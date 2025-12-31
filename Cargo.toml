@@ -4,7 +4,18 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-bevy = "0.15"
+bevy = { version = "0.15", default-features = false, features = [
+    "bevy_asset",
+    "bevy_render",
+    "bevy_sprite",
+    "bevy_winit",
+    "bevy_core_pipeline",
+    "bevy_window",
+    "multi_threaded",
+    "png",
+    "jpeg", 
+    "webgl2",
+] }
 
 [features]
 default = []
@@ -14,3 +25,14 @@ dynamic_linking = ["bevy/dynamic_linking"]
 getrandom_02 = { package = "getrandom", version = "0.2", features = ["js"] }
 getrandom = { version = "0.3", features = ["wasm_js"] }
 console_error_panic_hook = "0.1"
+
+# WASMの実行速度とサイズを劇的に改善するための設定
+[profile.release]
+opt-level = "s" # サイズ優先の最適化 ("z" も可)
+lto = "thin"    # リンク時最適化
+strip = true    # デバッグ情報を削除
+panic = "abort" # パニック時に即終了（サイズ削減）
+
+[profile.dev]
+opt-level = 1
+debug = false # デバッガを使わない場合はオフにしてサイズ削減
