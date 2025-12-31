@@ -1,3 +1,7 @@
 /target
 /dist
-
+/.trunk
+*.wasm
+**/*.rs.bk
+.DS_Store
+*.log
