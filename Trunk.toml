@@ -1,3 +1,15 @@
 [serve]
 address = "0.0.0.0"
-port = 8082
+port = 8083
+
+[build]
+# ビルド時の最適化を有効化
+release = true
+# wasm-opt がエラーを起こすためオフにする (両方の記法を試す)
+wasm_opt = "off"
+wasm-opt = "off"
+
+[serve.compression]
+# Brotli圧縮を有効にして転送量を削減
+brotli = true
+gzip = true
