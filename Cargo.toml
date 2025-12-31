@@ -16,6 +16,7 @@ bevy = { version = "0.15", default-features = false, features = [
     "jpeg", 
     "webgl2",
 ] }
+rand = "0.8"
 
 [features]
 default = []
