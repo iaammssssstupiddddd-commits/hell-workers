@@ -1,7 +1,9 @@
 use bevy::prelude::*;
 use crate::constants::*;
 use crate::interface::camera::MainCamera;
-use crate::entities::colonist::{Colonist, Destination};
+use crate::entities::colonist::Colonist;
+use crate::entities::damned_soul::{DamnedSoul, Destination};
+use crate::entities::familiar::Familiar;
 use crate::systems::jobs::{BuildingType, Blueprint};
 use crate::assets::GameAssets;
 use crate::world::map::WorldMap;
@@ -19,7 +21,8 @@ pub fn handle_mouse_input(
     buttons: Res<ButtonInput<MouseButton>>,
     q_window: Query<&Window, With<bevy::window::PrimaryWindow>>,
     q_camera: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
-    q_colonists: Query<(Entity, &GlobalTransform), With<Colonist>>,
+    q_souls: Query<(Entity, &GlobalTransform), With<DamnedSoul>>,
+    q_familiars: Query<(Entity, &GlobalTransform), With<Familiar>>,
     q_ui: Query<&Interaction, With<Button>>,
     mut selected_entity: ResMut<SelectedEntity>,
     mut q_dest: Query<&mut Destination>,
@@ -37,14 +40,31 @@ pub fn handle_mouse_input(
         if let Ok(world_pos) = camera.viewport_to_world_2d(camera_transform, cursor_pos) {
             if buttons.just_pressed(MouseButton::Left) {
                 let mut found = false;
-                for (entity, transform) in q_colonists.iter() {
-                    let col_pos = transform.translation().truncate();
-                    if col_pos.distance(world_pos) < TILE_SIZE / 2.0 {
+                
+                // まず使い魔をチェック（優先）
+                for (entity, transform) in q_familiars.iter() {
+                    let pos = transform.translation().truncate();
+                    if pos.distance(world_pos) < TILE_SIZE / 2.0 {
                         selected_entity.0 = Some(entity);
                         found = true;
+                        info!("SELECTED: Familiar");
                         break;
                     }
                 }
+                
+                // 次に人間をチェック
+                if !found {
+                    for (entity, transform) in q_souls.iter() {
+                        let pos = transform.translation().truncate();
+                        if pos.distance(world_pos) < TILE_SIZE / 2.0 {
+                            selected_entity.0 = Some(entity);
+                            found = true;
+                            info!("SELECTED: DamnedSoul");
+                            break;
+                        }
+                    }
+                }
+                
                 if !found {
                     selected_entity.0 = None;
                 }
