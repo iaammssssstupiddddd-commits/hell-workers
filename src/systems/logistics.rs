@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 use std::collections::HashMap;
+use rand::Rng;
 use crate::constants::*;
 use crate::assets::GameAssets;
 use crate::world::map::WorldMap;
@@ -93,22 +94,58 @@ pub fn item_spawner_system(
     game_assets: Res<GameAssets>,
     time: Res<Time>,
     mut timer: Local<f32>,
+    world_map: Res<WorldMap>,
 ) {
     *timer += time.delta_secs();
     if *timer > 5.0 {
-        let pos = Vec2::new(100.0, 100.0);
-        commands.spawn((
-            ResourceItem(ResourceType::Wood),
-            Sprite {
-                image: game_assets.wood.clone(),
-                custom_size: Some(Vec2::splat(TILE_SIZE * 0.5)),
-                ..default()
-            },
-            Transform::from_xyz(pos.x, pos.y, 0.6),
-        ));
-        *timer = 0.0;
-        info!("SPAWNER: Wood spawned at {:?}", pos);
+        let mut rng = rand::thread_rng();
+        let gx = rng.gen_range(5..MAP_WIDTH-5);
+        let gy = rng.gen_range(5..MAP_HEIGHT-5);
+        
+        if world_map.is_walkable(gx, gy) {
+            let spawn_pos = WorldMap::grid_to_world(gx, gy);
+            commands.spawn((
+                ResourceItem(ResourceType::Wood),
+                Sprite {
+                    image: game_assets.wood.clone(),
+                    custom_size: Some(Vec2::splat(TILE_SIZE * 0.5)),
+                    color: Color::srgb(0.5, 0.35, 0.05), // 木材っぽい茶色
+                    ..default()
+                },
+                Transform::from_xyz(spawn_pos.x, spawn_pos.y, 0.6),
+            ));
+            *timer = 0.0;
+            info!("SPAWNER: Wood spawned randomly at {:?}", spawn_pos);
+        }
     }
+}
+
+pub fn initial_resource_spawner(
+    mut commands: Commands,
+    game_assets: Res<GameAssets>,
+    world_map: Res<WorldMap>,
+) {
+    let mut rng = rand::thread_rng();
+    let mut count = 0;
+    while count < 10 {
+        let gx = rng.gen_range(5..MAP_WIDTH-5);
+        let gy = rng.gen_range(5..MAP_HEIGHT-5);
+        if world_map.is_walkable(gx, gy) {
+            let spawn_pos = WorldMap::grid_to_world(gx, gy);
+            commands.spawn((
+                ResourceItem(ResourceType::Wood),
+                Sprite {
+                    image: game_assets.wood.clone(),
+                    custom_size: Some(Vec2::splat(TILE_SIZE * 0.5)),
+                    color: Color::srgb(0.5, 0.35, 0.05),
+                    ..default()
+                },
+                Transform::from_xyz(spawn_pos.x, spawn_pos.y, 0.6),
+            ));
+            count += 1;
+        }
+    }
+    info!("SPAWNER: Initial 10 wood resources spawned randomly");
 }
 
 pub fn hauling_system(
