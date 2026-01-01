@@ -2,6 +2,8 @@ use bevy::prelude::*;
 use crate::systems::jobs::{BuildingType, Blueprint, CurrentJob};
 use crate::systems::logistics::{ZoneType, ZoneMode};
 use crate::entities::colonist::Colonist;
+use crate::entities::damned_soul::DamnedSoul;
+use crate::entities::familiar::{Familiar, ActiveCommand, FamiliarCommand};
 use crate::systems::time::{TimeSpeed, SpeedButton, ClockText};
 
 #[derive(Resource, Default, Debug, Clone, Copy)]
