@@ -1,0 +1,21 @@
+﻿cargo :     Checking bevy_app v0.1.0 (C:\Users\iaamm\.gemini\antigravity\scratch\bevy-projects\hell-workers)
+発生場所 行:1 文字:1
++ cargo check 2> build_error_final_final.txt; Get-Content build_error_f ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (    Checking be...s\hell-workers):String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+error[E0432]: unresolved import `crate::entities::colonist`
+ --> src\systems\jobs.rs:4:22
+  |
+4 | use crate::entities::colonist::{Colonist, Destination};
+  |                      ^^^^^^^^ could not find `colonist` in `entities`
+
+error[E0432]: unresolved import `crate::entities::colonist`
+ --> src\interface\ui.rs:4:22
+  |
+4 | use crate::entities::colonist::Colonist;
+  |                      ^^^^^^^^ could not find `colonist` in `entities`
+
+For more information about this error, try `rustc --explain E0432`.
+error: could not compile `bevy_app` (bin "bevy_app") due to 2 previous errors

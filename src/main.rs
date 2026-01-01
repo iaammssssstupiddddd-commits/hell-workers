@@ -18,8 +18,8 @@ use crate::systems::command::{familiar_command_input_system, familiar_command_vi
 use crate::systems::work::{task_delegation_system, task_execution_system};
 
 // 既存システム
-use crate::systems::jobs::{job_assignment_system, construction_work_system, building_completion_system};
-use crate::systems::logistics::{zone_placement, item_spawner_system, initial_resource_spawner, hauling_system, resource_count_display_system, ResourceLabels, ZoneMode};
+use crate::systems::jobs::building_completion_system;
+use crate::systems::logistics::{zone_placement, item_spawner_system, initial_resource_spawner, resource_count_display_system, ResourceLabels, ZoneMode};
 use crate::systems::time::{game_time_system, time_control_keyboard_system, time_control_ui_system, GameTime};
 use crate::interface::ui::{setup_ui, ui_interaction_system, menu_visibility_system, info_panel_system, MenuState};
 use crate::interface::camera::{camera_movement, camera_zoom, MainCamera};
@@ -56,7 +56,6 @@ fn main() {
         .add_systems(Update, (
             camera_movement, 
             camera_zoom, 
-            log_periodically,
             handle_mouse_input,
             blueprint_placement,
             zone_placement,
@@ -85,12 +84,9 @@ fn main() {
             ).chain(),
             // Logic chain
             (
-                job_assignment_system, 
-                hauling_system, 
                 pathfinding_system, 
                 soul_movement,
                 familiar_movement,
-                construction_work_system, 
                 building_completion_system, 
                 animation_system
             ).chain(),
@@ -129,38 +125,4 @@ fn spawn_familiar_wrapper(
     world_map: Res<WorldMap>,
 ) {
     spawn_familiar(commands, game_assets, world_map);
-}
-
-fn log_periodically(
-    time: Res<Time>,
-    mut timer: Local<f32>,
-    query_cam: Query<&Transform, With<MainCamera>>,
-    query_souls: Query<(&Transform, &crate::entities::damned_soul::DamnedSoul)>,
-    query_familiars: Query<(&Transform, &crate::entities::familiar::ActiveCommand), With<crate::entities::familiar::Familiar>>,
-    game_assets: Res<GameAssets>,
-    asset_server: Res<AssetServer>,
-) {
-    *timer += time.delta_secs();
-    if *timer > 3.0 {
-        if let Ok(cam_transform) = query_cam.get_single() {
-            info!("CAMERA_POS: x: {:.1}, y: {:.1}", cam_transform.translation.x, cam_transform.translation.y);
-        }
-        
-        for (soul_transform, soul) in query_souls.iter() {
-            info!("SOUL: pos({:.0},{:.0}) motivation:{:.2} laziness:{:.2} fatigue:{:.2}", 
-                soul_transform.translation.x, soul_transform.translation.y,
-                soul.motivation, soul.laziness, soul.fatigue);
-        }
-
-        for (fam_transform, command) in query_familiars.iter() {
-            info!("FAMILIAR: pos({:.0},{:.0}) command={:?}", 
-                fam_transform.translation.x, fam_transform.translation.y,
-                command.command);
-        }
-
-        let grass_load = asset_server.get_load_state(&game_assets.grass);
-        info!("ASSET_LOAD_STATE: Grass:{:?}", grass_load);
-        
-        *timer = 0.0;
-    }
 }

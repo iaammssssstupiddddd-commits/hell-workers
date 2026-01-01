@@ -1,7 +1,6 @@
 use bevy::prelude::*;
 use crate::constants::*;
 use crate::interface::camera::MainCamera;
-use crate::entities::colonist::Colonist;
 use crate::entities::damned_soul::{DamnedSoul, Destination};
 use crate::entities::familiar::Familiar;
 use crate::systems::jobs::{BuildingType, Blueprint};

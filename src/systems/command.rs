@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 use crate::constants::*;
-use crate::entities::damned_soul::{Destination, Path};
+use crate::entities::damned_soul::Destination;
 use crate::entities::familiar::{Familiar, ActiveCommand, FamiliarCommand};
 use crate::interface::selection::SelectedEntity;
 use crate::interface::camera::MainCamera;
@@ -14,7 +14,6 @@ pub enum TaskMode {
     SelectBuildTarget,  // 建築対象選択中
     SelectHaulTarget,   // 運搬対象選択中
 }
-
 /// タスクエリア - 使い魔が担当するエリア
 #[derive(Component, Clone)]
 pub struct TaskArea {
@@ -194,6 +193,3 @@ pub fn familiar_command_visual_system(
     }
 }
 
-/// タスクモード中のUIヒント表示用
-#[derive(Component)]
-pub struct TaskModeHint;

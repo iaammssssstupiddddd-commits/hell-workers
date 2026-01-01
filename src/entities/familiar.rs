@@ -29,6 +29,7 @@ impl Familiar {
 
 /// 使い魔の種類（パラメーター調整用に拡張可能）
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[allow(dead_code)]
 pub enum FamiliarType {
     #[default]
     Imp,            // インプ - 汎用型、バランス
@@ -37,12 +38,13 @@ pub enum FamiliarType {
 }
 
 /// 使い魔への指示
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)]
 pub enum FamiliarCommand {
     Idle,                            // 待機
-    GatherResources,                 // リソース収集を命じる
-    Construct(Entity),               // 建築命令
-    Patrol,                          // パトロール
+    GatherResources,                 // 収集指示
+    Patrol,                          // 巡回（監視）
+    Construct(Entity),               // 建設命令
 }
 
 impl Default for FamiliarCommand {
@@ -55,7 +57,8 @@ impl Default for FamiliarCommand {
 #[derive(Component, Default)]
 pub struct ActiveCommand {
     pub command: FamiliarCommand,
-    pub assigned_souls: Vec<Entity>,  // 割り当てられた人間
+    #[allow(dead_code)]
+    pub assigned_souls: Vec<Entity>,  // 割り当てられた魂
 }
 
 /// 使い魔をスポーンする

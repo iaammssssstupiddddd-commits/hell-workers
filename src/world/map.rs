@@ -30,6 +30,7 @@ pub struct WorldMap {
 }
 
 impl WorldMap {
+    #[allow(dead_code)]
     pub fn new() -> Self {
         Self { 
             tiles: HashMap::new(),

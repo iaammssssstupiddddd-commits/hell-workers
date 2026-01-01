@@ -8,6 +8,7 @@ use crate::systems::work::AssignedTask;
 /// 地獄に堕ちた人間（怠惰な魂）
 #[derive(Component)]
 pub struct DamnedSoul {
+    #[allow(dead_code)]
     pub sin_type: SinType,
     pub laziness: f32,      // 怠惰レベル (0.0-1.0) - 高いほど怠惰
     pub motivation: f32,    // やる気 (0.0-1.0) - 高いほど働く
@@ -27,6 +28,7 @@ impl Default for DamnedSoul {
 
 /// 落ちた理由（将来拡張用）
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[allow(dead_code)]
 pub enum SinType {
     #[default]
     Sloth,    // 怠惰
