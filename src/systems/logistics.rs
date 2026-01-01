@@ -4,8 +4,6 @@ use rand::Rng;
 use crate::constants::*;
 use crate::assets::GameAssets;
 use crate::world::map::WorldMap;
-use crate::entities::colonist::{Colonist, Destination};
-use crate::systems::jobs::CurrentJob;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ResourceType {
@@ -27,7 +25,7 @@ pub enum ZoneType {
 pub struct Stockpile;
 
 #[derive(Component)]
-pub struct ClaimedBy(pub Entity);
+pub struct ClaimedBy(#[allow(dead_code)] pub Entity);
 
 #[derive(Component)]
 pub struct InStockpile;
@@ -109,13 +107,13 @@ pub fn item_spawner_system(
                 Sprite {
                     image: game_assets.wood.clone(),
                     custom_size: Some(Vec2::splat(TILE_SIZE * 0.5)),
-                    color: Color::srgb(0.5, 0.35, 0.05), // 木材っぽい茶色
+                    color: Color::srgb(0.5, 0.35, 0.05),
                     ..default()
                 },
                 Transform::from_xyz(spawn_pos.x, spawn_pos.y, 0.6),
             ));
             *timer = 0.0;
-            info!("SPAWNER: Wood spawned randomly at {:?}", spawn_pos);
+            debug!("SPAWNER: Wood spawned randomly at {:?}", spawn_pos);
         }
     }
 }
@@ -145,49 +143,7 @@ pub fn initial_resource_spawner(
             count += 1;
         }
     }
-    info!("SPAWNER: Initial 10 wood resources spawned randomly");
-}
-
-pub fn hauling_system(
-    mut q_colonists: Query<(&Transform, &mut CurrentJob, &mut Inventory, &mut Destination), With<Colonist>>,
-    q_items: Query<(Entity, &Transform), With<ResourceItem>>,
-    q_stockpiles: Query<&Transform, With<Stockpile>>,
-    mut commands: Commands,
-) {
-    for (transform, mut job, mut inventory, mut dest) in q_colonists.iter_mut() {
-        if let Some(target_entity) = job.0 {
-            if let Ok((_item_entity, item_transform)) = q_items.get(target_entity) {
-                let col_pos = transform.translation.truncate();
-                
-                if inventory.0.is_none() {
-                    let item_pos = item_transform.translation.truncate();
-                    let dist = col_pos.distance(item_pos);
-                    if dist < TILE_SIZE * 0.7 {
-                        inventory.0 = Some(target_entity);
-                        commands.entity(target_entity).insert(Visibility::Hidden);
-                        info!("HAUL: Picked up item {:?}", target_entity);
-                    } else if dest.0 != item_pos {
-                        dest.0 = item_pos;
-                    }
-                } else {
-                    if let Some(stock_transform) = q_stockpiles.iter().next() {
-                        let target_stock = stock_transform.translation.truncate();
-                        if col_pos.distance(target_stock) < TILE_SIZE * 0.7 {
-                            let item_entity = inventory.0.take().unwrap();
-                            commands.entity(item_entity).insert(Visibility::Visible);
-                            commands.entity(item_entity).insert(Transform::from_xyz(target_stock.x, target_stock.y, 0.6));
-                            commands.entity(item_entity).insert(InStockpile);
-                            commands.entity(item_entity).remove::<ClaimedBy>();
-                            job.0 = None;
-                            info!("HAUL: Dropped item {:?} at stockpile", item_entity);
-                        } else if dest.0 != target_stock {
-                            dest.0 = target_stock;
-                        }
-                    }
-                }
-            }
-        }
-    }
+    info!("SPAWNER: Initial 10 wood resources spawned");
 }
 
 pub fn resource_count_display_system(

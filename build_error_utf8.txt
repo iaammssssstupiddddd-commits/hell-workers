@@ -1,0 +1,82 @@
+﻿cargo :     Checking 
+bevy_app v0.1.0 (C:\U
+sers\iaamm\.gemini\an
+tigravity\scratch\bev
+y-projects\hell-worke
+rs)
+発生場所 行:1 文字:1
++ cargo check 2> buil
+d_error.txt; Get-Cont
+ent build_error.txt |
+ Out-Fil ...
++ ~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~
+    + CategoryInfo   
+           : NotSpe  
+  cified: (    Che   
+ cking be...s\hel    
+l-workers):Strin    g
+) [], RemoteExc    ep
+tion
+    + FullyQualified 
+   ErrorId : Native  
+  CommandError
+ 
+error[E0432]: unresol
+ved import `crate::sy
+stems::logistics::hau
+ling_system`
+  --> src\main.rs:22:
+96
+   |
+22 | ...ner_system, i
+nitial_resource_spawn
+er, hauling_system, r
+esource_count_display
+_system, ResourceLabe
+ls, ZoneMode};
+   |                 
+                     
+    ^^^^^^^^^^^^^^ no
+ `hauling_system` in 
+`systems::logistics`
+
+warning: unused impor
+t: `crate::entities::
+familiar::Familiar`
+ --> src\interface\ui
+.rs:6:5
+  |
+6 | use crate::entiti
+es::familiar::Familia
+r;
+  |     ^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^
+^
+  |
+  = note: `#[warn(unu
+sed_imports)]` (part 
+of `#[warn(unused)]`)
+ on by default
+
+warning: unused impor
+t: `bevy::prelude`
+ --> src\world\pathfi
+nding.rs:1:5
+  |
+1 | use bevy::prelude
+::*;
+  |     ^^^^^^^^^^^^^
+
+For more information 
+about this error, try
+ `rustc --explain E04
+32`.
+warning: `bevy_app` (
+bin "bevy_app") gener
+ated 2 warnings
+error: could not comp
+ile `bevy_app` (bin "
+bevy_app") due to 1 p
+revious error; 2 warn
+ings emitted
