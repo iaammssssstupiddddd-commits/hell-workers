@@ -4,15 +4,12 @@ use std::cmp::Ordering;
 use rand::Rng;
 
 fn main() {
-    #[cfg(target_arch = "wasm32")]
-    console_error_panic_hook::set_once();
-
     App::new()
         .insert_resource(ClearColor(Color::srgb(0.1, 0.1, 0.1)))
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
-                canvas: Some("#bevy".to_string()),
-                fit_canvas_to_parent: true,
+                title: "Hell Workers".into(),
+                resolution: (1280.0, 720.0).into(),
                 ..default()
             }),
             ..default()
