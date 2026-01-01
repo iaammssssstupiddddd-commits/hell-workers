@@ -3,6 +3,7 @@ use crate::constants::*;
 use crate::assets::GameAssets;
 use crate::world::map::WorldMap;
 use crate::world::pathfinding::find_path;
+use crate::systems::work::AssignedTask;
 
 /// 地獄に堕ちた人間（怠惰な魂）
 #[derive(Component)]
@@ -121,6 +122,8 @@ pub fn spawn_damned_souls(
         commands.spawn((
             DamnedSoul::default(),
             IdleState::default(),
+            AssignedTask::default(),
+            crate::systems::logistics::Inventory(None), // インベントリを追加
             Sprite {
                 image: game_assets.colonist.clone(),
                 custom_size: Some(Vec2::splat(TILE_SIZE * 0.8)),
@@ -139,19 +142,28 @@ pub fn spawn_damned_souls(
 /// 経路探索システム
 pub fn pathfinding_system(
     world_map: Res<WorldMap>,
-    mut query: Query<(&Transform, &Destination, &mut Path), Changed<Destination>>,
+    mut query: Query<(Entity, &Transform, &Destination, &mut Path), Changed<Destination>>,
 ) {
-    for (transform, destination, mut path) in query.iter_mut() {
+    for (entity, transform, destination, mut path) in query.iter_mut() {
         let current_pos = transform.translation.truncate();
         let start_grid = WorldMap::world_to_grid(current_pos);
         let goal_grid = WorldMap::world_to_grid(destination.0);
 
+        if start_grid == goal_grid {
+            info!("PATH: Soul {:?} already at goal {:?}", entity, goal_grid);
+            path.waypoints = vec![destination.0];
+            path.current_index = 0;
+            continue;
+        }
+
         if let Some(grid_path) = find_path(&world_map, start_grid, goal_grid) {
+            info!("PATH: Soul {:?} found path from {:?} to {:?} ({} steps)", entity, start_grid, goal_grid, grid_path.len());
             path.waypoints = grid_path.iter()
                 .map(|&(x, y)| WorldMap::grid_to_world(x, y))
                 .collect();
             path.current_index = 0;
         } else {
+            warn!("PATH: Soul {:?} failed to find path from {:?} to {:?}", entity, start_grid, goal_grid);
             path.waypoints.clear();
         }
     }
@@ -160,16 +172,16 @@ pub fn pathfinding_system(
 /// 移動システム
 pub fn soul_movement(
     time: Res<Time>,
-    mut query: Query<(&mut Transform, &mut Path, &mut AnimationState, &DamnedSoul)>,
+    mut query: Query<(Entity, &mut Transform, &mut Path, &mut AnimationState, &DamnedSoul)>,
 ) {
-    for (mut transform, mut path, mut anim, soul) in query.iter_mut() {
+    for (entity, mut transform, mut path, mut anim, soul) in query.iter_mut() {
         if path.current_index < path.waypoints.len() {
             let target = path.waypoints[path.current_index];
             let current_pos = transform.translation.truncate();
             let to_target = target - current_pos;
             let distance = to_target.length();
 
-            if distance > 1.0 {
+            if distance > 2.0 {
                 // やる気が高いほど速く動く
                 let base_speed = 60.0;
                 let motivation_bonus = soul.motivation * 40.0;
@@ -187,6 +199,9 @@ pub fn soul_movement(
                 }
             } else {
                 path.current_index += 1;
+                if path.current_index >= path.waypoints.len() {
+                    info!("MOVE: Soul {:?} reached final destination", entity);
+                }
             }
         } else {
             anim.is_moving = false;

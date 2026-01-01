@@ -66,7 +66,7 @@ pub fn spawn_map(
 ) {
     for y in 0..MAP_HEIGHT {
         for x in 0..MAP_WIDTH {
-            let (terrain, texture) = if (x + y) % 7 == 0 {
+            let (terrain, texture) = if (x + y) % 15 == 0 {
                 (TerrainType::Stone, game_assets.stone.clone())
             } else if (x * y) % 5 == 0 {
                 (TerrainType::Dirt, game_assets.dirt.clone())

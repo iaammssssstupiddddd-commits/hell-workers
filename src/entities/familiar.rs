@@ -15,9 +15,9 @@ pub struct Familiar {
 impl Familiar {
     pub fn new(familiar_type: FamiliarType) -> Self {
         let (command_radius, efficiency) = match familiar_type {
-            FamiliarType::Imp => (TILE_SIZE * 5.0, 0.5),
-            FamiliarType::Taskmaster => (TILE_SIZE * 8.0, 0.3),
-            FamiliarType::Whisperer => (TILE_SIZE * 3.0, 0.8),
+            FamiliarType::Imp => (TILE_SIZE * 7.0, 0.5),      // 5 -> 7
+            FamiliarType::Taskmaster => (TILE_SIZE * 10.0, 0.3), // 8 -> 10
+            FamiliarType::Whisperer => (TILE_SIZE * 4.0, 0.8),   // 3 -> 4
         };
         Self {
             familiar_type,

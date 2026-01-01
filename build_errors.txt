@@ -1,363 +1,343 @@
-﻿cargo :    Compiling 
-bevy_app v0.1.0 (C:\U
-sers\iaamm\.gemini\an
-tigravity\scratch\bev
-y-projects\hell-worke
-rs)
+﻿cargo :    Compiling bevy_
+app v0.1.0 (C:\Users\iaamm
+\.gemini\antigravity\scrat
+ch\bevy-projects\hell-work
+ers)
 発生場所 行:1 文字:75
-+ ... tion SilentlyCo
-ntinue | Stop-Process
- -Force; cargo build 
-2>&1 | Out-F ...
-+                    
-                     
-         ~~~~~~~~~~~~
-~~~~
-    + CategoryInfo   
-           : NotSpe  
-  cified: (   Comp   
- iling be...s\hel    
-l-workers):Strin    g
-) [], RemoteExc    ep
-tion
-    + FullyQualified 
-   ErrorId : Native  
-  CommandError
++ ... tion SilentlyContinu
+e | Stop-Process -Force; c
+argo build 2>&1 | Out-F ..
+.
++                         
+                         ~
+~~~~~~~~~~~~~~~
+    + CategoryInfo        
+      : NotSpecified: (   
+Co    mpiling be...s\hell-
+wor    kers):String) [], R
+emot    eException
+    + FullyQualifiedErrorI
+d     : NativeCommandError
  
-warning: unused impor
-t: `crate::entities::
-damned_soul::DamnedSo
-ul`
- --> src\interface\ui
-.rs:5:5
+warning: unused import: `c
+rate::entities::damned_sou
+l::DamnedSoul`
+ --> src\interface\ui.rs:5
+:5
   |
-5 | use crate::entiti
-es::damned_soul::Damn
-edSoul;
-  |     ^^^^^^^^^^^^^
-^^^^^^^^^^^^^^^^^^^^^
-^^^^^^
+5 | use crate::entities::d
+amned_soul::DamnedSoul;
+  |     ^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^
   |
-  = note: `#[warn(unu
-sed_imports)]` (part 
-of `#[warn(unused)]`)
- on by default
+  = note: `#[warn(unused_i
+mports)]` (part of `#[warn
+(unused)]`) on by default
 
-warning: unused impor
-ts: `ActiveCommand`, 
-`FamiliarCommand`, an
-d `Familiar`
- --> src\interface\ui
-.rs:6:33
+warning: unused imports: `
+ActiveCommand`, `FamiliarC
+ommand`, and `Familiar`
+ --> src\interface\ui.rs:6
+:33
   |
-6 | use crate::entiti
-es::familiar::{Famili
-ar, ActiveCommand, Fa
-miliarCommand};
-  |                  
-               ^^^^^^
-^^  ^^^^^^^^^^^^^  ^^
-^^^^^^^^^^^^^
+6 | use crate::entities::f
+amiliar::{Familiar, Active
+Command, FamiliarCommand};
+  |                       
+          ^^^^^^^^  ^^^^^^
+^^^^^^^  ^^^^^^^^^^^^^^^
 
-warning: unused impor
-t: `crate::entities::
-colonist::Colonist`
- --> src\interface\se
-lection.rs:4:5
+warning: unused import: `c
+rate::entities::colonist::
+Colonist`
+ --> src\interface\selecti
+on.rs:4:5
   |
-4 | use crate::entiti
-es::colonist::Colonis
-t;
-  |     ^^^^^^^^^^^^^
-^^^^^^^^^^^^^^^^^^^^^
-^
+4 | use crate::entities::c
+olonist::Colonist;
+  |     ^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^
 
-warning: unused impor
-t: `bevy::prelude`
- --> src\world\pathfi
-nding.rs:1:5
+warning: unused import: `b
+evy::prelude`
+ --> src\world\pathfinding
+.rs:1:5
   |
-1 | use bevy::prelude
-::*;
+1 | use bevy::prelude::*;
   |     ^^^^^^^^^^^^^
 
-warning: associated f
-unction `new` is neve
-r used
-  --> src\world\map.r
-s:33:12
+warning: unused variable: 
+`soul_entity`
+   --> src\systems\work.rs
+:113:10
+    |
+113 |     for (soul_entity
+, soul_transform, mut soul
+, mut task, mut dest) in q
+_souls.iter_mut() {
+    |          ^^^^^^^^^^^
+ help: if this is intentio
+nal, prefix it with an und
+erscore: `_soul_entity`
+    |
+    = note: `#[warn(unused
+_variables)]` (part of `#[
+warn(unused)]`) on by defa
+ult
+
+warning: associated functi
+on `new` is never used
+  --> src\world\map.rs:33:
+12
    |
 32 | impl WorldMap {
-   | ------------- as
-sociated function in 
-this implementation
-33 |     pub fn new()
- -> Self {
+   | ------------- associa
+ted function in this imple
+mentation
+33 |     pub fn new() -> S
+elf {
    |            ^^^
    |
-   = note: `#[warn(de
-ad_code)]` (part of `
-#[warn(unused)]`) on 
-by default
+   = note: `#[warn(dead_co
+de)]` (part of `#[warn(unu
+sed)]`) on by default
 
-warning: struct `Path
-` is never constructe
-d
-  --> src\entities\co
-lonist.rs:14:12
+warning: struct `Path` is 
+never constructed
+  --> src\entities\colonis
+t.rs:14:12
    |
-14 | pub struct Path 
-{
+14 | pub struct Path {
    |            ^^^^
 
-warning: struct `Anim
-ationState` is never 
-constructed
-  --> src\entities\co
-lonist.rs:20:12
+warning: struct `Animation
+State` is never constructe
+d
+  --> src\entities\colonis
+t.rs:20:12
    |
-20 | pub struct Anima
-tionState {
-   |            ^^^^^
-^^^^^^^^^
+20 | pub struct AnimationS
+tate {
+   |            ^^^^^^^^^^
+^^^^
 
-warning: function `sp
-awn_colonists` is nev
-er used
-  --> src\entities\co
-lonist.rs:36:8
+warning: function `spawn_c
+olonists` is never used
+  --> src\entities\colonis
+t.rs:36:8
    |
-36 | pub fn spawn_col
-onists(
-   |        ^^^^^^^^^
-^^^^^^
+36 | pub fn spawn_colonist
+s(
+   |        ^^^^^^^^^^^^^^
+^
 
-warning: function `pa
-thfinding_system` is 
-never used
-  --> src\entities\co
-lonist.rs:76:8
+warning: function `pathfin
+ding_system` is never used
+  --> src\entities\colonis
+t.rs:76:8
    |
-76 | pub fn pathfindi
-ng_system(
-   |        ^^^^^^^^^
-^^^^^^^^^
+76 | pub fn pathfinding_sy
+stem(
+   |        ^^^^^^^^^^^^^^
+^^^^
 
-warning: function `co
-lonist_movement` is n
-ever used
-  --> src\entities\co
-lonist.rs:98:8
+warning: function `colonis
+t_movement` is never used
+  --> src\entities\colonis
+t.rs:98:8
    |
-98 | pub fn colonist_
-movement(
-   |        ^^^^^^^^^
-^^^^^^^^
+98 | pub fn colonist_movem
+ent(
+   |        ^^^^^^^^^^^^^^
+^^^
 
-warning: function `an
-imation_system` is ne
-ver used
-   --> src\entities\c
-olonist.rs:129:8
+warning: function `animati
+on_system` is never used
+   --> src\entities\coloni
+st.rs:129:8
     |
-129 | pub fn animatio
-n_system(
-    |        ^^^^^^^^
-^^^^^^^^
+129 | pub fn animation_sys
+tem(
+    |        ^^^^^^^^^^^^^
+^^^
 
-warning: field `sin_t
-ype` is never read
-  --> src\entities\da
-mned_soul.rs:10:9
+warning: field `sin_type` 
+is never read
+  --> src\entities\damned_
+soul.rs:11:9
    |
- 9 | pub struct Damne
-dSoul {
-   |            -----
------ field in this s
-truct
-10 |     pub sin_type
-: SinType,
-   |         ^^^^^^^^
-
-warning: variants `Gr
-eed` and `Wrath` are 
-never constructed
-  --> src\entities\da
-mned_soul.rs:32:5
-   |
-29 | pub enum SinType
+10 | pub struct DamnedSoul
  {
-   |          -------
- variants in this enu
-m
-...
-32 |     Greed,    //
- 強欲
-   |     ^^^^^
-33 |     Wrath,    //
- 憤怒
-   |     ^^^^^
-   |
-   = note: `SinType` 
-has derived impls for
- the traits `Clone` a
-nd `Debug`, but these
- are intentionally ig
-nored during dead cod
-e analysis
-
-warning: field `famil
-iar_type` is never re
-ad
-  --> src\entities\fa
-miliar.rs:10:9
-   |
- 9 | pub struct Famil
-iar {
-   |            -----
---- field in this str
-uct
-10 |     pub familiar
-_type: FamiliarType,
+   |            ----------
+ field in this struct
+11 |     pub sin_type: Sin
+Type,
    |         ^^^^^^^^
-^^^^^
 
-warning: variants `Ta
-skmaster` and `Whispe
-rer` are never constr
-ucted
-  --> src\entities\fa
-miliar.rs:35:5
-   |
-32 | pub enum Familia
-rType {
-   |          -------
------ variants in thi
-s enum
-...
-35 |     Taskmaster, 
-    // 監督官 - 広範囲、低効率
-   |     ^^^^^^^^^^
-36 |     Whisperer,  
-    // 囁き手 - 狭範囲、高効率
-   |     ^^^^^^^^^
-   |
-   = note: `FamiliarT
-ype` has derived impl
-s for the traits `Clo
-ne` and `Debug`, but 
-these are intentional
-ly ignored during dea
-d code analysis
-
-warning: variant `Con
-struct` is never cons
+warning: variants `Greed` 
+and `Wrath` are never cons
 tructed
-  --> src\entities\fa
-miliar.rs:44:5
+  --> src\entities\damned_
+soul.rs:33:5
    |
-41 | pub enum Familia
-rCommand {
-   |          -------
--------- variant in t
-his enum
+30 | pub enum SinType {
+   |          ------- vari
+ants in this enum
 ...
-44 |     Construct(En
-tity),               
-// 建築命令
+33 |     Greed,    // 強欲
+   |     ^^^^^
+34 |     Wrath,    // 憤怒
+   |     ^^^^^
+   |
+   = note: `SinType` has d
+erived impls for the trait
+s `Clone` and `Debug`, but
+ these are intentionally i
+gnored during dead code an
+alysis
+
+warning: field `familiar_t
+ype` is never read
+  --> src\entities\familia
+r.rs:10:9
+   |
+ 9 | pub struct Familiar {
+   |            -------- f
+ield in this struct
+10 |     pub familiar_type
+: FamiliarType,
+   |         ^^^^^^^^^^^^^
+
+warning: variants `Taskmas
+ter` and `Whisperer` are n
+ever constructed
+  --> src\entities\familia
+r.rs:35:5
+   |
+32 | pub enum FamiliarType
+ {
+   |          ------------
+ variants in this enum
+...
+35 |     Taskmaster,     /
+/ 監督官 - 広範囲、低効率
+   |     ^^^^^^^^^^
+36 |     Whisperer,      /
+/ 囁き手 - 狭範囲、高効率
    |     ^^^^^^^^^
    |
-   = note: `FamiliarC
-ommand` has derived i
-mpls for the traits `
-Clone` and `Debug`, b
-ut these are intentio
-nally ignored during 
-dead code analysis
+   = note: `FamiliarType` 
+has derived impls for the 
+traits `Clone` and `Debug`
+, but these are intentiona
+lly ignored during dead co
+de analysis
 
-warning: field `assig
-ned_souls` is never r
-ead
-  --> src\entities\fa
-miliar.rs:58:9
+warning: variant `Construc
+t` is never constructed
+  --> src\entities\familia
+r.rs:44:5
    |
-56 | pub struct Activ
-eCommand {
-   |            -----
--------- field in thi
-s struct
-57 |     pub command:
- FamiliarCommand,
-58 |     pub assigned
-_souls: Vec<Entity>, 
- // 割り当てられた人間
-   |         ^^^^^^^^
-^^^^^^
+41 | pub enum FamiliarComm
+and {
+   |          ------------
+--- variant in this enum
+...
+44 |     Construct(Entity)
+,               // 建築命令
+   |     ^^^^^^^^^
+   |
+   = note: `FamiliarComman
+d` has derived impls for t
+he traits `Clone` and `Deb
+ug`, but these are intenti
+onally ignored during dead
+ code analysis
 
-warning: variant `Flo
-or` is never construc
-ted
-  --> src\systems\job
-s.rs:10:5
+warning: field `assigned_s
+ouls` is never read
+  --> src\entities\familia
+r.rs:58:9
    |
- 8 | pub enum Buildin
-gType {
-   |          -------
------ variant in this
- enum
+56 | pub struct ActiveComm
+and {
+   |            ----------
+--- field in this struct
+57 |     pub command: Fami
+liarCommand,
+58 |     pub assigned_soul
+s: Vec<Entity>,  // 割り当てられ
+た人間
+   |         ^^^^^^^^^^^^^
+^
+
+warning: variant `Floor` i
+s never constructed
+  --> src\systems\jobs.rs:
+10:5
+   |
+ 8 | pub enum BuildingType
+ {
+   |          ------------
+ variant in this enum
  9 |     Wall,
 10 |     Floor,
    |     ^^^^^
    |
-   = note: `BuildingT
-ype` has derived impl
-s for the traits `Clo
-ne` and `Debug`, but 
-these are intentional
-ly ignored during dea
-d code analysis
+   = note: `BuildingType` 
+has derived impls for the 
+traits `Clone` and `Debug`
+, but these are intentiona
+lly ignored during dead co
+de analysis
 
-warning: field `0` is
- never read
-  --> src\systems\job
-s.rs:14:21
+warning: field `0` is neve
+r read
+  --> src\systems\jobs.rs:
+14:21
    |
-14 | pub struct Build
-ing(pub BuildingType)
-;
-   |            -----
---- ^^^^^^^^^^^^^^^^
+14 | pub struct Building(p
+ub BuildingType);
+   |            -------- ^
+^^^^^^^^^^^^^^^
    |            |
-   |            field
- in this struct
+   |            field in t
+his struct
    |
-   = help: consider r
-emoving this field
+   = help: consider removi
+ng this field
 
-warning: field `0` is
- never read
-  --> src\systems\log
-istics.rs:29:22
+warning: field `0` is neve
+r read
+  --> src\systems\logistic
+s.rs:29:22
    |
-29 | pub struct Claim
-edBy(pub Entity);
-   |            -----
----- ^^^^^^^^^^
+29 | pub struct ClaimedBy(
+pub Entity);
+   |            --------- 
+^^^^^^^^^^
    |            |
-   |            field
- in this struct
+   |            field in t
+his struct
    |
-   = help: consider r
-emoving this field
+   = help: consider removi
+ng this field
 
-warning: `bevy_app` (
-bin "bevy_app") gener
-ated 20 warnings (run
- `cargo fix --bin "be
-vy_app" -p bevy_app` 
-to apply 3 suggestion
-s)
-    Finished `dev` pr
-ofile [optimized + de
-buginfo] target(s) in
- 16.64s
+warning: struct `TaskModeH
+int` is never constructed
+   --> src\systems\command
+.rs:193:12
+    |
+193 | pub struct TaskModeH
+int;
+    |            ^^^^^^^^^
+^^^
+
+warning: `bevy_app` (bin "
+bevy_app") generated 22 wa
+rnings (run `cargo fix --b
+in "bevy_app" -p bevy_app`
+ to apply 4 suggestions)
+    Finished `dev` profile
+ [optimized + debuginfo] t
+arget(s) in 15.32s

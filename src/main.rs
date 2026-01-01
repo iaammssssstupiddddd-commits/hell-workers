@@ -14,11 +14,12 @@ use crate::entities::damned_soul::{spawn_damned_souls, pathfinding_system, soul_
 use crate::entities::familiar::{spawn_familiar, update_familiar_range_indicator, familiar_movement};
 use crate::systems::motivation::{motivation_system, fatigue_system};
 use crate::systems::idle::{idle_behavior_system, idle_visual_system};
-use crate::systems::command::{familiar_command_input_system, familiar_command_visual_system};
+use crate::systems::command::{familiar_command_input_system, familiar_command_visual_system, task_area_selection_system, task_area_indicator_system, TaskMode};
+use crate::systems::work::{task_delegation_system, task_execution_system};
 
 // 既存システム
 use crate::systems::jobs::{job_assignment_system, construction_work_system, building_completion_system};
-use crate::systems::logistics::{zone_placement, item_spawner_system, hauling_system, resource_count_display_system, ResourceLabels, ZoneMode};
+use crate::systems::logistics::{zone_placement, item_spawner_system, initial_resource_spawner, hauling_system, resource_count_display_system, ResourceLabels, ZoneMode};
 use crate::systems::time::{game_time_system, time_control_keyboard_system, time_control_ui_system, GameTime};
 use crate::interface::ui::{setup_ui, ui_interaction_system, menu_visibility_system, info_panel_system, MenuState};
 use crate::interface::camera::{camera_movement, camera_zoom, MainCamera};
@@ -47,9 +48,10 @@ fn main() {
         .init_resource::<ZoneMode>()
         .init_resource::<ResourceLabels>()
         .init_resource::<GameTime>()
+        .init_resource::<TaskMode>()
         // Startup systems
         .add_systems(Startup, setup)
-        .add_systems(PostStartup, (spawn_map, spawn_entities, spawn_familiar_wrapper, setup_ui).chain())
+        .add_systems(PostStartup, (spawn_map, spawn_entities, spawn_familiar_wrapper, setup_ui, initial_resource_spawner).chain())
         // Update systems
         .add_systems(Update, (
             camera_movement, 
@@ -71,9 +73,13 @@ fn main() {
             // Hell Workers core systems
             (
                 familiar_command_input_system,
+                task_area_selection_system,
+                task_area_indicator_system,
                 familiar_command_visual_system,
-                motivation_system,
+                motivation_system,  // やる気を先に更新
                 fatigue_system,
+                task_delegation_system,  // その後タスク割り当て
+                task_execution_system,   // タスク実行
                 idle_behavior_system,
                 idle_visual_system,
             ).chain(),
@@ -130,7 +136,7 @@ fn log_periodically(
     mut timer: Local<f32>,
     query_cam: Query<&Transform, With<MainCamera>>,
     query_souls: Query<(&Transform, &crate::entities::damned_soul::DamnedSoul)>,
-    query_familiars: Query<&Transform, With<crate::entities::familiar::Familiar>>,
+    query_familiars: Query<(&Transform, &crate::entities::familiar::ActiveCommand), With<crate::entities::familiar::Familiar>>,
     game_assets: Res<GameAssets>,
     asset_server: Res<AssetServer>,
 ) {
@@ -146,9 +152,10 @@ fn log_periodically(
                 soul.motivation, soul.laziness, soul.fatigue);
         }
 
-        for fam_transform in query_familiars.iter() {
-            info!("FAMILIAR: pos({:.0},{:.0})", 
-                fam_transform.translation.x, fam_transform.translation.y);
+        for (fam_transform, command) in query_familiars.iter() {
+            info!("FAMILIAR: pos({:.0},{:.0}) command={:?}", 
+                fam_transform.translation.x, fam_transform.translation.y,
+                command.command);
         }
 
         let grass_load = asset_server.get_load_state(&game_assets.grass);
