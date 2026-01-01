@@ -1,17 +1,18 @@
 use bevy::prelude::*;
 use crate::constants::*;
 use crate::assets::GameAssets;
-use crate::entities::colonist::{Colonist, Destination};
-use crate::systems::logistics::{ResourceItem, ClaimedBy, InStockpile};
+// use crate::entities::colonist::{Colonist, Destination};
+// use crate::systems::logistics::{ResourceItem, ClaimedBy, InStockpile};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BuildingType {
     Wall,
+    #[allow(dead_code)]
     Floor,
 }
 
 #[derive(Component)]
-pub struct Building(pub BuildingType);
+pub struct Building(#[allow(dead_code)] pub BuildingType);
 
 #[derive(Component)]
 pub struct Blueprint {
@@ -20,8 +21,10 @@ pub struct Blueprint {
 }
 
 #[derive(Component)]
+#[allow(dead_code)]
 pub struct CurrentJob(pub Option<Entity>);
 
+/*
 pub fn job_assignment_system(
     mut q_colonists: Query<(Entity, &mut CurrentJob, &mut Destination), With<Colonist>>,
     q_blueprints: Query<Entity, With<Blueprint>>,
@@ -41,7 +44,7 @@ pub fn job_assignment_system(
                         dest.0 = target;
                     }
                 }
-            } 
+            }
             // 2. 運搬
             else if let Some(item_entity) = q_items_unclaimed.iter().next() {
                 job.0 = Some(item_entity);
@@ -64,6 +67,7 @@ pub fn job_assignment_system(
     }
 }
 
+/*
 pub fn construction_work_system(
     time: Res<Time>,
     q_colonists: Query<(&Transform, &CurrentJob), With<Colonist>>,
@@ -80,6 +84,8 @@ pub fn construction_work_system(
         }
     }
 }
+*/
+*/
 
 pub fn building_completion_system(
     mut commands: Commands,

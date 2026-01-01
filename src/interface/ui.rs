@@ -1,9 +1,8 @@
 use bevy::prelude::*;
-use crate::systems::jobs::{BuildingType, Blueprint, CurrentJob};
+use crate::systems::jobs::{BuildingType, Blueprint};
 use crate::systems::logistics::{ZoneType, ZoneMode};
-use crate::entities::colonist::Colonist;
 use crate::entities::damned_soul::DamnedSoul;
-use crate::entities::familiar::{Familiar, ActiveCommand, FamiliarCommand};
+use crate::entities::familiar::Familiar;
 use crate::systems::work::AssignedTask;
 use crate::systems::time::{TimeSpeed, SpeedButton, ClockText};
 
@@ -107,7 +106,7 @@ pub fn setup_ui(mut commands: Commands) {
         });
     });
 
-    // Sub-menus (Architect and Zones)
+    // Sub-menus
     commands.spawn((
         Node {
             display: Display::None,
@@ -186,7 +185,7 @@ pub fn setup_ui(mut commands: Commands) {
             height: Val::Auto,
             position_type: PositionType::Absolute,
             right: Val::Px(20.0),
-            top: Val::Px(120.0), // Below clock
+            top: Val::Px(120.0),
             flex_direction: FlexDirection::Column,
             padding: UiRect::all(Val::Px(10.0)),
             ..default()
@@ -208,7 +207,7 @@ pub fn setup_ui(mut commands: Commands) {
         ));
     });
 
-    // Time Control & Clock UI
+    // Time Control
     commands.spawn((
         Node {
             position_type: PositionType::Absolute,
@@ -331,29 +330,18 @@ pub fn info_panel_system(
     mut q_panel: Query<&mut Node, With<InfoPanel>>,
     mut q_text_job: Query<&mut Text, (With<InfoPanelJobText>, Without<InfoPanelHeader>)>,
     mut q_text_header: Query<&mut Text, (With<InfoPanelHeader>, Without<InfoPanelJobText>)>,
-    q_colonists: Query<&CurrentJob, With<Colonist>>,
     q_souls: Query<(&DamnedSoul, &AssignedTask)>,
     q_blueprints: Query<&Blueprint>,
+    q_familiars: Query<&Familiar>,
 ) {
     let mut panel_node = q_panel.single_mut();
-    
+    panel_node.display = Display::None;
+
     if let Some(entity) = selected.0 {
         let mut header_text = q_text_header.single_mut();
         let mut job_text = q_text_job.single_mut();
 
-        if let Ok(job) = q_colonists.get(entity) {
-            panel_node.display = Display::Flex;
-            header_text.0 = "Colonist Info".to_string();
-            if let Some(job_entity) = job.0 {
-                if let Ok(bp) = q_blueprints.get(job_entity) {
-                    job_text.0 = format!("Job: Building {:?} ({:.0}%)", bp.kind, bp.progress * 100.0);
-                } else {
-                    job_text.0 = "Job: Moving".to_string();
-                }
-            } else {
-                job_text.0 = "Job: Idle".to_string();
-            }
-        } else if let Ok((soul, task)) = q_souls.get(entity) {
+        if let Ok((soul, task)) = q_souls.get(entity) {
             panel_node.display = Display::Flex;
             header_text.0 = "Damned Soul Info".to_string();
             let task_str = match task {
@@ -368,10 +356,22 @@ pub fn info_panel_system(
                 soul.fatigue * 100.0,
                 task_str
             );
-        } else {
-            panel_node.display = Display::None;
+        } else if let Ok(bp) = q_blueprints.get(entity) {
+            panel_node.display = Display::Flex;
+            header_text.0 = "Blueprint Info".to_string();
+            job_text.0 = format!(
+                "Type: {:?}\nProgress: {:.0}%",
+                bp.kind,
+                bp.progress * 100.0
+            );
+        } else if let Ok(familiar) = q_familiars.get(entity) {
+            panel_node.display = Display::Flex;
+            header_text.0 = "Familiar Info".to_string();
+            job_text.0 = format!(
+                "Type: {:?}\nRange: {:.0} tiles",
+                familiar.familiar_type,
+                familiar.command_radius / 16.0
+            );
         }
-    } else {
-        panel_node.display = Display::None;
     }
 }

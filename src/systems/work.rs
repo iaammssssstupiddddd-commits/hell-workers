@@ -72,9 +72,6 @@ pub fn task_delegation_system(
             }
 
             if soul.motivation < 0.1 {
-                if soul_entity.index() % 10 == 0 {
-                    info!("DELEGATION: Soul {:?} skipped (low motivation: {:.2})", soul_entity, soul.motivation);
-                }
                 continue;
             }
 
@@ -88,13 +85,13 @@ pub fn task_delegation_system(
                         let stock_pos = stock_transform.translation.truncate();
                         if stock_pos.distance(area.center) < area.radius {
                             target_stockpile = Some(stock_entity);
-                            break; // 最初の1つを採用
+                            break; 
                         }
                     }
                 }
 
                 if let Some(stock_entity) = target_stockpile {
-                    // 2. 運搬モード：最も近いリソースを探す（エリア外も可）
+                    // 2. 運搬モード：最も近いリソースを探す
                     let mut closest: Option<(Entity, f32)> = None;
                     for (res_entity, res_transform) in q_resources.iter() {
                         let res_pos = res_transform.translation.truncate();
@@ -111,12 +108,12 @@ pub fn task_delegation_system(
                             phase: HaulPhase::GoingToItem,
                         };
                         commands.entity(res_entity).insert(ClaimedBy(soul_entity));
-                        info!("DELEGATION: Soul {:?} assigned HAUL task to stockpile {:?}", soul_entity, stock_entity);
+                        debug!("DELEGATION: Soul {:?} assigned HAUL to {:?}", soul_entity, stock_entity);
                         continue;
                     }
                 }
 
-                // 3. 収集モード：エリア内のリソースを探す（既存ロジック）
+                // 3. 収集モード：エリア内のリソースを探す
                 let mut closest: Option<(Entity, f32)> = None;
                 let (target_center, target_radius) = if let Some(area) = task_area {
                     (area.center, area.radius)
@@ -140,7 +137,7 @@ pub fn task_delegation_system(
                         phase: GatherPhase::GoingToResource,
                     };
                     commands.entity(res_entity).insert(ClaimedBy(soul_entity));
-                    info!("DELEGATION: Soul {:?} assigned GATHER task at dist={:.1}", soul_entity, dist);
+                    debug!("DELEGATION: Soul {:?} assigned GATHER at dist={:.1}", soul_entity, dist);
                 }
             }
         }
@@ -168,7 +165,7 @@ pub fn task_execution_system(
                             let dist_to_current_dest = dest.0.distance(res_pos);
                             if path.waypoints.is_empty() || dist_to_current_dest > 1.0 {
                                 dest.0 = res_pos;
-                                info!("TASK_EXEC: Soul {:?} heading to target {:?} (dist: {:.1})", soul_entity, res_pos, dist_to_res);
+                                debug!("TASK_EXEC: Soul {:?} heading to target", soul_entity);
                             }
 
                             if dist_to_res < TILE_SIZE * 0.8 {
@@ -176,7 +173,7 @@ pub fn task_execution_system(
                                     target,
                                     phase: GatherPhase::Collecting,
                                 };
-                                info!("TASK_EXEC: Soul {:?} ARRIVED at resource {:?}", soul_entity, target);
+                                debug!("TASK_EXEC: Soul {:?} arrived at resource", soul_entity);
                             }
                         } else {
                             *task = AssignedTask::None;
@@ -186,7 +183,7 @@ pub fn task_execution_system(
                     GatherPhase::Collecting => {
                         if let Ok(_) = q_resources.get(target) {
                             commands.entity(target).despawn();
-                            info!("TASK_EXEC: Soul {:?} COLLECTED resource {:?}", soul_entity, target);
+                            info!("TASK_EXEC: Soul {:?} collected resource", soul_entity);
                         }
                         *task = AssignedTask::Gather {
                             target,
@@ -217,7 +214,7 @@ pub fn task_execution_system(
                                     phase: HaulPhase::GoingToStockpile,
                                 };
                                 path.waypoints.clear();
-                                info!("TASK_EXEC: Soul {:?} PICKED UP item {:?}", soul_entity, item);
+                                info!("TASK_EXEC: Soul {:?} picked up item", soul_entity);
                             }
                         } else {
                             *task = AssignedTask::None;
@@ -236,10 +233,9 @@ pub fn task_execution_system(
                                     stockpile,
                                     phase: HaulPhase::Dropping,
                                 };
-                                info!("TASK_EXEC: Soul {:?} ARRIVED at stockpile", soul_entity);
+                                debug!("TASK_EXEC: Soul {:?} arrived at stockpile", soul_entity);
                             }
                         } else {
-                            // ストックパイルが消えた？
                             *task = AssignedTask::None;
                             path.waypoints.clear();
                         }
@@ -254,7 +250,7 @@ pub fn task_execution_system(
                                     InStockpile,
                                 ));
                                 commands.entity(item_entity).remove::<ClaimedBy>();
-                                info!("TASK_EXEC: Soul {:?} DROPPED item at stockpile", soul_entity);
+                                info!("TASK_EXEC: Soul {:?} dropped item at stockpile", soul_entity);
                             }
                         }
                         *task = AssignedTask::None;
