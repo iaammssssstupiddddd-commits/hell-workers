@@ -2,17 +2,24 @@ use bevy::prelude::*;
 use rand::Rng;
 use crate::entities::damned_soul::{DamnedSoul, IdleState, IdleBehavior, Destination, Path};
 use crate::world::map::WorldMap;
+use crate::systems::work::AssignedTask;
 
 /// 怠惰行動のAIシステム
 /// やる気が低い人間は怠惰な行動をする
+/// タスクがある人間は怠惰行動をしない
 pub fn idle_behavior_system(
     time: Res<Time>,
     world_map: Res<WorldMap>,
-    mut query: Query<(&Transform, &mut IdleState, &mut Destination, &DamnedSoul, &Path)>,
+    mut query: Query<(&Transform, &mut IdleState, &mut Destination, &DamnedSoul, &Path, &AssignedTask)>,
 ) {
     let dt = time.delta_secs();
 
-    for (transform, mut idle, mut dest, soul, path) in query.iter_mut() {
+    for (transform, mut idle, mut dest, soul, path, task) in query.iter_mut() {
+        // タスクがある場合は怠惰行動をしない
+        if !matches!(task, AssignedTask::None) {
+            continue;
+        }
+
         // やる気が高い場合は怠惰行動をしない
         if soul.motivation > 0.3 {
             continue;
