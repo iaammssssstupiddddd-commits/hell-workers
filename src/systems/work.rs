@@ -6,6 +6,7 @@ use crate::entities::familiar::{Familiar, ActiveCommand, FamiliarCommand};
 use crate::systems::command::TaskArea;
 use crate::systems::logistics::{ResourceItem, ClaimedBy, Stockpile, Inventory, InStockpile};
 use crate::systems::jobs::{Designation, WorkType, Tree, Rock};
+use crate::world::map::WorldMap;
 
 /// 人間に割り当てられたタスク
 #[derive(Component, Clone, Debug)]
@@ -50,7 +51,7 @@ pub fn task_delegation_system(
     mut q_souls: Query<(Entity, &Transform, &DamnedSoul, &mut AssignedTask)>,
     q_designations: Query<(Entity, &Transform, &Designation), Without<ClaimedBy>>,
     q_stockpiles: Query<(Entity, &Transform), With<Stockpile>>,
-    q_resources: Query<Entity, With<ResourceItem>>,
+    _q_resources: Query<Entity, With<ResourceItem>>,
 ) {
     for (fam_transform, familiar, command, task_area) in q_familiars.iter() {
         if matches!(command.command, FamiliarCommand::Idle) {
@@ -66,8 +67,28 @@ pub fn task_delegation_system(
             
             // 指示エリアの判定
             if let Some(area) = task_area {
-                // エリア指定がある場合はエリア外ならスキップ
-                if !area.contains(des_pos) {
+                let mut valid = area.contains(des_pos);
+                
+                // 運搬タスクの場合、運び先の倉庫がエリア内なら許可（遠くの資源も回収させるため）
+                if !valid && matches!(designation.work_type, WorkType::Haul) {
+                    let mut nearest_stock_pos: Option<Vec2> = None;
+                    let mut min_dist = f32::MAX;
+                    for (_, s_transform) in q_stockpiles.iter() {
+                        let s_pos = s_transform.translation.truncate();
+                        let dist = des_pos.distance(s_pos);
+                        if dist < min_dist {
+                            min_dist = dist;
+                            nearest_stock_pos = Some(s_pos);
+                        }
+                    }
+                    if let Some(s_pos) = nearest_stock_pos {
+                        if area.contains(s_pos) {
+                            valid = true;
+                        }
+                    }
+                }
+
+                if !valid {
                     continue;
                 }
             } else {
@@ -172,7 +193,7 @@ pub fn task_execution_system(
                         }
                     }
                     GatherPhase::Collecting => {
-                        if let Ok((res_transform, tree, rock, item)) = q_targets.get(target) {
+                        if let Ok((res_transform, tree, rock, _item)) = q_targets.get(target) {
                             let pos = res_transform.translation;
                             
                             // 木を伐採した場合は木材を落とす
@@ -282,6 +303,57 @@ pub fn task_execution_system(
                 }
             }
             AssignedTask::None => {}
+        }
+    }
+}
+
+/// タスクエリア内に倉庫がある場合、自動的に運搬指示を出すシステム
+pub fn task_area_auto_haul_system(
+    mut commands: Commands,
+    q_familiars: Query<(&ActiveCommand, &TaskArea)>,
+    q_stockpiles: Query<(&Transform, &Stockpile)>,
+    q_items_in_stock: Query<&Transform, With<InStockpile>>,
+    q_resources: Query<(Entity, &Transform), (With<ResourceItem>, Without<InStockpile>, Without<Designation>)>,
+) {
+    for (active_command, task_area) in q_familiars.iter() {
+        if matches!(active_command.command, FamiliarCommand::Idle) {
+            continue;
+        }
+
+        // 1. エリア内の倉庫を探す
+        for (stock_transform, stockpile) in q_stockpiles.iter() {
+            let stock_pos = stock_transform.translation.truncate();
+            if !task_area.contains(stock_pos) {
+                continue;
+            }
+
+            // 2. 倉庫の空きを確認 (そのタイルにあるアイテム数)
+            let current_count = q_items_in_stock.iter()
+                .filter(|t| WorldMap::world_to_grid(t.translation.truncate()) == WorldMap::world_to_grid(stock_pos))
+                .count();
+
+            if current_count >= stockpile.capacity {
+                continue;
+            }
+
+            // 3. 付近の未指定リソースを探してHaul指示を出す
+            let mut nearest_resource: Option<(Entity, f32)> = None;
+            for (item_entity, item_transform) in q_resources.iter() {
+                let item_pos = item_transform.translation.truncate();
+                let dist = item_pos.distance(stock_pos);
+                
+                // 倉庫から一定範囲内（例：15タイル）のものを対象
+                if dist < TILE_SIZE * 15.0 {
+                    if nearest_resource.is_none() || dist < nearest_resource.unwrap().1 {
+                        nearest_resource = Some((item_entity, dist));
+                    }
+                }
+            }
+
+            if let Some((item_entity, _)) = nearest_resource {
+                commands.entity(item_entity).insert(Designation { work_type: WorkType::Haul });
+                debug!("AUTO_HAUL: Designated item {:?} for stockpile", item_entity);
+            }
         }
     }
 }

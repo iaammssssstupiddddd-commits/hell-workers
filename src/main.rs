@@ -20,7 +20,7 @@ use crate::systems::command::{
     designation_visual_system, update_designation_indicator_system,
     area_selection_indicator_system
 };
-use crate::systems::work::{task_delegation_system, task_execution_system};
+use crate::systems::work::{task_delegation_system, task_execution_system, task_area_auto_haul_system};
 
 // 既存システム
 use crate::systems::jobs::building_completion_system;
@@ -88,6 +88,7 @@ fn main() {
                 motivation_system,  // やる気を先に更新
                 fatigue_system,
                 task_delegation_system,  // その後タスク割り当て
+                task_area_auto_haul_system, // 自動運搬タスクの生成
                 task_execution_system,   // タスク実行
                 idle_behavior_system,
                 idle_visual_system,
