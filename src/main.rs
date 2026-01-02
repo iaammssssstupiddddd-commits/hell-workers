@@ -42,7 +42,7 @@ fn main() {
             ..default()
         }).set(bevy::log::LogPlugin {
             level: bevy::log::Level::INFO,
-            filter: "wgpu=error,bevy_app=debug".to_string(),
+            filter: "wgpu=error,bevy_app=info".to_string(),
             ..default()
         }))
         // Resources from various modules
@@ -77,6 +77,7 @@ fn main() {
             time_control_keyboard_system,
             time_control_ui_system,
             // Hell Workers core systems
+            // Hell Workers core systems & Logic chain
             (
                 familiar_command_input_system,
                 task_area_selection_system,
@@ -85,16 +86,13 @@ fn main() {
                 designation_visual_system,
                 update_designation_indicator_system,
                 familiar_command_visual_system,
-                motivation_system,  // やる気を先に更新
+                motivation_system,
                 fatigue_system,
-                task_delegation_system,  // その後タスク割り当て
-                task_area_auto_haul_system, // 自動運搬タスクの生成
-                task_execution_system,   // タスク実行
+                task_delegation_system,
+                task_area_auto_haul_system,
+                task_execution_system,
                 idle_behavior_system,
                 idle_visual_system,
-            ).chain(),
-            // Logic chain
-            (
                 pathfinding_system, 
                 soul_movement,
                 familiar_movement,
