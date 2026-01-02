@@ -1,9 +1,11 @@
 use bevy::prelude::*;
 use crate::constants::*;
 use crate::entities::damned_soul::{DamnedSoul, Destination, Path};
+use crate::assets::GameAssets;
 use crate::entities::familiar::{Familiar, ActiveCommand, FamiliarCommand};
 use crate::systems::command::TaskArea;
 use crate::systems::logistics::{ResourceItem, ClaimedBy, Stockpile, Inventory, InStockpile};
+use crate::systems::jobs::{Designation, WorkType, Tree, Rock};
 
 /// 人間に割り当てられたタスク
 #[derive(Component, Clone, Debug)]
@@ -46,98 +48,88 @@ pub fn task_delegation_system(
     mut commands: Commands,
     q_familiars: Query<(&Transform, &Familiar, &ActiveCommand, Option<&TaskArea>)>,
     mut q_souls: Query<(Entity, &Transform, &DamnedSoul, &mut AssignedTask)>,
-    q_resources: Query<(Entity, &Transform), (With<ResourceItem>, Without<ClaimedBy>, Without<InStockpile>)>,
+    q_designations: Query<(Entity, &Transform, &Designation), Without<ClaimedBy>>,
     q_stockpiles: Query<(Entity, &Transform), With<Stockpile>>,
+    q_resources: Query<Entity, With<ResourceItem>>,
 ) {
-
     for (fam_transform, familiar, command, task_area) in q_familiars.iter() {
         if matches!(command.command, FamiliarCommand::Idle) {
             continue;
         }
 
-        // 指示を中心に（指示が届く範囲）
-        let command_center = fam_transform.translation.truncate();
+        let fam_pos = fam_transform.translation.truncate();
         let command_radius = familiar.command_radius;
 
-        for (soul_entity, soul_transform, soul, mut current_task) in q_souls.iter_mut() {
-            if !matches!(*current_task, AssignedTask::None) {
-                continue;
+        // 1. 周囲の指示（Designation）を探す
+        for (des_entity, des_transform, designation) in q_designations.iter() {
+            let des_pos = des_transform.translation.truncate();
+            
+            // 指示エリアの判定
+            if let Some(area) = task_area {
+                // エリア指定がある場合はエリア外ならスキップ
+                if !area.contains(des_pos) {
+                    continue;
+                }
+            } else {
+                // エリア指定がない場合は使い魔の指揮範囲内か？
+                if des_pos.distance(fam_pos) > command_radius {
+                    continue;
+                }
             }
 
-            let soul_pos = soul_transform.translation.truncate();
-            let dist_to_fam = soul_pos.distance(command_center);
-
-            if dist_to_fam > command_radius {
-                continue;
+            // 2. この仕事に割り当てる「暇な魂」を探す
+            let mut best_soul: Option<(Entity, f32)> = None;
+            for (soul_entity, soul_transform, soul, current_task) in q_souls.iter() {
+                if !matches!(*current_task, AssignedTask::None) || soul.motivation < 0.1 {
+                    continue;
+                }
+                let soul_pos = soul_transform.translation.truncate();
+                let dist = soul_pos.distance(des_pos);
+                if best_soul.is_none() || dist < best_soul.unwrap().1 {
+                    best_soul = Some((soul_entity, dist));
+                }
             }
 
-            if soul.motivation < 0.1 {
-                continue;
-            }
-
-            // 収集・運搬コマンドの処理
-            if matches!(command.command, FamiliarCommand::GatherResources) || matches!(command.command, FamiliarCommand::Patrol) {
-                
-                // 1. エリア内にストックパイルがあるか探す
-                let mut target_stockpile: Option<Entity> = None;
-                if let Some(area) = task_area {
-                    for (stock_entity, stock_transform) in q_stockpiles.iter() {
-                        let stock_pos = stock_transform.translation.truncate();
-                        if stock_pos.distance(area.center) < area.radius {
-                            target_stockpile = Some(stock_entity);
-                            break; 
+            if let Some((soul_entity, _)) = best_soul {
+                // タスク割り当て
+                match designation.work_type {
+                    WorkType::Chop | WorkType::Mine => {
+                        if let Ok(mut soul_task) = q_souls.get_mut(soul_entity).map(|(_, _, _, t)| t) {
+                            *soul_task = AssignedTask::Gather {
+                                target: des_entity,
+                                phase: GatherPhase::GoingToResource,
+                            };
+                            commands.entity(des_entity).insert(ClaimedBy(soul_entity));
+                            debug!("DELEGATION: Soul {:?} assigned to designation {:?}", soul_entity, des_entity);
+                            break; // 一つの指示に一人の魂（簡略化のため）
                         }
                     }
-                }
+                    WorkType::Haul => {
+                        // 運搬の場合は最寄りのストックパイルも探す
+                        let mut best_stockpile: Option<Entity> = None;
+                        let mut min_stock_dist = f32::MAX;
+                        for (stock_entity, stock_transform) in q_stockpiles.iter() {
+                            let dist = stock_transform.translation.truncate().distance(des_pos);
+                            if dist < min_stock_dist {
+                                min_stock_dist = dist;
+                                best_stockpile = Some(stock_entity);
+                            }
+                        }
 
-                if let Some(stock_entity) = target_stockpile {
-                    // 2. 運搬モード：最も近いリソースを探す
-                    let mut closest: Option<(Entity, f32)> = None;
-                    for (res_entity, res_transform) in q_resources.iter() {
-                        let res_pos = res_transform.translation.truncate();
-                        let dist_to_soul = soul_pos.distance(res_pos);
-                        if closest.is_none() || dist_to_soul < closest.unwrap().1 {
-                            closest = Some((res_entity, dist_to_soul));
+                        if let Some(stock_entity) = best_stockpile {
+                            if let Ok(mut soul_task) = q_souls.get_mut(soul_entity).map(|(_, _, _, t)| t) {
+                                *soul_task = AssignedTask::Haul {
+                                    item: des_entity,
+                                    stockpile: stock_entity,
+                                    phase: HaulPhase::GoingToItem,
+                                };
+                                commands.entity(des_entity).insert(ClaimedBy(soul_entity));
+                                debug!("DELEGATION: Soul {:?} assigned HAUL designation {:?}", soul_entity, des_entity);
+                                break;
+                            }
                         }
                     }
-
-                    if let Some((res_entity, _)) = closest {
-                        *current_task = AssignedTask::Haul {
-                            item: res_entity,
-                            stockpile: stock_entity,
-                            phase: HaulPhase::GoingToItem,
-                        };
-                        commands.entity(res_entity).insert(ClaimedBy(soul_entity));
-                        debug!("DELEGATION: Soul {:?} assigned HAUL to {:?}", soul_entity, stock_entity);
-                        continue;
-                    }
-                }
-
-                // 3. 収集モード：エリア内のリソースを探す
-                let mut closest: Option<(Entity, f32)> = None;
-                let (target_center, target_radius) = if let Some(area) = task_area {
-                    (area.center, area.radius)
-                } else {
-                    (command_center, command_radius * 1.5)
-                };
-
-                for (res_entity, res_transform) in q_resources.iter() {
-                    let res_pos = res_transform.translation.truncate();
-                    if res_pos.distance(target_center) < target_radius {
-                        let dist_to_soul = soul_pos.distance(res_pos);
-                        if closest.is_none() || dist_to_soul < closest.unwrap().1 {
-                            closest = Some((res_entity, dist_to_soul));
-                        }
-                    }
-                }
-
-                if let Some((res_entity, dist)) = closest {
-                    *current_task = AssignedTask::Gather {
-                        target: res_entity,
-                        phase: GatherPhase::GoingToResource,
-                    };
-                    commands.entity(res_entity).insert(ClaimedBy(soul_entity));
-                    debug!("DELEGATION: Soul {:?} assigned GATHER at dist={:.1}", soul_entity, dist);
+                    _ => {}
                 }
             }
         }
@@ -148,8 +140,9 @@ pub fn task_delegation_system(
 pub fn task_execution_system(
     mut commands: Commands,
     mut q_souls: Query<(Entity, &Transform, &mut DamnedSoul, &mut AssignedTask, &mut Destination, &mut Path, &mut Inventory)>,
-    q_resources: Query<&Transform, With<ResourceItem>>,
+    q_targets: Query<(&Transform, Option<&Tree>, Option<&Rock>, Option<&ResourceItem>)>,
     q_stockpiles: Query<&Transform, With<Stockpile>>,
+    game_assets: Res<GameAssets>,
 ) {
     for (soul_entity, soul_transform, mut soul, mut task, mut dest, mut path, mut inventory) in q_souls.iter_mut() {
         let soul_pos = soul_transform.translation.truncate();
@@ -158,14 +151,13 @@ pub fn task_execution_system(
             AssignedTask::Gather { target, phase } => {
                 match phase {
                     GatherPhase::GoingToResource => {
-                        if let Ok(res_transform) = q_resources.get(target) {
+                        if let Ok((res_transform, _, _, _)) = q_targets.get(target) {
                             let res_pos = res_transform.translation.truncate();
                             let dist_to_res = soul_pos.distance(res_pos);
 
                             let dist_to_current_dest = dest.0.distance(res_pos);
                             if path.waypoints.is_empty() || dist_to_current_dest > 1.0 {
                                 dest.0 = res_pos;
-                                debug!("TASK_EXEC: Soul {:?} heading to target", soul_entity);
                             }
 
                             if dist_to_res < TILE_SIZE * 0.8 {
@@ -173,7 +165,6 @@ pub fn task_execution_system(
                                     target,
                                     phase: GatherPhase::Collecting,
                                 };
-                                debug!("TASK_EXEC: Soul {:?} arrived at resource", soul_entity);
                             }
                         } else {
                             *task = AssignedTask::None;
@@ -181,10 +172,41 @@ pub fn task_execution_system(
                         }
                     }
                     GatherPhase::Collecting => {
-                        if let Ok(_) = q_resources.get(target) {
+                        if let Ok((res_transform, tree, rock, item)) = q_targets.get(target) {
+                            let pos = res_transform.translation;
+                            
+                            // 木を伐採した場合は木材を落とす
+                            if tree.is_some() {
+                                commands.spawn((
+                                    ResourceItem(crate::systems::logistics::ResourceType::Wood),
+                                    Sprite {
+                                        image: game_assets.wood.clone(),
+                                        custom_size: Some(Vec2::splat(TILE_SIZE * 0.5)),
+                                        color: Color::srgb(0.5, 0.35, 0.05),
+                                        ..default()
+                                    },
+                                    Transform::from_translation(pos),
+                                ));
+                                info!("TASK_EXEC: Soul {:?} chopped a tree", soul_entity);
+                            } 
+                            // 岩を掘った場合は石材（仮で木材）を落とす
+                            else if rock.is_some() {
+                                // 本来はResourceType::Stoneだが現状Woodしかないので仮
+                                commands.spawn((
+                                    ResourceItem(crate::systems::logistics::ResourceType::Wood),
+                                    Sprite {
+                                        image: game_assets.stone.clone(),
+                                        custom_size: Some(Vec2::splat(TILE_SIZE * 0.5)),
+                                        ..default()
+                                    },
+                                    Transform::from_translation(pos),
+                                ));
+                                info!("TASK_EXEC: Soul {:?} mined a rock", soul_entity);
+                            }
+                            
                             commands.entity(target).despawn();
-                            info!("TASK_EXEC: Soul {:?} collected resource", soul_entity);
                         }
+                        
                         *task = AssignedTask::Gather {
                             target,
                             phase: GatherPhase::Done,
@@ -200,7 +222,7 @@ pub fn task_execution_system(
             AssignedTask::Haul { item, stockpile, phase } => {
                 match phase {
                     HaulPhase::GoingToItem => {
-                        if let Ok(res_transform) = q_resources.get(item) {
+                        if let Ok((res_transform, _, _, _)) = q_targets.get(item) {
                             let res_pos = res_transform.translation.truncate();
                             if dest.0.distance(res_pos) > 1.0 {
                                 dest.0 = res_pos;

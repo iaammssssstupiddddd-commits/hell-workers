@@ -14,14 +14,19 @@ use crate::entities::damned_soul::{spawn_damned_souls, pathfinding_system, soul_
 use crate::entities::familiar::{spawn_familiar, update_familiar_range_indicator, familiar_movement};
 use crate::systems::motivation::{motivation_system, fatigue_system};
 use crate::systems::idle::{idle_behavior_system, idle_visual_system};
-use crate::systems::command::{familiar_command_input_system, familiar_command_visual_system, task_area_selection_system, task_area_indicator_system, TaskMode};
+use crate::systems::command::{
+    familiar_command_input_system, familiar_command_visual_system, task_area_selection_system, 
+    task_area_indicator_system, TaskMode,
+    designation_visual_system, update_designation_indicator_system,
+    area_selection_indicator_system
+};
 use crate::systems::work::{task_delegation_system, task_execution_system};
 
 // 既存システム
 use crate::systems::jobs::building_completion_system;
 use crate::systems::logistics::{zone_placement, item_spawner_system, initial_resource_spawner, resource_count_display_system, ResourceLabels, ZoneMode};
 use crate::systems::time::{game_time_system, time_control_keyboard_system, time_control_ui_system, GameTime};
-use crate::interface::ui::{setup_ui, ui_interaction_system, menu_visibility_system, info_panel_system, MenuState};
+use crate::interface::ui::{setup_ui, ui_interaction_system, menu_visibility_system, info_panel_system, update_mode_text_system, familiar_context_menu_system, MenuState};
 use crate::interface::camera::{camera_movement, camera_zoom, MainCamera};
 use crate::interface::selection::{handle_mouse_input, blueprint_placement, update_selection_indicator, SelectedEntity, BuildMode};
 
@@ -63,6 +68,8 @@ fn main() {
             ui_interaction_system,
             menu_visibility_system,
             info_panel_system,
+            update_mode_text_system,
+            familiar_context_menu_system,
             update_selection_indicator,
             update_familiar_range_indicator,
             resource_count_display_system,
@@ -74,6 +81,9 @@ fn main() {
                 familiar_command_input_system,
                 task_area_selection_system,
                 task_area_indicator_system,
+                area_selection_indicator_system,
+                designation_visual_system,
+                update_designation_indicator_system,
                 familiar_command_visual_system,
                 motivation_system,  // やる気を先に更新
                 fatigue_system,
