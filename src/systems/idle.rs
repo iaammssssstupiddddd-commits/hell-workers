@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 use rand::Rng;
+use crate::constants::{MOTIVATION_THRESHOLD, FATIGUE_THRESHOLD};
 use crate::entities::damned_soul::{DamnedSoul, IdleState, IdleBehavior, Destination, Path};
 use crate::world::map::WorldMap;
 use crate::systems::work::AssignedTask;
@@ -20,8 +21,9 @@ pub fn idle_behavior_system(
             continue;
         }
 
-        // やる気が高い場合は怠惰行動をしない
-        if soul.motivation > 0.3 {
+        // やる気があり疲労が閾値未満の場合は怠惰行動をしない（次のタスクを待つ）
+        // これにより、ワーカーはモチベーションが続く限り疲労が閾値に達するまで継続的にタスクを行う
+        if soul.motivation > MOTIVATION_THRESHOLD && soul.fatigue < FATIGUE_THRESHOLD {
             continue;
         }
 
