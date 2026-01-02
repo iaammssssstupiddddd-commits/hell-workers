@@ -57,9 +57,12 @@ impl Default for FamiliarCommand {
 #[derive(Component, Default)]
 pub struct ActiveCommand {
     pub command: FamiliarCommand,
-    #[allow(dead_code)]
     pub assigned_souls: Vec<Entity>,  // 割り当てられた魂
 }
+
+/// 魂がどの使い魔に使役されているかを示す
+#[derive(Component, Debug, Clone, Copy)]
+pub struct UnderCommand(pub Entity);
 
 /// 使い魔をスポーンする
 pub fn spawn_familiar(

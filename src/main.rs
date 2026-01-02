@@ -12,7 +12,7 @@ use crate::world::map::{WorldMap, spawn_map};
 // 新システム
 use crate::entities::damned_soul::{spawn_damned_souls, pathfinding_system, soul_movement, animation_system};
 use crate::entities::familiar::{spawn_familiar, update_familiar_range_indicator, familiar_movement};
-use crate::systems::motivation::{motivation_system, fatigue_system};
+use crate::systems::motivation::{motivation_system, fatigue_system, familiar_hover_visualization_system};
 use crate::systems::idle::{idle_behavior_system, idle_visual_system};
 use crate::systems::command::{
     familiar_command_input_system, familiar_command_visual_system, task_area_selection_system, 
@@ -20,7 +20,7 @@ use crate::systems::command::{
     designation_visual_system, update_designation_indicator_system,
     area_selection_indicator_system
 };
-use crate::systems::work::{task_delegation_system, task_execution_system, task_area_auto_haul_system};
+use crate::systems::work::{task_delegation_system, task_execution_system, task_area_auto_haul_system, cleanup_commanded_souls_system};
 
 // 既存システム
 use crate::systems::jobs::building_completion_system;
@@ -89,13 +89,19 @@ fn main() {
                 motivation_system,
                 fatigue_system,
                 task_delegation_system,
+                cleanup_commanded_souls_system,
                 task_area_auto_haul_system,
                 task_execution_system,
+                familiar_hover_visualization_system,
                 idle_behavior_system,
                 idle_visual_system,
                 pathfinding_system, 
                 soul_movement,
                 familiar_movement,
+                // Split here if needed, but 20 is usually the limit. 
+                // Let's move the last two to another call or just shorten the tuple.
+            ).chain(),
+            (
                 building_completion_system, 
                 animation_system
             ).chain(),
