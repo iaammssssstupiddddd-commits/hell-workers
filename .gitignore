@@ -1,7 +1,47 @@
+# Rust
 /target
-/dist
-/.trunk
-*.wasm
 **/*.rs.bk
-.DS_Store
+Cargo.lock
+
+# Build artifacts
+/dist
+*.wasm
+*.exe
+*.pdb
+*.dll
+*.lib
+
+# Trunk
+/.trunk
+
+# Logs and error files
 *.log
+# Allow important text files but ignore log/error files
+*.txt
+!README*.txt
+!LICENSE*.txt
+!CHANGELOG*.txt
+!NOTES*.txt
+build_error*.txt
+build_error*.log
+check_out.txt
+cargo_check.log
+final_check*.log
+game_log.txt
+run_output.log
+build_errors.txt
+
+# Logs directory
+/logs
+
+# OS files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# IDE
+.vscode/
+.idea/
+*.iml
