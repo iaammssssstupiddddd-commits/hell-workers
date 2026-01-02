@@ -4,6 +4,7 @@ use rand::Rng;
 use crate::constants::*;
 use crate::assets::GameAssets;
 use crate::world::map::WorldMap;
+use crate::systems::jobs::{Tree, Rock};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ResourceType {
@@ -124,8 +125,48 @@ pub fn initial_resource_spawner(
     world_map: Res<WorldMap>,
 ) {
     let mut rng = rand::thread_rng();
+    
+    // 木のスポーン
+    for _ in 0..15 {
+        let gx = rng.gen_range(5..MAP_WIDTH-5);
+        let gy = rng.gen_range(5..MAP_HEIGHT-5);
+        if world_map.is_walkable(gx, gy) {
+            let pos = WorldMap::grid_to_world(gx, gy);
+            commands.spawn((
+                Tree,
+                Sprite {
+                    image: game_assets.wood.clone(), // TODO: 木のテクスチャ
+                    custom_size: Some(Vec2::splat(TILE_SIZE * 0.8)),
+                    color: Color::srgb(0.2, 0.5, 0.2),
+                    ..default()
+                },
+                Transform::from_xyz(pos.x, pos.y, 0.5),
+            ));
+        }
+    }
+
+    // 岩のスポーン
+    for _ in 0..10 {
+        let gx = rng.gen_range(5..MAP_WIDTH-5);
+        let gy = rng.gen_range(5..MAP_HEIGHT-5);
+        if world_map.is_walkable(gx, gy) {
+            let pos = WorldMap::grid_to_world(gx, gy);
+            commands.spawn((
+                Rock,
+                Sprite {
+                    image: game_assets.stone.clone(),
+                    custom_size: Some(Vec2::splat(TILE_SIZE * 0.7)),
+                    color: Color::srgb(0.5, 0.5, 0.5),
+                    ..default()
+                },
+                Transform::from_xyz(pos.x, pos.y, 0.5),
+            ));
+        }
+    }
+
+    // 既存の資材も少し撒く
     let mut count = 0;
-    while count < 10 {
+    while count < 5 {
         let gx = rng.gen_range(5..MAP_WIDTH-5);
         let gy = rng.gen_range(5..MAP_HEIGHT-5);
         if world_map.is_walkable(gx, gy) {
@@ -143,7 +184,7 @@ pub fn initial_resource_spawner(
             count += 1;
         }
     }
-    info!("SPAWNER: Initial 10 wood resources spawned");
+    info!("SPAWNER: Trees, Rocks, and Initial wood spawned");
 }
 
 pub fn resource_count_display_system(
