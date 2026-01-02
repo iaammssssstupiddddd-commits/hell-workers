@@ -24,3 +24,4 @@ $totalSize = (Get-ChildItem -Recurse -ErrorAction SilentlyContinue | Measure-Obj
 Write-Host "Total: $([math]::Round($totalSize/1MB, 2)) MB ($([math]::Round($totalSize/1GB, 3)) GB)" -ForegroundColor Yellow
 
 
+

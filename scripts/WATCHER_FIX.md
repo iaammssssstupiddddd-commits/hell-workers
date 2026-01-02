@@ -121,3 +121,4 @@ Windowsでは、1つのプロセスが監視できるファイル数の上限が
 - [Trunk Watch Configuration](https://trunkrs.dev/configuration/)
 
 
+
