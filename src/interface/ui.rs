@@ -418,7 +418,7 @@ pub fn info_panel_system(
     mut q_panel: Query<&mut Node, With<InfoPanel>>,
     mut q_text_job: Query<&mut Text, (With<InfoPanelJobText>, Without<InfoPanelHeader>)>,
     mut q_text_header: Query<&mut Text, (With<InfoPanelHeader>, Without<InfoPanelJobText>)>,
-    q_souls: Query<(&DamnedSoul, &AssignedTask)>,
+    q_souls: Query<(&DamnedSoul, &AssignedTask, &crate::systems::logistics::Inventory)>,
     q_blueprints: Query<&Blueprint>,
     q_familiars: Query<&Familiar>,
     q_items: Query<&crate::systems::logistics::ResourceItem>,
@@ -432,20 +432,35 @@ pub fn info_panel_system(
         let mut header_text = q_text_header.single_mut();
         let mut job_text = q_text_job.single_mut();
 
-        if let Ok((soul, task)) = q_souls.get(entity) {
+        if let Ok((soul, task, inventory)) = q_souls.get(entity) {
             panel_node.display = Display::Flex;
             header_text.0 = "Damned Soul Info".to_string();
+            
+            // タスクの詳細情報
             let task_str = match task {
-                AssignedTask::None => "Idle",
-                AssignedTask::Gather { .. } => "Gathering",
-                AssignedTask::Haul { .. } => "Hauling",
+                AssignedTask::None => "Idle".to_string(),
+                AssignedTask::Gather { phase, .. } => format!("Gather ({:?})", phase),
+                AssignedTask::Haul { phase, .. } => format!("Haul ({:?})", phase),
             };
+            
+            // インベントリ情報
+            let inv_str = if let Some(item_entity) = inventory.0 {
+                if let Ok(item) = q_items.get(item_entity) {
+                    format!("Carrying: {:?}", item.0)
+                } else {
+                    format!("Carrying: Entity {:?}", item_entity)
+                }
+            } else {
+                "Carrying: None".to_string()
+            };
+            
             job_text.0 = format!(
-                "Motivation: {:.0}%\nLaziness: {:.0}%\nFatigue: {:.0}%\nTask: {}",
+                "Motivation: {:.0}%\nLaziness: {:.0}%\nFatigue: {:.0}%\nTask: {}\n{}",
                 soul.motivation * 100.0,
                 soul.laziness * 100.0,
                 soul.fatigue * 100.0,
-                task_str
+                task_str,
+                inv_str
             );
         } else if let Ok(bp) = q_blueprints.get(entity) {
             panel_node.display = Display::Flex;
