@@ -6,6 +6,7 @@ use crate::systems::work::AssignedTask;
 
 /// やる気・怠惰の更新システム
 /// 使い魔の指定エリア内にいる人間はやる気が上がり、エリア外では怠惰に戻る
+/// タスクが割り当てられているワーカーはモチベーションを維持する
 pub fn motivation_system(
     time: Res<Time>,
     q_familiars: Query<(&Transform, &Familiar, &ActiveCommand, Option<&TaskArea>)>,
@@ -13,8 +14,9 @@ pub fn motivation_system(
 ) {
     let dt = time.delta_secs();
 
-    for (soul_transform, mut soul, _task) in q_souls.iter_mut() {
+    for (soul_transform, mut soul, task) in q_souls.iter_mut() {
         let soul_pos = soul_transform.translation.truncate();
+        let has_task = !matches!(task, AssignedTask::None);
         
         // 近くにアクティブな使い魔がいるかチェック
         let mut best_influence = 0.0_f32;
@@ -41,12 +43,20 @@ pub fn motivation_system(
         }
 
         if best_influence > 0.0 {
-            // 使い魔の影響下：やる気が上がる（速度アップ 2.5 -> 4.0）
+            // 使い魔の影響下：やる気が上がる
             let motivation_boost = best_influence * dt * 4.0; 
             soul.motivation = (soul.motivation + motivation_boost).min(1.0);
             soul.laziness = (soul.laziness - best_influence * dt * 2.5).max(0.0);
+        } else if has_task {
+            // タスクがある場合：モチベーションをゆっくり維持（使い魔の影響外でも働き続ける）
+            // ただしモチベーションは非常にゆっくり減少する（タスク完了を促す）
+            soul.motivation = (soul.motivation - dt * 0.02).max(0.0);
+            // 仕事中は怠惰にならない
+            soul.laziness = (soul.laziness - dt * 0.1).max(0.0);
+            // 仕事中は疲労が蓄積（task_execution_systemでも蓄積するが、移動中も少し）
+            soul.fatigue = (soul.fatigue + dt * 0.01).min(1.0);
         } else {
-            // 使い魔の影響外：やる気が下がり、怠惰に戻る
+            // 使い魔の影響外でタスクもなし：やる気が下がり、怠惰に戻る
             soul.motivation = (soul.motivation - dt * 0.1).max(0.0);
             soul.laziness = (soul.laziness + dt * 0.05).min(1.0);
             
