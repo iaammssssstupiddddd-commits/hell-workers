@@ -4,7 +4,7 @@ use crate::systems::logistics::{ZoneType, ZoneMode};
 use crate::entities::damned_soul::DamnedSoul;
 use crate::entities::familiar::Familiar;
 use crate::systems::work::AssignedTask;
-use crate::systems::time::{TimeSpeed, SpeedButton, ClockText};
+use crate::systems::time::ClockText;
 
 #[derive(Resource, Default, Debug, Clone, Copy)]
 pub enum MenuState {
