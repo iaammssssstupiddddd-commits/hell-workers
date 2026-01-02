@@ -36,3 +36,4 @@ if ($currentSize -gt $maxSizeBytes) {
 }
 
 
+
