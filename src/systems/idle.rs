@@ -104,9 +104,17 @@ pub fn idle_behavior_system(
 
 /// 怠惰行動のビジュアルフィードバック
 pub fn idle_visual_system(
-    mut query: Query<(&mut Transform, &mut Sprite, &IdleState, &DamnedSoul)>,
+    mut query: Query<(&mut Transform, &mut Sprite, &IdleState, &DamnedSoul, &AssignedTask)>,
 ) {
-    for (mut transform, mut sprite, idle, soul) in query.iter_mut() {
+    for (mut transform, mut sprite, idle, soul, task) in query.iter_mut() {
+        // タスクがある場合はビジュアルをリセット
+        if !matches!(task, AssignedTask::None) {
+            transform.rotation = Quat::IDENTITY;
+            transform.scale = Vec3::ONE;
+            sprite.color = Color::WHITE;
+            continue;
+        }
+
         match idle.behavior {
             IdleBehavior::Sleeping => {
                 // 寝ている：横倒しになる

@@ -1,8 +1,8 @@
 use bevy::prelude::*;
 use crate::constants::*;
 use crate::assets::GameAssets;
-// use crate::entities::colonist::{Colonist, Destination};
-// use crate::systems::logistics::{ResourceItem, ClaimedBy, InStockpile};
+
+// --- Components ---
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BuildingType {
@@ -12,7 +12,8 @@ pub enum BuildingType {
 }
 
 #[derive(Component)]
-pub struct Building(#[allow(dead_code)] pub BuildingType);
+#[allow(dead_code)]
+pub struct Building(pub BuildingType);
 
 #[derive(Component)]
 pub struct Tree;
@@ -26,7 +27,7 @@ pub struct Blueprint {
     pub progress: f32, // 0.0 to 1.0
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum WorkType {
     Chop,       // 伐採
     Mine,       // 採掘
@@ -40,9 +41,7 @@ pub struct Designation {
     pub work_type: WorkType,
 }
 
-#[derive(Component)]
-#[allow(dead_code)]
-pub struct CurrentJob(pub Option<Entity>);
+// --- Systems ---
 
 pub fn building_completion_system(
     mut commands: Commands,
@@ -53,10 +52,16 @@ pub fn building_completion_system(
         if bp.progress >= 1.0 {
             info!("BUILDING: Completed at {:?}", transform.translation);
             commands.entity(entity).despawn();
+            
+            let sprite_image = match bp.kind {
+                BuildingType::Wall => game_assets.wall.clone(),
+                BuildingType::Floor => game_assets.stone.clone(),
+            };
+
             commands.spawn((
                 Building(bp.kind),
                 Sprite {
-                    image: game_assets.wall.clone(),
+                    image: sprite_image,
                     custom_size: Some(Vec2::splat(TILE_SIZE)),
                     ..default()
                 },
