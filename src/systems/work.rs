@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use std::collections::HashMap;
 use crate::constants::*;
 use crate::entities::damned_soul::{DamnedSoul, Destination, Path};
 use crate::entities::familiar::{ActiveCommand, FamiliarCommand, UnderCommand};
@@ -7,6 +8,67 @@ use crate::systems::command::TaskArea;
 use crate::systems::logistics::{ResourceItem, ClaimedBy, Stockpile, Inventory, InStockpile};
 use crate::systems::jobs::{Designation, WorkType, Tree, Rock, IssuedBy};
 use crate::world::map::WorldMap;
+
+/// 空間グリッド - Soul位置の高速検索用
+#[derive(Resource, Default)]
+pub struct SpatialGrid {
+    cells: HashMap<(i32, i32), Vec<Entity>>,
+    cell_size: f32,
+}
+
+impl SpatialGrid {
+    #[allow(dead_code)]
+    pub fn new(cell_size: f32) -> Self {
+        Self {
+            cells: HashMap::new(),
+            cell_size,
+        }
+    }
+
+    fn pos_to_cell(&self, pos: Vec2) -> (i32, i32) {
+        let cell_size = if self.cell_size > 0.0 { self.cell_size } else { TILE_SIZE * 4.0 };
+        ((pos.x / cell_size).floor() as i32, (pos.y / cell_size).floor() as i32)
+    }
+
+    pub fn clear(&mut self) {
+        self.cells.clear();
+    }
+
+    pub fn insert(&mut self, entity: Entity, pos: Vec2) {
+        let cell = self.pos_to_cell(pos);
+        self.cells.entry(cell).or_default().push(entity);
+    }
+
+    /// 指定位置周辺の9セルにいるエンティティを返す
+    pub fn get_nearby(&self, pos: Vec2) -> Vec<Entity> {
+        let (cx, cy) = self.pos_to_cell(pos);
+        let mut result = Vec::new();
+        for dx in -1..=1 {
+            for dy in -1..=1 {
+                if let Some(entities) = self.cells.get(&(cx + dx, cy + dy)) {
+                    result.extend(entities.iter().copied());
+                }
+            }
+        }
+        result
+    }
+}
+
+/// Designation キャッシュ - Familiar毎のDesignationをキャッシュ
+#[derive(Resource, Default)]
+pub struct DesignationCache {
+    pub by_familiar: HashMap<Entity, Vec<(Entity, Vec2, WorkType)>>,
+}
+
+impl DesignationCache {
+    pub fn clear(&mut self) {
+        self.by_familiar.clear();
+    }
+
+    pub fn get(&self, familiar: Entity) -> Option<&Vec<(Entity, Vec2, WorkType)>> {
+        self.by_familiar.get(&familiar)
+    }
+}
 
 /// 人間に割り当てられたタスク
 #[derive(Component, Clone, Debug)]
@@ -45,12 +107,49 @@ pub enum GatherPhase {
     Done,
 }
 
+/// SpatialGridを更新するシステム（毎フレーム実行）
+pub fn update_spatial_grid_system(
+    mut spatial_grid: ResMut<SpatialGrid>,
+    q_souls: Query<(Entity, &Transform, &DamnedSoul, &AssignedTask)>,
+) {
+    spatial_grid.clear();
+    for (entity, transform, soul, task) in q_souls.iter() {
+        // フリーで作業可能なSoulのみグリッドに登録
+        if matches!(task, AssignedTask::None) 
+            && soul.motivation >= MOTIVATION_THRESHOLD 
+            && soul.fatigue < FATIGUE_THRESHOLD 
+        {
+            spatial_grid.insert(entity, transform.translation.truncate());
+        }
+    }
+}
+
+/// DesignationCacheを更新するシステム（毎フレーム実行）
+pub fn update_designation_cache_system(
+    mut cache: ResMut<DesignationCache>,
+    q_designations: Query<(Entity, &Transform, &Designation, &IssuedBy), (Without<ClaimedBy>, Without<InStockpile>)>,
+) {
+    cache.clear();
+    for (entity, transform, designation, issued_by) in q_designations.iter() {
+        let pos = transform.translation.truncate();
+        cache.by_familiar
+            .entry(issued_by.0)
+            .or_default()
+            .push((entity, pos, designation.work_type));
+    }
+    
+    // 各Familiarのリストを距離でソート（一度だけ）
+    // Note: ソートは必要に応じて後でFamiliar位置を使って行う
+}
+
+/// タスク委譲システム（0.5秒間隔で実行）
 pub fn task_delegation_system(
     mut commands: Commands,
     mut q_familiars: Query<(Entity, &Transform, &mut ActiveCommand)>,
     mut q_souls: Query<(Entity, &Transform, &DamnedSoul, &mut AssignedTask, &mut Destination, &mut Path, &mut Inventory)>,
-    q_designations: Query<(Entity, &Transform, &Designation, &IssuedBy), (Without<ClaimedBy>, Without<InStockpile>)>,
     q_stockpiles: Query<(Entity, &Transform), With<Stockpile>>,
+    cache: Res<DesignationCache>,
+    spatial_grid: Res<SpatialGrid>,
 ) {
     for (fam_entity, fam_transform, mut active_command) in q_familiars.iter_mut() {
         let fam_pos = fam_transform.translation.truncate();
@@ -60,39 +159,57 @@ pub fn task_delegation_system(
         if current_count >= 2 { continue; }
         let slots_available = 2 - current_count;
 
-        // この使い魔が発行した未割当タスクを探す
-        let mut my_designations: Vec<_> = q_designations.iter()
-            .filter(|(_, _, _, issued_by)| issued_by.0 == fam_entity)
-            .map(|(e, t, d, _)| (e, t.translation.truncate(), d))
-            .collect();
-
-        // 近い順にソートしておくと効率的かも
-        my_designations.sort_by(|(_, p1, _), (_, p2, _)| {
+        // キャッシュからこの使い魔のDesignationを取得
+        let Some(designations) = cache.get(fam_entity) else { continue; };
+        
+        // 距離でソート（コピーして直接所有）
+        let mut sorted_designations: Vec<_> = designations.iter().copied().collect();
+        sorted_designations.sort_by(|(_, p1, _), (_, p2, _)| {
             let d1 = p1.distance_squared(fam_pos);
             let d2 = p2.distance_squared(fam_pos);
             d1.partial_cmp(&d2).unwrap_or(std::cmp::Ordering::Equal)
         });
 
         let mut assigned_this_tick = 0;
-        for (des_entity, des_pos, designation) in my_designations.iter() {
+        for (des_entity, des_pos, work_type) in sorted_designations.iter() {
             if assigned_this_tick >= slots_available { break; }
 
-            // 近くのフリーな魂を探す
-            let best_soul = q_souls.iter()
-                .filter(|(_, _, soul, current_task, _, _, _)| {
-                    matches!(*current_task, AssignedTask::None) && 
-                    soul.motivation >= MOTIVATION_THRESHOLD && 
-                    soul.fatigue < FATIGUE_THRESHOLD
-                })
-                .min_by(|(_, t1, _, _, _, _, _), (_, t2, _, _, _, _, _)| {
-                    let d1 = t1.translation.truncate().distance_squared(*des_pos);
-                    let d2 = t2.translation.truncate().distance_squared(*des_pos);
-                    d1.partial_cmp(&d2).unwrap_or(std::cmp::Ordering::Equal)
-                })
-                .map(|(e, _, _, _, _, _, _)| e);
+            // SpatialGridで近くのSoulを高速検索（フォールバック付き）
+            let nearby_souls = spatial_grid.get_nearby(*des_pos);
+            
+            // 最も近いSoulを見つける（近傍検索）
+            let best_soul = if !nearby_souls.is_empty() {
+                nearby_souls.iter()
+                    .filter_map(|&e| q_souls.get(e).ok())
+                    .filter(|(_, _, soul, current_task, _, _, _)| {
+                        matches!(*current_task, AssignedTask::None) && 
+                        soul.motivation >= MOTIVATION_THRESHOLD && 
+                        soul.fatigue < FATIGUE_THRESHOLD
+                    })
+                    .min_by(|(_, t1, _, _, _, _, _), (_, t2, _, _, _, _, _)| {
+                        let d1 = t1.translation.truncate().distance_squared(*des_pos);
+                        let d2 = t2.translation.truncate().distance_squared(*des_pos);
+                        d1.partial_cmp(&d2).unwrap_or(std::cmp::Ordering::Equal)
+                    })
+                    .map(|(e, _, _, _, _, _, _)| e)
+            } else {
+                // フォールバック: 全Soulから検索
+                q_souls.iter()
+                    .filter(|(_, _, soul, current_task, _, _, _)| {
+                        matches!(*current_task, AssignedTask::None) && 
+                        soul.motivation >= MOTIVATION_THRESHOLD && 
+                        soul.fatigue < FATIGUE_THRESHOLD
+                    })
+                    .min_by(|(_, t1, _, _, _, _, _), (_, t2, _, _, _, _, _)| {
+                        let d1 = t1.translation.truncate().distance_squared(*des_pos);
+                        let d2 = t2.translation.truncate().distance_squared(*des_pos);
+                        d1.partial_cmp(&d2).unwrap_or(std::cmp::Ordering::Equal)
+                    })
+                    .map(|(e, _, _, _, _, _, _)| e)
+            };
 
             if let Some(soul_entity) = best_soul {
-                match designation.work_type {
+                match work_type {
                     WorkType::Chop | WorkType::Mine => {
                         if let Ok((mut soul_task, mut dest, mut path)) = q_souls.get_mut(soul_entity).map(|(_, _, _, t, d, p, _)| (t, d, p)) {
                             *soul_task = AssignedTask::Gather {

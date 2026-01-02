@@ -6,6 +6,8 @@ mod systems;
 mod interface;
 
 use bevy::prelude::*;
+use bevy::time::common_conditions::on_timer;
+use std::time::Duration;
 use crate::assets::GameAssets;
 use crate::world::map::{WorldMap, spawn_map};
 
@@ -20,7 +22,11 @@ use crate::systems::command::{
     designation_visual_system, update_designation_indicator_system,
     area_selection_indicator_system
 };
-use crate::systems::work::{task_delegation_system, task_execution_system, task_area_auto_haul_system, cleanup_commanded_souls_system};
+use crate::systems::work::{
+    task_delegation_system, task_execution_system, task_area_auto_haul_system, 
+    cleanup_commanded_souls_system, update_spatial_grid_system, update_designation_cache_system,
+    SpatialGrid, DesignationCache
+};
 
 // 既存システム
 use crate::systems::jobs::building_completion_system;
@@ -54,6 +60,8 @@ fn main() {
         .init_resource::<ResourceLabels>()
         .init_resource::<GameTime>()
         .init_resource::<TaskMode>()
+        .init_resource::<SpatialGrid>()
+        .init_resource::<DesignationCache>()
         // Startup systems
         .add_systems(Startup, setup)
         .add_systems(PostStartup, (spawn_map, spawn_entities, spawn_familiar_wrapper, setup_ui, initial_resource_spawner).chain())
@@ -76,7 +84,11 @@ fn main() {
             game_time_system,
             time_control_keyboard_system,
             time_control_ui_system,
-            // Hell Workers core systems
+            // Cache update systems (毎フレーム実行)
+            (
+                update_spatial_grid_system,
+                update_designation_cache_system,
+            ),
             // Hell Workers core systems & Logic chain
             (
                 familiar_command_input_system,
@@ -88,9 +100,7 @@ fn main() {
                 familiar_command_visual_system,
                 motivation_system,
                 fatigue_system,
-                task_delegation_system,
                 cleanup_commanded_souls_system,
-                task_area_auto_haul_system,
                 task_execution_system,
                 familiar_hover_visualization_system,
                 idle_behavior_system,
@@ -98,14 +108,17 @@ fn main() {
                 pathfinding_system, 
                 soul_movement,
                 familiar_movement,
-                // Split here if needed, but 20 is usually the limit. 
-                // Let's move the last two to another call or just shorten the tuple.
             ).chain(),
             (
                 building_completion_system, 
                 animation_system
             ).chain(),
         ))
+        // Timer-based systems for performance optimization (0.5s interval)
+        .add_systems(Update, (
+            task_delegation_system,
+            task_area_auto_haul_system,
+        ).run_if(on_timer(Duration::from_millis(500))))
         .run();
 }
 
