@@ -25,7 +25,12 @@ pub fn handle_mouse_input(
     q_ui: Query<&Interaction, With<Button>>,
     mut selected_entity: ResMut<SelectedEntity>,
     mut q_dest: Query<&mut Destination>,
+    task_mode: Res<crate::systems::command::TaskMode>,
 ) {
+    if *task_mode != crate::systems::command::TaskMode::None {
+        return;
+    }
+
     for interaction in q_ui.iter() {
         if *interaction != Interaction::None {
             return;
