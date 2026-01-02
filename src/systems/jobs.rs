@@ -41,6 +41,10 @@ pub struct Designation {
     pub work_type: WorkType,
 }
 
+/// どの使い魔が発行した指示か
+#[derive(Component, Clone, Copy, Debug)]
+pub struct IssuedBy(pub Entity);
+
 // --- Systems ---
 
 pub fn building_completion_system(

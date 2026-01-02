@@ -1,11 +1,11 @@
 use bevy::prelude::*;
 use crate::constants::*;
 use crate::entities::damned_soul::{DamnedSoul, Destination, Path};
+use crate::entities::familiar::{ActiveCommand, FamiliarCommand, UnderCommand};
 use crate::assets::GameAssets;
-use crate::entities::familiar::{ActiveCommand, FamiliarCommand};
 use crate::systems::command::TaskArea;
 use crate::systems::logistics::{ResourceItem, ClaimedBy, Stockpile, Inventory, InStockpile};
-use crate::systems::jobs::{Designation, WorkType, Tree, Rock};
+use crate::systems::jobs::{Designation, WorkType, Tree, Rock, IssuedBy};
 use crate::world::map::WorldMap;
 
 /// 人間に割り当てられたタスク
@@ -47,65 +47,122 @@ pub enum GatherPhase {
 
 pub fn task_delegation_system(
     mut commands: Commands,
+    mut q_familiars: Query<(Entity, &Transform, &mut ActiveCommand)>,
     mut q_souls: Query<(Entity, &Transform, &DamnedSoul, &mut AssignedTask, &mut Destination, &mut Path, &mut Inventory)>,
-    q_designations: Query<(Entity, &Transform, &Designation), (Without<ClaimedBy>, Without<InStockpile>)>,
+    q_designations: Query<(Entity, &Transform, &Designation, &IssuedBy), (Without<ClaimedBy>, Without<InStockpile>)>,
     q_stockpiles: Query<(Entity, &Transform), With<Stockpile>>,
 ) {
-    for (des_entity, des_transform, designation) in q_designations.iter() {
-        let des_pos = des_transform.translation.truncate();
+    for (fam_entity, fam_transform, mut active_command) in q_familiars.iter_mut() {
+        let fam_pos = fam_transform.translation.truncate();
+        
+        // 使役枠の空きを確認 (最大2名)
+        let current_count = active_command.assigned_souls.len();
+        if current_count >= 2 { continue; }
+        let slots_available = 2 - current_count;
 
-        let best_soul = q_souls.iter()
-            .filter(|(_, _, soul, current_task, _, _, _)| {
-                matches!(*current_task, AssignedTask::None) && 
-                soul.motivation >= MOTIVATION_THRESHOLD && 
-                soul.fatigue < FATIGUE_THRESHOLD
-            })
-            .min_by(|(_, t1, _, _, _, _, _), (_, t2, _, _, _, _, _)| {
-                let d1 = t1.translation.truncate().distance_squared(des_pos);
-                let d2 = t2.translation.truncate().distance_squared(des_pos);
-                d1.partial_cmp(&d2).unwrap_or(std::cmp::Ordering::Equal)
-            })
-            .map(|(e, _, _, _, _, _, _)| e);
+        // この使い魔が発行した未割当タスクを探す
+        let mut my_designations: Vec<_> = q_designations.iter()
+            .filter(|(_, _, _, issued_by)| issued_by.0 == fam_entity)
+            .map(|(e, t, d, _)| (e, t.translation.truncate(), d))
+            .collect();
 
-        let Some(soul_entity) = best_soul else { continue; };
+        // 近い順にソートしておくと効率的かも
+        my_designations.sort_by(|(_, p1, _), (_, p2, _)| {
+            let d1 = p1.distance_squared(fam_pos);
+            let d2 = p2.distance_squared(fam_pos);
+            d1.partial_cmp(&d2).unwrap_or(std::cmp::Ordering::Equal)
+        });
 
-        match designation.work_type {
-            WorkType::Chop | WorkType::Mine => {
-                if let Ok((mut soul_task, mut dest, mut path)) = q_souls.get_mut(soul_entity).map(|(_, _, _, t, d, p, _)| (t, d, p)) {
-                    *soul_task = AssignedTask::Gather {
-                        target: des_entity,
-                        phase: GatherPhase::GoingToResource,
-                    };
-                    dest.0 = des_pos;
-                    path.waypoints.clear();
-                    commands.entity(des_entity).insert(ClaimedBy(soul_entity));
-                    info!("DELEGATION: Soul {:?} assigned to GATHER target {:?}", soul_entity, des_entity);
-                }
-            }
-            WorkType::Haul => {
-                let best_stockpile = q_stockpiles.iter()
-                    .min_by(|(_, t1), (_, t2)| {
-                        let d1 = t1.translation.truncate().distance_squared(des_pos);
-                        let d2 = t2.translation.truncate().distance_squared(des_pos);
-                        d1.partial_cmp(&d2).unwrap_or(std::cmp::Ordering::Equal)
-                    })
-                    .map(|(e, _)| e);
+        let mut assigned_this_tick = 0;
+        for (des_entity, des_pos, designation) in my_designations.iter() {
+            if assigned_this_tick >= slots_available { break; }
 
-                if let Some(stock_entity) = best_stockpile {
-                    if let Ok((mut soul_task, mut dest, mut path)) = q_souls.get_mut(soul_entity).map(|(_, _, _, t, d, p, _)| (t, d, p)) {
-                        *soul_task = AssignedTask::Haul {
-                            item: des_entity,
-                            stockpile: stock_entity,
-                            phase: HaulPhase::GoingToItem,
-                        };
-                        dest.0 = des_pos;
-                        path.waypoints.clear();
-                        commands.entity(des_entity).insert(ClaimedBy(soul_entity));
-                        info!("DELEGATION: Soul {:?} assigned HAUL item {:?} to stockpile {:?}", soul_entity, des_entity, stock_entity);
+            // 近くのフリーな魂を探す
+            let best_soul = q_souls.iter()
+                .filter(|(_, _, soul, current_task, _, _, _)| {
+                    matches!(*current_task, AssignedTask::None) && 
+                    soul.motivation >= MOTIVATION_THRESHOLD && 
+                    soul.fatigue < FATIGUE_THRESHOLD
+                })
+                .min_by(|(_, t1, _, _, _, _, _), (_, t2, _, _, _, _, _)| {
+                    let d1 = t1.translation.truncate().distance_squared(*des_pos);
+                    let d2 = t2.translation.truncate().distance_squared(*des_pos);
+                    d1.partial_cmp(&d2).unwrap_or(std::cmp::Ordering::Equal)
+                })
+                .map(|(e, _, _, _, _, _, _)| e);
+
+            if let Some(soul_entity) = best_soul {
+                match designation.work_type {
+                    WorkType::Chop | WorkType::Mine => {
+                        if let Ok((mut soul_task, mut dest, mut path)) = q_souls.get_mut(soul_entity).map(|(_, _, _, t, d, p, _)| (t, d, p)) {
+                            *soul_task = AssignedTask::Gather {
+                                target: *des_entity,
+                                phase: GatherPhase::GoingToResource,
+                            };
+                            dest.0 = *des_pos;
+                            path.waypoints.clear();
+                            
+                            // リンクの作成
+                            commands.entity(*des_entity).insert(ClaimedBy(soul_entity));
+                            commands.entity(soul_entity).insert(UnderCommand(fam_entity));
+                            active_command.assigned_souls.push(soul_entity);
+                            
+                            assigned_this_tick += 1;
+                            info!("DELEGATION: Soul {:?} assigned to GATHER target {:?} by Familiar {:?}", soul_entity, des_entity, fam_entity);
+                        }
                     }
+                    WorkType::Haul => {
+                        let best_stockpile = q_stockpiles.iter()
+                            .min_by(|(_, t1), (_, t2)| {
+                                let d1 = t1.translation.truncate().distance_squared(*des_pos);
+                                let d2 = t2.translation.truncate().distance_squared(*des_pos);
+                                d1.partial_cmp(&d2).unwrap_or(std::cmp::Ordering::Equal)
+                            })
+                            .map(|(e, _)| e);
+
+                        if let Some(stock_entity) = best_stockpile {
+                            if let Ok((mut soul_task, mut dest, mut path)) = q_souls.get_mut(soul_entity).map(|(_, _, _, t, d, p, _)| (t, d, p)) {
+                                *soul_task = AssignedTask::Haul {
+                                    item: *des_entity,
+                                    stockpile: stock_entity,
+                                    phase: HaulPhase::GoingToItem,
+                                };
+                                dest.0 = *des_pos;
+                                path.waypoints.clear();
+                                
+                                // リンクの作成
+                                commands.entity(*des_entity).insert(ClaimedBy(soul_entity));
+                                commands.entity(soul_entity).insert(UnderCommand(fam_entity));
+                                active_command.assigned_souls.push(soul_entity);
+                                
+                                assigned_this_tick += 1;
+                                info!("DELEGATION: Soul {:?} assigned HAUL item {:?} by Familiar {:?}", soul_entity, des_entity, fam_entity);
+                            }
+                        }
+                    }
+                    _ => {}
                 }
             }
-            _ => {}
+        }
+    }
+}
+
+/// タスクが完了した魂を使役から解放する
+pub fn cleanup_commanded_souls_system(
+    mut commands: Commands,
+    mut q_familiars: Query<&mut ActiveCommand>,
+    q_souls: Query<(Entity, &AssignedTask, &UnderCommand)>,
+) {
+    for (soul_entity, task, under_command) in q_souls.iter() {
+        if matches!(task, AssignedTask::None) {
+            let fam_entity = under_command.0;
+            if let Ok(mut active_command) = q_familiars.get_mut(fam_entity) {
+                // 使い魔のリストから削除
+                active_command.assigned_souls.retain(|&e| e != soul_entity);
+            }
+            // コンポーネントを削除して解放
+            commands.entity(soul_entity).remove::<UnderCommand>();
+            info!("RELEASE: Soul {:?} released from Familiar {:?}", soul_entity, fam_entity);
         }
     }
 }
@@ -286,12 +343,12 @@ fn handle_haul_task(
 
 pub fn task_area_auto_haul_system(
     mut commands: Commands,
-    q_familiars: Query<(&ActiveCommand, &TaskArea)>,
+    q_familiars: Query<(Entity, &ActiveCommand, &TaskArea)>,
     q_stockpiles: Query<(&Transform, &Stockpile)>,
     q_items_in_stock: Query<&Transform, With<InStockpile>>,
     q_resources: Query<(Entity, &Transform), (With<ResourceItem>, Without<InStockpile>, Without<Designation>)>,
 ) {
-    for (active_command, task_area) in q_familiars.iter() {
+    for (fam_entity, active_command, task_area) in q_familiars.iter() {
         if matches!(active_command.command, FamiliarCommand::Idle) {
             continue;
         }
@@ -319,8 +376,11 @@ pub fn task_area_auto_haul_system(
                 });
 
             if let Some((item_entity, _)) = nearest_resource {
-                commands.entity(item_entity).insert(Designation { work_type: WorkType::Haul });
-                debug!("AUTO_HAUL: Designated item {:?} for stockpile", item_entity);
+                commands.entity(item_entity).insert((
+                    Designation { work_type: WorkType::Haul },
+                    IssuedBy(fam_entity),
+                ));
+                debug!("AUTO_HAUL: Designated item {:?} for stockpile (IssuedBy: {:?})", item_entity, fam_entity);
             }
         }
     }

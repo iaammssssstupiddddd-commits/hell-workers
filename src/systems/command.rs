@@ -4,7 +4,7 @@ use crate::entities::damned_soul::Destination;
 use crate::entities::familiar::{Familiar, ActiveCommand, FamiliarCommand};
 use crate::interface::selection::SelectedEntity;
 use crate::interface::camera::MainCamera;
-use crate::systems::jobs::{Designation, WorkType, Tree, Rock};
+use crate::systems::jobs::{Designation, WorkType, Tree, Rock, IssuedBy};
 use crate::systems::logistics::ResourceItem;
 
 /// タスクモード - どのタスクを指定中か
@@ -127,6 +127,12 @@ pub fn task_area_selection_system(
                         *task_mode = TaskMode::None;
                     }
                     _ => {
+                        // 使い魔が選択されていることを確認
+                        let Some(fam_entity) = selected.0 else { return; };
+                        if !q_familiars.contains(fam_entity) {
+                            return;
+                        }
+                        
                         let mut found_target = false;
                         // クリック位置に近いエンティティを探す
                         for (target_entity, transform, tree, rock, item) in q_targets.iter() {
@@ -134,17 +140,26 @@ pub fn task_area_selection_system(
                             if dist < TILE_SIZE * 0.8 {
                                 match *task_mode {
                                     TaskMode::DesignateChop if tree.is_some() => {
-                                        commands.entity(target_entity).insert(Designation { work_type: WorkType::Chop });
+                                        commands.entity(target_entity).insert((
+                                            Designation { work_type: WorkType::Chop },
+                                            IssuedBy(fam_entity),
+                                        ));
                                         info!("DESIGNATION: 伐採指示を出しました at {:?}", world_pos);
                                         found_target = true;
                                     }
                                     TaskMode::DesignateMine if rock.is_some() => {
-                                        commands.entity(target_entity).insert(Designation { work_type: WorkType::Mine });
+                                        commands.entity(target_entity).insert((
+                                            Designation { work_type: WorkType::Mine },
+                                            IssuedBy(fam_entity),
+                                        ));
                                         info!("DESIGNATION: 採掘指示を出しました at {:?}", world_pos);
                                         found_target = true;
                                     }
                                     TaskMode::DesignateHaul if item.is_some() => {
-                                        commands.entity(target_entity).insert(Designation { work_type: WorkType::Haul });
+                                        commands.entity(target_entity).insert((
+                                            Designation { work_type: WorkType::Haul },
+                                            IssuedBy(fam_entity),
+                                        ));
                                         info!("DESIGNATION: 運搬指示を出しました at {:?}", world_pos);
                                         found_target = true;
                                     }
