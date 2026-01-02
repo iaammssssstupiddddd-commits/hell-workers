@@ -1,0 +1,16 @@
+# Cursor IDEの監視から除外するファイル/ディレクトリ
+# エージェントのクラッシュを防ぐため、成果物を監視対象から除外
+
+target/
+dist/
+.trunk/
+logs/
+*.log
+*.txt
+!README*.txt
+!LICENSE*.txt
+Cargo.lock
+node_modules/
+.git/
+
+

@@ -1,0 +1,20 @@
+# Rust Analyzer設定 - 成果物ディレクトリを監視から除外
+
+[files]
+# 監視から除外するディレクトリ
+excludeDirs = [
+    "target",
+    "dist",
+    ".trunk",
+    "logs",
+    "node_modules"
+]
+
+# 監視するファイルサイズの上限（10MB）
+maxFileSize = 10485760
+
+[cargo]
+# ビルドスクリプトの監視を無効化（不要な監視を削減）
+buildScripts = { enable = false }
+
+
