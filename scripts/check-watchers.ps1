@@ -31,22 +31,12 @@ if (Test-Path $vscodeSettings) {
 
 Write-Host ""
 
-# Check rust-analyzer.toml
+# Check rust-analyzer.toml (optional - settings are in .vscode/settings.json)
 $rustAnalyzerConfig = "rust-analyzer.toml"
 if (Test-Path $rustAnalyzerConfig) {
-    Write-Host "✓ Found: $rustAnalyzerConfig" -ForegroundColor Green
-    $content = Get-Content $rustAnalyzerConfig -Raw
-    
-    if ($content -match 'target') {
-        Write-Host "  ✓ target/ is excluded from rust-analyzer" -ForegroundColor Green
-    } else {
-        Write-Host "  ⚠️  WARNING: target/ may not be excluded" -ForegroundColor Yellow
-        $issues += "target/ not excluded in rust-analyzer.toml"
-    }
+    Write-Host "ℹ️  Found: $rustAnalyzerConfig (non-standard, settings should be in .vscode/settings.json)" -ForegroundColor Cyan
 } else {
-    Write-Host "⚠️  Missing: $rustAnalyzerConfig" -ForegroundColor Yellow
-    Write-Host "  Creating recommended configuration..." -ForegroundColor Gray
-    $issues += "Missing rust-analyzer.toml"
+    Write-Host "✓ rust-analyzer.toml not found (expected - using .vscode/settings.json instead)" -ForegroundColor Green
 }
 
 Write-Host ""
