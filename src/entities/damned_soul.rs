@@ -151,21 +151,27 @@ pub fn pathfinding_system(
         let start_grid = WorldMap::world_to_grid(current_pos);
         let goal_grid = WorldMap::world_to_grid(destination.0);
 
+        // すでに同じ目的地への経路を持っている場合はスキップ
+        if let Some(last) = path.waypoints.last() {
+            if last.distance_squared(destination.0) < 1.0 {
+                continue;
+            }
+        }
+
         if start_grid == goal_grid {
-            info!("PATH: Soul {:?} already at goal {:?}", entity, goal_grid);
             path.waypoints = vec![destination.0];
             path.current_index = 0;
             continue;
         }
 
         if let Some(grid_path) = find_path(&world_map, start_grid, goal_grid) {
-            info!("PATH: Soul {:?} found path from {:?} to {:?} ({} steps)", entity, start_grid, goal_grid, grid_path.len());
             path.waypoints = grid_path.iter()
                 .map(|&(x, y)| WorldMap::grid_to_world(x, y))
                 .collect();
             path.current_index = 0;
+            debug!("PATH: Soul {:?} found new path ({} steps)", entity, path.waypoints.len());
         } else {
-            warn!("PATH: Soul {:?} failed to find path from {:?} to {:?}", entity, start_grid, goal_grid);
+            debug!("PATH: Soul {:?} failed to find path to {:?}", entity, goal_grid);
             path.waypoints.clear();
         }
     }
@@ -202,7 +208,7 @@ pub fn soul_movement(
             } else {
                 path.current_index += 1;
                 if path.current_index >= path.waypoints.len() {
-                    info!("MOVE: Soul {:?} reached final destination", entity);
+                    debug!("MOVE: Soul {:?} reached final destination", entity);
                 }
             }
         } else {
