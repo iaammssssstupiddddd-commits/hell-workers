@@ -39,6 +39,9 @@ Write-Host "Error log: $errorLogFile" -ForegroundColor Gray
 # Run cargo build and capture both stdout and stderr
 $process = Start-Process -FilePath "cargo" -ArgumentList $buildArgs -NoNewWindow -Wait -PassThru -RedirectStandardOutput $combinedLogFile -RedirectStandardError $errorLogFile
 
+# Automatic cleanup to prevent bloat
+& "$PSScriptRoot\post-build-cleanup.ps1" -MaxSizeGB 3 | Out-Null
+
 # Read and display errors if they exist
 if (Test-Path $errorLogFile) {
     $errorContent = Get-Content $errorLogFile -Raw -Encoding UTF8

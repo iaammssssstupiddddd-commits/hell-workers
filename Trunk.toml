@@ -1,6 +1,9 @@
 [serve]
 address = "0.0.0.0"
 port = 8083
+# ファイルウォッチャーの除外設定（エージェントのクラッシュ防止）
+watch = ["src/**", "assets/**", "index.html"]
+ignore = ["target/**", "dist/**", "logs/**", "*.log", "*.txt"]
 
 [build]
 # 開発時はコメントアウト、本番デプロイ時に有効化
