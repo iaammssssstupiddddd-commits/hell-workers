@@ -1,21 +1,21 @@
-use bevy::prelude::*;
 use crate::constants::*;
 use crate::entities::damned_soul::Destination;
-use crate::entities::familiar::{Familiar, ActiveCommand, FamiliarCommand};
-use crate::interface::selection::SelectedEntity;
+use crate::entities::familiar::{ActiveCommand, Familiar, FamiliarCommand};
 use crate::interface::camera::MainCamera;
-use crate::systems::jobs::{Designation, WorkType, Tree, Rock, IssuedBy};
+use crate::interface::selection::SelectedEntity;
+use crate::systems::jobs::{Designation, DesignationCreatedEvent, IssuedBy, Rock, Tree, WorkType};
 use crate::systems::logistics::ResourceItem;
+use bevy::prelude::*;
 
 /// タスクモード - どのタスクを指定中か
 #[derive(Resource, Default, Debug, Clone, Copy, PartialEq)]
 pub enum TaskMode {
     #[default]
-    None,               // 通常モード
-    DesignateChop,      // 伐採指示モード
-    DesignateMine,      // 採掘指示モード
-    DesignateHaul,      // 運搬指示モード
-    SelectBuildTarget,  // 建築対象選択中
+    None, // 通常モード
+    DesignateChop,               // 伐採指示モード
+    DesignateMine,               // 採掘指示モード
+    DesignateHaul,               // 運搬指示モード
+    SelectBuildTarget,           // 建築対象選択中
     AreaSelection(Option<Vec2>), // エリア選択モード (始点)
 }
 /// タスクエリア - 使い魔が担当するエリア
@@ -39,7 +39,7 @@ impl TaskArea {
 
 /// タスクエリア表示用
 #[derive(Component)]
-pub struct TaskAreaIndicator(pub Entity);  // 親の使い魔Entity
+pub struct TaskAreaIndicator(pub Entity); // 親の使い魔Entity
 
 /// キーボードで使い魔に指示を与えるシステム
 /// 1 キー = 収集エリア選択モード
@@ -55,7 +55,9 @@ pub fn familiar_command_input_system(
 ) {
     // 選択されたエンティティが使い魔かチェック
     let Some(entity) = selected.0 else { return };
-    if q_familiars.get(entity).is_err() { return };
+    if q_familiars.get(entity).is_err() {
+        return;
+    };
 
     if keyboard.just_pressed(KeyCode::Digit1) || keyboard.just_pressed(KeyCode::KeyC) {
         *task_mode = TaskMode::DesignateChop;
@@ -88,15 +90,29 @@ pub fn task_area_selection_system(
     selected: Res<SelectedEntity>,
     mut task_mode: ResMut<TaskMode>,
     mut q_familiars: Query<(&mut ActiveCommand, &mut Destination), With<Familiar>>,
-    q_targets: Query<(Entity, &Transform, Option<&Tree>, Option<&Rock>, Option<&ResourceItem>)>,
+    q_targets: Query<(
+        Entity,
+        &Transform,
+        Option<&Tree>,
+        Option<&Rock>,
+        Option<&ResourceItem>,
+    )>,
     mut commands: Commands,
+    mut ev_created: EventWriter<DesignationCreatedEvent>,
 ) {
-    if q_ui.iter().any(|i| *i != Interaction::None) { return; }
+    if q_ui.iter().any(|i| *i != Interaction::None) {
+        return;
+    }
 
-    if *task_mode == TaskMode::None { return; }
+    if *task_mode == TaskMode::None {
+        return;
+    }
 
     if buttons.just_pressed(MouseButton::Left) {
-        info!("CLICK: World click detected while task_mode={:?}", *task_mode);
+        info!(
+            "CLICK: World click detected while task_mode={:?}",
+            *task_mode
+        );
         let (camera, camera_transform) = q_camera.single();
         let window = q_window.single();
 
@@ -116,23 +132,30 @@ pub fn task_area_selection_system(
                         let center = (min + max) / 2.0;
 
                         if let Some(fam_entity) = selected.0 {
-                            if let Ok((mut active_command, mut familiar_dest)) = q_familiars.get_mut(fam_entity) {
+                            if let Ok((mut active_command, mut familiar_dest)) =
+                                q_familiars.get_mut(fam_entity)
+                            {
                                 commands.entity(fam_entity).insert(TaskArea { min, max });
                                 familiar_dest.0 = center;
                                 active_command.command = FamiliarCommand::Patrol;
-                                info!("AREA_ASSIGNMENT: Familiar {:?} assigned to rectangular area", fam_entity);
+                                info!(
+                                    "AREA_ASSIGNMENT: Familiar {:?} assigned to rectangular area",
+                                    fam_entity
+                                );
                             }
                         }
-                        
+
                         *task_mode = TaskMode::None;
                     }
                     _ => {
                         // 使い魔が選択されていることを確認
-                        let Some(fam_entity) = selected.0 else { return; };
+                        let Some(fam_entity) = selected.0 else {
+                            return;
+                        };
                         if !q_familiars.contains(fam_entity) {
                             return;
                         }
-                        
+
                         let mut found_target = false;
                         // クリック位置に近いエンティティを探す
                         for (target_entity, transform, tree, rock, item) in q_targets.iter() {
@@ -141,26 +164,56 @@ pub fn task_area_selection_system(
                                 match *task_mode {
                                     TaskMode::DesignateChop if tree.is_some() => {
                                         commands.entity(target_entity).insert((
-                                            Designation { work_type: WorkType::Chop },
+                                            Designation {
+                                                work_type: WorkType::Chop,
+                                            },
                                             IssuedBy(fam_entity),
                                         ));
-                                        info!("DESIGNATION: 伐採指示を出しました at {:?}", world_pos);
+                                        ev_created.send(DesignationCreatedEvent {
+                                            entity: target_entity,
+                                            work_type: WorkType::Chop,
+                                            issued_by: fam_entity,
+                                        });
+                                        info!(
+                                            "DESIGNATION: 伐採指示を出しました at {:?}",
+                                            world_pos
+                                        );
                                         found_target = true;
                                     }
                                     TaskMode::DesignateMine if rock.is_some() => {
                                         commands.entity(target_entity).insert((
-                                            Designation { work_type: WorkType::Mine },
+                                            Designation {
+                                                work_type: WorkType::Mine,
+                                            },
                                             IssuedBy(fam_entity),
                                         ));
-                                        info!("DESIGNATION: 採掘指示を出しました at {:?}", world_pos);
+                                        ev_created.send(DesignationCreatedEvent {
+                                            entity: target_entity,
+                                            work_type: WorkType::Mine,
+                                            issued_by: fam_entity,
+                                        });
+                                        info!(
+                                            "DESIGNATION: 採掘指示を出しました at {:?}",
+                                            world_pos
+                                        );
                                         found_target = true;
                                     }
                                     TaskMode::DesignateHaul if item.is_some() => {
                                         commands.entity(target_entity).insert((
-                                            Designation { work_type: WorkType::Haul },
+                                            Designation {
+                                                work_type: WorkType::Haul,
+                                            },
                                             IssuedBy(fam_entity),
                                         ));
-                                        info!("DESIGNATION: 運搬指示を出しました at {:?}", world_pos);
+                                        ev_created.send(DesignationCreatedEvent {
+                                            entity: target_entity,
+                                            work_type: WorkType::Haul,
+                                            issued_by: fam_entity,
+                                        });
+                                        info!(
+                                            "DESIGNATION: 運搬指示を出しました at {:?}",
+                                            world_pos
+                                        );
                                         found_target = true;
                                     }
                                     _ => {}
@@ -171,7 +224,9 @@ pub fn task_area_selection_system(
                         if found_target {
                             // 使い魔が選択されている場合は、その方向へ向かわせる（監督動作）
                             if let Some(entity) = selected.0 {
-                                if let Ok((mut active_command, mut familiar_dest)) = q_familiars.get_mut(entity) {
+                                if let Ok((mut active_command, mut familiar_dest)) =
+                                    q_familiars.get_mut(entity)
+                                {
                                     familiar_dest.0 = world_pos;
                                     active_command.command = FamiliarCommand::Patrol;
                                 }
@@ -190,7 +245,10 @@ pub fn area_selection_indicator_system(
     task_mode: Res<TaskMode>,
     q_camera: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
     q_window: Query<&Window, With<bevy::window::PrimaryWindow>>,
-    mut q_indicator: Query<(Entity, &mut Transform, &mut Sprite, &mut Visibility), With<AreaSelectionIndicator>>,
+    mut q_indicator: Query<
+        (Entity, &mut Transform, &mut Sprite, &mut Visibility),
+        With<AreaSelectionIndicator>,
+    >,
     mut commands: Commands,
 ) {
     if let TaskMode::AreaSelection(Some(start_pos)) = *task_mode {
@@ -202,7 +260,9 @@ pub fn area_selection_indicator_system(
                 let center = (start_pos + world_pos) / 2.0;
                 let size = (start_pos - world_pos).abs();
 
-                if let Ok((_, mut transform, mut sprite, mut visibility)) = q_indicator.get_single_mut() {
+                if let Ok((_, mut transform, mut sprite, mut visibility)) =
+                    q_indicator.get_single_mut()
+                {
                     transform.translation = center.extend(0.6);
                     sprite.custom_size = Some(size);
                     *visibility = Visibility::Visible;
@@ -229,11 +289,22 @@ pub fn area_selection_indicator_system(
 /// タスクエリアの表示システム
 pub fn task_area_indicator_system(
     q_familiars: Query<(Entity, &Transform, &TaskArea), With<Familiar>>,
-    mut q_indicators: Query<(Entity, &TaskAreaIndicator, &mut Transform, &mut Visibility, &mut Sprite), Without<Familiar>>,
+    mut q_indicators: Query<
+        (
+            Entity,
+            &TaskAreaIndicator,
+            &mut Transform,
+            &mut Visibility,
+            &mut Sprite,
+        ),
+        Without<Familiar>,
+    >,
     mut commands: Commands,
 ) {
     // 既存のインジケーターを更新
-    for (indicator_entity, indicator, mut transform, mut visibility, mut sprite) in q_indicators.iter_mut() {
+    for (indicator_entity, indicator, mut transform, mut visibility, mut sprite) in
+        q_indicators.iter_mut()
+    {
         if let Ok((_, _, task_area)) = q_familiars.get(indicator.0) {
             transform.translation = task_area.center().extend(0.2);
             sprite.custom_size = Some(task_area.size());
@@ -246,13 +317,15 @@ pub fn task_area_indicator_system(
 
     // 新しいTaskAreaにインジケーターを作成
     for (fam_entity, _, task_area) in q_familiars.iter() {
-        let has_indicator = q_indicators.iter().any(|(_, ind, _, _, _)| ind.0 == fam_entity);
-        
+        let has_indicator = q_indicators
+            .iter()
+            .any(|(_, ind, _, _, _)| ind.0 == fam_entity);
+
         if !has_indicator {
             commands.spawn((
                 TaskAreaIndicator(fam_entity),
                 Sprite {
-                    color: Color::srgba(0.0, 1.0, 0.0, 0.15),  // 緑の半透明
+                    color: Color::srgba(0.0, 1.0, 0.0, 0.15), // 緑の半透明
                     custom_size: Some(task_area.size()),
                     ..default()
                 },
@@ -314,7 +387,7 @@ pub fn familiar_command_visual_system(
     for (command, mut sprite) in q_familiars.iter_mut() {
         // タスクモード中は点滅
         if *task_mode != TaskMode::None {
-            sprite.color = Color::srgb(1.0, 1.0, 1.0);  // 白く光る
+            sprite.color = Color::srgb(1.0, 1.0, 1.0); // 白く光る
             return;
         }
 
@@ -334,4 +407,3 @@ pub fn familiar_command_visual_system(
         }
     }
 }
-
