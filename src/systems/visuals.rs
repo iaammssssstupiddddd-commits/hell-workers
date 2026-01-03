@@ -13,29 +13,20 @@ pub struct ProgressBarFill;
 
 #[derive(Component)]
 pub struct StatusIcon {
-    pub parent: Entity,
+    pub _parent: Entity,
 }
 
 pub fn progress_bar_system(
     mut commands: Commands,
-    q_tasks: Query<(Entity, &AssignedTask, &Transform), Without<ProgressBarFill>>,
-    q_bars: Query<(Entity, &ProgressBar)>,
-    mut q_fills: Query<
-        (&mut Transform, &ProgressBar),
-        (With<ProgressBarFill>, Without<AssignedTask>),
-    >,
+    mut q_souls: Query<(Entity, &AssignedTask, &Transform, &mut DamnedSoul)>,
 ) {
-    // 1. 進行中のタスクを特定
-    for (soul_entity, task, transform) in q_tasks.iter() {
+    for (soul_entity, task, transform, mut soul) in q_souls.iter_mut() {
         if let AssignedTask::Gather {
-            phase: GatherPhase::Collecting { progress },
+            phase: GatherPhase::Collecting { .. },
             ..
         } = task
         {
-            // バーが既にあるかチェック
-            let has_bar = q_bars.iter().any(|(_, bar)| bar.parent == soul_entity);
-
-            if !has_bar {
+            if soul.bar_entity.is_none() {
                 // バーをスポーン
                 let bar_background = commands
                     .spawn((
@@ -56,47 +47,40 @@ pub fn progress_bar_system(
                 commands
                     .spawn((
                         ProgressBarFill,
-                        ProgressBar {
-                            parent: soul_entity,
-                        },
                         Sprite {
                             color: Color::srgb(0.0, 1.0, 0.0),
                             custom_size: Some(Vec2::new(TILE_SIZE * 0.8, TILE_SIZE * 0.15)),
                             ..default()
                         },
-                        Transform::from_translation(
-                            transform.translation + Vec3::new(0.0, TILE_SIZE * 0.6, 0.2),
-                        ),
+                        Transform::from_translation(Vec3::new(0.0, 0.0, 0.1)),
                     ))
                     .set_parent(bar_background);
-            } else {
-                // バーを更新
-                for (mut fill_transform, bar) in q_fills.iter_mut() {
-                    if bar.parent == soul_entity {
-                        fill_transform.scale.x = *progress;
-                        // 左寄せにするために移動
-                        fill_transform.translation.x = (progress - 1.0) * TILE_SIZE * 0.4;
-                    }
-                }
 
-                // 親のバー（背景）の位置も追従させる
-                // (本来は親子関係で動くはずだが、グローバル座標でスポーンしている場合は手動更新が必要)
-                // 今回は追従システムを分けるか、ここでやる。
+                soul.bar_entity = Some(bar_background);
             }
-        } else {
-            // 作業中でない魂にバーが残っていれば削除
-            for (bar_entity, bar) in q_bars.iter() {
-                if bar.parent == soul_entity {
-                    commands.entity(bar_entity).despawn_recursive();
-                }
-            }
+        } else if let Some(bar_entity) = soul.bar_entity.take() {
+            commands.entity(bar_entity).despawn_recursive();
         }
     }
+}
 
-    // 2. 存在しない親を持つバーを削除 (クリーンアップ)
-    for (bar_entity, bar) in q_bars.iter() {
-        if q_tasks.get(bar.parent).is_err() {
-            commands.entity(bar_entity).despawn_recursive();
+pub fn update_progress_bar_fill_system(
+    q_souls: Query<&AssignedTask, With<DamnedSoul>>,
+    q_bars: Query<&ProgressBar>,
+    mut q_fills: Query<(&mut Transform, &Parent), With<ProgressBarFill>>,
+) {
+    for (mut fill_transform, parent) in q_fills.iter_mut() {
+        if let Ok(bar) = q_bars.get(parent.get()) {
+            if let Ok(task) = q_souls.get(bar.parent) {
+                if let AssignedTask::Gather {
+                    phase: GatherPhase::Collecting { progress },
+                    ..
+                } = task
+                {
+                    fill_transform.scale.x = *progress;
+                    fill_transform.translation.x = (progress - 1.0) * TILE_SIZE * 0.4;
+                }
+            }
         }
     }
 }
@@ -104,7 +88,7 @@ pub fn progress_bar_system(
 /// バーを親エンティティに追従させるシステム
 pub fn sync_progress_bar_position_system(
     q_parents: Query<&Transform, (With<AssignedTask>, Without<ProgressBar>)>,
-    mut q_bars: Query<(&mut Transform, &ProgressBar)>,
+    mut q_bars: Query<(&mut Transform, &ProgressBar), (With<ProgressBar>, Without<AssignedTask>)>,
 ) {
     for (mut transform, bar) in q_bars.iter_mut() {
         if let Ok(parent_transform) = q_parents.get(bar.parent) {
@@ -154,11 +138,10 @@ pub fn task_link_system(
 
 pub fn soul_status_visual_system(
     mut commands: Commands,
-    q_souls: Query<(Entity, &Transform, &DamnedSoul, &AssignedTask)>,
-    q_icons: Query<(Entity, &StatusIcon)>,
+    mut q_souls: Query<(Entity, &Transform, &mut DamnedSoul, &AssignedTask)>,
     mut q_text: Query<&mut Text2d, With<StatusIcon>>,
 ) {
-    for (soul_entity, transform, soul, task) in q_souls.iter() {
+    for (soul_entity, transform, mut soul, task) in q_souls.iter_mut() {
         let status = if soul.fatigue > 0.8 {
             Some(("!", Color::srgb(1.0, 0.0, 0.0))) // 疲労蓄積
         } else if soul.motivation < 0.2 {
@@ -169,46 +152,38 @@ pub fn soul_status_visual_system(
             None
         };
 
-        let existing_icon = q_icons.iter().find(|(_, icon)| icon.parent == soul_entity);
-
         if let Some((text, color)) = status {
-            if let Some((icon_entity, _)) = existing_icon {
+            if let Some(icon_entity) = soul.icon_entity {
                 if let Ok(mut text2d) = q_text.get_mut(icon_entity) {
                     text2d.0 = text.to_string();
                 }
-                // 位置の追従 (本来は親子関係がいいが、ここでは単純に更新)
+                // 位置の更新
                 commands
                     .entity(icon_entity)
                     .insert(Transform::from_translation(
                         transform.translation + Vec3::new(TILE_SIZE * 0.4, TILE_SIZE * 0.4, 0.5),
                     ));
             } else {
-                commands.spawn((
-                    StatusIcon {
-                        parent: soul_entity,
-                    },
-                    Text2d::new(text),
-                    TextFont {
-                        font_size: 16.0,
-                        ..default()
-                    },
-                    TextColor(color),
-                    Transform::from_translation(
-                        transform.translation + Vec3::new(TILE_SIZE * 0.4, TILE_SIZE * 0.4, 0.5),
-                    ),
-                ));
+                let icon_id = commands
+                    .spawn((
+                        StatusIcon {
+                            _parent: soul_entity,
+                        },
+                        Text2d::new(text),
+                        TextFont {
+                            font_size: 16.0,
+                            ..default()
+                        },
+                        TextColor(color),
+                        Transform::from_translation(
+                            transform.translation
+                                + Vec3::new(TILE_SIZE * 0.4, TILE_SIZE * 0.4, 0.5),
+                        ),
+                    ))
+                    .id();
+                soul.icon_entity = Some(icon_id);
             }
-        } else {
-            // ステータス異常がなければアイコン削除
-            if let Some((icon_entity, _)) = existing_icon {
-                commands.entity(icon_entity).despawn_recursive();
-            }
-        }
-    }
-
-    // クリーンアップ
-    for (icon_entity, icon) in q_icons.iter() {
-        if q_souls.get(icon.parent).is_err() {
+        } else if let Some(icon_entity) = soul.icon_entity.take() {
             commands.entity(icon_entity).despawn_recursive();
         }
     }

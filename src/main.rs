@@ -36,7 +36,7 @@ use crate::systems::task_execution::task_execution_system;
 use crate::systems::task_queue::{GlobalTaskQueue, TaskQueue, queue_management_system};
 use crate::systems::visuals::{
     progress_bar_system, soul_status_visual_system, sync_progress_bar_position_system,
-    task_link_system,
+    task_link_system, update_progress_bar_fill_system,
 };
 use crate::systems::work::{
     AutoHaulCounter, cleanup_commanded_souls_system, task_area_auto_haul_system,
@@ -148,21 +148,20 @@ fn main() {
         .add_systems(
             Update,
             (
-                // Cache & Queue update systems (毎フレーム実行)
+                // ロジックチェーン (直列実行を強制して不整合を防ぐ)
                 (
+                    cleanup_commanded_souls_system,
                     update_spatial_grid_system,
                     update_familiar_spatial_grid_system,
                     update_resource_spatial_grid_system,
                     queue_management_system,
                     task_delegation_system,
                     task_execution_system,
-                    cleanup_commanded_souls_system,
-                    progress_bar_system,
-                    sync_progress_bar_position_system,
-                    task_link_system,
-                    soul_status_visual_system,
                     assign_task_system,
-                ),
+                )
+                    .chain(),
+                // 視覚系などの非依存システム
+                (progress_bar_system, update_progress_bar_fill_system),
                 // Hell Workers core systems & Logic chain
                 (
                     familiar_command_input_system,
@@ -182,7 +181,15 @@ fn main() {
                     familiar_movement,
                 )
                     .chain(),
-                (building_completion_system, animation_system).chain(),
+                // 表示同期システム (移動の後に実行してジッターを防ぐ)
+                (
+                    sync_progress_bar_position_system,
+                    soul_status_visual_system,
+                    task_link_system,
+                    building_completion_system,
+                    animation_system,
+                )
+                    .chain(),
             ),
         )
         // Timer-based systems for performance optimization (0.5s interval)

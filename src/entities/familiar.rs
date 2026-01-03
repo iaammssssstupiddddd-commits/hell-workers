@@ -90,7 +90,6 @@ impl Default for FamiliarCommand {
 #[derive(Component, Default)]
 pub struct ActiveCommand {
     pub command: FamiliarCommand,
-    pub assigned_souls: Vec<Entity>, // 割り当てられた魂
 }
 
 /// 魂がどの使い魔に使役されているかを示す
