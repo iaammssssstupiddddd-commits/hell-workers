@@ -1,30 +1,62 @@
-use bevy::prelude::*;
-use crate::constants::*;
 use crate::assets::GameAssets;
-use crate::world::map::WorldMap;
+use crate::constants::*;
 use crate::entities::damned_soul::{Destination, Path};
+use crate::world::map::WorldMap;
+use bevy::prelude::*;
+use rand::Rng;
+
+/// 使い魔の名前リスト（10候補）- 下級悪魔風
+const FAMILIAR_NAMES: [&str; 10] = [
+    "Skrix",   // 小鬼
+    "Grubble", // 這いずり
+    "Snitch",  // 密告者
+    "Grimkin", // 陰気な小者
+    "Blotch",  // シミ
+    "Scraps",  // くず拾い
+    "Nub",     // ちび
+    "Whimper", // めそめそ
+    "Cringe",  // へつらい
+    "Slunk",   // こそこそ
+];
 
 /// 使い魔のコンポーネント
 #[derive(Component)]
 pub struct Familiar {
     pub familiar_type: FamiliarType,
-    pub command_radius: f32,      // 指示を出せる範囲
-    pub efficiency: f32,          // 人間を動かす効率 (0.0-1.0)
+    pub command_radius: f32, // 指示を出せる範囲
+    pub efficiency: f32,     // 人間を動かす効率 (0.0-1.0)
+    pub name: String,        // 使い魔の名前
 }
 
 impl Familiar {
     pub fn new(familiar_type: FamiliarType) -> Self {
         let (command_radius, efficiency) = match familiar_type {
-            FamiliarType::Imp => (TILE_SIZE * 7.0, 0.5),      // 5 -> 7
+            FamiliarType::Imp => (TILE_SIZE * 7.0, 0.5), // 5 -> 7
             FamiliarType::Taskmaster => (TILE_SIZE * 10.0, 0.3), // 8 -> 10
-            FamiliarType::Whisperer => (TILE_SIZE * 4.0, 0.8),   // 3 -> 4
+            FamiliarType::Whisperer => (TILE_SIZE * 4.0, 0.8), // 3 -> 4
         };
+        let mut rng = rand::thread_rng();
+        let name = FAMILIAR_NAMES[rng.gen_range(0..FAMILIAR_NAMES.len())].to_string();
         Self {
             familiar_type,
             command_radius,
             efficiency,
+            name,
         }
     }
+}
+
+/// オーラ演出用コンポーネント
+#[derive(Component)]
+pub struct FamiliarAura {
+    pub pulse_timer: f32,
+}
+
+/// オーラのレイヤー種別
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AuraLayer {
+    Border, // 固定範囲（実際の影響範囲）
+    Pulse,  // パルスアニメーション
 }
 
 /// 使い魔の種類（パラメーター調整用に拡張可能）
@@ -32,19 +64,19 @@ impl Familiar {
 #[allow(dead_code)]
 pub enum FamiliarType {
     #[default]
-    Imp,            // インプ - 汎用型、バランス
-    Taskmaster,     // 監督官 - 広範囲、低効率
-    Whisperer,      // 囁き手 - 狭範囲、高効率
+    Imp, // インプ - 汎用型、バランス
+    Taskmaster, // 監督官 - 広範囲、低効率
+    Whisperer,  // 囁き手 - 狭範囲、高効率
 }
 
 /// 使い魔への指示
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[allow(dead_code)]
 pub enum FamiliarCommand {
-    Idle,                            // 待機
-    GatherResources,                 // 収集指示
-    Patrol,                          // 巡回（監視）
-    Construct(Entity),               // 建設命令
+    Idle,              // 待機
+    GatherResources,   // 収集指示
+    Patrol,            // 巡回（監視）
+    Construct(Entity), // 建設命令
 }
 
 impl Default for FamiliarCommand {
@@ -57,7 +89,7 @@ impl Default for FamiliarCommand {
 #[derive(Component, Default)]
 pub struct ActiveCommand {
     pub command: FamiliarCommand,
-    pub assigned_souls: Vec<Entity>,  // 割り当てられた魂
+    pub assigned_souls: Vec<Entity>, // 割り当てられた魂
 }
 
 /// 魂がどの使い魔に使役されているかを示す
@@ -73,7 +105,7 @@ pub fn spawn_familiar(
     // マップ中央付近に使い魔を配置
     let spawn_pos = Vec2::new(0.0, 0.0);
     let spawn_grid = WorldMap::world_to_grid(spawn_pos);
-    
+
     // 歩ける場所を探す
     let mut actual_grid = spawn_grid;
     'search: for dx in -3..=3 {
@@ -87,65 +119,114 @@ pub fn spawn_familiar(
     }
     let actual_pos = WorldMap::grid_to_world(actual_grid.0, actual_grid.1);
 
+    let familiar = Familiar::new(FamiliarType::Imp);
+    let familiar_name = familiar.name.clone();
+    let command_radius = familiar.command_radius;
+
+    let fam_entity = commands
+        .spawn((
+            familiar,
+            ActiveCommand::default(),
+            Destination(actual_pos), // 移動先
+            Path::default(),         // 経路
+            Sprite {
+                image: game_assets.colonist.clone(), // TODO: 専用テクスチャ
+                custom_size: Some(Vec2::splat(TILE_SIZE * 0.9)),
+                color: Color::srgb(1.0, 0.3, 0.3), // 赤みがかった色で区別
+                ..default()
+            },
+            Transform::from_xyz(actual_pos.x, actual_pos.y, 1.5), // 人間より少し上に表示
+        ))
+        .id();
+
+    // オーラ外枠（固定範囲 - 実際の影響範囲を示す）
     commands.spawn((
-        Familiar::new(FamiliarType::Imp),
-        ActiveCommand::default(),
-        Destination(actual_pos),  // 移動先
-        Path::default(),          // 経路
+        FamiliarRangeIndicator(fam_entity),
+        AuraLayer::Border,
         Sprite {
-            image: game_assets.colonist.clone(),  // TODO: 専用テクスチャ
-            custom_size: Some(Vec2::splat(TILE_SIZE * 0.9)),
-            color: Color::srgb(1.0, 0.3, 0.3),  // 赤みがかった色で区別
+            color: Color::srgba(1.0, 0.3, 0.0, 0.15), // オレンジ色の枠
+            custom_size: Some(Vec2::splat(command_radius * 2.0)),
             ..default()
         },
-        Transform::from_xyz(actual_pos.x, actual_pos.y, 1.5),  // 人間より少し上に表示
+        Transform::from_translation(actual_pos.extend(0.25)),
     ));
 
-    info!("SPAWN: Familiar (Imp) at {:?}", actual_pos);
+    // オーラ内側（パルスアニメーション）
+    commands.spawn((
+        FamiliarAura { pulse_timer: 0.0 },
+        FamiliarRangeIndicator(fam_entity),
+        AuraLayer::Pulse,
+        Sprite {
+            color: Color::srgba(1.0, 0.6, 0.0, 0.08), // 明るいオレンジ
+            custom_size: Some(Vec2::splat(command_radius * 1.8)),
+            ..default()
+        },
+        Transform::from_translation(actual_pos.extend(0.28)),
+    ));
+
+    info!(
+        "SPAWN: Familiar '{}' (Imp) at {:?}",
+        familiar_name, actual_pos
+    );
 }
 
 /// 使い魔の範囲表示用コンポーネント
 #[derive(Component)]
-pub struct FamiliarRangeIndicator(pub Entity);  // 親の使い魔Entity
+pub struct FamiliarRangeIndicator(pub Entity); // 親の使い魔Entity
 
-/// 使い魔が選択されている時に範囲を表示するシステム
+/// オーラのパルスアニメーションと位置追従システム
 pub fn update_familiar_range_indicator(
+    time: Res<Time>,
     q_familiars: Query<(Entity, &Transform, &Familiar)>,
     selected: Res<crate::interface::selection::SelectedEntity>,
-    mut q_indicators: Query<(Entity, &FamiliarRangeIndicator, &mut Transform, &mut Visibility), Without<Familiar>>,
-    mut commands: Commands,
+    mut q_indicators: Query<
+        (
+            &FamiliarRangeIndicator,
+            &mut Transform,
+            &mut Sprite,
+            Option<&mut FamiliarAura>,
+            Option<&AuraLayer>,
+        ),
+        Without<Familiar>,
+    >,
 ) {
-    // 選択されている使い魔を確認
-    let selected_familiar = selected.0.and_then(|e| q_familiars.get(e).ok());
+    let selected_fam = selected.0;
 
-    if let Some((fam_entity, fam_transform, familiar)) = selected_familiar {
-        // インジケーターがあれば更新、なければ作成
-        let mut found = false;
-        for (_, indicator, mut transform, mut visibility) in q_indicators.iter_mut() {
-            if indicator.0 == fam_entity {
-                transform.translation = fam_transform.translation.truncate().extend(0.3);
-                *visibility = Visibility::Visible;
-                found = true;
-            } else {
-                *visibility = Visibility::Hidden;
+    for (indicator, mut transform, mut sprite, aura_opt, layer_opt) in q_indicators.iter_mut() {
+        // 親の使い魔の位置を取得
+        if let Ok((_, fam_transform, familiar)) = q_familiars.get(indicator.0) {
+            // 位置追従
+            let z = match layer_opt {
+                Some(AuraLayer::Border) => 0.25,
+                Some(AuraLayer::Pulse) => 0.28,
+                None => 0.25,
+            };
+            transform.translation = fam_transform.translation.truncate().extend(z);
+
+            // 選択状態を確認
+            let is_selected = selected_fam == Some(indicator.0);
+
+            // レイヤーに応じた処理
+            match layer_opt {
+                Some(AuraLayer::Border) => {
+                    // 固定サイズ（実際の影響範囲）
+                    sprite.custom_size = Some(Vec2::splat(familiar.command_radius * 2.0));
+                    let alpha = if is_selected { 0.2 } else { 0.1 };
+                    sprite.color = Color::srgba(1.0, 0.3, 0.0, alpha);
+                }
+                Some(AuraLayer::Pulse) => {
+                    // パルスアニメーション
+                    if let Some(mut aura) = aura_opt {
+                        aura.pulse_timer += time.delta_secs() * 1.5;
+                        let pulse = (aura.pulse_timer.sin() * 0.15 + 0.9).clamp(0.7, 1.0);
+                        sprite.custom_size =
+                            Some(Vec2::splat(familiar.command_radius * 2.0 * pulse));
+                    }
+                    let alpha = if is_selected { 0.15 } else { 0.05 };
+                    sprite.color = Color::srgba(1.0, 0.6, 0.0, alpha);
+                }
+                None => {}
             }
-        }
-
-        if !found {
-            commands.spawn((
-                FamiliarRangeIndicator(fam_entity),
-                Sprite {
-                    color: Color::srgba(1.0, 0.5, 0.0, 0.15),
-                    custom_size: Some(Vec2::splat(familiar.command_radius * 2.0)),
-                    ..default()
-                },
-                Transform::from_translation(fam_transform.translation.truncate().extend(0.3)),
-            ));
-        }
-    } else {
-        // 使い魔が選択されていなければ全て非表示
-        for (_, _, _, mut visibility) in q_indicators.iter_mut() {
-            *visibility = Visibility::Hidden;
         }
     }
 }
@@ -163,7 +244,7 @@ pub fn familiar_movement(
             let distance = to_target.length();
 
             if distance > 1.0 {
-                let speed = 100.0;  // 使い魔は速く動く
+                let speed = 100.0; // 使い魔は速く動く
                 let move_dist = (speed * time.delta_secs()).min(distance);
                 let direction = to_target.normalize();
                 let velocity = direction * move_dist;
@@ -174,4 +255,3 @@ pub fn familiar_movement(
         }
     }
 }
-
