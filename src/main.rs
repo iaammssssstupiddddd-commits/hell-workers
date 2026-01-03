@@ -41,11 +41,13 @@ use crate::systems::work::{
 // 既存システム
 use crate::interface::camera::{MainCamera, camera_movement, camera_zoom};
 use crate::interface::selection::{
-    BuildMode, SelectedEntity, blueprint_placement, handle_mouse_input, update_selection_indicator,
+    BuildMode, HoveredEntity, SelectedEntity, blueprint_placement, handle_mouse_input,
+    update_hover_entity, update_selection_indicator,
 };
 use crate::interface::ui::{
-    MenuState, familiar_context_menu_system, info_panel_system, menu_visibility_system, setup_ui,
-    task_summary_ui_system, ui_interaction_system, update_mode_text_system,
+    MenuState, familiar_context_menu_system, hover_tooltip_system, info_panel_system,
+    menu_visibility_system, setup_ui, task_summary_ui_system, ui_interaction_system,
+    update_mode_text_system,
 };
 use crate::systems::jobs::building_completion_system;
 use crate::systems::logistics::{
@@ -78,6 +80,7 @@ fn main() {
         // Resources from various modules
         .init_resource::<WorldMap>()
         .init_resource::<SelectedEntity>()
+        .init_resource::<HoveredEntity>()
         .init_resource::<MenuState>()
         .init_resource::<BuildMode>()
         .init_resource::<ZoneMode>()
@@ -119,6 +122,8 @@ fn main() {
                 familiar_context_menu_system,
                 task_summary_ui_system,
                 update_selection_indicator,
+                update_hover_entity,
+                hover_tooltip_system,
                 update_familiar_range_indicator,
                 resource_count_display_system,
                 game_time_system,

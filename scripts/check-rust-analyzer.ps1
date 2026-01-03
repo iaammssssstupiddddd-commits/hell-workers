@@ -131,3 +131,4 @@ Write-Host "   - Select 'Rust Analyzer Language Server' from dropdown" -Foregrou
 Write-Host "   - Look for any error messages" -ForegroundColor Gray
 
 
+
