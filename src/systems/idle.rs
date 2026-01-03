@@ -1,9 +1,9 @@
+use crate::constants::{FATIGUE_THRESHOLD, MOTIVATION_THRESHOLD};
+use crate::entities::damned_soul::{DamnedSoul, Destination, IdleBehavior, IdleState, Path};
+use crate::systems::work::AssignedTask;
+use crate::world::map::WorldMap;
 use bevy::prelude::*;
 use rand::Rng;
-use crate::constants::{MOTIVATION_THRESHOLD, FATIGUE_THRESHOLD};
-use crate::entities::damned_soul::{DamnedSoul, IdleState, IdleBehavior, Destination, Path};
-use crate::world::map::WorldMap;
-use crate::systems::work::AssignedTask;
 
 /// 怠惰行動のAIシステム
 /// やる気が低い人間は怠惰な行動をする
@@ -11,7 +11,14 @@ use crate::systems::work::AssignedTask;
 pub fn idle_behavior_system(
     time: Res<Time>,
     world_map: Res<WorldMap>,
-    mut query: Query<(&Transform, &mut IdleState, &mut Destination, &DamnedSoul, &Path, &AssignedTask)>,
+    mut query: Query<(
+        &Transform,
+        &mut IdleState,
+        &mut Destination,
+        &DamnedSoul,
+        &Path,
+        &AssignedTask,
+    )>,
 ) {
     let dt = time.delta_secs();
 
@@ -32,11 +39,11 @@ pub fn idle_behavior_system(
         // 行動の持続時間が過ぎたら新しい行動を選択
         if idle.idle_timer >= idle.behavior_duration {
             idle.idle_timer = 0.0;
-            
+
             // 怠惰レベルに応じて行動を選択
             let mut rng = rand::thread_rng();
             let roll: f32 = rng.gen_range(0.0..1.0);
-            
+
             idle.behavior = if soul.laziness > 0.8 {
                 // 非常に怠惰：ほとんど寝ている
                 if roll < 0.6 {
@@ -79,14 +86,14 @@ pub fn idle_behavior_system(
                 if path.waypoints.is_empty() || path.current_index >= path.waypoints.len() {
                     let current_pos = transform.translation.truncate();
                     let current_grid = WorldMap::world_to_grid(current_pos);
-                    
+
                     // 近くのランダムな場所を目的地に
                     let mut rng = rand::thread_rng();
                     for _ in 0..10 {
                         let dx: i32 = rng.gen_range(-5..=5);
                         let dy: i32 = rng.gen_range(-5..=5);
                         let new_grid = (current_grid.0 + dx, current_grid.1 + dy);
-                        
+
                         if world_map.is_walkable(new_grid.0, new_grid.1) {
                             let new_pos = WorldMap::grid_to_world(new_grid.0, new_grid.1);
                             dest.0 = new_pos;
@@ -104,7 +111,13 @@ pub fn idle_behavior_system(
 
 /// 怠惰行動のビジュアルフィードバック
 pub fn idle_visual_system(
-    mut query: Query<(&mut Transform, &mut Sprite, &IdleState, &DamnedSoul, &AssignedTask)>,
+    mut query: Query<(
+        &mut Transform,
+        &mut Sprite,
+        &IdleState,
+        &DamnedSoul,
+        &AssignedTask,
+    )>,
 ) {
     for (mut transform, mut sprite, idle, soul, task) in query.iter_mut() {
         // タスクがある場合はビジュアルをリセット
@@ -119,7 +132,7 @@ pub fn idle_visual_system(
             IdleBehavior::Sleeping => {
                 // 寝ている：横倒しになる
                 transform.rotation = Quat::from_rotation_z(std::f32::consts::FRAC_PI_4);
-                sprite.color = Color::srgba(0.6, 0.6, 0.7, 1.0);  // 少し暗く
+                sprite.color = Color::srgba(0.6, 0.6, 0.7, 1.0); // 少し暗く
             }
             IdleBehavior::Sitting => {
                 // 座っている：少し縮む
@@ -133,10 +146,10 @@ pub fn idle_visual_system(
                 sprite.color = Color::WHITE;
             }
         }
-        
+
         // やる気が高い場合は明るく表示
         if soul.motivation > 0.5 {
-            sprite.color = Color::srgb(1.0, 1.0, 0.8);  // 少し黄色がかる
+            sprite.color = Color::srgb(1.0, 1.0, 0.8); // 少し黄色がかる
             transform.rotation = Quat::IDENTITY;
             transform.scale = Vec3::ONE;
         }
