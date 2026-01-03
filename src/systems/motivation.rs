@@ -2,7 +2,7 @@ use crate::constants::TILE_SIZE;
 use crate::entities::damned_soul::DamnedSoul;
 use crate::entities::familiar::{ActiveCommand, Familiar, FamiliarCommand, UnderCommand};
 use crate::interface::camera::MainCamera;
-use crate::systems::work::AssignedTask;
+use crate::systems::work::{AssignedTask, FamiliarSpatialGrid};
 use bevy::prelude::*;
 
 /// やる気・怠惰の更新システム
@@ -10,6 +10,7 @@ use bevy::prelude::*;
 /// タスクが割り当てられているワーカーはモチベーションを維持する
 pub fn motivation_system(
     time: Res<Time>,
+    familiar_grid: Res<FamiliarSpatialGrid>,
     q_familiars: Query<(&Transform, &Familiar, &ActiveCommand)>,
     mut q_souls: Query<(
         &Transform,
@@ -24,13 +25,23 @@ pub fn motivation_system(
         let soul_pos = soul_transform.translation.truncate();
         let has_task = !matches!(task, AssignedTask::None);
 
-        let best_influence = q_familiars
-            .iter()
-            .filter_map(|(fam_transform, familiar, command)| {
-                let influence_center = fam_transform.translation.truncate();
-                let distance = soul_pos.distance(influence_center);
+        // 空間グリッドを使用して近傍の使い魔のみをチェック
+        // 最大command_radiusはTILE_SIZE * 10.0なので、それより大きい範囲を検索
+        let max_radius = TILE_SIZE * 10.0;
+        let nearby_familiar_entities = familiar_grid.get_nearby_in_radius(soul_pos, max_radius);
 
-                if distance < familiar.command_radius {
+        let best_influence = nearby_familiar_entities
+            .iter()
+            .filter_map(|&fam_entity| {
+                let Ok((fam_transform, familiar, command)) = q_familiars.get(fam_entity) else {
+                    return None;
+                };
+                let influence_center = fam_transform.translation.truncate();
+                let distance_sq = soul_pos.distance_squared(influence_center);
+                let radius_sq = familiar.command_radius * familiar.command_radius;
+
+                if distance_sq < radius_sq {
+                    let distance = distance_sq.sqrt();
                     let command_multiplier = if matches!(command.command, FamiliarCommand::Idle) {
                         0.4
                     } else {

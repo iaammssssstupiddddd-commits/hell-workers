@@ -1,7 +1,7 @@
 use crate::assets::GameAssets;
 use crate::constants::*;
 use crate::entities::damned_soul::{DamnedSoul, Destination, Path};
-use crate::entities::familiar::{ActiveCommand, FamiliarCommand, UnderCommand};
+use crate::entities::familiar::{ActiveCommand, Familiar, FamiliarCommand, UnderCommand};
 use crate::systems::command::TaskArea;
 use crate::systems::jobs::{
     Designation, DesignationCreatedEvent, IssuedBy, Rock, TaskCompletedEvent, TaskSlots, Tree,
@@ -17,6 +17,8 @@ use std::collections::HashMap;
 pub struct SpatialGrid {
     cells: HashMap<(i32, i32), Vec<Entity>>,
     cell_size: f32,
+    // 差分更新用: 各エンティティがどのセルにいるかを記録
+    entity_cells: HashMap<Entity, (i32, i32)>,
 }
 
 impl SpatialGrid {
@@ -25,6 +27,7 @@ impl SpatialGrid {
         Self {
             cells: HashMap::new(),
             cell_size,
+            entity_cells: HashMap::new(),
         }
     }
 
@@ -40,13 +43,37 @@ impl SpatialGrid {
         )
     }
 
+    #[allow(dead_code)]
     pub fn clear(&mut self) {
         self.cells.clear();
+        self.entity_cells.clear();
     }
 
     pub fn insert(&mut self, entity: Entity, pos: Vec2) {
         let cell = self.pos_to_cell(pos);
+        
+        // 既に登録されている場合は古いセルから削除
+        if let Some(old_cell) = self.entity_cells.get(&entity) {
+            if *old_cell != cell {
+                if let Some(entities) = self.cells.get_mut(old_cell) {
+                    entities.retain(|&e| e != entity);
+                }
+            } else {
+                // 同じセルにいる場合は何もしない
+                return;
+            }
+        }
+        
         self.cells.entry(cell).or_default().push(entity);
+        self.entity_cells.insert(entity, cell);
+    }
+
+    pub fn remove(&mut self, entity: Entity) {
+        if let Some(old_cell) = self.entity_cells.remove(&entity) {
+            if let Some(entities) = self.cells.get_mut(&old_cell) {
+                entities.retain(|&e| e != entity);
+            }
+        }
     }
 
     /// 指定位置周辺の9セルにいるエンティティを返す
@@ -55,6 +82,82 @@ impl SpatialGrid {
         let mut result = Vec::new();
         for dx in -1..=1 {
             for dy in -1..=1 {
+                if let Some(entities) = self.cells.get(&(cx + dx, cy + dy)) {
+                    result.extend(entities.iter().copied());
+                }
+            }
+        }
+        result
+    }
+}
+
+/// 使い魔用の空間グリッド - モチベーション計算の高速化用
+#[derive(Resource, Default)]
+pub struct FamiliarSpatialGrid {
+    cells: HashMap<(i32, i32), Vec<Entity>>,
+    cell_size: f32,
+    // 差分更新用
+    entity_cells: HashMap<Entity, (i32, i32)>,
+}
+
+impl FamiliarSpatialGrid {
+    pub fn new(cell_size: f32) -> Self {
+        Self {
+            cells: HashMap::new(),
+            cell_size,
+            entity_cells: HashMap::new(),
+        }
+    }
+
+    fn pos_to_cell(&self, pos: Vec2) -> (i32, i32) {
+        (
+            (pos.x / self.cell_size).floor() as i32,
+            (pos.y / self.cell_size).floor() as i32,
+        )
+    }
+
+    #[allow(dead_code)]
+    pub fn clear(&mut self) {
+        self.cells.clear();
+        self.entity_cells.clear();
+    }
+
+    pub fn insert(&mut self, entity: Entity, pos: Vec2) {
+        let cell = self.pos_to_cell(pos);
+        
+        // 既に登録されている場合は古いセルから削除
+        if let Some(old_cell) = self.entity_cells.get(&entity) {
+            if *old_cell != cell {
+                if let Some(entities) = self.cells.get_mut(old_cell) {
+                    entities.retain(|&e| e != entity);
+                }
+            } else {
+                // 同じセルにいる場合は何もしない
+                return;
+            }
+        }
+        
+        self.cells.entry(cell).or_default().push(entity);
+        self.entity_cells.insert(entity, cell);
+    }
+
+    #[allow(dead_code)]
+    pub fn remove(&mut self, entity: Entity) {
+        if let Some(old_cell) = self.entity_cells.remove(&entity) {
+            if let Some(entities) = self.cells.get_mut(&old_cell) {
+                entities.retain(|&e| e != entity);
+            }
+        }
+    }
+
+    /// 指定位置周辺のセルにいるエンティティを返す（検索半径を考慮）
+    pub fn get_nearby_in_radius(&self, pos: Vec2, radius: f32) -> Vec<Entity> {
+        let (cx, cy) = self.pos_to_cell(pos);
+        // 半径を考慮して必要なセル数を計算
+        let cells_needed = (radius / self.cell_size).ceil() as i32 + 1;
+        let mut result = Vec::new();
+        for dx in -cells_needed..=cells_needed {
+            for dy in -cells_needed..=cells_needed {
                 if let Some(entities) = self.cells.get(&(cx + dx, cy + dy)) {
                     result.extend(entities.iter().copied());
                 }
@@ -189,20 +292,61 @@ impl AssignedTask {
     }
 }
 
-/// SpatialGridを更新するシステム（毎フレーム実行）
+/// SpatialGridを更新するシステム（差分更新）
 pub fn update_spatial_grid_system(
     mut spatial_grid: ResMut<SpatialGrid>,
-    q_souls: Query<(Entity, &Transform, &DamnedSoul, &AssignedTask)>,
+    q_souls_transform: Query<(Entity, &Transform, &DamnedSoul, &AssignedTask), Changed<Transform>>,
+    q_souls_soul: Query<(Entity, &Transform, &DamnedSoul, &AssignedTask), Changed<DamnedSoul>>,
+    q_souls_task: Query<(Entity, &Transform, &DamnedSoul, &AssignedTask), Changed<AssignedTask>>,
 ) {
-    spatial_grid.clear();
-    for (entity, transform, soul, task) in q_souls.iter() {
-        // フリーで作業可能なSoulのみグリッドに登録
-        if matches!(task, AssignedTask::None)
+    // 位置が変更されたsoulを更新
+    for (entity, transform, soul, task) in q_souls_transform.iter() {
+        let should_be_in_grid = matches!(task, AssignedTask::None)
             && soul.motivation >= MOTIVATION_THRESHOLD
-            && soul.fatigue < FATIGUE_THRESHOLD
-        {
+            && soul.fatigue < FATIGUE_THRESHOLD;
+        
+        if should_be_in_grid {
             spatial_grid.insert(entity, transform.translation.truncate());
+        } else {
+            spatial_grid.remove(entity);
         }
+    }
+    
+    // やる気・疲労が変更されたsoulを更新
+    for (entity, transform, soul, task) in q_souls_soul.iter() {
+        let should_be_in_grid = matches!(task, AssignedTask::None)
+            && soul.motivation >= MOTIVATION_THRESHOLD
+            && soul.fatigue < FATIGUE_THRESHOLD;
+        
+        if should_be_in_grid {
+            spatial_grid.insert(entity, transform.translation.truncate());
+        } else {
+            spatial_grid.remove(entity);
+        }
+    }
+    
+    // タスクが変更されたsoulを更新
+    for (entity, transform, soul, task) in q_souls_task.iter() {
+        let should_be_in_grid = matches!(task, AssignedTask::None)
+            && soul.motivation >= MOTIVATION_THRESHOLD
+            && soul.fatigue < FATIGUE_THRESHOLD;
+        
+        if should_be_in_grid {
+            spatial_grid.insert(entity, transform.translation.truncate());
+        } else {
+            spatial_grid.remove(entity);
+        }
+    }
+}
+
+/// FamiliarSpatialGridを更新するシステム（差分更新）
+pub fn update_familiar_spatial_grid_system(
+    mut familiar_grid: ResMut<FamiliarSpatialGrid>,
+    q_familiars: Query<(Entity, &Transform, &Familiar), Changed<Transform>>,
+) {
+    // 変更された使い魔のみ更新
+    for (entity, transform, _) in q_familiars.iter() {
+        familiar_grid.insert(entity, transform.translation.truncate());
     }
 }
 
@@ -254,25 +398,31 @@ pub fn task_delegation_system(
             continue;
         }
 
-        // 優先度と距離でソート
+        // 優先度と距離でソート（既に優先度でソート済みなので、距離のみ計算）
+        // 優先度が同じタスクのみ距離でソート
         let mut sorted_tasks: Vec<_> = tasks.iter().copied().collect();
+        
+        // 優先度グループごとに距離でソート
+        // まず優先度でグループ化し、各グループ内で距離ソート
         sorted_tasks.sort_by(|t1, t2| {
             // 1. 優先度 (降順)
-            if t1.priority != t2.priority {
-                return t2.priority.cmp(&t1.priority);
+            match t2.priority.cmp(&t1.priority) {
+                std::cmp::Ordering::Equal => {
+                    // 優先度が同じ場合のみ距離を計算
+                    let p1 = q_designations
+                        .get(t1.entity)
+                        .map(|(t, _, _)| t.translation.truncate())
+                        .unwrap_or(Vec2::ZERO);
+                    let p2 = q_designations
+                        .get(t2.entity)
+                        .map(|(t, _, _)| t.translation.truncate())
+                        .unwrap_or(Vec2::ZERO);
+                    let d1 = p1.distance_squared(fam_pos);
+                    let d2 = p2.distance_squared(fam_pos);
+                    d1.partial_cmp(&d2).unwrap_or(std::cmp::Ordering::Equal)
+                }
+                other => other,
             }
-            // 2. 距離 (昇順)
-            let p1 = q_designations
-                .get(t1.entity)
-                .map(|(t, _, _)| t.translation.truncate())
-                .unwrap_or(Vec2::ZERO);
-            let p2 = q_designations
-                .get(t2.entity)
-                .map(|(t, _, _)| t.translation.truncate())
-                .unwrap_or(Vec2::ZERO);
-            let d1 = p1.distance_squared(fam_pos);
-            let d2 = p2.distance_squared(fam_pos);
-            d1.partial_cmp(&d2).unwrap_or(std::cmp::Ordering::Equal)
         });
 
         let mut assigned_this_tick = 0;
@@ -755,8 +905,124 @@ fn handle_haul_task(
     }
 }
 
+/// リソースアイテム用の空間グリッド
+#[derive(Resource, Default)]
+pub struct ResourceSpatialGrid {
+    cells: HashMap<(i32, i32), Vec<Entity>>,
+    cell_size: f32,
+    entity_cells: HashMap<Entity, (i32, i32)>,
+}
+
+impl ResourceSpatialGrid {
+    pub fn new(cell_size: f32) -> Self {
+        Self {
+            cells: HashMap::new(),
+            cell_size,
+            entity_cells: HashMap::new(),
+        }
+    }
+
+    fn pos_to_cell(&self, pos: Vec2) -> (i32, i32) {
+        (
+            (pos.x / self.cell_size).floor() as i32,
+            (pos.y / self.cell_size).floor() as i32,
+        )
+    }
+
+    #[allow(dead_code)]
+    pub fn clear(&mut self) {
+        self.cells.clear();
+        self.entity_cells.clear();
+    }
+
+    pub fn insert(&mut self, entity: Entity, pos: Vec2) {
+        let cell = self.pos_to_cell(pos);
+        
+        if let Some(old_cell) = self.entity_cells.get(&entity) {
+            if *old_cell != cell {
+                if let Some(entities) = self.cells.get_mut(old_cell) {
+                    entities.retain(|&e| e != entity);
+                }
+            } else {
+                return;
+            }
+        }
+        
+        self.cells.entry(cell).or_default().push(entity);
+        self.entity_cells.insert(entity, cell);
+    }
+
+    pub fn remove(&mut self, entity: Entity) {
+        if let Some(old_cell) = self.entity_cells.remove(&entity) {
+            if let Some(entities) = self.cells.get_mut(&old_cell) {
+                entities.retain(|&e| e != entity);
+            }
+        }
+    }
+
+    pub fn get_nearby_in_radius(&self, pos: Vec2, radius: f32) -> Vec<Entity> {
+        let (cx, cy) = self.pos_to_cell(pos);
+        let cells_needed = (radius / self.cell_size).ceil() as i32 + 1;
+        let mut result = Vec::new();
+        for dx in -cells_needed..=cells_needed {
+            for dy in -cells_needed..=cells_needed {
+                if let Some(entities) = self.cells.get(&(cx + dx, cy + dy)) {
+                    result.extend(entities.iter().copied());
+                }
+            }
+        }
+        result
+    }
+}
+
+/// リソースグリッドを更新するシステム（差分更新）
+pub fn update_resource_spatial_grid_system(
+    mut resource_grid: ResMut<ResourceSpatialGrid>,
+    q_resources_added: Query<(Entity, &Transform, Option<&Visibility>), (With<ResourceItem>, Added<ResourceItem>)>,
+    q_resources: Query<(Entity, &Transform, Option<&Visibility>), (With<ResourceItem>, Changed<Transform>)>,
+    q_visibility_changed: Query<(Entity, &Transform, Option<&Visibility>), (With<ResourceItem>, Changed<Visibility>)>,
+) {
+    // 新しく追加されたリソースを登録
+    // Visibility::Hiddenのリソース（拾われている）は除外、それ以外は登録
+    for (entity, transform, visibility) in q_resources_added.iter() {
+        let should_register = visibility.map(|v| *v != Visibility::Hidden).unwrap_or(true);
+        if should_register {
+            resource_grid.insert(entity, transform.translation.truncate());
+            info!("RESOURCE_GRID: Added resource {:?} at {:?}", entity, transform.translation.truncate());
+        }
+    }
+    
+    // 位置が変更されたリソースを更新
+    for (entity, transform, visibility) in q_resources.iter() {
+        let should_register = visibility.map(|v| *v != Visibility::Hidden).unwrap_or(true);
+        if should_register {
+            resource_grid.insert(entity, transform.translation.truncate());
+        } else {
+            resource_grid.remove(entity);
+        }
+    }
+    
+    // 可視性が変更されたリソースを更新
+    for (entity, transform, visibility) in q_visibility_changed.iter() {
+        let should_register = visibility.map(|v| *v != Visibility::Hidden).unwrap_or(true);
+        if should_register {
+            resource_grid.insert(entity, transform.translation.truncate());
+        } else {
+            resource_grid.remove(entity);
+        }
+    }
+}
+
+/// 実行頻度を制御するためのカウンター
+#[derive(Resource, Default)]
+pub struct AutoHaulCounter {
+    frame_count: u32,
+}
+
 pub fn task_area_auto_haul_system(
     mut commands: Commands,
+    mut counter: ResMut<AutoHaulCounter>,
+    resource_grid: Res<ResourceSpatialGrid>,
     q_familiars: Query<(Entity, &ActiveCommand, &TaskArea)>,
     q_stockpiles: Query<(&Transform, &Stockpile)>,
     q_items_in_stock: Query<&Transform, With<InStockpile>>,
@@ -771,16 +1037,39 @@ pub fn task_area_auto_haul_system(
     >,
     mut ev_created: EventWriter<DesignationCreatedEvent>,
 ) {
+    // 10フレームに1回実行（約0.17秒@60FPS）
+    counter.frame_count += 1;
+    if counter.frame_count < 10 {
+        return;
+    }
+    counter.frame_count = 0;
+
+    let familiar_count = q_familiars.iter().count();
+    let stockpile_count = q_stockpiles.iter().count();
+    
+    // リソースの総数を確認
+    let all_resources: Vec<_> = q_resources.iter().collect();
+    info!("AUTO_HAUL: System running - {} familiars with TaskArea, {} stockpiles, {} total resources in query", 
+        familiar_count, stockpile_count, all_resources.len());
+
     for (fam_entity, active_command, task_area) in q_familiars.iter() {
+        // タスクエリアが設定されている場合は、Idleでも自動運搬を実行
+        // タスクエリアが設定されていない場合は、Idleの場合はスキップ
         if matches!(active_command.command, FamiliarCommand::Idle) {
-            continue;
+            // TaskAreaが設定されている場合は続行（自動運搬を実行）
+            info!("AUTO_HAUL: Familiar {:?} is Idle but has TaskArea, continuing", fam_entity);
+        } else {
+            info!("AUTO_HAUL: Checking familiar {:?} with command {:?}", fam_entity, active_command.command);
         }
 
         for (stock_transform, stockpile) in q_stockpiles.iter() {
             let stock_pos = stock_transform.translation.truncate();
             if !task_area.contains(stock_pos) {
+                info!("AUTO_HAUL: Stockpile at {:?} is outside task area (min: {:?}, max: {:?})", stock_pos, task_area.min, task_area.max);
                 continue;
             }
+
+            info!("AUTO_HAUL: Found stockpile at {:?} in task area", stock_pos);
 
             let current_count = q_items_in_stock
                 .iter()
@@ -791,26 +1080,47 @@ pub fn task_area_auto_haul_system(
                 .count();
 
             if current_count >= stockpile.capacity {
+                info!("AUTO_HAUL: Stockpile at {:?} is full ({}/{})", stock_pos, current_count, stockpile.capacity);
                 continue;
             }
 
-            let nearest_resource = q_resources
-                .iter()
-                .filter(|(_, t, vis)| {
-                    // 非表示（拾われている）アイテムは除外
-                    if *vis == Visibility::Hidden {
-                        return false;
-                    }
-                    t.translation.truncate().distance_squared(stock_pos)
-                        < (TILE_SIZE * 15.0).powi(2)
-                })
-                .min_by(|(_, t1, _), (_, t2, _)| {
-                    let d1 = t1.translation.truncate().distance_squared(stock_pos);
-                    let d2 = t2.translation.truncate().distance_squared(stock_pos);
-                    d1.partial_cmp(&d2).unwrap_or(std::cmp::Ordering::Equal)
-                });
+            // 空間グリッドを使用して近傍のリソースのみを検索
+            let search_radius = TILE_SIZE * 15.0;
+            let nearby_resources = resource_grid.get_nearby_in_radius(stock_pos, search_radius);
+            
+            // タスクエリア内のすべてのリソースを確認（デバッグ用）
+            let resources_in_area: Vec<_> = all_resources.iter()
+                .filter(|(_, transform, _)| task_area.contains(transform.translation.truncate()))
+                .collect();
+            
+            info!("AUTO_HAUL: Found {} nearby resources in grid (search radius: {}), {} resources in task area, {} total resources in query", 
+                nearby_resources.len(), search_radius, resources_in_area.len(), all_resources.len());
 
-            if let Some((item_entity, _, _)) = nearest_resource {
+            let nearest_resource = nearby_resources
+                .iter()
+                .filter_map(|&entity| {
+                    let Ok((_, transform, visibility)) = q_resources.get(entity) else {
+                        // リソースがクエリに含まれない理由（Designation/ClaimedBy/InStockpileが付いている）
+                        return None;
+                    };
+                    // 非表示（拾われている）アイテムは除外
+                    if *visibility == Visibility::Hidden {
+                        return None;
+                    }
+                    let dist_sq = transform.translation.truncate().distance_squared(stock_pos);
+                    if dist_sq < search_radius * search_radius {
+                        Some((entity, dist_sq))
+                    } else {
+                        None
+                    }
+                })
+                .min_by(|(_, d1): &(Entity, f32), (_, d2): &(Entity, f32)| {
+                    d1.partial_cmp(d2).unwrap_or(std::cmp::Ordering::Equal)
+                })
+                .map(|(entity, _)| entity);
+
+            if let Some(item_entity) = nearest_resource {
+                info!("AUTO_HAUL: Found nearest resource {:?} for stockpile at {:?}", item_entity, stock_pos);
                 commands.entity(item_entity).insert((
                     Designation {
                         work_type: WorkType::Haul,
@@ -824,10 +1134,14 @@ pub fn task_area_auto_haul_system(
                     issued_by: Some(fam_entity),
                     priority: 0,
                 });
-                debug!(
+                info!(
                     "AUTO_HAUL: Designated item {:?} for stockpile (IssuedBy: {:?})",
                     item_entity, fam_entity
                 );
+            } else {
+                let available_count = nearby_resources.iter().filter(|&&e| q_resources.get(e).is_ok()).count();
+                info!("AUTO_HAUL: No suitable resource found for stockpile at {:?} (nearby in grid: {}, available in query: {})", 
+                    stock_pos, nearby_resources.len(), available_count);
             }
         }
     }
