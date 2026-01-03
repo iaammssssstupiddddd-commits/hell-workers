@@ -33,9 +33,11 @@ use crate::systems::visuals::{
     task_link_system,
 };
 use crate::systems::work::{
-    GlobalTaskQueue, SpatialGrid, TaskQueue, cleanup_commanded_souls_system,
-    queue_management_system, task_area_auto_haul_system, task_delegation_system,
-    task_execution_system, update_spatial_grid_system,
+    AutoHaulCounter, FamiliarSpatialGrid, GlobalTaskQueue, ResourceSpatialGrid, SpatialGrid,
+    TaskQueue, cleanup_commanded_souls_system, queue_management_system,
+    task_area_auto_haul_system, task_delegation_system, task_execution_system,
+    update_familiar_spatial_grid_system, update_resource_spatial_grid_system,
+    update_spatial_grid_system,
 };
 
 // 既存システム
@@ -88,6 +90,9 @@ fn main() {
         .init_resource::<GameTime>()
         .init_resource::<TaskMode>()
         .init_resource::<SpatialGrid>()
+        .init_resource::<FamiliarSpatialGrid>()
+        .init_resource::<ResourceSpatialGrid>()
+        .init_resource::<AutoHaulCounter>()
         .init_resource::<TaskQueue>()
         .init_resource::<GlobalTaskQueue>()
         .add_event::<DesignationCreatedEvent>()
@@ -102,6 +107,9 @@ fn main() {
                 spawn_familiar_wrapper,
                 setup_ui,
                 initial_resource_spawner,
+                initialize_familiar_spatial_grid,
+                initialize_resource_spatial_grid,
+                populate_resource_spatial_grid,
             )
                 .chain(),
         )
@@ -138,6 +146,8 @@ fn main() {
                 // Cache & Queue update systems (毎フレーム実行)
                 (
                     update_spatial_grid_system,
+                    update_familiar_spatial_grid_system,
+                    update_resource_spatial_grid_system,
                     queue_management_system,
                     task_delegation_system,
                     task_execution_system,
@@ -201,6 +211,42 @@ fn setup(
         aura_ring,
     };
     commands.insert_resource(game_assets);
+}
+
+/// FamiliarSpatialGridを初期化（最大command_radius * 2のセルサイズで）
+fn initialize_familiar_spatial_grid(mut familiar_grid: ResMut<FamiliarSpatialGrid>) {
+    use crate::constants::TILE_SIZE;
+    // 最大command_radiusはTILE_SIZE * 10.0（Taskmaster）なので、
+    // グリッドサイズはTILE_SIZE * 20.0以上にする
+    *familiar_grid = FamiliarSpatialGrid::new(TILE_SIZE * 20.0);
+}
+
+/// ResourceSpatialGridを初期化
+fn initialize_resource_spatial_grid(mut resource_grid: ResMut<ResourceSpatialGrid>) {
+    use crate::constants::TILE_SIZE;
+    // 検索範囲はTILE_SIZE * 15.0なので、グリッドサイズはそれより大きくする
+    *resource_grid = ResourceSpatialGrid::new(TILE_SIZE * 20.0);
+}
+
+/// 起動時に既存のリソースをResourceSpatialGridに登録
+fn populate_resource_spatial_grid(
+    mut resource_grid: ResMut<ResourceSpatialGrid>,
+    q_resources: Query<(Entity, &Transform, Option<&Visibility>), With<crate::systems::logistics::ResourceItem>>,
+) {
+    let mut registered_count = 0;
+    let mut skipped_count = 0;
+    for (entity, transform, visibility) in q_resources.iter() {
+        // Visibility::Hiddenのリソース（拾われている）は除外、それ以外は登録
+        let should_register = visibility.map(|v| *v != bevy::prelude::Visibility::Hidden).unwrap_or(true);
+        if should_register {
+            resource_grid.insert(entity, transform.translation.truncate());
+            registered_count += 1;
+        } else {
+            skipped_count += 1;
+        }
+    }
+    info!("RESOURCE_GRID: Populated {}/{} existing resources into grid (skipped: {})", 
+        registered_count, q_resources.iter().count(), skipped_count);
 }
 
 /// 円形リング（外枠）テクスチャを生成

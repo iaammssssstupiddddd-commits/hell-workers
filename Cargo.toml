@@ -30,5 +30,9 @@ opt-level = 1
 debug = true
 
 # Optimize all dependencies even in dev mode
+# But exclude bevy when using dynamic linking to avoid symbol resolution issues
 [profile.dev.package."*"]
 opt-level = 3
+
+[profile.dev.package.bevy]
+opt-level = 1  # Lower optimization for bevy when using dynamic linking
