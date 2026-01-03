@@ -11,10 +11,18 @@ pub fn camera_movement(
     let (mut transform, projection) = query.single_mut();
     let mut direction = Vec3::ZERO;
 
-    if keyboard_input.pressed(KeyCode::KeyW) { direction.y += 1.0; }
-    if keyboard_input.pressed(KeyCode::KeyS) { direction.y -= 1.0; }
-    if keyboard_input.pressed(KeyCode::KeyA) { direction.x -= 1.0; }
-    if keyboard_input.pressed(KeyCode::KeyD) { direction.x += 1.0; }
+    if keyboard_input.pressed(KeyCode::KeyW) {
+        direction.y += 1.0;
+    }
+    if keyboard_input.pressed(KeyCode::KeyS) {
+        direction.y -= 1.0;
+    }
+    if keyboard_input.pressed(KeyCode::KeyA) {
+        direction.x -= 1.0;
+    }
+    if keyboard_input.pressed(KeyCode::KeyD) {
+        direction.x += 1.0;
+    }
 
     if direction != Vec3::ZERO {
         let speed = 500.0 * projection.scale;
@@ -27,7 +35,7 @@ pub fn camera_zoom(
     mut query: Query<&mut OrthographicProjection, With<MainCamera>>,
 ) {
     let mut projection = query.single_mut();
-    
+
     for event in mouse_wheel_events.read() {
         let zoom_factor = 1.1;
         if event.y > 0.0 {
@@ -36,6 +44,6 @@ pub fn camera_zoom(
             projection.scale *= zoom_factor;
         }
     }
-    
+
     projection.scale = projection.scale.clamp(0.1, 5.0);
 }

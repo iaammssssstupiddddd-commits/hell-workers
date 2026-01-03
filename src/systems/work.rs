@@ -69,15 +69,25 @@ pub struct TaskQueue {
     pub by_familiar: HashMap<Entity, Vec<PendingTask>>,
 }
 
+/// 未アサインタスクキュー - 使い魔に割り当てられていないタスク
+#[derive(Resource, Default)]
+pub struct GlobalTaskQueue {
+    pub unassigned: Vec<PendingTask>,
+}
+
 #[derive(Clone, Copy, Debug)]
 pub struct PendingTask {
     pub entity: Entity,
     pub work_type: WorkType,
+    pub priority: u32, // 0: Normal, 1: High, etc.
 }
 
 impl TaskQueue {
     pub fn add(&mut self, familiar: Entity, task: PendingTask) {
-        self.by_familiar.entry(familiar).or_default().push(task);
+        let tasks = self.by_familiar.entry(familiar).or_default();
+        tasks.push(task);
+        // 優先度でソート (降順)
+        tasks.sort_by(|a, b| b.priority.cmp(&a.priority));
     }
 
     pub fn get_for_familiar(&self, familiar: Entity) -> Option<&Vec<PendingTask>> {
@@ -91,20 +101,42 @@ impl TaskQueue {
     }
 }
 
+impl GlobalTaskQueue {
+    pub fn add(&mut self, task: PendingTask) {
+        self.unassigned.push(task);
+        self.unassigned.sort_by(|a, b| b.priority.cmp(&a.priority));
+    }
+
+    pub fn remove(&mut self, task_entity: Entity) {
+        self.unassigned.retain(|t| t.entity != task_entity);
+    }
+}
+
 /// DesignationCreatedEventを受けてキューに追加するシステム
 pub fn queue_management_system(
     mut queue: ResMut<TaskQueue>,
+    mut global_queue: ResMut<GlobalTaskQueue>,
     mut ev_created: EventReader<DesignationCreatedEvent>,
 ) {
     for ev in ev_created.read() {
-        queue.add(
-            ev.issued_by,
-            PendingTask {
-                entity: ev.entity,
-                work_type: ev.work_type,
-            },
-        );
-        info!("QUEUE: Task added for Familiar {:?}", ev.issued_by);
+        let task = PendingTask {
+            entity: ev.entity,
+            work_type: ev.work_type,
+            priority: ev.priority,
+        };
+
+        if let Some(issued_by) = ev.issued_by {
+            queue.add(issued_by, task);
+            if ev.priority > 0 {
+                info!(
+                    "QUEUE: High Priority Task added for Familiar {:?}",
+                    issued_by
+                );
+            }
+        } else {
+            global_queue.add(task);
+            info!("QUEUE: Unassigned Task added (entity: {:?})", ev.entity);
+        }
     }
 }
 
@@ -139,10 +171,10 @@ impl Default for AssignedTask {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum GatherPhase {
     GoingToResource,
-    Collecting,
+    Collecting { progress: f32 },
     Done,
 }
 
@@ -221,9 +253,14 @@ pub fn task_delegation_system(
             continue;
         }
 
-        // 距離でソート（キュー内のタスクをEntityからTransform引きいてソート）
+        // 優先度と距離でソート
         let mut sorted_tasks: Vec<_> = tasks.iter().copied().collect();
         sorted_tasks.sort_by(|t1, t2| {
+            // 1. 優先度 (降順)
+            if t1.priority != t2.priority {
+                return t2.priority.cmp(&t1.priority);
+            }
+            // 2. 距離 (昇順)
             let p1 = q_designations
                 .get(t1.entity)
                 .map(|(t, _)| t.translation.truncate())
@@ -413,6 +450,7 @@ pub fn task_execution_system(
     q_stockpiles: Query<&Transform, With<Stockpile>>,
     game_assets: Res<GameAssets>,
     mut ev_completed: EventWriter<TaskCompletedEvent>,
+    time: Res<Time>,
 ) {
     for (soul_entity, soul_transform, mut soul, mut task, mut dest, mut path, mut inventory) in
         q_souls.iter_mut()
@@ -439,6 +477,7 @@ pub fn task_execution_system(
                     &q_targets,
                     &mut commands,
                     &game_assets,
+                    &time,
                 );
             }
             AssignedTask::Haul {
@@ -496,6 +535,7 @@ fn handle_gather_task(
     )>,
     commands: &mut Commands,
     game_assets: &Res<GameAssets>,
+    time: &Res<Time>,
 ) {
     let soul_pos = soul_transform.translation.truncate();
     match phase {
@@ -512,7 +552,7 @@ fn handle_gather_task(
                     *task = AssignedTask::Gather {
                         target,
                         work_type: *work_type,
-                        phase: GatherPhase::Collecting,
+                        phase: GatherPhase::Collecting { progress: 0.0 },
                     };
                     path.waypoints.clear();
                 }
@@ -521,41 +561,57 @@ fn handle_gather_task(
                 path.waypoints.clear();
             }
         }
-        GatherPhase::Collecting => {
+        GatherPhase::Collecting { mut progress } => {
             if let Ok((res_transform, tree, rock, _)) = q_targets.get(target) {
                 let pos = res_transform.translation;
-                if tree.is_some() {
-                    commands.spawn((
-                        ResourceItem(crate::systems::logistics::ResourceType::Wood),
-                        Sprite {
-                            image: game_assets.wood.clone(),
-                            custom_size: Some(Vec2::splat(TILE_SIZE * 0.5)),
-                            color: Color::srgb(0.5, 0.35, 0.05),
-                            ..default()
-                        },
-                        Transform::from_translation(pos),
-                    ));
-                    info!("TASK_EXEC: Soul {:?} chopped a tree", soul_entity);
-                } else if rock.is_some() {
-                    commands.spawn((
-                        ResourceItem(crate::systems::logistics::ResourceType::Wood),
-                        Sprite {
-                            image: game_assets.stone.clone(),
-                            custom_size: Some(Vec2::splat(TILE_SIZE * 0.5)),
-                            ..default()
-                        },
-                        Transform::from_translation(pos),
-                    ));
-                    info!("TASK_EXEC: Soul {:?} mined a rock", soul_entity);
+
+                // 進行度を更新 (仮に 2秒で完了とする)
+                progress += time.delta_secs() * 0.5;
+
+                if progress >= 1.0 {
+                    if tree.is_some() {
+                        commands.spawn((
+                            ResourceItem(crate::systems::logistics::ResourceType::Wood),
+                            Sprite {
+                                image: game_assets.wood.clone(),
+                                custom_size: Some(Vec2::splat(TILE_SIZE * 0.5)),
+                                color: Color::srgb(0.5, 0.35, 0.05),
+                                ..default()
+                            },
+                            Transform::from_translation(pos),
+                        ));
+                        info!("TASK_EXEC: Soul {:?} chopped a tree", soul_entity);
+                    } else if rock.is_some() {
+                        commands.spawn((
+                            ResourceItem(crate::systems::logistics::ResourceType::Stone), // 修正: Stone
+                            Sprite {
+                                image: game_assets.stone.clone(),
+                                custom_size: Some(Vec2::splat(TILE_SIZE * 0.5)),
+                                ..default()
+                            },
+                            Transform::from_translation(pos),
+                        ));
+                        info!("TASK_EXEC: Soul {:?} mined a rock", soul_entity);
+                    }
+                    commands.entity(target).despawn();
+
+                    *task = AssignedTask::Gather {
+                        target,
+                        work_type: *work_type,
+                        phase: GatherPhase::Done,
+                    };
+                    soul.fatigue = (soul.fatigue + 0.1).min(1.0);
+                } else {
+                    // 進捗を保存
+                    *task = AssignedTask::Gather {
+                        target,
+                        work_type: *work_type,
+                        phase: GatherPhase::Collecting { progress },
+                    };
                 }
-                commands.entity(target).despawn();
+            } else {
+                *task = AssignedTask::None;
             }
-            *task = AssignedTask::Gather {
-                target,
-                work_type: *work_type,
-                phase: GatherPhase::Done,
-            };
-            soul.fatigue = (soul.fatigue + 0.1).min(1.0);
         }
         GatherPhase::Done => {
             *task = AssignedTask::None;
@@ -722,7 +778,8 @@ pub fn task_area_auto_haul_system(
                 ev_created.send(DesignationCreatedEvent {
                     entity: item_entity,
                     work_type: WorkType::Haul,
-                    issued_by: fam_entity,
+                    issued_by: Some(fam_entity),
+                    priority: 0,
                 });
                 debug!(
                     "AUTO_HAUL: Designated item {:?} for stockpile (IssuedBy: {:?})",

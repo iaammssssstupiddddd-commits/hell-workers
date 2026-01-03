@@ -1,10 +1,10 @@
-use bevy::prelude::*;
-use crate::systems::jobs::{BuildingType, Blueprint};
-use crate::systems::logistics::{ZoneType, ZoneMode};
 use crate::entities::damned_soul::DamnedSoul;
 use crate::entities::familiar::Familiar;
-use crate::systems::work::AssignedTask;
+use crate::systems::jobs::{Blueprint, BuildingType};
+use crate::systems::logistics::{ZoneMode, ZoneType};
 use crate::systems::time::ClockText;
+use crate::systems::work::AssignedTask;
+use bevy::prelude::*;
 
 #[derive(Resource, Default, Debug, Clone, Copy)]
 pub enum MenuState {
@@ -53,265 +53,353 @@ pub struct ModeText;
 #[derive(Component)]
 pub struct ContextMenu;
 
+#[derive(Component)]
+pub struct TaskSummaryText;
+
 pub fn setup_ui(mut commands: Commands) {
     // Bottom bar
-    commands.spawn((
-        Node {
-            width: Val::Percent(100.0),
-            height: Val::Px(50.0),
-            position_type: PositionType::Absolute,
-            left: Val::Px(0.0),
-            bottom: Val::Px(0.0),
-            flex_direction: FlexDirection::Row,
-            align_items: AlignItems::Center,
-            justify_content: JustifyContent::Start,
-            padding: UiRect::all(Val::Px(5.0)),
-            ..default()
-        },
-        BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.8)),
-    )).with_children(|parent| {
-        let buttons = [
-            ("Architect", MenuAction::ToggleArchitect),
-            ("Zones", MenuAction::ToggleZones),
-            ("Orders", MenuAction::ToggleOrders),
-        ];
-
-        for (label, action) in buttons {
-            parent.spawn((
-                Button,
-                Node {
-                    width: Val::Px(100.0),
-                    height: Val::Px(40.0),
-                    margin: UiRect::right(Val::Px(10.0)),
-                    justify_content: JustifyContent::Center,
-                    align_items: AlignItems::Center,
-                    ..default()
-                },
-                BackgroundColor(Color::srgb(0.2, 0.2, 0.2)),
-                MenuButton(action),
-            )).with_children(|button| {
-                button.spawn((
-                    Text::new(label),
-                    TextFont { font_size: 18.0, ..default() },
-                    TextColor(Color::WHITE),
-                ));
-            });
-        }
-
-        // Mode Display
-        parent.spawn((
-            Text::new("Mode: Normal"),
-            TextFont { font_size: 18.0, ..default() },
-            TextColor(Color::srgb(0.0, 1.0, 1.0)),
+    commands
+        .spawn((
             Node {
-                margin: UiRect::left(Val::Px(20.0)),
+                width: Val::Percent(100.0),
+                height: Val::Px(50.0),
+                position_type: PositionType::Absolute,
+                left: Val::Px(0.0),
+                bottom: Val::Px(0.0),
+                flex_direction: FlexDirection::Row,
+                align_items: AlignItems::Center,
+                justify_content: JustifyContent::Start,
+                padding: UiRect::all(Val::Px(5.0)),
                 ..default()
             },
-            ModeText,
-        ));
-    });
+            BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.8)),
+        ))
+        .with_children(|parent| {
+            let buttons = [
+                ("Architect", MenuAction::ToggleArchitect),
+                ("Zones", MenuAction::ToggleZones),
+                ("Orders", MenuAction::ToggleOrders),
+            ];
+
+            for (label, action) in buttons {
+                parent
+                    .spawn((
+                        Button,
+                        Node {
+                            width: Val::Px(100.0),
+                            height: Val::Px(40.0),
+                            margin: UiRect::right(Val::Px(10.0)),
+                            justify_content: JustifyContent::Center,
+                            align_items: AlignItems::Center,
+                            ..default()
+                        },
+                        BackgroundColor(Color::srgb(0.2, 0.2, 0.2)),
+                        MenuButton(action),
+                    ))
+                    .with_children(|button| {
+                        button.spawn((
+                            Text::new(label),
+                            TextFont {
+                                font_size: 18.0,
+                                ..default()
+                            },
+                            TextColor(Color::WHITE),
+                        ));
+                    });
+            }
+
+            // Mode Display
+            parent.spawn((
+                Text::new("Mode: Normal"),
+                TextFont {
+                    font_size: 18.0,
+                    ..default()
+                },
+                TextColor(Color::srgb(0.0, 1.0, 1.0)),
+                Node {
+                    margin: UiRect::left(Val::Px(20.0)),
+                    ..default()
+                },
+                ModeText,
+            ));
+        });
 
     // --- Sub-menus ---
-    
+
     // Architect Sub-menu
-    commands.spawn((
-        Node {
-            display: Display::None,
-            width: Val::Px(120.0),
-            height: Val::Auto,
-            position_type: PositionType::Absolute,
-            left: Val::Px(0.0),
-            bottom: Val::Px(50.0),
-            flex_direction: FlexDirection::Column,
-            padding: UiRect::all(Val::Px(5.0)),
-            ..default()
-        },
-        BackgroundColor(Color::srgba(0.1, 0.1, 0.1, 0.9)),
-    )).insert(ArchitectSubMenu).with_children(|parent| {
-        parent.spawn((
-            Button,
+    commands
+        .spawn((
             Node {
-                width: Val::Percent(100.0),
-                height: Val::Px(40.0),
-                margin: UiRect::bottom(Val::Px(5.0)),
-                justify_content: JustifyContent::Center,
-                align_items: AlignItems::Center,
+                display: Display::None,
+                width: Val::Px(120.0),
+                height: Val::Auto,
+                position_type: PositionType::Absolute,
+                left: Val::Px(0.0),
+                bottom: Val::Px(50.0),
+                flex_direction: FlexDirection::Column,
+                padding: UiRect::all(Val::Px(5.0)),
                 ..default()
             },
-            BackgroundColor(Color::srgb(0.3, 0.3, 0.3)),
-            MenuButton(MenuAction::SelectBuild(BuildingType::Wall)),
-        )).with_children(|button| {
-            button.spawn((
-                Text::new("Wall"),
-                TextFont { font_size: 16.0, ..default() },
-                TextColor(Color::WHITE),
-            ));
+            BackgroundColor(Color::srgba(0.1, 0.1, 0.1, 0.9)),
+        ))
+        .insert(ArchitectSubMenu)
+        .with_children(|parent| {
+            parent
+                .spawn((
+                    Button,
+                    Node {
+                        width: Val::Percent(100.0),
+                        height: Val::Px(40.0),
+                        margin: UiRect::bottom(Val::Px(5.0)),
+                        justify_content: JustifyContent::Center,
+                        align_items: AlignItems::Center,
+                        ..default()
+                    },
+                    BackgroundColor(Color::srgb(0.3, 0.3, 0.3)),
+                    MenuButton(MenuAction::SelectBuild(BuildingType::Wall)),
+                ))
+                .with_children(|button| {
+                    button.spawn((
+                        Text::new("Wall"),
+                        TextFont {
+                            font_size: 16.0,
+                            ..default()
+                        },
+                        TextColor(Color::WHITE),
+                    ));
+                });
         });
-    });
 
     // Zones Sub-menu
-    commands.spawn((
-        Node {
-            display: Display::None,
-            width: Val::Px(120.0),
-            height: Val::Auto,
-            position_type: PositionType::Absolute,
-            left: Val::Px(110.0),
-            bottom: Val::Px(50.0),
-            flex_direction: FlexDirection::Column,
-            padding: UiRect::all(Val::Px(5.0)),
-            ..default()
-        },
-        BackgroundColor(Color::srgba(0.1, 0.1, 0.1, 0.9)),
-    )).insert(ZonesSubMenu).with_children(|parent| {
-        parent.spawn((
-            Button,
+    commands
+        .spawn((
             Node {
-                width: Val::Percent(100.0),
-                height: Val::Px(40.0),
-                margin: UiRect::bottom(Val::Px(5.0)),
-                justify_content: JustifyContent::Center,
-                align_items: AlignItems::Center,
+                display: Display::None,
+                width: Val::Px(120.0),
+                height: Val::Auto,
+                position_type: PositionType::Absolute,
+                left: Val::Px(110.0),
+                bottom: Val::Px(50.0),
+                flex_direction: FlexDirection::Column,
+                padding: UiRect::all(Val::Px(5.0)),
                 ..default()
             },
-            BackgroundColor(Color::srgb(0.3, 0.3, 0.3)),
-            MenuButton(MenuAction::SelectZone(ZoneType::Stockpile)),
-        )).with_children(|button| {
-            button.spawn((
-                Text::new("Stockpile"),
-                TextFont { font_size: 16.0, ..default() },
-                TextColor(Color::WHITE),
-            ));
+            BackgroundColor(Color::srgba(0.1, 0.1, 0.1, 0.9)),
+        ))
+        .insert(ZonesSubMenu)
+        .with_children(|parent| {
+            parent
+                .spawn((
+                    Button,
+                    Node {
+                        width: Val::Percent(100.0),
+                        height: Val::Px(40.0),
+                        margin: UiRect::bottom(Val::Px(5.0)),
+                        justify_content: JustifyContent::Center,
+                        align_items: AlignItems::Center,
+                        ..default()
+                    },
+                    BackgroundColor(Color::srgb(0.3, 0.3, 0.3)),
+                    MenuButton(MenuAction::SelectZone(ZoneType::Stockpile)),
+                ))
+                .with_children(|button| {
+                    button.spawn((
+                        Text::new("Stockpile"),
+                        TextFont {
+                            font_size: 16.0,
+                            ..default()
+                        },
+                        TextColor(Color::WHITE),
+                    ));
+                });
         });
-    });
 
     // Orders Sub-menu
-    commands.spawn((
-        Node {
-            display: Display::None,
-            width: Val::Px(120.0),
-            height: Val::Auto,
-            position_type: PositionType::Absolute,
-            left: Val::Px(220.0),
-            bottom: Val::Px(50.0),
-            flex_direction: FlexDirection::Column,
-            padding: UiRect::all(Val::Px(5.0)),
-            ..default()
-        },
-        BackgroundColor(Color::srgba(0.1, 0.1, 0.1, 0.9)),
-    )).insert(OrdersSubMenu).with_children(|parent| {
-        let tasks = [
-            ("Chop", crate::systems::command::TaskMode::DesignateChop),
-            ("Mine", crate::systems::command::TaskMode::DesignateMine),
-            ("Haul", crate::systems::command::TaskMode::DesignateHaul),
-        ];
+    commands
+        .spawn((
+            Node {
+                display: Display::None,
+                width: Val::Px(120.0),
+                height: Val::Auto,
+                position_type: PositionType::Absolute,
+                left: Val::Px(220.0),
+                bottom: Val::Px(50.0),
+                flex_direction: FlexDirection::Column,
+                padding: UiRect::all(Val::Px(5.0)),
+                ..default()
+            },
+            BackgroundColor(Color::srgba(0.1, 0.1, 0.1, 0.9)),
+        ))
+        .insert(OrdersSubMenu)
+        .with_children(|parent| {
+            let tasks = [
+                (
+                    "Chop",
+                    crate::systems::command::TaskMode::DesignateChop(None),
+                ),
+                (
+                    "Mine",
+                    crate::systems::command::TaskMode::DesignateMine(None),
+                ),
+                (
+                    "Haul",
+                    crate::systems::command::TaskMode::DesignateHaul(None),
+                ),
+                (
+                    "Cancel",
+                    crate::systems::command::TaskMode::CancelDesignation(None),
+                ),
+            ];
 
-        for (label, mode) in tasks {
-            parent.spawn((
-                Button,
-                Node {
-                    width: Val::Percent(100.0),
-                    height: Val::Px(40.0),
-                    margin: UiRect::bottom(Val::Px(5.0)),
-                    justify_content: JustifyContent::Center,
-                    align_items: AlignItems::Center,
-                    ..default()
-                },
-                BackgroundColor(Color::srgb(0.3, 0.3, 0.3)),
-                MenuButton(MenuAction::SelectTaskMode(mode)),
-            )).with_children(|button| {
-                button.spawn((
-                    Text::new(label),
-                    TextFont { font_size: 16.0, ..default() },
-                    TextColor(Color::WHITE),
-                ));
-            });
-        }
-    });
+            for (label, mode) in tasks {
+                parent
+                    .spawn((
+                        Button,
+                        Node {
+                            width: Val::Percent(100.0),
+                            height: Val::Px(40.0),
+                            margin: UiRect::bottom(Val::Px(5.0)),
+                            justify_content: JustifyContent::Center,
+                            align_items: AlignItems::Center,
+                            ..default()
+                        },
+                        BackgroundColor(Color::srgb(0.3, 0.3, 0.3)),
+                        MenuButton(MenuAction::SelectTaskMode(mode)),
+                    ))
+                    .with_children(|button| {
+                        button.spawn((
+                            Text::new(label),
+                            TextFont {
+                                font_size: 16.0,
+                                ..default()
+                            },
+                            TextColor(Color::WHITE),
+                        ));
+                    });
+            }
+        });
 
     // Info Panel
-    commands.spawn((
-        Node {
-            display: Display::None,
-            width: Val::Px(200.0),
-            height: Val::Auto,
-            position_type: PositionType::Absolute,
-            right: Val::Px(20.0),
-            top: Val::Px(120.0),
-            flex_direction: FlexDirection::Column,
-            padding: UiRect::all(Val::Px(10.0)),
-            ..default()
-        },
-        BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.8)),
-        InfoPanel,
-    )).with_children(|parent| {
-        parent.spawn((
-            Text::new("Entity Info"),
-            TextFont { font_size: 20.0, ..default() },
-            TextColor(Color::srgb(1.0, 1.0, 0.0)),
-            InfoPanelHeader,
-        ));
-        parent.spawn((
-            Text::new("Status: Idle"),
-            TextFont { font_size: 16.0, ..default() },
-            TextColor(Color::WHITE),
-            InfoPanelJobText,
-        ));
-    });
+    commands
+        .spawn((
+            Node {
+                display: Display::None,
+                width: Val::Px(200.0),
+                height: Val::Auto,
+                position_type: PositionType::Absolute,
+                right: Val::Px(20.0),
+                top: Val::Px(120.0),
+                flex_direction: FlexDirection::Column,
+                padding: UiRect::all(Val::Px(10.0)),
+                ..default()
+            },
+            BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.8)),
+            InfoPanel,
+        ))
+        .with_children(|parent| {
+            parent.spawn((
+                Text::new("Entity Info"),
+                TextFont {
+                    font_size: 20.0,
+                    ..default()
+                },
+                TextColor(Color::srgb(1.0, 1.0, 0.0)),
+                InfoPanelHeader,
+            ));
+            parent.spawn((
+                Text::new("Status: Idle"),
+                TextFont {
+                    font_size: 16.0,
+                    ..default()
+                },
+                TextColor(Color::WHITE),
+                InfoPanelJobText,
+            ));
+        });
 
     // Time Control
-    commands.spawn((
-        Node {
+    commands
+        .spawn((Node {
             position_type: PositionType::Absolute,
             right: Val::Px(20.0),
             top: Val::Px(20.0),
             flex_direction: FlexDirection::Column,
             align_items: AlignItems::End,
             ..default()
-        },
-    )).with_children(|parent| {
-        parent.spawn((
-            Text::new("Day 1, 00:00"),
-            TextFont { font_size: 24.0, ..default() },
-            TextColor(Color::WHITE),
-            ClockText,
-        ));
+        },))
+        .with_children(|parent| {
+            parent.spawn((
+                Text::new("Day 1, 00:00"),
+                TextFont {
+                    font_size: 24.0,
+                    ..default()
+                },
+                TextColor(Color::WHITE),
+                ClockText,
+            ));
 
-        parent.spawn(Node {
-            flex_direction: FlexDirection::Row,
-            margin: UiRect::top(Val::Px(5.0)),
-            ..default()
-        }).with_children(|speed_row| {
-            let speeds = [
-                (crate::systems::time::TimeSpeed::Paused, "||"),
-                (crate::systems::time::TimeSpeed::Normal, ">"),
-                (crate::systems::time::TimeSpeed::Fast, ">>"),
-                (crate::systems::time::TimeSpeed::Super, ">>>"),
-            ];
+            parent
+                .spawn(Node {
+                    flex_direction: FlexDirection::Row,
+                    margin: UiRect::top(Val::Px(5.0)),
+                    ..default()
+                })
+                .with_children(|speed_row| {
+                    let speeds = [
+                        (crate::systems::time::TimeSpeed::Paused, "||"),
+                        (crate::systems::time::TimeSpeed::Normal, ">"),
+                        (crate::systems::time::TimeSpeed::Fast, ">>"),
+                        (crate::systems::time::TimeSpeed::Super, ">>>"),
+                    ];
 
-            for (speed, label) in speeds {
-                speed_row.spawn((
-                    Button,
-                    Node {
-                        width: Val::Px(40.0),
-                        height: Val::Px(30.0),
-                        margin: UiRect::left(Val::Px(5.0)),
-                        justify_content: JustifyContent::Center,
-                        align_items: AlignItems::Center,
-                        ..default()
-                    },
-                    BackgroundColor(Color::srgb(0.2, 0.2, 0.2)),
-                    crate::systems::time::SpeedButton(speed),
-                )).with_children(|btn| {
-                    btn.spawn((
-                        Text::new(label),
-                        TextFont { font_size: 16.0, ..default() },
-                        TextColor(Color::WHITE),
+                    for (speed, label) in speeds {
+                        speed_row
+                            .spawn((
+                                Button,
+                                Node {
+                                    width: Val::Px(40.0),
+                                    height: Val::Px(30.0),
+                                    margin: UiRect::left(Val::Px(5.0)),
+                                    justify_content: JustifyContent::Center,
+                                    align_items: AlignItems::Center,
+                                    ..default()
+                                },
+                                BackgroundColor(Color::srgb(0.2, 0.2, 0.2)),
+                                crate::systems::time::SpeedButton(speed),
+                            ))
+                            .with_children(|btn| {
+                                btn.spawn((
+                                    Text::new(label),
+                                    TextFont {
+                                        font_size: 16.0,
+                                        ..default()
+                                    },
+                                    TextColor(Color::WHITE),
+                                ));
+                            });
+                    }
+                });
+
+            // Task Summary
+            parent
+                .spawn(Node {
+                    flex_direction: FlexDirection::Column,
+                    margin: UiRect::top(Val::Px(10.0)),
+                    padding: UiRect::all(Val::Px(5.0)),
+                    ..default()
+                })
+                .with_children(|summary| {
+                    summary.spawn((
+                        Text::new("Tasks: 0 (0 High)"),
+                        TextFont {
+                            font_size: 18.0,
+                            ..default()
+                        },
+                        TextColor(Color::srgb(0.8, 0.8, 1.0)),
+                        TaskSummaryText,
                     ));
                 });
-            }
         });
-    });
 }
 
 pub fn ui_interaction_system(
@@ -398,18 +486,51 @@ pub fn ui_interaction_system(
 
 pub fn menu_visibility_system(
     menu_state: Res<MenuState>,
-    mut q_architect: Query<&mut Node, (With<ArchitectSubMenu>, Without<ZonesSubMenu>, Without<OrdersSubMenu>)>,
-    mut q_zones: Query<&mut Node, (With<ZonesSubMenu>, Without<ArchitectSubMenu>, Without<OrdersSubMenu>)>,
-    mut q_orders: Query<&mut Node, (With<OrdersSubMenu>, Without<ArchitectSubMenu>, Without<ZonesSubMenu>)>,
+    mut q_architect: Query<
+        &mut Node,
+        (
+            With<ArchitectSubMenu>,
+            Without<ZonesSubMenu>,
+            Without<OrdersSubMenu>,
+        ),
+    >,
+    mut q_zones: Query<
+        &mut Node,
+        (
+            With<ZonesSubMenu>,
+            Without<ArchitectSubMenu>,
+            Without<OrdersSubMenu>,
+        ),
+    >,
+    mut q_orders: Query<
+        &mut Node,
+        (
+            With<OrdersSubMenu>,
+            Without<ArchitectSubMenu>,
+            Without<ZonesSubMenu>,
+        ),
+    >,
 ) {
     if let Ok(mut node) = q_architect.get_single_mut() {
-        node.display = if matches!(*menu_state, MenuState::Architect) { Display::Flex } else { Display::None };
+        node.display = if matches!(*menu_state, MenuState::Architect) {
+            Display::Flex
+        } else {
+            Display::None
+        };
     }
     if let Ok(mut node) = q_zones.get_single_mut() {
-        node.display = if matches!(*menu_state, MenuState::Zones) { Display::Flex } else { Display::None };
+        node.display = if matches!(*menu_state, MenuState::Zones) {
+            Display::Flex
+        } else {
+            Display::None
+        };
     }
     if let Ok(mut node) = q_orders.get_single_mut() {
-        node.display = if matches!(*menu_state, MenuState::Orders) { Display::Flex } else { Display::None };
+        node.display = if matches!(*menu_state, MenuState::Orders) {
+            Display::Flex
+        } else {
+            Display::None
+        };
     }
 }
 
@@ -418,7 +539,11 @@ pub fn info_panel_system(
     mut q_panel: Query<&mut Node, With<InfoPanel>>,
     mut q_text_job: Query<&mut Text, (With<InfoPanelJobText>, Without<InfoPanelHeader>)>,
     mut q_text_header: Query<&mut Text, (With<InfoPanelHeader>, Without<InfoPanelJobText>)>,
-    q_souls: Query<(&DamnedSoul, &AssignedTask, &crate::systems::logistics::Inventory)>,
+    q_souls: Query<(
+        &DamnedSoul,
+        &AssignedTask,
+        &crate::systems::logistics::Inventory,
+    )>,
     q_blueprints: Query<&Blueprint>,
     q_familiars: Query<&Familiar>,
     q_items: Query<&crate::systems::logistics::ResourceItem>,
@@ -435,14 +560,14 @@ pub fn info_panel_system(
         if let Ok((soul, task, inventory)) = q_souls.get(entity) {
             panel_node.display = Display::Flex;
             header_text.0 = "Damned Soul Info".to_string();
-            
+
             // タスクの詳細情報
             let task_str = match task {
                 AssignedTask::None => "Idle".to_string(),
                 AssignedTask::Gather { phase, .. } => format!("Gather ({:?})", phase),
                 AssignedTask::Haul { phase, .. } => format!("Haul ({:?})", phase),
             };
-            
+
             // インベントリ情報
             let inv_str = if let Some(item_entity) = inventory.0 {
                 if let Ok(item) = q_items.get(item_entity) {
@@ -453,7 +578,7 @@ pub fn info_panel_system(
             } else {
                 "Carrying: None".to_string()
             };
-            
+
             job_text.0 = format!(
                 "Motivation: {:.0}%\nLaziness: {:.0}%\nFatigue: {:.0}%\nTask: {}\n{}",
                 soul.motivation * 100.0,
@@ -465,11 +590,7 @@ pub fn info_panel_system(
         } else if let Ok(bp) = q_blueprints.get(entity) {
             panel_node.display = Display::Flex;
             header_text.0 = "Blueprint Info".to_string();
-            job_text.0 = format!(
-                "Type: {:?}\nProgress: {:.0}%",
-                bp.kind,
-                bp.progress * 100.0
-            );
+            job_text.0 = format!("Type: {:?}\nProgress: {:.0}%", bp.kind, bp.progress * 100.0);
         } else if let Ok(familiar) = q_familiars.get(entity) {
             panel_node.display = Display::Flex;
             header_text.0 = "Familiar Info".to_string();
@@ -505,12 +626,45 @@ pub fn update_mode_text_system(
         } else {
             match *task_mode {
                 crate::systems::command::TaskMode::None => "Mode: Normal".to_string(),
-                crate::systems::command::TaskMode::DesignateChop => "Mode: Chop (Click tree)".to_string(),
-                crate::systems::command::TaskMode::DesignateMine => "Mode: Mine (Click rock)".to_string(),
-                crate::systems::command::TaskMode::DesignateHaul => "Mode: Haul (Click item)".to_string(),
-                crate::systems::command::TaskMode::SelectBuildTarget => "Mode: Build Select".to_string(),
-                crate::systems::command::TaskMode::AreaSelection(None) => "Mode: Area (Click start)".to_string(),
-                crate::systems::command::TaskMode::AreaSelection(Some(_)) => "Mode: Area (Click end)".to_string(),
+                crate::systems::command::TaskMode::DesignateChop(None) => {
+                    "Mode: Chop (Drag to select)".to_string()
+                }
+                crate::systems::command::TaskMode::DesignateChop(Some(_)) => {
+                    "Mode: Chop (Dragging...)".to_string()
+                }
+                crate::systems::command::TaskMode::DesignateMine(None) => {
+                    "Mode: Mine (Drag to select)".to_string()
+                }
+                crate::systems::command::TaskMode::DesignateMine(Some(_)) => {
+                    "Mode: Mine (Dragging...)".to_string()
+                }
+                crate::systems::command::TaskMode::DesignateHaul(None) => {
+                    "Mode: Haul (Drag to select)".to_string()
+                }
+                crate::systems::command::TaskMode::DesignateHaul(Some(_)) => {
+                    "Mode: Haul (Dragging...)".to_string()
+                }
+                crate::systems::command::TaskMode::CancelDesignation(None) => {
+                    "Mode: Cancel (Drag to select)".to_string()
+                }
+                crate::systems::command::TaskMode::CancelDesignation(Some(_)) => {
+                    "Mode: Cancel (Dragging...)".to_string()
+                }
+                crate::systems::command::TaskMode::SelectBuildTarget => {
+                    "Mode: Build Select".to_string()
+                }
+                crate::systems::command::TaskMode::AreaSelection(None) => {
+                    "Mode: Area (Click start)".to_string()
+                }
+                crate::systems::command::TaskMode::AreaSelection(Some(_)) => {
+                    "Mode: Area (Click end)".to_string()
+                }
+                crate::systems::command::TaskMode::AssignTask(None) => {
+                    "Mode: Assign Task (Drag to select)".to_string()
+                }
+                crate::systems::command::TaskMode::AssignTask(Some(_)) => {
+                    "Mode: Assign Task (Dragging...)".to_string()
+                }
             }
         };
         text.0 = mode_str;
@@ -552,41 +706,63 @@ pub fn familiar_context_menu_system(
                 }
 
                 if clicked_familiar {
-                    commands.spawn((
-                        Node {
-                            position_type: PositionType::Absolute,
-                            left: Val::Px(cursor_pos.x),
-                            top: Val::Px(cursor_pos.y),
-                            width: Val::Px(80.0),
-                            height: Val::Auto,
-                            flex_direction: FlexDirection::Column,
-                            padding: UiRect::all(Val::Px(5.0)),
-                            ..default()
-                        },
-                        BackgroundColor(Color::srgba(0.1, 0.1, 0.1, 0.9)),
-                        ContextMenu,
-                    )).with_children(|parent| {
-                        parent.spawn((
-                            Button,
+                    commands
+                        .spawn((
                             Node {
-                                width: Val::Percent(100.0),
-                                height: Val::Px(30.0),
-                                justify_content: JustifyContent::Center,
-                                align_items: AlignItems::Center,
+                                position_type: PositionType::Absolute,
+                                left: Val::Px(cursor_pos.x),
+                                top: Val::Px(cursor_pos.y),
+                                width: Val::Px(80.0),
+                                height: Val::Auto,
+                                flex_direction: FlexDirection::Column,
+                                padding: UiRect::all(Val::Px(5.0)),
                                 ..default()
                             },
-                            BackgroundColor(Color::srgb(0.3, 0.3, 0.3)),
-                            MenuButton(MenuAction::SelectAreaTask),
-                        )).with_children(|button| {
-                            button.spawn((
-                                Text::new("Task"),
-                                TextFont { font_size: 14.0, ..default() },
-                                TextColor(Color::WHITE),
-                            ));
+                            BackgroundColor(Color::srgba(0.1, 0.1, 0.1, 0.9)),
+                            ContextMenu,
+                        ))
+                        .with_children(|parent| {
+                            parent
+                                .spawn((
+                                    Button,
+                                    Node {
+                                        width: Val::Percent(100.0),
+                                        height: Val::Px(30.0),
+                                        justify_content: JustifyContent::Center,
+                                        align_items: AlignItems::Center,
+                                        ..default()
+                                    },
+                                    BackgroundColor(Color::srgb(0.3, 0.3, 0.3)),
+                                    MenuButton(MenuAction::SelectAreaTask),
+                                ))
+                                .with_children(|button| {
+                                    button.spawn((
+                                        Text::new("Task"),
+                                        TextFont {
+                                            font_size: 14.0,
+                                            ..default()
+                                        },
+                                        TextColor(Color::WHITE),
+                                    ));
+                                });
                         });
-                    });
                 }
             }
         }
+    }
+}
+
+pub fn task_summary_ui_system(
+    task_queue: Res<crate::systems::work::TaskQueue>,
+    mut q_text: Query<&mut Text, With<TaskSummaryText>>,
+) {
+    if let Ok(mut text) = q_text.get_single_mut() {
+        let mut total = 0;
+        let mut high = 0;
+        for tasks in task_queue.by_familiar.values() {
+            total += tasks.len();
+            high += tasks.iter().filter(|t| t.priority > 0).count();
+        }
+        text.0 = format!("Tasks: {} ({} High)", total, high);
     }
 }

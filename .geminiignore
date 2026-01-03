@@ -1,0 +1,52 @@
+# Gemini/Antigravity AI Agent - ファイル除外設定
+# このファイルはエージェントがコンテキストに含めないファイルを指定します
+# .gitignoreと同じ構文を使用
+
+# ビルド成果物（大量のファイルでコンテキストを圧迫）
+target/
+dist/
+.trunk/
+
+# ログファイル（UTF-16エンコーディング問題を回避）
+*.log
+*.txt
+!README*.txt
+!LICENSE*.txt
+!CHANGELOG*.txt
+
+# 特定の問題ファイル
+build_*.txt
+build_*.log
+check*.txt
+err*.txt
+*_err*.txt
+*_output*.txt
+*_log*.txt
+stderr.txt
+game_log.txt
+cargo_check.log
+final_check*.log
+run_output.log
+
+# Gitおよびバージョン管理
+.git/
+.gitignore
+
+# 依存関係・ロックファイル
+Cargo.lock
+node_modules/
+
+# IDE設定
+.vscode/
+.idea/
+.cursor/
+
+# OSファイル
+.DS_Store
+Thumbs.db
+
+# スクリプトディレクトリ（ユーティリティスクリプト）
+scripts/
+
+# assets（画像等の大きなバイナリファイル）
+assets/
