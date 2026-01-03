@@ -55,8 +55,9 @@ pub struct FamiliarAura {
 /// オーラのレイヤー種別
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AuraLayer {
-    Border, // 固定範囲（実際の影響範囲）
-    Pulse,  // パルスアニメーション
+    Border,  // 固定範囲（実際の影響範囲）
+    Pulse,   // パルスアニメーション
+    Outline, // 選択時の強調用アウトライン
 }
 
 /// 使い魔の種類（パラメーター調整用に拡張可能）
@@ -144,11 +145,25 @@ pub fn spawn_familiar(
         FamiliarRangeIndicator(fam_entity),
         AuraLayer::Border,
         Sprite {
-            color: Color::srgba(1.0, 0.3, 0.0, 0.15), // オレンジ色の枠
+            image: game_assets.aura_circle.clone(),
+            color: Color::srgba(1.0, 0.3, 0.0, 0.3), // オレンジ色の枠
             custom_size: Some(Vec2::splat(command_radius * 2.0)),
             ..default()
         },
         Transform::from_translation(actual_pos.extend(0.25)),
+    ));
+
+    // オーラ強調用アウトライン（選択時のみ表示される細い線）
+    commands.spawn((
+        FamiliarRangeIndicator(fam_entity),
+        AuraLayer::Outline,
+        Sprite {
+            image: game_assets.aura_ring.clone(),
+            color: Color::srgba(1.0, 1.0, 0.0, 0.0), // 初期状態は透明
+            custom_size: Some(Vec2::splat(command_radius * 2.0)),
+            ..default()
+        },
+        Transform::from_translation(actual_pos.extend(0.26)),
     ));
 
     // オーラ内側（パルスアニメーション）
@@ -157,7 +172,8 @@ pub fn spawn_familiar(
         FamiliarRangeIndicator(fam_entity),
         AuraLayer::Pulse,
         Sprite {
-            color: Color::srgba(1.0, 0.6, 0.0, 0.08), // 明るいオレンジ
+            image: game_assets.aura_circle.clone(),
+            color: Color::srgba(1.0, 0.6, 0.0, 0.15), // 明るいオレンジ
             custom_size: Some(Vec2::splat(command_radius * 1.8)),
             ..default()
         },
@@ -198,6 +214,7 @@ pub fn update_familiar_range_indicator(
             // 位置追従
             let z = match layer_opt {
                 Some(AuraLayer::Border) => 0.25,
+                Some(AuraLayer::Outline) => 0.26,
                 Some(AuraLayer::Pulse) => 0.28,
                 None => 0.25,
             };
@@ -213,6 +230,12 @@ pub fn update_familiar_range_indicator(
                     sprite.custom_size = Some(Vec2::splat(familiar.command_radius * 2.0));
                     let alpha = if is_selected { 0.2 } else { 0.1 };
                     sprite.color = Color::srgba(1.0, 0.3, 0.0, alpha);
+                }
+                Some(AuraLayer::Outline) => {
+                    // 選択時のみ強調
+                    sprite.custom_size = Some(Vec2::splat(familiar.command_radius * 2.0));
+                    let alpha = if is_selected { 0.8 } else { 0.0 };
+                    sprite.color = Color::srgba(1.0, 1.0, 0.0, alpha); // 黄色の強調線
                 }
                 Some(AuraLayer::Pulse) => {
                     // パルスアニメーション

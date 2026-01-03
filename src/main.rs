@@ -173,8 +173,17 @@ fn main() {
         .run();
 }
 
-fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
+fn setup(
+    mut commands: Commands,
+    asset_server: Res<AssetServer>,
+    mut images: ResMut<Assets<Image>>,
+) {
     commands.spawn((Camera2d, MainCamera));
+
+    // 円形グラデーションテクスチャを動的生成
+    let aura_circle = create_circular_gradient_texture(&mut images);
+    // 円形リング（外枠）テクスチャを動的生成
+    let aura_ring = create_circular_outline_texture(&mut images);
 
     let game_assets = GameAssets {
         grass: asset_server.load("textures/grass.jpg"),
@@ -183,8 +192,101 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
         colonist: asset_server.load("textures/colonist.jpg"),
         wall: asset_server.load("textures/stone.jpg"), // Placeholder
         wood: asset_server.load("textures/dirt.jpg"),  // Placeholder
+        aura_circle,
+        aura_ring,
     };
     commands.insert_resource(game_assets);
+}
+
+/// 円形リング（外枠）テクスチャを生成
+fn create_circular_outline_texture(images: &mut Assets<Image>) -> Handle<Image> {
+    use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
+
+    let size = 128u32;
+    let center = size as f32 / 2.0;
+    let thickness = 2.0; // 線の太さ
+    let mut data = Vec::with_capacity((size * size * 4) as usize);
+
+    for y in 0..size {
+        for x in 0..size {
+            let dx = x as f32 - center;
+            let dy = y as f32 - center;
+            let distance = (dx * dx + dy * dy).sqrt();
+
+            // 外側の境界付近だけ不透明にする
+            let dist_from_edge = (distance - (center - thickness)).abs();
+            let alpha = if dist_from_edge < thickness {
+                let factor = 1.0 - (dist_from_edge / thickness);
+                (factor * 255.0) as u8
+            } else {
+                0
+            };
+
+            // RGBA: 白いリング
+            data.push(255); // R
+            data.push(255); // G
+            data.push(255); // B
+            data.push(alpha); // A
+        }
+    }
+
+    let image = Image::new(
+        Extent3d {
+            width: size,
+            height: size,
+            depth_or_array_layers: 1,
+        },
+        TextureDimension::D2,
+        data,
+        TextureFormat::Rgba8UnormSrgb,
+        default(),
+    );
+
+    images.add(image)
+}
+
+/// 円形グラデーションテクスチャを生成
+fn create_circular_gradient_texture(images: &mut Assets<Image>) -> Handle<Image> {
+    use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
+
+    let size = 128u32;
+    let center = size as f32 / 2.0;
+    let mut data = Vec::with_capacity((size * size * 4) as usize);
+
+    for y in 0..size {
+        for x in 0..size {
+            let dx = x as f32 - center;
+            let dy = y as f32 - center;
+            let distance = (dx * dx + dy * dy).sqrt() / center;
+
+            // 円形グラデーション（中心から外側へ透明に）
+            let alpha = if distance <= 1.0 {
+                ((1.0 - distance).powf(0.5) * 255.0) as u8
+            } else {
+                0
+            };
+
+            // RGBA: 白い円形グラデーション
+            data.push(255); // R
+            data.push(255); // G
+            data.push(255); // B
+            data.push(alpha); // A
+        }
+    }
+
+    let image = Image::new(
+        Extent3d {
+            width: size,
+            height: size,
+            depth_or_array_layers: 1,
+        },
+        TextureDimension::D2,
+        data,
+        TextureFormat::Rgba8UnormSrgb,
+        default(),
+    );
+
+    images.add(image)
 }
 
 /// エンティティ（使い魔と人間）をスポーン
