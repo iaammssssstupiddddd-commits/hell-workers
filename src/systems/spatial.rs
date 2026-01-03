@@ -91,6 +91,27 @@ impl SpatialGrid {
         }
         result
     }
+
+    /// 指定位置周辺のセルにいるエンティティを返す（検索半径を考慮）
+    pub fn get_nearby_in_radius(&self, pos: Vec2, radius: f32) -> Vec<Entity> {
+        let (cx, cy) = self.pos_to_cell(pos);
+        let cell_size = if self.cell_size > 0.0 {
+            self.cell_size
+        } else {
+            TILE_SIZE * 4.0
+        };
+        // 半径を考慮して必要なセル数を計算
+        let cells_needed = (radius / cell_size).ceil() as i32 + 1;
+        let mut result = Vec::new();
+        for dx in -cells_needed..=cells_needed {
+            for dy in -cells_needed..=cells_needed {
+                if let Some(entities) = self.cells.get(&(cx + dx, cy + dy)) {
+                    result.extend(entities.iter().copied());
+                }
+            }
+        }
+        result
+    }
 }
 
 // ============================================================
@@ -274,38 +295,9 @@ impl ResourceSpatialGrid {
 /// SpatialGridを更新するシステム（差分更新）
 pub fn update_spatial_grid_system(
     mut spatial_grid: ResMut<SpatialGrid>,
-    q_souls_transform: Query<(Entity, &Transform, &DamnedSoul, &AssignedTask), Changed<Transform>>,
-    q_souls_soul: Query<(Entity, &Transform, &DamnedSoul, &AssignedTask), Changed<DamnedSoul>>,
-    q_souls_task: Query<(Entity, &Transform, &DamnedSoul, &AssignedTask), Changed<AssignedTask>>,
+    q_souls: Query<(Entity, &Transform, &DamnedSoul, &AssignedTask)>,
 ) {
-    // 位置が変更されたsoulを更新
-    for (entity, transform, soul, task) in q_souls_transform.iter() {
-        let should_be_in_grid = matches!(task, AssignedTask::None)
-            && soul.motivation >= MOTIVATION_THRESHOLD
-            && soul.fatigue < FATIGUE_THRESHOLD;
-
-        if should_be_in_grid {
-            spatial_grid.insert(entity, transform.translation.truncate());
-        } else {
-            spatial_grid.remove(entity);
-        }
-    }
-
-    // やる気・疲労が変更されたsoulを更新
-    for (entity, transform, soul, task) in q_souls_soul.iter() {
-        let should_be_in_grid = matches!(task, AssignedTask::None)
-            && soul.motivation >= MOTIVATION_THRESHOLD
-            && soul.fatigue < FATIGUE_THRESHOLD;
-
-        if should_be_in_grid {
-            spatial_grid.insert(entity, transform.translation.truncate());
-        } else {
-            spatial_grid.remove(entity);
-        }
-    }
-
-    // タスクが変更されたsoulを更新
-    for (entity, transform, soul, task) in q_souls_task.iter() {
+    for (entity, transform, soul, task) in q_souls.iter() {
         let should_be_in_grid = matches!(task, AssignedTask::None)
             && soul.motivation >= MOTIVATION_THRESHOLD
             && soul.fatigue < FATIGUE_THRESHOLD;

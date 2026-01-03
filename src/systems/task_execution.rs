@@ -84,8 +84,9 @@ pub fn task_execution_system(
         Option<&Rock>,
         Option<&ResourceItem>,
         Option<&Designation>,
+        Option<&InStockpile>,
     )>,
-    q_stockpiles: Query<&Transform, With<Stockpile>>,
+    mut q_stockpiles: Query<(&Transform, &mut Stockpile)>,
     game_assets: Res<GameAssets>,
     mut ev_completed: EventWriter<TaskCompletedEvent>,
     time: Res<Time>,
@@ -135,7 +136,7 @@ pub fn task_execution_system(
                     stockpile,
                     phase,
                     &q_targets,
-                    &q_stockpiles,
+                    &mut q_stockpiles,
                     &mut commands,
                 );
             }
@@ -175,6 +176,7 @@ fn handle_gather_task(
         Option<&Rock>,
         Option<&ResourceItem>,
         Option<&Designation>,
+        Option<&InStockpile>,
     )>,
     commands: &mut Commands,
     game_assets: &Res<GameAssets>,
@@ -183,7 +185,7 @@ fn handle_gather_task(
     let soul_pos = soul_transform.translation.truncate();
     match phase {
         GatherPhase::GoingToResource => {
-            if let Ok((res_transform, _, _, _, des_opt)) = q_targets.get(target) {
+            if let Ok((res_transform, _, _, _, des_opt, _)) = q_targets.get(target) {
                 // 指定が解除されていたら中止
                 if des_opt.is_none() {
                     *task = AssignedTask::None;
@@ -211,7 +213,7 @@ fn handle_gather_task(
             }
         }
         GatherPhase::Collecting { mut progress } => {
-            if let Ok((res_transform, tree, rock, _, des_opt)) = q_targets.get(target) {
+            if let Ok((res_transform, tree, rock, _, des_opt, _)) = q_targets.get(target) {
                 // 指定が解除されていたら中止
                 if des_opt.is_none() {
                     *task = AssignedTask::None;
@@ -293,20 +295,23 @@ fn handle_haul_task(
         Option<&Rock>,
         Option<&ResourceItem>,
         Option<&Designation>,
+        Option<&InStockpile>,
     )>,
-    q_stockpiles: &Query<&Transform, With<Stockpile>>,
+    q_stockpiles: &mut Query<(&Transform, &mut Stockpile)>,
     commands: &mut Commands,
 ) {
     let soul_pos = soul_transform.translation.truncate();
     match phase {
         HaulPhase::GoingToItem => {
-            if let Ok((res_transform, _, _, _, des_opt)) = q_targets.get(item) {
-                // 指定が解除されていたら中止（運搬中のものは既に Designation が無いので、GoingToItem フェーズのみチェック）
+            if let Ok((res_transform, _, _, _, des_opt, in_stockpile_opt)) = q_targets.get(item) {
+                // 指示がキャンセルされていないか確認
                 if des_opt.is_none() {
                     *task = AssignedTask::None;
                     path.waypoints.clear();
                     return;
                 }
+
+                // アイテムと備蓄場所の情報を取得
                 let res_pos = res_transform.translation.truncate();
                 if dest.0.distance_squared(res_pos) > 2.0 {
                     dest.0 = res_pos;
@@ -316,7 +321,19 @@ fn handle_haul_task(
                 if soul_pos.distance(res_pos) < TILE_SIZE * 1.2 {
                     inventory.0 = Some(item);
                     commands.entity(item).insert(Visibility::Hidden);
-                    // タスク指定を削除（地面の色を消し、他の使い魔が割り当てるのを防ぐ）
+
+                    // 【修正】もしアイテムが備蓄場所にあったなら、カウントを減らし、InStockpileコンポーネントを削除
+                    if let Some(InStockpile(stock_entity)) = in_stockpile_opt {
+                        if let Ok((_, mut stock_comp)) = q_stockpiles.get_mut(*stock_entity) {
+                            stock_comp.current_count = stock_comp.current_count.saturating_sub(1);
+                            info!(
+                                "HAUL: Item picked up from Stockpile {:?}. New count: {}",
+                                stock_entity, stock_comp.current_count
+                            );
+                        }
+                    }
+                    commands.entity(item).remove::<InStockpile>();
+
                     commands.entity(item).remove::<Designation>();
                     commands.entity(item).remove::<IssuedBy>();
                     commands.entity(item).remove::<TaskSlots>();
@@ -335,7 +352,7 @@ fn handle_haul_task(
             }
         }
         HaulPhase::GoingToStockpile => {
-            if let Ok(stock_transform) = q_stockpiles.get(stockpile) {
+            if let Ok((stock_transform, _)) = q_stockpiles.get(stockpile) {
                 let stock_pos = stock_transform.translation.truncate();
                 if dest.0.distance_squared(stock_pos) > 2.0 {
                     dest.0 = stock_pos;
@@ -364,18 +381,19 @@ fn handle_haul_task(
             }
         }
         HaulPhase::Dropping => {
-            if let Ok(stock_transform) = q_stockpiles.get(stockpile) {
+            if let Ok((stock_transform, mut stockpile_comp)) = q_stockpiles.get_mut(stockpile) {
                 let stock_pos = stock_transform.translation.truncate();
                 if let Some(item_entity) = inventory.0.take() {
                     commands.entity(item_entity).insert((
                         Visibility::Visible,
                         Transform::from_xyz(stock_pos.x, stock_pos.y, 0.6),
-                        InStockpile,
+                        InStockpile(stockpile),
                     ));
                     commands.entity(item_entity).remove::<ClaimedBy>();
+                    stockpile_comp.current_count += 1; // カウントアップ
                     info!(
-                        "TASK_EXEC: Soul {:?} dropped item at stockpile",
-                        soul_entity
+                        "TASK_EXEC: Soul {:?} dropped item at stockpile. Count: {}",
+                        soul_entity, stockpile_comp.current_count
                     );
                 }
             }

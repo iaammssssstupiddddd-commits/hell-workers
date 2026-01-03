@@ -14,7 +14,7 @@ use crate::systems::jobs::{
     Designation, DesignationCreatedEvent, IssuedBy, TaskCompletedEvent, TaskSlots, WorkType,
 };
 use crate::systems::logistics::{ClaimedBy, InStockpile, Inventory, ResourceItem, Stockpile};
-use crate::world::map::WorldMap;
+
 use bevy::prelude::*;
 
 // ============================================================
@@ -31,7 +31,7 @@ pub struct AutoHaulCounter;
 
 pub fn task_delegation_system(
     mut commands: Commands,
-    mut q_familiars: Query<(Entity, &Transform, &mut ActiveCommand)>,
+    q_familiars: Query<(Entity, &Transform), With<ActiveCommand>>,
     mut q_souls: Query<(
         Entity,
         &Transform,
@@ -41,7 +41,8 @@ pub fn task_delegation_system(
         &mut Path,
         &mut Inventory,
     )>,
-    q_stockpiles: Query<(Entity, &Transform), With<Stockpile>>,
+    q_stockpiles: Query<(Entity, &Transform, &Stockpile)>,
+    q_under_command: Query<&UnderCommand>,
     mut q_designations: Query<(&Transform, &Designation, &mut TaskSlots)>,
     mut queue: ResMut<TaskQueue>,
     spatial_grid: Res<SpatialGrid>,
@@ -60,11 +61,15 @@ pub fn task_delegation_system(
     ev_created.clear();
     ev_completed.clear();
 
-    for (fam_entity, fam_transform, mut active_command) in q_familiars.iter_mut() {
+    for (fam_entity, fam_transform) in q_familiars.iter() {
         let fam_pos = fam_transform.translation.truncate();
 
-        // 使役枠の空きを確認 (最大2名)
-        let current_count = active_command.assigned_souls.len();
+        // 使役枠の空きを確認 (UnderCommandを持つソウルを数える)
+        let current_count = q_under_command
+            .iter()
+            .filter(|uc| uc.0 == fam_entity)
+            .count();
+
         if current_count >= 2 {
             continue;
         }
@@ -123,10 +128,51 @@ pub fn task_delegation_system(
 
             let nearby_souls = spatial_grid.get_nearby(des_pos);
 
-            let best_soul = if !nearby_souls.is_empty() {
-                nearby_souls
+            let mut best_soul = nearby_souls
+                .iter()
+                .filter_map(|&e| q_souls.get(e).ok())
+                .filter(|(_, _, soul, current_task, _, _, _)| {
+                    matches!(*current_task, AssignedTask::None)
+                        && soul.motivation >= MOTIVATION_THRESHOLD
+                        && soul.fatigue < FATIGUE_THRESHOLD
+                })
+                .min_by(|(_, t1, _, _, _, _, _), (_, t2, _, _, _, _, _)| {
+                    let d1 = t1.translation.truncate().distance_squared(des_pos);
+                    let d2 = t2.translation.truncate().distance_squared(des_pos);
+                    d1.partial_cmp(&d2).unwrap_or(std::cmp::Ordering::Equal)
+                })
+                .map(|(e, _, _, _, _, _, _)| e);
+
+            // 【最適化】見つからない場合、段階的に半径を広げて検索（全soulのイテレートを避ける）
+            if best_soul.is_none() {
+                let search_tiers = [TILE_SIZE * 10.0, TILE_SIZE * 30.0, TILE_SIZE * 60.0];
+                for &radius in search_tiers.iter() {
+                    let broader_souls = spatial_grid.get_nearby_in_radius(des_pos, radius);
+                    best_soul = broader_souls
+                        .iter()
+                        .filter_map(|&e| q_souls.get(e).ok())
+                        .filter(|(_, _, soul, current_task, _, _, _)| {
+                            matches!(*current_task, AssignedTask::None)
+                                && soul.motivation >= MOTIVATION_THRESHOLD
+                                && soul.fatigue < FATIGUE_THRESHOLD
+                        })
+                        .min_by(|(_, t1, _, _, _, _, _), (_, t2, _, _, _, _, _)| {
+                            let d1 = t1.translation.truncate().distance_squared(des_pos);
+                            let d2 = t2.translation.truncate().distance_squared(des_pos);
+                            d1.partial_cmp(&d2).unwrap_or(std::cmp::Ordering::Equal)
+                        })
+                        .map(|(e, _, _, _, _, _, _)| e);
+
+                    if best_soul.is_some() {
+                        break;
+                    }
+                }
+            }
+
+            // 【最終フォールバック】空間グリッドで見つからない場合、全ソウルをスキャン（グリッドの同期漏れ対策）
+            if best_soul.is_none() {
+                best_soul = q_souls
                     .iter()
-                    .filter_map(|&e| q_souls.get(e).ok())
                     .filter(|(_, _, soul, current_task, _, _, _)| {
                         matches!(*current_task, AssignedTask::None)
                             && soul.motivation >= MOTIVATION_THRESHOLD
@@ -137,22 +183,14 @@ pub fn task_delegation_system(
                         let d2 = t2.translation.truncate().distance_squared(des_pos);
                         d1.partial_cmp(&d2).unwrap_or(std::cmp::Ordering::Equal)
                     })
-                    .map(|(e, _, _, _, _, _, _)| e)
-            } else {
-                q_souls
-                    .iter()
-                    .filter(|(_, _, soul, current_task, _, _, _)| {
-                        matches!(*current_task, AssignedTask::None)
-                            && soul.motivation >= MOTIVATION_THRESHOLD
-                            && soul.fatigue < FATIGUE_THRESHOLD
-                    })
-                    .min_by(|(_, t1, _, _, _, _, _), (_, t2, _, _, _, _, _)| {
-                        let d1 = t1.translation.truncate().distance_squared(des_pos);
-                        let d2 = t2.translation.truncate().distance_squared(des_pos);
-                        d1.partial_cmp(&d2).unwrap_or(std::cmp::Ordering::Equal)
-                    })
-                    .map(|(e, _, _, _, _, _, _)| e)
-            };
+                    .map(|(e, _, _, _, _, _, _)| e);
+
+                if best_soul.is_some() {
+                    warn!(
+                        "WORK: Soul found via Global Fallback (SpatialGrid might be out of sync)"
+                    );
+                }
+            }
 
             if let Some(soul_entity) = best_soul {
                 match work_type {
@@ -174,7 +212,6 @@ pub fn task_delegation_system(
                             commands
                                 .entity(soul_entity)
                                 .insert(UnderCommand(fam_entity));
-                            active_command.assigned_souls.push(soul_entity);
 
                             assigned_this_tick += 1;
                             to_remove.push(des_entity);
@@ -187,12 +224,12 @@ pub fn task_delegation_system(
                     WorkType::Haul => {
                         let best_stockpile = q_stockpiles
                             .iter()
-                            .min_by(|(_, t1), (_, t2)| {
+                            .min_by(|(_, t1, _), (_, t2, _)| {
                                 let d1 = t1.translation.truncate().distance_squared(des_pos);
                                 let d2 = t2.translation.truncate().distance_squared(des_pos);
                                 d1.partial_cmp(&d2).unwrap_or(std::cmp::Ordering::Equal)
                             })
-                            .map(|(e, _)| e);
+                            .map(|(e, _, _)| e);
 
                         if let Some(stock_entity) = best_stockpile {
                             if let Ok((mut soul_task, mut dest, mut path)) = q_souls
@@ -212,7 +249,6 @@ pub fn task_delegation_system(
                                 commands
                                     .entity(soul_entity)
                                     .insert(UnderCommand(fam_entity));
-                                active_command.assigned_souls.push(soul_entity);
 
                                 assigned_this_tick += 1;
                                 to_remove.push(des_entity);
@@ -236,15 +272,11 @@ pub fn task_delegation_system(
 
 pub fn cleanup_commanded_souls_system(
     mut commands: Commands,
-    mut q_familiars: Query<&mut ActiveCommand>,
     q_souls: Query<(Entity, &AssignedTask, &UnderCommand)>,
 ) {
     for (soul_entity, task, under_command) in q_souls.iter() {
         if matches!(task, AssignedTask::None) {
             let fam_entity = under_command.0;
-            if let Ok(mut active_command) = q_familiars.get_mut(fam_entity) {
-                active_command.assigned_souls.retain(|&e| e != soul_entity);
-            }
             commands.entity(soul_entity).remove::<UnderCommand>();
             info!(
                 "RELEASE: Soul {:?} released from Familiar {:?}",
@@ -260,7 +292,6 @@ pub fn task_area_auto_haul_system(
     resource_grid: Res<ResourceSpatialGrid>,
     q_familiars: Query<(Entity, &ActiveCommand, &TaskArea)>,
     q_stockpiles: Query<(&Transform, &Stockpile)>,
-    q_items_in_stock: Query<&Transform, With<InStockpile>>,
     q_resources: Query<
         (Entity, &Transform, &Visibility),
         (
@@ -283,30 +314,26 @@ pub fn task_area_auto_haul_system(
                 continue;
             }
 
-            let current_count = q_items_in_stock
-                .iter()
-                .filter(|t| {
-                    WorldMap::world_to_grid(t.translation.truncate())
-                        == WorldMap::world_to_grid(stock_pos)
-                })
-                .count();
-
-            if current_count >= stockpile.capacity {
+            if stockpile.current_count >= stockpile.capacity {
                 continue;
             }
 
             let search_radius = TILE_SIZE * 15.0;
             let nearby_resources = resource_grid.get_nearby_in_radius(stock_pos, search_radius);
 
+            // 【最適化】全リソースを iterate するのではなく、空間グリッドで見つかった近傍のみをチェック
             let nearest_resource = nearby_resources
                 .iter()
                 .filter_map(|&entity| {
+                    // ここで q_resources を使って詳細チェック（Without等のフィルタは適用済みクエリを使う）
                     let Ok((_, transform, visibility)) = q_resources.get(entity) else {
                         return None;
                     };
+                    // Visibility::Hidden（誰かが持っている）は除外
                     if *visibility == Visibility::Hidden {
                         return None;
                     }
+
                     let dist_sq = transform.translation.truncate().distance_squared(stock_pos);
                     if dist_sq < search_radius * search_radius {
                         Some((entity, dist_sq))
@@ -314,9 +341,7 @@ pub fn task_area_auto_haul_system(
                         None
                     }
                 })
-                .min_by(|(_, d1): &(Entity, f32), (_, d2): &(Entity, f32)| {
-                    d1.partial_cmp(d2).unwrap_or(std::cmp::Ordering::Equal)
-                })
+                .min_by(|(_, d1), (_, d2)| d1.partial_cmp(d2).unwrap_or(std::cmp::Ordering::Equal))
                 .map(|(entity, _)| entity);
 
             if let Some(item_entity) = nearest_resource {
