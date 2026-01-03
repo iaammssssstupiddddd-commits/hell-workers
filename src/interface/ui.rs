@@ -543,6 +543,7 @@ pub fn info_panel_system(
         &DamnedSoul,
         &AssignedTask,
         &crate::systems::logistics::Inventory,
+        Option<&crate::entities::damned_soul::SoulIdentity>,
     )>,
     q_blueprints: Query<&Blueprint>,
     q_familiars: Query<&Familiar>,
@@ -557,9 +558,20 @@ pub fn info_panel_system(
         let mut header_text = q_text_header.single_mut();
         let mut job_text = q_text_job.single_mut();
 
-        if let Ok((soul, task, inventory)) = q_souls.get(entity) {
+        if let Ok((soul, task, inventory, identity_opt)) = q_souls.get(entity) {
             panel_node.display = Display::Flex;
-            header_text.0 = "Damned Soul Info".to_string();
+
+            // 名前と性別をヘッダーに表示
+            let header = if let Some(identity) = identity_opt {
+                let gender_icon = match identity.gender {
+                    crate::entities::damned_soul::Gender::Male => "♂",
+                    crate::entities::damned_soul::Gender::Female => "♀",
+                };
+                format!("{} {}", identity.name, gender_icon)
+            } else {
+                "Damned Soul Info".to_string()
+            };
+            header_text.0 = header;
 
             // タスクの詳細情報
             let task_str = match task {
@@ -593,7 +605,7 @@ pub fn info_panel_system(
             job_text.0 = format!("Type: {:?}\nProgress: {:.0}%", bp.kind, bp.progress * 100.0);
         } else if let Ok(familiar) = q_familiars.get(entity) {
             panel_node.display = Display::Flex;
-            header_text.0 = "Familiar Info".to_string();
+            header_text.0 = familiar.name.clone(); // 使い魔の名前を表示
             job_text.0 = format!(
                 "Type: {:?}\nRange: {:.0} tiles",
                 familiar.familiar_type,

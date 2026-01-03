@@ -1,26 +1,165 @@
-use bevy::prelude::*;
-use crate::constants::*;
 use crate::assets::GameAssets;
+use crate::constants::*;
+use crate::systems::work::AssignedTask;
 use crate::world::map::WorldMap;
 use crate::world::pathfinding::find_path;
-use crate::systems::work::AssignedTask;
+use bevy::prelude::*;
+use rand::Rng;
+
+/// 性別
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Gender {
+    Male,
+    Female,
+}
+
+/// 男性名リスト（50候補）
+const MALE_NAMES: [&str; 50] = [
+    "James",
+    "John",
+    "Robert",
+    "Michael",
+    "William",
+    "David",
+    "Richard",
+    "Joseph",
+    "Thomas",
+    "Charles",
+    "Christopher",
+    "Daniel",
+    "Matthew",
+    "Anthony",
+    "Mark",
+    "Donald",
+    "Steven",
+    "Paul",
+    "Andrew",
+    "Joshua",
+    "Kenneth",
+    "Kevin",
+    "Brian",
+    "George",
+    "Timothy",
+    "Ronald",
+    "Edward",
+    "Jason",
+    "Jeffrey",
+    "Ryan",
+    "Jacob",
+    "Gary",
+    "Nicholas",
+    "Eric",
+    "Jonathan",
+    "Stephen",
+    "Larry",
+    "Justin",
+    "Scott",
+    "Brandon",
+    "Benjamin",
+    "Samuel",
+    "Raymond",
+    "Gregory",
+    "Frank",
+    "Alexander",
+    "Patrick",
+    "Jack",
+    "Dennis",
+    "Jerry",
+];
+
+/// 女性名リスト（50候補）
+const FEMALE_NAMES: [&str; 50] = [
+    "Mary",
+    "Patricia",
+    "Jennifer",
+    "Linda",
+    "Barbara",
+    "Elizabeth",
+    "Susan",
+    "Jessica",
+    "Sarah",
+    "Karen",
+    "Lisa",
+    "Nancy",
+    "Betty",
+    "Margaret",
+    "Sandra",
+    "Ashley",
+    "Kimberly",
+    "Emily",
+    "Donna",
+    "Michelle",
+    "Dorothy",
+    "Carol",
+    "Amanda",
+    "Melissa",
+    "Deborah",
+    "Stephanie",
+    "Rebecca",
+    "Sharon",
+    "Laura",
+    "Cynthia",
+    "Kathleen",
+    "Amy",
+    "Angela",
+    "Shirley",
+    "Anna",
+    "Brenda",
+    "Pamela",
+    "Emma",
+    "Nicole",
+    "Helen",
+    "Samantha",
+    "Katherine",
+    "Christine",
+    "Debra",
+    "Rachel",
+    "Carolyn",
+    "Janet",
+    "Catherine",
+    "Maria",
+    "Heather",
+];
+
+/// 魂のアイデンティティ（名前と性別）
+#[derive(Component, Debug, Clone)]
+pub struct SoulIdentity {
+    pub name: String,
+    pub gender: Gender,
+}
+
+impl SoulIdentity {
+    pub fn random() -> Self {
+        let mut rng = rand::thread_rng();
+        let gender = if rng.gen_bool(0.5) {
+            Gender::Male
+        } else {
+            Gender::Female
+        };
+        let name = match gender {
+            Gender::Male => MALE_NAMES[rng.gen_range(0..MALE_NAMES.len())].to_string(),
+            Gender::Female => FEMALE_NAMES[rng.gen_range(0..FEMALE_NAMES.len())].to_string(),
+        };
+        Self { name, gender }
+    }
+}
 
 /// 地獄に堕ちた人間（怠惰な魂）
 #[derive(Component)]
 pub struct DamnedSoul {
     #[allow(dead_code)]
     pub sin_type: SinType,
-    pub laziness: f32,      // 怠惰レベル (0.0-1.0) - 高いほど怠惰
-    pub motivation: f32,    // やる気 (0.0-1.0) - 高いほど働く
-    pub fatigue: f32,       // 疲労 (0.0-1.0) - 高いほど疲れている
+    pub laziness: f32,   // 怠惰レベル (0.0-1.0) - 高いほど怠惰
+    pub motivation: f32, // やる気 (0.0-1.0) - 高いほど働く
+    pub fatigue: f32,    // 疲労 (0.0-1.0) - 高いほど疲れている
 }
 
 impl Default for DamnedSoul {
     fn default() -> Self {
         Self {
             sin_type: SinType::Sloth,
-            laziness: 0.7,      // デフォルトで怠惰
-            motivation: 0.1,    // デフォルトでやる気なし
+            laziness: 0.7,   // デフォルトで怠惰
+            motivation: 0.1, // デフォルトでやる気なし
             fatigue: 0.0,
         }
     }
@@ -31,9 +170,9 @@ impl Default for DamnedSoul {
 #[allow(dead_code)]
 pub enum SinType {
     #[default]
-    Sloth,    // 怠惰
-    Greed,    // 強欲
-    Wrath,    // 憤怒
+    Sloth, // 怠惰
+    Greed, // 強欲
+    Wrath, // 憤怒
 }
 
 /// 怠惰状態のコンポーネント
@@ -41,7 +180,7 @@ pub enum SinType {
 pub struct IdleState {
     pub idle_timer: f32,
     pub behavior: IdleBehavior,
-    pub behavior_duration: f32,  // 現在の行動をどれくらい続けるか
+    pub behavior_duration: f32, // 現在の行動をどれくらい続けるか
 }
 
 impl Default for IdleState {
@@ -58,10 +197,10 @@ impl Default for IdleState {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum IdleBehavior {
     #[default]
-    Wandering,    // うろうろ
-    Sitting,      // 座り込み
-    Sleeping,     // 寝ている
-    // 将来: Chatting, Dancing
+    Wandering, // うろうろ
+    Sitting, // 座り込み
+    Sleeping, // 寝ている
+             // 将来: Chatting, Dancing
 }
 
 /// 移動先
@@ -106,7 +245,7 @@ pub fn spawn_damned_souls(
         Vec2::new(0.0, 50.0),
     ];
 
-    for (i, spawn_pos) in spawn_positions.iter().enumerate() {
+    for (_i, spawn_pos) in spawn_positions.iter().enumerate() {
         // 歩ける場所を探す
         let spawn_grid = WorldMap::world_to_grid(*spawn_pos);
         let mut actual_grid = spawn_grid;
@@ -121,14 +260,27 @@ pub fn spawn_damned_souls(
         }
         let actual_pos = WorldMap::grid_to_world(actual_grid.0, actual_grid.1);
 
+        // ランダムなアイデンティティを生成
+        let identity = SoulIdentity::random();
+        let soul_name = identity.name.clone();
+        let gender = identity.gender;
+
+        // 性別で色分け
+        let sprite_color = match gender {
+            Gender::Male => Color::srgb(0.4, 0.6, 0.9),   // 青系
+            Gender::Female => Color::srgb(0.9, 0.5, 0.7), // ピンク系
+        };
+
         commands.spawn((
             DamnedSoul::default(),
+            identity,
             IdleState::default(),
             AssignedTask::default(),
             crate::systems::logistics::Inventory(None), // インベントリを追加
             Sprite {
                 image: game_assets.colonist.clone(),
                 custom_size: Some(Vec2::splat(TILE_SIZE * 0.8)),
+                color: sprite_color,
                 ..default()
             },
             Transform::from_xyz(actual_pos.x, actual_pos.y, 1.0),
@@ -137,7 +289,7 @@ pub fn spawn_damned_souls(
             AnimationState::default(),
         ));
 
-        info!("SPAWN: DamnedSoul {} at {:?}", i, actual_pos);
+        info!("SPAWN: {} ({:?}) at {:?}", soul_name, gender, actual_pos);
     }
 }
 
@@ -165,13 +317,21 @@ pub fn pathfinding_system(
         }
 
         if let Some(grid_path) = find_path(&world_map, start_grid, goal_grid) {
-            path.waypoints = grid_path.iter()
+            path.waypoints = grid_path
+                .iter()
                 .map(|&(x, y)| WorldMap::grid_to_world(x, y))
                 .collect();
             path.current_index = 0;
-            debug!("PATH: Soul {:?} found new path ({} steps)", entity, path.waypoints.len());
+            debug!(
+                "PATH: Soul {:?} found new path ({} steps)",
+                entity,
+                path.waypoints.len()
+            );
         } else {
-            debug!("PATH: Soul {:?} failed to find path to {:?}", entity, goal_grid);
+            debug!(
+                "PATH: Soul {:?} failed to find path to {:?}",
+                entity, goal_grid
+            );
             path.waypoints.clear();
         }
     }
@@ -180,7 +340,13 @@ pub fn pathfinding_system(
 /// 移動システム
 pub fn soul_movement(
     time: Res<Time>,
-    mut query: Query<(Entity, &mut Transform, &mut Path, &mut AnimationState, &DamnedSoul)>,
+    mut query: Query<(
+        Entity,
+        &mut Transform,
+        &mut Path,
+        &mut AnimationState,
+        &DamnedSoul,
+    )>,
 ) {
     for (entity, mut transform, mut path, mut anim, soul) in query.iter_mut() {
         if path.current_index < path.waypoints.len() {
@@ -220,7 +386,12 @@ pub fn soul_movement(
 /// アニメーションシステム
 pub fn animation_system(
     time: Res<Time>,
-    mut query: Query<(&mut Transform, &mut Sprite, &mut AnimationState, &DamnedSoul)>,
+    mut query: Query<(
+        &mut Transform,
+        &mut Sprite,
+        &mut AnimationState,
+        &DamnedSoul,
+    )>,
 ) {
     for (mut transform, mut sprite, mut anim, soul) in query.iter_mut() {
         sprite.flip_x = !anim.facing_right;
