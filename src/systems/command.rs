@@ -3,7 +3,9 @@ use crate::entities::damned_soul::Destination;
 use crate::entities::familiar::{ActiveCommand, Familiar, FamiliarCommand};
 use crate::interface::camera::MainCamera;
 use crate::interface::selection::SelectedEntity;
-use crate::systems::jobs::{Designation, DesignationCreatedEvent, IssuedBy, Rock, Tree, WorkType};
+use crate::systems::jobs::{
+    Designation, DesignationCreatedEvent, IssuedBy, Rock, TaskSlots, Tree, WorkType,
+};
 use crate::systems::logistics::ResourceItem;
 use crate::systems::work::GlobalTaskQueue;
 use bevy::prelude::*;
@@ -258,6 +260,7 @@ pub fn task_area_selection_system(
                                             commands.entity(target_entity).insert((
                                                 Designation { work_type: wt },
                                                 IssuedBy(issued_by),
+                                                TaskSlots::new(1),
                                             ));
                                             info!(
                                                 "DESIGNATION: Created {:?} for {:?} (assigned to {:?})",
@@ -265,9 +268,10 @@ pub fn task_area_selection_system(
                                             );
                                         } else {
                                             // 未アサインの場合は Designation のみ
-                                            commands
-                                                .entity(target_entity)
-                                                .insert(Designation { work_type: wt });
+                                            commands.entity(target_entity).insert((
+                                                Designation { work_type: wt },
+                                                TaskSlots::new(1),
+                                            ));
                                             info!(
                                                 "DESIGNATION: Created {:?} for {:?} (unassigned)",
                                                 wt, target_entity
@@ -283,6 +287,7 @@ pub fn task_area_selection_system(
                                 } else {
                                     // キャンセルモード
                                     commands.entity(target_entity).remove::<Designation>();
+                                    commands.entity(target_entity).remove::<TaskSlots>();
                                     commands.entity(target_entity).remove::<IssuedBy>();
                                 }
                             }
@@ -447,14 +452,17 @@ pub struct DesignationIndicator(pub Entity);
 #[derive(Component)]
 pub struct AreaSelectionIndicator;
 
+/// 指定（Designation）の削除を検知してインジケーターを削除
 pub fn update_designation_indicator_system(
     mut commands: Commands,
-    q_designated: Query<Entity, With<Designation>>,
+    mut removed: RemovedComponents<Designation>,
     q_indicators: Query<(Entity, &DesignationIndicator)>,
 ) {
-    for (indicator_entity, indicator) in q_indicators.iter() {
-        if q_designated.get(indicator.0).is_err() {
-            commands.entity(indicator_entity).despawn();
+    for entity in removed.read() {
+        for (indicator_entity, indicator) in q_indicators.iter() {
+            if indicator.0 == entity {
+                commands.entity(indicator_entity).despawn();
+            }
         }
     }
 }
