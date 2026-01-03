@@ -1,14 +1,17 @@
-use bevy::prelude::*;
+use crate::assets::GameAssets;
 use crate::constants::*;
-use crate::interface::camera::MainCamera;
 use crate::entities::damned_soul::{DamnedSoul, Destination};
 use crate::entities::familiar::Familiar;
-use crate::systems::jobs::{BuildingType, Blueprint};
-use crate::assets::GameAssets;
+use crate::interface::camera::MainCamera;
+use crate::systems::jobs::{Blueprint, BuildingType};
 use crate::world::map::WorldMap;
+use bevy::prelude::*;
 
 #[derive(Resource, Default)]
 pub struct SelectedEntity(pub Option<Entity>);
+
+#[derive(Resource, Default)]
+pub struct HoveredEntity(pub Option<Entity>);
 
 #[derive(Component)]
 pub struct SelectionIndicator;
@@ -44,7 +47,7 @@ pub fn handle_mouse_input(
         if let Ok(world_pos) = camera.viewport_to_world_2d(camera_transform, cursor_pos) {
             if buttons.just_pressed(MouseButton::Left) {
                 let mut found = false;
-                
+
                 // まず使い魔をチェック（優先）
                 for (entity, transform) in q_familiars.iter() {
                     let pos = transform.translation().truncate();
@@ -55,7 +58,7 @@ pub fn handle_mouse_input(
                         break;
                     }
                 }
-                
+
                 // 次に人間をチェック
                 if !found {
                     for (entity, transform) in q_souls.iter() {
@@ -68,7 +71,7 @@ pub fn handle_mouse_input(
                         }
                     }
                 }
-                
+
                 if !found {
                     selected_entity.0 = None;
                 }
@@ -110,29 +113,31 @@ pub fn blueprint_placement(
             if let Some(cursor_pos) = window.cursor_position() {
                 if let Ok(world_pos) = camera.viewport_to_world_2d(camera_transform, cursor_pos) {
                     let grid = WorldMap::world_to_grid(world_pos);
-                    
+
                     if !world_map.buildings.contains_key(&grid) {
                         let pos = WorldMap::grid_to_world(grid.0, grid.1);
-                        
+
                         let texture = match building_type {
                             BuildingType::Wall => game_assets.wall.clone(),
                             BuildingType::Floor => game_assets.dirt.clone(),
                         };
 
-                        let entity = commands.spawn((
-                            Blueprint {
-                                kind: building_type,
-                                progress: 0.0,
-                            },
-                            Sprite {
-                                image: texture,
-                                color: Color::srgba(1.0, 1.0, 1.0, 0.5),
-                                custom_size: Some(Vec2::splat(TILE_SIZE)),
-                                ..default()
-                            },
-                            Transform::from_xyz(pos.x, pos.y, 0.1),
-                        )).id();
-                        
+                        let entity = commands
+                            .spawn((
+                                Blueprint {
+                                    kind: building_type,
+                                    progress: 0.0,
+                                },
+                                Sprite {
+                                    image: texture,
+                                    color: Color::srgba(1.0, 1.0, 1.0, 0.5),
+                                    custom_size: Some(Vec2::splat(TILE_SIZE)),
+                                    ..default()
+                                },
+                                Transform::from_xyz(pos.x, pos.y, 0.1),
+                            ))
+                            .id();
+
                         world_map.buildings.insert(grid, entity);
                         info!("BLUEPRINT: Placed {:?} at {:?}", building_type, grid);
                     }
@@ -151,7 +156,8 @@ pub fn update_selection_indicator(
     if let Some(entity) = selected.0 {
         if let Ok(target_transform) = q_transforms.get(entity) {
             if let Ok((_, mut indicator_transform)) = q_indicator.get_single_mut() {
-                indicator_transform.translation = target_transform.translation().truncate().extend(0.5);
+                indicator_transform.translation =
+                    target_transform.translation().truncate().extend(0.5);
             } else {
                 commands.spawn((
                     SelectionIndicator,
@@ -160,7 +166,9 @@ pub fn update_selection_indicator(
                         custom_size: Some(Vec2::splat(TILE_SIZE * 1.1)),
                         ..default()
                     },
-                    Transform::from_translation(target_transform.translation().truncate().extend(0.5)),
+                    Transform::from_translation(
+                        target_transform.translation().truncate().extend(0.5),
+                    ),
                 ));
             }
         }
@@ -168,5 +176,67 @@ pub fn update_selection_indicator(
         for (indicator_entity, _) in q_indicator.iter() {
             commands.entity(indicator_entity).despawn();
         }
+    }
+}
+
+pub fn update_hover_entity(
+    q_window: Query<&Window, With<bevy::window::PrimaryWindow>>,
+    q_camera: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
+    q_souls: Query<(Entity, &GlobalTransform), With<DamnedSoul>>,
+    q_familiars: Query<(Entity, &GlobalTransform), With<Familiar>>,
+    q_targets: Query<
+        (Entity, &GlobalTransform),
+        Or<(
+            With<crate::systems::jobs::Tree>,
+            With<crate::systems::jobs::Rock>,
+            With<crate::systems::logistics::ResourceItem>,
+        )>,
+    >,
+    mut hovered_entity: ResMut<HoveredEntity>,
+) {
+    let (camera, camera_transform) = q_camera.single();
+    let window = q_window.single();
+
+    if let Some(cursor_pos) = window.cursor_position() {
+        if let Ok(world_pos) = camera.viewport_to_world_2d(camera_transform, cursor_pos) {
+            let mut found = None;
+
+            // 1. 使い魔
+            for (entity, transform) in q_familiars.iter() {
+                let pos = transform.translation().truncate();
+                if pos.distance(world_pos) < TILE_SIZE / 2.0 {
+                    found = Some(entity);
+                    break;
+                }
+            }
+
+            // 2. 魂
+            if found.is_none() {
+                for (entity, transform) in q_souls.iter() {
+                    let pos = transform.translation().truncate();
+                    if pos.distance(world_pos) < TILE_SIZE / 2.0 {
+                        found = Some(entity);
+                        break;
+                    }
+                }
+            }
+
+            // 3. 資源・アイテム
+            if found.is_none() {
+                for (entity, transform) in q_targets.iter() {
+                    let pos = transform.translation().truncate();
+                    if pos.distance(world_pos) < TILE_SIZE / 2.0 {
+                        found = Some(entity);
+                        break;
+                    }
+                }
+            }
+
+            hovered_entity.0 = found;
+        } else {
+            hovered_entity.0 = None;
+        }
+    } else {
+        hovered_entity.0 = None;
     }
 }
