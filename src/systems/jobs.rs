@@ -14,8 +14,8 @@ pub struct DesignationCreatedEvent {
 
 #[derive(Event)]
 pub struct TaskCompletedEvent {
-    pub soul_entity: Entity,
-    pub task_type: WorkType,
+    pub _soul_entity: Entity,
+    pub _task_type: WorkType,
 }
 
 // --- Components ---
@@ -57,9 +57,25 @@ pub struct Designation {
     pub work_type: WorkType,
 }
 
+#[derive(Component, Debug, Clone, Copy)]
+pub struct TaskSlots {
+    pub current: u32,
+    pub max: u32,
+}
+
+impl TaskSlots {
+    pub fn new(max: u32) -> Self {
+        Self { current: 0, max }
+    }
+
+    pub fn has_slot(&self) -> bool {
+        self.current < self.max
+    }
+}
+
 /// どの使い魔が発行した指示か
 #[derive(Component, Clone, Copy, Debug)]
-pub struct IssuedBy(pub Entity);
+pub struct IssuedBy(#[allow(dead_code)] pub Entity);
 
 // --- Systems ---
 
