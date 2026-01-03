@@ -1,14 +1,15 @@
-use bevy::prelude::*;
-use std::collections::HashMap;
-use rand::Rng;
-use crate::constants::*;
 use crate::assets::GameAssets;
+use crate::constants::*;
+use crate::systems::jobs::{Rock, Tree};
 use crate::world::map::WorldMap;
-use crate::systems::jobs::{Tree, Rock};
+use bevy::prelude::*;
+use rand::Rng;
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ResourceType {
     Wood,
+    Stone,
 }
 
 #[derive(Component)]
@@ -65,21 +66,23 @@ pub fn zone_placement(
             if let Some(cursor_pos) = window.cursor_position() {
                 if let Ok(world_pos) = camera.viewport_to_world_2d(camera_transform, cursor_pos) {
                     let grid = WorldMap::world_to_grid(world_pos);
-                    
+
                     if !world_map.stockpiles.contains_key(&grid) {
                         let pos = WorldMap::grid_to_world(grid.0, grid.1);
 
                         match zone_type {
                             ZoneType::Stockpile => {
-                                let entity = commands.spawn((
-                                    Stockpile { capacity: 10 },
-                                    Sprite {
-                                        color: Color::srgba(1.0, 1.0, 0.0, 0.2),
-                                        custom_size: Some(Vec2::splat(TILE_SIZE)),
-                                        ..default()
-                                    },
-                                    Transform::from_xyz(pos.x, pos.y, 0.01),
-                                )).id();
+                                let entity = commands
+                                    .spawn((
+                                        Stockpile { capacity: 10 },
+                                        Sprite {
+                                            color: Color::srgba(1.0, 1.0, 0.0, 0.2),
+                                            custom_size: Some(Vec2::splat(TILE_SIZE)),
+                                            ..default()
+                                        },
+                                        Transform::from_xyz(pos.x, pos.y, 0.01),
+                                    ))
+                                    .id();
                                 world_map.stockpiles.insert(grid, entity);
                             }
                         }
@@ -100,9 +103,9 @@ pub fn item_spawner_system(
     *timer += time.delta_secs();
     if *timer > 5.0 {
         let mut rng = rand::thread_rng();
-        let gx = rng.gen_range(5..MAP_WIDTH-5);
-        let gy = rng.gen_range(5..MAP_HEIGHT-5);
-        
+        let gx = rng.gen_range(5..MAP_WIDTH - 5);
+        let gy = rng.gen_range(5..MAP_HEIGHT - 5);
+
         if world_map.is_walkable(gx, gy) {
             let spawn_pos = WorldMap::grid_to_world(gx, gy);
             commands.spawn((
@@ -127,11 +130,11 @@ pub fn initial_resource_spawner(
     world_map: Res<WorldMap>,
 ) {
     let mut rng = rand::thread_rng();
-    
+
     // 木のスポーン
     for _ in 0..15 {
-        let gx = rng.gen_range(5..MAP_WIDTH-5);
-        let gy = rng.gen_range(5..MAP_HEIGHT-5);
+        let gx = rng.gen_range(5..MAP_WIDTH - 5);
+        let gy = rng.gen_range(5..MAP_HEIGHT - 5);
         if world_map.is_walkable(gx, gy) {
             let pos = WorldMap::grid_to_world(gx, gy);
             commands.spawn((
@@ -149,8 +152,8 @@ pub fn initial_resource_spawner(
 
     // 岩のスポーン
     for _ in 0..10 {
-        let gx = rng.gen_range(5..MAP_WIDTH-5);
-        let gy = rng.gen_range(5..MAP_HEIGHT-5);
+        let gx = rng.gen_range(5..MAP_WIDTH - 5);
+        let gy = rng.gen_range(5..MAP_HEIGHT - 5);
         if world_map.is_walkable(gx, gy) {
             let pos = WorldMap::grid_to_world(gx, gy);
             commands.spawn((
@@ -169,8 +172,8 @@ pub fn initial_resource_spawner(
     // 既存の資材も少し撒く
     let mut count = 0;
     while count < 5 {
-        let gx = rng.gen_range(5..MAP_WIDTH-5);
-        let gy = rng.gen_range(5..MAP_HEIGHT-5);
+        let gx = rng.gen_range(5..MAP_WIDTH - 5);
+        let gy = rng.gen_range(5..MAP_HEIGHT - 5);
         if world_map.is_walkable(gx, gy) {
             let spawn_pos = WorldMap::grid_to_world(gx, gy);
             commands.spawn((
@@ -211,17 +214,19 @@ pub fn resource_count_display_system(
             }
         } else {
             let pos = WorldMap::grid_to_world(grid.0, grid.1);
-            let entity = commands.spawn((
-                ResourceCountLabel,
-                Text2d::new(count.to_string()),
-                TextFont {
-                    font_size: 14.0,
-                    ..default()
-                },
-                TextColor(Color::WHITE),
-                TextLayout::new_with_justify(JustifyText::Center),
-                Transform::from_xyz(pos.x + TILE_SIZE * 0.3, pos.y + TILE_SIZE * 0.3, 1.0),
-            )).id();
+            let entity = commands
+                .spawn((
+                    ResourceCountLabel,
+                    Text2d::new(count.to_string()),
+                    TextFont {
+                        font_size: 14.0,
+                        ..default()
+                    },
+                    TextColor(Color::WHITE),
+                    TextLayout::new_with_justify(JustifyText::Center),
+                    Transform::from_xyz(pos.x + TILE_SIZE * 0.3, pos.y + TILE_SIZE * 0.3, 1.0),
+                ))
+                .id();
             labels.0.insert(*grid, entity);
         }
     }

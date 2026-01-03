@@ -19,7 +19,7 @@ use crate::entities::familiar::{
     familiar_movement, spawn_familiar, update_familiar_range_indicator,
 };
 use crate::systems::command::{
-    TaskMode, area_selection_indicator_system, designation_visual_system,
+    TaskMode, area_selection_indicator_system, assign_task_system, designation_visual_system,
     familiar_command_input_system, familiar_command_visual_system, task_area_indicator_system,
     task_area_selection_system, update_designation_indicator_system,
 };
@@ -28,10 +28,14 @@ use crate::systems::jobs::{DesignationCreatedEvent, TaskCompletedEvent};
 use crate::systems::motivation::{
     familiar_hover_visualization_system, fatigue_system, motivation_system,
 };
+use crate::systems::visuals::{
+    progress_bar_system, soul_status_visual_system, sync_progress_bar_position_system,
+    task_link_system,
+};
 use crate::systems::work::{
-    SpatialGrid, TaskQueue, cleanup_commanded_souls_system, queue_management_system,
-    task_area_auto_haul_system, task_delegation_system, task_execution_system,
-    update_spatial_grid_system,
+    GlobalTaskQueue, SpatialGrid, TaskQueue, cleanup_commanded_souls_system,
+    queue_management_system, task_area_auto_haul_system, task_delegation_system,
+    task_execution_system, update_spatial_grid_system,
 };
 
 // 既存システム
@@ -41,7 +45,7 @@ use crate::interface::selection::{
 };
 use crate::interface::ui::{
     MenuState, familiar_context_menu_system, info_panel_system, menu_visibility_system, setup_ui,
-    ui_interaction_system, update_mode_text_system,
+    task_summary_ui_system, ui_interaction_system, update_mode_text_system,
 };
 use crate::systems::jobs::building_completion_system;
 use crate::systems::logistics::{
@@ -82,6 +86,7 @@ fn main() {
         .init_resource::<TaskMode>()
         .init_resource::<SpatialGrid>()
         .init_resource::<TaskQueue>()
+        .init_resource::<GlobalTaskQueue>()
         .add_event::<DesignationCreatedEvent>()
         .add_event::<TaskCompletedEvent>()
         // Startup systems
@@ -97,7 +102,7 @@ fn main() {
             )
                 .chain(),
         )
-        // Update systems
+        // Update systems - Interface & Global
         .add_systems(
             Update,
             (
@@ -112,14 +117,32 @@ fn main() {
                 info_panel_system,
                 update_mode_text_system,
                 familiar_context_menu_system,
+                task_summary_ui_system,
                 update_selection_indicator,
                 update_familiar_range_indicator,
                 resource_count_display_system,
                 game_time_system,
                 time_control_keyboard_system,
                 time_control_ui_system,
+            ),
+        )
+        // Update systems - Core Logic & Visuals
+        .add_systems(
+            Update,
+            (
                 // Cache & Queue update systems (毎フレーム実行)
-                (update_spatial_grid_system, queue_management_system),
+                (
+                    update_spatial_grid_system,
+                    queue_management_system,
+                    task_delegation_system,
+                    task_execution_system,
+                    cleanup_commanded_souls_system,
+                    progress_bar_system,
+                    sync_progress_bar_position_system,
+                    task_link_system,
+                    soul_status_visual_system,
+                    assign_task_system,
+                ),
                 // Hell Workers core systems & Logic chain
                 (
                     familiar_command_input_system,
@@ -131,15 +154,12 @@ fn main() {
                     familiar_command_visual_system,
                     motivation_system,
                     fatigue_system,
-                    cleanup_commanded_souls_system,
-                    task_execution_system,
                     familiar_hover_visualization_system,
                     idle_behavior_system,
                     idle_visual_system,
                     pathfinding_system,
                     soul_movement,
                     familiar_movement,
-                    task_delegation_system,
                 )
                     .chain(),
                 (building_completion_system, animation_system).chain(),

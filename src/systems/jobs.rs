@@ -8,7 +8,8 @@ use bevy::prelude::*;
 pub struct DesignationCreatedEvent {
     pub entity: Entity,
     pub work_type: WorkType,
-    pub issued_by: Entity,
+    pub issued_by: Option<Entity>, // None = 未アサイン
+    pub priority: u32,
 }
 
 #[derive(Event)]

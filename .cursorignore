@@ -1,14 +1,29 @@
 # Cursor IDEの監視から除外するファイル/ディレクトリ
 # エージェントのクラッシュを防ぐため、成果物を監視対象から除外
 
+# ビルド成果物
 target/
 dist/
 .trunk/
+
+# ログファイル（エンコーディング問題を回避）
 logs/
 *.log
 *.txt
 !README*.txt
 !LICENSE*.txt
+
+# 特定のエラー/出力ファイル（UTF-16問題を回避）
+build_*.txt
+check*.txt
+err*.txt
+*_err*.txt
+*_output*.txt
+*_log*.txt
+stderr.txt
+game_log.txt
+
+# 依存関係・キャッシュ
 Cargo.lock
 node_modules/
 .git/
