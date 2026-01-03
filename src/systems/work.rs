@@ -1,13 +1,15 @@
-use bevy::prelude::*;
-use std::collections::HashMap;
+use crate::assets::GameAssets;
 use crate::constants::*;
 use crate::entities::damned_soul::{DamnedSoul, Destination, Path};
 use crate::entities::familiar::{ActiveCommand, FamiliarCommand, UnderCommand};
-use crate::assets::GameAssets;
 use crate::systems::command::TaskArea;
-use crate::systems::logistics::{ResourceItem, ClaimedBy, Stockpile, Inventory, InStockpile};
-use crate::systems::jobs::{Designation, WorkType, Tree, Rock, IssuedBy};
+use crate::systems::jobs::{
+    Designation, DesignationCreatedEvent, IssuedBy, Rock, TaskCompletedEvent, Tree, WorkType,
+};
+use crate::systems::logistics::{ClaimedBy, InStockpile, Inventory, ResourceItem, Stockpile};
 use crate::world::map::WorldMap;
+use bevy::prelude::*;
+use std::collections::HashMap;
 
 /// 空間グリッド - Soul位置の高速検索用
 #[derive(Resource, Default)]
@@ -26,8 +28,15 @@ impl SpatialGrid {
     }
 
     fn pos_to_cell(&self, pos: Vec2) -> (i32, i32) {
-        let cell_size = if self.cell_size > 0.0 { self.cell_size } else { TILE_SIZE * 4.0 };
-        ((pos.x / cell_size).floor() as i32, (pos.y / cell_size).floor() as i32)
+        let cell_size = if self.cell_size > 0.0 {
+            self.cell_size
+        } else {
+            TILE_SIZE * 4.0
+        };
+        (
+            (pos.x / cell_size).floor() as i32,
+            (pos.y / cell_size).floor() as i32,
+        )
     }
 
     pub fn clear(&mut self) {
@@ -54,19 +63,48 @@ impl SpatialGrid {
     }
 }
 
-/// Designation キャッシュ - Familiar毎のDesignationをキャッシュ
+/// タスクキュー - 保留中の仕事を管理
 #[derive(Resource, Default)]
-pub struct DesignationCache {
-    pub by_familiar: HashMap<Entity, Vec<(Entity, Vec2, WorkType)>>,
+pub struct TaskQueue {
+    pub by_familiar: HashMap<Entity, Vec<PendingTask>>,
 }
 
-impl DesignationCache {
-    pub fn clear(&mut self) {
-        self.by_familiar.clear();
+#[derive(Clone, Copy, Debug)]
+pub struct PendingTask {
+    pub entity: Entity,
+    pub work_type: WorkType,
+}
+
+impl TaskQueue {
+    pub fn add(&mut self, familiar: Entity, task: PendingTask) {
+        self.by_familiar.entry(familiar).or_default().push(task);
     }
 
-    pub fn get(&self, familiar: Entity) -> Option<&Vec<(Entity, Vec2, WorkType)>> {
+    pub fn get_for_familiar(&self, familiar: Entity) -> Option<&Vec<PendingTask>> {
         self.by_familiar.get(&familiar)
+    }
+
+    pub fn remove(&mut self, familiar: Entity, task_entity: Entity) {
+        if let Some(tasks) = self.by_familiar.get_mut(&familiar) {
+            tasks.retain(|t| t.entity != task_entity);
+        }
+    }
+}
+
+/// DesignationCreatedEventを受けてキューに追加するシステム
+pub fn queue_management_system(
+    mut queue: ResMut<TaskQueue>,
+    mut ev_created: EventReader<DesignationCreatedEvent>,
+) {
+    for ev in ev_created.read() {
+        queue.add(
+            ev.issued_by,
+            PendingTask {
+                entity: ev.entity,
+                work_type: ev.work_type,
+            },
+        );
+        info!("QUEUE: Task added for Familiar {:?}", ev.issued_by);
     }
 }
 
@@ -77,6 +115,7 @@ pub enum AssignedTask {
     /// リソースを収集する（簡略版）
     Gather {
         target: Entity,
+        work_type: WorkType,
         phase: GatherPhase,
     },
     /// リソースを運搬する
@@ -107,6 +146,16 @@ pub enum GatherPhase {
     Done,
 }
 
+impl AssignedTask {
+    pub fn work_type(&self) -> Option<WorkType> {
+        match self {
+            AssignedTask::Gather { work_type, .. } => Some(*work_type),
+            AssignedTask::Haul { .. } => Some(WorkType::Haul),
+            AssignedTask::None => None,
+        }
+    }
+}
+
 /// SpatialGridを更新するシステム（毎フレーム実行）
 pub fn update_spatial_grid_system(
     mut spatial_grid: ResMut<SpatialGrid>,
@@ -115,94 +164,127 @@ pub fn update_spatial_grid_system(
     spatial_grid.clear();
     for (entity, transform, soul, task) in q_souls.iter() {
         // フリーで作業可能なSoulのみグリッドに登録
-        if matches!(task, AssignedTask::None) 
-            && soul.motivation >= MOTIVATION_THRESHOLD 
-            && soul.fatigue < FATIGUE_THRESHOLD 
+        if matches!(task, AssignedTask::None)
+            && soul.motivation >= MOTIVATION_THRESHOLD
+            && soul.fatigue < FATIGUE_THRESHOLD
         {
             spatial_grid.insert(entity, transform.translation.truncate());
         }
     }
 }
 
-/// DesignationCacheを更新するシステム（毎フレーム実行）
-pub fn update_designation_cache_system(
-    mut cache: ResMut<DesignationCache>,
-    q_designations: Query<(Entity, &Transform, &Designation, &IssuedBy), (Without<ClaimedBy>, Without<InStockpile>)>,
-) {
-    cache.clear();
-    for (entity, transform, designation, issued_by) in q_designations.iter() {
-        let pos = transform.translation.truncate();
-        cache.by_familiar
-            .entry(issued_by.0)
-            .or_default()
-            .push((entity, pos, designation.work_type));
-    }
-    
-    // 各Familiarのリストを距離でソート（一度だけ）
-    // Note: ソートは必要に応じて後でFamiliar位置を使って行う
-}
-
-/// タスク委譲システム（0.5秒間隔で実行）
 pub fn task_delegation_system(
     mut commands: Commands,
     mut q_familiars: Query<(Entity, &Transform, &mut ActiveCommand)>,
-    mut q_souls: Query<(Entity, &Transform, &DamnedSoul, &mut AssignedTask, &mut Destination, &mut Path, &mut Inventory)>,
+    mut q_souls: Query<(
+        Entity,
+        &Transform,
+        &DamnedSoul,
+        &mut AssignedTask,
+        &mut Destination,
+        &mut Path,
+        &mut Inventory,
+    )>,
     q_stockpiles: Query<(Entity, &Transform), With<Stockpile>>,
-    cache: Res<DesignationCache>,
+    q_designations: Query<(&Transform, &Designation)>,
+    mut queue: ResMut<TaskQueue>,
     spatial_grid: Res<SpatialGrid>,
+    mut ev_created: EventReader<DesignationCreatedEvent>,
+    mut ev_completed: EventReader<TaskCompletedEvent>,
 ) {
+    // イベントがあるか、キューが空でない場合のみ実行
+    if ev_created.is_empty()
+        && ev_completed.is_empty()
+        && queue.by_familiar.values().all(|v| v.is_empty())
+    {
+        return;
+    }
+
+    // イベントを読み飛ばしてフラグにする（実際にはqueue_management_systemが既に処理している想定）
+    ev_created.clear();
+    ev_completed.clear();
     for (fam_entity, fam_transform, mut active_command) in q_familiars.iter_mut() {
         let fam_pos = fam_transform.translation.truncate();
-        
+
         // 使役枠の空きを確認 (最大2名)
         let current_count = active_command.assigned_souls.len();
-        if current_count >= 2 { continue; }
+        if current_count >= 2 {
+            continue;
+        }
         let slots_available = 2 - current_count;
 
-        // キャッシュからこの使い魔のDesignationを取得
-        let Some(designations) = cache.get(fam_entity) else { continue; };
-        
-        // 距離でソート（コピーして直接所有）
-        let mut sorted_designations: Vec<_> = designations.iter().copied().collect();
-        sorted_designations.sort_by(|(_, p1, _), (_, p2, _)| {
+        // キューからこの使い魔のタスクを取得
+        let Some(tasks) = queue.get_for_familiar(fam_entity) else {
+            continue;
+        };
+        if tasks.is_empty() {
+            continue;
+        }
+
+        // 距離でソート（キュー内のタスクをEntityからTransform引きいてソート）
+        let mut sorted_tasks: Vec<_> = tasks.iter().copied().collect();
+        sorted_tasks.sort_by(|t1, t2| {
+            let p1 = q_designations
+                .get(t1.entity)
+                .map(|(t, _)| t.translation.truncate())
+                .unwrap_or(Vec2::ZERO);
+            let p2 = q_designations
+                .get(t2.entity)
+                .map(|(t, _)| t.translation.truncate())
+                .unwrap_or(Vec2::ZERO);
             let d1 = p1.distance_squared(fam_pos);
             let d2 = p2.distance_squared(fam_pos);
             d1.partial_cmp(&d2).unwrap_or(std::cmp::Ordering::Equal)
         });
 
         let mut assigned_this_tick = 0;
-        for (des_entity, des_pos, work_type) in sorted_designations.iter() {
-            if assigned_this_tick >= slots_available { break; }
+        let mut to_remove = Vec::new();
+
+        for task_info in sorted_tasks.iter() {
+            let des_entity = task_info.entity;
+            let work_type = task_info.work_type;
+
+            let Ok((des_transform, _)) = q_designations.get(des_entity) else {
+                to_remove.push(des_entity); // 存在しないタスクは削除対象
+                continue;
+            };
+            let des_pos = des_transform.translation.truncate();
+
+            if assigned_this_tick >= slots_available {
+                break;
+            }
 
             // SpatialGridで近くのSoulを高速検索（フォールバック付き）
-            let nearby_souls = spatial_grid.get_nearby(*des_pos);
-            
+            let nearby_souls = spatial_grid.get_nearby(des_pos);
+
             // 最も近いSoulを見つける（近傍検索）
             let best_soul = if !nearby_souls.is_empty() {
-                nearby_souls.iter()
+                nearby_souls
+                    .iter()
                     .filter_map(|&e| q_souls.get(e).ok())
                     .filter(|(_, _, soul, current_task, _, _, _)| {
-                        matches!(*current_task, AssignedTask::None) && 
-                        soul.motivation >= MOTIVATION_THRESHOLD && 
-                        soul.fatigue < FATIGUE_THRESHOLD
+                        matches!(*current_task, AssignedTask::None)
+                            && soul.motivation >= MOTIVATION_THRESHOLD
+                            && soul.fatigue < FATIGUE_THRESHOLD
                     })
                     .min_by(|(_, t1, _, _, _, _, _), (_, t2, _, _, _, _, _)| {
-                        let d1 = t1.translation.truncate().distance_squared(*des_pos);
-                        let d2 = t2.translation.truncate().distance_squared(*des_pos);
+                        let d1 = t1.translation.truncate().distance_squared(des_pos);
+                        let d2 = t2.translation.truncate().distance_squared(des_pos);
                         d1.partial_cmp(&d2).unwrap_or(std::cmp::Ordering::Equal)
                     })
                     .map(|(e, _, _, _, _, _, _)| e)
             } else {
                 // フォールバック: 全Soulから検索
-                q_souls.iter()
+                q_souls
+                    .iter()
                     .filter(|(_, _, soul, current_task, _, _, _)| {
-                        matches!(*current_task, AssignedTask::None) && 
-                        soul.motivation >= MOTIVATION_THRESHOLD && 
-                        soul.fatigue < FATIGUE_THRESHOLD
+                        matches!(*current_task, AssignedTask::None)
+                            && soul.motivation >= MOTIVATION_THRESHOLD
+                            && soul.fatigue < FATIGUE_THRESHOLD
                     })
                     .min_by(|(_, t1, _, _, _, _, _), (_, t2, _, _, _, _, _)| {
-                        let d1 = t1.translation.truncate().distance_squared(*des_pos);
-                        let d2 = t2.translation.truncate().distance_squared(*des_pos);
+                        let d1 = t1.translation.truncate().distance_squared(des_pos);
+                        let d2 = t2.translation.truncate().distance_squared(des_pos);
                         d1.partial_cmp(&d2).unwrap_or(std::cmp::Ordering::Equal)
                     })
                     .map(|(e, _, _, _, _, _, _)| e)
@@ -211,55 +293,79 @@ pub fn task_delegation_system(
             if let Some(soul_entity) = best_soul {
                 match work_type {
                     WorkType::Chop | WorkType::Mine => {
-                        if let Ok((mut soul_task, mut dest, mut path)) = q_souls.get_mut(soul_entity).map(|(_, _, _, t, d, p, _)| (t, d, p)) {
+                        if let Ok((mut soul_task, mut dest, mut path)) = q_souls
+                            .get_mut(soul_entity)
+                            .map(|(_, _, _, t, d, p, _)| (t, d, p))
+                        {
                             *soul_task = AssignedTask::Gather {
-                                target: *des_entity,
+                                target: des_entity,
+                                work_type: work_type,
                                 phase: GatherPhase::GoingToResource,
                             };
-                            dest.0 = *des_pos;
+                            dest.0 = des_pos;
                             path.waypoints.clear();
-                            
+
                             // リンクの作成
-                            commands.entity(*des_entity).insert(ClaimedBy(soul_entity));
-                            commands.entity(soul_entity).insert(UnderCommand(fam_entity));
+                            commands.entity(des_entity).insert(ClaimedBy(soul_entity));
+                            commands
+                                .entity(soul_entity)
+                                .insert(UnderCommand(fam_entity));
                             active_command.assigned_souls.push(soul_entity);
-                            
+
                             assigned_this_tick += 1;
-                            info!("DELEGATION: Soul {:?} assigned to GATHER target {:?} by Familiar {:?}", soul_entity, des_entity, fam_entity);
+                            info!(
+                                "DELEGATION: Soul {:?} assigned to GATHER target {:?} by Familiar {:?}",
+                                soul_entity, des_entity, fam_entity
+                            );
                         }
                     }
                     WorkType::Haul => {
-                        let best_stockpile = q_stockpiles.iter()
+                        let best_stockpile = q_stockpiles
+                            .iter()
                             .min_by(|(_, t1), (_, t2)| {
-                                let d1 = t1.translation.truncate().distance_squared(*des_pos);
-                                let d2 = t2.translation.truncate().distance_squared(*des_pos);
+                                let d1 = t1.translation.truncate().distance_squared(des_pos);
+                                let d2 = t2.translation.truncate().distance_squared(des_pos);
                                 d1.partial_cmp(&d2).unwrap_or(std::cmp::Ordering::Equal)
                             })
                             .map(|(e, _)| e);
 
                         if let Some(stock_entity) = best_stockpile {
-                            if let Ok((mut soul_task, mut dest, mut path)) = q_souls.get_mut(soul_entity).map(|(_, _, _, t, d, p, _)| (t, d, p)) {
+                            if let Ok((mut soul_task, mut dest, mut path)) = q_souls
+                                .get_mut(soul_entity)
+                                .map(|(_, _, _, t, d, p, _)| (t, d, p))
+                            {
                                 *soul_task = AssignedTask::Haul {
-                                    item: *des_entity,
+                                    item: des_entity,
                                     stockpile: stock_entity,
                                     phase: HaulPhase::GoingToItem,
                                 };
-                                dest.0 = *des_pos;
+                                dest.0 = des_pos;
                                 path.waypoints.clear();
-                                
+
                                 // リンクの作成
-                                commands.entity(*des_entity).insert(ClaimedBy(soul_entity));
-                                commands.entity(soul_entity).insert(UnderCommand(fam_entity));
+                                commands.entity(des_entity).insert(ClaimedBy(soul_entity));
+                                commands
+                                    .entity(soul_entity)
+                                    .insert(UnderCommand(fam_entity));
                                 active_command.assigned_souls.push(soul_entity);
-                                
+
                                 assigned_this_tick += 1;
-                                info!("DELEGATION: Soul {:?} assigned HAUL item {:?} by Familiar {:?}", soul_entity, des_entity, fam_entity);
+                                to_remove.push(des_entity);
+                                info!(
+                                    "DELEGATION: Soul {:?} assigned HAUL item {:?} by Familiar {:?}",
+                                    soul_entity, des_entity, fam_entity
+                                );
                             }
                         }
                     }
                     _ => {}
                 }
             }
+        }
+
+        // 割り当てられたタスクをキューから削除
+        for entity in to_remove {
+            queue.remove(fam_entity, entity);
         }
     }
 }
@@ -279,30 +385,95 @@ pub fn cleanup_commanded_souls_system(
             }
             // コンポーネントを削除して解放
             commands.entity(soul_entity).remove::<UnderCommand>();
-            info!("RELEASE: Soul {:?} released from Familiar {:?}", soul_entity, fam_entity);
+            info!(
+                "RELEASE: Soul {:?} released from Familiar {:?}",
+                soul_entity, fam_entity
+            );
         }
     }
 }
 
 pub fn task_execution_system(
     mut commands: Commands,
-    mut q_souls: Query<(Entity, &Transform, &mut DamnedSoul, &mut AssignedTask, &mut Destination, &mut Path, &mut Inventory)>,
-    q_targets: Query<(&Transform, Option<&Tree>, Option<&Rock>, Option<&ResourceItem>)>,
+    mut q_souls: Query<(
+        Entity,
+        &Transform,
+        &mut DamnedSoul,
+        &mut AssignedTask,
+        &mut Destination,
+        &mut Path,
+        &mut Inventory,
+    )>,
+    q_targets: Query<(
+        &Transform,
+        Option<&Tree>,
+        Option<&Rock>,
+        Option<&ResourceItem>,
+    )>,
     q_stockpiles: Query<&Transform, With<Stockpile>>,
     game_assets: Res<GameAssets>,
+    mut ev_completed: EventWriter<TaskCompletedEvent>,
 ) {
-    for (soul_entity, soul_transform, mut soul, mut task, mut dest, mut path, mut inventory) in q_souls.iter_mut() {
-        if !matches!(*task, AssignedTask::None) {
-            // debug!("TASK_EXEC: Soul {:?} is on task {:?}", soul_entity, *task);
-        }
+    for (soul_entity, soul_transform, mut soul, mut task, mut dest, mut path, mut inventory) in
+        q_souls.iter_mut()
+    {
+        let was_busy = !matches!(*task, AssignedTask::None);
+        let old_work_type = task.work_type();
+
         match *task {
-            AssignedTask::Gather { target, phase } => {
-                handle_gather_task(soul_entity, soul_transform, &mut soul, &mut task, &mut dest, &mut path, target, phase, &q_targets, &mut commands, &game_assets);
+            AssignedTask::Gather {
+                target,
+                work_type,
+                phase,
+            } => {
+                handle_gather_task(
+                    soul_entity,
+                    soul_transform,
+                    &mut soul,
+                    &mut task,
+                    &mut dest,
+                    &mut path,
+                    target,
+                    &work_type,
+                    phase,
+                    &q_targets,
+                    &mut commands,
+                    &game_assets,
+                );
             }
-            AssignedTask::Haul { item, stockpile, phase } => {
-                handle_haul_task(soul_entity, soul_transform, &mut soul, &mut task, &mut dest, &mut path, &mut inventory, item, stockpile, phase, &q_targets, &q_stockpiles, &mut commands);
+            AssignedTask::Haul {
+                item,
+                stockpile,
+                phase,
+            } => {
+                handle_haul_task(
+                    soul_entity,
+                    soul_transform,
+                    &mut soul,
+                    &mut task,
+                    &mut dest,
+                    &mut path,
+                    &mut inventory,
+                    item,
+                    stockpile,
+                    phase,
+                    &q_targets,
+                    &q_stockpiles,
+                    &mut commands,
+                );
             }
             AssignedTask::None => {}
+        }
+
+        // 完了イベントの発行
+        if was_busy && matches!(*task, AssignedTask::None) {
+            if let Some(work_type) = old_work_type {
+                ev_completed.send(TaskCompletedEvent {
+                    soul_entity,
+                    task_type: work_type,
+                });
+                info!("EVENT: TaskCompletedEvent sent for Soul {:?}", soul_entity);
+            }
         }
     }
 }
@@ -315,8 +486,14 @@ fn handle_gather_task(
     dest: &mut Destination,
     path: &mut Path,
     target: Entity,
+    work_type: &WorkType,
     phase: GatherPhase,
-    q_targets: &Query<(&Transform, Option<&Tree>, Option<&Rock>, Option<&ResourceItem>)>,
+    q_targets: &Query<(
+        &Transform,
+        Option<&Tree>,
+        Option<&Rock>,
+        Option<&ResourceItem>,
+    )>,
     commands: &mut Commands,
     game_assets: &Res<GameAssets>,
 ) {
@@ -332,7 +509,11 @@ fn handle_gather_task(
 
                 let dist = soul_pos.distance(res_pos);
                 if dist < TILE_SIZE * 1.2 {
-                    *task = AssignedTask::Gather { target, phase: GatherPhase::Collecting };
+                    *task = AssignedTask::Gather {
+                        target,
+                        work_type: *work_type,
+                        phase: GatherPhase::Collecting,
+                    };
                     path.waypoints.clear();
                 }
             } else {
@@ -369,7 +550,11 @@ fn handle_gather_task(
                 }
                 commands.entity(target).despawn();
             }
-            *task = AssignedTask::Gather { target, phase: GatherPhase::Done };
+            *task = AssignedTask::Gather {
+                target,
+                work_type: *work_type,
+                phase: GatherPhase::Done,
+            };
             soul.fatigue = (soul.fatigue + 0.1).min(1.0);
         }
         GatherPhase::Done => {
@@ -390,7 +575,12 @@ fn handle_haul_task(
     item: Entity,
     stockpile: Entity,
     phase: HaulPhase,
-    q_targets: &Query<(&Transform, Option<&Tree>, Option<&Rock>, Option<&ResourceItem>)>,
+    q_targets: &Query<(
+        &Transform,
+        Option<&Tree>,
+        Option<&Rock>,
+        Option<&ResourceItem>,
+    )>,
     q_stockpiles: &Query<&Transform, With<Stockpile>>,
     commands: &mut Commands,
 ) {
@@ -403,11 +593,15 @@ fn handle_haul_task(
                     dest.0 = res_pos;
                     path.waypoints.clear();
                 }
-                
+
                 if soul_pos.distance(res_pos) < TILE_SIZE * 1.2 {
                     inventory.0 = Some(item);
                     commands.entity(item).insert(Visibility::Hidden);
-                    *task = AssignedTask::Haul { item, stockpile, phase: HaulPhase::GoingToStockpile };
+                    *task = AssignedTask::Haul {
+                        item,
+                        stockpile,
+                        phase: HaulPhase::GoingToStockpile,
+                    };
                     path.waypoints.clear();
                     info!("HAUL: Soul {:?} picked up item", soul_entity);
                 }
@@ -423,13 +617,20 @@ fn handle_haul_task(
                     dest.0 = stock_pos;
                     path.waypoints.clear();
                 }
-                
+
                 if soul_pos.distance(stock_pos) < TILE_SIZE * 1.2 {
-                    *task = AssignedTask::Haul { item, stockpile, phase: HaulPhase::Dropping };
+                    *task = AssignedTask::Haul {
+                        item,
+                        stockpile,
+                        phase: HaulPhase::Dropping,
+                    };
                     path.waypoints.clear();
                 }
             } else {
-                warn!("HAUL: Soul {:?} stockpile {:?} not found", soul_entity, stockpile);
+                warn!(
+                    "HAUL: Soul {:?} stockpile {:?} not found",
+                    soul_entity, stockpile
+                );
                 if let Some(item_entity) = inventory.0.take() {
                     commands.entity(item_entity).insert(Visibility::Visible);
                     commands.entity(item_entity).remove::<ClaimedBy>();
@@ -448,7 +649,10 @@ fn handle_haul_task(
                         InStockpile,
                     ));
                     commands.entity(item_entity).remove::<ClaimedBy>();
-                    info!("TASK_EXEC: Soul {:?} dropped item at stockpile", soul_entity);
+                    info!(
+                        "TASK_EXEC: Soul {:?} dropped item at stockpile",
+                        soul_entity
+                    );
                 }
             }
             *task = AssignedTask::None;
@@ -463,7 +667,15 @@ pub fn task_area_auto_haul_system(
     q_familiars: Query<(Entity, &ActiveCommand, &TaskArea)>,
     q_stockpiles: Query<(&Transform, &Stockpile)>,
     q_items_in_stock: Query<&Transform, With<InStockpile>>,
-    q_resources: Query<(Entity, &Transform), (With<ResourceItem>, Without<InStockpile>, Without<Designation>)>,
+    q_resources: Query<
+        (Entity, &Transform),
+        (
+            With<ResourceItem>,
+            Without<InStockpile>,
+            Without<Designation>,
+        ),
+    >,
+    mut ev_created: EventWriter<DesignationCreatedEvent>,
 ) {
     for (fam_entity, active_command, task_area) in q_familiars.iter() {
         if matches!(active_command.command, FamiliarCommand::Idle) {
@@ -476,16 +688,24 @@ pub fn task_area_auto_haul_system(
                 continue;
             }
 
-            let current_count = q_items_in_stock.iter()
-                .filter(|t| WorldMap::world_to_grid(t.translation.truncate()) == WorldMap::world_to_grid(stock_pos))
+            let current_count = q_items_in_stock
+                .iter()
+                .filter(|t| {
+                    WorldMap::world_to_grid(t.translation.truncate())
+                        == WorldMap::world_to_grid(stock_pos)
+                })
                 .count();
 
             if current_count >= stockpile.capacity {
                 continue;
             }
 
-            let nearest_resource = q_resources.iter()
-                .filter(|(_, t)| t.translation.truncate().distance_squared(stock_pos) < (TILE_SIZE * 15.0).powi(2))
+            let nearest_resource = q_resources
+                .iter()
+                .filter(|(_, t)| {
+                    t.translation.truncate().distance_squared(stock_pos)
+                        < (TILE_SIZE * 15.0).powi(2)
+                })
                 .min_by(|(_, t1), (_, t2)| {
                     let d1 = t1.translation.truncate().distance_squared(stock_pos);
                     let d2 = t2.translation.truncate().distance_squared(stock_pos);
@@ -494,10 +714,20 @@ pub fn task_area_auto_haul_system(
 
             if let Some((item_entity, _)) = nearest_resource {
                 commands.entity(item_entity).insert((
-                    Designation { work_type: WorkType::Haul },
+                    Designation {
+                        work_type: WorkType::Haul,
+                    },
                     IssuedBy(fam_entity),
                 ));
-                debug!("AUTO_HAUL: Designated item {:?} for stockpile (IssuedBy: {:?})", item_entity, fam_entity);
+                ev_created.send(DesignationCreatedEvent {
+                    entity: item_entity,
+                    work_type: WorkType::Haul,
+                    issued_by: fam_entity,
+                });
+                debug!(
+                    "AUTO_HAUL: Designated item {:?} for stockpile (IssuedBy: {:?})",
+                    item_entity, fam_entity
+                );
             }
         }
     }

@@ -1,6 +1,21 @@
-use bevy::prelude::*;
-use crate::constants::*;
 use crate::assets::GameAssets;
+use crate::constants::*;
+use bevy::prelude::*;
+
+// --- Events ---
+
+#[derive(Event)]
+pub struct DesignationCreatedEvent {
+    pub entity: Entity,
+    pub work_type: WorkType,
+    pub issued_by: Entity,
+}
+
+#[derive(Event)]
+pub struct TaskCompletedEvent {
+    pub soul_entity: Entity,
+    pub task_type: WorkType,
+}
 
 // --- Components ---
 
@@ -29,11 +44,11 @@ pub struct Blueprint {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum WorkType {
-    Chop,       // 伐採
-    Mine,       // 採掘
+    Chop, // 伐採
+    Mine, // 採掘
     #[allow(dead_code)]
-    Build,      // 建築
-    Haul,       // 運搬
+    Build, // 建築
+    Haul, // 運搬
 }
 
 #[derive(Component)]
@@ -56,7 +71,7 @@ pub fn building_completion_system(
         if bp.progress >= 1.0 {
             info!("BUILDING: Completed at {:?}", transform.translation);
             commands.entity(entity).despawn();
-            
+
             let sprite_image = match bp.kind {
                 BuildingType::Wall => game_assets.wall.clone(),
                 BuildingType::Floor => game_assets.stone.clone(),
