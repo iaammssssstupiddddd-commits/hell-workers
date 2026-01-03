@@ -28,16 +28,19 @@ use crate::systems::jobs::{DesignationCreatedEvent, TaskCompletedEvent};
 use crate::systems::motivation::{
     familiar_hover_visualization_system, fatigue_system, motivation_system,
 };
+use crate::systems::spatial::{
+    FamiliarSpatialGrid, ResourceSpatialGrid, SpatialGrid, update_familiar_spatial_grid_system,
+    update_resource_spatial_grid_system, update_spatial_grid_system,
+};
+use crate::systems::task_execution::task_execution_system;
+use crate::systems::task_queue::{GlobalTaskQueue, TaskQueue, queue_management_system};
 use crate::systems::visuals::{
     progress_bar_system, soul_status_visual_system, sync_progress_bar_position_system,
     task_link_system,
 };
 use crate::systems::work::{
-    AutoHaulCounter, FamiliarSpatialGrid, GlobalTaskQueue, ResourceSpatialGrid, SpatialGrid,
-    TaskQueue, cleanup_commanded_souls_system, queue_management_system,
-    task_area_auto_haul_system, task_delegation_system, task_execution_system,
-    update_familiar_spatial_grid_system, update_resource_spatial_grid_system,
-    update_spatial_grid_system,
+    AutoHaulCounter, cleanup_commanded_souls_system, task_area_auto_haul_system,
+    task_delegation_system,
 };
 
 // 既存システム
@@ -46,11 +49,13 @@ use crate::interface::selection::{
     BuildMode, HoveredEntity, SelectedEntity, blueprint_placement, handle_mouse_input,
     update_hover_entity, update_selection_indicator,
 };
-use crate::interface::ui::{
-    MenuState, familiar_context_menu_system, hover_tooltip_system, info_panel_system,
-    menu_visibility_system, setup_ui, task_summary_ui_system, ui_interaction_system,
-    update_mode_text_system,
+use crate::interface::ui_interaction::{
+    hover_tooltip_system, task_summary_ui_system, ui_interaction_system, update_mode_text_system,
 };
+use crate::interface::ui_panels::{
+    familiar_context_menu_system, info_panel_system, menu_visibility_system,
+};
+use crate::interface::ui_setup::{MenuState, setup_ui};
 use crate::systems::jobs::building_completion_system;
 use crate::systems::logistics::{
     ResourceLabels, ZoneMode, initial_resource_spawner, item_spawner_system,
@@ -231,13 +236,18 @@ fn initialize_resource_spatial_grid(mut resource_grid: ResMut<ResourceSpatialGri
 /// 起動時に既存のリソースをResourceSpatialGridに登録
 fn populate_resource_spatial_grid(
     mut resource_grid: ResMut<ResourceSpatialGrid>,
-    q_resources: Query<(Entity, &Transform, Option<&Visibility>), With<crate::systems::logistics::ResourceItem>>,
+    q_resources: Query<
+        (Entity, &Transform, Option<&Visibility>),
+        With<crate::systems::logistics::ResourceItem>,
+    >,
 ) {
     let mut registered_count = 0;
     let mut skipped_count = 0;
     for (entity, transform, visibility) in q_resources.iter() {
         // Visibility::Hiddenのリソース（拾われている）は除外、それ以外は登録
-        let should_register = visibility.map(|v| *v != bevy::prelude::Visibility::Hidden).unwrap_or(true);
+        let should_register = visibility
+            .map(|v| *v != bevy::prelude::Visibility::Hidden)
+            .unwrap_or(true);
         if should_register {
             resource_grid.insert(entity, transform.translation.truncate());
             registered_count += 1;
@@ -245,8 +255,12 @@ fn populate_resource_spatial_grid(
             skipped_count += 1;
         }
     }
-    info!("RESOURCE_GRID: Populated {}/{} existing resources into grid (skipped: {})", 
-        registered_count, q_resources.iter().count(), skipped_count);
+    info!(
+        "RESOURCE_GRID: Populated {}/{} existing resources into grid (skipped: {})",
+        registered_count,
+        q_resources.iter().count(),
+        skipped_count
+    );
 }
 
 /// 円形リング（外枠）テクスチャを生成
