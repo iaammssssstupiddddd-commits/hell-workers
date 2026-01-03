@@ -88,8 +88,8 @@ pub fn fatigue_system(mut q_souls: Query<&mut DamnedSoul>) {
 pub fn familiar_hover_visualization_system(
     q_window: Query<&Window, With<bevy::window::PrimaryWindow>>,
     q_camera: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
-    q_familiars: Query<(&GlobalTransform, &ActiveCommand), With<Familiar>>,
-    q_souls: Query<&GlobalTransform, With<DamnedSoul>>,
+    q_familiars: Query<(Entity, &GlobalTransform, &ActiveCommand), With<Familiar>>,
+    q_souls: Query<(&GlobalTransform, &crate::entities::familiar::UnderCommand), With<DamnedSoul>>,
     mut gizmos: Gizmos,
 ) {
     let Ok(window) = q_window.get_single() else {
@@ -101,14 +101,14 @@ pub fn familiar_hover_visualization_system(
 
     if let Some(cursor_pos) = window.cursor_position() {
         if let Ok(world_pos) = camera.viewport_to_world_2d(camera_transform, cursor_pos) {
-            for (fam_transform, active_command) in q_familiars.iter() {
+            for (fam_entity, fam_transform, _) in q_familiars.iter() {
                 let fam_pos = fam_transform.translation().truncate();
 
                 // マウスが使い魔の上にあるかチェック
                 if fam_pos.distance(world_pos) < TILE_SIZE * 0.5 {
-                    // 使役中の魂全員に対して線を引く
-                    for &soul_entity in &active_command.assigned_souls {
-                        if let Ok(soul_transform) = q_souls.get(soul_entity) {
+                    // 使役中の魂全員（UnderCommand(fam_entity)を持つソウル）に対して線を引く
+                    for (soul_transform, under_command) in q_souls.iter() {
+                        if under_command.0 == fam_entity {
                             let soul_pos = soul_transform.translation().truncate();
                             gizmos.line_2d(fam_pos, soul_pos, Color::srgba(1.0, 1.0, 1.0, 0.4));
                         }

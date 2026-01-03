@@ -26,13 +26,14 @@ pub enum ZoneType {
 #[derive(Component)]
 pub struct Stockpile {
     pub capacity: usize,
+    pub current_count: usize,
 }
 
 #[derive(Component)]
 pub struct ClaimedBy(#[allow(dead_code)] pub Entity);
 
 #[derive(Component)]
-pub struct InStockpile;
+pub struct InStockpile(pub Entity);
 
 #[derive(Resource, Default)]
 pub struct ResourceLabels(pub HashMap<(i32, i32), Entity>);
@@ -74,7 +75,10 @@ pub fn zone_placement(
                             ZoneType::Stockpile => {
                                 let entity = commands
                                     .spawn((
-                                        Stockpile { capacity: 10 },
+                                        Stockpile {
+                                            capacity: 10,
+                                            current_count: 0,
+                                        },
                                         Sprite {
                                             color: Color::srgba(1.0, 1.0, 0.0, 0.2),
                                             custom_size: Some(Vec2::splat(TILE_SIZE)),

@@ -152,6 +152,9 @@ pub struct DamnedSoul {
     pub laziness: f32,   // 怠惰レベル (0.0-1.0) - 高いほど怠惰
     pub motivation: f32, // やる気 (0.0-1.0) - 高いほど働く
     pub fatigue: f32,    // 疲労 (0.0-1.0) - 高いほど疲れている
+    // UI参照
+    pub bar_entity: Option<Entity>,
+    pub icon_entity: Option<Entity>,
 }
 
 impl Default for DamnedSoul {
@@ -161,6 +164,8 @@ impl Default for DamnedSoul {
             laziness: 0.7,   // デフォルトで怠惰
             motivation: 0.1, // デフォルトでやる気なし
             fatigue: 0.0,
+            bar_entity: None,
+            icon_entity: None,
         }
     }
 }
