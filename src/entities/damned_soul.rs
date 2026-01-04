@@ -184,28 +184,47 @@ pub enum SinType {
 #[derive(Component)]
 pub struct IdleState {
     pub idle_timer: f32,
+    pub total_idle_time: f32, // 累計の放置時間
     pub behavior: IdleBehavior,
     pub behavior_duration: f32, // 現在の行動をどれくらい続けるか
+    // 集会中のサブ行動
+    pub gathering_behavior: GatheringBehavior,
+    pub gathering_behavior_timer: f32,
+    pub gathering_behavior_duration: f32,
 }
 
 impl Default for IdleState {
     fn default() -> Self {
         Self {
             idle_timer: 0.0,
+            total_idle_time: 0.0,
             behavior: IdleBehavior::Wandering,
             behavior_duration: 3.0,
+            gathering_behavior: GatheringBehavior::Wandering,
+            gathering_behavior_timer: 0.0,
+            gathering_behavior_duration: 60.0,
         }
     }
 }
 
-/// 怠惰行動の種類（将来拡張用：Chatting, Dancing等）
+/// 怠惰行動の種類
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum IdleBehavior {
     #[default]
     Wandering, // うろうろ
-    Sitting, // 座り込み
+    Sitting,   // 座り込み
+    Sleeping,  // 寝ている
+    Gathering, // 集会中
+}
+
+/// 集会中のサブ行動
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum GatheringBehavior {
+    #[default]
+    Wandering, // うろうろ（今の動き）
     Sleeping, // 寝ている
-             // 将来: Chatting, Dancing
+    Standing, // 立ち尽くす
+    Dancing,  // 踊り（揺れ）
 }
 
 /// 移動先

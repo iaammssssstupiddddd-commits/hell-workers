@@ -1,7 +1,9 @@
-use crate::constants::{FATIGUE_THRESHOLD, MOTIVATION_THRESHOLD};
-use crate::entities::damned_soul::{DamnedSoul, Destination, IdleBehavior, IdleState, Path};
+use crate::constants::{FATIGUE_THRESHOLD, MOTIVATION_THRESHOLD, TILE_SIZE};
+use crate::entities::damned_soul::{
+    DamnedSoul, Destination, GatheringBehavior, IdleBehavior, IdleState, Path,
+};
 use crate::systems::work::AssignedTask;
-use crate::world::map::WorldMap;
+use crate::world::map::{GatheringArea, WorldMap};
 use bevy::prelude::*;
 use rand::Rng;
 
@@ -11,6 +13,7 @@ use rand::Rng;
 pub fn idle_behavior_system(
     time: Res<Time>,
     world_map: Res<WorldMap>,
+    gathering_area: Res<GatheringArea>,
     mut query: Query<(
         &Transform,
         &mut IdleState,
@@ -23,10 +26,13 @@ pub fn idle_behavior_system(
     let dt = time.delta_secs();
 
     for (transform, mut idle, mut dest, soul, path, task) in query.iter_mut() {
-        // タスクがある場合は怠惰行動をしない
+        // タスクがある場合は放置時間をリセットし、怠惰行動も行わない
         if !matches!(task, AssignedTask::None) {
+            idle.total_idle_time = 0.0;
             continue;
         }
+
+        idle.total_idle_time += dt;
 
         // やる気があり疲労が閾値未満の場合は怠惰行動をしない（次のタスクを待つ）
         // これにより、ワーカーはモチベーションが続く限り疲労が閾値に達するまで継続的にタスクを行う
@@ -40,42 +46,61 @@ pub fn idle_behavior_system(
         if idle.idle_timer >= idle.behavior_duration {
             idle.idle_timer = 0.0;
 
-            // 怠惰レベルに応じて行動を選択
-            let mut rng = rand::thread_rng();
-            let roll: f32 = rng.gen_range(0.0..1.0);
-
-            idle.behavior = if soul.laziness > 0.8 {
-                // 非常に怠惰：ほとんど寝ている
-                if roll < 0.6 {
-                    IdleBehavior::Sleeping
-                } else if roll < 0.9 {
-                    IdleBehavior::Sitting
-                } else {
-                    IdleBehavior::Wandering
+            // 疲労度が高いか、放置時間が長い場合は集会エリアへ移動
+            if soul.fatigue > 0.9 || idle.total_idle_time > 30.0 {
+                // 集会状態に入る時に最初の行動をランダムに設定
+                if idle.behavior != IdleBehavior::Gathering {
+                    let mut rng = rand::thread_rng();
+                    idle.gathering_behavior = match rng.gen_range(0..4) {
+                        0 => GatheringBehavior::Wandering,
+                        1 => GatheringBehavior::Sleeping,
+                        2 => GatheringBehavior::Standing,
+                        _ => GatheringBehavior::Dancing,
+                    };
+                    idle.gathering_behavior_timer = 0.0;
+                    idle.gathering_behavior_duration = rng.gen_range(60.0..90.0);
                 }
-            } else if soul.laziness > 0.5 {
-                // 中程度の怠惰
-                if roll < 0.3 {
-                    IdleBehavior::Sleeping
-                } else if roll < 0.6 {
-                    IdleBehavior::Sitting
-                } else {
-                    IdleBehavior::Wandering
-                }
+                idle.behavior = IdleBehavior::Gathering;
             } else {
-                // 比較的やる気がある
-                if roll < 0.7 {
-                    IdleBehavior::Wandering
+                // 怠惰レベルに応じて行動を選択
+                let mut rng = rand::thread_rng();
+                let roll: f32 = rng.gen_range(0.0..1.0);
+
+                idle.behavior = if soul.laziness > 0.8 {
+                    // 非常に怠惰：ほとんど寝ている
+                    if roll < 0.6 {
+                        IdleBehavior::Sleeping
+                    } else if roll < 0.9 {
+                        IdleBehavior::Sitting
+                    } else {
+                        IdleBehavior::Wandering
+                    }
+                } else if soul.laziness > 0.5 {
+                    // 中程度の怠惰
+                    if roll < 0.3 {
+                        IdleBehavior::Sleeping
+                    } else if roll < 0.6 {
+                        IdleBehavior::Sitting
+                    } else {
+                        IdleBehavior::Wandering
+                    }
                 } else {
-                    IdleBehavior::Sitting
-                }
-            };
+                    // 比較的やる気がある
+                    if roll < 0.7 {
+                        IdleBehavior::Wandering
+                    } else {
+                        IdleBehavior::Sitting
+                    }
+                };
+            }
 
             // 新しい行動の持続時間
+            let mut rng = rand::thread_rng();
             idle.behavior_duration = match idle.behavior {
                 IdleBehavior::Sleeping => rng.gen_range(5.0..10.0),
                 IdleBehavior::Sitting => rng.gen_range(3.0..6.0),
                 IdleBehavior::Wandering => rng.gen_range(2.0..4.0),
+                IdleBehavior::Gathering => rng.gen_range(2.0..4.0), // 頻繁にうろうろ
             };
         }
 
@@ -102,6 +127,66 @@ pub fn idle_behavior_system(
                     }
                 }
             }
+            IdleBehavior::Gathering => {
+                let current_pos = transform.translation.truncate();
+                let center = gathering_area.0;
+                let dist_from_center = (center - current_pos).length();
+                let arrival_radius = TILE_SIZE * 3.0;
+
+                // 集会中のサブ行動タイマーを更新
+                idle.gathering_behavior_timer += dt;
+                if idle.gathering_behavior_timer >= idle.gathering_behavior_duration {
+                    idle.gathering_behavior_timer = 0.0;
+                    // 60〜90秒ごとにランダムに行動を切り替え
+                    let mut rng = rand::thread_rng();
+                    idle.gathering_behavior_duration = rng.gen_range(60.0..90.0);
+                    idle.gathering_behavior = match rng.gen_range(0..4) {
+                        0 => GatheringBehavior::Wandering,
+                        1 => GatheringBehavior::Sleeping,
+                        2 => GatheringBehavior::Standing,
+                        _ => GatheringBehavior::Dancing,
+                    };
+                }
+
+                if dist_from_center > arrival_radius {
+                    // まだ集会エリアに到着していない場合は、集会エリアへ向かう
+                    if path.waypoints.is_empty() || path.current_index >= path.waypoints.len() {
+                        dest.0 = center;
+                    }
+                } else {
+                    // 集会エリアに到着済み：サブ行動に応じて動作
+                    match idle.gathering_behavior {
+                        GatheringBehavior::Wandering => {
+                            // うろうろ：2〜3秒おきにゆっくりと漂う
+                            let path_complete = path.waypoints.is_empty()
+                                || path.current_index >= path.waypoints.len();
+                            if path_complete && idle.idle_timer >= idle.behavior_duration * 0.8 {
+                                let mut rng = rand::thread_rng();
+                                let wander_angle: f32 = rng.gen_range(0.0..std::f32::consts::TAU);
+                                let wander_dist: f32 =
+                                    rng.gen_range(TILE_SIZE * 0.5..TILE_SIZE * 1.5);
+                                let offset =
+                                    Vec2::new(wander_angle.cos(), wander_angle.sin()) * wander_dist;
+                                let new_target = center + offset;
+
+                                let target_grid = WorldMap::world_to_grid(new_target);
+                                if world_map.is_walkable(target_grid.0, target_grid.1) {
+                                    dest.0 = new_target;
+                                } else {
+                                    dest.0 = center;
+                                }
+                                idle.idle_timer = 0.0;
+                                idle.behavior_duration = rng.gen_range(2.0..3.0);
+                            }
+                        }
+                        GatheringBehavior::Sleeping
+                        | GatheringBehavior::Standing
+                        | GatheringBehavior::Dancing => {
+                            // これらの行動では移動しない（ビジュアルのみ）
+                        }
+                    }
+                }
+            }
             IdleBehavior::Sitting | IdleBehavior::Sleeping => {
                 // 動かない - 現在位置に留まる
             }
@@ -111,6 +196,7 @@ pub fn idle_behavior_system(
 
 /// 怠惰行動のビジュアルフィードバック
 pub fn idle_visual_system(
+    gathering_area: Res<GatheringArea>,
     mut query: Query<(
         &mut Transform,
         &mut Sprite,
@@ -119,6 +205,8 @@ pub fn idle_visual_system(
         &AssignedTask,
     )>,
 ) {
+    let arrival_radius = TILE_SIZE * 3.0; // この範囲内なら「到着済み」
+
     for (mut transform, mut sprite, idle, soul, task) in query.iter_mut() {
         // タスクがある場合はビジュアルをリセット
         if !matches!(task, AssignedTask::None) {
@@ -145,6 +233,55 @@ pub fn idle_visual_system(
                 transform.rotation = Quat::IDENTITY;
                 sprite.color = Color::WHITE;
             }
+            IdleBehavior::Gathering => {
+                // 位置ベースで到着判定
+                let current_pos = transform.translation.truncate();
+                let center = gathering_area.0;
+                let dist_from_center = (center - current_pos).length();
+                let has_arrived = dist_from_center <= arrival_radius;
+
+                if !has_arrived {
+                    // 集会エリアに向かっている途中：通常の歩行アニメーション
+                    transform.rotation = Quat::IDENTITY;
+                    transform.scale = Vec3::ONE;
+                    sprite.color = Color::srgba(0.85, 0.75, 1.0, 0.85); // 淡いラベンダー色（移動中）
+                } else {
+                    // 集会エリアに到着済み：サブ行動に応じたビジュアル
+                    sprite.color = Color::srgba(0.8, 0.7, 1.0, 0.7);
+
+                    match idle.gathering_behavior {
+                        GatheringBehavior::Wandering => {
+                            // うろうろ：軽い呼吸アニメーション
+                            transform.rotation = Quat::IDENTITY;
+                            let pulse_speed = 0.5;
+                            let scale_offset =
+                                (idle.total_idle_time * pulse_speed).sin() * 0.03 + 1.0;
+                            transform.scale = Vec3::splat(scale_offset);
+                        }
+                        GatheringBehavior::Sleeping => {
+                            // 寝ている：横倒しになる
+                            transform.rotation = Quat::from_rotation_z(std::f32::consts::FRAC_PI_4);
+                            sprite.color = Color::srgba(0.6, 0.5, 0.8, 0.6); // より暗く
+                            let breath = (idle.total_idle_time * 0.3).sin() * 0.02 + 0.95;
+                            transform.scale = Vec3::splat(breath);
+                        }
+                        GatheringBehavior::Standing => {
+                            // 立ち尽くす：静止（微かな呼吸のみ）
+                            transform.rotation = Quat::IDENTITY;
+                            let breath = (idle.total_idle_time * 0.2).sin() * 0.01 + 1.0;
+                            transform.scale = Vec3::splat(breath);
+                        }
+                        GatheringBehavior::Dancing => {
+                            // 踊り（揺れ）：左右に揺れる
+                            let sway_angle = (idle.total_idle_time * 3.0).sin() * 0.15;
+                            transform.rotation = Quat::from_rotation_z(sway_angle);
+                            let bounce = (idle.total_idle_time * 4.0).sin() * 0.05 + 1.0;
+                            transform.scale = Vec3::new(1.0, bounce, 1.0);
+                            sprite.color = Color::srgba(1.0, 0.8, 1.0, 0.8); // 少し明るく
+                        }
+                    }
+                }
+            }
         }
 
         // やる気が高い場合は明るく表示
@@ -152,6 +289,107 @@ pub fn idle_visual_system(
             sprite.color = Color::srgb(1.0, 1.0, 0.8); // 少し黄色がかる
             transform.rotation = Quat::IDENTITY;
             transform.scale = Vec3::ONE;
+        }
+    }
+}
+
+/// 集会エリアでの魂の重なり回避システム
+/// うろつき以外の行動（睡眠、立ち尽くす、踊り）で重なりを解消
+pub fn gathering_separation_system(
+    gathering_area: Res<GatheringArea>,
+    world_map: Res<WorldMap>,
+    mut query: Query<(
+        Entity,
+        &Transform,
+        &mut Destination,
+        &IdleState,
+        &Path,
+        &AssignedTask,
+    )>,
+) {
+    let min_separation = TILE_SIZE * 1.2; // 最小間隔
+    let arrival_radius = TILE_SIZE * 3.0;
+
+    // まず全ての集会中の魂の位置を収集
+    let gathering_positions: Vec<(Entity, Vec2)> = query
+        .iter()
+        .filter(|(_, _, _, idle, _, task)| {
+            matches!(task, AssignedTask::None)
+                && idle.behavior == IdleBehavior::Gathering
+                && idle.gathering_behavior != GatheringBehavior::Wandering
+        })
+        .map(|(entity, transform, _, _, _, _)| (entity, transform.translation.truncate()))
+        .collect();
+
+    // 各魂について重なりをチェックし、必要なら移動
+    for (entity, transform, mut dest, idle, path, task) in query.iter_mut() {
+        // 集会中かつ静止系の行動でない場合はスキップ
+        if !matches!(task, AssignedTask::None) {
+            continue;
+        }
+        if idle.behavior != IdleBehavior::Gathering {
+            continue;
+        }
+        if idle.gathering_behavior == GatheringBehavior::Wandering {
+            continue;
+        }
+
+        let current_pos = transform.translation.truncate();
+        let center = gathering_area.0;
+        let dist_from_center = (center - current_pos).length();
+
+        // 集会エリアに到着していない場合はスキップ
+        if dist_from_center > arrival_radius {
+            continue;
+        }
+
+        // 経路がある場合（移動中）はスキップ
+        if !path.waypoints.is_empty() && path.current_index < path.waypoints.len() {
+            continue;
+        }
+
+        // 他の魂との重なりをチェック
+        let mut is_overlapping = false;
+        for (other_entity, other_pos) in &gathering_positions {
+            if *other_entity == entity {
+                continue;
+            }
+            let dist = (current_pos - *other_pos).length();
+            if dist < min_separation {
+                is_overlapping = true;
+                break;
+            }
+        }
+
+        // 重なっている場合は新しい位置を探す
+        if is_overlapping {
+            let mut rng = rand::thread_rng();
+            for _ in 0..10 {
+                let angle: f32 = rng.gen_range(0.0..std::f32::consts::TAU);
+                let dist: f32 = rng.gen_range(TILE_SIZE..TILE_SIZE * 2.5);
+                let offset = Vec2::new(angle.cos() * dist, angle.sin() * dist);
+                let new_pos = center + offset;
+
+                // 他の魂と重ならないかチェック
+                let mut valid = true;
+                for (other_entity, other_pos) in &gathering_positions {
+                    if *other_entity == entity {
+                        continue;
+                    }
+                    if (new_pos - *other_pos).length() < min_separation {
+                        valid = false;
+                        break;
+                    }
+                }
+
+                if valid {
+                    let target_grid = WorldMap::world_to_grid(new_pos);
+                    if world_map.is_walkable(target_grid.0, target_grid.1) {
+                        dest.0 = new_pos;
+                        break;
+                    }
+                }
+            }
         }
     }
 }

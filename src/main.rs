@@ -23,7 +23,7 @@ use crate::systems::command::{
     familiar_command_input_system, familiar_command_visual_system, task_area_indicator_system,
     task_area_selection_system, update_designation_indicator_system,
 };
-use crate::systems::idle::{idle_behavior_system, idle_visual_system};
+use crate::systems::idle::{gathering_separation_system, idle_behavior_system, idle_visual_system};
 use crate::systems::jobs::{DesignationCreatedEvent, TaskCompletedEvent};
 use crate::systems::motivation::{
     familiar_hover_visualization_system, fatigue_system, motivation_system,
@@ -176,6 +176,7 @@ fn main() {
                     familiar_hover_visualization_system,
                     idle_behavior_system,
                     idle_visual_system,
+                    gathering_separation_system,
                     pathfinding_system,
                     soul_movement,
                     familiar_movement,
