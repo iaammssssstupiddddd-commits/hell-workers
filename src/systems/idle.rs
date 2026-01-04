@@ -7,6 +7,41 @@ use crate::world::map::{GatheringArea, WorldMap};
 use bevy::prelude::*;
 use rand::Rng;
 
+// ===== 集会関連の定数 =====
+/// 集会エリアに「到着した」とみなす半径
+const GATHERING_ARRIVAL_RADIUS: f32 = TILE_SIZE * 3.0;
+/// 集会中の行動パターン変更間隔（秒）
+const GATHERING_BEHAVIOR_DURATION_MIN: f32 = 60.0;
+const GATHERING_BEHAVIOR_DURATION_MAX: f32 = 90.0;
+/// 重なり回避の最小間隔
+const GATHERING_MIN_SEPARATION: f32 = TILE_SIZE * 1.2;
+
+// ===== ヘルパー関数 =====
+/// ランダムな集会中のサブ行動を選択
+fn random_gathering_behavior() -> GatheringBehavior {
+    let mut rng = rand::thread_rng();
+    match rng.gen_range(0..4) {
+        0 => GatheringBehavior::Wandering,
+        1 => GatheringBehavior::Sleeping,
+        2 => GatheringBehavior::Standing,
+        _ => GatheringBehavior::Dancing,
+    }
+}
+
+/// ランダムな集会行動の持続時間を取得
+fn random_gathering_duration() -> f32 {
+    let mut rng = rand::thread_rng();
+    rng.gen_range(GATHERING_BEHAVIOR_DURATION_MIN..GATHERING_BEHAVIOR_DURATION_MAX)
+}
+
+/// 集会エリア周辺のランダムな位置を取得
+fn random_position_around(center: Vec2, min_dist: f32, max_dist: f32) -> Vec2 {
+    let mut rng = rand::thread_rng();
+    let angle: f32 = rng.gen_range(0.0..std::f32::consts::TAU);
+    let dist: f32 = rng.gen_range(min_dist..max_dist);
+    center + Vec2::new(angle.cos() * dist, angle.sin() * dist)
+}
+
 /// 怠惰行動のAIシステム
 /// やる気が低い人間は怠惰な行動をする
 /// タスクがある人間は怠惰行動をしない
@@ -50,16 +85,9 @@ pub fn idle_behavior_system(
             if soul.fatigue > 0.9 || idle.total_idle_time > 30.0 {
                 // 集会状態に入る時に最初の行動をランダムに設定
                 if idle.behavior != IdleBehavior::Gathering {
-                    let mut rng = rand::thread_rng();
-                    idle.gathering_behavior = match rng.gen_range(0..4) {
-                        0 => GatheringBehavior::Wandering,
-                        1 => GatheringBehavior::Sleeping,
-                        2 => GatheringBehavior::Standing,
-                        _ => GatheringBehavior::Dancing,
-                    };
+                    idle.gathering_behavior = random_gathering_behavior();
                     idle.gathering_behavior_timer = 0.0;
-                    idle.gathering_behavior_duration = rng.gen_range(60.0..90.0);
-                    // 初回到着時は重なり回避が必要
+                    idle.gathering_behavior_duration = random_gathering_duration();
                     idle.needs_separation = true;
                 }
                 idle.behavior = IdleBehavior::Gathering;
@@ -133,27 +161,18 @@ pub fn idle_behavior_system(
                 let current_pos = transform.translation.truncate();
                 let center = gathering_area.0;
                 let dist_from_center = (center - current_pos).length();
-                let arrival_radius = TILE_SIZE * 3.0;
 
                 // 集会中のサブ行動タイマーを更新
                 idle.gathering_behavior_timer += dt;
                 if idle.gathering_behavior_timer >= idle.gathering_behavior_duration {
                     idle.gathering_behavior_timer = 0.0;
-                    // 60〜90秒ごとにランダムに行動を切り替え
-                    let mut rng = rand::thread_rng();
-                    idle.gathering_behavior_duration = rng.gen_range(60.0..90.0);
-                    idle.gathering_behavior = match rng.gen_range(0..4) {
-                        0 => GatheringBehavior::Wandering,
-                        1 => GatheringBehavior::Sleeping,
-                        2 => GatheringBehavior::Standing,
-                        _ => GatheringBehavior::Dancing,
-                    };
-                    // パターン変更時は重なり回避が必要
+                    idle.gathering_behavior = random_gathering_behavior();
+                    idle.gathering_behavior_duration = random_gathering_duration();
                     idle.needs_separation = true;
                 }
 
-                if dist_from_center > arrival_radius {
-                    // まだ集会エリアに到着していない場合は、集会エリアへ向かう
+                if dist_from_center > GATHERING_ARRIVAL_RADIUS {
+                    // まだ集会エリアに到着していない：集会エリアへ向かう
                     if path.waypoints.is_empty() || path.current_index >= path.waypoints.len() {
                         dest.0 = center;
                     }
@@ -165,14 +184,11 @@ pub fn idle_behavior_system(
                             let path_complete = path.waypoints.is_empty()
                                 || path.current_index >= path.waypoints.len();
                             if path_complete && idle.idle_timer >= idle.behavior_duration * 0.8 {
-                                let mut rng = rand::thread_rng();
-                                let wander_angle: f32 = rng.gen_range(0.0..std::f32::consts::TAU);
-                                let wander_dist: f32 =
-                                    rng.gen_range(TILE_SIZE * 0.5..TILE_SIZE * 1.5);
-                                let offset =
-                                    Vec2::new(wander_angle.cos(), wander_angle.sin()) * wander_dist;
-                                let new_target = center + offset;
-
+                                let new_target = random_position_around(
+                                    center,
+                                    TILE_SIZE * 0.5,
+                                    TILE_SIZE * 1.5,
+                                );
                                 let target_grid = WorldMap::world_to_grid(new_target);
                                 if world_map.is_walkable(target_grid.0, target_grid.1) {
                                     dest.0 = new_target;
@@ -180,6 +196,7 @@ pub fn idle_behavior_system(
                                     dest.0 = center;
                                 }
                                 idle.idle_timer = 0.0;
+                                let mut rng = rand::thread_rng();
                                 idle.behavior_duration = rng.gen_range(2.0..3.0);
                             }
                         }
@@ -209,8 +226,6 @@ pub fn idle_visual_system(
         &AssignedTask,
     )>,
 ) {
-    let arrival_radius = TILE_SIZE * 3.0; // この範囲内なら「到着済み」
-
     for (mut transform, mut sprite, idle, soul, task) in query.iter_mut() {
         // タスクがある場合はビジュアルをリセット
         if !matches!(task, AssignedTask::None) {
@@ -224,7 +239,7 @@ pub fn idle_visual_system(
             IdleBehavior::Sleeping => {
                 // 寝ている：横倒しになる
                 transform.rotation = Quat::from_rotation_z(std::f32::consts::FRAC_PI_4);
-                sprite.color = Color::srgba(0.6, 0.6, 0.7, 1.0); // 少し暗く
+                sprite.color = Color::srgba(0.6, 0.6, 0.7, 1.0);
             }
             IdleBehavior::Sitting => {
                 // 座っている：少し縮む
@@ -242,7 +257,7 @@ pub fn idle_visual_system(
                 let current_pos = transform.translation.truncate();
                 let center = gathering_area.0;
                 let dist_from_center = (center - current_pos).length();
-                let has_arrived = dist_from_center <= arrival_radius;
+                let has_arrived = dist_from_center <= GATHERING_ARRIVAL_RADIUS;
 
                 if !has_arrived {
                     // 集会エリアに向かっている途中：通常の歩行アニメーション
@@ -312,9 +327,6 @@ pub fn gathering_separation_system(
         &AssignedTask,
     )>,
 ) {
-    let min_separation = TILE_SIZE * 1.2; // 最小間隔
-    let arrival_radius = TILE_SIZE * 3.0;
-
     // まず全ての集会中の魂の位置を収集
     let gathering_positions: Vec<(Entity, Vec2)> = query
         .iter()
@@ -352,7 +364,7 @@ pub fn gathering_separation_system(
         let dist_from_center = (center - current_pos).length();
 
         // 集会エリアに到着していない場合はスキップ（フラグは維持）
-        if dist_from_center > arrival_radius {
+        if dist_from_center > GATHERING_ARRIVAL_RADIUS {
             continue;
         }
 
@@ -368,7 +380,7 @@ pub fn gathering_separation_system(
                 continue;
             }
             let dist = (current_pos - *other_pos).length();
-            if dist < min_separation {
+            if dist < GATHERING_MIN_SEPARATION {
                 is_overlapping = true;
                 break;
             }
@@ -389,7 +401,7 @@ pub fn gathering_separation_system(
                     if *other_entity == entity {
                         continue;
                     }
-                    if (new_pos - *other_pos).length() < min_separation {
+                    if (new_pos - *other_pos).length() < GATHERING_MIN_SEPARATION {
                         valid = false;
                         break;
                     }
