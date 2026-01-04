@@ -23,11 +23,12 @@ pub struct SpeedButton(pub TimeSpeed);
 pub struct ClockText;
 
 pub fn game_time_system(
-    time: Res<Time>,
+    time: Res<Time<Virtual>>,
     mut game_time: ResMut<GameTime>,
     mut q_clock: Query<&mut Text, With<ClockText>>,
 ) {
-    game_time.seconds += time.delta_secs();
+    // 1秒(実時間) = 1分(ゲーム中) に調整 (60倍速)
+    game_time.seconds += time.delta_secs() * 60.0;
 
     let total_mins = (game_time.seconds / 60.0) as u32;
     game_time.minute = total_mins % 60;

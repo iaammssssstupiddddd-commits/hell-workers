@@ -1,7 +1,7 @@
+use crate::assets::GameAssets;
+use crate::constants::*;
 use bevy::prelude::*;
 use std::collections::HashMap;
-use crate::constants::*;
-use crate::assets::GameAssets;
 
 #[derive(Component)]
 pub struct Tile;
@@ -29,10 +29,13 @@ pub struct WorldMap {
     pub stockpiles: HashMap<(i32, i32), Entity>,
 }
 
+#[derive(Resource)]
+pub struct GatheringArea(pub Vec2);
+
 impl WorldMap {
     #[allow(dead_code)]
     pub fn new() -> Self {
-        Self { 
+        Self {
             tiles: HashMap::new(),
             buildings: HashMap::new(),
             stockpiles: HashMap::new(),
@@ -65,6 +68,22 @@ pub fn spawn_map(
     game_assets: Res<GameAssets>,
     mut world_map: ResMut<WorldMap>,
 ) {
+    // 集会エリアをマップの左下付近に設定
+    let gathering_grid = (5, 5);
+    let gathering_pos = WorldMap::grid_to_world(gathering_grid.0, gathering_grid.1);
+    commands.insert_resource(GatheringArea(gathering_pos));
+
+    // 集会エリアに視覚的なインジケーターを表示
+    commands.spawn((
+        Sprite {
+            image: game_assets.aura_circle.clone(),
+            custom_size: Some(Vec2::splat(TILE_SIZE * 5.0)),
+            color: Color::srgba(0.5, 0.2, 0.8, 0.2), // 薄い紫色
+            ..default()
+        },
+        Transform::from_xyz(gathering_pos.x, gathering_pos.y, 0.1),
+    ));
+
     for y in 0..MAP_HEIGHT {
         for x in 0..MAP_WIDTH {
             let (terrain, texture) = if (x + y) % 15 == 0 {
@@ -93,5 +112,8 @@ pub fn spawn_map(
         }
     }
 
-    info!("BEVY_STARTUP: Map spawned ({}x{} tiles)", MAP_WIDTH, MAP_HEIGHT);
+    info!(
+        "BEVY_STARTUP: Map spawned ({}x{} tiles)",
+        MAP_WIDTH, MAP_HEIGHT
+    );
 }
