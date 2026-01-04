@@ -191,6 +191,8 @@ pub struct IdleState {
     pub gathering_behavior: GatheringBehavior,
     pub gathering_behavior_timer: f32,
     pub gathering_behavior_duration: f32,
+    // 重なり回避が必要かどうか（初回到着時・パターン変更時に true）
+    pub needs_separation: bool,
 }
 
 impl Default for IdleState {
@@ -203,6 +205,7 @@ impl Default for IdleState {
             gathering_behavior: GatheringBehavior::Wandering,
             gathering_behavior_timer: 0.0,
             gathering_behavior_duration: 60.0,
+            needs_separation: false,
         }
     }
 }
