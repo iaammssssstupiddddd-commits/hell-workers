@@ -59,6 +59,8 @@ pub fn idle_behavior_system(
                     };
                     idle.gathering_behavior_timer = 0.0;
                     idle.gathering_behavior_duration = rng.gen_range(60.0..90.0);
+                    // 初回到着時は重なり回避が必要
+                    idle.needs_separation = true;
                 }
                 idle.behavior = IdleBehavior::Gathering;
             } else {
@@ -146,6 +148,8 @@ pub fn idle_behavior_system(
                         2 => GatheringBehavior::Standing,
                         _ => GatheringBehavior::Dancing,
                     };
+                    // パターン変更時は重なり回避が必要
+                    idle.needs_separation = true;
                 }
 
                 if dist_from_center > arrival_radius {
@@ -295,6 +299,7 @@ pub fn idle_visual_system(
 
 /// 集会エリアでの魂の重なり回避システム
 /// うろつき以外の行動（睡眠、立ち尽くす、踊り）で重なりを解消
+/// パフォーマンス最適化：初回到着時とパターン変更時のみ実行
 pub fn gathering_separation_system(
     gathering_area: Res<GatheringArea>,
     world_map: Res<WorldMap>,
@@ -302,7 +307,7 @@ pub fn gathering_separation_system(
         Entity,
         &Transform,
         &mut Destination,
-        &IdleState,
+        &mut IdleState,
         &Path,
         &AssignedTask,
     )>,
@@ -321,16 +326,24 @@ pub fn gathering_separation_system(
         .map(|(entity, transform, _, _, _, _)| (entity, transform.translation.truncate()))
         .collect();
 
-    // 各魂について重なりをチェックし、必要なら移動
-    for (entity, transform, mut dest, idle, path, task) in query.iter_mut() {
+    // needs_separation が true の魂のみ処理
+    for (entity, transform, mut dest, mut idle, path, task) in query.iter_mut() {
+        // needs_separation フラグがない場合はスキップ
+        if !idle.needs_separation {
+            continue;
+        }
+
         // 集会中かつ静止系の行動でない場合はスキップ
         if !matches!(task, AssignedTask::None) {
+            idle.needs_separation = false;
             continue;
         }
         if idle.behavior != IdleBehavior::Gathering {
+            idle.needs_separation = false;
             continue;
         }
         if idle.gathering_behavior == GatheringBehavior::Wandering {
+            idle.needs_separation = false;
             continue;
         }
 
@@ -338,12 +351,12 @@ pub fn gathering_separation_system(
         let center = gathering_area.0;
         let dist_from_center = (center - current_pos).length();
 
-        // 集会エリアに到着していない場合はスキップ
+        // 集会エリアに到着していない場合はスキップ（フラグは維持）
         if dist_from_center > arrival_radius {
             continue;
         }
 
-        // 経路がある場合（移動中）はスキップ
+        // 経路がある場合（移動中）はスキップ（フラグは維持）
         if !path.waypoints.is_empty() && path.current_index < path.waypoints.len() {
             continue;
         }
@@ -391,5 +404,8 @@ pub fn gathering_separation_system(
                 }
             }
         }
+
+        // 処理完了、フラグをクリア
+        idle.needs_separation = false;
     }
 }
