@@ -7,3 +7,6 @@ pub const FATIGUE_THRESHOLD: f32 = 0.8;
 
 /// モチベーション閾値: この値以上の場合、ワーカーは次のタスクを探し続ける
 pub const MOTIVATION_THRESHOLD: f32 = 0.1;
+
+/// 集会閾値: 疲労がこの値を超えると強制的に集会へ向かう
+pub const FATIGUE_GATHERING_THRESHOLD: f32 = 0.9;

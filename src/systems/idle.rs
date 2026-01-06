@@ -1,4 +1,6 @@
-use crate::constants::{FATIGUE_THRESHOLD, MOTIVATION_THRESHOLD, TILE_SIZE};
+use crate::constants::{
+    FATIGUE_GATHERING_THRESHOLD, FATIGUE_THRESHOLD, MOTIVATION_THRESHOLD, TILE_SIZE,
+};
 use crate::entities::damned_soul::{
     DamnedSoul, Destination, GatheringBehavior, IdleBehavior, IdleState, Path,
 };
@@ -82,15 +84,23 @@ pub fn idle_behavior_system(
             idle.idle_timer = 0.0;
 
             // 疲労度が高いか、放置時間が長い場合は集会エリアへ移動
-            if soul.fatigue > 0.9 || idle.total_idle_time > 30.0 {
+            if soul.fatigue > FATIGUE_GATHERING_THRESHOLD || idle.total_idle_time > 30.0 {
                 // 集会状態に入る時に最初の行動をランダムに設定
-                if idle.behavior != IdleBehavior::Gathering {
+                if idle.behavior != IdleBehavior::Gathering
+                    && idle.behavior != IdleBehavior::ExhaustedGathering
+                {
                     idle.gathering_behavior = random_gathering_behavior();
                     idle.gathering_behavior_timer = 0.0;
                     idle.gathering_behavior_duration = random_gathering_duration();
                     idle.needs_separation = true;
                 }
-                idle.behavior = IdleBehavior::Gathering;
+
+                // 疲労度による集会移動の場合は ExhaustedGathering を使用
+                if soul.fatigue > FATIGUE_GATHERING_THRESHOLD {
+                    idle.behavior = IdleBehavior::ExhaustedGathering;
+                } else {
+                    idle.behavior = IdleBehavior::Gathering;
+                }
             } else {
                 // 怠惰レベルに応じて行動を選択
                 let mut rng = rand::thread_rng();
@@ -130,7 +140,9 @@ pub fn idle_behavior_system(
                 IdleBehavior::Sleeping => rng.gen_range(5.0..10.0),
                 IdleBehavior::Sitting => rng.gen_range(3.0..6.0),
                 IdleBehavior::Wandering => rng.gen_range(2.0..4.0),
-                IdleBehavior::Gathering => rng.gen_range(2.0..4.0), // 頻繁にうろうろ
+                IdleBehavior::Gathering | IdleBehavior::ExhaustedGathering => {
+                    rng.gen_range(2.0..4.0)
+                } // 頻繁にうろうろ
             };
         }
 
@@ -157,7 +169,7 @@ pub fn idle_behavior_system(
                     }
                 }
             }
-            IdleBehavior::Gathering => {
+            IdleBehavior::Gathering | IdleBehavior::ExhaustedGathering => {
                 let current_pos = transform.translation.truncate();
                 let center = gathering_area.0;
                 let dist_from_center = (center - current_pos).length();
@@ -177,7 +189,14 @@ pub fn idle_behavior_system(
                         dest.0 = center;
                     }
                 } else {
-                    // 集会エリアに到着済み：サブ行動に応じて動作
+                    // 集会エリアに到着済み
+
+                    // ExhaustedGathering から通常の Gathering へ遷移
+                    if idle.behavior == IdleBehavior::ExhaustedGathering {
+                        idle.behavior = IdleBehavior::Gathering;
+                    }
+
+                    // サブ行動に応じて動作
                     match idle.gathering_behavior {
                         GatheringBehavior::Wandering => {
                             // うろうろ：2〜3秒おきにゆっくりと漂う
@@ -252,7 +271,7 @@ pub fn idle_visual_system(
                 transform.rotation = Quat::IDENTITY;
                 sprite.color = Color::WHITE;
             }
-            IdleBehavior::Gathering => {
+            IdleBehavior::Gathering | IdleBehavior::ExhaustedGathering => {
                 // 位置ベースで到着判定
                 let current_pos = transform.translation.truncate();
                 let center = gathering_area.0;
@@ -260,10 +279,16 @@ pub fn idle_visual_system(
                 let has_arrived = dist_from_center <= GATHERING_ARRIVAL_RADIUS;
 
                 if !has_arrived {
-                    // 集会エリアに向かっている途中：通常の歩行アニメーション
+                    // 集会エリアに向かっている途中
                     transform.rotation = Quat::IDENTITY;
                     transform.scale = Vec3::ONE;
-                    sprite.color = Color::srgba(0.85, 0.75, 1.0, 0.85); // 淡いラベンダー色（移動中）
+
+                    if idle.behavior == IdleBehavior::ExhaustedGathering {
+                        // 疲労による集会移動中は、より疲れた色合いに
+                        sprite.color = Color::srgba(0.7, 0.6, 0.8, 0.9);
+                    } else {
+                        sprite.color = Color::srgba(0.85, 0.75, 1.0, 0.85); // 淡いラベンダー色（移動中）
+                    }
                 } else {
                     // 集会エリアに到着済み：サブ行動に応じたビジュアル
                     sprite.color = Color::srgba(0.8, 0.7, 1.0, 0.7);
@@ -332,7 +357,8 @@ pub fn gathering_separation_system(
         .iter()
         .filter(|(_, _, _, idle, _, task)| {
             matches!(task, AssignedTask::None)
-                && idle.behavior == IdleBehavior::Gathering
+                && (idle.behavior == IdleBehavior::Gathering
+                    || idle.behavior == IdleBehavior::ExhaustedGathering)
                 && idle.gathering_behavior != GatheringBehavior::Wandering
         })
         .map(|(entity, transform, _, _, _, _)| (entity, transform.translation.truncate()))
@@ -350,7 +376,9 @@ pub fn gathering_separation_system(
             idle.needs_separation = false;
             continue;
         }
-        if idle.behavior != IdleBehavior::Gathering {
+        if idle.behavior != IdleBehavior::Gathering
+            && idle.behavior != IdleBehavior::ExhaustedGathering
+        {
             idle.needs_separation = false;
             continue;
         }

@@ -7,7 +7,7 @@ pub use crate::systems::task_execution::*;
 pub use crate::systems::task_queue::*;
 
 use crate::constants::*;
-use crate::entities::damned_soul::{DamnedSoul, Destination, Path};
+use crate::entities::damned_soul::{DamnedSoul, Destination, IdleBehavior, IdleState, Path};
 use crate::entities::familiar::{ActiveCommand, FamiliarCommand, UnderCommand};
 use crate::systems::command::TaskArea;
 use crate::systems::jobs::{
@@ -40,6 +40,7 @@ pub fn task_delegation_system(
         &mut Destination,
         &mut Path,
         &mut Inventory,
+        &IdleState,
     )>,
     q_stockpiles: Query<(Entity, &Transform, &Stockpile)>,
     q_under_command: Query<&UnderCommand>,
@@ -131,17 +132,18 @@ pub fn task_delegation_system(
             let mut best_soul = nearby_souls
                 .iter()
                 .filter_map(|&e| q_souls.get(e).ok())
-                .filter(|(_, _, soul, current_task, _, _, _)| {
+                .filter(|(_, _, soul, current_task, _, _, _, idle)| {
                     matches!(*current_task, AssignedTask::None)
                         && soul.motivation >= MOTIVATION_THRESHOLD
                         && soul.fatigue < FATIGUE_THRESHOLD
+                        && idle.behavior != IdleBehavior::ExhaustedGathering
                 })
-                .min_by(|(_, t1, _, _, _, _, _), (_, t2, _, _, _, _, _)| {
+                .min_by(|(_, t1, _, _, _, _, _, _), (_, t2, _, _, _, _, _, _)| {
                     let d1 = t1.translation.truncate().distance_squared(des_pos);
                     let d2 = t2.translation.truncate().distance_squared(des_pos);
                     d1.partial_cmp(&d2).unwrap_or(std::cmp::Ordering::Equal)
                 })
-                .map(|(e, _, _, _, _, _, _)| e);
+                .map(|(e, _, _, _, _, _, _, _)| e);
 
             // 【最適化】見つからない場合、段階的に半径を広げて検索（全soulのイテレートを避ける）
             if best_soul.is_none() {
@@ -151,17 +153,18 @@ pub fn task_delegation_system(
                     best_soul = broader_souls
                         .iter()
                         .filter_map(|&e| q_souls.get(e).ok())
-                        .filter(|(_, _, soul, current_task, _, _, _)| {
+                        .filter(|(_, _, soul, current_task, _, _, _, idle)| {
                             matches!(*current_task, AssignedTask::None)
                                 && soul.motivation >= MOTIVATION_THRESHOLD
                                 && soul.fatigue < FATIGUE_THRESHOLD
+                                && idle.behavior != IdleBehavior::ExhaustedGathering
                         })
-                        .min_by(|(_, t1, _, _, _, _, _), (_, t2, _, _, _, _, _)| {
+                        .min_by(|(_, t1, _, _, _, _, _, _), (_, t2, _, _, _, _, _, _)| {
                             let d1 = t1.translation.truncate().distance_squared(des_pos);
                             let d2 = t2.translation.truncate().distance_squared(des_pos);
                             d1.partial_cmp(&d2).unwrap_or(std::cmp::Ordering::Equal)
                         })
-                        .map(|(e, _, _, _, _, _, _)| e);
+                        .map(|(e, _, _, _, _, _, _, _)| e);
 
                     if best_soul.is_some() {
                         break;
@@ -173,17 +176,18 @@ pub fn task_delegation_system(
             if best_soul.is_none() {
                 best_soul = q_souls
                     .iter()
-                    .filter(|(_, _, soul, current_task, _, _, _)| {
+                    .filter(|(_, _, soul, current_task, _, _, _, idle)| {
                         matches!(*current_task, AssignedTask::None)
                             && soul.motivation >= MOTIVATION_THRESHOLD
                             && soul.fatigue < FATIGUE_THRESHOLD
+                            && idle.behavior != IdleBehavior::ExhaustedGathering
                     })
-                    .min_by(|(_, t1, _, _, _, _, _), (_, t2, _, _, _, _, _)| {
+                    .min_by(|(_, t1, _, _, _, _, _, _), (_, t2, _, _, _, _, _, _)| {
                         let d1 = t1.translation.truncate().distance_squared(des_pos);
                         let d2 = t2.translation.truncate().distance_squared(des_pos);
                         d1.partial_cmp(&d2).unwrap_or(std::cmp::Ordering::Equal)
                     })
-                    .map(|(e, _, _, _, _, _, _)| e);
+                    .map(|(e, _, _, _, _, _, _, _)| e);
 
                 if best_soul.is_some() {
                     warn!(
@@ -197,7 +201,7 @@ pub fn task_delegation_system(
                     WorkType::Chop | WorkType::Mine => {
                         if let Ok((mut soul_task, mut dest, mut path)) = q_souls
                             .get_mut(soul_entity)
-                            .map(|(_, _, _, t, d, p, _)| (t, d, p))
+                            .map(|(_, _, _, t, d, p, _, _)| (t, d, p))
                         {
                             *soul_task = AssignedTask::Gather {
                                 target: des_entity,
@@ -234,7 +238,7 @@ pub fn task_delegation_system(
                         if let Some(stock_entity) = best_stockpile {
                             if let Ok((mut soul_task, mut dest, mut path)) = q_souls
                                 .get_mut(soul_entity)
-                                .map(|(_, _, _, t, d, p, _)| (t, d, p))
+                                .map(|(_, _, _, t, d, p, _, _)| (t, d, p))
                             {
                                 *soul_task = AssignedTask::Haul {
                                     item: des_entity,

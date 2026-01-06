@@ -218,6 +218,7 @@ pub enum IdleBehavior {
     Sitting,   // 座り込み
     Sleeping,  // 寝ている
     Gathering, // 集会中
+    ExhaustedGathering, // 疲労による集会移動中
 }
 
 /// 集会中のサブ行動
@@ -373,9 +374,10 @@ pub fn soul_movement(
         &mut Path,
         &mut AnimationState,
         &DamnedSoul,
+        &IdleState,
     )>,
 ) {
-    for (entity, mut transform, mut path, mut anim, soul) in query.iter_mut() {
+    for (entity, mut transform, mut path, mut anim, soul, idle) in query.iter_mut() {
         if path.current_index < path.waypoints.len() {
             let target = path.waypoints[path.current_index];
             let current_pos = transform.translation.truncate();
@@ -387,7 +389,12 @@ pub fn soul_movement(
                 let base_speed = 60.0;
                 let motivation_bonus = soul.motivation * 40.0;
                 let laziness_penalty = soul.laziness * 30.0;
-                let speed = (base_speed + motivation_bonus - laziness_penalty).max(20.0);
+                let mut speed = (base_speed + motivation_bonus - laziness_penalty).max(20.0);
+
+                // 疲労による集会移動中は速度低下
+                if idle.behavior == IdleBehavior::ExhaustedGathering {
+                    speed *= 0.7;
+                }
 
                 let move_dist = (speed * time.delta_secs()).min(distance);
                 let direction = to_target.normalize();
