@@ -1,26 +1,6 @@
-# Prevent unnecessary cross-compilation target generation
-# Build target is not specified, so cargo uses the default native target
-# This prevents duplication of build artifacts in x86_64-pc-windows-msvc/
+[target.x86_64-pc-windows-gnu]
+linker = "x86_64-w64-mingw32-gcc"
+ar = "x86_64-w64-mingw32-gcc-ar"
 
-# Linux cross-compilation target (uncomment only if needed)
-# [target.x86_64-unknown-linux-gnu]
-# linker = "clang"
-# rustflags = ["-C", "link-arg=-fuse-ld=lld"]
-
-# Windows target configuration (uncomment only if cross-compiling from Linux)
-# [target.x86_64-pc-windows-msvc]
-# linker = "rust-lld.exe"
-
-# DO NOT uncomment the following unless you specifically need cross-compilation
-# [build]
-# target = "x86_64-pc-windows-msvc"
-
-[profile.dev]
-opt-level = 1
-
-[profile.dev.package."*"]
-opt-level = 3
-
-# Lower optimization for bevy when using dynamic linking to avoid symbol resolution issues
-[profile.dev.package.bevy]
-opt-level = 1
+[build]
+target = "x86_64-pc-windows-gnu"
