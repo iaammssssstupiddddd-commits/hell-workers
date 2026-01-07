@@ -51,6 +51,7 @@ use crate::interface::selection::{
 };
 use crate::interface::ui_interaction::{
     hover_tooltip_system, task_summary_ui_system, ui_interaction_system, update_mode_text_system,
+    update_operation_dialog_system,
 };
 use crate::interface::ui_panels::{
     familiar_context_menu_system, info_panel_system, menu_visibility_system,
@@ -122,26 +123,38 @@ fn main() {
         .add_systems(
             Update,
             (
-                camera_movement,
-                camera_zoom,
-                handle_mouse_input,
-                blueprint_placement,
-                zone_placement,
-                item_spawner_system,
-                ui_interaction_system,
-                menu_visibility_system,
-                info_panel_system,
-                update_mode_text_system,
-                familiar_context_menu_system,
-                task_summary_ui_system,
-                update_selection_indicator,
-                update_hover_entity,
-                hover_tooltip_system,
-                update_familiar_range_indicator,
-                resource_count_display_system,
-                game_time_system,
-                time_control_keyboard_system,
-                time_control_ui_system,
+                // カメラ & 入力
+                (camera_movement, camera_zoom, handle_mouse_input),
+                // 選択 & 配置
+                (
+                    update_hover_entity,
+                    update_selection_indicator,
+                    hover_tooltip_system,
+                    blueprint_placement,
+                    zone_placement,
+                    item_spawner_system,
+                ),
+                // UI ボタン・メニュー系
+                (
+                    ui_interaction_system,
+                    menu_visibility_system,
+                    info_panel_system,
+                ),
+                // ステータス・テキスト更新系
+                (
+                    update_mode_text_system,
+                    familiar_context_menu_system,
+                    task_summary_ui_system,
+                    update_operation_dialog_system,
+                    resource_count_display_system,
+                ),
+                // 使い魔・時間・その他
+                (
+                    update_familiar_range_indicator,
+                    game_time_system,
+                    time_control_keyboard_system,
+                    time_control_ui_system,
+                ),
             ),
         )
         // Update systems - Core Logic & Visuals
