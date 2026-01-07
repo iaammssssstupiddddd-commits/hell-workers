@@ -3,7 +3,7 @@
 //! ツールチップ、モードテキスト、タスクサマリー、およびボタン操作を管理します。
 
 use crate::entities::damned_soul::DamnedSoul;
-use crate::entities::familiar::Familiar;
+use crate::entities::familiar::{Familiar, FamiliarOperation};
 use crate::interface::ui_setup::*;
 use crate::systems::work::AssignedTask;
 use bevy::prelude::*;
@@ -32,9 +32,9 @@ pub fn hover_tooltip_system(
         Option<&crate::systems::logistics::ClaimedBy>,
     )>,
 ) {
-    let window = q_window.single();
-    let mut tooltip_node = q_tooltip.get_single_mut().unwrap();
-    let mut text = q_text.get_single_mut().unwrap();
+    let Ok(window) = q_window.get_single() else { return };
+    let Ok(mut tooltip_node) = q_tooltip.get_single_mut() else { return };
+    let Ok(mut text) = q_text.get_single_mut() else { return };
 
     if let Some(entity) = hovered.0 {
         let mut info_lines = Vec::new();
@@ -161,82 +161,142 @@ pub fn task_summary_ui_system(
     }
 }
 
+/// UI ボタンの操作を管理する統合システム
 pub fn ui_interaction_system(
     mut interaction_query: Query<
         (&Interaction, &MenuButton, &mut BackgroundColor),
         (Changed<Interaction>, With<Button>),
     >,
-    mut menu_state: ResMut<MenuState>,
-    mut build_mode: ResMut<crate::interface::selection::BuildMode>,
-    mut zone_mode: ResMut<crate::systems::logistics::ZoneMode>,
-    mut task_mode: ResMut<crate::systems::command::TaskMode>,
+    mut menu_state: ParamSet<(
+        ResMut<MenuState>,
+        ResMut<crate::interface::selection::BuildMode>,
+        ResMut<crate::systems::logistics::ZoneMode>,
+        ResMut<crate::systems::command::TaskMode>,
+    )>,
+    selected_entity: Res<crate::interface::selection::SelectedEntity>,
+    mut q_familiar_ops: Query<&mut FamiliarOperation>,
+    mut q_dialog: Query<&mut Node, With<OperationDialog>>,
     q_context_menu: Query<Entity, With<ContextMenu>>,
     mut commands: Commands,
 ) {
     for (interaction, menu_button, mut color) in interaction_query.iter_mut() {
+        // 視覚的フィードバック
         match *interaction {
             Interaction::Pressed => {
-                for entity in q_context_menu.iter() {
-                    commands.entity(entity).despawn_recursive();
-                }
-
                 *color = BackgroundColor(Color::srgb(0.5, 0.5, 0.5));
-                match menu_button.0 {
-                    MenuAction::ToggleArchitect => {
-                        *menu_state = match *menu_state {
-                            MenuState::Architect => MenuState::Hidden,
-                            _ => MenuState::Architect,
-                        };
-                        build_mode.0 = None;
-                        zone_mode.0 = None;
-                    }
-                    MenuAction::ToggleOrders => {
-                        *menu_state = match *menu_state {
-                            MenuState::Orders => MenuState::Hidden,
-                            _ => MenuState::Orders,
-                        };
-                        build_mode.0 = None;
-                        zone_mode.0 = None;
-                        *task_mode = crate::systems::command::TaskMode::None;
-                    }
-                    MenuAction::ToggleZones => {
-                        *menu_state = match *menu_state {
-                            MenuState::Zones => MenuState::Hidden,
-                            _ => MenuState::Zones,
-                        };
-                        build_mode.0 = None;
-                        zone_mode.0 = None;
-                        *task_mode = crate::systems::command::TaskMode::None;
-                    }
-                    MenuAction::SelectBuild(kind) => {
-                        build_mode.0 = Some(kind);
-                        zone_mode.0 = None;
-                        *task_mode = crate::systems::command::TaskMode::None;
-                    }
-                    MenuAction::SelectZone(kind) => {
-                        zone_mode.0 = Some(kind);
-                        build_mode.0 = None;
-                        *task_mode = crate::systems::command::TaskMode::None;
-                    }
-                    MenuAction::SelectTaskMode(mode) => {
-                        *task_mode = mode;
-                        build_mode.0 = None;
-                        zone_mode.0 = None;
-                        info!("UI: TaskMode set to {:?}", mode);
-                    }
-                    MenuAction::SelectAreaTask => {
-                        *task_mode = crate::systems::command::TaskMode::AreaSelection(None);
-                        build_mode.0 = None;
-                        zone_mode.0 = None;
-                        info!("UI: Area Selection Mode entered");
-                    }
-                }
             }
             Interaction::Hovered => {
                 *color = BackgroundColor(Color::srgb(0.4, 0.4, 0.4));
             }
             Interaction::None => {
                 *color = BackgroundColor(Color::srgb(0.2, 0.2, 0.2));
+            }
+        }
+
+        // 実際の処理
+        if *interaction == Interaction::Pressed {
+            // コンテキストメニューがあれば消す
+            for entity in q_context_menu.iter() {
+                commands.entity(entity).despawn_recursive();
+            }
+
+            match menu_button.0 {
+                MenuAction::ToggleArchitect => {
+                    let mut menu_state_res = menu_state.p0();
+                    let current = *menu_state_res;
+                    *menu_state_res = match current {
+                        MenuState::Architect => MenuState::Hidden,
+                        _ => MenuState::Architect,
+                    };
+                    menu_state.p1().0 = None;
+                    menu_state.p2().0 = None;
+                }
+                MenuAction::ToggleOrders => {
+                    let mut menu_state_res = menu_state.p0();
+                    let current = *menu_state_res;
+                    *menu_state_res = match current {
+                        MenuState::Orders => MenuState::Hidden,
+                        _ => MenuState::Orders,
+                    };
+                    menu_state.p1().0 = None;
+                    menu_state.p2().0 = None;
+                    *menu_state.p3() = crate::systems::command::TaskMode::None;
+                }
+                MenuAction::ToggleZones => {
+                    let mut menu_state_res = menu_state.p0();
+                    let current = *menu_state_res;
+                    *menu_state_res = match current {
+                        MenuState::Zones => MenuState::Hidden,
+                        _ => MenuState::Zones,
+                    };
+                    menu_state.p1().0 = None;
+                    menu_state.p2().0 = None;
+                    *menu_state.p3() = crate::systems::command::TaskMode::None;
+                }
+                MenuAction::SelectBuild(kind) => {
+                    menu_state.p1().0 = Some(kind);
+                    menu_state.p2().0 = None;
+                    *menu_state.p3() = crate::systems::command::TaskMode::None;
+                }
+                MenuAction::SelectZone(kind) => {
+                    menu_state.p2().0 = Some(kind);
+                    menu_state.p1().0 = None;
+                    *menu_state.p3() = crate::systems::command::TaskMode::None;
+                }
+                MenuAction::SelectTaskMode(mode) => {
+                    *menu_state.p3() = mode;
+                    menu_state.p1().0 = None;
+                    menu_state.p2().0 = None;
+                    info!("UI: TaskMode set to {:?}", mode);
+                }
+                MenuAction::SelectAreaTask => {
+                    *menu_state.p3() = crate::systems::command::TaskMode::AreaSelection(None);
+                    menu_state.p1().0 = None;
+                    menu_state.p2().0 = None;
+                    info!("UI: Area Selection Mode entered");
+                }
+                MenuAction::OpenOperationDialog => {
+                    if let Ok(mut dialog_node) = q_dialog.get_single_mut() {
+                        dialog_node.display = Display::Flex;
+                    }
+                }
+                MenuAction::CloseDialog => {
+                    if let Ok(mut dialog_node) = q_dialog.get_single_mut() {
+                        dialog_node.display = Display::None;
+                    }
+                }
+                MenuAction::AdjustFatigueThreshold(delta) => {
+                    if let Some(selected) = selected_entity.0 {
+                        if let Ok(mut op) = q_familiar_ops.get_mut(selected) {
+                            let new_val = (op.fatigue_threshold + delta).clamp(0.0, 1.0);
+                            op.fatigue_threshold = (new_val * 10.0).round() / 10.0;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Operation Dialog のテキスト表示を更新するシステム
+pub fn update_operation_dialog_system(
+    selected_entity: Res<crate::interface::selection::SelectedEntity>,
+    q_familiars: Query<(&Familiar, &FamiliarOperation)>,
+    mut text_set: ParamSet<(
+        Query<&mut Text, With<OperationDialogFamiliarName>>,
+        Query<&mut Text, With<OperationDialogThresholdText>>,
+    )>,
+) {
+    if let Some(selected) = selected_entity.0 {
+        if let Ok((familiar, op)) = q_familiars.get(selected) {
+            if let Ok(mut name_text) = text_set.p0().get_single_mut() {
+                name_text.0 = format!("Editing: {}", familiar.name);
+            }
+            if let Ok(mut threshold_text) = text_set.p1().get_single_mut() {
+                let val_str = format!("{:.0}%", op.fatigue_threshold * 100.0);
+                if threshold_text.0 != val_str {
+                    threshold_text.0 = val_str;
+                }
             }
         }
     }
