@@ -8,7 +8,7 @@ pub use crate::systems::task_queue::*;
 
 use crate::constants::*;
 use crate::entities::damned_soul::{DamnedSoul, Destination, IdleBehavior, IdleState, Path};
-use crate::entities::familiar::{ActiveCommand, FamiliarCommand, UnderCommand};
+use crate::entities::familiar::{ActiveCommand, FamiliarCommand, FamiliarOperation, UnderCommand};
 use crate::systems::command::TaskArea;
 use crate::systems::jobs::{
     Designation, DesignationCreatedEvent, IssuedBy, TaskCompletedEvent, TaskSlots, WorkType,
@@ -31,7 +31,7 @@ pub struct AutoHaulCounter;
 
 pub fn task_delegation_system(
     mut commands: Commands,
-    q_familiars: Query<(Entity, &Transform), With<ActiveCommand>>,
+    q_familiars: Query<(Entity, &Transform, &FamiliarOperation), With<ActiveCommand>>,
     mut q_souls: Query<(
         Entity,
         &Transform,
@@ -61,9 +61,9 @@ pub fn task_delegation_system(
     // イベントを読み飛ばしてフラグにする（実際にはqueue_management_systemが既に処理している想定）
     ev_created.clear();
     ev_completed.clear();
-
-    for (fam_entity, fam_transform) in q_familiars.iter() {
+    for (fam_entity, fam_transform, fam_op) in q_familiars.iter() {
         let fam_pos = fam_transform.translation.truncate();
+        let fatigue_threshold = fam_op.fatigue_threshold;
 
         // 使役枠の空きを確認 (UnderCommandを持つソウルを数える)
         let current_count = q_under_command
@@ -135,7 +135,7 @@ pub fn task_delegation_system(
                 .filter(|(_, _, soul, current_task, _, _, _, idle)| {
                     matches!(*current_task, AssignedTask::None)
                         && soul.motivation >= MOTIVATION_THRESHOLD
-                        && soul.fatigue < FATIGUE_THRESHOLD
+                        && soul.fatigue < fatigue_threshold
                         && idle.behavior != IdleBehavior::ExhaustedGathering
                 })
                 .min_by(|(_, t1, _, _, _, _, _, _), (_, t2, _, _, _, _, _, _)| {
@@ -156,7 +156,7 @@ pub fn task_delegation_system(
                         .filter(|(_, _, soul, current_task, _, _, _, idle)| {
                             matches!(*current_task, AssignedTask::None)
                                 && soul.motivation >= MOTIVATION_THRESHOLD
-                                && soul.fatigue < FATIGUE_THRESHOLD
+                                && soul.fatigue < fatigue_threshold
                                 && idle.behavior != IdleBehavior::ExhaustedGathering
                         })
                         .min_by(|(_, t1, _, _, _, _, _, _), (_, t2, _, _, _, _, _, _)| {
@@ -179,7 +179,7 @@ pub fn task_delegation_system(
                     .filter(|(_, _, soul, current_task, _, _, _, idle)| {
                         matches!(*current_task, AssignedTask::None)
                             && soul.motivation >= MOTIVATION_THRESHOLD
-                            && soul.fatigue < FATIGUE_THRESHOLD
+                            && soul.fatigue < fatigue_threshold
                             && idle.behavior != IdleBehavior::ExhaustedGathering
                     })
                     .min_by(|(_, t1, _, _, _, _, _, _), (_, t2, _, _, _, _, _, _)| {

@@ -92,6 +92,20 @@ pub struct ActiveCommand {
     pub command: FamiliarCommand,
 }
 
+/// 使い魔の運用設定（閾値など）
+#[derive(Component, Debug, Clone, Copy)]
+pub struct FamiliarOperation {
+    pub fatigue_threshold: f32, // この疲労度以下のソウルのみ受け入れる
+}
+
+impl Default for FamiliarOperation {
+    fn default() -> Self {
+        Self {
+            fatigue_threshold: FATIGUE_THRESHOLD,
+        }
+    }
+}
+
 /// 魂がどの使い魔に使役されているかを示す
 #[derive(Component, Debug, Clone, Copy)]
 pub struct UnderCommand(pub Entity);
@@ -126,6 +140,7 @@ pub fn spawn_familiar(
     let fam_entity = commands
         .spawn((
             familiar,
+            FamiliarOperation::default(),
             ActiveCommand::default(),
             Destination(actual_pos), // 移動先
             Path::default(),         // 経路

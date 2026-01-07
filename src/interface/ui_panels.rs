@@ -79,7 +79,7 @@ pub fn info_panel_system(
         Option<&crate::entities::damned_soul::SoulIdentity>,
     )>,
     q_blueprints: Query<&Blueprint>,
-    q_familiars: Query<&Familiar>,
+    q_familiars: Query<(&Familiar, &crate::entities::familiar::FamiliarOperation)>,
     q_items: Query<&crate::systems::logistics::ResourceItem>,
     q_trees: Query<&crate::systems::jobs::Tree>,
     q_rocks: Query<&crate::systems::jobs::Rock>,
@@ -133,13 +133,14 @@ pub fn info_panel_system(
             panel_node.display = Display::Flex;
             header_text.0 = "Blueprint Info".to_string();
             job_text.0 = format!("Type: {:?}\nProgress: {:.0}%", bp.kind, bp.progress * 100.0);
-        } else if let Ok(familiar) = q_familiars.get(entity) {
+        } else if let Ok((familiar, op)) = q_familiars.get(entity) {
             panel_node.display = Display::Flex;
             header_text.0 = familiar.name.clone();
             job_text.0 = format!(
-                "Type: {:?}\nRange: {:.0} tiles",
+                "Type: {:?}\nRange: {:.0} tiles\nFatigue Threshold: {:.0}%",
                 familiar.familiar_type,
-                familiar.command_radius / 16.0
+                familiar.command_radius / 16.0,
+                op.fatigue_threshold * 100.0
             );
         } else if let Ok(item) = q_items.get(entity) {
             panel_node.display = Display::Flex;
@@ -200,7 +201,7 @@ pub fn familiar_context_menu_system(
                                 position_type: PositionType::Absolute,
                                 left: Val::Px(cursor_pos.x),
                                 top: Val::Px(cursor_pos.y),
-                                width: Val::Px(80.0),
+                                width: Val::Px(100.0),
                                 height: Val::Auto,
                                 flex_direction: FlexDirection::Column,
                                 padding: UiRect::all(Val::Px(5.0)),
@@ -226,6 +227,30 @@ pub fn familiar_context_menu_system(
                                 .with_children(|button| {
                                     button.spawn((
                                         Text::new("Task"),
+                                        TextFont {
+                                            font_size: 14.0,
+                                            ..default()
+                                        },
+                                        TextColor(Color::WHITE),
+                                    ));
+                                });
+                            parent
+                                .spawn((
+                                    Button,
+                                    Node {
+                                        width: Val::Percent(100.0),
+                                        height: Val::Px(30.0),
+                                        justify_content: JustifyContent::Center,
+                                        align_items: AlignItems::Center,
+                                        margin: UiRect::top(Val::Px(2.0)),
+                                        ..default()
+                                    },
+                                    BackgroundColor(Color::srgb(0.3, 0.3, 0.3)),
+                                    MenuButton(MenuAction::OpenOperationDialog),
+                                ))
+                                .with_children(|button| {
+                                    button.spawn((
+                                        Text::new("Operation"),
                                         TextFont {
                                             font_size: 14.0,
                                             ..default()
