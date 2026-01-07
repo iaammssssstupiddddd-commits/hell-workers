@@ -5,6 +5,13 @@ use crate::world::map::WorldMap;
 use bevy::prelude::*;
 use rand::Rng;
 
+/// 使い魔のスポーンイベント
+#[derive(Event)]
+pub struct FamiliarSpawnEvent {
+    pub position: Vec2,
+    pub familiar_type: FamiliarType,
+}
+
 /// 使い魔の名前リスト（10候補）- 下級悪魔風
 const FAMILIAR_NAMES: [&str; 10] = [
     "Skrix",   // 小鬼
@@ -112,13 +119,35 @@ pub struct UnderCommand(pub Entity);
 
 /// 使い魔をスポーンする
 pub fn spawn_familiar(
+    mut spawn_events: EventWriter<FamiliarSpawnEvent>,
+) {
+    spawn_events.send(FamiliarSpawnEvent {
+        position: Vec2::new(0.0, 0.0),
+        familiar_type: FamiliarType::Imp,
+    });
+}
+
+/// 使い魔のスポーンを処理するシステム
+pub fn familiar_spawning_system(
     mut commands: Commands,
+    mut spawn_events: EventReader<FamiliarSpawnEvent>,
     game_assets: Res<GameAssets>,
     world_map: Res<WorldMap>,
 ) {
-    // マップ中央付近に使い魔を配置
-    let spawn_pos = Vec2::new(0.0, 0.0);
-    let spawn_grid = WorldMap::world_to_grid(spawn_pos);
+    for event in spawn_events.read() {
+        spawn_familiar_at(&mut commands, &game_assets, &world_map, event.position, event.familiar_type);
+    }
+}
+
+/// 指定座標に使い魔をスポーンする
+pub fn spawn_familiar_at(
+    commands: &mut Commands,
+    game_assets: &Res<GameAssets>,
+    world_map: &Res<WorldMap>,
+    pos: Vec2,
+    familiar_type: FamiliarType,
+) {
+    let spawn_grid = WorldMap::world_to_grid(pos);
 
     // 歩ける場所を探す
     let mut actual_grid = spawn_grid;
@@ -133,7 +162,7 @@ pub fn spawn_familiar(
     }
     let actual_pos = WorldMap::grid_to_world(actual_grid.0, actual_grid.1);
 
-    let familiar = Familiar::new(FamiliarType::Imp);
+    let familiar = Familiar::new(familiar_type);
     let familiar_name = familiar.name.clone();
     let command_radius = familiar.command_radius;
 
@@ -195,8 +224,8 @@ pub fn spawn_familiar(
     ));
 
     info!(
-        "SPAWN: Familiar '{}' (Imp) at {:?}",
-        familiar_name, actual_pos
+        "SPAWN: Familiar '{}' ({:?}) at {:?}",
+        familiar_name, familiar_type, actual_pos
     );
 }
 

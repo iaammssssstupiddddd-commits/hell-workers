@@ -6,6 +6,12 @@ use crate::world::pathfinding::find_path;
 use bevy::prelude::*;
 use rand::Rng;
 
+/// ソウルのスポーンイベント
+#[derive(Event)]
+pub struct DamnedSoulSpawnEvent {
+    pub position: Vec2,
+}
+
 /// 性別
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Gender {
@@ -262,9 +268,7 @@ impl Default for AnimationState {
 
 /// 人間をスポーンする
 pub fn spawn_damned_souls(
-    mut commands: Commands,
-    game_assets: Res<GameAssets>,
-    world_map: Res<WorldMap>,
+    mut spawn_events: EventWriter<DamnedSoulSpawnEvent>,
 ) {
     // 3体の人間をスポーン
     let spawn_positions = [
@@ -273,52 +277,74 @@ pub fn spawn_damned_souls(
         Vec2::new(0.0, 50.0),
     ];
 
-    for (_i, spawn_pos) in spawn_positions.iter().enumerate() {
-        // 歩ける場所を探す
-        let spawn_grid = WorldMap::world_to_grid(*spawn_pos);
-        let mut actual_grid = spawn_grid;
-        'search: for dx in -5..=5 {
-            for dy in -5..=5 {
-                let test = (spawn_grid.0 + dx, spawn_grid.1 + dy);
-                if world_map.is_walkable(test.0, test.1) {
-                    actual_grid = test;
-                    break 'search;
-                }
+    for spawn_pos in spawn_positions.iter() {
+        spawn_events.send(DamnedSoulSpawnEvent { position: *spawn_pos });
+    }
+}
+
+/// スポーンイベントを処理するシステム
+pub fn soul_spawning_system(
+    mut commands: Commands,
+    mut spawn_events: EventReader<DamnedSoulSpawnEvent>,
+    game_assets: Res<GameAssets>,
+    world_map: Res<WorldMap>,
+) {
+    for event in spawn_events.read() {
+        spawn_damned_soul_at(&mut commands, &game_assets, &world_map, event.position);
+    }
+}
+
+/// 指定座標にソウルをスポーンする（内部用ヘルパー）
+pub fn spawn_damned_soul_at(
+    commands: &mut Commands,
+    game_assets: &Res<GameAssets>,
+    world_map: &Res<WorldMap>,
+    pos: Vec2,
+) {
+    // 歩ける場所を探す
+    let spawn_grid = WorldMap::world_to_grid(pos);
+    let mut actual_grid = spawn_grid;
+    'search: for dx in -5..=5 {
+        for dy in -5..=5 {
+            let test = (spawn_grid.0 + dx, spawn_grid.1 + dy);
+            if world_map.is_walkable(test.0, test.1) {
+                actual_grid = test;
+                break 'search;
             }
         }
-        let actual_pos = WorldMap::grid_to_world(actual_grid.0, actual_grid.1);
-
-        // ランダムなアイデンティティを生成
-        let identity = SoulIdentity::random();
-        let soul_name = identity.name.clone();
-        let gender = identity.gender;
-
-        // 性別で色分け
-        let sprite_color = match gender {
-            Gender::Male => Color::srgb(0.4, 0.6, 0.9),   // 青系
-            Gender::Female => Color::srgb(0.9, 0.5, 0.7), // ピンク系
-        };
-
-        commands.spawn((
-            DamnedSoul::default(),
-            identity,
-            IdleState::default(),
-            AssignedTask::default(),
-            crate::systems::logistics::Inventory(None), // インベントリを追加
-            Sprite {
-                image: game_assets.colonist.clone(),
-                custom_size: Some(Vec2::splat(TILE_SIZE * 0.8)),
-                color: sprite_color,
-                ..default()
-            },
-            Transform::from_xyz(actual_pos.x, actual_pos.y, 1.0),
-            Destination(actual_pos),
-            Path::default(),
-            AnimationState::default(),
-        ));
-
-        info!("SPAWN: {} ({:?}) at {:?}", soul_name, gender, actual_pos);
     }
+    let actual_pos = WorldMap::grid_to_world(actual_grid.0, actual_grid.1);
+
+    // ランダムなアイデンティティを生成
+    let identity = SoulIdentity::random();
+    let soul_name = identity.name.clone();
+    let gender = identity.gender;
+
+    // 性別で色分け
+    let sprite_color = match gender {
+        Gender::Male => Color::srgb(0.4, 0.6, 0.9),   // 青系
+        Gender::Female => Color::srgb(0.9, 0.5, 0.7), // ピンク系
+    };
+
+    commands.spawn((
+        DamnedSoul::default(),
+        identity,
+        IdleState::default(),
+        AssignedTask::default(),
+        crate::systems::logistics::Inventory(None), // インベントリを追加
+        Sprite {
+            image: game_assets.colonist.clone(),
+            custom_size: Some(Vec2::splat(TILE_SIZE * 0.8)),
+            color: sprite_color,
+            ..default()
+        },
+        Transform::from_xyz(actual_pos.x, actual_pos.y, 1.0),
+        Destination(actual_pos),
+        Path::default(),
+        AnimationState::default(),
+    ));
+
+    info!("SPAWN: {} ({:?}) at {:?}", soul_name, gender, actual_pos);
 }
 
 /// 経路探索システム
