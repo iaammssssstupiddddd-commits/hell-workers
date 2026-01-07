@@ -18,7 +18,7 @@ bevy = { version = "0.15", features = [
 rand = "0.8"
 
 [features]
-default = [] # "dynamic_linking" removed to fix Windows cross-compilation DLL issues
+default = ["dynamic_linking"]
 dynamic_linking = ["bevy/dynamic_linking"]
 
 [profile.release]
