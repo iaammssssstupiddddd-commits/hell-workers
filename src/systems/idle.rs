@@ -48,6 +48,7 @@ fn random_position_around(center: Vec2, min_dist: f32, max_dist: f32) -> Vec2 {
 /// やる気が低い人間は怠惰な行動をする
 /// タスクがある人間は怠惰行動をしない
 pub fn idle_behavior_system(
+    mut commands: Commands,
     time: Res<Time>,
     world_map: Res<WorldMap>,
     gathering_area: Res<GatheringArea>,
@@ -57,16 +58,55 @@ pub fn idle_behavior_system(
         &mut IdleState,
         &mut Destination,
         &DamnedSoul,
-        &Path,
-        &AssignedTask,
+        &mut Path,
+        &mut AssignedTask,
         Option<&crate::entities::familiar::UnderCommand>,
     )>,
 ) {
     let dt = time.delta_secs();
 
-    for (_entity, transform, mut idle, mut dest, soul, path, task, under_command_opt) in
+    for (entity, transform, mut idle, mut dest, soul, mut path, mut task, under_command_opt) in
         query.iter_mut()
     {
+        // 集会エリアへの距離をチェック
+        let current_pos = transform.translation.truncate();
+        let center = gathering_area.0;
+        let dist_from_center = (center - current_pos).length();
+        let has_arrived = dist_from_center <= GATHERING_ARRIVAL_RADIUS;
+
+        // ExhaustedGatheringは全てに優先：疲労が閾値を超えた場合は即座にExhaustedGatheringに移行
+        if soul.fatigue > FATIGUE_GATHERING_THRESHOLD {
+            // 使役状態を解除
+            if under_command_opt.is_some() {
+                commands.entity(entity).remove::<crate::entities::familiar::UnderCommand>();
+            }
+            
+            // ExhaustedGatheringに移行
+            if idle.behavior != IdleBehavior::ExhaustedGathering {
+                if idle.behavior != IdleBehavior::Gathering {
+                    idle.gathering_behavior = random_gathering_behavior();
+                    idle.gathering_behavior_timer = 0.0;
+                    idle.gathering_behavior_duration = random_gathering_duration();
+                    idle.needs_separation = true;
+                }
+                idle.behavior = IdleBehavior::ExhaustedGathering;
+                idle.idle_timer = 0.0;
+                let mut rng = rand::thread_rng();
+                idle.behavior_duration = rng.gen_range(2.0..4.0);
+            }
+            
+            // 集会エリアへ向かう
+            if !has_arrived {
+                if path.waypoints.is_empty() || path.current_index >= path.waypoints.len() {
+                    dest.0 = center;
+                    path.waypoints.clear();
+                }
+            }
+            
+            // ExhaustedGathering状態の場合は他の処理をスキップ
+            continue;
+        }
+
         // 使い魔の部下（UnderCommand を持つ）の場合は追従システムに任せる
         if under_command_opt.is_some() {
             idle.total_idle_time = 0.0;
@@ -74,7 +114,7 @@ pub fn idle_behavior_system(
         }
 
         // タスクがある場合は放置時間をリセットし、怠惰行動も行わない
-        if !matches!(task, AssignedTask::None) {
+        if !matches!(*task, AssignedTask::None) {
             idle.total_idle_time = 0.0;
             continue;
         }
@@ -82,7 +122,6 @@ pub fn idle_behavior_system(
         idle.total_idle_time += dt;
 
         // やる気があり疲労が閾値未満の場合は怠惰行動をしない（次のタスクを待つ）
-        // これにより、ワーカーはモチベーションが続く限り疲労が閾値に達するまで継続的にタスクを行う
         if soul.motivation > MOTIVATION_THRESHOLD && soul.fatigue < FATIGUE_THRESHOLD {
             continue;
         }
