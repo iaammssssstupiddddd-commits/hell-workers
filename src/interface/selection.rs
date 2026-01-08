@@ -28,6 +28,7 @@ pub fn handle_mouse_input(
     q_ui: Query<&Interaction, With<Button>>,
     mut selected_entity: ResMut<SelectedEntity>,
     mut q_dest: Query<&mut Destination>,
+    mut q_active_command: Query<&mut crate::entities::familiar::ActiveCommand>,
     task_mode: Res<crate::systems::command::TaskMode>,
 ) {
     if *task_mode != crate::systems::command::TaskMode::None {
@@ -82,6 +83,11 @@ pub fn handle_mouse_input(
                     if let Ok(mut dest) = q_dest.get_mut(selected) {
                         dest.0 = world_pos;
                         info!("ORDER: Move to {:?}", world_pos);
+
+                        // 使い魔の場合、現在のAI作業を中断させる
+                        if let Ok(mut active) = q_active_command.get_mut(selected) {
+                            active.command = crate::entities::familiar::FamiliarCommand::Idle;
+                        }
                     }
                 }
             }

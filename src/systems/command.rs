@@ -24,7 +24,7 @@ pub enum TaskMode {
     AssignTask(Option<Vec2>),        // 未アサインタスクを使い魔に割り当てるモード
 }
 /// タスクエリア - 使い魔が担当するエリア
-#[derive(Component, Clone)]
+#[derive(Component, Clone, Debug)]
 pub struct TaskArea {
     pub min: Vec2,
     pub max: Vec2,

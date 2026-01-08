@@ -25,6 +25,7 @@ pub struct GlobalTaskQueue {
 #[derive(Clone, Copy, Debug)]
 pub struct PendingTask {
     pub entity: Entity,
+    #[allow(dead_code)]
     pub work_type: WorkType,
     pub priority: u32, // 0: Normal, 1: High, etc.
 }
@@ -37,10 +38,12 @@ impl TaskQueue {
         tasks.sort_by(|a, b| b.priority.cmp(&a.priority));
     }
 
+    #[allow(dead_code)]
     pub fn get_for_familiar(&self, familiar: Entity) -> Option<&Vec<PendingTask>> {
         self.by_familiar.get(&familiar)
     }
 
+    #[allow(dead_code)]
     pub fn remove(&mut self, familiar: Entity, task_entity: Entity) {
         if let Some(tasks) = self.by_familiar.get_mut(&familiar) {
             tasks.retain(|t| t.entity != task_entity);
