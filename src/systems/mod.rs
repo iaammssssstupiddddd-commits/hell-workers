@@ -1,4 +1,5 @@
 pub mod command;
+pub mod familiar_ai;
 pub mod idle;
 pub mod jobs;
 pub mod logistics;

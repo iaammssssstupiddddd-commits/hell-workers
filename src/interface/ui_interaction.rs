@@ -32,9 +32,15 @@ pub fn hover_tooltip_system(
         Option<&crate::systems::logistics::ClaimedBy>,
     )>,
 ) {
-    let Ok(window) = q_window.get_single() else { return };
-    let Ok(mut tooltip_node) = q_tooltip.get_single_mut() else { return };
-    let Ok(mut text) = q_text.get_single_mut() else { return };
+    let Ok(window) = q_window.get_single() else {
+        return;
+    };
+    let Ok(mut tooltip_node) = q_tooltip.get_single_mut() else {
+        return;
+    };
+    let Ok(mut text) = q_text.get_single_mut() else {
+        return;
+    };
 
     if let Some(entity) = hovered.0 {
         let mut info_lines = Vec::new();
@@ -273,6 +279,14 @@ pub fn ui_interaction_system(
                         }
                     }
                 }
+                MenuAction::AdjustMaxControlledSoul(delta) => {
+                    if let Some(selected) = selected_entity.0 {
+                        if let Ok(mut op) = q_familiar_ops.get_mut(selected) {
+                            let new_val = (op.max_controlled_soul as isize + delta).clamp(1, 5);
+                            op.max_controlled_soul = new_val as usize;
+                        }
+                    }
+                }
             }
         }
     }
@@ -285,6 +299,7 @@ pub fn update_operation_dialog_system(
     mut text_set: ParamSet<(
         Query<&mut Text, With<OperationDialogFamiliarName>>,
         Query<&mut Text, With<OperationDialogThresholdText>>,
+        Query<&mut Text, With<OperationDialogMaxSoulText>>,
     )>,
 ) {
     if let Some(selected) = selected_entity.0 {
@@ -296,6 +311,12 @@ pub fn update_operation_dialog_system(
                 let val_str = format!("{:.0}%", op.fatigue_threshold * 100.0);
                 if threshold_text.0 != val_str {
                     threshold_text.0 = val_str;
+                }
+            }
+            if let Ok(mut max_soul_text) = text_set.p2().get_single_mut() {
+                let val_str = format!("{}", op.max_controlled_soul);
+                if max_soul_text.0 != val_str {
+                    max_soul_text.0 = val_str;
                 }
             }
         }

@@ -102,13 +102,15 @@ pub struct ActiveCommand {
 /// 使い魔の運用設定（閾値など）
 #[derive(Component, Debug, Clone, Copy)]
 pub struct FamiliarOperation {
-    pub fatigue_threshold: f32, // この疲労度以下のソウルのみ受け入れる
+    pub fatigue_threshold: f32,     // この疲労度以下のソウルのみ受け入れる
+    pub max_controlled_soul: usize, // 最大使役数 (1-5)
 }
 
 impl Default for FamiliarOperation {
     fn default() -> Self {
         Self {
             fatigue_threshold: FATIGUE_THRESHOLD,
+            max_controlled_soul: 2, // デフォルトを2人に変更
         }
     }
 }
@@ -118,9 +120,7 @@ impl Default for FamiliarOperation {
 pub struct UnderCommand(pub Entity);
 
 /// 使い魔をスポーンする
-pub fn spawn_familiar(
-    mut spawn_events: EventWriter<FamiliarSpawnEvent>,
-) {
+pub fn spawn_familiar(mut spawn_events: EventWriter<FamiliarSpawnEvent>) {
     spawn_events.send(FamiliarSpawnEvent {
         position: Vec2::new(0.0, 0.0),
         familiar_type: FamiliarType::Imp,
@@ -135,7 +135,13 @@ pub fn familiar_spawning_system(
     world_map: Res<WorldMap>,
 ) {
     for event in spawn_events.read() {
-        spawn_familiar_at(&mut commands, &game_assets, &world_map, event.position, event.familiar_type);
+        spawn_familiar_at(
+            &mut commands,
+            &game_assets,
+            &world_map,
+            event.position,
+            event.familiar_type,
+        );
     }
 }
 
@@ -171,6 +177,7 @@ pub fn spawn_familiar_at(
             familiar,
             FamiliarOperation::default(),
             ActiveCommand::default(),
+            crate::systems::familiar_ai::FamiliarAiState::default(),
             Destination(actual_pos), // 移動先
             Path::default(),         // 経路
             Sprite {

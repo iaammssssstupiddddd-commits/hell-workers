@@ -75,11 +75,12 @@ pub fn motivation_system(
 }
 
 /// 疲労が限界に達したら強制的に休憩させるシステム
-pub fn fatigue_system(mut q_souls: Query<&mut DamnedSoul>) {
+pub fn fatigue_system(time: Res<Time>, mut q_souls: Query<&mut DamnedSoul>) {
+    let dt = time.delta_secs();
     for mut soul in q_souls.iter_mut() {
-        // 疲労が限界に達したらやる気が強制的に下がる
+        // 疲労が限界に達したらやる気が徐々に下がる（毎フレーム0.5ではなく時間ベース）
         if soul.fatigue > 0.9 {
-            soul.motivation = (soul.motivation - 0.5).max(0.0);
+            soul.motivation = (soul.motivation - dt * 0.5).max(0.0);
         }
     }
 }

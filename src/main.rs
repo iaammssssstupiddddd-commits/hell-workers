@@ -13,18 +13,19 @@ use std::time::Duration;
 
 // 新システム
 use crate::entities::damned_soul::{
-    animation_system, pathfinding_system, soul_movement, soul_spawning_system,
-    spawn_damned_souls, DamnedSoulSpawnEvent,
+    DamnedSoulSpawnEvent, animation_system, pathfinding_system, soul_movement,
+    soul_spawning_system, spawn_damned_souls,
 };
 use crate::entities::familiar::{
-    familiar_movement, familiar_spawning_system, spawn_familiar, update_familiar_range_indicator,
-    FamiliarSpawnEvent, FamiliarType,
+    FamiliarSpawnEvent, FamiliarType, familiar_movement, familiar_spawning_system, spawn_familiar,
+    update_familiar_range_indicator,
 };
 use crate::systems::command::{
     TaskMode, area_selection_indicator_system, assign_task_system, designation_visual_system,
     familiar_command_input_system, familiar_command_visual_system, task_area_indicator_system,
     task_area_selection_system, update_designation_indicator_system,
 };
+use crate::systems::familiar_ai::{familiar_ai_system, following_familiar_system};
 use crate::systems::idle::{gathering_separation_system, idle_behavior_system, idle_visual_system};
 use crate::systems::jobs::{DesignationCreatedEvent, TaskCompletedEvent};
 use crate::systems::motivation::{
@@ -42,7 +43,6 @@ use crate::systems::visuals::{
 };
 use crate::systems::work::{
     AutoHaulCounter, cleanup_commanded_souls_system, task_area_auto_haul_system,
-    task_delegation_system,
 };
 
 // 既存システム
@@ -173,7 +173,9 @@ fn main() {
                     update_familiar_spatial_grid_system,
                     update_resource_spatial_grid_system,
                     queue_management_system,
-                    task_delegation_system,
+                    familiar_ai_system,        // 新ステートマシンAI
+                    following_familiar_system, // 部下の追従システム
+                    // task_delegation_system, // 既存の自動委譲（AIに移行したため無効化）
                     task_execution_system,
                     assign_task_system,
                 )
@@ -229,9 +231,9 @@ fn setup(
     commands.spawn((Camera2d, MainCamera));
 
     // 円形グラデーションテクスチャを動的生成
-    let aura_circle = create_circular_gradient_texture(&mut images);
+    let aura_circle = create_circular_gradient_texture(&mut *images);
     // 円形リング（外枠）テクスチャを動的生成
-    let aura_ring = create_circular_outline_texture(&mut images);
+    let aura_ring = create_circular_outline_texture(&mut *images);
 
     let game_assets = GameAssets {
         grass: asset_server.load("textures/grass.jpg"),

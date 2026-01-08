@@ -37,7 +37,7 @@ impl SpatialGrid {
         let cell_size = if self.cell_size > 0.0 {
             self.cell_size
         } else {
-            TILE_SIZE * 4.0
+            TILE_SIZE * 8.0
         };
         (
             (pos.x / cell_size).floor() as i32,
@@ -93,12 +93,13 @@ impl SpatialGrid {
     }
 
     /// 指定位置周辺のセルにいるエンティティを返す（検索半径を考慮）
+    #[allow(dead_code)]
     pub fn get_nearby_in_radius(&self, pos: Vec2, radius: f32) -> Vec<Entity> {
         let (cx, cy) = self.pos_to_cell(pos);
         let cell_size = if self.cell_size > 0.0 {
             self.cell_size
         } else {
-            TILE_SIZE * 4.0
+            TILE_SIZE * 8.0
         };
         // 半径を考慮して必要なセル数を計算
         let cells_needed = (radius / cell_size).ceil() as i32 + 1;
@@ -140,7 +141,7 @@ impl FamiliarSpatialGrid {
         let cell_size = if self.cell_size > 0.0 {
             self.cell_size
         } else {
-            TILE_SIZE * 20.0
+            TILE_SIZE * 8.0
         };
         (
             (pos.x / cell_size).floor() as i32,
@@ -188,7 +189,7 @@ impl FamiliarSpatialGrid {
         let cell_size = if self.cell_size > 0.0 {
             self.cell_size
         } else {
-            TILE_SIZE * 20.0
+            TILE_SIZE * 8.0
         };
         // 半径を考慮して必要なセル数を計算
         let cells_needed = (radius / cell_size).ceil() as i32 + 1;
@@ -229,7 +230,7 @@ impl ResourceSpatialGrid {
         let cell_size = if self.cell_size > 0.0 {
             self.cell_size
         } else {
-            TILE_SIZE * 20.0
+            TILE_SIZE * 8.0
         };
         (
             (pos.x / cell_size).floor() as i32,
@@ -273,7 +274,7 @@ impl ResourceSpatialGrid {
         let cell_size = if self.cell_size > 0.0 {
             self.cell_size
         } else {
-            TILE_SIZE * 20.0
+            TILE_SIZE * 8.0
         };
         let cells_needed = (radius / cell_size).ceil() as i32 + 1;
         let mut result = Vec::new();
