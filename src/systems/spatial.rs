@@ -296,12 +296,13 @@ impl ResourceSpatialGrid {
 /// SpatialGridを更新するシステム（差分更新）
 pub fn update_spatial_grid_system(
     mut spatial_grid: ResMut<SpatialGrid>,
-    q_souls: Query<(Entity, &Transform, &DamnedSoul, &AssignedTask)>,
+    q_souls: Query<(Entity, &Transform, &DamnedSoul, &AssignedTask, &crate::entities::damned_soul::IdleState)>,
 ) {
-    for (entity, transform, soul, task) in q_souls.iter() {
+    for (entity, transform, soul, task, idle) in q_souls.iter() {
         let should_be_in_grid = matches!(task, AssignedTask::None)
             && soul.motivation >= MOTIVATION_THRESHOLD
-            && soul.fatigue < FATIGUE_THRESHOLD;
+            && soul.fatigue < FATIGUE_THRESHOLD
+            && idle.behavior != crate::entities::damned_soul::IdleBehavior::ExhaustedGathering;
 
         if should_be_in_grid {
             spatial_grid.insert(entity, transform.translation.truncate());
