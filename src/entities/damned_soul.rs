@@ -221,9 +221,9 @@ impl Default for IdleState {
 pub enum IdleBehavior {
     #[default]
     Wandering, // うろうろ
-    Sitting,   // 座り込み
-    Sleeping,  // 寝ている
-    Gathering, // 集会中
+    Sitting,            // 座り込み
+    Sleeping,           // 寝ている
+    Gathering,          // 集会中
     ExhaustedGathering, // 疲労による集会移動中
 }
 
@@ -267,9 +267,7 @@ impl Default for AnimationState {
 }
 
 /// 人間をスポーンする
-pub fn spawn_damned_souls(
-    mut spawn_events: EventWriter<DamnedSoulSpawnEvent>,
-) {
+pub fn spawn_damned_souls(mut spawn_events: EventWriter<DamnedSoulSpawnEvent>) {
     // 3体の人間をスポーン
     let spawn_positions = [
         Vec2::new(-50.0, -50.0),
@@ -278,7 +276,9 @@ pub fn spawn_damned_souls(
     ];
 
     for spawn_pos in spawn_positions.iter() {
-        spawn_events.send(DamnedSoulSpawnEvent { position: *spawn_pos });
+        spawn_events.send(DamnedSoulSpawnEvent {
+            position: *spawn_pos,
+        });
     }
 }
 
@@ -370,7 +370,7 @@ pub fn pathfinding_system(
             continue;
         }
 
-        if let Some(grid_path) = find_path(&world_map, start_grid, goal_grid) {
+        if let Some(grid_path) = find_path(&*world_map, start_grid, goal_grid) {
             path.waypoints = grid_path
                 .iter()
                 .map(|&(x, y)| WorldMap::grid_to_world(x, y))

@@ -52,17 +52,27 @@ pub fn idle_behavior_system(
     world_map: Res<WorldMap>,
     gathering_area: Res<GatheringArea>,
     mut query: Query<(
+        Entity,
         &Transform,
         &mut IdleState,
         &mut Destination,
         &DamnedSoul,
         &Path,
         &AssignedTask,
+        Option<&crate::entities::familiar::UnderCommand>,
     )>,
 ) {
     let dt = time.delta_secs();
 
-    for (transform, mut idle, mut dest, soul, path, task) in query.iter_mut() {
+    for (_entity, transform, mut idle, mut dest, soul, path, task, under_command_opt) in
+        query.iter_mut()
+    {
+        // 使い魔の部下（UnderCommand を持つ）の場合は追従システムに任せる
+        if under_command_opt.is_some() {
+            idle.total_idle_time = 0.0;
+            continue;
+        }
+
         // タスクがある場合は放置時間をリセットし、怠惰行動も行わない
         if !matches!(task, AssignedTask::None) {
             idle.total_idle_time = 0.0;

@@ -31,6 +31,7 @@ pub enum MenuAction {
     SelectAreaTask,
     OpenOperationDialog,
     AdjustFatigueThreshold(f32),
+    AdjustMaxControlledSoul(isize),
     CloseDialog,
 }
 
@@ -82,6 +83,9 @@ pub struct OperationDialogFamiliarName;
 
 #[derive(Component)]
 pub struct OperationDialogThresholdText;
+
+#[derive(Component)]
+pub struct OperationDialogMaxSoulText;
 
 // ============================================================
 // UIセットアップ
@@ -634,9 +638,101 @@ pub fn setup_ui(mut commands: Commands) {
                     });
                 });
 
+            // Max Controlled Souls Adjustment
+            parent.spawn((
+                Text::new("Max Controlled Souls:"),
+                TextFont {
+                    font_size: 14.0,
+                    ..default()
+                },
+                TextColor(Color::srgb(0.6, 0.6, 0.6)),
+                Node {
+                    margin: UiRect {
+                        top: Val::Px(15.0),
+                        bottom: Val::Px(5.0),
+                        ..default()
+                    },
+                    ..default()
+                },
+            ));
+
+            parent
+                .spawn((
+                    Node {
+                        width: Val::Percent(100.0),
+                        flex_direction: FlexDirection::Row,
+                        justify_content: JustifyContent::Center,
+                        align_items: AlignItems::Center,
+                        padding: UiRect::vertical(Val::Px(10.0)),
+                        ..default()
+                    },
+                    BackgroundColor(Color::srgba(1.0, 1.0, 1.0, 0.05)),
+                ))
+                .with_children(|row| {
+                    row.spawn((
+                        Button,
+                        Node {
+                            width: Val::Px(30.0),
+                            height: Val::Px(30.0),
+                            justify_content: JustifyContent::Center,
+                            align_items: AlignItems::Center,
+                            ..default()
+                        },
+                        BackgroundColor(Color::srgb(0.3, 0.3, 0.3)),
+                        MenuButton(MenuAction::AdjustMaxControlledSoul(-1)),
+                    ))
+                    .with_children(|btn| {
+                        btn.spawn((
+                            Text::new("-"),
+                            TextFont {
+                                font_size: 20.0,
+                                ..default()
+                            },
+                            TextColor(Color::WHITE),
+                        ));
+                    });
+
+                    row.spawn((
+                        Text::new("1"),
+                        TextFont {
+                            font_size: 18.0,
+                            ..default()
+                        },
+                        TextColor(Color::WHITE),
+                        Node {
+                            margin: UiRect::horizontal(Val::Px(20.0)),
+                            ..default()
+                        },
+                        OperationDialogMaxSoulText,
+                    ));
+
+                    row.spawn((
+                        Button,
+                        Node {
+                            width: Val::Px(30.0),
+                            height: Val::Px(30.0),
+                            justify_content: JustifyContent::Center,
+                            align_items: AlignItems::Center,
+                            ..default()
+                        },
+                        BackgroundColor(Color::srgb(0.3, 0.3, 0.3)),
+                        MenuButton(MenuAction::AdjustMaxControlledSoul(1)),
+                    ))
+                    .with_children(|btn| {
+                        btn.spawn((
+                            Text::new("+"),
+                            TextFont {
+                                font_size: 20.0,
+                                ..default()
+                            },
+                            TextColor(Color::WHITE),
+                        ));
+                    });
+                });
+
             // Future slot hint
             parent.spawn((
-                Text::new("(More settings coming soon)"),
+                Text::new("(Settings automatically synced)"),
                 TextFont {
                     font_size: 10.0,
                     ..default()

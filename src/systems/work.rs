@@ -8,7 +8,9 @@ pub use crate::systems::task_queue::*;
 
 use crate::constants::*;
 use crate::entities::damned_soul::{DamnedSoul, Destination, IdleBehavior, IdleState, Path};
-use crate::entities::familiar::{ActiveCommand, FamiliarCommand, FamiliarOperation, UnderCommand};
+use crate::entities::familiar::{
+    ActiveCommand, Familiar, FamiliarCommand, FamiliarOperation, UnderCommand,
+};
 use crate::systems::command::TaskArea;
 use crate::systems::jobs::{
     Designation, DesignationCreatedEvent, IssuedBy, TaskCompletedEvent, TaskSlots, WorkType,
@@ -29,6 +31,8 @@ pub struct AutoHaulCounter;
 // システム実装
 // ============================================================
 
+/// 旧来のタスク委譲システム（現在は使い魔AIに移行したため未使用）
+#[allow(dead_code)]
 pub fn task_delegation_system(
     mut commands: Commands,
     q_familiars: Query<(Entity, &Transform, &FamiliarOperation), With<ActiveCommand>>,
@@ -274,18 +278,24 @@ pub fn task_delegation_system(
     }
 }
 
+/// 使い魔が Idle コマンドの場合、または使い魔が存在しない場合に部下をリリースする
 pub fn cleanup_commanded_souls_system(
     mut commands: Commands,
-    q_souls: Query<(Entity, &AssignedTask, &UnderCommand)>,
+    q_souls: Query<(Entity, &UnderCommand)>,
+    q_familiars: Query<&ActiveCommand, With<Familiar>>,
 ) {
-    for (soul_entity, task, under_command) in q_souls.iter() {
-        if matches!(task, AssignedTask::None) {
-            let fam_entity = under_command.0;
-            commands.entity(soul_entity).remove::<UnderCommand>();
+    for (soul_entity, under_command) in q_souls.iter() {
+        let should_release = match q_familiars.get(under_command.0) {
+            Ok(active_cmd) => matches!(active_cmd.command, FamiliarCommand::Idle),
+            Err(_) => true, // 使い魔が存在しない場合はリリース
+        };
+
+        if should_release {
             info!(
                 "RELEASE: Soul {:?} released from Familiar {:?}",
-                soul_entity, fam_entity
+                soul_entity, under_command.0
             );
+            commands.entity(soul_entity).remove::<UnderCommand>();
         }
     }
 }
