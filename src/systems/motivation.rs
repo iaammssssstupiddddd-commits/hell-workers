@@ -1,32 +1,40 @@
 use crate::constants::TILE_SIZE;
-use crate::entities::damned_soul::DamnedSoul;
+use crate::entities::damned_soul::{DamnedSoul, IdleBehavior, IdleState, StressBreakdown};
 use crate::entities::familiar::{ActiveCommand, Familiar, FamiliarCommand, UnderCommand};
 use crate::interface::camera::MainCamera;
 use crate::systems::work::{AssignedTask, FamiliarSpatialGrid};
 use bevy::prelude::*;
 
-/// やる気・怠惰の更新システム
-/// 使い魔の指定エリア内にいる人間はやる気が上がり、エリア外では怠惰に戻る
-/// タスクが割り当てられているワーカーはモチベーションを維持する
+/// やる気・怠惰・ストレスの更新システム
+/// ストレスはタスク実行中に増加し、待機・集会中に減少する
 pub fn motivation_system(
+    mut commands: Commands,
     time: Res<Time>,
     familiar_grid: Res<FamiliarSpatialGrid>,
     q_familiars: Query<(&Transform, &Familiar, &ActiveCommand)>,
     mut q_souls: Query<(
+        Entity,
         &Transform,
         &mut DamnedSoul,
-        &AssignedTask,
+        &mut AssignedTask,
+        &IdleState,
         Option<&UnderCommand>,
+        Option<&mut StressBreakdown>,
     )>,
 ) {
     let dt = time.delta_secs();
 
-    for (soul_transform, mut soul, task, under_command) in q_souls.iter_mut() {
+    for (entity, soul_transform, mut soul, mut task, idle, under_command, breakdown_opt) in
+        q_souls.iter_mut()
+    {
         let soul_pos = soul_transform.translation.truncate();
-        let has_task = !matches!(task, AssignedTask::None);
+        let has_task = !matches!(*task, AssignedTask::None);
+        let is_gathering = matches!(
+            idle.behavior,
+            IdleBehavior::Gathering | IdleBehavior::ExhaustedGathering
+        );
 
         // 空間グリッドを使用して近傍の使い魔のみをチェック
-        // 最大command_radiusはTILE_SIZE * 10.0なので、それより大きい範囲を検索
         let max_radius = TILE_SIZE * 10.0;
         let nearby_familiar_entities = familiar_grid.get_nearby_in_radius(soul_pos, max_radius);
 
@@ -55,21 +63,72 @@ pub fn motivation_system(
             })
             .fold(0.0_f32, |acc, x| acc.max(x));
 
+        // --- モチベーションと怠惰の更新 ---
         if best_influence > 0.0 {
-            // 使い魔の影響下：やる気が上がる
             soul.motivation = (soul.motivation + best_influence * dt * 4.0).min(1.0);
             soul.laziness = (soul.laziness - best_influence * dt * 2.5).max(0.0);
         } else if has_task || under_command.is_some() {
-            // タスクがあるか、使役状態の場合：モチベーションをゆっくり維持
-            // （使役状態なら遠くてもサボりにくい）
             soul.motivation = (soul.motivation - dt * 0.02).max(0.0);
             soul.laziness = (soul.laziness - dt * 0.1).max(0.0);
             soul.fatigue = (soul.fatigue + dt * 0.01).min(1.0);
         } else {
-            // 使い魔の影響外でタスクもなし：やる気が下がり、怠惰に戻る
             soul.motivation = (soul.motivation - dt * 0.1).max(0.0);
             soul.laziness = (soul.laziness + dt * 0.05).min(1.0);
             soul.fatigue = (soul.fatigue - dt * 0.05).max(0.0);
+        }
+
+        // --- ストレスの更新 ---
+        // タスク1つ約10-15秒、1-2タスクで100%に達するよう調整
+        // 約10秒で100% → 0.105/秒
+        if has_task {
+            // タスク実行中
+            if best_influence > 0.0 {
+                // 監視されながら働く = 高ストレス（約10秒で100%）
+                soul.stress = (soul.stress + best_influence * dt * 0.105).min(1.0);
+            } else {
+                // 監視なしで働く = 軽いストレス
+                soul.stress = (soul.stress + dt * 0.03).min(1.0);
+            }
+        } else if is_gathering {
+            // 集会中 = 最速回復（約25秒で0%）
+            soul.stress = (soul.stress - dt * 0.04).max(0.0);
+        } else if under_command.is_some() || best_influence > 0.0 {
+            // 待機中（範囲内）= 変化なし
+            // 何もしない
+        } else {
+            // 待機中（範囲外）= リラックス（約50秒で0%）
+            soul.stress = (soul.stress - dt * 0.02).max(0.0);
+        }
+
+        // --- ブレイクダウン状態管理 ---
+        if soul.stress >= 1.0 {
+            // ストレス限界 → ブレイクダウン発動
+            if breakdown_opt.is_none() {
+                commands
+                    .entity(entity)
+                    .insert(StressBreakdown { is_frozen: true });
+                // タスクを放棄
+                if has_task {
+                    *task = AssignedTask::None;
+                    info!("STRESS: Soul {:?} abandoned task due to breakdown", entity);
+                }
+                // 使役を解除
+                if under_command.is_some() {
+                    commands.entity(entity).remove::<UnderCommand>();
+                    info!(
+                        "STRESS: Soul {:?} entered breakdown, released from command",
+                        entity
+                    );
+                }
+            }
+        } else if let Some(mut breakdown) = breakdown_opt {
+            if soul.stress <= 0.7 {
+                // 完全回復 → ブレイクダウン解除
+                commands.entity(entity).remove::<StressBreakdown>();
+            } else if soul.stress <= 0.9 && breakdown.is_frozen {
+                // 動けるようになる（使役はまだ拒否）
+                breakdown.is_frozen = false;
+            }
         }
     }
 }

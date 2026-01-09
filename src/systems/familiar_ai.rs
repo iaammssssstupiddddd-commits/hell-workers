@@ -3,7 +3,9 @@
 //! 使い魔の自律行動（ステートマシン）を管理します。
 
 use crate::constants::*;
-use crate::entities::damned_soul::{DamnedSoul, Destination, IdleBehavior, IdleState, Path};
+use crate::entities::damned_soul::{
+    DamnedSoul, Destination, IdleBehavior, IdleState, Path, StressBreakdown,
+};
 use crate::entities::familiar::{
     ActiveCommand, Familiar, FamiliarCommand, FamiliarOperation, UnderCommand,
 };
@@ -88,6 +90,7 @@ pub fn familiar_ai_system(
     )>,
     q_stockpiles: Query<(Entity, &Transform, &Stockpile)>,
     q_souls_lite: Query<(Entity, &UnderCommand), With<DamnedSoul>>,
+    q_breakdown: Query<&StressBreakdown>,
 ) {
     for (
         fam_entity,
@@ -154,10 +157,13 @@ pub fn familiar_ai_system(
                 {
                     // 疲労が閾値未満のsoulを探す（疲労が低いsoulも使役可能）
                     let fatigue_ok = soul.fatigue < fatigue_threshold;
-                    
+                    // ブレイクダウン中は使役不可
+                    let stress_ok = q_breakdown.get(target_soul).is_err();
+
                     if uc.is_none()
                         && matches!(*task, AssignedTask::None)
                         && fatigue_ok
+                        && stress_ok
                         && idle.behavior != IdleBehavior::ExhaustedGathering
                     {
                         let target_pos = target_transform.translation.truncate();
@@ -171,7 +177,7 @@ pub fn familiar_ai_system(
                                 .entity(target_soul)
                                 .insert(UnderCommand(fam_entity));
                             squad_members_entities.push(target_soul);
-                            
+
                             // リクルート後、分隊が満員になった場合は監視モードに移行
                             if squad_members_entities.len() >= max_workers {
                                 *ai_state = FamiliarAiState::Supervising;
@@ -201,6 +207,7 @@ pub fn familiar_ai_system(
                     0.0, // 互換性のため（実際には使用しない）
                     &*spatial_grid,
                     &q_souls,
+                    &q_breakdown,
                     Some(TILE_SIZE * 20.0),
                 ) {
                     info!(
@@ -211,7 +218,7 @@ pub fn familiar_ai_system(
                         .entity(new_recruit)
                         .insert(UnderCommand(fam_entity));
                     squad_members_entities.push(new_recruit);
-                    
+
                     // リクルート後、分隊が満員になった場合は監視モードに移行
                     if squad_members_entities.len() >= max_workers {
                         *ai_state = FamiliarAiState::Supervising;
@@ -220,9 +227,15 @@ pub fn familiar_ai_system(
                     }
                 } else {
                     // 遠くを探す（閾値より20%下以上、閾値未満のsoulを探す）
-                    if let Some(distant_recruit) =
-                        find_best_recruit(fam_pos, fatigue_threshold, 0.0, &*spatial_grid, &q_souls, None)
-                    {
+                    if let Some(distant_recruit) = find_best_recruit(
+                        fam_pos,
+                        fatigue_threshold,
+                        0.0,
+                        &*spatial_grid,
+                        &q_souls,
+                        &q_breakdown,
+                        None,
+                    ) {
                         info!(
                             "FAMILIAR_AI: {:?} spotted distant soul {:?}, moving to recruit ({}/{})",
                             fam_entity,
@@ -272,7 +285,7 @@ pub fn familiar_ai_system(
             }
             continue;
         }
-        
+
         // 分隊が満員になった場合は監視モードに移行
         if squad_members_entities.len() >= max_workers {
             if *ai_state != FamiliarAiState::Supervising {
@@ -285,7 +298,7 @@ pub fn familiar_ai_system(
                 *ai_state = FamiliarAiState::Supervising;
             }
         }
-        
+
         // --------------------------------------------------------
         // 優先度2: タスクの移譲 (Delegation)
         // --------------------------------------------------------
@@ -427,6 +440,7 @@ fn find_best_recruit(
         ),
         Without<Familiar>,
     >,
+    q_breakdown: &Query<&StressBreakdown>,
     radius_opt: Option<f32>,
 ) -> Option<Entity> {
     let mut candidates = Vec::new();
@@ -436,13 +450,15 @@ fn find_best_recruit(
         let nearby = spatial_grid.get_nearby_in_radius(fam_pos, radius);
         for &e in &nearby {
             if let Ok((entity, transform, soul, task, _, _, idle, uc)) = q_souls.get(e) {
-                // 閾値より20%下以上、閾値未満のsoulを探す
-                // 疲労が閾値未満のsoulを探す（疲労が低いsoulも使役可能）
+                // 疲労が閾値未満のsoulを探す
                 let fatigue_ok = soul.fatigue < fatigue_threshold;
-                
+                // ブレイクダウン中は使役不可
+                let stress_ok = q_breakdown.get(entity).is_err();
+
                 if uc.is_none()
                     && matches!(*task, AssignedTask::None)
                     && fatigue_ok
+                    && stress_ok
                     && idle.behavior != IdleBehavior::ExhaustedGathering
                 {
                     candidates.push((entity, transform.translation.truncate()));
@@ -452,20 +468,21 @@ fn find_best_recruit(
     } else {
         // 全域検索
         for (entity, transform, soul, task, _, _, idle, uc) in q_souls.iter() {
-            // 閾値より20%下以上、閾値未満のsoulを探す
-            // 疲労が低いsoul（0.0など）も使役可能
+            // 疲労が閾値未満のsoulを探す
             let min_fatigue = if fatigue_threshold >= 0.2 {
                 fatigue_threshold - 0.2
             } else {
                 0.0
             };
-            // 疲労がmin_fatigue以上、閾値未満、または疲労が0.0以上min_fatigue未満（疲労が低いsoulも使役可能）
             let fatigue_ok = (soul.fatigue >= min_fatigue && soul.fatigue < fatigue_threshold)
                 || (soul.fatigue < min_fatigue);
-            
+            // ブレイクダウン中は使役不可
+            let stress_ok = q_breakdown.get(entity).is_err();
+
             if uc.is_none()
                 && matches!(*task, AssignedTask::None)
                 && fatigue_ok
+                && stress_ok
                 && idle.behavior != IdleBehavior::ExhaustedGathering
             {
                 candidates.push((entity, transform.translation.truncate()));
@@ -586,7 +603,8 @@ fn assign_task_to_worker(
         slots.current += 1;
     }
 
-    let Ok((_, _, soul, mut assigned_task, mut dest, mut path, idle, _)) = q_souls.get_mut(worker_entity)
+    let Ok((_, _, soul, mut assigned_task, mut dest, mut path, idle, _)) =
+        q_souls.get_mut(worker_entity)
     else {
         return;
     };

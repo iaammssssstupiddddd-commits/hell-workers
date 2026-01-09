@@ -122,9 +122,9 @@ pub fn info_panel_system(
             };
 
             job_text.0 = format!(
-                "Motivation: {:.0}%\nLaziness: {:.0}%\nFatigue: {:.0}%\nTask: {}\n{}",
+                "Motivation: {:.0}%\nStress: {:.0}%\nFatigue: {:.0}%\nTask: {}\n{}",
                 soul.motivation * 100.0,
-                soul.laziness * 100.0,
+                soul.stress * 100.0,
                 soul.fatigue * 100.0,
                 task_str,
                 inv_str
