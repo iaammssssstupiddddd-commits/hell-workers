@@ -155,9 +155,10 @@ impl SoulIdentity {
 pub struct DamnedSoul {
     #[allow(dead_code)]
     pub sin_type: SinType,
-    pub laziness: f32,   // 怠惰レベル (0.0-1.0) - 高いほど怠惰
+    pub laziness: f32,   // 怠惰レベル (0.0-1.0) - 内部ステータス
     pub motivation: f32, // やる気 (0.0-1.0) - 高いほど働く
     pub fatigue: f32,    // 疲労 (0.0-1.0) - 高いほど疲れている
+    pub stress: f32,     // ストレス (0.0-1.0) - 使い魔監視下で増加
     // UI参照
     pub bar_entity: Option<Entity>,
     pub icon_entity: Option<Entity>,
@@ -170,6 +171,7 @@ impl Default for DamnedSoul {
             laziness: 0.7,   // デフォルトで怠惰
             motivation: 0.1, // デフォルトでやる気なし
             fatigue: 0.0,
+            stress: 0.0, // デフォルトでストレスなし
             bar_entity: None,
             icon_entity: None,
         }
@@ -184,6 +186,14 @@ pub enum SinType {
     Sloth, // 怠惰
     Greed, // 強欲
     Wrath, // 憤怒
+}
+
+/// ストレスによるブレイクダウン状態
+/// stress >= 1.0 で付与され、stress <= 0.7 で削除される
+#[derive(Component, Debug, Clone, Copy, Default)]
+pub struct StressBreakdown {
+    /// 停止中（stress > 0.9）- 動けない
+    pub is_frozen: bool,
 }
 
 /// 怠惰状態のコンポーネント
@@ -401,9 +411,18 @@ pub fn soul_movement(
         &mut AnimationState,
         &DamnedSoul,
         &IdleState,
+        Option<&StressBreakdown>,
     )>,
 ) {
-    for (entity, mut transform, mut path, mut anim, soul, idle) in query.iter_mut() {
+    for (entity, mut transform, mut path, mut anim, soul, idle, breakdown_opt) in query.iter_mut() {
+        // ブレイクダウンで停止中の場合は動けない
+        if let Some(breakdown) = breakdown_opt {
+            if breakdown.is_frozen {
+                anim.is_moving = false;
+                continue;
+            }
+        }
+
         if path.current_index < path.waypoints.len() {
             let target = path.waypoints[path.current_index];
             let current_pos = transform.translation.truncate();
