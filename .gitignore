@@ -44,4 +44,6 @@ Thumbs.db
 # IDE
 .vscode/
 .idea/
+.cursor/
 *.iml
+/proposals

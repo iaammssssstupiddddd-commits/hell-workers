@@ -8,7 +8,7 @@ mod world;
 use crate::assets::GameAssets;
 use crate::world::map::{WorldMap, spawn_map};
 use bevy::prelude::*;
-use bevy::time::common_conditions::on_timer;
+use bevy::time::common_conditions::*;
 use std::time::Duration;
 
 // 新システム
@@ -30,10 +30,6 @@ use crate::systems::fatigue::{fatigue_penalty_system, fatigue_update_system};
 use crate::systems::idle::{gathering_separation_system, idle_behavior_system, idle_visual_system};
 use crate::systems::jobs::{DesignationCreatedEvent, TaskCompletedEvent};
 use crate::systems::motivation::{familiar_hover_visualization_system, motivation_system};
-use crate::systems::spatial::{
-    FamiliarSpatialGrid, ResourceSpatialGrid, SpatialGrid, update_familiar_spatial_grid_system,
-    update_resource_spatial_grid_system, update_spatial_grid_system,
-};
 use crate::systems::stress::{stress_system, supervision_stress_system};
 use crate::systems::task_execution::task_execution_system;
 use crate::systems::task_queue::{GlobalTaskQueue, TaskQueue, queue_management_system};
@@ -43,6 +39,13 @@ use crate::systems::visuals::{
 };
 use crate::systems::work::{
     AutoHaulCounter, cleanup_commanded_souls_system, task_area_auto_haul_system,
+};
+use crate::systems::{
+    GameSystemSet,
+    spatial::{
+        FamiliarSpatialGrid, ResourceSpatialGrid, SpatialGrid, update_familiar_spatial_grid_system,
+        update_resource_spatial_grid_system, update_spatial_grid_system,
+    },
 };
 
 // 既存システム
@@ -107,6 +110,19 @@ fn main() {
         .add_message::<TaskCompletedEvent>()
         .add_message::<DamnedSoulSpawnEvent>()
         .add_message::<FamiliarSpawnEvent>()
+        // システムセットの構成
+        .configure_sets(
+            Update,
+            (
+                GameSystemSet::Input,
+                GameSystemSet::Spatial.run_if(|time: Res<Time<Virtual>>| !time.is_paused()),
+                GameSystemSet::Logic.run_if(|time: Res<Time<Virtual>>| !time.is_paused()),
+                GameSystemSet::Actor.run_if(|time: Res<Time<Virtual>>| !time.is_paused()),
+                GameSystemSet::Visual,
+                GameSystemSet::Interface,
+            )
+                .chain(),
+        )
         // Startup systems
         .add_systems(Startup, setup)
         .add_systems(
@@ -123,103 +139,115 @@ fn main() {
             )
                 .chain(),
         )
-        // Update systems - Interface & Global
+        // Update systems
         .add_systems(
             Update,
-            (
-                // カメラ & 入力
-                (camera_movement, camera_zoom, handle_mouse_input),
-                // 選択 & 配置
-                (
-                    update_hover_entity,
-                    update_selection_indicator,
-                    hover_tooltip_system,
-                    blueprint_placement,
-                    zone_placement,
-                    item_spawner_system,
-                ),
-                // UI ボタン・メニュー系
-                (
-                    ui_interaction_system,
-                    menu_visibility_system,
-                    info_panel_system,
-                ),
-                // ステータス・テキスト更新系
-                (
-                    update_mode_text_system,
-                    familiar_context_menu_system,
-                    task_summary_ui_system,
-                    update_operation_dialog_system,
-                    resource_count_display_system,
-                ),
-                // 使い魔・時間・その他
-                (
-                    update_familiar_range_indicator,
-                    game_time_system,
-                    time_control_keyboard_system,
-                    time_control_ui_system,
-                    debug_spawn_system,
-                ),
-            ),
+            (camera_movement, camera_zoom, handle_mouse_input).in_set(GameSystemSet::Input),
         )
-        // Update systems - Core Logic & Visuals
         .add_systems(
             Update,
             (
-                // ロジックチェーン (直列実行を強制して不整合を防ぐ)
-                (
-                    cleanup_commanded_souls_system,
-                    update_spatial_grid_system,
-                    update_familiar_spatial_grid_system,
-                    update_resource_spatial_grid_system,
-                    queue_management_system,
-                    familiar_ai_system,        // 新ステートマシンAI
-                    following_familiar_system, // 部下の追従システム
-                    // task_delegation_system, // 既存の自動委譲（AIに移行したため無効化）
-                    task_execution_system,
-                    assign_task_system,
-                )
-                    .chain(),
-                // 視覚系などの非依存システム
-                (
-                    progress_bar_system,
-                    update_progress_bar_fill_system,
-                    stress_system,
-                    supervision_stress_system,
+                update_spatial_grid_system,
+                update_familiar_spatial_grid_system,
+                update_resource_spatial_grid_system,
+            )
+                .in_set(GameSystemSet::Spatial),
+        )
+        .add_systems(
+            Update,
+            (
+                cleanup_commanded_souls_system,
+                queue_management_system,
+                familiar_ai_system,
+                following_familiar_system,
+                task_execution_system,
+                assign_task_system,
+            )
+                .chain()
+                .in_set(GameSystemSet::Logic),
+        )
+        .add_systems(
+            Update,
+            (
+                familiar_command_input_system,
+                task_area_selection_system,
+                task_area_indicator_system,
+                area_selection_indicator_system
+                    .run_if(|mode: Res<TaskMode>| *mode != TaskMode::None),
+                designation_visual_system,
+                update_designation_indicator_system,
+                familiar_command_visual_system,
+                motivation_system,
+                fatigue_update_system,
+                fatigue_penalty_system,
+                familiar_hover_visualization_system.run_if(
+                    |hovered: Res<crate::interface::selection::HoveredEntity>| hovered.0.is_some(),
                 ),
-                // Hell Workers core systems & Logic chain
-                (
-                    familiar_command_input_system,
-                    task_area_selection_system,
-                    task_area_indicator_system,
-                    area_selection_indicator_system,
-                    designation_visual_system,
-                    update_designation_indicator_system,
-                    familiar_command_visual_system,
-                    motivation_system,
-                    fatigue_update_system,
-                    fatigue_penalty_system,
-                    familiar_hover_visualization_system,
-                    idle_behavior_system,
-                    idle_visual_system,
-                    gathering_separation_system,
-                    pathfinding_system,
-                    soul_movement,
-                    familiar_movement,
-                    soul_spawning_system,
-                    familiar_spawning_system,
-                )
-                    .chain(),
-                // 表示同期システム (移動の後に実行してジッターを防ぐ)
-                (
-                    sync_progress_bar_position_system,
-                    soul_status_visual_system,
-                    task_link_system,
-                    building_completion_system,
-                    animation_system,
-                )
-                    .chain(),
-            ),
+                idle_behavior_system,
+                idle_visual_system,
+                gathering_separation_system,
+                soul_spawning_system,
+                familiar_spawning_system,
+                stress_system,
+                supervision_stress_system,
+            )
+                .chain()
+                .in_set(GameSystemSet::Logic),
+        )
+        .add_systems(
+            Update,
+            (pathfinding_system, soul_movement, familiar_movement)
+                .chain()
+                .in_set(GameSystemSet::Actor),
+        )
+        .add_systems(
+            Update,
+            (
+                progress_bar_system,
+                update_progress_bar_fill_system,
+                sync_progress_bar_position_system,
+                soul_status_visual_system,
+                task_link_system,
+                building_completion_system,
+                animation_system,
+            )
+                .chain()
+                .in_set(GameSystemSet::Visual),
+        )
+        .add_systems(
+            Update,
+            (
+                update_hover_entity,
+                update_selection_indicator.run_if(
+                    |selected: Res<crate::interface::selection::SelectedEntity>| {
+                        selected.0.is_some()
+                    },
+                ),
+                hover_tooltip_system,
+                blueprint_placement,
+                zone_placement,
+                item_spawner_system,
+                ui_interaction_system,
+                menu_visibility_system,
+                info_panel_system,
+                update_mode_text_system,
+            )
+                .in_set(GameSystemSet::Interface),
+        )
+        .add_systems(
+            Update,
+            (
+                familiar_context_menu_system,
+                task_summary_ui_system,
+                update_operation_dialog_system,
+                resource_count_display_system,
+                update_familiar_range_indicator,
+                game_time_system,
+                time_control_keyboard_system,
+                time_control_ui_system,
+                debug_spawn_system,
+            )
+                .in_set(GameSystemSet::Interface),
         )
         // Timer-based systems for performance optimization (0.5s interval)
         .add_systems(

@@ -12,3 +12,22 @@ pub mod task_queue;
 pub mod time;
 pub mod visuals;
 pub mod work;
+
+use bevy::prelude::*;
+
+/// ゲームシステムの実行順序を制御するセット
+#[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
+pub enum GameSystemSet {
+    /// 入力およびカメラの更新
+    Input,
+    /// UI・エンティティ選択・インタラクション
+    Interface,
+    /// 空間グリッドの更新 (最優先のデータ更新)
+    Spatial,
+    /// AI・タスク管理・リソース配分などのコアロジック
+    Logic,
+    /// エンティティの移動・アニメーション (ロジックに基づく実際のアクション)
+    Actor,
+    /// 視覚的な同期処理 (移動完了後の描画追従)
+    Visual,
+}
