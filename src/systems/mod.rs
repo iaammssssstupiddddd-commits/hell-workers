@@ -1,10 +1,12 @@
 pub mod command;
 pub mod familiar_ai;
+pub mod fatigue;
 pub mod idle;
 pub mod jobs;
 pub mod logistics;
 pub mod motivation;
 pub mod spatial;
+pub mod stress;
 pub mod task_execution;
 pub mod task_queue;
 pub mod time;

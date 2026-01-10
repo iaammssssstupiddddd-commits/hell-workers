@@ -26,15 +26,15 @@ use crate::systems::command::{
     task_area_selection_system, update_designation_indicator_system,
 };
 use crate::systems::familiar_ai::{familiar_ai_system, following_familiar_system};
+use crate::systems::fatigue::{fatigue_penalty_system, fatigue_update_system};
 use crate::systems::idle::{gathering_separation_system, idle_behavior_system, idle_visual_system};
 use crate::systems::jobs::{DesignationCreatedEvent, TaskCompletedEvent};
-use crate::systems::motivation::{
-    familiar_hover_visualization_system, fatigue_system, motivation_system,
-};
+use crate::systems::motivation::{familiar_hover_visualization_system, motivation_system};
 use crate::systems::spatial::{
     FamiliarSpatialGrid, ResourceSpatialGrid, SpatialGrid, update_familiar_spatial_grid_system,
     update_resource_spatial_grid_system, update_spatial_grid_system,
 };
+use crate::systems::stress::{stress_system, supervision_stress_system};
 use crate::systems::task_execution::task_execution_system;
 use crate::systems::task_queue::{GlobalTaskQueue, TaskQueue, queue_management_system};
 use crate::systems::visuals::{
@@ -181,7 +181,12 @@ fn main() {
                 )
                     .chain(),
                 // 視覚系などの非依存システム
-                (progress_bar_system, update_progress_bar_fill_system),
+                (
+                    progress_bar_system,
+                    update_progress_bar_fill_system,
+                    stress_system,
+                    supervision_stress_system,
+                ),
                 // Hell Workers core systems & Logic chain
                 (
                     familiar_command_input_system,
@@ -192,7 +197,8 @@ fn main() {
                     update_designation_indicator_system,
                     familiar_command_visual_system,
                     motivation_system,
-                    fatigue_system,
+                    fatigue_update_system,
+                    fatigue_penalty_system,
                     familiar_hover_visualization_system,
                     idle_behavior_system,
                     idle_visual_system,
