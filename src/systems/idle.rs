@@ -60,13 +60,23 @@ pub fn idle_behavior_system(
         &DamnedSoul,
         &mut Path,
         &mut AssignedTask,
+        &mut crate::systems::logistics::Inventory,
         Option<&crate::entities::familiar::UnderCommand>,
     )>,
 ) {
     let dt = time.delta_secs();
 
-    for (entity, transform, mut idle, mut dest, soul, mut path, mut task, under_command_opt) in
-        query.iter_mut()
+    for (
+        entity,
+        transform,
+        mut idle,
+        mut dest,
+        soul,
+        mut path,
+        mut task,
+        mut inventory,
+        under_command_opt,
+    ) in query.iter_mut()
     {
         // 集会エリアへの距離をチェック
         let current_pos = transform.translation.truncate();
@@ -78,9 +88,29 @@ pub fn idle_behavior_system(
         if soul.fatigue > FATIGUE_GATHERING_THRESHOLD {
             // 使役状態を解除
             if under_command_opt.is_some() {
-                commands.entity(entity).remove::<crate::entities::familiar::UnderCommand>();
+                commands
+                    .entity(entity)
+                    .remove::<crate::entities::familiar::UnderCommand>();
             }
-            
+
+            // タスク放棄とアイテムドロップ
+            if !matches!(*task, AssignedTask::None) {
+                if let Some(item_entity) = inventory.0.take() {
+                    commands.entity(item_entity).insert((
+                        Visibility::Visible,
+                        Transform::from_xyz(current_pos.x, current_pos.y, 0.6),
+                    ));
+                    commands
+                        .entity(item_entity)
+                        .remove::<crate::systems::logistics::ClaimedBy>();
+                }
+                *task = AssignedTask::None;
+                info!(
+                    "FATIGUE: Soul {:?} abandoned task due to exhaustion",
+                    entity
+                );
+            }
+
             // ExhaustedGatheringに移行
             if idle.behavior != IdleBehavior::ExhaustedGathering {
                 if idle.behavior != IdleBehavior::Gathering {
@@ -94,7 +124,7 @@ pub fn idle_behavior_system(
                 let mut rng = rand::thread_rng();
                 idle.behavior_duration = rng.gen_range(2.0..4.0);
             }
-            
+
             // 集会エリアへ向かう
             if !has_arrived {
                 if path.waypoints.is_empty() || path.current_index >= path.waypoints.len() {
@@ -102,7 +132,7 @@ pub fn idle_behavior_system(
                     path.waypoints.clear();
                 }
             }
-            
+
             // ExhaustedGathering状態の場合は他の処理をスキップ
             continue;
         }
