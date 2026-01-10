@@ -51,8 +51,8 @@ pub fn task_delegation_system(
     mut q_designations: Query<(&Transform, &Designation, &mut TaskSlots)>,
     mut queue: ResMut<TaskQueue>,
     spatial_grid: Res<SpatialGrid>,
-    mut ev_created: EventReader<DesignationCreatedEvent>,
-    mut ev_completed: EventReader<TaskCompletedEvent>,
+    mut ev_created: MessageReader<DesignationCreatedEvent>,
+    mut ev_completed: MessageReader<TaskCompletedEvent>,
 ) {
     // イベントがあるか、キューが空でない場合のみ実行
     if ev_created.is_empty()
@@ -315,7 +315,7 @@ pub fn task_area_auto_haul_system(
             Without<ClaimedBy>,
         ),
     >,
-    mut ev_created: EventWriter<DesignationCreatedEvent>,
+    mut ev_created: MessageWriter<DesignationCreatedEvent>,
 ) {
     for (fam_entity, active_command, task_area) in q_familiars.iter() {
         if matches!(active_command.command, FamiliarCommand::Idle) {
@@ -366,7 +366,7 @@ pub fn task_area_auto_haul_system(
                     IssuedBy(fam_entity),
                     TaskSlots::new(1),
                 ));
-                ev_created.send(DesignationCreatedEvent {
+                ev_created.write(DesignationCreatedEvent {
                     entity: item_entity,
                     work_type: WorkType::Haul,
                     issued_by: Some(fam_entity),

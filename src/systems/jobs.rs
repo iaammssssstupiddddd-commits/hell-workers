@@ -4,7 +4,7 @@ use bevy::prelude::*;
 
 // --- Events ---
 
-#[derive(Event)]
+#[derive(Message)]
 pub struct DesignationCreatedEvent {
     pub entity: Entity,
     pub work_type: WorkType,
@@ -12,7 +12,7 @@ pub struct DesignationCreatedEvent {
     pub priority: u32,
 }
 
-#[derive(Event)]
+#[derive(Message)]
 pub struct TaskCompletedEvent {
     pub _soul_entity: Entity,
     pub _task_type: WorkType,

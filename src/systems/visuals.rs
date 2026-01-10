@@ -44,7 +44,7 @@ pub fn progress_bar_system(
                     ))
                     .id();
 
-                commands
+                let _fill_entity = commands
                     .spawn((
                         ProgressBarFill,
                         Sprite {
@@ -53,13 +53,14 @@ pub fn progress_bar_system(
                             ..default()
                         },
                         Transform::from_translation(Vec3::new(0.0, 0.0, 0.1)),
+                        ChildOf(bar_background),
                     ))
-                    .set_parent(bar_background);
+                    .id();
 
                 soul.bar_entity = Some(bar_background);
             }
         } else if let Some(bar_entity) = soul.bar_entity.take() {
-            commands.entity(bar_entity).despawn_recursive();
+            commands.entity(bar_entity).despawn();
         }
     }
 }
@@ -67,10 +68,10 @@ pub fn progress_bar_system(
 pub fn update_progress_bar_fill_system(
     q_souls: Query<&AssignedTask, With<DamnedSoul>>,
     q_bars: Query<&ProgressBar>,
-    mut q_fills: Query<(&mut Transform, &Parent), With<ProgressBarFill>>,
+    mut q_fills: Query<(&mut Transform, &ChildOf), With<ProgressBarFill>>,
 ) {
     for (mut fill_transform, parent) in q_fills.iter_mut() {
-        if let Ok(bar) = q_bars.get(parent.get()) {
+        if let Ok(bar) = q_bars.get(parent.0) {
             if let Ok(task) = q_souls.get(bar.parent) {
                 if let AssignedTask::Gather {
                     phase: GatherPhase::Collecting { progress },
@@ -184,7 +185,7 @@ pub fn soul_status_visual_system(
                 soul.icon_entity = Some(icon_id);
             }
         } else if let Some(icon_entity) = soul.icon_entity.take() {
-            commands.entity(icon_entity).despawn_recursive();
+            commands.entity(icon_entity).despawn();
         }
     }
 }

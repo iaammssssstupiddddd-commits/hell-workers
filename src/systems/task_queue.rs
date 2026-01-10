@@ -70,7 +70,7 @@ impl GlobalTaskQueue {
 pub fn queue_management_system(
     mut queue: ResMut<TaskQueue>,
     mut global_queue: ResMut<GlobalTaskQueue>,
-    mut ev_created: EventReader<DesignationCreatedEvent>,
+    mut ev_created: MessageReader<DesignationCreatedEvent>,
 ) {
     for ev in ev_created.read() {
         let task = PendingTask {

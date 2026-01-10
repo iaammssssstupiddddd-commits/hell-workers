@@ -40,21 +40,21 @@ pub fn menu_visibility_system(
         ),
     >,
 ) {
-    if let Ok(mut node) = q_architect.get_single_mut() {
+    if let Ok(mut node) = q_architect.single_mut() {
         node.display = if matches!(*menu_state, MenuState::Architect) {
             Display::Flex
         } else {
             Display::None
         };
     }
-    if let Ok(mut node) = q_zones.get_single_mut() {
+    if let Ok(mut node) = q_zones.single_mut() {
         node.display = if matches!(*menu_state, MenuState::Zones) {
             Display::Flex
         } else {
             Display::None
         };
     }
-    if let Ok(mut node) = q_orders.get_single_mut() {
+    if let Ok(mut node) = q_orders.single_mut() {
         node.display = if matches!(*menu_state, MenuState::Orders) {
             Display::Flex
         } else {
@@ -84,12 +84,12 @@ pub fn info_panel_system(
     q_trees: Query<&crate::systems::jobs::Tree>,
     q_rocks: Query<&crate::systems::jobs::Rock>,
 ) {
-    let mut panel_node = q_panel.single_mut();
+    let Ok(mut panel_node) = q_panel.single_mut() else { return; };
     panel_node.display = Display::None;
 
     if let Some(entity) = selected.0 {
-        let mut header_text = q_text_header.single_mut();
-        let mut job_text = q_text_job.single_mut();
+        let Ok(mut header_text) = q_text_header.single_mut() else { return; };
+        let Ok(mut job_text) = q_text_job.single_mut() else { return; };
 
         if let Ok((soul, task, inventory, identity_opt)) = q_souls.get(entity) {
             panel_node.display = Display::Flex;
@@ -177,11 +177,11 @@ pub fn familiar_context_menu_system(
         }
 
         for entity in q_context_menu.iter() {
-            commands.entity(entity).despawn_recursive();
+            commands.entity(entity).despawn();
         }
 
-        let (camera, camera_transform) = q_camera.single();
-        let window = q_window.single();
+        let Ok((camera, camera_transform)) = q_camera.single() else { return; };
+        let Ok(window) = q_window.single() else { return; };
 
         if let Some(cursor_pos) = window.cursor_position() {
             if let Ok(world_pos) = camera.viewport_to_world_2d(camera_transform, cursor_pos) {

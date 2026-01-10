@@ -38,7 +38,7 @@ pub fn game_time_system(
 
     game_time.day = (total_hours / 24) + 1;
 
-    if let Ok(mut text) = q_clock.get_single_mut() {
+    if let Ok(mut text) = q_clock.single_mut() {
         text.0 = format!(
             "Day {}, {:02}:{:02}",
             game_time.day, game_time.hour, game_time.minute
