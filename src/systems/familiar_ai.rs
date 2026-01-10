@@ -146,7 +146,24 @@ pub fn familiar_ai_system(
         // --------------------------------------------------------
         // 優先度1: 使役数の確保 (Scouting / Recruitment)
         // --------------------------------------------------------
-        // 【重要】スカウトは Idle コマンド中であっても分隊維持のために行う
+
+        // コマンドが Idle ならリクルート（スカウト・勧誘）を行わない
+        if matches!(active_command.command, FamiliarCommand::Idle) {
+            if *ai_state != FamiliarAiState::Idle {
+                info!(
+                    "FAMILIAR_AI: {:?} is now Idle (squad: {})",
+                    fam_entity,
+                    squad_members_entities.len()
+                );
+                *ai_state = FamiliarAiState::Idle;
+            }
+
+            // スカウト中だった場合は中断
+            fam_dest.0 = fam_pos;
+            fam_path.waypoints.clear();
+            continue;
+        }
+
         let mut force_dest = None;
         let max_workers = familiar_op.max_controlled_soul;
 
@@ -261,32 +278,7 @@ pub fn familiar_ai_system(
             }
         }
 
-        // コマンドが Idle ならここで中断（ただしスカウト移動があるなら移動は行う）
-        if matches!(active_command.command, FamiliarCommand::Idle) {
-            if *ai_state != FamiliarAiState::Idle
-                && !matches!(*ai_state, FamiliarAiState::Scouting { .. })
-            {
-                info!(
-                    "FAMILIAR_AI: {:?} is now Idle (squad: {})",
-                    fam_entity,
-                    squad_members_entities.len()
-                );
-                *ai_state = FamiliarAiState::Idle;
-            }
-
-            if let Some(dest) = force_dest {
-                fam_dest.0 = dest;
-                fam_path.waypoints = vec![dest];
-                fam_path.current_index = 0;
-            } else if !matches!(*ai_state, FamiliarAiState::Scouting { .. }) {
-                // 待機中かつスカウトもしていないなら停止
-                fam_dest.0 = fam_pos;
-                fam_path.waypoints.clear();
-            }
-            continue;
-        }
-
-        // 分隊が満員になった場合は監視モードに移行
+        // 分隊が満員になった場合は監視モードに移行 (二重チェックになるが安全のため維持)
         if squad_members_entities.len() >= max_workers {
             if *ai_state != FamiliarAiState::Supervising {
                 info!(
