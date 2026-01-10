@@ -106,7 +106,7 @@ pub fn task_area_selection_system(
         Option<&ResourceItem>,
     )>,
     mut commands: Commands,
-    mut ev_created: EventWriter<DesignationCreatedEvent>,
+    mut ev_created: MessageWriter<DesignationCreatedEvent>,
     keyboard: Res<ButtonInput<KeyCode>>,
     // 未アサインタスク割り当て用
     q_unassigned: Query<(Entity, &Transform, &Designation), Without<IssuedBy>>,
@@ -122,8 +122,8 @@ pub fn task_area_selection_system(
     }
 
     if buttons.just_pressed(MouseButton::Left) {
-        let (camera, camera_transform) = q_camera.single();
-        let window = q_window.single();
+        let Ok((camera, camera_transform)) = q_camera.single() else { return; };
+        let Ok(window) = q_window.single() else { return; };
         if let Some(cursor_pos) = window.cursor_position() {
             if let Ok(world_pos) = camera.viewport_to_world_2d(camera_transform, cursor_pos) {
                 match *task_mode {
@@ -152,8 +152,8 @@ pub fn task_area_selection_system(
     }
 
     if buttons.just_released(MouseButton::Left) {
-        let (camera, camera_transform) = q_camera.single();
-        let window = q_window.single();
+        let Ok((camera, camera_transform)) = q_camera.single() else { return; };
+        let Ok(window) = q_window.single() else { return; };
 
         if let Some(cursor_pos) = window.cursor_position() {
             if let Ok(world_pos) = camera.viewport_to_world_2d(camera_transform, cursor_pos) {
@@ -277,7 +277,7 @@ pub fn task_area_selection_system(
                                                 wt, target_entity
                                             );
                                         }
-                                        ev_created.send(DesignationCreatedEvent {
+                                        ev_created.write(DesignationCreatedEvent {
                                             entity: target_entity,
                                             work_type: wt,
                                             issued_by: fam_entity, // Option<Entity>
@@ -330,8 +330,8 @@ pub fn area_selection_indicator_system(
     };
 
     if let Some(start_pos) = drag_start {
-        let (camera, camera_transform) = q_camera.single();
-        let window = q_window.single();
+        let Ok((camera, camera_transform)) = q_camera.single() else { return; };
+        let Ok(window) = q_window.single() else { return; };
 
         if let Some(cursor_pos) = window.cursor_position() {
             if let Ok(world_pos) = camera.viewport_to_world_2d(camera_transform, cursor_pos) {
@@ -345,7 +345,7 @@ pub fn area_selection_indicator_system(
                 };
 
                 if let Ok((_, mut transform, mut sprite, mut visibility)) =
-                    q_indicator.get_single_mut()
+                    q_indicator.single_mut()
                 {
                     transform.translation = center.extend(0.6);
                     sprite.custom_size = Some(size);
@@ -365,7 +365,7 @@ pub fn area_selection_indicator_system(
             }
         }
     } else {
-        if let Ok((_, _, _, mut visibility)) = q_indicator.get_single_mut() {
+        if let Ok((_, _, _, mut visibility)) = q_indicator.single_mut() {
             *visibility = Visibility::Hidden;
         }
     }
@@ -525,10 +525,10 @@ pub fn assign_task_system(
 
     info!("ASSIGN_TASK: Drag released, processing assignment...");
 
-    let Ok((camera, camera_transform)) = q_camera.get_single() else {
+    let Ok((camera, camera_transform)) = q_camera.single() else {
         return;
     };
-    let Ok(window) = q_window.get_single() else {
+    let Ok(window) = q_window.single() else {
         return;
     };
     let Some(cursor_pos) = window.cursor_position() else {

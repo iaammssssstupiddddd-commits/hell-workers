@@ -61,8 +61,8 @@ pub fn zone_placement(
         }
 
         if buttons.pressed(MouseButton::Left) {
-            let (camera, camera_transform) = q_camera.single();
-            let window = q_window.single();
+            let Ok((camera, camera_transform)) = q_camera.single() else { return; };
+            let Ok(window) = q_window.single() else { return; };
 
             if let Some(cursor_pos) = window.cursor_position() {
                 if let Ok(world_pos) = camera.viewport_to_world_2d(camera_transform, cursor_pos) {
@@ -227,7 +227,7 @@ pub fn resource_count_display_system(
                         ..default()
                     },
                     TextColor(Color::WHITE),
-                    TextLayout::new_with_justify(JustifyText::Center),
+                    TextLayout::new_with_justify(Justify::Center),
                     Transform::from_xyz(pos.x + TILE_SIZE * 0.3, pos.y + TILE_SIZE * 0.3, 1.0),
                 ))
                 .id();
@@ -238,7 +238,7 @@ pub fn resource_count_display_system(
     let mut to_remove = Vec::new();
     for (&grid, &entity) in labels.0.iter() {
         if !grid_counts.contains_key(&grid) {
-            if let Some(mut e) = commands.get_entity(entity) {
+            if let Ok(mut e) = commands.get_entity(entity) {
                 e.despawn();
             }
             to_remove.push(grid);

@@ -74,10 +74,10 @@ pub fn familiar_hover_visualization_system(
     q_souls: Query<(&GlobalTransform, &crate::entities::familiar::UnderCommand), With<DamnedSoul>>,
     mut gizmos: Gizmos,
 ) {
-    let Ok(window) = q_window.get_single() else {
+    let Ok(window) = q_window.single() else {
         return;
     };
-    let Ok((camera, camera_transform)) = q_camera.get_single() else {
+    let Ok((camera, camera_transform)) = q_camera.single() else {
         return;
     };
 
