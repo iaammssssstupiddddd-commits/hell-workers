@@ -15,13 +15,14 @@
 |------|--------|-------------|------|
 | タスク完了（採集系） | +0.10（瞬時） | - | 木や岩を採集完了時 |
 | タスク完了（運搬系） | +0.05（瞬時） | - | 運搬タスク完了時 |
-| 使役中 or タスク実行中（影響範囲外） | +0.01 × dt | 約100秒 | `motivation_system` で処理 |
+| タスク実行中 | +0.01 × dt | 約100秒 | `fatigue_update_system` で処理 |
 
 ### 減少
 
 | 状況 | 変化率 | 0%到達時間 | 備考 |
 |------|--------|-----------|----|
-| 待機（使役なし、タスクなし） | -0.05 × dt | 約20秒 | `motivation_system` で処理 |
+| 使役中の待機 | -0.01 × dt | 約100秒 | `fatigue_update_system` で処理 |
+| 通常の待機 | -0.05 × dt | 約20秒 | `fatigue_update_system` で処理 |
 
 ## 閾値と動作
 
@@ -36,7 +37,7 @@
 |--------|------|------|
 | < 80% | 通常 | タスクを受け付ける |
 | ≥ 80% | 疲労 | 新規タスクを受け付けない |
-| > 90% | 極度の疲労 | 使役解除 + 強制的に集会エリアへ移動 |
+| > 90% | 極度の疲労 | 使役解除 + 強制的に集会エリアへ移動 + やる気低下 |
 
 ## 使い魔の疲労閾値
 
@@ -50,7 +51,7 @@
 
 ### やる気（Motivation）との関係
 
-疲労が90%を超えると、`fatigue_system` によりやる気が強制的に減少：
+疲労が90%を超えると、`fatigue_penalty_system` によりやる気が強制的に減少：
 - 減少率: -0.5 × dt
 
 ### 怠惰行動（Idle Behavior）への影響
@@ -66,8 +67,9 @@
 ## 関連ファイル
 
 - `src/constants.rs` - `FATIGUE_THRESHOLD`, `FATIGUE_GATHERING_THRESHOLD` 定義
-- `src/systems/motivation.rs` - `motivation_system`, `fatigue_system`
+- `src/systems/fatigue.rs` - `fatigue_update_system`, `fatigue_penalty_system`（メイン）
 - `src/systems/task_execution.rs` - タスク完了時の疲労増加
 - `src/systems/idle.rs` - 疲労に基づく怠惰行動
 - `src/systems/familiar_ai.rs` - 使い魔のリクルート時の疲労チェック
 - `src/entities/familiar.rs` - `FamiliarOperationState.fatigue_threshold`
+
