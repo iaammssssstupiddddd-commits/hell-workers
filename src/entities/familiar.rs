@@ -6,7 +6,7 @@ use bevy::prelude::*;
 use rand::Rng;
 
 /// 使い魔のスポーンイベント
-#[derive(Event)]
+#[derive(Message)]
 pub struct FamiliarSpawnEvent {
     pub position: Vec2,
     pub familiar_type: FamiliarType,
@@ -120,8 +120,8 @@ impl Default for FamiliarOperation {
 pub struct UnderCommand(pub Entity);
 
 /// 使い魔をスポーンする
-pub fn spawn_familiar(mut spawn_events: EventWriter<FamiliarSpawnEvent>) {
-    spawn_events.send(FamiliarSpawnEvent {
+pub fn spawn_familiar(mut spawn_events: MessageWriter<FamiliarSpawnEvent>) {
+    spawn_events.write(FamiliarSpawnEvent {
         position: Vec2::new(0.0, 0.0),
         familiar_type: FamiliarType::Imp,
     });
@@ -130,7 +130,7 @@ pub fn spawn_familiar(mut spawn_events: EventWriter<FamiliarSpawnEvent>) {
 /// 使い魔のスポーンを処理するシステム
 pub fn familiar_spawning_system(
     mut commands: Commands,
-    mut spawn_events: EventReader<FamiliarSpawnEvent>,
+    mut spawn_events: MessageReader<FamiliarSpawnEvent>,
     game_assets: Res<GameAssets>,
     world_map: Res<WorldMap>,
 ) {

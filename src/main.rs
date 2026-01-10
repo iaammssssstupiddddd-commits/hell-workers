@@ -76,7 +76,7 @@ fn main() {
                 .set(WindowPlugin {
                     primary_window: Some(Window {
                         title: "Hell Workers".into(),
-                        resolution: (1280.0, 720.0).into(),
+                        resolution: (1280, 720).into(),
                         ..default()
                     }),
                     ..default()
@@ -103,10 +103,10 @@ fn main() {
         .init_resource::<AutoHaulCounter>()
         .init_resource::<TaskQueue>()
         .init_resource::<GlobalTaskQueue>()
-        .add_event::<DesignationCreatedEvent>()
-        .add_event::<TaskCompletedEvent>()
-        .add_event::<DamnedSoulSpawnEvent>()
-        .add_event::<FamiliarSpawnEvent>()
+        .add_message::<DesignationCreatedEvent>()
+        .add_message::<TaskCompletedEvent>()
+        .add_message::<DamnedSoulSpawnEvent>()
+        .add_message::<FamiliarSpawnEvent>()
         // Startup systems
         .add_systems(Startup, setup)
         .add_systems(
@@ -391,13 +391,13 @@ fn create_circular_gradient_texture(images: &mut Assets<Image>) -> Handle<Image>
 }
 
 /// エンティティ（使い魔と人間）をスポーン
-fn spawn_entities(spawn_events: EventWriter<DamnedSoulSpawnEvent>) {
+fn spawn_entities(spawn_events: MessageWriter<DamnedSoulSpawnEvent>) {
     // 人間をスポーン
     spawn_damned_souls(spawn_events);
 }
 
 /// 使い魔をスポーン（別システムとして実行）
-fn spawn_familiar_wrapper(spawn_events: EventWriter<FamiliarSpawnEvent>) {
+fn spawn_familiar_wrapper(spawn_events: MessageWriter<FamiliarSpawnEvent>) {
     spawn_familiar(spawn_events);
 }
 
@@ -406,15 +406,15 @@ fn debug_spawn_system(
     buttons: Res<ButtonInput<KeyCode>>,
     q_camera: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
     q_window: Query<&Window, With<bevy::window::PrimaryWindow>>,
-    mut soul_spawn_events: EventWriter<DamnedSoulSpawnEvent>,
-    mut familiar_spawn_events: EventWriter<FamiliarSpawnEvent>,
+    mut soul_spawn_events: MessageWriter<DamnedSoulSpawnEvent>,
+    mut familiar_spawn_events: MessageWriter<FamiliarSpawnEvent>,
 ) {
     let mut spawn_pos = Vec2::ZERO;
 
     // マウスカーソル位置を取得
-    if let Ok(window) = q_window.get_single() {
+    if let Ok(window) = q_window.single() {
         if let Some(cursor_pos) = window.cursor_position() {
-            if let Ok((camera, camera_transform)) = q_camera.get_single() {
+            if let Ok((camera, camera_transform)) = q_camera.single() {
                 if let Ok(pos) = camera.viewport_to_world_2d(camera_transform, cursor_pos) {
                     spawn_pos = pos;
                 }
@@ -423,14 +423,14 @@ fn debug_spawn_system(
     }
 
     if buttons.just_pressed(KeyCode::KeyP) {
-        soul_spawn_events.send(DamnedSoulSpawnEvent {
+        soul_spawn_events.write(DamnedSoulSpawnEvent {
             position: spawn_pos,
         });
         info!("DEBUG_SPAWN: Soul at {:?}", spawn_pos);
     }
 
     if buttons.just_pressed(KeyCode::KeyO) {
-        familiar_spawn_events.send(FamiliarSpawnEvent {
+        familiar_spawn_events.write(FamiliarSpawnEvent {
             position: spawn_pos,
             familiar_type: FamiliarType::Imp,
         });

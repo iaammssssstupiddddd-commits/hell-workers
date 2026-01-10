@@ -7,7 +7,7 @@ use bevy::prelude::*;
 use rand::Rng;
 
 /// ソウルのスポーンイベント
-#[derive(Event)]
+#[derive(Message)]
 pub struct DamnedSoulSpawnEvent {
     pub position: Vec2,
 }
@@ -277,7 +277,7 @@ impl Default for AnimationState {
 }
 
 /// 人間をスポーンする
-pub fn spawn_damned_souls(mut spawn_events: EventWriter<DamnedSoulSpawnEvent>) {
+pub fn spawn_damned_souls(mut spawn_events: MessageWriter<DamnedSoulSpawnEvent>) {
     // 3体の人間をスポーン
     let spawn_positions = [
         Vec2::new(-50.0, -50.0),
@@ -286,7 +286,7 @@ pub fn spawn_damned_souls(mut spawn_events: EventWriter<DamnedSoulSpawnEvent>) {
     ];
 
     for spawn_pos in spawn_positions.iter() {
-        spawn_events.send(DamnedSoulSpawnEvent {
+        spawn_events.write(DamnedSoulSpawnEvent {
             position: *spawn_pos,
         });
     }
@@ -295,7 +295,7 @@ pub fn spawn_damned_souls(mut spawn_events: EventWriter<DamnedSoulSpawnEvent>) {
 /// スポーンイベントを処理するシステム
 pub fn soul_spawning_system(
     mut commands: Commands,
-    mut spawn_events: EventReader<DamnedSoulSpawnEvent>,
+    mut spawn_events: MessageReader<DamnedSoulSpawnEvent>,
     game_assets: Res<GameAssets>,
     world_map: Res<WorldMap>,
 ) {

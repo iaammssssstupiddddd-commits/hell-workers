@@ -88,7 +88,7 @@ pub fn task_execution_system(
     )>,
     mut q_stockpiles: Query<(&Transform, &mut Stockpile)>,
     game_assets: Res<GameAssets>,
-    mut ev_completed: EventWriter<TaskCompletedEvent>,
+    mut ev_completed: MessageWriter<TaskCompletedEvent>,
     time: Res<Time>,
 ) {
     for (soul_entity, soul_transform, mut soul, mut task, mut dest, mut path, mut inventory) in
@@ -146,7 +146,7 @@ pub fn task_execution_system(
         // 完了イベントの発行
         if was_busy && matches!(*task, AssignedTask::None) {
             if let Some(work_type) = old_work_type {
-                ev_completed.send(TaskCompletedEvent {
+                ev_completed.write(TaskCompletedEvent {
                     _soul_entity: soul_entity,
                     _task_type: work_type,
                 });

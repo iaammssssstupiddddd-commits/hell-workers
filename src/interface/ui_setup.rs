@@ -448,7 +448,7 @@ pub fn setup_ui(mut commands: Commands) {
                 ..default()
             },
             BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.9)),
-            BorderColor(Color::srgb(0.5, 0.5, 0.5)),
+            BorderColor::all(Color::srgb(0.5, 0.5, 0.5)),
             HoverTooltip,
             ZIndex(100),
         ))
@@ -481,7 +481,7 @@ pub fn setup_ui(mut commands: Commands) {
                 ..default()
             },
             BackgroundColor(Color::srgba(0.05, 0.05, 0.05, 0.95)),
-            BorderColor(Color::srgb(0.4, 0.4, 0.4)),
+            BorderColor::all(Color::srgb(0.4, 0.4, 0.4)),
             OperationDialog,
             ZIndex(200),
         ))

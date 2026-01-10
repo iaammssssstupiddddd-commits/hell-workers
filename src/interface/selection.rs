@@ -41,8 +41,8 @@ pub fn handle_mouse_input(
         }
     }
 
-    let (camera, camera_transform) = q_camera.single();
-    let window = q_window.single();
+    let Ok((camera, camera_transform)) = q_camera.single() else { return; };
+    let Ok(window) = q_window.single() else { return; };
 
     if let Some(cursor_pos) = window.cursor_position() {
         if let Ok(world_pos) = camera.viewport_to_world_2d(camera_transform, cursor_pos) {
@@ -113,8 +113,8 @@ pub fn blueprint_placement(
 
     if let Some(building_type) = build_mode.0 {
         if buttons.just_pressed(MouseButton::Left) {
-            let (camera, camera_transform) = q_camera.single();
-            let window = q_window.single();
+            let Ok((camera, camera_transform)) = q_camera.single() else { return; };
+            let Ok(window) = q_window.single() else { return; };
 
             if let Some(cursor_pos) = window.cursor_position() {
                 if let Ok(world_pos) = camera.viewport_to_world_2d(camera_transform, cursor_pos) {
@@ -161,7 +161,7 @@ pub fn update_selection_indicator(
 ) {
     if let Some(entity) = selected.0 {
         if let Ok(target_transform) = q_transforms.get(entity) {
-            if let Ok((_, mut indicator_transform)) = q_indicator.get_single_mut() {
+            if let Ok((_, mut indicator_transform)) = q_indicator.single_mut() {
                 indicator_transform.translation =
                     target_transform.translation().truncate().extend(0.5);
             } else {
@@ -200,8 +200,8 @@ pub fn update_hover_entity(
     >,
     mut hovered_entity: ResMut<HoveredEntity>,
 ) {
-    let (camera, camera_transform) = q_camera.single();
-    let window = q_window.single();
+    let Ok((camera, camera_transform)) = q_camera.single() else { return; };
+    let Ok(window) = q_window.single() else { return; };
 
     if let Some(cursor_pos) = window.cursor_position() {
         if let Ok(world_pos) = camera.viewport_to_world_2d(camera_transform, cursor_pos) {

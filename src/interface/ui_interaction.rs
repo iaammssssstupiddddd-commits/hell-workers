@@ -32,13 +32,13 @@ pub fn hover_tooltip_system(
         Option<&crate::systems::logistics::ClaimedBy>,
     )>,
 ) {
-    let Ok(window) = q_window.get_single() else {
+    let Ok(window) = q_window.single() else {
         return;
     };
-    let Ok(mut tooltip_node) = q_tooltip.get_single_mut() else {
+    let Ok(mut tooltip_node) = q_tooltip.single_mut() else {
         return;
     };
-    let Ok(mut text) = q_text.get_single_mut() else {
+    let Ok(mut text) = q_text.single_mut() else {
         return;
     };
 
@@ -101,7 +101,7 @@ pub fn update_mode_text_system(
     build_mode: Res<crate::interface::selection::BuildMode>,
     mut q_text: Query<&mut Text, With<ModeText>>,
 ) {
-    if let Ok(mut text) = q_text.get_single_mut() {
+    if let Ok(mut text) = q_text.single_mut() {
         let mode_str = if let Some(kind) = build_mode.0 {
             format!("Mode: Build ({:?})", kind)
         } else {
@@ -156,7 +156,7 @@ pub fn task_summary_ui_system(
     task_queue: Res<crate::systems::work::TaskQueue>,
     mut q_text: Query<&mut Text, With<TaskSummaryText>>,
 ) {
-    if let Ok(mut text) = q_text.get_single_mut() {
+    if let Ok(mut text) = q_text.single_mut() {
         let mut total = 0;
         let mut high = 0;
         for tasks in task_queue.by_familiar.values() {
@@ -203,7 +203,7 @@ pub fn ui_interaction_system(
         if *interaction == Interaction::Pressed {
             // コンテキストメニューがあれば消す
             for entity in q_context_menu.iter() {
-                commands.entity(entity).despawn_recursive();
+                commands.entity(entity).despawn();
             }
 
             match menu_button.0 {
@@ -262,12 +262,12 @@ pub fn ui_interaction_system(
                     info!("UI: Area Selection Mode entered");
                 }
                 MenuAction::OpenOperationDialog => {
-                    if let Ok(mut dialog_node) = q_dialog.get_single_mut() {
+                    if let Ok(mut dialog_node) = q_dialog.single_mut() {
                         dialog_node.display = Display::Flex;
                     }
                 }
                 MenuAction::CloseDialog => {
-                    if let Ok(mut dialog_node) = q_dialog.get_single_mut() {
+                    if let Ok(mut dialog_node) = q_dialog.single_mut() {
                         dialog_node.display = Display::None;
                     }
                 }
@@ -304,16 +304,16 @@ pub fn update_operation_dialog_system(
 ) {
     if let Some(selected) = selected_entity.0 {
         if let Ok((familiar, op)) = q_familiars.get(selected) {
-            if let Ok(mut name_text) = text_set.p0().get_single_mut() {
+            if let Ok(mut name_text) = text_set.p0().single_mut() {
                 name_text.0 = format!("Editing: {}", familiar.name);
             }
-            if let Ok(mut threshold_text) = text_set.p1().get_single_mut() {
+            if let Ok(mut threshold_text) = text_set.p1().single_mut() {
                 let val_str = format!("{:.0}%", op.fatigue_threshold * 100.0);
                 if threshold_text.0 != val_str {
                     threshold_text.0 = val_str;
                 }
             }
-            if let Ok(mut max_soul_text) = text_set.p2().get_single_mut() {
+            if let Ok(mut max_soul_text) = text_set.p2().single_mut() {
                 let val_str = format!("{}", op.max_controlled_soul);
                 if max_soul_text.0 != val_str {
                     max_soul_text.0 = val_str;
