@@ -9,7 +9,7 @@ use crate::systems::logistics::ZoneType;
 use bevy::prelude::*;
 
 /// プレイ中の操作モード
-#[derive(States, Default, Debug, Clone, Eq, PartialEq, Hash)]
+#[derive(States, Default, Debug, Clone, Eq, PartialEq, Hash, Reflect)]
 pub enum PlayMode {
     #[default]
     Normal, // 通常操作

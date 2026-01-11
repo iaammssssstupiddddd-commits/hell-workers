@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 
-#[derive(Resource, Default)]
+#[derive(Resource, Default, Reflect)]
+#[reflect(Resource)]
 pub struct GameTime {
     pub seconds: f32,
     pub day: u32,
