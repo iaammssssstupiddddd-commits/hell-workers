@@ -27,12 +27,24 @@ const FAMILIAR_NAMES: [&str; 10] = [
 ];
 
 /// 使い魔のコンポーネント
-#[derive(Component)]
+#[derive(Component, Reflect)]
+#[reflect(Component)]
 pub struct Familiar {
     pub familiar_type: FamiliarType,
     pub command_radius: f32, // 指示を出せる範囲
     pub efficiency: f32,     // 人間を動かす効率 (0.0-1.0)
     pub name: String,        // 使い魔の名前
+}
+
+impl Default for Familiar {
+    fn default() -> Self {
+        Self {
+            familiar_type: FamiliarType::default(),
+            command_radius: TILE_SIZE * 7.0, // Impのデフォルト値
+            efficiency: 0.5,                  // Impのデフォルト値
+            name: String::new(),
+        }
+    }
 }
 
 impl Familiar {
@@ -68,7 +80,7 @@ pub enum AuraLayer {
 }
 
 /// 使い魔の種類（パラメーター調整用に拡張可能）
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Reflect, Default)]
 #[allow(dead_code)]
 pub enum FamiliarType {
     #[default]
@@ -78,19 +90,14 @@ pub enum FamiliarType {
 }
 
 /// 使い魔への指示
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Reflect, Default)]
 #[allow(dead_code)]
 pub enum FamiliarCommand {
+    #[default]
     Idle,              // 待機
     GatherResources,   // 収集指示
     Patrol,            // 巡回（監視）
     Construct(Entity), // 建設命令
-}
-
-impl Default for FamiliarCommand {
-    fn default() -> Self {
-        Self::Idle
-    }
 }
 
 /// 現在のアクティブな指示
@@ -116,8 +123,15 @@ impl Default for FamiliarOperation {
 }
 
 /// 魂がどの使い魔に使役されているかを示す
-#[derive(Component, Debug, Clone, Copy)]
+#[derive(Component, Reflect, Debug, Clone, Copy)]
+#[reflect(Component)]
 pub struct UnderCommand(pub Entity);
+
+impl Default for UnderCommand {
+    fn default() -> Self {
+        Self(Entity::PLACEHOLDER)
+    }
+}
 
 /// 使い魔をスポーンする
 pub fn spawn_familiar(mut spawn_events: MessageWriter<FamiliarSpawnEvent>) {
