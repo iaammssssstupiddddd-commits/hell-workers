@@ -279,7 +279,6 @@ fn main() {
                         selected.0.is_some()
                     },
                 ),
-                resource_count_display_system,
                 update_familiar_range_indicator,
                 game_time_system,
                 time_control_keyboard_system,

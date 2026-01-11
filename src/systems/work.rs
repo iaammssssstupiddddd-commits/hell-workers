@@ -16,6 +16,7 @@ use crate::systems::jobs::{
     Designation, DesignationCreatedEvent, IssuedBy, TaskCompletedEvent, TaskSlots, WorkType,
 };
 use crate::systems::logistics::{ClaimedBy, InStockpile, Inventory, ResourceItem, Stockpile};
+use crate::world::map::WorldMap;
 
 use bevy::prelude::*;
 
@@ -281,10 +282,26 @@ pub fn task_delegation_system(
 /// 使い魔が Idle コマンドの場合、または使い魔が存在しない場合に部下をリリースする
 pub fn cleanup_commanded_souls_system(
     mut commands: Commands,
-    q_souls: Query<(Entity, &UnderCommand)>,
+    mut q_souls: Query<(
+        Entity,
+        &Transform,
+        &UnderCommand,
+        &mut AssignedTask,
+        &mut Path,
+        &mut Inventory,
+    )>,
+    mut q_designations: Query<(
+        Entity,
+        &Transform,
+        &Designation,
+        Option<&IssuedBy>,
+        Option<&mut TaskSlots>,
+    )>,
     q_familiars: Query<&ActiveCommand, With<Familiar>>,
 ) {
-    for (soul_entity, under_command) in q_souls.iter() {
+    for (soul_entity, transform, under_command, mut task, mut path, mut inventory) in
+        q_souls.iter_mut()
+    {
         let should_release = match q_familiars.get(under_command.0) {
             Ok(active_cmd) => matches!(active_cmd.command, FamiliarCommand::Idle),
             Err(_) => true, // 使い魔が存在しない場合はリリース
@@ -295,9 +312,79 @@ pub fn cleanup_commanded_souls_system(
                 "RELEASE: Soul {:?} released from Familiar {:?}",
                 soul_entity, under_command.0
             );
+
+            // タスクを適切に解除（アイテムがあればドロップ）
+            unassign_task(
+                &mut commands,
+                soul_entity,
+                transform.translation.truncate(),
+                &mut task,
+                &mut path,
+                &mut inventory,
+                &mut q_designations,
+            );
+
             commands.entity(soul_entity).remove::<UnderCommand>();
         }
     }
+}
+
+/// 魂からタスクの割り当てを解除し、スロットを解放する。
+/// 魂がアイテムを持っていた場合はその場にドロップする。
+pub fn unassign_task(
+    commands: &mut Commands,
+    _soul_entity: Entity,
+    drop_pos: Vec2,
+    task: &mut AssignedTask,
+    path: &mut Path,
+    inventory: &mut Inventory,
+    q_designations: &mut Query<(
+        Entity,
+        &Transform,
+        &Designation,
+        Option<&IssuedBy>,
+        Option<&mut TaskSlots>,
+    )>,
+) {
+    // アイテムを持っていればドロップ
+    if let Some(item_entity) = inventory.0.take() {
+        // グリッドにスナップさせる（端数座標によるズレを防止）
+        let grid = WorldMap::world_to_grid(drop_pos);
+        let snapped_pos = WorldMap::grid_to_world(grid.0, grid.1);
+
+        commands.entity(item_entity).insert((
+            Visibility::Visible,
+            Transform::from_xyz(snapped_pos.x, snapped_pos.y, 0.6),
+        ));
+        commands.entity(item_entity).remove::<ClaimedBy>();
+        info!(
+            "UNASSIGN: Soul released item at {:?} (snapped to {:?})",
+            drop_pos, snapped_pos
+        );
+    }
+
+    let target_entity = match *task {
+        AssignedTask::Gather { target, .. } => Some(target),
+        AssignedTask::Haul { item, .. } => Some(item),
+        AssignedTask::None => None,
+    };
+
+    if let Some(target) = target_entity {
+        if let Ok((_, _, _, _, mut slots_opt)) = q_designations.get_mut(target) {
+            if let Some(ref mut slots) = slots_opt {
+                slots.current = slots.current.saturating_sub(1);
+            }
+        }
+        // タスクを完全に真っ白に戻す（Designation も削除）
+        // これにより、次フレーム以降にオートホール AI が再検知して新しいタスクとして発行できる
+        commands.entity(target).remove::<Designation>();
+        commands.entity(target).remove::<TaskSlots>();
+        commands.entity(target).remove::<IssuedBy>();
+        commands.entity(target).remove::<ClaimedBy>();
+    }
+
+    *task = AssignedTask::None;
+    path.waypoints.clear();
 }
 
 pub fn task_area_auto_haul_system(
@@ -317,11 +404,9 @@ pub fn task_area_auto_haul_system(
     >,
     mut ev_created: MessageWriter<DesignationCreatedEvent>,
 ) {
-    for (fam_entity, active_command, task_area) in q_familiars.iter() {
-        if matches!(active_command.command, FamiliarCommand::Idle) {
-            // TaskAreaがあれば続行
-        }
+    let mut already_assigned = std::collections::HashSet::new();
 
+    for (fam_entity, _active_command, task_area) in q_familiars.iter() {
         for (stock_transform, stockpile) in q_stockpiles.iter() {
             let stock_pos = stock_transform.translation.truncate();
             if !task_area.contains(stock_pos) {
@@ -335,15 +420,13 @@ pub fn task_area_auto_haul_system(
             let search_radius = TILE_SIZE * 15.0;
             let nearby_resources = resource_grid.get_nearby_in_radius(stock_pos, search_radius);
 
-            // 【最適化】全リソースを iterate するのではなく、空間グリッドで見つかった近傍のみをチェック
             let nearest_resource = nearby_resources
                 .iter()
+                .filter(|&&entity| !already_assigned.contains(&entity))
                 .filter_map(|&entity| {
-                    // ここで q_resources を使って詳細チェック（Without等のフィルタは適用済みクエリを使う）
                     let Ok((_, transform, visibility)) = q_resources.get(entity) else {
                         return None;
                     };
-                    // Visibility::Hidden（誰かが持っている）は除外
                     if *visibility == Visibility::Hidden {
                         return None;
                     }
@@ -359,6 +442,7 @@ pub fn task_area_auto_haul_system(
                 .map(|(entity, _)| entity);
 
             if let Some(item_entity) = nearest_resource {
+                already_assigned.insert(item_entity);
                 commands.entity(item_entity).insert((
                     Designation {
                         work_type: WorkType::Haul,
