@@ -43,8 +43,9 @@ pub struct Blueprint {
     pub progress: f32, // 0.0 to 1.0
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Reflect, Default)]
 pub enum WorkType {
+    #[default]
     Chop, // 伐採
     Mine, // 採掘
     #[allow(dead_code)]
