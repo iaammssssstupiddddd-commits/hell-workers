@@ -10,6 +10,7 @@ use crate::entities::familiar::{
     ActiveCommand, Familiar, FamiliarCommand, FamiliarOperation, UnderCommand,
 };
 use crate::events::OnSoulRecruited;
+use crate::relationships::Commanding;
 use crate::systems::command::TaskArea;
 use crate::systems::jobs::{Designation, IssuedBy, TaskSlots, WorkType};
 use crate::systems::logistics::{ClaimedBy, Stockpile};
@@ -68,6 +69,7 @@ pub fn familiar_ai_system(
         &mut Destination,
         &mut Path,
         Option<&TaskArea>,
+        &Commanding,
     )>,
     mut q_souls: Query<
         (
@@ -104,6 +106,7 @@ pub fn familiar_ai_system(
         mut fam_dest,
         mut fam_path,
         task_area_opt,
+        commanding,
     ) in q_familiars.iter_mut()
     {
         // 使い魔が Idle の場合は AI 処理をスキップ（部下を持つのをやめる指示のため）
@@ -114,12 +117,8 @@ pub fn familiar_ai_system(
         let fam_pos = fam_transform.translation.truncate();
         let command_radius = familiar.command_radius;
 
-        // 管理下のワーカー（分隊メンバー）を特定
-        let mut squad_members_entities: Vec<Entity> = q_souls_lite
-            .iter()
-            .filter(|(_, uc)| uc.0 == fam_entity)
-            .map(|(e, _)| e)
-            .collect();
+        // 管理下のワーカー（分隊メンバー）を Commanding から取得
+        let mut squad_members_entities: Vec<Entity> = commanding.iter().copied().collect();
 
         // 使い魔の設定した疲労閾値を取得
         let fatigue_threshold = familiar_op.fatigue_threshold;
