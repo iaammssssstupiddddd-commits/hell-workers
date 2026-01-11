@@ -4,6 +4,7 @@
 
 use crate::entities::damned_soul::DamnedSoul;
 use crate::entities::familiar::{Familiar, FamiliarOperation};
+use crate::game_state::{BuildContext, PlayMode, TaskContext, ZoneContext};
 use crate::interface::ui_setup::*;
 use crate::systems::work::AssignedTask;
 use bevy::prelude::*;
@@ -97,16 +98,30 @@ pub fn hover_tooltip_system(
 }
 
 pub fn update_mode_text_system(
-    task_mode: Res<crate::systems::command::TaskMode>,
-    build_mode: Res<crate::interface::selection::BuildMode>,
+    play_mode: Res<State<PlayMode>>,
+    build_context: Res<BuildContext>,
+    zone_context: Res<ZoneContext>,
+    task_context: Res<TaskContext>,
     mut q_text: Query<&mut Text, With<ModeText>>,
 ) {
     if let Ok(mut text) = q_text.single_mut() {
-        let mode_str = if let Some(kind) = build_mode.0 {
-            format!("Mode: Build ({:?})", kind)
-        } else {
-            match *task_mode {
-                crate::systems::command::TaskMode::None => "Mode: Normal".to_string(),
+        let mode_str = match *play_mode.get() {
+            PlayMode::Normal => "Mode: Normal".to_string(),
+            PlayMode::BuildingPlace => {
+                if let Some(kind) = build_context.0 {
+                    format!("Mode: Build ({:?})", kind)
+                } else {
+                    "Mode: Build".to_string()
+                }
+            }
+            PlayMode::ZonePlace => {
+                if let Some(kind) = zone_context.0 {
+                    format!("Mode: Zone ({:?})", kind)
+                } else {
+                    "Mode: Zone".to_string()
+                }
+            }
+            PlayMode::TaskDesignation => match task_context.0 {
                 crate::systems::command::TaskMode::DesignateChop(None) => {
                     "Mode: Chop (Drag to select)".to_string()
                 }
@@ -131,22 +146,12 @@ pub fn update_mode_text_system(
                 crate::systems::command::TaskMode::CancelDesignation(Some(_)) => {
                     "Mode: Cancel (Dragging...)".to_string()
                 }
-                crate::systems::command::TaskMode::SelectBuildTarget => {
-                    "Mode: Build Select".to_string()
+                crate::systems::command::TaskMode::AreaSelection(_) => {
+                    "Mode: Area Selection".to_string()
                 }
-                crate::systems::command::TaskMode::AreaSelection(None) => {
-                    "Mode: Area (Click start)".to_string()
-                }
-                crate::systems::command::TaskMode::AreaSelection(Some(_)) => {
-                    "Mode: Area (Click end)".to_string()
-                }
-                crate::systems::command::TaskMode::AssignTask(None) => {
-                    "Mode: Assign Task (Drag to select)".to_string()
-                }
-                crate::systems::command::TaskMode::AssignTask(Some(_)) => {
-                    "Mode: Assign Task (Dragging...)".to_string()
-                }
-            }
+                crate::systems::command::TaskMode::AssignTask(_) => "Mode: Assign Task".to_string(),
+                _ => "Mode: Task".to_string(),
+            },
         };
         text.0 = mode_str;
     }
@@ -173,12 +178,11 @@ pub fn ui_interaction_system(
         (&Interaction, &MenuButton, &mut BackgroundColor),
         (Changed<Interaction>, With<Button>),
     >,
-    mut menu_state: ParamSet<(
-        ResMut<MenuState>,
-        ResMut<crate::interface::selection::BuildMode>,
-        ResMut<crate::systems::logistics::ZoneMode>,
-        ResMut<crate::systems::command::TaskMode>,
-    )>,
+    mut menu_state: ResMut<MenuState>,
+    mut next_play_mode: ResMut<NextState<PlayMode>>,
+    mut build_context: ResMut<BuildContext>,
+    mut zone_context: ResMut<ZoneContext>,
+    mut task_context: ResMut<TaskContext>,
     selected_entity: Res<crate::interface::selection::SelectedEntity>,
     mut q_familiar_ops: Query<&mut FamiliarOperation>,
     mut q_dialog: Query<&mut Node, With<OperationDialog>>,
@@ -208,58 +212,82 @@ pub fn ui_interaction_system(
 
             match menu_button.0 {
                 MenuAction::ToggleArchitect => {
-                    let mut menu_state_res = menu_state.p0();
-                    let current = *menu_state_res;
-                    *menu_state_res = match current {
+                    let current = *menu_state;
+                    *menu_state = match current {
                         MenuState::Architect => MenuState::Hidden,
                         _ => MenuState::Architect,
                     };
-                    menu_state.p1().0 = None;
-                    menu_state.p2().0 = None;
+                    // 他モードをクリア
+                    build_context.0 = None;
+                    zone_context.0 = None;
+                    next_play_mode.set(PlayMode::Normal);
                 }
                 MenuAction::ToggleOrders => {
-                    let mut menu_state_res = menu_state.p0();
-                    let current = *menu_state_res;
-                    *menu_state_res = match current {
+                    let current = *menu_state;
+                    *menu_state = match current {
                         MenuState::Orders => MenuState::Hidden,
                         _ => MenuState::Orders,
                     };
-                    menu_state.p1().0 = None;
-                    menu_state.p2().0 = None;
-                    *menu_state.p3() = crate::systems::command::TaskMode::None;
+                    // 他モードをクリア
+                    build_context.0 = None;
+                    zone_context.0 = None;
+                    task_context.0 = crate::systems::command::TaskMode::None;
+                    next_play_mode.set(PlayMode::Normal);
                 }
                 MenuAction::ToggleZones => {
-                    let mut menu_state_res = menu_state.p0();
-                    let current = *menu_state_res;
-                    *menu_state_res = match current {
+                    let current = *menu_state;
+                    *menu_state = match current {
                         MenuState::Zones => MenuState::Hidden,
                         _ => MenuState::Zones,
                     };
-                    menu_state.p1().0 = None;
-                    menu_state.p2().0 = None;
-                    *menu_state.p3() = crate::systems::command::TaskMode::None;
+                    // 他モードをクリア
+                    build_context.0 = None;
+                    zone_context.0 = None;
+                    task_context.0 = crate::systems::command::TaskMode::None;
+                    next_play_mode.set(PlayMode::Normal);
                 }
                 MenuAction::SelectBuild(kind) => {
-                    menu_state.p1().0 = Some(kind);
-                    menu_state.p2().0 = None;
-                    *menu_state.p3() = crate::systems::command::TaskMode::None;
+                    // 他モードをクリア
+                    zone_context.0 = None;
+                    task_context.0 = crate::systems::command::TaskMode::None;
+                    // Build設定
+                    build_context.0 = Some(kind);
+                    next_play_mode.set(PlayMode::BuildingPlace);
+                    info!(
+                        "UI: Build mode set to {:?}, PlayMode -> BuildingPlace",
+                        kind
+                    );
                 }
                 MenuAction::SelectZone(kind) => {
-                    menu_state.p2().0 = Some(kind);
-                    menu_state.p1().0 = None;
-                    *menu_state.p3() = crate::systems::command::TaskMode::None;
+                    // 他モードをクリア
+                    build_context.0 = None;
+                    task_context.0 = crate::systems::command::TaskMode::None;
+                    // Zone設定
+                    zone_context.0 = Some(kind);
+                    next_play_mode.set(PlayMode::ZonePlace);
+                    info!("UI: Zone mode set to {:?}, PlayMode -> ZonePlace", kind);
                 }
                 MenuAction::SelectTaskMode(mode) => {
-                    *menu_state.p3() = mode;
-                    menu_state.p1().0 = None;
-                    menu_state.p2().0 = None;
-                    info!("UI: TaskMode set to {:?}", mode);
+                    // 他モードをクリア
+                    build_context.0 = None;
+                    zone_context.0 = None;
+                    // Task設定
+                    task_context.0 = mode;
+                    next_play_mode.set(PlayMode::TaskDesignation);
+                    info!(
+                        "UI: TaskMode set to {:?}, PlayMode -> TaskDesignation",
+                        mode
+                    );
                 }
                 MenuAction::SelectAreaTask => {
-                    *menu_state.p3() = crate::systems::command::TaskMode::AreaSelection(None);
-                    menu_state.p1().0 = None;
-                    menu_state.p2().0 = None;
-                    info!("UI: Area Selection Mode entered");
+                    let mode = crate::systems::command::TaskMode::AreaSelection(None);
+                    // 他モードをクリア
+                    build_context.0 = None;
+                    zone_context.0 = None;
+                    // Task設定
+                    task_context.0 = mode;
+                    next_play_mode.set(PlayMode::TaskDesignation);
+                    info!("UI: Area Selection Mode entered, PlayMode -> TaskDesignation");
                 }
                 MenuAction::OpenOperationDialog => {
                     if let Ok(mut dialog_node) = q_dialog.single_mut() {

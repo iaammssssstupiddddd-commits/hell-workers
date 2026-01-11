@@ -2,7 +2,9 @@ use crate::assets::GameAssets;
 use crate::constants::*;
 use crate::entities::damned_soul::{DamnedSoul, Destination};
 use crate::entities::familiar::Familiar;
+use crate::game_state::{BuildContext, PlayMode, TaskContext, ZoneContext};
 use crate::interface::camera::MainCamera;
+use crate::interface::ui_setup::MenuState;
 use crate::systems::jobs::{Blueprint, BuildingType};
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
@@ -16,9 +18,6 @@ pub struct HoveredEntity(pub Option<Entity>);
 #[derive(Component)]
 pub struct SelectionIndicator;
 
-#[derive(Resource, Default)]
-pub struct BuildMode(pub Option<BuildingType>);
-
 pub fn handle_mouse_input(
     buttons: Res<ButtonInput<MouseButton>>,
     q_window: Query<&Window, With<bevy::window::PrimaryWindow>>,
@@ -29,11 +28,9 @@ pub fn handle_mouse_input(
     mut selected_entity: ResMut<SelectedEntity>,
     mut q_dest: Query<&mut Destination>,
     mut q_active_command: Query<&mut crate::entities::familiar::ActiveCommand>,
-    task_mode: Res<crate::systems::command::TaskMode>,
 ) {
-    if *task_mode != crate::systems::command::TaskMode::None {
-        return;
-    }
+    // main.rsでrun_if(in_state(PlayMode::Normal))が設定されているため、
+    // TaskModeのチェックは不要
 
     for interaction in q_ui.iter() {
         if *interaction != Interaction::None {
@@ -105,7 +102,7 @@ pub fn blueprint_placement(
     q_camera: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
     q_ui: Query<&Interaction, With<Button>>,
     mut world_map: ResMut<WorldMap>,
-    build_mode: Res<BuildMode>,
+    build_context: Res<BuildContext>,
     game_assets: Res<GameAssets>,
     mut commands: Commands,
 ) {
@@ -115,7 +112,7 @@ pub fn blueprint_placement(
         }
     }
 
-    if let Some(building_type) = build_mode.0 {
+    if let Some(building_type) = build_context.0 {
         if buttons.just_pressed(MouseButton::Left) {
             let Ok((camera, camera_transform)) = q_camera.single() else {
                 return;
@@ -256,6 +253,38 @@ pub fn update_hover_entity(
                 }
                 hovered_entity.0 = found;
             }
+        }
+    }
+}
+
+/// Escキーでビルド/ゾーン/タスクモードを解除し、PlayMode::Normalに戻す
+/// 共通仕様: Normalに戻る際はMenuStateもHiddenに戻す
+pub fn build_mode_cancel_system(
+    keyboard: Res<ButtonInput<KeyCode>>,
+    play_mode: Res<State<PlayMode>>,
+    mut next_play_mode: ResMut<NextState<PlayMode>>,
+    mut build_context: ResMut<BuildContext>,
+    mut zone_context: ResMut<ZoneContext>,
+    mut task_context: ResMut<TaskContext>,
+    mut menu_state: ResMut<MenuState>,
+) {
+    if keyboard.just_pressed(KeyCode::Escape) {
+        let current_mode = play_mode.get();
+        if *current_mode == PlayMode::BuildingPlace {
+            build_context.0 = None;
+            next_play_mode.set(PlayMode::Normal);
+            *menu_state = MenuState::Hidden;
+            info!("STATE: Cancelled BuildingPlace -> Normal, Menu hidden");
+        } else if *current_mode == PlayMode::ZonePlace {
+            zone_context.0 = None;
+            next_play_mode.set(PlayMode::Normal);
+            *menu_state = MenuState::Hidden;
+            info!("STATE: Cancelled ZonePlace -> Normal, Menu hidden");
+        } else if *current_mode == PlayMode::TaskDesignation {
+            task_context.0 = crate::systems::command::TaskMode::None;
+            next_play_mode.set(PlayMode::Normal);
+            *menu_state = MenuState::Hidden;
+            info!("STATE: Cancelled TaskDesignation -> Normal, Menu hidden");
         }
     }
 }
