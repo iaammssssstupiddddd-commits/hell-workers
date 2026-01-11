@@ -1,6 +1,7 @@
 mod assets;
 mod constants;
 mod entities;
+mod events;
 mod game_state;
 mod interface;
 mod systems;

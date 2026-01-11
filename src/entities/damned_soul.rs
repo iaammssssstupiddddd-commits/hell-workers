@@ -1,6 +1,9 @@
 use crate::assets::GameAssets;
 use crate::constants::*;
-use crate::systems::work::AssignedTask;
+use crate::events::{
+    OnExhausted, OnSoulRecruited, OnStressBreakdown, OnTaskAssigned, OnTaskCompleted,
+};
+use crate::systems::work::{AssignedTask, unassign_task};
 use crate::world::map::WorldMap;
 use crate::world::pathfinding::find_path;
 use bevy::prelude::*;
@@ -336,23 +339,29 @@ pub fn spawn_damned_soul_at(
         Gender::Female => Color::srgb(0.9, 0.5, 0.7), // ピンク系
     };
 
-    commands.spawn((
-        DamnedSoul::default(),
-        identity,
-        IdleState::default(),
-        AssignedTask::default(),
-        crate::systems::logistics::Inventory(None), // インベントリを追加
-        Sprite {
-            image: game_assets.colonist.clone(),
-            custom_size: Some(Vec2::splat(TILE_SIZE * 0.8)),
-            color: sprite_color,
-            ..default()
-        },
-        Transform::from_xyz(actual_pos.x, actual_pos.y, 1.0),
-        Destination(actual_pos),
-        Path::default(),
-        AnimationState::default(),
-    ));
+    commands
+        .spawn((
+            DamnedSoul::default(),
+            identity,
+            IdleState::default(),
+            AssignedTask::default(),
+            crate::systems::logistics::Inventory(None), // インベントリを追加
+            Sprite {
+                image: game_assets.colonist.clone(),
+                custom_size: Some(Vec2::splat(TILE_SIZE * 0.8)),
+                color: sprite_color,
+                ..default()
+            },
+            Transform::from_xyz(actual_pos.x, actual_pos.y, 1.0),
+            Destination(actual_pos),
+            Path::default(),
+            AnimationState::default(),
+        ))
+        .observe(on_task_assigned)
+        .observe(on_task_completed)
+        .observe(on_soul_recruited)
+        .observe(on_stress_breakdown)
+        .observe(on_exhausted);
 
     info!("SPAWN: {} ({:?}) at {:?}", soul_name, gender, actual_pos);
 }
@@ -485,6 +494,198 @@ pub fn animation_system(
             anim.bob_timer += time.delta_secs() * breath_speed;
             let breath = (anim.bob_timer.sin() * 0.02) + 1.0;
             transform.scale = Vec3::splat(breath);
+        }
+    }
+}
+
+// ============================================================
+// Observer ハンドラ
+// ============================================================
+
+fn on_task_assigned(on: On<OnTaskAssigned>, mut q_souls: Query<&mut DamnedSoul>) {
+    let soul_entity = on.entity;
+    let event = on.event();
+    if let Ok(_soul) = q_souls.get_mut(soul_entity) {
+        info!(
+            "OBSERVER: Soul {:?} assigned to task {:?} ({:?})",
+            soul_entity, event.task_entity, event.work_type
+        );
+    }
+}
+
+fn on_task_completed(on: On<OnTaskCompleted>, mut q_souls: Query<&mut DamnedSoul>) {
+    let soul_entity = on.entity;
+    let event = on.event();
+    if let Ok(_soul) = q_souls.get_mut(soul_entity) {
+        info!(
+            "OBSERVER: Soul {:?} completed task {:?} ({:?})",
+            soul_entity, event.task_entity, event.work_type
+        );
+    }
+}
+
+fn on_soul_recruited(on: On<OnSoulRecruited>, mut q_souls: Query<&mut DamnedSoul>) {
+    let soul_entity = on.entity;
+    let event = on.event();
+    if let Ok(_soul) = q_souls.get_mut(soul_entity) {
+        info!(
+            "OBSERVER: Soul {:?} recruited by Familiar {:?}",
+            soul_entity, event.familiar_entity
+        );
+    }
+}
+
+fn on_stress_breakdown(
+    on: On<OnStressBreakdown>,
+    mut commands: Commands,
+    mut q_souls: Query<(
+        Entity,
+        &Transform,
+        &mut DamnedSoul,
+        &mut AssignedTask,
+        &mut Path,
+        &mut crate::systems::logistics::Inventory,
+        Option<&crate::entities::familiar::UnderCommand>,
+    )>,
+    mut q_designations: Query<(
+        Entity,
+        &Transform,
+        &crate::systems::jobs::Designation,
+        Option<&crate::systems::jobs::IssuedBy>,
+        Option<&mut crate::systems::jobs::TaskSlots>,
+    )>,
+) {
+    let soul_entity = on.entity;
+    if let Ok((entity, transform, mut _soul, mut task, mut path, mut inventory, under_command)) =
+        q_souls.get_mut(soul_entity)
+    {
+        info!("OBSERVER: Soul {:?} had a stress breakdown!", entity);
+
+        // 凍結状態を付与
+        commands
+            .entity(entity)
+            .insert(StressBreakdown { is_frozen: true });
+
+        // タスクを放棄
+        if !matches!(*task, AssignedTask::None) {
+            crate::systems::work::unassign_task(
+                &mut commands,
+                entity,
+                transform.translation.truncate(),
+                &mut task,
+                &mut path,
+                &mut inventory,
+                &mut q_designations,
+            );
+            info!(
+                "OBSERVER: Soul {:?} abandoned task due to breakdown",
+                entity
+            );
+        }
+
+        // 使役を解除
+        if under_command.is_some() {
+            commands
+                .entity(entity)
+                .remove::<crate::entities::familiar::UnderCommand>();
+            info!(
+                "OBSERVER: Soul {:?} entered breakdown, released from command",
+                entity
+            );
+        }
+    }
+}
+
+fn on_exhausted(
+    on: On<OnExhausted>,
+    mut commands: Commands,
+    gathering_area: Res<crate::world::map::GatheringArea>,
+    mut q_souls: Query<(
+        Entity,
+        &Transform,
+        &mut IdleState,
+        &mut AssignedTask,
+        &mut Path,
+        &mut Destination,
+        &mut crate::systems::logistics::Inventory,
+        Option<&crate::entities::familiar::UnderCommand>,
+    )>,
+    mut q_designations: Query<(
+        Entity,
+        &Transform,
+        &crate::systems::jobs::Designation,
+        Option<&crate::systems::jobs::IssuedBy>,
+        Option<&mut crate::systems::jobs::TaskSlots>,
+    )>,
+) {
+    let soul_entity = on.entity;
+    if let Ok((
+        entity,
+        transform,
+        mut idle,
+        mut task,
+        mut path,
+        mut dest,
+        mut inventory,
+        under_command_opt,
+    )) = q_souls.get_mut(soul_entity)
+    {
+        info!(
+            "OBSERVER: Soul {:?} is exhausted, heading to gathering area",
+            entity
+        );
+
+        // 使役状態を解除
+        if under_command_opt.is_some() {
+            commands
+                .entity(entity)
+                .remove::<crate::entities::familiar::UnderCommand>();
+        }
+
+        // タスクを放棄
+        if !matches!(*task, AssignedTask::None) {
+            unassign_task(
+                &mut commands,
+                entity,
+                transform.translation.truncate(),
+                &mut task,
+                &mut path,
+                &mut inventory,
+                &mut q_designations,
+            );
+        }
+
+        // ExhaustedGatheringに移行
+        if idle.behavior != IdleBehavior::ExhaustedGathering {
+            // Gathering状態でない場合は初期化
+            if idle.behavior != IdleBehavior::Gathering {
+                let mut rng = rand::thread_rng();
+                idle.gathering_behavior = match rng.gen_range(0..4) {
+                    0 => GatheringBehavior::Wandering,
+                    1 => GatheringBehavior::Sleeping,
+                    2 => GatheringBehavior::Standing,
+                    _ => GatheringBehavior::Dancing,
+                };
+                idle.gathering_behavior_timer = 0.0;
+                idle.gathering_behavior_duration = rng.gen_range(60.0..90.0);
+                idle.needs_separation = true;
+            }
+            idle.behavior = IdleBehavior::ExhaustedGathering;
+            idle.idle_timer = 0.0;
+            let mut rng = rand::thread_rng();
+            idle.behavior_duration = rng.gen_range(2.0..4.0);
+        }
+
+        // 集会エリアへ向かう
+        let current_pos = transform.translation.truncate();
+        let center = gathering_area.0;
+        let dist_from_center = (center - current_pos).length();
+
+        // 3.0タイル分を超えている場合は目的地を設定
+        if dist_from_center > TILE_SIZE * 3.0 {
+            dest.0 = center;
+            path.waypoints.clear();
+            path.current_index = 0;
         }
     }
 }
