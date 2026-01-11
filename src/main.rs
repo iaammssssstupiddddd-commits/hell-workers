@@ -14,6 +14,16 @@ use bevy::render::RenderPlugin;
 use bevy::render::settings::{Backends, RenderCreation, WgpuSettings};
 use bevy::render::view::NoIndirectDrawing;
 use bevy::time::common_conditions::*;
+use bevy_inspector_egui::bevy_egui::{
+    EguiPlugin, input::egui_wants_any_keyboard_input, input::egui_wants_any_pointer_input,
+};
+use bevy_inspector_egui::quick::{
+    FilterQueryInspectorPlugin, ResourceInspectorPlugin, StateInspectorPlugin, WorldInspectorPlugin,
+};
+
+/// F12キーでトグルするデバッグインスペクタの表示状態
+#[derive(Resource, Default)]
+pub struct DebugInspectorVisible(pub bool);
 use std::time::Duration;
 
 use game_state::{
@@ -101,12 +111,31 @@ fn main() {
                 })
                 .set(RenderPlugin {
                     render_creation: RenderCreation::Automatic(WgpuSettings {
-                        backends: Some(Backends::DX12),
+                        backends: Some(Backends::VULKAN),
                         ..default()
                     }),
                     ..default()
                 }),
         )
+        .add_plugins(EguiPlugin::default())
+        .add_plugins(WorldInspectorPlugin::new())
+        .add_plugins(
+            ResourceInspectorPlugin::<GameTime>::default()
+                .run_if(|vis: Res<DebugInspectorVisible>| vis.0),
+        )
+        .add_plugins(
+            StateInspectorPlugin::<PlayMode>::default()
+                .run_if(|vis: Res<DebugInspectorVisible>| vis.0),
+        )
+        .add_plugins(
+            FilterQueryInspectorPlugin::<With<crate::entities::familiar::Familiar>>::default()
+                .run_if(|vis: Res<DebugInspectorVisible>| vis.0),
+        )
+        .add_plugins(
+            FilterQueryInspectorPlugin::<With<crate::entities::damned_soul::DamnedSoul>>::default()
+                .run_if(|vis: Res<DebugInspectorVisible>| vis.0),
+        )
+        .init_resource::<DebugInspectorVisible>()
         // Resources from various modules
         .init_resource::<WorldMap>()
         .init_resource::<SelectedEntity>()
@@ -168,10 +197,12 @@ fn main() {
         .add_systems(
             Update,
             (
-                camera_movement,
-                camera_zoom,
-                handle_mouse_input.run_if(in_state(PlayMode::Normal)),
-                build_mode_cancel_system, // Phase1: Escキーでビルドモード解除
+                camera_movement.run_if(not(egui_wants_any_pointer_input)),
+                camera_zoom.run_if(not(egui_wants_any_pointer_input)),
+                handle_mouse_input
+                    .run_if(in_state(PlayMode::Normal).and(not(egui_wants_any_pointer_input))),
+                build_mode_cancel_system.run_if(not(egui_wants_any_keyboard_input)),
+                debug_inspector_toggle_system,
             )
                 .in_set(GameSystemSet::Input),
         )
@@ -508,5 +539,16 @@ fn debug_spawn_system(
             familiar_type: FamiliarType::Imp,
         });
         info!("DEBUG_SPAWN: Familiar at {:?}", spawn_pos);
+    }
+}
+
+/// F12キーでデバッグインスペクタの表示をトグル
+fn debug_inspector_toggle_system(
+    buttons: Res<ButtonInput<KeyCode>>,
+    mut visible: ResMut<DebugInspectorVisible>,
+) {
+    if buttons.just_pressed(KeyCode::F12) {
+        visible.0 = !visible.0;
+        info!("DEBUG_INSPECTOR: Visible = {}", visible.0);
     }
 }

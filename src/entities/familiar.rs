@@ -41,7 +41,7 @@ impl Default for Familiar {
         Self {
             familiar_type: FamiliarType::default(),
             command_radius: TILE_SIZE * 7.0, // Impのデフォルト値
-            efficiency: 0.5,                  // Impのデフォルト値
+            efficiency: 0.5,                 // Impのデフォルト値
             name: String::new(),
         }
     }
@@ -94,7 +94,7 @@ pub enum FamiliarType {
 #[allow(dead_code)]
 pub enum FamiliarCommand {
     #[default]
-    Idle,              // 待機
+    Idle, // 待機
     GatherResources,   // 収集指示
     Patrol,            // 巡回（監視）
     Construct(Entity), // 建設命令
@@ -189,6 +189,7 @@ pub fn spawn_familiar_at(
     let fam_entity = commands
         .spawn((
             familiar,
+            Name::new(familiar_name.clone()),
             FamiliarOperation::default(),
             ActiveCommand::default(),
             crate::systems::familiar_ai::FamiliarAiState::default(),
