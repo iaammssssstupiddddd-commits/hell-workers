@@ -122,16 +122,9 @@ impl Default for FamiliarOperation {
     }
 }
 
-/// 魂がどの使い魔に使役されているかを示す
-#[derive(Component, Reflect, Debug, Clone, Copy)]
-#[reflect(Component)]
-pub struct UnderCommand(pub Entity);
-
-impl Default for UnderCommand {
-    fn default() -> Self {
-        Self(Entity::PLACEHOLDER)
-    }
-}
+// UnderCommand は relationships.rs の CommandedBy に移行
+// 後方互換性のため、エイリアスを提供
+pub use crate::relationships::CommandedBy as UnderCommand;
 
 /// 使い魔をスポーンする
 pub fn spawn_familiar(mut spawn_events: MessageWriter<FamiliarSpawnEvent>) {
@@ -193,8 +186,10 @@ pub fn spawn_familiar_at(
             FamiliarOperation::default(),
             ActiveCommand::default(),
             crate::systems::familiar_ai::FamiliarAiState::default(),
-            Destination(actual_pos), // 移動先
-            Path::default(),         // 経路
+            crate::relationships::Commanding::default(), // 部下リスト（Relationship自動管理）
+            crate::relationships::ManagedTasks::default(), // 管理タスクリスト（Relationship自動管理）
+            Destination(actual_pos),                       // 移動先
+            Path::default(),                               // 経路
             Sprite {
                 image: game_assets.colonist.clone(), // TODO: 専用テクスチャ
                 custom_size: Some(Vec2::splat(TILE_SIZE * 0.9)),

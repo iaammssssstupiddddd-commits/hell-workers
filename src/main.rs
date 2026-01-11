@@ -4,6 +4,7 @@ mod entities;
 mod events;
 mod game_state;
 mod interface;
+mod relationships;
 mod systems;
 mod world;
 

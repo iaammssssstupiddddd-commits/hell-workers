@@ -55,8 +55,8 @@
 
 疲労が90%（`FATIGUE_GATHERING_THRESHOLD`）を超えると `OnExhausted` イベントがトリガーされ、Observerによって以下が即座に実行されます：
 
-1. 使役状態（UnderCommand）の解除
-2. 現在のタスクの放棄（アイテムはドロップ）
+1. **使役状態の解除**: `CommandedBy`Relationshipコンポーネント（旧 `UnderCommand`）を削除。
+2. **現在のタスクの放棄**: `WorkingOn`Relationship（旧 `ClaimedBy`）を解除し、アイテムはドロップ。
 3. `ExhaustedGathering` 状態への移行
 4. 集会所への移動開始
 
@@ -71,7 +71,7 @@
 使い魔がワーカーをリクルートする際の条件：
 
 1. **影響範囲内**: 使い魔の `command_radius` 内にいること
-2. **未使役**: `UnderCommand` コンポーネントがないこと
+2. **未使役**: `CommandedBy` コンポーネントがないこと
 3. **タスクなし**: `AssignedTask::None` であること
 4. **疲労OK**: 疲労が使い魔の閾値未満、または `Gathering` 状態であること
 5. **ストレスOK**: `StressBreakdown` 状態でないこと

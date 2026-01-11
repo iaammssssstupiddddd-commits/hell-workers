@@ -74,9 +74,9 @@ impl TaskSlots {
     }
 }
 
-/// どの使い魔が発行した指示か
-#[derive(Component, Clone, Copy, Debug)]
-pub struct IssuedBy(#[allow(dead_code)] pub Entity);
+// IssuedBy は relationships.rs の ManagedBy に移行
+// 後方互換性のため、エイリアスを提供
+pub use crate::relationships::ManagedBy as IssuedBy;
 
 // --- Systems ---
 
