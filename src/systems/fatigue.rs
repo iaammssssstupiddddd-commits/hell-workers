@@ -2,8 +2,10 @@
 //!
 //! 魂の疲労値を管理し、タスク実行中に増加、待機中に減少させる。
 
-use crate::entities::damned_soul::DamnedSoul;
+use crate::constants::FATIGUE_GATHERING_THRESHOLD;
+use crate::entities::damned_soul::{DamnedSoul, IdleBehavior, IdleState};
 use crate::entities::familiar::UnderCommand;
+use crate::events::OnExhausted;
 use crate::systems::work::AssignedTask;
 use bevy::prelude::*;
 
@@ -13,11 +15,18 @@ use bevy::prelude::*;
 /// - 通常の待機: 疲労減少（速い） (-0.05/秒)
 pub fn fatigue_update_system(
     time: Res<Time>,
-    mut q_souls: Query<(&mut DamnedSoul, &AssignedTask, Option<&UnderCommand>)>,
+    mut commands: Commands,
+    mut q_souls: Query<(
+        Entity,
+        &mut DamnedSoul,
+        &AssignedTask,
+        &IdleState,
+        Option<&UnderCommand>,
+    )>,
 ) {
     let dt = time.delta_secs();
 
-    for (mut soul, task, under_command) in q_souls.iter_mut() {
+    for (entity, mut soul, task, idle, under_command) in q_souls.iter_mut() {
         let has_task = !matches!(*task, AssignedTask::None);
 
         if has_task {
@@ -29,6 +38,14 @@ pub fn fatigue_update_system(
         } else {
             // 通常の待機: 疲労減少（速い）
             soul.fatigue = (soul.fatigue - dt * 0.05).max(0.0);
+        }
+
+        // 閾値を超えている間、ExhaustedGathering でなければトリガー
+        // （瞬間判定ではなく継続判定に変更）
+        if soul.fatigue > FATIGUE_GATHERING_THRESHOLD
+            && idle.behavior != IdleBehavior::ExhaustedGathering
+        {
+            commands.trigger(OnExhausted { entity });
         }
     }
 }

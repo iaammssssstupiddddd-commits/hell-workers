@@ -9,6 +9,7 @@ use crate::entities::damned_soul::{
 use crate::entities::familiar::{
     ActiveCommand, Familiar, FamiliarCommand, FamiliarOperation, UnderCommand,
 };
+use crate::events::OnSoulRecruited;
 use crate::systems::command::TaskArea;
 use crate::systems::jobs::{Designation, IssuedBy, TaskSlots, WorkType};
 use crate::systems::logistics::{ClaimedBy, Stockpile};
@@ -96,7 +97,7 @@ pub fn familiar_ai_system(
     for (
         fam_entity,
         fam_transform,
-        _familiar,
+        familiar,
         familiar_op,
         active_command,
         mut ai_state,
@@ -111,6 +112,7 @@ pub fn familiar_ai_system(
         }
 
         let fam_pos = fam_transform.translation.truncate();
+        let command_radius = familiar.command_radius;
 
         // 管理下のワーカー（分隊メンバー）を特定
         let mut squad_members_entities: Vec<Entity> = q_souls_lite
@@ -123,18 +125,21 @@ pub fn familiar_ai_system(
         let fatigue_threshold = familiar_op.fatigue_threshold;
 
         // 部下の疲労をチェックし、閾値を超えたら使役を解除
-        let mut released_count = 0;
+        let mut released_entities: Vec<Entity> = Vec::new();
         for &member_entity in &squad_members_entities {
-            if let Ok((entity, transform, soul, mut task, _, mut path, _, mut inventory, _)) =
+            if let Ok((entity, transform, soul, mut task, _, mut path, idle, mut inventory, _)) =
                 q_souls.get_mut(member_entity)
             {
-                if soul.fatigue > fatigue_threshold {
+                // 疲労が閾値を超えている、または ExhaustedGathering 状態なら解除
+                if soul.fatigue > fatigue_threshold
+                    || idle.behavior == IdleBehavior::ExhaustedGathering
+                {
                     info!(
-                        "FAMILIAR_AI: {:?} releasing soul {:?} due to fatigue (fatigue: {:.1}% > threshold: {:.1}%)",
+                        "FAMILIAR_AI: {:?} releasing soul {:?} due to fatigue/exhaustion (fatigue: {:.1}%, behavior: {:?})",
                         fam_entity,
                         member_entity,
                         soul.fatigue * 100.0,
-                        fatigue_threshold * 100.0
+                        idle.behavior
                     );
 
                     // タスクを適切に解除（アイテムがあればドロップ）
@@ -149,18 +154,14 @@ pub fn familiar_ai_system(
                     );
 
                     commands.entity(member_entity).remove::<UnderCommand>();
-                    released_count += 1;
+                    released_entities.push(member_entity);
                 }
             }
         }
 
-        // 使役を解除した場合は、分隊メンバーリストを更新
-        if released_count > 0 {
-            squad_members_entities = q_souls_lite
-                .iter()
-                .filter(|(_, uc)| uc.0 == fam_entity)
-                .map(|(e, _)| e)
-                .collect();
+        // 解除したメンバーをローカルリストから除外（コマンドバッファ適用を待たずに即座に反映）
+        if !released_entities.is_empty() {
+            squad_members_entities.retain(|e| !released_entities.contains(e));
         }
 
         // --------------------------------------------------------
@@ -213,6 +214,12 @@ pub fn familiar_ai_system(
                             commands
                                 .entity(target_soul)
                                 .insert(UnderCommand(fam_entity));
+
+                            // Bevy 0.17 の Observer をトリガー
+                            commands.trigger(OnSoulRecruited {
+                                entity: target_soul,
+                                familiar_entity: fam_entity,
+                            });
                             squad_members_entities.push(target_soul);
 
                             // リクルート後、分隊が満員になった場合は監視モードに移行
@@ -236,8 +243,10 @@ pub fn familiar_ai_system(
                 }
             }
 
-            if !matches!(*ai_state, FamiliarAiState::Scouting { .. }) {
-                // 近くを探す（閾値より20%下以上、閾値未満のsoulを探す）
+            if !matches!(*ai_state, FamiliarAiState::Scouting { .. })
+                && squad_members_entities.len() < max_workers
+            {
+                // 影響範囲内のワーカーのみリクルート可能
                 if let Some(new_recruit) = find_best_recruit(
                     fam_pos,
                     fatigue_threshold,
@@ -245,11 +254,14 @@ pub fn familiar_ai_system(
                     &*spatial_grid,
                     &q_souls,
                     &q_breakdown,
-                    Some(TILE_SIZE * 20.0),
+                    Some(command_radius), // 影響範囲内のみ
                 ) {
                     info!(
-                        "FAMILIAR_AI: {:?} RECRUITED nearby soul {:?}",
-                        fam_entity, new_recruit
+                        "FAMILIAR_AI: {:?} RECRUITED soul {:?} within command radius (squad: {}/{})",
+                        fam_entity,
+                        new_recruit,
+                        squad_members_entities.len() + 1,
+                        max_workers
                     );
                     commands
                         .entity(new_recruit)
@@ -262,8 +274,8 @@ pub fn familiar_ai_system(
                     } else {
                         *ai_state = FamiliarAiState::SearchingTask;
                     }
-                } else {
-                    // 遠くを探す（閾値より20%下以上、閾値未満のsoulを探す）
+                } else if squad_members_entities.len() < max_workers {
+                    // 影響範囲外のワーカーを探してスカウト（移動）する
                     if let Some(distant_recruit) = find_best_recruit(
                         fam_pos,
                         fatigue_threshold,
@@ -271,10 +283,10 @@ pub fn familiar_ai_system(
                         &*spatial_grid,
                         &q_souls,
                         &q_breakdown,
-                        None,
+                        None, // 全域検索
                     ) {
                         info!(
-                            "FAMILIAR_AI: {:?} spotted distant soul {:?}, moving to recruit ({}/{})",
+                            "FAMILIAR_AI: {:?} spotted soul {:?} outside range, moving to recruit ({}/{})",
                             fam_entity,
                             distant_recruit,
                             squad_members_entities.len(),
@@ -334,7 +346,7 @@ pub fn familiar_ai_system(
                 fam_pos,
                 task_area_opt,
                 &q_designations,
-                _familiar,
+                familiar,
                 &q_souls_lite,
                 Some(familiar_op),
             ) {
@@ -384,45 +396,77 @@ pub fn familiar_ai_system(
             fam_path.current_index = 0;
         } else if squad_members_entities.len() >= max_workers {
             // 全員揃っていて、かつスカウト中ではない
-            if *ai_state != FamiliarAiState::Supervising {
-                info!("FAMILIAR_AI: {:?} transitioned to Supervising", fam_entity);
-                *ai_state = FamiliarAiState::Supervising;
-            }
-
-            // 監視移動（作業中のワーカーを優先して追尾）
-            // まずタスク中のワーカーを探す、いなければ一人目
-            let target_worker = squad_members_entities
+            // ただし、有効なメンバー（ExhaustedGathering でない）がいるか確認
+            let active_members: Vec<Entity> = squad_members_entities
                 .iter()
-                .find(|&&e| {
-                    if let Ok((_, _, _, task, _, _, _, _, _)) = q_souls.get(e) {
-                        !matches!(*task, AssignedTask::None)
+                .filter(|&&e| {
+                    if let Ok((_, _, _, _, _, _, idle, _, _)) = q_souls.get(e) {
+                        idle.behavior != IdleBehavior::ExhaustedGathering
                     } else {
                         false
                     }
                 })
-                .or(squad_members_entities.first());
+                .copied()
+                .collect();
 
-            if let Some(&target) = target_worker {
-                if let Ok((_, worker_transform, _, _, _, _, _, _, _)) = q_souls.get(target) {
-                    let worker_pos = worker_transform.translation.truncate();
-                    // 距離閾値を緩和し、リアルタイムで追跡
-                    if fam_pos.distance(worker_pos) > TILE_SIZE * 5.0 {
-                        fam_dest.0 = worker_pos;
-                        fam_path.waypoints = vec![worker_pos];
-                        fam_path.current_index = 0;
-                    }
+            if active_members.is_empty() {
+                // 全員が疲労休息中 → 拠点で待機
+                if *ai_state != FamiliarAiState::SearchingTask {
+                    info!(
+                        "FAMILIAR_AI: {:?} all members exhausted, waiting at base",
+                        fam_entity
+                    );
+                    *ai_state = FamiliarAiState::SearchingTask;
                 }
-            }
-        } else {
-            // タスクもスカウト対象もないなら拠点に戻る
-            if matches!(*ai_state, FamiliarAiState::SearchingTask) {
                 if let Some(area) = task_area_opt {
                     let center = (area.min + area.max) * 0.5;
-                    if fam_pos.distance_squared(center) > (TILE_SIZE * 5.0).powi(2) {
+                    if fam_pos.distance_squared(center) > (TILE_SIZE * 3.0).powi(2) {
                         fam_dest.0 = center;
                         fam_path.waypoints = vec![center];
                         fam_path.current_index = 0;
                     }
+                }
+            } else {
+                // 有効なメンバーがいる → 監視モード
+                if *ai_state != FamiliarAiState::Supervising {
+                    info!("FAMILIAR_AI: {:?} transitioned to Supervising", fam_entity);
+                    *ai_state = FamiliarAiState::Supervising;
+                }
+
+                // 監視移動（作業中のワーカーを優先して追尾）
+                // まずタスク中のワーカーを探す、いなければアクティブメンバーの一人目
+                let target_worker = active_members
+                    .iter()
+                    .find(|&&e| {
+                        if let Ok((_, _, _, task, _, _, _, _, _)) = q_souls.get(e) {
+                            !matches!(*task, AssignedTask::None)
+                        } else {
+                            false
+                        }
+                    })
+                    .or(active_members.first());
+
+                if let Some(&target) = target_worker {
+                    if let Ok((_, worker_transform, _, _, _, _, _, _, _)) = q_souls.get(target) {
+                        let worker_pos = worker_transform.translation.truncate();
+                        // 距離閾値を緩和し、リアルタイムで追跡
+                        if fam_pos.distance(worker_pos) > TILE_SIZE * 5.0 {
+                            fam_dest.0 = worker_pos;
+                            fam_path.waypoints = vec![worker_pos];
+                            fam_path.current_index = 0;
+                        }
+                    }
+                }
+            }
+        } else {
+            // 分隊が満員でない → リクルートを探すか拠点で待機
+            // SearchingTask 以外の状態（Scoutingが失敗した場合など）でも拠点に戻れるようにする
+            if let Some(area) = task_area_opt {
+                let center = (area.min + area.max) * 0.5;
+                if fam_pos.distance_squared(center) > (TILE_SIZE * 5.0).powi(2) {
+                    fam_dest.0 = center;
+                    fam_path.waypoints = vec![center];
+                    fam_path.current_index = 0;
                 }
             }
         }
@@ -463,7 +507,9 @@ fn find_best_recruit(
         let nearby = spatial_grid.get_nearby_in_radius(fam_pos, radius);
         for &e in &nearby {
             if let Ok((entity, transform, soul, task, _, _, idle, _, uc)) = q_souls.get(e) {
-                let fatigue_ok = soul.fatigue < fatigue_threshold;
+                // Gathering状態（回復中）なら疲労チェックをスキップ
+                let is_gathering = idle.behavior == IdleBehavior::Gathering;
+                let fatigue_ok = is_gathering || soul.fatigue < fatigue_threshold;
                 // ブレイクダウン中は使役不可
                 let stress_ok = q_breakdown.get(entity).is_err();
 
@@ -480,26 +526,46 @@ fn find_best_recruit(
     } else {
         // 全域検索
         for (entity, transform, soul, task, _, _, idle, _, uc) in q_souls.iter() {
-            // 疲労が閾値未満のsoulを探す
-            let min_fatigue = if fatigue_threshold >= 0.2 {
-                fatigue_threshold - 0.2
+            // Gathering状態（回復中）なら疲労チェックをスキップ
+            let is_gathering = idle.behavior == IdleBehavior::Gathering;
+            let fatigue_ok = if is_gathering {
+                true // 回復中なので疲労に関係なくリクルート可能
             } else {
-                0.0
+                // 疲労が閾値未満
+                soul.fatigue < fatigue_threshold
             };
-            let fatigue_ok = (soul.fatigue >= min_fatigue && soul.fatigue < fatigue_threshold)
-                || (soul.fatigue < min_fatigue);
             // ブレイクダウン中は使役不可
             let stress_ok = q_breakdown.get(entity).is_err();
 
-            if uc.is_none()
-                && matches!(*task, AssignedTask::None)
-                && fatigue_ok
-                && stress_ok
-                && idle.behavior != IdleBehavior::ExhaustedGathering
-            {
+            let is_free = uc.is_none();
+            let has_no_task = matches!(*task, AssignedTask::None);
+            let not_exhausted = idle.behavior != IdleBehavior::ExhaustedGathering;
+
+            if is_free && has_no_task && fatigue_ok && stress_ok && not_exhausted {
                 candidates.push((entity, transform.translation.truncate()));
+            } else {
+                // デバッグ: なぜ除外されたか
+                info!(
+                    "FIND_RECRUIT: Soul {:?} rejected - free:{}, no_task:{}, fatigue_ok:{} (fatigue:{:.1}%, behavior:{:?}), stress_ok:{}, not_exhausted:{}",
+                    entity,
+                    is_free,
+                    has_no_task,
+                    fatigue_ok,
+                    soul.fatigue * 100.0,
+                    idle.behavior,
+                    stress_ok,
+                    not_exhausted
+                );
             }
         }
+    }
+
+    // デバッグ: 候補数をログ（ただし候補がいない場合のみ）
+    if candidates.is_empty() {
+        info!(
+            "FIND_RECRUIT: No candidates found (threshold: {:.1}%)",
+            fatigue_threshold * 100.0
+        );
     }
 
     // 最も近い候補を返す

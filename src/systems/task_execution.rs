@@ -5,6 +5,7 @@
 use crate::assets::GameAssets;
 use crate::constants::*;
 use crate::entities::damned_soul::{DamnedSoul, Destination, Path};
+use crate::events::OnTaskCompleted;
 use crate::systems::jobs::{
     Designation, IssuedBy, Rock, TaskCompletedEvent, TaskSlots, Tree, WorkType,
 };
@@ -97,6 +98,12 @@ pub fn task_execution_system(
         let was_busy = !matches!(*task, AssignedTask::None);
         let old_work_type = task.work_type();
 
+        let old_task_entity = match *task {
+            AssignedTask::Gather { target, .. } => Some(target),
+            AssignedTask::Haul { item, .. } => Some(item),
+            AssignedTask::None => None,
+        };
+
         match *task {
             AssignedTask::Gather {
                 target,
@@ -146,11 +153,23 @@ pub fn task_execution_system(
         // 完了イベントの発行
         if was_busy && matches!(*task, AssignedTask::None) {
             if let Some(work_type) = old_work_type {
+                // 既存のMessage送信
                 ev_completed.write(TaskCompletedEvent {
                     _soul_entity: soul_entity,
                     _task_type: work_type,
                 });
-                info!("EVENT: TaskCompletedEvent sent for Soul {:?}", soul_entity);
+
+                // Bevy 0.17 の Observer をトリガー
+                commands.trigger(OnTaskCompleted {
+                    entity: soul_entity,
+                    task_entity: old_task_entity.unwrap_or(Entity::PLACEHOLDER),
+                    work_type,
+                });
+
+                info!(
+                    "EVENT: TaskCompletedEvent sent & OnTaskCompleted triggered for Soul {:?}",
+                    soul_entity
+                );
             }
         }
     }

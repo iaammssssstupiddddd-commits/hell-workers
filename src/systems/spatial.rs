@@ -2,7 +2,7 @@
 //!
 //! エンティティの位置を高速検索するためのグリッドデータ構造を提供します。
 
-use crate::constants::*;
+use crate::constants::{FATIGUE_IDLE_THRESHOLD, MOTIVATION_THRESHOLD, TILE_SIZE};
 use crate::entities::damned_soul::DamnedSoul;
 use crate::entities::familiar::Familiar;
 use crate::systems::logistics::ResourceItem;
@@ -296,12 +296,18 @@ impl ResourceSpatialGrid {
 /// SpatialGridを更新するシステム（差分更新）
 pub fn update_spatial_grid_system(
     mut spatial_grid: ResMut<SpatialGrid>,
-    q_souls: Query<(Entity, &Transform, &DamnedSoul, &AssignedTask, &crate::entities::damned_soul::IdleState)>,
+    q_souls: Query<(
+        Entity,
+        &Transform,
+        &DamnedSoul,
+        &AssignedTask,
+        &crate::entities::damned_soul::IdleState,
+    )>,
 ) {
     for (entity, transform, soul, task, idle) in q_souls.iter() {
         let should_be_in_grid = matches!(task, AssignedTask::None)
             && soul.motivation >= MOTIVATION_THRESHOLD
-            && soul.fatigue < FATIGUE_THRESHOLD
+            && soul.fatigue < FATIGUE_IDLE_THRESHOLD
             && idle.behavior != crate::entities::damned_soul::IdleBehavior::ExhaustedGathering;
 
         if should_be_in_grid {

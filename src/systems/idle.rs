@@ -1,11 +1,10 @@
 use crate::constants::{
-    FATIGUE_GATHERING_THRESHOLD, FATIGUE_THRESHOLD, MOTIVATION_THRESHOLD, TILE_SIZE,
+    FATIGUE_GATHERING_THRESHOLD, FATIGUE_IDLE_THRESHOLD, MOTIVATION_THRESHOLD, TILE_SIZE,
 };
 use crate::entities::damned_soul::{
     DamnedSoul, Destination, GatheringBehavior, IdleBehavior, IdleState, Path,
 };
-use crate::systems::jobs::{Designation, IssuedBy, TaskSlots};
-use crate::systems::work::{AssignedTask, unassign_task};
+use crate::systems::work::AssignedTask;
 use crate::world::map::{GatheringArea, WorldMap};
 use bevy::prelude::*;
 use rand::Rng;
@@ -49,98 +48,45 @@ fn random_position_around(center: Vec2, min_dist: f32, max_dist: f32) -> Vec2 {
 /// やる気が低い人間は怠惰な行動をする
 /// タスクがある人間は怠惰行動をしない
 pub fn idle_behavior_system(
-    mut commands: Commands,
     time: Res<Time>,
     world_map: Res<WorldMap>,
     gathering_area: Res<GatheringArea>,
     mut query: Query<(
-        Entity,
         &Transform,
         &mut IdleState,
         &mut Destination,
         &DamnedSoul,
         &mut Path,
         &mut AssignedTask,
-        &mut crate::systems::logistics::Inventory,
         Option<&crate::entities::familiar::UnderCommand>,
-    )>,
-    mut q_designations: Query<(
-        Entity,
-        &Transform,
-        &Designation,
-        Option<&IssuedBy>,
-        Option<&mut TaskSlots>,
     )>,
 ) {
     let dt = time.delta_secs();
 
-    for (
-        entity,
-        transform,
-        mut idle,
-        mut dest,
-        soul,
-        mut path,
-        mut task,
-        mut inventory,
-        under_command_opt,
-    ) in query.iter_mut()
+    for (transform, mut idle, mut dest, soul, mut path, task, under_command_opt) in query.iter_mut()
     {
-        // 集会エリアへの距離をチェック
-        let current_pos = transform.translation.truncate();
-        let center = gathering_area.0;
-        let dist_from_center = (center - current_pos).length();
-        let has_arrived = dist_from_center <= GATHERING_ARRIVAL_RADIUS;
+        // 疲労による強制集会（ExhaustedGathering）状態の場合は他の処理をスキップ
+        // (OnExhausted Observer によって既に移行・パッチ処理されている)
+        if idle.behavior == IdleBehavior::ExhaustedGathering {
+            // 集会エリアへの距離をチェック
+            let current_pos = transform.translation.truncate();
+            let center = gathering_area.0;
+            let dist_from_center = (center - current_pos).length();
+            let has_arrived = dist_from_center <= GATHERING_ARRIVAL_RADIUS;
 
-        // ExhaustedGatheringは全てに優先：疲労が閾値を超えた場合は即座にExhaustedGatheringに移行
-        if soul.fatigue > FATIGUE_GATHERING_THRESHOLD {
-            // 使役状態を解除
-            if under_command_opt.is_some() {
-                commands
-                    .entity(entity)
-                    .remove::<crate::entities::familiar::UnderCommand>();
-            }
-
-            // タスクを適切に解除（アイテムがあればドロップ）
-            unassign_task(
-                &mut commands,
-                entity,
-                current_pos,
-                &mut task,
-                &mut path,
-                &mut inventory,
-                &mut q_designations,
-            );
-
-            info!(
-                "FATIGUE: Soul {:?} abandoned task due to exhaustion",
-                entity
-            );
-
-            // ExhaustedGatheringに移行
-            if idle.behavior != IdleBehavior::ExhaustedGathering {
-                if idle.behavior != IdleBehavior::Gathering {
-                    idle.gathering_behavior = random_gathering_behavior();
-                    idle.gathering_behavior_timer = 0.0;
-                    idle.gathering_behavior_duration = random_gathering_duration();
-                    idle.needs_separation = true;
-                }
-                idle.behavior = IdleBehavior::ExhaustedGathering;
-                idle.idle_timer = 0.0;
-                let mut rng = rand::thread_rng();
-                idle.behavior_duration = rng.gen_range(2.0..4.0);
-            }
-
-            // 集会エリアへ向かう
-            if !has_arrived {
+            if has_arrived {
+                // 到着したら Gathering に遷移
+                info!("IDLE: Soul transitioned from ExhaustedGathering to Gathering");
+                idle.behavior = IdleBehavior::Gathering;
+                // 通常の Gathering 処理に進む（continue しない）
+            } else {
+                // 到着していない場合は引き続き向かう
                 if path.waypoints.is_empty() || path.current_index >= path.waypoints.len() {
                     dest.0 = center;
                     path.waypoints.clear();
                 }
+                continue;
             }
-
-            // ExhaustedGathering状態の場合は他の処理をスキップ
-            continue;
         }
 
         // 使い魔の部下（UnderCommand を持つ）の場合は追従システムに任せる
@@ -158,7 +104,7 @@ pub fn idle_behavior_system(
         idle.total_idle_time += dt;
 
         // やる気があり疲労が閾値未満の場合は怠惰行動をしない（次のタスクを待つ）
-        if soul.motivation > MOTIVATION_THRESHOLD && soul.fatigue < FATIGUE_THRESHOLD {
+        if soul.motivation > MOTIVATION_THRESHOLD && soul.fatigue < FATIGUE_IDLE_THRESHOLD {
             continue;
         }
 

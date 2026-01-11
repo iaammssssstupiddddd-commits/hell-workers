@@ -20,32 +20,62 @@
 ### 減少
 
 | 状況 | 変化率 | 0%到達時間 | 備考 |
-|------|--------|-----------|----|
+|------|--------|-----------|------|
 | 使役中の待機 | -0.01 × dt | 約100秒 | `fatigue_update_system` で処理 |
 | 通常の待機 | -0.05 × dt | 約20秒 | `fatigue_update_system` で処理 |
 
-## 閾値と動作
+## 閾値と定数
+
+### グローバル定数
 
 | 定数名 | 値 | 説明 |
 |--------|-----|------|
-| `FATIGUE_THRESHOLD` | 0.8 (80%) | この値以上でタスクを受け付けない |
-| `FATIGUE_GATHERING_THRESHOLD` | 0.9 (90%) | この値以上で強制的に集会へ向かう |
+| `FATIGUE_THRESHOLD` | 0.8 (80%) | 使い魔ごとの疲労閾値のデフォルト値 |
+| `FATIGUE_IDLE_THRESHOLD` | 0.8 (80%) | 怠惰行動開始の閾値（グローバル） |
+| `FATIGUE_GATHERING_THRESHOLD` | 0.9 (90%) | 強制集会の閾値（グローバル） |
+
+### 使い魔ごとの閾値
+
+各使い魔は `fatigue_threshold` を個別に持ち、UIで調整可能。
+
+- デフォルト: 0.8 (80%)
+- この閾値以上の魂はタスク割り当て対象外
+- この閾値を超えた魂は使役から解放
 
 ### 閾値による状態変化
 
 | 疲労値 | 状態 | 動作 |
 |--------|------|------|
-| < 80% | 通常 | タスクを受け付ける |
-| ≥ 80% | 疲労 | 新規タスクを受け付けない |
-| > 90% | 極度の疲労 | 使役解除 + 強制的に集会エリアへ移動 + やる気低下 |
+| < 使い魔の閾値 | 通常 | タスクを受け付ける |
+| ≥ 使い魔の閾値 | 疲労 | 新規タスク拒否 + 使役解除 |
+| ≥ 80% (IDLE) | 怠惰 | 怠惰行動を開始 |
+| > 90% (GATHERING) | 極度の疲労 | 強制的に集会エリアへ移動 |
 
-## 使い魔の疲労閾値
+## OnExhausted イベント
 
-使い魔ごとに `fatigue_threshold` を設定可能（UIで調整可）。
+疲労が90%（`FATIGUE_GATHERING_THRESHOLD`）を超えると `OnExhausted` イベントがトリガーされ、Observerによって以下が即座に実行されます：
 
-- デフォルト: 0.8 (80%)
-- この閾値以上の魂はタスク割り当て対象外
-- この閾値を超えた魂は使役から解放
+1. 使役状態（UnderCommand）の解除
+2. 現在のタスクの放棄（アイテムはドロップ）
+3. `ExhaustedGathering` 状態への移行
+4. 集会所への移動開始
+
+### ExhaustedGathering → Gathering 遷移
+
+- `ExhaustedGathering` 状態のワーカーは集会所へ向かう
+- 集会所に到着すると `Gathering` 状態に遷移
+- `Gathering` 状態のワーカーは疲労が高くてもリクルート対象になる
+
+## リクルート条件
+
+使い魔がワーカーをリクルートする際の条件：
+
+1. **影響範囲内**: 使い魔の `command_radius` 内にいること
+2. **未使役**: `UnderCommand` コンポーネントがないこと
+3. **タスクなし**: `AssignedTask::None` であること
+4. **疲労OK**: 疲労が使い魔の閾値未満、または `Gathering` 状態であること
+5. **ストレスOK**: `StressBreakdown` 状態でないこと
+6. **休息中でない**: `ExhaustedGathering` 状態でないこと
 
 ## 疲労と他ステータスの相互作用
 
@@ -57,8 +87,8 @@
 ### 怠惰行動（Idle Behavior）への影響
 
 怠惰行動システムでは以下の条件で行動が変化：
-- `fatigue >= FATIGUE_THRESHOLD` かつ `motivation <= MOTIVATION_THRESHOLD`: 怠惰行動を開始
-- `fatigue > FATIGUE_GATHERING_THRESHOLD`: `ExhaustedGathering` 状態へ移行
+- `fatigue >= FATIGUE_IDLE_THRESHOLD (80%)` かつ `motivation <= MOTIVATION_THRESHOLD`: 怠惰行動を開始
+- `fatigue > FATIGUE_GATHERING_THRESHOLD (90%)`: `ExhaustedGathering` 状態へ移行
 
 ## UI表示
 
@@ -66,10 +96,12 @@
 
 ## 関連ファイル
 
-- `src/constants.rs` - `FATIGUE_THRESHOLD`, `FATIGUE_GATHERING_THRESHOLD` 定義
-- `src/systems/fatigue.rs` - `fatigue_update_system`, `fatigue_penalty_system`（メイン）
-- `src/systems/task_execution.rs` - タスク完了時の疲労増加
-- `src/systems/idle.rs` - 疲労に基づく怠惰行動
-- `src/systems/familiar_ai.rs` - 使い魔のリクルート時の疲労チェック
+- `src/constants.rs` - 各閾値の定義
+- `src/events.rs` - `OnExhausted` イベント定義
+- `src/entities/damned_soul.rs` - `on_exhausted` Observer ハンドラの実装
 - `src/entities/familiar.rs` - `FamiliarOperationState.fatigue_threshold`
-
+- `src/systems/fatigue.rs` - `fatigue_update_system`, `fatigue_penalty_system`
+- `src/systems/task_execution.rs` - タスク完了時の疲労増加
+- `src/systems/idle.rs` - 疲労に基づく怠惰行動、ExhaustedGathering→Gathering遷移
+- `src/systems/familiar_ai.rs` - 使い魔のリクルート時の疲労チェック
+- `src/systems/spatial.rs` - グリッド登録判定
