@@ -14,12 +14,12 @@ bevy = { version = "0.17", features = [
     "bevy_window",
     "bevy_gizmos",
     "bevy_ui",
-    "bevy_pbr",
     "multi_threaded",
     "png",
     "jpeg",
 ] }
 rand = "0.8"
+bevy-inspector-egui = "0.35"
 
 [features]
 default = ["dynamic_linking"]
