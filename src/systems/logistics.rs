@@ -203,6 +203,7 @@ pub fn resource_count_display_system(
     q_items: Query<(&Transform, &Visibility), With<ResourceItem>>,
     mut labels: ResMut<ResourceLabels>,
     mut q_text: Query<&mut Text2d, With<ResourceCountLabel>>,
+    mut q_transform: Query<&mut Transform, (With<ResourceCountLabel>, Without<ResourceItem>)>,
 ) {
     let mut grid_counts: HashMap<(i32, i32), usize> = HashMap::new();
 
@@ -213,13 +214,28 @@ pub fn resource_count_display_system(
         }
     }
 
+    // ラベルの更新または作成
     for (grid, count) in grid_counts.iter() {
+        let pos = WorldMap::grid_to_world(grid.0, grid.1);
+        // 新しい座標系では pos は中心なので、右上端 (32*0.5=16) 寄りにオフセット
+        // 0.35 * 32 = 11.2 なので正確にタイルの内側に収まる
+        let target_transform =
+            Transform::from_xyz(pos.x + TILE_SIZE * 0.35, pos.y + TILE_SIZE * 0.35, 1.0);
+
         if let Some(&entity) = labels.0.get(grid) {
-            if let Ok(mut text) = q_text.get_mut(entity) {
-                text.0 = count.to_string();
+            if let Ok(mut transform) = q_transform.get_mut(entity) {
+                if let Ok(mut text) = q_text.get_mut(entity) {
+                    text.0 = count.to_string();
+                }
+                *transform = target_transform;
+            } else {
+                // エンティティが存在しないか、Transformを持っていない場合は再作成フラグ
+                labels.0.remove(grid);
             }
-        } else {
-            let pos = WorldMap::grid_to_world(grid.0, grid.1);
+        }
+
+        // 存在しない、または上記で remove された場合は作成
+        if !labels.0.contains_key(grid) {
             let entity = commands
                 .spawn((
                     ResourceCountLabel,
@@ -230,13 +246,14 @@ pub fn resource_count_display_system(
                     },
                     TextColor(Color::WHITE),
                     TextLayout::new_with_justify(Justify::Center),
-                    Transform::from_xyz(pos.x + TILE_SIZE * 0.3, pos.y + TILE_SIZE * 0.3, 1.0),
+                    target_transform,
                 ))
                 .id();
             labels.0.insert(*grid, entity);
         }
     }
 
+    // 不要なラベルの削除
     let mut to_remove = Vec::new();
     for (&grid, &entity) in labels.0.iter() {
         if !grid_counts.contains_key(&grid) {

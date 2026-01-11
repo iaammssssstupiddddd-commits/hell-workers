@@ -13,7 +13,7 @@ use crate::systems::command::TaskArea;
 use crate::systems::jobs::{Designation, IssuedBy, TaskSlots, WorkType};
 use crate::systems::logistics::{ClaimedBy, Stockpile};
 use crate::systems::spatial::SpatialGrid;
-use crate::systems::work::{AssignedTask, GatherPhase, HaulPhase};
+use crate::systems::work::{AssignedTask, GatherPhase, HaulPhase, unassign_task};
 use bevy::prelude::*;
 
 // ============================================================
@@ -77,6 +77,7 @@ pub fn familiar_ai_system(
             &mut Destination,
             &mut Path,
             &IdleState,
+            &mut crate::systems::logistics::Inventory,
             Option<&UnderCommand>,
         ),
         Without<Familiar>,
@@ -104,6 +105,11 @@ pub fn familiar_ai_system(
         task_area_opt,
     ) in q_familiars.iter_mut()
     {
+        // 使い魔が Idle の場合は AI 処理をスキップ（部下を持つのをやめる指示のため）
+        if matches!(active_command.command, FamiliarCommand::Idle) {
+            continue;
+        }
+
         let fam_pos = fam_transform.translation.truncate();
 
         // 管理下のワーカー（分隊メンバー）を特定
@@ -119,7 +125,9 @@ pub fn familiar_ai_system(
         // 部下の疲労をチェックし、閾値を超えたら使役を解除
         let mut released_count = 0;
         for &member_entity in &squad_members_entities {
-            if let Ok((_, _, soul, _, _, _, _, _)) = q_souls.get(member_entity) {
+            if let Ok((entity, transform, soul, mut task, _, mut path, _, mut inventory, _)) =
+                q_souls.get_mut(member_entity)
+            {
                 if soul.fatigue > fatigue_threshold {
                     info!(
                         "FAMILIAR_AI: {:?} releasing soul {:?} due to fatigue (fatigue: {:.1}% > threshold: {:.1}%)",
@@ -128,6 +136,18 @@ pub fn familiar_ai_system(
                         soul.fatigue * 100.0,
                         fatigue_threshold * 100.0
                     );
+
+                    // タスクを適切に解除（アイテムがあればドロップ）
+                    unassign_task(
+                        &mut commands,
+                        entity,
+                        transform.translation.truncate(),
+                        &mut task,
+                        &mut path,
+                        &mut inventory,
+                        &mut q_designations,
+                    );
+
                     commands.entity(member_entity).remove::<UnderCommand>();
                     released_count += 1;
                 }
@@ -169,7 +189,7 @@ pub fn familiar_ai_system(
 
         if squad_members_entities.len() < max_workers {
             if let FamiliarAiState::Scouting { target_soul } = *ai_state {
-                if let Ok((_, target_transform, soul, task, _, _, idle, uc)) =
+                if let Ok((_soul_entity, target_transform, soul, task, _, _, idle, _, uc)) =
                     q_souls.get(target_soul)
                 {
                     // 疲労が閾値未満のsoulを探す（疲労が低いsoulも使役可能）
@@ -263,7 +283,7 @@ pub fn familiar_ai_system(
                         *ai_state = FamiliarAiState::Scouting {
                             target_soul: distant_recruit,
                         };
-                        if let Ok((_, t, _, _, _, _, _, _)) = q_souls.get(distant_recruit) {
+                        if let Ok((_, t, _, _, _, _, _, _, _)) = q_souls.get(distant_recruit) {
                             force_dest = Some(t.translation.truncate());
                         }
                     }
@@ -297,7 +317,7 @@ pub fn familiar_ai_system(
         // 部下の中で暇な人を探す（ExhaustedGathering状態は除外、疲労閾値未満のみ）
         let mut idle_members = Vec::new();
         for &member_entity in &squad_members_entities {
-            if let Ok((_, _, soul, task, _, _, idle, _)) = q_souls.get(member_entity) {
+            if let Ok((_, _, soul, task, _, _, idle, _, _)) = q_souls.get(member_entity) {
                 if matches!(*task, AssignedTask::None)
                     && idle.behavior != IdleBehavior::ExhaustedGathering
                     && soul.fatigue < fatigue_threshold
@@ -324,11 +344,11 @@ pub fn familiar_ai_system(
                     .min_by(|&e1, &e2| {
                         let p1 = q_souls
                             .get(e1)
-                            .map(|(_, t, _, _, _, _, _, _)| t.translation.truncate())
+                            .map(|(_, t, _, _, _, _, _, _, _)| t.translation.truncate())
                             .unwrap_or(Vec2::ZERO);
                         let p2 = q_souls
                             .get(e2)
-                            .map(|(_, t, _, _, _, _, _, _)| t.translation.truncate())
+                            .map(|(_, t, _, _, _, _, _, _, _)| t.translation.truncate())
                             .unwrap_or(Vec2::ZERO);
                         p1.distance_squared(fam_pos)
                             .partial_cmp(&p2.distance_squared(fam_pos))
@@ -374,7 +394,7 @@ pub fn familiar_ai_system(
             let target_worker = squad_members_entities
                 .iter()
                 .find(|&&e| {
-                    if let Ok((_, _, _, task, _, _, _, _)) = q_souls.get(e) {
+                    if let Ok((_, _, _, task, _, _, _, _, _)) = q_souls.get(e) {
                         !matches!(*task, AssignedTask::None)
                     } else {
                         false
@@ -383,7 +403,7 @@ pub fn familiar_ai_system(
                 .or(squad_members_entities.first());
 
             if let Some(&target) = target_worker {
-                if let Ok((_, worker_transform, _, _, _, _, _, _)) = q_souls.get(target) {
+                if let Ok((_, worker_transform, _, _, _, _, _, _, _)) = q_souls.get(target) {
                     let worker_pos = worker_transform.translation.truncate();
                     // 距離閾値を緩和し、リアルタイムで追跡
                     if fam_pos.distance(worker_pos) > TILE_SIZE * 5.0 {
@@ -428,6 +448,7 @@ fn find_best_recruit(
             &mut Destination,
             &mut Path,
             &IdleState,
+            &mut crate::systems::logistics::Inventory,
             Option<&UnderCommand>,
         ),
         Without<Familiar>,
@@ -441,8 +462,7 @@ fn find_best_recruit(
         // 近くを検索
         let nearby = spatial_grid.get_nearby_in_radius(fam_pos, radius);
         for &e in &nearby {
-            if let Ok((entity, transform, soul, task, _, _, idle, uc)) = q_souls.get(e) {
-                // 疲労が閾値未満のsoulを探す
+            if let Ok((entity, transform, soul, task, _, _, idle, _, uc)) = q_souls.get(e) {
                 let fatigue_ok = soul.fatigue < fatigue_threshold;
                 // ブレイクダウン中は使役不可
                 let stress_ok = q_breakdown.get(entity).is_err();
@@ -459,7 +479,7 @@ fn find_best_recruit(
         }
     } else {
         // 全域検索
-        for (entity, transform, soul, task, _, _, idle, uc) in q_souls.iter() {
+        for (entity, transform, soul, task, _, _, idle, _, uc) in q_souls.iter() {
             // 疲労が閾値未満のsoulを探す
             let min_fatigue = if fatigue_threshold >= 0.2 {
                 fatigue_threshold - 0.2
@@ -579,23 +599,14 @@ fn assign_task_to_worker(
             &mut Destination,
             &mut Path,
             &IdleState,
+            &mut crate::systems::logistics::Inventory,
             Option<&UnderCommand>,
         ),
         Without<Familiar>,
     >,
     q_stockpiles: &Query<(Entity, &Transform, &Stockpile)>,
 ) {
-    let Ok((_, task_transform, designation, _, mut slots_opt)) =
-        q_designations.get_mut(task_entity)
-    else {
-        return;
-    };
-
-    if let Some(ref mut slots) = slots_opt {
-        slots.current += 1;
-    }
-
-    let Ok((_, _, soul, mut assigned_task, mut dest, mut path, idle, _)) =
+    let Ok((_, _, soul, mut assigned_task, mut dest, mut path, idle, _, _)) =
         q_souls.get_mut(worker_entity)
     else {
         return;
@@ -618,7 +629,18 @@ fn assign_task_to_worker(
         return;
     }
 
-    let task_pos = task_transform.translation.truncate();
+    let task_pos = if let Ok((_, transform, _, _, _)) = q_designations.get(task_entity) {
+        transform.translation.truncate()
+    } else {
+        return;
+    };
+
+    let designation = if let Ok((_, _, designation, _, _)) = q_designations.get(task_entity) {
+        designation
+    } else {
+        return;
+    };
+
     let work_type = designation.work_type;
 
     // タスクを割り当て
@@ -653,6 +675,13 @@ fn assign_task_to_worker(
             }
         }
         _ => return,
+    }
+
+    // 確定後にスロットを増やす
+    if let Ok((_, _, _, _, mut slots_opt)) = q_designations.get_mut(task_entity) {
+        if let Some(ref mut slots) = slots_opt {
+            slots.current += 1;
+        }
     }
 
     dest.0 = task_pos;

@@ -1,6 +1,9 @@
-use crate::entities::damned_soul::{DamnedSoul, IdleBehavior, IdleState, StressBreakdown};
+use crate::entities::damned_soul::{
+    DamnedSoul, Destination, IdleBehavior, IdleState, Path, StressBreakdown,
+};
 use crate::entities::familiar::UnderCommand;
-use crate::systems::work::AssignedTask;
+use crate::systems::jobs::{Designation, IssuedBy, TaskSlots};
+use crate::systems::work::{AssignedTask, unassign_task};
 use bevy::prelude::*;
 
 /// ストレスの更新とブレイクダウン状態管理システム
@@ -13,10 +16,19 @@ pub fn stress_system(
         &Transform,
         &mut DamnedSoul,
         &mut AssignedTask,
+        &mut Destination,
+        &mut Path,
         &IdleState,
         &mut crate::systems::logistics::Inventory,
         Option<&UnderCommand>,
         Option<&mut StressBreakdown>,
+    )>,
+    mut q_designations: Query<(
+        Entity,
+        &Transform,
+        &Designation,
+        Option<&IssuedBy>,
+        Option<&mut TaskSlots>,
     )>,
 ) {
     let dt = time.delta_secs();
@@ -26,6 +38,8 @@ pub fn stress_system(
         transform,
         mut soul,
         mut task,
+        _dest,
+        mut path,
         idle,
         mut inventory,
         under_command,
@@ -65,18 +79,15 @@ pub fn stress_system(
                     .insert(StressBreakdown { is_frozen: true });
                 // タスクを放棄
                 if has_task {
-                    // アイテムをドロップ
-                    if let Some(item_entity) = inventory.0.take() {
-                        commands.entity(item_entity).insert((
-                            Visibility::Visible,
-                            Transform::from_xyz(soul_pos.x, soul_pos.y, 0.6),
-                        ));
-                        commands
-                            .entity(item_entity)
-                            .remove::<crate::systems::logistics::ClaimedBy>();
-                    }
-
-                    *task = AssignedTask::None;
+                    unassign_task(
+                        &mut commands,
+                        entity,
+                        soul_pos,
+                        &mut task,
+                        &mut path,
+                        &mut inventory,
+                        &mut q_designations,
+                    );
                     info!("STRESS: Soul {:?} abandoned task due to breakdown", entity);
                 }
                 // 使役を解除

@@ -37,5 +37,5 @@
 ## 関連ファイル
 
 - `src/entities/damned_soul.rs` - `StressBreakdown` コンポーネント定義
-- `src/systems/motivation.rs` - ストレス増減ロジック
+- `src/systems/stress.rs` - ストレス更新およびブレイクダウン管理
 - `src/systems/familiar_ai.rs` - リクルート時のチェック
