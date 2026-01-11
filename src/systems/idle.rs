@@ -4,7 +4,8 @@ use crate::constants::{
 use crate::entities::damned_soul::{
     DamnedSoul, Destination, GatheringBehavior, IdleBehavior, IdleState, Path,
 };
-use crate::systems::work::AssignedTask;
+use crate::systems::jobs::{Designation, IssuedBy, TaskSlots};
+use crate::systems::work::{AssignedTask, unassign_task};
 use crate::world::map::{GatheringArea, WorldMap};
 use bevy::prelude::*;
 use rand::Rng;
@@ -63,6 +64,13 @@ pub fn idle_behavior_system(
         &mut crate::systems::logistics::Inventory,
         Option<&crate::entities::familiar::UnderCommand>,
     )>,
+    mut q_designations: Query<(
+        Entity,
+        &Transform,
+        &Designation,
+        Option<&IssuedBy>,
+        Option<&mut TaskSlots>,
+    )>,
 ) {
     let dt = time.delta_secs();
 
@@ -93,23 +101,21 @@ pub fn idle_behavior_system(
                     .remove::<crate::entities::familiar::UnderCommand>();
             }
 
-            // タスク放棄とアイテムドロップ
-            if !matches!(*task, AssignedTask::None) {
-                if let Some(item_entity) = inventory.0.take() {
-                    commands.entity(item_entity).insert((
-                        Visibility::Visible,
-                        Transform::from_xyz(current_pos.x, current_pos.y, 0.6),
-                    ));
-                    commands
-                        .entity(item_entity)
-                        .remove::<crate::systems::logistics::ClaimedBy>();
-                }
-                *task = AssignedTask::None;
-                info!(
-                    "FATIGUE: Soul {:?} abandoned task due to exhaustion",
-                    entity
-                );
-            }
+            // タスクを適切に解除（アイテムがあればドロップ）
+            unassign_task(
+                &mut commands,
+                entity,
+                current_pos,
+                &mut task,
+                &mut path,
+                &mut inventory,
+                &mut q_designations,
+            );
+
+            info!(
+                "FATIGUE: Soul {:?} abandoned task due to exhaustion",
+                entity
+            );
 
             // ExhaustedGatheringに移行
             if idle.behavior != IdleBehavior::ExhaustedGathering {

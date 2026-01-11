@@ -50,15 +50,16 @@ impl WorldMap {
     }
 
     pub fn world_to_grid(pos: Vec2) -> (i32, i32) {
-        let x = ((pos.x / TILE_SIZE) + (MAP_WIDTH as f32 / 2.0)).floor() as i32;
-        let y = ((pos.y / TILE_SIZE) + (MAP_HEIGHT as f32 / 2.0)).floor() as i32;
+        // (MAP_WIDTH - 1) / 2.0 = 24.5 を中心(0,0)とする計算
+        let x = (pos.x / TILE_SIZE + (MAP_WIDTH as f32 - 1.0) / 2.0 + 0.5).floor() as i32;
+        let y = (pos.y / TILE_SIZE + (MAP_HEIGHT as f32 - 1.0) / 2.0 + 0.5).floor() as i32;
         (x, y)
     }
 
     pub fn grid_to_world(x: i32, y: i32) -> Vec2 {
         Vec2::new(
-            (x as f32 - MAP_WIDTH as f32 / 2.0) * TILE_SIZE + TILE_SIZE / 2.0,
-            (y as f32 - MAP_HEIGHT as f32 / 2.0) * TILE_SIZE + TILE_SIZE / 2.0,
+            (x as f32 - (MAP_WIDTH as f32 - 1.0) / 2.0) * TILE_SIZE,
+            (y as f32 - (MAP_HEIGHT as f32 - 1.0) / 2.0) * TILE_SIZE,
         )
     }
 }
@@ -96,6 +97,7 @@ pub fn spawn_map(
 
             world_map.tiles.insert((x, y), terrain);
 
+            let pos = WorldMap::grid_to_world(x, y);
             commands.spawn((
                 Tile,
                 Sprite {
@@ -103,11 +105,7 @@ pub fn spawn_map(
                     custom_size: Some(Vec2::splat(TILE_SIZE)),
                     ..default()
                 },
-                Transform::from_xyz(
-                    (x as f32 - MAP_WIDTH as f32 / 2.0) * TILE_SIZE,
-                    (y as f32 - MAP_HEIGHT as f32 / 2.0) * TILE_SIZE,
-                    0.0,
-                ),
+                Transform::from_xyz(pos.x, pos.y, 0.0),
             ));
         }
     }
