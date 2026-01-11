@@ -1,9 +1,7 @@
-use crate::entities::damned_soul::{
-    DamnedSoul, Destination, IdleBehavior, IdleState, Path, StressBreakdown,
-};
+use crate::entities::damned_soul::{DamnedSoul, IdleBehavior, IdleState, StressBreakdown};
 use crate::entities::familiar::UnderCommand;
-use crate::systems::jobs::{Designation, IssuedBy, TaskSlots};
-use crate::systems::work::{AssignedTask, unassign_task};
+use crate::events::OnStressBreakdown;
+use crate::systems::work::AssignedTask;
 use bevy::prelude::*;
 
 /// ストレスの更新とブレイクダウン状態管理システム
@@ -13,40 +11,16 @@ pub fn stress_system(
     time: Res<Time>,
     mut q_souls: Query<(
         Entity,
-        &Transform,
         &mut DamnedSoul,
-        &mut AssignedTask,
-        &mut Destination,
-        &mut Path,
+        &AssignedTask,
         &IdleState,
-        &mut crate::systems::logistics::Inventory,
         Option<&UnderCommand>,
         Option<&mut StressBreakdown>,
-    )>,
-    mut q_designations: Query<(
-        Entity,
-        &Transform,
-        &Designation,
-        Option<&IssuedBy>,
-        Option<&mut TaskSlots>,
     )>,
 ) {
     let dt = time.delta_secs();
 
-    for (
-        entity,
-        transform,
-        mut soul,
-        mut task,
-        _dest,
-        mut path,
-        idle,
-        mut inventory,
-        under_command,
-        breakdown_opt,
-    ) in q_souls.iter_mut()
-    {
-        let soul_pos = transform.translation.truncate();
+    for (entity, mut soul, task, idle, under_command, breakdown_opt) in q_souls.iter_mut() {
         let has_task = !matches!(*task, AssignedTask::None);
         let is_gathering = matches!(
             idle.behavior,
@@ -58,7 +32,7 @@ pub fn stress_system(
         // 約10秒で100% → 0.105/秒
         if has_task {
             // タスク実行中 = 監視なしで働く = 軽いストレス
-            soul.stress = (soul.stress + dt * 0.03).min(1.0);
+            soul.stress = (soul.stress + dt * 0.015).min(1.0);
         } else if is_gathering {
             // 集会中 = 最速回復（約25秒で0%）
             soul.stress = (soul.stress - dt * 0.04).max(0.0);
@@ -74,30 +48,8 @@ pub fn stress_system(
         if soul.stress >= 1.0 {
             // ストレス限界 → ブレイクダウン発動
             if breakdown_opt.is_none() {
-                commands
-                    .entity(entity)
-                    .insert(StressBreakdown { is_frozen: true });
-                // タスクを放棄
-                if has_task {
-                    unassign_task(
-                        &mut commands,
-                        entity,
-                        soul_pos,
-                        &mut task,
-                        &mut path,
-                        &mut inventory,
-                        &mut q_designations,
-                    );
-                    info!("STRESS: Soul {:?} abandoned task due to breakdown", entity);
-                }
-                // 使役を解除
-                if under_command.is_some() {
-                    commands.entity(entity).remove::<UnderCommand>();
-                    info!(
-                        "STRESS: Soul {:?} entered breakdown, released from command",
-                        entity
-                    );
-                }
+                // Bevy 0.17 の Observer をトリガー
+                commands.trigger(OnStressBreakdown { entity });
             }
         } else if let Some(mut breakdown) = breakdown_opt {
             if soul.stress <= 0.7 {
@@ -165,8 +117,8 @@ pub fn supervision_stress_system(
 
         // 監視されながら働く = 追加の高ストレス
         if best_influence > 0.0 {
-            // 基本ストレス(0.03)に加えて監視ストレスを追加（合計で約0.105/秒になるよう）
-            let supervision_stress = best_influence * dt * 0.075;
+            // 基本ストレス(0.015)に加えて監視ストレスを追加
+            let supervision_stress = best_influence * dt * 0.0375;
             soul.stress = (soul.stress + supervision_stress).min(1.0);
         }
     }
