@@ -1,6 +1,7 @@
 mod assets;
 mod constants;
 mod entities;
+mod game_state;
 mod interface;
 mod systems;
 mod world;
@@ -8,9 +9,16 @@ mod world;
 use crate::assets::GameAssets;
 use crate::world::map::{WorldMap, spawn_map};
 use bevy::prelude::*;
+use bevy::render::RenderPlugin;
+use bevy::render::settings::{Backends, RenderCreation, WgpuSettings};
 use bevy::render::view::NoIndirectDrawing;
 use bevy::time::common_conditions::*;
 use std::time::Duration;
+
+use game_state::{
+    BuildContext, PlayMode, TaskContext, ZoneContext, log_enter_building_mode, log_enter_task_mode,
+    log_enter_zone_mode, log_exit_building_mode, log_exit_task_mode, log_exit_zone_mode,
+};
 
 // 新システム
 use crate::entities::damned_soul::{
@@ -22,7 +30,7 @@ use crate::entities::familiar::{
     update_familiar_range_indicator,
 };
 use crate::systems::command::{
-    TaskMode, area_selection_indicator_system, assign_task_system, designation_visual_system,
+    area_selection_indicator_system, assign_task_system, designation_visual_system,
     familiar_command_input_system, familiar_command_visual_system, task_area_indicator_system,
     task_area_selection_system, update_designation_indicator_system,
 };
@@ -52,8 +60,8 @@ use crate::systems::{
 // 既存システム
 use crate::interface::camera::{MainCamera, camera_movement, camera_zoom};
 use crate::interface::selection::{
-    BuildMode, HoveredEntity, SelectedEntity, blueprint_placement, handle_mouse_input,
-    update_hover_entity, update_selection_indicator,
+    HoveredEntity, SelectedEntity, blueprint_placement, build_mode_cancel_system,
+    handle_mouse_input, update_hover_entity, update_selection_indicator,
 };
 use crate::interface::ui_interaction::{
     hover_tooltip_system, task_summary_ui_system, ui_interaction_system, update_mode_text_system,
@@ -65,8 +73,8 @@ use crate::interface::ui_panels::{
 use crate::interface::ui_setup::{MenuState, setup_ui};
 use crate::systems::jobs::building_completion_system;
 use crate::systems::logistics::{
-    ResourceLabels, ZoneMode, initial_resource_spawner, item_spawner_system,
-    resource_count_display_system, zone_placement,
+    ResourceLabels, initial_resource_spawner, item_spawner_system, resource_count_display_system,
+    zone_placement,
 };
 use crate::systems::time::{
     GameTime, game_time_system, time_control_keyboard_system, time_control_ui_system,
@@ -89,6 +97,13 @@ fn main() {
                     level: bevy::log::Level::INFO,
                     filter: "wgpu=error,bevy_app=info".to_string(),
                     ..default()
+                })
+                .set(RenderPlugin {
+                    render_creation: RenderCreation::Automatic(WgpuSettings {
+                        backends: Some(Backends::DX12),
+                        ..default()
+                    }),
+                    ..default()
                 }),
         )
         // Resources from various modules
@@ -96,17 +111,25 @@ fn main() {
         .init_resource::<SelectedEntity>()
         .init_resource::<HoveredEntity>()
         .init_resource::<MenuState>()
-        .init_resource::<BuildMode>()
-        .init_resource::<ZoneMode>()
+        .init_resource::<BuildContext>()
+        .init_resource::<ZoneContext>()
         .init_resource::<ResourceLabels>()
         .init_resource::<GameTime>()
-        .init_resource::<TaskMode>()
+        .init_resource::<TaskContext>()
         .init_resource::<SpatialGrid>()
         .init_resource::<FamiliarSpatialGrid>()
         .init_resource::<ResourceSpatialGrid>()
         .init_resource::<AutoHaulCounter>()
         .init_resource::<TaskQueue>()
         .init_resource::<GlobalTaskQueue>()
+        // PlayMode State
+        .init_state::<PlayMode>()
+        .add_systems(OnEnter(PlayMode::BuildingPlace), log_enter_building_mode)
+        .add_systems(OnExit(PlayMode::BuildingPlace), log_exit_building_mode)
+        .add_systems(OnEnter(PlayMode::ZonePlace), log_enter_zone_mode)
+        .add_systems(OnExit(PlayMode::ZonePlace), log_exit_zone_mode)
+        .add_systems(OnEnter(PlayMode::TaskDesignation), log_enter_task_mode)
+        .add_systems(OnExit(PlayMode::TaskDesignation), log_exit_task_mode)
         .add_message::<DesignationCreatedEvent>()
         .add_message::<TaskCompletedEvent>()
         .add_message::<DamnedSoulSpawnEvent>()
@@ -146,7 +169,8 @@ fn main() {
             (
                 camera_movement,
                 camera_zoom,
-                handle_mouse_input.run_if(|mode: Res<TaskMode>| *mode == TaskMode::None),
+                handle_mouse_input.run_if(in_state(PlayMode::Normal)),
+                build_mode_cancel_system, // Phase1: Escキーでビルドモード解除
             )
                 .in_set(GameSystemSet::Input),
         )
@@ -167,8 +191,7 @@ fn main() {
                 familiar_ai_system,
                 following_familiar_system,
                 task_execution_system,
-                assign_task_system
-                    .run_if(|mode: Res<TaskMode>| matches!(*mode, TaskMode::AssignTask(_))),
+                assign_task_system.run_if(in_state(PlayMode::TaskDesignation)),
             )
                 .chain()
                 .in_set(GameSystemSet::Logic),
@@ -181,7 +204,7 @@ fn main() {
                         selected.0.is_some()
                     },
                 ),
-                task_area_selection_system.run_if(|mode: Res<TaskMode>| *mode != TaskMode::None),
+                task_area_selection_system.run_if(in_state(PlayMode::TaskDesignation)),
                 motivation_system,
                 fatigue_update_system,
                 fatigue_penalty_system,
@@ -213,8 +236,7 @@ fn main() {
                 animation_system,
                 // ビジュアル・インジケータ系をここへ移動（ポーズ中も表示するため）
                 task_area_indicator_system,
-                area_selection_indicator_system
-                    .run_if(|mode: Res<TaskMode>| *mode != TaskMode::None),
+                area_selection_indicator_system.run_if(in_state(PlayMode::TaskDesignation)),
                 designation_visual_system,
                 update_designation_indicator_system,
                 familiar_command_visual_system,
@@ -230,10 +252,8 @@ fn main() {
                 update_hover_entity,
                 update_selection_indicator,
                 hover_tooltip_system,
-                blueprint_placement
-                    .run_if(|mode: Res<crate::interface::selection::BuildMode>| mode.0.is_some()),
-                zone_placement
-                    .run_if(|mode: Res<crate::systems::logistics::ZoneMode>| mode.0.is_some()),
+                blueprint_placement.run_if(in_state(PlayMode::BuildingPlace)),
+                zone_placement.run_if(in_state(PlayMode::ZonePlace)),
                 item_spawner_system,
                 ui_interaction_system,
                 menu_visibility_system,

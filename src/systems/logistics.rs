@@ -1,5 +1,6 @@
 use crate::assets::GameAssets;
 use crate::constants::*;
+use crate::game_state::ZoneContext;
 use crate::systems::jobs::{Rock, Tree};
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
@@ -41,19 +42,16 @@ pub struct ResourceLabels(pub HashMap<(i32, i32), Entity>);
 #[derive(Component)]
 pub struct ResourceCountLabel;
 
-#[derive(Resource, Default)]
-pub struct ZoneMode(pub Option<ZoneType>);
-
 pub fn zone_placement(
     buttons: Res<ButtonInput<MouseButton>>,
     q_window: Query<&Window, With<bevy::window::PrimaryWindow>>,
     q_camera: Query<(&Camera, &GlobalTransform), With<crate::interface::camera::MainCamera>>,
     q_ui: Query<&Interaction, With<Button>>,
-    zone_mode: Res<ZoneMode>,
+    zone_context: Res<ZoneContext>,
     mut world_map: ResMut<WorldMap>,
     mut commands: Commands,
 ) {
-    if let Some(zone_type) = zone_mode.0 {
+    if let Some(zone_type) = zone_context.0 {
         for interaction in q_ui.iter() {
             if *interaction != Interaction::None {
                 return;
@@ -61,8 +59,12 @@ pub fn zone_placement(
         }
 
         if buttons.pressed(MouseButton::Left) {
-            let Ok((camera, camera_transform)) = q_camera.single() else { return; };
-            let Ok(window) = q_window.single() else { return; };
+            let Ok((camera, camera_transform)) = q_camera.single() else {
+                return;
+            };
+            let Ok(window) = q_window.single() else {
+                return;
+            };
 
             if let Some(cursor_pos) = window.cursor_position() {
                 if let Ok(world_pos) = camera.viewport_to_world_2d(camera_transform, cursor_pos) {
