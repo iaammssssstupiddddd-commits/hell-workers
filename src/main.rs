@@ -8,6 +8,7 @@ mod world;
 use crate::assets::GameAssets;
 use crate::world::map::{WorldMap, spawn_map};
 use bevy::prelude::*;
+use bevy::render::view::NoIndirectDrawing;
 use bevy::time::common_conditions::*;
 use std::time::Duration;
 
@@ -124,7 +125,7 @@ fn main() {
                 .chain(),
         )
         // Startup systems
-        .add_systems(Startup, setup)
+        .add_systems(Startup, (setup, initialize_gizmo_config))
         .add_systems(
             PostStartup,
             (
@@ -142,7 +143,12 @@ fn main() {
         // Update systems
         .add_systems(
             Update,
-            (camera_movement, camera_zoom, handle_mouse_input).in_set(GameSystemSet::Input),
+            (
+                camera_movement,
+                camera_zoom,
+                handle_mouse_input.run_if(|mode: Res<TaskMode>| *mode == TaskMode::None),
+            )
+                .in_set(GameSystemSet::Input),
         )
         .add_systems(
             Update,
@@ -161,7 +167,8 @@ fn main() {
                 familiar_ai_system,
                 following_familiar_system,
                 task_execution_system,
-                assign_task_system,
+                assign_task_system
+                    .run_if(|mode: Res<TaskMode>| matches!(*mode, TaskMode::AssignTask(_))),
             )
                 .chain()
                 .in_set(GameSystemSet::Logic),
@@ -169,22 +176,16 @@ fn main() {
         .add_systems(
             Update,
             (
-                familiar_command_input_system,
-                task_area_selection_system,
-                task_area_indicator_system,
-                area_selection_indicator_system
-                    .run_if(|mode: Res<TaskMode>| *mode != TaskMode::None),
-                designation_visual_system,
-                update_designation_indicator_system,
-                familiar_command_visual_system,
+                familiar_command_input_system.run_if(
+                    |selected: Res<crate::interface::selection::SelectedEntity>| {
+                        selected.0.is_some()
+                    },
+                ),
+                task_area_selection_system.run_if(|mode: Res<TaskMode>| *mode != TaskMode::None),
                 motivation_system,
                 fatigue_update_system,
                 fatigue_penalty_system,
-                familiar_hover_visualization_system.run_if(
-                    |hovered: Res<crate::interface::selection::HoveredEntity>| hovered.0.is_some(),
-                ),
                 idle_behavior_system,
-                idle_visual_system,
                 gathering_separation_system,
                 soul_spawning_system,
                 familiar_spawning_system,
@@ -210,6 +211,15 @@ fn main() {
                 task_link_system,
                 building_completion_system,
                 animation_system,
+                // ビジュアル・インジケータ系をここへ移動（ポーズ中も表示するため）
+                task_area_indicator_system,
+                area_selection_indicator_system
+                    .run_if(|mode: Res<TaskMode>| *mode != TaskMode::None),
+                designation_visual_system,
+                update_designation_indicator_system,
+                familiar_command_visual_system,
+                resource_count_display_system,
+                idle_visual_system,
             )
                 .chain()
                 .in_set(GameSystemSet::Visual),
@@ -218,20 +228,25 @@ fn main() {
             Update,
             (
                 update_hover_entity,
-                update_selection_indicator.run_if(
+                update_selection_indicator,
+                hover_tooltip_system,
+                blueprint_placement
+                    .run_if(|mode: Res<crate::interface::selection::BuildMode>| mode.0.is_some()),
+                zone_placement
+                    .run_if(|mode: Res<crate::systems::logistics::ZoneMode>| mode.0.is_some()),
+                item_spawner_system,
+                ui_interaction_system,
+                menu_visibility_system,
+                info_panel_system.run_if(
                     |selected: Res<crate::interface::selection::SelectedEntity>| {
                         selected.0.is_some()
                     },
                 ),
-                hover_tooltip_system,
-                blueprint_placement,
-                zone_placement,
-                item_spawner_system,
-                ui_interaction_system,
-                menu_visibility_system,
-                info_panel_system,
                 update_mode_text_system,
+                // ホバー可視化をここに配置（update_hover_entity の後）
+                familiar_hover_visualization_system,
             )
+                .chain()
                 .in_set(GameSystemSet::Interface),
         )
         .add_systems(
@@ -239,7 +254,11 @@ fn main() {
             (
                 familiar_context_menu_system,
                 task_summary_ui_system,
-                update_operation_dialog_system,
+                update_operation_dialog_system.run_if(
+                    |selected: Res<crate::interface::selection::SelectedEntity>| {
+                        selected.0.is_some()
+                    },
+                ),
                 resource_count_display_system,
                 update_familiar_range_indicator,
                 game_time_system,
@@ -262,7 +281,7 @@ fn setup(
     asset_server: Res<AssetServer>,
     mut images: ResMut<Assets<Image>>,
 ) {
-    commands.spawn((Camera2d, MainCamera));
+    commands.spawn((Camera2d, MainCamera, NoIndirectDrawing));
 
     // 円形グラデーションテクスチャを動的生成
     let aura_circle = create_circular_gradient_texture(&mut *images);
@@ -280,6 +299,13 @@ fn setup(
         aura_ring,
     };
     commands.insert_resource(game_assets);
+}
+
+fn initialize_gizmo_config(mut config_store: ResMut<GizmoConfigStore>) {
+    for (_, config, _) in config_store.iter_mut() {
+        config.enabled = true;
+        config.line.width = 1.0;
+    }
 }
 
 /// FamiliarSpatialGridを初期化（最大command_radius * 2のセルサイズで）
@@ -429,7 +455,6 @@ fn spawn_familiar_wrapper(spawn_events: MessageWriter<FamiliarSpawnEvent>) {
     spawn_familiar(spawn_events);
 }
 
-/// デバッグ用のスポーンシステム
 fn debug_spawn_system(
     buttons: Res<ButtonInput<KeyCode>>,
     q_camera: Query<(&Camera, &GlobalTransform), With<MainCamera>>,

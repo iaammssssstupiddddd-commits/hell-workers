@@ -1,7 +1,6 @@
 use crate::constants::TILE_SIZE;
 use crate::entities::damned_soul::DamnedSoul;
 use crate::entities::familiar::{ActiveCommand, Familiar, FamiliarCommand, UnderCommand};
-use crate::interface::camera::MainCamera;
 use crate::systems::work::{AssignedTask, FamiliarSpatialGrid};
 use bevy::prelude::*;
 
@@ -66,35 +65,33 @@ pub fn motivation_system(
     }
 }
 
-/// 使い魔にホバーした際、使役中の魂との間に細い線を引く
+/// ホバー線の描画用コンポーネント
+#[derive(Component)]
+pub struct HoverLineIndicator;
+
+/// 使い魔にホバーした際、使役中の魂との間に線を引く (スプライトベース)
 pub fn familiar_hover_visualization_system(
-    q_window: Query<&Window, With<bevy::window::PrimaryWindow>>,
-    q_camera: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
-    q_familiars: Query<(Entity, &GlobalTransform, &ActiveCommand), With<Familiar>>,
-    q_souls: Query<(&GlobalTransform, &crate::entities::familiar::UnderCommand), With<DamnedSoul>>,
+    mut commands: Commands,
+    hovered_entity: Res<crate::interface::selection::HoveredEntity>,
+    q_familiars: Query<(&GlobalTransform, &ActiveCommand), With<Familiar>>,
+    q_souls: Query<(&GlobalTransform, &UnderCommand), With<DamnedSoul>>,
+    q_lines: Query<Entity, With<HoverLineIndicator>>,
     mut gizmos: Gizmos,
 ) {
-    let Ok(window) = q_window.single() else {
-        return;
-    };
-    let Ok((camera, camera_transform)) = q_camera.single() else {
-        return;
-    };
+    // 既存のスプライト線をすべて削除
+    for entity in q_lines.iter() {
+        commands.entity(entity).despawn();
+    }
 
-    if let Some(cursor_pos) = window.cursor_position() {
-        if let Ok(world_pos) = camera.viewport_to_world_2d(camera_transform, cursor_pos) {
-            for (fam_entity, fam_transform, _) in q_familiars.iter() {
-                let fam_pos = fam_transform.translation().truncate();
+    if let Some(hovered) = hovered_entity.0 {
+        if let Ok((fam_transform, _)) = q_familiars.get(hovered) {
+            let fam_pos = fam_transform.translation().truncate();
 
-                // マウスが使い魔の上にあるかチェック
-                if fam_pos.distance(world_pos) < TILE_SIZE * 0.5 {
-                    // 使役中の魂全員（UnderCommand(fam_entity)を持つソウル）に対して線を引く
-                    for (soul_transform, under_command) in q_souls.iter() {
-                        if under_command.0 == fam_entity {
-                            let soul_pos = soul_transform.translation().truncate();
-                            gizmos.line_2d(fam_pos, soul_pos, Color::srgba(1.0, 1.0, 1.0, 0.4));
-                        }
-                    }
+            for (soul_transform, under_command) in q_souls.iter() {
+                if under_command.0 == hovered {
+                    let soul_pos = soul_transform.translation().truncate();
+                    // 白色のホバー線を Gizmos で描画
+                    gizmos.line_2d(fam_pos, soul_pos, Color::srgba(1.0, 1.0, 1.0, 0.7));
                 }
             }
         }
