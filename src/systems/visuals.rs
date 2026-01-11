@@ -132,6 +132,7 @@ pub fn task_link_system(
                 };
 
                 gizmos.line_2d(start, end, color);
+                debug!("HAUL_GIZMO: Drawing line from {:?} to {:?}", start, end);
             }
         }
     }

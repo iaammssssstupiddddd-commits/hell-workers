@@ -41,8 +41,12 @@ pub fn handle_mouse_input(
         }
     }
 
-    let Ok((camera, camera_transform)) = q_camera.single() else { return; };
-    let Ok(window) = q_window.single() else { return; };
+    let Ok((camera, camera_transform)) = q_camera.single() else {
+        return;
+    };
+    let Ok(window) = q_window.single() else {
+        return;
+    };
 
     if let Some(cursor_pos) = window.cursor_position() {
         if let Ok(world_pos) = camera.viewport_to_world_2d(camera_transform, cursor_pos) {
@@ -113,8 +117,12 @@ pub fn blueprint_placement(
 
     if let Some(building_type) = build_mode.0 {
         if buttons.just_pressed(MouseButton::Left) {
-            let Ok((camera, camera_transform)) = q_camera.single() else { return; };
-            let Ok(window) = q_window.single() else { return; };
+            let Ok((camera, camera_transform)) = q_camera.single() else {
+                return;
+            };
+            let Ok(window) = q_window.single() else {
+                return;
+            };
 
             if let Some(cursor_pos) = window.cursor_position() {
                 if let Ok(world_pos) = camera.viewport_to_world_2d(camera_transform, cursor_pos) {
@@ -200,8 +208,12 @@ pub fn update_hover_entity(
     >,
     mut hovered_entity: ResMut<HoveredEntity>,
 ) {
-    let Ok((camera, camera_transform)) = q_camera.single() else { return; };
-    let Ok(window) = q_window.single() else { return; };
+    let Ok((camera, camera_transform)) = q_camera.single() else {
+        return;
+    };
+    let Ok(window) = q_window.single() else {
+        return;
+    };
 
     if let Some(cursor_pos) = window.cursor_position() {
         if let Ok(world_pos) = camera.viewport_to_world_2d(camera_transform, cursor_pos) {
@@ -238,11 +250,12 @@ pub fn update_hover_entity(
                 }
             }
 
-            hovered_entity.0 = found;
-        } else {
-            hovered_entity.0 = None;
+            if found != hovered_entity.0 {
+                if let Some(e) = found {
+                    info!("HOVER: Found entity {:?}", e);
+                }
+                hovered_entity.0 = found;
+            }
         }
-    } else {
-        hovered_entity.0 = None;
     }
 }

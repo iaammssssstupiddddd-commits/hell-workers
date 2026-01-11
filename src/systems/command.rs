@@ -112,6 +112,8 @@ pub fn task_area_selection_system(
     q_unassigned: Query<(Entity, &Transform, &Designation), Without<IssuedBy>>,
     mut global_queue: ResMut<GlobalTaskQueue>,
     mut queue: ResMut<crate::systems::work::TaskQueue>,
+    // エリア選択インジケーター削除用
+    q_selection_indicator: Query<Entity, With<AreaSelectionIndicator>>,
 ) {
     if q_ui.iter().any(|i| *i != Interaction::None) {
         return;
@@ -122,8 +124,12 @@ pub fn task_area_selection_system(
     }
 
     if buttons.just_pressed(MouseButton::Left) {
-        let Ok((camera, camera_transform)) = q_camera.single() else { return; };
-        let Ok(window) = q_window.single() else { return; };
+        let Ok((camera, camera_transform)) = q_camera.single() else {
+            return;
+        };
+        let Ok(window) = q_window.single() else {
+            return;
+        };
         if let Some(cursor_pos) = window.cursor_position() {
             if let Ok(world_pos) = camera.viewport_to_world_2d(camera_transform, cursor_pos) {
                 match *task_mode {
@@ -152,8 +158,12 @@ pub fn task_area_selection_system(
     }
 
     if buttons.just_released(MouseButton::Left) {
-        let Ok((camera, camera_transform)) = q_camera.single() else { return; };
-        let Ok(window) = q_window.single() else { return; };
+        let Ok((camera, camera_transform)) = q_camera.single() else {
+            return;
+        };
+        let Ok(window) = q_window.single() else {
+            return;
+        };
 
         if let Some(cursor_pos) = window.cursor_position() {
             if let Ok(world_pos) = camera.viewport_to_world_2d(camera_transform, cursor_pos) {
@@ -210,6 +220,10 @@ pub fn task_area_selection_system(
                                     );
                                 }
                             }
+                        }
+                        // エリア選択インジケーターを削除
+                        for indicator_entity in q_selection_indicator.iter() {
+                            commands.entity(indicator_entity).despawn();
                         }
                         *task_mode = TaskMode::None;
                     }
@@ -330,8 +344,12 @@ pub fn area_selection_indicator_system(
     };
 
     if let Some(start_pos) = drag_start {
-        let Ok((camera, camera_transform)) = q_camera.single() else { return; };
-        let Ok(window) = q_window.single() else { return; };
+        let Ok((camera, camera_transform)) = q_camera.single() else {
+            return;
+        };
+        let Ok(window) = q_window.single() else {
+            return;
+        };
 
         if let Some(cursor_pos) = window.cursor_position() {
             if let Ok(world_pos) = camera.viewport_to_world_2d(camera_transform, cursor_pos) {
@@ -344,8 +362,7 @@ pub fn area_selection_indicator_system(
                     _ => Color::srgba(0.2, 1.0, 0.2, 0.3),                          // 緑系
                 };
 
-                if let Ok((_, mut transform, mut sprite, mut visibility)) =
-                    q_indicator.single_mut()
+                if let Ok((_, mut transform, mut sprite, mut visibility)) = q_indicator.single_mut()
                 {
                     transform.translation = center.extend(0.6);
                     sprite.custom_size = Some(size);
