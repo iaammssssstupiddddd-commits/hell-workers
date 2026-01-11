@@ -17,8 +17,10 @@ use bevy::prelude::*;
 // ============================================================
 
 /// 人間に割り当てられたタスク
-#[derive(Component, Clone, Debug)]
+#[derive(Component, Reflect, Clone, Debug, Default)]
+#[reflect(Component)]
 pub enum AssignedTask {
+    #[default]
     None,
     /// リソースを収集する（簡略版）
     Gather {
@@ -34,21 +36,17 @@ pub enum AssignedTask {
     },
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Reflect, Default)]
 pub enum HaulPhase {
+    #[default]
     GoingToItem,
     GoingToStockpile,
     Dropping,
 }
 
-impl Default for AssignedTask {
-    fn default() -> Self {
-        Self::None
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Reflect, Default)]
 pub enum GatherPhase {
+    #[default]
     GoingToResource,
     Collecting { progress: f32 },
     Done,

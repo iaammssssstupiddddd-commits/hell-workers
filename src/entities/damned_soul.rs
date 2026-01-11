@@ -16,8 +16,9 @@ pub struct DamnedSoulSpawnEvent {
 }
 
 /// 性別
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Reflect, Default)]
 pub enum Gender {
+    #[default]
     Male,
     Female,
 }
@@ -154,7 +155,8 @@ impl SoulIdentity {
 }
 
 /// 地獄に堕ちた人間（怠惰な魂）
-#[derive(Component)]
+#[derive(Component, Reflect)]
+#[reflect(Component)]
 pub struct DamnedSoul {
     #[allow(dead_code)]
     pub sin_type: SinType,
@@ -182,7 +184,7 @@ impl Default for DamnedSoul {
 }
 
 /// 落ちた理由（将来拡張用）
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Reflect, Default)]
 #[allow(dead_code)]
 pub enum SinType {
     #[default]
@@ -200,7 +202,8 @@ pub struct StressBreakdown {
 }
 
 /// 怠惰状態のコンポーネント
-#[derive(Component)]
+#[derive(Component, Reflect)]
+#[reflect(Component)]
 pub struct IdleState {
     pub idle_timer: f32,
     pub total_idle_time: f32, // 累計の放置時間
@@ -230,7 +233,7 @@ impl Default for IdleState {
 }
 
 /// 怠惰行動の種類
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Reflect, Default)]
 pub enum IdleBehavior {
     #[default]
     Wandering, // うろうろ
@@ -241,7 +244,7 @@ pub enum IdleBehavior {
 }
 
 /// 集会中のサブ行動
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Reflect, Default)]
 pub enum GatheringBehavior {
     #[default]
     Wandering, // うろうろ（今の動き）
