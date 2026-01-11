@@ -30,8 +30,9 @@ pub struct Stockpile {
     pub current_count: usize,
 }
 
-#[derive(Component)]
-pub struct ClaimedBy(#[allow(dead_code)] pub Entity);
+// ClaimedBy は relationships.rs の WorkingOn に移行
+// 後方互換性のため、エイリアスを提供
+pub use crate::relationships::WorkingOn as ClaimedBy;
 
 #[derive(Component)]
 pub struct InStockpile(pub Entity);
