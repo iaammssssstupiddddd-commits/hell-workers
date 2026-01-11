@@ -1,6 +1,7 @@
 use crate::constants::*;
 use crate::entities::damned_soul::Destination;
 use crate::entities::familiar::{ActiveCommand, Familiar, FamiliarCommand};
+use crate::game_state::TaskContext;
 use crate::interface::camera::MainCamera;
 use crate::interface::selection::SelectedEntity;
 use crate::systems::jobs::{
@@ -56,7 +57,7 @@ pub fn familiar_command_input_system(
     selected: Res<SelectedEntity>,
     q_familiars: Query<Entity, With<Familiar>>,
     mut q_active_commands: Query<&mut ActiveCommand>,
-    mut task_mode: ResMut<TaskMode>,
+    mut task_context: ResMut<TaskContext>,
 ) {
     // 選択されたエンティティが使い魔かチェック
     let Some(entity) = selected.0 else { return };
@@ -65,22 +66,22 @@ pub fn familiar_command_input_system(
     };
 
     if keyboard.just_pressed(KeyCode::Digit1) || keyboard.just_pressed(KeyCode::KeyC) {
-        *task_mode = TaskMode::DesignateChop(None);
+        task_context.0 = TaskMode::DesignateChop(None);
         info!("TASK_MODE: 伐採対象を範囲指定（ドラッグ）またはクリックしてください");
     } else if keyboard.just_pressed(KeyCode::Digit2) || keyboard.just_pressed(KeyCode::KeyM) {
-        *task_mode = TaskMode::DesignateMine(None);
+        task_context.0 = TaskMode::DesignateMine(None);
         info!("TASK_MODE: 採掘対象を範囲指定（ドラッグ）またはクリックしてください");
     } else if keyboard.just_pressed(KeyCode::Digit3) || keyboard.just_pressed(KeyCode::KeyH) {
-        *task_mode = TaskMode::DesignateHaul(None);
+        task_context.0 = TaskMode::DesignateHaul(None);
         info!("TASK_MODE: 運搬対象を範囲指定（ドラッグ）またはクリックしてください");
     } else if keyboard.just_pressed(KeyCode::Digit4) || keyboard.just_pressed(KeyCode::KeyB) {
-        *task_mode = TaskMode::SelectBuildTarget;
+        task_context.0 = TaskMode::SelectBuildTarget;
         info!("TASK_MODE: 建築対象を選択してください（Blueprintをクリック）");
     } else if keyboard.just_pressed(KeyCode::Digit0) || keyboard.just_pressed(KeyCode::Delete) {
-        *task_mode = TaskMode::CancelDesignation(None);
+        task_context.0 = TaskMode::CancelDesignation(None);
         info!("TASK_MODE: 指示をキャンセルする範囲を指定してください");
     } else if keyboard.just_pressed(KeyCode::Escape) {
-        *task_mode = TaskMode::None;
+        task_context.0 = TaskMode::None;
         // 待機状態に戻す
         if let Ok(mut active) = q_active_commands.get_mut(entity) {
             active.command = FamiliarCommand::Idle;
@@ -96,7 +97,7 @@ pub fn task_area_selection_system(
     q_camera: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
     q_ui: Query<&Interaction, With<Button>>,
     selected: Res<SelectedEntity>,
-    mut task_mode: ResMut<TaskMode>,
+    mut task_context: ResMut<TaskContext>,
     mut q_familiars: Query<(&mut ActiveCommand, &mut Destination), With<Familiar>>,
     q_targets: Query<(
         Entity,
@@ -119,7 +120,7 @@ pub fn task_area_selection_system(
         return;
     }
 
-    if *task_mode == TaskMode::None {
+    if task_context.0 == TaskMode::None {
         return;
     }
 
@@ -132,24 +133,24 @@ pub fn task_area_selection_system(
         };
         if let Some(cursor_pos) = window.cursor_position() {
             if let Ok(world_pos) = camera.viewport_to_world_2d(camera_transform, cursor_pos) {
-                match *task_mode {
+                match task_context.0 {
                     TaskMode::AreaSelection(None) => {
-                        *task_mode = TaskMode::AreaSelection(Some(world_pos))
+                        task_context.0 = TaskMode::AreaSelection(Some(world_pos))
                     }
                     TaskMode::DesignateChop(None) => {
-                        *task_mode = TaskMode::DesignateChop(Some(world_pos))
+                        task_context.0 = TaskMode::DesignateChop(Some(world_pos))
                     }
                     TaskMode::DesignateMine(None) => {
-                        *task_mode = TaskMode::DesignateMine(Some(world_pos))
+                        task_context.0 = TaskMode::DesignateMine(Some(world_pos))
                     }
                     TaskMode::DesignateHaul(None) => {
-                        *task_mode = TaskMode::DesignateHaul(Some(world_pos))
+                        task_context.0 = TaskMode::DesignateHaul(Some(world_pos))
                     }
                     TaskMode::CancelDesignation(None) => {
-                        *task_mode = TaskMode::CancelDesignation(Some(world_pos))
+                        task_context.0 = TaskMode::CancelDesignation(Some(world_pos))
                     }
                     TaskMode::AssignTask(None) => {
-                        *task_mode = TaskMode::AssignTask(Some(world_pos))
+                        task_context.0 = TaskMode::AssignTask(Some(world_pos))
                     }
                     _ => {}
                 }
@@ -167,7 +168,7 @@ pub fn task_area_selection_system(
 
         if let Some(cursor_pos) = window.cursor_position() {
             if let Ok(world_pos) = camera.viewport_to_world_2d(camera_transform, cursor_pos) {
-                match *task_mode {
+                match task_context.0 {
                     TaskMode::AreaSelection(Some(start_pos)) => {
                         let min_x = f32::min(start_pos.x, world_pos.x);
                         let max_x = f32::max(start_pos.x, world_pos.x);
@@ -225,7 +226,7 @@ pub fn task_area_selection_system(
                         for indicator_entity in q_selection_indicator.iter() {
                             commands.entity(indicator_entity).despawn();
                         }
-                        *task_mode = TaskMode::None;
+                        task_context.0 = TaskMode::None;
                     }
                     TaskMode::DesignateChop(Some(start_pos))
                     | TaskMode::DesignateMine(Some(start_pos))
@@ -236,7 +237,7 @@ pub fn task_area_selection_system(
                         let min_y = f32::min(start_pos.y, world_pos.y);
                         let max_y = f32::max(start_pos.y, world_pos.y);
 
-                        let work_type = match *task_mode {
+                        let work_type = match task_context.0 {
                             TaskMode::DesignateChop(_) => Some(WorkType::Chop),
                             TaskMode::DesignateMine(_) => Some(WorkType::Mine),
                             TaskMode::DesignateHaul(_) => Some(WorkType::Haul),
@@ -308,7 +309,7 @@ pub fn task_area_selection_system(
                         }
 
                         // ドラッグ終了後にモードは維持するが、開始位置をクリア
-                        *task_mode = match *task_mode {
+                        task_context.0 = match task_context.0 {
                             TaskMode::DesignateChop(_) => TaskMode::DesignateChop(None),
                             TaskMode::DesignateMine(_) => TaskMode::DesignateMine(None),
                             TaskMode::DesignateHaul(_) => TaskMode::DesignateHaul(None),
@@ -325,7 +326,7 @@ pub fn task_area_selection_system(
 
 /// エリア選択の表示システム
 pub fn area_selection_indicator_system(
-    task_mode: Res<TaskMode>,
+    task_context: Res<TaskContext>,
     q_camera: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
     q_window: Query<&Window, With<bevy::window::PrimaryWindow>>,
     mut q_indicator: Query<
@@ -334,7 +335,7 @@ pub fn area_selection_indicator_system(
     >,
     mut commands: Commands,
 ) {
-    let drag_start = match *task_mode {
+    let drag_start = match task_context.0 {
         TaskMode::AreaSelection(s) => s,
         TaskMode::DesignateChop(s) => s,
         TaskMode::DesignateMine(s) => s,
@@ -356,7 +357,7 @@ pub fn area_selection_indicator_system(
                 let center = (start_pos + world_pos) / 2.0;
                 let size = (start_pos - world_pos).abs();
 
-                let color = match *task_mode {
+                let color = match task_context.0 {
                     TaskMode::AreaSelection(_) => Color::srgba(1.0, 1.0, 1.0, 0.2), // 白
                     TaskMode::CancelDesignation(_) => Color::srgba(1.0, 0.2, 0.2, 0.3), // 赤
                     _ => Color::srgba(0.2, 1.0, 0.2, 0.3),                          // 緑系
@@ -486,12 +487,12 @@ pub fn update_designation_indicator_system(
 
 /// 使い魔コマンドのビジュアルフィードバック
 pub fn familiar_command_visual_system(
-    task_mode: Res<TaskMode>,
+    task_context: Res<TaskContext>,
     mut q_familiars: Query<(&ActiveCommand, &mut Sprite), With<Familiar>>,
 ) {
     for (command, mut sprite) in q_familiars.iter_mut() {
         // タスクモード中は点滅
-        if *task_mode != TaskMode::None {
+        if task_context.0 != TaskMode::None {
             sprite.color = Color::srgb(1.0, 1.0, 1.0); // 白く光る
             return;
         }
@@ -520,7 +521,7 @@ pub fn assign_task_system(
     q_camera: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
     q_ui: Query<&Interaction, With<Button>>,
     selected: Res<SelectedEntity>,
-    mut task_mode: ResMut<TaskMode>,
+    mut task_context: ResMut<TaskContext>,
     mut global_queue: ResMut<GlobalTaskQueue>,
     mut queue: ResMut<crate::systems::work::TaskQueue>,
     mut commands: Commands,
@@ -532,7 +533,7 @@ pub fn assign_task_system(
     }
 
     // AssignTask モードでなければ何もしない
-    let TaskMode::AssignTask(Some(start_pos)) = *task_mode else {
+    let TaskMode::AssignTask(Some(start_pos)) = task_context.0 else {
         return;
     };
 
@@ -558,7 +559,7 @@ pub fn assign_task_system(
     // 使い魔が選択されていなければ何もしない
     let Some(fam_entity) = selected.0 else {
         info!("ASSIGN_TASK: No entity selected");
-        *task_mode = TaskMode::AssignTask(None);
+        task_context.0 = TaskMode::AssignTask(None);
         return;
     };
 
@@ -568,7 +569,7 @@ pub fn assign_task_system(
             "ASSIGN_TASK: Selected entity {:?} is not a familiar",
             fam_entity
         );
-        *task_mode = TaskMode::AssignTask(None);
+        task_context.0 = TaskMode::AssignTask(None);
         return;
     }
 
@@ -628,5 +629,5 @@ pub fn assign_task_system(
         info!("ASSIGN_TASK: No tasks found in selected area");
     }
 
-    *task_mode = TaskMode::AssignTask(None);
+    task_context.0 = TaskMode::AssignTask(None);
 }
