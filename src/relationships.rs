@@ -103,9 +103,14 @@ impl Default for ManagedBy {
     }
 }
 
-/// 使い魔が管理しているタスクの一覧を保持する RelationshipTarget
-/// 使い魔側に自動的に付与・維持される
 #[derive(Component, Reflect, Debug, Default)]
 #[reflect(Component)]
 #[relationship_target(relationship = ManagedBy)]
 pub struct ManagedTasks(Vec<Entity>);
+
+impl ManagedTasks {
+    /// 管理中のタスク一覧をイテレータで取得
+    pub fn iter(&self) -> impl Iterator<Item = &Entity> {
+        self.0.iter()
+    }
+}

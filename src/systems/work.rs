@@ -374,13 +374,12 @@ pub fn unassign_task(
             if let Some(ref mut slots) = slots_opt {
                 slots.current = slots.current.saturating_sub(1);
             }
+            // ターゲットが存在する場合のみコンポーネントを削除
+            commands.entity(target).remove::<Designation>();
+            commands.entity(target).remove::<TaskSlots>();
+            commands.entity(target).remove::<IssuedBy>();
+            commands.entity(target).remove::<ClaimedBy>();
         }
-        // タスクを完全に真っ白に戻す（Designation も削除）
-        // これにより、次フレーム以降にオートホール AI が再検知して新しいタスクとして発行できる
-        commands.entity(target).remove::<Designation>();
-        commands.entity(target).remove::<TaskSlots>();
-        commands.entity(target).remove::<IssuedBy>();
-        commands.entity(target).remove::<ClaimedBy>();
     }
 
     *task = AssignedTask::None;

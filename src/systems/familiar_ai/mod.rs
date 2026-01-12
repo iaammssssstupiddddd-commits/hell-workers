@@ -4,7 +4,7 @@ use crate::entities::damned_soul::{
 use crate::entities::familiar::{
     ActiveCommand, Familiar, FamiliarCommand, FamiliarOperation, UnderCommand,
 };
-use crate::relationships::Commanding;
+use crate::relationships::{Commanding, ManagedTasks};
 use crate::systems::GameSystemSet;
 use crate::systems::command::TaskArea;
 use crate::systems::jobs::{IssuedBy, TaskSlots};
@@ -73,7 +73,8 @@ pub fn familiar_ai_system(
         &mut Destination,
         &mut Path,
         Option<&TaskArea>,
-        &Commanding,
+        Option<&Commanding>,
+        &ManagedTasks,
     )>,
     mut q_souls: Query<
         (
@@ -111,8 +112,10 @@ pub fn familiar_ai_system(
         mut fam_path,
         task_area_opt,
         commanding,
+        managed_tasks,
     ) in q_familiars.iter_mut()
     {
+        let old_state = ai_state.clone();
         // 1. 基本コマンドチェック
         if matches!(active_command.command, FamiliarCommand::Idle) {
             if *ai_state != FamiliarAiState::Idle {
@@ -127,23 +130,41 @@ pub fn familiar_ai_system(
         let command_radius = familiar.command_radius;
         let fatigue_threshold = familiar_op.fatigue_threshold;
 
-        // Relationshipから現在の部下リストを取得
-        let mut squad_entities: Vec<Entity> = commanding.iter().copied().collect();
+        // Relationshipから現在の部下リストを取得 (Commandingがない場合は空)
+        let mut squad_entities: Vec<Entity> = commanding
+            .map(|c| c.iter().copied().collect())
+            .unwrap_or_default();
 
-        // 2. 整合性チェックと疲労解放
+        // 2. 疲労解放
         let mut released_entities: Vec<Entity> = Vec::new();
         for &member_entity in &squad_entities {
             if let Ok((entity, transform, soul, mut task, _, mut path, idle, mut inventory, uc)) =
                 q_souls.get_mut(member_entity)
             {
-                // 整合性チェック: 相手が自分を主人だと思っていないならリストから外す
-                if uc.is_none() || uc.unwrap().0 != fam_entity {
-                    released_entities.push(member_entity);
-                    continue;
+                // 整合性チェック: 相手が自分を主人だと思っていないならリストから外す ( रिलेशनशिप更新遅延対策 )
+                if let Some(uc_comp) = uc {
+                    if uc_comp.0 != fam_entity {
+                        info!(
+                            "FAM_AI: {:?} squad member {:?} belongs to another master {:?}",
+                            fam_entity, member_entity, uc_comp.0
+                        );
+                        released_entities.push(member_entity);
+                        continue;
+                    }
+                } else {
+                    // ここで即座にリリースせず、1フレーム待つか警告に留める
+                    // Relationship の反映がコンポーネントより先に来る可能性があるため
+                    debug!(
+                        "FAM_AI: {:?} squad member {:?} has no UnderCommand comp yet (waiting sync)",
+                        fam_entity, member_entity
+                    );
+                    //released_entities.push(member_entity); // 一時的にコメントアウト
+                    //continue;
                 }
 
                 // 疲労・崩壊チェック
-                if soul.fatigue > fatigue_threshold
+                let is_resting = idle.behavior == IdleBehavior::Gathering;
+                if (!is_resting && soul.fatigue > fatigue_threshold)
                     || idle.behavior == IdleBehavior::ExhaustedGathering
                 {
                     info!(
@@ -168,34 +189,45 @@ pub fn familiar_ai_system(
             }
         }
         if !released_entities.is_empty() {
+            let was_scouting = matches!(*ai_state, FamiliarAiState::Scouting { .. });
             squad_entities.retain(|e| !released_entities.contains(e));
+
+            // 分隊が空になった瞬間を検知
+            if squad_entities.is_empty() {
+                info!(
+                    "FAM_AI: {:?} squad became empty (was_scouting: {}, state: {:?})",
+                    fam_entity, was_scouting, *ai_state
+                );
+            }
         }
 
         // 3. 状態に応じたロジック実行
         let max_workers = familiar_op.max_controlled_soul;
         let mut state_changed = false;
 
-        if squad_entities.len() < max_workers {
-            match *ai_state {
-                FamiliarAiState::Scouting { target_soul } => {
-                    // Scoutingロジックを実行
-                    state_changed = scouting::scouting_logic(
-                        fam_entity,
-                        fam_pos,
-                        target_soul,
-                        fatigue_threshold,
-                        max_workers,
-                        &mut squad_entities,
-                        &mut ai_state,
-                        &mut fam_dest,
-                        &mut fam_path,
-                        &q_souls,
-                        &q_breakdown,
-                        &mut commands,
-                    );
-                }
-                _ => {
-                    // 近場のリクルート検索
+        // --- ステートに応じた主要ロジック ---
+        match *ai_state {
+            FamiliarAiState::Scouting { target_soul } => {
+                // Scoutingロジックを実行 (分隊の空き状況に関わらず常にチェック)
+                state_changed = scouting::scouting_logic(
+                    fam_entity,
+                    fam_pos,
+                    target_soul,
+                    fatigue_threshold,
+                    max_workers,
+                    &mut squad_entities,
+                    &mut ai_state,
+                    &mut fam_dest,
+                    &mut fam_path,
+                    &q_souls,
+                    &q_breakdown,
+                    &mut commands,
+                );
+            }
+            _ => {
+                // スカウト中以外で分隊に空きがあれば新規リクルートを試みる
+                if squad_entities.len() < max_workers {
+                    // 近場のリクルート検索 (即時勧誘)
                     if let Some(new_recruit) = helpers::find_best_recruit(
                         fam_pos,
                         fatigue_threshold,
@@ -215,35 +247,37 @@ pub fn familiar_ai_system(
                         squad_entities.push(new_recruit);
                         state_changed = true;
                     }
-                    // 遠方のリクルート検索（まだ枠がある場合）
-                    else if squad_entities.len() < max_workers {
-                        if let Some(distant_recruit) = helpers::find_best_recruit(
-                            fam_pos,
-                            fatigue_threshold,
-                            0.0,
-                            &*spatial_grid,
-                            &q_souls,
-                            &q_breakdown,
-                            None,
-                        ) {
+                    // 遠方のリクルート検索 (Scouting開始)
+                    else if let Some(distant_recruit) = helpers::find_best_recruit(
+                        fam_pos,
+                        fatigue_threshold,
+                        0.0,
+                        &*spatial_grid,
+                        &q_souls,
+                        &q_breakdown,
+                        None,
+                    ) {
+                        info!(
+                            "FAM_AI: {:?} scouting distant soul {:?}",
+                            fam_entity, distant_recruit
+                        );
+                        *ai_state = FamiliarAiState::Scouting {
+                            target_soul: distant_recruit,
+                        };
+                        state_changed = true;
+
+                        // 即座に移動開始
+                        if let Ok((_, target_transform, _, _, _, _, _, _, _)) =
+                            q_souls.get(distant_recruit)
+                        {
+                            let target_pos = target_transform.translation.truncate();
+                            fam_dest.0 = target_pos;
+                            fam_path.waypoints = vec![target_pos];
+                            fam_path.current_index = 0;
                             info!(
-                                "FAM_AI: {:?} scouting distant soul {:?}",
+                                "FAM_AI: {:?} path set to distant recruit {:?}",
                                 fam_entity, distant_recruit
                             );
-                            *ai_state = FamiliarAiState::Scouting {
-                                target_soul: distant_recruit,
-                            };
-                            state_changed = true;
-
-                            // 即座に移動開始
-                            if let Ok((_, target_transform, _, _, _, _, _, _, _)) =
-                                q_souls.get(distant_recruit)
-                            {
-                                let target_pos = target_transform.translation.truncate();
-                                fam_dest.0 = target_pos;
-                                fam_path.waypoints = vec![target_pos];
-                                fam_path.current_index = 0;
-                            }
                         }
                     }
                 }
@@ -274,6 +308,13 @@ pub fn familiar_ai_system(
             }
         }
 
+        if state_changed {
+            info!(
+                "FAM_AI: {:?} state changed: {:?} -> {:?}",
+                fam_entity, old_state, *ai_state
+            );
+        }
+
         // 4. タスク委譲
         let mut idle_member_opt = None;
         for &member_entity in &squad_entities {
@@ -294,6 +335,7 @@ pub fn familiar_ai_system(
                 fam_pos,
                 task_area_opt,
                 &q_designations,
+                managed_tasks,
             ) {
                 helpers::assign_task_to_worker(
                     &mut commands,
