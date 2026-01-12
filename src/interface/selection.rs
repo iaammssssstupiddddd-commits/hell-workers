@@ -4,7 +4,7 @@ use crate::entities::damned_soul::{DamnedSoul, Destination};
 use crate::entities::familiar::Familiar;
 use crate::game_state::{BuildContext, PlayMode, TaskContext, ZoneContext};
 use crate::interface::camera::MainCamera;
-use crate::interface::ui_setup::MenuState;
+use crate::interface::ui::MenuState;
 use crate::systems::jobs::{Blueprint, BuildingType};
 use crate::world::map::WorldMap;
 use bevy::prelude::*;

@@ -72,14 +72,11 @@ use crate::interface::selection::{
     HoveredEntity, SelectedEntity, blueprint_placement, build_mode_cancel_system,
     handle_mouse_input, update_hover_entity, update_selection_indicator,
 };
-use crate::interface::ui_interaction::{
-    hover_tooltip_system, task_summary_ui_system, ui_interaction_system, update_mode_text_system,
-    update_operation_dialog_system,
+use crate::interface::ui::{
+    MenuState, familiar_context_menu_system, hover_tooltip_system, info_panel_system,
+    menu_visibility_system, setup_ui, task_summary_ui_system, ui_interaction_system,
+    update_mode_text_system, update_operation_dialog_system,
 };
-use crate::interface::ui_panels::{
-    familiar_context_menu_system, info_panel_system, menu_visibility_system,
-};
-use crate::interface::ui_setup::{MenuState, setup_ui};
 use crate::systems::jobs::building_completion_system;
 use crate::systems::logistics::{
     ResourceLabels, initial_resource_spawner, item_spawner_system, resource_count_display_system,
