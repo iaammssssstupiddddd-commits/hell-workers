@@ -1,3 +1,4 @@
+use super::*;
 use crate::assets::GameAssets;
 use crate::constants::*;
 use crate::events::{
@@ -6,285 +7,10 @@ use crate::events::{
 use crate::systems::work::{AssignedTask, unassign_task};
 use crate::world::map::WorldMap;
 use crate::world::pathfinding::find_path;
-use bevy::prelude::*;
 use rand::Rng;
-
-/// ソウルのスポーンイベント
-#[derive(Message)]
-pub struct DamnedSoulSpawnEvent {
-    pub position: Vec2,
-}
-
-/// 性別
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Reflect, Default)]
-pub enum Gender {
-    #[default]
-    Male,
-    Female,
-}
-
-/// 男性名リスト（50候補）
-const MALE_NAMES: [&str; 50] = [
-    "James",
-    "John",
-    "Robert",
-    "Michael",
-    "William",
-    "David",
-    "Richard",
-    "Joseph",
-    "Thomas",
-    "Charles",
-    "Christopher",
-    "Daniel",
-    "Matthew",
-    "Anthony",
-    "Mark",
-    "Donald",
-    "Steven",
-    "Paul",
-    "Andrew",
-    "Joshua",
-    "Kenneth",
-    "Kevin",
-    "Brian",
-    "George",
-    "Timothy",
-    "Ronald",
-    "Edward",
-    "Jason",
-    "Jeffrey",
-    "Ryan",
-    "Jacob",
-    "Gary",
-    "Nicholas",
-    "Eric",
-    "Jonathan",
-    "Stephen",
-    "Larry",
-    "Justin",
-    "Scott",
-    "Brandon",
-    "Benjamin",
-    "Samuel",
-    "Raymond",
-    "Gregory",
-    "Frank",
-    "Alexander",
-    "Patrick",
-    "Jack",
-    "Dennis",
-    "Jerry",
-];
-
-/// 女性名リスト（50候補）
-const FEMALE_NAMES: [&str; 50] = [
-    "Mary",
-    "Patricia",
-    "Jennifer",
-    "Linda",
-    "Barbara",
-    "Elizabeth",
-    "Susan",
-    "Jessica",
-    "Sarah",
-    "Karen",
-    "Lisa",
-    "Nancy",
-    "Betty",
-    "Margaret",
-    "Sandra",
-    "Ashley",
-    "Kimberly",
-    "Emily",
-    "Donna",
-    "Michelle",
-    "Dorothy",
-    "Carol",
-    "Amanda",
-    "Melissa",
-    "Deborah",
-    "Stephanie",
-    "Rebecca",
-    "Sharon",
-    "Laura",
-    "Cynthia",
-    "Kathleen",
-    "Amy",
-    "Angela",
-    "Shirley",
-    "Anna",
-    "Brenda",
-    "Pamela",
-    "Emma",
-    "Nicole",
-    "Helen",
-    "Samantha",
-    "Katherine",
-    "Christine",
-    "Debra",
-    "Rachel",
-    "Carolyn",
-    "Janet",
-    "Catherine",
-    "Maria",
-    "Heather",
-];
-
-/// 魂のアイデンティティ（名前と性別）
-#[derive(Component, Debug, Clone)]
-pub struct SoulIdentity {
-    pub name: String,
-    pub gender: Gender,
-}
-
-impl SoulIdentity {
-    pub fn random() -> Self {
-        let mut rng = rand::thread_rng();
-        let gender = if rng.gen_bool(0.5) {
-            Gender::Male
-        } else {
-            Gender::Female
-        };
-        let name = match gender {
-            Gender::Male => MALE_NAMES[rng.gen_range(0..MALE_NAMES.len())].to_string(),
-            Gender::Female => FEMALE_NAMES[rng.gen_range(0..FEMALE_NAMES.len())].to_string(),
-        };
-        Self { name, gender }
-    }
-}
-
-/// 地獄に堕ちた人間（怠惰な魂）
-#[derive(Component, Reflect)]
-#[reflect(Component)]
-pub struct DamnedSoul {
-    #[allow(dead_code)]
-    pub sin_type: SinType,
-    pub laziness: f32,   // 怠惰レベル (0.0-1.0) - 内部ステータス
-    pub motivation: f32, // やる気 (0.0-1.0) - 高いほど働く
-    pub fatigue: f32,    // 疲労 (0.0-1.0) - 高いほど疲れている
-    pub stress: f32,     // ストレス (0.0-1.0) - 使い魔監視下で増加
-    // UI参照
-    pub bar_entity: Option<Entity>,
-    pub icon_entity: Option<Entity>,
-}
-
-impl Default for DamnedSoul {
-    fn default() -> Self {
-        Self {
-            sin_type: SinType::Sloth,
-            laziness: 0.7,   // デフォルトで怠惰
-            motivation: 0.1, // デフォルトでやる気なし
-            fatigue: 0.0,
-            stress: 0.0, // デフォルトでストレスなし
-            bar_entity: None,
-            icon_entity: None,
-        }
-    }
-}
-
-/// 落ちた理由（将来拡張用）
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Reflect, Default)]
-#[allow(dead_code)]
-pub enum SinType {
-    #[default]
-    Sloth, // 怠惰
-    Greed, // 強欲
-    Wrath, // 憤怒
-}
-
-/// ストレスによるブレイクダウン状態
-/// stress >= 1.0 で付与され、stress <= 0.7 で削除される
-#[derive(Component, Debug, Clone, Copy, Default)]
-pub struct StressBreakdown {
-    /// 停止中（stress > 0.9）- 動けない
-    pub is_frozen: bool,
-}
-
-/// 怠惰状態のコンポーネント
-#[derive(Component, Reflect)]
-#[reflect(Component)]
-pub struct IdleState {
-    pub idle_timer: f32,
-    pub total_idle_time: f32, // 累計の放置時間
-    pub behavior: IdleBehavior,
-    pub behavior_duration: f32, // 現在の行動をどれくらい続けるか
-    // 集会中のサブ行動
-    pub gathering_behavior: GatheringBehavior,
-    pub gathering_behavior_timer: f32,
-    pub gathering_behavior_duration: f32,
-    // 重なり回避が必要かどうか（初回到着時・パターン変更時に true）
-    pub needs_separation: bool,
-}
-
-impl Default for IdleState {
-    fn default() -> Self {
-        Self {
-            idle_timer: 0.0,
-            total_idle_time: 0.0,
-            behavior: IdleBehavior::Wandering,
-            behavior_duration: 3.0,
-            gathering_behavior: GatheringBehavior::Wandering,
-            gathering_behavior_timer: 0.0,
-            gathering_behavior_duration: 60.0,
-            needs_separation: false,
-        }
-    }
-}
-
-/// 怠惰行動の種類
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Reflect, Default)]
-pub enum IdleBehavior {
-    #[default]
-    Wandering, // うろうろ
-    Sitting,            // 座り込み
-    Sleeping,           // 寝ている
-    Gathering,          // 集会中
-    ExhaustedGathering, // 疲労による集会移動中
-}
-
-/// 集会中のサブ行動
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Reflect, Default)]
-pub enum GatheringBehavior {
-    #[default]
-    Wandering, // うろうろ（今の動き）
-    Sleeping, // 寝ている
-    Standing, // 立ち尽くす
-    Dancing,  // 踊り（揺れ）
-}
-
-/// 移動先
-#[derive(Component)]
-pub struct Destination(pub Vec2);
-
-/// 経路
-#[derive(Component, Default)]
-pub struct Path {
-    pub waypoints: Vec<Vec2>,
-    pub current_index: usize,
-}
-
-/// アニメーション状態
-#[derive(Component)]
-pub struct AnimationState {
-    pub is_moving: bool,
-    pub facing_right: bool,
-    pub bob_timer: f32,
-}
-
-impl Default for AnimationState {
-    fn default() -> Self {
-        Self {
-            is_moving: false,
-            facing_right: true,
-            bob_timer: 0.0,
-        }
-    }
-}
 
 /// 人間をスポーンする
 pub fn spawn_damned_souls(mut spawn_events: MessageWriter<DamnedSoulSpawnEvent>) {
-    // 3体の人間をスポーン
     let spawn_positions = [
         Vec2::new(-50.0, -50.0),
         Vec2::new(50.0, 0.0),
@@ -317,7 +43,6 @@ pub fn spawn_damned_soul_at(
     world_map: &Res<WorldMap>,
     pos: Vec2,
 ) {
-    // 歩ける場所を探す
     let spawn_grid = WorldMap::world_to_grid(pos);
     let mut actual_grid = spawn_grid;
     'search: for dx in -5..=5 {
@@ -331,15 +56,13 @@ pub fn spawn_damned_soul_at(
     }
     let actual_pos = WorldMap::grid_to_world(actual_grid.0, actual_grid.1);
 
-    // ランダムなアイデンティティを生成
     let identity = SoulIdentity::random();
     let soul_name = identity.name.clone();
     let gender = identity.gender;
 
-    // 性別で色分け
     let sprite_color = match gender {
-        Gender::Male => Color::srgb(0.4, 0.6, 0.9),   // 青系
-        Gender::Female => Color::srgb(0.9, 0.5, 0.7), // ピンク系
+        Gender::Male => Color::srgb(0.4, 0.6, 0.9),
+        Gender::Female => Color::srgb(0.9, 0.5, 0.7),
     };
 
     commands
@@ -349,7 +72,7 @@ pub fn spawn_damned_soul_at(
             identity,
             IdleState::default(),
             AssignedTask::default(),
-            crate::systems::logistics::Inventory(None), // インベントリを追加
+            crate::systems::logistics::Inventory(None),
             Sprite {
                 image: game_assets.colonist.clone(),
                 custom_size: Some(Vec2::splat(TILE_SIZE * 0.8)),
@@ -380,7 +103,6 @@ pub fn pathfinding_system(
         let start_grid = WorldMap::world_to_grid(current_pos);
         let goal_grid = WorldMap::world_to_grid(destination.0);
 
-        // すでに同じ目的地への経路を持っている場合はスキップ
         if let Some(last) = path.waypoints.last() {
             if last.distance_squared(destination.0) < 1.0 {
                 continue;
@@ -399,16 +121,9 @@ pub fn pathfinding_system(
                 .map(|&(x, y)| WorldMap::grid_to_world(x, y))
                 .collect();
             path.current_index = 0;
-            debug!(
-                "PATH: Soul {:?} found new path ({} steps)",
-                entity,
-                path.waypoints.len()
-            );
+            debug!("PATH: Soul {:?} found new path", entity);
         } else {
-            debug!(
-                "PATH: Soul {:?} failed to find path to {:?}",
-                entity, goal_grid
-            );
+            debug!("PATH: Soul {:?} failed to find path", entity);
             path.waypoints.clear();
         }
     }
@@ -427,8 +142,8 @@ pub fn soul_movement(
         Option<&StressBreakdown>,
     )>,
 ) {
-    for (entity, mut transform, mut path, mut anim, soul, idle, breakdown_opt) in query.iter_mut() {
-        // ブレイクダウンで停止中の場合は動けない
+    for (_entity, mut transform, mut path, mut anim, soul, idle, breakdown_opt) in query.iter_mut()
+    {
         if let Some(breakdown) = breakdown_opt {
             if breakdown.is_frozen {
                 anim.is_moving = false;
@@ -443,13 +158,11 @@ pub fn soul_movement(
             let distance = to_target.length();
 
             if distance > 2.0 {
-                // やる気が高いほど速く動く
                 let base_speed = 60.0;
                 let motivation_bonus = soul.motivation * 40.0;
                 let laziness_penalty = soul.laziness * 30.0;
                 let mut speed = (base_speed + motivation_bonus - laziness_penalty).max(20.0);
 
-                // 疲労による集会移動中は速度低下
                 if idle.behavior == IdleBehavior::ExhaustedGathering {
                     speed *= 0.7;
                 }
@@ -465,9 +178,6 @@ pub fn soul_movement(
                 }
             } else {
                 path.current_index += 1;
-                if path.current_index >= path.waypoints.len() {
-                    debug!("MOVE: Soul {:?} reached final destination", entity);
-                }
             }
         } else {
             anim.is_moving = false;
@@ -493,7 +203,6 @@ pub fn animation_system(
             let bob = (anim.bob_timer.sin() * 0.05) + 1.0;
             transform.scale = Vec3::new(1.0, bob, 1.0);
         } else {
-            // 怠惰なほどゆっくり呼吸
             let breath_speed = 2.0 - soul.laziness;
             anim.bob_timer += time.delta_secs() * breath_speed;
             let breath = (anim.bob_timer.sin() * 0.02) + 1.0;
@@ -506,37 +215,31 @@ pub fn animation_system(
 // Observer ハンドラ
 // ============================================================
 
-fn on_task_assigned(on: On<OnTaskAssigned>, mut q_souls: Query<&mut DamnedSoul>) {
+fn on_task_assigned(on: On<OnTaskAssigned>, _q_souls: Query<&mut DamnedSoul>) {
     let soul_entity = on.entity;
     let event = on.event();
-    if let Ok(_soul) = q_souls.get_mut(soul_entity) {
-        info!(
-            "OBSERVER: Soul {:?} assigned to task {:?} ({:?})",
-            soul_entity, event.task_entity, event.work_type
-        );
-    }
+    info!(
+        "OBSERVER: Soul {:?} assigned to task {:?} ({:?})",
+        soul_entity, event.task_entity, event.work_type
+    );
 }
 
-fn on_task_completed(on: On<OnTaskCompleted>, mut q_souls: Query<&mut DamnedSoul>) {
+fn on_task_completed(on: On<OnTaskCompleted>, _q_souls: Query<&mut DamnedSoul>) {
     let soul_entity = on.entity;
     let event = on.event();
-    if let Ok(_soul) = q_souls.get_mut(soul_entity) {
-        info!(
-            "OBSERVER: Soul {:?} completed task {:?} ({:?})",
-            soul_entity, event.task_entity, event.work_type
-        );
-    }
+    info!(
+        "OBSERVER: Soul {:?} completed task {:?} ({:?})",
+        soul_entity, event.task_entity, event.work_type
+    );
 }
 
-fn on_soul_recruited(on: On<OnSoulRecruited>, mut q_souls: Query<&mut DamnedSoul>) {
+fn on_soul_recruited(on: On<OnSoulRecruited>, _q_souls: Query<&mut DamnedSoul>) {
     let soul_entity = on.entity;
     let event = on.event();
-    if let Ok(_soul) = q_souls.get_mut(soul_entity) {
-        info!(
-            "OBSERVER: Soul {:?} recruited by Familiar {:?}",
-            soul_entity, event.familiar_entity
-        );
-    }
+    info!(
+        "OBSERVER: Soul {:?} recruited by Familiar {:?}",
+        soul_entity, event.familiar_entity
+    );
 }
 
 fn on_stress_breakdown(
@@ -565,12 +268,10 @@ fn on_stress_breakdown(
     {
         info!("OBSERVER: Soul {:?} had a stress breakdown!", entity);
 
-        // 凍結状態を付与
         commands
             .entity(entity)
             .insert(StressBreakdown { is_frozen: true });
 
-        // タスクを放棄
         if !matches!(*task, AssignedTask::None) {
             crate::systems::work::unassign_task(
                 &mut commands,
@@ -581,21 +282,12 @@ fn on_stress_breakdown(
                 &mut inventory,
                 &mut q_designations,
             );
-            info!(
-                "OBSERVER: Soul {:?} abandoned task due to breakdown",
-                entity
-            );
         }
 
-        // 使役を解除
         if under_command.is_some() {
             commands
                 .entity(entity)
                 .remove::<crate::entities::familiar::UnderCommand>();
-            info!(
-                "OBSERVER: Soul {:?} entered breakdown, released from command",
-                entity
-            );
         }
     }
 }
@@ -639,14 +331,12 @@ fn on_exhausted(
             entity
         );
 
-        // 使役状態を解除
         if under_command_opt.is_some() {
             commands
                 .entity(entity)
                 .remove::<crate::entities::familiar::UnderCommand>();
         }
 
-        // タスクを放棄
         if !matches!(*task, AssignedTask::None) {
             unassign_task(
                 &mut commands,
@@ -659,9 +349,7 @@ fn on_exhausted(
             );
         }
 
-        // ExhaustedGatheringに移行
         if idle.behavior != IdleBehavior::ExhaustedGathering {
-            // Gathering状態でない場合は初期化
             if idle.behavior != IdleBehavior::Gathering {
                 let mut rng = rand::thread_rng();
                 idle.gathering_behavior = match rng.gen_range(0..4) {
@@ -680,12 +368,10 @@ fn on_exhausted(
             idle.behavior_duration = rng.gen_range(2.0..4.0);
         }
 
-        // 集会エリアへ向かう
         let current_pos = transform.translation.truncate();
         let center = gathering_area.0;
         let dist_from_center = (center - current_pos).length();
 
-        // 3.0タイル分を超えている場合は目的地を設定
         if dist_from_center > TILE_SIZE * 3.0 {
             dest.0 = center;
             path.waypoints.clear();

@@ -33,10 +33,7 @@ use game_state::{
 };
 
 // 新システム
-use crate::entities::damned_soul::{
-    DamnedSoulSpawnEvent, animation_system, pathfinding_system, soul_movement,
-    soul_spawning_system, spawn_damned_souls,
-};
+use crate::entities::damned_soul::{DamnedSoulPlugin, DamnedSoulSpawnEvent, spawn_damned_souls};
 use crate::entities::familiar::{
     FamiliarSpawnEvent, FamiliarType, familiar_movement, familiar_spawning_system, spawn_familiar,
     update_familiar_range_indicator,
@@ -46,7 +43,7 @@ use crate::systems::command::{
     familiar_command_input_system, familiar_command_visual_system, task_area_indicator_system,
     task_area_selection_system, update_designation_indicator_system,
 };
-use crate::systems::familiar_ai::{familiar_ai_system, following_familiar_system};
+use crate::systems::familiar_ai::FamiliarAiPlugin;
 use crate::systems::fatigue::{fatigue_penalty_system, fatigue_update_system};
 use crate::systems::idle::{gathering_separation_system, idle_behavior_system, idle_visual_system};
 use crate::systems::jobs::{DesignationCreatedEvent, TaskCompletedEvent};
@@ -163,7 +160,8 @@ fn main() {
         .add_systems(OnExit(PlayMode::TaskDesignation), log_exit_task_mode)
         .add_message::<DesignationCreatedEvent>()
         .add_message::<TaskCompletedEvent>()
-        .add_message::<DamnedSoulSpawnEvent>()
+        .add_plugins(DamnedSoulPlugin)
+        .add_plugins(FamiliarAiPlugin)
         .add_message::<FamiliarSpawnEvent>()
         // システムセットの構成
         .configure_sets(
@@ -221,8 +219,6 @@ fn main() {
             (
                 cleanup_commanded_souls_system,
                 queue_management_system,
-                familiar_ai_system,
-                following_familiar_system,
                 task_execution_system,
                 assign_task_system.run_if(in_state(PlayMode::TaskDesignation)),
             )
@@ -243,7 +239,8 @@ fn main() {
                 fatigue_penalty_system,
                 idle_behavior_system,
                 gathering_separation_system,
-                soul_spawning_system,
+                // soul_spawning_system は Plugin で登録済み
+                // familiar_ai_system, following_familiar_system は Plugin で登録済み
                 familiar_spawning_system,
                 stress_system,
                 supervision_stress_system,
@@ -253,9 +250,7 @@ fn main() {
         )
         .add_systems(
             Update,
-            (pathfinding_system, soul_movement, familiar_movement)
-                .chain()
-                .in_set(GameSystemSet::Actor),
+            (familiar_movement).chain().in_set(GameSystemSet::Actor),
         )
         .add_systems(
             Update,
@@ -266,7 +261,7 @@ fn main() {
                 soul_status_visual_system,
                 task_link_system,
                 building_completion_system,
-                animation_system,
+                // animation_system は Plugin で登録済み
                 // ビジュアル・インジケータ系をここへ移動（ポーズ中も表示するため）
                 task_area_indicator_system,
                 area_selection_indicator_system.run_if(in_state(PlayMode::TaskDesignation)),
