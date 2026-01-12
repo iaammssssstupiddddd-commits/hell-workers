@@ -15,7 +15,7 @@ pub fn scouting_logic(
     fam_pos: Vec2,
     target_soul: Entity,
     fatigue_threshold: f32,
-    _max_workers: usize,
+    max_workers: usize,
     squad: &mut Vec<Entity>,
     ai_state: &mut FamiliarAiState,
     fam_dest: &mut Destination,
@@ -37,6 +37,21 @@ pub fn scouting_logic(
     q_breakdown: &Query<&StressBreakdown>,
     commands: &mut Commands,
 ) -> bool {
+    // 早期退出: 分隊が既に満員なら監視モードへ
+    if squad.len() >= max_workers {
+        info!(
+            "FAM_AI: {:?} scouting cancelled (squad full: {}/{}), switching to Supervising",
+            fam_entity,
+            squad.len(),
+            max_workers
+        );
+        *ai_state = FamiliarAiState::Supervising {
+            target: None,
+            timer: 0.0,
+        };
+        return true;
+    }
+
     // 変更があった場合は true を返す
     if let Ok((_soul_entity, target_transform, soul, task, _, _, idle, _, uc)) =
         q_souls.get(target_soul)
@@ -50,13 +65,26 @@ pub fn scouting_logic(
         if uc.is_none() || matches!(uc, Some(u) if u.0 == fam_entity) {
             if !fatigue_ok || !stress_ok || !matches!(*task, AssignedTask::None) {
                 // 条件を満たさなくなった
+                info!(
+                    "FAM_AI: {:?} scouting cancelled for {:?} (FatigueOK: {}/rest:{}, StressOK: {}, Task: {:?})",
+                    fam_entity, target_soul, fatigue_ok, is_gathering, stress_ok, *task
+                );
                 *ai_state = FamiliarAiState::SearchingTask;
                 return true;
             }
 
             let target_pos = target_transform.translation.truncate();
-            if fam_pos.distance_squared(target_pos) < (TILE_SIZE * 1.5).powi(2) {
+            let dist_sq = fam_pos.distance_squared(target_pos);
+
+            // リクルート半径を少し広げて確実に成功させる (1.5 -> 2.5)
+            if dist_sq < (TILE_SIZE * 2.5).powi(2) {
                 // リクルート成功
+                info!(
+                    "FAM_AI: {:?} reached target {:?} (dist: {:.2}), recruiting...",
+                    fam_entity,
+                    target_soul,
+                    dist_sq.sqrt()
+                );
                 if uc.is_none() {
                     commands
                         .entity(target_soul)
@@ -71,12 +99,22 @@ pub fn scouting_logic(
                 }
 
                 // 次のステートを決定 (元々のロジック: 満員でないなら探索に戻る)
-                if squad.len() >= _max_workers {
+                if squad.len() >= max_workers {
+                    info!(
+                        "FAM_AI: {:?} squad full after recruit, switching to Supervising",
+                        fam_entity
+                    );
                     *ai_state = FamiliarAiState::Supervising {
                         target: Some(target_soul),
                         timer: 2.0,
                     };
                 } else {
+                    info!(
+                        "FAM_AI: {:?} squad has room ({}/{}), returning to Searching",
+                        fam_entity,
+                        squad.len(),
+                        max_workers
+                    );
                     *ai_state = FamiliarAiState::SearchingTask;
                 }
 
@@ -85,8 +123,13 @@ pub fn scouting_logic(
                 // まだ距離があるなら接近を継続 (ガードを 0.5 タイルに緩和して反応性を向上)
                 let is_path_finished = fam_path.current_index >= fam_path.waypoints.len();
                 let dest_lag_sq = fam_dest.0.distance_squared(target_pos);
+                let dist = dist_sq.sqrt();
 
                 if is_path_finished || dest_lag_sq > (TILE_SIZE * 0.5).powi(2) {
+                    debug!(
+                        "FAM_AI: {:?} approaching {:?} (dist: {:.2}, path_fin: {})",
+                        fam_entity, target_soul, dist, is_path_finished
+                    );
                     fam_dest.0 = target_pos;
                     fam_path.waypoints = vec![target_pos];
                     fam_path.current_index = 0;
@@ -95,11 +138,19 @@ pub fn scouting_logic(
             }
         } else {
             // 他の使い魔に取られた
+            info!(
+                "FAM_AI: {:?} scouting target {:?} taken by another familiar",
+                fam_entity, target_soul
+            );
             *ai_state = FamiliarAiState::SearchingTask;
             return true;
         }
     } else {
         // ターゲット消失
+        info!(
+            "FAM_AI: {:?} scouting target {:?} disappeared from world",
+            fam_entity, target_soul
+        );
         *ai_state = FamiliarAiState::SearchingTask;
         return true;
     }

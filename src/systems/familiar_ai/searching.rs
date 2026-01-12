@@ -20,6 +20,7 @@ pub fn searching_logic(
             let is_path_finished = fam_path.current_index >= fam_path.waypoints.len();
 
             if is_path_finished || !is_moving_to_center {
+                info!("FAM_AI: Moving to task area center at {:?}", center);
                 fam_dest.0 = center;
                 fam_path.waypoints = vec![center];
                 fam_path.current_index = 0;

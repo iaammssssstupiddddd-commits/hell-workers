@@ -1,11 +1,14 @@
-use crate::constants::*;
+use crate::constants::TILE_SIZE;
 use crate::entities::damned_soul::{
     DamnedSoul, Destination, IdleBehavior, IdleState, Path, StressBreakdown,
 };
-use crate::entities::familiar::{Familiar, UnderCommand};
+use crate::entities::familiar::Familiar;
+use crate::relationships::{
+    CommandedBy as UnderCommand, ManagedBy as IssuedBy, ManagedTasks, WorkingOn as ClaimedBy,
+};
 use crate::systems::command::TaskArea;
-use crate::systems::jobs::{Designation, IssuedBy, TaskSlots, WorkType};
-use crate::systems::logistics::{ClaimedBy, Stockpile};
+use crate::systems::jobs::{Designation, TaskSlots, WorkType};
+use crate::systems::logistics::Stockpile;
 use crate::systems::spatial::SpatialGrid;
 use crate::systems::work::{AssignedTask, GatherPhase, HaulPhase};
 use bevy::prelude::*;
@@ -82,9 +85,9 @@ pub fn find_best_recruit(
 
 /// 担当エリア内の未アサインタスクを探す
 pub fn find_unassigned_task_in_area(
-    fam_entity: Entity,
+    _fam_entity: Entity,
     fam_pos: Vec2,
-    task_area_opt: Option<&TaskArea>,
+    _task_area_opt: Option<&TaskArea>,
     q_designations: &Query<(
         Entity,
         &Transform,
@@ -92,38 +95,55 @@ pub fn find_unassigned_task_in_area(
         Option<&IssuedBy>,
         Option<&mut TaskSlots>,
     )>,
+    managed_tasks: &ManagedTasks,
 ) -> Option<Entity> {
     let mut best_task = None;
     let mut best_dist = f32::MAX;
 
-    for (entity, transform, _designation, issued_by_opt, slots_opt) in q_designations.iter() {
-        let pos = transform.translation.truncate();
-        let is_mine = issued_by_opt.map(|ib| ib.0 == fam_entity).unwrap_or(false);
-        let is_unassigned = issued_by_opt.is_none();
+    // 1. 自分が管理しているタスクから探す (ManagedTasks ターゲットを利用)
+    for &entity in managed_tasks.iter() {
+        if let Ok((entity, transform, _, _, slots_opt)) = q_designations.get(entity) {
+            let pos = transform.translation.truncate();
+            let has_slot = slots_opt.as_ref().map(|s| s.has_slot()).unwrap_or(true);
+            if !has_slot {
+                continue;
+            }
 
-        if !is_mine && !is_unassigned {
+            let dist = fam_pos.distance_squared(pos);
+            if dist < best_dist {
+                best_dist = dist;
+                best_task = Some(entity);
+            }
+        }
+    }
+
+    if best_task.is_some() {
+        return best_task;
+    }
+
+    // 2. 自分が管理していない未アサインタスクをエリア内で探す
+    for (entity, transform, _designation, issued_by_opt, slots_opt) in q_designations.iter() {
+        if issued_by_opt.is_some() {
+            continue; // すでに誰かが管理している
+        }
+
+        let has_slot = slots_opt.as_ref().map(|s| s.has_slot()).unwrap_or(true);
+        if !has_slot {
             continue;
         }
 
-        let mut in_area = true;
-        if let Some(area) = task_area_opt {
+        let pos = transform.translation.truncate();
+
+        // エリア内チェック (未アサインタスクのみチェック)
+        if let Some(area) = _task_area_opt {
             let margin = TILE_SIZE * 2.0;
             if pos.x < area.min.x - margin
                 || pos.x > area.max.x + margin
                 || pos.y < area.min.y - margin
                 || pos.y > area.max.y + margin
             {
-                in_area = false;
+                continue;
             }
-        }
-
-        if !is_mine && !in_area {
-            continue;
-        }
-
-        let has_slot = slots_opt.as_ref().map(|s| s.has_slot()).unwrap_or(true);
-        if !has_slot {
-            continue;
         }
 
         let dist = fam_pos.distance_squared(pos);

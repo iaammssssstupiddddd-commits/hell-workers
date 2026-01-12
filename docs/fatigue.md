@@ -40,7 +40,7 @@
 
 - デフォルト: 0.8 (80%)
 - この閾値以上の魂はタスク割り当て対象外
-- この閾値を超えた魂は使役から解放
+- この閾値を超えた魂は使役から解放（ただし `Gathering` 状態の休息中は解放されない）
 
 ### 閾値による状態変化
 
@@ -103,5 +103,5 @@
 - `src/systems/fatigue.rs` - `fatigue_update_system`, `fatigue_penalty_system`
 - `src/systems/task_execution.rs` - タスク完了時の疲労増加
 - `src/systems/idle.rs` - 疲労に基づく怠惰行動、ExhaustedGathering→Gathering遷移
-- `src/systems/familiar_ai.rs` - 使い魔のリクルート時の疲労チェック
+- `src/systems/familiar_ai/` - 使い魔の AI 制御ロジック
 - `src/systems/spatial.rs` - グリッド登録判定
