@@ -11,11 +11,12 @@ use crate::entities::damned_soul::{DamnedSoul, Destination, IdleBehavior, IdleSt
 use crate::entities::familiar::{
     ActiveCommand, Familiar, FamiliarCommand, FamiliarOperation, UnderCommand,
 };
+use crate::relationships::{TaskWorkers, WorkingOn};
 use crate::systems::command::TaskArea;
 use crate::systems::jobs::{
     Designation, DesignationCreatedEvent, IssuedBy, TaskCompletedEvent, TaskSlots, WorkType,
 };
-use crate::systems::logistics::{ClaimedBy, InStockpile, Inventory, ResourceItem, Stockpile};
+use crate::systems::logistics::{InStockpile, Inventory, ResourceItem, Stockpile};
 use crate::world::map::WorldMap;
 
 use bevy::prelude::*;
@@ -216,7 +217,7 @@ pub fn task_delegation_system(
                             dest.0 = des_pos;
                             path.waypoints.clear();
 
-                            commands.entity(des_entity).insert(ClaimedBy(soul_entity));
+                            commands.entity(soul_entity).insert(WorkingOn(des_entity));
                             slots.current += 1;
                             commands
                                 .entity(soul_entity)
@@ -253,7 +254,7 @@ pub fn task_delegation_system(
                                 dest.0 = des_pos;
                                 path.waypoints.clear();
 
-                                commands.entity(des_entity).insert(ClaimedBy(soul_entity));
+                                commands.entity(soul_entity).insert(WorkingOn(des_entity));
                                 slots.current += 1;
                                 commands
                                     .entity(soul_entity)
@@ -333,7 +334,7 @@ pub fn cleanup_commanded_souls_system(
 /// 魂がアイテムを持っていた場合はその場にドロップする。
 pub fn unassign_task(
     commands: &mut Commands,
-    _soul_entity: Entity,
+    soul_entity: Entity,
     drop_pos: Vec2,
     task: &mut AssignedTask,
     path: &mut Path,
@@ -356,7 +357,6 @@ pub fn unassign_task(
             Visibility::Visible,
             Transform::from_xyz(snapped_pos.x, snapped_pos.y, 0.6),
         ));
-        commands.entity(item_entity).remove::<ClaimedBy>();
         info!(
             "UNASSIGN: Soul released item at {:?} (snapped to {:?})",
             drop_pos, snapped_pos
@@ -378,9 +378,11 @@ pub fn unassign_task(
             commands.entity(target).remove::<Designation>();
             commands.entity(target).remove::<TaskSlots>();
             commands.entity(target).remove::<IssuedBy>();
-            commands.entity(target).remove::<ClaimedBy>();
         }
     }
+
+    // ソウルから WorkingOn を削除（タスク側の TaskWorkers は自動更新される）
+    commands.entity(soul_entity).remove::<WorkingOn>();
 
     *task = AssignedTask::None;
     path.waypoints.clear();
@@ -398,7 +400,7 @@ pub fn task_area_auto_haul_system(
             With<ResourceItem>,
             Without<InStockpile>,
             Without<Designation>,
-            Without<ClaimedBy>,
+            Without<TaskWorkers>,
         ),
     >,
     mut ev_created: MessageWriter<DesignationCreatedEvent>,

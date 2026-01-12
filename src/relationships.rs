@@ -48,17 +48,21 @@ impl Commanding {
 // ソウル ⇔ タスク 関係
 // ============================================================
 
-/// ソウルがタスクに取り組んでいることを示す Relationship
-/// ソウル側に付与される（ソウル → タスクへの参照）
+/// ソウルがタスク/アイテムに取り組んでいることを示す Relationship
+/// **ソウル側**に付与される（ソウル → タスク/アイテムへの参照）
 ///
 /// # 使用例
 /// ```ignore
 /// // ソウルをタスクに割り当てる
 /// commands.entity(soul_entity).insert(WorkingOn(task_entity));
 ///
-/// // タスク完了時に解除
+/// // タスク完了時にソウルから解除
 /// commands.entity(soul_entity).remove::<WorkingOn>();
 /// ```
+///
+/// # 自動管理
+/// - タスク/アイテム側には `TaskWorkers` が自動的に付与・維持される
+/// - 複数のソウルが同じタスクに取り組める（TaskWorkers で追跡）
 #[derive(Component, Reflect, Debug, Clone, Copy)]
 #[reflect(Component)]
 #[relationship(relationship_target = TaskWorkers)]
@@ -70,12 +74,23 @@ impl Default for WorkingOn {
     }
 }
 
-/// タスクに割り当てられている作業者の一覧を保持する RelationshipTarget
-/// タスク側に自動的に付与・維持される
+/// タスク/アイテムに割り当てられている作業者（ソウル）の一覧
+/// タスク側に自動的に付与・維持される RelationshipTarget
+///
+/// # 注意
+/// このコンポーネントは Bevy の Relationship 機能により自動管理される。
+/// 手動で追加・削除しないこと。
 #[derive(Component, Reflect, Debug, Default)]
 #[reflect(Component)]
 #[relationship_target(relationship = WorkingOn)]
 pub struct TaskWorkers(Vec<Entity>);
+
+impl TaskWorkers {
+    /// 作業中のソウル一覧をイテレータで取得
+    pub fn iter(&self) -> impl Iterator<Item = &Entity> {
+        self.0.iter()
+    }
+}
 
 // ============================================================
 // 使い魔 ⇔ タスク 関係

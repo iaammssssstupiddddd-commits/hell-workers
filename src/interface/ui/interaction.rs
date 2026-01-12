@@ -6,6 +6,7 @@ use crate::entities::damned_soul::DamnedSoul;
 use crate::entities::familiar::{Familiar, FamiliarOperation};
 use crate::game_state::{BuildContext, PlayMode, TaskContext, ZoneContext};
 use crate::interface::ui::components::*;
+use crate::relationships::TaskWorkers;
 use crate::systems::work::AssignedTask;
 use bevy::prelude::*;
 
@@ -30,7 +31,7 @@ pub fn hover_tooltip_system(
     q_designations: Query<(
         &crate::systems::jobs::Designation,
         Option<&crate::systems::jobs::IssuedBy>,
-        Option<&crate::systems::logistics::ClaimedBy>,
+        Option<&TaskWorkers>,
     )>,
 ) {
     let Ok(window) = q_window.single() else {
@@ -62,7 +63,7 @@ pub fn hover_tooltip_system(
             info_lines.push(format!("Motivation: {:.0}%", soul.motivation * 100.0));
         }
 
-        if let Ok((des, issued_by_opt, claimed_by_opt)) = q_designations.get(entity) {
+        if let Ok((des, issued_by_opt, task_workers_opt)) = q_designations.get(entity) {
             info_lines.push(format!("Task: {:?}", des.work_type));
 
             if let Some(issued_by) = issued_by_opt {
@@ -71,12 +72,21 @@ pub fn hover_tooltip_system(
                 }
             }
 
-            if let Some(claimed_by) = claimed_by_opt {
-                if let Ok((_, _, identity_opt)) = q_souls.get(claimed_by.0) {
-                    let name = identity_opt
-                        .map(|i| i.name.clone())
-                        .unwrap_or("Unknown".to_string());
-                    info_lines.push(format!("Assigned to: {}", name));
+            // TaskWorkers から作業者を表示
+            if let Some(workers) = task_workers_opt {
+                let worker_names: Vec<String> = workers
+                    .iter()
+                    .filter_map(|&soul_entity| {
+                        q_souls.get(soul_entity).ok().map(|(_, _, identity_opt)| {
+                            identity_opt
+                                .map(|i| i.name.clone())
+                                .unwrap_or("Unknown".to_string())
+                        })
+                    })
+                    .collect();
+
+                if !worker_names.is_empty() {
+                    info_lines.push(format!("Assigned to: {}", worker_names.join(", ")));
                 }
             }
         }

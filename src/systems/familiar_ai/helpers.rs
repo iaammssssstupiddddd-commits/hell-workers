@@ -4,7 +4,7 @@ use crate::entities::damned_soul::{
 };
 use crate::entities::familiar::Familiar;
 use crate::relationships::{
-    CommandedBy as UnderCommand, ManagedBy as IssuedBy, ManagedTasks, WorkingOn as ClaimedBy,
+    CommandedBy as UnderCommand, ManagedBy as IssuedBy, ManagedTasks, WorkingOn,
 };
 use crate::systems::command::TaskArea;
 use crate::systems::jobs::{Designation, TaskSlots, WorkType};
@@ -251,7 +251,8 @@ pub fn assign_task_to_worker(
         .entity(worker_entity)
         .insert(UnderCommand(fam_entity));
 
+    // ワーカー側に WorkingOn を付与（タスク側の TaskWorkers は自動更新される）
     commands
-        .entity(task_entity)
-        .insert(ClaimedBy(worker_entity));
+        .entity(worker_entity)
+        .insert(WorkingOn(task_entity));
 }
