@@ -6,10 +6,11 @@ use crate::assets::GameAssets;
 use crate::constants::*;
 use crate::entities::damned_soul::{DamnedSoul, Destination, Path};
 use crate::events::OnTaskCompleted;
+use crate::relationships::WorkingOn;
 use crate::systems::jobs::{
     Designation, IssuedBy, Rock, TaskCompletedEvent, TaskSlots, Tree, WorkType,
 };
-use crate::systems::logistics::{ClaimedBy, InStockpile, Inventory, ResourceItem, Stockpile};
+use crate::systems::logistics::{InStockpile, Inventory, ResourceItem, Stockpile};
 use bevy::prelude::*;
 
 // ============================================================
@@ -48,7 +49,9 @@ pub enum HaulPhase {
 pub enum GatherPhase {
     #[default]
     GoingToResource,
-    Collecting { progress: f32 },
+    Collecting {
+        progress: f32,
+    },
     Done,
 }
 
@@ -391,8 +394,8 @@ fn handle_haul_task(
                 );
                 if let Some(item_entity) = inventory.0.take() {
                     commands.entity(item_entity).insert(Visibility::Visible);
-                    commands.entity(item_entity).remove::<ClaimedBy>();
                 }
+                commands.entity(soul_entity).remove::<WorkingOn>();
                 *task = AssignedTask::None;
                 path.waypoints.clear();
             }
@@ -406,7 +409,7 @@ fn handle_haul_task(
                         Transform::from_xyz(stock_pos.x, stock_pos.y, 0.6),
                         InStockpile(stockpile),
                     ));
-                    commands.entity(item_entity).remove::<ClaimedBy>();
+                    commands.entity(soul_entity).remove::<WorkingOn>();
                     stockpile_comp.current_count += 1; // カウントアップ
                     info!(
                         "TASK_EXEC: Soul {:?} dropped item at stockpile. Count: {}",
