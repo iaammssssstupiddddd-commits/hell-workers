@@ -30,9 +30,10 @@ pub struct Stockpile {
     pub current_count: usize,
 }
 
-// ClaimedBy は relationships.rs の WorkingOn に移行
-// 後方互換性のため、エイリアスを提供
-pub use crate::relationships::WorkingOn as ClaimedBy;
+// 【注意】ClaimedBy は廃止されました
+// 正しい使い方: ソウル側に WorkingOn(task_entity) を付与する
+// 例: commands.entity(soul_entity).insert(WorkingOn(task_entity));
+// タスク側には TaskWorkers が自動維持される
 
 #[derive(Component)]
 pub struct InStockpile(pub Entity);
