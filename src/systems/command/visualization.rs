@@ -1,0 +1,57 @@
+use super::{DesignationIndicator, TaskMode};
+use crate::constants::TILE_SIZE;
+use crate::entities::familiar::{ActiveCommand, Familiar, FamiliarCommand};
+use crate::game_state::TaskContext;
+use crate::systems::jobs::{Designation, WorkType};
+use bevy::prelude::*;
+
+pub fn designation_visual_system(
+    mut commands: Commands,
+    q_designated: Query<(Entity, &Transform, &Designation), Changed<Designation>>,
+) {
+    for (entity, transform, designation) in q_designated.iter() {
+        let color = match designation.work_type {
+            WorkType::Chop => Color::srgb(0.0, 1.0, 0.0),
+            WorkType::Mine => Color::srgb(1.0, 0.0, 0.0),
+            WorkType::Haul => Color::srgb(0.0, 0.0, 1.0),
+            _ => Color::WHITE,
+        };
+
+        commands.spawn((
+            DesignationIndicator(entity),
+            Sprite {
+                color: color.with_alpha(0.3),
+                custom_size: Some(Vec2::splat(TILE_SIZE * 1.1)),
+                ..default()
+            },
+            Transform::from_translation(transform.translation.truncate().extend(0.5)),
+        ));
+    }
+}
+
+pub fn familiar_command_visual_system(
+    task_context: Res<TaskContext>,
+    mut q_familiars: Query<(&ActiveCommand, &mut Sprite), With<Familiar>>,
+) {
+    for (command, mut sprite) in q_familiars.iter_mut() {
+        if task_context.0 != TaskMode::None {
+            sprite.color = Color::srgb(1.0, 1.0, 1.0);
+            return;
+        }
+
+        match command.command {
+            FamiliarCommand::Idle => {
+                sprite.color = Color::srgb(0.6, 0.2, 0.2);
+            }
+            FamiliarCommand::GatherResources => {
+                sprite.color = Color::srgb(1.0, 0.6, 0.2);
+            }
+            FamiliarCommand::Patrol => {
+                sprite.color = Color::srgb(1.0, 0.3, 0.3);
+            }
+            FamiliarCommand::Construct(_) => {
+                sprite.color = Color::srgb(1.0, 1.0, 0.3);
+            }
+        }
+    }
+}
