@@ -4,7 +4,7 @@ use crate::entities::damned_soul::{
 };
 use crate::entities::familiar::Familiar;
 use crate::relationships::{
-    CommandedBy as UnderCommand, ManagedBy as IssuedBy, ManagedTasks, WorkingOn,
+    CommandedBy as UnderCommand, ManagedBy as IssuedBy, ManagedTasks, TaskWorkers, WorkingOn,
 };
 use crate::systems::command::TaskArea;
 use crate::systems::jobs::{Designation, TaskSlots, WorkType};
@@ -93,7 +93,8 @@ pub fn find_unassigned_task_in_area(
         &Transform,
         &Designation,
         Option<&IssuedBy>,
-        Option<&mut TaskSlots>,
+        Option<&TaskSlots>,
+        Option<&TaskWorkers>,
     )>,
     managed_tasks: &ManagedTasks,
 ) -> Option<Entity> {
@@ -102,9 +103,16 @@ pub fn find_unassigned_task_in_area(
 
     // 1. 自分が管理しているタスクから探す (ManagedTasks ターゲットを利用)
     for &entity in managed_tasks.iter() {
-        if let Ok((entity, transform, _, _, slots_opt)) = q_designations.get(entity) {
+        if let Ok((entity, transform, _, _, slots_opt, workers_opt)) = q_designations.get(entity) {
             let pos = transform.translation.truncate();
-            let has_slot = slots_opt.as_ref().map(|s| s.has_slot()).unwrap_or(true);
+
+            let has_slot = if let Some(slots) = slots_opt {
+                let current = workers_opt.map(|w| w.len()).unwrap_or(0);
+                (current as u32) < slots.max
+            } else {
+                true
+            };
+
             if !has_slot {
                 continue;
             }
@@ -122,12 +130,19 @@ pub fn find_unassigned_task_in_area(
     }
 
     // 2. 自分が管理していない未アサインタスクをエリア内で探す
-    for (entity, transform, _designation, issued_by_opt, slots_opt) in q_designations.iter() {
+    for (entity, transform, _designation, issued_by_opt, slots_opt, workers_opt) in
+        q_designations.iter()
+    {
         if issued_by_opt.is_some() {
             continue; // すでに誰かが管理している
         }
 
-        let has_slot = slots_opt.as_ref().map(|s| s.has_slot()).unwrap_or(true);
+        let has_slot = if let Some(slots) = slots_opt {
+            let current = workers_opt.map(|w| w.len()).unwrap_or(0);
+            (current as u32) < slots.max
+        } else {
+            true
+        };
         if !has_slot {
             continue;
         }
@@ -163,12 +178,13 @@ pub fn assign_task_to_worker(
     task_entity: Entity,
     worker_entity: Entity,
     fatigue_threshold: f32,
-    q_designations: &mut Query<(
+    q_designations: &Query<(
         Entity,
         &Transform,
         &Designation,
         Option<&IssuedBy>,
-        Option<&mut TaskSlots>,
+        Option<&TaskSlots>,
+        Option<&TaskWorkers>,
     )>,
     q_souls: &mut Query<
         (
@@ -201,7 +217,7 @@ pub fn assign_task_to_worker(
     }
 
     let (task_pos, work_type) =
-        if let Ok((_, transform, designation, _, _)) = q_designations.get(task_entity) {
+        if let Ok((_, transform, designation, _, _, _)) = q_designations.get(task_entity) {
             (transform.translation.truncate(), designation.work_type)
         } else {
             return;
@@ -238,11 +254,8 @@ pub fn assign_task_to_worker(
         _ => return,
     }
 
-    if let Ok((_, _, _, _, mut slots_opt)) = q_designations.get_mut(task_entity) {
-        if let Some(ref mut slots) = slots_opt {
-            slots.current += 1;
-        }
-    }
+    // スロットのインクリメントは不要（Relationshipにより自動管理）
+    // if let Ok((..., mut slots_opt)) = q_designations.get_mut(task_entity) { ... }
 
     dest.0 = task_pos;
     path.waypoints.clear();

@@ -90,6 +90,11 @@ impl TaskWorkers {
     pub fn iter(&self) -> impl Iterator<Item = &Entity> {
         self.0.iter()
     }
+
+    /// 作業者の人数を取得
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
 }
 
 // ============================================================
