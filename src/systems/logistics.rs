@@ -16,9 +16,6 @@ pub enum ResourceType {
 #[derive(Component)]
 pub struct ResourceItem(pub ResourceType);
 
-#[derive(Component)]
-pub struct Inventory(pub Option<Entity>);
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ZoneType {
     Stockpile,

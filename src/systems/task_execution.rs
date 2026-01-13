@@ -6,11 +6,11 @@ use crate::assets::GameAssets;
 use crate::constants::*;
 use crate::entities::damned_soul::{DamnedSoul, Destination, Path};
 use crate::events::OnTaskCompleted;
-use crate::relationships::WorkingOn;
+use crate::relationships::{HeldBy, Holding, WorkingOn};
 use crate::systems::jobs::{
     Designation, IssuedBy, Rock, TaskCompletedEvent, TaskSlots, Tree, WorkType,
 };
-use crate::systems::logistics::{InStockpile, Inventory, ResourceItem, Stockpile};
+use crate::systems::logistics::{InStockpile, ResourceItem, Stockpile};
 use bevy::prelude::*;
 
 // ============================================================
@@ -78,7 +78,7 @@ pub fn task_execution_system(
         &mut AssignedTask,
         &mut Destination,
         &mut Path,
-        &mut Inventory,
+        Option<&Holding>,
     )>,
     q_targets: Query<(
         &Transform,
@@ -93,7 +93,7 @@ pub fn task_execution_system(
     mut ev_completed: MessageWriter<TaskCompletedEvent>,
     time: Res<Time>,
 ) {
-    for (soul_entity, soul_transform, mut soul, mut task, mut dest, mut path, mut inventory) in
+    for (soul_entity, soul_transform, mut soul, mut task, mut dest, mut path, holding_opt) in
         q_souls.iter_mut()
     {
         let was_busy = !matches!(*task, AssignedTask::None);
@@ -139,7 +139,7 @@ pub fn task_execution_system(
                     &mut task,
                     &mut dest,
                     &mut path,
-                    &mut inventory,
+                    holding_opt,
                     item,
                     stockpile,
                     phase,
@@ -305,7 +305,7 @@ fn handle_haul_task(
     task: &mut AssignedTask,
     dest: &mut Destination,
     path: &mut Path,
-    inventory: &mut Inventory,
+    holding: Option<&Holding>,
     item: Entity,
     stockpile: Entity,
     phase: HaulPhase,
@@ -339,7 +339,7 @@ fn handle_haul_task(
                 }
 
                 if soul_pos.distance(res_pos) < TILE_SIZE * 1.2 {
-                    inventory.0 = Some(item);
+                    commands.entity(soul_entity).insert(Holding(item));
                     commands.entity(item).insert(Visibility::Hidden);
 
                     // 【修正】もしアイテムが備蓄場所にあったなら、カウントを減らし、InStockpileコンポーネントを削除
@@ -392,9 +392,14 @@ fn handle_haul_task(
                     "HAUL: Soul {:?} stockpile {:?} not found",
                     soul_entity, stockpile
                 );
-                if let Some(item_entity) = inventory.0.take() {
-                    commands.entity(item_entity).insert(Visibility::Visible);
+                // 備蓄場所が見つからない場合、持っているアイテムを可視化してタスクを中止
+                if let Some(Holding(held_item_entity)) = holding {
+                    commands
+                        .entity(*held_item_entity)
+                        .insert(Visibility::Visible);
+                    commands.entity(*held_item_entity).remove::<HeldBy>();
                 }
+                commands.entity(soul_entity).remove::<Holding>();
                 commands.entity(soul_entity).remove::<WorkingOn>();
                 *task = AssignedTask::None;
                 path.waypoints.clear();
@@ -403,19 +408,18 @@ fn handle_haul_task(
         HaulPhase::Dropping => {
             if let Ok((stock_transform, mut stockpile_comp)) = q_stockpiles.get_mut(stockpile) {
                 let stock_pos = stock_transform.translation.truncate();
-                if let Some(item_entity) = inventory.0.take() {
-                    commands.entity(item_entity).insert((
-                        Visibility::Visible,
-                        Transform::from_xyz(stock_pos.x, stock_pos.y, 0.6),
-                        InStockpile(stockpile),
-                    ));
-                    commands.entity(soul_entity).remove::<WorkingOn>();
-                    stockpile_comp.current_count += 1; // カウントアップ
-                    info!(
-                        "TASK_EXEC: Soul {:?} dropped item at stockpile. Count: {}",
-                        soul_entity, stockpile_comp.current_count
-                    );
-                }
+                commands.entity(item).insert((
+                    Visibility::Visible,
+                    Transform::from_xyz(stock_pos.x, stock_pos.y, 0.6),
+                    InStockpile(stockpile),
+                ));
+                commands.entity(soul_entity).remove::<Holding>();
+                commands.entity(soul_entity).remove::<WorkingOn>();
+                stockpile_comp.current_count += 1; // カウントアップ
+                info!(
+                    "TASK_EXEC: Soul {:?} dropped item at stockpile. Count: {}",
+                    soul_entity, stockpile_comp.current_count
+                );
             }
             *task = AssignedTask::None;
             path.waypoints.clear();

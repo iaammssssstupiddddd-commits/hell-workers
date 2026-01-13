@@ -29,7 +29,7 @@ pub fn scouting_logic(
             &mut Destination,
             &mut Path,
             &IdleState,
-            &mut crate::systems::logistics::Inventory,
+            Option<&crate::relationships::Holding>,
             Option<&UnderCommand>,
         ),
         Without<crate::entities::familiar::Familiar>,

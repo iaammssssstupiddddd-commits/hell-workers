@@ -85,8 +85,8 @@ pub fn familiar_ai_system(
             &mut Destination,
             &mut Path,
             &IdleState,
-            &mut crate::systems::logistics::Inventory,
-            Option<&UnderCommand>,
+            Option<&crate::relationships::Holding>,
+            Option<&crate::entities::familiar::UnderCommand>,
         ),
         Without<Familiar>,
     >,
@@ -139,10 +139,10 @@ pub fn familiar_ai_system(
         // 2. 疲労解放
         let mut released_entities: Vec<Entity> = Vec::new();
         for &member_entity in &squad_entities {
-            if let Ok((entity, transform, soul, mut task, _, mut path, idle, mut inventory, uc)) =
+            if let Ok((entity, transform, soul, mut task, _, mut path, idle, holding_opt, uc)) =
                 q_souls.get_mut(member_entity)
             {
-                // 整合性チェック: 相手が自分を主人だと思っていないならリストから外す ( रिलेशनशिप更新遅延対策 )
+                // 整合性チェック: 相手が自分を主人だと思っていないならリストから外す ( Relationship更新遅延対策 )
                 if let Some(uc_comp) = uc {
                     if uc_comp.0 != fam_entity {
                         info!(
@@ -178,7 +178,7 @@ pub fn familiar_ai_system(
                         transform.translation.truncate(),
                         &mut task,
                         &mut path,
-                        &mut inventory,
+                        holding_opt,
                         &q_designations,
                     );
                     commands.entity(member_entity).remove::<UnderCommand>();
