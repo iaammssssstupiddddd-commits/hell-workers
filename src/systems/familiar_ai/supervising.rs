@@ -25,7 +25,7 @@ pub fn supervising_logic(
             &mut Destination,
             &mut Path,
             &IdleState,
-            &mut crate::systems::logistics::Inventory,
+            Option<&crate::relationships::Holding>,
             Option<&crate::entities::familiar::UnderCommand>,
         ),
         Without<crate::entities::familiar::Familiar>,
