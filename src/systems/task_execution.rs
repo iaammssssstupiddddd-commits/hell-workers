@@ -7,6 +7,7 @@ use crate::constants::*;
 use crate::entities::damned_soul::{DamnedSoul, Destination, Path};
 use crate::events::OnTaskCompleted;
 use crate::relationships::{Holding, WorkingOn};
+use crate::systems::familiar_ai::haul_cache::HaulReservationCache;
 use crate::systems::jobs::{
     Designation, IssuedBy, Rock, TaskCompletedEvent, TaskSlots, Tree, WorkType,
 };
@@ -96,6 +97,7 @@ pub fn task_execution_system(
     game_assets: Res<GameAssets>,
     mut ev_completed: MessageWriter<TaskCompletedEvent>,
     time: Res<Time>,
+    mut haul_cache: ResMut<HaulReservationCache>,
 ) {
     let mut dropped_this_frame = std::collections::HashMap::<Entity, usize>::new();
 
@@ -153,6 +155,7 @@ pub fn task_execution_system(
                     &mut q_stockpiles,
                     &mut commands,
                     &mut dropped_this_frame,
+                    &mut *haul_cache,
                 );
             }
             AssignedTask::None => {}
@@ -332,6 +335,7 @@ fn handle_haul_task(
     )>,
     commands: &mut Commands,
     dropped_this_frame: &mut std::collections::HashMap<Entity, usize>,
+    haul_cache: &mut HaulReservationCache,
 ) {
     let soul_pos = soul_transform.translation.truncate();
     match phase {
@@ -391,6 +395,7 @@ fn handle_haul_task(
             } else {
                 *task = AssignedTask::None;
                 path.waypoints.clear();
+                haul_cache.release(stockpile);
             }
         }
         HaulPhase::GoingToStockpile => {
@@ -423,6 +428,7 @@ fn handle_haul_task(
                 commands.entity(soul_entity).remove::<WorkingOn>();
                 *task = AssignedTask::None;
                 path.waypoints.clear();
+                haul_cache.release(stockpile);
             }
         }
         HaulPhase::Dropping => {
@@ -496,6 +502,9 @@ fn handle_haul_task(
             *task = AssignedTask::None;
             path.waypoints.clear();
             soul.fatigue = (soul.fatigue + 0.05).min(1.0);
+
+            // 搬送予約を解放
+            haul_cache.release(stockpile);
         }
     }
 }

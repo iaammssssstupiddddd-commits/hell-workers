@@ -133,6 +133,11 @@ impl ManagedTasks {
     pub fn iter(&self) -> impl Iterator<Item = &Entity> {
         self.0.iter()
     }
+
+    /// 特定のタスクが含まれているかチェック
+    pub fn contains(&self, entity: Entity) -> bool {
+        self.0.contains(&entity)
+    }
 }
 // ============================================================
 // ソウル ⇔ アイテム 保持関係

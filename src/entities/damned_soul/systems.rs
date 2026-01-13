@@ -262,6 +262,7 @@ fn on_stress_breakdown(
         Option<&crate::systems::jobs::TaskSlots>,
         Option<&crate::relationships::TaskWorkers>,
     )>,
+    mut haul_cache: ResMut<crate::systems::familiar_ai::haul_cache::HaulReservationCache>,
 ) {
     let soul_entity = on.entity;
     if let Ok((entity, transform, mut _soul, mut task, mut path, holding_opt, under_command)) =
@@ -282,6 +283,7 @@ fn on_stress_breakdown(
                 &mut path,
                 holding_opt,
                 &q_designations,
+                &mut *haul_cache,
             );
         }
 
@@ -315,6 +317,7 @@ fn on_exhausted(
         Option<&crate::systems::jobs::TaskSlots>,
         Option<&crate::relationships::TaskWorkers>,
     )>,
+    mut haul_cache: ResMut<crate::systems::familiar_ai::haul_cache::HaulReservationCache>,
 ) {
     let soul_entity = on.entity;
     if let Ok((
@@ -348,6 +351,7 @@ fn on_exhausted(
                 &mut path,
                 holding_opt,
                 &q_designations,
+                &mut *haul_cache,
             );
         }
 

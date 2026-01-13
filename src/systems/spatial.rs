@@ -289,6 +289,73 @@ impl ResourceSpatialGrid {
 }
 
 // ============================================================
+// DesignationSpatialGrid - タスク（Designation）用の空間グリッド
+// ============================================================
+
+/// タスク（Designation）用の空間グリッド
+#[derive(Resource, Default)]
+pub struct DesignationSpatialGrid {
+    cells: HashMap<(i32, i32), Vec<Entity>>,
+    cell_size: f32,
+    entity_cells: HashMap<Entity, (i32, i32)>,
+}
+
+impl DesignationSpatialGrid {
+    fn pos_to_cell(&self, pos: Vec2) -> (i32, i32) {
+        let cell_size = if self.cell_size > 0.0 {
+            self.cell_size
+        } else {
+            TILE_SIZE * 8.0
+        };
+        (
+            (pos.x / cell_size).floor() as i32,
+            (pos.y / cell_size).floor() as i32,
+        )
+    }
+
+    pub fn insert(&mut self, entity: Entity, pos: Vec2) {
+        let cell = self.pos_to_cell(pos);
+
+        if let Some(old_cell) = self.entity_cells.get(&entity) {
+            if *old_cell != cell {
+                if let Some(entities) = self.cells.get_mut(old_cell) {
+                    entities.retain(|&e| e != entity);
+                }
+            } else {
+                return;
+            }
+        }
+
+        self.cells.entry(cell).or_default().push(entity);
+        self.entity_cells.insert(entity, cell);
+    }
+
+    pub fn remove(&mut self, entity: Entity) {
+        if let Some(old_cell) = self.entity_cells.remove(&entity) {
+            if let Some(entities) = self.cells.get_mut(&old_cell) {
+                entities.retain(|&e| e != entity);
+            }
+        }
+    }
+
+    /// 指定された矩形エリア内のセルからエンティティを収集する
+    pub fn get_in_area(&self, min: Vec2, max: Vec2) -> Vec<Entity> {
+        let (c_min_x, c_min_y) = self.pos_to_cell(min);
+        let (c_max_x, c_max_y) = self.pos_to_cell(max);
+
+        let mut result = Vec::new();
+        for cx in c_min_x..=c_max_x {
+            for cy in c_min_y..=c_max_y {
+                if let Some(entities) = self.cells.get(&(cx, cy)) {
+                    result.extend(entities.iter().copied());
+                }
+            }
+        }
+        result
+    }
+}
+
+// ============================================================
 // 空間グリッド更新システム
 // ============================================================
 
@@ -379,5 +446,37 @@ pub fn update_resource_spatial_grid_system(
         } else {
             resource_grid.remove(entity);
         }
+    }
+}
+
+/// DesignationSpatialGridを更新するシステム（差分更新）
+pub fn update_designation_spatial_grid_system(
+    mut designation_grid: ResMut<DesignationSpatialGrid>,
+    q_designations_added: Query<
+        (Entity, &Transform),
+        (
+            With<crate::systems::jobs::Designation>,
+            Added<crate::systems::jobs::Designation>,
+        ),
+    >,
+    q_designations_changed: Query<
+        (Entity, &Transform),
+        (With<crate::systems::jobs::Designation>, Changed<Transform>),
+    >,
+    mut removed: RemovedComponents<crate::systems::jobs::Designation>,
+) {
+    // 削除されたタスクをグリッドから取り除く
+    for entity in removed.read() {
+        designation_grid.remove(entity);
+    }
+
+    // 新規タスクの登録
+    for (entity, transform) in q_designations_added.iter() {
+        designation_grid.insert(entity, transform.translation.truncate());
+    }
+
+    // 移動したタスクの更新（通常アイテムに付いているため、アイテムが動くとタスクも動く）
+    for (entity, transform) in q_designations_changed.iter() {
+        designation_grid.insert(entity, transform.translation.truncate());
     }
 }

@@ -9,11 +9,14 @@ use crate::systems::GameSystemSet;
 use crate::systems::command::TaskArea;
 use crate::systems::jobs::{IssuedBy, TaskSlots};
 use crate::systems::logistics::{ResourceItem, Stockpile};
-use crate::systems::spatial::SpatialGrid;
+use crate::systems::spatial::{
+    DesignationSpatialGrid, SpatialGrid, update_designation_spatial_grid_system,
+};
 use crate::systems::work::{AssignedTask, unassign_task};
 use bevy::prelude::*;
 
 pub mod following;
+pub mod haul_cache;
 pub mod helpers;
 pub mod scouting;
 pub mod searching;
@@ -48,13 +51,17 @@ pub struct FamiliarAiPlugin;
 
 impl Plugin for FamiliarAiPlugin {
     fn build(&self, app: &mut App) {
-        app.register_type::<FamiliarAiState>().add_systems(
-            Update,
-            (
-                familiar_ai_system.in_set(GameSystemSet::Logic),
-                following::following_familiar_system.in_set(GameSystemSet::Logic),
-            ),
-        );
+        app.register_type::<FamiliarAiState>()
+            .init_resource::<haul_cache::HaulReservationCache>()
+            .init_resource::<DesignationSpatialGrid>()
+            .add_systems(
+                Update,
+                (
+                    update_designation_spatial_grid_system.in_set(GameSystemSet::Logic),
+                    familiar_ai_system.in_set(GameSystemSet::Logic),
+                    following::following_familiar_system.in_set(GameSystemSet::Logic),
+                ),
+            );
     }
 }
 
@@ -107,14 +114,17 @@ pub fn familiar_ai_system(
     _q_souls_lite: Query<(Entity, &UnderCommand), With<DamnedSoul>>,
     q_breakdown: Query<&StressBreakdown>,
     q_resources: Query<&ResourceItem>,
+    mut haul_cache: ResMut<haul_cache::HaulReservationCache>,
+    designation_grid: Res<DesignationSpatialGrid>,
 ) {
     // 1. 搬送中のアイテム・ストックパイル予約状況を事前計算
-    let mut in_flight_haulers = std::collections::HashMap::new();
-    for (_, _, _, task, _, _, _, _, _) in q_souls.iter() {
-        if let AssignedTask::Haul { stockpile, .. } = *task {
-            *in_flight_haulers.entry(stockpile).or_insert(0) += 1;
-        }
-    }
+    // フェーズ2: 全ソウルをイテレートする代わりにキャッシュ（HaulReservationCache）を使用
+    // let mut in_flight_haulers = std::collections::HashMap::new();
+    // for (_, _, _, task, _, _, _, _, _) in q_souls.iter() {
+    //     if let AssignedTask::Haul { stockpile, .. } = *task {
+    //         *in_flight_haulers.entry(stockpile).or_insert(0) += 1;
+    //     }
+    // }
 
     for (
         fam_entity,
@@ -194,6 +204,7 @@ pub fn familiar_ai_system(
                         &mut path,
                         holding_opt,
                         &q_designations,
+                        &mut *haul_cache,
                     );
                     commands.entity(member_entity).remove::<UnderCommand>();
                     released_entities.push(member_entity);
@@ -350,6 +361,7 @@ pub fn familiar_ai_system(
                 fam_pos,
                 task_area_opt,
                 &q_designations,
+                &designation_grid,
                 managed_tasks,
             ) {
                 helpers::assign_task_to_worker(
@@ -363,7 +375,7 @@ pub fn familiar_ai_system(
                     &q_stockpiles,
                     &q_resources,
                     task_area_opt,
-                    &in_flight_haulers,
+                    &mut *haul_cache,
                 );
                 commands.entity(task_entity).insert(IssuedBy(fam_entity));
             }
