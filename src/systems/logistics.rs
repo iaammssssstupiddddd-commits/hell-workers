@@ -7,33 +7,28 @@ use bevy::prelude::*;
 use rand::Rng;
 use std::collections::HashMap;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Reflect)]
 pub enum ResourceType {
     Wood,
     Stone,
 }
 
-#[derive(Component)]
+#[derive(Component, Reflect)]
+#[reflect(Component)]
 pub struct ResourceItem(pub ResourceType);
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Reflect)]
 pub enum ZoneType {
     Stockpile,
 }
 
-#[derive(Component)]
+#[derive(Component, Reflect)]
+#[reflect(Component)]
 pub struct Stockpile {
     pub capacity: usize,
-    pub current_count: usize,
+    /// 最初に格納された資源の種類。空の場合は None。
+    pub resource_type: Option<ResourceType>,
 }
-
-// 【注意】ClaimedBy は廃止されました
-// 正しい使い方: ソウル側に WorkingOn(task_entity) を付与する
-// 例: commands.entity(soul_entity).insert(WorkingOn(task_entity));
-// タスク側には TaskWorkers が自動維持される
-
-#[derive(Component)]
-pub struct InStockpile(pub Entity);
 
 #[derive(Resource, Default)]
 pub struct ResourceLabels(pub HashMap<(i32, i32), Entity>);
@@ -78,7 +73,7 @@ pub fn zone_placement(
                                     .spawn((
                                         Stockpile {
                                             capacity: 10,
-                                            current_count: 0,
+                                            resource_type: None,
                                         },
                                         Sprite {
                                             color: Color::srgba(1.0, 1.0, 0.0, 0.2),

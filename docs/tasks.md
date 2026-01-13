@@ -17,6 +17,10 @@ Bevy 0.17 の **ECS Relationships** 機能を使用し、エンティティ間�
 | **`ManagedTasks(Vec)`** | **Target** | 使い魔側の**管理タスク一覧**。自動的に維持される。 |
 | **`WorkingOn(Entity)`** | **Relationship** | 魂から**タスク**への参照。 |
 | **`TaskWorkers(Vec)`** | **Target** | タスク側の**作業者一覧**。自動的に維持される。 |
+| **`Holding(Entity)`** | **Relationship** | 魂から**保持アイテム**への参照。 |
+| **`HeldBy(Vec)`** | **Target** | アイテム側の**保持者一覧**（通常は1人）。自動的に維持される。 |
+| **`StoredIn(Entity)`** | **Relationship** | アイテムから**備蓄場所**への参照。 |
+| **`StoredItems(Vec)`** | **Target** | 備蓄場所側の**格納アイテム一覧**。自動的に維持される。 |
 
 ### Relationship のメリット
 - **自動クリーンアップ**: 使い魔やタスクのエンティティが削除された際、関連する Relationship コンポーネントも Bevy によって自動的にクリーンアップされます。
@@ -68,7 +72,9 @@ Bevy 0.17 の **ECS Relationships** 機能を使用し、エンティティ間�
 
 ## 6. オートホール (Auto-Haul)
 使い魔の `TaskArea`（担当エリア）内に **`Stockpile`（備蓄場所）** がある場合、その周辺の未指定資源を自動的に `Haul` タスクとして登録するシステム。
+詳細は [logistics.md](logistics.md) を参照してください。
 - 効率化のため空間グリッド（`ResourceSpatialGrid`）を利用して検索を行う。
+- 型の一致（木材/石材）と備蓄場所の容量（最大10個）を厳格にチェックします。
 - 同一フレーム内での過剰なタスク発行を抑えるため、予約済みの資源はスキップする。
 
 ## 7. 疲労とタスク受付

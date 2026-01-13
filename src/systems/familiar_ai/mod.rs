@@ -8,7 +8,7 @@ use crate::relationships::{Commanding, ManagedTasks, TaskWorkers};
 use crate::systems::GameSystemSet;
 use crate::systems::command::TaskArea;
 use crate::systems::jobs::{IssuedBy, TaskSlots};
-use crate::systems::logistics::Stockpile;
+use crate::systems::logistics::{ResourceItem, Stockpile};
 use crate::systems::spatial::SpatialGrid;
 use crate::systems::work::{AssignedTask, unassign_task};
 use bevy::prelude::*;
@@ -98,10 +98,24 @@ pub fn familiar_ai_system(
         Option<&TaskSlots>,
         Option<&TaskWorkers>,
     )>,
-    q_stockpiles: Query<(Entity, &Transform, &Stockpile)>,
+    q_stockpiles: Query<(
+        Entity,
+        &Transform,
+        &Stockpile,
+        Option<&crate::relationships::StoredItems>,
+    )>,
     _q_souls_lite: Query<(Entity, &UnderCommand), With<DamnedSoul>>,
     q_breakdown: Query<&StressBreakdown>,
+    q_resources: Query<&ResourceItem>,
 ) {
+    // 1. 搬送中のアイテム・ストックパイル予約状況を事前計算
+    let mut in_flight_haulers = std::collections::HashMap::new();
+    for (_, _, _, task, _, _, _, _, _) in q_souls.iter() {
+        if let AssignedTask::Haul { stockpile, .. } = *task {
+            *in_flight_haulers.entry(stockpile).or_insert(0) += 1;
+        }
+    }
+
     for (
         fam_entity,
         fam_transform,
@@ -347,6 +361,9 @@ pub fn familiar_ai_system(
                     &q_designations,
                     &mut q_souls,
                     &q_stockpiles,
+                    &q_resources,
+                    task_area_opt,
+                    &in_flight_haulers,
                 );
                 commands.entity(task_entity).insert(IssuedBy(fam_entity));
             }

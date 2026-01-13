@@ -8,7 +8,7 @@ use crate::relationships::{
 };
 use crate::systems::command::TaskArea;
 use crate::systems::jobs::{Designation, TaskSlots, WorkType};
-use crate::systems::logistics::Stockpile;
+use crate::systems::logistics::{ResourceItem, ResourceType, Stockpile};
 use crate::systems::spatial::SpatialGrid;
 use crate::systems::work::{AssignedTask, GatherPhase, HaulPhase};
 use bevy::prelude::*;
@@ -200,7 +200,15 @@ pub fn assign_task_to_worker(
         ),
         Without<Familiar>,
     >,
-    q_stockpiles: &Query<(Entity, &Transform, &Stockpile)>,
+    q_stockpiles: &Query<(
+        Entity,
+        &Transform,
+        &Stockpile,
+        Option<&crate::relationships::StoredItems>,
+    )>,
+    q_resources: &Query<&ResourceItem>,
+    task_area_opt: Option<&TaskArea>,
+    in_flight_haulers: &std::collections::HashMap<Entity, usize>,
 ) {
     let Ok((_, _, soul, mut assigned_task, mut dest, mut path, idle, _, _)) =
         q_souls.get_mut(worker_entity)
@@ -232,14 +240,38 @@ pub fn assign_task_to_worker(
             };
         }
         WorkType::Haul => {
+            let item_type = q_resources
+                .get(task_entity)
+                .map(|ri| ri.0)
+                .unwrap_or(ResourceType::Wood);
+
             let best_stockpile = q_stockpiles
                 .iter()
-                .min_by(|(_, t1, _), (_, t2, _)| {
+                .filter(|(s_entity, s_transform, stock, stored)| {
+                    // エリアチェック: 使い魔の管理エリア内か
+                    if let Some(area) = task_area_opt {
+                        if !area.contains(s_transform.translation.truncate()) {
+                            return false;
+                        }
+                    }
+
+                    // 型チェック
+                    let type_match =
+                        stock.resource_type.is_none() || stock.resource_type == Some(item_type);
+
+                    // 容量チェック: 現在のアイテム数 + 搬送中の数
+                    let current_count = stored.map(|s| s.len()).unwrap_or(0);
+                    let reserved = in_flight_haulers.get(s_entity).cloned().unwrap_or(0);
+                    let has_capacity = (current_count + reserved) < stock.capacity;
+
+                    type_match && has_capacity
+                })
+                .min_by(|(_, t1, _, _), (_, t2, _, _)| {
                     let d1 = t1.translation.truncate().distance_squared(task_pos);
                     let d2 = t2.translation.truncate().distance_squared(task_pos);
                     d1.partial_cmp(&d2).unwrap_or(std::cmp::Ordering::Equal)
                 })
-                .map(|(e, _, _)| e);
+                .map(|(e, _, _, _)| e);
 
             if let Some(stock_entity) = best_stockpile {
                 *assigned_task = AssignedTask::Haul {

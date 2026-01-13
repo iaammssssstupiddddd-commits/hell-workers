@@ -16,7 +16,7 @@ use crate::systems::command::TaskArea;
 use crate::systems::jobs::{
     Designation, DesignationCreatedEvent, IssuedBy, TaskCompletedEvent, TaskSlots, WorkType,
 };
-use crate::systems::logistics::{InStockpile, ResourceItem, Stockpile};
+use crate::systems::logistics::{ResourceItem, Stockpile};
 use crate::world::map::WorldMap;
 
 use bevy::prelude::*;
@@ -396,12 +396,15 @@ pub fn task_area_auto_haul_system(
     _counter: ResMut<AutoHaulCounter>,
     resource_grid: Res<ResourceSpatialGrid>,
     q_familiars: Query<(Entity, &ActiveCommand, &TaskArea)>,
-    q_stockpiles: Query<(&Transform, &Stockpile)>,
+    q_stockpiles: Query<(
+        &Transform,
+        &Stockpile,
+        Option<&crate::relationships::StoredItems>,
+    )>,
     q_resources: Query<
-        (Entity, &Transform, &Visibility),
+        (Entity, &Transform, &Visibility, &ResourceItem),
         (
-            With<ResourceItem>,
-            Without<InStockpile>,
+            Without<crate::relationships::StoredIn>,
             Without<Designation>,
             Without<TaskWorkers>,
         ),
@@ -411,13 +414,14 @@ pub fn task_area_auto_haul_system(
     let mut already_assigned = std::collections::HashSet::new();
 
     for (fam_entity, _active_command, task_area) in q_familiars.iter() {
-        for (stock_transform, stockpile) in q_stockpiles.iter() {
+        for (stock_transform, stockpile, stored_items_opt) in q_stockpiles.iter() {
             let stock_pos = stock_transform.translation.truncate();
             if !task_area.contains(stock_pos) {
                 continue;
             }
 
-            if stockpile.current_count >= stockpile.capacity {
+            let current_count = stored_items_opt.map(|si| si.len()).unwrap_or(0);
+            if current_count >= stockpile.capacity {
                 continue;
             }
 
@@ -428,11 +432,18 @@ pub fn task_area_auto_haul_system(
                 .iter()
                 .filter(|&&entity| !already_assigned.contains(&entity))
                 .filter_map(|&entity| {
-                    let Ok((_, transform, visibility)) = q_resources.get(entity) else {
+                    let Ok((_, transform, visibility, res_item)) = q_resources.get(entity) else {
                         return None;
                     };
                     if *visibility == Visibility::Hidden {
                         return None;
+                    }
+
+                    // 型チェック：備蓄場所に型が指定されている場合、一致するもののみ
+                    if let Some(target_type) = stockpile.resource_type {
+                        if res_item.0 != target_type {
+                            return None;
+                        }
                     }
 
                     let dist_sq = transform.translation.truncate().distance_squared(stock_pos);
