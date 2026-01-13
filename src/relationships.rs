@@ -159,3 +159,35 @@ impl Default for Holding {
 pub struct HeldBy(Vec<Entity>);
 
 impl HeldBy {}
+// ============================================================
+// アイテム ⇔ ストックパイル 関係
+// ============================================================
+
+/// アイテムがどの備蓄場所に格納されているかを示す Relationship
+/// アイテム側に付与される（アイテム → 備蓄場所への参照）
+#[derive(Component, Reflect, Debug, Clone, Copy)]
+#[reflect(Component)]
+#[relationship(relationship_target = StoredItems)]
+pub struct StoredIn(pub Entity);
+
+impl Default for StoredIn {
+    fn default() -> Self {
+        Self(Entity::PLACEHOLDER)
+    }
+}
+
+/// 備蓄場所に格納されているアイテムの一覧
+/// 備蓄場所側に自動的に付与・維持される RelationshipTarget
+#[derive(Component, Reflect, Debug, Default)]
+#[reflect(Component)]
+#[relationship_target(relationship = StoredIn)]
+pub struct StoredItems(Vec<Entity>);
+
+impl StoredItems {
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+}
+
+// Item -> Stockpile 関係のみを維持します。
+// Familiar -> Stockpile の管理は空間検索 (TaskArea) で行います。
