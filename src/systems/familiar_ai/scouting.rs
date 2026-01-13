@@ -1,8 +1,6 @@
 use super::FamiliarAiState;
 use crate::constants::TILE_SIZE;
-use crate::entities::damned_soul::{
-    DamnedSoul, Destination, IdleBehavior, IdleState, Path, StressBreakdown,
-};
+use crate::entities::damned_soul::{DamnedSoul, Destination, IdleState, Path, StressBreakdown};
 use crate::entities::familiar::UnderCommand;
 use crate::events::OnSoulRecruited;
 use crate::systems::work::AssignedTask;
@@ -53,12 +51,12 @@ pub fn scouting_logic(
     }
 
     // 変更があった場合は true を返す
-    if let Ok((_soul_entity, target_transform, soul, task, _, _, idle, _, uc)) =
+    if let Ok((_soul_entity, target_transform, soul, task, _, _, _, _, uc)) =
         q_souls.get(target_soul)
     {
-        // Gathering状態（回復中）なら疲労チェックをスキップ（helpers.rs と条件を統一）
-        let is_gathering = idle.behavior == IdleBehavior::Gathering;
-        let fatigue_ok = is_gathering || soul.fatigue < fatigue_threshold;
+        // リクルート閾値 = リリース閾値 - 0.2（余裕を持ってリクルート）
+        let recruit_threshold = fatigue_threshold - 0.2;
+        let fatigue_ok = soul.fatigue < recruit_threshold;
         let stress_ok = q_breakdown.get(target_soul).is_err();
 
         // 依然としてリクルート可能かチェック
@@ -66,8 +64,8 @@ pub fn scouting_logic(
             if !fatigue_ok || !stress_ok || !matches!(*task, AssignedTask::None) {
                 // 条件を満たさなくなった
                 info!(
-                    "FAM_AI: {:?} scouting cancelled for {:?} (FatigueOK: {}/rest:{}, StressOK: {}, Task: {:?})",
-                    fam_entity, target_soul, fatigue_ok, is_gathering, stress_ok, *task
+                    "FAM_AI: {:?} scouting cancelled for {:?} (FatigueOK: {}, StressOK: {}, Task: {:?})",
+                    fam_entity, target_soul, fatigue_ok, stress_ok, *task
                 );
                 *ai_state = FamiliarAiState::SearchingTask;
                 return true;
