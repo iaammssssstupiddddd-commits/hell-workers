@@ -6,11 +6,11 @@ use crate::assets::GameAssets;
 use crate::constants::*;
 use crate::entities::damned_soul::{DamnedSoul, Destination, Path};
 use crate::events::OnTaskCompleted;
-use crate::relationships::{HeldBy, Holding, WorkingOn};
+use crate::relationships::{Holding, WorkingOn};
 use crate::systems::jobs::{
     Designation, IssuedBy, Rock, TaskCompletedEvent, TaskSlots, Tree, WorkType,
 };
-use crate::systems::logistics::{InStockpile, ResourceItem, Stockpile};
+use crate::systems::logistics::{ResourceItem, Stockpile};
 use bevy::prelude::*;
 
 // ============================================================
@@ -86,13 +86,19 @@ pub fn task_execution_system(
         Option<&Rock>,
         Option<&ResourceItem>,
         Option<&Designation>,
-        Option<&InStockpile>,
+        Option<&crate::relationships::StoredIn>,
     )>,
-    mut q_stockpiles: Query<(&Transform, &mut Stockpile)>,
+    mut q_stockpiles: Query<(
+        &Transform,
+        &mut Stockpile,
+        Option<&crate::relationships::StoredItems>,
+    )>,
     game_assets: Res<GameAssets>,
     mut ev_completed: MessageWriter<TaskCompletedEvent>,
     time: Res<Time>,
 ) {
+    let mut dropped_this_frame = std::collections::HashMap::<Entity, usize>::new();
+
     for (soul_entity, soul_transform, mut soul, mut task, mut dest, mut path, holding_opt) in
         q_souls.iter_mut()
     {
@@ -146,6 +152,7 @@ pub fn task_execution_system(
                     &q_targets,
                     &mut q_stockpiles,
                     &mut commands,
+                    &mut dropped_this_frame,
                 );
             }
             AssignedTask::None => {}
@@ -196,7 +203,7 @@ fn handle_gather_task(
         Option<&Rock>,
         Option<&ResourceItem>,
         Option<&Designation>,
-        Option<&InStockpile>,
+        Option<&crate::relationships::StoredIn>,
     )>,
     commands: &mut Commands,
     game_assets: &Res<GameAssets>,
@@ -233,7 +240,8 @@ fn handle_gather_task(
             }
         }
         GatherPhase::Collecting { mut progress } => {
-            if let Ok((res_transform, tree, rock, _, des_opt, _)) = q_targets.get(target) {
+            if let Ok(target_data) = q_targets.get(target) {
+                let (res_transform, tree, rock, _res_item, des_opt, _stored_in) = target_data;
                 // 指定が解除されていたら中止
                 if des_opt.is_none() {
                     *task = AssignedTask::None;
@@ -315,15 +323,22 @@ fn handle_haul_task(
         Option<&Rock>,
         Option<&ResourceItem>,
         Option<&Designation>,
-        Option<&InStockpile>,
+        Option<&crate::relationships::StoredIn>,
     )>,
-    q_stockpiles: &mut Query<(&Transform, &mut Stockpile)>,
+    q_stockpiles: &mut Query<(
+        &Transform,
+        &mut Stockpile,
+        Option<&crate::relationships::StoredItems>,
+    )>,
     commands: &mut Commands,
+    dropped_this_frame: &mut std::collections::HashMap<Entity, usize>,
 ) {
     let soul_pos = soul_transform.translation.truncate();
     match phase {
         HaulPhase::GoingToItem => {
-            if let Ok((res_transform, _, _, _, des_opt, in_stockpile_opt)) = q_targets.get(item) {
+            if let Ok((res_transform, _, _, _res_item_opt, des_opt, stored_in_opt)) =
+                q_targets.get(item)
+            {
                 // 指示がキャンセルされていないか確認
                 if des_opt.is_none() {
                     *task = AssignedTask::None;
@@ -331,7 +346,6 @@ fn handle_haul_task(
                     return;
                 }
 
-                // アイテムと備蓄場所の情報を取得
                 let res_pos = res_transform.translation.truncate();
                 if dest.0.distance_squared(res_pos) > 2.0 {
                     dest.0 = res_pos;
@@ -342,18 +356,26 @@ fn handle_haul_task(
                     commands.entity(soul_entity).insert(Holding(item));
                     commands.entity(item).insert(Visibility::Hidden);
 
-                    // 【修正】もしアイテムが備蓄場所にあったなら、カウントを減らし、InStockpileコンポーネントを削除
-                    if let Some(InStockpile(stock_entity)) = in_stockpile_opt {
-                        if let Ok((_, mut stock_comp)) = q_stockpiles.get_mut(*stock_entity) {
-                            stock_comp.current_count = stock_comp.current_count.saturating_sub(1);
-                            info!(
-                                "HAUL: Item picked up from Stockpile {:?}. New count: {}",
-                                stock_entity, stock_comp.current_count
-                            );
+                    // もしアイテムが備蓄場所にあったなら、その備蓄場所の型管理を更新する
+                    if let Some(crate::relationships::StoredIn(stock_entity)) = stored_in_opt {
+                        if let Ok((_, mut stock_comp, Some(stored_items))) =
+                            q_stockpiles.get_mut(*stock_entity)
+                        {
+                            // 自分を引いて 0 個になるなら None に戻す
+                            if stored_items.len() <= 1 {
+                                stock_comp.resource_type = None;
+                                info!(
+                                    "HAUL: Stockpile {:?} became empty. Resetting resource type.",
+                                    stock_entity
+                                );
+                            }
                         }
                     }
-                    commands.entity(item).remove::<InStockpile>();
 
+                    // 元のコンポーネントを削除
+                    commands
+                        .entity(item)
+                        .remove::<crate::relationships::StoredIn>();
                     commands.entity(item).remove::<Designation>();
                     commands.entity(item).remove::<IssuedBy>();
                     commands.entity(item).remove::<TaskSlots>();
@@ -364,7 +386,7 @@ fn handle_haul_task(
                         phase: HaulPhase::GoingToStockpile,
                     };
                     path.waypoints.clear();
-                    info!("HAUL: Soul {:?} picked up item", soul_entity);
+                    info!("HAUL: Soul {:?} picked up item {:?}", soul_entity, item);
                 }
             } else {
                 *task = AssignedTask::None;
@@ -372,7 +394,7 @@ fn handle_haul_task(
             }
         }
         HaulPhase::GoingToStockpile => {
-            if let Ok((stock_transform, _)) = q_stockpiles.get(stockpile) {
+            if let Ok((stock_transform, _, _)) = q_stockpiles.get(stockpile) {
                 let stock_pos = stock_transform.translation.truncate();
                 if dest.0.distance_squared(stock_pos) > 2.0 {
                     dest.0 = stock_pos;
@@ -392,12 +414,10 @@ fn handle_haul_task(
                     "HAUL: Soul {:?} stockpile {:?} not found",
                     soul_entity, stockpile
                 );
-                // 備蓄場所が見つからない場合、持っているアイテムを可視化してタスクを中止
                 if let Some(Holding(held_item_entity)) = holding {
                     commands
                         .entity(*held_item_entity)
                         .insert(Visibility::Visible);
-                    commands.entity(*held_item_entity).remove::<HeldBy>();
                 }
                 commands.entity(soul_entity).remove::<Holding>();
                 commands.entity(soul_entity).remove::<WorkingOn>();
@@ -406,21 +426,73 @@ fn handle_haul_task(
             }
         }
         HaulPhase::Dropping => {
-            if let Ok((stock_transform, mut stockpile_comp)) = q_stockpiles.get_mut(stockpile) {
-                let stock_pos = stock_transform.translation.truncate();
-                commands.entity(item).insert((
-                    Visibility::Visible,
-                    Transform::from_xyz(stock_pos.x, stock_pos.y, 0.6),
-                    InStockpile(stockpile),
-                ));
-                commands.entity(soul_entity).remove::<Holding>();
-                commands.entity(soul_entity).remove::<WorkingOn>();
-                stockpile_comp.current_count += 1; // カウントアップ
-                info!(
-                    "TASK_EXEC: Soul {:?} dropped item at stockpile. Count: {}",
-                    soul_entity, stockpile_comp.current_count
-                );
+            if let Ok((stock_transform, mut stockpile_comp, stored_items_opt)) =
+                q_stockpiles.get_mut(stockpile)
+            {
+                let current_count = stored_items_opt.map(|si| si.len()).unwrap_or(0);
+
+                // アイテムの型を取得
+                let item_type = q_targets
+                    .get(item)
+                    .ok()
+                    .and_then(|(_, _, _, ri, _, _)| ri.map(|r| r.0));
+                let this_frame = dropped_this_frame.get(&stockpile).cloned().unwrap_or(0);
+
+                let can_drop = if let Some(it) = item_type {
+                    let type_match = stockpile_comp.resource_type.is_none()
+                        || stockpile_comp.resource_type == Some(it);
+                    // 現在の数 + このフレームですでに置かれた数
+                    let capacity_ok = (current_count + this_frame) < stockpile_comp.capacity;
+                    type_match && capacity_ok
+                } else {
+                    false
+                };
+
+                if can_drop {
+                    // 資源タイプがNoneなら設定
+                    if stockpile_comp.resource_type.is_none() {
+                        stockpile_comp.resource_type = item_type;
+                    }
+
+                    commands.entity(item).insert((
+                        Visibility::Visible,
+                        Transform::from_xyz(
+                            stock_transform.translation.x,
+                            stock_transform.translation.y,
+                            0.6,
+                        ),
+                        crate::relationships::StoredIn(stockpile),
+                    ));
+
+                    // カウンタを増やす
+                    *dropped_this_frame.entry(stockpile).or_insert(0) += 1;
+
+                    info!(
+                        "TASK_EXEC: Soul {:?} dropped item at stockpile. New count: {}",
+                        soul_entity,
+                        current_count + this_frame + 1
+                    );
+                } else {
+                    // 到着時に条件を満たさなくなった場合（型違いor満杯）
+                    // 本来は代替地を探すべきだが、今回はシンプルにその場にドロップする
+                    warn!("HAUL: Stockpile condition changed. Dropping item on the ground.");
+                    commands.entity(item).insert((
+                        Visibility::Visible,
+                        Transform::from_xyz(soul_pos.x, soul_pos.y, 0.6),
+                    ));
+                }
+            } else {
+                // 備蓄場所消失
+                if holding.is_some() {
+                    commands.entity(item).insert((
+                        Visibility::Visible,
+                        Transform::from_xyz(soul_pos.x, soul_pos.y, 0.6),
+                    ));
+                }
             }
+
+            commands.entity(soul_entity).remove::<Holding>();
+            commands.entity(soul_entity).remove::<WorkingOn>();
             *task = AssignedTask::None;
             path.waypoints.clear();
             soul.fatigue = (soul.fatigue + 0.05).min(1.0);
