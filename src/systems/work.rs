@@ -13,6 +13,7 @@ use crate::entities::familiar::{
 };
 use crate::relationships::{Holding, TaskWorkers, WorkingOn};
 use crate::systems::command::TaskArea;
+use crate::systems::familiar_ai::haul_cache::HaulReservationCache;
 use crate::systems::jobs::{
     Designation, DesignationCreatedEvent, IssuedBy, TaskCompletedEvent, TaskSlots, WorkType,
 };
@@ -299,6 +300,7 @@ pub fn cleanup_commanded_souls_system(
         Option<&TaskWorkers>,
     )>,
     q_familiars: Query<&ActiveCommand, With<Familiar>>,
+    mut haul_cache: ResMut<HaulReservationCache>,
 ) {
     for (soul_entity, transform, under_command, mut task, mut path, holding_opt) in
         q_souls.iter_mut()
@@ -323,6 +325,7 @@ pub fn cleanup_commanded_souls_system(
                 &mut path,
                 holding_opt,
                 &q_designations,
+                &mut *haul_cache,
             );
 
             commands.entity(soul_entity).remove::<UnderCommand>();
@@ -347,7 +350,12 @@ pub fn unassign_task(
         Option<&TaskSlots>,
         Option<&TaskWorkers>,
     )>,
+    haul_cache: &mut HaulReservationCache,
 ) {
+    if let AssignedTask::Haul { stockpile, .. } = *task {
+        haul_cache.release(stockpile);
+    }
+
     // アイテムを持っていればドロップ
     if let Some(Holding(item_entity)) = holding {
         let item_entity = *item_entity;

@@ -1,19 +1,107 @@
+use super::haul_cache::HaulReservationCache;
 use crate::constants::TILE_SIZE;
 use crate::entities::damned_soul::{
     DamnedSoul, Destination, IdleBehavior, IdleState, Path, StressBreakdown,
 };
-use crate::entities::familiar::Familiar;
-use crate::relationships::{
-    CommandedBy as UnderCommand, ManagedBy as IssuedBy, ManagedTasks, TaskWorkers, WorkingOn,
-};
+use crate::entities::familiar::{Familiar, UnderCommand};
+use crate::relationships::ManagedTasks;
 use crate::systems::command::TaskArea;
-use crate::systems::jobs::{Designation, TaskSlots, WorkType};
+use crate::systems::jobs::{Designation, IssuedBy, TaskSlots, WorkType};
 use crate::systems::logistics::{ResourceItem, ResourceType, Stockpile};
-use crate::systems::spatial::SpatialGrid;
-use crate::systems::work::{AssignedTask, GatherPhase, HaulPhase};
+use crate::systems::spatial::{DesignationSpatialGrid, SpatialGrid};
+use crate::systems::task_execution::{AssignedTask, GatherPhase, HaulPhase};
 use bevy::prelude::*;
 
-/// 最も近い「フリーな」ワーカーをスカウト対象として探す
+/// 指定エリア内で未割り当てのタスク（Designation）を探す
+pub fn find_unassigned_task_in_area(
+    _fam_entity: Entity,
+    fam_pos: Vec2,
+    task_area_opt: Option<&TaskArea>,
+    q_designations: &Query<(
+        Entity,
+        &Transform,
+        &Designation,
+        Option<&IssuedBy>,
+        Option<&TaskSlots>,
+        Option<&crate::relationships::TaskWorkers>,
+    )>,
+    designation_grid: &DesignationSpatialGrid,
+    managed_tasks: &ManagedTasks,
+) -> Option<Entity> {
+    // 候補となるエンティティのリスト
+    let candidates = if let Some(area) = task_area_opt {
+        // エリア指定がある場合、エリア内のタスク + 自分が管理しているタスク を対象にする
+        let mut ents = designation_grid.get_in_area(area.min, area.max);
+
+        // 自分が管理しているタスクがエリア外にある可能性も考慮（移動等）
+        // ただしManagedTasksは通常少ないため、ここは個別に足しても計算量は抑えられる
+        for &managed_entity in managed_tasks.iter() {
+            if !ents.contains(&managed_entity) {
+                ents.push(managed_entity);
+            }
+        }
+        ents
+    } else {
+        // エリア指定がない場合、自分が管理しているタスクのみが対象
+        managed_tasks.iter().copied().collect::<Vec<_>>()
+    };
+
+    candidates
+        .into_iter()
+        .filter_map(|entity| {
+            let (entity, transform, designation, issued_by, slots, workers) =
+                q_designations.get(entity).ok()?;
+
+            let is_managed_by_me = managed_tasks.contains(entity);
+            let is_unassigned = issued_by.is_none();
+
+            // 1. 他の使い魔が管理しているタスクは除外
+            if !is_managed_by_me && !is_unassigned {
+                return None;
+            }
+
+            // 2. スロットが空いているか
+            let current_workers = workers.map(|w| w.len()).unwrap_or(0);
+            let max_slots = slots.map(|s| s.max).unwrap_or(1) as usize;
+            if current_workers >= max_slots {
+                return None;
+            }
+
+            // 3. エリア制限のチェック
+            let pos = transform.translation.truncate();
+            if let Some(area) = task_area_opt {
+                if !area.contains(pos) {
+                    // エリア外のタスクは、既に自分が管理しているものであっても一旦除外（パトロール範囲優先）
+                    if !is_managed_by_me {
+                        return None;
+                    }
+                }
+            } else {
+                // エリア指定がない使い魔は、明示的に割り当てられたタスク(Managed)のみ行う
+                if !is_managed_by_me {
+                    return None;
+                }
+            }
+
+            // 収集系は対象が実在するか追加チェック
+            let is_valid = match designation.work_type {
+                WorkType::Chop | WorkType::Mine | WorkType::Haul | WorkType::Build => true,
+            };
+
+            if is_valid {
+                let dist_sq = transform.translation.truncate().distance_squared(fam_pos);
+                Some((entity, dist_sq))
+            } else {
+                None
+            }
+        })
+        .min_by(|(_, d1): &(Entity, f32), (_, d2): &(Entity, f32)| {
+            d1.partial_cmp(d2).unwrap_or(std::cmp::Ordering::Equal)
+        })
+        .map(|(entity, _)| entity)
+}
+
+/// 条件に合う魂を検索する (リクルート用)
 ///
 /// # パフォーマンス最適化
 /// `radius_opt = None` の場合でも全ソウルスキャンを行わず、
@@ -78,7 +166,6 @@ pub fn find_best_recruit(
             .map(|(e, _)| e)
     };
 
-    // 指定された半径がある場合はその半径で検索
     if let Some(radius) = radius_opt {
         let nearby = spatial_grid.get_nearby_in_radius(fam_pos, radius);
         let candidates: Vec<_> = nearby.iter().filter_map(|&e| filter_candidate(e)).collect();
@@ -110,95 +197,8 @@ pub fn find_best_recruit(
     None
 }
 
-/// 担当エリア内の未アサインタスクを探す
-pub fn find_unassigned_task_in_area(
-    _fam_entity: Entity,
-    fam_pos: Vec2,
-    _task_area_opt: Option<&TaskArea>,
-    q_designations: &Query<(
-        Entity,
-        &Transform,
-        &Designation,
-        Option<&IssuedBy>,
-        Option<&TaskSlots>,
-        Option<&TaskWorkers>,
-    )>,
-    managed_tasks: &ManagedTasks,
-) -> Option<Entity> {
-    let mut best_task = None;
-    let mut best_dist = f32::MAX;
-
-    // 1. 自分が管理しているタスクから探す (ManagedTasks ターゲットを利用)
-    for &entity in managed_tasks.iter() {
-        if let Ok((entity, transform, _, _, slots_opt, workers_opt)) = q_designations.get(entity) {
-            let pos = transform.translation.truncate();
-
-            let has_slot = if let Some(slots) = slots_opt {
-                let current = workers_opt.map(|w| w.len()).unwrap_or(0);
-                (current as u32) < slots.max
-            } else {
-                true
-            };
-
-            if !has_slot {
-                continue;
-            }
-
-            let dist = fam_pos.distance_squared(pos);
-            if dist < best_dist {
-                best_dist = dist;
-                best_task = Some(entity);
-            }
-        }
-    }
-
-    if best_task.is_some() {
-        return best_task;
-    }
-
-    // 2. 自分が管理していない未アサインタスクをエリア内で探す
-    for (entity, transform, _designation, issued_by_opt, slots_opt, workers_opt) in
-        q_designations.iter()
-    {
-        if issued_by_opt.is_some() {
-            continue; // すでに誰かが管理している
-        }
-
-        let has_slot = if let Some(slots) = slots_opt {
-            let current = workers_opt.map(|w| w.len()).unwrap_or(0);
-            (current as u32) < slots.max
-        } else {
-            true
-        };
-        if !has_slot {
-            continue;
-        }
-
-        let pos = transform.translation.truncate();
-
-        // エリア内チェック (未アサインタスクのみチェック)
-        if let Some(area) = _task_area_opt {
-            let margin = TILE_SIZE * 2.0;
-            if pos.x < area.min.x - margin
-                || pos.x > area.max.x + margin
-                || pos.y < area.min.y - margin
-                || pos.y > area.max.y + margin
-            {
-                continue;
-            }
-        }
-
-        let dist = fam_pos.distance_squared(pos);
-        if dist < best_dist {
-            best_dist = dist;
-            best_task = Some(entity);
-        }
-    }
-
-    best_task
-}
-
 /// ワーカーにタスクを割り当てる
+#[allow(clippy::too_many_arguments)]
 pub fn assign_task_to_worker(
     commands: &mut Commands,
     fam_entity: Entity,
@@ -211,7 +211,7 @@ pub fn assign_task_to_worker(
         &Designation,
         Option<&IssuedBy>,
         Option<&TaskSlots>,
-        Option<&TaskWorkers>,
+        Option<&crate::relationships::TaskWorkers>,
     )>,
     q_souls: &mut Query<
         (
@@ -235,7 +235,7 @@ pub fn assign_task_to_worker(
     )>,
     q_resources: &Query<&ResourceItem>,
     task_area_opt: Option<&TaskArea>,
-    in_flight_haulers: &std::collections::HashMap<Entity, usize>,
+    haul_cache: &mut HaulReservationCache,
 ) {
     let Ok((_, _, soul, mut assigned_task, mut dest, mut path, idle, _, _)) =
         q_souls.get_mut(worker_entity)
@@ -251,12 +251,26 @@ pub fn assign_task_to_worker(
         return;
     }
 
+    // タスクが存在するか最終確認
     let (task_pos, work_type) =
         if let Ok((_, transform, designation, _, _, _)) = q_designations.get(task_entity) {
             (transform.translation.truncate(), designation.work_type)
         } else {
+            warn!("ASSIGN: Task entity {:?} not found or invalid", task_entity);
             return;
         };
+
+    // どのパスでも共通して実行する処理
+    // 魂にタスクと使い魔の関係を構築（Relationship自動管理）
+    commands.entity(worker_entity).insert((
+        UnderCommand(fam_entity),
+        crate::relationships::WorkingOn(task_entity),
+    ));
+
+    // タスク側にも発行者を設定（まだ設定されていない場合や、更新が必要な場合）
+    commands
+        .entity(task_entity)
+        .insert(crate::systems::jobs::IssuedBy(fam_entity));
 
     match work_type {
         WorkType::Chop | WorkType::Mine => {
@@ -265,6 +279,10 @@ pub fn assign_task_to_worker(
                 work_type,
                 phase: GatherPhase::GoingToResource,
             };
+            dest.0 = task_pos;
+            path.waypoints = vec![task_pos];
+            path.current_index = 0;
+            info!("ASSIGN: Gather task assigned to {:?}", worker_entity);
         }
         WorkType::Haul => {
             let item_type = q_resources
@@ -286,10 +304,10 @@ pub fn assign_task_to_worker(
                     let type_match =
                         stock.resource_type.is_none() || stock.resource_type == Some(item_type);
 
-                    // 容量チェック: 現在のアイテム数 + 搬送中の数
+                    // 容量チェック
                     let current_count = stored.map(|s| s.len()).unwrap_or(0);
-                    let reserved = in_flight_haulers.get(s_entity).cloned().unwrap_or(0);
-                    let has_capacity = (current_count + reserved) < stock.capacity;
+                    let reserved = haul_cache.get(*s_entity);
+                    let has_capacity = (current_count + reserved) < stock.capacity as usize;
 
                     type_match && has_capacity
                 })
@@ -306,25 +324,37 @@ pub fn assign_task_to_worker(
                     stockpile: stock_entity,
                     phase: HaulPhase::GoingToItem,
                 };
+                // 搬送予約をキャッシュに登録
+                haul_cache.reserve(stock_entity);
+
+                // アイテムへ移動
+                dest.0 = task_pos;
+                path.waypoints = vec![task_pos];
+                path.current_index = 0;
+                info!("ASSIGN: Haul task assigned to {:?}", worker_entity);
             } else {
+                warn!(
+                    "ASSIGN: No suitable stockpile found in area for item {:?}",
+                    task_entity
+                );
+                // 魂の状態を戻す（WorkingOnを削除）
+                commands
+                    .entity(worker_entity)
+                    .remove::<crate::relationships::WorkingOn>();
                 return;
             }
         }
-        _ => return,
+        WorkType::Build => {
+            // 建築タスク
+            *assigned_task = AssignedTask::Gather {
+                target: task_entity,
+                work_type,
+                phase: GatherPhase::GoingToResource, // 建築でも最初はリソース（ブループリント）へ向かう
+            };
+            dest.0 = task_pos;
+            path.waypoints = vec![task_pos];
+            path.current_index = 0;
+            info!("ASSIGN: Build task assigned to {:?}", worker_entity);
+        }
     }
-
-    // スロットのインクリメントは不要（Relationshipにより自動管理）
-    // if let Ok((..., mut slots_opt)) = q_designations.get_mut(task_entity) { ... }
-
-    dest.0 = task_pos;
-    path.waypoints.clear();
-
-    commands
-        .entity(worker_entity)
-        .insert(UnderCommand(fam_entity));
-
-    // ワーカー側に WorkingOn を付与（タスク側の TaskWorkers は自動更新される）
-    commands
-        .entity(worker_entity)
-        .insert(WorkingOn(task_entity));
 }
