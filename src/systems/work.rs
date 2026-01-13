@@ -50,7 +50,7 @@ pub fn task_delegation_system(
     )>,
     q_stockpiles: Query<(Entity, &Transform, &Stockpile)>,
     q_under_command: Query<&UnderCommand>,
-    mut q_designations: Query<(&Transform, &Designation, &mut TaskSlots)>,
+    q_designations: Query<(&Transform, &Designation, &TaskSlots, Option<&TaskWorkers>)>,
     mut queue: ResMut<TaskQueue>,
     spatial_grid: Res<SpatialGrid>,
     mut ev_created: MessageReader<DesignationCreatedEvent>,
@@ -97,11 +97,11 @@ pub fn task_delegation_system(
             std::cmp::Ordering::Equal => {
                 let p1 = q_designations
                     .get(t1.entity)
-                    .map(|(t, _, _)| t.translation.truncate())
+                    .map(|(t, _, _, _)| t.translation.truncate())
                     .unwrap_or(Vec2::ZERO);
                 let p2 = q_designations
                     .get(t2.entity)
-                    .map(|(t, _, _)| t.translation.truncate())
+                    .map(|(t, _, _, _)| t.translation.truncate())
                     .unwrap_or(Vec2::ZERO);
                 let d1 = p1.distance_squared(fam_pos);
                 let d2 = p2.distance_squared(fam_pos);
@@ -117,12 +117,13 @@ pub fn task_delegation_system(
             let des_entity = task_info.entity;
             let work_type = task_info.work_type;
 
-            let Ok((des_transform, _, mut slots)) = q_designations.get_mut(des_entity) else {
+            let Ok((des_transform, _, slots, workers_opt)) = q_designations.get(des_entity) else {
                 to_remove.push(des_entity);
                 continue;
             };
 
-            if !slots.has_slot() {
+            let current_workers = workers_opt.map(|w| w.len()).unwrap_or(0);
+            if current_workers as u32 >= slots.max {
                 to_remove.push(des_entity);
                 continue;
             }
@@ -218,7 +219,6 @@ pub fn task_delegation_system(
                             path.waypoints.clear();
 
                             commands.entity(soul_entity).insert(WorkingOn(des_entity));
-                            slots.current += 1;
                             commands
                                 .entity(soul_entity)
                                 .insert(UnderCommand(fam_entity));
@@ -255,7 +255,6 @@ pub fn task_delegation_system(
                                 path.waypoints.clear();
 
                                 commands.entity(soul_entity).insert(WorkingOn(des_entity));
-                                slots.current += 1;
                                 commands
                                     .entity(soul_entity)
                                     .insert(UnderCommand(fam_entity));
@@ -291,12 +290,13 @@ pub fn cleanup_commanded_souls_system(
         &mut Path,
         &mut Inventory,
     )>,
-    mut q_designations: Query<(
+    q_designations: Query<(
         Entity,
         &Transform,
         &Designation,
         Option<&IssuedBy>,
-        Option<&mut TaskSlots>,
+        Option<&TaskSlots>,
+        Option<&TaskWorkers>,
     )>,
     q_familiars: Query<&ActiveCommand, With<Familiar>>,
 ) {
@@ -322,7 +322,7 @@ pub fn cleanup_commanded_souls_system(
                 &mut task,
                 &mut path,
                 &mut inventory,
-                &mut q_designations,
+                &q_designations,
             );
 
             commands.entity(soul_entity).remove::<UnderCommand>();
@@ -339,12 +339,13 @@ pub fn unassign_task(
     task: &mut AssignedTask,
     path: &mut Path,
     inventory: &mut Inventory,
-    q_designations: &mut Query<(
+    q_designations: &Query<(
         Entity,
         &Transform,
         &Designation,
         Option<&IssuedBy>,
-        Option<&mut TaskSlots>,
+        Option<&TaskSlots>,
+        Option<&TaskWorkers>,
     )>,
 ) {
     // アイテムを持っていればドロップ
@@ -370,10 +371,7 @@ pub fn unassign_task(
     };
 
     if let Some(target) = target_entity {
-        if let Ok((_, _, _, _, mut slots_opt)) = q_designations.get_mut(target) {
-            if let Some(ref mut slots) = slots_opt {
-                slots.current = slots.current.saturating_sub(1);
-            }
+        if let Ok((_, _, _, _, _, _)) = q_designations.get(target) {
             // ターゲットが存在する場合のみコンポーネントを削除
             commands.entity(target).remove::<Designation>();
             commands.entity(target).remove::<TaskSlots>();

@@ -58,19 +58,15 @@ pub struct Designation {
     pub work_type: WorkType,
 }
 
-#[derive(Component, Debug, Clone, Copy)]
+#[derive(Component, Debug, Clone, Copy, Reflect, Default)]
+#[reflect(Component, Default)]
 pub struct TaskSlots {
-    pub current: u32,
     pub max: u32,
 }
 
 impl TaskSlots {
     pub fn new(max: u32) -> Self {
-        Self { current: 0, max }
-    }
-
-    pub fn has_slot(&self) -> bool {
-        self.current < self.max
+        Self { max }
     }
 }
 
