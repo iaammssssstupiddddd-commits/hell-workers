@@ -4,6 +4,7 @@ use crate::constants::*;
 use crate::events::{
     OnExhausted, OnSoulRecruited, OnStressBreakdown, OnTaskAssigned, OnTaskCompleted,
 };
+use crate::relationships::Holding;
 use crate::systems::work::{AssignedTask, unassign_task};
 use crate::world::map::WorldMap;
 use crate::world::pathfinding::find_path;
@@ -72,7 +73,6 @@ pub fn spawn_damned_soul_at(
             identity,
             IdleState::default(),
             AssignedTask::default(),
-            crate::systems::logistics::Inventory(None),
             Sprite {
                 image: game_assets.colonist.clone(),
                 custom_size: Some(Vec2::splat(TILE_SIZE * 0.8)),
@@ -251,7 +251,7 @@ fn on_stress_breakdown(
         &mut DamnedSoul,
         &mut AssignedTask,
         &mut Path,
-        &mut crate::systems::logistics::Inventory,
+        Option<&Holding>,
         Option<&crate::entities::familiar::UnderCommand>,
     )>,
     q_designations: Query<(
@@ -264,7 +264,7 @@ fn on_stress_breakdown(
     )>,
 ) {
     let soul_entity = on.entity;
-    if let Ok((entity, transform, mut _soul, mut task, mut path, mut inventory, under_command)) =
+    if let Ok((entity, transform, mut _soul, mut task, mut path, holding_opt, under_command)) =
         q_souls.get_mut(soul_entity)
     {
         info!("OBSERVER: Soul {:?} had a stress breakdown!", entity);
@@ -280,7 +280,7 @@ fn on_stress_breakdown(
                 transform.translation.truncate(),
                 &mut task,
                 &mut path,
-                &mut inventory,
+                holding_opt,
                 &q_designations,
             );
         }
@@ -304,7 +304,7 @@ fn on_exhausted(
         &mut AssignedTask,
         &mut Path,
         &mut Destination,
-        &mut crate::systems::logistics::Inventory,
+        Option<&Holding>,
         Option<&crate::entities::familiar::UnderCommand>,
     )>,
     q_designations: Query<(
@@ -324,7 +324,7 @@ fn on_exhausted(
         mut task,
         mut path,
         mut dest,
-        mut inventory,
+        holding_opt,
         under_command_opt,
     )) = q_souls.get_mut(soul_entity)
     {
@@ -346,7 +346,7 @@ fn on_exhausted(
                 transform.translation.truncate(),
                 &mut task,
                 &mut path,
-                &mut inventory,
+                holding_opt,
                 &q_designations,
             );
         }

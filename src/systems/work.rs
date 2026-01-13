@@ -11,12 +11,12 @@ use crate::entities::damned_soul::{DamnedSoul, Destination, IdleBehavior, IdleSt
 use crate::entities::familiar::{
     ActiveCommand, Familiar, FamiliarCommand, FamiliarOperation, UnderCommand,
 };
-use crate::relationships::{TaskWorkers, WorkingOn};
+use crate::relationships::{Holding, TaskWorkers, WorkingOn};
 use crate::systems::command::TaskArea;
 use crate::systems::jobs::{
     Designation, DesignationCreatedEvent, IssuedBy, TaskCompletedEvent, TaskSlots, WorkType,
 };
-use crate::systems::logistics::{InStockpile, Inventory, ResourceItem, Stockpile};
+use crate::systems::logistics::{InStockpile, ResourceItem, Stockpile};
 use crate::world::map::WorldMap;
 
 use bevy::prelude::*;
@@ -45,7 +45,7 @@ pub fn task_delegation_system(
         &mut AssignedTask,
         &mut Destination,
         &mut Path,
-        &mut Inventory,
+        Option<&Holding>,
         &IdleState,
     )>,
     q_stockpiles: Query<(Entity, &Transform, &Stockpile)>,
@@ -288,7 +288,7 @@ pub fn cleanup_commanded_souls_system(
         &UnderCommand,
         &mut AssignedTask,
         &mut Path,
-        &mut Inventory,
+        Option<&Holding>,
     )>,
     q_designations: Query<(
         Entity,
@@ -300,7 +300,7 @@ pub fn cleanup_commanded_souls_system(
     )>,
     q_familiars: Query<&ActiveCommand, With<Familiar>>,
 ) {
-    for (soul_entity, transform, under_command, mut task, mut path, mut inventory) in
+    for (soul_entity, transform, under_command, mut task, mut path, holding_opt) in
         q_souls.iter_mut()
     {
         let should_release = match q_familiars.get(under_command.0) {
@@ -321,7 +321,7 @@ pub fn cleanup_commanded_souls_system(
                 transform.translation.truncate(),
                 &mut task,
                 &mut path,
-                &mut inventory,
+                holding_opt,
                 &q_designations,
             );
 
@@ -338,7 +338,7 @@ pub fn unassign_task(
     drop_pos: Vec2,
     task: &mut AssignedTask,
     path: &mut Path,
-    inventory: &mut Inventory,
+    holding: Option<&Holding>,
     q_designations: &Query<(
         Entity,
         &Transform,
@@ -349,7 +349,8 @@ pub fn unassign_task(
     )>,
 ) {
     // アイテムを持っていればドロップ
-    if let Some(item_entity) = inventory.0.take() {
+    if let Some(Holding(item_entity)) = holding {
+        let item_entity = *item_entity;
         // グリッドにスナップさせる（端数座標によるズレを防止）
         let grid = WorldMap::world_to_grid(drop_pos);
         let snapped_pos = WorldMap::grid_to_world(grid.0, grid.1);
@@ -358,9 +359,13 @@ pub fn unassign_task(
             Visibility::Visible,
             Transform::from_xyz(snapped_pos.x, snapped_pos.y, 0.6),
         ));
+        // HeldBy 関係は削除不要（Holding 削除により自動で対応 or 必要なら remove で明示）
+        // ただし所持者がいなくなるので、Holding を消す
+        commands.entity(soul_entity).remove::<Holding>();
+
         info!(
-            "UNASSIGN: Soul released item at {:?} (snapped to {:?})",
-            drop_pos, snapped_pos
+            "UNASSIGN: Soul released item {:?} at {:?} (snapped to {:?})",
+            item_entity, drop_pos, snapped_pos
         );
     }
 
