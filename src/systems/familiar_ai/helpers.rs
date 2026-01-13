@@ -14,6 +14,11 @@ use crate::systems::work::{AssignedTask, GatherPhase, HaulPhase};
 use bevy::prelude::*;
 
 /// 最も近い「フリーな」ワーカーをスカウト対象として探す
+///
+/// # パフォーマンス最適化
+/// `radius_opt = None` の場合でも全ソウルスキャンを行わず、
+/// 段階的に検索半径を拡大して最初に見つかった候補を返す。
+/// これにより O(S) → O(k) に計算量を削減。
 pub fn find_best_recruit(
     fam_pos: Vec2,
     fatigue_threshold: f32,
@@ -36,51 +41,73 @@ pub fn find_best_recruit(
     q_breakdown: &Query<&StressBreakdown>,
     radius_opt: Option<f32>,
 ) -> Option<Entity> {
-    let mut candidates = Vec::new();
+    // 候補をフィルタリングするヘルパークロージャ
+    // リクルート条件:
+    // - 使役されていない
+    // - タスクなし
+    // - 疲労 < リクルート閾値
+    // - ストレス崩壊していない
+    // - ExhaustedGatheringではない
+    let filter_candidate = |e: Entity| -> Option<(Entity, Vec2)> {
+        let (entity, transform, soul, task, _, _, idle, _, uc) = q_souls.get(e).ok()?;
+        let recruit_threshold = fatigue_threshold - 0.2;
+        let fatigue_ok = soul.fatigue < recruit_threshold;
+        let stress_ok = q_breakdown.get(entity).is_err();
 
+        if uc.is_none()
+            && matches!(*task, AssignedTask::None)
+            && fatigue_ok
+            && stress_ok
+            && idle.behavior != IdleBehavior::ExhaustedGathering
+        {
+            Some((entity, transform.translation.truncate()))
+        } else {
+            None
+        }
+    };
+
+    // 候補リストから最も近いエンティティを選択するヘルパー
+    let find_nearest = |candidates: Vec<(Entity, Vec2)>| -> Option<Entity> {
+        candidates
+            .into_iter()
+            .min_by(|(_, p1), (_, p2)| {
+                p1.distance_squared(fam_pos)
+                    .partial_cmp(&p2.distance_squared(fam_pos))
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
+            .map(|(e, _)| e)
+    };
+
+    // 指定された半径がある場合はその半径で検索
     if let Some(radius) = radius_opt {
         let nearby = spatial_grid.get_nearby_in_radius(fam_pos, radius);
-        for &e in &nearby {
-            if let Ok((entity, transform, soul, task, _, _, idle, _, uc)) = q_souls.get(e) {
-                let is_gathering = idle.behavior == IdleBehavior::Gathering;
-                let fatigue_ok = is_gathering || soul.fatigue < fatigue_threshold;
-                let stress_ok = q_breakdown.get(entity).is_err();
+        let candidates: Vec<_> = nearby.iter().filter_map(|&e| filter_candidate(e)).collect();
+        return find_nearest(candidates);
+    }
 
-                if uc.is_none()
-                    && matches!(*task, AssignedTask::None)
-                    && fatigue_ok
-                    && stress_ok
-                    && idle.behavior != IdleBehavior::ExhaustedGathering
-                {
-                    candidates.push((entity, transform.translation.truncate()));
-                }
-            }
-        }
-    } else {
-        for (entity, transform, soul, task, _, _, idle, _, uc) in q_souls.iter() {
-            let is_gathering = idle.behavior == IdleBehavior::Gathering;
-            let fatigue_ok = is_gathering || soul.fatigue < fatigue_threshold;
-            let stress_ok = q_breakdown.get(entity).is_err();
+    // radius_opt = None の場合: 段階的に検索半径を拡大
+    // 【最適化】全ソウルスキャンを回避し、見つかり次第早期リターン
+    let search_tiers = [
+        TILE_SIZE * 20.0,  // 640px - 近傍
+        TILE_SIZE * 40.0,  // 1280px - 中距離
+        TILE_SIZE * 80.0,  // 2560px - 遠方
+        TILE_SIZE * 160.0, // 5120px - 超遠方（マップ端対応）
+    ];
 
-            if uc.is_none()
-                && matches!(*task, AssignedTask::None)
-                && fatigue_ok
-                && stress_ok
-                && idle.behavior != IdleBehavior::ExhaustedGathering
-            {
-                candidates.push((entity, transform.translation.truncate()));
-            }
+    for &radius in &search_tiers {
+        let nearby = spatial_grid.get_nearby_in_radius(fam_pos, radius);
+        let candidates: Vec<_> = nearby.iter().filter_map(|&e| filter_candidate(e)).collect();
+
+        if let Some(best) = find_nearest(candidates) {
+            debug!(
+                "RECRUIT: Found candidate at radius {:.0} (tier search)",
+                radius
+            );
+            return Some(best);
         }
     }
 
-    candidates
-        .into_iter()
-        .min_by(|(_, p1), (_, p2)| {
-            p1.distance_squared(fam_pos)
-                .partial_cmp(&p2.distance_squared(fam_pos))
-                .unwrap_or(std::cmp::Ordering::Equal)
-        })
-        .map(|(e, _)| e)
+    None
 }
 
 /// 担当エリア内の未アサインタスクを探す
