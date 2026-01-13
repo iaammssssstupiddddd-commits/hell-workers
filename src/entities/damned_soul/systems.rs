@@ -254,12 +254,13 @@ fn on_stress_breakdown(
         &mut crate::systems::logistics::Inventory,
         Option<&crate::entities::familiar::UnderCommand>,
     )>,
-    mut q_designations: Query<(
+    q_designations: Query<(
         Entity,
         &Transform,
         &crate::systems::jobs::Designation,
         Option<&crate::systems::jobs::IssuedBy>,
-        Option<&mut crate::systems::jobs::TaskSlots>,
+        Option<&crate::systems::jobs::TaskSlots>,
+        Option<&crate::relationships::TaskWorkers>,
     )>,
 ) {
     let soul_entity = on.entity;
@@ -280,7 +281,7 @@ fn on_stress_breakdown(
                 &mut task,
                 &mut path,
                 &mut inventory,
-                &mut q_designations,
+                &q_designations,
             );
         }
 
@@ -306,12 +307,13 @@ fn on_exhausted(
         &mut crate::systems::logistics::Inventory,
         Option<&crate::entities::familiar::UnderCommand>,
     )>,
-    mut q_designations: Query<(
+    q_designations: Query<(
         Entity,
         &Transform,
         &crate::systems::jobs::Designation,
         Option<&crate::systems::jobs::IssuedBy>,
-        Option<&mut crate::systems::jobs::TaskSlots>,
+        Option<&crate::systems::jobs::TaskSlots>,
+        Option<&crate::relationships::TaskWorkers>,
     )>,
 ) {
     let soul_entity = on.entity;
@@ -345,7 +347,7 @@ fn on_exhausted(
                 &mut task,
                 &mut path,
                 &mut inventory,
-                &mut q_designations,
+                &q_designations,
             );
         }
 

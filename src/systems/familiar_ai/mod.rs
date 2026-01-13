@@ -4,7 +4,7 @@ use crate::entities::damned_soul::{
 use crate::entities::familiar::{
     ActiveCommand, Familiar, FamiliarCommand, FamiliarOperation, UnderCommand,
 };
-use crate::relationships::{Commanding, ManagedTasks};
+use crate::relationships::{Commanding, ManagedTasks, TaskWorkers};
 use crate::systems::GameSystemSet;
 use crate::systems::command::TaskArea;
 use crate::systems::jobs::{IssuedBy, TaskSlots};
@@ -90,12 +90,13 @@ pub fn familiar_ai_system(
         ),
         Without<Familiar>,
     >,
-    mut q_designations: Query<(
+    q_designations: Query<(
         Entity,
         &Transform,
         &crate::systems::jobs::Designation,
         Option<&IssuedBy>,
-        Option<&mut TaskSlots>,
+        Option<&TaskSlots>,
+        Option<&TaskWorkers>,
     )>,
     q_stockpiles: Query<(Entity, &Transform, &Stockpile)>,
     _q_souls_lite: Query<(Entity, &UnderCommand), With<DamnedSoul>>,
@@ -178,7 +179,7 @@ pub fn familiar_ai_system(
                         &mut task,
                         &mut path,
                         &mut inventory,
-                        &mut q_designations,
+                        &q_designations,
                     );
                     commands.entity(member_entity).remove::<UnderCommand>();
                     released_entities.push(member_entity);
@@ -343,7 +344,7 @@ pub fn familiar_ai_system(
                     task_entity,
                     best_idle_member,
                     fatigue_threshold,
-                    &mut q_designations,
+                    &q_designations,
                     &mut q_souls,
                     &q_stockpiles,
                 );

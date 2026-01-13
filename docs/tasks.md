@@ -12,7 +12,7 @@ Bevy 0.17 の **ECS Relationships** 機能を使用し、エンティティ間�
 | コンポーネント | 役割 | 説明 |
 | :--- | :--- | :--- |
 | `Designation` | 基本 | エンティティが仕事の対象であることを示すフラグ。`WorkType` を持つ。 |
-| `TaskSlots` | 制限 | 1つのタスクに同時に取り組める最大人数と現在の人数を管理する。 |
+| `TaskSlots` | 制限 | 1つのタスクに同時に取り組める最大人数を管理する（参加人数は `TaskWorkers` で自動集計される）。 |
 | **`ManagedBy(Entity)`** | **Relationship** | タスクから**使い魔**への参照。エイリアス: `IssuedBy`。 |
 | **`ManagedTasks(Vec)`** | **Target** | 使い魔側の**管理タスク一覧**。自動的に維持される。 |
 | **`WorkingOn(Entity)`** | **Relationship** | 魂から**タスク**への参照。 |
