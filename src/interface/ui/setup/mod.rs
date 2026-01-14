@@ -4,6 +4,7 @@
 
 mod bottom_bar;
 mod dialogs;
+mod entity_list;
 mod panels;
 mod submenus;
 mod time_control;
@@ -11,14 +12,15 @@ mod time_control;
 use bevy::prelude::*;
 
 /// UI全体をセットアップ
-pub fn setup_ui(commands: Commands) {
-    setup_ui_internal(commands);
+pub fn setup_ui(commands: Commands, game_assets: Res<crate::assets::GameAssets>) {
+    setup_ui_internal(commands, game_assets);
 }
 
-fn setup_ui_internal(mut commands: Commands) {
+fn setup_ui_internal(mut commands: Commands, game_assets: Res<crate::assets::GameAssets>) {
     bottom_bar::spawn_bottom_bar(&mut commands);
     submenus::spawn_submenus(&mut commands);
-    panels::spawn_panels(&mut commands);
+    panels::spawn_panels(&mut commands, &game_assets);
+    entity_list::spawn_entity_list_panel(&mut commands, &game_assets);
     time_control::spawn_time_control(&mut commands);
     dialogs::spawn_dialogs(&mut commands);
 }

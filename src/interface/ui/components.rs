@@ -54,10 +54,28 @@ pub struct OrdersSubMenu;
 pub struct InfoPanel;
 
 #[derive(Component)]
-pub struct InfoPanelJobText;
+pub struct InfoPanelHeader;
 
 #[derive(Component)]
-pub struct InfoPanelHeader;
+pub struct InfoPanelGenderIcon;
+
+#[derive(Component)]
+pub struct InfoPanelStatMotivation;
+
+#[derive(Component)]
+pub struct InfoPanelStatStress;
+
+#[derive(Component)]
+pub struct InfoPanelStatFatigue;
+
+#[derive(Component)]
+pub struct InfoPanelTaskText;
+
+#[derive(Component)]
+pub struct InfoPanelInventoryText;
+
+#[derive(Component)]
+pub struct InfoPanelCommonText; // 汎用テキスト（ブループリント等用）
 
 #[derive(Component)]
 pub struct ModeText;
@@ -85,3 +103,47 @@ pub struct OperationDialogThresholdText;
 
 #[derive(Component)]
 pub struct OperationDialogMaxSoulText;
+
+// ============================================================
+// エンティティリスト UI コンポーネント
+// ============================================================
+
+#[derive(Component)]
+pub struct EntityListPanel;
+
+/// ヘッダーのリストコンテナ
+#[derive(Component)]
+pub struct FamiliarListContainer;
+
+#[derive(Component)]
+pub struct SoulListItem(pub Entity);
+
+/// 使い魔リストアイテム（選択用）
+#[derive(Component)]
+pub struct FamiliarListItem(pub Entity);
+
+#[derive(Component)]
+pub struct UnassignedSoulSection;
+
+#[derive(Component)]
+pub struct UnassignedSoulContent;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EntityListSectionType {
+    Familiar(Entity),
+    Unassigned,
+}
+
+/// セクションの折りたたみイベント等に使う識別
+#[derive(Component)]
+pub struct SectionToggle(pub EntityListSectionType);
+
+/// 未所属ソウルセクションの矢印アイコン（動的更新用）
+#[derive(Component)]
+pub struct UnassignedSectionArrowIcon;
+
+#[derive(Resource, Default)]
+pub struct EntityListFoldState {
+    pub folded_familiars: std::collections::HashSet<Entity>,
+    pub unassigned_folded: bool,
+}
