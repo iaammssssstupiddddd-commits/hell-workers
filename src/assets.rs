@@ -17,6 +17,7 @@ pub struct GameAssets {
     pub icon_stress: Handle<Image>,
     pub icon_idle: Handle<Image>,
     pub icon_pick: Handle<Image>,
+    pub icon_axe: Handle<Image>,
     pub icon_haul: Handle<Image>,
     pub icon_arrow_down: Handle<Image>,
     pub icon_arrow_right: Handle<Image>,

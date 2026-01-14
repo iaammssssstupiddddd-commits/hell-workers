@@ -10,17 +10,23 @@
 
 **ヘッダー構成:**
 - **折りたたみアイコン** (左): クリックでセクションを展開/折りたたみ
-  - ▼ (`arrow_down.jpg`): 展開状態
-  - ▶ (`arrow_right.jpg`): 折りたたみ状態
+  - ▼ (`arrow_down.png`): 展開状態 (サイズ 14px)
+  - ▶ (`arrow_right.png`): 折りたたみ状態 (サイズ 14px)
 - **名前ボタン** (右): クリックで使い魔を選択し、カメラをフォーカス
   - 表示: `{名前} ({現在/最大}) [{AIステート}]`
 
 **ソウルリストアイテム:**
-- 性別アイコン (`male.jpg` / `female.jpg`)
-- 名前
-- 疲労アイコン (`fatigue.jpg`) + パーセンテージ
-- ストレスアイコン (`stress.jpg`) + パーセンテージ
-- タスクアイコン (`idle.jpg` / `pick.jpg` / `haul.jpg`)
+各アイテムのアイコンサイズは **16px** です。視認性向上のため、アイコンには色が適用されています。
+
+- **性別アイコン**: `male.png` (水色) / `female.png` (ピンク)
+- **名前**: 文字色はストレス度に応じて変化（白 -> オレンジ -> 赤）
+- **疲労アイコン**: `fatigue.png` (青紫色) + パーセンテージ
+- **ストレスアイコン**: `stress.png` (黄色) + パーセンテージ
+- **タスクアイコン**:
+  - `idle.png`: アイドル状態 (灰色 `0.6, 0.6, 0.6`)
+  - `pick.png`: 採掘 (Mine) (灰色 `0.7, 0.7, 0.7`) / その他収集 (オレンジ `1.0, 0.7, 0.3`)
+  - `axe.png`: 伐採 (Chop) (茶色 `0.6, 0.4, 0.2`)
+  - `haul.png`: 運搬 (Haul) (緑色 `0.5, 1.0, 0.5`)
 
 ### 未所属ソウルセクション
 使い魔に配属されていないソウルの一覧です。
@@ -28,11 +34,14 @@
 **ヘッダー:** 「Unassigned Souls」+ 折りたたみアイコン
 
 ## アセット
-すべてのアイコンは `assets/textures/ui/` に配置（JPEG形式）:
-- `male.jpg`, `female.jpg` - 性別
-- `fatigue.jpg`, `stress.jpg` - ステータス
-- `idle.jpg`, `pick.jpg`, `haul.jpg` - タスク状態
-- `arrow_down.jpg`, `arrow_right.jpg` - 折りたたみ
+すべてのアイコンは `assets/textures/ui/` に配置（PNG形式、背景透過）:
+- `male.png`, `female.png` - 性別
+- `fatigue.png`, `stress.png` - ステータス
+- `idle.png` - アイドル
+- `pick.png` - 採掘 (Mine)
+- `axe.png` - 伐採 (Chop)
+- `haul.png` - 運搬 (Haul)
+- `arrow_down.png`, `arrow_right.png` - 折りたたみ
 
 ## 更新頻度
 100msごとにリストが再構築されます（`interface.rs` の `on_timer`）。
