@@ -65,12 +65,18 @@ impl Plugin for InterfacePlugin {
                 time_control_keyboard_system,
                 time_control_ui_system,
                 debug_spawn_system,
+                crate::interface::ui::entity_list_interaction_system,
+                crate::interface::ui::update_unassigned_arrow_icon_system,
             )
                 .in_set(GameSystemSet::Interface),
         )
         .add_systems(
             Update,
-            (task_area_auto_haul_system,).run_if(on_timer(Duration::from_millis(500))),
+            (
+                task_area_auto_haul_system,
+                crate::interface::ui::rebuild_entity_list_system,
+            )
+                .run_if(on_timer(Duration::from_millis(100))),
         );
     }
 }

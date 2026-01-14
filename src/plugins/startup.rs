@@ -77,6 +77,15 @@ fn setup(
         wood: asset_server.load("textures/dirt.jpg"),
         aura_circle,
         aura_ring,
+        icon_male: asset_server.load("textures/ui/male.jpg"),
+        icon_female: asset_server.load("textures/ui/female.jpg"),
+        icon_fatigue: asset_server.load("textures/ui/fatigue.jpg"),
+        icon_stress: asset_server.load("textures/ui/stress.jpg"),
+        icon_idle: asset_server.load("textures/ui/idle.jpg"),
+        icon_pick: asset_server.load("textures/ui/pick.jpg"),
+        icon_haul: asset_server.load("textures/ui/haul.jpg"),
+        icon_arrow_down: asset_server.load("textures/ui/arrow_down.jpg"),
+        icon_arrow_right: asset_server.load("textures/ui/arrow_right.jpg"),
     };
     commands.insert_resource(game_assets);
 }

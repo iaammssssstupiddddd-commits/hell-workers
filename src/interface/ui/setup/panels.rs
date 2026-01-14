@@ -1,17 +1,19 @@
 //! パネル UI (Info Panel, Hover Tooltip)
 
 use crate::interface::ui::components::{
-    HoverTooltip, HoverTooltipText, InfoPanel, InfoPanelHeader, InfoPanelJobText,
+    HoverTooltip, HoverTooltipText, InfoPanel, InfoPanelCommonText, InfoPanelGenderIcon,
+    InfoPanelHeader, InfoPanelInventoryText, InfoPanelStatFatigue, InfoPanelStatMotivation,
+    InfoPanelStatStress, InfoPanelTaskText,
 };
 use bevy::prelude::*;
 
 /// パネルをスポーン
-pub fn spawn_panels(commands: &mut Commands) {
-    spawn_info_panel(commands);
+pub fn spawn_panels(commands: &mut Commands, game_assets: &Res<crate::assets::GameAssets>) {
+    spawn_info_panel(commands, game_assets);
     spawn_hover_tooltip(commands);
 }
 
-fn spawn_info_panel(commands: &mut Commands) {
+fn spawn_info_panel(commands: &mut Commands, game_assets: &Res<crate::assets::GameAssets>) {
     commands
         .spawn((
             Node {
@@ -29,23 +31,140 @@ fn spawn_info_panel(commands: &mut Commands) {
             InfoPanel,
         ))
         .with_children(|parent| {
-            parent.spawn((
-                Text::new("Entity Info"),
-                TextFont {
-                    font_size: 20.0,
+            // Header row
+            parent
+                .spawn(Node {
+                    flex_direction: FlexDirection::Row,
+                    align_items: AlignItems::Center,
+                    margin: UiRect::bottom(Val::Px(5.0)),
                     ..default()
-                },
-                TextColor(Color::srgb(1.0, 1.0, 0.0)),
-                InfoPanelHeader,
-            ));
+                })
+                .with_children(|row| {
+                    row.spawn((
+                        Text::new("Entity Info"),
+                        TextFont {
+                            font_size: 20.0,
+                            ..default()
+                        },
+                        TextColor(Color::srgb(1.0, 1.0, 0.0)),
+                        InfoPanelHeader,
+                    ));
+                    row.spawn((
+                        ImageNode::default(),
+                        Node {
+                            width: Val::Px(16.0),
+                            height: Val::Px(16.0),
+                            margin: UiRect::left(Val::Px(8.0)),
+                            display: Display::None,
+                            ..default()
+                        },
+                        InfoPanelGenderIcon,
+                    ));
+                });
+
+            // Soul Stats Column
+            parent
+                .spawn(Node {
+                    flex_direction: FlexDirection::Column,
+                    ..default()
+                })
+                .with_children(|col| {
+                    // Motivation (as text for now, but in separate node)
+                    col.spawn((
+                        Text::new(""),
+                        TextFont {
+                            font_size: 14.0,
+                            ..default()
+                        },
+                        InfoPanelStatMotivation,
+                    ));
+                    // Stress row
+                    col.spawn(Node {
+                        flex_direction: FlexDirection::Row,
+                        align_items: AlignItems::Center,
+                        ..default()
+                    })
+                    .with_children(|row| {
+                        row.spawn((
+                            ImageNode::new(game_assets.icon_stress.clone()),
+                            Node {
+                                width: Val::Px(14.0),
+                                height: Val::Px(14.0),
+                                margin: UiRect::right(Val::Px(4.0)),
+                                ..default()
+                            },
+                        ));
+                        row.spawn((
+                            Text::new("Stress: 0%"),
+                            TextFont {
+                                font_size: 14.0,
+                                ..default()
+                            },
+                            InfoPanelStatStress,
+                        ));
+                    });
+                    // Fatigue row
+                    col.spawn(Node {
+                        flex_direction: FlexDirection::Row,
+                        align_items: AlignItems::Center,
+                        ..default()
+                    })
+                    .with_children(|row| {
+                        row.spawn((
+                            ImageNode::new(game_assets.icon_fatigue.clone()),
+                            Node {
+                                width: Val::Px(14.0),
+                                height: Val::Px(14.0),
+                                margin: UiRect::right(Val::Px(4.0)),
+                                ..default()
+                            },
+                        ));
+                        row.spawn((
+                            Text::new("Fatigue: 0%"),
+                            TextFont {
+                                font_size: 14.0,
+                                ..default()
+                            },
+                            InfoPanelStatFatigue,
+                        ));
+                    });
+                    // Task row
+                    col.spawn(Node {
+                        flex_direction: FlexDirection::Row,
+                        align_items: AlignItems::Center,
+                        margin: UiRect::top(Val::Px(5.0)),
+                        ..default()
+                    })
+                    .with_children(|row| {
+                        row.spawn((
+                            Text::new("Task: Idle"),
+                            TextFont {
+                                font_size: 14.0,
+                                ..default()
+                            },
+                            InfoPanelTaskText,
+                        ));
+                    });
+                    // Inventory row
+                    col.spawn((
+                        Text::new("Carrying: None"),
+                        TextFont {
+                            font_size: 14.0,
+                            ..default()
+                        },
+                        InfoPanelInventoryText,
+                    ));
+                });
+
+            // Common/Generic Text (Blueprints, Items, etc)
             parent.spawn((
-                Text::new("Status: Idle"),
+                Text::new(""),
                 TextFont {
                     font_size: 16.0,
                     ..default()
                 },
                 TextColor(Color::WHITE),
-                InfoPanelJobText,
+                InfoPanelCommonText,
             ));
         });
 }
