@@ -12,15 +12,12 @@ use rand::Rng;
 
 /// 人間をスポーンする
 pub fn spawn_damned_souls(mut spawn_events: MessageWriter<DamnedSoulSpawnEvent>) {
-    let spawn_positions = [
-        Vec2::new(-50.0, -50.0),
-        Vec2::new(50.0, 0.0),
-        Vec2::new(0.0, 50.0),
-    ];
-
-    for spawn_pos in spawn_positions.iter() {
+    let mut rng = rand::thread_rng();
+    for _ in 0..10 {
+        let x = rng.gen_range(-100.0..100.0);
+        let y = rng.gen_range(-100.0..100.0);
         spawn_events.write(DamnedSoulSpawnEvent {
-            position: *spawn_pos,
+            position: Vec2::new(x, y),
         });
     }
 }

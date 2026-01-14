@@ -129,7 +129,11 @@ pub use crate::relationships::CommandedBy as UnderCommand;
 /// 使い魔をスポーンする
 pub fn spawn_familiar(mut spawn_events: MessageWriter<FamiliarSpawnEvent>) {
     spawn_events.write(FamiliarSpawnEvent {
-        position: Vec2::new(0.0, 0.0),
+        position: Vec2::new(-20.0, 0.0),
+        familiar_type: FamiliarType::Imp,
+    });
+    spawn_events.write(FamiliarSpawnEvent {
+        position: Vec2::new(20.0, 0.0),
         familiar_type: FamiliarType::Imp,
     });
 }
