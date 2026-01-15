@@ -4,12 +4,12 @@
 
 use crate::assets::GameAssets;
 use crate::constants::*;
-use crate::entities::damned_soul::{DamnedSoul, Destination, Path};
+use crate::entities::damned_soul::{DamnedSoul, Destination, Path, StressBreakdown};
 use crate::events::OnTaskCompleted;
 use crate::relationships::{Holding, WorkingOn};
 use crate::systems::familiar_ai::haul_cache::HaulReservationCache;
 use crate::systems::jobs::{
-    Designation, IssuedBy, Rock, TaskCompletedEvent, TaskSlots, Tree, WorkType,
+    Blueprint, Designation, IssuedBy, Rock, TaskCompletedEvent, TaskSlots, Tree, WorkType,
 };
 use crate::systems::logistics::{ResourceItem, Stockpile};
 use bevy::prelude::*;
@@ -30,11 +30,22 @@ pub enum AssignedTask {
         work_type: WorkType,
         phase: GatherPhase,
     },
-    /// リソースを運搬する
+    /// リソースを運搬する（ストックパイルへ）
     Haul {
         item: Entity,
         stockpile: Entity,
         phase: HaulPhase,
+    },
+    /// 資材を設計図へ運搬する
+    HaulToBlueprint {
+        item: Entity,
+        blueprint: Entity,
+        phase: HaulToBpPhase,
+    },
+    /// 建築作業を行う
+    Build {
+        blueprint: Entity,
+        phase: BuildPhase,
     },
 }
 
@@ -56,11 +67,31 @@ pub enum GatherPhase {
     Done,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Reflect, Default)]
+pub enum BuildPhase {
+    #[default]
+    GoingToBlueprint,
+    Building {
+        progress: f32,
+    },
+    Done,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Reflect, Default)]
+pub enum HaulToBpPhase {
+    #[default]
+    GoingToItem,
+    GoingToBlueprint,
+    Delivering,
+}
+
 impl AssignedTask {
     pub fn work_type(&self) -> Option<WorkType> {
         match self {
             AssignedTask::Gather { work_type, .. } => Some(*work_type),
             AssignedTask::Haul { .. } => Some(WorkType::Haul),
+            AssignedTask::HaulToBlueprint { .. } => Some(WorkType::Haul), // 同じ Haul カテゴリ
+            AssignedTask::Build { .. } => Some(WorkType::Build),
             AssignedTask::None => None,
         }
     }
@@ -80,6 +111,7 @@ pub fn task_execution_system(
         &mut Destination,
         &mut Path,
         Option<&Holding>,
+        Option<&StressBreakdown>,
     )>,
     q_targets: Query<(
         &Transform,
@@ -88,6 +120,14 @@ pub fn task_execution_system(
         Option<&ResourceItem>,
         Option<&Designation>,
         Option<&crate::relationships::StoredIn>,
+    )>,
+    q_designations: Query<(
+        Entity,
+        &Transform,
+        &Designation,
+        Option<&IssuedBy>,
+        Option<&TaskSlots>,
+        Option<&crate::relationships::TaskWorkers>,
     )>,
     mut q_stockpiles: Query<(
         &Transform,
@@ -98,11 +138,20 @@ pub fn task_execution_system(
     mut ev_completed: MessageWriter<TaskCompletedEvent>,
     time: Res<Time>,
     mut haul_cache: ResMut<HaulReservationCache>,
+    mut q_blueprints: Query<(&Transform, &mut Blueprint, Option<&Designation>)>,
 ) {
     let mut dropped_this_frame = std::collections::HashMap::<Entity, usize>::new();
 
-    for (soul_entity, soul_transform, mut soul, mut task, mut dest, mut path, holding_opt) in
-        q_souls.iter_mut()
+    for (
+        soul_entity,
+        soul_transform,
+        mut soul,
+        mut task,
+        mut dest,
+        mut path,
+        holding_opt,
+        breakdown_opt,
+    ) in q_souls.iter_mut()
     {
         let was_busy = !matches!(*task, AssignedTask::None);
         let old_work_type = task.work_type();
@@ -110,6 +159,8 @@ pub fn task_execution_system(
         let old_task_entity = match *task {
             AssignedTask::Gather { target, .. } => Some(target),
             AssignedTask::Haul { item, .. } => Some(item),
+            AssignedTask::HaulToBlueprint { item, .. } => Some(item),
+            AssignedTask::Build { blueprint, .. } => Some(blueprint),
             AssignedTask::None => None,
         };
 
@@ -156,6 +207,46 @@ pub fn task_execution_system(
                     &mut commands,
                     &mut dropped_this_frame,
                     &mut *haul_cache,
+                );
+            }
+            AssignedTask::Build { blueprint, phase } => {
+                handle_build_task(
+                    soul_entity,
+                    soul_transform,
+                    &mut soul,
+                    &mut task,
+                    &mut dest,
+                    &mut path,
+                    blueprint,
+                    phase,
+                    &mut q_blueprints,
+                    &mut commands,
+                    &time,
+                );
+            }
+            AssignedTask::HaulToBlueprint {
+                item,
+                blueprint,
+                phase,
+            } => {
+                handle_haul_to_blueprint_task(
+                    soul_entity,
+                    soul_transform,
+                    &mut soul,
+                    &mut task,
+                    &mut dest,
+                    &mut path,
+                    holding_opt,
+                    breakdown_opt,
+                    item,
+                    blueprint,
+                    phase,
+                    &q_targets,
+                    &q_designations,
+                    &mut q_blueprints,
+                    &mut q_stockpiles,
+                    &mut haul_cache,
+                    &mut commands,
                 );
             }
             AssignedTask::None => {}
@@ -505,6 +596,314 @@ fn handle_haul_task(
 
             // 搬送予約を解放
             haul_cache.release(stockpile);
+        }
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn handle_build_task(
+    soul_entity: Entity,
+    soul_transform: &Transform,
+    soul: &mut DamnedSoul,
+    task: &mut AssignedTask,
+    dest: &mut Destination,
+    path: &mut Path,
+    blueprint_entity: Entity,
+    phase: BuildPhase,
+    q_blueprints: &mut Query<(&Transform, &mut Blueprint, Option<&Designation>)>,
+    commands: &mut Commands,
+    time: &Res<Time>,
+) {
+    let soul_pos = soul_transform.translation.truncate();
+
+    match phase {
+        BuildPhase::GoingToBlueprint => {
+            if let Ok((bp_transform, bp, des_opt)) = q_blueprints.get(blueprint_entity) {
+                // 指定が解除されていたら中止
+                if des_opt.is_none() {
+                    *task = AssignedTask::None;
+                    path.waypoints.clear();
+                    commands.entity(soul_entity).remove::<WorkingOn>();
+                    return;
+                }
+
+                // 資材が揃っていない場合は中止（資材運搬は別タスク）
+                if !bp.materials_complete() {
+                    info!(
+                        "BUILD: Soul {:?} waiting for materials at blueprint {:?}",
+                        soul_entity, blueprint_entity
+                    );
+                    *task = AssignedTask::None;
+                    path.waypoints.clear();
+                    commands.entity(soul_entity).remove::<WorkingOn>();
+                    return;
+                }
+
+                let bp_pos = bp_transform.translation.truncate();
+                if dest.0.distance_squared(bp_pos) > 2.0 {
+                    dest.0 = bp_pos;
+                    path.waypoints.clear();
+                }
+
+                let dist = soul_pos.distance(bp_pos);
+                if dist < TILE_SIZE * 1.2 {
+                    *task = AssignedTask::Build {
+                        blueprint: blueprint_entity,
+                        phase: BuildPhase::Building { progress: 0.0 },
+                    };
+                    path.waypoints.clear();
+                    info!(
+                        "BUILD: Soul {:?} started building at {:?}",
+                        soul_entity, bp_pos
+                    );
+                }
+            } else {
+                // 設計図が消失
+                *task = AssignedTask::None;
+                path.waypoints.clear();
+                commands.entity(soul_entity).remove::<WorkingOn>();
+            }
+        }
+        BuildPhase::Building { mut progress } => {
+            if let Ok((_, mut bp, des_opt)) = q_blueprints.get_mut(blueprint_entity) {
+                // 指定が解除されていたら中止
+                if des_opt.is_none() {
+                    *task = AssignedTask::None;
+                    path.waypoints.clear();
+                    commands.entity(soul_entity).remove::<WorkingOn>();
+                    return;
+                }
+
+                // 進捗を更新（3秒で完了）
+                progress += time.delta_secs() * 0.33;
+                bp.progress = progress;
+
+                if progress >= 1.0 {
+                    *task = AssignedTask::Build {
+                        blueprint: blueprint_entity,
+                        phase: BuildPhase::Done,
+                    };
+                    soul.fatigue = (soul.fatigue + 0.15).min(1.0);
+                    info!(
+                        "BUILD: Soul {:?} completed building {:?}",
+                        soul_entity, blueprint_entity
+                    );
+                } else {
+                    *task = AssignedTask::Build {
+                        blueprint: blueprint_entity,
+                        phase: BuildPhase::Building { progress },
+                    };
+                }
+            } else {
+                *task = AssignedTask::None;
+                path.waypoints.clear();
+                commands.entity(soul_entity).remove::<WorkingOn>();
+            }
+        }
+        BuildPhase::Done => {
+            commands.entity(soul_entity).remove::<WorkingOn>();
+            *task = AssignedTask::None;
+            path.waypoints.clear();
+        }
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn handle_haul_to_blueprint_task(
+    soul_entity: Entity,
+    soul_transform: &Transform,
+    soul: &mut DamnedSoul,
+    task: &mut AssignedTask,
+    dest: &mut Destination,
+    path: &mut Path,
+    holding: Option<&Holding>,
+    breakdown_opt: Option<&StressBreakdown>,
+    item_entity: Entity,
+    blueprint_entity: Entity,
+    phase: HaulToBpPhase,
+    q_targets: &Query<(
+        &Transform,
+        Option<&Tree>,
+        Option<&Rock>,
+        Option<&ResourceItem>,
+        Option<&Designation>,
+        Option<&crate::relationships::StoredIn>,
+    )>,
+    q_designations: &Query<(
+        Entity,
+        &Transform,
+        &Designation,
+        Option<&IssuedBy>,
+        Option<&TaskSlots>,
+        Option<&crate::relationships::TaskWorkers>,
+    )>,
+    q_blueprints: &mut Query<(&Transform, &mut Blueprint, Option<&Designation>)>,
+    q_stockpiles: &mut Query<(
+        &Transform,
+        &mut Stockpile,
+        Option<&crate::relationships::StoredItems>,
+    )>,
+    haul_cache: &mut HaulReservationCache,
+    commands: &mut Commands,
+) {
+    // 疲労またはストレス崩壊のチェック
+    if soul.fatigue > 0.95 || breakdown_opt.is_some() {
+        info!(
+            "HAUL_TO_BP: Cancelled for {:?} - Exhausted or Stress breakdown",
+            soul_entity
+        );
+        crate::systems::soul_ai::work::unassign_task(
+            commands,
+            soul_entity,
+            soul_transform.translation.truncate(),
+            task,
+            path,
+            holding,
+            q_designations,
+            haul_cache,
+        );
+        return;
+    }
+
+    let soul_pos = soul_transform.translation.truncate();
+
+    match phase {
+        HaulToBpPhase::GoingToItem => {
+            if let Ok((item_transform, _, _, _, des_opt, _)) = q_targets.get(item_entity) {
+                // 指示がキャンセルされていないか確認
+                if des_opt.is_none() {
+                    info!(
+                        "HAUL_TO_BP: Cancelled for {:?} - Designation missing",
+                        soul_entity
+                    );
+                    *task = AssignedTask::None;
+                    path.waypoints.clear();
+                    commands.entity(soul_entity).remove::<WorkingOn>();
+                    return;
+                }
+
+                let item_pos = item_transform.translation.truncate();
+                if dest.0.distance_squared(item_pos) > 2.0 {
+                    dest.0 = item_pos;
+                    path.waypoints.clear();
+                }
+
+                if soul_pos.distance(item_pos) < TILE_SIZE * 1.2 {
+                    commands.entity(soul_entity).insert(Holding(item_entity));
+                    commands.entity(item_entity).insert(Visibility::Hidden);
+
+                    // もしアイテムが備蓄場所にあったなら、その備蓄場所の型管理を更新する
+                    if let Ok((_, _, _, _, _, stored_in_opt)) = q_targets.get(item_entity) {
+                        if let Some(crate::relationships::StoredIn(stock_entity)) = stored_in_opt {
+                            if let Ok((_, mut stock_comp, Some(stored_items))) =
+                                q_stockpiles.get_mut(*stock_entity)
+                            {
+                                // 自分を引いて 0 個になるなら None に戻す
+                                if stored_items.len() <= 1 {
+                                    stock_comp.resource_type = None;
+                                    info!(
+                                        "HAUL_TO_BP: Stockpile {:?} became empty. Resetting resource type.",
+                                        stock_entity
+                                    );
+                                }
+                            }
+                        }
+                    }
+
+                    // 元のコンポーネントを削除
+                    commands
+                        .entity(item_entity)
+                        .remove::<crate::relationships::StoredIn>();
+                    commands.entity(item_entity).remove::<Designation>();
+                    commands.entity(item_entity).remove::<IssuedBy>();
+                    commands.entity(item_entity).remove::<TaskSlots>();
+
+                    *task = AssignedTask::HaulToBlueprint {
+                        item: item_entity,
+                        blueprint: blueprint_entity,
+                        phase: HaulToBpPhase::GoingToBlueprint,
+                    };
+                    path.waypoints.clear();
+                    info!(
+                        "HAUL_TO_BP: Soul {:?} picked up item {:?}",
+                        soul_entity, item_entity
+                    );
+                }
+            } else {
+                info!(
+                    "HAUL_TO_BP: Cancelled for {:?} - Item {:?} gone",
+                    soul_entity, item_entity
+                );
+                *task = AssignedTask::None;
+                path.waypoints.clear();
+                commands.entity(soul_entity).remove::<WorkingOn>();
+            }
+        }
+        HaulToBpPhase::GoingToBlueprint => {
+            if let Ok((bp_transform, _, _)) = q_blueprints.get(blueprint_entity) {
+                let bp_pos = bp_transform.translation.truncate();
+                if dest.0.distance_squared(bp_pos) > 2.0 {
+                    dest.0 = bp_pos;
+                    path.waypoints.clear();
+                }
+
+                if soul_pos.distance(bp_pos) < TILE_SIZE * 1.2 {
+                    info!(
+                        "HAUL_TO_BP: Soul {:?} arrived at blueprint {:?}",
+                        soul_entity, blueprint_entity
+                    );
+                    *task = AssignedTask::HaulToBlueprint {
+                        item: item_entity,
+                        blueprint: blueprint_entity,
+                        phase: HaulToBpPhase::Delivering,
+                    };
+                    path.waypoints.clear();
+                }
+            } else {
+                info!(
+                    "HAUL_TO_BP: Cancelled for {:?} - Blueprint {:?} gone",
+                    soul_entity, blueprint_entity
+                );
+                // Blueprint が消失 - アイテムをドロップ
+                if holding.is_some() {
+                    commands.entity(item_entity).insert((
+                        Visibility::Visible,
+                        Transform::from_xyz(soul_pos.x, soul_pos.y, 0.6),
+                    ));
+                }
+                commands.entity(soul_entity).remove::<Holding>();
+                commands.entity(soul_entity).remove::<WorkingOn>();
+                *task = AssignedTask::None;
+                path.waypoints.clear();
+            }
+        }
+        HaulToBpPhase::Delivering => {
+            if let Ok((_, mut bp, _)) = q_blueprints.get_mut(blueprint_entity) {
+                // アイテムの資材タイプを取得
+                if let Ok((_, _, _, Some(res_item), _, _)) = q_targets.get(item_entity) {
+                    let resource_type = res_item.0;
+
+                    // Blueprint に資材を搬入
+                    bp.deliver_material(resource_type, 1);
+                    info!(
+                        "HAUL_TO_BP: Soul {:?} delivered {:?} to blueprint {:?}. Progress: {:?}/{:?}",
+                        soul_entity,
+                        resource_type,
+                        blueprint_entity,
+                        bp.delivered_materials,
+                        bp.required_materials
+                    );
+
+                    // アイテムを消費
+                    commands.entity(item_entity).despawn();
+                }
+            }
+
+            commands.entity(soul_entity).remove::<Holding>();
+            commands.entity(soul_entity).remove::<WorkingOn>();
+            *task = AssignedTask::None;
+            path.waypoints.clear();
+            soul.fatigue = (soul.fatigue + 0.05).min(1.0);
         }
     }
 }

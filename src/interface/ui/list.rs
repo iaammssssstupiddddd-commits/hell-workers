@@ -212,6 +212,14 @@ pub fn rebuild_entity_list_system(
                                                     game_assets.icon_haul.clone(),
                                                     Color::srgb(0.5, 1.0, 0.5),
                                                 ),
+                                                AssignedTask::Build { .. } => (
+                                                    game_assets.icon_pick.clone(),
+                                                    Color::srgb(0.8, 0.6, 0.2),
+                                                ),
+                                                AssignedTask::HaulToBlueprint { .. } => (
+                                                    game_assets.icon_haul.clone(),
+                                                    Color::srgb(0.8, 0.8, 0.3),
+                                                ),
                                             };
                                             let stress_color = if soul.stress > 0.8 {
                                                 Color::srgb(1.0, 0.0, 0.0)
@@ -378,6 +386,12 @@ pub fn rebuild_entity_list_system(
                             },
                             AssignedTask::Haul { .. } => {
                                 (game_assets.icon_haul.clone(), Color::srgb(0.5, 1.0, 0.5))
+                            }
+                            AssignedTask::Build { .. } => {
+                                (game_assets.icon_pick.clone(), Color::srgb(0.8, 0.6, 0.2))
+                            }
+                            AssignedTask::HaulToBlueprint { .. } => {
+                                (game_assets.icon_haul.clone(), Color::srgb(0.8, 0.8, 0.3))
                             }
                         };
                         let stress_color = if soul.stress > 0.8 {
