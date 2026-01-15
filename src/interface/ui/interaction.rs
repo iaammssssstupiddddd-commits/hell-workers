@@ -7,7 +7,7 @@ use crate::entities::familiar::{Familiar, FamiliarOperation};
 use crate::game_state::{BuildContext, PlayMode, TaskContext, ZoneContext};
 use crate::interface::ui::components::*;
 use crate::relationships::TaskWorkers;
-use crate::systems::soul_ai::execution::AssignedTask;
+use crate::systems::soul_ai::task_execution::AssignedTask;
 use crate::systems::task_queue::TaskQueue;
 use bevy::prelude::*;
 

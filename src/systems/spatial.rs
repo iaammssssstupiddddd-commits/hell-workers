@@ -5,7 +5,7 @@
 use crate::constants::TILE_SIZE;
 use crate::entities::familiar::Familiar;
 use crate::systems::logistics::ResourceItem;
-use crate::systems::soul_ai::execution::AssignedTask;
+use crate::systems::soul_ai::task_execution::AssignedTask;
 use bevy::prelude::*;
 use std::collections::HashMap;
 

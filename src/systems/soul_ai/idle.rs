@@ -4,7 +4,7 @@ use crate::constants::{
 use crate::entities::damned_soul::{
     DamnedSoul, Destination, GatheringBehavior, IdleBehavior, IdleState, Path,
 };
-use crate::systems::soul_ai::execution::AssignedTask;
+use crate::systems::soul_ai::task_execution::AssignedTask;
 use crate::world::map::{GatheringArea, WorldMap};
 use bevy::prelude::*;
 use rand::Rng;
