@@ -195,9 +195,9 @@ pub fn spawn_familiar_at(
             Destination(actual_pos),                       // 移動先
             Path::default(),                               // 経路
             Sprite {
-                image: game_assets.colonist.clone(), // TODO: 専用テクスチャ
+                image: game_assets.familiar.clone(),
                 custom_size: Some(Vec2::splat(TILE_SIZE * 0.9)),
-                color: Color::srgb(1.0, 0.3, 0.3), // 赤みがかった色で区別
+                color: Color::WHITE,
                 ..default()
             },
             Transform::from_xyz(actual_pos.x, actual_pos.y, 1.5), // 人間より少し上に表示
