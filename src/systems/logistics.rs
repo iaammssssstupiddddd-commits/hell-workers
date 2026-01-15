@@ -7,7 +7,7 @@ use bevy::prelude::*;
 use rand::Rng;
 use std::collections::HashMap;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Reflect)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Reflect)]
 pub enum ResourceType {
     Wood,
     Stone,

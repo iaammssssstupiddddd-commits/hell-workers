@@ -244,6 +244,8 @@ pub fn info_panel_system(
                 AssignedTask::None => "Idle".to_string(),
                 AssignedTask::Gather { phase, .. } => format!("Gather ({:?})", phase),
                 AssignedTask::Haul { phase, .. } => format!("Haul ({:?})", phase),
+                AssignedTask::HaulToBlueprint { phase, .. } => format!("HaulToBp ({:?})", phase),
+                AssignedTask::Build { phase, .. } => format!("Build ({:?})", phase),
             };
             if let Ok(mut t) = params.q_task.single_mut() {
                 t.0 = format!("Task: {}", task_str);

@@ -7,7 +7,7 @@ use crate::entities::familiar::{
 use crate::relationships::{Commanding, ManagedTasks, TaskWorkers};
 use crate::systems::GameSystemSet;
 use crate::systems::command::TaskArea;
-use crate::systems::jobs::{IssuedBy, TaskSlots};
+use crate::systems::jobs::{Blueprint, IssuedBy, TargetBlueprint, TaskSlots};
 use crate::systems::logistics::{ResourceItem, Stockpile};
 use crate::systems::soul_ai::execution::AssignedTask;
 use crate::systems::soul_ai::work::unassign_task;
@@ -115,6 +115,8 @@ pub fn familiar_ai_system(
     _q_souls_lite: Query<(Entity, &UnderCommand), With<DamnedSoul>>,
     q_breakdown: Query<&StressBreakdown>,
     q_resources: Query<&ResourceItem>,
+    q_target_blueprints: Query<&TargetBlueprint>,
+    q_blueprints: Query<&Blueprint>,
     mut haul_cache: ResMut<haul_cache::HaulReservationCache>,
     designation_grid: Res<DesignationSpatialGrid>,
 ) {
@@ -364,7 +366,13 @@ pub fn familiar_ai_system(
                 &q_designations,
                 &designation_grid,
                 managed_tasks,
+                &q_blueprints,
+                &q_target_blueprints,
             ) {
+                info!(
+                    "FAM_AI: Found task {:?} for idle member {:?}",
+                    task_entity, best_idle_member
+                );
                 helpers::assign_task_to_worker(
                     &mut commands,
                     fam_entity,
@@ -375,11 +383,20 @@ pub fn familiar_ai_system(
                     &mut q_souls,
                     &q_stockpiles,
                     &q_resources,
+                    &q_target_blueprints,
+                    &q_blueprints,
                     task_area_opt,
                     &mut *haul_cache,
                 );
                 commands.entity(task_entity).insert(IssuedBy(fam_entity));
+            } else {
+                debug!(
+                    "FAM_AI: No unassigned task found for idle member {:?}",
+                    best_idle_member
+                );
             }
+        } else {
+            debug!("FAM_AI: No idle member found in squad for {:?}", fam_entity);
         }
 
         // 5. 移動制御

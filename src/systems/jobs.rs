@@ -1,6 +1,8 @@
 use crate::assets::GameAssets;
 use crate::constants::*;
+use crate::systems::logistics::ResourceType;
 use bevy::prelude::*;
+use std::collections::HashMap;
 
 // --- Events ---
 
@@ -20,16 +22,36 @@ pub struct TaskCompletedEvent {
 
 // --- Components ---
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Reflect)]
 pub enum BuildingType {
     Wall,
-    #[allow(dead_code)]
     Floor,
 }
 
+impl BuildingType {
+    /// この建物タイプに必要な資材を返す
+    pub fn required_materials(&self) -> HashMap<ResourceType, u32> {
+        let mut materials = HashMap::new();
+        match self {
+            BuildingType::Wall => {
+                materials.insert(ResourceType::Wood, 2);
+            }
+            BuildingType::Floor => {
+                materials.insert(ResourceType::Stone, 1);
+            }
+        }
+        materials
+    }
+}
+
 #[derive(Component)]
-#[allow(dead_code)]
-pub struct Building(pub BuildingType);
+pub struct Building {
+    pub _kind: BuildingType,
+}
+
+/// 資材の運搬先となる Blueprint を示すマーカー
+#[derive(Component)]
+pub struct TargetBlueprint(pub Entity);
 
 #[derive(Component)]
 pub struct Tree;
@@ -37,20 +59,52 @@ pub struct Tree;
 #[derive(Component)]
 pub struct Rock;
 
+/// 設計図コンポーネント - 建設中の建物を表す
 #[derive(Component)]
 pub struct Blueprint {
     pub kind: BuildingType,
-    pub progress: f32, // 0.0 to 1.0
+    /// 建築進捗 (0.0 to 1.0) - 資材が揃った後の建築作業の進捗
+    pub progress: f32,
+    /// 必要な資材量
+    pub required_materials: HashMap<ResourceType, u32>,
+    /// 搬入済みの資材量
+    pub delivered_materials: HashMap<ResourceType, u32>,
+}
+
+impl Blueprint {
+    /// 新しい設計図を作成
+    pub fn new(kind: BuildingType) -> Self {
+        Self {
+            kind,
+            progress: 0.0,
+            required_materials: kind.required_materials(),
+            delivered_materials: HashMap::new(),
+        }
+    }
+
+    /// 資材が全て揃っているかチェック
+    pub fn materials_complete(&self) -> bool {
+        for (resource_type, required) in &self.required_materials {
+            let delivered = self.delivered_materials.get(resource_type).unwrap_or(&0);
+            if delivered < required {
+                return false;
+            }
+        }
+        true
+    }
+
+    pub fn deliver_material(&mut self, resource_type: ResourceType, amount: u32) {
+        *self.delivered_materials.entry(resource_type).or_insert(0) += amount;
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Reflect, Default)]
 pub enum WorkType {
     #[default]
     Chop, // 伐採
-    Mine, // 採掘
-    #[allow(dead_code)]
+    Mine,  // 採掘
     Build, // 建築
-    Haul, // 運搬
+    Haul,  // 運搬
 }
 
 #[derive(Component)]
@@ -82,8 +136,12 @@ pub fn building_completion_system(
     mut q_blueprints: Query<(Entity, &Blueprint, &Transform)>,
 ) {
     for (entity, bp, transform) in q_blueprints.iter_mut() {
-        if bp.progress >= 1.0 {
-            info!("BUILDING: Completed at {:?}", transform.translation);
+        // 資材が揃っていて、建築進捗が100%に達したら完成
+        if bp.materials_complete() && bp.progress >= 1.0 {
+            info!(
+                "BUILDING: Completed at {:?} (materials: {:?})",
+                transform.translation, bp.delivered_materials
+            );
             commands.entity(entity).despawn();
 
             let sprite_image = match bp.kind {
@@ -92,13 +150,14 @@ pub fn building_completion_system(
             };
 
             commands.spawn((
-                Building(bp.kind),
+                Building { _kind: bp.kind },
                 Sprite {
                     image: sprite_image,
                     custom_size: Some(Vec2::splat(TILE_SIZE)),
                     ..default()
                 },
                 *transform,
+                Name::new(format!("Building ({:?})", bp.kind)),
             ));
         }
     }

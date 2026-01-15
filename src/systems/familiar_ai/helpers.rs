@@ -6,9 +6,13 @@ use crate::entities::damned_soul::{
 use crate::entities::familiar::{Familiar, UnderCommand};
 use crate::relationships::ManagedTasks;
 use crate::systems::command::TaskArea;
-use crate::systems::jobs::{Designation, IssuedBy, TaskSlots, WorkType};
+use crate::systems::jobs::{
+    Blueprint, Designation, IssuedBy, TargetBlueprint, TaskSlots, WorkType,
+};
 use crate::systems::logistics::{ResourceItem, ResourceType, Stockpile};
-use crate::systems::soul_ai::execution::{AssignedTask, GatherPhase, HaulPhase};
+use crate::systems::soul_ai::execution::{
+    AssignedTask, BuildPhase, GatherPhase, HaulPhase, HaulToBpPhase,
+};
 use crate::systems::spatial::{DesignationSpatialGrid, SpatialGrid};
 use bevy::prelude::*;
 
@@ -27,6 +31,8 @@ pub fn find_unassigned_task_in_area(
     )>,
     designation_grid: &DesignationSpatialGrid,
     managed_tasks: &ManagedTasks,
+    q_blueprints: &Query<&Blueprint>,
+    q_target_blueprints: &Query<&TargetBlueprint>,
 ) -> Option<Entity> {
     // 候補となるエンティティのリスト
     let candidates = if let Some(area) = task_area_opt {
@@ -85,20 +91,46 @@ pub fn find_unassigned_task_in_area(
 
             // 収集系は対象が実在するか追加チェック
             let is_valid = match designation.work_type {
-                WorkType::Chop | WorkType::Mine | WorkType::Haul | WorkType::Build => true,
+                WorkType::Chop | WorkType::Mine | WorkType::Haul => true,
+                WorkType::Build => {
+                    // 建築の場合、資材が揃っているかチェック
+                    if let Ok(bp) = q_blueprints.get(entity) {
+                        bp.materials_complete()
+                    } else {
+                        false
+                    }
+                }
             };
 
             if is_valid {
                 let dist_sq = transform.translation.truncate().distance_squared(fam_pos);
-                Some((entity, dist_sq))
+                // 優先スコアの計算
+                // 10: 建築(Build) または 設計図への運搬(Haul with TargetBlueprint)
+                // 0: その他
+                let mut priority = 0;
+                if designation.work_type == WorkType::Build {
+                    priority = 10;
+                } else if designation.work_type == WorkType::Haul {
+                    if q_target_blueprints.get(entity).is_ok() {
+                        priority = 10;
+                    }
+                }
+
+                Some((entity, priority, dist_sq))
             } else {
                 None
             }
         })
-        .min_by(|(_, d1): &(Entity, f32), (_, d2): &(Entity, f32)| {
-            d1.partial_cmp(d2).unwrap_or(std::cmp::Ordering::Equal)
+        .min_by(|(_, p1, d1), (_, p2, d2)| {
+            // 優先度が高い(大きい)ものを優先
+            match p2.cmp(p1) {
+                std::cmp::Ordering::Equal => {
+                    d1.partial_cmp(d2).unwrap_or(std::cmp::Ordering::Equal)
+                }
+                other => other,
+            }
         })
-        .map(|(entity, _)| entity)
+        .map(|(entity, _, _)| entity)
 }
 
 /// 条件に合う魂を検索する (リクルート用)
@@ -234,20 +266,31 @@ pub fn assign_task_to_worker(
         Option<&crate::relationships::StoredItems>,
     )>,
     q_resources: &Query<&ResourceItem>,
+    q_target_blueprints: &Query<&TargetBlueprint>,
+    q_blueprints: &Query<&Blueprint>,
     task_area_opt: Option<&TaskArea>,
     haul_cache: &mut HaulReservationCache,
 ) {
     let Ok((_, _, soul, mut assigned_task, mut dest, mut path, idle, _, _)) =
         q_souls.get_mut(worker_entity)
     else {
+        warn!("ASSIGN: Worker {:?} not found in query", worker_entity);
         return;
     };
 
     if idle.behavior == IdleBehavior::ExhaustedGathering {
+        info!(
+            "ASSIGN: Worker {:?} is ExhaustedGathering, skipping",
+            worker_entity
+        );
         return;
     }
 
     if soul.fatigue >= fatigue_threshold {
+        info!(
+            "ASSIGN: Worker {:?} fatigue {:.2} >= threshold {:.2}, skipping",
+            worker_entity, soul.fatigue, fatigue_threshold
+        );
         return;
     }
 
@@ -260,20 +303,17 @@ pub fn assign_task_to_worker(
             return;
         };
 
-    // どのパスでも共通して実行する処理
-    // 魂にタスクと使い魔の関係を構築（Relationship自動管理）
-    commands.entity(worker_entity).insert((
-        UnderCommand(fam_entity),
-        crate::relationships::WorkingOn(task_entity),
-    ));
-
-    // タスク側にも発行者を設定（まだ設定されていない場合や、更新が必要な場合）
-    commands
-        .entity(task_entity)
-        .insert(crate::systems::jobs::IssuedBy(fam_entity));
-
     match work_type {
         WorkType::Chop | WorkType::Mine => {
+            // 割り当て確定時にのみ Relationship を更新
+            commands.entity(worker_entity).insert((
+                UnderCommand(fam_entity),
+                crate::relationships::WorkingOn(task_entity),
+            ));
+            commands
+                .entity(task_entity)
+                .insert(crate::systems::jobs::IssuedBy(fam_entity));
+
             *assigned_task = AssignedTask::Gather {
                 target: task_entity,
                 work_type,
@@ -285,6 +325,38 @@ pub fn assign_task_to_worker(
             info!("ASSIGN: Gather task assigned to {:?}", worker_entity);
         }
         WorkType::Haul => {
+            // TargetBlueprint が存在するかチェック
+            if let Ok(target_bp) = q_target_blueprints.get(task_entity) {
+                // 割り当て確定時にのみ Relationship を更新
+                commands.entity(worker_entity).insert((
+                    UnderCommand(fam_entity),
+                    crate::relationships::WorkingOn(task_entity),
+                ));
+                commands
+                    .entity(task_entity)
+                    .insert(crate::systems::jobs::IssuedBy(fam_entity));
+
+                *assigned_task = AssignedTask::HaulToBlueprint {
+                    item: task_entity,
+                    blueprint: target_bp.0,
+                    phase: HaulToBpPhase::GoingToItem,
+                };
+                dest.0 = task_pos;
+                path.waypoints = vec![task_pos];
+                path.current_index = 0;
+                info!(
+                    "ASSIGN: HaulToBlueprint task assigned to {:?} (item: {:?}, bp: {:?})",
+                    worker_entity, task_entity, target_bp.0
+                );
+                return;
+            } else {
+                info!(
+                    "ASSIGN: No TargetBlueprint found for task {:?}, using regular Haul search",
+                    task_entity
+                );
+            }
+
+            // 通常の Haul タスク（ストックパイルへ）
             let item_type = q_resources
                 .get(task_entity)
                 .map(|ri| ri.0)
@@ -319,6 +391,15 @@ pub fn assign_task_to_worker(
                 .map(|(e, _, _, _)| e);
 
             if let Some(stock_entity) = best_stockpile {
+                // 割り当て確定時にのみ Relationship を更新
+                commands.entity(worker_entity).insert((
+                    UnderCommand(fam_entity),
+                    crate::relationships::WorkingOn(task_entity),
+                ));
+                commands
+                    .entity(task_entity)
+                    .insert(crate::systems::jobs::IssuedBy(fam_entity));
+
                 *assigned_task = AssignedTask::Haul {
                     item: task_entity,
                     stockpile: stock_entity,
@@ -337,19 +418,35 @@ pub fn assign_task_to_worker(
                     "ASSIGN: No suitable stockpile found in area for item {:?}",
                     task_entity
                 );
-                // 魂の状態を戻す（WorkingOnを削除）
-                commands
-                    .entity(worker_entity)
-                    .remove::<crate::relationships::WorkingOn>();
                 return;
             }
         }
         WorkType::Build => {
+            // 資材が揃っているかチェック
+            if let Ok(bp) = q_blueprints.get(task_entity) {
+                if !bp.materials_complete() {
+                    // 資材が揃っていない場合は割り当てをスキップ
+                    info!(
+                        "ASSIGN: Skipping Build task {:?} - materials not complete",
+                        task_entity
+                    );
+                    return;
+                }
+            }
+
+            // 割り当て確定時にのみ Relationship を更新
+            commands.entity(worker_entity).insert((
+                UnderCommand(fam_entity),
+                crate::relationships::WorkingOn(task_entity),
+            ));
+            commands
+                .entity(task_entity)
+                .insert(crate::systems::jobs::IssuedBy(fam_entity));
+
             // 建築タスク
-            *assigned_task = AssignedTask::Gather {
-                target: task_entity,
-                work_type,
-                phase: GatherPhase::GoingToResource, // 建築でも最初はリソース（ブループリント）へ向かう
+            *assigned_task = AssignedTask::Build {
+                blueprint: task_entity,
+                phase: BuildPhase::GoingToBlueprint,
             };
             dest.0 = task_pos;
             path.waypoints = vec![task_pos];

@@ -30,6 +30,7 @@ impl Plugin for SoulAiPlugin {
                     execution::task_execution_system,
                     // 仕事管理
                     work::cleanup_commanded_souls_system,
+                    work::blueprint_auto_haul_system,
                     work::task_area_auto_haul_system,
                     // アイドル行動
                     idle::idle_behavior_system,
