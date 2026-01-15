@@ -12,7 +12,7 @@ use crate::systems::jobs::{
     Blueprint, Designation, DesignationCreatedEvent, IssuedBy, TaskSlots, WorkType,
 };
 use crate::systems::logistics::{ResourceItem, Stockpile};
-use crate::systems::soul_ai::execution::AssignedTask;
+use crate::systems::soul_ai::task_execution::AssignedTask;
 use crate::systems::spatial::ResourceSpatialGrid;
 use crate::world::map::WorldMap;
 use bevy::prelude::*;

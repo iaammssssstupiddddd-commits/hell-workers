@@ -4,7 +4,7 @@ use crate::constants::{FATIGUE_GATHERING_THRESHOLD, TILE_SIZE};
 use crate::entities::damned_soul::{DamnedSoul, IdleBehavior, IdleState, StressBreakdown};
 use crate::entities::familiar::{ActiveCommand, Familiar, FamiliarCommand, UnderCommand};
 use crate::events::{OnExhausted, OnStressBreakdown};
-use crate::systems::soul_ai::execution::AssignedTask;
+use crate::systems::soul_ai::task_execution::AssignedTask;
 use crate::systems::spatial::FamiliarSpatialGrid;
 use bevy::prelude::*;
 

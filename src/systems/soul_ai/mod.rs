@@ -4,8 +4,8 @@
 
 use bevy::prelude::*;
 
-pub mod execution;
 pub mod idle;
+pub mod task_execution; // タスク実行モジュール
 pub mod vitals;
 pub mod work;
 
@@ -15,7 +15,7 @@ pub struct SoulAiPlugin;
 
 impl Plugin for SoulAiPlugin {
     fn build(&self, app: &mut App) {
-        app.register_type::<execution::AssignedTask>()
+        app.register_type::<task_execution::AssignedTask>()
             .init_resource::<work::AutoHaulCounter>()
             .add_systems(
                 Update,
@@ -27,7 +27,7 @@ impl Plugin for SoulAiPlugin {
                     vitals::supervision_stress_system,
                     vitals::motivation_system,
                     // タスク実行
-                    execution::task_execution_system,
+                    task_execution::task_execution_system,
                     // 仕事管理
                     work::cleanup_commanded_souls_system,
                     work::blueprint_auto_haul_system,

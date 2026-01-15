@@ -68,6 +68,6 @@ flowchart TD
 ## 7. 関連ファイル
 
 - [jobs.rs](file:///f:/DevData/projects/hell-workers/src/systems/jobs.rs): `Blueprint`, `Building`, `WorkType::Build`
-- [execution.rs](file:///f:/DevData/projects/hell-workers/src/systems/soul_ai/execution.rs): `handle_build_task`
+- [build.rs](file:///f:/DevData/projects/hell-workers/src/systems/soul_ai/task_execution/build.rs): `handle_build_task`
 - [selection.rs](file:///f:/DevData/projects/hell-workers/src/interface/selection.rs): `blueprint_placement`
 - [helpers.rs](file:///f:/DevData/projects/hell-workers/src/systems/familiar_ai/helpers.rs): `assign_task_to_worker`

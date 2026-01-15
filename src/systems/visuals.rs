@@ -1,6 +1,6 @@
 use crate::constants::TILE_SIZE;
 use crate::entities::damned_soul::DamnedSoul;
-use crate::systems::soul_ai::execution::{AssignedTask, GatherPhase, HaulPhase};
+use crate::systems::soul_ai::task_execution::types::{AssignedTask, GatherPhase, HaulPhase};
 use bevy::prelude::*;
 
 #[derive(Component)]
@@ -121,8 +121,8 @@ pub fn task_link_system(
 
         if let Some(target) = target_entity {
             if let Ok(target_transform) = q_targets.get(target) {
-                let start: Vec2 = soul_transform.translation().xy();
-                let end: Vec2 = target_transform.translation().xy();
+                let start: Vec2 = soul_transform.translation().truncate();
+                let end: Vec2 = target_transform.translation().truncate();
 
                 // 線の色をタスクの種類で変える
                 let color = match task {

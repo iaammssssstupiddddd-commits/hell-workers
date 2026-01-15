@@ -6,8 +6,228 @@ use crate::interface::ui::components::*;
 use crate::relationships::Commanding;
 use crate::systems::familiar_ai::FamiliarAiState;
 use crate::systems::jobs::WorkType;
-use crate::systems::soul_ai::execution::AssignedTask;
+use crate::systems::soul_ai::task_execution::AssignedTask;
 use bevy::prelude::*;
+
+// ============================================================
+// UI定数
+// ============================================================
+
+mod ui_constants {
+    use super::*;
+
+    // サイズ定数
+    pub const HEADER_HEIGHT: f32 = 24.0;
+    pub const SOUL_ITEM_HEIGHT: f32 = 20.0;
+    pub const ICON_SIZE: f32 = 16.0;
+    pub const FOLD_ICON_SIZE: f32 = 12.0;
+    pub const FOLD_BUTTON_SIZE: f32 = 20.0;
+    pub const FAMILIAR_SECTION_MARGIN_TOP: f32 = 4.0;
+    pub const SQUAD_MEMBER_LEFT_MARGIN: f32 = 15.0;
+    pub const EMPTY_SQUAD_LEFT_MARGIN: f32 = 15.0;
+
+    // マージン定数
+    pub const MARGIN_SMALL: f32 = 2.0;
+    pub const MARGIN_MEDIUM: f32 = 4.0;
+    pub const MARGIN_LARGE: f32 = 6.0;
+    pub const TEXT_LEFT_PADDING: f32 = 4.0;
+
+    // フォントサイズ
+    pub const FONT_SIZE_HEADER: f32 = 14.0;
+    pub const FONT_SIZE_ITEM: f32 = 12.0;
+    pub const FONT_SIZE_SMALL: f32 = 10.0;
+
+    // 色定数
+    pub const COLOR_MALE: Color = Color::srgb(0.4, 0.7, 1.0);
+    pub const COLOR_FEMALE: Color = Color::srgb(1.0, 0.5, 0.7);
+    pub const COLOR_IDLE: Color = Color::srgb(0.6, 0.6, 0.6);
+    pub const COLOR_CHOP: Color = Color::srgb(0.6, 0.4, 0.2);
+    pub const COLOR_MINE: Color = Color::srgb(0.7, 0.7, 0.7);
+    pub const COLOR_GATHER_DEFAULT: Color = Color::srgb(1.0, 0.7, 0.3);
+    pub const COLOR_HAUL: Color = Color::srgb(0.5, 1.0, 0.5);
+    pub const COLOR_BUILD: Color = Color::srgb(0.8, 0.6, 0.2);
+    pub const COLOR_HAUL_TO_BP: Color = Color::srgb(0.8, 0.8, 0.3);
+    pub const COLOR_STRESS_HIGH: Color = Color::srgb(1.0, 0.0, 0.0);
+    pub const COLOR_STRESS_MEDIUM: Color = Color::srgb(1.0, 0.5, 0.0);
+    pub const COLOR_FATIGUE_ICON: Color = Color::srgb(0.6, 0.6, 1.0);
+    pub const COLOR_FATIGUE_TEXT: Color = Color::srgb(0.7, 0.7, 1.0);
+    pub const COLOR_STRESS_ICON: Color = Color::srgb(1.0, 0.9, 0.2);
+    pub const COLOR_HEADER_TEXT: Color = Color::srgb(0.8, 0.8, 1.0);
+    pub const COLOR_EMPTY_TEXT: Color = Color::srgb(0.5, 0.5, 0.5);
+    pub const COLOR_FOLD_BUTTON_BG: Color = Color::srgba(0.3, 0.3, 0.5, 0.6);
+    pub const COLOR_FAMILIAR_BUTTON_BG: Color = Color::srgba(0.2, 0.2, 0.4, 0.6);
+    pub const COLOR_SECTION_TOGGLE_PRESSED: Color = Color::srgba(0.5, 0.5, 0.5, 0.8);
+}
+
+use ui_constants::*;
+
+// ============================================================
+// ヘルパー関数
+// ============================================================
+
+/// 性別に応じたアイコンハンドルと色を取得
+fn get_gender_icon_and_color(
+    gender: Gender,
+    game_assets: &crate::assets::GameAssets,
+) -> (Handle<Image>, Color) {
+    match gender {
+        Gender::Male => (game_assets.icon_male.clone(), COLOR_MALE),
+        Gender::Female => (game_assets.icon_female.clone(), COLOR_FEMALE),
+    }
+}
+
+/// タスクに応じたアイコンハンドルと色を取得
+fn get_task_icon_and_color(
+    task: &AssignedTask,
+    game_assets: &crate::assets::GameAssets,
+) -> (Handle<Image>, Color) {
+    match task {
+        AssignedTask::None => (game_assets.icon_idle.clone(), COLOR_IDLE),
+        AssignedTask::Gather { work_type, .. } => match work_type {
+            WorkType::Chop => (game_assets.icon_axe.clone(), COLOR_CHOP),
+            WorkType::Mine => (game_assets.icon_pick.clone(), COLOR_MINE),
+            _ => (game_assets.icon_pick.clone(), COLOR_GATHER_DEFAULT),
+        },
+        AssignedTask::Haul { .. } => (game_assets.icon_haul.clone(), COLOR_HAUL),
+        AssignedTask::Build { .. } => (game_assets.icon_pick.clone(), COLOR_BUILD),
+        AssignedTask::HaulToBlueprint { .. } => {
+            (game_assets.icon_haul.clone(), COLOR_HAUL_TO_BP)
+        }
+    }
+}
+
+/// ストレス値に応じた色を取得
+fn get_stress_color(stress: f32) -> Color {
+    if stress > 0.8 {
+        COLOR_STRESS_HIGH
+    } else if stress > 0.5 {
+        COLOR_STRESS_MEDIUM
+    } else {
+        Color::WHITE
+    }
+}
+
+/// ソウルリストアイテムを構築
+/// 
+/// `parent`は`with_children`のクロージャ内で使用される`ChildBuilder`です
+macro_rules! build_soul_list_item {
+    ($parent:expr, $soul_entity:expr, $soul:expr, $task:expr, $identity:expr, $game_assets:expr, $left_margin:expr) => {{
+        let (gender_handle, gender_color) = get_gender_icon_and_color($identity.gender, $game_assets);
+        let (task_handle, task_color) = get_task_icon_and_color($task, $game_assets);
+        let stress_color = get_stress_color($soul.stress);
+
+        $parent.spawn((
+            Button,
+            Node {
+                width: Val::Percent(100.0),
+                height: Val::Px(SOUL_ITEM_HEIGHT),
+                align_items: AlignItems::Center,
+                margin: if $left_margin > 0.0 {
+                    UiRect::left(Val::Px($left_margin))
+                } else {
+                    UiRect::default()
+                },
+                ..default()
+            },
+            BackgroundColor(Color::NONE),
+            SoulListItem($soul_entity),
+        ))
+        .with_children(|item| {
+            // Gender Icon
+            item.spawn((
+                ImageNode {
+                    image: gender_handle,
+                    color: gender_color,
+                    ..default()
+                },
+                Node {
+                    width: Val::Px(ICON_SIZE),
+                    height: Val::Px(ICON_SIZE),
+                    margin: UiRect::right(Val::Px(MARGIN_MEDIUM)),
+                    ..default()
+                },
+            ));
+            // Name
+            item.spawn((
+                Text::new($identity.name.clone()),
+                TextFont {
+                    font_size: FONT_SIZE_ITEM,
+                    ..default()
+                },
+                TextColor(stress_color),
+                Node {
+                    margin: UiRect::right(Val::Px(MARGIN_LARGE)),
+                    ..default()
+                },
+            ));
+            // Fatigue icon & %
+            item.spawn((
+                ImageNode {
+                    image: $game_assets.icon_fatigue.clone(),
+                    color: COLOR_FATIGUE_ICON,
+                    ..default()
+                },
+                Node {
+                    width: Val::Px(ICON_SIZE),
+                    height: Val::Px(ICON_SIZE),
+                    margin: UiRect::right(Val::Px(MARGIN_SMALL)),
+                    ..default()
+                },
+            ));
+            item.spawn((
+                Text::new(format!("{:.0}%", $soul.fatigue * 100.0)),
+                TextFont {
+                    font_size: FONT_SIZE_SMALL,
+                    ..default()
+                },
+                TextColor(COLOR_FATIGUE_TEXT),
+                Node {
+                    margin: UiRect::right(Val::Px(MARGIN_LARGE)),
+                    ..default()
+                },
+            ));
+            // Stress icon & %
+            item.spawn((
+                ImageNode {
+                    image: $game_assets.icon_stress.clone(),
+                    color: COLOR_STRESS_ICON,
+                    ..default()
+                },
+                Node {
+                    width: Val::Px(ICON_SIZE),
+                    height: Val::Px(ICON_SIZE),
+                    margin: UiRect::right(Val::Px(MARGIN_SMALL)),
+                    ..default()
+                },
+            ));
+            item.spawn((
+                Text::new(format!("{:.0}%", $soul.stress * 100.0)),
+                TextFont {
+                    font_size: FONT_SIZE_SMALL,
+                    ..default()
+                },
+                TextColor(stress_color),
+                Node {
+                    margin: UiRect::right(Val::Px(MARGIN_LARGE)),
+                    ..default()
+                },
+            ));
+            // Task icon
+            item.spawn((
+                ImageNode {
+                    image: task_handle,
+                    color: task_color,
+                    ..default()
+                },
+                Node {
+                    width: Val::Px(ICON_SIZE),
+                    height: Val::Px(ICON_SIZE),
+                    ..default()
+                },
+            ));
+        });
+    }};
+}
 
 /// シンプルな実装: 定期的にUIをクリアして再構築する
 pub fn rebuild_entity_list_system(
@@ -83,7 +303,7 @@ pub fn rebuild_entity_list_system(
                 parent
                     .spawn((Node {
                         flex_direction: FlexDirection::Column,
-                        margin: UiRect::top(Val::Px(4.0)),
+                        margin: UiRect::top(Val::Px(FAMILIAR_SECTION_MARGIN_TOP)),
                         ..default()
                     },))
                     .with_children(|header_node| {
@@ -91,7 +311,7 @@ pub fn rebuild_entity_list_system(
                         header_node
                             .spawn(Node {
                                 width: Val::Percent(100.0),
-                                height: Val::Px(24.0),
+                                height: Val::Px(HEADER_HEIGHT),
                                 align_items: AlignItems::Center,
                                 flex_direction: FlexDirection::Row,
                                 ..default()
@@ -101,13 +321,13 @@ pub fn rebuild_entity_list_system(
                                 row.spawn((
                                     Button,
                                     Node {
-                                        width: Val::Px(20.0),
-                                        height: Val::Px(20.0),
+                                        width: Val::Px(FOLD_BUTTON_SIZE),
+                                        height: Val::Px(FOLD_BUTTON_SIZE),
                                         align_items: AlignItems::Center,
                                         justify_content: JustifyContent::Center,
                                         ..default()
                                     },
-                                    BackgroundColor(Color::srgba(0.3, 0.3, 0.5, 0.6)),
+                                    BackgroundColor(COLOR_FOLD_BUTTON_BG),
                                     SectionToggle(EntityListSectionType::Familiar(fam_entity)),
                                 ))
                                 .with_children(|icon_btn| {
@@ -117,8 +337,8 @@ pub fn rebuild_entity_list_system(
                                             ..default()
                                         },
                                         Node {
-                                            width: Val::Px(12.0),
-                                            height: Val::Px(12.0),
+                                            width: Val::Px(FOLD_ICON_SIZE),
+                                            height: Val::Px(FOLD_ICON_SIZE),
                                             ..default()
                                         },
                                     ));
@@ -129,12 +349,12 @@ pub fn rebuild_entity_list_system(
                                     Button,
                                     Node {
                                         flex_grow: 1.0,
-                                        height: Val::Px(24.0),
+                                        height: Val::Px(HEADER_HEIGHT),
                                         align_items: AlignItems::Center,
-                                        padding: UiRect::left(Val::Px(4.0)),
+                                        padding: UiRect::left(Val::Px(TEXT_LEFT_PADDING)),
                                         ..default()
                                     },
-                                    BackgroundColor(Color::srgba(0.2, 0.2, 0.4, 0.6)),
+                                    BackgroundColor(COLOR_FAMILIAR_BUTTON_BG),
                                     FamiliarListItem(fam_entity),
                                 ))
                                 .with_children(|name_btn| {
@@ -147,10 +367,10 @@ pub fn rebuild_entity_list_system(
                                             state_str
                                         )),
                                         TextFont {
-                                            font_size: 14.0,
+                                            font_size: FONT_SIZE_HEADER,
                                             ..default()
                                         },
-                                        TextColor(Color::srgb(0.8, 0.8, 1.0)),
+                                        TextColor(COLOR_HEADER_TEXT),
                                     ));
                                 });
                             });
@@ -162,12 +382,12 @@ pub fn rebuild_entity_list_system(
                                     header_node.spawn((
                                         Text::new("  (empty)"),
                                         TextFont {
-                                            font_size: 12.0,
+                                            font_size: FONT_SIZE_ITEM,
                                             ..default()
                                         },
-                                        TextColor(Color::srgb(0.5, 0.5, 0.5)),
+                                        TextColor(COLOR_EMPTY_TEXT),
                                         Node {
-                                            margin: UiRect::left(Val::Px(15.0)),
+                                            margin: UiRect::left(Val::Px(EMPTY_SQUAD_LEFT_MARGIN)),
                                             ..default()
                                         },
                                     ));
@@ -176,172 +396,15 @@ pub fn rebuild_entity_list_system(
                                         if let Ok((_, soul, task, identity, _)) =
                                             q_all_souls.get(soul_entity)
                                         {
-                                            let (gender_handle, gender_color) =
-                                                match identity.gender {
-                                                    Gender::Male => (
-                                                        game_assets.icon_male.clone(),
-                                                        Color::srgb(0.4, 0.7, 1.0),
-                                                    ),
-                                                    Gender::Female => (
-                                                        game_assets.icon_female.clone(),
-                                                        Color::srgb(1.0, 0.5, 0.7),
-                                                    ),
-                                                };
-                                            let (task_handle, task_color) = match task {
-                                                AssignedTask::None => (
-                                                    game_assets.icon_idle.clone(),
-                                                    Color::srgb(0.6, 0.6, 0.6),
-                                                ),
-                                                AssignedTask::Gather { work_type, .. } => {
-                                                    match work_type {
-                                                        WorkType::Chop => (
-                                                            game_assets.icon_axe.clone(),
-                                                            Color::srgb(0.6, 0.4, 0.2), // 茶色
-                                                        ),
-                                                        WorkType::Mine => (
-                                                            game_assets.icon_pick.clone(),
-                                                            Color::srgb(0.7, 0.7, 0.7), // 灰色
-                                                        ),
-                                                        _ => (
-                                                            game_assets.icon_pick.clone(),
-                                                            Color::srgb(1.0, 0.7, 0.3), // デフォルト
-                                                        ),
-                                                    }
-                                                }
-                                                AssignedTask::Haul { .. } => (
-                                                    game_assets.icon_haul.clone(),
-                                                    Color::srgb(0.5, 1.0, 0.5),
-                                                ),
-                                                AssignedTask::Build { .. } => (
-                                                    game_assets.icon_pick.clone(),
-                                                    Color::srgb(0.8, 0.6, 0.2),
-                                                ),
-                                                AssignedTask::HaulToBlueprint { .. } => (
-                                                    game_assets.icon_haul.clone(),
-                                                    Color::srgb(0.8, 0.8, 0.3),
-                                                ),
-                                            };
-                                            let stress_color = if soul.stress > 0.8 {
-                                                Color::srgb(1.0, 0.0, 0.0)
-                                            } else if soul.stress > 0.5 {
-                                                Color::srgb(1.0, 0.5, 0.0)
-                                            } else {
-                                                Color::WHITE
-                                            };
-
-                                            header_node
-                                                .spawn((
-                                                    Button,
-                                                    Node {
-                                                        width: Val::Percent(100.0),
-                                                        height: Val::Px(20.0),
-                                                        align_items: AlignItems::Center,
-                                                        margin: UiRect::left(Val::Px(15.0)),
-                                                        ..default()
-                                                    },
-                                                    BackgroundColor(Color::NONE),
-                                                    SoulListItem(soul_entity),
-                                                ))
-                                                .with_children(|item| {
-                                                    // Gender Icon
-                                                    item.spawn((
-                                                        ImageNode {
-                                                            image: gender_handle,
-                                                            color: gender_color,
-                                                            ..default()
-                                                        },
-                                                        Node {
-                                                            width: Val::Px(16.0),
-                                                            height: Val::Px(16.0),
-                                                            margin: UiRect::right(Val::Px(4.0)),
-                                                            ..default()
-                                                        },
-                                                    ));
-                                                    // Name
-                                                    item.spawn((
-                                                        Text::new(identity.name.clone()),
-                                                        TextFont {
-                                                            font_size: 12.0,
-                                                            ..default()
-                                                        },
-                                                        TextColor(stress_color),
-                                                        Node {
-                                                            margin: UiRect::right(Val::Px(6.0)),
-                                                            ..default()
-                                                        },
-                                                    ));
-                                                    // Fatigue icon & %
-                                                    item.spawn((
-                                                        ImageNode {
-                                                            image: game_assets.icon_fatigue.clone(),
-                                                            color: Color::srgb(0.6, 0.6, 1.0),
-                                                            ..default()
-                                                        },
-                                                        Node {
-                                                            width: Val::Px(16.0),
-                                                            height: Val::Px(16.0),
-                                                            margin: UiRect::right(Val::Px(2.0)),
-                                                            ..default()
-                                                        },
-                                                    ));
-                                                    item.spawn((
-                                                        Text::new(format!(
-                                                            "{:.0}%",
-                                                            soul.fatigue * 100.0
-                                                        )),
-                                                        TextFont {
-                                                            font_size: 10.0,
-                                                            ..default()
-                                                        },
-                                                        TextColor(Color::srgb(0.7, 0.7, 1.0)),
-                                                        Node {
-                                                            margin: UiRect::right(Val::Px(6.0)),
-                                                            ..default()
-                                                        },
-                                                    ));
-                                                    // Stress icon & %
-                                                    item.spawn((
-                                                        ImageNode {
-                                                            image: game_assets.icon_stress.clone(),
-                                                            color: Color::srgb(1.0, 0.9, 0.2),
-                                                            ..default()
-                                                        },
-                                                        Node {
-                                                            width: Val::Px(16.0),
-                                                            height: Val::Px(16.0),
-                                                            margin: UiRect::right(Val::Px(2.0)),
-                                                            ..default()
-                                                        },
-                                                    ));
-                                                    item.spawn((
-                                                        Text::new(format!(
-                                                            "{:.0}%",
-                                                            soul.stress * 100.0
-                                                        )),
-                                                        TextFont {
-                                                            font_size: 10.0,
-                                                            ..default()
-                                                        },
-                                                        TextColor(stress_color),
-                                                        Node {
-                                                            margin: UiRect::right(Val::Px(6.0)),
-                                                            ..default()
-                                                        },
-                                                    ));
-                                                    // Task icon
-                                                    item.spawn((
-                                                        ImageNode {
-                                                            image: task_handle,
-                                                            color: task_color,
-                                                            ..default()
-                                                        },
-                                                        Node {
-                                                            width: Val::Px(16.0),
-                                                            height: Val::Px(16.0),
-                                                            ..default()
-                                                        },
-                                                    ));
-                                                });
+                                            build_soul_list_item!(
+                                                header_node,
+                                                soul_entity,
+                                                soul,
+                                                task,
+                                                identity,
+                                                &game_assets,
+                                                SQUAD_MEMBER_LEFT_MARGIN
+                                            );
                                         }
                                     }
                                 }
@@ -358,156 +421,15 @@ pub fn rebuild_entity_list_system(
                 commands
                     .entity(unassigned_content_entity)
                     .with_children(|parent| {
-                        let (gender_handle, gender_color) = match identity.gender {
-                            Gender::Male => {
-                                (game_assets.icon_male.clone(), Color::srgb(0.4, 0.7, 1.0))
-                            }
-                            Gender::Female => {
-                                (game_assets.icon_female.clone(), Color::srgb(1.0, 0.5, 0.7))
-                            }
-                        };
-                        let (task_handle, task_color) = match task {
-                            AssignedTask::None => {
-                                (game_assets.icon_idle.clone(), Color::srgb(0.6, 0.6, 0.6))
-                            }
-                            AssignedTask::Gather { work_type, .. } => match work_type {
-                                WorkType::Chop => (
-                                    game_assets.icon_axe.clone(),
-                                    Color::srgb(0.6, 0.4, 0.2), // 茶色
-                                ),
-                                WorkType::Mine => (
-                                    game_assets.icon_pick.clone(),
-                                    Color::srgb(0.7, 0.7, 0.7), // 灰色
-                                ),
-                                _ => (
-                                    game_assets.icon_pick.clone(),
-                                    Color::srgb(1.0, 0.7, 0.3), // デフォルト
-                                ),
-                            },
-                            AssignedTask::Haul { .. } => {
-                                (game_assets.icon_haul.clone(), Color::srgb(0.5, 1.0, 0.5))
-                            }
-                            AssignedTask::Build { .. } => {
-                                (game_assets.icon_pick.clone(), Color::srgb(0.8, 0.6, 0.2))
-                            }
-                            AssignedTask::HaulToBlueprint { .. } => {
-                                (game_assets.icon_haul.clone(), Color::srgb(0.8, 0.8, 0.3))
-                            }
-                        };
-                        let stress_color = if soul.stress > 0.8 {
-                            Color::srgb(1.0, 0.0, 0.0)
-                        } else if soul.stress > 0.5 {
-                            Color::srgb(1.0, 0.5, 0.0)
-                        } else {
-                            Color::WHITE
-                        };
-
-                        parent
-                            .spawn((
-                                Button,
-                                Node {
-                                    width: Val::Percent(100.0),
-                                    height: Val::Px(20.0),
-                                    align_items: AlignItems::Center,
-                                    ..default()
-                                },
-                                BackgroundColor(Color::NONE),
-                                SoulListItem(soul_entity),
-                            ))
-                            .with_children(|item| {
-                                // Gender Icon
-                                item.spawn((
-                                    ImageNode {
-                                        image: gender_handle,
-                                        color: gender_color,
-                                        ..default()
-                                    },
-                                    Node {
-                                        width: Val::Px(16.0),
-                                        height: Val::Px(16.0),
-                                        margin: UiRect::right(Val::Px(4.0)),
-                                        ..default()
-                                    },
-                                ));
-                                // Name
-                                item.spawn((
-                                    Text::new(identity.name.clone()),
-                                    TextFont {
-                                        font_size: 12.0,
-                                        ..default()
-                                    },
-                                    TextColor(stress_color),
-                                    Node {
-                                        margin: UiRect::right(Val::Px(6.0)),
-                                        ..default()
-                                    },
-                                ));
-                                // Fatigue icon & %
-                                item.spawn((
-                                    ImageNode {
-                                        image: game_assets.icon_fatigue.clone(),
-                                        color: Color::srgb(0.6, 0.6, 1.0),
-                                        ..default()
-                                    },
-                                    Node {
-                                        width: Val::Px(16.0),
-                                        height: Val::Px(16.0),
-                                        margin: UiRect::right(Val::Px(2.0)),
-                                        ..default()
-                                    },
-                                ));
-                                item.spawn((
-                                    Text::new(format!("{:.0}%", soul.fatigue * 100.0)),
-                                    TextFont {
-                                        font_size: 10.0,
-                                        ..default()
-                                    },
-                                    TextColor(Color::srgb(0.7, 0.7, 1.0)),
-                                    Node {
-                                        margin: UiRect::right(Val::Px(6.0)),
-                                        ..default()
-                                    },
-                                ));
-                                // Stress icon & %
-                                item.spawn((
-                                    ImageNode {
-                                        image: game_assets.icon_stress.clone(),
-                                        color: Color::srgb(1.0, 0.9, 0.2),
-                                        ..default()
-                                    },
-                                    Node {
-                                        width: Val::Px(16.0),
-                                        height: Val::Px(16.0),
-                                        margin: UiRect::right(Val::Px(2.0)),
-                                        ..default()
-                                    },
-                                ));
-                                item.spawn((
-                                    Text::new(format!("{:.0}%", soul.stress * 100.0)),
-                                    TextFont {
-                                        font_size: 10.0,
-                                        ..default()
-                                    },
-                                    TextColor(stress_color),
-                                    Node {
-                                        margin: UiRect::right(Val::Px(6.0)),
-                                        ..default()
-                                    },
-                                ));
-                                // Task icon
-                                item.spawn((
-                                    ImageNode {
-                                        image: task_handle,
-                                        color: task_color,
-                                        ..default()
-                                    },
-                                    Node {
-                                        width: Val::Px(16.0),
-                                        height: Val::Px(16.0),
-                                        ..default()
-                                    },
-                                ));
-                            });
+                        build_soul_list_item!(
+                            parent,
+                            soul_entity,
+                            soul,
+                            task,
+                            identity,
+                            &game_assets,
+                            0.0 // 未所属はマージンなし
+                        );
                     });
             }
         }
@@ -541,7 +463,7 @@ pub fn entity_list_interaction_system(
     for (interaction, toggle, mut color) in interaction_query.iter_mut() {
         match *interaction {
             Interaction::Pressed => {
-                *color = BackgroundColor(Color::srgba(0.5, 0.5, 0.5, 0.8));
+                *color = BackgroundColor(COLOR_SECTION_TOGGLE_PRESSED);
                 match toggle.0 {
                     EntityListSectionType::Familiar(entity) => {
                         if fold_state.folded_familiars.contains(&entity) {

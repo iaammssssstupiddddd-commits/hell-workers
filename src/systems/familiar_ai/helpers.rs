@@ -10,7 +10,7 @@ use crate::systems::jobs::{
     Blueprint, Designation, IssuedBy, TargetBlueprint, TaskSlots, WorkType,
 };
 use crate::systems::logistics::{ResourceItem, ResourceType, Stockpile};
-use crate::systems::soul_ai::execution::{
+use crate::systems::soul_ai::task_execution::types::{
     AssignedTask, BuildPhase, GatherPhase, HaulPhase, HaulToBpPhase,
 };
 use crate::systems::spatial::{DesignationSpatialGrid, SpatialGrid};
