@@ -62,6 +62,7 @@ fn setup(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
     mut images: ResMut<Assets<Image>>,
+    mut layouts: ResMut<Assets<TextureAtlasLayout>>,
 ) {
     commands.spawn((Camera2d, MainCamera, NoIndirectDrawing));
 
@@ -73,7 +74,7 @@ fn setup(
         dirt: asset_server.load("textures/dirt.jpg"),
         stone: asset_server.load("textures/stone.jpg"),
         colonist: asset_server.load("textures/colonist.png"),
-        familiar: asset_server.load("textures/familiar.png"),
+        familiar: asset_server.load("textures/familiar_spritesheet.png"),
         wall: asset_server.load("textures/stone.jpg"),
         wood: asset_server.load("textures/dirt.jpg"),
         aura_circle,
@@ -88,6 +89,16 @@ fn setup(
         icon_haul: asset_server.load("textures/ui/haul.png"),
         icon_arrow_down: asset_server.load("textures/ui/arrow_down.png"),
         icon_arrow_right: asset_server.load("textures/ui/arrow_right.png"),
+        familiar_layout: {
+            let mut layout = TextureAtlasLayout::new_empty(UVec2::new(1024, 1024));
+            // フレーム1: 左上
+            layout.add_texture(URect::new(0, 0, 512, 512));
+            // フレーム2: 右上
+            layout.add_texture(URect::new(512, 0, 1024, 512));
+            // フレーム3: 下段中央
+            layout.add_texture(URect::new(256, 512, 768, 1024));
+            layouts.add(layout)
+        },
     };
     commands.insert_resource(game_assets);
 }
