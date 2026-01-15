@@ -9,10 +9,11 @@ use crate::systems::GameSystemSet;
 use crate::systems::command::TaskArea;
 use crate::systems::jobs::{IssuedBy, TaskSlots};
 use crate::systems::logistics::{ResourceItem, Stockpile};
+use crate::systems::soul_ai::execution::AssignedTask;
+use crate::systems::soul_ai::work::unassign_task;
 use crate::systems::spatial::{
     DesignationSpatialGrid, SpatialGrid, update_designation_spatial_grid_system,
 };
-use crate::systems::work::{AssignedTask, unassign_task};
 use bevy::prelude::*;
 
 pub mod following;

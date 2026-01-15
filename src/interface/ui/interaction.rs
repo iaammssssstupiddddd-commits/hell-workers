@@ -7,7 +7,8 @@ use crate::entities::familiar::{Familiar, FamiliarOperation};
 use crate::game_state::{BuildContext, PlayMode, TaskContext, ZoneContext};
 use crate::interface::ui::components::*;
 use crate::relationships::TaskWorkers;
-use crate::systems::work::AssignedTask;
+use crate::systems::soul_ai::execution::AssignedTask;
+use crate::systems::task_queue::TaskQueue;
 use bevy::prelude::*;
 
 // ============================================================
@@ -168,7 +169,7 @@ pub fn update_mode_text_system(
 }
 
 pub fn task_summary_ui_system(
-    task_queue: Res<crate::systems::work::TaskQueue>,
+    task_queue: Res<TaskQueue>,
     mut q_text: Query<&mut Text, With<TaskSummaryText>>,
 ) {
     if let Ok(mut text) = q_text.single_mut() {

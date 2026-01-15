@@ -6,7 +6,7 @@ use crate::interface::ui::components::*;
 use crate::relationships::Commanding;
 use crate::systems::familiar_ai::FamiliarAiState;
 use crate::systems::jobs::WorkType;
-use crate::systems::work::AssignedTask;
+use crate::systems::soul_ai::execution::AssignedTask;
 use bevy::prelude::*;
 
 /// シンプルな実装: 定期的にUIをクリアして再構築する

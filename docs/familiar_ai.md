@@ -19,15 +19,14 @@
 
 ### リクルート条件
 
-魂がリクルート対象となるための条件：
+魂がリクルート対象となるための条件（詳細は [soul_ai.md](soul_ai.md) 参照）：
 
 1. **未使役**: `CommandedBy` コンポーネントがないこと
 2. **タスクなし**: `AssignedTask::None` であること
-3. **疲労OK**: 疲労 < (使い魔の `fatigue_threshold` - 0.2)
-4. **ストレスOK**: `StressBreakdown` 状態でないこと
-5. **休息中でない**: `ExhaustedGathering` 状態でないこと
+3. **バイタル良好**: 疲労・ストレスが閾値以下であること
+4. **休息中でない**: `ExhaustedGathering` 状態でないこと
 
-> **Note**: リクルート閾値はリリース閾値より0.2低く設定されており、リクルート直後にリリースされることを防ぎます。
+> **Note**: リクルート閾値はリリース閾値より低下させて設定されており、リクルート直後にリリースされることを防ぎます。
 
 ### リクルート挙動
 
@@ -64,6 +63,8 @@
 - `FamiliarOperation`: 指揮下に入れる最大人数や、魂を解雇する疲労しきい値を保持。
 - `ActiveCommand`: プレイヤーからの直接命令（Idle / Gather / Task）。
 - `Commanding` (Relationship): 配下の魂への参照リスト。**オプショナル**（分隊が空のとき削除される）。
+- `AssignedTask`: 魂が現在実行中のタスク（採取・運搬・建築）を管理。`src/systems/soul_ai/execution.rs` で定義。
+- `IdleState`: 待機中の振る舞いを管理。`src/systems/soul_ai/idle.rs` で管理。
 
 ## 6. 分隊が空になったときの挙動
 

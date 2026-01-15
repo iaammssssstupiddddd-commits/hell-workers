@@ -6,7 +6,7 @@ use crate::entities::damned_soul::DamnedSoul;
 use crate::entities::familiar::Familiar;
 use crate::interface::ui::components::*;
 use crate::systems::jobs::Blueprint;
-use crate::systems::work::AssignedTask;
+use crate::systems::soul_ai::execution::AssignedTask;
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 

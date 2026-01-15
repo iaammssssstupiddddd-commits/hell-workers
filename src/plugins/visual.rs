@@ -7,9 +7,9 @@ use crate::systems::command::{
     area_selection_indicator_system, designation_visual_system, familiar_command_visual_system,
     task_area_indicator_system, update_designation_indicator_system,
 };
-use crate::systems::idle::idle_visual_system;
 use crate::systems::jobs::building_completion_system;
 use crate::systems::logistics::resource_count_display_system;
+use crate::systems::soul_ai::idle::idle_visual_system;
 use crate::systems::visuals::{
     progress_bar_system, soul_status_visual_system, sync_progress_bar_position_system,
     task_link_system, update_progress_bar_fill_system,

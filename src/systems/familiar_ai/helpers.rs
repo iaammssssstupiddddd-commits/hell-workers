@@ -8,8 +8,8 @@ use crate::relationships::ManagedTasks;
 use crate::systems::command::TaskArea;
 use crate::systems::jobs::{Designation, IssuedBy, TaskSlots, WorkType};
 use crate::systems::logistics::{ResourceItem, ResourceType, Stockpile};
+use crate::systems::soul_ai::execution::{AssignedTask, GatherPhase, HaulPhase};
 use crate::systems::spatial::{DesignationSpatialGrid, SpatialGrid};
-use crate::systems::task_execution::{AssignedTask, GatherPhase, HaulPhase};
 use bevy::prelude::*;
 
 /// 指定エリア内で未割り当てのタスク（Designation）を探す
