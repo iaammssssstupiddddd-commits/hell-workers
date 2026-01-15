@@ -15,11 +15,11 @@ use crate::interface::ui::{
 };
 use crate::systems::GameSystemSet;
 use crate::systems::logistics::{item_spawner_system, zone_placement};
-use crate::systems::motivation::familiar_hover_visualization_system;
+use crate::systems::soul_ai::vitals::familiar_hover_visualization_system;
+use crate::systems::soul_ai::work::task_area_auto_haul_system;
 use crate::systems::time::{
     game_time_system, time_control_keyboard_system, time_control_ui_system,
 };
-use crate::systems::work::task_area_auto_haul_system;
 use bevy::prelude::*;
 use bevy::time::common_conditions::on_timer;
 use std::time::Duration;

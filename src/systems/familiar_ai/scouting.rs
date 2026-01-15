@@ -3,7 +3,7 @@ use crate::constants::TILE_SIZE;
 use crate::entities::damned_soul::{DamnedSoul, Destination, IdleState, Path, StressBreakdown};
 use crate::entities::familiar::UnderCommand;
 use crate::events::OnSoulRecruited;
-use crate::systems::work::AssignedTask;
+use crate::systems::soul_ai::execution::AssignedTask;
 use bevy::prelude::*;
 
 /// スカウト（Scouting）状態のロジック

@@ -5,7 +5,8 @@ use crate::events::{
     OnExhausted, OnSoulRecruited, OnStressBreakdown, OnTaskAssigned, OnTaskCompleted,
 };
 use crate::relationships::Holding;
-use crate::systems::work::{AssignedTask, unassign_task};
+use crate::systems::soul_ai::execution::AssignedTask;
+use crate::systems::soul_ai::work::unassign_task;
 use crate::world::map::WorldMap;
 use crate::world::pathfinding::find_path;
 use rand::Rng;
@@ -272,7 +273,7 @@ fn on_stress_breakdown(
             .insert(StressBreakdown { is_frozen: true });
 
         if !matches!(*task, AssignedTask::None) {
-            crate::systems::work::unassign_task(
+            unassign_task(
                 &mut commands,
                 entity,
                 transform.translation.truncate(),

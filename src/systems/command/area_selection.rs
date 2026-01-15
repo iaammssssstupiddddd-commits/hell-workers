@@ -6,7 +6,7 @@ use crate::interface::camera::MainCamera;
 use crate::interface::selection::SelectedEntity;
 use crate::systems::jobs::{Designation, DesignationCreatedEvent, IssuedBy, Rock, Tree, WorkType};
 use crate::systems::logistics::ResourceItem;
-use crate::systems::work::GlobalTaskQueue;
+use crate::systems::task_queue::{GlobalTaskQueue, PendingTask, TaskQueue};
 use bevy::prelude::*;
 
 pub fn task_area_selection_system(
@@ -29,7 +29,7 @@ pub fn task_area_selection_system(
     keyboard: Res<ButtonInput<KeyCode>>,
     q_unassigned: Query<(Entity, &Transform, &Designation), Without<IssuedBy>>,
     mut global_queue: ResMut<GlobalTaskQueue>,
-    mut queue: ResMut<crate::systems::work::TaskQueue>,
+    mut queue: ResMut<TaskQueue>,
     q_selection_indicator: Query<Entity, With<AreaSelectionIndicator>>,
 ) {
     if q_ui.iter().any(|i| *i != Interaction::None) {
@@ -120,7 +120,7 @@ pub fn task_area_selection_system(
                                         global_queue.remove(task_entity);
                                         queue.add(
                                             fam_entity,
-                                            crate::systems::work::PendingTask {
+                                            PendingTask {
                                                 entity: task_entity,
                                                 work_type: designation.work_type,
                                                 priority: 0,

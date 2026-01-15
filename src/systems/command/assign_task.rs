@@ -4,7 +4,7 @@ use crate::game_state::TaskContext;
 use crate::interface::camera::MainCamera;
 use crate::interface::selection::SelectedEntity;
 use crate::systems::jobs::{Designation, IssuedBy};
-use crate::systems::work::GlobalTaskQueue;
+use crate::systems::task_queue::{GlobalTaskQueue, PendingTask, TaskQueue};
 use bevy::prelude::*;
 
 pub fn assign_task_system(
@@ -15,7 +15,7 @@ pub fn assign_task_system(
     selected: Res<SelectedEntity>,
     mut task_context: ResMut<TaskContext>,
     mut global_queue: ResMut<GlobalTaskQueue>,
-    mut queue: ResMut<crate::systems::work::TaskQueue>,
+    mut queue: ResMut<TaskQueue>,
     mut commands: Commands,
     q_designations: Query<(Entity, &Transform, &Designation), Without<IssuedBy>>,
     q_familiars: Query<Entity, With<Familiar>>,
@@ -86,7 +86,7 @@ pub fn assign_task_system(
             global_queue.remove(entity);
             queue.add(
                 fam_entity,
-                crate::systems::work::PendingTask {
+                PendingTask {
                     entity,
                     work_type: designation.work_type,
                     priority: 0,

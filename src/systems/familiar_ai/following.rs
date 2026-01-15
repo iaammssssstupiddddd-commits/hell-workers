@@ -1,6 +1,6 @@
 use crate::entities::damned_soul::{DamnedSoul, Destination, IdleBehavior, IdleState, Path};
 use crate::entities::familiar::{Familiar, UnderCommand};
-use crate::systems::work::AssignedTask;
+use crate::systems::soul_ai::execution::AssignedTask;
 use bevy::prelude::*;
 
 /// 部下が使い魔を追尾するシステム
