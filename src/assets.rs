@@ -22,4 +22,5 @@ pub struct GameAssets {
     pub icon_haul: Handle<Image>,
     pub icon_arrow_down: Handle<Image>,
     pub icon_arrow_right: Handle<Image>,
+    pub familiar_layout: Handle<TextureAtlasLayout>,
 }

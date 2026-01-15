@@ -1,5 +1,6 @@
 //! ビジュアル関連のプラグイン
 
+use crate::entities::familiar::{familiar_animation_system, update_familiar_range_indicator};
 use crate::game_state::PlayMode;
 use crate::systems::GameSystemSet;
 use crate::systems::command::{
@@ -35,6 +36,8 @@ impl Plugin for VisualPlugin {
                 familiar_command_visual_system,
                 resource_count_display_system,
                 idle_visual_system,
+                familiar_animation_system,
+                update_familiar_range_indicator,
             )
                 .chain()
                 .in_set(GameSystemSet::Visual),
