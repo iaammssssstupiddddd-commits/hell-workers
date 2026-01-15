@@ -1,6 +1,6 @@
 use super::FamiliarAiState;
 use crate::entities::damned_soul::{DamnedSoul, Destination, IdleState, Path};
-use crate::systems::soul_ai::execution::AssignedTask;
+use crate::systems::soul_ai::task_execution::AssignedTask;
 use bevy::prelude::*;
 
 use crate::constants::TILE_SIZE;

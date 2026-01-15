@@ -64,6 +64,6 @@ Bevy 0.17 の ECS Relationships を使用して、状態を管理しています
 
 これらは `SoulAiPlugin` によって管理されています。
 - `src/systems/soul_ai/vitals.rs`: バイタル更新、監視ストレス、やる気。
-- `src/systems/soul_ai/execution.rs`: タスク実行 (`task_execution_system`)。
+- `src/systems/soul_ai/task_execution/`: タスク実行モジュール (`task_execution_system`)。`mod.rs`にメインシステム、各タスクハンドラーは個別ファイルに分割。
 - `src/systems/soul_ai/idle.rs`: 待機行動ロジック、ビジュアル更新。
 - `src/systems/soul_ai/work.rs`: タスク委任、解除、オートホール。
