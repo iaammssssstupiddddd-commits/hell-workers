@@ -135,10 +135,11 @@ pub fn blueprint_placement(
 
                         let entity = commands
                             .spawn((
-                                Blueprint {
-                                    kind: building_type,
-                                    progress: 0.0,
+                                Blueprint::new(building_type),
+                                crate::systems::jobs::Designation {
+                                    work_type: crate::systems::jobs::WorkType::Build,
                                 },
+                                crate::systems::jobs::TaskSlots::new(1), // 建築は1人ずつ
                                 Sprite {
                                     image: texture,
                                     color: Color::srgba(1.0, 1.0, 1.0, 0.5),
@@ -146,6 +147,7 @@ pub fn blueprint_placement(
                                     ..default()
                                 },
                                 Transform::from_xyz(pos.x, pos.y, 0.1),
+                                Name::new(format!("Blueprint ({:?})", building_type)),
                             ))
                             .id();
 
