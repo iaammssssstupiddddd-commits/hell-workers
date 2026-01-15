@@ -6,6 +6,7 @@ pub struct GameAssets {
     pub dirt: Handle<Image>,
     pub stone: Handle<Image>,
     pub colonist: Handle<Image>,
+    pub familiar: Handle<Image>,
     pub wall: Handle<Image>,
     pub wood: Handle<Image>,
     pub aura_circle: Handle<Image>, // 円形オーラテクスチャ

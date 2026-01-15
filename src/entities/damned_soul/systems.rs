@@ -59,8 +59,8 @@ pub fn spawn_damned_soul_at(
     let gender = identity.gender;
 
     let sprite_color = match gender {
-        Gender::Male => Color::srgb(0.4, 0.6, 0.9),
-        Gender::Female => Color::srgb(0.9, 0.5, 0.7),
+        Gender::Male => Color::srgb(0.9, 0.9, 1.0), // わずかに青み
+        Gender::Female => Color::srgb(1.0, 0.9, 0.9), // わずかに赤み
     };
 
     commands
