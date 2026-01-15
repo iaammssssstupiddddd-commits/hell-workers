@@ -5,7 +5,7 @@
 use crate::constants::TILE_SIZE;
 use crate::entities::familiar::Familiar;
 use crate::systems::logistics::ResourceItem;
-use crate::systems::work::AssignedTask;
+use crate::systems::soul_ai::execution::AssignedTask;
 use bevy::prelude::*;
 use std::collections::HashMap;
 
@@ -23,15 +23,6 @@ pub struct SpatialGrid {
 }
 
 impl SpatialGrid {
-    #[allow(dead_code)]
-    pub fn new(cell_size: f32) -> Self {
-        Self {
-            cells: HashMap::new(),
-            cell_size,
-            entity_cells: HashMap::new(),
-        }
-    }
-
     fn pos_to_cell(&self, pos: Vec2) -> (i32, i32) {
         let cell_size = if self.cell_size > 0.0 {
             self.cell_size
@@ -42,12 +33,6 @@ impl SpatialGrid {
             (pos.x / cell_size).floor() as i32,
             (pos.y / cell_size).floor() as i32,
         )
-    }
-
-    #[allow(dead_code)]
-    pub fn clear(&mut self) {
-        self.cells.clear();
-        self.entity_cells.clear();
     }
 
     pub fn insert(&mut self, entity: Entity, pos: Vec2) {
@@ -77,22 +62,7 @@ impl SpatialGrid {
         }
     }
 
-    /// 指定位置周辺の9セルにいるエンティティを返す
-    pub fn get_nearby(&self, pos: Vec2) -> Vec<Entity> {
-        let (cx, cy) = self.pos_to_cell(pos);
-        let mut result = Vec::new();
-        for dx in -1..=1 {
-            for dy in -1..=1 {
-                if let Some(entities) = self.cells.get(&(cx + dx, cy + dy)) {
-                    result.extend(entities.iter().copied());
-                }
-            }
-        }
-        result
-    }
-
     /// 指定位置周辺のセルにいるエンティティを返す（検索半径を考慮）
-    #[allow(dead_code)]
     pub fn get_nearby_in_radius(&self, pos: Vec2, radius: f32) -> Vec<Entity> {
         let (cx, cy) = self.pos_to_cell(pos);
         let cell_size = if self.cell_size > 0.0 {
@@ -148,12 +118,6 @@ impl FamiliarSpatialGrid {
         )
     }
 
-    #[allow(dead_code)]
-    pub fn clear(&mut self) {
-        self.cells.clear();
-        self.entity_cells.clear();
-    }
-
     pub fn insert(&mut self, entity: Entity, pos: Vec2) {
         let cell = self.pos_to_cell(pos);
 
@@ -171,15 +135,6 @@ impl FamiliarSpatialGrid {
 
         self.cells.entry(cell).or_default().push(entity);
         self.entity_cells.insert(entity, cell);
-    }
-
-    #[allow(dead_code)]
-    pub fn remove(&mut self, entity: Entity) {
-        if let Some(old_cell) = self.entity_cells.remove(&entity) {
-            if let Some(entities) = self.cells.get_mut(&old_cell) {
-                entities.retain(|&e| e != entity);
-            }
-        }
     }
 
     /// 指定位置周辺のセルにいるエンティティを返す（検索半径を考慮）
@@ -235,12 +190,6 @@ impl ResourceSpatialGrid {
             (pos.x / cell_size).floor() as i32,
             (pos.y / cell_size).floor() as i32,
         )
-    }
-
-    #[allow(dead_code)]
-    pub fn clear(&mut self) {
-        self.cells.clear();
-        self.entity_cells.clear();
     }
 
     pub fn insert(&mut self, entity: Entity, pos: Vec2) {
