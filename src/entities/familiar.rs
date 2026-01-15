@@ -106,6 +106,16 @@ pub struct ActiveCommand {
     pub command: FamiliarCommand,
 }
 
+/// 使い魔のアニメーション状態
+#[derive(Component, Reflect, Default)]
+#[reflect(Component)]
+pub struct FamiliarAnimation {
+    pub timer: f32,
+    pub frame: usize,
+    pub is_moving: bool,
+    pub facing_right: bool,
+}
+
 /// 使い魔の運用設定（閾値など）
 #[derive(Component, Debug, Clone, Copy)]
 pub struct FamiliarOperation {
@@ -194,8 +204,13 @@ pub fn spawn_familiar_at(
             crate::relationships::ManagedTasks::default(), // 管理タスクリスト（Relationship自動管理）
             Destination(actual_pos),                       // 移動先
             Path::default(),                               // 経路
+            FamiliarAnimation::default(),                  // アニメーション
             Sprite {
                 image: game_assets.familiar.clone(),
+                texture_atlas: Some(TextureAtlas {
+                    layout: game_assets.familiar_layout.clone(),
+                    index: 0,
+                }),
                 custom_size: Some(Vec2::splat(TILE_SIZE * 0.9)),
                 color: Color::WHITE,
                 ..default()
@@ -321,9 +336,9 @@ pub fn update_familiar_range_indicator(
 /// 使い魔の移動システム
 pub fn familiar_movement(
     time: Res<Time>,
-    mut query: Query<(&mut Transform, &mut Path), With<Familiar>>,
+    mut query: Query<(&mut Transform, &mut Path, &mut FamiliarAnimation), With<Familiar>>,
 ) {
-    for (mut transform, mut path) in query.iter_mut() {
+    for (mut transform, mut path, mut anim) in query.iter_mut() {
         if path.current_index < path.waypoints.len() {
             let target = path.waypoints[path.current_index];
             let current_pos = transform.translation.truncate();
@@ -336,9 +351,41 @@ pub fn familiar_movement(
                 let direction = to_target.normalize();
                 let velocity = direction * move_dist;
                 transform.translation += velocity.extend(0.0);
+
+                anim.is_moving = true;
+                if direction.x.abs() > 0.1 {
+                    anim.facing_right = direction.x > 0.0;
+                }
             } else {
                 path.current_index += 1;
             }
+        } else {
+            anim.is_moving = false;
+        }
+    }
+}
+
+/// 使い魔のアニメーション更新システム
+pub fn familiar_animation_system(
+    time: Res<Time>,
+    mut query: Query<(&mut Sprite, &mut FamiliarAnimation), With<Familiar>>,
+) {
+    for (mut sprite, mut anim) in query.iter_mut() {
+        // 向きの更新
+        // アセットがデフォルトで左向きのため、右を向くときに flip_x を true にする
+        sprite.flip_x = anim.facing_right;
+
+        // アニメーションフレームの更新
+        if anim.is_moving {
+            anim.timer += time.delta_secs() * 5.0; // 5 FPS 程度 (以前は 10.0)
+            anim.frame = (anim.timer as usize) % 3; // 3フレームのループ
+        } else {
+            anim.timer = 0.0;
+            anim.frame = 0; // 停止時は最初のフレーム
+        }
+
+        if let Some(atlas) = &mut sprite.texture_atlas {
+            atlas.index = anim.frame;
         }
     }
 }
