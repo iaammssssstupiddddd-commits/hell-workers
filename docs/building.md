@@ -67,7 +67,7 @@ flowchart TD
 
 ## 7. ビジュアルフィードバック (Visual Feedback)
 
-`building_visual.rs` モジュールによって、設計図の状態をプレイヤーに視覚的に伝えます。
+`visual/blueprint/` モジュールによって、設計図の状態をプレイヤーに視覚的に伝えます。
 
 このモジュールは、汎用的なビジュアルユーティリティ（`systems/utils/`）を使用して実装されています：
 - **`utils/progress_bar.rs`**: プログレスバーの生成・更新・位置同期
@@ -118,7 +118,12 @@ flowchart TD
 ## 8. 関連ファイル
 
 - [jobs.rs](file:///f:/DevData/projects/hell-workers/src/systems/jobs.rs): `Blueprint`, `Building`, 建設完了ロジック
-- [building_visual.rs](file:///f:/DevData/projects/hell-workers/src/systems/building_visual.rs): ビジュアルフィードバック（全システム）
+- [visual/blueprint/mod.rs](file:///f:/DevData/projects/hell-workers/src/systems/visual/blueprint/mod.rs): ビジュアルフィードバック（統括モジュール）
+- [visual/blueprint/components.rs](file:///f:/DevData/projects/hell-workers/src/systems/visual/blueprint/components.rs): コンポーネント定義
+- [visual/blueprint/progress_bar.rs](file:///f:/DevData/projects/hell-workers/src/systems/visual/blueprint/progress_bar.rs): プログレスバー
+- [visual/blueprint/material_display.rs](file:///f:/DevData/projects/hell-workers/src/systems/visual/blueprint/material_display.rs): 資材表示
+- [visual/blueprint/effects.rs](file:///f:/DevData/projects/hell-workers/src/systems/visual/blueprint/effects.rs): エフェクト
+- [visual/blueprint/worker_indicator.rs](file:///f:/DevData/projects/hell-workers/src/systems/visual/blueprint/worker_indicator.rs): ワーカーインジケータ
 - [utils/progress_bar.rs](file:///f:/DevData/projects/hell-workers/src/systems/utils/progress_bar.rs): 汎用プログレスバー実装
 - [utils/animations.rs](file:///f:/DevData/projects/hell-workers/src/systems/utils/animations.rs): パルス・バウンスアニメーション実装
 - [utils/floating_text.rs](file:///f:/DevData/projects/hell-workers/src/systems/utils/floating_text.rs): フローティングテキスト実装

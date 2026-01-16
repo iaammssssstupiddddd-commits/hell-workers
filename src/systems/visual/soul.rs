@@ -1,3 +1,7 @@
+//! ソウル用ビジュアルシステム
+//!
+//! DamnedSoul（亡者）のプログレスバー、ステータスアイコン、タスクリンク表示
+
 use crate::constants::TILE_SIZE;
 use crate::entities::damned_soul::DamnedSoul;
 use crate::systems::soul_ai::task_execution::types::{AssignedTask, GatherPhase, HaulPhase};

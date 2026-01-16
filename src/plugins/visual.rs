@@ -3,7 +3,14 @@
 use crate::entities::familiar::{familiar_animation_system, update_familiar_range_indicator};
 use crate::game_state::PlayMode;
 use crate::systems::GameSystemSet;
-use crate::systems::building_visual::{
+use crate::systems::command::{
+    area_selection_indicator_system, designation_visual_system, familiar_command_visual_system,
+    task_area_indicator_system, update_designation_indicator_system,
+};
+use crate::systems::jobs::building_completion_system;
+use crate::systems::logistics::resource_count_display_system;
+use crate::systems::soul_ai::idle::idle_visual_system;
+use crate::systems::visual::blueprint::{
     attach_blueprint_visual_system, blueprint_pulse_animation_system,
     blueprint_scale_animation_system, building_bounce_animation_system,
     cleanup_material_display_system, cleanup_progress_bars_system, material_delivery_vfx_system,
@@ -14,14 +21,7 @@ use crate::systems::building_visual::{
     update_progress_bar_fill_system as bp_update_progress_bar_fill_system,
     update_worker_indicators_system,
 };
-use crate::systems::command::{
-    area_selection_indicator_system, designation_visual_system, familiar_command_visual_system,
-    task_area_indicator_system, update_designation_indicator_system,
-};
-use crate::systems::jobs::building_completion_system;
-use crate::systems::logistics::resource_count_display_system;
-use crate::systems::soul_ai::idle::idle_visual_system;
-use crate::systems::visuals::{
+use crate::systems::visual::soul::{
     progress_bar_system, soul_status_visual_system, sync_progress_bar_position_system,
     task_link_system, update_progress_bar_fill_system,
 };

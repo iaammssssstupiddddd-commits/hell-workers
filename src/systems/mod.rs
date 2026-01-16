@@ -1,4 +1,3 @@
-pub mod building_visual;
 pub mod command;
 pub mod familiar_ai;
 pub mod jobs;
@@ -8,7 +7,7 @@ pub mod spatial;
 pub mod task_queue;
 pub mod time;
 pub mod utils;
-pub mod visuals;
+pub mod visual;
 
 use bevy::prelude::*;
 
