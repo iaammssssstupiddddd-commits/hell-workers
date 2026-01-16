@@ -23,4 +23,8 @@ pub struct GameAssets {
     pub icon_arrow_down: Handle<Image>,
     pub icon_arrow_right: Handle<Image>,
     pub familiar_layout: Handle<TextureAtlasLayout>,
+    // Building Visual Icons
+    pub icon_hammer: Handle<Image>,
+    pub icon_wood_small: Handle<Image>,
+    pub icon_stone_small: Handle<Image>,
 }

@@ -99,6 +99,10 @@ fn setup(
             layout.add_texture(URect::new(256, 512, 768, 1024));
             layouts.add(layout)
         },
+        // Building Visual Icons
+        icon_hammer: asset_server.load("textures/ui/hammer.png"),
+        icon_wood_small: asset_server.load("textures/ui/wood_small.png"),
+        icon_stone_small: asset_server.load("textures/ui/stone_small.png"),
     };
     commands.insert_resource(game_assets);
 }

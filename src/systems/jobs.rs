@@ -158,6 +158,41 @@ pub fn building_completion_system(
                 },
                 *transform,
                 Name::new(format!("Building ({:?})", bp.kind)),
+                // Phase 5: バウンス効果
+                crate::systems::building_visual::BuildingBounceEffect {
+                    bounce_animation: crate::systems::utils::animations::BounceAnimation {
+                        timer: 0.0,
+                        config: crate::systems::utils::animations::BounceAnimationConfig {
+                            duration: crate::systems::building_visual::BOUNCE_DURATION,
+                            min_scale: 1.0,
+                            max_scale: 1.2,
+                        },
+                    },
+                },
+            ));
+
+            // Phase 5: フローティングテキスト
+            let completion_config = crate::systems::utils::floating_text::FloatingTextConfig {
+                lifetime: crate::systems::building_visual::COMPLETION_TEXT_LIFETIME,
+                velocity: Vec2::new(0.0, 15.0),
+                initial_color: Color::srgb(0.2, 1.0, 0.4),
+                fade_out: true,
+            };
+            let completion_entity = crate::systems::utils::floating_text::spawn_floating_text(
+                &mut commands,
+                "Construction Complete!",
+                transform.translation + Vec3::new(0.0, 20.0, 2.0),
+                completion_config.clone(),
+                Some(16.0),
+            );
+            commands.entity(completion_entity).insert((
+                crate::systems::building_visual::CompletionText {
+                    floating_text: crate::systems::utils::floating_text::FloatingText {
+                        lifetime: completion_config.lifetime,
+                        config: completion_config,
+                    },
+                },
+                TextLayout::new_with_justify(Justify::Center),
             ));
         }
     }

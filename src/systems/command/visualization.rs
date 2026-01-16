@@ -14,7 +14,7 @@ pub fn designation_visual_system(
             WorkType::Chop => Color::srgb(0.0, 1.0, 0.0),
             WorkType::Mine => Color::srgb(1.0, 0.0, 0.0),
             WorkType::Haul => Color::srgb(0.0, 0.0, 1.0),
-            _ => Color::WHITE,
+            WorkType::Build => Color::srgb(0.0, 0.5, 1.0),
         };
 
         commands.spawn((
