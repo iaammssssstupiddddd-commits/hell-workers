@@ -46,6 +46,23 @@ pub fn find_unassigned_task_in_area(
                 ents.push(managed_entity);
             }
         }
+        
+        // 資材が揃った建築タスク（Blueprint）を直接検索して追加
+        // DesignationSpatialGridの更新タイミングの問題を回避するため
+        for (bp_entity, bp_transform, bp_designation, bp_issued_by, _, _) in q_designations.iter() {
+            if bp_designation.work_type == WorkType::Build {
+                let bp_pos = bp_transform.translation.truncate();
+                if area.contains(bp_pos) && bp_issued_by.is_none() {
+                    // 資材が揃っているかチェック
+                    if let Ok(bp) = q_blueprints.get(bp_entity) {
+                        if bp.materials_complete() && !ents.contains(&bp_entity) {
+                            ents.push(bp_entity);
+                        }
+                    }
+                }
+            }
+        }
+        
         ents
     } else {
         // エリア指定がない場合、自分が管理しているタスクのみが対象

@@ -231,6 +231,142 @@ pub fn task_area_auto_haul_system(
     }
 }
 
+/// 資材が揃った建築タスクの自動割り当てシステム
+pub fn blueprint_auto_build_system(
+    mut commands: Commands,
+    q_familiars: Query<(Entity, &ActiveCommand, &TaskArea)>,
+    q_blueprints: Query<(Entity, &Transform, &Blueprint, Option<&TaskWorkers>)>,
+    q_designations: Query<(
+        Entity,
+        &Transform,
+        &Designation,
+        Option<&IssuedBy>,
+        Option<&TaskSlots>,
+        Option<&TaskWorkers>,
+    )>,
+    mut q_souls: Query<
+        (
+            Entity,
+            &Transform,
+            &crate::entities::damned_soul::DamnedSoul,
+            &mut AssignedTask,
+            &mut crate::entities::damned_soul::Destination,
+            &mut Path,
+            &crate::entities::damned_soul::IdleState,
+            Option<&crate::relationships::Holding>,
+            Option<&UnderCommand>,
+        ),
+        Without<Familiar>,
+    >,
+    q_breakdown: Query<&crate::entities::damned_soul::StressBreakdown>,
+) {
+    for (fam_entity, _active_command, task_area) in q_familiars.iter() {
+        // エリア内の Blueprint を探す
+        for (bp_entity, bp_transform, blueprint, workers_opt) in q_blueprints.iter() {
+            let bp_pos = bp_transform.translation.truncate();
+            if !task_area.contains(bp_pos) {
+                continue;
+            }
+
+            // 既に作業員が割り当てられている場合はスキップ（建築中）
+            if workers_opt.map(|w| w.len()).unwrap_or(0) > 0 {
+                continue;
+            }
+
+            // 資材が揃っていて、まだIssuedByが付与されていない場合のみ処理
+            if !blueprint.materials_complete() {
+                continue;
+            }
+
+            // Designationが存在し、IssuedByが付与されていないか確認
+            if let Ok((_, _, designation, issued_by_opt, _, _)) = q_designations.get(bp_entity) {
+                if designation.work_type != WorkType::Build {
+                    continue;
+                }
+
+                // 既に割り当てられている場合はスキップ
+                if issued_by_opt.is_some() {
+                    continue;
+                }
+
+                // 使い魔の部下から待機中の魂を探す
+                let fatigue_threshold = 0.8; // デフォルトの疲労閾値
+
+                // 近くの待機中の魂を探す
+                let mut best_worker = None;
+                let mut min_dist_sq = f32::MAX;
+
+                for (soul_entity, soul_transform, soul, task, _, _, idle, _, uc_opt) in q_souls.iter() {
+                    // この使い魔の部下か確認
+                    if let Some(uc) = uc_opt {
+                        if uc.0 != fam_entity {
+                            continue;
+                        }
+                    } else {
+                        continue;
+                    }
+
+                    // 待機中で、疲労が閾値以下で、ストレス崩壊していないか確認
+                    if !matches!(*task, AssignedTask::None) {
+                        continue;
+                    }
+                    if idle.behavior == crate::entities::damned_soul::IdleBehavior::ExhaustedGathering {
+                        continue;
+                    }
+                    if soul.fatigue >= fatigue_threshold {
+                        continue;
+                    }
+                    if q_breakdown.get(soul_entity).is_ok() {
+                        continue;
+                    }
+
+                    // 最も近い魂を選択
+                    let dist_sq = soul_transform.translation.truncate().distance_squared(bp_pos);
+                    if dist_sq < min_dist_sq {
+                        min_dist_sq = dist_sq;
+                        best_worker = Some(soul_entity);
+                    }
+                }
+
+                // 見つかった魂に建築タスクを割り当て
+                if let Some(worker_entity) = best_worker {
+                    if let Ok((_, _, soul, mut assigned_task, mut dest, mut path, idle, _, _)) =
+                        q_souls.get_mut(worker_entity)
+                    {
+                        if idle.behavior == crate::entities::damned_soul::IdleBehavior::ExhaustedGathering {
+                            continue;
+                        }
+                        if soul.fatigue >= fatigue_threshold {
+                            continue;
+                        }
+
+                        // 建築タスクを割り当て
+                        use crate::systems::soul_ai::task_execution::types::BuildPhase;
+                        *assigned_task = AssignedTask::Build {
+                            blueprint: bp_entity,
+                            phase: BuildPhase::GoingToBlueprint,
+                        };
+                        dest.0 = bp_pos;
+                        path.waypoints = vec![bp_pos];
+                        path.current_index = 0;
+
+                        commands.entity(worker_entity).insert((
+                            UnderCommand(fam_entity),
+                            WorkingOn(bp_entity),
+                        ));
+                        commands.entity(bp_entity).insert(IssuedBy(fam_entity));
+
+                        info!(
+                            "AUTO_BUILD: Assigned build task {:?} to worker {:?}",
+                            bp_entity, worker_entity
+                        );
+                    }
+                }
+            }
+        }
+    }
+}
+
 /// 設計図への自動資材運搬タスク生成システム
 pub fn blueprint_auto_haul_system(
     mut commands: Commands,

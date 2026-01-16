@@ -31,6 +31,7 @@ impl Plugin for SoulAiPlugin {
                     // 仕事管理
                     work::cleanup_commanded_souls_system,
                     work::blueprint_auto_haul_system,
+                    work::blueprint_auto_build_system.after(crate::systems::familiar_ai::familiar_ai_system), // 資材が揃った建築タスクの自動割り当て（使い魔AIの後に実行）
                     work::task_area_auto_haul_system,
                     // アイドル行動
                     idle::idle_behavior_system,
