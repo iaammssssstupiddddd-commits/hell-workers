@@ -12,12 +12,14 @@ use crate::assets::GameAssets;
 use crate::systems::jobs::Blueprint;
 use crate::systems::logistics::ResourceType;
 use crate::systems::utils::{
-    animations::{BounceAnimation, PulseAnimation, update_bounce_animation, update_pulse_animation},
+    animations::{
+        BounceAnimation, PulseAnimation, update_bounce_animation, update_pulse_animation,
+    },
     floating_text::{FloatingText, FloatingTextConfig, spawn_floating_text, update_floating_text},
     progress_bar::{
-        ProgressBarConfig, GenericProgressBar, ProgressBarBackground, ProgressBarFill,
-        spawn_progress_bar, update_progress_bar_fill, sync_progress_bar_position,
-        sync_progress_bar_fill_position,
+        GenericProgressBar, ProgressBarBackground, ProgressBarConfig, ProgressBarFill,
+        spawn_progress_bar, sync_progress_bar_fill_position, sync_progress_bar_position,
+        update_progress_bar_fill,
     },
 };
 use std::collections::HashMap;
@@ -117,7 +119,6 @@ pub const PROGRESS_BAR_WIDTH: f32 = 24.0;
 pub const PROGRESS_BAR_HEIGHT: f32 = 4.0;
 /// プログレスバーのY軸オフセット（設計図の下）
 pub const PROGRESS_BAR_Y_OFFSET: f32 = -18.0;
-
 
 /// 資材アイコンのオフセット
 pub const MATERIAL_ICON_X_OFFSET: f32 = 20.0;
@@ -273,10 +274,12 @@ pub fn spawn_progress_bar_system(
             height: PROGRESS_BAR_HEIGHT,
             y_offset: PROGRESS_BAR_Y_OFFSET,
             bg_color: COLOR_PROGRESS_BG,
+            fill_color: COLOR_PROGRESS_MATERIAL,
             z_index: 0.5,
         };
 
-        let (bg_entity, fill_entity) = spawn_progress_bar(&mut commands, bp_entity, bp_transform, config);
+        let (bg_entity, fill_entity) =
+            spawn_progress_bar(&mut commands, bp_entity, bp_transform, config);
 
         // ラッパーコンポーネントを追加
         commands.entity(bg_entity).insert(ProgressBar {
@@ -512,7 +515,13 @@ pub fn material_delivery_vfx_system(
 pub fn update_delivery_popup_system(
     mut commands: Commands,
     time: Res<Time>,
-    mut q_popups: Query<(Entity, &mut DeliveryPopup, &mut FloatingText, &mut Transform, &mut TextColor)>,
+    mut q_popups: Query<(
+        Entity,
+        &mut DeliveryPopup,
+        &mut FloatingText,
+        &mut Transform,
+        &mut TextColor,
+    )>,
 ) {
     for (entity, mut popup, mut floating_text, mut transform, mut color) in q_popups.iter_mut() {
         // utilを使用してフローティングテキストを更新
@@ -558,9 +567,16 @@ pub fn cleanup_material_display_system(
 pub fn update_completion_text_system(
     mut commands: Commands,
     time: Res<Time>,
-    mut q_texts: Query<(Entity, &mut CompletionText, &mut FloatingText, &mut Transform, &mut TextColor)>,
+    mut q_texts: Query<(
+        Entity,
+        &mut CompletionText,
+        &mut FloatingText,
+        &mut Transform,
+        &mut TextColor,
+    )>,
 ) {
-    for (entity, mut completion, mut floating_text, mut transform, mut color) in q_texts.iter_mut() {
+    for (entity, mut completion, mut floating_text, mut transform, mut color) in q_texts.iter_mut()
+    {
         // utilを使用してフローティングテキストを更新
         let (should_despawn, new_position, alpha) =
             update_floating_text(&time, &mut floating_text, transform.translation);
