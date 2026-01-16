@@ -1,15 +1,18 @@
 use crate::constants::TILE_SIZE;
 use crate::entities::damned_soul::DamnedSoul;
 use crate::systems::soul_ai::task_execution::types::{AssignedTask, GatherPhase, HaulPhase};
+use crate::systems::utils::progress_bar::{
+    ProgressBarConfig, GenericProgressBar, ProgressBarBackground, ProgressBarFill,
+    spawn_progress_bar, update_progress_bar_fill, sync_progress_bar_position,
+    sync_progress_bar_fill_position,
+};
 use bevy::prelude::*;
 
+/// ソウル用プログレスバーのラッパーコンポーネント
 #[derive(Component)]
-pub struct ProgressBar {
+pub struct SoulProgressBar {
     pub parent: Entity,
 }
-
-#[derive(Component)]
-pub struct ProgressBarFill;
 
 #[derive(Component)]
 pub struct StatusIcon {
@@ -18,6 +21,7 @@ pub struct StatusIcon {
 
 pub fn progress_bar_system(
     mut commands: Commands,
+    q_soul_bars: Query<(Entity, &SoulProgressBar)>,
     mut q_souls: Query<(Entity, &AssignedTask, &Transform, &mut DamnedSoul)>,
 ) {
     for (soul_entity, task, transform, mut soul) in q_souls.iter_mut() {
@@ -27,59 +31,81 @@ pub fn progress_bar_system(
         } = task
         {
             if soul.bar_entity.is_none() {
-                // バーをスポーン
-                let bar_background = commands
-                    .spawn((
-                        ProgressBar {
-                            parent: soul_entity,
-                        },
-                        Sprite {
-                            color: Color::srgba(0.0, 0.0, 0.0, 0.8),
-                            custom_size: Some(Vec2::new(TILE_SIZE * 0.8, TILE_SIZE * 0.15)),
-                            ..default()
-                        },
-                        Transform::from_translation(
-                            transform.translation + Vec3::new(0.0, TILE_SIZE * 0.6, 0.1),
-                        ),
-                    ))
-                    .id();
+                // utilを使用してプログレスバーを生成
+                let config = ProgressBarConfig {
+                    width: TILE_SIZE * 0.8,
+                    height: TILE_SIZE * 0.15,
+                    y_offset: TILE_SIZE * 0.6,
+                    bg_color: Color::srgba(0.0, 0.0, 0.0, 0.8),
+                    z_index: 0.1,
+                };
 
-                let _fill_entity = commands
-                    .spawn((
-                        ProgressBarFill,
-                        Sprite {
-                            color: Color::srgb(0.0, 1.0, 0.0),
-                            custom_size: Some(Vec2::new(TILE_SIZE * 0.8, TILE_SIZE * 0.15)),
-                            ..default()
-                        },
-                        Transform::from_translation(Vec3::new(0.0, 0.0, 0.1)),
-                        ChildOf(bar_background),
-                    ))
-                    .id();
+                let (bg_entity, fill_entity) = spawn_progress_bar(
+                    &mut commands,
+                    soul_entity,
+                    transform,
+                    config,
+                );
 
-                soul.bar_entity = Some(bar_background);
+                // ラッパーコンポーネントを追加
+                commands.entity(bg_entity).insert(SoulProgressBar {
+                    parent: soul_entity,
+                });
+                commands.entity(fill_entity).insert(SoulProgressBar {
+                    parent: soul_entity,
+                });
+
+                // Fillの色を緑に設定
+                commands.entity(fill_entity).insert(Sprite {
+                    color: Color::srgb(0.0, 1.0, 0.0),
+                    ..default()
+                });
+
+                soul.bar_entity = Some(bg_entity);
             }
         } else if let Some(bar_entity) = soul.bar_entity.take() {
-            commands.entity(bar_entity).despawn();
+            // プログレスバーを削除（背景とFillの両方）
+            // SoulProgressBarコンポーネントを持つ全てのエンティティを削除
+            let mut to_despawn = vec![bar_entity];
+            
+            // fill_entityも探して削除
+            for (entity, soul_bar) in q_soul_bars.iter() {
+                if soul_bar.parent == soul_entity {
+                    to_despawn.push(entity);
+                }
+            }
+            
+            for entity in to_despawn {
+                commands.entity(entity).despawn();
+            }
         }
     }
 }
 
 pub fn update_progress_bar_fill_system(
     q_souls: Query<&AssignedTask, With<DamnedSoul>>,
-    q_bars: Query<&ProgressBar>,
-    mut q_fills: Query<(&mut Transform, &ChildOf), With<ProgressBarFill>>,
+    q_generic_bars: Query<&GenericProgressBar>,
+    q_soul_bars: Query<&SoulProgressBar>,
+    mut q_fills: Query<(Entity, &mut Sprite, &mut Transform), With<ProgressBarFill>>,
 ) {
-    for (mut fill_transform, parent) in q_fills.iter_mut() {
-        if let Ok(bar) = q_bars.get(parent.0) {
-            if let Ok(task) = q_souls.get(bar.parent) {
+    for (fill_entity, mut sprite, mut transform) in q_fills.iter_mut() {
+        // SoulProgressBarコンポーネントを取得
+        if let Ok(soul_bar) = q_soul_bars.get(fill_entity) {
+            if let Ok(task) = q_souls.get(soul_bar.parent) {
                 if let AssignedTask::Gather {
                     phase: GatherPhase::Collecting { progress },
                     ..
                 } = task
                 {
-                    fill_transform.scale.x = *progress;
-                    fill_transform.translation.x = (progress - 1.0) * TILE_SIZE * 0.4;
+                    if let Ok(generic_bar) = q_generic_bars.get(fill_entity) {
+                        update_progress_bar_fill(
+                            *progress,
+                            &generic_bar.config,
+                            &mut sprite,
+                            &mut transform,
+                            None, // 色は変更しない（緑のまま）
+                        );
+                    }
                 }
             }
         }
@@ -88,13 +114,38 @@ pub fn update_progress_bar_fill_system(
 
 /// バーを親エンティティに追従させるシステム
 pub fn sync_progress_bar_position_system(
-    q_parents: Query<&Transform, (With<AssignedTask>, Without<ProgressBar>)>,
-    mut q_bars: Query<(&mut Transform, &ProgressBar), (With<ProgressBar>, Without<AssignedTask>)>,
+    q_parents: Query<&Transform, (With<AssignedTask>, Without<SoulProgressBar>)>,
+    q_generic_bars: Query<&GenericProgressBar>,
+    mut q_bg_bars: Query<
+        (Entity, &SoulProgressBar, &mut Transform),
+        (With<ProgressBarBackground>, Without<AssignedTask>, Without<ProgressBarFill>),
+    >,
+    mut q_fill_bars: Query<
+        (Entity, &SoulProgressBar, &mut Transform, &Sprite),
+        (With<ProgressBarFill>, Without<AssignedTask>, Without<ProgressBarBackground>),
+    >,
 ) {
-    for (mut transform, bar) in q_bars.iter_mut() {
-        if let Ok(parent_transform) = q_parents.get(bar.parent) {
-            transform.translation =
-                parent_transform.translation + Vec3::new(0.0, TILE_SIZE * 0.6, 0.1);
+    // 背景バーを親位置に追従
+    for (bg_entity, soul_bar, mut bar_transform) in q_bg_bars.iter_mut() {
+        if let Ok(parent_transform) = q_parents.get(soul_bar.parent) {
+            if let Ok(generic_bar) = q_generic_bars.get(bg_entity) {
+                sync_progress_bar_position(parent_transform, &generic_bar.config, &mut bar_transform);
+            }
+        }
+    }
+
+    // Fillバーを親位置に追従（左寄せオフセットを考慮）
+    for (fill_entity, soul_bar, mut fill_transform, sprite) in q_fill_bars.iter_mut() {
+        if let Ok(parent_transform) = q_parents.get(soul_bar.parent) {
+            if let Ok(generic_bar) = q_generic_bars.get(fill_entity) {
+                let fill_width = sprite.custom_size.map(|s| s.x).unwrap_or(0.0);
+                sync_progress_bar_fill_position(
+                    parent_transform,
+                    &generic_bar.config,
+                    fill_width,
+                    &mut fill_transform,
+                );
+            }
         }
     }
 }
@@ -116,6 +167,8 @@ pub fn task_link_system(
                 HaulPhase::GoingToStockpile => Some(*stockpile),
                 _ => None,
             },
+            AssignedTask::Build { blueprint, .. } => Some(*blueprint),
+            AssignedTask::HaulToBlueprint { blueprint, .. } => Some(*blueprint),
             _ => None,
         };
 
@@ -128,6 +181,8 @@ pub fn task_link_system(
                 let color = match task {
                     AssignedTask::Gather { .. } => Color::srgba(0.0, 1.0, 0.0, 0.3), // 緑 (採取)
                     AssignedTask::Haul { .. } => Color::srgba(1.0, 1.0, 0.0, 0.3),   // 黄 (運搬)
+                    AssignedTask::Build { .. } => Color::srgba(1.0, 1.0, 1.0, 0.4),  // 白 (建築)
+                    AssignedTask::HaulToBlueprint { .. } => Color::srgba(1.0, 1.0, 0.5, 0.3), // 薄黄 (搬入)
                     _ => Color::srgba(1.0, 1.0, 1.0, 0.2),
                 };
 
