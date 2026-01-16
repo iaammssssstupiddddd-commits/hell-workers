@@ -15,6 +15,8 @@ pub struct ProgressBarConfig {
     pub y_offset: f32,
     /// 背景色
     pub bg_color: Color,
+    /// 前景色
+    pub fill_color: Color,
     /// Z軸の値
     pub z_index: f32,
 }
@@ -26,6 +28,7 @@ impl Default for ProgressBarConfig {
             height: 4.0,
             y_offset: -18.0,
             bg_color: Color::srgba(0.1, 0.1, 0.1, 0.9),
+            fill_color: Color::srgba(1.0, 0.7, 0.1, 1.0),
             z_index: 0.5,
         }
     }
@@ -75,15 +78,13 @@ pub fn spawn_progress_bar(
     // 前景バー（進捗部分） - 最初は幅0
     let fill_entity = commands
         .spawn((
-            GenericProgressBar {
-                config,
-            },
             ProgressBarFill,
             Sprite {
-                color: Color::srgba(1.0, 0.7, 0.1, 1.0),
+                color: config.fill_color,
                 custom_size: Some(Vec2::new(0.0, 0.0)),
                 ..default()
             },
+            GenericProgressBar { config },
             Transform::from_translation(bar_pos + Vec3::new(0.0, 0.0, 0.1)),
             Name::new("ProgressBar Fill"),
         ))

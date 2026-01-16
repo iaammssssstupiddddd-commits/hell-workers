@@ -2,9 +2,9 @@ use crate::constants::TILE_SIZE;
 use crate::entities::damned_soul::DamnedSoul;
 use crate::systems::soul_ai::task_execution::types::{AssignedTask, GatherPhase, HaulPhase};
 use crate::systems::utils::progress_bar::{
-    ProgressBarConfig, GenericProgressBar, ProgressBarBackground, ProgressBarFill,
-    spawn_progress_bar, update_progress_bar_fill, sync_progress_bar_position,
-    sync_progress_bar_fill_position,
+    GenericProgressBar, ProgressBarBackground, ProgressBarConfig, ProgressBarFill,
+    spawn_progress_bar, sync_progress_bar_fill_position, sync_progress_bar_position,
+    update_progress_bar_fill,
 };
 use bevy::prelude::*;
 
@@ -37,15 +37,12 @@ pub fn progress_bar_system(
                     height: TILE_SIZE * 0.15,
                     y_offset: TILE_SIZE * 0.6,
                     bg_color: Color::srgba(0.0, 0.0, 0.0, 0.8),
+                    fill_color: Color::srgb(0.0, 1.0, 0.0),
                     z_index: 0.1,
                 };
 
-                let (bg_entity, fill_entity) = spawn_progress_bar(
-                    &mut commands,
-                    soul_entity,
-                    transform,
-                    config,
-                );
+                let (bg_entity, fill_entity) =
+                    spawn_progress_bar(&mut commands, soul_entity, transform, config);
 
                 // ラッパーコンポーネントを追加
                 commands.entity(bg_entity).insert(SoulProgressBar {
@@ -67,14 +64,14 @@ pub fn progress_bar_system(
             // プログレスバーを削除（背景とFillの両方）
             // SoulProgressBarコンポーネントを持つ全てのエンティティを削除
             let mut to_despawn = vec![bar_entity];
-            
+
             // fill_entityも探して削除
             for (entity, soul_bar) in q_soul_bars.iter() {
                 if soul_bar.parent == soul_entity {
                     to_despawn.push(entity);
                 }
             }
-            
+
             for entity in to_despawn {
                 commands.entity(entity).despawn();
             }
@@ -118,18 +115,30 @@ pub fn sync_progress_bar_position_system(
     q_generic_bars: Query<&GenericProgressBar>,
     mut q_bg_bars: Query<
         (Entity, &SoulProgressBar, &mut Transform),
-        (With<ProgressBarBackground>, Without<AssignedTask>, Without<ProgressBarFill>),
+        (
+            With<ProgressBarBackground>,
+            Without<AssignedTask>,
+            Without<ProgressBarFill>,
+        ),
     >,
     mut q_fill_bars: Query<
         (Entity, &SoulProgressBar, &mut Transform, &Sprite),
-        (With<ProgressBarFill>, Without<AssignedTask>, Without<ProgressBarBackground>),
+        (
+            With<ProgressBarFill>,
+            Without<AssignedTask>,
+            Without<ProgressBarBackground>,
+        ),
     >,
 ) {
     // 背景バーを親位置に追従
     for (bg_entity, soul_bar, mut bar_transform) in q_bg_bars.iter_mut() {
         if let Ok(parent_transform) = q_parents.get(soul_bar.parent) {
             if let Ok(generic_bar) = q_generic_bars.get(bg_entity) {
-                sync_progress_bar_position(parent_transform, &generic_bar.config, &mut bar_transform);
+                sync_progress_bar_position(
+                    parent_transform,
+                    &generic_bar.config,
+                    &mut bar_transform,
+                );
             }
         }
     }
