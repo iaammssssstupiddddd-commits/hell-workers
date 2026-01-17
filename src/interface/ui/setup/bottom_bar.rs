@@ -2,6 +2,7 @@
 
 use crate::interface::ui::components::{MenuAction, MenuButton, ModeText};
 use bevy::prelude::*;
+use bevy::ui::{BackgroundGradient, ColorStop, LinearGradient};
 
 /// ボトムバーをスポーン
 pub fn spawn_bottom_bar(commands: &mut Commands) {
@@ -19,7 +20,14 @@ pub fn spawn_bottom_bar(commands: &mut Commands) {
                 padding: UiRect::all(Val::Px(5.0)),
                 ..default()
             },
-            BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.8)),
+            BackgroundGradient::from(LinearGradient {
+                angle: std::f32::consts::FRAC_PI_2, // 上から下
+                stops: vec![
+                    ColorStop::new(Color::srgba(0.4, 0.1, 0.1, 0.9), Val::Percent(0.0)), // 赤っぽい
+                    ColorStop::new(Color::srgba(0.0, 0.0, 0.0, 0.8), Val::Percent(100.0)),
+                ],
+                ..default()
+            }),
         ))
         .with_children(|parent| {
             let buttons = [

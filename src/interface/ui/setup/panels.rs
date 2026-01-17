@@ -6,6 +6,7 @@ use crate::interface::ui::components::{
     InfoPanelStatStress, InfoPanelTaskText,
 };
 use bevy::prelude::*;
+use bevy::ui::{BackgroundGradient, ColorStop, LinearGradient};
 
 /// パネルをスポーン
 pub fn spawn_panels(commands: &mut Commands, game_assets: &Res<crate::assets::GameAssets>) {
@@ -27,7 +28,14 @@ fn spawn_info_panel(commands: &mut Commands, game_assets: &Res<crate::assets::Ga
                 padding: UiRect::all(Val::Px(10.0)),
                 ..default()
             },
-            BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.8)),
+            BackgroundGradient::from(LinearGradient {
+                angle: 0.0, // 左から右
+                stops: vec![
+                    ColorStop::new(Color::srgba(0.3, 0.1, 0.3, 0.9), Val::Percent(0.0)), // 紫っぽい
+                    ColorStop::new(Color::srgba(0.0, 0.0, 0.0, 0.8), Val::Percent(100.0)),
+                ],
+                ..default()
+            }),
             InfoPanel,
         ))
         .with_children(|parent| {
