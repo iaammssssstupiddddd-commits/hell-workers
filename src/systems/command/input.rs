@@ -12,11 +12,11 @@ pub fn familiar_command_input_system(
     mut q_active_commands: Query<&mut ActiveCommand>,
     mut task_context: ResMut<TaskContext>,
 ) {
-    // 選択されたエンティティが使い魔かチェック
+    // 選択されたエンティティが使い魔の場合のみ処理（Soulは直接指示不可）
     let Some(entity) = selected.0 else { return };
     if q_familiars.get(entity).is_err() {
         return;
-    };
+    }
 
     if keyboard.just_pressed(KeyCode::Digit1) || keyboard.just_pressed(KeyCode::KeyC) {
         task_context.0 = TaskMode::DesignateChop(None);
