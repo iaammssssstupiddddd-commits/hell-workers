@@ -4,13 +4,14 @@ use crate::assets::GameAssets;
 use crate::entities::damned_soul::{DamnedSoulSpawnEvent, spawn_damned_souls};
 use crate::entities::familiar::FamiliarSpawnEvent;
 use crate::game_state::{BuildContext, TaskContext, ZoneContext};
-use crate::interface::camera::MainCamera;
+use crate::interface::camera::{MainCamera, PanCamera};
 use crate::interface::selection::{HoveredEntity, SelectedEntity};
-use crate::interface::ui::MenuState;
-use crate::interface::ui::setup_ui;
+use crate::interface::ui::{MenuState, setup_ui};
 use crate::systems::logistics::{ResourceLabels, initial_resource_spawner};
 use crate::systems::soul_ai::work::AutoHaulCounter;
-use crate::systems::spatial::{FamiliarSpatialGrid, ResourceSpatialGrid, SpatialGrid};
+use crate::systems::spatial::{
+    FamiliarSpatialGrid, ResourceSpatialGrid, SpatialGrid, SpatialGridOps,
+};
 use crate::systems::task_queue::{GlobalTaskQueue, TaskQueue};
 use crate::systems::time::GameTime;
 use crate::world::map::{WorldMap, spawn_map};
@@ -49,8 +50,6 @@ impl Plugin for StartupPlugin {
                     spawn_familiar_wrapper,
                     setup_ui,
                     initial_resource_spawner,
-                    initialize_familiar_spatial_grid,
-                    initialize_resource_spatial_grid,
                     populate_resource_spatial_grid,
                 )
                     .chain(),
@@ -64,7 +63,12 @@ fn setup(
     mut images: ResMut<Assets<Image>>,
     mut layouts: ResMut<Assets<TextureAtlasLayout>>,
 ) {
-    commands.spawn((Camera2d, MainCamera, NoIndirectDrawing));
+    commands.spawn((
+        Camera2d,
+        MainCamera,
+        PanCamera::default(),
+        NoIndirectDrawing,
+    ));
 
     let aura_circle = create_circular_gradient_texture(&mut *images);
     let aura_ring = create_circular_outline_texture(&mut *images);
@@ -112,16 +116,6 @@ fn initialize_gizmo_config(mut config_store: ResMut<GizmoConfigStore>) {
         config.enabled = true;
         config.line.width = 1.0;
     }
-}
-
-fn initialize_familiar_spatial_grid(mut familiar_grid: ResMut<FamiliarSpatialGrid>) {
-    use crate::constants::TILE_SIZE;
-    *familiar_grid = FamiliarSpatialGrid::new(TILE_SIZE * 20.0);
-}
-
-fn initialize_resource_spatial_grid(mut resource_grid: ResMut<ResourceSpatialGrid>) {
-    use crate::constants::TILE_SIZE;
-    *resource_grid = ResourceSpatialGrid::new(TILE_SIZE * 20.0);
 }
 
 fn populate_resource_spatial_grid(

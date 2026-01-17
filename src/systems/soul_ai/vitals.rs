@@ -5,7 +5,7 @@ use crate::entities::damned_soul::{DamnedSoul, IdleBehavior, IdleState, StressBr
 use crate::entities::familiar::{ActiveCommand, Familiar, FamiliarCommand, UnderCommand};
 use crate::events::{OnExhausted, OnStressBreakdown};
 use crate::systems::soul_ai::task_execution::AssignedTask;
-use crate::systems::spatial::FamiliarSpatialGrid;
+use crate::systems::spatial::{FamiliarSpatialGrid, SpatialGridOps};
 use bevy::prelude::*;
 
 // ============================================================

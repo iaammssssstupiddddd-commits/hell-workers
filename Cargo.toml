@@ -4,22 +4,18 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-bevy = { version = "0.18", features = [
-    "bevy_asset",
-    "bevy_render",
-    "bevy_sprite",
-    "bevy_sprite_render",
-    "bevy_winit",
-    "bevy_core_pipeline",
-    "bevy_window",
-    "bevy_gizmos",
+bevy = { version = "0.18", default-features = false, features = [
+    "2d",
     "bevy_ui",
+    "bevy_gizmos",
+    "bevy_winit",
+    "bevy_dev_tools",
+    "pan_camera",
     "multi_threaded",
     "png",
     "jpeg",
 ] }
 rand = "0.8"
-bevy-inspector-egui = "0.36"
 
 [features]
 default = ["dynamic_linking"]

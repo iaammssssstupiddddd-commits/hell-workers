@@ -13,7 +13,7 @@ use crate::systems::logistics::{ResourceItem, ResourceType, Stockpile};
 use crate::systems::soul_ai::task_execution::types::{
     AssignedTask, BuildPhase, GatherPhase, HaulPhase, HaulToBpPhase,
 };
-use crate::systems::spatial::{DesignationSpatialGrid, SpatialGrid};
+use crate::systems::spatial::{DesignationSpatialGrid, SpatialGrid, SpatialGridOps};
 use bevy::prelude::*;
 
 /// 指定エリア内で未割り当てのタスク（Designation）を探す
@@ -46,7 +46,7 @@ pub fn find_unassigned_task_in_area(
                 ents.push(managed_entity);
             }
         }
-        
+
         // 資材が揃った建築タスク（Blueprint）を直接検索して追加
         // DesignationSpatialGridの更新タイミングの問題を回避するため
         for (bp_entity, bp_transform, bp_designation, bp_issued_by, _, _) in q_designations.iter() {
@@ -62,7 +62,7 @@ pub fn find_unassigned_task_in_area(
                 }
             }
         }
-        
+
         ents
     } else {
         // エリア指定がない場合、自分が管理しているタスクのみが対象
