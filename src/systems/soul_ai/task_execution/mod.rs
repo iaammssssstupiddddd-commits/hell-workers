@@ -2,13 +2,13 @@
 //!
 //! 魂に割り当てられたタスクの実行ロジックを提供します。
 
-pub mod types;
+pub mod build;
 pub mod common;
 pub mod context;
 pub mod gather;
 pub mod haul;
 pub mod haul_to_blueprint;
-pub mod build;
+pub mod types;
 
 // 型の再エクスポート（外部からのアクセスを簡潔に）
 pub use types::AssignedTask;
@@ -17,18 +17,18 @@ use crate::entities::damned_soul::{DamnedSoul, Destination, Path, StressBreakdow
 use crate::events::OnTaskCompleted;
 use crate::relationships::Holding;
 use crate::systems::familiar_ai::haul_cache::HaulReservationCache;
-use crate::systems::jobs::{Blueprint, Designation, DesignationCreatedEvent, TaskCompletedEvent};
+use crate::systems::jobs::{Blueprint, Designation, DesignationCreatedEvent};
 use crate::systems::logistics::Stockpile;
 use bevy::prelude::*;
 
+use build::handle_build_task;
 use context::TaskExecutionContext;
 use gather::handle_gather_task;
 use haul::handle_haul_task;
 use haul_to_blueprint::handle_haul_to_blueprint_task;
-use build::handle_build_task;
 
 /// タスク実行システム
-/// 
+///
 /// 各魂の割り当てられたタスクを実行し、フェーズに応じて処理を進めます。
 pub fn task_execution_system(
     mut commands: Commands,
@@ -64,7 +64,6 @@ pub fn task_execution_system(
         Option<&crate::relationships::StoredItems>,
     )>,
     game_assets: Res<crate::assets::GameAssets>,
-    mut ev_completed: MessageWriter<TaskCompletedEvent>,
     mut ev_created: MessageWriter<DesignationCreatedEvent>,
     time: Res<Time>,
     mut haul_cache: ResMut<HaulReservationCache>,
@@ -89,7 +88,11 @@ pub fn task_execution_system(
 
         // タスクタイプに応じてルーティング
         match *task {
-            AssignedTask::Gather { target, work_type, phase } => {
+            AssignedTask::Gather {
+                target,
+                work_type,
+                phase,
+            } => {
                 let mut ctx = TaskExecutionContext {
                     soul_entity,
                     soul_transform,
@@ -109,7 +112,11 @@ pub fn task_execution_system(
                     &time,
                 );
             }
-            AssignedTask::Haul { item, stockpile, phase } => {
+            AssignedTask::Haul {
+                item,
+                stockpile,
+                phase,
+            } => {
                 let mut ctx = TaskExecutionContext {
                     soul_entity,
                     soul_transform,
@@ -149,7 +156,11 @@ pub fn task_execution_system(
                     &time,
                 );
             }
-            AssignedTask::HaulToBlueprint { item, blueprint, phase } => {
+            AssignedTask::HaulToBlueprint {
+                item,
+                blueprint,
+                phase,
+            } => {
                 let mut ctx = TaskExecutionContext {
                     soul_entity,
                     soul_transform,
@@ -180,13 +191,7 @@ pub fn task_execution_system(
         // 完了イベントの発行
         if was_busy && matches!(*task, AssignedTask::None) {
             if let Some(work_type) = old_work_type {
-                // 既存のMessage送信
-                ev_completed.write(TaskCompletedEvent {
-                    _soul_entity: soul_entity,
-                    _task_type: work_type,
-                });
-
-                // Bevy 0.17 の Observer をトリガー
+                // Observer をトリガー
                 commands.trigger(OnTaskCompleted {
                     entity: soul_entity,
                     task_entity: old_task_entity.unwrap_or(Entity::PLACEHOLDER),
@@ -194,7 +199,7 @@ pub fn task_execution_system(
                 });
 
                 info!(
-                    "EVENT: TaskCompletedEvent sent & OnTaskCompleted triggered for Soul {:?}",
+                    "EVENT: OnTaskCompleted triggered for Soul {:?}",
                     soul_entity
                 );
             }

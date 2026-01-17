@@ -14,12 +14,6 @@ pub struct DesignationCreatedEvent {
     pub priority: u32,
 }
 
-#[derive(Message)]
-pub struct TaskCompletedEvent {
-    pub _soul_entity: Entity,
-    pub _task_type: WorkType,
-}
-
 // --- Components ---
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Reflect)]

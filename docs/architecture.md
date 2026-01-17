@@ -51,3 +51,27 @@ graph TD
 ## システムセットの実行順序
 `src/main.rs` で定義されている `GameSystemSet` は以下の順序でチェーンされています：
 `Input` → `Spatial` → `Logic` → `Actor` → `Visual` → `Interface`
+
+## 定数管理 (`src/constants.rs`)
+
+ゲームバランスに関わる全てのマジックナンバーは `constants.rs` に集約されています。
+
+| カテゴリ | 例 |
+|:--|:--|
+| Z軸レイヤー | `Z_MAP`, `Z_CHARACTER`, `Z_FLOATING_TEXT` |
+| AI閾値 | `FATIGUE_GATHERING_THRESHOLD`, `MOTIVATION_THRESHOLD` |
+| バイタル増減率 | `FATIGUE_WORK_RATE`, `STRESS_RECOVERY_RATE_GATHERING` |
+| 移動・アニメーション | `SOUL_SPEED_BASE`, `ANIM_BOB_SPEED` |
+
+## イベントシステム
+
+本プロジェクトでは、Bevy 0.18 の `Message` と `Observer` を用途に応じて使い分けています。
+
+| 方式 | 用途 | 定義場所 |
+|:--|:--|:--|
+| `Message` | グローバル通知（タスクキュー更新等） | `src/systems/jobs.rs` |
+| `Observer` | エンティティベースの即時反応 | `src/events.rs` |
+
+> [!TIP]
+> リソース (`ResMut`) を更新する必要がある場合は `Message` を使用してください。
+> エンティティのコンポーネントに即座に反応する場合は `Observer` を使用してください。

@@ -4,6 +4,7 @@ use crate::entities::damned_soul::{
     DamnedSoul, Destination, IdleBehavior, IdleState, Path, StressBreakdown,
 };
 use crate::entities::familiar::{Familiar, UnderCommand};
+use crate::events::OnTaskAssigned;
 use crate::relationships::ManagedTasks;
 use crate::systems::command::TaskArea;
 use crate::systems::jobs::{
@@ -339,6 +340,11 @@ pub fn assign_task_to_worker(
             dest.0 = task_pos;
             path.waypoints = vec![task_pos];
             path.current_index = 0;
+            commands.trigger(OnTaskAssigned {
+                entity: worker_entity,
+                task_entity,
+                work_type,
+            });
             info!("ASSIGN: Gather task assigned to {:?}", worker_entity);
         }
         WorkType::Haul => {
@@ -365,6 +371,11 @@ pub fn assign_task_to_worker(
                     "ASSIGN: HaulToBlueprint task assigned to {:?} (item: {:?}, bp: {:?})",
                     worker_entity, task_entity, target_bp.0
                 );
+                commands.trigger(OnTaskAssigned {
+                    entity: worker_entity,
+                    task_entity,
+                    work_type: WorkType::Haul,
+                });
                 return;
             } else {
                 info!(
@@ -429,6 +440,11 @@ pub fn assign_task_to_worker(
                 dest.0 = task_pos;
                 path.waypoints = vec![task_pos];
                 path.current_index = 0;
+                commands.trigger(OnTaskAssigned {
+                    entity: worker_entity,
+                    task_entity,
+                    work_type: WorkType::Haul,
+                });
                 info!("ASSIGN: Haul task assigned to {:?}", worker_entity);
             } else {
                 warn!(
