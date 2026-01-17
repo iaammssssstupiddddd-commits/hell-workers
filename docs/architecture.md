@@ -2,11 +2,11 @@
 
 ## システム全体俯瞰 (System Overview)
 
-本プロジェクトは Bevy 0.17 のプラグインアーキテクチャに基づき、関心事ごとに分離されています。
+本プロジェクトは Bevy 0.18 のプラグインアーキテクチャに基づき、関心事ごとに分離されています。
 
 ```mermaid
 graph TD
-    subgraph Engine["Bevy Engine (0.17)"]
+    subgraph Engine["Bevy Engine (0.18)"]
         ECS["ECS (Entities, Components, Systems)"]
         Rel["ECS Relationships"]
         Obs["Observers"]
