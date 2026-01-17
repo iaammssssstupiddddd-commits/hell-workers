@@ -2,8 +2,8 @@
 
 use crate::systems::GameSystemSet;
 use crate::systems::spatial::{
-    update_familiar_spatial_grid_system, update_resource_spatial_grid_system,
-    update_spatial_grid_system,
+    update_designation_spatial_grid_system, update_familiar_spatial_grid_system,
+    update_resource_spatial_grid_system, update_spatial_grid_system,
 };
 use bevy::prelude::*;
 
@@ -17,6 +17,7 @@ impl Plugin for SpatialPlugin {
                 update_spatial_grid_system,
                 update_familiar_spatial_grid_system,
                 update_resource_spatial_grid_system,
+                update_designation_spatial_grid_system,
             )
                 .in_set(GameSystemSet::Spatial),
         );

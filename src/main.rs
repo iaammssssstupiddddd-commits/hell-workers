@@ -12,10 +12,6 @@ mod world;
 use bevy::prelude::*;
 use bevy::render::RenderPlugin;
 use bevy::render::settings::{Backends, RenderCreation, WgpuSettings};
-use bevy_inspector_egui::bevy_egui::EguiPlugin;
-use bevy_inspector_egui::quick::{
-    FilterQueryInspectorPlugin, ResourceInspectorPlugin, StateInspectorPlugin, WorldInspectorPlugin,
-};
 
 use game_state::{
     PlayMode, log_enter_building_mode, log_enter_task_mode, log_enter_zone_mode,
@@ -30,11 +26,10 @@ use crate::plugins::{
 use crate::systems::GameSystemSet;
 use crate::systems::familiar_ai::FamiliarAiPlugin;
 use crate::systems::jobs::{DesignationCreatedEvent, TaskCompletedEvent};
-use crate::systems::time::GameTime;
 
-/// F12キーでトグルするデバッグインスペクタの表示状態
+/// ゲーム内のデバッグ情報の表示状態（独自実装用）
 #[derive(Resource, Default)]
-pub struct DebugInspectorVisible(pub bool);
+pub struct DebugVisible(pub bool);
 
 fn main() {
     App::new()
@@ -62,29 +57,7 @@ fn main() {
                     ..default()
                 }),
         )
-        // Debug inspector plugins
-        .add_plugins(EguiPlugin::default())
-        .add_plugins(
-            WorldInspectorPlugin::new()
-                .run_if(|vis: Res<DebugInspectorVisible>| vis.0),
-        )
-        .add_plugins(
-            ResourceInspectorPlugin::<GameTime>::default()
-                .run_if(|vis: Res<DebugInspectorVisible>| vis.0),
-        )
-        .add_plugins(
-            StateInspectorPlugin::<PlayMode>::default()
-                .run_if(|vis: Res<DebugInspectorVisible>| vis.0),
-        )
-        .add_plugins(
-            FilterQueryInspectorPlugin::<With<crate::entities::familiar::Familiar>>::default()
-                .run_if(|vis: Res<DebugInspectorVisible>| vis.0),
-        )
-        .add_plugins(
-            FilterQueryInspectorPlugin::<With<crate::entities::damned_soul::DamnedSoul>>::default()
-                .run_if(|vis: Res<DebugInspectorVisible>| vis.0),
-        )
-        .init_resource::<DebugInspectorVisible>()
+        .init_resource::<DebugVisible>()
         // PlayMode State
         .init_state::<PlayMode>()
         .add_systems(OnEnter(PlayMode::BuildingPlace), log_enter_building_mode)
