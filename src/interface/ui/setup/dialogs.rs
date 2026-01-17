@@ -7,11 +7,11 @@ use crate::interface::ui::components::{
 use bevy::prelude::*;
 
 /// ダイアログをスポーン
-pub fn spawn_dialogs(commands: &mut Commands) {
-    spawn_operation_dialog(commands);
+pub fn spawn_dialogs(commands: &mut Commands, game_assets: &Res<crate::assets::GameAssets>) {
+    spawn_operation_dialog(commands, game_assets);
 }
 
-fn spawn_operation_dialog(commands: &mut Commands) {
+fn spawn_operation_dialog(commands: &mut Commands, game_assets: &Res<crate::assets::GameAssets>) {
     commands
         .spawn((
             Node {
@@ -47,7 +47,8 @@ fn spawn_operation_dialog(commands: &mut Commands) {
                     header.spawn((
                         Text::new("Familiar Operation"),
                         TextFont {
-                            font_size: 20.0,
+                            font: game_assets.font_ui.clone(),
+                            font_size: crate::constants::FONT_SIZE_HEADER,
                             ..default()
                         },
                         TextColor(Color::srgb(1.0, 1.0, 0.0)),
@@ -70,7 +71,8 @@ fn spawn_operation_dialog(commands: &mut Commands) {
                             btn.spawn((
                                 Text::new("X"),
                                 TextFont {
-                                    font_size: 14.0,
+                                    font: game_assets.font_ui.clone(),
+                                    font_size: crate::constants::FONT_SIZE_SMALL,
                                     ..default()
                                 },
                                 TextColor(Color::WHITE),
@@ -82,6 +84,7 @@ fn spawn_operation_dialog(commands: &mut Commands) {
             parent.spawn((
                 Text::new("Familiar Name"),
                 TextFont {
+                    font: game_assets.font_familiar.clone(),
                     font_size: 18.0,
                     ..default()
                 },
@@ -97,7 +100,8 @@ fn spawn_operation_dialog(commands: &mut Commands) {
             parent.spawn((
                 Text::new("Work Standards:"),
                 TextFont {
-                    font_size: 14.0,
+                    font: game_assets.font_ui.clone(),
+                    font_size: crate::constants::FONT_SIZE_SMALL,
                     ..default()
                 },
                 TextColor(Color::srgb(0.6, 0.6, 0.6)),
@@ -147,8 +151,9 @@ fn spawn_operation_dialog(commands: &mut Commands) {
 
                     // Current value
                     row.spawn((
-                        Text::new("80%"),
+                        Text::new("1"),
                         TextFont {
+                            font: game_assets.font_ui.clone(),
                             font_size: 18.0,
                             ..default()
                         },
@@ -189,7 +194,8 @@ fn spawn_operation_dialog(commands: &mut Commands) {
             parent.spawn((
                 Text::new("Max Controlled Souls:"),
                 TextFont {
-                    font_size: 14.0,
+                    font: game_assets.font_ui.clone(),
+                    font_size: crate::constants::FONT_SIZE_SMALL,
                     ..default()
                 },
                 TextColor(Color::srgb(0.6, 0.6, 0.6)),
@@ -232,7 +238,8 @@ fn spawn_operation_dialog(commands: &mut Commands) {
                         btn.spawn((
                             Text::new("-"),
                             TextFont {
-                                font_size: 20.0,
+                                font: game_assets.font_ui.clone(),
+                                font_size: crate::constants::FONT_SIZE_HEADER,
                                 ..default()
                             },
                             TextColor(Color::WHITE),
@@ -269,7 +276,8 @@ fn spawn_operation_dialog(commands: &mut Commands) {
                         btn.spawn((
                             Text::new("+"),
                             TextFont {
-                                font_size: 20.0,
+                                font: game_assets.font_ui.clone(),
+                                font_size: crate::constants::FONT_SIZE_HEADER,
                                 ..default()
                             },
                             TextColor(Color::WHITE),
@@ -281,7 +289,8 @@ fn spawn_operation_dialog(commands: &mut Commands) {
             parent.spawn((
                 Text::new("(Settings automatically synced)"),
                 TextFont {
-                    font_size: 10.0,
+                    font: game_assets.font_ui.clone(),
+                    font_size: crate::constants::FONT_SIZE_TINY,
                     ..default()
                 },
                 TextColor(Color::srgba(1.0, 1.0, 1.0, 0.3)),

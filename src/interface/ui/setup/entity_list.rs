@@ -39,7 +39,8 @@ pub fn spawn_entity_list_panel(
             parent.spawn((
                 Text::new("Entity List"),
                 TextFont {
-                    font_size: 20.0,
+                    font: game_assets.font_ui.clone(),
+                    font_size: crate::constants::FONT_SIZE_HEADER,
                     ..default()
                 },
                 TextColor(Color::srgb(0.0, 1.0, 1.0)),
@@ -98,7 +99,8 @@ pub fn spawn_entity_list_panel(
                             button.spawn((
                                 Text::new("Unassigned Souls"),
                                 TextFont {
-                                    font_size: 14.0,
+                                    font: game_assets.font_ui.clone(),
+                                    font_size: crate::constants::FONT_SIZE_SMALL,
                                     ..default()
                                 },
                                 TextColor(Color::WHITE),

@@ -2,6 +2,7 @@
 //!
 //! DamnedSoul（亡者）のプログレスバー、ステータスアイコン、タスクリンク表示
 
+use crate::assets::GameAssets;
 use crate::constants::TILE_SIZE;
 use crate::constants::*;
 use crate::entities::damned_soul::DamnedSoul;
@@ -217,6 +218,7 @@ pub fn soul_status_visual_system(
     mut commands: Commands,
     mut q_souls: Query<(Entity, &Transform, &mut DamnedSoul, &AssignedTask)>,
     mut q_text: Query<&mut Text2d, With<StatusIcon>>,
+    game_assets: Res<GameAssets>,
 ) {
     for (soul_entity, transform, mut soul, task) in q_souls.iter_mut() {
         let status = if soul.fatigue > 0.8 {
@@ -249,7 +251,8 @@ pub fn soul_status_visual_system(
                         },
                         Text2d::new(text),
                         TextFont {
-                            font_size: 16.0,
+                            font: game_assets.font_soul_name.clone(),
+                            font_size: FONT_SIZE_BODY,
                             ..default()
                         },
                         TextColor(color),

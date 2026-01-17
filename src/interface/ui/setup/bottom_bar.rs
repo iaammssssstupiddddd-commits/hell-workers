@@ -5,7 +5,7 @@ use bevy::prelude::*;
 use bevy::ui::{BackgroundGradient, ColorStop, LinearGradient};
 
 /// ボトムバーをスポーン
-pub fn spawn_bottom_bar(commands: &mut Commands) {
+pub fn spawn_bottom_bar(commands: &mut Commands, game_assets: &Res<crate::assets::GameAssets>) {
     commands
         .spawn((
             Node {
@@ -55,6 +55,7 @@ pub fn spawn_bottom_bar(commands: &mut Commands) {
                         button.spawn((
                             Text::new(label),
                             TextFont {
+                                font: game_assets.font_ui.clone(),
                                 font_size: 18.0,
                                 ..default()
                             },
@@ -67,6 +68,7 @@ pub fn spawn_bottom_bar(commands: &mut Commands) {
             parent.spawn((
                 Text::new("Mode: Normal"),
                 TextFont {
+                    font: game_assets.font_ui.clone(),
                     font_size: 18.0,
                     ..default()
                 },

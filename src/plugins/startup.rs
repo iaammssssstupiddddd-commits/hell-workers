@@ -73,6 +73,13 @@ fn setup(
     let aura_circle = create_circular_gradient_texture(&mut *images);
     let aura_ring = create_circular_outline_texture(&mut *images);
 
+    // Load Fonts
+    let font_ui = asset_server.load("fonts/NotoSansJP-VF.ttf");
+    let font_narrator = asset_server.load("fonts/NotoSerifJP-VF.ttf");
+    let font_familiar = asset_server.load("fonts/ShantellSans-VF.ttf");
+    let font_soul_name = asset_server.load("fonts/SourceSerif4-VF.ttf");
+    let font_soul_emoji = asset_server.load("fonts/NotoEmoji-VF.ttf");
+
     let game_assets = GameAssets {
         grass: asset_server.load("textures/grass.jpg"),
         dirt: asset_server.load("textures/dirt.jpg"),
@@ -107,6 +114,12 @@ fn setup(
         icon_hammer: asset_server.load("textures/ui/hammer.png"),
         icon_wood_small: asset_server.load("textures/ui/wood_small.png"),
         icon_stone_small: asset_server.load("textures/ui/stone_small.png"),
+        // Fonts
+        font_ui,
+        font_narrator,
+        font_familiar,
+        font_soul_name,
+        font_soul_emoji,
     };
     commands.insert_resource(game_assets);
 }
