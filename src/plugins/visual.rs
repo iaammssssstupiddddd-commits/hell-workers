@@ -21,6 +21,13 @@ use crate::systems::visual::blueprint::{
     update_progress_bar_fill_system as bp_update_progress_bar_fill_system,
     update_worker_indicators_system,
 };
+use crate::systems::visual::gather::{
+    attach_resource_visual_system, cleanup_resource_visual_system, spawn_gather_indicators_system,
+    update_gather_indicators_system, update_resource_visual_system,
+};
+use crate::systems::visual::haul::{
+    spawn_carrying_item_system, update_carrying_item_system, update_drop_popup_system,
+};
 use crate::systems::visual::soul::{
     progress_bar_system, soul_status_visual_system, sync_progress_bar_position_system,
     task_link_system, update_progress_bar_fill_system,
@@ -82,6 +89,41 @@ impl Plugin for VisualPlugin {
                 spawn_worker_indicators_system,
                 update_worker_indicators_system,
                 cleanup_material_display_system,
+            )
+                .chain()
+                .in_set(GameSystemSet::Visual),
+        );
+
+        // Gather visual systems (Phase 1: 伐採ワーカーインジケータ)
+        app.add_systems(
+            Update,
+            (
+                spawn_gather_indicators_system,
+                update_gather_indicators_system,
+            )
+                .chain()
+                .in_set(GameSystemSet::Visual),
+        );
+
+        // Resource highlight systems (Phase 2: リソースハイライト)
+        app.add_systems(
+            Update,
+            (
+                attach_resource_visual_system,
+                update_resource_visual_system,
+                cleanup_resource_visual_system,
+            )
+                .chain()
+                .in_set(GameSystemSet::Visual),
+        );
+
+        // Haul visual systems (Phase 3: 運搬ビジュアル)
+        app.add_systems(
+            Update,
+            (
+                spawn_carrying_item_system,
+                update_carrying_item_system,
+                update_drop_popup_system,
             )
                 .chain()
                 .in_set(GameSystemSet::Visual),

@@ -192,14 +192,20 @@ pub fn task_link_system(
 
                 // 線の色をタスクの種類で変える
                 let color = match task {
-                    AssignedTask::Gather { .. } => Color::srgba(0.0, 1.0, 0.0, 0.3), // 緑 (採取)
-                    AssignedTask::Haul { .. } => Color::srgba(1.0, 1.0, 0.0, 0.3),   // 黄 (運搬)
-                    AssignedTask::Build { .. } => Color::srgba(1.0, 1.0, 1.0, 0.4),  // 白 (建築)
-                    AssignedTask::HaulToBlueprint { .. } => Color::srgba(1.0, 1.0, 0.5, 0.3), // 薄黄 (搬入)
-                    _ => Color::srgba(1.0, 1.0, 1.0, 0.2),
+                    AssignedTask::Gather { .. } => Color::srgba(0.0, 1.0, 0.0, 0.4), // 緑 (採取)
+                    AssignedTask::Haul { .. } => Color::srgba(1.0, 1.0, 0.0, 0.4),   // 黄 (運搬)
+                    AssignedTask::Build { .. } => Color::srgba(1.0, 1.0, 1.0, 0.5),  // 白 (建築)
+                    AssignedTask::HaulToBlueprint { .. } => Color::srgba(1.0, 1.0, 0.5, 0.4), // 薄黄 (搬入)
+                    _ => Color::srgba(1.0, 1.0, 1.0, 0.3),
                 };
 
+                // タスクリンク線を描画
                 gizmos.line_2d(start, end, color);
+
+                // 目標地点にマーカー円を描画
+                let marker_color = color.with_alpha(0.6);
+                gizmos.circle_2d(end, 4.0, marker_color);
+
                 debug!("HAUL_GIZMO: Drawing line from {:?} to {:?}", start, end);
             }
         }
