@@ -14,7 +14,6 @@ use bevy::prelude::Color;
 // Re-exports
 // ============================================================================
 
-pub use components::*;
 pub use resource_highlight::*;
 pub use worker_indicator::*;
 
