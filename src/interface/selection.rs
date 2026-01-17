@@ -81,13 +81,16 @@ pub fn handle_mouse_input(
 
             if buttons.just_pressed(MouseButton::Right) {
                 if let Some(selected) = selected_entity.0 {
-                    if let Ok(mut dest) = q_dest.get_mut(selected) {
-                        dest.0 = world_pos;
-                        info!("ORDER: Move to {:?}", world_pos);
+                    // 使い魔の場合のみ移動指示を出す（Soulは直接指示不可）
+                    if q_familiars.get(selected).is_ok() {
+                        if let Ok(mut dest) = q_dest.get_mut(selected) {
+                            dest.0 = world_pos;
+                            info!("ORDER: Move to {:?}", world_pos);
 
-                        // 使い魔の場合、現在のAI作業を中断させる
-                        if let Ok(mut active) = q_active_command.get_mut(selected) {
-                            active.command = crate::entities::familiar::FamiliarCommand::Idle;
+                            // 使い魔の場合、現在のAI作業を中断させる
+                            if let Ok(mut active) = q_active_command.get_mut(selected) {
+                                active.command = crate::entities::familiar::FamiliarCommand::Idle;
+                            }
                         }
                     }
                 }
