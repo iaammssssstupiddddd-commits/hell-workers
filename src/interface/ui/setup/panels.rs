@@ -11,7 +11,7 @@ use bevy::ui::{BackgroundGradient, ColorStop, LinearGradient};
 /// パネルをスポーン
 pub fn spawn_panels(commands: &mut Commands, game_assets: &Res<crate::assets::GameAssets>) {
     spawn_info_panel(commands, game_assets);
-    spawn_hover_tooltip(commands);
+    spawn_hover_tooltip(commands, game_assets);
 }
 
 fn spawn_info_panel(commands: &mut Commands, game_assets: &Res<crate::assets::GameAssets>) {
@@ -51,7 +51,8 @@ fn spawn_info_panel(commands: &mut Commands, game_assets: &Res<crate::assets::Ga
                     row.spawn((
                         Text::new("Entity Info"),
                         TextFont {
-                            font_size: 20.0,
+                            font: game_assets.font_ui.clone(),
+                            font_size: crate::constants::FONT_SIZE_HEADER,
                             ..default()
                         },
                         TextColor(Color::srgb(1.0, 1.0, 0.0)),
@@ -81,7 +82,8 @@ fn spawn_info_panel(commands: &mut Commands, game_assets: &Res<crate::assets::Ga
                     col.spawn((
                         Text::new(""),
                         TextFont {
-                            font_size: 14.0,
+                            font: game_assets.font_ui.clone(),
+                            font_size: crate::constants::FONT_SIZE_SMALL,
                             ..default()
                         },
                         InfoPanelStatMotivation,
@@ -105,7 +107,8 @@ fn spawn_info_panel(commands: &mut Commands, game_assets: &Res<crate::assets::Ga
                         row.spawn((
                             Text::new("Stress: 0%"),
                             TextFont {
-                                font_size: 14.0,
+                                font: game_assets.font_ui.clone(),
+                                font_size: crate::constants::FONT_SIZE_SMALL,
                                 ..default()
                             },
                             InfoPanelStatStress,
@@ -130,7 +133,8 @@ fn spawn_info_panel(commands: &mut Commands, game_assets: &Res<crate::assets::Ga
                         row.spawn((
                             Text::new("Fatigue: 0%"),
                             TextFont {
-                                font_size: 14.0,
+                                font: game_assets.font_ui.clone(),
+                                font_size: crate::constants::FONT_SIZE_SMALL,
                                 ..default()
                             },
                             InfoPanelStatFatigue,
@@ -147,7 +151,8 @@ fn spawn_info_panel(commands: &mut Commands, game_assets: &Res<crate::assets::Ga
                         row.spawn((
                             Text::new("Task: Idle"),
                             TextFont {
-                                font_size: 14.0,
+                                font: game_assets.font_ui.clone(),
+                                font_size: crate::constants::FONT_SIZE_SMALL,
                                 ..default()
                             },
                             InfoPanelTaskText,
@@ -157,7 +162,8 @@ fn spawn_info_panel(commands: &mut Commands, game_assets: &Res<crate::assets::Ga
                     col.spawn((
                         Text::new("Carrying: None"),
                         TextFont {
-                            font_size: 14.0,
+                            font: game_assets.font_ui.clone(),
+                            font_size: crate::constants::FONT_SIZE_SMALL,
                             ..default()
                         },
                         InfoPanelInventoryText,
@@ -168,7 +174,8 @@ fn spawn_info_panel(commands: &mut Commands, game_assets: &Res<crate::assets::Ga
             parent.spawn((
                 Text::new(""),
                 TextFont {
-                    font_size: 16.0,
+                    font: game_assets.font_ui.clone(),
+                    font_size: crate::constants::FONT_SIZE_BODY,
                     ..default()
                 },
                 TextColor(Color::WHITE),
@@ -177,7 +184,7 @@ fn spawn_info_panel(commands: &mut Commands, game_assets: &Res<crate::assets::Ga
         });
 }
 
-fn spawn_hover_tooltip(commands: &mut Commands) {
+fn spawn_hover_tooltip(commands: &mut Commands, game_assets: &Res<crate::assets::GameAssets>) {
     commands
         .spawn((
             Node {
@@ -197,7 +204,8 @@ fn spawn_hover_tooltip(commands: &mut Commands) {
             tooltip.spawn((
                 Text::new(""),
                 TextFont {
-                    font_size: 14.0,
+                    font: game_assets.font_ui.clone(),
+                    font_size: crate::constants::FONT_SIZE_SMALL,
                     ..default()
                 },
                 TextColor(Color::WHITE),

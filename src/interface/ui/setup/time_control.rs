@@ -5,7 +5,7 @@ use crate::systems::time::ClockText;
 use bevy::prelude::*;
 
 /// 時間操作UIをスポーン
-pub fn spawn_time_control(commands: &mut Commands) {
+pub fn spawn_time_control(commands: &mut Commands, game_assets: &Res<crate::assets::GameAssets>) {
     commands
         .spawn((Node {
             position_type: PositionType::Absolute,
@@ -19,7 +19,8 @@ pub fn spawn_time_control(commands: &mut Commands) {
             parent.spawn((
                 Text::new("Day 1, 00:00"),
                 TextFont {
-                    font_size: 24.0,
+                    font: game_assets.font_ui.clone(),
+                    font_size: crate::constants::FONT_SIZE_TITLE,
                     ..default()
                 },
                 TextColor(Color::WHITE),
@@ -59,7 +60,8 @@ pub fn spawn_time_control(commands: &mut Commands) {
                                 btn.spawn((
                                     Text::new(label),
                                     TextFont {
-                                        font_size: 16.0,
+                                        font: game_assets.font_ui.clone(),
+                                        font_size: crate::constants::FONT_SIZE_BODY,
                                         ..default()
                                     },
                                     TextColor(Color::WHITE),
@@ -80,7 +82,8 @@ pub fn spawn_time_control(commands: &mut Commands) {
                     summary.spawn((
                         Text::new("Tasks: 0 (0 High)"),
                         TextFont {
-                            font_size: 18.0,
+                            font: game_assets.font_ui.clone(),
+                            font_size: crate::constants::FONT_SIZE_HEADER,
                             ..default()
                         },
                         TextColor(Color::srgb(0.8, 0.8, 1.0)),

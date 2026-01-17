@@ -15,6 +15,7 @@ use crate::systems::utils::floating_text::{
 pub fn material_delivery_vfx_system(
     mut commands: Commands,
     mut q_visuals: Query<(Entity, &mut BlueprintVisual, &Blueprint, &Transform)>,
+    game_assets: Res<crate::assets::GameAssets>,
 ) {
     for (_, mut visual, bp, transform) in q_visuals.iter_mut() {
         for (resource_type, &current_count) in &bp.delivered_materials {
@@ -35,6 +36,7 @@ pub fn material_delivery_vfx_system(
                         + Vec3::new(0.0, 10.0, 0.0),
                     config.clone(),
                     Some(12.0),
+                    game_assets.font_ui.clone(),
                 );
 
                 // ラッパーコンポーネントを追加

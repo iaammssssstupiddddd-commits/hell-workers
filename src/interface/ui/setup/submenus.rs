@@ -8,13 +8,13 @@ use crate::systems::logistics::ZoneType;
 use bevy::prelude::*;
 
 /// サブメニューをスポーン
-pub fn spawn_submenus(commands: &mut Commands) {
-    spawn_architect_submenu(commands);
-    spawn_zones_submenu(commands);
-    spawn_orders_submenu(commands);
+pub fn spawn_submenus(commands: &mut Commands, game_assets: &Res<crate::assets::GameAssets>) {
+    spawn_architect_submenu(commands, game_assets);
+    spawn_zones_submenu(commands, game_assets);
+    spawn_orders_submenu(commands, game_assets);
 }
 
-fn spawn_architect_submenu(commands: &mut Commands) {
+fn spawn_architect_submenu(commands: &mut Commands, game_assets: &Res<crate::assets::GameAssets>) {
     commands
         .spawn((
             Node {
@@ -50,7 +50,8 @@ fn spawn_architect_submenu(commands: &mut Commands) {
                     button.spawn((
                         Text::new("Wall"),
                         TextFont {
-                            font_size: 16.0,
+                            font: game_assets.font_ui.clone(),
+                            font_size: crate::constants::FONT_SIZE_BODY,
                             ..default()
                         },
                         TextColor(Color::WHITE),
@@ -59,7 +60,7 @@ fn spawn_architect_submenu(commands: &mut Commands) {
         });
 }
 
-fn spawn_zones_submenu(commands: &mut Commands) {
+fn spawn_zones_submenu(commands: &mut Commands, game_assets: &Res<crate::assets::GameAssets>) {
     commands
         .spawn((
             Node {
@@ -95,7 +96,8 @@ fn spawn_zones_submenu(commands: &mut Commands) {
                     button.spawn((
                         Text::new("Stockpile"),
                         TextFont {
-                            font_size: 16.0,
+                            font: game_assets.font_ui.clone(),
+                            font_size: crate::constants::FONT_SIZE_BODY,
                             ..default()
                         },
                         TextColor(Color::WHITE),
@@ -104,7 +106,7 @@ fn spawn_zones_submenu(commands: &mut Commands) {
         });
 }
 
-fn spawn_orders_submenu(commands: &mut Commands) {
+fn spawn_orders_submenu(commands: &mut Commands, game_assets: &Res<crate::assets::GameAssets>) {
     commands
         .spawn((
             Node {
@@ -160,7 +162,8 @@ fn spawn_orders_submenu(commands: &mut Commands) {
                         button.spawn((
                             Text::new(label),
                             TextFont {
-                                font_size: 16.0,
+                                font: game_assets.font_ui.clone(),
+                                font_size: crate::constants::FONT_SIZE_BODY,
                                 ..default()
                             },
                             TextColor(Color::WHITE),
