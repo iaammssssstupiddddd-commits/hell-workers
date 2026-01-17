@@ -80,7 +80,7 @@ pub fn zone_placement(
                                             custom_size: Some(Vec2::splat(TILE_SIZE)),
                                             ..default()
                                         },
-                                        Transform::from_xyz(pos.x, pos.y, 0.01),
+                                        Transform::from_xyz(pos.x, pos.y, Z_MAP + 0.01),
                                     ))
                                     .id();
                                 world_map.stockpiles.insert(grid, entity);
@@ -116,7 +116,7 @@ pub fn item_spawner_system(
                     color: Color::srgb(0.5, 0.35, 0.05),
                     ..default()
                 },
-                Transform::from_xyz(spawn_pos.x, spawn_pos.y, 0.6),
+                Transform::from_xyz(spawn_pos.x, spawn_pos.y, Z_ITEM_PICKUP),
             ));
             *timer = 0.0;
             debug!("SPAWNER: Wood spawned randomly at {:?}", spawn_pos);
@@ -145,7 +145,7 @@ pub fn initial_resource_spawner(
                     color: Color::srgb(0.2, 0.5, 0.2),
                     ..default()
                 },
-                Transform::from_xyz(pos.x, pos.y, 0.5),
+                Transform::from_xyz(pos.x, pos.y, Z_ITEM_OBSTACLE),
             ));
         }
     }
@@ -164,7 +164,7 @@ pub fn initial_resource_spawner(
                     color: Color::srgb(0.5, 0.5, 0.5),
                     ..default()
                 },
-                Transform::from_xyz(pos.x, pos.y, 0.5),
+                Transform::from_xyz(pos.x, pos.y, Z_ITEM_OBSTACLE),
             ));
         }
     }
@@ -184,7 +184,7 @@ pub fn initial_resource_spawner(
                     color: Color::srgb(0.5, 0.35, 0.05),
                     ..default()
                 },
-                Transform::from_xyz(spawn_pos.x, spawn_pos.y, 0.6),
+                Transform::from_xyz(spawn_pos.x, spawn_pos.y, Z_ITEM_PICKUP),
             ));
             count += 1;
         }
@@ -213,8 +213,11 @@ pub fn resource_count_display_system(
         let pos = WorldMap::grid_to_world(grid.0, grid.1);
         // 新しい座標系では pos は中心なので、右上端 (32*0.5=16) 寄りにオフセット
         // 0.35 * 32 = 11.2 なので正確にタイルの内側に収まる
-        let target_transform =
-            Transform::from_xyz(pos.x + TILE_SIZE * 0.35, pos.y + TILE_SIZE * 0.35, 1.0);
+        let target_transform = Transform::from_xyz(
+            pos.x + TILE_SIZE * 0.35,
+            pos.y + TILE_SIZE * 0.35,
+            Z_CHARACTER,
+        );
 
         if let Some(&entity) = labels.0.get(grid) {
             if let Ok(mut transform) = q_transform.get_mut(entity) {

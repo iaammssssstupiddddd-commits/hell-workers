@@ -181,7 +181,8 @@ pub fn building_completion_system(
             let completion_entity = crate::systems::utils::floating_text::spawn_floating_text(
                 &mut commands,
                 "Construction Complete!",
-                transform.translation + Vec3::new(0.0, 20.0, 2.0),
+                transform.translation.truncate().extend(Z_FLOATING_TEXT)
+                    + Vec3::new(0.0, 20.0, 0.0),
                 completion_config.clone(),
                 Some(16.0),
             );
