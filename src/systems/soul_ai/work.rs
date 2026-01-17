@@ -110,7 +110,7 @@ pub fn unassign_task(
 
         commands.entity(item_entity).insert((
             Visibility::Visible,
-            Transform::from_xyz(snapped_pos.x, snapped_pos.y, 0.6),
+            Transform::from_xyz(snapped_pos.x, snapped_pos.y, Z_ITEM_PICKUP),
         ));
         commands.entity(soul_entity).remove::<Holding>();
 

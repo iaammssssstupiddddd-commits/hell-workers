@@ -2,6 +2,7 @@
 //!
 //! 任意のエンティティにプログレスバーを表示するためのユーティリティ
 
+use crate::constants::*;
 use bevy::prelude::*;
 
 /// プログレスバーの設定
@@ -29,7 +30,7 @@ impl Default for ProgressBarConfig {
             y_offset: -18.0,
             bg_color: Color::srgba(0.1, 0.1, 0.1, 0.9),
             fill_color: Color::srgba(1.0, 0.7, 0.1, 1.0),
-            z_index: 0.5,
+            z_index: Z_BAR_BG,
         }
     }
 }
@@ -110,6 +111,7 @@ pub fn update_progress_bar_fill(
     // 背景バーの左端 = -config.width/2
     // fill_widthの中心を左端に合わせる: -config.width/2 + fill_width/2
     transform.translation.x = (fill_width - config.width) / 2.0;
+    transform.translation.z = Z_BAR_FILL;
 
     // 色を更新（指定がある場合）
     if let Some(color) = fill_color {
@@ -125,7 +127,7 @@ pub fn sync_progress_bar_position(
 ) {
     bar_transform.translation.x = parent_transform.translation.x;
     bar_transform.translation.y = parent_transform.translation.y + config.y_offset;
-    bar_transform.translation.z = parent_transform.translation.z + config.z_index;
+    bar_transform.translation.z = Z_BAR_BG;
 }
 
 /// プログレスバーのFill位置を親エンティティに追従させる（左寄せオフセットを考慮）
@@ -138,5 +140,5 @@ pub fn sync_progress_bar_fill_position(
     let offset_x = (fill_width - config.width) / 2.0;
     fill_transform.translation.x = parent_transform.translation.x + offset_x;
     fill_transform.translation.y = parent_transform.translation.y + config.y_offset;
-    fill_transform.translation.z = parent_transform.translation.z + config.z_index + 0.1;
+    fill_transform.translation.z = Z_BAR_FILL;
 }

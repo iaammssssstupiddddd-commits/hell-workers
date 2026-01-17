@@ -1,5 +1,6 @@
 //! 設計図のプログレスバー関連システム
 
+use crate::constants::Z_BAR_BG;
 use bevy::prelude::*;
 
 use super::components::ProgressBar;
@@ -34,7 +35,7 @@ pub fn spawn_progress_bar_system(
             y_offset: PROGRESS_BAR_Y_OFFSET,
             bg_color: COLOR_PROGRESS_BG,
             fill_color: COLOR_PROGRESS_MATERIAL,
-            z_index: 0.5,
+            z_index: Z_BAR_BG,
         };
 
         let (bg_entity, fill_entity) =

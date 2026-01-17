@@ -1,5 +1,6 @@
 //! ポップアップ・完成テキスト・バウンスアニメーション
 
+use crate::constants::*;
 use bevy::prelude::*;
 
 use super::POPUP_LIFETIME;
@@ -30,7 +31,8 @@ pub fn material_delivery_vfx_system(
                 let popup_entity = spawn_floating_text(
                     &mut commands,
                     "+1",
-                    transform.translation + Vec3::new(0.0, 10.0, 1.0),
+                    transform.translation.truncate().extend(Z_FLOATING_TEXT)
+                        + Vec3::new(0.0, 10.0, 0.0),
                     config.clone(),
                     Some(12.0),
                 );

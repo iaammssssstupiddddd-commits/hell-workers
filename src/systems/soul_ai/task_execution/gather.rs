@@ -2,7 +2,7 @@
 
 use crate::assets::GameAssets;
 use crate::constants::*;
-use crate::systems::jobs::{Designation, Tree, Rock, WorkType};
+use crate::systems::jobs::{Designation, Rock, Tree, WorkType};
 use crate::systems::logistics::ResourceItem;
 use crate::systems::soul_ai::task_execution::{
     common::*,
@@ -60,8 +60,8 @@ pub fn handle_gather_task(
                 }
                 let pos = res_transform.translation;
 
-                // 進行度を更新 (仮に 2秒で完了とする)
-                progress += time.delta_secs() * 0.5;
+                // 進行度を更新
+                progress += time.delta_secs() * GATHER_SPEED_BASE;
 
                 if progress >= 1.0 {
                     if tree.is_some() {
@@ -73,7 +73,7 @@ pub fn handle_gather_task(
                                 color: Color::srgb(0.5, 0.35, 0.05),
                                 ..default()
                             },
-                            Transform::from_translation(pos),
+                            Transform::from_xyz(pos.x, pos.y, Z_ITEM_PICKUP),
                         ));
                         info!("TASK_EXEC: Soul {:?} chopped a tree", ctx.soul_entity);
                     } else if rock.is_some() {
@@ -82,9 +82,10 @@ pub fn handle_gather_task(
                             Sprite {
                                 image: game_assets.stone.clone(),
                                 custom_size: Some(Vec2::splat(TILE_SIZE * 0.5)),
+                                color: Color::srgb(0.5, 0.5, 0.5),
                                 ..default()
                             },
-                            Transform::from_translation(pos),
+                            Transform::from_xyz(pos.x, pos.y, Z_ITEM_PICKUP),
                         ));
                         info!("TASK_EXEC: Soul {:?} mined a rock", ctx.soul_entity);
                     }
@@ -95,7 +96,7 @@ pub fn handle_gather_task(
                         work_type: *work_type,
                         phase: GatherPhase::Done,
                     };
-                    ctx.soul.fatigue = (ctx.soul.fatigue + 0.1).min(1.0);
+                    ctx.soul.fatigue = (ctx.soul.fatigue + FATIGUE_GAIN_ON_COMPLETION).min(1.0);
                 } else {
                     // 進捗を保存
                     *ctx.task = AssignedTask::Gather {

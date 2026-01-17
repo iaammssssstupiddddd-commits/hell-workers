@@ -82,7 +82,7 @@ pub fn spawn_map(
             color: Color::srgba(0.5, 0.2, 0.8, 0.2), // 薄い紫色
             ..default()
         },
-        Transform::from_xyz(gathering_pos.x, gathering_pos.y, 0.1),
+        Transform::from_xyz(gathering_pos.x, gathering_pos.y, Z_ITEM),
     ));
 
     for y in 0..MAP_HEIGHT {
@@ -105,7 +105,7 @@ pub fn spawn_map(
                     custom_size: Some(Vec2::splat(TILE_SIZE)),
                     ..default()
                 },
-                Transform::from_xyz(pos.x, pos.y, 0.0),
+                Transform::from_xyz(pos.x, pos.y, Z_MAP),
             ));
         }
     }

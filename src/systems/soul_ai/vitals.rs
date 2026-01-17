@@ -1,6 +1,6 @@
 //! ワーカーのバイタル（疲労、ストレス、やる気）を管理するモジュール
 
-use crate::constants::{FATIGUE_GATHERING_THRESHOLD, TILE_SIZE};
+use crate::constants::*;
 use crate::entities::damned_soul::{DamnedSoul, IdleBehavior, IdleState, StressBreakdown};
 use crate::entities::familiar::{ActiveCommand, Familiar, FamiliarCommand, UnderCommand};
 use crate::events::{OnExhausted, OnStressBreakdown};
@@ -31,13 +31,13 @@ pub fn fatigue_update_system(
 
         if has_task {
             // タスク実行中: 疲労増加
-            soul.fatigue = (soul.fatigue + dt * 0.01).min(1.0);
+            soul.fatigue = (soul.fatigue + dt * FATIGUE_WORK_RATE).min(1.0);
         } else if under_command.is_some() {
             // 使役中の待機: 疲労減少（遅い）
-            soul.fatigue = (soul.fatigue - dt * 0.01).max(0.0);
+            soul.fatigue = (soul.fatigue - dt * FATIGUE_RECOVERY_RATE_COMMANDED).max(0.0);
         } else {
             // 通常の待機: 疲労減少（速い）
-            soul.fatigue = (soul.fatigue - dt * 0.05).max(0.0);
+            soul.fatigue = (soul.fatigue - dt * FATIGUE_RECOVERY_RATE_IDLE).max(0.0);
         }
 
         if soul.fatigue > FATIGUE_GATHERING_THRESHOLD
@@ -52,8 +52,8 @@ pub fn fatigue_update_system(
 pub fn fatigue_penalty_system(time: Res<Time>, mut q_souls: Query<&mut DamnedSoul>) {
     let dt = time.delta_secs();
     for mut soul in q_souls.iter_mut() {
-        if soul.fatigue > 0.9 {
-            soul.motivation = (soul.motivation - dt * 0.5).max(0.0);
+        if soul.fatigue > FATIGUE_MOTIVATION_PENALTY_THRESHOLD {
+            soul.motivation = (soul.motivation - dt * FATIGUE_MOTIVATION_PENALTY_RATE).max(0.0);
         }
     }
 }
@@ -85,13 +85,13 @@ pub fn stress_system(
         );
 
         if has_task {
-            soul.stress = (soul.stress + dt * 0.015).min(1.0);
+            soul.stress = (soul.stress + dt * STRESS_WORK_RATE).min(1.0);
         } else if is_gathering {
-            soul.stress = (soul.stress - dt * 0.04).max(0.0);
+            soul.stress = (soul.stress - dt * STRESS_RECOVERY_RATE_GATHERING).max(0.0);
         } else if under_command.is_some() {
             // 待機中（使役下）= 変化なし
         } else {
-            soul.stress = (soul.stress - dt * 0.02).max(0.0);
+            soul.stress = (soul.stress - dt * STRESS_RECOVERY_RATE_IDLE).max(0.0);
         }
 
         if soul.stress >= 1.0 {
@@ -99,9 +99,9 @@ pub fn stress_system(
                 commands.trigger(OnStressBreakdown { entity });
             }
         } else if let Some(mut breakdown) = breakdown_opt {
-            if soul.stress <= 0.7 {
+            if soul.stress <= STRESS_RECOVERY_THRESHOLD {
                 commands.entity(entity).remove::<StressBreakdown>();
-            } else if soul.stress <= 0.9 && breakdown.is_frozen {
+            } else if soul.stress <= STRESS_FREEZE_RECOVERY_THRESHOLD && breakdown.is_frozen {
                 breakdown.is_frozen = false;
             }
         }
@@ -139,7 +139,7 @@ pub fn supervision_stress_system(
                 if distance_sq < radius_sq {
                     let distance = distance_sq.sqrt();
                     let command_multiplier = if matches!(command.command, FamiliarCommand::Idle) {
-                        0.4
+                        SUPERVISION_IDLE_MULTIPLIER
                     } else {
                         1.0
                     };
@@ -152,7 +152,7 @@ pub fn supervision_stress_system(
             .fold(0.0_f32, |acc, x| acc.max(x));
 
         if best_influence > 0.0 {
-            let supervision_stress = best_influence * dt * 0.0375;
+            let supervision_stress = best_influence * dt * SUPERVISION_STRESS_SCALE;
             soul.stress = (soul.stress + supervision_stress).min(1.0);
         }
     }
@@ -196,7 +196,7 @@ pub fn motivation_system(
                 if distance_sq < radius_sq {
                     let distance = distance_sq.sqrt();
                     let command_multiplier = if matches!(command.command, FamiliarCommand::Idle) {
-                        0.4
+                        SUPERVISION_IDLE_MULTIPLIER
                     } else {
                         1.0
                     };
@@ -209,14 +209,16 @@ pub fn motivation_system(
             .fold(0.0_f32, |acc, x| acc.max(x));
 
         if best_influence > 0.0 {
-            soul.motivation = (soul.motivation + best_influence * dt * 4.0).min(1.0);
-            soul.laziness = (soul.laziness - best_influence * dt * 2.5).max(0.0);
+            soul.motivation =
+                (soul.motivation + best_influence * dt * SUPERVISION_MOTIVATION_SCALE).min(1.0);
+            soul.laziness =
+                (soul.laziness - best_influence * dt * SUPERVISION_LAZINESS_SCALE).max(0.0);
         } else if has_task || under_command.is_some() {
-            soul.motivation = (soul.motivation - dt * 0.02).max(0.0);
-            soul.laziness = (soul.laziness - dt * 0.1).max(0.0);
+            soul.motivation = (soul.motivation - dt * MOTIVATION_LOSS_RATE_ACTIVE).max(0.0);
+            soul.laziness = (soul.laziness - dt * LAZINESS_LOSS_RATE_ACTIVE).max(0.0);
         } else {
-            soul.motivation = (soul.motivation - dt * 0.1).max(0.0);
-            soul.laziness = (soul.laziness + dt * 0.05).min(1.0);
+            soul.motivation = (soul.motivation - dt * MOTIVATION_LOSS_RATE_IDLE).max(0.0);
+            soul.laziness = (soul.laziness + dt * LAZINESS_GAIN_RATE_IDLE).min(1.0);
         }
     }
 }

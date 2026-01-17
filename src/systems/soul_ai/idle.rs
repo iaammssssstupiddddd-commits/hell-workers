@@ -1,6 +1,4 @@
-use crate::constants::{
-    FATIGUE_GATHERING_THRESHOLD, FATIGUE_IDLE_THRESHOLD, MOTIVATION_THRESHOLD, TILE_SIZE,
-};
+use crate::constants::*;
 use crate::entities::damned_soul::{
     DamnedSoul, Destination, GatheringBehavior, IdleBehavior, IdleState, Path,
 };
@@ -11,10 +9,7 @@ use rand::Rng;
 
 // ===== 集会関連の定数 =====
 /// 集会エリアに「到着した」とみなす半径
-const GATHERING_ARRIVAL_RADIUS: f32 = TILE_SIZE * 3.0;
-/// 集会中の行動パターン変更間隔（秒）
-const GATHERING_BEHAVIOR_DURATION_MIN: f32 = 60.0;
-const GATHERING_BEHAVIOR_DURATION_MAX: f32 = 90.0;
+const GATHERING_ARRIVAL_RADIUS: f32 = TILE_SIZE * GATHERING_ARRIVAL_RADIUS_BASE;
 /// 重なり回避の最小間隔
 const GATHERING_MIN_SEPARATION: f32 = TILE_SIZE * 1.2;
 
@@ -105,7 +100,9 @@ pub fn idle_behavior_system(
         if idle.idle_timer >= idle.behavior_duration {
             idle.idle_timer = 0.0;
 
-            if soul.fatigue > FATIGUE_GATHERING_THRESHOLD || idle.total_idle_time > 30.0 {
+            if soul.fatigue > FATIGUE_GATHERING_THRESHOLD
+                || idle.total_idle_time > IDLE_TIME_TO_GATHERING
+            {
                 if idle.behavior != IdleBehavior::Gathering
                     && idle.behavior != IdleBehavior::ExhaustedGathering
                 {
@@ -124,7 +121,7 @@ pub fn idle_behavior_system(
                 let mut rng = rand::thread_rng();
                 let roll: f32 = rng.gen_range(0.0..1.0);
 
-                idle.behavior = if soul.laziness > 0.8 {
+                idle.behavior = if soul.laziness > LAZINESS_THRESHOLD_HIGH {
                     if roll < 0.6 {
                         IdleBehavior::Sleeping
                     } else if roll < 0.9 {
@@ -132,7 +129,7 @@ pub fn idle_behavior_system(
                     } else {
                         IdleBehavior::Wandering
                     }
-                } else if soul.laziness > 0.5 {
+                } else if soul.laziness > LAZINESS_THRESHOLD_MID {
                     if roll < 0.3 {
                         IdleBehavior::Sleeping
                     } else if roll < 0.6 {
@@ -151,11 +148,17 @@ pub fn idle_behavior_system(
 
             let mut rng = rand::thread_rng();
             idle.behavior_duration = match idle.behavior {
-                IdleBehavior::Sleeping => rng.gen_range(5.0..10.0),
-                IdleBehavior::Sitting => rng.gen_range(3.0..6.0),
-                IdleBehavior::Wandering => rng.gen_range(2.0..4.0),
+                IdleBehavior::Sleeping => {
+                    rng.gen_range(IDLE_DURATION_SLEEP_MIN..IDLE_DURATION_SLEEP_MAX)
+                }
+                IdleBehavior::Sitting => {
+                    rng.gen_range(IDLE_DURATION_SIT_MIN..IDLE_DURATION_SIT_MAX)
+                }
+                IdleBehavior::Wandering => {
+                    rng.gen_range(IDLE_DURATION_WANDER_MIN..IDLE_DURATION_WANDER_MAX)
+                }
                 IdleBehavior::Gathering | IdleBehavior::ExhaustedGathering => {
-                    rng.gen_range(2.0..4.0)
+                    rng.gen_range(IDLE_DURATION_WANDER_MIN..IDLE_DURATION_WANDER_MAX)
                 }
             };
         }

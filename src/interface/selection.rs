@@ -149,7 +149,7 @@ pub fn blueprint_placement(
                                     custom_size: Some(Vec2::splat(TILE_SIZE)),
                                     ..default()
                                 },
-                                Transform::from_xyz(pos.x, pos.y, 0.1),
+                                Transform::from_xyz(pos.x, pos.y, Z_AURA),
                                 Name::new(format!("Blueprint ({:?})", building_type)),
                             ))
                             .id();
@@ -172,8 +172,10 @@ pub fn update_selection_indicator(
     if let Some(entity) = selected.0 {
         if let Ok(target_transform) = q_transforms.get(entity) {
             if let Ok((_, mut indicator_transform)) = q_indicator.single_mut() {
-                indicator_transform.translation =
-                    target_transform.translation().truncate().extend(0.5);
+                indicator_transform.translation = target_transform
+                    .translation()
+                    .truncate()
+                    .extend(Z_SELECTION);
             } else {
                 commands.spawn((
                     SelectionIndicator,
@@ -183,7 +185,10 @@ pub fn update_selection_indicator(
                         ..default()
                     },
                     Transform::from_translation(
-                        target_transform.translation().truncate().extend(0.5),
+                        target_transform
+                            .translation()
+                            .truncate()
+                            .extend(Z_SELECTION),
                     ),
                 ));
             }

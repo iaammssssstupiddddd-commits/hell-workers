@@ -77,7 +77,7 @@ pub fn spawn_damned_soul_at(
                 color: sprite_color,
                 ..default()
             },
-            Transform::from_xyz(actual_pos.x, actual_pos.y, 1.0),
+            Transform::from_xyz(actual_pos.x, actual_pos.y, Z_CHARACTER),
             Destination(actual_pos),
             Path::default(),
             AnimationState::default(),
@@ -156,13 +156,14 @@ pub fn soul_movement(
             let distance = to_target.length();
 
             if distance > 2.0 {
-                let base_speed = 60.0;
-                let motivation_bonus = soul.motivation * 40.0;
-                let laziness_penalty = soul.laziness * 30.0;
-                let mut speed = (base_speed + motivation_bonus - laziness_penalty).max(20.0);
+                let base_speed = SOUL_SPEED_BASE;
+                let motivation_bonus = soul.motivation * SOUL_SPEED_MOTIVATION_BONUS;
+                let laziness_penalty = soul.laziness * SOUL_SPEED_LAZINESS_PENALTY;
+                let mut speed =
+                    (base_speed + motivation_bonus - laziness_penalty).max(SOUL_SPEED_MIN);
 
                 if idle.behavior == IdleBehavior::ExhaustedGathering {
-                    speed *= 0.7;
+                    speed *= SOUL_SPEED_EXHAUSTED_MULTIPLIER;
                 }
 
                 let move_dist = (speed * time.delta_secs()).min(distance);
@@ -197,13 +198,13 @@ pub fn animation_system(
         sprite.flip_x = !anim.facing_right;
 
         if anim.is_moving {
-            anim.bob_timer += time.delta_secs() * 10.0;
-            let bob = (anim.bob_timer.sin() * 0.05) + 1.0;
+            anim.bob_timer += time.delta_secs() * ANIM_BOB_SPEED;
+            let bob = (anim.bob_timer.sin() * ANIM_BOB_AMPLITUDE) + 1.0;
             transform.scale = Vec3::new(1.0, bob, 1.0);
         } else {
-            let breath_speed = 2.0 - soul.laziness;
+            let breath_speed = ANIM_BREATH_SPEED_BASE - soul.laziness;
             anim.bob_timer += time.delta_secs() * breath_speed;
-            let breath = (anim.bob_timer.sin() * 0.02) + 1.0;
+            let breath = (anim.bob_timer.sin() * ANIM_BREATH_AMPLITUDE) + 1.0;
             transform.scale = Vec3::splat(breath);
         }
     }
@@ -376,7 +377,7 @@ fn on_exhausted(
         let center = gathering_area.0;
         let dist_from_center = (center - current_pos).length();
 
-        if dist_from_center > TILE_SIZE * 3.0 {
+        if dist_from_center > TILE_SIZE * GATHERING_ARRIVAL_RADIUS_BASE {
             dest.0 = center;
             path.waypoints.clear();
             path.current_index = 0;

@@ -3,6 +3,7 @@
 //! DamnedSoul（亡者）のプログレスバー、ステータスアイコン、タスクリンク表示
 
 use crate::constants::TILE_SIZE;
+use crate::constants::*;
 use crate::entities::damned_soul::DamnedSoul;
 use crate::systems::soul_ai::task_execution::types::{AssignedTask, GatherPhase, HaulPhase};
 use crate::systems::utils::progress_bar::{
@@ -42,7 +43,7 @@ pub fn progress_bar_system(
                     y_offset: TILE_SIZE * 0.6,
                     bg_color: Color::srgba(0.0, 0.0, 0.0, 0.8),
                     fill_color: Color::srgb(0.0, 1.0, 0.0),
-                    z_index: 0.1,
+                    z_index: Z_BAR_BG,
                 };
 
                 let (bg_entity, fill_entity) =
@@ -237,7 +238,8 @@ pub fn soul_status_visual_system(
                 commands
                     .entity(icon_entity)
                     .insert(Transform::from_translation(
-                        transform.translation + Vec3::new(TILE_SIZE * 0.4, TILE_SIZE * 0.4, 0.5),
+                        transform.translation.truncate().extend(Z_CHARACTER + 0.5)
+                            + Vec3::new(TILE_SIZE * 0.4, TILE_SIZE * 0.4, 0.0),
                     ));
             } else {
                 let icon_id = commands
@@ -252,8 +254,8 @@ pub fn soul_status_visual_system(
                         },
                         TextColor(color),
                         Transform::from_translation(
-                            transform.translation
-                                + Vec3::new(TILE_SIZE * 0.4, TILE_SIZE * 0.4, 0.5),
+                            transform.translation.truncate().extend(Z_CHARACTER + 0.5)
+                                + Vec3::new(TILE_SIZE * 0.4, TILE_SIZE * 0.4, 0.0),
                         ),
                     ))
                     .id();

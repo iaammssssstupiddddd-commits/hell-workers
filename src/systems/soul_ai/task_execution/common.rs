@@ -9,13 +9,9 @@ use crate::systems::soul_ai::task_execution::types::AssignedTask;
 use bevy::prelude::*;
 
 /// 目的地を更新（必要に応じて）
-/// 
+///
 /// 目的地が2.0以上離れている場合にのみ更新します。
-pub fn update_destination_if_needed(
-    dest: &mut Destination,
-    target_pos: Vec2,
-    path: &mut Path,
-) {
+pub fn update_destination_if_needed(dest: &mut Destination, target_pos: Vec2, path: &mut Path) {
     if dest.0.distance_squared(target_pos) > 2.0 {
         dest.0 = target_pos;
         path.waypoints.clear();
@@ -29,7 +25,7 @@ pub fn clear_task_and_path(task: &mut AssignedTask, path: &mut Path) {
 }
 
 /// 指定が解除されていたらタスクをキャンセル
-/// 
+///
 /// 指定が解除されていた場合、タスクとパスをクリアして`true`を返します。
 /// 指定が存在する場合、`false`を返します。
 pub fn cancel_task_if_designation_missing(
@@ -45,19 +41,15 @@ pub fn cancel_task_if_designation_missing(
 }
 
 /// アイテムをピックアップ
-/// 
+///
 /// 魂にアイテムを持たせ、アイテムを非表示にします。
-pub fn pickup_item(
-    commands: &mut Commands,
-    soul_entity: Entity,
-    item_entity: Entity,
-) {
+pub fn pickup_item(commands: &mut Commands, soul_entity: Entity, item_entity: Entity) {
     commands.entity(soul_entity).insert(Holding(item_entity));
     commands.entity(item_entity).insert(Visibility::Hidden);
 }
 
 /// アイテムをドロップ
-/// 
+///
 /// 魂からアイテムを外し、指定位置にアイテムを表示します。
 pub fn drop_item(
     commands: &mut Commands,
@@ -68,12 +60,12 @@ pub fn drop_item(
     commands.entity(soul_entity).remove::<Holding>();
     commands.entity(item_entity).insert((
         Visibility::Visible,
-        Transform::from_xyz(drop_pos.x, drop_pos.y, 0.6),
+        Transform::from_xyz(drop_pos.x, drop_pos.y, Z_ITEM_PICKUP),
     ));
 }
 
 /// ストックパイルからアイテムが取り出された際の更新処理
-/// 
+///
 /// ストックパイルが空になった場合、リソースタイプをリセットします。
 pub fn update_stockpile_on_item_removal(
     stock_entity: Entity,
@@ -96,7 +88,7 @@ pub fn update_stockpile_on_item_removal(
 }
 
 /// 距離チェック: 魂がターゲットに近づいたかどうか
-/// 
+///
 /// `TILE_SIZE * 1.2`以内にいる場合、`true`を返します。
 pub fn is_near_target(soul_pos: Vec2, target_pos: Vec2) -> bool {
     soul_pos.distance(target_pos) < TILE_SIZE * 1.2
