@@ -2,6 +2,7 @@
 
 use crate::interface::ui::components::*;
 use bevy::prelude::*;
+use bevy::ui::{BackgroundGradient, ColorStop, LinearGradient};
 
 /// エンティティリストパネルをスポーン
 pub fn spawn_entity_list_panel(
@@ -23,7 +24,14 @@ pub fn spawn_entity_list_panel(
                 overflow: Overflow::clip_y(),
                 ..default()
             },
-            BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.8)),
+            BackgroundGradient::from(LinearGradient {
+                angle: 0.0, // 左から右
+                stops: vec![
+                    ColorStop::new(Color::srgba(0.1, 0.3, 0.5, 0.9), Val::Percent(0.0)), // 青っぽい
+                    ColorStop::new(Color::srgba(0.0, 0.0, 0.0, 0.8), Val::Percent(100.0)),
+                ],
+                ..default()
+            }),
             EntityListPanel,
         ))
         .with_children(|parent| {
