@@ -1,0 +1,16 @@
+# AI Agent Instructions
+
+You are working on the "Hell Workers" project.
+Before starting any task, you MUST check the following documents to understand the context and rules:
+
+1.  **Project Overview**: [README.md](file:///f:/DevData/projects/hell-workers/README.md)
+2.  **Development Rules**: [docs/DEVELOPMENT.md](file:///f:/DevData/projects/hell-workers/docs/DEVELOPMENT.md)
+3.  **Documentation Index**: [docs/README.md](file:///f:/DevData/projects/hell-workers/docs/README.md)
+
+## Key Technical Context
+- **Engine**: Bevy 0.17
+- **Critical Mechanism**: ECS Relationships are used for most entity connections.
+- **Verification**: Always run `cargo check` before finishing a task.
+- **Visuals**: Use the specific magenta-background workflow for new images.
+
+Refer to `docs/` for specific system details (AI, Tasks, Logistics, etc.).
