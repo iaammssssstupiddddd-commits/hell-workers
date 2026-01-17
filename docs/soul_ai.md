@@ -51,7 +51,7 @@
 
 ## 4. 関連コンポーネントと Relationship
 
-Bevy 0.17 の ECS Relationships を使用して、状態を管理しています。
+Bevy 0.18 の ECS Relationships を使用して、状態を管理しています。
 
 - `DamnedSoul`: 基本ステータス（fatigue, stress, motivation 等）を保持。
 - `AssignedTask`: 現在の作業内容。
