@@ -1,7 +1,7 @@
 use super::{AreaSelectionIndicator, TaskArea, TaskMode};
 use crate::entities::damned_soul::Destination;
 use crate::entities::familiar::{ActiveCommand, Familiar, FamiliarCommand};
-use crate::game_state::TaskContext;
+use crate::game_state::{PlayMode, TaskContext};
 use crate::interface::camera::MainCamera;
 use crate::interface::selection::SelectedEntity;
 use crate::systems::jobs::{Designation, DesignationCreatedEvent, IssuedBy, Rock, Tree, WorkType};
@@ -16,6 +16,7 @@ pub fn task_area_selection_system(
     q_ui: Query<&Interaction, With<Button>>,
     selected: Res<SelectedEntity>,
     mut task_context: ResMut<TaskContext>,
+    mut next_play_mode: ResMut<NextState<PlayMode>>,
     mut q_familiars: Query<(&mut ActiveCommand, &mut Destination), With<Familiar>>,
     q_targets: Query<(
         Entity,
@@ -141,6 +142,7 @@ pub fn task_area_selection_system(
                             commands.entity(indicator_entity).despawn();
                         }
                         task_context.0 = TaskMode::None;
+                        next_play_mode.set(PlayMode::Normal);
                     }
                     TaskMode::DesignateChop(Some(start_pos))
                     | TaskMode::DesignateMine(Some(start_pos))
