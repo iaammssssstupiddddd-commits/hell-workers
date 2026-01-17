@@ -215,7 +215,7 @@ pub fn spawn_familiar_at(
                 color: Color::WHITE,
                 ..default()
             },
-            Transform::from_xyz(actual_pos.x, actual_pos.y, 1.5), // 人間より少し上に表示
+            Transform::from_xyz(actual_pos.x, actual_pos.y, Z_CHARACTER + 0.5), // 人間より少し上に表示
         ))
         .id();
 
@@ -229,7 +229,7 @@ pub fn spawn_familiar_at(
             custom_size: Some(Vec2::splat(command_radius * 2.0)),
             ..default()
         },
-        Transform::from_translation(actual_pos.extend(0.25)),
+        Transform::from_translation(actual_pos.extend(Z_AURA)),
     ));
 
     // オーラ強調用アウトライン（選択時のみ表示される細い線）
@@ -242,7 +242,7 @@ pub fn spawn_familiar_at(
             custom_size: Some(Vec2::splat(command_radius * 2.0)),
             ..default()
         },
-        Transform::from_translation(actual_pos.extend(0.26)),
+        Transform::from_translation(actual_pos.extend(Z_AURA + 0.01)),
     ));
 
     // オーラ内側（パルスアニメーション）
@@ -256,7 +256,7 @@ pub fn spawn_familiar_at(
             custom_size: Some(Vec2::splat(command_radius * 1.8)),
             ..default()
         },
-        Transform::from_translation(actual_pos.extend(0.28)),
+        Transform::from_translation(actual_pos.extend(Z_AURA + 0.03)),
     ));
 
     info!(
@@ -292,10 +292,10 @@ pub fn update_familiar_range_indicator(
         if let Ok((_, fam_transform, familiar)) = q_familiars.get(indicator.0) {
             // 位置追従
             let z = match layer_opt {
-                Some(AuraLayer::Border) => 0.25,
-                Some(AuraLayer::Outline) => 0.26,
-                Some(AuraLayer::Pulse) => 0.28,
-                None => 0.25,
+                Some(AuraLayer::Border) => Z_AURA,
+                Some(AuraLayer::Outline) => Z_AURA + 0.01,
+                Some(AuraLayer::Pulse) => Z_AURA + 0.03,
+                None => Z_AURA,
             };
             transform.translation = fam_transform.translation.truncate().extend(z);
 

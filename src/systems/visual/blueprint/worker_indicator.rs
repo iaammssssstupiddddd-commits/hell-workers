@@ -1,5 +1,6 @@
 //! 建築中のワーカーインジケータ（ハンマーアイコン）
 
+use crate::constants::*;
 use bevy::prelude::*;
 
 use super::components::{HasWorkerIndicator, WorkerHammerIcon};
@@ -35,7 +36,9 @@ pub fn spawn_worker_indicators_system(
                         color: Color::srgb(1.0, 0.8, 0.2), // 建築らしいオレンジ寄りの黄色
                         ..default()
                     },
-                    Transform::from_translation(transform.translation + Vec3::new(0.0, 32.0, 0.5)),
+                    Transform::from_translation(
+                        transform.translation + Vec3::new(0.0, 32.0, Z_VISUAL_EFFECT - Z_CHARACTER),
+                    ),
                     Name::new("WorkerHammerIcon"),
                 ));
 
@@ -62,8 +65,8 @@ pub fn update_worker_indicators_system(
 
                     // 位置同期（Z=0.5で固定）
                     let bob = (time.elapsed_secs() * 5.0).sin() * 2.5;
-                    hammer_transform.translation =
-                        worker_transform.translation + Vec3::new(0.0, 32.0 + bob, 0.5);
+                    hammer_transform.translation = worker_transform.translation
+                        + Vec3::new(0.0, 32.0 + bob, Z_VISUAL_EFFECT - Z_CHARACTER);
                 }
             }
         }

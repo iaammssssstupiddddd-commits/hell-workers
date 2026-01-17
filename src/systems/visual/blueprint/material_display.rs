@@ -28,7 +28,7 @@ pub fn spawn_material_display_system(
             let offset = Vec3::new(
                 MATERIAL_ICON_X_OFFSET,
                 MATERIAL_ICON_Y_OFFSET - (i as f32 * 14.0),
-                0.2,
+                0.1, // 親(Z_AURA)からの相対
             );
 
             commands.entity(bp_entity).with_children(|parent| {
