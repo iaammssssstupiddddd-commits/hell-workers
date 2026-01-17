@@ -64,7 +64,10 @@ fn main() {
         )
         // Debug inspector plugins
         .add_plugins(EguiPlugin::default())
-        .add_plugins(WorldInspectorPlugin::new())
+        .add_plugins(
+            WorldInspectorPlugin::new()
+                .run_if(|vis: Res<DebugInspectorVisible>| vis.0),
+        )
         .add_plugins(
             ResourceInspectorPlugin::<GameTime>::default()
                 .run_if(|vis: Res<DebugInspectorVisible>| vis.0),
