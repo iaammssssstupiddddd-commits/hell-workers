@@ -25,7 +25,7 @@ use crate::plugins::{
 };
 use crate::systems::GameSystemSet;
 use crate::systems::familiar_ai::FamiliarAiPlugin;
-use crate::systems::jobs::{DesignationCreatedEvent, TaskCompletedEvent};
+use crate::systems::jobs::DesignationCreatedEvent;
 
 /// ゲーム内のデバッグ情報の表示状態（独自実装用）
 #[derive(Resource, Default)]
@@ -68,7 +68,6 @@ fn main() {
         .add_systems(OnExit(PlayMode::TaskDesignation), log_exit_task_mode)
         // Events
         .add_message::<DesignationCreatedEvent>()
-        .add_message::<TaskCompletedEvent>()
         .add_message::<FamiliarSpawnEvent>()
         // Entity plugins
         .add_plugins(DamnedSoulPlugin)
