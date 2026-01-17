@@ -17,10 +17,10 @@ pub fn setup_ui(commands: Commands, game_assets: Res<crate::assets::GameAssets>)
 }
 
 fn setup_ui_internal(mut commands: Commands, game_assets: Res<crate::assets::GameAssets>) {
-    bottom_bar::spawn_bottom_bar(&mut commands);
-    submenus::spawn_submenus(&mut commands);
+    bottom_bar::spawn_bottom_bar(&mut commands, &game_assets);
+    submenus::spawn_submenus(&mut commands, &game_assets);
     panels::spawn_panels(&mut commands, &game_assets);
     entity_list::spawn_entity_list_panel(&mut commands, &game_assets);
-    time_control::spawn_time_control(&mut commands);
-    dialogs::spawn_dialogs(&mut commands);
+    time_control::spawn_time_control(&mut commands, &game_assets);
+    dialogs::spawn_dialogs(&mut commands, &game_assets);
 }

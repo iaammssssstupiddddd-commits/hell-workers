@@ -155,3 +155,18 @@ pub const ANIM_BOB_AMPLITUDE: f32 = 0.05;
 pub const ANIM_BREATH_SPEED_BASE: f32 = 2.0;
 /// 待機中呼吸アニメーションの振幅
 pub const ANIM_BREATH_AMPLITUDE: f32 = 0.02;
+
+// ============================================================
+// UI・フォント定数
+// ============================================================
+
+/// タイトル用フォントサイズ
+pub const FONT_SIZE_TITLE: f32 = 24.0;
+/// ヘッダー用フォントサイズ
+pub const FONT_SIZE_HEADER: f32 = 20.0;
+/// 本文用フォントサイズ
+pub const FONT_SIZE_BODY: f32 = 16.0;
+/// 小サイズテキスト用フォントサイズ
+pub const FONT_SIZE_SMALL: f32 = 14.0;
+/// 極小サイズテキスト用フォントサイズ
+pub const FONT_SIZE_TINY: f32 = 10.0;

@@ -179,6 +179,7 @@ pub fn building_completion_system(
                     + Vec3::new(0.0, 20.0, 0.0),
                 completion_config.clone(),
                 Some(16.0),
+                game_assets.font_ui.clone(),
             );
             commands.entity(completion_entity).insert((
                 crate::systems::visual::blueprint::CompletionText {

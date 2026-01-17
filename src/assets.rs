@@ -27,4 +27,10 @@ pub struct GameAssets {
     pub icon_hammer: Handle<Image>,
     pub icon_wood_small: Handle<Image>,
     pub icon_stone_small: Handle<Image>,
+    // Fonts
+    pub font_ui: Handle<Font>,         // UI全般
+    pub font_narrator: Handle<Font>,   // 地獄の王（ナレーション）
+    pub font_familiar: Handle<Font>,   // Familiar吹き出し
+    pub font_soul_name: Handle<Font>,  // Soul名
+    pub font_soul_emoji: Handle<Font>, // Soulセリフ（絵文字）
 }

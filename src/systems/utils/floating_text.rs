@@ -44,6 +44,7 @@ pub fn spawn_floating_text(
     position: Vec3,
     config: FloatingTextConfig,
     font_size: Option<f32>,
+    font: Handle<Font>,
 ) -> Entity {
     let mut entity_commands = commands.spawn((
         FloatingText {
@@ -52,6 +53,7 @@ pub fn spawn_floating_text(
         },
         Text2d::new(text),
         TextFont {
+            font,
             font_size: font_size.unwrap_or(12.0),
             ..default()
         },
