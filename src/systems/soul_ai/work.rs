@@ -13,7 +13,7 @@ use crate::systems::jobs::{
 };
 use crate::systems::logistics::{ResourceItem, Stockpile};
 use crate::systems::soul_ai::task_execution::AssignedTask;
-use crate::systems::spatial::ResourceSpatialGrid;
+use crate::systems::spatial::{ResourceSpatialGrid, SpatialGridOps};
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
 
@@ -296,7 +296,9 @@ pub fn blueprint_auto_build_system(
                 let mut best_worker = None;
                 let mut min_dist_sq = f32::MAX;
 
-                for (soul_entity, soul_transform, soul, task, _, _, idle, _, uc_opt) in q_souls.iter() {
+                for (soul_entity, soul_transform, soul, task, _, _, idle, _, uc_opt) in
+                    q_souls.iter()
+                {
                     // この使い魔の部下か確認
                     if let Some(uc) = uc_opt {
                         if uc.0 != fam_entity {
@@ -310,7 +312,9 @@ pub fn blueprint_auto_build_system(
                     if !matches!(*task, AssignedTask::None) {
                         continue;
                     }
-                    if idle.behavior == crate::entities::damned_soul::IdleBehavior::ExhaustedGathering {
+                    if idle.behavior
+                        == crate::entities::damned_soul::IdleBehavior::ExhaustedGathering
+                    {
                         continue;
                     }
                     if soul.fatigue >= fatigue_threshold {
@@ -321,7 +325,10 @@ pub fn blueprint_auto_build_system(
                     }
 
                     // 最も近い魂を選択
-                    let dist_sq = soul_transform.translation.truncate().distance_squared(bp_pos);
+                    let dist_sq = soul_transform
+                        .translation
+                        .truncate()
+                        .distance_squared(bp_pos);
                     if dist_sq < min_dist_sq {
                         min_dist_sq = dist_sq;
                         best_worker = Some(soul_entity);
@@ -333,7 +340,9 @@ pub fn blueprint_auto_build_system(
                     if let Ok((_, _, soul, mut assigned_task, mut dest, mut path, idle, _, _)) =
                         q_souls.get_mut(worker_entity)
                     {
-                        if idle.behavior == crate::entities::damned_soul::IdleBehavior::ExhaustedGathering {
+                        if idle.behavior
+                            == crate::entities::damned_soul::IdleBehavior::ExhaustedGathering
+                        {
                             continue;
                         }
                         if soul.fatigue >= fatigue_threshold {
@@ -350,10 +359,9 @@ pub fn blueprint_auto_build_system(
                         path.waypoints = vec![bp_pos];
                         path.current_index = 0;
 
-                        commands.entity(worker_entity).insert((
-                            UnderCommand(fam_entity),
-                            WorkingOn(bp_entity),
-                        ));
+                        commands
+                            .entity(worker_entity)
+                            .insert((UnderCommand(fam_entity), WorkingOn(bp_entity)));
                         commands.entity(bp_entity).insert(IssuedBy(fam_entity));
 
                         info!(
