@@ -25,6 +25,12 @@ systems/visual/
 │   ├── components.rs       # コンポーネント定義
 │   ├── carrying_item.rs    # 運搬中アイテム表示
 │   └── effects.rs          # ドロップエフェクト
+├── speech/                 # セリフ吹き出しシステム (NEW)
+│   ├── mod.rs              # システム登録
+│   ├── components.rs       # 感情・アニメーション定義
+│   ├── spawn.rs            # 生成ロジック
+│   ├── animation.rs        # アニメーション制御
+│   └── typewriter.rs       # タイプライター効果
 └── soul.rs                 # タスクリンク
 ```
 
@@ -79,6 +85,10 @@ systems/visual/
 | HaulToBlueprint | 薄黄 (1.0, 1.0, 0.5, 0.4) |
 
 目標地点には半径4pxのマーカー円が表示されます。
+
+### セリフ吹き出し (Speech Bubbles)
+
+ワーカーの感情や使い魔の命令を視覚化します。詳細は [speech_system.md](speech_system.md) を参照してください。
 
 ## 5. 関連ファイル
 
