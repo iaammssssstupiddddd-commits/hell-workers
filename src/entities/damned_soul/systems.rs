@@ -101,7 +101,10 @@ pub fn spawn_damned_soul_at(
 /// 経路探索システム
 pub fn pathfinding_system(
     world_map: Res<WorldMap>,
-    mut query: Query<(Entity, &Transform, &Destination, &mut Path), Changed<Destination>>,
+    mut query: Query<
+        (Entity, &Transform, &Destination, &mut Path),
+        (Changed<Destination>, With<DamnedSoul>),
+    >,
 ) {
     for (entity, transform, destination, mut path) in query.iter_mut() {
         let current_pos = transform.translation.truncate();

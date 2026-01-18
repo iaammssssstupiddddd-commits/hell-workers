@@ -17,7 +17,7 @@ pub fn following_familiar_system(
         ),
         (With<DamnedSoul>, Without<Familiar>),
     >,
-    q_familiars: Query<&Transform, With<Familiar>>,
+    q_familiars: Query<(&Transform, &Familiar), With<Familiar>>,
 ) {
     for (_soul_entity, soul_transform, task, under_command, idle, mut dest, mut path) in
         q_souls.iter_mut()
@@ -29,15 +29,32 @@ pub fn following_familiar_system(
             continue;
         }
 
-        if let Ok(fam_transform) = q_familiars.get(under_command.0) {
+        if let Ok((fam_transform, familiar)) = q_familiars.get(under_command.0) {
             let fam_pos = fam_transform.translation.truncate();
             let soul_pos = soul_transform.translation.truncate();
+            let command_radius = familiar.command_radius;
 
-            // 使い魔の近くに集まる
-            if soul_pos.distance_squared(fam_pos) > (64.0f32).powi(2) {
-                dest.0 = fam_pos;
-                // パスは次のpathfinding_systemで更新されるため、ここではクリアのみ
-                path.waypoints.clear();
+            // 使い魔の影響範囲内に移動する
+            let distance_sq = soul_pos.distance_squared(fam_pos);
+            let radius_sq = command_radius * command_radius;
+            
+            // 影響範囲外にいる場合は、使い魔の位置に向かって移動する
+            if distance_sq > radius_sq {
+                // 既存の目的地と新しい目的地の距離をチェック
+                // 2.0以上離れている場合のみ更新（pathfinding_systemのChanged<Destination>を確実に発火させるため）
+                if dest.0.distance_squared(fam_pos) > 4.0 {
+                    dest.0 = fam_pos;
+                    // パスを完全にリセット（pathfinding_systemで再計算される）
+                    path.waypoints.clear();
+                    path.current_index = 0;
+                }
+            } else {
+                // 影響範囲内にいる場合は、既存のパスをクリアして停止
+                // ただし、既にパスが完了している場合は何もしない
+                if !path.waypoints.is_empty() && path.current_index < path.waypoints.len() {
+                    path.waypoints.clear();
+                    path.current_index = 0;
+                }
             }
         }
     }
