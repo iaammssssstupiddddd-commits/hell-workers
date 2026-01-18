@@ -14,10 +14,6 @@ pub fn update_speech_bubbles(
         bubble.elapsed += time.delta_secs();
 
         if bubble.elapsed >= bubble.duration {
-            // 背景（子エンティティ）も含めて削除するため、despawn_recursiveを使用
-            // Bevy 0.18 では commands.entity(entity).despawn() がデフォルトで再帰的な可能性もあるが、
-            // エラーを避けるために despawn() にし、もし手動が必要なら工夫する。
-            // 以前 despawn_recursive() が無いと言われたため、despawn() を試す。
             commands.entity(entity).despawn();
             continue;
         }
@@ -31,33 +27,58 @@ pub fn update_speech_bubbles(
     }
 }
 
-/// 吹き出しの重なりを調整するシステム
-pub fn update_bubble_stacking(mut q_bubbles: Query<&mut SpeechBubble>) {
-    use std::collections::HashMap;
-    let mut speaker_groups: HashMap<Entity, Vec<Mut<SpeechBubble>>> = HashMap::new();
+/// 吹き出しの重なりを調整するシステム（ParamSet最適化版）
+/// 吹き出しの追加・削除時のみ計算を実行し、Query競合を回避する
+pub fn update_bubble_stacking(
+    mut removed: RemovedComponents<SpeechBubble>,
+    mut set: ParamSet<(
+        Query<&SpeechBubble, Added<SpeechBubble>>,
+        Query<(Entity, &mut SpeechBubble)>,
+    )>,
+) {
+    // 1. 追加または削除があるかチェック
+    let has_added = !set.p0().is_empty();
+    let has_removed = removed.read().next().is_some();
 
-    // 1. 話者ごとに吹き出しをグループ化
-    for bubble in q_bubbles.iter_mut() {
-        speaker_groups
-            .entry(bubble.speaker)
-            .or_default()
-            .push(bubble);
+    if !has_added && !has_removed {
+        return;
     }
 
-    // 2. 各話者グループ内で経過時間順に並べ替え、オフセットを更新
-    for (_speaker, mut bubbles) in speaker_groups {
-        // 経過時間が短い（新しい）順に並べるか、長い（古い）順に並べるか
-        // ここでは、古いものが上に、新しいものが下に来るようにする（逆も可）
-        // 経過時間が大きい = 古い
-        bubbles.sort_by(|a, b| {
-            b.elapsed
-                .partial_cmp(&a.elapsed)
-                .unwrap_or(std::cmp::Ordering::Equal)
-        });
+    use std::collections::HashMap;
 
-        for (i, bubble) in bubbles.iter_mut().enumerate() {
-            // 基本オフセットに、スタック分のギャップを加算
-            bubble.offset.y = SPEECH_BUBBLE_OFFSET.y + (i as f32 * BUBBLE_STACK_GAP);
+    // 2. 情報を収集 (ParamSet p1 を読み取り専用で使用)
+    // 注意: p1() を呼ぶと他の Query と競合する可能性があるため、スコープを限定する
+    let bubble_info: Vec<(Entity, Entity, f32)> = set
+        .p1()
+        .iter()
+        .map(|(e, b)| (e, b.speaker, b.elapsed))
+        .collect();
+
+    // 3. 話者ごとにグループ化
+    let mut speaker_data: HashMap<Entity, Vec<(Entity, f32)>> = HashMap::new();
+    for (entity, speaker, elapsed) in bubble_info {
+        speaker_data
+            .entry(speaker)
+            .or_default()
+            .push((entity, elapsed));
+    }
+
+    // 4. 各グループ内でソートし、オフセットを更新
+    let mut offset_updates: Vec<(Entity, f32)> = Vec::new();
+    for (_speaker, mut data) in speaker_data {
+        // 経過時間が大きい = 古い → 上に配置
+        data.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+        for (stack_idx, (entity, _)) in data.iter().enumerate() {
+            let new_offset_y = SPEECH_BUBBLE_OFFSET.y + (stack_idx as f32 * BUBBLE_STACK_GAP);
+            offset_updates.push((*entity, new_offset_y));
+        }
+    }
+
+    // 5. オフセットを適用 (ParamSet p1 を可変で使用)
+    let mut q_bubbles = set.p1();
+    for (entity, new_y) in offset_updates {
+        if let Ok((_e, mut bubble)) = q_bubbles.get_mut(entity) {
+            bubble.offset.y = new_y;
         }
     }
 }
