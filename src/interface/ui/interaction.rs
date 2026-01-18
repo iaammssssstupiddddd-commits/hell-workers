@@ -199,6 +199,7 @@ pub fn ui_interaction_system(
     mut q_dialog: Query<&mut Node, With<OperationDialog>>,
     q_context_menu: Query<Entity, With<ContextMenu>>,
     mut commands: Commands,
+    mut ev_max_soul_changed: MessageWriter<crate::events::FamiliarOperationMaxSoulChangedEvent>,
 ) {
     for (interaction, menu_button, mut color) in interaction_query.iter_mut() {
         // 視覚的フィードバック
@@ -321,8 +322,20 @@ pub fn ui_interaction_system(
                 MenuAction::AdjustMaxControlledSoul(delta) => {
                     if let Some(selected) = selected_entity.0 {
                         if let Ok(mut op) = q_familiar_ops.get_mut(selected) {
-                            let new_val = (op.max_controlled_soul as isize + delta).clamp(1, 5);
-                            op.max_controlled_soul = new_val as usize;
+                            let old_val = op.max_controlled_soul;
+                            let new_val = (old_val as isize + delta).clamp(1, 8) as usize;
+                            op.max_controlled_soul = new_val;
+                            
+                            // 値が変更された場合のみイベントを発火
+                            if old_val != new_val {
+                                ev_max_soul_changed.write(
+                                    crate::events::FamiliarOperationMaxSoulChangedEvent {
+                                        familiar_entity: selected,
+                                        old_value: old_val,
+                                        new_value: new_val,
+                                    },
+                                );
+                            }
                         }
                     }
                 }

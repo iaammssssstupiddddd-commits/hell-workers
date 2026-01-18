@@ -69,6 +69,7 @@ fn main() {
         // Events
         .add_message::<DesignationCreatedEvent>()
         .add_message::<FamiliarSpawnEvent>()
+        .add_message::<crate::events::FamiliarOperationMaxSoulChangedEvent>()
         // Entity plugins
         .add_plugins(DamnedSoulPlugin)
         .add_plugins(FamiliarAiPlugin)
