@@ -14,6 +14,7 @@ use crate::systems::soul_ai::work::unassign_task;
 use crate::systems::spatial::{
     DesignationSpatialGrid, SpatialGrid, update_designation_spatial_grid_system,
 };
+use crate::systems::visual::speech::components::{BubbleEmotion, FamiliarBubble, SpeechBubble};
 use bevy::prelude::*;
 
 pub mod following;
@@ -120,6 +121,7 @@ pub fn familiar_ai_system(
     mut haul_cache: ResMut<haul_cache::HaulReservationCache>,
     designation_grid: Res<DesignationSpatialGrid>,
     game_assets: Res<crate::assets::GameAssets>,
+    q_bubbles: Query<(Entity, &SpeechBubble), With<FamiliarBubble>>,
 ) {
     // 1. 搬送中のアイテム・ストックパイル予約状況を事前計算
     // フェーズ2: 全ソウルをイテレートする代わりにキャッシュ（HaulReservationCache）を使用
@@ -156,6 +158,8 @@ pub fn familiar_ai_system(
                     crate::systems::visual::speech::phrases::LatinPhrase::Requiesce,
                     fam_transform.translation,
                     &game_assets,
+                    &q_bubbles,
+                    BubbleEmotion::Neutral,
                 );
             }
             fam_dest.0 = fam_transform.translation.truncate();

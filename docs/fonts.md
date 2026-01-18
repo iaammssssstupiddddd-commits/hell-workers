@@ -9,7 +9,6 @@
 | カテゴリ | フォント | ファイル名 | 用途 |
 |:--|:--|:--|:--|
 | **UI全般** | Noto Sans JP VF | `NotoSansJP-VF.ttf` | パネル、ボタン、ラベル |
-| **地獄の王** | Noto Serif JP VF | `NotoSerifJP-VF.ttf` | ナレーション |
 | **Familiar** | Shantell Sans VF | `ShantellSans-VF.ttf` | ラテン語の吹き出しセリフ |
 | **Soul (名前)** | Source Serif 4 VF | `SourceSerif4-VF.ttf` | UIリスト上のソウル名 |
 | **Soul (セリフ)** | Noto Emoji VF | `NotoEmoji-VF.ttf` | モノクロ絵文字の吹き出し |
@@ -22,7 +21,6 @@
 
 ```rust
 pub font_ui: Handle<Font>,         // UI全般
-pub font_narrator: Handle<Font>,   // 地獄の王
 pub font_familiar: Handle<Font>,   // Familiar吹き出し
 pub font_soul_name: Handle<Font>,  // Soul名
 pub font_soul_emoji: Handle<Font>, // Soulセリフ（絵文字）

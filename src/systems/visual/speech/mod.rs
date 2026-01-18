@@ -1,18 +1,28 @@
+pub mod animation;
 pub mod components;
 pub mod observers;
 pub mod phrases;
 pub mod spawn;
+pub mod typewriter;
 pub mod update;
 
 use bevy::prelude::*;
 use observers::*;
-use update::update_speech_bubbles;
 
 pub struct SpeechPlugin;
 
 impl Plugin for SpeechPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, update_speech_bubbles);
+        app.add_systems(
+            Update,
+            (
+                update::update_bubble_stacking, // 追従の前にオフセットを確定させる
+                update::update_speech_bubbles,
+                animation::animate_speech_bubbles,
+                typewriter::update_typewriter,
+            )
+                .chain(),
+        );
 
         // Observers の登録
         app.add_observer(on_task_assigned);

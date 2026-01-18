@@ -1,3 +1,4 @@
+use super::components::*;
 use super::phrases::LatinPhrase;
 use super::spawn::*;
 use crate::assets::GameAssets;
@@ -13,6 +14,7 @@ pub fn on_task_assigned(
     assets: Res<GameAssets>,
     q_souls: Query<(&GlobalTransform, Option<&UnderCommand>)>,
     q_familiars: Query<&GlobalTransform, With<Familiar>>,
+    q_bubbles: Query<(Entity, &SpeechBubble), With<FamiliarBubble>>,
 ) {
     let soul_entity = on.entity;
     let event = on.event();
@@ -21,7 +23,14 @@ pub fn on_task_assigned(
         let soul_pos = soul_transform.translation();
 
         // Soul: 「やる気」絵文字
-        spawn_soul_bubble(&mut commands, soul_entity, "💪", soul_pos, &assets);
+        spawn_soul_bubble(
+            &mut commands,
+            soul_entity,
+            "💪",
+            soul_pos,
+            &assets,
+            BubbleEmotion::Motivated,
+        );
 
         // Familiar: 命令フレーズ
         if let Some(uc) = under_command {
@@ -33,7 +42,15 @@ pub fn on_task_assigned(
                     WorkType::Haul => LatinPhrase::Portare,
                     WorkType::Build => LatinPhrase::Laborare,
                 };
-                spawn_familiar_bubble(&mut commands, uc.0, phrase, fam_pos, &assets);
+                spawn_familiar_bubble(
+                    &mut commands,
+                    uc.0,
+                    phrase,
+                    fam_pos,
+                    &assets,
+                    &q_bubbles,
+                    BubbleEmotion::Motivated,
+                );
             }
         }
     }
@@ -54,6 +71,7 @@ pub fn on_task_completed(
             "😊",
             transform.translation(),
             &assets,
+            BubbleEmotion::Happy,
         );
     }
 }
@@ -64,6 +82,7 @@ pub fn on_soul_recruited(
     mut commands: Commands,
     assets: Res<GameAssets>,
     q_familiars: Query<&GlobalTransform, With<Familiar>>,
+    q_bubbles: Query<(Entity, &SpeechBubble), With<FamiliarBubble>>,
 ) {
     let fam_entity = on.event().familiar_entity;
     if let Ok(transform) = q_familiars.get(fam_entity) {
@@ -73,6 +92,8 @@ pub fn on_soul_recruited(
             LatinPhrase::Veni,
             transform.translation(),
             &assets,
+            &q_bubbles,
+            BubbleEmotion::Neutral,
         );
     }
 }
@@ -92,6 +113,7 @@ pub fn on_exhausted(
             "😴",
             transform.translation(),
             &assets,
+            BubbleEmotion::Exhausted,
         );
     }
 }
@@ -111,6 +133,7 @@ pub fn on_stress_breakdown(
             "😰",
             transform.translation(),
             &assets,
+            BubbleEmotion::Stressed,
         );
     }
 }

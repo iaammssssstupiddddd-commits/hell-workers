@@ -23,14 +23,14 @@ pub struct GameAssets {
     pub icon_arrow_down: Handle<Image>,
     pub icon_arrow_right: Handle<Image>,
     pub familiar_layout: Handle<TextureAtlasLayout>,
-    pub speech_bubble: Handle<Image>, // 吹き出し背景
+    pub glow_circle: Handle<Image>,   // グロー効果用
+    pub bubble_9slice: Handle<Image>, // 9-slice吹き出し画像
     // Building Visual Icons
     pub icon_hammer: Handle<Image>,
     pub icon_wood_small: Handle<Image>,
     pub icon_stone_small: Handle<Image>,
     // Fonts
     pub font_ui: Handle<Font>,         // UI全般
-    pub font_narrator: Handle<Font>,   // 地獄の王（ナレーション）
     pub font_familiar: Handle<Font>,   // Familiar吹き出し
     pub font_soul_name: Handle<Font>,  // Soul名
     pub font_soul_emoji: Handle<Font>, // Soulセリフ（絵文字）
