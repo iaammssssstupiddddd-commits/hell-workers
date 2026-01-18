@@ -60,6 +60,7 @@ pub fn handle_haul_to_blueprint_task(
             holding,
             q_designations,
             haul_cache,
+            Some(ev_created),
         );
         return;
     }

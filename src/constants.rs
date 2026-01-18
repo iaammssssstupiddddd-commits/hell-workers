@@ -178,13 +178,25 @@ pub const FONT_SIZE_TINY: f32 = 10.0;
 // ============================================================
 
 /// 吹き出しの生存時間 (秒)
-pub const SPEECH_BUBBLE_DURATION: f32 = 1.5;
+pub const BUBBLE_DURATION_LOW: f32 = 0.8;
+pub const BUBBLE_DURATION_NORMAL: f32 = 1.5;
+pub const BUBBLE_DURATION_HIGH: f32 = 2.5;
+pub const BUBBLE_DURATION_CRITICAL: f32 = 3.5;
+
 /// 吹き出しの話者からのオフセット
 pub const SPEECH_BUBBLE_OFFSET: Vec2 = Vec2::new(16.0, 16.0);
+
 /// Soul吹き出し（絵文字）のフォントサイズ
-pub const FONT_SIZE_BUBBLE_SOUL: f32 = 24.0;
+pub const BUBBLE_SIZE_SOUL_LOW: f32 = 18.0;
+pub const BUBBLE_SIZE_SOUL_NORMAL: f32 = 24.0;
+pub const BUBBLE_SIZE_SOUL_HIGH: f32 = 28.0;
+pub const BUBBLE_SIZE_SOUL_CRITICAL: f32 = 32.0;
+
 /// Familiar吹き出しのフォントサイズ
-pub const FONT_SIZE_BUBBLE_FAMILIAR: f32 = 12.0;
+pub const BUBBLE_SIZE_FAMILIAR_LOW: f32 = 10.0;
+pub const BUBBLE_SIZE_FAMILIAR_NORMAL: f32 = 12.0;
+pub const BUBBLE_SIZE_FAMILIAR_HIGH: f32 = 14.0;
+pub const BUBBLE_SIZE_FAMILIAR_CRITICAL: f32 = 16.0;
 /// 吹き出しのZレイヤー
 pub const Z_SPEECH_BUBBLE: f32 = 11.0;
 /// 吹き出し背景のZレイヤー

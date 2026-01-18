@@ -50,6 +50,7 @@ pub fn cleanup_commanded_souls_system(
     )>,
     q_familiars: Query<&ActiveCommand, With<Familiar>>,
     mut haul_cache: ResMut<HaulReservationCache>,
+    mut ev_created: MessageWriter<DesignationCreatedEvent>,
 ) {
     for (soul_entity, transform, under_command, mut task, mut path, holding_opt) in
         q_souls.iter_mut()
@@ -74,6 +75,7 @@ pub fn cleanup_commanded_souls_system(
                 holding_opt,
                 &q_designations,
                 &mut *haul_cache,
+                Some(&mut ev_created),
             );
 
             commands.entity(soul_entity).remove::<UnderCommand>();
@@ -82,6 +84,9 @@ pub fn cleanup_commanded_souls_system(
 }
 
 /// 魂からタスクの割り当てを解除し、スロットを解放する。
+///
+/// `ev_created`が提供されている場合、中断されたタスクをキューに戻すために
+/// `DesignationCreatedEvent`を再発行します。
 pub fn unassign_task(
     commands: &mut Commands,
     soul_entity: Entity,
@@ -98,6 +103,7 @@ pub fn unassign_task(
         Option<&TaskWorkers>,
     )>,
     haul_cache: &mut HaulReservationCache,
+    ev_created: Option<&mut MessageWriter<DesignationCreatedEvent>>,
 ) {
     if let AssignedTask::Haul { stockpile, .. } = *task {
         haul_cache.release(stockpile);
@@ -129,13 +135,40 @@ pub fn unassign_task(
     };
 
     if let Some(target) = target_entity {
-        if let Ok((_, _, _, _, _, _)) = q_designations.get(target) {
-            commands.entity(target).remove::<Designation>();
-            commands.entity(target).remove::<TaskSlots>();
-            commands.entity(target).remove::<IssuedBy>();
-            commands
-                .entity(target)
-                .remove::<crate::systems::jobs::TargetBlueprint>();
+        if let Ok((_, _, designation, issued_by_opt, _, _)) = q_designations.get(target) {
+            // IssuedByが存在する場合、タスクをキューに戻すためにDesignationCreatedEventを再発行
+            if issued_by_opt.is_some() {
+                if let Some(ev_writer) = ev_created {
+                    // Designationを残し、IssuedByだけを削除してタスクをキューに戻す
+                    commands.entity(target).remove::<IssuedBy>();
+                    commands
+                        .entity(target)
+                        .remove::<crate::systems::jobs::TargetBlueprint>();
+
+                    // タスクをキューに戻すためにイベントを再発行
+                    ev_writer.write(DesignationCreatedEvent {
+                        entity: target,
+                        work_type: designation.work_type,
+                        issued_by: None, // 未アサインとしてキューに戻す
+                        priority: 0,
+                    });
+
+                    info!(
+                        "UNASSIGN: Task {:?} returned to queue (Designation preserved)",
+                        target
+                    );
+                } else {
+                    // MessageWriterが提供されていない場合は従来通り削除
+                    commands.entity(target).remove::<Designation>();
+                    commands.entity(target).remove::<TaskSlots>();
+                    commands.entity(target).remove::<IssuedBy>();
+                    commands
+                        .entity(target)
+                        .remove::<crate::systems::jobs::TargetBlueprint>();
+                }
+            } else {
+                // IssuedByが存在しない場合は何もしない（既に未アサイン）
+            }
         }
     }
 
