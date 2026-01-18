@@ -267,6 +267,8 @@ pub fn apply_conversation_rewards(
         for &entity in &event.participants {
             if let Ok(mut soul) = q_souls.get_mut(entity) {
                 soul.stress = (soul.stress - relief / 100.0).max(0.0);
+                // 会話によるモチベーション減少（サボり）
+                soul.motivation = (soul.motivation - MOTIVATION_PENALTY_CONVERSATION).max(0.0);
             }
         }
     }

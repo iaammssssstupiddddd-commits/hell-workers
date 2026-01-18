@@ -18,7 +18,7 @@ bevy = { version = "0.18", default-features = false, features = [
 rand = "0.8"
 
 [features]
-default = ["dynamic_linking"]
+default = []
 dynamic_linking = ["bevy/dynamic_linking"]
 
 [profile.release]
@@ -35,4 +35,4 @@ debug = true
 opt-level = 3
 
 [profile.dev.package.bevy]
-opt-level = 1  # Lower optimization for bevy when using dynamic linking
+opt-level = 1  # Lower optimization for bevy for faster linking

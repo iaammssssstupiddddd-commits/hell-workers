@@ -9,7 +9,7 @@ pub const MAP_HEIGHT: i32 = 50;
 pub const FATIGUE_THRESHOLD: f32 = 0.8;
 
 /// モチベーション閾値: この値以上の場合、ワーカーは次のタスクを探し続ける
-pub const MOTIVATION_THRESHOLD: f32 = 0.1;
+pub const MOTIVATION_THRESHOLD: f32 = 0.3;
 
 /// 集会閾値: 疲労がこの値を超えると強制的に集会へ向かう（グローバル）
 pub const FATIGUE_GATHERING_THRESHOLD: f32 = 0.9;
@@ -86,7 +86,7 @@ pub const SUPERVISION_IDLE_MULTIPLIER: f32 = 0.4;
 /// 監視によるストレス増加係数
 pub const SUPERVISION_STRESS_SCALE: f32 = 0.0375;
 /// 監視によるモチベーション増加係数
-pub const SUPERVISION_MOTIVATION_SCALE: f32 = 4.0;
+pub const SUPERVISION_MOTIVATION_SCALE: f32 = 0.4;
 /// 監視による怠惰減少係数
 pub const SUPERVISION_LAZINESS_SCALE: f32 = 2.5;
 
@@ -95,13 +95,36 @@ pub const SUPERVISION_LAZINESS_SCALE: f32 = 2.5;
 // ============================================================
 
 /// 作業・使役中のモチベーション自然減少率 (毎秒)
-pub const MOTIVATION_LOSS_RATE_ACTIVE: f32 = 0.02;
+pub const MOTIVATION_LOSS_RATE_ACTIVE: f32 = 0.05;
 /// 通常待機中のモチベーション自然減少率 (毎秒)
 pub const MOTIVATION_LOSS_RATE_IDLE: f32 = 0.1;
 /// 作業・使役中の怠惰減少率 (毎秒)
 pub const LAZINESS_LOSS_RATE_ACTIVE: f32 = 0.1;
 /// 通常待機中の怠惰増加率 (毎秒)
 pub const LAZINESS_GAIN_RATE_IDLE: f32 = 0.05;
+
+/// タスク完了時のモチベーション回復量
+pub const MOTIVATION_BONUS_GATHER: f32 = 0.02;
+pub const MOTIVATION_BONUS_HAUL: f32 = 0.01;
+pub const MOTIVATION_BONUS_BUILD: f32 = 0.05;
+
+/// Soul会話（サボり）によるモチベーションペナルティ
+pub const MOTIVATION_PENALTY_CONVERSATION: f32 = 0.02;
+
+/// 激励システム
+pub const ENCOURAGEMENT_INTERVAL_MIN: f32 = 5.0;
+pub const ENCOURAGEMENT_INTERVAL_MAX: f32 = 10.0;
+
+pub const ENCOURAGEMENT_COOLDOWN: f32 = 30.0;
+pub const ENCOURAGEMENT_MOTIVATION_BONUS: f32 = 0.025;
+pub const ENCOURAGEMENT_STRESS_PENALTY: f32 = 0.0125;
+
+/// リクルート時のバイタル変化
+pub const RECRUIT_MOTIVATION_BONUS: f32 = 0.3;
+pub const RECRUIT_STRESS_PENALTY: f32 = 0.1;
+
+/// 激励用絵文字セット
+pub const EMOJIS_ENCOURAGEMENT: &[&str] = &["👊", "💪", "📢", "⚡", "🔥"];
 
 // = ==========================================================
 // AI ロジック定数 - 怠惰行動 (Idle Behavior)

@@ -129,7 +129,7 @@ pub fn spawn_familiar_bubble(
     }
     // テキスト長に応じたサイズ計算 (概算: 1文字平均 8px + 左右余白 16px)
     let text_str = if let Some(v) = voice {
-        phrase.select_with_preference(v.get_preference(phrase), v.preference_weight)
+        phrase.select_with_preference(v.get_preference(phrase.clone()), v.preference_weight)
     } else {
         phrase.random_str()
     };
