@@ -8,7 +8,7 @@ use crate::systems::command::TaskArea;
 
 /// 監視（Supervising）状態のロジック
 pub fn supervising_logic(
-    _fam_entity: Entity,
+    fam_entity: Entity,
     fam_pos: Vec2,
     active_members: &[Entity],
     task_area_opt: Option<&TaskArea>,
@@ -30,10 +30,13 @@ pub fn supervising_logic(
         ),
         Without<crate::entities::familiar::Familiar>,
     >,
+    _has_available_task: bool,
 ) {
     if active_members.is_empty() {
-        // 誰もいない場合は探索に戻る
-        *ai_state = FamiliarAiState::SearchingTask;
+        if let Some(area) = task_area_opt {
+            let area_center = area.center();
+            move_to_center(fam_entity, fam_pos, area_center, fam_dest, fam_path);
+        }
         return;
     }
 
@@ -78,11 +81,14 @@ pub fn supervising_logic(
             }
         }
 
-        // 作業者を最優先、いなければ待機者を選ぶ
         let next_target = best_worker.or(best_idle);
         if let Some(new_target) = next_target {
             current_target = Some(new_target);
             timer = 2.0;
+            debug!(
+                "FAM_AI: {:?} New target selected: {:?}",
+                fam_entity, new_target
+            );
         }
     }
 
@@ -93,12 +99,29 @@ pub fn supervising_logic(
     }
 
     // 移動制御
+    let all_members_idle = active_members.iter().all(|&member_ent| {
+        if let Ok((_, _, _, task, _, _, _, _, _)) = q_souls.get(member_ent) {
+            matches!(*task, AssignedTask::None)
+        } else {
+            false
+        }
+    });
+
+    if all_members_idle {
+        if let Some(area) = task_area_opt {
+            let area_center = area.center();
+            // メンバー全員待機中なら、エリア中心に移動して終了（以降の追従ロジックをスキップ）
+            move_to_center(fam_entity, fam_pos, area_center, fam_dest, fam_path);
+            return;
+        }
+    }
+
     if let Some(target_ent) = current_target {
         if let Ok((_, transform, _, task, _, _, _, _, _)) = q_souls.get(target_ent) {
             let target_pos = transform.translation.truncate();
             let is_working = !matches!(*task, AssignedTask::None);
 
-            // 監視のしきい値 (遠めから見守る設定。バックオフは行わないシンプル追従)
+            // 監視のしきい値 (遠めから見守る設定)
             let follow_threshold = (TILE_SIZE * 5.0).powi(2);
             let stop_threshold = (TILE_SIZE * 3.0).powi(2);
             let dist_sq = fam_pos.distance_squared(target_pos);
@@ -107,36 +130,77 @@ pub fn supervising_logic(
             // 1. 誘導判定 (ターゲットが待機中、かつエリアから遠い場合)
             if !is_working {
                 if let Some(area) = task_area_opt {
-                    let area_center = (area.min + area.max) * 0.5;
-                    if fam_pos.distance_squared(area_center) > (TILE_SIZE * 5.0).powi(2) {
-                        if is_path_finished
-                            || fam_dest.0.distance_squared(area_center) > (TILE_SIZE * 1.0).powi(2)
-                        {
-                            fam_dest.0 = area_center;
-                            fam_path.waypoints = vec![area_center];
-                            fam_path.current_index = 0;
+                    let area_center = area.center();
+                    if fam_pos.distance_squared(area_center) > (TILE_SIZE * 1.5).powi(2)
+                        || target_pos.distance_squared(area_center) > (TILE_SIZE * 5.0).powi(2)
+                    {
+                        if move_to_center(fam_entity, fam_pos, area_center, fam_dest, fam_path) {
+                            return;
                         }
-                        return;
                     }
                 }
             }
 
-            // 2. 追従判定 (離れた時だけ近づく、シンプルな方式に戻す)
-            if dist_sq > follow_threshold {
+            // 2. 追従判定 (離れた時だけ近づく)
+            let mut should_follow = dist_sq > follow_threshold;
+            if !is_working {
+                if let Some(area) = task_area_opt {
+                    if !area.contains(target_pos)
+                        && fam_pos.distance_squared(area.center()) < (TILE_SIZE * 3.0).powi(2)
+                    {
+                        should_follow = false;
+                    }
+                }
+            }
+
+            if should_follow {
                 let dest_lag_sq = fam_dest.0.distance_squared(target_pos);
-                // ターゲットが十分に動いた、または止まっているなら目的地を更新
                 if is_path_finished || dest_lag_sq > (TILE_SIZE * 1.0).powi(2) {
                     fam_dest.0 = target_pos;
                     fam_path.waypoints = vec![target_pos];
                     fam_path.current_index = 0;
                 }
-            } else if dist_sq < stop_threshold {
-                // 十分近ければ（遠距離監視の範囲内なら）停止
+            } else if dist_sq < stop_threshold || !is_working {
                 if !is_path_finished {
                     fam_path.waypoints.clear();
                     fam_path.current_index = 0;
                 }
             }
         }
+    }
+}
+
+/// 指定位置（エリア中心など）への移動を制御するヘルパー
+/// 到着していれば false, 移動中なら true を返す
+pub fn move_to_center(
+    fam_entity: Entity,
+    fam_pos: Vec2,
+    center: Vec2,
+    fam_dest: &mut Destination,
+    fam_path: &mut Path,
+) -> bool {
+    let dist_sq = fam_pos.distance_squared(center);
+    let is_path_finished = fam_path.current_index >= fam_path.waypoints.len();
+    let threshold_sq = (TILE_SIZE * 1.5).powi(2);
+
+    if dist_sq > threshold_sq {
+        let is_moving_to_center = fam_dest.0.distance_squared(center) < (TILE_SIZE * 0.5).powi(2);
+        if is_path_finished || !is_moving_to_center {
+            debug!(
+                "FAM_AI: {:?} setting return path to center {:?}",
+                fam_entity, center
+            );
+            fam_dest.0 = center;
+            fam_path.waypoints = vec![center];
+            fam_path.current_index = 0;
+        }
+        true
+    } else {
+        if !is_path_finished {
+            debug!("FAM_AI: {:?} reached center, clearing path", fam_entity);
+            fam_path.waypoints.clear();
+            fam_path.current_index = 0;
+        }
+        false
     }
 }

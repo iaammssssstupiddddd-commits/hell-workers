@@ -384,10 +384,17 @@ pub fn familiar_movement(
                 transform.translation += velocity.extend(0.0);
 
                 anim.is_moving = true;
+                if move_dist > 0.0 {
+                    debug!(
+                        "FAM_MOV: Moving towards waypoint. dist: {:.1}, move: {:.1}",
+                        distance, move_dist
+                    );
+                }
                 if direction.x.abs() > 0.1 {
                     anim.facing_right = direction.x > 0.0;
                 }
             } else {
+                info!("FAM_MOV: Reached waypoint index {}", path.current_index);
                 path.current_index += 1;
             }
         } else {

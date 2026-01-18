@@ -4,10 +4,13 @@ use crate::entities::damned_soul::{
 use crate::entities::familiar::{
     ActiveCommand, Familiar, FamiliarCommand, FamiliarOperation, FamiliarVoice, UnderCommand,
 };
+use crate::events::FamiliarOperationMaxSoulChangedEvent;
+use crate::relationships::Holding;
 use crate::relationships::{Commanding, ManagedTasks, TaskWorkers};
 use crate::systems::GameSystemSet;
 use crate::systems::command::TaskArea;
 use crate::systems::jobs::{Blueprint, IssuedBy, TargetBlueprint, TaskSlots};
+use crate::systems::jobs::{Designation, DesignationCreatedEvent};
 use crate::systems::logistics::{ResourceItem, Stockpile};
 use crate::systems::soul_ai::task_execution::AssignedTask;
 use crate::systems::soul_ai::work::unassign_task;
@@ -17,9 +20,6 @@ use crate::systems::spatial::{
 use crate::systems::visual::speech::components::{
     BubbleEmotion, BubblePriority, FamiliarBubble, SpeechBubble,
 };
-use crate::events::FamiliarOperationMaxSoulChangedEvent;
-use crate::relationships::Holding;
-use crate::systems::jobs::{Designation, DesignationCreatedEvent};
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 
@@ -93,7 +93,7 @@ pub struct FamiliarAiParams<'w, 's> {
             &'static mut Path,
             Option<&'static TaskArea>,
             Option<&'static Commanding>,
-            &'static ManagedTasks,
+            Option<&'static ManagedTasks>,
             Option<&'static FamiliarVoice>,
         ),
     >,
@@ -190,14 +190,30 @@ pub fn familiar_ai_system(params: FamiliarAiParams) {
         mut fam_path,
         task_area_opt,
         commanding,
-        managed_tasks,
+        managed_tasks_opt,
         voice_opt,
     ) in q_familiars.iter_mut()
     {
+        let default_tasks = crate::relationships::ManagedTasks::default();
+        let managed_tasks = managed_tasks_opt.unwrap_or(&default_tasks);
+
+        // 個別の使い魔の処理開始ログ
+        debug!(
+            "FAM_AI: {:?} Processing. Command: {:?}, State: {:?}, Area: {}",
+            fam_entity,
+            active_command.command,
+            *ai_state,
+            task_area_opt.is_some()
+        );
+
         let old_state = ai_state.clone();
         // 1. 基本コマンドチェック
         if matches!(active_command.command, FamiliarCommand::Idle) {
             if *ai_state != FamiliarAiState::Idle {
+                debug!(
+                    "FAM_AI: {:?} Switching to Idle state because command is Idle",
+                    fam_entity
+                );
                 *ai_state = FamiliarAiState::Idle;
                 // 休息フレーズを表示
                 if cooldowns.can_speak(fam_entity, BubblePriority::Normal, time.elapsed_secs()) {
@@ -267,7 +283,7 @@ pub fn familiar_ai_system(params: FamiliarAiParams) {
                 if (!is_resting && soul.fatigue > fatigue_threshold)
                     || idle.behavior == IdleBehavior::ExhaustedGathering
                 {
-                    info!(
+                    debug!(
                         "FAM_AI: {:?} releasing soul {:?} (Fatigue/Exhausted)",
                         fam_entity, member_entity
                     );
@@ -319,7 +335,7 @@ pub fn familiar_ai_system(params: FamiliarAiParams) {
 
             // 分隊が空になった瞬間を検知
             if squad_entities.is_empty() {
-                info!(
+                debug!(
                     "FAM_AI: {:?} squad became empty (was_scouting: {}, state: {:?})",
                     fam_entity, was_scouting, *ai_state
                 );
@@ -362,7 +378,7 @@ pub fn familiar_ai_system(params: FamiliarAiParams) {
                         &q_breakdown,
                         Some(command_radius),
                     ) {
-                        info!(
+                        debug!(
                             "FAM_AI: {:?} recruiting nearby soul {:?}",
                             fam_entity, new_recruit
                         );
@@ -377,38 +393,46 @@ pub fn familiar_ai_system(params: FamiliarAiParams) {
                         state_changed = true;
                     }
                     // 遠方のリクルート検索 (Scouting開始)
-                    else if let Some(distant_recruit) = helpers::find_best_recruit(
-                        fam_pos,
-                        fatigue_threshold,
-                        0.0,
-                        &*spatial_grid,
-                        &q_souls,
-                        &q_breakdown,
-                        None,
-                    ) {
-                        info!(
-                            "FAM_AI: {:?} scouting distant soul {:?}",
-                            fam_entity, distant_recruit
-                        );
-                        *ai_state = FamiliarAiState::Scouting {
-                            target_soul: distant_recruit,
-                        };
-                        state_changed = true;
-
-                        // 即座に移動開始
-                        if let Ok((_, target_transform, _, _, _, _, _, _, _)) =
-                            q_souls.get(distant_recruit)
-                        {
-                            let target_pos = target_transform.translation.truncate();
-                            fam_dest.0 = target_pos;
-                            fam_path.waypoints = vec![target_pos];
-                            fam_path.current_index = 0;
-                            info!(
-                                "FAM_AI: {:?} path set to distant recruit {:?}",
+                    else {
+                        if let Some(distant_recruit) = helpers::find_best_recruit(
+                            fam_pos,
+                            fatigue_threshold,
+                            0.0,
+                            &*spatial_grid,
+                            &q_souls,
+                            &q_breakdown,
+                            None,
+                        ) {
+                            debug!(
+                                "FAM_AI: {:?} scouting distant soul {:?}",
                                 fam_entity, distant_recruit
                             );
+                            *ai_state = FamiliarAiState::Scouting {
+                                target_soul: distant_recruit,
+                            };
+                            state_changed = true;
+
+                            // 即座に移動開始
+                            if let Ok((_, target_transform, _, _, _, _, _, _, _)) =
+                                q_souls.get(distant_recruit)
+                            {
+                                let target_pos = target_transform.translation.truncate();
+                                fam_dest.0 = target_pos;
+                                fam_path.waypoints = vec![target_pos];
+                                fam_path.current_index = 0;
+                            }
+                        } else {
+                            // 何も見つからなければログに出す (デバッグ用)
+                            debug!("FAM_AI: {:?} No recruitable souls found", fam_entity);
                         }
                     }
+                } else {
+                    debug!(
+                        "FAM_AI: {:?} Squad full ({}/{})",
+                        fam_entity,
+                        squad_entities.len(),
+                        max_workers
+                    );
                 }
             }
         }
@@ -421,8 +445,13 @@ pub fn familiar_ai_system(params: FamiliarAiParams) {
                     | FamiliarAiState::Idle
                     | FamiliarAiState::Scouting { .. }
             ) {
+                let prev_state = ai_state.clone();
                 *ai_state = FamiliarAiState::SearchingTask;
                 state_changed = true;
+                info!(
+                    "FAM_AI: {:?} squad is empty. Transitioning to SearchingTask from {:?}",
+                    fam_entity, prev_state
+                );
             }
         } else {
             // メンバーがいるなら、スカウト中でない限り監視モードを維持
@@ -433,6 +462,8 @@ pub fn familiar_ai_system(params: FamiliarAiParams) {
                         timer: 0.0,
                     };
                     state_changed = true;
+                    // 状態遷移は重要なため info を残すが、形式を整理
+                    info!("FAM_AI: {:?} squad not empty. -> Supervising", fam_entity);
                 }
             }
         }
@@ -445,31 +476,37 @@ pub fn familiar_ai_system(params: FamiliarAiParams) {
         }
 
         // 4. タスク委譲
-        let mut idle_member_opt = None;
-        for &member_entity in &squad_entities {
-            if let Ok((_, _, soul, task, _, _, idle, _, _)) = q_souls.get(member_entity) {
-                if matches!(*task, AssignedTask::None)
-                    && idle.behavior != IdleBehavior::ExhaustedGathering
-                    && soul.fatigue < fatigue_threshold
-                {
-                    idle_member_opt = Some(member_entity);
-                    break; // 一人ずつ割り当てる
+        // 重複排除: 検索結果を保持して再利用
+        let available_task_opt = helpers::find_unassigned_task_in_area(
+            fam_entity,
+            fam_pos,
+            task_area_opt,
+            &q_designations,
+            &designation_grid,
+            managed_tasks,
+            &q_blueprints,
+            &q_target_blueprints,
+        );
+
+        let has_available_task = available_task_opt.is_some();
+
+        if let Some(task_entity) = available_task_opt {
+            // タスクがある場合のみ、委譲処理を実行
+            let mut idle_member_opt = None;
+            for &member_entity in &squad_entities {
+                if let Ok((_, _, soul, task, _, _, idle, _, _)) = q_souls.get(member_entity) {
+                    if matches!(*task, AssignedTask::None)
+                        && idle.behavior != IdleBehavior::ExhaustedGathering
+                        && soul.fatigue < fatigue_threshold
+                    {
+                        idle_member_opt = Some(member_entity);
+                        break; // 一人ずつ割り当てる
+                    }
                 }
             }
-        }
 
-        if let Some(best_idle_member) = idle_member_opt {
-            if let Some(task_entity) = helpers::find_unassigned_task_in_area(
-                fam_entity,
-                fam_pos,
-                task_area_opt,
-                &q_designations,
-                &designation_grid,
-                managed_tasks,
-                &q_blueprints,
-                &q_target_blueprints,
-            ) {
-                info!(
+            if let Some(best_idle_member) = idle_member_opt {
+                debug!(
                     "FAM_AI: Found task {:?} for idle member {:?}",
                     task_entity, best_idle_member
                 );
@@ -489,14 +526,7 @@ pub fn familiar_ai_system(params: FamiliarAiParams) {
                     &mut *haul_cache,
                 );
                 commands.entity(task_entity).insert(IssuedBy(fam_entity));
-            } else {
-                debug!(
-                    "FAM_AI: No unassigned task found for idle member {:?}",
-                    best_idle_member
-                );
             }
-        } else {
-            debug!("FAM_AI: No idle member found in squad for {:?}", fam_entity);
         }
 
         // 5. 移動制御
@@ -519,8 +549,17 @@ pub fn familiar_ai_system(params: FamiliarAiParams) {
                 .copied()
                 .collect();
 
+            debug!(
+                "FAM_AI: Movement control - state: {:?}, active_members: {}, has_available_task: {}, state_changed: {}",
+                *ai_state,
+                active_members.len(),
+                has_available_task,
+                state_changed
+            );
+
             match *ai_state {
                 FamiliarAiState::Supervising { .. } => {
+                    // 移動制御では、既にチェック済みのhas_available_taskを使用
                     supervising::supervising_logic(
                         fam_entity,
                         fam_pos,
@@ -531,10 +570,13 @@ pub fn familiar_ai_system(params: FamiliarAiParams) {
                         &mut fam_dest,
                         &mut fam_path,
                         &q_souls,
+                        has_available_task,
                     );
                 }
                 FamiliarAiState::SearchingTask => {
+                    debug!("FAM_AI: {:?} executing SearchingTask logic", fam_entity);
                     searching::searching_logic(
+                        fam_entity,
                         fam_pos,
                         task_area_opt,
                         &mut fam_dest,
@@ -624,8 +666,14 @@ pub fn handle_max_soul_changed_system(
                     }
 
                     // リリースフレーズを表示（一度だけ）
-                    if let Ok((fam_transform, voice_opt, _)) = q_familiars.get(event.familiar_entity) {
-                        if cooldowns.can_speak(event.familiar_entity, BubblePriority::Normal, time.elapsed_secs()) {
+                    if let Ok((fam_transform, voice_opt, _)) =
+                        q_familiars.get(event.familiar_entity)
+                    {
+                        if cooldowns.can_speak(
+                            event.familiar_entity,
+                            BubblePriority::Normal,
+                            time.elapsed_secs(),
+                        ) {
                             crate::systems::visual::speech::spawn::spawn_familiar_bubble(
                                 &mut commands,
                                 event.familiar_entity,
