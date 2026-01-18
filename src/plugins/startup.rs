@@ -110,6 +110,7 @@ fn setup(
             layout.add_texture(URect::new(256, 512, 768, 1024));
             layouts.add(layout)
         },
+        speech_bubble: asset_server.load("textures/ui/speech_bubble.png"),
         // Building Visual Icons
         icon_hammer: asset_server.load("textures/ui/hammer.png"),
         icon_wood_small: asset_server.load("textures/ui/wood_small.png"),

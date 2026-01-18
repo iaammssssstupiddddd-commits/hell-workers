@@ -40,6 +40,10 @@ pub const FONT_SIZE_HEADER: f32 = 20.0;
 pub const FONT_SIZE_BODY: f32 = 16.0;
 pub const FONT_SIZE_SMALL: f32 = 14.0;
 pub const FONT_SIZE_TINY: f32 = 10.0;
+
+// 吹き出し用
+pub const FONT_SIZE_BUBBLE_SOUL: f32 = 24.0;
+pub const FONT_SIZE_BUBBLE_FAMILIAR: f32 = 12.0;
 ```
 
 ---
@@ -58,3 +62,4 @@ pub const FONT_SIZE_TINY: f32 = 10.0;
 | [soul.rs](file:///f:/DevData/projects/hell-workers/src/systems/visual/soul.rs) | ステータスアイコン |
 | [effects.rs](file:///f:/DevData/projects/hell-workers/src/systems/visual/blueprint/effects.rs) | 搬入ポップアップ |
 | [jobs.rs](file:///f:/DevData/projects/hell-workers/src/systems/jobs.rs) | 建物完成テキスト |
+| [speech/update.rs](file:///f:/DevData/projects/hell-workers/src/systems/visual/speech/update.rs) | 吹き出しシステム（Soul/Familiar） |

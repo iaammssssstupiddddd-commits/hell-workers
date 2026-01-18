@@ -6,3 +6,4 @@ pub mod blueprint;
 pub mod gather;
 pub mod haul;
 pub mod soul;
+pub mod speech;
