@@ -120,14 +120,14 @@ pub struct FamiliarAnimation {
 #[derive(Component, Debug, Clone, Copy)]
 pub struct FamiliarOperation {
     pub fatigue_threshold: f32,     // この疲労度以下のソウルのみ受け入れる
-    pub max_controlled_soul: usize, // 最大使役数 (1-5)
+    pub max_controlled_soul: usize, // 最大使役数
 }
 
 impl Default for FamiliarOperation {
     fn default() -> Self {
         Self {
             fatigue_threshold: FATIGUE_THRESHOLD,
-            max_controlled_soul: 2, // デフォルトを2人に変更
+            max_controlled_soul: 8, // デフォルトを8人に変更
         }
     }
 }
