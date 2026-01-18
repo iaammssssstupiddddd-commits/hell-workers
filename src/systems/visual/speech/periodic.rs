@@ -7,11 +7,17 @@ use crate::systems::visual::speech::spawn::spawn_soul_bubble;
 use bevy::prelude::*;
 use rand::Rng;
 
+/// 分散実行用のフレームカウンタ
+#[derive(Resource, Default)]
+pub struct PeriodicEmotionFrameCounter(pub u32);
+
 /// 定期的に Soul の感情状態をチェックし、必要に応じて吹き出しを出すシステム
+/// パフォーマンス最適化: 毎フレーム全Soulをチェックせず、フレームごとに一部のみ処理
 pub fn periodic_emotion_system(
     time: Res<Time>,
     mut commands: Commands,
     assets: Res<GameAssets>,
+    mut frame_counter: ResMut<PeriodicEmotionFrameCounter>,
     mut query: Query<(
         Entity,
         &GlobalTransform,
@@ -24,7 +30,25 @@ pub fn periodic_emotion_system(
     let dt = time.delta_secs();
     let mut rng = rand::thread_rng();
 
+    // フレームカウンタをインクリメント（10フレームで1周）
+    frame_counter.0 = (frame_counter.0 + 1) % PERIODIC_EMOTION_FRAME_DIVISOR;
+    let current_frame = frame_counter.0;
+
     for (entity, transform, soul, idle, under_command_opt, mut state) in query.iter_mut() {
+        // 分散実行: エンティティのインデックスに基づいてフレームを分散
+        // 全Soulを PERIODIC_EMOTION_FRAME_DIVISOR フレームかけて巡回
+        if (entity.to_bits() as u32) % PERIODIC_EMOTION_FRAME_DIVISOR != current_frame {
+            // このフレームでは処理しないが、タイマーは更新する必要がある
+            state.tick(dt);
+            // アイドル時間も更新
+            if under_command_opt.is_none() && idle.behavior != IdleBehavior::Gathering {
+                state.idle_time += dt;
+            } else {
+                state.idle_time = 0.0;
+            }
+            continue;
+        }
+
         // タイマー更新
         state.tick(dt);
 
