@@ -17,6 +17,9 @@ use crate::systems::spatial::{
 use crate::systems::visual::speech::components::{
     BubbleEmotion, BubblePriority, FamiliarBubble, SpeechBubble,
 };
+use crate::events::FamiliarOperationMaxSoulChangedEvent;
+use crate::relationships::Holding;
+use crate::systems::jobs::{Designation, DesignationCreatedEvent};
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 
@@ -64,6 +67,7 @@ impl Plugin for FamiliarAiPlugin {
                 (
                     update_designation_spatial_grid_system.in_set(GameSystemSet::Logic),
                     familiar_ai_system.in_set(GameSystemSet::Logic),
+                    handle_max_soul_changed_system.in_set(GameSystemSet::Logic),
                     following::following_familiar_system.in_set(GameSystemSet::Logic),
                 ),
             );
@@ -225,9 +229,11 @@ pub fn familiar_ai_system(params: FamiliarAiParams) {
         let fatigue_threshold = familiar_op.fatigue_threshold;
 
         // Relationshipから現在の部下リストを取得 (Commandingがない場合は空)
-        let mut squad_entities: Vec<Entity> = commanding
-            .map(|c| c.iter().copied().collect())
-            .unwrap_or_default();
+        let mut squad_entities: Vec<Entity> = if let Some(c) = commanding {
+            c.iter().copied().collect()
+        } else {
+            Vec::new()
+        };
 
         // 2. 疲労解放
         let mut released_entities: Vec<Entity> = Vec::new();
@@ -536,6 +542,109 @@ pub fn familiar_ai_system(params: FamiliarAiParams) {
                     );
                 }
                 _ => {}
+            }
+        }
+    }
+}
+
+/// 使役数上限変更イベントを処理するシステム
+/// UIで使役数が減少した場合、超過分の魂をリリースする
+pub fn handle_max_soul_changed_system(
+    mut ev_max_soul_changed: MessageReader<FamiliarOperationMaxSoulChangedEvent>,
+    q_familiars: Query<(&Transform, &FamiliarVoice, Option<&Familiar>), With<Familiar>>,
+    q_commanding: Query<&Commanding, With<Familiar>>,
+    mut q_souls: Query<(
+        Entity,
+        &Transform,
+        &mut AssignedTask,
+        &mut Path,
+        Option<&Holding>,
+    )>,
+    q_designations: Query<(
+        Entity,
+        &Transform,
+        &Designation,
+        Option<&IssuedBy>,
+        Option<&TaskSlots>,
+        Option<&TaskWorkers>,
+    )>,
+    mut haul_cache: ResMut<haul_cache::HaulReservationCache>,
+    mut ev_created: MessageWriter<DesignationCreatedEvent>,
+    game_assets: Res<crate::assets::GameAssets>,
+    q_bubbles: Query<(Entity, &SpeechBubble), With<FamiliarBubble>>,
+    mut cooldowns: ResMut<crate::systems::visual::speech::cooldown::BubbleCooldowns>,
+    time: Res<Time>,
+    mut commands: Commands,
+) {
+    for event in ev_max_soul_changed.read() {
+        // 使役数が減少した場合のみ処理
+        if event.new_value < event.old_value {
+            if let Ok(commanding) = q_commanding.get(event.familiar_entity) {
+                let squad_entities: Vec<Entity> = commanding.iter().copied().collect();
+
+                if squad_entities.len() > event.new_value {
+                    let excess_count = squad_entities.len() - event.new_value;
+                    info!(
+                        "FAM_AI: {:?} max_soul decreased from {} to {}, releasing {} excess members",
+                        event.familiar_entity, event.old_value, event.new_value, excess_count
+                    );
+
+                    // 超過分をリリース（後ろから順にリリース）
+                    let mut released_count = 0;
+                    for i in (0..squad_entities.len()).rev() {
+                        if released_count >= excess_count {
+                            break;
+                        }
+                        let member_entity = squad_entities[i];
+                        if let Ok((entity, transform, mut task, mut path, holding_opt)) =
+                            q_souls.get_mut(member_entity)
+                        {
+                            // タスクを解除
+                            unassign_task(
+                                &mut commands,
+                                entity,
+                                transform.translation.truncate(),
+                                &mut task,
+                                &mut path,
+                                holding_opt,
+                                &q_designations,
+                                &mut *haul_cache,
+                                Some(&mut ev_created),
+                                false, // emit_abandoned_event: 上限超過リリース時は個別のタスク中断セリフを出さない
+                            );
+                        }
+
+                        commands.entity(member_entity).remove::<UnderCommand>();
+                        released_count += 1;
+
+                        info!(
+                            "FAM_AI: {:?} released excess member {:?} (limit: {} -> {})",
+                            event.familiar_entity, member_entity, event.old_value, event.new_value
+                        );
+                    }
+
+                    // リリースフレーズを表示（一度だけ）
+                    if let Ok((fam_transform, voice_opt, _)) = q_familiars.get(event.familiar_entity) {
+                        if cooldowns.can_speak(event.familiar_entity, BubblePriority::Normal, time.elapsed_secs()) {
+                            crate::systems::visual::speech::spawn::spawn_familiar_bubble(
+                                &mut commands,
+                                event.familiar_entity,
+                                crate::systems::visual::speech::phrases::LatinPhrase::Abi,
+                                fam_transform.translation,
+                                &game_assets,
+                                &q_bubbles,
+                                BubbleEmotion::Neutral,
+                                BubblePriority::Normal,
+                                Some(voice_opt),
+                            );
+                            cooldowns.record_speech(
+                                event.familiar_entity,
+                                BubblePriority::Normal,
+                                time.elapsed_secs(),
+                            );
+                        }
+                    }
+                }
             }
         }
     }
