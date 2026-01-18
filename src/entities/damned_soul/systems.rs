@@ -81,12 +81,16 @@ pub fn spawn_damned_soul_at(
             Destination(actual_pos),
             Path::default(),
             AnimationState::default(),
+            crate::systems::visual::speech::components::SoulEmotionState::default(),
         ))
         .observe(on_task_assigned)
         .observe(on_task_completed)
         .observe(on_soul_recruited)
         .observe(on_stress_breakdown)
-        .observe(on_exhausted);
+        .observe(on_exhausted)
+        .observe(crate::systems::visual::speech::observers::on_released_from_service)
+        .observe(crate::systems::visual::speech::observers::on_gathering_joined)
+        .observe(crate::systems::visual::speech::observers::on_task_abandoned);
 
     info!("SPAWN: {} ({:?}) at {:?}", soul_name, gender, actual_pos);
 }
@@ -285,6 +289,7 @@ fn on_stress_breakdown(
                 &q_designations,
                 &mut *haul_cache,
                 Some(&mut ev_created),
+                true,
             );
         }
 
@@ -355,6 +360,7 @@ fn on_exhausted(
                 &q_designations,
                 &mut *haul_cache,
                 Some(&mut ev_created),
+                true,
             );
         }
 

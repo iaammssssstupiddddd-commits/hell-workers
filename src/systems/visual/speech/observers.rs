@@ -2,7 +2,7 @@ use super::components::*;
 use super::phrases::LatinPhrase;
 use super::spawn::*;
 use crate::assets::GameAssets;
-use crate::entities::familiar::{Familiar, UnderCommand};
+use crate::entities::familiar::{Familiar, FamiliarVoice, UnderCommand};
 use crate::events::*;
 use crate::systems::jobs::WorkType;
 use bevy::prelude::*;
@@ -13,7 +13,7 @@ pub fn on_task_assigned(
     mut commands: Commands,
     assets: Res<GameAssets>,
     q_souls: Query<(&GlobalTransform, Option<&UnderCommand>)>,
-    q_familiars: Query<&GlobalTransform, With<Familiar>>,
+    q_familiars: Query<(&GlobalTransform, Option<&FamiliarVoice>), With<Familiar>>,
     q_bubbles: Query<(Entity, &SpeechBubble), With<FamiliarBubble>>,
     time: Res<Time>,
     mut cooldowns: ResMut<crate::systems::visual::speech::cooldown::BubbleCooldowns>,
@@ -41,7 +41,7 @@ pub fn on_task_assigned(
 
         // Familiar: 命令フレーズ (Low)
         if let Some(uc) = under_command {
-            if let Ok(fam_transform) = q_familiars.get(uc.0) {
+            if let Ok((fam_transform, voice)) = q_familiars.get(uc.0) {
                 if cooldowns.can_speak(uc.0, BubblePriority::Low, current_time) {
                     let fam_pos = fam_transform.translation();
                     let phrase = match event.work_type {
@@ -59,6 +59,7 @@ pub fn on_task_assigned(
                         &q_bubbles,
                         BubbleEmotion::Motivated,
                         BubblePriority::Low,
+                        voice,
                     );
                     cooldowns.record_speech(uc.0, BubblePriority::Low, current_time);
                 }
@@ -94,19 +95,22 @@ pub fn on_task_completed(
     }
 }
 
-/// 勧誘時のオブザーバー
+/// 勧誘時のオブザーバー（使い魔の発言）
 pub fn on_soul_recruited(
     on: On<OnSoulRecruited>,
     mut commands: Commands,
     assets: Res<GameAssets>,
-    q_familiars: Query<&GlobalTransform, With<Familiar>>,
+    q_familiars: Query<(&GlobalTransform, Option<&FamiliarVoice>), With<Familiar>>,
     q_bubbles: Query<(Entity, &SpeechBubble), With<FamiliarBubble>>,
     time: Res<Time>,
     mut cooldowns: ResMut<crate::systems::visual::speech::cooldown::BubbleCooldowns>,
 ) {
     let fam_entity = on.event().familiar_entity;
+    let soul_entity = on.entity;
     let current_time = time.elapsed_secs();
-    if let Ok(transform) = q_familiars.get(fam_entity) {
+
+    // 使い魔の発言（即時）
+    if let Ok((transform, voice)) = q_familiars.get(fam_entity) {
         if cooldowns.can_speak(fam_entity, BubblePriority::Normal, current_time) {
             spawn_familiar_bubble(
                 &mut commands,
@@ -117,10 +121,18 @@ pub fn on_soul_recruited(
                 &q_bubbles,
                 BubbleEmotion::Neutral,
                 BubblePriority::Normal,
+                voice,
             );
             cooldowns.record_speech(fam_entity, BubblePriority::Normal, current_time);
         }
     }
+
+    // [NEW] Soulのリアクションを遅延予約
+    commands.entity(soul_entity).insert(ReactionDelay {
+        timer: Timer::from_seconds(0.3, TimerMode::Once),
+        emotion: BubbleEmotion::Fearful,
+        text: "😨".to_string(),
+    });
 }
 
 /// 疲労限界時のオブザーバー
@@ -175,4 +187,79 @@ pub fn on_stress_breakdown(
             cooldowns.record_speech(soul_entity, BubblePriority::Critical, current_time);
         }
     }
+}
+
+/// リアクションの遅延実行を行うシステム
+pub fn reaction_delay_system(
+    time: Res<Time>,
+    mut commands: Commands,
+    assets: Res<GameAssets>,
+    mut query: Query<(Entity, &GlobalTransform, &mut ReactionDelay)>,
+) {
+    for (entity, transform, mut delay) in query.iter_mut() {
+        delay.timer.tick(time.delta());
+        if delay.timer.just_finished() {
+            spawn_soul_bubble(
+                &mut commands,
+                entity,
+                &delay.text,
+                transform.translation(),
+                &assets,
+                delay.emotion,
+                BubblePriority::Normal,
+            );
+            commands.entity(entity).remove::<ReactionDelay>();
+        }
+    }
+}
+
+/// 使役解放時のリアクション
+pub fn on_released_from_service(
+    on: On<crate::events::OnReleasedFromService>,
+    mut commands: Commands,
+    assets: Res<GameAssets>,
+) {
+    spawn_soul_bubble(
+        &mut commands,
+        on.entity,
+        "😅",
+        Vec3::ZERO,
+        &assets,
+        BubbleEmotion::Relieved,
+        BubblePriority::Normal,
+    );
+}
+
+/// 集会参加時のリアクション
+pub fn on_gathering_joined(
+    on: On<crate::events::OnGatheringJoined>,
+    mut commands: Commands,
+    assets: Res<GameAssets>,
+) {
+    spawn_soul_bubble(
+        &mut commands,
+        on.entity,
+        "😌",
+        Vec3::ZERO,
+        &assets,
+        BubbleEmotion::Relaxed,
+        BubblePriority::Normal,
+    );
+}
+
+/// タスク中断・失敗時のリアクション
+pub fn on_task_abandoned(
+    on: On<crate::events::OnTaskAbandoned>,
+    mut commands: Commands,
+    assets: Res<GameAssets>,
+) {
+    spawn_soul_bubble(
+        &mut commands,
+        on.entity,
+        "😓",
+        Vec3::ZERO,
+        &assets,
+        BubbleEmotion::Frustrated,
+        BubblePriority::Normal,
+    );
 }

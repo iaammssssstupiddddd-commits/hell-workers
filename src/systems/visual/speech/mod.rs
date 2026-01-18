@@ -2,6 +2,7 @@ pub mod animation;
 pub mod components;
 pub mod cooldown;
 pub mod observers;
+pub mod periodic;
 pub mod phrases;
 pub mod spawn;
 pub mod typewriter;
@@ -22,6 +23,8 @@ impl Plugin for SpeechPlugin {
                 update::update_speech_bubbles,
                 animation::animate_speech_bubbles,
                 typewriter::update_typewriter,
+                periodic::periodic_emotion_system,
+                observers::reaction_delay_system,
             )
                 .chain(),
         );
@@ -32,5 +35,8 @@ impl Plugin for SpeechPlugin {
         app.add_observer(on_soul_recruited);
         app.add_observer(on_exhausted);
         app.add_observer(on_stress_breakdown);
+        app.add_observer(on_released_from_service);
+        app.add_observer(on_gathering_joined);
+        app.add_observer(on_task_abandoned);
     }
 }

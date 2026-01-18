@@ -2,7 +2,7 @@ use crate::entities::damned_soul::{
     DamnedSoul, Destination, IdleBehavior, IdleState, Path, StressBreakdown,
 };
 use crate::entities::familiar::{
-    ActiveCommand, Familiar, FamiliarCommand, FamiliarOperation, UnderCommand,
+    ActiveCommand, Familiar, FamiliarCommand, FamiliarOperation, FamiliarVoice, UnderCommand,
 };
 use crate::relationships::{Commanding, ManagedTasks, TaskWorkers};
 use crate::systems::GameSystemSet;
@@ -90,6 +90,7 @@ pub struct FamiliarAiParams<'w, 's> {
             Option<&'static TaskArea>,
             Option<&'static Commanding>,
             &'static ManagedTasks,
+            Option<&'static FamiliarVoice>,
         ),
     >,
     pub q_souls: Query<
@@ -186,6 +187,7 @@ pub fn familiar_ai_system(params: FamiliarAiParams) {
         task_area_opt,
         commanding,
         managed_tasks,
+        voice_opt,
     ) in q_familiars.iter_mut()
     {
         let old_state = ai_state.clone();
@@ -204,6 +206,7 @@ pub fn familiar_ai_system(params: FamiliarAiParams) {
                         &q_bubbles,
                         BubbleEmotion::Neutral,
                         BubblePriority::Normal,
+                        voice_opt,
                     );
                     cooldowns.record_speech(
                         fam_entity,
@@ -272,6 +275,7 @@ pub fn familiar_ai_system(params: FamiliarAiParams) {
                         &q_designations,
                         &mut *haul_cache,
                         Some(&mut ev_created),
+                        false, // emit_abandoned_event: 疲労リリース時は個別のタスク中断セリフを出さない
                     );
 
                     // リリースフレーズを表示
@@ -286,6 +290,7 @@ pub fn familiar_ai_system(params: FamiliarAiParams) {
                             &q_bubbles,
                             BubbleEmotion::Neutral,
                             BubblePriority::Normal,
+                            voice_opt,
                         );
                         cooldowns.record_speech(
                             fam_entity,

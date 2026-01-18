@@ -234,3 +234,27 @@ pub const BUBBLE_COLOR_MOTIVATED: Color = Color::srgba(0.6, 1.0, 0.4, 1.0); // �
 pub const BUBBLE_COLOR_HAPPY: Color = Color::srgba(1.0, 0.7, 0.8, 1.0); // ピンク
 pub const BUBBLE_COLOR_EXHAUSTED: Color = Color::srgba(0.6, 0.6, 0.7, 1.0); // グレー
 pub const BUBBLE_COLOR_STRESSED: Color = Color::srgba(1.0, 0.4, 0.4, 1.0); // 赤
+pub const BUBBLE_COLOR_FEARFUL: Color = Color::srgba(0.5, 0.4, 0.7, 1.0); // 紫
+pub const BUBBLE_COLOR_RELIEVED: Color = Color::srgba(0.4, 0.8, 1.0, 1.0); // 水色
+pub const BUBBLE_COLOR_RELAXED: Color = Color::srgba(0.4, 1.0, 0.7, 1.0); // ミント
+pub const BUBBLE_COLOR_FRUSTRATED: Color = Color::srgba(0.7, 0.7, 0.7, 1.0); // 濁ったグレー
+pub const BUBBLE_COLOR_UNMOTIVATED: Color = Color::srgba(0.8, 0.8, 0.5, 1.0); // 鈍い黄色
+pub const BUBBLE_COLOR_BORED: Color = Color::srgba(0.7, 0.7, 1.0, 0.8); // 薄い青
+
+// ============================================================
+// 定期セリフシステム (Periodic Emotion System)
+// ============================================================
+
+pub const PERIODIC_EMOTION_LOCK_DURATION: f32 = 10.0; // 一度出た後のロック時間（秒）
+pub const IDLE_EMOTION_MIN_DURATION: f32 = 10.0; // アイドル何秒以上でボアド判定に入るか
+
+// 定期判定の確率
+pub const PROBABILITY_PERIODIC_STRESSED: f32 = 0.2;
+pub const PROBABILITY_PERIODIC_EXHAUSTED: f32 = 0.2;
+pub const PROBABILITY_PERIODIC_UNMOTIVATED: f32 = 0.1;
+pub const PROBABILITY_PERIODIC_BORED: f32 = 0.05;
+
+// しきい値
+pub const EMOTION_THRESHOLD_STRESSED: f32 = 0.6;
+pub const EMOTION_THRESHOLD_EXHAUSTED: f32 = 0.7;
+pub const EMOTION_THRESHOLD_UNMOTIVATED: f32 = 0.3;
