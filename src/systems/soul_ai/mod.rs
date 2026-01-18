@@ -39,10 +39,14 @@ impl Plugin for SoulAiPlugin {
                     idle::idle_visual_system,
                     idle::gathering_separation_system,
                     // ビジュアル
+                    // ビジュアル
                     vitals::familiar_hover_visualization_system,
                 )
                     .chain()
                     .in_set(GameSystemSet::Logic),
-            );
+            )
+            .add_observer(vitals::on_task_completed_motivation_bonus)
+            .add_observer(vitals::on_encouraged_effect)
+            .add_observer(vitals::on_soul_recruited_effect);
     }
 }

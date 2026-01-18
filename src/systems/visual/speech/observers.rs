@@ -256,10 +256,57 @@ pub fn on_task_abandoned(
     spawn_soul_bubble(
         &mut commands,
         on.entity,
-        "😓",
+        "🙅‍♂️", // 拒否/放棄
         Vec3::ZERO,
         &assets,
-        BubbleEmotion::Frustrated,
+        BubbleEmotion::Unmotivated,
         BubblePriority::Normal,
     );
+}
+
+/// 激励時のリアクション
+pub fn on_encouraged(
+    on: On<OnEncouraged>,
+    mut commands: Commands,
+    assets: Res<GameAssets>,
+    q_familiars: Query<(&GlobalTransform, Option<&FamiliarVoice>), With<Familiar>>,
+    q_bubbles: Query<(Entity, &SpeechBubble), With<FamiliarBubble>>,
+    time: Res<Time>,
+    mut cooldowns: ResMut<crate::systems::visual::speech::cooldown::BubbleCooldowns>,
+) {
+    let event = on.event();
+    let fam_entity = event.familiar_entity;
+    let soul_entity = event.soul_entity;
+    let current_time = time.elapsed_secs();
+
+    // 使い魔の激励（即時）
+    if let Ok((transform, voice)) = q_familiars.get(fam_entity) {
+        if cooldowns.can_speak(fam_entity, BubblePriority::Normal, current_time) {
+            use rand::seq::SliceRandom;
+            let mut rng = rand::thread_rng();
+            let emoji = crate::constants::EMOJIS_ENCOURAGEMENT
+                .choose(&mut rng)
+                .unwrap_or(&"💪");
+
+            spawn_familiar_bubble(
+                &mut commands,
+                fam_entity,
+                crate::systems::visual::speech::phrases::LatinPhrase::Custom(emoji.to_string()),
+                transform.translation(),
+                &assets,
+                &q_bubbles,
+                BubbleEmotion::Motivated,
+                BubblePriority::Normal,
+                voice,
+            );
+            cooldowns.record_speech(fam_entity, BubblePriority::Normal, current_time);
+        }
+    }
+
+    // Soulのリアクション（遅延）
+    commands.entity(soul_entity).insert(ReactionDelay {
+        timer: Timer::from_seconds(0.3, TimerMode::Once),
+        emotion: BubbleEmotion::Stressed, // ストレスも溜まる
+        text: "😓".to_string(),
+    });
 }
