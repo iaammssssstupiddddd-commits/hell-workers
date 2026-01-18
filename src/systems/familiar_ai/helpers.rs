@@ -4,7 +4,7 @@ use crate::entities::damned_soul::{
     DamnedSoul, Destination, IdleBehavior, IdleState, Path, StressBreakdown,
 };
 use crate::entities::familiar::{Familiar, UnderCommand};
-use crate::events::OnTaskAssigned;
+use crate::events::{OnSoulRecruited, OnTaskAssigned};
 use crate::relationships::ManagedTasks;
 use crate::systems::command::TaskArea;
 use crate::systems::jobs::{
@@ -289,7 +289,7 @@ pub fn assign_task_to_worker(
     task_area_opt: Option<&TaskArea>,
     haul_cache: &mut HaulReservationCache,
 ) {
-    let Ok((_, _, soul, mut assigned_task, mut dest, mut path, idle, _, _)) =
+    let Ok((_, _, soul, mut assigned_task, mut dest, mut path, idle, _, uc_opt)) =
         q_souls.get_mut(worker_entity)
     else {
         warn!("ASSIGN: Worker {:?} not found in query", worker_entity);
@@ -324,6 +324,13 @@ pub fn assign_task_to_worker(
     match work_type {
         WorkType::Chop | WorkType::Mine => {
             // 割り当て確定時にのみ Relationship を更新
+            if uc_opt.is_none() {
+                commands.trigger(OnSoulRecruited {
+                    entity: worker_entity,
+                    familiar_entity: fam_entity,
+                });
+            }
+
             commands.entity(worker_entity).insert((
                 UnderCommand(fam_entity),
                 crate::relationships::WorkingOn(task_entity),
@@ -351,6 +358,13 @@ pub fn assign_task_to_worker(
             // TargetBlueprint が存在するかチェック
             if let Ok(target_bp) = q_target_blueprints.get(task_entity) {
                 // 割り当て確定時にのみ Relationship を更新
+                if uc_opt.is_none() {
+                    commands.trigger(OnSoulRecruited {
+                        entity: worker_entity,
+                        familiar_entity: fam_entity,
+                    });
+                }
+
                 commands.entity(worker_entity).insert((
                     UnderCommand(fam_entity),
                     crate::relationships::WorkingOn(task_entity),
@@ -420,6 +434,13 @@ pub fn assign_task_to_worker(
 
             if let Some(stock_entity) = best_stockpile {
                 // 割り当て確定時にのみ Relationship を更新
+                if uc_opt.is_none() {
+                    commands.trigger(OnSoulRecruited {
+                        entity: worker_entity,
+                        familiar_entity: fam_entity,
+                    });
+                }
+
                 commands.entity(worker_entity).insert((
                     UnderCommand(fam_entity),
                     crate::relationships::WorkingOn(task_entity),
@@ -468,6 +489,13 @@ pub fn assign_task_to_worker(
             }
 
             // 割り当て確定時にのみ Relationship を更新
+            if uc_opt.is_none() {
+                commands.trigger(OnSoulRecruited {
+                    entity: worker_entity,
+                    familiar_entity: fam_entity,
+                });
+            }
+
             commands.entity(worker_entity).insert((
                 UnderCommand(fam_entity),
                 crate::relationships::WorkingOn(task_entity),

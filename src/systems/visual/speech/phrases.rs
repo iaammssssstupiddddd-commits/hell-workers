@@ -13,6 +13,8 @@ pub enum LatinPhrase {
     Portare,
     /// 休め！ (休憩/アイドル)
     Requiesce,
+    /// 去れ！ (リリース)
+    Abi,
 }
 
 impl LatinPhrase {
@@ -24,6 +26,7 @@ impl LatinPhrase {
             LatinPhrase::Caede => "Caede!",
             LatinPhrase::Portare => "Portare!",
             LatinPhrase::Requiesce => "Requiesce!",
+            LatinPhrase::Abi => "Abi!",
         }
     }
 }

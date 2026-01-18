@@ -12,7 +12,24 @@ pub fn spawn_soul_bubble(
     pos: Vec3,
     assets: &Res<GameAssets>,
     emotion: BubbleEmotion,
+    priority: BubblePriority,
 ) {
+    // 優先度に応じた生存時間の決定
+    let duration = match priority {
+        BubblePriority::Low => BUBBLE_DURATION_LOW,
+        BubblePriority::Normal => BUBBLE_DURATION_NORMAL,
+        BubblePriority::High => BUBBLE_DURATION_HIGH,
+        BubblePriority::Critical => BUBBLE_DURATION_CRITICAL,
+    };
+
+    // 優先度に応じたフォントサイズの決定
+    let font_size = match priority {
+        BubblePriority::Low => BUBBLE_SIZE_SOUL_LOW,
+        BubblePriority::Normal => BUBBLE_SIZE_SOUL_NORMAL,
+        BubblePriority::High => BUBBLE_SIZE_SOUL_HIGH,
+        BubblePriority::Critical => BUBBLE_SIZE_SOUL_CRITICAL,
+    };
+
     // 感情に応じたカラーの決定
     let glow_color = match emotion {
         BubbleEmotion::Motivated => BUBBLE_COLOR_MOTIVATED,
@@ -26,10 +43,11 @@ pub fn spawn_soul_bubble(
         .spawn((
             SpeechBubble {
                 elapsed: 0.0,
-                duration: SPEECH_BUBBLE_DURATION,
+                duration,
                 speaker: soul_entity,
                 offset: SPEECH_BUBBLE_OFFSET,
                 emotion,
+                priority,
             },
             BubbleAnimation {
                 phase: AnimationPhase::PopIn,
@@ -39,7 +57,7 @@ pub fn spawn_soul_bubble(
             Text2d::new(emoji),
             TextFont {
                 font: assets.font_soul_emoji.clone(),
-                font_size: FONT_SIZE_BUBBLE_SOUL,
+                font_size,
                 ..default()
             },
             TextColor(Color::WHITE),
@@ -76,7 +94,24 @@ pub fn spawn_familiar_bubble(
     assets: &Res<GameAssets>,
     q_bubbles: &Query<(Entity, &SpeechBubble), With<FamiliarBubble>>,
     emotion: BubbleEmotion,
+    priority: BubblePriority,
 ) {
+    // 優先度に応じた生存時間の決定
+    let duration = match priority {
+        BubblePriority::Low => BUBBLE_DURATION_LOW,
+        BubblePriority::Normal => BUBBLE_DURATION_NORMAL,
+        BubblePriority::High => BUBBLE_DURATION_HIGH,
+        BubblePriority::Critical => BUBBLE_DURATION_CRITICAL,
+    };
+
+    // 優先度に応じたフォントサイズの決定
+    let font_size = match priority {
+        BubblePriority::Low => BUBBLE_SIZE_FAMILIAR_LOW,
+        BubblePriority::Normal => BUBBLE_SIZE_FAMILIAR_NORMAL,
+        BubblePriority::High => BUBBLE_SIZE_FAMILIAR_HIGH,
+        BubblePriority::Critical => BUBBLE_SIZE_FAMILIAR_CRITICAL,
+    };
+
     // 既存の吹き出しを削除
     for (bubble_entity, bubble) in q_bubbles.iter() {
         if bubble.speaker == fam_entity {
@@ -102,10 +137,11 @@ pub fn spawn_familiar_bubble(
         .spawn((
             SpeechBubble {
                 elapsed: 0.0,
-                duration: SPEECH_BUBBLE_DURATION,
+                duration,
                 speaker: fam_entity,
                 offset: SPEECH_BUBBLE_OFFSET,
                 emotion,
+                priority,
             },
             BubbleAnimation {
                 phase: AnimationPhase::PopIn,
@@ -115,7 +151,7 @@ pub fn spawn_familiar_bubble(
             Text2d::new(text_str),
             TextFont {
                 font: assets.font_ui.clone(),
-                font_size: FONT_SIZE_BUBBLE_FAMILIAR,
+                font_size,
                 ..default()
             },
             TextColor(Color::BLACK),

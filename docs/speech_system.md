@@ -11,21 +11,21 @@
 ### Soul (魂) のセリフ
 Soul は主に「感情」を絵文字で表現します。表示時は各感情に対応した色の **グロー（光彩）背景** が伴います。
 
-| トリガー | 絵文字 | 感情 (BubbleEmotion) | 内容・条件 |
-| :--- | :--- | :--- | :--- |
-| `OnTaskAssigned` | 💪 | Motivated | タスクが割り当てられた瞬間 |
-| `OnTaskCompleted` | 😊 | Happy | タスクを正常に完了した瞬間 |
-| `OnExhausted` | 😴 | Exhausted | 疲労限界に達し、休息へ向かう時 |
-| `OnStressBreakdown` | 😰 | Stressed | ストレス崩壊を起こした時 |
+| トリガー | 絵文字 | 感情 (BubbleEmotion) | 優先度 | 内容・条件 |
+| :--- | :--- | :--- | :--- | :--- |
+| `OnTaskAssigned` | 💪 | Motivated | Low | タスクが割り当てられた瞬間 |
+| `OnTaskCompleted` | 😊 | Happy | Low | タスクを正常に完了した瞬間 |
+| `OnExhausted` | 😴 | Exhausted | High | 疲労限界に達し、休息へ向かう時 |
+| `OnStressBreakdown` | 😰 | Stressed | Critical | ストレス崩壊を起こした時 |
 
 ### Familiar (使い魔) のセリフ
 Familiar は命令や状態を「ラテン語」で表現します。表示は **9-slice 吹き出し** と **タイプライター効果** を伴います。
 
-| トリガー | ラテン語 | 感情 | 内容・条件 |
-| :--- | :--- | :--- | :--- |
-| `OnTaskAssigned` | (複数) | Motivated | 部下にタスクを命じた時（以下参照） |
-| `OnSoulRecruited` | Veni | Neutral | 新しい Soul を分隊に勧誘した時 |
-| `AI: Idle` | Requiesce | Neutral | 命令が解除され、待機状態に入った時 |
+| トリガー | ラテン語 | 感情 | 優先度 | 内容・条件 |
+| :--- | :--- | :--- | :--- | :--- |
+| `OnTaskAssigned` | (複数) | Motivated | Low | 部下にタスクを命じた時 |
+| `OnSoulRecruited` | Veni | Neutral | Normal | 新しい Soul を分隊に勧誘した時 |
+| `AI: Idle` | Requiesce | Neutral | Normal | 命令が解除され、待機状態に入った時 |
 
 #### 命令別のラテン語 (OnTaskAssigned)
 | 作業種別 (WorkType) | セリフ | 意味 (参考) |
@@ -33,7 +33,8 @@ Familiar は命令や状態を「ラテン語」で表現します。表示は *
 | `Chop` (伐採) | **Caede** | 切れ / 伐採せよ |
 | `Mine` (採掘) | **Fodere** | 掘れ / 採掘せよ |
 | `Haul` (搬送) | **Portare** | 運べ |
-| `Build` (建築) | **Laborare** | 働け / 構築せよ |
+| `Build` (建築) | **Laborare** | 働け / 構築せよ | -- |
+| `Release` (解放) | **Abi** | 去れ / 去りなさい | 疲労・崩壊時 |
 
 ---
 
@@ -53,6 +54,25 @@ Familiar は命令や状態を「ラテン語」で表現します。表示は *
 ### Familiar 固有
 - **9-slice 吹き出し**: テキストの長さに応じて、吹き出し背景（`bubble_9slice.png`）が動的に伸縮します。
 - **タイプライター効果**: 1文字ずつ高速（0.03秒間隔）でテキストが表示されます。
+
+---
+
+## 3. 優先度とスロットリング (New)
+
+画面の混雑を防ぎ、重要な情報を際立たせるために優先度システムを導入しています。
+
+### 優先度別の差別化
+| 優先度 (BubblePriority) | 表示時間 | Soul 絵文字サイズ | 用途例 |
+| :--- | :--- | :--- | :--- |
+| **Low** | 0.8秒 | 18px (小) | タスク開始・完了 |
+| **Normal** | 1.5秒 | 24px (中) | 勧誘、休息開始 |
+| **High** | 2.5秒 | 28px (大) | 疲労限界 |
+| **Critical** | 3.5秒 | 32px (特大) | ストレス崩壊 |
+
+### クールダウン (スロットリング)
+同一エンティティからの連続した発言を制限します。
+- **高優先度 (High以上)**: クールダウンを無視して即座に表示されます。
+- **低優先度 (Low/Normal)**: 前回の発言から一定時間（0.5〜1.5秒）経過するまで、新しい吹き出しの生成がスキップされます。
 
 ---
 
