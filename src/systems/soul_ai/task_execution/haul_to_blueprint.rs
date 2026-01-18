@@ -3,7 +3,9 @@
 use crate::entities::damned_soul::StressBreakdown;
 use crate::relationships::{Holding, WorkingOn};
 use crate::systems::familiar_ai::haul_cache::HaulReservationCache;
-use crate::systems::jobs::{Blueprint, Designation, DesignationCreatedEvent, IssuedBy, TaskSlots, WorkType};
+use crate::systems::jobs::{
+    Blueprint, Designation, DesignationCreatedEvent, IssuedBy, TaskSlots, WorkType,
+};
 use crate::systems::logistics::Stockpile;
 use crate::systems::soul_ai::task_execution::{
     common::*,
@@ -61,6 +63,7 @@ pub fn handle_haul_to_blueprint_task(
             q_designations,
             haul_cache,
             Some(ev_created),
+            true, // 失敗時はセリフを出す
         );
         return;
     }
@@ -172,20 +175,22 @@ pub fn handle_haul_to_blueprint_task(
                     // 資材が揃った場合、BlueprintエンティティのIssuedByを削除して未割り当て状態にする
                     // そして、DesignationCreatedEventを再発行して使い魔が建築タスクを探せるようにする
                     if bp.materials_complete() {
-                        if let Ok((_, _, _designation, issued_by_opt, _, _)) = q_designations.get(blueprint_entity) {
+                        if let Ok((_, _, _designation, issued_by_opt, _, _)) =
+                            q_designations.get(blueprint_entity)
+                        {
                             // IssuedByを削除して未割り当て状態にする
                             if issued_by_opt.is_some() {
                                 commands.entity(blueprint_entity).remove::<IssuedBy>();
                             }
-                            
+
                             // DesignationCreatedEventを再発行して使い魔がタスクを探せるようにする
                             ev_created.write(DesignationCreatedEvent {
                                 entity: blueprint_entity,
                                 work_type: WorkType::Build,
                                 issued_by: None, // 未割り当て状態
-                                priority: 10, // 建築タスクは高優先度
+                                priority: 10,    // 建築タスクは高優先度
                             });
-                            
+
                             info!(
                                 "HAUL_TO_BP: Blueprint {:?} materials complete, reissuing DesignationCreatedEvent for build task",
                                 blueprint_entity
