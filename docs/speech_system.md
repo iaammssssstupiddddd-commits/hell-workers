@@ -23,6 +23,7 @@ Soul は主に「感情」を絵文字で表現します。表示時は各感情
 | `OnTaskAbandoned` | 😓 | Frustrated | Normal | タスクがキャンセルされた時 | [NEW]
 | `Periodic: Idle` | 💤.. | Bored | Low | 長時間アイドル時 (10s+) | [NEW]
 | `Periodic: High` | 😰/😴..| (各種) | High | 状態異常時の定期リマインド | [NEW]
+| `Conversation` | (複数) | Chatting/Happy/Slacking.. | Normal | Soul同士の対話システム | [NEW]
 
 ### Familiar (使い魔) のセリフ
 Familiar は命令や状態を「ラテン語」で表現します。表示は **9-slice 吹き出し** と **タイプライター効果** を伴います。
@@ -62,6 +63,8 @@ Familiar は命令や状態を「ラテン語」で表現します。表示は *
     - Frustrated: 濁ったグレー
     - Unmotivated: 黄色系
     - Bored: 薄い青系
+    - Chatting: 会話用の明るい色系 [NEW]
+    - Slacking: サボり用の特定色系 [NEW]
 
 ### Familiar 固有
 - **9-slice 吹き出し**: テキストの長さに応じて、吹き出し背景（`bubble_9slice.png`）が動的に伸縮します。
@@ -99,6 +102,29 @@ Familiar は命令や状態を「ラテン語」で表現します。表示は *
     - `update_bubble_stacking`: 位置調整制御
     - `periodic_emotion_system`: [NEW] 定期的な感情判定ロジック
     - `reaction_delay_system`: [NEW] 勧誘時の遅延リアクション制御
+
+---
+
+## 4. Soul 会話システム (Soul Conversation System) [NEW]
+
+Soul 同士が近接した際に発生する、動的な対話システムです。
+
+### 仕組み
+1. **トリガー**: `ConversationInitiator` が一定間隔ごとに周囲の Soul を探索。両者が Idle または Gathering 状態の場合、確率で会話が開始されます。
+2. **構成**: 開始者 (Initiator) と応答者 (Responder) の 1対1（将来的に拡張可能）で行われます。
+3. **フロー**: 
+    - `Greeting`: 挨拶フェーズ (`👋`, `❓` 等)。
+    - `Chatting`: 雑談フェーズ。サボり・愚痴・食事・質問などの「仕事以外」のトピックから絵文字を選択。
+    - `Closing`: 終了フェーズ。同意や別れの挨拶。
+4. **場所による変化**:
+    - **通常 (Idle)**: 短い（1〜2ターン）のやり取り。
+    - **集会所 (Gathering)**: 通常より発生確率が高く、ターン数も多い「深い対話」になります。
+
+### 報酬 (機械的メリット)
+会話が正常に完了すると、参加したすべての Soul の **ストレス値が減少** します。
+- 3ターン以上の長い会話には、追加のボーナス報酬が適用されます。
+
+---
 
 ---
 

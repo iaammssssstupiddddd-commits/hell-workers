@@ -1,5 +1,6 @@
 pub mod animation;
 pub mod components;
+pub mod conversation;
 pub mod cooldown;
 pub mod observers;
 pub mod periodic;
@@ -9,6 +10,7 @@ pub mod typewriter;
 pub mod update;
 
 use bevy::prelude::*;
+use conversation::ConversationPlugin;
 use observers::*;
 
 pub struct SpeechPlugin;
@@ -17,6 +19,7 @@ impl Plugin for SpeechPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<cooldown::BubbleCooldowns>();
         app.init_resource::<periodic::PeriodicEmotionFrameCounter>();
+        app.add_plugins(ConversationPlugin);
         app.add_systems(
             Update,
             (

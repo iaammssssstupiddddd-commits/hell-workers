@@ -240,6 +240,8 @@ pub const BUBBLE_COLOR_RELAXED: Color = Color::srgba(0.4, 1.0, 0.7, 1.0); // ミ
 pub const BUBBLE_COLOR_FRUSTRATED: Color = Color::srgba(0.7, 0.7, 0.7, 1.0); // 濁ったグレー
 pub const BUBBLE_COLOR_UNMOTIVATED: Color = Color::srgba(0.8, 0.8, 0.5, 1.0); // 鈍い黄色
 pub const BUBBLE_COLOR_BORED: Color = Color::srgba(0.7, 0.7, 1.0, 0.8); // 薄い青
+pub const BUBBLE_COLOR_SLACKING: Color = Color::srgba(0.5, 0.7, 0.5, 1.0); // 落ち着いた緑
+pub const BUBBLE_COLOR_CHATTING: Color = Color::srgba(1.0, 0.9, 0.6, 1.0); // 薄いオレンジ/クリーム
 
 // ============================================================
 // 定期セリフシステム (Periodic Emotion System)
@@ -261,3 +263,32 @@ pub const PERIODIC_EMOTION_FRAME_DIVISOR: u32 = 10;
 pub const EMOTION_THRESHOLD_STRESSED: f32 = 0.6;
 pub const EMOTION_THRESHOLD_EXHAUSTED: f32 = 0.7;
 pub const EMOTION_THRESHOLD_UNMOTIVATED: f32 = 0.3;
+
+// ============================================================
+// 会話システム (Soul Conversation System)
+// ============================================================
+
+/// 会話の感知半径
+pub const CONVERSATION_RADIUS: f32 = 2.5 * TILE_SIZE;
+/// 会話開始の試行間隔 (秒)
+pub const CONVERSATION_CHECK_INTERVAL: f32 = 3.0;
+/// 会話開始確率 (Idle時)
+pub const CONVERSATION_CHANCE_IDLE: f32 = 0.2;
+/// 会話開始確率 (Gathering時)
+pub const CONVERSATION_CHANCE_GATHERING: f32 = 0.4;
+/// 会話後のクールダウン (秒)
+pub const CONVERSATION_COOLDOWN: f32 = 30.0;
+/// 1ターンの表示時間
+pub const CONVERSATION_TURN_DURATION: f32 = 2.0;
+/// 会話成立によるストレス軽減量
+pub const CONVERSATION_STRESS_RELIEF: f32 = 2.0;
+/// 集会所での長期会話ボーナス
+pub const CONVERSATION_LONG_CHAT_BONUS: f32 = 3.0;
+
+/// 会話用絵文字セット
+pub const EMOJIS_GREETING: &[&str] = &["👋", "🙋‍♂️"];
+pub const EMOJIS_QUESTION: &[&str] = &["❓", "❔"];
+pub const EMOJIS_AGREEMENT: &[&str] = &["🙆‍♂️", "👍", "👌"];
+pub const EMOJIS_SLACKING: &[&str] = &["🛌", "🛑", "🐌"];
+pub const EMOJIS_FOOD: &[&str] = &["🍖", "🍺", "🥤"];
+pub const EMOJIS_COMPLAINING: &[&str] = &["😓", "😴", "😒", "🥱"];

@@ -43,6 +43,8 @@ pub fn spawn_soul_bubble(
         BubbleEmotion::Frustrated => BUBBLE_COLOR_FRUSTRATED,
         BubbleEmotion::Unmotivated => BUBBLE_COLOR_UNMOTIVATED,
         BubbleEmotion::Bored => BUBBLE_COLOR_BORED,
+        BubbleEmotion::Slacking => BUBBLE_COLOR_SLACKING,
+        BubbleEmotion::Chatting => BUBBLE_COLOR_CHATTING,
         BubbleEmotion::Neutral => Color::srgba(1.0, 1.0, 1.0, 0.5),
     };
 
@@ -147,6 +149,8 @@ pub fn spawn_familiar_bubble(
         BubbleEmotion::Frustrated => BUBBLE_COLOR_FRUSTRATED,
         BubbleEmotion::Unmotivated => BUBBLE_COLOR_UNMOTIVATED,
         BubbleEmotion::Bored => BUBBLE_COLOR_BORED,
+        BubbleEmotion::Slacking => BUBBLE_COLOR_SLACKING,
+        BubbleEmotion::Chatting => BUBBLE_COLOR_CHATTING,
         BubbleEmotion::Neutral => Color::WHITE,
     };
 
