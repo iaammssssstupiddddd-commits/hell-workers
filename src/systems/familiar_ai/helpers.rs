@@ -484,6 +484,11 @@ pub fn assign_task_to_worker(
             dest.0 = task_pos;
             path.waypoints = vec![task_pos];
             path.current_index = 0;
+            commands.trigger(OnTaskAssigned {
+                entity: worker_entity,
+                task_entity,
+                work_type: WorkType::Build,
+            });
             info!("ASSIGN: Build task assigned to {:?}", worker_entity);
         }
     }
