@@ -17,6 +17,12 @@ Soul は主に「感情」を絵文字で表現します。表示時は各感情
 | `OnTaskCompleted` | 😊 | Happy | Low | タスクを正常に完了した瞬間 |
 | `OnExhausted` | 😴 | Exhausted | High | 疲労限界に達し、休息へ向かう時 |
 | `OnStressBreakdown` | 😰 | Stressed | Critical | ストレス崩壊を起こした時 |
+| `OnSoulRecruited` | 😨 | Fearful | Normal | 勧誘された時 (0.3s遅延) | [NEW]
+| `OnReleased` | 😅 | Relieved | Normal | 使役から解放された時 | [NEW]
+| `OnGatheringJoined`| 😌 | Relaxed | Normal | 集会所に到着した時 | [NEW]
+| `OnTaskAbandoned` | 😓 | Frustrated | Normal | タスクがキャンセルされた時 | [NEW]
+| `Periodic: Idle` | 💤.. | Bored | Low | 長時間アイドル時 (10s+) | [NEW]
+| `Periodic: High` | 😰/😴..| (各種) | High | 状態異常時の定期リマインド | [NEW]
 
 ### Familiar (使い魔) のセリフ
 Familiar は命令や状態を「ラテン語」で表現します。表示は **9-slice 吹き出し** と **タイプライター効果** を伴います。
@@ -46,10 +52,16 @@ Familiar は命令や状態を「ラテン語」で表現します。表示は *
 
 ### Soul 固有
 - **感情カラーグロー**: 吹き出しの背後に、感情に対応した色の円形グラデーション（`glow_circle.png`）が表示されます。
-    - Motivated: 黄色系
-    - Happy: ピンク/オレンジ系
-    - Exhausted: 青/紫系
+    - Motivated: 黄緑系
+    - Happy: ピンク系
+    - Exhausted: グレー系
     - Stressed: 赤系
+    - Fearful: 紫系
+    - Relieved: 水色系
+    - Relaxed: ミント系
+    - Frustrated: 濁ったグレー
+    - Unmotivated: 黄色系
+    - Bored: 薄い青系
 
 ### Familiar 固有
 - **9-slice 吹き出し**: テキストの長さに応じて、吹き出し背景（`bubble_9slice.png`）が動的に伸縮します。
@@ -85,3 +97,26 @@ Familiar は命令や状態を「ラテン語」で表現します。表示は *
     - `animate_speech_bubbles`: アニメーション制御
     - `update_typewriter`: テキスト表示制御
     - `update_bubble_stacking`: 位置調整制御
+    - `periodic_emotion_system`: [NEW] 定期的な感情判定ロジック
+    - `reaction_delay_system`: [NEW] 勧誘時の遅延リアクション制御
+
+---
+
+## 4. ランダムフレーズシステム
+
+各使い魔はスポーン時にランダムな「口癖傾向」（`FamiliarVoice`）を持つ。
+
+### 仕組み
+- **お気に入り確率**: 60〜90%（使い魔ごとにランダム設定）
+- **フレーズ選択**: お気に入り確率でお気に入りフレーズを使用、残りは完全ランダム
+
+### フレーズ候補一覧 (各5つ)
+| コマンド | フレーズ候補 |
+|:--|:--|
+| Veni | "Veni!", "Ad me!", "Huc!", "Sequere!", "Adesto!" |
+| Laborare | "Laborare!", "Opus!", "Facite!", "Agite!", "Elabora!" |
+| Fodere | "Fodere!", "Effodite!", "Excava!", "Pelle!", "Fodite!" |
+| Caede | "Caede!", "Seca!", "Tunde!", "Percute!", "Incide!" |
+| Portare | "Portare!", "Fer!", "Cape!", "Tolle!", "Affer!" |
+| Requiesce | "Requiesce!", "Quiesce!", "Siste!", "Mane!", "Pausa!" |
+| Abi | "Abi!", "Discede!", "I!", "Vade!", "Recede!" |

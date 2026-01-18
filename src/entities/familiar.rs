@@ -136,6 +136,36 @@ impl Default for FamiliarOperation {
 // 後方互換性のため、エイリアスを提供
 pub use crate::relationships::CommandedBy as UnderCommand;
 
+use crate::systems::visual::speech::phrases::LatinPhrase;
+
+/// 使い魔の「口癖」傾向
+#[derive(Component)]
+pub struct FamiliarVoice {
+    /// 各コマンドの「お気に入りフレーズ」インデックス (0-4)
+    pub preferences: [usize; LatinPhrase::COUNT],
+    /// お気に入りを使う確率 (0.6〜0.9)
+    pub preference_weight: f32,
+}
+
+impl FamiliarVoice {
+    pub fn random() -> Self {
+        let mut rng = rand::thread_rng();
+        let mut preferences = [0; LatinPhrase::COUNT];
+        for p in preferences.iter_mut() {
+            *p = rng.gen_range(0..5); // 各フレーズは5個ずつ
+        }
+        Self {
+            preferences,
+            preference_weight: rng.gen_range(0.6..0.9),
+        }
+    }
+
+    /// 指定フレーズのお気に入りインデックスを取得
+    pub fn get_preference(&self, phrase: LatinPhrase) -> usize {
+        self.preferences[phrase.index()]
+    }
+}
+
 /// 使い魔をスポーンする
 pub fn spawn_familiar(mut spawn_events: MessageWriter<FamiliarSpawnEvent>) {
     spawn_events.write(FamiliarSpawnEvent {
@@ -205,6 +235,7 @@ pub fn spawn_familiar_at(
             Destination(actual_pos),                       // 移動先
             Path::default(),                               // 経路
             FamiliarAnimation::default(),                  // アニメーション
+            FamiliarVoice::random(),                       // ランダムな口癖傾向
             Sprite {
                 image: game_assets.familiar.clone(),
                 texture_atlas: Some(TextureAtlas {

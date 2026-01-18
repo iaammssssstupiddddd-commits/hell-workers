@@ -35,3 +35,21 @@ pub struct OnStressBreakdown {
 pub struct OnExhausted {
     pub entity: Entity, // 魂
 }
+
+/// 魂が使い魔の使役から解放された
+#[derive(Message, EntityEvent)]
+pub struct OnReleasedFromService {
+    pub entity: Entity,
+}
+
+/// 魂が自発的に集会に参加した
+#[derive(Message, EntityEvent)]
+pub struct OnGatheringJoined {
+    pub entity: Entity,
+}
+
+/// 魂のタスクが中断・放棄された
+#[derive(Message, EntityEvent)]
+pub struct OnTaskAbandoned {
+    pub entity: Entity,
+}

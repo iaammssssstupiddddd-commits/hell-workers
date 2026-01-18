@@ -76,7 +76,12 @@ pub fn cleanup_commanded_souls_system(
                 &q_designations,
                 &mut *haul_cache,
                 Some(&mut ev_created),
+                false, // emit_abandoned_event: 解放時は個別のタスク中断セリフを出さない
             );
+
+            commands.trigger(crate::events::OnReleasedFromService {
+                entity: soul_entity,
+            });
 
             commands.entity(soul_entity).remove::<UnderCommand>();
         }
@@ -104,7 +109,13 @@ pub fn unassign_task(
     )>,
     haul_cache: &mut HaulReservationCache,
     ev_created: Option<&mut MessageWriter<DesignationCreatedEvent>>,
+    emit_abandoned_event: bool,
 ) {
+    if !matches!(*task, AssignedTask::None) && emit_abandoned_event {
+        commands.trigger(crate::events::OnTaskAbandoned {
+            entity: soul_entity,
+        });
+    }
     if let AssignedTask::Haul { stockpile, .. } = *task {
         haul_cache.release(stockpile);
     }

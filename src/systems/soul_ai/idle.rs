@@ -44,9 +44,11 @@ fn random_position_around(center: Vec2, min_dist: f32, max_dist: f32) -> Vec2 {
 /// タスクがある人間は怠惰行動をしない
 pub fn idle_behavior_system(
     time: Res<Time>,
+    mut commands: Commands,
     world_map: Res<WorldMap>,
     gathering_area: Res<GatheringArea>,
     mut query: Query<(
+        Entity,
         &Transform,
         &mut IdleState,
         &mut Destination,
@@ -58,7 +60,8 @@ pub fn idle_behavior_system(
 ) {
     let dt = time.delta_secs();
 
-    for (transform, mut idle, mut dest, soul, mut path, task, under_command_opt) in query.iter_mut()
+    for (entity, transform, mut idle, mut dest, soul, mut path, task, under_command_opt) in
+        query.iter_mut()
     {
         // 疲労による強制集会（ExhaustedGathering）状態の場合は他の処理をスキップ
         if idle.behavior == IdleBehavior::ExhaustedGathering {
@@ -70,6 +73,7 @@ pub fn idle_behavior_system(
             if has_arrived {
                 info!("IDLE: Soul transitioned from ExhaustedGathering to Gathering");
                 idle.behavior = IdleBehavior::Gathering;
+                commands.trigger(crate::events::OnGatheringJoined { entity });
             } else {
                 if path.waypoints.is_empty() || path.current_index >= path.waypoints.len() {
                     dest.0 = center;

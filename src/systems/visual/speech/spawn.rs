@@ -2,6 +2,7 @@ use super::components::*;
 use super::phrases::LatinPhrase;
 use crate::assets::GameAssets;
 use crate::constants::*;
+use crate::entities::familiar::FamiliarVoice;
 use bevy::prelude::*;
 
 /// Soul用の絵文字吹き出しをスポーンする
@@ -36,6 +37,12 @@ pub fn spawn_soul_bubble(
         BubbleEmotion::Happy => BUBBLE_COLOR_HAPPY,
         BubbleEmotion::Exhausted => BUBBLE_COLOR_EXHAUSTED,
         BubbleEmotion::Stressed => BUBBLE_COLOR_STRESSED,
+        BubbleEmotion::Fearful => BUBBLE_COLOR_FEARFUL,
+        BubbleEmotion::Relieved => BUBBLE_COLOR_RELIEVED,
+        BubbleEmotion::Relaxed => BUBBLE_COLOR_RELAXED,
+        BubbleEmotion::Frustrated => BUBBLE_COLOR_FRUSTRATED,
+        BubbleEmotion::Unmotivated => BUBBLE_COLOR_UNMOTIVATED,
+        BubbleEmotion::Bored => BUBBLE_COLOR_BORED,
         BubbleEmotion::Neutral => Color::srgba(1.0, 1.0, 1.0, 0.5),
     };
 
@@ -47,7 +54,6 @@ pub fn spawn_soul_bubble(
                 speaker: soul_entity,
                 offset: SPEECH_BUBBLE_OFFSET,
                 emotion,
-                priority,
             },
             BubbleAnimation {
                 phase: AnimationPhase::PopIn,
@@ -95,6 +101,7 @@ pub fn spawn_familiar_bubble(
     q_bubbles: &Query<(Entity, &SpeechBubble), With<FamiliarBubble>>,
     emotion: BubbleEmotion,
     priority: BubblePriority,
+    voice: Option<&FamiliarVoice>,
 ) {
     // 優先度に応じた生存時間の決定
     let duration = match priority {
@@ -119,7 +126,11 @@ pub fn spawn_familiar_bubble(
         }
     }
     // テキスト長に応じたサイズ計算 (概算: 1文字平均 8px + 左右余白 16px)
-    let text_str = phrase.as_str();
+    let text_str = if let Some(v) = voice {
+        phrase.select_with_preference(v.get_preference(phrase), v.preference_weight)
+    } else {
+        phrase.random_str()
+    };
     let text_width = (text_str.len() as f32 * 8.0).max(32.0);
     let bubble_width = text_width + 16.0;
     let bubble_height = 32.0;
@@ -130,6 +141,12 @@ pub fn spawn_familiar_bubble(
         BubbleEmotion::Happy => BUBBLE_COLOR_HAPPY,
         BubbleEmotion::Exhausted => BUBBLE_COLOR_EXHAUSTED,
         BubbleEmotion::Stressed => BUBBLE_COLOR_STRESSED,
+        BubbleEmotion::Fearful => BUBBLE_COLOR_FEARFUL,
+        BubbleEmotion::Relieved => BUBBLE_COLOR_RELIEVED,
+        BubbleEmotion::Relaxed => BUBBLE_COLOR_RELAXED,
+        BubbleEmotion::Frustrated => BUBBLE_COLOR_FRUSTRATED,
+        BubbleEmotion::Unmotivated => BUBBLE_COLOR_UNMOTIVATED,
+        BubbleEmotion::Bored => BUBBLE_COLOR_BORED,
         BubbleEmotion::Neutral => Color::WHITE,
     };
 
@@ -141,7 +158,6 @@ pub fn spawn_familiar_bubble(
                 speaker: fam_entity,
                 offset: SPEECH_BUBBLE_OFFSET,
                 emotion,
-                priority,
             },
             BubbleAnimation {
                 phase: AnimationPhase::PopIn,

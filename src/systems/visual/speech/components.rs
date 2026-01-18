@@ -13,8 +13,6 @@ pub struct SpeechBubble {
     pub offset: Vec2,
     /// 感情タイプ
     pub emotion: BubbleEmotion,
-    /// 優先度
-    pub priority: BubblePriority,
 }
 
 /// 吹き出しの優先度
@@ -32,10 +30,16 @@ pub enum BubblePriority {
 pub enum BubbleEmotion {
     #[default]
     Neutral, // 通常
-    Motivated, // やる気（💪）
-    Happy,     // 満足（😊）
-    Exhausted, // 疲労（😴）
-    Stressed,  // ストレス（😰）
+    Motivated,   // やる気（💪）
+    Happy,       // 満足（😊）
+    Exhausted,   // 疲労（😴）
+    Stressed,    // ストレス（😰）
+    Fearful,     // 恐怖・服従（😨）
+    Relieved,    // 安堵（😅）
+    Relaxed,     // リラックス（😌）
+    Frustrated,  // フラストレーション（😓）
+    Unmotivated, // やる気なし（😒）
+    Bored,       // 退屈（💤、🥱、😑）
 }
 
 /// アニメーション状態
@@ -72,3 +76,36 @@ pub struct FamiliarBubble;
 /// 吹き出しの背景スプライト用マーカー
 #[derive(Component)]
 pub struct SpeechBubbleBackground;
+
+/// リアクションの遅延実行用
+#[derive(Component)]
+pub struct ReactionDelay {
+    pub timer: Timer,
+    pub emotion: BubbleEmotion,
+    pub text: String,
+}
+
+/// 定期的な感情表現の状態管理
+#[derive(Component, Default)]
+pub struct SoulEmotionState {
+    /// 前回の発言からの経過時間ロック
+    pub lock_timer: f32,
+    /// 現在のアイドル時間
+    pub idle_time: f32,
+}
+
+impl SoulEmotionState {
+    pub fn is_ready(&self, _time: &Time) -> bool {
+        self.lock_timer <= 0.0
+    }
+
+    pub fn lock(&mut self, duration: f32) {
+        self.lock_timer = duration;
+    }
+
+    pub fn tick(&mut self, dt: f32) {
+        if self.lock_timer > 0.0 {
+            self.lock_timer -= dt;
+        }
+    }
+}
