@@ -14,7 +14,10 @@ use crate::systems::soul_ai::work::unassign_task;
 use crate::systems::spatial::{
     DesignationSpatialGrid, SpatialGrid, update_designation_spatial_grid_system,
 };
-use crate::systems::visual::speech::components::{BubbleEmotion, FamiliarBubble, SpeechBubble};
+use crate::systems::visual::speech::components::{
+    BubbleEmotion, BubblePriority, FamiliarBubble, SpeechBubble,
+};
+use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 
 pub mod following;
@@ -67,62 +70,101 @@ impl Plugin for FamiliarAiPlugin {
     }
 }
 
-/// 使い魔AIの更新システム
-pub fn familiar_ai_system(
-    mut commands: Commands,
-    time: Res<Time>,
-    spatial_grid: Res<SpatialGrid>,
-    mut q_familiars: Query<(
-        Entity,
-        &Transform,
-        &Familiar,
-        &FamiliarOperation,
-        &ActiveCommand,
-        &mut FamiliarAiState,
-        &mut Destination,
-        &mut Path,
-        Option<&TaskArea>,
-        Option<&Commanding>,
-        &ManagedTasks,
-    )>,
-    mut q_souls: Query<
+#[derive(SystemParam)]
+pub struct FamiliarAiParams<'w, 's> {
+    pub commands: Commands<'w, 's>,
+    pub time: Res<'w, Time>,
+    pub spatial_grid: Res<'w, SpatialGrid>,
+    pub q_familiars: Query<
+        'w,
+        's,
         (
             Entity,
-            &Transform,
-            &DamnedSoul,
-            &mut AssignedTask,
-            &mut Destination,
-            &mut Path,
-            &IdleState,
-            Option<&crate::relationships::Holding>,
-            Option<&crate::entities::familiar::UnderCommand>,
+            &'static Transform,
+            &'static Familiar,
+            &'static FamiliarOperation,
+            &'static ActiveCommand,
+            &'static mut FamiliarAiState,
+            &'static mut Destination,
+            &'static mut Path,
+            Option<&'static TaskArea>,
+            Option<&'static Commanding>,
+            &'static ManagedTasks,
+        ),
+    >,
+    pub q_souls: Query<
+        'w,
+        's,
+        (
+            Entity,
+            &'static Transform,
+            &'static DamnedSoul,
+            &'static mut AssignedTask,
+            &'static mut Destination,
+            &'static mut Path,
+            &'static IdleState,
+            Option<&'static crate::relationships::Holding>,
+            Option<&'static crate::entities::familiar::UnderCommand>,
         ),
         Without<Familiar>,
     >,
-    q_designations: Query<(
-        Entity,
-        &Transform,
-        &crate::systems::jobs::Designation,
-        Option<&IssuedBy>,
-        Option<&TaskSlots>,
-        Option<&TaskWorkers>,
-    )>,
-    q_stockpiles: Query<(
-        Entity,
-        &Transform,
-        &Stockpile,
-        Option<&crate::relationships::StoredItems>,
-    )>,
-    _q_souls_lite: Query<(Entity, &UnderCommand), With<DamnedSoul>>,
-    q_breakdown: Query<&StressBreakdown>,
-    q_resources: Query<&ResourceItem>,
-    q_target_blueprints: Query<&TargetBlueprint>,
-    q_blueprints: Query<&Blueprint>,
-    mut haul_cache: ResMut<haul_cache::HaulReservationCache>,
-    designation_grid: Res<DesignationSpatialGrid>,
-    game_assets: Res<crate::assets::GameAssets>,
-    q_bubbles: Query<(Entity, &SpeechBubble), With<FamiliarBubble>>,
-) {
+    pub q_designations: Query<
+        'w,
+        's,
+        (
+            Entity,
+            &'static Transform,
+            &'static crate::systems::jobs::Designation,
+            Option<&'static IssuedBy>,
+            Option<&'static TaskSlots>,
+            Option<&'static TaskWorkers>,
+        ),
+    >,
+    pub q_stockpiles: Query<
+        'w,
+        's,
+        (
+            Entity,
+            &'static Transform,
+            &'static Stockpile,
+            Option<&'static crate::relationships::StoredItems>,
+        ),
+    >,
+    pub _q_souls_lite: Query<'w, 's, (Entity, &'static UnderCommand), With<DamnedSoul>>,
+    pub q_breakdown: Query<'w, 's, &'static StressBreakdown>,
+    pub q_resources: Query<'w, 's, &'static ResourceItem>,
+    pub q_target_blueprints: Query<'w, 's, &'static TargetBlueprint>,
+    pub q_blueprints: Query<'w, 's, &'static Blueprint>,
+    pub haul_cache: ResMut<'w, haul_cache::HaulReservationCache>,
+    pub designation_grid: Res<'w, DesignationSpatialGrid>,
+    pub game_assets: Res<'w, crate::assets::GameAssets>,
+    pub q_bubbles: Query<'w, 's, (Entity, &'static SpeechBubble), With<FamiliarBubble>>,
+    pub cooldowns: ResMut<'w, crate::systems::visual::speech::cooldown::BubbleCooldowns>,
+    pub ev_created: MessageWriter<'w, crate::systems::jobs::DesignationCreatedEvent>,
+}
+
+/// 使い魔AIの更新システム
+pub fn familiar_ai_system(params: FamiliarAiParams) {
+    let FamiliarAiParams {
+        mut commands,
+        time,
+        spatial_grid,
+        mut q_familiars,
+        mut q_souls,
+        q_designations,
+        q_stockpiles,
+        _q_souls_lite,
+        q_breakdown,
+        q_resources,
+        q_target_blueprints,
+        q_blueprints,
+        mut haul_cache,
+        designation_grid,
+        game_assets,
+        q_bubbles,
+        mut cooldowns,
+        mut ev_created,
+    } = params;
     // 1. 搬送中のアイテム・ストックパイル予約状況を事前計算
     // フェーズ2: 全ソウルをイテレートする代わりにキャッシュ（HaulReservationCache）を使用
     // let mut in_flight_haulers = std::collections::HashMap::new();
@@ -152,15 +194,23 @@ pub fn familiar_ai_system(
             if *ai_state != FamiliarAiState::Idle {
                 *ai_state = FamiliarAiState::Idle;
                 // 休息フレーズを表示
-                crate::systems::visual::speech::spawn::spawn_familiar_bubble(
-                    &mut commands,
-                    fam_entity,
-                    crate::systems::visual::speech::phrases::LatinPhrase::Requiesce,
-                    fam_transform.translation,
-                    &game_assets,
-                    &q_bubbles,
-                    BubbleEmotion::Neutral,
-                );
+                if cooldowns.can_speak(fam_entity, BubblePriority::Normal, time.elapsed_secs()) {
+                    crate::systems::visual::speech::spawn::spawn_familiar_bubble(
+                        &mut commands,
+                        fam_entity,
+                        crate::systems::visual::speech::phrases::LatinPhrase::Requiesce,
+                        fam_transform.translation,
+                        &game_assets,
+                        &q_bubbles,
+                        BubbleEmotion::Neutral,
+                        BubblePriority::Normal,
+                    );
+                    cooldowns.record_speech(
+                        fam_entity,
+                        BubblePriority::Normal,
+                        time.elapsed_secs(),
+                    );
+                }
             }
             fam_dest.0 = fam_transform.translation.truncate();
             fam_path.waypoints.clear();
@@ -221,7 +271,29 @@ pub fn familiar_ai_system(
                         holding_opt,
                         &q_designations,
                         &mut *haul_cache,
+                        Some(&mut ev_created),
                     );
+
+                    // リリースフレーズを表示
+                    if cooldowns.can_speak(fam_entity, BubblePriority::Normal, time.elapsed_secs())
+                    {
+                        crate::systems::visual::speech::spawn::spawn_familiar_bubble(
+                            &mut commands,
+                            fam_entity,
+                            crate::systems::visual::speech::phrases::LatinPhrase::Abi,
+                            fam_transform.translation,
+                            &game_assets,
+                            &q_bubbles,
+                            BubbleEmotion::Neutral,
+                            BubblePriority::Normal,
+                        );
+                        cooldowns.record_speech(
+                            fam_entity,
+                            BubblePriority::Normal,
+                            time.elapsed_secs(),
+                        );
+                    }
+
                     commands.entity(member_entity).remove::<UnderCommand>();
                     released_entities.push(member_entity);
                 }
@@ -286,6 +358,10 @@ pub fn familiar_ai_system(
                         commands
                             .entity(new_recruit)
                             .insert(UnderCommand(fam_entity));
+                        commands.trigger(crate::events::OnSoulRecruited {
+                            entity: new_recruit,
+                            familiar_entity: fam_entity,
+                        });
                         squad_entities.push(new_recruit);
                         state_changed = true;
                     }

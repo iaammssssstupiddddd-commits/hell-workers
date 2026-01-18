@@ -1,5 +1,6 @@
 pub mod animation;
 pub mod components;
+pub mod cooldown;
 pub mod observers;
 pub mod phrases;
 pub mod spawn;
@@ -13,6 +14,7 @@ pub struct SpeechPlugin;
 
 impl Plugin for SpeechPlugin {
     fn build(&self, app: &mut App) {
+        app.init_resource::<cooldown::BubbleCooldowns>();
         app.add_systems(
             Update,
             (

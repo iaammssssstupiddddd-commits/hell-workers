@@ -13,6 +13,18 @@ pub struct SpeechBubble {
     pub offset: Vec2,
     /// 感情タイプ
     pub emotion: BubbleEmotion,
+    /// 優先度
+    pub priority: BubblePriority,
+}
+
+/// 吹き出しの優先度
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default, Reflect)]
+pub enum BubblePriority {
+    Low, // タスク開始・完了（頻出）
+    #[default]
+    Normal, // 勧誘、待機
+    High, // 疲労限界
+    Critical, // ストレス崩壊
 }
 
 /// 吹き出しの感情タイプ
