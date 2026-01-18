@@ -53,3 +53,11 @@ pub struct OnGatheringJoined {
 pub struct OnTaskAbandoned {
     pub entity: Entity,
 }
+
+/// 使い魔の使役数上限が変更された
+#[derive(Message)]
+pub struct FamiliarOperationMaxSoulChangedEvent {
+    pub familiar_entity: Entity,
+    pub old_value: usize,
+    pub new_value: usize,
+}

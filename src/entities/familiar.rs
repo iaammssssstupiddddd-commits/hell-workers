@@ -117,7 +117,7 @@ pub struct FamiliarAnimation {
 }
 
 /// 使い魔の運用設定（閾値など）
-#[derive(Component, Debug, Clone, Copy)]
+#[derive(Component, Debug, Clone)]
 pub struct FamiliarOperation {
     pub fatigue_threshold: f32,     // この疲労度以下のソウルのみ受け入れる
     pub max_controlled_soul: usize, // 最大使役数
