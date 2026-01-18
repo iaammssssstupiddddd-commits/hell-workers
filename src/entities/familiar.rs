@@ -127,7 +127,7 @@ impl Default for FamiliarOperation {
     fn default() -> Self {
         Self {
             fatigue_threshold: FATIGUE_THRESHOLD,
-            max_controlled_soul: 8, // デフォルトを8人に変更
+            max_controlled_soul: 2, // デフォルトを2人に変更
         }
     }
 }
