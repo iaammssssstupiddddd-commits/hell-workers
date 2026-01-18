@@ -11,6 +11,42 @@ pub struct SpeechBubble {
     pub speaker: Entity,
     /// 話者からのオフセット
     pub offset: Vec2,
+    /// 感情タイプ
+    pub emotion: BubbleEmotion,
+}
+
+/// 吹き出しの感情タイプ
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Reflect)]
+pub enum BubbleEmotion {
+    #[default]
+    Neutral, // 通常
+    Motivated, // やる気（💪）
+    Happy,     // 満足（😊）
+    Exhausted, // 疲労（😴）
+    Stressed,  // ストレス（😰）
+}
+
+/// アニメーション状態
+#[derive(Component, Reflect)]
+pub struct BubbleAnimation {
+    pub phase: AnimationPhase,
+    pub elapsed: f32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Reflect)]
+pub enum AnimationPhase {
+    PopIn,  // 出現中（0 → 1.2 → 1.0）
+    Idle,   // 通常表示
+    PopOut, // 消失中（1.0 → 0）
+}
+
+/// タイプライター効果用
+#[derive(Component, Reflect)]
+pub struct TypewriterEffect {
+    pub full_text: String,
+    pub current_len: usize,
+    pub char_interval: f32,
+    pub elapsed: f32,
 }
 
 /// Soul用の吹き出しマーカー（テキストのみ）

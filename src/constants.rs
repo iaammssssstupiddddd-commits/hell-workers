@@ -189,3 +189,36 @@ pub const FONT_SIZE_BUBBLE_FAMILIAR: f32 = 12.0;
 pub const Z_SPEECH_BUBBLE: f32 = 11.0;
 /// 吹き出し背景のZレイヤー
 pub const Z_SPEECH_BUBBLE_BG: f32 = 10.9;
+
+// ============================================================
+// 吹き出しアニメーション (Speech Bubble Animation)
+// ============================================================
+
+/// ポップインアニメーション時間
+pub const BUBBLE_ANIM_POP_IN_DURATION: f32 = 0.15;
+/// ポップイン時のオーバーシュート倍率
+pub const BUBBLE_ANIM_POP_IN_OVERSHOOT: f32 = 1.2;
+/// ポップアウトアニメーション時間
+pub const BUBBLE_ANIM_POP_OUT_DURATION: f32 = 0.3;
+
+/// スタッキング用のオフセット（複数吹き出し時）
+pub const BUBBLE_STACK_GAP: f32 = 40.0;
+
+/// 感情別エフェクトの定数
+/// 震え（Stressed）の強度
+pub const BUBBLE_SHAKE_INTENSITY: f32 = 1.5;
+/// 震え（Stressed）の速度
+pub const BUBBLE_SHAKE_SPEED: f32 = 40.0;
+/// ボブ（Exhausted）の振幅
+pub const BUBBLE_BOB_AMPLITUDE: f32 = 3.0;
+/// ボブ（Exhausted）の速度
+pub const BUBBLE_BOB_SPEED: f32 = 4.0;
+
+// ============================================================
+// 吹き出しカラー (Speech Bubble Colors)
+// ============================================================
+
+pub const BUBBLE_COLOR_MOTIVATED: Color = Color::srgba(0.6, 1.0, 0.4, 1.0); // 黄緑
+pub const BUBBLE_COLOR_HAPPY: Color = Color::srgba(1.0, 0.7, 0.8, 1.0); // ピンク
+pub const BUBBLE_COLOR_EXHAUSTED: Color = Color::srgba(0.6, 0.6, 0.7, 1.0); // グレー
+pub const BUBBLE_COLOR_STRESSED: Color = Color::srgba(1.0, 0.4, 0.4, 1.0); // 赤

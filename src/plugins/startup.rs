@@ -75,7 +75,6 @@ fn setup(
 
     // Load Fonts
     let font_ui = asset_server.load("fonts/NotoSansJP-VF.ttf");
-    let font_narrator = asset_server.load("fonts/NotoSerifJP-VF.ttf");
     let font_familiar = asset_server.load("fonts/ShantellSans-VF.ttf");
     let font_soul_name = asset_server.load("fonts/SourceSerif4-VF.ttf");
     let font_soul_emoji = asset_server.load("fonts/NotoEmoji-VF.ttf");
@@ -110,14 +109,14 @@ fn setup(
             layout.add_texture(URect::new(256, 512, 768, 1024));
             layouts.add(layout)
         },
-        speech_bubble: asset_server.load("textures/ui/speech_bubble.png"),
+        glow_circle: asset_server.load("textures/ui/glow_circle.png"),
+        bubble_9slice: asset_server.load("textures/ui/bubble_9slice.png"),
         // Building Visual Icons
         icon_hammer: asset_server.load("textures/ui/hammer.png"),
         icon_wood_small: asset_server.load("textures/ui/wood_small.png"),
         icon_stone_small: asset_server.load("textures/ui/stone_small.png"),
         // Fonts
         font_ui,
-        font_narrator,
         font_familiar,
         font_soul_name,
         font_soul_emoji,

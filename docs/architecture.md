@@ -75,3 +75,10 @@ graph TD
 > [!TIP]
 > リソース (`ResMut`) を更新する必要がある場合は `Message` を使用してください。
 > エンティティのコンポーネントに即座に反応する場合は `Observer` を使用してください。
+
+---
+
+### 詳細仕様書リンク
+- **タスク割り当て/管理**: [tasks.md](tasks.md)
+- **ビジュアル/セリフ**: [gather_haul_visual.md](gather_haul_visual.md) / [speech_system.md](speech_system.md)
+- **AI挙動**: [soul_ai.md](soul_ai.md) / [familiar_ai.md](familiar_ai.md)
