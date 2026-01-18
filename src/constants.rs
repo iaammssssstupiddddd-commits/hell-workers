@@ -1,3 +1,5 @@
+use bevy::prelude::*;
+
 pub const TILE_SIZE: f32 = 32.0;
 pub const MAP_WIDTH: i32 = 50;
 pub const MAP_HEIGHT: i32 = 50;
@@ -170,3 +172,20 @@ pub const FONT_SIZE_BODY: f32 = 16.0;
 pub const FONT_SIZE_SMALL: f32 = 14.0;
 /// 極小サイズテキスト用フォントサイズ
 pub const FONT_SIZE_TINY: f32 = 10.0;
+
+// ============================================================
+// 吹き出しシステム (Speech Bubble)
+// ============================================================
+
+/// 吹き出しの生存時間 (秒)
+pub const SPEECH_BUBBLE_DURATION: f32 = 1.5;
+/// 吹き出しの話者からのオフセット
+pub const SPEECH_BUBBLE_OFFSET: Vec2 = Vec2::new(16.0, 16.0);
+/// Soul吹き出し（絵文字）のフォントサイズ
+pub const FONT_SIZE_BUBBLE_SOUL: f32 = 24.0;
+/// Familiar吹き出しのフォントサイズ
+pub const FONT_SIZE_BUBBLE_FAMILIAR: f32 = 12.0;
+/// 吹き出しのZレイヤー
+pub const Z_SPEECH_BUBBLE: f32 = 11.0;
+/// 吹き出し背景のZレイヤー
+pub const Z_SPEECH_BUBBLE_BG: f32 = 10.9;

@@ -32,12 +32,14 @@ use crate::systems::visual::soul::{
     progress_bar_system, soul_status_visual_system, sync_progress_bar_position_system,
     task_link_system, update_progress_bar_fill_system,
 };
+use crate::systems::visual::speech::SpeechPlugin;
 use bevy::prelude::*;
 
 pub struct VisualPlugin;
 
 impl Plugin for VisualPlugin {
     fn build(&self, app: &mut App) {
+        app.add_plugins(SpeechPlugin);
         // Blueprint visual systems (separate to avoid tuple limit)
         app.add_systems(
             Update,

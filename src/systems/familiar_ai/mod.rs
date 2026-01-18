@@ -119,6 +119,7 @@ pub fn familiar_ai_system(
     q_blueprints: Query<&Blueprint>,
     mut haul_cache: ResMut<haul_cache::HaulReservationCache>,
     designation_grid: Res<DesignationSpatialGrid>,
+    game_assets: Res<crate::assets::GameAssets>,
 ) {
     // 1. 搬送中のアイテム・ストックパイル予約状況を事前計算
     // フェーズ2: 全ソウルをイテレートする代わりにキャッシュ（HaulReservationCache）を使用
@@ -148,6 +149,14 @@ pub fn familiar_ai_system(
         if matches!(active_command.command, FamiliarCommand::Idle) {
             if *ai_state != FamiliarAiState::Idle {
                 *ai_state = FamiliarAiState::Idle;
+                // 休息フレーズを表示
+                crate::systems::visual::speech::spawn::spawn_familiar_bubble(
+                    &mut commands,
+                    fam_entity,
+                    crate::systems::visual::speech::phrases::LatinPhrase::Requiesce,
+                    fam_transform.translation,
+                    &game_assets,
+                );
             }
             fam_dest.0 = fam_transform.translation.truncate();
             fam_path.waypoints.clear();
