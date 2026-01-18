@@ -39,6 +39,12 @@ python scripts/convert_to_png.py "source_path" "assets/textures/dest.png"
 powershell -Command "[BitConverter]::ToString((Get-Content 'file_path' -Encoding Byte -TotalCount 8))"
 ```
 
-## コミット・進捗管理
-- タスクの状態は `task.md` で逐一管理すること。
-- 大規模なリファクタリングの際は、`proposals/` に経緯を残すことを検討する。
+## トラブルシューティング
+
+### 1. Windows でのリンクエラー (too many exported symbols)
+Windows の PE 形式では、一つの DLL からエクスポートできるシンボル数が 65,535 に制限されています。Bevy の `dynamic_linking` 機能を使用するとこの制限を超えやすいため、エラーが出る場合は以下の対応を行ってください。
+- `Cargo.toml` の `default` features から `dynamic_linking` を削除し、静的リンクでビルドする。
+- 静的リンクであってもデバッグビルドが遅い場合は、依存関係の `opt-level` を 3 に設定したままにする。
+
+### 2. File Lock エラー
+`cargo` コマンドが「Blocking waiting for file lock」で止まる場合は、別のターミナルや IDE、あるいはゲーム自体が `target/` ディレクトリを使用中（ロック中）です。それらを終了してから再度実行してください。

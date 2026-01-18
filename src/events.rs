@@ -61,3 +61,11 @@ pub struct FamiliarOperationMaxSoulChangedEvent {
     pub old_value: usize,
     pub new_value: usize,
 }
+
+/// 使い魔が魂を激励した
+#[derive(Message, EntityEvent)]
+pub struct OnEncouraged {
+    pub familiar_entity: Entity,
+    #[event_target]
+    pub soul_entity: Entity,
+}

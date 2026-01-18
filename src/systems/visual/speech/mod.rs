@@ -42,5 +42,6 @@ impl Plugin for SpeechPlugin {
         app.add_observer(on_released_from_service);
         app.add_observer(on_gathering_joined);
         app.add_observer(on_task_abandoned);
+        app.add_observer(on_encouraged);
     }
 }

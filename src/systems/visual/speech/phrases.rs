@@ -2,7 +2,7 @@ use rand::Rng;
 use rand::seq::SliceRandom;
 
 /// Familiar が喋るラテン語のフレーズ
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum LatinPhrase {
     /// 来い！ (リクルート)
     Veni,
@@ -18,6 +18,8 @@ pub enum LatinPhrase {
     Requiesce,
     /// 去れ！ (リリース)
     Abi,
+    /// カスタムテキスト（激励など）
+    Custom(String),
 }
 
 impl LatinPhrase {
@@ -31,32 +33,46 @@ impl LatinPhrase {
             LatinPhrase::Portare => &["Portare!", "Fer!", "Cape!", "Tolle!", "Affer!"],
             LatinPhrase::Requiesce => &["Requiesce!", "Quiesce!", "Siste!", "Mane!", "Pausa!"],
             LatinPhrase::Abi => &["Abi!", "Discede!", "I!", "Vade!", "Recede!"],
+            LatinPhrase::Custom(_) => &[], // Custom handles string generation differently
         }
     }
 
     /// ランダムにフレーズを選択
-    pub fn random_str(&self) -> &'static str {
-        let variants = self.variants();
-        variants
-            .choose(&mut rand::thread_rng())
-            .unwrap_or(&variants[0])
+    pub fn random_str(&self) -> String {
+        match self {
+            LatinPhrase::Custom(s) => s.clone(),
+            _ => {
+                let variants = self.variants();
+                variants
+                    .choose(&mut rand::thread_rng())
+                    .unwrap_or(&variants[0])
+                    .to_string()
+            }
+        }
     }
 
     /// 使い魔の傾向に基づいてフレーズを選択
-    pub fn select_with_preference(
-        &self,
-        preferred_index: usize,
-        preference_weight: f32,
-    ) -> &'static str {
-        let variants = self.variants();
-        let mut rng = rand::thread_rng();
+    pub fn select_with_preference(&self, preferred_index: usize, preference_weight: f32) -> String {
+        match self {
+            LatinPhrase::Custom(s) => s.clone(),
+            _ => {
+                let variants = self.variants();
+                let mut rng = rand::thread_rng();
 
-        if rng.r#gen::<f32>() < preference_weight {
-            // お気に入りを使用
-            variants.get(preferred_index).unwrap_or(&variants[0])
-        } else {
-            // ランダム選択
-            variants.choose(&mut rng).unwrap_or(&variants[0])
+                if rng.r#gen::<f32>() < preference_weight {
+                    // お気に入りを使用
+                    variants
+                        .get(preferred_index)
+                        .unwrap_or(&variants[0])
+                        .to_string()
+                } else {
+                    // ランダム選択
+                    variants
+                        .choose(&mut rng)
+                        .unwrap_or(&variants[0])
+                        .to_string()
+                }
+            }
         }
     }
 
@@ -70,9 +86,10 @@ impl LatinPhrase {
             LatinPhrase::Portare => 4,
             LatinPhrase::Requiesce => 5,
             LatinPhrase::Abi => 6,
+            LatinPhrase::Custom(_) => 7,
         }
     }
 
     /// フレーズの種類数
-    pub const COUNT: usize = 7;
+    pub const COUNT: usize = 8;
 }

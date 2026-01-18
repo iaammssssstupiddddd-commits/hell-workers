@@ -23,6 +23,7 @@ use crate::systems::visual::speech::components::{
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 
+pub mod encouragement; // 新規追加
 pub mod following;
 pub mod haul_cache;
 pub mod helpers;
@@ -61,6 +62,7 @@ impl Plugin for FamiliarAiPlugin {
     fn build(&self, app: &mut App) {
         app.register_type::<FamiliarAiState>()
             .init_resource::<haul_cache::HaulReservationCache>()
+            .init_resource::<encouragement::EncouragementCooldowns>()
             .init_resource::<DesignationSpatialGrid>()
             .add_systems(
                 Update,
@@ -69,6 +71,7 @@ impl Plugin for FamiliarAiPlugin {
                     familiar_ai_system.in_set(GameSystemSet::Logic),
                     handle_max_soul_changed_system.in_set(GameSystemSet::Logic),
                     following::following_familiar_system.in_set(GameSystemSet::Logic),
+                    encouragement::encouragement_system.in_set(GameSystemSet::Logic),
                 ),
             );
     }

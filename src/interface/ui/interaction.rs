@@ -325,7 +325,7 @@ pub fn ui_interaction_system(
                             let old_val = op.max_controlled_soul;
                             let new_val = (old_val as isize + delta).clamp(1, 8) as usize;
                             op.max_controlled_soul = new_val;
-                            
+
                             // 値が変更された場合のみイベントを発火
                             if old_val != new_val {
                                 ev_max_soul_changed.write(
