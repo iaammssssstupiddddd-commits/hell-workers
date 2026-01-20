@@ -24,14 +24,19 @@ pub const GATHERING_MAX_CAPACITY: usize = 8;
 pub const GATHERING_MIN_PARTICIPANTS: usize = 2;
 /// 集会消滅までの猶予時間 (秒)
 pub const GATHERING_GRACE_PERIOD: f32 = 10.0;
-/// 統合の基本距離
-pub const GATHERING_MERGE_BASE_DISTANCE: f32 = TILE_SIZE * 3.0;
-/// 統合距離の人数係数 (人数が少ないほど距離が長くなる)
-pub const GATHERING_MERGE_DISTANCE_SCALE: f32 = TILE_SIZE * 0.8;
+/// 統合の初期距離 (タイル)
+pub const GATHERING_MERGE_INITIAL_DISTANCE: f32 = TILE_SIZE * 2.0;
+/// 統合の最大距離 (タイル)
+pub const GATHERING_MERGE_MAX_DISTANCE: f32 = TILE_SIZE * 10.0;
+/// 統合距離の基本拡大速度 (タイル/秒)
+pub const GATHERING_MERGE_GROWTH_BASE_SPEED: f32 = TILE_SIZE * 0.3;
 /// オーラの基本サイズ
 pub const GATHERING_AURA_BASE_SIZE: f32 = TILE_SIZE * 3.0;
 /// オーラの1人あたりサイズ増加
 pub const GATHERING_AURA_SIZE_PER_PERSON: f32 = TILE_SIZE * 0.5;
+
+/// 集会から離脱する半径 (検出半径より大きくしてチャタリングを防ぐ)
+pub const GATHERING_LEAVE_RADIUS: f32 = TILE_SIZE * 7.5;
 
 // ============================================================
 // コンポーネント
@@ -140,11 +145,12 @@ pub struct GatheringReadiness {
 // ヘルパー関数
 // ============================================================
 
-/// 統合距離を計算 (人数が少ないほど長い)
-pub fn calculate_merge_distance(participant_count: usize) -> f32 {
-    let max_influence = GATHERING_MAX_CAPACITY as f32;
-    let count = participant_count as f32;
-    GATHERING_MERGE_BASE_DISTANCE + (max_influence - count) * GATHERING_MERGE_DISTANCE_SCALE
+/// 統合距離を計算 (時間経過で拡大、人数が少ないほど速く拡大)
+pub fn calculate_merge_distance(participant_count: usize, elapsed_time: f32) -> f32 {
+    let count = (participant_count.max(1)) as f32;
+    let speed = GATHERING_MERGE_GROWTH_BASE_SPEED * (GATHERING_MAX_CAPACITY as f32 / count);
+    let distance = GATHERING_MERGE_INITIAL_DISTANCE + elapsed_time * speed;
+    distance.min(GATHERING_MERGE_MAX_DISTANCE)
 }
 
 /// オーラサイズを計算
@@ -223,7 +229,7 @@ pub fn gathering_spawn_system(
             if readiness.idle_time >= spawn_time {
                 // 集会発生!
                 let object_type = GatheringObjectType::random_weighted(nearby_souls + 1);
-                spawn_gathering_spot(
+                let spot_entity = spawn_gathering_spot(
                     &mut commands,
                     &asset_server,
                     &game_assets,
@@ -231,10 +237,12 @@ pub fn gathering_spawn_system(
                     object_type,
                     current_time,
                 );
+                // 発起人を参加者として登録
+                commands.entity(entity).insert(ParticipatingIn(spot_entity));
                 readiness.idle_time = 0.0;
                 info!(
-                    "GATHERING: New spot spawned at {:?} with {:?}",
-                    pos, object_type
+                    "GATHERING: New spot spawned at {:?} with {:?}, initiator {:?}",
+                    pos, object_type, entity
                 );
             }
         } else {
@@ -253,7 +261,7 @@ fn spawn_gathering_spot(
     center: Vec2,
     object_type: GatheringObjectType,
     created_at: f32,
-) {
+) -> Entity {
     let spot = GatheringSpot {
         center,
         participants: 1, // 発起人
@@ -298,7 +306,7 @@ fn spawn_gathering_spot(
         object_entity,
     };
 
-    commands.spawn((spot, visuals));
+    commands.spawn((spot, visuals)).id()
 }
 
 /// 集会スポットの維持・消滅システム
@@ -344,10 +352,12 @@ pub fn gathering_maintenance_system(
 
 /// 集会スポットの統合システム
 pub fn gathering_merge_system(
+    time: Res<Time>,
     mut commands: Commands,
     q_spots: Query<(Entity, &GatheringSpot, &GatheringVisuals)>,
     mut q_participants: Query<&mut ParticipatingIn>,
 ) {
+    let current_time = time.elapsed_secs();
     let spots: Vec<_> = q_spots.iter().collect();
 
     for i in 0..spots.len() {
@@ -355,9 +365,17 @@ pub fn gathering_merge_system(
             let (entity_a, spot_a, visuals_a) = &spots[i];
             let (entity_b, spot_b, visuals_b) = &spots[j];
 
+            // 統合後の合計人数が定員を超える場合はスキップ
+            let combined_participants = spot_a.participants + spot_b.participants;
+            if combined_participants > GATHERING_MAX_CAPACITY {
+                continue;
+            }
+
             let distance = (spot_a.center - spot_b.center).length();
-            let merge_distance_a = calculate_merge_distance(spot_a.participants);
-            let merge_distance_b = calculate_merge_distance(spot_b.participants);
+            let elapsed_a = current_time - spot_a.created_at;
+            let elapsed_b = current_time - spot_b.created_at;
+            let merge_distance_a = calculate_merge_distance(spot_a.participants, elapsed_a);
+            let merge_distance_b = calculate_merge_distance(spot_b.participants, elapsed_b);
 
             // どちらかの統合距離内にあるか
             if distance < merge_distance_a.max(merge_distance_b) {
@@ -401,35 +419,14 @@ pub fn gathering_merge_system(
 
 /// 集会オーラのサイズと位置の更新システム
 pub fn gathering_visual_update_system(
-    mut q_spots: Query<(Entity, &mut GatheringSpot, &GatheringVisuals)>,
-    q_participants: Query<(&ParticipatingIn, &Transform), With<DamnedSoul>>,
+    q_spots: Query<(Entity, &GatheringSpot, &GatheringVisuals)>,
     mut q_visuals: Query<
         (&mut Sprite, &mut Transform),
         (Without<DamnedSoul>, Without<ParticipatingIn>),
     >,
 ) {
-    // 参加者をスポットごとにバケツ分け (O(M))
-    let mut spot_positions: std::collections::HashMap<Entity, (Vec2, usize)> =
-        std::collections::HashMap::new();
-    for (p, t) in q_participants.iter() {
-        let entry = spot_positions.entry(p.0).or_insert((Vec2::ZERO, 0));
-        entry.0 += t.translation.truncate();
-        entry.1 += 1;
-    }
-
-    for (spot_entity, mut spot, visuals) in q_spots.iter_mut() {
-        // バケツから平均座標を取得して中心を更新 (O(N))
-        if let Some((sum, count)) = spot_positions.get(&spot_entity) {
-            if *count > 0 {
-                let average = *sum / (*count as f32);
-
-                // 急激な移動を避けるため、中心を徐々に更新する (Lerp)
-                // これにより描画のガタつきを抑え、GPU/CPUへの負荷と視覚的ノイズを軽減する
-                spot.center = spot.center.lerp(average, 0.1);
-            }
-        }
-
-        // ビジュアルの更新 (サイズと位置)
+    for (_spot_entity, spot, visuals) in q_spots.iter() {
+        // ビジュアルの更新 (サイズのみ - 位置はスポーン時のcenterを維持)
         let target_size = calculate_aura_size(spot.participants);
 
         // オーラの更新
@@ -443,6 +440,127 @@ pub fn gathering_visual_update_system(
             if let Ok((_, mut transform)) = q_visuals.get_mut(obj_entity) {
                 transform.translation = spot.center.extend(Z_ITEM);
             }
+        }
+    }
+}
+
+/// 集会エリア内の未参加Soulを自動的に参加させるシステム
+pub fn gathering_recruitment_system(
+    mut commands: Commands,
+    q_spots: Query<(Entity, &GatheringSpot)>,
+    q_souls: Query<(Entity, &Transform), (With<DamnedSoul>, Without<ParticipatingIn>)>,
+) {
+    for (spot_entity, spot) in q_spots.iter() {
+        // 定員オーバーならスキップ
+        if spot.participants >= spot.max_capacity {
+            continue;
+        }
+
+        for (soul_entity, transform) in q_souls.iter() {
+            let dist = (spot.center - transform.translation.truncate()).length();
+            // 集会検出半径内に入れば自動参加
+            if dist < GATHERING_DETECTION_RADIUS {
+                commands
+                    .entity(soul_entity)
+                    .insert(ParticipatingIn(spot_entity));
+                info!(
+                    "GATHERING: Soul {:?} automatically recruited to spot {:?}",
+                    soul_entity, spot_entity
+                );
+            }
+        }
+    }
+}
+
+/// 集会中でない参加者が中心から離れた時に参加を解除するシステム
+pub fn gathering_leave_system(
+    mut commands: Commands,
+    q_spots: Query<&GatheringSpot>,
+    q_participants: Query<(Entity, &Transform, &IdleState, &ParticipatingIn), With<DamnedSoul>>,
+) {
+    for (entity, transform, idle, participating_in) in q_participants.iter() {
+        // 自発的に参加中（集会行動中）のSoulは離脱判定をしない
+        if matches!(
+            idle.behavior,
+            IdleBehavior::Gathering | IdleBehavior::ExhaustedGathering
+        ) {
+            continue;
+        }
+
+        if let Ok(spot) = q_spots.get(participating_in.0) {
+            let dist = (spot.center - transform.translation.truncate()).length();
+            // 一定距離以上離れたら参加を解除
+            if dist > GATHERING_LEAVE_RADIUS {
+                commands.entity(entity).remove::<ParticipatingIn>();
+                info!(
+                    "GATHERING: Soul {:?} left spot {:?} (too far away)",
+                    entity, participating_in.0
+                );
+            }
+        } else {
+            // スポット自体が消滅している場合はコンポーネントを削除
+            commands.entity(entity).remove::<ParticipatingIn>();
+        }
+    }
+}
+
+/// 集会スポットホバー時に参加者との間に紫の線を引くデバッグシステム
+pub fn gathering_debug_visualization_system(
+    q_window: Query<&Window, With<bevy::window::PrimaryWindow>>,
+    q_camera: Query<(&Camera, &GlobalTransform), With<crate::interface::camera::MainCamera>>,
+    hovered_entity: Res<crate::interface::selection::HoveredEntity>,
+    q_spots: Query<(Entity, &GatheringSpot)>,
+    q_participants: Query<(&GlobalTransform, &ParticipatingIn), With<DamnedSoul>>,
+    mut gizmos: Gizmos,
+) {
+    let Ok(window) = q_window.single() else {
+        return;
+    };
+    let Ok((camera, camera_transform)) = q_camera.single() else {
+        return;
+    };
+
+    let cursor_world_pos = window.cursor_position().and_then(|cursor_pos| {
+        camera
+            .viewport_to_world_2d(camera_transform, cursor_pos)
+            .ok()
+    });
+
+    // 表示対象のスポットIDを保持するセット
+    let mut target_spots = std::collections::HashSet::new();
+
+    // 1. マウス座標がスポットの中心に近いかチェック (1タイル以内)
+    if let Some(world_pos) = cursor_world_pos {
+        for (entity, spot) in q_spots.iter() {
+            if spot.center.distance(world_pos) < TILE_SIZE {
+                target_spots.insert(entity);
+            }
+        }
+    }
+
+    // 2. もしSoulをホバーしていたら、そのSoulが参加しているスポットを対象にする
+    if let Some(hovered) = hovered_entity.0 {
+        if let Ok((_, participating_in)) = q_participants.get(hovered) {
+            target_spots.insert(participating_in.0);
+        }
+    }
+
+    // 対象のスポットをすべて描画
+    for spot_entity in target_spots {
+        if let Ok((_, spot)) = q_spots.get(spot_entity) {
+            let center = spot.center;
+
+            for (soul_transform, participating_in) in q_participants.iter() {
+                if participating_in.0 == spot_entity {
+                    let soul_pos = soul_transform.translation().truncate();
+                    // 紫の線とドット
+                    gizmos.line_2d(center, soul_pos, Color::srgba(0.8, 0.4, 1.0, 0.8));
+                    gizmos.circle_2d(soul_pos, 4.0, Color::srgba(0.8, 0.4, 1.0, 0.6));
+                }
+            }
+
+            // 中心に目立つ円を描く
+            gizmos.circle_2d(center, 16.0, Color::srgba(0.8, 0.4, 1.0, 1.0));
         }
     }
 }
