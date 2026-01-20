@@ -36,8 +36,10 @@ impl Plugin for SoulAiPlugin {
                     work::blueprint_auto_build_system
                         .after(crate::systems::familiar_ai::familiar_ai_system), // 資材が揃った建築タスクの自動割り当て（使い魔AIの後に実行）
                     work::task_area_auto_haul_system,
-                    // 動的集会システム
+                    // 動動的集会システム
                     gathering::gathering_spawn_system,
+                    gathering::gathering_recruitment_system, // 新規追加: 自動参加
+                    gathering::gathering_leave_system,       // 新規追加: 距離による離脱
                     gathering::gathering_maintenance_system,
                     gathering::gathering_merge_system,
                     gathering::gathering_visual_update_system,
@@ -50,6 +52,11 @@ impl Plugin for SoulAiPlugin {
                 )
                     .chain()
                     .in_set(GameSystemSet::Logic),
+            )
+            // デバッグシステム (順序非依存)
+            .add_systems(
+                Update,
+                gathering::gathering_debug_visualization_system.in_set(GameSystemSet::Logic),
             )
             .add_observer(vitals::on_task_completed_motivation_bonus)
             .add_observer(vitals::on_encouraged_effect)
