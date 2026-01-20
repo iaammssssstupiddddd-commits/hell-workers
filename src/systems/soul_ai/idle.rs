@@ -74,23 +74,28 @@ pub fn idle_behavior_system(
         under_command_opt,
     ) in query.iter_mut()
     {
-        // 参加中の集会スポットの座標を取得、または最寄りのスポットを探す
-        let gathering_center = if let Some(p) = participating_in {
-            q_spots.get(p.0).ok().map(|(_, s)| s.center)
-        } else {
-            // 最寄りのスポットを探す
-            let pos = transform.translation.truncate();
-            q_spots
-                .iter()
-                .filter(|(_, s)| s.participants < s.max_capacity)
-                .min_by(|(_, a), (_, b)| {
-                    a.center
-                        .distance_squared(pos)
-                        .partial_cmp(&b.center.distance_squared(pos))
-                        .unwrap()
-                })
-                .map(|(_, s)| s.center)
-        };
+        // 参加中の集会スポットの座標とEntityを取得、または最寄りのスポットを探す
+        let (gathering_center, target_spot_entity): (Option<Vec2>, Option<Entity>) =
+            if let Some(p) = participating_in {
+                let center = q_spots.get(p.0).ok().map(|(_, s)| s.center);
+                (center, Some(p.0))
+            } else {
+                // 最寄りのスポットを探す
+                let pos = transform.translation.truncate();
+                let nearest = q_spots
+                    .iter()
+                    .filter(|(_, s)| s.participants < s.max_capacity)
+                    .min_by(|(_, a), (_, b)| {
+                        a.center
+                            .distance_squared(pos)
+                            .partial_cmp(&b.center.distance_squared(pos))
+                            .unwrap()
+                    });
+                match nearest {
+                    Some((e, s)) => (Some(s.center), Some(e)),
+                    None => (None, None),
+                }
+            };
 
         // 疲労による強制集会（ExhaustedGathering）状態の場合は他の処理をスキップ
         if idle.behavior == IdleBehavior::ExhaustedGathering {
@@ -102,6 +107,12 @@ pub fn idle_behavior_system(
                 if has_arrived {
                     info!("IDLE: Soul transitioned from ExhaustedGathering to Gathering");
                     idle.behavior = IdleBehavior::Gathering;
+                    // ParticipatingIn を追加
+                    if participating_in.is_none() {
+                        if let Some(spot_entity) = target_spot_entity {
+                            commands.entity(entity).insert(ParticipatingIn(spot_entity));
+                        }
+                    }
                     commands.trigger(crate::events::OnGatheringJoined { entity });
                 } else {
                     if path.waypoints.is_empty() || path.current_index >= path.waypoints.len() {
@@ -238,6 +249,13 @@ pub fn idle_behavior_system(
                             dest.0 = center;
                         }
                     } else {
+                        // 到着時にParticipatingInを追加
+                        if participating_in.is_none() {
+                            if let Some(spot_entity) = target_spot_entity {
+                                commands.entity(entity).insert(ParticipatingIn(spot_entity));
+                            }
+                        }
+
                         if idle.behavior == IdleBehavior::ExhaustedGathering {
                             idle.behavior = IdleBehavior::Gathering;
                         }
@@ -388,7 +406,6 @@ pub fn idle_visual_system(
     }
 }
 
-/// 集会エリアでの魂の重なり回避システム
 pub fn gathering_separation_system(
     world_map: Res<WorldMap>,
     q_spots: Query<&GatheringSpot>,
@@ -399,69 +416,47 @@ pub fn gathering_separation_system(
         &mut IdleState,
         &Path,
         &AssignedTask,
-        Option<&ParticipatingIn>,
+        &ParticipatingIn,
     )>,
 ) {
-    let gathering_positions: Vec<(Entity, Vec2)> = query
-        .iter()
-        .filter(|(_, _, _, idle, _, task, _)| {
-            matches!(task, AssignedTask::None)
-                && (idle.behavior == IdleBehavior::Gathering
-                    || idle.behavior == IdleBehavior::ExhaustedGathering)
-                && idle.gathering_behavior != GatheringBehavior::Wandering
-        })
-        .map(|(entity, transform, _, _, _, _, _)| (entity, transform.translation.truncate()))
-        .collect();
+    let mut gathering_positions: Vec<(Entity, Vec2)> = Vec::new();
+    for (entity, transform, _, _, _, _, _) in query.iter() {
+        gathering_positions.push((entity, transform.translation.truncate()));
+    }
 
-    for (entity, transform, mut dest, mut idle, path, task, participating_in) in query.iter_mut() {
+    for (entity, transform, mut dest, mut idle, soul_path, soul_task, participating_in) in
+        query.iter_mut()
+    {
         if !idle.needs_separation {
             continue;
         }
 
-        if !matches!(task, AssignedTask::None) {
+        // タスク実行中は重なり回避しない
+        if !matches!(soul_task, AssignedTask::None) {
             idle.needs_separation = false;
             continue;
         }
-        if idle.behavior != IdleBehavior::Gathering
-            && idle.behavior != IdleBehavior::ExhaustedGathering
-        {
-            idle.needs_separation = false;
-            continue;
-        }
+
+        // 集会中のうろうろ状態（ターゲットに向かって歩いている最中）は回避イベントを発生させない
         if idle.gathering_behavior == GatheringBehavior::Wandering {
             idle.needs_separation = false;
             continue;
         }
 
-        let gathering_center = if let Some(p) = participating_in {
-            q_spots.get(p.0).ok().map(|s| s.center)
-        } else {
-            let pos = transform.translation.truncate();
-            q_spots
-                .iter()
-                .min_by(|a, b| {
-                    a.center
-                        .distance_squared(pos)
-                        .partial_cmp(&b.center.distance_squared(pos))
-                        .unwrap()
-                })
-                .map(|s| s.center)
-        };
-
-        if let Some(center) = gathering_center {
+        if let Ok(spot) = q_spots.get(participating_in.0) {
+            let center = spot.center;
             let current_pos = transform.translation.truncate();
-            let dist_from_center = (center - current_pos).length();
 
-            if dist_from_center > GATHERING_ARRIVAL_RADIUS {
-                continue;
-            }
-
-            if !path.waypoints.is_empty() && path.current_index < path.waypoints.len() {
+            // 目的地にまだ到達していない、またはパス移動中の場合は回避をスキップ
+            if !soul_path.waypoints.is_empty()
+                && soul_path.current_index < soul_path.waypoints.len()
+            {
                 continue;
             }
 
             let mut is_overlapping =
                 (center - current_pos).length() < TILE_SIZE * GATHERING_KEEP_DISTANCE_MIN;
+
             if !is_overlapping {
                 for (other_entity, other_pos) in &gathering_positions {
                     if *other_entity == entity {
