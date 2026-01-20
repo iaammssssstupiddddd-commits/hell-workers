@@ -310,7 +310,7 @@ fn on_stress_breakdown(
 fn on_exhausted(
     on: On<OnExhausted>,
     mut commands: Commands,
-    gathering_area: Res<crate::world::map::GatheringArea>,
+    q_spots: Query<&crate::systems::soul_ai::gathering::GatheringSpot>,
     mut q_souls: Query<(
         Entity,
         &Transform,
@@ -389,14 +389,26 @@ fn on_exhausted(
             idle.behavior_duration = rng.gen_range(2.0..4.0);
         }
 
+        // 最寄りの集会所を探す
         let current_pos = transform.translation.truncate();
-        let center = gathering_area.0;
-        let dist_from_center = (center - current_pos).length();
+        let gathering_center = q_spots
+            .iter()
+            .min_by(|a, b| {
+                a.center
+                    .distance_squared(current_pos)
+                    .partial_cmp(&b.center.distance_squared(current_pos))
+                    .unwrap()
+            })
+            .map(|s| s.center);
 
-        if dist_from_center > TILE_SIZE * GATHERING_ARRIVAL_RADIUS_BASE {
-            dest.0 = center;
-            path.waypoints.clear();
-            path.current_index = 0;
+        if let Some(center) = gathering_center {
+            let dist_from_center = (center - current_pos).length();
+
+            if dist_from_center > TILE_SIZE * GATHERING_ARRIVAL_RADIUS_BASE {
+                dest.0 = center;
+                path.waypoints.clear();
+                path.current_index = 0;
+            }
         }
     }
 }

@@ -2,8 +2,9 @@ use crate::constants::*;
 use crate::entities::damned_soul::{
     DamnedSoul, Destination, GatheringBehavior, IdleBehavior, IdleState, Path,
 };
+use crate::systems::soul_ai::gathering::{GatheringSpot, ParticipatingIn};
 use crate::systems::soul_ai::task_execution::AssignedTask;
-use crate::world::map::{GatheringArea, WorldMap};
+use crate::world::map::WorldMap;
 use bevy::prelude::*;
 use rand::Rng;
 
@@ -46,7 +47,7 @@ pub fn idle_behavior_system(
     time: Res<Time>,
     mut commands: Commands,
     world_map: Res<WorldMap>,
-    gathering_area: Res<GatheringArea>,
+    q_spots: Query<(Entity, &GatheringSpot)>,
     mut query: Query<(
         Entity,
         &Transform,
@@ -55,31 +56,63 @@ pub fn idle_behavior_system(
         &DamnedSoul,
         &mut Path,
         &mut AssignedTask,
+        Option<&ParticipatingIn>,
         Option<&crate::entities::familiar::UnderCommand>,
     )>,
 ) {
     let dt = time.delta_secs();
 
-    for (entity, transform, mut idle, mut dest, soul, mut path, task, under_command_opt) in
-        query.iter_mut()
+    for (
+        entity,
+        transform,
+        mut idle,
+        mut dest,
+        soul,
+        mut path,
+        task,
+        participating_in,
+        under_command_opt,
+    ) in query.iter_mut()
     {
+        // 参加中の集会スポットの座標を取得、または最寄りのスポットを探す
+        let gathering_center = if let Some(p) = participating_in {
+            q_spots.get(p.0).ok().map(|(_, s)| s.center)
+        } else {
+            // 最寄りのスポットを探す
+            let pos = transform.translation.truncate();
+            q_spots
+                .iter()
+                .filter(|(_, s)| s.participants < s.max_capacity)
+                .min_by(|(_, a), (_, b)| {
+                    a.center
+                        .distance_squared(pos)
+                        .partial_cmp(&b.center.distance_squared(pos))
+                        .unwrap()
+                })
+                .map(|(_, s)| s.center)
+        };
+
         // 疲労による強制集会（ExhaustedGathering）状態の場合は他の処理をスキップ
         if idle.behavior == IdleBehavior::ExhaustedGathering {
-            let current_pos = transform.translation.truncate();
-            let center = gathering_area.0;
-            let dist_from_center = (center - current_pos).length();
-            let has_arrived = dist_from_center <= GATHERING_ARRIVAL_RADIUS;
+            if let Some(center) = gathering_center {
+                let current_pos = transform.translation.truncate();
+                let dist_from_center = (center - current_pos).length();
+                let has_arrived = dist_from_center <= GATHERING_ARRIVAL_RADIUS;
 
-            if has_arrived {
-                info!("IDLE: Soul transitioned from ExhaustedGathering to Gathering");
-                idle.behavior = IdleBehavior::Gathering;
-                commands.trigger(crate::events::OnGatheringJoined { entity });
-            } else {
-                if path.waypoints.is_empty() || path.current_index >= path.waypoints.len() {
-                    dest.0 = center;
-                    path.waypoints.clear();
+                if has_arrived {
+                    info!("IDLE: Soul transitioned from ExhaustedGathering to Gathering");
+                    idle.behavior = IdleBehavior::Gathering;
+                    commands.trigger(crate::events::OnGatheringJoined { entity });
+                } else {
+                    if path.waypoints.is_empty() || path.current_index >= path.waypoints.len() {
+                        dest.0 = center;
+                        path.waypoints.clear();
+                    }
+                    continue;
                 }
-                continue;
+            } else {
+                // 向かうべき集会所がない場合はうろうろに戻る
+                idle.behavior = IdleBehavior::Wandering;
             }
         }
 
@@ -188,50 +221,55 @@ pub fn idle_behavior_system(
                 }
             }
             IdleBehavior::Gathering | IdleBehavior::ExhaustedGathering => {
-                let current_pos = transform.translation.truncate();
-                let center = gathering_area.0;
-                let dist_from_center = (center - current_pos).length();
+                if let Some(center) = gathering_center {
+                    let current_pos = transform.translation.truncate();
+                    let dist_from_center = (center - current_pos).length();
 
-                idle.gathering_behavior_timer += dt;
-                if idle.gathering_behavior_timer >= idle.gathering_behavior_duration {
-                    idle.gathering_behavior_timer = 0.0;
-                    idle.gathering_behavior = random_gathering_behavior();
-                    idle.gathering_behavior_duration = random_gathering_duration();
-                    idle.needs_separation = true;
-                }
+                    idle.gathering_behavior_timer += dt;
+                    if idle.gathering_behavior_timer >= idle.gathering_behavior_duration {
+                        idle.gathering_behavior_timer = 0.0;
+                        idle.gathering_behavior = random_gathering_behavior();
+                        idle.gathering_behavior_duration = random_gathering_duration();
+                        idle.needs_separation = true;
+                    }
 
-                if dist_from_center > GATHERING_ARRIVAL_RADIUS {
-                    if path.waypoints.is_empty() || path.current_index >= path.waypoints.len() {
-                        dest.0 = center;
+                    if dist_from_center > GATHERING_ARRIVAL_RADIUS {
+                        if path.waypoints.is_empty() || path.current_index >= path.waypoints.len() {
+                            dest.0 = center;
+                        }
+                    } else {
+                        if idle.behavior == IdleBehavior::ExhaustedGathering {
+                            idle.behavior = IdleBehavior::Gathering;
+                        }
+
+                        match idle.gathering_behavior {
+                            GatheringBehavior::Wandering => {
+                                let path_complete = path.waypoints.is_empty()
+                                    || path.current_index >= path.waypoints.len();
+                                if path_complete && idle.idle_timer >= idle.behavior_duration * 0.8
+                                {
+                                    let new_target = random_position_around(
+                                        center,
+                                        TILE_SIZE * GATHERING_KEEP_DISTANCE_TARGET_MIN,
+                                        TILE_SIZE * GATHERING_KEEP_DISTANCE_TARGET_MAX,
+                                    );
+                                    let target_grid = WorldMap::world_to_grid(new_target);
+                                    if world_map.is_walkable(target_grid.0, target_grid.1) {
+                                        dest.0 = new_target;
+                                    } else {
+                                        dest.0 = center;
+                                    }
+                                    idle.idle_timer = 0.0;
+                                    let mut rng = rand::thread_rng();
+                                    idle.behavior_duration = rng.gen_range(2.0..3.0);
+                                }
+                            }
+                            _ => {}
+                        }
                     }
                 } else {
-                    if idle.behavior == IdleBehavior::ExhaustedGathering {
-                        idle.behavior = IdleBehavior::Gathering;
-                    }
-
-                    match idle.gathering_behavior {
-                        GatheringBehavior::Wandering => {
-                            let path_complete = path.waypoints.is_empty()
-                                || path.current_index >= path.waypoints.len();
-                            if path_complete && idle.idle_timer >= idle.behavior_duration * 0.8 {
-                                let new_target = random_position_around(
-                                    center,
-                                    TILE_SIZE * 0.5,
-                                    TILE_SIZE * 1.5,
-                                );
-                                let target_grid = WorldMap::world_to_grid(new_target);
-                                if world_map.is_walkable(target_grid.0, target_grid.1) {
-                                    dest.0 = new_target;
-                                } else {
-                                    dest.0 = center;
-                                }
-                                idle.idle_timer = 0.0;
-                                let mut rng = rand::thread_rng();
-                                idle.behavior_duration = rng.gen_range(2.0..3.0);
-                            }
-                        }
-                        _ => {}
-                    }
+                    // 中心が見つからない場合は Wandering へ
+                    idle.behavior = IdleBehavior::Wandering;
                 }
             }
             IdleBehavior::Sitting | IdleBehavior::Sleeping => {}
@@ -241,16 +279,17 @@ pub fn idle_behavior_system(
 
 /// 怠惰行動のビジュアルフィードバック
 pub fn idle_visual_system(
-    gathering_area: Res<GatheringArea>,
+    q_spots: Query<&GatheringSpot>,
     mut query: Query<(
         &mut Transform,
         &mut Sprite,
         &IdleState,
         &DamnedSoul,
         &AssignedTask,
+        Option<&ParticipatingIn>,
     )>,
 ) {
-    for (mut transform, mut sprite, idle, soul, task) in query.iter_mut() {
+    for (mut transform, mut sprite, idle, soul, task, participating_in) in query.iter_mut() {
         if !matches!(task, AssignedTask::None) {
             transform.rotation = Quat::IDENTITY;
             transform.scale = Vec3::ONE;
@@ -273,50 +312,70 @@ pub fn idle_visual_system(
                 sprite.color = Color::WHITE;
             }
             IdleBehavior::Gathering | IdleBehavior::ExhaustedGathering => {
-                let current_pos = transform.translation.truncate();
-                let center = gathering_area.0;
-                let dist_from_center = (center - current_pos).length();
-                let has_arrived = dist_from_center <= GATHERING_ARRIVAL_RADIUS;
+                let gathering_center = if let Some(p) = participating_in {
+                    q_spots.get(p.0).ok().map(|s| s.center)
+                } else {
+                    let pos = transform.translation.truncate();
+                    q_spots
+                        .iter()
+                        .min_by(|a, b| {
+                            a.center
+                                .distance_squared(pos)
+                                .partial_cmp(&b.center.distance_squared(pos))
+                                .unwrap()
+                        })
+                        .map(|s| s.center)
+                };
 
-                if !has_arrived {
-                    transform.rotation = Quat::IDENTITY;
-                    transform.scale = Vec3::ONE;
+                if let Some(center) = gathering_center {
+                    let current_pos = transform.translation.truncate();
+                    let dist_from_center = (center - current_pos).length();
+                    let has_arrived = dist_from_center <= GATHERING_ARRIVAL_RADIUS;
 
-                    if idle.behavior == IdleBehavior::ExhaustedGathering {
-                        sprite.color = Color::srgba(0.7, 0.6, 0.8, 0.9);
+                    if !has_arrived {
+                        transform.rotation = Quat::IDENTITY;
+                        transform.scale = Vec3::ONE;
+
+                        if idle.behavior == IdleBehavior::ExhaustedGathering {
+                            sprite.color = Color::srgba(0.7, 0.6, 0.8, 0.9);
+                        } else {
+                            sprite.color = Color::srgba(0.85, 0.75, 1.0, 0.85);
+                        }
                     } else {
-                        sprite.color = Color::srgba(0.85, 0.75, 1.0, 0.85);
+                        sprite.color = Color::srgba(0.8, 0.7, 1.0, 0.7);
+
+                        match idle.gathering_behavior {
+                            GatheringBehavior::Wandering => {
+                                transform.rotation = Quat::IDENTITY;
+                                let pulse_speed = 0.5;
+                                let scale_offset =
+                                    (idle.total_idle_time * pulse_speed).sin() * 0.03 + 1.0;
+                                transform.scale = Vec3::splat(scale_offset);
+                            }
+                            GatheringBehavior::Sleeping => {
+                                transform.rotation =
+                                    Quat::from_rotation_z(std::f32::consts::FRAC_PI_4);
+                                sprite.color = Color::srgba(0.6, 0.5, 0.8, 0.6);
+                                let breath = (idle.total_idle_time * 0.3).sin() * 0.02 + 0.95;
+                                transform.scale = Vec3::splat(breath);
+                            }
+                            GatheringBehavior::Standing => {
+                                transform.rotation = Quat::IDENTITY;
+                                let breath = (idle.total_idle_time * 0.2).sin() * 0.01 + 1.0;
+                                transform.scale = Vec3::splat(breath);
+                            }
+                            GatheringBehavior::Dancing => {
+                                let sway_angle = (idle.total_idle_time * 3.0).sin() * 0.15;
+                                transform.rotation = Quat::from_rotation_z(sway_angle);
+                                let bounce = (idle.total_idle_time * 4.0).sin() * 0.05 + 1.0;
+                                transform.scale = Vec3::new(1.0, bounce, 1.0);
+                                sprite.color = Color::srgba(1.0, 0.8, 1.0, 0.8);
+                            }
+                        }
                     }
                 } else {
-                    sprite.color = Color::srgba(0.8, 0.7, 1.0, 0.7);
-
-                    match idle.gathering_behavior {
-                        GatheringBehavior::Wandering => {
-                            transform.rotation = Quat::IDENTITY;
-                            let pulse_speed = 0.5;
-                            let scale_offset =
-                                (idle.total_idle_time * pulse_speed).sin() * 0.03 + 1.0;
-                            transform.scale = Vec3::splat(scale_offset);
-                        }
-                        GatheringBehavior::Sleeping => {
-                            transform.rotation = Quat::from_rotation_z(std::f32::consts::FRAC_PI_4);
-                            sprite.color = Color::srgba(0.6, 0.5, 0.8, 0.6);
-                            let breath = (idle.total_idle_time * 0.3).sin() * 0.02 + 0.95;
-                            transform.scale = Vec3::splat(breath);
-                        }
-                        GatheringBehavior::Standing => {
-                            transform.rotation = Quat::IDENTITY;
-                            let breath = (idle.total_idle_time * 0.2).sin() * 0.01 + 1.0;
-                            transform.scale = Vec3::splat(breath);
-                        }
-                        GatheringBehavior::Dancing => {
-                            let sway_angle = (idle.total_idle_time * 3.0).sin() * 0.15;
-                            transform.rotation = Quat::from_rotation_z(sway_angle);
-                            let bounce = (idle.total_idle_time * 4.0).sin() * 0.05 + 1.0;
-                            transform.scale = Vec3::new(1.0, bounce, 1.0);
-                            sprite.color = Color::srgba(1.0, 0.8, 1.0, 0.8);
-                        }
-                    }
+                    transform.rotation = Quat::IDENTITY;
+                    sprite.color = Color::WHITE;
                 }
             }
         }
@@ -331,8 +390,8 @@ pub fn idle_visual_system(
 
 /// 集会エリアでの魂の重なり回避システム
 pub fn gathering_separation_system(
-    gathering_area: Res<GatheringArea>,
     world_map: Res<WorldMap>,
+    q_spots: Query<&GatheringSpot>,
     mut query: Query<(
         Entity,
         &Transform,
@@ -340,20 +399,21 @@ pub fn gathering_separation_system(
         &mut IdleState,
         &Path,
         &AssignedTask,
+        Option<&ParticipatingIn>,
     )>,
 ) {
     let gathering_positions: Vec<(Entity, Vec2)> = query
         .iter()
-        .filter(|(_, _, _, idle, _, task)| {
+        .filter(|(_, _, _, idle, _, task, _)| {
             matches!(task, AssignedTask::None)
                 && (idle.behavior == IdleBehavior::Gathering
                     || idle.behavior == IdleBehavior::ExhaustedGathering)
                 && idle.gathering_behavior != GatheringBehavior::Wandering
         })
-        .map(|(entity, transform, _, _, _, _)| (entity, transform.translation.truncate()))
+        .map(|(entity, transform, _, _, _, _, _)| (entity, transform.translation.truncate()))
         .collect();
 
-    for (entity, transform, mut dest, mut idle, path, task) in query.iter_mut() {
+    for (entity, transform, mut dest, mut idle, path, task, participating_in) in query.iter_mut() {
         if !idle.needs_separation {
             continue;
         }
@@ -373,54 +433,76 @@ pub fn gathering_separation_system(
             continue;
         }
 
-        let current_pos = transform.translation.truncate();
-        let center = gathering_area.0;
-        let dist_from_center = (center - current_pos).length();
+        let gathering_center = if let Some(p) = participating_in {
+            q_spots.get(p.0).ok().map(|s| s.center)
+        } else {
+            let pos = transform.translation.truncate();
+            q_spots
+                .iter()
+                .min_by(|a, b| {
+                    a.center
+                        .distance_squared(pos)
+                        .partial_cmp(&b.center.distance_squared(pos))
+                        .unwrap()
+                })
+                .map(|s| s.center)
+        };
 
-        if dist_from_center > GATHERING_ARRIVAL_RADIUS {
-            continue;
-        }
+        if let Some(center) = gathering_center {
+            let current_pos = transform.translation.truncate();
+            let dist_from_center = (center - current_pos).length();
 
-        if !path.waypoints.is_empty() && path.current_index < path.waypoints.len() {
-            continue;
-        }
-
-        let mut is_overlapping = false;
-        for (other_entity, other_pos) in &gathering_positions {
-            if *other_entity == entity {
+            if dist_from_center > GATHERING_ARRIVAL_RADIUS {
                 continue;
             }
-            let dist = (current_pos - *other_pos).length();
-            if dist < GATHERING_MIN_SEPARATION {
-                is_overlapping = true;
-                break;
+
+            if !path.waypoints.is_empty() && path.current_index < path.waypoints.len() {
+                continue;
             }
-        }
 
-        if is_overlapping {
-            let mut rng = rand::thread_rng();
-            for _ in 0..10 {
-                let angle: f32 = rng.gen_range(0.0..std::f32::consts::TAU);
-                let dist: f32 = rng.gen_range(TILE_SIZE..TILE_SIZE * 2.5);
-                let offset = Vec2::new(angle.cos() * dist, angle.sin() * dist);
-                let new_pos = center + offset;
-
-                let mut valid = true;
+            let mut is_overlapping =
+                (center - current_pos).length() < TILE_SIZE * GATHERING_KEEP_DISTANCE_MIN;
+            if !is_overlapping {
                 for (other_entity, other_pos) in &gathering_positions {
                     if *other_entity == entity {
                         continue;
                     }
-                    if (new_pos - *other_pos).length() < GATHERING_MIN_SEPARATION {
-                        valid = false;
+                    let dist = (current_pos - *other_pos).length();
+                    if dist < GATHERING_MIN_SEPARATION {
+                        is_overlapping = true;
                         break;
                     }
                 }
+            }
 
-                if valid {
-                    let target_grid = WorldMap::world_to_grid(new_pos);
-                    if world_map.is_walkable(target_grid.0, target_grid.1) {
-                        dest.0 = new_pos;
-                        break;
+            if is_overlapping {
+                let mut rng = rand::thread_rng();
+                for _ in 0..10 {
+                    let angle: f32 = rng.gen_range(0.0..std::f32::consts::TAU);
+                    let dist: f32 = rng.gen_range(
+                        TILE_SIZE * GATHERING_KEEP_DISTANCE_TARGET_MIN
+                            ..TILE_SIZE * GATHERING_KEEP_DISTANCE_TARGET_MAX,
+                    );
+                    let offset = Vec2::new(angle.cos() * dist, angle.sin() * dist);
+                    let new_pos = center + offset;
+
+                    let mut valid = true;
+                    for (other_entity, other_pos) in &gathering_positions {
+                        if *other_entity == entity {
+                            continue;
+                        }
+                        if (new_pos - *other_pos).length() < GATHERING_MIN_SEPARATION {
+                            valid = false;
+                            break;
+                        }
+                    }
+
+                    if valid {
+                        let target_grid = WorldMap::world_to_grid(new_pos);
+                        if world_map.is_walkable(target_grid.0, target_grid.1) {
+                            dest.0 = new_pos;
+                            break;
+                        }
                     }
                 }
             }
