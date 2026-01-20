@@ -136,7 +136,10 @@ pub const IDLE_TIME_TO_GATHERING: f32 = 30.0;
 pub const LAZINESS_THRESHOLD_HIGH: f32 = 0.8;
 pub const LAZINESS_THRESHOLD_MID: f32 = 0.5;
 /// 集会エリアへの到着判定半径
-pub const GATHERING_ARRIVAL_RADIUS_BASE: f32 = 3.0; // TILE_SIZE 倍
+pub const GATHERING_ARRIVAL_RADIUS_BASE: f32 = 5.0; // TILE_SIZE 倍 (この範囲に入れば集会参加とみなす)
+pub const GATHERING_KEEP_DISTANCE_MIN: f32 = 2.0; // 中心から最低限離れる距離
+pub const GATHERING_KEEP_DISTANCE_TARGET_MIN: f32 = 2.5; // 移動先の最小距離 (バッファ込)
+pub const GATHERING_KEEP_DISTANCE_TARGET_MAX: f32 = 4.5; // 移動先の最大距離
 
 /// 集会中の行動変化間隔 (最小/最大)
 pub const GATHERING_BEHAVIOR_DURATION_MIN: f32 = 60.0;
@@ -297,8 +300,8 @@ pub const CONVERSATION_RADIUS: f32 = 2.5 * TILE_SIZE;
 pub const CONVERSATION_CHECK_INTERVAL: f32 = 3.0;
 /// 会話開始確率 (Idle時)
 pub const CONVERSATION_CHANCE_IDLE: f32 = 0.2;
-/// 会話開始確率 (Gathering時)
-pub const CONVERSATION_CHANCE_GATHERING: f32 = 0.4;
+/// 会話開始確率 (Gathering時) - 動的集会システムでさらに活発に
+pub const CONVERSATION_CHANCE_GATHERING: f32 = 0.6;
 /// 会話後のクールダウン (秒)
 pub const CONVERSATION_COOLDOWN: f32 = 30.0;
 /// 1ターンの表示時間
