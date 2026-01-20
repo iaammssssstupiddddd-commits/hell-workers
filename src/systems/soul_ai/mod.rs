@@ -4,6 +4,7 @@
 
 use bevy::prelude::*;
 
+pub mod gathering;
 pub mod idle;
 pub mod task_execution; // タスク実行モジュール
 pub mod vitals;
@@ -16,6 +17,7 @@ pub struct SoulAiPlugin;
 impl Plugin for SoulAiPlugin {
     fn build(&self, app: &mut App) {
         app.register_type::<task_execution::AssignedTask>()
+            .register_type::<gathering::GatheringSpot>()
             .init_resource::<work::AutoHaulCounter>()
             .add_systems(
                 Update,
@@ -34,11 +36,15 @@ impl Plugin for SoulAiPlugin {
                     work::blueprint_auto_build_system
                         .after(crate::systems::familiar_ai::familiar_ai_system), // 資材が揃った建築タスクの自動割り当て（使い魔AIの後に実行）
                     work::task_area_auto_haul_system,
+                    // 動的集会システム
+                    gathering::gathering_spawn_system,
+                    gathering::gathering_maintenance_system,
+                    gathering::gathering_merge_system,
+                    gathering::gathering_visual_update_system,
                     // アイドル行動
                     idle::idle_behavior_system,
                     idle::idle_visual_system,
                     idle::gathering_separation_system,
-                    // ビジュアル
                     // ビジュアル
                     vitals::familiar_hover_visualization_system,
                 )
