@@ -7,6 +7,7 @@ use bevy::prelude::*;
 use rand::Rng;
 
 use crate::constants::*;
+use crate::systems::spatial::{GatheringSpotSpatialGrid, SpatialGrid, SpatialGridOps};
 
 // ============================================================
 // 定数
@@ -141,6 +142,20 @@ pub struct GatheringReadiness {
     pub idle_time: f32,
 }
 
+/// 集会システムの更新頻度を制御するタイマー
+#[derive(Resource)]
+pub struct GatheringUpdateTimer {
+    pub timer: Timer,
+}
+
+impl Default for GatheringUpdateTimer {
+    fn default() -> Self {
+        Self {
+            timer: Timer::from_seconds(0.5, TimerMode::Repeating),
+        }
+    }
+}
+
 // ============================================================
 // ヘルパー関数
 // ============================================================
@@ -175,12 +190,22 @@ pub fn gathering_spawn_system(
     game_assets: Res<GameAssets>,
     q_souls: Query<
         (Entity, &Transform, &IdleState, &AssignedTask),
-        (With<DamnedSoul>, Without<ParticipatingIn>),
+        (
+            With<DamnedSoul>,
+            Without<ParticipatingIn>,
+            Without<crate::entities::familiar::UnderCommand>,
+        ),
     >,
-    q_existing_spots: Query<(Entity, &GatheringSpot)>,
+    spot_grid: Res<GatheringSpotSpatialGrid>,
+    soul_grid: Res<SpatialGrid>,
     mut q_readiness: Query<&mut GatheringReadiness>,
+    update_timer: Res<GatheringUpdateTimer>,
 ) {
-    let dt = time.delta_secs();
+    if !update_timer.timer.just_finished() {
+        return;
+    }
+
+    let dt = update_timer.timer.duration().as_secs_f32(); // 約0.5s
     let current_time = time.elapsed_secs();
 
     for (entity, transform, idle, task) in q_souls.iter() {
@@ -197,26 +222,15 @@ pub fn gathering_spawn_system(
 
         let pos = transform.translation.truncate();
 
-        // 既存の集会所が近くにあるかチェック
-        let mut has_nearby_spot = false;
-        for (_, spot) in q_existing_spots.iter() {
-            if (spot.center - pos).length() < GATHERING_DETECTION_RADIUS {
-                has_nearby_spot = true;
-                break;
-            }
-        }
-        if has_nearby_spot {
+        // 既存の集会所が近くにあるか空間グリッドでチェック
+        let nearby_spots = spot_grid.get_nearby_in_radius(pos, GATHERING_DETECTION_RADIUS);
+        if !nearby_spots.is_empty() {
             continue;
         }
 
-        // 近傍のSoul数をカウント
-        let nearby_souls = q_souls
-            .iter()
-            .filter(|(e, t, _, _)| {
-                *e != entity
-                    && (t.translation.truncate() - pos).length() < GATHERING_DETECTION_RADIUS
-            })
-            .count();
+        // 近傍のSoul数を空間グリッドでカウント
+        let nearby_soul_entities = soul_grid.get_nearby_in_radius(pos, GATHERING_DETECTION_RADIUS);
+        let nearby_souls = nearby_soul_entities.len().saturating_sub(1); // 自分を除く
 
         // 発生時間を計算
         let spawn_time = (GATHERING_SPAWN_BASE_TIME
@@ -239,6 +253,10 @@ pub fn gathering_spawn_system(
                 );
                 // 発起人を参加者として登録
                 commands.entity(entity).insert(ParticipatingIn(spot_entity));
+                commands.trigger(crate::events::OnGatheringParticipated {
+                    entity,
+                    spot_entity,
+                });
                 readiness.idle_time = 0.0;
                 info!(
                     "GATHERING: New spot spawned at {:?} with {:?}, initiator {:?}",
@@ -264,7 +282,7 @@ fn spawn_gathering_spot(
 ) -> Entity {
     let spot = GatheringSpot {
         center,
-        participants: 1, // 発起人
+        participants: 0, // Observerによって加算される
         max_capacity: GATHERING_MAX_CAPACITY,
         grace_timer: GATHERING_GRACE_PERIOD,
         grace_active: true,
@@ -272,7 +290,7 @@ fn spawn_gathering_spot(
         created_at,
     };
 
-    let aura_size = calculate_aura_size(1);
+    let aura_size = calculate_aura_size(0);
 
     // オーラエンティティ
     let aura_entity = commands
@@ -310,21 +328,20 @@ fn spawn_gathering_spot(
 }
 
 /// 集会スポットの維持・消滅システム
+/// 参加者数はObserverで自動更新されるため、ここでは猶予タイマーのみ管理
 pub fn gathering_maintenance_system(
-    time: Res<Time>,
     mut commands: Commands,
     mut q_spots: Query<(Entity, &mut GatheringSpot, &GatheringVisuals)>,
-    q_participants: Query<&ParticipatingIn>,
+    update_timer: Res<GatheringUpdateTimer>,
 ) {
-    let dt = time.delta_secs();
+    if !update_timer.timer.just_finished() {
+        return;
+    }
+    let dt = update_timer.timer.duration().as_secs_f32(); // 約0.5s
 
     for (spot_entity, mut spot, visuals) in q_spots.iter_mut() {
-        // 参加人数をカウント
-        let participant_count = q_participants.iter().filter(|p| p.0 == spot_entity).count();
-        spot.participants = participant_count;
-
         // 人数が最低未満の場合
-        if participant_count < GATHERING_MIN_PARTICIPANTS {
+        if spot.participants < GATHERING_MIN_PARTICIPANTS {
             if !spot.grace_active {
                 spot.grace_active = true;
                 spot.grace_timer = GATHERING_GRACE_PERIOD;
@@ -355,8 +372,12 @@ pub fn gathering_merge_system(
     time: Res<Time>,
     mut commands: Commands,
     q_spots: Query<(Entity, &GatheringSpot, &GatheringVisuals)>,
-    mut q_participants: Query<&mut ParticipatingIn>,
+    q_participants: Query<(Entity, &ParticipatingIn)>,
+    update_timer: Res<GatheringUpdateTimer>,
 ) {
+    if !update_timer.timer.just_finished() {
+        return;
+    }
     let current_time = time.elapsed_secs();
     let spots: Vec<_> = q_spots.iter().collect();
 
@@ -396,10 +417,22 @@ pub fn gathering_merge_system(
 
                 info!("GATHERING: Merging spot {:?} into {:?}", absorbed, absorber);
 
-                // 参加者のターゲットを変更
-                for mut participating in q_participants.iter_mut() {
+                // 参加者のターゲットを変更 (Observerを発火させるためにイベントをトリガー)
+                for (soul_entity, participating) in q_participants.iter() {
                     if participating.0 == absorbed {
-                        participating.0 = absorber;
+                        // 古いスポットから離脱
+                        commands.trigger(crate::events::OnGatheringLeft {
+                            entity: soul_entity,
+                            spot_entity: absorbed,
+                        });
+                        // 新しいスポットに参加
+                        commands
+                            .entity(soul_entity)
+                            .insert(ParticipatingIn(absorber));
+                        commands.trigger(crate::events::OnGatheringParticipated {
+                            entity: soul_entity,
+                            spot_entity: absorber,
+                        });
                     }
                 }
 
@@ -419,26 +452,51 @@ pub fn gathering_merge_system(
 
 /// 集会オーラのサイズと位置の更新システム
 pub fn gathering_visual_update_system(
-    q_spots: Query<(Entity, &GatheringSpot, &GatheringVisuals)>,
+    q_spots: Query<(Entity, &GatheringSpot, &GatheringVisuals), Changed<GatheringSpot>>,
     mut q_visuals: Query<
-        (&mut Sprite, &mut Transform),
+        (&mut Sprite, &mut Transform, &mut Visibility),
         (Without<DamnedSoul>, Without<ParticipatingIn>),
     >,
 ) {
     for (_spot_entity, spot, visuals) in q_spots.iter() {
         // ビジュアルの更新 (サイズのみ - 位置はスポーン時のcenterを維持)
         let target_size = calculate_aura_size(spot.participants);
+        let target_pos = spot.center.extend(Z_AURA);
+        let target_obj_pos = spot.center.extend(Z_ITEM);
 
-        // オーラの更新
-        if let Ok((mut sprite, mut transform)) = q_visuals.get_mut(visuals.aura_entity) {
-            sprite.custom_size = Some(Vec2::splat(target_size));
-            transform.translation = spot.center.extend(Z_AURA);
+        // オーラの更新 (常に表示)
+        if let Ok((mut sprite, mut transform, mut visibility)) =
+            q_visuals.get_mut(visuals.aura_entity)
+        {
+            let target_size_vec = Some(Vec2::splat(target_size));
+            if sprite.custom_size != target_size_vec {
+                sprite.custom_size = target_size_vec;
+            }
+            if transform.translation != target_pos {
+                transform.translation = target_pos;
+            }
+            if *visibility != Visibility::Inherited {
+                *visibility = Visibility::Inherited;
+            }
         }
 
-        // 中心オブジェクトの更新
+        // 中心オブジェクトの更新 (人数が2人以上の時のみ表示)
         if let Some(obj_entity) = visuals.object_entity {
-            if let Ok((_, mut transform)) = q_visuals.get_mut(obj_entity) {
-                transform.translation = spot.center.extend(Z_ITEM);
+            if let Ok((_, mut transform, mut visibility)) = q_visuals.get_mut(obj_entity) {
+                if transform.translation != target_obj_pos {
+                    transform.translation = target_obj_pos;
+                }
+
+                // 1人以下（0人の猶予期間を含む）なら非表示
+                let target_visibility = if spot.participants < 2 {
+                    Visibility::Hidden
+                } else {
+                    Visibility::Inherited
+                };
+
+                if *visibility != target_visibility {
+                    *visibility = target_visibility;
+                }
             }
         }
     }
@@ -448,21 +506,51 @@ pub fn gathering_visual_update_system(
 pub fn gathering_recruitment_system(
     mut commands: Commands,
     q_spots: Query<(Entity, &GatheringSpot)>,
-    q_souls: Query<(Entity, &Transform), (With<DamnedSoul>, Without<ParticipatingIn>)>,
+    soul_grid: Res<SpatialGrid>,
+    q_souls: Query<
+        (Entity, &Transform, &AssignedTask),
+        (
+            With<DamnedSoul>,
+            Without<ParticipatingIn>,
+            Without<crate::entities::familiar::UnderCommand>,
+        ),
+    >,
+    update_timer: Res<GatheringUpdateTimer>,
 ) {
+    if !update_timer.timer.just_finished() {
+        return;
+    }
     for (spot_entity, spot) in q_spots.iter() {
         // 定員オーバーならスキップ
         if spot.participants >= spot.max_capacity {
             continue;
         }
 
-        for (soul_entity, transform) in q_souls.iter() {
-            let dist = (spot.center - transform.translation.truncate()).length();
-            // 集会検出半径内に入れば自動参加
-            if dist < GATHERING_DETECTION_RADIUS {
+        // 空間グリッドで近傍のSoulを検索
+        let nearby_souls = soul_grid.get_nearby_in_radius(spot.center, GATHERING_DETECTION_RADIUS);
+
+        // 空き容量の分だけ参加させる
+        let mut current_participants = spot.participants;
+        for soul_entity in nearby_souls {
+            if current_participants >= spot.max_capacity {
+                break;
+            }
+
+            if let Ok((_ent, _transform, task)) = q_souls.get(soul_entity) {
+                // タスク実行中は除外
+                if !matches!(task, AssignedTask::None) {
+                    continue;
+                }
+
+                // q_souls のフィルタ (Without<ParticipatingIn> 等) により、条件に合うSoulのみが対象
+                current_participants += 1;
                 commands
                     .entity(soul_entity)
                     .insert(ParticipatingIn(spot_entity));
+                commands.trigger(crate::events::OnGatheringParticipated {
+                    entity: soul_entity,
+                    spot_entity,
+                });
                 info!(
                     "GATHERING: Soul {:?} automatically recruited to spot {:?}",
                     soul_entity, spot_entity
@@ -477,7 +565,11 @@ pub fn gathering_leave_system(
     mut commands: Commands,
     q_spots: Query<&GatheringSpot>,
     q_participants: Query<(Entity, &Transform, &IdleState, &ParticipatingIn), With<DamnedSoul>>,
+    update_timer: Res<GatheringUpdateTimer>,
 ) {
+    if !update_timer.timer.just_finished() {
+        return;
+    }
     for (entity, transform, idle, participating_in) in q_participants.iter() {
         // 自発的に参加中（集会行動中）のSoulは離脱判定をしない
         if matches!(
@@ -491,6 +583,10 @@ pub fn gathering_leave_system(
             let dist = (spot.center - transform.translation.truncate()).length();
             // 一定距離以上離れたら参加を解除
             if dist > GATHERING_LEAVE_RADIUS {
+                commands.trigger(crate::events::OnGatheringLeft {
+                    entity,
+                    spot_entity: participating_in.0,
+                });
                 commands.entity(entity).remove::<ParticipatingIn>();
                 info!(
                     "GATHERING: Soul {:?} left spot {:?} (too far away)",
@@ -498,7 +594,8 @@ pub fn gathering_leave_system(
                 );
             }
         } else {
-            // スポット自体が消滅している場合はコンポーネントを削除
+            // スポット自体が消滅している場合は、イベントなしでコンポーネントのみ削除
+            // (スポット消滅時に参加者全員をトリガーするのは重いため、残留成分の掃除とみなす)
             commands.entity(entity).remove::<ParticipatingIn>();
         }
     }
@@ -563,4 +660,35 @@ pub fn gathering_debug_visualization_system(
             gizmos.circle_2d(center, 16.0, Color::srgba(0.8, 0.4, 1.0, 1.0));
         }
     }
+}
+
+// ============================================================
+// Observers (イベント駆動による参加者数更新)
+// ============================================================
+
+/// ParticipatingIn追加時に参加者数をインクリメント
+pub fn on_participating_added(
+    on: On<crate::events::OnGatheringParticipated>,
+    mut q_spots: Query<&mut GatheringSpot>,
+) {
+    let event = on.event();
+    if let Ok(mut spot) = q_spots.get_mut(event.spot_entity) {
+        spot.participants += 1;
+    }
+}
+
+/// ParticipatingIn削除時に参加者数をデクリメント
+pub fn on_participating_removed(
+    on: On<crate::events::OnGatheringLeft>,
+    mut q_spots: Query<&mut GatheringSpot>,
+) {
+    let event = on.event();
+    if let Ok(mut spot) = q_spots.get_mut(event.spot_entity) {
+        spot.participants = spot.participants.saturating_sub(1);
+    }
+}
+
+/// 集会システムのタイマーを更新するシステム
+pub fn tick_gathering_timer_system(time: Res<Time>, mut timer: ResMut<GatheringUpdateTimer>) {
+    timer.timer.tick(time.delta());
 }

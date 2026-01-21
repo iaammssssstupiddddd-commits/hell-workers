@@ -1,5 +1,7 @@
 use super::FamiliarAiState;
 use crate::entities::damned_soul::{DamnedSoul, Destination, IdleState, Path};
+use crate::entities::familiar::UnderCommand;
+use crate::systems::soul_ai::gathering::ParticipatingIn;
 use crate::systems::soul_ai::task_execution::AssignedTask;
 use bevy::prelude::*;
 
@@ -26,7 +28,8 @@ pub fn supervising_logic(
             &mut Path,
             &IdleState,
             Option<&crate::relationships::Holding>,
-            Option<&crate::entities::familiar::UnderCommand>,
+            Option<&UnderCommand>,
+            Option<&ParticipatingIn>,
         ),
         Without<crate::entities::familiar::Familiar>,
     >,
@@ -65,7 +68,7 @@ pub fn supervising_logic(
         let mut max_idle_dist_sq = -1.0;
 
         for &member_ent in active_members {
-            if let Ok((_, transform, _, task, _, _, _, _, _)) = q_souls.get(member_ent) {
+            if let Ok((_, transform, _, task, _, _, _, _, _, _)) = q_souls.get(member_ent) {
                 let dist_sq = fam_pos.distance_squared(transform.translation.truncate());
                 if !matches!(*task, AssignedTask::None) {
                     if dist_sq > max_worker_dist_sq {
@@ -100,7 +103,7 @@ pub fn supervising_logic(
 
     // 移動制御
     let all_members_idle = active_members.iter().all(|&member_ent| {
-        if let Ok((_, _, _, task, _, _, _, _, _)) = q_souls.get(member_ent) {
+        if let Ok((_, _, _, task, _, _, _, _, _, _)) = q_souls.get(member_ent) {
             matches!(*task, AssignedTask::None)
         } else {
             false
@@ -117,7 +120,7 @@ pub fn supervising_logic(
     }
 
     if let Some(target_ent) = current_target {
-        if let Ok((_, transform, _, task, _, _, _, _, _)) = q_souls.get(target_ent) {
+        if let Ok((_, transform, _, task, _, _, _, _, _, _)) = q_souls.get(target_ent) {
             let target_pos = transform.translation.truncate();
             let is_working = !matches!(*task, AssignedTask::None);
 
