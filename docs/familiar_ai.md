@@ -72,11 +72,48 @@
 - **パス更新ガード**: 目的地が **0.5 〜 1.0 タイル** 以上変化しない限り、新しい経路（Path）を再計算しません。これにより、微小な移動に伴う「ガタつき」を排除しています。
 - **明示的なパス解放**: 停止距離に到達した際、即座に経路情報をクリアすることで、ターゲット周囲での「足踏み」を防いでいます。
 
-## 5. 関連コンポーネント
+## 5. システム構造
+
+`familiar_ai` システムは、保守性と可読性を向上させるため、以下のモジュールに分離されています：
+
+### 5.1. 主要モジュール
+
+- **`mod.rs`**: メインのシステム定義と `FamiliarAiParams` の定義（368行）
+- **`familiar_processor.rs`**: 使い魔の処理ロジックを複数の関数に分割
+  - `process_squad_management`: 分隊管理
+  - `process_recruitment`: リクルート処理
+  - `finalize_state_transitions`: 状態遷移の最終確定
+  - `process_task_delegation_and_movement`: タスク委譲と移動制御
+- **`state_handlers/`**: 各状態のハンドラー
+  - `idle.rs`: Idle 状態の処理
+  - `searching.rs`: SearchingTask 状態の処理
+  - `scouting.rs`: Scouting 状態の処理
+  - `supervising.rs`: Supervising 状態の処理
+- **`squad.rs`**: 分隊管理（`SquadManager`）
+  - `build_squad`: 分隊の構築
+  - `validate_squad`: 分隊の検証
+  - `release_fatigued`: 疲労・崩壊したメンバーのリリース
+- **`task_management.rs`**: タスク管理（`TaskManager`）
+  - `find_unassigned_task_in_area`: タスク検索
+  - `assign_task_to_worker`: タスク割り当て
+  - `delegate_task`: タスク委譲
+- **`recruitment.rs`**: リクルート管理（`RecruitmentManager`）
+  - `find_best_recruit`: リクルート候補の検索
+  - `try_immediate_recruit`: 即時リクルート
+  - `start_scouting`: スカウト開始
+- **`state_transition.rs`**: 状態遷移の検知とイベント発火
+  - `detect_state_changes_system`: 状態変更の検知（`Changed<FamiliarAiState>` 使用）
+  - `detect_command_changes_system`: コマンド変更の検知（`Changed<ActiveCommand>` 使用）
+  - `determine_transition_reason`: 状態遷移理由の判定
+- **`max_soul_handler.rs`**: 使役数上限変更イベントの処理
+  - `handle_max_soul_changed_system`: 上限超過分の魂をリリース
+
+### 5.2. 関連コンポーネント
 
 - `Familiar`: 使い魔の基本パラメータ（Radius, Speed 等）を保持。
 - `FamiliarOperation`: 指揮下に入れる最大人数や、魂を解雇する疲労しきい値を保持。
 - `ActiveCommand`: プレイヤーからの直接命令（Idle / Gather / Task）。
+- `FamiliarAiState`: AI の現在の状態（Idle, SearchingTask, Scouting, Supervising）。
 - `Commanding` (Relationship): 配下の魂への参照リスト。**オプショナル**（分隊が空のとき削除される）。
 - `ManagedTasks` (Relationship Target): 管理下のタスクリスト。**オプショナル**（タスクがゼロのとき削除されるため、AI クエリでは `Option` として扱う）。
 - `AssignedTask`: 魂が現在実行中のタスク（採取・運搬・建築）を管理。`src/systems/soul_ai/task_execution/types.rs` で定義。
@@ -116,6 +153,12 @@
 ### 7.5. タスク検索結果のキャッシュ
 タスクの「有無の判定」と「実際の割り当て」で、同じ条件の空間検索（`find_unassigned_task_in_area`）を繰り返さないように修正しました。
 - **効果**: 重い空間検索の回数を半減させ、判断の重複（二重スキャン）による CPU 負荷を抑制しました。
+
+### 7.6. 状態遷移の自動検知（Bevy 標準機能の活用）
+`Changed<FamiliarAiState>` フィルタを使用して状態遷移を自動検知します。
+- **仕組み**: Bevy の `Changed<T>` フィルタにより、変更されたエンティティのみを処理
+- **効果**: 毎フレーム全使い魔の状態をチェックするコストを排除し、変更時のみ処理を実行
+- **イベント**: 状態遷移時に `FamiliarAiStateChangedEvent` を発火し、他のシステムが反応可能
 
 ## 8. ビジュアルとアニメーション (Visuals & Animation)
 

@@ -15,8 +15,11 @@ graph TD
     subgraph Core["Core Logic"]
         Jobs["Job System (tasks.md)"]
         F_AI["Familiar AI (familiar_ai.md)"]
+        F_AI_Sub["├─ State Handlers<br/>├─ Squad Management<br/>├─ Task Management<br/>└─ Recruitment"]
         S_AI["Soul AI (soul_ai.md)"]
     end
+    
+    F_AI --> F_AI_Sub
 
     subgraph Data["Data Structures"]
         Grid["Spatial Grid (Optimized Search)"]
