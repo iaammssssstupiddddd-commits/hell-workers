@@ -2,8 +2,11 @@ use crate::constants::*;
 use crate::entities::damned_soul::{
     DamnedSoul, Destination, GatheringBehavior, IdleBehavior, IdleState, Path,
 };
-use crate::systems::soul_ai::gathering::{GatheringSpot, ParticipatingIn};
+use crate::systems::soul_ai::gathering::{
+    GATHERING_LEAVE_RADIUS, GatheringSpot, GatheringUpdateTimer, ParticipatingIn,
+};
 use crate::systems::soul_ai::task_execution::AssignedTask;
+use crate::systems::spatial::{GatheringSpotSpatialGrid, SpatialGrid, SpatialGridOps};
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
 use rand::Rng;
@@ -59,6 +62,7 @@ pub fn idle_behavior_system(
         Option<&ParticipatingIn>,
         Option<&crate::entities::familiar::UnderCommand>,
     )>,
+    spot_grid: Res<GatheringSpotSpatialGrid>,
 ) {
     let dt = time.delta_secs();
 
@@ -80,15 +84,20 @@ pub fn idle_behavior_system(
                 let center = q_spots.get(p.0).ok().map(|(_, s)| s.center);
                 (center, Some(p.0))
             } else {
-                // 最寄りのスポットを探す
+                // 最寄りのスポットを空間グリッドで効率的に探す
                 let pos = transform.translation.truncate();
-                let nearest = q_spots
+                // 離脱半径の2倍程度の範囲で探す (あまり遠くの集会所には行かない)
+                let spot_entities =
+                    spot_grid.get_nearby_in_radius(pos, GATHERING_LEAVE_RADIUS * 2.0);
+
+                let nearest = spot_entities
                     .iter()
-                    .filter(|(_, s)| s.participants < s.max_capacity)
-                    .min_by(|(_, a), (_, b)| {
-                        a.center
+                    .filter_map(|&e| q_spots.get(e).ok())
+                    .filter(|item| item.1.participants < item.1.max_capacity)
+                    .min_by(|a, b| {
+                        a.1.center
                             .distance_squared(pos)
-                            .partial_cmp(&b.center.distance_squared(pos))
+                            .partial_cmp(&b.1.center.distance_squared(pos))
                             .unwrap()
                     });
                 match nearest {
@@ -111,6 +120,10 @@ pub fn idle_behavior_system(
                     if participating_in.is_none() {
                         if let Some(spot_entity) = target_spot_entity {
                             commands.entity(entity).insert(ParticipatingIn(spot_entity));
+                            commands.trigger(crate::events::OnGatheringParticipated {
+                                entity,
+                                spot_entity,
+                            });
                         }
                     }
                     commands.trigger(crate::events::OnGatheringJoined { entity });
@@ -128,11 +141,27 @@ pub fn idle_behavior_system(
         }
 
         if under_command_opt.is_some() {
+            // 使役されたら集会から抜ける
+            if let Some(p) = participating_in {
+                commands.entity(entity).remove::<ParticipatingIn>();
+                commands.trigger(crate::events::OnGatheringLeft {
+                    entity,
+                    spot_entity: p.0,
+                });
+            }
             idle.total_idle_time = 0.0;
             continue;
         }
 
         if !matches!(*task, AssignedTask::None) {
+            // タスクが割り当てられたら集会から抜ける
+            if let Some(p) = participating_in {
+                commands.entity(entity).remove::<ParticipatingIn>();
+                commands.trigger(crate::events::OnGatheringLeft {
+                    entity,
+                    spot_entity: p.0,
+                });
+            }
             idle.total_idle_time = 0.0;
             continue;
         }
@@ -253,6 +282,10 @@ pub fn idle_behavior_system(
                         if participating_in.is_none() {
                             if let Some(spot_entity) = target_spot_entity {
                                 commands.entity(entity).insert(ParticipatingIn(spot_entity));
+                                commands.trigger(crate::events::OnGatheringParticipated {
+                                    entity,
+                                    spot_entity,
+                                });
                             }
                         }
 
@@ -409,6 +442,7 @@ pub fn idle_visual_system(
 pub fn gathering_separation_system(
     world_map: Res<WorldMap>,
     q_spots: Query<&GatheringSpot>,
+    update_timer: Res<GatheringUpdateTimer>,
     mut query: Query<(
         Entity,
         &Transform,
@@ -418,11 +452,15 @@ pub fn gathering_separation_system(
         &AssignedTask,
         &ParticipatingIn,
     )>,
+    soul_grid: Res<SpatialGrid>,
 ) {
-    let mut gathering_positions: Vec<(Entity, Vec2)> = Vec::new();
-    for (entity, transform, _, _, _, _, _) in query.iter() {
-        gathering_positions.push((entity, transform.translation.truncate()));
+    if !update_timer.timer.just_finished() {
+        return;
     }
+
+    // 重なり判定用に、クエリから位置情報を取得する（このシステム内で位置が変わるため、グリッドより現在のクエリ結果が重要）
+    // ただし、グリッド更新はこのシステムの前に終わっているため、soul_grid を活用する。
+    // 完全に O(N) にするため、gathering_positions の全走査を soul_grid.get_nearby_in_radius に置き換える。
 
     for (entity, transform, mut dest, mut idle, soul_path, soul_task, participating_in) in
         query.iter_mut()
@@ -458,15 +496,15 @@ pub fn gathering_separation_system(
                 (center - current_pos).length() < TILE_SIZE * GATHERING_KEEP_DISTANCE_MIN;
 
             if !is_overlapping {
-                for (other_entity, other_pos) in &gathering_positions {
-                    if *other_entity == entity {
+                // 空間グリッドで近傍のSoulとの重なりをチェック
+                let nearby_souls =
+                    soul_grid.get_nearby_in_radius(current_pos, GATHERING_MIN_SEPARATION);
+                for &other_entity in &nearby_souls {
+                    if other_entity == entity {
                         continue;
                     }
-                    let dist = (current_pos - *other_pos).length();
-                    if dist < GATHERING_MIN_SEPARATION {
-                        is_overlapping = true;
-                        break;
-                    }
+                    is_overlapping = true;
+                    break;
                 }
             }
 
@@ -482,14 +520,15 @@ pub fn gathering_separation_system(
                     let new_pos = center + offset;
 
                     let mut valid = true;
-                    for (other_entity, other_pos) in &gathering_positions {
-                        if *other_entity == entity {
+                    // 空間グリッドで移動先が他のSoulと被らないかチェック
+                    let nearby_at_new =
+                        soul_grid.get_nearby_in_radius(new_pos, GATHERING_MIN_SEPARATION);
+                    for &other_entity in &nearby_at_new {
+                        if other_entity == entity {
                             continue;
                         }
-                        if (new_pos - *other_pos).length() < GATHERING_MIN_SEPARATION {
-                            valid = false;
-                            break;
-                        }
+                        valid = false;
+                        break;
                     }
 
                     if valid {

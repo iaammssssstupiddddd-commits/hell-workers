@@ -4,7 +4,7 @@ use crate::entities::damned_soul::{
 use crate::entities::familiar::{
     ActiveCommand, Familiar, FamiliarCommand, FamiliarOperation, FamiliarVoice, UnderCommand,
 };
-use crate::events::FamiliarOperationMaxSoulChangedEvent;
+use crate::events::{FamiliarOperationMaxSoulChangedEvent, OnGatheringLeft};
 use crate::relationships::Holding;
 use crate::relationships::{Commanding, ManagedTasks, TaskWorkers};
 use crate::systems::GameSystemSet;
@@ -12,6 +12,7 @@ use crate::systems::command::TaskArea;
 use crate::systems::jobs::{Blueprint, IssuedBy, TargetBlueprint, TaskSlots};
 use crate::systems::jobs::{Designation, DesignationCreatedEvent};
 use crate::systems::logistics::{ResourceItem, Stockpile};
+use crate::systems::soul_ai::gathering::ParticipatingIn;
 use crate::systems::soul_ai::task_execution::AssignedTask;
 use crate::systems::soul_ai::work::unassign_task;
 use crate::systems::spatial::{
@@ -29,6 +30,8 @@ pub mod haul_cache;
 pub mod helpers;
 pub mod scouting;
 pub mod searching;
+pub mod state_handlers;
+pub mod state_transition;
 pub mod supervising;
 
 /// 使い魔のAI状態
@@ -64,14 +67,27 @@ impl Plugin for FamiliarAiPlugin {
             .init_resource::<haul_cache::HaulReservationCache>()
             .init_resource::<encouragement::EncouragementCooldowns>()
             .init_resource::<DesignationSpatialGrid>()
+            .init_resource::<state_transition::PreviousFamiliarAiStates>()
             .add_systems(
                 Update,
                 (
+                    // 状態遷移の検知（Changed フィルタを使用）
+                    state_transition::detect_state_changes_system
+                        .in_set(GameSystemSet::Logic)
+                        .before(familiar_ai_system),
+                    state_transition::detect_command_changes_system
+                        .in_set(GameSystemSet::Logic)
+                        .before(familiar_ai_system),
+                    // メインのAIシステム
                     update_designation_spatial_grid_system.in_set(GameSystemSet::Logic),
                     familiar_ai_system.in_set(GameSystemSet::Logic),
                     handle_max_soul_changed_system.in_set(GameSystemSet::Logic),
                     following::following_familiar_system.in_set(GameSystemSet::Logic),
                     encouragement::encouragement_system.in_set(GameSystemSet::Logic),
+                    // 状態遷移イベントの処理
+                    state_transition::handle_state_changed_system.in_set(GameSystemSet::Logic),
+                    // クリーンアップ
+                    state_transition::cleanup_previous_states_system.in_set(GameSystemSet::Logic),
                 ),
             );
     }
@@ -113,6 +129,7 @@ pub struct FamiliarAiParams<'w, 's> {
             &'static IdleState,
             Option<&'static crate::relationships::Holding>,
             Option<&'static crate::entities::familiar::UnderCommand>,
+            Option<&'static ParticipatingIn>,
         ),
         Without<Familiar>,
     >,
@@ -149,6 +166,7 @@ pub struct FamiliarAiParams<'w, 's> {
     pub q_bubbles: Query<'w, 's, (Entity, &'static SpeechBubble), With<FamiliarBubble>>,
     pub cooldowns: ResMut<'w, crate::systems::visual::speech::cooldown::BubbleCooldowns>,
     pub ev_created: MessageWriter<'w, crate::systems::jobs::DesignationCreatedEvent>,
+    pub ev_state_changed: MessageWriter<'w, crate::events::FamiliarAiStateChangedEvent>,
 }
 
 /// 使い魔AIの更新システム
@@ -172,6 +190,7 @@ pub fn familiar_ai_system(params: FamiliarAiParams) {
         q_bubbles,
         mut cooldowns,
         mut ev_created,
+        mut ev_state_changed,
     } = params;
     // 1. 搬送中のアイテム・ストックパイル予約状況を事前計算
     // フェーズ2: 全ソウルをイテレートする代わりにキャッシュ（HaulReservationCache）を使用
@@ -209,42 +228,33 @@ pub fn familiar_ai_system(params: FamiliarAiParams) {
             task_area_opt.is_some()
         );
 
-        let old_state = ai_state.clone();
-        // 1. 基本コマンドチェック
+        // 1. 基本コマンドチェック（Idle状態の処理）
         if matches!(active_command.command, FamiliarCommand::Idle) {
-            if *ai_state != FamiliarAiState::Idle {
-                debug!(
-                    "FAM_AI: {:?} Switching to Idle state because command is Idle",
-                    fam_entity
-                );
-                *ai_state = FamiliarAiState::Idle;
-                // 休息フレーズを表示
-                if cooldowns.can_speak(fam_entity, BubblePriority::Normal, time.elapsed_secs()) {
-                    crate::systems::visual::speech::spawn::spawn_familiar_bubble(
-                        &mut commands,
-                        fam_entity,
-                        crate::systems::visual::speech::phrases::LatinPhrase::Requiesce,
-                        fam_transform.translation,
-                        &game_assets,
-                        &q_bubbles,
-                        BubbleEmotion::Neutral,
-                        BubblePriority::Normal,
-                        voice_opt,
-                    );
-                    cooldowns.record_speech(
-                        fam_entity,
-                        BubblePriority::Normal,
-                        time.elapsed_secs(),
-                    );
-                }
+            let transition_result = state_handlers::idle::handle_idle_state(
+                fam_entity,
+                fam_transform,
+                active_command,
+                &mut ai_state,
+                &mut fam_dest,
+                &mut fam_path,
+                &mut commands,
+                &time,
+                &game_assets,
+                &q_bubbles,
+                &mut cooldowns,
+                voice_opt,
+            );
+            if transition_result.apply_to(&mut ai_state) {
+                debug!("FAM_AI: {:?} state changed to Idle", fam_entity);
             }
-            fam_dest.0 = fam_transform.translation.truncate();
-            fam_path.waypoints.clear();
             continue;
         }
 
         let fam_pos = fam_transform.translation.truncate();
         let command_radius = familiar.command_radius;
+
+        let old_state = ai_state.clone();
+        let mut state_changed = false;
         let fatigue_threshold = familiar_op.fatigue_threshold;
 
         // Relationshipから現在の部下リストを取得 (Commandingがない場合は空)
@@ -257,8 +267,18 @@ pub fn familiar_ai_system(params: FamiliarAiParams) {
         // 2. 疲労解放
         let mut released_entities: Vec<Entity> = Vec::new();
         for &member_entity in &squad_entities {
-            if let Ok((entity, transform, soul, mut task, _, mut path, idle, holding_opt, uc)) =
-                q_souls.get_mut(member_entity)
+            if let Ok((
+                entity,
+                transform,
+                soul,
+                mut task,
+                _,
+                mut path,
+                idle,
+                holding_opt,
+                uc,
+                _participating_opt,
+            )) = q_souls.get_mut(member_entity)
             {
                 // 整合性チェック: 相手が自分を主人だと思っていないならリストから外す ( Relationship更新遅延対策 )
                 if let Some(uc_comp) = uc {
@@ -347,13 +367,11 @@ pub fn familiar_ai_system(params: FamiliarAiParams) {
 
         // 3. 状態に応じたロジック実行
         let max_workers = familiar_op.max_controlled_soul;
-        let mut state_changed = false;
-
         // --- ステートに応じた主要ロジック ---
         match *ai_state {
             FamiliarAiState::Scouting { target_soul } => {
                 // Scoutingロジックを実行 (分隊の空き状況に関わらず常にチェック)
-                state_changed = scouting::scouting_logic(
+                let transition_result = state_handlers::scouting::handle_scouting_state(
                     fam_entity,
                     fam_pos,
                     target_soul,
@@ -367,6 +385,7 @@ pub fn familiar_ai_system(params: FamiliarAiParams) {
                     &q_breakdown,
                     &mut commands,
                 );
+                state_changed = transition_result.apply_to(&mut ai_state);
             }
             _ => {
                 // スカウト中以外で分隊に空きがあれば新規リクルートを試みる
@@ -388,6 +407,14 @@ pub fn familiar_ai_system(params: FamiliarAiParams) {
                         commands
                             .entity(new_recruit)
                             .insert(UnderCommand(fam_entity));
+                        // もし集会に参加中なら抜ける
+                        if let Ok((_, _, _, _, _, _, _, _, _, Some(p))) = q_souls.get(new_recruit) {
+                            commands.entity(new_recruit).remove::<ParticipatingIn>();
+                            commands.trigger(OnGatheringLeft {
+                                entity: new_recruit,
+                                spot_entity: p.0,
+                            });
+                        }
                         commands.trigger(crate::events::OnSoulRecruited {
                             entity: new_recruit,
                             familiar_entity: fam_entity,
@@ -416,7 +443,7 @@ pub fn familiar_ai_system(params: FamiliarAiParams) {
                             state_changed = true;
 
                             // 即座に移動開始
-                            if let Ok((_, target_transform, _, _, _, _, _, _, _)) =
+                            if let Ok((_, target_transform, _, _, _, _, _, _, _, _)) =
                                 q_souls.get(distant_recruit)
                             {
                                 let target_pos = target_transform.translation.truncate();
@@ -472,10 +499,13 @@ pub fn familiar_ai_system(params: FamiliarAiParams) {
         }
 
         if state_changed {
-            info!(
-                "FAM_AI: {:?} state changed: {:?} -> {:?}",
-                fam_entity, old_state, *ai_state
-            );
+            // 状態遷移イベントを発火（Changed フィルタで検知できない場合の補完）
+            ev_state_changed.write(crate::events::FamiliarAiStateChangedEvent {
+                familiar_entity: fam_entity,
+                from: old_state.clone(),
+                to: ai_state.clone(),
+                reason: determine_transition_reason_inline(&old_state, &*ai_state),
+            });
         }
 
         // 4. タスク委譲
@@ -497,7 +527,7 @@ pub fn familiar_ai_system(params: FamiliarAiParams) {
             // タスクがある場合のみ、委譲処理を実行
             let mut idle_member_opt = None;
             for &member_entity in &squad_entities {
-                if let Ok((_, _, soul, task, _, _, idle, _, _)) = q_souls.get(member_entity) {
+                if let Ok((_, _, soul, task, _, _, idle, _, _, _)) = q_souls.get(member_entity) {
                     if matches!(*task, AssignedTask::None)
                         && idle.behavior != IdleBehavior::ExhaustedGathering
                         && soul.fatigue < fatigue_threshold
@@ -543,7 +573,7 @@ pub fn familiar_ai_system(params: FamiliarAiParams) {
             let active_members: Vec<Entity> = squad_entities
                 .iter()
                 .filter(|&&e| {
-                    if let Ok((_, _, _, _, _, _, idle, _, _)) = q_souls.get(e) {
+                    if let Ok((_, _, _, _, _, _, idle, _, _, _)) = q_souls.get(e) {
                         idle.behavior != IdleBehavior::ExhaustedGathering
                     } else {
                         false
@@ -563,7 +593,7 @@ pub fn familiar_ai_system(params: FamiliarAiParams) {
             match *ai_state {
                 FamiliarAiState::Supervising { .. } => {
                     // 移動制御では、既にチェック済みのhas_available_taskを使用
-                    supervising::supervising_logic(
+                    state_handlers::supervising::handle_supervising_state(
                         fam_entity,
                         fam_pos,
                         &active_members,
@@ -578,7 +608,7 @@ pub fn familiar_ai_system(params: FamiliarAiParams) {
                 }
                 FamiliarAiState::SearchingTask => {
                     debug!("FAM_AI: {:?} executing SearchingTask logic", fam_entity);
-                    searching::searching_logic(
+                    state_handlers::searching::handle_searching_task_state(
                         fam_entity,
                         fam_pos,
                         task_area_opt,
@@ -589,6 +619,31 @@ pub fn familiar_ai_system(params: FamiliarAiParams) {
                 _ => {}
             }
         }
+    }
+}
+
+/// 状態遷移の理由を判定する（インライン版）
+fn determine_transition_reason_inline(
+    from: &FamiliarAiState,
+    to: &FamiliarAiState,
+) -> crate::events::FamiliarAiStateTransitionReason {
+    match (from, to) {
+        (_, FamiliarAiState::Idle) => {
+            crate::events::FamiliarAiStateTransitionReason::CommandChanged
+        }
+        (FamiliarAiState::Scouting { .. }, FamiliarAiState::Supervising { .. }) => {
+            crate::events::FamiliarAiStateTransitionReason::SquadFull
+        }
+        (FamiliarAiState::Scouting { .. }, FamiliarAiState::SearchingTask) => {
+            crate::events::FamiliarAiStateTransitionReason::ScoutingCancelled
+        }
+        (FamiliarAiState::Supervising { .. }, FamiliarAiState::SearchingTask) => {
+            crate::events::FamiliarAiStateTransitionReason::SquadEmpty
+        }
+        (FamiliarAiState::SearchingTask, FamiliarAiState::Scouting { .. }) => {
+            crate::events::FamiliarAiStateTransitionReason::RecruitSuccess
+        }
+        _ => crate::events::FamiliarAiStateTransitionReason::Unknown,
     }
 }
 

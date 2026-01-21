@@ -11,6 +11,7 @@ use crate::systems::jobs::{
     Blueprint, Designation, IssuedBy, TargetBlueprint, TaskSlots, WorkType,
 };
 use crate::systems::logistics::{ResourceItem, ResourceType, Stockpile};
+use crate::systems::soul_ai::gathering::ParticipatingIn;
 use crate::systems::soul_ai::task_execution::types::{
     AssignedTask, BuildPhase, GatherPhase, HaulPhase, HaulToBpPhase,
 };
@@ -152,11 +153,6 @@ pub fn find_unassigned_task_in_area(
 }
 
 /// 条件に合う魂を検索する (リクルート用)
-///
-/// # パフォーマンス最適化
-/// `radius_opt = None` の場合でも全ソウルスキャンを行わず、
-/// 段階的に検索半径を拡大して最初に見つかった候補を返す。
-/// これにより O(S) → O(k) に計算量を削減。
 pub fn find_best_recruit(
     fam_pos: Vec2,
     fatigue_threshold: f32,
@@ -173,6 +169,7 @@ pub fn find_best_recruit(
             &IdleState,
             Option<&crate::relationships::Holding>,
             Option<&UnderCommand>,
+            Option<&ParticipatingIn>,
         ),
         Without<Familiar>,
     >,
@@ -180,14 +177,8 @@ pub fn find_best_recruit(
     radius_opt: Option<f32>,
 ) -> Option<Entity> {
     // 候補をフィルタリングするヘルパークロージャ
-    // リクルート条件:
-    // - 使役されていない
-    // - タスクなし
-    // - 疲労 < リクルート閾値
-    // - ストレス崩壊していない
-    // - ExhaustedGatheringではない
     let filter_candidate = |e: Entity| -> Option<(Entity, Vec2)> {
-        let (entity, transform, soul, task, _, _, idle, _, uc) = q_souls.get(e).ok()?;
+        let (entity, transform, soul, task, _, _, idle, _, uc, _) = q_souls.get(e).ok()?;
         let recruit_threshold = fatigue_threshold - 0.2;
         let fatigue_ok = soul.fatigue < recruit_threshold;
         let stress_ok = q_breakdown.get(entity).is_err();
@@ -223,7 +214,6 @@ pub fn find_best_recruit(
     }
 
     // radius_opt = None の場合: 段階的に検索半径を拡大
-    // 【最適化】全ソウルスキャンを回避し、見つかり次第早期リターン
     let search_tiers = [
         TILE_SIZE * 20.0,  // 640px - 近傍
         TILE_SIZE * 40.0,  // 1280px - 中距離
@@ -236,10 +226,6 @@ pub fn find_best_recruit(
         let candidates: Vec<_> = nearby.iter().filter_map(|&e| filter_candidate(e)).collect();
 
         if let Some(best) = find_nearest(candidates) {
-            debug!(
-                "RECRUIT: Found candidate at radius {:.0} (tier search)",
-                radius
-            );
             return Some(best);
         }
     }
@@ -274,6 +260,7 @@ pub fn assign_task_to_worker(
             &IdleState,
             Option<&crate::relationships::Holding>,
             Option<&UnderCommand>,
+            Option<&ParticipatingIn>,
         ),
         Without<Familiar>,
     >,
@@ -289,26 +276,27 @@ pub fn assign_task_to_worker(
     task_area_opt: Option<&TaskArea>,
     haul_cache: &mut HaulReservationCache,
 ) {
-    let Ok((_, _, soul, mut assigned_task, mut dest, mut path, idle, _, uc_opt)) =
+    let Ok((_, _, soul, mut assigned_task, mut dest, mut path, idle, _, uc_opt, participating_opt)) =
         q_souls.get_mut(worker_entity)
     else {
         warn!("ASSIGN: Worker {:?} not found in query", worker_entity);
         return;
     };
 
+    // もし集会に参加中なら抜ける
+    if let Some(p) = participating_opt {
+        commands.entity(worker_entity).remove::<ParticipatingIn>();
+        commands.trigger(crate::events::OnGatheringLeft {
+            entity: worker_entity,
+            spot_entity: p.0,
+        });
+    }
+
     if idle.behavior == IdleBehavior::ExhaustedGathering {
-        info!(
-            "ASSIGN: Worker {:?} is ExhaustedGathering, skipping",
-            worker_entity
-        );
         return;
     }
 
     if soul.fatigue >= fatigue_threshold {
-        info!(
-            "ASSIGN: Worker {:?} fatigue {:.2} >= threshold {:.2}, skipping",
-            worker_entity, soul.fatigue, fatigue_threshold
-        );
         return;
     }
 
@@ -317,13 +305,11 @@ pub fn assign_task_to_worker(
         if let Ok((_, transform, designation, _, _, _)) = q_designations.get(task_entity) {
             (transform.translation.truncate(), designation.work_type)
         } else {
-            warn!("ASSIGN: Task entity {:?} not found or invalid", task_entity);
             return;
         };
 
     match work_type {
         WorkType::Chop | WorkType::Mine => {
-            // 割り当て確定時にのみ Relationship を更新
             if uc_opt.is_none() {
                 commands.trigger(OnSoulRecruited {
                     entity: worker_entity,
@@ -352,12 +338,9 @@ pub fn assign_task_to_worker(
                 task_entity,
                 work_type,
             });
-            info!("ASSIGN: Gather task assigned to {:?}", worker_entity);
         }
         WorkType::Haul => {
-            // TargetBlueprint が存在するかチェック
             if let Ok(target_bp) = q_target_blueprints.get(task_entity) {
-                // 割り当て確定時にのみ Relationship を更新
                 if uc_opt.is_none() {
                     commands.trigger(OnSoulRecruited {
                         entity: worker_entity,
@@ -381,24 +364,14 @@ pub fn assign_task_to_worker(
                 dest.0 = task_pos;
                 path.waypoints = vec![task_pos];
                 path.current_index = 0;
-                info!(
-                    "ASSIGN: HaulToBlueprint task assigned to {:?} (item: {:?}, bp: {:?})",
-                    worker_entity, task_entity, target_bp.0
-                );
                 commands.trigger(OnTaskAssigned {
                     entity: worker_entity,
                     task_entity,
                     work_type: WorkType::Haul,
                 });
                 return;
-            } else {
-                info!(
-                    "ASSIGN: No TargetBlueprint found for task {:?}, using regular Haul search",
-                    task_entity
-                );
             }
 
-            // 通常の Haul タスク（ストックパイルへ）
             let item_type = q_resources
                 .get(task_entity)
                 .map(|ri| ri.0)
@@ -407,18 +380,15 @@ pub fn assign_task_to_worker(
             let best_stockpile = q_stockpiles
                 .iter()
                 .filter(|(s_entity, s_transform, stock, stored)| {
-                    // エリアチェック: 使い魔の管理エリア内か
                     if let Some(area) = task_area_opt {
                         if !area.contains(s_transform.translation.truncate()) {
                             return false;
                         }
                     }
 
-                    // 型チェック
                     let type_match =
                         stock.resource_type.is_none() || stock.resource_type == Some(item_type);
 
-                    // 容量チェック
                     let current_count = stored.map(|s| s.len()).unwrap_or(0);
                     let reserved = haul_cache.get(*s_entity);
                     let has_capacity = (current_count + reserved) < stock.capacity as usize;
@@ -433,7 +403,6 @@ pub fn assign_task_to_worker(
                 .map(|(e, _, _, _)| e);
 
             if let Some(stock_entity) = best_stockpile {
-                // 割り当て確定時にのみ Relationship を更新
                 if uc_opt.is_none() {
                     commands.trigger(OnSoulRecruited {
                         entity: worker_entity,
@@ -454,10 +423,8 @@ pub fn assign_task_to_worker(
                     stockpile: stock_entity,
                     phase: HaulPhase::GoingToItem,
                 };
-                // 搬送予約をキャッシュに登録
                 haul_cache.reserve(stock_entity);
 
-                // アイテムへ移動
                 dest.0 = task_pos;
                 path.waypoints = vec![task_pos];
                 path.current_index = 0;
@@ -466,29 +433,15 @@ pub fn assign_task_to_worker(
                     task_entity,
                     work_type: WorkType::Haul,
                 });
-                info!("ASSIGN: Haul task assigned to {:?}", worker_entity);
-            } else {
-                warn!(
-                    "ASSIGN: No suitable stockpile found in area for item {:?}",
-                    task_entity
-                );
-                return;
             }
         }
         WorkType::Build => {
-            // 資材が揃っているかチェック
             if let Ok(bp) = q_blueprints.get(task_entity) {
                 if !bp.materials_complete() {
-                    // 資材が揃っていない場合は割り当てをスキップ
-                    info!(
-                        "ASSIGN: Skipping Build task {:?} - materials not complete",
-                        task_entity
-                    );
                     return;
                 }
             }
 
-            // 割り当て確定時にのみ Relationship を更新
             if uc_opt.is_none() {
                 commands.trigger(OnSoulRecruited {
                     entity: worker_entity,
@@ -504,7 +457,6 @@ pub fn assign_task_to_worker(
                 .entity(task_entity)
                 .insert(crate::systems::jobs::IssuedBy(fam_entity));
 
-            // 建築タスク
             *assigned_task = AssignedTask::Build {
                 blueprint: task_entity,
                 phase: BuildPhase::GoingToBlueprint,
@@ -517,7 +469,6 @@ pub fn assign_task_to_worker(
                 task_entity,
                 work_type: WorkType::Build,
             });
-            info!("ASSIGN: Build task assigned to {:?}", worker_entity);
         }
     }
 }
