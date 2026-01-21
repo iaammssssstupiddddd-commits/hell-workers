@@ -10,7 +10,7 @@ use crate::interface::ui::{MenuState, setup_ui};
 use crate::systems::logistics::{ResourceLabels, initial_resource_spawner};
 use crate::systems::soul_ai::work::AutoHaulCounter;
 use crate::systems::spatial::{
-    FamiliarSpatialGrid, ResourceSpatialGrid, SpatialGrid, SpatialGridOps,
+    FamiliarSpatialGrid, GatheringSpotSpatialGrid, ResourceSpatialGrid, SpatialGrid, SpatialGridOps,
 };
 use crate::systems::task_queue::{GlobalTaskQueue, TaskQueue};
 use crate::systems::time::GameTime;
@@ -37,6 +37,7 @@ impl Plugin for StartupPlugin {
             .init_resource::<SpatialGrid>()
             .init_resource::<FamiliarSpatialGrid>()
             .init_resource::<ResourceSpatialGrid>()
+            .init_resource::<GatheringSpotSpatialGrid>()
             .init_resource::<AutoHaulCounter>()
             .init_resource::<TaskQueue>()
             .init_resource::<GlobalTaskQueue>()

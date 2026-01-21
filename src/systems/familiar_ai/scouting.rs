@@ -1,8 +1,9 @@
-use super::FamiliarAiState;
 use crate::constants::TILE_SIZE;
 use crate::entities::damned_soul::{DamnedSoul, Destination, IdleState, Path, StressBreakdown};
 use crate::entities::familiar::UnderCommand;
 use crate::events::OnSoulRecruited;
+use crate::systems::familiar_ai::FamiliarAiState;
+use crate::systems::soul_ai::gathering::ParticipatingIn;
 use crate::systems::soul_ai::task_execution::AssignedTask;
 use bevy::prelude::*;
 
@@ -29,6 +30,7 @@ pub fn scouting_logic(
             &IdleState,
             Option<&crate::relationships::Holding>,
             Option<&UnderCommand>,
+            Option<&ParticipatingIn>,
         ),
         Without<crate::entities::familiar::Familiar>,
     >,
@@ -51,7 +53,7 @@ pub fn scouting_logic(
     }
 
     // 変更があった場合は true を返す
-    if let Ok((_soul_entity, target_transform, soul, task, _, _, _, _, uc)) =
+    if let Ok((_soul_entity, target_transform, soul, task, _, _, _, _, uc, _)) =
         q_souls.get(target_soul)
     {
         // リクルート閾値 = リリース閾値 - 0.2（余裕を持ってリクルート）

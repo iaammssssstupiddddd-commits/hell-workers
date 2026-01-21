@@ -3,6 +3,10 @@ use crate::systems::command::TaskArea;
 use bevy::prelude::*;
 
 /// 探索（SearchingTask）状態のロジック
+/// 
+/// 注意: この関数は `state_handlers::searching::handle_searching_task_state` に移行されました。
+/// Phase 1 のリファクタリング完了後、このファイルは削除予定です。
+#[allow(dead_code)]
 pub fn searching_logic(
     fam_entity: Entity,
     fam_pos: Vec2,

@@ -62,10 +62,55 @@ pub struct FamiliarOperationMaxSoulChangedEvent {
     pub new_value: usize,
 }
 
+/// 魂が集会に参加した（スポット管理用）
+#[derive(Message, EntityEvent)]
+pub struct OnGatheringParticipated {
+    pub entity: Entity,
+    pub spot_entity: Entity,
+}
+
+/// 魂が集会から離脱した（スポット管理用）
+#[derive(Message, EntityEvent)]
+pub struct OnGatheringLeft {
+    pub entity: Entity,
+    pub spot_entity: Entity,
+}
+
 /// 使い魔が魂を激励した
 #[derive(Message, EntityEvent)]
 pub struct OnEncouraged {
     pub familiar_entity: Entity,
     #[event_target]
     pub soul_entity: Entity,
+}
+
+/// 使い魔のAI状態が変更された
+#[derive(Message)]
+#[allow(dead_code)] // handle_state_changed_system で使用されるが、コンパイラが検知しない場合がある
+pub struct FamiliarAiStateChangedEvent {
+    /// 使い魔のエンティティ
+    pub familiar_entity: Entity,
+    /// 遷移前の状態
+    pub from: crate::systems::familiar_ai::FamiliarAiState,
+    /// 遷移後の状態
+    pub to: crate::systems::familiar_ai::FamiliarAiState,
+    /// 遷移の理由
+    pub reason: FamiliarAiStateTransitionReason,
+}
+
+/// 状態遷移の理由
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FamiliarAiStateTransitionReason {
+    CommandChanged,
+    SquadEmpty,
+    SquadFull,
+    #[allow(dead_code)] // 将来的に使用予定
+    TargetReached,
+    #[allow(dead_code)] // 将来的に使用予定
+    TargetLost,
+    #[allow(dead_code)] // 将来的に使用予定（疲労によるリリース時）
+    FatigueRelease,
+    RecruitSuccess,
+    ScoutingCancelled,
+    Unknown,
 }

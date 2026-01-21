@@ -1,0 +1,26 @@
+use super::grid::{GridData, SpatialGridOps};
+use crate::systems::soul_ai::gathering::GatheringSpot;
+use bevy::prelude::*;
+
+/// 集会スポット用の空間グリッド
+#[derive(Resource, Default)]
+pub struct GatheringSpotSpatialGrid(pub GridData);
+
+impl SpatialGridOps for GatheringSpotSpatialGrid {
+    fn insert(&mut self, entity: Entity, pos: Vec2) {
+        self.0.insert(entity, pos);
+    }
+    fn get_nearby_in_radius(&self, pos: Vec2, radius: f32) -> Vec<Entity> {
+        self.0.get_nearby_in_radius(pos, radius)
+    }
+}
+
+pub fn update_gathering_spot_spatial_grid_system(
+    mut grid: ResMut<GatheringSpotSpatialGrid>,
+    query: Query<(Entity, &GatheringSpot)>,
+) {
+    grid.0.clear();
+    for (entity, spot) in query.iter() {
+        grid.0.insert(entity, spot.center);
+    }
+}
