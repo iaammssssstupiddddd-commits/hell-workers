@@ -90,8 +90,8 @@ pub fn cleanup_commanded_souls_system(
 
 /// 魂からタスクの割り当てを解除し、スロットを解放する。
 ///
-/// `ev_created`が提供されている場合、中断されたタスクをキューに戻すために
-/// `DesignationCreatedEvent`を再発行します。
+/// ソウル側のみを処理し、タスク側（Designation, IssuedBy）には触らない。
+/// 使い魔がスロットの空きを検知して別のソウルに再アサインする。
 pub fn unassign_task(
     commands: &mut Commands,
     soul_entity: Entity,
@@ -99,7 +99,7 @@ pub fn unassign_task(
     task: &mut AssignedTask,
     path: &mut Path,
     holding: Option<&Holding>,
-    q_designations: &Query<(
+    _q_designations: &Query<(
         Entity,
         &Transform,
         &Designation,
@@ -108,85 +108,57 @@ pub fn unassign_task(
         Option<&TaskWorkers>,
     )>,
     haul_cache: &mut HaulReservationCache,
-    ev_created: Option<&mut MessageWriter<DesignationCreatedEvent>>,
+    _ev_created: Option<&mut MessageWriter<DesignationCreatedEvent>>,
     emit_abandoned_event: bool,
 ) {
+    // タスク中断イベントを発火
     if !matches!(*task, AssignedTask::None) && emit_abandoned_event {
         commands.trigger(crate::events::OnTaskAbandoned {
             entity: soul_entity,
         });
     }
+
+    // 運搬タスクの備蓄場所予約を解除
     if let AssignedTask::Haul { stockpile, .. } = *task {
         haul_cache.release(stockpile);
     }
 
+    // アイテムのドロップ処理（運搬タスクの場合）
+    // クリーンな状態でドロップ → オートホールシステムに任せる
     if let Some(Holding(item_entity)) = holding {
         let item_entity = *item_entity;
         let grid = WorldMap::world_to_grid(drop_pos);
         let snapped_pos = WorldMap::grid_to_world(grid.0, grid.1);
 
+        // クリーンな状態でドロップ（Designation なし）
         commands.entity(item_entity).insert((
             Visibility::Visible,
             Transform::from_xyz(snapped_pos.x, snapped_pos.y, Z_ITEM_PICKUP),
         ));
+        // 既存のタスク関連コンポーネントを削除
+        commands.entity(item_entity).remove::<Designation>();
+        commands.entity(item_entity).remove::<IssuedBy>();
+        commands.entity(item_entity).remove::<TaskSlots>();
+        commands
+            .entity(item_entity)
+            .remove::<crate::systems::jobs::TargetBlueprint>();
+
         commands.entity(soul_entity).remove::<Holding>();
 
         info!(
-            "UNASSIGN: Soul released item {:?} at {:?} (snapped to {:?})",
-            item_entity, drop_pos, snapped_pos
+            "UNASSIGN: Soul dropped item {:?} (clean state for auto-haul)",
+            item_entity
         );
     }
 
-    let target_entity = match *task {
-        AssignedTask::Gather { target, .. } => Some(target),
-        AssignedTask::Haul { item, .. } => Some(item),
-        AssignedTask::HaulToBlueprint { item, .. } => Some(item),
-        AssignedTask::Build { blueprint, .. } => Some(blueprint),
-        AssignedTask::None => None,
-    };
-
-    if let Some(target) = target_entity {
-        if let Ok((_, _, designation, issued_by_opt, _, _)) = q_designations.get(target) {
-            // IssuedByが存在する場合、タスクをキューに戻すためにDesignationCreatedEventを再発行
-            if issued_by_opt.is_some() {
-                if let Some(ev_writer) = ev_created {
-                    // Designationを残し、IssuedByだけを削除してタスクをキューに戻す
-                    commands.entity(target).remove::<IssuedBy>();
-                    commands
-                        .entity(target)
-                        .remove::<crate::systems::jobs::TargetBlueprint>();
-
-                    // タスクをキューに戻すためにイベントを再発行
-                    ev_writer.write(DesignationCreatedEvent {
-                        entity: target,
-                        work_type: designation.work_type,
-                        issued_by: None, // 未アサインとしてキューに戻す
-                        priority: 0,
-                    });
-
-                    info!(
-                        "UNASSIGN: Task {:?} returned to queue (Designation preserved)",
-                        target
-                    );
-                } else {
-                    // MessageWriterが提供されていない場合は従来通り削除
-                    commands.entity(target).remove::<Designation>();
-                    commands.entity(target).remove::<TaskSlots>();
-                    commands.entity(target).remove::<IssuedBy>();
-                    commands
-                        .entity(target)
-                        .remove::<crate::systems::jobs::TargetBlueprint>();
-                }
-            } else {
-                // IssuedByが存在しない場合は何もしない（既に未アサイン）
-            }
-        }
-    }
-
+    // ソウルからタスクを解除（タスク側には触らない）
+    // 使い魔がスロットの空きを検知して別のソウルに再アサインする
     commands.entity(soul_entity).remove::<WorkingOn>();
 
     *task = AssignedTask::None;
     path.waypoints.clear();
+
+    info!("UNASSIGN: Soul {:?} unassigned from task", soul_entity);
 }
 
 /// 指揮エリア内での自動運搬タスク生成システム
