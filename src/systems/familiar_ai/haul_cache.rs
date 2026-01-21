@@ -41,9 +41,4 @@ impl HaulReservationCache {
         self.reservations.get(&stockpile).cloned().unwrap_or(0)
     }
 
-    /// 全てのキャッシュをクリア（初期化用）
-    #[allow(dead_code)]
-    pub fn clear(&mut self) {
-        self.reservations.clear();
-    }
 }
