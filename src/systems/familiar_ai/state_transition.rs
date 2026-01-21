@@ -83,7 +83,7 @@ pub fn detect_command_changes_system(
 }
 
 /// 状態遷移の理由を判定する
-fn determine_transition_reason(
+pub fn determine_transition_reason(
     from: &FamiliarAiState,
     to: &FamiliarAiState,
 ) -> FamiliarAiStateTransitionReason {
