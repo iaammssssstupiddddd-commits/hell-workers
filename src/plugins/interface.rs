@@ -1,5 +1,6 @@
 //! インターフェース関連のプラグイン
 
+// インポート整理完了
 use crate::entities::damned_soul::DamnedSoulSpawnEvent;
 use crate::entities::familiar::{
     FamiliarSpawnEvent, FamiliarType, update_familiar_range_indicator,
@@ -15,7 +16,7 @@ use crate::interface::ui::{
 };
 use crate::systems::GameSystemSet;
 use crate::systems::logistics::{item_spawner_system, zone_placement};
-use crate::systems::soul_ai::vitals::familiar_hover_visualization_system;
+use crate::systems::soul_ai::vitals::visual::familiar_hover_visualization_system;
 use crate::systems::soul_ai::work::task_area_auto_haul_system;
 use crate::systems::time::{
     game_time_system, time_control_keyboard_system, time_control_ui_system,

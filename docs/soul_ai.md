@@ -67,9 +67,10 @@ Bevy 0.18 の ECS Relationships を使用して、状態を管理しています
 - `Holding(Entity)`: 現在持っているアイテム。
 
 ## 5. 関連システム
-
+ 
 これらは `SoulAiPlugin` によって管理されています。
-- `src/systems/soul_ai/vitals.rs`: バイタル更新、監視ストレス、やる気。
-- `src/systems/soul_ai/task_execution/`: タスク実行モジュール (`task_execution_system`)。`mod.rs`にメインシステム、各タスクハンドラーは個別ファイルに分割。
-- `src/systems/soul_ai/idle.rs`: 待機行動ロジック、ビジュアル更新。
-- `src/systems/soul_ai/work.rs`: タスク委任、解除、オートホール。
+- `src/systems/soul_ai/vitals/`: バイタル（疲労、ストレス、やる気）の更新ロジック。
+- `src/systems/soul_ai/idle/`: 待機行動の意思決定、ビジュアルフィードバック、重なり回避。
+- `src/systems/soul_ai/gathering/`: 動的な集会所（休息ポイント）の生成、維持。
+- `src/systems/soul_ai/work/`: 指揮エリアのオートホール、タスク解除、監視部下の管理。
+- `src/systems/soul_ai/task_execution/`: 割り当てられたタスク（採取、運搬、建築）の具体的な実行プロセス。
