@@ -221,6 +221,8 @@ pub fn familiar_ai_system(params: FamiliarAiParams) {
         voice_opt,
     ) in q_familiars.iter_mut()
     {
+        #[allow(clippy::type_complexity)]
+        let (fam_entity, fam_transform, familiar, familiar_op, active_command, mut ai_state, mut fam_dest, mut fam_path, task_area_opt, commanding, managed_tasks_opt, voice_opt): (Entity, &Transform, &Familiar, &FamiliarOperation, &ActiveCommand, Mut<FamiliarAiState>, Mut<Destination>, Mut<Path>, Option<&TaskArea>, Option<&Commanding>, Option<&ManagedTasks>, Option<&FamiliarVoice>) = (fam_entity, fam_transform, familiar, familiar_op, active_command, ai_state, fam_dest, fam_path, task_area_opt, commanding, managed_tasks_opt, voice_opt);
         let default_tasks = crate::relationships::ManagedTasks::default();
         let managed_tasks = managed_tasks_opt.unwrap_or(&default_tasks);
 

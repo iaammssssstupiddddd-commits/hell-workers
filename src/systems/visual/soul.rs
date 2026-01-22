@@ -171,24 +171,25 @@ pub fn task_link_system(
     mut gizmos: Gizmos,
 ) {
     for (soul_transform, task) in q_souls.iter() {
+        let (soul_transform, task): (&GlobalTransform, &AssignedTask) = (soul_transform, task);
         let target_entity = match task {
-            AssignedTask::Gather { target, .. } => Some(*target),
+            AssignedTask::Gather { target, .. } => Some(target),
             AssignedTask::Haul {
                 item,
                 stockpile,
                 phase,
             } => match phase {
-                HaulPhase::GoingToItem => Some(*item),
-                HaulPhase::GoingToStockpile => Some(*stockpile),
+                HaulPhase::GoingToItem => Some(item),
+                HaulPhase::GoingToStockpile => Some(stockpile),
                 _ => None,
             },
-            AssignedTask::Build { blueprint, .. } => Some(*blueprint),
-            AssignedTask::HaulToBlueprint { blueprint, .. } => Some(*blueprint),
+            AssignedTask::Build { blueprint, .. } => Some(blueprint),
+            AssignedTask::HaulToBlueprint { blueprint, .. } => Some(blueprint),
             _ => None,
         };
 
         if let Some(target) = target_entity {
-            if let Ok(target_transform) = q_targets.get(target) {
+            if let Ok(target_transform) = q_targets.get(*target) {
                 let start: Vec2 = soul_transform.translation().truncate();
                 let end: Vec2 = target_transform.translation().truncate();
 
@@ -221,6 +222,7 @@ pub fn soul_status_visual_system(
     game_assets: Res<GameAssets>,
 ) {
     for (soul_entity, transform, mut soul, task) in q_souls.iter_mut() {
+        let (soul_entity, transform, mut soul, task): (Entity, &Transform, Mut<DamnedSoul>, &AssignedTask) = (soul_entity, transform, soul, task);
         let status = if soul.fatigue > 0.8 {
             Some(("!", Color::srgb(1.0, 0.0, 0.0))) // 疲労蓄積
         } else if soul.motivation < 0.2 {

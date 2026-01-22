@@ -35,6 +35,14 @@ pub fn periodic_emotion_system(
     let current_frame = frame_counter.0;
 
     for (entity, transform, soul, idle, under_command_opt, mut state) in query.iter_mut() {
+        let (entity, transform, soul, idle, under_command_opt, mut state): (
+            Entity,
+            &GlobalTransform,
+            &DamnedSoul,
+            &IdleState,
+            Option<&UnderCommand>,
+            Mut<SoulEmotionState>,
+        ) = (entity, transform, soul, idle, under_command_opt, state);
         // 分散実行: エンティティのインデックスに基づいてフレームを分散
         // 全Soulを PERIODIC_EMOTION_FRAME_DIVISOR フレームかけて巡回
         if (entity.to_bits() as u32) % PERIODIC_EMOTION_FRAME_DIVISOR != current_frame {

@@ -64,6 +64,7 @@ pub fn handle_mouse_input(
                 // 次に人間をチェック
                 if !found {
                     for (entity, transform) in q_souls.iter() {
+                        let (entity, transform): (Entity, &GlobalTransform) = (entity, transform);
                         let pos = transform.translation().truncate();
                         if pos.distance(world_pos) < TILE_SIZE / 2.0 {
                             selected_entity.0 = Some(entity);
@@ -238,6 +239,7 @@ pub fn update_hover_entity(
             // 2. 魂
             if found.is_none() {
                 for (entity, transform) in q_souls.iter() {
+                    let (entity, transform): (Entity, &GlobalTransform) = (entity, transform);
                     let pos = transform.translation().truncate();
                     if pos.distance(world_pos) < TILE_SIZE / 2.0 {
                         found = Some(entity);

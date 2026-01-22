@@ -35,7 +35,9 @@ pub fn task_area_auto_haul_system(
     let mut already_assigned = std::collections::HashSet::new();
 
     for (fam_entity, _active_command, task_area) in q_familiars.iter() {
+        let (fam_entity, _active_command, task_area): (Entity, &ActiveCommand, &TaskArea) = (fam_entity, _active_command, task_area);
         for (stock_transform, stockpile, stored_items_opt) in q_stockpiles.iter() {
+            let (stock_transform, stockpile, stored_items_opt): (&Transform, &Stockpile, Option<&crate::relationships::StoredItems>) = (stock_transform, stockpile, stored_items_opt);
             let stock_pos = stock_transform.translation.truncate();
             if !task_area.contains(stock_pos) {
                 continue;
@@ -127,6 +129,7 @@ pub fn blueprint_auto_haul_system(
 
     // 運搬中 (ソウルが持っている、または向かっている)
     for task in q_souls.iter() {
+        let task: &AssignedTask = task;
         if let AssignedTask::HaulToBlueprint {
             item, blueprint, ..
         } = task
@@ -145,8 +148,10 @@ pub fn blueprint_auto_haul_system(
     let mut already_assigned_this_frame = std::collections::HashSet::new();
 
     for (fam_entity, _active_command, task_area) in q_familiars.iter() {
+        let (fam_entity, _active_command, task_area): (Entity, &ActiveCommand, &TaskArea) = (fam_entity, _active_command, task_area);
         // エリア内の Blueprint を探す
         for (bp_entity, bp_transform, blueprint, workers_opt) in q_blueprints.iter() {
+            let (bp_entity, bp_transform, blueprint, workers_opt): (Entity, &Transform, &Blueprint, Option<&TaskWorkers>) = (bp_entity, bp_transform, blueprint, workers_opt);
             let bp_pos = bp_transform.translation.truncate();
             if !task_area.contains(bp_pos) {
                 continue;

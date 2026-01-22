@@ -103,6 +103,7 @@ pub fn gathering_debug_visualization_system(
             let center = spot.center;
 
             for (soul_transform, participating_in) in q_participants.iter() {
+                let (soul_transform, participating_in): (&GlobalTransform, &ParticipatingIn) = (soul_transform, participating_in);
                 if participating_in.0 == spot_entity {
                     let soul_pos = soul_transform.translation().truncate();
                     // 紫の線とドット
