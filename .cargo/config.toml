@@ -3,3 +3,4 @@ linker = "rust-lld.exe"
 
 [build]
 target = "x86_64-pc-windows-msvc"
+target-dir = "E:/rust-target/hell-workers"
