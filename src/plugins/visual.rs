@@ -9,7 +9,7 @@ use crate::systems::command::{
 };
 use crate::systems::jobs::building_completion_system;
 use crate::systems::logistics::resource_count_display_system;
-use crate::systems::soul_ai::idle::idle_visual_system;
+use crate::systems::soul_ai::idle::visual::idle_visual_system;
 use crate::systems::visual::blueprint::{
     attach_blueprint_visual_system, blueprint_pulse_animation_system,
     blueprint_scale_animation_system, building_bounce_animation_system,
