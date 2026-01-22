@@ -18,7 +18,7 @@ bevy = { version = "0.18", default-features = false, features = [
 rand = "0.8"
 
 [features]
-default = []
+default = ["dynamic_linking"]
 dynamic_linking = ["bevy/dynamic_linking"]
 
 [profile.release]

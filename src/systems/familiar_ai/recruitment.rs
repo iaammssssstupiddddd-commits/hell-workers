@@ -43,7 +43,7 @@ impl RecruitmentManager {
     ) -> Option<Entity> {
         // 候補をフィルタリングするヘルパークロージャ
         let filter_candidate = |e: Entity| -> Option<(Entity, Vec2)> {
-            let (entity, transform, soul, task, _, _, idle, _, uc, _) = q_souls.get(e).ok()?;
+            let (entity, transform, soul, task, _, _, idle, _, uc, _): (Entity, &Transform, &DamnedSoul, &AssignedTask, &Destination, &Path, &IdleState, Option<&crate::relationships::Holding>, Option<&UnderCommand>, Option<&ParticipatingIn>) = q_souls.get(e).ok()?;
             let recruit_threshold = fatigue_threshold - 0.2;
             let fatigue_ok = soul.fatigue < recruit_threshold;
             let stress_ok = q_breakdown.get(entity).is_err();
@@ -87,6 +87,7 @@ impl RecruitmentManager {
         ];
 
         for &radius in &search_tiers {
+            let radius: f32 = radius;
             let nearby = spatial_grid.get_nearby_in_radius(fam_pos, radius);
             let candidates: Vec<_> = nearby.iter().filter_map(|&e| filter_candidate(e)).collect();
 

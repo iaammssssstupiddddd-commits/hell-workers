@@ -146,7 +146,7 @@ impl TaskManager {
                     None
                 }
             })
-            .min_by(|(_, p1, d1), (_, p2, d2)| {
+            .min_by(|(_, p1, d1): &(Entity, i32, f32), (_, p2, d2): &(Entity, i32, f32)| {
                 // 優先度が高い(大きい)ものを優先
                 match p2.cmp(p1) {
                     std::cmp::Ordering::Equal => {
