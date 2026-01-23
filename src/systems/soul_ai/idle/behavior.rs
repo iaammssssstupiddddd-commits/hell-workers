@@ -5,10 +5,10 @@ use crate::constants::*;
 use crate::entities::damned_soul::{
     DamnedSoul, Destination, GatheringBehavior, IdleBehavior, IdleState, Path,
 };
+use crate::entities::familiar::UnderCommand;
 use crate::systems::soul_ai::gathering::{GATHERING_LEAVE_RADIUS, GatheringSpot, ParticipatingIn};
 use crate::systems::soul_ai::task_execution::AssignedTask;
 use crate::systems::spatial::{GatheringSpotSpatialGrid, SpatialGridOps};
-use crate::entities::familiar::UnderCommand;
 use crate::world::map::WorldMap;
 
 // ===== 集会関連の定数 =====
@@ -64,20 +64,41 @@ pub fn idle_behavior_system(
 ) {
     let dt = time.delta_secs();
 
-    for (
-        entity,
-        transform,
-        mut idle,
-        mut dest,
-        soul,
-        mut path,
-        task,
-        participating_in,
-        under_command_opt,
-    ) in query.iter_mut()
+    for (entity, transform, idle, dest, soul, path, task, participating_in, under_command_opt) in
+        query.iter_mut()
     {
         #[allow(clippy::type_complexity)]
-        let (entity, transform, mut idle, mut dest, soul, mut path, task, participating_in, under_command_opt): (Entity, &Transform, Mut<IdleState>, Mut<Destination>, &DamnedSoul, Mut<Path>, Mut<AssignedTask>, Option<&ParticipatingIn>, Option<&UnderCommand>) = (entity, transform, idle, dest, soul, path, task, participating_in, under_command_opt);
+        let (
+            entity,
+            transform,
+            mut idle,
+            mut dest,
+            soul,
+            mut path,
+            task,
+            participating_in,
+            under_command_opt,
+        ): (
+            Entity,
+            &Transform,
+            Mut<IdleState>,
+            Mut<Destination>,
+            &DamnedSoul,
+            Mut<Path>,
+            Mut<AssignedTask>,
+            Option<&ParticipatingIn>,
+            Option<&UnderCommand>,
+        ) = (
+            entity,
+            transform,
+            idle,
+            dest,
+            soul,
+            path,
+            task,
+            participating_in,
+            under_command_opt,
+        );
         // 参加中の集会スポットの座標とEntityを取得、または最寄りのスポットを探す
         let (gathering_center, target_spot_entity): (Option<Vec2>, Option<Entity>) =
             if let Some(p) = participating_in {
