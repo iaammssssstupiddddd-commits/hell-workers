@@ -2,6 +2,11 @@
 linker = "clang"
 rustflags = ["-C", "link-arg=-fuse-ld=mold"]
 
+[env]
+WGPU_BACKEND = "gl"
+GALLIUM_DRIVER = "d3d12"
+MESA_D3D12_DEFAULT_ADAPTER_NAME = "intel" # Intel を優先（必要に応じて変更可）
+
 [build]
 target = "x86_64-unknown-linux-gnu"
 target-dir = "/mnt/e/rust-target/hell-workers"

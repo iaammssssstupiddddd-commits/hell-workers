@@ -221,8 +221,13 @@ pub fn soul_status_visual_system(
     mut q_text: Query<&mut Text2d, With<StatusIcon>>,
     game_assets: Res<GameAssets>,
 ) {
-    for (soul_entity, transform, mut soul, task) in q_souls.iter_mut() {
-        let (soul_entity, transform, mut soul, task): (Entity, &Transform, Mut<DamnedSoul>, &AssignedTask) = (soul_entity, transform, soul, task);
+    for (soul_entity, transform, soul, task) in q_souls.iter_mut() {
+        let (soul_entity, transform, mut soul, task): (
+            Entity,
+            &Transform,
+            Mut<DamnedSoul>,
+            &AssignedTask,
+        ) = (soul_entity, transform, soul, task);
         let status = if soul.fatigue > 0.8 {
             Some(("!", Color::srgb(1.0, 0.0, 0.0))) // 疲労蓄積
         } else if soul.motivation < 0.2 {

@@ -67,8 +67,9 @@ pub fn update_carrying_item_system(
     q_workers: Query<(Entity, &Transform, Option<&Holding>), With<DamnedSoul>>,
     mut q_icons: Query<(Entity, &CarryingItemVisual, &mut Transform), Without<DamnedSoul>>,
 ) {
-    for (icon_entity, icon, mut icon_transform) in q_icons.iter_mut() {
-        let (icon_entity, icon, mut icon_transform): (Entity, &CarryingItemVisual, Mut<Transform>) = (icon_entity, icon, icon_transform);
+    for (icon_entity, icon, icon_transform) in q_icons.iter_mut() {
+        let (icon_entity, icon, mut icon_transform): (Entity, &CarryingItemVisual, Mut<Transform>) =
+            (icon_entity, icon, icon_transform);
         let mut should_despawn = true;
 
         if let Ok((_, worker_transform, holding)) = q_workers.get(icon.worker) {

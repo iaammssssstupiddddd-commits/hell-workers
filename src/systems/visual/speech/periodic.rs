@@ -34,7 +34,7 @@ pub fn periodic_emotion_system(
     frame_counter.0 = (frame_counter.0 + 1) % PERIODIC_EMOTION_FRAME_DIVISOR;
     let current_frame = frame_counter.0;
 
-    for (entity, transform, soul, idle, under_command_opt, mut state) in query.iter_mut() {
+    for (entity, transform, soul, idle, under_command_opt, state) in query.iter_mut() {
         let (entity, transform, soul, idle, under_command_opt, mut state): (
             Entity,
             &GlobalTransform,

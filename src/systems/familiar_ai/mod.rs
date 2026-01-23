@@ -1,13 +1,11 @@
-use crate::entities::damned_soul::{
-    DamnedSoul, Destination, IdleState, Path, StressBreakdown,
-};
+use crate::entities::damned_soul::{DamnedSoul, Destination, IdleState, Path, StressBreakdown};
 use crate::entities::familiar::{
     ActiveCommand, Familiar, FamiliarCommand, FamiliarOperation, FamiliarVoice, UnderCommand,
 };
+use crate::relationships::TaskWorkers;
 use crate::relationships::{Commanding, ManagedTasks};
 use crate::systems::GameSystemSet;
 use crate::systems::command::TaskArea;
-use crate::relationships::TaskWorkers;
 use crate::systems::jobs::{Blueprint, IssuedBy, TargetBlueprint, TaskSlots};
 use crate::systems::logistics::{ResourceItem, Stockpile};
 use crate::systems::soul_ai::gathering::ParticipatingIn;
@@ -212,9 +210,9 @@ pub fn familiar_ai_system(params: FamiliarAiParams) {
         familiar,
         familiar_op,
         active_command,
-        mut ai_state,
-        mut fam_dest,
-        mut fam_path,
+        ai_state,
+        fam_dest,
+        fam_path,
         task_area_opt,
         commanding,
         managed_tasks_opt,
@@ -222,7 +220,46 @@ pub fn familiar_ai_system(params: FamiliarAiParams) {
     ) in q_familiars.iter_mut()
     {
         #[allow(clippy::type_complexity)]
-        let (fam_entity, fam_transform, familiar, familiar_op, active_command, mut ai_state, mut fam_dest, mut fam_path, task_area_opt, commanding, managed_tasks_opt, voice_opt): (Entity, &Transform, &Familiar, &FamiliarOperation, &ActiveCommand, Mut<FamiliarAiState>, Mut<Destination>, Mut<Path>, Option<&TaskArea>, Option<&Commanding>, Option<&ManagedTasks>, Option<&FamiliarVoice>) = (fam_entity, fam_transform, familiar, familiar_op, active_command, ai_state, fam_dest, fam_path, task_area_opt, commanding, managed_tasks_opt, voice_opt);
+        let (
+            fam_entity,
+            fam_transform,
+            familiar,
+            familiar_op,
+            active_command,
+            mut ai_state,
+            mut fam_dest,
+            mut fam_path,
+            task_area_opt,
+            commanding,
+            managed_tasks_opt,
+            voice_opt,
+        ): (
+            Entity,
+            &Transform,
+            &Familiar,
+            &FamiliarOperation,
+            &ActiveCommand,
+            Mut<FamiliarAiState>,
+            Mut<Destination>,
+            Mut<Path>,
+            Option<&TaskArea>,
+            Option<&Commanding>,
+            Option<&ManagedTasks>,
+            Option<&FamiliarVoice>,
+        ) = (
+            fam_entity,
+            fam_transform,
+            familiar,
+            familiar_op,
+            active_command,
+            ai_state,
+            fam_dest,
+            fam_path,
+            task_area_opt,
+            commanding,
+            managed_tasks_opt,
+            voice_opt,
+        );
         let default_tasks = crate::relationships::ManagedTasks::default();
         let managed_tasks = managed_tasks_opt.unwrap_or(&default_tasks);
 
@@ -324,11 +361,7 @@ pub fn familiar_ai_system(params: FamiliarAiParams) {
         }
 
         // 状態遷移の最終確定
-        if finalize_state_transitions(
-            &mut ai_state,
-            &squad_entities,
-            fam_entity,
-        ) {
+        if finalize_state_transitions(&mut ai_state, &squad_entities, fam_entity) {
             state_changed = true;
         }
 
@@ -367,4 +400,3 @@ pub fn familiar_ai_system(params: FamiliarAiParams) {
         );
     }
 }
-

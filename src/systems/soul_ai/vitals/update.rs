@@ -20,8 +20,14 @@ pub fn fatigue_update_system(
 ) {
     let dt = time.delta_secs();
 
-    for (entity, mut soul, task, idle, under_command) in q_souls.iter_mut() {
-        let (entity, mut soul, task, idle, under_command): (Entity, Mut<DamnedSoul>, &AssignedTask, &IdleState, Option<&UnderCommand>) = (entity, soul, task, idle, under_command);
+    for (entity, soul, task, idle, under_command) in q_souls.iter_mut() {
+        let (entity, mut soul, task, idle, under_command): (
+            Entity,
+            Mut<DamnedSoul>,
+            &AssignedTask,
+            &IdleState,
+            Option<&UnderCommand>,
+        ) = (entity, soul, task, idle, under_command);
         let has_task = !matches!(task, AssignedTask::None);
 
         if has_task {
@@ -68,8 +74,15 @@ pub fn stress_system(
 ) {
     let dt = time.delta_secs();
 
-    for (entity, mut soul, task, idle, under_command, breakdown_opt) in q_souls.iter_mut() {
-        let (entity, mut soul, task, idle, under_command, breakdown_opt): (Entity, Mut<DamnedSoul>, &AssignedTask, &IdleState, Option<&UnderCommand>, Option<Mut<StressBreakdown>>) = (entity, soul, task, idle, under_command, breakdown_opt);
+    for (entity, soul, task, idle, under_command, breakdown_opt) in q_souls.iter_mut() {
+        let (entity, mut soul, task, idle, under_command, breakdown_opt): (
+            Entity,
+            Mut<DamnedSoul>,
+            &AssignedTask,
+            &IdleState,
+            Option<&UnderCommand>,
+            Option<Mut<StressBreakdown>>,
+        ) = (entity, soul, task, idle, under_command, breakdown_opt);
         let has_task = !matches!(task, AssignedTask::None);
         let is_gathering = matches!(
             idle.behavior,
