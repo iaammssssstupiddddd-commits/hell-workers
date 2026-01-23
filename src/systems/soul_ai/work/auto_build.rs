@@ -39,10 +39,16 @@ pub fn blueprint_auto_build_system(
     q_breakdown: Query<&StressBreakdown>,
 ) {
     for (fam_entity, _active_command, task_area) in q_familiars.iter() {
-        let (fam_entity, _active_command, task_area): (Entity, &ActiveCommand, &TaskArea) = (fam_entity, _active_command, task_area);
+        let (fam_entity, _active_command, task_area): (Entity, &ActiveCommand, &TaskArea) =
+            (fam_entity, _active_command, task_area);
         // エリア内の Blueprint を探す
         for (bp_entity, bp_transform, blueprint, workers_opt) in q_blueprints.iter() {
-            let (bp_entity, bp_transform, blueprint, workers_opt): (Entity, &Transform, &Blueprint, Option<&TaskWorkers>) = (bp_entity, bp_transform, blueprint, workers_opt);
+            let (bp_entity, bp_transform, blueprint, workers_opt): (
+                Entity,
+                &Transform,
+                &Blueprint,
+                Option<&TaskWorkers>,
+            ) = (bp_entity, bp_transform, blueprint, workers_opt);
             let bp_pos = bp_transform.translation.truncate();
             if !task_area.contains(bp_pos) {
                 continue;
@@ -126,12 +132,10 @@ pub fn blueprint_auto_build_system(
                         }
 
                         // 建築タスクを割り当て
-                        if let mut assigned_task = assigned_task {
-                            *assigned_task = AssignedTask::Build {
-                                blueprint: bp_entity,
-                                phase: BuildPhase::GoingToBlueprint,
-                            };
-                        }
+                        *assigned_task = AssignedTask::Build {
+                            blueprint: bp_entity,
+                            phase: BuildPhase::GoingToBlueprint,
+                        };
                         dest.0 = bp_pos;
                         path.waypoints = vec![bp_pos];
                         path.current_index = 0;

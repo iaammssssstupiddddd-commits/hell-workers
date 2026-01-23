@@ -16,8 +16,9 @@ pub fn supervision_stress_system(
 ) {
     let dt = time.delta_secs();
 
-    for (soul_transform, mut soul, task) in q_souls.iter_mut() {
-        let (soul_transform, mut soul, task): (&Transform, Mut<DamnedSoul>, &AssignedTask) = (soul_transform, soul, task);
+    for (soul_transform, soul, task) in q_souls.iter_mut() {
+        let (soul_transform, mut soul, task): (&Transform, Mut<DamnedSoul>, &AssignedTask) =
+            (soul_transform, soul, task);
         if matches!(*task, AssignedTask::None) {
             continue;
         }
@@ -50,8 +51,13 @@ pub fn motivation_system(
 ) {
     let dt = time.delta_secs();
 
-    for (soul_transform, mut soul, task, under_command) in q_souls.iter_mut() {
-        let (soul_transform, mut soul, task, under_command): (&Transform, Mut<DamnedSoul>, &AssignedTask, Option<&UnderCommand>) = (soul_transform, soul, task, under_command);
+    for (soul_transform, soul, task, under_command) in q_souls.iter_mut() {
+        let (soul_transform, mut soul, task, under_command): (
+            &Transform,
+            Mut<DamnedSoul>,
+            &AssignedTask,
+            Option<&UnderCommand>,
+        ) = (soul_transform, soul, task, under_command);
         let soul_pos = soul_transform.translation.truncate();
         let has_task = !matches!(*task, AssignedTask::None);
 

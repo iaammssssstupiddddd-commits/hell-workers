@@ -53,10 +53,53 @@ pub fn scouting_logic(
     }
 
     // 変更があった場合は true を返す
-    if let Ok((_soul_entity, target_transform, soul, task, dest, path, idle, holding, uc, participating)) =
-        q_souls.get(target_soul)
+    if let Ok((
+        _soul_entity,
+        target_transform,
+        soul,
+        task,
+        dest,
+        path,
+        idle,
+        holding,
+        uc,
+        participating,
+    )) = q_souls.get(target_soul)
     {
-        let (_soul_entity, target_transform, soul, task, dest, path, idle, holding, uc, participating): (Entity, &Transform, &DamnedSoul, &AssignedTask, &Destination, &Path, &IdleState, Option<&crate::relationships::Holding>, Option<&UnderCommand>, Option<&ParticipatingIn>) = (_soul_entity, target_transform, soul, task, dest, path, idle, holding, uc, participating);
+        let (
+            _soul_entity,
+            target_transform,
+            soul,
+            task,
+            _dest,
+            _path,
+            _idle,
+            _holding,
+            uc,
+            _participating,
+        ): (
+            Entity,
+            &Transform,
+            &DamnedSoul,
+            &AssignedTask,
+            &Destination,
+            &Path,
+            &IdleState,
+            Option<&crate::relationships::Holding>,
+            Option<&UnderCommand>,
+            Option<&ParticipatingIn>,
+        ) = (
+            _soul_entity,
+            target_transform,
+            soul,
+            task,
+            dest,
+            path,
+            idle,
+            holding,
+            uc,
+            participating,
+        );
         // リクルート閾値 = リリース閾値 - 0.2（余裕を持ってリクルート）
         let recruit_threshold = fatigue_threshold - 0.2;
         let fatigue_ok = soul.fatigue < recruit_threshold;
