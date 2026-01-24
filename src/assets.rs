@@ -5,6 +5,8 @@ pub struct GameAssets {
     pub grass: Handle<Image>,
     pub dirt: Handle<Image>,
     pub stone: Handle<Image>,
+    pub river: Handle<Image>,
+    pub sand: Handle<Image>,
     pub colonist: Handle<Image>,
     pub familiar: Handle<Image>,
     pub wall: Handle<Image>,

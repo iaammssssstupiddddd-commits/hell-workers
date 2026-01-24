@@ -84,6 +84,8 @@ fn setup(
         grass: asset_server.load("textures/grass.jpg"),
         dirt: asset_server.load("textures/dirt.jpg"),
         stone: asset_server.load("textures/stone.jpg"),
+        river: asset_server.load("textures/river.png"),
+        sand: asset_server.load("textures/sand.png"),
         colonist: asset_server.load("textures/colonist.png"),
         familiar: asset_server.load("textures/familiar_spritesheet.png"),
         wall: asset_server.load("textures/stone.jpg"),
