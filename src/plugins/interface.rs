@@ -15,7 +15,7 @@ use crate::interface::ui::{
     update_operation_dialog_system,
 };
 use crate::systems::GameSystemSet;
-use crate::systems::logistics::{item_spawner_system, zone_placement};
+use crate::systems::logistics::zone_placement;
 use crate::systems::soul_ai::vitals::visual::familiar_hover_visualization_system;
 use crate::systems::soul_ai::work::task_area_auto_haul_system;
 use crate::systems::time::{
@@ -37,7 +37,6 @@ impl Plugin for InterfacePlugin {
                 hover_tooltip_system,
                 blueprint_placement.run_if(in_state(PlayMode::BuildingPlace)),
                 zone_placement.run_if(in_state(PlayMode::ZonePlace)),
-                item_spawner_system,
                 ui_interaction_system,
                 menu_visibility_system,
                 info_panel_system.run_if(
