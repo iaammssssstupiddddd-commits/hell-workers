@@ -19,6 +19,7 @@ use crate::relationships::Holding;
 use crate::systems::familiar_ai::haul_cache::HaulReservationCache;
 use crate::systems::jobs::{Blueprint, Designation, DesignationCreatedEvent};
 use crate::systems::logistics::Stockpile;
+use crate::world::map::WorldMap;
 use bevy::prelude::*;
 
 use build::handle_build_task;
@@ -68,6 +69,7 @@ pub fn task_execution_system(
     time: Res<Time>,
     mut haul_cache: ResMut<HaulReservationCache>,
     mut q_blueprints: Query<(&Transform, &mut Blueprint, Option<&Designation>)>,
+    world_map: Res<WorldMap>,
 ) {
     let mut dropped_this_frame = std::collections::HashMap::<Entity, usize>::new();
 
@@ -110,6 +112,7 @@ pub fn task_execution_system(
                     &mut commands,
                     &game_assets,
                     &time,
+                    &world_map,
                 );
             }
             AssignedTask::Haul {
@@ -136,6 +139,7 @@ pub fn task_execution_system(
                     &mut commands,
                     &mut dropped_this_frame,
                     &mut *haul_cache,
+                    &world_map,
                 );
             }
             AssignedTask::Build { blueprint, phase } => {
@@ -154,6 +158,7 @@ pub fn task_execution_system(
                     &mut q_blueprints,
                     &mut commands,
                     &time,
+                    &world_map,
                 );
             }
             AssignedTask::HaulToBlueprint {
@@ -183,6 +188,7 @@ pub fn task_execution_system(
                     &mut haul_cache,
                     &mut commands,
                     &mut ev_created,
+                    &world_map,
                 );
             }
             AssignedTask::None => {}

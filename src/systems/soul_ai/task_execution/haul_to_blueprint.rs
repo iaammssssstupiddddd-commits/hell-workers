@@ -12,6 +12,7 @@ use crate::systems::soul_ai::task_execution::{
     context::TaskExecutionContext,
     types::{AssignedTask, HaulToBpPhase},
 };
+use crate::world::map::WorldMap;
 use bevy::prelude::*;
 
 pub fn handle_haul_to_blueprint_task(
@@ -46,6 +47,7 @@ pub fn handle_haul_to_blueprint_task(
     haul_cache: &mut HaulReservationCache,
     commands: &mut Commands,
     ev_created: &mut MessageWriter<DesignationCreatedEvent>,
+    world_map: &Res<WorldMap>,
 ) {
     // 疲労またはストレス崩壊のチェック
     if ctx.soul.fatigue > 0.95 || breakdown_opt.is_some() {
@@ -72,7 +74,7 @@ pub fn handle_haul_to_blueprint_task(
 
     match phase {
         HaulToBpPhase::GoingToItem => {
-            if let Ok((item_transform, _, _, _, des_opt, _)) = q_targets.get(item_entity) {
+            if let Ok((item_transform, _, _, _, des_opt, stored_in_opt)) = q_targets.get(item_entity) {
                 // 指示がキャンセルされていないか確認
                 if cancel_task_if_designation_missing(des_opt, ctx.task, ctx.path) {
                     info!(
@@ -84,16 +86,14 @@ pub fn handle_haul_to_blueprint_task(
                 }
 
                 let item_pos = item_transform.translation.truncate();
-                update_destination_if_needed(ctx.dest, item_pos, ctx.path);
+                update_destination_to_adjacent(ctx.dest, item_pos, ctx.path, soul_pos, world_map);
 
                 if is_near_target(soul_pos, item_pos) {
                     pickup_item(commands, ctx.soul_entity, item_entity);
 
                     // もしアイテムが備蓄場所にあったなら、その備蓄場所の型管理を更新する
-                    if let Ok((_, _, _, _, _, stored_in_opt)) = q_targets.get(item_entity) {
-                        if let Some(stored_in) = stored_in_opt {
-                            update_stockpile_on_item_removal(stored_in.0, q_stockpiles);
-                        }
+                    if let Some(stored_in) = stored_in_opt {
+                        update_stockpile_on_item_removal(stored_in.0, q_stockpiles);
                     }
 
                     // 元のコンポーネントを削除
@@ -127,7 +127,7 @@ pub fn handle_haul_to_blueprint_task(
         HaulToBpPhase::GoingToBlueprint => {
             if let Ok((bp_transform, _, _)) = q_blueprints.get(blueprint_entity) {
                 let bp_pos = bp_transform.translation.truncate();
-                update_destination_if_needed(ctx.dest, bp_pos, ctx.path);
+                update_destination_to_adjacent(ctx.dest, bp_pos, ctx.path, soul_pos, world_map);
 
                 if is_near_target(soul_pos, bp_pos) {
                     info!(

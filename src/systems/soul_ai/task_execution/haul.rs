@@ -9,6 +9,7 @@ use crate::systems::soul_ai::task_execution::{
     context::TaskExecutionContext,
     types::{AssignedTask, HaulPhase},
 };
+use crate::world::map::WorldMap;
 use bevy::prelude::*;
 
 pub fn handle_haul_task(
@@ -33,6 +34,7 @@ pub fn handle_haul_task(
     commands: &mut Commands,
     dropped_this_frame: &mut std::collections::HashMap<Entity, usize>,
     haul_cache: &mut HaulReservationCache,
+    world_map: &Res<WorldMap>,
 ) {
     let soul_pos = ctx.soul_pos();
     match phase {
@@ -47,7 +49,7 @@ pub fn handle_haul_task(
                 }
 
                 let res_pos = res_transform.translation.truncate();
-                update_destination_if_needed(ctx.dest, res_pos, ctx.path);
+                update_destination_to_adjacent(ctx.dest, res_pos, ctx.path, soul_pos, world_map);
 
                 if is_near_target(soul_pos, res_pos) {
                     pickup_item(commands, ctx.soul_entity, item);
@@ -81,7 +83,7 @@ pub fn handle_haul_task(
         HaulPhase::GoingToStockpile => {
             if let Ok((stock_transform, _, _)) = q_stockpiles.get(stockpile) {
                 let stock_pos = stock_transform.translation.truncate();
-                update_destination_if_needed(ctx.dest, stock_pos, ctx.path);
+                update_destination_to_adjacent(ctx.dest, stock_pos, ctx.path, soul_pos, world_map);
 
                 if is_near_target(soul_pos, stock_pos) {
                     *ctx.task = AssignedTask::Haul {

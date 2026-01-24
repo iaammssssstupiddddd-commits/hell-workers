@@ -16,16 +16,19 @@ use crate::systems::soul_ai::task_execution::types::{
     AssignedTask, BuildPhase, GatherPhase, HaulPhase, HaulToBpPhase,
 };
 use crate::systems::spatial::DesignationSpatialGrid;
+use crate::world::map::WorldMap;
 use bevy::prelude::*;
 
 /// タスク管理ユーティリティ
 pub struct TaskManager;
 
 impl TaskManager {
-    /// 指定エリア内で未割り当てのタスク（Designation）を探す
+    /// 指定ワーカーの位置から到達可能な未割り当てタスクを探す
+    #[allow(clippy::too_many_arguments)]
     pub fn find_unassigned_task_in_area(
         _fam_entity: Entity,
         fam_pos: Vec2,
+        worker_pos: Vec2, // 実際に到達するかチェックするワーカーの位置
         task_area_opt: Option<&TaskArea>,
         q_designations: &Query<(
             Entity,
@@ -39,14 +42,16 @@ impl TaskManager {
         managed_tasks: &ManagedTasks,
         q_blueprints: &Query<&Blueprint>,
         q_target_blueprints: &Query<&TargetBlueprint>,
+        world_map: &WorldMap,
     ) -> Option<Entity> {
+        // パス検索の起点を「ソウルの居場所」に補正する
+        let worker_grid = world_map.get_nearest_walkable_grid(worker_pos)?;
+
         // 候補となるエンティティのリスト
         let candidates = if let Some(area) = task_area_opt {
             // エリア指定がある場合、エリア内のタスク + 自分が管理しているタスク を対象にする
             let mut ents = designation_grid.get_in_area(area.min, area.max);
 
-            // 自分が管理しているタスクがエリア外にある可能性も考慮（移動等）
-            // ただしManagedTasksは通常少ないため、ここは個別に足しても計算量は抑えられる
             for &managed_entity in managed_tasks.iter() {
                 if !ents.contains(&managed_entity) {
                     ents.push(managed_entity);
@@ -54,14 +59,12 @@ impl TaskManager {
             }
 
             // 資材が揃った建築タスク（Blueprint）を直接検索して追加
-            // DesignationSpatialGridの更新タイミングの問題を回避するため
             for (bp_entity, bp_transform, bp_designation, bp_issued_by, _, _) in
                 q_designations.iter()
             {
                 if bp_designation.work_type == WorkType::Build {
                     let bp_pos = bp_transform.translation.truncate();
                     if area.contains(bp_pos) && bp_issued_by.is_none() {
-                        // 資材が揃っているかチェック
                         if let Ok(bp) = q_blueprints.get(bp_entity) {
                             if bp.materials_complete() && !ents.contains(&bp_entity) {
                                 ents.push(bp_entity);
@@ -73,7 +76,6 @@ impl TaskManager {
 
             ents
         } else {
-            // エリア指定がない場合、自分が管理しているタスクのみが対象
             managed_tasks.iter().copied().collect::<Vec<_>>()
         };
 
@@ -86,39 +88,47 @@ impl TaskManager {
                 let is_managed_by_me = managed_tasks.contains(entity);
                 let is_unassigned = issued_by.is_none();
 
-                // 1. 他の使い魔が管理しているタスクは除外
                 if !is_managed_by_me && !is_unassigned {
                     return None;
                 }
 
-                // 2. スロットが空いているか
                 let current_workers = workers.map(|w| w.len()).unwrap_or(0);
                 let max_slots = slots.map(|s| s.max).unwrap_or(1) as usize;
                 if current_workers >= max_slots {
                     return None;
                 }
 
-                // 3. エリア制限のチェック
                 let pos = transform.translation.truncate();
                 if let Some(area) = task_area_opt {
                     if !area.contains(pos) {
-                        // エリア外のタスクは、既に自分が管理しているものであっても一旦除外（パトロール範囲優先）
                         if !is_managed_by_me {
                             return None;
                         }
                     }
                 } else {
-                    // エリア指定がない使い魔は、明示的に割り当てられたタスク(Managed)のみ行う
                     if !is_managed_by_me {
                         return None;
                     }
+                }
+
+                // 4. 到達可能性チェック（逆引き検索: タスクからソウルまで歩けるかチェック）
+                let target_grid = WorldMap::world_to_grid(pos);
+                let is_reachable = if world_map.is_walkable(target_grid.0, target_grid.1) {
+                    // タスク位置 -> ソウル位置
+                    crate::world::pathfinding::find_path(world_map, target_grid, worker_grid).is_some()
+                } else {
+                    // タスクの隣接 -> ソウル位置 (内部で neighbor -> worker_grid の探索が行われる)
+                    crate::world::pathfinding::find_path_to_adjacent(world_map, worker_grid, target_grid).is_some()
+                };
+
+                if !is_reachable {
+                    return None;
                 }
 
                 // 収集系は対象が実在するか追加チェック
                 let is_valid = match designation.work_type {
                     WorkType::Chop | WorkType::Mine | WorkType::Haul => true,
                     WorkType::Build => {
-                        // 建築の場合、資材が揃っているかチェック
                         if let Ok(bp) = q_blueprints.get(entity) {
                             bp.materials_complete()
                         } else {
@@ -128,10 +138,7 @@ impl TaskManager {
                 };
 
                 if is_valid {
-                    let dist_sq = transform.translation.truncate().distance_squared(fam_pos);
-                    // 優先スコアの計算
-                    // 10: 建築(Build) または 設計図への運搬(Haul with TargetBlueprint)
-                    // 0: その他
+                    let dist_sq = pos.distance_squared(fam_pos);
                     let mut priority = 0;
                     if designation.work_type == WorkType::Build {
                         priority = 10;
@@ -147,7 +154,6 @@ impl TaskManager {
                 }
             })
             .min_by(|(_, p1, d1): &(Entity, i32, f32), (_, p2, d2): &(Entity, i32, f32)| {
-                // 優先度が高い(大きい)ものを優先
                 match p2.cmp(p1) {
                     std::cmp::Ordering::Equal => {
                         d1.partial_cmp(d2).unwrap_or(std::cmp::Ordering::Equal)
@@ -399,38 +405,6 @@ impl TaskManager {
     }
 
     /// 分隊内のアイドルメンバーを検索
-    pub fn find_idle_member(
-        squad: &[Entity],
-        fatigue_threshold: f32,
-        q_souls: &mut Query<
-            (
-                Entity,
-                &Transform,
-                &DamnedSoul,
-                &mut AssignedTask,
-                &mut Destination,
-                &mut Path,
-                &IdleState,
-                Option<&Holding>,
-                Option<&UnderCommand>,
-                Option<&ParticipatingIn>,
-            ),
-            Without<crate::entities::familiar::Familiar>,
-        >,
-    ) -> Option<Entity> {
-        for &member_entity in squad {
-            if let Ok((_, _, soul, task, _, _, idle, _, _, _)) = q_souls.get(member_entity) {
-                if matches!(*task, AssignedTask::None)
-                    && idle.behavior != IdleBehavior::ExhaustedGathering
-                    && soul.fatigue < fatigue_threshold
-                {
-                    return Some(member_entity);
-                }
-            }
-        }
-        None
-    }
-
     /// タスクを委譲する（タスク検索 + 割り当て）
     pub fn delegate_task(
         commands: &mut Commands,
@@ -474,39 +448,56 @@ impl TaskManager {
         designation_grid: &DesignationSpatialGrid,
         managed_tasks: &ManagedTasks,
         haul_cache: &mut crate::systems::familiar_ai::haul_cache::HaulReservationCache,
+        world_map: &WorldMap,
     ) -> Option<Entity> {
-        // タスクを検索
-        let task_entity = Self::find_unassigned_task_in_area(
-            fam_entity,
-            fam_pos,
-            task_area_opt,
-            q_designations,
-            designation_grid,
-            managed_tasks,
-            q_blueprints,
-            q_target_blueprints,
-        )?;
+        // 1. 公平性/効率のため、アイドルメンバーを全員リストアップ
+        let mut idle_members = Vec::new();
+        for &member_entity in squad {
+            if let Ok(soul_data) = q_souls.get(member_entity) {
+                let (_, transform, soul, task, _, _, idle, _, _, _) = soul_data;
+                if matches!(*task, AssignedTask::None)
+                    && idle.behavior != IdleBehavior::ExhaustedGathering
+                    && soul.fatigue < fatigue_threshold
+                {
+                    idle_members.push((member_entity, transform.translation.truncate()));
+                }
+            }
+        }
 
-        // アイドルメンバーを検索
-        let idle_member = Self::find_idle_member(squad, fatigue_threshold, q_souls)?;
+        // 2. 各メンバーに対して最適なタスクを一つずつ探して試みる
+        for (worker_entity, pos) in idle_members {
+            if let Some(task_entity) = Self::find_unassigned_task_in_area(
+                fam_entity,
+                fam_pos,
+                pos, // 個別ソウルの位置を使用
+                task_area_opt,
+                q_designations,
+                designation_grid,
+                managed_tasks,
+                q_blueprints,
+                q_target_blueprints,
+                world_map,
+            ) {
+                // アサイン成功！1サイクル1人へのアサインとする（安定性のため）
+                Self::assign_task_to_worker(
+                    commands,
+                    fam_entity,
+                    task_entity,
+                    worker_entity,
+                    fatigue_threshold,
+                    q_designations,
+                    q_souls,
+                    q_stockpiles,
+                    q_resources,
+                    q_target_blueprints,
+                    q_blueprints,
+                    task_area_opt,
+                    haul_cache,
+                );
+                return Some(task_entity);
+            }
+        }
 
-        // タスクを割り当て（assign_task_to_worker 内で IssuedBy も設定される）
-        Self::assign_task_to_worker(
-            commands,
-            fam_entity,
-            task_entity,
-            idle_member,
-            fatigue_threshold,
-            q_designations,
-            q_souls,
-            q_stockpiles,
-            q_resources,
-            q_target_blueprints,
-            q_blueprints,
-            task_area_opt,
-            haul_cache,
-        );
-
-        Some(task_entity)
+        None
     }
 }

@@ -7,6 +7,7 @@ use crate::systems::soul_ai::task_execution::{
     context::TaskExecutionContext,
     types::{AssignedTask, BuildPhase},
 };
+use crate::world::map::WorldMap;
 use bevy::prelude::*;
 
 pub fn handle_build_task(
@@ -16,6 +17,7 @@ pub fn handle_build_task(
     q_blueprints: &mut Query<(&Transform, &mut Blueprint, Option<&Designation>)>,
     commands: &mut Commands,
     time: &Res<Time>,
+    world_map: &Res<WorldMap>,
 ) {
     let soul_pos = ctx.soul_pos();
 
@@ -40,7 +42,7 @@ pub fn handle_build_task(
                 }
 
                 let bp_pos = bp_transform.translation.truncate();
-                update_destination_if_needed(ctx.dest, bp_pos, ctx.path);
+                update_destination_to_adjacent(ctx.dest, bp_pos, ctx.path, soul_pos, world_map);
 
                 if is_near_target(soul_pos, bp_pos) {
                     *ctx.task = AssignedTask::Build {

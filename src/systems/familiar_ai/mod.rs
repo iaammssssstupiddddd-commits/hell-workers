@@ -170,6 +170,7 @@ pub struct FamiliarAiParams<'w, 's> {
     pub cooldowns: ResMut<'w, crate::systems::visual::speech::cooldown::BubbleCooldowns>,
     pub ev_created: MessageWriter<'w, crate::systems::jobs::DesignationCreatedEvent>,
     pub ev_state_changed: MessageWriter<'w, crate::events::FamiliarAiStateChangedEvent>,
+    pub world_map: Res<'w, crate::world::map::WorldMap>,
 }
 
 /// 使い魔AIの更新システム
@@ -194,6 +195,7 @@ pub fn familiar_ai_system(params: FamiliarAiParams) {
         mut cooldowns,
         mut ev_created,
         mut ev_state_changed,
+        world_map,
     } = params;
     // 1. 搬送中のアイテム・ストックパイル予約状況を事前計算
     // フェーズ2: 全ソウルをイテレートする代わりにキャッシュ（HaulReservationCache）を使用
@@ -395,6 +397,7 @@ pub fn familiar_ai_system(params: FamiliarAiParams) {
             &designation_grid,
             managed_tasks,
             &mut *haul_cache,
+            &world_map,
             &time,
             state_changed,
         );

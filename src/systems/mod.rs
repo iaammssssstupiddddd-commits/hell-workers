@@ -2,6 +2,7 @@ pub mod command;
 pub mod familiar_ai;
 pub mod jobs;
 pub mod logistics;
+pub mod obstacle;
 pub mod soul_ai;
 pub mod spatial;
 pub mod task_queue;

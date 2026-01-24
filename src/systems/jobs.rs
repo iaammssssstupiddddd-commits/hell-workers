@@ -31,7 +31,7 @@ impl BuildingType {
                 materials.insert(ResourceType::Wood, 2);
             }
             BuildingType::Floor => {
-                materials.insert(ResourceType::Stone, 1);
+                materials.insert(ResourceType::Rock, 1);
             }
         }
         materials
@@ -52,6 +52,10 @@ pub struct Tree;
 
 #[derive(Component)]
 pub struct Rock;
+
+/// 障害物のグリッド座標を保持するコンポーネント
+#[derive(Component)]
+pub struct ObstaclePosition(pub i32, pub i32);
 
 /// 設計図コンポーネント - 建設中の建物を表す
 #[derive(Component)]

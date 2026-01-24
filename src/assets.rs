@@ -11,6 +11,8 @@ pub struct GameAssets {
     pub familiar: Handle<Image>,
     pub wall: Handle<Image>,
     pub wood: Handle<Image>,
+    pub tree: Handle<Image>,        // 木のスプライト
+    pub rock: Handle<Image>,        // 岩のスプライト
     pub aura_circle: Handle<Image>, // 円形オーラテクスチャ
     pub aura_ring: Handle<Image>,   // 強調用リングテクスチャ
     // UI Icons
@@ -30,7 +32,7 @@ pub struct GameAssets {
     // Building Visual Icons
     pub icon_hammer: Handle<Image>,
     pub icon_wood_small: Handle<Image>,
-    pub icon_stone_small: Handle<Image>,
+    pub icon_rock_small: Handle<Image>, // 旧icon_stone_small
     // Fonts
     pub font_ui: Handle<Font>,         // UI全般
     pub font_familiar: Handle<Font>,   // Familiar吹き出し

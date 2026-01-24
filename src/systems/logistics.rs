@@ -9,7 +9,7 @@ use std::collections::HashMap;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Reflect)]
 pub enum ResourceType {
     Wood,
-    Stone,
+    Rock, // 旧Stone（岩採掘でのみ入手可能）
 }
 
 #[derive(Component, Reflect)]
@@ -97,39 +97,42 @@ pub fn zone_placement(
 pub fn initial_resource_spawner(
     mut commands: Commands,
     game_assets: Res<GameAssets>,
-    world_map: Res<WorldMap>,
+    mut world_map: ResMut<WorldMap>,
 ) {
-    // 木のスポーン
+    // 木のスポーン（障害物として登録）
     for &(gx, gy) in TREE_POSITIONS {
-        if world_map.is_walkable(gx, gy) {
+        // 地形が通行可能な場合のみスポーン（障害物チェックなし）
+        if world_map.tiles.get(&(gx, gy)).map_or(false, |t| t.is_walkable()) {
             let pos = WorldMap::grid_to_world(gx, gy);
             commands.spawn((
                 Tree,
+                crate::systems::jobs::ObstaclePosition(gx, gy),
                 Sprite {
-                    image: game_assets.wood.clone(),
-                    custom_size: Some(Vec2::splat(TILE_SIZE * 0.8)),
-                    color: Color::srgb(0.2, 0.5, 0.2),
+                    image: game_assets.tree.clone(),
+                    custom_size: Some(Vec2::splat(TILE_SIZE * 1.5)),
                     ..default()
                 },
                 Transform::from_xyz(pos.x, pos.y, Z_ITEM_OBSTACLE),
             ));
+            world_map.add_obstacle(gx, gy);
         }
     }
 
-    // 岩のスポーン
+    // 岩のスポーン（障害物として登録）
     for &(gx, gy) in ROCK_POSITIONS {
-        if world_map.is_walkable(gx, gy) {
+        if world_map.tiles.get(&(gx, gy)).map_or(false, |t| t.is_walkable()) {
             let pos = WorldMap::grid_to_world(gx, gy);
             commands.spawn((
                 Rock,
+                crate::systems::jobs::ObstaclePosition(gx, gy),
                 Sprite {
-                    image: game_assets.stone.clone(),
-                    custom_size: Some(Vec2::splat(TILE_SIZE * 0.7)),
-                    color: Color::srgb(0.5, 0.5, 0.5),
+                    image: game_assets.rock.clone(),
+                    custom_size: Some(Vec2::splat(TILE_SIZE * 1.2)),
                     ..default()
                 },
                 Transform::from_xyz(pos.x, pos.y, Z_ITEM_OBSTACLE),
             ));
+            world_map.add_obstacle(gx, gy);
         }
     }
 
@@ -150,7 +153,9 @@ pub fn initial_resource_spawner(
         }
     }
 
-    info!("SPAWNER: Fixed Trees, Rocks, and Initial wood spawned");
+    let rock_count = ROCK_POSITIONS.len();
+    let obstacle_count = world_map.obstacles.len();
+    info!("SPAWNER: Fixed Trees ({}), Rocks ({}) spawned. WorldMap obstacles: {}", TREE_POSITIONS.len(), rock_count, obstacle_count);
 }
 
 pub fn resource_count_display_system(
