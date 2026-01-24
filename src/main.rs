@@ -51,7 +51,7 @@ fn main() {
                 })
                 .set(RenderPlugin {
                     render_creation: RenderCreation::Automatic(WgpuSettings {
-                        backends: Some(Backends::VULKAN),
+                        backends: Some(Backends::PRIMARY), // Windows ネイティブ (DX12/Vulkan) を優先
                         ..default()
                     }),
                     ..default()

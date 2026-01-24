@@ -14,11 +14,12 @@ bevy = { version = "0.18", default-features = false, features = [
     "multi_threaded",
     "png",
     "jpeg",
+    # Windows ネイティブ (x64) では wgpu が DX12/Vulkan を自動選択するため webgl2 は不要
 ] }
 rand = "0.8"
 
 [features]
-default = ["dynamic_linking"]
+default = []
 dynamic_linking = ["bevy/dynamic_linking"]
 
 [profile.release]

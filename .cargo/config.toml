@@ -1,12 +1,17 @@
-[target.x86_64-unknown-linux-gnu]
-linker = "clang"
-rustflags = ["-C", "link-arg=-fuse-ld=mold"]
+[target.x86_64-pc-windows-gnu]
+linker = "x86_64-w64-mingw32-gcc"
+runner = ["sh", "-c", "ASSETS_DIR=$(dirname \"$1\")/assets; mkdir -p \"$ASSETS_DIR\"; cp -ru assets/* \"$ASSETS_DIR/\" 2>/dev/null || true; \"$@\"", "--"]
+rustflags = [
+    "-C", "link-arg=-fuse-ld=lld",
+    "-C", "link-args=-static",
+    "-C", "debuginfo=1",      # ファイル名と行番号のみ維持（サイズ削減）
+    "-C", "strip=symbols"     # 不要なシンボル情報を削除
+]
 
 [env]
-WGPU_BACKEND = "gl"
-GALLIUM_DRIVER = "d3d12"
-MESA_D3D12_DEFAULT_ADAPTER_NAME = "intel" # Intel を優先（必要に応じて変更可）
+# Windows 起動時に wgpu が適切なバックエンドを選択するように Linux 固有設定は削除
 
 [build]
-target = "x86_64-unknown-linux-gnu"
-target-dir = "/mnt/e/rust-target/hell-workers"
+target = "x86_64-pc-windows-gnu"
+# target-dir = "/mnt/e/rust-target/hell-workers" # 以前の E ドライブ設定
+incremental = false # クロスコンパイル時のリンクエラー回避のため無効化
