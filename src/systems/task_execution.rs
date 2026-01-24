@@ -222,33 +222,46 @@ fn handle_gather_task(
                 }
                 let pos = res_transform.translation;
 
-                // 進行度を更新 (仮に 2秒で完了とする)
-                progress += time.delta_secs() * 0.5;
+                // 進行度を更新（岩は2倍の時間がかかる）
+                let speed = if rock.is_some() {
+                    GATHER_SPEED_BASE * GATHER_SPEED_ROCK_MULTIPLIER
+                } else {
+                    GATHER_SPEED_BASE
+                };
+                progress += time.delta_secs() * speed;
 
                 if progress >= 1.0 {
                     if tree.is_some() {
-                        commands.spawn((
-                            ResourceItem(crate::systems::logistics::ResourceType::Wood),
-                            Sprite {
-                                image: game_assets.wood.clone(),
-                                custom_size: Some(Vec2::splat(TILE_SIZE * 0.5)),
-                                color: Color::srgb(0.5, 0.35, 0.05),
-                                ..default()
-                            },
-                            Transform::from_translation(pos),
-                        ));
-                        info!("TASK_EXEC: Soul {:?} chopped a tree", soul_entity);
+                        // 木1本 → Wood × WOOD_DROP_AMOUNT
+                        for i in 0..WOOD_DROP_AMOUNT {
+                            let offset = Vec3::new((i as f32 - 2.0) * 8.0, 0.0, 0.0);
+                            commands.spawn((
+                                ResourceItem(crate::systems::logistics::ResourceType::Wood),
+                                Sprite {
+                                    image: game_assets.wood.clone(),
+                                    custom_size: Some(Vec2::splat(TILE_SIZE * 0.5)),
+                                    color: Color::srgb(0.5, 0.35, 0.05),
+                                    ..default()
+                                },
+                                Transform::from_translation(pos + offset),
+                            ));
+                        }
+                        info!("TASK_EXEC: Soul {:?} chopped a tree (dropped {} wood)", soul_entity, WOOD_DROP_AMOUNT);
                     } else if rock.is_some() {
-                        commands.spawn((
-                            ResourceItem(crate::systems::logistics::ResourceType::Stone),
-                            Sprite {
-                                image: game_assets.stone.clone(),
-                                custom_size: Some(Vec2::splat(TILE_SIZE * 0.5)),
-                                ..default()
-                            },
-                            Transform::from_translation(pos),
-                        ));
-                        info!("TASK_EXEC: Soul {:?} mined a rock", soul_entity);
+                        // 岩1つ → Rock × ROCK_DROP_AMOUNT
+                        for i in 0..ROCK_DROP_AMOUNT {
+                            let offset = Vec3::new(((i % 5) as f32 - 2.0) * 8.0, ((i / 5) as f32 - 1.0) * 8.0, 0.0);
+                            commands.spawn((
+                                ResourceItem(crate::systems::logistics::ResourceType::Rock),
+                                Sprite {
+                                    image: game_assets.rock.clone(),
+                                    custom_size: Some(Vec2::splat(TILE_SIZE * 0.5)),
+                                    ..default()
+                                },
+                                Transform::from_translation(pos + offset),
+                            ));
+                        }
+                        info!("TASK_EXEC: Soul {:?} mined a rock (dropped {} rock)", soul_entity, ROCK_DROP_AMOUNT);
                     }
                     commands.entity(target).despawn();
 
@@ -257,7 +270,7 @@ fn handle_gather_task(
                         work_type: *work_type,
                         phase: GatherPhase::Done,
                     };
-                    soul.fatigue = (soul.fatigue + 0.1).min(1.0);
+                    soul.fatigue = (soul.fatigue + FATIGUE_GAIN_ON_COMPLETION).min(1.0);
                 } else {
                     // 進捗を保存
                     *task = AssignedTask::Gather {

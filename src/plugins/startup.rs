@@ -47,10 +47,10 @@ impl Plugin for StartupPlugin {
                 PostStartup,
                 (
                     spawn_map,
-                    spawn_entities,
+                    initial_resource_spawner, // 先に岩・木を配置して障害物情報を登録
+                    spawn_entities,           // その後、通行可能な場所にソウルを配置
                     spawn_familiar_wrapper,
                     setup_ui,
-                    initial_resource_spawner,
                     populate_resource_spatial_grid,
                 )
                     .chain(),
@@ -90,6 +90,8 @@ fn setup(
         familiar: asset_server.load("textures/familiar_spritesheet.png"),
         wall: asset_server.load("textures/stone.jpg"),
         wood: asset_server.load("textures/dirt.jpg"),
+        tree: asset_server.load("textures/tree.png"),
+        rock: asset_server.load("textures/rock.png"),
         aura_circle,
         aura_ring,
         icon_male: asset_server.load("textures/ui/male.png"),
@@ -117,7 +119,7 @@ fn setup(
         // Building Visual Icons
         icon_hammer: asset_server.load("textures/ui/hammer.png"),
         icon_wood_small: asset_server.load("textures/ui/wood_small.png"),
-        icon_stone_small: asset_server.load("textures/ui/stone_small.png"),
+        icon_rock_small: asset_server.load("textures/ui/rock_small.png"),
         // Fonts
         font_ui,
         font_familiar,

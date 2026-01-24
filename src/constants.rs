@@ -159,6 +159,13 @@ pub const IDLE_DURATION_WANDER_MAX: f32 = 4.0;
 
 /// 資源採取の基本速度 (進捗/秒)
 pub const GATHER_SPEED_BASE: f32 = 0.5;
+/// 岩採掘の速度倍率（基本速度に対して）- 2倍の時間がかかる
+pub const GATHER_SPEED_ROCK_MULTIPLIER: f32 = 0.5;
+
+/// 伐採報酬: 木1本あたりのWood数
+pub const WOOD_DROP_AMOUNT: u32 = 5;
+/// 採掘報酬: 岩1つあたりのRock数
+pub const ROCK_DROP_AMOUNT: u32 = 10;
 
 // ============================================================
 // キャラクター移動・アニメーション
