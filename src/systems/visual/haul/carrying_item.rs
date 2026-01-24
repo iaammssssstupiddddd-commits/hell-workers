@@ -29,7 +29,7 @@ pub fn spawn_carrying_item_system(
         // リソースタイプに応じたアイコンを選択
         let icon_handle = match item.0 {
             ResourceType::Wood => game_assets.icon_wood_small.clone(),
-            ResourceType::Stone => game_assets.icon_stone_small.clone(),
+            ResourceType::Rock => game_assets.icon_rock_small.clone(),
         };
 
         info!(

@@ -25,6 +25,7 @@ impl PartialOrd for PathNode {
 
 // A*パスファインディング
 pub fn find_path(world_map: &WorldMap, start: (i32, i32), goal: (i32, i32)) -> Option<Vec<(i32, i32)>> {
+    // 目的地（逆引きならソウル）が通行不能なら到達不能
     if !world_map.is_walkable(goal.0, goal.1) {
         return None;
     }
@@ -44,10 +45,8 @@ pub fn find_path(world_map: &WorldMap, start: (i32, i32), goal: (i32, i32)) -> O
         f_cost: heuristic(start, goal),
     });
 
-    let directions = [
-        (0, 1), (0, -1), (1, 0), (-1, 0),
-        (1, 1), (1, -1), (-1, 1), (-1, -1),
-    ];
+    // 4方向に限定（斜め移動を廃止）
+    let directions = [(0, 1), (0, -1), (1, 0), (-1, 0)];
 
     while let Some(current) = open_set.pop() {
         if current.pos == goal {
@@ -65,13 +64,13 @@ pub fn find_path(world_map: &WorldMap, start: (i32, i32), goal: (i32, i32)) -> O
         for (dx, dy) in &directions {
             let neighbor = (current.pos.0 + dx, current.pos.1 + dy);
             
+            // 隣接マスが通行不能ならスキップ（目的地は許可済み）
             if !world_map.is_walkable(neighbor.0, neighbor.1) {
                 continue;
             }
 
-            // 斜め移動のコスト（14）と直線移動のコスト（10）
-            let move_cost = if *dx != 0 && *dy != 0 { 14 } else { 10 };
-            let tentative_g = g_score.get(&current.pos).unwrap_or(&i32::MAX) + move_cost;
+            // 直線移動のコスト（10）
+            let tentative_g = g_score.get(&current.pos).unwrap_or(&i32::MAX) + 10;
 
             if tentative_g < *g_score.get(&neighbor).unwrap_or(&i32::MAX) {
                 came_from.insert(neighbor, current.pos);
@@ -86,4 +85,23 @@ pub fn find_path(world_map: &WorldMap, start: (i32, i32), goal: (i32, i32)) -> O
     }
 
     None
+}
+
+/// ターゲットの隣接マスへのパスを検索（ターゲット自体には入らない）
+pub fn find_path_to_adjacent(world_map: &WorldMap, start: (i32, i32), target: (i32, i32)) -> Option<Vec<(i32, i32)>> {
+    // 逆引き検索を1回実行: ターゲット地点（岩など）から開始点（ソウル）に向かってパスを探す
+    // ターゲット地点自体が通行不能でも、最初の展開（隣接マスへの移動）で通行可能マスに移行する
+    let mut path = find_path(world_map, target, start)?;
+    
+    // 得られたパスは [target, neighbor, ..., start]
+    // これを逆転させて [start, ..., neighbor, target] にし、target を削除すれば隣接マス到着パスになる
+    path.reverse();
+    path.pop(); // ターゲット自体(岩の中心)を削除。これで隣接マスで止まる。
+    
+    if path.is_empty() {
+        // すでにターゲットの隣にある場合、空の代わりに開始地点を返す（移動不要）
+        Some(vec![start])
+    } else {
+        Some(path)
+    }
 }

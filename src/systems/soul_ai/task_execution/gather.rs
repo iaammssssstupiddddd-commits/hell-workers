@@ -9,6 +9,7 @@ use crate::systems::soul_ai::task_execution::{
     context::TaskExecutionContext,
     types::{AssignedTask, GatherPhase},
 };
+use crate::world::map::WorldMap;
 use bevy::prelude::*;
 
 pub fn handle_gather_task(
@@ -27,6 +28,7 @@ pub fn handle_gather_task(
     commands: &mut Commands,
     game_assets: &Res<GameAssets>,
     time: &Res<Time>,
+    world_map: &Res<WorldMap>,
 ) {
     let soul_pos = ctx.soul_pos();
     match phase {
@@ -37,7 +39,7 @@ pub fn handle_gather_task(
                     return;
                 }
                 let res_pos = res_transform.translation.truncate();
-                update_destination_if_needed(ctx.dest, res_pos, ctx.path);
+                update_destination_to_adjacent(ctx.dest, res_pos, ctx.path, soul_pos, world_map);
 
                 if is_near_target(soul_pos, res_pos) {
                     *ctx.task = AssignedTask::Gather {
@@ -60,34 +62,48 @@ pub fn handle_gather_task(
                 }
                 let pos = res_transform.translation;
 
-                // 進行度を更新
-                progress += time.delta_secs() * GATHER_SPEED_BASE;
+                // 進行度を更新（岩は2倍の時間がかかる）
+                let speed = if rock.is_some() {
+                    GATHER_SPEED_BASE * crate::constants::GATHER_SPEED_ROCK_MULTIPLIER
+                } else {
+                    GATHER_SPEED_BASE
+                };
+                progress += time.delta_secs() * speed;
 
                 if progress >= 1.0 {
                     if tree.is_some() {
-                        commands.spawn((
-                            ResourceItem(crate::systems::logistics::ResourceType::Wood),
-                            Sprite {
-                                image: game_assets.wood.clone(),
-                                custom_size: Some(Vec2::splat(TILE_SIZE * 0.5)),
-                                color: Color::srgb(0.5, 0.35, 0.05),
-                                ..default()
-                            },
-                            Transform::from_xyz(pos.x, pos.y, Z_ITEM_PICKUP),
-                        ));
-                        info!("TASK_EXEC: Soul {:?} chopped a tree", ctx.soul_entity);
+                        // 木1本 → Wood × WOOD_DROP_AMOUNT
+                        for i in 0..crate::constants::WOOD_DROP_AMOUNT {
+                            // タイルサイズ 32 なので、中心から ±16 以内に収める。余裕を見て ±12
+                            let offset = Vec3::new((i as f32 - 2.0) * 6.0, 0.0, 0.0);
+                            commands.spawn((
+                                ResourceItem(crate::systems::logistics::ResourceType::Wood),
+                                Sprite {
+                                    image: game_assets.wood.clone(),
+                                    custom_size: Some(Vec2::splat(TILE_SIZE * 0.5)),
+                                    color: Color::srgb(0.5, 0.35, 0.05),
+                                    ..default()
+                                },
+                                Transform::from_translation(pos + offset),
+                            ));
+                        }
+                        info!("TASK_EXEC: Soul {:?} chopped a tree (dropped {} wood)", ctx.soul_entity, crate::constants::WOOD_DROP_AMOUNT);
                     } else if rock.is_some() {
-                        commands.spawn((
-                            ResourceItem(crate::systems::logistics::ResourceType::Stone),
-                            Sprite {
-                                image: game_assets.stone.clone(),
-                                custom_size: Some(Vec2::splat(TILE_SIZE * 0.5)),
-                                color: Color::srgb(0.5, 0.5, 0.5),
-                                ..default()
-                            },
-                            Transform::from_xyz(pos.x, pos.y, Z_ITEM_PICKUP),
-                        ));
-                        info!("TASK_EXEC: Soul {:?} mined a rock", ctx.soul_entity);
+                        // 岩1つ → Rock × ROCK_DROP_AMOUNT
+                        for i in 0..crate::constants::ROCK_DROP_AMOUNT {
+                            // タイルサイズ 32 なので、中心から ±16 以内に収める。余裕を見て ±12
+                            let offset = Vec3::new(((i % 5) as f32 - 2.0) * 6.0, ((i / 5) as f32 - 0.5) * 6.0, 0.0);
+                            commands.spawn((
+                                ResourceItem(crate::systems::logistics::ResourceType::Rock),
+                                Sprite {
+                                    image: game_assets.rock.clone(),
+                                    custom_size: Some(Vec2::splat(TILE_SIZE * 0.5)),
+                                    ..default()
+                                },
+                                Transform::from_translation(pos + offset),
+                            ));
+                        }
+                        info!("TASK_EXEC: Soul {:?} mined a rock (dropped {} rock)", ctx.soul_entity, crate::constants::ROCK_DROP_AMOUNT);
                     }
                     commands.entity(target).despawn();
 

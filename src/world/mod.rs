@@ -1,3 +1,4 @@
 pub mod map;
-pub mod river;
 pub mod pathfinding;
+pub mod regrowth;
+pub mod river;

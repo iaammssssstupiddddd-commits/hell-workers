@@ -22,7 +22,7 @@ pub fn spawn_material_display_system(
         for (resource_type, _) in &bp.required_materials {
             let icon_image = match resource_type {
                 ResourceType::Wood => game_assets.icon_wood_small.clone(),
-                ResourceType::Stone => game_assets.icon_stone_small.clone(),
+                ResourceType::Rock => game_assets.icon_rock_small.clone(),
             };
 
             let offset = Vec3::new(

@@ -100,13 +100,31 @@ pub fn spawn_damned_soul_at(
 
 /// 経路探索システム
 pub fn pathfinding_system(
+    mut commands: Commands,
     world_map: Res<WorldMap>,
     mut query: Query<
-        (Entity, &Transform, &Destination, &mut Path),
+        (
+            Entity,
+            &Transform,
+            &Destination,
+            &mut Path,
+            &mut AssignedTask,
+            Option<&Holding>,
+        ),
         (Changed<Destination>, With<DamnedSoul>),
     >,
+    q_designations: Query<(
+        Entity,
+        &Transform,
+        &crate::systems::jobs::Designation,
+        Option<&crate::systems::jobs::IssuedBy>,
+        Option<&crate::systems::jobs::TaskSlots>,
+        Option<&crate::relationships::TaskWorkers>,
+    )>,
+    mut haul_cache: ResMut<crate::systems::familiar_ai::haul_cache::HaulReservationCache>,
+    mut ev_created: MessageWriter<crate::systems::jobs::DesignationCreatedEvent>,
 ) {
-    for (entity, transform, destination, mut path) in query.iter_mut() {
+    for (entity, transform, destination, mut path, mut task, holding_opt) in query.iter_mut() {
         let current_pos = transform.translation.truncate();
         let start_grid = WorldMap::world_to_grid(current_pos);
         let goal_grid = WorldMap::world_to_grid(destination.0);
@@ -133,6 +151,26 @@ pub fn pathfinding_system(
         } else {
             debug!("PATH: Soul {:?} failed to find path", entity);
             path.waypoints.clear();
+
+            // タスク実行中なら放棄
+            if !matches!(*task, AssignedTask::None) {
+                info!(
+                    "PATH: Soul {:?} abandoning task due to unreachable destination",
+                    entity
+                );
+                unassign_task(
+                    &mut commands,
+                    entity,
+                    transform.translation.truncate(),
+                    &mut task,
+                    &mut path,
+                    holding_opt,
+                    &q_designations,
+                    &mut *haul_cache,
+                    Some(&mut ev_created),
+                    true,
+                );
+            }
         }
     }
 }
@@ -140,6 +178,7 @@ pub fn pathfinding_system(
 /// 移動システム
 pub fn soul_movement(
     time: Res<Time>,
+    world_map: Res<WorldMap>,
     mut query: Query<(
         Entity,
         &mut Transform,
@@ -165,7 +204,8 @@ pub fn soul_movement(
             let to_target = target - current_pos;
             let distance = to_target.length();
 
-            if distance > 2.0 {
+            // 目的地への距離が十分近い場合は到着とみなす (1.0)
+            if distance > 1.0 {
                 let base_speed = SOUL_SPEED_BASE;
                 let motivation_bonus = soul.motivation * SOUL_SPEED_MOTIVATION_BONUS;
                 let laziness_penalty = soul.laziness * SOUL_SPEED_LAZINESS_PENALTY;
@@ -179,14 +219,44 @@ pub fn soul_movement(
                 let move_dist = (speed * time.delta_secs()).min(distance);
                 let direction = to_target.normalize();
                 let velocity = direction * move_dist;
-                transform.translation += velocity.extend(0.0);
 
-                anim.is_moving = true;
+                // --- 物理衝突チェック (Global Impassability) ---
+                let next_pos = current_pos + velocity;
+                let mut moved = false;
+                
+                if world_map.is_walkable_world(next_pos) {
+                    // 通常移動
+                    transform.translation.x = next_pos.x;
+                    transform.translation.y = next_pos.y;
+                    moved = true;
+                } else {
+                    // スライディング衝突解決
+                    let next_pos_x = current_pos + Vec2::new(velocity.x, 0.0);
+                    if world_map.is_walkable_world(next_pos_x) {
+                        transform.translation.x = next_pos_x.x;
+                        moved = true;
+                    } else {
+                        let next_pos_y = current_pos + Vec2::new(0.0, velocity.y);
+                        if world_map.is_walkable_world(next_pos_y) {
+                            transform.translation.y = next_pos_y.y;
+                            moved = true;
+                        }
+                    }
+                }
+
+                // 物理判定により全く動けなかった場合、到着したとみなして次のウェイポイントへ
+                // (障害物の端に引っかかって目的地に極微小距離近づけない状況を救済)
+                if !moved && move_dist > 0.01 {
+                    path.current_index += 1;
+                }
+
+                anim.is_moving = moved;
                 if direction.x.abs() > 0.1 {
                     anim.facing_right = direction.x > 0.0;
                 }
             } else {
                 path.current_index += 1;
+                anim.is_moving = false;
             }
         } else {
             anim.is_moving = false;
