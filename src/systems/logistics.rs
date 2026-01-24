@@ -2,9 +2,8 @@ use crate::assets::GameAssets;
 use crate::constants::*;
 use crate::game_state::ZoneContext;
 use crate::systems::jobs::{Rock, Tree};
-use crate::world::map::WorldMap;
+use crate::world::map::{WorldMap, TREE_POSITIONS, ROCK_POSITIONS, INITIAL_WOOD_POSITIONS};
 use bevy::prelude::*;
-use rand::Rng;
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Reflect)]
@@ -93,54 +92,21 @@ pub fn zone_placement(
     }
 }
 
-pub fn item_spawner_system(
-    mut commands: Commands,
-    game_assets: Res<GameAssets>,
-    time: Res<Time>,
-    mut timer: Local<f32>,
-    world_map: Res<WorldMap>,
-) {
-    *timer += time.delta_secs();
-    if *timer > 5.0 {
-        let mut rng = rand::thread_rng();
-        let gx = rng.gen_range(5..MAP_WIDTH - 5);
-        let gy = rng.gen_range(5..MAP_HEIGHT - 5);
 
-        if world_map.is_walkable(gx, gy) {
-            let spawn_pos = WorldMap::grid_to_world(gx, gy);
-            commands.spawn((
-                ResourceItem(ResourceType::Wood),
-                Sprite {
-                    image: game_assets.wood.clone(),
-                    custom_size: Some(Vec2::splat(TILE_SIZE * 0.5)),
-                    color: Color::srgb(0.5, 0.35, 0.05),
-                    ..default()
-                },
-                Transform::from_xyz(spawn_pos.x, spawn_pos.y, Z_ITEM_PICKUP),
-            ));
-            *timer = 0.0;
-            debug!("SPAWNER: Wood spawned randomly at {:?}", spawn_pos);
-        }
-    }
-}
 
 pub fn initial_resource_spawner(
     mut commands: Commands,
     game_assets: Res<GameAssets>,
     world_map: Res<WorldMap>,
 ) {
-    let mut rng = rand::thread_rng();
-
     // 木のスポーン
-    for _ in 0..15 {
-        let gx = rng.gen_range(5..MAP_WIDTH - 5);
-        let gy = rng.gen_range(5..MAP_HEIGHT - 5);
+    for &(gx, gy) in TREE_POSITIONS {
         if world_map.is_walkable(gx, gy) {
             let pos = WorldMap::grid_to_world(gx, gy);
             commands.spawn((
                 Tree,
                 Sprite {
-                    image: game_assets.wood.clone(), // TODO: 木のテクスチャ
+                    image: game_assets.wood.clone(),
                     custom_size: Some(Vec2::splat(TILE_SIZE * 0.8)),
                     color: Color::srgb(0.2, 0.5, 0.2),
                     ..default()
@@ -151,9 +117,7 @@ pub fn initial_resource_spawner(
     }
 
     // 岩のスポーン
-    for _ in 0..10 {
-        let gx = rng.gen_range(5..MAP_WIDTH - 5);
-        let gy = rng.gen_range(5..MAP_HEIGHT - 5);
+    for &(gx, gy) in ROCK_POSITIONS {
         if world_map.is_walkable(gx, gy) {
             let pos = WorldMap::grid_to_world(gx, gy);
             commands.spawn((
@@ -169,11 +133,8 @@ pub fn initial_resource_spawner(
         }
     }
 
-    // 既存の資材も少し撒く
-    let mut count = 0;
-    while count < 5 {
-        let gx = rng.gen_range(5..MAP_WIDTH - 5);
-        let gy = rng.gen_range(5..MAP_HEIGHT - 5);
+    // 既存の資材（木材）も中央付近に少し撒く
+    for &(gx, gy) in INITIAL_WOOD_POSITIONS {
         if world_map.is_walkable(gx, gy) {
             let spawn_pos = WorldMap::grid_to_world(gx, gy);
             commands.spawn((
@@ -186,10 +147,10 @@ pub fn initial_resource_spawner(
                 },
                 Transform::from_xyz(spawn_pos.x, spawn_pos.y, Z_ITEM_PICKUP),
             ));
-            count += 1;
         }
     }
-    info!("SPAWNER: Trees, Rocks, and Initial wood spawned");
+
+    info!("SPAWNER: Fixed Trees, Rocks, and Initial wood spawned");
 }
 
 pub fn resource_count_display_system(

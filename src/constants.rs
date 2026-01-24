@@ -1,8 +1,8 @@
 use bevy::prelude::*;
 
 pub const TILE_SIZE: f32 = 32.0;
-pub const MAP_WIDTH: i32 = 50;
-pub const MAP_HEIGHT: i32 = 50;
+pub const MAP_WIDTH: i32 = 100;
+pub const MAP_HEIGHT: i32 = 100;
 
 /// 使い魔ごとの疲労閾値のデフォルト値
 /// 使い魔はこの値をUIで個別に調整可能
