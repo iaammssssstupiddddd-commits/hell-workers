@@ -23,6 +23,29 @@ use bevy::prelude::*;
 pub struct TaskManager;
 
 impl TaskManager {
+    /// ワーカーにタスク割り当てのための共通セットアップを行う
+    fn prepare_worker_for_task(
+        commands: &mut Commands,
+        worker_entity: Entity,
+        fam_entity: Entity,
+        task_entity: Entity,
+        already_commanded: bool,
+    ) {
+        if !already_commanded {
+            commands.trigger(OnSoulRecruited {
+                entity: worker_entity,
+                familiar_entity: fam_entity,
+            });
+        }
+        commands.entity(worker_entity).insert((
+            UnderCommand(fam_entity),
+            crate::relationships::WorkingOn(task_entity),
+        ));
+        commands
+            .entity(task_entity)
+            .insert(crate::systems::jobs::IssuedBy(fam_entity));
+    }
+
     /// 指定ワーカーの位置から到達可能な未割り当てタスクを探す
     #[allow(clippy::too_many_arguments)]
     pub fn find_unassigned_task_in_area(
@@ -241,20 +264,9 @@ impl TaskManager {
 
         match work_type {
             WorkType::Chop | WorkType::Mine => {
-                if uc_opt.is_none() {
-                    commands.trigger(OnSoulRecruited {
-                        entity: worker_entity,
-                        familiar_entity: fam_entity,
-                    });
-                }
-
-                commands.entity(worker_entity).insert((
-                    UnderCommand(fam_entity),
-                    crate::relationships::WorkingOn(task_entity),
-                ));
-                commands
-                    .entity(task_entity)
-                    .insert(crate::systems::jobs::IssuedBy(fam_entity));
+                Self::prepare_worker_for_task(
+                    commands, worker_entity, fam_entity, task_entity, uc_opt.is_some(),
+                );
 
                 *assigned_task = AssignedTask::Gather {
                     target: task_entity,
@@ -272,20 +284,9 @@ impl TaskManager {
             }
             WorkType::Haul => {
                 if let Ok(target_bp) = q_target_blueprints.get(task_entity) {
-                    if uc_opt.is_none() {
-                        commands.trigger(OnSoulRecruited {
-                            entity: worker_entity,
-                            familiar_entity: fam_entity,
-                        });
-                    }
-
-                    commands.entity(worker_entity).insert((
-                        UnderCommand(fam_entity),
-                        crate::relationships::WorkingOn(task_entity),
-                    ));
-                    commands
-                        .entity(task_entity)
-                        .insert(crate::systems::jobs::IssuedBy(fam_entity));
+                    Self::prepare_worker_for_task(
+                        commands, worker_entity, fam_entity, task_entity, uc_opt.is_some(),
+                    );
 
                     *assigned_task = AssignedTask::HaulToBlueprint {
                         item: task_entity,
@@ -334,20 +335,9 @@ impl TaskManager {
                     .map(|(e, _, _, _)| e);
 
                 if let Some(stock_entity) = best_stockpile {
-                    if uc_opt.is_none() {
-                        commands.trigger(OnSoulRecruited {
-                            entity: worker_entity,
-                            familiar_entity: fam_entity,
-                        });
-                    }
-
-                    commands.entity(worker_entity).insert((
-                        UnderCommand(fam_entity),
-                        crate::relationships::WorkingOn(task_entity),
-                    ));
-                    commands
-                        .entity(task_entity)
-                        .insert(crate::systems::jobs::IssuedBy(fam_entity));
+                    Self::prepare_worker_for_task(
+                        commands, worker_entity, fam_entity, task_entity, uc_opt.is_some(),
+                    );
 
                     *assigned_task = AssignedTask::Haul {
                         item: task_entity,
@@ -373,20 +363,9 @@ impl TaskManager {
                     }
                 }
 
-                if uc_opt.is_none() {
-                    commands.trigger(OnSoulRecruited {
-                        entity: worker_entity,
-                        familiar_entity: fam_entity,
-                    });
-                }
-
-                commands.entity(worker_entity).insert((
-                    UnderCommand(fam_entity),
-                    crate::relationships::WorkingOn(task_entity),
-                ));
-                commands
-                    .entity(task_entity)
-                    .insert(crate::systems::jobs::IssuedBy(fam_entity));
+                Self::prepare_worker_for_task(
+                    commands, worker_entity, fam_entity, task_entity, uc_opt.is_some(),
+                );
 
                 *assigned_task = AssignedTask::Build {
                     blueprint: task_entity,
