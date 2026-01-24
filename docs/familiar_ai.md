@@ -97,6 +97,13 @@
   - `find_unassigned_task_in_area`: タスク検索
   - `assign_task_to_worker`: タスク割り当て
   - `delegate_task`: タスク委譲
+    - 各アイドル状態のワーカーに対し、その現在地から到達可能なタスクを個別に検索して割り当てます。
+- **find_unassigned_task_in_area**: タスク検索
+    - **到達可能性チェック**: 空間グリッドから見つかった候補タスクに対し、ワーカーが物理的に到達可能か（パスが存在するか）をチェックします。
+    - **Worker-Centric**: 使い魔の現在地ではなく、**ワーカー個々の現在地**を起点として判定を行います。
+    - **Ground Projection**: 使い魔（空中ユニット）の位置ではなく、常にワーカー（地上ユニット）が立つ地面の座標に投影してパス計算を開始します。
+    - **4方向パス検索**: 上下左右の4方向移動に準拠したパス検索を行い、斜め移動による障害物のすり抜けを防止しています。
+- **assign_task_to_worker**: タスク割り当て
 - **`recruitment.rs`**: リクルート管理（`RecruitmentManager`）
   - `find_best_recruit`: リクルート候補の検索
   - `try_immediate_recruit`: 即時リクルート

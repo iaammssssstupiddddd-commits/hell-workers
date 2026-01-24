@@ -136,7 +136,8 @@ pub fn update_stockpile_on_item_removal(
 
 /// 距離チェック: 魂がターゲットに近づいたかどうか
 ///
-/// 斜め隣接(sqrt(2) ≒ 1.41倍)をカバーするため、1.5倍以上に設定
+/// 4方向隣接（1タイル＝32px）をカバーするため、タイルサイズの1.5倍を閾値に設定。
+/// これにより、隣接マス（中心間距離32px）からでもターゲットに「近い」と判定される。
 pub fn is_near_target(soul_pos: Vec2, target_pos: Vec2) -> bool {
     soul_pos.distance(target_pos) < TILE_SIZE * 1.5
 }
