@@ -11,8 +11,8 @@ use crate::interface::selection::blueprint_placement;
 use crate::interface::selection::{update_hover_entity, update_selection_indicator};
 use crate::interface::ui::{
     familiar_context_menu_system, hover_tooltip_system, info_panel_system, menu_visibility_system,
-    task_summary_ui_system, ui_interaction_system, update_mode_text_system,
-    update_operation_dialog_system,
+    task_summary_ui_system, ui_interaction_system, update_fps_display_system,
+    update_mode_text_system, update_operation_dialog_system,
 };
 use crate::systems::GameSystemSet;
 use crate::systems::logistics::zone_placement;
@@ -64,6 +64,7 @@ impl Plugin for InterfacePlugin {
                 game_time_system,
                 time_control_keyboard_system,
                 time_control_ui_system,
+                update_fps_display_system,
                 debug_spawn_system,
                 crate::interface::ui::entity_list_interaction_system,
                 crate::interface::ui::update_unassigned_arrow_icon_system,

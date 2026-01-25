@@ -22,7 +22,7 @@ pub fn assign_task_system(
     q_designations: Query<(Entity, &Transform, &Designation), Without<IssuedBy>>,
     q_familiars: Query<(Entity, &Transform), With<Familiar>>,
     world_map: Res<WorldMap>,
-    mut pf_context: ResMut<PathfindingContext>,
+    mut pf_context: Local<PathfindingContext>,
 ) {
     if q_ui.iter().any(|i| *i != Interaction::None) {
         return;
@@ -96,10 +96,10 @@ pub fn assign_task_system(
             // 地面周辺から到達可能かチェック（逆引き検索: タスクから地面へ）
             let target_grid = WorldMap::world_to_grid(pos);
             let is_reachable = if world_map.is_walkable(target_grid.0, target_grid.1) {
-                pathfinding::find_path(&world_map, &mut *pf_context, target_grid, actual_start_grid).is_some()
+                pathfinding::find_path(&world_map, &mut pf_context, target_grid, actual_start_grid).is_some()
             } else {
                 // pathfinding.rs 内部で neighbor -> actual_start_grid の逆引きが行われる
-                pathfinding::find_path_to_adjacent(&world_map, &mut *pf_context, actual_start_grid, target_grid).is_some()
+                pathfinding::find_path_to_adjacent(&world_map, &mut pf_context, actual_start_grid, target_grid).is_some()
             };
 
             if !is_reachable {

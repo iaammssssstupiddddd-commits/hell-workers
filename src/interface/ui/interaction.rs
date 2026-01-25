@@ -10,6 +10,7 @@ use crate::relationships::TaskWorkers;
 use crate::systems::soul_ai::task_execution::AssignedTask;
 use crate::systems::task_queue::TaskQueue;
 use bevy::prelude::*;
+use std::time::Duration;
 
 // ============================================================
 // システム実装
@@ -180,6 +181,31 @@ pub fn task_summary_ui_system(
             high += tasks.iter().filter(|t| t.priority > 0).count();
         }
         text.0 = format!("Tasks: {} ({} High)", total, high);
+    }
+}
+
+#[derive(Default)]
+pub struct FpsCounter {
+    pub frame_count: u32,
+    pub elapsed_time: Duration,
+}
+
+pub fn update_fps_display_system(
+    time: Res<Time>,
+    mut fps_counter: Local<FpsCounter>,
+    mut q_text: Query<&mut Text, With<FpsText>>,
+) {
+    fps_counter.elapsed_time += time.delta();
+    fps_counter.frame_count += 1;
+
+    // 1秒ごとにFPSを更新
+    if fps_counter.elapsed_time >= Duration::from_secs(1) {
+        if let Ok(mut text) = q_text.single_mut() {
+            let fps = fps_counter.frame_count as f32 / fps_counter.elapsed_time.as_secs_f32();
+            text.0 = format!("FPS: {:.0}", fps);
+            fps_counter.frame_count = 0;
+            fps_counter.elapsed_time = Duration::ZERO;
+        }
     }
 }
 

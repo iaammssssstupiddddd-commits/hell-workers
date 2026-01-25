@@ -28,8 +28,7 @@ impl PartialOrd for PathNode {
     }
 }
 
-/// 経路探索用の作業メモリを再利用するためのリソース
-#[derive(Resource)]
+/// 経路探索用の作業メモリを再利用するための構造体
 pub struct PathfindingContext {
     pub g_scores: Vec<i32>,
     pub came_from: Vec<Option<usize>>,

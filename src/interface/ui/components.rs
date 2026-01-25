@@ -104,6 +104,9 @@ pub struct OperationDialogThresholdText;
 #[derive(Component)]
 pub struct OperationDialogMaxSoulText;
 
+#[derive(Component)]
+pub struct FpsText;
+
 // ============================================================
 // エンティティリスト UI コンポーネント
 // ============================================================
