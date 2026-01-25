@@ -52,6 +52,9 @@ pub struct AreaSelectionIndicator;
 // 公開API
 pub use area_selection::{area_selection_indicator_system, task_area_selection_system};
 pub use assign_task::assign_task_system;
-pub use indicators::{task_area_indicator_system, update_designation_indicator_system};
+pub use indicators::{
+    sync_designation_indicator_system, task_area_indicator_system,
+    update_designation_indicator_system,
+};
 pub use input::familiar_command_input_system;
 pub use visualization::{designation_visual_system, familiar_command_visual_system};

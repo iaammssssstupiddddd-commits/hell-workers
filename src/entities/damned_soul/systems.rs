@@ -251,12 +251,10 @@ pub fn soul_movement(
                             moved = true;
                         }
                     }
-                }
-
-                // 物理判定により全く動けなかった場合、到着したとみなして次のウェイポイントへ
-                // (障害物の端に引っかかって目的地に極微小距離近づけない状況を救済)
-                if !moved && move_dist > 0.01 {
-                    path.current_index += 1;
+                    
+                    if !moved && move_dist > 0.01 {
+                        path.current_index += 1;
+                    }
                 }
 
                 anim.is_moving = moved;

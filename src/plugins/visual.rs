@@ -5,7 +5,8 @@ use crate::game_state::PlayMode;
 use crate::systems::GameSystemSet;
 use crate::systems::command::{
     area_selection_indicator_system, designation_visual_system, familiar_command_visual_system,
-    task_area_indicator_system, update_designation_indicator_system,
+    sync_designation_indicator_system, task_area_indicator_system,
+    update_designation_indicator_system,
 };
 use crate::systems::jobs::building_completion_system;
 use crate::systems::logistics::resource_count_display_system;
@@ -72,6 +73,7 @@ impl Plugin for VisualPlugin {
                 area_selection_indicator_system.run_if(in_state(PlayMode::TaskDesignation)),
                 designation_visual_system,
                 update_designation_indicator_system,
+                sync_designation_indicator_system,
                 familiar_command_visual_system,
                 resource_count_display_system,
             )

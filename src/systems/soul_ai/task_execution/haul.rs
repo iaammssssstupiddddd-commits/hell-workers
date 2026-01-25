@@ -71,13 +71,13 @@ pub fn handle_haul_task(
                         update_stockpile_on_item_removal(stored_in.0, q_stockpiles);
                     }
 
-                    // 元のコンポーネントを削除
+                    // 元のコンポーネントは維持する
                     commands
                         .entity(item)
                         .remove::<crate::relationships::StoredIn>();
-                    commands.entity(item).remove::<Designation>();
-                    commands.entity(item).remove::<IssuedBy>();
-                    commands.entity(item).remove::<TaskSlots>();
+                    // commands.entity(item).remove::<Designation>();
+                    // commands.entity(item).remove::<IssuedBy>();
+                    // commands.entity(item).remove::<TaskSlots>();
 
                     *ctx.task = AssignedTask::Haul {
                         item,
