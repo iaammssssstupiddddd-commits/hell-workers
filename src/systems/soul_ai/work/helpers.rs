@@ -1,6 +1,6 @@
 use crate::constants::*;
 use crate::entities::damned_soul::{DamnedSoul, IdleBehavior, IdleState, Path};
-use crate::relationships::{TaskWorkers, WorkingOn};
+use crate::relationships::WorkingOn;
 use crate::systems::familiar_ai::haul_cache::HaulReservationCache;
 use crate::systems::jobs::{Designation, IssuedBy, TaskSlots};
 use crate::systems::soul_ai::task_execution::AssignedTask;
@@ -41,13 +41,22 @@ pub fn unassign_task(
     task: &mut AssignedTask,
     path: &mut Path,
     mut inventory: Option<&mut crate::systems::logistics::Inventory>,
+    dropped_item_res: Option<crate::systems::logistics::ResourceType>,
+    q_targets: &Query<(
+        &Transform,
+        Option<&crate::systems::jobs::Tree>,
+        Option<&crate::systems::jobs::Rock>,
+        Option<&crate::systems::logistics::ResourceItem>,
+        Option<&crate::systems::jobs::Designation>,
+        Option<&crate::relationships::StoredIn>,
+    )>,
     _q_designations: &Query<(
         Entity,
         &Transform,
-        &Designation,
-        Option<&IssuedBy>,
-        Option<&TaskSlots>,
-        Option<&TaskWorkers>,
+        &crate::systems::jobs::Designation,
+        Option<&crate::systems::jobs::IssuedBy>,
+        Option<&crate::systems::jobs::TaskSlots>,
+        Option<&crate::relationships::TaskWorkers>,
     )>,
     haul_cache: &mut HaulReservationCache,
     emit_abandoned_event: bool,
@@ -81,7 +90,14 @@ pub fn unassign_task(
                 Visibility::Visible,
                 Transform::from_xyz(snapped_pos.x, snapped_pos.y, Z_ITEM_PICKUP),
             ));
-            // 既存のタスク関連コンポーネントを削除
+            
+            // アイテムの種類に応じたタスクの再発行
+            // 引数の dropped_item_res を優先し、なければ Query から取得を試みる
+            let res_item = dropped_item_res.or_else(|| {
+                q_targets.get(item_entity).ok().and_then(|(_, _, _, ri, _, _)| ri.map(|r| r.0))
+            });
+
+            // 一旦既存のコンポーネントを削除
             commands.entity(item_entity).remove::<Designation>();
             commands.entity(item_entity).remove::<IssuedBy>();
             commands.entity(item_entity).remove::<TaskSlots>();
@@ -95,9 +111,29 @@ pub fn unassign_task(
             // StoredIn関係も削除
             commands.entity(item_entity).remove::<crate::relationships::StoredIn>();
             
+            // 新しいタスクを即座に付与
+            let next_work_type = if let Some(res) = res_item {
+                if matches!(res, crate::systems::logistics::ResourceType::BucketEmpty | crate::systems::logistics::ResourceType::BucketWater) {
+                    crate::systems::jobs::WorkType::GatherWater
+                } else {
+                    crate::systems::jobs::WorkType::Haul
+                }
+            } else {
+                crate::systems::jobs::WorkType::Haul
+            };
+
+            commands.entity(item_entity).insert((
+                Designation {
+                    work_type: next_work_type,
+                },
+                TaskSlots::new(1),
+            ));
+            
             info!(
-                "UNASSIGN: Soul dropped item {:?} (clean state for auto-haul)",
-                item_entity
+                "UNASSIGN: Soul dropped item {:?} ({:?}) and re-issued {:?} task",
+                item_entity,
+                res_item,
+                next_work_type
             );
         }
     }

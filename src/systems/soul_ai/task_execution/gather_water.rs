@@ -18,6 +18,7 @@ pub fn handle_gather_water_task(
         Option<&crate::systems::jobs::Designation>,
         Option<&crate::relationships::StoredIn>,
     )>,
+    _q_belongs: &Query<&crate::systems::logistics::BelongsTo>,
     commands: &mut Commands,
     game_assets: &Res<crate::assets::GameAssets>,
     time: &Res<Time>,

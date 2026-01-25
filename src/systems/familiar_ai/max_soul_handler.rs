@@ -39,6 +39,14 @@ pub fn handle_max_soul_changed_system(
         Option<&TaskWorkers>,
     )>,
     mut haul_cache: ResMut<crate::systems::familiar_ai::haul_cache::HaulReservationCache>,
+    q_targets: Query<(
+        &Transform,
+        Option<&crate::systems::jobs::Tree>,
+        Option<&crate::systems::jobs::Rock>,
+        Option<&crate::systems::logistics::ResourceItem>,
+        Option<&crate::systems::jobs::Designation>,
+        Option<&crate::relationships::StoredIn>,
+    )>,
     game_assets: Res<crate::assets::GameAssets>,
     q_bubbles: Query<(Entity, &SpeechBubble), With<FamiliarBubble>>,
     mut cooldowns: ResMut<crate::systems::visual::speech::cooldown::BubbleCooldowns>,
@@ -76,6 +84,8 @@ pub fn handle_max_soul_changed_system(
                                 &mut task,
                                 &mut path,
                                 inventory_opt.as_deref_mut(),
+                                None,
+                                &q_targets,
                                 &q_designations,
                                 &mut *haul_cache,
                                 false, // emit_abandoned_event: 上限超過リリース時は個別のタスク中断セリフを出さない

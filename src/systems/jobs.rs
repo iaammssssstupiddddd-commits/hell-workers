@@ -137,6 +137,7 @@ pub use crate::relationships::ManagedBy as IssuedBy;
 pub fn building_completion_system(
     mut commands: Commands,
     game_assets: Res<GameAssets>,
+    mut world_map: ResMut<WorldMap>,
     mut q_blueprints: Query<(Entity, &Blueprint, &Transform)>,
 ) {
     for (entity, bp, transform) in q_blueprints.iter_mut() {
@@ -183,20 +184,56 @@ pub fn building_completion_system(
                     resource_type: Some(crate::systems::logistics::ResourceType::Water),
                 });
 
-                // バケツの生成 (5個)
-                let base_grid = WorldMap::world_to_grid(transform.translation.truncate());
-                let spawn_grids = [
-                    (base_grid.0 - 1, base_grid.1),
-                    (base_grid.0 + 2, base_grid.1),
-                    (base_grid.0, base_grid.1 - 1),
-                    (base_grid.0, base_grid.1 + 2),
-                    (base_grid.0 + 1, base_grid.1 - 1),
-                ];
+                // タンクの前方（下側）2マスをバケツ置き場（Stockpile）として設定
+                let (bx, by) = WorldMap::world_to_grid(transform.translation.truncate());
+                let storage_grids = [(bx, by - 1), (bx + 1, by - 1)];
+                let mut storage_entities = Vec::new();
 
-                for (gx, gy) in spawn_grids {
-                    let spawn_pos = WorldMap::grid_to_world(gx, gy);
+                for (gx, gy) in storage_grids {
+                    let pos = WorldMap::grid_to_world(gx, gy);
+                    let storage_entity = commands
+                        .spawn((
+                            crate::systems::logistics::Stockpile {
+                                capacity: 10,
+                                resource_type: None, // 所有権チェックで専用化するためResourceTypeはNoneでOK
+                            },
+                            crate::systems::logistics::BelongsTo(building_entity),
+                            Sprite {
+                                color: Color::srgba(1.0, 1.0, 0.0, 0.2),
+                                custom_size: Some(Vec2::splat(TILE_SIZE)),
+                                ..default()
+                            },
+                            Transform::from_xyz(pos.x, pos.y, Z_MAP + 0.01),
+                            Name::new("Tank Bucket Storage"),
+                        ))
+                        .id();
+                    world_map.stockpiles.insert((gx, gy), storage_entity);
+                    storage_entities.push(storage_entity);
+                }
+
+                // バケツを5つ生成して専用ストレージに配分
+                for i in 0..5 {
+                    let storage_idx = if i < 3 { 0 } else { 1 };
+                    let storage_entity = storage_entities[storage_idx];
+                    let grid = storage_grids[storage_idx];
+                    let base_pos = WorldMap::grid_to_world(grid.0, grid.1);
+                    
+                    // バケツ置き場らしく少しずらす
+                    let offset = match i {
+                        0 => Vec2::new(-TILE_SIZE * 0.2, TILE_SIZE * 0.2),
+                        1 => Vec2::new(TILE_SIZE * 0.2, TILE_SIZE * 0.2),
+                        2 => Vec2::new(0.0, -TILE_SIZE * 0.2),
+                        3 => Vec2::new(-TILE_SIZE * 0.2, 0.0),
+                        4 => Vec2::new(TILE_SIZE * 0.2, 0.0),
+                        _ => Vec2::ZERO,
+                    };
+
+                    let spawn_pos = base_pos + offset;
+
                     commands.spawn((
                         crate::systems::logistics::ResourceItem(crate::systems::logistics::ResourceType::BucketEmpty),
+                        crate::systems::logistics::BelongsTo(building_entity),
+                        crate::relationships::StoredIn(storage_entity),
                         crate::systems::jobs::Designation {
                             work_type: crate::systems::jobs::WorkType::GatherWater,
                         },
@@ -207,7 +244,7 @@ pub fn building_completion_system(
                             ..default()
                         },
                         Transform::from_xyz(spawn_pos.x, spawn_pos.y, Z_ITEM_PICKUP),
-                        Name::new("Empty Bucket"),
+                        Name::new("Empty Bucket (Tank Dedicated)"),
                     ));
                 }
             }

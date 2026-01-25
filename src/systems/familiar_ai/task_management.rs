@@ -205,6 +205,7 @@ impl TaskManager {
             Option<&TaskSlots>,
             Option<&TaskWorkers>,
         )>,
+        q_items: &Query<(&ResourceItem, Option<&Designation>)>,
         q_souls: &mut Query<
             (
                 Entity,
@@ -227,9 +228,9 @@ impl TaskManager {
             &Stockpile,
             Option<&crate::relationships::StoredItems>,
         )>,
-        q_resources: &Query<&ResourceItem>,
         q_target_blueprints: &Query<&TargetBlueprint>,
         q_blueprints: &Query<&Blueprint>,
+        q_belongs: &Query<&crate::systems::logistics::BelongsTo>,
         task_area_opt: Option<&TaskArea>,
         haul_cache: &mut crate::systems::familiar_ai::haul_cache::HaulReservationCache,
     ) {
@@ -307,10 +308,13 @@ impl TaskManager {
                     return;
                 }
 
-                let item_type = q_resources
-                    .get(task_entity)
-                    .map(|ri| ri.0)
-                    .unwrap_or(ResourceType::Wood);
+                let item_info = q_items.get(task_entity).ok().map(|(it, _)| it.0);
+                let item_belongs = q_belongs.get(task_entity).ok();
+
+                if item_info.is_none() {
+                    return;
+                }
+                let item_type = item_info.unwrap();
 
                 let best_stockpile = q_stockpiles
                     .iter()
@@ -319,6 +323,12 @@ impl TaskManager {
                             if !area.contains(s_transform.translation.truncate()) {
                                 return false;
                             }
+                        }
+
+                        // 所有権チェック
+                        let stock_belongs = q_belongs.get(*s_entity).ok();
+                        if item_belongs != stock_belongs {
+                            return false;
                         }
 
                         let type_match =
@@ -397,7 +407,12 @@ impl TaskManager {
                         let reserved = haul_cache.get(*s_entity);
                         let has_capacity = (current_count + reserved) < stock.capacity;
 
-                        is_tank && has_capacity
+                        // 所有権チェック（バケツとタンク）
+                        let bucket_belongs = q_belongs.get(task_entity).ok();
+                        let _tank_belongs = Some(&crate::systems::logistics::BelongsTo(*s_entity)); // タンク自身への帰属
+                        let is_my_tank = bucket_belongs.map(|b| b.0) == Some(*s_entity);
+
+                        is_tank && has_capacity && is_my_tank
                     })
                     .min_by(|(_, t1, _, _), (_, t2, _, _)| {
                         let d1 = t1.translation.truncate().distance_squared(task_pos);
@@ -452,6 +467,7 @@ impl TaskManager {
             Option<&TaskSlots>,
             Option<&TaskWorkers>,
         )>,
+        q_items: &Query<(&ResourceItem, Option<&Designation>)>,
         q_souls: &mut Query<
             (
                 Entity,
@@ -474,9 +490,9 @@ impl TaskManager {
             &Stockpile,
             Option<&crate::relationships::StoredItems>,
         )>,
-        q_resources: &Query<&ResourceItem>,
         q_target_blueprints: &Query<&TargetBlueprint>,
         q_blueprints: &Query<&Blueprint>,
+        q_belongs: &Query<&crate::systems::logistics::BelongsTo>,
         designation_grid: &DesignationSpatialGrid,
         managed_tasks: &ManagedTasks,
         haul_cache: &mut crate::systems::familiar_ai::haul_cache::HaulReservationCache,
@@ -520,11 +536,12 @@ impl TaskManager {
                     worker_entity,
                     fatigue_threshold,
                     q_designations,
+                    q_items,
                     q_souls,
                     q_stockpiles,
-                    q_resources,
                     q_target_blueprints,
                     q_blueprints,
+                    q_belongs,
                     task_area_opt,
                     haul_cache,
                 );

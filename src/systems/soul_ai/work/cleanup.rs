@@ -29,6 +29,14 @@ pub fn cleanup_commanded_souls_system(
     )>,
     q_familiars: Query<&ActiveCommand, With<Familiar>>,
     mut haul_cache: ResMut<HaulReservationCache>,
+    q_targets: Query<(
+        &Transform,
+        Option<&crate::systems::jobs::Tree>,
+        Option<&crate::systems::jobs::Rock>,
+        Option<&crate::systems::logistics::ResourceItem>,
+        Option<&Designation>,
+        Option<&crate::relationships::StoredIn>,
+    )>,
 ) {
     for (soul_entity, transform, under_command, mut task, mut path, mut inventory_opt) in
         q_souls.iter_mut()
@@ -50,8 +58,9 @@ pub fn cleanup_commanded_souls_system(
                 transform.translation.truncate(),
                 &mut task,
                 &mut path,
-
                 inventory_opt.as_deref_mut(),
+                None,
+                &q_targets,
                 &q_designations,
                 &mut *haul_cache,
                 false, // emit_abandoned_event: 解放時は個別のタスク中断セリフを出さない

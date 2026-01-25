@@ -163,19 +163,16 @@ pub fn pickup_item(
     commands.entity(item_entity).insert(Visibility::Hidden);
 }
 
-/// アイテムをドロップ
-///
-/// 魂からアイテムを外し、指定位置にアイテムを表示します。
+/// アイテムを地面に落とす
 pub fn drop_item(
     commands: &mut Commands,
     _soul_entity: Entity,
     item_entity: Entity,
-    drop_pos: Vec2,
+    pos: Vec2,
 ) {
-    // Inventory update is handled by the caller
     commands.entity(item_entity).insert((
         Visibility::Visible,
-        Transform::from_xyz(drop_pos.x, drop_pos.y, Z_ITEM_PICKUP),
+        Transform::from_xyz(pos.x, pos.y, 0.6),
     ));
 }
 
@@ -185,12 +182,13 @@ pub fn drop_item(
 pub fn update_stockpile_on_item_removal(
     stock_entity: Entity,
     q_stockpiles: &mut Query<(
+        Entity,
         &Transform,
         &mut Stockpile,
         Option<&crate::relationships::StoredItems>,
     )>,
 ) {
-    if let Ok((_, mut stock_comp, Some(stored_items))) = q_stockpiles.get_mut(stock_entity) {
+    if let Ok((_, _, mut stock_comp, Some(stored_items))) = q_stockpiles.get_mut(stock_entity) {
         // 自分を引いて 0 個になるなら None に戻す
         if stored_items.len() <= 1 {
             stock_comp.resource_type = None;

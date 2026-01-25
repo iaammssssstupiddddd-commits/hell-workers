@@ -98,7 +98,6 @@ pub fn spawn_damned_soul_at(
     info!("SPAWN: {} ({:?}) at {:?}", soul_name, gender, actual_pos);
 }
 
-/// 経路探索システム
 pub fn pathfinding_system(
     mut commands: Commands,
     world_map: Res<WorldMap>,
@@ -123,6 +122,14 @@ pub fn pathfinding_system(
         Option<&crate::relationships::TaskWorkers>,
     )>,
     mut haul_cache: ResMut<crate::systems::familiar_ai::haul_cache::HaulReservationCache>,
+    q_targets: Query<(
+        &Transform,
+        Option<&crate::systems::jobs::Tree>,
+        Option<&crate::systems::jobs::Rock>,
+        Option<&crate::systems::logistics::ResourceItem>,
+        Option<&crate::systems::jobs::Designation>,
+        Option<&crate::relationships::StoredIn>,
+    )>,
 ) {
     for (entity, transform, destination, mut path, mut task, mut inventory_opt) in query.iter_mut() {
         let current_pos = transform.translation.truncate();
@@ -166,6 +173,8 @@ pub fn pathfinding_system(
                     &mut task,
                     &mut path,
                     inventory_opt.as_deref_mut(),
+                    None,
+                    &q_targets,
                     &q_designations,
                     &mut *haul_cache,
                     true,
@@ -342,6 +351,14 @@ fn on_stress_breakdown(
         Option<&crate::relationships::TaskWorkers>,
     )>,
     mut haul_cache: ResMut<crate::systems::familiar_ai::haul_cache::HaulReservationCache>,
+    q_targets: Query<(
+        &Transform,
+        Option<&crate::systems::jobs::Tree>,
+        Option<&crate::systems::jobs::Rock>,
+        Option<&crate::systems::logistics::ResourceItem>,
+        Option<&crate::systems::jobs::Designation>,
+        Option<&crate::relationships::StoredIn>,
+    )>,
 ) {
     let soul_entity = on.entity;
     if let Ok((entity, transform, mut _soul, mut task, mut path, mut inventory_opt, under_command)) =
@@ -361,6 +378,8 @@ fn on_stress_breakdown(
                 &mut task,
                 &mut path,
                 inventory_opt.as_deref_mut(),
+                None,
+                &q_targets,
                 &q_designations,
                 &mut *haul_cache,
                 true,
@@ -398,6 +417,14 @@ fn on_exhausted(
         Option<&crate::relationships::TaskWorkers>,
     )>,
     mut haul_cache: ResMut<crate::systems::familiar_ai::haul_cache::HaulReservationCache>,
+    q_targets: Query<(
+        &Transform,
+        Option<&crate::systems::jobs::Tree>,
+        Option<&crate::systems::jobs::Rock>,
+        Option<&crate::systems::logistics::ResourceItem>,
+        Option<&crate::systems::jobs::Designation>,
+        Option<&crate::relationships::StoredIn>,
+    )>,
 ) {
     let soul_entity = on.entity;
     if let Ok((
@@ -430,6 +457,8 @@ fn on_exhausted(
                 &mut task,
                 &mut path,
                 inventory_opt.as_deref_mut(),
+                None,
+                &q_targets,
                 &q_designations,
                 &mut *haul_cache,
                 true,
