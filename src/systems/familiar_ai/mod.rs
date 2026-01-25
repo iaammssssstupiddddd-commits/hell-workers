@@ -2,12 +2,11 @@ use crate::entities::damned_soul::{DamnedSoul, Destination, IdleState, Path, Str
 use crate::entities::familiar::{
     ActiveCommand, Familiar, FamiliarCommand, FamiliarOperation, FamiliarVoice, UnderCommand,
 };
-use crate::relationships::TaskWorkers;
-use crate::relationships::{Commanding, ManagedTasks};
+use crate::relationships::{Commanding, ManagedBy, ManagedTasks, TaskWorkers};
 use crate::systems::GameSystemSet;
 use crate::systems::command::TaskArea;
-use crate::systems::jobs::{Blueprint, IssuedBy, TargetBlueprint, TaskSlots};
-use crate::systems::logistics::{ResourceItem, Stockpile};
+use crate::systems::jobs::{Blueprint, Designation, TaskSlots, TargetBlueprint, Priority};
+use crate::systems::logistics::{ResourceItem, Stockpile, InStockpile};
 use crate::systems::soul_ai::gathering::ParticipatingIn;
 use crate::systems::soul_ai::task_execution::AssignedTask;
 use crate::systems::spatial::{
@@ -143,10 +142,12 @@ pub struct FamiliarAiParams<'w, 's> {
         (
             Entity,
             &'static Transform,
-            &'static crate::systems::jobs::Designation,
-            Option<&'static IssuedBy>,
+            &'static Designation,
+            Option<&'static ManagedBy>,
             Option<&'static TaskSlots>,
             Option<&'static TaskWorkers>,
+            Option<&'static InStockpile>,
+            Option<&'static Priority>,
         ),
     >,
     pub q_stockpiles: Query<
@@ -332,6 +333,7 @@ pub fn familiar_ai_system(params: FamiliarAiParams) {
             &time,
             &game_assets,
             &q_bubbles,
+            &world_map,
         );
 
         // 状態に応じたロジック実行

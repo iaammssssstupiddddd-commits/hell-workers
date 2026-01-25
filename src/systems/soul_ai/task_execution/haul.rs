@@ -1,9 +1,9 @@
 //! 運搬タスクの実行処理（ストックパイルへ）
 
-use crate::relationships::WorkingOn;
+use crate::relationships::{WorkingOn, ManagedBy, TaskWorkers};
 use crate::systems::familiar_ai::haul_cache::HaulReservationCache;
-use crate::systems::jobs::{Designation, IssuedBy, TaskSlots};
-use crate::systems::logistics::Stockpile;
+use crate::systems::jobs::{Designation, TaskSlots, Priority};
+use crate::systems::logistics::{Stockpile, InStockpile};
 use crate::systems::soul_ai::task_execution::{
     context::TaskExecutionContext,
     types::{AssignedTask, HaulPhase},
@@ -30,9 +30,11 @@ pub fn handle_haul_task(
         Entity,
         &Transform,
         &Designation,
-        Option<&IssuedBy>,
+        Option<&ManagedBy>,
         Option<&TaskSlots>,
-        Option<&crate::relationships::TaskWorkers>,
+        Option<&TaskWorkers>,
+        Option<&InStockpile>,
+        Option<&Priority>,
     )>,
     q_stockpiles: &mut Query<(
         Entity,
@@ -173,6 +175,7 @@ pub fn handle_haul_task(
                             0.6,
                         ),
                         crate::relationships::StoredIn(stockpile),
+                        crate::systems::logistics::InStockpile(stockpile),
                     ));
 
                     // カウンタを増やす
@@ -198,6 +201,7 @@ pub fn handle_haul_task(
                         q_targets,
                         q_designations,
                         haul_cache,
+                        world_map,
                         true,
                     );
                 }

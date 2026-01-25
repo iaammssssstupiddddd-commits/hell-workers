@@ -1,5 +1,6 @@
-
-use crate::systems::logistics::{ResourceItem, ResourceType};
+use crate::relationships::{ManagedBy, TaskWorkers};
+use crate::systems::jobs::{Designation, TaskSlots, Priority};
+use crate::systems::logistics::{InStockpile, ResourceItem, ResourceType};
 use crate::systems::soul_ai::task_execution::context::TaskExecutionContext;
 use crate::systems::soul_ai::task_execution::types::{AssignedTask, GatherWaterPhase};
 use crate::world::map::WorldMap;
@@ -15,8 +16,18 @@ pub fn handle_gather_water_task(
         Option<&crate::systems::jobs::Tree>,
         Option<&crate::systems::jobs::Rock>,
         Option<&crate::systems::logistics::ResourceItem>,
-        Option<&crate::systems::jobs::Designation>,
+        Option<&Designation>,
         Option<&crate::relationships::StoredIn>,
+    )>,
+    _q_designations: &Query<(
+        Entity,
+        &Transform,
+        &Designation,
+        Option<&ManagedBy>,
+        Option<&TaskSlots>,
+        Option<&TaskWorkers>,
+        Option<&InStockpile>,
+        Option<&Priority>,
     )>,
     _q_belongs: &Query<&crate::systems::logistics::BelongsTo>,
     commands: &mut Commands,
@@ -60,12 +71,23 @@ pub fn handle_gather_water_task(
             }
 
             let bucket_pos = bucket_transform.translation.truncate();
-            if ctx.soul_transform.translation.truncate().distance(bucket_pos) < 20.0 {
+            // let distance = ctx.soul_pos().distance(bucket_pos);
+            let is_adjacent = {
+                 let sg = WorldMap::world_to_grid(ctx.soul_pos());
+                 let bg = WorldMap::world_to_grid(bucket_pos);
+                 (sg.0 - bg.0).abs() <= 1 && (sg.1 - bg.1).abs() <= 1
+            };
+
+            // 1.8タイルの距離内、または隣接マスにいればピックアップ可能とする
+            if crate::systems::soul_ai::task_execution::common::is_near_target(ctx.soul_pos(), bucket_pos) || is_adjacent {
                 // バケツを拾う
                 commands.entity(bucket_entity).insert(crate::relationships::StoredIn(ctx.soul_entity));
                 // インベントリに追加し、ワールドから消す
                 ctx.inventory.0 = Some(bucket_entity);
                 commands.entity(bucket_entity).insert(Visibility::Hidden);
+                
+                // 次のフェーズへの遷移ロジック...
+
                 
                 // 管理コンポーネントは維持する
                 // commands.entity(bucket_entity).remove::<crate::systems::jobs::Designation>();
@@ -144,31 +166,35 @@ pub fn handle_gather_water_task(
                     // 川が見つからない（ありえないはずだが）
                     *ctx.task = AssignedTask::None;
                 }
+                return;
             } else {
                  let bucket_grid = WorldMap::world_to_grid(bucket_pos);
-                 // バケツがタンク内にめり込んでいる可能性があるため、find_path_to_boundaryを使用する
-                 // (find_path_to_adjacentだとゴールが障害物の場合に失敗する)
-                 if let Some(path) = crate::world::pathfinding::find_path_to_boundary(
-                    world_map,
-                    ctx.pf_context,
-                    WorldMap::world_to_grid(ctx.soul_transform.translation.truncate()),
-                    &vec![bucket_grid]
-                ) {
-                    if let Some(last_grid) = path.last() {
-                         let last_pos = WorldMap::grid_to_world(last_grid.0, last_grid.1);
-                         ctx.dest.0 = last_pos;
-                    } else {
-                         ctx.dest.0 = bucket_pos;
+                 // パスがない場合のみ計算する（毎フレームリセットを防ぐ）
+                    if ctx.path.waypoints.is_empty() {
+                        // バケツがタンク内にめり込んでいる可能性があるため、find_path_to_boundaryを使用する
+                        // (find_path_to_adjacentだとゴールが障害物の場合に失敗する)
+                        if let Some(path) = crate::world::pathfinding::find_path_to_boundary(
+                            world_map,
+                            ctx.pf_context,
+                            WorldMap::world_to_grid(ctx.soul_transform.translation.truncate()),
+                            &vec![bucket_grid]
+                        ) {
+                            if let Some(last_grid) = path.last() {
+                                let last_pos = WorldMap::grid_to_world(last_grid.0, last_grid.1);
+                                ctx.dest.0 = last_pos;
+                            } else {
+                                ctx.dest.0 = bucket_pos;
+                            }
+                            ctx.path.waypoints = path.iter()
+                                .map(|&(x, y)| WorldMap::grid_to_world(x, y))
+                                .collect();
+                            ctx.path.current_index = 0;
+                        } else {
+                            // 経路がない場合は直線移動
+                            ctx.dest.0 = bucket_pos;
+                        }
                     }
-                    ctx.path.waypoints = path.iter()
-                        .map(|&(x, y)| WorldMap::grid_to_world(x, y))
-                        .collect();
-                    ctx.path.current_index = 0;
-                } else {
-                    // 経路がない場合は直線移動
-                    ctx.dest.0 = bucket_pos;
                 }
-            }
         }
         GatherWaterPhase::GoingToRiver => {
             // バケツがインベントリにあるか確認
@@ -322,13 +348,24 @@ pub fn handle_gather_water_task(
                  ));
 
                  // タンクの中身を増やす
-                 // Stockpile コンポーネントの StoredItems を増やす必要があるが、
-                 // 面倒なので単にダミーアイテムをタンク位置にspawnしてStoredIn(tank)にする
                  commands.spawn((
                      ResourceItem(ResourceType::Water),
                      crate::relationships::StoredIn(tank_entity),
                      Visibility::Hidden, // タンクの中なので見えない
                  ));
+
+                 // ドロップ位置がストックパイルなら InStockpile / StoredIn を付与
+                 let drop_grid = WorldMap::world_to_grid(drop_pos);
+                 if let Some(&stockpile_entity) = world_map.stockpiles.get(&drop_grid) {
+                     commands.entity(bucket_entity).insert((
+                         crate::relationships::StoredIn(stockpile_entity),
+                         crate::systems::logistics::InStockpile(stockpile_entity),
+                     ));
+                     info!("GATHER_WATER: Dropped bucket {:?} into stockpile {:?}", bucket_entity, stockpile_entity);
+                 } else {
+                    // ストックパイルでないなら InStockpile も StoredIn も持たない（既に remove 済み）
+                    info!("GATHER_WATER: Dropped bucket {:?} on ground", bucket_entity);
+                 }
 
                  // タスク完了
                  commands.entity(ctx.soul_entity).remove::<crate::relationships::WorkingOn>();

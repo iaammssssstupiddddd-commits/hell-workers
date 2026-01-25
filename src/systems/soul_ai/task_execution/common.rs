@@ -35,8 +35,11 @@ pub fn update_destination_to_adjacent(
         return;
     }
     
-    // 隣接マスのうち、Walkableで現在位置に最も近いものを探す（4方向のみ）
-    let directions = [(0, 1), (0, -1), (1, 0), (-1, 0)];
+    // 隣接マスのうち、Walkableで現在位置に最も近いものを探す（8方向）
+    let directions = [
+        (0, 1), (0, -1), (1, 0), (-1, 0),
+        (1, 1), (1, -1), (-1, 1), (-1, -1)
+    ];
     
     let mut best_pos = None;
     let mut min_dist_sq = f32::MAX;
@@ -202,10 +205,10 @@ pub fn update_stockpile_on_item_removal(
 
 /// 距離チェック: 魂がターゲットに近づいたかどうか
 ///
-/// 4方向隣接（1タイル＝32px）をカバーするため、タイルサイズの1.5倍を閾値に設定。
-/// これにより、隣接マス（中心間距離32px）からでもターゲットに「近い」と判定される。
+/// 隣接マス（中心間距離32px）からでも確実に「近い」と判定されるように、
+/// タイルサイズの1.5倍（48px）を閾値に設定。
 pub fn is_near_target(soul_pos: Vec2, target_pos: Vec2) -> bool {
-    soul_pos.distance(target_pos) < TILE_SIZE * 1.5
+    soul_pos.distance(target_pos) < TILE_SIZE * 1.8
 }
 
 /// 設計図への距離チェック: 魂が設計図の構成タイルのいずれかに近づいたかどうか

@@ -73,9 +73,10 @@ pub fn idle_behavior_system(
         Entity,
         &Transform,
         &crate::systems::jobs::Designation,
-        Option<&crate::systems::jobs::IssuedBy>,
+        Option<&crate::relationships::ManagedBy>,
         Option<&crate::systems::jobs::TaskSlots>,
         Option<&crate::relationships::TaskWorkers>,
+        Option<&crate::systems::logistics::InStockpile>,
     )>,
 ) {
     let dt = time.delta_secs();

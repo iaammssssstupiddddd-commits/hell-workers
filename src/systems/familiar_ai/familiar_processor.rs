@@ -6,11 +6,11 @@ use crate::entities::damned_soul::{DamnedSoul, Destination, IdleBehavior, IdleSt
 use crate::entities::familiar::{
     Familiar, FamiliarOperation, FamiliarVoice, UnderCommand,
 };
-use crate::relationships::{Commanding, ManagedTasks};
+use crate::relationships::{Commanding, ManagedTasks, ManagedBy, TaskWorkers};
 use crate::systems::command::TaskArea;
 use crate::systems::soul_ai::gathering::ParticipatingIn;
-use crate::systems::jobs::Designation;
-use crate::systems::logistics::ResourceItem;
+use crate::systems::jobs::{Designation, TaskSlots, Priority};
+use crate::systems::logistics::{ResourceItem, InStockpile};
 use crate::systems::soul_ai::task_execution::AssignedTask;
 use crate::systems::spatial::{DesignationSpatialGrid, SpatialGrid};
 use crate::systems::visual::speech::components::{FamiliarBubble, SpeechBubble};
@@ -51,10 +51,12 @@ pub fn process_squad_management(
     q_designations: &Query<(
         Entity,
         &Transform,
-        &crate::systems::jobs::Designation,
-        Option<&crate::systems::jobs::IssuedBy>,
-        Option<&crate::systems::jobs::TaskSlots>,
-        Option<&crate::relationships::TaskWorkers>,
+        &Designation,
+        Option<&ManagedBy>,
+        Option<&TaskSlots>,
+        Option<&TaskWorkers>,
+        Option<&InStockpile>,
+        Option<&Priority>,
     )>,
     haul_cache: &mut crate::systems::familiar_ai::haul_cache::HaulReservationCache,
     q_targets: &Query<(
@@ -70,6 +72,7 @@ pub fn process_squad_management(
     time: &Res<Time>,
     game_assets: &Res<crate::assets::GameAssets>,
     q_bubbles: &Query<(Entity, &SpeechBubble), With<FamiliarBubble>>,
+    world_map: &Res<WorldMap>,
 ) -> Vec<Entity> {
     let initial_squad = SquadManager::build_squad(commanding);
 
@@ -96,6 +99,7 @@ pub fn process_squad_management(
         q_bubbles,
         fam_transform,
         voice_opt,
+        world_map,
     );
 
     // リリースされたメンバーを分隊から除外
@@ -289,10 +293,12 @@ pub fn process_task_delegation_and_movement(
     q_designations: &Query<(
         Entity,
         &Transform,
-        &crate::systems::jobs::Designation,
-        Option<&crate::systems::jobs::IssuedBy>,
-        Option<&crate::systems::jobs::TaskSlots>,
-        Option<&crate::relationships::TaskWorkers>,
+        &Designation,
+        Option<&ManagedBy>,
+        Option<&TaskSlots>,
+        Option<&TaskWorkers>,
+        Option<&InStockpile>,
+        Option<&Priority>,
     )>,
     q_stockpiles: &Query<(
         Entity,

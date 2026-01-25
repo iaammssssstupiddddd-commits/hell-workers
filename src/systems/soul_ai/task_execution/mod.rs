@@ -16,9 +16,10 @@ pub use types::AssignedTask;
 
 use crate::entities::damned_soul::{DamnedSoul, Destination, Path, StressBreakdown};
 use crate::events::OnTaskCompleted;
+use crate::relationships::{ManagedBy, TaskWorkers};
 use crate::systems::familiar_ai::haul_cache::HaulReservationCache;
-use crate::systems::jobs::{Blueprint, Designation};
-use crate::systems::logistics::{Inventory, Stockpile};
+use crate::systems::jobs::{Blueprint, Designation, TaskSlots, Priority};
+use crate::systems::logistics::{Inventory, Stockpile, InStockpile};
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
 
@@ -56,9 +57,11 @@ pub fn task_execution_system(
         Entity,
         &Transform,
         &Designation,
-        Option<&crate::systems::jobs::IssuedBy>,
-        Option<&crate::systems::jobs::TaskSlots>,
-        Option<&crate::relationships::TaskWorkers>,
+        Option<&ManagedBy>,
+        Option<&TaskSlots>,
+        Option<&TaskWorkers>,
+        Option<&InStockpile>,
+        Option<&Priority>,
     )>,
     mut q_stockpiles: Query<(
         Entity, // 追加
@@ -114,6 +117,7 @@ pub fn task_execution_system(
                     &work_type,
                     phase,
                     &q_targets,
+                    &q_designations,
                     &mut commands,
                     &game_assets,
                     &time,
@@ -218,6 +222,7 @@ pub fn task_execution_system(
                     tank,
                     phase,
                     &q_targets,
+                    &q_designations,
                     &q_belongs,
                     &mut commands,
                     &game_assets,
@@ -237,6 +242,9 @@ pub fn task_execution_system(
                     task_entity: old_task_entity.unwrap_or(Entity::PLACEHOLDER),
                     work_type,
                 });
+
+                // WorkingOn コンポーネントを削除（これでTaskWorkersも自動更新される）
+                commands.entity(soul_entity).remove::<crate::relationships::WorkingOn>();
 
                 info!(
                     "EVENT: OnTaskCompleted triggered for Soul {:?}",

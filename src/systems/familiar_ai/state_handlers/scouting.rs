@@ -5,7 +5,10 @@
 use super::StateTransitionResult;
 use crate::entities::damned_soul::{DamnedSoul, Destination, IdleState, Path, StressBreakdown};
 use crate::entities::familiar::UnderCommand;
+use crate::relationships::{ManagedBy, TaskWorkers};
 use crate::systems::familiar_ai::FamiliarAiState;
+use crate::systems::jobs::{Designation, TaskSlots, Priority};
+use crate::systems::logistics::InStockpile;
 use crate::systems::soul_ai::gathering::ParticipatingIn;
 use crate::systems::soul_ai::task_execution::AssignedTask;
 use bevy::prelude::*;
@@ -48,10 +51,12 @@ q_targets: &Query<(
 q_designations: &Query<(
     Entity,
     &Transform,
-    &crate::systems::jobs::Designation,
-    Option<&crate::systems::jobs::IssuedBy>,
-    Option<&crate::systems::jobs::TaskSlots>,
-    Option<&crate::relationships::TaskWorkers>,
+    &Designation,
+    Option<&ManagedBy>,
+    Option<&TaskSlots>,
+    Option<&TaskWorkers>,
+    Option<&InStockpile>,
+    Option<&Priority>,
 )>,
 haul_cache: &mut crate::systems::familiar_ai::haul_cache::HaulReservationCache,
 q_breakdown: &Query<&StressBreakdown>,

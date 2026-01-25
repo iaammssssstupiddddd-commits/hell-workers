@@ -5,12 +5,10 @@
 use crate::entities::damned_soul::{DamnedSoul, Destination, IdleBehavior, IdleState, Path};
 use crate::entities::familiar::UnderCommand;
 use crate::events::{OnSoulRecruited, OnTaskAssigned};
-use crate::relationships::{ManagedTasks, TaskWorkers};
+use crate::relationships::{ManagedBy, ManagedTasks, TaskWorkers};
 use crate::systems::command::TaskArea;
-use crate::systems::jobs::{
-    Blueprint, Designation, IssuedBy, TargetBlueprint, TaskSlots, WorkType,
-};
-use crate::systems::logistics::{ResourceItem, ResourceType, Stockpile};
+use crate::systems::jobs::{Blueprint, Designation, TaskSlots, TargetBlueprint, Priority, WorkType};
+use crate::systems::logistics::{InStockpile, ResourceItem, ResourceType, Stockpile};
 use crate::systems::soul_ai::gathering::ParticipatingIn;
 use crate::systems::soul_ai::task_execution::types::{
     AssignedTask, BuildPhase, GatherPhase, GatherWaterPhase, HaulPhase, HaulToBpPhase,
@@ -58,9 +56,11 @@ impl TaskManager {
             Entity,
             &Transform,
             &Designation,
-            Option<&IssuedBy>,
+            Option<&ManagedBy>,
             Option<&TaskSlots>,
             Option<&TaskWorkers>,
+            Option<&InStockpile>,
+            Option<&Priority>,
         )>,
         designation_grid: &DesignationSpatialGrid,
         managed_tasks: &ManagedTasks,
@@ -84,7 +84,7 @@ impl TaskManager {
             }
 
             // 資材が揃った建築タスク（Blueprint）を直接検索して追加
-            for (bp_entity, bp_transform, bp_designation, bp_issued_by, _, _) in
+            for (bp_entity, bp_transform, bp_designation, bp_issued_by, _, _, _, _) in
                 q_designations.iter()
             {
                 if bp_designation.work_type == WorkType::Build {
@@ -107,7 +107,7 @@ impl TaskManager {
         candidates
             .into_iter()
             .filter_map(|entity| {
-                let (entity, transform, designation, issued_by, slots, workers) =
+                let (entity, transform, designation, issued_by, slots, workers, in_stockpile_opt, priority_opt) =
                     q_designations.get(entity).ok()?;
 
                 let is_managed_by_me = managed_tasks.contains(entity);
@@ -138,11 +138,19 @@ impl TaskManager {
 
                 // 4. 到達可能性チェック（逆引き検索: タスクからソウルまで歩けるかチェック）
                 let target_grid = WorldMap::world_to_grid(pos);
+
+
                 let is_reachable = if world_map.is_walkable(target_grid.0, target_grid.1) {
-                    // タスク位置 -> ソウル位置
-                    pathfinding::find_path(world_map, pf_context, target_grid, worker_grid).is_some()
+                    // 通常アイテム（通行可能位置）: 
+                    // 1. まずその場所まで直接いけるか試す
+                    // 2. 失敗した場合、隣接地点までいけるか試す（アイテムが狭い場所にある場合など）
+                    if pathfinding::find_path(world_map, pf_context, target_grid, worker_grid).is_some() {
+                        true
+                    } else {
+                        pathfinding::find_path_to_adjacent(world_map, pf_context, worker_grid, target_grid).is_some()
+                    }
                 } else {
-                    // タスクの隣接 -> ソウル位置 (内部で neighbor -> worker_grid の探索が行われる)
+                    // 障害物（岩・木など）: 隣接マスまで行けるか
                     pathfinding::find_path_to_adjacent(world_map, pf_context, worker_grid, target_grid).is_some()
                 };
 
@@ -164,12 +172,20 @@ impl TaskManager {
 
                 if is_valid {
                     let dist_sq = pos.distance_squared(fam_pos);
-                    let mut priority = 0;
+                    let mut priority = priority_opt.map(|p| p.0).unwrap_or(0) as i32;
                     if designation.work_type == WorkType::Build {
-                        priority = 10;
+                        priority += 10;
                     } else if designation.work_type == WorkType::Haul {
                         if q_target_blueprints.get(entity).is_ok() {
-                            priority = 10;
+                            priority += 10;
+                        }
+                    } else if designation.work_type == WorkType::GatherWater {
+                        // 水汲みは基本優先度を高めに（5）
+                        priority += 5;
+                        // 備蓄場所にあっても優先度を維持するが、地面にあればさらに少し上乗せ?
+                        // 一旦一律 +5 にして、地面ならさらに +2 など
+                        if in_stockpile_opt.is_none() {
+                            priority += 2;
                         }
                     }
 
@@ -201,9 +217,11 @@ impl TaskManager {
             Entity,
             &Transform,
             &Designation,
-            Option<&IssuedBy>,
+            Option<&ManagedBy>,
             Option<&TaskSlots>,
             Option<&TaskWorkers>,
+            Option<&InStockpile>,
+            Option<&Priority>,
         )>,
         q_items: &Query<(&ResourceItem, Option<&Designation>)>,
         q_souls: &mut Query<
@@ -260,7 +278,7 @@ impl TaskManager {
 
         // タスクが存在するか最終確認
         let (task_pos, work_type) =
-            if let Ok((_, transform, designation, _, _, _)) = q_designations.get(task_entity) {
+            if let Ok((_, transform, designation, _, _, _, _, _)) = q_designations.get(task_entity) {
                 (transform.translation.truncate(), designation.work_type)
             } else {
                 return;
@@ -278,7 +296,7 @@ impl TaskManager {
                     phase: GatherPhase::GoingToResource,
                 };
                 dest.0 = task_pos;
-                path.waypoints = vec![task_pos];
+                path.waypoints.clear();
                 path.current_index = 0;
                 commands.trigger(OnTaskAssigned {
                     entity: worker_entity,
@@ -298,7 +316,7 @@ impl TaskManager {
                         phase: HaulToBpPhase::GoingToItem,
                     };
                     dest.0 = task_pos;
-                    path.waypoints = vec![task_pos];
+                    path.waypoints.clear();
                     path.current_index = 0;
                     commands.trigger(OnTaskAssigned {
                         entity: worker_entity,
@@ -360,7 +378,7 @@ impl TaskManager {
                     haul_cache.reserve(stock_entity);
 
                     dest.0 = task_pos;
-                    path.waypoints = vec![task_pos];
+                    path.waypoints.clear();
                     path.current_index = 0;
                     commands.trigger(OnTaskAssigned {
                         entity: worker_entity,
@@ -385,7 +403,7 @@ impl TaskManager {
                     phase: BuildPhase::GoingToBlueprint,
                 };
                 dest.0 = task_pos;
-                path.waypoints = vec![task_pos];
+                path.waypoints.clear();
                 path.current_index = 0;
                 commands.trigger(OnTaskAssigned {
                     entity: worker_entity,
@@ -438,7 +456,7 @@ impl TaskManager {
                     haul_cache.reserve(tank_entity);
 
                     dest.0 = task_pos;
-                    path.waypoints = vec![task_pos];
+                    path.waypoints.clear();
                     path.current_index = 0;
                     commands.trigger(OnTaskAssigned {
                         entity: worker_entity,
@@ -463,9 +481,11 @@ impl TaskManager {
             Entity,
             &Transform,
             &Designation,
-            Option<&IssuedBy>,
+            Option<&ManagedBy>,
             Option<&TaskSlots>,
             Option<&TaskWorkers>,
+            Option<&InStockpile>,
+            Option<&Priority>,
         )>,
         q_items: &Query<(&ResourceItem, Option<&Designation>)>,
         q_souls: &mut Query<

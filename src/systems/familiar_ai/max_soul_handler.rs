@@ -5,8 +5,9 @@
 use crate::entities::damned_soul::Path;
 use crate::entities::familiar::{Familiar, FamiliarVoice, UnderCommand};
 use crate::events::FamiliarOperationMaxSoulChangedEvent;
-use crate::relationships::{Commanding, TaskWorkers};
-use crate::systems::jobs::{Designation, IssuedBy, TaskSlots};
+use crate::relationships::{Commanding, ManagedBy, TaskWorkers};
+use crate::systems::jobs::{Designation, TaskSlots, Priority};
+use crate::systems::logistics::InStockpile;
 use crate::systems::soul_ai::task_execution::AssignedTask;
 use crate::systems::soul_ai::work::unassign_task;
 use crate::systems::visual::speech::components::{
@@ -34,9 +35,11 @@ pub fn handle_max_soul_changed_system(
         Entity,
         &Transform,
         &Designation,
-        Option<&IssuedBy>,
+        Option<&ManagedBy>,
         Option<&TaskSlots>,
         Option<&TaskWorkers>,
+        Option<&InStockpile>,
+        Option<&Priority>,
     )>,
     mut haul_cache: ResMut<crate::systems::familiar_ai::haul_cache::HaulReservationCache>,
     q_targets: Query<(
@@ -51,6 +54,7 @@ pub fn handle_max_soul_changed_system(
     q_bubbles: Query<(Entity, &SpeechBubble), With<FamiliarBubble>>,
     mut cooldowns: ResMut<crate::systems::visual::speech::cooldown::BubbleCooldowns>,
     time: Res<Time>,
+    world_map: Res<crate::world::map::WorldMap>,
     mut commands: Commands,
 ) {
     for event in ev_max_soul_changed.read() {
@@ -88,6 +92,7 @@ pub fn handle_max_soul_changed_system(
                                 &q_targets,
                                 &q_designations,
                                 &mut *haul_cache,
+                                &world_map,
                                 false, // emit_abandoned_event: 上限超過リリース時は個別のタスク中断セリフを出さない
                             );
                         }

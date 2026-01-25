@@ -2,9 +2,10 @@ use bevy::prelude::*;
 
 use crate::entities::damned_soul::Path;
 use crate::entities::familiar::{ActiveCommand, Familiar, FamiliarCommand, UnderCommand};
-use crate::relationships::TaskWorkers;
+use crate::relationships::{ManagedBy, TaskWorkers};
 use crate::systems::familiar_ai::haul_cache::HaulReservationCache;
-use crate::systems::jobs::{Designation, IssuedBy, TaskSlots};
+use crate::systems::jobs::{Designation, TaskSlots, Priority};
+
 use crate::systems::soul_ai::task_execution::AssignedTask;
 use crate::systems::soul_ai::work::helpers;
 
@@ -23,9 +24,11 @@ pub fn cleanup_commanded_souls_system(
         Entity,
         &Transform,
         &Designation,
-        Option<&IssuedBy>,
+        Option<&ManagedBy>,
         Option<&TaskSlots>,
         Option<&TaskWorkers>,
+        Option<&crate::systems::logistics::InStockpile>,
+        Option<&Priority>,
     )>,
     q_familiars: Query<&ActiveCommand, With<Familiar>>,
     mut haul_cache: ResMut<HaulReservationCache>,
@@ -37,6 +40,7 @@ pub fn cleanup_commanded_souls_system(
         Option<&Designation>,
         Option<&crate::relationships::StoredIn>,
     )>,
+    world_map: Res<crate::world::map::WorldMap>,
 ) {
     for (soul_entity, transform, under_command, mut task, mut path, mut inventory_opt) in
         q_souls.iter_mut()
@@ -63,6 +67,7 @@ pub fn cleanup_commanded_souls_system(
                 &q_targets,
                 &q_designations,
                 &mut *haul_cache,
+                &world_map,
                 false, // emit_abandoned_event: 解放時は個別のタスク中断セリフを出さない
             );
 

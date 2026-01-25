@@ -4,6 +4,9 @@ use crate::constants::*;
 use crate::events::{
     OnExhausted, OnSoulRecruited, OnStressBreakdown, OnTaskAssigned, OnTaskCompleted,
 };
+use crate::relationships::{ManagedBy, TaskWorkers};
+use crate::systems::jobs::{Designation, TaskSlots, Priority};
+use crate::systems::logistics::InStockpile;
 use crate::systems::soul_ai::task_execution::AssignedTask;
 use crate::systems::soul_ai::work::unassign_task;
 use crate::world::map::WorldMap;
@@ -111,15 +114,17 @@ pub fn pathfinding_system(
             &mut AssignedTask,
             Option<&mut crate::systems::logistics::Inventory>,
         ),
-        (Changed<Destination>, With<DamnedSoul>),
+        With<DamnedSoul>,
     >,
     q_designations: Query<(
         Entity,
         &Transform,
-        &crate::systems::jobs::Designation,
-        Option<&crate::systems::jobs::IssuedBy>,
-        Option<&crate::systems::jobs::TaskSlots>,
-        Option<&crate::relationships::TaskWorkers>,
+        &Designation,
+        Option<&ManagedBy>,
+        Option<&TaskSlots>,
+        Option<&TaskWorkers>,
+        Option<&InStockpile>,
+        Option<&Priority>,
     )>,
     mut haul_cache: ResMut<crate::systems::familiar_ai::haul_cache::HaulReservationCache>,
     q_targets: Query<(
@@ -136,10 +141,18 @@ pub fn pathfinding_system(
         let start_grid = WorldMap::world_to_grid(current_pos);
         let goal_grid = WorldMap::world_to_grid(destination.0);
 
-        if let Some(last) = path.waypoints.last() {
-            if last.distance_squared(destination.0) < 1.0 {
-                continue;
+        // すでに有効なパスがあり、目的地も変わっていないならスキップ
+        if !path.waypoints.is_empty() {
+            if let Some(last) = path.waypoints.last() {
+                if last.distance_squared(destination.0) < 1.0 {
+                    continue;
+                }
             }
+        }
+
+        // タスクがないなら探索不要
+        if matches!(*task, AssignedTask::None) {
+            continue;
         }
 
         if start_grid == goal_grid {
@@ -148,12 +161,19 @@ pub fn pathfinding_system(
             continue;
         }
 
-        if let Some(grid_path) = pathfinding::find_path(&*world_map, &mut *pf_context, start_grid, goal_grid) {
+        if let Some(grid_path) =
+            pathfinding::find_path(&*world_map, &mut *pf_context, start_grid, goal_grid)
+                .or_else(|| {
+                    // 通常のパスが見つからない場合、ターゲットの隣接マスへのパスを試みる
+                    // これはターゲットが木や岩（非歩行可能）の上にある場合に有効
+                    debug!("PATH: Soul {:?} failed find_path, trying find_path_to_adjacent", entity);
+                    pathfinding::find_path_to_adjacent(&*world_map, &mut *pf_context, start_grid, goal_grid)
+                })
+        {
             path.waypoints = grid_path
                 .iter()
                 .map(|&(x, y)| WorldMap::grid_to_world(x, y))
                 .collect();
-            path.current_index = 0;
             path.current_index = 0;
             debug!("PATH: Soul {:?} found new path", entity);
         } else {
@@ -177,6 +197,7 @@ pub fn pathfinding_system(
                     &q_targets,
                     &q_designations,
                     &mut *haul_cache,
+                    &*world_map,
                     true,
                 );
             }
@@ -343,11 +364,14 @@ fn on_stress_breakdown(
     q_designations: Query<(
         Entity,
         &Transform,
-        &crate::systems::jobs::Designation,
-        Option<&crate::systems::jobs::IssuedBy>,
-        Option<&crate::systems::jobs::TaskSlots>,
-        Option<&crate::relationships::TaskWorkers>,
+        &Designation,
+        Option<&ManagedBy>,
+        Option<&TaskSlots>,
+        Option<&TaskWorkers>,
+        Option<&InStockpile>,
+        Option<&Priority>,
     )>,
+    world_map: Res<WorldMap>,
     mut haul_cache: ResMut<crate::systems::familiar_ai::haul_cache::HaulReservationCache>,
     q_targets: Query<(
         &Transform,
@@ -380,6 +404,7 @@ fn on_stress_breakdown(
                 &q_targets,
                 &q_designations,
                 &mut *haul_cache,
+                &world_map,
                 true,
             );
         }
@@ -409,10 +434,12 @@ fn on_exhausted(
     q_designations: Query<(
         Entity,
         &Transform,
-        &crate::systems::jobs::Designation,
-        Option<&crate::systems::jobs::IssuedBy>,
-        Option<&crate::systems::jobs::TaskSlots>,
-        Option<&crate::relationships::TaskWorkers>,
+        &Designation,
+        Option<&ManagedBy>,
+        Option<&TaskSlots>,
+        Option<&TaskWorkers>,
+        Option<&InStockpile>,
+        Option<&Priority>,
     )>,
     mut haul_cache: ResMut<crate::systems::familiar_ai::haul_cache::HaulReservationCache>,
     q_targets: Query<(
@@ -423,6 +450,7 @@ fn on_exhausted(
         Option<&crate::systems::jobs::Designation>,
         Option<&crate::relationships::StoredIn>,
     )>,
+    world_map: Res<WorldMap>,
 ) {
     let soul_entity = on.entity;
     if let Ok((
@@ -459,6 +487,7 @@ fn on_exhausted(
                 &q_targets,
                 &q_designations,
                 &mut *haul_cache,
+                &world_map,
                 true,
             );
         }

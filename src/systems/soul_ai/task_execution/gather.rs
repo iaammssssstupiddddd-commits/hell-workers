@@ -2,8 +2,9 @@
 
 use crate::assets::GameAssets;
 use crate::constants::*;
-use crate::systems::jobs::{Designation, Rock, Tree, WorkType};
-use crate::systems::logistics::ResourceItem;
+use crate::relationships::{ManagedBy, TaskWorkers};
+use crate::systems::jobs::{Designation, TaskSlots, Priority, Rock, Tree, WorkType};
+use crate::systems::logistics::{InStockpile, ResourceItem};
 use crate::systems::soul_ai::task_execution::{
     common::*,
     context::TaskExecutionContext,
@@ -24,6 +25,16 @@ pub fn handle_gather_task(
         Option<&ResourceItem>,
         Option<&Designation>,
         Option<&crate::relationships::StoredIn>,
+    )>,
+    _q_designations: &Query<(
+        Entity,
+        &Transform,
+        &Designation,
+        Option<&ManagedBy>,
+        Option<&TaskSlots>,
+        Option<&TaskWorkers>,
+        Option<&InStockpile>,
+        Option<&Priority>,
     )>,
     commands: &mut Commands,
     game_assets: &Res<GameAssets>,
