@@ -94,6 +94,10 @@ fn setup(
         rock: asset_server.load("textures/rock.png"),
         aura_circle,
         aura_ring,
+        // Water related
+        tank_empty: asset_server.load("textures/tank_empty.png"),
+        bucket_empty: asset_server.load("textures/bucket_empty.png"),
+        bucket_water: asset_server.load("textures/bucket_water.png"),
         icon_male: asset_server.load("textures/ui/male.png"),
         icon_female: asset_server.load("textures/ui/female.png"),
         icon_fatigue: asset_server.load("textures/ui/fatigue.png"),
@@ -120,6 +124,7 @@ fn setup(
         icon_hammer: asset_server.load("textures/ui/hammer.png"),
         icon_wood_small: asset_server.load("textures/ui/wood_small.png"),
         icon_rock_small: asset_server.load("textures/ui/rock_small.png"),
+        icon_water_small: asset_server.load("textures/ui/water_small.png"),
         // Fonts
         font_ui,
         font_familiar,

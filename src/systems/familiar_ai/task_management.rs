@@ -13,7 +13,7 @@ use crate::systems::jobs::{
 use crate::systems::logistics::{ResourceItem, ResourceType, Stockpile};
 use crate::systems::soul_ai::gathering::ParticipatingIn;
 use crate::systems::soul_ai::task_execution::types::{
-    AssignedTask, BuildPhase, GatherPhase, HaulPhase, HaulToBpPhase,
+    AssignedTask, BuildPhase, GatherPhase, GatherWaterPhase, HaulPhase, HaulToBpPhase,
 };
 use crate::systems::spatial::DesignationSpatialGrid;
 use crate::world::map::WorldMap;
@@ -152,7 +152,7 @@ impl TaskManager {
 
                 // 収集系は対象が実在するか追加チェック
                 let is_valid = match designation.work_type {
-                    WorkType::Chop | WorkType::Mine | WorkType::Haul => true,
+                    WorkType::Chop | WorkType::Mine | WorkType::Haul | WorkType::GatherWater => true,
                     WorkType::Build => {
                         if let Ok(bp) = q_blueprints.get(entity) {
                             bp.materials_complete()
@@ -381,6 +381,55 @@ impl TaskManager {
                     task_entity,
                     work_type: WorkType::Build,
                 });
+            }
+            WorkType::GatherWater => {
+                let best_tank = q_stockpiles
+                    .iter()
+                    .filter(|(s_entity, s_transform, stock, stored)| {
+                        if let Some(area) = task_area_opt {
+                            if !area.contains(s_transform.translation.truncate()) {
+                                return false;
+                            }
+                        }
+                        let is_tank = stock.resource_type == Some(ResourceType::Water);
+                        let current_count = stored.map(|s| s.len()).unwrap_or(0);
+                        let reserved = haul_cache.get(*s_entity);
+                        let has_capacity = (current_count + reserved) < stock.capacity;
+
+                        is_tank && has_capacity
+                    })
+                    .min_by(|(_, t1, _, _), (_, t2, _, _)| {
+                        let d1 = t1.translation.truncate().distance_squared(task_pos);
+                        let d2 = t2.translation.truncate().distance_squared(task_pos);
+                        d1.partial_cmp(&d2).unwrap_or(std::cmp::Ordering::Equal)
+                    })
+                    .map(|(e, _, _, _)| e);
+
+                if let Some(tank_entity) = best_tank {
+                    Self::prepare_worker_for_task(
+                        commands,
+                        worker_entity,
+                        fam_entity,
+                        task_entity,
+                        uc_opt.is_some(),
+                    );
+
+                    *assigned_task = AssignedTask::GatherWater {
+                        bucket: task_entity,
+                        tank: tank_entity,
+                        phase: GatherWaterPhase::GoingToBucket,
+                    };
+                    haul_cache.reserve(tank_entity);
+
+                    dest.0 = task_pos;
+                    path.waypoints = vec![task_pos];
+                    path.current_index = 0;
+                    commands.trigger(OnTaskAssigned {
+                        entity: worker_entity,
+                        task_entity,
+                        work_type: WorkType::GatherWater,
+                    });
+                }
             }
         }
     }

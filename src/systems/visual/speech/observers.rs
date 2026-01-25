@@ -49,6 +49,7 @@ pub fn on_task_assigned(
                         WorkType::Mine => LatinPhrase::Fodere,
                         WorkType::Haul => LatinPhrase::Portare,
                         WorkType::Build => LatinPhrase::Laborare,
+                        WorkType::GatherWater => LatinPhrase::Haurire,
                     };
                     spawn_familiar_bubble(
                         &mut commands,

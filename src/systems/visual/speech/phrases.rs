@@ -14,6 +14,8 @@ pub enum LatinPhrase {
     Caede,
     /// 運べ！ (運搬)
     Portare,
+    /// 汲め！ (水汲み)
+    Haurire,
     /// 休め！ (休憩/アイドル)
     Requiesce,
     /// 去れ！ (リリース)
@@ -31,6 +33,7 @@ impl LatinPhrase {
             LatinPhrase::Fodere => &["Fodere!", "Effodite!", "Excava!", "Pelle!", "Fodite!"],
             LatinPhrase::Caede => &["Caede!", "Seca!", "Tunde!", "Percute!", "Incide!"],
             LatinPhrase::Portare => &["Portare!", "Fer!", "Cape!", "Tolle!", "Affer!"],
+            LatinPhrase::Haurire => &["Haurire!", "Hauri!", "Ehauri!", "Exhauri!", "Liba!"],
             LatinPhrase::Requiesce => &["Requiesce!", "Quiesce!", "Siste!", "Mane!", "Pausa!"],
             LatinPhrase::Abi => &["Abi!", "Discede!", "I!", "Vade!", "Recede!"],
             LatinPhrase::Custom(_) => &[], // Custom handles string generation differently
@@ -84,12 +87,13 @@ impl LatinPhrase {
             LatinPhrase::Fodere => 2,
             LatinPhrase::Caede => 3,
             LatinPhrase::Portare => 4,
-            LatinPhrase::Requiesce => 5,
-            LatinPhrase::Abi => 6,
-            LatinPhrase::Custom(_) => 7,
+            LatinPhrase::Haurire => 5,
+            LatinPhrase::Requiesce => 6,
+            LatinPhrase::Abi => 7,
+            LatinPhrase::Custom(_) => 8,
         }
     }
 
     /// フレーズの種類数
-    pub const COUNT: usize = 8;
+    pub const COUNT: usize = 9;
 }
