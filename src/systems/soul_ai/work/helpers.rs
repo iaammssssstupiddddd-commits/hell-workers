@@ -72,9 +72,15 @@ pub fn unassign_task(
         });
     }
 
-    // 運搬タスクの備蓄場所予約を解除
-    if let AssignedTask::Haul { stockpile, .. } = *task {
-        haul_cache.release(stockpile);
+    // 運搬・水汲みタスクの予約を解除
+    match *task {
+        AssignedTask::Haul { stockpile, .. } => {
+            haul_cache.release(stockpile);
+        }
+        AssignedTask::GatherWater { tank, .. } => {
+            haul_cache.release(tank);
+        }
+        _ => {}
     }
 
     // アイテムのドロップ処理（運搬タスクの場合）

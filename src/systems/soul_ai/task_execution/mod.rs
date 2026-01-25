@@ -224,8 +224,10 @@ pub fn task_execution_system(
                     &q_targets,
                     &q_designations,
                     &q_belongs,
+                    &mut q_stockpiles,
                     &mut commands,
                     &game_assets,
+                    &mut *haul_cache,
                     &time,
                     &world_map,
                 );
