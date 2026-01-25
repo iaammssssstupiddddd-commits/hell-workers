@@ -1,8 +1,9 @@
 use crate::constants::*;
 use crate::entities::damned_soul::{DamnedSoul, IdleBehavior, IdleState, Path};
-use crate::relationships::WorkingOn;
+use crate::relationships::{WorkingOn, ManagedBy, TaskWorkers, StoredIn};
 use crate::systems::familiar_ai::haul_cache::HaulReservationCache;
-use crate::systems::jobs::{Designation, TaskSlots};
+use crate::systems::jobs::{Designation, TaskSlots, Priority, Tree, Rock};
+use crate::systems::logistics::{InStockpile, Inventory, ResourceType, ResourceItem};
 use crate::systems::soul_ai::task_execution::AssignedTask;
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
@@ -40,25 +41,28 @@ pub fn unassign_task(
     drop_pos: Vec2,
     task: &mut AssignedTask,
     path: &mut Path,
-    mut inventory: Option<&mut crate::systems::logistics::Inventory>,
-    dropped_item_res: Option<crate::systems::logistics::ResourceType>,
+    mut inventory: Option<&mut Inventory>,
+    dropped_item_res: Option<ResourceType>,
     q_targets: &Query<(
         &Transform,
-        Option<&crate::systems::jobs::Tree>,
-        Option<&crate::systems::jobs::Rock>,
-        Option<&crate::systems::logistics::ResourceItem>,
-        Option<&crate::systems::jobs::Designation>,
-        Option<&crate::relationships::StoredIn>,
+        Option<&Tree>,
+        Option<&Rock>,
+        Option<&ResourceItem>,
+        Option<&Designation>,
+        Option<&StoredIn>,
     )>,
     _q_designations: &Query<(
         Entity,
         &Transform,
-        &crate::systems::jobs::Designation,
-        Option<&crate::systems::jobs::IssuedBy>,
-        Option<&crate::systems::jobs::TaskSlots>,
-        Option<&crate::relationships::TaskWorkers>,
+        &Designation,
+        Option<&ManagedBy>,
+        Option<&TaskSlots>,
+        Option<&TaskWorkers>,
+        Option<&InStockpile>,
+        Option<&Priority>,
     )>,
     haul_cache: &mut HaulReservationCache,
+    world_map: &WorldMap,
     emit_abandoned_event: bool,
 ) {
     // タスク中断イベントを発火
@@ -82,8 +86,15 @@ pub fn unassign_task(
             // あるいはここでinventory.0 = Noneする?
             // argument is Option<&mut Inventory>. 
             
-            let grid = WorldMap::world_to_grid(drop_pos);
-            let snapped_pos = WorldMap::grid_to_world(grid.0, grid.1);
+            let (gx, gy) = WorldMap::world_to_grid(drop_pos);
+            let drop_grid = if world_map.is_walkable(gx, gy) {
+                (gx, gy)
+            } else {
+                // 通行不能（壁の中など）なら、近くの通行可能な場所を探す
+                world_map.get_nearest_walkable_grid(drop_pos).unwrap_or((gx, gy))
+            };
+            
+            let snapped_pos = WorldMap::grid_to_world(drop_grid.0, drop_grid.1);
 
             // クリーンな状態でドロップ（Designation なし）
             commands.entity(item_entity).insert((
@@ -94,7 +105,7 @@ pub fn unassign_task(
             // アイテムの種類に応じたタスクの再発行
             // 引数の dropped_item_res を優先し、なければ Query から取得を試みる
             let res_item = dropped_item_res.or_else(|| {
-                q_targets.get(item_entity).ok().and_then(|(_, _, _, ri, _, _)| ri.map(|r| r.0))
+                q_targets.get(item_entity).ok().and_then(|(_tr, _tree, _rock, ri, _des, _stored): (&Transform, Option<&Tree>, Option<&Rock>, Option<&ResourceItem>, Option<&Designation>, Option<&StoredIn>)| ri.map(|r| r.0))
             });
 
             // 管理コンポーネントは削除せず維持する。
@@ -111,6 +122,8 @@ pub fn unassign_task(
 
             // StoredIn関係は削除（地面に落ちるため）
             commands.entity(item_entity).remove::<crate::relationships::StoredIn>();
+            // ストックパイル情報も削除（地面に落ちるため、確実に非備蓄状態にする）
+            commands.entity(item_entity).remove::<crate::systems::logistics::InStockpile>();
             
             // 新しいタスクを即座に付与
             let next_work_type = if let Some(res) = res_item {
