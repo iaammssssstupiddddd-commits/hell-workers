@@ -234,6 +234,7 @@ pub fn spawn_familiar_at(
             crate::relationships::ManagedTasks::default(), // 管理タスクリスト（Relationship自動管理）
             Destination(actual_pos),                       // 移動先
             Path::default(),                               // 経路
+
             FamiliarAnimation::default(),                  // アニメーション
             FamiliarVoice::random(),                       // ランダムな口癖傾向
             Sprite {

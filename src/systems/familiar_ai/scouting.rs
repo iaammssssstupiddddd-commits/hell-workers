@@ -19,7 +19,7 @@ pub fn scouting_logic(
     ai_state: &mut FamiliarAiState,
     fam_dest: &mut Destination,
     fam_path: &mut Path,
-    q_souls: &Query<
+    q_souls: &mut Query<
         (
             Entity,
             &Transform,
@@ -28,7 +28,8 @@ pub fn scouting_logic(
             &mut Destination,
             &mut Path,
             &IdleState,
-            Option<&crate::relationships::Holding>,
+
+            Option<&mut crate::systems::logistics::Inventory>,
             Option<&UnderCommand>,
             Option<&ParticipatingIn>,
         ),
@@ -61,10 +62,11 @@ pub fn scouting_logic(
         dest,
         path,
         idle,
-        holding,
+
+        mut _inv,
         uc,
         participating,
-    )) = q_souls.get(target_soul)
+    )) = q_souls.get_mut(target_soul)
     {
         let (
             _soul_entity,
@@ -74,7 +76,8 @@ pub fn scouting_logic(
             _dest,
             _path,
             _idle,
-            _holding,
+
+            _inv,
             uc,
             _participating,
         ): (
@@ -85,18 +88,19 @@ pub fn scouting_logic(
             &Destination,
             &Path,
             &IdleState,
-            Option<&crate::relationships::Holding>,
+
+            Option<&mut crate::systems::logistics::Inventory>,
             Option<&UnderCommand>,
             Option<&ParticipatingIn>,
         ) = (
             _soul_entity,
             target_transform,
             soul,
-            task,
-            dest,
-            path,
+            &*task,
+            &*dest,
+            &*path,
             idle,
-            holding,
+            _inv.as_deref_mut(),
             uc,
             participating,
         );

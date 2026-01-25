@@ -31,7 +31,7 @@ pub fn blueprint_auto_build_system(
             &mut Destination,
             &mut Path,
             &IdleState,
-            Option<&crate::relationships::Holding>,
+
             Option<&UnderCommand>,
         ),
         Without<Familiar>,
@@ -82,7 +82,7 @@ pub fn blueprint_auto_build_system(
                 let mut best_worker = None;
                 let mut min_dist_sq = f32::MAX;
 
-                for (soul_entity, soul_transform, soul, task, _, _, idle, _, uc_opt) in
+                for (soul_entity, soul_transform, soul, task, _, _, idle, uc_opt) in
                     q_souls.iter()
                 {
                     // この使い魔の部下か確認
@@ -118,7 +118,7 @@ pub fn blueprint_auto_build_system(
 
                 // 見つかった魂に建築タスクを割り当て
                 if let Some(worker_entity) = best_worker {
-                    if let Ok((_, _, soul, mut assigned_task, mut dest, mut path, idle, _, _)) =
+                    if let Ok((_, _, soul, mut assigned_task, mut dest, mut path, idle, _)) =
                         q_souls.get_mut(worker_entity)
                     {
                         if !helpers::is_soul_available_for_work(

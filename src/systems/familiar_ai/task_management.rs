@@ -5,7 +5,7 @@
 use crate::entities::damned_soul::{DamnedSoul, Destination, IdleBehavior, IdleState, Path};
 use crate::entities::familiar::UnderCommand;
 use crate::events::{OnSoulRecruited, OnTaskAssigned};
-use crate::relationships::{Holding, ManagedTasks, TaskWorkers};
+use crate::relationships::{ManagedTasks, TaskWorkers};
 use crate::systems::command::TaskArea;
 use crate::systems::jobs::{
     Blueprint, Designation, IssuedBy, TargetBlueprint, TaskSlots, WorkType,
@@ -214,7 +214,8 @@ impl TaskManager {
                 &mut Destination,
                 &mut Path,
                 &IdleState,
-                Option<&Holding>,
+
+                Option<&mut crate::systems::logistics::Inventory>,
                 Option<&UnderCommand>,
                 Option<&ParticipatingIn>,
             ),
@@ -460,7 +461,8 @@ impl TaskManager {
                 &mut Destination,
                 &mut Path,
                 &IdleState,
-                Option<&Holding>,
+
+                Option<&mut crate::systems::logistics::Inventory>,
                 Option<&UnderCommand>,
                 Option<&ParticipatingIn>,
             ),

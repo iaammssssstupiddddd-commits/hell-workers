@@ -1,7 +1,7 @@
 //! 設計図への運搬タスクの実行処理
 
 use crate::entities::damned_soul::StressBreakdown;
-use crate::relationships::{Holding, WorkingOn};
+use crate::relationships::WorkingOn;
 use crate::systems::familiar_ai::haul_cache::HaulReservationCache;
 use crate::systems::jobs::{
     Blueprint, Designation, DesignationCreatedEvent, IssuedBy, TaskSlots, WorkType,
@@ -17,7 +17,6 @@ use bevy::prelude::*;
 
 pub fn handle_haul_to_blueprint_task(
     ctx: &mut TaskExecutionContext,
-    holding: Option<&Holding>,
     breakdown_opt: Option<&StressBreakdown>,
     item_entity: Entity,
     blueprint_entity: Entity,
@@ -61,7 +60,8 @@ pub fn handle_haul_to_blueprint_task(
             ctx.soul_pos(),
             ctx.task,
             ctx.path,
-            holding,
+
+            Some(ctx.inventory),
             q_designations,
             haul_cache,
             Some(ev_created),
@@ -90,7 +90,7 @@ pub fn handle_haul_to_blueprint_task(
                 let is_near = is_near_target(soul_pos, item_pos);
                 
                 if is_near {
-                    pickup_item(commands, ctx.soul_entity, item_entity);
+                    pickup_item(commands, ctx.soul_entity, item_entity, ctx.inventory);
 
                     // もしアイテムが備蓄場所にあったなら、その備蓄場所の型管理を更新する
                     if let Some(stored_in) = stored_in_opt {
@@ -188,10 +188,10 @@ pub fn handle_haul_to_blueprint_task(
                     ctx.soul_entity, blueprint_entity
                 );
                 // Blueprint が消失 - アイテムをドロップ
-                if holding.is_some() {
+                if ctx.inventory.0.is_some() {
                     drop_item(commands, ctx.soul_entity, item_entity, soul_pos);
                 }
-                commands.entity(ctx.soul_entity).remove::<Holding>();
+                ctx.inventory.0 = None;
                 commands.entity(ctx.soul_entity).remove::<WorkingOn>();
                 clear_task_and_path(ctx.task, ctx.path);
             }
@@ -244,7 +244,7 @@ pub fn handle_haul_to_blueprint_task(
                 }
             }
 
-            commands.entity(ctx.soul_entity).remove::<Holding>();
+            ctx.inventory.0 = None;
             commands.entity(ctx.soul_entity).remove::<WorkingOn>();
             clear_task_and_path(ctx.task, ctx.path);
             ctx.soul.fatigue = (ctx.soul.fatigue + 0.05).min(1.0);

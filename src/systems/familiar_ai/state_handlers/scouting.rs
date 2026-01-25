@@ -21,7 +21,7 @@ pub fn handle_scouting_state(
     ai_state: &mut FamiliarAiState,
     fam_dest: &mut Destination,
     fam_path: &mut Path,
-    q_souls: &Query<
+    q_souls: &mut Query<
         (
             Entity,
             &Transform,
@@ -30,7 +30,8 @@ pub fn handle_scouting_state(
             &mut Destination,
             &mut Path,
             &IdleState,
-            Option<&crate::relationships::Holding>,
+
+            Option<&mut crate::systems::logistics::Inventory>,
             Option<&UnderCommand>,
             Option<&ParticipatingIn>,
         ),

@@ -39,7 +39,7 @@ pub struct ResourceLabels(pub HashMap<(i32, i32), Entity>);
 pub struct ResourceCountLabel;
 
 /// ソウルが持っているアイテムのエンティティ
-#[derive(Component, Default, Reflect)]
+#[derive(Component, Default, Reflect, Clone, Copy, Debug)]
 #[reflect(Component)]
 pub struct Inventory(pub Option<Entity>);
 

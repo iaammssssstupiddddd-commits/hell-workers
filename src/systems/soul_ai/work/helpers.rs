@@ -1,6 +1,6 @@
 use crate::constants::*;
 use crate::entities::damned_soul::{DamnedSoul, IdleBehavior, IdleState, Path};
-use crate::relationships::{Holding, TaskWorkers, WorkingOn};
+use crate::relationships::{TaskWorkers, WorkingOn};
 use crate::systems::familiar_ai::haul_cache::HaulReservationCache;
 use crate::systems::jobs::{Designation, DesignationCreatedEvent, IssuedBy, TaskSlots};
 use crate::systems::soul_ai::task_execution::AssignedTask;
@@ -40,7 +40,7 @@ pub fn unassign_task(
     drop_pos: Vec2,
     task: &mut AssignedTask,
     path: &mut Path,
-    holding: Option<&Holding>,
+    mut inventory: Option<&mut crate::systems::logistics::Inventory>,
     _q_designations: &Query<(
         Entity,
         &Transform,
@@ -66,30 +66,43 @@ pub fn unassign_task(
     }
 
     // アイテムのドロップ処理（運搬タスクの場合）
-    if let Some(Holding(item_entity)) = holding {
-        let item_entity = *item_entity;
-        let grid = WorldMap::world_to_grid(drop_pos);
-        let snapped_pos = WorldMap::grid_to_world(grid.0, grid.1);
+    if let Some(inventory) = inventory.as_deref_mut() {
+        if let Some(item_entity) = inventory.0 {
+            // インベントリから削除
+            // 注意: inventoryは可変参照なので直接書き換える
+            // しかし、呼び出し元でinventory.0 = Noneする必要があるため、ここではドロップ処理のみ行う
+            // あるいはここでinventory.0 = Noneする?
+            // argument is Option<&mut Inventory>. 
+            
+            let grid = WorldMap::world_to_grid(drop_pos);
+            let snapped_pos = WorldMap::grid_to_world(grid.0, grid.1);
 
-        // クリーンな状態でドロップ（Designation なし）
-        commands.entity(item_entity).insert((
-            Visibility::Visible,
-            Transform::from_xyz(snapped_pos.x, snapped_pos.y, Z_ITEM_PICKUP),
-        ));
-        // 既存のタスク関連コンポーネントを削除
-        commands.entity(item_entity).remove::<Designation>();
-        commands.entity(item_entity).remove::<IssuedBy>();
-        commands.entity(item_entity).remove::<TaskSlots>();
-        commands
-            .entity(item_entity)
-            .remove::<crate::systems::jobs::TargetBlueprint>();
+            // クリーンな状態でドロップ（Designation なし）
+            commands.entity(item_entity).insert((
+                Visibility::Visible,
+                Transform::from_xyz(snapped_pos.x, snapped_pos.y, Z_ITEM_PICKUP),
+            ));
+            // 既存のタスク関連コンポーネントを削除
+            commands.entity(item_entity).remove::<Designation>();
+            commands.entity(item_entity).remove::<IssuedBy>();
+            commands.entity(item_entity).remove::<TaskSlots>();
+            commands
+                .entity(item_entity)
+                .remove::<crate::systems::jobs::TargetBlueprint>();
 
-        commands.entity(soul_entity).remove::<Holding>();
+            // StoredIn関係も削除
+            commands.entity(item_entity).remove::<crate::relationships::StoredIn>();
+            
+            info!(
+                "UNASSIGN: Soul dropped item {:?} (clean state for auto-haul)",
+                item_entity
+            );
+        }
+    }
 
-        info!(
-            "UNASSIGN: Soul dropped item {:?} (clean state for auto-haul)",
-            item_entity
-        );
+    // インベントリを空にする（ドロップしたとみなす）
+    if let Some(inventory) = inventory {
+        inventory.0 = None;
     }
 
     // ソウルからタスクを解除

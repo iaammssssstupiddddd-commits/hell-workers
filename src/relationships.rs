@@ -140,31 +140,6 @@ impl ManagedTasks {
     }
 }
 // ============================================================
-// ソウル ⇔ アイテム 保持関係
-// =================================== =========================
-
-/// ソウルがアイテムを保持していることを示す Relationship
-/// ソウル側に付与される（ソウル → アイテムへの参照）
-#[derive(Component, Reflect, Debug, Clone, Copy)]
-#[reflect(Component)]
-#[relationship(relationship_target = HeldBy)]
-pub struct Holding(pub Entity);
-
-impl Default for Holding {
-    fn default() -> Self {
-        Self(Entity::PLACEHOLDER)
-    }
-}
-
-/// アイテムを保持している作業者（ソウル）の一覧
-/// アイテム側に自動的に付与・維持される RelationshipTarget
-#[derive(Component, Reflect, Debug, Default)]
-#[reflect(Component)]
-#[relationship_target(relationship = Holding)]
-pub struct HeldBy(Vec<Entity>);
-
-impl HeldBy {}
-// ============================================================
 // アイテム ⇔ ストックパイル 関係
 // ============================================================
 
