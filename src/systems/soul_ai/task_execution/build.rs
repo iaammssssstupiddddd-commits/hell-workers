@@ -41,7 +41,7 @@ pub fn handle_build_task(
                     return;
                 }
 
-                update_destination_to_blueprint(ctx.dest, &bp.occupied_grids, ctx.path, soul_pos, world_map);
+                update_destination_to_blueprint(ctx.dest, &bp.occupied_grids, ctx.path, soul_pos, world_map, ctx.pf_context);
 
                 if is_near_blueprint(soul_pos, &bp.occupied_grids) {
                     *ctx.task = AssignedTask::Build {

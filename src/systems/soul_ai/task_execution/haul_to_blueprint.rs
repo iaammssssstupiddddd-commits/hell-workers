@@ -87,8 +87,9 @@ pub fn handle_haul_to_blueprint_task(
 
                 let item_pos = item_transform.translation.truncate();
                 update_destination_to_adjacent(ctx.dest, item_pos, ctx.path, soul_pos, world_map);
-
-                if is_near_target(soul_pos, item_pos) {
+                let is_near = is_near_target(soul_pos, item_pos);
+                
+                if is_near {
                     pickup_item(commands, ctx.soul_entity, item_entity);
 
                     // もしアイテムが備蓄場所にあったなら、その備蓄場所の型管理を更新する
@@ -104,6 +105,47 @@ pub fn handle_haul_to_blueprint_task(
                     commands.entity(item_entity).remove::<IssuedBy>();
                     commands.entity(item_entity).remove::<TaskSlots>();
 
+                    // ブループリントへの目的地を即座に更新（強制的に更新）
+                    if let Ok((_, bp, _)) = q_blueprints.get(blueprint_entity) {
+                        // 強制的に目的地を更新するため、まず目的地をクリア
+                        ctx.path.waypoints.clear();
+                        // ブループリントへの目的地を強制的に設定（重複チェックを避ける）
+                        use std::collections::HashSet;
+                        let mut checked_grids = HashSet::new();
+                        let mut best_pos = None;
+                        let mut min_dist_sq = f32::MAX;
+                        let directions = [(0, 1), (0, -1), (1, 0), (-1, 0)];
+                        for &(gx, gy) in &bp.occupied_grids {
+                            for (dx, dy) in directions {
+                                let nx = gx + dx;
+                                let ny = gy + dy;
+                                let grid_key = (nx, ny);
+                                
+                                // 既にチェック済みの位置はスキップ
+                                if checked_grids.contains(&grid_key) {
+                                    continue;
+                                }
+                                checked_grids.insert(grid_key);
+                                
+                                if bp.occupied_grids.contains(&(nx, ny)) {
+                                    continue;
+                                }
+                                if world_map.is_walkable(nx, ny) {
+                                    let world_pos = crate::world::map::WorldMap::grid_to_world(nx, ny);
+                                    let dist_sq = soul_pos.distance_squared(world_pos);
+                                    if dist_sq < min_dist_sq {
+                                        min_dist_sq = dist_sq;
+                                        best_pos = Some(world_pos);
+                                    }
+                                }
+                            }
+                        }
+                        if let Some(pos) = best_pos {
+                            // 強制的に目的地を更新（距離チェックなし）
+                            ctx.dest.0 = pos;
+                        }
+                    }
+
                     *ctx.task = AssignedTask::HaulToBlueprint {
                         item: item_entity,
                         blueprint: blueprint_entity,
@@ -111,8 +153,8 @@ pub fn handle_haul_to_blueprint_task(
                     };
                     ctx.path.waypoints.clear();
                     info!(
-                        "HAUL_TO_BP: Soul {:?} picked up item {:?}",
-                        ctx.soul_entity, item_entity
+                        "HAUL_TO_BP: Soul {:?} picked up item {:?}, heading to blueprint {:?}",
+                        ctx.soul_entity, item_entity, blueprint_entity
                     );
                 }
             } else {
@@ -126,7 +168,7 @@ pub fn handle_haul_to_blueprint_task(
         }
         HaulToBpPhase::GoingToBlueprint => {
             if let Ok((_bp_transform, bp, _)) = q_blueprints.get(blueprint_entity) {
-                update_destination_to_blueprint(ctx.dest, &bp.occupied_grids, ctx.path, soul_pos, world_map);
+                update_destination_to_blueprint(ctx.dest, &bp.occupied_grids, ctx.path, soul_pos, world_map, ctx.pf_context);
 
                 if is_near_blueprint(soul_pos, &bp.occupied_grids) {
                     info!(

@@ -51,7 +51,9 @@ pub fn handle_haul_task(
                 let res_pos = res_transform.translation.truncate();
                 update_destination_to_adjacent(ctx.dest, res_pos, ctx.path, soul_pos, world_map);
 
-                if is_near_target(soul_pos, res_pos) {
+                let is_near = is_near_target(soul_pos, res_pos);
+
+                if is_near {
                     pickup_item(commands, ctx.soul_entity, item);
 
                     // もしアイテムが備蓄場所にあったなら、その備蓄場所の型管理を更新する

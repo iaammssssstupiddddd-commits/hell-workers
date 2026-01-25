@@ -65,43 +65,67 @@ pub fn update_destination_to_adjacent(
     }
 }
 
-/// 設計図への隣接目的地を設定（サイズを考慮）
+/// 設計図への到達パスを設定（境界で停止するパスを探索）
 pub fn update_destination_to_blueprint(
     dest: &mut Destination,
     occupied_grids: &[(i32, i32)],
     path: &mut Path,
     soul_pos: Vec2,
     world_map: &WorldMap,
+    pf_context: &mut crate::world::pathfinding::PathfindingContext,
 ) {
-    // 占有しているタイルの周囲から、最も魂に近い歩行可能なタイルを探す
-    let mut best_pos = None;
-    let mut min_dist_sq = f32::MAX;
-
-    let directions = [(0, 1), (0, -1), (1, 0), (-1, 0)];
-
-    for &(gx, gy) in occupied_grids {
-        for (dx, dy) in directions {
-            let nx = gx + dx;
-            let ny = gy + dy;
-
-            // 占有グリッド内は目的地にしない
-            if occupied_grids.contains(&(nx, ny)) {
-                continue;
-            }
-
-            if world_map.is_walkable(nx, ny) {
-                let world_pos = WorldMap::grid_to_world(nx, ny);
-                let dist_sq = soul_pos.distance_squared(world_pos);
-                if dist_sq < min_dist_sq {
-                    min_dist_sq = dist_sq;
-                    best_pos = Some(world_pos);
+    let start_grid = WorldMap::world_to_grid(soul_pos);
+    
+    // 現在のパスが既に有効（ターゲットの隣接点に向かっている）なら再計算しない
+    if !path.waypoints.is_empty() {
+        if let Some(last_wp) = path.waypoints.last() {
+            let last_grid = WorldMap::world_to_grid(*last_wp);
+            // ターゲット領域そのものではなく、「ターゲット領域に隣接しているか」をチェック
+            // ただし find_path_to_boundary はターゲット内に入る直前を返すため、
+            // ターゲット内の点に隣接している点であればOK
+            for &(gx, gy) in occupied_grids {
+                let dx = (last_grid.0 - gx).abs();
+                let dy = (last_grid.1 - gy).abs();
+                // 隣接 (dx<=1, dy<=1) かつ 自分自身はターゲット外（ただし今回はターゲット内通過も許容したロジックなので、
+                // 単に「ターゲットの近傍に向かっている」ことでよしとする）
+                if dx <= 1 && dy <= 1 {
+                    // 有効なパスを持っているので何もしない
+                    return;
                 }
             }
         }
     }
 
-    if let Some(pos) = best_pos {
-        update_destination_if_needed(dest, pos, path);
+    // 現在地がすでにゴール条件を満たしているかチェック
+    // （中心地との距離などではなく、占有グリッドへの隣接チェック）
+    for &(gx, gy) in occupied_grids {
+        let grid_pos = WorldMap::grid_to_world(gx, gy);
+        if soul_pos.distance(grid_pos) < TILE_SIZE * 1.5 {
+            // 到着済み
+            return;
+        }
+    }
+
+    if let Some(grid_path) = crate::world::pathfinding::find_path_to_boundary(
+        world_map,
+        pf_context,
+        start_grid,
+        occupied_grids
+    ) {
+        // パスが見つかった場合、そのパスを採用
+        if let Some(last_grid) = grid_path.last() {
+             let last_pos = WorldMap::grid_to_world(last_grid.0, last_grid.1);
+             
+             // 目的地設定（これが移動の目標）
+             update_destination_if_needed(dest, last_pos, path);
+             
+             // パスウェイポイントを直接上書き
+             path.waypoints = grid_path
+                .iter()
+                .map(|&(x, y)| WorldMap::grid_to_world(x, y))
+                .collect();
+             path.current_index = 0;
+        }
     }
 }
 

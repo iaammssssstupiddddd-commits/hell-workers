@@ -1,6 +1,7 @@
 //! タスク実行のコンテキスト構造体
 
 use crate::entities::damned_soul::{DamnedSoul, Destination, Path};
+use crate::systems::logistics::Inventory;
 use crate::systems::soul_ai::task_execution::types::AssignedTask;
 use bevy::prelude::*;
 
@@ -15,6 +16,8 @@ pub struct TaskExecutionContext<'a> {
     pub task: &'a mut AssignedTask,
     pub dest: &'a mut Destination,
     pub path: &'a mut Path,
+    pub inventory: &'a mut Inventory,
+    pub pf_context: &'a mut crate::world::pathfinding::PathfindingContext,
 }
 
 impl<'a> TaskExecutionContext<'a> {

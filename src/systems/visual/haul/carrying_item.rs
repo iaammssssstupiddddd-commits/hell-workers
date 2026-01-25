@@ -67,22 +67,37 @@ pub fn spawn_carrying_item_system(
 /// 運搬アイコンの位置更新とクリーンアップ
 pub fn update_carrying_item_system(
     mut commands: Commands,
+    game_assets: Res<GameAssets>,
     q_workers: Query<(Entity, &Transform, Option<&Holding>), With<DamnedSoul>>,
-    mut q_icons: Query<(Entity, &CarryingItemVisual, &mut Transform), Without<DamnedSoul>>,
+    q_items: Query<&ResourceItem>,
+    mut q_icons: Query<(Entity, &CarryingItemVisual, &mut Transform, &mut Sprite), Without<DamnedSoul>>,
 ) {
-    for (icon_entity, icon, icon_transform) in q_icons.iter_mut() {
-        let (icon_entity, icon, mut icon_transform): (Entity, &CarryingItemVisual, Mut<Transform>) =
-            (icon_entity, icon, icon_transform);
+    for (icon_entity, icon, mut icon_transform, mut icon_sprite) in q_icons.iter_mut() {
         let mut should_despawn = true;
 
         if let Ok((_, worker_transform, holding)) = q_workers.get(icon.worker) {
             // Holdingがある場合のみアイコンを維持
-            if holding.is_some() {
+            if let Some(holding) = holding {
                 should_despawn = false;
 
                 // 位置同期
                 icon_transform.translation =
                     worker_transform.translation + Vec3::new(0.0, CARRIED_ITEM_Y_OFFSET, 0.5);
+
+                // バケツの状態に応じて画像を更新
+                if let Ok(item) = q_items.get(holding.0) {
+                    let new_icon_handle = match item.0 {
+                        ResourceType::Wood => game_assets.icon_wood_small.clone(),
+                        ResourceType::Rock => game_assets.icon_rock_small.clone(),
+                        ResourceType::Water => game_assets.icon_water_small.clone(),
+                        ResourceType::BucketEmpty => game_assets.bucket_empty.clone(),
+                        ResourceType::BucketWater => game_assets.bucket_water.clone(),
+                    };
+                    // 画像が変更された場合のみ更新
+                    if icon_sprite.image != new_icon_handle {
+                        icon_sprite.image = new_icon_handle;
+                    }
+                }
             }
         }
 
