@@ -47,6 +47,7 @@ mod ui_constants {
     pub const COLOR_HAUL: Color = Color::srgb(0.5, 1.0, 0.5);
     pub const COLOR_BUILD: Color = Color::srgb(0.8, 0.6, 0.2);
     pub const COLOR_HAUL_TO_BP: Color = Color::srgb(0.8, 0.8, 0.3);
+    pub const COLOR_WATER: Color = Color::srgb(0.3, 0.5, 1.0);
     pub const COLOR_STRESS_HIGH: Color = Color::srgb(1.0, 0.0, 0.0);
     pub const COLOR_STRESS_MEDIUM: Color = Color::srgb(1.0, 0.5, 0.0);
     pub const COLOR_FATIGUE_ICON: Color = Color::srgb(0.6, 0.6, 1.0);
@@ -91,6 +92,7 @@ fn get_task_icon_and_color(
         AssignedTask::Haul { .. } => (game_assets.icon_haul.clone(), COLOR_HAUL),
         AssignedTask::Build { .. } => (game_assets.icon_pick.clone(), COLOR_BUILD),
         AssignedTask::HaulToBlueprint { .. } => (game_assets.icon_haul.clone(), COLOR_HAUL_TO_BP),
+        AssignedTask::GatherWater { .. } => (game_assets.icon_haul.clone(), COLOR_WATER),
     }
 }
 

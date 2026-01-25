@@ -65,6 +65,46 @@ pub fn update_destination_to_adjacent(
     }
 }
 
+/// 設計図への隣接目的地を設定（サイズを考慮）
+pub fn update_destination_to_blueprint(
+    dest: &mut Destination,
+    occupied_grids: &[(i32, i32)],
+    path: &mut Path,
+    soul_pos: Vec2,
+    world_map: &WorldMap,
+) {
+    // 占有しているタイルの周囲から、最も魂に近い歩行可能なタイルを探す
+    let mut best_pos = None;
+    let mut min_dist_sq = f32::MAX;
+
+    let directions = [(0, 1), (0, -1), (1, 0), (-1, 0)];
+
+    for &(gx, gy) in occupied_grids {
+        for (dx, dy) in directions {
+            let nx = gx + dx;
+            let ny = gy + dy;
+
+            // 占有グリッド内は目的地にしない
+            if occupied_grids.contains(&(nx, ny)) {
+                continue;
+            }
+
+            if world_map.is_walkable(nx, ny) {
+                let world_pos = WorldMap::grid_to_world(nx, ny);
+                let dist_sq = soul_pos.distance_squared(world_pos);
+                if dist_sq < min_dist_sq {
+                    min_dist_sq = dist_sq;
+                    best_pos = Some(world_pos);
+                }
+            }
+        }
+    }
+
+    if let Some(pos) = best_pos {
+        update_destination_if_needed(dest, pos, path);
+    }
+}
+
 /// タスクとパスをクリア
 pub fn clear_task_and_path(task: &mut AssignedTask, path: &mut Path) {
     *task = AssignedTask::None;
@@ -140,4 +180,15 @@ pub fn update_stockpile_on_item_removal(
 /// これにより、隣接マス（中心間距離32px）からでもターゲットに「近い」と判定される。
 pub fn is_near_target(soul_pos: Vec2, target_pos: Vec2) -> bool {
     soul_pos.distance(target_pos) < TILE_SIZE * 1.5
+}
+
+/// 設計図への距離チェック: 魂が設計図の構成タイルのいずれかに近づいたかどうか
+pub fn is_near_blueprint(soul_pos: Vec2, occupied_grids: &[(i32, i32)]) -> bool {
+    for &(gx, gy) in occupied_grids {
+        let grid_pos = WorldMap::grid_to_world(gx, gy);
+        if soul_pos.distance(grid_pos) < TILE_SIZE * 1.5 {
+            return true;
+        }
+    }
+    false
 }

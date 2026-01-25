@@ -17,7 +17,7 @@ pub fn on_task_completed_motivation_bonus(
     if let Ok(mut soul) = q_souls.get_mut(event.entity) {
         let bonus = match event.work_type {
             WorkType::Chop | WorkType::Mine => MOTIVATION_BONUS_GATHER,
-            WorkType::Haul => MOTIVATION_BONUS_HAUL,
+            WorkType::Haul | WorkType::GatherWater => MOTIVATION_BONUS_HAUL,
             WorkType::Build => MOTIVATION_BONUS_BUILD,
         };
 
