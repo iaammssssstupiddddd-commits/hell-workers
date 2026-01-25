@@ -18,8 +18,9 @@ impl Plugin for LogicPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(SoulAiPlugin);
         
-        // 再生マネージャーを登録
-        app.init_resource::<RegrowthManager>();
+        // パスファインディング用の作業メモリを登録
+        app.init_resource::<RegrowthManager>()
+            .init_resource::<crate::world::pathfinding::PathfindingContext>();
 
         app.add_systems(
             Update,
