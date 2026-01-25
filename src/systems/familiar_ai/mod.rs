@@ -169,7 +169,6 @@ pub struct FamiliarAiParams<'w, 's> {
     pub game_assets: Res<'w, crate::assets::GameAssets>,
     pub q_bubbles: Query<'w, 's, (Entity, &'static SpeechBubble), With<FamiliarBubble>>,
     pub cooldowns: ResMut<'w, crate::systems::visual::speech::cooldown::BubbleCooldowns>,
-    pub ev_created: MessageWriter<'w, crate::systems::jobs::DesignationCreatedEvent>,
     pub ev_state_changed: MessageWriter<'w, crate::events::FamiliarAiStateChangedEvent>,
     pub world_map: Res<'w, crate::world::map::WorldMap>,
     pub pf_context: Local<'s, PathfindingContext>,
@@ -195,10 +194,10 @@ pub fn familiar_ai_system(params: FamiliarAiParams) {
         game_assets,
         q_bubbles,
         mut cooldowns,
-        mut ev_created,
         mut ev_state_changed,
         world_map,
         mut pf_context,
+        ..
     } = params;
     // 1. 搬送中のアイテム・ストックパイル予約状況を事前計算
     // フェーズ2: 全ソウルをイテレートする代わりにキャッシュ（HaulReservationCache）を使用
@@ -316,7 +315,6 @@ pub fn familiar_ai_system(params: FamiliarAiParams) {
             &mut q_souls,
             &q_designations,
             &mut *haul_cache,
-            &mut ev_created,
             &mut cooldowns,
             &time,
             &game_assets,
@@ -366,7 +364,7 @@ pub fn familiar_ai_system(params: FamiliarAiParams) {
         }
 
         // 状態遷移の最終確定
-        if finalize_state_transitions(&mut ai_state, &squad_entities, fam_entity) {
+        if finalize_state_transitions(&mut ai_state, &squad_entities, fam_entity, max_workers) {
             state_changed = true;
         }
 

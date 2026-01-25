@@ -8,7 +8,6 @@ use crate::systems::command::{
 };
 use crate::systems::obstacle::obstacle_cleanup_system;
 use crate::systems::soul_ai::SoulAiPlugin;
-use crate::systems::task_queue::queue_management_system;
 use crate::world::regrowth::{RegrowthManager, tree_regrowth_system};
 use bevy::prelude::*;
 
@@ -24,7 +23,6 @@ impl Plugin for LogicPlugin {
         app.add_systems(
             Update,
             (
-                queue_management_system,
                 assign_task_system.run_if(in_state(PlayMode::TaskDesignation)),
             )
                 .chain()

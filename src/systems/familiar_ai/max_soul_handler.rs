@@ -6,7 +6,7 @@ use crate::entities::damned_soul::Path;
 use crate::entities::familiar::{Familiar, FamiliarVoice, UnderCommand};
 use crate::events::FamiliarOperationMaxSoulChangedEvent;
 use crate::relationships::{Commanding, TaskWorkers};
-use crate::systems::jobs::{Designation, DesignationCreatedEvent, IssuedBy, TaskSlots};
+use crate::systems::jobs::{Designation, IssuedBy, TaskSlots};
 use crate::systems::soul_ai::task_execution::AssignedTask;
 use crate::systems::soul_ai::work::unassign_task;
 use crate::systems::visual::speech::components::{
@@ -39,7 +39,6 @@ pub fn handle_max_soul_changed_system(
         Option<&TaskWorkers>,
     )>,
     mut haul_cache: ResMut<crate::systems::familiar_ai::haul_cache::HaulReservationCache>,
-    mut ev_created: MessageWriter<DesignationCreatedEvent>,
     game_assets: Res<crate::assets::GameAssets>,
     q_bubbles: Query<(Entity, &SpeechBubble), With<FamiliarBubble>>,
     mut cooldowns: ResMut<crate::systems::visual::speech::cooldown::BubbleCooldowns>,
@@ -79,7 +78,6 @@ pub fn handle_max_soul_changed_system(
                                 inventory_opt.as_deref_mut(),
                                 &q_designations,
                                 &mut *haul_cache,
-                                Some(&mut ev_created),
                                 false, // emit_abandoned_event: 上限超過リリース時は個別のタスク中断セリフを出さない
                             );
                         }

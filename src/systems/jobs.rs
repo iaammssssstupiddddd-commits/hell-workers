@@ -7,13 +7,6 @@ use std::collections::HashMap;
 
 // --- Events ---
 
-#[derive(Message)]
-pub struct DesignationCreatedEvent {
-    pub entity: Entity,
-    pub work_type: WorkType,
-    pub issued_by: Option<Entity>, // None = 未アサイン
-    pub priority: u32,
-}
 
 // --- Components ---
 
@@ -118,6 +111,10 @@ pub enum WorkType {
 pub struct Designation {
     pub work_type: WorkType,
 }
+
+#[derive(Component, Debug, Clone, Copy, Reflect, Default)]
+#[reflect(Component, Default)]
+pub struct Priority(pub u32);
 
 #[derive(Component, Debug, Clone, Copy, Reflect, Default)]
 #[reflect(Component, Default)]

@@ -8,7 +8,6 @@ use crate::game_state::{BuildContext, PlayMode, TaskContext, ZoneContext};
 use crate::interface::ui::components::*;
 use crate::relationships::TaskWorkers;
 use crate::systems::soul_ai::task_execution::AssignedTask;
-use crate::systems::task_queue::TaskQueue;
 use bevy::prelude::*;
 use std::time::Duration;
 
@@ -34,6 +33,11 @@ pub fn hover_tooltip_system(
         &crate::systems::jobs::Designation,
         Option<&crate::systems::jobs::IssuedBy>,
         Option<&TaskWorkers>,
+    )>,
+    q_buildings: Query<(
+        &crate::systems::jobs::Building,
+        Option<&crate::systems::logistics::Stockpile>,
+        Option<&crate::relationships::StoredItems>,
     )>,
 ) {
     let Ok(window) = q_window.single() else {
@@ -63,6 +67,20 @@ pub fn hover_tooltip_system(
                 .unwrap_or("Soul".to_string());
             info_lines.push(format!("Soul: {}", name));
             info_lines.push(format!("Motivation: {:.0}%", soul.motivation * 100.0));
+        } else if let Ok((building, stockpile_opt, stored_items_opt)) = q_buildings.get(entity) {
+            let mut building_info = format!("Building: {:?}", building._kind);
+            if let Some(stockpile) = stockpile_opt {
+                let current = stored_items_opt.map(|si| si.len()).unwrap_or(0);
+                let resource_name = stockpile
+                    .resource_type
+                    .map(|r| format!("{:?}", r))
+                    .unwrap_or_else(|| "Items".to_string());
+                building_info = format!(
+                    "{}: {} ({}/{})",
+                    building_info, resource_name, current, stockpile.capacity
+                );
+            }
+            info_lines.push(building_info);
         }
 
         if let Ok((des, issued_by_opt, task_workers_opt)) = q_designations.get(entity) {
@@ -170,16 +188,12 @@ pub fn update_mode_text_system(
 }
 
 pub fn task_summary_ui_system(
-    task_queue: Res<TaskQueue>,
+    q_designations: Query<&crate::systems::jobs::Priority, With<crate::systems::jobs::Designation>>,
     mut q_text: Query<&mut Text, With<TaskSummaryText>>,
 ) {
     if let Ok(mut text) = q_text.single_mut() {
-        let mut total = 0;
-        let mut high = 0;
-        for tasks in task_queue.by_familiar.values() {
-            total += tasks.len();
-            high += tasks.iter().filter(|t| t.priority > 0).count();
-        }
+        let total = q_designations.iter().count();
+        let high = q_designations.iter().filter(|p| p.0 > 0).count();
         text.0 = format!("Tasks: {} ({} High)", total, high);
     }
 }
