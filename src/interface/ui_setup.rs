@@ -432,6 +432,28 @@ pub fn setup_ui(mut commands: Commands) {
                 });
         });
 
+    // FPS Display
+    commands
+        .spawn((Node {
+            position_type: PositionType::Absolute,
+            left: Val::Px(20.0),
+            top: Val::Px(20.0),
+            flex_direction: FlexDirection::Column,
+            align_items: AlignItems::Start,
+            ..default()
+        },))
+        .with_children(|parent| {
+            parent.spawn((
+                Text::new("FPS: --"),
+                TextFont {
+                    font_size: 18.0,
+                    ..default()
+                },
+                TextColor(Color::srgb(0.0, 1.0, 0.0)),
+                FpsText,
+            ));
+        });
+
     // Hover Tooltip
     commands
         .spawn((

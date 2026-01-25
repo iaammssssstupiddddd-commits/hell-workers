@@ -7,6 +7,7 @@ use crate::entities::familiar::{Familiar, FamiliarOperation};
 use crate::interface::ui_setup::*;
 use crate::systems::work::AssignedTask;
 use bevy::prelude::*;
+use bevy::diagnostic::{DiagnosticsStore, FrameTimeDiagnosticsPlugin};
 
 // ============================================================
 // システム実装
@@ -158,6 +159,21 @@ pub fn task_summary_ui_system(
             high += tasks.iter().filter(|t| t.priority > 0).count();
         }
         text.0 = format!("Tasks: {} ({} High)", total, high);
+    }
+}
+
+pub fn update_fps_display_system(
+    diagnostics: Res<DiagnosticsStore>,
+    mut q_text: Query<&mut Text, With<FpsText>>,
+) {
+    if let Ok(mut text) = q_text.get_single_mut() {
+        if let Some(fps) = diagnostics.get(&FrameTimeDiagnosticsPlugin::FPS) {
+            if let Some(value) = fps.smoothed() {
+                text.0 = format!("FPS: {:.0}", value);
+            } else if let Some(value) = fps.value() {
+                text.0 = format!("FPS: {:.0}", value);
+            }
+        }
     }
 }
 
