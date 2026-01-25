@@ -38,6 +38,21 @@ pub struct ResourceLabels(pub HashMap<(i32, i32), Entity>);
 #[derive(Component)]
 pub struct ResourceCountLabel;
 
+/// ソウルが持っているアイテムのエンティティ
+#[derive(Component, Default, Reflect)]
+#[reflect(Component)]
+pub struct Inventory(pub Option<Entity>);
+
+/// アイテムがストックパイルに格納されていることを示すコンポーネント
+#[derive(Component, Reflect)]
+#[reflect(Component)]
+pub struct InStockpile(pub Entity);
+
+/// アイテムがソウルに要求されていることを示すコンポーネント
+#[derive(Component, Reflect)]
+#[reflect(Component)]
+pub struct ClaimedBy(pub Entity);
+
 pub fn zone_placement(
     buttons: Res<ButtonInput<MouseButton>>,
     q_window: Query<&Window, With<bevy::window::PrimaryWindow>>,

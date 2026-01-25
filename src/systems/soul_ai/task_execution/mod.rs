@@ -19,7 +19,7 @@ use crate::events::OnTaskCompleted;
 use crate::relationships::Holding;
 use crate::systems::familiar_ai::haul_cache::HaulReservationCache;
 use crate::systems::jobs::{Blueprint, Designation, DesignationCreatedEvent};
-use crate::systems::logistics::Stockpile;
+use crate::systems::logistics::{Inventory, Stockpile};
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
 
@@ -42,6 +42,7 @@ pub fn task_execution_system(
         &mut AssignedTask,
         &mut Destination,
         &mut Path,
+        &mut Inventory,
         Option<&Holding>,
         Option<&StressBreakdown>,
     )>,
@@ -72,6 +73,7 @@ pub fn task_execution_system(
     mut haul_cache: ResMut<HaulReservationCache>,
     mut q_blueprints: Query<(&Transform, &mut Blueprint, Option<&Designation>)>,
     world_map: Res<WorldMap>,
+    mut pf_context: Local<crate::world::pathfinding::PathfindingContext>,
 ) {
     let mut dropped_this_frame = std::collections::HashMap::<Entity, usize>::new();
 
@@ -82,6 +84,7 @@ pub fn task_execution_system(
         mut task,
         mut dest,
         mut path,
+        mut inventory,
         holding_opt,
         breakdown_opt,
     ) in q_souls.iter_mut()
@@ -104,6 +107,8 @@ pub fn task_execution_system(
                     task: &mut task,
                     dest: &mut dest,
                     path: &mut path,
+                    inventory: &mut inventory,
+                    pf_context: &mut *pf_context,
                 };
                 handle_gather_task(
                     &mut ctx,
@@ -129,6 +134,8 @@ pub fn task_execution_system(
                     task: &mut task,
                     dest: &mut dest,
                     path: &mut path,
+                    inventory: &mut inventory,
+                    pf_context: &mut *pf_context,
                 };
                 handle_haul_task(
                     &mut ctx,
@@ -152,6 +159,8 @@ pub fn task_execution_system(
                     task: &mut task,
                     dest: &mut dest,
                     path: &mut path,
+                    inventory: &mut inventory,
+                    pf_context: &mut *pf_context,
                 };
                 handle_build_task(
                     &mut ctx,
@@ -175,6 +184,8 @@ pub fn task_execution_system(
                     task: &mut task,
                     dest: &mut dest,
                     path: &mut path,
+                    inventory: &mut inventory,
+                    pf_context: &mut *pf_context,
                 };
                 handle_haul_to_blueprint_task(
                     &mut ctx,
@@ -201,6 +212,8 @@ pub fn task_execution_system(
                     task: &mut task,
                     dest: &mut dest,
                     path: &mut path,
+                    inventory: &mut inventory,
+                    pf_context: &mut *pf_context,
                 };
                 handle_gather_water_task(
                     &mut ctx,

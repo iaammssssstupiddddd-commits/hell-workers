@@ -85,6 +85,7 @@ pub fn spawn_damned_soul_at(
             crate::systems::visual::speech::conversation::components::ConversationInitiator {
                 timer: Timer::from_seconds(CONVERSATION_CHECK_INTERVAL, TimerMode::Repeating),
             },
+            crate::systems::logistics::Inventory::default(),
         ))
         .observe(on_task_assigned)
         .observe(on_task_completed)
@@ -147,6 +148,7 @@ pub fn pathfinding_system(
                 .iter()
                 .map(|&(x, y)| WorldMap::grid_to_world(x, y))
                 .collect();
+            path.current_index = 0;
             path.current_index = 0;
             debug!("PATH: Soul {:?} found new path", entity);
         } else {
