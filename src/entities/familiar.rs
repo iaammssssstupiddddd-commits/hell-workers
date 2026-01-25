@@ -50,9 +50,7 @@ impl Default for Familiar {
 impl Familiar {
     pub fn new(familiar_type: FamiliarType) -> Self {
         let (command_radius, efficiency) = match familiar_type {
-            FamiliarType::Imp => (TILE_SIZE * 7.0, 0.5), // 5 -> 7
-            FamiliarType::Taskmaster => (TILE_SIZE * 10.0, 0.3), // 8 -> 10
-            FamiliarType::Whisperer => (TILE_SIZE * 4.0, 0.8), // 3 -> 4
+            FamiliarType::Imp => (TILE_SIZE * 7.0, 0.5),
         };
         let mut rng = rand::thread_rng();
         let name = FAMILIAR_NAMES[rng.gen_range(0..FAMILIAR_NAMES.len())].to_string();
@@ -81,23 +79,18 @@ pub enum AuraLayer {
 
 /// 使い魔の種類（パラメーター調整用に拡張可能）
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Reflect, Default)]
-#[allow(dead_code)]
 pub enum FamiliarType {
     #[default]
     Imp, // インプ - 汎用型、バランス
-    Taskmaster, // 監督官 - 広範囲、低効率
-    Whisperer,  // 囁き手 - 狭範囲、高効率
 }
 
 /// 使い魔への指示
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Reflect, Default)]
-#[allow(dead_code)]
 pub enum FamiliarCommand {
     #[default]
     Idle, // 待機
-    GatherResources,   // 収集指示
-    Patrol,            // 巡回（監視）
-    Construct(Entity), // 建設命令
+    GatherResources, // 収集指示
+    Patrol,          // 巡回（監視）
 }
 
 /// 現在のアクティブな指示

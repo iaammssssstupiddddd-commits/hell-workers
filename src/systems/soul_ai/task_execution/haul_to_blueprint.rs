@@ -4,7 +4,7 @@ use crate::entities::damned_soul::StressBreakdown;
 use crate::relationships::WorkingOn;
 use crate::systems::familiar_ai::haul_cache::HaulReservationCache;
 use crate::systems::jobs::{
-    Blueprint, Designation, DesignationCreatedEvent, IssuedBy, TaskSlots, WorkType,
+    Blueprint, Designation, IssuedBy, TaskSlots,
 };
 use crate::systems::logistics::Stockpile;
 use crate::systems::soul_ai::task_execution::{
@@ -45,7 +45,6 @@ pub fn handle_haul_to_blueprint_task(
     )>,
     haul_cache: &mut HaulReservationCache,
     commands: &mut Commands,
-    ev_created: &mut MessageWriter<DesignationCreatedEvent>,
     world_map: &Res<WorldMap>,
 ) {
     // 疲労またはストレス崩壊のチェック
@@ -64,7 +63,6 @@ pub fn handle_haul_to_blueprint_task(
             Some(ctx.inventory),
             q_designations,
             haul_cache,
-            Some(ev_created),
             true, // 失敗時はセリフを出す
         );
         return;
@@ -224,13 +222,8 @@ pub fn handle_haul_to_blueprint_task(
                                 commands.entity(blueprint_entity).remove::<IssuedBy>();
                             }
 
-                            // DesignationCreatedEventを再発行して使い魔がタスクを探せるようにする
-                            ev_created.write(DesignationCreatedEvent {
-                                entity: blueprint_entity,
-                                work_type: WorkType::Build,
-                                issued_by: None, // 未割り当て状態
-                                priority: 10,    // 建築タスクは高優先度
-                            });
+                            // Priority(10) を付与して使い魔がタスクを探せるようにする
+                            commands.entity(blueprint_entity).insert(crate::systems::jobs::Priority(10));
 
                             info!(
                                 "HAUL_TO_BP: Blueprint {:?} materials complete, reissuing DesignationCreatedEvent for build task",

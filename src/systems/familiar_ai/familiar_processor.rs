@@ -8,7 +8,6 @@ use crate::entities::familiar::{
 };
 use crate::relationships::{Commanding, ManagedTasks};
 use crate::systems::command::TaskArea;
-use crate::systems::jobs::DesignationCreatedEvent;
 use crate::systems::soul_ai::gathering::ParticipatingIn;
 use crate::systems::soul_ai::task_execution::AssignedTask;
 use crate::systems::spatial::{DesignationSpatialGrid, SpatialGrid};
@@ -56,7 +55,6 @@ pub fn process_squad_management(
         Option<&crate::relationships::TaskWorkers>,
     )>,
     haul_cache: &mut crate::systems::familiar_ai::haul_cache::HaulReservationCache,
-    ev_created: &mut MessageWriter<DesignationCreatedEvent>,
     cooldowns: &mut crate::systems::visual::speech::cooldown::BubbleCooldowns,
     time: &Res<Time>,
     game_assets: &Res<crate::assets::GameAssets>,
@@ -80,7 +78,6 @@ pub fn process_squad_management(
         q_souls,
         q_designations,
         haul_cache,
-        ev_created,
         cooldowns,
         time,
         game_assets,
@@ -205,6 +202,7 @@ pub fn finalize_state_transitions(
     ai_state: &mut FamiliarAiState,
     squad_entities: &[Entity],
     fam_entity: Entity,
+    max_workers: usize,
 ) -> bool {
     let mut state_changed = false;
 
@@ -225,15 +223,23 @@ pub fn finalize_state_transitions(
             );
         }
     } else {
-        // メンバーがいるなら、スカウト中でない限り監視モードを維持
+        // メンバーがいる場合
+        let is_squad_full = squad_entities.len() >= max_workers;
+
         if !matches!(*ai_state, FamiliarAiState::Scouting { .. }) {
-            if !matches!(*ai_state, FamiliarAiState::Supervising { .. }) {
+            // 枠に空きがあるなら、監視を中断して探索へ戻れるようにする
+            if !is_squad_full && matches!(*ai_state, FamiliarAiState::Supervising { .. }) {
+                *ai_state = FamiliarAiState::SearchingTask;
+                state_changed = true;
+                info!("FAM_AI: {:?} squad has open slots ({}/{}). Switching to SearchingTask", fam_entity, squad_entities.len(), max_workers);
+            } else if is_squad_full && !matches!(*ai_state, FamiliarAiState::Supervising { .. }) {
+                // 枠がいっぱいで、かつ監視モード以外なら監視へ
                 *ai_state = FamiliarAiState::Supervising {
                     target: None,
                     timer: 0.0,
                 };
                 state_changed = true;
-                info!("FAM_AI: {:?} squad not empty. -> Supervising", fam_entity);
+                info!("FAM_AI: {:?} squad full. -> Supervising", fam_entity);
             }
         }
     }

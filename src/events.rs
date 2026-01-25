@@ -86,7 +86,6 @@ pub struct OnEncouraged {
 
 /// 使い魔のAI状態が変更された
 #[derive(Message)]
-#[allow(dead_code)] // handle_state_changed_system で使用されるが、コンパイラが検知しない場合がある
 pub struct FamiliarAiStateChangedEvent {
     /// 使い魔のエンティティ
     pub familiar_entity: Entity,
@@ -104,12 +103,6 @@ pub enum FamiliarAiStateTransitionReason {
     CommandChanged,
     SquadEmpty,
     SquadFull,
-    #[allow(dead_code)] // 将来的に使用予定
-    TargetReached,
-    #[allow(dead_code)] // 将来的に使用予定
-    TargetLost,
-    #[allow(dead_code)] // 将来的に使用予定（疲労によるリリース時）
-    FatigueRelease,
     RecruitSuccess,
     ScoutingCancelled,
     Unknown,

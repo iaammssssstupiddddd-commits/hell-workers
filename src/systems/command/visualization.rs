@@ -50,9 +50,6 @@ pub fn familiar_command_visual_system(
             FamiliarCommand::Patrol => {
                 sprite.color = Color::srgb(1.0, 0.3, 0.3);
             }
-            FamiliarCommand::Construct(_) => {
-                sprite.color = Color::srgb(1.0, 1.0, 0.3);
-            }
         }
     }
 }

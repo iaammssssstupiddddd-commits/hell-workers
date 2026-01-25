@@ -5,7 +5,7 @@ use crate::entities::familiar::ActiveCommand;
 use crate::relationships::TaskWorkers;
 use crate::systems::command::TaskArea;
 use crate::systems::jobs::{
-    Blueprint, Designation, DesignationCreatedEvent, IssuedBy, TaskSlots, WorkType,
+    Blueprint, Designation, IssuedBy, TaskSlots, WorkType,
 };
 use crate::systems::logistics::{ResourceItem, ResourceType, Stockpile};
 use crate::systems::soul_ai::task_execution::AssignedTask;
@@ -30,7 +30,6 @@ pub fn task_area_auto_haul_system(
             Without<crate::systems::jobs::TargetBlueprint>,
         ),
     >,
-    mut ev_created: MessageWriter<DesignationCreatedEvent>,
 ) {
     let mut already_assigned = std::collections::HashSet::new();
 
@@ -86,13 +85,8 @@ pub fn task_area_auto_haul_system(
                     },
                     IssuedBy(fam_entity),
                     TaskSlots::new(1),
+                    crate::systems::jobs::Priority(0),
                 ));
-                ev_created.write(DesignationCreatedEvent {
-                    entity: item_entity,
-                    work_type: WorkType::Haul,
-                    issued_by: Some(fam_entity),
-                    priority: 0,
-                });
             }
         }
     }
@@ -121,7 +115,6 @@ pub fn blueprint_auto_haul_system(
         (&ResourceItem, &crate::systems::jobs::TargetBlueprint),
         With<Designation>,
     >,
-    mut ev_created: MessageWriter<DesignationCreatedEvent>,
 ) {
     // 1. 集計フェーズ: 各設計図への「運搬中」および「予約済み」の数を集計
     // (BlueprintEntity, ResourceType) -> Count
@@ -240,13 +233,8 @@ pub fn blueprint_auto_haul_system(
                         IssuedBy(fam_entity),
                         TaskSlots::new(1),
                         crate::systems::jobs::TargetBlueprint(bp_entity),
+                        crate::systems::jobs::Priority(0),
                     ));
-                    ev_created.write(DesignationCreatedEvent {
-                        entity: item_entity,
-                        work_type: WorkType::Haul,
-                        issued_by: Some(fam_entity),
-                        priority: 1,
-                    });
 
                     info!(
                         "AUTO_HAUL_BP: Assigned {:?} for bp {:?} (Total expected: {})",

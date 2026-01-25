@@ -2,7 +2,7 @@ use crate::constants::*;
 use crate::entities::damned_soul::{DamnedSoul, IdleBehavior, IdleState, Path};
 use crate::relationships::{TaskWorkers, WorkingOn};
 use crate::systems::familiar_ai::haul_cache::HaulReservationCache;
-use crate::systems::jobs::{Designation, DesignationCreatedEvent, IssuedBy, TaskSlots};
+use crate::systems::jobs::{Designation, IssuedBy, TaskSlots};
 use crate::systems::soul_ai::task_execution::AssignedTask;
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
@@ -50,7 +50,6 @@ pub fn unassign_task(
         Option<&TaskWorkers>,
     )>,
     haul_cache: &mut HaulReservationCache,
-    _ev_created: Option<&mut MessageWriter<DesignationCreatedEvent>>,
     emit_abandoned_event: bool,
 ) {
     // タスク中断イベントを発火
@@ -89,6 +88,9 @@ pub fn unassign_task(
             commands
                 .entity(item_entity)
                 .remove::<crate::systems::jobs::TargetBlueprint>();
+            commands
+                .entity(item_entity)
+                .remove::<crate::systems::jobs::Priority>();
 
             // StoredIn関係も削除
             commands.entity(item_entity).remove::<crate::relationships::StoredIn>();

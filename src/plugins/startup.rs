@@ -12,7 +12,6 @@ use crate::systems::soul_ai::work::AutoHaulCounter;
 use crate::systems::spatial::{
     FamiliarSpatialGrid, GatheringSpotSpatialGrid, ResourceSpatialGrid, SpatialGrid, SpatialGridOps,
 };
-use crate::systems::task_queue::{GlobalTaskQueue, TaskQueue};
 use crate::systems::time::GameTime;
 use crate::world::map::{WorldMap, spawn_map};
 use bevy::prelude::*;
@@ -39,8 +38,6 @@ impl Plugin for StartupPlugin {
             .init_resource::<ResourceSpatialGrid>()
             .init_resource::<GatheringSpotSpatialGrid>()
             .init_resource::<AutoHaulCounter>()
-            .init_resource::<TaskQueue>()
-            .init_resource::<GlobalTaskQueue>()
             // Startup systems
             .add_systems(Startup, (setup, initialize_gizmo_config))
             .add_systems(

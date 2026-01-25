@@ -3,16 +3,6 @@ use bevy::prelude::*;
 pub mod names;
 pub mod systems;
 
-/// 落ちた理由（将来拡張用）
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Reflect, Default)]
-#[allow(dead_code)]
-pub enum SinType {
-    #[default]
-    Sloth, // 怠惰
-    Greed, // 強欲
-    Wrath, // 憤怒
-}
-
 use names::{FEMALE_NAMES, MALE_NAMES};
 use rand::Rng;
 
@@ -57,8 +47,6 @@ impl SoulIdentity {
 #[derive(Component, Reflect)]
 #[reflect(Component)]
 pub struct DamnedSoul {
-    #[allow(dead_code)]
-    pub sin_type: SinType,
     pub laziness: f32,   // 怠惰レベル (0.0-1.0) - 内部ステータス
     pub motivation: f32, // やる気 (0.0-1.0) - 高いほど働く
     pub fatigue: f32,    // 疲労 (0.0-1.0) - 高いほど疲れている
@@ -71,7 +59,6 @@ pub struct DamnedSoul {
 impl Default for DamnedSoul {
     fn default() -> Self {
         Self {
-            sin_type: SinType::Sloth,
             laziness: 0.7,   // デフォルトで怠惰
             motivation: 0.1, // デフォルトでやる気なし
             fatigue: 0.0,

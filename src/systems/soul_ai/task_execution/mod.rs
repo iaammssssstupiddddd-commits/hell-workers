@@ -17,7 +17,7 @@ pub use types::AssignedTask;
 use crate::entities::damned_soul::{DamnedSoul, Destination, Path, StressBreakdown};
 use crate::events::OnTaskCompleted;
 use crate::systems::familiar_ai::haul_cache::HaulReservationCache;
-use crate::systems::jobs::{Blueprint, Designation, DesignationCreatedEvent};
+use crate::systems::jobs::{Blueprint, Designation};
 use crate::systems::logistics::{Inventory, Stockpile};
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
@@ -66,7 +66,6 @@ pub fn task_execution_system(
         Option<&crate::relationships::StoredItems>,
     )>,
     game_assets: Res<crate::assets::GameAssets>,
-    mut ev_created: MessageWriter<DesignationCreatedEvent>,
     time: Res<Time>,
     mut haul_cache: ResMut<HaulReservationCache>,
     mut q_blueprints: Query<(&Transform, &mut Blueprint, Option<&Designation>)>,
@@ -195,7 +194,6 @@ pub fn task_execution_system(
                     &mut q_stockpiles,
                     &mut haul_cache,
                     &mut commands,
-                    &mut ev_created,
                     &world_map,
                 );
             }

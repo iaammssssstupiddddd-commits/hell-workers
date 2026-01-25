@@ -4,9 +4,8 @@ use crate::entities::familiar::{ActiveCommand, Familiar, FamiliarCommand};
 use crate::game_state::{PlayMode, TaskContext};
 use crate::interface::camera::MainCamera;
 use crate::interface::selection::SelectedEntity;
-use crate::systems::jobs::{Designation, DesignationCreatedEvent, IssuedBy, Rock, Tree, WorkType};
+use crate::systems::jobs::{Designation, Rock, Tree, WorkType};
 use crate::systems::logistics::ResourceItem;
-use crate::systems::task_queue::{GlobalTaskQueue, PendingTask, TaskQueue};
 use bevy::prelude::*;
 
 pub fn task_area_selection_system(
@@ -26,11 +25,8 @@ pub fn task_area_selection_system(
         Option<&ResourceItem>,
     )>,
     mut commands: Commands,
-    mut ev_created: MessageWriter<DesignationCreatedEvent>,
-    keyboard: Res<ButtonInput<KeyCode>>,
-    q_unassigned: Query<(Entity, &Transform, &Designation), Without<IssuedBy>>,
-    mut global_queue: ResMut<GlobalTaskQueue>,
-    mut queue: ResMut<TaskQueue>,
+    _keyboard: Res<ButtonInput<KeyCode>>,
+    q_unassigned: Query<(Entity, &Transform, &Designation), Without<crate::relationships::ManagedBy>>,
     q_selection_indicator: Query<Entity, With<AreaSelectionIndicator>>,
 ) {
     if q_ui.iter().any(|i| *i != Interaction::None) {
@@ -108,7 +104,7 @@ pub fn task_area_selection_system(
                                 );
 
                                 let mut assigned_count = 0;
-                                for (task_entity, task_transform, designation) in
+                                for (task_entity, task_transform, _designation) in
                                     q_unassigned.iter()
                                 {
                                     let pos = task_transform.translation.truncate();
@@ -117,16 +113,10 @@ pub fn task_area_selection_system(
                                         && pos.y >= min_y - 0.1
                                         && pos.y <= max_y + 0.1
                                     {
-                                        commands.entity(task_entity).insert(IssuedBy(fam_entity));
-                                        global_queue.remove(task_entity);
-                                        queue.add(
-                                            fam_entity,
-                                            PendingTask {
-                                                entity: task_entity,
-                                                work_type: designation.work_type,
-                                                priority: 0,
-                                            },
-                                        );
+                                        commands.entity(task_entity).insert((
+                                            crate::relationships::ManagedBy(fam_entity),
+                                            crate::systems::jobs::Priority(0),
+                                        ));
                                         assigned_count += 1;
                                     }
                                 }
@@ -160,13 +150,6 @@ pub fn task_area_selection_system(
                             _ => None,
                         };
 
-                        let priority = if keyboard.pressed(KeyCode::ShiftLeft)
-                            || keyboard.pressed(KeyCode::ShiftRight)
-                        {
-                            1
-                        } else {
-                            0
-                        };
                         let fam_entity = selected.0;
 
                         for (target_entity, transform, tree, rock, item) in q_targets.iter() {
@@ -188,8 +171,9 @@ pub fn task_area_selection_system(
                                         if let Some(issued_by) = fam_entity {
                                             commands.entity(target_entity).insert((
                                                 crate::systems::jobs::Designation { work_type: wt },
-                                                IssuedBy(issued_by),
+                                                crate::relationships::ManagedBy(issued_by),
                                                 crate::systems::jobs::TaskSlots::new(1),
+                                                crate::systems::jobs::Priority(0),
                                             ));
                                             info!(
                                                 "DESIGNATION: Created {:?} for {:?} (assigned to {:?})",
@@ -199,18 +183,13 @@ pub fn task_area_selection_system(
                                             commands.entity(target_entity).insert((
                                                 crate::systems::jobs::Designation { work_type: wt },
                                                 crate::systems::jobs::TaskSlots::new(1),
+                                                crate::systems::jobs::Priority(0),
                                             ));
                                             info!(
                                                 "DESIGNATION: Created {:?} for {:?} (unassigned)",
                                                 wt, target_entity
                                             );
                                         }
-                                        ev_created.write(DesignationCreatedEvent {
-                                            entity: target_entity,
-                                            work_type: wt,
-                                            issued_by: fam_entity,
-                                            priority,
-                                        });
                                     }
                                 } else {
                                     commands
@@ -219,7 +198,7 @@ pub fn task_area_selection_system(
                                     commands
                                         .entity(target_entity)
                                         .remove::<crate::systems::jobs::TaskSlots>();
-                                    commands.entity(target_entity).remove::<IssuedBy>();
+                                    commands.entity(target_entity).remove::<crate::relationships::ManagedBy>();
                                 }
                             }
                         }
