@@ -40,7 +40,8 @@ pub fn process_squad_management(
             &mut Destination,
             &mut Path,
             &IdleState,
-            Option<&crate::relationships::Holding>,
+
+            Option<&mut crate::systems::logistics::Inventory>,
             Option<&UnderCommand>,
             Option<&ParticipatingIn>,
         ),
@@ -113,7 +114,7 @@ pub fn process_recruitment(
     squad_entities: &mut Vec<Entity>,
     max_workers: usize,
     spatial_grid: &SpatialGrid,
-    q_souls: &Query<
+    q_souls: &mut Query<
         (
             Entity,
             &Transform,
@@ -122,7 +123,8 @@ pub fn process_recruitment(
             &mut Destination,
             &mut Path,
             &IdleState,
-            Option<&crate::relationships::Holding>,
+
+            Option<&mut crate::systems::logistics::Inventory>,
             Option<&UnderCommand>,
             Option<&ParticipatingIn>,
         ),
@@ -161,7 +163,7 @@ pub fn process_recruitment(
                 fam_pos,
                 fatigue_threshold,
                 spatial_grid,
-                q_souls,
+                &mut *q_souls,
                 q_breakdown,
             ) {
                 debug!(
@@ -259,7 +261,8 @@ pub fn process_task_delegation_and_movement(
             &mut Destination,
             &mut Path,
             &IdleState,
-            Option<&crate::relationships::Holding>,
+
+            Option<&mut crate::systems::logistics::Inventory>,
             Option<&UnderCommand>,
             Option<&ParticipatingIn>,
         ),

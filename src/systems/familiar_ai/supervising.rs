@@ -18,7 +18,7 @@ pub fn supervising_logic(
     ai_state: &mut FamiliarAiState,
     fam_dest: &mut Destination,
     fam_path: &mut Path,
-    q_souls: &Query<
+    q_souls: &mut Query<
         (
             Entity,
             &Transform,
@@ -27,7 +27,8 @@ pub fn supervising_logic(
             &mut Destination,
             &mut Path,
             &IdleState,
-            Option<&crate::relationships::Holding>,
+
+            Option<&mut crate::systems::logistics::Inventory>,
             Option<&UnderCommand>,
             Option<&ParticipatingIn>,
         ),

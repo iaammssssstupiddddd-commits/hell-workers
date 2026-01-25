@@ -16,7 +16,6 @@ pub use types::AssignedTask;
 
 use crate::entities::damned_soul::{DamnedSoul, Destination, Path, StressBreakdown};
 use crate::events::OnTaskCompleted;
-use crate::relationships::Holding;
 use crate::systems::familiar_ai::haul_cache::HaulReservationCache;
 use crate::systems::jobs::{Blueprint, Designation, DesignationCreatedEvent};
 use crate::systems::logistics::{Inventory, Stockpile};
@@ -43,7 +42,6 @@ pub fn task_execution_system(
         &mut Destination,
         &mut Path,
         &mut Inventory,
-        Option<&Holding>,
         Option<&StressBreakdown>,
     )>,
     q_targets: Query<(
@@ -85,7 +83,6 @@ pub fn task_execution_system(
         mut dest,
         mut path,
         mut inventory,
-        holding_opt,
         breakdown_opt,
     ) in q_souls.iter_mut()
     {
@@ -139,7 +136,6 @@ pub fn task_execution_system(
                 };
                 handle_haul_task(
                     &mut ctx,
-                    holding_opt,
                     item,
                     stockpile,
                     phase,
@@ -189,7 +185,6 @@ pub fn task_execution_system(
                 };
                 handle_haul_to_blueprint_task(
                     &mut ctx,
-                    holding_opt,
                     breakdown_opt,
                     item,
                     blueprint,
@@ -224,8 +219,8 @@ pub fn task_execution_system(
                     &mut commands,
                     &game_assets,
                     &time,
+
                     &world_map,
-                    holding_opt,
                 );
             }
             AssignedTask::None => {}

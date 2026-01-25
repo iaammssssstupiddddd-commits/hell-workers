@@ -131,7 +131,7 @@ pub struct FamiliarAiParams<'w, 's> {
             &'static mut Destination,
             &'static mut Path,
             &'static IdleState,
-            Option<&'static crate::relationships::Holding>,
+            Option<&'static mut crate::systems::logistics::Inventory>,
             Option<&'static crate::entities::familiar::UnderCommand>,
             Option<&'static ParticipatingIn>,
         ),
@@ -337,7 +337,7 @@ pub fn familiar_ai_system(params: FamiliarAiParams) {
                     &mut ai_state,
                     &mut fam_dest,
                     &mut fam_path,
-                    &q_souls,
+                    &mut q_souls,
                     &q_breakdown,
                     &mut commands,
                 );
@@ -356,7 +356,7 @@ pub fn familiar_ai_system(params: FamiliarAiParams) {
                     &mut squad_entities,
                     max_workers,
                     &*spatial_grid,
-                    &q_souls,
+                    &mut q_souls,
                     &q_breakdown,
                     &mut commands,
                 ) {

@@ -4,7 +4,6 @@ use crate::constants::*;
 use crate::events::{
     OnExhausted, OnSoulRecruited, OnStressBreakdown, OnTaskAssigned, OnTaskCompleted,
 };
-use crate::relationships::Holding;
 use crate::systems::soul_ai::task_execution::AssignedTask;
 use crate::systems::soul_ai::work::unassign_task;
 use crate::world::map::WorldMap;
@@ -111,7 +110,7 @@ pub fn pathfinding_system(
             &Destination,
             &mut Path,
             &mut AssignedTask,
-            Option<&Holding>,
+            Option<&mut crate::systems::logistics::Inventory>,
         ),
         (Changed<Destination>, With<DamnedSoul>),
     >,
@@ -126,7 +125,7 @@ pub fn pathfinding_system(
     mut haul_cache: ResMut<crate::systems::familiar_ai::haul_cache::HaulReservationCache>,
     mut ev_created: MessageWriter<crate::systems::jobs::DesignationCreatedEvent>,
 ) {
-    for (entity, transform, destination, mut path, mut task, holding_opt) in query.iter_mut() {
+    for (entity, transform, destination, mut path, mut task, mut inventory_opt) in query.iter_mut() {
         let current_pos = transform.translation.truncate();
         let start_grid = WorldMap::world_to_grid(current_pos);
         let goal_grid = WorldMap::world_to_grid(destination.0);
@@ -167,7 +166,7 @@ pub fn pathfinding_system(
                     transform.translation.truncate(),
                     &mut task,
                     &mut path,
-                    holding_opt,
+                    inventory_opt.as_deref_mut(),
                     &q_designations,
                     &mut *haul_cache,
                     Some(&mut ev_created),
@@ -333,7 +332,7 @@ fn on_stress_breakdown(
         &mut DamnedSoul,
         &mut AssignedTask,
         &mut Path,
-        Option<&Holding>,
+        Option<&mut crate::systems::logistics::Inventory>,
         Option<&crate::entities::familiar::UnderCommand>,
     )>,
     q_designations: Query<(
@@ -348,7 +347,7 @@ fn on_stress_breakdown(
     mut ev_created: MessageWriter<crate::systems::jobs::DesignationCreatedEvent>,
 ) {
     let soul_entity = on.entity;
-    if let Ok((entity, transform, mut _soul, mut task, mut path, holding_opt, under_command)) =
+    if let Ok((entity, transform, mut _soul, mut task, mut path, mut inventory_opt, under_command)) =
         q_souls.get_mut(soul_entity)
     {
         info!("OBSERVER: Soul {:?} had a stress breakdown!", entity);
@@ -364,7 +363,7 @@ fn on_stress_breakdown(
                 transform.translation.truncate(),
                 &mut task,
                 &mut path,
-                holding_opt,
+                inventory_opt.as_deref_mut(),
                 &q_designations,
                 &mut *haul_cache,
                 Some(&mut ev_created),
@@ -391,7 +390,7 @@ fn on_exhausted(
         &mut AssignedTask,
         &mut Path,
         &mut Destination,
-        Option<&Holding>,
+        Option<&mut crate::systems::logistics::Inventory>,
         Option<&crate::entities::familiar::UnderCommand>,
     )>,
     q_designations: Query<(
@@ -413,7 +412,7 @@ fn on_exhausted(
         mut task,
         mut path,
         mut dest,
-        holding_opt,
+        mut inventory_opt,
         under_command_opt,
     )) = q_souls.get_mut(soul_entity)
     {
@@ -435,7 +434,7 @@ fn on_exhausted(
                 transform.translation.truncate(),
                 &mut task,
                 &mut path,
-                holding_opt,
+                inventory_opt.as_deref_mut(),
                 &q_designations,
                 &mut *haul_cache,
                 Some(&mut ev_created),

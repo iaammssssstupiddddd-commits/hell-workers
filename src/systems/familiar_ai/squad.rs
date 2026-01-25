@@ -6,7 +6,7 @@ use crate::entities::damned_soul::{
     DamnedSoul, Destination, IdleBehavior, IdleState, Path,
 };
 use crate::entities::familiar::UnderCommand;
-use crate::relationships::{Commanding, Holding};
+use crate::relationships::Commanding;
 use crate::systems::jobs::{Designation, DesignationCreatedEvent};
 use crate::systems::soul_ai::gathering::ParticipatingIn;
 use crate::systems::soul_ai::task_execution::AssignedTask;
@@ -41,7 +41,7 @@ impl SquadManager {
     pub fn validate_squad(
         squad: Vec<Entity>,
         fam_entity: Entity,
-        q_souls: &Query<
+        q_souls: &mut Query<
             (
                 Entity,
                 &Transform,
@@ -50,7 +50,8 @@ impl SquadManager {
                 &mut Destination,
                 &mut Path,
                 &IdleState,
-                Option<&Holding>,
+
+                Option<&mut crate::systems::logistics::Inventory>,
                 Option<&UnderCommand>,
                 Option<&ParticipatingIn>,
             ),
@@ -129,7 +130,7 @@ impl SquadManager {
                 &mut Destination,
                 &mut Path,
                 &IdleState,
-                Option<&Holding>,
+                Option<&mut crate::systems::logistics::Inventory>,
                 Option<&UnderCommand>,
                 Option<&ParticipatingIn>,
             ),
@@ -165,7 +166,7 @@ impl SquadManager {
                 _,
                 mut path,
                 idle,
-                holding_opt,
+                mut inventory_opt,
                 _,
                 _participating_opt,
             )) = q_souls.get_mut(member_entity)
@@ -187,7 +188,7 @@ impl SquadManager {
                         transform.translation.truncate(),
                         &mut task,
                         &mut path,
-                        holding_opt,
+                        inventory_opt.as_deref_mut(),
                         q_designations,
                         haul_cache,
                         Some(ev_created),

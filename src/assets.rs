@@ -17,6 +17,8 @@ pub struct GameAssets {
     pub aura_ring: Handle<Image>,   // 強調用リングテクスチャ
     // Water related
     pub tank_empty: Handle<Image>,
+    pub tank_partial: Handle<Image>,
+    pub tank_full: Handle<Image>,
     pub bucket_empty: Handle<Image>,
     pub bucket_water: Handle<Image>,
     // UI Icons

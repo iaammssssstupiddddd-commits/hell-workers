@@ -2,9 +2,8 @@
 
 use crate::constants::*;
 use crate::entities::damned_soul::{Destination, Path};
-use crate::relationships::Holding;
 use crate::systems::jobs::Designation;
-use crate::systems::logistics::Stockpile;
+use crate::systems::logistics::{Inventory, Stockpile};
 use crate::systems::soul_ai::task_execution::types::AssignedTask;
 use bevy::prelude::*;
 
@@ -154,8 +153,13 @@ pub fn cancel_task_if_designation_missing(
 /// アイテムをピックアップ
 ///
 /// 魂にアイテムを持たせ、アイテムを非表示にします。
-pub fn pickup_item(commands: &mut Commands, soul_entity: Entity, item_entity: Entity) {
-    commands.entity(soul_entity).insert(Holding(item_entity));
+pub fn pickup_item(
+    commands: &mut Commands,
+    _soul_entity: Entity,
+    item_entity: Entity,
+    inventory: &mut Inventory,
+) {
+    inventory.0 = Some(item_entity);
     commands.entity(item_entity).insert(Visibility::Hidden);
 }
 
@@ -164,11 +168,11 @@ pub fn pickup_item(commands: &mut Commands, soul_entity: Entity, item_entity: En
 /// 魂からアイテムを外し、指定位置にアイテムを表示します。
 pub fn drop_item(
     commands: &mut Commands,
-    soul_entity: Entity,
+    _soul_entity: Entity,
     item_entity: Entity,
     drop_pos: Vec2,
 ) {
-    commands.entity(soul_entity).remove::<Holding>();
+    // Inventory update is handled by the caller
     commands.entity(item_entity).insert((
         Visibility::Visible,
         Transform::from_xyz(drop_pos.x, drop_pos.y, Z_ITEM_PICKUP),

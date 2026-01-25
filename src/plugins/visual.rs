@@ -33,6 +33,7 @@ use crate::systems::visual::soul::{
     task_link_system, update_progress_bar_fill_system,
 };
 use crate::systems::visual::speech::SpeechPlugin;
+use crate::systems::visual::tank::update_tank_visual_system;
 use bevy::prelude::*;
 
 pub struct VisualPlugin;
@@ -138,6 +139,7 @@ impl Plugin for VisualPlugin {
                 idle_visual_system,
                 familiar_animation_system,
                 update_familiar_range_indicator,
+                update_tank_visual_system,
             )
                 .chain()
                 .in_set(GameSystemSet::Visual),
