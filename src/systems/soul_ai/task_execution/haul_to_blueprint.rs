@@ -1,12 +1,10 @@
 //! 設計図への運搬タスクの実行処理
 
 use crate::entities::damned_soul::StressBreakdown;
-use crate::relationships::WorkingOn;
+use crate::relationships::{ManagedBy, TaskWorkers, WorkingOn};
 use crate::systems::familiar_ai::haul_cache::HaulReservationCache;
-use crate::systems::jobs::{
-    Blueprint, Designation, IssuedBy, TaskSlots,
-};
-use crate::systems::logistics::Stockpile;
+use crate::systems::jobs::{Blueprint, Designation, TaskSlots, Priority};
+use crate::systems::logistics::{InStockpile, Stockpile};
 use crate::systems::soul_ai::task_execution::{
     common::*,
     context::TaskExecutionContext,
@@ -33,9 +31,11 @@ pub fn handle_haul_to_blueprint_task(
         Entity,
         &Transform,
         &Designation,
-        Option<&IssuedBy>,
+        Option<&ManagedBy>,
         Option<&TaskSlots>,
-        Option<&crate::relationships::TaskWorkers>,
+        Option<&TaskWorkers>,
+        Option<&InStockpile>,
+        Option<&Priority>,
     )>,
     q_blueprints: &mut Query<(&Transform, &mut Blueprint, Option<&Designation>)>,
     q_stockpiles: &mut Query<(
@@ -66,6 +66,7 @@ pub fn handle_haul_to_blueprint_task(
             q_targets,
             q_designations,
             haul_cache,
+            world_map,
             true, // 失敗時はセリフを出す
         );
         return;
@@ -201,6 +202,7 @@ pub fn handle_haul_to_blueprint_task(
                     q_targets,
                     q_designations,
                     haul_cache,
+                    world_map,
                     true,
                 );
             }
@@ -225,12 +227,12 @@ pub fn handle_haul_to_blueprint_task(
                     // 資材が揃った場合、BlueprintエンティティのIssuedByを削除して未割り当て状態にする
                     // そして、DesignationCreatedEventを再発行して使い魔が建築タスクを探せるようにする
                     if bp.materials_complete() {
-                        if let Ok((_, _, _designation, issued_by_opt, _, _)) =
+                        if let Ok((_, _, _designation, managed_by_opt, _, _, _, _)) =
                             q_designations.get(blueprint_entity)
                         {
-                            // IssuedByを削除して未割り当て状態にする
-                            if issued_by_opt.is_some() {
-                                commands.entity(blueprint_entity).remove::<IssuedBy>();
+                            // ManagedByを削除して未割り当て状態にする
+                            if managed_by_opt.is_some() {
+                                commands.entity(blueprint_entity).remove::<crate::relationships::ManagedBy>();
                             }
 
                             // Priority(10) を付与して使い魔がタスクを探せるようにする

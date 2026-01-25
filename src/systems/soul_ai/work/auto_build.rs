@@ -2,9 +2,10 @@ use bevy::prelude::*;
 
 use crate::entities::damned_soul::{DamnedSoul, Destination, IdleState, Path, StressBreakdown};
 use crate::entities::familiar::{ActiveCommand, Familiar, UnderCommand};
-use crate::relationships::{TaskWorkers, WorkingOn};
+use crate::relationships::{ManagedBy, TaskWorkers, WorkingOn};
 use crate::systems::command::TaskArea;
-use crate::systems::jobs::{Blueprint, Designation, IssuedBy, TaskSlots, WorkType};
+use crate::systems::jobs::{Blueprint, Designation, TaskSlots, Priority, WorkType};
+use crate::systems::logistics::InStockpile;
 use crate::systems::soul_ai::task_execution::AssignedTask;
 use crate::systems::soul_ai::task_execution::types::BuildPhase;
 use crate::systems::soul_ai::work::helpers;
@@ -18,9 +19,11 @@ pub fn blueprint_auto_build_system(
         Entity,
         &Transform,
         &Designation,
-        Option<&IssuedBy>,
+        Option<&ManagedBy>,
         Option<&TaskSlots>,
         Option<&TaskWorkers>,
+        Option<&InStockpile>,
+        Option<&Priority>,
     )>,
     mut q_souls: Query<
         (
@@ -39,16 +42,8 @@ pub fn blueprint_auto_build_system(
     q_breakdown: Query<&StressBreakdown>,
 ) {
     for (fam_entity, _active_command, task_area) in q_familiars.iter() {
-        let (fam_entity, _active_command, task_area): (Entity, &ActiveCommand, &TaskArea) =
-            (fam_entity, _active_command, task_area);
         // エリア内の Blueprint を探す
         for (bp_entity, bp_transform, blueprint, workers_opt) in q_blueprints.iter() {
-            let (bp_entity, bp_transform, blueprint, workers_opt): (
-                Entity,
-                &Transform,
-                &Blueprint,
-                Option<&TaskWorkers>,
-            ) = (bp_entity, bp_transform, blueprint, workers_opt);
             let bp_pos = bp_transform.translation.truncate();
             if !task_area.contains(bp_pos) {
                 continue;
@@ -59,19 +54,19 @@ pub fn blueprint_auto_build_system(
                 continue;
             }
 
-            // 資材が揃っていて、まだIssuedByが付与されていない場合のみ処理
+            // 資材が揃っていて、まだManagedByが付与されていない場合のみ処理
             if !blueprint.materials_complete() {
                 continue;
             }
 
-            // Designationが存在し、IssuedByが付与されていないか確認
-            if let Ok((_, _, designation, issued_by_opt, _, _)) = q_designations.get(bp_entity) {
+            // Designationが存在し、ManagedByが付与されていないか確認
+            if let Ok((_, _, designation, managed_by_opt, _, _, _, _)) = q_designations.get(bp_entity) {
                 if designation.work_type != WorkType::Build {
                     continue;
                 }
 
                 // 既に割り当てられている場合はスキップ
-                if issued_by_opt.is_some() {
+                if managed_by_opt.is_some() {
                     continue;
                 }
 
@@ -143,7 +138,7 @@ pub fn blueprint_auto_build_system(
                         commands
                             .entity(worker_entity)
                             .insert((UnderCommand(fam_entity), WorkingOn(bp_entity)));
-                        commands.entity(bp_entity).insert(IssuedBy(fam_entity));
+                        commands.entity(bp_entity).insert(ManagedBy(fam_entity));
 
                         info!(
                             "AUTO_BUILD: Assigned build task {:?} to worker {:?}",

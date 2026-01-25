@@ -206,9 +206,9 @@ pub fn building_completion_system(
                 });
 
                 // タンクの前方（下側）2マスをバケツ置き場（Stockpile）として設定
-                // ユーザー要望により左に1マス、下に1マスずらす
+                // タンクの真下に配置する (bx, bx+1)
                 let (bx, by) = WorldMap::world_to_grid(transform.translation.truncate());
-                let storage_grids = [(bx - 1, by - 2), (bx, by - 2)];
+                let storage_grids = [(bx, by - 2), (bx + 1, by - 2)];
                 let mut storage_entities = Vec::new();
 
                 for (gx, gy) in storage_grids {
@@ -240,15 +240,9 @@ pub fn building_completion_system(
                     let grid = storage_grids[storage_idx];
                     let base_pos = WorldMap::grid_to_world(grid.0, grid.1);
                     
-                    // バケツ置き場らしく少しずらす
-                    let offset = match i {
-                        0 => Vec2::new(-TILE_SIZE * 0.2, TILE_SIZE * 0.2),
-                        1 => Vec2::new(TILE_SIZE * 0.2, TILE_SIZE * 0.2),
-                        2 => Vec2::new(0.0, -TILE_SIZE * 0.2),
-                        3 => Vec2::new(-TILE_SIZE * 0.2, 0.0),
-                        4 => Vec2::new(TILE_SIZE * 0.2, 0.0),
-                        _ => Vec2::ZERO,
-                    };
+                    // オフセットを削除し、グリッド中心に確実に配置する
+                    // これにより「見た目は拾えそうだが論理的に遠い」といった問題を排除
+                    let offset = Vec2::ZERO;
 
                     let spawn_pos = base_pos + offset;
 
@@ -256,6 +250,7 @@ pub fn building_completion_system(
                         crate::systems::logistics::ResourceItem(crate::systems::logistics::ResourceType::BucketEmpty),
                         crate::systems::logistics::BelongsTo(building_entity),
                         crate::relationships::StoredIn(storage_entity),
+                        crate::systems::logistics::InStockpile(storage_entity),
                         crate::systems::jobs::Designation {
                             work_type: crate::systems::jobs::WorkType::GatherWater,
                         },

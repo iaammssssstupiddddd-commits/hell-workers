@@ -6,8 +6,9 @@ use crate::entities::damned_soul::{
     DamnedSoul, Destination, IdleBehavior, IdleState, Path,
 };
 use crate::entities::familiar::UnderCommand;
-use crate::relationships::Commanding;
-use crate::systems::jobs::Designation;
+use crate::relationships::{Commanding, ManagedBy, TaskWorkers};
+use crate::systems::jobs::{Designation, TaskSlots, Priority};
+use crate::systems::logistics::InStockpile;
 use crate::systems::soul_ai::gathering::ParticipatingIn;
 use crate::systems::soul_ai::task_execution::AssignedTask;
 use crate::systems::soul_ai::work::unassign_task;
@@ -140,9 +141,11 @@ impl SquadManager {
             Entity,
             &Transform,
             &Designation,
-            Option<&crate::systems::jobs::IssuedBy>,
-            Option<&crate::systems::jobs::TaskSlots>,
-            Option<&crate::relationships::TaskWorkers>,
+            Option<&ManagedBy>,
+            Option<&TaskSlots>,
+            Option<&TaskWorkers>,
+            Option<&InStockpile>,
+        Option<&Priority>,
         )>,
         q_targets: &Query<(
             &Transform,
@@ -159,6 +162,7 @@ impl SquadManager {
         q_bubbles: &Query<(Entity, &SpeechBubble), With<FamiliarBubble>>,
         fam_transform: &Transform,
         voice_opt: Option<&crate::entities::familiar::FamiliarVoice>,
+        world_map: &Res<crate::world::map::WorldMap>,
     ) -> Vec<Entity> {
         let mut released_entities = Vec::new();
 
@@ -202,6 +206,7 @@ impl SquadManager {
                         q_targets,
                         q_designations,
                         haul_cache,
+                        world_map,
                         false, // emit_abandoned_event: 疲労リリース時は個別のタスク中断セリフを出さない
                     );
 
