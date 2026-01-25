@@ -102,7 +102,7 @@ pub fn spawn_damned_soul_at(
 pub fn pathfinding_system(
     mut commands: Commands,
     world_map: Res<WorldMap>,
-    mut pf_context: ResMut<PathfindingContext>,
+    mut pf_context: Local<PathfindingContext>,
     mut query: Query<
         (
             Entity,

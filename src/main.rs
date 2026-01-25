@@ -12,6 +12,7 @@ mod world;
 use bevy::prelude::*;
 use bevy::render::RenderPlugin;
 use bevy::render::settings::{Backends, RenderCreation, WgpuSettings};
+use bevy::diagnostic::FrameTimeDiagnosticsPlugin;
 
 use game_state::{
     PlayMode, log_enter_building_mode, log_enter_task_mode, log_enter_zone_mode,
@@ -87,6 +88,8 @@ fn main() {
             )
                 .chain(),
         )
+        // Diagnostics plugins
+        .add_plugins(FrameTimeDiagnosticsPlugin::default())
         // Game plugins
         .add_plugins(StartupPlugin)
         .add_plugins(InputPlugin)

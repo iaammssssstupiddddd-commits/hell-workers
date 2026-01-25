@@ -19,8 +19,7 @@ impl Plugin for LogicPlugin {
         app.add_plugins(SoulAiPlugin);
         
         // パスファインディング用の作業メモリを登録
-        app.init_resource::<RegrowthManager>()
-            .init_resource::<crate::world::pathfinding::PathfindingContext>();
+        app.init_resource::<RegrowthManager>();
 
         app.add_systems(
             Update,

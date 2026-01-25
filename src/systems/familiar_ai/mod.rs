@@ -172,7 +172,7 @@ pub struct FamiliarAiParams<'w, 's> {
     pub ev_created: MessageWriter<'w, crate::systems::jobs::DesignationCreatedEvent>,
     pub ev_state_changed: MessageWriter<'w, crate::events::FamiliarAiStateChangedEvent>,
     pub world_map: Res<'w, crate::world::map::WorldMap>,
-    pub pf_context: ResMut<'w, PathfindingContext>,
+    pub pf_context: Local<'s, PathfindingContext>,
 }
 
 /// 使い魔AIの更新システム
