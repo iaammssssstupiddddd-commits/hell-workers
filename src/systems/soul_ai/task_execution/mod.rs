@@ -61,10 +61,12 @@ pub fn task_execution_system(
         Option<&crate::relationships::TaskWorkers>,
     )>,
     mut q_stockpiles: Query<(
+        Entity, // 追加
         &Transform,
         &mut Stockpile,
         Option<&crate::relationships::StoredItems>,
     )>,
+    q_belongs: Query<&crate::systems::logistics::BelongsTo>, // 追加
     game_assets: Res<crate::assets::GameAssets>,
     time: Res<Time>,
     mut haul_cache: ResMut<HaulReservationCache>,
@@ -139,7 +141,9 @@ pub fn task_execution_system(
                     stockpile,
                     phase,
                     &q_targets,
+                    &q_designations,
                     &mut q_stockpiles,
+                    &q_belongs,
                     &mut commands,
                     &mut dropped_this_frame,
                     &mut *haul_cache,
@@ -214,10 +218,10 @@ pub fn task_execution_system(
                     tank,
                     phase,
                     &q_targets,
+                    &q_belongs,
                     &mut commands,
                     &game_assets,
                     &time,
-
                     &world_map,
                 );
             }

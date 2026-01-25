@@ -9,6 +9,8 @@ use crate::entities::familiar::{
 use crate::relationships::{Commanding, ManagedTasks};
 use crate::systems::command::TaskArea;
 use crate::systems::soul_ai::gathering::ParticipatingIn;
+use crate::systems::jobs::Designation;
+use crate::systems::logistics::ResourceItem;
 use crate::systems::soul_ai::task_execution::AssignedTask;
 use crate::systems::spatial::{DesignationSpatialGrid, SpatialGrid};
 use crate::systems::visual::speech::components::{FamiliarBubble, SpeechBubble};
@@ -55,6 +57,15 @@ pub fn process_squad_management(
         Option<&crate::relationships::TaskWorkers>,
     )>,
     haul_cache: &mut crate::systems::familiar_ai::haul_cache::HaulReservationCache,
+    q_targets: &Query<(
+        &Transform,
+        Option<&crate::systems::jobs::Tree>,
+        Option<&crate::systems::jobs::Rock>,
+        Option<&crate::systems::logistics::ResourceItem>,
+        Option<&crate::systems::jobs::Designation>,
+        Option<&crate::relationships::StoredIn>,
+    )>,
+    _q_items: &Query<(&ResourceItem, Option<&Designation>)>,
     cooldowns: &mut crate::systems::visual::speech::cooldown::BubbleCooldowns,
     time: &Res<Time>,
     game_assets: &Res<crate::assets::GameAssets>,
@@ -77,6 +88,7 @@ pub fn process_squad_management(
         commands,
         q_souls,
         q_designations,
+        q_targets,
         haul_cache,
         cooldowns,
         time,
@@ -288,11 +300,20 @@ pub fn process_task_delegation_and_movement(
         &crate::systems::logistics::Stockpile,
         Option<&crate::relationships::StoredItems>,
     )>,
-    q_resources: &Query<&crate::systems::logistics::ResourceItem>,
+    q_items: &Query<(&ResourceItem, Option<&Designation>)>,
     q_target_blueprints: &Query<&crate::systems::jobs::TargetBlueprint>,
     q_blueprints: &Query<&crate::systems::jobs::Blueprint>,
+    q_belongs: &Query<&crate::systems::logistics::BelongsTo>, // 追加
     designation_grid: &DesignationSpatialGrid,
     managed_tasks: &ManagedTasks,
+    _q_targets: &Query<(
+        &Transform,
+        Option<&crate::systems::jobs::Tree>,
+        Option<&crate::systems::jobs::Rock>,
+        Option<&crate::systems::logistics::ResourceItem>,
+        Option<&crate::systems::jobs::Designation>,
+        Option<&crate::relationships::StoredIn>,
+    )>,
     haul_cache: &mut crate::systems::familiar_ai::haul_cache::HaulReservationCache,
     world_map: &WorldMap,
     pf_context: &mut PathfindingContext,
@@ -311,11 +332,12 @@ pub fn process_task_delegation_and_movement(
         task_area_opt,
         fatigue_threshold,
         q_designations,
+        q_items,
         q_souls,
         q_stockpiles,
-        q_resources,
         q_target_blueprints,
         q_blueprints,
+        q_belongs,
         designation_grid,
         managed_tasks,
         haul_cache,

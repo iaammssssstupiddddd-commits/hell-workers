@@ -39,6 +39,7 @@ pub fn handle_haul_to_blueprint_task(
     )>,
     q_blueprints: &mut Query<(&Transform, &mut Blueprint, Option<&Designation>)>,
     q_stockpiles: &mut Query<(
+        Entity,
         &Transform,
         &mut Stockpile,
         Option<&crate::relationships::StoredItems>,
@@ -53,14 +54,16 @@ pub fn handle_haul_to_blueprint_task(
             "HAUL_TO_BP: Cancelled for {:?} - Exhausted or Stress breakdown",
             ctx.soul_entity
         );
+        let soul_pos = ctx.soul_transform.translation.truncate();
         crate::systems::soul_ai::work::unassign_task(
             commands,
             ctx.soul_entity,
-            ctx.soul_pos(),
+            soul_pos,
             ctx.task,
             ctx.path,
-
             Some(ctx.inventory),
+            None, // アイテムを拾う前なのでNone
+            q_targets,
             q_designations,
             haul_cache,
             true, // 失敗時はセリフを出す
@@ -185,13 +188,21 @@ pub fn handle_haul_to_blueprint_task(
                     "HAUL_TO_BP: Cancelled for {:?} - Blueprint {:?} gone",
                     ctx.soul_entity, blueprint_entity
                 );
-                // Blueprint が消失 - アイテムをドロップ
-                if ctx.inventory.0.is_some() {
-                    drop_item(commands, ctx.soul_entity, item_entity, soul_pos);
-                }
-                ctx.inventory.0 = None;
-                commands.entity(ctx.soul_entity).remove::<WorkingOn>();
-                clear_task_and_path(ctx.task, ctx.path);
+                // Blueprint が消失 - アイテムを解除して再発行
+                let dropped_res = q_targets.get(item_entity).ok().and_then(|(_, _, _, ri, _, _)| ri.map(|r| r.0));
+                crate::systems::soul_ai::work::unassign_task(
+                    commands,
+                    ctx.soul_entity,
+                    soul_pos,
+                    ctx.task,
+                    ctx.path,
+                    Some(ctx.inventory),
+                    dropped_res,
+                    q_targets,
+                    q_designations,
+                    haul_cache,
+                    true,
+                );
             }
         }
         HaulToBpPhase::Delivering => {

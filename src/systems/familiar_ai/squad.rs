@@ -136,16 +136,22 @@ impl SquadManager {
             ),
             Without<crate::entities::familiar::Familiar>,
         >,
-        q_designations: &Query<
-            (
-                Entity,
-                &Transform,
-                &Designation,
-                Option<&crate::systems::jobs::IssuedBy>,
-                Option<&crate::systems::jobs::TaskSlots>,
-                Option<&crate::relationships::TaskWorkers>,
-            ),
-        >,
+        q_designations: &Query<(
+            Entity,
+            &Transform,
+            &Designation,
+            Option<&crate::systems::jobs::IssuedBy>,
+            Option<&crate::systems::jobs::TaskSlots>,
+            Option<&crate::relationships::TaskWorkers>,
+        )>,
+        q_targets: &Query<(
+            &Transform,
+            Option<&crate::systems::jobs::Tree>,
+            Option<&crate::systems::jobs::Rock>,
+            Option<&crate::systems::logistics::ResourceItem>,
+            Option<&Designation>,
+            Option<&crate::relationships::StoredIn>,
+        )>,
         haul_cache: &mut crate::systems::familiar_ai::haul_cache::HaulReservationCache,
         cooldowns: &mut crate::systems::visual::speech::cooldown::BubbleCooldowns,
         time: &Time,
@@ -181,6 +187,10 @@ impl SquadManager {
                     );
 
                     // タスクを解除
+                    let dropped_res = inventory_opt.as_ref().and_then(|i| {
+                        i.0.and_then(|e| q_targets.get(e).ok().and_then(|(_, _, _, ri, _, _)| ri.map(|r| r.0)))
+                    });
+
                     unassign_task(
                         commands,
                         entity,
@@ -188,6 +198,8 @@ impl SquadManager {
                         &mut task,
                         &mut path,
                         inventory_opt.as_deref_mut(),
+                        dropped_res,
+                        q_targets,
                         q_designations,
                         haul_cache,
                         false, // emit_abandoned_event: 疲労リリース時は個別のタスク中断セリフを出さない
