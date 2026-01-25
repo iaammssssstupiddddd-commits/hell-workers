@@ -177,6 +177,27 @@ pub fn building_completion_system(
                 },
             )).id();
 
+            // 壁やタンクなどの障害物となる建物の場合、通行不可設定を行う
+            let is_obstacle = match bp.kind {
+                BuildingType::Wall | BuildingType::Tank => true,
+                BuildingType::Floor => false,
+            };
+
+            if is_obstacle {
+                commands.entity(building_entity).with_children(|parent| {
+                    for &(gx, gy) in &bp.occupied_grids {
+                        parent.spawn((
+                            ObstaclePosition(gx, gy),
+                            Name::new("Building Obstacle"),
+                        ));
+                    }
+                });
+
+                for &(gx, gy) in &bp.occupied_grids {
+                    world_map.add_obstacle(gx, gy);
+                }
+            }
+
             // タンクが完成した場合、周囲にバケツを5つ生成し、貯水機能を追加
             if bp.kind == BuildingType::Tank {
                 commands.entity(building_entity).insert(crate::systems::logistics::Stockpile {
@@ -185,8 +206,9 @@ pub fn building_completion_system(
                 });
 
                 // タンクの前方（下側）2マスをバケツ置き場（Stockpile）として設定
+                // ユーザー要望により左に1マス、下に1マスずらす
                 let (bx, by) = WorldMap::world_to_grid(transform.translation.truncate());
-                let storage_grids = [(bx, by - 1), (bx + 1, by - 1)];
+                let storage_grids = [(bx - 1, by - 2), (bx, by - 2)];
                 let mut storage_entities = Vec::new();
 
                 for (gx, gy) in storage_grids {

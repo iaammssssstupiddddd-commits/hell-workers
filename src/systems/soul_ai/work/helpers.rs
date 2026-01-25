@@ -2,7 +2,7 @@ use crate::constants::*;
 use crate::entities::damned_soul::{DamnedSoul, IdleBehavior, IdleState, Path};
 use crate::relationships::WorkingOn;
 use crate::systems::familiar_ai::haul_cache::HaulReservationCache;
-use crate::systems::jobs::{Designation, IssuedBy, TaskSlots};
+use crate::systems::jobs::{Designation, TaskSlots};
 use crate::systems::soul_ai::task_execution::AssignedTask;
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
@@ -97,10 +97,11 @@ pub fn unassign_task(
                 q_targets.get(item_entity).ok().and_then(|(_, _, _, ri, _, _)| ri.map(|r| r.0))
             });
 
-            // 一旦既存のコンポーネントを削除
-            commands.entity(item_entity).remove::<Designation>();
-            commands.entity(item_entity).remove::<IssuedBy>();
-            commands.entity(item_entity).remove::<TaskSlots>();
+            // 管理コンポーネントは削除せず維持する。
+            // これにより使い魔の ManagedTasks リストと整合性が取れ、再アサインが可能になる。
+            // commands.entity(item_entity).remove::<Designation>();
+            // commands.entity(item_entity).remove::<IssuedBy>();
+            // commands.entity(item_entity).remove::<TaskSlots>();
             commands
                 .entity(item_entity)
                 .remove::<crate::systems::jobs::TargetBlueprint>();
@@ -108,7 +109,7 @@ pub fn unassign_task(
                 .entity(item_entity)
                 .remove::<crate::systems::jobs::Priority>();
 
-            // StoredIn関係も削除
+            // StoredIn関係は削除（地面に落ちるため）
             commands.entity(item_entity).remove::<crate::relationships::StoredIn>();
             
             // 新しいタスクを即座に付与

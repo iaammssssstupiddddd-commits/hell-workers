@@ -109,8 +109,9 @@ pub fn find_path(
                 if curr == start_idx { break; }
             }
             path.reverse();
-            // 経路の平滑化を適用
-            return Some(smooth_path(world_map, path));
+            // 経路の平滑化を適用せずにダイレクトなグリッドパスを返す
+            // return Some(smooth_path(world_map, path));
+            return Some(path);
         }
 
         let curr_pos = WorldMap::idx_to_pos(current.idx);
@@ -185,6 +186,7 @@ pub fn find_path_to_adjacent(
 }
 
 /// 経路を平滑化する（直線で行ける場所を一直線に結ぶ）
+#[allow(dead_code)]
 pub fn smooth_path(world_map: &WorldMap, path: Vec<(i32, i32)>) -> Vec<(i32, i32)> {
     if path.len() <= 2 {
         return path;

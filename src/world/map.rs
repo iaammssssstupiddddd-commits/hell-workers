@@ -220,6 +220,7 @@ impl WorldMap {
     }
 
     /// 2点間に障害物がないか（Line-of-Sight）を判定
+    #[allow(dead_code)]
     pub fn has_line_of_sight(&self, p1: (i32, i32), p2: (i32, i32)) -> bool {
         let (x1, y1) = p1;
         let (x2, y2) = p2;
