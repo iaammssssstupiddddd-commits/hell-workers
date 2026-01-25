@@ -35,6 +35,23 @@ pub fn scouting_logic(
         ),
         Without<crate::entities::familiar::Familiar>,
     >,
+    _q_targets: &Query<(
+        &Transform,
+        Option<&crate::systems::jobs::Tree>,
+        Option<&crate::systems::jobs::Rock>,
+        Option<&crate::systems::logistics::ResourceItem>,
+        Option<&crate::systems::jobs::Designation>,
+        Option<&crate::relationships::StoredIn>,
+    )>,
+    _q_designations: &Query<(
+        Entity,
+        &Transform,
+        &crate::systems::jobs::Designation,
+        Option<&crate::systems::jobs::IssuedBy>,
+        Option<&crate::systems::jobs::TaskSlots>,
+        Option<&crate::relationships::TaskWorkers>,
+    )>,
+    _haul_cache: &mut crate::systems::familiar_ai::haul_cache::HaulReservationCache,
     q_breakdown: &Query<&StressBreakdown>,
     commands: &mut Commands,
 ) -> bool {
@@ -58,7 +75,7 @@ pub fn scouting_logic(
         _soul_entity,
         target_transform,
         soul,
-        task,
+        soul_task,
         dest,
         path,
         idle,
@@ -72,7 +89,7 @@ pub fn scouting_logic(
             _soul_entity,
             target_transform,
             soul,
-            task,
+            soul_task,
             _dest,
             _path,
             _idle,
@@ -96,7 +113,7 @@ pub fn scouting_logic(
             _soul_entity,
             target_transform,
             soul,
-            &*task,
+            &soul_task,
             &*dest,
             &*path,
             idle,
@@ -111,11 +128,11 @@ pub fn scouting_logic(
 
         // 依然としてリクルート可能かチェック
         if uc.is_none() || matches!(uc, Some(u) if u.0 == fam_entity) {
-            if !fatigue_ok || !stress_ok || !matches!(*task, AssignedTask::None) {
+            if !fatigue_ok || !stress_ok || !matches!(soul_task, AssignedTask::None) {
                 // 条件を満たさなくなった
                 info!(
                     "FAM_AI: {:?} scouting cancelled for {:?} (FatigueOK: {}, StressOK: {}, Task: {:?})",
-                    fam_entity, target_soul, fatigue_ok, stress_ok, *task
+                    fam_entity, target_soul, fatigue_ok, stress_ok, soul_task
                 );
                 *ai_state = FamiliarAiState::SearchingTask;
                 return true;

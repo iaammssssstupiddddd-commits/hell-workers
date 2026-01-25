@@ -19,6 +19,11 @@ pub enum ResourceType {
 #[reflect(Component)]
 pub struct ResourceItem(pub ResourceType);
 
+/// エンティティが特定の親（タンクなど）に属することを示す
+#[derive(Component, Reflect, Debug, Clone, Copy, PartialEq, Eq)]
+#[reflect(Component)]
+pub struct BelongsTo(pub Entity);
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Reflect)]
 pub enum ZoneType {
     Stockpile,

@@ -5,10 +5,11 @@ use crate::systems::familiar_ai::haul_cache::HaulReservationCache;
 use crate::systems::jobs::{Designation, IssuedBy, TaskSlots};
 use crate::systems::logistics::Stockpile;
 use crate::systems::soul_ai::task_execution::{
-    common::*,
     context::TaskExecutionContext,
     types::{AssignedTask, HaulPhase},
 };
+use crate::systems::soul_ai::task_execution::common::*;
+use crate::systems::soul_ai::work::unassign_task;
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
 
@@ -25,11 +26,21 @@ pub fn handle_haul_task(
         Option<&Designation>,
         Option<&crate::relationships::StoredIn>,
     )>,
+    q_designations: &Query<(
+        Entity,
+        &Transform,
+        &Designation,
+        Option<&IssuedBy>,
+        Option<&TaskSlots>,
+        Option<&crate::relationships::TaskWorkers>,
+    )>,
     q_stockpiles: &mut Query<(
+        Entity,
         &Transform,
         &mut Stockpile,
         Option<&crate::relationships::StoredItems>,
     )>,
+    q_belongs: &Query<&crate::systems::logistics::BelongsTo>,
     commands: &mut Commands,
     dropped_this_frame: &mut std::collections::HashMap<Entity, usize>,
     haul_cache: &mut HaulReservationCache,
@@ -82,7 +93,7 @@ pub fn handle_haul_task(
             }
         }
         HaulPhase::GoingToStockpile => {
-            if let Ok((stock_transform, _, _)) = q_stockpiles.get(stockpile) {
+            if let Ok((_, stock_transform, _, _)) = q_stockpiles.get(stockpile) {
                 let stock_pos = stock_transform.translation.truncate();
                 update_destination_to_adjacent(ctx.dest, stock_pos, ctx.path, soul_pos, world_map);
 
@@ -111,32 +122,47 @@ pub fn handle_haul_task(
             }
         }
         HaulPhase::Dropping => {
-            if let Ok((stock_transform, mut stockpile_comp, stored_items_opt)) =
+            if let Ok((_, stock_transform, mut stockpile_comp, stored_items_opt)) =
                 q_stockpiles.get_mut(stockpile)
             {
                 let current_count = stored_items_opt.map(|si| si.len()).unwrap_or(0);
 
-                // アイテムの型を取得
-                let item_type = q_targets
-                    .get(item)
-                    .ok()
-                    .and_then(|(_, _, _, ri, _, _): (_, _, _, Option<&crate::systems::logistics::ResourceItem>, _, _)| ri.map(|r| r.0));
+                // アイテムの型と所有権を取得
+                let item_info = q_targets.get(item).ok().map(|(_, _, _, ri, _, _)| {
+                    let res_type = ri.map(|r| r.0);
+                    let belongs = q_belongs.get(item).ok();
+                    (res_type, belongs)
+                });
                 let this_frame = dropped_this_frame.get(&stockpile).cloned().unwrap_or(0);
 
-                let can_drop = if let Some(it) = item_type {
-                    let type_match = stockpile_comp.resource_type.is_none()
-                        || stockpile_comp.resource_type == Some(it);
-                    // 現在の数 + このフレームですでに置かれた数
-                    let capacity_ok = (current_count + this_frame) < stockpile_comp.capacity;
-                    type_match && capacity_ok
-                } else {
-                    false
-                };
+                    let can_drop = if let Some((Some(res_type), item_belongs)) = item_info {
+                        // 所有権チェック
+                        let stock_belongs = q_belongs.get(stockpile).ok();
+                        let belongs_match = item_belongs == stock_belongs;
+
+                        let type_match = stockpile_comp.resource_type.is_none()
+                            || stockpile_comp.resource_type == Some(res_type);
+                            
+                        // 専用エリアの場合、型チェックを緩和（所有権が一致すれば空/満タンバケツ混在OK）
+                        let type_allowed = if stock_belongs.is_some() {
+                            belongs_match
+                        } else {
+                            type_match
+                        };
+
+                        // 現在の数 + このフレームですでに置かれた数
+                        let capacity_ok = (current_count + this_frame) < stockpile_comp.capacity;
+                        belongs_match && type_allowed && capacity_ok
+                    } else {
+                        false
+                    };
 
                 if can_drop {
                     // 資源タイプがNoneなら設定
                     if stockpile_comp.resource_type.is_none() {
-                        stockpile_comp.resource_type = item_type;
+                        if let Some((res_type, _)) = item_info {
+                             stockpile_comp.resource_type = res_type;
+                        }
                     }
 
                     commands.entity(item).insert((
@@ -159,9 +185,21 @@ pub fn handle_haul_task(
                     );
                 } else {
                     // 到着時に条件を満たさなくなった場合（型違いor満杯）
-                    // 本来は代替地を探すべきだが、今回はシンプルにその場にドロップする
+                    // 片付けタスクを再発行してドロップ
                     warn!("HAUL: Stockpile condition changed. Dropping item on the ground.");
-                    drop_item(commands, ctx.soul_entity, item, soul_pos);
+                    unassign_task(
+                        commands,
+                        ctx.soul_entity,
+                        soul_pos,
+                        ctx.task,
+                        ctx.path,
+                        Some(ctx.inventory),
+                        item_info.and_then(|(it, _)| it),
+                        q_targets,
+                        q_designations,
+                        haul_cache,
+                        true,
+                    );
                 }
             } else {
                 // 備蓄場所消失

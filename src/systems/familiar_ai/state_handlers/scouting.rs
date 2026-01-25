@@ -34,11 +34,28 @@ pub fn handle_scouting_state(
             Option<&mut crate::systems::logistics::Inventory>,
             Option<&UnderCommand>,
             Option<&ParticipatingIn>,
-        ),
-        Without<crate::entities::familiar::Familiar>,
-    >,
-    q_breakdown: &Query<&StressBreakdown>,
-    commands: &mut Commands,
+    ),
+    Without<crate::entities::familiar::Familiar>,
+>,
+q_targets: &Query<(
+    &Transform,
+    Option<&crate::systems::jobs::Tree>,
+    Option<&crate::systems::jobs::Rock>,
+    Option<&crate::systems::logistics::ResourceItem>,
+    Option<&crate::systems::jobs::Designation>,
+    Option<&crate::relationships::StoredIn>,
+)>,
+q_designations: &Query<(
+    Entity,
+    &Transform,
+    &crate::systems::jobs::Designation,
+    Option<&crate::systems::jobs::IssuedBy>,
+    Option<&crate::systems::jobs::TaskSlots>,
+    Option<&crate::relationships::TaskWorkers>,
+)>,
+haul_cache: &mut crate::systems::familiar_ai::haul_cache::HaulReservationCache,
+q_breakdown: &Query<&StressBreakdown>,
+commands: &mut Commands,
 ) -> StateTransitionResult {
     // 既存の scouting_logic を呼び出し
     let state_changed = crate::systems::familiar_ai::scouting::scouting_logic(
@@ -52,6 +69,9 @@ pub fn handle_scouting_state(
         fam_dest,
         fam_path,
         q_souls,
+        q_targets,
+        q_designations,
+        haul_cache,
         q_breakdown,
         commands,
     );

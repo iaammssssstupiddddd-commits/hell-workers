@@ -61,6 +61,22 @@ pub fn idle_behavior_system(
         Option<&crate::entities::familiar::UnderCommand>,
     )>,
     spot_grid: Res<GatheringSpotSpatialGrid>,
+    _q_targets: Query<(
+        &Transform,
+        Option<&crate::systems::jobs::Tree>,
+        Option<&crate::systems::jobs::Rock>,
+        Option<&crate::systems::logistics::ResourceItem>,
+        Option<&crate::systems::jobs::Designation>,
+        Option<&crate::relationships::StoredIn>,
+    )>,
+    _q_designations: Query<(
+        Entity,
+        &Transform,
+        &crate::systems::jobs::Designation,
+        Option<&crate::systems::jobs::IssuedBy>,
+        Option<&crate::systems::jobs::TaskSlots>,
+        Option<&crate::relationships::TaskWorkers>,
+    )>,
 ) {
     let dt = time.delta_secs();
 
