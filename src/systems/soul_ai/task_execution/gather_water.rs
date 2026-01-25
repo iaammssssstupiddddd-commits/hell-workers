@@ -373,20 +373,6 @@ pub fn handle_gather_water_task(
                       ..default()
                  });
 
-                 // バケツを置く（インベントリから削除し、ワールドに表示）
-                 commands.entity(bucket_entity).remove::<crate::relationships::StoredIn>();
-                 ctx.inventory.0 = None;
-                 // バケツの状態（空）を保持してdrop時に反映
-                 // ResourceItem(ResourceType::BucketEmpty)は既に設定済み
-                 commands.entity(bucket_entity).insert(Visibility::Visible);
-                 // バケツを現在位置に配置
-                 let drop_pos = ctx.soul_transform.translation.truncate();
-                 commands.entity(bucket_entity).insert(Transform::from_xyz(
-                     drop_pos.x,
-                     drop_pos.y,
-                     crate::constants::Z_ITEM_PICKUP,
-                 ));
-
                  // タンクの中身を増やす
                  commands.spawn((
                      ResourceItem(ResourceType::Water),
@@ -394,20 +380,8 @@ pub fn handle_gather_water_task(
                      Visibility::Hidden, // タンクの中なので見えない
                  ));
 
-                 // ドロップ位置がストックパイルなら InStockpile / StoredIn を付与
-                 let drop_grid = WorldMap::world_to_grid(drop_pos);
-                 if let Some(&stockpile_entity) = world_map.stockpiles.get(&drop_grid) {
-                     commands.entity(bucket_entity).insert((
-                         crate::relationships::StoredIn(stockpile_entity),
-                         crate::systems::logistics::InStockpile(stockpile_entity),
-                     ));
-                     info!("GATHER_WATER: Dropped bucket {:?} into stockpile {:?}", bucket_entity, stockpile_entity);
-                 } else {
-                    // ストックパイルでないなら InStockpile も StoredIn も持たない（既に remove 済み）
-                    info!("GATHER_WATER: Dropped bucket {:?} on ground", bucket_entity);
-                 }
-
                  // タスク完了... ではなくバケツを戻しに行く
+                 // 注：ここでバケツをドロップしてはいけない！保持したまま移動する
                  *ctx.task = AssignedTask::GatherWater {
                      bucket: bucket_entity,
                      tank: tank_entity,
@@ -426,8 +400,9 @@ pub fn handle_gather_water_task(
              }
          }
         GatherWaterPhase::ReturningBucket => {
-             // バケツがインベントリにあるか確認
+            // バケツがインベントリにあるか確認
             if ctx.inventory.0 != Some(bucket_entity) {
+                trace!("GATHER_WATER: ReturningBucket cancelled - bucket not in inventory");
                 *ctx.task = AssignedTask::None;
                 return;
             }
@@ -436,34 +411,41 @@ pub fn handle_gather_water_task(
             let mut best_storage = None;
             let mut min_dist_sq = f32::MAX;
             
+            trace!("GATHER_WATER: Phase ReturningBucket. Searching for storage belonging to tank {:?}", tank_entity);
+
             for (s_entity, s_transform, stock, stored) in q_stockpiles.iter() {
                 // タンクへの帰属チェック
                 let belongs_to_tank = _q_belongs.get(s_entity).map(|b| b.0 == tank_entity).unwrap_or(false);
                 
                 let current = stored.map(|s| s.len()).unwrap_or(0);
-                // デバッグ用：全てのストレージの状態をログ出力（多すぎる場合は制限が必要だが、一旦出す）
-                trace!("GATHER_WATER: Checking storage {:?}, belongs_to_tank: {}, capacity: {}/{}", s_entity, belongs_to_tank, current, stock.capacity);
+                trace!("GATHER_WATER: Storage {:?}: belongs_to_tank={}, capacity={}/{}", s_entity, belongs_to_tank, current, stock.capacity);
 
                 if !belongs_to_tank { continue; }
                 
                 // 容量チェック
-                if current >= stock.capacity { continue; }
+                if current >= stock.capacity { 
+                    trace!("GATHER_WATER: Storage {:?} is full ({}/{})", s_entity, current, stock.capacity);
+                    continue; 
+                }
                 
-                let dist_sq = ctx.soul_pos().distance_squared(s_transform.translation.truncate());
+                let s_pos = s_transform.translation.truncate();
+                let dist_sq = ctx.soul_pos().distance_squared(s_pos);
                 if dist_sq < min_dist_sq {
                     min_dist_sq = dist_sq;
-                    best_storage = Some((s_entity, s_transform.translation.truncate()));
+                    best_storage = Some((s_entity, s_pos));
                 }
             }
             
             if let Some((storage_entity, storage_pos)) = best_storage {
-                trace!("GATHER_WATER: Found best storage {:?} at {:?}", storage_entity, storage_pos);
-                let is_near = crate::systems::soul_ai::task_execution::common::is_near_target(ctx.soul_pos(), storage_pos);
+                let is_near = ctx.soul_pos().distance(storage_pos) < crate::constants::TILE_SIZE * 1.8;
+                trace!("GATHER_WATER: Best storage is {:?} at {:?}. is_near: {}", storage_entity, storage_pos, is_near);
                 
                 if is_near {
                     // バケツを置く
+                    trace!("GATHER_WATER: Dropping bucket {:?} into storage {:?}", bucket_entity, storage_entity);
                     commands.entity(bucket_entity).remove::<crate::relationships::StoredIn>();
                     ctx.inventory.0 = None;
+                    
                     commands.entity(bucket_entity).insert((
                         Visibility::Visible,
                         Transform::from_xyz(storage_pos.x, storage_pos.y, crate::constants::Z_ITEM_PICKUP),
@@ -474,9 +456,10 @@ pub fn handle_gather_water_task(
                     // タスク完了
                     commands.entity(ctx.soul_entity).remove::<crate::relationships::WorkingOn>();
                     *ctx.task = AssignedTask::None;
-                    info!("GATHER_WATER: Returned bucket {:?} to storage {:?}", bucket_entity, storage_entity);
+                    info!("GATHER_WATER: Successfully returned bucket {:?} to storage {:?}", bucket_entity, storage_entity);
                 } else {
-                    // 移動中
+                    // 移動
+                    trace!("GATHER_WATER: Moving to storage {:?} at {:?}", storage_entity, storage_pos);
                     if ctx.path.waypoints.is_empty() || ctx.dest.0.distance_squared(storage_pos) > 1.0 {
                         let start_grid = WorldMap::world_to_grid(ctx.soul_pos());
                         let target_grid = WorldMap::world_to_grid(storage_pos);
@@ -486,14 +469,12 @@ pub fn handle_gather_water_task(
                             ctx.path.waypoints = path.iter().map(|&(x,y)| WorldMap::grid_to_world(x,y)).collect();
                             ctx.path.current_index = 0;
                         } else {
-                            // 直線移動
                             ctx.dest.0 = storage_pos;
                         }
                     }
                 }
             } else {
-                // 適切なストレージが見つからない場合はその場に落とす
-                info!("GATHER_WATER: No storage found for bucket, dropping on ground");
+                warn!("GATHER_WATER: No storage found for tank {:?}. Dropping on ground.", tank_entity);
                 commands.entity(bucket_entity).remove::<crate::relationships::StoredIn>();
                 ctx.inventory.0 = None;
                 commands.entity(bucket_entity).insert((
