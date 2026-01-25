@@ -209,6 +209,16 @@ impl WorldMap {
         None
     }
 
+    /// 指定位置から最も近い川（水）タイルの座標を返す
+    pub fn get_nearest_river_grid(&self, pos: Vec2) -> Option<(i32, i32)> {
+        // 川の範囲（RIVER_Y_MIN..=RIVER_Y_MAX, RIVER_X_MIN..=RIVER_X_MAX）
+        // 川タイルの座標は固定なので、効率的に最短距離のタイルを探す
+        let grid = Self::world_to_grid(pos);
+        let target_y = grid.1.clamp(RIVER_Y_MIN, RIVER_Y_MAX);
+        let target_x = grid.0.clamp(RIVER_X_MIN, RIVER_X_MAX);
+        Some((target_x, target_y))
+    }
+
     /// 2点間に障害物がないか（Line-of-Sight）を判定
     pub fn has_line_of_sight(&self, p1: (i32, i32), p2: (i32, i32)) -> bool {
         let (x1, y1) = p1;

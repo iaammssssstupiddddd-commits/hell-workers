@@ -32,6 +32,12 @@ pub enum AssignedTask {
         blueprint: Entity,
         phase: BuildPhase,
     },
+    /// 水汲みを行う
+    GatherWater {
+        bucket: Entity,
+        tank: Entity,
+        phase: GatherWaterPhase,
+    },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Reflect, Default)]
@@ -66,6 +72,16 @@ pub enum HaulToBpPhase {
     Delivering,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Reflect, Default)]
+pub enum GatherWaterPhase {
+    #[default]
+    GoingToBucket,
+    GoingToRiver,
+    Filling { progress: f32 },
+    GoingToTank,
+    Pouring { progress: f32 },
+}
+
 impl AssignedTask {
     /// タスクの作業タイプを取得
     pub fn work_type(&self) -> Option<WorkType> {
@@ -74,6 +90,7 @@ impl AssignedTask {
             AssignedTask::Haul { .. } => Some(WorkType::Haul),
             AssignedTask::HaulToBlueprint { .. } => Some(WorkType::Haul),
             AssignedTask::Build { .. } => Some(WorkType::Build),
+            AssignedTask::GatherWater { .. } => Some(WorkType::GatherWater),
             AssignedTask::None => None,
         }
     }
@@ -85,6 +102,7 @@ impl AssignedTask {
             AssignedTask::Haul { item, .. } => Some(*item),
             AssignedTask::HaulToBlueprint { item, .. } => Some(*item),
             AssignedTask::Build { blueprint, .. } => Some(*blueprint),
+            AssignedTask::GatherWater { bucket, .. } => Some(*bucket),
             AssignedTask::None => None,
         }
     }

@@ -23,7 +23,7 @@ pub fn handle_build_task(
 
     match phase {
         BuildPhase::GoingToBlueprint => {
-            if let Ok((bp_transform, bp, des_opt)) = q_blueprints.get(blueprint_entity) {
+            if let Ok((_bp_transform, bp, des_opt)) = q_blueprints.get(blueprint_entity) {
                 // 指定が解除されていたら中止
                 if cancel_task_if_designation_missing(des_opt, ctx.task, ctx.path) {
                     commands.entity(ctx.soul_entity).remove::<WorkingOn>();
@@ -41,10 +41,9 @@ pub fn handle_build_task(
                     return;
                 }
 
-                let bp_pos = bp_transform.translation.truncate();
-                update_destination_to_adjacent(ctx.dest, bp_pos, ctx.path, soul_pos, world_map);
+                update_destination_to_blueprint(ctx.dest, &bp.occupied_grids, ctx.path, soul_pos, world_map);
 
-                if is_near_target(soul_pos, bp_pos) {
+                if is_near_blueprint(soul_pos, &bp.occupied_grids) {
                     *ctx.task = AssignedTask::Build {
                         blueprint: blueprint_entity,
                         phase: BuildPhase::Building { progress: 0.0 },
@@ -52,7 +51,7 @@ pub fn handle_build_task(
                     ctx.path.waypoints.clear();
                     info!(
                         "BUILD: Soul {:?} started building at {:?}",
-                        ctx.soul_entity, bp_pos
+                        ctx.soul_entity, blueprint_entity
                     );
                 }
             } else {

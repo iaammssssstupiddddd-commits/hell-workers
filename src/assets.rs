@@ -15,6 +15,10 @@ pub struct GameAssets {
     pub rock: Handle<Image>,        // 岩のスプライト
     pub aura_circle: Handle<Image>, // 円形オーラテクスチャ
     pub aura_ring: Handle<Image>,   // 強調用リングテクスチャ
+    // Water related
+    pub tank_empty: Handle<Image>,
+    pub bucket_empty: Handle<Image>,
+    pub bucket_water: Handle<Image>,
     // UI Icons
     pub icon_male: Handle<Image>,
     pub icon_female: Handle<Image>,
@@ -24,6 +28,7 @@ pub struct GameAssets {
     pub icon_pick: Handle<Image>,
     pub icon_axe: Handle<Image>,
     pub icon_haul: Handle<Image>,
+    pub icon_water_small: Handle<Image>,
     pub icon_arrow_down: Handle<Image>,
     pub icon_arrow_right: Handle<Image>,
     pub familiar_layout: Handle<TextureAtlasLayout>,

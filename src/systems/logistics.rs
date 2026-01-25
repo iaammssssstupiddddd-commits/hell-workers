@@ -10,6 +10,9 @@ use std::collections::HashMap;
 pub enum ResourceType {
     Wood,
     Rock, // 旧Stone（岩採掘でのみ入手可能）
+    Water,
+    BucketEmpty,
+    BucketWater,
 }
 
 #[derive(Component, Reflect)]

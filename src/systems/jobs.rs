@@ -1,5 +1,6 @@
 use crate::assets::GameAssets;
 use crate::constants::*;
+use crate::world::map::WorldMap;
 use crate::systems::logistics::ResourceType;
 use bevy::prelude::*;
 use std::collections::HashMap;
@@ -20,6 +21,7 @@ pub struct DesignationCreatedEvent {
 pub enum BuildingType {
     Wall,
     Floor,
+    Tank,
 }
 
 impl BuildingType {
@@ -32,6 +34,9 @@ impl BuildingType {
             }
             BuildingType::Floor => {
                 materials.insert(ResourceType::Rock, 1);
+            }
+            BuildingType::Tank => {
+                materials.insert(ResourceType::Wood, 2);
             }
         }
         materials
@@ -67,16 +72,19 @@ pub struct Blueprint {
     pub required_materials: HashMap<ResourceType, u32>,
     /// 搬入済みの資材量
     pub delivered_materials: HashMap<ResourceType, u32>,
+    /// 占有するグリッド座標リスト
+    pub occupied_grids: Vec<(i32, i32)>,
 }
 
 impl Blueprint {
     /// 新しい設計図を作成
-    pub fn new(kind: BuildingType) -> Self {
+    pub fn new(kind: BuildingType, occupied_grids: Vec<(i32, i32)>) -> Self {
         Self {
             kind,
             progress: 0.0,
             required_materials: kind.required_materials(),
             delivered_materials: HashMap::new(),
+            occupied_grids,
         }
     }
 
@@ -103,6 +111,7 @@ pub enum WorkType {
     Mine,  // 採掘
     Build, // 建築
     Haul,  // 運搬
+    GatherWater, // 水汲み
 }
 
 #[derive(Component)]
@@ -142,16 +151,17 @@ pub fn building_completion_system(
             );
             commands.entity(entity).despawn();
 
-            let sprite_image = match bp.kind {
-                BuildingType::Wall => game_assets.wall.clone(),
-                BuildingType::Floor => game_assets.stone.clone(),
+            let (sprite_image, custom_size) = match bp.kind {
+                BuildingType::Wall => (game_assets.wall.clone(), Vec2::splat(TILE_SIZE)),
+                BuildingType::Floor => (game_assets.stone.clone(), Vec2::splat(TILE_SIZE)),
+                BuildingType::Tank => (game_assets.tank_empty.clone(), Vec2::splat(TILE_SIZE * 2.0)),
             };
 
-            commands.spawn((
+            let building_entity = commands.spawn((
                 Building { _kind: bp.kind },
                 Sprite {
                     image: sprite_image,
-                    custom_size: Some(Vec2::splat(TILE_SIZE)),
+                    custom_size: Some(custom_size),
                     ..default()
                 },
                 *transform,
@@ -167,7 +177,43 @@ pub fn building_completion_system(
                         },
                     },
                 },
-            ));
+            )).id();
+
+            // タンクが完成した場合、周囲にバケツを5つ生成し、貯水機能を追加
+            if bp.kind == BuildingType::Tank {
+                commands.entity(building_entity).insert(crate::systems::logistics::Stockpile {
+                    capacity: 50,
+                    resource_type: Some(crate::systems::logistics::ResourceType::Water),
+                });
+
+                // バケツの生成 (5個)
+                let base_grid = WorldMap::world_to_grid(transform.translation.truncate());
+                let spawn_grids = [
+                    (base_grid.0 - 1, base_grid.1),
+                    (base_grid.0 + 2, base_grid.1),
+                    (base_grid.0, base_grid.1 - 1),
+                    (base_grid.0, base_grid.1 + 2),
+                    (base_grid.0 + 1, base_grid.1 - 1),
+                ];
+
+                for (gx, gy) in spawn_grids {
+                    let spawn_pos = WorldMap::grid_to_world(gx, gy);
+                    commands.spawn((
+                        crate::systems::logistics::ResourceItem(crate::systems::logistics::ResourceType::BucketEmpty),
+                        crate::systems::jobs::Designation {
+                            work_type: crate::systems::jobs::WorkType::GatherWater,
+                        },
+                        crate::systems::jobs::TaskSlots::new(1),
+                        Sprite {
+                            image: game_assets.bucket_empty.clone(),
+                            custom_size: Some(Vec2::splat(TILE_SIZE * 0.6)),
+                            ..default()
+                        },
+                        Transform::from_xyz(spawn_pos.x, spawn_pos.y, Z_ITEM_PICKUP),
+                        Name::new("Empty Bucket"),
+                    ));
+                }
+            }
 
             // Phase 5: フローティングテキスト
             let completion_config = crate::systems::utils::floating_text::FloatingTextConfig {

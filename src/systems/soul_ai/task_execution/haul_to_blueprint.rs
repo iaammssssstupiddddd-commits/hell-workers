@@ -125,11 +125,10 @@ pub fn handle_haul_to_blueprint_task(
             }
         }
         HaulToBpPhase::GoingToBlueprint => {
-            if let Ok((bp_transform, _, _)) = q_blueprints.get(blueprint_entity) {
-                let bp_pos = bp_transform.translation.truncate();
-                update_destination_to_adjacent(ctx.dest, bp_pos, ctx.path, soul_pos, world_map);
+            if let Ok((_bp_transform, bp, _)) = q_blueprints.get(blueprint_entity) {
+                update_destination_to_blueprint(ctx.dest, &bp.occupied_grids, ctx.path, soul_pos, world_map);
 
-                if is_near_target(soul_pos, bp_pos) {
+                if is_near_blueprint(soul_pos, &bp.occupied_grids) {
                     info!(
                         "HAUL_TO_BP: Soul {:?} arrived at blueprint {:?}",
                         ctx.soul_entity, blueprint_entity

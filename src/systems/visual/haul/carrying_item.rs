@@ -30,6 +30,9 @@ pub fn spawn_carrying_item_system(
         let icon_handle = match item.0 {
             ResourceType::Wood => game_assets.icon_wood_small.clone(),
             ResourceType::Rock => game_assets.icon_rock_small.clone(),
+            ResourceType::Water => game_assets.icon_water_small.clone(),
+            ResourceType::BucketEmpty => game_assets.bucket_empty.clone(),
+            ResourceType::BucketWater => game_assets.bucket_water.clone(),
         };
 
         info!(

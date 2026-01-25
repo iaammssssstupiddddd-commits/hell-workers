@@ -129,34 +129,66 @@ pub fn blueprint_placement(
                 if let Ok(world_pos) = camera.viewport_to_world_2d(camera_transform, cursor_pos) {
                     let grid = WorldMap::world_to_grid(world_pos);
 
-                    if !world_map.buildings.contains_key(&grid) {
-                        let pos = WorldMap::grid_to_world(grid.0, grid.1);
+                    // 建造物のサイズと占有グリッドの判定
+                    let (occupied_grids, spawn_pos, custom_size) = match building_type {
+                        BuildingType::Tank => {
+                            let grids = vec![
+                                grid,
+                                (grid.0 + 1, grid.1),
+                                (grid.0, grid.1 + 1),
+                                (grid.0 + 1, grid.1 + 1),
+                            ];
+                            // 2x2 の中心座標
+                            let base_pos = WorldMap::grid_to_world(grid.0, grid.1);
+                            let center_pos = base_pos + Vec2::new(TILE_SIZE * 0.5, TILE_SIZE * 0.5);
+                            (grids, center_pos, Some(Vec2::splat(TILE_SIZE * 2.0)))
+                        }
+                        _ => {
+                            let grids = vec![grid];
+                            let center_pos = WorldMap::grid_to_world(grid.0, grid.1);
+                            (grids, center_pos, Some(Vec2::splat(TILE_SIZE)))
+                        }
+                    };
 
+                    // 配置可能かチェック（全占有予定マスが空きかつ通行可能か）
+                    let can_place = occupied_grids.iter().all(|&g| {
+                        !world_map.buildings.contains_key(&g)
+                            && !world_map.stockpiles.contains_key(&g)
+                            && world_map.is_walkable(g.0, g.1)
+                    });
+
+                    if can_place {
                         let texture = match building_type {
                             BuildingType::Wall => game_assets.wall.clone(),
                             BuildingType::Floor => game_assets.dirt.clone(),
+                            BuildingType::Tank => game_assets.tank_empty.clone(),
                         };
 
                         let entity = commands
                             .spawn((
-                                Blueprint::new(building_type),
+                                Blueprint::new(building_type, occupied_grids.clone()),
                                 crate::systems::jobs::Designation {
                                     work_type: crate::systems::jobs::WorkType::Build,
                                 },
-                                crate::systems::jobs::TaskSlots::new(1), // 建築は1人ずつ
+                                crate::systems::jobs::TaskSlots::new(1),
                                 Sprite {
                                     image: texture,
                                     color: Color::srgba(1.0, 1.0, 1.0, 0.5),
-                                    custom_size: Some(Vec2::splat(TILE_SIZE)),
+                                    custom_size,
                                     ..default()
                                 },
-                                Transform::from_xyz(pos.x, pos.y, Z_AURA),
+                                Transform::from_xyz(spawn_pos.x, spawn_pos.y, Z_AURA),
                                 Name::new(format!("Blueprint ({:?})", building_type)),
                             ))
                             .id();
 
-                        world_map.buildings.insert(grid, entity);
-                        info!("BLUEPRINT: Placed {:?} at {:?}", building_type, grid);
+                        // 全グリッドを登録
+                        for &g in &occupied_grids {
+                            world_map.buildings.insert(g, entity);
+                            // 建築中は障害物としても登録しておく
+                            world_map.add_obstacle(g.0, g.1);
+                        }
+                        info!("BLUEPRINT: Placed {:?} at {:?}", building_type, occupied_grids);
                     }
                 }
             }

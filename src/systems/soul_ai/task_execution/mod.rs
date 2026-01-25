@@ -6,6 +6,7 @@ pub mod build;
 pub mod common;
 pub mod context;
 pub mod gather;
+pub mod gather_water;
 pub mod haul;
 pub mod haul_to_blueprint;
 pub mod types;
@@ -25,6 +26,7 @@ use bevy::prelude::*;
 use build::handle_build_task;
 use context::TaskExecutionContext;
 use gather::handle_gather_task;
+use gather_water::handle_gather_water_task;
 use haul::handle_haul_task;
 use haul_to_blueprint::handle_haul_to_blueprint_task;
 
@@ -189,6 +191,28 @@ pub fn task_execution_system(
                     &mut commands,
                     &mut ev_created,
                     &world_map,
+                );
+            }
+            AssignedTask::GatherWater { bucket, tank, phase } => {
+                let mut ctx = TaskExecutionContext {
+                    soul_entity,
+                    soul_transform,
+                    soul: &mut soul,
+                    task: &mut task,
+                    dest: &mut dest,
+                    path: &mut path,
+                };
+                handle_gather_water_task(
+                    &mut ctx,
+                    bucket,
+                    tank,
+                    phase,
+                    &q_targets,
+                    &mut commands,
+                    &game_assets,
+                    &time,
+                    &world_map,
+                    holding_opt,
                 );
             }
             AssignedTask::None => {}
