@@ -7,7 +7,7 @@ use crate::entities::damned_soul::{
 };
 use crate::entities::familiar::UnderCommand;
 use crate::relationships::Commanding;
-use crate::systems::jobs::{Designation, DesignationCreatedEvent};
+use crate::systems::jobs::Designation;
 use crate::systems::soul_ai::gathering::ParticipatingIn;
 use crate::systems::soul_ai::task_execution::AssignedTask;
 use crate::systems::soul_ai::work::unassign_task;
@@ -147,7 +147,6 @@ impl SquadManager {
             ),
         >,
         haul_cache: &mut crate::systems::familiar_ai::haul_cache::HaulReservationCache,
-        ev_created: &mut MessageWriter<DesignationCreatedEvent>,
         cooldowns: &mut crate::systems::visual::speech::cooldown::BubbleCooldowns,
         time: &Time,
         game_assets: &Res<crate::assets::GameAssets>,
@@ -191,7 +190,6 @@ impl SquadManager {
                         inventory_opt.as_deref_mut(),
                         q_designations,
                         haul_cache,
-                        Some(ev_created),
                         false, // emit_abandoned_event: 疲労リリース時は個別のタスク中断セリフを出さない
                     );
 

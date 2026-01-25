@@ -239,11 +239,12 @@ pub fn update_hover_entity(
     q_souls: Query<(Entity, &GlobalTransform), With<DamnedSoul>>,
     q_familiars: Query<(Entity, &GlobalTransform), With<Familiar>>,
     q_targets: Query<
-        (Entity, &GlobalTransform),
+        (Entity, &GlobalTransform, Option<&crate::systems::jobs::Building>),
         Or<(
             With<crate::systems::jobs::Tree>,
             With<crate::systems::jobs::Rock>,
             With<crate::systems::logistics::ResourceItem>,
+            With<crate::systems::jobs::Building>,
         )>,
     >,
     mut hovered_entity: ResMut<HoveredEntity>,
@@ -280,11 +281,20 @@ pub fn update_hover_entity(
                 }
             }
 
-            // 3. 資源・アイテム
+            // 3. 資源・アイテム・建物
             if found.is_none() {
-                for (entity, transform) in q_targets.iter() {
+                for (entity, transform, building_opt) in q_targets.iter() {
                     let pos = transform.translation().truncate();
-                    if pos.distance(world_pos) < TILE_SIZE / 2.0 {
+                    let radius = if let Some(building) = building_opt {
+                        match building._kind {
+                            crate::systems::jobs::BuildingType::Tank => TILE_SIZE, // 2x2なので半径を大きく
+                            _ => TILE_SIZE / 2.0,
+                        }
+                    } else {
+                        TILE_SIZE / 2.0
+                    };
+
+                    if pos.distance(world_pos) < radius {
                         found = Some(entity);
                         break;
                     }

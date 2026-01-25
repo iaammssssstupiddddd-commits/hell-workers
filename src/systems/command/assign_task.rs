@@ -3,8 +3,7 @@ use crate::entities::familiar::Familiar;
 use crate::game_state::TaskContext;
 use crate::interface::camera::MainCamera;
 use crate::interface::selection::SelectedEntity;
-use crate::systems::jobs::{Designation, IssuedBy};
-use crate::systems::task_queue::{GlobalTaskQueue, PendingTask, TaskQueue};
+use crate::systems::jobs::{Designation};
 use crate::world::map::WorldMap;
 use crate::world::pathfinding::{self, PathfindingContext};
 use bevy::prelude::*;
@@ -16,10 +15,8 @@ pub fn assign_task_system(
     q_ui: Query<&Interaction, With<Button>>,
     selected: Res<SelectedEntity>,
     mut task_context: ResMut<TaskContext>,
-    mut global_queue: ResMut<GlobalTaskQueue>,
-    mut queue: ResMut<TaskQueue>,
     mut commands: Commands,
-    q_designations: Query<(Entity, &Transform, &Designation), Without<IssuedBy>>,
+    q_designations: Query<(Entity, &Transform, &Designation), Without<crate::relationships::ManagedBy>>,
     q_familiars: Query<(Entity, &Transform), With<Familiar>>,
     world_map: Res<WorldMap>,
     mut pf_context: Local<PathfindingContext>,
@@ -110,17 +107,10 @@ pub fn assign_task_system(
                 continue;
             }
 
-            commands.entity(entity).insert(IssuedBy(fam_entity));
-
-            global_queue.remove(entity);
-            queue.add(
-                fam_entity,
-                PendingTask {
-                    entity,
-                    work_type: designation.work_type,
-                    priority: 0,
-                },
-            );
+            commands.entity(entity).insert((
+                crate::relationships::ManagedBy(fam_entity),
+                crate::systems::jobs::Priority(0),
+            ));
 
             assigned_count += 1;
             info!(

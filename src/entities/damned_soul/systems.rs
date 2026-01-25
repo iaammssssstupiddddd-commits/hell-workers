@@ -123,7 +123,6 @@ pub fn pathfinding_system(
         Option<&crate::relationships::TaskWorkers>,
     )>,
     mut haul_cache: ResMut<crate::systems::familiar_ai::haul_cache::HaulReservationCache>,
-    mut ev_created: MessageWriter<crate::systems::jobs::DesignationCreatedEvent>,
 ) {
     for (entity, transform, destination, mut path, mut task, mut inventory_opt) in query.iter_mut() {
         let current_pos = transform.translation.truncate();
@@ -169,7 +168,6 @@ pub fn pathfinding_system(
                     inventory_opt.as_deref_mut(),
                     &q_designations,
                     &mut *haul_cache,
-                    Some(&mut ev_created),
                     true,
                 );
             }
@@ -344,7 +342,6 @@ fn on_stress_breakdown(
         Option<&crate::relationships::TaskWorkers>,
     )>,
     mut haul_cache: ResMut<crate::systems::familiar_ai::haul_cache::HaulReservationCache>,
-    mut ev_created: MessageWriter<crate::systems::jobs::DesignationCreatedEvent>,
 ) {
     let soul_entity = on.entity;
     if let Ok((entity, transform, mut _soul, mut task, mut path, mut inventory_opt, under_command)) =
@@ -366,7 +363,6 @@ fn on_stress_breakdown(
                 inventory_opt.as_deref_mut(),
                 &q_designations,
                 &mut *haul_cache,
-                Some(&mut ev_created),
                 true,
             );
         }
@@ -402,7 +398,6 @@ fn on_exhausted(
         Option<&crate::relationships::TaskWorkers>,
     )>,
     mut haul_cache: ResMut<crate::systems::familiar_ai::haul_cache::HaulReservationCache>,
-    mut ev_created: MessageWriter<crate::systems::jobs::DesignationCreatedEvent>,
 ) {
     let soul_entity = on.entity;
     if let Ok((
@@ -437,7 +432,6 @@ fn on_exhausted(
                 inventory_opt.as_deref_mut(),
                 &q_designations,
                 &mut *haul_cache,
-                Some(&mut ev_created),
                 true,
             );
         }
