@@ -46,6 +46,9 @@ pub fn handle_gather_water_task(
                 // バケツを拾う
                 commands.entity(ctx.soul_entity).insert(Holding(bucket_entity));
                 commands.entity(bucket_entity).insert(crate::relationships::StoredIn(ctx.soul_entity));
+                // インベントリに追加し、ワールドから消す
+                ctx.inventory.0 = Some(bucket_entity);
+                commands.entity(bucket_entity).insert(Visibility::Hidden);
                 
                 // 次のフェーズへ：川へ
                 if let Some(river_grid) = world_map.get_nearest_river_grid(ctx.soul_transform.translation.truncate()) {
@@ -138,9 +141,20 @@ pub fn handle_gather_water_task(
                       ..default()
                  });
 
-                 // バケツを置く
+                 // バケツを置く（インベントリから削除し、ワールドに表示）
                  commands.entity(ctx.soul_entity).remove::<Holding>();
                  commands.entity(bucket_entity).remove::<crate::relationships::StoredIn>();
+                 ctx.inventory.0 = None;
+                 // バケツの状態（空）を保持してdrop時に反映
+                 // ResourceItem(ResourceType::BucketEmpty)は既に設定済み
+                 commands.entity(bucket_entity).insert(Visibility::Visible);
+                 // バケツを現在位置に配置
+                 let drop_pos = ctx.soul_transform.translation.truncate();
+                 commands.entity(bucket_entity).insert(Transform::from_xyz(
+                     drop_pos.x,
+                     drop_pos.y,
+                     crate::constants::Z_ITEM_PICKUP,
+                 ));
 
                  // タンクの中身を増やす
                  // Stockpile コンポーネントの StoredItems を増やす必要があるが、
