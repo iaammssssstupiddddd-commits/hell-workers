@@ -8,7 +8,7 @@ use crate::relationships::Holding;
 use crate::systems::soul_ai::task_execution::AssignedTask;
 use crate::systems::soul_ai::work::unassign_task;
 use crate::world::map::WorldMap;
-use crate::world::pathfinding::find_path;
+use crate::world::pathfinding::{self, PathfindingContext};
 use rand::Rng;
 
 /// 人間をスポーンする
@@ -102,6 +102,7 @@ pub fn spawn_damned_soul_at(
 pub fn pathfinding_system(
     mut commands: Commands,
     world_map: Res<WorldMap>,
+    mut pf_context: ResMut<PathfindingContext>,
     mut query: Query<
         (
             Entity,
@@ -141,7 +142,7 @@ pub fn pathfinding_system(
             continue;
         }
 
-        if let Some(grid_path) = find_path(&*world_map, start_grid, goal_grid) {
+        if let Some(grid_path) = pathfinding::find_path(&*world_map, &mut *pf_context, start_grid, goal_grid) {
             path.waypoints = grid_path
                 .iter()
                 .map(|&(x, y)| WorldMap::grid_to_world(x, y))

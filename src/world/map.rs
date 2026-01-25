@@ -104,36 +104,69 @@ impl TerrainType {
     }
 }
 
-#[derive(Resource, Default)]
+#[derive(Resource)]
 pub struct WorldMap {
-    pub tiles: HashMap<(i32, i32), TerrainType>,
-    pub tile_entities: HashMap<(i32, i32), Entity>,
+    pub tiles: Vec<TerrainType>,
+    pub tile_entities: Vec<Option<Entity>>,
     pub buildings: HashMap<(i32, i32), Entity>,
     pub stockpiles: HashMap<(i32, i32), Entity>,
     /// 障害物（Rock, Treeなど）の座標
-    pub obstacles: std::collections::HashSet<(i32, i32)>,
+    pub obstacles: Vec<bool>,
+}
+
+impl Default for WorldMap {
+    fn default() -> Self {
+        let size = (MAP_WIDTH * MAP_HEIGHT) as usize;
+        Self {
+            tiles: vec![TerrainType::Grass; size],
+            tile_entities: vec![None; size],
+            buildings: HashMap::new(),
+            stockpiles: HashMap::new(),
+            obstacles: vec![false; size],
+        }
+    }
 }
 
 impl WorldMap {
-    pub fn is_walkable(&self, x: i32, y: i32) -> bool {
+    #[inline(always)]
+    pub fn pos_to_idx(&self, x: i32, y: i32) -> Option<usize> {
         if x < 0 || x >= MAP_WIDTH || y < 0 || y >= MAP_HEIGHT {
-            return false;
+            return None;
         }
+        Some((y * MAP_WIDTH + x) as usize)
+    }
+
+    #[inline(always)]
+    pub fn idx_to_pos(idx: usize) -> (i32, i32) {
+        let x = idx as i32 % MAP_WIDTH;
+        let y = idx as i32 / MAP_WIDTH;
+        (x, y)
+    }
+
+    pub fn is_walkable(&self, x: i32, y: i32) -> bool {
+        let idx = match self.pos_to_idx(x, y) {
+            Some(i) => i,
+            None => return false,
+        };
         // 障害物があれば通行不可
-        if self.obstacles.contains(&(x, y)) {
+        if self.obstacles[idx] {
             return false;
         }
-        self.tiles.get(&(x, y)).map_or(false, |t| t.is_walkable())
+        self.tiles[idx].is_walkable()
     }
     
     /// 障害物を追加
     pub fn add_obstacle(&mut self, x: i32, y: i32) {
-        self.obstacles.insert((x, y));
+        if let Some(idx) = self.pos_to_idx(x, y) {
+            self.obstacles[idx] = true;
+        }
     }
     
     /// 障害物を削除
     pub fn remove_obstacle(&mut self, x: i32, y: i32) {
-        self.obstacles.remove(&(x, y));
+        if let Some(idx) = self.pos_to_idx(x, y) {
+            self.obstacles[idx] = false;
+        }
     }
 
     pub fn world_to_grid(pos: Vec2) -> (i32, i32) {
@@ -175,6 +208,50 @@ impl WorldMap {
         }
         None
     }
+
+    /// 2点間に障害物がないか（Line-of-Sight）を判定
+    pub fn has_line_of_sight(&self, p1: (i32, i32), p2: (i32, i32)) -> bool {
+        let (x1, y1) = p1;
+        let (x2, y2) = p2;
+
+        let dx = (x2 - x1).abs();
+        let dy = (y2 - y1).abs();
+        let mut x = x1;
+        let mut y = y1;
+        let n = 1 + dx + dy;
+        let x_inc = if x2 > x1 { 1 } else { -1 };
+        let y_inc = if y2 > y1 { 1 } else { -1 };
+        let mut error = dx - dy;
+        let dx_twice = dx * 2;
+        let dy_twice = dy * 2;
+
+        for _ in 0..n {
+            if !self.is_walkable(x, y) {
+                return false;
+            }
+            if x == x2 && y == y2 {
+                break;
+            }
+
+            if error > 0 {
+                x += x_inc;
+                error -= dy_twice;
+            } else if error < 0 {
+                y += y_inc;
+                error += dx_twice;
+            } else {
+                // error == 0 の場合（ど真ん中を通る場合）
+                // 角抜けを確実に防ぐため、隣接する両方のマスもチェックする
+                if !self.is_walkable(x + x_inc, y) || !self.is_walkable(x, y + y_inc) {
+                    return false;
+                }
+                x += x_inc;
+                y += y_inc;
+                error += dx_twice - dy_twice;
+            }
+        }
+        true
+    }
 }
 
 /// 固定配置の川タイルを生成
@@ -210,7 +287,8 @@ pub fn spawn_map(
                 (TerrainType::Grass, game_assets.grass.clone())
             };
 
-            world_map.tiles.insert((x, y), terrain);
+            let idx = world_map.pos_to_idx(x, y).unwrap();
+            world_map.tiles[idx] = terrain;
 
             let pos = WorldMap::grid_to_world(x, y);
             let entity = commands.spawn((
@@ -223,7 +301,7 @@ pub fn spawn_map(
                 Transform::from_xyz(pos.x, pos.y, Z_MAP),
             )).id();
             
-            world_map.tile_entities.insert((x, y), entity);
+            world_map.tile_entities[idx] = Some(entity);
         }
     }
 

@@ -21,6 +21,7 @@ use super::state_handlers;
 use super::task_management::TaskManager;
 use super::FamiliarAiState;
 use crate::world::map::WorldMap;
+use crate::world::pathfinding::PathfindingContext;
 
 /// 分隊管理を実行
 pub fn process_squad_management(
@@ -285,6 +286,7 @@ pub fn process_task_delegation_and_movement(
     managed_tasks: &ManagedTasks,
     haul_cache: &mut crate::systems::familiar_ai::haul_cache::HaulReservationCache,
     world_map: &WorldMap,
+    pf_context: &mut PathfindingContext,
     time: &Res<Time>,
     state_changed: bool,
 ) {
@@ -309,6 +311,7 @@ pub fn process_task_delegation_and_movement(
         managed_tasks,
         haul_cache,
         world_map,
+        pf_context,
     );
     let has_available_task = assigned_task_opt.is_some();
 

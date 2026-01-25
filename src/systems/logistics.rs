@@ -102,37 +102,41 @@ pub fn initial_resource_spawner(
     // 木のスポーン（障害物として登録）
     for &(gx, gy) in TREE_POSITIONS {
         // 地形が通行可能な場合のみスポーン（障害物チェックなし）
-        if world_map.tiles.get(&(gx, gy)).map_or(false, |t| t.is_walkable()) {
-            let pos = WorldMap::grid_to_world(gx, gy);
-            commands.spawn((
-                Tree,
-                crate::systems::jobs::ObstaclePosition(gx, gy),
-                Sprite {
-                    image: game_assets.tree.clone(),
-                    custom_size: Some(Vec2::splat(TILE_SIZE * 1.5)),
-                    ..default()
-                },
-                Transform::from_xyz(pos.x, pos.y, Z_ITEM_OBSTACLE),
-            ));
-            world_map.add_obstacle(gx, gy);
+        if let Some(idx) = world_map.pos_to_idx(gx, gy) {
+            if world_map.tiles[idx].is_walkable() {
+                let pos = WorldMap::grid_to_world(gx, gy);
+                commands.spawn((
+                    Tree,
+                    crate::systems::jobs::ObstaclePosition(gx, gy),
+                    Sprite {
+                        image: game_assets.tree.clone(),
+                        custom_size: Some(Vec2::splat(TILE_SIZE * 1.5)),
+                        ..default()
+                    },
+                    Transform::from_xyz(pos.x, pos.y, Z_ITEM_OBSTACLE),
+                ));
+                world_map.add_obstacle(gx, gy);
+            }
         }
     }
 
     // 岩のスポーン（障害物として登録）
     for &(gx, gy) in ROCK_POSITIONS {
-        if world_map.tiles.get(&(gx, gy)).map_or(false, |t| t.is_walkable()) {
-            let pos = WorldMap::grid_to_world(gx, gy);
-            commands.spawn((
-                Rock,
-                crate::systems::jobs::ObstaclePosition(gx, gy),
-                Sprite {
-                    image: game_assets.rock.clone(),
-                    custom_size: Some(Vec2::splat(TILE_SIZE * 1.2)),
-                    ..default()
-                },
-                Transform::from_xyz(pos.x, pos.y, Z_ITEM_OBSTACLE),
-            ));
-            world_map.add_obstacle(gx, gy);
+        if let Some(idx) = world_map.pos_to_idx(gx, gy) {
+            if world_map.tiles[idx].is_walkable() {
+                let pos = WorldMap::grid_to_world(gx, gy);
+                commands.spawn((
+                    Rock,
+                    crate::systems::jobs::ObstaclePosition(gx, gy),
+                    Sprite {
+                        image: game_assets.rock.clone(),
+                        custom_size: Some(Vec2::splat(TILE_SIZE * 1.2)),
+                        ..default()
+                    },
+                    Transform::from_xyz(pos.x, pos.y, Z_ITEM_OBSTACLE),
+                ));
+                world_map.add_obstacle(gx, gy);
+            }
         }
     }
 
@@ -154,8 +158,8 @@ pub fn initial_resource_spawner(
     }
 
     let rock_count = ROCK_POSITIONS.len();
-    let obstacle_count = world_map.obstacles.len();
-    info!("SPAWNER: Fixed Trees ({}), Rocks ({}) spawned. WorldMap obstacles: {}", TREE_POSITIONS.len(), rock_count, obstacle_count);
+    let obstacle_count = world_map.obstacles.iter().filter(|&&b| b).count();
+    info!("SPAWNER: Fixed Trees ({}), Rocks ({}) spawned. WorldMap active obstacles: {}", TREE_POSITIONS.len(), rock_count, obstacle_count);
 }
 
 pub fn resource_count_display_system(

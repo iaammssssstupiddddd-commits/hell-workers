@@ -17,6 +17,7 @@ use crate::systems::soul_ai::task_execution::types::{
 };
 use crate::systems::spatial::DesignationSpatialGrid;
 use crate::world::map::WorldMap;
+use crate::world::pathfinding::{self, PathfindingContext};
 use bevy::prelude::*;
 
 /// タスク管理ユーティリティ
@@ -66,6 +67,7 @@ impl TaskManager {
         q_blueprints: &Query<&Blueprint>,
         q_target_blueprints: &Query<&TargetBlueprint>,
         world_map: &WorldMap,
+        pf_context: &mut PathfindingContext,
     ) -> Option<Entity> {
         // パス検索の起点を「ソウルの居場所」に補正する
         let worker_grid = world_map.get_nearest_walkable_grid(worker_pos)?;
@@ -138,10 +140,10 @@ impl TaskManager {
                 let target_grid = WorldMap::world_to_grid(pos);
                 let is_reachable = if world_map.is_walkable(target_grid.0, target_grid.1) {
                     // タスク位置 -> ソウル位置
-                    crate::world::pathfinding::find_path(world_map, target_grid, worker_grid).is_some()
+                    pathfinding::find_path(world_map, pf_context, target_grid, worker_grid).is_some()
                 } else {
                     // タスクの隣接 -> ソウル位置 (内部で neighbor -> worker_grid の探索が行われる)
-                    crate::world::pathfinding::find_path_to_adjacent(world_map, worker_grid, target_grid).is_some()
+                    pathfinding::find_path_to_adjacent(world_map, pf_context, worker_grid, target_grid).is_some()
                 };
 
                 if !is_reachable {
@@ -428,6 +430,7 @@ impl TaskManager {
         managed_tasks: &ManagedTasks,
         haul_cache: &mut crate::systems::familiar_ai::haul_cache::HaulReservationCache,
         world_map: &WorldMap,
+        pf_context: &mut PathfindingContext,
     ) -> Option<Entity> {
         // 1. 公平性/効率のため、アイドルメンバーを全員リストアップ
         let mut idle_members = Vec::new();
@@ -456,6 +459,7 @@ impl TaskManager {
                 q_blueprints,
                 q_target_blueprints,
                 world_map,
+                pf_context,
             ) {
                 // アサイン成功！1サイクル1人へのアサインとする（安定性のため）
                 Self::assign_task_to_worker(
