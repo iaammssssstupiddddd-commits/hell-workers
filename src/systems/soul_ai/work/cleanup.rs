@@ -2,7 +2,7 @@ use bevy::prelude::*;
 
 use crate::entities::damned_soul::Path;
 use crate::entities::familiar::{ActiveCommand, Familiar, FamiliarCommand, UnderCommand};
-use crate::relationships::{Holding, TaskWorkers};
+use crate::relationships::TaskWorkers;
 use crate::systems::familiar_ai::haul_cache::HaulReservationCache;
 use crate::systems::jobs::{Designation, DesignationCreatedEvent, IssuedBy, TaskSlots};
 use crate::systems::soul_ai::task_execution::AssignedTask;
@@ -17,7 +17,7 @@ pub fn cleanup_commanded_souls_system(
         &UnderCommand,
         &mut AssignedTask,
         &mut Path,
-        Option<&Holding>,
+        Option<&mut crate::systems::logistics::Inventory>,
     )>,
     q_designations: Query<(
         Entity,
@@ -31,7 +31,7 @@ pub fn cleanup_commanded_souls_system(
     mut haul_cache: ResMut<HaulReservationCache>,
     mut ev_created: MessageWriter<DesignationCreatedEvent>,
 ) {
-    for (soul_entity, transform, under_command, mut task, mut path, holding_opt) in
+    for (soul_entity, transform, under_command, mut task, mut path, mut inventory_opt) in
         q_souls.iter_mut()
     {
         let should_release = match q_familiars.get(under_command.0) {
@@ -51,7 +51,8 @@ pub fn cleanup_commanded_souls_system(
                 transform.translation.truncate(),
                 &mut task,
                 &mut path,
-                holding_opt,
+
+                inventory_opt.as_deref_mut(),
                 &q_designations,
                 &mut *haul_cache,
                 Some(&mut ev_created),

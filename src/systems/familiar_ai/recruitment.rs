@@ -23,7 +23,7 @@ impl RecruitmentManager {
         fatigue_threshold: f32,
         _min_fatigue: f32,
         spatial_grid: &SpatialGrid,
-        q_souls: &Query<
+        q_souls: &mut Query<
             (
                 Entity,
                 &Transform,
@@ -32,7 +32,8 @@ impl RecruitmentManager {
                 &mut Destination,
                 &mut Path,
                 &IdleState,
-                Option<&crate::relationships::Holding>,
+
+                Option<&mut crate::systems::logistics::Inventory>,
                 Option<&UnderCommand>,
                 Option<&ParticipatingIn>,
             ),
@@ -43,7 +44,7 @@ impl RecruitmentManager {
     ) -> Option<Entity> {
         // 候補をフィルタリングするヘルパークロージャ
         let filter_candidate = |e: Entity| -> Option<(Entity, Vec2)> {
-            let (entity, transform, soul, task, _, _, idle, _, uc, _): (Entity, &Transform, &DamnedSoul, &AssignedTask, &Destination, &Path, &IdleState, Option<&crate::relationships::Holding>, Option<&UnderCommand>, Option<&ParticipatingIn>) = q_souls.get(e).ok()?;
+            let (entity, transform, soul, task, _, _, idle, _, uc, _): (Entity, &Transform, &DamnedSoul, &AssignedTask, &Destination, &Path, &IdleState, Option<&crate::systems::logistics::Inventory>, Option<&UnderCommand>, Option<&ParticipatingIn>) = q_souls.get(e).ok()?;
             let recruit_threshold = fatigue_threshold - 0.2;
             let fatigue_ok = soul.fatigue < recruit_threshold;
             let stress_ok = q_breakdown.get(entity).is_err();
@@ -110,7 +111,7 @@ impl RecruitmentManager {
         command_radius: f32,
         fatigue_threshold: f32,
         spatial_grid: &SpatialGrid,
-        q_souls: &Query<
+        q_souls: &mut Query<
             (
                 Entity,
                 &Transform,
@@ -119,7 +120,8 @@ impl RecruitmentManager {
                 &mut Destination,
                 &mut Path,
                 &IdleState,
-                Option<&crate::relationships::Holding>,
+
+                Option<&mut crate::systems::logistics::Inventory>,
                 Option<&UnderCommand>,
                 Option<&ParticipatingIn>,
             ),
@@ -165,7 +167,7 @@ impl RecruitmentManager {
         fam_pos: Vec2,
         fatigue_threshold: f32,
         spatial_grid: &SpatialGrid,
-        q_souls: &Query<
+        q_souls: &mut Query<
             (
                 Entity,
                 &Transform,
@@ -174,7 +176,8 @@ impl RecruitmentManager {
                 &mut Destination,
                 &mut Path,
                 &IdleState,
-                Option<&crate::relationships::Holding>,
+
+                Option<&mut crate::systems::logistics::Inventory>,
                 Option<&UnderCommand>,
                 Option<&ParticipatingIn>,
             ),

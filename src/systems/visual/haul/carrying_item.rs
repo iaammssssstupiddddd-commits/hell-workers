@@ -6,22 +6,23 @@ use super::components::{CarryingItemVisual, HasCarryingIndicator};
 use super::{CARRIED_ITEM_ICON_SIZE, CARRIED_ITEM_Y_OFFSET};
 use crate::assets::GameAssets;
 use crate::entities::damned_soul::DamnedSoul;
-use crate::relationships::Holding;
-use crate::systems::logistics::{ResourceItem, ResourceType};
+use crate::systems::logistics::{Inventory, ResourceItem, ResourceType};
 
 /// 運搬中のワーカーにアイテムアイコンを付与する
 pub fn spawn_carrying_item_system(
     mut commands: Commands,
     game_assets: Res<GameAssets>,
     q_workers: Query<
-        (Entity, &Transform, &Holding),
+        (Entity, &Transform, &Inventory),
         (With<DamnedSoul>, Without<HasCarryingIndicator>),
     >,
     q_items: Query<&ResourceItem>,
 ) {
-    for (worker_entity, transform, holding) in q_workers.iter() {
-        // Holdingしているアイテムのタイプを取得
-        let item_entity = holding.0;
+    for (worker_entity, transform, inventory) in q_workers.iter() {
+        // Inventoryにあるアイテムのタイプを取得
+        let Some(item_entity) = inventory.0 else {
+            continue;
+        };
         let Ok(item) = q_items.get(item_entity) else {
             continue;
         };
@@ -68,16 +69,16 @@ pub fn spawn_carrying_item_system(
 pub fn update_carrying_item_system(
     mut commands: Commands,
     game_assets: Res<GameAssets>,
-    q_workers: Query<(Entity, &Transform, Option<&Holding>), With<DamnedSoul>>,
+    q_workers: Query<(Entity, &Transform, &Inventory), With<DamnedSoul>>,
     q_items: Query<&ResourceItem>,
     mut q_icons: Query<(Entity, &CarryingItemVisual, &mut Transform, &mut Sprite), Without<DamnedSoul>>,
 ) {
     for (icon_entity, icon, mut icon_transform, mut icon_sprite) in q_icons.iter_mut() {
         let mut should_despawn = true;
 
-        if let Ok((_, worker_transform, holding)) = q_workers.get(icon.worker) {
-            // Holdingがある場合のみアイコンを維持
-            if let Some(holding) = holding {
+        if let Ok((_, worker_transform, inventory)) = q_workers.get(icon.worker) {
+            // Inventoryがある場合のみアイコンを維持
+            if let Some(item_entity) = inventory.0 {
                 should_despawn = false;
 
                 // 位置同期
@@ -85,7 +86,7 @@ pub fn update_carrying_item_system(
                     worker_transform.translation + Vec3::new(0.0, CARRIED_ITEM_Y_OFFSET, 0.5);
 
                 // バケツの状態に応じて画像を更新
-                if let Ok(item) = q_items.get(holding.0) {
+                if let Ok(item) = q_items.get(item_entity) {
                     let new_icon_handle = match item.0 {
                         ResourceType::Wood => game_assets.icon_wood_small.clone(),
                         ResourceType::Rock => game_assets.icon_rock_small.clone(),

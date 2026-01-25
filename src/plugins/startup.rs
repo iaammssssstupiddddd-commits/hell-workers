@@ -96,6 +96,8 @@ fn setup(
         aura_ring,
         // Water related
         tank_empty: asset_server.load("textures/tank_empty.png"),
+        tank_partial: asset_server.load("textures/tank_partial.png"),
+        tank_full: asset_server.load("textures/tank_full.png"),
         bucket_empty: asset_server.load("textures/bucket_empty.png"),
         bucket_water: asset_server.load("textures/bucket_water.png"),
         icon_male: asset_server.load("textures/ui/male.png"),

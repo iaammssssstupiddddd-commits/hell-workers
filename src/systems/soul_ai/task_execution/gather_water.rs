@@ -1,5 +1,4 @@
-// Unused DamnedSoul removed
-use crate::relationships::Holding;
+
 use crate::systems::logistics::{ResourceItem, ResourceType};
 use crate::systems::soul_ai::task_execution::context::TaskExecutionContext;
 use crate::systems::soul_ai::task_execution::types::{AssignedTask, GatherWaterPhase};
@@ -23,10 +22,28 @@ pub fn handle_gather_water_task(
     game_assets: &Res<crate::assets::GameAssets>,
     time: &Res<Time>,
     world_map: &WorldMap,
-    holding_opt: Option<&Holding>,
 ) {
         match phase {
         GatherWaterPhase::GoingToBucket => {
+            // 既にインベントリにバケツがある場合は次のフェーズへ
+            if ctx.inventory.0 == Some(bucket_entity) {
+                // バケツが既にインベントリにあるので、川へ
+                if let Some(river_grid) = world_map.get_nearest_river_grid(ctx.soul_transform.translation.truncate()) {
+                    let river_pos = WorldMap::grid_to_world(river_grid.0, river_grid.1);
+                    *ctx.task = AssignedTask::GatherWater {
+                        bucket: bucket_entity,
+                        tank: tank_entity,
+                        phase: GatherWaterPhase::GoingToRiver,
+                    };
+                    ctx.dest.0 = river_pos;
+                    ctx.path.waypoints = vec![river_pos];
+                    ctx.path.current_index = 0;
+                } else {
+                    *ctx.task = AssignedTask::None;
+                }
+                return;
+            }
+            
             let Ok((bucket_transform, _, _, res_item_opt, _, _)) = q_targets.get(bucket_entity) else {
                 ctx.soul.motivation -= 0.01;
                 *ctx.task = AssignedTask::None;
@@ -44,11 +61,15 @@ pub fn handle_gather_water_task(
             let bucket_pos = bucket_transform.translation.truncate();
             if ctx.soul_transform.translation.truncate().distance(bucket_pos) < 20.0 {
                 // バケツを拾う
-                commands.entity(ctx.soul_entity).insert(Holding(bucket_entity));
                 commands.entity(bucket_entity).insert(crate::relationships::StoredIn(ctx.soul_entity));
                 // インベントリに追加し、ワールドから消す
                 ctx.inventory.0 = Some(bucket_entity);
                 commands.entity(bucket_entity).insert(Visibility::Hidden);
+                
+                // 青いマスキング（DesignationIndicator）を削除
+                // DesignationIndicatorは別のクエリで管理されているため、ここでは削除できない
+                // 代わりに、Designationコンポーネントを削除することで、update_designation_indicator_systemが自動的に削除する
+                commands.entity(bucket_entity).remove::<crate::systems::jobs::Designation>();
                 
                 // 次のフェーズへ：川へ
                 if let Some(river_grid) = world_map.get_nearest_river_grid(ctx.soul_transform.translation.truncate()) {
@@ -71,10 +92,13 @@ pub fn handle_gather_water_task(
             }
         }
         GatherWaterPhase::GoingToRiver => {
-            // バケツを持っているか確認
-            if holding_opt.map(|h| h.0) != Some(bucket_entity) {
+            // バケツがインベントリにあるか確認
+            if ctx.inventory.0 != Some(bucket_entity) {
                 *ctx.task = AssignedTask::None;
                 return;
+            }
+            if ctx.inventory.0 == Some(bucket_entity) {
+               commands.entity(bucket_entity).insert(crate::relationships::StoredIn(ctx.soul_entity));
             }
 
             if ctx.soul_transform.translation.truncate().distance(ctx.dest.0) < 30.0 {
@@ -87,6 +111,17 @@ pub fn handle_gather_water_task(
             }
         }
         GatherWaterPhase::Filling { progress } => {
+            // バケツがインベントリにあるか確認
+            if ctx.inventory.0 != Some(bucket_entity) {
+                *ctx.task = AssignedTask::None;
+                return;
+            }
+            
+            // StoredIn関係の復元
+            if ctx.inventory.0 == Some(bucket_entity) {
+                commands.entity(bucket_entity).insert(crate::relationships::StoredIn(ctx.soul_entity));
+            }
+            
             let new_progress = progress + time.delta_secs() * 0.5; // 2秒で満タン
             if new_progress >= 1.0 {
                 // 満タン！見た目を更新
@@ -122,6 +157,17 @@ pub fn handle_gather_water_task(
             }
         }
         GatherWaterPhase::GoingToTank => {
+            // バケツがインベントリにあるか確認
+            if ctx.inventory.0 != Some(bucket_entity) {
+                *ctx.task = AssignedTask::None;
+                return;
+            }
+            
+            // StoredIn関係の復元
+            if ctx.inventory.0 == Some(bucket_entity) {
+                commands.entity(bucket_entity).insert(crate::relationships::StoredIn(ctx.soul_entity));
+            }
+            
             if ctx.soul_transform.translation.truncate().distance(ctx.dest.0) < 40.0 { // 2x2なので少し広めに
                 *ctx.task = AssignedTask::GatherWater {
                     bucket: bucket_entity,
@@ -131,6 +177,17 @@ pub fn handle_gather_water_task(
             }
         }
         GatherWaterPhase::Pouring { progress } => {
+            // バケツがインベントリにあるか確認
+            if ctx.inventory.0 != Some(bucket_entity) {
+                *ctx.task = AssignedTask::None;
+                return;
+            }
+            
+            // StoredIn関係の復元
+            if ctx.inventory.0 == Some(bucket_entity) {
+                commands.entity(bucket_entity).insert(crate::relationships::StoredIn(ctx.soul_entity));
+            }
+            
              let new_progress = progress + time.delta_secs() * 1.0; // 1秒で注ぐ
              if new_progress >= 1.0 {
                  // 注ぎ完了！バケツを空に戻す
@@ -142,7 +199,6 @@ pub fn handle_gather_water_task(
                  });
 
                  // バケツを置く（インベントリから削除し、ワールドに表示）
-                 commands.entity(ctx.soul_entity).remove::<Holding>();
                  commands.entity(bucket_entity).remove::<crate::relationships::StoredIn>();
                  ctx.inventory.0 = None;
                  // バケツの状態（空）を保持してdrop時に反映

@@ -5,7 +5,7 @@
 use crate::entities::damned_soul::Path;
 use crate::entities::familiar::{Familiar, FamiliarVoice, UnderCommand};
 use crate::events::FamiliarOperationMaxSoulChangedEvent;
-use crate::relationships::{Commanding, Holding, TaskWorkers};
+use crate::relationships::{Commanding, TaskWorkers};
 use crate::systems::jobs::{Designation, DesignationCreatedEvent, IssuedBy, TaskSlots};
 use crate::systems::soul_ai::task_execution::AssignedTask;
 use crate::systems::soul_ai::work::unassign_task;
@@ -26,7 +26,8 @@ pub fn handle_max_soul_changed_system(
             &Transform,
             &mut AssignedTask,
             &mut Path,
-            Option<&Holding>,
+
+            Option<&mut crate::systems::logistics::Inventory>,
         ),
     >,
     q_designations: Query<(
@@ -65,7 +66,7 @@ pub fn handle_max_soul_changed_system(
                             break;
                         }
                         let member_entity = squad_entities[i];
-                        if let Ok((entity, transform, mut task, mut path, holding_opt)) =
+                        if let Ok((entity, transform, mut task, mut path, mut inventory_opt)) =
                             q_souls.get_mut(member_entity)
                         {
                             // タスクを解除
@@ -75,7 +76,7 @@ pub fn handle_max_soul_changed_system(
                                 transform.translation.truncate(),
                                 &mut task,
                                 &mut path,
-                                holding_opt,
+                                inventory_opt.as_deref_mut(),
                                 &q_designations,
                                 &mut *haul_cache,
                                 Some(&mut ev_created),

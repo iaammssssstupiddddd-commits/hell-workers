@@ -184,7 +184,7 @@ pub fn info_panel_system(
     q_souls: Query<(
         &DamnedSoul,
         &AssignedTask,
-        Option<&crate::relationships::Holding>,
+        Option<&crate::systems::logistics::Inventory>,
         Option<&crate::entities::damned_soul::SoulIdentity>,
     )>,
     q_blueprints: Query<&Blueprint>,
@@ -207,7 +207,7 @@ pub fn info_panel_system(
     }
 
     if let Some(entity) = selected.0 {
-        if let Ok((soul, task, holding_opt, identity_opt)) = q_souls.get(entity) {
+        if let Ok((soul, task, inventory_opt, identity_opt)) = q_souls.get(entity) {
             panel_node.display = Display::Flex;
 
             if let Ok(mut header) = params.q_header.single_mut() {
@@ -252,7 +252,7 @@ pub fn info_panel_system(
                 t.0 = format!("Task: {}", task_str);
             }
 
-            let inv_str = if let Some(crate::relationships::Holding(item_entity)) = holding_opt {
+            let inv_str = if let Some(crate::systems::logistics::Inventory(Some(item_entity))) = inventory_opt {
                 if let Ok(item) = q_items.get(*item_entity) {
                     format!("Carrying: {:?}", item.0)
                 } else {
