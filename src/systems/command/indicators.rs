@@ -61,3 +61,38 @@ pub fn update_designation_indicator_system(
         }
     }
 }
+
+/// DesignationIndicator をターゲットに同期させるシステム
+pub fn sync_designation_indicator_system(
+    mut q_indicators: Query<(&DesignationIndicator, &mut Transform, &mut Visibility)>,
+    q_targets: Query<
+        (&Transform, &Visibility, Option<&crate::relationships::StoredIn>),
+        Without<DesignationIndicator>,
+    >,
+    q_parents: Query<&Transform, (Without<DesignationIndicator>, Without<Designation>)>,
+) {
+    for (indicator, mut transform, mut visibility) in q_indicators.iter_mut() {
+        if let Ok((target_transform, target_visibility, stored_in_opt)) = q_targets.get(indicator.0)
+        {
+            if let Some(stored_in) = stored_in_opt {
+                // アイテムが何かに格納されている（インベントリ内など）場合、その親の座標に同期
+                if let Ok(parent_transform) = q_parents.get(stored_in.0) {
+                    transform.translation = parent_transform.translation.truncate().extend(0.5);
+                    *visibility = Visibility::Visible;
+                } else {
+                    *visibility = Visibility::Hidden;
+                }
+            } else if *target_visibility != Visibility::Hidden {
+                // 地面に置かれていて表示されている場合、アイテム自体の座標に同期
+                transform.translation = target_transform.translation.truncate().extend(0.5);
+                *visibility = Visibility::Visible;
+            } else {
+                // それ以外（非表示など）はインジケーターも隠す
+                *visibility = Visibility::Hidden;
+            }
+        } else {
+            // ターゲット消失
+            *visibility = Visibility::Hidden;
+        }
+    }
+}

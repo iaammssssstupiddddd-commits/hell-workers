@@ -67,29 +67,107 @@ pub fn handle_gather_water_task(
                 ctx.inventory.0 = Some(bucket_entity);
                 commands.entity(bucket_entity).insert(Visibility::Hidden);
                 
-                // 青いマスキング（DesignationIndicator）を削除
-                // DesignationIndicatorは別のクエリで管理されているため、ここでは削除できない
-                // 代わりに、Designationコンポーネントを削除することで、update_designation_indicator_systemが自動的に削除する
-                commands.entity(bucket_entity).remove::<crate::systems::jobs::Designation>();
+                // 管理コンポーネントは維持する
+                // commands.entity(bucket_entity).remove::<crate::systems::jobs::Designation>();
+                // commands.entity(bucket_entity).remove::<crate::relationships::ManagedBy>();
+                // commands.entity(bucket_entity).remove::<crate::systems::jobs::TaskSlots>();
                 
+                // 拾ったバケツの状態を確認
+                let is_already_full = if let Some(res) = res_item_opt {
+                    res.0 == ResourceType::BucketWater
+                } else {
+                    false
+                };
+
+                if is_already_full {
+                    // 既に満タンならタンクへ
+                    if let Ok((tank_transform, _, _, _, _, _)) = q_targets.get(tank_entity) {
+                        let tank_pos = tank_transform.translation.truncate();
+                        let (cx, cy) = WorldMap::world_to_grid(tank_pos);
+                        let tank_grids = vec![(cx - 1, cy - 1), (cx, cy - 1), (cx - 1, cy), (cx, cy)];
+                        
+                        if let Some(path) = crate::world::pathfinding::find_path_to_boundary(
+                            world_map,
+                            ctx.pf_context,
+                            WorldMap::world_to_grid(ctx.soul_transform.translation.truncate()),
+                            &tank_grids
+                        ) {
+                            *ctx.task = AssignedTask::GatherWater {
+                                bucket: bucket_entity,
+                                tank: tank_entity,
+                                phase: GatherWaterPhase::GoingToTank,
+                            };
+                            if let Some(last_grid) = path.last() {
+                                ctx.dest.0 = WorldMap::grid_to_world(last_grid.0, last_grid.1);
+                            }
+                            ctx.path.waypoints = path.iter().map(|&(x, y)| WorldMap::grid_to_world(x, y)).collect();
+                            ctx.path.current_index = 0;
+                            return;
+                        }
+                    }
+                }
+
                 // 次のフェーズへ：川へ
                 if let Some(river_grid) = world_map.get_nearest_river_grid(ctx.soul_transform.translation.truncate()) {
-                    let river_pos = WorldMap::grid_to_world(river_grid.0, river_grid.1);
-                    *ctx.task = AssignedTask::GatherWater {
-                        bucket: bucket_entity,
-                        tank: tank_entity,
-                        phase: GatherWaterPhase::GoingToRiver,
-                    };
-                    ctx.dest.0 = river_pos;
-                    ctx.path.waypoints = vec![river_pos];
-                    ctx.path.current_index = 0;
+                    
+                    // 経路探索を実行
+                    if let Some(path) = crate::world::pathfinding::find_path_to_adjacent(
+                        world_map,
+                        ctx.pf_context,
+                        WorldMap::world_to_grid(ctx.soul_transform.translation.truncate()),
+                        river_grid
+                    ) {
+                        *ctx.task = AssignedTask::GatherWater {
+                            bucket: bucket_entity,
+                            tank: tank_entity,
+                            phase: GatherWaterPhase::GoingToRiver,
+                        };
+                        
+                         // パスの最後の地点を目的地とする
+                        if let Some(last_grid) = path.last() {
+                            let last_pos = WorldMap::grid_to_world(last_grid.0, last_grid.1);
+                            ctx.dest.0 = last_pos;
+                        } else {
+                            // パスが空（既に隣接）なら現在地維持でフェーズ以降
+                            ctx.dest.0 = ctx.soul_transform.translation.truncate();
+                        }
+                        
+                        ctx.path.waypoints = path.iter()
+                            .map(|&(x, y)| WorldMap::grid_to_world(x, y))
+                            .collect();
+                        ctx.path.current_index = 0;
+                    } else {
+                        // 経路が見つからない
+                         *ctx.task = AssignedTask::None;
+                    }
                 } else {
                     // 川が見つからない（ありえないはずだが）
                     *ctx.task = AssignedTask::None;
                 }
             } else {
-                ctx.dest.0 = bucket_pos;
-                // 到達チェックは movement システム側に任せる
+                 let bucket_grid = WorldMap::world_to_grid(bucket_pos);
+                 // バケツがタンク内にめり込んでいる可能性があるため、find_path_to_boundaryを使用する
+                 // (find_path_to_adjacentだとゴールが障害物の場合に失敗する)
+                 if let Some(path) = crate::world::pathfinding::find_path_to_boundary(
+                    world_map,
+                    ctx.pf_context,
+                    WorldMap::world_to_grid(ctx.soul_transform.translation.truncate()),
+                    &vec![bucket_grid]
+                ) {
+                    if let Some(last_grid) = path.last() {
+                         let last_pos = WorldMap::grid_to_world(last_grid.0, last_grid.1);
+                         ctx.dest.0 = last_pos;
+                    } else {
+                         ctx.dest.0 = bucket_pos;
+                    }
+                    ctx.path.waypoints = path.iter()
+                        .map(|&(x, y)| WorldMap::grid_to_world(x, y))
+                        .collect();
+                    ctx.path.current_index = 0;
+                } else {
+                    // 経路がない場合は直線移動
+                    ctx.dest.0 = bucket_pos;
+                }
             }
         }
         GatherWaterPhase::GoingToRiver => {
@@ -138,14 +216,44 @@ pub fn handle_gather_water_task(
                 // タンクへ
                 if let Ok((tank_transform, _, _, _, _, _)) = q_targets.get(tank_entity) {
                     let tank_pos = tank_transform.translation.truncate();
-                    *ctx.task = AssignedTask::GatherWater {
-                        bucket: bucket_entity,
-                        tank: tank_entity,
-                        phase: GatherWaterPhase::GoingToTank,
-                    };
-                    ctx.dest.0 = tank_pos;
-                    ctx.path.waypoints = vec![tank_pos];
-                    ctx.path.current_index = 0;
+                    
+                    // タンクの占有グリッドを計算 (2x2)
+                    let (cx, cy) = WorldMap::world_to_grid(tank_pos);
+                    // タンク中心座標が(cx, cy)の場合、占有領域は (cx-1, cy-1) などを基準とした2x2
+                    let tank_grids = vec![
+                        (cx - 1, cy - 1),
+                        (cx, cy - 1),
+                        (cx - 1, cy),
+                        (cx, cy),
+                    ];
+                    
+                    if let Some(path) = crate::world::pathfinding::find_path_to_boundary(
+                        world_map,
+                        ctx.pf_context,
+                        WorldMap::world_to_grid(ctx.soul_transform.translation.truncate()),
+                        &tank_grids
+                    ) {
+                        *ctx.task = AssignedTask::GatherWater {
+                            bucket: bucket_entity,
+                            tank: tank_entity,
+                            phase: GatherWaterPhase::GoingToTank,
+                        };
+                        
+                        if let Some(last_grid) = path.last() {
+                            let last_pos = WorldMap::grid_to_world(last_grid.0, last_grid.1);
+                            ctx.dest.0 = last_pos;
+                        } else {
+                            ctx.dest.0 = tank_pos; // フォールバック
+                        }
+                        
+                        ctx.path.waypoints = path.iter()
+                            .map(|&(x, y)| WorldMap::grid_to_world(x, y))
+                            .collect();
+                        ctx.path.current_index = 0;
+                    } else {
+                        // 経路なし
+                        *ctx.task = AssignedTask::None;
+                    }
                 } else {
                     *ctx.task = AssignedTask::None;
                 }
@@ -169,7 +277,7 @@ pub fn handle_gather_water_task(
                 commands.entity(bucket_entity).insert(crate::relationships::StoredIn(ctx.soul_entity));
             }
             
-            if ctx.soul_transform.translation.truncate().distance(ctx.dest.0) < 40.0 { // 2x2なので少し広めに
+            if ctx.soul_transform.translation.truncate().distance(ctx.dest.0) < 60.0 { // 2x2なので少し広めに (2タイル分=64.0未満)
                 *ctx.task = AssignedTask::GatherWater {
                     bucket: bucket_entity,
                     tank: tank_entity,
@@ -223,6 +331,7 @@ pub fn handle_gather_water_task(
                  ));
 
                  // タスク完了
+                 commands.entity(ctx.soul_entity).remove::<crate::relationships::WorkingOn>();
                  *ctx.task = AssignedTask::None;
              } else {
                  *ctx.task = AssignedTask::GatherWater {
