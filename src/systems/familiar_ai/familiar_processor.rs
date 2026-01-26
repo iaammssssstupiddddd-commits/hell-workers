@@ -6,11 +6,9 @@ use crate::entities::damned_soul::{DamnedSoul, Destination, IdleBehavior, IdleSt
 use crate::entities::familiar::{
     Familiar, FamiliarOperation, FamiliarVoice, UnderCommand,
 };
-use crate::relationships::{Commanding, ManagedTasks, ManagedBy, TaskWorkers};
+use crate::relationships::{Commanding, ManagedTasks};
 use crate::systems::command::TaskArea;
 use crate::systems::soul_ai::gathering::ParticipatingIn;
-use crate::systems::jobs::{Designation, TaskSlots, Priority};
-use crate::systems::logistics::{ResourceItem, InStockpile};
 use crate::systems::soul_ai::task_execution::AssignedTask;
 use crate::systems::spatial::{DesignationSpatialGrid, SpatialGrid};
 use crate::systems::visual::speech::components::{FamiliarBubble, SpeechBubble};
@@ -48,31 +46,13 @@ pub fn process_squad_management(
         ),
         bevy::ecs::query::Without<Familiar>,
     >,
-    q_designations: &Query<(
-        Entity,
-        &Transform,
-        &Designation,
-        Option<&ManagedBy>,
-        Option<&TaskSlots>,
-        Option<&TaskWorkers>,
-        Option<&InStockpile>,
-        Option<&Priority>,
-    )>,
-    haul_cache: &mut crate::systems::familiar_ai::haul_cache::HaulReservationCache,
-    q_targets: &Query<(
-        &Transform,
-        Option<&crate::systems::jobs::Tree>,
-        Option<&crate::systems::jobs::Rock>,
-        Option<&crate::systems::logistics::ResourceItem>,
-        Option<&crate::systems::jobs::Designation>,
-        Option<&crate::relationships::StoredIn>,
-    )>,
-    _q_items: &Query<(&ResourceItem, Option<&Designation>)>,
+    queries: &crate::systems::soul_ai::task_execution::context::TaskQueries,
     cooldowns: &mut crate::systems::visual::speech::cooldown::BubbleCooldowns,
     time: &Res<Time>,
     game_assets: &Res<crate::assets::GameAssets>,
     q_bubbles: &Query<(Entity, &SpeechBubble), With<FamiliarBubble>>,
     world_map: &Res<WorldMap>,
+    haul_cache: &mut crate::systems::familiar_ai::haul_cache::HaulReservationCache,
 ) -> Vec<Entity> {
     let initial_squad = SquadManager::build_squad(commanding);
 
@@ -90,8 +70,7 @@ pub fn process_squad_management(
         familiar_op.fatigue_threshold,
         commands,
         q_souls,
-        q_designations,
-        q_targets,
+        queries,
         haul_cache,
         cooldowns,
         time,
@@ -290,36 +269,9 @@ pub fn process_task_delegation_and_movement(
         ),
         bevy::ecs::query::Without<Familiar>,
     >,
-    q_designations: &Query<(
-        Entity,
-        &Transform,
-        &Designation,
-        Option<&ManagedBy>,
-        Option<&TaskSlots>,
-        Option<&TaskWorkers>,
-        Option<&InStockpile>,
-        Option<&Priority>,
-    )>,
-    q_stockpiles: &Query<(
-        Entity,
-        &Transform,
-        &crate::systems::logistics::Stockpile,
-        Option<&crate::relationships::StoredItems>,
-    )>,
-    q_items: &Query<(&ResourceItem, Option<&Designation>)>,
-    q_target_blueprints: &Query<&crate::systems::jobs::TargetBlueprint>,
-    q_blueprints: &Query<&crate::systems::jobs::Blueprint>,
-    q_belongs: &Query<&crate::systems::logistics::BelongsTo>, // 追加
+    queries: &crate::systems::soul_ai::task_execution::context::TaskQueries,
     designation_grid: &DesignationSpatialGrid,
     managed_tasks: &ManagedTasks,
-    _q_targets: &Query<(
-        &Transform,
-        Option<&crate::systems::jobs::Tree>,
-        Option<&crate::systems::jobs::Rock>,
-        Option<&crate::systems::logistics::ResourceItem>,
-        Option<&crate::systems::jobs::Designation>,
-        Option<&crate::relationships::StoredIn>,
-    )>,
     haul_cache: &mut crate::systems::familiar_ai::haul_cache::HaulReservationCache,
     world_map: &WorldMap,
     pf_context: &mut PathfindingContext,
@@ -334,16 +286,11 @@ pub fn process_task_delegation_and_movement(
         commands,
         fam_entity,
         fam_pos,
-        squad_entities,
+        &squad_entities,
         task_area_opt,
         fatigue_threshold,
-        q_designations,
-        q_items,
+        queries,
         q_souls,
-        q_stockpiles,
-        q_target_blueprints,
-        q_blueprints,
-        q_belongs,
         designation_grid,
         managed_tasks,
         haul_cache,

@@ -5,10 +5,7 @@
 use super::StateTransitionResult;
 use crate::entities::damned_soul::{DamnedSoul, Destination, IdleState, Path, StressBreakdown};
 use crate::entities::familiar::UnderCommand;
-use crate::relationships::{ManagedBy, TaskWorkers};
 use crate::systems::familiar_ai::FamiliarAiState;
-use crate::systems::jobs::{Designation, TaskSlots, Priority};
-use crate::systems::logistics::InStockpile;
 use crate::systems::soul_ai::gathering::ParticipatingIn;
 use crate::systems::soul_ai::task_execution::AssignedTask;
 use bevy::prelude::*;
@@ -40,25 +37,7 @@ pub fn handle_scouting_state(
     ),
     Without<crate::entities::familiar::Familiar>,
 >,
-q_targets: &Query<(
-    &Transform,
-    Option<&crate::systems::jobs::Tree>,
-    Option<&crate::systems::jobs::Rock>,
-    Option<&crate::systems::logistics::ResourceItem>,
-    Option<&crate::systems::jobs::Designation>,
-    Option<&crate::relationships::StoredIn>,
-)>,
-q_designations: &Query<(
-    Entity,
-    &Transform,
-    &Designation,
-    Option<&ManagedBy>,
-    Option<&TaskSlots>,
-    Option<&TaskWorkers>,
-    Option<&InStockpile>,
-    Option<&Priority>,
-)>,
-haul_cache: &mut crate::systems::familiar_ai::haul_cache::HaulReservationCache,
+queries: &crate::systems::soul_ai::task_execution::context::TaskQueries,
 q_breakdown: &Query<&StressBreakdown>,
 commands: &mut Commands,
 ) -> StateTransitionResult {
@@ -74,9 +53,7 @@ commands: &mut Commands,
         fam_dest,
         fam_path,
         q_souls,
-        q_targets,
-        q_designations,
-        haul_cache,
+        queries,
         q_breakdown,
         commands,
     );

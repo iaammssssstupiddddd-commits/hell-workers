@@ -1,9 +1,9 @@
 use crate::constants::*;
 use crate::entities::damned_soul::{DamnedSoul, IdleBehavior, IdleState, Path};
-use crate::relationships::{WorkingOn, ManagedBy, TaskWorkers, StoredIn};
+use crate::relationships::WorkingOn;
 use crate::systems::familiar_ai::haul_cache::HaulReservationCache;
-use crate::systems::jobs::{Designation, TaskSlots, Priority, Tree, Rock};
-use crate::systems::logistics::{InStockpile, Inventory, ResourceType, ResourceItem};
+use crate::systems::jobs::{Designation, TaskSlots};
+use crate::systems::logistics::{Inventory, ResourceType};
 use crate::systems::soul_ai::task_execution::AssignedTask;
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
@@ -43,24 +43,7 @@ pub fn unassign_task(
     path: &mut Path,
     mut inventory: Option<&mut Inventory>,
     dropped_item_res: Option<ResourceType>,
-    q_targets: &Query<(
-        &Transform,
-        Option<&Tree>,
-        Option<&Rock>,
-        Option<&ResourceItem>,
-        Option<&Designation>,
-        Option<&StoredIn>,
-    )>,
-    _q_designations: &Query<(
-        Entity,
-        &Transform,
-        &Designation,
-        Option<&ManagedBy>,
-        Option<&TaskSlots>,
-        Option<&TaskWorkers>,
-        Option<&InStockpile>,
-        Option<&Priority>,
-    )>,
+    queries: &crate::systems::soul_ai::task_execution::context::TaskQueries,
     haul_cache: &mut HaulReservationCache,
     world_map: &WorldMap,
     emit_abandoned_event: bool,
@@ -73,12 +56,12 @@ pub fn unassign_task(
     }
 
     // 運搬・水汲みタスクの予約を解除
-    match *task {
-        AssignedTask::Haul { stockpile, .. } => {
-            haul_cache.release(stockpile);
+    match task {
+        AssignedTask::Haul(data) => {
+            haul_cache.release(data.stockpile);
         }
-        AssignedTask::GatherWater { tank, .. } => {
-            haul_cache.release(tank);
+        AssignedTask::GatherWater(data) => {
+            haul_cache.release(data.tank);
         }
         _ => {}
     }
@@ -108,10 +91,8 @@ pub fn unassign_task(
                 Transform::from_xyz(snapped_pos.x, snapped_pos.y, Z_ITEM_PICKUP),
             ));
             
-            // アイテムの種類に応じたタスクの再発行
-            // 引数の dropped_item_res を優先し、なければ Query から取得を試みる
             let res_item = dropped_item_res.or_else(|| {
-                q_targets.get(item_entity).ok().and_then(|(_tr, _tree, _rock, ri, _des, _stored): (&Transform, Option<&Tree>, Option<&Rock>, Option<&ResourceItem>, Option<&Designation>, Option<&StoredIn>)| ri.map(|r| r.0))
+                queries.targets.get(item_entity).ok().and_then(|(_tr, _tree, _rock, ri, _des, _stored)| ri.map(|r| r.0))
             });
 
             // 管理コンポーネントは削除せず維持する。

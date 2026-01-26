@@ -2,9 +2,8 @@
 
 use crate::assets::GameAssets;
 use crate::constants::*;
-use crate::relationships::{ManagedBy, TaskWorkers};
-use crate::systems::jobs::{Designation, TaskSlots, Priority, Rock, Tree, WorkType};
-use crate::systems::logistics::{InStockpile, ResourceItem};
+use crate::systems::jobs::WorkType;
+use crate::systems::logistics::ResourceItem;
 use crate::systems::soul_ai::task_execution::{
     common::*,
     context::TaskExecutionContext,
@@ -18,30 +17,13 @@ pub fn handle_gather_task(
     target: Entity,
     work_type: &WorkType,
     phase: GatherPhase,
-    q_targets: &Query<(
-        &Transform,
-        Option<&Tree>,
-        Option<&Rock>,
-        Option<&ResourceItem>,
-        Option<&Designation>,
-        Option<&crate::relationships::StoredIn>,
-    )>,
-    _q_designations: &Query<(
-        Entity,
-        &Transform,
-        &Designation,
-        Option<&ManagedBy>,
-        Option<&TaskSlots>,
-        Option<&TaskWorkers>,
-        Option<&InStockpile>,
-        Option<&Priority>,
-    )>,
     commands: &mut Commands,
     game_assets: &Res<GameAssets>,
     time: &Res<Time>,
     world_map: &Res<WorldMap>,
 ) {
     let soul_pos = ctx.soul_pos();
+    let q_targets = &ctx.queries.targets;
     match phase {
         GatherPhase::GoingToResource => {
             if let Ok((res_transform, _, _, _, des_opt, _)) = q_targets.get(target) {
@@ -53,11 +35,11 @@ pub fn handle_gather_task(
                 update_destination_to_adjacent(ctx.dest, res_pos, ctx.path, soul_pos, world_map);
 
                 if is_near_target(soul_pos, res_pos) {
-                    *ctx.task = AssignedTask::Gather {
+                    *ctx.task = AssignedTask::Gather(crate::systems::soul_ai::task_execution::types::GatherData {
                         target,
                         work_type: *work_type,
                         phase: GatherPhase::Collecting { progress: 0.0 },
-                    };
+                    });
                     ctx.path.waypoints.clear();
                 }
             } else {
@@ -118,19 +100,19 @@ pub fn handle_gather_task(
                     }
                     commands.entity(target).despawn();
 
-                    *ctx.task = AssignedTask::Gather {
+                    *ctx.task = AssignedTask::Gather(crate::systems::soul_ai::task_execution::types::GatherData {
                         target,
                         work_type: *work_type,
                         phase: GatherPhase::Done,
-                    };
+                    });
                     ctx.soul.fatigue = (ctx.soul.fatigue + FATIGUE_GAIN_ON_COMPLETION).min(1.0);
                 } else {
                     // 進捗を保存
-                    *ctx.task = AssignedTask::Gather {
+                    *ctx.task = AssignedTask::Gather(crate::systems::soul_ai::task_execution::types::GatherData {
                         target,
                         work_type: *work_type,
                         phase: GatherPhase::Collecting { progress },
-                    };
+                    });
                 }
             } else {
                 clear_task_and_path(ctx.task, ctx.path);

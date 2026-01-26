@@ -1,7 +1,6 @@
 //! 建築タスクの実行処理
 
 use crate::relationships::WorkingOn;
-use crate::systems::jobs::{Blueprint, Designation};
 use crate::systems::soul_ai::task_execution::{
     common::*,
     context::TaskExecutionContext,
@@ -14,12 +13,12 @@ pub fn handle_build_task(
     ctx: &mut TaskExecutionContext,
     blueprint_entity: Entity,
     phase: BuildPhase,
-    q_blueprints: &mut Query<(&Transform, &mut Blueprint, Option<&Designation>)>,
     commands: &mut Commands,
     time: &Res<Time>,
     world_map: &Res<WorldMap>,
 ) {
     let soul_pos = ctx.soul_pos();
+    let q_blueprints = &mut ctx.queries.blueprints;
 
     match phase {
         BuildPhase::GoingToBlueprint => {
@@ -44,10 +43,10 @@ pub fn handle_build_task(
                 update_destination_to_blueprint(ctx.dest, &bp.occupied_grids, ctx.path, soul_pos, world_map, ctx.pf_context);
 
                 if is_near_blueprint(soul_pos, &bp.occupied_grids) {
-                    *ctx.task = AssignedTask::Build {
+                    *ctx.task = AssignedTask::Build(crate::systems::soul_ai::task_execution::types::BuildData {
                         blueprint: blueprint_entity,
                         phase: BuildPhase::Building { progress: 0.0 },
-                    };
+                    });
                     ctx.path.waypoints.clear();
                     info!(
                         "BUILD: Soul {:?} started building at {:?}",
@@ -73,20 +72,20 @@ pub fn handle_build_task(
                 bp.progress = progress;
 
                 if progress >= 1.0 {
-                    *ctx.task = AssignedTask::Build {
+                    *ctx.task = AssignedTask::Build(crate::systems::soul_ai::task_execution::types::BuildData {
                         blueprint: blueprint_entity,
                         phase: BuildPhase::Done,
-                    };
+                    });
                     ctx.soul.fatigue = (ctx.soul.fatigue + 0.15).min(1.0);
                     info!(
                         "BUILD: Soul {:?} completed building {:?}",
                         ctx.soul_entity, blueprint_entity
                     );
                 } else {
-                    *ctx.task = AssignedTask::Build {
+                    *ctx.task = AssignedTask::Build(crate::systems::soul_ai::task_execution::types::BuildData {
                         blueprint: blueprint_entity,
                         phase: BuildPhase::Building { progress },
-                    };
+                    });
                 }
             } else {
                 clear_task_and_path(ctx.task, ctx.path);

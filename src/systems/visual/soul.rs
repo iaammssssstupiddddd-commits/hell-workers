@@ -31,11 +31,8 @@ pub fn progress_bar_system(
     mut q_souls: Query<(Entity, &AssignedTask, &Transform, &mut DamnedSoul)>,
 ) {
     for (soul_entity, task, transform, mut soul) in q_souls.iter_mut() {
-        if let AssignedTask::Gather {
-            phase: GatherPhase::Collecting { .. },
-            ..
-        } = task
-        {
+        if let AssignedTask::Gather(data) = task {
+            if matches!(data.phase, GatherPhase::Collecting { .. }) {
             if soul.bar_entity.is_none() {
                 // utilを使用してプログレスバーを生成
                 let config = ProgressBarConfig {
@@ -66,6 +63,7 @@ pub fn progress_bar_system(
 
                 soul.bar_entity = Some(bg_entity);
             }
+        }
         } else if let Some(bar_entity) = soul.bar_entity.take() {
             // プログレスバーを削除（背景とFillの両方）
             // SoulProgressBarコンポーネントを持つ全てのエンティティを削除
@@ -95,14 +93,11 @@ pub fn update_progress_bar_fill_system(
         // SoulProgressBarコンポーネントを取得
         if let Ok(soul_bar) = q_soul_bars.get(fill_entity) {
             if let Ok(task) = q_souls.get(soul_bar.parent) {
-                if let AssignedTask::Gather {
-                    phase: GatherPhase::Collecting { progress },
-                    ..
-                } = task
-                {
+                if let AssignedTask::Gather(data) = task {
+                    if let GatherPhase::Collecting { progress } = data.phase {
                     if let Ok(generic_bar) = q_generic_bars.get(fill_entity) {
                         update_progress_bar_fill(
-                            *progress,
+                            progress,
                             &generic_bar.config,
                             &mut sprite,
                             &mut transform,
@@ -113,6 +108,7 @@ pub fn update_progress_bar_fill_system(
             }
         }
     }
+}
 }
 
 /// バーを親エンティティに追従させるシステム
@@ -173,32 +169,28 @@ pub fn task_link_system(
     for (soul_transform, task) in q_souls.iter() {
         let (soul_transform, task): (&GlobalTransform, &AssignedTask) = (soul_transform, task);
         let target_entity = match task {
-            AssignedTask::Gather { target, .. } => Some(target),
-            AssignedTask::Haul {
-                item,
-                stockpile,
-                phase,
-            } => match phase {
-                HaulPhase::GoingToItem => Some(item),
-                HaulPhase::GoingToStockpile => Some(stockpile),
+            AssignedTask::Gather(data) => Some(data.target),
+            AssignedTask::Haul(data) => match data.phase {
+                HaulPhase::GoingToItem => Some(data.item),
+                HaulPhase::GoingToStockpile => Some(data.stockpile),
                 _ => None,
             },
-            AssignedTask::Build { blueprint, .. } => Some(blueprint),
-            AssignedTask::HaulToBlueprint { blueprint, .. } => Some(blueprint),
+            AssignedTask::Build(data) => Some(data.blueprint),
+            AssignedTask::HaulToBlueprint(data) => Some(data.blueprint),
             _ => None,
         };
 
         if let Some(target) = target_entity {
-            if let Ok(target_transform) = q_targets.get(*target) {
+            if let Ok(target_transform) = q_targets.get(target) {
                 let start: Vec2 = soul_transform.translation().truncate();
                 let end: Vec2 = target_transform.translation().truncate();
 
                 // 線の色をタスクの種類で変える
                 let color = match task {
-                    AssignedTask::Gather { .. } => Color::srgba(0.0, 1.0, 0.0, 0.4), // 緑 (採取)
-                    AssignedTask::Haul { .. } => Color::srgba(1.0, 1.0, 0.0, 0.4),   // 黄 (運搬)
-                    AssignedTask::Build { .. } => Color::srgba(1.0, 1.0, 1.0, 0.5),  // 白 (建築)
-                    AssignedTask::HaulToBlueprint { .. } => Color::srgba(1.0, 1.0, 0.5, 0.4), // 薄黄 (搬入)
+                    AssignedTask::Gather(_) => Color::srgba(0.0, 1.0, 0.0, 0.4), // 緑 (採取)
+                    AssignedTask::Haul(_) => Color::srgba(1.0, 1.0, 0.0, 0.4),   // 黄 (運搬)
+                    AssignedTask::Build(_) => Color::srgba(1.0, 1.0, 1.0, 0.5),  // 白 (建築)
+                    AssignedTask::HaulToBlueprint(_) => Color::srgba(1.0, 1.0, 0.5, 0.4), // 薄黄 (搬入)
                     _ => Color::srgba(1.0, 1.0, 1.0, 0.3),
                 };
 

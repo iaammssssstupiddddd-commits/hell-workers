@@ -16,10 +16,8 @@ pub use types::AssignedTask;
 
 use crate::entities::damned_soul::{DamnedSoul, Destination, Path, StressBreakdown};
 use crate::events::OnTaskCompleted;
-use crate::relationships::{ManagedBy, TaskWorkers};
 use crate::systems::familiar_ai::haul_cache::HaulReservationCache;
-use crate::systems::jobs::{Blueprint, Designation, TaskSlots, Priority};
-use crate::systems::logistics::{Inventory, Stockpile, InStockpile};
+use crate::systems::logistics::Inventory;
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
 
@@ -30,9 +28,6 @@ use gather_water::handle_gather_water_task;
 use haul::handle_haul_task;
 use haul_to_blueprint::handle_haul_to_blueprint_task;
 
-/// タスク実行システム
-///
-/// 各魂の割り当てられたタスクを実行し、フェーズに応じて処理を進めます。
 pub fn task_execution_system(
     mut commands: Commands,
     mut q_souls: Query<(
@@ -45,35 +40,10 @@ pub fn task_execution_system(
         &mut Inventory,
         Option<&StressBreakdown>,
     )>,
-    q_targets: Query<(
-        &Transform,
-        Option<&crate::systems::jobs::Tree>,
-        Option<&crate::systems::jobs::Rock>,
-        Option<&crate::systems::logistics::ResourceItem>,
-        Option<&Designation>,
-        Option<&crate::relationships::StoredIn>,
-    )>,
-    q_designations: Query<(
-        Entity,
-        &Transform,
-        &Designation,
-        Option<&ManagedBy>,
-        Option<&TaskSlots>,
-        Option<&TaskWorkers>,
-        Option<&InStockpile>,
-        Option<&Priority>,
-    )>,
-    mut q_stockpiles: Query<(
-        Entity, // 追加
-        &Transform,
-        &mut Stockpile,
-        Option<&crate::relationships::StoredItems>,
-    )>,
-    q_belongs: Query<&crate::systems::logistics::BelongsTo>, // 追加
+    mut queries: context::TaskQueries,
     game_assets: Res<crate::assets::GameAssets>,
     time: Res<Time>,
     mut haul_cache: ResMut<HaulReservationCache>,
-    mut q_blueprints: Query<(&Transform, &mut Blueprint, Option<&Designation>)>,
     world_map: Res<WorldMap>,
     mut pf_context: Local<crate::world::pathfinding::PathfindingContext>,
 ) {
@@ -94,137 +64,78 @@ pub fn task_execution_system(
         let old_work_type = task.work_type();
         let old_task_entity = task.get_target_entity();
 
+        // 共通コンテキストの構築
+        let mut ctx = TaskExecutionContext {
+            soul_entity,
+            soul_transform,
+            soul: &mut soul,
+            task: &mut task,
+            dest: &mut dest,
+            path: &mut path,
+            inventory: &mut inventory,
+            pf_context: &mut *pf_context,
+            queries: &mut queries,
+        };
+
         // タスクタイプに応じてルーティング
-        match *task {
-            AssignedTask::Gather {
-                target,
-                work_type,
-                phase,
-            } => {
-                let mut ctx = TaskExecutionContext {
-                    soul_entity,
-                    soul_transform,
-                    soul: &mut soul,
-                    task: &mut task,
-                    dest: &mut dest,
-                    path: &mut path,
-                    inventory: &mut inventory,
-                    pf_context: &mut *pf_context,
-                };
+        match &*ctx.task {
+            AssignedTask::Gather(data) => {
+                let data = data.clone();
                 handle_gather_task(
                     &mut ctx,
-                    target,
-                    &work_type,
-                    phase,
-                    &q_targets,
-                    &q_designations,
+                    data.target,
+                    &data.work_type,
+                    data.phase,
                     &mut commands,
                     &game_assets,
                     &time,
                     &world_map,
                 );
             }
-            AssignedTask::Haul {
-                item,
-                stockpile,
-                phase,
-            } => {
-                let mut ctx = TaskExecutionContext {
-                    soul_entity,
-                    soul_transform,
-                    soul: &mut soul,
-                    task: &mut task,
-                    dest: &mut dest,
-                    path: &mut path,
-                    inventory: &mut inventory,
-                    pf_context: &mut *pf_context,
-                };
+            AssignedTask::Haul(data) => {
+                let data = data.clone();
                 handle_haul_task(
                     &mut ctx,
-                    item,
-                    stockpile,
-                    phase,
-                    &q_targets,
-                    &q_designations,
-                    &mut q_stockpiles,
-                    &q_belongs,
+                    data.item,
+                    data.stockpile,
+                    data.phase,
                     &mut commands,
                     &mut dropped_this_frame,
                     &mut *haul_cache,
                     &world_map,
                 );
             }
-            AssignedTask::Build { blueprint, phase } => {
-                let mut ctx = TaskExecutionContext {
-                    soul_entity,
-                    soul_transform,
-                    soul: &mut soul,
-                    task: &mut task,
-                    dest: &mut dest,
-                    path: &mut path,
-                    inventory: &mut inventory,
-                    pf_context: &mut *pf_context,
-                };
+            AssignedTask::Build(data) => {
+                let data = data.clone();
                 handle_build_task(
                     &mut ctx,
-                    blueprint,
-                    phase,
-                    &mut q_blueprints,
+                    data.blueprint,
+                    data.phase,
                     &mut commands,
                     &time,
                     &world_map,
                 );
             }
-            AssignedTask::HaulToBlueprint {
-                item,
-                blueprint,
-                phase,
-            } => {
-                let mut ctx = TaskExecutionContext {
-                    soul_entity,
-                    soul_transform,
-                    soul: &mut soul,
-                    task: &mut task,
-                    dest: &mut dest,
-                    path: &mut path,
-                    inventory: &mut inventory,
-                    pf_context: &mut *pf_context,
-                };
+            AssignedTask::HaulToBlueprint(data) => {
+                let data = data.clone();
                 handle_haul_to_blueprint_task(
                     &mut ctx,
                     breakdown_opt,
-                    item,
-                    blueprint,
-                    phase,
-                    &q_targets,
-                    &q_designations,
-                    &mut q_blueprints,
-                    &mut q_stockpiles,
+                    data.item,
+                    data.blueprint,
+                    data.phase,
                     &mut haul_cache,
                     &mut commands,
                     &world_map,
                 );
             }
-            AssignedTask::GatherWater { bucket, tank, phase } => {
-                let mut ctx = TaskExecutionContext {
-                    soul_entity,
-                    soul_transform,
-                    soul: &mut soul,
-                    task: &mut task,
-                    dest: &mut dest,
-                    path: &mut path,
-                    inventory: &mut inventory,
-                    pf_context: &mut *pf_context,
-                };
+            AssignedTask::GatherWater(data) => {
+                let data = data.clone();
                 handle_gather_water_task(
                     &mut ctx,
-                    bucket,
-                    tank,
-                    phase,
-                    &q_targets,
-                    &q_designations,
-                    &q_belongs,
-                    &mut q_stockpiles,
+                    data.bucket,
+                    data.tank,
+                    data.phase,
                     &mut commands,
                     &game_assets,
                     &mut *haul_cache,

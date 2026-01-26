@@ -123,10 +123,10 @@ pub fn blueprint_auto_haul_system(
     // 運搬中 (ソウルが持っている、または向かっている)
     for task in q_souls.iter() {
         let task: &AssignedTask = task;
-        if let AssignedTask::HaulToBlueprint {
-            item, blueprint, ..
-        } = task
+        if let AssignedTask::HaulToBlueprint(data) = task
         {
+            let item = &data.item;
+            let blueprint = &data.blueprint;
             if let Ok(res_item) = q_all_resources.get(*item) {
                 *in_flight.entry((*blueprint, res_item.0)).or_insert(0) += 1;
             }

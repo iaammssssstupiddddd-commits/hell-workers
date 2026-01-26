@@ -10,34 +10,49 @@ pub enum AssignedTask {
     #[default]
     None,
     /// リソースを収集する
-    Gather {
-        target: Entity,
-        work_type: WorkType,
-        phase: GatherPhase,
-    },
+    Gather(GatherData),
     /// リソースを運搬する（ストックパイルへ）
-    Haul {
-        item: Entity,
-        stockpile: Entity,
-        phase: HaulPhase,
-    },
+    Haul(HaulData),
     /// 資材を設計図へ運搬する
-    HaulToBlueprint {
-        item: Entity,
-        blueprint: Entity,
-        phase: HaulToBpPhase,
-    },
+    HaulToBlueprint(HaulToBlueprintData),
     /// 建築作業を行う
-    Build {
-        blueprint: Entity,
-        phase: BuildPhase,
-    },
+    Build(BuildData),
     /// 水汲みを行う
-    GatherWater {
-        bucket: Entity,
-        tank: Entity,
-        phase: GatherWaterPhase,
-    },
+    GatherWater(GatherWaterData),
+}
+
+#[derive(Reflect, Clone, Debug, PartialEq)]
+pub struct GatherData {
+    pub target: Entity,
+    pub work_type: WorkType,
+    pub phase: GatherPhase,
+}
+
+#[derive(Reflect, Clone, Debug, PartialEq, Eq)]
+pub struct HaulData {
+    pub item: Entity,
+    pub stockpile: Entity,
+    pub phase: HaulPhase,
+}
+
+#[derive(Reflect, Clone, Debug, PartialEq, Eq)]
+pub struct HaulToBlueprintData {
+    pub item: Entity,
+    pub blueprint: Entity,
+    pub phase: HaulToBpPhase,
+}
+
+#[derive(Reflect, Clone, Debug, PartialEq)]
+pub struct BuildData {
+    pub blueprint: Entity,
+    pub phase: BuildPhase,
+}
+
+#[derive(Reflect, Clone, Debug, PartialEq)]
+pub struct GatherWaterData {
+    pub bucket: Entity,
+    pub tank: Entity,
+    pub phase: GatherWaterPhase,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Reflect, Default)]
@@ -87,11 +102,11 @@ impl AssignedTask {
     /// タスクの作業タイプを取得
     pub fn work_type(&self) -> Option<WorkType> {
         match self {
-            AssignedTask::Gather { work_type, .. } => Some(*work_type),
-            AssignedTask::Haul { .. } => Some(WorkType::Haul),
-            AssignedTask::HaulToBlueprint { .. } => Some(WorkType::Haul),
-            AssignedTask::Build { .. } => Some(WorkType::Build),
-            AssignedTask::GatherWater { .. } => Some(WorkType::GatherWater),
+            AssignedTask::Gather(data) => Some(data.work_type),
+            AssignedTask::Haul(_) => Some(WorkType::Haul),
+            AssignedTask::HaulToBlueprint(_) => Some(WorkType::Haul),
+            AssignedTask::Build(_) => Some(WorkType::Build),
+            AssignedTask::GatherWater(_) => Some(WorkType::GatherWater),
             AssignedTask::None => None,
         }
     }
@@ -99,11 +114,11 @@ impl AssignedTask {
     /// タスクのターゲットエンティティを取得（完了イベント用）
     pub fn get_target_entity(&self) -> Option<Entity> {
         match self {
-            AssignedTask::Gather { target, .. } => Some(*target),
-            AssignedTask::Haul { item, .. } => Some(*item),
-            AssignedTask::HaulToBlueprint { item, .. } => Some(*item),
-            AssignedTask::Build { blueprint, .. } => Some(*blueprint),
-            AssignedTask::GatherWater { bucket, .. } => Some(*bucket),
+            AssignedTask::Gather(data) => Some(data.target),
+            AssignedTask::Haul(data) => Some(data.item),
+            AssignedTask::HaulToBlueprint(data) => Some(data.item),
+            AssignedTask::Build(data) => Some(data.blueprint),
+            AssignedTask::GatherWater(data) => Some(data.bucket),
             AssignedTask::None => None,
         }
     }
