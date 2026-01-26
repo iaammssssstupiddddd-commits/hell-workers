@@ -1,9 +1,7 @@
 //! 運搬タスクの実行処理（ストックパイルへ）
 
-use crate::relationships::{WorkingOn, ManagedBy, TaskWorkers};
+use crate::relationships::WorkingOn;
 use crate::systems::familiar_ai::haul_cache::HaulReservationCache;
-use crate::systems::jobs::{Designation, TaskSlots, Priority};
-use crate::systems::logistics::{Stockpile, InStockpile};
 use crate::systems::soul_ai::task_execution::{
     context::TaskExecutionContext,
     types::{AssignedTask, HaulPhase},
@@ -18,37 +16,15 @@ pub fn handle_haul_task(
     item: Entity,
     stockpile: Entity,
     phase: HaulPhase,
-    q_targets: &Query<(
-        &Transform,
-        Option<&crate::systems::jobs::Tree>,
-        Option<&crate::systems::jobs::Rock>,
-        Option<&crate::systems::logistics::ResourceItem>,
-        Option<&Designation>,
-        Option<&crate::relationships::StoredIn>,
-    )>,
-    q_designations: &Query<(
-        Entity,
-        &Transform,
-        &Designation,
-        Option<&ManagedBy>,
-        Option<&TaskSlots>,
-        Option<&TaskWorkers>,
-        Option<&InStockpile>,
-        Option<&Priority>,
-    )>,
-    q_stockpiles: &mut Query<(
-        Entity,
-        &Transform,
-        &mut Stockpile,
-        Option<&crate::relationships::StoredItems>,
-    )>,
-    q_belongs: &Query<&crate::systems::logistics::BelongsTo>,
     commands: &mut Commands,
     dropped_this_frame: &mut std::collections::HashMap<Entity, usize>,
     haul_cache: &mut HaulReservationCache,
     world_map: &Res<WorldMap>,
 ) {
     let soul_pos = ctx.soul_pos();
+    let q_targets = &ctx.queries.targets;
+    let q_stockpiles = &mut ctx.queries.stockpiles;
+    let q_belongs = &ctx.queries.belongs;
     match phase {
         HaulPhase::GoingToItem => {
             if let Ok((res_transform, _, _, _res_item_opt, des_opt, stored_in_opt)) =
@@ -81,11 +57,11 @@ pub fn handle_haul_task(
                     // commands.entity(item).remove::<IssuedBy>();
                     // commands.entity(item).remove::<TaskSlots>();
 
-                    *ctx.task = AssignedTask::Haul {
+                    *ctx.task = AssignedTask::Haul(crate::systems::soul_ai::task_execution::types::HaulData {
                         item,
                         stockpile,
                         phase: HaulPhase::GoingToStockpile,
-                    };
+                    });
                     ctx.path.waypoints.clear();
                     info!("HAUL: Soul {:?} picked up item {:?}", ctx.soul_entity, item);
                 }
@@ -100,11 +76,11 @@ pub fn handle_haul_task(
                 update_destination_to_adjacent(ctx.dest, stock_pos, ctx.path, soul_pos, world_map);
 
                 if is_near_target(soul_pos, stock_pos) {
-                    *ctx.task = AssignedTask::Haul {
+                    *ctx.task = AssignedTask::Haul(crate::systems::soul_ai::task_execution::types::HaulData {
                         item,
                         stockpile,
                         phase: HaulPhase::Dropping,
-                    };
+                    });
                     ctx.path.waypoints.clear();
                 }
             } else {
@@ -198,8 +174,7 @@ pub fn handle_haul_task(
                         ctx.path,
                         Some(ctx.inventory),
                         item_info.and_then(|(it, _)| it),
-                        q_targets,
-                        q_designations,
+                        &ctx.queries,
                         haul_cache,
                         world_map,
                         true,

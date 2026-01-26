@@ -242,11 +242,11 @@ pub fn info_panel_system(
 
             let task_str = match task {
                 AssignedTask::None => "Idle".to_string(),
-                AssignedTask::Gather { phase, .. } => format!("Gather ({:?})", phase),
-                AssignedTask::Haul { phase, .. } => format!("Haul ({:?})", phase),
-                AssignedTask::HaulToBlueprint { phase, .. } => format!("HaulToBp ({:?})", phase),
-                AssignedTask::Build { phase, .. } => format!("Build ({:?})", phase),
-                AssignedTask::GatherWater { phase, .. } => format!("GatherWater ({:?})", phase),
+                AssignedTask::Gather(data) => format!("Gather ({:?})", data.phase),
+                AssignedTask::Haul(data) => format!("Haul ({:?})", data.phase),
+                AssignedTask::HaulToBlueprint(data) => format!("HaulToBp ({:?})", data.phase),
+                AssignedTask::Build(data) => format!("Build ({:?})", data.phase),
+                AssignedTask::GatherWater(data) => format!("GatherWater ({:?})", data.phase),
             };
             if let Ok(mut t) = params.q_task.single_mut() {
                 t.0 = format!("Task: {}", task_str);

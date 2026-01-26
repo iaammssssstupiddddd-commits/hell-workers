@@ -18,7 +18,9 @@ pub fn spawn_worker_indicators_system(
     >,
 ) {
     for (worker_entity, assigned_task, transform) in q_workers.iter() {
-        if let AssignedTask::Build { blueprint, phase } = assigned_task {
+        if let AssignedTask::Build(data) = assigned_task {
+            let blueprint = data.blueprint;
+            let phase = &data.phase;
             if matches!(phase, BuildPhase::Building { .. }) {
                 info!(
                     "VISUAL: Spawning hammer icon for worker {:?} (building {:?})",
@@ -59,7 +61,8 @@ pub fn update_worker_indicators_system(
         let mut should_despawn = true;
 
         if let Ok((_w_entity, assigned_task, worker_transform)) = q_workers.get(hammer.worker) {
-            if let AssignedTask::Build { phase, .. } = assigned_task {
+            if let AssignedTask::Build(data) = assigned_task {
+                let phase = &data.phase;
                 if matches!(phase, BuildPhase::Building { .. }) {
                     should_despawn = false;
 

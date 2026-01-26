@@ -5,10 +5,10 @@
 use crate::entities::damned_soul::{DamnedSoul, Destination, IdleBehavior, IdleState, Path};
 use crate::entities::familiar::UnderCommand;
 use crate::events::{OnSoulRecruited, OnTaskAssigned};
-use crate::relationships::{ManagedBy, ManagedTasks, TaskWorkers};
+use crate::relationships::ManagedTasks;
 use crate::systems::command::TaskArea;
-use crate::systems::jobs::{Blueprint, Designation, TaskSlots, TargetBlueprint, Priority, WorkType};
-use crate::systems::logistics::{InStockpile, ResourceItem, ResourceType, Stockpile};
+use crate::systems::jobs::{TargetBlueprint, WorkType};
+use crate::systems::logistics::ResourceType;
 use crate::systems::soul_ai::gathering::ParticipatingIn;
 use crate::systems::soul_ai::task_execution::types::{
     AssignedTask, BuildPhase, GatherPhase, GatherWaterPhase, HaulPhase, HaulToBpPhase,
@@ -52,19 +52,9 @@ impl TaskManager {
         fam_pos: Vec2,
         worker_pos: Vec2, // 実際に到達するかチェックするワーカーの位置
         task_area_opt: Option<&TaskArea>,
-        q_designations: &Query<(
-            Entity,
-            &Transform,
-            &Designation,
-            Option<&ManagedBy>,
-            Option<&TaskSlots>,
-            Option<&TaskWorkers>,
-            Option<&InStockpile>,
-            Option<&Priority>,
-        )>,
+        queries: &crate::systems::soul_ai::task_execution::context::TaskQueries,
         designation_grid: &DesignationSpatialGrid,
         managed_tasks: &ManagedTasks,
-        q_blueprints: &Query<&Blueprint>,
         q_target_blueprints: &Query<&TargetBlueprint>,
         world_map: &WorldMap,
         pf_context: &mut PathfindingContext,
@@ -85,12 +75,12 @@ impl TaskManager {
 
             // 資材が揃った建築タスク（Blueprint）を直接検索して追加
             for (bp_entity, bp_transform, bp_designation, bp_issued_by, _, _, _, _) in
-                q_designations.iter()
+                queries.designations.iter()
             {
                 if bp_designation.work_type == WorkType::Build {
                     let bp_pos = bp_transform.translation.truncate();
                     if area.contains(bp_pos) && bp_issued_by.is_none() {
-                        if let Ok(bp) = q_blueprints.get(bp_entity) {
+                        if let Ok((_, bp, _)) = queries.blueprints.get(bp_entity) {
                             if bp.materials_complete() && !ents.contains(&bp_entity) {
                                 ents.push(bp_entity);
                             }
@@ -108,7 +98,7 @@ impl TaskManager {
             .into_iter()
             .filter_map(|entity| {
                 let (entity, transform, designation, issued_by, slots, workers, in_stockpile_opt, priority_opt) =
-                    q_designations.get(entity).ok()?;
+                    queries.designations.get(entity).ok()?;
 
                 let is_managed_by_me = managed_tasks.contains(entity);
                 let is_unassigned = issued_by.is_none();
@@ -162,7 +152,7 @@ impl TaskManager {
                 let is_valid = match designation.work_type {
                     WorkType::Chop | WorkType::Mine | WorkType::Haul | WorkType::GatherWater => true,
                     WorkType::Build => {
-                        if let Ok(bp) = q_blueprints.get(entity) {
+                        if let Ok((_, bp, _)) = queries.blueprints.get(entity) {
                             bp.materials_complete()
                         } else {
                             false
@@ -213,17 +203,7 @@ impl TaskManager {
         task_entity: Entity,
         worker_entity: Entity,
         fatigue_threshold: f32,
-        q_designations: &Query<(
-            Entity,
-            &Transform,
-            &Designation,
-            Option<&ManagedBy>,
-            Option<&TaskSlots>,
-            Option<&TaskWorkers>,
-            Option<&InStockpile>,
-            Option<&Priority>,
-        )>,
-        q_items: &Query<(&ResourceItem, Option<&Designation>)>,
+        queries: &crate::systems::soul_ai::task_execution::context::TaskQueries,
         q_souls: &mut Query<
             (
                 Entity,
@@ -240,15 +220,6 @@ impl TaskManager {
             ),
             Without<crate::entities::familiar::Familiar>,
         >,
-        q_stockpiles: &Query<(
-            Entity,
-            &Transform,
-            &Stockpile,
-            Option<&crate::relationships::StoredItems>,
-        )>,
-        q_target_blueprints: &Query<&TargetBlueprint>,
-        q_blueprints: &Query<&Blueprint>,
-        q_belongs: &Query<&crate::systems::logistics::BelongsTo>,
         task_area_opt: Option<&TaskArea>,
         haul_cache: &mut crate::systems::familiar_ai::haul_cache::HaulReservationCache,
     ) {
@@ -278,7 +249,7 @@ impl TaskManager {
 
         // タスクが存在するか最終確認
         let (task_pos, work_type) =
-            if let Ok((_, transform, designation, _, _, _, _, _)) = q_designations.get(task_entity) {
+            if let Ok((_, transform, designation, _, _, _, _, _)) = queries.designations.get(task_entity) {
                 (transform.translation.truncate(), designation.work_type)
             } else {
                 return;
@@ -290,11 +261,11 @@ impl TaskManager {
                     commands, worker_entity, fam_entity, task_entity, uc_opt.is_some(),
                 );
 
-                *assigned_task = AssignedTask::Gather {
+                *assigned_task = AssignedTask::Gather(crate::systems::soul_ai::task_execution::types::GatherData {
                     target: task_entity,
                     work_type,
                     phase: GatherPhase::GoingToResource,
-                };
+                });
                 dest.0 = task_pos;
                 path.waypoints.clear();
                 path.current_index = 0;
@@ -305,16 +276,16 @@ impl TaskManager {
                 });
             }
             WorkType::Haul => {
-                if let Ok(target_bp) = q_target_blueprints.get(task_entity) {
+                if let Ok(target_bp) = queries.target_blueprints.get(task_entity) {
                     Self::prepare_worker_for_task(
                         commands, worker_entity, fam_entity, task_entity, uc_opt.is_some(),
                     );
 
-                    *assigned_task = AssignedTask::HaulToBlueprint {
+                    *assigned_task = AssignedTask::HaulToBlueprint(crate::systems::soul_ai::task_execution::types::HaulToBlueprintData {
                         item: task_entity,
                         blueprint: target_bp.0,
                         phase: HaulToBpPhase::GoingToItem,
-                    };
+                    });
                     dest.0 = task_pos;
                     path.waypoints.clear();
                     path.current_index = 0;
@@ -326,15 +297,15 @@ impl TaskManager {
                     return;
                 }
 
-                let item_info = q_items.get(task_entity).ok().map(|(it, _)| it.0);
-                let item_belongs = q_belongs.get(task_entity).ok();
+                let item_info = queries.items.get(task_entity).ok().map(|(it, _)| it.0);
+                let item_belongs = queries.belongs.get(task_entity).ok();
 
                 if item_info.is_none() {
                     return;
                 }
                 let item_type = item_info.unwrap();
 
-                let best_stockpile = q_stockpiles
+                let best_stockpile = queries.stockpiles
                     .iter()
                     .filter(|(s_entity, s_transform, stock, stored)| {
                         if let Some(area) = task_area_opt {
@@ -344,7 +315,7 @@ impl TaskManager {
                         }
 
                         // 所有権チェック
-                        let stock_belongs = q_belongs.get(*s_entity).ok();
+                        let stock_belongs = queries.belongs.get(*s_entity).ok();
                         if item_belongs != stock_belongs {
                             return false;
                         }
@@ -370,11 +341,11 @@ impl TaskManager {
                         commands, worker_entity, fam_entity, task_entity, uc_opt.is_some(),
                     );
 
-                    *assigned_task = AssignedTask::Haul {
+                    *assigned_task = AssignedTask::Haul(crate::systems::soul_ai::task_execution::types::HaulData {
                         item: task_entity,
                         stockpile: stock_entity,
                         phase: HaulPhase::GoingToItem,
-                    };
+                    });
                     haul_cache.reserve(stock_entity);
 
                     dest.0 = task_pos;
@@ -388,7 +359,7 @@ impl TaskManager {
                 }
             }
             WorkType::Build => {
-                if let Ok(bp) = q_blueprints.get(task_entity) {
+                if let Ok((_, bp, _)) = queries.blueprints.get(task_entity) {
                     if !bp.materials_complete() {
                         return;
                     }
@@ -398,10 +369,10 @@ impl TaskManager {
                     commands, worker_entity, fam_entity, task_entity, uc_opt.is_some(),
                 );
 
-                *assigned_task = AssignedTask::Build {
+                *assigned_task = AssignedTask::Build(crate::systems::soul_ai::task_execution::types::BuildData {
                     blueprint: task_entity,
                     phase: BuildPhase::GoingToBlueprint,
-                };
+                });
                 dest.0 = task_pos;
                 path.waypoints.clear();
                 path.current_index = 0;
@@ -412,7 +383,7 @@ impl TaskManager {
                 });
             }
             WorkType::GatherWater => {
-                let best_tank = q_stockpiles
+                let best_tank = queries.stockpiles
                     .iter()
                     .filter(|(s_entity, s_transform, stock, stored)| {
                         if let Some(area) = task_area_opt {
@@ -426,7 +397,7 @@ impl TaskManager {
                         let has_capacity = (current_count + reserved) < stock.capacity;
 
                         // 所有権チェック（バケツとタンク）
-                        let bucket_belongs = q_belongs.get(task_entity).ok();
+                        let bucket_belongs = queries.belongs.get(task_entity).ok();
                         let _tank_belongs = Some(&crate::systems::logistics::BelongsTo(*s_entity)); // タンク自身への帰属
                         let is_my_tank = bucket_belongs.map(|b| b.0) == Some(*s_entity);
 
@@ -448,11 +419,11 @@ impl TaskManager {
                         uc_opt.is_some(),
                     );
 
-                    *assigned_task = AssignedTask::GatherWater {
+                    *assigned_task = AssignedTask::GatherWater(crate::systems::soul_ai::task_execution::types::GatherWaterData {
                         bucket: task_entity,
                         tank: tank_entity,
                         phase: GatherWaterPhase::GoingToBucket,
-                    };
+                    });
                     haul_cache.reserve(tank_entity);
 
                     dest.0 = task_pos;
@@ -477,17 +448,7 @@ impl TaskManager {
         squad: &[Entity],
         task_area_opt: Option<&TaskArea>,
         fatigue_threshold: f32,
-        q_designations: &Query<(
-            Entity,
-            &Transform,
-            &Designation,
-            Option<&ManagedBy>,
-            Option<&TaskSlots>,
-            Option<&TaskWorkers>,
-            Option<&InStockpile>,
-            Option<&Priority>,
-        )>,
-        q_items: &Query<(&ResourceItem, Option<&Designation>)>,
+        queries: &crate::systems::soul_ai::task_execution::context::TaskQueries,
         q_souls: &mut Query<
             (
                 Entity,
@@ -504,15 +465,6 @@ impl TaskManager {
             ),
             Without<crate::entities::familiar::Familiar>,
         >,
-        q_stockpiles: &Query<(
-            Entity,
-            &Transform,
-            &Stockpile,
-            Option<&crate::relationships::StoredItems>,
-        )>,
-        q_target_blueprints: &Query<&TargetBlueprint>,
-        q_blueprints: &Query<&Blueprint>,
-        q_belongs: &Query<&crate::systems::logistics::BelongsTo>,
         designation_grid: &DesignationSpatialGrid,
         managed_tasks: &ManagedTasks,
         haul_cache: &mut crate::systems::familiar_ai::haul_cache::HaulReservationCache,
@@ -540,11 +492,10 @@ impl TaskManager {
                 fam_pos,
                 pos, // 個別ソウルの位置を使用
                 task_area_opt,
-                q_designations,
+                queries,
                 designation_grid,
                 managed_tasks,
-                q_blueprints,
-                q_target_blueprints,
+                &queries.target_blueprints,
                 world_map,
                 pf_context,
             ) {
@@ -555,13 +506,8 @@ impl TaskManager {
                     task_entity,
                     worker_entity,
                     fatigue_threshold,
-                    q_designations,
-                    q_items,
+                    queries,
                     q_souls,
-                    q_stockpiles,
-                    q_target_blueprints,
-                    q_blueprints,
-                    q_belongs,
                     task_area_opt,
                     haul_cache,
                 );

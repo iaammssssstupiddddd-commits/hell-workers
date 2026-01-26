@@ -4,9 +4,6 @@ use crate::constants::*;
 use crate::events::{
     OnExhausted, OnSoulRecruited, OnStressBreakdown, OnTaskAssigned, OnTaskCompleted,
 };
-use crate::relationships::{ManagedBy, TaskWorkers};
-use crate::systems::jobs::{Designation, TaskSlots, Priority};
-use crate::systems::logistics::InStockpile;
 use crate::systems::soul_ai::task_execution::AssignedTask;
 use crate::systems::soul_ai::work::unassign_task;
 use crate::world::map::WorldMap;
@@ -116,25 +113,8 @@ pub fn pathfinding_system(
         ),
         With<DamnedSoul>,
     >,
-    q_designations: Query<(
-        Entity,
-        &Transform,
-        &Designation,
-        Option<&ManagedBy>,
-        Option<&TaskSlots>,
-        Option<&TaskWorkers>,
-        Option<&InStockpile>,
-        Option<&Priority>,
-    )>,
     mut haul_cache: ResMut<crate::systems::familiar_ai::haul_cache::HaulReservationCache>,
-    q_targets: Query<(
-        &Transform,
-        Option<&crate::systems::jobs::Tree>,
-        Option<&crate::systems::jobs::Rock>,
-        Option<&crate::systems::logistics::ResourceItem>,
-        Option<&crate::systems::jobs::Designation>,
-        Option<&crate::relationships::StoredIn>,
-    )>,
+    queries: crate::systems::soul_ai::task_execution::context::TaskQueries,
 ) {
     for (entity, transform, destination, mut path, mut task, mut inventory_opt) in query.iter_mut() {
         let current_pos = transform.translation.truncate();
@@ -194,8 +174,7 @@ pub fn pathfinding_system(
                     &mut path,
                     inventory_opt.as_deref_mut(),
                     None,
-                    &q_targets,
-                    &q_designations,
+                    &queries,
                     &mut *haul_cache,
                     &*world_map,
                     true,
@@ -361,26 +340,9 @@ fn on_stress_breakdown(
         Option<&mut crate::systems::logistics::Inventory>,
         Option<&crate::entities::familiar::UnderCommand>,
     )>,
-    q_designations: Query<(
-        Entity,
-        &Transform,
-        &Designation,
-        Option<&ManagedBy>,
-        Option<&TaskSlots>,
-        Option<&TaskWorkers>,
-        Option<&InStockpile>,
-        Option<&Priority>,
-    )>,
     world_map: Res<WorldMap>,
     mut haul_cache: ResMut<crate::systems::familiar_ai::haul_cache::HaulReservationCache>,
-    q_targets: Query<(
-        &Transform,
-        Option<&crate::systems::jobs::Tree>,
-        Option<&crate::systems::jobs::Rock>,
-        Option<&crate::systems::logistics::ResourceItem>,
-        Option<&crate::systems::jobs::Designation>,
-        Option<&crate::relationships::StoredIn>,
-    )>,
+    queries: crate::systems::soul_ai::task_execution::context::TaskQueries,
 ) {
     let soul_entity = on.entity;
     if let Ok((entity, transform, mut _soul, mut task, mut path, mut inventory_opt, under_command)) =
@@ -401,8 +363,7 @@ fn on_stress_breakdown(
                 &mut path,
                 inventory_opt.as_deref_mut(),
                 None,
-                &q_targets,
-                &q_designations,
+                &queries,
                 &mut *haul_cache,
                 &world_map,
                 true,
@@ -431,26 +392,9 @@ fn on_exhausted(
         Option<&mut crate::systems::logistics::Inventory>,
         Option<&crate::entities::familiar::UnderCommand>,
     )>,
-    q_designations: Query<(
-        Entity,
-        &Transform,
-        &Designation,
-        Option<&ManagedBy>,
-        Option<&TaskSlots>,
-        Option<&TaskWorkers>,
-        Option<&InStockpile>,
-        Option<&Priority>,
-    )>,
     mut haul_cache: ResMut<crate::systems::familiar_ai::haul_cache::HaulReservationCache>,
-    q_targets: Query<(
-        &Transform,
-        Option<&crate::systems::jobs::Tree>,
-        Option<&crate::systems::jobs::Rock>,
-        Option<&crate::systems::logistics::ResourceItem>,
-        Option<&crate::systems::jobs::Designation>,
-        Option<&crate::relationships::StoredIn>,
-    )>,
     world_map: Res<WorldMap>,
+    queries: crate::systems::soul_ai::task_execution::context::TaskQueries,
 ) {
     let soul_entity = on.entity;
     if let Ok((
@@ -484,8 +428,7 @@ fn on_exhausted(
                 &mut path,
                 inventory_opt.as_deref_mut(),
                 None,
-                &q_targets,
-                &q_designations,
+                &queries,
                 &mut *haul_cache,
                 &world_map,
                 true,

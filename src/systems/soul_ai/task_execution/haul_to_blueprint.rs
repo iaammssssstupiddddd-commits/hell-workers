@@ -1,10 +1,8 @@
 //! 設計図への運搬タスクの実行処理
 
 use crate::entities::damned_soul::StressBreakdown;
-use crate::relationships::{ManagedBy, TaskWorkers, WorkingOn};
+use crate::relationships::WorkingOn;
 use crate::systems::familiar_ai::haul_cache::HaulReservationCache;
-use crate::systems::jobs::{Blueprint, Designation, TaskSlots, Priority};
-use crate::systems::logistics::{InStockpile, Stockpile};
 use crate::systems::soul_ai::task_execution::{
     common::*,
     context::TaskExecutionContext,
@@ -19,35 +17,15 @@ pub fn handle_haul_to_blueprint_task(
     item_entity: Entity,
     blueprint_entity: Entity,
     phase: HaulToBpPhase,
-    q_targets: &Query<(
-        &Transform,
-        Option<&crate::systems::jobs::Tree>,
-        Option<&crate::systems::jobs::Rock>,
-        Option<&crate::systems::logistics::ResourceItem>,
-        Option<&Designation>,
-        Option<&crate::relationships::StoredIn>,
-    )>,
-    q_designations: &Query<(
-        Entity,
-        &Transform,
-        &Designation,
-        Option<&ManagedBy>,
-        Option<&TaskSlots>,
-        Option<&TaskWorkers>,
-        Option<&InStockpile>,
-        Option<&Priority>,
-    )>,
-    q_blueprints: &mut Query<(&Transform, &mut Blueprint, Option<&Designation>)>,
-    q_stockpiles: &mut Query<(
-        Entity,
-        &Transform,
-        &mut Stockpile,
-        Option<&crate::relationships::StoredItems>,
-    )>,
     haul_cache: &mut HaulReservationCache,
     commands: &mut Commands,
     world_map: &Res<WorldMap>,
 ) {
+    let q_targets = &ctx.queries.targets;
+    let q_designations = &ctx.queries.designations;
+    let soul_pos = ctx.soul_pos();
+    let q_blueprints = &mut ctx.queries.blueprints;
+    let q_stockpiles = &mut ctx.queries.stockpiles;
     // 疲労またはストレス崩壊のチェック
     if ctx.soul.fatigue > 0.95 || breakdown_opt.is_some() {
         info!(
@@ -63,8 +41,7 @@ pub fn handle_haul_to_blueprint_task(
             ctx.path,
             Some(ctx.inventory),
             None, // アイテムを拾う前なのでNone
-            q_targets,
-            q_designations,
+            &ctx.queries,
             haul_cache,
             world_map,
             true, // 失敗時はセリフを出す
@@ -72,7 +49,7 @@ pub fn handle_haul_to_blueprint_task(
         return;
     }
 
-    let soul_pos = ctx.soul_pos();
+
 
     match phase {
         HaulToBpPhase::GoingToItem => {
@@ -148,11 +125,11 @@ pub fn handle_haul_to_blueprint_task(
                         }
                     }
 
-                    *ctx.task = AssignedTask::HaulToBlueprint {
+                    *ctx.task = AssignedTask::HaulToBlueprint(crate::systems::soul_ai::task_execution::types::HaulToBlueprintData {
                         item: item_entity,
                         blueprint: blueprint_entity,
                         phase: HaulToBpPhase::GoingToBlueprint,
-                    };
+                    });
                     ctx.path.waypoints.clear();
                     info!(
                         "HAUL_TO_BP: Soul {:?} picked up item {:?}, heading to blueprint {:?}",
@@ -177,11 +154,11 @@ pub fn handle_haul_to_blueprint_task(
                         "HAUL_TO_BP: Soul {:?} arrived at blueprint {:?}",
                         ctx.soul_entity, blueprint_entity
                     );
-                    *ctx.task = AssignedTask::HaulToBlueprint {
+                    *ctx.task = AssignedTask::HaulToBlueprint(crate::systems::soul_ai::task_execution::types::HaulToBlueprintData {
                         item: item_entity,
                         blueprint: blueprint_entity,
                         phase: HaulToBpPhase::Delivering,
-                    };
+                    });
                     ctx.path.waypoints.clear();
                 }
             } else {
@@ -199,8 +176,7 @@ pub fn handle_haul_to_blueprint_task(
                     ctx.path,
                     Some(ctx.inventory),
                     dropped_res,
-                    q_targets,
-                    q_designations,
+                    &ctx.queries,
                     haul_cache,
                     world_map,
                     true,

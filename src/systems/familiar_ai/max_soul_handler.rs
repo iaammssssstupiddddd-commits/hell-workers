@@ -5,9 +5,7 @@
 use crate::entities::damned_soul::Path;
 use crate::entities::familiar::{Familiar, FamiliarVoice, UnderCommand};
 use crate::events::FamiliarOperationMaxSoulChangedEvent;
-use crate::relationships::{Commanding, ManagedBy, TaskWorkers};
-use crate::systems::jobs::{Designation, TaskSlots, Priority};
-use crate::systems::logistics::InStockpile;
+use crate::relationships::Commanding;
 use crate::systems::soul_ai::task_execution::AssignedTask;
 use crate::systems::soul_ai::work::unassign_task;
 use crate::systems::visual::speech::components::{
@@ -27,29 +25,11 @@ pub fn handle_max_soul_changed_system(
             &Transform,
             &mut AssignedTask,
             &mut Path,
-
             Option<&mut crate::systems::logistics::Inventory>,
         ),
     >,
-    q_designations: Query<(
-        Entity,
-        &Transform,
-        &Designation,
-        Option<&ManagedBy>,
-        Option<&TaskSlots>,
-        Option<&TaskWorkers>,
-        Option<&InStockpile>,
-        Option<&Priority>,
-    )>,
     mut haul_cache: ResMut<crate::systems::familiar_ai::haul_cache::HaulReservationCache>,
-    q_targets: Query<(
-        &Transform,
-        Option<&crate::systems::jobs::Tree>,
-        Option<&crate::systems::jobs::Rock>,
-        Option<&crate::systems::logistics::ResourceItem>,
-        Option<&crate::systems::jobs::Designation>,
-        Option<&crate::relationships::StoredIn>,
-    )>,
+    queries: crate::systems::soul_ai::task_execution::context::TaskQueries,
     game_assets: Res<crate::assets::GameAssets>,
     q_bubbles: Query<(Entity, &SpeechBubble), With<FamiliarBubble>>,
     mut cooldowns: ResMut<crate::systems::visual::speech::cooldown::BubbleCooldowns>,
@@ -89,8 +69,7 @@ pub fn handle_max_soul_changed_system(
                                 &mut path,
                                 inventory_opt.as_deref_mut(),
                                 None,
-                                &q_targets,
-                                &q_designations,
+                                &queries,
                                 &mut *haul_cache,
                                 &world_map,
                                 false, // emit_abandoned_event: 上限超過リリース時は個別のタスク中断セリフを出さない
