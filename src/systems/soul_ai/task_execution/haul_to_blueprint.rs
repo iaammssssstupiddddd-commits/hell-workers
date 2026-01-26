@@ -76,13 +76,7 @@ pub fn handle_haul_to_blueprint_task(
                         update_stockpile_on_item_removal(stored_in.0, q_stockpiles);
                     }
 
-                    // 元のコンポーネントは維持する
-                    commands
-                        .entity(item_entity)
-                        .remove::<crate::relationships::StoredIn>();
-                    // commands.entity(item_entity).remove::<Designation>();
-                    // commands.entity(item_entity).remove::<IssuedBy>();
-                    // commands.entity(item_entity).remove::<TaskSlots>();
+                    // 管理コンポーネントの削除は pickup_item 内で行われる
 
                     // ブループリントへの目的地を即座に更新（強制的に更新）
                     if let Ok((_, bp, _)) = q_blueprints.get(blueprint_entity) {
