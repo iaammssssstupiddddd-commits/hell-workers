@@ -164,6 +164,16 @@ pub fn pickup_item(
 ) {
     inventory.0 = Some(item_entity);
     commands.entity(item_entity).insert(Visibility::Hidden);
+
+    // 管理コンポーネントおよび備蓄状態を削除
+    commands
+        .entity(item_entity)
+        .remove::<crate::systems::jobs::Designation>()
+        .remove::<crate::systems::jobs::IssuedBy>()
+        .remove::<crate::systems::jobs::TaskSlots>()
+        .remove::<crate::systems::jobs::Priority>()
+        .remove::<crate::relationships::StoredIn>()
+        .remove::<crate::systems::logistics::InStockpile>();
 }
 
 /// アイテムを地面に落とす
