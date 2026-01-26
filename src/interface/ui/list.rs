@@ -84,7 +84,7 @@ fn get_task_icon_and_color(
 ) -> (Handle<Image>, Color) {
     match task {
         AssignedTask::None => (game_assets.icon_idle.clone(), COLOR_IDLE),
-        AssignedTask::Gather { work_type, .. } => match work_type {
+        AssignedTask::Gather(data) => match data.work_type {
             WorkType::Chop => (game_assets.icon_axe.clone(), COLOR_CHOP),
             WorkType::Mine => (game_assets.icon_pick.clone(), COLOR_MINE),
             _ => (game_assets.icon_pick.clone(), COLOR_GATHER_DEFAULT),

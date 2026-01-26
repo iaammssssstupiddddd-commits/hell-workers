@@ -1,12 +1,10 @@
 use crate::entities::damned_soul::{DamnedSoul, Destination, IdleState, Path, StressBreakdown};
 use crate::entities::familiar::{
-    ActiveCommand, Familiar, FamiliarCommand, FamiliarOperation, FamiliarVoice, UnderCommand,
+    ActiveCommand, Familiar, FamiliarCommand, FamiliarOperation, FamiliarVoice,
 };
-use crate::relationships::{Commanding, ManagedBy, ManagedTasks, TaskWorkers};
+use crate::relationships::{Commanding, ManagedTasks};
 use crate::systems::GameSystemSet;
 use crate::systems::command::TaskArea;
-use crate::systems::jobs::{Blueprint, Designation, TaskSlots, TargetBlueprint, Priority};
-use crate::systems::logistics::{ResourceItem, Stockpile, InStockpile};
 use crate::systems::soul_ai::gathering::ParticipatingIn;
 use crate::systems::soul_ai::task_execution::AssignedTask;
 use crate::systems::spatial::{
@@ -136,44 +134,8 @@ pub struct FamiliarAiParams<'w, 's> {
         ),
         Without<Familiar>,
     >,
-    pub q_designations: Query<
-        'w,
-        's,
-        (
-            Entity,
-            &'static Transform,
-            &'static Designation,
-            Option<&'static ManagedBy>,
-            Option<&'static TaskSlots>,
-            Option<&'static TaskWorkers>,
-            Option<&'static InStockpile>,
-            Option<&'static Priority>,
-        ),
-    >,
-    pub q_stockpiles: Query<
-        'w,
-        's,
-        (
-            Entity,
-            &'static Transform,
-            &'static Stockpile,
-            Option<&'static crate::relationships::StoredItems>,
-        ),
-    >,
-    pub _q_souls_lite: Query<'w, 's, (Entity, &'static UnderCommand), With<DamnedSoul>>,
     pub q_breakdown: Query<'w, 's, &'static StressBreakdown>,
-    pub q_items: Query<'w, 's, (&'static ResourceItem, Option<&'static crate::systems::jobs::Designation>)>,
-    pub q_target_blueprints: Query<'w, 's, &'static TargetBlueprint>,
-    pub q_blueprints: Query<'w, 's, &'static Blueprint>,
-    pub q_belongs: Query<'w, 's, &'static crate::systems::logistics::BelongsTo>,
-    pub q_targets: Query<'w, 's, (
-        &'static Transform,
-        Option<&'static crate::systems::jobs::Tree>,
-        Option<&'static crate::systems::jobs::Rock>,
-        Option<&'static crate::systems::logistics::ResourceItem>,
-        Option<&'static crate::systems::jobs::Designation>,
-        Option<&'static crate::relationships::StoredIn>,
-    )>,
+    pub task_queries: crate::systems::soul_ai::task_execution::context::TaskQueries<'w, 's>,
     pub haul_cache: ResMut<'w, haul_cache::HaulReservationCache>,
     pub designation_grid: Res<'w, DesignationSpatialGrid>,
     pub game_assets: Res<'w, crate::assets::GameAssets>,
@@ -192,15 +154,8 @@ pub fn familiar_ai_system(params: FamiliarAiParams) {
         spatial_grid,
         mut q_familiars,
         mut q_souls,
-        q_designations,
-        q_stockpiles,
-        _q_souls_lite,
         q_breakdown,
-        q_target_blueprints,
-        q_blueprints,
-        q_belongs,
-        q_targets,
-        q_items,
+        task_queries,
         mut haul_cache,
         designation_grid,
         game_assets,
@@ -325,15 +280,13 @@ pub fn familiar_ai_system(params: FamiliarAiParams) {
             voice_opt,
             &mut commands,
             &mut q_souls,
-            &q_designations,
-            &mut *haul_cache,
-            &q_targets,
-            &q_items,
+            &task_queries,
             &mut cooldowns,
             &time,
             &game_assets,
             &q_bubbles,
             &world_map,
+            &mut *haul_cache,
         );
 
         // 状態に応じたロジック実行
@@ -351,9 +304,7 @@ pub fn familiar_ai_system(params: FamiliarAiParams) {
                     &mut fam_dest,
                     &mut fam_path,
                     &mut q_souls,
-                    &q_targets,
-                    &q_designations,
-                    &mut *haul_cache,
+                    &task_queries,
                     &q_breakdown,
                     &mut commands,
                 );
@@ -408,15 +359,9 @@ pub fn familiar_ai_system(params: FamiliarAiParams) {
             &squad_entities,
             &mut commands,
             &mut q_souls,
-            &q_designations,
-            &q_stockpiles,
-            &q_items,
-            &q_target_blueprints,
-            &q_blueprints,
-            &q_belongs,
+            &task_queries,
             &designation_grid,
             managed_tasks,
-            &q_targets,
             &mut *haul_cache,
             &world_map,
             &mut *pf_context,

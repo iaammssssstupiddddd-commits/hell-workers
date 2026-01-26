@@ -2,10 +2,7 @@ use crate::constants::TILE_SIZE;
 use crate::entities::damned_soul::{DamnedSoul, Destination, IdleState, Path, StressBreakdown};
 use crate::entities::familiar::UnderCommand;
 use crate::events::OnSoulRecruited;
-use crate::relationships::{ManagedBy, TaskWorkers};
 use crate::systems::familiar_ai::FamiliarAiState;
-use crate::systems::jobs::{Designation, TaskSlots, Priority};
-use crate::systems::logistics::InStockpile;
 use crate::systems::soul_ai::gathering::ParticipatingIn;
 use crate::systems::soul_ai::task_execution::AssignedTask;
 use bevy::prelude::*;
@@ -38,25 +35,7 @@ pub fn scouting_logic(
         ),
         Without<crate::entities::familiar::Familiar>,
     >,
-    _q_targets: &Query<(
-        &Transform,
-        Option<&crate::systems::jobs::Tree>,
-        Option<&crate::systems::jobs::Rock>,
-        Option<&crate::systems::logistics::ResourceItem>,
-        Option<&crate::systems::jobs::Designation>,
-        Option<&crate::relationships::StoredIn>,
-    )>,
-    _q_designations: &Query<(
-        Entity,
-        &Transform,
-        &Designation,
-        Option<&ManagedBy>,
-        Option<&TaskSlots>,
-        Option<&TaskWorkers>,
-        Option<&InStockpile>,
-        Option<&Priority>,
-    )>,
-    _haul_cache: &mut crate::systems::familiar_ai::haul_cache::HaulReservationCache,
+    _queries: &crate::systems::soul_ai::task_execution::context::TaskQueries,
     q_breakdown: &Query<&StressBreakdown>,
     commands: &mut Commands,
 ) -> bool {

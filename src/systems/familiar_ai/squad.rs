@@ -6,9 +6,7 @@ use crate::entities::damned_soul::{
     DamnedSoul, Destination, IdleBehavior, IdleState, Path,
 };
 use crate::entities::familiar::UnderCommand;
-use crate::relationships::{Commanding, ManagedBy, TaskWorkers};
-use crate::systems::jobs::{Designation, TaskSlots, Priority};
-use crate::systems::logistics::InStockpile;
+use crate::relationships::Commanding;
 use crate::systems::soul_ai::gathering::ParticipatingIn;
 use crate::systems::soul_ai::task_execution::AssignedTask;
 use crate::systems::soul_ai::work::unassign_task;
@@ -137,24 +135,7 @@ impl SquadManager {
             ),
             Without<crate::entities::familiar::Familiar>,
         >,
-        q_designations: &Query<(
-            Entity,
-            &Transform,
-            &Designation,
-            Option<&ManagedBy>,
-            Option<&TaskSlots>,
-            Option<&TaskWorkers>,
-            Option<&InStockpile>,
-        Option<&Priority>,
-        )>,
-        q_targets: &Query<(
-            &Transform,
-            Option<&crate::systems::jobs::Tree>,
-            Option<&crate::systems::jobs::Rock>,
-            Option<&crate::systems::logistics::ResourceItem>,
-            Option<&Designation>,
-            Option<&crate::relationships::StoredIn>,
-        )>,
+        queries: &crate::systems::soul_ai::task_execution::context::TaskQueries,
         haul_cache: &mut crate::systems::familiar_ai::haul_cache::HaulReservationCache,
         cooldowns: &mut crate::systems::visual::speech::cooldown::BubbleCooldowns,
         time: &Time,
@@ -190,9 +171,8 @@ impl SquadManager {
                         fam_entity, member_entity
                     );
 
-                    // タスクを解除
                     let dropped_res = inventory_opt.as_ref().and_then(|i| {
-                        i.0.and_then(|e| q_targets.get(e).ok().and_then(|(_, _, _, ri, _, _)| ri.map(|r| r.0)))
+                        i.0.and_then(|e| queries.targets.get(e).ok().and_then(|(_, _, _, ri, _, _)| ri.map(|r| r.0)))
                     });
 
                     unassign_task(
@@ -203,8 +183,7 @@ impl SquadManager {
                         &mut path,
                         inventory_opt.as_deref_mut(),
                         dropped_res,
-                        q_targets,
-                        q_designations,
+                        queries,
                         haul_cache,
                         world_map,
                         false, // emit_abandoned_event: 疲労リリース時は個別のタスク中断セリフを出さない

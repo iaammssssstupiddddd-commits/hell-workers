@@ -127,10 +127,10 @@ pub fn blueprint_auto_build_system(
                         }
 
                         // 建築タスクを割り当て
-                        *assigned_task = AssignedTask::Build {
+                        *assigned_task = AssignedTask::Build(crate::systems::soul_ai::task_execution::types::BuildData {
                             blueprint: bp_entity,
                             phase: BuildPhase::GoingToBlueprint,
-                        };
+                        });
                         dest.0 = bp_pos;
                         path.waypoints = vec![bp_pos];
                         path.current_index = 0;
