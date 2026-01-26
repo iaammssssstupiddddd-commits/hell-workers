@@ -129,13 +129,6 @@ pub fn unassign_task(
                 },
                 TaskSlots::new(1),
             ));
-            
-            info!(
-                "UNASSIGN: Soul dropped item {:?} ({:?}) and re-issued {:?} task",
-                item_entity,
-                res_item,
-                next_work_type
-            );
         }
     }
 
@@ -149,6 +142,4 @@ pub fn unassign_task(
 
     *task = AssignedTask::None;
     path.waypoints.clear();
-
-    info!("UNASSIGN: Soul {:?} unassigned from task", soul_entity);
 }

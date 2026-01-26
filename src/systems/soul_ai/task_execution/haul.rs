@@ -147,6 +147,8 @@ pub fn handle_haul_task(
                         crate::relationships::StoredIn(stockpile),
                         crate::systems::logistics::InStockpile(stockpile),
                     ));
+                    // タスク完了: ManagedTasks を肥大化させないため、管理者を解除する
+                    commands.entity(item).remove::<crate::systems::jobs::IssuedBy>();
 
                     // カウンタを増やす
                     *dropped_this_frame.entry(stockpile).or_insert(0) += 1;
@@ -159,7 +161,6 @@ pub fn handle_haul_task(
                 } else {
                     // 到着時に条件を満たさなくなった場合（型違いor満杯）
                     // 片付けタスクを再発行してドロップ
-                    warn!("HAUL: Stockpile condition changed. Dropping item on the ground.");
                     unassign_task(
                         commands,
                         ctx.soul_entity,

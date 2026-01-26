@@ -165,11 +165,14 @@ pub fn pickup_item(
     inventory.0 = Some(item_entity);
     commands.entity(item_entity).insert(Visibility::Hidden);
 
-    // 管理コンポーネントおよび備蓄状態を削除
+    // タスク指定・備蓄状態を削除
+    //
+    // 重要: `IssuedBy(=ManagedBy)` はここでは削除しない。
+    // タスク実行中にアイテムを一時的に拾っている間も「どの使い魔が管理していたか」を保持しておくことで、
+    // タスク放棄などでドロップされた場合でも ManagedTasks 経由で再検知できる。
     commands
         .entity(item_entity)
         .remove::<crate::systems::jobs::Designation>()
-        .remove::<crate::systems::jobs::IssuedBy>()
         .remove::<crate::systems::jobs::TaskSlots>()
         .remove::<crate::systems::jobs::Priority>()
         .remove::<crate::relationships::StoredIn>()
