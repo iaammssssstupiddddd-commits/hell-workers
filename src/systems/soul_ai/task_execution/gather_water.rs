@@ -34,7 +34,6 @@ pub fn handle_gather_water_task(
                     ctx.path.waypoints = vec![river_pos];
                     ctx.path.current_index = 0;
                 } else {
-                    info!("GATHER_WATER: No river found near {:?}", soul_pos);
                     crate::systems::soul_ai::work::unassign_task(
                         commands, ctx.soul_entity, soul_pos, ctx.task, ctx.path,
                         Some(ctx.inventory), None, &ctx.queries, haul_cache, world_map, true
@@ -44,7 +43,6 @@ pub fn handle_gather_water_task(
             }
             
             let Ok((bucket_transform, _, _, res_item_opt, _, stored_in_opt)) = q_targets.get(bucket_entity) else {
-                info!("GATHER_WATER: Bucket {:?} disappeared", bucket_entity);
                 crate::systems::soul_ai::work::unassign_task(
                     commands, ctx.soul_entity, soul_pos, ctx.task, ctx.path,
                     Some(ctx.inventory), None, &ctx.queries, haul_cache, world_map, true
@@ -55,7 +53,6 @@ pub fn handle_gather_water_task(
             // バケツであることを確認（任意だが安全のため）
             if let Some(res) = res_item_opt {
                 if !matches!(res.0, ResourceType::BucketEmpty | ResourceType::BucketWater) {
-                     info!("GATHER_WATER: Item {:?} is not a bucket", bucket_entity);
                      crate::systems::soul_ai::work::unassign_task(
                         commands, ctx.soul_entity, soul_pos, ctx.task, ctx.path,
                         Some(ctx.inventory), None, &ctx.queries, haul_cache, world_map, true
@@ -145,14 +142,12 @@ pub fn handle_gather_water_task(
                             .collect();
                         ctx.path.current_index = 0;
                     } else {
-                         warn!("GATHER_WATER: No path to river grid {:?} from {:?}", river_grid, soul_pos);
                          crate::systems::soul_ai::work::unassign_task(
                             commands, ctx.soul_entity, soul_pos, ctx.task, ctx.path,
                             Some(ctx.inventory), None, &ctx.queries, haul_cache, world_map, true
                         );
                     }
                 } else {
-                    info!("GATHER_WATER: River not found for soul at {:?}", soul_pos);
                     crate::systems::soul_ai::work::unassign_task(
                         commands, ctx.soul_entity, soul_pos, ctx.task, ctx.path,
                         Some(ctx.inventory), None, &ctx.queries, haul_cache, world_map, true
@@ -202,15 +197,9 @@ pub fn handle_gather_water_task(
                 // タンクが満タンかチェック
                 let is_tank_full = if let Ok((_, _, stock, stored)) = q_stockpiles.get(tank_entity) {
                     let current = stored.map(|s| s.len()).unwrap_or(0);
-                    let reserved = haul_cache.get(tank_entity);
                     if current >= stock.capacity {
-                        info!("GATHER_WATER: Tank {:?} is full ({}/{})", tank_entity, current, stock.capacity);
                         true
                     } else {
-                        // ログに予約状況を出力して追跡
-                        if current % 5 == 0 { // ログ過多を防ぐため5刻みで
-                            debug!("GATHER_WATER: Soul {:?} heading to fill. Tank: {}/{}, Reserved: {}", ctx.soul_entity, current, stock.capacity, reserved);
-                        }
                         false
                     }
                 } else {
@@ -294,14 +283,12 @@ pub fn handle_gather_water_task(
                             .collect();
                         ctx.path.current_index = 0;
                     } else {
-                         warn!("GATHER_WATER: No path to tank {:?} from {:?}", tank_entity, soul_pos);
                          crate::systems::soul_ai::work::unassign_task(
                             commands, ctx.soul_entity, soul_pos, ctx.task, ctx.path,
                             Some(ctx.inventory), None, &ctx.queries, haul_cache, world_map, true
                         );
                     }
                 } else {
-                    info!("GATHER_WATER: Tank {:?} disappeared", tank_entity);
                     crate::systems::soul_ai::work::unassign_task(
                         commands, ctx.soul_entity, soul_pos, ctx.task, ctx.path,
                         Some(ctx.inventory), None, &ctx.queries, haul_cache, world_map, true
@@ -399,7 +386,6 @@ pub fn handle_gather_water_task(
         GatherWaterPhase::ReturningBucket => {
             // バケツがインベントリにあるか確認
             if ctx.inventory.0 != Some(bucket_entity) {
-                trace!("GATHER_WATER: ReturningBucket cancelled - bucket not in inventory");
                 crate::systems::soul_ai::work::unassign_task(
                     commands, ctx.soul_entity, soul_pos, ctx.task, ctx.path,
                     Some(ctx.inventory), None, &ctx.queries, haul_cache, world_map, true
@@ -410,21 +396,17 @@ pub fn handle_gather_water_task(
             // タンクに紐付いたストレージ（置き場）を探す
             let mut best_storage = None;
             let mut min_dist_sq = f32::MAX;
-            
-            trace!("GATHER_WATER: Phase ReturningBucket. Searching for storage belonging to tank {:?}", tank_entity);
 
             for (s_entity, s_transform, stock, stored) in q_stockpiles.iter() {
                 // タンクへの帰属チェック
                 let belongs_to_tank = ctx.queries.belongs.get(s_entity).map(|b| b.0 == tank_entity).unwrap_or(false);
                 
                 let current = stored.map(|s| s.len()).unwrap_or(0);
-                trace!("GATHER_WATER: Storage {:?}: belongs_to_tank={}, capacity={}/{}", s_entity, belongs_to_tank, current, stock.capacity);
 
                 if !belongs_to_tank { continue; }
                 
                 // 容量チェック
                 if current >= stock.capacity { 
-                    trace!("GATHER_WATER: Storage {:?} is full ({}/{})", s_entity, current, stock.capacity);
                     continue; 
                 }
                 
@@ -438,11 +420,9 @@ pub fn handle_gather_water_task(
             
             if let Some((storage_entity, storage_pos)) = best_storage {
                 let is_near = ctx.soul_pos().distance(storage_pos) < crate::constants::TILE_SIZE * 1.8;
-                trace!("GATHER_WATER: Best storage is {:?} at {:?}. is_near: {}", storage_entity, storage_pos, is_near);
                 
                 if is_near {
                     // バケツを置く
-                    trace!("GATHER_WATER: Dropping bucket {:?} into storage {:?}", bucket_entity, storage_entity);
                     commands.entity(bucket_entity).remove::<crate::relationships::StoredIn>();
                     ctx.inventory.0 = None;
                     
@@ -463,10 +443,8 @@ pub fn handle_gather_water_task(
                         commands, ctx.soul_entity, soul_pos, ctx.task, ctx.path,
                         Some(ctx.inventory), None, &ctx.queries, haul_cache, world_map, false // 成功時はAbandonedイベント出さない
                     );
-                    info!("GATHER_WATER: Successfully returned bucket {:?} to storage {:?}", bucket_entity, storage_entity);
                 } else {
                     // 移動
-                    trace!("GATHER_WATER: Moving to storage {:?} at {:?}", storage_entity, storage_pos);
                     if ctx.path.waypoints.is_empty() || ctx.dest.0.distance_squared(storage_pos) > 1.0 {
                         let start_grid = WorldMap::world_to_grid(ctx.soul_pos());
                         let target_grid = WorldMap::world_to_grid(storage_pos);
@@ -481,7 +459,6 @@ pub fn handle_gather_water_task(
                     }
                 }
             } else {
-                warn!("GATHER_WATER: No storage found for tank {:?}. Dropping on ground.", tank_entity);
                 crate::systems::soul_ai::work::unassign_task(
                     commands, ctx.soul_entity, soul_pos, ctx.task, ctx.path,
                     Some(ctx.inventory), None, &ctx.queries, haul_cache, world_map, true
