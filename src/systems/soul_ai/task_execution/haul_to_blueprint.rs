@@ -76,48 +76,9 @@ pub fn handle_haul_to_blueprint_task(
                         update_stockpile_on_item_removal(stored_in.0, q_stockpiles);
                     }
 
-                    // 管理コンポーネントの削除は pickup_item 内で行われる
-
-                    // ブループリントへの目的地を即座に更新（強制的に更新）
-                    if let Ok((_, bp, _)) = q_blueprints.get(blueprint_entity) {
-                        // 強制的に目的地を更新するため、まず目的地をクリア
-                        ctx.path.waypoints.clear();
-                        // ブループリントへの目的地を強制的に設定（重複チェックを避ける）
-                        use std::collections::HashSet;
-                        let mut checked_grids = HashSet::new();
-                        let mut best_pos = None;
-                        let mut min_dist_sq = f32::MAX;
-                        let directions = [(0, 1), (0, -1), (1, 0), (-1, 0)];
-                        for &(gx, gy) in &bp.occupied_grids {
-                            for (dx, dy) in directions {
-                                let nx = gx + dx;
-                                let ny = gy + dy;
-                                let grid_key = (nx, ny);
-                                
-                                // 既にチェック済みの位置はスキップ
-                                if checked_grids.contains(&grid_key) {
-                                    continue;
-                                }
-                                checked_grids.insert(grid_key);
-                                
-                                if bp.occupied_grids.contains(&(nx, ny)) {
-                                    continue;
-                                }
-                                if world_map.is_walkable(nx, ny) {
-                                    let world_pos = crate::world::map::WorldMap::grid_to_world(nx, ny);
-                                    let dist_sq = soul_pos.distance_squared(world_pos);
-                                    if dist_sq < min_dist_sq {
-                                        min_dist_sq = dist_sq;
-                                        best_pos = Some(world_pos);
-                                    }
-                                }
-                            }
-                        }
-                        if let Some(pos) = best_pos {
-                            // 強制的に目的地を更新（距離チェックなし）
-                            ctx.dest.0 = pos;
-                        }
-                    }
+                    // ブループリントへの目的地設定は、次のフレームの GoingToBlueprint フェーズで
+                    // update_destination_to_blueprint により自動的に（一貫したロジックで）行われるため、
+                    // ここではパスをクリアするのみとする。
 
                     *ctx.task = AssignedTask::HaulToBlueprint(crate::systems::soul_ai::task_execution::types::HaulToBlueprintData {
                         item: item_entity,
