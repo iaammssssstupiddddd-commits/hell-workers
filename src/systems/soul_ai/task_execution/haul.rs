@@ -37,7 +37,13 @@ pub fn handle_haul_task(
                 }
 
                 let res_pos = res_transform.translation.truncate();
-                update_destination_to_adjacent(ctx.dest, res_pos, ctx.path, soul_pos, world_map);
+                // 伐採で生成される資源はタイル中心からオフセットされた座標に出るため、
+                // 目的地は「その資源が属するタイル中心」にスナップしておく。
+                // これにより、pathfinding が生成する waypoint（タイル中心）と一致し、
+                // 「目的地とパス終端がズレている」系の不具合を避けられる。
+                let res_grid = WorldMap::world_to_grid(res_pos);
+                let res_dest = WorldMap::grid_to_world(res_grid.0, res_grid.1);
+                update_destination_if_needed(ctx.dest, res_dest, ctx.path);
 
                 let is_near = is_near_target(soul_pos, res_pos);
 
@@ -51,12 +57,23 @@ pub fn handle_haul_task(
 
                     // 管理コンポーネントの削除は pickup_item 内で行われる
 
+                    // GoingToStockpileフェーズに移行する際、目的地を確実に更新する
+                    // パスをクリアする前に目的地を更新することで、pathfinding_systemが正しい目的地に向かってパスを計算できるようにする
+                    if let Ok((_, stock_transform, _, _)) = q_stockpiles.get(stockpile) {
+                        let stock_pos = stock_transform.translation.truncate();
+                        // 目的地はストックパイルの属するタイル中心にスナップしておく
+                        let stock_grid = WorldMap::world_to_grid(stock_pos);
+                        let stock_dest = WorldMap::grid_to_world(stock_grid.0, stock_grid.1);
+                        // パスを先にクリアしてから目的地を更新することで、確実に目的地が更新される
+                        ctx.path.waypoints.clear();
+                        update_destination_if_needed(ctx.dest, stock_dest, ctx.path);
+                    }
+
                     *ctx.task = AssignedTask::Haul(crate::systems::soul_ai::task_execution::types::HaulData {
                         item,
                         stockpile,
                         phase: HaulPhase::GoingToStockpile,
                     });
-                    ctx.path.waypoints.clear();
                     info!("HAUL: Soul {:?} picked up item {:?}", ctx.soul_entity, item);
                 }
             } else {
@@ -67,7 +84,9 @@ pub fn handle_haul_task(
         HaulPhase::GoingToStockpile => {
             if let Ok((_, stock_transform, _, _)) = q_stockpiles.get(stockpile) {
                 let stock_pos = stock_transform.translation.truncate();
-                update_destination_to_adjacent(ctx.dest, stock_pos, ctx.path, soul_pos, world_map);
+                let stock_grid = WorldMap::world_to_grid(stock_pos);
+                let stock_dest = WorldMap::grid_to_world(stock_grid.0, stock_grid.1);
+                update_destination_if_needed(ctx.dest, stock_dest, ctx.path);
 
                 if is_near_target(soul_pos, stock_pos) {
                     *ctx.task = AssignedTask::Haul(crate::systems::soul_ai::task_execution::types::HaulData {

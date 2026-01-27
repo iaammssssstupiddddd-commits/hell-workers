@@ -122,7 +122,11 @@ pub fn pathfinding_system(
         let goal_grid = WorldMap::world_to_grid(destination.0);
 
         // すでに有効なパスがあり、目的地も変わっていないならスキップ
-        if !path.waypoints.is_empty() {
+        //
+        // ただし、移動側が衝突で waypoint をスキップして `current_index == waypoints.len()` になっている場合、
+        // パスが「残っている」扱いで再計算されず、結果的に停止してしまうことがある。
+        // そのため「まだパス追従中」の場合のみスキップする。
+        if path.current_index < path.waypoints.len() && !path.waypoints.is_empty() {
             if let Some(last) = path.waypoints.last() {
                 if last.distance_squared(destination.0) < 1.0 {
                     continue;
