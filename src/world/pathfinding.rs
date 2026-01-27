@@ -234,27 +234,34 @@ pub fn find_path_to_boundary(
     start: (i32, i32),
     target_grids: &[(i32, i32)],
 ) -> Option<Vec<(i32, i32)>> {
-    let start_idx = world_map.pos_to_idx(start.0, start.1)?;
-
     if target_grids.is_empty() {
         return None;
     }
 
-    // 重心を計算 (浮動小数点で計算して最も近い整数グリッドへ)
+    // すでにターゲット内にいる場合は、外へ脱出するための最短マスを探す
+    if target_grids.contains(&start) {
+        let directions = [(0, 1), (0, -1), (1, 0), (-1, 0), (1, 1), (1, -1), (-1, 1), (-1, -1)];
+        for (dx, dy) in directions {
+            let nx = start.0 + dx;
+            let ny = start.1 + dy;
+            if !target_grids.contains(&(nx, ny)) && world_map.is_walkable(nx, ny) {
+                return Some(vec![start, (nx, ny)]);
+            }
+        }
+    }
+
+    // 重心を計算して一意なターゲット地点（目標）とする
     let sum_x: f32 = target_grids.iter().map(|g| g.0 as f32).sum();
     let sum_y: f32 = target_grids.iter().map(|g| g.1 as f32).sum();
     let center_x = (sum_x / target_grids.len() as f32).round() as i32;
     let center_y = (sum_y / target_grids.len() as f32).round() as i32;
-    
-    // 中心がマップ外なら、target_gridsの最初の要素を使うなどフォールバック
-    let goal_idx = world_map.pos_to_idx(center_x, center_y).unwrap_or_else(|| {
-        let first = target_grids[0];
-        world_map.pos_to_idx(first.0, first.1).unwrap_or(start_idx)
-    });
+    let goal_grid = (center_x, center_y);
+    let goal_idx = world_map.pos_to_idx(goal_grid.0, goal_grid.1)?;
 
     context.reset();
-    context.allow_goal_obstacle = true; // ゴールが障害物でも許可
+    let start_idx = world_map.pos_to_idx(start.0, start.1)?;
 
+    // ヒューリスティック
     let heuristic = |idx: usize, g_idx: usize| -> i32 {
         let p1 = WorldMap::idx_to_pos(idx);
         let p2 = WorldMap::idx_to_pos(g_idx);
@@ -271,51 +278,30 @@ pub fn find_path_to_boundary(
         f_cost: heuristic(start_idx, goal_idx),
     });
 
-    let directions = [
-        (0, 1), (0, -1), (1, 0), (-1, 0),
-        (1, 1), (1, -1), (-1, 1), (-1, -1)
-    ];
+    let directions = [(0, 1), (0, -1), (1, 0), (-1, 0), (1, 1), (1, -1), (-1, 1), (-1, -1)];
 
     while let Some(current) = context.open_set.pop() {
-        if current.idx == goal_idx {
-            // 中心へのパスが見つかった -> 境界でカットする処理へ
-            let mut raw_path = vec![WorldMap::idx_to_pos(goal_idx)];
-            let mut curr = goal_idx;
-            while let Some(prev) = context.came_from[curr] {
-                let pos = WorldMap::idx_to_pos(prev);
-                raw_path.push(pos);
-                curr = prev;
-                if curr == start_idx { break; }
-            }
-            raw_path.reverse();
+        let curr_pos = WorldMap::idx_to_pos(current.idx);
 
-            // パスを前からスキャンし、最初にターゲット領域に入る点を探す
-            let mut cut_index = None;
-            for (i, pos) in raw_path.iter().enumerate() {
-                if target_grids.contains(pos) {
-                    cut_index = Some(i);
-                    break;
-                }
+        // ターゲット領域のいずれかのマスに到達したなら、その手前でパスを生成して終了
+        if target_grids.contains(&curr_pos) {
+            let mut path = vec![curr_pos];
+            let mut c = current.idx;
+            while let Some(prev) = context.came_from[c] {
+                path.push(WorldMap::idx_to_pos(prev));
+                c = prev;
             }
+            path.reverse();
             
-            // ターゲット領域に入る手前までを有効なパスとする
-            let valid_path = if let Some(idx) = cut_index {
-                if idx == 0 {
-                    // スタート地点がいきなりターゲット内 -> スタート地点のみ（移動済み）
-                    vec![raw_path[0]]
-                } else {
-                    raw_path[0..idx].to_vec()
-                }
-            } else {
-                // ターゲット領域に入らず到達？（中心がターゲット外の場合など）
-                // そのまま返す
-                raw_path
-            };
+            // ターゲット内の最後のノードを削除（境界で停止）
+            path.pop();
             
-            return Some(valid_path);
+            if path.is_empty() {
+                return Some(vec![start]);
+            }
+            return Some(path);
         }
 
-        let curr_pos = WorldMap::idx_to_pos(current.idx);
         let current_g = context.g_scores[current.idx];
 
         for (dx, dy) in &directions {
@@ -327,34 +313,22 @@ pub fn find_path_to_boundary(
                 None => continue,
             };
 
-            // 歩行可能チェック
-            // ターゲット領域内は「重いコストで歩行可能」とみなす
+            // 歩行可能チェック: ターゲット内のマスは「透明」な障害物として扱い、許可する
             let is_in_target = target_grids.contains(&(nx, ny));
             if !world_map.is_walkable(nx, ny) && !is_in_target {
                 continue;
             }
 
-            // 角抜けチェック（斜め移動）
-            let is_diagonal = dx.abs() == 1 && dy.abs() == 1;
-            if is_diagonal {
-                // 両脇が通行可能であること。ただしターゲット領域内ならOKとする緩和を入れるか？
-                // 通行不能な壁の角をすり抜けるのはNGだが、ターゲット（建築予定地）の角へ入るのはOKにしたい
-                // ここでは厳密にチェックする（ターゲット内も「歩行可能」扱いにするため、ターゲット内同士ならOKになる）
-                let side1_walkable = world_map.is_walkable(curr_pos.0 + dx, curr_pos.1) || target_grids.contains(&(curr_pos.0 + dx, curr_pos.1));
-                let side2_walkable = world_map.is_walkable(curr_pos.0, curr_pos.1 + dy) || target_grids.contains(&(curr_pos.0, curr_pos.1 + dy));
-                
-                if !side1_walkable || !side2_walkable {
-                     continue;
+            // 角抜けチェック
+            if dx.abs() == 1 && dy.abs() == 1 {
+                let s1 = world_map.is_walkable(curr_pos.0 + dx, curr_pos.1) || target_grids.contains(&(curr_pos.0 + dx, curr_pos.1));
+                let s2 = world_map.is_walkable(curr_pos.0, curr_pos.1 + dy) || target_grids.contains(&(curr_pos.0, curr_pos.1 + dy));
+                if !s1 || !s2 {
+                    continue;
                 }
             }
 
-            // コスト計算
-            let base_cost = if is_diagonal { MOVE_COST_DIAGONAL } else { MOVE_COST_STRAIGHT };
-            // ターゲット領域内を通る場合はコストを高くしない（最短距離で突っ込ませるため）
-            // むしろ低くしてもいいが、普通でよい。
-            // ただし、もし「ターゲット以外の障害物」を避けさせたいなら、ターゲット内だけ特別扱いする今のロジックでOK。
-            
-            let move_cost = base_cost;
+            let move_cost = if dx.abs() == 1 && dy.abs() == 1 { MOVE_COST_DIAGONAL } else { MOVE_COST_STRAIGHT };
             let tentative_g = current_g + move_cost;
 
             if tentative_g < context.g_scores[n_idx] {

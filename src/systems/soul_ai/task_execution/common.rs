@@ -67,7 +67,7 @@ pub fn update_destination_to_adjacent(
     }
 }
 
-/// 設計図への到達パスを設定（境界で停止するパスを探索）
+/// 設計図への到達パスを設定（予定地の中心を一意なターゲットとする）
 pub fn update_destination_to_blueprint(
     dest: &mut Destination,
     occupied_grids: &[(i32, i32)],
@@ -78,50 +78,46 @@ pub fn update_destination_to_blueprint(
 ) {
     let start_grid = WorldMap::world_to_grid(soul_pos);
     
+    // 現在地がすでにゴール条件を満たしているかチェック
+    if is_near_blueprint(soul_pos, occupied_grids) {
+        // 到着済みなら、不要なパス（予定地内へ続くものなど）を消去して停止させる
+        if !path.waypoints.is_empty() {
+            path.waypoints.clear();
+            path.current_index = 0;
+            dest.0 = soul_pos;
+        }
+        return;
+    }
+
     // 現在のパスが既に有効（ターゲットの隣接点に向かっている）なら再計算しない
     if !path.waypoints.is_empty() {
         if let Some(last_wp) = path.waypoints.last() {
             let last_grid = WorldMap::world_to_grid(*last_wp);
-            // ターゲット領域そのものではなく、「ターゲット領域に隣接しているか」をチェック
-            // ただし find_path_to_boundary はターゲット内に入る直前を返すため、
-            // ターゲット内の点に隣接している点であればOK
-            for &(gx, gy) in occupied_grids {
-                let dx = (last_grid.0 - gx).abs();
-                let dy = (last_grid.1 - gy).abs();
-                // 隣接 (dx<=1, dy<=1) かつ 自分自身はターゲット外（ただし今回はターゲット内通過も許容したロジックなので、
-                // 単に「ターゲットの近傍に向かっている」ことでよしとする）
-                if dx <= 1 && dy <= 1 {
-                    // 有効なパスを持っているので何もしない
-                    return;
+            
+            // 終点が予定地外かつターゲットに隣接していれば、そのパスは有効
+            if !occupied_grids.contains(&last_grid) {
+                for &(gx, gy) in occupied_grids {
+                    let dx = (last_grid.0 - gx).abs();
+                    let dy = (last_grid.1 - gy).abs();
+                    if dx <= 1 && dy <= 1 {
+                        return;
+                    }
                 }
             }
         }
     }
-
-    // 現在地がすでにゴール条件を満たしているかチェック
-    // （中心地との距離などではなく、占有グリッドへの隣接チェック）
-    for &(gx, gy) in occupied_grids {
-        let grid_pos = WorldMap::grid_to_world(gx, gy);
-        if soul_pos.distance(grid_pos) < TILE_SIZE * 1.5 {
-            // 到着済み
-            return;
-        }
-    }
-
+    
+    // ターゲットの中心地点を軸に「境界」までのパスを計算
     if let Some(grid_path) = crate::world::pathfinding::find_path_to_boundary(
         world_map,
         pf_context,
         start_grid,
         occupied_grids
     ) {
-        // パスが見つかった場合、そのパスを採用
         if let Some(last_grid) = grid_path.last() {
              let last_pos = WorldMap::grid_to_world(last_grid.0, last_grid.1);
-             
-             // 目的地設定（これが移動の目標）
              update_destination_if_needed(dest, last_pos, path);
              
-             // パスウェイポイントを直接上書き
              path.waypoints = grid_path
                 .iter()
                 .map(|&(x, y)| WorldMap::grid_to_world(x, y))
@@ -225,10 +221,25 @@ pub fn is_near_target(soul_pos: Vec2, target_pos: Vec2) -> bool {
 }
 
 /// 設計図への距離チェック: 魂が設計図の構成タイルのいずれかに近づいたかどうか
+///
+/// 修正: 建設作業を予定地の上で行わないようにするため、
+/// 1. ソウルの中心が予定地（occupied_grids）のいずれかに含まれている場合は false を返す。
+/// 2. その上で、予定地のいずれかのタイルに隣接（距離 1.5 TILE_SIZE 未満）している場合に true を返す。
 pub fn is_near_blueprint(soul_pos: Vec2, occupied_grids: &[(i32, i32)]) -> bool {
+    let soul_grid = WorldMap::world_to_grid(soul_pos);
+    
+    // 予定地の上に立っていたらダメ
+    if occupied_grids.contains(&soul_grid) {
+        return false;
+    }
+
     for &(gx, gy) in occupied_grids {
         let grid_pos = WorldMap::grid_to_world(gx, gy);
-        if soul_pos.distance(grid_pos) < TILE_SIZE * 1.5 {
+        let dist = soul_pos.distance(grid_pos);
+        
+        // 隣接（1.5タイル分以内）していればOK
+        // 斜め方向の距離が約1.414なため、1.5必要。
+        if dist < TILE_SIZE * 1.5 {
             return true;
         }
     }

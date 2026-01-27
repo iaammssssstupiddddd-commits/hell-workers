@@ -67,6 +67,15 @@ pub fn handle_build_task(
                     return;
                 }
 
+                // 位置を再確認（予定地内に入っていないか、離れすぎていないか）
+                if !is_near_blueprint(soul_pos, &bp.occupied_grids) {
+                    *ctx.task = AssignedTask::Build(crate::systems::soul_ai::task_execution::types::BuildData {
+                        blueprint: blueprint_entity,
+                        phase: BuildPhase::GoingToBlueprint,
+                    });
+                    return;
+                }
+
                 // 進捗を更新（3秒で完了）
                 progress += time.delta_secs() * 0.33;
                 bp.progress = progress;

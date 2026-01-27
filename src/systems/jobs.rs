@@ -139,6 +139,7 @@ pub fn building_completion_system(
     game_assets: Res<GameAssets>,
     mut world_map: ResMut<WorldMap>,
     mut q_blueprints: Query<(Entity, &Blueprint, &Transform)>,
+    mut q_souls: Query<(&mut Transform, Entity), (With<crate::entities::damned_soul::DamnedSoul>, Without<Blueprint>)>,
 ) {
     for (entity, bp, transform) in q_blueprints.iter_mut() {
         // 資材が揃っていて、建築進捗が100%に達したら完成
@@ -195,6 +196,45 @@ pub fn building_completion_system(
 
                 for &(gx, gy) in &bp.occupied_grids {
                     world_map.add_obstacle(gx, gy);
+                }
+
+                // --- ソウル埋まり解消の処理 ---
+                // 新しい障害物のグリッドに重なっているソウルを検索して押し出す
+                for &(gx, gy) in &bp.occupied_grids {
+                    for (mut soul_transform, soul_entity) in q_souls.iter_mut() {
+                        let soul_pos = soul_transform.translation.truncate();
+                        let (sgx, sgy) = WorldMap::world_to_grid(soul_pos);
+
+                        if sgx == gx && sgy == gy {
+                            // 隣接する8マスから通行可能な場所を探す
+                            let directions = [
+                                (0, 1), (0, -1), (1, 0), (-1, 0),
+                                (1, 1), (1, -1), (-1, 1), (-1, -1)
+                            ];
+                            
+                            let mut found = false;
+                            for (dx, dy) in directions {
+                                let nx = gx + dx;
+                                let ny = gy + dy;
+                                
+                                if world_map.is_walkable(nx, ny) && !bp.occupied_grids.contains(&(nx, ny)) {
+                                    let new_pos = WorldMap::grid_to_world(nx, ny);
+                                    soul_transform.translation.x = new_pos.x;
+                                    soul_transform.translation.y = new_pos.y;
+                                    info!("BUILD: Soul {:?} was pushed out to ({}, {})", soul_entity, nx, ny);
+                                    found = true;
+                                    break;
+                                }
+                            }
+                            
+                            if !found {
+                                // 万が一周囲が全て通行不可の場合（非常に稀）、さらに遠くを探すか
+                                // 建築予定マス以外で最も近いWalkableを探す必要があるが、
+                                // 通常は建設作業員が隣にいるはずなので隣接マスが見つかるはず
+                                warn!("BUILD: Soul {:?} is stuck and could not find simple push-out position!", soul_entity);
+                            }
+                        }
+                    }
                 }
             }
 
