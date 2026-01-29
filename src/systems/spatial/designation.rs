@@ -37,6 +37,12 @@ impl SpatialGridOps for DesignationSpatialGrid {
     fn insert(&mut self, entity: Entity, pos: Vec2) {
         self.0.insert(entity, pos);
     }
+    fn remove(&mut self, entity: Entity) {
+        self.0.remove(entity);
+    }
+    fn update(&mut self, entity: Entity, pos: Vec2) {
+        self.0.update(entity, pos);
+    }
     fn get_nearby_in_radius(&self, pos: Vec2, radius: f32) -> Vec<Entity> {
         self.0.get_nearby_in_radius(pos, radius)
     }

@@ -2,7 +2,6 @@ use crate::constants::*;
 use crate::entities::damned_soul::{DamnedSoul, IdleBehavior, IdleState, Path};
 use crate::relationships::WorkingOn;
 use crate::systems::familiar_ai::haul_cache::HaulReservationCache;
-use crate::systems::jobs::{Designation, TaskSlots};
 use crate::systems::logistics::{Inventory, ResourceType};
 use crate::systems::soul_ai::task_execution::AssignedTask;
 use crate::world::map::WorldMap;
@@ -91,44 +90,31 @@ pub fn unassign_task(
                 Transform::from_xyz(snapped_pos.x, snapped_pos.y, Z_ITEM_PICKUP),
             ));
             
-            let res_item = dropped_item_res.or_else(|| {
+            let _res_item = dropped_item_res.or_else(|| {
                 queries.targets.get(item_entity).ok().and_then(|(_tr, _tree, _rock, ri, _des, _stored)| ri.map(|r| r.0))
             });
 
-            // 管理コンポーネントは削除せず維持する。
-            // これにより使い魔の ManagedTasks リストと整合性が取れ、再アサインが可能になる。
-            // commands.entity(item_entity).remove::<Designation>();
-            // commands.entity(item_entity).remove::<IssuedBy>();
-            // commands.entity(item_entity).remove::<TaskSlots>();
+            // 管理コンポーネントは削除せず維持する...
             commands
                 .entity(item_entity)
                 .remove::<crate::systems::jobs::TargetBlueprint>();
             commands
                 .entity(item_entity)
                 .remove::<crate::systems::jobs::Priority>();
+            
+            // TaskWorkersも確実に削除してリセットする
+            commands
+                .entity(item_entity)
+                .remove::<crate::relationships::TaskWorkers>();
 
             // StoredIn関係は削除（地面に落ちるため）
             commands.entity(item_entity).remove::<crate::relationships::StoredIn>();
             // ストックパイル情報も削除（地面に落ちるため、確実に非備蓄状態にする）
             commands.entity(item_entity).remove::<crate::systems::logistics::InStockpile>();
             
-            // 新しいタスクを即座に付与
-            let next_work_type = if let Some(res) = res_item {
-                if matches!(res, crate::systems::logistics::ResourceType::BucketEmpty | crate::systems::logistics::ResourceType::BucketWater) {
-                    crate::systems::jobs::WorkType::GatherWater
-                } else {
-                    crate::systems::jobs::WorkType::Haul
-                }
-            } else {
-                crate::systems::jobs::WorkType::Haul
-            };
-
-            commands.entity(item_entity).insert((
-                Designation {
-                    work_type: next_work_type,
-                },
-                TaskSlots::new(1),
-            ));
+            // Note: ここで即座に新しいタスク(Designation)を付与しない。
+            // オートホールシステム(task_area_auto_haul_system)に回収を任せることで、
+            // 状況に応じた適切なタスク(Haul)が発行されるようにする。
         }
     }
 

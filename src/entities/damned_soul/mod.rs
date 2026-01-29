@@ -181,6 +181,11 @@ impl Plugin for DamnedSoulPlugin {
                     movement::soul_movement.in_set(GameSystemSet::Actor),
                     movement::animation_system.in_set(GameSystemSet::Visual),
                 ),
-            );
+            )
+            .add_observer(observers::on_task_assigned)
+            .add_observer(observers::on_task_completed)
+            .add_observer(observers::on_soul_recruited)
+            .add_observer(observers::on_stress_breakdown)
+            .add_observer(observers::on_exhausted);
     }
 }

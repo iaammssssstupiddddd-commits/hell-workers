@@ -42,6 +42,7 @@ impl Plugin for SoulAiPlugin {
                         work::auto_build::blueprint_auto_build_system
                             .after(crate::systems::familiar_ai::familiar_ai_system),
                         work::task_area_auto_haul_system,
+                        work::tank_water_request_system,
                     ),
                     (
                         // 動的集会システム

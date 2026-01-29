@@ -160,11 +160,24 @@ pub fn assign_task_to_worker(
                     // 所有権チェック
                     let stock_belongs = queries.belongs.get(*s_entity).ok();
                     if item_belongs != stock_belongs {
+                        // debug!("ASSIGN: Stockpile {:?} rejected due to ownership mismatch. Item: {:?}, Stock: {:?}", s_entity, item_belongs, stock_belongs);
                         return false;
                     }
 
-                    let type_match =
-                        stock.resource_type.is_none() || stock.resource_type == Some(item_type);
+                    // 専用ストレージ（所有権あり）かつバケツなら、型不一致でも許可する
+                    // これにより、BucketEmpty専用になった置き場にBucketWaterを戻せる（逆も然り）
+                    let is_dedicated = stock_belongs.is_some();
+                    let is_bucket = matches!(item_type, ResourceType::BucketEmpty | ResourceType::BucketWater);
+                    
+                    let type_match = if is_dedicated && is_bucket {
+                        true
+                    } else {
+                        stock.resource_type.is_none() || stock.resource_type == Some(item_type)
+                    };
+
+                    if !type_match {
+                        // debug!("ASSIGN: Stockpile {:?} rejected due to type mismatch. StockType: {:?}, ItemType: {:?}", s_entity, stock.resource_type, item_type);
+                    }
 
                     let current_count = stored.map(|s| s.len()).unwrap_or(0);
                     let reserved = haul_cache.get(*s_entity);

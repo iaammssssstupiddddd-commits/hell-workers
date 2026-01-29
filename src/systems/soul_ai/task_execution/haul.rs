@@ -168,6 +168,7 @@ pub fn handle_haul_task(
                     ));
                     // タスク完了: ManagedTasks を肥大化させないため、管理者を解除する
                     commands.entity(item).remove::<crate::systems::jobs::IssuedBy>();
+                    commands.entity(item).remove::<crate::relationships::TaskWorkers>();
 
                     // カウンタを増やす
                     *dropped_this_frame.entry(stockpile).or_insert(0) += 1;
