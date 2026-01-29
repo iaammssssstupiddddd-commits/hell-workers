@@ -1,0 +1,78 @@
+//! Tank water request system
+//!
+//! Monitors tank storage levels and issues water gathering tasks when tanks are low.
+
+use bevy::prelude::*;
+
+use crate::systems::command::TaskArea;
+use crate::systems::jobs::{Designation, IssuedBy, TaskSlots, WorkType};
+use crate::systems::logistics::{BelongsTo, ResourceItem, ResourceType, Stockpile};
+use crate::systems::familiar_ai::haul_cache::HaulReservationCache;
+use crate::relationships::{StoredIn, StoredItems, TaskWorkers};
+
+/// タンクの貯蔵量を監視し、空きがあればバケツに水汲み指示を出すシステム
+pub fn tank_water_request_system(
+    mut commands: Commands,
+    haul_cache: Res<HaulReservationCache>,
+    q_familiars: Query<(Entity, &TaskArea)>,
+    // タンク自体の在庫状況（Water を貯める Stockpile）
+    q_tanks: Query<(Entity, &Transform, &Stockpile, Option<&StoredItems>)>,
+    // バケツ置き場にあるバケツ
+    q_buckets: Query<
+        (Entity, &ResourceItem, &BelongsTo, &StoredIn),
+        (Without<Designation>, Without<TaskWorkers>),
+    >,
+) {
+    for (tank_entity, tank_transform, tank_stock, stored_opt) in q_tanks.iter() {
+        // 水タンク以外はスキップ
+        if tank_stock.resource_type != Some(ResourceType::Water) {
+            continue;
+        }
+
+        let current_water = stored_opt.map(|s| s.len()).unwrap_or(0);
+        let reserved_water = haul_cache.get(tank_entity);
+        let total_water = current_water + reserved_water;
+
+        if total_water < tank_stock.capacity {
+            let needed = tank_stock.capacity - total_water;
+            let mut issued = 0;
+
+            // このタンクに紐付いたバケツを探す
+            for (bucket_entity, res_item, bucket_belongs, _stored_in) in q_buckets.iter() {
+                if issued >= needed {
+                    break;
+                }
+
+                if bucket_belongs.0 != tank_entity {
+                    continue;
+                }
+
+                // バケツ（空または水入り）であることを確認
+                if !matches!(res_item.0, ResourceType::BucketEmpty | ResourceType::BucketWater) {
+                    continue;
+                }
+
+                // このバケツを管理しているファミリアを探す（タスクエリアに基づく）
+                let tank_pos = tank_transform.translation.truncate();
+                let issued_by = q_familiars
+                    .iter()
+                    .filter(|(_, area)| area.contains(tank_pos))
+                    .map(|(fam, _)| fam)
+                    .next();
+
+                if let Some(fam_entity) = issued_by {
+                    commands.entity(bucket_entity).insert((
+                        Designation {
+                            work_type: WorkType::GatherWater,
+                        },
+                        IssuedBy(fam_entity),
+                        TaskSlots::new(1),
+                        crate::systems::jobs::Priority(3),
+                    ));
+                    issued += 1;
+                    info!("TANK_WATCH: Issued GatherWater for bucket {:?} (Tank {:?})", bucket_entity, tank_entity);
+                }
+            }
+        }
+    }
+}
