@@ -58,6 +58,7 @@ impl TaskManager {
         q_target_blueprints: &Query<&TargetBlueprint>,
         world_map: &WorldMap,
         pf_context: &mut PathfindingContext,
+        haul_cache: &crate::systems::familiar_ai::haul_cache::HaulReservationCache,
     ) -> Option<Entity> {
         // パス検索の起点を「ソウルの居場所」に補正する
         let worker_grid = world_map.get_nearest_walkable_grid(worker_pos)?;
@@ -172,8 +173,28 @@ impl TaskManager {
                     } else if designation.work_type == WorkType::GatherWater {
                         // 水汲みは基本優先度を高めに（5）
                         priority += 5;
-                        // 備蓄場所にあっても優先度を維持するが、地面にあればさらに少し上乗せ?
-                        // 一旦一律 +5 にして、地面ならさらに +2 など
+                        
+                        // タンクの空き容量チェック
+                        let bucket_belongs = queries.belongs.get(entity).ok();
+                        let has_tank_space = queries.stockpiles
+                            .iter()
+                            .any(|(s_entity, _, stock, stored)| {
+                                let is_tank = stock.resource_type == Some(ResourceType::Water);
+                                let is_my_tank = bucket_belongs.map(|b| b.0) == Some(s_entity);
+                                if is_tank && is_my_tank {
+                                    let current_count = stored.map(|s| s.len()).unwrap_or(0);
+                                    let reserved = haul_cache.get(s_entity);
+                                    (current_count + reserved) < stock.capacity
+                                } else {
+                                    false
+                                }
+                            });
+                        
+                        // 一旦ここでは所有権とタンクの存在確認に留める（詳細な容量チェックは assign_task_to_worker で行う）
+                        if !has_tank_space {
+                            return None;
+                        }
+
                         if in_stockpile_opt.is_none() {
                             priority += 2;
                         }
@@ -222,12 +243,12 @@ impl TaskManager {
         >,
         task_area_opt: Option<&TaskArea>,
         haul_cache: &mut crate::systems::familiar_ai::haul_cache::HaulReservationCache,
-    ) {
+    ) -> bool {
         let Ok((_, _, soul, mut assigned_task, mut dest, mut path, idle, _, uc_opt, participating_opt)) =
             q_souls.get_mut(worker_entity)
         else {
             warn!("ASSIGN: Worker {:?} not found in query", worker_entity);
-            return;
+            return false;
         };
 
         // もし集会に参加中なら抜ける
@@ -240,11 +261,11 @@ impl TaskManager {
         }
 
         if idle.behavior == IdleBehavior::ExhaustedGathering {
-            return;
+            return false;
         }
 
         if soul.fatigue >= fatigue_threshold {
-            return;
+            return false;
         }
 
         // タスクが存在するか最終確認
@@ -252,7 +273,7 @@ impl TaskManager {
             if let Ok((_, transform, designation, _, _, _, _, _)) = queries.designations.get(task_entity) {
                 (transform.translation.truncate(), designation.work_type)
             } else {
-                return;
+                return false;
             };
 
         match work_type {
@@ -274,6 +295,7 @@ impl TaskManager {
                     task_entity,
                     work_type,
                 });
+                return true;
             }
             WorkType::Haul => {
                 if let Ok(target_bp) = queries.target_blueprints.get(task_entity) {
@@ -294,14 +316,14 @@ impl TaskManager {
                         task_entity,
                         work_type: WorkType::Haul,
                     });
-                    return;
+                    return true;
                 }
 
                 let item_info = queries.items.get(task_entity).ok().map(|(it, _)| it.0);
                 let item_belongs = queries.belongs.get(task_entity).ok();
 
                 if item_info.is_none() {
-                    return;
+                    return false;
                 }
                 let item_type = item_info.unwrap();
 
@@ -356,12 +378,14 @@ impl TaskManager {
                         task_entity,
                         work_type: WorkType::Haul,
                     });
+                    return true;
                 }
+                return false;
             }
             WorkType::Build => {
                 if let Ok((_, bp, _)) = queries.blueprints.get(task_entity) {
                     if !bp.materials_complete() {
-                        return;
+                        return false;
                     }
                 }
 
@@ -381,6 +405,7 @@ impl TaskManager {
                     task_entity,
                     work_type: WorkType::Build,
                 });
+                return true;
             }
             WorkType::GatherWater => {
                 let best_tank = queries.stockpiles
@@ -434,7 +459,9 @@ impl TaskManager {
                         task_entity,
                         work_type: WorkType::GatherWater,
                     });
+                    return true;
                 }
+                return false;
             }
         }
     }
@@ -498,9 +525,10 @@ impl TaskManager {
                 &queries.target_blueprints,
                 world_map,
                 pf_context,
+                haul_cache,
             ) {
                 // アサイン成功！1サイクル1人へのアサインとする（安定性のため）
-                Self::assign_task_to_worker(
+                if Self::assign_task_to_worker(
                     commands,
                     fam_entity,
                     task_entity,
@@ -510,8 +538,10 @@ impl TaskManager {
                     q_souls,
                     task_area_opt,
                     haul_cache,
-                );
-                return Some(task_entity);
+                ) {
+                    return Some(task_entity);
+                }
+                // アサインに失敗した場合は次の候補（メンバーまたはタスク）を試みる
             }
         }
 
