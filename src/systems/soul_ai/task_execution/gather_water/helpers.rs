@@ -24,6 +24,10 @@ pub fn drop_bucket_for_auto_haul(
     ));
     commands.entity(bucket_entity).remove::<crate::relationships::StoredIn>();
     commands.entity(bucket_entity).remove::<crate::systems::logistics::InStockpile>();
+    commands.entity(bucket_entity).remove::<crate::systems::jobs::IssuedBy>();
+    commands.entity(bucket_entity).remove::<crate::relationships::TaskWorkers>();
+    commands.entity(bucket_entity).remove::<crate::systems::jobs::Designation>();
+    commands.entity(bucket_entity).remove::<crate::systems::jobs::TaskSlots>();
 
     ctx.inventory.0 = None;
     haul_cache.release(tank_entity);

@@ -8,22 +8,26 @@ use crate::constants::*;
 use crate::entities::familiar::ActiveCommand;
 use crate::systems::command::TaskArea;
 use crate::systems::jobs::{Designation, IssuedBy, TaskSlots, WorkType};
-use crate::systems::logistics::ResourceItem;
+use crate::systems::logistics::{ResourceItem, ResourceType, Stockpile, BelongsTo};
 use crate::systems::spatial::{ResourceSpatialGrid, SpatialGridOps};
-use crate::relationships::TaskWorkers;
+use crate::relationships::{TaskWorkers, StoredItems};
 
 /// 指揮エリア内での自動運搬タスク生成システム
+/// 
+/// 汎用アイテムは空間検索で、専用アイテム（所有権あり）はRelationshipで検索します。
 pub fn task_area_auto_haul_system(
     mut commands: Commands,
     resource_grid: Res<ResourceSpatialGrid>,
     q_familiars: Query<(Entity, &ActiveCommand, &TaskArea)>,
     q_stockpiles: Query<(
+        Entity,
         &Transform,
-        &crate::systems::logistics::Stockpile,
-        Option<&crate::relationships::StoredItems>,
+        &Stockpile,
+        Option<&StoredItems>,
+        Option<&BelongsTo>,
     )>,
     q_resources: Query<
-        (Entity, &Transform, &Visibility, &ResourceItem),
+        (Entity, &Transform, &Visibility, &ResourceItem, Option<&BelongsTo>),
         (
             Without<crate::relationships::StoredIn>,
             Without<Designation>,
@@ -34,10 +38,75 @@ pub fn task_area_auto_haul_system(
 ) {
     let mut already_assigned = std::collections::HashSet::new();
 
+    // -----------------------------------------------------------------------
+    // 1. 専用アイテム（所有権あり）の回収
+    // 空間に関係なく、所有権の一致するストックパイルへ戻す
+    // -----------------------------------------------------------------------
+    for (item_entity, _transform, visibility, res_item, item_belongs_opt) in q_resources.iter() {
+        if *visibility == Visibility::Hidden { continue; }
+        if already_assigned.contains(&item_entity) { continue; }
+
+        // 所有権がないアイテムはここでは扱わない（後半の空間検索で扱う）
+        let Some(item_owner) = item_belongs_opt else {
+            continue;
+        };
+
+        // このアイテムを受け入れるストックパイルを探す
+        // Note: 単純化のため、最初に見つかった適切なストックパイルに割り当てる
+        for (_stock_entity, _stock_transform, stockpile, stored, stock_belongs_opt) in q_stockpiles.iter() {
+            // ストックパイルも同じ所有者でなければならない
+            if stock_belongs_opt.map(|b| b.0) != Some(item_owner.0) {
+                continue;
+            }
+
+            // 容量チェック
+            if stored.map(|s| s.len()).unwrap_or(0) >= stockpile.capacity {
+                continue;
+            }
+
+            // 型チェック（バケツ特例含む）
+            if let Some(target_type) = stockpile.resource_type {
+                let is_bucket_target = matches!(target_type, ResourceType::BucketEmpty | ResourceType::BucketWater);
+                let is_bucket_item = matches!(res_item.0, ResourceType::BucketEmpty | ResourceType::BucketWater);
+                
+                if is_bucket_target && is_bucket_item {
+                    // バケツ同士ならOK
+                } else if res_item.0 != target_type {
+                    continue;
+                }
+            }
+
+            // タスク発行（発行者はそのアイテムの持ち主であるFamiliarを探すべきだが、
+            // 簡易的に TaskArea を持っている Familiar を使うか、あるいはランダムに選ぶ）
+            // バケツはタンクに属しており、タンクはエリア内にあるはず。
+            // ここでは「エリア内にあるFamiliar」を代表として使う。
+            
+            if let Some((fam_entity, _, _)) = q_familiars.iter().next() {
+                already_assigned.insert(item_entity);
+                commands.entity(item_entity).insert((
+                    Designation {
+                        work_type: WorkType::Haul,
+                    },
+                    IssuedBy(fam_entity),
+                    TaskSlots::new(1),
+                    crate::systems::jobs::Priority(10), // 専用品の回収は最優先
+                ));
+                break; // 1つ割り当てたら次のアイテムへ
+            }
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // 2. 汎用アイテム（所有権なし）の回収
+    // エリア内のストックパイルを中心に、近くのアイテムを空間検索で探す
+    // -----------------------------------------------------------------------
     for (fam_entity, _active_command, task_area) in q_familiars.iter() {
-        let (fam_entity, _active_command, task_area): (Entity, &ActiveCommand, &TaskArea) = (fam_entity, _active_command, task_area);
-        for (stock_transform, stockpile, stored_items_opt) in q_stockpiles.iter() {
-            let (stock_transform, stockpile, stored_items_opt): (&Transform, &crate::systems::logistics::Stockpile, Option<&crate::relationships::StoredItems>) = (stock_transform, stockpile, stored_items_opt);
+        for (_stock_entity, stock_transform, stockpile, stored_items_opt, stock_belongs) in q_stockpiles.iter() {
+            // 専用ストックパイル（所有権あり）は、汎用アイテムを受け入れない
+            if stock_belongs.is_some() {
+                continue;
+            }
+
             let stock_pos = stock_transform.translation.truncate();
             if !task_area.contains(stock_pos) {
                 continue;
@@ -55,10 +124,15 @@ pub fn task_area_auto_haul_system(
                 .iter()
                 .filter(|&&entity| !already_assigned.contains(&entity))
                 .filter_map(|&entity| {
-                    let Ok((_, transform, visibility, res_item)) = q_resources.get(entity) else {
+                    let Ok((_, transform, visibility, res_item, item_belongs)) = q_resources.get(entity) else {
                         return None;
                     };
                     if *visibility == Visibility::Hidden {
+                        return None;
+                    }
+
+                    // 所有権があるアイテムは除外（前半のループで処理済みのはずだが念のため）
+                    if item_belongs.is_some() {
                         return None;
                     }
 

@@ -4,6 +4,8 @@ use std::collections::{HashMap, HashSet};
 /// 空間グリッドの共通操作を定義するトレイト
 pub trait SpatialGridOps {
     fn insert(&mut self, entity: Entity, pos: Vec2);
+    fn remove(&mut self, entity: Entity);
+    fn update(&mut self, entity: Entity, pos: Vec2);
     fn get_nearby_in_radius(&self, pos: Vec2, radius: f32) -> Vec<Entity>;
 }
 
@@ -63,6 +65,47 @@ impl GridData {
             }
         }
         results
+    }
+
+    pub fn remove(&mut self, entity: Entity) {
+        if let Some(pos) = self.positions.remove(&entity) {
+            let cell = self.pos_to_cell(pos);
+            if let Some(entities) = self.grid.get_mut(&cell) {
+                entities.remove(&entity);
+                if entities.is_empty() {
+                    self.grid.remove(&cell);
+                }
+            }
+        }
+    }
+
+    pub fn update(&mut self, entity: Entity, new_pos: Vec2) {
+        if let Some(&old_pos) = self.positions.get(&entity) {
+            if old_pos == new_pos {
+                return;
+            }
+
+            let old_cell = self.pos_to_cell(old_pos);
+            let new_cell = self.pos_to_cell(new_pos);
+
+            if old_cell == new_cell {
+                // セルが変わらない場合は位置情報のみ更新（高速パス）
+                self.positions.insert(entity, new_pos);
+            } else {
+                // セルが変わる場合は移動処理
+                if let Some(entities) = self.grid.get_mut(&old_cell) {
+                    entities.remove(&entity);
+                    if entities.is_empty() {
+                        self.grid.remove(&old_cell);
+                    }
+                }
+                self.grid.entry(new_cell).or_default().insert(entity);
+                self.positions.insert(entity, new_pos);
+            }
+        } else {
+            // 新規登録
+            self.insert(entity, new_pos);
+        }
     }
 
     pub fn clear(&mut self) {
