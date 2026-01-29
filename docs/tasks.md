@@ -38,7 +38,9 @@ Bevy 0.18 の **ECS Relationships** 機能を使用し、エンティティ間�
 
 ### 1. 指定 (Designation)
 - **手動**: プレイヤーが UI やドラッグ操作で指定。
-- **自動**: `soul_ai::work::task_area_auto_haul_system` が備蓄場所周辺の資源を自動的に `Haul` 指定。
+- **自動**:
+    - `soul_ai::work::task_area_auto_haul_system` が備蓄場所周辺の資源を自動的に `Haul` 指定。
+    - `soul_ai::work::tank_water_request_system` がタンクの空きに応じてバケツに自動的に `GatherWater` 指定。
 
 ### 2. 割り当て (Assignment)
 - 使い魔 AI が自分のキュー、またはグローバルキューから最も近い有効なタスクを配下の魂に割り当てる。

@@ -95,7 +95,6 @@ pub enum GatherWaterPhase {
     Filling { progress: f32 },
     GoingToTank,
     Pouring { progress: f32 },
-    ReturningBucket,
 }
 
 impl AssignedTask {
