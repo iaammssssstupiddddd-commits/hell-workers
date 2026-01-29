@@ -4,6 +4,35 @@ use crate::systems::soul_ai::task_execution::types::{AssignedTask, GatherWaterPh
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
 
+/// バケツをドロップしてオートホールに任せるヘルパー関数
+/// タンクが満タンになった場合や、水汲み完了後に使用
+fn drop_bucket_for_auto_haul(
+    commands: &mut Commands,
+    ctx: &mut TaskExecutionContext,
+    bucket_entity: Entity,
+    tank_entity: Entity,
+    haul_cache: &mut crate::systems::familiar_ai::haul_cache::HaulReservationCache,
+    world_map: &WorldMap,
+) {
+    let soul_pos = ctx.soul_pos();
+    let drop_grid = WorldMap::world_to_grid(soul_pos);
+    let drop_pos = WorldMap::grid_to_world(drop_grid.0, drop_grid.1);
+    
+    commands.entity(bucket_entity).insert((
+        Visibility::Visible,
+        Transform::from_xyz(drop_pos.x, drop_pos.y, crate::constants::Z_ITEM_PICKUP),
+    ));
+    commands.entity(bucket_entity).remove::<crate::relationships::StoredIn>();
+    commands.entity(bucket_entity).remove::<crate::systems::logistics::InStockpile>();
+    
+    ctx.inventory.0 = None;
+    haul_cache.release(tank_entity);
+    crate::systems::soul_ai::work::unassign_task(
+        commands, ctx.soul_entity, soul_pos, ctx.task, ctx.path,
+        None, None, &ctx.queries, haul_cache, world_map, false
+    );
+}
+
 pub fn handle_gather_water_task(
     ctx: &mut TaskExecutionContext,
     bucket_entity: Entity,
@@ -17,7 +46,7 @@ pub fn handle_gather_water_task(
 ) {
     let soul_pos = ctx.soul_pos();
     let q_targets = &ctx.queries.targets;
-    let q_stockpiles = &mut ctx.queries.stockpiles;
+    // let q_stockpiles = &mut ctx.queries.stockpiles; // 必要な箇所でローカルに取得する
         match phase {
         GatherWaterPhase::GoingToBucket => {
             // 既にインベントリにバケツがある場合は次のフェーズへ
@@ -76,6 +105,7 @@ pub fn handle_gather_water_task(
                 
                 // もしアイテムが備蓄場所にあったなら、その備蓄場所の型管理を更新する
                 if let Some(stored_in) = stored_in_opt {
+                    let q_stockpiles = &mut ctx.queries.stockpiles;
                     crate::systems::soul_ai::task_execution::common::update_stockpile_on_item_removal(stored_in.0, q_stockpiles);
                 }
                 let is_already_full = if let Some(res) = res_item_opt {
@@ -186,32 +216,28 @@ pub fn handle_gather_water_task(
         GatherWaterPhase::GoingToRiver => {
             // バケツがインベントリにあるか確認
             if ctx.inventory.0 != Some(bucket_entity) {
+                // バケツを持っていないのでタスクを中断（ドロップ処理なし）
+                warn!("GoingToRiver: Bucket not in inventory, aborting task for soul {:?}", ctx.soul_entity);
                 crate::systems::soul_ai::work::unassign_task(
                     commands, ctx.soul_entity, soul_pos, ctx.task, ctx.path,
-                    Some(ctx.inventory), None, &ctx.queries, haul_cache, world_map, true
+                    None, None, &ctx.queries, haul_cache, world_map, true
                 );
                 return;
             }
 
             if ctx.soul_transform.translation.truncate().distance(ctx.dest.0) < 30.0 {
                 // タンクが満タンかチェック
-                let is_tank_full = if let Ok((_, _, stock, stored)) = q_stockpiles.get(tank_entity) {
-                    let current = stored.map(|s| s.len()).unwrap_or(0);
-                    if current >= stock.capacity {
-                        true
+                let is_tank_full = {
+                    let q_stockpiles = &mut ctx.queries.stockpiles;
+                    if let Ok((_, _, stock, Some(stored))) = q_stockpiles.get(tank_entity) {
+                        stored.len() >= stock.capacity
                     } else {
                         false
                     }
-                } else {
-                    false
                 };
 
                 if is_tank_full {
-                    *ctx.task = AssignedTask::GatherWater(crate::systems::soul_ai::task_execution::types::GatherWaterData {
-                        bucket: bucket_entity,
-                        tank: tank_entity,
-                        phase: GatherWaterPhase::ReturningBucket,
-                    });
+                    drop_bucket_for_auto_haul(commands, ctx, bucket_entity, tank_entity, haul_cache, world_map);
                     return;
                 }
 
@@ -226,9 +252,11 @@ pub fn handle_gather_water_task(
         GatherWaterPhase::Filling { progress } => {
             // バケツがインベントリにあるか確認
             if ctx.inventory.0 != Some(bucket_entity) {
+                // バケツを持っていないのでタスクを中断（ドロップ処理なし）
+                warn!("Filling: Bucket not in inventory, aborting task for soul {:?}", ctx.soul_entity);
                 crate::systems::soul_ai::work::unassign_task(
                     commands, ctx.soul_entity, soul_pos, ctx.task, ctx.path,
-                    Some(ctx.inventory), None, &ctx.queries, haul_cache, world_map, true
+                    None, None, &ctx.queries, haul_cache, world_map, true
                 );
                 return;
             }
@@ -305,27 +333,27 @@ pub fn handle_gather_water_task(
         GatherWaterPhase::GoingToTank => {
             // バケツがインベントリにあるか確認
             if ctx.inventory.0 != Some(bucket_entity) {
+                // バケツを持っていないのでタスクを中断（ドロップ処理なし）
+                warn!("GoingToTank: Bucket not in inventory, aborting task for soul {:?}", ctx.soul_entity);
                 crate::systems::soul_ai::work::unassign_task(
                     commands, ctx.soul_entity, soul_pos, ctx.task, ctx.path,
-                    Some(ctx.inventory), None, &ctx.queries, haul_cache, world_map, true
+                    None, None, &ctx.queries, haul_cache, world_map, true
                 );
                 return;
             }
             
             // タンクが満タンかチェック（移動中に満タンになる可能性）
-            let is_tank_full = if let Ok((_, _, stock, stored)) = q_stockpiles.get(tank_entity) {
-                let current = stored.map(|s| s.len()).unwrap_or(0);
-                current >= stock.capacity
-            } else {
-                false
+            let is_tank_full = {
+                let q_stockpiles = &mut ctx.queries.stockpiles;
+                if let Ok((_, _, stock, Some(stored))) = q_stockpiles.get(tank_entity) {
+                    stored.len() >= stock.capacity
+                } else {
+                    false
+                }
             };
 
             if is_tank_full {
-                *ctx.task = AssignedTask::GatherWater(crate::systems::soul_ai::task_execution::types::GatherWaterData {
-                    bucket: bucket_entity,
-                    tank: tank_entity,
-                    phase: GatherWaterPhase::ReturningBucket,
-                });
+                drop_bucket_for_auto_haul(commands, ctx, bucket_entity, tank_entity, haul_cache, world_map);
                 return;
             }
 
@@ -340,9 +368,11 @@ pub fn handle_gather_water_task(
         GatherWaterPhase::Pouring { progress } => {
             // バケツがインベントリにあるか確認
             if ctx.inventory.0 != Some(bucket_entity) {
+                // バケツを持っていないのでタスクを中断（ドロップ処理なし）
+                warn!("Pouring: Bucket not in inventory, aborting task for soul {:?}", ctx.soul_entity);
                 crate::systems::soul_ai::work::unassign_task(
                     commands, ctx.soul_entity, soul_pos, ctx.task, ctx.path,
-                    Some(ctx.inventory), None, &ctx.queries, haul_cache, world_map, true
+                    None, None, &ctx.queries, haul_cache, world_map, true
                 );
                 return;
             }
@@ -364,17 +394,9 @@ pub fn handle_gather_water_task(
                      Visibility::Hidden, // タンクの中なので見えない
                  ));
 
-                 // タスク完了... ではなくバケツを戻しに行く
-                 // 注：ここでバケツをドロップしてはいけない！保持したまま移動する
-                 *ctx.task = AssignedTask::GatherWater(crate::systems::soul_ai::task_execution::types::GatherWaterData {
-                     bucket: bucket_entity,
-                     tank: tank_entity,
-                     phase: GatherWaterPhase::ReturningBucket,
-                 });
-                 ctx.path.waypoints.clear(); // 目的地再計算のためクリア
-
-                 // 搬送予約を解除
-                 haul_cache.release(tank_entity);
+                 // バケツをその場にドロップしてタスク完了
+                 // オートホールシステムがバケツをバケツ置き場に戻す
+                 drop_bucket_for_auto_haul(commands, ctx, bucket_entity, tank_entity, haul_cache, world_map);
              } else {
                  *ctx.task = AssignedTask::GatherWater(crate::systems::soul_ai::task_execution::types::GatherWaterData {
                      bucket: bucket_entity,
@@ -383,87 +405,5 @@ pub fn handle_gather_water_task(
                  });
              }
          }
-        GatherWaterPhase::ReturningBucket => {
-            // バケツがインベントリにあるか確認
-            if ctx.inventory.0 != Some(bucket_entity) {
-                crate::systems::soul_ai::work::unassign_task(
-                    commands, ctx.soul_entity, soul_pos, ctx.task, ctx.path,
-                    Some(ctx.inventory), None, &ctx.queries, haul_cache, world_map, true
-                );
-                return;
-            }
-            
-            // タンクに紐付いたストレージ（置き場）を探す
-            let mut best_storage = None;
-            let mut min_dist_sq = f32::MAX;
-
-            for (s_entity, s_transform, stock, stored) in q_stockpiles.iter() {
-                // タンクへの帰属チェック
-                let belongs_to_tank = ctx.queries.belongs.get(s_entity).map(|b| b.0 == tank_entity).unwrap_or(false);
-                
-                let current = stored.map(|s| s.len()).unwrap_or(0);
-
-                if !belongs_to_tank { continue; }
-                
-                // 容量チェック
-                if current >= stock.capacity { 
-                    continue; 
-                }
-                
-                let s_pos = s_transform.translation.truncate();
-                let dist_sq = soul_pos.distance_squared(s_pos);
-                if dist_sq < min_dist_sq {
-                    min_dist_sq = dist_sq;
-                    best_storage = Some((s_entity, s_pos));
-                }
-            }
-            
-            if let Some((storage_entity, storage_pos)) = best_storage {
-                let is_near = ctx.soul_pos().distance(storage_pos) < crate::constants::TILE_SIZE * 1.8;
-                
-                if is_near {
-                    // バケツを置く
-                    commands.entity(bucket_entity).remove::<crate::relationships::StoredIn>();
-                    ctx.inventory.0 = None;
-                    
-                    commands.entity(bucket_entity).insert((
-                        Visibility::Visible,
-                        Transform::from_xyz(storage_pos.x, storage_pos.y, crate::constants::Z_ITEM_PICKUP),
-                        crate::relationships::StoredIn(storage_entity),
-                        crate::systems::logistics::InStockpile(storage_entity),
-                        // タスク指定を再付予（次の水汲みサイクルのため）
-                        crate::systems::jobs::Designation {
-                            work_type: crate::systems::jobs::WorkType::GatherWater,
-                        },
-                        crate::systems::jobs::TaskSlots::new(1),
-                    ));
-                    
-                    // タスク完了
-                    crate::systems::soul_ai::work::unassign_task(
-                        commands, ctx.soul_entity, soul_pos, ctx.task, ctx.path,
-                        Some(ctx.inventory), None, &ctx.queries, haul_cache, world_map, false // 成功時はAbandonedイベント出さない
-                    );
-                } else {
-                    // 移動
-                    if ctx.path.waypoints.is_empty() || ctx.dest.0.distance_squared(storage_pos) > 1.0 {
-                        let start_grid = WorldMap::world_to_grid(ctx.soul_pos());
-                        let target_grid = WorldMap::world_to_grid(storage_pos);
-                        
-                        if let Some(path) = crate::world::pathfinding::find_path(world_map, ctx.pf_context, start_grid, target_grid) {
-                            ctx.dest.0 = storage_pos;
-                            ctx.path.waypoints = path.iter().map(|&(x,y)| WorldMap::grid_to_world(x,y)).collect();
-                            ctx.path.current_index = 0;
-                        } else {
-                            ctx.dest.0 = storage_pos;
-                        }
-                    }
-                }
-            } else {
-                crate::systems::soul_ai::work::unassign_task(
-                    commands, ctx.soul_entity, soul_pos, ctx.task, ctx.path,
-                    Some(ctx.inventory), None, &ctx.queries, haul_cache, world_map, true
-                );
-            }
-        }
     }
 }

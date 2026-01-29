@@ -75,6 +75,8 @@ impl Plugin for InterfacePlugin {
             Update,
             (
                 task_area_auto_haul_system,
+                crate::systems::soul_ai::work::bucket_auto_haul_system,
+                crate::systems::soul_ai::work::tank_water_request_system,
                 crate::interface::ui::rebuild_entity_list_system,
             )
                 .run_if(on_timer(Duration::from_millis(100))),

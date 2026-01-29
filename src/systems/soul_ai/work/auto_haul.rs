@@ -2,14 +2,15 @@ use bevy::prelude::*;
 
 use crate::constants::*;
 use crate::entities::familiar::ActiveCommand;
-use crate::relationships::TaskWorkers;
 use crate::systems::command::TaskArea;
 use crate::systems::jobs::{
     Blueprint, Designation, IssuedBy, TaskSlots, WorkType,
 };
-use crate::systems::logistics::{ResourceItem, ResourceType, Stockpile};
+use crate::systems::logistics::{ResourceItem, ResourceType, Stockpile, BelongsTo};
 use crate::systems::soul_ai::task_execution::AssignedTask;
 use crate::systems::spatial::{ResourceSpatialGrid, SpatialGridOps};
+use crate::systems::familiar_ai::haul_cache::HaulReservationCache;
+use crate::relationships::{TaskWorkers, StoredIn, StoredItems};
 
 /// 指揮エリア内での自動運搬タスク生成システム
 pub fn task_area_auto_haul_system(
@@ -245,6 +246,157 @@ pub fn blueprint_auto_haul_system(
 
                     // 1つ割り当てたら、この Blueprint のこのリソースについては一旦終了して次のリソースまたは次の設計図へ
                     // (複数同時に探すと1フレームで一気に割り当てすぎてしまう可能性があるが、集計ロジックがあるので基本安全)
+                }
+            }
+        }
+    }
+}
+
+/// バケツ専用オートホールシステム
+/// ドロップされたバケツを、BelongsTo で紐付いたタンクのバケツ置き場に運搬する
+pub fn bucket_auto_haul_system(
+    mut commands: Commands,
+    q_familiars: Query<(Entity, &ActiveCommand, &TaskArea)>,
+    q_buckets: Query<
+        (Entity, &Transform, &Visibility, &ResourceItem, &crate::systems::logistics::BelongsTo),
+        (
+            Without<crate::relationships::StoredIn>,
+            Without<Designation>,
+            Without<TaskWorkers>,
+        ),
+    >,
+    q_stockpiles: Query<(
+        Entity,
+        &Transform,
+        &Stockpile,
+        &crate::systems::logistics::BelongsTo,
+        Option<&crate::relationships::StoredItems>,
+    )>,
+) {
+    let mut already_assigned = std::collections::HashSet::new();
+
+    for (fam_entity, _active_command, task_area) in q_familiars.iter() {
+        for (bucket_entity, bucket_transform, visibility, res_item, bucket_belongs) in q_buckets.iter() {
+            // バケツ以外はスキップ
+            if !matches!(res_item.0, ResourceType::BucketEmpty | ResourceType::BucketWater) {
+                continue;
+            }
+            
+            // 既に割り当て済みならスキップ
+            if already_assigned.contains(&bucket_entity) {
+                continue;
+            }
+            
+            // 非表示ならスキップ
+            if *visibility == Visibility::Hidden {
+                continue;
+            }
+            
+            let bucket_pos = bucket_transform.translation.truncate();
+            
+            // タスクエリア内にあるかチェック
+            if !task_area.contains(bucket_pos) {
+                continue;
+            }
+            
+            // バケツが紐付いているタンク
+            let tank_entity = bucket_belongs.0;
+            
+            // 同じタンクに紐付いたストックパイルを探す
+            let target_stockpile = q_stockpiles
+                .iter()
+                .filter(|(_, _, stock, stock_belongs, stored_opt)| {
+                    // 同じタンクに紐付いているか
+                    if stock_belongs.0 != tank_entity {
+                        return false;
+                    }
+                    // 容量に空きがあるか
+                    let current = stored_opt.map(|s| s.len()).unwrap_or(0);
+                    current < stock.capacity
+                })
+                .min_by(|(_, t1, _, _, _), (_, t2, _, _, _)| {
+                    let d1 = t1.translation.truncate().distance_squared(bucket_pos);
+                    let d2 = t2.translation.truncate().distance_squared(bucket_pos);
+                    d1.partial_cmp(&d2).unwrap_or(std::cmp::Ordering::Equal)
+                })
+                .map(|(entity, _, _, _, _)| entity);
+            
+            if let Some(_stockpile_entity) = target_stockpile {
+                already_assigned.insert(bucket_entity);
+                commands.entity(bucket_entity).insert((
+                    Designation {
+                        work_type: WorkType::Haul,
+                    },
+                    IssuedBy(fam_entity),
+                    TaskSlots::new(1),
+                    crate::systems::jobs::Priority(5), // バケツ返却は優先度高め
+                ));
+            }
+        }
+    }
+}
+
+/// タンクの貯蔵量を監視し、空きがあればバケツに水汲み指示を出すシステム
+pub fn tank_water_request_system(
+    mut commands: Commands,
+    haul_cache: Res<HaulReservationCache>,
+    q_familiars: Query<(Entity, &TaskArea)>,
+    // タンク自体の在庫状況（Water を貯める Stockpile）
+    q_tanks: Query<(Entity, &Transform, &Stockpile, Option<&StoredItems>)>,
+    // バケツ置き場にあるバケツ
+    q_buckets: Query<
+        (Entity, &ResourceItem, &BelongsTo, &StoredIn),
+        (Without<Designation>, Without<TaskWorkers>),
+    >,
+) {
+    for (tank_entity, tank_transform, tank_stock, stored_opt) in q_tanks.iter() {
+        // 水タンク以外はスキップ
+        if tank_stock.resource_type != Some(ResourceType::Water) {
+            continue;
+        }
+
+        let current_water = stored_opt.map(|s| s.len()).unwrap_or(0);
+        let reserved_water = haul_cache.get(tank_entity);
+        let total_water = current_water + reserved_water;
+
+        if total_water < tank_stock.capacity {
+            let needed = tank_stock.capacity - total_water;
+            let mut issued = 0;
+
+            // このタンクに紐付いたバケツを探す
+            for (bucket_entity, res_item, bucket_belongs, _stored_in) in q_buckets.iter() {
+                if issued >= needed {
+                    break;
+                }
+
+                if bucket_belongs.0 != tank_entity {
+                    continue;
+                }
+
+                // バケツ（空または水入り）であることを確認
+                if !matches!(res_item.0, ResourceType::BucketEmpty | ResourceType::BucketWater) {
+                    continue;
+                }
+
+                // このバケツを管理しているファミリアを探す（タスクエリアに基づく）
+                let tank_pos = tank_transform.translation.truncate();
+                let issued_by = q_familiars
+                    .iter()
+                    .filter(|(_, area)| area.contains(tank_pos))
+                    .map(|(fam, _)| fam)
+                    .next();
+
+                if let Some(fam_entity) = issued_by {
+                    commands.entity(bucket_entity).insert((
+                        Designation {
+                            work_type: WorkType::GatherWater,
+                        },
+                        IssuedBy(fam_entity),
+                        TaskSlots::new(1),
+                        crate::systems::jobs::Priority(3),
+                    ));
+                    issued += 1;
+                    info!("TANK_WATCH: Issued GatherWater for bucket {:?} (Tank {:?})", bucket_entity, tank_entity);
                 }
             }
         }
