@@ -1,0 +1,34 @@
+//! Helper functions for water gathering task
+
+use crate::systems::soul_ai::task_execution::context::TaskExecutionContext;
+use crate::world::map::WorldMap;
+use bevy::prelude::*;
+
+/// バケツをドロップしてオートホールに任せるヘルパー関数
+/// タンクが満タンになった場合や、水汲み完了後に使用
+pub fn drop_bucket_for_auto_haul(
+    commands: &mut Commands,
+    ctx: &mut TaskExecutionContext,
+    bucket_entity: Entity,
+    tank_entity: Entity,
+    haul_cache: &mut crate::systems::familiar_ai::haul_cache::HaulReservationCache,
+    world_map: &WorldMap,
+) {
+    let soul_pos = ctx.soul_pos();
+    let drop_grid = WorldMap::world_to_grid(soul_pos);
+    let drop_pos = WorldMap::grid_to_world(drop_grid.0, drop_grid.1);
+
+    commands.entity(bucket_entity).insert((
+        Visibility::Visible,
+        Transform::from_xyz(drop_pos.x, drop_pos.y, crate::constants::Z_ITEM_PICKUP),
+    ));
+    commands.entity(bucket_entity).remove::<crate::relationships::StoredIn>();
+    commands.entity(bucket_entity).remove::<crate::systems::logistics::InStockpile>();
+
+    ctx.inventory.0 = None;
+    haul_cache.release(tank_entity);
+    crate::systems::soul_ai::work::unassign_task(
+        commands, ctx.soul_entity, soul_pos, ctx.task, ctx.path,
+        None, None, &ctx.queries, haul_cache, world_map, false
+    );
+}

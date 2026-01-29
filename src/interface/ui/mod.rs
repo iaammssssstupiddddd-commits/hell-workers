@@ -7,6 +7,7 @@ pub mod interaction;
 pub mod list;
 pub mod panels;
 pub mod setup;
+pub mod theme;
 
 // 公開API
 pub use components::*;

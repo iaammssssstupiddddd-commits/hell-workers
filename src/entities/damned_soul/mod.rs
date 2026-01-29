@@ -1,7 +1,9 @@
 use bevy::prelude::*;
 
+pub mod movement;
 pub mod names;
-pub mod systems;
+pub mod observers;
+pub mod spawn;
 
 use names::{FEMALE_NAMES, MALE_NAMES};
 use rand::Rng;
@@ -163,7 +165,7 @@ pub struct DamnedSoulPlugin;
 
 use crate::systems::GameSystemSet;
 
-pub use systems::spawn_damned_souls;
+pub use spawn::spawn_damned_souls;
 
 impl Plugin for DamnedSoulPlugin {
     fn build(&self, app: &mut App) {
@@ -174,10 +176,10 @@ impl Plugin for DamnedSoulPlugin {
             .add_systems(
                 Update,
                 (
-                    systems::soul_spawning_system.in_set(GameSystemSet::Logic),
-                    systems::pathfinding_system.in_set(GameSystemSet::Actor),
-                    systems::soul_movement.in_set(GameSystemSet::Actor),
-                    systems::animation_system.in_set(GameSystemSet::Visual),
+                    spawn::soul_spawning_system.in_set(GameSystemSet::Logic),
+                    movement::pathfinding_system.in_set(GameSystemSet::Actor),
+                    movement::soul_movement.in_set(GameSystemSet::Actor),
+                    movement::animation_system.in_set(GameSystemSet::Visual),
                 ),
             );
     }
