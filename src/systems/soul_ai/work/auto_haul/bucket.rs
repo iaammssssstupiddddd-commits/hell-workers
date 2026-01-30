@@ -4,15 +4,18 @@
 
 use bevy::prelude::*;
 
+use crate::constants::*;
 use crate::systems::command::TaskArea;
 use crate::systems::jobs::{Designation, IssuedBy, TaskSlots, WorkType};
 use crate::systems::logistics::{ResourceItem, ResourceType, Stockpile};
+use crate::systems::spatial::{StockpileSpatialGrid, SpatialGridOps};
 use crate::relationships::TaskWorkers;
 
 /// バケツ専用オートホールシステム
 /// ドロップされたバケツを、BelongsTo で紐付いたタンクのバケツ置き場に運搬する
 pub fn bucket_auto_haul_system(
     mut commands: Commands,
+    stockpile_grid: Res<StockpileSpatialGrid>,
     q_familiars: Query<(Entity, &TaskArea), With<crate::entities::familiar::Familiar>>,
     q_buckets: Query<
         (Entity, &Transform, &Visibility, &ResourceItem, &crate::systems::logistics::BelongsTo, Option<&TaskWorkers>),
@@ -63,20 +66,22 @@ pub fn bucket_auto_haul_system(
             }
 
             // バケツが紐付いているタンク
-            let _tank_entity = bucket_belongs.0;
-
-            // 同じタンクに紐付いたストックパイルを探す
             let tank_entity = bucket_belongs.0;
 
-            // 同じタンクに紐付いたストックパイルを探る
-            let target_stockpile = q_stockpiles
+            // 近くのストックパイルを空間グリッドで検索
+            let search_radius = TILE_SIZE * 20.0;
+            let nearby_stockpiles = stockpile_grid.get_nearby_in_radius(bucket_pos, search_radius);
+
+            // 同じタンクに紐付いた、条件に合うストックパイルを探す
+            let target_stockpile = nearby_stockpiles
                 .iter()
+                .filter_map(|&entity| q_stockpiles.get(entity).ok())
                 .filter(|(_, _, stock, stock_belongs, stored_opt)| {
                     // 同じタンクに紐付いているか
                     if stock_belongs.0 != tank_entity {
                         return false;
                     }
-                    
+
                     // バケツ置き場（Stockpile）が「バケツ」または「未設定」を受け入れるか確認
                     // 通常、タンクのバケツ置き場は resource_type が None または BucketEmpty/Water
                     let type_match = match stock.resource_type {
