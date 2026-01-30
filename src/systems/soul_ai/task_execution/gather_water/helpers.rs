@@ -36,3 +36,33 @@ pub fn drop_bucket_for_auto_haul(
         None, None, &ctx.queries, haul_cache, world_map, false
     );
 }
+
+/// タスクを中断する（インベントリにアイテムがない場合）
+/// バケツがインベントリにない状態でのタスク中断時に使用
+pub fn abort_task_without_item(
+    commands: &mut Commands,
+    ctx: &mut TaskExecutionContext,
+    haul_cache: &mut crate::systems::familiar_ai::haul_cache::HaulReservationCache,
+    world_map: &WorldMap,
+) {
+    let soul_pos = ctx.soul_pos();
+    crate::systems::soul_ai::work::unassign_task(
+        commands, ctx.soul_entity, soul_pos, ctx.task, ctx.path,
+        None, None, &ctx.queries, haul_cache, world_map, true
+    );
+}
+
+/// タスクを中断する（インベントリにアイテムがある場合）
+/// 経路探索失敗やターゲット消失などのエラー時に使用
+pub fn abort_task_with_item(
+    commands: &mut Commands,
+    ctx: &mut TaskExecutionContext,
+    haul_cache: &mut crate::systems::familiar_ai::haul_cache::HaulReservationCache,
+    world_map: &WorldMap,
+) {
+    let soul_pos = ctx.soul_pos();
+    crate::systems::soul_ai::work::unassign_task(
+        commands, ctx.soul_entity, soul_pos, ctx.task, ctx.path,
+        Some(ctx.inventory), None, &ctx.queries, haul_cache, world_map, true
+    );
+}
