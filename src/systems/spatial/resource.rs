@@ -28,12 +28,21 @@ impl SpatialGridOps for ResourceSpatialGrid {
 pub fn update_resource_spatial_grid_system(
     mut grid: ResMut<ResourceSpatialGrid>,
     query: Query<(Entity, &Transform, Option<&Visibility>), With<ResourceItem>>,
+    mut removed: RemovedComponents<ResourceItem>,
 ) {
-    grid.0.clear();
+    // 状態更新（移動・表示切替）
     for (entity, transform, visibility) in query.iter() {
         let should_register = visibility.map(|v| *v != Visibility::Hidden).unwrap_or(true);
         if should_register {
-            grid.0.insert(entity, transform.translation.truncate());
+            grid.update(entity, transform.translation.truncate());
+        } else {
+            // 非表示になった場合はグリッドから削除
+            grid.remove(entity);
         }
+    }
+
+    // 削除されたアイテムをグリッドから除去
+    for entity in removed.read() {
+        grid.remove(entity);
     }
 }
