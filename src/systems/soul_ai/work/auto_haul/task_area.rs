@@ -9,7 +9,7 @@ use crate::entities::familiar::ActiveCommand;
 use crate::systems::command::TaskArea;
 use crate::systems::jobs::{Designation, IssuedBy, TaskSlots, WorkType};
 use crate::systems::logistics::{ResourceItem, ResourceType, Stockpile, BelongsTo};
-use crate::systems::spatial::{ResourceSpatialGrid, SpatialGridOps};
+use crate::systems::spatial::{ResourceSpatialGrid, StockpileSpatialGrid, SpatialGridOps};
 use crate::relationships::{TaskWorkers, StoredItems};
 
 /// 指揮エリア内での自動運搬タスク生成システム
@@ -18,6 +18,7 @@ use crate::relationships::{TaskWorkers, StoredItems};
 pub fn task_area_auto_haul_system(
     mut commands: Commands,
     resource_grid: Res<ResourceSpatialGrid>,
+    stockpile_grid: Res<StockpileSpatialGrid>,
     q_familiars: Query<(Entity, &ActiveCommand, &TaskArea)>,
     q_stockpiles: Query<(
         Entity,
@@ -101,16 +102,19 @@ pub fn task_area_auto_haul_system(
     // エリア内のストックパイルを中心に、近くのアイテムを空間検索で探す
     // -----------------------------------------------------------------------
     for (fam_entity, _active_command, task_area) in q_familiars.iter() {
-        for (_stock_entity, stock_transform, stockpile, stored_items_opt, stock_belongs) in q_stockpiles.iter() {
+        // タスクエリア内のストックパイルのみを取得
+        let stockpiles_in_area = stockpile_grid.get_in_area(task_area.min, task_area.max);
+
+        for stock_entity in stockpiles_in_area {
+            let Ok((_stock_entity, stock_transform, stockpile, stored_items_opt, stock_belongs)) =
+                q_stockpiles.get(stock_entity) else { continue; };
+
             // 専用ストックパイル（所有権あり）は、汎用アイテムを受け入れない
             if stock_belongs.is_some() {
                 continue;
             }
 
             let stock_pos = stock_transform.translation.truncate();
-            if !task_area.contains(stock_pos) {
-                continue;
-            }
 
             let current_count = stored_items_opt.map(|si| si.len()).unwrap_or(0);
             if current_count >= stockpile.capacity {
