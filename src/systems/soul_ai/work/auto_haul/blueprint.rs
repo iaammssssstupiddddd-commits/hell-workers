@@ -10,13 +10,14 @@ use crate::systems::command::TaskArea;
 use crate::systems::jobs::{Blueprint, Designation, IssuedBy, TaskSlots, WorkType};
 use crate::systems::logistics::{ResourceItem, ResourceType};
 use crate::systems::soul_ai::task_execution::AssignedTask;
-use crate::systems::spatial::{ResourceSpatialGrid, SpatialGridOps};
+use crate::systems::spatial::{BlueprintSpatialGrid, ResourceSpatialGrid, SpatialGridOps};
 use crate::relationships::TaskWorkers;
 
 /// 設計図への自動資材運搬タスク生成システム
 pub fn blueprint_auto_haul_system(
     mut commands: Commands,
     resource_grid: Res<ResourceSpatialGrid>,
+    blueprint_grid: Res<BlueprintSpatialGrid>,
     q_familiars: Query<(Entity, &ActiveCommand, &TaskArea)>,
     q_blueprints: Query<(Entity, &Transform, &Blueprint, Option<&TaskWorkers>)>,
     q_resources: Query<
@@ -63,13 +64,16 @@ pub fn blueprint_auto_haul_system(
 
     for (fam_entity, _active_command, task_area) in q_familiars.iter() {
         let (fam_entity, _active_command, task_area): (Entity, &ActiveCommand, &TaskArea) = (fam_entity, _active_command, task_area);
-        // エリア内の Blueprint を探す
-        for (bp_entity, bp_transform, blueprint, workers_opt) in q_blueprints.iter() {
-            let (bp_entity, bp_transform, blueprint, workers_opt): (Entity, &Transform, &Blueprint, Option<&TaskWorkers>) = (bp_entity, bp_transform, blueprint, workers_opt);
-            let bp_pos = bp_transform.translation.truncate();
-            if !task_area.contains(bp_pos) {
+
+        // 最適化: タスクエリア内のブループリントのみを取得
+        let blueprints_in_area = blueprint_grid.get_in_area(task_area.min, task_area.max);
+
+        for bp_entity in blueprints_in_area {
+            // クエリで詳細データを取得
+            let Ok((_, bp_transform, blueprint, workers_opt)) = q_blueprints.get(bp_entity) else {
                 continue;
-            }
+            };
+            let bp_pos = bp_transform.translation.truncate();
 
             // 既に作業員が割り当てられている場合はスキップ（建築中）
             if workers_opt.map(|w| w.len()).unwrap_or(0) > 0 {

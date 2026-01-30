@@ -34,6 +34,8 @@ pub struct PathfindingContext {
     pub came_from: Vec<Option<usize>>,
     pub open_set: BinaryHeap<PathNode>,
     pub allow_goal_obstacle: bool,
+    /// 訪問済みインデックスを追跡（reset時の最適化用）
+    visited: Vec<usize>,
 }
 
 impl Default for PathfindingContext {
@@ -44,14 +46,19 @@ impl Default for PathfindingContext {
             came_from: vec![None; size],
             open_set: BinaryHeap::with_capacity(size / 4),
             allow_goal_obstacle: false,
+            visited: Vec::with_capacity(512),
         }
     }
 }
 
 impl PathfindingContext {
     fn reset(&mut self) {
-        self.g_scores.fill(i32::MAX);
-        self.came_from.fill(None);
+        // 訪問済みセルのみリセット（O(n) → O(k) 最適化）
+        for &idx in &self.visited {
+            self.g_scores[idx] = i32::MAX;
+            self.came_from[idx] = None;
+        }
+        self.visited.clear();
         self.open_set.clear();
         self.allow_goal_obstacle = false;
     }
@@ -86,6 +93,7 @@ pub fn find_path(
         MOVE_COST_DIAGONAL * min_d + MOVE_COST_STRAIGHT * (max_d - min_d)
     };
 
+    context.visited.push(start_idx);
     context.g_scores[start_idx] = 0;
     context.open_set.push(PathNode {
         idx: start_idx,
@@ -148,6 +156,10 @@ pub fn find_path(
             let tentative_g = current_g + move_cost;
 
             if tentative_g < context.g_scores[n_idx] {
+                // 初訪問時のみ記録（重複防止）
+                if context.g_scores[n_idx] == i32::MAX {
+                    context.visited.push(n_idx);
+                }
                 context.came_from[n_idx] = Some(current.idx);
                 context.g_scores[n_idx] = tentative_g;
                 context.open_set.push(PathNode {
@@ -272,6 +284,7 @@ pub fn find_path_to_boundary(
         MOVE_COST_DIAGONAL * min_d + MOVE_COST_STRAIGHT * (max_d - min_d)
     };
 
+    context.visited.push(start_idx);
     context.g_scores[start_idx] = 0;
     context.open_set.push(PathNode {
         idx: start_idx,
@@ -332,6 +345,10 @@ pub fn find_path_to_boundary(
             let tentative_g = current_g + move_cost;
 
             if tentative_g < context.g_scores[n_idx] {
+                // 初訪問時のみ記録（重複防止）
+                if context.g_scores[n_idx] == i32::MAX {
+                    context.visited.push(n_idx);
+                }
                 context.came_from[n_idx] = Some(current.idx);
                 context.g_scores[n_idx] = tentative_g;
                 context.open_set.push(PathNode {

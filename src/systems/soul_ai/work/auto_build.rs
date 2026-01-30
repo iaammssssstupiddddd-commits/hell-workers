@@ -9,10 +9,12 @@ use crate::systems::logistics::InStockpile;
 use crate::systems::soul_ai::task_execution::AssignedTask;
 use crate::systems::soul_ai::task_execution::types::BuildPhase;
 use crate::systems::soul_ai::work::helpers;
+use crate::systems::spatial::BlueprintSpatialGrid;
 
 /// 資材が揃った建築タスクの自動割り当てシステム
 pub fn blueprint_auto_build_system(
     mut commands: Commands,
+    blueprint_grid: Res<BlueprintSpatialGrid>,
     q_familiars: Query<(Entity, &ActiveCommand, &TaskArea)>,
     q_blueprints: Query<(Entity, &Transform, &Blueprint, Option<&TaskWorkers>)>,
     q_designations: Query<(
@@ -42,12 +44,15 @@ pub fn blueprint_auto_build_system(
     q_breakdown: Query<&StressBreakdown>,
 ) {
     for (fam_entity, _active_command, task_area) in q_familiars.iter() {
-        // エリア内の Blueprint を探す
-        for (bp_entity, bp_transform, blueprint, workers_opt) in q_blueprints.iter() {
-            let bp_pos = bp_transform.translation.truncate();
-            if !task_area.contains(bp_pos) {
+        // 最適化: タスクエリア内のブループリントのみを取得
+        let blueprints_in_area = blueprint_grid.get_in_area(task_area.min, task_area.max);
+
+        for bp_entity in blueprints_in_area {
+            // クエリで詳細データを取得
+            let Ok((_, bp_transform, blueprint, workers_opt)) = q_blueprints.get(bp_entity) else {
                 continue;
-            }
+            };
+            let bp_pos = bp_transform.translation.truncate();
 
             // 既に作業員が割り当てられている場合はスキップ（建築中）
             if workers_opt.map(|w| w.len()).unwrap_or(0) > 0 {
