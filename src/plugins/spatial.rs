@@ -2,7 +2,7 @@
 
 use crate::systems::GameSystemSet;
 use crate::systems::spatial::{
-    update_designation_spatial_grid_system, update_familiar_spatial_grid_system,
+    update_blueprint_spatial_grid_system, update_designation_spatial_grid_system, update_familiar_spatial_grid_system,
     update_gathering_spot_spatial_grid_system, update_resource_spatial_grid_system,
     update_spatial_grid_system,
 };
@@ -20,6 +20,7 @@ impl Plugin for SpatialPlugin {
                 update_resource_spatial_grid_system,
                 update_designation_spatial_grid_system,
                 update_gathering_spot_spatial_grid_system,
+                update_blueprint_spatial_grid_system,
             )
                 .in_set(GameSystemSet::Spatial),
         );
