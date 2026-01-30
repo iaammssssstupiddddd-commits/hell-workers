@@ -6,7 +6,7 @@ use crate::systems::soul_ai::task_execution::types::{AssignedTask, GatherWaterPh
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
 
-use super::helpers::drop_bucket_for_auto_haul;
+use super::helpers::{abort_task_with_item, abort_task_without_item, drop_bucket_for_auto_haul};
 
 pub fn handle_gather_water_task(
     ctx: &mut TaskExecutionContext,
@@ -65,29 +65,20 @@ fn handle_going_to_bucket(
             ctx.path.waypoints = vec![river_pos];
             ctx.path.current_index = 0;
         } else {
-            crate::systems::soul_ai::work::unassign_task(
-                commands, ctx.soul_entity, soul_pos, ctx.task, ctx.path,
-                Some(ctx.inventory), None, &ctx.queries, haul_cache, world_map, true
-            );
+            abort_task_with_item(commands, ctx, haul_cache, world_map);
         }
         return;
     }
 
     let Ok((bucket_transform, _, _, res_item_opt, _, stored_in_opt)) = q_targets.get(bucket_entity) else {
-        crate::systems::soul_ai::work::unassign_task(
-            commands, ctx.soul_entity, soul_pos, ctx.task, ctx.path,
-            Some(ctx.inventory), None, &ctx.queries, haul_cache, world_map, true
-        );
+        abort_task_with_item(commands, ctx, haul_cache, world_map);
         return;
     };
 
     // バケツであることを確認（任意だが安全のため）
     if let Some(res) = res_item_opt {
         if !matches!(res.0, ResourceType::BucketEmpty | ResourceType::BucketWater) {
-            crate::systems::soul_ai::work::unassign_task(
-                commands, ctx.soul_entity, soul_pos, ctx.task, ctx.path,
-                Some(ctx.inventory), None, &ctx.queries, haul_cache, world_map, true
-            );
+            abort_task_with_item(commands, ctx, haul_cache, world_map);
             return;
         }
     }
@@ -172,16 +163,10 @@ fn handle_going_to_bucket(
                     .collect();
                 ctx.path.current_index = 0;
             } else {
-                crate::systems::soul_ai::work::unassign_task(
-                    commands, ctx.soul_entity, soul_pos, ctx.task, ctx.path,
-                    Some(ctx.inventory), None, &ctx.queries, haul_cache, world_map, true
-                );
+                abort_task_with_item(commands, ctx, haul_cache, world_map);
             }
         } else {
-            crate::systems::soul_ai::work::unassign_task(
-                commands, ctx.soul_entity, soul_pos, ctx.task, ctx.path,
-                Some(ctx.inventory), None, &ctx.queries, haul_cache, world_map, true
-            );
+            abort_task_with_item(commands, ctx, haul_cache, world_map);
         }
     } else {
         let bucket_grid = WorldMap::world_to_grid(bucket_pos);
@@ -220,16 +205,13 @@ fn handle_going_to_river(
     commands: &mut Commands,
     haul_cache: &mut crate::systems::familiar_ai::haul_cache::HaulReservationCache,
     world_map: &WorldMap,
-    soul_pos: Vec2,
+    _soul_pos: Vec2,
 ) {
     // バケツがインベントリにあるか確認
     if ctx.inventory.0 != Some(bucket_entity) {
         // バケツを持っていないのでタスクを中断（ドロップ処理なし）
         warn!("GoingToRiver: Bucket not in inventory, aborting task for soul {:?}", ctx.soul_entity);
-        crate::systems::soul_ai::work::unassign_task(
-            commands, ctx.soul_entity, soul_pos, ctx.task, ctx.path,
-            None, None, &ctx.queries, haul_cache, world_map, true
-        );
+        abort_task_without_item(commands, ctx, haul_cache, world_map);
         return;
     }
 
@@ -268,16 +250,13 @@ fn handle_filling(
     haul_cache: &mut crate::systems::familiar_ai::haul_cache::HaulReservationCache,
     time: &Res<Time>,
     world_map: &WorldMap,
-    soul_pos: Vec2,
+    _soul_pos: Vec2,
 ) {
     // バケツがインベントリにあるか確認
     if ctx.inventory.0 != Some(bucket_entity) {
         // バケツを持っていないのでタスクを中断（ドロップ処理なし）
         warn!("Filling: Bucket not in inventory, aborting task for soul {:?}", ctx.soul_entity);
-        crate::systems::soul_ai::work::unassign_task(
-            commands, ctx.soul_entity, soul_pos, ctx.task, ctx.path,
-            None, None, &ctx.queries, haul_cache, world_map, true
-        );
+        abort_task_without_item(commands, ctx, haul_cache, world_map);
         return;
     }
 
@@ -332,16 +311,10 @@ fn handle_filling(
                     .collect();
                 ctx.path.current_index = 0;
             } else {
-                crate::systems::soul_ai::work::unassign_task(
-                    commands, ctx.soul_entity, soul_pos, ctx.task, ctx.path,
-                    Some(ctx.inventory), None, &ctx.queries, haul_cache, world_map, true
-                );
+                abort_task_with_item(commands, ctx, haul_cache, world_map);
             }
         } else {
-            crate::systems::soul_ai::work::unassign_task(
-                commands, ctx.soul_entity, soul_pos, ctx.task, ctx.path,
-                Some(ctx.inventory), None, &ctx.queries, haul_cache, world_map, true
-            );
+            abort_task_with_item(commands, ctx, haul_cache, world_map);
         }
     } else {
         *ctx.task = AssignedTask::GatherWater(crate::systems::soul_ai::task_execution::types::GatherWaterData {
@@ -359,16 +332,13 @@ fn handle_going_to_tank(
     commands: &mut Commands,
     haul_cache: &mut crate::systems::familiar_ai::haul_cache::HaulReservationCache,
     world_map: &WorldMap,
-    soul_pos: Vec2,
+    _soul_pos: Vec2,
 ) {
     // バケツがインベントリにあるか確認
     if ctx.inventory.0 != Some(bucket_entity) {
         // バケツを持っていないのでタスクを中断（ドロップ処理なし）
         warn!("GoingToTank: Bucket not in inventory, aborting task for soul {:?}", ctx.soul_entity);
-        crate::systems::soul_ai::work::unassign_task(
-            commands, ctx.soul_entity, soul_pos, ctx.task, ctx.path,
-            None, None, &ctx.queries, haul_cache, world_map, true
-        );
+        abort_task_without_item(commands, ctx, haul_cache, world_map);
         return;
     }
 
@@ -405,16 +375,13 @@ fn handle_pouring(
     game_assets: &Res<crate::assets::GameAssets>,
     haul_cache: &mut crate::systems::familiar_ai::haul_cache::HaulReservationCache,
     world_map: &WorldMap,
-    soul_pos: Vec2,
+    _soul_pos: Vec2,
 ) {
     // バケツがインベントリにあるか確認
     if ctx.inventory.0 != Some(bucket_entity) {
         // バケツを持っていないのでタスクを中断（ドロップ処理なし）
         warn!("Pouring: Bucket not in inventory, aborting task for soul {:?}", ctx.soul_entity);
-        crate::systems::soul_ai::work::unassign_task(
-            commands, ctx.soul_entity, soul_pos, ctx.task, ctx.path,
-            None, None, &ctx.queries, haul_cache, world_map, true
-        );
+        abort_task_without_item(commands, ctx, haul_cache, world_map);
         return;
     }
 
