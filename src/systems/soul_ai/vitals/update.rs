@@ -2,9 +2,12 @@ use bevy::prelude::*;
 
 use crate::constants::*;
 use crate::entities::damned_soul::{DamnedSoul, IdleBehavior, IdleState, StressBreakdown};
+use crate::entities::familiar::Familiar;
 use crate::entities::familiar::UnderCommand;
 use crate::events::{OnExhausted, OnStressBreakdown};
+use crate::systems::soul_ai::idle::escaping::is_familiar_in_influence_range;
 use crate::systems::soul_ai::task_execution::AssignedTask;
+use crate::systems::spatial::FamiliarSpatialGrid;
 
 /// 疲労の増減を管理するシステム
 pub fn fatigue_update_system(
@@ -63,8 +66,11 @@ pub fn fatigue_penalty_system(time: Res<Time>, mut q_souls: Query<&mut DamnedSou
 pub fn stress_system(
     mut commands: Commands,
     time: Res<Time>,
+    familiar_grid: Res<FamiliarSpatialGrid>,
+    q_familiars: Query<(&Transform, &Familiar)>,
     mut q_souls: Query<(
         Entity,
+        &Transform,
         &mut DamnedSoul,
         &AssignedTask,
         &IdleState,
@@ -74,27 +80,27 @@ pub fn stress_system(
 ) {
     let dt = time.delta_secs();
 
-    for (entity, soul, task, idle, under_command, breakdown_opt) in q_souls.iter_mut() {
-        let (entity, mut soul, task, idle, under_command, breakdown_opt): (
-            Entity,
-            Mut<DamnedSoul>,
-            &AssignedTask,
-            &IdleState,
-            Option<&UnderCommand>,
-            Option<Mut<StressBreakdown>>,
-        ) = (entity, soul, task, idle, under_command, breakdown_opt);
+    for (entity, transform, mut soul, task, idle, under_command, breakdown_opt) in
+        q_souls.iter_mut()
+    {
         let has_task = !matches!(task, AssignedTask::None);
         let is_gathering = matches!(
             idle.behavior,
             IdleBehavior::Gathering | IdleBehavior::ExhaustedGathering
         );
+        let soul_pos = transform.translation.truncate();
+        let is_influence_close =
+            is_familiar_in_influence_range(soul_pos, &familiar_grid, &q_familiars);
 
         if has_task {
             soul.stress = (soul.stress + dt * STRESS_WORK_RATE).min(1.0);
-        } else if is_gathering {
-            soul.stress = (soul.stress - dt * STRESS_RECOVERY_RATE_GATHERING).max(0.0);
         } else if under_command.is_some() {
             // 待機中（使役下）= 変化なし
+        } else if is_influence_close {
+            // 未使役で警戒圏内にいる場合はストレスを上昇させる
+            soul.stress = (soul.stress + dt * ESCAPE_PROXIMITY_STRESS_RATE).min(1.0);
+        } else if is_gathering {
+            soul.stress = (soul.stress - dt * STRESS_RECOVERY_RATE_GATHERING).max(0.0);
         } else {
             soul.stress = (soul.stress - dt * STRESS_RECOVERY_RATE_IDLE).max(0.0);
         }
