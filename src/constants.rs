@@ -67,7 +67,7 @@ pub const FATIGUE_GAIN_ON_COMPLETION: f32 = 0.1;
 // ============================================================
 
 /// 作業中のストレス増加率 (毎秒)
-pub const STRESS_WORK_RATE: f32 = 0.015;
+pub const STRESS_WORK_RATE: f32 = 0.005;
 /// 集会中のストレス減少率 (毎秒)
 pub const STRESS_RECOVERY_RATE_GATHERING: f32 = 0.04;
 /// 通常待機中のストレス減少率 (毎秒)
@@ -84,7 +84,7 @@ pub const STRESS_FREEZE_RECOVERY_THRESHOLD: f32 = 0.9;
 /// 待機中（非コマンド中）の使い魔の監視効率マルチプライヤー
 pub const SUPERVISION_IDLE_MULTIPLIER: f32 = 0.4;
 /// 監視によるストレス増加係数
-pub const SUPERVISION_STRESS_SCALE: f32 = 0.0375;
+pub const SUPERVISION_STRESS_SCALE: f32 = 0.01;
 /// 監視によるモチベーション増加係数
 pub const SUPERVISION_MOTIVATION_SCALE: f32 = 0.4;
 /// 監視による怠惰減少係数
@@ -152,6 +152,25 @@ pub const IDLE_DURATION_SIT_MIN: f32 = 3.0;
 pub const IDLE_DURATION_SIT_MAX: f32 = 6.0;
 pub const IDLE_DURATION_WANDER_MIN: f32 = 2.0;
 pub const IDLE_DURATION_WANDER_MAX: f32 = 4.0;
+
+// ============================================================
+// AI ロジック定数 - 逃走システム (Escape System)
+// ============================================================
+
+/// 逃走を開始する距離（command_radiusの何倍か）
+pub const ESCAPE_TRIGGER_DISTANCE_MULTIPLIER: f32 = 1.5;
+/// 逃走を終了する距離（command_radiusの何倍か）
+pub const ESCAPE_SAFE_DISTANCE_MULTIPLIER: f32 = 2.0;
+/// 逃走時のスピード倍率
+pub const ESCAPE_SPEED_MULTIPLIER: f32 = 1.3;
+/// 逃走を開始するストレス閾値
+pub const ESCAPE_STRESS_THRESHOLD: f32 = 0.3;
+/// 警戒圏内でのストレス増加率 (毎秒)
+pub const ESCAPE_PROXIMITY_STRESS_RATE: f32 = 0.005;
+/// Escaping状態のSoulの集会参加距離（通常より遠くから参加可能）
+pub const ESCAPE_GATHERING_JOIN_RADIUS: f32 = TILE_SIZE * 7.5;
+/// 逃走検出システムの実行間隔（秒）
+pub const ESCAPE_DETECTION_INTERVAL: f32 = 0.5;
 
 // ============================================================
 // AI ロジック定数 - 作業 (Work)
