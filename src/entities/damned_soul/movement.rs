@@ -18,6 +18,7 @@ pub fn pathfinding_system(
             &Destination,
             &mut Path,
             &mut AssignedTask,
+            &IdleState,
             Option<&mut crate::systems::logistics::Inventory>,
         ),
         With<DamnedSoul>,
@@ -25,7 +26,9 @@ pub fn pathfinding_system(
     mut haul_cache: ResMut<crate::systems::familiar_ai::haul_cache::HaulReservationCache>,
     queries: crate::systems::soul_ai::task_execution::context::TaskQueries,
 ) {
-    for (entity, transform, destination, mut path, mut task, mut inventory_opt) in query.iter_mut() {
+    for (entity, transform, destination, mut path, mut task, idle, mut inventory_opt) in
+        query.iter_mut()
+    {
         let current_pos = transform.translation.truncate();
         let start_grid = WorldMap::world_to_grid(current_pos);
         let goal_grid = WorldMap::world_to_grid(destination.0);
@@ -43,8 +46,14 @@ pub fn pathfinding_system(
             }
         }
 
-        // タスクがないなら探索不要
-        if matches!(*task, AssignedTask::None) {
+        let has_task = !matches!(*task, AssignedTask::None);
+        let idle_can_move = match idle.behavior {
+            IdleBehavior::Sitting | IdleBehavior::Sleeping => false,
+            _ => true,
+        };
+
+        // タスクがなく、かつアイドル移動が不要なら探索不要
+        if !has_task && !idle_can_move {
             continue;
         }
 
@@ -136,6 +145,9 @@ pub fn soul_movement(
 
                 if idle.behavior == IdleBehavior::ExhaustedGathering {
                     speed *= SOUL_SPEED_EXHAUSTED_MULTIPLIER;
+                }
+                if idle.behavior == IdleBehavior::Escaping {
+                    speed *= ESCAPE_SPEED_MULTIPLIER;
                 }
 
                 let move_dist = (speed * time.delta_secs()).min(distance);

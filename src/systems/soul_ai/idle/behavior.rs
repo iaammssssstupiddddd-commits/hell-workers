@@ -146,6 +146,10 @@ pub fn idle_behavior_system(
 
         // 疲労による強制集会（ExhaustedGathering）状態の場合は他の処理をスキップ
         if idle.behavior == IdleBehavior::ExhaustedGathering {
+            if under_command_opt.is_some() {
+                // ExhaustedGathering は疲労起因のため使役対象外
+                commands.entity(entity).remove::<UnderCommand>();
+            }
             if let Some(center) = gathering_center {
                 let current_pos = transform.translation.truncate();
                 let dist_from_center = (center - current_pos).length();
@@ -178,29 +182,27 @@ pub fn idle_behavior_system(
             }
         }
 
-        if under_command_opt.is_some() {
-            // 使役されたら集会から抜ける
+        if under_command_opt.is_some() || !matches!(&*task, AssignedTask::None) {
+            // 使役/タスク割り当て時は集会・逃走を解除
             if let Some(p) = participating_in {
                 commands.entity(entity).remove::<ParticipatingIn>();
                 commands.trigger(crate::events::OnGatheringLeft {
                     entity,
                     spot_entity: p.0,
                 });
+            }
+            if idle.behavior != IdleBehavior::Wandering {
+                idle.behavior = IdleBehavior::Wandering;
+                idle.idle_timer = 0.0;
+                idle.behavior_duration = 3.0;
+                idle.needs_separation = false;
             }
             idle.total_idle_time = 0.0;
             continue;
         }
 
-        if !matches!(&*task, AssignedTask::None) {
-            // タスクが割り当てられたら集会から抜ける
-            if let Some(p) = participating_in {
-                commands.entity(entity).remove::<ParticipatingIn>();
-                commands.trigger(crate::events::OnGatheringLeft {
-                    entity,
-                    spot_entity: p.0,
-                });
-            }
-            idle.total_idle_time = 0.0;
+        // 逃走中（Escaping）は escaping_behavior_system に任せる
+        if idle.behavior == IdleBehavior::Escaping {
             continue;
         }
 
@@ -274,6 +276,10 @@ pub fn idle_behavior_system(
                 }
                 IdleBehavior::Gathering | IdleBehavior::ExhaustedGathering => {
                     rng.gen_range(IDLE_DURATION_WANDER_MIN..IDLE_DURATION_WANDER_MAX)
+                }
+                IdleBehavior::Escaping => {
+                    // 逃走中は短い間隔で再評価
+                    2.0
                 }
             };
         }
@@ -362,6 +368,10 @@ pub fn idle_behavior_system(
                 }
             }
             IdleBehavior::Sitting | IdleBehavior::Sleeping => {}
+            IdleBehavior::Escaping => {
+                // 逃走中はescaping_behavior_systemで処理されるため、
+                // ここでは何もしない（continueされるはず）
+            }
         }
     }
 }

@@ -1,10 +1,13 @@
 //! 情報パネル更新
 
-use crate::entities::damned_soul::DamnedSoul;
-use crate::entities::familiar::Familiar;
+use crate::constants::ESCAPE_STRESS_THRESHOLD;
+use crate::entities::damned_soul::{DamnedSoul, IdleBehavior, IdleState};
+use crate::entities::familiar::{Familiar, UnderCommand};
 use crate::interface::ui::components::*;
 use crate::systems::jobs::Blueprint;
+use crate::systems::soul_ai::idle::escaping::is_escape_threat_close;
 use crate::systems::soul_ai::task_execution::AssignedTask;
+use crate::systems::spatial::FamiliarSpatialGrid;
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 
@@ -124,11 +127,16 @@ pub fn info_panel_system(
     q_souls: Query<(
         &DamnedSoul,
         &AssignedTask,
+        &Transform,
+        &IdleState,
+        Option<&UnderCommand>,
         Option<&crate::systems::logistics::Inventory>,
         Option<&crate::entities::damned_soul::SoulIdentity>,
     )>,
     q_blueprints: Query<&Blueprint>,
     q_familiars: Query<(&Familiar, &crate::entities::familiar::FamiliarOperation)>,
+    q_familiars_escape: Query<(&Transform, &Familiar)>,
+    familiar_grid: Res<FamiliarSpatialGrid>,
     q_items: Query<&crate::systems::logistics::ResourceItem>,
     q_trees: Query<&crate::systems::jobs::Tree>,
     q_rocks: Query<&crate::systems::jobs::Rock>,
@@ -147,7 +155,9 @@ pub fn info_panel_system(
     }
 
     if let Some(entity) = selected.0 {
-        if let Ok((soul, task, inventory_opt, identity_opt)) = q_souls.get(entity) {
+        if let Ok((soul, task, transform, idle, under_command, inventory_opt, identity_opt)) =
+            q_souls.get(entity)
+        {
             panel_node.display = Display::Flex;
 
             if let Ok(mut header) = params.q_header.single_mut() {
@@ -190,6 +200,27 @@ pub fn info_panel_system(
             };
             if let Ok(mut t) = params.q_task.single_mut() {
                 t.0 = format!("Task: {}", task_str);
+            }
+
+            let escape_threat_close = is_escape_threat_close(
+                transform.translation.truncate(),
+                &familiar_grid,
+                &q_familiars_escape,
+            );
+            let escape_allowed = under_command.is_none()
+                && idle.behavior != IdleBehavior::ExhaustedGathering
+                && soul.stress > ESCAPE_STRESS_THRESHOLD
+                && escape_threat_close;
+            if let Ok(mut common) = params.q_common.single_mut() {
+                common.0 = format!(
+                    "Idle: {:?}\nEscape: {}\n- stress_ok: {}\n- threat_close: {}\n- commanded: {}\n- exhausted: {}",
+                    idle.behavior,
+                    if escape_allowed { "eligible" } else { "blocked" },
+                    soul.stress > ESCAPE_STRESS_THRESHOLD,
+                    escape_threat_close,
+                    under_command.is_some(),
+                    idle.behavior == IdleBehavior::ExhaustedGathering
+                );
             }
 
             let inv_str = if let Some(crate::systems::logistics::Inventory(Some(item_entity))) = inventory_opt {

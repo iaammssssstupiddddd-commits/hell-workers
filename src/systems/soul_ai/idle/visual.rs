@@ -42,6 +42,15 @@ pub fn idle_visual_system(
                 transform.rotation = Quat::IDENTITY;
                 sprite.color = Color::WHITE;
             }
+            IdleBehavior::Escaping => {
+                // 逃走中: 少し傾けて走っている感じ + 青白い色（パニック）
+                transform.rotation = Quat::from_rotation_z(-0.1);
+                // 色を少し青白く
+                sprite.color = Color::srgba(0.8, 0.9, 1.0, 1.0);
+                // 軽く点滅（パニック感）
+                let panic_pulse = (idle.total_idle_time * 8.0).sin() * 0.05 + 0.95;
+                transform.scale = Vec3::splat(panic_pulse);
+            }
             IdleBehavior::Gathering | IdleBehavior::ExhaustedGathering => {
                 let gathering_center = if let Some(p) = participating_in {
                     q_spots.get(p.0).ok().map(|s| s.center)

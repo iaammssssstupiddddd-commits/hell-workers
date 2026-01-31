@@ -77,6 +77,40 @@ When adding new tasks to `AssignedTask` enum:
 3. **Verify**: Check PNG signature is `89 50 4e 47 0d 0a 1a 0a`
 4. **Use**: Load with `.png` extension in code
 
+### Planning Workflow
+
+#### When to Create a Plan
+Create an implementation plan in `docs/plans/` when:
+- The task involves significant optimization or refactoring
+- Multiple files or systems will be modified
+- The implementation approach requires analysis and evaluation
+- The user explicitly requests a plan
+
+#### Plan File Management
+- **Location**: `docs/plans/` (gitignored - working documents only)
+- **Naming**: Use descriptive kebab-case names (e.g., `blueprint-spatial-grid.md`, `taskarea-optimization.md`)
+- **Format**: Markdown with clear sections:
+  - Problem description
+  - Solution approach
+  - Expected performance impact
+  - Implementation steps
+  - Files to modify
+  - Verification methods
+
+#### Plan Lifecycle
+1. **Creation**: Write detailed plan before implementation
+2. **Implementation**: Follow plan steps, updating as needed
+3. **Completion**:
+   - If successful: Delete plan file or move to archive
+   - If relevant for future: Document in `docs/architecture.md` or system-specific docs
+   - Plans are temporary working documents, not permanent documentation
+
+#### Why Plans are Gitignored
+- Plans are AI working documents for organizing complex tasks
+- Completed features should be documented in permanent docs (`docs/*.md`)
+- Prevents clutter in version control
+- User can manually commit specific plans if needed
+
 ### Task Lifecycle
 **On task start**: Review `docs/` to understand current specs and implementation status
 **On task completion**: Update or create documentation in `docs/` as needed
@@ -102,13 +136,20 @@ head -c 8 "assets/textures/file.png" | od -An -t x1
 
 ---
 
-## Directories to Avoid Reading
+## Directory Structure
+
+### Directories to Avoid Reading
 These directories contain build artifacts or logs that may cause issues:
 - `target/` - Build artifacts
 - `dist/` - Distribution files
 - `.trunk/` - Trunk cache
 - `logs/` - Log files
 - `.git/` - Git internal files
+- `docs/plans/` - Temporary AI working documents (gitignored)
+
+### Documentation Directories
+- `docs/` - Permanent project documentation (version controlled)
+- `docs/plans/` - Temporary implementation plans (gitignored, AI working files)
 
 ---
 

@@ -16,10 +16,11 @@ pub struct SoulAiPlugin;
 
 impl Plugin for SoulAiPlugin {
     fn build(&self, app: &mut App) {
-        app.register_type::<task_execution::AssignedTask>()
+        app            .register_type::<task_execution::AssignedTask>()
             .register_type::<gathering::GatheringSpot>()
             .init_resource::<work::AutoHaulCounter>()
             .init_resource::<gathering::GatheringUpdateTimer>()
+            .init_resource::<idle::escaping::EscapeDetectionTimer>()
             .add_systems(
                 Update,
                 (
@@ -58,6 +59,9 @@ impl Plugin for SoulAiPlugin {
                         idle::behavior::idle_behavior_system,
                         idle::visual::idle_visual_system,
                         idle::separation::gathering_separation_system,
+                        // 逃走システム
+                        idle::escaping::escaping_detection_system,
+                        idle::escaping::escaping_behavior_system,
                     ),
                     // ビジュアル
                     vitals::visual::familiar_hover_visualization_system,

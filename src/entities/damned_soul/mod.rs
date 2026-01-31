@@ -120,6 +120,7 @@ pub enum IdleBehavior {
     Sleeping,           // 寝ている
     Gathering,          // 集会中
     ExhaustedGathering, // 疲労による集会移動中
+    Escaping,           // 使い魔から逃走中
 }
 
 /// 集会中のサブ行動
