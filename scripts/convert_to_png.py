@@ -12,22 +12,58 @@ def convert_to_transparent_png(input_path, output_path, chroma_color=(255, 0, 25
         datas = img.getdata()
 
         new_data = []
-        # Support a small threshold for JPEG compression artifacts around the chroma color
-        threshold = 60 
+        
+        # Parameters
+        # Threshold for full transparency
+        cutoff_threshold = 60 
+        # Threshold for partial transparency / color correction
+        fade_threshold = 180 
         
         for item in datas:
-            # Check if this pixel is close to our chroma color
-            dist = sum(abs(item[i] - chroma_color[i]) for i in range(3))
-            
-            if dist < threshold:
-                # Make transparent
-                new_data.append((0, 0, 0, 0))
+            # Handle both RGB and RGBA inputs
+            if len(item) == 4:
+                r, g, b, a = item
             else:
-                new_data.append(item)
+                r, g, b = item
+                a = 255
+            
+            # Manhattan distance to magenta
+            dist = abs(r - chroma_color[0]) + abs(g - chroma_color[1]) + abs(b - chroma_color[2])
+            
+            if dist < cutoff_threshold:
+                new_data.append((0, 0, 0, 0))
+                continue
+
+            # Check for inner magenta gaps (high bias)
+            magenta_bias = (r + b) / 2 - g
+            if magenta_bias > 60:
+                # Likely an inner gap -> Transparent
+                new_data.append((0, 0, 0, 0))
+                continue
+                
+            if dist < fade_threshold:
+                # Edge region processing
+                factor = (dist - cutoff_threshold) / (fade_threshold - cutoff_threshold)
+                new_alpha = int(a * factor)
+                
+                # Despill
+                magenta_bias = (r + b) / 2 - g
+                if magenta_bias > 0:
+                    correction_strength = (1.0 - factor)
+                    new_r = int(r - (magenta_bias * correction_strength))
+                    new_b = int(b - (magenta_bias * correction_strength))
+                    new_r = max(0, new_r)
+                    new_b = max(0, new_b)
+                    new_data.append((new_r, g, new_b, new_alpha))
+                else:
+                    new_data.append((r, g, b, new_alpha))
+            else:
+                # Safe zone
+                new_data.append((r, g, b, a))
 
         img.putdata(new_data)
         img.save(output_path, "PNG")
-        print(f"Successfully converted {input_path} to {output_path} with chroma key transparency")
+        print(f"Successfully converted {input_path} to {output_path} with refined transparency")
     except Exception as e:
         print(f"Error: {e}")
 

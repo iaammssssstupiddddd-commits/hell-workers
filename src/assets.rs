@@ -9,7 +9,26 @@ pub struct GameAssets {
     pub sand: Handle<Image>,
     pub colonist: Handle<Image>,
     pub familiar: Handle<Image>,
-    pub wall: Handle<Image>,
+    // pub wall: Handle<Image>, // Removed single wall texture
+    // Wall connections
+    pub wall_isolated: Handle<Image>,
+    pub wall_horizontal_left: Handle<Image>,
+    pub wall_horizontal_right: Handle<Image>,
+    pub wall_horizontal_both: Handle<Image>,
+    pub wall_vertical_top: Handle<Image>,
+    pub wall_vertical_bottom: Handle<Image>,
+    pub wall_vertical_both: Handle<Image>,
+    pub wall_corner_top_left: Handle<Image>,
+    pub wall_corner_top_right: Handle<Image>,
+    pub wall_corner_bottom_left: Handle<Image>,
+    pub wall_corner_bottom_right: Handle<Image>,
+    pub wall_t_up: Handle<Image>,
+    pub wall_t_down: Handle<Image>,
+    pub wall_t_left: Handle<Image>,
+    pub wall_t_right: Handle<Image>,
+    pub wall_cross: Handle<Image>,
+    
+    // Base Resources
     pub wood: Handle<Image>,
     pub tree: Handle<Image>,        // 木のスプライト
     pub rock: Handle<Image>,        // 岩のスプライト
