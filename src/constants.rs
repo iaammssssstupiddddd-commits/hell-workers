@@ -185,6 +185,8 @@ pub const GATHER_SPEED_ROCK_MULTIPLIER: f32 = 0.5;
 pub const WOOD_DROP_AMOUNT: u32 = 5;
 /// 採掘報酬: 岩1つあたりのRock数
 pub const ROCK_DROP_AMOUNT: u32 = 10;
+/// バケツ一度に汲める・運べる水の量
+pub const BUCKET_CAPACITY: u32 = 5;
 
 // ============================================================
 // AI ロジック定数 - 精製 (Refining)

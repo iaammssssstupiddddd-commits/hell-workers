@@ -48,6 +48,7 @@ pub struct TaskQueries<'w, 's> {
     pub mixers: Query<'w, 's, (&'static Transform, &'static mut crate::systems::jobs::MudMixerStorage, Option<&'static TaskWorkers>)>,
     pub resources: Query<'w, 's, &'static crate::systems::logistics::ResourceItem>,
     pub target_mixers: Query<'w, 's, &'static crate::systems::jobs::TargetMixer>,
+    pub resource_items: Query<'w, 's, (Entity, &'static crate::systems::logistics::ResourceItem, Option<&'static crate::relationships::StoredIn>)>,
 }
 
 /// タスク実行の基本コンテキスト

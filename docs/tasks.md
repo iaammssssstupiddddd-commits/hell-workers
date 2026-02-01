@@ -41,6 +41,8 @@ Bevy 0.18 の **ECS Relationships** 機能を使用し、エンティティ間�
 - **自動**:
     - `soul_ai::work::task_area_auto_haul_system` が備蓄場所周辺の資源を自動的に `Haul` 指定。
     - `soul_ai::work::tank_water_request_system` がタンクの空きに応じてバケツに自動的に `GatherWater` 指定。
+    - `soul_ai::work::auto_haul::mixer` システムが、MudMixerの空き状況とTankの在庫に応じて `HaulToMixer` (Sand/Rock) および `HaulWaterToMixer` (Water) を自動指定。
+
 
 ### 2. 割り当て (Assignment)
 - 使い魔 AI が自分のキュー、またはグローバルキューから最も近い有効なタスクを配下の魂に割り当てる。
@@ -60,6 +62,9 @@ Bevy 0.18 の **ECS Relationships** 機能を使用し、エンティティ間�
     - **岩 (Rock)**: `Rock` x 10 をドロップ。**作業時間は木の約2倍**かかる重労働です。
     - **スタック**: 報酬は同一タイル内にドロップされ、アイテム個数としてまとめてカウント（スタック）されます。
 - **運搬 (Haul)**: 「拾う」「備蓄場所へ運ぶ」「置く」のフェーズを経る。
+- **水運搬 (HaulWater)**: Tankから水を汲み、MudMixerへ運ぶ一連のプロセス。
+    - バケツ確保 -> Tankへ移動 -> 汲む -> Mixerへ移動 -> 注ぐ -> バケツ返却
+
 
 ### 4. 完了・放棄 (Completion / Abandonment)
 - **完了**: 資源が消滅、または目的地に到達。`AssignedTask::None` に戻り、コンポーネントがクリーンアップされる。この際、`OnTaskCompleted` イベントが発行される。

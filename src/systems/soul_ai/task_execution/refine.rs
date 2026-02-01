@@ -22,7 +22,16 @@ pub fn handle_refine_task(
             if let Ok(mixer_data) = ctx.queries.mixers.get(mixer_entity) {
                 let (mixer_transform, _, _) = mixer_data;
                 let mixer_pos = mixer_transform.translation.truncate();
-                update_destination_to_adjacent(ctx.dest, mixer_pos, ctx.path, soul_pos, world_map);
+                
+                // 到達可能かチェック
+                let reachable = update_destination_to_adjacent(ctx.dest, mixer_pos, ctx.path, soul_pos, world_map);
+                
+                if !reachable {
+                    // 到達不能: タスクをキャンセル
+                    info!("REFINE: Soul {:?} cannot reach mixer {:?}, canceling", ctx.soul_entity, mixer_entity);
+                    clear_task_and_path(ctx.task, ctx.path);
+                    return;
+                }
 
                 if is_near_target(soul_pos, mixer_pos) {
                     *ctx.task = AssignedTask::Refine(crate::systems::soul_ai::task_execution::types::RefineData {
@@ -35,6 +44,7 @@ pub fn handle_refine_task(
                 clear_task_and_path(ctx.task, ctx.path);
             }
         }
+
         RefinePhase::Refining { mut progress } => {
             if let Ok(mixer_data) = ctx.queries.mixers.get_mut(mixer_entity) {
                 let (mixer_transform, mut storage, _) = mixer_data;

@@ -143,7 +143,9 @@ flowchart TD
 - **MudMixer**: 2x2 の生産施設。
     - **建設**: 木材 × 4 で建設。
     - **機能**: 砂(1) + 水(1) + 岩(1) = Stasis Mud(5) を精製。
+    - **要件**: 稼働には `Tank` からの水供給（`HaulWaterToMixer`）が必要です。
     - **SandPile**: 建設完了時、周囲に砂採取場所 (`SandPile`) が生成されます。
+
 - **Stasis Mud**: 高度な建築（完全な壁など）に必要な強化建材。
 
 

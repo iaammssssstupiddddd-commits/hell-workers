@@ -4,62 +4,40 @@
 
 use bevy::prelude::*;
 
-use crate::constants::*;
+use crate::constants::{MUD_MIXER_CAPACITY, BUCKET_CAPACITY, TILE_SIZE};
 use crate::entities::familiar::ActiveCommand;
 use crate::systems::command::TaskArea;
 use crate::systems::jobs::{Designation, IssuedBy, MudMixerStorage, TargetMixer, TaskSlots, WorkType};
 use crate::systems::logistics::{ResourceItem, ResourceType, Stockpile};
-use crate::systems::soul_ai::task_execution::AssignedTask;
 use crate::systems::spatial::{ResourceSpatialGrid, SpatialGridOps, SpatialGrid};
 use crate::relationships::TaskWorkers;
+use crate::systems::familiar_ai::haul_cache::HaulReservationCache;
+
 
 /// MudMixer への自動資材運搬タスク生成システム
 pub fn mud_mixer_auto_haul_system(
     mut commands: Commands,
     resource_grid: Res<ResourceSpatialGrid>,
     _tank_grid: Res<SpatialGrid>,
+    mut haul_cache: ResMut<HaulReservationCache>,
     q_familiars: Query<(Entity, &ActiveCommand, &TaskArea)>,
     q_mixers: Query<(Entity, &Transform, &MudMixerStorage, Option<&TaskWorkers>)>,
-    q_resources: Query<
+    q_resources_with_belongs: Query<
         (
             Entity,
             &Transform,
             &Visibility,
             &ResourceItem,
+            Option<&crate::systems::logistics::BelongsTo>,
             Option<&crate::relationships::StoredIn>,
         ),
         (Without<Designation>, Without<TaskWorkers>),
     >,
-    q_stockpiles: Query<&Transform, With<Stockpile>>,
-    q_souls: Query<&AssignedTask>,
+    q_stockpiles_detailed: Query<(Entity, &Transform, &Stockpile, Option<&crate::relationships::StoredItems>)>,
     q_all_resources: Query<&ResourceItem>,
-    q_reserved_items: Query<
-        (&ResourceItem, &TargetMixer),
-        With<Designation>,
-    >,
 ) {
-    // 1. 集計フェーズ: 各ミキサーへの「運搬中」および「予約済み」の数を集計
-    let mut in_flight = std::collections::HashMap::<(Entity, ResourceType), usize>::new();
-
-    for task in q_souls.iter() {
-        if let AssignedTask::HaulToMixer(data) = task {
-            if let Ok(res_item) = q_all_resources.get(data.item) {
-                *in_flight.entry((data.mixer, res_item.0)).or_insert(0) += 1;
-            }
-        }
-        if let AssignedTask::GatherWater(data) = task {
-            // GatherWater も MudMixer がターゲットならインフライトとして数える
-            // ただし GatherWaterData.tank が Entity なので、それが mixer かどうかで判定
-            *in_flight.entry((data.tank, ResourceType::Water)).or_insert(0) += 1;
-        }
-    }
-
-    // 予約済みアイテムをカウント
-    for (res_item, target_mixer) in q_reserved_items.iter() {
-        *in_flight.entry((target_mixer.0, res_item.0)).or_insert(0) += 1;
-    }
-
     let mut already_assigned_this_frame = std::collections::HashSet::new();
+
 
     for (_fam_entity, _active_command, task_area) in q_familiars.iter() {
         for (mixer_entity, mixer_transform, storage, _workers_opt) in q_mixers.iter() {
@@ -76,65 +54,53 @@ pub fn mud_mixer_auto_haul_system(
                     ResourceType::Rock => storage.rock,
                     _ => 0,
                 };
-                let inflight_count = *in_flight.get(&(mixer_entity, resource_type)).unwrap_or(&0);
+                let inflight_count = haul_cache.get_mixer(mixer_entity, resource_type);
 
-                if current + (inflight_count as u32) < MUD_MIXER_CAPACITY {
-                    // 近場のアイテムを探す
-                    let search_radius = TILE_SIZE * 30.0;
-                    let nearby = resource_grid.get_nearby_in_radius(mixer_pos, search_radius);
-                    
-                    let matching = nearby.into_iter()
-                        .filter(|&e| !already_assigned_this_frame.contains(&e))
-                        .filter_map(|e| {
-                            let Ok((_, transform, vis, res_item, stored_in_opt)) = q_resources.get(e) else { return None; };
-                            if *vis == Visibility::Hidden || res_item.0 != resource_type { return None; }
-                            
-                            // 既に Reserved されているものはクエリの Without<Designation> で除外済み
-                            
-                            if let Some(crate::relationships::StoredIn(stock_entity)) = stored_in_opt {
-                                if let Ok(stock_transform) = q_stockpiles.get(*stock_entity) {
-                                    if !task_area.contains(stock_transform.translation.truncate()) { return None; }
-                                }
-                            }
-                            
-                            Some((e, transform.translation.truncate().distance_squared(mixer_pos)))
-                        })
-                        .min_by(|a, b| a.1.partial_cmp(&b.1).unwrap())
-                        .map(|a| a.0);
-
-                    if let Some(item_entity) = matching {
-                        already_assigned_this_frame.insert(item_entity);
-                        *in_flight.entry((mixer_entity, resource_type)).or_insert(0) += 1;
-
-                        commands.entity(item_entity).insert((
-                            Designation { work_type: WorkType::Haul },
-                            TargetMixer(mixer_entity),
-                            TaskSlots::new(1),
-                            IssuedBy(_fam_entity),
-                        ));
-                    }
+                // 満杯ならスキップ
+                if current >= MUD_MIXER_CAPACITY {
+                    info!("AUTO_HAUL_MIXER: Mixer {:?} is full for {:?} (current={}), skipping", mixer_entity, resource_type, current);
+                    continue;
                 }
-            }
 
-            // Water の自動リクエスト
-            let water_current = storage.water;
-            let water_inflight = *in_flight.get(&(mixer_entity, ResourceType::Water)).unwrap_or(&0);
-            
-            if water_current + (water_inflight as u32) < MUD_MIXER_CAPACITY {
-                // 近くの空バケツを探して GatherWater タスクを発行
+                if current + (inflight_count as u32) >= MUD_MIXER_CAPACITY {
+                    info!("AUTO_HAUL_MIXER: Mixer {:?} has enough {:?} in-flight (current={}, inflight={}), skipping", mixer_entity, resource_type, current, inflight_count);
+                    continue;
+                }
+
+
+                // 近場のアイテムを探す
                 let search_radius = TILE_SIZE * 30.0;
                 let nearby = resource_grid.get_nearby_in_radius(mixer_pos, search_radius);
                 
-                let matching_bucket = nearby.into_iter()
+                info!("AUTO_HAUL_MIXER: Searching {:?} for Mixer {:?}, current={}, inflight={}, nearby_count={}", 
+                      resource_type, mixer_entity, current, inflight_count, nearby.len());
+
+                    
+                let matching = nearby.into_iter()
                     .filter(|&e| !already_assigned_this_frame.contains(&e))
                     .filter_map(|e| {
-                        let Ok((_, transform, vis, res_item, stored_in_opt)) = q_resources.get(e) else { return None; };
-                        if *vis == Visibility::Hidden { return None; }
-                        // 空バケツのみ（水入りバケツは既に水を持っている）
-                        if res_item.0 != ResourceType::BucketEmpty { return None; }
+                        let query_result = q_resources_with_belongs.get(e);
+                        if query_result.is_err() {
+                            // Designationがあるか確認
+                            if q_all_resources.get(e).is_ok() {
+                                info!("AUTO_HAUL_MIXER: Entity {:?} has Designation or TaskWorkers, skipping", e);
+                            } else {
+                                info!("AUTO_HAUL_MIXER: Entity {:?} not a ResourceItem", e);
+                            }
+                            return None;
+                        }
+                        let (_, transform, vis, res_item, _belongs, stored_in_opt) = query_result.unwrap();
+                        if *vis == Visibility::Hidden { 
+                            return None; 
+                        }
+                        if res_item.0 != resource_type {
+                            return None;
+                        }
+                        
+                        // 既に Reserved されているものはクエリの Without<Designation> で除外済み
                         
                         if let Some(crate::relationships::StoredIn(stock_entity)) = stored_in_opt {
-                            if let Ok(stock_transform) = q_stockpiles.get(*stock_entity) {
+                            if let Ok((_, stock_transform, _, _)) = q_stockpiles_detailed.get(*stock_entity) {
                                 if !task_area.contains(stock_transform.translation.truncate()) { return None; }
                             }
                         }
@@ -144,20 +110,83 @@ pub fn mud_mixer_auto_haul_system(
                     .min_by(|a, b| a.1.partial_cmp(&b.1).unwrap())
                     .map(|a| a.0);
 
-                if let Some(bucket_entity) = matching_bucket {
-                    already_assigned_this_frame.insert(bucket_entity);
-                    *in_flight.entry((mixer_entity, ResourceType::Water)).or_insert(0) += 1;
+                if let Some(item_entity) = matching {
+                    already_assigned_this_frame.insert(item_entity);
+                    haul_cache.reserve_mixer(mixer_entity, resource_type);
 
-                    commands.entity(bucket_entity).insert((
-                        Designation { work_type: WorkType::GatherWater },
+                    info!("AUTO_HAUL_MIXER: Issuing HaulToMixer for {:?} ({:?}) to Mixer {:?}", 
+                          item_entity, resource_type, mixer_entity);
+
+                    commands.entity(item_entity).insert((
+                        Designation { work_type: WorkType::Haul },
                         TargetMixer(mixer_entity),
                         TaskSlots::new(1),
                         IssuedBy(_fam_entity),
-                        crate::systems::jobs::Priority(4),
                     ));
-                    info!("AUTO_HAUL_MIXER: Issued GatherWater for bucket {:?} to MudMixer {:?}", bucket_entity, mixer_entity);
+                } else {
+                    info!("AUTO_HAUL_MIXER: No matching {:?} item found for Mixer {:?}", resource_type, mixer_entity);
+                }
+
+            }
+
+            // Water の自動リクエスト
+
+            let water_current = storage.water;
+            let water_inflight = haul_cache.get_mixer(mixer_entity, ResourceType::Water) as u32;
+            
+            if water_current + (water_inflight * BUCKET_CAPACITY) < MUD_MIXER_CAPACITY {
+                // TaskArea内のTankを探す
+                let mut tank_with_water = None;
+                for (stock_entity, stock_transform, stock, stored_opt) in q_stockpiles_detailed.iter() {
+                    if stock.resource_type == Some(ResourceType::Water) {
+                        if task_area.contains(stock_transform.translation.truncate()) {
+                            let water_count = stored_opt.map(|s| s.len()).unwrap_or(0);
+                            if water_count > 0 {
+                                tank_with_water = Some(stock_entity);
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                if let Some(tank_entity) = tank_with_water {
+                    // そのTank専用の空バケツを探す（tank_water_requestと同様のロジック）
+                    let mut found_bucket = None;
+                    for (e, transform, vis, res_item, belongs_opt, stored_in_opt) in q_resources_with_belongs.iter() {
+                        // 非表示はスキップ
+                        if *vis == Visibility::Hidden { continue; }
+                        // 空バケツのみ対象
+                        if res_item.0 != ResourceType::BucketEmpty { continue; }
+                        // 既に割り当て済みはスキップ
+                        if already_assigned_this_frame.contains(&e) { continue; }
+                        // StoredInがない（持ち運び中など）はスキップ
+                        if stored_in_opt.is_none() { continue; }
+
+                        // BelongsToでこのタンクに紐付いたバケツのみ
+                        if let Some(belongs) = belongs_opt {
+                            if belongs.0 == tank_entity {
+                                found_bucket = Some((e, transform.translation.truncate().distance_squared(mixer_pos)));
+                                break; // 専用バケツ優先
+                            }
+                        }
+                    }
+
+                    if let Some(bucket_entity) = found_bucket.map(|(e, _)| e) {
+                        already_assigned_this_frame.insert(bucket_entity);
+                        haul_cache.reserve_mixer(mixer_entity, ResourceType::Water);
+
+                        commands.entity(bucket_entity).insert((
+                            Designation { work_type: WorkType::HaulWaterToMixer },
+                            TargetMixer(mixer_entity),
+                            TaskSlots::new(1),
+                            IssuedBy(_fam_entity),
+                            crate::systems::jobs::Priority(6), // 通常の運搬より優先
+                        ));
+                        info!("AUTO_HAUL_MIXER: Issued HaulWaterToMixer for bucket {:?} from Tank {:?} to Mixer {:?}", bucket_entity, tank_entity, mixer_entity);
+                    }
                 }
             }
+
         }
     }
 }

@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 use std::collections::HashMap;
+use crate::systems::logistics::ResourceType;
 
 /// 搬送中のアイテム・ストックパイル予約状況をキャッシュするリソース
 ///
@@ -9,6 +10,8 @@ use std::collections::HashMap;
 pub struct HaulReservationCache {
     /// ストックパイルエンティティ -> 搬送中の予約数
     reservations: HashMap<Entity, usize>,
+    /// ミキサーエンティティ + リソースタイプ -> 搬送中の予約数
+    mixer_reservations: HashMap<(Entity, ResourceType), usize>,
 }
 
 impl HaulReservationCache {
@@ -41,4 +44,35 @@ impl HaulReservationCache {
         self.reservations.get(&stockpile).cloned().unwrap_or(0)
     }
 
+    /// ミキサー予約を追加
+    pub fn reserve_mixer(&mut self, mixer: Entity, resource_type: ResourceType) {
+        let key = (mixer, resource_type);
+        *self.mixer_reservations.entry(key).or_insert(0) += 1;
+        debug!(
+            "HAUL_CACHE: Reserved mixer {:?} for {:?} (count: {})",
+            mixer, resource_type, self.mixer_reservations[&key]
+        );
+    }
+
+    /// ミキサー予約を解除
+    pub fn release_mixer(&mut self, mixer: Entity, resource_type: ResourceType) {
+        let key = (mixer, resource_type);
+        if let Some(count) = self.mixer_reservations.get_mut(&key) {
+            *count = count.saturating_sub(1);
+            let new_count = *count;
+            if new_count == 0 {
+                self.mixer_reservations.remove(&key);
+            }
+            debug!(
+                "HAUL_CACHE: Released mixer {:?} for {:?} (count: {})",
+                mixer, resource_type, new_count
+            );
+        }
+    }
+
+    /// 特定のミキサー+リソースタイプの予約数を取得
+    pub fn get_mixer(&self, mixer: Entity, resource_type: ResourceType) -> usize {
+        self.mixer_reservations.get(&(mixer, resource_type)).cloned().unwrap_or(0)
+    }
 }
+

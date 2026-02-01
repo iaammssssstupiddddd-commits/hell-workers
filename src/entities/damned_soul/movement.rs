@@ -57,6 +57,11 @@ pub fn pathfinding_system(
             continue;
         }
 
+        // デバッグログ: どのソウルがパス探索を行うか
+        if has_task && path.waypoints.is_empty() {
+            info!("PATHFIND_DEBUG: Soul {:?} seeking path from {:?} to {:?}", entity, start_grid, goal_grid);
+        }
+
         if start_grid == goal_grid {
             path.waypoints = vec![destination.0];
             path.current_index = 0;

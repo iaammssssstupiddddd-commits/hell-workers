@@ -3,6 +3,7 @@
 //! Monitors tank storage levels and issues water gathering tasks when tanks are low.
 
 use bevy::prelude::*;
+use crate::constants::BUCKET_CAPACITY;
 
 use crate::systems::command::TaskArea;
 use crate::systems::jobs::{Designation, IssuedBy, TaskSlots, WorkType};
@@ -30,16 +31,17 @@ pub fn tank_water_request_system(
         }
 
         let current_water = stored_opt.map(|s| s.len()).unwrap_or(0);
-        let reserved_water = haul_cache.get(tank_entity);
-        let total_water = current_water + reserved_water;
+        let reserved_water_tasks = haul_cache.get(tank_entity);
+        let total_water = (current_water as u32) + (reserved_water_tasks as u32 * BUCKET_CAPACITY);
 
-        if total_water < tank_stock.capacity {
-            let needed = tank_stock.capacity - total_water;
+        if total_water < tank_stock.capacity as u32 {
+            let needed_water = tank_stock.capacity as u32 - total_water;
+            let needed_tasks = (needed_water + BUCKET_CAPACITY - 1) / BUCKET_CAPACITY;
             let mut issued = 0;
 
             // このタンクに紐付いたバケツを探す
             for (bucket_entity, res_item, bucket_belongs, _stored_in) in q_buckets.iter() {
-                if issued >= needed {
+                if issued >= needed_tasks {
                     break;
                 }
 
