@@ -45,6 +45,9 @@ pub struct TaskQueries<'w, 's> {
     pub blueprints: Query<'w, 's, (&'static Transform, &'static mut Blueprint, Option<&'static Designation>)>,
     pub target_blueprints: Query<'w, 's, &'static crate::systems::jobs::TargetBlueprint>,
     pub items: Query<'w, 's, (&'static crate::systems::logistics::ResourceItem, Option<&'static Designation>)>,
+    pub mixers: Query<'w, 's, (&'static Transform, &'static mut crate::systems::jobs::MudMixerStorage, Option<&'static TaskWorkers>)>,
+    pub resources: Query<'w, 's, &'static crate::systems::logistics::ResourceItem>,
+    pub target_mixers: Query<'w, 's, &'static crate::systems::jobs::TargetMixer>,
 }
 
 /// タスク実行の基本コンテキスト

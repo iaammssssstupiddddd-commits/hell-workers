@@ -20,6 +20,10 @@ pub enum LatinPhrase {
     Requiesce,
     /// 去れ！ (リリース)
     Abi,
+    /// 採取せよ！ (砂採取)
+    Colligere,
+    /// 混ぜろ！ (精製)
+    Misce,
     /// カスタムテキスト（激励など）
     Custom(String),
 }
@@ -36,6 +40,8 @@ impl LatinPhrase {
             LatinPhrase::Haurire => &["Haurire!", "Hauri!", "Ehauri!", "Exhauri!", "Liba!"],
             LatinPhrase::Requiesce => &["Requiesce!", "Quiesce!", "Siste!", "Mane!", "Pausa!"],
             LatinPhrase::Abi => &["Abi!", "Discede!", "I!", "Vade!", "Recede!"],
+            LatinPhrase::Colligere => &["Colligere!", "Collige!", "Excerpe!", "Cape!", "Legite!"],
+            LatinPhrase::Misce => &["Misce!", "Miscere!", "Confice!", "Tempera!", "Misceo!"],
             LatinPhrase::Custom(_) => &[], // Custom handles string generation differently
         }
     }
@@ -90,10 +96,12 @@ impl LatinPhrase {
             LatinPhrase::Haurire => 5,
             LatinPhrase::Requiesce => 6,
             LatinPhrase::Abi => 7,
-            LatinPhrase::Custom(_) => 8,
+            LatinPhrase::Colligere => 8,
+            LatinPhrase::Misce => 9,
+            LatinPhrase::Custom(_) => 10,
         }
     }
 
     /// フレーズの種類数
-    pub const COUNT: usize = 9;
+    pub const COUNT: usize = 11;
 }

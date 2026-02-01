@@ -50,6 +50,8 @@ pub fn on_task_assigned(
                         WorkType::Haul => LatinPhrase::Portare,
                         WorkType::Build => LatinPhrase::Laborare,
                         WorkType::GatherWater => LatinPhrase::Haurire,
+                        WorkType::CollectSand => LatinPhrase::Colligere,
+                        WorkType::Refine => LatinPhrase::Misce,
                     };
                     spawn_familiar_bubble(
                         &mut commands,

@@ -10,8 +10,10 @@ mod task_area;
 mod blueprint;
 mod bucket;
 mod tank_water_request;
+mod mixer;
 
 pub use task_area::task_area_auto_haul_system;
 pub use blueprint::blueprint_auto_haul_system;
 pub use bucket::bucket_auto_haul_system;
 pub use tank_water_request::tank_water_request_system;
+pub use mixer::mud_mixer_auto_haul_system;

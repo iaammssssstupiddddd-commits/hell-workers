@@ -12,6 +12,7 @@ use crate::systems::soul_ai::gathering::ParticipatingIn;
 use crate::systems::soul_ai::task_execution::types::{
     AssignedTask, BuildPhase, GatherPhase, GatherWaterPhase, HaulPhase, HaulToBpPhase,
 };
+use crate::constants::*;
 use bevy::prelude::*;
 
 /// ワーカーにタスク割り当てのための共通セットアップを行う
@@ -142,11 +143,33 @@ pub fn assign_task_to_worker(
 
             let item_info = queries.items.get(task_entity).ok().map(|(it, _)| it.0);
             let item_belongs = queries.belongs.get(task_entity).ok();
+            let target_mixer = queries.target_mixers.get(task_entity).ok().map(|tm| tm.0);
 
             if item_info.is_none() {
                 return false;
             }
             let item_type = item_info.unwrap();
+
+            // ミキサーが指定されている場合
+            if let Some(mixer_entity) = target_mixer {
+                prepare_worker_for_task(
+                    commands, worker_entity, fam_entity, task_entity, uc_opt.is_some(),
+                );
+                *assigned_task = AssignedTask::HaulToMixer(crate::systems::soul_ai::task_execution::types::HaulToMixerData {
+                    item: task_entity,
+                    mixer: mixer_entity,
+                    phase: crate::systems::soul_ai::task_execution::types::HaulToMixerPhase::GoingToItem,
+                });
+                dest.0 = task_pos;
+                path.waypoints.clear();
+                path.current_index = 0;
+                commands.trigger(OnTaskAssigned {
+                    entity: worker_entity,
+                    task_entity,
+                    work_type: WorkType::Haul,
+                });
+                return true;
+            }
 
             let best_stockpile = queries.stockpiles
                 .iter()
@@ -258,9 +281,17 @@ pub fn assign_task_to_worker(
                     // 所有権チェック（バケツとタンク）
                     let bucket_belongs = queries.belongs.get(task_entity).ok();
                     let _tank_belongs = Some(&crate::systems::logistics::BelongsTo(*s_entity)); // タンク自身への帰属
+                    
+                    // MudMixer も水を受け入れる場合がある（ストレージに水枠がある）
+                    let is_mixer_with_water_cap = if let Ok((_, storage, _)) = queries.mixers.get(*s_entity) {
+                        storage.water < MUD_MIXER_CAPACITY
+                    } else {
+                        false
+                    };
+
                     let is_my_tank = bucket_belongs.map(|b| b.0) == Some(*s_entity);
 
-                    is_tank && has_capacity && is_my_tank
+                    (is_tank && has_capacity && is_my_tank) || (is_mixer_with_water_cap && is_my_tank)
                 })
                 .min_by(|(_, t1, _, _), (_, t2, _, _)| {
                     let d1 = t1.translation.truncate().distance_squared(task_pos);
@@ -296,6 +327,44 @@ pub fn assign_task_to_worker(
                 return true;
             }
             return false;
+        }
+        WorkType::CollectSand => {
+            prepare_worker_for_task(
+                commands, worker_entity, fam_entity, task_entity, uc_opt.is_some(),
+            );
+
+            *assigned_task = AssignedTask::CollectSand(crate::systems::soul_ai::task_execution::types::CollectSandData {
+                target: task_entity,
+                phase: crate::systems::soul_ai::task_execution::types::CollectSandPhase::GoingToSand,
+            });
+            dest.0 = task_pos;
+            path.waypoints.clear();
+            path.current_index = 0;
+            commands.trigger(OnTaskAssigned {
+                entity: worker_entity,
+                task_entity,
+                work_type,
+            });
+            return true;
+        }
+        WorkType::Refine => {
+            prepare_worker_for_task(
+                commands, worker_entity, fam_entity, task_entity, uc_opt.is_some(),
+            );
+
+            *assigned_task = AssignedTask::Refine(crate::systems::soul_ai::task_execution::types::RefineData {
+                mixer: task_entity,
+                phase: crate::systems::soul_ai::task_execution::types::RefinePhase::GoingToMixer,
+            });
+            dest.0 = task_pos;
+            path.waypoints.clear();
+            path.current_index = 0;
+            commands.trigger(OnTaskAssigned {
+                entity: worker_entity,
+                task_entity,
+                work_type,
+            });
+            return true;
         }
     }
 }

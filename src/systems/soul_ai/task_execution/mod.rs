@@ -3,12 +3,15 @@
 //! 魂に割り当てられたタスクの実行ロジックを提供します。
 
 pub mod build;
+pub mod collect_sand;
 pub mod common;
 pub mod context;
 pub mod gather;
 pub mod gather_water;
 pub mod haul;
 pub mod haul_to_blueprint;
+pub mod haul_to_mixer;
+pub mod refine;
 pub mod types;
 
 // 型の再エクスポート（外部からのアクセスを簡潔に）
@@ -22,11 +25,14 @@ use crate::world::map::WorldMap;
 use bevy::prelude::*;
 
 use build::handle_build_task;
+use collect_sand::handle_collect_sand_task;
 use context::TaskExecutionContext;
 use gather::handle_gather_task;
 use gather_water::handle_gather_water_task;
 use haul::handle_haul_task;
 use haul_to_blueprint::handle_haul_to_blueprint_task;
+use haul_to_mixer::handle_haul_to_mixer_task;
+use refine::handle_refine_task;
 
 pub fn task_execution_system(
     mut commands: Commands,
@@ -140,6 +146,41 @@ pub fn task_execution_system(
                     &game_assets,
                     &mut *haul_cache,
                     &time,
+                    &world_map,
+                );
+            }
+            AssignedTask::CollectSand(data) => {
+                let data = data.clone();
+                handle_collect_sand_task(
+                    &mut ctx,
+                    data.target,
+                    data.phase,
+                    &mut commands,
+                    &game_assets,
+                    &time,
+                    &world_map,
+                );
+            }
+            AssignedTask::Refine(data) => {
+                let data = data.clone();
+                handle_refine_task(
+                    &mut ctx,
+                    data.mixer,
+                    data.phase,
+                    &mut commands,
+                    &game_assets,
+                    &time,
+                    &world_map,
+                );
+            }
+            AssignedTask::HaulToMixer(data) => {
+                let data = data.clone();
+                handle_haul_to_mixer_task(
+                    &mut ctx,
+                    data.item,
+                    data.mixer,
+                    data.phase,
+                    &mut commands,
                     &world_map,
                 );
             }

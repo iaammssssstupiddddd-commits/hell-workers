@@ -126,6 +126,12 @@ fn setup(
         icon_wood_small: asset_server.load("textures/ui/wood_small.png"),
         icon_rock_small: asset_server.load("textures/ui/rock_small.png"),
         icon_water_small: asset_server.load("textures/ui/water_small.png"),
+        icon_sand_small: asset_server.load("textures/sand.png"),
+        icon_stasis_mud_small: asset_server.load("textures/ui/wood_small.png"),
+        // New Resource & Station
+        sand_pile: asset_server.load("textures/sand.png"),
+        stasis_mud: asset_server.load("textures/stone.jpg"),
+        mud_mixer: asset_server.load("textures/tank_empty.png"),
         // Fonts
         font_ui,
         font_familiar,

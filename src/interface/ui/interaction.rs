@@ -68,7 +68,10 @@ pub fn hover_tooltip_system(
             info_lines.push(format!("Soul: {}", name));
             info_lines.push(format!("Motivation: {:.0}%", soul.motivation * 100.0));
         } else if let Ok((building, stockpile_opt, stored_items_opt)) = q_buildings.get(entity) {
-            let mut building_info = format!("Building: {:?}", building._kind);
+            let mut building_info = format!("Building: {:?}", building.kind);
+            if building.is_provisional {
+                building_info += " (Provisional)";
+            }
             if let Some(stockpile) = stockpile_opt {
                 let current = stored_items_opt.map(|si| si.len()).unwrap_or(0);
                 let resource_name = stockpile
