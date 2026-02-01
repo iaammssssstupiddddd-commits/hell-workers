@@ -155,7 +155,12 @@ impl FamiliarVoice {
 
     /// 指定フレーズのお気に入りインデックスを取得
     pub fn get_preference(&self, phrase: LatinPhrase) -> usize {
-        self.preferences[phrase.index()]
+        let idx = phrase.index();
+        if idx < self.preferences.len() {
+            self.preferences[idx]
+        } else {
+            0
+        }
     }
 }
 

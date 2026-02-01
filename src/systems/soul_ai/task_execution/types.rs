@@ -19,6 +19,12 @@ pub enum AssignedTask {
     Build(BuildData),
     /// 水汲みを行う
     GatherWater(GatherWaterData),
+    /// 砂を採取する
+    CollectSand(CollectSandData),
+    /// 精製作業を行う
+    Refine(RefineData),
+    /// ミキサーへ資材を運搬する
+    HaulToMixer(HaulToMixerData),
 }
 
 #[derive(Reflect, Clone, Debug, PartialEq)]
@@ -53,6 +59,25 @@ pub struct GatherWaterData {
     pub bucket: Entity,
     pub tank: Entity,
     pub phase: GatherWaterPhase,
+}
+
+#[derive(Reflect, Clone, Debug, PartialEq)]
+pub struct CollectSandData {
+    pub target: Entity,
+    pub phase: CollectSandPhase,
+}
+
+#[derive(Reflect, Clone, Debug, PartialEq)]
+pub struct RefineData {
+    pub mixer: Entity,
+    pub phase: RefinePhase,
+}
+
+#[derive(Reflect, Clone, Debug, PartialEq, Eq)]
+pub struct HaulToMixerData {
+    pub item: Entity,
+    pub mixer: Entity,
+    pub phase: HaulToMixerPhase,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Reflect, Default)]
@@ -97,6 +122,30 @@ pub enum GatherWaterPhase {
     Pouring { progress: f32 },
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Reflect, Default)]
+pub enum CollectSandPhase {
+    #[default]
+    GoingToSand,
+    Collecting { progress: f32 },
+    Done,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Reflect, Default)]
+pub enum RefinePhase {
+    #[default]
+    GoingToMixer,
+    Refining { progress: f32 },
+    Done,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Reflect, Default)]
+pub enum HaulToMixerPhase {
+    #[default]
+    GoingToItem,
+    GoingToMixer,
+    Delivering,
+}
+
 impl AssignedTask {
     /// タスクの作業タイプを取得
     pub fn work_type(&self) -> Option<WorkType> {
@@ -106,6 +155,9 @@ impl AssignedTask {
             AssignedTask::HaulToBlueprint(_) => Some(WorkType::Haul),
             AssignedTask::Build(_) => Some(WorkType::Build),
             AssignedTask::GatherWater(_) => Some(WorkType::GatherWater),
+            AssignedTask::CollectSand(_) => Some(WorkType::CollectSand),
+            AssignedTask::Refine(_) => Some(WorkType::Refine),
+            AssignedTask::HaulToMixer(_) => Some(WorkType::Haul),
             AssignedTask::None => None,
         }
     }
@@ -118,6 +170,9 @@ impl AssignedTask {
             AssignedTask::HaulToBlueprint(data) => Some(data.item),
             AssignedTask::Build(data) => Some(data.blueprint),
             AssignedTask::GatherWater(data) => Some(data.bucket),
+            AssignedTask::CollectSand(data) => Some(data.target),
+            AssignedTask::Refine(data) => Some(data.mixer),
+            AssignedTask::HaulToMixer(data) => Some(data.item),
             AssignedTask::None => None,
         }
     }

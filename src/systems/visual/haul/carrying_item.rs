@@ -34,6 +34,8 @@ pub fn spawn_carrying_item_system(
             ResourceType::Water => game_assets.icon_water_small.clone(),
             ResourceType::BucketEmpty => game_assets.bucket_empty.clone(),
             ResourceType::BucketWater => game_assets.bucket_water.clone(),
+            ResourceType::Sand => game_assets.sand_pile.clone(),
+            ResourceType::StasisMud => game_assets.stasis_mud.clone(),
         };
 
         info!(
@@ -93,6 +95,8 @@ pub fn update_carrying_item_system(
                         ResourceType::Water => game_assets.icon_water_small.clone(),
                         ResourceType::BucketEmpty => game_assets.bucket_empty.clone(),
                         ResourceType::BucketWater => game_assets.bucket_water.clone(),
+                        ResourceType::Sand => game_assets.sand_pile.clone(),
+                        ResourceType::StasisMud => game_assets.stasis_mud.clone(),
                     };
                     // 画像が変更された場合のみ更新
                     if icon_sprite.image != new_icon_handle {

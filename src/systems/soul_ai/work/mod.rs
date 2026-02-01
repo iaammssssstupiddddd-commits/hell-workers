@@ -6,6 +6,7 @@ use bevy::prelude::*;
 
 pub mod auto_build;
 pub mod auto_haul;
+pub mod auto_refine;
 pub mod cleanup;
 pub mod helpers;
 

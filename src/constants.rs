@@ -187,6 +187,19 @@ pub const WOOD_DROP_AMOUNT: u32 = 5;
 pub const ROCK_DROP_AMOUNT: u32 = 10;
 
 // ============================================================
+// AI ロジック定数 - 精製 (Refining)
+// ============================================================
+
+/// 砂採取報酬: 1回あたりのSand数
+pub const SAND_DROP_AMOUNT: u32 = 1;
+/// 精製出力: 1レシピあたりのStasisMud数
+pub const STASIS_MUD_OUTPUT: u32 = 5;
+/// MudMixer の原料最大保存数
+pub const MUD_MIXER_CAPACITY: u32 = 5;
+/// Wall の本設化に必要な StasisMud 数
+pub const _STASIS_MUD_REQUIREMENT: u32 = 1;
+
+// ============================================================
 // キャラクター移動・アニメーション
 // ============================================================
 

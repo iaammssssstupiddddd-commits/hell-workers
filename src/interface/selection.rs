@@ -131,7 +131,7 @@ pub fn blueprint_placement(
 
                     // 建造物のサイズと占有グリッドの判定
                     let (occupied_grids, spawn_pos, custom_size) = match building_type {
-                        BuildingType::Tank => {
+                        BuildingType::Tank | BuildingType::MudMixer => {
                             let grids = vec![
                                 grid,
                                 (grid.0 + 1, grid.1),
@@ -162,6 +162,7 @@ pub fn blueprint_placement(
                             BuildingType::Wall => game_assets.wall.clone(),
                             BuildingType::Floor => game_assets.dirt.clone(),
                             BuildingType::Tank => game_assets.tank_empty.clone(),
+                            BuildingType::MudMixer => game_assets.mud_mixer.clone(),
                         };
 
                         let entity = commands
@@ -286,8 +287,8 @@ pub fn update_hover_entity(
                 for (entity, transform, building_opt) in q_targets.iter() {
                     let pos = transform.translation().truncate();
                     let radius = if let Some(building) = building_opt {
-                        match building._kind {
-                            crate::systems::jobs::BuildingType::Tank => TILE_SIZE, // 2x2なので半径を大きく
+                        match building.kind {
+                            crate::systems::jobs::BuildingType::Tank | crate::systems::jobs::BuildingType::MudMixer => TILE_SIZE, // 2x2なので半径を大きく
                             _ => TILE_SIZE / 2.0,
                         }
                     } else {

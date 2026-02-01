@@ -16,7 +16,7 @@ pub fn update_tank_visual_system(
 ) {
     for (building, stockpile, stored_items_opt, mut sprite) in q_tanks.iter_mut() {
         // タンクのみ処理
-        if building._kind != BuildingType::Tank {
+        if building.kind != BuildingType::Tank {
             continue;
         }
 
