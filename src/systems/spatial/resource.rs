@@ -7,7 +7,29 @@ use bevy::prelude::*;
 pub struct ResourceSpatialGrid(pub GridData);
 
 impl ResourceSpatialGrid {
-    // ResourceSpatialGrid は現状では Resource::default() で初期化されています
+    /// 指定範囲内のリソースを取得（TaskAreaとの連携用）
+    pub fn get_in_area(&self, min: Vec2, max: Vec2) -> Vec<Entity> {
+        let mut results = Vec::new();
+        let min_cell = self.0.pos_to_cell(min);
+        let max_cell = self.0.pos_to_cell(max);
+
+        for dy in min_cell.1..=max_cell.1 {
+            for dx in min_cell.0..=max_cell.0 {
+                let cell = (dx, dy);
+                if let Some(entities) = self.0.grid.get(&cell) {
+                    for &entity in entities {
+                        if let Some(&pos) = self.0.positions.get(&entity) {
+                            if pos.x >= min.x && pos.x <= max.x && pos.y >= min.y && pos.y <= max.y
+                            {
+                                results.push(entity);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        results
+    }
 }
 
 impl SpatialGridOps for ResourceSpatialGrid {

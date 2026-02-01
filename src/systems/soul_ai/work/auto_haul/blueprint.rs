@@ -4,7 +4,7 @@
 
 use bevy::prelude::*;
 
-use crate::constants::*;
+use crate::constants::TILE_SIZE;
 use crate::entities::familiar::ActiveCommand;
 use crate::systems::command::TaskArea;
 use crate::systems::jobs::{Blueprint, Designation, IssuedBy, TaskSlots, WorkType};
@@ -12,6 +12,9 @@ use crate::systems::logistics::{ResourceItem, ResourceType};
 use crate::systems::soul_ai::task_execution::AssignedTask;
 use crate::systems::spatial::{BlueprintSpatialGrid, ResourceSpatialGrid, SpatialGridOps};
 use crate::relationships::TaskWorkers;
+
+/// 段階的検索の半径（タイル単位）
+const SEARCH_RADII: [f32; 4] = [20.0, 50.0, 100.0, 200.0];
 
 /// 設計図への自動資材運搬タスク生成システム
 pub fn blueprint_auto_haul_system(
@@ -98,52 +101,16 @@ pub fn blueprint_auto_haul_system(
                     continue;
                 }
 
-                // 近くの対応する資材を探す
-                let search_radius = TILE_SIZE * 20.0;
-                let nearby_resources = resource_grid.get_nearby_in_radius(bp_pos, search_radius);
-
-                // まだ Designation が付いていないものから探す
-                let matching_resource = nearby_resources
-                    .iter()
-                    .filter(|&&entity| !already_assigned_this_frame.contains(&entity))
-                    .filter_map(|&entity| {
-                        let Ok((_, transform, visibility, res_item, stored_in_opt)) =
-                            q_resources.get(entity)
-                        else {
-                            return None;
-                        };
-                        if *visibility == Visibility::Hidden {
-                            return None;
-                        }
-                        if res_item.0 != *resource_type {
-                            return None;
-                        }
-
-                        // ストックパイル内にある場合、そのストックパイルが主のタスクエリア内にあるかチェック
-                        if let Some(crate::relationships::StoredIn(stock_entity)) = stored_in_opt {
-                            if let Ok(stock_transform) = q_stockpiles.get(*stock_entity) {
-                                let stock_pos = stock_transform.translation.truncate();
-                                if !task_area.contains(stock_pos) {
-                                    return None;
-                                }
-                            } else {
-                                // ストックパイルが見つからない（消失している）場合は地上扱いとするか除外するか
-                                // 基本的には StoredIn があるなら存在するはず
-                                return None;
-                            }
-                        }
-
-                        let dist_sq = transform.translation.truncate().distance_squared(bp_pos);
-                        if dist_sq < search_radius * search_radius {
-                            Some((entity, dist_sq))
-                        } else {
-                            None
-                        }
-                    })
-                    .min_by(|(_, d1), (_, d2)| {
-                        d1.partial_cmp(d2).unwrap_or(std::cmp::Ordering::Equal)
-                    })
-                    .map(|(entity, _)| entity);
+                // 段階的に検索範囲を広げて資材を探す
+                let matching_resource = find_resource_progressively(
+                    bp_pos,
+                    *resource_type,
+                    task_area,
+                    &resource_grid,
+                    &q_resources,
+                    &q_stockpiles,
+                    &already_assigned_this_frame,
+                );
 
                 if let Some(item_entity) = matching_resource {
                     already_assigned_this_frame.insert(item_entity);
@@ -169,9 +136,90 @@ pub fn blueprint_auto_haul_system(
                     );
 
                     // 1つ割り当てたら、この Blueprint のこのリソースについては一旦終了して次のリソースまたは次の設計図へ
-                    // (複数同時に探すと1フレームで一気に割り当てすぎてしまう可能性があるが、集計ロジックがあるので基本安全)
                 }
             }
         }
     }
+}
+
+/// 設計図の位置から段階的に検索範囲を広げて資材を探す
+///
+/// 1. まず近い範囲から検索
+/// 2. 見つからなければ範囲を広げる
+/// 3. TaskArea内はストックパイルチェックを適用
+/// 4. TaskArea外の資材も検索対象に含める（ただしストックパイル外の資材のみ）
+fn find_resource_progressively(
+    bp_pos: Vec2,
+    resource_type: ResourceType,
+    task_area: &TaskArea,
+    resource_grid: &ResourceSpatialGrid,
+    q_resources: &Query<
+        (
+            Entity,
+            &Transform,
+            &Visibility,
+            &ResourceItem,
+            Option<&crate::relationships::StoredIn>,
+        ),
+        (Without<Designation>, Without<TaskWorkers>),
+    >,
+    q_stockpiles: &Query<&Transform, With<crate::systems::logistics::Stockpile>>,
+    already_assigned: &std::collections::HashSet<Entity>,
+) -> Option<Entity> {
+    // 段階的に検索範囲を広げる
+    for &radius_tiles in &SEARCH_RADII {
+        let search_radius = TILE_SIZE * radius_tiles;
+        let nearby_resources = resource_grid.get_nearby_in_radius(bp_pos, search_radius);
+
+        // 距離でソートして近いものから優先
+        let mut candidates: Vec<(Entity, f32)> = nearby_resources
+            .iter()
+            .filter(|&&entity| !already_assigned.contains(&entity))
+            .filter_map(|&entity| {
+                let Ok((_, transform, visibility, res_item, stored_in_opt)) =
+                    q_resources.get(entity)
+                else {
+                    return None;
+                };
+                
+                if *visibility == Visibility::Hidden {
+                    return None;
+                }
+                if res_item.0 != resource_type {
+                    return None;
+                }
+
+                let item_pos = transform.translation.truncate();
+
+                // ストックパイル内にある場合のチェック
+                if let Some(crate::relationships::StoredIn(stock_entity)) = stored_in_opt {
+                    if let Ok(stock_transform) = q_stockpiles.get(*stock_entity) {
+                        let stock_pos = stock_transform.translation.truncate();
+                        // ストックパイルがTaskArea外なら除外（他の使い魔の管轄）
+                        if !task_area.contains(stock_pos) {
+                            return None;
+                        }
+                    } else {
+                        return None;
+                    }
+                }
+                // ストックパイル外の資材は位置に関わらず利用可能
+
+                let dist_sq = item_pos.distance_squared(bp_pos);
+                Some((entity, dist_sq))
+            })
+            .collect();
+
+        // 距離でソート
+        candidates.sort_by(|(_, d1), (_, d2)| {
+            d1.partial_cmp(d2).unwrap_or(std::cmp::Ordering::Equal)
+        });
+
+        // 最も近い資材を返す
+        if let Some((entity, _)) = candidates.first() {
+            return Some(*entity);
+        }
+    }
+
+    None
 }

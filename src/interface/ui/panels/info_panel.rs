@@ -200,6 +200,7 @@ pub fn info_panel_system(
                 AssignedTask::CollectSand(data) => format!("CollectSand ({:?})", data.phase),
                 AssignedTask::Refine(data) => format!("Refine ({:?})", data.phase),
                 AssignedTask::HaulToMixer(data) => format!("HaulToMixer ({:?})", data.phase),
+                AssignedTask::HaulWaterToMixer(data) => format!("HaulWaterToMixer ({:?})", data.phase),
             };
             if let Ok(mut t) = params.q_task.single_mut() {
                 t.0 = format!("Task: {}", task_str);

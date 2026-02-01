@@ -32,7 +32,16 @@ pub fn handle_gather_task(
                     return;
                 }
                 let res_pos = res_transform.translation.truncate();
-                update_destination_to_adjacent(ctx.dest, res_pos, ctx.path, soul_pos, world_map);
+                
+                // 到達可能かチェック
+                let reachable = update_destination_to_adjacent(ctx.dest, res_pos, ctx.path, soul_pos, world_map);
+                
+                if !reachable {
+                    // 到達不能: タスクをキャンセル
+                    info!("GATHER: Soul {:?} cannot reach target {:?}, canceling", ctx.soul_entity, target);
+                    clear_task_and_path(ctx.task, ctx.path);
+                    return;
+                }
 
                 if is_near_target(soul_pos, res_pos) {
                     *ctx.task = AssignedTask::Gather(crate::systems::soul_ai::task_execution::types::GatherData {
@@ -46,6 +55,7 @@ pub fn handle_gather_task(
                 clear_task_and_path(ctx.task, ctx.path);
             }
         }
+
         GatherPhase::Collecting { mut progress } => {
             if let Ok(target_data) = q_targets.get(target) {
                 let (res_transform, tree, rock, _res_item, des_opt, _stored_in) = target_data;

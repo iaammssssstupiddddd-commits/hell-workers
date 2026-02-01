@@ -52,6 +52,7 @@ pub fn on_task_assigned(
                         WorkType::GatherWater => LatinPhrase::Haurire,
                         WorkType::CollectSand => LatinPhrase::Colligere,
                         WorkType::Refine => LatinPhrase::Misce,
+                        WorkType::HaulWaterToMixer => LatinPhrase::Haurire,
                     };
                     spawn_familiar_bubble(
                         &mut commands,

@@ -12,7 +12,7 @@ use crate::systems::soul_ai::gathering::ParticipatingIn;
 use crate::systems::soul_ai::task_execution::types::{
     AssignedTask, BuildPhase, GatherPhase, GatherWaterPhase, HaulPhase, HaulToBpPhase,
 };
-use crate::constants::*;
+use crate::constants::{MUD_MIXER_CAPACITY, BUCKET_CAPACITY};
 use bevy::prelude::*;
 
 /// ワーカーにタスク割り当てのための共通セットアップを行う
@@ -171,6 +171,8 @@ pub fn assign_task_to_worker(
                 return true;
             }
 
+
+
             let best_stockpile = queries.stockpiles
                 .iter()
                 .filter(|(s_entity, s_transform, stock, stored)| {
@@ -274,9 +276,10 @@ pub fn assign_task_to_worker(
                         }
                     }
                     let is_tank = stock.resource_type == Some(ResourceType::Water);
-                    let current_count = stored.map(|s| s.len()).unwrap_or(0);
-                    let reserved = haul_cache.get(*s_entity);
-                    let has_capacity = (current_count + reserved) < stock.capacity;
+                    let current_water = stored.map(|s| s.len()).unwrap_or(0);
+                    let reserved_water = haul_cache.get(*s_entity) as usize;
+                    let total_water = current_water + (reserved_water * BUCKET_CAPACITY as usize);
+                    let has_capacity = total_water < stock.capacity;
 
                     // 所有権チェック（バケツとタンク）
                     let bucket_belongs = queries.belongs.get(task_entity).ok();
@@ -363,6 +366,40 @@ pub fn assign_task_to_worker(
                 entity: worker_entity,
                 task_entity,
                 work_type,
+            });
+            return true;
+        }
+        WorkType::HaulWaterToMixer => {
+            // TargetMixer があるか確認
+            let target_mixer = queries.target_mixers.get(task_entity).ok().map(|tm| tm.0);
+            let mixer_entity = if let Some(m) = target_mixer { m } else { return false; };
+
+            // バケツの BelongsTo から Tank を取得
+            let tank_entity = if let Ok(belongs) = queries.belongs.get(task_entity) {
+                belongs.0
+            } else {
+                return false;
+            };
+
+            prepare_worker_for_task(
+                commands, worker_entity, fam_entity, task_entity, uc_opt.is_some(),
+            );
+
+            *assigned_task = AssignedTask::HaulWaterToMixer(crate::systems::soul_ai::task_execution::types::HaulWaterToMixerData {
+                bucket: task_entity,
+                tank: tank_entity,
+                mixer: mixer_entity,
+                amount: 0,
+                phase: crate::systems::soul_ai::task_execution::types::HaulWaterToMixerPhase::GoingToBucket,
+            });
+            
+            dest.0 = task_pos;
+            path.waypoints.clear();
+            path.current_index = 0;
+            commands.trigger(OnTaskAssigned {
+                entity: worker_entity,
+                task_entity,
+                work_type: WorkType::HaulWaterToMixer,
             });
             return true;
         }

@@ -180,6 +180,7 @@ pub fn task_link_system(
             },
             AssignedTask::Build(data) => Some(data.blueprint),
             AssignedTask::HaulToBlueprint(data) => Some(data.blueprint),
+            AssignedTask::HaulWaterToMixer(data) => Some(data.bucket),
             _ => None,
         };
 
@@ -197,6 +198,7 @@ pub fn task_link_system(
                     AssignedTask::Haul(_) => Color::srgba(1.0, 1.0, 0.0, 0.4),   // 黄 (運搬)
                     AssignedTask::Build(_) => Color::srgba(1.0, 1.0, 1.0, 0.5),  // 白 (建築)
                     AssignedTask::HaulToBlueprint(_) => Color::srgba(1.0, 1.0, 0.5, 0.4), // 薄黄 (搬入)
+                    AssignedTask::HaulWaterToMixer(_) => Color::srgb(0.0, 0.5, 1.0), // Same as GatherWater
                     _ => Color::srgba(1.0, 1.0, 1.0, 0.3),
                 };
 

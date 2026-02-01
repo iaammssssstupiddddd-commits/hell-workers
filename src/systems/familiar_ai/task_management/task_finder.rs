@@ -117,7 +117,7 @@ pub fn find_unassigned_task_in_area(
 
             // 収集系は対象が実在するか追加チェック
             let is_valid = match designation.work_type {
-                WorkType::Chop | WorkType::Mine | WorkType::Haul | WorkType::GatherWater | WorkType::CollectSand | WorkType::Refine => true,
+                WorkType::Chop | WorkType::Mine | WorkType::Haul | WorkType::GatherWater | WorkType::CollectSand | WorkType::Refine | WorkType::HaulWaterToMixer => true,
                 WorkType::Build => {
                     if let Ok((_, bp, _)) = queries.blueprints.get(entity) {
                         bp.materials_complete()

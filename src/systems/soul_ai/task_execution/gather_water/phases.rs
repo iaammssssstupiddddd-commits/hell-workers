@@ -4,6 +4,7 @@ use crate::systems::logistics::{ResourceItem, ResourceType};
 use crate::systems::soul_ai::task_execution::context::TaskExecutionContext;
 use crate::systems::soul_ai::task_execution::types::{AssignedTask, GatherWaterPhase};
 use crate::world::map::WorldMap;
+use crate::constants::BUCKET_CAPACITY;
 use bevy::prelude::*;
 
 use super::helpers::{abort_task_with_item, abort_task_without_item, drop_bucket_for_auto_haul};
@@ -397,11 +398,13 @@ fn handle_pouring(
         });
 
         // タンクの中身を増やす
-        commands.spawn((
-            ResourceItem(ResourceType::Water),
-            crate::relationships::StoredIn(tank_entity),
-            Visibility::Hidden, // タンクの中なので見えない
-        ));
+        for _ in 0..BUCKET_CAPACITY {
+            commands.spawn((
+                ResourceItem(ResourceType::Water),
+                crate::relationships::StoredIn(tank_entity),
+                Visibility::Hidden, // タンクの中なので見えない
+            ));
+        }
 
         // バケツをその場にドロップしてタスク完了
         // オートホールシステムがバケツをバケツ置き場に戻す
