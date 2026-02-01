@@ -25,8 +25,8 @@ impl BuildingType {
         let mut materials = HashMap::new();
         match self {
             BuildingType::Wall => {
-                materials.insert(ResourceType::Wood, 2);
-                materials.insert(ResourceType::StasisMud, 1);
+                materials.insert(ResourceType::Wood, 1); // Cost reduced to 1
+                // materials.insert(ResourceType::StasisMud, 1); // Removed
             }
             BuildingType::Floor => {
                 materials.insert(ResourceType::Rock, 1);
@@ -109,7 +109,7 @@ impl Blueprint {
         // 壁の場合、木材さえあれば建築作業開始は可能とする（仮設状態になる）
         if self.kind == BuildingType::Wall {
             let wood_delivered = self.delivered_materials.get(&ResourceType::Wood).unwrap_or(&0);
-            let wood_required = self.required_materials.get(&ResourceType::Wood).unwrap_or(&2);
+            let wood_required = self.required_materials.get(&ResourceType::Wood).unwrap_or(&1);
             return wood_delivered >= wood_required;
         }
 
@@ -194,7 +194,7 @@ pub fn building_completion_system(
             commands.entity(entity).despawn();
 
             let (sprite_image, custom_size) = match bp.kind {
-                BuildingType::Wall => (game_assets.wall.clone(), Vec2::splat(TILE_SIZE)),
+                BuildingType::Wall => (game_assets.wall_isolated.clone(), Vec2::splat(TILE_SIZE)),
                 BuildingType::Floor => (game_assets.stone.clone(), Vec2::splat(TILE_SIZE)),
                 BuildingType::Tank => (game_assets.tank_empty.clone(), Vec2::splat(TILE_SIZE * 2.0)),
                 BuildingType::MudMixer => (game_assets.mud_mixer.clone(), Vec2::splat(TILE_SIZE * 2.0)),
@@ -243,6 +243,8 @@ pub fn building_completion_system(
 
                 for &(gx, gy) in &bp.occupied_grids {
                     world_map.add_obstacle(gx, gy);
+                    // 完成した建物でマップ情報を更新（古いBlueprintのEntityIDを上書き）
+                    world_map.buildings.insert((gx, gy), building_entity);
                 }
 
                 // --- ソウル埋まり解消の処理 ---

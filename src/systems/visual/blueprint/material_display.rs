@@ -13,7 +13,7 @@ use crate::systems::visual::blueprint::BlueprintVisual;
 pub fn spawn_material_display_system(
     mut commands: Commands,
     game_assets: Res<GameAssets>,
-    q_blueprints: Query<(Entity, &Blueprint), (With<Blueprint>, Without<BlueprintVisual>)>,
+    q_blueprints: Query<(Entity, &Blueprint), (With<Blueprint>, Added<BlueprintVisual>)>,
 ) {
     for (bp_entity, bp) in q_blueprints.iter() {
         // BlueprintVisual がまだない = 初期段階

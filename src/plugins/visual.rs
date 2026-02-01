@@ -35,6 +35,8 @@ use crate::systems::visual::soul::{
 };
 use crate::systems::visual::speech::SpeechPlugin;
 use crate::systems::visual::tank::update_tank_visual_system;
+use crate::systems::visual::wall_connection::WallConnectionPlugin;
+
 use bevy::prelude::*;
 
 pub struct VisualPlugin;
@@ -42,6 +44,7 @@ pub struct VisualPlugin;
 impl Plugin for VisualPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(SpeechPlugin);
+        app.add_plugins(WallConnectionPlugin);
         // Blueprint visual systems (separate to avoid tuple limit)
         app.add_systems(
             Update,

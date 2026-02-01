@@ -159,7 +159,7 @@ pub fn blueprint_placement(
 
                     if can_place {
                         let texture = match building_type {
-                            BuildingType::Wall => game_assets.wall.clone(),
+                            BuildingType::Wall => game_assets.wall_isolated.clone(),
                             BuildingType::Floor => game_assets.dirt.clone(),
                             BuildingType::Tank => game_assets.tank_empty.clone(),
                             BuildingType::MudMixer => game_assets.mud_mixer.clone(),
