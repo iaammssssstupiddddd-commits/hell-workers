@@ -16,7 +16,6 @@ impl Plugin for WallConnectionPlugin {
 /// 壁（Building）や壁の設計図（Blueprint）が追加されたとき、
 /// 自身と隣接する壁の見た目を更新する。
 fn wall_connections_system(
-    // mut commands: Commands, // Unused
     game_assets: Res<GameAssets>,
     world_map: Res<WorldMap>,
     q_new_buildings: Query<(Entity, &Transform, &Building), Added<Building>>,
@@ -40,9 +39,6 @@ fn wall_connections_system(
     for (_entity, _transform, blueprint) in q_new_blueprints.iter() {
         // Blueprint::kind を確認
         if blueprint.kind == BuildingType::Wall {
-            // let (x, y) = WorldMap::world_to_grid(transform.translation.truncate()); // Unused
-            // 設計図は複数マスを占有する可能性があるが、壁は1x1なので occupied_grids[0] でOK
-            // 一応 occupied_grids 全てを見る
             for &(gx, gy) in &blueprint.occupied_grids {
                 add_neighbors_to_update(gx, gy, &mut update_targets);
             }
@@ -57,21 +53,7 @@ fn wall_connections_system(
     for (gx, gy) in update_targets {
         // マップからその座標にあるエンティティを取得
         if let Some(&entity) = world_map.buildings.get(&(gx, gy)) {
-            // まず壁かどうかをチェック
-            let is_wall_entity = if let Ok((building_opt, blueprint_opt)) = q_walls_check.get(entity) {
-                 if let Some(b) = building_opt {
-                    b.kind == BuildingType::Wall
-                } else if let Some(bp) = blueprint_opt {
-                    bp.kind == BuildingType::Wall
-                } else {
-                    false
-                }
-            } else {
-                false
-            };
-
-            if is_wall_entity {
-                // スプライトを更新
+            if is_wall(gx, gy, &world_map, &q_walls_check) {
                 if let Ok(mut sprite) = q_sprites.get_mut(entity) {
                     update_wall_sprite(gx, gy, &mut sprite, &world_map, &q_walls_check, &game_assets);
                 }
@@ -140,11 +122,6 @@ fn update_wall_sprite(
 
         // Cross
         (true, true, true, true) => (game_assets.wall_cross.clone(), false, false),
-
-        // Default fallback (should be covered)
-        /*
-        _ => (game_assets.wall_isolated.clone(), false, false),
-        */
     };
 
     sprite.image = texture;

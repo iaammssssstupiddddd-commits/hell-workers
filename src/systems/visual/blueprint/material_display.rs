@@ -16,7 +16,7 @@ pub fn spawn_material_display_system(
     q_blueprints: Query<(Entity, &Blueprint), (With<Blueprint>, Added<BlueprintVisual>)>,
 ) {
     for (bp_entity, bp) in q_blueprints.iter() {
-        // BlueprintVisual がまだない = 初期段階
+        // BlueprintVisual が追加されたタイミングで資材表示を生成
         // 必要な資材ごとにアイコンとカウンターを生成
         let mut i = 0;
         for (resource_type, _) in &bp.required_materials {
