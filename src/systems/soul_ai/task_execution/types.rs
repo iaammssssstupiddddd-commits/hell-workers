@@ -25,6 +25,8 @@ pub enum AssignedTask {
     Refine(RefineData),
     /// ミキサーへ資材を運搬する
     HaulToMixer(HaulToMixerData),
+    /// Tankの水をバケツでMudMixerへ運ぶ
+    HaulWaterToMixer(HaulWaterToMixerData),
 }
 
 #[derive(Reflect, Clone, Debug, PartialEq)]
@@ -78,6 +80,15 @@ pub struct HaulToMixerData {
     pub item: Entity,
     pub mixer: Entity,
     pub phase: HaulToMixerPhase,
+}
+
+#[derive(Reflect, Clone, Debug, PartialEq, Eq)]
+pub struct HaulWaterToMixerData {
+    pub bucket: Entity,
+    pub tank: Entity,
+    pub mixer: Entity,
+    pub amount: u32,
+    pub phase: HaulWaterToMixerPhase,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Reflect, Default)]
@@ -146,6 +157,17 @@ pub enum HaulToMixerPhase {
     Delivering,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Reflect, Default)]
+pub enum HaulWaterToMixerPhase {
+    #[default]
+    GoingToBucket,
+    GoingToTank,
+    FillingFromTank,
+    GoingToMixer,
+    Pouring,
+    ReturningBucket,
+}
+
 impl AssignedTask {
     /// タスクの作業タイプを取得
     pub fn work_type(&self) -> Option<WorkType> {
@@ -158,6 +180,7 @@ impl AssignedTask {
             AssignedTask::CollectSand(_) => Some(WorkType::CollectSand),
             AssignedTask::Refine(_) => Some(WorkType::Refine),
             AssignedTask::HaulToMixer(_) => Some(WorkType::Haul),
+            AssignedTask::HaulWaterToMixer(_) => Some(WorkType::HaulWaterToMixer),
             AssignedTask::None => None,
         }
     }
@@ -173,7 +196,16 @@ impl AssignedTask {
             AssignedTask::CollectSand(data) => Some(data.target),
             AssignedTask::Refine(data) => Some(data.mixer),
             AssignedTask::HaulToMixer(data) => Some(data.item),
+            AssignedTask::HaulWaterToMixer(data) => Some(data.bucket),
             AssignedTask::None => None,
+        }
+    }
+
+    pub fn get_amount_if_haul_water(&self) -> Option<u32> {
+        if let AssignedTask::HaulWaterToMixer(data) = self {
+            Some(data.amount)
+        } else {
+            None
         }
     }
 }

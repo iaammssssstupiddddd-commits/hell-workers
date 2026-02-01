@@ -18,6 +18,7 @@ pub fn designation_visual_system(
             WorkType::GatherWater => Color::srgb(0.0, 0.8, 1.0), // Sky blue for water
             WorkType::CollectSand => Color::srgb(1.0, 0.8, 0.0), // Orange-yellow
             WorkType::Refine => Color::srgb(0.5, 0.0, 1.0),      // Purple
+            WorkType::HaulWaterToMixer => Color::srgb(0.0, 0.8, 1.0), // Same as gather water
         };
 
         commands.spawn((

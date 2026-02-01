@@ -38,6 +38,7 @@ pub fn hover_tooltip_system(
         &crate::systems::jobs::Building,
         Option<&crate::systems::logistics::Stockpile>,
         Option<&crate::relationships::StoredItems>,
+        Option<&crate::systems::jobs::MudMixerStorage>,
     )>,
 ) {
     let Ok(window) = q_window.single() else {
@@ -67,7 +68,7 @@ pub fn hover_tooltip_system(
                 .unwrap_or("Soul".to_string());
             info_lines.push(format!("Soul: {}", name));
             info_lines.push(format!("Motivation: {:.0}%", soul.motivation * 100.0));
-        } else if let Ok((building, stockpile_opt, stored_items_opt)) = q_buildings.get(entity) {
+        } else if let Ok((building, stockpile_opt, stored_items_opt, mixer_storage_opt)) = q_buildings.get(entity) {
             let mut building_info = format!("Building: {:?}", building.kind);
             if building.is_provisional {
                 building_info += " (Provisional)";
@@ -84,6 +85,14 @@ pub fn hover_tooltip_system(
                 );
             }
             info_lines.push(building_info);
+            
+            // MudMixer の貯蔵量表示
+            if let Some(storage) = mixer_storage_opt {
+                info_lines.push(format!(
+                    "Storage: Sand {}, Rock {}, Water {}",
+                    storage.sand, storage.rock, storage.water
+                ));
+            }
         }
 
         if let Ok((des, issued_by_opt, task_workers_opt)) = q_designations.get(entity) {

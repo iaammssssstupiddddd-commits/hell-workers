@@ -147,6 +147,7 @@ pub enum WorkType {
     GatherWater, // 水汲み
     CollectSand, // 砂採取
     Refine,      // 精製
+    HaulWaterToMixer, // Tankから水をミキサーへ運ぶ
 }
 
 #[derive(Component)]

@@ -44,6 +44,7 @@ fn get_task_icon_and_color(
         AssignedTask::CollectSand { .. } => (game_assets.icon_axe.clone(), COLOR_GATHER_DEFAULT),
         AssignedTask::Refine { .. } => (game_assets.icon_hammer.clone(), COLOR_BUILD),
         AssignedTask::HaulToMixer { .. } => (game_assets.icon_haul.clone(), COLOR_HAUL_TO_BP),
+        AssignedTask::HaulWaterToMixer { .. } => (game_assets.icon_haul.clone(), COLOR_WATER),
     }
 }
 

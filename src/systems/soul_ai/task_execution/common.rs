@@ -20,19 +20,21 @@ pub fn update_destination_if_needed(dest: &mut Destination, target_pos: Vec2, pa
 }
 
 /// インタラクション対象への隣接目的地を設定（岩などへの近接用）
+///
+/// 到達可能な隣接マスがあれば`true`を返し、なければ`false`を返す
 pub fn update_destination_to_adjacent(
     dest: &mut Destination,
     target_pos: Vec2,
     path: &mut Path,
     soul_pos: Vec2,
     world_map: &WorldMap,
-) {
+) -> bool {
     let target_grid = WorldMap::world_to_grid(target_pos);
     
     // ターゲット自体がWalkableならそのままターゲットへ
     if world_map.is_walkable(target_grid.0, target_grid.1) {
         update_destination_if_needed(dest, target_pos, path);
-        return;
+        return true;
     }
     
     // 隣接マスのうち、Walkableで現在位置に最も近いものを探す（8方向）
@@ -60,12 +62,13 @@ pub fn update_destination_to_adjacent(
     
     if let Some(pos) = best_pos {
         update_destination_if_needed(dest, pos, path);
+        true
     } else {
-        // 近づける場所がない場合（完全な袋小路など）、ターゲットを目的地にセットするのではなく
-        // 到達不能であることを確定させる（目的地を更新しないか、不変にする）
-        // もしターゲット自体が歩行可能な場合は上記でリターン済み
+        // 到達不能: 近づける場所がない（完全な袋小路など）
+        false
     }
 }
+
 
 /// 設計図への到達パスを設定（予定地の中心を一意なターゲットとする）
 pub fn update_destination_to_blueprint(
