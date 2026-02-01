@@ -23,7 +23,10 @@ pub fn spawn_material_display_system(
             let icon_image = match *resource_type {
                 ResourceType::Wood => game_assets.icon_wood_small.clone(),
                 ResourceType::Rock => game_assets.icon_rock_small.clone(),
-                _ => game_assets.icon_haul.clone(),
+                ResourceType::Water => game_assets.icon_water_small.clone(),
+                ResourceType::Sand => game_assets.icon_sand_small.clone(),
+                ResourceType::StasisMud => game_assets.icon_stasis_mud_small.clone(),
+                _ => game_assets.icon_hammer.clone(),
             };
 
             let offset = Vec3::new(

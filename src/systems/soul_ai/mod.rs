@@ -40,6 +40,8 @@ impl Plugin for SoulAiPlugin {
                         // 仕事管理
                         work::cleanup::cleanup_commanded_souls_system,
                         work::auto_haul::blueprint_auto_haul_system,
+                        work::auto_haul::mud_mixer_auto_haul_system,
+                        work::auto_refine::mud_mixer_auto_refine_system,
                         work::auto_build::blueprint_auto_build_system
                             .after(crate::systems::familiar_ai::familiar_ai_system),
                         work::task_area_auto_haul_system,

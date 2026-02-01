@@ -13,6 +13,8 @@ pub enum ResourceType {
     Water,
     BucketEmpty,
     BucketWater,
+    Sand,
+    StasisMud,
 }
 
 #[derive(Component, Reflect)]

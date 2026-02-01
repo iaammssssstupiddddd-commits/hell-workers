@@ -85,6 +85,60 @@ fn spawn_architect_submenu(commands: &mut Commands, game_assets: &Res<crate::ass
                         TextColor(Color::WHITE),
                     ));
                 });
+
+            // Floor button
+            parent
+                .spawn((
+                    Button,
+                    Node {
+                        width: Val::Percent(100.0),
+                        height: Val::Px(40.0),
+                        margin: UiRect::bottom(Val::Px(5.0)),
+                        justify_content: JustifyContent::Center,
+                        align_items: AlignItems::Center,
+                        ..default()
+                    },
+                    BackgroundColor(Color::srgb(0.3, 0.3, 0.3)),
+                    MenuButton(MenuAction::SelectBuild(BuildingType::Floor)),
+                ))
+                .with_children(|button| {
+                    button.spawn((
+                        Text::new("Floor"),
+                        TextFont {
+                            font: game_assets.font_ui.clone(),
+                            font_size: crate::constants::FONT_SIZE_BODY,
+                            ..default()
+                        },
+                        TextColor(Color::WHITE),
+                    ));
+                });
+
+            // MudMixer button
+            parent
+                .spawn((
+                    Button,
+                    Node {
+                        width: Val::Percent(100.0),
+                        height: Val::Px(40.0),
+                        margin: UiRect::bottom(Val::Px(5.0)),
+                        justify_content: JustifyContent::Center,
+                        align_items: AlignItems::Center,
+                        ..default()
+                    },
+                    BackgroundColor(Color::srgb(0.3, 0.3, 0.3)),
+                    MenuButton(MenuAction::SelectBuild(BuildingType::MudMixer)),
+                ))
+                .with_children(|button| {
+                    button.spawn((
+                        Text::new("MudMixer"),
+                        TextFont {
+                            font: game_assets.font_ui.clone(),
+                            font_size: crate::constants::FONT_SIZE_BODY,
+                            ..default()
+                        },
+                        TextColor(Color::WHITE),
+                    ));
+                });
         });
 }
 

@@ -10,11 +10,13 @@ use std::collections::HashMap;
 
 // --- Components ---
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Reflect)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Reflect, Default)]
 pub enum BuildingType {
+    #[default]
     Wall,
     Floor,
     Tank,
+    MudMixer,
 }
 
 impl BuildingType {
@@ -24,6 +26,7 @@ impl BuildingType {
         match self {
             BuildingType::Wall => {
                 materials.insert(ResourceType::Wood, 2);
+                materials.insert(ResourceType::StasisMud, 1);
             }
             BuildingType::Floor => {
                 materials.insert(ResourceType::Rock, 1);
@@ -31,19 +34,39 @@ impl BuildingType {
             BuildingType::Tank => {
                 materials.insert(ResourceType::Wood, 2);
             }
+            BuildingType::MudMixer => {
+                materials.insert(ResourceType::Wood, 4);
+            }
         }
         materials
     }
 }
 
-#[derive(Component)]
+#[derive(Component, Reflect, Default)]
+#[reflect(Component, Default)]
 pub struct Building {
-    pub _kind: BuildingType,
+    pub kind: BuildingType,
+    pub is_provisional: bool,
+}
+
+#[derive(Component)]
+pub struct SandPile;
+
+#[derive(Component, Reflect, Default)]
+#[reflect(Component, Default)]
+pub struct MudMixerStorage {
+    pub sand: u32,
+    pub water: u32,
+    pub rock: u32,
 }
 
 /// 資材の運搬先となる Blueprint を示すマーカー
 #[derive(Component)]
 pub struct TargetBlueprint(pub Entity);
+
+#[derive(Component, Reflect)]
+#[reflect(Component)]
+pub struct TargetMixer(pub Entity);
 
 #[derive(Component)]
 pub struct Tree;
@@ -83,6 +106,24 @@ impl Blueprint {
 
     /// 資材が全て揃っているかチェック
     pub fn materials_complete(&self) -> bool {
+        // 壁の場合、木材さえあれば建築作業開始は可能とする（仮設状態になる）
+        if self.kind == BuildingType::Wall {
+            let wood_delivered = self.delivered_materials.get(&ResourceType::Wood).unwrap_or(&0);
+            let wood_required = self.required_materials.get(&ResourceType::Wood).unwrap_or(&2);
+            return wood_delivered >= wood_required;
+        }
+
+        for (resource_type, required) in &self.required_materials {
+            let delivered = self.delivered_materials.get(resource_type).unwrap_or(&0);
+            if delivered < required {
+                return false;
+            }
+        }
+        true
+    }
+
+    /// 本来の全資材が揃っているか（仮設ではなく完全な状態か）
+    pub fn is_fully_complete(&self) -> bool {
         for (resource_type, required) in &self.required_materials {
             let delivered = self.delivered_materials.get(resource_type).unwrap_or(&0);
             if delivered < required {
@@ -105,6 +146,8 @@ pub enum WorkType {
     Build, // 建築
     Haul,  // 運搬
     GatherWater, // 水汲み
+    CollectSand, // 砂採取
+    Refine,      // 精製
 }
 
 #[derive(Component)]
@@ -154,10 +197,14 @@ pub fn building_completion_system(
                 BuildingType::Wall => (game_assets.wall.clone(), Vec2::splat(TILE_SIZE)),
                 BuildingType::Floor => (game_assets.stone.clone(), Vec2::splat(TILE_SIZE)),
                 BuildingType::Tank => (game_assets.tank_empty.clone(), Vec2::splat(TILE_SIZE * 2.0)),
+                BuildingType::MudMixer => (game_assets.mud_mixer.clone(), Vec2::splat(TILE_SIZE * 2.0)),
             };
 
             let building_entity = commands.spawn((
-                Building { _kind: bp.kind },
+                Building { 
+                    kind: bp.kind,
+                    is_provisional: !bp.is_fully_complete(),
+                },
                 Sprite {
                     image: sprite_image,
                     custom_size: Some(custom_size),
@@ -178,9 +225,9 @@ pub fn building_completion_system(
                 },
             )).id();
 
-            // 壁やタンクなどの障害物となる建物の場合、通行不可設定を行う
+            // 壁やタンクなどの建物の場合、通行不可設定を行う
             let is_obstacle = match bp.kind {
-                BuildingType::Wall | BuildingType::Tank => true,
+                BuildingType::Wall | BuildingType::Tank | BuildingType::MudMixer => true,
                 BuildingType::Floor => false,
             };
 
@@ -303,6 +350,41 @@ pub fn building_completion_system(
                         Transform::from_xyz(spawn_pos.x, spawn_pos.y, Z_ITEM_PICKUP),
                         Name::new("Empty Bucket (Tank Dedicated)"),
                     ));
+                }
+            }
+
+            // MudMixer が完成した場合、原料ストレージを追加し、隣接マスに SandPile を生成
+            if bp.kind == BuildingType::MudMixer {
+                commands.entity(building_entity).insert((
+                    MudMixerStorage::default(),
+                    Designation {
+                        work_type: WorkType::Refine,
+                    },
+                    TaskSlots::new(1),
+                ));
+
+                // MudMixer (2x2) の周辺に2つの SandPile を生成
+                let (bx, by) = WorldMap::world_to_grid(transform.translation.truncate());
+                let sand_positions = [(bx - 2, by - 1), (bx - 2, by)];
+
+                for (sx, sy) in sand_positions {
+                    let pos = WorldMap::grid_to_world(sx, sy);
+                    commands.spawn((
+                        SandPile,
+                        ObstaclePosition(sx, sy),
+                        Designation {
+                            work_type: WorkType::CollectSand,
+                        },
+                        TaskSlots::new(1),
+                        Sprite {
+                            image: game_assets.sand_pile.clone(),
+                            custom_size: Some(Vec2::splat(TILE_SIZE * 0.8)),
+                            ..default()
+                        },
+                        Transform::from_xyz(pos.x, pos.y, Z_ITEM_OBSTACLE),
+                        Name::new("SandPile"),
+                    ));
+                    world_map.add_obstacle(sx, sy);
                 }
             }
 
