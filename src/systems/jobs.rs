@@ -25,8 +25,7 @@ impl BuildingType {
         let mut materials = HashMap::new();
         match self {
             BuildingType::Wall => {
-                materials.insert(ResourceType::Wood, 1); // Cost reduced to 1
-                // materials.insert(ResourceType::StasisMud, 1); // Removed
+                materials.insert(ResourceType::Wood, 1);
             }
             BuildingType::Floor => {
                 materials.insert(ResourceType::Rock, 1);
