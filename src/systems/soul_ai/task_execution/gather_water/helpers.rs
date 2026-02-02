@@ -28,6 +28,7 @@ pub fn drop_bucket_for_auto_haul(
     commands.entity(bucket_entity).remove::<crate::relationships::TaskWorkers>();
     commands.entity(bucket_entity).remove::<crate::systems::jobs::Designation>();
     commands.entity(bucket_entity).remove::<crate::systems::jobs::TaskSlots>();
+    commands.entity(bucket_entity).remove::<crate::systems::jobs::TargetMixer>();
 
     ctx.inventory.0 = None;
     haul_cache.release(tank_entity);

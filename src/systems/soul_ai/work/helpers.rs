@@ -63,7 +63,10 @@ pub fn unassign_task(
             haul_cache.release(data.tank);
         }
         AssignedTask::HaulWaterToMixer(data) => {
-            haul_cache.release(data.tank);
+            haul_cache.release_mixer(data.mixer, ResourceType::Water);
+        }
+        AssignedTask::HaulToMixer(data) => {
+            haul_cache.release_mixer(data.mixer, data.resource_type);
         }
         AssignedTask::CollectSand(_) | AssignedTask::Refine(_) => {}
         _ => {}

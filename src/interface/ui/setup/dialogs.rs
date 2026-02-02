@@ -29,6 +29,7 @@ fn spawn_operation_dialog(commands: &mut Commands, game_assets: &Res<crate::asse
             },
             BackgroundColor(Color::srgba(0.05, 0.05, 0.05, 0.95)),
             BorderColor::all(Color::srgb(0.4, 0.4, 0.4)),
+            Interaction::default(),
             OperationDialog,
             ZIndex(200),
         ))
