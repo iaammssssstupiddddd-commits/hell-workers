@@ -400,6 +400,7 @@ pub fn ui_interaction_system(
 pub fn update_operation_dialog_system(
     selected_entity: Res<crate::interface::selection::SelectedEntity>,
     q_familiars: Query<(&Familiar, &FamiliarOperation)>,
+    mut q_dialog: Query<&mut Node, With<OperationDialog>>,
     mut text_set: ParamSet<(
         Query<&mut Text, With<OperationDialogFamiliarName>>,
         Query<&mut Text, With<OperationDialogThresholdText>>,
@@ -422,6 +423,20 @@ pub fn update_operation_dialog_system(
                 if max_soul_text.0 != val_str {
                     max_soul_text.0 = val_str;
                 }
+            }
+        } else {
+            // 選択されているが使い魔ではない場合、ダイアログを閉じる
+            if let Ok(mut dialog_node) = q_dialog.single_mut() {
+                if dialog_node.display != Display::None {
+                    dialog_node.display = Display::None;
+                }
+            }
+        }
+    } else {
+        // 何も選択されていない場合、ダイアログを閉じる
+        if let Ok(mut dialog_node) = q_dialog.single_mut() {
+            if dialog_node.display != Display::None {
+                dialog_node.display = Display::None;
             }
         }
     }
