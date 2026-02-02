@@ -17,6 +17,7 @@ use crate::world::map::{WorldMap, spawn_map};
 use bevy::prelude::*;
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 use bevy::render::view::NoIndirectDrawing;
+use std::time::Instant;
 
 pub struct StartupPlugin;
 
@@ -45,9 +46,10 @@ impl Plugin for StartupPlugin {
             .add_systems(
                 PostStartup,
                 (
-                    spawn_map,
-                    initial_resource_spawner, // 先に岩・木を配置して障害物情報を登録
-                    spawn_entities,           // その後、通行可能な場所にソウルを配置
+                    log_post_startup_begin,
+                    spawn_map_timed,
+                    initial_resource_spawner_timed, // 先に岩・木を配置して障害物情報を登録
+                    spawn_entities,                 // その後、通行可能な場所にソウルを配置
                     spawn_familiar_wrapper,
                     setup_ui,
                     populate_resource_spatial_grid,
@@ -57,12 +59,43 @@ impl Plugin for StartupPlugin {
     }
 }
 
+fn log_post_startup_begin() {
+    info!("STARTUP_TIMING: PostStartup begin");
+}
+
+fn spawn_map_timed(
+    commands: Commands,
+    game_assets: Res<GameAssets>,
+    world_map: ResMut<WorldMap>,
+) {
+    let start = Instant::now();
+    spawn_map(commands, game_assets, world_map);
+    info!(
+        "STARTUP_TIMING: spawn_map finished in {} ms",
+        start.elapsed().as_millis()
+    );
+}
+
+fn initial_resource_spawner_timed(
+    commands: Commands,
+    game_assets: Res<GameAssets>,
+    world_map: ResMut<WorldMap>,
+) {
+    let start = Instant::now();
+    initial_resource_spawner(commands, game_assets, world_map);
+    info!(
+        "STARTUP_TIMING: initial_resource_spawner finished in {} ms",
+        start.elapsed().as_millis()
+    );
+}
+
 fn setup(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
     mut images: ResMut<Assets<Image>>,
     mut layouts: ResMut<Assets<TextureAtlasLayout>>,
 ) {
+    let start = Instant::now();
     commands.spawn((
         Camera2d,
         MainCamera,
@@ -143,9 +176,13 @@ fn setup(
         icon_hammer: asset_server.load("textures/ui/hammer.png"),
         icon_wood_small: asset_server.load("textures/ui/wood_small.png"),
         icon_rock_small: asset_server.load("textures/ui/rock_small.png"),
-        icon_water_small: asset_server.load("textures/ui/water_small.png"),
+        icon_water_small: asset_server.load("textures/bucket_water.png"),
         icon_sand_small: asset_server.load("textures/sand.png"),
         icon_stasis_mud_small: asset_server.load("textures/ui/wood_small.png"),
+        // Gathering Objects
+        gathering_card_table: asset_server.load("textures/ui/card_table.png"),
+        gathering_campfire: asset_server.load("textures/ui/campfire.png"),
+        gathering_barrel: asset_server.load("textures/ui/barrel.png"),
         // New Resource & Station
         sand_pile: asset_server.load("textures/sand.png"),
         stasis_mud: asset_server.load("textures/stone.jpg"),
@@ -157,6 +194,10 @@ fn setup(
         font_soul_emoji,
     };
     commands.insert_resource(game_assets);
+    info!(
+        "STARTUP_TIMING: setup (assets + resources) finished in {} ms",
+        start.elapsed().as_millis()
+    );
 }
 
 fn initialize_gizmo_config(mut config_store: ResMut<GizmoConfigStore>) {
@@ -173,6 +214,7 @@ fn populate_resource_spatial_grid(
         With<crate::systems::logistics::ResourceItem>,
     >,
 ) {
+    let start = Instant::now();
     let mut registered_count = 0;
     for (entity, transform, visibility) in q_resources.iter() {
         let should_register = visibility
@@ -187,14 +229,28 @@ fn populate_resource_spatial_grid(
         "RESOURCE_GRID: Populated {} existing resources into grid",
         registered_count
     );
+    info!(
+        "STARTUP_TIMING: populate_resource_spatial_grid finished in {} ms",
+        start.elapsed().as_millis()
+    );
 }
 
 fn spawn_entities(spawn_events: MessageWriter<DamnedSoulSpawnEvent>) {
+    let start = Instant::now();
     spawn_damned_souls(spawn_events);
+    info!(
+        "STARTUP_TIMING: spawn_entities finished in {} ms",
+        start.elapsed().as_millis()
+    );
 }
 
 fn spawn_familiar_wrapper(spawn_events: MessageWriter<FamiliarSpawnEvent>) {
+    let start = Instant::now();
     crate::entities::familiar::spawn_familiar(spawn_events);
+    info!(
+        "STARTUP_TIMING: spawn_familiar_wrapper finished in {} ms",
+        start.elapsed().as_millis()
+    );
 }
 
 fn create_circular_outline_texture(images: &mut Assets<Image>) -> Handle<Image> {

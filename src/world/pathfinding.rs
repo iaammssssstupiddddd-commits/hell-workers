@@ -182,6 +182,12 @@ pub fn find_path_to_adjacent(
 ) -> Option<Vec<(i32, i32)>> {
     // 逆引き検索を1回実行: ターゲット地点（岩など）から開始点（ソウル）に向かってパスを探す
     // ターゲット地点自体が通行不能でも、最初の展開（隣接マスへの移動）で通行可能マスに移行する
+    // 開始点が通行不能な場合（アイテムの上にいるなど）は、allow_goal_obstacleを設定
+    let start_walkable = world_map.is_walkable(start.0, start.1);
+    if !start_walkable {
+        context.allow_goal_obstacle = true;
+    }
+    
     let mut path = find_path(world_map, context, target, start)?;
     
     // 得られたパスは [target, neighbor, ..., start]
@@ -196,6 +202,8 @@ pub fn find_path_to_adjacent(
         Some(path)
     }
 }
+
+
 
 /// 経路を平滑化する（直線で行ける場所を一直線に結ぶ）
 #[allow(dead_code)]

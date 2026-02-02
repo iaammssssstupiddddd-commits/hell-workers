@@ -38,10 +38,25 @@ pub fn pathfinding_system(
         // ただし、移動側が衝突で waypoint をスキップして `current_index == waypoints.len()` になっている場合、
         // パスが「残っている」扱いで再計算されず、結果的に停止してしまうことがある。
         // そのため「まだパス追従中」の場合のみスキップする。
+        //
+        // また、パス上に新たな障害物が追加されていないかも確認する。
         if path.current_index < path.waypoints.len() && !path.waypoints.is_empty() {
             if let Some(last) = path.waypoints.last() {
                 if last.distance_squared(destination.0) < 1.0 {
-                    continue;
+                    // パス上に障害物がないか確認（残りの経路部分のみ）
+                    let path_blocked = path.waypoints[path.current_index..]
+                        .iter()
+                        .any(|wp| {
+                            let grid = WorldMap::world_to_grid(*wp);
+                            !world_map.is_walkable(grid.0, grid.1)
+                        });
+                    
+                    if !path_blocked {
+                        continue;
+                    }
+                    
+                    // パスが阻塞された場合、再計算が必要
+                    debug!("PATH: Soul {:?} path blocked by obstacle, recalculating", entity);
                 }
             }
         }

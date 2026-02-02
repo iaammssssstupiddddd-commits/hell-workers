@@ -38,7 +38,7 @@ pub fn handle_haul_task(
 
                 let res_pos = res_transform.translation.truncate();
                 // アイテムが障害物の上にある可能性があるため、隣接マスを目的地として設定
-                let reachable = update_destination_to_adjacent(ctx.dest, res_pos, ctx.path, soul_pos, world_map);
+                let reachable = update_destination_to_adjacent(ctx.dest, res_pos, ctx.path, soul_pos, world_map, ctx.pf_context);
 
                 if !reachable {
                     // 到達不能: タスクをキャンセル

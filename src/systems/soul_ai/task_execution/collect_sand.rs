@@ -27,11 +27,13 @@ pub fn handle_collect_sand_task(
                     return;
                 }
                 let res_pos = res_transform.translation.truncate();
-                let reachable = update_destination_to_adjacent(ctx.dest, res_pos, ctx.path, soul_pos, world_map);
+                let reachable = update_destination_to_adjacent(ctx.dest, res_pos, ctx.path, soul_pos, world_map, ctx.pf_context);
 
                 if !reachable {
                     // 到達不能: タスクをキャンセル
                     info!("COLLECT_SAND: Soul {:?} cannot reach SandPile {:?}, canceling", ctx.soul_entity, target);
+                    commands.entity(target).remove::<crate::systems::jobs::Designation>();
+                    commands.entity(target).remove::<crate::systems::jobs::TaskSlots>();
                     clear_task_and_path(ctx.task, ctx.path);
                     return;
                 }
@@ -44,6 +46,9 @@ pub fn handle_collect_sand_task(
                     ctx.path.waypoints.clear();
                 }
             } else {
+                // SandPile が存在しない場合も Designation を削除
+                commands.entity(target).remove::<crate::systems::jobs::Designation>();
+                commands.entity(target).remove::<crate::systems::jobs::TaskSlots>();
                 clear_task_and_path(ctx.task, ctx.path);
             }
         }
@@ -91,10 +96,17 @@ pub fn handle_collect_sand_task(
                     });
                 }
             } else {
+                // SandPile が存在しない場合も Designation を削除
+                commands.entity(target).remove::<crate::systems::jobs::Designation>();
+                commands.entity(target).remove::<crate::systems::jobs::TaskSlots>();
                 clear_task_and_path(ctx.task, ctx.path);
             }
         }
         CollectSandPhase::Done => {
+            // SandPile の Designation を削除（次回必要なときに再発行される）
+            commands.entity(target).remove::<crate::systems::jobs::Designation>();
+            commands.entity(target).remove::<crate::systems::jobs::TaskSlots>();
+            commands.entity(target).remove::<crate::systems::jobs::IssuedBy>();
             clear_task_and_path(ctx.task, ctx.path);
         }
     }

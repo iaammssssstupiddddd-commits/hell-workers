@@ -61,6 +61,10 @@ pub struct GameAssets {
     pub icon_rock_small: Handle<Image>, // 旧icon_stone_small
     pub icon_sand_small: Handle<Image>,
     pub icon_stasis_mud_small: Handle<Image>,
+    // Gathering Objects
+    pub gathering_card_table: Handle<Image>,
+    pub gathering_campfire: Handle<Image>,
+    pub gathering_barrel: Handle<Image>,
     // New Resource & Station
     pub sand_pile: Handle<Image>,
     pub stasis_mud: Handle<Image>,

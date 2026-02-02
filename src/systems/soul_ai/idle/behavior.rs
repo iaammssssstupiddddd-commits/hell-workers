@@ -156,7 +156,7 @@ pub fn idle_behavior_system(
                 let has_arrived = dist_from_center <= GATHERING_ARRIVAL_RADIUS;
 
                 if has_arrived {
-                    info!("IDLE: Soul transitioned from ExhaustedGathering to Gathering");
+                    debug!("IDLE: Soul transitioned from ExhaustedGathering to Gathering");
                     idle.behavior = IdleBehavior::Gathering;
                     // ParticipatingIn を追加
                     if participating_in.is_none() {

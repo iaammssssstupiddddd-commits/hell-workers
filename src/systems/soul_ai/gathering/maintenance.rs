@@ -28,7 +28,7 @@ pub fn gathering_maintenance_system(
 
             if spot.grace_timer <= 0.0 {
                 // 集会消滅
-                info!(
+                debug!(
                     "GATHERING: Spot at {:?} dissolved (insufficient participants)",
                     spot.center
                 );
@@ -93,7 +93,7 @@ pub fn gathering_merge_system(
                         }
                     };
 
-                info!("GATHERING: Merging spot {:?} into {:?}", absorbed, absorber);
+                debug!("GATHERING: Merging spot {:?} into {:?}", absorbed, absorber);
 
                 // 参加者のターゲットを変更 (Observerを発火させるためにイベントをトリガー)
                 for (soul_entity, participating) in q_participants.iter() {
@@ -177,7 +177,7 @@ pub fn gathering_recruitment_system(
                     entity: soul_entity,
                     spot_entity,
                 });
-                info!(
+                debug!(
                     "GATHERING: Soul {:?} automatically recruited to spot {:?}",
                     soul_entity, spot_entity
                 );
@@ -214,7 +214,7 @@ pub fn gathering_leave_system(
                     spot_entity: participating_in.0,
                 });
                 commands.entity(entity).remove::<ParticipatingIn>();
-                info!(
+                debug!(
                     "GATHERING: Soul {:?} left spot {:?} (too far away)",
                     entity, participating_in.0
                 );
