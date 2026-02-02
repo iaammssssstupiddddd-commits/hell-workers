@@ -95,7 +95,7 @@ pub fn unassign_task(
             ));
             
             let _res_item = dropped_item_res.or_else(|| {
-                queries.targets.get(item_entity).ok().and_then(|(_tr, _tree, _rock, ri, _des, _stored)| ri.map(|r| r.0))
+                queries.resources.get(item_entity).ok().map(|r| r.0)
             });
 
             // 管理コンポーネントは削除せず維持する...

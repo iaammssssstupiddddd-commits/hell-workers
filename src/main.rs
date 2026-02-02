@@ -13,6 +13,7 @@ use bevy::prelude::*;
 use bevy::render::RenderPlugin;
 use bevy::render::settings::{Backends, RenderCreation, WgpuSettings};
 use bevy::diagnostic::FrameTimeDiagnosticsPlugin;
+use std::env;
 
 use game_state::{
     PlayMode, log_enter_building_mode, log_enter_task_mode, log_enter_zone_mode,
@@ -41,6 +42,7 @@ struct FrameSpikeLogger {
 }
 
 fn main() {
+    let backends = select_backends();
     App::new()
         .insert_resource(ClearColor(Color::srgb(0.1, 0.1, 0.1)))
         .add_plugins(
@@ -60,7 +62,7 @@ fn main() {
                 })
                 .set(RenderPlugin {
                     render_creation: RenderCreation::Automatic(WgpuSettings {
-                        backends: Some(Backends::PRIMARY), // Windows ネイティブ (DX12/Vulkan) を優先
+                        backends: Some(backends), // WSL は GL を優先
                         ..default()
                     }),
                     ..default()
@@ -107,6 +109,21 @@ fn main() {
         .add_plugins(VisualPlugin)
         .add_plugins(InterfacePlugin)
         .run();
+}
+
+fn select_backends() -> Backends {
+    if env::var("WGPU_BACKEND").is_ok() {
+        return Backends::PRIMARY;
+    }
+    if is_wsl() {
+        Backends::GL
+    } else {
+        Backends::PRIMARY
+    }
+}
+
+fn is_wsl() -> bool {
+    env::var("WSL_DISTRO_NAME").is_ok() || env::var("WSL_INTEROP").is_ok()
 }
 
 fn frame_spike_logger_system(
