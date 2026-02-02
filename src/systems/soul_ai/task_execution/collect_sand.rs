@@ -27,7 +27,14 @@ pub fn handle_collect_sand_task(
                     return;
                 }
                 let res_pos = res_transform.translation.truncate();
-                update_destination_to_adjacent(ctx.dest, res_pos, ctx.path, soul_pos, world_map);
+                let reachable = update_destination_to_adjacent(ctx.dest, res_pos, ctx.path, soul_pos, world_map);
+
+                if !reachable {
+                    // 到達不能: タスクをキャンセル
+                    info!("COLLECT_SAND: Soul {:?} cannot reach SandPile {:?}, canceling", ctx.soul_entity, target);
+                    clear_task_and_path(ctx.task, ctx.path);
+                    return;
+                }
 
                 if is_near_target(soul_pos, res_pos) {
                     *ctx.task = AssignedTask::CollectSand(crate::systems::soul_ai::task_execution::types::CollectSandData {

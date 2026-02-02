@@ -6,6 +6,7 @@ use crate::interface::camera::MainCamera;
 use crate::interface::selection::SelectedEntity;
 use crate::systems::jobs::{Designation, Rock, Tree, WorkType};
 use crate::systems::logistics::ResourceItem;
+use crate::world::map::WorldMap;
 use bevy::prelude::*;
 
 pub fn task_area_selection_system(
@@ -46,24 +47,27 @@ pub fn task_area_selection_system(
         };
         if let Some(cursor_pos) = window.cursor_position() {
             if let Ok(world_pos) = camera.viewport_to_world_2d(camera_transform, cursor_pos) {
+                // 開始位置はグリッドのエッジにスナップ
+                let snapped_pos = WorldMap::snap_to_grid_edge(world_pos);
+
                 match task_context.0 {
                     TaskMode::AreaSelection(None) => {
-                        task_context.0 = TaskMode::AreaSelection(Some(world_pos))
+                        task_context.0 = TaskMode::AreaSelection(Some(snapped_pos))
                     }
                     TaskMode::DesignateChop(None) => {
-                        task_context.0 = TaskMode::DesignateChop(Some(world_pos))
+                        task_context.0 = TaskMode::DesignateChop(Some(snapped_pos))
                     }
                     TaskMode::DesignateMine(None) => {
-                        task_context.0 = TaskMode::DesignateMine(Some(world_pos))
+                        task_context.0 = TaskMode::DesignateMine(Some(snapped_pos))
                     }
                     TaskMode::DesignateHaul(None) => {
-                        task_context.0 = TaskMode::DesignateHaul(Some(world_pos))
+                        task_context.0 = TaskMode::DesignateHaul(Some(snapped_pos))
                     }
                     TaskMode::CancelDesignation(None) => {
-                        task_context.0 = TaskMode::CancelDesignation(Some(world_pos))
+                        task_context.0 = TaskMode::CancelDesignation(Some(snapped_pos))
                     }
                     TaskMode::AssignTask(None) => {
-                        task_context.0 = TaskMode::AssignTask(Some(world_pos))
+                        task_context.0 = TaskMode::AssignTask(Some(snapped_pos))
                     }
                     _ => {}
                 }
@@ -83,10 +87,11 @@ pub fn task_area_selection_system(
             if let Ok(world_pos) = camera.viewport_to_world_2d(camera_transform, cursor_pos) {
                 match task_context.0 {
                     TaskMode::AreaSelection(Some(start_pos)) => {
-                        let min_x = f32::min(start_pos.x, world_pos.x);
-                        let max_x = f32::max(start_pos.x, world_pos.x);
-                        let min_y = f32::min(start_pos.y, world_pos.y);
-                        let max_y = f32::max(start_pos.y, world_pos.y);
+                        let end_pos = WorldMap::snap_to_grid_edge(world_pos);
+                        let min_x = f32::min(start_pos.x, end_pos.x);
+                        let max_x = f32::max(start_pos.x, end_pos.x);
+                        let min_y = f32::min(start_pos.y, end_pos.y);
+                        let max_y = f32::max(start_pos.y, end_pos.y);
                         let min = Vec2::new(min_x, min_y);
                         let max = Vec2::new(max_x, max_y);
                         let center = (min + max) / 2.0;
@@ -138,10 +143,11 @@ pub fn task_area_selection_system(
                     | TaskMode::DesignateMine(Some(start_pos))
                     | TaskMode::DesignateHaul(Some(start_pos))
                     | TaskMode::CancelDesignation(Some(start_pos)) => {
-                        let min_x = f32::min(start_pos.x, world_pos.x);
-                        let max_x = f32::max(start_pos.x, world_pos.x);
-                        let min_y = f32::min(start_pos.y, world_pos.y);
-                        let max_y = f32::max(start_pos.y, world_pos.y);
+                        let end_pos = WorldMap::snap_to_grid_edge(world_pos);
+                        let min_x = f32::min(start_pos.x, end_pos.x);
+                        let max_x = f32::max(start_pos.x, end_pos.x);
+                        let min_y = f32::min(start_pos.y, end_pos.y);
+                        let max_y = f32::max(start_pos.y, end_pos.y);
 
                         let work_type = match task_context.0 {
                             TaskMode::DesignateChop(_) => Some(WorkType::Chop),
@@ -247,8 +253,9 @@ pub fn area_selection_indicator_system(
 
         if let Some(cursor_pos) = window.cursor_position() {
             if let Ok(world_pos) = camera.viewport_to_world_2d(camera_transform, cursor_pos) {
-                let center = (start_pos + world_pos) / 2.0;
-                let size = (start_pos - world_pos).abs();
+                let end_pos = WorldMap::snap_to_grid_edge(world_pos);
+                let center = (start_pos + end_pos) / 2.0;
+                let size = (start_pos - end_pos).abs();
 
                 let color = match task_context.0 {
                     TaskMode::AreaSelection(_) => Color::srgba(1.0, 1.0, 1.0, 0.2),

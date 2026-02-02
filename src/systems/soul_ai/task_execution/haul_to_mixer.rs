@@ -11,6 +11,7 @@ pub fn handle_haul_to_mixer_task(
     ctx: &mut TaskExecutionContext,
     item_entity: Entity,
     mixer_entity: Entity,
+    resource_type: ResourceType,
     phase: HaulToMixerPhase,
     commands: &mut Commands,
     haul_cache: &mut HaulReservationCache,
@@ -24,29 +25,24 @@ pub fn handle_haul_to_mixer_task(
             // ミキサーのストレージが満杯かチェック
             if let Ok(mixer_data) = ctx.queries.mixers.get(mixer_entity) {
                 let (_, storage, _) = mixer_data;
-                if let Ok(res_item) = ctx.queries.resources.get(item_entity) {
-                    let current = match res_item.0 {
-                        ResourceType::Sand => storage.sand,
-                        ResourceType::Rock => storage.rock,
-                        _ => 0,
-                    };
-                    if current >= MUD_MIXER_CAPACITY {
-                        info!("HAUL_TO_MIXER: Soul {:?} - mixer {:?} storage full for {:?}, canceling", ctx.soul_entity, mixer_entity, res_item.0);
-                        // 予約解除
-                        haul_cache.release_mixer(mixer_entity, res_item.0);
-                        // アイテムのDesignationを解除
-                        commands.entity(item_entity).remove::<crate::systems::jobs::Designation>();
-                        clear_task_and_path(ctx.task, ctx.path);
-                        return;
-                    }
+                let current = match resource_type {
+                    ResourceType::Sand => storage.sand,
+                    ResourceType::Rock => storage.rock,
+                    _ => 0,
+                };
+                if current >= MUD_MIXER_CAPACITY {
+                    info!("HAUL_TO_MIXER: Soul {:?} - mixer {:?} storage full for {:?}, canceling", ctx.soul_entity, mixer_entity, resource_type);
+                    // 予約解除
+                    haul_cache.release_mixer(mixer_entity, resource_type);
+                    // アイテムのDesignationを解除
+                    commands.entity(item_entity).remove::<crate::systems::jobs::Designation>();
+                    clear_task_and_path(ctx.task, ctx.path);
+                    return;
                 }
             } else {
                 // ミキサーが存在しない
                 info!("HAUL_TO_MIXER: Soul {:?} - mixer {:?} not found, canceling", ctx.soul_entity, mixer_entity);
-                // リソースタイプが不明なため、予約解除できない（アイテムが残っていれば解除したいが...）
-                if let Ok(res_item) = ctx.queries.resources.get(item_entity) {
-                    haul_cache.release_mixer(mixer_entity, res_item.0);
-                }
+                haul_cache.release_mixer(mixer_entity, resource_type);
                 clear_task_and_path(ctx.task, ctx.path);
                 return;
             }
@@ -55,30 +51,39 @@ pub fn handle_haul_to_mixer_task(
                 // 指定が解除されていたら中止
                 if des_opt.is_none() {
                     info!("HAUL_TO_MIXER: Soul {:?} - item {:?} designation removed, canceling", ctx.soul_entity, item_entity);
-                    if let Ok(res_item) = ctx.queries.resources.get(item_entity) {
-                        haul_cache.release_mixer(mixer_entity, res_item.0);
-                    }
+                    haul_cache.release_mixer(mixer_entity, resource_type);
                     clear_task_and_path(ctx.task, ctx.path);
                     return;
                 }
 
                 let item_pos = res_transform.translation.truncate();
-                update_destination_if_needed(ctx.dest, item_pos, ctx.path);
+                // アイテムが障害物の上にある可能性があるため、隣接マスを目的地として設定
+                let reachable = update_destination_to_adjacent(ctx.dest, item_pos, ctx.path, soul_pos, world_map);
+
+                if !reachable {
+                    // 到達不能: タスクをキャンセル
+                    info!("HAUL_TO_MIXER: Soul {:?} cannot reach item {:?}, canceling", ctx.soul_entity, item_entity);
+                    haul_cache.release_mixer(mixer_entity, resource_type);
+                    commands.entity(item_entity).remove::<crate::systems::jobs::Designation>();
+                    clear_task_and_path(ctx.task, ctx.path);
+                    return;
+                }
 
                 if is_near_target(soul_pos, item_pos) {
                     // アイテムを拾う（pickup_item が Designation, StoredIn などをクリア）
                     pickup_item(commands, ctx.soul_entity, item_entity, ctx.inventory);
-                    
+
                     *ctx.task = AssignedTask::HaulToMixer(crate::systems::soul_ai::task_execution::types::HaulToMixerData {
                         item: item_entity,
                         mixer: mixer_entity,
+                        resource_type,
                         phase: HaulToMixerPhase::GoingToMixer,
                     });
                     ctx.path.waypoints.clear();
                 }
             } else {
                 info!("HAUL_TO_MIXER: Soul {:?} - item {:?} not found, canceling", ctx.soul_entity, item_entity);
-                // アイテムがないのでリソースタイプ不明。予約解除できない可能性があるが、アイテム消失時に別途処理が必要か
+                haul_cache.release_mixer(mixer_entity, resource_type);
                 clear_task_and_path(ctx.task, ctx.path);
             }
         }
@@ -88,54 +93,43 @@ pub fn handle_haul_to_mixer_task(
             // インベントリにアイテムがあるか確認
             if ctx.inventory.0 != Some(item_entity) {
                 info!("HAUL_TO_MIXER: Soul {:?} - item not in inventory, canceling", ctx.soul_entity);
-                // アイテム紛失？予約解除できない
+                haul_cache.release_mixer(mixer_entity, resource_type);
                 clear_task_and_path(ctx.task, ctx.path);
                 return;
             }
-            
-            // 手持ちアイテムのリソースタイプを取得
-            let resource_type = if let Ok(res) = ctx.queries.resources.get(item_entity) {
-                Some(res.0)
-            } else {
-                None 
-            };
 
             if let Ok(mixer_data) = ctx.queries.mixers.get(mixer_entity) {
                 let (mixer_transform, storage, _) = mixer_data;
                 let mixer_pos = mixer_transform.translation.truncate();
 
-                if let Some(res_type) = resource_type {
-                    // ミキサーが満タンかチェック（移動中に満タンになる可能性）
-                    let current = match res_type {
-                        ResourceType::Sand => storage.sand,
-                        ResourceType::Rock => storage.rock,
-                        _ => 0,
-                    };
-                    if current >= MUD_MIXER_CAPACITY {
-                        // 満タン: 砂は無限にあるのでdespawn、それ以外はdrop
-                        info!("HAUL_TO_MIXER: Mixer {:?} full for {:?}, disposing item", mixer_entity, res_type);
-                        haul_cache.release_mixer(mixer_entity, res_type);
-                        
-                        if res_type == ResourceType::Sand {
-                            commands.entity(item_entity).despawn();
-                        } else {
-                            drop_item(commands, ctx.soul_entity, item_entity, soul_pos);
-                        }
-                        ctx.inventory.0 = None;
-                        clear_task_and_path(ctx.task, ctx.path);
-                        return;
+                // ミキサーが満タンかチェック（移動中に満タンになる可能性）
+                let current = match resource_type {
+                    ResourceType::Sand => storage.sand,
+                    ResourceType::Rock => storage.rock,
+                    _ => 0,
+                };
+                if current >= MUD_MIXER_CAPACITY {
+                    // 満タン: 砂は無限にあるのでdespawn、それ以外はdrop
+                    info!("HAUL_TO_MIXER: Mixer {:?} full for {:?}, disposing item", mixer_entity, resource_type);
+                    haul_cache.release_mixer(mixer_entity, resource_type);
+
+                    if resource_type == ResourceType::Sand {
+                        commands.entity(item_entity).despawn();
+                    } else {
+                        drop_item(commands, ctx.soul_entity, item_entity, soul_pos);
                     }
+                    ctx.inventory.0 = None;
+                    clear_task_and_path(ctx.task, ctx.path);
+                    return;
                 }
-                
+
                 // 到達可能かチェック
                 let reachable = update_destination_to_adjacent(ctx.dest, mixer_pos, ctx.path, soul_pos, world_map);
-                
+
                 if !reachable {
                     // 到達不能: アイテムをドロップしてタスクをキャンセル
                     info!("HAUL_TO_MIXER: Soul {:?} cannot reach mixer {:?}, dropping item", ctx.soul_entity, mixer_entity);
-                    if let Some(res_type) = resource_type {
-                        haul_cache.release_mixer(mixer_entity, res_type);
-                    }
+                    haul_cache.release_mixer(mixer_entity, resource_type);
                     drop_item(commands, ctx.soul_entity, item_entity, soul_pos);
                     ctx.inventory.0 = None;
                     clear_task_and_path(ctx.task, ctx.path);
@@ -146,6 +140,7 @@ pub fn handle_haul_to_mixer_task(
                     *ctx.task = AssignedTask::HaulToMixer(crate::systems::soul_ai::task_execution::types::HaulToMixerData {
                         item: item_entity,
                         mixer: mixer_entity,
+                        resource_type,
                         phase: HaulToMixerPhase::Delivering,
                     });
                     ctx.path.waypoints.clear();
@@ -153,9 +148,7 @@ pub fn handle_haul_to_mixer_task(
 
             } else {
                 // ミキサーが消失した場合はアイテムをドロップして終了
-                if let Some(res_type) = resource_type {
-                    haul_cache.release_mixer(mixer_entity, res_type);
-                }
+                haul_cache.release_mixer(mixer_entity, resource_type);
                 if let Some(item) = ctx.inventory.0 {
                     drop_item(commands, ctx.soul_entity, item, soul_pos);
                     ctx.inventory.0 = None;
@@ -165,25 +158,17 @@ pub fn handle_haul_to_mixer_task(
         }
 
         HaulToMixerPhase::Delivering => {
-            // 手持ちアイテムのリソースタイプを取得
-            let resource_type = if let Ok(res) = ctx.queries.resources.get(item_entity) {
-                Some(res.0)
-            } else {
-                None
-            };
-
-            
             if let Ok(mixer_data) = ctx.queries.mixers.get_mut(mixer_entity) {
                 let (_, mut storage, _) = mixer_data;
                 let mut delivered = false;
                 match resource_type {
-                    Some(ResourceType::Sand) => {
+                    ResourceType::Sand => {
                         if storage.sand < MUD_MIXER_CAPACITY {
                             storage.sand += 1;
                             delivered = true;
                         }
                     }
-                    Some(ResourceType::Rock) => {
+                    ResourceType::Rock => {
                         if storage.rock < MUD_MIXER_CAPACITY {
                             storage.rock += 1;
                             delivered = true;
@@ -191,8 +176,6 @@ pub fn handle_haul_to_mixer_task(
                     }
                     _ => {}
                 }
-
-                
 
                 if delivered {
                     commands.entity(item_entity).despawn();
@@ -212,9 +195,7 @@ pub fn handle_haul_to_mixer_task(
                 }
             }
             // 完了したので予約解除
-            if let Some(res_type) = resource_type {
-                haul_cache.release_mixer(mixer_entity, res_type);
-            }
+            haul_cache.release_mixer(mixer_entity, resource_type);
             clear_task_and_path(ctx.task, ctx.path);
         }
     }
