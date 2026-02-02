@@ -7,6 +7,31 @@ use crate::systems::soul_ai::work::unassign_task;
 use crate::world::map::WorldMap;
 use crate::world::pathfinding::{self, PathfindingContext};
 
+/// 障害物に埋まったソウルを最寄りの歩行可能タイルへ逃がす。
+/// 建築物の配置や障害物の追加で現在位置が通行不可になった場合に実行される。
+pub fn soul_stuck_escape_system(
+    world_map: Res<WorldMap>,
+    mut query: Query<(&mut Transform, &mut Path), With<DamnedSoul>>,
+) {
+    for (mut transform, mut path) in query.iter_mut() {
+        let current_pos = transform.translation.truncate();
+        if world_map.is_walkable_world(current_pos) {
+            continue;
+        }
+        if let Some((gx, gy)) = world_map.get_nearest_walkable_grid(current_pos) {
+            let escape_pos = WorldMap::grid_to_world(gx, gy);
+            transform.translation.x = escape_pos.x;
+            transform.translation.y = escape_pos.y;
+            path.waypoints.clear();
+            path.current_index = 0;
+            debug!(
+                "SOUL_STUCK_ESCAPE: moved soul from {:?} to walkable {:?}",
+                current_pos, escape_pos
+            );
+        }
+    }
+}
+
 pub fn pathfinding_system(
     mut commands: Commands,
     world_map: Res<WorldMap>,

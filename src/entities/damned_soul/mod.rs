@@ -178,6 +178,9 @@ impl Plugin for DamnedSoulPlugin {
                 Update,
                 (
                     spawn::soul_spawning_system.in_set(GameSystemSet::Logic),
+                    movement::soul_stuck_escape_system
+                        .in_set(GameSystemSet::Actor)
+                        .before(movement::pathfinding_system),
                     movement::pathfinding_system.in_set(GameSystemSet::Actor),
                     movement::soul_movement.in_set(GameSystemSet::Actor),
                     movement::animation_system.in_set(GameSystemSet::Visual),
