@@ -81,7 +81,23 @@ flowchart TD
 3.  **過剰運搬の防止**: 「配達済み + 運搬中 + 予約済み」の合計が必要数を超えないよう、厳密に管理されます。
 4.  **搬入**: Blueprint に到着すると `deliver_material()` で資材が搬入され、進捗が進みます。
 
-## 7. ビジュアルフィードバック (Visual Feedback)
+## 7. グリッド配置とエリア選択 (Grid Alignment & Area Selection)
+
+すべての配置操作は、ワールドのタイルグリッドに厳密に整合するように設計されています。
+
+### グリッドスナップ
+- **エリア選択**: `Stockpile` や `TaskArea` の指定時、ドラッグ中の矩形は常にグリッドの境界線（タイルの端）にスナップします。中途半端な座標での指定はできません。
+- **建築配置**: 建築物の配置位置はグリッドの中心にスナップします。
+
+### 建築ゴースト (Placement Ghost)
+建築モード（`PlayMode::BuildingPlace`）中、マウスカーソルに追従する半透明の建物（ゴースト）が表示されます。
+
+- **視覚フィードバック**:
+    - **緑色（半透明）**: 配置可能。
+    - **赤色（半透明）**: 配置不可（障害物や他の建物と重複、または通行不可地形）。
+- **サイズ対応**: 1x1（壁など）だけでなく、2x2（タンクなど）の建物も適切なオフセットで表示されます。
+
+## 8. ビジュアルフィードバック (Visual Feedback)
 
 `visual/blueprint/` モジュールによって、設計図の状態をプレイヤーに視覚的に伝えます。
 
@@ -149,7 +165,7 @@ flowchart TD
 - **Stasis Mud**: 高度な建築（完全な壁など）に必要な強化建材。
 
 
-## 8. 関連ファイル
+## 9. 関連ファイル
 
 - [jobs.rs](file:///f:/DevData/projects/hell-workers/src/systems/jobs.rs): `Blueprint`, `Building`, 建設完了ロジック
 - [visual/blueprint/mod.rs](file:///f:/DevData/projects/hell-workers/src/systems/visual/blueprint/mod.rs): ビジュアルフィードバック（統括モジュール）
@@ -165,4 +181,5 @@ flowchart TD
 - [wall_connection.rs](file:///f:/DevData/projects/hell-workers/src/systems/visual/wall_connection.rs): 壁の自動接続ロジック
 - [build.rs](file:///f:/DevData/projects/hell-workers/src/systems/soul_ai/task_execution/build.rs): `handle_build_task` (進捗更新)
 - [selection.rs](file:///f:/DevData/projects/hell-workers/src/interface/selection.rs): `blueprint_placement`
+- [placement_ghost.rs](file:///f:/DevData/projects/hell-workers/src/systems/visual/placement_ghost.rs): 建築ゴースト表示システム
 - [assets.rs](file:///f:/DevData/projects/hell-workers/src/assets.rs): 各種アイコンアセット

@@ -182,6 +182,51 @@ impl WorldMap {
         )
     }
 
+    /// ワールド座標を最も近いグリッドの中心座標にスナップさせる
+    pub fn snap_to_grid_center(pos: Vec2) -> Vec2 {
+        let (x, y) = Self::world_to_grid(pos);
+        Self::grid_to_world(x, y)
+    }
+
+    /// ワールド座標を最も近いグリッドの境界（エッジ）座標にスナップさせる
+    /// エリア選択矩形の端点として使用することを想定
+    pub fn snap_to_grid_edge(pos: Vec2) -> Vec2 {
+        // グリッドの中心からの相対位置を計算
+        // グリッド境界は中心から +/- TILE_SIZE/2 の位置にある
+        // 単純に TILE_SIZE で丸めるだけだと中心になってしまうので、
+        // TILE_SIZE単位で丸めた後にオフセット調整するか、
+        // あるいは round 処理を調整する。
+
+        // world_to_grid は中心座標への変換を含むので、
+        // 一旦ローカルなグリッド座標系（0.0, 1.0...）的なものに変換してから丸めるのが良さそうだが、
+        // 既存の world_to_grid / grid_to_world がマップ中心基準なので少し複雑。
+        
+        // シンプルなアプローチ:
+        // 一旦グリッド中心にスナップさせ、そこからマウス位置に近い側のエッジを選択する。
+        
+        // しかし、エリア選択矩形は min/max で定義されるため、
+        // 矩形の各辺が「グリッドの境界線上」にあることが望ましい。
+        // グリッド(x,y)の中心は grid_to_world(x,y).
+        // そのグリッドの境界は center +/- TILE_SIZE/2.
+        
+        // 座標を TILE_SIZE で割って、0.5 オフセットしてから round して戻す方法が一般的。
+        
+        // マップ中心オフセット考慮
+        let map_offset_x = (MAP_WIDTH as f32 * TILE_SIZE) / 2.0;
+        let map_offset_y = (MAP_HEIGHT as f32 * TILE_SIZE) / 2.0;
+        
+        // 0.0 起点の座標系に変換
+        let local_x = pos.x + map_offset_x;
+        let local_y = pos.y + map_offset_y;
+        
+        // TILE_SIZE で丸める（ここがエッジになる）
+        let snapped_local_x = (local_x / TILE_SIZE).round() * TILE_SIZE;
+        let snapped_local_y = (local_y / TILE_SIZE).round() * TILE_SIZE;
+        
+        // ワールド座標に戻す
+        Vec2::new(snapped_local_x - map_offset_x, snapped_local_y - map_offset_y)
+    }
+
     /// ワールド座標が通行可能かチェック
     pub fn is_walkable_world(&self, pos: Vec2) -> bool {
         let grid = Self::world_to_grid(pos);

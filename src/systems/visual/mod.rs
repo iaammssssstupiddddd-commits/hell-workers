@@ -8,4 +8,4 @@ pub mod haul;
 pub mod soul;
 pub mod speech;
 pub mod tank;
-pub mod wall_connection;
+pub mod wall_connection;pub mod placement_ghost;
