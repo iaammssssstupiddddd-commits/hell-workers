@@ -12,7 +12,6 @@ use crate::systems::spatial::{GatheringSpotSpatialGrid, SpatialGrid, SpatialGrid
 pub fn gathering_spawn_system(
     time: Res<Time>,
     mut commands: Commands,
-    asset_server: Res<AssetServer>,
     game_assets: Res<GameAssets>,
     q_souls: Query<
         (Entity, &Transform, &IdleState, &AssignedTask),
@@ -71,7 +70,6 @@ pub fn gathering_spawn_system(
                 let object_type = GatheringObjectType::random_weighted(nearby_souls + 1);
                 let spot_entity = spawn_gathering_spot(
                     &mut commands,
-                    &asset_server,
                     &game_assets,
                     pos,
                     object_type,
@@ -84,7 +82,7 @@ pub fn gathering_spawn_system(
                     spot_entity,
                 });
                 readiness.idle_time = 0.0;
-                info!(
+                debug!(
                     "GATHERING: New spot spawned at {:?} with {:?}, initiator {:?}",
                     pos, object_type, entity
                 );
@@ -100,7 +98,6 @@ pub fn gathering_spawn_system(
 /// 集会スポットをスポーン
 pub(crate) fn spawn_gathering_spot(
     commands: &mut Commands,
-    asset_server: &Res<AssetServer>,
     game_assets: &Res<GameAssets>,
     center: Vec2,
     object_type: GatheringObjectType,
@@ -132,11 +129,17 @@ pub(crate) fn spawn_gathering_spot(
         .id();
 
     // 中心オブジェクトエンティティ (もしあれば)
-    let object_entity = object_type.asset_path().map(|path| {
+    let object_image = match object_type {
+        GatheringObjectType::Nothing => None,
+        GatheringObjectType::CardTable => Some(game_assets.gathering_card_table.clone()),
+        GatheringObjectType::Campfire => Some(game_assets.gathering_campfire.clone()),
+        GatheringObjectType::Barrel => Some(game_assets.gathering_barrel.clone()),
+    };
+    let object_entity = object_image.map(|image| {
         commands
             .spawn((
                 Sprite {
-                    image: asset_server.load(path),
+                    image,
                     custom_size: Some(Vec2::splat(TILE_SIZE * 1.5)),
                     ..default()
                 },

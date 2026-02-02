@@ -357,13 +357,7 @@ pub fn building_completion_system(
 
             // MudMixer が完成した場合、原料ストレージを追加し、隣接マスに SandPile を生成
             if bp.kind == BuildingType::MudMixer {
-                commands.entity(building_entity).insert((
-                    MudMixerStorage::default(),
-                    Designation {
-                        work_type: WorkType::Refine,
-                    },
-                    TaskSlots::new(1),
-                ));
+                commands.entity(building_entity).insert(MudMixerStorage::default());
 
                 // MudMixer (2x2) の周辺に2つの SandPile を生成
                 let (bx, by) = WorldMap::world_to_grid(transform.translation.truncate());
@@ -374,10 +368,7 @@ pub fn building_completion_system(
                     commands.spawn((
                         SandPile,
                         ObstaclePosition(sx, sy),
-                        Designation {
-                            work_type: WorkType::CollectSand,
-                        },
-                        TaskSlots::new(1),
+                        crate::systems::logistics::BelongsTo(building_entity), // MudMixer への参照
                         Sprite {
                             image: game_assets.sand_pile.clone(),
                             custom_size: Some(Vec2::splat(TILE_SIZE * 0.8)),

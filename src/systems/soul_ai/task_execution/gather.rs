@@ -34,7 +34,7 @@ pub fn handle_gather_task(
                 let res_pos = res_transform.translation.truncate();
                 
                 // 到達可能かチェック
-                let reachable = update_destination_to_adjacent(ctx.dest, res_pos, ctx.path, soul_pos, world_map);
+                let reachable = update_destination_to_adjacent(ctx.dest, res_pos, ctx.path, soul_pos, world_map, ctx.pf_context);
                 
                 if !reachable {
                     // 到達不能: タスクをキャンセル

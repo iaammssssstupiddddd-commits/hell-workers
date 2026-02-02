@@ -33,6 +33,7 @@ pub fn mud_mixer_auto_haul_system(
         (Without<Designation>, Without<TaskWorkers>),
     >,
     q_stockpiles_detailed: Query<(Entity, &Transform, &Stockpile, Option<&crate::relationships::StoredItems>)>,
+    q_sandpiles: Query<(Entity, &Transform, &crate::systems::logistics::BelongsTo), (With<crate::systems::jobs::SandPile>, Without<Designation>)>,
 ) {
     let mut already_assigned_this_frame = std::collections::HashSet::new();
 
@@ -73,7 +74,7 @@ pub fn mud_mixer_auto_haul_system(
                 debug!("AUTO_HAUL_MIXER: Searching {:?} for Mixer {:?}, current={}, inflight={}, nearby_count={}",
                       resource_type, mixer_entity, current, inflight_count, nearby.len());
 
-                    
+
                 let matching = nearby.into_iter()
                     .filter(|&e| !already_assigned_this_frame.contains(&e))
                     .filter_map(|e| {
@@ -82,21 +83,21 @@ pub fn mud_mixer_auto_haul_system(
                             return None;
                         }
                         let (_, transform, vis, res_item, _belongs, stored_in_opt) = query_result.unwrap();
-                        if *vis == Visibility::Hidden { 
-                            return None; 
+                        if *vis == Visibility::Hidden {
+                            return None;
                         }
                         if res_item.0 != resource_type {
                             return None;
                         }
-                        
+
                         // 既に Reserved されているものはクエリの Without<Designation> で除外済み
-                        
+
                         if let Some(crate::relationships::StoredIn(stock_entity)) = stored_in_opt {
                             if let Ok((_, stock_transform, _, _)) = q_stockpiles_detailed.get(*stock_entity) {
                                 if !task_area.contains(stock_transform.translation.truncate()) { return None; }
                             }
                         }
-                        
+
                         Some((e, transform.translation.truncate().distance_squared(mixer_pos)))
                     })
                     .min_by(|a, b| a.1.partial_cmp(&b.1).unwrap())
@@ -115,6 +116,27 @@ pub fn mud_mixer_auto_haul_system(
                         TaskSlots::new(1),
                         IssuedBy(_fam_entity),
                     ));
+                } else if resource_type == ResourceType::Sand {
+                    // 砂アイテムが見つからない場合、SandPile への CollectSand タスクを発行
+                    let sandpile = q_sandpiles.iter()
+                        .find(|(_, _, belongs)| belongs.0 == mixer_entity);
+
+                    if let Some((sandpile_entity, _, _)) = sandpile {
+                        if !already_assigned_this_frame.contains(&sandpile_entity) {
+                            already_assigned_this_frame.insert(sandpile_entity);
+
+                            debug!("AUTO_HAUL_MIXER: Issuing CollectSand for SandPile {:?} to Mixer {:?}",
+                                  sandpile_entity, mixer_entity);
+
+                            commands.entity(sandpile_entity).insert((
+                                Designation { work_type: WorkType::CollectSand },
+                                TaskSlots::new(1),
+                                IssuedBy(_fam_entity),
+                            ));
+                        }
+                    } else {
+                        debug!("AUTO_HAUL_MIXER: No SandPile found for Mixer {:?}", mixer_entity);
+                    }
                 } else {
                     debug!("AUTO_HAUL_MIXER: No matching {:?} item found for Mixer {:?}", resource_type, mixer_entity);
                 }

@@ -24,11 +24,13 @@ pub fn handle_refine_task(
                 let mixer_pos = mixer_transform.translation.truncate();
                 
                 // 到達可能かチェック
-                let reachable = update_destination_to_adjacent(ctx.dest, mixer_pos, ctx.path, soul_pos, world_map);
+                let reachable = update_destination_to_adjacent(ctx.dest, mixer_pos, ctx.path, soul_pos, world_map, ctx.pf_context);
                 
                 if !reachable {
                     // 到達不能: タスクをキャンセル
                     info!("REFINE: Soul {:?} cannot reach mixer {:?}, canceling", ctx.soul_entity, mixer_entity);
+                    commands.entity(mixer_entity).remove::<crate::systems::jobs::Designation>();
+                    commands.entity(mixer_entity).remove::<crate::systems::jobs::TaskSlots>();
                     clear_task_and_path(ctx.task, ctx.path);
                     return;
                 }
@@ -41,6 +43,9 @@ pub fn handle_refine_task(
                     ctx.path.waypoints.clear();
                 }
             } else {
+                // Mixer が存在しない場合も Designation を削除
+                commands.entity(mixer_entity).remove::<crate::systems::jobs::Designation>();
+                commands.entity(mixer_entity).remove::<crate::systems::jobs::TaskSlots>();
                 clear_task_and_path(ctx.task, ctx.path);
             }
         }
@@ -52,6 +57,8 @@ pub fn handle_refine_task(
                 // 原料がまだあるか確認
                 if storage.sand == 0 || storage.water == 0 || storage.rock == 0 {
                     info!("TASK_EXEC: Soul {:?} canceled refining due to lack of materials", ctx.soul_entity);
+                    commands.entity(mixer_entity).remove::<crate::systems::jobs::Designation>();
+                    commands.entity(mixer_entity).remove::<crate::systems::jobs::TaskSlots>();
                     clear_task_and_path(ctx.task, ctx.path);
                     return;
                 }
@@ -95,10 +102,17 @@ pub fn handle_refine_task(
                     });
                 }
             } else {
+                // Mixer が存在しない場合も Designation を削除
+                commands.entity(mixer_entity).remove::<crate::systems::jobs::Designation>();
+                commands.entity(mixer_entity).remove::<crate::systems::jobs::TaskSlots>();
                 clear_task_and_path(ctx.task, ctx.path);
             }
         }
         RefinePhase::Done => {
+            // 精製完了時に Designation を削除（次回必要なときに再発行される）
+            commands.entity(mixer_entity).remove::<crate::systems::jobs::Designation>();
+            commands.entity(mixer_entity).remove::<crate::systems::jobs::TaskSlots>();
+            commands.entity(mixer_entity).remove::<crate::systems::jobs::IssuedBy>();
             clear_task_and_path(ctx.task, ctx.path);
         }
     }
