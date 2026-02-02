@@ -74,16 +74,6 @@ impl GatheringObjectType {
             GatheringObjectType::Barrel
         }
     }
-
-    /// アセットパス (Nothing の場合は None)
-    pub fn asset_path(&self) -> Option<&'static str> {
-        match self {
-            GatheringObjectType::Nothing => None,
-            GatheringObjectType::CardTable => Some("textures/ui/card_table.png"),
-            GatheringObjectType::Campfire => Some("textures/ui/campfire.png"),
-            GatheringObjectType::Barrel => Some("textures/ui/barrel.png"),
-        }
-    }
 }
 
 /// 集会スポットコンポーネント

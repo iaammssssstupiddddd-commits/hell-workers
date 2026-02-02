@@ -65,7 +65,7 @@ pub fn handle_haul_to_blueprint_task(
                 }
 
                 let item_pos = item_transform.translation.truncate();
-                update_destination_to_adjacent(ctx.dest, item_pos, ctx.path, soul_pos, world_map);
+                update_destination_to_adjacent(ctx.dest, item_pos, ctx.path, soul_pos, world_map, ctx.pf_context);
                 let is_near = is_near_target(soul_pos, item_pos);
                 
                 if is_near {

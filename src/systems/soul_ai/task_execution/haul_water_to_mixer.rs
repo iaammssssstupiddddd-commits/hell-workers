@@ -48,7 +48,7 @@ pub fn handle_haul_water_to_mixer_task(
                 let tank_pos = tank_transform.translation.truncate();
                 
                 // 2x2なので隣接位置へ
-                update_destination_to_adjacent(ctx.dest, tank_pos, ctx.path, soul_pos, world_map);
+                update_destination_to_adjacent(ctx.dest, tank_pos, ctx.path, soul_pos, world_map, ctx.pf_context);
 
                 if is_near_target(soul_pos, tank_pos) {
                     *ctx.task = AssignedTask::HaulWaterToMixer(crate::systems::soul_ai::task_execution::types::HaulWaterToMixerData {
@@ -109,7 +109,7 @@ pub fn handle_haul_water_to_mixer_task(
                         amount: take_amount,
                         phase: HaulWaterToMixerPhase::GoingToMixer,
                     });
-                    update_destination_to_adjacent(ctx.dest, mixer_pos, ctx.path, soul_pos, world_map);
+                    update_destination_to_adjacent(ctx.dest, mixer_pos, ctx.path, soul_pos, world_map, ctx.pf_context);
                 } else {
                     abort_and_drop_bucket(commands, ctx, bucket_entity, mixer_entity, haul_cache, soul_pos);
                 }
@@ -125,7 +125,7 @@ pub fn handle_haul_water_to_mixer_task(
                 let mixer_pos = mixer_transform.translation.truncate();
                 
                 // 到達可能かチェック
-                let reachable = update_destination_to_adjacent(ctx.dest, mixer_pos, ctx.path, soul_pos, world_map);
+                let reachable = update_destination_to_adjacent(ctx.dest, mixer_pos, ctx.path, soul_pos, world_map, ctx.pf_context);
                 
                 if !reachable {
                     // 到達不能: バケツをドロップしてタスクをキャンセル
