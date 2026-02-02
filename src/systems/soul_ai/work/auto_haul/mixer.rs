@@ -149,13 +149,14 @@ pub fn mud_mixer_auto_haul_system(
             let water_inflight = haul_cache.get_mixer(mixer_entity, ResourceType::Water) as u32;
             
             if water_current + (water_inflight * BUCKET_CAPACITY) < MUD_MIXER_CAPACITY {
-                // TaskArea内のTankを探す
+                // TaskArea内のTankを探す（バケツ1杯分以上の水があるタンクのみ）
                 let mut tank_with_water = None;
                 for (stock_entity, stock_transform, stock, stored_opt) in q_stockpiles_detailed.iter() {
                     if stock.resource_type == Some(ResourceType::Water) {
                         if task_area.contains(stock_transform.translation.truncate()) {
                             let water_count = stored_opt.map(|s| s.len()).unwrap_or(0);
-                            if water_count > 0 {
+                            // バケツ1杯分以上の水がないとタスクを発行しない
+                            if water_count >= BUCKET_CAPACITY as usize {
                                 tank_with_water = Some(stock_entity);
                                 break;
                             }
@@ -164,13 +165,15 @@ pub fn mud_mixer_auto_haul_system(
                 }
 
                 if let Some(tank_entity) = tank_with_water {
-                    // そのTank専用の空バケツを探す（tank_water_requestと同様のロジック）
-                    let mut found_bucket = None;
+                    // そのTank専用のバケツを探す（空バケツ優先、水入りバケツも対象）
+                    let mut found_empty_bucket = None;
+                    let mut found_water_bucket = None;
+
                     for (e, transform, vis, res_item, belongs_opt, stored_in_opt) in q_resources_with_belongs.iter() {
                         // 非表示はスキップ
                         if *vis == Visibility::Hidden { continue; }
-                        // 空バケツのみ対象
-                        if res_item.0 != ResourceType::BucketEmpty { continue; }
+                        // バケツ以外はスキップ
+                        if !matches!(res_item.0, ResourceType::BucketEmpty | ResourceType::BucketWater) { continue; }
                         // 既に割り当て済みはスキップ
                         if already_assigned_this_frame.contains(&e) { continue; }
                         // StoredInがない（持ち運び中など）はスキップ
@@ -179,13 +182,25 @@ pub fn mud_mixer_auto_haul_system(
                         // BelongsToでこのタンクに紐付いたバケツのみ
                         if let Some(belongs) = belongs_opt {
                             if belongs.0 == tank_entity {
-                                found_bucket = Some((e, transform.translation.truncate().distance_squared(mixer_pos)));
-                                break; // 専用バケツ優先
+                                let dist = transform.translation.truncate().distance_squared(mixer_pos);
+                                if res_item.0 == ResourceType::BucketEmpty {
+                                    if found_empty_bucket.is_none() {
+                                        found_empty_bucket = Some((e, dist));
+                                    }
+                                } else {
+                                    // BucketWater - 水入りバケツを優先（タンクに行く必要がない）
+                                    if found_water_bucket.is_none() {
+                                        found_water_bucket = Some((e, dist));
+                                    }
+                                }
                             }
                         }
                     }
 
-                    if let Some(bucket_entity) = found_bucket.map(|(e, _)| e) {
+                    // 水入りバケツを優先（タンクをスキップできるため）
+                    let found_bucket = found_water_bucket.or(found_empty_bucket);
+
+                    if let Some((bucket_entity, _)) = found_bucket {
                         already_assigned_this_frame.insert(bucket_entity);
                         haul_cache.reserve_mixer(mixer_entity, ResourceType::Water);
 
