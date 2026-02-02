@@ -181,6 +181,7 @@ pub fn task_execution_system(
                     &mut ctx,
                     data.item,
                     data.mixer,
+                    data.resource_type,
                     data.phase,
                     &mut commands,
                     &mut *haul_cache,

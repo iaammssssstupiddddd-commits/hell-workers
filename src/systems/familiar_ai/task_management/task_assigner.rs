@@ -158,6 +158,7 @@ pub fn assign_task_to_worker(
                 *assigned_task = AssignedTask::HaulToMixer(crate::systems::soul_ai::task_execution::types::HaulToMixerData {
                     item: task_entity,
                     mixer: mixer_entity,
+                    resource_type: item_type,
                     phase: crate::systems::soul_ai::task_execution::types::HaulToMixerPhase::GoingToItem,
                 });
                 dest.0 = task_pos;

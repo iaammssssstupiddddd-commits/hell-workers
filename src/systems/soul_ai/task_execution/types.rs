@@ -79,6 +79,7 @@ pub struct RefineData {
 pub struct HaulToMixerData {
     pub item: Entity,
     pub mixer: Entity,
+    pub resource_type: crate::systems::logistics::ResourceType,
     pub phase: HaulToMixerPhase,
 }
 

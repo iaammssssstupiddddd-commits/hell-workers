@@ -37,13 +37,16 @@ pub fn handle_haul_task(
                 }
 
                 let res_pos = res_transform.translation.truncate();
-                // 伐採で生成される資源はタイル中心からオフセットされた座標に出るため、
-                // 目的地は「その資源が属するタイル中心」にスナップしておく。
-                // これにより、pathfinding が生成する waypoint（タイル中心）と一致し、
-                // 「目的地とパス終端がズレている」系の不具合を避けられる。
-                let res_grid = WorldMap::world_to_grid(res_pos);
-                let res_dest = WorldMap::grid_to_world(res_grid.0, res_grid.1);
-                update_destination_if_needed(ctx.dest, res_dest, ctx.path);
+                // アイテムが障害物の上にある可能性があるため、隣接マスを目的地として設定
+                let reachable = update_destination_to_adjacent(ctx.dest, res_pos, ctx.path, soul_pos, world_map);
+
+                if !reachable {
+                    // 到達不能: タスクをキャンセル
+                    info!("HAUL: Soul {:?} cannot reach item {:?}, canceling", ctx.soul_entity, item);
+                    haul_cache.release(stockpile);
+                    clear_task_and_path(ctx.task, ctx.path);
+                    return;
+                }
 
                 let is_near = is_near_target(soul_pos, res_pos);
 

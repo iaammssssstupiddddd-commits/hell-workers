@@ -9,7 +9,7 @@ use crate::entities::familiar::ActiveCommand;
 use crate::systems::command::TaskArea;
 use crate::systems::jobs::{Designation, IssuedBy, MudMixerStorage, TargetMixer, TaskSlots, WorkType};
 use crate::systems::logistics::{ResourceItem, ResourceType, Stockpile};
-use crate::systems::spatial::{ResourceSpatialGrid, SpatialGridOps, SpatialGrid};
+use crate::systems::spatial::{ResourceSpatialGrid, SpatialGridOps};
 use crate::relationships::TaskWorkers;
 use crate::systems::familiar_ai::haul_cache::HaulReservationCache;
 
@@ -18,7 +18,6 @@ use crate::systems::familiar_ai::haul_cache::HaulReservationCache;
 pub fn mud_mixer_auto_haul_system(
     mut commands: Commands,
     resource_grid: Res<ResourceSpatialGrid>,
-    _tank_grid: Res<SpatialGrid>,
     mut haul_cache: ResMut<HaulReservationCache>,
     q_familiars: Query<(Entity, &ActiveCommand, &TaskArea)>,
     q_mixers: Query<(Entity, &Transform, &MudMixerStorage, Option<&TaskWorkers>)>,
@@ -34,7 +33,6 @@ pub fn mud_mixer_auto_haul_system(
         (Without<Designation>, Without<TaskWorkers>),
     >,
     q_stockpiles_detailed: Query<(Entity, &Transform, &Stockpile, Option<&crate::relationships::StoredItems>)>,
-    q_all_resources: Query<&ResourceItem>,
 ) {
     let mut already_assigned_this_frame = std::collections::HashSet::new();
 
@@ -58,12 +56,12 @@ pub fn mud_mixer_auto_haul_system(
 
                 // 満杯ならスキップ
                 if current >= MUD_MIXER_CAPACITY {
-                    info!("AUTO_HAUL_MIXER: Mixer {:?} is full for {:?} (current={}), skipping", mixer_entity, resource_type, current);
+                    debug!("AUTO_HAUL_MIXER: Mixer {:?} is full for {:?} (current={}), skipping", mixer_entity, resource_type, current);
                     continue;
                 }
 
                 if current + (inflight_count as u32) >= MUD_MIXER_CAPACITY {
-                    info!("AUTO_HAUL_MIXER: Mixer {:?} has enough {:?} in-flight (current={}, inflight={}), skipping", mixer_entity, resource_type, current, inflight_count);
+                    debug!("AUTO_HAUL_MIXER: Mixer {:?} has enough {:?} in-flight (current={}, inflight={}), skipping", mixer_entity, resource_type, current, inflight_count);
                     continue;
                 }
 
@@ -71,8 +69,8 @@ pub fn mud_mixer_auto_haul_system(
                 // 近場のアイテムを探す
                 let search_radius = TILE_SIZE * 30.0;
                 let nearby = resource_grid.get_nearby_in_radius(mixer_pos, search_radius);
-                
-                info!("AUTO_HAUL_MIXER: Searching {:?} for Mixer {:?}, current={}, inflight={}, nearby_count={}", 
+
+                debug!("AUTO_HAUL_MIXER: Searching {:?} for Mixer {:?}, current={}, inflight={}, nearby_count={}",
                       resource_type, mixer_entity, current, inflight_count, nearby.len());
 
                     
@@ -81,12 +79,6 @@ pub fn mud_mixer_auto_haul_system(
                     .filter_map(|e| {
                         let query_result = q_resources_with_belongs.get(e);
                         if query_result.is_err() {
-                            // Designationがあるか確認
-                            if q_all_resources.get(e).is_ok() {
-                                info!("AUTO_HAUL_MIXER: Entity {:?} has Designation or TaskWorkers, skipping", e);
-                            } else {
-                                info!("AUTO_HAUL_MIXER: Entity {:?} not a ResourceItem", e);
-                            }
                             return None;
                         }
                         let (_, transform, vis, res_item, _belongs, stored_in_opt) = query_result.unwrap();
@@ -114,7 +106,7 @@ pub fn mud_mixer_auto_haul_system(
                     already_assigned_this_frame.insert(item_entity);
                     haul_cache.reserve_mixer(mixer_entity, resource_type);
 
-                    info!("AUTO_HAUL_MIXER: Issuing HaulToMixer for {:?} ({:?}) to Mixer {:?}", 
+                    debug!("AUTO_HAUL_MIXER: Issuing HaulToMixer for {:?} ({:?}) to Mixer {:?}",
                           item_entity, resource_type, mixer_entity);
 
                     commands.entity(item_entity).insert((
@@ -124,7 +116,7 @@ pub fn mud_mixer_auto_haul_system(
                         IssuedBy(_fam_entity),
                     ));
                 } else {
-                    info!("AUTO_HAUL_MIXER: No matching {:?} item found for Mixer {:?}", resource_type, mixer_entity);
+                    debug!("AUTO_HAUL_MIXER: No matching {:?} item found for Mixer {:?}", resource_type, mixer_entity);
                 }
 
             }
@@ -182,7 +174,7 @@ pub fn mud_mixer_auto_haul_system(
                             IssuedBy(_fam_entity),
                             crate::systems::jobs::Priority(6), // 通常の運搬より優先
                         ));
-                        info!("AUTO_HAUL_MIXER: Issued HaulWaterToMixer for bucket {:?} from Tank {:?} to Mixer {:?}", bucket_entity, tank_entity, mixer_entity);
+                        debug!("AUTO_HAUL_MIXER: Issued HaulWaterToMixer for bucket {:?} from Tank {:?} to Mixer {:?}", bucket_entity, tank_entity, mixer_entity);
                     }
                 }
             }

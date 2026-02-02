@@ -125,6 +125,25 @@ impl Plugin for VisualPlugin {
                 .in_set(GameSystemSet::Visual),
         );
 
+        // Area indicators
+        app.add_systems(
+            Update,
+            (
+                crate::systems::command::task_area_indicator_system,
+                crate::systems::command::designation_visual_system,
+                crate::systems::command::familiar_command_visual_system,
+                crate::systems::visual::placement_ghost::placement_ghost_system,
+            )
+                .run_if(|state: Res<State<crate::game_state::PlayMode>>| {
+                    match state.get() {
+                        crate::game_state::PlayMode::Normal
+                        | crate::game_state::PlayMode::BuildingPlace
+                        | crate::game_state::PlayMode::TaskDesignation => true,
+                        _ => false,
+                    }
+                }),
+        );
+
         // Haul visual systems (Phase 3: 運搬ビジュアル)
         app.add_systems(
             Update,

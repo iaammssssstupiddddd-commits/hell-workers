@@ -25,7 +25,7 @@ pub fn handle_haul_water_to_mixer_task(
         HaulWaterToMixerPhase::GoingToBucket => {
             if ctx.inventory.0 == Some(bucket_entity) {
                 // すでにバケツを持っていればTankへ
-                transition_to_tank(ctx, bucket_entity, tank_entity, mixer_entity);
+                transition_to_tank(ctx, bucket_entity, tank_entity, mixer_entity, haul_cache);
                 return;
             }
 
@@ -35,7 +35,7 @@ pub fn handle_haul_water_to_mixer_task(
 
                 if is_near_target(soul_pos, bucket_pos) {
                     pickup_item(commands, ctx.soul_entity, bucket_entity, ctx.inventory);
-                    transition_to_tank(ctx, bucket_entity, tank_entity, mixer_entity);
+                    transition_to_tank(ctx, bucket_entity, tank_entity, mixer_entity, haul_cache);
                 }
             } else {
                 haul_cache.release_mixer(mixer_entity, ResourceType::Water);
@@ -208,7 +208,7 @@ pub fn handle_haul_water_to_mixer_task(
         }
         HaulWaterToMixerPhase::ReturningBucket => {
             // 目的地（バケツ置き場）に到着したら終了
-            if ctx.soul_transform.translation.truncate().distance(ctx.dest.0) < 10.0 {
+            if is_near_target(soul_pos, ctx.dest.0) {
                 drop_bucket_for_auto_haul(
                     commands, ctx, bucket_entity, tank_entity, haul_cache, world_map
                 );
@@ -217,11 +217,17 @@ pub fn handle_haul_water_to_mixer_task(
     }
 }
 
-fn transition_to_tank(ctx: &mut TaskExecutionContext, bucket_entity: Entity, tank_entity: Entity, mixer_entity: Entity) {
+fn transition_to_tank(
+    ctx: &mut TaskExecutionContext,
+    bucket_entity: Entity,
+    tank_entity: Entity,
+    mixer_entity: Entity,
+    haul_cache: &mut crate::systems::familiar_ai::haul_cache::HaulReservationCache,
+) {
     if let Ok(tank_data) = ctx.queries.stockpiles.get(tank_entity) {
         let (_, tank_transform, _, _) = tank_data;
         let tank_pos = tank_transform.translation.truncate();
-        
+
         *ctx.task = AssignedTask::HaulWaterToMixer(crate::systems::soul_ai::task_execution::types::HaulWaterToMixerData {
             bucket: bucket_entity,
             tank: tank_entity,
@@ -232,7 +238,8 @@ fn transition_to_tank(ctx: &mut TaskExecutionContext, bucket_entity: Entity, tan
         ctx.dest.0 = tank_pos;
         ctx.path.waypoints.clear();
     } else {
-        // Tankがなければ中止
+        // Tankがなければ中止（予約も解除）
+        haul_cache.release_mixer(mixer_entity, ResourceType::Water);
         *ctx.task = AssignedTask::None;
     }
 }
