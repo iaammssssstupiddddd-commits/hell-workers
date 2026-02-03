@@ -15,9 +15,13 @@ mod mixer;
 use bevy::prelude::*;
 use std::collections::HashSet;
 
-/// MudMixerの水運搬で予約されたバケツ（同フレーム内の競合回避用）
+/// 同フレーム内の競合回避用: タスク発行済みアイテム
 #[derive(Resource, Default)]
-pub struct MixerWaterBucketReservations(pub HashSet<Entity>);
+pub struct ItemReservations(pub HashSet<Entity>);
+
+pub fn clear_item_reservations_system(mut reservations: ResMut<ItemReservations>) {
+    reservations.0.clear();
+}
 
 pub use task_area::task_area_auto_haul_system;
 pub use blueprint::blueprint_auto_haul_system;

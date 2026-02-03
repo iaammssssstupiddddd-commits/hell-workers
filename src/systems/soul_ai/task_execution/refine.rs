@@ -35,7 +35,7 @@ pub fn handle_refine_task(
                     return;
                 }
 
-                if is_near_target(soul_pos, mixer_pos) {
+                if is_near_target_or_dest(soul_pos, mixer_pos, ctx.dest.0) {
                     *ctx.task = AssignedTask::Refine(crate::systems::soul_ai::task_execution::types::RefineData {
                         mixer: mixer_entity,
                         phase: RefinePhase::Refining { progress: 0.0 },

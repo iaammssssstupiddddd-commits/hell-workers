@@ -19,7 +19,7 @@ impl Plugin for SoulAiPlugin {
         app            .register_type::<task_execution::AssignedTask>()
             .register_type::<gathering::GatheringSpot>()
             .init_resource::<work::AutoHaulCounter>()
-            .init_resource::<work::auto_haul::MixerWaterBucketReservations>()
+            .init_resource::<work::auto_haul::ItemReservations>()
             .init_resource::<gathering::GatheringUpdateTimer>()
             .init_resource::<idle::escaping::EscapeDetectionTimer>()
             .add_systems(
@@ -38,8 +38,11 @@ impl Plugin for SoulAiPlugin {
                     (
                         // タスク実行
                         task_execution::task_execution_system,
+                        // タスク実行の反映を同期
+                        bevy::ecs::schedule::ApplyDeferred,
                         // 仕事管理
                         work::cleanup::cleanup_commanded_souls_system,
+                        work::auto_haul::clear_item_reservations_system,
                         work::auto_haul::blueprint_auto_haul_system,
                         work::tank_water_request_system,
                         work::auto_haul::mud_mixer_auto_haul_system,

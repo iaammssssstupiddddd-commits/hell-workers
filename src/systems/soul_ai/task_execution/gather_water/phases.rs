@@ -85,16 +85,21 @@ fn handle_going_to_bucket(
     }
 
     let bucket_pos = bucket_transform.translation.truncate();
-    let is_adjacent = {
-        let sg = WorldMap::world_to_grid(soul_pos);
-        let bg = WorldMap::world_to_grid(bucket_pos);
-        (sg.0 - bg.0).abs() <= 1 && (sg.1 - bg.1).abs() <= 1
-    };
 
-    // 1.8タイルの距離内、または隣接マスにいればピックアップ可能とする
-    if crate::systems::soul_ai::task_execution::common::is_near_target(soul_pos, bucket_pos) || is_adjacent {
-        // バケツを拾う（管理コンポーネント・StoredInの削除も含む）
-        crate::systems::soul_ai::task_execution::common::pickup_item(commands, ctx.soul_entity, bucket_entity, ctx.inventory);
+    // 隣接マスにいればピックアップ可能とする
+    if crate::systems::soul_ai::task_execution::common::can_pickup_item(soul_pos, bucket_pos) {
+        if !crate::systems::soul_ai::task_execution::common::try_pickup_item(
+            commands,
+            ctx.soul_entity,
+            bucket_entity,
+            ctx.inventory,
+            soul_pos,
+            bucket_pos,
+            ctx.task,
+            ctx.path,
+        ) {
+            return;
+        }
 
         // もしアイテムが備蓄場所にあったなら、その備蓄場所の型管理を更新する
         if let Some(stored_in) = stored_in_opt {

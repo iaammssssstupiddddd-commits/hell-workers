@@ -66,10 +66,21 @@ pub fn handle_haul_to_blueprint_task(
 
                 let item_pos = item_transform.translation.truncate();
                 update_destination_to_adjacent(ctx.dest, item_pos, ctx.path, soul_pos, world_map, ctx.pf_context);
-                let is_near = is_near_target(soul_pos, item_pos);
+                let is_near = can_pickup_item(soul_pos, item_pos);
                 
                 if is_near {
-                    pickup_item(commands, ctx.soul_entity, item_entity, ctx.inventory);
+                    if !try_pickup_item(
+                        commands,
+                        ctx.soul_entity,
+                        item_entity,
+                        ctx.inventory,
+                        soul_pos,
+                        item_pos,
+                        ctx.task,
+                        ctx.path,
+                    ) {
+                        return;
+                    }
 
                     // もしアイテムが備蓄場所にあったなら、その備蓄場所の型管理を更新する
                     if let Some(stored_in) = stored_in_opt {

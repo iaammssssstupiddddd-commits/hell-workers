@@ -8,7 +8,8 @@ use crate::constants::*;
 use crate::entities::familiar::ActiveCommand;
 use crate::systems::command::TaskArea;
 use crate::systems::jobs::{Designation, IssuedBy, TaskSlots, WorkType};
-use crate::systems::logistics::{ResourceItem, ResourceType, Stockpile, BelongsTo};
+use crate::systems::logistics::{ResourceItem, ResourceType, ReservedForTask, Stockpile, BelongsTo};
+use crate::systems::soul_ai::work::auto_haul::ItemReservations;
 use crate::systems::spatial::{ResourceSpatialGrid, StockpileSpatialGrid, SpatialGridOps};
 use crate::relationships::{TaskWorkers, StoredItems};
 
@@ -36,6 +37,7 @@ pub fn task_area_auto_haul_system(
             Without<crate::systems::jobs::TargetBlueprint>,
         ),
     >,
+    mut item_reservations: ResMut<ItemReservations>,
 ) {
     let mut already_assigned = std::collections::HashSet::new();
 
@@ -45,6 +47,7 @@ pub fn task_area_auto_haul_system(
     // -----------------------------------------------------------------------
     for (item_entity, _transform, visibility, res_item, item_belongs_opt) in q_resources.iter() {
         if *visibility == Visibility::Hidden { continue; }
+        if item_reservations.0.contains(&item_entity) { continue; }
         if already_assigned.contains(&item_entity) { continue; }
 
         // 所有権がないアイテムはここでは扱わない（後半の空間検索で扱う）
@@ -84,6 +87,7 @@ pub fn task_area_auto_haul_system(
             
             if let Some((fam_entity, _, _)) = q_familiars.iter().next() {
                 already_assigned.insert(item_entity);
+                item_reservations.0.insert(item_entity);
                 commands.entity(item_entity).insert((
                     Designation {
                         work_type: WorkType::Haul,
@@ -91,6 +95,7 @@ pub fn task_area_auto_haul_system(
                     IssuedBy(fam_entity),
                     TaskSlots::new(1),
                     crate::systems::jobs::Priority(10), // 専用品の回収は最優先
+                    ReservedForTask,
                 ));
                 break; // 1つ割り当てたら次のアイテムへ
             }
@@ -127,6 +132,7 @@ pub fn task_area_auto_haul_system(
             let nearest_resource = nearby_resources
                 .iter()
                 .filter(|&&entity| !already_assigned.contains(&entity))
+                .filter(|&&entity| !item_reservations.0.contains(&entity))
                 .filter_map(|&entity| {
                     let Ok((_, transform, visibility, res_item, item_belongs)) = q_resources.get(entity) else {
                         return None;
@@ -158,6 +164,7 @@ pub fn task_area_auto_haul_system(
 
             if let Some(item_entity) = nearest_resource {
                 already_assigned.insert(item_entity);
+                item_reservations.0.insert(item_entity);
                 commands.entity(item_entity).insert((
                     Designation {
                         work_type: WorkType::Haul,
@@ -165,6 +172,7 @@ pub fn task_area_auto_haul_system(
                     IssuedBy(fam_entity),
                     TaskSlots::new(1),
                     crate::systems::jobs::Priority(0),
+                    ReservedForTask,
                 ));
             }
         }

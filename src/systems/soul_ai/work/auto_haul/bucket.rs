@@ -7,17 +7,17 @@ use bevy::prelude::*;
 use crate::constants::*;
 use crate::systems::command::TaskArea;
 use crate::systems::jobs::{Designation, IssuedBy, TaskSlots, WorkType};
-use crate::systems::logistics::{ResourceItem, ResourceType, ReservedForMixerWater, Stockpile};
+use crate::systems::logistics::{ResourceItem, ResourceType, ReservedForTask, Stockpile};
 use crate::systems::spatial::{StockpileSpatialGrid, SpatialGridOps};
 use crate::relationships::TaskWorkers;
-use crate::systems::soul_ai::work::auto_haul::MixerWaterBucketReservations;
+use crate::systems::soul_ai::work::auto_haul::ItemReservations;
 
 /// バケツ専用オートホールシステム
 /// ドロップされたバケツを、BelongsTo で紐付いたタンクのバケツ置き場に運搬する
 pub fn bucket_auto_haul_system(
     mut commands: Commands,
     stockpile_grid: Res<StockpileSpatialGrid>,
-    bucket_reservations: Res<MixerWaterBucketReservations>,
+    mut item_reservations: ResMut<ItemReservations>,
     q_familiars: Query<(Entity, &TaskArea), With<crate::entities::familiar::Familiar>>,
     q_buckets: Query<
         (
@@ -26,7 +26,7 @@ pub fn bucket_auto_haul_system(
             &Visibility,
             &ResourceItem,
             &crate::systems::logistics::BelongsTo,
-            Option<&ReservedForMixerWater>,
+            Option<&ReservedForTask>,
             Option<&TaskWorkers>,
         ),
         (
@@ -63,8 +63,8 @@ pub fn bucket_auto_haul_system(
                 continue;
             }
 
-            // MudMixerの水運搬で予約されているバケツはスキップ
-            if bucket_reservations.0.contains(&bucket_entity) || reserved_opt.is_some() {
+            // 既にタスク発行済みならスキップ
+            if item_reservations.0.contains(&bucket_entity) || reserved_opt.is_some() {
                 continue;
             }
 
@@ -120,6 +120,7 @@ pub fn bucket_auto_haul_system(
 
             if let Some(_stockpile_entity) = target_stockpile {
                 already_assigned.insert(bucket_entity);
+                item_reservations.0.insert(bucket_entity);
                 info!("BUCKET_HAUL: Issuing Haul task for bucket {:?} to stockpile {:?}", bucket_entity, _stockpile_entity);
                 commands.entity(bucket_entity).insert((
                     Designation {
@@ -128,6 +129,7 @@ pub fn bucket_auto_haul_system(
                     IssuedBy(fam_entity),
                     TaskSlots::new(1),
                     crate::systems::jobs::Priority(5), // バケツ返却は優先度高め
+                    ReservedForTask,
                 ));
             } else {
                 warn!("BUCKET_HAUL: Found bucket {:?} for tank {:?} but no suitable stockpile found!", bucket_entity, tank_entity);

@@ -7,7 +7,7 @@ use crate::constants::BUCKET_CAPACITY;
 
 use crate::systems::command::TaskArea;
 use crate::systems::jobs::{Designation, IssuedBy, TaskSlots, WorkType};
-use crate::systems::logistics::{BelongsTo, ResourceItem, ReservedForMixerWater, ResourceType, Stockpile};
+use crate::systems::logistics::{BelongsTo, ResourceItem, ReservedForTask, ResourceType, Stockpile};
 use crate::systems::familiar_ai::haul_cache::HaulReservationCache;
 use crate::relationships::{StoredIn, StoredItems, TaskWorkers};
 
@@ -25,12 +25,13 @@ pub fn tank_water_request_system(
             &ResourceItem,
             &BelongsTo,
             &Visibility,
-            Option<&ReservedForMixerWater>,
+            Option<&ReservedForTask>,
             Option<&StoredIn>,
             Option<&Designation>,
             Option<&TaskWorkers>,
         ),
     >,
+    mut item_reservations: ResMut<crate::systems::soul_ai::work::auto_haul::ItemReservations>,
 ) {
     for (tank_entity, tank_transform, tank_stock, stored_opt) in q_tanks.iter() {
         // 水タンク以外はスキップ
@@ -59,7 +60,7 @@ pub fn tank_water_request_system(
                     continue;
                 }
 
-                if reserved_opt.is_some() {
+                if reserved_opt.is_some() || item_reservations.0.contains(&bucket_entity) {
                     continue;
                 }
 
@@ -90,6 +91,7 @@ pub fn tank_water_request_system(
                     .next();
 
                 if let Some(fam_entity) = issued_by {
+                    item_reservations.0.insert(bucket_entity);
                     commands.entity(bucket_entity).insert((
                         Designation {
                             work_type: WorkType::GatherWater,
@@ -97,6 +99,7 @@ pub fn tank_water_request_system(
                         IssuedBy(fam_entity),
                         TaskSlots::new(1),
                         crate::systems::jobs::Priority(3),
+                        ReservedForTask,
                     ));
                     issued += 1;
                     info!("TANK_WATCH: Issued GatherWater for bucket {:?} (Tank {:?})", bucket_entity, tank_entity);

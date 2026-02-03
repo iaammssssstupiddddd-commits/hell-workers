@@ -22,6 +22,10 @@ use crate::entities::damned_soul::{DamnedSoul, Destination, Path, StressBreakdow
 use crate::events::OnTaskCompleted;
 use crate::systems::familiar_ai::haul_cache::HaulReservationCache;
 use crate::systems::logistics::Inventory;
+use crate::systems::soul_ai::task_execution::types::{
+    GatherWaterPhase, HaulPhase, HaulToBpPhase, HaulToMixerPhase, HaulWaterToMixerPhase,
+};
+use crate::systems::soul_ai::work::unassign_task;
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
 
@@ -35,6 +39,33 @@ use haul_to_blueprint::handle_haul_to_blueprint_task;
 use haul_to_mixer::handle_haul_to_mixer_task;
 use haul_water_to_mixer::handle_haul_water_to_mixer_task;
 use refine::handle_refine_task;
+
+fn expected_item_for_task(task: &AssignedTask) -> Option<Entity> {
+    match task {
+        AssignedTask::Haul(data) => Some(data.item),
+        AssignedTask::HaulToBlueprint(data) => Some(data.item),
+        AssignedTask::HaulToMixer(data) => Some(data.item),
+        AssignedTask::GatherWater(data) => Some(data.bucket),
+        AssignedTask::HaulWaterToMixer(data) => Some(data.bucket),
+        _ => None,
+    }
+}
+
+fn requires_item_in_inventory(task: &AssignedTask) -> bool {
+    match task {
+        AssignedTask::Haul(data) => matches!(data.phase, HaulPhase::GoingToStockpile),
+        AssignedTask::HaulToBlueprint(data) => matches!(data.phase, HaulToBpPhase::GoingToBlueprint),
+        AssignedTask::HaulToMixer(data) => matches!(
+            data.phase,
+            HaulToMixerPhase::GoingToMixer | HaulToMixerPhase::Delivering
+        ),
+        AssignedTask::GatherWater(data) => !matches!(data.phase, GatherWaterPhase::GoingToBucket),
+        AssignedTask::HaulWaterToMixer(data) => {
+            !matches!(data.phase, HaulWaterToMixerPhase::GoingToBucket)
+        }
+        _ => false,
+    }
+}
 
 pub fn task_execution_system(
     mut commands: Commands,
@@ -68,6 +99,30 @@ pub fn task_execution_system(
         breakdown_opt,
     ) in q_souls.iter_mut()
     {
+        if let Some(expected_item) = expected_item_for_task(&task) {
+            let needs_item = requires_item_in_inventory(&task);
+            let has_expected = inventory.0 == Some(expected_item);
+            let has_mismatch = inventory.0.is_some() && !has_expected;
+            let missing_required = needs_item && !has_expected;
+
+            if has_mismatch || missing_required {
+                unassign_task(
+                    &mut commands,
+                    soul_entity,
+                    soul_transform.translation.truncate(),
+                    &mut task,
+                    &mut path,
+                    Some(&mut inventory),
+                    None,
+                    &queries,
+                    &mut *haul_cache,
+                    &world_map,
+                    true,
+                );
+                continue;
+            }
+        }
+
         let was_busy = !matches!(*task, AssignedTask::None);
         let old_work_type = task.work_type();
         let old_task_entity = task.get_target_entity();

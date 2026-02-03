@@ -48,10 +48,21 @@ pub fn handle_haul_task(
                     return;
                 }
 
-                let is_near = is_near_target(soul_pos, res_pos);
+                let is_near = can_pickup_item(soul_pos, res_pos);
 
                 if is_near {
-                    pickup_item(commands, ctx.soul_entity, item, ctx.inventory);
+                    if !try_pickup_item(
+                        commands,
+                        ctx.soul_entity,
+                        item,
+                        ctx.inventory,
+                        soul_pos,
+                        res_pos,
+                        ctx.task,
+                        ctx.path,
+                    ) {
+                        return;
+                    }
 
                     // もしアイテムが備蓄場所にあったなら、その備蓄場所の型管理を更新する
                     if let Some(stored_in) = stored_in_opt {
