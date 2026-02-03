@@ -2,7 +2,7 @@
 
 use crate::entities::damned_soul::StressBreakdown;
 use crate::relationships::WorkingOn;
-use crate::systems::familiar_ai::haul_cache::HaulReservationCache;
+use crate::systems::familiar_ai::resource_cache::SharedResourceCache;
 use crate::systems::soul_ai::task_execution::{
     common::*,
     context::TaskExecutionContext,
@@ -17,7 +17,7 @@ pub fn handle_haul_to_blueprint_task(
     item_entity: Entity,
     blueprint_entity: Entity,
     phase: HaulToBpPhase,
-    haul_cache: &mut HaulReservationCache,
+    haul_cache: &mut SharedResourceCache,
     commands: &mut Commands,
     world_map: &Res<WorldMap>,
 ) {
@@ -90,6 +90,9 @@ pub fn handle_haul_to_blueprint_task(
                     // ブループリントへの目的地設定は、次のフレームの GoingToBlueprint フェーズで
                     // update_destination_to_blueprint により自動的に（一貫したロジックで）行われるため、
                     // ここではパスをクリアするのみとする。
+                    
+                    // ソース予約解放と取得記録
+                    haul_cache.record_picked_source(item_entity, 1);
 
                     *ctx.task = AssignedTask::HaulToBlueprint(crate::systems::soul_ai::task_execution::types::HaulToBlueprintData {
                         item: item_entity,
@@ -196,6 +199,9 @@ pub fn handle_haul_to_blueprint_task(
             commands.entity(ctx.soul_entity).remove::<WorkingOn>();
             clear_task_and_path(ctx.task, ctx.path);
             ctx.soul.fatigue = (ctx.soul.fatigue + 0.05).min(1.0);
+            
+            // 完了したので予約解除
+            haul_cache.release_destination(blueprint_entity);
         }
     }
 }

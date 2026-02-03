@@ -48,7 +48,7 @@ pub fn pathfinding_system(
         ),
         With<DamnedSoul>,
     >,
-    mut haul_cache: ResMut<crate::systems::familiar_ai::haul_cache::HaulReservationCache>,
+    mut haul_cache: ResMut<crate::systems::familiar_ai::resource_cache::SharedResourceCache>,
     queries: crate::systems::soul_ai::task_execution::context::TaskQueries,
 ) {
     for (entity, transform, destination, mut path, mut task, idle, mut inventory_opt) in

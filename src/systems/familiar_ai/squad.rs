@@ -136,7 +136,7 @@ impl SquadManager {
             Without<crate::entities::familiar::Familiar>,
         >,
         queries: &crate::systems::soul_ai::task_execution::context::TaskQueries,
-        haul_cache: &mut crate::systems::familiar_ai::haul_cache::HaulReservationCache,
+        haul_cache: &mut crate::systems::familiar_ai::resource_cache::SharedResourceCache,
         cooldowns: &mut crate::systems::visual::speech::cooldown::BubbleCooldowns,
         time: &Time,
         game_assets: &Res<crate::assets::GameAssets>,

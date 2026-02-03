@@ -1,7 +1,7 @@
 use crate::constants::*;
 use crate::entities::damned_soul::{DamnedSoul, IdleBehavior, IdleState, Path};
 use crate::relationships::WorkingOn;
-use crate::systems::familiar_ai::haul_cache::HaulReservationCache;
+use crate::systems::familiar_ai::resource_cache::SharedResourceCache;
 use crate::systems::logistics::{Inventory, ResourceType};
 use crate::systems::soul_ai::task_execution::AssignedTask;
 use crate::world::map::WorldMap;
@@ -43,7 +43,7 @@ pub fn unassign_task(
     mut inventory: Option<&mut Inventory>,
     dropped_item_res: Option<ResourceType>,
     queries: &crate::systems::soul_ai::task_execution::context::TaskQueries,
-    haul_cache: &mut HaulReservationCache,
+    haul_cache: &mut SharedResourceCache,
     world_map: &WorldMap,
     emit_abandoned_event: bool,
 ) {
@@ -55,18 +55,48 @@ pub fn unassign_task(
     }
 
     // 運搬・水汲みタスクの予約を解除
+    // 運搬・水汲みタスクの予約を解除
     match task {
         AssignedTask::Haul(data) => {
-            haul_cache.release(data.stockpile);
+            haul_cache.release_destination(data.stockpile);
+            use crate::systems::soul_ai::task_execution::types::HaulPhase;
+            if matches!(data.phase, HaulPhase::GoingToItem) {
+                haul_cache.release_source(data.item, 1);
+            }
         }
         AssignedTask::GatherWater(data) => {
-            haul_cache.release(data.tank);
+            haul_cache.release_destination(data.tank);
+            use crate::systems::soul_ai::task_execution::types::GatherWaterPhase;
+            if matches!(data.phase, GatherWaterPhase::GoingToBucket) {
+                haul_cache.release_source(data.bucket, 1);
+            }
         }
         AssignedTask::HaulWaterToMixer(data) => {
-            haul_cache.release_mixer(data.mixer, ResourceType::Water);
+             // 作業員スロットとしてのMixer予約解除
+            haul_cache.release_mixer_destination(data.mixer, ResourceType::Water);
+            
+            use crate::systems::soul_ai::task_execution::types::HaulWaterToMixerPhase;
+            if matches!(data.phase, HaulWaterToMixerPhase::GoingToBucket) {
+                 haul_cache.release_source(data.bucket, 1);
+            } else if matches!(data.phase, HaulWaterToMixerPhase::FillingFromTank) {
+                 haul_cache.release_source(data.tank, 1);
+            }
         }
         AssignedTask::HaulToMixer(data) => {
-            haul_cache.release_mixer(data.mixer, data.resource_type);
+            haul_cache.release_mixer_destination(data.mixer, data.resource_type);
+             
+            use crate::systems::soul_ai::task_execution::types::HaulToMixerPhase;
+             if matches!(data.phase, HaulToMixerPhase::GoingToItem) {
+                 haul_cache.release_source(data.item, 1);
+             }
+        }
+        AssignedTask::HaulToBlueprint(data) => {
+            haul_cache.release_destination(data.blueprint);
+             
+            use crate::systems::soul_ai::task_execution::types::HaulToBpPhase;
+            if matches!(data.phase, HaulToBpPhase::GoingToItem) {
+                haul_cache.release_source(data.item, 1);
+            }
         }
         AssignedTask::CollectSand(_) | AssignedTask::Refine(_) => {}
         _ => {}

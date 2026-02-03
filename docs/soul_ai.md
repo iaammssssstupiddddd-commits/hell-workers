@@ -73,7 +73,13 @@
 
 ## 3. タスク実行ロジック (Task Execution)
 
-割り当てられた `AssignedTask` に基づき、以下の 2 つの主要なタスクを実行します。
+割り当てられた `AssignedTask` に基づき、**Global Cycle Framework (Sense-Think-Act)** に従ってタスクを実行します。
+
+### 3.0. 実行サイクル (Execution Cycle)
+すべてのAI処理は以下の順序で厳密にスケジュールされます (`SoulAiSystemSet`)。
+1. **Sense Phase**: 環境認識とリソース予約状況の同期 (`sync_reservations_system`)。
+2. **Think Phase**: 新しいタスクの検索と割り当て (`task_assigner`)。
+3. **Act Phase**: 実際の移動やアクションの実行 (`task_execution`)。
 
 ### 3.1. 採取 (Gather)
 - **対象**: 木、岩、建築物など。

@@ -9,14 +9,26 @@ pub mod idle;
 pub mod task_execution; // タスク実行モジュール
 pub mod vitals;
 pub mod work;
+pub mod scheduling;
 
 use crate::systems::GameSystemSet;
+use scheduling::SoulAiSystemSet;
 
 pub struct SoulAiPlugin;
 
 impl Plugin for SoulAiPlugin {
     fn build(&self, app: &mut App) {
-        app            .register_type::<task_execution::AssignedTask>()
+        app.configure_sets(
+            Update,
+            (
+                SoulAiSystemSet::Sense,
+                SoulAiSystemSet::Think,
+                SoulAiSystemSet::Act,
+            )
+                .chain()
+                .in_set(GameSystemSet::Logic),
+        )
+        .register_type::<task_execution::AssignedTask>()
             .register_type::<gathering::GatheringSpot>()
             .init_resource::<work::AutoHaulCounter>()
             .init_resource::<work::auto_haul::ItemReservations>()

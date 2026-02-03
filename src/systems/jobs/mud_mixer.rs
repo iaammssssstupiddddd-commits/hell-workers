@@ -26,6 +26,16 @@ impl MudMixerStorage {
         }
     }
 
+    /// 指定された量のリソースを受け入れ可能かチェック（現在の在庫 + 追加分 <= キャパシティ）
+    pub fn can_accept(&self, resource: ResourceType, amount: u32) -> bool {
+        match resource {
+            ResourceType::Sand => self.sand + amount <= MUD_MIXER_CAPACITY,
+            ResourceType::Rock => self.rock + amount <= MUD_MIXER_CAPACITY,
+            ResourceType::Water => false, // 水は Stockpile で管理
+            _ => false,
+        }
+    }
+
     /// リソースを指定量追加する。実際に加算された量を返す。
     pub fn add_amount(&mut self, resource: ResourceType, amount: u32) -> u32 {
         let capacity = MUD_MIXER_CAPACITY;

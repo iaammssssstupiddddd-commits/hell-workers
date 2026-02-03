@@ -20,7 +20,7 @@ pub use types::AssignedTask;
 
 use crate::entities::damned_soul::{DamnedSoul, Destination, Path, StressBreakdown};
 use crate::events::OnTaskCompleted;
-use crate::systems::familiar_ai::haul_cache::HaulReservationCache;
+use crate::systems::familiar_ai::resource_cache::SharedResourceCache;
 use crate::systems::logistics::Inventory;
 use crate::systems::soul_ai::task_execution::types::{
     GatherWaterPhase, HaulPhase, HaulToBpPhase, HaulToMixerPhase, HaulWaterToMixerPhase,
@@ -82,11 +82,11 @@ pub fn task_execution_system(
     mut queries: context::TaskQueries,
     game_assets: Res<crate::assets::GameAssets>,
     time: Res<Time>,
-    mut haul_cache: ResMut<HaulReservationCache>,
+    mut haul_cache: ResMut<SharedResourceCache>,
     world_map: Res<WorldMap>,
     mut pf_context: Local<crate::world::pathfinding::PathfindingContext>,
 ) {
-    let mut dropped_this_frame = std::collections::HashMap::<Entity, usize>::new();
+
 
     for (
         soul_entity,
@@ -163,7 +163,6 @@ pub fn task_execution_system(
                     data.stockpile,
                     data.phase,
                     &mut commands,
-                    &mut dropped_this_frame,
                     &mut *haul_cache,
                     &world_map,
                 );

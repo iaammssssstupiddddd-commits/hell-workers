@@ -15,7 +15,7 @@ pub fn handle_haul_water_to_mixer_task(
     phase: HaulWaterToMixerPhase,
     commands: &mut Commands,
     game_assets: &Res<crate::assets::GameAssets>,
-    haul_cache: &mut crate::systems::familiar_ai::haul_cache::HaulReservationCache,
+    haul_cache: &mut crate::systems::familiar_ai::resource_cache::SharedResourceCache,
     _time: &Res<Time>,
     world_map: &Res<WorldMap>,
 ) {
@@ -35,7 +35,7 @@ pub fn handle_haul_water_to_mixer_task(
                     }
                 } else {
                     // バケツが見つからない場合は中断
-                    haul_cache.release_mixer(mixer_entity, ResourceType::Water);
+                    haul_cache.release_mixer_destination(mixer_entity, ResourceType::Water);
                     clear_task_and_path(ctx.task, ctx.path);
                 }
                 return;
@@ -58,10 +58,13 @@ pub fn handle_haul_water_to_mixer_task(
                     ) {
                         return;
                     }
+                    // ソース取得記録
+                    haul_cache.record_picked_source(bucket_entity, 1);
+
                     let bucket_is_water = match ctx.queries.resources.get(bucket_entity) {
                         Ok(res_item) => res_item.0 == ResourceType::BucketWater,
                         Err(_) => {
-                            haul_cache.release_mixer(mixer_entity, ResourceType::Water);
+                            haul_cache.release_mixer_destination(mixer_entity, ResourceType::Water);
                             clear_task_and_path(ctx.task, ctx.path);
                             return;
                         }
@@ -76,7 +79,7 @@ pub fn handle_haul_water_to_mixer_task(
                     }
                 }
             } else {
-                haul_cache.release_mixer(mixer_entity, ResourceType::Water);
+                haul_cache.release_mixer_destination(mixer_entity, ResourceType::Water);
                 clear_task_and_path(ctx.task, ctx.path);
             }
         }
@@ -270,7 +273,7 @@ pub fn handle_haul_water_to_mixer_task(
                     info!("TASK_EXEC: Soul {:?} poured {} water into MudMixer", ctx.soul_entity, added);
                     
                     // 予約解除
-                    haul_cache.release_mixer(mixer_entity, ResourceType::Water);
+                    haul_cache.release_mixer_destination(mixer_entity, ResourceType::Water);
 
                     // バケツを空に戻す
                     commands.entity(bucket_entity).insert((
@@ -334,7 +337,7 @@ fn transition_to_tank(
     bucket_entity: Entity,
     tank_entity: Entity,
     mixer_entity: Entity,
-    haul_cache: &mut crate::systems::familiar_ai::haul_cache::HaulReservationCache,
+    haul_cache: &mut crate::systems::familiar_ai::resource_cache::SharedResourceCache,
     soul_pos: Vec2,
 ) {
     if let Ok(tank_data) = ctx.queries.stockpiles.get(tank_entity) {
@@ -363,7 +366,7 @@ fn transition_to_mixer(
     bucket_entity: Entity,
     tank_entity: Entity,
     mixer_entity: Entity,
-    haul_cache: &mut crate::systems::familiar_ai::haul_cache::HaulReservationCache,
+    haul_cache: &mut crate::systems::familiar_ai::resource_cache::SharedResourceCache,
     world_map: &WorldMap,
     soul_pos: Vec2,
 ) {
@@ -390,10 +393,10 @@ fn abort_and_drop_bucket(
     ctx: &mut TaskExecutionContext,
     bucket_entity: Entity,
     mixer_entity: Entity,
-    haul_cache: &mut crate::systems::familiar_ai::haul_cache::HaulReservationCache,
+    haul_cache: &mut crate::systems::familiar_ai::resource_cache::SharedResourceCache,
     pos: Vec2
 ) {
-    haul_cache.release_mixer(mixer_entity, ResourceType::Water);
+    haul_cache.release_mixer_destination(mixer_entity, ResourceType::Water);
 
     // バケツを地面にドロップして、関連コンポーネントをクリーンアップ
     let drop_grid = WorldMap::world_to_grid(pos);

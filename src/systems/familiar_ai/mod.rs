@@ -18,7 +18,7 @@ use bevy::prelude::*;
 pub mod encouragement; // 新規追加
 pub mod familiar_processor;
 pub mod following;
-pub mod haul_cache;
+pub mod resource_cache;
 pub mod helpers;
 pub mod max_soul_handler;
 pub mod recruitment;
@@ -64,8 +64,9 @@ pub struct FamiliarAiPlugin;
 
 impl Plugin for FamiliarAiPlugin {
     fn build(&self, app: &mut App) {
-        app.register_type::<FamiliarAiState>()
-            .init_resource::<haul_cache::HaulReservationCache>()
+        app
+            .register_type::<FamiliarAiState>()
+            .init_resource::<resource_cache::SharedResourceCache>()
             .init_resource::<encouragement::EncouragementCooldowns>()
             .init_resource::<DesignationSpatialGrid>()
             .init_resource::<state_transition::PreviousFamiliarAiStates>()
@@ -79,9 +80,8 @@ impl Plugin for FamiliarAiPlugin {
                     state_transition::detect_command_changes_system
                         .in_set(GameSystemSet::Logic)
                         .before(familiar_ai_system),
-                    haul_cache::sync_haul_reservations_system
-                        .in_set(GameSystemSet::Logic)
-                        .before(familiar_ai_system),
+                    resource_cache::sync_reservations_system
+                        .in_set(crate::systems::soul_ai::scheduling::SoulAiSystemSet::Sense),
                     // メインのAIシステム
                     update_designation_spatial_grid_system.in_set(GameSystemSet::Logic),
                     familiar_ai_system.in_set(GameSystemSet::Logic),
@@ -139,7 +139,7 @@ pub struct FamiliarAiParams<'w, 's> {
     >,
     pub q_breakdown: Query<'w, 's, &'static StressBreakdown>,
     pub task_queries: crate::systems::soul_ai::task_execution::context::TaskQueries<'w, 's>,
-    pub haul_cache: ResMut<'w, haul_cache::HaulReservationCache>,
+    pub resource_cache: ResMut<'w, resource_cache::SharedResourceCache>,
     pub designation_grid: Res<'w, DesignationSpatialGrid>,
     pub game_assets: Res<'w, crate::assets::GameAssets>,
     pub q_bubbles: Query<'w, 's, (Entity, &'static SpeechBubble), With<FamiliarBubble>>,
@@ -159,7 +159,7 @@ pub fn familiar_ai_system(params: FamiliarAiParams) {
         mut q_souls,
         q_breakdown,
         task_queries,
-        mut haul_cache,
+        mut resource_cache,
         designation_grid,
         game_assets,
         q_bubbles,
@@ -289,7 +289,7 @@ pub fn familiar_ai_system(params: FamiliarAiParams) {
             &game_assets,
             &q_bubbles,
             &world_map,
-            &mut *haul_cache,
+            &mut *resource_cache,
         );
 
         // 状態に応じたロジック実行
@@ -365,7 +365,7 @@ pub fn familiar_ai_system(params: FamiliarAiParams) {
             &task_queries,
             &designation_grid,
             managed_tasks,
-            &mut *haul_cache,
+            &mut *resource_cache,
             &world_map,
             &mut *pf_context,
             &time,

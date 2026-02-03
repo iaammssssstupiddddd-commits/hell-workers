@@ -55,6 +55,14 @@ graph TD
 `src/main.rs` で定義されている `GameSystemSet` は以下の順序でチェーンされています：
 `Input` → `Spatial` → `Logic` → `Actor` → `Visual` → `Interface`
 
+### Global Cycle Framework (Logic Phase)
+
+`Logic` フェーズ内では、**Soul AI** の動作順序を厳密に制御するためのサブセット (`SoulAiSystemSet`) が定義されています。
+
+1.  **Sense**: 環境情報の収集とリソース予約状況の初期化 (`sync_reservations_system`)
+2.  **Think**: 意思決定とタスク割り当て (`task_assigner`)
+3.  **Act**: 実際の行動実行 (`task_execution`)
+
 ## 定数管理 (`src/constants.rs`)
 
 ゲームバランスに関わる全てのマジックナンバーは `constants.rs` に集約されています。
