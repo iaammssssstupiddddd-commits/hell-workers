@@ -28,7 +28,7 @@ pub fn handle_max_soul_changed_system(
             Option<&mut crate::systems::logistics::Inventory>,
         ),
     >,
-    mut haul_cache: ResMut<crate::systems::familiar_ai::haul_cache::HaulReservationCache>,
+    mut haul_cache: ResMut<crate::systems::familiar_ai::resource_cache::SharedResourceCache>,
     queries: crate::systems::soul_ai::task_execution::context::TaskQueries,
     game_assets: Res<crate::assets::GameAssets>,
     q_bubbles: Query<(Entity, &SpeechBubble), With<FamiliarBubble>>,

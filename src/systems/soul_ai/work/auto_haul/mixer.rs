@@ -10,14 +10,14 @@ use crate::systems::command::TaskArea;
 use crate::systems::jobs::{Designation, IssuedBy, MudMixerStorage, TargetMixer, TaskSlots, WorkType, Priority};
 use crate::systems::logistics::{ResourceItem, ResourceType, ReservedForTask, Stockpile};
 use crate::relationships::TaskWorkers;
-use crate::systems::familiar_ai::haul_cache::HaulReservationCache;
+use crate::systems::familiar_ai::resource_cache::SharedResourceCache;
 use crate::systems::soul_ai::work::auto_haul::ItemReservations;
 use crate::systems::soul_ai::task_execution::AssignedTask;
 
 /// MudMixer への自動資材運搬タスク生成システム
 pub fn mud_mixer_auto_haul_system(
     mut commands: Commands,
-    mut haul_cache: ResMut<HaulReservationCache>,
+    mut haul_cache: ResMut<SharedResourceCache>,
     mut item_reservations: ResMut<ItemReservations>,
     q_familiars: Query<(Entity, &ActiveCommand, &TaskArea)>,
     q_mixers: Query<(Entity, &Transform, &MudMixerStorage, Option<&TaskWorkers>)>,
@@ -69,7 +69,7 @@ pub fn mud_mixer_auto_haul_system(
                     ResourceType::Rock => storage.rock,
                     _ => 0,
                 };
-                let inflight_count = haul_cache.get_mixer(mixer_entity, resource_type);
+                let inflight_count = haul_cache.get_mixer_destination_reservation(mixer_entity, resource_type);
 
                 // 満杯ならスキップ
                 if storage.is_full(resource_type) {
@@ -130,7 +130,7 @@ pub fn mud_mixer_auto_haul_system(
                         Priority(5),
                         ReservedForTask,
                     ));
-                    haul_cache.reserve_mixer(mixer_entity, resource_type);
+                    haul_cache.reserve_mixer_destination(mixer_entity, resource_type);
                     already_assigned_this_frame.insert(item_entity);
                     item_reservations.0.insert(item_entity);
                     info!("AUTO_HAUL_MIXER: Assigned {:?} haul to Mixer {:?}", resource_type, mixer_entity);
@@ -140,7 +140,7 @@ pub fn mud_mixer_auto_haul_system(
 
             // --- 砂採取タスクの自動発行 ---
             // 砂アイテムが足りず、かつミキサー近辺にSandPileがある場合
-            if storage.sand + (haul_cache.get_mixer(mixer_entity, ResourceType::Sand) as u32) < 2 {
+            if storage.sand + (haul_cache.get_mixer_destination_reservation(mixer_entity, ResourceType::Sand) as u32) < 2 {
                 for (sp_entity, sp_transform, sp_designation, sp_workers) in q_sand_piles.iter() {
                     // ミキサーの近く（3タイル以内）にあるSandPileを対象にする
                     let dist = sp_transform.translation.truncate().distance(mixer_transform.translation.truncate());
@@ -277,7 +277,7 @@ pub fn mud_mixer_auto_haul_system(
                             ReservedForTask,
                         ));
                         item_reservations.0.insert(*bucket_entity);
-                        haul_cache.reserve_mixer(mixer_entity, ResourceType::Water);
+                        haul_cache.reserve_mixer_destination(mixer_entity, ResourceType::Water);
                         already_assigned_this_frame.insert(*bucket_entity);
                         info!("AUTO_HAUL_MIXER: Issued HaulWaterToMixer for bucket {:?} (Mixer {:?})", bucket_entity, mixer_entity);
                     }

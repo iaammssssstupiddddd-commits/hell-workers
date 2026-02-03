@@ -50,7 +50,7 @@ pub fn on_stress_breakdown(
         Option<&crate::entities::familiar::UnderCommand>,
     )>,
     world_map: Res<WorldMap>,
-    mut haul_cache: ResMut<crate::systems::familiar_ai::haul_cache::HaulReservationCache>,
+    mut haul_cache: ResMut<crate::systems::familiar_ai::resource_cache::SharedResourceCache>,
     queries: crate::systems::soul_ai::task_execution::context::TaskQueries,
 ) {
     let soul_entity = on.entity;
@@ -101,7 +101,7 @@ pub fn on_exhausted(
         Option<&mut crate::systems::logistics::Inventory>,
         Option<&crate::entities::familiar::UnderCommand>,
     )>,
-    mut haul_cache: ResMut<crate::systems::familiar_ai::haul_cache::HaulReservationCache>,
+    mut haul_cache: ResMut<crate::systems::familiar_ai::resource_cache::SharedResourceCache>,
     world_map: Res<WorldMap>,
     queries: crate::systems::soul_ai::task_execution::context::TaskQueries,
 ) {

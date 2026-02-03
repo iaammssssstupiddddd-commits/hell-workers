@@ -24,7 +24,7 @@ pub fn find_unassigned_task_in_area(
     q_target_blueprints: &Query<&TargetBlueprint>,
     world_map: &WorldMap,
     pf_context: &mut PathfindingContext,
-    haul_cache: &crate::systems::familiar_ai::haul_cache::HaulReservationCache,
+    haul_cache: &crate::systems::familiar_ai::resource_cache::SharedResourceCache,
 ) -> Vec<Entity> {
     // パス検索の起点を「ソウルの居場所」に補正する
     let worker_grid = match world_map.get_nearest_walkable_grid(worker_pos) {
@@ -185,7 +185,7 @@ pub fn find_unassigned_task_in_area(
                             let is_my_tank = bucket_belongs.map(|b| b.0) == Some(s_entity);
                             if is_tank && is_my_tank {
                                 let current_count = stored.map(|s| s.len()).unwrap_or(0);
-                                let reserved = haul_cache.get(s_entity);
+                                let reserved = haul_cache.get_destination_reservation(s_entity);
                                 (current_count + reserved) < stock.capacity
                             } else {
                                 false

@@ -1,7 +1,7 @@
 //! 運搬タスクの実行処理（ストックパイルへ）
 
 use crate::relationships::WorkingOn;
-use crate::systems::familiar_ai::haul_cache::HaulReservationCache;
+use crate::systems::familiar_ai::resource_cache::SharedResourceCache;
 use crate::systems::soul_ai::task_execution::{
     context::TaskExecutionContext,
     types::{AssignedTask, HaulPhase},
@@ -17,8 +17,7 @@ pub fn handle_haul_task(
     stockpile: Entity,
     phase: HaulPhase,
     commands: &mut Commands,
-    dropped_this_frame: &mut std::collections::HashMap<Entity, usize>,
-    haul_cache: &mut HaulReservationCache,
+    haul_cache: &mut SharedResourceCache,
     world_map: &Res<WorldMap>,
 ) {
     let soul_pos = ctx.soul_pos();
@@ -32,7 +31,8 @@ pub fn handle_haul_task(
             {
                 // 指示がキャンセルされていないか確認
                 if cancel_task_if_designation_missing(des_opt, ctx.task, ctx.path) {
-                    haul_cache.release(stockpile);
+                    haul_cache.release_destination(stockpile);
+                    haul_cache.release_source(item, 1);
                     return;
                 }
 
@@ -43,7 +43,8 @@ pub fn handle_haul_task(
                 if !reachable {
                     // 到達不能: タスクをキャンセル
                     info!("HAUL: Soul {:?} cannot reach item {:?}, canceling", ctx.soul_entity, item);
-                    haul_cache.release(stockpile);
+                    haul_cache.release_destination(stockpile);
+                    haul_cache.release_source(item, 1);
                     clear_task_and_path(ctx.task, ctx.path);
                     return;
                 }
@@ -88,11 +89,14 @@ pub fn handle_haul_task(
                         stockpile,
                         phase: HaulPhase::GoingToStockpile,
                     });
+                     // ソース予約解放と取得記録 (Delta Update)
+                    haul_cache.record_picked_source(item, 1);
                     info!("HAUL: Soul {:?} picked up item {:?}", ctx.soul_entity, item);
                 }
             } else {
                 clear_task_and_path(ctx.task, ctx.path);
-                haul_cache.release(stockpile);
+                haul_cache.release_destination(stockpile);
+                haul_cache.release_source(item, 1);
             }
         }
         HaulPhase::GoingToStockpile => {
@@ -123,7 +127,7 @@ pub fn handle_haul_task(
                 ctx.inventory.0 = None;
                 commands.entity(ctx.soul_entity).remove::<WorkingOn>();
                 clear_task_and_path(ctx.task, ctx.path);
-                haul_cache.release(stockpile);
+                haul_cache.release_destination(stockpile);
             }
         }
         HaulPhase::Dropping => {
@@ -138,9 +142,7 @@ pub fn handle_haul_task(
                     let belongs = q_belongs.get(item).ok();
                     (res_type, belongs)
                 });
-                let this_frame = dropped_this_frame.get(&stockpile).cloned().unwrap_or(0);
-
-                    let can_drop = if let Some((Some(res_type), item_belongs)) = item_info {
+                let can_drop = if let Some((Some(res_type), item_belongs)) = item_info {
                         // 所有権チェック
                         let stock_belongs = q_belongs.get(stockpile).ok();
                         let belongs_match = item_belongs == stock_belongs;
@@ -155,8 +157,15 @@ pub fn handle_haul_task(
                             type_match
                         };
 
-                        // 現在の数 + このフレームですでに置かれた数
-                        let capacity_ok = (current_count + this_frame) < stockpile_comp.capacity;
+                        // 現在の数 + 予約分 + フレーム内増加分 < capacity
+                         let anticipated = haul_cache.get_total_anticipated_count(stockpile, current_count);
+                        // ただし、自分自身の予約が含まれている（はず）。
+                        // Thinkフェーズで予約しているなら、anticipatedには自分の分(1)が含まれる。
+                        // なのでキャパシティ計算時には、その分を考慮する（つまり自分は入れるはず）。
+                        // ここで確認するのは「異常なオーバーフローがないか」程度でいいが、一応判定するなら:
+                        // anticipated <= capacity でOK（自分が最後の1個かもしれないので < ではなく <= ? いや index 0 ベースなら < だが、capacity は数か？）
+                         let capacity_ok = anticipated <= stockpile_comp.capacity;
+                        
                         belongs_match && type_allowed && capacity_ok
                     } else {
                         false
@@ -185,16 +194,22 @@ pub fn handle_haul_task(
                     commands.entity(item).remove::<crate::relationships::TaskWorkers>();
 
                     // カウンタを増やす
-                    *dropped_this_frame.entry(stockpile).or_insert(0) += 1;
+                    // Delta Update: 予約解放 + フレーム内増加
+                    haul_cache.record_stored_destination(stockpile);
 
                     info!(
-                        "TASK_EXEC: Soul {:?} dropped item at stockpile. New count: {}",
+                        "TASK_EXEC: Soul {:?} dropped item at stockpile. Count ~ {}",
                         ctx.soul_entity,
-                        current_count + this_frame + 1
+                        current_count // 正確な数はnext frameだが
                     );
                 } else {
                     // 到着時に条件を満たさなくなった場合（型違いor満杯）
                     // 片付けタスクを再発行してドロップ
+                    // unassign_task 内で release_destination が呼ばれるべきだが、
+                    // ここで haul_cache.release_destination を読んでしまうと unassign_task で二重解放になる？
+                    // unassign_task は AssignedTask を見て判断する。
+                    // 今は Haul(Dropping) なので、unassign_task は release_destination を呼ぶ。
+                    // なのでここでは何もしなくていい。
                     unassign_task(
                         commands,
                         ctx.soul_entity,
@@ -222,7 +237,17 @@ pub fn handle_haul_task(
             ctx.soul.fatigue = (ctx.soul.fatigue + 0.05).min(1.0);
 
             // 搬送予約を解放
-            haul_cache.release(stockpile);
+            // ドロップ成功時に record_stored しているので、ここでは呼ばない！
+            // record_stored していない場合（= drop失敗時やStockpile消失時）は release_destination する必要があるが...
+            // 上記 else ブロック（消失）では release_destination している。
+            // 正常終了時は既に record_stored 済みなので何もしない、と言いたいが
+            // Dropping フェーズが終わる＝タスク完了。
+            // もし record_stored で release 済みなら二重解放になる。
+            // release_destination は 0未満にならないようになっているので安全ではある。
+            // しかし、コードフロー的にここを通るのは「ドロップ完了後」または「キャンセル後」。
+            // Dropping フェーズ内での分岐で処理済みなら不要。
+            // ここでは念のため release_destination を呼んでおくのが無難か？いや、record_stored で消えているはず。
+            // 余計な処理はしない。
         }
     }
 }

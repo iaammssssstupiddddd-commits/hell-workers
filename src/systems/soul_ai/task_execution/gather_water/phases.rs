@@ -16,7 +16,7 @@ pub fn handle_gather_water_task(
     phase: GatherWaterPhase,
     commands: &mut Commands,
     game_assets: &Res<crate::assets::GameAssets>,
-    haul_cache: &mut crate::systems::familiar_ai::haul_cache::HaulReservationCache,
+    haul_cache: &mut crate::systems::familiar_ai::resource_cache::SharedResourceCache,
     time: &Res<Time>,
     world_map: &WorldMap,
 ) {
@@ -46,7 +46,7 @@ fn handle_going_to_bucket(
     bucket_entity: Entity,
     tank_entity: Entity,
     commands: &mut Commands,
-    haul_cache: &mut crate::systems::familiar_ai::haul_cache::HaulReservationCache,
+    haul_cache: &mut crate::systems::familiar_ai::resource_cache::SharedResourceCache,
     world_map: &WorldMap,
     soul_pos: Vec2,
 ) {
@@ -100,6 +100,9 @@ fn handle_going_to_bucket(
         ) {
             return;
         }
+        
+        // ソース取得記録 
+        haul_cache.record_picked_source(bucket_entity, 1);
 
         // もしアイテムが備蓄場所にあったなら、その備蓄場所の型管理を更新する
         if let Some(stored_in) = stored_in_opt {
@@ -209,7 +212,7 @@ fn handle_going_to_river(
     bucket_entity: Entity,
     tank_entity: Entity,
     commands: &mut Commands,
-    haul_cache: &mut crate::systems::familiar_ai::haul_cache::HaulReservationCache,
+    haul_cache: &mut crate::systems::familiar_ai::resource_cache::SharedResourceCache,
     world_map: &WorldMap,
     _soul_pos: Vec2,
 ) {
@@ -253,7 +256,7 @@ fn handle_filling(
     progress: f32,
     commands: &mut Commands,
     game_assets: &Res<crate::assets::GameAssets>,
-    haul_cache: &mut crate::systems::familiar_ai::haul_cache::HaulReservationCache,
+    haul_cache: &mut crate::systems::familiar_ai::resource_cache::SharedResourceCache,
     time: &Res<Time>,
     world_map: &WorldMap,
     _soul_pos: Vec2,
@@ -336,7 +339,7 @@ fn handle_going_to_tank(
     bucket_entity: Entity,
     tank_entity: Entity,
     commands: &mut Commands,
-    haul_cache: &mut crate::systems::familiar_ai::haul_cache::HaulReservationCache,
+    haul_cache: &mut crate::systems::familiar_ai::resource_cache::SharedResourceCache,
     world_map: &WorldMap,
     _soul_pos: Vec2,
 ) {
@@ -379,7 +382,7 @@ fn handle_pouring(
     progress: f32,
     commands: &mut Commands,
     game_assets: &Res<crate::assets::GameAssets>,
-    haul_cache: &mut crate::systems::familiar_ai::haul_cache::HaulReservationCache,
+    haul_cache: &mut crate::systems::familiar_ai::resource_cache::SharedResourceCache,
     world_map: &WorldMap,
     _soul_pos: Vec2,
 ) {

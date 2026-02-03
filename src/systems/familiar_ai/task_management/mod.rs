@@ -51,7 +51,7 @@ impl TaskManager {
         >,
         designation_grid: &DesignationSpatialGrid,
         managed_tasks: &ManagedTasks,
-        haul_cache: &mut crate::systems::familiar_ai::haul_cache::HaulReservationCache,
+        haul_cache: &mut crate::systems::familiar_ai::resource_cache::SharedResourceCache,
         world_map: &WorldMap,
         pf_context: &mut PathfindingContext,
     ) -> Option<Entity> {
