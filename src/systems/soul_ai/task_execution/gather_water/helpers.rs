@@ -11,7 +11,7 @@ pub fn drop_bucket_for_auto_haul(
     ctx: &mut TaskExecutionContext,
     bucket_entity: Entity,
     _tank_entity: Entity,
-    haul_cache: &mut crate::systems::familiar_ai::haul_cache::HaulReservationCache,
+    haul_cache: &mut crate::systems::familiar_ai::resource_cache::SharedResourceCache,
     world_map: &WorldMap,
 ) {
     let soul_pos = ctx.soul_pos();
@@ -42,7 +42,7 @@ pub fn drop_bucket_for_auto_haul(
 pub fn abort_task_without_item(
     commands: &mut Commands,
     ctx: &mut TaskExecutionContext,
-    haul_cache: &mut crate::systems::familiar_ai::haul_cache::HaulReservationCache,
+    haul_cache: &mut crate::systems::familiar_ai::resource_cache::SharedResourceCache,
     world_map: &WorldMap,
 ) {
     let soul_pos = ctx.soul_pos();
@@ -57,7 +57,7 @@ pub fn abort_task_without_item(
 pub fn abort_task_with_item(
     commands: &mut Commands,
     ctx: &mut TaskExecutionContext,
-    haul_cache: &mut crate::systems::familiar_ai::haul_cache::HaulReservationCache,
+    haul_cache: &mut crate::systems::familiar_ai::resource_cache::SharedResourceCache,
     world_map: &WorldMap,
 ) {
     let soul_pos = ctx.soul_pos();

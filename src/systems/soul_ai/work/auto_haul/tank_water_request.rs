@@ -8,13 +8,13 @@ use crate::constants::BUCKET_CAPACITY;
 use crate::systems::command::TaskArea;
 use crate::systems::jobs::{Designation, IssuedBy, TaskSlots, WorkType};
 use crate::systems::logistics::{BelongsTo, ResourceItem, ReservedForTask, ResourceType, Stockpile};
-use crate::systems::familiar_ai::haul_cache::HaulReservationCache;
+use crate::systems::familiar_ai::resource_cache::SharedResourceCache;
 use crate::relationships::{StoredIn, StoredItems, TaskWorkers};
 
 /// タンクの貯蔵量を監視し、空きがあればバケツに水汲み指示を出すシステム
 pub fn tank_water_request_system(
     mut commands: Commands,
-    haul_cache: Res<HaulReservationCache>,
+    haul_cache: Res<SharedResourceCache>,
     q_familiars: Query<(Entity, &TaskArea)>,
     // タンク自体の在庫状況（Water を貯める Stockpile）
     q_tanks: Query<(Entity, &Transform, &Stockpile, Option<&StoredItems>)>,
@@ -40,7 +40,7 @@ pub fn tank_water_request_system(
         }
 
         let current_water = stored_opt.map(|s| s.len()).unwrap_or(0);
-        let reserved_water_tasks = haul_cache.get(tank_entity);
+        let reserved_water_tasks = haul_cache.get_destination_reservation(tank_entity);
         let total_water = (current_water as u32) + (reserved_water_tasks as u32 * BUCKET_CAPACITY);
 
         if total_water < tank_stock.capacity as u32 {

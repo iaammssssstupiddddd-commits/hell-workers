@@ -12,7 +12,7 @@ use crate::systems::soul_ai::gathering::ParticipatingIn;
 use crate::systems::soul_ai::task_execution::types::{
     AssignedTask, BuildPhase, GatherPhase, GatherWaterPhase, HaulPhase, HaulToBpPhase,
 };
-use crate::constants::BUCKET_CAPACITY;
+
 use bevy::prelude::*;
 
 /// ワーカーにタスク割り当てのための共通セットアップを行う
@@ -64,7 +64,7 @@ pub fn assign_task_to_worker(
         Without<crate::entities::familiar::Familiar>,
     >,
     task_area_opt: Option<&TaskArea>,
-    haul_cache: &mut crate::systems::familiar_ai::haul_cache::HaulReservationCache,
+    haul_cache: &mut crate::systems::familiar_ai::resource_cache::SharedResourceCache,
 ) -> bool {
     let Ok((_, _, soul, mut assigned_task, mut dest, mut path, idle, _, uc_opt, participating_opt)) =
         q_souls.get_mut(worker_entity)
@@ -124,6 +124,15 @@ pub fn assign_task_to_worker(
         }
         WorkType::Haul => {
             if let Ok(target_bp) = queries.target_blueprints.get(task_entity) {
+                // ソース予約チェック
+                if haul_cache.get_source_reservation(task_entity) > 0 {
+                    debug!("ASSIGN: Item {:?} (for BP) is already reserved", task_entity);
+                    return false;
+                }
+
+                haul_cache.reserve_destination(target_bp.0);
+                haul_cache.reserve_source(task_entity, 1);
+
                 prepare_worker_for_task(
                     commands, worker_entity, fam_entity, task_entity, uc_opt.is_some(),
                 );
@@ -144,6 +153,12 @@ pub fn assign_task_to_worker(
                 return true;
             }
 
+            // ソース予約チェック (一般Item)
+            if haul_cache.get_source_reservation(task_entity) > 0 {
+                debug!("ASSIGN: Item {:?} is already reserved", task_entity);
+                return false;
+            }
+
             let item_info = queries.items.get(task_entity).ok().map(|(it, _)| it.0);
             let item_belongs = queries.belongs.get(task_entity).ok();
             let target_mixer = queries.target_mixers.get(task_entity).ok().map(|tm| tm.0);
@@ -158,24 +173,39 @@ pub fn assign_task_to_worker(
             if let Some(mixer_entity) = target_mixer {
                 // ミキサーが受け入れ可能なリソース（砂または岩）であるか確認
                 if matches!(item_type, ResourceType::Sand | ResourceType::Rock) {
-                    prepare_worker_for_task(
-                        commands, worker_entity, fam_entity, task_entity, uc_opt.is_some(),
-                    );
-                    *assigned_task = AssignedTask::HaulToMixer(crate::systems::soul_ai::task_execution::types::HaulToMixerData {
-                        item: task_entity,
-                        mixer: mixer_entity,
-                        resource_type: item_type,
-                        phase: crate::systems::soul_ai::task_execution::types::HaulToMixerPhase::GoingToItem,
-                    });
-                    dest.0 = task_pos;
-                    path.waypoints.clear();
-                    path.current_index = 0;
-                    commands.trigger(OnTaskAssigned {
-                        entity: worker_entity,
-                        task_entity,
-                        work_type: WorkType::Haul,
-                    });
-                    return true;
+                    // ミキサーのキャパシティチェック
+                    let can_accept = if let Ok((_, storage, _)) = queries.mixers.get(mixer_entity) {
+                        let reserved = haul_cache.get_mixer_destination_reservation(mixer_entity, item_type);
+                        storage.can_accept(item_type, (1 + reserved) as u32)
+                    } else {
+                        false
+                    };
+
+                    if can_accept {
+                        haul_cache.reserve_mixer_destination(mixer_entity, item_type);
+                        haul_cache.reserve_source(task_entity, 1);
+
+                        prepare_worker_for_task(
+                            commands, worker_entity, fam_entity, task_entity, uc_opt.is_some(),
+                        );
+                        *assigned_task = AssignedTask::HaulToMixer(crate::systems::soul_ai::task_execution::types::HaulToMixerData {
+                            item: task_entity,
+                            mixer: mixer_entity,
+                            resource_type: item_type,
+                            phase: crate::systems::soul_ai::task_execution::types::HaulToMixerPhase::GoingToItem,
+                        });
+                        dest.0 = task_pos;
+                        path.waypoints.clear();
+                        path.current_index = 0;
+                        commands.trigger(OnTaskAssigned {
+                            entity: worker_entity,
+                            task_entity,
+                            work_type: WorkType::Haul,
+                        });
+                        return true;
+                    } else {
+                        debug!("ASSIGN: Mixer {:?} cannot accept item {:?} (Full or Reserved)", mixer_entity, item_type);
+                    }
                 } else {
                     debug!("ASSIGN: Haul item {:?} has TargetMixer but type {:?} is not accepted as solid material", task_entity, item_type);
                     // ここで TargetMixer を削除してしまうか、あるいはミキサー用タスクではないとして通常の運搬に回す
@@ -218,7 +248,7 @@ pub fn assign_task_to_worker(
                     }
 
                     let current_count = stored.map(|s| s.len()).unwrap_or(0);
-                    let reserved = haul_cache.get(*s_entity);
+                    let reserved = haul_cache.get_destination_reservation(*s_entity);
                     let has_capacity = (current_count + reserved) < stock.capacity as usize;
 
                     type_match && has_capacity
@@ -231,6 +261,9 @@ pub fn assign_task_to_worker(
                 .map(|(e, _, _, _)| e);
 
             if let Some(stock_entity) = best_stockpile {
+                haul_cache.reserve_destination(stock_entity);
+                haul_cache.reserve_source(task_entity, 1);
+
                 prepare_worker_for_task(
                     commands, worker_entity, fam_entity, task_entity, uc_opt.is_some(),
                 );
@@ -240,8 +273,7 @@ pub fn assign_task_to_worker(
                     stockpile: stock_entity,
                     phase: HaulPhase::GoingToItem,
                 });
-                haul_cache.reserve(stock_entity);
-
+                
                 dest.0 = task_pos;
                 path.waypoints.clear();
                 path.current_index = 0;
@@ -282,6 +314,11 @@ pub fn assign_task_to_worker(
             return true;
         }
         WorkType::GatherWater => {
+            // バケツ予約チェック
+            if haul_cache.get_source_reservation(task_entity) > 0 {
+                return false;
+            }
+
             let best_tank = queries.stockpiles
                 .iter()
                 .filter(|(s_entity, s_transform, stock, stored)| {
@@ -292,9 +329,11 @@ pub fn assign_task_to_worker(
                     }
                     let is_tank = stock.resource_type == Some(ResourceType::Water);
                     let current_water = stored.map(|s| s.len()).unwrap_or(0);
-                    let reserved_water = haul_cache.get(*s_entity) as usize;
-                    let total_water = current_water + (reserved_water * BUCKET_CAPACITY as usize);
-                    let has_capacity = total_water < stock.capacity;
+                    let reserved_tank = haul_cache.get_destination_reservation(*s_entity);
+                     // タンクに関しては、何人（何個）が集まっているか、という予約になっている
+                     // バケツ1つあたり5の水が入るので、本当は容量チェックをシビアにするべきだが
+                     // ここでは destination_reservation (人数) でチェックする
+                    let has_capacity = (current_water + reserved_tank) < stock.capacity;
 
                     // 所有権チェック（バケツとタンク）
                     let bucket_belongs = queries.belongs.get(task_entity).ok();
@@ -312,6 +351,9 @@ pub fn assign_task_to_worker(
                 .map(|(e, _, _, _)| e);
 
             if let Some(tank_entity) = best_tank {
+                haul_cache.reserve_destination(tank_entity);
+                haul_cache.reserve_source(task_entity, 1);
+
                 prepare_worker_for_task(
                     commands,
                     worker_entity,
@@ -325,7 +367,6 @@ pub fn assign_task_to_worker(
                     tank: tank_entity,
                     phase: GatherWaterPhase::GoingToBucket,
                 });
-                haul_cache.reserve(tank_entity);
 
                 dest.0 = task_pos;
                 path.waypoints.clear();
@@ -393,6 +434,14 @@ pub fn assign_task_to_worker(
                 debug!("ASSIGN: HaulWaterToMixer bucket {:?} has no BelongsTo (Tank)", task_entity);
                 return false;
             };
+
+            // ソース（バケツ）予約チェック
+            if haul_cache.get_source_reservation(task_entity) > 0 {
+                return false;
+            }
+            
+            haul_cache.reserve_mixer_destination(mixer_entity, ResourceType::Water);
+            haul_cache.reserve_source(task_entity, 1);
 
             prepare_worker_for_task(
                 commands, worker_entity, fam_entity, task_entity, uc_opt.is_some(),

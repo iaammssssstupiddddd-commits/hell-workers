@@ -2,7 +2,7 @@ use bevy::prelude::*;
 
 use crate::entities::damned_soul::Path;
 use crate::entities::familiar::{ActiveCommand, Familiar, FamiliarCommand, UnderCommand};
-use crate::systems::familiar_ai::haul_cache::HaulReservationCache;
+use crate::systems::familiar_ai::resource_cache::SharedResourceCache;
 
 use crate::systems::soul_ai::task_execution::AssignedTask;
 use crate::systems::soul_ai::work::helpers;
@@ -20,7 +20,7 @@ pub fn cleanup_commanded_souls_system(
     )>,
     queries: crate::systems::soul_ai::task_execution::context::TaskQueries,
     q_familiars: Query<&ActiveCommand, With<Familiar>>,
-    mut haul_cache: ResMut<HaulReservationCache>,
+    mut haul_cache: ResMut<SharedResourceCache>,
     world_map: Res<crate::world::map::WorldMap>,
 ) {
     for (soul_entity, transform, under_command, mut task, mut path, mut inventory_opt) in
