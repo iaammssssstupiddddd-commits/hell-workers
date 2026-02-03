@@ -12,7 +12,6 @@ pub mod helpers;
 
 // 外部からの参照のために再公開
 pub use auto_haul::task_area_auto_haul_system;
-pub use auto_haul::bucket_auto_haul_system;
 pub use auto_haul::tank_water_request_system;
 pub use helpers::unassign_task;
 

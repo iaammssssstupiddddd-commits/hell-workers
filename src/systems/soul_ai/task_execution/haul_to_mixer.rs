@@ -4,7 +4,6 @@ use super::types::{AssignedTask, HaulToMixerPhase};
 use super::common::*;
 use crate::systems::logistics::ResourceType;
 use crate::world::map::WorldMap;
-use crate::constants::*;
 use crate::systems::familiar_ai::haul_cache::HaulReservationCache;
 
 pub fn handle_haul_to_mixer_task(
@@ -25,17 +24,14 @@ pub fn handle_haul_to_mixer_task(
             // ミキサーのストレージが満杯かチェック
             if let Ok(mixer_data) = ctx.queries.mixers.get(mixer_entity) {
                 let (_, storage, _) = mixer_data;
-                let current = match resource_type {
-                    ResourceType::Sand => storage.sand,
-                    ResourceType::Rock => storage.rock,
-                    _ => 0,
-                };
-                if current >= MUD_MIXER_CAPACITY {
+                let is_full = storage.is_full(resource_type);
+                if is_full {
                     info!("HAUL_TO_MIXER: Soul {:?} - mixer {:?} storage full for {:?}, canceling", ctx.soul_entity, mixer_entity, resource_type);
                     // 予約解除
                     haul_cache.release_mixer(mixer_entity, resource_type);
-                    // アイテムのDesignationを解除
+                    // アイテムのDesignationとTargetMixerを解除
                     commands.entity(item_entity).remove::<crate::systems::jobs::Designation>();
+                    commands.entity(item_entity).remove::<crate::systems::jobs::TargetMixer>();
                     clear_task_and_path(ctx.task, ctx.path);
                     return;
                 }
@@ -52,6 +48,7 @@ pub fn handle_haul_to_mixer_task(
                 if des_opt.is_none() {
                     info!("HAUL_TO_MIXER: Soul {:?} - item {:?} designation removed, canceling", ctx.soul_entity, item_entity);
                     haul_cache.release_mixer(mixer_entity, resource_type);
+                    commands.entity(item_entity).remove::<crate::systems::jobs::TargetMixer>();
                     clear_task_and_path(ctx.task, ctx.path);
                     return;
                 }
@@ -65,6 +62,7 @@ pub fn handle_haul_to_mixer_task(
                     info!("HAUL_TO_MIXER: Soul {:?} cannot reach item {:?}, canceling", ctx.soul_entity, item_entity);
                     haul_cache.release_mixer(mixer_entity, resource_type);
                     commands.entity(item_entity).remove::<crate::systems::jobs::Designation>();
+                    commands.entity(item_entity).remove::<crate::systems::jobs::TargetMixer>();
                     clear_task_and_path(ctx.task, ctx.path);
                     return;
                 }
@@ -84,6 +82,7 @@ pub fn handle_haul_to_mixer_task(
             } else {
                 info!("HAUL_TO_MIXER: Soul {:?} - item {:?} not found, canceling", ctx.soul_entity, item_entity);
                 haul_cache.release_mixer(mixer_entity, resource_type);
+                // アイテムが存在しない場合は削除できないが、念のためコマンドは発行しない（IDが無効なため）
                 clear_task_and_path(ctx.task, ctx.path);
             }
         }
@@ -103,12 +102,7 @@ pub fn handle_haul_to_mixer_task(
                 let mixer_pos = mixer_transform.translation.truncate();
 
                 // ミキサーが満タンかチェック（移動中に満タンになる可能性）
-                let current = match resource_type {
-                    ResourceType::Sand => storage.sand,
-                    ResourceType::Rock => storage.rock,
-                    _ => 0,
-                };
-                if current >= MUD_MIXER_CAPACITY {
+                if storage.is_full(resource_type) {
                     // 満タン: 砂は無限にあるのでdespawn、それ以外はdrop
                     info!("HAUL_TO_MIXER: Mixer {:?} full for {:?}, disposing item", mixer_entity, resource_type);
                     haul_cache.release_mixer(mixer_entity, resource_type);
@@ -116,6 +110,7 @@ pub fn handle_haul_to_mixer_task(
                     if resource_type == ResourceType::Sand {
                         commands.entity(item_entity).despawn();
                     } else {
+                        commands.entity(item_entity).remove::<crate::systems::jobs::TargetMixer>();
                         drop_item(commands, ctx.soul_entity, item_entity, soul_pos);
                     }
                     ctx.inventory.0 = None;
@@ -130,13 +125,14 @@ pub fn handle_haul_to_mixer_task(
                     // 到達不能: アイテムをドロップしてタスクをキャンセル
                     info!("HAUL_TO_MIXER: Soul {:?} cannot reach mixer {:?}, dropping item", ctx.soul_entity, mixer_entity);
                     haul_cache.release_mixer(mixer_entity, resource_type);
+                    commands.entity(item_entity).remove::<crate::systems::jobs::TargetMixer>();
                     drop_item(commands, ctx.soul_entity, item_entity, soul_pos);
                     ctx.inventory.0 = None;
                     clear_task_and_path(ctx.task, ctx.path);
                     return;
                 }
 
-                if is_near_target(soul_pos, mixer_pos) {
+                if is_near_target(soul_pos, mixer_pos) || is_near_target(soul_pos, ctx.dest.0) {
                     *ctx.task = AssignedTask::HaulToMixer(crate::systems::soul_ai::task_execution::types::HaulToMixerData {
                         item: item_entity,
                         mixer: mixer_entity,
@@ -150,6 +146,7 @@ pub fn handle_haul_to_mixer_task(
                 // ミキサーが消失した場合はアイテムをドロップして終了
                 haul_cache.release_mixer(mixer_entity, resource_type);
                 if let Some(item) = ctx.inventory.0 {
+                    commands.entity(item).remove::<crate::systems::jobs::TargetMixer>();
                     drop_item(commands, ctx.soul_entity, item, soul_pos);
                     ctx.inventory.0 = None;
                 }
@@ -161,20 +158,8 @@ pub fn handle_haul_to_mixer_task(
             if let Ok(mixer_data) = ctx.queries.mixers.get_mut(mixer_entity) {
                 let (_, mut storage, _) = mixer_data;
                 let mut delivered = false;
-                match resource_type {
-                    ResourceType::Sand => {
-                        if storage.sand < MUD_MIXER_CAPACITY {
-                            storage.sand += 1;
-                            delivered = true;
-                        }
-                    }
-                    ResourceType::Rock => {
-                        if storage.rock < MUD_MIXER_CAPACITY {
-                            storage.rock += 1;
-                            delivered = true;
-                        }
-                    }
-                    _ => {}
+                if storage.add_material(resource_type).is_ok() {
+                    delivered = true;
                 }
 
                 if delivered {

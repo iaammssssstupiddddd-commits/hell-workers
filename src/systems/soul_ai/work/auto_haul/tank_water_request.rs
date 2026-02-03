@@ -7,7 +7,7 @@ use crate::constants::BUCKET_CAPACITY;
 
 use crate::systems::command::TaskArea;
 use crate::systems::jobs::{Designation, IssuedBy, TaskSlots, WorkType};
-use crate::systems::logistics::{BelongsTo, ResourceItem, ResourceType, Stockpile};
+use crate::systems::logistics::{BelongsTo, ResourceItem, ReservedForMixerWater, ResourceType, Stockpile};
 use crate::systems::familiar_ai::haul_cache::HaulReservationCache;
 use crate::relationships::{StoredIn, StoredItems, TaskWorkers};
 
@@ -18,10 +18,18 @@ pub fn tank_water_request_system(
     q_familiars: Query<(Entity, &TaskArea)>,
     // タンク自体の在庫状況（Water を貯める Stockpile）
     q_tanks: Query<(Entity, &Transform, &Stockpile, Option<&StoredItems>)>,
-    // バケツ置き場にあるバケツ
+    // 全てのバケツ
     q_buckets: Query<
-        (Entity, &ResourceItem, &BelongsTo, &StoredIn),
-        (Without<Designation>, Without<TaskWorkers>),
+        (
+            Entity,
+            &ResourceItem,
+            &BelongsTo,
+            &Visibility,
+            Option<&ReservedForMixerWater>,
+            Option<&StoredIn>,
+            Option<&Designation>,
+            Option<&TaskWorkers>,
+        ),
     >,
 ) {
     for (tank_entity, tank_transform, tank_stock, stored_opt) in q_tanks.iter() {
@@ -40,9 +48,28 @@ pub fn tank_water_request_system(
             let mut issued = 0;
 
             // このタンクに紐付いたバケツを探す
-            for (bucket_entity, res_item, bucket_belongs, _stored_in) in q_buckets.iter() {
+            for (bucket_entity, res_item, bucket_belongs, visibility, reserved_opt, _stored_in, designation, workers) in
+                q_buckets.iter()
+            {
                 if issued >= needed_tasks {
                     break;
+                }
+
+                if *visibility == Visibility::Hidden {
+                    continue;
+                }
+
+                if reserved_opt.is_some() {
+                    continue;
+                }
+
+                if workers.is_some() {
+                    continue;
+                }
+
+                // 既にタスクが付与されているバケツはスキップ（上書き防止）
+                if designation.is_some() {
+                    continue;
                 }
 
                 if bucket_belongs.0 != tank_entity {

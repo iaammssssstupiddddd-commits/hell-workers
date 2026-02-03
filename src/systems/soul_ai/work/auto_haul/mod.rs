@@ -12,6 +12,13 @@ mod bucket;
 mod tank_water_request;
 mod mixer;
 
+use bevy::prelude::*;
+use std::collections::HashSet;
+
+/// MudMixerの水運搬で予約されたバケツ（同フレーム内の競合回避用）
+#[derive(Resource, Default)]
+pub struct MixerWaterBucketReservations(pub HashSet<Entity>);
+
 pub use task_area::task_area_auto_haul_system;
 pub use blueprint::blueprint_auto_haul_system;
 pub use bucket::bucket_auto_haul_system;
