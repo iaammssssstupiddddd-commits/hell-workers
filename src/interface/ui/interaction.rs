@@ -88,9 +88,17 @@ pub fn hover_tooltip_system(
             
             // MudMixer の貯蔵量表示
             if let Some(storage) = mixer_storage_opt {
+                let water_count = match (stockpile_opt, stored_items_opt) {
+                    (Some(stockpile), Some(stored_items))
+                        if stockpile.resource_type == Some(crate::systems::logistics::ResourceType::Water) =>
+                    {
+                        stored_items.len()
+                    }
+                    _ => 0,
+                };
                 info_lines.push(format!(
                     "Storage: Sand {}, Rock {}, Water {}",
-                    storage.sand, storage.rock, storage.water
+                    storage.sand, storage.rock, water_count
                 ));
             }
         }

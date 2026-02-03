@@ -21,6 +21,11 @@ pub enum ResourceType {
 #[reflect(Component)]
 pub struct ResourceItem(pub ResourceType);
 
+/// MudMixerの水運搬でバケツを占有中であることを示す
+#[derive(Component, Reflect, Debug, Clone, Copy, PartialEq, Eq)]
+#[reflect(Component)]
+pub struct ReservedForMixerWater;
+
 /// エンティティが特定の親（タンクなど）に属することを示す
 #[derive(Component, Reflect, Debug, Clone, Copy, PartialEq, Eq)]
 #[reflect(Component)]

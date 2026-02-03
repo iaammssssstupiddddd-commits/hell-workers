@@ -10,7 +10,7 @@ pub fn drop_bucket_for_auto_haul(
     commands: &mut Commands,
     ctx: &mut TaskExecutionContext,
     bucket_entity: Entity,
-    tank_entity: Entity,
+    _tank_entity: Entity,
     haul_cache: &mut crate::systems::familiar_ai::haul_cache::HaulReservationCache,
     world_map: &WorldMap,
 ) {
@@ -29,9 +29,9 @@ pub fn drop_bucket_for_auto_haul(
     commands.entity(bucket_entity).remove::<crate::systems::jobs::Designation>();
     commands.entity(bucket_entity).remove::<crate::systems::jobs::TaskSlots>();
     commands.entity(bucket_entity).remove::<crate::systems::jobs::TargetMixer>();
+    commands.entity(bucket_entity).remove::<crate::systems::logistics::ReservedForMixerWater>();
 
     ctx.inventory.0 = None;
-    haul_cache.release(tank_entity);
     crate::systems::soul_ai::work::unassign_task(
         commands, ctx.soul_entity, soul_pos, ctx.task, ctx.path,
         None, None, &ctx.queries, haul_cache, world_map, false

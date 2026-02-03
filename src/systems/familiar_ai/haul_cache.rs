@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 use std::collections::HashMap;
 use crate::systems::logistics::ResourceType;
+use crate::systems::soul_ai::task_execution::AssignedTask;
 
 /// 搬送中のアイテム・ストックパイル予約状況をキャッシュするリソース
 ///
@@ -15,6 +16,15 @@ pub struct HaulReservationCache {
 }
 
 impl HaulReservationCache {
+    /// 外部から予約状況を再構築する（タスク状態から同期）
+    pub fn reset(
+        &mut self,
+        reservations: HashMap<Entity, usize>,
+        mixer_reservations: HashMap<(Entity, ResourceType), usize>,
+    ) {
+        self.reservations = reservations;
+        self.mixer_reservations = mixer_reservations;
+    }
     /// 予約を追加
     pub fn reserve(&mut self, stockpile: Entity) {
         *self.reservations.entry(stockpile).or_insert(0) += 1;
@@ -74,5 +84,36 @@ impl HaulReservationCache {
     pub fn get_mixer(&self, mixer: Entity, resource_type: ResourceType) -> usize {
         self.mixer_reservations.get(&(mixer, resource_type)).cloned().unwrap_or(0)
     }
+}
+
+/// タスク状態から搬送予約を同期する
+pub fn sync_haul_reservations_system(
+    q_souls: Query<&AssignedTask>,
+    mut haul_cache: ResMut<HaulReservationCache>,
+) {
+    let mut reservations: HashMap<Entity, usize> = HashMap::new();
+    let mut mixer_reservations: HashMap<(Entity, ResourceType), usize> = HashMap::new();
+
+    for task in q_souls.iter() {
+        match task {
+            AssignedTask::Haul(data) => {
+                *reservations.entry(data.stockpile).or_insert(0) += 1;
+            }
+            AssignedTask::GatherWater(data) => {
+                *reservations.entry(data.tank).or_insert(0) += 1;
+            }
+            AssignedTask::HaulToMixer(data) => {
+                *mixer_reservations.entry((data.mixer, data.resource_type)).or_insert(0) += 1;
+            }
+            AssignedTask::HaulWaterToMixer(data) => {
+                *mixer_reservations
+                    .entry((data.mixer, ResourceType::Water))
+                    .or_insert(0) += 1;
+            }
+            _ => {}
+        }
+    }
+
+    haul_cache.reset(reservations, mixer_reservations);
 }
 

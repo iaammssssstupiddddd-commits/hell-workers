@@ -4,6 +4,8 @@ use crate::world::map::WorldMap;
 use crate::systems::logistics::ResourceType;
 use bevy::prelude::*;
 use std::collections::HashMap;
+mod mud_mixer;
+pub use mud_mixer::*;
 
 // --- Events ---
 
@@ -51,21 +53,8 @@ pub struct Building {
 #[derive(Component)]
 pub struct SandPile;
 
-#[derive(Component, Reflect, Default)]
-#[reflect(Component, Default)]
-pub struct MudMixerStorage {
-    pub sand: u32,
-    pub water: u32,
-    pub rock: u32,
-}
-
-/// 資材の運搬先となる Blueprint を示すマーカー
 #[derive(Component)]
 pub struct TargetBlueprint(pub Entity);
-
-#[derive(Component, Reflect)]
-#[reflect(Component)]
-pub struct TargetMixer(pub Entity);
 
 #[derive(Component)]
 pub struct Tree;
@@ -340,9 +329,6 @@ pub fn building_completion_system(
                         crate::systems::logistics::BelongsTo(building_entity),
                         crate::relationships::StoredIn(storage_entity),
                         crate::systems::logistics::InStockpile(storage_entity),
-                        crate::systems::jobs::Designation {
-                            work_type: crate::systems::jobs::WorkType::GatherWater,
-                        },
                         crate::systems::jobs::TaskSlots::new(1),
                         Sprite {
                             image: game_assets.bucket_empty.clone(),
@@ -357,7 +343,13 @@ pub fn building_completion_system(
 
             // MudMixer が完成した場合、原料ストレージを追加し、隣接マスに SandPile を生成
             if bp.kind == BuildingType::MudMixer {
-                commands.entity(building_entity).insert(MudMixerStorage::default());
+                commands.entity(building_entity).insert((
+                    MudMixerStorage::default(),
+                    crate::systems::logistics::Stockpile {
+                        capacity: MUD_MIXER_CAPACITY as usize,
+                        resource_type: Some(crate::systems::logistics::ResourceType::Water),
+                    },
+                ));
 
                 // MudMixer (2x2) の周辺に2つの SandPile を生成
                 let (bx, by) = WorldMap::world_to_grid(transform.translation.truncate());

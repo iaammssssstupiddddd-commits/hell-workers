@@ -17,7 +17,6 @@ use crate::interface::ui::{
 use crate::systems::GameSystemSet;
 use crate::systems::logistics::zone_placement;
 use crate::systems::soul_ai::vitals::visual::familiar_hover_visualization_system;
-use crate::systems::soul_ai::work::task_area_auto_haul_system;
 use crate::systems::time::{
     game_time_system, time_control_keyboard_system, time_control_ui_system,
 };
@@ -74,9 +73,6 @@ impl Plugin for InterfacePlugin {
         .add_systems(
             Update,
             (
-                task_area_auto_haul_system,
-                crate::systems::soul_ai::work::bucket_auto_haul_system,
-                crate::systems::soul_ai::work::tank_water_request_system,
                 crate::interface::ui::rebuild_entity_list_system,
             )
                 .run_if(on_timer(Duration::from_millis(100))),

@@ -240,8 +240,8 @@ impl WorldMap {
             return Some(grid);
         }
 
-        // 周辺3マスまで探索
-        for r in 1..=3 {
+        // 周辺5マスまで探索
+        for r in 1..=5 {
             for dx in -r..=r {
                 for dy in -r..=r {
                     let test = (grid.0 + dx, grid.1 + dy);

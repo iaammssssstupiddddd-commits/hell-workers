@@ -9,12 +9,22 @@ use crate::systems::command::TaskArea;
 use crate::systems::jobs::{Designation, IssuedBy, MudMixerStorage, TaskSlots, WorkType};
 use crate::systems::soul_ai::task_execution::AssignedTask;
 use crate::relationships::TaskWorkers;
+use crate::systems::logistics::{ResourceType, Stockpile};
+use crate::relationships::StoredItems;
 
 /// MudMixer で精製タスクを自動発行するシステム
 pub fn mud_mixer_auto_refine_system(
     mut commands: Commands,
     q_familiars: Query<(Entity, &ActiveCommand, &TaskArea)>,
-    q_mixers: Query<(Entity, &Transform, &MudMixerStorage, Option<&TaskWorkers>, Option<&Designation>)>,
+    q_mixers: Query<(
+        Entity,
+        &Transform,
+        &MudMixerStorage,
+        Option<&TaskWorkers>,
+        Option<&Designation>,
+        Option<&Stockpile>,
+        Option<&StoredItems>,
+    )>,
     q_souls: Query<&AssignedTask>,
 ) {
     // 1. 集計フェーズ: 現在実行中の精製タスクをカウント
@@ -27,7 +37,9 @@ pub fn mud_mixer_auto_refine_system(
     }
 
     for (fam_entity, _active_command, task_area) in q_familiars.iter() {
-        for (mixer_entity, mixer_transform, storage, workers_opt, designation_opt) in q_mixers.iter() {
+        for (mixer_entity, mixer_transform, storage, workers_opt, designation_opt, stockpile_opt, stored_opt) in
+            q_mixers.iter()
+        {
             let mixer_pos = mixer_transform.translation.truncate();
             if !task_area.contains(mixer_pos) {
                 continue;
@@ -38,8 +50,15 @@ pub fn mud_mixer_auto_refine_system(
                 continue;
             }
 
-            // 原料が揃っているかチェック (1 Sand + 1 Water + 1 Rock)
-            if storage.sand >= 1 && storage.water >= 1 && storage.rock >= 1 {
+            // 原料が揃っているかチェック
+            let water_count = match (stockpile_opt, stored_opt) {
+                (Some(stockpile), Some(stored_items)) if stockpile.resource_type == Some(ResourceType::Water) => {
+                    stored_items.len() as u32
+                }
+                _ => 0,
+            };
+
+            if storage.has_materials_for_refining(water_count) {
                 let inflight_count = *in_flight.get(&mixer_entity).unwrap_or(&0);
                 let current_workers = workers_opt.map(|w| w.len()).unwrap_or(0);
 

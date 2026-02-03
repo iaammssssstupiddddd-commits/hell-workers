@@ -53,9 +53,15 @@ pub fn handle_refine_task(
         RefinePhase::Refining { mut progress } => {
             if let Ok(mixer_data) = ctx.queries.mixers.get_mut(mixer_entity) {
                 let (mixer_transform, mut storage, _) = mixer_data;
+                let water_count = match ctx.queries.stockpiles.get(mixer_entity) {
+                    Ok((_, _, stockpile, Some(stored_items))) if stockpile.resource_type == Some(ResourceType::Water) => {
+                        stored_items.len() as u32
+                    }
+                    _ => 0,
+                };
                 
                 // 原料がまだあるか確認
-                if storage.sand == 0 || storage.water == 0 || storage.rock == 0 {
+                if !storage.has_materials_for_refining(water_count) {
                     info!("TASK_EXEC: Soul {:?} canceled refining due to lack of materials", ctx.soul_entity);
                     commands.entity(mixer_entity).remove::<crate::systems::jobs::Designation>();
                     commands.entity(mixer_entity).remove::<crate::systems::jobs::TaskSlots>();
@@ -68,9 +74,26 @@ pub fn handle_refine_task(
 
                 if progress >= 1.0 {
                     // 原料消費
-                    storage.sand -= 1;
-                    storage.water -= 1;
-                    storage.rock -= 1;
+                    let _ = storage.consume_materials_for_refining(water_count);
+                    if let Some(water_entity) = ctx
+                        .queries
+                        .resource_items
+                        .iter()
+                        .find_map(|(res_entity, res_item, stored_in)| {
+                            if res_item.0 == ResourceType::Water && stored_in.map(|s| s.0) == Some(mixer_entity) {
+                                Some(res_entity)
+                            } else {
+                                None
+                            }
+                        })
+                    {
+                        commands.entity(water_entity).despawn();
+                    } else {
+                        warn!(
+                            "TASK_EXEC: Soul {:?} could not find water item in mixer {:?} during refine",
+                            ctx.soul_entity, mixer_entity
+                        );
+                    }
 
                     // StasisMud をドロップ（Stockpile オートホールで自動的に運搬される）
                     let pos = mixer_transform.translation;

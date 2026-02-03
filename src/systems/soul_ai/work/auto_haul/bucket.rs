@@ -7,18 +7,28 @@ use bevy::prelude::*;
 use crate::constants::*;
 use crate::systems::command::TaskArea;
 use crate::systems::jobs::{Designation, IssuedBy, TaskSlots, WorkType};
-use crate::systems::logistics::{ResourceItem, ResourceType, Stockpile};
+use crate::systems::logistics::{ResourceItem, ResourceType, ReservedForMixerWater, Stockpile};
 use crate::systems::spatial::{StockpileSpatialGrid, SpatialGridOps};
 use crate::relationships::TaskWorkers;
+use crate::systems::soul_ai::work::auto_haul::MixerWaterBucketReservations;
 
 /// バケツ専用オートホールシステム
 /// ドロップされたバケツを、BelongsTo で紐付いたタンクのバケツ置き場に運搬する
 pub fn bucket_auto_haul_system(
     mut commands: Commands,
     stockpile_grid: Res<StockpileSpatialGrid>,
+    bucket_reservations: Res<MixerWaterBucketReservations>,
     q_familiars: Query<(Entity, &TaskArea), With<crate::entities::familiar::Familiar>>,
     q_buckets: Query<
-        (Entity, &Transform, &Visibility, &ResourceItem, &crate::systems::logistics::BelongsTo, Option<&TaskWorkers>),
+        (
+            Entity,
+            &Transform,
+            &Visibility,
+            &ResourceItem,
+            &crate::systems::logistics::BelongsTo,
+            Option<&ReservedForMixerWater>,
+            Option<&TaskWorkers>,
+        ),
         (
             Without<crate::relationships::StoredIn>,
             Without<Designation>,
@@ -35,7 +45,7 @@ pub fn bucket_auto_haul_system(
     let mut already_assigned = std::collections::HashSet::new();
 
     for (fam_entity, task_area) in q_familiars.iter() {
-        for (bucket_entity, bucket_transform, visibility, res_item, bucket_belongs, workers_opt) in q_buckets.iter() {
+        for (bucket_entity, bucket_transform, visibility, res_item, bucket_belongs, reserved_opt, workers_opt) in q_buckets.iter() {
             // バケツ以外はスキップ
             if !matches!(res_item.0, ResourceType::BucketEmpty | ResourceType::BucketWater) {
                 continue;
@@ -50,6 +60,11 @@ pub fn bucket_auto_haul_system(
 
             // 既に割り当て済みならスキップ
             if already_assigned.contains(&bucket_entity) {
+                continue;
+            }
+
+            // MudMixerの水運搬で予約されているバケツはスキップ
+            if bucket_reservations.0.contains(&bucket_entity) || reserved_opt.is_some() {
                 continue;
             }
 
