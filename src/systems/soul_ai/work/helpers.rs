@@ -64,7 +64,6 @@ pub fn unassign_task(
         }
         AssignedTask::HaulWaterToMixer(data) => {
             haul_cache.release_mixer(data.mixer, ResourceType::Water);
-            commands.entity(data.bucket).remove::<crate::systems::logistics::ReservedForMixerWater>();
         }
         AssignedTask::HaulToMixer(data) => {
             haul_cache.release_mixer(data.mixer, data.resource_type);

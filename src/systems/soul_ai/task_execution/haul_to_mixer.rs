@@ -67,9 +67,20 @@ pub fn handle_haul_to_mixer_task(
                     return;
                 }
 
-                if is_near_target(soul_pos, item_pos) {
-                    // アイテムを拾う（pickup_item が Designation, StoredIn などをクリア）
-                    pickup_item(commands, ctx.soul_entity, item_entity, ctx.inventory);
+                if can_pickup_item(soul_pos, item_pos) {
+                    // アイテムを拾う（拾えなければタスクをクリア）
+                    if !try_pickup_item(
+                        commands,
+                        ctx.soul_entity,
+                        item_entity,
+                        ctx.inventory,
+                        soul_pos,
+                        item_pos,
+                        ctx.task,
+                        ctx.path,
+                    ) {
+                        return;
+                    }
 
                     *ctx.task = AssignedTask::HaulToMixer(crate::systems::soul_ai::task_execution::types::HaulToMixerData {
                         item: item_entity,
@@ -132,7 +143,7 @@ pub fn handle_haul_to_mixer_task(
                     return;
                 }
 
-                if is_near_target(soul_pos, mixer_pos) || is_near_target(soul_pos, ctx.dest.0) {
+                if is_near_target_or_dest(soul_pos, mixer_pos, ctx.dest.0) {
                     *ctx.task = AssignedTask::HaulToMixer(crate::systems::soul_ai::task_execution::types::HaulToMixerData {
                         item: item_entity,
                         mixer: mixer_entity,
