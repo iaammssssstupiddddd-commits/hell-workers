@@ -3,7 +3,7 @@
 use crate::constants::*;
 use crate::entities::damned_soul::{Destination, Path};
 use crate::systems::jobs::Designation;
-use crate::systems::logistics::{Inventory, Stockpile};
+use crate::systems::logistics::{Inventory, ReservedForTask, Stockpile};
 use crate::systems::soul_ai::task_execution::types::AssignedTask;
 use bevy::prelude::*;
 
@@ -223,6 +223,7 @@ pub fn pickup_item(
         .remove::<crate::systems::jobs::Designation>()
         .remove::<crate::systems::jobs::TaskSlots>()
         .remove::<crate::systems::jobs::Priority>()
+        .remove::<ReservedForTask>()
         .remove::<crate::relationships::StoredIn>()
         .remove::<crate::systems::logistics::InStockpile>();
 }
@@ -270,6 +271,42 @@ pub fn update_stockpile_on_item_removal(
 /// タイルサイズの1.5倍（48px）を閾値に設定。
 pub fn is_near_target(soul_pos: Vec2, target_pos: Vec2) -> bool {
     soul_pos.distance(target_pos) < TILE_SIZE * 1.8
+}
+
+/// ターゲットまたは現在の目的地への近接判定
+pub fn is_near_target_or_dest(soul_pos: Vec2, target_pos: Vec2, dest_pos: Vec2) -> bool {
+    is_near_target(soul_pos, target_pos) || is_near_target(soul_pos, dest_pos)
+}
+
+/// グリッド上で隣接しているか（斜め含む）
+pub fn is_adjacent_grid(soul_pos: Vec2, target_pos: Vec2) -> bool {
+    let sg = WorldMap::world_to_grid(soul_pos);
+    let tg = WorldMap::world_to_grid(target_pos);
+    (sg.0 - tg.0).abs() <= 1 && (sg.1 - tg.1).abs() <= 1
+}
+
+/// アイテムの拾い判定は隣接グリッドのみ許可する
+pub fn can_pickup_item(soul_pos: Vec2, item_pos: Vec2) -> bool {
+    is_adjacent_grid(soul_pos, item_pos)
+}
+
+/// 拾い判定が満たされない場合はタスクをクリアする
+pub fn try_pickup_item(
+    commands: &mut Commands,
+    soul_entity: Entity,
+    item_entity: Entity,
+    inventory: &mut Inventory,
+    soul_pos: Vec2,
+    item_pos: Vec2,
+    task: &mut AssignedTask,
+    path: &mut Path,
+) -> bool {
+    if !can_pickup_item(soul_pos, item_pos) {
+        clear_task_and_path(task, path);
+        return false;
+    }
+    pickup_item(commands, soul_entity, item_entity, inventory);
+    true
 }
 
 /// 設計図への距離チェック: 魂が設計図の構成タイルのいずれかに近づいたかどうか
