@@ -3,6 +3,7 @@ use super::context::TaskExecutionContext;
 use super::types::{AssignedTask, HaulWaterToMixerPhase};
 use super::common::*;
 use crate::systems::logistics::{ResourceItem, ResourceType};
+use crate::systems::logistics::ReservedForMixerWater;
 use crate::world::map::WorldMap;
 use crate::constants::*;
 use crate::systems::soul_ai::task_execution::gather_water::helpers::drop_bucket_for_auto_haul;
@@ -156,12 +157,37 @@ pub fn handle_haul_water_to_mixer_task(
                     return;
                 }
 
-                if is_near_target(soul_pos, mixer_pos) {
+                if is_near_target(soul_pos, mixer_pos) || is_near_target(soul_pos, ctx.dest.0) {
+                    if ctx.inventory.0 != Some(bucket_entity) {
+                        // バケツを所持していないならタスクを中断
+                        warn!(
+                            "HAUL_WATER_TO_MIXER: Soul {:?} reached mixer without bucket, aborting",
+                            ctx.soul_entity
+                        );
+                        abort_and_drop_bucket(commands, ctx, bucket_entity, mixer_entity, haul_cache, soul_pos);
+                        return;
+                    }
+                    let amount = ctx.task.get_amount_if_haul_water().unwrap_or(0);
+                    if amount == 0 {
+                        // 水量が不明/ゼロならタンクへ戻る
+                        transition_to_tank(commands, ctx, bucket_entity, tank_entity, mixer_entity, haul_cache, soul_pos);
+                        return;
+                    }
+                    if let Ok(res_item) = ctx.queries.resources.get(bucket_entity) {
+                        if res_item.0 != ResourceType::BucketWater {
+                            // 空バケツならタンクへ戻る
+                            transition_to_tank(commands, ctx, bucket_entity, tank_entity, mixer_entity, haul_cache, soul_pos);
+                            return;
+                        }
+                    } else {
+                        abort_and_drop_bucket(commands, ctx, bucket_entity, mixer_entity, haul_cache, soul_pos);
+                        return;
+                    }
                     *ctx.task = AssignedTask::HaulWaterToMixer(crate::systems::soul_ai::task_execution::types::HaulWaterToMixerData {
                         bucket: bucket_entity,
                         tank: tank_entity,
                         mixer: mixer_entity,
-                        amount: ctx.task.get_amount_if_haul_water().unwrap_or(0),
+                        amount,
                         phase: HaulWaterToMixerPhase::Pouring,
                     });
                     ctx.path.waypoints.clear();
@@ -173,11 +199,25 @@ pub fn handle_haul_water_to_mixer_task(
 
         HaulWaterToMixerPhase::Pouring => {
             // バケツが水入りかチェック
+            if ctx.inventory.0 != Some(bucket_entity) {
+                warn!(
+                    "HAUL_WATER_TO_MIXER: Soul {:?} tried to pour without bucket, aborting",
+                    ctx.soul_entity
+                );
+                abort_and_drop_bucket(commands, ctx, bucket_entity, mixer_entity, haul_cache, soul_pos);
+                return;
+            }
+            let amount = ctx.task.get_amount_if_haul_water().unwrap_or(0);
+            if amount == 0 {
+                warn!("HAUL_WATER_TO_MIXER: Soul {:?} tried to pour with zero amount, returning to tank", ctx.soul_entity);
+                transition_to_tank(commands, ctx, bucket_entity, tank_entity, mixer_entity, haul_cache, soul_pos);
+                return;
+            }
             if let Ok(res_item) = ctx.queries.resources.get(bucket_entity) {
                 if res_item.0 != ResourceType::BucketWater {
                     // 空のバケツでは注げない
-                    warn!("HAUL_WATER_TO_MIXER: Soul {:?} tried to pour with empty bucket, aborting", ctx.soul_entity);
-                    abort_and_drop_bucket(commands, ctx, bucket_entity, mixer_entity, haul_cache, soul_pos);
+                    warn!("HAUL_WATER_TO_MIXER: Soul {:?} tried to pour with empty bucket, returning to tank", ctx.soul_entity);
+                    transition_to_tank(commands, ctx, bucket_entity, tank_entity, mixer_entity, haul_cache, soul_pos);
                     return;
                 }
             } else {
@@ -187,12 +227,29 @@ pub fn handle_haul_water_to_mixer_task(
             }
 
             if let Ok(mixer_data) = ctx.queries.mixers.get_mut(mixer_entity) {
-                let (_, mut storage, _) = mixer_data;
+                let (_, _storage, _) = mixer_data;
 
-                if storage.water < MUD_MIXER_CAPACITY {
+                let (current_count, capacity) = match ctx.queries.stockpiles.get(mixer_entity) {
+                    Ok((_, _, stockpile, Some(stored_items))) if stockpile.resource_type == Some(ResourceType::Water) => {
+                        (stored_items.len(), stockpile.capacity)
+                    }
+                    _ => (0, MUD_MIXER_CAPACITY as usize),
+                };
+
+                if current_count < capacity {
                     let amount = ctx.task.get_amount_if_haul_water().unwrap_or(BUCKET_CAPACITY);
-                    storage.water = (storage.water + amount).min(MUD_MIXER_CAPACITY);
-                    info!("TASK_EXEC: Soul {:?} poured {} water into MudMixer", ctx.soul_entity, amount);
+                    let available = capacity.saturating_sub(current_count) as u32;
+                    let added = amount.min(available);
+
+                    for _ in 0..added {
+                        commands.spawn((
+                            ResourceItem(ResourceType::Water),
+                            crate::relationships::StoredIn(mixer_entity),
+                            Visibility::Hidden,
+                        ));
+                    }
+
+                    info!("TASK_EXEC: Soul {:?} poured {} water into MudMixer", ctx.soul_entity, added);
                     
                     // 予約解除
                     haul_cache.release_mixer(mixer_entity, ResourceType::Water);
@@ -334,6 +391,7 @@ fn abort_and_drop_bucket(
     commands.entity(bucket_entity).remove::<crate::systems::jobs::Designation>();
     commands.entity(bucket_entity).remove::<crate::systems::jobs::TaskSlots>();
     commands.entity(bucket_entity).remove::<crate::systems::jobs::TargetMixer>();
+    commands.entity(bucket_entity).remove::<ReservedForMixerWater>();
 
     ctx.inventory.0 = None;
     clear_task_and_path(ctx.task, ctx.path);

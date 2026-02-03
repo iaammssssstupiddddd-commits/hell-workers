@@ -12,7 +12,7 @@ use crate::systems::soul_ai::gathering::ParticipatingIn;
 use crate::systems::soul_ai::task_execution::types::{
     AssignedTask, BuildPhase, GatherPhase, GatherWaterPhase, HaulPhase, HaulToBpPhase,
 };
-use crate::constants::{MUD_MIXER_CAPACITY, BUCKET_CAPACITY};
+use crate::constants::BUCKET_CAPACITY;
 use bevy::prelude::*;
 
 /// ワーカーにタスク割り当てのための共通セットアップを行う
@@ -83,10 +83,12 @@ pub fn assign_task_to_worker(
     }
 
     if idle.behavior == IdleBehavior::ExhaustedGathering {
+        debug!("ASSIGN: Worker {:?} is exhausted gathering", worker_entity);
         return false;
     }
 
     if soul.fatigue >= fatigue_threshold {
+        debug!("ASSIGN: Worker {:?} is too fatigued ({:.2} >= {:.2})", worker_entity, soul.fatigue, fatigue_threshold);
         return false;
     }
 
@@ -95,6 +97,7 @@ pub fn assign_task_to_worker(
         if let Ok((_, transform, designation, _, _, _, _, _)) = queries.designations.get(task_entity) {
             (transform.translation.truncate(), designation.work_type)
         } else {
+            debug!("ASSIGN: Task designation {:?} disappeared", task_entity);
             return false;
         };
 
@@ -146,30 +149,39 @@ pub fn assign_task_to_worker(
             let target_mixer = queries.target_mixers.get(task_entity).ok().map(|tm| tm.0);
 
             if item_info.is_none() {
+                debug!("ASSIGN: Haul item {:?} has no ResourceItem", task_entity);
                 return false;
             }
             let item_type = item_info.unwrap();
 
             // ミキサーが指定されている場合
             if let Some(mixer_entity) = target_mixer {
-                prepare_worker_for_task(
-                    commands, worker_entity, fam_entity, task_entity, uc_opt.is_some(),
-                );
-                *assigned_task = AssignedTask::HaulToMixer(crate::systems::soul_ai::task_execution::types::HaulToMixerData {
-                    item: task_entity,
-                    mixer: mixer_entity,
-                    resource_type: item_type,
-                    phase: crate::systems::soul_ai::task_execution::types::HaulToMixerPhase::GoingToItem,
-                });
-                dest.0 = task_pos;
-                path.waypoints.clear();
-                path.current_index = 0;
-                commands.trigger(OnTaskAssigned {
-                    entity: worker_entity,
-                    task_entity,
-                    work_type: WorkType::Haul,
-                });
-                return true;
+                // ミキサーが受け入れ可能なリソース（砂または岩）であるか確認
+                if matches!(item_type, ResourceType::Sand | ResourceType::Rock) {
+                    prepare_worker_for_task(
+                        commands, worker_entity, fam_entity, task_entity, uc_opt.is_some(),
+                    );
+                    *assigned_task = AssignedTask::HaulToMixer(crate::systems::soul_ai::task_execution::types::HaulToMixerData {
+                        item: task_entity,
+                        mixer: mixer_entity,
+                        resource_type: item_type,
+                        phase: crate::systems::soul_ai::task_execution::types::HaulToMixerPhase::GoingToItem,
+                    });
+                    dest.0 = task_pos;
+                    path.waypoints.clear();
+                    path.current_index = 0;
+                    commands.trigger(OnTaskAssigned {
+                        entity: worker_entity,
+                        task_entity,
+                        work_type: WorkType::Haul,
+                    });
+                    return true;
+                } else {
+                    debug!("ASSIGN: Haul item {:?} has TargetMixer but type {:?} is not accepted as solid material", task_entity, item_type);
+                    // ここで TargetMixer を削除してしまうか、あるいはミキサー用タスクではないとして通常の運搬に回す
+                    // 今回は通常の運搬（ストックパイル行き）へのフォールバックを許容するため、あえて TargetMixer は消さず、
+                    // 下の通常の Haul ロジックに進ませる
+                }
             }
 
 
@@ -240,11 +252,13 @@ pub fn assign_task_to_worker(
                 });
                 return true;
             }
+            debug!("ASSIGN: No suitable stockpile found for item {:?} (type: {:?})", task_entity, item_type);
             return false;
         }
         WorkType::Build => {
             if let Ok((_, bp, _)) = queries.blueprints.get(task_entity) {
                 if !bp.materials_complete() {
+                    debug!("ASSIGN: Build target {:?} materials not complete", task_entity);
                     return false;
                 }
             }
@@ -286,16 +300,9 @@ pub fn assign_task_to_worker(
                     let bucket_belongs = queries.belongs.get(task_entity).ok();
                     let _tank_belongs = Some(&crate::systems::logistics::BelongsTo(*s_entity)); // タンク自身への帰属
                     
-                    // MudMixer も水を受け入れる場合がある（ストレージに水枠がある）
-                    let is_mixer_with_water_cap = if let Ok((_, storage, _)) = queries.mixers.get(*s_entity) {
-                        storage.water < MUD_MIXER_CAPACITY
-                    } else {
-                        false
-                    };
-
                     let is_my_tank = bucket_belongs.map(|b| b.0) == Some(*s_entity);
 
-                    (is_tank && has_capacity && is_my_tank) || (is_mixer_with_water_cap && is_my_tank)
+                    is_tank && has_capacity && is_my_tank
                 })
                 .min_by(|(_, t1, _, _), (_, t2, _, _)| {
                     let d1 = t1.translation.truncate().distance_squared(task_pos);
@@ -330,6 +337,7 @@ pub fn assign_task_to_worker(
                 });
                 return true;
             }
+            debug!("ASSIGN: No suitable tank/mixer found for bucket {:?}", task_entity);
             return false;
         }
         WorkType::CollectSand => {
@@ -373,12 +381,16 @@ pub fn assign_task_to_worker(
         WorkType::HaulWaterToMixer => {
             // TargetMixer があるか確認
             let target_mixer = queries.target_mixers.get(task_entity).ok().map(|tm| tm.0);
-            let mixer_entity = if let Some(m) = target_mixer { m } else { return false; };
+            let mixer_entity = if let Some(m) = target_mixer { m } else {
+                debug!("ASSIGN: HaulWaterToMixer task {:?} has no TargetMixer", task_entity);
+                return false;
+            };
 
             // バケツの BelongsTo から Tank を取得
             let tank_entity = if let Ok(belongs) = queries.belongs.get(task_entity) {
                 belongs.0
             } else {
+                debug!("ASSIGN: HaulWaterToMixer bucket {:?} has no BelongsTo (Tank)", task_entity);
                 return false;
             };
 

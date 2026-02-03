@@ -79,6 +79,9 @@ impl Plugin for FamiliarAiPlugin {
                     state_transition::detect_command_changes_system
                         .in_set(GameSystemSet::Logic)
                         .before(familiar_ai_system),
+                    haul_cache::sync_haul_reservations_system
+                        .in_set(GameSystemSet::Logic)
+                        .before(familiar_ai_system),
                     // メインのAIシステム
                     update_designation_spatial_grid_system.in_set(GameSystemSet::Logic),
                     familiar_ai_system.in_set(GameSystemSet::Logic),

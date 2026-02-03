@@ -69,9 +69,9 @@ impl TaskManager {
             }
         }
 
-        // 2. 各メンバーに対して最適なタスクを一つずつ探して試みる
+        // 2. 各メンバーに対してタスク候補を順に試みる
         for (worker_entity, pos) in idle_members {
-            if let Some(task_entity) = find_unassigned_task_in_area(
+            let candidates = find_unassigned_task_in_area(
                 fam_entity,
                 fam_pos,
                 pos, // 個別ソウルの位置を使用
@@ -83,7 +83,9 @@ impl TaskManager {
                 world_map,
                 pf_context,
                 haul_cache,
-            ) {
+            );
+
+            for task_entity in candidates {
                 // アサイン成功！1サイクル1人へのアサインとする（安定性のため）
                 if assign_task_to_worker(
                     commands,
@@ -98,7 +100,7 @@ impl TaskManager {
                 ) {
                     return Some(task_entity);
                 }
-                // アサインに失敗した場合は次の候補（メンバーまたはタスク）を試みる
+                // このタスクに失敗した場合は、次のタスク候補を試す
             }
         }
 

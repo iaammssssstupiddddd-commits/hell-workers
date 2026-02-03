@@ -25,9 +25,12 @@ pub fn find_unassigned_task_in_area(
     world_map: &WorldMap,
     pf_context: &mut PathfindingContext,
     haul_cache: &crate::systems::familiar_ai::haul_cache::HaulReservationCache,
-) -> Option<Entity> {
+) -> Vec<Entity> {
     // パス検索の起点を「ソウルの居場所」に補正する
-    let worker_grid = world_map.get_nearest_walkable_grid(worker_pos)?;
+    let worker_grid = match world_map.get_nearest_walkable_grid(worker_pos) {
+        Some(g) => g,
+        None => return Vec::new(),
+    };
 
     // 候補となるエンティティのリスト
     let candidates = if let Some(area) = task_area_opt {
@@ -61,7 +64,7 @@ pub fn find_unassigned_task_in_area(
         managed_tasks.iter().copied().collect::<Vec<_>>()
     };
 
-    candidates
+    let mut valid_candidates: Vec<(Entity, i32, f32)> = candidates
         .into_iter()
         .filter_map(|entity| {
             let (entity, transform, designation, issued_by, slots, workers, in_stockpile_opt, priority_opt) =
@@ -70,6 +73,14 @@ pub fn find_unassigned_task_in_area(
             let is_managed_by_me = managed_tasks.contains(entity);
             let is_unassigned = issued_by.is_none();
 
+            // デバッグ: HaulWaterToMixerタスクの追跡
+            if designation.work_type == WorkType::HaulWaterToMixer {
+                debug!(
+                    "TASK_FINDER: HaulWaterToMixer candidate {:?} - is_managed_by_me: {}, is_unassigned: {}",
+                    entity, is_managed_by_me, is_unassigned
+                );
+            }
+
             if !is_managed_by_me && !is_unassigned {
                 return None;
             }
@@ -77,25 +88,33 @@ pub fn find_unassigned_task_in_area(
             let current_workers = workers.map(|w| w.len()).unwrap_or(0);
             let max_slots = slots.map(|s| s.max).unwrap_or(1) as usize;
             if current_workers >= max_slots {
+                // デバッグ: HaulWaterToMixerタスクのスロットチェック
+                if designation.work_type == WorkType::HaulWaterToMixer {
+                    debug!(
+                        "TASK_FINDER: HaulWaterToMixer {:?} slots full ({}/{})",
+                        entity, current_workers, max_slots
+                    );
+                }
                 return None;
             }
 
             let pos = transform.translation.truncate();
+            let is_mixer_task = queries.target_mixers.get(entity).is_ok();
+            
             if let Some(area) = task_area_opt {
                 if !area.contains(pos) {
-                    if !is_managed_by_me {
+                    if !is_managed_by_me && !is_mixer_task {
                         return None;
                     }
                 }
             } else {
-                if !is_managed_by_me {
+                if !is_managed_by_me && !is_mixer_task {
                     return None;
                 }
             }
 
             // 4. 到達可能性チェック（逆引き検索: タスクからソウルまで歩けるかチェック）
             let target_grid = WorldMap::world_to_grid(pos);
-
 
             let is_reachable = if world_map.is_walkable(target_grid.0, target_grid.1) {
                 // 通常アイテム（通行可能位置）:
@@ -112,6 +131,13 @@ pub fn find_unassigned_task_in_area(
             };
 
             if !is_reachable {
+                // デバッグ: HaulWaterToMixerタスクの到達可能性
+                if designation.work_type == WorkType::HaulWaterToMixer {
+                    debug!(
+                        "TASK_FINDER: HaulWaterToMixer {:?} not reachable from worker at {:?}",
+                        entity, worker_pos
+                    );
+                }
                 return None;
             }
 
@@ -128,6 +154,13 @@ pub fn find_unassigned_task_in_area(
             };
 
             if is_valid {
+                // デバッグ: HaulWaterToMixerタスクが有効候補として残った
+                if designation.work_type == WorkType::HaulWaterToMixer {
+                    debug!(
+                        "TASK_FINDER: HaulWaterToMixer {:?} is valid candidate at pos {:?}",
+                        entity, pos
+                    );
+                }
                 let dist_sq = pos.distance_squared(fam_pos);
                 let mut priority = priority_opt.map(|p| p.0).unwrap_or(0) as i32;
                 if designation.work_type == WorkType::Build {
@@ -135,6 +168,9 @@ pub fn find_unassigned_task_in_area(
                 } else if designation.work_type == WorkType::Haul {
                     if q_target_blueprints.get(entity).is_ok() {
                         priority += 10;
+                    }
+                    if queries.target_mixers.get(entity).is_ok() {
+                        priority += 2;
                     }
                 } else if designation.work_type == WorkType::GatherWater {
                     // 水汲みは基本優先度を高めに（5）
@@ -171,13 +207,17 @@ pub fn find_unassigned_task_in_area(
                 None
             }
         })
-        .min_by(|(_, p1, d1): &(Entity, i32, f32), (_, p2, d2): &(Entity, i32, f32)| {
-            match p2.cmp(p1) {
-                std::cmp::Ordering::Equal => {
-                    d1.partial_cmp(d2).unwrap_or(std::cmp::Ordering::Equal)
-                }
-                other => other,
+        .collect();
+
+    // 優先度が高い順、同じなら距離が近い順にソート
+    valid_candidates.sort_by(|(_, p1, d1), (_, p2, d2)| {
+        match p2.cmp(p1) {
+            std::cmp::Ordering::Equal => {
+                d1.partial_cmp(d2).unwrap_or(std::cmp::Ordering::Equal)
             }
-        })
-        .map(|(entity, _, _)| entity)
+            other => other,
+        }
+    });
+
+    valid_candidates.into_iter().map(|(entity, _, _)| entity).collect()
 }
