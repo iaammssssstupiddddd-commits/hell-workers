@@ -78,7 +78,8 @@
 
 ### 5.1. 主要モジュール
 
-- **`mod.rs`**: メインのシステム定義と `FamiliarAiParams` の定義（368行）
+- **`mod.rs`**: メインのシステム定義と SystemParam の分割（`FamiliarAiParams` / `FamiliarAiTaskParams`）
+  - **Think フェーズ**: 状態更新 → `ApplyDeferred` → タスク委譲/移動の順で実行
 - **`familiar_processor.rs`**: 使い魔の処理ロジックを複数の関数に分割
   - `process_squad_management`: 分隊管理
   - `process_recruitment`: リクルート処理
@@ -145,6 +146,11 @@
   - **Destination Reservation**: 搬送先（ストックパイル、タンク、ミキサー）への予約。
   - **Source Reservation**: アイテム（拾う対象）の重複予約防止。
   - **Intra-frame Tracking**: 同一フレーム内での在庫変動（格納・取り出し）を追跡し、コマンド適用前の論理在庫を正確に把握します。
+
+### 7.1.1. TaskQueries の分割
+タスク割り当てとタスク実行で必要なクエリを分離し、システム並列性の阻害を抑えています。
+- **`TaskAssignmentQueries`**: Familiar AI の割り当て/解除に必要なクエリを集約
+- **`TaskQueries`**: Soul AI のタスク実行に必要なクエリを集約
 
 ### 7.2. タスク用空間グリッド (DesignationSpatialGrid)
 未割り当てのタスク（伐採、採掘、運搬等）を座標ベースで高速検索します。

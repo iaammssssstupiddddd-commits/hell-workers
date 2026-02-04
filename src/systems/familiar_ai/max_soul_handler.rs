@@ -30,7 +30,7 @@ pub fn handle_max_soul_changed_system(
         ),
         (With<DamnedSoul>, Without<Familiar>),
     >,
-    mut queries: crate::systems::soul_ai::task_execution::context::TaskQueries,
+    mut queries: crate::systems::soul_ai::task_execution::context::TaskAssignmentQueries,
     game_assets: Res<crate::assets::GameAssets>,
     q_bubbles: Query<(Entity, &SpeechBubble), With<FamiliarBubble>>,
     time: Res<Time>,
