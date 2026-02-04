@@ -1,7 +1,9 @@
-use super::components::*;
+use super::components::{BubbleEmotion, BubblePriority, FamiliarBubble, ReactionDelay, SpeechBubble};
+use super::cooldown::SpeechHistory;
 use super::phrases::LatinPhrase;
 use super::spawn::*;
 use crate::assets::GameAssets;
+use crate::entities::damned_soul::DamnedSoul;
 use crate::entities::familiar::{Familiar, FamiliarVoice, UnderCommand};
 use crate::events::*;
 use crate::systems::jobs::WorkType;
@@ -12,21 +14,28 @@ pub fn on_task_assigned(
     on: On<OnTaskAssigned>,
     mut commands: Commands,
     assets: Res<GameAssets>,
-    q_souls: Query<(&GlobalTransform, Option<&UnderCommand>)>,
-    q_familiars: Query<(&GlobalTransform, Option<&FamiliarVoice>), With<Familiar>>,
+    mut q_souls: Query<(&GlobalTransform, Option<&UnderCommand>, Option<&mut SpeechHistory>), (With<DamnedSoul>, Without<Familiar>)>,
+    mut q_familiars: Query<
+        (&GlobalTransform, Option<&FamiliarVoice>, Option<&mut SpeechHistory>),
+        (With<Familiar>, Without<DamnedSoul>),
+    >,
     q_bubbles: Query<(Entity, &SpeechBubble), With<FamiliarBubble>>,
     time: Res<Time>,
-    mut cooldowns: ResMut<crate::systems::visual::speech::cooldown::BubbleCooldowns>,
 ) {
     let soul_entity = on.entity;
     let event = on.event();
     let current_time = time.elapsed_secs();
 
-    if let Ok((soul_transform, under_command)) = q_souls.get(soul_entity) {
+    if let Ok((soul_transform, under_command, soul_history_opt)) = q_souls.get_mut(soul_entity) {
         let soul_pos = soul_transform.translation();
 
-        // Soul: 「やる気」絵文字 (Low)
-        if cooldowns.can_speak(soul_entity, BubblePriority::Low, current_time) {
+        let can_speak = if let Some(history) = &soul_history_opt {
+            history.can_speak(BubblePriority::Low, current_time)
+        } else {
+            true
+        };
+
+        if can_speak {
             spawn_soul_bubble(
                 &mut commands,
                 soul_entity,
@@ -36,13 +45,25 @@ pub fn on_task_assigned(
                 BubbleEmotion::Motivated,
                 BubblePriority::Low,
             );
-            cooldowns.record_speech(soul_entity, BubblePriority::Low, current_time);
+            if let Some(mut history) = soul_history_opt {
+                history.record_speech(BubblePriority::Low, current_time);
+            } else {
+                commands.entity(soul_entity).insert(SpeechHistory {
+                    last_time: current_time,
+                    last_priority: BubblePriority::Low,
+                });
+            }
         }
 
-        // Familiar: 命令フレーズ (Low)
         if let Some(uc) = under_command {
-            if let Ok((fam_transform, voice)) = q_familiars.get(uc.0) {
-                if cooldowns.can_speak(uc.0, BubblePriority::Low, current_time) {
+            if let Ok((fam_transform, voice, fam_history_opt)) = q_familiars.get_mut(uc.0) {
+                let fam_can_speak = if let Some(history) = &fam_history_opt {
+                    history.can_speak(BubblePriority::Low, current_time)
+                } else {
+                    true
+                };
+
+                if fam_can_speak {
                     let fam_pos = fam_transform.translation();
                     let phrase = match event.work_type {
                         WorkType::Chop => LatinPhrase::Caede,
@@ -65,7 +86,14 @@ pub fn on_task_assigned(
                         BubblePriority::Low,
                         voice,
                     );
-                    cooldowns.record_speech(uc.0, BubblePriority::Low, current_time);
+                    if let Some(mut history) = fam_history_opt {
+                        history.record_speech(BubblePriority::Low, current_time);
+                    } else {
+                        commands.entity(uc.0).insert(SpeechHistory {
+                            last_time: current_time,
+                            last_priority: BubblePriority::Low,
+                        });
+                    }
                 }
             }
         }
@@ -77,14 +105,19 @@ pub fn on_task_completed(
     on: On<OnTaskCompleted>,
     mut commands: Commands,
     assets: Res<GameAssets>,
-    q_souls: Query<&GlobalTransform>,
+    mut q_souls: Query<(&GlobalTransform, Option<&mut SpeechHistory>), (With<DamnedSoul>, Without<Familiar>)>,
     time: Res<Time>,
-    mut cooldowns: ResMut<crate::systems::visual::speech::cooldown::BubbleCooldowns>,
 ) {
     let soul_entity = on.entity;
     let current_time = time.elapsed_secs();
-    if let Ok(transform) = q_souls.get(soul_entity) {
-        if cooldowns.can_speak(soul_entity, BubblePriority::Low, current_time) {
+    if let Ok((transform, history_opt)) = q_souls.get_mut(soul_entity) {
+        let can_speak = if let Some(history) = &history_opt {
+            history.can_speak(BubblePriority::Low, current_time)
+        } else {
+            true
+        };
+
+        if can_speak {
             spawn_soul_bubble(
                 &mut commands,
                 soul_entity,
@@ -94,7 +127,14 @@ pub fn on_task_completed(
                 BubbleEmotion::Happy,
                 BubblePriority::Low,
             );
-            cooldowns.record_speech(soul_entity, BubblePriority::Low, current_time);
+            if let Some(mut history) = history_opt {
+                history.record_speech(BubblePriority::Low, current_time);
+            } else {
+                commands.entity(soul_entity).insert(SpeechHistory {
+                    last_time: current_time,
+                    last_priority: BubblePriority::Low,
+                });
+            }
         }
     }
 }
@@ -104,18 +144,25 @@ pub fn on_soul_recruited(
     on: On<OnSoulRecruited>,
     mut commands: Commands,
     assets: Res<GameAssets>,
-    q_familiars: Query<(&GlobalTransform, Option<&FamiliarVoice>), With<Familiar>>,
+    mut q_familiars: Query<
+        (&GlobalTransform, Option<&FamiliarVoice>, Option<&mut SpeechHistory>),
+        With<Familiar>,
+    >,
     q_bubbles: Query<(Entity, &SpeechBubble), With<FamiliarBubble>>,
     time: Res<Time>,
-    mut cooldowns: ResMut<crate::systems::visual::speech::cooldown::BubbleCooldowns>,
 ) {
     let fam_entity = on.event().familiar_entity;
     let soul_entity = on.entity;
     let current_time = time.elapsed_secs();
 
-    // 使い魔の発言（即時）
-    if let Ok((transform, voice)) = q_familiars.get(fam_entity) {
-        if cooldowns.can_speak(fam_entity, BubblePriority::Normal, current_time) {
+    if let Ok((transform, voice, history_opt)) = q_familiars.get_mut(fam_entity) {
+        let can_speak = if let Some(history) = &history_opt {
+            history.can_speak(BubblePriority::Normal, current_time)
+        } else {
+            true
+        };
+
+        if can_speak {
             spawn_familiar_bubble(
                 &mut commands,
                 fam_entity,
@@ -127,11 +174,17 @@ pub fn on_soul_recruited(
                 BubblePriority::Normal,
                 voice,
             );
-            cooldowns.record_speech(fam_entity, BubblePriority::Normal, current_time);
+            if let Some(mut history) = history_opt {
+                history.record_speech(BubblePriority::Normal, current_time);
+            } else {
+                commands.entity(fam_entity).insert(SpeechHistory {
+                    last_time: current_time,
+                    last_priority: BubblePriority::Normal,
+                });
+            }
         }
     }
 
-    // [NEW] Soulのリアクションを遅延予約
     commands.entity(soul_entity).insert(ReactionDelay {
         timer: Timer::from_seconds(0.3, TimerMode::Once),
         emotion: BubbleEmotion::Fearful,
@@ -144,14 +197,19 @@ pub fn on_exhausted(
     on: On<OnExhausted>,
     mut commands: Commands,
     assets: Res<GameAssets>,
-    q_souls: Query<&GlobalTransform>,
+    mut q_souls: Query<(&GlobalTransform, Option<&mut SpeechHistory>), (With<DamnedSoul>, Without<Familiar>)>,
     time: Res<Time>,
-    mut cooldowns: ResMut<crate::systems::visual::speech::cooldown::BubbleCooldowns>,
 ) {
     let soul_entity = on.entity;
     let current_time = time.elapsed_secs();
-    if let Ok(transform) = q_souls.get(soul_entity) {
-        if cooldowns.can_speak(soul_entity, BubblePriority::High, current_time) {
+    if let Ok((transform, history_opt)) = q_souls.get_mut(soul_entity) {
+        let can_speak = if let Some(history) = &history_opt {
+            history.can_speak(BubblePriority::High, current_time)
+        } else {
+            true
+        };
+
+        if can_speak {
             spawn_soul_bubble(
                 &mut commands,
                 soul_entity,
@@ -161,7 +219,14 @@ pub fn on_exhausted(
                 BubbleEmotion::Exhausted,
                 BubblePriority::High,
             );
-            cooldowns.record_speech(soul_entity, BubblePriority::High, current_time);
+            if let Some(mut history) = history_opt {
+                history.record_speech(BubblePriority::High, current_time);
+            } else {
+                commands.entity(soul_entity).insert(SpeechHistory {
+                    last_time: current_time,
+                    last_priority: BubblePriority::High,
+                });
+            }
         }
     }
 }
@@ -171,14 +236,19 @@ pub fn on_stress_breakdown(
     on: On<OnStressBreakdown>,
     mut commands: Commands,
     assets: Res<GameAssets>,
-    q_souls: Query<&GlobalTransform>,
+    mut q_souls: Query<(&GlobalTransform, Option<&mut SpeechHistory>), (With<DamnedSoul>, Without<Familiar>)>,
     time: Res<Time>,
-    mut cooldowns: ResMut<crate::systems::visual::speech::cooldown::BubbleCooldowns>,
 ) {
     let soul_entity = on.entity;
     let current_time = time.elapsed_secs();
-    if let Ok(transform) = q_souls.get(soul_entity) {
-        if cooldowns.can_speak(soul_entity, BubblePriority::Critical, current_time) {
+    if let Ok((transform, history_opt)) = q_souls.get_mut(soul_entity) {
+        let can_speak = if let Some(history) = &history_opt {
+            history.can_speak(BubblePriority::Critical, current_time)
+        } else {
+            true
+        };
+
+        if can_speak {
             spawn_soul_bubble(
                 &mut commands,
                 soul_entity,
@@ -188,7 +258,14 @@ pub fn on_stress_breakdown(
                 BubbleEmotion::Stressed,
                 BubblePriority::Critical,
             );
-            cooldowns.record_speech(soul_entity, BubblePriority::Critical, current_time);
+            if let Some(mut history) = history_opt {
+                history.record_speech(BubblePriority::Critical, current_time);
+            } else {
+                commands.entity(soul_entity).insert(SpeechHistory {
+                    last_time: current_time,
+                    last_priority: BubblePriority::Critical,
+                });
+            }
         }
     }
 }
@@ -260,7 +337,7 @@ pub fn on_task_abandoned(
     spawn_soul_bubble(
         &mut commands,
         on.entity,
-        "🙅‍♂️", // 拒否/放棄
+        "🙅‍♂️",
         Vec3::ZERO,
         &assets,
         BubbleEmotion::Unmotivated,
@@ -273,19 +350,26 @@ pub fn on_encouraged(
     on: On<OnEncouraged>,
     mut commands: Commands,
     assets: Res<GameAssets>,
-    q_familiars: Query<(&GlobalTransform, Option<&FamiliarVoice>), With<Familiar>>,
+    mut q_familiars: Query<
+        (&GlobalTransform, Option<&FamiliarVoice>, Option<&mut SpeechHistory>),
+        With<Familiar>,
+    >,
     q_bubbles: Query<(Entity, &SpeechBubble), With<FamiliarBubble>>,
     time: Res<Time>,
-    mut cooldowns: ResMut<crate::systems::visual::speech::cooldown::BubbleCooldowns>,
 ) {
     let event = on.event();
     let fam_entity = event.familiar_entity;
     let soul_entity = event.soul_entity;
     let current_time = time.elapsed_secs();
 
-    // 使い魔の激励（即時）
-    if let Ok((transform, voice)) = q_familiars.get(fam_entity) {
-        if cooldowns.can_speak(fam_entity, BubblePriority::Normal, current_time) {
+    if let Ok((transform, voice, history_opt)) = q_familiars.get_mut(fam_entity) {
+        let can_speak = if let Some(history) = &history_opt {
+            history.can_speak(BubblePriority::Normal, current_time)
+        } else {
+            true
+        };
+
+        if can_speak {
             use rand::seq::SliceRandom;
             let mut rng = rand::thread_rng();
             let emoji = crate::constants::EMOJIS_ENCOURAGEMENT
@@ -303,14 +387,20 @@ pub fn on_encouraged(
                 BubblePriority::Normal,
                 voice,
             );
-            cooldowns.record_speech(fam_entity, BubblePriority::Normal, current_time);
+            if let Some(mut history) = history_opt {
+                history.record_speech(BubblePriority::Normal, current_time);
+            } else {
+                commands.entity(fam_entity).insert(SpeechHistory {
+                    last_time: current_time,
+                    last_priority: BubblePriority::Normal,
+                });
+            }
         }
     }
 
-    // Soulのリアクション（遅延）
     commands.entity(soul_entity).insert(ReactionDelay {
         timer: Timer::from_seconds(0.3, TimerMode::Once),
-        emotion: BubbleEmotion::Stressed, // ストレスも溜まる
+        emotion: BubbleEmotion::Stressed,
         text: "😓".to_string(),
     });
 }

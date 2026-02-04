@@ -4,12 +4,10 @@ use crate::interface::ui::components::*;
 use bevy::prelude::*;
 use bevy::ui::{BackgroundGradient, ColorStop, LinearGradient};
 
-/// エンティティリストパネルをスポーン
 pub fn spawn_entity_list_panel(
     commands: &mut Commands,
     game_assets: &Res<crate::assets::GameAssets>,
 ) {
-    commands.init_resource::<EntityListFoldState>();
     commands
         .spawn((
             Node {

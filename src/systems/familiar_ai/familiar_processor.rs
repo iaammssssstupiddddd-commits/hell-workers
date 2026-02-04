@@ -47,7 +47,7 @@ pub fn process_squad_management(
         bevy::ecs::query::Without<Familiar>,
     >,
     queries: &mut crate::systems::soul_ai::task_execution::context::TaskQueries,
-    cooldowns: &mut crate::systems::visual::speech::cooldown::BubbleCooldowns,
+    history_opt: Option<&mut crate::systems::visual::speech::cooldown::SpeechHistory>,
     time: &Res<Time>,
     game_assets: &Res<crate::assets::GameAssets>,
     q_bubbles: &Query<(Entity, &SpeechBubble), With<FamiliarBubble>>,
@@ -72,7 +72,7 @@ pub fn process_squad_management(
         q_souls,
         &mut *queries,
         // haul_cache removed
-        cooldowns,
+        history_opt,
         time,
         game_assets,
         q_bubbles,
