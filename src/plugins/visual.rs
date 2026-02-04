@@ -4,8 +4,8 @@ use crate::entities::familiar::{familiar_animation_system, update_familiar_range
 use crate::game_state::PlayMode;
 use crate::systems::GameSystemSet;
 use crate::systems::command::{
-    area_selection_indicator_system, designation_visual_system, familiar_command_visual_system,
-    sync_designation_indicator_system, task_area_indicator_system,
+    area_selection_indicator_system,
+    sync_designation_indicator_system,
     update_designation_indicator_system,
 };
 use crate::systems::jobs::building_completion_system;
@@ -36,6 +36,7 @@ use crate::systems::visual::soul::{
 use crate::systems::visual::speech::SpeechPlugin;
 use crate::systems::visual::tank::update_tank_visual_system;
 use crate::systems::visual::wall_connection::WallConnectionPlugin;
+use crate::systems::soul_ai::vitals::visual::familiar_hover_visualization_system;
 
 use bevy::prelude::*;
 
@@ -72,12 +73,9 @@ impl Plugin for VisualPlugin {
                 soul_status_visual_system,
                 task_link_system,
                 building_completion_system,
-                task_area_indicator_system,
                 area_selection_indicator_system.run_if(in_state(PlayMode::TaskDesignation)),
-                designation_visual_system,
                 update_designation_indicator_system,
                 sync_designation_indicator_system,
-                familiar_command_visual_system,
                 resource_count_display_system,
             )
                 .chain()
@@ -134,6 +132,7 @@ impl Plugin for VisualPlugin {
                 crate::systems::command::familiar_command_visual_system,
                 crate::systems::visual::placement_ghost::placement_ghost_system,
             )
+                .in_set(GameSystemSet::Visual)
                 .run_if(|state: Res<State<crate::game_state::PlayMode>>| {
                     match state.get() {
                         crate::game_state::PlayMode::Normal
@@ -164,6 +163,7 @@ impl Plugin for VisualPlugin {
                 familiar_animation_system,
                 update_familiar_range_indicator,
                 update_tank_visual_system,
+                familiar_hover_visualization_system,
             )
                 .chain()
                 .in_set(GameSystemSet::Visual),

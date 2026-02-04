@@ -100,7 +100,7 @@ fn main() {
         )
         // Diagnostics plugins
         .add_plugins(FrameTimeDiagnosticsPlugin::default())
-        .add_systems(Update, frame_spike_logger_system)
+        .add_systems(Update, frame_spike_logger_system.in_set(GameSystemSet::Visual))
         // Game plugins
         .add_plugins(StartupPlugin)
         .add_plugins(InputPlugin)

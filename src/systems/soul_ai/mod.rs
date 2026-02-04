@@ -37,6 +37,7 @@ impl Plugin for SoulAiPlugin {
             .add_systems(
                 Update,
                 (
+                    // --- Sense Phase ---
                     (
                         // タイマー更新 (集会システムの間引き用)
                         gathering::tick_gathering_timer_system,
@@ -46,15 +47,17 @@ impl Plugin for SoulAiPlugin {
                         vitals::update::stress_system,
                         vitals::influence::supervision_stress_system,
                         vitals::influence::motivation_system,
-                    ),
+                        // 各種メンテナンス
+                        gathering::maintenance::gathering_recruitment_system,
+                        gathering::maintenance::gathering_leave_system,
+                        gathering::maintenance::gathering_maintenance_system,
+                        gathering::maintenance::gathering_merge_system,
+                        idle::escaping::escaping_detection_system,
+                    )
+                        .in_set(SoulAiSystemSet::Sense),
+                    // --- Think Phase ---
                     (
-                        // タスク実行
-                        task_execution::task_execution_system,
-                        // タスク実行の反映を同期
-                        bevy::ecs::schedule::ApplyDeferred,
-                        // 仕事管理
-                        work::cleanup::cleanup_commanded_souls_system,
-                        work::auto_haul::clear_item_reservations_system,
+                        // 意思決定・タスク割り当て
                         work::auto_haul::blueprint_auto_haul_system,
                         work::tank_water_request_system,
                         work::auto_haul::mud_mixer_auto_haul_system,
@@ -63,36 +66,35 @@ impl Plugin for SoulAiPlugin {
                         work::auto_build::blueprint_auto_build_system
                             .after(crate::systems::familiar_ai::familiar_ai_system),
                         work::task_area_auto_haul_system,
-                    ),
-                    (
-                        // 動的集会システム
-                        gathering::spawn::gathering_spawn_system,
-                        gathering::maintenance::gathering_recruitment_system,
-                        gathering::maintenance::gathering_leave_system,
-                        gathering::maintenance::gathering_maintenance_system,
-                        gathering::maintenance::gathering_merge_system,
-                        gathering::visual::gathering_visual_update_system,
-                    ),
-                    (
-                        // アイドル行動
+                        // アイドル・特殊行動
                         idle::behavior::idle_behavior_system,
-                        idle::visual::idle_visual_system,
                         idle::separation::gathering_separation_system,
-                        // 逃走システム
-                        idle::escaping::escaping_detection_system,
                         idle::escaping::escaping_behavior_system,
-                    ),
-                    // ビジュアル
-                    vitals::visual::familiar_hover_visualization_system,
-                )
-                    .chain()
-                    .in_set(GameSystemSet::Logic),
+                        gathering::spawn::gathering_spawn_system,
+                    )
+                        .in_set(SoulAiSystemSet::Think),
+                    // コマンドの反映をフェーズ間で強制同期
+                    bevy::ecs::schedule::ApplyDeferred
+                        .after(SoulAiSystemSet::Think)
+                        .before(SoulAiSystemSet::Act),
+                    // --- Act Phase ---
+                    (
+                        // 物理的な行動・反映
+                        task_execution::task_execution_system,
+                        work::cleanup::cleanup_commanded_souls_system,
+                        work::auto_haul::clear_item_reservations_system,
+                    )
+                        .in_set(SoulAiSystemSet::Act),
+                ),
             )
             // デバッグシステム (順序非依存)
             .add_systems(
                 Update,
-                gathering::visual::gathering_debug_visualization_system
-                    .in_set(GameSystemSet::Logic),
+                (
+                    gathering::visual::gathering_visual_update_system,
+                    gathering::visual::gathering_debug_visualization_system,
+                )
+                    .in_set(GameSystemSet::Visual),
             )
             .add_observer(vitals::on_task_completed_motivation_bonus)
             .add_observer(vitals::on_encouraged_effect)
