@@ -5,7 +5,7 @@
 use crate::assets::GameAssets;
 use crate::constants::TILE_SIZE;
 use crate::constants::*;
-use crate::entities::damned_soul::DamnedSoul;
+use crate::entities::damned_soul::{DamnedSoul, SoulUiLinks};
 use crate::systems::soul_ai::task_execution::types::{AssignedTask, GatherPhase, HaulPhase};
 use crate::systems::utils::progress_bar::{
     GenericProgressBar, ProgressBarBackground, ProgressBarConfig, ProgressBarFill,
@@ -28,12 +28,12 @@ pub struct StatusIcon {
 pub fn progress_bar_system(
     mut commands: Commands,
     q_soul_bars: Query<(Entity, &SoulProgressBar)>,
-    mut q_souls: Query<(Entity, &AssignedTask, &Transform, &mut DamnedSoul)>,
+    mut q_souls: Query<(Entity, &AssignedTask, &Transform, &mut SoulUiLinks), With<DamnedSoul>>,
 ) {
-    for (soul_entity, task, transform, mut soul) in q_souls.iter_mut() {
+    for (soul_entity, task, transform, mut ui_links) in q_souls.iter_mut() {
         if let AssignedTask::Gather(data) = task {
             if matches!(data.phase, GatherPhase::Collecting { .. }) {
-            if soul.bar_entity.is_none() {
+            if ui_links.bar_entity.is_none() {
                 // utilを使用してプログレスバーを生成
                 let config = ProgressBarConfig {
                     width: TILE_SIZE * 0.8,
@@ -61,10 +61,10 @@ pub fn progress_bar_system(
                     ..default()
                 });
 
-                soul.bar_entity = Some(bg_entity);
+                ui_links.bar_entity = Some(bg_entity);
             }
         }
-        } else if let Some(bar_entity) = soul.bar_entity.take() {
+        } else if let Some(bar_entity) = ui_links.bar_entity.take() {
             // プログレスバーを削除（背景とFillの両方）
             // SoulProgressBarコンポーネントを持つ全てのエンティティを削除
             let mut to_despawn = vec![bar_entity];
@@ -217,17 +217,21 @@ pub fn task_link_system(
 
 pub fn soul_status_visual_system(
     mut commands: Commands,
-    mut q_souls: Query<(Entity, &Transform, &mut DamnedSoul, &AssignedTask)>,
+    mut q_souls: Query<
+        (Entity, &Transform, &DamnedSoul, &mut SoulUiLinks, &AssignedTask),
+        With<DamnedSoul>,
+    >,
     mut q_text: Query<&mut Text2d, With<StatusIcon>>,
     game_assets: Res<GameAssets>,
 ) {
-    for (soul_entity, transform, soul, task) in q_souls.iter_mut() {
-        let (soul_entity, transform, mut soul, task): (
+    for (soul_entity, transform, soul, ui_links, task) in q_souls.iter_mut() {
+        let (soul_entity, transform, soul, mut ui_links, task): (
             Entity,
             &Transform,
-            Mut<DamnedSoul>,
+            &DamnedSoul,
+            Mut<SoulUiLinks>,
             &AssignedTask,
-        ) = (soul_entity, transform, soul, task);
+        ) = (soul_entity, transform, soul, ui_links, task);
         let status = if soul.fatigue > 0.8 {
             Some(("!", Color::srgb(1.0, 0.0, 0.0))) // 疲労蓄積
         } else if soul.motivation < 0.2 {
@@ -239,7 +243,7 @@ pub fn soul_status_visual_system(
         };
 
         if let Some((text, color)) = status {
-            if let Some(icon_entity) = soul.icon_entity {
+            if let Some(icon_entity) = ui_links.icon_entity {
                 if let Ok(mut text2d) = q_text.get_mut(icon_entity) {
                     text2d.0 = text.to_string();
                 }
@@ -269,9 +273,9 @@ pub fn soul_status_visual_system(
                         ),
                     ))
                     .id();
-                soul.icon_entity = Some(icon_id);
+                ui_links.icon_entity = Some(icon_id);
             }
-        } else if let Some(icon_entity) = soul.icon_entity.take() {
+        } else if let Some(icon_entity) = ui_links.icon_entity.take() {
             commands.entity(icon_entity).despawn();
         }
     }

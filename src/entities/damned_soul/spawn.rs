@@ -65,6 +65,7 @@ pub fn spawn_damned_soul_at(
     commands
         .spawn((
             DamnedSoul::default(),
+            SoulUiLinks::default(),
             Name::new(format!("Soul: {}", soul_name)),
             identity,
             IdleState::default(),

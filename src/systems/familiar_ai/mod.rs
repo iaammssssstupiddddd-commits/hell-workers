@@ -3,12 +3,12 @@ use crate::entities::familiar::{
     ActiveCommand, Familiar, FamiliarCommand, FamiliarOperation, FamiliarVoice,
 };
 use crate::relationships::{Commanding, ManagedTasks};
-use crate::systems::GameSystemSet;
+// use crate::systems::GameSystemSet; // Removed unused import
 use crate::systems::command::TaskArea;
 use crate::systems::soul_ai::gathering::ParticipatingIn;
 use crate::systems::soul_ai::task_execution::AssignedTask;
 use crate::systems::spatial::{
-    DesignationSpatialGrid, SpatialGrid, update_designation_spatial_grid_system,
+    DesignationSpatialGrid, SpatialGrid,
 };
 use crate::systems::visual::speech::components::{FamiliarBubble, SpeechBubble};
 use crate::world::pathfinding::PathfindingContext;
@@ -73,25 +73,27 @@ impl Plugin for FamiliarAiPlugin {
             .add_systems(
                 Update,
                 (
-                    // 状態遷移の検知（Changed フィルタを使用）
-                    state_transition::detect_state_changes_system
-                        .in_set(GameSystemSet::Logic)
-                        .before(familiar_ai_system),
-                    state_transition::detect_command_changes_system
-                        .in_set(GameSystemSet::Logic)
-                        .before(familiar_ai_system),
-                    resource_cache::sync_reservations_system
+                    // --- Sense Phase ---
+                    (
+                        state_transition::detect_state_changes_system,
+                        state_transition::detect_command_changes_system,
+                        resource_cache::sync_reservations_system,
+                        max_soul_handler::handle_max_soul_changed_system,
+                    )
                         .in_set(crate::systems::soul_ai::scheduling::SoulAiSystemSet::Sense),
-                    // メインのAIシステム
-                    update_designation_spatial_grid_system.in_set(GameSystemSet::Logic),
-                    familiar_ai_system.in_set(GameSystemSet::Logic),
-                    max_soul_handler::handle_max_soul_changed_system.in_set(GameSystemSet::Logic),
-                    following::following_familiar_system.in_set(GameSystemSet::Logic),
-                    encouragement::encouragement_system.in_set(GameSystemSet::Logic),
-                    // 状態遷移イベントの処理
-                    state_transition::handle_state_changed_system.in_set(GameSystemSet::Logic),
-                    // クリーンアップ
-                    state_transition::cleanup_previous_states_system.in_set(GameSystemSet::Logic),
+                    // --- Think Phase ---
+                    (
+                        familiar_ai_system,
+                        following::following_familiar_system,
+                        encouragement::encouragement_system,
+                    )
+                        .in_set(crate::systems::soul_ai::scheduling::SoulAiSystemSet::Think),
+                    // --- Act Phase ---
+                    (
+                        state_transition::handle_state_changed_system,
+                        state_transition::cleanup_previous_states_system,
+                    )
+                        .in_set(crate::systems::soul_ai::scheduling::SoulAiSystemSet::Act),
                 ),
             );
     }

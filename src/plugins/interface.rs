@@ -3,7 +3,7 @@
 // インポート整理完了
 use crate::entities::damned_soul::DamnedSoulSpawnEvent;
 use crate::entities::familiar::{
-    FamiliarSpawnEvent, FamiliarType, update_familiar_range_indicator,
+    FamiliarSpawnEvent, FamiliarType,
 };
 use crate::game_state::PlayMode;
 use crate::interface::camera::MainCamera;
@@ -16,7 +16,6 @@ use crate::interface::ui::{
 };
 use crate::systems::GameSystemSet;
 use crate::systems::logistics::zone_placement;
-use crate::systems::soul_ai::vitals::visual::familiar_hover_visualization_system;
 use crate::systems::time::{
     game_time_system, time_control_keyboard_system, time_control_ui_system,
 };
@@ -44,7 +43,6 @@ impl Plugin for InterfacePlugin {
                     },
                 ),
                 update_mode_text_system,
-                familiar_hover_visualization_system,
             )
                 .chain()
                 .in_set(GameSystemSet::Interface),
@@ -59,7 +57,6 @@ impl Plugin for InterfacePlugin {
                         selected.0.is_some()
                     },
                 ),
-                update_familiar_range_indicator,
                 game_time_system,
                 time_control_keyboard_system,
                 time_control_ui_system,
@@ -75,7 +72,8 @@ impl Plugin for InterfacePlugin {
             (
                 crate::interface::ui::rebuild_entity_list_system,
             )
-                .run_if(on_timer(Duration::from_millis(100))),
+                .run_if(on_timer(Duration::from_millis(100)))
+                .in_set(GameSystemSet::Interface),
         );
     }
 }

@@ -53,9 +53,6 @@ pub struct DamnedSoul {
     pub motivation: f32, // やる気 (0.0-1.0) - 高いほど働く
     pub fatigue: f32,    // 疲労 (0.0-1.0) - 高いほど疲れている
     pub stress: f32,     // ストレス (0.0-1.0) - 使い魔監視下で増加
-    // UI参照
-    pub bar_entity: Option<Entity>,
-    pub icon_entity: Option<Entity>,
 }
 
 impl Default for DamnedSoul {
@@ -65,10 +62,16 @@ impl Default for DamnedSoul {
             motivation: 0.1, // デフォルトでやる気なし
             fatigue: 0.0,
             stress: 0.0, // デフォルトでストレスなし
-            bar_entity: None,
-            icon_entity: None,
         }
     }
+}
+
+/// ソウルに紐づくUI参照
+#[derive(Component, Default, Reflect)]
+#[reflect(Component)]
+pub struct SoulUiLinks {
+    pub bar_entity: Option<Entity>,
+    pub icon_entity: Option<Entity>,
 }
 
 /// ストレスによるブレイクダウン状態
@@ -172,6 +175,7 @@ impl Plugin for DamnedSoulPlugin {
     fn build(&self, app: &mut App) {
         app.add_message::<DamnedSoulSpawnEvent>()
             .register_type::<DamnedSoul>()
+            .register_type::<SoulUiLinks>()
             .register_type::<IdleState>()
             .register_type::<StressBreakdown>()
             .add_systems(
