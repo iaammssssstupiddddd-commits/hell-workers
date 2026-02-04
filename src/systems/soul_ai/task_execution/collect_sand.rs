@@ -34,6 +34,7 @@ pub fn handle_collect_sand_task(
                     info!("COLLECT_SAND: Soul {:?} cannot reach SandPile {:?}, canceling", ctx.soul_entity, target);
                     commands.entity(target).remove::<crate::systems::jobs::Designation>();
                     commands.entity(target).remove::<crate::systems::jobs::TaskSlots>();
+                    ctx.queries.resource_cache.release_source(target, 1);
                     clear_task_and_path(ctx.task, ctx.path);
                     return;
                 }
@@ -49,6 +50,7 @@ pub fn handle_collect_sand_task(
                 // SandPile が存在しない場合も Designation を削除
                 commands.entity(target).remove::<crate::systems::jobs::Designation>();
                 commands.entity(target).remove::<crate::systems::jobs::TaskSlots>();
+                ctx.queries.resource_cache.release_source(target, 1);
                 clear_task_and_path(ctx.task, ctx.path);
             }
         }
@@ -99,6 +101,7 @@ pub fn handle_collect_sand_task(
                 // SandPile が存在しない場合も Designation を削除
                 commands.entity(target).remove::<crate::systems::jobs::Designation>();
                 commands.entity(target).remove::<crate::systems::jobs::TaskSlots>();
+                ctx.queries.resource_cache.release_source(target, 1);
                 clear_task_and_path(ctx.task, ctx.path);
             }
         }
@@ -107,6 +110,7 @@ pub fn handle_collect_sand_task(
             commands.entity(target).remove::<crate::systems::jobs::Designation>();
             commands.entity(target).remove::<crate::systems::jobs::TaskSlots>();
             commands.entity(target).remove::<crate::systems::jobs::IssuedBy>();
+            ctx.queries.resource_cache.release_source(target, 1);
             clear_task_and_path(ctx.task, ctx.path);
         }
     }
