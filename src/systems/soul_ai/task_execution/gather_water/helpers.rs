@@ -11,7 +11,7 @@ pub fn drop_bucket_for_auto_haul(
     ctx: &mut TaskExecutionContext,
     bucket_entity: Entity,
     _tank_entity: Entity,
-    haul_cache: &mut crate::systems::familiar_ai::resource_cache::SharedResourceCache,
+    // haul_cache removed
     world_map: &WorldMap,
 ) {
     let soul_pos = ctx.soul_pos();
@@ -33,7 +33,7 @@ pub fn drop_bucket_for_auto_haul(
     ctx.inventory.0 = None;
     crate::systems::soul_ai::work::unassign_task(
         commands, ctx.soul_entity, soul_pos, ctx.task, ctx.path,
-        None, None, &ctx.queries, haul_cache, world_map, false
+        None, None, ctx.queries, world_map, false
     );
 }
 
@@ -42,13 +42,13 @@ pub fn drop_bucket_for_auto_haul(
 pub fn abort_task_without_item(
     commands: &mut Commands,
     ctx: &mut TaskExecutionContext,
-    haul_cache: &mut crate::systems::familiar_ai::resource_cache::SharedResourceCache,
+    // haul_cache removed
     world_map: &WorldMap,
 ) {
     let soul_pos = ctx.soul_pos();
     crate::systems::soul_ai::work::unassign_task(
         commands, ctx.soul_entity, soul_pos, ctx.task, ctx.path,
-        None, None, &ctx.queries, haul_cache, world_map, true
+        None, None, ctx.queries, world_map, true
     );
 }
 
@@ -57,12 +57,12 @@ pub fn abort_task_without_item(
 pub fn abort_task_with_item(
     commands: &mut Commands,
     ctx: &mut TaskExecutionContext,
-    haul_cache: &mut crate::systems::familiar_ai::resource_cache::SharedResourceCache,
+    // haul_cache removed
     world_map: &WorldMap,
 ) {
     let soul_pos = ctx.soul_pos();
     crate::systems::soul_ai::work::unassign_task(
         commands, ctx.soul_entity, soul_pos, ctx.task, ctx.path,
-        Some(ctx.inventory), None, &ctx.queries, haul_cache, world_map, true
+        Some(ctx.inventory), None, ctx.queries, world_map, true
     );
 }

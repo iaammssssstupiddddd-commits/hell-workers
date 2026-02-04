@@ -135,8 +135,9 @@ impl SquadManager {
             ),
             Without<crate::entities::familiar::Familiar>,
         >,
-        queries: &crate::systems::soul_ai::task_execution::context::TaskQueries,
-        haul_cache: &mut crate::systems::familiar_ai::resource_cache::SharedResourceCache,
+        queries: &mut crate::systems::soul_ai::task_execution::context::TaskQueries,
+        // haul_cache removed (from call, but maybe kept in signature if used elsewhere?? unassign_task needs queries.resource_cache)
+        // haul_cache is removed
         cooldowns: &mut crate::systems::visual::speech::cooldown::BubbleCooldowns,
         time: &Time,
         game_assets: &Res<crate::assets::GameAssets>,
@@ -184,7 +185,7 @@ impl SquadManager {
                         inventory_opt.as_deref_mut(),
                         dropped_res,
                         queries,
-                        haul_cache,
+                        // haul_cache removed
                         world_map,
                         false, // emit_abandoned_event: 疲労リリース時は個別のタスク中断セリフを出さない
                     );

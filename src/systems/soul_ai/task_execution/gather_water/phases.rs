@@ -16,7 +16,7 @@ pub fn handle_gather_water_task(
     phase: GatherWaterPhase,
     commands: &mut Commands,
     game_assets: &Res<crate::assets::GameAssets>,
-    haul_cache: &mut crate::systems::familiar_ai::resource_cache::SharedResourceCache,
+    // haul_cache is removed
     time: &Res<Time>,
     world_map: &WorldMap,
 ) {
@@ -24,19 +24,20 @@ pub fn handle_gather_water_task(
 
     match phase {
         GatherWaterPhase::GoingToBucket => {
-            handle_going_to_bucket(ctx, bucket_entity, tank_entity, commands, haul_cache, world_map, soul_pos);
+            handle_going_to_bucket(ctx, bucket_entity, tank_entity, commands, world_map, soul_pos);
         }
         GatherWaterPhase::GoingToRiver => {
-            handle_going_to_river(ctx, bucket_entity, tank_entity, commands, haul_cache, world_map, soul_pos);
+            handle_going_to_river(ctx, bucket_entity, tank_entity, commands, world_map, soul_pos);
         }
         GatherWaterPhase::Filling { progress } => {
-            handle_filling(ctx, bucket_entity, tank_entity, progress, commands, game_assets, haul_cache, time, world_map, soul_pos);
+            // Updated call
+            handle_filling(ctx, bucket_entity, tank_entity, progress, commands, game_assets, time, world_map, soul_pos);
         }
         GatherWaterPhase::GoingToTank => {
-            handle_going_to_tank(ctx, bucket_entity, tank_entity, commands, haul_cache, world_map, soul_pos);
+            handle_going_to_tank(ctx, bucket_entity, tank_entity, commands, world_map, soul_pos);
         }
         GatherWaterPhase::Pouring { progress } => {
-            handle_pouring(ctx, bucket_entity, tank_entity, progress, commands, game_assets, haul_cache, world_map, soul_pos);
+            handle_pouring(ctx, bucket_entity, tank_entity, progress, commands, game_assets, world_map, soul_pos);
         }
     }
 }
@@ -46,7 +47,7 @@ fn handle_going_to_bucket(
     bucket_entity: Entity,
     tank_entity: Entity,
     commands: &mut Commands,
-    haul_cache: &mut crate::systems::familiar_ai::resource_cache::SharedResourceCache,
+    // haul_cache removed
     world_map: &WorldMap,
     soul_pos: Vec2,
 ) {
@@ -65,21 +66,22 @@ fn handle_going_to_bucket(
             ctx.dest.0 = river_pos;
             ctx.path.waypoints = vec![river_pos];
             ctx.path.current_index = 0;
+            ctx.path.current_index = 0;
         } else {
-            abort_task_with_item(commands, ctx, haul_cache, world_map);
+            abort_task_with_item(commands, ctx, world_map);
         }
         return;
     }
 
     let Ok((bucket_transform, _, _, res_item_opt, _, stored_in_opt)) = q_targets.get(bucket_entity) else {
-        abort_task_with_item(commands, ctx, haul_cache, world_map);
+        abort_task_with_item(commands, ctx, world_map);
         return;
     };
 
     // バケツであることを確認（任意だが安全のため）
     if let Some(res) = res_item_opt {
         if !matches!(res.0, ResourceType::BucketEmpty | ResourceType::BucketWater) {
-            abort_task_with_item(commands, ctx, haul_cache, world_map);
+            abort_task_with_item(commands, ctx, world_map);
             return;
         }
     }
@@ -102,7 +104,7 @@ fn handle_going_to_bucket(
         }
         
         // ソース取得記録 
-        haul_cache.record_picked_source(bucket_entity, 1);
+        ctx.queries.resource_cache.record_picked_source(bucket_entity, 1);
 
         // もしアイテムが備蓄場所にあったなら、その備蓄場所の型管理を更新する
         if let Some(stored_in) = stored_in_opt {
@@ -172,10 +174,10 @@ fn handle_going_to_bucket(
                     .collect();
                 ctx.path.current_index = 0;
             } else {
-                abort_task_with_item(commands, ctx, haul_cache, world_map);
+                abort_task_with_item(commands, ctx, world_map);
             }
         } else {
-            abort_task_with_item(commands, ctx, haul_cache, world_map);
+            abort_task_with_item(commands, ctx, world_map);
         }
     } else {
         let bucket_grid = WorldMap::world_to_grid(bucket_pos);
@@ -212,7 +214,7 @@ fn handle_going_to_river(
     bucket_entity: Entity,
     tank_entity: Entity,
     commands: &mut Commands,
-    haul_cache: &mut crate::systems::familiar_ai::resource_cache::SharedResourceCache,
+    // haul_cache removed
     world_map: &WorldMap,
     _soul_pos: Vec2,
 ) {
@@ -220,7 +222,7 @@ fn handle_going_to_river(
     if ctx.inventory.0 != Some(bucket_entity) {
         // バケツを持っていないのでタスクを中断（ドロップ処理なし）
         warn!("GoingToRiver: Bucket not in inventory, aborting task for soul {:?}", ctx.soul_entity);
-        abort_task_without_item(commands, ctx, haul_cache, world_map);
+        abort_task_without_item(commands, ctx, world_map);
         return;
     }
 
@@ -236,7 +238,7 @@ fn handle_going_to_river(
         };
 
         if is_tank_full {
-            drop_bucket_for_auto_haul(commands, ctx, bucket_entity, tank_entity, haul_cache, world_map);
+            drop_bucket_for_auto_haul(commands, ctx, bucket_entity, tank_entity, world_map);
             return;
         }
 
@@ -256,7 +258,7 @@ fn handle_filling(
     progress: f32,
     commands: &mut Commands,
     game_assets: &Res<crate::assets::GameAssets>,
-    haul_cache: &mut crate::systems::familiar_ai::resource_cache::SharedResourceCache,
+    // haul_cache removed
     time: &Res<Time>,
     world_map: &WorldMap,
     _soul_pos: Vec2,
@@ -265,7 +267,7 @@ fn handle_filling(
     if ctx.inventory.0 != Some(bucket_entity) {
         // バケツを持っていないのでタスクを中断（ドロップ処理なし）
         warn!("Filling: Bucket not in inventory, aborting task for soul {:?}", ctx.soul_entity);
-        abort_task_without_item(commands, ctx, haul_cache, world_map);
+        abort_task_without_item(commands, ctx, world_map);
         return;
     }
 
@@ -320,10 +322,10 @@ fn handle_filling(
                     .collect();
                 ctx.path.current_index = 0;
             } else {
-                abort_task_with_item(commands, ctx, haul_cache, world_map);
+                abort_task_with_item(commands, ctx, world_map);
             }
         } else {
-            abort_task_with_item(commands, ctx, haul_cache, world_map);
+            abort_task_with_item(commands, ctx, world_map);
         }
     } else {
         *ctx.task = AssignedTask::GatherWater(crate::systems::soul_ai::task_execution::types::GatherWaterData {
@@ -339,7 +341,7 @@ fn handle_going_to_tank(
     bucket_entity: Entity,
     tank_entity: Entity,
     commands: &mut Commands,
-    haul_cache: &mut crate::systems::familiar_ai::resource_cache::SharedResourceCache,
+    // haul_cache removed
     world_map: &WorldMap,
     _soul_pos: Vec2,
 ) {
@@ -347,7 +349,7 @@ fn handle_going_to_tank(
     if ctx.inventory.0 != Some(bucket_entity) {
         // バケツを持っていないのでタスクを中断（ドロップ処理なし）
         warn!("GoingToTank: Bucket not in inventory, aborting task for soul {:?}", ctx.soul_entity);
-        abort_task_without_item(commands, ctx, haul_cache, world_map);
+        abort_task_without_item(commands, ctx, world_map);
         return;
     }
 
@@ -362,7 +364,7 @@ fn handle_going_to_tank(
     };
 
     if is_tank_full {
-        drop_bucket_for_auto_haul(commands, ctx, bucket_entity, tank_entity, haul_cache, world_map);
+        drop_bucket_for_auto_haul(commands, ctx, bucket_entity, tank_entity, world_map);
         return;
     }
 
@@ -382,7 +384,7 @@ fn handle_pouring(
     progress: f32,
     commands: &mut Commands,
     game_assets: &Res<crate::assets::GameAssets>,
-    haul_cache: &mut crate::systems::familiar_ai::resource_cache::SharedResourceCache,
+    // haul_cache removed
     world_map: &WorldMap,
     _soul_pos: Vec2,
 ) {
@@ -390,7 +392,7 @@ fn handle_pouring(
     if ctx.inventory.0 != Some(bucket_entity) {
         // バケツを持っていないのでタスクを中断（ドロップ処理なし）
         warn!("Pouring: Bucket not in inventory, aborting task for soul {:?}", ctx.soul_entity);
-        abort_task_without_item(commands, ctx, haul_cache, world_map);
+        abort_task_without_item(commands, ctx, world_map);
         return;
     }
 
@@ -416,7 +418,7 @@ fn handle_pouring(
 
         // バケツをその場にドロップしてタスク完了
         // オートホールシステムがバケツをバケツ置き場に戻す
-        drop_bucket_for_auto_haul(commands, ctx, bucket_entity, tank_entity, haul_cache, world_map);
+        drop_bucket_for_auto_haul(commands, ctx, bucket_entity, tank_entity, world_map);
     } else {
         *ctx.task = AssignedTask::GatherWater(crate::systems::soul_ai::task_execution::types::GatherWaterData {
             bucket: bucket_entity,

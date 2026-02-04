@@ -139,7 +139,7 @@ pub struct FamiliarAiParams<'w, 's> {
     >,
     pub q_breakdown: Query<'w, 's, &'static StressBreakdown>,
     pub task_queries: crate::systems::soul_ai::task_execution::context::TaskQueries<'w, 's>,
-    pub resource_cache: ResMut<'w, resource_cache::SharedResourceCache>,
+    // resource_cache removed (included in task_queries)
     pub designation_grid: Res<'w, DesignationSpatialGrid>,
     pub game_assets: Res<'w, crate::assets::GameAssets>,
     pub q_bubbles: Query<'w, 's, (Entity, &'static SpeechBubble), With<FamiliarBubble>>,
@@ -158,8 +158,8 @@ pub fn familiar_ai_system(params: FamiliarAiParams) {
         mut q_familiars,
         mut q_souls,
         q_breakdown,
-        task_queries,
-        mut resource_cache,
+        mut task_queries,
+        // resource_cache removed
         designation_grid,
         game_assets,
         q_bubbles,
@@ -283,13 +283,13 @@ pub fn familiar_ai_system(params: FamiliarAiParams) {
             voice_opt,
             &mut commands,
             &mut q_souls,
-            &task_queries,
+            &mut task_queries,
             &mut cooldowns,
             &time,
             &game_assets,
             &q_bubbles,
             &world_map,
-            &mut *resource_cache,
+            // resource_cache arg removed
         );
 
         // 状態に応じたロジック実行
@@ -362,10 +362,10 @@ pub fn familiar_ai_system(params: FamiliarAiParams) {
             &squad_entities,
             &mut commands,
             &mut q_souls,
-            &task_queries,
+            &mut task_queries,
             &designation_grid,
             managed_tasks,
-            &mut *resource_cache,
+            // resource_cache arg removed
             &world_map,
             &mut *pf_context,
             &time,

@@ -15,6 +15,25 @@ use crate::systems::soul_ai::task_execution::types::{
 
 use bevy::prelude::*;
 
+/// 予約チェックヘルパー: 既に予約済み人数がスロット上限に達しているか確認
+fn can_reserve_source(
+    task_entity: Entity,
+    // resource_cache removed
+    queries: &crate::systems::soul_ai::task_execution::context::TaskQueries,
+) -> bool {
+    // 現在の予約数（実行中 + 割り当て済み移動中）
+    let current_reserved = queries.resource_cache.get_source_reservation(task_entity);
+
+    // TaskSlotsコンポーネントがあればそのmax値、なければデフォルト1（排他）
+    let max_slots = if let Ok(slots) = queries.task_slots.get(task_entity) {
+        slots.max as usize
+    } else {
+        1
+    };
+
+    current_reserved < max_slots
+}
+
 /// ワーカーにタスク割り当てのための共通セットアップを行う
 pub fn prepare_worker_for_task(
     commands: &mut Commands,
@@ -46,7 +65,7 @@ pub fn assign_task_to_worker(
     task_entity: Entity,
     worker_entity: Entity,
     fatigue_threshold: f32,
-    queries: &crate::systems::soul_ai::task_execution::context::TaskQueries,
+    queries: &mut crate::systems::soul_ai::task_execution::context::TaskQueries,
     q_souls: &mut Query<
         (
             Entity,
@@ -64,7 +83,7 @@ pub fn assign_task_to_worker(
         Without<crate::entities::familiar::Familiar>,
     >,
     task_area_opt: Option<&TaskArea>,
-    haul_cache: &mut crate::systems::familiar_ai::resource_cache::SharedResourceCache,
+    // haul_cache is removed
 ) -> bool {
     let Ok((_, _, soul, mut assigned_task, mut dest, mut path, idle, _, uc_opt, participating_opt)) =
         q_souls.get_mut(worker_entity)
@@ -103,6 +122,11 @@ pub fn assign_task_to_worker(
 
     match work_type {
         WorkType::Chop | WorkType::Mine => {
+            if !can_reserve_source(task_entity, queries) {
+                return false;
+            }
+            queries.resource_cache.reserve_source(task_entity, 1);
+
             prepare_worker_for_task(
                 commands, worker_entity, fam_entity, task_entity, uc_opt.is_some(),
             );
@@ -125,13 +149,13 @@ pub fn assign_task_to_worker(
         WorkType::Haul => {
             if let Ok(target_bp) = queries.target_blueprints.get(task_entity) {
                 // ソース予約チェック
-                if haul_cache.get_source_reservation(task_entity) > 0 {
+                if queries.resource_cache.get_source_reservation(task_entity) > 0 {
                     debug!("ASSIGN: Item {:?} (for BP) is already reserved", task_entity);
                     return false;
                 }
 
-                haul_cache.reserve_destination(target_bp.0);
-                haul_cache.reserve_source(task_entity, 1);
+                queries.resource_cache.reserve_destination(target_bp.0);
+                queries.resource_cache.reserve_source(task_entity, 1);
 
                 prepare_worker_for_task(
                     commands, worker_entity, fam_entity, task_entity, uc_opt.is_some(),
@@ -154,7 +178,7 @@ pub fn assign_task_to_worker(
             }
 
             // ソース予約チェック (一般Item)
-            if haul_cache.get_source_reservation(task_entity) > 0 {
+            if queries.resource_cache.get_source_reservation(task_entity) > 0 {
                 debug!("ASSIGN: Item {:?} is already reserved", task_entity);
                 return false;
             }
@@ -175,15 +199,15 @@ pub fn assign_task_to_worker(
                 if matches!(item_type, ResourceType::Sand | ResourceType::Rock) {
                     // ミキサーのキャパシティチェック
                     let can_accept = if let Ok((_, storage, _)) = queries.mixers.get(mixer_entity) {
-                        let reserved = haul_cache.get_mixer_destination_reservation(mixer_entity, item_type);
+                        let reserved = queries.resource_cache.get_mixer_destination_reservation(mixer_entity, item_type);
                         storage.can_accept(item_type, (1 + reserved) as u32)
                     } else {
                         false
                     };
 
                     if can_accept {
-                        haul_cache.reserve_mixer_destination(mixer_entity, item_type);
-                        haul_cache.reserve_source(task_entity, 1);
+                        queries.resource_cache.reserve_mixer_destination(mixer_entity, item_type);
+                        queries.resource_cache.reserve_source(task_entity, 1);
 
                         prepare_worker_for_task(
                             commands, worker_entity, fam_entity, task_entity, uc_opt.is_some(),
@@ -248,7 +272,7 @@ pub fn assign_task_to_worker(
                     }
 
                     let current_count = stored.map(|s| s.len()).unwrap_or(0);
-                    let reserved = haul_cache.get_destination_reservation(*s_entity);
+                    let reserved = queries.resource_cache.get_destination_reservation(*s_entity);
                     let has_capacity = (current_count + reserved) < stock.capacity as usize;
 
                     type_match && has_capacity
@@ -261,8 +285,8 @@ pub fn assign_task_to_worker(
                 .map(|(e, _, _, _)| e);
 
             if let Some(stock_entity) = best_stockpile {
-                haul_cache.reserve_destination(stock_entity);
-                haul_cache.reserve_source(task_entity, 1);
+                queries.resource_cache.reserve_destination(stock_entity);
+                queries.resource_cache.reserve_source(task_entity, 1);
 
                 prepare_worker_for_task(
                     commands, worker_entity, fam_entity, task_entity, uc_opt.is_some(),
@@ -295,6 +319,14 @@ pub fn assign_task_to_worker(
                 }
             }
 
+            // 建築タスクもソース予約として管理（TaskSlotsで人数制限）
+            if !can_reserve_source(task_entity, queries) {
+                return false;
+            }
+            queries.resource_cache.reserve_source(task_entity, 1);
+
+
+
             prepare_worker_for_task(
                 commands, worker_entity, fam_entity, task_entity, uc_opt.is_some(),
             );
@@ -315,7 +347,7 @@ pub fn assign_task_to_worker(
         }
         WorkType::GatherWater => {
             // バケツ予約チェック
-            if haul_cache.get_source_reservation(task_entity) > 0 {
+            if queries.resource_cache.get_source_reservation(task_entity) > 0 {
                 return false;
             }
 
@@ -329,7 +361,7 @@ pub fn assign_task_to_worker(
                     }
                     let is_tank = stock.resource_type == Some(ResourceType::Water);
                     let current_water = stored.map(|s| s.len()).unwrap_or(0);
-                    let reserved_tank = haul_cache.get_destination_reservation(*s_entity);
+                    let reserved_tank = queries.resource_cache.get_destination_reservation(*s_entity);
                      // タンクに関しては、何人（何個）が集まっているか、という予約になっている
                      // バケツ1つあたり5の水が入るので、本当は容量チェックをシビアにするべきだが
                      // ここでは destination_reservation (人数) でチェックする
@@ -351,8 +383,8 @@ pub fn assign_task_to_worker(
                 .map(|(e, _, _, _)| e);
 
             if let Some(tank_entity) = best_tank {
-                haul_cache.reserve_destination(tank_entity);
-                haul_cache.reserve_source(task_entity, 1);
+                queries.resource_cache.reserve_destination(tank_entity);
+                queries.resource_cache.reserve_source(task_entity, 1);
 
                 prepare_worker_for_task(
                     commands,
@@ -382,6 +414,11 @@ pub fn assign_task_to_worker(
             return false;
         }
         WorkType::CollectSand => {
+            if !can_reserve_source(task_entity, queries) {
+                return false;
+            }
+            queries.resource_cache.reserve_source(task_entity, 1);
+
             prepare_worker_for_task(
                 commands, worker_entity, fam_entity, task_entity, uc_opt.is_some(),
             );
@@ -401,6 +438,11 @@ pub fn assign_task_to_worker(
             return true;
         }
         WorkType::Refine => {
+            if !can_reserve_source(task_entity, queries) {
+                return false;
+            }
+            queries.resource_cache.reserve_source(task_entity, 1);
+
             prepare_worker_for_task(
                 commands, worker_entity, fam_entity, task_entity, uc_opt.is_some(),
             );
@@ -436,12 +478,12 @@ pub fn assign_task_to_worker(
             };
 
             // ソース（バケツ）予約チェック
-            if haul_cache.get_source_reservation(task_entity) > 0 {
+            if queries.resource_cache.get_source_reservation(task_entity) > 0 {
                 return false;
             }
             
-            haul_cache.reserve_mixer_destination(mixer_entity, ResourceType::Water);
-            haul_cache.reserve_source(task_entity, 1);
+            queries.resource_cache.reserve_mixer_destination(mixer_entity, ResourceType::Water);
+            queries.resource_cache.reserve_source(task_entity, 1);
 
             prepare_worker_for_task(
                 commands, worker_entity, fam_entity, task_entity, uc_opt.is_some(),

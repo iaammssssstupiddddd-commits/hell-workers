@@ -50,8 +50,7 @@ pub fn on_stress_breakdown(
         Option<&crate::entities::familiar::UnderCommand>,
     )>,
     world_map: Res<WorldMap>,
-    mut haul_cache: ResMut<crate::systems::familiar_ai::resource_cache::SharedResourceCache>,
-    queries: crate::systems::soul_ai::task_execution::context::TaskQueries,
+    mut queries: crate::systems::soul_ai::task_execution::context::TaskQueries,
 ) {
     let soul_entity = on.entity;
     if let Ok((entity, transform, mut _soul, mut task, mut path, mut inventory_opt, under_command)) =
@@ -72,8 +71,7 @@ pub fn on_stress_breakdown(
                 &mut path,
                 inventory_opt.as_deref_mut(),
                 None,
-                &queries,
-                &mut *haul_cache,
+                &mut queries,
                 &world_map,
                 true,
             );
@@ -101,9 +99,8 @@ pub fn on_exhausted(
         Option<&mut crate::systems::logistics::Inventory>,
         Option<&crate::entities::familiar::UnderCommand>,
     )>,
-    mut haul_cache: ResMut<crate::systems::familiar_ai::resource_cache::SharedResourceCache>,
     world_map: Res<WorldMap>,
-    queries: crate::systems::soul_ai::task_execution::context::TaskQueries,
+    mut queries: crate::systems::soul_ai::task_execution::context::TaskQueries,
 ) {
     let soul_entity = on.entity;
     if let Ok((
@@ -137,8 +134,7 @@ pub fn on_exhausted(
                 &mut path,
                 inventory_opt.as_deref_mut(),
                 None,
-                &queries,
-                &mut *haul_cache,
+                &mut queries,
                 &world_map,
                 true,
             );
