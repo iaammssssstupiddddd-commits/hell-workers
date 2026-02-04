@@ -28,8 +28,7 @@ pub fn handle_max_soul_changed_system(
             Option<&mut crate::systems::logistics::Inventory>,
         ),
     >,
-    mut haul_cache: ResMut<crate::systems::familiar_ai::resource_cache::SharedResourceCache>,
-    queries: crate::systems::soul_ai::task_execution::context::TaskQueries,
+    mut queries: crate::systems::soul_ai::task_execution::context::TaskQueries,
     game_assets: Res<crate::assets::GameAssets>,
     q_bubbles: Query<(Entity, &SpeechBubble), With<FamiliarBubble>>,
     mut cooldowns: ResMut<crate::systems::visual::speech::cooldown::BubbleCooldowns>,
@@ -69,8 +68,7 @@ pub fn handle_max_soul_changed_system(
                                 &mut path,
                                 inventory_opt.as_deref_mut(),
                                 None,
-                                &queries,
-                                &mut *haul_cache,
+                                &mut queries,
                                 &world_map,
                                 false, // emit_abandoned_event: 上限超過リリース時は個別のタスク中断セリフを出さない
                             );

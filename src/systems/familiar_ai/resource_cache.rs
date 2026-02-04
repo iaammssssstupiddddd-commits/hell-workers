@@ -212,12 +212,17 @@ pub fn sync_reservations_system(
                 }
             }
             // 他のタスク（Build, CollectSand, Refine）も必要に応じて追加
-            AssignedTask::Build(_data) => {
+            AssignedTask::Build(data) => {
                 // 建材を持っていくソース予約が必要かもしれないが、
                 // Buildタスク自体は「資材を持って現地に行く」のか「現地で建築する」のか。
                 // 既存実装では `GoingToBlueprint` で移動。
                 // 手持ちがない場合は別途HaulToBlueprintタスクになるはず（TaskAssignerが切り替える）。
                 // よって Build タスク中は既にアイテムを持っているか、あるいは不要。
+                // ... と思われたが、Cycle Framework移行によりSource Reservationが必要になったため追記
+                use crate::systems::soul_ai::task_execution::types::BuildPhase;
+                if matches!(data.phase, BuildPhase::GoingToBlueprint | BuildPhase::Building { .. }) {
+                    *source_res.entry(data.blueprint).or_insert(0) += 1;
+                }
             }
             AssignedTask::HaulToBlueprint(data) => {
                 // ブループリントへの搬送予約（正しくはBlueprintが必要とする資材枠への予約）
@@ -227,6 +232,27 @@ pub fn sync_reservations_system(
                 use crate::systems::soul_ai::task_execution::types::HaulToBpPhase;
                 if matches!(data.phase, HaulToBpPhase::GoingToItem) {
                     *source_res.entry(data.item).or_insert(0) += 1;
+                }
+            }
+            AssignedTask::Gather(data) => {
+                // 木や岩への予約（複数人同時作業の制御用）
+                use crate::systems::soul_ai::task_execution::types::GatherPhase;
+                if matches!(data.phase, GatherPhase::GoingToResource | GatherPhase::Collecting { .. }) {
+                    *source_res.entry(data.target).or_insert(0) += 1;
+                }
+            }
+            AssignedTask::CollectSand(data) => {
+                // SandPileへの予約
+                use crate::systems::soul_ai::task_execution::types::CollectSandPhase;
+                if matches!(data.phase, CollectSandPhase::GoingToSand | CollectSandPhase::Collecting { .. }) {
+                    *source_res.entry(data.target).or_insert(0) += 1;
+                }
+            }
+            AssignedTask::Refine(data) => {
+                // Mixerへの予約（精製作業の排他制御）
+                use crate::systems::soul_ai::task_execution::types::RefinePhase;
+                if matches!(data.phase, RefinePhase::GoingToMixer | RefinePhase::Refining { .. }) {
+                    *source_res.entry(data.mixer).or_insert(0) += 1;
                 }
             }
             _ => {}

@@ -1,7 +1,6 @@
 //! 運搬タスクの実行処理（ストックパイルへ）
 
 use crate::relationships::WorkingOn;
-use crate::systems::familiar_ai::resource_cache::SharedResourceCache;
 use crate::systems::soul_ai::task_execution::{
     context::TaskExecutionContext,
     types::{AssignedTask, HaulPhase},
@@ -17,7 +16,7 @@ pub fn handle_haul_task(
     stockpile: Entity,
     phase: HaulPhase,
     commands: &mut Commands,
-    haul_cache: &mut SharedResourceCache,
+    // haul_cache is now accessed via ctx.queries.resource_cache
     world_map: &Res<WorldMap>,
 ) {
     let soul_pos = ctx.soul_pos();
@@ -31,8 +30,8 @@ pub fn handle_haul_task(
             {
                 // 指示がキャンセルされていないか確認
                 if cancel_task_if_designation_missing(des_opt, ctx.task, ctx.path) {
-                    haul_cache.release_destination(stockpile);
-                    haul_cache.release_source(item, 1);
+                    ctx.queries.resource_cache.release_destination(stockpile);
+                    ctx.queries.resource_cache.release_source(item, 1);
                     return;
                 }
 
@@ -43,8 +42,8 @@ pub fn handle_haul_task(
                 if !reachable {
                     // 到達不能: タスクをキャンセル
                     info!("HAUL: Soul {:?} cannot reach item {:?}, canceling", ctx.soul_entity, item);
-                    haul_cache.release_destination(stockpile);
-                    haul_cache.release_source(item, 1);
+                    ctx.queries.resource_cache.release_destination(stockpile);
+                    ctx.queries.resource_cache.release_source(item, 1);
                     clear_task_and_path(ctx.task, ctx.path);
                     return;
                 }
@@ -90,13 +89,13 @@ pub fn handle_haul_task(
                         phase: HaulPhase::GoingToStockpile,
                     });
                      // ソース予約解放と取得記録 (Delta Update)
-                    haul_cache.record_picked_source(item, 1);
+                    ctx.queries.resource_cache.record_picked_source(item, 1);
                     info!("HAUL: Soul {:?} picked up item {:?}", ctx.soul_entity, item);
                 }
             } else {
                 clear_task_and_path(ctx.task, ctx.path);
-                haul_cache.release_destination(stockpile);
-                haul_cache.release_source(item, 1);
+                ctx.queries.resource_cache.release_destination(stockpile);
+                ctx.queries.resource_cache.release_source(item, 1);
             }
         }
         HaulPhase::GoingToStockpile => {
@@ -126,8 +125,9 @@ pub fn handle_haul_task(
                 }
                 ctx.inventory.0 = None;
                 commands.entity(ctx.soul_entity).remove::<WorkingOn>();
+                commands.entity(ctx.soul_entity).remove::<WorkingOn>();
                 clear_task_and_path(ctx.task, ctx.path);
-                haul_cache.release_destination(stockpile);
+                ctx.queries.resource_cache.release_destination(stockpile);
             }
         }
         HaulPhase::Dropping => {
@@ -158,7 +158,7 @@ pub fn handle_haul_task(
                         };
 
                         // 現在の数 + 予約分 + フレーム内増加分 < capacity
-                         let anticipated = haul_cache.get_total_anticipated_count(stockpile, current_count);
+                         let anticipated = ctx.queries.resource_cache.get_total_anticipated_count(stockpile, current_count);
                         // ただし、自分自身の予約が含まれている（はず）。
                         // Thinkフェーズで予約しているなら、anticipatedには自分の分(1)が含まれる。
                         // なのでキャパシティ計算時には、その分を考慮する（つまり自分は入れるはず）。
@@ -195,7 +195,7 @@ pub fn handle_haul_task(
 
                     // カウンタを増やす
                     // Delta Update: 予約解放 + フレーム内増加
-                    haul_cache.record_stored_destination(stockpile);
+                    ctx.queries.resource_cache.record_stored_destination(stockpile);
 
                     info!(
                         "TASK_EXEC: Soul {:?} dropped item at stockpile. Count ~ {}",
@@ -218,8 +218,8 @@ pub fn handle_haul_task(
                         ctx.path,
                         Some(ctx.inventory),
                         item_info.and_then(|(it, _)| it),
-                        &ctx.queries,
-                        haul_cache,
+                        ctx.queries,
+                        // haul_cache removed
                         world_map,
                         true,
                     );

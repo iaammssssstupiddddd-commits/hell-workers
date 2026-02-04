@@ -2,7 +2,7 @@
 
 use crate::entities::damned_soul::StressBreakdown;
 use crate::relationships::WorkingOn;
-use crate::systems::familiar_ai::resource_cache::SharedResourceCache;
+// use crate::systems::familiar_ai::resource_cache::SharedResourceCache; // Removed unused import
 use crate::systems::soul_ai::task_execution::{
     common::*,
     context::TaskExecutionContext,
@@ -17,7 +17,6 @@ pub fn handle_haul_to_blueprint_task(
     item_entity: Entity,
     blueprint_entity: Entity,
     phase: HaulToBpPhase,
-    haul_cache: &mut SharedResourceCache,
     commands: &mut Commands,
     world_map: &Res<WorldMap>,
 ) {
@@ -41,8 +40,7 @@ pub fn handle_haul_to_blueprint_task(
             ctx.path,
             Some(ctx.inventory),
             None, // アイテムを拾う前なのでNone
-            &ctx.queries,
-            haul_cache,
+            ctx.queries,
             world_map,
             true, // 失敗時はセリフを出す
         );
@@ -92,7 +90,7 @@ pub fn handle_haul_to_blueprint_task(
                     // ここではパスをクリアするのみとする。
                     
                     // ソース予約解放と取得記録
-                    haul_cache.record_picked_source(item_entity, 1);
+                    ctx.queries.resource_cache.record_picked_source(item_entity, 1);
 
                     *ctx.task = AssignedTask::HaulToBlueprint(crate::systems::soul_ai::task_execution::types::HaulToBlueprintData {
                         item: item_entity,
@@ -145,8 +143,7 @@ pub fn handle_haul_to_blueprint_task(
                     ctx.path,
                     Some(ctx.inventory),
                     dropped_res,
-                    &ctx.queries,
-                    haul_cache,
+                    ctx.queries,
                     world_map,
                     true,
                 );
@@ -201,7 +198,7 @@ pub fn handle_haul_to_blueprint_task(
             ctx.soul.fatigue = (ctx.soul.fatigue + 0.05).min(1.0);
             
             // 完了したので予約解除
-            haul_cache.release_destination(blueprint_entity);
+            ctx.queries.resource_cache.release_destination(blueprint_entity);
         }
     }
 }

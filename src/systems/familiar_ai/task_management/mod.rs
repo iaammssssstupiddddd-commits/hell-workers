@@ -32,7 +32,7 @@ impl TaskManager {
         squad: &[Entity],
         task_area_opt: Option<&TaskArea>,
         fatigue_threshold: f32,
-        queries: &crate::systems::soul_ai::task_execution::context::TaskQueries,
+        queries: &mut crate::systems::soul_ai::task_execution::context::TaskQueries,
         q_souls: &mut Query<
             (
                 Entity,
@@ -51,7 +51,7 @@ impl TaskManager {
         >,
         designation_grid: &DesignationSpatialGrid,
         managed_tasks: &ManagedTasks,
-        haul_cache: &mut crate::systems::familiar_ai::resource_cache::SharedResourceCache,
+        // haul_cache removed
         world_map: &WorldMap,
         pf_context: &mut PathfindingContext,
     ) -> Option<Entity> {
@@ -82,7 +82,7 @@ impl TaskManager {
                 &queries.target_blueprints,
                 world_map,
                 pf_context,
-                haul_cache,
+                // haul_cache removed
             );
 
             for task_entity in candidates {
@@ -96,7 +96,7 @@ impl TaskManager {
                     queries,
                     q_souls,
                     task_area_opt,
-                    haul_cache,
+                    // haul_cache removed
                 ) {
                     return Some(task_entity);
                 }

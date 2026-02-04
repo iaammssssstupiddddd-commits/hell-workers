@@ -39,6 +39,8 @@ pub fn handle_gather_task(
                 if !reachable {
                     // 到達不能: タスクをキャンセル
                     info!("GATHER: Soul {:?} cannot reach target {:?}, canceling", ctx.soul_entity, target);
+                    // 予約解除
+                    ctx.queries.resource_cache.release_source(target, 1);
                     clear_task_and_path(ctx.task, ctx.path);
                     return;
                 }
@@ -60,7 +62,10 @@ pub fn handle_gather_task(
             if let Ok(target_data) = q_targets.get(target) {
                 let (res_transform, tree, rock, _res_item, des_opt, _stored_in) = target_data;
                 // 指定が解除されていたら中止
+                // 指定が解除されていたら中止
                 if cancel_task_if_designation_missing(des_opt, ctx.task, ctx.path) {
+                    // キャンセル時も予約解除
+                    ctx.queries.resource_cache.release_source(target, 1);
                     return;
                 }
                 let pos = res_transform.translation;
@@ -109,6 +114,9 @@ pub fn handle_gather_task(
                         info!("TASK_EXEC: Soul {:?} mined a rock (dropped {} rock)", ctx.soul_entity, crate::constants::ROCK_DROP_AMOUNT);
                     }
                     commands.entity(target).despawn();
+                    
+                    // 完了時予約解除
+                    ctx.queries.resource_cache.release_source(target, 1);
 
                     *ctx.task = AssignedTask::Gather(crate::systems::soul_ai::task_execution::types::GatherData {
                         target,

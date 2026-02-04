@@ -48,8 +48,8 @@ pub fn pathfinding_system(
         ),
         With<DamnedSoul>,
     >,
-    mut haul_cache: ResMut<crate::systems::familiar_ai::resource_cache::SharedResourceCache>,
-    queries: crate::systems::soul_ai::task_execution::context::TaskQueries,
+    // haul_cache removed
+    mut queries: crate::systems::soul_ai::task_execution::context::TaskQueries,
 ) {
     for (entity, transform, destination, mut path, mut task, idle, mut inventory_opt) in
         query.iter_mut()
@@ -140,9 +140,8 @@ pub fn pathfinding_system(
                     &mut task,
                     &mut path,
                     inventory_opt.as_deref_mut(),
-                    None,
-                    &queries,
-                    &mut *haul_cache,
+                    None, // Dropped resource
+                    &mut queries,
                     &*world_map,
                     true,
                 );

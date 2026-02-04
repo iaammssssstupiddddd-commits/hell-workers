@@ -46,13 +46,13 @@ pub fn process_squad_management(
         ),
         bevy::ecs::query::Without<Familiar>,
     >,
-    queries: &crate::systems::soul_ai::task_execution::context::TaskQueries,
+    queries: &mut crate::systems::soul_ai::task_execution::context::TaskQueries,
     cooldowns: &mut crate::systems::visual::speech::cooldown::BubbleCooldowns,
     time: &Res<Time>,
     game_assets: &Res<crate::assets::GameAssets>,
     q_bubbles: &Query<(Entity, &SpeechBubble), With<FamiliarBubble>>,
     world_map: &Res<WorldMap>,
-    haul_cache: &mut crate::systems::familiar_ai::resource_cache::SharedResourceCache,
+    // haul_cache removed
 ) -> Vec<Entity> {
     let initial_squad = SquadManager::build_squad(commanding);
 
@@ -70,8 +70,8 @@ pub fn process_squad_management(
         familiar_op.fatigue_threshold,
         commands,
         q_souls,
-        queries,
-        haul_cache,
+        &mut *queries,
+        // haul_cache removed
         cooldowns,
         time,
         game_assets,
@@ -269,10 +269,10 @@ pub fn process_task_delegation_and_movement(
         ),
         bevy::ecs::query::Without<Familiar>,
     >,
-    queries: &crate::systems::soul_ai::task_execution::context::TaskQueries,
+    queries: &mut crate::systems::soul_ai::task_execution::context::TaskQueries,
     designation_grid: &DesignationSpatialGrid,
     managed_tasks: &ManagedTasks,
-    haul_cache: &mut crate::systems::familiar_ai::resource_cache::SharedResourceCache,
+    // haul_cache removed
     world_map: &WorldMap,
     pf_context: &mut PathfindingContext,
     time: &Res<Time>,
@@ -293,7 +293,7 @@ pub fn process_task_delegation_and_movement(
         q_souls,
         designation_grid,
         managed_tasks,
-        haul_cache,
+        // haul_cache removed
         world_map,
         pf_context,
     );

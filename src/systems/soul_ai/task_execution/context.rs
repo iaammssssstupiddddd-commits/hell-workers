@@ -12,6 +12,7 @@ use bevy::prelude::*;
 use crate::relationships::{ManagedBy, TaskWorkers};
 use crate::systems::jobs::{Designation, TaskSlots, Priority, Blueprint};
 use crate::systems::logistics::{Stockpile, InStockpile};
+use crate::systems::familiar_ai::resource_cache::SharedResourceCache;
 use bevy::ecs::system::SystemParam;
 
 /// タスク実行に必要なクエリ群
@@ -49,6 +50,8 @@ pub struct TaskQueries<'w, 's> {
     pub resources: Query<'w, 's, &'static crate::systems::logistics::ResourceItem>,
     pub target_mixers: Query<'w, 's, &'static crate::systems::jobs::TargetMixer>,
     pub resource_items: Query<'w, 's, (Entity, &'static crate::systems::logistics::ResourceItem, Option<&'static crate::relationships::StoredIn>)>,
+    pub resource_cache: ResMut<'w, SharedResourceCache>,
+    pub task_slots: Query<'w, 's, &'static crate::systems::jobs::TaskSlots>,
 }
 
 /// タスク実行の基本コンテキスト

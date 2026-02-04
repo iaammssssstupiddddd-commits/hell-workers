@@ -20,7 +20,7 @@ pub use types::AssignedTask;
 
 use crate::entities::damned_soul::{DamnedSoul, Destination, Path, StressBreakdown};
 use crate::events::OnTaskCompleted;
-use crate::systems::familiar_ai::resource_cache::SharedResourceCache;
+// use crate::systems::familiar_ai::resource_cache::SharedResourceCache; // Removed unused import
 use crate::systems::logistics::Inventory;
 use crate::systems::soul_ai::task_execution::types::{
     GatherWaterPhase, HaulPhase, HaulToBpPhase, HaulToMixerPhase, HaulWaterToMixerPhase,
@@ -82,7 +82,7 @@ pub fn task_execution_system(
     mut queries: context::TaskQueries,
     game_assets: Res<crate::assets::GameAssets>,
     time: Res<Time>,
-    mut haul_cache: ResMut<SharedResourceCache>,
+    // haul_cache is removed
     world_map: Res<WorldMap>,
     mut pf_context: Local<crate::world::pathfinding::PathfindingContext>,
 ) {
@@ -114,8 +114,8 @@ pub fn task_execution_system(
                     &mut path,
                     Some(&mut inventory),
                     None,
-                    &queries,
-                    &mut *haul_cache,
+                    &mut queries,
+                    // haul_cache removed
                     &world_map,
                     true,
                 );
@@ -163,7 +163,7 @@ pub fn task_execution_system(
                     data.stockpile,
                     data.phase,
                     &mut commands,
-                    &mut *haul_cache,
+                    // haul_cache removed
                     &world_map,
                 );
             }
@@ -186,7 +186,6 @@ pub fn task_execution_system(
                     data.item,
                     data.blueprint,
                     data.phase,
-                    &mut haul_cache,
                     &mut commands,
                     &world_map,
                 );
@@ -200,7 +199,7 @@ pub fn task_execution_system(
                     data.phase,
                     &mut commands,
                     &game_assets,
-                    &mut *haul_cache,
+                    // haul_cache removed
                     &time,
                     &world_map,
                 );
@@ -238,7 +237,7 @@ pub fn task_execution_system(
                     data.resource_type,
                     data.phase,
                     &mut commands,
-                    &mut *haul_cache,
+                    // haul_cache removed
                     &world_map,
                 );
             }
@@ -252,7 +251,7 @@ pub fn task_execution_system(
                     data.phase,
                     &mut commands,
                     &game_assets,
-                    &mut *haul_cache,
+                    // haul_cache removed
                     &time,
                     &world_map,
                 );

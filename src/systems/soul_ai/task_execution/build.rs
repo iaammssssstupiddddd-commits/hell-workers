@@ -35,6 +35,7 @@ pub fn handle_build_task(
                         "BUILD: Soul {:?} waiting for materials at blueprint {:?}",
                         ctx.soul_entity, blueprint_entity
                     );
+                    ctx.queries.resource_cache.release_source(blueprint_entity, 1);
                     clear_task_and_path(ctx.task, ctx.path);
                     commands.entity(ctx.soul_entity).remove::<WorkingOn>();
                     return;
@@ -55,6 +56,7 @@ pub fn handle_build_task(
                 }
             } else {
                 // 設計図が消失
+                ctx.queries.resource_cache.release_source(blueprint_entity, 1);
                 clear_task_and_path(ctx.task, ctx.path);
                 commands.entity(ctx.soul_entity).remove::<WorkingOn>();
             }
@@ -97,11 +99,13 @@ pub fn handle_build_task(
                     });
                 }
             } else {
+                ctx.queries.resource_cache.release_source(blueprint_entity, 1);
                 clear_task_and_path(ctx.task, ctx.path);
                 commands.entity(ctx.soul_entity).remove::<WorkingOn>();
             }
         }
         BuildPhase::Done => {
+            ctx.queries.resource_cache.release_source(blueprint_entity, 1);
             commands.entity(ctx.soul_entity).remove::<WorkingOn>();
             clear_task_and_path(ctx.task, ctx.path);
         }
