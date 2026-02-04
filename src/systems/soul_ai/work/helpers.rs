@@ -4,6 +4,7 @@ use crate::relationships::WorkingOn;
 // use crate::systems::familiar_ai::resource_cache::SharedResourceCache; // Removed unused import
 use crate::systems::logistics::{Inventory, ResourceType};
 use crate::systems::soul_ai::task_execution::AssignedTask;
+use crate::systems::soul_ai::task_execution::context::TaskReservationAccess;
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
 
@@ -34,7 +35,7 @@ pub fn is_soul_available_for_work(
 ///
 /// ソウル側のみを処理し、タスク側（Designation, IssuedBy）には触らない。
 /// 使い魔がスロットの空きを検知して別のソウルに再アサインする。
-pub fn unassign_task(
+pub fn unassign_task<'w, 's, Q: TaskReservationAccess<'w, 's>>(
     commands: &mut Commands,
     soul_entity: Entity,
     drop_pos: Vec2,
@@ -42,7 +43,7 @@ pub fn unassign_task(
     path: &mut Path,
     mut inventory: Option<&mut Inventory>,
     dropped_item_res: Option<ResourceType>,
-    queries: &mut crate::systems::soul_ai::task_execution::context::TaskQueries,
+    queries: &mut Q,
     world_map: &WorldMap,
     emit_abandoned_event: bool,
 ) {
@@ -57,44 +58,44 @@ pub fn unassign_task(
     // 運搬・水汲みタスクの予約を解除
     match task {
         AssignedTask::Haul(data) => {
-            queries.resource_cache.release_destination(data.stockpile);
+            queries.resource_cache().release_destination(data.stockpile);
             use crate::systems::soul_ai::task_execution::types::HaulPhase;
             if matches!(data.phase, HaulPhase::GoingToItem) {
-                queries.resource_cache.release_source(data.item, 1);
+                queries.resource_cache().release_source(data.item, 1);
             }
         }
         AssignedTask::GatherWater(data) => {
-            queries.resource_cache.release_destination(data.tank);
+            queries.resource_cache().release_destination(data.tank);
             use crate::systems::soul_ai::task_execution::types::GatherWaterPhase;
             if matches!(data.phase, GatherWaterPhase::GoingToBucket) {
-                queries.resource_cache.release_source(data.bucket, 1);
+                queries.resource_cache().release_source(data.bucket, 1);
             }
         }
         AssignedTask::HaulWaterToMixer(data) => {
              // 作業員スロットとしてのMixer予約解除
-            queries.resource_cache.release_mixer_destination(data.mixer, ResourceType::Water);
+            queries.resource_cache().release_mixer_destination(data.mixer, ResourceType::Water);
             
             use crate::systems::soul_ai::task_execution::types::HaulWaterToMixerPhase;
             if matches!(data.phase, HaulWaterToMixerPhase::GoingToBucket) {
-                 queries.resource_cache.release_source(data.bucket, 1);
+                 queries.resource_cache().release_source(data.bucket, 1);
             } else if matches!(data.phase, HaulWaterToMixerPhase::FillingFromTank) {
-                 queries.resource_cache.release_source(data.tank, 1);
+                 queries.resource_cache().release_source(data.tank, 1);
             }
         }
         AssignedTask::HaulToMixer(data) => {
-            queries.resource_cache.release_mixer_destination(data.mixer, data.resource_type);
+            queries.resource_cache().release_mixer_destination(data.mixer, data.resource_type);
              
             use crate::systems::soul_ai::task_execution::types::HaulToMixerPhase;
              if matches!(data.phase, HaulToMixerPhase::GoingToItem) {
-                 queries.resource_cache.release_source(data.item, 1);
+                 queries.resource_cache().release_source(data.item, 1);
              }
         }
         AssignedTask::HaulToBlueprint(data) => {
-            queries.resource_cache.release_destination(data.blueprint);
+            queries.resource_cache().release_destination(data.blueprint);
              
             use crate::systems::soul_ai::task_execution::types::HaulToBpPhase;
             if matches!(data.phase, HaulToBpPhase::GoingToItem) {
-                queries.resource_cache.release_source(data.item, 1);
+                queries.resource_cache().release_source(data.item, 1);
             }
         }
         AssignedTask::CollectSand(_) | AssignedTask::Refine(_) => {}
@@ -127,7 +128,7 @@ pub fn unassign_task(
             ));
             
             let _res_item = dropped_item_res.or_else(|| {
-                queries.resources.get(item_entity).ok().map(|r| r.0)
+                queries.resources().get(item_entity).ok().map(|r| r.0)
             });
 
             // 管理コンポーネントは削除せず維持する...

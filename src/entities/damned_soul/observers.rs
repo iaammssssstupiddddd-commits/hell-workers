@@ -50,7 +50,7 @@ pub fn on_stress_breakdown(
         Option<&crate::entities::familiar::UnderCommand>,
     )>,
     world_map: Res<WorldMap>,
-    mut queries: crate::systems::soul_ai::task_execution::context::TaskQueries,
+    mut queries: crate::systems::soul_ai::task_execution::context::TaskAssignmentQueries,
 ) {
     let soul_entity = on.entity;
     if let Ok((entity, transform, mut _soul, mut task, mut path, mut inventory_opt, under_command)) =
@@ -100,7 +100,7 @@ pub fn on_exhausted(
         Option<&crate::entities::familiar::UnderCommand>,
     )>,
     world_map: Res<WorldMap>,
-    mut queries: crate::systems::soul_ai::task_execution::context::TaskQueries,
+    mut queries: crate::systems::soul_ai::task_execution::context::TaskAssignmentQueries,
 ) {
     let soul_entity = on.entity;
     if let Ok((
