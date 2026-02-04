@@ -228,6 +228,7 @@ pub fn spawn_familiar_at(
             FamiliarOperation::default(),
             ActiveCommand::default(),
             crate::systems::familiar_ai::FamiliarAiState::default(),
+            crate::systems::familiar_ai::state_transition::FamiliarAiStateHistory::default(),
             crate::relationships::Commanding::default(), // 部下リスト（Relationship自動管理）
             crate::relationships::ManagedTasks::default(), // 管理タスクリスト（Relationship自動管理）
             Destination(actual_pos),                       // 移動先

@@ -7,27 +7,21 @@ use crate::entities::familiar::{ActiveCommand, FamiliarCommand};
 use crate::events::{FamiliarAiStateChangedEvent, FamiliarAiStateTransitionReason};
 use crate::systems::familiar_ai::FamiliarAiState;
 use bevy::prelude::*;
-use std::collections::HashMap;
 
-/// 前フレームの状態を保存するリソース
-#[derive(Resource, Default)]
-pub struct PreviousFamiliarAiStates {
-    states: HashMap<Entity, FamiliarAiState>,
+/// 前フレームの状態を保存するコンポーネント
+#[derive(Component, Default)]
+pub struct FamiliarAiStateHistory {
+    pub last_state: FamiliarAiState,
 }
 
 /// 状態が変更された時のみ処理するシステム
 /// Bevy の `Changed<FamiliarAiState>` フィルタを使用
 pub fn detect_state_changes_system(
-    q_familiars: Query<(Entity, &FamiliarAiState), Changed<FamiliarAiState>>,
-    mut previous_states: ResMut<PreviousFamiliarAiStates>,
+    mut q_familiars: Query<(Entity, &FamiliarAiState, &mut FamiliarAiStateHistory), Changed<FamiliarAiState>>,
     mut ev_state_changed: MessageWriter<FamiliarAiStateChangedEvent>,
 ) {
-    for (entity, new_state) in q_familiars.iter() {
-        let from_state = previous_states
-            .states
-            .get(&entity)
-            .cloned()
-            .unwrap_or_else(|| FamiliarAiState::default());
+    for (entity, new_state, mut history) in q_familiars.iter_mut() {
+        let from_state = history.last_state.clone();
 
         // 実際に状態が異なっている場合のみ発火
         if from_state != *new_state {
@@ -43,7 +37,7 @@ pub fn detect_state_changes_system(
             });
 
             // 前の状態を更新
-            previous_states.states.insert(entity, new_state.clone());
+            history.last_state = new_state.clone();
         }
     }
 }
@@ -51,32 +45,24 @@ pub fn detect_state_changes_system(
 /// コマンドが変更された時のみ処理するシステム
 /// Bevy の `Changed<ActiveCommand>` フィルタを使用
 pub fn detect_command_changes_system(
-    q_familiars: Query<(Entity, &ActiveCommand), Changed<ActiveCommand>>,
-    q_ai_states: Query<&FamiliarAiState>,
+    mut q_familiars: Query<(Entity, &ActiveCommand, &FamiliarAiState, &mut FamiliarAiStateHistory), Changed<ActiveCommand>>,
     mut ev_state_changed: MessageWriter<FamiliarAiStateChangedEvent>,
-    mut previous_states: ResMut<PreviousFamiliarAiStates>,
 ) {
-    for (entity, active_command) in q_familiars.iter() {
+    for (entity, active_command, current_state, mut history) in q_familiars.iter_mut() {
         // コマンドが Idle に変更された場合、状態も Idle に遷移する可能性が高い
         if matches!(active_command.command, FamiliarCommand::Idle) {
-            if let Ok(current_state) = q_ai_states.get(entity) {
-                if !matches!(current_state, FamiliarAiState::Idle) {
-                    let from_state = previous_states
-                        .states
-                        .get(&entity)
-                        .cloned()
-                        .unwrap_or_else(|| current_state.clone());
+            if !matches!(current_state, FamiliarAiState::Idle) {
+                let from_state = history.last_state.clone();
 
-                    // イベントを発火
-                    ev_state_changed.write(FamiliarAiStateChangedEvent {
-                        familiar_entity: entity,
-                        from: from_state.clone(),
-                        to: FamiliarAiState::Idle,
-                        reason: FamiliarAiStateTransitionReason::CommandChanged,
-                    });
+                // イベントを発火
+                ev_state_changed.write(FamiliarAiStateChangedEvent {
+                    familiar_entity: entity,
+                    from: from_state,
+                    to: FamiliarAiState::Idle,
+                    reason: FamiliarAiStateTransitionReason::CommandChanged,
+                });
 
-                    previous_states.states.insert(entity, FamiliarAiState::Idle);
-                }
+                history.last_state = FamiliarAiState::Idle;
             }
         }
     }
@@ -119,12 +105,3 @@ pub fn handle_state_changed_system(
     }
 }
 
-/// エンティティが削除された時に前の状態をクリーンアップ
-pub fn cleanup_previous_states_system(
-    mut removed: RemovedComponents<FamiliarAiState>,
-    mut previous_states: ResMut<PreviousFamiliarAiStates>,
-) {
-    for entity in removed.read() {
-        previous_states.states.remove(&entity);
-    }
-}

@@ -2,7 +2,7 @@
 //!
 //! UIで使役数が減少した場合、超過分の魂をリリースします。
 
-use crate::entities::damned_soul::Path;
+use crate::entities::damned_soul::{DamnedSoul, Path};
 use crate::entities::familiar::{Familiar, FamiliarVoice, UnderCommand};
 use crate::events::FamiliarOperationMaxSoulChangedEvent;
 use crate::relationships::Commanding;
@@ -17,7 +17,7 @@ use bevy::prelude::*;
 /// UIで使役数が減少した場合、超過分の魂をリリースする
 pub fn handle_max_soul_changed_system(
     mut ev_max_soul_changed: MessageReader<FamiliarOperationMaxSoulChangedEvent>,
-    q_familiars: Query<(&Transform, &FamiliarVoice, Option<&Familiar>), With<Familiar>>,
+    mut q_familiars: Query<(&Transform, &FamiliarVoice, Option<&mut crate::systems::visual::speech::cooldown::SpeechHistory>), With<Familiar>>,
     q_commanding: Query<&Commanding, With<Familiar>>,
     mut q_souls: Query<
         (
@@ -26,12 +26,13 @@ pub fn handle_max_soul_changed_system(
             &mut AssignedTask,
             &mut Path,
             Option<&mut crate::systems::logistics::Inventory>,
+            Option<&mut crate::systems::visual::speech::cooldown::SpeechHistory>,
         ),
+        (With<DamnedSoul>, Without<Familiar>),
     >,
     mut queries: crate::systems::soul_ai::task_execution::context::TaskQueries,
     game_assets: Res<crate::assets::GameAssets>,
     q_bubbles: Query<(Entity, &SpeechBubble), With<FamiliarBubble>>,
-    mut cooldowns: ResMut<crate::systems::visual::speech::cooldown::BubbleCooldowns>,
     time: Res<Time>,
     world_map: Res<crate::world::map::WorldMap>,
     mut commands: Commands,
@@ -56,7 +57,7 @@ pub fn handle_max_soul_changed_system(
                             break;
                         }
                         let member_entity = squad_entities[i];
-                        if let Ok((entity, transform, mut task, mut path, mut inventory_opt)) =
+                        if let Ok((entity, transform, mut task, mut path, mut inventory_opt, _history)) =
                             q_souls.get_mut(member_entity)
                         {
                             // タスクを解除
@@ -84,14 +85,17 @@ pub fn handle_max_soul_changed_system(
                     }
 
                     // リリースフレーズを表示（一度だけ）
-                    if let Ok((fam_transform, voice_opt, _)) =
-                        q_familiars.get(event.familiar_entity)
+                    if let Ok((fam_transform, voice_opt, history_opt)) =
+                        q_familiars.get_mut(event.familiar_entity)
                     {
-                        if cooldowns.can_speak(
-                            event.familiar_entity,
-                            BubblePriority::Normal,
-                            time.elapsed_secs(),
-                        ) {
+                        let current_time = time.elapsed_secs();
+                        let can_speak = if let Some(history) = &history_opt {
+                            history.can_speak(BubblePriority::Normal, current_time)
+                        } else {
+                            true
+                        };
+
+                        if can_speak {
                             crate::systems::visual::speech::spawn::spawn_familiar_bubble(
                                 &mut commands,
                                 event.familiar_entity,
@@ -103,11 +107,14 @@ pub fn handle_max_soul_changed_system(
                                 BubblePriority::Normal,
                                 Some(voice_opt),
                             );
-                            cooldowns.record_speech(
-                                event.familiar_entity,
-                                BubblePriority::Normal,
-                                time.elapsed_secs(),
-                            );
+                            if let Some(mut history) = history_opt {
+                                history.record_speech(BubblePriority::Normal, current_time);
+                            } else {
+                                commands.entity(event.familiar_entity).insert(crate::systems::visual::speech::cooldown::SpeechHistory {
+                                    last_time: current_time,
+                                    last_priority: BubblePriority::Normal,
+                                });
+                            }
                         }
                     }
                 }

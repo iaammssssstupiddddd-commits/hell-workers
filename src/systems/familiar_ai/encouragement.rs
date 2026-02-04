@@ -12,13 +12,13 @@ use crate::systems::spatial::{SpatialGrid, SpatialGridOps};
 use bevy::prelude::*;
 use rand::Rng;
 use rand::seq::SliceRandom;
-use std::collections::HashMap;
 
-/// 激励のクールダウン管理リソース
-#[derive(Resource, Default)]
-pub struct EncouragementCooldowns {
-    /// Soul Entity -> 次回激励可能になる時間
-    pub cooldowns: HashMap<Entity, f32>,
+/// 激励のクールダウン管理コンポーネント
+#[derive(Component, Debug, Reflect)]
+#[reflect(Component)]
+pub struct EncouragementCooldown {
+    /// 次回激励可能になる時間（elapsed_secs）
+    pub expiry: f32,
 }
 
 /// 激励システム
@@ -32,18 +32,12 @@ pub fn encouragement_system(
         &FamiliarAiState,
         &ActiveCommand,
     )>,
-    q_souls: Query<Entity, With<DamnedSoul>>,
+    q_souls: Query<(Entity, Has<EncouragementCooldown>), With<DamnedSoul>>,
     soul_grid: Res<SpatialGrid>,
-    mut cooldowns: ResMut<EncouragementCooldowns>,
 ) {
     let current_time = time.elapsed_secs();
     let dt = time.delta_secs();
     let mut rng = rand::thread_rng();
-
-    // クールダウンのクリーンアップ（古いエントリを削除）
-    cooldowns
-        .cooldowns
-        .retain(|_, expiry| *expiry > current_time);
 
     for (fam_entity, fam_transform, familiar, state, active_cmd) in q_familiars.iter() {
         // 監視モード中のみ有効
@@ -71,17 +65,15 @@ pub fn encouragement_system(
         let valid_targets: Vec<Entity> = nearby
             .iter()
             .filter_map(|&soul_entity| {
-                // クールダウン中は除外
-                if cooldowns.cooldowns.contains_key(&soul_entity) {
-                    return None;
+                // Soulエンティティであることを確認し、クールダウン中でないことを確認
+                if let Ok((entity, has_cooldown)) = q_souls.get(soul_entity) {
+                    if has_cooldown {
+                        return None;
+                    }
+                    Some(entity)
+                } else {
+                    None
                 }
-
-                // Soulエンティティであることを確認
-                if q_souls.get(soul_entity).is_err() {
-                    return None;
-                }
-
-                Some(soul_entity)
             })
             .collect();
 
@@ -93,12 +85,26 @@ pub fn encouragement_system(
             });
 
             // クールダウン設定
-            cooldowns
-                .cooldowns
-                .insert(target_soul, current_time + ENCOURAGEMENT_COOLDOWN);
+            commands.entity(target_soul).insert(EncouragementCooldown {
+                expiry: current_time + ENCOURAGEMENT_COOLDOWN,
+            });
 
             // 1フレームにつき1体まで激励
             break;
+        }
+    }
+}
+
+/// 期限切れのクールダウンを削除するシステム
+pub fn cleanup_encouragement_cooldowns_system(
+    mut commands: Commands,
+    time: Res<Time>,
+    q_cooldowns: Query<(Entity, &EncouragementCooldown)>,
+) {
+    let current_time = time.elapsed_secs();
+    for (entity, cooldown) in q_cooldowns.iter() {
+        if current_time >= cooldown.expiry {
+            commands.entity(entity).remove::<EncouragementCooldown>();
         }
     }
 }

@@ -37,7 +37,7 @@ pub fn handle_idle_state(
     time: &Res<Time>,
     game_assets: &Res<crate::assets::GameAssets>,
     q_bubbles: &Query<(Entity, &SpeechBubble), With<FamiliarBubble>>,
-    cooldowns: &mut crate::systems::visual::speech::cooldown::BubbleCooldowns,
+    history_opt: Option<&mut crate::systems::visual::speech::cooldown::SpeechHistory>,
     voice_opt: Option<&crate::entities::familiar::FamiliarVoice>,
 ) -> StateTransitionResult {
     // Idle コマンドでない場合は処理しない
@@ -54,7 +54,14 @@ pub fn handle_idle_state(
         *ai_state = FamiliarAiState::Idle;
 
         // 休息フレーズを表示
-        if cooldowns.can_speak(fam_entity, BubblePriority::Normal, time.elapsed_secs()) {
+        let current_time = time.elapsed_secs();
+        let can_speak = if let Some(history) = &history_opt {
+            history.can_speak(BubblePriority::Normal, current_time)
+        } else {
+            true
+        };
+
+        if can_speak {
             crate::systems::visual::speech::spawn::spawn_familiar_bubble(
                 commands,
                 fam_entity,
@@ -66,11 +73,17 @@ pub fn handle_idle_state(
                 BubblePriority::Normal,
                 voice_opt,
             );
-            cooldowns.record_speech(
-                fam_entity,
-                BubblePriority::Normal,
-                time.elapsed_secs(),
-            );
+            if let Some(history) = history_opt {
+                history.record_speech(
+                    BubblePriority::Normal,
+                    current_time,
+                );
+            } else {
+                commands.entity(fam_entity).insert(crate::systems::visual::speech::cooldown::SpeechHistory {
+                    last_time: current_time,
+                    last_priority: BubblePriority::Normal,
+                });
+            }
         }
     }
 

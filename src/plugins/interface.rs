@@ -27,6 +27,8 @@ pub struct InterfacePlugin;
 
 impl Plugin for InterfacePlugin {
     fn build(&self, app: &mut App) {
+        app.register_type::<crate::interface::ui::SectionFolded>();
+        app.register_type::<crate::interface::ui::UnassignedFolded>();
         app.add_systems(
             Update,
             (
