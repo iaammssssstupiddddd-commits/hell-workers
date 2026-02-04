@@ -138,7 +138,8 @@ impl SquadManager {
         queries: &mut crate::systems::soul_ai::task_execution::context::TaskQueries,
         // haul_cache removed (from call, but maybe kept in signature if used elsewhere?? unassign_task needs queries.resource_cache)
         // haul_cache is removed
-        cooldowns: &mut crate::systems::visual::speech::cooldown::BubbleCooldowns,
+        // haul_cache is removed
+        mut history_opt: Option<&mut crate::systems::visual::speech::cooldown::SpeechHistory>,
         time: &Time,
         game_assets: &Res<crate::assets::GameAssets>,
         q_bubbles: &Query<(Entity, &SpeechBubble), With<FamiliarBubble>>,
@@ -191,7 +192,14 @@ impl SquadManager {
                     );
 
                     // リリースフレーズを表示
-                    if cooldowns.can_speak(fam_entity, BubblePriority::Normal, time.elapsed_secs())
+                    let current_time = time.elapsed_secs();
+                    let can_speak = if let Some(history) = &history_opt {
+                        history.can_speak(BubblePriority::Normal, current_time)
+                    } else {
+                        true
+                    };
+
+                    if can_speak
                     {
                         crate::systems::visual::speech::spawn::spawn_familiar_bubble(
                             commands,
@@ -204,11 +212,14 @@ impl SquadManager {
                             BubblePriority::Normal,
                             voice_opt,
                         );
-                        cooldowns.record_speech(
-                            fam_entity,
-                            BubblePriority::Normal,
-                            time.elapsed_secs(),
-                        );
+                        if let Some(history) = history_opt.as_mut() {
+                            history.record_speech(BubblePriority::Normal, current_time);
+                        } else {
+                            commands.entity(fam_entity).insert(crate::systems::visual::speech::cooldown::SpeechHistory {
+                                last_time: current_time,
+                                last_priority: BubblePriority::Normal,
+                            });
+                        }
                     }
 
                     // UnderCommand を削除

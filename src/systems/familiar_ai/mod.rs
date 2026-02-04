@@ -66,10 +66,9 @@ impl Plugin for FamiliarAiPlugin {
     fn build(&self, app: &mut App) {
         app
             .register_type::<FamiliarAiState>()
+            .register_type::<encouragement::EncouragementCooldown>()
             .init_resource::<resource_cache::SharedResourceCache>()
-            .init_resource::<encouragement::EncouragementCooldowns>()
             .init_resource::<DesignationSpatialGrid>()
-            .init_resource::<state_transition::PreviousFamiliarAiStates>()
             .add_systems(
                 Update,
                 (
@@ -79,6 +78,7 @@ impl Plugin for FamiliarAiPlugin {
                         state_transition::detect_command_changes_system,
                         resource_cache::sync_reservations_system,
                         max_soul_handler::handle_max_soul_changed_system,
+                        encouragement::cleanup_encouragement_cooldowns_system,
                     )
                         .in_set(crate::systems::soul_ai::scheduling::SoulAiSystemSet::Sense),
                     // --- Think Phase ---
@@ -91,7 +91,6 @@ impl Plugin for FamiliarAiPlugin {
                     // --- Act Phase ---
                     (
                         state_transition::handle_state_changed_system,
-                        state_transition::cleanup_previous_states_system,
                     )
                         .in_set(crate::systems::soul_ai::scheduling::SoulAiSystemSet::Act),
                 ),
@@ -120,6 +119,7 @@ pub struct FamiliarAiParams<'w, 's> {
             Option<&'static Commanding>,
             Option<&'static ManagedTasks>,
             Option<&'static FamiliarVoice>,
+            Option<&'static mut crate::systems::visual::speech::cooldown::SpeechHistory>,
         ),
     >,
     pub q_souls: Query<
@@ -145,7 +145,7 @@ pub struct FamiliarAiParams<'w, 's> {
     pub designation_grid: Res<'w, DesignationSpatialGrid>,
     pub game_assets: Res<'w, crate::assets::GameAssets>,
     pub q_bubbles: Query<'w, 's, (Entity, &'static SpeechBubble), With<FamiliarBubble>>,
-    pub cooldowns: ResMut<'w, crate::systems::visual::speech::cooldown::BubbleCooldowns>,
+    // cooldowns removed (now a component)
     pub ev_state_changed: MessageWriter<'w, crate::events::FamiliarAiStateChangedEvent>,
     pub world_map: Res<'w, crate::world::map::WorldMap>,
     pub pf_context: Local<'s, PathfindingContext>,
@@ -165,7 +165,7 @@ pub fn familiar_ai_system(params: FamiliarAiParams) {
         designation_grid,
         game_assets,
         q_bubbles,
-        mut cooldowns,
+        // cooldowns removed
         mut ev_state_changed,
         world_map,
         mut pf_context,
@@ -193,6 +193,7 @@ pub fn familiar_ai_system(params: FamiliarAiParams) {
         commanding,
         managed_tasks_opt,
         voice_opt,
+        history_opt,
     ) in q_familiars.iter_mut()
     {
         #[allow(clippy::type_complexity)]
@@ -209,6 +210,7 @@ pub fn familiar_ai_system(params: FamiliarAiParams) {
             commanding,
             managed_tasks_opt,
             voice_opt,
+            mut history_opt,
         ): (
             Entity,
             &Transform,
@@ -222,6 +224,7 @@ pub fn familiar_ai_system(params: FamiliarAiParams) {
             Option<&Commanding>,
             Option<&ManagedTasks>,
             Option<&FamiliarVoice>,
+            Option<Mut<crate::systems::visual::speech::cooldown::SpeechHistory>>,
         ) = (
             fam_entity,
             fam_transform,
@@ -235,6 +238,7 @@ pub fn familiar_ai_system(params: FamiliarAiParams) {
             commanding,
             managed_tasks_opt,
             voice_opt,
+            history_opt,
         );
         let default_tasks = crate::relationships::ManagedTasks::default();
         let managed_tasks = managed_tasks_opt.unwrap_or(&default_tasks);
@@ -261,7 +265,7 @@ pub fn familiar_ai_system(params: FamiliarAiParams) {
                 &time,
                 &game_assets,
                 &q_bubbles,
-                &mut cooldowns,
+                history_opt.as_deref_mut(),
                 voice_opt,
             );
             if transition_result.apply_to(&mut ai_state) {
@@ -286,7 +290,7 @@ pub fn familiar_ai_system(params: FamiliarAiParams) {
             &mut commands,
             &mut q_souls,
             &mut task_queries,
-            &mut cooldowns,
+            history_opt.as_deref_mut(),
             &time,
             &game_assets,
             &q_bubbles,

@@ -145,8 +145,13 @@ pub struct SectionToggle(pub EntityListSectionType);
 #[derive(Component)]
 pub struct UnassignedSectionArrowIcon;
 
-#[derive(Resource, Default)]
-pub struct EntityListFoldState {
-    pub folded_familiars: std::collections::HashSet<Entity>,
-    pub unassigned_folded: bool,
-}
+/// セクションが折りたたまれていることを示すコンポーネント
+#[derive(Component, Default, Debug, Reflect)]
+#[reflect(Component)]
+pub struct SectionFolded;
+
+/// 未所属セクションが折りたたまれていることを示すコンポーネント
+/// 未所属セクションのエンティティに付与される
+#[derive(Component, Default, Debug, Reflect)]
+#[reflect(Component)]
+pub struct UnassignedFolded;

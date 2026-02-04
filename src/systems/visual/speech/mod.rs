@@ -17,7 +17,7 @@ pub struct SpeechPlugin;
 
 impl Plugin for SpeechPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<cooldown::BubbleCooldowns>();
+        app.register_type::<cooldown::SpeechHistory>();
         app.init_resource::<periodic::PeriodicEmotionFrameCounter>();
         app.add_plugins(ConversationPlugin);
         app.add_systems(

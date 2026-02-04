@@ -188,6 +188,8 @@ macro_rules! build_soul_list_item {
 pub fn rebuild_entity_list_system(
     mut commands: Commands,
     game_assets: Res<crate::assets::GameAssets>,
+    q_fam_container: Query<Entity, With<FamiliarListContainer>>,
+    q_unassigned_container: Query<Entity, With<UnassignedSoulContent>>,
     q_familiars: Query<(
         Entity,
         &Familiar,
@@ -205,10 +207,9 @@ pub fn rebuild_entity_list_system(
         ),
         Without<Familiar>,
     >,
-    q_fam_container: Query<Entity, With<FamiliarListContainer>>,
-    q_unassigned_container: Query<Entity, With<UnassignedSoulContent>>,
     q_children: Query<&Children>,
-    fold_state: Res<EntityListFoldState>,
+    q_folded: Query<Has<SectionFolded>>,
+    unassigned_folded_query: Query<Has<UnassignedFolded>, With<UnassignedSoulSection>>,
 ) {
     // Note: Update frequency is controlled by on_timer in interface.rs
 
@@ -237,7 +238,7 @@ pub fn rebuild_entity_list_system(
 
     // 使い魔リスト構築
     for (fam_entity, familiar, op, ai_state, commanding_opt) in q_familiars.iter() {
-        let is_folded = fold_state.folded_familiars.contains(&fam_entity);
+        let is_folded = q_folded.get(fam_entity).unwrap_or(false);
         let fold_icon = if is_folded {
             game_assets.icon_arrow_right.clone()
         } else {
@@ -372,7 +373,8 @@ pub fn rebuild_entity_list_system(
     }
 
     // 未所属ソウル
-    if !fold_state.unassigned_folded {
+    let unassigned_folded = unassigned_folded_query.iter().next().unwrap_or(false);
+    if !unassigned_folded {
         for (soul_entity, soul, task, identity, under_command) in q_all_souls.iter() {
             if under_command.is_none() {
                 commands
@@ -395,6 +397,7 @@ pub fn rebuild_entity_list_system(
 
 /// エンティティリストのインタラクション
 pub fn entity_list_interaction_system(
+    mut commands: Commands,
     mut interaction_query: Query<
         (&Interaction, &SectionToggle, &mut BackgroundColor),
         (Changed<Interaction>, With<Button>),
@@ -411,10 +414,11 @@ pub fn entity_list_interaction_system(
         (&Interaction, &FamiliarListItem),
         (Changed<Interaction>, With<Button>, Without<SoulListItem>),
     >,
-    mut fold_state: ResMut<EntityListFoldState>,
     mut selected_entity: ResMut<crate::interface::selection::SelectedEntity>,
     mut q_camera: Query<&mut Transform, With<crate::interface::camera::MainCamera>>,
     q_transforms: Query<&GlobalTransform>,
+    q_folded: Query<Has<SectionFolded>>,
+    unassigned_folded_query: Query<(Entity, Has<UnassignedFolded>), With<UnassignedSoulSection>>,
 ) {
     // セクション切り替え
     for (interaction, toggle, mut color) in interaction_query.iter_mut() {
@@ -423,14 +427,25 @@ pub fn entity_list_interaction_system(
                 *color = BackgroundColor(COLOR_SECTION_TOGGLE_PRESSED);
                 match toggle.0 {
                     EntityListSectionType::Familiar(entity) => {
-                        if fold_state.folded_familiars.contains(&entity) {
-                            fold_state.folded_familiars.remove(&entity);
+                        if q_folded.get(entity).unwrap_or(false) {
+                            commands.entity(entity).remove::<SectionFolded>();
                         } else {
-                            fold_state.folded_familiars.insert(entity);
+                            commands.entity(entity).insert(SectionFolded);
                         }
                     }
                     EntityListSectionType::Unassigned => {
-                        fold_state.unassigned_folded = !fold_state.unassigned_folded;
+                        let mut any_toggled = false;
+                        for (unassigned_entity, has_folded) in unassigned_folded_query.iter() {
+                            if has_folded {
+                                commands.entity(unassigned_entity).remove::<UnassignedFolded>();
+                            } else {
+                                commands.entity(unassigned_entity).insert(UnassignedFolded);
+                            }
+                            any_toggled = true;
+                        }
+                        if !any_toggled {
+                            warn!("LIST: UnassignedSoulSection not found for toggling!");
+                        }
                     }
                 }
             }
@@ -477,17 +492,16 @@ pub fn entity_list_interaction_system(
 /// 未所属ソウルセクションの矢印アイコンを折りたたみ状態に応じて更新
 pub fn update_unassigned_arrow_icon_system(
     game_assets: Res<crate::assets::GameAssets>,
-    fold_state: Res<EntityListFoldState>,
+    unassigned_folded_query: Query<Has<UnassignedFolded>, (With<UnassignedSoulSection>, Changed<UnassignedFolded>)>,
     mut q_arrow: Query<&mut ImageNode, With<UnassignedSectionArrowIcon>>,
 ) {
-    if !fold_state.is_changed() {
-        return;
-    }
-    for mut icon in q_arrow.iter_mut() {
-        icon.image = if fold_state.unassigned_folded {
-            game_assets.icon_arrow_right.clone()
-        } else {
-            game_assets.icon_arrow_down.clone()
-        };
+    if let Some(is_folded) = unassigned_folded_query.iter().next() {
+        for mut icon in q_arrow.iter_mut() {
+            icon.image = if is_folded {
+                game_assets.icon_arrow_right.clone()
+            } else {
+                game_assets.icon_arrow_down.clone()
+            };
+        }
     }
 }
