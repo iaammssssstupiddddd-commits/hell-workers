@@ -64,7 +64,7 @@ impl Plugin for SoulAiPlugin {
                         work::auto_haul::bucket_auto_haul_system,
                         work::auto_refine::mud_mixer_auto_refine_system,
                         work::auto_build::blueprint_auto_build_system
-                            .after(crate::systems::familiar_ai::familiar_ai_system),
+                            .after(crate::systems::familiar_ai::familiar_task_delegation_system),
                         work::task_area_auto_haul_system,
                         // アイドル・特殊行動
                         idle::behavior::idle_behavior_system,
@@ -86,15 +86,6 @@ impl Plugin for SoulAiPlugin {
                     )
                         .in_set(SoulAiSystemSet::Act),
                 ),
-            )
-            // デバッグシステム (順序非依存)
-            .add_systems(
-                Update,
-                (
-                    gathering::visual::gathering_visual_update_system,
-                    gathering::visual::gathering_debug_visualization_system,
-                )
-                    .in_set(GameSystemSet::Visual),
             )
             .add_observer(vitals::on_task_completed_motivation_bonus)
             .add_observer(vitals::on_encouraged_effect)

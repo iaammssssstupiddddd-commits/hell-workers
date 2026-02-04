@@ -18,7 +18,7 @@ pub fn cleanup_commanded_souls_system(
         &mut Path,
         Option<&mut crate::systems::logistics::Inventory>,
     )>,
-    mut queries: crate::systems::soul_ai::task_execution::context::TaskQueries,
+    mut queries: crate::systems::soul_ai::task_execution::context::TaskAssignmentQueries,
     q_familiars: Query<&ActiveCommand, With<Familiar>>,
     world_map: Res<crate::world::map::WorldMap>,
 ) {

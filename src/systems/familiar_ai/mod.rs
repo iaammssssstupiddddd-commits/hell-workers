@@ -83,9 +83,14 @@ impl Plugin for FamiliarAiPlugin {
                         .in_set(crate::systems::soul_ai::scheduling::SoulAiSystemSet::Sense),
                     // --- Think Phase ---
                     (
-                        familiar_ai_system,
-                        following::following_familiar_system,
-                        encouragement::encouragement_system,
+                        (
+                            familiar_ai_state_system,
+                            ApplyDeferred,
+                            familiar_task_delegation_system,
+                            following::following_familiar_system,
+                            encouragement::encouragement_system,
+                        )
+                            .chain(),
                     )
                         .in_set(crate::systems::soul_ai::scheduling::SoulAiSystemSet::Think),
                     // --- Act Phase ---
@@ -117,7 +122,6 @@ pub struct FamiliarAiParams<'w, 's> {
             &'static mut Path,
             Option<&'static TaskArea>,
             Option<&'static Commanding>,
-            Option<&'static ManagedTasks>,
             Option<&'static FamiliarVoice>,
             Option<&'static mut crate::systems::visual::speech::cooldown::SpeechHistory>,
         ),
@@ -140,19 +144,62 @@ pub struct FamiliarAiParams<'w, 's> {
         Without<Familiar>,
     >,
     pub q_breakdown: Query<'w, 's, &'static StressBreakdown>,
-    pub task_queries: crate::systems::soul_ai::task_execution::context::TaskQueries<'w, 's>,
+    pub task_queries: crate::systems::soul_ai::task_execution::context::TaskAssignmentQueries<'w, 's>,
     // resource_cache removed (included in task_queries)
-    pub designation_grid: Res<'w, DesignationSpatialGrid>,
     pub game_assets: Res<'w, crate::assets::GameAssets>,
     pub q_bubbles: Query<'w, 's, (Entity, &'static SpeechBubble), With<FamiliarBubble>>,
     // cooldowns removed (now a component)
     pub ev_state_changed: MessageWriter<'w, crate::events::FamiliarAiStateChangedEvent>,
     pub world_map: Res<'w, crate::world::map::WorldMap>,
+}
+
+#[derive(SystemParam)]
+pub struct FamiliarAiTaskParams<'w, 's> {
+    pub commands: Commands<'w, 's>,
+    pub time: Res<'w, Time>,
+    pub q_familiars: Query<
+        'w,
+        's,
+        (
+            Entity,
+            &'static Transform,
+            &'static Familiar,
+            &'static FamiliarOperation,
+            &'static ActiveCommand,
+            &'static mut FamiliarAiState,
+            &'static mut Destination,
+            &'static mut Path,
+            Option<&'static TaskArea>,
+            Option<&'static Commanding>,
+            Option<&'static ManagedTasks>,
+        ),
+        With<Familiar>,
+    >,
+    pub q_souls: Query<
+        'w,
+        's,
+        (
+            Entity,
+            &'static Transform,
+            &'static DamnedSoul,
+            &'static mut AssignedTask,
+            &'static mut Destination,
+            &'static mut Path,
+            &'static IdleState,
+            Option<&'static mut crate::systems::logistics::Inventory>,
+            Option<&'static crate::entities::familiar::UnderCommand>,
+            Option<&'static ParticipatingIn>,
+        ),
+        Without<Familiar>,
+    >,
+    pub task_queries: crate::systems::soul_ai::task_execution::context::TaskAssignmentQueries<'w, 's>,
+    pub designation_grid: Res<'w, DesignationSpatialGrid>,
+    pub world_map: Res<'w, crate::world::map::WorldMap>,
     pub pf_context: Local<'s, PathfindingContext>,
 }
 
-/// 使い魔AIの更新システム
-pub fn familiar_ai_system(params: FamiliarAiParams) {
+/// 使い魔AIの状態更新システム
+pub fn familiar_ai_state_system(params: FamiliarAiParams) {
     let FamiliarAiParams {
         mut commands,
         time,
@@ -162,13 +209,11 @@ pub fn familiar_ai_system(params: FamiliarAiParams) {
         q_breakdown,
         mut task_queries,
         // resource_cache removed
-        designation_grid,
         game_assets,
         q_bubbles,
         // cooldowns removed
         mut ev_state_changed,
         world_map,
-        mut pf_context,
         ..
     } = params;
     // 1. 搬送中のアイテム・ストックパイル予約状況を事前計算
@@ -191,7 +236,6 @@ pub fn familiar_ai_system(params: FamiliarAiParams) {
         fam_path,
         task_area_opt,
         commanding,
-        managed_tasks_opt,
         voice_opt,
         history_opt,
     ) in q_familiars.iter_mut()
@@ -208,7 +252,6 @@ pub fn familiar_ai_system(params: FamiliarAiParams) {
             mut fam_path,
             task_area_opt,
             commanding,
-            managed_tasks_opt,
             voice_opt,
             mut history_opt,
         ): (
@@ -222,7 +265,6 @@ pub fn familiar_ai_system(params: FamiliarAiParams) {
             Mut<Path>,
             Option<&TaskArea>,
             Option<&Commanding>,
-            Option<&ManagedTasks>,
             Option<&FamiliarVoice>,
             Option<Mut<crate::systems::visual::speech::cooldown::SpeechHistory>>,
         ) = (
@@ -236,12 +278,9 @@ pub fn familiar_ai_system(params: FamiliarAiParams) {
             fam_path,
             task_area_opt,
             commanding,
-            managed_tasks_opt,
             voice_opt,
             history_opt,
         );
-        let default_tasks = crate::relationships::ManagedTasks::default();
-        let managed_tasks = managed_tasks_opt.unwrap_or(&default_tasks);
 
         // 個別の使い魔の処理開始ログ
         debug!(
@@ -313,7 +352,6 @@ pub fn familiar_ai_system(params: FamiliarAiParams) {
                     &mut fam_dest,
                     &mut fam_path,
                     &mut q_souls,
-                    &task_queries,
                     &q_breakdown,
                     &mut commands,
                 );
@@ -356,14 +394,60 @@ pub fn familiar_ai_system(params: FamiliarAiParams) {
             });
         }
 
-        // タスク委譲と移動制御
+    }
+}
+
+/// 使い魔AIのタスク委譲・移動システム
+pub fn familiar_task_delegation_system(params: FamiliarAiTaskParams) {
+    let FamiliarAiTaskParams {
+        mut commands,
+        time,
+        mut q_familiars,
+        mut q_souls,
+        mut task_queries,
+        designation_grid,
+        world_map,
+        mut pf_context,
+        ..
+    } = params;
+
+    for (
+        fam_entity,
+        fam_transform,
+        _familiar,
+        familiar_op,
+        active_command,
+        mut ai_state,
+        mut fam_dest,
+        mut fam_path,
+        task_area_opt,
+        commanding,
+        managed_tasks_opt,
+    ) in q_familiars.iter_mut()
+    {
+        if matches!(active_command.command, FamiliarCommand::Idle) {
+            continue;
+        }
+
+        let state_changed = ai_state.is_changed();
+        let default_tasks = crate::relationships::ManagedTasks::default();
+        let managed_tasks = managed_tasks_opt.unwrap_or(&default_tasks);
+
+        let initial_squad = crate::systems::familiar_ai::squad::SquadManager::build_squad(commanding);
+        let (squad_entities, _invalid_members) =
+            crate::systems::familiar_ai::squad::SquadManager::validate_squad(
+                initial_squad,
+                fam_entity,
+                &mut q_souls,
+            );
+
         process_task_delegation_and_movement(
             fam_entity,
             fam_transform,
             familiar_op,
-            &mut ai_state,
-            &mut fam_dest,
-            &mut fam_path,
+            &mut *ai_state,
+            &mut *fam_dest,
+            &mut *fam_path,
             task_area_opt,
             &squad_entities,
             &mut commands,
@@ -371,7 +455,6 @@ pub fn familiar_ai_system(params: FamiliarAiParams) {
             &mut task_queries,
             &designation_grid,
             managed_tasks,
-            // resource_cache arg removed
             &world_map,
             &mut *pf_context,
             &time,

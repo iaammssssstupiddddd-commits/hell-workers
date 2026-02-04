@@ -35,7 +35,6 @@ pub fn scouting_logic(
         ),
         Without<crate::entities::familiar::Familiar>,
     >,
-    _queries: &crate::systems::soul_ai::task_execution::context::TaskQueries,
     q_breakdown: &Query<&StressBreakdown>,
     commands: &mut Commands,
 ) -> bool {

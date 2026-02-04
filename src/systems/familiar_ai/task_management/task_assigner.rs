@@ -19,7 +19,7 @@ use bevy::prelude::*;
 fn can_reserve_source(
     task_entity: Entity,
     // resource_cache removed
-    queries: &crate::systems::soul_ai::task_execution::context::TaskQueries,
+    queries: &crate::systems::soul_ai::task_execution::context::TaskAssignmentQueries,
 ) -> bool {
     // 現在の予約数（実行中 + 割り当て済み移動中）
     let current_reserved = queries.resource_cache.get_source_reservation(task_entity);
@@ -65,7 +65,7 @@ pub fn assign_task_to_worker(
     task_entity: Entity,
     worker_entity: Entity,
     fatigue_threshold: f32,
-    queries: &mut crate::systems::soul_ai::task_execution::context::TaskQueries,
+    queries: &mut crate::systems::soul_ai::task_execution::context::TaskAssignmentQueries,
     q_souls: &mut Query<
         (
             Entity,

@@ -49,7 +49,7 @@ pub fn pathfinding_system(
         With<DamnedSoul>,
     >,
     // haul_cache removed
-    mut queries: crate::systems::soul_ai::task_execution::context::TaskQueries,
+    mut queries: crate::systems::soul_ai::task_execution::context::TaskAssignmentQueries,
 ) {
     for (entity, transform, destination, mut path, mut task, idle, mut inventory_opt) in
         query.iter_mut()

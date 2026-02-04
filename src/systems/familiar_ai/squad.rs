@@ -135,7 +135,7 @@ impl SquadManager {
             ),
             Without<crate::entities::familiar::Familiar>,
         >,
-        queries: &mut crate::systems::soul_ai::task_execution::context::TaskQueries,
+        queries: &mut crate::systems::soul_ai::task_execution::context::TaskAssignmentQueries,
         // haul_cache removed (from call, but maybe kept in signature if used elsewhere?? unassign_task needs queries.resource_cache)
         // haul_cache is removed
         // haul_cache is removed

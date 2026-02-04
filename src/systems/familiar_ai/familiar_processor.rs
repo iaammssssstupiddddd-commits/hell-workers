@@ -46,7 +46,7 @@ pub fn process_squad_management(
         ),
         bevy::ecs::query::Without<Familiar>,
     >,
-    queries: &mut crate::systems::soul_ai::task_execution::context::TaskQueries,
+    queries: &mut crate::systems::soul_ai::task_execution::context::TaskAssignmentQueries,
     history_opt: Option<&mut crate::systems::visual::speech::cooldown::SpeechHistory>,
     time: &Res<Time>,
     game_assets: &Res<crate::assets::GameAssets>,
@@ -269,7 +269,7 @@ pub fn process_task_delegation_and_movement(
         ),
         bevy::ecs::query::Without<Familiar>,
     >,
-    queries: &mut crate::systems::soul_ai::task_execution::context::TaskQueries,
+    queries: &mut crate::systems::soul_ai::task_execution::context::TaskAssignmentQueries,
     designation_grid: &DesignationSpatialGrid,
     managed_tasks: &ManagedTasks,
     // haul_cache removed

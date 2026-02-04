@@ -37,6 +37,9 @@ use crate::systems::visual::speech::SpeechPlugin;
 use crate::systems::visual::tank::update_tank_visual_system;
 use crate::systems::visual::wall_connection::WallConnectionPlugin;
 use crate::systems::soul_ai::vitals::visual::familiar_hover_visualization_system;
+use crate::systems::soul_ai::gathering::visual::{
+    gathering_debug_visualization_system, gathering_visual_update_system,
+};
 
 use bevy::prelude::*;
 
@@ -164,6 +167,8 @@ impl Plugin for VisualPlugin {
                 update_familiar_range_indicator,
                 update_tank_visual_system,
                 familiar_hover_visualization_system,
+                gathering_visual_update_system,
+                gathering_debug_visualization_system,
             )
                 .chain()
                 .in_set(GameSystemSet::Visual),

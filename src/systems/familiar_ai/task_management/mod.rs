@@ -32,7 +32,7 @@ impl TaskManager {
         squad: &[Entity],
         task_area_opt: Option<&TaskArea>,
         fatigue_threshold: f32,
-        queries: &mut crate::systems::soul_ai::task_execution::context::TaskQueries,
+        queries: &mut crate::systems::soul_ai::task_execution::context::TaskAssignmentQueries,
         q_souls: &mut Query<
             (
                 Entity,

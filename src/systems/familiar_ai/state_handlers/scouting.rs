@@ -37,7 +37,6 @@ pub fn handle_scouting_state(
     ),
     Without<crate::entities::familiar::Familiar>,
 >,
-queries: &crate::systems::soul_ai::task_execution::context::TaskQueries,
 q_breakdown: &Query<&StressBreakdown>,
 commands: &mut Commands,
 ) -> StateTransitionResult {
@@ -53,7 +52,6 @@ commands: &mut Commands,
         fam_dest,
         fam_path,
         q_souls,
-        queries,
         q_breakdown,
         commands,
     );
