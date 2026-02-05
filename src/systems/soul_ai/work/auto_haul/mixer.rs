@@ -10,6 +10,7 @@ use crate::systems::command::TaskArea;
 use crate::systems::jobs::{Designation, IssuedBy, MudMixerStorage, TargetMixer, TaskSlots, WorkType, Priority};
 use crate::systems::logistics::{ResourceItem, ResourceType, ReservedForTask, Stockpile};
 use crate::relationships::TaskWorkers;
+use crate::events::{ResourceReservationOp, ResourceReservationRequest};
 use crate::systems::familiar_ai::resource_cache::SharedResourceCache;
 use crate::systems::soul_ai::work::auto_haul::ItemReservations;
 use crate::systems::soul_ai::task_execution::AssignedTask;
@@ -17,8 +18,9 @@ use crate::systems::soul_ai::task_execution::AssignedTask;
 /// MudMixer への自動資材運搬タスク生成システム
 pub fn mud_mixer_auto_haul_system(
     mut commands: Commands,
-    mut haul_cache: ResMut<SharedResourceCache>,
+    haul_cache: Res<SharedResourceCache>,
     mut item_reservations: ResMut<ItemReservations>,
+    mut reservation_writer: MessageWriter<ResourceReservationRequest>,
     q_familiars: Query<(Entity, &ActiveCommand, &TaskArea)>,
     q_mixers: Query<(Entity, &Transform, &MudMixerStorage, Option<&TaskWorkers>)>,
     q_stockpiles_detailed: Query<(Entity, &Transform, &Stockpile, Option<&crate::relationships::StoredItems>)>,
@@ -40,6 +42,7 @@ pub fn mud_mixer_auto_haul_system(
 ) {
     let mut already_assigned_this_frame = std::collections::HashSet::new();
     let mut water_inflight_by_mixer = std::collections::HashMap::<Entity, usize>::new();
+    let mut mixer_reservation_delta = std::collections::HashMap::<(Entity, ResourceType), usize>::new();
 
     for task in q_souls.iter() {
         if let AssignedTask::HaulWaterToMixer(data) = task {
@@ -69,7 +72,12 @@ pub fn mud_mixer_auto_haul_system(
                     ResourceType::Rock => storage.rock,
                     _ => 0,
                 };
-                let inflight_count = haul_cache.get_mixer_destination_reservation(mixer_entity, resource_type);
+                let inflight_count =
+                    haul_cache.get_mixer_destination_reservation(mixer_entity, resource_type)
+                        + mixer_reservation_delta
+                            .get(&(mixer_entity, resource_type))
+                            .cloned()
+                            .unwrap_or(0);
 
                 // 満杯ならスキップ
                 if storage.is_full(resource_type) {
@@ -130,7 +138,13 @@ pub fn mud_mixer_auto_haul_system(
                         Priority(5),
                         ReservedForTask,
                     ));
-                    haul_cache.reserve_mixer_destination(mixer_entity, resource_type);
+                    *mixer_reservation_delta.entry((mixer_entity, resource_type)).or_insert(0) += 1;
+                    reservation_writer.write(ResourceReservationRequest {
+                        op: ResourceReservationOp::ReserveMixerDestination {
+                            target: mixer_entity,
+                            resource_type,
+                        },
+                    });
                     already_assigned_this_frame.insert(item_entity);
                     item_reservations.0.insert(item_entity);
                     info!("AUTO_HAUL_MIXER: Assigned {:?} haul to Mixer {:?}", resource_type, mixer_entity);
@@ -140,7 +154,13 @@ pub fn mud_mixer_auto_haul_system(
 
             // --- 砂採取タスクの自動発行 ---
             // 砂アイテムが足りず、かつミキサー近辺にSandPileがある場合
-            if storage.sand + (haul_cache.get_mixer_destination_reservation(mixer_entity, ResourceType::Sand) as u32) < 2 {
+            let sand_inflight =
+                haul_cache.get_mixer_destination_reservation(mixer_entity, ResourceType::Sand)
+                    + mixer_reservation_delta
+                        .get(&(mixer_entity, ResourceType::Sand))
+                        .cloned()
+                        .unwrap_or(0);
+            if storage.sand + (sand_inflight as u32) < 2 {
                 for (sp_entity, sp_transform, sp_designation, sp_workers) in q_sand_piles.iter() {
                     // ミキサーの近く（3タイル以内）にあるSandPileを対象にする
                     let dist = sp_transform.translation.truncate().distance(mixer_transform.translation.truncate());
@@ -277,7 +297,13 @@ pub fn mud_mixer_auto_haul_system(
                             ReservedForTask,
                         ));
                         item_reservations.0.insert(*bucket_entity);
-                        haul_cache.reserve_mixer_destination(mixer_entity, ResourceType::Water);
+                        *mixer_reservation_delta.entry((mixer_entity, ResourceType::Water)).or_insert(0) += 1;
+                        reservation_writer.write(ResourceReservationRequest {
+                            op: ResourceReservationOp::ReserveMixerDestination {
+                                target: mixer_entity,
+                                resource_type: ResourceType::Water,
+                            },
+                        });
                         already_assigned_this_frame.insert(*bucket_entity);
                         info!("AUTO_HAUL_MIXER: Issued HaulWaterToMixer for bucket {:?} (Mixer {:?})", bucket_entity, mixer_entity);
                     }

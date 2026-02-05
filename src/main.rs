@@ -82,6 +82,8 @@ fn main() {
         .add_message::<FamiliarSpawnEvent>()
         .add_message::<crate::events::FamiliarOperationMaxSoulChangedEvent>()
         .add_message::<crate::events::FamiliarAiStateChangedEvent>()
+        .add_message::<crate::events::TaskAssignmentRequest>()
+        .add_message::<crate::events::ResourceReservationRequest>()
         // Entity plugins
         .add_plugins(DamnedSoulPlugin)
         .add_plugins(FamiliarAiPlugin)

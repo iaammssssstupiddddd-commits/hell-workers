@@ -34,7 +34,10 @@ pub fn handle_haul_water_to_mixer_task(
                     }
                 } else {
                     // バケツが見つからない場合は中断
-                    ctx.queries.resource_cache.release_mixer_destination(mixer_entity, ResourceType::Water);
+                    ctx.queue_reservation(crate::events::ResourceReservationOp::ReleaseMixerDestination {
+                        target: mixer_entity,
+                        resource_type: ResourceType::Water,
+                    });
                     clear_task_and_path(ctx.task, ctx.path);
                 }
                 return;
@@ -58,12 +61,15 @@ pub fn handle_haul_water_to_mixer_task(
                         return;
                     }
                     // ソース取得記録
-                    ctx.queries.resource_cache.record_picked_source(bucket_entity, 1);
+                    ctx.queue_reservation(crate::events::ResourceReservationOp::RecordPickedSource { source: bucket_entity, amount: 1 });
 
                     let bucket_is_water = match ctx.queries.resources.get(bucket_entity) {
                         Ok(res_item) => res_item.0 == ResourceType::BucketWater,
                         Err(_) => {
-                            ctx.queries.resource_cache.release_mixer_destination(mixer_entity, ResourceType::Water);
+                            ctx.queue_reservation(crate::events::ResourceReservationOp::ReleaseMixerDestination {
+                                target: mixer_entity,
+                                resource_type: ResourceType::Water,
+                            });
                             clear_task_and_path(ctx.task, ctx.path);
                             return;
                         }
@@ -78,7 +84,10 @@ pub fn handle_haul_water_to_mixer_task(
                     }
                 }
             } else {
-                ctx.queries.resource_cache.release_mixer_destination(mixer_entity, ResourceType::Water);
+                ctx.queue_reservation(crate::events::ResourceReservationOp::ReleaseMixerDestination {
+                    target: mixer_entity,
+                    resource_type: ResourceType::Water,
+                });
                 clear_task_and_path(ctx.task, ctx.path);
             }
         }
@@ -272,7 +281,10 @@ pub fn handle_haul_water_to_mixer_task(
                     info!("TASK_EXEC: Soul {:?} poured {} water into MudMixer", ctx.soul_entity, added);
                     
                     // 予約解除
-                    ctx.queries.resource_cache.release_mixer_destination(mixer_entity, ResourceType::Water);
+                    ctx.queue_reservation(crate::events::ResourceReservationOp::ReleaseMixerDestination {
+                        target: mixer_entity,
+                        resource_type: ResourceType::Water,
+                    });
 
                     // バケツを空に戻す
                     commands.entity(bucket_entity).insert((
@@ -395,7 +407,10 @@ fn abort_and_drop_bucket(
     // haul_cache removed
     pos: Vec2
 ) {
-    ctx.queries.resource_cache.release_mixer_destination(mixer_entity, ResourceType::Water);
+    ctx.queue_reservation(crate::events::ResourceReservationOp::ReleaseMixerDestination {
+        target: mixer_entity,
+        resource_type: ResourceType::Water,
+    });
 
     // バケツを地面にドロップして、関連コンポーネントをクリーンアップ
     let drop_grid = WorldMap::world_to_grid(pos);

@@ -12,8 +12,8 @@
 | フェーズ | システムセット (`SoulAiSystemSet`) | 役割 |
 | :--- | :--- | :--- |
 | **Sense** | `Sense` | 環境情報の収集と **リソース予約の再構築** (`sync_reservations_system`)。毎フレーム、現在のタスク状況から `SharedResourceCache` をリセット・再計算します。 |
-| **Think** | `Think` | 意思決定とタスク割り当て (`task_assigner`)。`SharedResourceCache` を参照してリソースの予約 (Try Reserve) を行います。 |
-| **Act** | `Act` | 実際の行動 (`task_execution`)。移動、採取、運搬、建築などを行い、成功時にはキャッシュを即時更新します。 |
+| **Think** | `Think` | 意思決定とタスク割り当て要求の生成（`TaskAssignmentRequest`）。`SharedResourceCache` を参照して候補を選定します。 |
+| **Act** | `Act` | 割り当て要求の適用 → 実際の行動 (`task_execution`) → 予約更新の反映 (`apply_reservation_requests_system`)。 |
 
 ## 3. 主要なコンポーネント
 
@@ -57,8 +57,8 @@ Bevy 0.18 の **ECS Relationships** 機能を使用し、エンティティ間�
 ### 2. 割り当て (Assignment)
 - 使い魔 AI が自分のキュー、またはグローバルキューから最も近い有効なタスクを配下の魂に割り当てる。
 - **排他制御 (SharedResourceCache)**:
-    - 割り当て時、`SharedResourceCache` をチェックして、「他の誰かが狙っている資源」や「満杯になりそうな格納先」への割り当てを防ぎます。
-    - 決定したタスクは即座に予約 (Reserve) され、同一フレーム内の後続の AI からは「既約」として認識されます。
+    - 割り当て時は `SharedResourceCache` を参照し、過剰割り当てを防ぎます。
+    - 決定したタスクは `TaskAssignmentRequest` と同時に予約更新要求がキューされ、Act で反映されます。
 - **優先度 (Priority)**:
     - **High (10)**: 建築作業 (`WorkType::Build`)、建築資材の運搬（設計図への `Haul`）。これらは距離に関わらず最優先で割り当てられる。
     - **Low (0)**: 通常の資源採取、備蓄への運搬。

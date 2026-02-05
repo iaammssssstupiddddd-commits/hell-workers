@@ -51,8 +51,6 @@ fn handle_going_to_bucket(
     world_map: &WorldMap,
     soul_pos: Vec2,
 ) {
-    let q_targets = &ctx.queries.targets;
-
     // 既にインベントリにバケツがある場合は次のフェーズへ
     if ctx.inventory.0 == Some(bucket_entity) {
         // バケツが既にインベントリにあるので、川へ
@@ -73,14 +71,19 @@ fn handle_going_to_bucket(
         return;
     }
 
-    let Ok((bucket_transform, _, _, res_item_opt, _, stored_in_opt)) = q_targets.get(bucket_entity) else {
+    let Ok((bucket_transform, _, _, res_item_opt, _, stored_in_opt)) =
+        ctx.queries.targets.get(bucket_entity)
+    else {
         abort_task_with_item(commands, ctx, world_map);
         return;
     };
 
+    let res_type = res_item_opt.map(|res| res.0);
+    let stored_in_entity = stored_in_opt.map(|stored| stored.0);
+
     // バケツであることを確認（任意だが安全のため）
-    if let Some(res) = res_item_opt {
-        if !matches!(res.0, ResourceType::BucketEmpty | ResourceType::BucketWater) {
+    if let Some(res_type) = res_type {
+        if !matches!(res_type, ResourceType::BucketEmpty | ResourceType::BucketWater) {
             abort_task_with_item(commands, ctx, world_map);
             return;
         }
@@ -104,22 +107,18 @@ fn handle_going_to_bucket(
         }
         
         // ソース取得記録 
-        ctx.queries.resource_cache.record_picked_source(bucket_entity, 1);
+        ctx.queue_reservation(crate::events::ResourceReservationOp::RecordPickedSource { source: bucket_entity, amount: 1 });
 
         // もしアイテムが備蓄場所にあったなら、その備蓄場所の型管理を更新する
-        if let Some(stored_in) = stored_in_opt {
+        if let Some(stored_in) = stored_in_entity {
             let q_stockpiles = &mut ctx.queries.stockpiles;
-            crate::systems::soul_ai::task_execution::common::update_stockpile_on_item_removal(stored_in.0, q_stockpiles);
+            crate::systems::soul_ai::task_execution::common::update_stockpile_on_item_removal(stored_in, q_stockpiles);
         }
-        let is_already_full = if let Some(res) = res_item_opt {
-            res.0 == ResourceType::BucketWater
-        } else {
-            false
-        };
+        let is_already_full = res_type == Some(ResourceType::BucketWater);
 
         if is_already_full {
             // 既に満タンならタンクへ
-            if let Ok((tank_transform, _, _, _, _, _)) = q_targets.get(tank_entity) {
+            if let Ok((tank_transform, _, _, _, _, _)) = ctx.queries.targets.get(tank_entity) {
                 let tank_pos = tank_transform.translation.truncate();
                 let (cx, cy) = WorldMap::world_to_grid(tank_pos);
                 let tank_grids = vec![(cx - 1, cy - 1), (cx, cy - 1), (cx - 1, cy), (cx, cy)];

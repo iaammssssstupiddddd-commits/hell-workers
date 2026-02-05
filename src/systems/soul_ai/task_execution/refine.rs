@@ -31,7 +31,7 @@ pub fn handle_refine_task(
                     info!("REFINE: Soul {:?} cannot reach mixer {:?}, canceling", ctx.soul_entity, mixer_entity);
                     commands.entity(mixer_entity).remove::<crate::systems::jobs::Designation>();
                     commands.entity(mixer_entity).remove::<crate::systems::jobs::TaskSlots>();
-                    ctx.queries.resource_cache.release_source(mixer_entity, 1);
+                    ctx.queue_reservation(crate::events::ResourceReservationOp::ReleaseSource { source: mixer_entity, amount: 1 });
                     clear_task_and_path(ctx.task, ctx.path);
                     return;
                 }
@@ -47,7 +47,7 @@ pub fn handle_refine_task(
                 // Mixer が存在しない場合も Designation を削除
                 commands.entity(mixer_entity).remove::<crate::systems::jobs::Designation>();
                 commands.entity(mixer_entity).remove::<crate::systems::jobs::TaskSlots>();
-                ctx.queries.resource_cache.release_source(mixer_entity, 1);
+                ctx.queue_reservation(crate::events::ResourceReservationOp::ReleaseSource { source: mixer_entity, amount: 1 });
                 clear_task_and_path(ctx.task, ctx.path);
             }
         }
@@ -67,7 +67,7 @@ pub fn handle_refine_task(
                     info!("TASK_EXEC: Soul {:?} canceled refining due to lack of materials", ctx.soul_entity);
                     commands.entity(mixer_entity).remove::<crate::systems::jobs::Designation>();
                     commands.entity(mixer_entity).remove::<crate::systems::jobs::TaskSlots>();
-                    ctx.queries.resource_cache.release_source(mixer_entity, 1);
+                    ctx.queue_reservation(crate::events::ResourceReservationOp::ReleaseSource { source: mixer_entity, amount: 1 });
                     clear_task_and_path(ctx.task, ctx.path);
                     return;
                 }
@@ -131,7 +131,7 @@ pub fn handle_refine_task(
                 // Mixer が存在しない場合も Designation を削除
                 commands.entity(mixer_entity).remove::<crate::systems::jobs::Designation>();
                 commands.entity(mixer_entity).remove::<crate::systems::jobs::TaskSlots>();
-                ctx.queries.resource_cache.release_source(mixer_entity, 1);
+                ctx.queue_reservation(crate::events::ResourceReservationOp::ReleaseSource { source: mixer_entity, amount: 1 });
                 clear_task_and_path(ctx.task, ctx.path);
             }
         }
@@ -140,7 +140,7 @@ pub fn handle_refine_task(
             commands.entity(mixer_entity).remove::<crate::systems::jobs::Designation>();
             commands.entity(mixer_entity).remove::<crate::systems::jobs::TaskSlots>();
             commands.entity(mixer_entity).remove::<crate::systems::jobs::IssuedBy>();
-            ctx.queries.resource_cache.release_source(mixer_entity, 1);
+            ctx.queue_reservation(crate::events::ResourceReservationOp::ReleaseSource { source: mixer_entity, amount: 1 });
             clear_task_and_path(ctx.task, ctx.path);
         }
     }
