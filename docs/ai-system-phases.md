@@ -13,12 +13,44 @@ Perceive → Update → Decide → Execute
 
 各フェーズ間には `ApplyDeferred` が配置され、コンポーネント変更が次のフェーズで確実に反映されます。
 
+## レイヤー構造
+
+Familiar AI と Soul AI は**別々のシステムセット**として定義され、Familiar AI が先に実行されます：
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  FamiliarAiSystemSet（指揮層）                          │
+│  Perceive → Update → Decide → Execute                   │
+└─────────────────────────────────────────────────────────┘
+                         │
+                   ApplyDeferred
+                         ↓
+┌─────────────────────────────────────────────────────────┐
+│  SoulAiSystemSet（実行層）                              │
+│  Perceive → Update → Decide → Execute                   │
+└─────────────────────────────────────────────────────────┘
+```
+
+### レイヤー分離の理由
+
+1. **指揮系統の表現**: Familiar（指揮官）が先に決定 → Soul（従属者）が反映
+2. **データ依存関係の明示化**: Familiar のタスク割り当てが Soul に自動的に伝播
+3. **重複割り当ての防止**: Familiar の決定が Soul の自動割り当てに先行
+4. **拡張性**: 将来的に敵AI等を追加する場合の階層設計が自然
+
 ## フェーズ定義
 
 `src/systems/soul_ai/scheduling.rs`:
 
 ```rust
-pub enum AiSystemSet {
+pub enum FamiliarAiSystemSet {
+    Perceive,  // 環境情報の読み取り、変化の検出
+    Update,    // 時間経過による内部状態の変化
+    Decide,    // 次の行動の選択、要求の生成
+    Execute,   // 決定された行動の実行
+}
+
+pub enum SoulAiSystemSet {
     Perceive,  // 環境情報の読み取り、変化の検出
     Update,    // 時間経過による内部状態の変化
     Decide,    // 次の行動の選択、要求の生成
@@ -275,8 +307,8 @@ fn rest_behavior_apply_system(
 
 | ファイル | 説明 |
 |:--|:--|
-| `src/systems/soul_ai/scheduling.rs` | `AiSystemSet`の定義 |
-| `src/systems/soul_ai/mod.rs` | Soul AIのフェーズ登録 |
+| `src/systems/soul_ai/scheduling.rs` | `FamiliarAiSystemSet`, `SoulAiSystemSet`の定義 |
+| `src/systems/soul_ai/mod.rs` | Soul AIのフェーズ登録、レイヤー間順序設定 |
 | `src/systems/familiar_ai/mod.rs` | Familiar AIのフェーズ登録 |
 | `src/systems/soul_ai/idle/behavior.rs` | Decide/Execute分割の実装例 |
 | `src/events.rs` | Request型の定義 |

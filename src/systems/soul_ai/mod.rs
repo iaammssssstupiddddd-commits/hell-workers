@@ -13,21 +13,24 @@ pub mod work;
 pub mod scheduling;
 
 use crate::systems::GameSystemSet;
-use scheduling::AiSystemSet;
+use scheduling::{FamiliarAiSystemSet, SoulAiSystemSet};
 
 pub struct SoulAiPlugin;
 
 impl Plugin for SoulAiPlugin {
     fn build(&self, app: &mut App) {
+        // Soul AI は Familiar AI の後に実行される
+        // FamiliarAiSystemSet::Execute → ApplyDeferred → SoulAiSystemSet::Perceive
         app.configure_sets(
             Update,
             (
-                AiSystemSet::Perceive,
-                AiSystemSet::Update,
-                AiSystemSet::Decide,
-                AiSystemSet::Execute,
+                SoulAiSystemSet::Perceive,
+                SoulAiSystemSet::Update,
+                SoulAiSystemSet::Decide,
+                SoulAiSystemSet::Execute,
             )
                 .chain()
+                .after(FamiliarAiSystemSet::Execute)
                 .in_set(GameSystemSet::Logic),
         )
         .register_type::<task_execution::AssignedTask>()
@@ -39,17 +42,23 @@ impl Plugin for SoulAiPlugin {
             .add_systems(
                 Update,
                 (
+                    // === Familiar → Soul 間の同期 ===
+                    // Familiar AI の決定を Soul AI に反映
+                    bevy::ecs::schedule::ApplyDeferred
+                        .after(FamiliarAiSystemSet::Execute)
+                        .before(SoulAiSystemSet::Perceive),
+
                     // === Perceive Phase ===
                     // 環境情報の読み取り、変化の検出
                     (
                         idle::escaping::escaping_detection_system,
                     )
-                        .in_set(AiSystemSet::Perceive),
+                        .in_set(SoulAiSystemSet::Perceive),
 
                     // Perceive → Update 間の同期
                     bevy::ecs::schedule::ApplyDeferred
-                        .after(AiSystemSet::Perceive)
-                        .before(AiSystemSet::Update),
+                        .after(SoulAiSystemSet::Perceive)
+                        .before(SoulAiSystemSet::Update),
 
                     // === Update Phase ===
                     // 時間経過による内部状態の変化
@@ -68,12 +77,12 @@ impl Plugin for SoulAiPlugin {
                         gathering::maintenance::gathering_maintenance_system,
                         gathering::maintenance::gathering_merge_system,
                     )
-                        .in_set(AiSystemSet::Update),
+                        .in_set(SoulAiSystemSet::Update),
 
                     // Update → Decide 間の同期
                     bevy::ecs::schedule::ApplyDeferred
-                        .after(AiSystemSet::Update)
-                        .before(AiSystemSet::Decide),
+                        .after(SoulAiSystemSet::Update)
+                        .before(SoulAiSystemSet::Decide),
 
                     // === Decide Phase ===
                     // 次の行動の選択、要求の生成
@@ -84,20 +93,19 @@ impl Plugin for SoulAiPlugin {
                         work::auto_haul::mud_mixer_auto_haul_system,
                         work::auto_haul::bucket_auto_haul_system,
                         work::auto_refine::mud_mixer_auto_refine_system,
-                        work::auto_build::blueprint_auto_build_system
-                            .after(crate::systems::familiar_ai::familiar_task_delegation_system),
+                        work::auto_build::blueprint_auto_build_system,
                         work::task_area_auto_haul_system,
                         // アイドル行動の決定
                         idle::behavior::idle_behavior_decision_system,
                         idle::separation::gathering_separation_system,
                         idle::escaping::escaping_behavior_system,
                     )
-                        .in_set(AiSystemSet::Decide),
+                        .in_set(SoulAiSystemSet::Decide),
 
                     // Decide → Execute 間の同期
                     bevy::ecs::schedule::ApplyDeferred
-                        .after(AiSystemSet::Decide)
-                        .before(AiSystemSet::Execute),
+                        .after(SoulAiSystemSet::Decide)
+                        .before(SoulAiSystemSet::Execute),
 
                     // === Execute Phase ===
                     // 決定された行動の実行
@@ -117,7 +125,7 @@ impl Plugin for SoulAiPlugin {
                         // エンティティ生成
                         gathering::spawn::gathering_spawn_system,
                     )
-                        .in_set(AiSystemSet::Execute),
+                        .in_set(SoulAiSystemSet::Execute),
                 ),
             )
             .add_observer(vitals::on_task_completed_motivation_bonus)
