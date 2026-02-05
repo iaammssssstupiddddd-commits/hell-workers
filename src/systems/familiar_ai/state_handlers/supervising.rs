@@ -3,13 +3,11 @@
 //! 配下の魂を監視し、仕事の進捗を管理している状態の処理を行います。
 
 use super::StateTransitionResult;
-use crate::entities::damned_soul::{DamnedSoul, Destination, IdleState, Path};
-use crate::relationships::CommandedBy;
+use crate::entities::damned_soul::{Destination, Path};
 use crate::systems::command::TaskArea;
 use crate::systems::familiar_ai::FamiliarAiState;
-use crate::systems::soul_ai::gathering::ParticipatingIn;
-use crate::systems::soul_ai::task_execution::AssignedTask;
 use bevy::prelude::*;
+use crate::systems::familiar_ai::FamiliarSoulQuery;
 
 /// Supervising 状態のハンドラー
 pub fn handle_supervising_state(
@@ -21,22 +19,7 @@ pub fn handle_supervising_state(
     ai_state: &mut FamiliarAiState,
     fam_dest: &mut Destination,
     fam_path: &mut Path,
-    q_souls: &mut Query<
-        (
-            Entity,
-            &Transform,
-            &DamnedSoul,
-            &mut AssignedTask,
-            &mut Destination,
-            &mut Path,
-            &IdleState,
-
-            Option<&mut crate::systems::logistics::Inventory>,
-            Option<&CommandedBy>,
-            Option<&ParticipatingIn>,
-        ),
-        Without<crate::entities::familiar::Familiar>,
-    >,
+    q_souls: &mut FamiliarSoulQuery,
     has_available_task: bool,
 ) -> StateTransitionResult {
     // 既存の supervising_logic を呼び出し

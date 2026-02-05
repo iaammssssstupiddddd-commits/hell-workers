@@ -10,16 +10,15 @@ pub use task_assigner::assign_task_to_worker;
 pub use task_assigner::prepare_worker_for_task;
 pub use task_assigner::ReservationShadow;
 
-use crate::entities::damned_soul::{DamnedSoul, Destination, IdleBehavior, IdleState, Path};
-use crate::relationships::CommandedBy;
+use crate::entities::damned_soul::IdleBehavior;
 use crate::relationships::ManagedTasks;
 use crate::systems::command::TaskArea;
-use crate::systems::soul_ai::gathering::ParticipatingIn;
 use crate::systems::soul_ai::task_execution::types::AssignedTask;
 use crate::systems::spatial::DesignationSpatialGrid;
 use crate::world::map::WorldMap;
 use crate::world::pathfinding::PathfindingContext;
 use bevy::prelude::*;
+use crate::systems::familiar_ai::FamiliarSoulQuery;
 
 /// タスク管理ユーティリティ
 pub struct TaskManager;
@@ -34,22 +33,7 @@ impl TaskManager {
         task_area_opt: Option<&TaskArea>,
         fatigue_threshold: f32,
         queries: &mut crate::systems::soul_ai::task_execution::context::TaskAssignmentQueries,
-        q_souls: &mut Query<
-            (
-                Entity,
-                &Transform,
-                &DamnedSoul,
-                &mut AssignedTask,
-                &mut Destination,
-                &mut Path,
-                &IdleState,
-
-                Option<&mut crate::systems::logistics::Inventory>,
-                Option<&CommandedBy>,
-                Option<&ParticipatingIn>,
-            ),
-            Without<crate::entities::familiar::Familiar>,
-        >,
+        q_souls: &mut FamiliarSoulQuery,
         designation_grid: &DesignationSpatialGrid,
         managed_tasks: &ManagedTasks,
         // haul_cache removed

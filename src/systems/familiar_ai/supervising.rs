@@ -1,9 +1,8 @@
 use super::FamiliarAiState;
-use crate::entities::damned_soul::{DamnedSoul, Destination, IdleState, Path};
-use crate::relationships::CommandedBy;
-use crate::systems::soul_ai::gathering::ParticipatingIn;
+use crate::entities::damned_soul::{Destination, Path};
 use crate::systems::soul_ai::task_execution::AssignedTask;
 use bevy::prelude::*;
+use crate::systems::familiar_ai::FamiliarSoulQuery;
 
 use crate::constants::TILE_SIZE;
 use crate::systems::command::TaskArea;
@@ -18,22 +17,7 @@ pub fn supervising_logic(
     ai_state: &mut FamiliarAiState,
     fam_dest: &mut Destination,
     fam_path: &mut Path,
-    q_souls: &mut Query<
-        (
-            Entity,
-            &Transform,
-            &DamnedSoul,
-            &mut AssignedTask,
-            &mut Destination,
-            &mut Path,
-            &IdleState,
-
-            Option<&mut crate::systems::logistics::Inventory>,
-            Option<&CommandedBy>,
-            Option<&ParticipatingIn>,
-        ),
-        Without<crate::entities::familiar::Familiar>,
-    >,
+    q_souls: &mut FamiliarSoulQuery,
     _has_available_task: bool,
 ) {
     if active_members.is_empty() {

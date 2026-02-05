@@ -2,18 +2,18 @@
 //!
 //! ワーカーへのタスク割り当てロジックを提供します。
 
-use crate::entities::damned_soul::{DamnedSoul, Destination, IdleBehavior, IdleState, Path};
+use crate::entities::damned_soul::IdleBehavior;
 use crate::relationships::CommandedBy;
 use crate::events::{OnSoulRecruited, ResourceReservationOp, TaskAssignmentRequest};
 use crate::systems::command::TaskArea;
 use crate::systems::jobs::WorkType;
 use crate::systems::logistics::ResourceType;
-use crate::systems::soul_ai::gathering::ParticipatingIn;
 use crate::systems::soul_ai::task_execution::types::{
     AssignedTask, BuildPhase, GatherPhase, GatherWaterPhase, HaulPhase, HaulToBpPhase,
 };
 
 use bevy::prelude::*;
+use crate::systems::familiar_ai::FamiliarSoulQuery;
 use std::collections::HashMap;
 
 /// Thinkフェーズ内の予約増分を追跡する
@@ -110,22 +110,7 @@ pub fn assign_task_to_worker(
     worker_entity: Entity,
     fatigue_threshold: f32,
     queries: &mut crate::systems::soul_ai::task_execution::context::TaskAssignmentQueries,
-    q_souls: &mut Query<
-        (
-            Entity,
-            &Transform,
-            &DamnedSoul,
-            &mut AssignedTask,
-            &mut Destination,
-            &mut Path,
-            &IdleState,
-
-            Option<&mut crate::systems::logistics::Inventory>,
-            Option<&CommandedBy>,
-            Option<&ParticipatingIn>,
-        ),
-        Without<crate::entities::familiar::Familiar>,
-    >,
+    q_souls: &mut FamiliarSoulQuery,
     task_area_opt: Option<&TaskArea>,
     shadow: &mut ReservationShadow,
 ) -> bool {

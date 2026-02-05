@@ -1,12 +1,13 @@
 use bevy::prelude::*;
 
-use crate::entities::damned_soul::{DamnedSoul, Destination, IdleState, Path, StressBreakdown};
-use crate::entities::familiar::{ActiveCommand, Familiar};
+use crate::entities::damned_soul::StressBreakdown;
+use crate::entities::familiar::ActiveCommand;
 use crate::relationships::CommandedBy;
 use crate::relationships::{ManagedBy, TaskWorkers, WorkingOn};
 use crate::systems::command::TaskArea;
 use crate::systems::jobs::{Blueprint, Designation, TaskSlots, Priority, WorkType};
 use crate::systems::logistics::InStockpile;
+use crate::systems::soul_ai::query_types::AutoBuildSoulQuery;
 use crate::systems::soul_ai::task_execution::AssignedTask;
 use crate::systems::soul_ai::task_execution::types::BuildPhase;
 use crate::systems::soul_ai::work::helpers;
@@ -28,20 +29,7 @@ pub fn blueprint_auto_build_system(
         Option<&InStockpile>,
         Option<&Priority>,
     )>,
-    mut q_souls: Query<
-        (
-            Entity,
-            &Transform,
-            &DamnedSoul,
-            &mut AssignedTask,
-            &mut Destination,
-            &mut Path,
-            &IdleState,
-
-            Option<&CommandedBy>,
-        ),
-        Without<Familiar>,
-    >,
+    mut q_souls: AutoBuildSoulQuery,
     q_breakdown: Query<&StressBreakdown>,
 ) {
     for (fam_entity, _active_command, task_area) in q_familiars.iter() {

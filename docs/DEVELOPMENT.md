@@ -22,6 +22,18 @@
 - `scripts/convert_to_png.py` を使用して透過 PNG に変換する。
 - 変換後はバイナリ署名を確認する： `89-50-4E-47-0D-0A-1A-0A`
 
+### 4. 型変更とメッセージ初期化の規約
+型不一致や二重借用エラーが長引きやすいため、以下を必ず守る。
+
+- 型変更の順番は `定義 -> 生成 -> 使用` を固定する
+  例: `entities` の `struct/enum` を更新してから、`spawn/build` 側、最後に `systems` の `Query` を更新する。
+- 変換は `From/Into` に統一し、`as` の多用を避ける
+  変換地点を明確にして、型ミスの原因位置を特定しやすくする。
+- `Messages<T>`/`Events<T>` は専用プラグインで集中初期化する
+  `src/plugins/messages.rs` などに集約し、`build()` 冒頭で `add_message::<T>()`/`add_event::<T>()` を登録する。
+- 初期化漏れに備えて `Option<Messages<T>>` か `If<Messages<T>>` を検討する
+  使わないフレームでもパニックしない形にしておく。
+
 ## 便利なコマンド
 
 ### コンパイル確認

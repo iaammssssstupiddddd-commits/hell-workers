@@ -5,10 +5,10 @@
 use bevy::prelude::*;
 
 use crate::constants::*;
-use crate::entities::damned_soul::{DamnedSoul, Destination, IdleBehavior, IdleState, Path};
+use crate::entities::damned_soul::IdleBehavior;
 use crate::entities::familiar::Familiar;
-use crate::relationships::CommandedBy;
 use crate::systems::soul_ai::gathering::{GatheringSpot, ParticipatingIn};
+use crate::systems::soul_ai::query_types::{EscapingBehaviorSoulQuery, EscapingDetectionSoulQuery};
 use crate::systems::spatial::{FamiliarSpatialGrid, SpatialGridOps};
 use crate::world::map::WorldMap;
 
@@ -110,14 +110,7 @@ pub fn escaping_detection_system(
     mut timer: ResMut<EscapeDetectionTimer>,
     familiar_grid: Res<FamiliarSpatialGrid>,
     q_familiars: Query<(&Transform, &Familiar)>,
-    mut q_souls: Query<(
-        Entity,
-        &Transform,
-        &DamnedSoul,
-        Option<&CommandedBy>,
-        Option<&ParticipatingIn>,
-        &mut IdleState,
-    )>,
+    mut q_souls: EscapingDetectionSoulQuery,
 ) {
     if !timer.timer.tick(time.delta()).just_finished() {
         return;
@@ -244,17 +237,7 @@ pub fn escaping_behavior_system(
     familiar_grid: Res<FamiliarSpatialGrid>,
     q_familiars: Query<(&Transform, &Familiar)>,
     q_gathering_spots: Query<(Entity, &GatheringSpot)>,
-    mut q_souls: Query<
-        (
-            Entity,
-            &Transform,
-            &mut IdleState,
-            &mut Destination,
-            &mut Path,
-            &DamnedSoul,
-            Option<&CommandedBy>,
-        ),
-    >,
+    mut q_souls: EscapingBehaviorSoulQuery,
 ) {
     for (entity, transform, mut idle_state, mut destination, mut path, _soul, under_command) in
         q_souls.iter_mut()
@@ -318,4 +301,3 @@ pub fn escaping_behavior_system(
         }
     }
 }
-

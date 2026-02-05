@@ -9,6 +9,7 @@ use crate::entities::familiar::ActiveCommand;
 use crate::systems::command::TaskArea;
 use crate::systems::jobs::{Blueprint, Designation, IssuedBy, TaskSlots, WorkType};
 use crate::systems::logistics::{ResourceItem, ResourceType};
+use crate::systems::soul_ai::query_types::AutoHaulAssignedTaskQuery;
 use crate::systems::soul_ai::task_execution::AssignedTask;
 use crate::systems::spatial::{BlueprintSpatialGrid, ResourceSpatialGrid, SpatialGridOps};
 use crate::relationships::TaskWorkers;
@@ -34,7 +35,7 @@ pub fn blueprint_auto_haul_system(
         (Without<Designation>, Without<TaskWorkers>),
     >,
     q_stockpiles: Query<&Transform, With<crate::systems::logistics::Stockpile>>,
-    q_souls: Query<&AssignedTask>,
+    q_souls: AutoHaulAssignedTaskQuery,
     q_all_resources: Query<&ResourceItem>,
     q_reserved_items: Query<
         (&ResourceItem, &crate::systems::jobs::TargetBlueprint),

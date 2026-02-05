@@ -3,14 +3,11 @@ use bevy::prelude::*;
 use rand::Rng;
 
 use crate::constants::*;
-use crate::entities::damned_soul::{
-    DamnedSoul, Destination, GatheringBehavior, IdleBehavior, IdleState, Path,
-};
+use crate::entities::damned_soul::{GatheringBehavior, IdleBehavior};
 use crate::events::{IdleBehaviorOperation, IdleBehaviorRequest};
-use crate::relationships::CommandedBy;
-use crate::relationships::WorkingOn;
 use crate::systems::soul_ai::gathering::{GATHERING_LEAVE_RADIUS, GatheringSpot, ParticipatingIn};
 use crate::systems::soul_ai::task_execution::AssignedTask;
+use crate::systems::soul_ai::query_types::IdleDecisionSoulQuery;
 use crate::systems::spatial::{GatheringSpotSpatialGrid, SpatialGridOps};
 use crate::world::map::WorldMap;
 
@@ -57,19 +54,7 @@ pub fn idle_behavior_decision_system(
     mut request_writer: MessageWriter<IdleBehaviorRequest>,
     world_map: Res<WorldMap>,
     q_spots: Query<(Entity, &GatheringSpot)>,
-    mut query: Query<
-        (
-            Entity,
-            &Transform,
-            &mut IdleState,
-            &mut Destination,
-            &DamnedSoul,
-            &mut Path,
-            &AssignedTask,
-            Option<&ParticipatingIn>,
-        ),
-        (Without<WorkingOn>, Without<CommandedBy>),
-    >,
+    mut query: IdleDecisionSoulQuery,
     spot_grid: Res<GatheringSpotSpatialGrid>,
 ) {
     let dt = time.delta_secs();
@@ -372,4 +357,3 @@ pub fn idle_behavior_apply_system(
         }
     }
 }
-

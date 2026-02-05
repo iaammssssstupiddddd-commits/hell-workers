@@ -173,8 +173,7 @@ pub use spawn::spawn_damned_souls;
 
 impl Plugin for DamnedSoulPlugin {
     fn build(&self, app: &mut App) {
-        app.add_message::<DamnedSoulSpawnEvent>()
-            .register_type::<DamnedSoul>()
+        app.register_type::<DamnedSoul>()
             .register_type::<SoulUiLinks>()
             .register_type::<IdleState>()
             .register_type::<StressBreakdown>()

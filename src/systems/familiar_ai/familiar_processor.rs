@@ -2,17 +2,17 @@
 //!
 //! `familiar_ai_system` の処理を複数の関数に分割して管理します。
 
-use crate::entities::damned_soul::{DamnedSoul, Destination, IdleBehavior, IdleState, Path};
+use crate::entities::damned_soul::{Destination, IdleBehavior, Path};
 use crate::entities::familiar::{
     Familiar, FamiliarOperation, FamiliarVoice,
 };
 use crate::relationships::{Commanding, ManagedTasks, CommandedBy};
 use crate::systems::command::TaskArea;
 use crate::systems::soul_ai::gathering::ParticipatingIn;
-use crate::systems::soul_ai::task_execution::AssignedTask;
 use crate::systems::spatial::{DesignationSpatialGrid, SpatialGrid};
 use crate::systems::visual::speech::components::{FamiliarBubble, SpeechBubble};
 use bevy::prelude::*;
+use crate::systems::familiar_ai::FamiliarSoulQuery;
 
 use super::recruitment::RecruitmentManager;
 use super::squad::SquadManager;
@@ -29,21 +29,7 @@ pub fn process_squad_management(
     familiar_op: &FamiliarOperation,
     commanding: Option<&Commanding>,
     _voice_opt: Option<&FamiliarVoice>,
-    q_souls: &Query<
-        (
-            Entity,
-            &Transform,
-            &DamnedSoul,
-            &mut AssignedTask,
-            &mut Destination,
-            &mut Path,
-            &IdleState,
-            Option<&mut crate::systems::logistics::Inventory>,
-            Option<&CommandedBy>,
-            Option<&ParticipatingIn>,
-        ),
-        Without<crate::entities::familiar::Familiar>,
-    >,
+    q_souls: &FamiliarSoulQuery,
     request_writer: &mut MessageWriter<crate::events::SquadManagementRequest>,
 ) -> Vec<Entity> {
     let initial_squad = SquadManager::build_squad(commanding);
@@ -89,22 +75,7 @@ pub fn process_recruitment(
     squad_entities: &mut Vec<Entity>,
     max_workers: usize,
     spatial_grid: &SpatialGrid,
-    q_souls: &mut Query<
-        (
-            Entity,
-            &Transform,
-            &DamnedSoul,
-            &mut AssignedTask,
-            &mut Destination,
-            &mut Path,
-            &IdleState,
-
-            Option<&mut crate::systems::logistics::Inventory>,
-            Option<&CommandedBy>,
-            Option<&ParticipatingIn>,
-        ),
-        bevy::ecs::query::Without<Familiar>,
-    >,
+    q_souls: &mut FamiliarSoulQuery,
     q_breakdown: &Query<&crate::entities::damned_soul::StressBreakdown>,
     request_writer: &mut MessageWriter<crate::events::SquadManagementRequest>,
 ) -> bool {
@@ -236,22 +207,7 @@ pub fn process_task_delegation_and_movement(
     task_area_opt: Option<&TaskArea>,
     squad_entities: &[Entity],
     _commands: &mut Commands,
-    q_souls: &mut Query<
-        (
-            Entity,
-            &Transform,
-            &DamnedSoul,
-            &mut AssignedTask,
-            &mut Destination,
-            &mut Path,
-            &IdleState,
-
-            Option<&mut crate::systems::logistics::Inventory>,
-            Option<&CommandedBy>,
-            Option<&ParticipatingIn>,
-        ),
-        bevy::ecs::query::Without<Familiar>,
-    >,
+    q_souls: &mut FamiliarSoulQuery,
     queries: &mut crate::systems::soul_ai::task_execution::context::TaskAssignmentQueries,
     designation_grid: &DesignationSpatialGrid,
     managed_tasks: &ManagedTasks,
@@ -345,21 +301,7 @@ pub fn process_task_delegation_and_movement(
 pub fn apply_squad_management_requests_system(
     mut commands: Commands,
     mut request_reader: MessageReader<crate::events::SquadManagementRequest>,
-    mut q_souls: Query<
-        (
-            Entity,
-            &Transform,
-            &DamnedSoul,
-            &mut AssignedTask,
-            &mut Destination,
-            &mut Path,
-            &IdleState,
-            Option<&mut crate::systems::logistics::Inventory>,
-            Option<&CommandedBy>,
-            Option<&ParticipatingIn>,
-        ),
-        Without<Familiar>,
-    >,
+    mut q_souls: FamiliarSoulQuery,
     mut queries: crate::systems::soul_ai::task_execution::context::TaskAssignmentQueries,
     world_map: Res<WorldMap>,
     time: Res<Time>,

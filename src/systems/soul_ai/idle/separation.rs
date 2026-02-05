@@ -2,9 +2,10 @@ use bevy::prelude::*;
 use rand::Rng;
 
 use crate::constants::*;
-use crate::entities::damned_soul::{Destination, GatheringBehavior, IdleState, Path};
-use crate::systems::soul_ai::gathering::{GatheringSpot, GatheringUpdateTimer, ParticipatingIn};
+use crate::entities::damned_soul::GatheringBehavior;
+use crate::systems::soul_ai::gathering::{GatheringSpot, GatheringUpdateTimer};
 use crate::systems::soul_ai::task_execution::AssignedTask;
+use crate::systems::soul_ai::query_types::IdleSeparationSoulQuery;
 use crate::systems::spatial::{SpatialGrid, SpatialGridOps};
 use crate::world::map::WorldMap;
 
@@ -15,15 +16,7 @@ pub fn gathering_separation_system(
     world_map: Res<WorldMap>,
     q_spots: Query<&GatheringSpot>,
     update_timer: Res<GatheringUpdateTimer>,
-    mut query: Query<(
-        Entity,
-        &Transform,
-        &mut Destination,
-        &mut IdleState,
-        &Path,
-        &AssignedTask,
-        &ParticipatingIn,
-    )>,
+    mut query: IdleSeparationSoulQuery,
     soul_grid: Res<SpatialGrid>,
 ) {
     if !update_timer.timer.just_finished() {
