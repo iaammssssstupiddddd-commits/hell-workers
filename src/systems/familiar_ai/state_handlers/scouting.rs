@@ -38,7 +38,7 @@ pub fn handle_scouting_state(
     Without<crate::entities::familiar::Familiar>,
 >,
 q_breakdown: &Query<&StressBreakdown>,
-commands: &mut Commands,
+request_writer: &mut MessageWriter<crate::events::SquadManagementRequest>,
 ) -> StateTransitionResult {
     // 既存の scouting_logic を呼び出し
     let state_changed = crate::systems::familiar_ai::scouting::scouting_logic(
@@ -53,7 +53,7 @@ commands: &mut Commands,
         fam_path,
         q_souls,
         q_breakdown,
-        commands,
+        request_writer,
     );
 
     if state_changed {

@@ -110,6 +110,7 @@ pub enum AiSystemSet {
 
 // Familiar AI
 - handle_state_changed_system
+- apply_squad_management_requests_system  // 分隊管理要求の適用
 ```
 
 ## Message/Request パターン
@@ -159,6 +160,59 @@ pub fn idle_behavior_apply_system(
             IdleBehaviorOperation::JoinGathering { spot_entity } => {
                 commands.entity(request.entity).insert(ParticipatingIn(*spot_entity));
                 commands.trigger(OnGatheringParticipated { ... });
+            }
+// ...
+        }
+    }
+}
+```
+
+### SquadManagementRequest
+
+`src/events.rs`:
+
+```rust
+#[derive(Message, Debug, Clone)]
+pub struct SquadManagementRequest {
+    pub familiar_entity: Entity,
+    pub operation: SquadManagementOperation,
+}
+
+pub enum SquadManagementOperation {
+    AddMember { soul_entity: Entity },
+    ReleaseMember { soul_entity: Entity, reason: ReleaseReason },
+}
+
+pub enum ReleaseReason {
+    Fatigued,
+}
+```
+
+**使用例** (`familiar_ai/squad.rs`):
+
+```rust
+// Decide フェーズ: 疲労した魂のリリース要求
+pub fn release_fatigued(...) {
+    request_writer.write(SquadManagementRequest {
+        familiar_entity: fam_entity,
+        operation: SquadManagementOperation::ReleaseMember {
+            soul_entity: member_entity,
+            reason: ReleaseReason::Fatigued,
+        },
+    });
+}
+
+// Execute フェーズ: 要求の適用
+pub fn apply_squad_management_requests_system(
+    mut commands: Commands,
+    mut request_reader: MessageReader<SquadManagementRequest>,
+) {
+    for request in request_reader.read() {
+        match &request.operation {
+            SquadManagementOperation::ReleaseMember { soul_entity, reason } => {
+                // unassign_task の実行や Relationship の削除
+                commands.entity(*soul_entity).remove::<CommandedBy>();
+                // ...
             }
             // ...
         }
@@ -215,36 +269,7 @@ fn rest_behavior_apply_system(
 ) { ... }
 ```
 
-## 将来の改善点
-
-### familiar_ai_state_system の分割
-
-現状、`familiar_ai_state_system`は複雑なヘルパー関数群を経由してCommands操作を行っています：
-
-- `squad.rs`: `release_fatigued()` でCommandedBy削除
-- `recruitment.rs`: `try_immediate_recruit()` でCommandedBy追加
-- `scouting.rs`: `scouting_logic()` でリクルート実行
-
-これらを`SquadManagementRequest`を使って分離することで、より明確なフェーズ分離が可能です：
-
-```rust
-// 既に定義済み (events.rs)
-pub struct SquadManagementRequest {
-    pub familiar_entity: Entity,
-    pub operation: SquadManagementOperation,
-}
-
-pub enum SquadManagementOperation {
-    AddMember { soul_entity: Entity },
-    ReleaseMember { soul_entity: Entity },
-}
-```
-
-**実装手順**:
-1. `squad.rs`の`release_fatigued()`をRequest発行に変更
-2. `recruitment.rs`の`try_immediate_recruit()`をRequest発行に変更
-3. `scouting.rs`の`scouting_logic()`をRequest発行に変更
-4. Executeフェーズに`squad_management_apply_system`を追加
+（この項目は実装済みです）
 
 ## 関連ファイル
 

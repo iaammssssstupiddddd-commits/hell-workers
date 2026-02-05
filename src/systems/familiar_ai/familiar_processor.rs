@@ -25,12 +25,11 @@ use crate::world::pathfinding::PathfindingContext;
 /// 分隊管理を実行
 pub fn process_squad_management(
     fam_entity: Entity,
-    fam_transform: &Transform,
+    _fam_transform: &Transform,
     familiar_op: &FamiliarOperation,
     commanding: Option<&Commanding>,
-    voice_opt: Option<&FamiliarVoice>,
-    commands: &mut Commands,
-    q_souls: &mut Query<
+    _voice_opt: Option<&FamiliarVoice>,
+    q_souls: &Query<
         (
             Entity,
             &Transform,
@@ -39,20 +38,13 @@ pub fn process_squad_management(
             &mut Destination,
             &mut Path,
             &IdleState,
-
             Option<&mut crate::systems::logistics::Inventory>,
             Option<&CommandedBy>,
             Option<&ParticipatingIn>,
         ),
-        bevy::ecs::query::Without<Familiar>,
+        Without<crate::entities::familiar::Familiar>,
     >,
-    queries: &mut crate::systems::soul_ai::task_execution::context::TaskAssignmentQueries,
-    history_opt: Option<&mut crate::systems::visual::speech::cooldown::SpeechHistory>,
-    time: &Res<Time>,
-    game_assets: &Res<crate::assets::GameAssets>,
-    q_bubbles: &Query<(Entity, &SpeechBubble), With<FamiliarBubble>>,
-    world_map: &Res<WorldMap>,
-    // haul_cache removed
+    request_writer: &mut MessageWriter<crate::events::SquadManagementRequest>,
 ) -> Vec<Entity> {
     let initial_squad = SquadManager::build_squad(commanding);
 
@@ -63,22 +55,13 @@ pub fn process_squad_management(
         q_souls,
     );
 
-    // 疲労・崩壊したメンバーをリリース
+    // 疲労・崩壊したメンバーをリリース要求
     let released_entities = SquadManager::release_fatigued(
         &squad_entities,
         fam_entity,
         familiar_op.fatigue_threshold,
-        commands,
         q_souls,
-        &mut *queries,
-        // haul_cache removed
-        history_opt,
-        time,
-        game_assets,
-        q_bubbles,
-        fam_transform,
-        voice_opt,
-        world_map,
+        request_writer,
     );
 
     // リリースされたメンバーを分隊から除外
@@ -123,7 +106,7 @@ pub fn process_recruitment(
         bevy::ecs::query::Without<Familiar>,
     >,
     q_breakdown: &Query<&crate::entities::damned_soul::StressBreakdown>,
-    commands: &mut Commands,
+    request_writer: &mut MessageWriter<crate::events::SquadManagementRequest>,
 ) -> bool {
     let fam_pos = fam_transform.translation.truncate();
     let command_radius = familiar.command_radius;
@@ -133,7 +116,6 @@ pub fn process_recruitment(
     if squad_entities.len() < max_workers {
         // 近場のリクルート検索 (即時勧誘)
         if let Some(new_recruit) = RecruitmentManager::try_immediate_recruit(
-            commands,
             fam_entity,
             fam_pos,
             command_radius,
@@ -141,6 +123,7 @@ pub fn process_recruitment(
             spatial_grid,
             q_souls,
             q_breakdown,
+            request_writer,
         ) {
             debug!(
                 "FAM_AI: {:?} recruiting nearby soul {:?}",
@@ -354,6 +337,133 @@ pub fn process_task_delegation_and_movement(
                 );
             }
             _ => {}
+        }
+    }
+}
+
+/// 分隊管理要求を適用するシステム
+pub fn apply_squad_management_requests_system(
+    mut commands: Commands,
+    mut request_reader: MessageReader<crate::events::SquadManagementRequest>,
+    mut q_souls: Query<
+        (
+            Entity,
+            &Transform,
+            &DamnedSoul,
+            &mut AssignedTask,
+            &mut Destination,
+            &mut Path,
+            &IdleState,
+            Option<&mut crate::systems::logistics::Inventory>,
+            Option<&CommandedBy>,
+            Option<&ParticipatingIn>,
+        ),
+        Without<Familiar>,
+    >,
+    mut queries: crate::systems::soul_ai::task_execution::context::TaskAssignmentQueries,
+    world_map: Res<WorldMap>,
+    time: Res<Time>,
+    game_assets: Res<crate::assets::GameAssets>,
+    q_bubbles: Query<(Entity, &SpeechBubble), With<FamiliarBubble>>,
+    mut q_familiars: Query<(&Transform, Option<&FamiliarVoice>, Option<&mut crate::systems::visual::speech::cooldown::SpeechHistory>), With<Familiar>>,
+) {
+    use crate::events::{SquadManagementOperation, ReleaseReason};
+    use crate::systems::visual::speech::components::{BubbleEmotion, BubblePriority};
+
+    for request in request_reader.read() {
+        let fam_entity = request.familiar_entity;
+        match &request.operation {
+            SquadManagementOperation::AddMember { soul_entity } => {
+                let soul_entity = *soul_entity;
+                commands.entity(soul_entity).insert(CommandedBy(fam_entity));
+
+                // 集会参加中なら離脱
+                if let Ok((_, _, _, _, _, _, _, _, _, Some(p))) = q_souls.get(soul_entity) {
+                    commands.entity(soul_entity).remove::<ParticipatingIn>();
+                    commands.trigger(crate::events::OnGatheringLeft {
+                        entity: soul_entity,
+                        spot_entity: p.0,
+                    });
+                }
+
+                commands.trigger(crate::events::OnSoulRecruited {
+                    entity: soul_entity,
+                    familiar_entity: fam_entity,
+                });
+            }
+            SquadManagementOperation::ReleaseMember { soul_entity, reason } => {
+                let soul_entity = *soul_entity;
+                if let Ok((
+                    entity,
+                    transform,
+                    _soul,
+                    mut task,
+                    _,
+                    mut path,
+                    _idle,
+                    mut inventory_opt,
+                    _,
+                    _,
+                )) = q_souls.get_mut(soul_entity)
+                {
+                    let dropped_res = inventory_opt.as_ref().and_then(|i| {
+                        i.0.and_then(|e| queries.targets.get(e).ok().and_then(|(_, _, _, ri, _, _)| ri.map(|r| r.0)))
+                    });
+
+                    // 現在、すべての解放は自動（疲労）のため、個別のタスク中断セリフは出さない
+                    let emit_abandoned = false;
+
+                    crate::systems::soul_ai::work::unassign_task(
+                        &mut commands,
+                        entity,
+                        transform.translation.truncate(),
+                        &mut task,
+                        &mut path,
+                        inventory_opt.as_deref_mut(),
+                        dropped_res,
+                        &mut queries,
+                        &world_map,
+                        emit_abandoned,
+                    );
+
+                    // セリフの表示
+                    if matches!(reason, ReleaseReason::Fatigued) {
+                        if let Ok((fam_transform, voice_opt, mut history_opt)) = q_familiars.get_mut(fam_entity) {
+                            let current_time = time.elapsed_secs();
+                            let can_speak = if let Some(history) = &history_opt {
+                                history.can_speak(BubblePriority::Normal, current_time)
+                            } else {
+                                true
+                            };
+
+                            if can_speak {
+                                crate::systems::visual::speech::spawn::spawn_familiar_bubble(
+                                    &mut commands,
+                                    fam_entity,
+                                    crate::systems::visual::speech::phrases::LatinPhrase::Abi,
+                                    fam_transform.translation,
+                                    &game_assets,
+                                    &q_bubbles,
+                                    BubbleEmotion::Neutral,
+                                    BubblePriority::Normal,
+                                    voice_opt,
+                                );
+                                if let Some(history) = history_opt.as_mut() {
+                                    history.record_speech(BubblePriority::Normal, current_time);
+                                } else {
+                                    commands.entity(fam_entity).insert(crate::systems::visual::speech::cooldown::SpeechHistory {
+                                        last_time: current_time,
+                                        last_priority: BubblePriority::Normal,
+                                    });
+                                }
+                            }
+                        }
+                    }
+
+                    commands.entity(soul_entity).remove::<CommandedBy>();
+                    commands.trigger(crate::events::OnReleasedFromService { entity: soul_entity });
+                }
+            }
         }
     }
 }

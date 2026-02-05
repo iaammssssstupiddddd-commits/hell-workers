@@ -187,5 +187,15 @@ pub enum SquadManagementOperation {
     /// 魂を分隊に追加（Commanding関係を設定）
     AddMember { soul_entity: Entity },
     /// 魂を分隊から解放（Commanding関係を削除）
-    ReleaseMember { soul_entity: Entity },
+    ReleaseMember {
+        soul_entity: Entity,
+        reason: ReleaseReason,
+    },
+}
+
+/// 分隊解放の理由
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReleaseReason {
+    /// 疲労またはストレスによる自動解放
+    Fatigued,
 }

@@ -107,12 +107,16 @@ impl Plugin for FamiliarAiPlugin {
                     // 決定された行動の実行
                     (
                         state_transition::handle_state_changed_system,
+                        process_squad_management_apply_system,
                     )
                         .in_set(crate::systems::soul_ai::scheduling::AiSystemSet::Execute),
                 ),
             );
     }
 }
+
+/// Redirect for name consistency if needed, or just use the one in processor
+pub use familiar_processor::apply_squad_management_requests_system as process_squad_management_apply_system;
 
 #[derive(SystemParam)]
 pub struct FamiliarAiParams<'w, 's> {
@@ -155,13 +159,12 @@ pub struct FamiliarAiParams<'w, 's> {
         Without<Familiar>,
     >,
     pub q_breakdown: Query<'w, 's, &'static StressBreakdown>,
-    pub task_queries: crate::systems::soul_ai::task_execution::context::TaskAssignmentQueries<'w, 's>,
     // resource_cache removed (included in task_queries)
     pub game_assets: Res<'w, crate::assets::GameAssets>,
     pub q_bubbles: Query<'w, 's, (Entity, &'static SpeechBubble), With<FamiliarBubble>>,
     // cooldowns removed (now a component)
     pub ev_state_changed: MessageWriter<'w, crate::events::FamiliarAiStateChangedEvent>,
-    pub world_map: Res<'w, crate::world::map::WorldMap>,
+    pub request_writer: MessageWriter<'w, crate::events::SquadManagementRequest>,
 }
 
 #[derive(SystemParam)]
@@ -217,13 +220,12 @@ pub fn familiar_ai_state_system(params: FamiliarAiParams) {
         mut q_familiars,
         mut q_souls,
         q_breakdown,
-        mut task_queries,
-        // resource_cache removed
-        game_assets,
-        q_bubbles,
-        // cooldowns removed
+        // fatigue_threshold removed
+        // max_workers removed
         mut ev_state_changed,
-        world_map,
+        mut request_writer,
+        q_bubbles,
+        game_assets,
         ..
     } = params;
     // 1. 搬送中のアイテム・ストックパイル予約状況を事前計算
@@ -336,15 +338,8 @@ pub fn familiar_ai_state_system(params: FamiliarAiParams) {
             familiar_op,
             commanding,
             voice_opt,
-            &mut commands,
-            &mut q_souls,
-            &mut task_queries,
-            history_opt.as_deref_mut(),
-            &time,
-            &game_assets,
-            &q_bubbles,
-            &world_map,
-            // resource_cache arg removed
+            &q_souls,
+            &mut request_writer,
         );
 
         // 状態に応じたロジック実行
@@ -363,7 +358,7 @@ pub fn familiar_ai_state_system(params: FamiliarAiParams) {
                     &mut fam_path,
                     &mut q_souls,
                     &q_breakdown,
-                    &mut commands,
+                    &mut request_writer,
                 );
                 state_changed = transition_result.apply_to(&mut ai_state);
             }
@@ -382,7 +377,7 @@ pub fn familiar_ai_state_system(params: FamiliarAiParams) {
                     &*spatial_grid,
                     &mut q_souls,
                     &q_breakdown,
-                    &mut commands,
+                    &mut request_writer,
                 ) {
                     state_changed = true;
                 }
