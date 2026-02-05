@@ -3,7 +3,8 @@ use crate::entities::familiar::{
     ActiveCommand, Familiar, FamiliarCommand, FamiliarOperation, FamiliarVoice,
 };
 use crate::relationships::{Commanding, ManagedTasks};
-// use crate::systems::GameSystemSet; // Removed unused import
+use crate::systems::GameSystemSet;
+use crate::systems::soul_ai::scheduling::FamiliarAiSystemSet;
 use crate::systems::command::TaskArea;
 use crate::systems::spatial::{
     DesignationSpatialGrid, SpatialGrid,
@@ -65,6 +66,17 @@ pub struct FamiliarAiPlugin;
 impl Plugin for FamiliarAiPlugin {
     fn build(&self, app: &mut App) {
         app
+            .configure_sets(
+                Update,
+                (
+                    FamiliarAiSystemSet::Perceive,
+                    FamiliarAiSystemSet::Update,
+                    FamiliarAiSystemSet::Decide,
+                    FamiliarAiSystemSet::Execute,
+                )
+                    .chain()
+                    .in_set(GameSystemSet::Logic),
+            )
             .register_type::<FamiliarAiState>()
             .register_type::<encouragement::EncouragementCooldown>()
             .init_resource::<resource_cache::SharedResourceCache>()
@@ -80,24 +92,24 @@ impl Plugin for FamiliarAiPlugin {
                         resource_cache::sync_reservations_system,
                         max_soul_handler::handle_max_soul_changed_system,
                     )
-                        .in_set(crate::systems::soul_ai::scheduling::AiSystemSet::Perceive),
+                        .in_set(crate::systems::soul_ai::scheduling::FamiliarAiSystemSet::Perceive),
 
                     // Perceive → Update 間の同期
                     ApplyDeferred
-                        .after(crate::systems::soul_ai::scheduling::AiSystemSet::Perceive)
-                        .before(crate::systems::soul_ai::scheduling::AiSystemSet::Update),
+                        .after(crate::systems::soul_ai::scheduling::FamiliarAiSystemSet::Perceive)
+                        .before(crate::systems::soul_ai::scheduling::FamiliarAiSystemSet::Update),
 
                     // === Update Phase ===
                     // 時間経過による内部状態の変化
                     (
                         encouragement::cleanup_encouragement_cooldowns_system,
                     )
-                        .in_set(crate::systems::soul_ai::scheduling::AiSystemSet::Update),
+                        .in_set(crate::systems::soul_ai::scheduling::FamiliarAiSystemSet::Update),
 
                     // Update → Decide 間の同期
                     ApplyDeferred
-                        .after(crate::systems::soul_ai::scheduling::AiSystemSet::Update)
-                        .before(crate::systems::soul_ai::scheduling::AiSystemSet::Decide),
+                        .after(crate::systems::soul_ai::scheduling::FamiliarAiSystemSet::Update)
+                        .before(crate::systems::soul_ai::scheduling::FamiliarAiSystemSet::Decide),
 
                     // === Decide Phase ===
                     // 次の行動の選択、要求の生成
@@ -111,7 +123,7 @@ impl Plugin for FamiliarAiPlugin {
                         )
                             .chain(),
                     )
-                        .in_set(crate::systems::soul_ai::scheduling::AiSystemSet::Decide),
+                        .in_set(crate::systems::soul_ai::scheduling::FamiliarAiSystemSet::Decide),
 
                     // === Execute Phase ===
                     // 決定された行動の実行
@@ -119,7 +131,7 @@ impl Plugin for FamiliarAiPlugin {
                         state_transition::handle_state_changed_system,
                         process_squad_management_apply_system,
                     )
-                        .in_set(crate::systems::soul_ai::scheduling::AiSystemSet::Execute),
+                        .in_set(crate::systems::soul_ai::scheduling::FamiliarAiSystemSet::Execute),
                 ),
             );
     }
