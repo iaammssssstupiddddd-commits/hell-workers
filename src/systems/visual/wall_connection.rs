@@ -8,7 +8,7 @@ pub struct WallConnectionPlugin;
 
 impl Plugin for WallConnectionPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, wall_connections_system);
+        app.add_systems(Update, wall_connections_system.in_set(crate::systems::GameSystemSet::Visual));
     }
 }
 

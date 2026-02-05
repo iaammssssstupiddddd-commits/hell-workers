@@ -13,6 +13,8 @@ pub struct SpeechBubble {
     pub offset: Vec2,
     /// 感情タイプ
     pub emotion: BubbleEmotion,
+    /// 背景エンティティ（手動削除用）
+    pub background: Option<Entity>,
 }
 
 /// 吹き出しの優先度

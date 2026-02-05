@@ -30,7 +30,8 @@ impl Plugin for SpeechPlugin {
                 periodic::periodic_emotion_system,
                 observers::reaction_delay_system,
             )
-                .chain(),
+                .chain()
+                .in_set(crate::systems::GameSystemSet::Visual),
         );
 
         // Observers の登録
