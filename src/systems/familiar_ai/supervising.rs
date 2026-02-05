@@ -1,6 +1,6 @@
 use super::FamiliarAiState;
 use crate::entities::damned_soul::{DamnedSoul, Destination, IdleState, Path};
-use crate::entities::familiar::UnderCommand;
+use crate::relationships::CommandedBy;
 use crate::systems::soul_ai::gathering::ParticipatingIn;
 use crate::systems::soul_ai::task_execution::AssignedTask;
 use bevy::prelude::*;
@@ -29,7 +29,7 @@ pub fn supervising_logic(
             &IdleState,
 
             Option<&mut crate::systems::logistics::Inventory>,
-            Option<&UnderCommand>,
+            Option<&CommandedBy>,
             Option<&ParticipatingIn>,
         ),
         Without<crate::entities::familiar::Familiar>,

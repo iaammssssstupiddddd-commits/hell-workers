@@ -57,11 +57,19 @@ graph TD
 
 ### Global Cycle Framework (Logic Phase)
 
-`Logic` フェーズ内では、**Soul AI** の動作順序を厳密に制御するためのサブセット (`SoulAiSystemSet`) が定義されています。
+`Logic` フェーズ内では、**AI** の動作順序を厳密に制御するための4フェーズサブセット (`AiSystemSet`) が定義されています。
 
-1.  **Sense**: 環境情報の収集とリソース予約状況の初期化 (`sync_reservations_system`)
-2.  **Think**: 意思決定とタスク割り当て (`task_assigner`)
-3.  **Act**: 実際の行動実行 (`task_execution`)
+```
+Perceive → Update → Decide → Execute
+  (知覚)    (更新)   (決定)    (実行)
+```
+
+1.  **Perceive**: 環境情報の読み取り、変化の検出、キャッシュ再構築 (`sync_reservations_system`, 状態変化検出)
+2.  **Update**: 時間経過による内部状態の変化（バイタル更新、タイマー、メンテナンス）
+3.  **Decide**: 次の行動の選択、要求の生成 (`TaskAssignmentRequest`, `IdleBehaviorRequest`)
+4.  **Execute**: 決定された行動の実行、コマンド発行 (`apply_task_assignment_requests_system`, `task_execution`)
+
+各フェーズ間には `ApplyDeferred` が配置され、変更が次のフェーズで確実に反映されます。
 
 ## 定数管理 (`src/constants.rs`)
 

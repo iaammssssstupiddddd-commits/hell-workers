@@ -1,5 +1,6 @@
 use crate::entities::damned_soul::{DamnedSoul, Destination, IdleBehavior, IdleState, Path};
-use crate::entities::familiar::{Familiar, UnderCommand};
+use crate::entities::familiar::Familiar;
+use crate::relationships::CommandedBy;
 use crate::systems::soul_ai::task_execution::AssignedTask;
 use bevy::prelude::*;
 
@@ -10,7 +11,7 @@ pub fn following_familiar_system(
             Entity,
             &Transform,
             &AssignedTask,
-            &UnderCommand,
+            &CommandedBy,
             &IdleState,
             &mut Destination,
             &mut Path,
@@ -19,7 +20,7 @@ pub fn following_familiar_system(
     >,
     q_familiars: Query<(&Transform, &Familiar), With<Familiar>>,
 ) {
-    for (_soul_entity, soul_transform, task, under_command, idle, mut dest, mut path) in
+    for (_soul_entity, soul_transform, task, commanded_by, idle, mut dest, mut path) in
         q_souls.iter_mut()
     {
         if idle.behavior == IdleBehavior::ExhaustedGathering {
@@ -29,7 +30,7 @@ pub fn following_familiar_system(
             continue;
         }
 
-        if let Ok((fam_transform, familiar)) = q_familiars.get(under_command.0) {
+        if let Ok((fam_transform, familiar)) = q_familiars.get(commanded_by.0) {
             let fam_pos = fam_transform.translation.truncate();
             let soul_pos = soul_transform.translation.truncate();
             let command_radius = familiar.command_radius;

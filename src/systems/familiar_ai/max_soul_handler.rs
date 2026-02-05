@@ -3,9 +3,9 @@
 //! UIで使役数が減少した場合、超過分の魂をリリースします。
 
 use crate::entities::damned_soul::{DamnedSoul, Path};
-use crate::entities::familiar::{Familiar, FamiliarVoice, UnderCommand};
+use crate::entities::familiar::{Familiar, FamiliarVoice};
+use crate::relationships::{CommandedBy, Commanding};
 use crate::events::FamiliarOperationMaxSoulChangedEvent;
-use crate::relationships::Commanding;
 use crate::systems::soul_ai::task_execution::AssignedTask;
 use crate::systems::soul_ai::work::unassign_task;
 use crate::systems::visual::speech::components::{
@@ -75,7 +75,7 @@ pub fn handle_max_soul_changed_system(
                             );
                         }
 
-                        commands.entity(member_entity).remove::<UnderCommand>();
+                        commands.entity(member_entity).remove::<CommandedBy>();
                         released_count += 1;
 
                         info!(

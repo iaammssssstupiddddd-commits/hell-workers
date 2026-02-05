@@ -4,7 +4,7 @@
 
 use super::StateTransitionResult;
 use crate::entities::damned_soul::{DamnedSoul, Destination, IdleState, Path};
-use crate::entities::familiar::UnderCommand;
+use crate::relationships::CommandedBy;
 use crate::systems::command::TaskArea;
 use crate::systems::familiar_ai::FamiliarAiState;
 use crate::systems::soul_ai::gathering::ParticipatingIn;
@@ -32,7 +32,7 @@ pub fn handle_supervising_state(
             &IdleState,
 
             Option<&mut crate::systems::logistics::Inventory>,
-            Option<&UnderCommand>,
+            Option<&CommandedBy>,
             Option<&ParticipatingIn>,
         ),
         Without<crate::entities::familiar::Familiar>,

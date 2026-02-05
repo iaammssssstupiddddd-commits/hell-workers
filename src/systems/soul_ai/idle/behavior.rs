@@ -6,7 +6,8 @@ use crate::constants::*;
 use crate::entities::damned_soul::{
     DamnedSoul, Destination, GatheringBehavior, IdleBehavior, IdleState, Path,
 };
-use crate::entities::familiar::UnderCommand;
+use crate::events::{IdleBehaviorOperation, IdleBehaviorRequest};
+use crate::relationships::CommandedBy;
 use crate::relationships::WorkingOn;
 use crate::systems::soul_ai::gathering::{GATHERING_LEAVE_RADIUS, GatheringSpot, ParticipatingIn};
 use crate::systems::soul_ai::task_execution::AssignedTask;
@@ -43,54 +44,39 @@ fn random_position_around(center: Vec2, min_dist: f32, max_dist: f32) -> Vec2 {
     center + Vec2::new(angle.cos() * dist, angle.sin() * dist)
 }
 
-/// 怠惰行動のAIシステム
-/// やる気が低い人間は怠惰な行動をする
-/// タスクがある人間は怠惰行動をしない
-pub fn idle_behavior_system(
+/// アイドル行動の決定システム (Decide Phase)
+///
+/// 怠惰行動のAIロジック。やる気が低い魂は怠惰な行動をする。
+/// タスクがある魂は怠惰行動をしない。
+///
+/// このシステムはIdleState, Destination, Pathの更新と、
+/// IdleBehaviorRequestの発行を行う。実際のエンティティ操作は
+/// idle_behavior_apply_systemで行われる。
+pub fn idle_behavior_decision_system(
     time: Res<Time>,
-    mut commands: Commands,
+    mut request_writer: MessageWriter<IdleBehaviorRequest>,
     world_map: Res<WorldMap>,
     q_spots: Query<(Entity, &GatheringSpot)>,
-    mut query: Query<(
-        Entity,
-        &Transform,
-        &mut IdleState,
-        &mut Destination,
-        &DamnedSoul,
-        &mut Path,
-        &AssignedTask,
-        Option<&ParticipatingIn>,
-    ), (
-        Without<WorkingOn>,
-        Without<UnderCommand>,
-    )>,
+    mut query: Query<
+        (
+            Entity,
+            &Transform,
+            &mut IdleState,
+            &mut Destination,
+            &DamnedSoul,
+            &mut Path,
+            &AssignedTask,
+            Option<&ParticipatingIn>,
+        ),
+        (Without<WorkingOn>, Without<CommandedBy>),
+    >,
     spot_grid: Res<GatheringSpotSpatialGrid>,
-    _q_targets: Query<(
-        &Transform,
-        Option<&crate::systems::jobs::Tree>,
-        Option<&crate::systems::jobs::Rock>,
-        Option<&crate::systems::logistics::ResourceItem>,
-        Option<&crate::systems::jobs::Designation>,
-        Option<&crate::relationships::StoredIn>,
-    )>,
-    _q_designations: Query<(
-        Entity,
-        &Transform,
-        &crate::systems::jobs::Designation,
-        Option<&crate::relationships::ManagedBy>,
-        Option<&crate::systems::jobs::TaskSlots>,
-        Option<&crate::relationships::TaskWorkers>,
-        Option<&crate::systems::logistics::InStockpile>,
-    )>,
 ) {
     let dt = time.delta_secs();
 
     for (entity, transform, mut idle, mut dest, soul, mut path, task, participating_in) in
         query.iter_mut()
     {
-        // クエリフィルタにより、WorkingOn（タスク中）や UnderCommand（使役中）の個体は
-        // このループには入らないため、それらのチェックと解除処理は不要になりました。
-
         // 参加中の集会スポットの座標とEntityを取得、または最寄りのスポットを探す
         let (gathering_center, target_spot_entity): (Option<Vec2>, Option<Entity>) =
             if let Some(p) = participating_in {
@@ -99,7 +85,6 @@ pub fn idle_behavior_system(
             } else {
                 // 最寄りのスポットを空間グリッドで効率的に探す
                 let pos = transform.translation.truncate();
-                // 離脱半径の2倍程度の範囲で探す (あまり遠くの集会所には行かない)
                 let spot_entities =
                     spot_grid.get_nearby_in_radius(pos, GATHERING_LEAVE_RADIUS * 2.0);
 
@@ -121,7 +106,6 @@ pub fn idle_behavior_system(
 
         // 疲労による強制集会（ExhaustedGathering）状態の場合は他の処理をスキップ
         if idle.behavior == IdleBehavior::ExhaustedGathering {
-
             if let Some(center) = gathering_center {
                 let current_pos = transform.translation.truncate();
                 let dist_from_center = (center - current_pos).length();
@@ -130,17 +114,15 @@ pub fn idle_behavior_system(
                 if has_arrived {
                     debug!("IDLE: Soul transitioned from ExhaustedGathering to Gathering");
                     idle.behavior = IdleBehavior::Gathering;
-                    // ParticipatingIn を追加
+                    // ParticipatingIn を追加（Executeフェーズで処理）
                     if participating_in.is_none() {
                         if let Some(spot_entity) = target_spot_entity {
-                            commands.entity(entity).insert(ParticipatingIn(spot_entity));
-                            commands.trigger(crate::events::OnGatheringParticipated {
+                            request_writer.write(IdleBehaviorRequest {
                                 entity,
-                                spot_entity,
+                                operation: IdleBehaviorOperation::ArriveAtGathering { spot_entity },
                             });
                         }
                     }
-                    commands.trigger(crate::events::OnGatheringJoined { entity });
                 } else {
                     if path.waypoints.is_empty() || path.current_index >= path.waypoints.len() {
                         dest.0 = center;
@@ -155,13 +137,11 @@ pub fn idle_behavior_system(
         }
 
         if !matches!(&*task, AssignedTask::None) {
-            // タスク割り当て時は集会を解除（通常はWorkingOnフィルタで弾かれるが、
-            // AssignedTask::None 以外の瞬間的な状態変化への安全策として残す）
+            // タスク割り当て時は集会を解除
             if let Some(p) = participating_in {
-                commands.entity(entity).remove::<ParticipatingIn>();
-                commands.trigger(crate::events::OnGatheringLeft {
+                request_writer.write(IdleBehaviorRequest {
                     entity,
-                    spot_entity: p.0,
+                    operation: IdleBehaviorOperation::LeaveGathering { spot_entity: p.0 },
                 });
             }
             if idle.behavior != IdleBehavior::Wandering {
@@ -295,13 +275,12 @@ pub fn idle_behavior_system(
                             dest.0 = center;
                         }
                     } else {
-                        // 到着時にParticipatingInを追加
+                        // 到着時にParticipatingInを追加（Executeフェーズで処理）
                         if participating_in.is_none() {
                             if let Some(spot_entity) = target_spot_entity {
-                                commands.entity(entity).insert(ParticipatingIn(spot_entity));
-                                commands.trigger(crate::events::OnGatheringParticipated {
+                                request_writer.write(IdleBehaviorRequest {
                                     entity,
-                                    spot_entity,
+                                    operation: IdleBehaviorOperation::JoinGathering { spot_entity },
                                 });
                             }
                         }
@@ -348,3 +327,49 @@ pub fn idle_behavior_system(
         }
     }
 }
+
+/// アイドル行動の適用システム (Execute Phase)
+///
+/// IdleBehaviorRequestを読み取り、実際のエンティティ操作を行う。
+/// - ParticipatingInの追加/削除
+/// - イベントのトリガー
+pub fn idle_behavior_apply_system(
+    mut commands: Commands,
+    mut request_reader: MessageReader<IdleBehaviorRequest>,
+) {
+    for request in request_reader.read() {
+        match &request.operation {
+            IdleBehaviorOperation::JoinGathering { spot_entity } => {
+                commands
+                    .entity(request.entity)
+                    .insert(ParticipatingIn(*spot_entity));
+                commands.trigger(crate::events::OnGatheringParticipated {
+                    entity: request.entity,
+                    spot_entity: *spot_entity,
+                });
+            }
+            IdleBehaviorOperation::LeaveGathering { spot_entity } => {
+                commands
+                    .entity(request.entity)
+                    .remove::<ParticipatingIn>();
+                commands.trigger(crate::events::OnGatheringLeft {
+                    entity: request.entity,
+                    spot_entity: *spot_entity,
+                });
+            }
+            IdleBehaviorOperation::ArriveAtGathering { spot_entity } => {
+                commands
+                    .entity(request.entity)
+                    .insert(ParticipatingIn(*spot_entity));
+                commands.trigger(crate::events::OnGatheringParticipated {
+                    entity: request.entity,
+                    spot_entity: *spot_entity,
+                });
+                commands.trigger(crate::events::OnGatheringJoined {
+                    entity: request.entity,
+                });
+            }
+        }
+    }
+}
+
