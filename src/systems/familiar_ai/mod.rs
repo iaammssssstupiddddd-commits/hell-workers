@@ -72,16 +72,25 @@ impl Plugin for FamiliarAiPlugin {
             .add_systems(
                 Update,
                 (
-                    // --- Sense Phase ---
+                    // === Perceive Phase ===
+                    // 環境情報の読み取り、変化の検出
                     (
                         state_transition::detect_state_changes_system,
                         state_transition::detect_command_changes_system,
                         resource_cache::sync_reservations_system,
                         max_soul_handler::handle_max_soul_changed_system,
+                    )
+                        .in_set(crate::systems::soul_ai::scheduling::AiSystemSet::Perceive),
+
+                    // === Update Phase ===
+                    // 時間経過による内部状態の変化
+                    (
                         encouragement::cleanup_encouragement_cooldowns_system,
                     )
-                        .in_set(crate::systems::soul_ai::scheduling::SoulAiSystemSet::Sense),
-                    // --- Think Phase ---
+                        .in_set(crate::systems::soul_ai::scheduling::AiSystemSet::Update),
+
+                    // === Decide Phase ===
+                    // 次の行動の選択、要求の生成
                     (
                         (
                             familiar_ai_state_system,
@@ -92,12 +101,14 @@ impl Plugin for FamiliarAiPlugin {
                         )
                             .chain(),
                     )
-                        .in_set(crate::systems::soul_ai::scheduling::SoulAiSystemSet::Think),
-                    // --- Act Phase ---
+                        .in_set(crate::systems::soul_ai::scheduling::AiSystemSet::Decide),
+
+                    // === Execute Phase ===
+                    // 決定された行動の実行
                     (
                         state_transition::handle_state_changed_system,
                     )
-                        .in_set(crate::systems::soul_ai::scheduling::SoulAiSystemSet::Act),
+                        .in_set(crate::systems::soul_ai::scheduling::AiSystemSet::Execute),
                 ),
             );
     }
@@ -138,7 +149,7 @@ pub struct FamiliarAiParams<'w, 's> {
             &'static mut Path,
             &'static IdleState,
             Option<&'static mut crate::systems::logistics::Inventory>,
-            Option<&'static crate::entities::familiar::UnderCommand>,
+            Option<&'static crate::relationships::CommandedBy>,
             Option<&'static ParticipatingIn>,
         ),
         Without<Familiar>,
@@ -186,7 +197,7 @@ pub struct FamiliarAiTaskParams<'w, 's> {
             &'static mut Path,
             &'static IdleState,
             Option<&'static mut crate::systems::logistics::Inventory>,
-            Option<&'static crate::entities::familiar::UnderCommand>,
+            Option<&'static crate::relationships::CommandedBy>,
             Option<&'static ParticipatingIn>,
         ),
         Without<Familiar>,

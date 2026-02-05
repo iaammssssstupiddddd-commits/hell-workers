@@ -4,9 +4,9 @@
 
 use crate::entities::damned_soul::{DamnedSoul, Destination, IdleBehavior, IdleState, Path};
 use crate::entities::familiar::{
-    Familiar, FamiliarOperation, FamiliarVoice, UnderCommand,
+    Familiar, FamiliarOperation, FamiliarVoice,
 };
-use crate::relationships::{Commanding, ManagedTasks};
+use crate::relationships::{Commanding, ManagedTasks, CommandedBy};
 use crate::systems::command::TaskArea;
 use crate::systems::soul_ai::gathering::ParticipatingIn;
 use crate::systems::soul_ai::task_execution::AssignedTask;
@@ -41,7 +41,7 @@ pub fn process_squad_management(
             &IdleState,
 
             Option<&mut crate::systems::logistics::Inventory>,
-            Option<&UnderCommand>,
+            Option<&CommandedBy>,
             Option<&ParticipatingIn>,
         ),
         bevy::ecs::query::Without<Familiar>,
@@ -117,7 +117,7 @@ pub fn process_recruitment(
             &IdleState,
 
             Option<&mut crate::systems::logistics::Inventory>,
-            Option<&UnderCommand>,
+            Option<&CommandedBy>,
             Option<&ParticipatingIn>,
         ),
         bevy::ecs::query::Without<Familiar>,
@@ -264,7 +264,7 @@ pub fn process_task_delegation_and_movement(
             &IdleState,
 
             Option<&mut crate::systems::logistics::Inventory>,
-            Option<&UnderCommand>,
+            Option<&CommandedBy>,
             Option<&ParticipatingIn>,
         ),
         bevy::ecs::query::Without<Familiar>,

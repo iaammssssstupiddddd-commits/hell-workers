@@ -205,34 +205,6 @@ pub fn find_path_to_adjacent(
 
 
 
-/// 経路を平滑化する（直線で行ける場所を一直線に結ぶ）
-#[allow(dead_code)]
-pub fn smooth_path(world_map: &WorldMap, path: Vec<(i32, i32)>) -> Vec<(i32, i32)> {
-    if path.len() <= 2 {
-        return path;
-    }
-
-    let mut smoothed = vec![path[0]];
-    let mut current = 0;
-
-    while current < path.len() - 1 {
-        let mut furthest_visible = current + 1;
-        
-        // 先のノードが今の位置から直線で見えるかチェック
-        // パフォーマンスのため、後ろから順にチェックして最初に見つかった「見える点」を採用する
-        for next in (current + 2..path.len()).rev() {
-            if world_map.has_line_of_sight(path[current], path[next]) {
-                furthest_visible = next;
-                break;
-            }
-        }
-        
-        smoothed.push(path[furthest_visible]);
-        current = furthest_visible;
-    }
-
-    smoothed
-}
 
 /// ターゲット（複数の占有マス）へ向かい、その境界（隣接する歩行可能タイル）で停止するパスを探索
 /// ターゲット自体が障害物（非Walkable）であっても到達可能とする

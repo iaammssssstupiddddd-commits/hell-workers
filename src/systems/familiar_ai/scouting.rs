@@ -1,6 +1,6 @@
 use crate::constants::TILE_SIZE;
 use crate::entities::damned_soul::{DamnedSoul, Destination, IdleState, Path, StressBreakdown};
-use crate::entities::familiar::UnderCommand;
+use crate::relationships::CommandedBy;
 use crate::events::OnSoulRecruited;
 use crate::systems::familiar_ai::FamiliarAiState;
 use crate::systems::soul_ai::gathering::ParticipatingIn;
@@ -30,7 +30,7 @@ pub fn scouting_logic(
             &IdleState,
 
             Option<&mut crate::systems::logistics::Inventory>,
-            Option<&UnderCommand>,
+            Option<&CommandedBy>,
             Option<&ParticipatingIn>,
         ),
         Without<crate::entities::familiar::Familiar>,
@@ -90,7 +90,7 @@ pub fn scouting_logic(
             &IdleState,
 
             Option<&mut crate::systems::logistics::Inventory>,
-            Option<&UnderCommand>,
+            Option<&CommandedBy>,
             Option<&ParticipatingIn>,
         ) = (
             _soul_entity,
@@ -136,7 +136,7 @@ pub fn scouting_logic(
                 if uc.is_none() {
                     commands
                         .entity(target_soul)
-                        .insert(UnderCommand(fam_entity));
+                        .insert(CommandedBy(fam_entity));
                     commands.trigger(OnSoulRecruited {
                         entity: target_soul,
                         familiar_entity: fam_entity,

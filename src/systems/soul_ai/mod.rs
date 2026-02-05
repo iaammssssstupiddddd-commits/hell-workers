@@ -12,7 +12,7 @@ pub mod work;
 pub mod scheduling;
 
 use crate::systems::GameSystemSet;
-use scheduling::SoulAiSystemSet;
+use scheduling::AiSystemSet;
 
 pub struct SoulAiPlugin;
 
@@ -21,9 +21,10 @@ impl Plugin for SoulAiPlugin {
         app.configure_sets(
             Update,
             (
-                SoulAiSystemSet::Sense,
-                SoulAiSystemSet::Think,
-                SoulAiSystemSet::Act,
+                AiSystemSet::Perceive,
+                AiSystemSet::Update,
+                AiSystemSet::Decide,
+                AiSystemSet::Execute,
             )
                 .chain()
                 .in_set(GameSystemSet::Logic),
@@ -37,9 +38,22 @@ impl Plugin for SoulAiPlugin {
             .add_systems(
                 Update,
                 (
-                    // --- Sense Phase ---
+                    // === Perceive Phase ===
+                    // 環境情報の読み取り、変化の検出
                     (
-                        // タイマー更新 (集会システムの間引き用)
+                        idle::escaping::escaping_detection_system,
+                    )
+                        .in_set(AiSystemSet::Perceive),
+
+                    // Perceive → Update 間の同期
+                    bevy::ecs::schedule::ApplyDeferred
+                        .after(AiSystemSet::Perceive)
+                        .before(AiSystemSet::Update),
+
+                    // === Update Phase ===
+                    // 時間経過による内部状態の変化
+                    (
+                        // タイマー更新
                         gathering::tick_gathering_timer_system,
                         // バイタル更新
                         vitals::update::fatigue_update_system,
@@ -47,17 +61,23 @@ impl Plugin for SoulAiPlugin {
                         vitals::update::stress_system,
                         vitals::influence::supervision_stress_system,
                         vitals::influence::motivation_system,
-                        // 各種メンテナンス
+                        // メンテナンス処理
                         gathering::maintenance::gathering_recruitment_system,
                         gathering::maintenance::gathering_leave_system,
                         gathering::maintenance::gathering_maintenance_system,
                         gathering::maintenance::gathering_merge_system,
-                        idle::escaping::escaping_detection_system,
                     )
-                        .in_set(SoulAiSystemSet::Sense),
-                    // --- Think Phase ---
+                        .in_set(AiSystemSet::Update),
+
+                    // Update → Decide 間の同期
+                    bevy::ecs::schedule::ApplyDeferred
+                        .after(AiSystemSet::Update)
+                        .before(AiSystemSet::Decide),
+
+                    // === Decide Phase ===
+                    // 次の行動の選択、要求の生成
                     (
-                        // 意思決定・タスク割り当て
+                        // タスク割り当て要求
                         work::auto_haul::blueprint_auto_haul_system,
                         work::tank_water_request_system,
                         work::auto_haul::mud_mixer_auto_haul_system,
@@ -66,29 +86,37 @@ impl Plugin for SoulAiPlugin {
                         work::auto_build::blueprint_auto_build_system
                             .after(crate::systems::familiar_ai::familiar_task_delegation_system),
                         work::task_area_auto_haul_system,
-                        // アイドル・特殊行動
-                        idle::behavior::idle_behavior_system,
+                        // アイドル行動の決定
+                        idle::behavior::idle_behavior_decision_system,
                         idle::separation::gathering_separation_system,
                         idle::escaping::escaping_behavior_system,
-                        gathering::spawn::gathering_spawn_system,
                     )
-                        .in_set(SoulAiSystemSet::Think),
-                    // コマンドの反映をフェーズ間で強制同期
+                        .in_set(AiSystemSet::Decide),
+
+                    // Decide → Execute 間の同期
                     bevy::ecs::schedule::ApplyDeferred
-                        .after(SoulAiSystemSet::Think)
-                        .before(SoulAiSystemSet::Act),
-                    // --- Act Phase ---
+                        .after(AiSystemSet::Decide)
+                        .before(AiSystemSet::Execute),
+
+                    // === Execute Phase ===
+                    // 決定された行動の実行
                     (
-                        // 物理的な行動・反映
+                        // タスク要求の適用
                         task_execution::apply_task_assignment_requests_system
                             .before(task_execution::task_execution_system),
                         task_execution::task_execution_system,
+                        // アイドル行動の適用
+                        idle::behavior::idle_behavior_apply_system,
+                        // クリーンアップ
                         work::cleanup::cleanup_commanded_souls_system,
                         work::auto_haul::clear_item_reservations_system,
+                        // 予約の確定
                         crate::systems::familiar_ai::resource_cache::apply_reservation_requests_system
                             .after(work::auto_haul::clear_item_reservations_system),
+                        // エンティティ生成
+                        gathering::spawn::gathering_spawn_system,
                     )
-                        .in_set(SoulAiSystemSet::Act),
+                        .in_set(AiSystemSet::Execute),
                 ),
             )
             .add_observer(vitals::on_task_completed_motivation_bonus)

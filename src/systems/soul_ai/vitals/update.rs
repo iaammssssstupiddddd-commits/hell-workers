@@ -3,7 +3,7 @@ use bevy::prelude::*;
 use crate::constants::*;
 use crate::entities::damned_soul::{DamnedSoul, IdleBehavior, IdleState, StressBreakdown};
 use crate::entities::familiar::Familiar;
-use crate::entities::familiar::UnderCommand;
+use crate::relationships::CommandedBy;
 use crate::events::{OnExhausted, OnStressBreakdown};
 use crate::systems::soul_ai::idle::escaping::is_familiar_in_influence_range;
 use crate::systems::soul_ai::task_execution::AssignedTask;
@@ -18,7 +18,7 @@ pub fn fatigue_update_system(
         &mut DamnedSoul,
         &AssignedTask,
         &IdleState,
-        Option<&UnderCommand>,
+        Option<&CommandedBy>,
     )>,
 ) {
     let dt = time.delta_secs();
@@ -29,7 +29,7 @@ pub fn fatigue_update_system(
             Mut<DamnedSoul>,
             &AssignedTask,
             &IdleState,
-            Option<&UnderCommand>,
+            Option<&CommandedBy>,
         ) = (entity, soul, task, idle, under_command);
         let has_task = !matches!(task, AssignedTask::None);
 
@@ -74,7 +74,7 @@ pub fn stress_system(
         &mut DamnedSoul,
         &AssignedTask,
         &IdleState,
-        Option<&UnderCommand>,
+        Option<&CommandedBy>,
         Option<&mut StressBreakdown>,
     )>,
 ) {

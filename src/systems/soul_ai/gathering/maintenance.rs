@@ -138,7 +138,7 @@ pub fn gathering_recruitment_system(
         (
             With<DamnedSoul>,
             Without<ParticipatingIn>,
-            Without<crate::entities::familiar::UnderCommand>,
+            Without<crate::relationships::CommandedBy>,
         ),
     >,
     update_timer: Res<GatheringUpdateTimer>,

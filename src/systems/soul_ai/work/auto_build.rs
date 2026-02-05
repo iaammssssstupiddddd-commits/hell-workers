@@ -1,7 +1,8 @@
 use bevy::prelude::*;
 
 use crate::entities::damned_soul::{DamnedSoul, Destination, IdleState, Path, StressBreakdown};
-use crate::entities::familiar::{ActiveCommand, Familiar, UnderCommand};
+use crate::entities::familiar::{ActiveCommand, Familiar};
+use crate::relationships::CommandedBy;
 use crate::relationships::{ManagedBy, TaskWorkers, WorkingOn};
 use crate::systems::command::TaskArea;
 use crate::systems::jobs::{Blueprint, Designation, TaskSlots, Priority, WorkType};
@@ -37,7 +38,7 @@ pub fn blueprint_auto_build_system(
             &mut Path,
             &IdleState,
 
-            Option<&UnderCommand>,
+            Option<&CommandedBy>,
         ),
         Without<Familiar>,
     >,
@@ -142,7 +143,7 @@ pub fn blueprint_auto_build_system(
 
                         commands
                             .entity(worker_entity)
-                            .insert((UnderCommand(fam_entity), WorkingOn(bp_entity)));
+                            .insert((CommandedBy(fam_entity), WorkingOn(bp_entity)));
                         commands.entity(bp_entity).insert(ManagedBy(fam_entity));
 
                         info!(

@@ -5,7 +5,7 @@
 use crate::entities::damned_soul::{
     DamnedSoul, Destination, IdleBehavior, IdleState, Path,
 };
-use crate::entities::familiar::UnderCommand;
+use crate::relationships::CommandedBy;
 use crate::relationships::Commanding;
 use crate::systems::soul_ai::gathering::ParticipatingIn;
 use crate::systems::soul_ai::task_execution::AssignedTask;
@@ -51,7 +51,7 @@ impl SquadManager {
                 &IdleState,
 
                 Option<&mut crate::systems::logistics::Inventory>,
-                Option<&UnderCommand>,
+                Option<&CommandedBy>,
                 Option<&ParticipatingIn>,
             ),
             Without<crate::entities::familiar::Familiar>,
@@ -77,7 +77,7 @@ impl SquadManager {
                         // Relationship の反映がコンポーネントより先に来る可能性があるため
                         // 1フレーム待つ（警告のみ）
                         debug!(
-                            "FAM_AI: {:?} squad member {:?} has no UnderCommand comp yet (waiting sync)",
+                            "FAM_AI: {:?} squad member {:?} has no CommandedBy comp yet (waiting sync)",
                             fam_entity, member_entity
                         );
                         // ここでは無効としない（次のフレームで再チェック）
@@ -130,7 +130,7 @@ impl SquadManager {
                 &mut Path,
                 &IdleState,
                 Option<&mut crate::systems::logistics::Inventory>,
-                Option<&UnderCommand>,
+                Option<&CommandedBy>,
                 Option<&ParticipatingIn>,
             ),
             Without<crate::entities::familiar::Familiar>,
@@ -222,8 +222,8 @@ impl SquadManager {
                         }
                     }
 
-                    // UnderCommand を削除
-                    commands.entity(member_entity).remove::<UnderCommand>();
+                    // CommandedBy を削除
+                    commands.entity(member_entity).remove::<CommandedBy>();
                     released_entities.push(member_entity);
                 }
             } else {

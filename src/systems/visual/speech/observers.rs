@@ -4,7 +4,8 @@ use super::phrases::LatinPhrase;
 use super::spawn::*;
 use crate::assets::GameAssets;
 use crate::entities::damned_soul::DamnedSoul;
-use crate::entities::familiar::{Familiar, FamiliarVoice, UnderCommand};
+use crate::entities::familiar::{Familiar, FamiliarVoice};
+use crate::relationships::CommandedBy;
 use crate::events::*;
 use crate::systems::jobs::WorkType;
 use bevy::prelude::*;
@@ -14,7 +15,7 @@ pub fn on_task_assigned(
     on: On<OnTaskAssigned>,
     mut commands: Commands,
     assets: Res<GameAssets>,
-    mut q_souls: Query<(&GlobalTransform, Option<&UnderCommand>, Option<&mut SpeechHistory>), (With<DamnedSoul>, Without<Familiar>)>,
+    mut q_souls: Query<(&GlobalTransform, Option<&CommandedBy>, Option<&mut SpeechHistory>), (With<DamnedSoul>, Without<Familiar>)>,
     mut q_familiars: Query<
         (&GlobalTransform, Option<&FamiliarVoice>, Option<&mut SpeechHistory>),
         (With<Familiar>, Without<DamnedSoul>),

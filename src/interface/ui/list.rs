@@ -1,7 +1,8 @@
 //! エンティティリストの動的更新システム
 
 use crate::entities::damned_soul::{DamnedSoul, Gender, SoulIdentity};
-use crate::entities::familiar::{Familiar, FamiliarOperation, UnderCommand};
+use crate::entities::familiar::{Familiar, FamiliarOperation};
+use crate::relationships::CommandedBy;
 use crate::interface::ui::components::*;
 use crate::interface::ui::theme::*;
 use crate::relationships::Commanding;
@@ -203,7 +204,7 @@ pub fn rebuild_entity_list_system(
             &DamnedSoul,
             &AssignedTask,
             &SoulIdentity,
-            Option<&UnderCommand>,
+            Option<&CommandedBy>,
         ),
         Without<Familiar>,
     >,

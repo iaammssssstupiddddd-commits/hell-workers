@@ -73,13 +73,23 @@
 
 ## 3. タスク実行ロジック (Task Execution)
 
-割り当てられた `AssignedTask` に基づき、**Global Cycle Framework (Sense-Think-Act)** に従ってタスクを実行します。
+割り当てられた `AssignedTask` に基づき、**Global Cycle Framework (4フェーズ)** に従ってタスクを実行します。
 
 ### 3.0. 実行サイクル (Execution Cycle)
-すべてのAI処理は以下の順序で厳密にスケジュールされます (`SoulAiSystemSet`)。
-1. **Sense Phase**: 環境認識とリソース予約状況の同期 (`sync_reservations_system`)。
-2. **Think Phase**: 新しいタスクの検索と割り当て要求（`TaskAssignmentRequest`）の生成。
-3. **Act Phase**: 割り当て要求の適用 (`apply_task_assignment_requests_system`) → 実際の移動やアクションの実行 (`task_execution`) → 予約更新の反映 (`apply_reservation_requests_system`)。
+すべてのAI処理は以下の順序で厳密にスケジュールされます (`AiSystemSet`)。
+
+```
+Perceive → Update → Decide → Execute
+```
+
+| フェーズ | 責任 | 主なシステム |
+|:--|:--|:--|
+| **Perceive** | 環境情報の読み取り、変化の検出 | `sync_reservations_system`, `escaping_detection_system` |
+| **Update** | 時間経過による内部状態の変化 | バイタル更新、タイマー、集会スポットメンテナンス |
+| **Decide** | 次の行動の選択、要求の生成 | `idle_behavior_decision_system`, タスク割り当て要求 |
+| **Execute** | 決定された行動の実行 | `apply_task_assignment_requests_system`, `idle_behavior_apply_system`, `task_execution` |
+
+**Message/Request パターン**: Decideフェーズで生成された `TaskAssignmentRequest` や `IdleBehaviorRequest` はExecuteフェーズで読み取られ、実際のコンポーネント更新が行われます。これにより堅牢なフェーズ間通信が実現されています。
 
 ### 3.1. 採取 (Gather)
 - **対象**: 木、岩、建築物など。

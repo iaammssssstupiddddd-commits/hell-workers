@@ -1,7 +1,8 @@
 use bevy::prelude::*;
 
 use crate::entities::damned_soul::Path;
-use crate::entities::familiar::{ActiveCommand, Familiar, FamiliarCommand, UnderCommand};
+use crate::entities::familiar::{ActiveCommand, Familiar, FamiliarCommand};
+use crate::relationships::CommandedBy;
 // use crate::systems::familiar_ai::resource_cache::SharedResourceCache; // Removed unused import
 
 use crate::systems::soul_ai::task_execution::AssignedTask;
@@ -13,7 +14,7 @@ pub fn cleanup_commanded_souls_system(
     mut q_souls: Query<(
         Entity,
         &Transform,
-        &UnderCommand,
+        &CommandedBy,
         &mut AssignedTask,
         &mut Path,
         Option<&mut crate::systems::logistics::Inventory>,
@@ -54,7 +55,7 @@ pub fn cleanup_commanded_souls_system(
                 entity: soul_entity,
             });
 
-            commands.entity(soul_entity).remove::<UnderCommand>();
+            commands.entity(soul_entity).remove::<CommandedBy>();
         }
     }
 }

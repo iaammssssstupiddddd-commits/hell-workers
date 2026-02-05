@@ -125,10 +125,6 @@ impl Default for FamiliarOperation {
     }
 }
 
-// UnderCommand は relationships.rs の CommandedBy に移行
-// 後方互換性のため、エイリアスを提供
-pub use crate::relationships::CommandedBy as UnderCommand;
-
 use crate::systems::visual::speech::phrases::LatinPhrase;
 
 /// 使い魔の「口癖」傾向

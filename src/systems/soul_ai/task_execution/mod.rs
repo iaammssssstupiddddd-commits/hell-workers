@@ -19,7 +19,8 @@ pub mod types;
 pub use types::AssignedTask;
 
 use crate::entities::damned_soul::{DamnedSoul, Destination, IdleBehavior, IdleState, Path, StressBreakdown};
-use crate::entities::familiar::{Familiar, UnderCommand};
+use crate::entities::familiar::Familiar;
+use crate::relationships::CommandedBy;
 use crate::events::{OnGatheringLeft, OnTaskAssigned, OnTaskCompleted, TaskAssignmentRequest};
 use crate::systems::familiar_ai::resource_cache::{apply_reservation_op, SharedResourceCache};
 // use crate::systems::familiar_ai::resource_cache::SharedResourceCache; // Removed unused import
@@ -56,7 +57,7 @@ pub fn apply_task_assignment_requests_system(
             &mut Path,
             &IdleState,
             Option<&mut Inventory>,
-            Option<&UnderCommand>,
+            Option<&CommandedBy>,
             Option<&crate::systems::soul_ai::gathering::ParticipatingIn>,
         ),
         (With<crate::entities::damned_soul::DamnedSoul>, Without<Familiar>),

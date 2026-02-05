@@ -6,7 +6,7 @@ use crate::constants::TILE_SIZE;
 use crate::entities::damned_soul::{
     DamnedSoul, Destination, IdleBehavior, IdleState, Path, StressBreakdown,
 };
-use crate::entities::familiar::UnderCommand;
+use crate::relationships::CommandedBy;
 use crate::events::OnSoulRecruited;
 use crate::systems::soul_ai::gathering::ParticipatingIn;
 use crate::systems::soul_ai::task_execution::AssignedTask;
@@ -34,7 +34,7 @@ impl RecruitmentManager {
                 &IdleState,
 
                 Option<&mut crate::systems::logistics::Inventory>,
-                Option<&UnderCommand>,
+                Option<&CommandedBy>,
                 Option<&ParticipatingIn>,
             ),
             Without<crate::entities::familiar::Familiar>,
@@ -44,7 +44,7 @@ impl RecruitmentManager {
     ) -> Option<Entity> {
         // 候補をフィルタリングするヘルパークロージャ
         let filter_candidate = |e: Entity| -> Option<(Entity, Vec2)> {
-            let (entity, transform, soul, task, _, _, idle, _, uc, _): (Entity, &Transform, &DamnedSoul, &AssignedTask, &Destination, &Path, &IdleState, Option<&crate::systems::logistics::Inventory>, Option<&UnderCommand>, Option<&ParticipatingIn>) = q_souls.get(e).ok()?;
+            let (entity, transform, soul, task, _, _, idle, _, uc, _): (Entity, &Transform, &DamnedSoul, &AssignedTask, &Destination, &Path, &IdleState, Option<&crate::systems::logistics::Inventory>, Option<&CommandedBy>, Option<&ParticipatingIn>) = q_souls.get(e).ok()?;
             let recruit_threshold = fatigue_threshold - 0.2;
             let fatigue_ok = soul.fatigue < recruit_threshold;
             let stress_ok = q_breakdown.get(entity).is_err();
@@ -122,7 +122,7 @@ impl RecruitmentManager {
                 &IdleState,
 
                 Option<&mut crate::systems::logistics::Inventory>,
-                Option<&UnderCommand>,
+                Option<&CommandedBy>,
                 Option<&ParticipatingIn>,
             ),
             Without<crate::entities::familiar::Familiar>,
@@ -140,7 +140,7 @@ impl RecruitmentManager {
         )?;
 
         // リクルート実行
-        commands.entity(recruit_entity).insert(UnderCommand(fam_entity));
+        commands.entity(recruit_entity).insert(CommandedBy(fam_entity));
 
         // もし集会に参加中なら抜ける
         if let Ok((_, _, _, _, _, _, _, _, _, Some(p))) = q_souls.get(recruit_entity) {
@@ -178,7 +178,7 @@ impl RecruitmentManager {
                 &IdleState,
 
                 Option<&mut crate::systems::logistics::Inventory>,
-                Option<&UnderCommand>,
+                Option<&CommandedBy>,
                 Option<&ParticipatingIn>,
             ),
             Without<crate::entities::familiar::Familiar>,

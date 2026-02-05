@@ -5,6 +5,7 @@ use crate::constants::*;
 use crate::events::{
     OnExhausted, OnSoulRecruited, OnStressBreakdown, OnTaskAssigned, OnTaskCompleted,
 };
+use crate::relationships::CommandedBy;
 use crate::systems::soul_ai::task_execution::AssignedTask;
 use crate::systems::soul_ai::work::unassign_task;
 use crate::world::map::WorldMap;
@@ -47,7 +48,7 @@ pub fn on_stress_breakdown(
         &mut AssignedTask,
         &mut Path,
         Option<&mut crate::systems::logistics::Inventory>,
-        Option<&crate::entities::familiar::UnderCommand>,
+        Option<&crate::relationships::CommandedBy>,
     )>,
     world_map: Res<WorldMap>,
     mut queries: crate::systems::soul_ai::task_execution::context::TaskAssignmentQueries,
@@ -80,7 +81,7 @@ pub fn on_stress_breakdown(
         if under_command.is_some() {
             commands
                 .entity(entity)
-                .remove::<crate::entities::familiar::UnderCommand>();
+                .remove::<CommandedBy>();
         }
     }
 }
@@ -97,7 +98,7 @@ pub fn on_exhausted(
         &mut Path,
         &mut Destination,
         Option<&mut crate::systems::logistics::Inventory>,
-        Option<&crate::entities::familiar::UnderCommand>,
+        Option<&crate::relationships::CommandedBy>,
     )>,
     world_map: Res<WorldMap>,
     mut queries: crate::systems::soul_ai::task_execution::context::TaskAssignmentQueries,
@@ -122,7 +123,7 @@ pub fn on_exhausted(
         if under_command_opt.is_some() {
             commands
                 .entity(entity)
-                .remove::<crate::entities::familiar::UnderCommand>();
+                .remove::<CommandedBy>();
         }
 
         if !matches!(*task, AssignedTask::None) {

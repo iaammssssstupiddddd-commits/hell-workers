@@ -141,3 +141,51 @@ pub struct TaskAssignmentRequest {
     pub reservation_ops: Vec<ResourceReservationOp>,
     pub already_commanded: bool,
 }
+
+// ============================================================
+// Idle Behavior Requests (Decide -> Execute)
+// ============================================================
+
+/// アイドル行動の変更要求
+#[derive(Message, Debug, Clone)]
+pub struct IdleBehaviorRequest {
+    pub entity: Entity,
+    pub operation: IdleBehaviorOperation,
+}
+
+/// アイドル行動の操作種別
+#[derive(Debug, Clone)]
+pub enum IdleBehaviorOperation {
+    /// 集会に参加
+    JoinGathering {
+        spot_entity: Entity,
+    },
+    /// 集会から離脱
+    LeaveGathering {
+        spot_entity: Entity,
+    },
+    /// 集会に到着（ExhaustedGathering -> Gathering）
+    ArriveAtGathering {
+        spot_entity: Entity,
+    },
+}
+
+// ============================================================
+// Familiar AI Requests (Decide -> Execute)
+// ============================================================
+
+/// 使い魔の分隊管理要求
+#[derive(Message, Debug, Clone)]
+pub struct SquadManagementRequest {
+    pub familiar_entity: Entity,
+    pub operation: SquadManagementOperation,
+}
+
+/// 分隊管理の操作種別
+#[derive(Debug, Clone)]
+pub enum SquadManagementOperation {
+    /// 魂を分隊に追加（Commanding関係を設定）
+    AddMember { soul_entity: Entity },
+    /// 魂を分隊から解放（Commanding関係を削除）
+    ReleaseMember { soul_entity: Entity },
+}

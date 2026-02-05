@@ -6,7 +6,8 @@ use bevy::prelude::*;
 
 use crate::constants::*;
 use crate::entities::damned_soul::{DamnedSoul, Destination, IdleBehavior, IdleState, Path};
-use crate::entities::familiar::{Familiar, UnderCommand};
+use crate::entities::familiar::Familiar;
+use crate::relationships::CommandedBy;
 use crate::systems::soul_ai::gathering::{GatheringSpot, ParticipatingIn};
 use crate::systems::spatial::{FamiliarSpatialGrid, SpatialGridOps};
 use crate::world::map::WorldMap;
@@ -113,7 +114,7 @@ pub fn escaping_detection_system(
         Entity,
         &Transform,
         &DamnedSoul,
-        Option<&UnderCommand>,
+        Option<&CommandedBy>,
         Option<&ParticipatingIn>,
         &mut IdleState,
     )>,
@@ -251,7 +252,7 @@ pub fn escaping_behavior_system(
             &mut Destination,
             &mut Path,
             &DamnedSoul,
-            Option<&UnderCommand>,
+            Option<&CommandedBy>,
         ),
     >,
 ) {
@@ -318,10 +319,3 @@ pub fn escaping_behavior_system(
     }
 }
 
-/// 逃走中のSoulが集会スポットに参加できるようにするシステム
-/// （将来的な拡張用: Escaping状態のSoulは通常より遠くから集会に参加可能）
-#[allow(dead_code)]
-pub fn escaping_gathering_join_system() {
-    // 現在はescaping_behavior_systemで処理
-    // 必要に応じてEscaping中のSoulの集会参加距離を拡張する際に実装
-}

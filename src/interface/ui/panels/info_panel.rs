@@ -2,7 +2,8 @@
 
 use crate::constants::ESCAPE_STRESS_THRESHOLD;
 use crate::entities::damned_soul::{DamnedSoul, IdleBehavior, IdleState};
-use crate::entities::familiar::{Familiar, UnderCommand};
+use crate::entities::familiar::Familiar;
+use crate::relationships::CommandedBy;
 use crate::interface::ui::components::*;
 use crate::systems::jobs::Blueprint;
 use crate::systems::soul_ai::idle::escaping::is_escape_threat_close;
@@ -129,7 +130,7 @@ pub fn info_panel_system(
         &AssignedTask,
         &Transform,
         &IdleState,
-        Option<&UnderCommand>,
+        Option<&CommandedBy>,
         Option<&crate::systems::logistics::Inventory>,
         Option<&crate::entities::damned_soul::SoulIdentity>,
     )>,

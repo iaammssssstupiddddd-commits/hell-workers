@@ -264,50 +264,6 @@ impl WorldMap {
         Some((target_x, target_y))
     }
 
-    /// 2点間に障害物がないか（Line-of-Sight）を判定
-    #[allow(dead_code)]
-    pub fn has_line_of_sight(&self, p1: (i32, i32), p2: (i32, i32)) -> bool {
-        let (x1, y1) = p1;
-        let (x2, y2) = p2;
-
-        let dx = (x2 - x1).abs();
-        let dy = (y2 - y1).abs();
-        let mut x = x1;
-        let mut y = y1;
-        let n = 1 + dx + dy;
-        let x_inc = if x2 > x1 { 1 } else { -1 };
-        let y_inc = if y2 > y1 { 1 } else { -1 };
-        let mut error = dx - dy;
-        let dx_twice = dx * 2;
-        let dy_twice = dy * 2;
-
-        for _ in 0..n {
-            if !self.is_walkable(x, y) {
-                return false;
-            }
-            if x == x2 && y == y2 {
-                break;
-            }
-
-            if error > 0 {
-                x += x_inc;
-                error -= dy_twice;
-            } else if error < 0 {
-                y += y_inc;
-                error += dx_twice;
-            } else {
-                // error == 0 の場合（ど真ん中を通る場合）
-                // 角抜けを確実に防ぐため、隣接する両方のマスもチェックする
-                if !self.is_walkable(x + x_inc, y) || !self.is_walkable(x, y + y_inc) {
-                    return false;
-                }
-                x += x_inc;
-                y += y_inc;
-                error += dx_twice - dy_twice;
-            }
-        }
-        true
-    }
 }
 
 /// 固定配置の川タイルを生成

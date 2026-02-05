@@ -24,13 +24,6 @@ impl Plugin for LogicPlugin {
             Update,
             (
                 assign_task_system.run_if(in_state(PlayMode::TaskDesignation)),
-            )
-                .chain()
-                .in_set(GameSystemSet::Logic),
-        )
-        .add_systems(
-            Update,
-            (
                 familiar_command_input_system.run_if(
                     |selected: Res<crate::interface::selection::SelectedEntity>| {
                         selected.0.is_some()
