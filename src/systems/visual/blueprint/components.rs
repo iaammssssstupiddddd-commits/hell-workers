@@ -39,8 +39,6 @@ pub struct BlueprintVisual {
 /// 資材アイコン表示用コンポーネント
 #[derive(Component)]
 pub struct MaterialIcon {
-    /// 親となる設計図エンティティ
-    pub blueprint: Entity,
     /// 表示する資材タイプ
     pub _resource_type: ResourceType,
 }
@@ -48,8 +46,6 @@ pub struct MaterialIcon {
 /// 資材カウンター表示用コンポーネント
 #[derive(Component)]
 pub struct MaterialCounter {
-    /// 親となる設計図エンティティ
-    pub blueprint: Entity,
     /// 表示する資材タイプ
     pub resource_type: ResourceType,
 }
@@ -77,9 +73,7 @@ pub struct BuildingBounceEffect {
 
 /// 建築中のワーカー頭上に表示されるハンマーアイコン
 #[derive(Component)]
-pub struct WorkerHammerIcon {
-    pub worker: Entity,
-}
+pub struct WorkerHammerIcon;
 
 /// インジケータが既に付与されていることを示すマーカー
 #[derive(Component)]
@@ -87,7 +81,4 @@ pub struct HasWorkerIndicator;
 
 /// プログレスバーのマーカーコンポーネント（util::GenericProgressBarのラッパー）
 #[derive(Component)]
-pub struct ProgressBar {
-    /// 親となる設計図エンティティ
-    pub blueprint: Entity,
-}
+pub struct ProgressBar;

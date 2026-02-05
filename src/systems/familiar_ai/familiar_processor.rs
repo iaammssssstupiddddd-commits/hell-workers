@@ -252,7 +252,7 @@ pub fn process_task_delegation_and_movement(
     fam_path: &mut Path,
     task_area_opt: Option<&TaskArea>,
     squad_entities: &[Entity],
-    commands: &mut Commands,
+    _commands: &mut Commands,
     q_souls: &mut Query<
         (
             Entity,
@@ -277,13 +277,13 @@ pub fn process_task_delegation_and_movement(
     pf_context: &mut PathfindingContext,
     time: &Res<Time>,
     state_changed: bool,
+    reservation_shadow: &mut crate::systems::familiar_ai::task_management::ReservationShadow,
 ) {
     let fam_pos = fam_transform.translation.truncate();
     let fatigue_threshold = familiar_op.fatigue_threshold;
 
     // タスク委譲
     let assigned_task_opt = TaskManager::delegate_task(
-        commands,
         fam_entity,
         fam_pos,
         &squad_entities,
@@ -296,6 +296,7 @@ pub fn process_task_delegation_and_movement(
         // haul_cache removed
         world_map,
         pf_context,
+        reservation_shadow,
     );
     let has_available_task = assigned_task_opt.is_some();
 

@@ -2,6 +2,7 @@
 
 use crate::constants::Z_BAR_BG;
 use bevy::prelude::*;
+use bevy::prelude::ChildOf;
 
 use super::components::ProgressBar;
 use super::{
@@ -19,11 +20,11 @@ use crate::systems::utils::progress_bar::{
 pub fn spawn_progress_bar_system(
     mut commands: Commands,
     q_blueprints: Query<(Entity, &Transform), (With<Blueprint>, Without<ProgressBar>)>,
-    q_progress_bars: Query<&ProgressBar>,
+    q_progress_bars: Query<&ChildOf, With<ProgressBar>>,
 ) {
     for (bp_entity, bp_transform) in q_blueprints.iter() {
         // 既にこの Blueprint 用のプログレスバーがあるかチェック
-        let has_bar = q_progress_bars.iter().any(|pb| pb.blueprint == bp_entity);
+        let has_bar = q_progress_bars.iter().any(|c| c.parent() == bp_entity);
         if has_bar {
             continue;
         }
@@ -42,23 +43,23 @@ pub fn spawn_progress_bar_system(
             spawn_progress_bar(&mut commands, bp_entity, bp_transform, config);
 
         // ラッパーコンポーネントを追加
-        commands.entity(bg_entity).insert(ProgressBar {
-            blueprint: bp_entity,
-        });
-        commands.entity(fill_entity).insert(ProgressBar {
-            blueprint: bp_entity,
-        });
+        commands.entity(bg_entity).insert(ProgressBar);
+        commands.entity(fill_entity).insert(ProgressBar);
+
+        // 親子関係を設定（Lifecycle管理のため）
+        commands.entity(bp_entity).add_child(bg_entity);
+        commands.entity(bp_entity).add_child(fill_entity);
     }
 }
 
 /// プログレスバーの進捗を更新する
 pub fn update_progress_bar_fill_system(
-    q_blueprints: Query<(Entity, &Blueprint)>,
+    q_blueprints: Query<&Blueprint>,
     q_generic_bars: Query<&GenericProgressBar>,
-    mut q_fills: Query<(Entity, &ProgressBar, &mut Sprite, &mut Transform), With<ProgressBarFill>>,
+    mut q_fills: Query<(Entity, &ChildOf, &mut Sprite, &mut Transform), (With<ProgressBar>, With<ProgressBarFill>)>,
 ) {
-    for (fill_entity, pb, mut sprite, mut transform) in q_fills.iter_mut() {
-        if let Some((_, bp)) = q_blueprints.iter().find(|(e, _)| *e == pb.blueprint) {
+    for (fill_entity, child_of, mut sprite, mut transform) in q_fills.iter_mut() {
+        if let Ok(bp) = q_blueprints.get(child_of.parent()) {
             // 全体進捗 = 資材進捗(0~0.5) + 建築進捗(0~0.5)
             let total_required: u32 = bp.required_materials.values().sum();
             let total_delivered: u32 = bp.delivered_materials.values().sum();
@@ -97,16 +98,18 @@ pub fn sync_progress_bar_position_system(
     q_blueprints: Query<(Entity, &Transform), With<Blueprint>>,
     q_generic_bars: Query<&GenericProgressBar>,
     mut q_bg_bars: Query<
-        (Entity, &ProgressBar, &mut Transform),
+        (Entity, &ChildOf, &mut Transform),
         (
+            With<ProgressBar>,
             With<ProgressBarBackground>,
             Without<Blueprint>,
             Without<ProgressBarFill>,
         ),
     >,
     mut q_fill_bars: Query<
-        (Entity, &ProgressBar, &mut Transform, &Sprite),
+        (Entity, &ChildOf, &mut Transform, &Sprite),
         (
+            With<ProgressBar>,
             With<ProgressBarFill>,
             Without<Blueprint>,
             Without<ProgressBarBackground>,
@@ -114,8 +117,8 @@ pub fn sync_progress_bar_position_system(
     >,
 ) {
     // 背景バーをBlueprint位置に追従
-    for (bg_entity, pb, mut bar_transform) in q_bg_bars.iter_mut() {
-        if let Some((_, bp_transform)) = q_blueprints.iter().find(|(e, _)| *e == pb.blueprint) {
+    for (bg_entity, child_of, mut bar_transform) in q_bg_bars.iter_mut() {
+        if let Ok((_bp_entity, bp_transform)) = q_blueprints.get(child_of.parent()) {
             if let Ok(generic_bar) = q_generic_bars.get(bg_entity) {
                 sync_progress_bar_position(bp_transform, &generic_bar.config, &mut bar_transform);
             }
@@ -123,8 +126,8 @@ pub fn sync_progress_bar_position_system(
     }
 
     // Fillバーは左寄せオフセットを保持しつつBlueprint位置に追従
-    for (fill_entity, pb, mut bar_transform, sprite) in q_fill_bars.iter_mut() {
-        if let Some((_, bp_transform)) = q_blueprints.iter().find(|(e, _)| *e == pb.blueprint) {
+    for (fill_entity, child_of, mut bar_transform, sprite) in q_fill_bars.iter_mut() {
+        if let Ok((_bp_entity, bp_transform)) = q_blueprints.get(child_of.parent()) {
             if let Ok(generic_bar) = q_generic_bars.get(fill_entity) {
                 let fill_width = sprite.custom_size.map(|s| s.x).unwrap_or(0.0);
                 sync_progress_bar_fill_position(
@@ -138,15 +141,14 @@ pub fn sync_progress_bar_position_system(
     }
 }
 
-/// Blueprint が削除されたらプログレスバーも削除する
 pub fn cleanup_progress_bars_system(
     mut commands: Commands,
     q_blueprints: Query<Entity, With<Blueprint>>,
-    q_bars: Query<(Entity, &ProgressBar)>,
+    q_bars: Query<(Entity, &ChildOf, &ProgressBar)>,
 ) {
     let bp_entities: std::collections::HashSet<Entity> = q_blueprints.iter().collect();
-    for (bar_entity, pb) in q_bars.iter() {
-        if !bp_entities.contains(&pb.blueprint) {
+    for (bar_entity, child_of, _) in q_bars.iter() {
+        if !bp_entities.contains(&child_of.parent()) {
             commands.entity(bar_entity).despawn();
         }
     }

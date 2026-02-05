@@ -12,6 +12,7 @@ use bevy::prelude::*;
 use crate::relationships::{ManagedBy, TaskWorkers};
 use crate::systems::jobs::{Designation, TaskSlots, Priority, Blueprint};
 use crate::systems::logistics::{Stockpile, InStockpile};
+use crate::events::{ResourceReservationOp, ResourceReservationRequest, TaskAssignmentRequest};
 use crate::systems::familiar_ai::resource_cache::SharedResourceCache;
 use bevy::ecs::system::SystemParam;
 
@@ -39,17 +40,19 @@ pub struct TaskAssignmentQueries<'w, 's> {
     pub stockpiles: Query<'w, 's, (
         Entity,
         &'static Transform,
-        &'static mut Stockpile,
+        &'static Stockpile,
         Option<&'static crate::relationships::StoredItems>,
     )>,
     pub belongs: Query<'w, 's, &'static crate::systems::logistics::BelongsTo>,
-    pub blueprints: Query<'w, 's, (&'static Transform, &'static mut Blueprint, Option<&'static Designation>)>,
+    pub blueprints: Query<'w, 's, (&'static Transform, &'static Blueprint, Option<&'static Designation>)>,
     pub target_blueprints: Query<'w, 's, &'static crate::systems::jobs::TargetBlueprint>,
     pub items: Query<'w, 's, (&'static ResourceItem, Option<&'static Designation>)>,
-    pub mixers: Query<'w, 's, (&'static Transform, &'static mut crate::systems::jobs::MudMixerStorage, Option<&'static TaskWorkers>)>,
+    pub mixers: Query<'w, 's, (&'static Transform, &'static crate::systems::jobs::MudMixerStorage, Option<&'static TaskWorkers>)>,
     pub resources: Query<'w, 's, &'static ResourceItem>,
     pub target_mixers: Query<'w, 's, &'static crate::systems::jobs::TargetMixer>,
-    pub resource_cache: ResMut<'w, SharedResourceCache>,
+    pub resource_cache: Res<'w, SharedResourceCache>,
+    pub assignment_writer: MessageWriter<'w, TaskAssignmentRequest>,
+    pub reservation_writer: MessageWriter<'w, ResourceReservationRequest>,
     pub task_slots: Query<'w, 's, &'static crate::systems::jobs::TaskSlots>,
 }
 
@@ -85,18 +88,19 @@ pub struct TaskQueries<'w, 's> {
     pub mixers: Query<'w, 's, (&'static Transform, &'static mut crate::systems::jobs::MudMixerStorage, Option<&'static TaskWorkers>)>,
     pub resources: Query<'w, 's, &'static crate::systems::logistics::ResourceItem>,
     pub resource_items: Query<'w, 's, (Entity, &'static crate::systems::logistics::ResourceItem, Option<&'static crate::relationships::StoredIn>)>,
-    pub resource_cache: ResMut<'w, SharedResourceCache>,
+    pub resource_cache: Res<'w, SharedResourceCache>,
+    pub reservation_writer: MessageWriter<'w, ResourceReservationRequest>,
 }
 
 /// タスク解除に必要なアクセス
 pub trait TaskReservationAccess<'w, 's> {
-    fn resource_cache(&mut self) -> &mut SharedResourceCache;
+    fn reservation_writer(&mut self) -> &mut MessageWriter<'w, ResourceReservationRequest>;
     fn resources(&self) -> &Query<'w, 's, &'static ResourceItem>;
 }
 
 impl<'w, 's> TaskReservationAccess<'w, 's> for TaskQueries<'w, 's> {
-    fn resource_cache(&mut self) -> &mut SharedResourceCache {
-        &mut self.resource_cache
+    fn reservation_writer(&mut self) -> &mut MessageWriter<'w, ResourceReservationRequest> {
+        &mut self.reservation_writer
     }
 
     fn resources(&self) -> &Query<'w, 's, &'static ResourceItem> {
@@ -105,8 +109,8 @@ impl<'w, 's> TaskReservationAccess<'w, 's> for TaskQueries<'w, 's> {
 }
 
 impl<'w, 's> TaskReservationAccess<'w, 's> for TaskAssignmentQueries<'w, 's> {
-    fn resource_cache(&mut self) -> &mut SharedResourceCache {
-        &mut self.resource_cache
+    fn reservation_writer(&mut self) -> &mut MessageWriter<'w, ResourceReservationRequest> {
+        &mut self.reservation_writer
     }
 
     fn resources(&self) -> &Query<'w, 's, &'static ResourceItem> {
@@ -131,5 +135,10 @@ impl<'a, 'w, 's> TaskExecutionContext<'a, 'w, 's> {
     /// 魂の位置を取得
     pub fn soul_pos(&self) -> Vec2 {
         self.soul_transform.translation.truncate()
+    }
+
+    /// リソース予約更新の要求を追加
+    pub fn queue_reservation(&mut self, op: ResourceReservationOp) {
+        self.queries.reservation_writer.write(ResourceReservationRequest { op });
     }
 }

@@ -163,7 +163,6 @@ pub struct FamiliarAiTaskParams<'w, 's> {
         (
             Entity,
             &'static Transform,
-            &'static Familiar,
             &'static FamiliarOperation,
             &'static ActiveCommand,
             &'static mut FamiliarAiState,
@@ -411,10 +410,11 @@ pub fn familiar_task_delegation_system(params: FamiliarAiTaskParams) {
         ..
     } = params;
 
+    let mut reservation_shadow = crate::systems::familiar_ai::task_management::ReservationShadow::default();
+
     for (
         fam_entity,
         fam_transform,
-        _familiar,
         familiar_op,
         active_command,
         mut ai_state,
@@ -459,6 +459,7 @@ pub fn familiar_task_delegation_system(params: FamiliarAiTaskParams) {
             &mut *pf_context,
             &time,
             state_changed,
+            &mut reservation_shadow,
         );
     }
 }

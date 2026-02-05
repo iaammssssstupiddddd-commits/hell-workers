@@ -7,6 +7,8 @@ mod task_assigner;
 
 pub use task_finder::find_unassigned_task_in_area;
 pub use task_assigner::assign_task_to_worker;
+pub use task_assigner::prepare_worker_for_task;
+pub use task_assigner::ReservationShadow;
 
 use crate::entities::damned_soul::{DamnedSoul, Destination, IdleBehavior, IdleState, Path};
 use crate::entities::familiar::UnderCommand;
@@ -26,7 +28,6 @@ impl TaskManager {
     /// タスクを委譲する（タスク検索 + 割り当て）
     #[allow(clippy::too_many_arguments)]
     pub fn delegate_task(
-        commands: &mut Commands,
         fam_entity: Entity,
         fam_pos: Vec2,
         squad: &[Entity],
@@ -54,6 +55,7 @@ impl TaskManager {
         // haul_cache removed
         world_map: &WorldMap,
         pf_context: &mut PathfindingContext,
+        reservation_shadow: &mut ReservationShadow,
     ) -> Option<Entity> {
         // 1. 公平性/効率のため、アイドルメンバーを全員リストアップ
         let mut idle_members = Vec::new();
@@ -88,7 +90,6 @@ impl TaskManager {
             for task_entity in candidates {
                 // アサイン成功！1サイクル1人へのアサインとする（安定性のため）
                 if assign_task_to_worker(
-                    commands,
                     fam_entity,
                     task_entity,
                     worker_entity,
@@ -96,7 +97,7 @@ impl TaskManager {
                     queries,
                     q_souls,
                     task_area_opt,
-                    // haul_cache removed
+                    reservation_shadow,
                 ) {
                     return Some(task_entity);
                 }

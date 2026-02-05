@@ -1,6 +1,7 @@
 //! 資材アイコン・カウンター表示システム
 
 use bevy::prelude::*;
+use bevy::prelude::ChildOf;
 
 use super::components::{MaterialCounter, MaterialIcon};
 use super::{COUNTER_TEXT_OFFSET, MATERIAL_ICON_X_OFFSET, MATERIAL_ICON_Y_OFFSET};
@@ -39,7 +40,6 @@ pub fn spawn_material_display_system(
                 // アイコン
                 parent.spawn((
                     MaterialIcon {
-                        blueprint: bp_entity,
                         _resource_type: *resource_type,
                     },
                     Sprite {
@@ -54,7 +54,6 @@ pub fn spawn_material_display_system(
                 // カウンター
                 parent.spawn((
                     MaterialCounter {
-                        blueprint: bp_entity,
                         resource_type: *resource_type,
                     },
                     Text2d::new("0/0"),
@@ -76,11 +75,11 @@ pub fn spawn_material_display_system(
 
 /// 資材カウンターの数値を更新する
 pub fn update_material_counter_system(
-    q_blueprints: Query<(Entity, &Blueprint)>,
-    mut q_counters: Query<(&MaterialCounter, &mut Text2d)>,
+    q_blueprints: Query<&Blueprint>,
+    mut q_counters: Query<(&MaterialCounter, &ChildOf, &mut Text2d)>,
 ) {
-    for (counter, mut text) in q_counters.iter_mut() {
-        if let Some((_, bp)) = q_blueprints.iter().find(|(e, _)| *e == counter.blueprint) {
+    for (counter, child_of, mut text) in q_counters.iter_mut() {
+        if let Ok(bp) = q_blueprints.get(child_of.parent()) {
             let delivered = bp
                 .delivered_materials
                 .get(&counter.resource_type)
@@ -98,19 +97,19 @@ pub fn update_material_counter_system(
 pub fn cleanup_material_display_system(
     mut commands: Commands,
     q_blueprints: Query<Entity, With<Blueprint>>,
-    q_icons: Query<(Entity, &MaterialIcon)>,
-    q_counters: Query<(Entity, &MaterialCounter)>,
+    q_icons: Query<(Entity, &ChildOf, &MaterialIcon)>,
+    q_counters: Query<(Entity, &ChildOf, &MaterialCounter)>,
 ) {
     let bp_entities: std::collections::HashSet<Entity> = q_blueprints.iter().collect();
 
-    for (entity, icon) in q_icons.iter() {
-        if !bp_entities.contains(&icon.blueprint) {
+    for (entity, child_of, _) in q_icons.iter() {
+        if !bp_entities.contains(&child_of.parent()) {
             commands.entity(entity).despawn();
         }
     }
 
-    for (entity, counter) in q_counters.iter() {
-        if !bp_entities.contains(&counter.blueprint) {
+    for (entity, child_of, _) in q_counters.iter() {
+        if !bp_entities.contains(&child_of.parent()) {
             commands.entity(entity).despawn();
         }
     }

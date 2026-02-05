@@ -54,10 +54,10 @@ pub struct ProgressBarFill;
 pub fn spawn_progress_bar(
     commands: &mut Commands,
     _parent: Entity,
-    parent_transform: &Transform,
+    _parent_transform: &Transform,
     config: ProgressBarConfig,
 ) -> (Entity, Entity) {
-    let bar_pos = parent_transform.translation + Vec3::new(0.0, config.y_offset, config.z_index);
+    let bar_pos = Vec3::new(0.0, config.y_offset, config.z_index);
 
     // 背景バー
     let bg_entity = commands
@@ -121,24 +121,24 @@ pub fn update_progress_bar_fill(
 
 /// プログレスバーの位置を親エンティティに追従させる
 pub fn sync_progress_bar_position(
-    parent_transform: &Transform,
+    _parent_transform: &Transform,
     config: &ProgressBarConfig,
     bar_transform: &mut Transform,
 ) {
-    bar_transform.translation.x = parent_transform.translation.x;
-    bar_transform.translation.y = parent_transform.translation.y + config.y_offset;
-    bar_transform.translation.z = Z_BAR_BG;
+    bar_transform.translation.x = 0.0;
+    bar_transform.translation.y = config.y_offset;
+    bar_transform.translation.z = config.z_index;
 }
 
 /// プログレスバーのFill位置を親エンティティに追従させる（左寄せオフセットを考慮）
 pub fn sync_progress_bar_fill_position(
-    parent_transform: &Transform,
+    _parent_transform: &Transform,
     config: &ProgressBarConfig,
     fill_width: f32,
     fill_transform: &mut Transform,
 ) {
     let offset_x = (fill_width - config.width) / 2.0;
-    fill_transform.translation.x = parent_transform.translation.x + offset_x;
-    fill_transform.translation.y = parent_transform.translation.y + config.y_offset;
-    fill_transform.translation.z = Z_BAR_FILL;
+    fill_transform.translation.x = offset_x;
+    fill_transform.translation.y = config.y_offset;
+    fill_transform.translation.z = Z_BAR_FILL - Z_BAR_BG + config.z_index;
 }

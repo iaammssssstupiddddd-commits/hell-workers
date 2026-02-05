@@ -2,6 +2,7 @@
 
 use crate::constants::*;
 use bevy::prelude::*;
+use bevy::prelude::ChildOf;
 
 use super::components::{HasWorkerIndicator, WorkerHammerIcon};
 use crate::assets::GameAssets;
@@ -17,7 +18,7 @@ pub fn spawn_worker_indicators_system(
         (With<DamnedSoul>, Without<HasWorkerIndicator>),
     >,
 ) {
-    for (worker_entity, assigned_task, transform) in q_workers.iter() {
+    for (worker_entity, assigned_task, _transform) in q_workers.iter() {
         if let AssignedTask::Build(data) = assigned_task {
             let blueprint = data.blueprint;
             let phase = &data.phase;
@@ -27,11 +28,8 @@ pub fn spawn_worker_indicators_system(
                     worker_entity, blueprint
                 );
 
-                // ハンマーアイコン（正常なアセットに復旧済み）
-                commands.spawn((
-                    WorkerHammerIcon {
-                        worker: worker_entity,
-                    },
+                let hammer_id = commands.spawn((
+                    WorkerHammerIcon,
                     Sprite {
                         image: game_assets.icon_hammer.clone(),
                         custom_size: Some(Vec2::splat(16.0)),
@@ -39,10 +37,12 @@ pub fn spawn_worker_indicators_system(
                         ..default()
                     },
                     Transform::from_translation(
-                        transform.translation + Vec3::new(0.0, 32.0, Z_VISUAL_EFFECT - Z_CHARACTER),
+                        Vec3::new(0.0, 32.0, Z_VISUAL_EFFECT - Z_CHARACTER),
                     ),
                     Name::new("WorkerHammerIcon"),
-                ));
+                ))
+                .id();
+                commands.entity(worker_entity).add_child(hammer_id);
 
                 commands.entity(worker_entity).insert(HasWorkerIndicator);
             }
@@ -54,13 +54,14 @@ pub fn spawn_worker_indicators_system(
 pub fn update_worker_indicators_system(
     mut commands: Commands,
     time: Res<Time>,
-    q_workers: Query<(Entity, &AssignedTask, &Transform), With<DamnedSoul>>,
-    mut q_hammers: Query<(Entity, &WorkerHammerIcon, &mut Transform), Without<DamnedSoul>>,
+    q_workers: Query<(&AssignedTask, &Transform), With<DamnedSoul>>,
+    mut q_hammers: Query<(Entity, &ChildOf, &mut Transform), (With<WorkerHammerIcon>, Without<DamnedSoul>)>,
 ) {
-    for (hammer_entity, hammer, mut hammer_transform) in q_hammers.iter_mut() {
+    for (hammer_entity, child_of, mut hammer_transform) in q_hammers.iter_mut() {
         let mut should_despawn = true;
+        let worker_entity: Entity = child_of.parent();
 
-        if let Ok((_w_entity, assigned_task, worker_transform)) = q_workers.get(hammer.worker) {
+        if let Ok((assigned_task, worker_transform)) = q_workers.get(worker_entity) {
             if let AssignedTask::Build(data) = assigned_task {
                 let phase = &data.phase;
                 if matches!(phase, BuildPhase::Building { .. }) {
@@ -75,10 +76,10 @@ pub fn update_worker_indicators_system(
         }
 
         if should_despawn {
-            info!("VISUAL: Despawning hammer for worker {:?}", hammer.worker);
+            info!("VISUAL: Despawning hammer for worker {:?}", worker_entity);
             commands.entity(hammer_entity).despawn();
             commands
-                .entity(hammer.worker)
+                .entity(worker_entity)
                 .remove::<HasWorkerIndicator>();
         }
     }

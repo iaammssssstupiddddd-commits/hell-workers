@@ -40,7 +40,7 @@ pub fn handle_gather_task(
                     // 到達不能: タスクをキャンセル
                     info!("GATHER: Soul {:?} cannot reach target {:?}, canceling", ctx.soul_entity, target);
                     // 予約解除
-                    ctx.queries.resource_cache.release_source(target, 1);
+                    ctx.queue_reservation(crate::events::ResourceReservationOp::ReleaseSource { source: target, amount: 1 });
                     clear_task_and_path(ctx.task, ctx.path);
                     return;
                 }
@@ -65,7 +65,7 @@ pub fn handle_gather_task(
                 // 指定が解除されていたら中止
                 if cancel_task_if_designation_missing(des_opt, ctx.task, ctx.path) {
                     // キャンセル時も予約解除
-                    ctx.queries.resource_cache.release_source(target, 1);
+                    ctx.queue_reservation(crate::events::ResourceReservationOp::ReleaseSource { source: target, amount: 1 });
                     return;
                 }
                 let pos = res_transform.translation;
@@ -116,7 +116,7 @@ pub fn handle_gather_task(
                     commands.entity(target).despawn();
                     
                     // 完了時予約解除
-                    ctx.queries.resource_cache.release_source(target, 1);
+                    ctx.queue_reservation(crate::events::ResourceReservationOp::ReleaseSource { source: target, amount: 1 });
 
                     *ctx.task = AssignedTask::Gather(crate::systems::soul_ai::task_execution::types::GatherData {
                         target,

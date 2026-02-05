@@ -1,4 +1,6 @@
 use crate::systems::jobs::WorkType;
+use crate::systems::logistics::ResourceType;
+use crate::systems::soul_ai::task_execution::types::AssignedTask;
 use bevy::prelude::*;
 
 /// 魂がタスクに割り当てられた
@@ -106,4 +108,36 @@ pub enum FamiliarAiStateTransitionReason {
     RecruitSuccess,
     ScoutingCancelled,
     Unknown,
+}
+
+/// リソース予約の更新要求
+#[derive(Message, Debug, Clone)]
+pub struct ResourceReservationRequest {
+    pub op: ResourceReservationOp,
+}
+
+/// リソース予約の操作
+#[derive(Debug, Clone)]
+pub enum ResourceReservationOp {
+    ReserveDestination { target: Entity },
+    ReleaseDestination { target: Entity },
+    ReserveMixerDestination { target: Entity, resource_type: ResourceType },
+    ReleaseMixerDestination { target: Entity, resource_type: ResourceType },
+    ReserveSource { source: Entity, amount: usize },
+    ReleaseSource { source: Entity, amount: usize },
+    RecordStoredDestination { target: Entity },
+    RecordPickedSource { source: Entity, amount: usize },
+}
+
+/// タスク割り当て要求（Think -> Act）
+#[derive(Message, Debug, Clone)]
+pub struct TaskAssignmentRequest {
+    pub familiar_entity: Entity,
+    pub worker_entity: Entity,
+    pub task_entity: Entity,
+    pub work_type: WorkType,
+    pub task_pos: Vec2,
+    pub assigned_task: AssignedTask,
+    pub reservation_ops: Vec<ResourceReservationOp>,
+    pub already_commanded: bool,
 }

@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+
 use rand::Rng;
 
 use crate::constants::*;
@@ -6,6 +7,7 @@ use crate::entities::damned_soul::{
     DamnedSoul, Destination, GatheringBehavior, IdleBehavior, IdleState, Path,
 };
 use crate::entities::familiar::UnderCommand;
+use crate::relationships::WorkingOn;
 use crate::systems::soul_ai::gathering::{GATHERING_LEAVE_RADIUS, GatheringSpot, ParticipatingIn};
 use crate::systems::soul_ai::task_execution::AssignedTask;
 use crate::systems::spatial::{GatheringSpotSpatialGrid, SpatialGridOps};
@@ -56,9 +58,11 @@ pub fn idle_behavior_system(
         &mut Destination,
         &DamnedSoul,
         &mut Path,
-        &mut AssignedTask,
+        &AssignedTask,
         Option<&ParticipatingIn>,
-        Option<&crate::entities::familiar::UnderCommand>,
+    ), (
+        Without<WorkingOn>,
+        Without<UnderCommand>,
     )>,
     spot_grid: Res<GatheringSpotSpatialGrid>,
     _q_targets: Query<(
@@ -81,41 +85,12 @@ pub fn idle_behavior_system(
 ) {
     let dt = time.delta_secs();
 
-    for (entity, transform, idle, dest, soul, path, task, participating_in, under_command_opt) in
+    for (entity, transform, mut idle, mut dest, soul, mut path, task, participating_in) in
         query.iter_mut()
     {
-        #[allow(clippy::type_complexity)]
-        let (
-            entity,
-            transform,
-            mut idle,
-            mut dest,
-            soul,
-            mut path,
-            task,
-            participating_in,
-            under_command_opt,
-        ): (
-            Entity,
-            &Transform,
-            Mut<IdleState>,
-            Mut<Destination>,
-            &DamnedSoul,
-            Mut<Path>,
-            Mut<AssignedTask>,
-            Option<&ParticipatingIn>,
-            Option<&UnderCommand>,
-        ) = (
-            entity,
-            transform,
-            idle,
-            dest,
-            soul,
-            path,
-            task,
-            participating_in,
-            under_command_opt,
-        );
+        // クエリフィルタにより、WorkingOn（タスク中）や UnderCommand（使役中）の個体は
+        // このループには入らないため、それらのチェックと解除処理は不要になりました。
+
         // 参加中の集会スポットの座標とEntityを取得、または最寄りのスポットを探す
         let (gathering_center, target_spot_entity): (Option<Vec2>, Option<Entity>) =
             if let Some(p) = participating_in {
@@ -146,10 +121,7 @@ pub fn idle_behavior_system(
 
         // 疲労による強制集会（ExhaustedGathering）状態の場合は他の処理をスキップ
         if idle.behavior == IdleBehavior::ExhaustedGathering {
-            if under_command_opt.is_some() {
-                // ExhaustedGathering は疲労起因のため使役対象外
-                commands.entity(entity).remove::<UnderCommand>();
-            }
+
             if let Some(center) = gathering_center {
                 let current_pos = transform.translation.truncate();
                 let dist_from_center = (center - current_pos).length();
@@ -182,8 +154,9 @@ pub fn idle_behavior_system(
             }
         }
 
-        if under_command_opt.is_some() || !matches!(&*task, AssignedTask::None) {
-            // 使役/タスク割り当て時は集会・逃走を解除
+        if !matches!(&*task, AssignedTask::None) {
+            // タスク割り当て時は集会を解除（通常はWorkingOnフィルタで弾かれるが、
+            // AssignedTask::None 以外の瞬間的な状態変化への安全策として残す）
             if let Some(p) = participating_in {
                 commands.entity(entity).remove::<ParticipatingIn>();
                 commands.trigger(crate::events::OnGatheringLeft {

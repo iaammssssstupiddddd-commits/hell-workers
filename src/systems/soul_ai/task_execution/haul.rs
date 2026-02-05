@@ -30,8 +30,8 @@ pub fn handle_haul_task(
             {
                 // 指示がキャンセルされていないか確認
                 if cancel_task_if_designation_missing(des_opt, ctx.task, ctx.path) {
-                    ctx.queries.resource_cache.release_destination(stockpile);
-                    ctx.queries.resource_cache.release_source(item, 1);
+                    ctx.queue_reservation(crate::events::ResourceReservationOp::ReleaseDestination { target: stockpile });
+                    ctx.queue_reservation(crate::events::ResourceReservationOp::ReleaseSource { source: item, amount: 1 });
                     return;
                 }
 
@@ -42,8 +42,8 @@ pub fn handle_haul_task(
                 if !reachable {
                     // 到達不能: タスクをキャンセル
                     info!("HAUL: Soul {:?} cannot reach item {:?}, canceling", ctx.soul_entity, item);
-                    ctx.queries.resource_cache.release_destination(stockpile);
-                    ctx.queries.resource_cache.release_source(item, 1);
+                    ctx.queue_reservation(crate::events::ResourceReservationOp::ReleaseDestination { target: stockpile });
+                    ctx.queue_reservation(crate::events::ResourceReservationOp::ReleaseSource { source: item, amount: 1 });
                     clear_task_and_path(ctx.task, ctx.path);
                     return;
                 }
@@ -89,13 +89,13 @@ pub fn handle_haul_task(
                         phase: HaulPhase::GoingToStockpile,
                     });
                      // ソース予約解放と取得記録 (Delta Update)
-                    ctx.queries.resource_cache.record_picked_source(item, 1);
+                    ctx.queue_reservation(crate::events::ResourceReservationOp::RecordPickedSource { source: item, amount: 1 });
                     info!("HAUL: Soul {:?} picked up item {:?}", ctx.soul_entity, item);
                 }
             } else {
                 clear_task_and_path(ctx.task, ctx.path);
-                ctx.queries.resource_cache.release_destination(stockpile);
-                ctx.queries.resource_cache.release_source(item, 1);
+                ctx.queue_reservation(crate::events::ResourceReservationOp::ReleaseDestination { target: stockpile });
+                ctx.queue_reservation(crate::events::ResourceReservationOp::ReleaseSource { source: item, amount: 1 });
             }
         }
         HaulPhase::GoingToStockpile => {
@@ -127,7 +127,7 @@ pub fn handle_haul_task(
                 commands.entity(ctx.soul_entity).remove::<WorkingOn>();
                 commands.entity(ctx.soul_entity).remove::<WorkingOn>();
                 clear_task_and_path(ctx.task, ctx.path);
-                ctx.queries.resource_cache.release_destination(stockpile);
+                ctx.queue_reservation(crate::events::ResourceReservationOp::ReleaseDestination { target: stockpile });
             }
         }
         HaulPhase::Dropping => {
@@ -195,7 +195,7 @@ pub fn handle_haul_task(
 
                     // カウンタを増やす
                     // Delta Update: 予約解放 + フレーム内増加
-                    ctx.queries.resource_cache.record_stored_destination(stockpile);
+                    ctx.queue_reservation(crate::events::ResourceReservationOp::RecordStoredDestination { target: stockpile });
 
                     info!(
                         "TASK_EXEC: Soul {:?} dropped item at stockpile. Count ~ {}",

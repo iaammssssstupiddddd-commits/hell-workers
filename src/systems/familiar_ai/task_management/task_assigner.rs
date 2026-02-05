@@ -4,7 +4,7 @@
 
 use crate::entities::damned_soul::{DamnedSoul, Destination, IdleBehavior, IdleState, Path};
 use crate::entities::familiar::UnderCommand;
-use crate::events::{OnSoulRecruited, OnTaskAssigned};
+use crate::events::{OnSoulRecruited, ResourceReservationOp, TaskAssignmentRequest};
 use crate::systems::command::TaskArea;
 use crate::systems::jobs::WorkType;
 use crate::systems::logistics::ResourceType;
@@ -14,15 +14,60 @@ use crate::systems::soul_ai::task_execution::types::{
 };
 
 use bevy::prelude::*;
+use std::collections::HashMap;
+
+/// Thinkフェーズ内の予約増分を追跡する
+#[derive(Default)]
+pub struct ReservationShadow {
+    destination: HashMap<Entity, usize>,
+    mixer_destination: HashMap<(Entity, ResourceType), usize>,
+    source: HashMap<Entity, usize>,
+}
+
+impl ReservationShadow {
+    pub fn destination_reserved(&self, target: Entity) -> usize {
+        self.destination.get(&target).cloned().unwrap_or(0)
+    }
+
+    pub fn mixer_reserved(&self, target: Entity, resource_type: ResourceType) -> usize {
+        self.mixer_destination
+            .get(&(target, resource_type))
+            .cloned()
+            .unwrap_or(0)
+    }
+
+    pub fn source_reserved(&self, source: Entity) -> usize {
+        self.source.get(&source).cloned().unwrap_or(0)
+    }
+
+    pub fn apply_reserve_ops(&mut self, ops: &[ResourceReservationOp]) {
+        for op in ops {
+            match *op {
+                ResourceReservationOp::ReserveDestination { target } => {
+                    *self.destination.entry(target).or_insert(0) += 1;
+                }
+                ResourceReservationOp::ReserveMixerDestination { target, resource_type } => {
+                    *self.mixer_destination.entry((target, resource_type)).or_insert(0) += 1;
+                }
+                ResourceReservationOp::ReserveSource { source, amount } => {
+                    *self.source.entry(source).or_insert(0) += amount;
+                }
+                _ => {}
+            }
+        }
+    }
+}
 
 /// 予約チェックヘルパー: 既に予約済み人数がスロット上限に達しているか確認
 fn can_reserve_source(
     task_entity: Entity,
     // resource_cache removed
     queries: &crate::systems::soul_ai::task_execution::context::TaskAssignmentQueries,
+    shadow: &ReservationShadow,
 ) -> bool {
     // 現在の予約数（実行中 + 割り当て済み移動中）
-    let current_reserved = queries.resource_cache.get_source_reservation(task_entity);
+    let current_reserved = queries.resource_cache.get_source_reservation(task_entity)
+        + shadow.source_reserved(task_entity);
 
     // TaskSlotsコンポーネントがあればそのmax値、なければデフォルト1（排他）
     let max_slots = if let Ok(slots) = queries.task_slots.get(task_entity) {
@@ -60,7 +105,6 @@ pub fn prepare_worker_for_task(
 /// ワーカーにタスクを割り当てる
 #[allow(clippy::too_many_arguments)]
 pub fn assign_task_to_worker(
-    commands: &mut Commands,
     fam_entity: Entity,
     task_entity: Entity,
     worker_entity: Entity,
@@ -83,23 +127,14 @@ pub fn assign_task_to_worker(
         Without<crate::entities::familiar::Familiar>,
     >,
     task_area_opt: Option<&TaskArea>,
-    // haul_cache is removed
+    shadow: &mut ReservationShadow,
 ) -> bool {
-    let Ok((_, _, soul, mut assigned_task, mut dest, mut path, idle, _, uc_opt, participating_opt)) =
+    let Ok((_, _, soul, _assigned_task, _dest, _path, idle, _, uc_opt, _participating_opt)) =
         q_souls.get_mut(worker_entity)
     else {
         warn!("ASSIGN: Worker {:?} not found in query", worker_entity);
         return false;
     };
-
-    // もし集会に参加中なら抜ける
-    if let Some(p) = participating_opt {
-        commands.entity(worker_entity).remove::<ParticipatingIn>();
-        commands.trigger(crate::events::OnGatheringLeft {
-            entity: worker_entity,
-            spot_entity: p.0,
-        });
-    }
 
     if idle.behavior == IdleBehavior::ExhaustedGathering {
         debug!("ASSIGN: Worker {:?} is exhausted gathering", worker_entity);
@@ -122,63 +157,67 @@ pub fn assign_task_to_worker(
 
     match work_type {
         WorkType::Chop | WorkType::Mine => {
-            if !can_reserve_source(task_entity, queries) {
+            if !can_reserve_source(task_entity, queries, shadow) {
                 return false;
             }
-            queries.resource_cache.reserve_source(task_entity, 1);
-
-            prepare_worker_for_task(
-                commands, worker_entity, fam_entity, task_entity, uc_opt.is_some(),
-            );
-
-            *assigned_task = AssignedTask::Gather(crate::systems::soul_ai::task_execution::types::GatherData {
+            let assigned_task = AssignedTask::Gather(crate::systems::soul_ai::task_execution::types::GatherData {
                 target: task_entity,
                 work_type,
                 phase: GatherPhase::GoingToResource,
             });
-            dest.0 = task_pos;
-            path.waypoints.clear();
-            path.current_index = 0;
-            commands.trigger(OnTaskAssigned {
-                entity: worker_entity,
+            let reservation_ops = vec![
+                ResourceReservationOp::ReserveSource { source: task_entity, amount: 1 },
+            ];
+            shadow.apply_reserve_ops(&reservation_ops);
+            queries.assignment_writer.write(TaskAssignmentRequest {
+                familiar_entity: fam_entity,
+                worker_entity,
                 task_entity,
                 work_type,
+                task_pos,
+                assigned_task,
+                reservation_ops,
+                already_commanded: uc_opt.is_some(),
             });
             return true;
         }
         WorkType::Haul => {
             if let Ok(target_bp) = queries.target_blueprints.get(task_entity) {
                 // ソース予約チェック
-                if queries.resource_cache.get_source_reservation(task_entity) > 0 {
+                let current_reserved = queries.resource_cache.get_source_reservation(task_entity)
+                    + shadow.source_reserved(task_entity);
+                if current_reserved > 0 {
                     debug!("ASSIGN: Item {:?} (for BP) is already reserved", task_entity);
                     return false;
                 }
 
-                queries.resource_cache.reserve_destination(target_bp.0);
-                queries.resource_cache.reserve_source(task_entity, 1);
-
-                prepare_worker_for_task(
-                    commands, worker_entity, fam_entity, task_entity, uc_opt.is_some(),
-                );
-
-                *assigned_task = AssignedTask::HaulToBlueprint(crate::systems::soul_ai::task_execution::types::HaulToBlueprintData {
+                let assigned_task = AssignedTask::HaulToBlueprint(crate::systems::soul_ai::task_execution::types::HaulToBlueprintData {
                     item: task_entity,
                     blueprint: target_bp.0,
                     phase: HaulToBpPhase::GoingToItem,
                 });
-                dest.0 = task_pos;
-                path.waypoints.clear();
-                path.current_index = 0;
-                commands.trigger(OnTaskAssigned {
-                    entity: worker_entity,
+                let reservation_ops = vec![
+                    ResourceReservationOp::ReserveDestination { target: target_bp.0 },
+                    ResourceReservationOp::ReserveSource { source: task_entity, amount: 1 },
+                ];
+                shadow.apply_reserve_ops(&reservation_ops);
+                queries.assignment_writer.write(TaskAssignmentRequest {
+                    familiar_entity: fam_entity,
+                    worker_entity,
                     task_entity,
                     work_type: WorkType::Haul,
+                    task_pos,
+                    assigned_task,
+                    reservation_ops,
+                    already_commanded: uc_opt.is_some(),
                 });
                 return true;
             }
 
             // ソース予約チェック (一般Item)
-            if queries.resource_cache.get_source_reservation(task_entity) > 0 {
+            let current_reserved = queries.resource_cache.get_source_reservation(task_entity)
+                + shadow.source_reserved(task_entity);
+            if current_reserved > 0 {
                 debug!("ASSIGN: Item {:?} is already reserved", task_entity);
                 return false;
             }
@@ -199,32 +238,37 @@ pub fn assign_task_to_worker(
                 if matches!(item_type, ResourceType::Sand | ResourceType::Rock) {
                     // ミキサーのキャパシティチェック
                     let can_accept = if let Ok((_, storage, _)) = queries.mixers.get(mixer_entity) {
-                        let reserved = queries.resource_cache.get_mixer_destination_reservation(mixer_entity, item_type);
+                        let reserved = queries.resource_cache.get_mixer_destination_reservation(mixer_entity, item_type)
+                            + shadow.mixer_reserved(mixer_entity, item_type);
                         storage.can_accept(item_type, (1 + reserved) as u32)
                     } else {
                         false
                     };
 
                     if can_accept {
-                        queries.resource_cache.reserve_mixer_destination(mixer_entity, item_type);
-                        queries.resource_cache.reserve_source(task_entity, 1);
-
-                        prepare_worker_for_task(
-                            commands, worker_entity, fam_entity, task_entity, uc_opt.is_some(),
-                        );
-                        *assigned_task = AssignedTask::HaulToMixer(crate::systems::soul_ai::task_execution::types::HaulToMixerData {
+                        let assigned_task = AssignedTask::HaulToMixer(crate::systems::soul_ai::task_execution::types::HaulToMixerData {
                             item: task_entity,
                             mixer: mixer_entity,
                             resource_type: item_type,
                             phase: crate::systems::soul_ai::task_execution::types::HaulToMixerPhase::GoingToItem,
                         });
-                        dest.0 = task_pos;
-                        path.waypoints.clear();
-                        path.current_index = 0;
-                        commands.trigger(OnTaskAssigned {
-                            entity: worker_entity,
+                        let reservation_ops = vec![
+                            ResourceReservationOp::ReserveMixerDestination {
+                                target: mixer_entity,
+                                resource_type: item_type,
+                            },
+                            ResourceReservationOp::ReserveSource { source: task_entity, amount: 1 },
+                        ];
+                        shadow.apply_reserve_ops(&reservation_ops);
+                        queries.assignment_writer.write(TaskAssignmentRequest {
+                            familiar_entity: fam_entity,
+                            worker_entity,
                             task_entity,
                             work_type: WorkType::Haul,
+                            task_pos,
+                            assigned_task,
+                            reservation_ops,
+                            already_commanded: uc_opt.is_some(),
                         });
                         return true;
                     } else {
@@ -272,7 +316,8 @@ pub fn assign_task_to_worker(
                     }
 
                     let current_count = stored.map(|s| s.len()).unwrap_or(0);
-                    let reserved = queries.resource_cache.get_destination_reservation(*s_entity);
+                    let reserved = queries.resource_cache.get_destination_reservation(*s_entity)
+                        + shadow.destination_reserved(*s_entity);
                     let has_capacity = (current_count + reserved) < stock.capacity as usize;
 
                     type_match && has_capacity
@@ -285,26 +330,25 @@ pub fn assign_task_to_worker(
                 .map(|(e, _, _, _)| e);
 
             if let Some(stock_entity) = best_stockpile {
-                queries.resource_cache.reserve_destination(stock_entity);
-                queries.resource_cache.reserve_source(task_entity, 1);
-
-                prepare_worker_for_task(
-                    commands, worker_entity, fam_entity, task_entity, uc_opt.is_some(),
-                );
-
-                *assigned_task = AssignedTask::Haul(crate::systems::soul_ai::task_execution::types::HaulData {
+                let assigned_task = AssignedTask::Haul(crate::systems::soul_ai::task_execution::types::HaulData {
                     item: task_entity,
                     stockpile: stock_entity,
                     phase: HaulPhase::GoingToItem,
                 });
-                
-                dest.0 = task_pos;
-                path.waypoints.clear();
-                path.current_index = 0;
-                commands.trigger(OnTaskAssigned {
-                    entity: worker_entity,
+                let reservation_ops = vec![
+                    ResourceReservationOp::ReserveDestination { target: stock_entity },
+                    ResourceReservationOp::ReserveSource { source: task_entity, amount: 1 },
+                ];
+                shadow.apply_reserve_ops(&reservation_ops);
+                queries.assignment_writer.write(TaskAssignmentRequest {
+                    familiar_entity: fam_entity,
+                    worker_entity,
                     task_entity,
                     work_type: WorkType::Haul,
+                    task_pos,
+                    assigned_task,
+                    reservation_ops,
+                    already_commanded: uc_opt.is_some(),
                 });
                 return true;
             }
@@ -320,34 +364,34 @@ pub fn assign_task_to_worker(
             }
 
             // 建築タスクもソース予約として管理（TaskSlotsで人数制限）
-            if !can_reserve_source(task_entity, queries) {
+            if !can_reserve_source(task_entity, queries, shadow) {
                 return false;
             }
-            queries.resource_cache.reserve_source(task_entity, 1);
-
-
-
-            prepare_worker_for_task(
-                commands, worker_entity, fam_entity, task_entity, uc_opt.is_some(),
-            );
-
-            *assigned_task = AssignedTask::Build(crate::systems::soul_ai::task_execution::types::BuildData {
+            let assigned_task = AssignedTask::Build(crate::systems::soul_ai::task_execution::types::BuildData {
                 blueprint: task_entity,
                 phase: BuildPhase::GoingToBlueprint,
             });
-            dest.0 = task_pos;
-            path.waypoints.clear();
-            path.current_index = 0;
-            commands.trigger(OnTaskAssigned {
-                entity: worker_entity,
+            let reservation_ops = vec![
+                ResourceReservationOp::ReserveSource { source: task_entity, amount: 1 },
+            ];
+            shadow.apply_reserve_ops(&reservation_ops);
+            queries.assignment_writer.write(TaskAssignmentRequest {
+                familiar_entity: fam_entity,
+                worker_entity,
                 task_entity,
                 work_type: WorkType::Build,
+                task_pos,
+                assigned_task,
+                reservation_ops,
+                already_commanded: uc_opt.is_some(),
             });
             return true;
         }
         WorkType::GatherWater => {
             // バケツ予約チェック
-            if queries.resource_cache.get_source_reservation(task_entity) > 0 {
+            let current_reserved = queries.resource_cache.get_source_reservation(task_entity)
+                + shadow.source_reserved(task_entity);
+            if current_reserved > 0 {
                 return false;
             }
 
@@ -361,7 +405,8 @@ pub fn assign_task_to_worker(
                     }
                     let is_tank = stock.resource_type == Some(ResourceType::Water);
                     let current_water = stored.map(|s| s.len()).unwrap_or(0);
-                    let reserved_tank = queries.resource_cache.get_destination_reservation(*s_entity);
+                    let reserved_tank = queries.resource_cache.get_destination_reservation(*s_entity)
+                        + shadow.destination_reserved(*s_entity);
                      // タンクに関しては、何人（何個）が集まっているか、という予約になっている
                      // バケツ1つあたり5の水が入るので、本当は容量チェックをシビアにするべきだが
                      // ここでは destination_reservation (人数) でチェックする
@@ -383,30 +428,25 @@ pub fn assign_task_to_worker(
                 .map(|(e, _, _, _)| e);
 
             if let Some(tank_entity) = best_tank {
-                queries.resource_cache.reserve_destination(tank_entity);
-                queries.resource_cache.reserve_source(task_entity, 1);
-
-                prepare_worker_for_task(
-                    commands,
-                    worker_entity,
-                    fam_entity,
-                    task_entity,
-                    uc_opt.is_some(),
-                );
-
-                *assigned_task = AssignedTask::GatherWater(crate::systems::soul_ai::task_execution::types::GatherWaterData {
+                let assigned_task = AssignedTask::GatherWater(crate::systems::soul_ai::task_execution::types::GatherWaterData {
                     bucket: task_entity,
                     tank: tank_entity,
                     phase: GatherWaterPhase::GoingToBucket,
                 });
-
-                dest.0 = task_pos;
-                path.waypoints.clear();
-                path.current_index = 0;
-                commands.trigger(OnTaskAssigned {
-                    entity: worker_entity,
+                let reservation_ops = vec![
+                    ResourceReservationOp::ReserveDestination { target: tank_entity },
+                    ResourceReservationOp::ReserveSource { source: task_entity, amount: 1 },
+                ];
+            shadow.apply_reserve_ops(&reservation_ops);
+                queries.assignment_writer.write(TaskAssignmentRequest {
+                    familiar_entity: fam_entity,
+                    worker_entity,
                     task_entity,
                     work_type: WorkType::GatherWater,
+                    task_pos,
+                    assigned_task,
+                    reservation_ops,
+                    already_commanded: uc_opt.is_some(),
                 });
                 return true;
             }
@@ -414,50 +454,50 @@ pub fn assign_task_to_worker(
             return false;
         }
         WorkType::CollectSand => {
-            if !can_reserve_source(task_entity, queries) {
+            if !can_reserve_source(task_entity, queries, shadow) {
                 return false;
             }
-            queries.resource_cache.reserve_source(task_entity, 1);
-
-            prepare_worker_for_task(
-                commands, worker_entity, fam_entity, task_entity, uc_opt.is_some(),
-            );
-
-            *assigned_task = AssignedTask::CollectSand(crate::systems::soul_ai::task_execution::types::CollectSandData {
+            let assigned_task = AssignedTask::CollectSand(crate::systems::soul_ai::task_execution::types::CollectSandData {
                 target: task_entity,
                 phase: crate::systems::soul_ai::task_execution::types::CollectSandPhase::GoingToSand,
             });
-            dest.0 = task_pos;
-            path.waypoints.clear();
-            path.current_index = 0;
-            commands.trigger(OnTaskAssigned {
-                entity: worker_entity,
+            let reservation_ops = vec![
+                ResourceReservationOp::ReserveSource { source: task_entity, amount: 1 },
+            ];
+            shadow.apply_reserve_ops(&reservation_ops);
+            queries.assignment_writer.write(TaskAssignmentRequest {
+                familiar_entity: fam_entity,
+                worker_entity,
                 task_entity,
                 work_type,
+                task_pos,
+                assigned_task,
+                reservation_ops,
+                already_commanded: uc_opt.is_some(),
             });
             return true;
         }
         WorkType::Refine => {
-            if !can_reserve_source(task_entity, queries) {
+            if !can_reserve_source(task_entity, queries, shadow) {
                 return false;
             }
-            queries.resource_cache.reserve_source(task_entity, 1);
-
-            prepare_worker_for_task(
-                commands, worker_entity, fam_entity, task_entity, uc_opt.is_some(),
-            );
-
-            *assigned_task = AssignedTask::Refine(crate::systems::soul_ai::task_execution::types::RefineData {
+            let assigned_task = AssignedTask::Refine(crate::systems::soul_ai::task_execution::types::RefineData {
                 mixer: task_entity,
                 phase: crate::systems::soul_ai::task_execution::types::RefinePhase::GoingToMixer,
             });
-            dest.0 = task_pos;
-            path.waypoints.clear();
-            path.current_index = 0;
-            commands.trigger(OnTaskAssigned {
-                entity: worker_entity,
+            let reservation_ops = vec![
+                ResourceReservationOp::ReserveSource { source: task_entity, amount: 1 },
+            ];
+            shadow.apply_reserve_ops(&reservation_ops);
+            queries.assignment_writer.write(TaskAssignmentRequest {
+                familiar_entity: fam_entity,
+                worker_entity,
                 task_entity,
                 work_type,
+                task_pos,
+                assigned_task,
+                reservation_ops,
+                already_commanded: uc_opt.is_some(),
             });
             return true;
         }
@@ -478,32 +518,36 @@ pub fn assign_task_to_worker(
             };
 
             // ソース（バケツ）予約チェック
-            if queries.resource_cache.get_source_reservation(task_entity) > 0 {
+            let current_reserved = queries.resource_cache.get_source_reservation(task_entity)
+                + shadow.source_reserved(task_entity);
+            if current_reserved > 0 {
                 return false;
             }
             
-            queries.resource_cache.reserve_mixer_destination(mixer_entity, ResourceType::Water);
-            queries.resource_cache.reserve_source(task_entity, 1);
-
-            prepare_worker_for_task(
-                commands, worker_entity, fam_entity, task_entity, uc_opt.is_some(),
-            );
-
-            *assigned_task = AssignedTask::HaulWaterToMixer(crate::systems::soul_ai::task_execution::types::HaulWaterToMixerData {
+            let assigned_task = AssignedTask::HaulWaterToMixer(crate::systems::soul_ai::task_execution::types::HaulWaterToMixerData {
                 bucket: task_entity,
                 tank: tank_entity,
                 mixer: mixer_entity,
                 amount: 0,
                 phase: crate::systems::soul_ai::task_execution::types::HaulWaterToMixerPhase::GoingToBucket,
             });
-            
-            dest.0 = task_pos;
-            path.waypoints.clear();
-            path.current_index = 0;
-            commands.trigger(OnTaskAssigned {
-                entity: worker_entity,
+            let reservation_ops = vec![
+                ResourceReservationOp::ReserveMixerDestination {
+                    target: mixer_entity,
+                    resource_type: ResourceType::Water,
+                },
+                ResourceReservationOp::ReserveSource { source: task_entity, amount: 1 },
+            ];
+            shadow.apply_reserve_ops(&reservation_ops);
+            queries.assignment_writer.write(TaskAssignmentRequest {
+                familiar_entity: fam_entity,
+                worker_entity,
                 task_entity,
                 work_type: WorkType::HaulWaterToMixer,
+                task_pos,
+                assigned_task,
+                reservation_ops,
+                already_commanded: uc_opt.is_some(),
             });
             return true;
         }

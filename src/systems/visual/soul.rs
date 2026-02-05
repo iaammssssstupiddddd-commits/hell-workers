@@ -13,21 +13,18 @@ use crate::systems::utils::progress_bar::{
     update_progress_bar_fill,
 };
 use bevy::prelude::*;
+use bevy::prelude::ChildOf;
 
 /// ソウル用プログレスバーのラッパーコンポーネント
 #[derive(Component)]
-pub struct SoulProgressBar {
-    pub parent: Entity,
-}
+pub struct SoulProgressBar;
 
 #[derive(Component)]
-pub struct StatusIcon {
-    pub _parent: Entity,
-}
+pub struct StatusIcon;
 
 pub fn progress_bar_system(
     mut commands: Commands,
-    q_soul_bars: Query<(Entity, &SoulProgressBar)>,
+    q_soul_bars: Query<(Entity, &ChildOf), With<SoulProgressBar>>,
     mut q_souls: Query<(Entity, &AssignedTask, &Transform, &mut SoulUiLinks), With<DamnedSoul>>,
 ) {
     for (soul_entity, task, transform, mut ui_links) in q_souls.iter_mut() {
@@ -47,13 +44,12 @@ pub fn progress_bar_system(
                 let (bg_entity, fill_entity) =
                     spawn_progress_bar(&mut commands, soul_entity, transform, config);
 
-                // ラッパーコンポーネントを追加
-                commands.entity(bg_entity).insert(SoulProgressBar {
-                    parent: soul_entity,
-                });
-                commands.entity(fill_entity).insert(SoulProgressBar {
-                    parent: soul_entity,
-                });
+                // 親子関係を設定（Lifecycle管理のため）
+                commands.entity(soul_entity).add_child(bg_entity);
+                commands.entity(soul_entity).add_child(fill_entity);
+                
+                commands.entity(bg_entity).insert(SoulProgressBar);
+                commands.entity(fill_entity).insert(SoulProgressBar);
 
                 // Fillの色を緑に設定
                 commands.entity(fill_entity).insert(Sprite {
@@ -69,9 +65,9 @@ pub fn progress_bar_system(
             // SoulProgressBarコンポーネントを持つ全てのエンティティを削除
             let mut to_despawn = vec![bar_entity];
 
-            // fill_entityも探して削除
-            for (entity, soul_bar) in q_soul_bars.iter() {
-                if soul_bar.parent == soul_entity {
+            // fill_entityも探して削除（Parentコンポーネントで紐付けられているもの）
+            for (entity, child_of) in q_soul_bars.iter() {
+                if child_of.parent() == soul_entity {
                     to_despawn.push(entity);
                 }
             }
@@ -86,13 +82,13 @@ pub fn progress_bar_system(
 pub fn update_progress_bar_fill_system(
     q_souls: Query<&AssignedTask, With<DamnedSoul>>,
     q_generic_bars: Query<&GenericProgressBar>,
-    q_soul_bars: Query<&SoulProgressBar>,
+    q_soul_bars: Query<&ChildOf, With<SoulProgressBar>>,
     mut q_fills: Query<(Entity, &mut Sprite, &mut Transform), With<ProgressBarFill>>,
 ) {
     for (fill_entity, mut sprite, mut transform) in q_fills.iter_mut() {
-        // SoulProgressBarコンポーネントを取得
-        if let Ok(soul_bar) = q_soul_bars.get(fill_entity) {
-            if let Ok(task) = q_souls.get(soul_bar.parent) {
+        // Parentコンポーネントを介して親ソウルを取得
+        if let Ok(child_of) = q_soul_bars.get(fill_entity) {
+            if let Ok(task) = q_souls.get(child_of.parent()) {
                 if let AssignedTask::Gather(data) = task {
                     if let GatherPhase::Collecting { progress } = data.phase {
                     if let Ok(generic_bar) = q_generic_bars.get(fill_entity) {
@@ -116,16 +112,18 @@ pub fn sync_progress_bar_position_system(
     q_parents: Query<&Transform, (With<AssignedTask>, Without<SoulProgressBar>)>,
     q_generic_bars: Query<&GenericProgressBar>,
     mut q_bg_bars: Query<
-        (Entity, &SoulProgressBar, &mut Transform),
+        (Entity, &ChildOf, &mut Transform),
         (
+            With<SoulProgressBar>,
             With<ProgressBarBackground>,
             Without<AssignedTask>,
             Without<ProgressBarFill>,
         ),
     >,
     mut q_fill_bars: Query<
-        (Entity, &SoulProgressBar, &mut Transform, &Sprite),
+        (Entity, &ChildOf, &mut Transform, &Sprite),
         (
+            With<SoulProgressBar>,
             With<ProgressBarFill>,
             Without<AssignedTask>,
             Without<ProgressBarBackground>,
@@ -133,8 +131,8 @@ pub fn sync_progress_bar_position_system(
     >,
 ) {
     // 背景バーを親位置に追従
-    for (bg_entity, soul_bar, mut bar_transform) in q_bg_bars.iter_mut() {
-        if let Ok(parent_transform) = q_parents.get(soul_bar.parent) {
+    for (bg_entity, child_of, mut bar_transform) in q_bg_bars.iter_mut() {
+        if let Ok(parent_transform) = q_parents.get(child_of.parent()) {
             if let Ok(generic_bar) = q_generic_bars.get(bg_entity) {
                 sync_progress_bar_position(
                     parent_transform,
@@ -146,8 +144,8 @@ pub fn sync_progress_bar_position_system(
     }
 
     // Fillバーを親位置に追従（左寄せオフセットを考慮）
-    for (fill_entity, soul_bar, mut fill_transform, sprite) in q_fill_bars.iter_mut() {
-        if let Ok(parent_transform) = q_parents.get(soul_bar.parent) {
+    for (fill_entity, child_of, mut fill_transform, sprite) in q_fill_bars.iter_mut() {
+        if let Ok(parent_transform) = q_parents.get(child_of.parent()) {
             if let Ok(generic_bar) = q_generic_bars.get(fill_entity) {
                 let fill_width = sprite.custom_size.map(|s| s.x).unwrap_or(0.0);
                 sync_progress_bar_fill_position(
@@ -257,9 +255,7 @@ pub fn soul_status_visual_system(
             } else {
                 let icon_id = commands
                     .spawn((
-                        StatusIcon {
-                            _parent: soul_entity,
-                        },
+                        StatusIcon,
                         Text2d::new(text),
                         TextFont {
                             font: game_assets.font_soul_name.clone(),
@@ -273,6 +269,7 @@ pub fn soul_status_visual_system(
                         ),
                     ))
                     .id();
+                commands.entity(soul_entity).add_child(icon_id);
                 ui_links.icon_entity = Some(icon_id);
             }
         } else if let Some(icon_entity) = ui_links.icon_entity.take() {

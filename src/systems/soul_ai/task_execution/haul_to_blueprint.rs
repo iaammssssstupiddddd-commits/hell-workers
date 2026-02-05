@@ -90,7 +90,7 @@ pub fn handle_haul_to_blueprint_task(
                     // ここではパスをクリアするのみとする。
                     
                     // ソース予約解放と取得記録
-                    ctx.queries.resource_cache.record_picked_source(item_entity, 1);
+                    ctx.queue_reservation(crate::events::ResourceReservationOp::RecordPickedSource { source: item_entity, amount: 1 });
 
                     *ctx.task = AssignedTask::HaulToBlueprint(crate::systems::soul_ai::task_execution::types::HaulToBlueprintData {
                         item: item_entity,
@@ -198,7 +198,7 @@ pub fn handle_haul_to_blueprint_task(
             ctx.soul.fatigue = (ctx.soul.fatigue + 0.05).min(1.0);
             
             // 完了したので予約解除
-            ctx.queries.resource_cache.release_destination(blueprint_entity);
+            ctx.queue_reservation(crate::events::ResourceReservationOp::ReleaseDestination { target: blueprint_entity });
         }
     }
 }

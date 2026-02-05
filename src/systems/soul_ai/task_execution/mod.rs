@@ -18,8 +18,10 @@ pub mod types;
 // 型の再エクスポート（外部からのアクセスを簡潔に）
 pub use types::AssignedTask;
 
-use crate::entities::damned_soul::{DamnedSoul, Destination, Path, StressBreakdown};
-use crate::events::OnTaskCompleted;
+use crate::entities::damned_soul::{DamnedSoul, Destination, IdleBehavior, IdleState, Path, StressBreakdown};
+use crate::entities::familiar::{Familiar, UnderCommand};
+use crate::events::{OnGatheringLeft, OnTaskAssigned, OnTaskCompleted, TaskAssignmentRequest};
+use crate::systems::familiar_ai::resource_cache::{apply_reservation_op, SharedResourceCache};
 // use crate::systems::familiar_ai::resource_cache::SharedResourceCache; // Removed unused import
 use crate::systems::logistics::Inventory;
 use crate::systems::soul_ai::task_execution::types::{
@@ -39,6 +41,89 @@ use haul_to_blueprint::handle_haul_to_blueprint_task;
 use haul_to_mixer::handle_haul_to_mixer_task;
 use haul_water_to_mixer::handle_haul_water_to_mixer_task;
 use refine::handle_refine_task;
+
+/// Thinkで生成されたタスク割り当て要求を適用する
+pub fn apply_task_assignment_requests_system(
+    mut commands: Commands,
+    mut requests: MessageReader<TaskAssignmentRequest>,
+    mut cache: ResMut<SharedResourceCache>,
+    mut q_souls: Query<
+        (
+            Entity,
+            &Transform,
+            &mut AssignedTask,
+            &mut Destination,
+            &mut Path,
+            &IdleState,
+            Option<&mut Inventory>,
+            Option<&UnderCommand>,
+            Option<&crate::systems::soul_ai::gathering::ParticipatingIn>,
+        ),
+        (With<crate::entities::damned_soul::DamnedSoul>, Without<Familiar>),
+    >,
+) {
+    for request in requests.read() {
+        let Ok((
+            worker_entity,
+            worker_transform,
+            mut assigned_task,
+            mut dest,
+            mut path,
+            idle,
+            _inventory_opt,
+            under_command_opt,
+            participating_opt,
+        )) = q_souls.get_mut(request.worker_entity) else {
+            warn!("ASSIGN_REQUEST: Worker {:?} not found", request.worker_entity);
+            continue;
+        };
+
+        if !matches!(*assigned_task, AssignedTask::None) {
+            continue;
+        }
+        if idle.behavior == IdleBehavior::ExhaustedGathering {
+            continue;
+        }
+
+        if let Some(p) = participating_opt {
+            commands.entity(worker_entity).remove::<crate::systems::soul_ai::gathering::ParticipatingIn>();
+            commands.trigger(OnGatheringLeft {
+                entity: worker_entity,
+                spot_entity: p.0,
+            });
+        }
+
+        crate::systems::familiar_ai::task_management::prepare_worker_for_task(
+            &mut commands,
+            worker_entity,
+            request.familiar_entity,
+            request.task_entity,
+            request.already_commanded || under_command_opt.is_some(),
+        );
+
+        *assigned_task = request.assigned_task.clone();
+        dest.0 = request.task_pos;
+        path.waypoints.clear();
+        path.current_index = 0;
+
+        for op in &request.reservation_ops {
+            apply_reservation_op(&mut cache, op);
+        }
+
+        commands.trigger(OnTaskAssigned {
+            entity: worker_entity,
+            task_entity: request.task_entity,
+            work_type: request.work_type,
+        });
+
+        debug!(
+            "ASSIGN_REQUEST: Assigned {:?} to {:?} at {:?}",
+            request.work_type,
+            worker_entity,
+            worker_transform.translation.truncate()
+        );
+    }
+}
 
 fn expected_item_for_task(task: &AssignedTask) -> Option<Entity> {
     match task {

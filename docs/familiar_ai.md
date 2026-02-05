@@ -104,7 +104,7 @@
     - **Worker-Centric**: 使い魔の現在地ではなく、**ワーカー個々の現在地**を起点として判定を行います。
     - **Ground Projection**: 使い魔（空中ユニット）の位置ではなく、常にワーカー（地上ユニット）が立つ地面の座標に投影してパス計算を開始します。
     - **4方向パス検索**: 上下左右の4方向移動に準拠したパス検索を行い、斜め移動による障害物のすり抜けを防止しています。
-- **assign_task_to_worker**: タスク割り当て
+- **assign_task_to_worker**: タスク割り当て要求の生成（`TaskAssignmentRequest` を発行し、実適用は Act で行う）
 - **`recruitment.rs`**: リクルート管理（`RecruitmentManager`）
   - `find_best_recruit`: リクルート候補の検索
   - `try_immediate_recruit`: 即時リクルート
@@ -141,7 +141,7 @@
 
 ### 7.1. 共有リソースキャッシュ (SharedResourceCache)
 タスク間のリソース競合を O(1) で管理します。従来の `HaulReservationCache` を統合・拡張したものです。
-- **仕組み**: Senseフェーズで毎フレーム再構築され、Think/Actフェーズで更新されます。
+- **仕組み**: Senseフェーズで毎フレーム再構築され、Think/Actフェーズの更新は `ResourceReservationRequest` を通じて反映されます。
 - **機能**: 
   - **Destination Reservation**: 搬送先（ストックパイル、タンク、ミキサー）への予約。
   - **Source Reservation**: アイテム（拾う対象）の重複予約防止。
