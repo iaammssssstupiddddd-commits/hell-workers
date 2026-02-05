@@ -22,9 +22,9 @@ use game_state::{
 
 use crate::entities::damned_soul::DamnedSoul;
 use crate::entities::damned_soul::DamnedSoulPlugin;
-use crate::entities::familiar::FamiliarSpawnEvent;
 use crate::plugins::{
-    InputPlugin, InterfacePlugin, LogicPlugin, SpatialPlugin, StartupPlugin, VisualPlugin,
+    InputPlugin, InterfacePlugin, LogicPlugin, MessagesPlugin, SpatialPlugin, StartupPlugin,
+    VisualPlugin,
 };
 use crate::systems::GameSystemSet;
 use crate::systems::familiar_ai::FamiliarAiPlugin;
@@ -78,14 +78,8 @@ fn main() {
         .add_systems(OnExit(PlayMode::ZonePlace), log_exit_zone_mode)
         .add_systems(OnEnter(PlayMode::TaskDesignation), log_enter_task_mode)
         .add_systems(OnExit(PlayMode::TaskDesignation), log_exit_task_mode)
-        // Events
-        .add_message::<FamiliarSpawnEvent>()
-        .add_message::<crate::events::FamiliarOperationMaxSoulChangedEvent>()
-        .add_message::<crate::events::FamiliarAiStateChangedEvent>()
-        .add_message::<crate::events::TaskAssignmentRequest>()
-        .add_message::<crate::events::ResourceReservationRequest>()
-        .add_message::<crate::events::SquadManagementRequest>()
-        .add_message::<crate::events::IdleBehaviorRequest>()
+        // Messages
+        .add_plugins(MessagesPlugin)
         // Entity plugins
         .add_plugins(DamnedSoulPlugin)
         .add_plugins(FamiliarAiPlugin)

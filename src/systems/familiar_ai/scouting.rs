@@ -6,6 +6,7 @@ use crate::systems::familiar_ai::FamiliarAiState;
 use crate::systems::soul_ai::gathering::ParticipatingIn;
 use crate::systems::soul_ai::task_execution::AssignedTask;
 use bevy::prelude::*;
+use crate::systems::familiar_ai::FamiliarSoulQuery;
 
 /// スカウト（Scouting）状態のロジック
 /// ターゲットに接近し、近づいたらリクルートする
@@ -19,22 +20,7 @@ pub fn scouting_logic(
     ai_state: &mut FamiliarAiState,
     fam_dest: &mut Destination,
     fam_path: &mut Path,
-    q_souls: &mut Query<
-        (
-            Entity,
-            &Transform,
-            &DamnedSoul,
-            &mut AssignedTask,
-            &mut Destination,
-            &mut Path,
-            &IdleState,
-
-            Option<&mut crate::systems::logistics::Inventory>,
-            Option<&CommandedBy>,
-            Option<&ParticipatingIn>,
-        ),
-        Without<crate::entities::familiar::Familiar>,
-    >,
+    q_souls: &mut FamiliarSoulQuery,
     q_breakdown: &Query<&StressBreakdown>,
     request_writer: &mut MessageWriter<crate::events::SquadManagementRequest>,
 ) -> bool {

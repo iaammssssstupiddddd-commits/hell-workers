@@ -64,5 +64,10 @@ cargo run
 - `F12`: ワールドインスペクターのトグル
 - `Space`: ポーズ / 再開（Virtual Time）
 
+### 開発ルール（抜粋）
+- `Messages<T>`/`Events<T>` は `MessagesPlugin` に追加して初期化する
+- 型変更は `定義 -> 生成 -> 使用` の順で更新する
+- 変換は `From/Into` を優先して `as` の多用を避ける
+
 ## 関連ドキュメント
 詳細は [docs/README.md](docs/README.md) を参照してください。

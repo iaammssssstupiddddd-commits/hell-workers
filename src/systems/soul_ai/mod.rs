@@ -6,6 +6,7 @@ use bevy::prelude::*;
 
 pub mod gathering;
 pub mod idle;
+pub mod query_types;
 pub mod task_execution; // タスク実行モジュール
 pub mod vitals;
 pub mod work;

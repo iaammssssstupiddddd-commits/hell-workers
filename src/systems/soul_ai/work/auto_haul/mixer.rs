@@ -13,6 +13,7 @@ use crate::relationships::TaskWorkers;
 use crate::events::{ResourceReservationOp, ResourceReservationRequest};
 use crate::systems::familiar_ai::resource_cache::SharedResourceCache;
 use crate::systems::soul_ai::work::auto_haul::ItemReservations;
+use crate::systems::soul_ai::query_types::AutoHaulAssignedTaskQuery;
 use crate::systems::soul_ai::task_execution::AssignedTask;
 
 /// MudMixer への自動資材運搬タスク生成システム
@@ -24,7 +25,7 @@ pub fn mud_mixer_auto_haul_system(
     q_familiars: Query<(Entity, &ActiveCommand, &TaskArea)>,
     q_mixers: Query<(Entity, &Transform, &MudMixerStorage, Option<&TaskWorkers>)>,
     q_stockpiles_detailed: Query<(Entity, &Transform, &Stockpile, Option<&crate::relationships::StoredItems>)>,
-    q_souls: Query<&AssignedTask>,
+    q_souls: AutoHaulAssignedTaskQuery,
     q_resources_with_belongs: Query<
         (
             Entity,

@@ -18,17 +18,15 @@ pub mod types;
 // 型の再エクスポート（外部からのアクセスを簡潔に）
 pub use types::AssignedTask;
 
-use crate::entities::damned_soul::{DamnedSoul, Destination, IdleBehavior, IdleState, Path, StressBreakdown};
-use crate::entities::familiar::Familiar;
-use crate::relationships::CommandedBy;
+use crate::entities::damned_soul::IdleBehavior;
 use crate::events::{OnGatheringLeft, OnTaskAssigned, OnTaskCompleted, TaskAssignmentRequest};
 use crate::systems::familiar_ai::resource_cache::{apply_reservation_op, SharedResourceCache};
 // use crate::systems::familiar_ai::resource_cache::SharedResourceCache; // Removed unused import
-use crate::systems::logistics::Inventory;
 use crate::systems::soul_ai::task_execution::types::{
     GatherWaterPhase, HaulPhase, HaulToBpPhase, HaulToMixerPhase, HaulWaterToMixerPhase,
 };
 use crate::systems::soul_ai::work::unassign_task;
+use crate::systems::soul_ai::query_types::{TaskAssignmentSoulQuery, TaskExecutionSoulQuery};
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
 
@@ -48,20 +46,7 @@ pub fn apply_task_assignment_requests_system(
     mut commands: Commands,
     mut requests: MessageReader<TaskAssignmentRequest>,
     mut cache: ResMut<SharedResourceCache>,
-    mut q_souls: Query<
-        (
-            Entity,
-            &Transform,
-            &mut AssignedTask,
-            &mut Destination,
-            &mut Path,
-            &IdleState,
-            Option<&mut Inventory>,
-            Option<&CommandedBy>,
-            Option<&crate::systems::soul_ai::gathering::ParticipatingIn>,
-        ),
-        (With<crate::entities::damned_soul::DamnedSoul>, Without<Familiar>),
-    >,
+    mut q_souls: TaskAssignmentSoulQuery,
 ) {
     for request in requests.read() {
         let Ok((
@@ -155,16 +140,7 @@ fn requires_item_in_inventory(task: &AssignedTask) -> bool {
 
 pub fn task_execution_system(
     mut commands: Commands,
-    mut q_souls: Query<(
-        Entity,
-        &Transform,
-        &mut DamnedSoul,
-        &mut AssignedTask,
-        &mut Destination,
-        &mut Path,
-        &mut Inventory,
-        Option<&StressBreakdown>,
-    )>,
+    mut q_souls: TaskExecutionSoulQuery,
     mut queries: context::TaskQueries,
     game_assets: Res<crate::assets::GameAssets>,
     time: Res<Time>,
