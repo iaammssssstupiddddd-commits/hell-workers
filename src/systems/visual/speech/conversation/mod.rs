@@ -24,7 +24,8 @@ impl Plugin for ConversationPlugin {
                     process_conversation_logic,
                     apply_conversation_rewards,
                     update_conversation_cooldowns,
-                ),
+                )
+                    .in_set(crate::systems::GameSystemSet::Visual),
             );
     }
 }

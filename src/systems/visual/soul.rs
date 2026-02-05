@@ -5,7 +5,7 @@
 use crate::assets::GameAssets;
 use crate::constants::TILE_SIZE;
 use crate::constants::*;
-use crate::entities::damned_soul::{DamnedSoul, SoulUiLinks};
+use crate::entities::damned_soul::{DamnedSoul, SoulUiLinks, IdleState, IdleBehavior, GatheringBehavior};
 use crate::systems::soul_ai::task_execution::types::{AssignedTask, GatherPhase, HaulPhase};
 use crate::systems::utils::progress_bar::{
     GenericProgressBar, ProgressBarBackground, ProgressBarConfig, ProgressBarFill,
@@ -216,26 +216,29 @@ pub fn task_link_system(
 pub fn soul_status_visual_system(
     mut commands: Commands,
     mut q_souls: Query<
-        (Entity, &Transform, &DamnedSoul, &mut SoulUiLinks, &AssignedTask),
+        (Entity, &Transform, &DamnedSoul, &mut SoulUiLinks, &AssignedTask, Option<&IdleState>),
         With<DamnedSoul>,
     >,
     mut q_text: Query<&mut Text2d, With<StatusIcon>>,
     game_assets: Res<GameAssets>,
 ) {
-    for (soul_entity, transform, soul, ui_links, task) in q_souls.iter_mut() {
-        let (soul_entity, transform, soul, mut ui_links, task): (
-            Entity,
-            &Transform,
-            &DamnedSoul,
-            Mut<SoulUiLinks>,
-            &AssignedTask,
-        ) = (soul_entity, transform, soul, ui_links, task);
+    for (soul_entity, _transform, soul, mut ui_links, task, idle_state) in q_souls.iter_mut() {
         let status = if soul.fatigue > 0.8 {
             Some(("!", Color::srgb(1.0, 0.0, 0.0))) // 疲労蓄積
         } else if soul.motivation < 0.2 {
             Some(("?", Color::srgb(0.5, 0.5, 1.0))) // やる気なし
         } else if matches!(task, AssignedTask::None) {
-            Some(("Zzz", Color::srgb(0.5, 0.7, 1.0))) // 待機中
+            // 待機中の場合、さらに詳細な状態を確認
+            let is_sleeping = idle_state.map_or(false, |state| {
+                state.behavior == IdleBehavior::Sleeping || 
+                (state.behavior == IdleBehavior::Gathering && state.gathering_behavior == GatheringBehavior::Sleeping)
+            });
+            
+            if is_sleeping {
+                Some(("Zzz", Color::srgb(0.5, 0.7, 1.0))) // 睡眠中
+            } else {
+                None // 通常の待機中は何も表示しない
+            }
         } else {
             None
         };
@@ -249,8 +252,7 @@ pub fn soul_status_visual_system(
                 commands
                     .entity(icon_entity)
                     .insert(Transform::from_translation(
-                        transform.translation.truncate().extend(Z_CHARACTER + 0.5)
-                            + Vec3::new(TILE_SIZE * 0.4, TILE_SIZE * 0.4, 0.0),
+                         Vec3::new(TILE_SIZE * 0.4, TILE_SIZE * 0.4, 0.5),
                     ));
             } else {
                 let icon_id = commands
@@ -264,8 +266,7 @@ pub fn soul_status_visual_system(
                         },
                         TextColor(color),
                         Transform::from_translation(
-                            transform.translation.truncate().extend(Z_CHARACTER + 0.5)
-                                + Vec3::new(TILE_SIZE * 0.4, TILE_SIZE * 0.4, 0.0),
+                            Vec3::new(TILE_SIZE * 0.4, TILE_SIZE * 0.4, 0.5),
                         ),
                     ))
                     .id();
