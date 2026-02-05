@@ -7,11 +7,12 @@
 
 ## 2. 実行アーキテクチャ (Global Cycle Framework)
 
-タスクシステムは、競合（Race Condition）と遅延を防ぐため、厳密に定義された **Sense-Think-Act サイクル** に従って実行されます。
+タスクシステムは、競合（Race Condition）と遅延を防ぐため、厳密に定義された **Sense-React-Think-Act サイクル** に従って実行されます。
 
 | フェーズ | システムセット (`SoulAiSystemSet`) | 役割 |
 | :--- | :--- | :--- |
-| **Sense** | `Sense` | 環境情報の収集と **リソース予約の再構築** (`sync_reservations_system`)。毎フレーム、現在のタスク状況から `SharedResourceCache` をリセット・再計算します。 |
+| **Sense** | `Sense` | 環境情報の収集と **リソース予約の再構築** (`sync_reservations_system`)。毎フレーム、現在のタスク状況から `SharedResourceCache` をリセット・再計算します。読み取り専用。 |
+| **React** | `React` | バイタル更新（疲労・ストレス・やる気）、集会メンテナンス、逃走検出など、Senseで収集した情報に基づく反応的な状態変更。Observer経由のコンポーネント変更はここで行います。 |
 | **Think** | `Think` | 意思決定とタスク割り当て (`task_assigner`)。`SharedResourceCache` を参照してリソースの予約 (Try Reserve) を行います。 |
 | **Act** | `Act` | 実際の行動 (`task_execution`)。移動、採取、運搬、建築などを行い、成功時にはキャッシュを即時更新します。 |
 

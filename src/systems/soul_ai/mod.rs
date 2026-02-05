@@ -22,6 +22,7 @@ impl Plugin for SoulAiPlugin {
             Update,
             (
                 SoulAiSystemSet::Sense,
+                SoulAiSystemSet::React,
                 SoulAiSystemSet::Think,
                 SoulAiSystemSet::Act,
             )
@@ -37,25 +38,35 @@ impl Plugin for SoulAiPlugin {
             .add_systems(
                 Update,
                 (
-                    // --- Sense Phase ---
+                    // --- Sense Phase (読み取り専用) ---
                     (
                         // タイマー更新 (集会システムの間引き用)
                         gathering::tick_gathering_timer_system,
+                    )
+                        .in_set(SoulAiSystemSet::Sense),
+                    // --- React Phase (反応的状態変更) ---
+                    (
                         // バイタル更新
                         vitals::update::fatigue_update_system,
                         vitals::update::fatigue_penalty_system,
                         vitals::update::stress_system,
                         vitals::influence::supervision_stress_system,
                         vitals::influence::motivation_system,
-                        // 各種メンテナンス
+                        // 集会メンテナンス
                         gathering::maintenance::gathering_recruitment_system,
                         gathering::maintenance::gathering_leave_system,
                         gathering::maintenance::gathering_maintenance_system,
                         gathering::maintenance::gathering_merge_system,
+                        // 逃走検出
                         idle::escaping::escaping_detection_system,
                     )
-                        .in_set(SoulAiSystemSet::Sense),
-                    // --- Think Phase ---
+                        .in_set(SoulAiSystemSet::React),
+                    // React → Think 間のコマンド反映
+                    // Reactで発行されたObserver経由の変更をThinkで読めるようにする
+                    bevy::ecs::schedule::ApplyDeferred
+                        .after(SoulAiSystemSet::React)
+                        .before(SoulAiSystemSet::Think),
+                    // --- Think Phase (意思決定) ---
                     (
                         // 意思決定・タスク割り当て
                         work::auto_haul::blueprint_auto_haul_system,
@@ -73,11 +84,11 @@ impl Plugin for SoulAiPlugin {
                         gathering::spawn::gathering_spawn_system,
                     )
                         .in_set(SoulAiSystemSet::Think),
-                    // コマンドの反映をフェーズ間で強制同期
+                    // Think → Act 間のコマンド反映
                     bevy::ecs::schedule::ApplyDeferred
                         .after(SoulAiSystemSet::Think)
                         .before(SoulAiSystemSet::Act),
-                    // --- Act Phase ---
+                    // --- Act Phase (実行) ---
                     (
                         // 物理的な行動・反映
                         task_execution::task_execution_system,

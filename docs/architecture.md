@@ -59,9 +59,12 @@ graph TD
 
 `Logic` フェーズ内では、**Soul AI** の動作順序を厳密に制御するためのサブセット (`SoulAiSystemSet`) が定義されています。
 
-1.  **Sense**: 環境情報の収集とリソース予約状況の初期化 (`sync_reservations_system`)
-2.  **Think**: 意思決定とタスク割り当て (`task_assigner`)
-3.  **Act**: 実際の行動実行 (`task_execution`)
+1.  **Sense**: 環境情報の収集とリソース予約状況の初期化（読み取り専用）
+2.  **React**: バイタル更新、集会メンテナンス、逃走検出など反応的な状態変更
+3.  **[ApplyDeferred]**: React で発行されたコマンドの反映
+4.  **Think**: 意思決定とタスク割り当て (`task_assigner`)
+5.  **[ApplyDeferred]**: Think で発行されたコマンドの反映
+6.  **Act**: 実際の行動実行 (`task_execution`)
 
 ## 定数管理 (`src/constants.rs`)
 

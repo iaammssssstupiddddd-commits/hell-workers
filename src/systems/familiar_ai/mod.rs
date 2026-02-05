@@ -72,16 +72,20 @@ impl Plugin for FamiliarAiPlugin {
             .add_systems(
                 Update,
                 (
-                    // --- Sense Phase ---
+                    // --- Sense Phase (読み取り専用) ---
                     (
                         state_transition::detect_state_changes_system,
                         state_transition::detect_command_changes_system,
                         resource_cache::sync_reservations_system,
-                        max_soul_handler::handle_max_soul_changed_system,
                         encouragement::cleanup_encouragement_cooldowns_system,
                     )
                         .in_set(crate::systems::soul_ai::scheduling::SoulAiSystemSet::Sense),
-                    // --- Think Phase ---
+                    // --- React Phase (反応的状態変更) ---
+                    (
+                        max_soul_handler::handle_max_soul_changed_system,
+                    )
+                        .in_set(crate::systems::soul_ai::scheduling::SoulAiSystemSet::React),
+                    // --- Think Phase (意思決定) ---
                     (
                         (
                             familiar_ai_state_system,
@@ -93,7 +97,7 @@ impl Plugin for FamiliarAiPlugin {
                             .chain(),
                     )
                         .in_set(crate::systems::soul_ai::scheduling::SoulAiSystemSet::Think),
-                    // --- Act Phase ---
+                    // --- Act Phase (実行) ---
                     (
                         state_transition::handle_state_changed_system,
                     )
