@@ -2,18 +2,14 @@
 //!
 //! 分隊の構築・検証・解放ロジックを提供します。
 
-use crate::entities::damned_soul::{
-    DamnedSoul, Destination, IdleBehavior, IdleState, Path,
-};
-use crate::relationships::CommandedBy;
+use crate::entities::damned_soul::IdleBehavior;
 use crate::relationships::Commanding;
-use crate::systems::soul_ai::gathering::ParticipatingIn;
-use crate::systems::soul_ai::task_execution::AssignedTask;
 // use crate::systems::soul_ai::work::unassign_task;
 // use crate::systems::visual::speech::components::{
 //     BubbleEmotion, BubblePriority, FamiliarBubble, SpeechBubble,
 // };
 use bevy::prelude::*;
+use crate::systems::familiar_ai::FamiliarSoulQuery;
 
 /// 分隊管理ユーティリティ
 pub struct SquadManager;
@@ -40,22 +36,7 @@ impl SquadManager {
     pub fn validate_squad(
         squad: Vec<Entity>,
         fam_entity: Entity,
-        q_souls: &Query<
-            (
-                Entity,
-                &Transform,
-                &DamnedSoul,
-                &mut AssignedTask,
-                &mut Destination,
-                &mut Path,
-                &IdleState,
-
-                Option<&mut crate::systems::logistics::Inventory>,
-                Option<&CommandedBy>,
-                Option<&ParticipatingIn>,
-            ),
-            Without<crate::entities::familiar::Familiar>,
-        >,
+        q_souls: &FamiliarSoulQuery,
     ) -> (Vec<Entity>, Vec<Entity>) {
         let mut valid_squad = Vec::new();
         let mut invalid_members = Vec::new();
@@ -119,21 +100,7 @@ impl SquadManager {
         squad: &[Entity],
         fam_entity: Entity,
         fatigue_threshold: f32,
-    q_souls: &Query<
-        (
-            Entity,
-            &Transform,
-            &DamnedSoul,
-            &mut AssignedTask,
-            &mut Destination,
-            &mut Path,
-            &IdleState,
-            Option<&mut crate::systems::logistics::Inventory>,
-            Option<&CommandedBy>,
-            Option<&ParticipatingIn>,
-        ),
-        Without<crate::entities::familiar::Familiar>,
-    >,
+        q_souls: &FamiliarSoulQuery,
         request_writer: &mut MessageWriter<crate::events::SquadManagementRequest>,
     ) -> Vec<Entity> {
         let mut released_entities = Vec::new();

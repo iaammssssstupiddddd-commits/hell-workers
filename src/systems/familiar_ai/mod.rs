@@ -1,12 +1,10 @@
-use crate::entities::damned_soul::{DamnedSoul, Destination, IdleState, Path, StressBreakdown};
+use crate::entities::damned_soul::{Destination, Path, StressBreakdown};
 use crate::entities::familiar::{
     ActiveCommand, Familiar, FamiliarCommand, FamiliarOperation, FamiliarVoice,
 };
 use crate::relationships::{Commanding, ManagedTasks};
 // use crate::systems::GameSystemSet; // Removed unused import
 use crate::systems::command::TaskArea;
-use crate::systems::soul_ai::gathering::ParticipatingIn;
-use crate::systems::soul_ai::task_execution::AssignedTask;
 use crate::systems::spatial::{
     DesignationSpatialGrid, SpatialGrid,
 };
@@ -21,6 +19,7 @@ pub mod following;
 pub mod resource_cache;
 pub mod helpers;
 pub mod max_soul_handler;
+pub mod query_types;
 pub mod recruitment;
 pub mod scouting;
 pub mod squad;
@@ -34,6 +33,7 @@ use familiar_processor::{
     process_task_delegation_and_movement,
 };
 use state_transition::determine_transition_reason;
+pub use query_types::FamiliarSoulQuery;
 
 /// 使い魔のAI状態
 #[derive(Component, Debug, Clone, PartialEq, Reflect)]
@@ -141,23 +141,7 @@ pub struct FamiliarAiParams<'w, 's> {
             Option<&'static mut crate::systems::visual::speech::cooldown::SpeechHistory>,
         ),
     >,
-    pub q_souls: Query<
-        'w,
-        's,
-        (
-            Entity,
-            &'static Transform,
-            &'static DamnedSoul,
-            &'static mut AssignedTask,
-            &'static mut Destination,
-            &'static mut Path,
-            &'static IdleState,
-            Option<&'static mut crate::systems::logistics::Inventory>,
-            Option<&'static crate::relationships::CommandedBy>,
-            Option<&'static ParticipatingIn>,
-        ),
-        Without<Familiar>,
-    >,
+    pub q_souls: FamiliarSoulQuery<'w, 's>,
     pub q_breakdown: Query<'w, 's, &'static StressBreakdown>,
     // resource_cache removed (included in task_queries)
     pub game_assets: Res<'w, crate::assets::GameAssets>,
@@ -188,23 +172,7 @@ pub struct FamiliarAiTaskParams<'w, 's> {
         ),
         With<Familiar>,
     >,
-    pub q_souls: Query<
-        'w,
-        's,
-        (
-            Entity,
-            &'static Transform,
-            &'static DamnedSoul,
-            &'static mut AssignedTask,
-            &'static mut Destination,
-            &'static mut Path,
-            &'static IdleState,
-            Option<&'static mut crate::systems::logistics::Inventory>,
-            Option<&'static crate::relationships::CommandedBy>,
-            Option<&'static ParticipatingIn>,
-        ),
-        Without<Familiar>,
-    >,
+    pub q_souls: FamiliarSoulQuery<'w, 's>,
     pub task_queries: crate::systems::soul_ai::task_execution::context::TaskAssignmentQueries<'w, 's>,
     pub designation_grid: Res<'w, DesignationSpatialGrid>,
     pub world_map: Res<'w, crate::world::map::WorldMap>,

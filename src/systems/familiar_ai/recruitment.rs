@@ -12,6 +12,7 @@ use crate::systems::soul_ai::gathering::ParticipatingIn;
 use crate::systems::soul_ai::task_execution::AssignedTask;
 use crate::systems::spatial::{SpatialGrid, SpatialGridOps};
 use bevy::prelude::*;
+use crate::systems::familiar_ai::FamiliarSoulQuery;
 
 /// リクルート管理ユーティリティ
 pub struct RecruitmentManager;
@@ -23,22 +24,7 @@ impl RecruitmentManager {
         fatigue_threshold: f32,
         _min_fatigue: f32,
         spatial_grid: &SpatialGrid,
-        q_souls: &mut Query<
-            (
-                Entity,
-                &Transform,
-                &DamnedSoul,
-                &mut AssignedTask,
-                &mut Destination,
-                &mut Path,
-                &IdleState,
-
-                Option<&mut crate::systems::logistics::Inventory>,
-                Option<&CommandedBy>,
-                Option<&ParticipatingIn>,
-            ),
-            Without<crate::entities::familiar::Familiar>,
-        >,
+        q_souls: &mut FamiliarSoulQuery,
         q_breakdown: &Query<&StressBreakdown>,
         radius_opt: Option<f32>,
     ) -> Option<Entity> {
@@ -110,22 +96,7 @@ impl RecruitmentManager {
         command_radius: f32,
         fatigue_threshold: f32,
         spatial_grid: &SpatialGrid,
-        q_souls: &mut Query<
-            (
-                Entity,
-                &Transform,
-                &DamnedSoul,
-                &mut AssignedTask,
-                &mut Destination,
-                &mut Path,
-                &IdleState,
-    
-                Option<&mut crate::systems::logistics::Inventory>,
-                Option<&CommandedBy>,
-                Option<&ParticipatingIn>,
-            ),
-            Without<crate::entities::familiar::Familiar>,
-        >,
+        q_souls: &mut FamiliarSoulQuery,
         q_breakdown: &Query<&StressBreakdown>,
         request_writer: &mut MessageWriter<crate::events::SquadManagementRequest>,
     ) -> Option<Entity> {
@@ -158,22 +129,7 @@ impl RecruitmentManager {
         fam_pos: Vec2,
         fatigue_threshold: f32,
         spatial_grid: &SpatialGrid,
-        q_souls: &mut Query<
-            (
-                Entity,
-                &Transform,
-                &DamnedSoul,
-                &mut AssignedTask,
-                &mut Destination,
-                &mut Path,
-                &IdleState,
-
-                Option<&mut crate::systems::logistics::Inventory>,
-                Option<&CommandedBy>,
-                Option<&ParticipatingIn>,
-            ),
-            Without<crate::entities::familiar::Familiar>,
-        >,
+        q_souls: &mut FamiliarSoulQuery,
         q_breakdown: &Query<&StressBreakdown>,
     ) -> Option<Entity> {
         Self::find_best_recruit(

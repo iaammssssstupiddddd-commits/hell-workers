@@ -1,8 +1,9 @@
 use bevy::prelude::*;
 
 use crate::constants::*;
-use crate::entities::damned_soul::{DamnedSoul, GatheringBehavior, IdleBehavior, IdleState};
-use crate::systems::soul_ai::gathering::{GatheringSpot, ParticipatingIn, GATHERING_LEAVE_RADIUS};
+use crate::entities::damned_soul::{GatheringBehavior, IdleBehavior};
+use crate::systems::soul_ai::gathering::{GatheringSpot, GATHERING_LEAVE_RADIUS};
+use crate::systems::soul_ai::query_types::IdleVisualSoulQuery;
 use crate::systems::soul_ai::task_execution::AssignedTask;
 use crate::systems::spatial::{GatheringSpotSpatialGrid, SpatialGridOps};
 
@@ -10,14 +11,7 @@ use crate::systems::spatial::{GatheringSpotSpatialGrid, SpatialGridOps};
 pub fn idle_visual_system(
     q_spots: Query<&GatheringSpot>,
     spot_grid: Res<GatheringSpotSpatialGrid>,
-    mut query: Query<(
-        &mut Transform,
-        &mut Sprite,
-        &IdleState,
-        &DamnedSoul,
-        &AssignedTask,
-        Option<&ParticipatingIn>,
-    )>,
+    mut query: IdleVisualSoulQuery,
 ) {
     // idle_behavior_system で定義されている定数を使用
     const GATHERING_ARRIVAL_RADIUS: f32 = TILE_SIZE * GATHERING_ARRIVAL_RADIUS_BASE;
