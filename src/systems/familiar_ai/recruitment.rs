@@ -7,7 +7,7 @@ use crate::entities::damned_soul::{
     DamnedSoul, Destination, IdleBehavior, IdleState, Path, StressBreakdown,
 };
 use crate::relationships::CommandedBy;
-use crate::events::OnSoulRecruited;
+// use crate::events::OnSoulRecruited;
 use crate::systems::soul_ai::gathering::ParticipatingIn;
 use crate::systems::soul_ai::task_execution::AssignedTask;
 use crate::systems::spatial::{SpatialGrid, SpatialGridOps};
@@ -105,7 +105,6 @@ impl RecruitmentManager {
     /// # 戻り値
     /// リクルートされたエンティティ、または None
     pub fn try_immediate_recruit(
-        commands: &mut Commands,
         fam_entity: Entity,
         fam_pos: Vec2,
         command_radius: f32,
@@ -120,7 +119,7 @@ impl RecruitmentManager {
                 &mut Destination,
                 &mut Path,
                 &IdleState,
-
+    
                 Option<&mut crate::systems::logistics::Inventory>,
                 Option<&CommandedBy>,
                 Option<&ParticipatingIn>,
@@ -128,6 +127,7 @@ impl RecruitmentManager {
             Without<crate::entities::familiar::Familiar>,
         >,
         q_breakdown: &Query<&StressBreakdown>,
+        request_writer: &mut MessageWriter<crate::events::SquadManagementRequest>,
     ) -> Option<Entity> {
         let recruit_entity = Self::find_best_recruit(
             fam_pos,
@@ -139,21 +139,12 @@ impl RecruitmentManager {
             Some(command_radius),
         )?;
 
-        // リクルート実行
-        commands.entity(recruit_entity).insert(CommandedBy(fam_entity));
-
-        // もし集会に参加中なら抜ける
-        if let Ok((_, _, _, _, _, _, _, _, _, Some(p))) = q_souls.get(recruit_entity) {
-            commands.entity(recruit_entity).remove::<ParticipatingIn>();
-            commands.trigger(crate::events::OnGatheringLeft {
-                entity: recruit_entity,
-                spot_entity: p.0,
-            });
-        }
-
-        commands.trigger(OnSoulRecruited {
-            entity: recruit_entity,
+        // リクルート実行要求
+        request_writer.write(crate::events::SquadManagementRequest {
             familiar_entity: fam_entity,
+            operation: crate::events::SquadManagementOperation::AddMember {
+                soul_entity: recruit_entity,
+            },
         });
 
         Some(recruit_entity)
