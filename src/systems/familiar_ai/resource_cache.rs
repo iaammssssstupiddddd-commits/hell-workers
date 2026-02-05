@@ -1,5 +1,7 @@
 use bevy::prelude::*;
 use std::collections::HashMap;
+use crate::events::ResourceReservationOp;
+use crate::events::ResourceReservationRequest;
 use crate::systems::logistics::ResourceType;
 use crate::systems::soul_ai::task_execution::AssignedTask;
 
@@ -146,6 +148,46 @@ impl SharedResourceCache {
         let stored = self.get_logical_stored_count(target, current_from_query);
         let reserved = self.get_destination_reservation(target);
         stored + reserved
+    }
+}
+
+/// 予約操作をキャッシュに反映する
+pub fn apply_reservation_op(cache: &mut SharedResourceCache, op: &ResourceReservationOp) {
+    match *op {
+        ResourceReservationOp::ReserveDestination { target } => {
+            cache.reserve_destination(target);
+        }
+        ResourceReservationOp::ReleaseDestination { target } => {
+            cache.release_destination(target);
+        }
+        ResourceReservationOp::ReserveMixerDestination { target, resource_type } => {
+            cache.reserve_mixer_destination(target, resource_type);
+        }
+        ResourceReservationOp::ReleaseMixerDestination { target, resource_type } => {
+            cache.release_mixer_destination(target, resource_type);
+        }
+        ResourceReservationOp::ReserveSource { source, amount } => {
+            cache.reserve_source(source, amount);
+        }
+        ResourceReservationOp::ReleaseSource { source, amount } => {
+            cache.release_source(source, amount);
+        }
+        ResourceReservationOp::RecordStoredDestination { target } => {
+            cache.record_stored_destination(target);
+        }
+        ResourceReservationOp::RecordPickedSource { source, amount } => {
+            cache.record_picked_source(source, amount);
+        }
+    }
+}
+
+/// 予約更新リクエストを反映するシステム
+pub fn apply_reservation_requests_system(
+    mut cache: ResMut<SharedResourceCache>,
+    mut requests: MessageReader<ResourceReservationRequest>,
+) {
+    for request in requests.read() {
+        apply_reservation_op(&mut cache, &request.op);
     }
 }
 

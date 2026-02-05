@@ -80,9 +80,13 @@ impl Plugin for SoulAiPlugin {
                     // --- Act Phase ---
                     (
                         // 物理的な行動・反映
+                        task_execution::apply_task_assignment_requests_system
+                            .before(task_execution::task_execution_system),
                         task_execution::task_execution_system,
                         work::cleanup::cleanup_commanded_souls_system,
                         work::auto_haul::clear_item_reservations_system,
+                        crate::systems::familiar_ai::resource_cache::apply_reservation_requests_system
+                            .after(work::auto_haul::clear_item_reservations_system),
                     )
                         .in_set(SoulAiSystemSet::Act),
                 ),
