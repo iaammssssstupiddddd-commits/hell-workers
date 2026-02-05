@@ -82,12 +82,22 @@ impl Plugin for FamiliarAiPlugin {
                     )
                         .in_set(crate::systems::soul_ai::scheduling::AiSystemSet::Perceive),
 
+                    // Perceive → Update 間の同期
+                    ApplyDeferred
+                        .after(crate::systems::soul_ai::scheduling::AiSystemSet::Perceive)
+                        .before(crate::systems::soul_ai::scheduling::AiSystemSet::Update),
+
                     // === Update Phase ===
                     // 時間経過による内部状態の変化
                     (
                         encouragement::cleanup_encouragement_cooldowns_system,
                     )
                         .in_set(crate::systems::soul_ai::scheduling::AiSystemSet::Update),
+
+                    // Update → Decide 間の同期
+                    ApplyDeferred
+                        .after(crate::systems::soul_ai::scheduling::AiSystemSet::Update)
+                        .before(crate::systems::soul_ai::scheduling::AiSystemSet::Decide),
 
                     // === Decide Phase ===
                     // 次の行動の選択、要求の生成
