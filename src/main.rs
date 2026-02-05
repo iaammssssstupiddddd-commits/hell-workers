@@ -84,6 +84,8 @@ fn main() {
         .add_message::<crate::events::FamiliarAiStateChangedEvent>()
         .add_message::<crate::events::TaskAssignmentRequest>()
         .add_message::<crate::events::ResourceReservationRequest>()
+        .add_message::<crate::events::SquadManagementRequest>()
+        .add_message::<crate::events::IdleBehaviorRequest>()
         // Entity plugins
         .add_plugins(DamnedSoulPlugin)
         .add_plugins(FamiliarAiPlugin)

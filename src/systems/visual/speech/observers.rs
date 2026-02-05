@@ -6,7 +6,10 @@ use crate::assets::GameAssets;
 use crate::entities::damned_soul::DamnedSoul;
 use crate::entities::familiar::{Familiar, FamiliarVoice};
 use crate::relationships::CommandedBy;
-use crate::events::*;
+use crate::events::{
+    OnEncouraged, OnExhausted, OnGatheringJoined, OnReleasedFromService, OnSoulRecruited,
+    OnStressBreakdown, OnTaskAbandoned, OnTaskAssigned, OnTaskCompleted,
+};
 use crate::systems::jobs::WorkType;
 use bevy::prelude::*;
 
@@ -297,7 +300,7 @@ pub fn reaction_delay_system(
 
 /// 使役解放時のリアクション
 pub fn on_released_from_service(
-    on: On<crate::events::OnReleasedFromService>,
+    on: On<OnReleasedFromService>,
     mut commands: Commands,
     assets: Res<GameAssets>,
 ) {
@@ -314,7 +317,7 @@ pub fn on_released_from_service(
 
 /// 集会参加時のリアクション
 pub fn on_gathering_joined(
-    on: On<crate::events::OnGatheringJoined>,
+    on: On<OnGatheringJoined>,
     mut commands: Commands,
     assets: Res<GameAssets>,
 ) {
@@ -331,7 +334,7 @@ pub fn on_gathering_joined(
 
 /// タスク中断・失敗時のリアクション
 pub fn on_task_abandoned(
-    on: On<crate::events::OnTaskAbandoned>,
+    on: On<OnTaskAbandoned>,
     mut commands: Commands,
     assets: Res<GameAssets>,
 ) {

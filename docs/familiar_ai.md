@@ -85,15 +85,16 @@
 | **Perceive** | 状態変化の検出、予約同期 | `detect_state_changes_system`, `sync_reservations_system` |
 | **Update** | クールダウン減少 | `cleanup_encouragement_cooldowns_system` |
 | **Decide** | 状態遷移、タスク委譲 | `familiar_ai_state_system`, `familiar_task_delegation_system` |
-| **Execute** | 状態変更の適用 | `handle_state_changed_system` |
+| **Execute** | 状態変更の適用、分隊管理 | `handle_state_changed_system`, `apply_squad_management_requests_system` |
 
 ### 5.2. 主要モジュール
 
 - **`mod.rs`**: メインのシステム定義と SystemParam の分割（`FamiliarAiParams` / `FamiliarAiTaskParams`）
   - **Decide フェーズ**: 状態更新 → `ApplyDeferred` → タスク委譲/移動の順で実行
 - **`familiar_processor.rs`**: 使い魔の処理ロジックを複数の関数に分割
-  - `process_squad_management`: 分隊管理
-  - `process_recruitment`: リクルート処理
+  - `process_squad_management`: 分隊管理の意思決定（Request 発行）
+  - `process_recruitment`: リクルート処理の意思決定（Request 発行）
+  - `apply_squad_management_requests_system`: 分隊管理要求の実際の適用（Executeフェーズ）
   - `finalize_state_transitions`: 状態遷移の最終確定
   - `process_task_delegation_and_movement`: タスク委譲と移動制御
 - **`state_handlers/`**: 各状態のハンドラー
@@ -104,7 +105,7 @@
 - **`squad.rs`**: 分隊管理（`SquadManager`）
   - `build_squad`: 分隊の構築
   - `validate_squad`: 分隊の検証
-  - `release_fatigued`: 疲労・崩壊したメンバーのリリース
+  - `release_fatigued`: 疲労・崩壊したメンバーのリリース要求発行
 - **`task_management.rs`**: タスク管理（`TaskManager`）
   - `find_unassigned_task_in_area`: タスク検索
   - `assign_task_to_worker`: タスク割り当て
@@ -118,8 +119,8 @@
 - **assign_task_to_worker**: タスク割り当て要求の生成（`TaskAssignmentRequest` を発行し、実適用は Act で行う）
 - **`recruitment.rs`**: リクルート管理（`RecruitmentManager`）
   - `find_best_recruit`: リクルート候補の検索
-  - `try_immediate_recruit`: 即時リクルート
-  - `start_scouting`: スカウト開始
+  - `try_immediate_recruit`: 即時リクルート要求発行
+  - `start_scouting`: スカウト開始・移動目標設定
 - **`state_transition.rs`**: 状態遷移の検知とイベント発火
   - `detect_state_changes_system`: 状態変更の検知（`Changed<FamiliarAiState>` 使用）
   - `detect_command_changes_system`: コマンド変更の検知（`Changed<ActiveCommand>` 使用）

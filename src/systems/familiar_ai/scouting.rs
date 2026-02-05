@@ -1,7 +1,7 @@
 use crate::constants::TILE_SIZE;
 use crate::entities::damned_soul::{DamnedSoul, Destination, IdleState, Path, StressBreakdown};
 use crate::relationships::CommandedBy;
-use crate::events::OnSoulRecruited;
+// use crate::events::OnSoulRecruited;
 use crate::systems::familiar_ai::FamiliarAiState;
 use crate::systems::soul_ai::gathering::ParticipatingIn;
 use crate::systems::soul_ai::task_execution::AssignedTask;
@@ -36,7 +36,7 @@ pub fn scouting_logic(
         Without<crate::entities::familiar::Familiar>,
     >,
     q_breakdown: &Query<&StressBreakdown>,
-    commands: &mut Commands,
+    request_writer: &mut MessageWriter<crate::events::SquadManagementRequest>,
 ) -> bool {
     // 早期退出: 分隊が既に満員なら監視モードへ
     if squad.len() >= max_workers {
@@ -134,15 +134,14 @@ pub fn scouting_logic(
                     dist_sq.sqrt()
                 );
                 if uc.is_none() {
-                    commands
-                        .entity(target_soul)
-                        .insert(CommandedBy(fam_entity));
-                    commands.trigger(OnSoulRecruited {
-                        entity: target_soul,
+                    request_writer.write(crate::events::SquadManagementRequest {
                         familiar_entity: fam_entity,
+                        operation: crate::events::SquadManagementOperation::AddMember {
+                            soul_entity: target_soul,
+                        },
                     });
 
-                    // 分隊リストを即座に更新
+                    // 分隊リストを即座に更新 (Decideフェーズ内の後続処理のため)
                     squad.push(target_soul);
                 }
 
