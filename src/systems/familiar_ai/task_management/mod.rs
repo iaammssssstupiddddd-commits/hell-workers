@@ -11,7 +11,7 @@ pub use task_assigner::prepare_worker_for_task;
 pub use task_assigner::ReservationShadow;
 
 use crate::entities::damned_soul::{DamnedSoul, Destination, IdleBehavior, IdleState, Path};
-use crate::entities::familiar::UnderCommand;
+use crate::relationships::CommandedBy;
 use crate::relationships::ManagedTasks;
 use crate::systems::command::TaskArea;
 use crate::systems::soul_ai::gathering::ParticipatingIn;
@@ -45,7 +45,7 @@ impl TaskManager {
                 &IdleState,
 
                 Option<&mut crate::systems::logistics::Inventory>,
-                Option<&UnderCommand>,
+                Option<&CommandedBy>,
                 Option<&ParticipatingIn>,
             ),
             Without<crate::entities::familiar::Familiar>,

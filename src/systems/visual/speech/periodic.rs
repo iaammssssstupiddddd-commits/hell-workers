@@ -1,7 +1,7 @@
 use crate::assets::GameAssets;
 use crate::constants::*;
 use crate::entities::damned_soul::{DamnedSoul, IdleBehavior, IdleState};
-use crate::entities::familiar::UnderCommand;
+use crate::relationships::CommandedBy;
 use crate::systems::visual::speech::components::{BubbleEmotion, BubblePriority, SoulEmotionState};
 use crate::systems::visual::speech::spawn::spawn_soul_bubble;
 use bevy::prelude::*;
@@ -23,7 +23,7 @@ pub fn periodic_emotion_system(
         &GlobalTransform,
         &DamnedSoul,
         &IdleState,
-        Option<&UnderCommand>,
+        Option<&CommandedBy>,
         &mut SoulEmotionState,
     )>,
 ) {
@@ -40,7 +40,7 @@ pub fn periodic_emotion_system(
             &GlobalTransform,
             &DamnedSoul,
             &IdleState,
-            Option<&UnderCommand>,
+            Option<&CommandedBy>,
             Mut<SoulEmotionState>,
         ) = (entity, transform, soul, idle, under_command_opt, state);
         // 分散実行: エンティティのインデックスに基づいてフレームを分散

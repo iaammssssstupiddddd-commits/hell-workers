@@ -18,7 +18,7 @@ pub fn gathering_spawn_system(
         (
             With<DamnedSoul>,
             Without<ParticipatingIn>,
-            Without<crate::entities::familiar::UnderCommand>,
+            Without<crate::relationships::CommandedBy>,
         ),
     >,
     spot_grid: Res<GatheringSpotSpatialGrid>,

@@ -76,10 +76,21 @@
 
 `familiar_ai` システムは、保守性と可読性を向上させるため、以下のモジュールに分離されています：
 
-### 5.1. 主要モジュール
+### 5.1. 実行サイクル (Execution Cycle)
+
+使い魔AIも `AiSystemSet` の4フェーズに従って実行されます。
+
+| フェーズ | 責任 | 主なシステム |
+|:--|:--|:--|
+| **Perceive** | 状態変化の検出、予約同期 | `detect_state_changes_system`, `sync_reservations_system` |
+| **Update** | クールダウン減少 | `cleanup_encouragement_cooldowns_system` |
+| **Decide** | 状態遷移、タスク委譲 | `familiar_ai_state_system`, `familiar_task_delegation_system` |
+| **Execute** | 状態変更の適用 | `handle_state_changed_system` |
+
+### 5.2. 主要モジュール
 
 - **`mod.rs`**: メインのシステム定義と SystemParam の分割（`FamiliarAiParams` / `FamiliarAiTaskParams`）
-  - **Think フェーズ**: 状態更新 → `ApplyDeferred` → タスク委譲/移動の順で実行
+  - **Decide フェーズ**: 状態更新 → `ApplyDeferred` → タスク委譲/移動の順で実行
 - **`familiar_processor.rs`**: 使い魔の処理ロジックを複数の関数に分割
   - `process_squad_management`: 分隊管理
   - `process_recruitment`: リクルート処理

@@ -2,7 +2,8 @@ use bevy::prelude::*;
 
 use crate::constants::*;
 use crate::entities::damned_soul::DamnedSoul;
-use crate::entities::familiar::{ActiveCommand, Familiar, UnderCommand};
+use crate::entities::familiar::{ActiveCommand, Familiar};
+use crate::relationships::CommandedBy;
 use crate::systems::soul_ai::task_execution::AssignedTask;
 use crate::systems::soul_ai::vitals::helpers;
 use crate::systems::spatial::{FamiliarSpatialGrid, SpatialGridOps};
@@ -46,7 +47,7 @@ pub fn motivation_system(
         &Transform,
         &mut DamnedSoul,
         &AssignedTask,
-        Option<&UnderCommand>,
+        Option<&CommandedBy>,
     )>,
 ) {
     let dt = time.delta_secs();
@@ -56,7 +57,7 @@ pub fn motivation_system(
             &Transform,
             Mut<DamnedSoul>,
             &AssignedTask,
-            Option<&UnderCommand>,
+            Option<&CommandedBy>,
         ) = (soul_transform, soul, task, under_command);
         let soul_pos = soul_transform.translation.truncate();
         let has_task = !matches!(*task, AssignedTask::None);

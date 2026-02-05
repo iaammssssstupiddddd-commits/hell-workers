@@ -3,7 +3,7 @@
 //! ワーカーへのタスク割り当てロジックを提供します。
 
 use crate::entities::damned_soul::{DamnedSoul, Destination, IdleBehavior, IdleState, Path};
-use crate::entities::familiar::UnderCommand;
+use crate::relationships::CommandedBy;
 use crate::events::{OnSoulRecruited, ResourceReservationOp, TaskAssignmentRequest};
 use crate::systems::command::TaskArea;
 use crate::systems::jobs::WorkType;
@@ -94,7 +94,7 @@ pub fn prepare_worker_for_task(
         });
     }
     commands.entity(worker_entity).insert((
-        UnderCommand(fam_entity),
+        CommandedBy(fam_entity),
         crate::relationships::WorkingOn(task_entity),
     ));
     commands
@@ -121,7 +121,7 @@ pub fn assign_task_to_worker(
             &IdleState,
 
             Option<&mut crate::systems::logistics::Inventory>,
-            Option<&UnderCommand>,
+            Option<&CommandedBy>,
             Option<&ParticipatingIn>,
         ),
         Without<crate::entities::familiar::Familiar>,
