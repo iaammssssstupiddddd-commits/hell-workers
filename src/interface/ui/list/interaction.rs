@@ -43,7 +43,9 @@ pub fn entity_list_interaction_system(
                         let mut any_toggled = false;
                         for (unassigned_entity, has_folded) in unassigned_folded_query.iter() {
                             if has_folded {
-                                commands.entity(unassigned_entity).remove::<UnassignedFolded>();
+                                commands
+                                    .entity(unassigned_entity)
+                                    .remove::<UnassignedFolded>();
                             } else {
                                 commands.entity(unassigned_entity).insert(UnassignedFolded);
                             }
@@ -55,7 +57,12 @@ pub fn entity_list_interaction_system(
                     }
                 }
             }
-            _ => {}
+            Interaction::Hovered => {
+                *color = BackgroundColor(COLOR_BUTTON_HOVER);
+            }
+            Interaction::None => {
+                *color = BackgroundColor(COLOR_BUTTON_DEFAULT);
+            }
         }
     }
 
@@ -81,6 +88,88 @@ pub fn entity_list_interaction_system(
                 &q_transforms,
             );
         }
+    }
+}
+
+pub fn entity_list_visual_feedback_system(
+    selected_entity: Res<crate::interface::selection::SelectedEntity>,
+    mut q_souls: Query<
+        (
+            &Interaction,
+            &SoulListItem,
+            &mut Node,
+            &mut BackgroundColor,
+            &mut BorderColor,
+        ),
+        With<Button>,
+    >,
+    mut q_familiars: Query<
+        (
+            &Interaction,
+            &FamiliarListItem,
+            &mut Node,
+            &mut BackgroundColor,
+            &mut BorderColor,
+        ),
+        (With<Button>, Without<SoulListItem>),
+    >,
+) {
+    for (interaction, item, mut node, mut bg, mut border_color) in q_souls.iter_mut() {
+        let is_selected = selected_entity.0 == Some(item.0);
+        apply_row_highlight(
+            &mut node,
+            &mut bg,
+            &mut border_color,
+            *interaction,
+            is_selected,
+            COLOR_LIST_ITEM_DEFAULT,
+            COLOR_LIST_ITEM_HOVER,
+            COLOR_LIST_ITEM_SELECTED,
+            COLOR_LIST_ITEM_SELECTED_HOVER,
+        );
+    }
+
+    for (interaction, item, mut node, mut bg, mut border_color) in q_familiars.iter_mut() {
+        let is_selected = selected_entity.0 == Some(item.0);
+        apply_row_highlight(
+            &mut node,
+            &mut bg,
+            &mut border_color,
+            *interaction,
+            is_selected,
+            COLOR_FAMILIAR_BUTTON_BG,
+            COLOR_FAMILIAR_HEADER_HOVER,
+            COLOR_FAMILIAR_HEADER_SELECTED,
+            COLOR_FAMILIAR_HEADER_SELECTED_HOVER,
+        );
+    }
+}
+
+fn apply_row_highlight(
+    node: &mut Node,
+    bg: &mut BackgroundColor,
+    border_color: &mut BorderColor,
+    interaction: Interaction,
+    is_selected: bool,
+    default_color: Color,
+    hover_color: Color,
+    selected_color: Color,
+    selected_hover_color: Color,
+) {
+    let is_hovered = matches!(interaction, Interaction::Hovered | Interaction::Pressed);
+    bg.0 = match (is_selected, is_hovered) {
+        (true, true) => selected_hover_color,
+        (true, false) => selected_color,
+        (false, true) => hover_color,
+        (false, false) => default_color,
+    };
+
+    if is_selected {
+        node.border.left = Val::Px(LIST_SELECTION_BORDER_WIDTH);
+        *border_color = BorderColor::all(COLOR_LIST_SELECTION_BORDER);
+    } else {
+        node.border.left = Val::Px(0.0);
+        *border_color = BorderColor::all(Color::NONE);
     }
 }
 

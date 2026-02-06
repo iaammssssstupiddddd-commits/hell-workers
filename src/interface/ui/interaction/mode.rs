@@ -3,8 +3,8 @@ use bevy::prelude::*;
 use crate::game_state::{BuildContext, PlayMode, TaskContext, ZoneContext};
 use crate::interface::ui::components::MenuState;
 use crate::systems::command::TaskMode;
-use crate::systems::logistics::ZoneType;
 use crate::systems::jobs::BuildingType;
+use crate::systems::logistics::ZoneType;
 
 pub(super) fn toggle_menu_and_reset_mode(
     menu_state: &mut MenuState,
@@ -41,7 +41,10 @@ pub(super) fn set_build_mode(
     task_context.0 = TaskMode::None;
     build_context.0 = Some(kind);
     next_play_mode.set(PlayMode::BuildingPlace);
-    info!("UI: Build mode set to {:?}, PlayMode -> BuildingPlace", kind);
+    info!(
+        "UI: Build mode set to {:?}, PlayMode -> BuildingPlace",
+        kind
+    );
 }
 
 pub(super) fn set_zone_mode(
@@ -69,7 +72,10 @@ pub(super) fn set_task_mode(
     zone_context.0 = None;
     task_context.0 = mode;
     next_play_mode.set(PlayMode::TaskDesignation);
-    info!("UI: TaskMode set to {:?}, PlayMode -> TaskDesignation", mode);
+    info!(
+        "UI: TaskMode set to {:?}, PlayMode -> TaskDesignation",
+        mode
+    );
 }
 
 pub(super) fn set_area_task_mode(

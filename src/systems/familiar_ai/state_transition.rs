@@ -17,7 +17,10 @@ pub struct FamiliarAiStateHistory {
 /// 状態が変更された時のみ処理するシステム
 /// Bevy の `Changed<FamiliarAiState>` フィルタを使用
 pub fn detect_state_changes_system(
-    mut q_familiars: Query<(Entity, &FamiliarAiState, &mut FamiliarAiStateHistory), Changed<FamiliarAiState>>,
+    mut q_familiars: Query<
+        (Entity, &FamiliarAiState, &mut FamiliarAiStateHistory),
+        Changed<FamiliarAiState>,
+    >,
     mut ev_state_changed: MessageWriter<FamiliarAiStateChangedEvent>,
 ) {
     for (entity, new_state, mut history) in q_familiars.iter_mut() {
@@ -45,7 +48,15 @@ pub fn detect_state_changes_system(
 /// コマンドが変更された時のみ処理するシステム
 /// Bevy の `Changed<ActiveCommand>` フィルタを使用
 pub fn detect_command_changes_system(
-    mut q_familiars: Query<(Entity, &ActiveCommand, &FamiliarAiState, &mut FamiliarAiStateHistory), Changed<ActiveCommand>>,
+    mut q_familiars: Query<
+        (
+            Entity,
+            &ActiveCommand,
+            &FamiliarAiState,
+            &mut FamiliarAiStateHistory,
+        ),
+        Changed<ActiveCommand>,
+    >,
     mut ev_state_changed: MessageWriter<FamiliarAiStateChangedEvent>,
 ) {
     for (entity, active_command, current_state, mut history) in q_familiars.iter_mut() {
@@ -104,4 +115,3 @@ pub fn handle_state_changed_system(
         // ここで状態遷移に応じた処理（アニメーション、音声など）を追加可能
     }
 }
-

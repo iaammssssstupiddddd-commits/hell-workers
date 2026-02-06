@@ -1,6 +1,8 @@
 //! 時間操作 UI
 
 use crate::interface::ui::components::TaskSummaryText;
+use crate::interface::ui::components::UiTooltip;
+use crate::interface::ui::theme::*;
 use crate::systems::time::ClockText;
 use bevy::prelude::*;
 
@@ -9,8 +11,8 @@ pub fn spawn_time_control(commands: &mut Commands, game_assets: &Res<crate::asse
     commands
         .spawn((Node {
             position_type: PositionType::Absolute,
-            right: Val::Px(20.0),
-            top: Val::Px(20.0),
+            right: Val::Px(PANEL_MARGIN_X),
+            top: Val::Px(TIME_CONTROL_TOP),
             flex_direction: FlexDirection::Column,
             align_items: AlignItems::End,
             ..default()
@@ -20,10 +22,10 @@ pub fn spawn_time_control(commands: &mut Commands, game_assets: &Res<crate::asse
                 Text::new("Day 1, 00:00"),
                 TextFont {
                     font: game_assets.font_ui.clone(),
-                    font_size: crate::constants::FONT_SIZE_TITLE,
+                    font_size: FONT_SIZE_CLOCK,
                     ..default()
                 },
-                TextColor(Color::WHITE),
+                TextColor(COLOR_TEXT_PRIMARY),
                 ClockText,
             ));
 
@@ -35,13 +37,17 @@ pub fn spawn_time_control(commands: &mut Commands, game_assets: &Res<crate::asse
                 })
                 .with_children(|speed_row| {
                     let speeds = [
-                        (crate::systems::time::TimeSpeed::Paused, "||"),
-                        (crate::systems::time::TimeSpeed::Normal, ">"),
-                        (crate::systems::time::TimeSpeed::Fast, ">>"),
-                        (crate::systems::time::TimeSpeed::Super, ">>>"),
+                        (crate::systems::time::TimeSpeed::Paused, "||", "一時停止"),
+                        (
+                            crate::systems::time::TimeSpeed::Normal,
+                            ">",
+                            "通常速度 (x1)",
+                        ),
+                        (crate::systems::time::TimeSpeed::Fast, ">>", "高速 (x2)"),
+                        (crate::systems::time::TimeSpeed::Super, ">>>", "超高速 (x4)"),
                     ];
 
-                    for (speed, label) in speeds {
+                    for (speed, label, tooltip) in speeds {
                         speed_row
                             .spawn((
                                 Button,
@@ -53,18 +59,19 @@ pub fn spawn_time_control(commands: &mut Commands, game_assets: &Res<crate::asse
                                     align_items: AlignItems::Center,
                                     ..default()
                                 },
-                                BackgroundColor(Color::srgb(0.2, 0.2, 0.2)),
+                                BackgroundColor(COLOR_BUTTON_DEFAULT),
                                 crate::systems::time::SpeedButton(speed),
+                                UiTooltip(tooltip),
                             ))
                             .with_children(|btn| {
                                 btn.spawn((
                                     Text::new(label),
                                     TextFont {
                                         font: game_assets.font_ui.clone(),
-                                        font_size: crate::constants::FONT_SIZE_BODY,
+                                        font_size: FONT_SIZE_TITLE,
                                         ..default()
                                     },
-                                    TextColor(Color::WHITE),
+                                    TextColor(COLOR_TEXT_PRIMARY),
                                 ));
                             });
                     }
@@ -83,10 +90,10 @@ pub fn spawn_time_control(commands: &mut Commands, game_assets: &Res<crate::asse
                         Text::new("Tasks: 0 (0 High)"),
                         TextFont {
                             font: game_assets.font_ui.clone(),
-                            font_size: crate::constants::FONT_SIZE_HEADER,
+                            font_size: FONT_SIZE_HEADER,
                             ..default()
                         },
-                        TextColor(Color::srgb(0.8, 0.8, 1.0)),
+                        TextColor(COLOR_HEADER_TEXT),
                         TaskSummaryText,
                     ));
                 });

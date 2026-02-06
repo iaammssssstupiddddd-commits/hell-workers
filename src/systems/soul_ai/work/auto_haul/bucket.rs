@@ -5,12 +5,12 @@
 use bevy::prelude::*;
 
 use crate::constants::*;
+use crate::relationships::TaskWorkers;
 use crate::systems::command::TaskArea;
 use crate::systems::jobs::{Designation, IssuedBy, TaskSlots, WorkType};
-use crate::systems::logistics::{ResourceItem, ResourceType, ReservedForTask, Stockpile};
-use crate::systems::spatial::{StockpileSpatialGrid, SpatialGridOps};
-use crate::relationships::TaskWorkers;
+use crate::systems::logistics::{ReservedForTask, ResourceItem, ResourceType, Stockpile};
 use crate::systems::soul_ai::work::auto_haul::ItemReservations;
+use crate::systems::spatial::{SpatialGridOps, StockpileSpatialGrid};
 
 /// バケツ専用オートホールシステム
 /// ドロップされたバケツを、BelongsTo で紐付いたタンクのバケツ置き場に運搬する
@@ -45,9 +45,21 @@ pub fn bucket_auto_haul_system(
     let mut already_assigned = std::collections::HashSet::new();
 
     for (fam_entity, task_area) in q_familiars.iter() {
-        for (bucket_entity, bucket_transform, visibility, res_item, bucket_belongs, reserved_opt, workers_opt) in q_buckets.iter() {
+        for (
+            bucket_entity,
+            bucket_transform,
+            visibility,
+            res_item,
+            bucket_belongs,
+            reserved_opt,
+            workers_opt,
+        ) in q_buckets.iter()
+        {
             // バケツ以外はスキップ
-            if !matches!(res_item.0, ResourceType::BucketEmpty | ResourceType::BucketWater) {
+            if !matches!(
+                res_item.0,
+                ResourceType::BucketEmpty | ResourceType::BucketWater
+            ) {
                 continue;
             }
 
@@ -101,7 +113,9 @@ pub fn bucket_auto_haul_system(
                     // 通常、タンクのバケツ置き場は resource_type が None または BucketEmpty/Water
                     let type_match = match stock.resource_type {
                         None => true,
-                        Some(t) => matches!(t, ResourceType::BucketEmpty | ResourceType::BucketWater),
+                        Some(t) => {
+                            matches!(t, ResourceType::BucketEmpty | ResourceType::BucketWater)
+                        }
                     };
                     if !type_match {
                         return false;
@@ -121,7 +135,10 @@ pub fn bucket_auto_haul_system(
             if let Some(_stockpile_entity) = target_stockpile {
                 already_assigned.insert(bucket_entity);
                 item_reservations.0.insert(bucket_entity);
-                info!("BUCKET_HAUL: Issuing Haul task for bucket {:?} to stockpile {:?}", bucket_entity, _stockpile_entity);
+                info!(
+                    "BUCKET_HAUL: Issuing Haul task for bucket {:?} to stockpile {:?}",
+                    bucket_entity, _stockpile_entity
+                );
                 commands.entity(bucket_entity).insert((
                     Designation {
                         work_type: WorkType::Haul,
@@ -132,7 +149,10 @@ pub fn bucket_auto_haul_system(
                     ReservedForTask,
                 ));
             } else {
-                warn!("BUCKET_HAUL: Found bucket {:?} for tank {:?} but no suitable stockpile found!", bucket_entity, tank_entity);
+                warn!(
+                    "BUCKET_HAUL: Found bucket {:?} for tank {:?} but no suitable stockpile found!",
+                    bucket_entity, tank_entity
+                );
             }
         }
     }

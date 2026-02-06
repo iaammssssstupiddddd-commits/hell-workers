@@ -10,7 +10,8 @@ use crate::interface::ui::{MenuState, setup_ui};
 use crate::systems::logistics::{ResourceLabels, initial_resource_spawner};
 use crate::systems::soul_ai::work::AutoHaulCounter;
 use crate::systems::spatial::{
-    BlueprintSpatialGrid, FamiliarSpatialGrid, GatheringSpotSpatialGrid, ResourceSpatialGrid, SpatialGrid, SpatialGridOps, StockpileSpatialGrid,
+    BlueprintSpatialGrid, FamiliarSpatialGrid, GatheringSpotSpatialGrid, ResourceSpatialGrid,
+    SpatialGrid, SpatialGridOps, StockpileSpatialGrid,
 };
 use crate::systems::time::GameTime;
 use crate::world::map::{WorldMap, spawn_map};
@@ -63,11 +64,7 @@ fn log_post_startup_begin() {
     info!("STARTUP_TIMING: PostStartup begin");
 }
 
-fn spawn_map_timed(
-    commands: Commands,
-    game_assets: Res<GameAssets>,
-    world_map: ResMut<WorldMap>,
-) {
+fn spawn_map_timed(commands: Commands, game_assets: Res<GameAssets>, world_map: ResMut<WorldMap>) {
     let start = Instant::now();
     spawn_map(commands, game_assets, world_map);
     info!(
@@ -123,16 +120,24 @@ fn setup(
         // wall: asset_server.load("textures/stone.jpg"),
         // Wall connections
         wall_isolated: asset_server.load("textures/wooden_wall/wall_isolated.png"),
-        wall_horizontal_left: asset_server.load("textures/wooden_wall/wall_horizontal_left_side_connected.png"),
-        wall_horizontal_right: asset_server.load("textures/wooden_wall/wall_horizontal_right_side_connected.png"),
-        wall_horizontal_both: asset_server.load("textures/wooden_wall/wall_horizontal_connected_both_side.png"),
-        wall_vertical_top: asset_server.load("textures/wooden_wall/wall_vertical_top_side_connected.png"),
-        wall_vertical_bottom: asset_server.load("textures/wooden_wall/wall_vertical_bottom_side_connected.png"),
-        wall_vertical_both: asset_server.load("textures/wooden_wall/wall_vertical_both_side_connected.png"),
+        wall_horizontal_left: asset_server
+            .load("textures/wooden_wall/wall_horizontal_left_side_connected.png"),
+        wall_horizontal_right: asset_server
+            .load("textures/wooden_wall/wall_horizontal_right_side_connected.png"),
+        wall_horizontal_both: asset_server
+            .load("textures/wooden_wall/wall_horizontal_connected_both_side.png"),
+        wall_vertical_top: asset_server
+            .load("textures/wooden_wall/wall_vertical_top_side_connected.png"),
+        wall_vertical_bottom: asset_server
+            .load("textures/wooden_wall/wall_vertical_bottom_side_connected.png"),
+        wall_vertical_both: asset_server
+            .load("textures/wooden_wall/wall_vertical_both_side_connected.png"),
         wall_corner_top_left: asset_server.load("textures/wooden_wall/wall_corner_left_top.png"),
         wall_corner_top_right: asset_server.load("textures/wooden_wall/wall_corner_right_top.png"),
-        wall_corner_bottom_left: asset_server.load("textures/wooden_wall/wall_corner_left_down.png"),
-        wall_corner_bottom_right: asset_server.load("textures/wooden_wall/wall_corner_right_down.png"),
+        wall_corner_bottom_left: asset_server
+            .load("textures/wooden_wall/wall_corner_left_down.png"),
+        wall_corner_bottom_right: asset_server
+            .load("textures/wooden_wall/wall_corner_right_down.png"),
         wall_t_up: asset_server.load("textures/wooden_wall/wall_t_up.png"),
         wall_t_down: asset_server.load("textures/wooden_wall/wall_t_down.png"),
         wall_t_left: asset_server.load("textures/wooden_wall/wall_t_left.png"),

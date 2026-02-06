@@ -5,8 +5,8 @@
 use super::StateTransitionResult;
 use crate::entities::damned_soul::{Destination, Path, StressBreakdown};
 use crate::systems::familiar_ai::FamiliarAiState;
-use bevy::prelude::*;
 use crate::systems::familiar_ai::FamiliarSoulQuery;
+use bevy::prelude::*;
 
 /// Scouting 状態のハンドラー
 pub fn handle_scouting_state(
@@ -20,8 +20,8 @@ pub fn handle_scouting_state(
     fam_dest: &mut Destination,
     fam_path: &mut Path,
     q_souls: &mut FamiliarSoulQuery,
-q_breakdown: &Query<&StressBreakdown>,
-request_writer: &mut MessageWriter<crate::events::SquadManagementRequest>,
+    q_breakdown: &Query<&StressBreakdown>,
+    request_writer: &mut MessageWriter<crate::events::SquadManagementRequest>,
 ) -> StateTransitionResult {
     // 既存の scouting_logic を呼び出し
     let state_changed = crate::systems::familiar_ai::scouting::scouting_logic(

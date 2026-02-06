@@ -1,8 +1,8 @@
 //! 設計図のプログレスバー関連システム
 
 use crate::constants::Z_BAR_BG;
-use bevy::prelude::*;
 use bevy::prelude::ChildOf;
+use bevy::prelude::*;
 
 use super::components::ProgressBar;
 use super::{
@@ -56,7 +56,10 @@ pub fn spawn_progress_bar_system(
 pub fn update_progress_bar_fill_system(
     q_blueprints: Query<&Blueprint>,
     q_generic_bars: Query<&GenericProgressBar>,
-    mut q_fills: Query<(Entity, &ChildOf, &mut Sprite, &mut Transform), (With<ProgressBar>, With<ProgressBarFill>)>,
+    mut q_fills: Query<
+        (Entity, &ChildOf, &mut Sprite, &mut Transform),
+        (With<ProgressBar>, With<ProgressBarFill>),
+    >,
 ) {
     for (fill_entity, child_of, mut sprite, mut transform) in q_fills.iter_mut() {
         if let Ok(bp) = q_blueprints.get(child_of.parent()) {

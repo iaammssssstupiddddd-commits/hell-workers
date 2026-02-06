@@ -6,8 +6,8 @@ use super::StateTransitionResult;
 use crate::entities::damned_soul::{Destination, Path};
 use crate::systems::command::TaskArea;
 use crate::systems::familiar_ai::FamiliarAiState;
-use bevy::prelude::*;
 use crate::systems::familiar_ai::FamiliarSoulQuery;
+use bevy::prelude::*;
 
 /// Supervising 状態のハンドラー
 pub fn handle_supervising_state(

@@ -1,8 +1,8 @@
 //! 建築中のワーカーインジケータ（ハンマーアイコン）
 
 use crate::constants::*;
-use bevy::prelude::*;
 use bevy::prelude::ChildOf;
+use bevy::prelude::*;
 
 use super::components::{HasWorkerIndicator, WorkerHammerIcon};
 use crate::assets::GameAssets;
@@ -28,20 +28,23 @@ pub fn spawn_worker_indicators_system(
                     worker_entity, blueprint
                 );
 
-                let hammer_id = commands.spawn((
-                    WorkerHammerIcon,
-                    Sprite {
-                        image: game_assets.icon_hammer.clone(),
-                        custom_size: Some(Vec2::splat(16.0)),
-                        color: Color::srgb(1.0, 0.8, 0.2), // 建築らしいオレンジ寄りの黄色
-                        ..default()
-                    },
-                    Transform::from_translation(
-                        Vec3::new(0.0, 32.0, Z_VISUAL_EFFECT - Z_CHARACTER),
-                    ),
-                    Name::new("WorkerHammerIcon"),
-                ))
-                .id();
+                let hammer_id = commands
+                    .spawn((
+                        WorkerHammerIcon,
+                        Sprite {
+                            image: game_assets.icon_hammer.clone(),
+                            custom_size: Some(Vec2::splat(16.0)),
+                            color: Color::srgb(1.0, 0.8, 0.2), // 建築らしいオレンジ寄りの黄色
+                            ..default()
+                        },
+                        Transform::from_translation(Vec3::new(
+                            0.0,
+                            32.0,
+                            Z_VISUAL_EFFECT - Z_CHARACTER,
+                        )),
+                        Name::new("WorkerHammerIcon"),
+                    ))
+                    .id();
                 commands.entity(worker_entity).add_child(hammer_id);
 
                 commands.entity(worker_entity).insert(HasWorkerIndicator);
@@ -55,7 +58,10 @@ pub fn update_worker_indicators_system(
     mut commands: Commands,
     time: Res<Time>,
     q_workers: Query<(&AssignedTask, &Transform), With<DamnedSoul>>,
-    mut q_hammers: Query<(Entity, &ChildOf, &mut Transform), (With<WorkerHammerIcon>, Without<DamnedSoul>)>,
+    mut q_hammers: Query<
+        (Entity, &ChildOf, &mut Transform),
+        (With<WorkerHammerIcon>, Without<DamnedSoul>),
+    >,
 ) {
     for (hammer_entity, child_of, mut hammer_transform) in q_hammers.iter_mut() {
         let mut should_despawn = true;

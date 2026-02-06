@@ -1,10 +1,10 @@
 //! Phase handlers for water gathering task
 
+use crate::constants::BUCKET_CAPACITY;
 use crate::systems::logistics::{ResourceItem, ResourceType};
 use crate::systems::soul_ai::task_execution::context::TaskExecutionContext;
 use crate::systems::soul_ai::task_execution::types::{AssignedTask, GatherWaterPhase};
 use crate::world::map::WorldMap;
-use crate::constants::BUCKET_CAPACITY;
 use bevy::prelude::*;
 
 use super::helpers::{abort_task_with_item, abort_task_without_item, drop_bucket_for_auto_haul};
@@ -24,20 +24,60 @@ pub fn handle_gather_water_task(
 
     match phase {
         GatherWaterPhase::GoingToBucket => {
-            handle_going_to_bucket(ctx, bucket_entity, tank_entity, commands, world_map, soul_pos);
+            handle_going_to_bucket(
+                ctx,
+                bucket_entity,
+                tank_entity,
+                commands,
+                world_map,
+                soul_pos,
+            );
         }
         GatherWaterPhase::GoingToRiver => {
-            handle_going_to_river(ctx, bucket_entity, tank_entity, commands, world_map, soul_pos);
+            handle_going_to_river(
+                ctx,
+                bucket_entity,
+                tank_entity,
+                commands,
+                world_map,
+                soul_pos,
+            );
         }
         GatherWaterPhase::Filling { progress } => {
             // Updated call
-            handle_filling(ctx, bucket_entity, tank_entity, progress, commands, game_assets, time, world_map, soul_pos);
+            handle_filling(
+                ctx,
+                bucket_entity,
+                tank_entity,
+                progress,
+                commands,
+                game_assets,
+                time,
+                world_map,
+                soul_pos,
+            );
         }
         GatherWaterPhase::GoingToTank => {
-            handle_going_to_tank(ctx, bucket_entity, tank_entity, commands, world_map, soul_pos);
+            handle_going_to_tank(
+                ctx,
+                bucket_entity,
+                tank_entity,
+                commands,
+                world_map,
+                soul_pos,
+            );
         }
         GatherWaterPhase::Pouring { progress } => {
-            handle_pouring(ctx, bucket_entity, tank_entity, progress, commands, game_assets, world_map, soul_pos);
+            handle_pouring(
+                ctx,
+                bucket_entity,
+                tank_entity,
+                progress,
+                commands,
+                game_assets,
+                world_map,
+                soul_pos,
+            );
         }
     }
 }
@@ -54,13 +94,17 @@ fn handle_going_to_bucket(
     // 既にインベントリにバケツがある場合は次のフェーズへ
     if ctx.inventory.0 == Some(bucket_entity) {
         // バケツが既にインベントリにあるので、川へ
-        if let Some(river_grid) = world_map.get_nearest_river_grid(ctx.soul_transform.translation.truncate()) {
+        if let Some(river_grid) =
+            world_map.get_nearest_river_grid(ctx.soul_transform.translation.truncate())
+        {
             let river_pos = WorldMap::grid_to_world(river_grid.0, river_grid.1);
-            *ctx.task = AssignedTask::GatherWater(crate::systems::soul_ai::task_execution::types::GatherWaterData {
-                bucket: bucket_entity,
-                tank: tank_entity,
-                phase: GatherWaterPhase::GoingToRiver,
-            });
+            *ctx.task = AssignedTask::GatherWater(
+                crate::systems::soul_ai::task_execution::types::GatherWaterData {
+                    bucket: bucket_entity,
+                    tank: tank_entity,
+                    phase: GatherWaterPhase::GoingToRiver,
+                },
+            );
             ctx.dest.0 = river_pos;
             ctx.path.waypoints = vec![river_pos];
             ctx.path.current_index = 0;
@@ -83,7 +127,10 @@ fn handle_going_to_bucket(
 
     // バケツであることを確認（任意だが安全のため）
     if let Some(res_type) = res_type {
-        if !matches!(res_type, ResourceType::BucketEmpty | ResourceType::BucketWater) {
+        if !matches!(
+            res_type,
+            ResourceType::BucketEmpty | ResourceType::BucketWater
+        ) {
             abort_task_with_item(commands, ctx, world_map);
             return;
         }
@@ -105,20 +152,28 @@ fn handle_going_to_bucket(
         ) {
             return;
         }
-        
-        // ソース取得記録 
-        ctx.queue_reservation(crate::events::ResourceReservationOp::RecordPickedSource { source: bucket_entity, amount: 1 });
+
+        // ソース取得記録
+        ctx.queue_reservation(crate::events::ResourceReservationOp::RecordPickedSource {
+            source: bucket_entity,
+            amount: 1,
+        });
 
         // もしアイテムが備蓄場所にあったなら、その備蓄場所の型管理を更新する
         if let Some(stored_in) = stored_in_entity {
             let q_stockpiles = &mut ctx.queries.storage.stockpiles;
-            crate::systems::soul_ai::task_execution::common::update_stockpile_on_item_removal(stored_in, q_stockpiles);
+            crate::systems::soul_ai::task_execution::common::update_stockpile_on_item_removal(
+                stored_in,
+                q_stockpiles,
+            );
         }
         let is_already_full = res_type == Some(ResourceType::BucketWater);
 
         if is_already_full {
             // 既に満タンならタンクへ
-            if let Ok((tank_transform, _, _, _, _, _)) = ctx.queries.designation.targets.get(tank_entity) {
+            if let Ok((tank_transform, _, _, _, _, _)) =
+                ctx.queries.designation.targets.get(tank_entity)
+            {
                 let tank_pos = tank_transform.translation.truncate();
                 let (cx, cy) = WorldMap::world_to_grid(tank_pos);
                 let tank_grids = vec![(cx - 1, cy - 1), (cx, cy - 1), (cx - 1, cy), (cx, cy)];
@@ -127,17 +182,22 @@ fn handle_going_to_bucket(
                     world_map,
                     ctx.pf_context,
                     WorldMap::world_to_grid(ctx.soul_transform.translation.truncate()),
-                    &tank_grids
+                    &tank_grids,
                 ) {
-                    *ctx.task = AssignedTask::GatherWater(crate::systems::soul_ai::task_execution::types::GatherWaterData {
-                        bucket: bucket_entity,
-                        tank: tank_entity,
-                        phase: GatherWaterPhase::GoingToTank,
-                    });
+                    *ctx.task = AssignedTask::GatherWater(
+                        crate::systems::soul_ai::task_execution::types::GatherWaterData {
+                            bucket: bucket_entity,
+                            tank: tank_entity,
+                            phase: GatherWaterPhase::GoingToTank,
+                        },
+                    );
                     if let Some(last_grid) = path.last() {
                         ctx.dest.0 = WorldMap::grid_to_world(last_grid.0, last_grid.1);
                     }
-                    ctx.path.waypoints = path.iter().map(|&(x, y)| WorldMap::grid_to_world(x, y)).collect();
+                    ctx.path.waypoints = path
+                        .iter()
+                        .map(|&(x, y)| WorldMap::grid_to_world(x, y))
+                        .collect();
                     ctx.path.current_index = 0;
                     return;
                 }
@@ -145,19 +205,23 @@ fn handle_going_to_bucket(
         }
 
         // 次のフェーズへ：川へ
-        if let Some(river_grid) = world_map.get_nearest_river_grid(ctx.soul_transform.translation.truncate()) {
+        if let Some(river_grid) =
+            world_map.get_nearest_river_grid(ctx.soul_transform.translation.truncate())
+        {
             // 経路探索を実行
             if let Some(path) = crate::world::pathfinding::find_path_to_adjacent(
                 world_map,
                 ctx.pf_context,
                 WorldMap::world_to_grid(ctx.soul_transform.translation.truncate()),
-                river_grid
+                river_grid,
             ) {
-                *ctx.task = AssignedTask::GatherWater(crate::systems::soul_ai::task_execution::types::GatherWaterData {
-                    bucket: bucket_entity,
-                    tank: tank_entity,
-                    phase: GatherWaterPhase::GoingToRiver,
-                });
+                *ctx.task = AssignedTask::GatherWater(
+                    crate::systems::soul_ai::task_execution::types::GatherWaterData {
+                        bucket: bucket_entity,
+                        tank: tank_entity,
+                        phase: GatherWaterPhase::GoingToRiver,
+                    },
+                );
 
                 // パスの最後の地点を目的地とする
                 if let Some(last_grid) = path.last() {
@@ -168,7 +232,8 @@ fn handle_going_to_bucket(
                     ctx.dest.0 = ctx.soul_transform.translation.truncate();
                 }
 
-                ctx.path.waypoints = path.iter()
+                ctx.path.waypoints = path
+                    .iter()
                     .map(|&(x, y)| WorldMap::grid_to_world(x, y))
                     .collect();
                 ctx.path.current_index = 0;
@@ -188,7 +253,7 @@ fn handle_going_to_bucket(
                 world_map,
                 ctx.pf_context,
                 WorldMap::world_to_grid(ctx.soul_transform.translation.truncate()),
-                &vec![bucket_grid]
+                &vec![bucket_grid],
             ) {
                 if let Some(last_grid) = path.last() {
                     let last_pos = WorldMap::grid_to_world(last_grid.0, last_grid.1);
@@ -196,7 +261,8 @@ fn handle_going_to_bucket(
                 } else {
                     ctx.dest.0 = bucket_pos;
                 }
-                ctx.path.waypoints = path.iter()
+                ctx.path.waypoints = path
+                    .iter()
                     .map(|&(x, y)| WorldMap::grid_to_world(x, y))
                     .collect();
                 ctx.path.current_index = 0;
@@ -220,12 +286,21 @@ fn handle_going_to_river(
     // バケツがインベントリにあるか確認
     if ctx.inventory.0 != Some(bucket_entity) {
         // バケツを持っていないのでタスクを中断（ドロップ処理なし）
-        warn!("GoingToRiver: Bucket not in inventory, aborting task for soul {:?}", ctx.soul_entity);
+        warn!(
+            "GoingToRiver: Bucket not in inventory, aborting task for soul {:?}",
+            ctx.soul_entity
+        );
         abort_task_without_item(commands, ctx, world_map);
         return;
     }
 
-    if ctx.soul_transform.translation.truncate().distance(ctx.dest.0) < 30.0 {
+    if ctx
+        .soul_transform
+        .translation
+        .truncate()
+        .distance(ctx.dest.0)
+        < 30.0
+    {
         // タンクが満タンかチェック
         let is_tank_full = {
             let q_stockpiles = &mut ctx.queries.storage.stockpiles;
@@ -242,11 +317,13 @@ fn handle_going_to_river(
         }
 
         // 水を汲むフェーズへ
-        *ctx.task = AssignedTask::GatherWater(crate::systems::soul_ai::task_execution::types::GatherWaterData {
-            bucket: bucket_entity,
-            tank: tank_entity,
-            phase: GatherWaterPhase::Filling { progress: 0.0 },
-        });
+        *ctx.task = AssignedTask::GatherWater(
+            crate::systems::soul_ai::task_execution::types::GatherWaterData {
+                bucket: bucket_entity,
+                tank: tank_entity,
+                phase: GatherWaterPhase::Filling { progress: 0.0 },
+            },
+        );
     }
 }
 
@@ -265,7 +342,10 @@ fn handle_filling(
     // バケツがインベントリにあるか確認
     if ctx.inventory.0 != Some(bucket_entity) {
         // バケツを持っていないのでタスクを中断（ドロップ処理なし）
-        warn!("Filling: Bucket not in inventory, aborting task for soul {:?}", ctx.soul_entity);
+        warn!(
+            "Filling: Bucket not in inventory, aborting task for soul {:?}",
+            ctx.soul_entity
+        );
         abort_task_without_item(commands, ctx, world_map);
         return;
     }
@@ -280,7 +360,7 @@ fn handle_filling(
                 image: game_assets.bucket_water.clone(),
                 custom_size: Some(Vec2::splat(crate::constants::TILE_SIZE * 0.6)),
                 ..default()
-            }
+            },
         ));
 
         // タンクへ
@@ -290,24 +370,21 @@ fn handle_filling(
             // タンクの占有グリッドを計算 (2x2)
             let (cx, cy) = WorldMap::world_to_grid(tank_pos);
             // タンク中心座標が(cx, cy)の場合、占有領域は (cx-1, cy-1) などを基準とした2x2
-            let tank_grids = vec![
-                (cx - 1, cy - 1),
-                (cx, cy - 1),
-                (cx - 1, cy),
-                (cx, cy),
-            ];
+            let tank_grids = vec![(cx - 1, cy - 1), (cx, cy - 1), (cx - 1, cy), (cx, cy)];
 
             if let Some(path) = crate::world::pathfinding::find_path_to_boundary(
                 world_map,
                 ctx.pf_context,
                 WorldMap::world_to_grid(ctx.soul_transform.translation.truncate()),
-                &tank_grids
+                &tank_grids,
             ) {
-                *ctx.task = AssignedTask::GatherWater(crate::systems::soul_ai::task_execution::types::GatherWaterData {
-                    bucket: bucket_entity,
-                    tank: tank_entity,
-                    phase: GatherWaterPhase::GoingToTank,
-                });
+                *ctx.task = AssignedTask::GatherWater(
+                    crate::systems::soul_ai::task_execution::types::GatherWaterData {
+                        bucket: bucket_entity,
+                        tank: tank_entity,
+                        phase: GatherWaterPhase::GoingToTank,
+                    },
+                );
 
                 if let Some(last_grid) = path.last() {
                     let last_pos = WorldMap::grid_to_world(last_grid.0, last_grid.1);
@@ -316,7 +393,8 @@ fn handle_filling(
                     ctx.dest.0 = tank_pos; // フォールバック
                 }
 
-                ctx.path.waypoints = path.iter()
+                ctx.path.waypoints = path
+                    .iter()
                     .map(|&(x, y)| WorldMap::grid_to_world(x, y))
                     .collect();
                 ctx.path.current_index = 0;
@@ -327,11 +405,15 @@ fn handle_filling(
             abort_task_with_item(commands, ctx, world_map);
         }
     } else {
-        *ctx.task = AssignedTask::GatherWater(crate::systems::soul_ai::task_execution::types::GatherWaterData {
-            bucket: bucket_entity,
-            tank: tank_entity,
-            phase: GatherWaterPhase::Filling { progress: new_progress },
-        });
+        *ctx.task = AssignedTask::GatherWater(
+            crate::systems::soul_ai::task_execution::types::GatherWaterData {
+                bucket: bucket_entity,
+                tank: tank_entity,
+                phase: GatherWaterPhase::Filling {
+                    progress: new_progress,
+                },
+            },
+        );
     }
 }
 
@@ -347,7 +429,10 @@ fn handle_going_to_tank(
     // バケツがインベントリにあるか確認
     if ctx.inventory.0 != Some(bucket_entity) {
         // バケツを持っていないのでタスクを中断（ドロップ処理なし）
-        warn!("GoingToTank: Bucket not in inventory, aborting task for soul {:?}", ctx.soul_entity);
+        warn!(
+            "GoingToTank: Bucket not in inventory, aborting task for soul {:?}",
+            ctx.soul_entity
+        );
         abort_task_without_item(commands, ctx, world_map);
         return;
     }
@@ -367,12 +452,21 @@ fn handle_going_to_tank(
         return;
     }
 
-    if ctx.soul_transform.translation.truncate().distance(ctx.dest.0) < 60.0 { // 2x2なので少し広めに (2タイル分=64.0未満)
-        *ctx.task = AssignedTask::GatherWater(crate::systems::soul_ai::task_execution::types::GatherWaterData {
-            bucket: bucket_entity,
-            tank: tank_entity,
-            phase: GatherWaterPhase::Pouring { progress: 0.0 },
-        });
+    if ctx
+        .soul_transform
+        .translation
+        .truncate()
+        .distance(ctx.dest.0)
+        < 60.0
+    {
+        // 2x2なので少し広めに (2タイル分=64.0未満)
+        *ctx.task = AssignedTask::GatherWater(
+            crate::systems::soul_ai::task_execution::types::GatherWaterData {
+                bucket: bucket_entity,
+                tank: tank_entity,
+                phase: GatherWaterPhase::Pouring { progress: 0.0 },
+            },
+        );
     }
 }
 
@@ -390,7 +484,10 @@ fn handle_pouring(
     // バケツがインベントリにあるか確認
     if ctx.inventory.0 != Some(bucket_entity) {
         // バケツを持っていないのでタスクを中断（ドロップ処理なし）
-        warn!("Pouring: Bucket not in inventory, aborting task for soul {:?}", ctx.soul_entity);
+        warn!(
+            "Pouring: Bucket not in inventory, aborting task for soul {:?}",
+            ctx.soul_entity
+        );
         abort_task_without_item(commands, ctx, world_map);
         return;
     }
@@ -399,7 +496,9 @@ fn handle_pouring(
     let new_progress = progress + time_delta * 1.0; // 1秒で注ぐ
     if new_progress >= 1.0 {
         // 注ぎ完了！バケツを空に戻す
-        commands.entity(bucket_entity).insert(ResourceItem(ResourceType::BucketEmpty));
+        commands
+            .entity(bucket_entity)
+            .insert(ResourceItem(ResourceType::BucketEmpty));
         commands.entity(bucket_entity).insert(Sprite {
             image: game_assets.bucket_empty.clone(),
             custom_size: Some(Vec2::splat(crate::constants::TILE_SIZE * 0.6)),
@@ -419,10 +518,14 @@ fn handle_pouring(
         // オートホールシステムがバケツをバケツ置き場に戻す
         drop_bucket_for_auto_haul(commands, ctx, bucket_entity, tank_entity, world_map);
     } else {
-        *ctx.task = AssignedTask::GatherWater(crate::systems::soul_ai::task_execution::types::GatherWaterData {
-            bucket: bucket_entity,
-            tank: tank_entity,
-            phase: GatherWaterPhase::Pouring { progress: new_progress },
-        });
+        *ctx.task = AssignedTask::GatherWater(
+            crate::systems::soul_ai::task_execution::types::GatherWaterData {
+                bucket: bucket_entity,
+                tank: tank_entity,
+                phase: GatherWaterPhase::Pouring {
+                    progress: new_progress,
+                },
+            },
+        );
     }
 }

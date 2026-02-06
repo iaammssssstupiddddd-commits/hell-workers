@@ -1,11 +1,11 @@
 //! 運搬タスクの実行処理（ストックパイルへ）
 
 use crate::relationships::WorkingOn;
+use crate::systems::soul_ai::task_execution::common::*;
 use crate::systems::soul_ai::task_execution::{
     context::TaskExecutionContext,
     types::{AssignedTask, HaulPhase},
 };
-use crate::systems::soul_ai::task_execution::common::*;
 use crate::systems::soul_ai::work::unassign_task;
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
@@ -30,20 +30,44 @@ pub fn handle_haul_task(
             {
                 // 指示がキャンセルされていないか確認
                 if cancel_task_if_designation_missing(des_opt, ctx.task, ctx.path) {
-                    ctx.queue_reservation(crate::events::ResourceReservationOp::ReleaseDestination { target: stockpile });
-                    ctx.queue_reservation(crate::events::ResourceReservationOp::ReleaseSource { source: item, amount: 1 });
+                    ctx.queue_reservation(
+                        crate::events::ResourceReservationOp::ReleaseDestination {
+                            target: stockpile,
+                        },
+                    );
+                    ctx.queue_reservation(crate::events::ResourceReservationOp::ReleaseSource {
+                        source: item,
+                        amount: 1,
+                    });
                     return;
                 }
 
                 let res_pos = res_transform.translation.truncate();
                 // アイテムが障害物の上にある可能性があるため、隣接マスを目的地として設定
-                let reachable = update_destination_to_adjacent(ctx.dest, res_pos, ctx.path, soul_pos, world_map, ctx.pf_context);
+                let reachable = update_destination_to_adjacent(
+                    ctx.dest,
+                    res_pos,
+                    ctx.path,
+                    soul_pos,
+                    world_map,
+                    ctx.pf_context,
+                );
 
                 if !reachable {
                     // 到達不能: タスクをキャンセル
-                    info!("HAUL: Soul {:?} cannot reach item {:?}, canceling", ctx.soul_entity, item);
-                    ctx.queue_reservation(crate::events::ResourceReservationOp::ReleaseDestination { target: stockpile });
-                    ctx.queue_reservation(crate::events::ResourceReservationOp::ReleaseSource { source: item, amount: 1 });
+                    info!(
+                        "HAUL: Soul {:?} cannot reach item {:?}, canceling",
+                        ctx.soul_entity, item
+                    );
+                    ctx.queue_reservation(
+                        crate::events::ResourceReservationOp::ReleaseDestination {
+                            target: stockpile,
+                        },
+                    );
+                    ctx.queue_reservation(crate::events::ResourceReservationOp::ReleaseSource {
+                        source: item,
+                        amount: 1,
+                    });
                     clear_task_and_path(ctx.task, ctx.path);
                     return;
                 }
@@ -83,19 +107,31 @@ pub fn handle_haul_task(
                         update_destination_if_needed(ctx.dest, stock_dest, ctx.path);
                     }
 
-                    *ctx.task = AssignedTask::Haul(crate::systems::soul_ai::task_execution::types::HaulData {
-                        item,
-                        stockpile,
-                        phase: HaulPhase::GoingToStockpile,
-                    });
-                     // ソース予約解放と取得記録 (Delta Update)
-                    ctx.queue_reservation(crate::events::ResourceReservationOp::RecordPickedSource { source: item, amount: 1 });
+                    *ctx.task = AssignedTask::Haul(
+                        crate::systems::soul_ai::task_execution::types::HaulData {
+                            item,
+                            stockpile,
+                            phase: HaulPhase::GoingToStockpile,
+                        },
+                    );
+                    // ソース予約解放と取得記録 (Delta Update)
+                    ctx.queue_reservation(
+                        crate::events::ResourceReservationOp::RecordPickedSource {
+                            source: item,
+                            amount: 1,
+                        },
+                    );
                     info!("HAUL: Soul {:?} picked up item {:?}", ctx.soul_entity, item);
                 }
             } else {
                 clear_task_and_path(ctx.task, ctx.path);
-                ctx.queue_reservation(crate::events::ResourceReservationOp::ReleaseDestination { target: stockpile });
-                ctx.queue_reservation(crate::events::ResourceReservationOp::ReleaseSource { source: item, amount: 1 });
+                ctx.queue_reservation(crate::events::ResourceReservationOp::ReleaseDestination {
+                    target: stockpile,
+                });
+                ctx.queue_reservation(crate::events::ResourceReservationOp::ReleaseSource {
+                    source: item,
+                    amount: 1,
+                });
             }
         }
         HaulPhase::GoingToStockpile => {
@@ -106,11 +142,13 @@ pub fn handle_haul_task(
                 update_destination_if_needed(ctx.dest, stock_dest, ctx.path);
 
                 if is_near_target(soul_pos, stock_pos) {
-                    *ctx.task = AssignedTask::Haul(crate::systems::soul_ai::task_execution::types::HaulData {
-                        item,
-                        stockpile,
-                        phase: HaulPhase::Dropping,
-                    });
+                    *ctx.task = AssignedTask::Haul(
+                        crate::systems::soul_ai::task_execution::types::HaulData {
+                            item,
+                            stockpile,
+                            phase: HaulPhase::Dropping,
+                        },
+                    );
                     ctx.path.waypoints.clear();
                 }
             } else {
@@ -127,7 +165,9 @@ pub fn handle_haul_task(
                 commands.entity(ctx.soul_entity).remove::<WorkingOn>();
                 commands.entity(ctx.soul_entity).remove::<WorkingOn>();
                 clear_task_and_path(ctx.task, ctx.path);
-                ctx.queue_reservation(crate::events::ResourceReservationOp::ReleaseDestination { target: stockpile });
+                ctx.queue_reservation(crate::events::ResourceReservationOp::ReleaseDestination {
+                    target: stockpile,
+                });
             }
         }
         HaulPhase::Dropping => {
@@ -143,39 +183,43 @@ pub fn handle_haul_task(
                     (res_type, belongs)
                 });
                 let can_drop = if let Some((Some(res_type), item_belongs)) = item_info {
-                        // 所有権チェック
-                        let stock_belongs = q_belongs.get(stockpile).ok();
-                        let belongs_match = item_belongs == stock_belongs;
+                    // 所有権チェック
+                    let stock_belongs = q_belongs.get(stockpile).ok();
+                    let belongs_match = item_belongs == stock_belongs;
 
-                        let type_match = stockpile_comp.resource_type.is_none()
-                            || stockpile_comp.resource_type == Some(res_type);
-                            
-                        // 専用エリアの場合、型チェックを緩和（所有権が一致すれば空/満タンバケツ混在OK）
-                        let type_allowed = if stock_belongs.is_some() {
-                            belongs_match
-                        } else {
-                            type_match
-                        };
+                    let type_match = stockpile_comp.resource_type.is_none()
+                        || stockpile_comp.resource_type == Some(res_type);
 
-                        // 現在の数 + 予約分 + フレーム内増加分 < capacity
-                         let anticipated = ctx.queries.reservation.resource_cache.get_total_anticipated_count(stockpile, current_count);
-                        // ただし、自分自身の予約が含まれている（はず）。
-                        // Thinkフェーズで予約しているなら、anticipatedには自分の分(1)が含まれる。
-                        // なのでキャパシティ計算時には、その分を考慮する（つまり自分は入れるはず）。
-                        // ここで確認するのは「異常なオーバーフローがないか」程度でいいが、一応判定するなら:
-                        // anticipated <= capacity でOK（自分が最後の1個かもしれないので < ではなく <= ? いや index 0 ベースなら < だが、capacity は数か？）
-                         let capacity_ok = anticipated <= stockpile_comp.capacity;
-                        
-                        belongs_match && type_allowed && capacity_ok
+                    // 専用エリアの場合、型チェックを緩和（所有権が一致すれば空/満タンバケツ混在OK）
+                    let type_allowed = if stock_belongs.is_some() {
+                        belongs_match
                     } else {
-                        false
+                        type_match
                     };
+
+                    // 現在の数 + 予約分 + フレーム内増加分 < capacity
+                    let anticipated = ctx
+                        .queries
+                        .reservation
+                        .resource_cache
+                        .get_total_anticipated_count(stockpile, current_count);
+                    // ただし、自分自身の予約が含まれている（はず）。
+                    // Thinkフェーズで予約しているなら、anticipatedには自分の分(1)が含まれる。
+                    // なのでキャパシティ計算時には、その分を考慮する（つまり自分は入れるはず）。
+                    // ここで確認するのは「異常なオーバーフローがないか」程度でいいが、一応判定するなら:
+                    // anticipated <= capacity でOK（自分が最後の1個かもしれないので < ではなく <= ? いや index 0 ベースなら < だが、capacity は数か？）
+                    let capacity_ok = anticipated <= stockpile_comp.capacity;
+
+                    belongs_match && type_allowed && capacity_ok
+                } else {
+                    false
+                };
 
                 if can_drop {
                     // 資源タイプがNoneなら設定
                     if stockpile_comp.resource_type.is_none() {
                         if let Some((res_type, _)) = item_info {
-                             stockpile_comp.resource_type = res_type;
+                            stockpile_comp.resource_type = res_type;
                         }
                     }
 
@@ -190,12 +234,20 @@ pub fn handle_haul_task(
                         crate::systems::logistics::InStockpile(stockpile),
                     ));
                     // タスク完了: ManagedTasks を肥大化させないため、管理者を解除する
-                    commands.entity(item).remove::<crate::systems::jobs::IssuedBy>();
-                    commands.entity(item).remove::<crate::relationships::TaskWorkers>();
+                    commands
+                        .entity(item)
+                        .remove::<crate::systems::jobs::IssuedBy>();
+                    commands
+                        .entity(item)
+                        .remove::<crate::relationships::TaskWorkers>();
 
                     // カウンタを増やす
                     // Delta Update: 予約解放 + フレーム内増加
-                    ctx.queue_reservation(crate::events::ResourceReservationOp::RecordStoredDestination { target: stockpile });
+                    ctx.queue_reservation(
+                        crate::events::ResourceReservationOp::RecordStoredDestination {
+                            target: stockpile,
+                        },
+                    );
 
                     info!(
                         "TASK_EXEC: Soul {:?} dropped item at stockpile. Count ~ {}",

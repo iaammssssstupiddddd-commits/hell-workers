@@ -15,13 +15,14 @@ pub fn issue_haul_to_blueprint(
     queries: &mut crate::systems::soul_ai::task_execution::context::TaskAssignmentQueries,
     shadow: &mut ReservationShadow,
 ) {
-    let assigned_task = crate::systems::soul_ai::task_execution::types::AssignedTask::HaulToBlueprint(
-        crate::systems::soul_ai::task_execution::types::HaulToBlueprintData {
-            item: ctx.task_entity,
-            blueprint,
-            phase: HaulToBpPhase::GoingToItem,
-        },
-    );
+    let assigned_task =
+        crate::systems::soul_ai::task_execution::types::AssignedTask::HaulToBlueprint(
+            crate::systems::soul_ai::task_execution::types::HaulToBlueprintData {
+                item: ctx.task_entity,
+                blueprint,
+                phase: HaulToBpPhase::GoingToItem,
+            },
+        );
     let reservation_ops = vec![
         ResourceReservationOp::ReserveDestination { target: blueprint },
         ResourceReservationOp::ReserveSource {

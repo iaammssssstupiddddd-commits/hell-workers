@@ -12,7 +12,8 @@ pub fn find_best_stockpile_for_item(
     shadow: &ReservationShadow,
 ) -> Option<Entity> {
     queries
-        .storage.stockpiles
+        .storage
+        .stockpiles
         .iter()
         .filter(|(s_entity, s_transform, stock, stored)| {
             if let Some(area) = task_area_opt {
@@ -27,7 +28,10 @@ pub fn find_best_stockpile_for_item(
             }
 
             let is_dedicated = stock_owner.is_some();
-            let is_bucket = matches!(item_type, ResourceType::BucketEmpty | ResourceType::BucketWater);
+            let is_bucket = matches!(
+                item_type,
+                ResourceType::BucketEmpty | ResourceType::BucketWater
+            );
 
             let type_match = if is_dedicated && is_bucket {
                 true
@@ -36,7 +40,10 @@ pub fn find_best_stockpile_for_item(
             };
 
             let current_count = stored.map(|s| s.len()).unwrap_or(0);
-            let reserved = queries.reservation.resource_cache.get_destination_reservation(*s_entity)
+            let reserved = queries
+                .reservation
+                .resource_cache
+                .get_destination_reservation(*s_entity)
                 + shadow.destination_reserved(*s_entity);
             let has_capacity = (current_count + reserved) < stock.capacity as usize;
 
@@ -58,7 +65,8 @@ pub fn find_best_tank_for_bucket(
     shadow: &ReservationShadow,
 ) -> Option<Entity> {
     queries
-        .storage.stockpiles
+        .storage
+        .stockpiles
         .iter()
         .filter(|(s_entity, s_transform, stock, stored)| {
             if let Some(area) = task_area_opt {
@@ -68,11 +76,19 @@ pub fn find_best_tank_for_bucket(
             }
             let is_tank = stock.resource_type == Some(ResourceType::Water);
             let current_water = stored.map(|s| s.len()).unwrap_or(0);
-            let reserved_tank = queries.reservation.resource_cache.get_destination_reservation(*s_entity)
+            let reserved_tank = queries
+                .reservation
+                .resource_cache
+                .get_destination_reservation(*s_entity)
                 + shadow.destination_reserved(*s_entity);
             let has_capacity = (current_water + reserved_tank) < stock.capacity;
 
-            let bucket_owner = queries.designation.belongs.get(task_entity).ok().map(|b| b.0);
+            let bucket_owner = queries
+                .designation
+                .belongs
+                .get(task_entity)
+                .ok()
+                .map(|b| b.0);
             let is_my_tank = bucket_owner == Some(*s_entity);
 
             is_tank && has_capacity && is_my_tank

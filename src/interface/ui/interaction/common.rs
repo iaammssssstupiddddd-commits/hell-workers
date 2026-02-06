@@ -1,10 +1,11 @@
+use crate::interface::ui::theme::{COLOR_BUTTON_DEFAULT, COLOR_BUTTON_HOVER, COLOR_BUTTON_PRESSED};
 use bevy::prelude::*;
 
 pub(super) fn update_interaction_color(interaction: Interaction, color: &mut BackgroundColor) {
     *color = match interaction {
-        Interaction::Pressed => BackgroundColor(Color::srgb(0.5, 0.5, 0.5)),
-        Interaction::Hovered => BackgroundColor(Color::srgb(0.4, 0.4, 0.4)),
-        Interaction::None => BackgroundColor(Color::srgb(0.2, 0.2, 0.2)),
+        Interaction::Pressed => BackgroundColor(COLOR_BUTTON_PRESSED),
+        Interaction::Hovered => BackgroundColor(COLOR_BUTTON_HOVER),
+        Interaction::None => BackgroundColor(COLOR_BUTTON_DEFAULT),
     };
 }
 

@@ -8,11 +8,11 @@ use crate::entities::damned_soul::{
 };
 use crate::relationships::CommandedBy;
 // use crate::events::OnSoulRecruited;
+use crate::systems::familiar_ai::FamiliarSoulQuery;
 use crate::systems::soul_ai::gathering::ParticipatingIn;
 use crate::systems::soul_ai::task_execution::AssignedTask;
 use crate::systems::spatial::{SpatialGrid, SpatialGridOps};
 use bevy::prelude::*;
-use crate::systems::familiar_ai::FamiliarSoulQuery;
 
 /// リクルート管理ユーティリティ
 pub struct RecruitmentManager;
@@ -30,7 +30,18 @@ impl RecruitmentManager {
     ) -> Option<Entity> {
         // 候補をフィルタリングするヘルパークロージャ
         let filter_candidate = |e: Entity| -> Option<(Entity, Vec2)> {
-            let (entity, transform, soul, task, _, _, idle, _, uc, _): (Entity, &Transform, &DamnedSoul, &AssignedTask, &Destination, &Path, &IdleState, Option<&crate::systems::logistics::Inventory>, Option<&CommandedBy>, Option<&ParticipatingIn>) = q_souls.get(e).ok()?;
+            let (entity, transform, soul, task, _, _, idle, _, uc, _): (
+                Entity,
+                &Transform,
+                &DamnedSoul,
+                &AssignedTask,
+                &Destination,
+                &Path,
+                &IdleState,
+                Option<&crate::systems::logistics::Inventory>,
+                Option<&CommandedBy>,
+                Option<&ParticipatingIn>,
+            ) = q_souls.get(e).ok()?;
             let recruit_threshold = fatigue_threshold - 0.2;
             let fatigue_ok = soul.fatigue < recruit_threshold;
             let stress_ok = q_breakdown.get(entity).is_err();

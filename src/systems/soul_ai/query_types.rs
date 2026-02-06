@@ -1,6 +1,4 @@
-use crate::entities::damned_soul::{
-    DamnedSoul, Destination, IdleState, Path, StressBreakdown,
-};
+use crate::entities::damned_soul::{DamnedSoul, Destination, IdleState, Path, StressBreakdown};
 use crate::entities::familiar::Familiar;
 use crate::relationships::{CommandedBy, WorkingOn};
 use crate::systems::logistics::Inventory;

@@ -3,8 +3,8 @@
 use crate::constants::ESCAPE_STRESS_THRESHOLD;
 use crate::entities::damned_soul::{DamnedSoul, IdleBehavior, IdleState};
 use crate::entities::familiar::Familiar;
-use crate::relationships::CommandedBy;
 use crate::interface::ui::components::*;
+use crate::relationships::CommandedBy;
 use crate::systems::jobs::Blueprint;
 use crate::systems::soul_ai::idle::escaping::is_escape_threat_close;
 use crate::systems::soul_ai::task_execution::AssignedTask;
@@ -201,7 +201,9 @@ pub fn info_panel_system(
                 AssignedTask::CollectSand(data) => format!("CollectSand ({:?})", data.phase),
                 AssignedTask::Refine(data) => format!("Refine ({:?})", data.phase),
                 AssignedTask::HaulToMixer(data) => format!("HaulToMixer ({:?})", data.phase),
-                AssignedTask::HaulWaterToMixer(data) => format!("HaulWaterToMixer ({:?})", data.phase),
+                AssignedTask::HaulWaterToMixer(data) => {
+                    format!("HaulWaterToMixer ({:?})", data.phase)
+                }
             };
             if let Ok(mut t) = params.q_task.single_mut() {
                 t.0 = format!("Task: {}", task_str);
@@ -220,7 +222,11 @@ pub fn info_panel_system(
                 common.0 = format!(
                     "Idle: {:?}\nEscape: {}\n- stress_ok: {}\n- threat_close: {}\n- commanded: {}\n- exhausted: {}",
                     idle.behavior,
-                    if escape_allowed { "eligible" } else { "blocked" },
+                    if escape_allowed {
+                        "eligible"
+                    } else {
+                        "blocked"
+                    },
                     soul.stress > ESCAPE_STRESS_THRESHOLD,
                     escape_threat_close,
                     under_command.is_some(),
@@ -228,7 +234,9 @@ pub fn info_panel_system(
                 );
             }
 
-            let inv_str = if let Some(crate::systems::logistics::Inventory(Some(item_entity))) = inventory_opt {
+            let inv_str = if let Some(crate::systems::logistics::Inventory(Some(item_entity))) =
+                inventory_opt
+            {
                 if let Ok(item) = q_items.get(*item_entity) {
                     format!("Carrying: {:?}", item.0)
                 } else {

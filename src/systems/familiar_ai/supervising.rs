@@ -1,8 +1,8 @@
 use super::FamiliarAiState;
 use crate::entities::damned_soul::{Destination, Path};
+use crate::systems::familiar_ai::FamiliarSoulQuery;
 use crate::systems::soul_ai::task_execution::AssignedTask;
 use bevy::prelude::*;
-use crate::systems::familiar_ai::FamiliarSoulQuery;
 
 use crate::constants::TILE_SIZE;
 use crate::systems::command::TaskArea;

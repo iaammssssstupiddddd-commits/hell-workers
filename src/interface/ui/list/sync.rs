@@ -71,7 +71,11 @@ fn sync_familiar_sections(
                 };
             }
             super::helpers::sync_familiar_section_content(
-                commands, q_children, familiar, nodes, game_assets,
+                commands,
+                q_children,
+                familiar,
+                nodes,
+                game_assets,
             );
         }
     }

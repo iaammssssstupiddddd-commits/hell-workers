@@ -1,14 +1,17 @@
-use bevy::prelude::*;
 use crate::assets::GameAssets;
-use crate::systems::jobs::{Building, Blueprint, BuildingType};
+use crate::systems::jobs::{Blueprint, Building, BuildingType};
 use crate::world::map::WorldMap;
+use bevy::prelude::*;
 use std::collections::HashSet;
 
 pub struct WallConnectionPlugin;
 
 impl Plugin for WallConnectionPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, wall_connections_system.in_set(crate::systems::GameSystemSet::Visual));
+        app.add_systems(
+            Update,
+            wall_connections_system.in_set(crate::systems::GameSystemSet::Visual),
+        );
     }
 }
 
@@ -21,7 +24,10 @@ fn wall_connections_system(
     q_new_buildings: Query<(Entity, &Transform, &Building), Added<Building>>,
     q_new_blueprints: Query<(Entity, &Transform, &Blueprint), Added<Blueprint>>,
     // 状態チェック用クエリ（Spriteを含まない）
-    q_walls_check: Query<(Option<&Building>, Option<&Blueprint>), Or<(With<Building>, With<Blueprint>)>>,
+    q_walls_check: Query<
+        (Option<&Building>, Option<&Blueprint>),
+        Or<(With<Building>, With<Blueprint>)>,
+    >,
     // スプライト更新用クエリ
     mut q_sprites: Query<&mut Sprite>,
 ) {
@@ -55,7 +61,14 @@ fn wall_connections_system(
         if let Some(&entity) = world_map.buildings.get(&(gx, gy)) {
             if is_wall(gx, gy, &world_map, &q_walls_check) {
                 if let Ok(mut sprite) = q_sprites.get_mut(entity) {
-                    update_wall_sprite(gx, gy, &mut sprite, &world_map, &q_walls_check, &game_assets);
+                    update_wall_sprite(
+                        gx,
+                        gy,
+                        &mut sprite,
+                        &world_map,
+                        &q_walls_check,
+                        &game_assets,
+                    );
                 }
             }
         }
@@ -77,7 +90,10 @@ fn update_wall_sprite(
     y: i32,
     sprite: &mut Sprite,
     world_map: &WorldMap,
-    q_walls_check: &Query<(Option<&Building>, Option<&Blueprint>), Or<(With<Building>, With<Blueprint>)>>,
+    q_walls_check: &Query<
+        (Option<&Building>, Option<&Blueprint>),
+        Or<(With<Building>, With<Blueprint>)>,
+    >,
     game_assets: &GameAssets,
 ) {
     // Check connections
@@ -89,17 +105,17 @@ fn update_wall_sprite(
     let (texture, flip_x, flip_y) = match (up, down, left, right) {
         // No connections
         (false, false, false, false) => (game_assets.wall_isolated.clone(), false, false),
-        
+
         // Horizontal
         (false, false, true, false) => (game_assets.wall_horizontal_left.clone(), false, false),
         (false, false, false, true) => (game_assets.wall_horizontal_right.clone(), false, false),
         (false, false, true, true) => (game_assets.wall_horizontal_both.clone(), false, false),
-        
+
         // Vertical
         (true, false, false, false) => (game_assets.wall_vertical_top.clone(), false, false),
         (false, true, false, false) => (game_assets.wall_vertical_bottom.clone(), false, false),
         (true, true, false, false) => (game_assets.wall_vertical_both.clone(), false, false),
-        
+
         // Corners
         // Top-Left (Up & Left)
         (true, false, true, false) => (game_assets.wall_corner_top_left.clone(), false, false),
@@ -131,10 +147,13 @@ fn update_wall_sprite(
 
 /// 座標(x, y)に「壁」または「壁の設計図」があるか確認
 fn is_wall(
-    x: i32, 
-    y: i32, 
+    x: i32,
+    y: i32,
     world_map: &WorldMap,
-    q_walls_check: &Query<(Option<&Building>, Option<&Blueprint>), Or<(With<Building>, With<Blueprint>)>>
+    q_walls_check: &Query<
+        (Option<&Building>, Option<&Blueprint>),
+        Or<(With<Building>, With<Blueprint>)>,
+    >,
 ) -> bool {
     if let Some(&entity) = world_map.buildings.get(&(x, y)) {
         if let Ok((building_opt, blueprint_opt)) = q_walls_check.get(entity) {
