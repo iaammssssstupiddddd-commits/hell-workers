@@ -67,6 +67,7 @@ impl Plugin for InterfacePlugin {
                 debug_spawn_system,
                 crate::interface::ui::entity_list_interaction_system,
                 crate::interface::ui::entity_list_visual_feedback_system,
+                crate::interface::ui::entity_list_scroll_system,
                 crate::interface::ui::update_unassigned_arrow_icon_system,
             )
                 .in_set(GameSystemSet::Interface),
