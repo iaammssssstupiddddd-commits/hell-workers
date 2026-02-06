@@ -1,11 +1,7 @@
-use crate::entities::damned_soul::{Destination, Path, StressBreakdown};
-use crate::entities::familiar::{
-    ActiveCommand, Familiar, FamiliarCommand, FamiliarOperation, FamiliarVoice,
-};
-use crate::relationships::{Commanding, ManagedTasks};
+use crate::entities::damned_soul::StressBreakdown;
+use crate::entities::familiar::FamiliarCommand;
 use crate::systems::GameSystemSet;
 use crate::systems::soul_ai::scheduling::FamiliarAiSystemSet;
-use crate::systems::command::TaskArea;
 use crate::systems::spatial::{
     DesignationSpatialGrid, SpatialGrid,
 };
@@ -34,7 +30,7 @@ use familiar_processor::{
     process_task_delegation_and_movement,
 };
 use state_transition::determine_transition_reason;
-pub use query_types::FamiliarSoulQuery;
+pub use query_types::{FamiliarSoulQuery, FamiliarStateQuery, FamiliarTaskQuery};
 
 /// 使い魔のAI状態
 #[derive(Component, Debug, Clone, PartialEq, Reflect)]
@@ -145,24 +141,7 @@ pub struct FamiliarAiParams<'w, 's> {
     pub commands: Commands<'w, 's>,
     pub time: Res<'w, Time>,
     pub spatial_grid: Res<'w, SpatialGrid>,
-    pub q_familiars: Query<
-        'w,
-        's,
-        (
-            Entity,
-            &'static Transform,
-            &'static Familiar,
-            &'static FamiliarOperation,
-            &'static ActiveCommand,
-            &'static mut FamiliarAiState,
-            &'static mut Destination,
-            &'static mut Path,
-            Option<&'static TaskArea>,
-            Option<&'static Commanding>,
-            Option<&'static FamiliarVoice>,
-            Option<&'static mut crate::systems::visual::speech::cooldown::SpeechHistory>,
-        ),
-    >,
+    pub q_familiars: FamiliarStateQuery<'w, 's>,
     pub q_souls: FamiliarSoulQuery<'w, 's>,
     pub q_breakdown: Query<'w, 's, &'static StressBreakdown>,
     // resource_cache removed (included in task_queries)
@@ -177,23 +156,7 @@ pub struct FamiliarAiParams<'w, 's> {
 pub struct FamiliarAiTaskParams<'w, 's> {
     pub commands: Commands<'w, 's>,
     pub time: Res<'w, Time>,
-    pub q_familiars: Query<
-        'w,
-        's,
-        (
-            Entity,
-            &'static Transform,
-            &'static FamiliarOperation,
-            &'static ActiveCommand,
-            &'static mut FamiliarAiState,
-            &'static mut Destination,
-            &'static mut Path,
-            Option<&'static TaskArea>,
-            Option<&'static Commanding>,
-            Option<&'static ManagedTasks>,
-        ),
-        With<Familiar>,
-    >,
+    pub q_familiars: FamiliarTaskQuery<'w, 's>,
     pub q_souls: FamiliarSoulQuery<'w, 's>,
     pub task_queries: crate::systems::soul_ai::task_execution::context::TaskAssignmentQueries<'w, 's>,
     pub designation_grid: Res<'w, DesignationSpatialGrid>,
@@ -233,57 +196,15 @@ pub fn familiar_ai_state_system(params: FamiliarAiParams) {
         familiar,
         familiar_op,
         active_command,
-        ai_state,
-        fam_dest,
-        fam_path,
+        mut ai_state,
+        mut fam_dest,
+        mut fam_path,
         task_area_opt,
         commanding,
         voice_opt,
-        history_opt,
+        mut history_opt,
     ) in q_familiars.iter_mut()
     {
-        #[allow(clippy::type_complexity)]
-        let (
-            fam_entity,
-            fam_transform,
-            familiar,
-            familiar_op,
-            active_command,
-            mut ai_state,
-            mut fam_dest,
-            mut fam_path,
-            task_area_opt,
-            commanding,
-            voice_opt,
-            mut history_opt,
-        ): (
-            Entity,
-            &Transform,
-            &Familiar,
-            &FamiliarOperation,
-            &ActiveCommand,
-            Mut<FamiliarAiState>,
-            Mut<Destination>,
-            Mut<Path>,
-            Option<&TaskArea>,
-            Option<&Commanding>,
-            Option<&FamiliarVoice>,
-            Option<Mut<crate::systems::visual::speech::cooldown::SpeechHistory>>,
-        ) = (
-            fam_entity,
-            fam_transform,
-            familiar,
-            familiar_op,
-            active_command,
-            ai_state,
-            fam_dest,
-            fam_path,
-            task_area_opt,
-            commanding,
-            voice_opt,
-            history_opt,
-        );
-
         // 個別の使い魔の処理開始ログ
         debug!(
             "FAM_AI: {:?} Processing. Command: {:?}, State: {:?}, Area: {}",

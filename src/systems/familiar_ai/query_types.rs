@@ -1,7 +1,13 @@
 use crate::entities::damned_soul::{DamnedSoul, Destination, IdleState, Path};
-use crate::relationships::CommandedBy;
+use crate::entities::familiar::{
+    ActiveCommand, Familiar, FamiliarOperation, FamiliarVoice,
+};
+use crate::relationships::{CommandedBy, Commanding, ManagedTasks};
+use crate::systems::command::TaskArea;
 use crate::systems::soul_ai::gathering::ParticipatingIn;
 use crate::systems::soul_ai::task_execution::AssignedTask;
+use crate::systems::visual::speech::cooldown::SpeechHistory;
+use super::FamiliarAiState;
 use bevy::prelude::*;
 
 /// 使い魔AIが扱うソウルの標準クエリ型
@@ -23,4 +29,43 @@ pub type FamiliarSoulQuery<'w, 's> = Query<
         Option<&'static ParticipatingIn>,
     ),
     Without<crate::entities::familiar::Familiar>,
+>;
+
+/// 使い魔AI状態システム用クエリ型（FamiliarAiParams用）
+pub type FamiliarStateQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static Transform,
+        &'static Familiar,
+        &'static FamiliarOperation,
+        &'static ActiveCommand,
+        &'static mut FamiliarAiState,
+        &'static mut Destination,
+        &'static mut Path,
+        Option<&'static TaskArea>,
+        Option<&'static Commanding>,
+        Option<&'static FamiliarVoice>,
+        Option<&'static mut SpeechHistory>,
+    ),
+>;
+
+/// 使い魔AIタスク委譲システム用クエリ型（FamiliarAiTaskParams用）
+pub type FamiliarTaskQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static Transform,
+        &'static FamiliarOperation,
+        &'static ActiveCommand,
+        &'static mut FamiliarAiState,
+        &'static mut Destination,
+        &'static mut Path,
+        Option<&'static TaskArea>,
+        Option<&'static Commanding>,
+        Option<&'static ManagedTasks>,
+    ),
+    With<Familiar>,
 >;

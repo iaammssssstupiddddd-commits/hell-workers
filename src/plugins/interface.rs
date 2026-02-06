@@ -29,6 +29,8 @@ impl Plugin for InterfacePlugin {
     fn build(&self, app: &mut App) {
         app.register_type::<crate::interface::ui::SectionFolded>();
         app.register_type::<crate::interface::ui::UnassignedFolded>();
+        app.init_resource::<crate::interface::ui::EntityListViewModel>();
+        app.init_resource::<crate::interface::ui::EntityListNodeIndex>();
         app.add_systems(
             Update,
             (
@@ -72,8 +74,10 @@ impl Plugin for InterfacePlugin {
         .add_systems(
             Update,
             (
-                crate::interface::ui::rebuild_entity_list_system,
+                crate::interface::ui::build_entity_list_view_model_system,
+                crate::interface::ui::sync_entity_list_from_view_model_system,
             )
+                .chain()
                 .run_if(on_timer(Duration::from_millis(100)))
                 .in_set(GameSystemSet::Interface),
         );
