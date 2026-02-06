@@ -132,7 +132,8 @@ pub enum WorkType {
     Chop, // 伐採
     Mine,  // 採掘
     Build, // 建築
-    Haul,  // 運搬
+    Haul,  // 運搬（Stockpile行き）
+    HaulToMixer, // 固体原料（Sand/Rock）をミキサーへ運ぶ
     GatherWater, // 水汲み
     CollectSand, // 砂採取
     Refine,      // 精製

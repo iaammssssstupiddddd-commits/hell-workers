@@ -61,8 +61,43 @@ Hell-Workers における資源の備蓄、運搬、および管理の仕組み�
     - **要件**: エリア内に水が入った `Tank`（貯水槽）が存在すること。
     - 川から直接ではなく、**Tankからバケツで水を汲んで** 運びます。
     - タスク `HaulWaterToMixer` が自動発行されます。
+    - 水量はタスク数 × `BUCKET_CAPACITY` で計算されます。
 - **満杯時の制御**:
     - ミキサーが満杯になった場合、搬送中のタスクは即座にキャンセルされ、アイテムは適切に処分（Sandは消去、他はドロップ）されます。
+
+## 6. 競合回避システム (Contention Avoidance)
+
+自動発行システムが過剰にタスクを発行しないよう、`SharedResourceCache` と `sync_reservations_system` で予約を一元管理しています。
+
+### 6.1. 予約の再構築
+`sync_reservations_system` は毎フレーム以下の2つのソースから予約を再構築します:
+
+1. **`AssignedTask`** - 既にSoulに割り当てられているタスク
+2. **`Designation` (Without<TaskWorkers>)** - まだ割り当て待ちのタスク候補
+
+### 6.2. Designation からの予約カウント
+`Designation` を持つエンティティは、付随するコンポーネントによって適切な予約にカウントされます:
+
+| WorkType | 条件 | 予約先 |
+| :--- | :--- | :--- |
+| `Haul` | `TargetBlueprint` あり | `destination_reservations` |
+| `HaulToMixer` | `TargetMixer` + `ResourceItem` あり | `mixer_dest_reservations` |
+| `HaulWaterToMixer` | `TargetMixer` あり | `mixer_dest_reservations` (Water) |
+| `GatherWater` | `BelongsTo` あり | `destination_reservations` |
+
+### 6.3. 自動発行システムのフィルタリング
+各自動発行システムは、以下の方法で重複を防いでいます:
+
+- **`Without<Designation>`**: 既にタスクが付与されているアイテムをクエリから除外
+  - `task_area_auto_haul_system`, `blueprint_auto_haul_system`, `bucket_auto_haul_system`
+- **`SharedResourceCache` 参照**: 予約数を確認して容量超過を防止
+  - `mud_mixer_auto_haul_system`, `tank_water_request_system`
+
+### 6.4. 拡張性
+新しい自動発行システムを追加する場合:
+1. `sync_reservations_system` の `match designation.work_type` に新しい `WorkType` を追加
+2. 必要なターゲットコンポーネント（例: `TargetFurnace`）をクエリに追加
+3. 適切な予約カテゴリにカウントを追加
 
 
 ## 4. 備蓄からの利用 (Retrieval)

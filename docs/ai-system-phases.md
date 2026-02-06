@@ -80,6 +80,15 @@ pub enum SoulAiSystemSet {
 - sync_reservations_system       // リソース予約キャッシュの再構築
 ```
 
+**sync_reservations_system の詳細**:
+
+リソース予約の再構築は以下の2つのソースから行われます:
+
+1. **`AssignedTask`** - 既にSoulに割り当てられているタスク
+2. **`Designation` (Without<TaskWorkers>)** - まだ割り当て待ちのタスク候補
+
+`Designation` からの予約は、付随するコンポーネント（`TargetMixer`, `TargetBlueprint`, `BelongsTo`）と `WorkType` に基づいて適切な予約カテゴリにカウントされます。これにより、自動発行システムが複数フレームにわたって過剰にタスクを発行することを防ぎます。
+
 ### Update（更新）
 
 **責任**: 時間経過による内部状態の変化

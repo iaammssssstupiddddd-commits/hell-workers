@@ -72,16 +72,18 @@ pub fn find_unassigned_task_in_area(
 
             let is_managed_by_me = managed_tasks.contains(entity);
             let is_unassigned = issued_by.is_none();
+            let is_issued_by_me = issued_by.map(|ib| ib.0) == Some(_fam_entity);
 
             // デバッグ: HaulWaterToMixerタスクの追跡
             if designation.work_type == WorkType::HaulWaterToMixer {
                 debug!(
-                    "TASK_FINDER: HaulWaterToMixer candidate {:?} - is_managed_by_me: {}, is_unassigned: {}",
-                    entity, is_managed_by_me, is_unassigned
+                    "TASK_FINDER: HaulWaterToMixer candidate {:?} - is_managed_by_me: {}, is_unassigned: {}, is_issued_by_me: {}",
+                    entity, is_managed_by_me, is_unassigned, is_issued_by_me
                 );
             }
 
-            if !is_managed_by_me && !is_unassigned {
+            // 自分が管理しているタスク、未割り当てのタスク、または自分が発行したタスクのみ対象
+            if !is_managed_by_me && !is_unassigned && !is_issued_by_me {
                 return None;
             }
 
@@ -143,7 +145,7 @@ pub fn find_unassigned_task_in_area(
 
             // 収集系は対象が実在するか追加チェック
             let is_valid = match designation.work_type {
-                WorkType::Chop | WorkType::Mine | WorkType::Haul | WorkType::GatherWater | WorkType::CollectSand | WorkType::Refine | WorkType::HaulWaterToMixer => true,
+                WorkType::Chop | WorkType::Mine | WorkType::Haul | WorkType::HaulToMixer | WorkType::GatherWater | WorkType::CollectSand | WorkType::Refine | WorkType::HaulWaterToMixer => true,
                 WorkType::Build => {
                     if let Ok((_, bp, _)) = queries.blueprints.get(entity) {
                         bp.materials_complete()

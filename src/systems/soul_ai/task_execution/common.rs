@@ -42,6 +42,8 @@ pub fn update_destination_to_adjacent(
             let dx = (last_grid.0 - target_grid.0).abs();
             let dy = (last_grid.1 - target_grid.1).abs();
             if dx <= 1 && dy <= 1 {
+                // 目的地をパスの終点に更新（is_near_target_or_destで正しく判定するため）
+                dest.0 = *last_wp;
                 return true;
             }
         }
