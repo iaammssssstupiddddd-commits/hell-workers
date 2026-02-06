@@ -19,7 +19,7 @@ pub fn handle_refine_task(
 
     match phase {
         RefinePhase::GoingToMixer => {
-            if let Ok(mixer_data) = ctx.queries.mixers.get(mixer_entity) {
+            if let Ok(mixer_data) = ctx.queries.storage.mixers.get(mixer_entity) {
                 let (mixer_transform, _, _) = mixer_data;
                 let mixer_pos = mixer_transform.translation.truncate();
                 
@@ -53,9 +53,9 @@ pub fn handle_refine_task(
         }
 
         RefinePhase::Refining { mut progress } => {
-            if let Ok(mixer_data) = ctx.queries.mixers.get_mut(mixer_entity) {
+            if let Ok(mixer_data) = ctx.queries.storage.mixers.get_mut(mixer_entity) {
                 let (mixer_transform, mut storage, _) = mixer_data;
-                let water_count = match ctx.queries.stockpiles.get(mixer_entity) {
+                let water_count = match ctx.queries.storage.stockpiles.get(mixer_entity) {
                     Ok((_, _, stockpile, Some(stored_items))) if stockpile.resource_type == Some(ResourceType::Water) => {
                         stored_items.len() as u32
                     }

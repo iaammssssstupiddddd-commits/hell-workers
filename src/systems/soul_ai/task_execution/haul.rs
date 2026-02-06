@@ -20,9 +20,9 @@ pub fn handle_haul_task(
     world_map: &Res<WorldMap>,
 ) {
     let soul_pos = ctx.soul_pos();
-    let q_targets = &ctx.queries.targets;
-    let q_stockpiles = &mut ctx.queries.stockpiles;
-    let q_belongs = &ctx.queries.belongs;
+    let q_targets = &ctx.queries.designation.targets;
+    let q_stockpiles = &mut ctx.queries.storage.stockpiles;
+    let q_belongs = &ctx.queries.designation.belongs;
     match phase {
         HaulPhase::GoingToItem => {
             if let Ok((res_transform, _, _, _res_item_opt, des_opt, stored_in_opt)) =
@@ -158,7 +158,7 @@ pub fn handle_haul_task(
                         };
 
                         // 現在の数 + 予約分 + フレーム内増加分 < capacity
-                         let anticipated = ctx.queries.resource_cache.get_total_anticipated_count(stockpile, current_count);
+                         let anticipated = ctx.queries.reservation.resource_cache.get_total_anticipated_count(stockpile, current_count);
                         // ただし、自分自身の予約が含まれている（はず）。
                         // Thinkフェーズで予約しているなら、anticipatedには自分の分(1)が含まれる。
                         // なのでキャパシティ計算時には、その分を考慮する（つまり自分は入れるはず）。
