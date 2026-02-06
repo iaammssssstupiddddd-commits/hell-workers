@@ -3,7 +3,7 @@
 use crate::interface::ui::components::*;
 use crate::interface::ui::theme::*;
 use bevy::prelude::*;
-use bevy::ui::{BackgroundGradient, ColorStop, LinearGradient};
+use bevy::ui::{BackgroundGradient, ColorStop, LinearGradient, RelativeCursorPosition};
 
 pub fn spawn_entity_list_panel(
     commands: &mut Commands,
@@ -20,7 +20,7 @@ pub fn spawn_entity_list_panel(
                 top: Val::Px(PANEL_TOP),
                 flex_direction: FlexDirection::Column,
                 padding: UiRect::all(Val::Px(PANEL_PADDING)),
-                overflow: Overflow::scroll_y(),
+                overflow: Overflow::clip_y(),
                 ..default()
             },
             BackgroundGradient::from(LinearGradient {
@@ -31,6 +31,7 @@ pub fn spawn_entity_list_panel(
                 ],
                 ..default()
             }),
+            RelativeCursorPosition::default(),
             EntityListPanel,
         ))
         .with_children(|parent| {
@@ -110,8 +111,11 @@ pub fn spawn_entity_list_panel(
                     section.spawn((
                         Node {
                             flex_direction: FlexDirection::Column,
+                            max_height: Val::Px(220.0),
+                            overflow: Overflow::scroll_y(),
                             ..default()
                         },
+                        RelativeCursorPosition::default(),
                         UnassignedSoulContent,
                     ));
                 });

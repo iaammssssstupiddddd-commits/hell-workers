@@ -1,6 +1,8 @@
 use crate::interface::ui::components::*;
 use crate::interface::ui::theme::*;
+use bevy::input::mouse::{MouseScrollUnit, MouseWheel};
 use bevy::prelude::*;
+use bevy::ui::RelativeCursorPosition;
 
 /// エンティティリストのインタラクション
 pub fn entity_list_interaction_system(
@@ -171,6 +173,36 @@ fn apply_row_highlight(
         node.border.left = Val::Px(0.0);
         *border_color = BorderColor::all(Color::NONE);
     }
+}
+
+pub fn entity_list_scroll_system(
+    mut mouse_wheel_events: MessageReader<MouseWheel>,
+    mut q_scroll_area: Query<
+        (&RelativeCursorPosition, &mut ScrollPosition),
+        With<UnassignedSoulContent>,
+    >,
+) {
+    let Ok((cursor, mut scroll_position)) = q_scroll_area.single_mut() else {
+        return;
+    };
+    if !cursor.cursor_over() {
+        return;
+    }
+
+    let mut delta_y = 0.0;
+    for event in mouse_wheel_events.read() {
+        let unit_scale = match event.unit {
+            MouseScrollUnit::Line => 28.0,
+            MouseScrollUnit::Pixel => 1.0,
+        };
+        delta_y += event.y * unit_scale;
+    }
+    if delta_y.abs() <= f32::EPSILON {
+        return;
+    }
+
+    // Wheel up should move list content down (toward earlier rows).
+    scroll_position.y = (scroll_position.y - delta_y).max(0.0);
 }
 
 /// 未所属ソウルセクションの矢印アイコンを折りたたみ状態に応じて更新

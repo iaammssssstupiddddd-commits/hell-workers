@@ -9,7 +9,7 @@ mod sync;
 mod view_model;
 
 pub use interaction::{
-    entity_list_interaction_system, entity_list_visual_feedback_system,
+    entity_list_interaction_system, entity_list_scroll_system, entity_list_visual_feedback_system,
     update_unassigned_arrow_icon_system,
 };
 pub use sync::sync_entity_list_from_view_model_system;
