@@ -1,9 +1,29 @@
 use bevy::prelude::*;
 
+use crate::constants::{ESCAPE_GATHERING_JOIN_RADIUS, ESCAPE_SAFE_DISTANCE_MULTIPLIER};
 use crate::entities::damned_soul::{DamnedSoul, IdleBehavior, IdleState};
+use crate::entities::familiar::Familiar;
 use crate::systems::soul_ai::gathering::*;
 use crate::systems::soul_ai::task_execution::AssignedTask;
 use crate::systems::spatial::{SpatialGrid, SpatialGridOps};
+
+fn is_gathering_spot_safe_from_familiars(
+    spot_pos: Vec2,
+    q_familiars: &Query<(&Transform, &Familiar)>,
+) -> bool {
+    let mut nearest: Option<(f32, f32)> = None; // (distance, command_radius)
+    for (transform, familiar) in q_familiars.iter() {
+        let dist = spot_pos.distance(transform.translation.truncate());
+        if nearest.map_or(true, |(best_dist, _)| dist < best_dist) {
+            nearest = Some((dist, familiar.command_radius));
+        }
+    }
+
+    match nearest {
+        None => true,
+        Some((dist, command_radius)) => dist > command_radius * ESCAPE_SAFE_DISTANCE_MULTIPLIER,
+    }
+}
 
 /// 集会スポットの維持・消滅システム
 /// 参加者数はObserverで自動更新されるため、ここでは猶予タイマーのみ管理
@@ -134,13 +154,14 @@ pub fn gathering_recruitment_system(
     q_spots: Query<(Entity, &GatheringSpot)>,
     soul_grid: Res<SpatialGrid>,
     q_souls: Query<
-        (Entity, &Transform, &AssignedTask),
+        (Entity, &Transform, &AssignedTask, &IdleState),
         (
             With<DamnedSoul>,
             Without<ParticipatingIn>,
             Without<crate::relationships::CommandedBy>,
         ),
     >,
+    q_familiars: Query<(&Transform, &Familiar)>,
     update_timer: Res<GatheringUpdateTimer>,
 ) {
     if !update_timer.timer.just_finished() {
@@ -152,8 +173,12 @@ pub fn gathering_recruitment_system(
             continue;
         }
 
+        let spot_is_safe_for_escape =
+            is_gathering_spot_safe_from_familiars(spot.center, &q_familiars);
+
         // 空間グリッドで近傍のSoulを検索
-        let nearby_souls = soul_grid.get_nearby_in_radius(spot.center, GATHERING_DETECTION_RADIUS);
+        let search_radius = GATHERING_DETECTION_RADIUS.max(ESCAPE_GATHERING_JOIN_RADIUS);
+        let nearby_souls = soul_grid.get_nearby_in_radius(spot.center, search_radius);
 
         // 空き容量の分だけ参加させる
         let mut current_participants = spot.participants;
@@ -162,9 +187,21 @@ pub fn gathering_recruitment_system(
                 break;
             }
 
-            if let Ok((_ent, _transform, task)) = q_souls.get(soul_entity) {
+            if let Ok((_ent, transform, task, idle)) = q_souls.get(soul_entity) {
                 // タスク実行中は除外
                 if !matches!(task, AssignedTask::None) {
+                    continue;
+                }
+
+                let dist_to_spot = spot.center.distance(transform.translation.truncate());
+                if idle.behavior == IdleBehavior::Escaping {
+                    if dist_to_spot > ESCAPE_GATHERING_JOIN_RADIUS {
+                        continue;
+                    }
+                    if !spot_is_safe_for_escape {
+                        continue;
+                    }
+                } else if dist_to_spot > GATHERING_DETECTION_RADIUS {
                     continue;
                 }
 

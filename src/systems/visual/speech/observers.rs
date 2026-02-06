@@ -72,7 +72,7 @@ pub fn on_task_assigned(
                     let phrase = match event.work_type {
                         WorkType::Chop => LatinPhrase::Caede,
                         WorkType::Mine => LatinPhrase::Fodere,
-                        WorkType::Haul => LatinPhrase::Portare,
+                        WorkType::Haul | WorkType::HaulToMixer => LatinPhrase::Portare,
                         WorkType::Build => LatinPhrase::Laborare,
                         WorkType::GatherWater => LatinPhrase::Haurire,
                         WorkType::CollectSand => LatinPhrase::Colligere,
