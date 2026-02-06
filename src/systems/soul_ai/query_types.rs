@@ -112,7 +112,6 @@ pub type EscapingBehaviorSoulQuery<'w, 's> = Query<
         &'static mut IdleState,
         &'static mut Destination,
         &'static mut Path,
-        &'static DamnedSoul,
         Option<&'static CommandedBy>,
     ),
 >;

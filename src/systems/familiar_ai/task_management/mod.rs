@@ -4,91 +4,12 @@
 
 mod task_finder;
 mod task_assigner;
+mod delegation;
+mod assignment;
 
+pub use delegation::TaskManager;
 pub use task_finder::find_unassigned_task_in_area;
+pub use task_assigner::AssignTaskContext;
 pub use task_assigner::assign_task_to_worker;
 pub use task_assigner::prepare_worker_for_task;
 pub use task_assigner::ReservationShadow;
-
-use crate::entities::damned_soul::IdleBehavior;
-use crate::relationships::ManagedTasks;
-use crate::systems::command::TaskArea;
-use crate::systems::soul_ai::task_execution::types::AssignedTask;
-use crate::systems::spatial::DesignationSpatialGrid;
-use crate::world::map::WorldMap;
-use crate::world::pathfinding::PathfindingContext;
-use bevy::prelude::*;
-use crate::systems::familiar_ai::FamiliarSoulQuery;
-
-/// タスク管理ユーティリティ
-pub struct TaskManager;
-
-impl TaskManager {
-    /// タスクを委譲する（タスク検索 + 割り当て）
-    #[allow(clippy::too_many_arguments)]
-    pub fn delegate_task(
-        fam_entity: Entity,
-        fam_pos: Vec2,
-        squad: &[Entity],
-        task_area_opt: Option<&TaskArea>,
-        fatigue_threshold: f32,
-        queries: &mut crate::systems::soul_ai::task_execution::context::TaskAssignmentQueries,
-        q_souls: &mut FamiliarSoulQuery,
-        designation_grid: &DesignationSpatialGrid,
-        managed_tasks: &ManagedTasks,
-        // haul_cache removed
-        world_map: &WorldMap,
-        pf_context: &mut PathfindingContext,
-        reservation_shadow: &mut ReservationShadow,
-    ) -> Option<Entity> {
-        // 1. 公平性/効率のため、アイドルメンバーを全員リストアップ
-        let mut idle_members = Vec::new();
-        for &member_entity in squad {
-            if let Ok(soul_data) = q_souls.get(member_entity) {
-                let (_, transform, soul, task, _, _, idle, _, _, _) = soul_data;
-                if matches!(*task, AssignedTask::None)
-                    && idle.behavior != IdleBehavior::ExhaustedGathering
-                    && soul.fatigue < fatigue_threshold
-                {
-                    idle_members.push((member_entity, transform.translation.truncate()));
-                }
-            }
-        }
-
-        // 2. 各メンバーに対してタスク候補を順に試みる
-        for (worker_entity, pos) in idle_members {
-            let candidates = find_unassigned_task_in_area(
-                fam_entity,
-                fam_pos,
-                pos, // 個別ソウルの位置を使用
-                task_area_opt,
-                queries,
-                designation_grid,
-                managed_tasks,
-                &queries.target_blueprints,
-                world_map,
-                pf_context,
-                // haul_cache removed
-            );
-
-            for task_entity in candidates {
-                // アサイン成功！1サイクル1人へのアサインとする（安定性のため）
-                if assign_task_to_worker(
-                    fam_entity,
-                    task_entity,
-                    worker_entity,
-                    fatigue_threshold,
-                    queries,
-                    q_souls,
-                    task_area_opt,
-                    reservation_shadow,
-                ) {
-                    return Some(task_entity);
-                }
-                // このタスクに失敗した場合は、次のタスク候補を試す
-            }
-        }
-
-        None
-    }
-}

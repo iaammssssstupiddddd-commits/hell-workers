@@ -33,7 +33,6 @@ impl Default for EscapeDetectionTimer {
 struct FamiliarThreat {
     entity: Entity,
     position: Vec2,
-    command_radius: f32,
     distance: f32,
 }
 
@@ -61,7 +60,6 @@ fn detect_nearest_familiar_within_multiplier(
                     nearest = Some(FamiliarThreat {
                         entity: fam_entity,
                         position: fam_pos,
-                        command_radius: familiar.command_radius,
                         distance,
                     });
                 }
@@ -143,7 +141,6 @@ fn detect_reachable_familiar_within_safe_distance(
             let threat = FamiliarThreat {
                 entity: fam_entity,
                 position: fam_pos,
-                command_radius: familiar.command_radius,
                 distance: euclid,
             };
 
@@ -267,13 +264,18 @@ fn calculate_escape_destination(
 
 fn nearest_familiar_info(
     pos: Vec2,
+    familiar_grid: &FamiliarSpatialGrid,
     q_familiars: &Query<(&Transform, &Familiar)>,
 ) -> Option<(f32, f32)> {
+    let search_radius = TILE_SIZE * 15.0;
+    let nearby = familiar_grid.get_nearby_in_radius(pos, search_radius);
     let mut nearest: Option<(f32, f32)> = None; // (distance, command_radius)
-    for (transform, familiar) in q_familiars.iter() {
-        let dist = pos.distance(transform.translation.truncate());
-        if nearest.map_or(true, |(best_dist, _)| dist < best_dist) {
-            nearest = Some((dist, familiar.command_radius));
+    for fam_entity in nearby {
+        if let Ok((transform, familiar)) = q_familiars.get(fam_entity) {
+            let dist = pos.distance(transform.translation.truncate());
+            if nearest.map_or(true, |(best_dist, _)| dist < best_dist) {
+                nearest = Some((dist, familiar.command_radius));
+            }
         }
     }
     nearest
@@ -283,6 +285,7 @@ fn nearest_familiar_info(
 fn find_safe_gathering_spot(
     soul_pos: Vec2,
     gathering_spots: &Query<(Entity, &GatheringSpot)>,
+    familiar_grid: &FamiliarSpatialGrid,
     q_familiars: &Query<(&Transform, &Familiar)>,
 ) -> Option<Vec2> {
     let mut best_spot: Option<(Vec2, f32)> = None; // (position, score)
@@ -290,7 +293,7 @@ fn find_safe_gathering_spot(
     for (_, spot) in gathering_spots.iter() {
         let spot_pos = spot.center;
         let dist_to_soul = soul_pos.distance(spot_pos);
-        let nearest = nearest_familiar_info(spot_pos, q_familiars);
+        let nearest = nearest_familiar_info(spot_pos, familiar_grid, q_familiars);
         let (dist_to_familiar, safe_distance) = match nearest {
             None => (TILE_SIZE * 1000.0, 0.0),
             Some((dist, command_radius)) => {
@@ -320,7 +323,6 @@ fn find_safe_gathering_spot(
 /// 逃走行動システム
 /// Escaping状態のSoulの移動を制御
 pub fn escaping_behavior_system(
-    _time: Res<Time>,
     world_map: Res<WorldMap>,
     mut pf_context: Local<PathfindingContext>,
     familiar_grid: Res<FamiliarSpatialGrid>,
@@ -328,7 +330,7 @@ pub fn escaping_behavior_system(
     q_gathering_spots: Query<(Entity, &GatheringSpot)>,
     mut q_souls: EscapingBehaviorSoulQuery,
 ) {
-    for (entity, transform, mut idle_state, mut destination, mut path, _soul, under_command) in
+    for (entity, transform, mut idle_state, mut destination, mut path, under_command) in
         q_souls.iter_mut()
     {
         // Escaping状態のみ処理
@@ -356,7 +358,7 @@ pub fn escaping_behavior_system(
             &mut pf_context,
         )
         {
-            let safe_spot = find_safe_gathering_spot(soul_pos, &q_gathering_spots, &q_familiars);
+            let safe_spot = find_safe_gathering_spot(soul_pos, &q_gathering_spots, &familiar_grid, &q_familiars);
 
             // 安全な集会スポットに到達したら Gathering に遷移
             if let Some(spot_pos) = safe_spot {

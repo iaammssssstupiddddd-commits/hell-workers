@@ -1,0 +1,36 @@
+mod basic;
+mod haul;
+mod water;
+
+pub use basic::{issue_build, issue_collect_sand, issue_gather, issue_refine};
+pub use haul::{issue_haul_to_blueprint, issue_haul_to_mixer, issue_haul_to_stockpile};
+pub use water::{issue_gather_water, issue_haul_water_to_mixer};
+
+use crate::events::{ResourceReservationOp, TaskAssignmentRequest};
+use crate::systems::familiar_ai::task_management::{AssignTaskContext, ReservationShadow};
+use crate::systems::jobs::WorkType;
+use crate::systems::soul_ai::task_execution::types::AssignedTask;
+use bevy::prelude::*;
+
+pub fn submit_assignment(
+    ctx: &AssignTaskContext<'_>,
+    queries: &mut crate::systems::soul_ai::task_execution::context::TaskAssignmentQueries,
+    shadow: &mut ReservationShadow,
+    work_type: WorkType,
+    task_pos: Vec2,
+    assigned_task: AssignedTask,
+    reservation_ops: Vec<ResourceReservationOp>,
+    already_commanded: bool,
+) {
+    shadow.apply_reserve_ops(&reservation_ops);
+    queries.assignment_writer.write(TaskAssignmentRequest {
+        familiar_entity: ctx.fam_entity,
+        worker_entity: ctx.worker_entity,
+        task_entity: ctx.task_entity,
+        work_type,
+        task_pos,
+        assigned_task,
+        reservation_ops,
+        already_commanded,
+    });
+}
