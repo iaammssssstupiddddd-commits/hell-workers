@@ -1,15 +1,17 @@
-use super::components::{BubbleEmotion, BubblePriority, FamiliarBubble, ReactionDelay, SpeechBubble};
+use super::components::{
+    BubbleEmotion, BubblePriority, FamiliarBubble, ReactionDelay, SpeechBubble,
+};
 use super::cooldown::SpeechHistory;
 use super::phrases::LatinPhrase;
 use super::spawn::*;
 use crate::assets::GameAssets;
 use crate::entities::damned_soul::DamnedSoul;
 use crate::entities::familiar::{Familiar, FamiliarVoice};
-use crate::relationships::CommandedBy;
 use crate::events::{
     OnEncouraged, OnExhausted, OnGatheringJoined, OnReleasedFromService, OnSoulRecruited,
     OnStressBreakdown, OnTaskAbandoned, OnTaskAssigned, OnTaskCompleted,
 };
+use crate::relationships::CommandedBy;
 use crate::systems::jobs::WorkType;
 use bevy::prelude::*;
 
@@ -18,9 +20,20 @@ pub fn on_task_assigned(
     on: On<OnTaskAssigned>,
     mut commands: Commands,
     assets: Res<GameAssets>,
-    mut q_souls: Query<(&GlobalTransform, Option<&CommandedBy>, Option<&mut SpeechHistory>), (With<DamnedSoul>, Without<Familiar>)>,
+    mut q_souls: Query<
+        (
+            &GlobalTransform,
+            Option<&CommandedBy>,
+            Option<&mut SpeechHistory>,
+        ),
+        (With<DamnedSoul>, Without<Familiar>),
+    >,
     mut q_familiars: Query<
-        (&GlobalTransform, Option<&FamiliarVoice>, Option<&mut SpeechHistory>),
+        (
+            &GlobalTransform,
+            Option<&FamiliarVoice>,
+            Option<&mut SpeechHistory>,
+        ),
         (With<Familiar>, Without<DamnedSoul>),
     >,
     q_bubbles: Query<(Entity, &SpeechBubble), With<FamiliarBubble>>,
@@ -109,7 +122,10 @@ pub fn on_task_completed(
     on: On<OnTaskCompleted>,
     mut commands: Commands,
     assets: Res<GameAssets>,
-    mut q_souls: Query<(&GlobalTransform, Option<&mut SpeechHistory>), (With<DamnedSoul>, Without<Familiar>)>,
+    mut q_souls: Query<
+        (&GlobalTransform, Option<&mut SpeechHistory>),
+        (With<DamnedSoul>, Without<Familiar>),
+    >,
     time: Res<Time>,
 ) {
     let soul_entity = on.entity;
@@ -149,7 +165,11 @@ pub fn on_soul_recruited(
     mut commands: Commands,
     assets: Res<GameAssets>,
     mut q_familiars: Query<
-        (&GlobalTransform, Option<&FamiliarVoice>, Option<&mut SpeechHistory>),
+        (
+            &GlobalTransform,
+            Option<&FamiliarVoice>,
+            Option<&mut SpeechHistory>,
+        ),
         With<Familiar>,
     >,
     q_bubbles: Query<(Entity, &SpeechBubble), With<FamiliarBubble>>,
@@ -201,7 +221,10 @@ pub fn on_exhausted(
     on: On<OnExhausted>,
     mut commands: Commands,
     assets: Res<GameAssets>,
-    mut q_souls: Query<(&GlobalTransform, Option<&mut SpeechHistory>), (With<DamnedSoul>, Without<Familiar>)>,
+    mut q_souls: Query<
+        (&GlobalTransform, Option<&mut SpeechHistory>),
+        (With<DamnedSoul>, Without<Familiar>),
+    >,
     time: Res<Time>,
 ) {
     let soul_entity = on.entity;
@@ -240,7 +263,10 @@ pub fn on_stress_breakdown(
     on: On<OnStressBreakdown>,
     mut commands: Commands,
     assets: Res<GameAssets>,
-    mut q_souls: Query<(&GlobalTransform, Option<&mut SpeechHistory>), (With<DamnedSoul>, Without<Familiar>)>,
+    mut q_souls: Query<
+        (&GlobalTransform, Option<&mut SpeechHistory>),
+        (With<DamnedSoul>, Without<Familiar>),
+    >,
     time: Res<Time>,
 ) {
     let soul_entity = on.entity;
@@ -333,11 +359,7 @@ pub fn on_gathering_joined(
 }
 
 /// タスク中断・失敗時のリアクション
-pub fn on_task_abandoned(
-    on: On<OnTaskAbandoned>,
-    mut commands: Commands,
-    assets: Res<GameAssets>,
-) {
+pub fn on_task_abandoned(on: On<OnTaskAbandoned>, mut commands: Commands, assets: Res<GameAssets>) {
     spawn_soul_bubble(
         &mut commands,
         on.entity,
@@ -355,7 +377,11 @@ pub fn on_encouraged(
     mut commands: Commands,
     assets: Res<GameAssets>,
     mut q_familiars: Query<
-        (&GlobalTransform, Option<&FamiliarVoice>, Option<&mut SpeechHistory>),
+        (
+            &GlobalTransform,
+            Option<&FamiliarVoice>,
+            Option<&mut SpeechHistory>,
+        ),
         With<Familiar>,
     >,
     q_bubbles: Query<(Entity, &SpeechBubble), With<FamiliarBubble>>,

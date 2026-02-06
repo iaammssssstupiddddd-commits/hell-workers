@@ -4,13 +4,16 @@ use crate::entities::familiar::{familiar_animation_system, update_familiar_range
 use crate::game_state::PlayMode;
 use crate::systems::GameSystemSet;
 use crate::systems::command::{
-    area_selection_indicator_system,
-    sync_designation_indicator_system,
+    area_selection_indicator_system, sync_designation_indicator_system,
     update_designation_indicator_system,
 };
 use crate::systems::jobs::building_completion_system;
 use crate::systems::logistics::resource_count_display_system;
+use crate::systems::soul_ai::gathering::visual::{
+    gathering_debug_visualization_system, gathering_visual_update_system,
+};
 use crate::systems::soul_ai::idle::visual::idle_visual_system;
+use crate::systems::soul_ai::vitals::visual::familiar_hover_visualization_system;
 use crate::systems::visual::blueprint::{
     attach_blueprint_visual_system, blueprint_pulse_animation_system,
     blueprint_scale_animation_system, building_bounce_animation_system,
@@ -36,10 +39,6 @@ use crate::systems::visual::soul::{
 use crate::systems::visual::speech::SpeechPlugin;
 use crate::systems::visual::tank::update_tank_visual_system;
 use crate::systems::visual::wall_connection::WallConnectionPlugin;
-use crate::systems::soul_ai::vitals::visual::familiar_hover_visualization_system;
-use crate::systems::soul_ai::gathering::visual::{
-    gathering_debug_visualization_system, gathering_visual_update_system,
-};
 
 use bevy::prelude::*;
 
@@ -136,14 +135,14 @@ impl Plugin for VisualPlugin {
                 crate::systems::visual::placement_ghost::placement_ghost_system,
             )
                 .in_set(GameSystemSet::Visual)
-                .run_if(|state: Res<State<crate::game_state::PlayMode>>| {
-                    match state.get() {
+                .run_if(
+                    |state: Res<State<crate::game_state::PlayMode>>| match state.get() {
                         crate::game_state::PlayMode::Normal
                         | crate::game_state::PlayMode::BuildingPlace
                         | crate::game_state::PlayMode::TaskDesignation => true,
                         _ => false,
-                    }
-                }),
+                    },
+                ),
         );
 
         // Haul visual systems (Phase 3: 運搬ビジュアル)

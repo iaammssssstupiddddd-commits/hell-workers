@@ -1,3 +1,4 @@
+use crate::interface::ui::theme::{COLOR_BUTTON_DEFAULT, COLOR_BUTTON_HOVER, COLOR_BUTTON_PRESSED};
 use bevy::prelude::*;
 
 #[derive(Resource, Default, Reflect)]
@@ -60,14 +61,17 @@ pub fn time_control_keyboard_system(
     }
 
     if keyboard.just_pressed(KeyCode::Digit1) {
-        time.unpause();
-        time.set_relative_speed(1.0);
+        time.pause();
     }
     if keyboard.just_pressed(KeyCode::Digit2) {
         time.unpause();
-        time.set_relative_speed(2.0);
+        time.set_relative_speed(1.0);
     }
     if keyboard.just_pressed(KeyCode::Digit3) {
+        time.unpause();
+        time.set_relative_speed(2.0);
+    }
+    if keyboard.just_pressed(KeyCode::Digit4) {
         time.unpause();
         time.set_relative_speed(4.0);
     }
@@ -82,26 +86,29 @@ pub fn time_control_ui_system(
 ) {
     for (interaction, speed_button, mut color) in interaction_query.iter_mut() {
         match *interaction {
-            Interaction::Pressed => match speed_button.0 {
-                TimeSpeed::Paused => time.pause(),
-                TimeSpeed::Normal => {
-                    time.unpause();
-                    time.set_relative_speed(1.0);
+            Interaction::Pressed => {
+                *color = BackgroundColor(COLOR_BUTTON_PRESSED);
+                match speed_button.0 {
+                    TimeSpeed::Paused => time.pause(),
+                    TimeSpeed::Normal => {
+                        time.unpause();
+                        time.set_relative_speed(1.0);
+                    }
+                    TimeSpeed::Fast => {
+                        time.unpause();
+                        time.set_relative_speed(2.0);
+                    }
+                    TimeSpeed::Super => {
+                        time.unpause();
+                        time.set_relative_speed(4.0);
+                    }
                 }
-                TimeSpeed::Fast => {
-                    time.unpause();
-                    time.set_relative_speed(2.0);
-                }
-                TimeSpeed::Super => {
-                    time.unpause();
-                    time.set_relative_speed(4.0);
-                }
-            },
+            }
             Interaction::Hovered => {
-                *color = BackgroundColor(Color::srgb(0.4, 0.4, 0.4));
+                *color = BackgroundColor(COLOR_BUTTON_HOVER);
             }
             Interaction::None => {
-                *color = BackgroundColor(Color::srgb(0.2, 0.2, 0.2));
+                *color = BackgroundColor(COLOR_BUTTON_DEFAULT);
             }
         }
     }

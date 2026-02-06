@@ -73,7 +73,10 @@ pub fn update_carrying_item_system(
     game_assets: Res<GameAssets>,
     q_workers: Query<(Entity, &Transform, &Inventory), With<DamnedSoul>>,
     q_items: Query<&ResourceItem>,
-    mut q_icons: Query<(Entity, &CarryingItemVisual, &mut Transform, &mut Sprite), Without<DamnedSoul>>,
+    mut q_icons: Query<
+        (Entity, &CarryingItemVisual, &mut Transform, &mut Sprite),
+        Without<DamnedSoul>,
+    >,
 ) {
     for (icon_entity, icon, mut icon_transform, mut icon_sprite) in q_icons.iter_mut() {
         let mut should_despawn = true;

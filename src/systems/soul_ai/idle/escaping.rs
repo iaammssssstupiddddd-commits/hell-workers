@@ -356,9 +356,13 @@ pub fn escaping_behavior_system(
             &q_familiars,
             &world_map,
             &mut pf_context,
-        )
-        {
-            let safe_spot = find_safe_gathering_spot(soul_pos, &q_gathering_spots, &familiar_grid, &q_familiars);
+        ) {
+            let safe_spot = find_safe_gathering_spot(
+                soul_pos,
+                &q_gathering_spots,
+                &familiar_grid,
+                &q_familiars,
+            );
 
             // 安全な集会スポットに到達したら Gathering に遷移
             if let Some(spot_pos) = safe_spot {
@@ -378,18 +382,12 @@ pub fn escaping_behavior_system(
             }
 
             // 逃走先を計算
-            let escape_dest = calculate_escape_destination(
-                soul_pos,
-                &threat,
-                safe_spot,
-                &world_map,
-            );
+            let escape_dest =
+                calculate_escape_destination(soul_pos, &threat, safe_spot, &world_map);
 
             // 目的地を更新（既存のパスが古いか、目的地が変わった場合）
             let current_dest = destination.0;
-            if path.waypoints.is_empty()
-                || current_dest.distance(escape_dest) > TILE_SIZE * 2.0
-            {
+            if path.waypoints.is_empty() || current_dest.distance(escape_dest) > TILE_SIZE * 2.0 {
                 destination.0 = escape_dest;
                 // Pathはsoul_movementシステムで計算される
                 path.waypoints.clear();

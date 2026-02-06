@@ -93,6 +93,9 @@ pub struct HoverTooltipText;
 pub struct HoverTooltip;
 
 #[derive(Component)]
+pub struct UiTooltip(pub &'static str);
+
+#[derive(Component)]
 pub struct OperationDialog;
 
 #[derive(Component)]
@@ -113,6 +116,9 @@ pub struct FpsText;
 
 #[derive(Component)]
 pub struct EntityListPanel;
+
+#[derive(Component)]
+pub struct EntityListScrollHint;
 
 /// ヘッダーのリストコンテナ
 #[derive(Component)]

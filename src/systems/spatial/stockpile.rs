@@ -19,7 +19,8 @@ impl StockpileSpatialGrid {
                 if let Some(entities) = self.0.grid.get(&cell) {
                     for &entity in entities {
                         if let Some(&pos) = self.0.positions.get(&entity) {
-                            if pos.x >= min.x && pos.x <= max.x && pos.y >= min.y && pos.y <= max.y {
+                            if pos.x >= min.x && pos.x <= max.x && pos.y >= min.y && pos.y <= max.y
+                            {
                                 results.push(entity);
                             }
                         }

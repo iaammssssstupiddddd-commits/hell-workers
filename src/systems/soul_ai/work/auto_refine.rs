@@ -5,12 +5,12 @@
 use bevy::prelude::*;
 
 use crate::entities::familiar::ActiveCommand;
+use crate::relationships::StoredItems;
+use crate::relationships::TaskWorkers;
 use crate::systems::command::TaskArea;
 use crate::systems::jobs::{Designation, IssuedBy, MudMixerStorage, TaskSlots, WorkType};
-use crate::systems::soul_ai::task_execution::AssignedTask;
-use crate::relationships::TaskWorkers;
 use crate::systems::logistics::{ResourceType, Stockpile};
-use crate::relationships::StoredItems;
+use crate::systems::soul_ai::task_execution::AssignedTask;
 
 /// MudMixer で精製タスクを自動発行するシステム
 pub fn mud_mixer_auto_refine_system(
@@ -37,8 +37,15 @@ pub fn mud_mixer_auto_refine_system(
     }
 
     for (fam_entity, _active_command, task_area) in q_familiars.iter() {
-        for (mixer_entity, mixer_transform, storage, workers_opt, designation_opt, stockpile_opt, stored_opt) in
-            q_mixers.iter()
+        for (
+            mixer_entity,
+            mixer_transform,
+            storage,
+            workers_opt,
+            designation_opt,
+            stockpile_opt,
+            stored_opt,
+        ) in q_mixers.iter()
         {
             let mixer_pos = mixer_transform.translation.truncate();
             if !task_area.contains(mixer_pos) {
@@ -52,7 +59,9 @@ pub fn mud_mixer_auto_refine_system(
 
             // 原料が揃っているかチェック
             let water_count = match (stockpile_opt, stored_opt) {
-                (Some(stockpile), Some(stored_items)) if stockpile.resource_type == Some(ResourceType::Water) => {
+                (Some(stockpile), Some(stored_items))
+                    if stockpile.resource_type == Some(ResourceType::Water) =>
+                {
                     stored_items.len() as u32
                 }
                 _ => 0,
@@ -66,7 +75,9 @@ pub fn mud_mixer_auto_refine_system(
                 if current_workers + inflight_count < 1 {
                     // Refine タスクを発行
                     commands.entity(mixer_entity).insert((
-                        Designation { work_type: WorkType::Refine },
+                        Designation {
+                            work_type: WorkType::Refine,
+                        },
                         IssuedBy(fam_entity),
                         TaskSlots::new(1),
                     ));
@@ -74,7 +85,10 @@ pub fn mud_mixer_auto_refine_system(
                     // カウントアップして同一フレーム内での重複を防ぐ
                     in_flight.insert(mixer_entity, inflight_count + 1);
 
-                    info!("AUTO_REFINE: Issued Refine task for MudMixer {:?}", mixer_entity);
+                    info!(
+                        "AUTO_REFINE: Issued Refine task for MudMixer {:?}",
+                        mixer_entity
+                    );
                 }
             }
         }

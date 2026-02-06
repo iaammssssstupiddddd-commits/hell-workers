@@ -4,6 +4,7 @@ use crate::interface::ui::components::{
     MenuAction, MenuButton, OperationDialog, OperationDialogFamiliarName,
     OperationDialogMaxSoulText, OperationDialogThresholdText,
 };
+use crate::interface::ui::theme::*;
 use bevy::prelude::*;
 
 /// ダイアログをスポーン
@@ -86,7 +87,7 @@ fn spawn_operation_dialog(commands: &mut Commands, game_assets: &Res<crate::asse
                 Text::new("Familiar Name"),
                 TextFont {
                     font: game_assets.font_familiar.clone(),
-                    font_size: 18.0,
+                    font_size: FONT_SIZE_TITLE,
                     ..default()
                 },
                 TextColor(Color::srgb(0.8, 0.8, 0.8)),
@@ -105,7 +106,7 @@ fn spawn_operation_dialog(commands: &mut Commands, game_assets: &Res<crate::asse
                     font_size: crate::constants::FONT_SIZE_SMALL,
                     ..default()
                 },
-                TextColor(Color::srgb(0.6, 0.6, 0.6)),
+                TextColor(COLOR_TEXT_SECONDARY),
                 Node {
                     margin: UiRect::bottom(Val::Px(5.0)),
                     ..default()
@@ -143,7 +144,7 @@ fn spawn_operation_dialog(commands: &mut Commands, game_assets: &Res<crate::asse
                         btn.spawn((
                             Text::new("-"),
                             TextFont {
-                                font_size: 20.0,
+                                font_size: FONT_SIZE_TITLE,
                                 ..default()
                             },
                             TextColor(Color::WHITE),
@@ -155,7 +156,7 @@ fn spawn_operation_dialog(commands: &mut Commands, game_assets: &Res<crate::asse
                         Text::new("1"),
                         TextFont {
                             font: game_assets.font_ui.clone(),
-                            font_size: 18.0,
+                            font_size: FONT_SIZE_TITLE,
                             ..default()
                         },
                         TextColor(Color::WHITE),
@@ -183,7 +184,7 @@ fn spawn_operation_dialog(commands: &mut Commands, game_assets: &Res<crate::asse
                         btn.spawn((
                             Text::new("+"),
                             TextFont {
-                                font_size: 20.0,
+                                font_size: FONT_SIZE_TITLE,
                                 ..default()
                             },
                             TextColor(Color::WHITE),
@@ -199,7 +200,7 @@ fn spawn_operation_dialog(commands: &mut Commands, game_assets: &Res<crate::asse
                     font_size: crate::constants::FONT_SIZE_SMALL,
                     ..default()
                 },
-                TextColor(Color::srgb(0.6, 0.6, 0.6)),
+                TextColor(COLOR_TEXT_SECONDARY),
                 Node {
                     margin: UiRect {
                         top: Val::Px(15.0),
@@ -250,7 +251,7 @@ fn spawn_operation_dialog(commands: &mut Commands, game_assets: &Res<crate::asse
                     row.spawn((
                         Text::new("1"),
                         TextFont {
-                            font_size: 18.0,
+                            font_size: FONT_SIZE_TITLE,
                             ..default()
                         },
                         TextColor(Color::WHITE),

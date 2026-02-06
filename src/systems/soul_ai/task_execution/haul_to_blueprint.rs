@@ -47,11 +47,11 @@ pub fn handle_haul_to_blueprint_task(
         return;
     }
 
-
-
     match phase {
         HaulToBpPhase::GoingToItem => {
-            if let Ok((item_transform, _, _, _, des_opt, stored_in_opt)) = q_targets.get(item_entity) {
+            if let Ok((item_transform, _, _, _, des_opt, stored_in_opt)) =
+                q_targets.get(item_entity)
+            {
                 // 指示がキャンセルされていないか確認
                 if cancel_task_if_designation_missing(des_opt, ctx.task, ctx.path) {
                     info!(
@@ -63,9 +63,16 @@ pub fn handle_haul_to_blueprint_task(
                 }
 
                 let item_pos = item_transform.translation.truncate();
-                update_destination_to_adjacent(ctx.dest, item_pos, ctx.path, soul_pos, world_map, ctx.pf_context);
+                update_destination_to_adjacent(
+                    ctx.dest,
+                    item_pos,
+                    ctx.path,
+                    soul_pos,
+                    world_map,
+                    ctx.pf_context,
+                );
                 let is_near = can_pickup_item(soul_pos, item_pos);
-                
+
                 if is_near {
                     if !try_pickup_item(
                         commands,
@@ -88,15 +95,22 @@ pub fn handle_haul_to_blueprint_task(
                     // ブループリントへの目的地設定は、次のフレームの GoingToBlueprint フェーズで
                     // update_destination_to_blueprint により自動的に（一貫したロジックで）行われるため、
                     // ここではパスをクリアするのみとする。
-                    
-                    // ソース予約解放と取得記録
-                    ctx.queue_reservation(crate::events::ResourceReservationOp::RecordPickedSource { source: item_entity, amount: 1 });
 
-                    *ctx.task = AssignedTask::HaulToBlueprint(crate::systems::soul_ai::task_execution::types::HaulToBlueprintData {
-                        item: item_entity,
-                        blueprint: blueprint_entity,
-                        phase: HaulToBpPhase::GoingToBlueprint,
-                    });
+                    // ソース予約解放と取得記録
+                    ctx.queue_reservation(
+                        crate::events::ResourceReservationOp::RecordPickedSource {
+                            source: item_entity,
+                            amount: 1,
+                        },
+                    );
+
+                    *ctx.task = AssignedTask::HaulToBlueprint(
+                        crate::systems::soul_ai::task_execution::types::HaulToBlueprintData {
+                            item: item_entity,
+                            blueprint: blueprint_entity,
+                            phase: HaulToBpPhase::GoingToBlueprint,
+                        },
+                    );
                     ctx.path.waypoints.clear();
                     info!(
                         "HAUL_TO_BP: Soul {:?} picked up item {:?}, heading to blueprint {:?}",
@@ -114,18 +128,27 @@ pub fn handle_haul_to_blueprint_task(
         }
         HaulToBpPhase::GoingToBlueprint => {
             if let Ok((_bp_transform, bp, _)) = q_blueprints.get(blueprint_entity) {
-                update_destination_to_blueprint(ctx.dest, &bp.occupied_grids, ctx.path, soul_pos, world_map, ctx.pf_context);
+                update_destination_to_blueprint(
+                    ctx.dest,
+                    &bp.occupied_grids,
+                    ctx.path,
+                    soul_pos,
+                    world_map,
+                    ctx.pf_context,
+                );
 
                 if is_near_blueprint(soul_pos, &bp.occupied_grids) {
                     info!(
                         "HAUL_TO_BP: Soul {:?} arrived at blueprint {:?}",
                         ctx.soul_entity, blueprint_entity
                     );
-                    *ctx.task = AssignedTask::HaulToBlueprint(crate::systems::soul_ai::task_execution::types::HaulToBlueprintData {
-                        item: item_entity,
-                        blueprint: blueprint_entity,
-                        phase: HaulToBpPhase::Delivering,
-                    });
+                    *ctx.task = AssignedTask::HaulToBlueprint(
+                        crate::systems::soul_ai::task_execution::types::HaulToBlueprintData {
+                            item: item_entity,
+                            blueprint: blueprint_entity,
+                            phase: HaulToBpPhase::Delivering,
+                        },
+                    );
                     ctx.path.waypoints.clear();
                 }
             } else {
@@ -134,7 +157,10 @@ pub fn handle_haul_to_blueprint_task(
                     ctx.soul_entity, blueprint_entity
                 );
                 // Blueprint が消失 - アイテムを解除して再発行
-                let dropped_res = q_targets.get(item_entity).ok().and_then(|(_, _, _, ri, _, _)| ri.map(|r| r.0));
+                let dropped_res = q_targets
+                    .get(item_entity)
+                    .ok()
+                    .and_then(|(_, _, _, ri, _, _)| ri.map(|r| r.0));
                 crate::systems::soul_ai::work::unassign_task(
                     commands,
                     ctx.soul_entity,
@@ -174,11 +200,15 @@ pub fn handle_haul_to_blueprint_task(
                         {
                             // ManagedByを削除して未割り当て状態にする
                             if managed_by_opt.is_some() {
-                                commands.entity(blueprint_entity).remove::<crate::relationships::ManagedBy>();
+                                commands
+                                    .entity(blueprint_entity)
+                                    .remove::<crate::relationships::ManagedBy>();
                             }
 
                             // Priority(10) を付与して使い魔がタスクを探せるようにする
-                            commands.entity(blueprint_entity).insert(crate::systems::jobs::Priority(10));
+                            commands
+                                .entity(blueprint_entity)
+                                .insert(crate::systems::jobs::Priority(10));
 
                             info!(
                                 "HAUL_TO_BP: Blueprint {:?} materials complete, reissuing DesignationCreatedEvent for build task",
@@ -196,9 +226,11 @@ pub fn handle_haul_to_blueprint_task(
             commands.entity(ctx.soul_entity).remove::<WorkingOn>();
             clear_task_and_path(ctx.task, ctx.path);
             ctx.soul.fatigue = (ctx.soul.fatigue + 0.05).min(1.0);
-            
+
             // 完了したので予約解除
-            ctx.queue_reservation(crate::events::ResourceReservationOp::ReleaseDestination { target: blueprint_entity });
+            ctx.queue_reservation(crate::events::ResourceReservationOp::ReleaseDestination {
+                target: blueprint_entity,
+            });
         }
     }
 }

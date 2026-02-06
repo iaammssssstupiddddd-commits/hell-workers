@@ -22,18 +22,40 @@ pub fn drop_bucket_for_auto_haul(
         Visibility::Visible,
         Transform::from_xyz(drop_pos.x, drop_pos.y, crate::constants::Z_ITEM_PICKUP),
     ));
-    commands.entity(bucket_entity).remove::<crate::relationships::StoredIn>();
-    commands.entity(bucket_entity).remove::<crate::systems::logistics::InStockpile>();
-    commands.entity(bucket_entity).remove::<crate::systems::jobs::IssuedBy>();
-    commands.entity(bucket_entity).remove::<crate::relationships::TaskWorkers>();
-    commands.entity(bucket_entity).remove::<crate::systems::jobs::Designation>();
-    commands.entity(bucket_entity).remove::<crate::systems::jobs::TaskSlots>();
-    commands.entity(bucket_entity).remove::<crate::systems::jobs::TargetMixer>();
+    commands
+        .entity(bucket_entity)
+        .remove::<crate::relationships::StoredIn>();
+    commands
+        .entity(bucket_entity)
+        .remove::<crate::systems::logistics::InStockpile>();
+    commands
+        .entity(bucket_entity)
+        .remove::<crate::systems::jobs::IssuedBy>();
+    commands
+        .entity(bucket_entity)
+        .remove::<crate::relationships::TaskWorkers>();
+    commands
+        .entity(bucket_entity)
+        .remove::<crate::systems::jobs::Designation>();
+    commands
+        .entity(bucket_entity)
+        .remove::<crate::systems::jobs::TaskSlots>();
+    commands
+        .entity(bucket_entity)
+        .remove::<crate::systems::jobs::TargetMixer>();
 
     ctx.inventory.0 = None;
     crate::systems::soul_ai::work::unassign_task(
-        commands, ctx.soul_entity, soul_pos, ctx.task, ctx.path,
-        None, None, ctx.queries, world_map, false
+        commands,
+        ctx.soul_entity,
+        soul_pos,
+        ctx.task,
+        ctx.path,
+        None,
+        None,
+        ctx.queries,
+        world_map,
+        false,
     );
 }
 
@@ -47,8 +69,16 @@ pub fn abort_task_without_item(
 ) {
     let soul_pos = ctx.soul_pos();
     crate::systems::soul_ai::work::unassign_task(
-        commands, ctx.soul_entity, soul_pos, ctx.task, ctx.path,
-        None, None, ctx.queries, world_map, true
+        commands,
+        ctx.soul_entity,
+        soul_pos,
+        ctx.task,
+        ctx.path,
+        None,
+        None,
+        ctx.queries,
+        world_map,
+        true,
     );
 }
 
@@ -62,7 +92,15 @@ pub fn abort_task_with_item(
 ) {
     let soul_pos = ctx.soul_pos();
     crate::systems::soul_ai::work::unassign_task(
-        commands, ctx.soul_entity, soul_pos, ctx.task, ctx.path,
-        Some(ctx.inventory), None, ctx.queries, world_map, true
+        commands,
+        ctx.soul_entity,
+        soul_pos,
+        ctx.task,
+        ctx.path,
+        Some(ctx.inventory),
+        None,
+        ctx.queries,
+        world_map,
+        true,
     );
 }

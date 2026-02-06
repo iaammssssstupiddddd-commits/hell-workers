@@ -3,6 +3,7 @@
 use crate::interface::ui::components::{
     ArchitectSubMenu, MenuAction, MenuButton, OrdersSubMenu, ZonesSubMenu,
 };
+use crate::interface::ui::theme::*;
 use crate::systems::jobs::BuildingType;
 use crate::systems::logistics::ZoneType;
 use bevy::prelude::*;
@@ -19,11 +20,11 @@ fn spawn_architect_submenu(commands: &mut Commands, game_assets: &Res<crate::ass
         .spawn((
             Node {
                 display: Display::None,
-                width: Val::Px(120.0),
+                width: Val::Px(SUBMENU_WIDTH),
                 height: Val::Auto,
                 position_type: PositionType::Absolute,
-                left: Val::Px(0.0),
-                bottom: Val::Px(50.0),
+                left: Val::Px(SUBMENU_LEFT_ARCHITECT),
+                bottom: Val::Px(BOTTOM_BAR_HEIGHT),
                 flex_direction: FlexDirection::Column,
                 padding: UiRect::all(Val::Px(5.0)),
                 ..default()
@@ -44,7 +45,7 @@ fn spawn_architect_submenu(commands: &mut Commands, game_assets: &Res<crate::ass
                         align_items: AlignItems::Center,
                         ..default()
                     },
-                    BackgroundColor(Color::srgb(0.3, 0.3, 0.3)),
+                    BackgroundColor(COLOR_BUTTON_DEFAULT),
                     MenuButton(MenuAction::SelectBuild(BuildingType::Wall)),
                 ))
                 .with_children(|button| {
@@ -52,10 +53,10 @@ fn spawn_architect_submenu(commands: &mut Commands, game_assets: &Res<crate::ass
                         Text::new("Wall"),
                         TextFont {
                             font: game_assets.font_ui.clone(),
-                            font_size: crate::constants::FONT_SIZE_BODY,
+                            font_size: FONT_SIZE_TITLE,
                             ..default()
                         },
-                        TextColor(Color::WHITE),
+                        TextColor(COLOR_TEXT_PRIMARY),
                     ));
                 });
 
@@ -71,7 +72,7 @@ fn spawn_architect_submenu(commands: &mut Commands, game_assets: &Res<crate::ass
                         align_items: AlignItems::Center,
                         ..default()
                     },
-                    BackgroundColor(Color::srgb(0.3, 0.3, 0.3)),
+                    BackgroundColor(COLOR_BUTTON_DEFAULT),
                     MenuButton(MenuAction::SelectBuild(BuildingType::Tank)),
                 ))
                 .with_children(|button| {
@@ -79,10 +80,10 @@ fn spawn_architect_submenu(commands: &mut Commands, game_assets: &Res<crate::ass
                         Text::new("Tank"),
                         TextFont {
                             font: game_assets.font_ui.clone(),
-                            font_size: crate::constants::FONT_SIZE_BODY,
+                            font_size: FONT_SIZE_TITLE,
                             ..default()
                         },
-                        TextColor(Color::WHITE),
+                        TextColor(COLOR_TEXT_PRIMARY),
                     ));
                 });
 
@@ -98,7 +99,7 @@ fn spawn_architect_submenu(commands: &mut Commands, game_assets: &Res<crate::ass
                         align_items: AlignItems::Center,
                         ..default()
                     },
-                    BackgroundColor(Color::srgb(0.3, 0.3, 0.3)),
+                    BackgroundColor(COLOR_BUTTON_DEFAULT),
                     MenuButton(MenuAction::SelectBuild(BuildingType::Floor)),
                 ))
                 .with_children(|button| {
@@ -106,10 +107,10 @@ fn spawn_architect_submenu(commands: &mut Commands, game_assets: &Res<crate::ass
                         Text::new("Floor"),
                         TextFont {
                             font: game_assets.font_ui.clone(),
-                            font_size: crate::constants::FONT_SIZE_BODY,
+                            font_size: FONT_SIZE_TITLE,
                             ..default()
                         },
-                        TextColor(Color::WHITE),
+                        TextColor(COLOR_TEXT_PRIMARY),
                     ));
                 });
 
@@ -125,7 +126,7 @@ fn spawn_architect_submenu(commands: &mut Commands, game_assets: &Res<crate::ass
                         align_items: AlignItems::Center,
                         ..default()
                     },
-                    BackgroundColor(Color::srgb(0.3, 0.3, 0.3)),
+                    BackgroundColor(COLOR_BUTTON_DEFAULT),
                     MenuButton(MenuAction::SelectBuild(BuildingType::MudMixer)),
                 ))
                 .with_children(|button| {
@@ -133,10 +134,10 @@ fn spawn_architect_submenu(commands: &mut Commands, game_assets: &Res<crate::ass
                         Text::new("MudMixer"),
                         TextFont {
                             font: game_assets.font_ui.clone(),
-                            font_size: crate::constants::FONT_SIZE_BODY,
+                            font_size: FONT_SIZE_TITLE,
                             ..default()
                         },
-                        TextColor(Color::WHITE),
+                        TextColor(COLOR_TEXT_PRIMARY),
                     ));
                 });
         });
@@ -147,11 +148,11 @@ fn spawn_zones_submenu(commands: &mut Commands, game_assets: &Res<crate::assets:
         .spawn((
             Node {
                 display: Display::None,
-                width: Val::Px(120.0),
+                width: Val::Px(SUBMENU_WIDTH),
                 height: Val::Auto,
                 position_type: PositionType::Absolute,
-                left: Val::Px(110.0),
-                bottom: Val::Px(50.0),
+                left: Val::Px(SUBMENU_LEFT_ZONES),
+                bottom: Val::Px(BOTTOM_BAR_HEIGHT),
                 flex_direction: FlexDirection::Column,
                 padding: UiRect::all(Val::Px(5.0)),
                 ..default()
@@ -171,7 +172,7 @@ fn spawn_zones_submenu(commands: &mut Commands, game_assets: &Res<crate::assets:
                         align_items: AlignItems::Center,
                         ..default()
                     },
-                    BackgroundColor(Color::srgb(0.3, 0.3, 0.3)),
+                    BackgroundColor(COLOR_BUTTON_DEFAULT),
                     MenuButton(MenuAction::SelectZone(ZoneType::Stockpile)),
                 ))
                 .with_children(|button| {
@@ -179,10 +180,10 @@ fn spawn_zones_submenu(commands: &mut Commands, game_assets: &Res<crate::assets:
                         Text::new("Stockpile"),
                         TextFont {
                             font: game_assets.font_ui.clone(),
-                            font_size: crate::constants::FONT_SIZE_BODY,
+                            font_size: FONT_SIZE_TITLE,
                             ..default()
                         },
-                        TextColor(Color::WHITE),
+                        TextColor(COLOR_TEXT_PRIMARY),
                     ));
                 });
         });
@@ -193,11 +194,11 @@ fn spawn_orders_submenu(commands: &mut Commands, game_assets: &Res<crate::assets
         .spawn((
             Node {
                 display: Display::None,
-                width: Val::Px(120.0),
+                width: Val::Px(SUBMENU_WIDTH),
                 height: Val::Auto,
                 position_type: PositionType::Absolute,
-                left: Val::Px(220.0),
-                bottom: Val::Px(50.0),
+                left: Val::Px(SUBMENU_LEFT_ORDERS),
+                bottom: Val::Px(BOTTOM_BAR_HEIGHT),
                 flex_direction: FlexDirection::Column,
                 padding: UiRect::all(Val::Px(5.0)),
                 ..default()
@@ -237,7 +238,7 @@ fn spawn_orders_submenu(commands: &mut Commands, game_assets: &Res<crate::assets
                             align_items: AlignItems::Center,
                             ..default()
                         },
-                        BackgroundColor(Color::srgb(0.3, 0.3, 0.3)),
+                        BackgroundColor(COLOR_BUTTON_DEFAULT),
                         MenuButton(MenuAction::SelectTaskMode(mode)),
                     ))
                     .with_children(|button| {
@@ -245,10 +246,10 @@ fn spawn_orders_submenu(commands: &mut Commands, game_assets: &Res<crate::assets
                             Text::new(label),
                             TextFont {
                                 font: game_assets.font_ui.clone(),
-                                font_size: crate::constants::FONT_SIZE_BODY,
+                                font_size: FONT_SIZE_TITLE,
                                 ..default()
                             },
-                            TextColor(Color::WHITE),
+                            TextColor(COLOR_TEXT_PRIMARY),
                         ));
                     });
             }

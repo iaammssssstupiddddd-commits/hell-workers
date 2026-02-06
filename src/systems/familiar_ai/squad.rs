@@ -8,8 +8,8 @@ use crate::relationships::Commanding;
 // use crate::systems::visual::speech::components::{
 //     BubbleEmotion, BubblePriority, FamiliarBubble, SpeechBubble,
 // };
-use bevy::prelude::*;
 use crate::systems::familiar_ai::FamiliarSoulQuery;
+use bevy::prelude::*;
 
 /// 分隊管理ユーティリティ
 pub struct SquadManager;
@@ -106,18 +106,8 @@ impl SquadManager {
         let mut released_entities = Vec::new();
 
         for &member_entity in squad {
-            if let Ok((
-                _entity,
-                _transform,
-                soul,
-                _task,
-                _dest,
-                _path,
-                idle,
-                _inv,
-                _cb,
-                _pi,
-            )) = q_souls.get(member_entity)
+            if let Ok((_entity, _transform, soul, _task, _dest, _path, idle, _inv, _cb, _pi)) =
+                q_souls.get(member_entity)
             {
                 // 疲労・崩壊チェック
                 let is_resting = idle.behavior == IdleBehavior::Gathering;

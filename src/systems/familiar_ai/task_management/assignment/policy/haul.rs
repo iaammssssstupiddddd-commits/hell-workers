@@ -1,7 +1,9 @@
 use crate::systems::familiar_ai::task_management::{AssignTaskContext, ReservationShadow};
 use bevy::prelude::*;
 
-use super::super::builders::{issue_haul_to_blueprint, issue_haul_to_mixer, issue_haul_to_stockpile};
+use super::super::builders::{
+    issue_haul_to_blueprint, issue_haul_to_mixer, issue_haul_to_stockpile,
+};
 use super::super::validator::{
     can_accept_mixer_item, find_best_stockpile_for_item, resolve_haul_to_mixer_inputs,
     source_not_reserved,
@@ -14,13 +16,20 @@ pub(super) fn assign_haul_to_mixer(
     queries: &mut crate::systems::soul_ai::task_execution::context::TaskAssignmentQueries,
     shadow: &mut ReservationShadow,
 ) -> bool {
-    let Some((mixer_entity, item_type)) = resolve_haul_to_mixer_inputs(ctx.task_entity, queries) else {
-        debug!("ASSIGN: HaulToMixer task {:?} has no TargetMixer", ctx.task_entity);
+    let Some((mixer_entity, item_type)) = resolve_haul_to_mixer_inputs(ctx.task_entity, queries)
+    else {
+        debug!(
+            "ASSIGN: HaulToMixer task {:?} has no TargetMixer",
+            ctx.task_entity
+        );
         return false;
     };
 
     if !source_not_reserved(ctx.task_entity, queries, shadow) {
-        debug!("ASSIGN: HaulToMixer item {:?} is already reserved", ctx.task_entity);
+        debug!(
+            "ASSIGN: HaulToMixer item {:?} is already reserved",
+            ctx.task_entity
+        );
         return false;
     }
 
@@ -79,10 +88,18 @@ pub(super) fn assign_haul(
     }
 
     let item_info = queries.items.get(ctx.task_entity).ok().map(|(it, _)| it.0);
-    let item_owner = queries.designation.belongs.get(ctx.task_entity).ok().map(|b| b.0);
+    let item_owner = queries
+        .designation
+        .belongs
+        .get(ctx.task_entity)
+        .ok()
+        .map(|b| b.0);
 
     let Some(item_type) = item_info else {
-        debug!("ASSIGN: Haul item {:?} has no ResourceItem", ctx.task_entity);
+        debug!(
+            "ASSIGN: Haul item {:?} has no ResourceItem",
+            ctx.task_entity
+        );
         return false;
     };
 

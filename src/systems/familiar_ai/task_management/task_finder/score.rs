@@ -23,17 +23,25 @@ pub(super) fn score_candidate(
         priority += 5;
 
         let bucket_belongs = queries.designation.belongs.get(entity).ok();
-        let has_tank_space = queries.storage.stockpiles.iter().any(|(s_entity, _, stock, stored)| {
-            let is_tank = stock.resource_type == Some(ResourceType::Water);
-            let is_my_tank = bucket_belongs.map(|b| b.0) == Some(s_entity);
-            if is_tank && is_my_tank {
-                let current_count = stored.map(|s| s.len()).unwrap_or(0);
-                let reserved = queries.reservation.resource_cache.get_destination_reservation(s_entity);
-                (current_count + reserved) < stock.capacity
-            } else {
-                false
-            }
-        });
+        let has_tank_space =
+            queries
+                .storage
+                .stockpiles
+                .iter()
+                .any(|(s_entity, _, stock, stored)| {
+                    let is_tank = stock.resource_type == Some(ResourceType::Water);
+                    let is_my_tank = bucket_belongs.map(|b| b.0) == Some(s_entity);
+                    if is_tank && is_my_tank {
+                        let current_count = stored.map(|s| s.len()).unwrap_or(0);
+                        let reserved = queries
+                            .reservation
+                            .resource_cache
+                            .get_destination_reservation(s_entity);
+                        (current_count + reserved) < stock.capacity
+                    } else {
+                        false
+                    }
+                });
 
         if !has_tank_space {
             return None;

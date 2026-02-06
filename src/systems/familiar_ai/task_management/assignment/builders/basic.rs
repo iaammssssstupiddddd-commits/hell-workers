@@ -14,14 +14,13 @@ pub fn issue_gather(
     queries: &mut crate::systems::soul_ai::task_execution::context::TaskAssignmentQueries,
     shadow: &mut ReservationShadow,
 ) {
-    let assigned_task =
-        crate::systems::soul_ai::task_execution::types::AssignedTask::Gather(
-            crate::systems::soul_ai::task_execution::types::GatherData {
-                target: ctx.task_entity,
-                work_type,
-                phase: GatherPhase::GoingToResource,
-            },
-        );
+    let assigned_task = crate::systems::soul_ai::task_execution::types::AssignedTask::Gather(
+        crate::systems::soul_ai::task_execution::types::GatherData {
+            target: ctx.task_entity,
+            work_type,
+            phase: GatherPhase::GoingToResource,
+        },
+    );
     let reservation_ops = vec![ResourceReservationOp::ReserveSource {
         source: ctx.task_entity,
         amount: 1,

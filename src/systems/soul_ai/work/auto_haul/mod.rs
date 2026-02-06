@@ -6,11 +6,11 @@
 //! - `bucket_auto_haul_system` - Auto-haul buckets back to bucket storage
 //! - `tank_water_request_system` - Request water gathering when tank is low
 
-mod task_area;
 mod blueprint;
 mod bucket;
-mod tank_water_request;
 mod mixer;
+mod tank_water_request;
+mod task_area;
 
 use bevy::prelude::*;
 use std::collections::HashSet;
@@ -23,8 +23,8 @@ pub fn clear_item_reservations_system(mut reservations: ResMut<ItemReservations>
     reservations.0.clear();
 }
 
-pub use task_area::task_area_auto_haul_system;
 pub use blueprint::blueprint_auto_haul_system;
 pub use bucket::bucket_auto_haul_system;
-pub use tank_water_request::tank_water_request_system;
 pub use mixer::mud_mixer_auto_haul_system;
+pub use tank_water_request::tank_water_request_system;
+pub use task_area::task_area_auto_haul_system;

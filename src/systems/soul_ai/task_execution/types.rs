@@ -104,7 +104,9 @@ pub enum HaulPhase {
 pub enum GatherPhase {
     #[default]
     GoingToResource,
-    Collecting { progress: f32 },
+    Collecting {
+        progress: f32,
+    },
     Done,
 }
 
@@ -112,7 +114,9 @@ pub enum GatherPhase {
 pub enum BuildPhase {
     #[default]
     GoingToBlueprint,
-    Building { progress: f32 },
+    Building {
+        progress: f32,
+    },
     Done,
 }
 
@@ -129,16 +133,22 @@ pub enum GatherWaterPhase {
     #[default]
     GoingToBucket,
     GoingToRiver,
-    Filling { progress: f32 },
+    Filling {
+        progress: f32,
+    },
     GoingToTank,
-    Pouring { progress: f32 },
+    Pouring {
+        progress: f32,
+    },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Reflect, Default)]
 pub enum CollectSandPhase {
     #[default]
     GoingToSand,
-    Collecting { progress: f32 },
+    Collecting {
+        progress: f32,
+    },
     Done,
 }
 
@@ -146,7 +156,9 @@ pub enum CollectSandPhase {
 pub enum RefinePhase {
     #[default]
     GoingToMixer,
-    Refining { progress: f32 },
+    Refining {
+        progress: f32,
+    },
     Done,
 }
 

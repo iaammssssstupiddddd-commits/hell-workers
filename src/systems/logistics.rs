@@ -2,7 +2,7 @@ use crate::assets::GameAssets;
 use crate::constants::*;
 use crate::game_state::ZoneContext;
 use crate::systems::jobs::{Rock, Tree};
-use crate::world::map::{WorldMap, TREE_POSITIONS, ROCK_POSITIONS, INITIAL_WOOD_POSITIONS};
+use crate::world::map::{INITIAL_WOOD_POSITIONS, ROCK_POSITIONS, TREE_POSITIONS, WorldMap};
 use bevy::prelude::*;
 use std::collections::HashMap;
 
@@ -122,8 +122,6 @@ pub fn zone_placement(
     }
 }
 
-
-
 pub fn initial_resource_spawner(
     mut commands: Commands,
     game_assets: Res<GameAssets>,
@@ -189,7 +187,12 @@ pub fn initial_resource_spawner(
 
     let rock_count = ROCK_POSITIONS.len();
     let obstacle_count = world_map.obstacles.iter().filter(|&&b| b).count();
-    info!("SPAWNER: Fixed Trees ({}), Rocks ({}) spawned. WorldMap active obstacles: {}", TREE_POSITIONS.len(), rock_count, obstacle_count);
+    info!(
+        "SPAWNER: Fixed Trees ({}), Rocks ({}) spawned. WorldMap active obstacles: {}",
+        TREE_POSITIONS.len(),
+        rock_count,
+        obstacle_count
+    );
 }
 
 pub fn resource_count_display_system(

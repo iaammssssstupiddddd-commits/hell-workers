@@ -74,15 +74,14 @@ pub fn handle_idle_state(
                 voice_opt,
             );
             if let Some(history) = history_opt {
-                history.record_speech(
-                    BubblePriority::Normal,
-                    current_time,
-                );
+                history.record_speech(BubblePriority::Normal, current_time);
             } else {
-                commands.entity(fam_entity).insert(crate::systems::visual::speech::cooldown::SpeechHistory {
-                    last_time: current_time,
-                    last_priority: BubblePriority::Normal,
-                });
+                commands.entity(fam_entity).insert(
+                    crate::systems::visual::speech::cooldown::SpeechHistory {
+                        last_time: current_time,
+                        last_priority: BubblePriority::Normal,
+                    },
+                );
             }
         }
     }

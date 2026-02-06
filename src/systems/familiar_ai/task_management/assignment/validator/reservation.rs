@@ -7,8 +7,11 @@ pub fn can_reserve_source(
     queries: &crate::systems::soul_ai::task_execution::context::TaskAssignmentQueries,
     shadow: &ReservationShadow,
 ) -> bool {
-    let current_reserved =
-        queries.reservation.resource_cache.get_source_reservation(task_entity) + shadow.source_reserved(task_entity);
+    let current_reserved = queries
+        .reservation
+        .resource_cache
+        .get_source_reservation(task_entity)
+        + shadow.source_reserved(task_entity);
 
     let max_slots = if let Ok(slots) = queries.task_slots.get(task_entity) {
         slots.max as usize
@@ -24,7 +27,12 @@ pub fn source_not_reserved(
     queries: &crate::systems::soul_ai::task_execution::context::TaskAssignmentQueries,
     shadow: &ReservationShadow,
 ) -> bool {
-    queries.reservation.resource_cache.get_source_reservation(task_entity) + shadow.source_reserved(task_entity) == 0
+    queries
+        .reservation
+        .resource_cache
+        .get_source_reservation(task_entity)
+        + shadow.source_reserved(task_entity)
+        == 0
 }
 
 pub fn can_accept_mixer_item(
@@ -35,7 +43,8 @@ pub fn can_accept_mixer_item(
 ) -> bool {
     if let Ok((_, storage, _)) = queries.storage.mixers.get(mixer_entity) {
         let reserved = queries
-            .reservation.resource_cache
+            .reservation
+            .resource_cache
             .get_mixer_destination_reservation(mixer_entity, item_type)
             + shadow.mixer_reserved(mixer_entity, item_type);
         storage.can_accept(item_type, (1 + reserved) as u32)

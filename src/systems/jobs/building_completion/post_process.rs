@@ -1,6 +1,8 @@
 use super::super::{Blueprint, BuildingType, MudMixerStorage, SandPile, TaskSlots};
 use crate::assets::GameAssets;
-use crate::constants::{MUD_MIXER_CAPACITY, TILE_SIZE, Z_FLOATING_TEXT, Z_ITEM_OBSTACLE, Z_ITEM_PICKUP, Z_MAP};
+use crate::constants::{
+    MUD_MIXER_CAPACITY, TILE_SIZE, Z_FLOATING_TEXT, Z_ITEM_OBSTACLE, Z_ITEM_PICKUP, Z_MAP,
+};
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
 
@@ -30,10 +32,12 @@ fn setup_tank(
     game_assets: &GameAssets,
     world_map: &mut WorldMap,
 ) {
-    commands.entity(building_entity).insert(crate::systems::logistics::Stockpile {
-        capacity: 50,
-        resource_type: Some(crate::systems::logistics::ResourceType::Water),
-    });
+    commands
+        .entity(building_entity)
+        .insert(crate::systems::logistics::Stockpile {
+            capacity: 50,
+            resource_type: Some(crate::systems::logistics::ResourceType::Water),
+        });
 
     let (bx, by) = WorldMap::world_to_grid(transform.translation.truncate());
     let storage_grids = [(bx, by - 2), (bx + 1, by - 2)];
@@ -68,7 +72,9 @@ fn setup_tank(
         let spawn_pos = WorldMap::grid_to_world(grid.0, grid.1);
 
         commands.spawn((
-            crate::systems::logistics::ResourceItem(crate::systems::logistics::ResourceType::BucketEmpty),
+            crate::systems::logistics::ResourceItem(
+                crate::systems::logistics::ResourceType::BucketEmpty,
+            ),
             crate::systems::logistics::BelongsTo(building_entity),
             crate::relationships::StoredIn(storage_entity),
             crate::systems::logistics::InStockpile(storage_entity),

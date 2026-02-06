@@ -1,18 +1,15 @@
 //! タンクの視覚的表示システム
 
 use crate::assets::GameAssets;
+use crate::relationships::StoredItems;
 use crate::systems::jobs::{Building, BuildingType};
 use crate::systems::logistics::Stockpile;
-use crate::relationships::StoredItems;
 use bevy::prelude::*;
 
 /// タンクの状態に応じて画像を更新するシステム
 pub fn update_tank_visual_system(
     game_assets: Res<GameAssets>,
-    mut q_tanks: Query<
-        (&Building, &Stockpile, Option<&StoredItems>, &mut Sprite),
-        With<Building>,
-    >,
+    mut q_tanks: Query<(&Building, &Stockpile, Option<&StoredItems>, &mut Sprite), With<Building>>,
 ) {
     for (building, stockpile, stored_items_opt, mut sprite) in q_tanks.iter_mut() {
         // タンクのみ処理

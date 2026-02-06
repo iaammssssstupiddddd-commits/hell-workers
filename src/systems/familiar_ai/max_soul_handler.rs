@@ -4,8 +4,8 @@
 
 use crate::entities::damned_soul::{DamnedSoul, Path};
 use crate::entities::familiar::{Familiar, FamiliarVoice};
-use crate::relationships::{CommandedBy, Commanding};
 use crate::events::FamiliarOperationMaxSoulChangedEvent;
+use crate::relationships::{CommandedBy, Commanding};
 use crate::systems::soul_ai::task_execution::AssignedTask;
 use crate::systems::soul_ai::work::unassign_task;
 use crate::systems::visual::speech::components::{
@@ -17,7 +17,14 @@ use bevy::prelude::*;
 /// UIで使役数が減少した場合、超過分の魂をリリースする
 pub fn handle_max_soul_changed_system(
     mut ev_max_soul_changed: MessageReader<FamiliarOperationMaxSoulChangedEvent>,
-    mut q_familiars: Query<(&Transform, &FamiliarVoice, Option<&mut crate::systems::visual::speech::cooldown::SpeechHistory>), With<Familiar>>,
+    mut q_familiars: Query<
+        (
+            &Transform,
+            &FamiliarVoice,
+            Option<&mut crate::systems::visual::speech::cooldown::SpeechHistory>,
+        ),
+        With<Familiar>,
+    >,
     q_commanding: Query<&Commanding, With<Familiar>>,
     mut q_souls: Query<
         (
@@ -57,8 +64,14 @@ pub fn handle_max_soul_changed_system(
                             break;
                         }
                         let member_entity = squad_entities[i];
-                        if let Ok((entity, transform, mut task, mut path, mut inventory_opt, _history)) =
-                            q_souls.get_mut(member_entity)
+                        if let Ok((
+                            entity,
+                            transform,
+                            mut task,
+                            mut path,
+                            mut inventory_opt,
+                            _history,
+                        )) = q_souls.get_mut(member_entity)
                         {
                             // タスクを解除
                             unassign_task(
@@ -110,10 +123,12 @@ pub fn handle_max_soul_changed_system(
                             if let Some(mut history) = history_opt {
                                 history.record_speech(BubblePriority::Normal, current_time);
                             } else {
-                                commands.entity(event.familiar_entity).insert(crate::systems::visual::speech::cooldown::SpeechHistory {
-                                    last_time: current_time,
-                                    last_priority: BubblePriority::Normal,
-                                });
+                                commands.entity(event.familiar_entity).insert(
+                                    crate::systems::visual::speech::cooldown::SpeechHistory {
+                                        last_time: current_time,
+                                        last_priority: BubblePriority::Normal,
+                                    },
+                                );
                             }
                         }
                     }

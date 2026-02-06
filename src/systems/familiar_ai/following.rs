@@ -38,7 +38,7 @@ pub fn following_familiar_system(
             // 使い魔の影響範囲内に移動する
             let distance_sq = soul_pos.distance_squared(fam_pos);
             let radius_sq = command_radius * command_radius;
-            
+
             // 影響範囲外にいる場合は、使い魔の位置に向かって移動する
             if distance_sq > radius_sq {
                 // 既存の目的地と新しい目的地の距離をチェック

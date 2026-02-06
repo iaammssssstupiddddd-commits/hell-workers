@@ -20,13 +20,13 @@ pub use types::AssignedTask;
 
 use crate::entities::damned_soul::IdleBehavior;
 use crate::events::{OnGatheringLeft, OnTaskAssigned, OnTaskCompleted, TaskAssignmentRequest};
-use crate::systems::familiar_ai::resource_cache::{apply_reservation_op, SharedResourceCache};
+use crate::systems::familiar_ai::resource_cache::{SharedResourceCache, apply_reservation_op};
 // use crate::systems::familiar_ai::resource_cache::SharedResourceCache; // Removed unused import
+use crate::systems::soul_ai::query_types::{TaskAssignmentSoulQuery, TaskExecutionSoulQuery};
 use crate::systems::soul_ai::task_execution::types::{
     GatherWaterPhase, HaulPhase, HaulToBpPhase, HaulToMixerPhase, HaulWaterToMixerPhase,
 };
 use crate::systems::soul_ai::work::unassign_task;
-use crate::systems::soul_ai::query_types::{TaskAssignmentSoulQuery, TaskExecutionSoulQuery};
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
 
@@ -59,8 +59,12 @@ pub fn apply_task_assignment_requests_system(
             _inventory_opt,
             under_command_opt,
             participating_opt,
-        )) = q_souls.get_mut(request.worker_entity) else {
-            warn!("ASSIGN_REQUEST: Worker {:?} not found", request.worker_entity);
+        )) = q_souls.get_mut(request.worker_entity)
+        else {
+            warn!(
+                "ASSIGN_REQUEST: Worker {:?} not found",
+                request.worker_entity
+            );
             continue;
         };
 
@@ -72,7 +76,9 @@ pub fn apply_task_assignment_requests_system(
         }
 
         if let Some(p) = participating_opt {
-            commands.entity(worker_entity).remove::<crate::systems::soul_ai::gathering::ParticipatingIn>();
+            commands
+                .entity(worker_entity)
+                .remove::<crate::systems::soul_ai::gathering::ParticipatingIn>();
             commands.trigger(OnGatheringLeft {
                 entity: worker_entity,
                 spot_entity: p.0,
@@ -125,7 +131,9 @@ fn expected_item_for_task(task: &AssignedTask) -> Option<Entity> {
 fn requires_item_in_inventory(task: &AssignedTask) -> bool {
     match task {
         AssignedTask::Haul(data) => matches!(data.phase, HaulPhase::GoingToStockpile),
-        AssignedTask::HaulToBlueprint(data) => matches!(data.phase, HaulToBpPhase::GoingToBlueprint),
+        AssignedTask::HaulToBlueprint(data) => {
+            matches!(data.phase, HaulToBpPhase::GoingToBlueprint)
+        }
         AssignedTask::HaulToMixer(data) => matches!(
             data.phase,
             HaulToMixerPhase::GoingToMixer | HaulToMixerPhase::Delivering
@@ -148,8 +156,6 @@ pub fn task_execution_system(
     world_map: Res<WorldMap>,
     mut pf_context: Local<crate::world::pathfinding::PathfindingContext>,
 ) {
-
-
     for (
         soul_entity,
         soul_transform,
@@ -332,7 +338,9 @@ pub fn task_execution_system(
                 });
 
                 // WorkingOn コンポーネントを削除（これでTaskWorkersも自動更新される）
-                commands.entity(soul_entity).remove::<crate::relationships::WorkingOn>();
+                commands
+                    .entity(soul_entity)
+                    .remove::<crate::relationships::WorkingOn>();
 
                 info!(
                     "EVENT: OnTaskCompleted triggered for Soul {:?}",

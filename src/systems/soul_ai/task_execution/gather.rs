@@ -32,25 +32,40 @@ pub fn handle_gather_task(
                     return;
                 }
                 let res_pos = res_transform.translation.truncate();
-                
+
                 // 到達可能かチェック
-                let reachable = update_destination_to_adjacent(ctx.dest, res_pos, ctx.path, soul_pos, world_map, ctx.pf_context);
-                
+                let reachable = update_destination_to_adjacent(
+                    ctx.dest,
+                    res_pos,
+                    ctx.path,
+                    soul_pos,
+                    world_map,
+                    ctx.pf_context,
+                );
+
                 if !reachable {
                     // 到達不能: タスクをキャンセル
-                    info!("GATHER: Soul {:?} cannot reach target {:?}, canceling", ctx.soul_entity, target);
+                    info!(
+                        "GATHER: Soul {:?} cannot reach target {:?}, canceling",
+                        ctx.soul_entity, target
+                    );
                     // 予約解除
-                    ctx.queue_reservation(crate::events::ResourceReservationOp::ReleaseSource { source: target, amount: 1 });
+                    ctx.queue_reservation(crate::events::ResourceReservationOp::ReleaseSource {
+                        source: target,
+                        amount: 1,
+                    });
                     clear_task_and_path(ctx.task, ctx.path);
                     return;
                 }
 
                 if is_near_target(soul_pos, res_pos) {
-                    *ctx.task = AssignedTask::Gather(crate::systems::soul_ai::task_execution::types::GatherData {
-                        target,
-                        work_type: *work_type,
-                        phase: GatherPhase::Collecting { progress: 0.0 },
-                    });
+                    *ctx.task = AssignedTask::Gather(
+                        crate::systems::soul_ai::task_execution::types::GatherData {
+                            target,
+                            work_type: *work_type,
+                            phase: GatherPhase::Collecting { progress: 0.0 },
+                        },
+                    );
                     ctx.path.waypoints.clear();
                 }
             } else {
@@ -65,7 +80,10 @@ pub fn handle_gather_task(
                 // 指定が解除されていたら中止
                 if cancel_task_if_designation_missing(des_opt, ctx.task, ctx.path) {
                     // キャンセル時も予約解除
-                    ctx.queue_reservation(crate::events::ResourceReservationOp::ReleaseSource { source: target, amount: 1 });
+                    ctx.queue_reservation(crate::events::ResourceReservationOp::ReleaseSource {
+                        source: target,
+                        amount: 1,
+                    });
                     return;
                 }
                 let pos = res_transform.translation;
@@ -95,12 +113,20 @@ pub fn handle_gather_task(
                                 Transform::from_translation(pos + offset),
                             ));
                         }
-                        info!("TASK_EXEC: Soul {:?} chopped a tree (dropped {} wood)", ctx.soul_entity, crate::constants::WOOD_DROP_AMOUNT);
+                        info!(
+                            "TASK_EXEC: Soul {:?} chopped a tree (dropped {} wood)",
+                            ctx.soul_entity,
+                            crate::constants::WOOD_DROP_AMOUNT
+                        );
                     } else if rock.is_some() {
                         // 岩1つ → Rock × ROCK_DROP_AMOUNT
                         for i in 0..crate::constants::ROCK_DROP_AMOUNT {
                             // タイルサイズ 32 なので、中心から ±16 以内に収める。余裕を見て ±12
-                            let offset = Vec3::new(((i % 5) as f32 - 2.0) * 6.0, ((i / 5) as f32 - 0.5) * 6.0, 0.0);
+                            let offset = Vec3::new(
+                                ((i % 5) as f32 - 2.0) * 6.0,
+                                ((i / 5) as f32 - 0.5) * 6.0,
+                                0.0,
+                            );
                             commands.spawn((
                                 ResourceItem(crate::systems::logistics::ResourceType::Rock),
                                 Sprite {
@@ -111,26 +137,37 @@ pub fn handle_gather_task(
                                 Transform::from_translation(pos + offset),
                             ));
                         }
-                        info!("TASK_EXEC: Soul {:?} mined a rock (dropped {} rock)", ctx.soul_entity, crate::constants::ROCK_DROP_AMOUNT);
+                        info!(
+                            "TASK_EXEC: Soul {:?} mined a rock (dropped {} rock)",
+                            ctx.soul_entity,
+                            crate::constants::ROCK_DROP_AMOUNT
+                        );
                     }
                     commands.entity(target).despawn();
-                    
-                    // 完了時予約解除
-                    ctx.queue_reservation(crate::events::ResourceReservationOp::ReleaseSource { source: target, amount: 1 });
 
-                    *ctx.task = AssignedTask::Gather(crate::systems::soul_ai::task_execution::types::GatherData {
-                        target,
-                        work_type: *work_type,
-                        phase: GatherPhase::Done,
+                    // 完了時予約解除
+                    ctx.queue_reservation(crate::events::ResourceReservationOp::ReleaseSource {
+                        source: target,
+                        amount: 1,
                     });
+
+                    *ctx.task = AssignedTask::Gather(
+                        crate::systems::soul_ai::task_execution::types::GatherData {
+                            target,
+                            work_type: *work_type,
+                            phase: GatherPhase::Done,
+                        },
+                    );
                     ctx.soul.fatigue = (ctx.soul.fatigue + FATIGUE_GAIN_ON_COMPLETION).min(1.0);
                 } else {
                     // 進捗を保存
-                    *ctx.task = AssignedTask::Gather(crate::systems::soul_ai::task_execution::types::GatherData {
-                        target,
-                        work_type: *work_type,
-                        phase: GatherPhase::Collecting { progress },
-                    });
+                    *ctx.task = AssignedTask::Gather(
+                        crate::systems::soul_ai::task_execution::types::GatherData {
+                            target,
+                            work_type: *work_type,
+                            phase: GatherPhase::Collecting { progress },
+                        },
+                    );
                 }
             } else {
                 clear_task_and_path(ctx.task, ctx.path);

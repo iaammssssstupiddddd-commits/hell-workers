@@ -1,6 +1,7 @@
 //! エンティティリスト UI (Familiar & Soul List)
 
 use crate::interface::ui::components::*;
+use crate::interface::ui::theme::*;
 use bevy::prelude::*;
 use bevy::ui::{BackgroundGradient, ColorStop, LinearGradient};
 
@@ -11,22 +12,22 @@ pub fn spawn_entity_list_panel(
     commands
         .spawn((
             Node {
-                width: Val::Px(300.0),
+                width: Val::Px(ENTITY_LIST_PANEL_WIDTH),
                 height: Val::Auto,
-                max_height: Val::Percent(70.0),
+                max_height: Val::Percent(ENTITY_LIST_MAX_HEIGHT_PERCENT),
                 position_type: PositionType::Absolute,
-                left: Val::Px(20.0),
-                top: Val::Px(120.0),
+                left: Val::Px(PANEL_MARGIN_X),
+                top: Val::Px(PANEL_TOP),
                 flex_direction: FlexDirection::Column,
-                padding: UiRect::all(Val::Px(10.0)),
-                overflow: Overflow::clip_y(),
+                padding: UiRect::all(Val::Px(PANEL_PADDING)),
+                overflow: Overflow::scroll_y(),
                 ..default()
             },
             BackgroundGradient::from(LinearGradient {
                 angle: 0.0, // 左から右
                 stops: vec![
-                    ColorStop::new(Color::srgba(0.1, 0.3, 0.5, 0.9), Val::Percent(0.0)), // 青っぽい
-                    ColorStop::new(Color::srgba(0.0, 0.0, 0.0, 0.8), Val::Percent(100.0)),
+                    ColorStop::new(COLOR_PANEL_LEFT_TOP, Val::Percent(0.0)),
+                    ColorStop::new(COLOR_PANEL_LEFT_BOTTOM, Val::Percent(100.0)),
                 ],
                 ..default()
             }),
@@ -38,10 +39,10 @@ pub fn spawn_entity_list_panel(
                 Text::new("Entity List"),
                 TextFont {
                     font: game_assets.font_ui.clone(),
-                    font_size: crate::constants::FONT_SIZE_HEADER,
+                    font_size: FONT_SIZE_TITLE,
                     ..default()
                 },
-                TextColor(Color::srgb(0.0, 1.0, 1.0)),
+                TextColor(COLOR_TEXT_ACCENT),
                 Node {
                     margin: UiRect::bottom(Val::Px(10.0)),
                     ..default()
@@ -80,7 +81,7 @@ pub fn spawn_entity_list_panel(
                                 padding: UiRect::horizontal(Val::Px(5.0)),
                                 ..default()
                             },
-                            BackgroundColor(Color::srgba(0.3, 0.3, 0.3, 0.5)),
+                            BackgroundColor(COLOR_BUTTON_DEFAULT),
                             SectionToggle(EntityListSectionType::Unassigned),
                         ))
                         .with_children(|button| {
@@ -98,10 +99,10 @@ pub fn spawn_entity_list_panel(
                                 Text::new("Unassigned Souls"),
                                 TextFont {
                                     font: game_assets.font_ui.clone(),
-                                    font_size: crate::constants::FONT_SIZE_SMALL,
+                                    font_size: FONT_SIZE_SMALL,
                                     ..default()
                                 },
-                                TextColor(Color::WHITE),
+                                TextColor(COLOR_TEXT_PRIMARY),
                             ));
                         });
 
@@ -114,5 +115,23 @@ pub fn spawn_entity_list_panel(
                         UnassignedSoulContent,
                     ));
                 });
+
+            // スクロール可能であることを示す固定ヒント
+            parent.spawn((
+                Text::new("Scroll: Mouse Wheel"),
+                TextFont {
+                    font: game_assets.font_ui.clone(),
+                    font_size: FONT_SIZE_SMALL,
+                    ..default()
+                },
+                TextColor(COLOR_TEXT_SECONDARY),
+                Node {
+                    align_self: AlignSelf::End,
+                    margin: UiRect::top(Val::Px(8.0)),
+                    ..default()
+                },
+                IgnoreScroll(BVec2::new(false, true)),
+                EntityListScrollHint,
+            ));
         });
 }

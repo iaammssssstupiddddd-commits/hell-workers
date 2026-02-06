@@ -69,7 +69,7 @@ pub fn find_path(
     world_map: &WorldMap,
     context: &mut PathfindingContext,
     start: (i32, i32),
-    goal: (i32, i32)
+    goal: (i32, i32),
 ) -> Option<Vec<(i32, i32)>> {
     let start_idx = world_map.pos_to_idx(start.0, start.1)?;
     let goal_idx = world_map.pos_to_idx(goal.0, goal.1)?;
@@ -102,8 +102,14 @@ pub fn find_path(
 
     // 8方向に拡張
     let directions = [
-        (0, 1), (0, -1), (1, 0), (-1, 0),
-        (1, 1), (1, -1), (-1, 1), (-1, -1)
+        (0, 1),
+        (0, -1),
+        (1, 0),
+        (-1, 0),
+        (1, 1),
+        (1, -1),
+        (-1, 1),
+        (-1, -1),
     ];
 
     while let Some(current) = context.open_set.pop() {
@@ -114,7 +120,9 @@ pub fn find_path(
             while let Some(prev) = context.came_from[curr] {
                 path.push(WorldMap::idx_to_pos(prev));
                 curr = prev;
-                if curr == start_idx { break; }
+                if curr == start_idx {
+                    break;
+                }
             }
             path.reverse();
             // 経路の平滑化を適用せずにダイレクトなグリッドパスを返す
@@ -128,7 +136,7 @@ pub fn find_path(
         for (dx, dy) in &directions {
             let nx = curr_pos.0 + dx;
             let ny = curr_pos.1 + dy;
-            
+
             let n_idx = match world_map.pos_to_idx(nx, ny) {
                 Some(idx) => idx,
                 None => continue,
@@ -145,14 +153,19 @@ pub fn find_path(
                 // 角抜け防止: 斜め移動の際、隣接する2マスが通行不能なら通れない
                 // (x+dx, y) または (x, y+dy) のどちらかが通行不能な場合、通り抜けを制限する
                 // ここでは「両方が通行可能」であることを条件とする
-                if !world_map.is_walkable(curr_pos.0 + dx, curr_pos.1) || 
-                   !world_map.is_walkable(curr_pos.0, curr_pos.1 + dy) {
+                if !world_map.is_walkable(curr_pos.0 + dx, curr_pos.1)
+                    || !world_map.is_walkable(curr_pos.0, curr_pos.1 + dy)
+                {
                     continue;
                 }
             }
 
             // 移動コスト: 直線は10、斜めは14
-            let move_cost = if is_diagonal { MOVE_COST_DIAGONAL } else { MOVE_COST_STRAIGHT };
+            let move_cost = if is_diagonal {
+                MOVE_COST_DIAGONAL
+            } else {
+                MOVE_COST_STRAIGHT
+            };
             let tentative_g = current_g + move_cost;
 
             if tentative_g < context.g_scores[n_idx] {
@@ -178,7 +191,7 @@ pub fn find_path_to_adjacent(
     world_map: &WorldMap,
     context: &mut PathfindingContext,
     start: (i32, i32),
-    target: (i32, i32)
+    target: (i32, i32),
 ) -> Option<Vec<(i32, i32)>> {
     // 逆引き検索を1回実行: ターゲット地点（岩など）から開始点（ソウル）に向かってパスを探す
     // ターゲット地点自体が通行不能でも、最初の展開（隣接マスへの移動）で通行可能マスに移行する
@@ -187,14 +200,14 @@ pub fn find_path_to_adjacent(
     if !start_walkable {
         context.allow_goal_obstacle = true;
     }
-    
+
     let mut path = find_path(world_map, context, target, start)?;
-    
+
     // 得られたパスは [target, neighbor, ..., start]
     // これを逆転させて [start, ..., neighbor, target] にし、target を削除すれば隣接マス到着パスになる
     path.reverse();
     path.pop(); // ターゲット自体(岩の中心)を削除。これで隣接マスで止まる。
-    
+
     if path.is_empty() {
         // すでにターゲットの隣にある場合、空の代わりに開始地点を返す（移動不要）
         Some(vec![start])
@@ -202,9 +215,6 @@ pub fn find_path_to_adjacent(
         Some(path)
     }
 }
-
-
-
 
 /// ターゲット（複数の占有マス）へ向かい、その境界（隣接する歩行可能タイル）で停止するパスを探索
 /// ターゲット自体が障害物（非Walkable）であっても到達可能とする
@@ -232,7 +242,16 @@ pub fn find_path_to_boundary(
 
     // すでにターゲット内にいる場合は、外へ脱出するための最短マスを探す
     if target_grids.contains(&start) {
-        let directions = [(0, 1), (0, -1), (1, 0), (-1, 0), (1, 1), (1, -1), (-1, 1), (-1, -1)];
+        let directions = [
+            (0, 1),
+            (0, -1),
+            (1, 0),
+            (-1, 0),
+            (1, 1),
+            (1, -1),
+            (-1, 1),
+            (-1, -1),
+        ];
         for (dx, dy) in directions {
             let nx = start.0 + dx;
             let ny = start.1 + dy;
@@ -271,7 +290,16 @@ pub fn find_path_to_boundary(
         f_cost: heuristic(start_idx, goal_idx),
     });
 
-    let directions = [(0, 1), (0, -1), (1, 0), (-1, 0), (1, 1), (1, -1), (-1, 1), (-1, -1)];
+    let directions = [
+        (0, 1),
+        (0, -1),
+        (1, 0),
+        (-1, 0),
+        (1, 1),
+        (1, -1),
+        (-1, 1),
+        (-1, -1),
+    ];
 
     while let Some(current) = context.open_set.pop() {
         let curr_pos = WorldMap::idx_to_pos(current.idx);
@@ -285,10 +313,10 @@ pub fn find_path_to_boundary(
                 c = prev;
             }
             path.reverse();
-            
+
             // ターゲット内の最後のノードを削除（境界で停止）
             path.pop();
-            
+
             if path.is_empty() {
                 return Some(vec![start]);
             }
@@ -300,7 +328,7 @@ pub fn find_path_to_boundary(
         for (dx, dy) in &directions {
             let nx = curr_pos.0 + dx;
             let ny = curr_pos.1 + dy;
-            
+
             let n_idx = match world_map.pos_to_idx(nx, ny) {
                 Some(idx) => idx,
                 None => continue,
@@ -314,14 +342,20 @@ pub fn find_path_to_boundary(
 
             // 角抜けチェック
             if dx.abs() == 1 && dy.abs() == 1 {
-                let s1 = world_map.is_walkable(curr_pos.0 + dx, curr_pos.1) || target_grids.contains(&(curr_pos.0 + dx, curr_pos.1));
-                let s2 = world_map.is_walkable(curr_pos.0, curr_pos.1 + dy) || target_grids.contains(&(curr_pos.0, curr_pos.1 + dy));
+                let s1 = world_map.is_walkable(curr_pos.0 + dx, curr_pos.1)
+                    || target_grids.contains(&(curr_pos.0 + dx, curr_pos.1));
+                let s2 = world_map.is_walkable(curr_pos.0, curr_pos.1 + dy)
+                    || target_grids.contains(&(curr_pos.0, curr_pos.1 + dy));
                 if !s1 || !s2 {
                     continue;
                 }
             }
 
-            let move_cost = if dx.abs() == 1 && dy.abs() == 1 { MOVE_COST_DIAGONAL } else { MOVE_COST_STRAIGHT };
+            let move_cost = if dx.abs() == 1 && dy.abs() == 1 {
+                MOVE_COST_DIAGONAL
+            } else {
+                MOVE_COST_STRAIGHT
+            };
             let tentative_g = current_g + move_cost;
 
             if tentative_g < context.g_scores[n_idx] {
@@ -356,18 +390,22 @@ mod tests {
         let map = create_test_map(10, 10);
         let mut ctx = PathfindingContext::default();
         let target = vec![(5, 5)];
-        
+
         let path = find_path_to_boundary(&map, &mut ctx, (1, 1), &target);
         assert!(path.is_some(), "Path should be found");
         let path = path.unwrap();
         println!("1x1 Path: {:?}", path);
-        
+
         // 1マスのターゲットの場合、最後はターゲットの隣接マスで終わるべき
         let last = path.last().unwrap();
         let dx = (last.0 - 5).abs();
         let dy = (last.1 - 5).abs();
         // 中心(5,5)への隣接条件: dx<=1 && dy<=1
-        assert!(dx <= 1 && dy <= 1, "Last {:?} should be adjacent to (5,5)", last);
+        assert!(
+            dx <= 1 && dy <= 1,
+            "Last {:?} should be adjacent to (5,5)",
+            last
+        );
         assert!(*last != (5, 5), "Last {:?} should not be target", last);
     }
 }

@@ -44,10 +44,7 @@ impl Default for PulseAnimation {
 }
 
 /// パルスアニメーションを更新し、値を返す
-pub fn update_pulse_animation(
-    time: &Time,
-    animation: &mut PulseAnimation,
-) -> f32 {
+pub fn update_pulse_animation(time: &Time, animation: &mut PulseAnimation) -> f32 {
     animation.timer += time.delta_secs();
 
     // sin波でパルス
@@ -97,10 +94,7 @@ impl Default for BounceAnimation {
 
 /// バウンスアニメーションを更新し、スケール値を返す
 /// アニメーションが完了した場合はNoneを返す
-pub fn update_bounce_animation(
-    time: &Time,
-    animation: &mut BounceAnimation,
-) -> Option<f32> {
+pub fn update_bounce_animation(time: &Time, animation: &mut BounceAnimation) -> Option<f32> {
     animation.timer += time.delta_secs();
 
     if animation.timer >= animation.config.duration {
@@ -110,8 +104,8 @@ pub fn update_bounce_animation(
     // サイン波でスケールを変化させる (min_scale -> max_scale -> min_scale)
     let progress = animation.timer / animation.config.duration;
     let t = (progress * std::f32::consts::PI).sin();
-    let scale = animation.config.min_scale
-        + (animation.config.max_scale - animation.config.min_scale) * t;
+    let scale =
+        animation.config.min_scale + (animation.config.max_scale - animation.config.min_scale) * t;
 
     Some(scale)
 }

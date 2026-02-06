@@ -4,8 +4,8 @@ use crate::entities::familiar::{ActiveCommand, Familiar, FamiliarCommand};
 use crate::relationships::CommandedBy;
 // use crate::systems::familiar_ai::resource_cache::SharedResourceCache; // Removed unused import
 
-use crate::systems::soul_ai::work::helpers;
 use crate::systems::soul_ai::query_types::CleanupSoulQuery;
+use crate::systems::soul_ai::work::helpers;
 
 /// 使い魔が Idle コマンドの場合、または使い魔が存在しない場合に部下をリリースする
 pub fn cleanup_commanded_souls_system(

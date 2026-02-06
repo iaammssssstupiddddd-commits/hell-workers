@@ -9,15 +9,16 @@ mod panels;
 mod submenus;
 mod time_control;
 
-use bevy::prelude::*;
 use crate::interface::ui::components::FpsText;
+use crate::interface::ui::theme::{COLOR_TEXT_PRIMARY, FONT_SIZE_TITLE, FPS_LEFT, FPS_TOP};
+use bevy::prelude::*;
 
 fn spawn_fps_display(commands: &mut Commands) {
     commands
         .spawn((Node {
             position_type: PositionType::Absolute,
-            left: Val::Px(20.0),
-            top: Val::Px(20.0),
+            left: Val::Px(FPS_LEFT),
+            top: Val::Px(FPS_TOP),
             flex_direction: FlexDirection::Column,
             align_items: AlignItems::Start,
             ..default()
@@ -26,10 +27,10 @@ fn spawn_fps_display(commands: &mut Commands) {
             parent.spawn((
                 Text::new("FPS: --"),
                 TextFont {
-                    font_size: 18.0,
+                    font_size: FONT_SIZE_TITLE,
                     ..default()
                 },
-                TextColor(Color::srgb(0.0, 1.0, 0.0)),
+                TextColor(COLOR_TEXT_PRIMARY),
                 FpsText,
             ));
         });

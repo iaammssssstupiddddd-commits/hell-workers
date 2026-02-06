@@ -54,8 +54,15 @@ pub fn on_stress_breakdown(
     mut queries: crate::systems::soul_ai::task_execution::context::TaskAssignmentQueries,
 ) {
     let soul_entity = on.entity;
-    if let Ok((entity, transform, mut _soul, mut task, mut path, mut inventory_opt, under_command)) =
-        q_souls.get_mut(soul_entity)
+    if let Ok((
+        entity,
+        transform,
+        mut _soul,
+        mut task,
+        mut path,
+        mut inventory_opt,
+        under_command,
+    )) = q_souls.get_mut(soul_entity)
     {
         info!("OBSERVER: Soul {:?} had a stress breakdown!", entity);
 
@@ -79,9 +86,7 @@ pub fn on_stress_breakdown(
         }
 
         if under_command.is_some() {
-            commands
-                .entity(entity)
-                .remove::<CommandedBy>();
+            commands.entity(entity).remove::<CommandedBy>();
         }
     }
 }
@@ -121,9 +126,7 @@ pub fn on_exhausted(
         );
 
         if under_command_opt.is_some() {
-            commands
-                .entity(entity)
-                .remove::<CommandedBy>();
+            commands.entity(entity).remove::<CommandedBy>();
         }
 
         if !matches!(*task, AssignedTask::None) {

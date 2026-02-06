@@ -109,7 +109,10 @@ pub fn assign_task_to_worker(
     };
 
     if idle.behavior == IdleBehavior::ExhaustedGathering {
-        debug!("ASSIGN: Worker {:?} is exhausted gathering", ctx.worker_entity);
+        debug!(
+            "ASSIGN: Worker {:?} is exhausted gathering",
+            ctx.worker_entity
+        );
         return false;
     }
 
@@ -122,15 +125,14 @@ pub fn assign_task_to_worker(
     }
 
     // タスクが存在するか最終確認
-    let (task_pos, work_type) =
-        if let Ok((_, transform, designation, _, _, _, _, _)) =
-            queries.designation.designations.get(ctx.task_entity)
-        {
-            (transform.translation.truncate(), designation.work_type)
-        } else {
-            debug!("ASSIGN: Task designation {:?} disappeared", ctx.task_entity);
-            return false;
-        };
+    let (task_pos, work_type) = if let Ok((_, transform, designation, _, _, _, _, _)) =
+        queries.designation.designations.get(ctx.task_entity)
+    {
+        (transform.translation.truncate(), designation.work_type)
+    } else {
+        debug!("ASSIGN: Task designation {:?} disappeared", ctx.task_entity);
+        return false;
+    };
 
     super::assignment::assign_by_work_type(
         work_type,

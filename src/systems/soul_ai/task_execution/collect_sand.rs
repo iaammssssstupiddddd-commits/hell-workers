@@ -27,30 +27,56 @@ pub fn handle_collect_sand_task(
                     return;
                 }
                 let res_pos = res_transform.translation.truncate();
-                let reachable = update_destination_to_adjacent(ctx.dest, res_pos, ctx.path, soul_pos, world_map, ctx.pf_context);
+                let reachable = update_destination_to_adjacent(
+                    ctx.dest,
+                    res_pos,
+                    ctx.path,
+                    soul_pos,
+                    world_map,
+                    ctx.pf_context,
+                );
 
                 if !reachable {
                     // 到達不能: タスクをキャンセル
-                    info!("COLLECT_SAND: Soul {:?} cannot reach SandPile {:?}, canceling", ctx.soul_entity, target);
-                    commands.entity(target).remove::<crate::systems::jobs::Designation>();
-                    commands.entity(target).remove::<crate::systems::jobs::TaskSlots>();
-                    ctx.queue_reservation(crate::events::ResourceReservationOp::ReleaseSource { source: target, amount: 1 });
+                    info!(
+                        "COLLECT_SAND: Soul {:?} cannot reach SandPile {:?}, canceling",
+                        ctx.soul_entity, target
+                    );
+                    commands
+                        .entity(target)
+                        .remove::<crate::systems::jobs::Designation>();
+                    commands
+                        .entity(target)
+                        .remove::<crate::systems::jobs::TaskSlots>();
+                    ctx.queue_reservation(crate::events::ResourceReservationOp::ReleaseSource {
+                        source: target,
+                        amount: 1,
+                    });
                     clear_task_and_path(ctx.task, ctx.path);
                     return;
                 }
 
                 if is_near_target(soul_pos, res_pos) {
-                    *ctx.task = AssignedTask::CollectSand(crate::systems::soul_ai::task_execution::types::CollectSandData {
-                        target,
-                        phase: CollectSandPhase::Collecting { progress: 0.0 },
-                    });
+                    *ctx.task = AssignedTask::CollectSand(
+                        crate::systems::soul_ai::task_execution::types::CollectSandData {
+                            target,
+                            phase: CollectSandPhase::Collecting { progress: 0.0 },
+                        },
+                    );
                     ctx.path.waypoints.clear();
                 }
             } else {
                 // SandPile が存在しない場合も Designation を削除
-                commands.entity(target).remove::<crate::systems::jobs::Designation>();
-                commands.entity(target).remove::<crate::systems::jobs::TaskSlots>();
-                ctx.queue_reservation(crate::events::ResourceReservationOp::ReleaseSource { source: target, amount: 1 });
+                commands
+                    .entity(target)
+                    .remove::<crate::systems::jobs::Designation>();
+                commands
+                    .entity(target)
+                    .remove::<crate::systems::jobs::TaskSlots>();
+                ctx.queue_reservation(crate::events::ResourceReservationOp::ReleaseSource {
+                    source: target,
+                    amount: 1,
+                });
                 clear_task_and_path(ctx.task, ctx.path);
             }
         }
@@ -61,7 +87,7 @@ pub fn handle_collect_sand_task(
                 if cancel_task_if_designation_missing(des_opt, ctx.task, ctx.path) {
                     return;
                 }
-                
+
                 // 進行度を更新
                 progress += time.delta_secs() * GATHER_SPEED_BASE;
 
@@ -78,39 +104,61 @@ pub fn handle_collect_sand_task(
                                 custom_size: Some(Vec2::splat(TILE_SIZE * 0.5)),
                                 ..default()
                             },
-                            Transform::from_translation(pos.truncate().extend(Z_ITEM_PICKUP) + offset),
+                            Transform::from_translation(
+                                pos.truncate().extend(Z_ITEM_PICKUP) + offset,
+                            ),
                             Name::new("Item (Sand)"),
                         ));
                     }
-                    
+
                     info!("TASK_EXEC: Soul {:?} collected sand", ctx.soul_entity);
 
-                    *ctx.task = AssignedTask::CollectSand(crate::systems::soul_ai::task_execution::types::CollectSandData {
-                        target,
-                        phase: CollectSandPhase::Done,
-                    });
+                    *ctx.task = AssignedTask::CollectSand(
+                        crate::systems::soul_ai::task_execution::types::CollectSandData {
+                            target,
+                            phase: CollectSandPhase::Done,
+                        },
+                    );
                     ctx.soul.fatigue = (ctx.soul.fatigue + FATIGUE_GAIN_ON_COMPLETION).min(1.0);
                 } else {
                     // 進捗を保存
-                    *ctx.task = AssignedTask::CollectSand(crate::systems::soul_ai::task_execution::types::CollectSandData {
-                        target,
-                        phase: CollectSandPhase::Collecting { progress },
-                    });
+                    *ctx.task = AssignedTask::CollectSand(
+                        crate::systems::soul_ai::task_execution::types::CollectSandData {
+                            target,
+                            phase: CollectSandPhase::Collecting { progress },
+                        },
+                    );
                 }
             } else {
                 // SandPile が存在しない場合も Designation を削除
-                commands.entity(target).remove::<crate::systems::jobs::Designation>();
-                commands.entity(target).remove::<crate::systems::jobs::TaskSlots>();
-                ctx.queue_reservation(crate::events::ResourceReservationOp::ReleaseSource { source: target, amount: 1 });
+                commands
+                    .entity(target)
+                    .remove::<crate::systems::jobs::Designation>();
+                commands
+                    .entity(target)
+                    .remove::<crate::systems::jobs::TaskSlots>();
+                ctx.queue_reservation(crate::events::ResourceReservationOp::ReleaseSource {
+                    source: target,
+                    amount: 1,
+                });
                 clear_task_and_path(ctx.task, ctx.path);
             }
         }
         CollectSandPhase::Done => {
             // SandPile の Designation を削除（次回必要なときに再発行される）
-            commands.entity(target).remove::<crate::systems::jobs::Designation>();
-            commands.entity(target).remove::<crate::systems::jobs::TaskSlots>();
-            commands.entity(target).remove::<crate::systems::jobs::IssuedBy>();
-            ctx.queue_reservation(crate::events::ResourceReservationOp::ReleaseSource { source: target, amount: 1 });
+            commands
+                .entity(target)
+                .remove::<crate::systems::jobs::Designation>();
+            commands
+                .entity(target)
+                .remove::<crate::systems::jobs::TaskSlots>();
+            commands
+                .entity(target)
+                .remove::<crate::systems::jobs::IssuedBy>();
+            ctx.queue_reservation(crate::events::ResourceReservationOp::ReleaseSource {
+                source: target,
+                amount: 1,
+            });
             clear_task_and_path(ctx.task, ctx.path);
         }
     }

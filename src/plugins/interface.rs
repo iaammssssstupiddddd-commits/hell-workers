@@ -2,17 +2,15 @@
 
 // インポート整理完了
 use crate::entities::damned_soul::DamnedSoulSpawnEvent;
-use crate::entities::familiar::{
-    FamiliarSpawnEvent, FamiliarType,
-};
+use crate::entities::familiar::{FamiliarSpawnEvent, FamiliarType};
 use crate::game_state::PlayMode;
 use crate::interface::camera::MainCamera;
 use crate::interface::selection::blueprint_placement;
 use crate::interface::selection::{update_hover_entity, update_selection_indicator};
 use crate::interface::ui::{
     familiar_context_menu_system, hover_tooltip_system, info_panel_system, menu_visibility_system,
-    task_summary_ui_system, ui_interaction_system, update_fps_display_system,
-    update_mode_text_system, update_operation_dialog_system,
+    task_summary_ui_system, ui_interaction_system, ui_keyboard_shortcuts_system,
+    update_fps_display_system, update_mode_text_system, update_operation_dialog_system,
 };
 use crate::systems::GameSystemSet;
 use crate::systems::logistics::zone_placement;
@@ -39,6 +37,7 @@ impl Plugin for InterfacePlugin {
                 hover_tooltip_system,
                 blueprint_placement.run_if(in_state(PlayMode::BuildingPlace)),
                 zone_placement.run_if(in_state(PlayMode::ZonePlace)),
+                ui_keyboard_shortcuts_system,
                 ui_interaction_system,
                 menu_visibility_system,
                 info_panel_system.run_if(
@@ -67,6 +66,7 @@ impl Plugin for InterfacePlugin {
                 update_fps_display_system,
                 debug_spawn_system,
                 crate::interface::ui::entity_list_interaction_system,
+                crate::interface::ui::entity_list_visual_feedback_system,
                 crate::interface::ui::update_unassigned_arrow_icon_system,
             )
                 .in_set(GameSystemSet::Interface),

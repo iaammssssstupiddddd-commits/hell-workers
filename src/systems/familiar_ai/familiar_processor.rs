@@ -3,22 +3,20 @@
 //! `familiar_ai_system` の処理を複数の関数に分割して管理します。
 
 use crate::entities::damned_soul::{Destination, IdleBehavior, Path};
-use crate::entities::familiar::{
-    Familiar, FamiliarOperation, FamiliarVoice,
-};
-use crate::relationships::{Commanding, ManagedTasks, CommandedBy};
+use crate::entities::familiar::{Familiar, FamiliarOperation, FamiliarVoice};
+use crate::relationships::{CommandedBy, Commanding, ManagedTasks};
 use crate::systems::command::TaskArea;
+use crate::systems::familiar_ai::FamiliarSoulQuery;
 use crate::systems::soul_ai::gathering::ParticipatingIn;
 use crate::systems::spatial::{DesignationSpatialGrid, SpatialGrid};
 use crate::systems::visual::speech::components::{FamiliarBubble, SpeechBubble};
 use bevy::prelude::*;
-use crate::systems::familiar_ai::FamiliarSoulQuery;
 
+use super::FamiliarAiState;
 use super::recruitment::RecruitmentManager;
 use super::squad::SquadManager;
 use super::state_handlers;
 use super::task_management::TaskManager;
-use super::FamiliarAiState;
 use crate::world::map::WorldMap;
 use crate::world::pathfinding::PathfindingContext;
 
@@ -35,11 +33,8 @@ pub fn process_squad_management(
     let initial_squad = SquadManager::build_squad(commanding);
 
     // 分隊を検証（無効なメンバーを除外）
-    let (mut squad_entities, invalid_members) = SquadManager::validate_squad(
-        initial_squad,
-        fam_entity,
-        q_souls,
-    );
+    let (mut squad_entities, invalid_members) =
+        SquadManager::validate_squad(initial_squad, fam_entity, q_souls);
 
     // 疲労・崩壊したメンバーをリリース要求
     let released_entities = SquadManager::release_fatigued(
@@ -180,7 +175,12 @@ pub fn finalize_state_transitions(
             if !is_squad_full && matches!(*ai_state, FamiliarAiState::Supervising { .. }) {
                 *ai_state = FamiliarAiState::SearchingTask;
                 state_changed = true;
-                info!("FAM_AI: {:?} squad has open slots ({}/{}). Switching to SearchingTask", fam_entity, squad_entities.len(), max_workers);
+                info!(
+                    "FAM_AI: {:?} squad has open slots ({}/{}). Switching to SearchingTask",
+                    fam_entity,
+                    squad_entities.len(),
+                    max_workers
+                );
             } else if is_squad_full && !matches!(*ai_state, FamiliarAiState::Supervising { .. }) {
                 // 枠がいっぱいで、かつ監視モード以外なら監視へ
                 *ai_state = FamiliarAiState::Supervising {
@@ -307,9 +307,16 @@ pub fn apply_squad_management_requests_system(
     time: Res<Time>,
     game_assets: Res<crate::assets::GameAssets>,
     q_bubbles: Query<(Entity, &SpeechBubble), With<FamiliarBubble>>,
-    mut q_familiars: Query<(&Transform, Option<&FamiliarVoice>, Option<&mut crate::systems::visual::speech::cooldown::SpeechHistory>), With<Familiar>>,
+    mut q_familiars: Query<
+        (
+            &Transform,
+            Option<&FamiliarVoice>,
+            Option<&mut crate::systems::visual::speech::cooldown::SpeechHistory>,
+        ),
+        With<Familiar>,
+    >,
 ) {
-    use crate::events::{SquadManagementOperation, ReleaseReason};
+    use crate::events::{ReleaseReason, SquadManagementOperation};
     use crate::systems::visual::speech::components::{BubbleEmotion, BubblePriority};
 
     for request in request_reader.read() {
@@ -333,7 +340,10 @@ pub fn apply_squad_management_requests_system(
                     familiar_entity: fam_entity,
                 });
             }
-            SquadManagementOperation::ReleaseMember { soul_entity, reason } => {
+            SquadManagementOperation::ReleaseMember {
+                soul_entity,
+                reason,
+            } => {
                 let soul_entity = *soul_entity;
                 if let Ok((
                     entity,
@@ -349,7 +359,14 @@ pub fn apply_squad_management_requests_system(
                 )) = q_souls.get_mut(soul_entity)
                 {
                     let dropped_res = inventory_opt.as_ref().and_then(|i| {
-                        i.0.and_then(|e| queries.designation.targets.get(e).ok().and_then(|(_, _, _, ri, _, _)| ri.map(|r| r.0)))
+                        i.0.and_then(|e| {
+                            queries
+                                .designation
+                                .targets
+                                .get(e)
+                                .ok()
+                                .and_then(|(_, _, _, ri, _, _)| ri.map(|r| r.0))
+                        })
                     });
 
                     // 現在、すべての解放は自動（疲労）のため、個別のタスク中断セリフは出さない
@@ -370,7 +387,9 @@ pub fn apply_squad_management_requests_system(
 
                     // セリフの表示
                     if matches!(reason, ReleaseReason::Fatigued) {
-                        if let Ok((fam_transform, voice_opt, mut history_opt)) = q_familiars.get_mut(fam_entity) {
+                        if let Ok((fam_transform, voice_opt, mut history_opt)) =
+                            q_familiars.get_mut(fam_entity)
+                        {
                             let current_time = time.elapsed_secs();
                             let can_speak = if let Some(history) = &history_opt {
                                 history.can_speak(BubblePriority::Normal, current_time)
@@ -393,17 +412,21 @@ pub fn apply_squad_management_requests_system(
                                 if let Some(history) = history_opt.as_mut() {
                                     history.record_speech(BubblePriority::Normal, current_time);
                                 } else {
-                                    commands.entity(fam_entity).insert(crate::systems::visual::speech::cooldown::SpeechHistory {
-                                        last_time: current_time,
-                                        last_priority: BubblePriority::Normal,
-                                    });
+                                    commands.entity(fam_entity).insert(
+                                        crate::systems::visual::speech::cooldown::SpeechHistory {
+                                            last_time: current_time,
+                                            last_priority: BubblePriority::Normal,
+                                        },
+                                    );
                                 }
                             }
                         }
                     }
 
                     commands.entity(soul_entity).remove::<CommandedBy>();
-                    commands.trigger(crate::events::OnReleasedFromService { entity: soul_entity });
+                    commands.trigger(crate::events::OnReleasedFromService {
+                        entity: soul_entity,
+                    });
                 }
             }
         }

@@ -4,8 +4,8 @@
 //! 独立したハンドラー関数を提供します。
 
 pub mod idle;
-pub mod searching;
 pub mod scouting;
+pub mod searching;
 pub mod supervising;
 
 use crate::systems::familiar_ai::FamiliarAiState;

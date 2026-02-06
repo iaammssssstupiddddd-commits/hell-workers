@@ -2,9 +2,7 @@ use crate::entities::damned_soul::StressBreakdown;
 use crate::entities::familiar::FamiliarCommand;
 use crate::systems::GameSystemSet;
 use crate::systems::soul_ai::scheduling::FamiliarAiSystemSet;
-use crate::systems::spatial::{
-    DesignationSpatialGrid, SpatialGrid,
-};
+use crate::systems::spatial::{DesignationSpatialGrid, SpatialGrid};
 use crate::systems::visual::speech::components::{FamiliarBubble, SpeechBubble};
 use crate::world::pathfinding::PathfindingContext;
 use bevy::ecs::system::SystemParam;
@@ -13,11 +11,11 @@ use bevy::prelude::*;
 pub mod encouragement; // 新規追加
 pub mod familiar_processor;
 pub mod following;
-pub mod resource_cache;
 pub mod helpers;
 pub mod max_soul_handler;
 pub mod query_types;
 pub mod recruitment;
+pub mod resource_cache;
 pub mod scouting;
 pub mod squad;
 pub mod state_handlers;
@@ -29,8 +27,8 @@ use familiar_processor::{
     finalize_state_transitions, process_recruitment, process_squad_management,
     process_task_delegation_and_movement,
 };
-use state_transition::determine_transition_reason;
 pub use query_types::{FamiliarSoulQuery, FamiliarStateQuery, FamiliarTaskQuery};
+use state_transition::determine_transition_reason;
 
 /// 使い魔のAI状態
 #[derive(Component, Debug, Clone, PartialEq, Reflect)]
@@ -61,75 +59,65 @@ pub struct FamiliarAiPlugin;
 
 impl Plugin for FamiliarAiPlugin {
     fn build(&self, app: &mut App) {
-        app
-            .configure_sets(
-                Update,
-                (
-                    FamiliarAiSystemSet::Perceive,
-                    FamiliarAiSystemSet::Update,
-                    FamiliarAiSystemSet::Decide,
-                    FamiliarAiSystemSet::Execute,
-                )
-                    .chain()
-                    .in_set(GameSystemSet::Logic),
+        app.configure_sets(
+            Update,
+            (
+                FamiliarAiSystemSet::Perceive,
+                FamiliarAiSystemSet::Update,
+                FamiliarAiSystemSet::Decide,
+                FamiliarAiSystemSet::Execute,
             )
-            .register_type::<FamiliarAiState>()
-            .register_type::<encouragement::EncouragementCooldown>()
-            .init_resource::<resource_cache::SharedResourceCache>()
-            .init_resource::<DesignationSpatialGrid>()
-            .add_systems(
-                Update,
+                .chain()
+                .in_set(GameSystemSet::Logic),
+        )
+        .register_type::<FamiliarAiState>()
+        .register_type::<encouragement::EncouragementCooldown>()
+        .init_resource::<resource_cache::SharedResourceCache>()
+        .init_resource::<DesignationSpatialGrid>()
+        .add_systems(
+            Update,
+            (
+                // === Perceive Phase ===
+                // 環境情報の読み取り、変化の検出
                 (
-                    // === Perceive Phase ===
-                    // 環境情報の読み取り、変化の検出
-                    (
-                        state_transition::detect_state_changes_system,
-                        state_transition::detect_command_changes_system,
-                        resource_cache::sync_reservations_system,
-                        max_soul_handler::handle_max_soul_changed_system,
-                    )
-                        .in_set(crate::systems::soul_ai::scheduling::FamiliarAiSystemSet::Perceive),
-
-                    // Perceive → Update 間の同期
-                    ApplyDeferred
-                        .after(crate::systems::soul_ai::scheduling::FamiliarAiSystemSet::Perceive)
-                        .before(crate::systems::soul_ai::scheduling::FamiliarAiSystemSet::Update),
-
-                    // === Update Phase ===
-                    // 時間経過による内部状態の変化
-                    (
-                        encouragement::cleanup_encouragement_cooldowns_system,
-                    )
-                        .in_set(crate::systems::soul_ai::scheduling::FamiliarAiSystemSet::Update),
-
-                    // Update → Decide 間の同期
-                    ApplyDeferred
-                        .after(crate::systems::soul_ai::scheduling::FamiliarAiSystemSet::Update)
-                        .before(crate::systems::soul_ai::scheduling::FamiliarAiSystemSet::Decide),
-
-                    // === Decide Phase ===
-                    // 次の行動の選択、要求の生成
-                    (
-                        (
-                            familiar_ai_state_system,
-                            ApplyDeferred,
-                            familiar_task_delegation_system,
-                            following::following_familiar_system,
-                            encouragement::encouragement_system,
-                        )
-                            .chain(),
-                    )
-                        .in_set(crate::systems::soul_ai::scheduling::FamiliarAiSystemSet::Decide),
-
-                    // === Execute Phase ===
-                    // 決定された行動の実行
-                    (
-                        state_transition::handle_state_changed_system,
-                        process_squad_management_apply_system,
-                    )
-                        .in_set(crate::systems::soul_ai::scheduling::FamiliarAiSystemSet::Execute),
-                ),
-            );
+                    state_transition::detect_state_changes_system,
+                    state_transition::detect_command_changes_system,
+                    resource_cache::sync_reservations_system,
+                    max_soul_handler::handle_max_soul_changed_system,
+                )
+                    .in_set(crate::systems::soul_ai::scheduling::FamiliarAiSystemSet::Perceive),
+                // Perceive → Update 間の同期
+                ApplyDeferred
+                    .after(crate::systems::soul_ai::scheduling::FamiliarAiSystemSet::Perceive)
+                    .before(crate::systems::soul_ai::scheduling::FamiliarAiSystemSet::Update),
+                // === Update Phase ===
+                // 時間経過による内部状態の変化
+                (encouragement::cleanup_encouragement_cooldowns_system,)
+                    .in_set(crate::systems::soul_ai::scheduling::FamiliarAiSystemSet::Update),
+                // Update → Decide 間の同期
+                ApplyDeferred
+                    .after(crate::systems::soul_ai::scheduling::FamiliarAiSystemSet::Update)
+                    .before(crate::systems::soul_ai::scheduling::FamiliarAiSystemSet::Decide),
+                // === Decide Phase ===
+                // 次の行動の選択、要求の生成
+                ((
+                    familiar_ai_state_system,
+                    ApplyDeferred,
+                    familiar_task_delegation_system,
+                    following::following_familiar_system,
+                    encouragement::encouragement_system,
+                )
+                    .chain(),)
+                    .in_set(crate::systems::soul_ai::scheduling::FamiliarAiSystemSet::Decide),
+                // === Execute Phase ===
+                // 決定された行動の実行
+                (
+                    state_transition::handle_state_changed_system,
+                    process_squad_management_apply_system,
+                )
+                    .in_set(crate::systems::soul_ai::scheduling::FamiliarAiSystemSet::Execute),
+            ),
+        );
     }
 }
 
@@ -158,7 +146,8 @@ pub struct FamiliarAiTaskParams<'w, 's> {
     pub time: Res<'w, Time>,
     pub q_familiars: FamiliarTaskQuery<'w, 's>,
     pub q_souls: FamiliarSoulQuery<'w, 's>,
-    pub task_queries: crate::systems::soul_ai::task_execution::context::TaskAssignmentQueries<'w, 's>,
+    pub task_queries:
+        crate::systems::soul_ai::task_execution::context::TaskAssignmentQueries<'w, 's>,
     pub designation_grid: Res<'w, DesignationSpatialGrid>,
     pub world_map: Res<'w, crate::world::map::WorldMap>,
     pub pf_context: Local<'s, PathfindingContext>,
@@ -309,7 +298,6 @@ pub fn familiar_ai_state_system(params: FamiliarAiParams) {
                 reason: determine_transition_reason(&old_state, &*ai_state),
             });
         }
-
     }
 }
 
@@ -327,7 +315,8 @@ pub fn familiar_task_delegation_system(params: FamiliarAiTaskParams) {
         ..
     } = params;
 
-    let mut reservation_shadow = crate::systems::familiar_ai::task_management::ReservationShadow::default();
+    let mut reservation_shadow =
+        crate::systems::familiar_ai::task_management::ReservationShadow::default();
 
     for (
         fam_entity,
@@ -350,7 +339,8 @@ pub fn familiar_task_delegation_system(params: FamiliarAiTaskParams) {
         let default_tasks = crate::relationships::ManagedTasks::default();
         let managed_tasks = managed_tasks_opt.unwrap_or(&default_tasks);
 
-        let initial_squad = crate::systems::familiar_ai::squad::SquadManager::build_squad(commanding);
+        let initial_squad =
+            crate::systems::familiar_ai::squad::SquadManager::build_squad(commanding);
         let (squad_entities, _invalid_members) =
             crate::systems::familiar_ai::squad::SquadManager::validate_squad(
                 initial_squad,

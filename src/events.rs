@@ -119,14 +119,35 @@ pub struct ResourceReservationRequest {
 /// リソース予約の操作
 #[derive(Debug, Clone)]
 pub enum ResourceReservationOp {
-    ReserveDestination { target: Entity },
-    ReleaseDestination { target: Entity },
-    ReserveMixerDestination { target: Entity, resource_type: ResourceType },
-    ReleaseMixerDestination { target: Entity, resource_type: ResourceType },
-    ReserveSource { source: Entity, amount: usize },
-    ReleaseSource { source: Entity, amount: usize },
-    RecordStoredDestination { target: Entity },
-    RecordPickedSource { source: Entity, amount: usize },
+    ReserveDestination {
+        target: Entity,
+    },
+    ReleaseDestination {
+        target: Entity,
+    },
+    ReserveMixerDestination {
+        target: Entity,
+        resource_type: ResourceType,
+    },
+    ReleaseMixerDestination {
+        target: Entity,
+        resource_type: ResourceType,
+    },
+    ReserveSource {
+        source: Entity,
+        amount: usize,
+    },
+    ReleaseSource {
+        source: Entity,
+        amount: usize,
+    },
+    RecordStoredDestination {
+        target: Entity,
+    },
+    RecordPickedSource {
+        source: Entity,
+        amount: usize,
+    },
 }
 
 /// タスク割り当て要求（Think -> Act）
@@ -157,17 +178,11 @@ pub struct IdleBehaviorRequest {
 #[derive(Debug, Clone)]
 pub enum IdleBehaviorOperation {
     /// 集会に参加
-    JoinGathering {
-        spot_entity: Entity,
-    },
+    JoinGathering { spot_entity: Entity },
     /// 集会から離脱
-    LeaveGathering {
-        spot_entity: Entity,
-    },
+    LeaveGathering { spot_entity: Entity },
     /// 集会に到着（ExhaustedGathering -> Gathering）
-    ArriveAtGathering {
-        spot_entity: Entity,
-    },
+    ArriveAtGathering { spot_entity: Entity },
 }
 
 // ============================================================

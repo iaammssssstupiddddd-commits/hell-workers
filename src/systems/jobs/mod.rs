@@ -1,13 +1,12 @@
 use crate::systems::logistics::ResourceType;
 use bevy::prelude::*;
 use std::collections::HashMap;
-mod mud_mixer;
 mod building_completion;
-pub use mud_mixer::*;
+mod mud_mixer;
 pub use building_completion::building_completion_system;
+pub use mud_mixer::*;
 
 // --- Events ---
-
 
 // --- Components ---
 
@@ -95,8 +94,14 @@ impl Blueprint {
     pub fn materials_complete(&self) -> bool {
         // 壁の場合、木材さえあれば建築作業開始は可能とする（仮設状態になる）
         if self.kind == BuildingType::Wall {
-            let wood_delivered = self.delivered_materials.get(&ResourceType::Wood).unwrap_or(&0);
-            let wood_required = self.required_materials.get(&ResourceType::Wood).unwrap_or(&1);
+            let wood_delivered = self
+                .delivered_materials
+                .get(&ResourceType::Wood)
+                .unwrap_or(&0);
+            let wood_required = self
+                .required_materials
+                .get(&ResourceType::Wood)
+                .unwrap_or(&1);
             return wood_delivered >= wood_required;
         }
 
@@ -129,13 +134,13 @@ impl Blueprint {
 pub enum WorkType {
     #[default]
     Chop, // 伐採
-    Mine,  // 採掘
-    Build, // 建築
-    Haul,  // 運搬（Stockpile行き）
-    HaulToMixer, // 固体原料（Sand/Rock）をミキサーへ運ぶ
-    GatherWater, // 水汲み
-    CollectSand, // 砂採取
-    Refine,      // 精製
+    Mine,             // 採掘
+    Build,            // 建築
+    Haul,             // 運搬（Stockpile行き）
+    HaulToMixer,      // 固体原料（Sand/Rock）をミキサーへ運ぶ
+    GatherWater,      // 水汲み
+    CollectSand,      // 砂採取
+    Refine,           // 精製
     HaulWaterToMixer, // Tankから水をミキサーへ運ぶ
 }
 

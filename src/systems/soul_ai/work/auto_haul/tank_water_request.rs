@@ -2,14 +2,16 @@
 //!
 //! Monitors tank storage levels and issues water gathering tasks when tanks are low.
 
-use bevy::prelude::*;
 use crate::constants::BUCKET_CAPACITY;
+use bevy::prelude::*;
 
-use crate::systems::command::TaskArea;
-use crate::systems::jobs::{Designation, IssuedBy, TaskSlots, WorkType};
-use crate::systems::logistics::{BelongsTo, ResourceItem, ReservedForTask, ResourceType, Stockpile};
-use crate::systems::familiar_ai::resource_cache::SharedResourceCache;
 use crate::relationships::{StoredIn, StoredItems, TaskWorkers};
+use crate::systems::command::TaskArea;
+use crate::systems::familiar_ai::resource_cache::SharedResourceCache;
+use crate::systems::jobs::{Designation, IssuedBy, TaskSlots, WorkType};
+use crate::systems::logistics::{
+    BelongsTo, ReservedForTask, ResourceItem, ResourceType, Stockpile,
+};
 
 /// タンクの貯蔵量を監視し、空きがあればバケツに水汲み指示を出すシステム
 pub fn tank_water_request_system(
@@ -19,18 +21,16 @@ pub fn tank_water_request_system(
     // タンク自体の在庫状況（Water を貯める Stockpile）
     q_tanks: Query<(Entity, &Transform, &Stockpile, Option<&StoredItems>)>,
     // 全てのバケツ
-    q_buckets: Query<
-        (
-            Entity,
-            &ResourceItem,
-            &BelongsTo,
-            &Visibility,
-            Option<&ReservedForTask>,
-            Option<&StoredIn>,
-            Option<&Designation>,
-            Option<&TaskWorkers>,
-        ),
-    >,
+    q_buckets: Query<(
+        Entity,
+        &ResourceItem,
+        &BelongsTo,
+        &Visibility,
+        Option<&ReservedForTask>,
+        Option<&StoredIn>,
+        Option<&Designation>,
+        Option<&TaskWorkers>,
+    )>,
     mut item_reservations: ResMut<crate::systems::soul_ai::work::auto_haul::ItemReservations>,
 ) {
     for (tank_entity, tank_transform, tank_stock, stored_opt) in q_tanks.iter() {
@@ -49,8 +49,16 @@ pub fn tank_water_request_system(
             let mut issued = 0;
 
             // このタンクに紐付いたバケツを探す
-            for (bucket_entity, res_item, bucket_belongs, visibility, reserved_opt, _stored_in, designation, workers) in
-                q_buckets.iter()
+            for (
+                bucket_entity,
+                res_item,
+                bucket_belongs,
+                visibility,
+                reserved_opt,
+                _stored_in,
+                designation,
+                workers,
+            ) in q_buckets.iter()
             {
                 if issued >= needed_tasks {
                     break;
@@ -78,7 +86,10 @@ pub fn tank_water_request_system(
                 }
 
                 // バケツ（空または水入り）であることを確認
-                if !matches!(res_item.0, ResourceType::BucketEmpty | ResourceType::BucketWater) {
+                if !matches!(
+                    res_item.0,
+                    ResourceType::BucketEmpty | ResourceType::BucketWater
+                ) {
                     continue;
                 }
 
@@ -102,7 +113,10 @@ pub fn tank_water_request_system(
                         ReservedForTask,
                     ));
                     issued += 1;
-                    info!("TANK_WATCH: Issued GatherWater for bucket {:?} (Tank {:?})", bucket_entity, tank_entity);
+                    info!(
+                        "TANK_WATCH: Issued GatherWater for bucket {:?} (Tank {:?})",
+                        bucket_entity, tank_entity
+                    );
                 }
             }
         }

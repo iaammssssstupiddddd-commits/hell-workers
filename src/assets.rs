@@ -27,7 +27,7 @@ pub struct GameAssets {
     pub wall_t_left: Handle<Image>,
     pub wall_t_right: Handle<Image>,
     pub wall_cross: Handle<Image>,
-    
+
     // Base Resources
     pub wood: Handle<Image>,
     pub tree: Handle<Image>,        // 木のスプライト

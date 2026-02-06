@@ -2,7 +2,7 @@ use bevy::prelude::*;
 
 use crate::constants::*;
 use crate::entities::damned_soul::{GatheringBehavior, IdleBehavior};
-use crate::systems::soul_ai::gathering::{GatheringSpot, GATHERING_LEAVE_RADIUS};
+use crate::systems::soul_ai::gathering::{GATHERING_LEAVE_RADIUS, GatheringSpot};
 use crate::systems::soul_ai::query_types::IdleVisualSoulQuery;
 use crate::systems::soul_ai::task_execution::AssignedTask;
 use crate::systems::spatial::{GatheringSpotSpatialGrid, SpatialGridOps};

@@ -69,19 +69,20 @@ pub fn pathfinding_system(
             if let Some(last) = path.waypoints.last() {
                 if last.distance_squared(destination.0) < 1.0 {
                     // パス上に障害物がないか確認（残りの経路部分のみ）
-                    let path_blocked = path.waypoints[path.current_index..]
-                        .iter()
-                        .any(|wp| {
-                            let grid = WorldMap::world_to_grid(*wp);
-                            !world_map.is_walkable(grid.0, grid.1)
-                        });
-                    
+                    let path_blocked = path.waypoints[path.current_index..].iter().any(|wp| {
+                        let grid = WorldMap::world_to_grid(*wp);
+                        !world_map.is_walkable(grid.0, grid.1)
+                    });
+
                     if !path_blocked {
                         continue;
                     }
-                    
+
                     // パスが阻塞された場合、再計算が必要
-                    debug!("PATH: Soul {:?} path blocked by obstacle, recalculating", entity);
+                    debug!(
+                        "PATH: Soul {:?} path blocked by obstacle, recalculating",
+                        entity
+                    );
                 }
             }
         }
@@ -99,7 +100,10 @@ pub fn pathfinding_system(
 
         // デバッグログ: どのソウルがパス探索を行うか
         if has_task && path.waypoints.is_empty() {
-            info!("PATHFIND_DEBUG: Soul {:?} seeking path from {:?} to {:?}", entity, start_grid, goal_grid);
+            info!(
+                "PATHFIND_DEBUG: Soul {:?} seeking path from {:?} to {:?}",
+                entity, start_grid, goal_grid
+            );
         }
 
         if start_grid == goal_grid {
@@ -108,15 +112,21 @@ pub fn pathfinding_system(
             continue;
         }
 
-        if let Some(grid_path) =
-            pathfinding::find_path(&*world_map, &mut *pf_context, start_grid, goal_grid)
-                .or_else(|| {
-                    // 通常のパスが見つからない場合、ターゲットの隣接マスへのパスを試みる
-                    // これはターゲットが木や岩（非歩行可能）の上にある場合に有効
-                    debug!("PATH: Soul {:?} failed find_path, trying find_path_to_adjacent", entity);
-                    pathfinding::find_path_to_adjacent(&*world_map, &mut *pf_context, start_grid, goal_grid)
-                })
-        {
+        if let Some(grid_path) = pathfinding::find_path(
+            &*world_map,
+            &mut *pf_context,
+            start_grid,
+            goal_grid,
+        )
+        .or_else(|| {
+            // 通常のパスが見つからない場合、ターゲットの隣接マスへのパスを試みる
+            // これはターゲットが木や岩（非歩行可能）の上にある場合に有効
+            debug!(
+                "PATH: Soul {:?} failed find_path, trying find_path_to_adjacent",
+                entity
+            );
+            pathfinding::find_path_to_adjacent(&*world_map, &mut *pf_context, start_grid, goal_grid)
+        }) {
             path.waypoints = grid_path
                 .iter()
                 .map(|&(x, y)| WorldMap::grid_to_world(x, y))

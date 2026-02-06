@@ -5,7 +5,7 @@ use crate::entities::familiar::ActiveCommand;
 use crate::relationships::CommandedBy;
 use crate::relationships::{ManagedBy, TaskWorkers, WorkingOn};
 use crate::systems::command::TaskArea;
-use crate::systems::jobs::{Blueprint, Designation, TaskSlots, Priority, WorkType};
+use crate::systems::jobs::{Blueprint, Designation, Priority, TaskSlots, WorkType};
 use crate::systems::logistics::InStockpile;
 use crate::systems::soul_ai::query_types::AutoBuildSoulQuery;
 use crate::systems::soul_ai::task_execution::AssignedTask;
@@ -54,7 +54,9 @@ pub fn blueprint_auto_build_system(
             }
 
             // Designationが存在し、ManagedByが付与されていないか確認
-            if let Ok((_, _, designation, managed_by_opt, _, _, _, _)) = q_designations.get(bp_entity) {
+            if let Ok((_, _, designation, managed_by_opt, _, _, _, _)) =
+                q_designations.get(bp_entity)
+            {
                 if designation.work_type != WorkType::Build {
                     continue;
                 }
@@ -71,8 +73,7 @@ pub fn blueprint_auto_build_system(
                 let mut best_worker = None;
                 let mut min_dist_sq = f32::MAX;
 
-                for (soul_entity, soul_transform, soul, task, _, _, idle, uc_opt) in
-                    q_souls.iter()
+                for (soul_entity, soul_transform, soul, task, _, _, idle, uc_opt) in q_souls.iter()
                 {
                     // この使い魔の部下か確認
                     if let Some(uc) = uc_opt {
@@ -121,10 +122,12 @@ pub fn blueprint_auto_build_system(
                         }
 
                         // 建築タスクを割り当て
-                        *assigned_task = AssignedTask::Build(crate::systems::soul_ai::task_execution::types::BuildData {
-                            blueprint: bp_entity,
-                            phase: BuildPhase::GoingToBlueprint,
-                        });
+                        *assigned_task = AssignedTask::Build(
+                            crate::systems::soul_ai::task_execution::types::BuildData {
+                                blueprint: bp_entity,
+                                phase: BuildPhase::GoingToBlueprint,
+                            },
+                        );
                         dest.0 = bp_pos;
                         path.waypoints = vec![bp_pos];
                         path.current_index = 0;

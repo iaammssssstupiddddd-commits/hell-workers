@@ -35,19 +35,31 @@ pub fn handle_build_task(
                         "BUILD: Soul {:?} waiting for materials at blueprint {:?}",
                         ctx.soul_entity, blueprint_entity
                     );
-                    ctx.queue_reservation(crate::events::ResourceReservationOp::ReleaseSource { source: blueprint_entity, amount: 1 });
+                    ctx.queue_reservation(crate::events::ResourceReservationOp::ReleaseSource {
+                        source: blueprint_entity,
+                        amount: 1,
+                    });
                     clear_task_and_path(ctx.task, ctx.path);
                     commands.entity(ctx.soul_entity).remove::<WorkingOn>();
                     return;
                 }
 
-                update_destination_to_blueprint(ctx.dest, &bp.occupied_grids, ctx.path, soul_pos, world_map, ctx.pf_context);
+                update_destination_to_blueprint(
+                    ctx.dest,
+                    &bp.occupied_grids,
+                    ctx.path,
+                    soul_pos,
+                    world_map,
+                    ctx.pf_context,
+                );
 
                 if is_near_blueprint(soul_pos, &bp.occupied_grids) {
-                    *ctx.task = AssignedTask::Build(crate::systems::soul_ai::task_execution::types::BuildData {
-                        blueprint: blueprint_entity,
-                        phase: BuildPhase::Building { progress: 0.0 },
-                    });
+                    *ctx.task = AssignedTask::Build(
+                        crate::systems::soul_ai::task_execution::types::BuildData {
+                            blueprint: blueprint_entity,
+                            phase: BuildPhase::Building { progress: 0.0 },
+                        },
+                    );
                     ctx.path.waypoints.clear();
                     info!(
                         "BUILD: Soul {:?} started building at {:?}",
@@ -56,7 +68,10 @@ pub fn handle_build_task(
                 }
             } else {
                 // 設計図が消失
-                ctx.queue_reservation(crate::events::ResourceReservationOp::ReleaseSource { source: blueprint_entity, amount: 1 });
+                ctx.queue_reservation(crate::events::ResourceReservationOp::ReleaseSource {
+                    source: blueprint_entity,
+                    amount: 1,
+                });
                 clear_task_and_path(ctx.task, ctx.path);
                 commands.entity(ctx.soul_entity).remove::<WorkingOn>();
             }
@@ -71,10 +86,12 @@ pub fn handle_build_task(
 
                 // 位置を再確認（予定地内に入っていないか、離れすぎていないか）
                 if !is_near_blueprint(soul_pos, &bp.occupied_grids) {
-                    *ctx.task = AssignedTask::Build(crate::systems::soul_ai::task_execution::types::BuildData {
-                        blueprint: blueprint_entity,
-                        phase: BuildPhase::GoingToBlueprint,
-                    });
+                    *ctx.task = AssignedTask::Build(
+                        crate::systems::soul_ai::task_execution::types::BuildData {
+                            blueprint: blueprint_entity,
+                            phase: BuildPhase::GoingToBlueprint,
+                        },
+                    );
                     return;
                 }
 
@@ -83,29 +100,39 @@ pub fn handle_build_task(
                 bp.progress = progress;
 
                 if progress >= 1.0 {
-                    *ctx.task = AssignedTask::Build(crate::systems::soul_ai::task_execution::types::BuildData {
-                        blueprint: blueprint_entity,
-                        phase: BuildPhase::Done,
-                    });
+                    *ctx.task = AssignedTask::Build(
+                        crate::systems::soul_ai::task_execution::types::BuildData {
+                            blueprint: blueprint_entity,
+                            phase: BuildPhase::Done,
+                        },
+                    );
                     ctx.soul.fatigue = (ctx.soul.fatigue + 0.15).min(1.0);
                     info!(
                         "BUILD: Soul {:?} completed building {:?}",
                         ctx.soul_entity, blueprint_entity
                     );
                 } else {
-                    *ctx.task = AssignedTask::Build(crate::systems::soul_ai::task_execution::types::BuildData {
-                        blueprint: blueprint_entity,
-                        phase: BuildPhase::Building { progress },
-                    });
+                    *ctx.task = AssignedTask::Build(
+                        crate::systems::soul_ai::task_execution::types::BuildData {
+                            blueprint: blueprint_entity,
+                            phase: BuildPhase::Building { progress },
+                        },
+                    );
                 }
             } else {
-                ctx.queue_reservation(crate::events::ResourceReservationOp::ReleaseSource { source: blueprint_entity, amount: 1 });
+                ctx.queue_reservation(crate::events::ResourceReservationOp::ReleaseSource {
+                    source: blueprint_entity,
+                    amount: 1,
+                });
                 clear_task_and_path(ctx.task, ctx.path);
                 commands.entity(ctx.soul_entity).remove::<WorkingOn>();
             }
         }
         BuildPhase::Done => {
-            ctx.queue_reservation(crate::events::ResourceReservationOp::ReleaseSource { source: blueprint_entity, amount: 1 });
+            ctx.queue_reservation(crate::events::ResourceReservationOp::ReleaseSource {
+                source: blueprint_entity,
+                amount: 1,
+            });
             commands.entity(ctx.soul_entity).remove::<WorkingOn>();
             clear_task_and_path(ctx.task, ctx.path);
         }
