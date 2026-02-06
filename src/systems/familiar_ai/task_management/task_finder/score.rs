@@ -16,19 +16,19 @@ pub(super) fn score_candidate(
         if q_target_blueprints.get(entity).is_ok() {
             priority += 10;
         }
-        if queries.target_mixers.get(entity).is_ok() {
+        if queries.storage.target_mixers.get(entity).is_ok() {
             priority += 2;
         }
     } else if work_type == WorkType::GatherWater {
         priority += 5;
 
-        let bucket_belongs = queries.belongs.get(entity).ok();
-        let has_tank_space = queries.stockpiles.iter().any(|(s_entity, _, stock, stored)| {
+        let bucket_belongs = queries.designation.belongs.get(entity).ok();
+        let has_tank_space = queries.storage.stockpiles.iter().any(|(s_entity, _, stock, stored)| {
             let is_tank = stock.resource_type == Some(ResourceType::Water);
             let is_my_tank = bucket_belongs.map(|b| b.0) == Some(s_entity);
             if is_tank && is_my_tank {
                 let current_count = stored.map(|s| s.len()).unwrap_or(0);
-                let reserved = queries.resource_cache.get_destination_reservation(s_entity);
+                let reserved = queries.reservation.resource_cache.get_destination_reservation(s_entity);
                 (current_count + reserved) < stock.capacity
             } else {
                 false

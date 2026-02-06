@@ -34,7 +34,7 @@ pub(super) fn try_assign_for_workers(
             queries,
             designation_grid,
             managed_tasks,
-            &queries.target_blueprints,
+            &queries.storage.target_blueprints,
             world_map,
             pf_context,
         );

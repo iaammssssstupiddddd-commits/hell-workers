@@ -53,7 +53,7 @@ pub(super) fn assign_haul(
     queries: &mut crate::systems::soul_ai::task_execution::context::TaskAssignmentQueries,
     shadow: &mut ReservationShadow,
 ) -> bool {
-    if let Ok(target_bp) = queries.target_blueprints.get(ctx.task_entity) {
+    if let Ok(target_bp) = queries.storage.target_blueprints.get(ctx.task_entity) {
         if !source_not_reserved(ctx.task_entity, queries, shadow) {
             debug!(
                 "ASSIGN: Item {:?} (for BP) is already reserved",
@@ -79,7 +79,7 @@ pub(super) fn assign_haul(
     }
 
     let item_info = queries.items.get(ctx.task_entity).ok().map(|(it, _)| it.0);
-    let item_owner = queries.belongs.get(ctx.task_entity).ok().map(|b| b.0);
+    let item_owner = queries.designation.belongs.get(ctx.task_entity).ok().map(|b| b.0);
 
     let Some(item_type) = item_info else {
         debug!("ASSIGN: Haul item {:?} has no ResourceItem", ctx.task_entity);

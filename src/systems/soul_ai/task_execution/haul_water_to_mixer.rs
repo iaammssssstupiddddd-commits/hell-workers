@@ -25,7 +25,7 @@ pub fn handle_haul_water_to_mixer_task(
         HaulWaterToMixerPhase::GoingToBucket => {
             if ctx.inventory.0 == Some(bucket_entity) {
                 // すでにバケツを持っている場合、バケツの状態を確認
-                if let Ok(res_item) = ctx.queries.resources.get(bucket_entity) {
+                if let Ok(res_item) = ctx.queries.reservation.resources.get(bucket_entity) {
                     if res_item.0 == ResourceType::BucketWater {
                         transition_to_mixer(commands, ctx, bucket_entity, tank_entity, mixer_entity, world_map, soul_pos);
                     } else {
@@ -43,7 +43,7 @@ pub fn handle_haul_water_to_mixer_task(
                 return;
             }
 
-            if let Ok((bucket_transform, _, _, _res_item_opt, _, _)) = ctx.queries.targets.get(bucket_entity) {
+            if let Ok((bucket_transform, _, _, _res_item_opt, _, _)) = ctx.queries.designation.targets.get(bucket_entity) {
                 let bucket_pos = bucket_transform.translation.truncate();
                 update_destination_if_needed(ctx.dest, bucket_pos, ctx.path);
 
@@ -63,7 +63,7 @@ pub fn handle_haul_water_to_mixer_task(
                     // ソース取得記録
                     ctx.queue_reservation(crate::events::ResourceReservationOp::RecordPickedSource { source: bucket_entity, amount: 1 });
 
-                    let bucket_is_water = match ctx.queries.resources.get(bucket_entity) {
+                    let bucket_is_water = match ctx.queries.reservation.resources.get(bucket_entity) {
                         Ok(res_item) => res_item.0 == ResourceType::BucketWater,
                         Err(_) => {
                             ctx.queue_reservation(crate::events::ResourceReservationOp::ReleaseMixerDestination {
@@ -92,7 +92,7 @@ pub fn handle_haul_water_to_mixer_task(
             }
         }
         HaulWaterToMixerPhase::GoingToTank => {
-            if let Ok(tank_data) = ctx.queries.stockpiles.get(tank_entity) {
+            if let Ok(tank_data) = ctx.queries.storage.stockpiles.get(tank_entity) {
                 let (_, tank_transform, _, _) = tank_data;
                 let tank_pos = tank_transform.translation.truncate();
 
@@ -161,7 +161,7 @@ pub fn handle_haul_water_to_mixer_task(
                 ));
 
                 // Mixerへ
-                if let Ok(mixer_data) = ctx.queries.mixers.get(mixer_entity) {
+                if let Ok(mixer_data) = ctx.queries.storage.mixers.get(mixer_entity) {
                     let (mixer_transform, _, _) = mixer_data;
                     let mixer_pos = mixer_transform.translation.truncate();
                     
@@ -183,7 +183,7 @@ pub fn handle_haul_water_to_mixer_task(
 
         }
         HaulWaterToMixerPhase::GoingToMixer => {
-            if let Ok(mixer_data) = ctx.queries.mixers.get(mixer_entity) {
+            if let Ok(mixer_data) = ctx.queries.storage.mixers.get(mixer_entity) {
                 let (mixer_transform, _, _) = mixer_data;
                 let mixer_pos = mixer_transform.translation.truncate();
                 
@@ -197,7 +197,7 @@ pub fn handle_haul_water_to_mixer_task(
                     return;
                 }
 
-                if let Ok(res_item) = ctx.queries.resources.get(bucket_entity) {
+                if let Ok(res_item) = ctx.queries.reservation.resources.get(bucket_entity) {
                     if res_item.0 != ResourceType::BucketWater {
                         // 空バケツなら即タンクへ戻る（ミキサーへ向かわせない）
                         transition_to_tank(commands, ctx, bucket_entity, tank_entity, mixer_entity, soul_pos);
@@ -256,7 +256,7 @@ pub fn handle_haul_water_to_mixer_task(
                 transition_to_tank(commands, ctx, bucket_entity, tank_entity, mixer_entity, soul_pos);
                 return;
             }
-            if let Ok(res_item) = ctx.queries.resources.get(bucket_entity) {
+            if let Ok(res_item) = ctx.queries.reservation.resources.get(bucket_entity) {
                 if res_item.0 != ResourceType::BucketWater {
                     // 空のバケツでは注げない
                     warn!("HAUL_WATER_TO_MIXER: Soul {:?} tried to pour with empty bucket, returning to tank", ctx.soul_entity);
@@ -269,10 +269,10 @@ pub fn handle_haul_water_to_mixer_task(
                 return;
             }
 
-            if let Ok(mixer_data) = ctx.queries.mixers.get_mut(mixer_entity) {
+            if let Ok(mixer_data) = ctx.queries.storage.mixers.get_mut(mixer_entity) {
                 let (_, _storage, _) = mixer_data;
 
-                let (current_count, capacity) = match ctx.queries.stockpiles.get(mixer_entity) {
+                let (current_count, capacity) = match ctx.queries.storage.stockpiles.get(mixer_entity) {
                     Ok((_, _, stockpile, Some(stored_items))) if stockpile.resource_type == Some(ResourceType::Water) => {
                         (stored_items.len(), stockpile.capacity)
                     }
@@ -313,8 +313,8 @@ pub fn handle_haul_water_to_mixer_task(
                     // バケツを戻しに行く
                     // Tankのバケツ置き場を探す
                     let mut return_pos = None;
-                    for (stock_entity, stock_transform, _, _) in ctx.queries.stockpiles.iter() {
-                        if let Ok(belongs) = ctx.queries.belongs.get(stock_entity) {
+                    for (stock_entity, stock_transform, _, _) in ctx.queries.storage.stockpiles.iter() {
+                        if let Ok(belongs) = ctx.queries.designation.belongs.get(stock_entity) {
                             if belongs.0 == tank_entity {
                                 return_pos = Some(stock_transform.translation.truncate());
                                 break;
@@ -365,7 +365,7 @@ fn transition_to_tank(
     // haul_cache removed
     soul_pos: Vec2,
 ) {
-    if let Ok(tank_data) = ctx.queries.stockpiles.get(tank_entity) {
+    if let Ok(tank_data) = ctx.queries.storage.stockpiles.get(tank_entity) {
         let (_, tank_transform, _, _) = tank_data;
         let tank_pos = tank_transform.translation.truncate();
 
@@ -395,7 +395,7 @@ fn transition_to_mixer(
     world_map: &WorldMap,
     soul_pos: Vec2,
 ) {
-    if let Ok(mixer_data) = ctx.queries.mixers.get(mixer_entity) {
+    if let Ok(mixer_data) = ctx.queries.storage.mixers.get(mixer_entity) {
         let (mixer_transform, _, _) = mixer_data;
         let mixer_pos = mixer_transform.translation.truncate();
 

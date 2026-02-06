@@ -72,7 +72,7 @@ fn handle_going_to_bucket(
     }
 
     let Ok((bucket_transform, _, _, res_item_opt, _, stored_in_opt)) =
-        ctx.queries.targets.get(bucket_entity)
+        ctx.queries.designation.targets.get(bucket_entity)
     else {
         abort_task_with_item(commands, ctx, world_map);
         return;
@@ -111,14 +111,14 @@ fn handle_going_to_bucket(
 
         // もしアイテムが備蓄場所にあったなら、その備蓄場所の型管理を更新する
         if let Some(stored_in) = stored_in_entity {
-            let q_stockpiles = &mut ctx.queries.stockpiles;
+            let q_stockpiles = &mut ctx.queries.storage.stockpiles;
             crate::systems::soul_ai::task_execution::common::update_stockpile_on_item_removal(stored_in, q_stockpiles);
         }
         let is_already_full = res_type == Some(ResourceType::BucketWater);
 
         if is_already_full {
             // 既に満タンならタンクへ
-            if let Ok((tank_transform, _, _, _, _, _)) = ctx.queries.targets.get(tank_entity) {
+            if let Ok((tank_transform, _, _, _, _, _)) = ctx.queries.designation.targets.get(tank_entity) {
                 let tank_pos = tank_transform.translation.truncate();
                 let (cx, cy) = WorldMap::world_to_grid(tank_pos);
                 let tank_grids = vec![(cx - 1, cy - 1), (cx, cy - 1), (cx - 1, cy), (cx, cy)];
@@ -228,7 +228,7 @@ fn handle_going_to_river(
     if ctx.soul_transform.translation.truncate().distance(ctx.dest.0) < 30.0 {
         // タンクが満タンかチェック
         let is_tank_full = {
-            let q_stockpiles = &mut ctx.queries.stockpiles;
+            let q_stockpiles = &mut ctx.queries.storage.stockpiles;
             if let Ok((_, _, stock, Some(stored))) = q_stockpiles.get(tank_entity) {
                 stored.len() >= stock.capacity
             } else {
@@ -270,7 +270,7 @@ fn handle_filling(
         return;
     }
 
-    let q_targets = &ctx.queries.targets;
+    let q_targets = &ctx.queries.designation.targets;
     let new_progress = progress + time.delta_secs() * 0.5; // 2秒で満タン
     if new_progress >= 1.0 {
         // 満タン！見た目を更新
@@ -354,7 +354,7 @@ fn handle_going_to_tank(
 
     // タンクが満タンかチェック（移動中に満タンになる可能性）
     let is_tank_full = {
-        let q_stockpiles = &mut ctx.queries.stockpiles;
+        let q_stockpiles = &mut ctx.queries.storage.stockpiles;
         if let Ok((_, _, stock, Some(stored))) = q_stockpiles.get(tank_entity) {
             stored.len() >= stock.capacity
         } else {

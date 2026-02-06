@@ -349,7 +349,7 @@ pub fn apply_squad_management_requests_system(
                 )) = q_souls.get_mut(soul_entity)
                 {
                     let dropped_res = inventory_opt.as_ref().and_then(|i| {
-                        i.0.and_then(|e| queries.targets.get(e).ok().and_then(|(_, _, _, ri, _, _)| ri.map(|r| r.0)))
+                        i.0.and_then(|e| queries.designation.targets.get(e).ok().and_then(|(_, _, _, ri, _, _)| ri.map(|r| r.0)))
                     });
 
                     // 現在、すべての解放は自動（疲労）のため、個別のタスク中断セリフは出さない
