@@ -25,8 +25,7 @@ pub fn spawn_gather_indicators_system(
     >,
 ) {
     for (worker_entity, assigned_task, transform) in q_workers.iter() {
-        if let AssignedTask::Gather(data) = assigned_task
-        {
+        if let AssignedTask::Gather(data) = assigned_task {
             let phase = &data.phase;
             let work_type = &data.work_type;
             // 採取中のみアイコン表示

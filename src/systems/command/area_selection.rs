@@ -27,7 +27,10 @@ pub fn task_area_selection_system(
     )>,
     mut commands: Commands,
     _keyboard: Res<ButtonInput<KeyCode>>,
-    q_unassigned: Query<(Entity, &Transform, &Designation), Without<crate::relationships::ManagedBy>>,
+    q_unassigned: Query<
+        (Entity, &Transform, &Designation),
+        Without<crate::relationships::ManagedBy>,
+    >,
     q_selection_indicator: Query<Entity, With<AreaSelectionIndicator>>,
 ) {
     if q_ui.iter().any(|i| *i != Interaction::None) {
@@ -204,7 +207,9 @@ pub fn task_area_selection_system(
                                     commands
                                         .entity(target_entity)
                                         .remove::<crate::systems::jobs::TaskSlots>();
-                                    commands.entity(target_entity).remove::<crate::relationships::ManagedBy>();
+                                    commands
+                                        .entity(target_entity)
+                                        .remove::<crate::relationships::ManagedBy>();
                                 }
                             }
                         }

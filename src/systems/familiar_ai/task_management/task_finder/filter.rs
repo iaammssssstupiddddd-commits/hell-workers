@@ -52,8 +52,16 @@ pub(super) fn candidate_snapshot(
     pf_context: &mut PathfindingContext,
     queries: &crate::systems::soul_ai::task_execution::context::TaskAssignmentQueries,
 ) -> Option<(Vec2, WorkType, i32, bool)> {
-    let (_entity, transform, designation, issued_by, slots, workers, in_stockpile_opt, priority_opt) =
-        queries.designation.designations.get(entity).ok()?;
+    let (
+        _entity,
+        transform,
+        designation,
+        issued_by,
+        slots,
+        workers,
+        in_stockpile_opt,
+        priority_opt,
+    ) = queries.designation.designations.get(entity).ok()?;
 
     let is_managed_by_me = managed_tasks.contains(entity);
     let is_unassigned = issued_by.is_none();
@@ -89,10 +97,12 @@ pub(super) fn candidate_snapshot(
         if pathfinding::find_path(world_map, pf_context, target_grid, worker_grid).is_some() {
             true
         } else {
-            pathfinding::find_path_to_adjacent(world_map, pf_context, worker_grid, target_grid).is_some()
+            pathfinding::find_path_to_adjacent(world_map, pf_context, worker_grid, target_grid)
+                .is_some()
         }
     } else {
-        pathfinding::find_path_to_adjacent(world_map, pf_context, worker_grid, target_grid).is_some()
+        pathfinding::find_path_to_adjacent(world_map, pf_context, worker_grid, target_grid)
+            .is_some()
     };
 
     if !is_reachable {

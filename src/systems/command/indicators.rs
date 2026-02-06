@@ -66,7 +66,11 @@ pub fn update_designation_indicator_system(
 pub fn sync_designation_indicator_system(
     mut q_indicators: Query<(&DesignationIndicator, &mut Transform, &mut Visibility)>,
     q_targets: Query<
-        (&Transform, &Visibility, Option<&crate::relationships::StoredIn>),
+        (
+            &Transform,
+            &Visibility,
+            Option<&crate::relationships::StoredIn>,
+        ),
         Without<DesignationIndicator>,
     >,
     q_parents: Query<&Transform, (Without<DesignationIndicator>, Without<Designation>)>,

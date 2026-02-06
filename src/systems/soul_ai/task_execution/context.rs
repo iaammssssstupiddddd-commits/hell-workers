@@ -5,15 +5,15 @@ use crate::systems::logistics::{Inventory, ResourceItem};
 use crate::systems::soul_ai::task_execution::types::AssignedTask;
 use bevy::prelude::*;
 
+use crate::events::{ResourceReservationOp, ResourceReservationRequest, TaskAssignmentRequest};
 /// タスク実行の基本コンテキスト
-/// 
+///
 /// 各ハンドラー関数に共通する引数をまとめます。
 /// CommandsとQueryはライフタイムが複雑なため、引数として残します。
 use crate::relationships::{ManagedBy, TaskWorkers};
-use crate::systems::jobs::{Designation, TaskSlots, Priority, Blueprint};
-use crate::systems::logistics::{Stockpile, InStockpile};
-use crate::events::{ResourceReservationOp, ResourceReservationRequest, TaskAssignmentRequest};
 use crate::systems::familiar_ai::resource_cache::SharedResourceCache;
+use crate::systems::jobs::{Blueprint, Designation, Priority, TaskSlots};
+use crate::systems::logistics::{InStockpile, Stockpile};
 use bevy::ecs::system::SystemParam;
 
 /// リソース予約・管理に必要な共通アクセス
@@ -27,53 +27,101 @@ pub struct ReservationAccess<'w, 's> {
 /// 指定・場所・属性確認に必要な共通アクセス
 #[derive(SystemParam)]
 pub struct DesignationAccess<'w, 's> {
-    pub targets: Query<'w, 's, (
-        &'static Transform,
-        Option<&'static crate::systems::jobs::Tree>,
-        Option<&'static crate::systems::jobs::Rock>,
-        Option<&'static ResourceItem>,
-        Option<&'static Designation>,
-        Option<&'static crate::relationships::StoredIn>,
-    )>,
-    pub designations: Query<'w, 's, (
-        Entity,
-        &'static Transform,
-        &'static Designation,
-        Option<&'static ManagedBy>,
-        Option<&'static TaskSlots>,
-        Option<&'static TaskWorkers>,
-        Option<&'static InStockpile>,
-        Option<&'static Priority>,
-    )>,
+    pub targets: Query<
+        'w,
+        's,
+        (
+            &'static Transform,
+            Option<&'static crate::systems::jobs::Tree>,
+            Option<&'static crate::systems::jobs::Rock>,
+            Option<&'static ResourceItem>,
+            Option<&'static Designation>,
+            Option<&'static crate::relationships::StoredIn>,
+        ),
+    >,
+    pub designations: Query<
+        'w,
+        's,
+        (
+            Entity,
+            &'static Transform,
+            &'static Designation,
+            Option<&'static ManagedBy>,
+            Option<&'static TaskSlots>,
+            Option<&'static TaskWorkers>,
+            Option<&'static InStockpile>,
+            Option<&'static Priority>,
+        ),
+    >,
     pub belongs: Query<'w, 's, &'static crate::systems::logistics::BelongsTo>,
 }
 
 /// 倉庫・設備・ブループリントへの読み取り専用アクセス
 #[derive(SystemParam)]
 pub struct StorageAccess<'w, 's> {
-    pub stockpiles: Query<'w, 's, (
-        Entity,
-        &'static Transform,
-        &'static Stockpile,
-        Option<&'static crate::relationships::StoredItems>,
-    )>,
-    pub blueprints: Query<'w, 's, (&'static Transform, &'static Blueprint, Option<&'static Designation>)>,
+    pub stockpiles: Query<
+        'w,
+        's,
+        (
+            Entity,
+            &'static Transform,
+            &'static Stockpile,
+            Option<&'static crate::relationships::StoredItems>,
+        ),
+    >,
+    pub blueprints: Query<
+        'w,
+        's,
+        (
+            &'static Transform,
+            &'static Blueprint,
+            Option<&'static Designation>,
+        ),
+    >,
     pub target_blueprints: Query<'w, 's, &'static crate::systems::jobs::TargetBlueprint>,
-    pub mixers: Query<'w, 's, (&'static Transform, &'static crate::systems::jobs::MudMixerStorage, Option<&'static TaskWorkers>)>,
+    pub mixers: Query<
+        'w,
+        's,
+        (
+            &'static Transform,
+            &'static crate::systems::jobs::MudMixerStorage,
+            Option<&'static TaskWorkers>,
+        ),
+    >,
     pub target_mixers: Query<'w, 's, &'static crate::systems::jobs::TargetMixer>,
 }
 
 /// 倉庫・設備・ブループリントへの変更可能アクセス
 #[derive(SystemParam)]
 pub struct MutStorageAccess<'w, 's> {
-    pub stockpiles: Query<'w, 's, (
-        Entity,
-        &'static Transform,
-        &'static mut Stockpile,
-        Option<&'static crate::relationships::StoredItems>,
-    )>,
-    pub blueprints: Query<'w, 's, (&'static Transform, &'static mut Blueprint, Option<&'static Designation>)>,
-    pub mixers: Query<'w, 's, (&'static Transform, &'static mut crate::systems::jobs::MudMixerStorage, Option<&'static TaskWorkers>)>,
+    pub stockpiles: Query<
+        'w,
+        's,
+        (
+            Entity,
+            &'static Transform,
+            &'static mut Stockpile,
+            Option<&'static crate::relationships::StoredItems>,
+        ),
+    >,
+    pub blueprints: Query<
+        'w,
+        's,
+        (
+            &'static Transform,
+            &'static mut Blueprint,
+            Option<&'static Designation>,
+        ),
+    >,
+    pub mixers: Query<
+        'w,
+        's,
+        (
+            &'static Transform,
+            &'static mut crate::systems::jobs::MudMixerStorage,
+            Option<&'static TaskWorkers>,
+        ),
+    >,
 }
 
 /// タスク割り当てに必要なクエリ群（Familiar AI向け）
@@ -82,7 +130,7 @@ pub struct TaskAssignmentQueries<'w, 's> {
     pub reservation: ReservationAccess<'w, 's>,
     pub designation: DesignationAccess<'w, 's>,
     pub storage: StorageAccess<'w, 's>,
-    
+
     // 固有フィールド
     pub items: Query<'w, 's, (&'static ResourceItem, Option<&'static Designation>)>,
     pub assignment_writer: MessageWriter<'w, TaskAssignmentRequest>,
@@ -97,7 +145,15 @@ pub struct TaskQueries<'w, 's> {
     pub storage: MutStorageAccess<'w, 's>,
 
     // 固有フィールド
-    pub resource_items: Query<'w, 's, (Entity, &'static crate::systems::logistics::ResourceItem, Option<&'static crate::relationships::StoredIn>)>,
+    pub resource_items: Query<
+        'w,
+        's,
+        (
+            Entity,
+            &'static crate::systems::logistics::ResourceItem,
+            Option<&'static crate::relationships::StoredIn>,
+        ),
+    >,
 }
 
 /// タスク解除に必要なアクセス
@@ -147,6 +203,9 @@ impl<'a, 'w, 's> TaskExecutionContext<'a, 'w, 's> {
 
     /// リソース予約更新の要求を追加
     pub fn queue_reservation(&mut self, op: ResourceReservationOp) {
-        self.queries.reservation.reservation_writer.write(ResourceReservationRequest { op });
+        self.queries
+            .reservation
+            .reservation_writer
+            .write(ResourceReservationRequest { op });
     }
 }

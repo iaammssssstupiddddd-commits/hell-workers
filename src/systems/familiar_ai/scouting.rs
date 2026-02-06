@@ -3,10 +3,10 @@ use crate::entities::damned_soul::{DamnedSoul, Destination, IdleState, Path, Str
 use crate::relationships::CommandedBy;
 // use crate::events::OnSoulRecruited;
 use crate::systems::familiar_ai::FamiliarAiState;
+use crate::systems::familiar_ai::FamiliarSoulQuery;
 use crate::systems::soul_ai::gathering::ParticipatingIn;
 use crate::systems::soul_ai::task_execution::AssignedTask;
 use bevy::prelude::*;
-use crate::systems::familiar_ai::FamiliarSoulQuery;
 
 /// スカウト（Scouting）状態のロジック
 /// ターゲットに接近し、近づいたらリクルートする
@@ -48,7 +48,6 @@ pub fn scouting_logic(
         dest,
         path,
         idle,
-
         mut _inv,
         uc,
         participating,
@@ -62,7 +61,6 @@ pub fn scouting_logic(
             _dest,
             _path,
             _idle,
-
             _inv,
             uc,
             _participating,
@@ -74,7 +72,6 @@ pub fn scouting_logic(
             &Destination,
             &Path,
             &IdleState,
-
             Option<&mut crate::systems::logistics::Inventory>,
             Option<&CommandedBy>,
             Option<&ParticipatingIn>,

@@ -33,7 +33,7 @@ pub fn update_destination_to_adjacent(
 ) -> bool {
     let target_grid = WorldMap::world_to_grid(target_pos);
     let start_grid = WorldMap::world_to_grid(soul_pos);
-    
+
     // すでに有効なパスがあり、目的地も変わっていないならスキップ
     if !path.waypoints.is_empty() && path.current_index < path.waypoints.len() {
         if let Some(last_wp) = path.waypoints.last() {
@@ -48,13 +48,13 @@ pub fn update_destination_to_adjacent(
             }
         }
     }
-    
+
     // ターゲット自体がWalkableなら、そのまま直接移動を試みる
     if world_map.is_walkable(target_grid.0, target_grid.1) {
         // 直接の経路があればそれを使用
-        if let Some(grid_path) = crate::world::pathfinding::find_path(
-            world_map, pf_context, start_grid, target_grid
-        ) {
+        if let Some(grid_path) =
+            crate::world::pathfinding::find_path(world_map, pf_context, start_grid, target_grid)
+        {
             if let Some(&last_grid) = grid_path.last() {
                 let dest_pos = WorldMap::grid_to_world(last_grid.0, last_grid.1);
                 // 必ず目的地を更新（近くても変更検知のため）
@@ -69,29 +69,35 @@ pub fn update_destination_to_adjacent(
             return true;
         }
     }
-    
+
     // 最も到達コストが小さい隣接マスを見つける
     let directions = [
-        (0, 1), (0, -1), (1, 0), (-1, 0),
-        (1, 1), (1, -1), (-1, 1), (-1, -1)
+        (0, 1),
+        (0, -1),
+        (1, 0),
+        (-1, 0),
+        (1, 1),
+        (1, -1),
+        (-1, 1),
+        (-1, -1),
     ];
-    
+
     let mut best_path: Option<Vec<(i32, i32)>> = None;
     let mut best_cost = i32::MAX;
-    
+
     for (dx, dy) in directions {
         let nx = target_grid.0 + dx;
         let ny = target_grid.1 + dy;
-        
+
         // 隣接マスが歩行可能かチェック
         if !world_map.is_walkable(nx, ny) {
             continue;
         }
-        
+
         // 開始点からこの隣接マスへの経路を探索
-        if let Some(grid_path) = crate::world::pathfinding::find_path(
-            world_map, pf_context, start_grid, (nx, ny)
-        ) {
+        if let Some(grid_path) =
+            crate::world::pathfinding::find_path(world_map, pf_context, start_grid, (nx, ny))
+        {
             // 経路コストを計算（パスの長さで近似）
             let cost = grid_path.len() as i32;
             if cost < best_cost {
@@ -100,7 +106,7 @@ pub fn update_destination_to_adjacent(
             }
         }
     }
-    
+
     if let Some(grid_path) = best_path {
         if let Some(&last_grid) = grid_path.last() {
             let dest_pos = WorldMap::grid_to_world(last_grid.0, last_grid.1);
@@ -120,7 +126,6 @@ pub fn update_destination_to_adjacent(
     }
 }
 
-
 /// 設計図への到達パスを設定（予定地の中心を一意なターゲットとする）
 pub fn update_destination_to_blueprint(
     dest: &mut Destination,
@@ -131,7 +136,7 @@ pub fn update_destination_to_blueprint(
     pf_context: &mut crate::world::pathfinding::PathfindingContext,
 ) {
     let start_grid = WorldMap::world_to_grid(soul_pos);
-    
+
     // 現在地がすでにゴール条件を満たしているかチェック
     if is_near_blueprint(soul_pos, occupied_grids) {
         // 到着済みなら、不要なパス（予定地内へ続くものなど）を消去して停止させる
@@ -147,7 +152,7 @@ pub fn update_destination_to_blueprint(
     if !path.waypoints.is_empty() {
         if let Some(last_wp) = path.waypoints.last() {
             let last_grid = WorldMap::world_to_grid(*last_wp);
-            
+
             // 終点が予定地外かつターゲットに隣接していれば、そのパスは有効
             if !occupied_grids.contains(&last_grid) {
                 for &(gx, gy) in occupied_grids {
@@ -160,23 +165,23 @@ pub fn update_destination_to_blueprint(
             }
         }
     }
-    
+
     // ターゲットの中心地点を軸に「境界」までのパスを計算
     if let Some(grid_path) = crate::world::pathfinding::find_path_to_boundary(
         world_map,
         pf_context,
         start_grid,
-        occupied_grids
+        occupied_grids,
     ) {
         if let Some(last_grid) = grid_path.last() {
-             let last_pos = WorldMap::grid_to_world(last_grid.0, last_grid.1);
-             update_destination_if_needed(dest, last_pos, path);
-             
-             path.waypoints = grid_path
+            let last_pos = WorldMap::grid_to_world(last_grid.0, last_grid.1);
+            update_destination_if_needed(dest, last_pos, path);
+
+            path.waypoints = grid_path
                 .iter()
                 .map(|&(x, y)| WorldMap::grid_to_world(x, y))
                 .collect();
-             path.current_index = 0;
+            path.current_index = 0;
         }
     }
 }
@@ -231,16 +236,10 @@ pub fn pickup_item(
 }
 
 /// アイテムを地面に落とす
-pub fn drop_item(
-    commands: &mut Commands,
-    _soul_entity: Entity,
-    item_entity: Entity,
-    pos: Vec2,
-) {
-    commands.entity(item_entity).insert((
-        Visibility::Visible,
-        Transform::from_xyz(pos.x, pos.y, 0.6),
-    ));
+pub fn drop_item(commands: &mut Commands, _soul_entity: Entity, item_entity: Entity, pos: Vec2) {
+    commands
+        .entity(item_entity)
+        .insert((Visibility::Visible, Transform::from_xyz(pos.x, pos.y, 0.6)));
 }
 
 /// ストックパイルからアイテムが取り出された際の更新処理
@@ -318,7 +317,7 @@ pub fn try_pickup_item(
 /// 2. その上で、予定地のいずれかのタイルに隣接（距離 1.5 TILE_SIZE 未満）している場合に true を返す。
 pub fn is_near_blueprint(soul_pos: Vec2, occupied_grids: &[(i32, i32)]) -> bool {
     let soul_grid = WorldMap::world_to_grid(soul_pos);
-    
+
     // 予定地の上に立っていたらダメ
     if occupied_grids.contains(&soul_grid) {
         return false;
@@ -327,7 +326,7 @@ pub fn is_near_blueprint(soul_pos: Vec2, occupied_grids: &[(i32, i32)]) -> bool 
     for &(gx, gy) in occupied_grids {
         let grid_pos = WorldMap::grid_to_world(gx, gy);
         let dist = soul_pos.distance(grid_pos);
-        
+
         // 隣接（1.5タイル分以内）していればOK
         // 斜め方向の距離が約1.414なため、1.5必要。
         if dist < TILE_SIZE * 1.5 {

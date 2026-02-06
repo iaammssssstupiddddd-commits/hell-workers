@@ -1,4 +1,6 @@
-use super::{FamiliarRowViewModel, FamiliarSectionNodes, SoulRowViewModel, StressBucket, TaskVisual};
+use super::{
+    FamiliarRowViewModel, FamiliarSectionNodes, SoulRowViewModel, StressBucket, TaskVisual,
+};
 use crate::entities::damned_soul::{DamnedSoul, Gender, SoulIdentity};
 use crate::entities::familiar::{Familiar, FamiliarOperation};
 use crate::interface::ui::components::*;
@@ -170,6 +172,7 @@ pub(super) fn spawn_soul_list_item(
                 width: Val::Percent(100.0),
                 height: Val::Px(SOUL_ITEM_HEIGHT),
                 align_items: AlignItems::Center,
+                border: UiRect::left(Val::Px(0.0)),
                 margin: if left_margin > 0.0 {
                     UiRect::left(Val::Px(left_margin))
                 } else {
@@ -177,7 +180,8 @@ pub(super) fn spawn_soul_list_item(
                 },
                 ..default()
             },
-            BackgroundColor(Color::NONE),
+            BackgroundColor(COLOR_LIST_ITEM_DEFAULT),
+            BorderColor::all(Color::NONE),
             SoulListItem(soul_vm.entity),
         ))
         .with_children(|item| {
@@ -342,10 +346,12 @@ pub(super) fn spawn_familiar_section(
                 flex_grow: 1.0,
                 height: Val::Px(HEADER_HEIGHT),
                 align_items: AlignItems::Center,
+                border: UiRect::left(Val::Px(0.0)),
                 padding: UiRect::left(Val::Px(TEXT_LEFT_PADDING)),
                 ..default()
             },
             BackgroundColor(COLOR_FAMILIAR_BUTTON_BG),
+            BorderColor::all(Color::NONE),
             FamiliarListItem(familiar.entity),
         ))
         .id();
@@ -380,7 +386,11 @@ pub(super) fn spawn_familiar_section(
     }
 }
 
-pub(super) fn clear_children(commands: &mut Commands, q_children: &Query<&Children>, parent: Entity) {
+pub(super) fn clear_children(
+    commands: &mut Commands,
+    q_children: &Query<&Children>,
+    parent: Entity,
+) {
     if let Ok(children) = q_children.get(parent) {
         for child in children.iter() {
             commands.entity(child).despawn();
@@ -422,7 +432,12 @@ pub(super) fn sync_familiar_section_content(
             }
 
             for soul_vm in &familiar.souls {
-                spawn_soul_list_item(members_parent, soul_vm, game_assets, SQUAD_MEMBER_LEFT_MARGIN);
+                spawn_soul_list_item(
+                    members_parent,
+                    soul_vm,
+                    game_assets,
+                    SQUAD_MEMBER_LEFT_MARGIN,
+                );
             }
         });
 }

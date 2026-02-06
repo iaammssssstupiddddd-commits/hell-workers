@@ -189,7 +189,10 @@ pub fn blueprint_placement(
                             // 建築中は障害物としても登録しておく
                             world_map.add_obstacle(g.0, g.1);
                         }
-                        info!("BLUEPRINT: Placed {:?} at {:?}", building_type, occupied_grids);
+                        info!(
+                            "BLUEPRINT: Placed {:?} at {:?}",
+                            building_type, occupied_grids
+                        );
                     }
                 }
             }
@@ -240,7 +243,11 @@ pub fn update_hover_entity(
     q_souls: Query<(Entity, &GlobalTransform), With<DamnedSoul>>,
     q_familiars: Query<(Entity, &GlobalTransform), With<Familiar>>,
     q_targets: Query<
-        (Entity, &GlobalTransform, Option<&crate::systems::jobs::Building>),
+        (
+            Entity,
+            &GlobalTransform,
+            Option<&crate::systems::jobs::Building>,
+        ),
         Or<(
             With<crate::systems::jobs::Tree>,
             With<crate::systems::jobs::Rock>,
@@ -288,7 +295,8 @@ pub fn update_hover_entity(
                     let pos = transform.translation().truncate();
                     let radius = if let Some(building) = building_opt {
                         match building.kind {
-                            crate::systems::jobs::BuildingType::Tank | crate::systems::jobs::BuildingType::MudMixer => TILE_SIZE, // 2x2なので半径を大きく
+                            crate::systems::jobs::BuildingType::Tank
+                            | crate::systems::jobs::BuildingType::MudMixer => TILE_SIZE, // 2x2なので半径を大きく
                             _ => TILE_SIZE / 2.0,
                         }
                     } else {

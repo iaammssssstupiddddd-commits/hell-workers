@@ -1,13 +1,11 @@
+use super::FamiliarAiState;
 use crate::entities::damned_soul::{DamnedSoul, Destination, IdleState, Path};
-use crate::entities::familiar::{
-    ActiveCommand, Familiar, FamiliarOperation, FamiliarVoice,
-};
+use crate::entities::familiar::{ActiveCommand, Familiar, FamiliarOperation, FamiliarVoice};
 use crate::relationships::{CommandedBy, Commanding, ManagedTasks};
 use crate::systems::command::TaskArea;
 use crate::systems::soul_ai::gathering::ParticipatingIn;
 use crate::systems::soul_ai::task_execution::AssignedTask;
 use crate::systems::visual::speech::cooldown::SpeechHistory;
-use super::FamiliarAiState;
 use bevy::prelude::*;
 
 /// 使い魔AIが扱うソウルの標準クエリ型

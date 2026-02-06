@@ -1,7 +1,7 @@
 //! 資材アイコン・カウンター表示システム
 
-use bevy::prelude::*;
 use bevy::prelude::ChildOf;
+use bevy::prelude::*;
 
 use super::components::{MaterialCounter, MaterialIcon};
 use super::{COUNTER_TEXT_OFFSET, MATERIAL_ICON_X_OFFSET, MATERIAL_ICON_Y_OFFSET};

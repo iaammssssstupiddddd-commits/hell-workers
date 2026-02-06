@@ -3,7 +3,7 @@ use crate::entities::familiar::Familiar;
 use crate::game_state::TaskContext;
 use crate::interface::camera::MainCamera;
 use crate::interface::selection::SelectedEntity;
-use crate::systems::jobs::{Designation};
+use crate::systems::jobs::Designation;
 use crate::world::map::WorldMap;
 use crate::world::pathfinding::{self, PathfindingContext};
 use bevy::prelude::*;
@@ -16,7 +16,10 @@ pub fn assign_task_system(
     selected: Res<SelectedEntity>,
     mut task_context: ResMut<TaskContext>,
     mut commands: Commands,
-    q_designations: Query<(Entity, &Transform, &Designation), Without<crate::relationships::ManagedBy>>,
+    q_designations: Query<
+        (Entity, &Transform, &Designation),
+        Without<crate::relationships::ManagedBy>,
+    >,
     q_familiars: Query<(Entity, &Transform), With<Familiar>>,
     world_map: Res<WorldMap>,
     mut pf_context: Local<PathfindingContext>,
@@ -75,7 +78,9 @@ pub fn assign_task_system(
 
     // パス検索の起点を「通行可能な地面」に補正する
     // 使い魔は空中を飛べるが、ワーカーは地面しか歩けないため。
-    let Some(actual_start_grid) = world_map.get_nearest_walkable_grid(fam_transform.translation.truncate()) else {
+    let Some(actual_start_grid) =
+        world_map.get_nearest_walkable_grid(fam_transform.translation.truncate())
+    else {
         info!("ASSIGN_TASK: Familiar is in very deep obstacles, skipping assignment...");
         task_context.0 = TaskMode::AssignTask(None);
         return;
@@ -93,10 +98,17 @@ pub fn assign_task_system(
             // 地面周辺から到達可能かチェック（逆引き検索: タスクから地面へ）
             let target_grid = WorldMap::world_to_grid(pos);
             let is_reachable = if world_map.is_walkable(target_grid.0, target_grid.1) {
-                pathfinding::find_path(&world_map, &mut pf_context, target_grid, actual_start_grid).is_some()
+                pathfinding::find_path(&world_map, &mut pf_context, target_grid, actual_start_grid)
+                    .is_some()
             } else {
                 // pathfinding.rs 内部で neighbor -> actual_start_grid の逆引きが行われる
-                pathfinding::find_path_to_adjacent(&world_map, &mut pf_context, actual_start_grid, target_grid).is_some()
+                pathfinding::find_path_to_adjacent(
+                    &world_map,
+                    &mut pf_context,
+                    actual_start_grid,
+                    target_grid,
+                )
+                .is_some()
             };
 
             if !is_reachable {

@@ -5,6 +5,7 @@ use crate::interface::ui::components::{
     InfoPanelHeader, InfoPanelInventoryText, InfoPanelStatFatigue, InfoPanelStatMotivation,
     InfoPanelStatStress, InfoPanelTaskText,
 };
+use crate::interface::ui::theme::*;
 use bevy::prelude::*;
 use bevy::ui::{BackgroundGradient, ColorStop, LinearGradient};
 
@@ -19,20 +20,20 @@ fn spawn_info_panel(commands: &mut Commands, game_assets: &Res<crate::assets::Ga
         .spawn((
             Node {
                 display: Display::None,
-                width: Val::Px(200.0),
+                width: Val::Px(INFO_PANEL_WIDTH),
                 height: Val::Auto,
                 position_type: PositionType::Absolute,
-                right: Val::Px(20.0),
-                top: Val::Px(120.0),
+                right: Val::Px(PANEL_MARGIN_X),
+                top: Val::Px(PANEL_TOP),
                 flex_direction: FlexDirection::Column,
-                padding: UiRect::all(Val::Px(10.0)),
+                padding: UiRect::all(Val::Px(PANEL_PADDING)),
                 ..default()
             },
             BackgroundGradient::from(LinearGradient {
                 angle: 0.0, // 左から右
                 stops: vec![
-                    ColorStop::new(Color::srgba(0.3, 0.1, 0.3, 0.9), Val::Percent(0.0)), // 紫っぽい
-                    ColorStop::new(Color::srgba(0.0, 0.0, 0.0, 0.8), Val::Percent(100.0)),
+                    ColorStop::new(COLOR_PANEL_RIGHT_TOP, Val::Percent(0.0)),
+                    ColorStop::new(COLOR_PANEL_RIGHT_BOTTOM, Val::Percent(100.0)),
                 ],
                 ..default()
             }),
@@ -52,10 +53,10 @@ fn spawn_info_panel(commands: &mut Commands, game_assets: &Res<crate::assets::Ga
                         Text::new("Entity Info"),
                         TextFont {
                             font: game_assets.font_ui.clone(),
-                            font_size: crate::constants::FONT_SIZE_HEADER,
+                            font_size: FONT_SIZE_TITLE,
                             ..default()
                         },
-                        TextColor(Color::srgb(1.0, 1.0, 0.0)),
+                        TextColor(COLOR_TEXT_ACCENT),
                         InfoPanelHeader,
                     ));
                     row.spawn((
@@ -83,7 +84,7 @@ fn spawn_info_panel(commands: &mut Commands, game_assets: &Res<crate::assets::Ga
                         Text::new(""),
                         TextFont {
                             font: game_assets.font_ui.clone(),
-                            font_size: crate::constants::FONT_SIZE_SMALL,
+                            font_size: FONT_SIZE_SMALL,
                             ..default()
                         },
                         InfoPanelStatMotivation,
@@ -108,7 +109,7 @@ fn spawn_info_panel(commands: &mut Commands, game_assets: &Res<crate::assets::Ga
                             Text::new("Stress: 0%"),
                             TextFont {
                                 font: game_assets.font_ui.clone(),
-                                font_size: crate::constants::FONT_SIZE_SMALL,
+                                font_size: FONT_SIZE_SMALL,
                                 ..default()
                             },
                             InfoPanelStatStress,
@@ -134,7 +135,7 @@ fn spawn_info_panel(commands: &mut Commands, game_assets: &Res<crate::assets::Ga
                             Text::new("Fatigue: 0%"),
                             TextFont {
                                 font: game_assets.font_ui.clone(),
-                                font_size: crate::constants::FONT_SIZE_SMALL,
+                                font_size: FONT_SIZE_SMALL,
                                 ..default()
                             },
                             InfoPanelStatFatigue,
@@ -152,7 +153,7 @@ fn spawn_info_panel(commands: &mut Commands, game_assets: &Res<crate::assets::Ga
                             Text::new("Task: Idle"),
                             TextFont {
                                 font: game_assets.font_ui.clone(),
-                                font_size: crate::constants::FONT_SIZE_SMALL,
+                                font_size: FONT_SIZE_SMALL,
                                 ..default()
                             },
                             InfoPanelTaskText,
@@ -163,7 +164,7 @@ fn spawn_info_panel(commands: &mut Commands, game_assets: &Res<crate::assets::Ga
                         Text::new("Carrying: None"),
                         TextFont {
                             font: game_assets.font_ui.clone(),
-                            font_size: crate::constants::FONT_SIZE_SMALL,
+                            font_size: FONT_SIZE_SMALL,
                             ..default()
                         },
                         InfoPanelInventoryText,
@@ -175,10 +176,10 @@ fn spawn_info_panel(commands: &mut Commands, game_assets: &Res<crate::assets::Ga
                 Text::new(""),
                 TextFont {
                     font: game_assets.font_ui.clone(),
-                    font_size: crate::constants::FONT_SIZE_BODY,
+                    font_size: FONT_SIZE_ITEM,
                     ..default()
                 },
-                TextColor(Color::WHITE),
+                TextColor(COLOR_TEXT_PRIMARY),
                 InfoPanelCommonText,
             ));
         });
@@ -205,10 +206,10 @@ fn spawn_hover_tooltip(commands: &mut Commands, game_assets: &Res<crate::assets:
                 Text::new(""),
                 TextFont {
                     font: game_assets.font_ui.clone(),
-                    font_size: crate::constants::FONT_SIZE_SMALL,
+                    font_size: FONT_SIZE_SMALL,
                     ..default()
                 },
-                TextColor(Color::WHITE),
+                TextColor(COLOR_TEXT_PRIMARY),
                 HoverTooltipText,
             ));
         });

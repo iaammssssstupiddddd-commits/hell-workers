@@ -6,8 +6,8 @@ use crate::constants::*;
 use crate::entities::damned_soul::{GatheringBehavior, IdleBehavior};
 use crate::events::{IdleBehaviorOperation, IdleBehaviorRequest};
 use crate::systems::soul_ai::gathering::{GATHERING_LEAVE_RADIUS, GatheringSpot, ParticipatingIn};
-use crate::systems::soul_ai::task_execution::AssignedTask;
 use crate::systems::soul_ai::query_types::IdleDecisionSoulQuery;
+use crate::systems::soul_ai::task_execution::AssignedTask;
 use crate::systems::spatial::{GatheringSpotSpatialGrid, SpatialGridOps};
 use crate::world::map::WorldMap;
 
@@ -334,9 +334,7 @@ pub fn idle_behavior_apply_system(
                 });
             }
             IdleBehaviorOperation::LeaveGathering { spot_entity } => {
-                commands
-                    .entity(request.entity)
-                    .remove::<ParticipatingIn>();
+                commands.entity(request.entity).remove::<ParticipatingIn>();
                 commands.trigger(crate::events::OnGatheringLeft {
                     entity: request.entity,
                     spot_entity: *spot_entity,

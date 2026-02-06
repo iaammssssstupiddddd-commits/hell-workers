@@ -5,7 +5,8 @@
 pub mod blueprint;
 pub mod gather;
 pub mod haul;
+pub mod placement_ghost;
 pub mod soul;
 pub mod speech;
 pub mod tank;
-pub mod wall_connection;pub mod placement_ghost;
+pub mod wall_connection;

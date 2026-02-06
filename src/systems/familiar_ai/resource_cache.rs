@@ -1,11 +1,11 @@
-use bevy::prelude::*;
-use std::collections::HashMap;
 use crate::events::ResourceReservationOp;
 use crate::events::ResourceReservationRequest;
 use crate::relationships::TaskWorkers;
 use crate::systems::jobs::{Designation, TargetBlueprint, TargetMixer, WorkType};
 use crate::systems::logistics::{BelongsTo, ResourceItem, ResourceType};
 use crate::systems::soul_ai::task_execution::AssignedTask;
+use bevy::prelude::*;
+use std::collections::HashMap;
 
 /// システム全体で共有されるリソース予約キャッシュ
 ///
@@ -66,12 +66,18 @@ impl SharedResourceCache {
 
     /// 指定された搬送先の現在の予約数を取得
     pub fn get_destination_reservation(&self, target: Entity) -> usize {
-        self.destination_reservations.get(&target).cloned().unwrap_or(0)
+        self.destination_reservations
+            .get(&target)
+            .cloned()
+            .unwrap_or(0)
     }
 
     /// ミキサーへの予約を追加
     pub fn reserve_mixer_destination(&mut self, target: Entity, resource_type: ResourceType) {
-        *self.mixer_dest_reservations.entry((target, resource_type)).or_insert(0) += 1;
+        *self
+            .mixer_dest_reservations
+            .entry((target, resource_type))
+            .or_insert(0) += 1;
     }
 
     /// ミキサーへの予約を解除
@@ -86,8 +92,15 @@ impl SharedResourceCache {
     }
 
     /// ミキサーへの予約数を取得
-    pub fn get_mixer_destination_reservation(&self, target: Entity, resource_type: ResourceType) -> usize {
-        self.mixer_dest_reservations.get(&(target, resource_type)).cloned().unwrap_or(0)
+    pub fn get_mixer_destination_reservation(
+        &self,
+        target: Entity,
+        resource_type: ResourceType,
+    ) -> usize {
+        self.mixer_dest_reservations
+            .get(&(target, resource_type))
+            .cloned()
+            .unwrap_or(0)
     }
 
     /// リソース取り出し予約を追加 (Source Reservation)
@@ -113,16 +126,15 @@ impl SharedResourceCache {
     }
 
     /// アトミックに予約を試みる (Thinkフェーズ用)
-    /// 
+    ///
     /// 現在の予約数 + 要求量が capacity を超えなければ予約を確定し true を返す。
     /// capacity は外部（呼び出し元）が現在の実在庫や容量を確認して計算した「受け入れ可能残量」などを想定するが、
     /// ここでは単純に「コンポーネントの状態とは独立した純粋な予約管理」を行うため、
     /// 「予約可能か？」の判定ロジックは呼び出し元（TaskAssigner）が持つべき責務とする。
     /// このメソッドは単に予約を追加する。
-    /// 
+    ///
     /// check_and_reserve のようなヘルパーメソッドを作ることも可能だが、
     /// 判定条件が対象（Stockpile, Tank, Mixer）によって異なるため、プリミティブな予約機能を提供するに留める。
-
 
     /// 収納アクション成功を記録 (Delta Update)
     /// 予約を減らし、フレーム内格納数を増やす
@@ -143,7 +155,7 @@ impl SharedResourceCache {
         let frame_added = self.frame_stored_count.get(&target).cloned().unwrap_or(0);
         current_from_query + frame_added
     }
-    
+
     /// 論理的な予約済み合計（実在庫 + 予約 + フレーム内増加）を取得
     /// これが capacity を超えてはいけない
     pub fn get_total_anticipated_count(&self, target: Entity, current_from_query: usize) -> usize {
@@ -162,10 +174,16 @@ pub fn apply_reservation_op(cache: &mut SharedResourceCache, op: &ResourceReserv
         ResourceReservationOp::ReleaseDestination { target } => {
             cache.release_destination(target);
         }
-        ResourceReservationOp::ReserveMixerDestination { target, resource_type } => {
+        ResourceReservationOp::ReserveMixerDestination {
+            target,
+            resource_type,
+        } => {
             cache.reserve_mixer_destination(target, resource_type);
         }
-        ResourceReservationOp::ReleaseMixerDestination { target, resource_type } => {
+        ResourceReservationOp::ReleaseMixerDestination {
+            target,
+            resource_type,
+        } => {
             cache.release_mixer_destination(target, resource_type);
         }
         ResourceReservationOp::ReserveSource { source, amount } => {
@@ -221,7 +239,9 @@ pub fn sync_reservations_system(
 
     // Designation（タスク割り当て待ち）のアイテムも予約としてカウント
     // Without<TaskWorkers> により、既に割り当て済みのものは除外（AssignedTask 側でカウント）
-    for (designation, target_mixer, target_blueprint, belongs_to, resource_item) in q_pending_tasks.iter() {
+    for (designation, target_mixer, target_blueprint, belongs_to, resource_item) in
+        q_pending_tasks.iter()
+    {
         match designation.work_type {
             WorkType::Haul => {
                 // ブループリント向け運搬
@@ -240,7 +260,9 @@ pub fn sync_reservations_system(
             WorkType::HaulWaterToMixer => {
                 // ミキサー向け水運搬（バケツ1杯 = 1予約）
                 if let Some(mixer) = target_mixer {
-                    *mixer_dest_res.entry((mixer.0, ResourceType::Water)).or_insert(0) += 1;
+                    *mixer_dest_res
+                        .entry((mixer.0, ResourceType::Water))
+                        .or_insert(0) += 1;
                 }
             }
             WorkType::GatherWater => {
@@ -285,28 +307,32 @@ pub fn sync_reservations_system(
                 }
             }
             AssignedTask::HaulToMixer(data) => {
-                *mixer_dest_res.entry((data.mixer, data.resource_type)).or_insert(0) += 1;
-                
+                *mixer_dest_res
+                    .entry((data.mixer, data.resource_type))
+                    .or_insert(0) += 1;
+
                 use crate::systems::soul_ai::task_execution::types::HaulToMixerPhase;
                 if matches!(data.phase, HaulToMixerPhase::GoingToItem) {
                     *source_res.entry(data.item).or_insert(0) += 1;
                 }
             }
             AssignedTask::HaulWaterToMixer(data) => {
-                *mixer_dest_res.entry((data.mixer, ResourceType::Water)).or_insert(0) += 1; // ここは水量単位ではなく「作業員数単位」で予約しているかもしれない（既存実装依存）
+                *mixer_dest_res
+                    .entry((data.mixer, ResourceType::Water))
+                    .or_insert(0) += 1; // ここは水量単位ではなく「作業員数単位」で予約しているかもしれない（既存実装依存）
                 // 既存実装では `*mixer_reservations.entry((data.mixer, ResourceType::Water)).or_insert(0) += 1;` となっていた。
                 // つまり、1人の作業員が向かっている＝1予約、としている。水量は考慮されていない（あるいはバケツ1杯分と仮定？）
                 // ここでは既存のロジックを踏襲する。
-                
+
                 use crate::systems::soul_ai::task_execution::types::HaulWaterToMixerPhase;
                 if matches!(data.phase, HaulWaterToMixerPhase::GoingToBucket) {
                     *source_res.entry(data.bucket).or_insert(0) += 1;
                 } else if matches!(data.phase, HaulWaterToMixerPhase::FillingFromTank) {
-                     // タンクから水を汲む予約。ここでタンクをSourceとして予約すべきか？
-                     // 水リソースそのものを予約するのは難しい（水アイテムは動的に生成/消滅したりする？）
-                     // タンクロジック依存だが、ここではタンクEntityをSourceとして予約数に入れておく
-                     // amountはとりあえず1（作業員一人分）とする
-                     *source_res.entry(data.tank).or_insert(0) += 1;
+                    // タンクから水を汲む予約。ここでタンクをSourceとして予約すべきか？
+                    // 水リソースそのものを予約するのは難しい（水アイテムは動的に生成/消滅したりする？）
+                    // タンクロジック依存だが、ここではタンクEntityをSourceとして予約数に入れておく
+                    // amountはとりあえず1（作業員一人分）とする
+                    *source_res.entry(data.tank).or_insert(0) += 1;
                 }
             }
             // 他のタスク（Build, CollectSand, Refine）も必要に応じて追加
@@ -318,14 +344,17 @@ pub fn sync_reservations_system(
                 // よって Build タスク中は既にアイテムを持っているか、あるいは不要。
                 // ... と思われたが、Cycle Framework移行によりSource Reservationが必要になったため追記
                 use crate::systems::soul_ai::task_execution::types::BuildPhase;
-                if matches!(data.phase, BuildPhase::GoingToBlueprint | BuildPhase::Building { .. }) {
+                if matches!(
+                    data.phase,
+                    BuildPhase::GoingToBlueprint | BuildPhase::Building { .. }
+                ) {
                     *source_res.entry(data.blueprint).or_insert(0) += 1;
                 }
             }
             AssignedTask::HaulToBlueprint(data) => {
                 // ブループリントへの搬送予約（正しくはBlueprintが必要とする資材枠への予約）
                 // 現状のSharedResourceCacheはEntity単位。Blueprint EntityへのDestination Reservationとする。
-                 *dest_res.entry(data.blueprint).or_insert(0) += 1;
+                *dest_res.entry(data.blueprint).or_insert(0) += 1;
 
                 use crate::systems::soul_ai::task_execution::types::HaulToBpPhase;
                 if matches!(data.phase, HaulToBpPhase::GoingToItem) {
@@ -335,21 +364,30 @@ pub fn sync_reservations_system(
             AssignedTask::Gather(data) => {
                 // 木や岩への予約（複数人同時作業の制御用）
                 use crate::systems::soul_ai::task_execution::types::GatherPhase;
-                if matches!(data.phase, GatherPhase::GoingToResource | GatherPhase::Collecting { .. }) {
+                if matches!(
+                    data.phase,
+                    GatherPhase::GoingToResource | GatherPhase::Collecting { .. }
+                ) {
                     *source_res.entry(data.target).or_insert(0) += 1;
                 }
             }
             AssignedTask::CollectSand(data) => {
                 // SandPileへの予約
                 use crate::systems::soul_ai::task_execution::types::CollectSandPhase;
-                if matches!(data.phase, CollectSandPhase::GoingToSand | CollectSandPhase::Collecting { .. }) {
+                if matches!(
+                    data.phase,
+                    CollectSandPhase::GoingToSand | CollectSandPhase::Collecting { .. }
+                ) {
                     *source_res.entry(data.target).or_insert(0) += 1;
                 }
             }
             AssignedTask::Refine(data) => {
                 // Mixerへの予約（精製作業の排他制御）
                 use crate::systems::soul_ai::task_execution::types::RefinePhase;
-                if matches!(data.phase, RefinePhase::GoingToMixer | RefinePhase::Refining { .. }) {
+                if matches!(
+                    data.phase,
+                    RefinePhase::GoingToMixer | RefinePhase::Refining { .. }
+                ) {
                     *source_res.entry(data.mixer).or_insert(0) += 1;
                 }
             }

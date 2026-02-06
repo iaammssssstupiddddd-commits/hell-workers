@@ -9,10 +9,10 @@ mod relationships;
 mod systems;
 mod world;
 
+use bevy::diagnostic::FrameTimeDiagnosticsPlugin;
 use bevy::prelude::*;
 use bevy::render::RenderPlugin;
 use bevy::render::settings::{Backends, RenderCreation, WgpuSettings};
-use bevy::diagnostic::FrameTimeDiagnosticsPlugin;
 use std::env;
 
 use game_state::{
@@ -98,7 +98,10 @@ fn main() {
         )
         // Diagnostics plugins
         .add_plugins(FrameTimeDiagnosticsPlugin::default())
-        .add_systems(Update, frame_spike_logger_system.in_set(GameSystemSet::Visual))
+        .add_systems(
+            Update,
+            frame_spike_logger_system.in_set(GameSystemSet::Visual),
+        )
         // Game plugins
         .add_plugins(StartupPlugin)
         .add_plugins(InputPlugin)

@@ -18,18 +18,12 @@ pub fn assign_by_work_type(
         WorkType::Chop | WorkType::Mine => {
             basic::assign_gather(work_type, task_pos, already_commanded, ctx, queries, shadow)
         }
-        WorkType::Build => {
-            basic::assign_build(task_pos, already_commanded, ctx, queries, shadow)
-        }
+        WorkType::Build => basic::assign_build(task_pos, already_commanded, ctx, queries, shadow),
         WorkType::CollectSand => {
             basic::assign_collect_sand(task_pos, already_commanded, ctx, queries, shadow)
         }
-        WorkType::Refine => {
-            basic::assign_refine(task_pos, already_commanded, ctx, queries, shadow)
-        }
-        WorkType::Haul => {
-            haul::assign_haul(task_pos, already_commanded, ctx, queries, shadow)
-        }
+        WorkType::Refine => basic::assign_refine(task_pos, already_commanded, ctx, queries, shadow),
+        WorkType::Haul => haul::assign_haul(task_pos, already_commanded, ctx, queries, shadow),
         WorkType::HaulToMixer => {
             haul::assign_haul_to_mixer(task_pos, already_commanded, ctx, queries, shadow)
         }

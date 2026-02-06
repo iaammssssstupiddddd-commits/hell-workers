@@ -17,8 +17,13 @@ pub(super) fn assign_gather_water(
         return false;
     }
 
-    let best_tank =
-        find_best_tank_for_bucket(ctx.task_entity, task_pos, ctx.task_area_opt, queries, shadow);
+    let best_tank = find_best_tank_for_bucket(
+        ctx.task_entity,
+        task_pos,
+        ctx.task_area_opt,
+        queries,
+        shadow,
+    );
 
     if let Some(tank_entity) = best_tank {
         issue_gather_water(

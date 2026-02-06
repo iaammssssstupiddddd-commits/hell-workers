@@ -1,8 +1,8 @@
+use crate::constants::TILE_SIZE;
 use crate::game_state::{BuildContext, PlayMode};
 use crate::interface::camera::MainCamera;
 use crate::systems::jobs::BuildingType;
 use crate::world::map::WorldMap;
-use crate::constants::TILE_SIZE;
 use bevy::prelude::*;
 
 #[derive(Component)]
@@ -12,10 +12,7 @@ pub fn placement_ghost_system(
     mut commands: Commands,
     play_mode: Res<State<PlayMode>>,
     build_context: Res<BuildContext>,
-    mut q_ghost: Query<
-        (Entity, &mut Transform, &mut Sprite),
-        With<PlacementGhost>,
-    >,
+    mut q_ghost: Query<(Entity, &mut Transform, &mut Sprite), With<PlacementGhost>>,
     q_window: Query<&Window, With<bevy::window::PrimaryWindow>>,
     q_camera: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
     game_assets: Res<crate::assets::GameAssets>,
@@ -53,7 +50,7 @@ pub fn placement_ghost_system(
 
     // 座標計算（ここ重要：配置ロジックと一致させる）
     let grid_pos = WorldMap::world_to_grid(world_pos);
-    
+
     // 占有グリッドの計算
     let occupied_grids = match building_type {
         BuildingType::Tank | BuildingType::MudMixer => {
@@ -81,7 +78,7 @@ pub fn placement_ghost_system(
             let base_pos = WorldMap::grid_to_world(grid_pos.0, grid_pos.1);
             base_pos + Vec2::new(TILE_SIZE * 0.5, TILE_SIZE * 0.5)
         }
-        _ => WorldMap::snap_to_grid_center(world_pos)
+        _ => WorldMap::snap_to_grid_center(world_pos),
     };
 
     // 画像とサイズ

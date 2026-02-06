@@ -6,13 +6,13 @@ use bevy::prelude::*;
 
 use crate::constants::TILE_SIZE;
 use crate::entities::familiar::ActiveCommand;
+use crate::relationships::TaskWorkers;
 use crate::systems::command::TaskArea;
 use crate::systems::jobs::{Blueprint, Designation, IssuedBy, TaskSlots, WorkType};
 use crate::systems::logistics::{ResourceItem, ResourceType};
 use crate::systems::soul_ai::query_types::AutoHaulAssignedTaskQuery;
 use crate::systems::soul_ai::task_execution::AssignedTask;
 use crate::systems::spatial::{BlueprintSpatialGrid, ResourceSpatialGrid, SpatialGridOps};
-use crate::relationships::TaskWorkers;
 
 /// 段階的検索の半径（タイル単位）
 const SEARCH_RADII: [f32; 4] = [20.0, 50.0, 100.0, 200.0];
@@ -49,8 +49,7 @@ pub fn blueprint_auto_haul_system(
     // 運搬中 (ソウルが持っている、または向かっている)
     for task in q_souls.iter() {
         let task: &AssignedTask = task;
-        if let AssignedTask::HaulToBlueprint(data) = task
-        {
+        if let AssignedTask::HaulToBlueprint(data) = task {
             let item = &data.item;
             let blueprint = &data.blueprint;
             if let Ok(res_item) = q_all_resources.get(*item) {
@@ -67,7 +66,8 @@ pub fn blueprint_auto_haul_system(
     let mut already_assigned_this_frame = std::collections::HashSet::new();
 
     for (fam_entity, _active_command, task_area) in q_familiars.iter() {
-        let (fam_entity, _active_command, task_area): (Entity, &ActiveCommand, &TaskArea) = (fam_entity, _active_command, task_area);
+        let (fam_entity, _active_command, task_area): (Entity, &ActiveCommand, &TaskArea) =
+            (fam_entity, _active_command, task_area);
 
         // 最適化: タスクエリア内のブループリントのみを取得
         let blueprints_in_area = blueprint_grid.get_in_area(task_area.min, task_area.max);
@@ -182,7 +182,7 @@ fn find_resource_progressively(
                 else {
                     return None;
                 };
-                
+
                 if *visibility == Visibility::Hidden {
                     return None;
                 }
@@ -212,9 +212,8 @@ fn find_resource_progressively(
             .collect();
 
         // 距離でソート
-        candidates.sort_by(|(_, d1), (_, d2)| {
-            d1.partial_cmp(d2).unwrap_or(std::cmp::Ordering::Equal)
-        });
+        candidates
+            .sort_by(|(_, d1), (_, d2)| d1.partial_cmp(d2).unwrap_or(std::cmp::Ordering::Equal));
 
         // 最も近い資材を返す
         if let Some((entity, _)) = candidates.first() {

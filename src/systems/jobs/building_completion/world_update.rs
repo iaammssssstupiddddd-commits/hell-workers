@@ -61,7 +61,10 @@ pub(super) fn update_world_for_completed_building(
                         let new_pos = WorldMap::grid_to_world(nx, ny);
                         soul_transform.translation.x = new_pos.x;
                         soul_transform.translation.y = new_pos.y;
-                        info!("BUILD: Soul {:?} was pushed out to ({}, {})", soul_entity, nx, ny);
+                        info!(
+                            "BUILD: Soul {:?} was pushed out to ({}, {})",
+                            soul_entity, nx, ny
+                        );
                         found = true;
                         break;
                     }

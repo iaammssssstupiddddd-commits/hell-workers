@@ -5,15 +5,17 @@
 use crate::assets::GameAssets;
 use crate::constants::TILE_SIZE;
 use crate::constants::*;
-use crate::entities::damned_soul::{DamnedSoul, SoulUiLinks, IdleState, IdleBehavior, GatheringBehavior};
+use crate::entities::damned_soul::{
+    DamnedSoul, GatheringBehavior, IdleBehavior, IdleState, SoulUiLinks,
+};
 use crate::systems::soul_ai::task_execution::types::{AssignedTask, GatherPhase, HaulPhase};
 use crate::systems::utils::progress_bar::{
     GenericProgressBar, ProgressBarBackground, ProgressBarConfig, ProgressBarFill,
     spawn_progress_bar, sync_progress_bar_fill_position, sync_progress_bar_position,
     update_progress_bar_fill,
 };
-use bevy::prelude::*;
 use bevy::prelude::ChildOf;
+use bevy::prelude::*;
 
 /// ソウル用プログレスバーのラッパーコンポーネント
 #[derive(Component)]
@@ -30,36 +32,36 @@ pub fn progress_bar_system(
     for (soul_entity, task, transform, mut ui_links) in q_souls.iter_mut() {
         if let AssignedTask::Gather(data) = task {
             if matches!(data.phase, GatherPhase::Collecting { .. }) {
-            if ui_links.bar_entity.is_none() {
-                // utilを使用してプログレスバーを生成
-                let config = ProgressBarConfig {
-                    width: TILE_SIZE * 0.8,
-                    height: TILE_SIZE * 0.15,
-                    y_offset: TILE_SIZE * 0.6,
-                    bg_color: Color::srgba(0.0, 0.0, 0.0, 0.8),
-                    fill_color: Color::srgb(0.0, 1.0, 0.0),
-                    z_index: Z_BAR_BG,
-                };
+                if ui_links.bar_entity.is_none() {
+                    // utilを使用してプログレスバーを生成
+                    let config = ProgressBarConfig {
+                        width: TILE_SIZE * 0.8,
+                        height: TILE_SIZE * 0.15,
+                        y_offset: TILE_SIZE * 0.6,
+                        bg_color: Color::srgba(0.0, 0.0, 0.0, 0.8),
+                        fill_color: Color::srgb(0.0, 1.0, 0.0),
+                        z_index: Z_BAR_BG,
+                    };
 
-                let (bg_entity, fill_entity) =
-                    spawn_progress_bar(&mut commands, soul_entity, transform, config);
+                    let (bg_entity, fill_entity) =
+                        spawn_progress_bar(&mut commands, soul_entity, transform, config);
 
-                // 親子関係を設定（Lifecycle管理のため）
-                commands.entity(soul_entity).add_child(bg_entity);
-                commands.entity(soul_entity).add_child(fill_entity);
-                
-                commands.entity(bg_entity).insert(SoulProgressBar);
-                commands.entity(fill_entity).insert(SoulProgressBar);
+                    // 親子関係を設定（Lifecycle管理のため）
+                    commands.entity(soul_entity).add_child(bg_entity);
+                    commands.entity(soul_entity).add_child(fill_entity);
 
-                // Fillの色を緑に設定
-                commands.entity(fill_entity).insert(Sprite {
-                    color: Color::srgb(0.0, 1.0, 0.0),
-                    ..default()
-                });
+                    commands.entity(bg_entity).insert(SoulProgressBar);
+                    commands.entity(fill_entity).insert(SoulProgressBar);
 
-                ui_links.bar_entity = Some(bg_entity);
+                    // Fillの色を緑に設定
+                    commands.entity(fill_entity).insert(Sprite {
+                        color: Color::srgb(0.0, 1.0, 0.0),
+                        ..default()
+                    });
+
+                    ui_links.bar_entity = Some(bg_entity);
+                }
             }
-        }
         } else if let Some(bar_entity) = ui_links.bar_entity.take() {
             // プログレスバーを削除（背景とFillの両方）
             // SoulProgressBarコンポーネントを持つ全てのエンティティを削除
@@ -91,20 +93,20 @@ pub fn update_progress_bar_fill_system(
             if let Ok(task) = q_souls.get(child_of.parent()) {
                 if let AssignedTask::Gather(data) = task {
                     if let GatherPhase::Collecting { progress } = data.phase {
-                    if let Ok(generic_bar) = q_generic_bars.get(fill_entity) {
-                        update_progress_bar_fill(
-                            progress,
-                            &generic_bar.config,
-                            &mut sprite,
-                            &mut transform,
-                            None, // 色は変更しない（緑のまま）
-                        );
+                        if let Ok(generic_bar) = q_generic_bars.get(fill_entity) {
+                            update_progress_bar_fill(
+                                progress,
+                                &generic_bar.config,
+                                &mut sprite,
+                                &mut transform,
+                                None, // 色は変更しない（緑のまま）
+                            );
+                        }
                     }
                 }
             }
         }
     }
-}
 }
 
 /// バーを親エンティティに追従させるシステム
@@ -193,8 +195,8 @@ pub fn task_link_system(
                     AssignedTask::GatherWater(_) => Color::srgb(0.0, 0.5, 1.0),
                     AssignedTask::CollectSand(_) => Color::srgb(1.0, 0.8, 0.0),
                     AssignedTask::Refine(_) => Color::srgb(0.5, 0.0, 1.0),
-                    AssignedTask::Haul(_) => Color::srgba(1.0, 1.0, 0.0, 0.4),   // 黄 (運搬)
-                    AssignedTask::Build(_) => Color::srgba(1.0, 1.0, 1.0, 0.5),  // 白 (建築)
+                    AssignedTask::Haul(_) => Color::srgba(1.0, 1.0, 0.0, 0.4), // 黄 (運搬)
+                    AssignedTask::Build(_) => Color::srgba(1.0, 1.0, 1.0, 0.5), // 白 (建築)
                     AssignedTask::HaulToBlueprint(_) => Color::srgba(1.0, 1.0, 0.5, 0.4), // 薄黄 (搬入)
                     AssignedTask::HaulWaterToMixer(_) => Color::srgb(0.0, 0.5, 1.0), // Same as GatherWater
                     _ => Color::srgba(1.0, 1.0, 1.0, 0.3),
@@ -216,7 +218,14 @@ pub fn task_link_system(
 pub fn soul_status_visual_system(
     mut commands: Commands,
     mut q_souls: Query<
-        (Entity, &Transform, &DamnedSoul, &mut SoulUiLinks, &AssignedTask, Option<&IdleState>),
+        (
+            Entity,
+            &Transform,
+            &DamnedSoul,
+            &mut SoulUiLinks,
+            &AssignedTask,
+            Option<&IdleState>,
+        ),
         With<DamnedSoul>,
     >,
     mut q_text: Query<&mut Text2d, With<StatusIcon>>,
@@ -230,10 +239,11 @@ pub fn soul_status_visual_system(
         } else if matches!(task, AssignedTask::None) {
             // 待機中の場合、さらに詳細な状態を確認
             let is_sleeping = idle_state.map_or(false, |state| {
-                state.behavior == IdleBehavior::Sleeping || 
-                (state.behavior == IdleBehavior::Gathering && state.gathering_behavior == GatheringBehavior::Sleeping)
+                state.behavior == IdleBehavior::Sleeping
+                    || (state.behavior == IdleBehavior::Gathering
+                        && state.gathering_behavior == GatheringBehavior::Sleeping)
             });
-            
+
             if is_sleeping {
                 Some(("Zzz", Color::srgb(0.5, 0.7, 1.0))) // 睡眠中
             } else {
@@ -251,9 +261,11 @@ pub fn soul_status_visual_system(
                 // 位置の更新
                 commands
                     .entity(icon_entity)
-                    .insert(Transform::from_translation(
-                         Vec3::new(TILE_SIZE * 0.4, TILE_SIZE * 0.4, 0.5),
-                    ));
+                    .insert(Transform::from_translation(Vec3::new(
+                        TILE_SIZE * 0.4,
+                        TILE_SIZE * 0.4,
+                        0.5,
+                    )));
             } else {
                 let icon_id = commands
                     .spawn((
@@ -265,9 +277,11 @@ pub fn soul_status_visual_system(
                             ..default()
                         },
                         TextColor(color),
-                        Transform::from_translation(
-                            Vec3::new(TILE_SIZE * 0.4, TILE_SIZE * 0.4, 0.5),
-                        ),
+                        Transform::from_translation(Vec3::new(
+                            TILE_SIZE * 0.4,
+                            TILE_SIZE * 0.4,
+                            0.5,
+                        )),
                     ))
                     .id();
                 commands.entity(soul_entity).add_child(icon_id);

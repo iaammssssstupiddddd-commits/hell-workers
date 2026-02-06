@@ -21,6 +21,7 @@ pub fn hover_tooltip_system(
     q_window: Query<&Window, With<bevy::window::PrimaryWindow>>,
     mut q_tooltip: Query<&mut Node, With<HoverTooltip>>,
     mut q_text: Query<&mut Text, With<HoverTooltipText>>,
+    q_ui_tooltips: Query<(&Interaction, &UiTooltip), With<Button>>,
     q_souls: Query<(
         &DamnedSoul,
         &AssignedTask,
@@ -51,6 +52,18 @@ pub fn hover_tooltip_system(
     let Ok(mut text) = q_text.single_mut() else {
         return;
     };
+
+    if let Some((_, tooltip)) = q_ui_tooltips.iter().find(|(interaction, _)| {
+        matches!(**interaction, Interaction::Hovered | Interaction::Pressed)
+    }) {
+        text.0 = tooltip.0.to_string();
+        tooltip_node.display = Display::Flex;
+        if let Some(cursor_pos) = window.cursor_position() {
+            tooltip_node.left = Val::Px(cursor_pos.x + 15.0);
+            tooltip_node.top = Val::Px(cursor_pos.y + 15.0);
+        }
+        return;
+    }
 
     if let Some(entity) = hovered.0 {
         let mut info_lines = Vec::new();
@@ -146,6 +159,39 @@ pub fn hover_tooltip_system(
         }
     } else {
         tooltip_node.display = Display::None;
+    }
+}
+
+pub fn ui_keyboard_shortcuts_system(
+    keyboard: Res<ButtonInput<KeyCode>>,
+    mut menu_state: ResMut<MenuState>,
+    mut next_play_mode: ResMut<NextState<PlayMode>>,
+    mut build_context: ResMut<BuildContext>,
+    mut zone_context: ResMut<ZoneContext>,
+    mut task_context: ResMut<TaskContext>,
+) {
+    if keyboard.just_pressed(KeyCode::KeyB) {
+        mode::toggle_menu_and_reset_mode(
+            &mut menu_state,
+            MenuState::Architect,
+            &mut next_play_mode,
+            &mut build_context,
+            &mut zone_context,
+            &mut task_context,
+            false,
+        );
+    }
+
+    if keyboard.just_pressed(KeyCode::KeyZ) {
+        mode::toggle_menu_and_reset_mode(
+            &mut menu_state,
+            MenuState::Zones,
+            &mut next_play_mode,
+            &mut build_context,
+            &mut zone_context,
+            &mut task_context,
+            true,
+        );
     }
 }
 
