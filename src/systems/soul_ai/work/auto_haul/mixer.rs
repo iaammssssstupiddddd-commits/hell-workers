@@ -13,8 +13,6 @@ use crate::relationships::TaskWorkers;
 use crate::events::{ResourceReservationOp, ResourceReservationRequest};
 use crate::systems::familiar_ai::resource_cache::SharedResourceCache;
 use crate::systems::soul_ai::work::auto_haul::ItemReservations;
-use crate::systems::soul_ai::query_types::AutoHaulAssignedTaskQuery;
-use crate::systems::soul_ai::task_execution::AssignedTask;
 
 /// MudMixer への自動資材運搬タスク生成システム
 pub fn mud_mixer_auto_haul_system(
@@ -25,7 +23,6 @@ pub fn mud_mixer_auto_haul_system(
     q_familiars: Query<(Entity, &ActiveCommand, &TaskArea)>,
     q_mixers: Query<(Entity, &Transform, &MudMixerStorage, Option<&TaskWorkers>)>,
     q_stockpiles_detailed: Query<(Entity, &Transform, &Stockpile, Option<&crate::relationships::StoredItems>)>,
-    q_souls: AutoHaulAssignedTaskQuery,
     q_resources_with_belongs: Query<
         (
             Entity,
@@ -42,14 +39,7 @@ pub fn mud_mixer_auto_haul_system(
     q_sand_piles: Query<(Entity, &Transform, Option<&Designation>, Option<&TaskWorkers>), With<crate::systems::jobs::SandPile>>,
 ) {
     let mut already_assigned_this_frame = std::collections::HashSet::new();
-    let mut water_inflight_by_mixer = std::collections::HashMap::<Entity, usize>::new();
     let mut mixer_reservation_delta = std::collections::HashMap::<(Entity, ResourceType), usize>::new();
-
-    for task in q_souls.iter() {
-        if let AssignedTask::HaulWaterToMixer(data) = task {
-            *water_inflight_by_mixer.entry(data.mixer).or_insert(0) += 1;
-        }
-    }
 
     for (_fam_entity, _active_command, task_area) in q_familiars.iter() {
         for (mixer_entity, mixer_transform, storage, _workers_opt) in q_mixers.iter() {
@@ -132,7 +122,7 @@ pub fn mud_mixer_auto_haul_system(
                 if let Some((item_entity, _)) = candidates.first() {
                     let item_entity = *item_entity;
                     commands.entity(item_entity).insert((
-                        Designation { work_type: WorkType::Haul },
+                        Designation { work_type: WorkType::HaulToMixer },
                         TargetMixer(mixer_entity),
                         TaskSlots::new(1),
                         IssuedBy(_fam_entity),
@@ -183,7 +173,14 @@ pub fn mud_mixer_auto_haul_system(
             }
 
             // --- 水の自動リクエスト ---
-            let water_inflight = *water_inflight_by_mixer.get(&mixer_entity).unwrap_or(&0) as u32;
+            // 水はタスク数 × BUCKET_CAPACITY で水量を計算
+            let water_inflight_tasks =
+                haul_cache.get_mixer_destination_reservation(mixer_entity, ResourceType::Water)
+                    + mixer_reservation_delta
+                        .get(&(mixer_entity, ResourceType::Water))
+                        .cloned()
+                        .unwrap_or(0);
+            let water_inflight = (water_inflight_tasks as u32) * BUCKET_CAPACITY;
             let (water_current, water_capacity) = if let Ok((_, _, stock, stored_opt)) =
                 q_stockpiles_detailed.get(mixer_entity)
             {
@@ -198,7 +195,7 @@ pub fn mud_mixer_auto_haul_system(
             let issue_threshold = water_capacity.saturating_sub(BUCKET_CAPACITY);
             
             if water_current < water_capacity
-                && water_current + (water_inflight * BUCKET_CAPACITY) <= issue_threshold
+                && water_current + water_inflight <= issue_threshold
             {
                 // 他の使い魔の領域リストを取得（上のループで定義されているが、スコープが違う可能性があるため再利用または再定義）
                 // ※ ここでは同じ関数内なので other_areas は有効だが、念のため再定義せず利用する。

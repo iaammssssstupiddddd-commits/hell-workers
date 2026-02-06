@@ -95,9 +95,19 @@ pub fn handle_haul_water_to_mixer_task(
             if let Ok(tank_data) = ctx.queries.stockpiles.get(tank_entity) {
                 let (_, tank_transform, _, _) = tank_data;
                 let tank_pos = tank_transform.translation.truncate();
-                
+
                 // 2x2なので隣接位置へ
-                update_destination_to_adjacent(ctx.dest, tank_pos, ctx.path, soul_pos, world_map, ctx.pf_context);
+                let reachable = update_destination_to_adjacent(ctx.dest, tank_pos, ctx.path, soul_pos, world_map, ctx.pf_context);
+
+                if !reachable {
+                    // タンクへ到達不能の場合、タスクを中断
+                    warn!(
+                        "HAUL_WATER_TO_MIXER: Soul {:?} cannot reach tank {:?}, aborting",
+                        ctx.soul_entity, tank_entity
+                    );
+                    abort_and_drop_bucket(commands, ctx, bucket_entity, mixer_entity, soul_pos);
+                    return;
+                }
 
                 if is_near_target_or_dest(soul_pos, tank_pos, ctx.dest.0) {
                     *ctx.task = AssignedTask::HaulWaterToMixer(crate::systems::soul_ai::task_execution::types::HaulWaterToMixerData {
@@ -110,6 +120,10 @@ pub fn handle_haul_water_to_mixer_task(
                     ctx.path.waypoints.clear();
                 }
             } else {
+                warn!(
+                    "HAUL_WATER_TO_MIXER: Tank {:?} not found in stockpiles query, aborting",
+                    tank_entity
+                );
                 abort_and_drop_bucket(commands, ctx, bucket_entity, mixer_entity, soul_pos);
             }
 

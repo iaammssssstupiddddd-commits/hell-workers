@@ -166,6 +166,69 @@ pub fn assign_task_to_worker(
             });
             return true;
         }
+        WorkType::HaulToMixer => {
+            // 固体原料（Sand/Rock）をミキサーへ運ぶ専用タスク
+            let target_mixer = queries.target_mixers.get(task_entity).ok().map(|tm| tm.0);
+            let item_info = queries.items.get(task_entity).ok().map(|(it, _)| it.0);
+
+            let Some(mixer_entity) = target_mixer else {
+                debug!("ASSIGN: HaulToMixer task {:?} has no TargetMixer", task_entity);
+                return false;
+            };
+
+            let Some(item_type) = item_info else {
+                debug!("ASSIGN: HaulToMixer item {:?} has no ResourceItem", task_entity);
+                return false;
+            };
+
+            // ソース予約チェック
+            let current_reserved = queries.resource_cache.get_source_reservation(task_entity)
+                + shadow.source_reserved(task_entity);
+            if current_reserved > 0 {
+                debug!("ASSIGN: HaulToMixer item {:?} is already reserved", task_entity);
+                return false;
+            }
+
+            // ミキサーが受け入れ可能かチェック
+            let can_accept = if let Ok((_, storage, _)) = queries.mixers.get(mixer_entity) {
+                let reserved = queries.resource_cache.get_mixer_destination_reservation(mixer_entity, item_type)
+                    + shadow.mixer_reserved(mixer_entity, item_type);
+                storage.can_accept(item_type, (1 + reserved) as u32)
+            } else {
+                false
+            };
+
+            if !can_accept {
+                debug!("ASSIGN: Mixer {:?} cannot accept item {:?} (Full or Reserved)", mixer_entity, item_type);
+                return false;
+            }
+
+            let assigned_task = AssignedTask::HaulToMixer(crate::systems::soul_ai::task_execution::types::HaulToMixerData {
+                item: task_entity,
+                mixer: mixer_entity,
+                resource_type: item_type,
+                phase: crate::systems::soul_ai::task_execution::types::HaulToMixerPhase::GoingToItem,
+            });
+            let reservation_ops = vec![
+                ResourceReservationOp::ReserveMixerDestination {
+                    target: mixer_entity,
+                    resource_type: item_type,
+                },
+                ResourceReservationOp::ReserveSource { source: task_entity, amount: 1 },
+            ];
+            shadow.apply_reserve_ops(&reservation_ops);
+            queries.assignment_writer.write(TaskAssignmentRequest {
+                familiar_entity: fam_entity,
+                worker_entity,
+                task_entity,
+                work_type: WorkType::HaulToMixer,
+                task_pos,
+                assigned_task,
+                reservation_ops,
+                already_commanded: uc_opt.is_some(),
+            });
+            return true;
+        }
         WorkType::Haul => {
             if let Ok(target_bp) = queries.target_blueprints.get(task_entity) {
                 // ソース予約チェック
@@ -209,64 +272,12 @@ pub fn assign_task_to_worker(
 
             let item_info = queries.items.get(task_entity).ok().map(|(it, _)| it.0);
             let item_belongs = queries.belongs.get(task_entity).ok();
-            let target_mixer = queries.target_mixers.get(task_entity).ok().map(|tm| tm.0);
 
             if item_info.is_none() {
                 debug!("ASSIGN: Haul item {:?} has no ResourceItem", task_entity);
                 return false;
             }
             let item_type = item_info.unwrap();
-
-            // ミキサーが指定されている場合
-            if let Some(mixer_entity) = target_mixer {
-                // ミキサーが受け入れ可能なリソース（砂または岩）であるか確認
-                if matches!(item_type, ResourceType::Sand | ResourceType::Rock) {
-                    // ミキサーのキャパシティチェック
-                    let can_accept = if let Ok((_, storage, _)) = queries.mixers.get(mixer_entity) {
-                        let reserved = queries.resource_cache.get_mixer_destination_reservation(mixer_entity, item_type)
-                            + shadow.mixer_reserved(mixer_entity, item_type);
-                        storage.can_accept(item_type, (1 + reserved) as u32)
-                    } else {
-                        false
-                    };
-
-                    if can_accept {
-                        let assigned_task = AssignedTask::HaulToMixer(crate::systems::soul_ai::task_execution::types::HaulToMixerData {
-                            item: task_entity,
-                            mixer: mixer_entity,
-                            resource_type: item_type,
-                            phase: crate::systems::soul_ai::task_execution::types::HaulToMixerPhase::GoingToItem,
-                        });
-                        let reservation_ops = vec![
-                            ResourceReservationOp::ReserveMixerDestination {
-                                target: mixer_entity,
-                                resource_type: item_type,
-                            },
-                            ResourceReservationOp::ReserveSource { source: task_entity, amount: 1 },
-                        ];
-                        shadow.apply_reserve_ops(&reservation_ops);
-                        queries.assignment_writer.write(TaskAssignmentRequest {
-                            familiar_entity: fam_entity,
-                            worker_entity,
-                            task_entity,
-                            work_type: WorkType::Haul,
-                            task_pos,
-                            assigned_task,
-                            reservation_ops,
-                            already_commanded: uc_opt.is_some(),
-                        });
-                        return true;
-                    } else {
-                        debug!("ASSIGN: Mixer {:?} cannot accept item {:?} (Full or Reserved)", mixer_entity, item_type);
-                    }
-                } else {
-                    debug!("ASSIGN: Haul item {:?} has TargetMixer but type {:?} is not accepted as solid material", task_entity, item_type);
-                    // ここで TargetMixer を削除してしまうか、あるいはミキサー用タスクではないとして通常の運搬に回す
-                    // 今回は通常の運搬（ストックパイル行き）へのフォールバックを許容するため、あえて TargetMixer は消さず、
-                    // 下の通常の Haul ロジックに進ませる
-                }
-            }
-
 
 
             let best_stockpile = queries.stockpiles

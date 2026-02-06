@@ -222,7 +222,9 @@ pub fn soul_movement(
                     }
 
                     if !moved && move_dist > 0.01 {
-                        path.current_index += 1;
+                        // 衝突でスタックした場合、パスをクリアして再計算を要求
+                        path.waypoints.clear();
+                        path.current_index = 0;
                     }
                 }
 

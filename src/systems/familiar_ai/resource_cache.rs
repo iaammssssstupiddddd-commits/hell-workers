@@ -2,7 +2,9 @@ use bevy::prelude::*;
 use std::collections::HashMap;
 use crate::events::ResourceReservationOp;
 use crate::events::ResourceReservationRequest;
-use crate::systems::logistics::ResourceType;
+use crate::relationships::TaskWorkers;
+use crate::systems::jobs::{Designation, TargetBlueprint, TargetMixer, WorkType};
+use crate::systems::logistics::{BelongsTo, ResourceItem, ResourceType};
 use crate::systems::soul_ai::task_execution::AssignedTask;
 
 /// システム全体で共有されるリソース予約キャッシュ
@@ -192,13 +194,67 @@ pub fn apply_reservation_requests_system(
 }
 
 /// タスク状態から予約を同期するシステム (Sense Phase)
+///
+/// 以下の2種類のソースから予約を再構築する:
+/// 1. `AssignedTask` - 既にSoulに割り当てられているタスク
+/// 2. `Designation` (Without<TaskWorkers>) - まだ割り当て待ちのタスク候補
+///
+/// これにより、自動発行システムが複数フレームにわたって過剰にタスクを発行することを防ぐ。
 pub fn sync_reservations_system(
     q_souls: Query<&AssignedTask>,
+    // まだ割り当てられていない（TaskWorkers がない）タスク候補を汎用的にスキャン
+    q_pending_tasks: Query<
+        (
+            &Designation,
+            Option<&TargetMixer>,
+            Option<&TargetBlueprint>,
+            Option<&BelongsTo>,
+            Option<&ResourceItem>,
+        ),
+        Without<TaskWorkers>,
+    >,
     mut cache: ResMut<SharedResourceCache>,
 ) {
     let mut dest_res = HashMap::new();
     let mut mixer_dest_res = HashMap::new();
     let mut source_res = HashMap::new();
+
+    // Designation（タスク割り当て待ち）のアイテムも予約としてカウント
+    // Without<TaskWorkers> により、既に割り当て済みのものは除外（AssignedTask 側でカウント）
+    for (designation, target_mixer, target_blueprint, belongs_to, resource_item) in q_pending_tasks.iter() {
+        match designation.work_type {
+            WorkType::Haul => {
+                // ブループリント向け運搬
+                if let Some(blueprint) = target_blueprint {
+                    *dest_res.entry(blueprint.0).or_insert(0) += 1;
+                }
+                // 通常のStockpile向けHaulは、どのStockpileか不明のためカウントしない
+                // （task_area_auto_haul は Without<Designation> でフィルタしているので問題なし）
+            }
+            WorkType::HaulToMixer => {
+                // 固体原料（Sand/Rock）のミキサー向け運搬
+                if let (Some(mixer), Some(res)) = (target_mixer, resource_item) {
+                    *mixer_dest_res.entry((mixer.0, res.0)).or_insert(0) += 1;
+                }
+            }
+            WorkType::HaulWaterToMixer => {
+                // ミキサー向け水運搬（バケツ1杯 = 1予約）
+                if let Some(mixer) = target_mixer {
+                    *mixer_dest_res.entry((mixer.0, ResourceType::Water)).or_insert(0) += 1;
+                }
+            }
+            WorkType::GatherWater => {
+                // 水汲みタスク（BelongsTo はタンクを指す）
+                if let Some(belongs) = belongs_to {
+                    *dest_res.entry(belongs.0).or_insert(0) += 1;
+                }
+            }
+            // 他の WorkType は現状予約カウント不要
+            // CollectSand, Refine, Build 等は source_res で管理されるが、
+            // Designation 段階では不要（AssignedTask になってからカウント）
+            _ => {}
+        }
+    }
 
     for task in q_souls.iter() {
         match task {

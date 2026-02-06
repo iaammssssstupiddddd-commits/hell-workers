@@ -14,6 +14,7 @@ pub fn designation_visual_system(
             WorkType::Chop => Color::srgb(0.0, 1.0, 0.0),
             WorkType::Mine => Color::srgb(1.0, 0.0, 0.0),
             WorkType::Haul => Color::srgb(0.0, 0.0, 1.0),
+            WorkType::HaulToMixer => Color::srgb(0.0, 0.0, 1.0), // Same as Haul
             WorkType::Build => Color::srgb(0.0, 0.5, 1.0),
             WorkType::GatherWater => Color::srgb(0.0, 0.8, 1.0), // Sky blue for water
             WorkType::CollectSand => Color::srgb(1.0, 0.8, 0.0), // Orange-yellow
