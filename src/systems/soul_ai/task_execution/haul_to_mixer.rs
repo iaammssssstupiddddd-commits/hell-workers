@@ -21,7 +21,7 @@ pub fn handle_haul_to_mixer_task(
     match phase {
         HaulToMixerPhase::GoingToItem => {
             // ミキサーのストレージが満杯かチェック
-            if let Ok(mixer_data) = ctx.queries.mixers.get(mixer_entity) {
+            if let Ok(mixer_data) = ctx.queries.storage.mixers.get(mixer_entity) {
                 let (_, storage, _) = mixer_data;
                 let is_full = storage.is_full(resource_type);
                 if is_full {
@@ -48,7 +48,7 @@ pub fn handle_haul_to_mixer_task(
                 return;
             }
 
-            if let Ok((res_transform, _, _, _, des_opt, _)) = ctx.queries.targets.get(item_entity) {
+            if let Ok((res_transform, _, _, _, des_opt, _)) = ctx.queries.designation.targets.get(item_entity) {
                 // 指定が解除されていたら中止
                 if des_opt.is_none() {
                     info!("HAUL_TO_MIXER: Soul {:?} - item {:?} designation removed, canceling", ctx.soul_entity, item_entity);
@@ -128,7 +128,7 @@ pub fn handle_haul_to_mixer_task(
                 return;
             }
 
-            if let Ok(mixer_data) = ctx.queries.mixers.get(mixer_entity) {
+            if let Ok(mixer_data) = ctx.queries.storage.mixers.get(mixer_entity) {
                 let (mixer_transform, storage, _) = mixer_data;
                 let mixer_pos = mixer_transform.translation.truncate();
 
@@ -195,7 +195,7 @@ pub fn handle_haul_to_mixer_task(
         }
 
         HaulToMixerPhase::Delivering => {
-            if let Ok(mixer_data) = ctx.queries.mixers.get_mut(mixer_entity) {
+            if let Ok(mixer_data) = ctx.queries.storage.mixers.get_mut(mixer_entity) {
                 let (_, mut storage, _) = mixer_data;
                 let mut delivered = false;
                 if storage.add_material(resource_type).is_ok() {

@@ -124,7 +124,7 @@ pub fn assign_task_to_worker(
     // タスクが存在するか最終確認
     let (task_pos, work_type) =
         if let Ok((_, transform, designation, _, _, _, _, _)) =
-            queries.designations.get(ctx.task_entity)
+            queries.designation.designations.get(ctx.task_entity)
         {
             (transform.translation.truncate(), designation.work_type)
         } else {

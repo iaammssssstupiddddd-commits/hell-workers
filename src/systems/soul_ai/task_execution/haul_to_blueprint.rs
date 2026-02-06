@@ -20,11 +20,11 @@ pub fn handle_haul_to_blueprint_task(
     commands: &mut Commands,
     world_map: &Res<WorldMap>,
 ) {
-    let q_targets = &ctx.queries.targets;
-    let q_designations = &ctx.queries.designations;
+    let q_targets = &ctx.queries.designation.targets;
+    let q_designations = &ctx.queries.designation.designations;
     let soul_pos = ctx.soul_pos();
-    let q_blueprints = &mut ctx.queries.blueprints;
-    let q_stockpiles = &mut ctx.queries.stockpiles;
+    let q_blueprints = &mut ctx.queries.storage.blueprints;
+    let q_stockpiles = &mut ctx.queries.storage.stockpiles;
     // 疲労またはストレス崩壊のチェック
     if ctx.soul.fatigue > 0.95 || breakdown_opt.is_some() {
         info!(

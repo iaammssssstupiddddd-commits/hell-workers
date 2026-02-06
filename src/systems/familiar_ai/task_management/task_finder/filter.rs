@@ -22,12 +22,12 @@ pub(super) fn collect_candidate_entities(
         }
 
         for (bp_entity, bp_transform, bp_designation, bp_issued_by, _, _, _, _) in
-            queries.designations.iter()
+            queries.designation.designations.iter()
         {
             if bp_designation.work_type == WorkType::Build {
                 let bp_pos = bp_transform.translation.truncate();
                 if area.contains(bp_pos) && bp_issued_by.is_none() {
-                    if let Ok((_, bp, _)) = queries.blueprints.get(bp_entity) {
+                    if let Ok((_, bp, _)) = queries.storage.blueprints.get(bp_entity) {
                         if bp.materials_complete() && !ents.contains(&bp_entity) {
                             ents.push(bp_entity);
                         }
@@ -53,7 +53,7 @@ pub(super) fn candidate_snapshot(
     queries: &crate::systems::soul_ai::task_execution::context::TaskAssignmentQueries,
 ) -> Option<(Vec2, WorkType, i32, bool)> {
     let (_entity, transform, designation, issued_by, slots, workers, in_stockpile_opt, priority_opt) =
-        queries.designations.get(entity).ok()?;
+        queries.designation.designations.get(entity).ok()?;
 
     let is_managed_by_me = managed_tasks.contains(entity);
     let is_unassigned = issued_by.is_none();
@@ -70,7 +70,7 @@ pub(super) fn candidate_snapshot(
     }
 
     let pos = transform.translation.truncate();
-    let is_mixer_task = queries.target_mixers.get(entity).is_ok();
+    let is_mixer_task = queries.storage.target_mixers.get(entity).is_ok();
 
     if let Some(area) = task_area_opt {
         if !area.contains(pos) {
@@ -109,7 +109,7 @@ pub(super) fn candidate_snapshot(
         | WorkType::Refine
         | WorkType::HaulWaterToMixer => true,
         WorkType::Build => {
-            if let Ok((_, bp, _)) = queries.blueprints.get(entity) {
+            if let Ok((_, bp, _)) = queries.storage.blueprints.get(entity) {
                 bp.materials_complete()
             } else {
                 false

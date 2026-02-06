@@ -23,7 +23,7 @@ pub fn handle_gather_task(
     world_map: &Res<WorldMap>,
 ) {
     let soul_pos = ctx.soul_pos();
-    let q_targets = &ctx.queries.targets;
+    let q_targets = &ctx.queries.designation.targets;
     match phase {
         GatherPhase::GoingToResource => {
             if let Ok((res_transform, _, _, _, des_opt, _)) = q_targets.get(target) {

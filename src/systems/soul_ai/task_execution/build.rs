@@ -18,7 +18,7 @@ pub fn handle_build_task(
     world_map: &Res<WorldMap>,
 ) {
     let soul_pos = ctx.soul_pos();
-    let q_blueprints = &mut ctx.queries.blueprints;
+    let q_blueprints = &mut ctx.queries.storage.blueprints;
 
     match phase {
         BuildPhase::GoingToBlueprint => {

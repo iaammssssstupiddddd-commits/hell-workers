@@ -27,7 +27,7 @@ pub(super) fn assign_build(
     queries: &mut crate::systems::soul_ai::task_execution::context::TaskAssignmentQueries,
     shadow: &mut ReservationShadow,
 ) -> bool {
-    if let Ok((_, bp, _)) = queries.blueprints.get(ctx.task_entity) {
+    if let Ok((_, bp, _)) = queries.storage.blueprints.get(ctx.task_entity) {
         if !bp.materials_complete() {
             debug!(
                 "ASSIGN: Build target {:?} materials not complete",
