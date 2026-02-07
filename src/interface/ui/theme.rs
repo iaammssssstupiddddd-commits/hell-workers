@@ -27,9 +27,6 @@ pub struct ThemeColors {
     pub text_accent_semantic: Color,
     pub border_default: Color,
     pub border_accent: Color,
-    pub interactive_default: Color,
-    pub interactive_hover: Color,
-    pub interactive_active: Color,
 
     // Status Colors
     pub status_healthy: Color,
@@ -129,8 +126,6 @@ pub struct ThemeTypography {
     pub font_size_item: f32,
     pub font_size_small: f32,
     pub font_size_clock: f32,
-    /// Dialog header font size (previously constants::FONT_SIZE_HEADER)
-    pub font_size_dialog_header: f32,
     /// Dialog small font size (previously constants::FONT_SIZE_SMALL)
     pub font_size_dialog_small: f32,
     /// Dialog tiny font size (previously constants::FONT_SIZE_TINY)
@@ -229,9 +224,6 @@ impl Default for UiTheme {
                 text_accent_semantic: Color::srgb(1.0, 0.6, 0.2),
                 border_default: Color::srgb(0.25, 0.25, 0.3),
                 border_accent: Color::srgb(0.8, 0.4, 0.1),
-                interactive_default: Color::srgb(0.25, 0.25, 0.3),
-                interactive_hover: Color::srgb(0.35, 0.15, 0.28),
-                interactive_active: Color::srgb(0.8, 0.4, 0.1),
 
                 // Status Colors
                 status_healthy: Color::srgb(0.3, 0.8, 0.4),
@@ -277,9 +269,9 @@ impl Default for UiTheme {
                 fatigue_text: Color::srgb(0.7, 0.7, 1.0),
 
                 // Buttons (Legacy mapping to new interactive colors + alpha for some)
-                button_default: Color::srgb(0.25, 0.25, 0.3), // interactive_default
-                button_hover: Color::srgb(0.35, 0.15, 0.28),  // interactive_hover
-                button_pressed: Color::srgb(0.8, 0.4, 0.1),   // interactive_active
+                button_default: Color::srgb(0.25, 0.25, 0.3),
+                button_hover: Color::srgb(0.35, 0.15, 0.28),
+                button_pressed: Color::srgb(0.8, 0.4, 0.1),
 
                 // List items
                 list_item_default: Color::NONE,
@@ -321,7 +313,6 @@ impl Default for UiTheme {
                 font_size_item: 12.0,
                 font_size_small: 10.0,
                 font_size_clock: 18.0,
-                font_size_dialog_header: 20.0,
                 font_size_dialog_small: 14.0,
                 font_size_dialog_tiny: 10.0,
             },
@@ -353,7 +344,7 @@ impl Default for UiTheme {
                 tooltip_border_width: 1.0,
                 tooltip_corner_radius: 3.0,
                 tooltip_min_width: 220.0,
-                tooltip_max_width: 340.0,
+                tooltip_max_width: 280.0,
                 tooltip_padding: 8.0,
 
                 // Legacy

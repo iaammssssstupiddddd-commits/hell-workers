@@ -67,7 +67,7 @@ fn spawn_operation_dialog(
                     Text::new("Familiar Operation"),
                     TextFont {
                         font: game_assets.font_ui.clone(),
-                        font_size: theme.typography.font_size_dialog_header,
+                        font_size: theme.typography.font_size_xl,
                         ..default()
                     },
                     TextColor(theme.colors.text_accent),
@@ -83,7 +83,7 @@ fn spawn_operation_dialog(
                             align_items: AlignItems::Center,
                             ..default()
                         },
-                        BackgroundColor(theme.colors.interactive_default),
+                        BackgroundColor(theme.colors.button_default),
                         MenuButton(MenuAction::CloseDialog),
                     ))
                     .with_children(|btn| {
@@ -157,7 +157,7 @@ fn spawn_operation_dialog(
                         align_items: AlignItems::Center,
                         ..default()
                     },
-                    BackgroundColor(theme.colors.interactive_default),
+                    BackgroundColor(theme.colors.button_default),
                     MenuButton(MenuAction::AdjustFatigueThreshold(-0.1)),
                 ))
                 .with_children(|btn| {
@@ -200,7 +200,7 @@ fn spawn_operation_dialog(
                         align_items: AlignItems::Center,
                         ..default()
                     },
-                    BackgroundColor(theme.colors.interactive_default),
+                    BackgroundColor(theme.colors.button_default),
                     MenuButton(MenuAction::AdjustFatigueThreshold(0.1)),
                 ))
                 .with_children(|btn| {
@@ -256,7 +256,7 @@ fn spawn_operation_dialog(
                         align_items: AlignItems::Center,
                         ..default()
                     },
-                    BackgroundColor(theme.colors.interactive_default),
+                    BackgroundColor(theme.colors.button_default),
                     MenuButton(MenuAction::AdjustMaxControlledSoul(-1)),
                 ))
                 .with_children(|btn| {
@@ -264,7 +264,7 @@ fn spawn_operation_dialog(
                         Text::new("-"),
                         TextFont {
                             font: game_assets.font_ui.clone(),
-                            font_size: theme.typography.font_size_dialog_header,
+                            font_size: theme.typography.font_size_xl,
                             ..default()
                         },
                         TextColor(Color::WHITE),
@@ -297,7 +297,7 @@ fn spawn_operation_dialog(
                         align_items: AlignItems::Center,
                         ..default()
                     },
-                    BackgroundColor(theme.colors.interactive_default),
+                    BackgroundColor(theme.colors.button_default),
                     MenuButton(MenuAction::AdjustMaxControlledSoul(1)),
                 ))
                 .with_children(|btn| {
@@ -305,7 +305,7 @@ fn spawn_operation_dialog(
                         Text::new("+"),
                         TextFont {
                             font: game_assets.font_ui.clone(),
-                            font_size: theme.typography.font_size_dialog_header,
+                            font_size: theme.typography.font_size_xl,
                             ..default()
                         },
                         TextColor(Color::WHITE),

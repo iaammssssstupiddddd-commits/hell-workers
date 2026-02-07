@@ -38,7 +38,7 @@ pub fn spawn_time_control(
                 font_size: theme.typography.font_size_clock,
                 ..default()
             },
-            TextColor(theme.colors.text_primary),
+            TextColor(theme.colors.text_primary_semantic),
             ClockText,
         ));
 
@@ -88,7 +88,7 @@ pub fn spawn_time_control(
                                 align_items: AlignItems::Center,
                                 ..default()
                             },
-                            BackgroundColor(theme.colors.interactive_default),
+                            BackgroundColor(theme.colors.button_default),
                             crate::systems::time::SpeedButton(speed),
                             UiTooltip::with_shortcut(tooltip, shortcut),
                         ))
@@ -100,7 +100,7 @@ pub fn spawn_time_control(
                                     font_size: theme.typography.font_size_title,
                                     ..default()
                                 },
-                                TextColor(theme.colors.text_primary),
+                                TextColor(theme.colors.accent_sulfur),
                             ));
                         });
                 }
@@ -123,7 +123,7 @@ pub fn spawn_time_control(
                             font_size: theme.typography.font_size_header,
                             ..default()
                         },
-                        TextColor(theme.colors.header_text),
+                        TextColor(theme.colors.panel_accent_time_control),
                         UiSlot::TaskSummaryText,
                     ))
                     .id();
