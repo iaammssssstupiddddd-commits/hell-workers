@@ -6,6 +6,7 @@ pub mod components;
 pub mod interaction;
 pub mod list;
 pub mod panels;
+pub mod presentation;
 pub mod setup;
 pub mod theme;
 

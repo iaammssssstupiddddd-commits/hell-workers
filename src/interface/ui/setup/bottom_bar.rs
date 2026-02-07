@@ -1,7 +1,7 @@
 //! ボトムバー UI
 
 use crate::interface::ui::components::{
-    MenuAction, MenuButton, UiInputBlocker, UiSlot, UiTooltip,
+    MenuAction, MenuButton, UiInputBlocker, UiNodeRegistry, UiSlot, UiTooltip,
 };
 use crate::interface::ui::theme::UiTheme;
 use bevy::prelude::*;
@@ -9,8 +9,14 @@ use bevy::ui::RelativeCursorPosition;
 use bevy::ui::{BackgroundGradient, ColorStop, LinearGradient};
 
 /// ボトムバーをスポーン
-pub fn spawn_bottom_bar(commands: &mut Commands, game_assets: &Res<crate::assets::GameAssets>, theme: &UiTheme) {
-    commands
+pub fn spawn_bottom_bar(
+    commands: &mut Commands,
+    game_assets: &Res<crate::assets::GameAssets>,
+    theme: &UiTheme,
+    parent_entity: Entity,
+    ui_nodes: &mut UiNodeRegistry,
+) {
+    let bottom_bar = commands
         .spawn((
             Node {
                 width: Val::Percent(100.0),
@@ -35,6 +41,11 @@ pub fn spawn_bottom_bar(commands: &mut Commands, game_assets: &Res<crate::assets
             RelativeCursorPosition::default(),
             UiInputBlocker,
         ))
+        .id();
+    commands.entity(parent_entity).add_child(bottom_bar);
+
+    commands
+        .entity(bottom_bar)
         .with_children(|parent| {
             let buttons = [
                 (
@@ -76,7 +87,8 @@ pub fn spawn_bottom_bar(commands: &mut Commands, game_assets: &Res<crate::assets
             }
 
             // Mode Display
-            parent.spawn((
+            let mode_text = parent
+                .spawn((
                 Text::new("Mode: Normal"),
                 TextFont {
                     font: game_assets.font_ui.clone(),
@@ -89,6 +101,8 @@ pub fn spawn_bottom_bar(commands: &mut Commands, game_assets: &Res<crate::assets
                     ..default()
                 },
                 UiSlot::ModeText,
-            ));
+            ))
+                .id();
+            ui_nodes.set_slot(UiSlot::ModeText, mode_text);
         });
 }

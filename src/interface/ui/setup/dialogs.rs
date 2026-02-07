@@ -1,19 +1,31 @@
 //! ダイアログ UI
 
 use crate::interface::ui::components::{
-    MenuAction, MenuButton, OperationDialog, UiInputBlocker, UiSlot,
+    MenuAction, MenuButton, OperationDialog, UiInputBlocker, UiNodeRegistry, UiSlot,
 };
 use crate::interface::ui::theme::UiTheme;
 use bevy::prelude::*;
 use bevy::ui::RelativeCursorPosition;
 
 /// ダイアログをスポーン
-pub fn spawn_dialogs(commands: &mut Commands, game_assets: &Res<crate::assets::GameAssets>, theme: &UiTheme) {
-    spawn_operation_dialog(commands, game_assets, theme);
+pub fn spawn_dialogs(
+    commands: &mut Commands,
+    game_assets: &Res<crate::assets::GameAssets>,
+    theme: &UiTheme,
+    parent_entity: Entity,
+    ui_nodes: &mut UiNodeRegistry,
+) {
+    spawn_operation_dialog(commands, game_assets, theme, parent_entity, ui_nodes);
 }
 
-fn spawn_operation_dialog(commands: &mut Commands, game_assets: &Res<crate::assets::GameAssets>, theme: &UiTheme) {
-    commands
+fn spawn_operation_dialog(
+    commands: &mut Commands,
+    game_assets: &Res<crate::assets::GameAssets>,
+    theme: &UiTheme,
+    parent_entity: Entity,
+    ui_nodes: &mut UiNodeRegistry,
+) {
+    let dialog_root = commands
         .spawn((
             Node {
                 display: Display::None,
@@ -36,6 +48,11 @@ fn spawn_operation_dialog(commands: &mut Commands, game_assets: &Res<crate::asse
             OperationDialog,
             ZIndex(200),
         ))
+        .id();
+    commands.entity(parent_entity).add_child(dialog_root);
+
+    commands
+        .entity(dialog_root)
         .with_children(|parent| {
             // Header with Close Button
             parent
@@ -85,7 +102,8 @@ fn spawn_operation_dialog(commands: &mut Commands, game_assets: &Res<crate::asse
                 });
 
             // Familiar Name
-            parent.spawn((
+            let familiar_name = parent
+                .spawn((
                 Text::new("Familiar Name"),
                 TextFont {
                     font: game_assets.font_familiar.clone(),
@@ -98,7 +116,9 @@ fn spawn_operation_dialog(commands: &mut Commands, game_assets: &Res<crate::asse
                     margin: UiRect::bottom(Val::Px(15.0)),
                     ..default()
                 },
-            ));
+            ))
+                .id();
+            ui_nodes.set_slot(UiSlot::DialogFamiliarName, familiar_name);
 
             // Section Label
             parent.spawn((
@@ -154,7 +174,8 @@ fn spawn_operation_dialog(commands: &mut Commands, game_assets: &Res<crate::asse
                     });
 
                     // Current value
-                    row.spawn((
+                    let threshold = row
+                        .spawn((
                         Text::new("1"),
                         TextFont {
                             font: game_assets.font_ui.clone(),
@@ -167,7 +188,9 @@ fn spawn_operation_dialog(commands: &mut Commands, game_assets: &Res<crate::asse
                             ..default()
                         },
                         UiSlot::DialogThresholdText,
-                    ));
+                    ))
+                        .id();
+                    ui_nodes.set_slot(UiSlot::DialogThresholdText, threshold);
 
                     // Increase button
                     row.spawn((
@@ -250,7 +273,8 @@ fn spawn_operation_dialog(commands: &mut Commands, game_assets: &Res<crate::asse
                         ));
                     });
 
-                    row.spawn((
+                    let max_soul = row
+                        .spawn((
                         Text::new("1"),
                         TextFont {
                             font_size: theme.typography.font_size_title,
@@ -262,7 +286,9 @@ fn spawn_operation_dialog(commands: &mut Commands, game_assets: &Res<crate::asse
                             ..default()
                         },
                         UiSlot::DialogMaxSoulText,
-                    ));
+                    ))
+                        .id();
+                    ui_nodes.set_slot(UiSlot::DialogMaxSoulText, max_soul);
 
                     row.spawn((
                         Button,

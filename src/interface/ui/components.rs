@@ -5,6 +5,7 @@
 use crate::systems::jobs::BuildingType;
 use crate::systems::logistics::ZoneType;
 use bevy::prelude::*;
+use std::collections::HashMap;
 
 // ============================================================
 // UI列挙型
@@ -13,6 +14,21 @@ use bevy::prelude::*;
 #[derive(Resource, Default)]
 pub struct UiInputState {
     pub pointer_over_ui: bool,
+}
+
+#[derive(Resource, Default)]
+pub struct UiNodeRegistry {
+    pub slots: HashMap<UiSlot, Entity>,
+}
+
+impl UiNodeRegistry {
+    pub fn set_slot(&mut self, slot: UiSlot, entity: Entity) {
+        self.slots.insert(slot, entity);
+    }
+
+    pub fn get_slot(&self, slot: UiSlot) -> Option<Entity> {
+        self.slots.get(&slot).copied()
+    }
 }
 
 #[derive(Resource, Default, Debug, Clone, Copy)]
@@ -45,6 +61,8 @@ pub enum MenuAction {
 
 #[derive(Component, Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum UiSlot {
+    InfoPanelRoot,
+    InfoPanelStatsGroup,
     // Info Panel
     Header,
     GenderIcon,
@@ -96,6 +114,19 @@ pub struct UiTooltip(pub &'static str);
 
 #[derive(Component, Default)]
 pub struct UiInputBlocker;
+
+#[derive(Component)]
+pub struct UiRoot;
+
+#[derive(Component, Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub enum UiMountSlot {
+    LeftPanel,
+    RightPanel,
+    Bottom,
+    Overlay,
+    TopRight,
+    TopLeft,
+}
 
 #[derive(Component)]
 pub struct OperationDialog;
