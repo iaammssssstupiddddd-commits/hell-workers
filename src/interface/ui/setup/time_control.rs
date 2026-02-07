@@ -1,31 +1,35 @@
 //! 時間操作 UI
 
-use crate::interface::ui::components::TaskSummaryText;
-use crate::interface::ui::components::UiTooltip;
-use crate::interface::ui::theme::*;
+use crate::interface::ui::components::{UiInputBlocker, UiSlot, UiTooltip};
+use crate::interface::ui::theme::UiTheme;
 use crate::systems::time::ClockText;
 use bevy::prelude::*;
+use bevy::ui::RelativeCursorPosition;
 
 /// 時間操作UIをスポーン
-pub fn spawn_time_control(commands: &mut Commands, game_assets: &Res<crate::assets::GameAssets>) {
+pub fn spawn_time_control(commands: &mut Commands, game_assets: &Res<crate::assets::GameAssets>, theme: &UiTheme) {
     commands
-        .spawn((Node {
-            position_type: PositionType::Absolute,
-            right: Val::Px(PANEL_MARGIN_X),
-            top: Val::Px(TIME_CONTROL_TOP),
-            flex_direction: FlexDirection::Column,
-            align_items: AlignItems::End,
-            ..default()
-        },))
+        .spawn((
+            Node {
+                position_type: PositionType::Absolute,
+                right: Val::Px(theme.spacing.panel_margin_x),
+                top: Val::Px(theme.sizes.time_control_top),
+                flex_direction: FlexDirection::Column,
+                align_items: AlignItems::End,
+                ..default()
+            },
+            RelativeCursorPosition::default(),
+            UiInputBlocker,
+        ))
         .with_children(|parent| {
             parent.spawn((
                 Text::new("Day 1, 00:00"),
                 TextFont {
                     font: game_assets.font_ui.clone(),
-                    font_size: FONT_SIZE_CLOCK,
+                    font_size: theme.typography.font_size_clock,
                     ..default()
                 },
-                TextColor(COLOR_TEXT_PRIMARY),
+                TextColor(theme.colors.text_primary),
                 ClockText,
             ));
 
@@ -59,7 +63,7 @@ pub fn spawn_time_control(commands: &mut Commands, game_assets: &Res<crate::asse
                                     align_items: AlignItems::Center,
                                     ..default()
                                 },
-                                BackgroundColor(COLOR_BUTTON_DEFAULT),
+                                BackgroundColor(theme.colors.button_default),
                                 crate::systems::time::SpeedButton(speed),
                                 UiTooltip(tooltip),
                             ))
@@ -68,10 +72,10 @@ pub fn spawn_time_control(commands: &mut Commands, game_assets: &Res<crate::asse
                                     Text::new(label),
                                     TextFont {
                                         font: game_assets.font_ui.clone(),
-                                        font_size: FONT_SIZE_TITLE,
+                                        font_size: theme.typography.font_size_title,
                                         ..default()
                                     },
-                                    TextColor(COLOR_TEXT_PRIMARY),
+                                    TextColor(theme.colors.text_primary),
                                 ));
                             });
                     }
@@ -90,11 +94,11 @@ pub fn spawn_time_control(commands: &mut Commands, game_assets: &Res<crate::asse
                         Text::new("Tasks: 0 (0 High)"),
                         TextFont {
                             font: game_assets.font_ui.clone(),
-                            font_size: FONT_SIZE_HEADER,
+                            font_size: theme.typography.font_size_header,
                             ..default()
                         },
-                        TextColor(COLOR_HEADER_TEXT),
-                        TaskSummaryText,
+                        TextColor(theme.colors.header_text),
+                        UiSlot::TaskSummaryText,
                     ));
                 });
         });

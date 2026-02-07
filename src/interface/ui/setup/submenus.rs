@@ -1,165 +1,97 @@
 //! サブメニュー UI (Architect, Zones, Orders)
 
 use crate::interface::ui::components::{
-    ArchitectSubMenu, MenuAction, MenuButton, OrdersSubMenu, ZonesSubMenu,
+    ArchitectSubMenu, MenuAction, MenuButton, OrdersSubMenu, UiInputBlocker, ZonesSubMenu,
 };
-use crate::interface::ui::theme::*;
+use crate::interface::ui::theme::UiTheme;
 use crate::systems::jobs::BuildingType;
 use crate::systems::logistics::ZoneType;
 use bevy::prelude::*;
+use bevy::ui::RelativeCursorPosition;
 
 /// サブメニューをスポーン
-pub fn spawn_submenus(commands: &mut Commands, game_assets: &Res<crate::assets::GameAssets>) {
-    spawn_architect_submenu(commands, game_assets);
-    spawn_zones_submenu(commands, game_assets);
-    spawn_orders_submenu(commands, game_assets);
+pub fn spawn_submenus(commands: &mut Commands, game_assets: &Res<crate::assets::GameAssets>, theme: &UiTheme) {
+    spawn_architect_submenu(commands, game_assets, theme);
+    spawn_zones_submenu(commands, game_assets, theme);
+    spawn_orders_submenu(commands, game_assets, theme);
 }
 
-fn spawn_architect_submenu(commands: &mut Commands, game_assets: &Res<crate::assets::GameAssets>) {
+fn spawn_architect_submenu(commands: &mut Commands, game_assets: &Res<crate::assets::GameAssets>, theme: &UiTheme) {
+    let items = [
+        ("Wall", BuildingType::Wall),
+        ("Tank", BuildingType::Tank),
+        ("Floor", BuildingType::Floor),
+        ("MudMixer", BuildingType::MudMixer),
+    ];
+
     commands
         .spawn((
             Node {
                 display: Display::None,
-                width: Val::Px(SUBMENU_WIDTH),
+                width: Val::Px(theme.sizes.submenu_width),
                 height: Val::Auto,
                 position_type: PositionType::Absolute,
-                left: Val::Px(SUBMENU_LEFT_ARCHITECT),
-                bottom: Val::Px(BOTTOM_BAR_HEIGHT),
+                left: Val::Px(theme.sizes.submenu_left_architect),
+                bottom: Val::Px(theme.spacing.bottom_bar_height),
                 flex_direction: FlexDirection::Column,
                 padding: UiRect::all(Val::Px(5.0)),
                 ..default()
             },
-            BackgroundColor(Color::srgba(0.1, 0.1, 0.1, 0.9)),
+            BackgroundColor(theme.colors.submenu_bg),
+            RelativeCursorPosition::default(),
+            UiInputBlocker,
+            ArchitectSubMenu,
         ))
-        .insert(ArchitectSubMenu)
         .with_children(|parent| {
-            // Wall button
-            parent
-                .spawn((
-                    Button,
-                    Node {
-                        width: Val::Percent(100.0),
-                        height: Val::Px(40.0),
-                        margin: UiRect::bottom(Val::Px(5.0)),
-                        justify_content: JustifyContent::Center,
-                        align_items: AlignItems::Center,
-                        ..default()
-                    },
-                    BackgroundColor(COLOR_BUTTON_DEFAULT),
-                    MenuButton(MenuAction::SelectBuild(BuildingType::Wall)),
-                ))
-                .with_children(|button| {
-                    button.spawn((
-                        Text::new("Wall"),
-                        TextFont {
-                            font: game_assets.font_ui.clone(),
-                            font_size: FONT_SIZE_TITLE,
+            for (label, kind) in items {
+                parent
+                    .spawn((
+                        Button,
+                        Node {
+                            width: Val::Percent(100.0),
+                            height: Val::Px(40.0),
+                            margin: UiRect::bottom(Val::Px(5.0)),
+                            justify_content: JustifyContent::Center,
+                            align_items: AlignItems::Center,
                             ..default()
                         },
-                        TextColor(COLOR_TEXT_PRIMARY),
-                    ));
-                });
-
-            // Tank button
-            parent
-                .spawn((
-                    Button,
-                    Node {
-                        width: Val::Percent(100.0),
-                        height: Val::Px(40.0),
-                        margin: UiRect::bottom(Val::Px(5.0)),
-                        justify_content: JustifyContent::Center,
-                        align_items: AlignItems::Center,
-                        ..default()
-                    },
-                    BackgroundColor(COLOR_BUTTON_DEFAULT),
-                    MenuButton(MenuAction::SelectBuild(BuildingType::Tank)),
-                ))
-                .with_children(|button| {
-                    button.spawn((
-                        Text::new("Tank"),
-                        TextFont {
-                            font: game_assets.font_ui.clone(),
-                            font_size: FONT_SIZE_TITLE,
-                            ..default()
-                        },
-                        TextColor(COLOR_TEXT_PRIMARY),
-                    ));
-                });
-
-            // Floor button
-            parent
-                .spawn((
-                    Button,
-                    Node {
-                        width: Val::Percent(100.0),
-                        height: Val::Px(40.0),
-                        margin: UiRect::bottom(Val::Px(5.0)),
-                        justify_content: JustifyContent::Center,
-                        align_items: AlignItems::Center,
-                        ..default()
-                    },
-                    BackgroundColor(COLOR_BUTTON_DEFAULT),
-                    MenuButton(MenuAction::SelectBuild(BuildingType::Floor)),
-                ))
-                .with_children(|button| {
-                    button.spawn((
-                        Text::new("Floor"),
-                        TextFont {
-                            font: game_assets.font_ui.clone(),
-                            font_size: FONT_SIZE_TITLE,
-                            ..default()
-                        },
-                        TextColor(COLOR_TEXT_PRIMARY),
-                    ));
-                });
-
-            // MudMixer button
-            parent
-                .spawn((
-                    Button,
-                    Node {
-                        width: Val::Percent(100.0),
-                        height: Val::Px(40.0),
-                        margin: UiRect::bottom(Val::Px(5.0)),
-                        justify_content: JustifyContent::Center,
-                        align_items: AlignItems::Center,
-                        ..default()
-                    },
-                    BackgroundColor(COLOR_BUTTON_DEFAULT),
-                    MenuButton(MenuAction::SelectBuild(BuildingType::MudMixer)),
-                ))
-                .with_children(|button| {
-                    button.spawn((
-                        Text::new("MudMixer"),
-                        TextFont {
-                            font: game_assets.font_ui.clone(),
-                            font_size: FONT_SIZE_TITLE,
-                            ..default()
-                        },
-                        TextColor(COLOR_TEXT_PRIMARY),
-                    ));
-                });
+                        BackgroundColor(theme.colors.button_default),
+                        MenuButton(MenuAction::SelectBuild(kind)),
+                    ))
+                    .with_children(|button| {
+                        button.spawn((
+                            Text::new(label),
+                            TextFont {
+                                font: game_assets.font_ui.clone(),
+                                font_size: theme.typography.font_size_title,
+                                ..default()
+                            },
+                            TextColor(theme.colors.text_primary),
+                        ));
+                    });
+            }
         });
 }
 
-fn spawn_zones_submenu(commands: &mut Commands, game_assets: &Res<crate::assets::GameAssets>) {
+fn spawn_zones_submenu(commands: &mut Commands, game_assets: &Res<crate::assets::GameAssets>, theme: &UiTheme) {
     commands
         .spawn((
             Node {
                 display: Display::None,
-                width: Val::Px(SUBMENU_WIDTH),
+                width: Val::Px(theme.sizes.submenu_width),
                 height: Val::Auto,
                 position_type: PositionType::Absolute,
-                left: Val::Px(SUBMENU_LEFT_ZONES),
-                bottom: Val::Px(BOTTOM_BAR_HEIGHT),
+                left: Val::Px(theme.sizes.submenu_left_zones),
+                bottom: Val::Px(theme.spacing.bottom_bar_height),
                 flex_direction: FlexDirection::Column,
                 padding: UiRect::all(Val::Px(5.0)),
                 ..default()
             },
-            BackgroundColor(Color::srgba(0.1, 0.1, 0.1, 0.9)),
+            BackgroundColor(theme.colors.submenu_bg),
+            RelativeCursorPosition::default(),
+            UiInputBlocker,
+            ZonesSubMenu,
         ))
-        .insert(ZonesSubMenu)
         .with_children(|parent| {
             parent
                 .spawn((
@@ -172,7 +104,7 @@ fn spawn_zones_submenu(commands: &mut Commands, game_assets: &Res<crate::assets:
                         align_items: AlignItems::Center,
                         ..default()
                     },
-                    BackgroundColor(COLOR_BUTTON_DEFAULT),
+                    BackgroundColor(theme.colors.button_default),
                     MenuButton(MenuAction::SelectZone(ZoneType::Stockpile)),
                 ))
                 .with_children(|button| {
@@ -180,52 +112,54 @@ fn spawn_zones_submenu(commands: &mut Commands, game_assets: &Res<crate::assets:
                         Text::new("Stockpile"),
                         TextFont {
                             font: game_assets.font_ui.clone(),
-                            font_size: FONT_SIZE_TITLE,
+                            font_size: theme.typography.font_size_title,
                             ..default()
                         },
-                        TextColor(COLOR_TEXT_PRIMARY),
+                        TextColor(theme.colors.text_primary),
                     ));
                 });
         });
 }
 
-fn spawn_orders_submenu(commands: &mut Commands, game_assets: &Res<crate::assets::GameAssets>) {
+fn spawn_orders_submenu(commands: &mut Commands, game_assets: &Res<crate::assets::GameAssets>, theme: &UiTheme) {
+    let tasks = [
+        (
+            "Chop",
+            crate::systems::command::TaskMode::DesignateChop(None),
+        ),
+        (
+            "Mine",
+            crate::systems::command::TaskMode::DesignateMine(None),
+        ),
+        (
+            "Haul",
+            crate::systems::command::TaskMode::DesignateHaul(None),
+        ),
+        (
+            "Cancel",
+            crate::systems::command::TaskMode::CancelDesignation(None),
+        ),
+    ];
+
     commands
         .spawn((
             Node {
                 display: Display::None,
-                width: Val::Px(SUBMENU_WIDTH),
+                width: Val::Px(theme.sizes.submenu_width),
                 height: Val::Auto,
                 position_type: PositionType::Absolute,
-                left: Val::Px(SUBMENU_LEFT_ORDERS),
-                bottom: Val::Px(BOTTOM_BAR_HEIGHT),
+                left: Val::Px(theme.sizes.submenu_left_orders),
+                bottom: Val::Px(theme.spacing.bottom_bar_height),
                 flex_direction: FlexDirection::Column,
                 padding: UiRect::all(Val::Px(5.0)),
                 ..default()
             },
-            BackgroundColor(Color::srgba(0.1, 0.1, 0.1, 0.9)),
+            BackgroundColor(theme.colors.submenu_bg),
+            RelativeCursorPosition::default(),
+            UiInputBlocker,
+            OrdersSubMenu,
         ))
-        .insert(OrdersSubMenu)
         .with_children(|parent| {
-            let tasks = [
-                (
-                    "Chop",
-                    crate::systems::command::TaskMode::DesignateChop(None),
-                ),
-                (
-                    "Mine",
-                    crate::systems::command::TaskMode::DesignateMine(None),
-                ),
-                (
-                    "Haul",
-                    crate::systems::command::TaskMode::DesignateHaul(None),
-                ),
-                (
-                    "Cancel",
-                    crate::systems::command::TaskMode::CancelDesignation(None),
-                ),
-            ];
-
             for (label, mode) in tasks {
                 parent
                     .spawn((
@@ -238,7 +172,7 @@ fn spawn_orders_submenu(commands: &mut Commands, game_assets: &Res<crate::assets
                             align_items: AlignItems::Center,
                             ..default()
                         },
-                        BackgroundColor(COLOR_BUTTON_DEFAULT),
+                        BackgroundColor(theme.colors.button_default),
                         MenuButton(MenuAction::SelectTaskMode(mode)),
                     ))
                     .with_children(|button| {
@@ -246,10 +180,10 @@ fn spawn_orders_submenu(commands: &mut Commands, game_assets: &Res<crate::assets
                             Text::new(label),
                             TextFont {
                                 font: game_assets.font_ui.clone(),
-                                font_size: FONT_SIZE_TITLE,
+                                font_size: theme.typography.font_size_title,
                                 ..default()
                             },
-                            TextColor(COLOR_TEXT_PRIMARY),
+                            TextColor(theme.colors.text_primary),
                         ));
                     });
             }

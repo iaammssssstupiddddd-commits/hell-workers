@@ -1,5 +1,5 @@
 use crate::interface::ui::components::*;
-use crate::interface::ui::theme::*;
+use crate::interface::ui::theme::UiTheme;
 use bevy::input::mouse::{MouseScrollUnit, MouseWheel};
 use bevy::prelude::*;
 use bevy::ui::RelativeCursorPosition;
@@ -28,11 +28,12 @@ pub fn entity_list_interaction_system(
     q_transforms: Query<&GlobalTransform>,
     q_folded: Query<Has<SectionFolded>>,
     unassigned_folded_query: Query<(Entity, Has<UnassignedFolded>), With<UnassignedSoulSection>>,
+    theme: Res<UiTheme>,
 ) {
     for (interaction, toggle, mut color) in interaction_query.iter_mut() {
         match *interaction {
             Interaction::Pressed => {
-                *color = BackgroundColor(COLOR_SECTION_TOGGLE_PRESSED);
+                *color = BackgroundColor(theme.colors.section_toggle_pressed);
                 match toggle.0 {
                     EntityListSectionType::Familiar(entity) => {
                         if q_folded.get(entity).unwrap_or(false) {
@@ -60,10 +61,10 @@ pub fn entity_list_interaction_system(
                 }
             }
             Interaction::Hovered => {
-                *color = BackgroundColor(COLOR_BUTTON_HOVER);
+                *color = BackgroundColor(theme.colors.button_hover);
             }
             Interaction::None => {
-                *color = BackgroundColor(COLOR_BUTTON_DEFAULT);
+                *color = BackgroundColor(theme.colors.button_default);
             }
         }
     }
@@ -95,6 +96,8 @@ pub fn entity_list_interaction_system(
 
 pub fn entity_list_visual_feedback_system(
     selected_entity: Res<crate::interface::selection::SelectedEntity>,
+    q_soul_changed: Query<(), Or<(Changed<Interaction>, Added<SoulListItem>)>>,
+    q_familiar_changed: Query<(), Or<(Changed<Interaction>, Added<FamiliarListItem>)>>,
     mut q_souls: Query<
         (
             &Interaction,
@@ -115,7 +118,12 @@ pub fn entity_list_visual_feedback_system(
         ),
         (With<Button>, Without<SoulListItem>),
     >,
+    theme: Res<UiTheme>,
 ) {
+    if !selected_entity.is_changed() && q_soul_changed.is_empty() && q_familiar_changed.is_empty() {
+        return;
+    }
+
     for (interaction, item, mut node, mut bg, mut border_color) in q_souls.iter_mut() {
         let is_selected = selected_entity.0 == Some(item.0);
         apply_row_highlight(
@@ -124,10 +132,11 @@ pub fn entity_list_visual_feedback_system(
             &mut border_color,
             *interaction,
             is_selected,
-            COLOR_LIST_ITEM_DEFAULT,
-            COLOR_LIST_ITEM_HOVER,
-            COLOR_LIST_ITEM_SELECTED,
-            COLOR_LIST_ITEM_SELECTED_HOVER,
+            theme.colors.list_item_default,
+            theme.colors.list_item_hover,
+            theme.colors.list_item_selected,
+            theme.colors.list_item_selected_hover,
+            &theme,
         );
     }
 
@@ -139,10 +148,11 @@ pub fn entity_list_visual_feedback_system(
             &mut border_color,
             *interaction,
             is_selected,
-            COLOR_FAMILIAR_BUTTON_BG,
-            COLOR_FAMILIAR_HEADER_HOVER,
-            COLOR_FAMILIAR_HEADER_SELECTED,
-            COLOR_FAMILIAR_HEADER_SELECTED_HOVER,
+            theme.colors.familiar_button_bg,
+            theme.colors.familiar_header_hover,
+            theme.colors.familiar_header_selected,
+            theme.colors.familiar_header_selected_hover,
+            &theme,
         );
     }
 }
@@ -157,6 +167,7 @@ fn apply_row_highlight(
     hover_color: Color,
     selected_color: Color,
     selected_hover_color: Color,
+    theme: &UiTheme,
 ) {
     let is_hovered = matches!(interaction, Interaction::Hovered | Interaction::Pressed);
     bg.0 = match (is_selected, is_hovered) {
@@ -167,8 +178,8 @@ fn apply_row_highlight(
     };
 
     if is_selected {
-        node.border.left = Val::Px(LIST_SELECTION_BORDER_WIDTH);
-        *border_color = BorderColor::all(COLOR_LIST_SELECTION_BORDER);
+        node.border.left = Val::Px(theme.sizes.list_selection_border_width);
+        *border_color = BorderColor::all(theme.colors.list_selection_border);
     } else {
         node.border.left = Val::Px(0.0);
         *border_color = BorderColor::all(Color::NONE);
@@ -177,22 +188,19 @@ fn apply_row_highlight(
 
 pub fn entity_list_scroll_system(
     mut mouse_wheel_events: MessageReader<MouseWheel>,
-    mut q_scroll_area: Query<
-        (&RelativeCursorPosition, &mut ScrollPosition),
-        With<UnassignedSoulContent>,
-    >,
+    mut q_scroll_areas: Query<(&RelativeCursorPosition, &mut ScrollPosition, &UiScrollArea)>,
 ) {
-    let Ok((cursor, mut scroll_position)) = q_scroll_area.single_mut() else {
+    let Some((_, mut scroll_position, scroll_area)) = q_scroll_areas
+        .iter_mut()
+        .find(|(cursor, _, _)| cursor.cursor_over())
+    else {
         return;
     };
-    if !cursor.cursor_over() {
-        return;
-    }
 
     let mut delta_y = 0.0;
     for event in mouse_wheel_events.read() {
         let unit_scale = match event.unit {
-            MouseScrollUnit::Line => 28.0,
+            MouseScrollUnit::Line => scroll_area.speed,
             MouseScrollUnit::Pixel => 1.0,
         };
         delta_y += event.y * unit_scale;
@@ -203,6 +211,54 @@ pub fn entity_list_scroll_system(
 
     // Wheel up should move list content down (toward earlier rows).
     scroll_position.y = (scroll_position.y - delta_y).max(0.0);
+}
+
+pub fn entity_list_tab_focus_system(
+    keyboard: Res<ButtonInput<KeyCode>>,
+    mut selected_entity: ResMut<crate::interface::selection::SelectedEntity>,
+    q_soul_items: Query<&SoulListItem>,
+    q_familiar_items: Query<&FamiliarListItem>,
+    mut q_camera: Query<&mut Transform, With<crate::interface::camera::MainCamera>>,
+    q_transforms: Query<&GlobalTransform>,
+) {
+    if !keyboard.just_pressed(KeyCode::Tab) {
+        return;
+    }
+
+    let mut candidates: Vec<Entity> = q_familiar_items
+        .iter()
+        .map(|item| item.0)
+        .chain(q_soul_items.iter().map(|item| item.0))
+        .collect();
+    candidates.sort_by_key(|entity| entity.index());
+    candidates.dedup();
+
+    if candidates.is_empty() {
+        return;
+    }
+
+    let reverse = keyboard.pressed(KeyCode::ShiftLeft) || keyboard.pressed(KeyCode::ShiftRight);
+    let current_index = selected_entity
+        .0
+        .and_then(|selected| candidates.iter().position(|&entity| entity == selected));
+    let next_index = if reverse {
+        current_index
+            .map(|idx| idx.saturating_sub(1))
+            .unwrap_or(candidates.len().saturating_sub(1))
+    } else {
+        current_index
+            .map(|idx| (idx + 1) % candidates.len())
+            .unwrap_or(0)
+    };
+    let target = candidates[next_index];
+
+    super::helpers::select_entity_and_focus_camera(
+        target,
+        "tab-focus",
+        &mut selected_entity,
+        &mut q_camera,
+        &q_transforms,
+    );
 }
 
 /// 未所属ソウルセクションの矢印アイコンを折りたたみ状態に応じて更新

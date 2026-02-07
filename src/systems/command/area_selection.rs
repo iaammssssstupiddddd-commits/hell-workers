@@ -4,6 +4,7 @@ use crate::entities::familiar::{ActiveCommand, Familiar, FamiliarCommand};
 use crate::game_state::{PlayMode, TaskContext};
 use crate::interface::camera::MainCamera;
 use crate::interface::selection::SelectedEntity;
+use crate::interface::ui::UiInputState;
 use crate::systems::jobs::{Designation, Rock, Tree, WorkType};
 use crate::systems::logistics::ResourceItem;
 use crate::world::map::WorldMap;
@@ -13,7 +14,7 @@ pub fn task_area_selection_system(
     buttons: Res<ButtonInput<MouseButton>>,
     q_window: Query<&Window, With<bevy::window::PrimaryWindow>>,
     q_camera: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
-    q_ui: Query<&Interaction, With<Button>>,
+    ui_input_state: Res<UiInputState>,
     selected: Res<SelectedEntity>,
     mut task_context: ResMut<TaskContext>,
     mut next_play_mode: ResMut<NextState<PlayMode>>,
@@ -33,7 +34,7 @@ pub fn task_area_selection_system(
     >,
     q_selection_indicator: Query<Entity, With<AreaSelectionIndicator>>,
 ) {
-    if q_ui.iter().any(|i| *i != Interaction::None) {
+    if ui_input_state.pointer_over_ui {
         return;
     }
 

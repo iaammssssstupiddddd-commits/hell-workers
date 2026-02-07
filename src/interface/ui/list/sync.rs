@@ -1,11 +1,13 @@
 use super::{EntityListNodeIndex, EntityListViewModel, FamiliarRowViewModel};
 use crate::interface::ui::components::{FamiliarListContainer, UnassignedSoulContent};
+use crate::interface::ui::theme::UiTheme;
 use bevy::prelude::*;
 use std::collections::{HashMap, HashSet};
 
 fn sync_familiar_sections(
     commands: &mut Commands,
     game_assets: &crate::assets::GameAssets,
+    theme: &UiTheme,
     view_model: &EntityListViewModel,
     node_index: &mut EntityListNodeIndex,
     fam_container_entity: Entity,
@@ -42,6 +44,7 @@ fn sync_familiar_sections(
                     fam_container_entity,
                     familiar,
                     game_assets,
+                    theme,
                 )
             });
     }
@@ -76,6 +79,7 @@ fn sync_familiar_sections(
                 familiar,
                 nodes,
                 game_assets,
+                theme,
             );
         }
     }
@@ -84,6 +88,7 @@ fn sync_familiar_sections(
 fn sync_unassigned_souls(
     commands: &mut Commands,
     game_assets: &crate::assets::GameAssets,
+    theme: &UiTheme,
     view_model: &EntityListViewModel,
     unassigned_content_entity: Entity,
     q_children: &Query<&Children>,
@@ -97,7 +102,7 @@ fn sync_unassigned_souls(
                 .entity(unassigned_content_entity)
                 .with_children(|parent| {
                     for soul_vm in &view_model.current.unassigned {
-                        super::helpers::spawn_soul_list_item(parent, soul_vm, game_assets, 0.0);
+                        super::helpers::spawn_soul_list_item(parent, soul_vm, game_assets, 0.0, theme);
                     }
                 });
         }
@@ -107,6 +112,7 @@ fn sync_unassigned_souls(
 pub fn sync_entity_list_from_view_model_system(
     mut commands: Commands,
     game_assets: Res<crate::assets::GameAssets>,
+    theme: Res<UiTheme>,
     view_model: Res<EntityListViewModel>,
     mut node_index: ResMut<EntityListNodeIndex>,
     q_fam_container: Query<Entity, With<FamiliarListContainer>>,
@@ -133,6 +139,7 @@ pub fn sync_entity_list_from_view_model_system(
     sync_familiar_sections(
         &mut commands,
         &game_assets,
+        &theme,
         &view_model,
         &mut node_index,
         fam_container_entity,
@@ -143,6 +150,7 @@ pub fn sync_entity_list_from_view_model_system(
     sync_unassigned_souls(
         &mut commands,
         &game_assets,
+        &theme,
         &view_model,
         unassigned_content_entity,
         &q_children,

@@ -11,16 +11,30 @@ use crate::entities::damned_soul::DamnedSoul;
 use crate::entities::familiar::{Familiar, FamiliarOperation};
 use crate::game_state::{BuildContext, PlayMode, TaskContext, ZoneContext};
 use crate::interface::ui::components::*;
+use crate::interface::ui::theme::UiTheme;
 use crate::relationships::TaskWorkers;
 use crate::systems::soul_ai::task_execution::AssignedTask;
 use bevy::prelude::*;
+use bevy::ui::RelativeCursorPosition;
 use std::time::Duration;
+
+pub fn update_ui_input_state_system(
+    mut ui_input_state: ResMut<UiInputState>,
+    q_blockers: Query<&RelativeCursorPosition, With<UiInputBlocker>>,
+    q_buttons: Query<&Interaction, With<Button>>,
+) {
+    let pointer_over_blocker = q_blockers.iter().any(RelativeCursorPosition::cursor_over);
+    let pointer_over_button = q_buttons
+        .iter()
+        .any(|interaction| matches!(*interaction, Interaction::Hovered | Interaction::Pressed));
+    ui_input_state.pointer_over_ui = pointer_over_blocker || pointer_over_button;
+}
 
 pub fn hover_tooltip_system(
     hovered: Res<crate::interface::selection::HoveredEntity>,
     q_window: Query<&Window, With<bevy::window::PrimaryWindow>>,
     mut q_tooltip: Query<&mut Node, With<HoverTooltip>>,
-    mut q_text: Query<&mut Text, With<HoverTooltipText>>,
+    mut q_text: Query<(&UiSlot, &mut Text)>,
     q_ui_tooltips: Query<(&Interaction, &UiTooltip), With<Button>>,
     q_souls: Query<(
         &DamnedSoul,
@@ -49,7 +63,10 @@ pub fn hover_tooltip_system(
     let Ok(mut tooltip_node) = q_tooltip.single_mut() else {
         return;
     };
-    let Ok(mut text) = q_text.single_mut() else {
+    let Some(mut text) = q_text
+        .iter_mut()
+        .find_map(|(slot, t)| (*slot == UiSlot::HoverTooltipText).then_some(t))
+    else {
         return;
     };
 
@@ -200,9 +217,19 @@ pub fn update_mode_text_system(
     build_context: Res<BuildContext>,
     zone_context: Res<ZoneContext>,
     task_context: Res<TaskContext>,
-    mut q_text: Query<&mut Text, With<ModeText>>,
+    mut q_text: Query<(&UiSlot, &mut Text)>,
 ) {
-    if let Ok(mut text) = q_text.single_mut() {
+    if !play_mode.is_changed()
+        && !build_context.is_changed()
+        && !zone_context.is_changed()
+        && !task_context.is_changed()
+    {
+        return;
+    }
+    if let Some(mut text) = q_text
+        .iter_mut()
+        .find_map(|(slot, t)| (*slot == UiSlot::ModeText).then_some(t))
+    {
         text.0 = mode::build_mode_text(
             play_mode.get(),
             &build_context,
@@ -214,9 +241,12 @@ pub fn update_mode_text_system(
 
 pub fn task_summary_ui_system(
     q_designations: Query<&crate::systems::jobs::Priority, With<crate::systems::jobs::Designation>>,
-    mut q_text: Query<&mut Text, With<TaskSummaryText>>,
+    mut q_text: Query<(&UiSlot, &mut Text)>,
 ) {
-    if let Ok(mut text) = q_text.single_mut() {
+    if let Some(mut text) = q_text
+        .iter_mut()
+        .find_map(|(slot, t)| (*slot == UiSlot::TaskSummaryText).then_some(t))
+    {
         let total = q_designations.iter().count();
         let high = q_designations.iter().filter(|p| p.0 > 0).count();
         text.0 = format!("Tasks: {} ({} High)", total, high);
@@ -232,13 +262,16 @@ pub struct FpsCounter {
 pub fn update_fps_display_system(
     time: Res<Time>,
     mut fps_counter: Local<FpsCounter>,
-    mut q_text: Query<&mut Text, With<FpsText>>,
+    mut q_text: Query<(&UiSlot, &mut Text)>,
 ) {
     fps_counter.elapsed_time += time.delta();
     fps_counter.frame_count += 1;
 
     if fps_counter.elapsed_time >= Duration::from_secs(1) {
-        if let Ok(mut text) = q_text.single_mut() {
+        if let Some(mut text) = q_text
+            .iter_mut()
+            .find_map(|(slot, t)| (*slot == UiSlot::FpsText).then_some(t))
+        {
             let fps = fps_counter.frame_count as f32 / fps_counter.elapsed_time.as_secs_f32();
             text.0 = format!("FPS: {:.0}", fps);
             fps_counter.frame_count = 0;
@@ -264,9 +297,10 @@ pub fn ui_interaction_system(
     q_context_menu: Query<Entity, With<ContextMenu>>,
     mut commands: Commands,
     mut ev_max_soul_changed: MessageWriter<crate::events::FamiliarOperationMaxSoulChangedEvent>,
+    theme: Res<UiTheme>,
 ) {
     for (interaction, menu_button, mut color) in interaction_query.iter_mut() {
-        common::update_interaction_color(*interaction, &mut color);
+        common::update_interaction_color(*interaction, &mut color, &theme);
         if *interaction != Interaction::Pressed {
             continue;
         }
@@ -292,27 +326,28 @@ pub fn update_operation_dialog_system(
     selected_entity: Res<crate::interface::selection::SelectedEntity>,
     q_familiars: Query<(&Familiar, &FamiliarOperation)>,
     mut q_dialog: Query<&mut Node, With<OperationDialog>>,
-    mut text_set: ParamSet<(
-        Query<&mut Text, With<OperationDialogFamiliarName>>,
-        Query<&mut Text, With<OperationDialogThresholdText>>,
-        Query<&mut Text, With<OperationDialogMaxSoulText>>,
-    )>,
+    mut q_slots: Query<(&UiSlot, &mut Text)>,
 ) {
     if let Some(selected) = selected_entity.0 {
         if let Ok((familiar, op)) = q_familiars.get(selected) {
-            if let Ok(mut name_text) = text_set.p0().single_mut() {
-                name_text.0 = format!("Editing: {}", familiar.name);
-            }
-            if let Ok(mut threshold_text) = text_set.p1().single_mut() {
-                let val_str = format!("{:.0}%", op.fatigue_threshold * 100.0);
-                if threshold_text.0 != val_str {
-                    threshold_text.0 = val_str;
-                }
-            }
-            if let Ok(mut max_soul_text) = text_set.p2().single_mut() {
-                let val_str = format!("{}", op.max_controlled_soul);
-                if max_soul_text.0 != val_str {
-                    max_soul_text.0 = val_str;
+            for (slot, mut text) in q_slots.iter_mut() {
+                match slot {
+                    UiSlot::DialogFamiliarName => {
+                        text.0 = format!("Editing: {}", familiar.name);
+                    }
+                    UiSlot::DialogThresholdText => {
+                        let val_str = format!("{:.0}%", op.fatigue_threshold * 100.0);
+                        if text.0 != val_str {
+                            text.0 = val_str;
+                        }
+                    }
+                    UiSlot::DialogMaxSoulText => {
+                        let val_str = format!("{}", op.max_controlled_soul);
+                        if text.0 != val_str {
+                            text.0 = val_str;
+                        }
+                    }
+                    _ => {}
                 }
             }
         } else {

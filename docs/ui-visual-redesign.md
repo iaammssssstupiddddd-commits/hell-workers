@@ -1,6 +1,6 @@
 # UI ビジュアル再設計 & 操作感改善ドキュメント
 
-> 本ドキュメントは `ui-improvement-proposals.md` の延長として、UIパネルとツールチップの**根本的なビジュアル変更**および**操作感の抜本改善**に焦点を当てる。
+> 本ドキュメントは `../proposals/ui-improvement-proposals.md` の延長として、UIパネルとツールチップの**根本的なビジュアル変更**および**操作感の抜本改善**に焦点を当てる。
 
 ---
 
@@ -623,7 +623,7 @@ pub const TIME_CONTROL_MARGIN_RIGHT: f32 = 10.0;
 
 ## 関連ドキュメント
 
-- `docs/ui-improvement-proposals.md` - インクリメンタルな改善案（本ドキュメントの前提）
+- `../proposals/ui-improvement-proposals.md` - インクリメンタルな改善案（本ドキュメントの前提）
 - `docs/entity_list_ui.md` - エンティティリストの現行仕様
 - `docs/info_panel_ui.md` - 情報パネルの現行仕様
 - `src/interface/ui/theme.rs` - 現行テーマ定数

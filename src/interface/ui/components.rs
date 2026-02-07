@@ -10,6 +10,11 @@ use bevy::prelude::*;
 // UI列挙型
 // ============================================================
 
+#[derive(Resource, Default)]
+pub struct UiInputState {
+    pub pointer_over_ui: bool,
+}
+
 #[derive(Resource, Default, Debug, Clone, Copy)]
 pub enum MenuState {
     #[default]
@@ -35,6 +40,33 @@ pub enum MenuAction {
 }
 
 // ============================================================
+// UiSlot - 統一UIスロットコンポーネント
+// ============================================================
+
+#[derive(Component, Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub enum UiSlot {
+    // Info Panel
+    Header,
+    GenderIcon,
+    StatMotivation,
+    StatStress,
+    StatFatigue,
+    TaskText,
+    InventoryText,
+    CommonText,
+    // Dialog
+    DialogFamiliarName,
+    DialogThresholdText,
+    DialogMaxSoulText,
+    // Bottom bar
+    ModeText,
+    // Other
+    TaskSummaryText,
+    HoverTooltipText,
+    FpsText,
+}
+
+// ============================================================
 // UIコンポーネント
 // ============================================================
 
@@ -54,40 +86,7 @@ pub struct OrdersSubMenu;
 pub struct InfoPanel;
 
 #[derive(Component)]
-pub struct InfoPanelHeader;
-
-#[derive(Component)]
-pub struct InfoPanelGenderIcon;
-
-#[derive(Component)]
-pub struct InfoPanelStatMotivation;
-
-#[derive(Component)]
-pub struct InfoPanelStatStress;
-
-#[derive(Component)]
-pub struct InfoPanelStatFatigue;
-
-#[derive(Component)]
-pub struct InfoPanelTaskText;
-
-#[derive(Component)]
-pub struct InfoPanelInventoryText;
-
-#[derive(Component)]
-pub struct InfoPanelCommonText; // 汎用テキスト（ブループリント等用）
-
-#[derive(Component)]
-pub struct ModeText;
-
-#[derive(Component)]
 pub struct ContextMenu;
-
-#[derive(Component)]
-pub struct TaskSummaryText;
-
-#[derive(Component)]
-pub struct HoverTooltipText;
 
 #[derive(Component)]
 pub struct HoverTooltip;
@@ -95,20 +94,11 @@ pub struct HoverTooltip;
 #[derive(Component)]
 pub struct UiTooltip(pub &'static str);
 
+#[derive(Component, Default)]
+pub struct UiInputBlocker;
+
 #[derive(Component)]
 pub struct OperationDialog;
-
-#[derive(Component)]
-pub struct OperationDialogFamiliarName;
-
-#[derive(Component)]
-pub struct OperationDialogThresholdText;
-
-#[derive(Component)]
-pub struct OperationDialogMaxSoulText;
-
-#[derive(Component)]
-pub struct FpsText;
 
 // ============================================================
 // エンティティリスト UI コンポーネント
@@ -136,6 +126,11 @@ pub struct UnassignedSoulSection;
 
 #[derive(Component)]
 pub struct UnassignedSoulContent;
+
+#[derive(Component)]
+pub struct UiScrollArea {
+    pub speed: f32,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EntityListSectionType {

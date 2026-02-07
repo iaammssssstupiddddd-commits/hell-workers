@@ -31,17 +31,16 @@ impl Plugin for InputPlugin {
 /// UI パネル上にカーソルがある間は PanCamera を無効化する
 fn pan_camera_ui_guard_system(
     mut q_camera: Query<&mut PanCamera, With<MainCamera>>,
-    q_scroll_area_cursor: Query<
-        &RelativeCursorPosition,
-        With<crate::interface::ui::UnassignedSoulContent>,
-    >,
+    q_blockers: Query<&RelativeCursorPosition, With<crate::interface::ui::UiInputBlocker>>,
+    q_buttons: Query<&Interaction, With<Button>>,
 ) {
-    let is_list_hovered = q_scroll_area_cursor
-        .iter()
-        .any(RelativeCursorPosition::cursor_over);
+    let pointer_over_ui = q_blockers.iter().any(RelativeCursorPosition::cursor_over)
+        || q_buttons
+            .iter()
+            .any(|interaction| matches!(*interaction, Interaction::Hovered | Interaction::Pressed));
 
     if let Ok(mut pan_camera) = q_camera.single_mut() {
-        pan_camera.enabled = !is_list_hovered;
+        pan_camera.enabled = !pointer_over_ui;
     }
 }
 

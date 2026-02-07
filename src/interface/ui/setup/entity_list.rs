@@ -1,37 +1,39 @@
 //! エンティティリスト UI (Familiar & Soul List)
 
 use crate::interface::ui::components::*;
-use crate::interface::ui::theme::*;
+use crate::interface::ui::theme::UiTheme;
 use bevy::prelude::*;
 use bevy::ui::{BackgroundGradient, ColorStop, LinearGradient, RelativeCursorPosition};
 
 pub fn spawn_entity_list_panel(
     commands: &mut Commands,
     game_assets: &Res<crate::assets::GameAssets>,
+    theme: &UiTheme,
 ) {
     commands
         .spawn((
             Node {
-                width: Val::Px(ENTITY_LIST_PANEL_WIDTH),
+                width: Val::Px(theme.sizes.entity_list_panel_width),
                 height: Val::Auto,
-                max_height: Val::Percent(ENTITY_LIST_MAX_HEIGHT_PERCENT),
+                max_height: Val::Percent(theme.sizes.entity_list_max_height_percent),
                 position_type: PositionType::Absolute,
-                left: Val::Px(PANEL_MARGIN_X),
-                top: Val::Px(PANEL_TOP),
+                left: Val::Px(theme.spacing.panel_margin_x),
+                top: Val::Px(theme.spacing.panel_top),
                 flex_direction: FlexDirection::Column,
-                padding: UiRect::all(Val::Px(PANEL_PADDING)),
+                padding: UiRect::all(Val::Px(theme.spacing.panel_padding)),
                 overflow: Overflow::clip_y(),
                 ..default()
             },
             BackgroundGradient::from(LinearGradient {
-                angle: 0.0, // 左から右
+                angle: 0.0,
                 stops: vec![
-                    ColorStop::new(COLOR_PANEL_LEFT_TOP, Val::Percent(0.0)),
-                    ColorStop::new(COLOR_PANEL_LEFT_BOTTOM, Val::Percent(100.0)),
+                    ColorStop::new(theme.panels.entity_list.top, Val::Percent(0.0)),
+                    ColorStop::new(theme.panels.entity_list.bottom, Val::Percent(100.0)),
                 ],
                 ..default()
             }),
             RelativeCursorPosition::default(),
+            UiInputBlocker,
             EntityListPanel,
         ))
         .with_children(|parent| {
@@ -40,10 +42,10 @@ pub fn spawn_entity_list_panel(
                 Text::new("Entity List"),
                 TextFont {
                     font: game_assets.font_ui.clone(),
-                    font_size: FONT_SIZE_TITLE,
+                    font_size: theme.typography.font_size_title,
                     ..default()
                 },
-                TextColor(COLOR_TEXT_ACCENT),
+                TextColor(theme.colors.text_accent),
                 Node {
                     margin: UiRect::bottom(Val::Px(10.0)),
                     ..default()
@@ -82,7 +84,7 @@ pub fn spawn_entity_list_panel(
                                 padding: UiRect::horizontal(Val::Px(5.0)),
                                 ..default()
                             },
-                            BackgroundColor(COLOR_BUTTON_DEFAULT),
+                            BackgroundColor(theme.colors.button_default),
                             SectionToggle(EntityListSectionType::Unassigned),
                         ))
                         .with_children(|button| {
@@ -100,10 +102,10 @@ pub fn spawn_entity_list_panel(
                                 Text::new("Unassigned Souls"),
                                 TextFont {
                                     font: game_assets.font_ui.clone(),
-                                    font_size: FONT_SIZE_SMALL,
+                                    font_size: theme.typography.font_size_small,
                                     ..default()
                                 },
-                                TextColor(COLOR_TEXT_PRIMARY),
+                                TextColor(theme.colors.text_primary),
                             ));
                         });
 
@@ -116,6 +118,8 @@ pub fn spawn_entity_list_panel(
                             ..default()
                         },
                         RelativeCursorPosition::default(),
+                        UiInputBlocker,
+                        UiScrollArea { speed: 28.0 },
                         UnassignedSoulContent,
                     ));
                 });
@@ -125,10 +129,10 @@ pub fn spawn_entity_list_panel(
                 Text::new("Scroll: Mouse Wheel"),
                 TextFont {
                     font: game_assets.font_ui.clone(),
-                    font_size: FONT_SIZE_SMALL,
+                    font_size: theme.typography.font_size_small,
                     ..default()
                 },
-                TextColor(COLOR_TEXT_SECONDARY),
+                TextColor(theme.colors.text_secondary),
                 Node {
                     align_self: AlignSelf::End,
                     margin: UiRect::top(Val::Px(8.0)),
