@@ -24,6 +24,19 @@ pub fn handle_mouse_input(
     q_camera: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
     q_souls: Query<(Entity, &GlobalTransform), With<DamnedSoul>>,
     q_familiars: Query<(Entity, &GlobalTransform), With<Familiar>>,
+    q_targets: Query<
+        (
+            Entity,
+            &GlobalTransform,
+            Option<&crate::systems::jobs::Building>,
+        ),
+        Or<(
+            With<crate::systems::jobs::Tree>,
+            With<crate::systems::jobs::Rock>,
+            With<crate::systems::logistics::ResourceItem>,
+            With<crate::systems::jobs::Building>,
+        )>,
+    >,
     ui_input_state: Res<UiInputState>,
     mut selected_entity: ResMut<SelectedEntity>,
     mut q_dest: Query<&mut Destination>,
@@ -79,6 +92,28 @@ pub fn handle_mouse_input(
             }
 
             if buttons.just_pressed(MouseButton::Right) {
+                let clicked_entity = q_familiars.iter().any(|(_, transform)| {
+                    transform.translation().truncate().distance(world_pos) < TILE_SIZE / 2.0
+                }) || q_souls.iter().any(|(_, transform)| {
+                    transform.translation().truncate().distance(world_pos) < TILE_SIZE / 2.0
+                }) || q_targets.iter().any(|(_, transform, building_opt)| {
+                    let radius = if let Some(building) = building_opt {
+                        match building.kind {
+                            crate::systems::jobs::BuildingType::Tank
+                            | crate::systems::jobs::BuildingType::MudMixer => TILE_SIZE,
+                            _ => TILE_SIZE / 2.0,
+                        }
+                    } else {
+                        TILE_SIZE / 2.0
+                    };
+                    transform.translation().truncate().distance(world_pos) < radius
+                });
+
+                // 右クリック対象がエンティティ上なら、移動命令ではなくコンテキストメニューを優先する。
+                if clicked_entity {
+                    return;
+                }
+
                 if let Some(selected) = selected_entity.0 {
                     // 使い魔の場合のみ移動指示を出す（Soulは直接指示不可）
                     if q_familiars.get(selected).is_ok() {
