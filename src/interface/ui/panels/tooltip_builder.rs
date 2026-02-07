@@ -297,7 +297,7 @@ pub fn spawn_progress_bar(
                         margin: UiRect::top(Val::Px(2.0)),
                         ..default()
                     },
-                    BackgroundColor(theme.colors.interactive_default),
+                    BackgroundColor(theme.colors.button_default),
                 ))
                 .with_children(|track| {
                     track.spawn((

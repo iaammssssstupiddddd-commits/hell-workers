@@ -68,7 +68,7 @@ fn spawn_architect_submenu(
                         align_items: AlignItems::Center,
                         ..default()
                     },
-                    BackgroundColor(theme.colors.interactive_default),
+                    BackgroundColor(theme.colors.button_default),
                     MenuButton(MenuAction::SelectBuild(kind)),
                 ))
                 .with_children(|button| {
@@ -125,7 +125,7 @@ fn spawn_zones_submenu(
                     align_items: AlignItems::Center,
                     ..default()
                 },
-                BackgroundColor(theme.colors.interactive_default),
+                BackgroundColor(theme.colors.button_default),
                 MenuButton(MenuAction::SelectZone(ZoneType::Stockpile)),
             ))
             .with_children(|button| {
@@ -201,7 +201,7 @@ fn spawn_orders_submenu(
                         align_items: AlignItems::Center,
                         ..default()
                     },
-                    BackgroundColor(theme.colors.interactive_default),
+                    BackgroundColor(theme.colors.button_default),
                     MenuButton(MenuAction::SelectTaskMode(mode)),
                 ))
                 .with_children(|button| {

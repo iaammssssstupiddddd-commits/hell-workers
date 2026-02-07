@@ -60,7 +60,7 @@ fn spawn_hover_tooltip(
                 )),
                 ..default()
             },
-            BackgroundColor(theme.colors.tooltip_bg),
+            BackgroundColor(theme.colors.bg_overlay),
             BorderColor::all(theme.colors.tooltip_border),
             HoverTooltip::default(),
             Popover {

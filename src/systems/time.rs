@@ -88,7 +88,7 @@ pub fn time_control_ui_system(
     for (interaction, speed_button, mut color) in interaction_query.iter_mut() {
         match *interaction {
             Interaction::Pressed => {
-                *color = BackgroundColor(theme.colors.interactive_active);
+                *color = BackgroundColor(theme.colors.button_pressed);
                 match speed_button.0 {
                     TimeSpeed::Paused => time.pause(),
                     TimeSpeed::Normal => {
@@ -106,10 +106,10 @@ pub fn time_control_ui_system(
                 }
             }
             Interaction::Hovered => {
-                *color = BackgroundColor(theme.colors.interactive_hover);
+                *color = BackgroundColor(theme.colors.button_hover);
             }
             Interaction::None => {
-                *color = BackgroundColor(theme.colors.interactive_default);
+                *color = BackgroundColor(theme.colors.button_default);
             }
         }
     }

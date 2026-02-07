@@ -7,9 +7,9 @@ pub(super) fn update_interaction_color(
     theme: &UiTheme,
 ) {
     *color = match interaction {
-        Interaction::Pressed => BackgroundColor(theme.colors.interactive_active),
-        Interaction::Hovered => BackgroundColor(theme.colors.interactive_hover),
-        Interaction::None => BackgroundColor(theme.colors.interactive_default),
+        Interaction::Pressed => BackgroundColor(theme.colors.button_pressed),
+        Interaction::Hovered => BackgroundColor(theme.colors.button_hover),
+        Interaction::None => BackgroundColor(theme.colors.button_default),
     };
 }
 

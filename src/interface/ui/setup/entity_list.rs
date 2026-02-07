@@ -25,6 +25,8 @@ pub fn spawn_entity_list_panel(
                 top: Val::Px(theme.spacing.panel_top),
                 flex_direction: FlexDirection::Column,
                 padding: UiRect::all(Val::Px(theme.spacing.panel_padding)),
+                border: UiRect::all(Val::Px(theme.sizes.panel_border_width)),
+                border_radius: BorderRadius::all(Val::Px(theme.sizes.panel_corner_radius)),
                 overflow: Overflow::clip_y(),
                 ..default()
             },
@@ -36,6 +38,7 @@ pub fn spawn_entity_list_panel(
                 ],
                 ..default()
             }),
+            BorderColor::all(theme.colors.border_default),
             RelativeCursorPosition::default(),
             UiInputBlocker,
             EntityListPanel,
@@ -45,15 +48,18 @@ pub fn spawn_entity_list_panel(
 
     commands.entity(panel).with_children(|parent| {
         parent
-            .spawn(Node {
-                width: Val::Percent(100.0),
-                min_height: Val::Px(24.0),
-                flex_direction: FlexDirection::Row,
-                justify_content: JustifyContent::SpaceBetween,
-                align_items: AlignItems::Center,
-                margin: UiRect::bottom(Val::Px(10.0)),
-                ..default()
-            })
+            .spawn((
+                Node {
+                    width: Val::Percent(100.0),
+                    min_height: Val::Px(24.0),
+                    flex_direction: FlexDirection::Row,
+                    justify_content: JustifyContent::SpaceBetween,
+                    align_items: AlignItems::Center,
+                    margin: UiRect::bottom(Val::Px(10.0)),
+                    ..default()
+                },
+                BackgroundColor(theme.colors.bg_elevated),
+            ))
             .with_children(|header| {
                 // パネルタイトル
                 header.spawn((
@@ -80,7 +86,7 @@ pub fn spawn_entity_list_panel(
                             align_items: AlignItems::Center,
                             ..default()
                         },
-                        BackgroundColor(theme.colors.interactive_default),
+                        BackgroundColor(theme.colors.button_default),
                         EntityListMinimizeButton,
                     ))
                     .with_children(|button| {
@@ -107,6 +113,7 @@ pub fn spawn_entity_list_panel(
                     flex_direction: FlexDirection::Column,
                     ..default()
                 },
+                BackgroundColor(theme.colors.bg_surface),
                 EntityListBody,
             ))
             .with_children(|body| {
@@ -141,7 +148,7 @@ pub fn spawn_entity_list_panel(
                                 padding: UiRect::horizontal(Val::Px(5.0)),
                                 ..default()
                             },
-                            BackgroundColor(theme.colors.interactive_default), // Semantic
+                            BackgroundColor(theme.colors.button_default), // Semantic
                             SectionToggle(EntityListSectionType::Unassigned),
                         ))
                         .with_children(|button| {

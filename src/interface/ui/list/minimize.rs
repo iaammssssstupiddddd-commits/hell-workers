@@ -52,7 +52,7 @@ pub fn entity_list_minimize_toggle_system(
     for (interaction, mut bg_color) in q_button.iter_mut() {
         match *interaction {
             Interaction::Pressed => {
-                *bg_color = BackgroundColor(theme.colors.interactive_active);
+                *bg_color = BackgroundColor(theme.colors.button_pressed);
                 state.minimized = !state.minimized;
 
                 if state.minimized {
@@ -75,10 +75,10 @@ pub fn entity_list_minimize_toggle_system(
                 }
             }
             Interaction::Hovered => {
-                *bg_color = BackgroundColor(theme.colors.interactive_hover);
+                *bg_color = BackgroundColor(theme.colors.button_hover);
             }
             Interaction::None => {
-                *bg_color = BackgroundColor(theme.colors.interactive_default);
+                *bg_color = BackgroundColor(theme.colors.button_default);
             }
         }
     }
