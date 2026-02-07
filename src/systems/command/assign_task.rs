@@ -3,6 +3,7 @@ use crate::entities::familiar::Familiar;
 use crate::game_state::TaskContext;
 use crate::interface::camera::MainCamera;
 use crate::interface::selection::SelectedEntity;
+use crate::interface::ui::UiInputState;
 use crate::systems::jobs::Designation;
 use crate::world::map::WorldMap;
 use crate::world::pathfinding::{self, PathfindingContext};
@@ -12,7 +13,7 @@ pub fn assign_task_system(
     buttons: Res<ButtonInput<MouseButton>>,
     q_window: Query<&Window, With<bevy::window::PrimaryWindow>>,
     q_camera: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
-    q_ui: Query<&Interaction, With<Button>>,
+    ui_input_state: Res<UiInputState>,
     selected: Res<SelectedEntity>,
     mut task_context: ResMut<TaskContext>,
     mut commands: Commands,
@@ -24,7 +25,7 @@ pub fn assign_task_system(
     world_map: Res<WorldMap>,
     mut pf_context: Local<PathfindingContext>,
 ) {
-    if q_ui.iter().any(|i| *i != Interaction::None) {
+    if ui_input_state.pointer_over_ui {
         return;
     }
 

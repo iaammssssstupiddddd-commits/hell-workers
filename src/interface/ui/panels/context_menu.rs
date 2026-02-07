@@ -1,7 +1,9 @@
 //! コンテキストメニュー管理
 
 use crate::interface::ui::components::*;
+use crate::interface::ui::theme::UiTheme;
 use bevy::prelude::*;
+use bevy::ui::RelativeCursorPosition;
 
 pub fn familiar_context_menu_system(
     mut commands: Commands,
@@ -10,10 +12,11 @@ pub fn familiar_context_menu_system(
     q_camera: Query<(&Camera, &GlobalTransform), With<crate::interface::camera::MainCamera>>,
     q_familiars: Query<&GlobalTransform, With<crate::entities::familiar::Familiar>>,
     q_context_menu: Query<Entity, With<ContextMenu>>,
-    q_ui_interaction: Query<&Interaction, With<Button>>,
+    ui_input_state: Res<UiInputState>,
+    theme: Res<UiTheme>,
 ) {
     if buttons.just_pressed(MouseButton::Left) {
-        if q_ui_interaction.iter().any(|i| *i != Interaction::None) {
+        if ui_input_state.pointer_over_ui {
             return;
         }
 
@@ -52,7 +55,9 @@ pub fn familiar_context_menu_system(
                                 padding: UiRect::all(Val::Px(5.0)),
                                 ..default()
                             },
-                            BackgroundColor(Color::srgba(0.1, 0.1, 0.1, 0.9)),
+                            BackgroundColor(theme.colors.submenu_bg),
+                            RelativeCursorPosition::default(),
+                            UiInputBlocker,
                             ContextMenu,
                         ))
                         .with_children(|parent| {
@@ -66,17 +71,17 @@ pub fn familiar_context_menu_system(
                                         align_items: AlignItems::Center,
                                         ..default()
                                     },
-                                    BackgroundColor(Color::srgb(0.3, 0.3, 0.3)),
+                                    BackgroundColor(theme.colors.button_default),
                                     MenuButton(MenuAction::SelectAreaTask),
                                 ))
                                 .with_children(|button| {
                                     button.spawn((
                                         Text::new("Task"),
                                         TextFont {
-                                            font_size: 14.0,
+                                            font_size: theme.typography.font_size_item,
                                             ..default()
                                         },
-                                        TextColor(Color::WHITE),
+                                        TextColor(theme.colors.text_primary),
                                     ));
                                 });
                             parent
@@ -90,17 +95,17 @@ pub fn familiar_context_menu_system(
                                         margin: UiRect::top(Val::Px(2.0)),
                                         ..default()
                                     },
-                                    BackgroundColor(Color::srgb(0.3, 0.3, 0.3)),
+                                    BackgroundColor(theme.colors.button_default),
                                     MenuButton(MenuAction::OpenOperationDialog),
                                 ))
                                 .with_children(|button| {
                                     button.spawn((
                                         Text::new("Operation"),
                                         TextFont {
-                                            font_size: 14.0,
+                                            font_size: theme.typography.font_size_item,
                                             ..default()
                                         },
-                                        TextColor(Color::WHITE),
+                                        TextColor(theme.colors.text_primary),
                                     ));
                                 });
                         });
