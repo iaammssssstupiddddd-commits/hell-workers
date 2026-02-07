@@ -15,6 +15,8 @@ pub fn spawn_entity_list_panel(
         .spawn((
             Node {
                 width: Val::Px(theme.sizes.entity_list_panel_width),
+                min_width: Val::Px(theme.sizes.entity_list_min_width),
+                max_width: Val::Px(theme.sizes.entity_list_max_width),
                 height: Val::Auto,
                 max_height: Val::Percent(theme.sizes.entity_list_max_height_percent),
                 position_type: PositionType::Absolute,
@@ -56,6 +58,7 @@ pub fn spawn_entity_list_panel(
                 margin: UiRect::bottom(Val::Px(10.0)),
                 ..default()
             },
+            IgnoreScroll(BVec2::new(false, true)),
         ));
 
         // 使い魔リストコンテナ (動的に中身を追加される)
@@ -140,6 +143,7 @@ pub fn spawn_entity_list_panel(
             },
             TextColor(theme.colors.text_secondary_semantic), // Semantic
             Node {
+                display: Display::None,
                 align_self: AlignSelf::End,
                 margin: UiRect::top(Val::Px(8.0)),
                 ..default()
