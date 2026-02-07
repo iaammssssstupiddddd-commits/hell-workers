@@ -479,7 +479,7 @@ pub(super) fn spawn_familiar_section(
                 justify_content: JustifyContent::Center,
                 ..default()
             },
-            BackgroundColor(theme.colors.fold_button_bg),
+            BackgroundColor(theme.colors.interactive_default),
             SectionToggle(EntityListSectionType::Familiar(familiar.entity)),
         ))
         .id();
@@ -511,7 +511,7 @@ pub(super) fn spawn_familiar_section(
                 padding: UiRect::left(Val::Px(theme.spacing.text_left_padding)),
                 ..default()
             },
-            BackgroundColor(theme.colors.familiar_button_bg),
+            BackgroundColor(theme.colors.list_item_default),
             BorderColor::all(Color::NONE),
             FamiliarListItem(familiar.entity),
         ))

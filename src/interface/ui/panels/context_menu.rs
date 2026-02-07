@@ -71,7 +71,7 @@ pub fn familiar_context_menu_system(
                                         align_items: AlignItems::Center,
                                         ..default()
                                     },
-                                    BackgroundColor(theme.colors.button_default),
+                                    BackgroundColor(theme.colors.interactive_default),
                                     MenuButton(MenuAction::SelectAreaTask),
                                 ))
                                 .with_children(|button| {
@@ -95,7 +95,7 @@ pub fn familiar_context_menu_system(
                                         margin: UiRect::top(Val::Px(2.0)),
                                         ..default()
                                     },
-                                    BackgroundColor(theme.colors.button_default),
+                                    BackgroundColor(theme.colors.interactive_default),
                                     MenuButton(MenuAction::OpenOperationDialog),
                                 ))
                                 .with_children(|button| {
