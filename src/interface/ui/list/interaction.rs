@@ -61,10 +61,10 @@ pub fn entity_list_interaction_system(
                 }
             }
             Interaction::Hovered => {
-                *color = BackgroundColor(theme.colors.button_hover);
+                *color = BackgroundColor(theme.colors.interactive_hover);
             }
             Interaction::None => {
-                *color = BackgroundColor(theme.colors.button_default);
+                *color = BackgroundColor(theme.colors.interactive_default);
             }
         }
     }

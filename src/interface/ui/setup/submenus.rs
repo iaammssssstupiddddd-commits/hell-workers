@@ -55,37 +55,35 @@ fn spawn_architect_submenu(
         .id();
     commands.entity(parent_entity).add_child(submenu);
 
-    commands
-        .entity(submenu)
-        .with_children(|parent| {
-            for (label, kind) in items {
-                parent
-                    .spawn((
-                        Button,
-                        Node {
-                            width: Val::Percent(100.0),
-                            height: Val::Px(40.0),
-                            margin: UiRect::bottom(Val::Px(5.0)),
-                            justify_content: JustifyContent::Center,
-                            align_items: AlignItems::Center,
+    commands.entity(submenu).with_children(|parent| {
+        for (label, kind) in items {
+            parent
+                .spawn((
+                    Button,
+                    Node {
+                        width: Val::Percent(100.0),
+                        height: Val::Px(40.0),
+                        margin: UiRect::bottom(Val::Px(5.0)),
+                        justify_content: JustifyContent::Center,
+                        align_items: AlignItems::Center,
+                        ..default()
+                    },
+                    BackgroundColor(theme.colors.button_default),
+                    MenuButton(MenuAction::SelectBuild(kind)),
+                ))
+                .with_children(|button| {
+                    button.spawn((
+                        Text::new(label),
+                        TextFont {
+                            font: game_assets.font_ui.clone(),
+                            font_size: theme.typography.font_size_title,
                             ..default()
                         },
-                        BackgroundColor(theme.colors.button_default),
-                        MenuButton(MenuAction::SelectBuild(kind)),
-                    ))
-                    .with_children(|button| {
-                        button.spawn((
-                            Text::new(label),
-                            TextFont {
-                                font: game_assets.font_ui.clone(),
-                                font_size: theme.typography.font_size_title,
-                                ..default()
-                            },
-                            TextColor(theme.colors.text_primary),
-                        ));
-                    });
-            }
-        });
+                        TextColor(theme.colors.text_primary),
+                    ));
+                });
+        }
+    });
 }
 
 fn spawn_zones_submenu(
@@ -115,35 +113,33 @@ fn spawn_zones_submenu(
         .id();
     commands.entity(parent_entity).add_child(submenu);
 
-    commands
-        .entity(submenu)
-        .with_children(|parent| {
-            parent
-                .spawn((
-                    Button,
-                    Node {
-                        width: Val::Percent(100.0),
-                        height: Val::Px(40.0),
-                        margin: UiRect::bottom(Val::Px(5.0)),
-                        justify_content: JustifyContent::Center,
-                        align_items: AlignItems::Center,
+    commands.entity(submenu).with_children(|parent| {
+        parent
+            .spawn((
+                Button,
+                Node {
+                    width: Val::Percent(100.0),
+                    height: Val::Px(40.0),
+                    margin: UiRect::bottom(Val::Px(5.0)),
+                    justify_content: JustifyContent::Center,
+                    align_items: AlignItems::Center,
+                    ..default()
+                },
+                BackgroundColor(theme.colors.button_default),
+                MenuButton(MenuAction::SelectZone(ZoneType::Stockpile)),
+            ))
+            .with_children(|button| {
+                button.spawn((
+                    Text::new("Stockpile"),
+                    TextFont {
+                        font: game_assets.font_ui.clone(),
+                        font_size: theme.typography.font_size_title,
                         ..default()
                     },
-                    BackgroundColor(theme.colors.button_default),
-                    MenuButton(MenuAction::SelectZone(ZoneType::Stockpile)),
-                ))
-                .with_children(|button| {
-                    button.spawn((
-                        Text::new("Stockpile"),
-                        TextFont {
-                            font: game_assets.font_ui.clone(),
-                            font_size: theme.typography.font_size_title,
-                            ..default()
-                        },
-                        TextColor(theme.colors.text_primary),
-                    ));
-                });
-        });
+                    TextColor(theme.colors.text_primary),
+                ));
+            });
+    });
 }
 
 fn spawn_orders_submenu(
@@ -192,35 +188,33 @@ fn spawn_orders_submenu(
         .id();
     commands.entity(parent_entity).add_child(submenu);
 
-    commands
-        .entity(submenu)
-        .with_children(|parent| {
-            for (label, mode) in tasks {
-                parent
-                    .spawn((
-                        Button,
-                        Node {
-                            width: Val::Percent(100.0),
-                            height: Val::Px(40.0),
-                            margin: UiRect::bottom(Val::Px(5.0)),
-                            justify_content: JustifyContent::Center,
-                            align_items: AlignItems::Center,
+    commands.entity(submenu).with_children(|parent| {
+        for (label, mode) in tasks {
+            parent
+                .spawn((
+                    Button,
+                    Node {
+                        width: Val::Percent(100.0),
+                        height: Val::Px(40.0),
+                        margin: UiRect::bottom(Val::Px(5.0)),
+                        justify_content: JustifyContent::Center,
+                        align_items: AlignItems::Center,
+                        ..default()
+                    },
+                    BackgroundColor(theme.colors.button_default),
+                    MenuButton(MenuAction::SelectTaskMode(mode)),
+                ))
+                .with_children(|button| {
+                    button.spawn((
+                        Text::new(label),
+                        TextFont {
+                            font: game_assets.font_ui.clone(),
+                            font_size: theme.typography.font_size_title,
                             ..default()
                         },
-                        BackgroundColor(theme.colors.button_default),
-                        MenuButton(MenuAction::SelectTaskMode(mode)),
-                    ))
-                    .with_children(|button| {
-                        button.spawn((
-                            Text::new(label),
-                            TextFont {
-                                font: game_assets.font_ui.clone(),
-                                font_size: theme.typography.font_size_title,
-                                ..default()
-                            },
-                            TextColor(theme.colors.text_primary),
-                        ));
-                    });
-            }
-        });
+                        TextColor(theme.colors.text_primary),
+                    ));
+                });
+        }
+    });
 }

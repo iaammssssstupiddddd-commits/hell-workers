@@ -164,8 +164,10 @@ pub(super) fn spawn_soul_list_item(
     left_margin: f32,
     theme: &UiTheme,
 ) {
-    let (gender_handle, gender_color) = get_gender_icon_and_color(soul_vm.gender, game_assets, theme);
-    let (task_handle, task_color) = get_task_icon_and_color(soul_vm.task_visual, game_assets, theme);
+    let (gender_handle, gender_color) =
+        get_gender_icon_and_color(soul_vm.gender, game_assets, theme);
+    let (task_handle, task_color) =
+        get_task_icon_and_color(soul_vm.task_visual, game_assets, theme);
     let stress_color = get_stress_color(soul_vm.stress_bucket, theme);
 
     parent
@@ -287,8 +289,10 @@ pub(super) fn spawn_soul_list_item_entity(
     left_margin: f32,
     theme: &UiTheme,
 ) -> Entity {
-    let (gender_handle, gender_color) = get_gender_icon_and_color(soul_vm.gender, game_assets, theme);
-    let (task_handle, task_color) = get_task_icon_and_color(soul_vm.task_visual, game_assets, theme);
+    let (gender_handle, gender_color) =
+        get_gender_icon_and_color(soul_vm.gender, game_assets, theme);
+    let (task_handle, task_color) =
+        get_task_icon_and_color(soul_vm.task_visual, game_assets, theme);
     let stress_color = get_stress_color(soul_vm.stress_bucket, theme);
 
     let row = commands

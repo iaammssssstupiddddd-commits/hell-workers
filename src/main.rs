@@ -13,6 +13,7 @@ use bevy::diagnostic::FrameTimeDiagnosticsPlugin;
 use bevy::prelude::*;
 use bevy::render::RenderPlugin;
 use bevy::render::settings::{Backends, RenderCreation, WgpuSettings};
+use bevy::ui_widgets::popover::PopoverPlugin;
 use std::env;
 
 use game_state::{
@@ -68,6 +69,7 @@ fn main() {
                     ..default()
                 }),
         )
+        .add_plugins(PopoverPlugin)
         .init_resource::<DebugVisible>()
         .init_resource::<FrameSpikeLogger>()
         // PlayMode State

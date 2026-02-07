@@ -51,59 +51,57 @@ fn spawn_operation_dialog(
         .id();
     commands.entity(parent_entity).add_child(dialog_root);
 
-    commands
-        .entity(dialog_root)
-        .with_children(|parent| {
-            // Header with Close Button
-            parent
-                .spawn(Node {
-                    width: Val::Percent(100.0),
-                    flex_direction: FlexDirection::Row,
-                    justify_content: JustifyContent::SpaceBetween,
-                    align_items: AlignItems::Center,
-                    margin: UiRect::bottom(Val::Px(10.0)),
-                    ..default()
-                })
-                .with_children(|header| {
-                    header.spawn((
-                        Text::new("Familiar Operation"),
-                        TextFont {
-                            font: game_assets.font_ui.clone(),
-                            font_size: theme.typography.font_size_dialog_header,
+    commands.entity(dialog_root).with_children(|parent| {
+        // Header with Close Button
+        parent
+            .spawn(Node {
+                width: Val::Percent(100.0),
+                flex_direction: FlexDirection::Row,
+                justify_content: JustifyContent::SpaceBetween,
+                align_items: AlignItems::Center,
+                margin: UiRect::bottom(Val::Px(10.0)),
+                ..default()
+            })
+            .with_children(|header| {
+                header.spawn((
+                    Text::new("Familiar Operation"),
+                    TextFont {
+                        font: game_assets.font_ui.clone(),
+                        font_size: theme.typography.font_size_dialog_header,
+                        ..default()
+                    },
+                    TextColor(theme.colors.text_accent),
+                ));
+
+                header
+                    .spawn((
+                        Button,
+                        Node {
+                            width: Val::Px(24.0),
+                            height: Val::Px(24.0),
+                            justify_content: JustifyContent::Center,
+                            align_items: AlignItems::Center,
                             ..default()
                         },
-                        TextColor(theme.colors.text_accent),
-                    ));
-
-                    header
-                        .spawn((
-                            Button,
-                            Node {
-                                width: Val::Px(24.0),
-                                height: Val::Px(24.0),
-                                justify_content: JustifyContent::Center,
-                                align_items: AlignItems::Center,
+                        BackgroundColor(theme.panels.bottom_bar.top),
+                        MenuButton(MenuAction::CloseDialog),
+                    ))
+                    .with_children(|btn| {
+                        btn.spawn((
+                            Text::new("X"),
+                            TextFont {
+                                font: game_assets.font_ui.clone(),
+                                font_size: theme.typography.font_size_dialog_small,
                                 ..default()
                             },
-                            BackgroundColor(theme.panels.bottom_bar.top),
-                            MenuButton(MenuAction::CloseDialog),
-                        ))
-                        .with_children(|btn| {
-                            btn.spawn((
-                                Text::new("X"),
-                                TextFont {
-                                    font: game_assets.font_ui.clone(),
-                                    font_size: theme.typography.font_size_dialog_small,
-                                    ..default()
-                                },
-                                TextColor(Color::WHITE),
-                            ));
-                        });
-                });
+                            TextColor(Color::WHITE),
+                        ));
+                    });
+            });
 
-            // Familiar Name
-            let familiar_name = parent
-                .spawn((
+        // Familiar Name
+        let familiar_name = parent
+            .spawn((
                 Text::new("Familiar Name"),
                 TextFont {
                     font: game_assets.font_familiar.clone(),
@@ -117,65 +115,65 @@ fn spawn_operation_dialog(
                     ..default()
                 },
             ))
-                .id();
-            ui_nodes.set_slot(UiSlot::DialogFamiliarName, familiar_name);
+            .id();
+        ui_nodes.set_slot(UiSlot::DialogFamiliarName, familiar_name);
 
-            // Section Label
-            parent.spawn((
-                Text::new("Work Standards:"),
-                TextFont {
-                    font: game_assets.font_ui.clone(),
-                    font_size: theme.typography.font_size_dialog_small,
-                    ..default()
-                },
-                TextColor(theme.colors.text_secondary),
+        // Section Label
+        parent.spawn((
+            Text::new("Work Standards:"),
+            TextFont {
+                font: game_assets.font_ui.clone(),
+                font_size: theme.typography.font_size_dialog_small,
+                ..default()
+            },
+            TextColor(theme.colors.text_secondary),
+            Node {
+                margin: UiRect::bottom(Val::Px(5.0)),
+                ..default()
+            },
+        ));
+
+        // Fatigue Threshold Adjustment
+        parent
+            .spawn((
                 Node {
-                    margin: UiRect::bottom(Val::Px(5.0)),
+                    width: Val::Percent(100.0),
+                    flex_direction: FlexDirection::Row,
+                    justify_content: JustifyContent::Center,
+                    align_items: AlignItems::Center,
+                    padding: UiRect::vertical(Val::Px(10.0)),
                     ..default()
                 },
-            ));
-
-            // Fatigue Threshold Adjustment
-            parent
-                .spawn((
+                BackgroundColor(theme.colors.overlay_row_bg),
+            ))
+            .with_children(|row| {
+                // Decrease button
+                row.spawn((
+                    Button,
                     Node {
-                        width: Val::Percent(100.0),
-                        flex_direction: FlexDirection::Row,
+                        width: Val::Px(30.0),
+                        height: Val::Px(30.0),
                         justify_content: JustifyContent::Center,
                         align_items: AlignItems::Center,
-                        padding: UiRect::vertical(Val::Px(10.0)),
                         ..default()
                     },
-                    BackgroundColor(theme.colors.overlay_row_bg),
+                    BackgroundColor(theme.colors.button_default),
+                    MenuButton(MenuAction::AdjustFatigueThreshold(-0.1)),
                 ))
-                .with_children(|row| {
-                    // Decrease button
-                    row.spawn((
-                        Button,
-                        Node {
-                            width: Val::Px(30.0),
-                            height: Val::Px(30.0),
-                            justify_content: JustifyContent::Center,
-                            align_items: AlignItems::Center,
+                .with_children(|btn| {
+                    btn.spawn((
+                        Text::new("-"),
+                        TextFont {
+                            font_size: theme.typography.font_size_title,
                             ..default()
                         },
-                        BackgroundColor(theme.colors.button_default),
-                        MenuButton(MenuAction::AdjustFatigueThreshold(-0.1)),
-                    ))
-                    .with_children(|btn| {
-                        btn.spawn((
-                            Text::new("-"),
-                            TextFont {
-                                font_size: theme.typography.font_size_title,
-                                ..default()
-                            },
-                            TextColor(Color::WHITE),
-                        ));
-                    });
+                        TextColor(Color::WHITE),
+                    ));
+                });
 
-                    // Current value
-                    let threshold = row
-                        .spawn((
+                // Current value
+                let threshold = row
+                    .spawn((
                         Text::new("1"),
                         TextFont {
                             font: game_assets.font_ui.clone(),
@@ -189,92 +187,92 @@ fn spawn_operation_dialog(
                         },
                         UiSlot::DialogThresholdText,
                     ))
-                        .id();
-                    ui_nodes.set_slot(UiSlot::DialogThresholdText, threshold);
+                    .id();
+                ui_nodes.set_slot(UiSlot::DialogThresholdText, threshold);
 
-                    // Increase button
-                    row.spawn((
-                        Button,
-                        Node {
-                            width: Val::Px(30.0),
-                            height: Val::Px(30.0),
-                            justify_content: JustifyContent::Center,
-                            align_items: AlignItems::Center,
-                            ..default()
-                        },
-                        BackgroundColor(theme.colors.button_default),
-                        MenuButton(MenuAction::AdjustFatigueThreshold(0.1)),
-                    ))
-                    .with_children(|btn| {
-                        btn.spawn((
-                            Text::new("+"),
-                            TextFont {
-                                font_size: theme.typography.font_size_title,
-                                ..default()
-                            },
-                            TextColor(Color::WHITE),
-                        ));
-                    });
-                });
-
-            // Max Controlled Souls Adjustment
-            parent.spawn((
-                Text::new("Max Controlled Souls:"),
-                TextFont {
-                    font: game_assets.font_ui.clone(),
-                    font_size: theme.typography.font_size_dialog_small,
-                    ..default()
-                },
-                TextColor(theme.colors.text_secondary),
-                Node {
-                    margin: UiRect {
-                        top: Val::Px(15.0),
-                        bottom: Val::Px(5.0),
-                        ..default()
-                    },
-                    ..default()
-                },
-            ));
-
-            parent
-                .spawn((
+                // Increase button
+                row.spawn((
+                    Button,
                     Node {
-                        width: Val::Percent(100.0),
-                        flex_direction: FlexDirection::Row,
+                        width: Val::Px(30.0),
+                        height: Val::Px(30.0),
                         justify_content: JustifyContent::Center,
                         align_items: AlignItems::Center,
-                        padding: UiRect::vertical(Val::Px(10.0)),
                         ..default()
                     },
-                    BackgroundColor(theme.colors.overlay_row_bg),
+                    BackgroundColor(theme.colors.button_default),
+                    MenuButton(MenuAction::AdjustFatigueThreshold(0.1)),
                 ))
-                .with_children(|row| {
-                    row.spawn((
-                        Button,
-                        Node {
-                            width: Val::Px(30.0),
-                            height: Val::Px(30.0),
-                            justify_content: JustifyContent::Center,
-                            align_items: AlignItems::Center,
+                .with_children(|btn| {
+                    btn.spawn((
+                        Text::new("+"),
+                        TextFont {
+                            font_size: theme.typography.font_size_title,
                             ..default()
                         },
-                        BackgroundColor(theme.colors.button_default),
-                        MenuButton(MenuAction::AdjustMaxControlledSoul(-1)),
-                    ))
-                    .with_children(|btn| {
-                        btn.spawn((
-                            Text::new("-"),
-                            TextFont {
-                                font: game_assets.font_ui.clone(),
-                                font_size: theme.typography.font_size_dialog_header,
-                                ..default()
-                            },
-                            TextColor(Color::WHITE),
-                        ));
-                    });
+                        TextColor(Color::WHITE),
+                    ));
+                });
+            });
 
-                    let max_soul = row
-                        .spawn((
+        // Max Controlled Souls Adjustment
+        parent.spawn((
+            Text::new("Max Controlled Souls:"),
+            TextFont {
+                font: game_assets.font_ui.clone(),
+                font_size: theme.typography.font_size_dialog_small,
+                ..default()
+            },
+            TextColor(theme.colors.text_secondary),
+            Node {
+                margin: UiRect {
+                    top: Val::Px(15.0),
+                    bottom: Val::Px(5.0),
+                    ..default()
+                },
+                ..default()
+            },
+        ));
+
+        parent
+            .spawn((
+                Node {
+                    width: Val::Percent(100.0),
+                    flex_direction: FlexDirection::Row,
+                    justify_content: JustifyContent::Center,
+                    align_items: AlignItems::Center,
+                    padding: UiRect::vertical(Val::Px(10.0)),
+                    ..default()
+                },
+                BackgroundColor(theme.colors.overlay_row_bg),
+            ))
+            .with_children(|row| {
+                row.spawn((
+                    Button,
+                    Node {
+                        width: Val::Px(30.0),
+                        height: Val::Px(30.0),
+                        justify_content: JustifyContent::Center,
+                        align_items: AlignItems::Center,
+                        ..default()
+                    },
+                    BackgroundColor(theme.colors.button_default),
+                    MenuButton(MenuAction::AdjustMaxControlledSoul(-1)),
+                ))
+                .with_children(|btn| {
+                    btn.spawn((
+                        Text::new("-"),
+                        TextFont {
+                            font: game_assets.font_ui.clone(),
+                            font_size: theme.typography.font_size_dialog_header,
+                            ..default()
+                        },
+                        TextColor(Color::WHITE),
+                    ));
+                });
+
+                let max_soul = row
+                    .spawn((
                         Text::new("1"),
                         TextFont {
                             font_size: theme.typography.font_size_title,
@@ -287,48 +285,48 @@ fn spawn_operation_dialog(
                         },
                         UiSlot::DialogMaxSoulText,
                     ))
-                        .id();
-                    ui_nodes.set_slot(UiSlot::DialogMaxSoulText, max_soul);
+                    .id();
+                ui_nodes.set_slot(UiSlot::DialogMaxSoulText, max_soul);
 
-                    row.spawn((
-                        Button,
-                        Node {
-                            width: Val::Px(30.0),
-                            height: Val::Px(30.0),
-                            justify_content: JustifyContent::Center,
-                            align_items: AlignItems::Center,
+                row.spawn((
+                    Button,
+                    Node {
+                        width: Val::Px(30.0),
+                        height: Val::Px(30.0),
+                        justify_content: JustifyContent::Center,
+                        align_items: AlignItems::Center,
+                        ..default()
+                    },
+                    BackgroundColor(theme.colors.button_default),
+                    MenuButton(MenuAction::AdjustMaxControlledSoul(1)),
+                ))
+                .with_children(|btn| {
+                    btn.spawn((
+                        Text::new("+"),
+                        TextFont {
+                            font: game_assets.font_ui.clone(),
+                            font_size: theme.typography.font_size_dialog_header,
                             ..default()
                         },
-                        BackgroundColor(theme.colors.button_default),
-                        MenuButton(MenuAction::AdjustMaxControlledSoul(1)),
-                    ))
-                    .with_children(|btn| {
-                        btn.spawn((
-                            Text::new("+"),
-                            TextFont {
-                                font: game_assets.font_ui.clone(),
-                                font_size: theme.typography.font_size_dialog_header,
-                                ..default()
-                            },
-                            TextColor(Color::WHITE),
-                        ));
-                    });
+                        TextColor(Color::WHITE),
+                    ));
                 });
+            });
 
-            // Future slot hint
-            parent.spawn((
-                Text::new("(Settings automatically synced)"),
-                TextFont {
-                    font: game_assets.font_ui.clone(),
-                    font_size: theme.typography.font_size_dialog_tiny,
-                    ..default()
-                },
-                TextColor(theme.colors.text_muted),
-                Node {
-                    margin: UiRect::top(Val::Px(20.0)),
-                    align_self: AlignSelf::Center,
-                    ..default()
-                },
-            ));
-        });
+        // Future slot hint
+        parent.spawn((
+            Text::new("(Settings automatically synced)"),
+            TextFont {
+                font: game_assets.font_ui.clone(),
+                font_size: theme.typography.font_size_dialog_tiny,
+                ..default()
+            },
+            TextColor(theme.colors.text_muted),
+            Node {
+                margin: UiRect::top(Val::Px(20.0)),
+                align_self: AlignSelf::Center,
+                ..default()
+            },
+        ));
+    });
 }

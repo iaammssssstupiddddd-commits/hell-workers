@@ -13,7 +13,12 @@ use crate::interface::ui::components::{UiMountSlot, UiNodeRegistry, UiRoot, UiSl
 use crate::interface::ui::theme::UiTheme;
 use bevy::prelude::*;
 
-fn spawn_fps_display(commands: &mut Commands, theme: &UiTheme, parent: Entity, ui_nodes: &mut UiNodeRegistry) {
+fn spawn_fps_display(
+    commands: &mut Commands,
+    theme: &UiTheme,
+    parent: Entity,
+    ui_nodes: &mut UiNodeRegistry,
+) {
     let root = commands
         .spawn((Node {
             position_type: PositionType::Absolute,
@@ -26,11 +31,9 @@ fn spawn_fps_display(commands: &mut Commands, theme: &UiTheme, parent: Entity, u
         .id();
     commands.entity(parent).add_child(root);
 
-    commands
-        .entity(root)
-        .with_children(|parent| {
-            let text_entity = parent
-                .spawn((
+    commands.entity(root).with_children(|parent| {
+        let text_entity = parent
+            .spawn((
                 Text::new("FPS: --"),
                 TextFont {
                     font_size: theme.typography.font_size_title,
@@ -39,9 +42,9 @@ fn spawn_fps_display(commands: &mut Commands, theme: &UiTheme, parent: Entity, u
                 TextColor(theme.colors.text_primary),
                 UiSlot::FpsText,
             ))
-                .id();
-            ui_nodes.set_slot(UiSlot::FpsText, text_entity);
-        });
+            .id();
+        ui_nodes.set_slot(UiSlot::FpsText, text_entity);
+    });
 }
 
 fn spawn_ui_root(commands: &mut Commands) -> (Entity, Entity, Entity, Entity, Entity, Entity) {
@@ -138,7 +141,9 @@ fn spawn_ui_root(commands: &mut Commands) -> (Entity, Entity, Entity, Entity, En
         ))
         .id();
 
-    commands.entity(ui_root).add_children(&[left, right, bottom, overlay, top_right, top_left]);
+    commands
+        .entity(ui_root)
+        .add_children(&[left, right, bottom, overlay, top_right, top_left]);
     (ui_root, left, right, bottom, overlay, top_right)
 }
 
