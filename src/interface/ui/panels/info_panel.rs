@@ -45,6 +45,55 @@ struct SimpleInfoViewModel {
     common: String,
 }
 
+fn spawn_info_section_divider(
+    parent: &mut ChildSpawnerCommands,
+    game_assets: &crate::assets::GameAssets,
+    theme: &UiTheme,
+    label: &str,
+) {
+    parent
+        .spawn(Node {
+            width: Val::Percent(100.0),
+            flex_direction: FlexDirection::Row,
+            align_items: AlignItems::Center,
+            margin: UiRect {
+                top: Val::Px(6.0),
+                bottom: Val::Px(4.0),
+                ..default()
+            },
+            column_gap: Val::Px(6.0),
+            ..default()
+        })
+        .with_children(|row| {
+            row.spawn((
+                Node {
+                    flex_grow: 1.0,
+                    height: Val::Px(1.0),
+                    ..default()
+                },
+                BackgroundColor(theme.colors.border_default),
+            ));
+            row.spawn((
+                Text::new(label),
+                TextFont {
+                    font: game_assets.font_ui.clone(),
+                    font_size: theme.typography.font_size_xs,
+                    weight: FontWeight::SEMIBOLD,
+                    ..default()
+                },
+                TextColor(theme.colors.text_secondary_semantic),
+            ));
+            row.spawn((
+                Node {
+                    flex_grow: 1.0,
+                    height: Val::Px(1.0),
+                    ..default()
+                },
+                BackgroundColor(theme.colors.border_default),
+            ));
+        });
+}
+
 pub fn spawn_info_panel_ui(
     commands: &mut Commands,
     game_assets: &Res<crate::assets::GameAssets>,
@@ -56,6 +105,8 @@ pub fn spawn_info_panel_ui(
         .spawn((
             Node {
                 width: Val::Px(theme.sizes.info_panel_width),
+                min_width: Val::Px(theme.sizes.info_panel_min_width),
+                max_width: Val::Px(theme.sizes.info_panel_max_width),
                 height: Val::Auto,
                 position_type: PositionType::Absolute,
                 right: Val::Px(theme.spacing.panel_margin_x),
@@ -130,6 +181,8 @@ pub fn spawn_info_panel_ui(
                 UiSlot::InfoPanelStatsGroup,
             ))
             .with_children(|col| {
+                spawn_info_section_divider(col, game_assets, theme, "Status");
+
                 let motivation = col
                     .spawn((
                         Text::new(""),
@@ -201,6 +254,8 @@ pub fn spawn_info_panel_ui(
                     ui_nodes.set_slot(UiSlot::StatFatigue, fatigue);
                 });
 
+                spawn_info_section_divider(col, game_assets, theme, "Current Task");
+
                 col.spawn(Node {
                     flex_direction: FlexDirection::Row,
                     align_items: AlignItems::Center,
@@ -221,6 +276,8 @@ pub fn spawn_info_panel_ui(
                         .id();
                     ui_nodes.set_slot(UiSlot::TaskText, task);
                 });
+
+                spawn_info_section_divider(col, game_assets, theme, "Inventory");
 
                 let inventory = col
                     .spawn((
