@@ -4,7 +4,7 @@ use super::{
 use crate::entities::damned_soul::{DamnedSoul, Gender, SoulIdentity};
 use crate::entities::familiar::{Familiar, FamiliarOperation};
 use crate::interface::ui::components::*;
-use crate::interface::ui::theme::*;
+use crate::interface::ui::theme::UiTheme;
 use crate::relationships::CommandedBy;
 use crate::relationships::Commanding;
 use crate::systems::familiar_ai::FamiliarAiState;
@@ -16,10 +16,11 @@ use bevy::prelude::*;
 fn get_gender_icon_and_color(
     gender: Gender,
     game_assets: &crate::assets::GameAssets,
+    theme: &UiTheme,
 ) -> (Handle<Image>, Color) {
     match gender {
-        Gender::Male => (game_assets.icon_male.clone(), COLOR_MALE),
-        Gender::Female => (game_assets.icon_female.clone(), COLOR_FEMALE),
+        Gender::Male => (game_assets.icon_male.clone(), theme.colors.male),
+        Gender::Female => (game_assets.icon_female.clone(), theme.colors.female),
     }
 }
 
@@ -27,25 +28,26 @@ fn get_gender_icon_and_color(
 fn get_task_icon_and_color(
     task: TaskVisual,
     game_assets: &crate::assets::GameAssets,
+    theme: &UiTheme,
 ) -> (Handle<Image>, Color) {
     match task {
-        TaskVisual::Idle => (game_assets.icon_idle.clone(), COLOR_IDLE),
-        TaskVisual::Chop => (game_assets.icon_axe.clone(), COLOR_CHOP),
-        TaskVisual::Mine => (game_assets.icon_pick.clone(), COLOR_MINE),
-        TaskVisual::GatherDefault => (game_assets.icon_pick.clone(), COLOR_GATHER_DEFAULT),
-        TaskVisual::Haul => (game_assets.icon_haul.clone(), COLOR_HAUL),
-        TaskVisual::Build => (game_assets.icon_pick.clone(), COLOR_BUILD),
-        TaskVisual::HaulToBlueprint => (game_assets.icon_haul.clone(), COLOR_HAUL_TO_BP),
-        TaskVisual::Water => (game_assets.icon_haul.clone(), COLOR_WATER),
+        TaskVisual::Idle => (game_assets.icon_idle.clone(), theme.colors.idle),
+        TaskVisual::Chop => (game_assets.icon_axe.clone(), theme.colors.chop),
+        TaskVisual::Mine => (game_assets.icon_pick.clone(), theme.colors.mine),
+        TaskVisual::GatherDefault => (game_assets.icon_pick.clone(), theme.colors.gather_default),
+        TaskVisual::Haul => (game_assets.icon_haul.clone(), theme.colors.haul),
+        TaskVisual::Build => (game_assets.icon_pick.clone(), theme.colors.build),
+        TaskVisual::HaulToBlueprint => (game_assets.icon_haul.clone(), theme.colors.haul_to_bp),
+        TaskVisual::Water => (game_assets.icon_haul.clone(), theme.colors.water),
     }
 }
 
 /// ストレス値に応じた色を取得
-fn get_stress_color(bucket: StressBucket) -> Color {
+fn get_stress_color(bucket: StressBucket, theme: &UiTheme) -> Color {
     match bucket {
         StressBucket::Low => Color::WHITE,
-        StressBucket::Medium => COLOR_STRESS_MEDIUM,
-        StressBucket::High => COLOR_STRESS_HIGH,
+        StressBucket::Medium => theme.colors.stress_medium,
+        StressBucket::High => theme.colors.stress_high,
     }
 }
 
@@ -160,17 +162,18 @@ pub(super) fn spawn_soul_list_item(
     soul_vm: &SoulRowViewModel,
     game_assets: &crate::assets::GameAssets,
     left_margin: f32,
+    theme: &UiTheme,
 ) {
-    let (gender_handle, gender_color) = get_gender_icon_and_color(soul_vm.gender, game_assets);
-    let (task_handle, task_color) = get_task_icon_and_color(soul_vm.task_visual, game_assets);
-    let stress_color = get_stress_color(soul_vm.stress_bucket);
+    let (gender_handle, gender_color) = get_gender_icon_and_color(soul_vm.gender, game_assets, theme);
+    let (task_handle, task_color) = get_task_icon_and_color(soul_vm.task_visual, game_assets, theme);
+    let stress_color = get_stress_color(soul_vm.stress_bucket, theme);
 
     parent
         .spawn((
             Button,
             Node {
                 width: Val::Percent(100.0),
-                height: Val::Px(SOUL_ITEM_HEIGHT),
+                height: Val::Px(theme.sizes.soul_item_height),
                 align_items: AlignItems::Center,
                 border: UiRect::left(Val::Px(0.0)),
                 margin: if left_margin > 0.0 {
@@ -180,7 +183,7 @@ pub(super) fn spawn_soul_list_item(
                 },
                 ..default()
             },
-            BackgroundColor(COLOR_LIST_ITEM_DEFAULT),
+            BackgroundColor(theme.colors.list_item_default),
             BorderColor::all(Color::NONE),
             SoulListItem(soul_vm.entity),
         ))
@@ -192,9 +195,9 @@ pub(super) fn spawn_soul_list_item(
                     ..default()
                 },
                 Node {
-                    width: Val::Px(ICON_SIZE),
-                    height: Val::Px(ICON_SIZE),
-                    margin: UiRect::right(Val::Px(MARGIN_MEDIUM)),
+                    width: Val::Px(theme.sizes.icon_size),
+                    height: Val::Px(theme.sizes.icon_size),
+                    margin: UiRect::right(Val::Px(theme.spacing.margin_medium)),
                     ..default()
                 },
             ));
@@ -202,62 +205,62 @@ pub(super) fn spawn_soul_list_item(
                 Text::new(soul_vm.name.clone()),
                 TextFont {
                     font: game_assets.font_soul_name.clone(),
-                    font_size: FONT_SIZE_ITEM,
+                    font_size: theme.typography.font_size_item,
                     ..default()
                 },
                 TextColor(stress_color),
                 Node {
-                    margin: UiRect::right(Val::Px(MARGIN_LARGE)),
+                    margin: UiRect::right(Val::Px(theme.spacing.margin_large)),
                     ..default()
                 },
             ));
             item.spawn((
                 ImageNode {
                     image: game_assets.icon_fatigue.clone(),
-                    color: COLOR_FATIGUE_ICON,
+                    color: theme.colors.fatigue_icon,
                     ..default()
                 },
                 Node {
-                    width: Val::Px(ICON_SIZE),
-                    height: Val::Px(ICON_SIZE),
-                    margin: UiRect::right(Val::Px(MARGIN_SMALL)),
+                    width: Val::Px(theme.sizes.icon_size),
+                    height: Val::Px(theme.sizes.icon_size),
+                    margin: UiRect::right(Val::Px(theme.spacing.margin_small)),
                     ..default()
                 },
             ));
             item.spawn((
                 Text::new(soul_vm.fatigue_text.clone()),
                 TextFont {
-                    font_size: FONT_SIZE_SMALL,
+                    font_size: theme.typography.font_size_small,
                     ..default()
                 },
-                TextColor(COLOR_FATIGUE_TEXT),
+                TextColor(theme.colors.fatigue_text),
                 Node {
-                    margin: UiRect::right(Val::Px(MARGIN_LARGE)),
+                    margin: UiRect::right(Val::Px(theme.spacing.margin_large)),
                     ..default()
                 },
             ));
             item.spawn((
                 ImageNode {
                     image: game_assets.icon_stress.clone(),
-                    color: COLOR_STRESS_ICON,
+                    color: theme.colors.stress_icon,
                     ..default()
                 },
                 Node {
-                    width: Val::Px(ICON_SIZE),
-                    height: Val::Px(ICON_SIZE),
-                    margin: UiRect::right(Val::Px(MARGIN_SMALL)),
+                    width: Val::Px(theme.sizes.icon_size),
+                    height: Val::Px(theme.sizes.icon_size),
+                    margin: UiRect::right(Val::Px(theme.spacing.margin_small)),
                     ..default()
                 },
             ));
             item.spawn((
                 Text::new(soul_vm.stress_text.clone()),
                 TextFont {
-                    font_size: FONT_SIZE_SMALL,
+                    font_size: theme.typography.font_size_small,
                     ..default()
                 },
                 TextColor(stress_color),
                 Node {
-                    margin: UiRect::right(Val::Px(MARGIN_LARGE)),
+                    margin: UiRect::right(Val::Px(theme.spacing.margin_large)),
                     ..default()
                 },
             ));
@@ -268,8 +271,8 @@ pub(super) fn spawn_soul_list_item(
                     ..default()
                 },
                 Node {
-                    width: Val::Px(ICON_SIZE),
-                    height: Val::Px(ICON_SIZE),
+                    width: Val::Px(theme.sizes.icon_size),
+                    height: Val::Px(theme.sizes.icon_size),
                     ..default()
                 },
             ));
@@ -281,6 +284,7 @@ pub(super) fn spawn_familiar_section(
     parent_container: Entity,
     familiar: &FamiliarRowViewModel,
     game_assets: &crate::assets::GameAssets,
+    theme: &UiTheme,
 ) -> FamiliarSectionNodes {
     let fold_icon_handle = if familiar.is_folded {
         game_assets.icon_arrow_right.clone()
@@ -291,7 +295,7 @@ pub(super) fn spawn_familiar_section(
     let root = commands
         .spawn((Node {
             flex_direction: FlexDirection::Column,
-            margin: UiRect::top(Val::Px(FAMILIAR_SECTION_MARGIN_TOP)),
+            margin: UiRect::top(Val::Px(theme.sizes.familiar_section_margin_top)),
             ..default()
         },))
         .id();
@@ -300,7 +304,7 @@ pub(super) fn spawn_familiar_section(
     let header = commands
         .spawn(Node {
             width: Val::Percent(100.0),
-            height: Val::Px(HEADER_HEIGHT),
+            height: Val::Px(theme.sizes.header_height),
             align_items: AlignItems::Center,
             flex_direction: FlexDirection::Row,
             ..default()
@@ -312,13 +316,13 @@ pub(super) fn spawn_familiar_section(
         .spawn((
             Button,
             Node {
-                width: Val::Px(FOLD_BUTTON_SIZE),
-                height: Val::Px(FOLD_BUTTON_SIZE),
+                width: Val::Px(theme.sizes.fold_button_size),
+                height: Val::Px(theme.sizes.fold_button_size),
                 align_items: AlignItems::Center,
                 justify_content: JustifyContent::Center,
                 ..default()
             },
-            BackgroundColor(COLOR_FOLD_BUTTON_BG),
+            BackgroundColor(theme.colors.fold_button_bg),
             SectionToggle(EntityListSectionType::Familiar(familiar.entity)),
         ))
         .id();
@@ -331,8 +335,8 @@ pub(super) fn spawn_familiar_section(
                 ..default()
             },
             Node {
-                width: Val::Px(FOLD_ICON_SIZE),
-                height: Val::Px(FOLD_ICON_SIZE),
+                width: Val::Px(theme.sizes.fold_icon_size),
+                height: Val::Px(theme.sizes.fold_icon_size),
                 ..default()
             },
         ))
@@ -344,13 +348,13 @@ pub(super) fn spawn_familiar_section(
             Button,
             Node {
                 flex_grow: 1.0,
-                height: Val::Px(HEADER_HEIGHT),
+                height: Val::Px(theme.sizes.header_height),
                 align_items: AlignItems::Center,
                 border: UiRect::left(Val::Px(0.0)),
-                padding: UiRect::left(Val::Px(TEXT_LEFT_PADDING)),
+                padding: UiRect::left(Val::Px(theme.spacing.text_left_padding)),
                 ..default()
             },
-            BackgroundColor(COLOR_FAMILIAR_BUTTON_BG),
+            BackgroundColor(theme.colors.familiar_button_bg),
             BorderColor::all(Color::NONE),
             FamiliarListItem(familiar.entity),
         ))
@@ -362,10 +366,10 @@ pub(super) fn spawn_familiar_section(
             Text::new(familiar.label.clone()),
             TextFont {
                 font: game_assets.font_familiar.clone(),
-                font_size: FONT_SIZE_HEADER,
+                font_size: theme.typography.font_size_header,
                 ..default()
             },
-            TextColor(COLOR_HEADER_TEXT),
+            TextColor(theme.colors.header_text),
         ))
         .id();
     commands.entity(familiar_button).add_child(header_text);
@@ -404,6 +408,7 @@ pub(super) fn sync_familiar_section_content(
     familiar: &FamiliarRowViewModel,
     nodes: FamiliarSectionNodes,
     game_assets: &crate::assets::GameAssets,
+    theme: &UiTheme,
 ) {
     clear_children(commands, q_children, nodes.members_container);
 
@@ -419,12 +424,12 @@ pub(super) fn sync_familiar_section_content(
                     Text::new("  (empty)"),
                     TextFont {
                         font: game_assets.font_ui.clone(),
-                        font_size: FONT_SIZE_ITEM,
+                        font_size: theme.typography.font_size_item,
                         ..default()
                     },
-                    TextColor(COLOR_EMPTY_TEXT),
+                    TextColor(theme.colors.empty_text),
                     Node {
-                        margin: UiRect::left(Val::Px(EMPTY_SQUAD_LEFT_MARGIN)),
+                        margin: UiRect::left(Val::Px(theme.sizes.empty_squad_left_margin)),
                         ..default()
                     },
                 ));
@@ -436,7 +441,8 @@ pub(super) fn sync_familiar_section_content(
                     members_parent,
                     soul_vm,
                     game_assets,
-                    SQUAD_MEMBER_LEFT_MARGIN,
+                    theme.sizes.squad_member_left_margin,
+                    theme,
                 );
             }
         });

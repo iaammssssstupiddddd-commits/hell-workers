@@ -1,4 +1,4 @@
-use crate::interface::ui::theme::{COLOR_BUTTON_DEFAULT, COLOR_BUTTON_HOVER, COLOR_BUTTON_PRESSED};
+use crate::interface::ui::theme::UiTheme;
 use bevy::prelude::*;
 
 #[derive(Resource, Default, Reflect)]
@@ -83,11 +83,12 @@ pub fn time_control_ui_system(
         (Changed<Interaction>, With<Button>),
     >,
     mut time: ResMut<Time<Virtual>>,
+    theme: Res<UiTheme>,
 ) {
     for (interaction, speed_button, mut color) in interaction_query.iter_mut() {
         match *interaction {
             Interaction::Pressed => {
-                *color = BackgroundColor(COLOR_BUTTON_PRESSED);
+                *color = BackgroundColor(theme.colors.button_pressed);
                 match speed_button.0 {
                     TimeSpeed::Paused => time.pause(),
                     TimeSpeed::Normal => {
@@ -105,10 +106,10 @@ pub fn time_control_ui_system(
                 }
             }
             Interaction::Hovered => {
-                *color = BackgroundColor(COLOR_BUTTON_HOVER);
+                *color = BackgroundColor(theme.colors.button_hover);
             }
             Interaction::None => {
-                *color = BackgroundColor(COLOR_BUTTON_DEFAULT);
+                *color = BackgroundColor(theme.colors.button_default);
             }
         }
     }

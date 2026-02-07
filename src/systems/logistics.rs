@@ -1,6 +1,7 @@
 use crate::assets::GameAssets;
 use crate::constants::*;
 use crate::game_state::ZoneContext;
+use crate::interface::ui::UiInputState;
 use crate::systems::jobs::{Rock, Tree};
 use crate::world::map::{INITIAL_WOOD_POSITIONS, ROCK_POSITIONS, TREE_POSITIONS, WorldMap};
 use bevy::prelude::*;
@@ -69,16 +70,14 @@ pub fn zone_placement(
     buttons: Res<ButtonInput<MouseButton>>,
     q_window: Query<&Window, With<bevy::window::PrimaryWindow>>,
     q_camera: Query<(&Camera, &GlobalTransform), With<crate::interface::camera::MainCamera>>,
-    q_ui: Query<&Interaction, With<Button>>,
+    ui_input_state: Res<UiInputState>,
     zone_context: Res<ZoneContext>,
     mut world_map: ResMut<WorldMap>,
     mut commands: Commands,
 ) {
     if let Some(zone_type) = zone_context.0 {
-        for interaction in q_ui.iter() {
-            if *interaction != Interaction::None {
-                return;
-            }
+        if ui_input_state.pointer_over_ui {
+            return;
         }
 
         if buttons.pressed(MouseButton::Left) {

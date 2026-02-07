@@ -6,7 +6,9 @@ use crate::entities::familiar::{FamiliarSpawnEvent, FamiliarType};
 use crate::game_state::PlayMode;
 use crate::interface::camera::MainCamera;
 use crate::interface::selection::blueprint_placement;
-use crate::interface::selection::{update_hover_entity, update_selection_indicator};
+use crate::interface::selection::{
+    cleanup_selection_references_system, update_hover_entity, update_selection_indicator,
+};
 use crate::interface::ui::{
     familiar_context_menu_system, hover_tooltip_system, info_panel_system, menu_visibility_system,
     task_summary_ui_system, ui_interaction_system, ui_keyboard_shortcuts_system,
@@ -27,12 +29,19 @@ impl Plugin for InterfacePlugin {
     fn build(&self, app: &mut App) {
         app.register_type::<crate::interface::ui::SectionFolded>();
         app.register_type::<crate::interface::ui::UnassignedFolded>();
+        app.init_resource::<crate::interface::ui::UiInputState>();
+        app.init_resource::<crate::interface::ui::theme::UiTheme>();
         app.init_resource::<crate::interface::ui::EntityListViewModel>();
         app.init_resource::<crate::interface::ui::EntityListNodeIndex>();
         app.add_systems(
+            PreUpdate,
+            crate::interface::ui::update_ui_input_state_system.in_set(GameSystemSet::Interface),
+        )
+        .add_systems(
             Update,
             (
                 update_hover_entity,
+                cleanup_selection_references_system,
                 update_selection_indicator,
                 hover_tooltip_system,
                 blueprint_placement.run_if(in_state(PlayMode::BuildingPlace)),
@@ -42,7 +51,7 @@ impl Plugin for InterfacePlugin {
                 menu_visibility_system,
                 info_panel_system.run_if(
                     |selected: Res<crate::interface::selection::SelectedEntity>| {
-                        selected.0.is_some()
+                        selected.is_changed() || selected.0.is_some()
                     },
                 ),
                 update_mode_text_system,
@@ -68,6 +77,7 @@ impl Plugin for InterfacePlugin {
                 crate::interface::ui::entity_list_interaction_system,
                 crate::interface::ui::entity_list_visual_feedback_system,
                 crate::interface::ui::entity_list_scroll_system,
+                crate::interface::ui::entity_list_tab_focus_system,
                 crate::interface::ui::update_unassigned_arrow_icon_system,
             )
                 .in_set(GameSystemSet::Interface),

@@ -4,7 +4,7 @@ use crate::entities::damned_soul::{DamnedSoul, Destination};
 use crate::entities::familiar::Familiar;
 use crate::game_state::{BuildContext, PlayMode, TaskContext, ZoneContext};
 use crate::interface::camera::MainCamera;
-use crate::interface::ui::MenuState;
+use crate::interface::ui::{MenuState, UiInputState};
 use crate::systems::jobs::{Blueprint, BuildingType};
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
@@ -24,7 +24,7 @@ pub fn handle_mouse_input(
     q_camera: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
     q_souls: Query<(Entity, &GlobalTransform), With<DamnedSoul>>,
     q_familiars: Query<(Entity, &GlobalTransform), With<Familiar>>,
-    q_ui: Query<&Interaction, With<Button>>,
+    ui_input_state: Res<UiInputState>,
     mut selected_entity: ResMut<SelectedEntity>,
     mut q_dest: Query<&mut Destination>,
     mut q_active_command: Query<&mut crate::entities::familiar::ActiveCommand>,
@@ -32,10 +32,8 @@ pub fn handle_mouse_input(
     // main.rsでrun_if(in_state(PlayMode::Normal))が設定されているため、
     // TaskModeのチェックは不要
 
-    for interaction in q_ui.iter() {
-        if *interaction != Interaction::None {
-            return;
-        }
+    if ui_input_state.pointer_over_ui {
+        return;
     }
 
     let Ok((camera, camera_transform)) = q_camera.single() else {
@@ -104,16 +102,14 @@ pub fn blueprint_placement(
     buttons: Res<ButtonInput<MouseButton>>,
     q_window: Query<&Window, With<bevy::window::PrimaryWindow>>,
     q_camera: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
-    q_ui: Query<&Interaction, With<Button>>,
+    ui_input_state: Res<UiInputState>,
     mut world_map: ResMut<WorldMap>,
     build_context: Res<BuildContext>,
     game_assets: Res<GameAssets>,
     mut commands: Commands,
 ) {
-    for interaction in q_ui.iter() {
-        if *interaction != Interaction::None {
-            return;
-        }
+    if ui_input_state.pointer_over_ui {
+        return;
     }
 
     if let Some(building_type) = build_context.0 {
@@ -238,6 +234,7 @@ pub fn update_selection_indicator(
 }
 
 pub fn update_hover_entity(
+    ui_input_state: Res<UiInputState>,
     q_window: Query<&Window, With<bevy::window::PrimaryWindow>>,
     q_camera: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
     q_souls: Query<(Entity, &GlobalTransform), With<DamnedSoul>>,
@@ -257,6 +254,11 @@ pub fn update_hover_entity(
     >,
     mut hovered_entity: ResMut<HoveredEntity>,
 ) {
+    if ui_input_state.pointer_over_ui {
+        hovered_entity.0 = None;
+        return;
+    }
+
     let Ok((camera, camera_transform)) = q_camera.single() else {
         return;
     };
@@ -317,6 +319,24 @@ pub fn update_hover_entity(
                 hovered_entity.0 = found;
             }
         }
+    }
+}
+
+pub fn cleanup_selection_references_system(
+    mut selected_entity: ResMut<SelectedEntity>,
+    mut hovered_entity: ResMut<HoveredEntity>,
+    q_exists: Query<(), ()>,
+) {
+    if let Some(entity) = selected_entity.0
+        && q_exists.get(entity).is_err()
+    {
+        selected_entity.0 = None;
+    }
+
+    if let Some(entity) = hovered_entity.0
+        && q_exists.get(entity).is_err()
+    {
+        hovered_entity.0 = None;
     }
 }
 
