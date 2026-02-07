@@ -33,7 +33,7 @@ pub fn entity_list_interaction_system(
     for (interaction, toggle, mut color) in interaction_query.iter_mut() {
         match *interaction {
             Interaction::Pressed => {
-                *color = BackgroundColor(theme.colors.section_toggle_pressed);
+                *color = BackgroundColor(theme.colors.interactive_active);
                 match toggle.0 {
                     EntityListSectionType::Familiar(entity) => {
                         if q_folded.get(entity).unwrap_or(false) {
@@ -132,10 +132,6 @@ pub fn entity_list_visual_feedback_system(
             &mut border_color,
             *interaction,
             is_selected,
-            theme.colors.list_item_default,
-            theme.colors.list_item_hover,
-            theme.colors.list_item_selected,
-            theme.colors.list_item_selected_hover,
             &theme,
         );
     }
@@ -148,10 +144,6 @@ pub fn entity_list_visual_feedback_system(
             &mut border_color,
             *interaction,
             is_selected,
-            theme.colors.familiar_button_bg,
-            theme.colors.familiar_header_hover,
-            theme.colors.familiar_header_selected,
-            theme.colors.familiar_header_selected_hover,
             &theme,
         );
     }
@@ -163,18 +155,14 @@ fn apply_row_highlight(
     border_color: &mut BorderColor,
     interaction: Interaction,
     is_selected: bool,
-    default_color: Color,
-    hover_color: Color,
-    selected_color: Color,
-    selected_hover_color: Color,
     theme: &UiTheme,
 ) {
     let is_hovered = matches!(interaction, Interaction::Hovered | Interaction::Pressed);
     bg.0 = match (is_selected, is_hovered) {
-        (true, true) => selected_hover_color,
-        (true, false) => selected_color,
-        (false, true) => hover_color,
-        (false, false) => default_color,
+        (true, true) => theme.colors.list_item_selected_hover,
+        (true, false) => theme.colors.list_item_selected,
+        (false, true) => theme.colors.list_item_hover,
+        (false, false) => theme.colors.list_item_default,
     };
 
     if is_selected {

@@ -283,10 +283,10 @@ impl Default for UiTheme {
 
                 // List items
                 list_item_default: Color::NONE,
-                list_item_hover: Color::srgba(0.35, 0.15, 0.28, 0.3), // Based on interactive_hover
-                list_item_selected: Color::srgba(0.3, 0.5, 0.8, 0.35), // Based on accent_soul
-                list_item_selected_hover: Color::srgba(0.5, 0.7, 1.0, 0.45), // Based on accent_soul_bright
-                list_selection_border: Color::srgba(0.8, 0.4, 0.1, 0.95), // Based on accent_ember
+                list_item_hover: Color::srgba(0.12, 0.05, 0.10, 0.55), // bg_elevated (hover)
+                list_item_selected: Color::srgba(0.12, 0.05, 0.10, 0.74), // bg_elevated (selected)
+                list_item_selected_hover: Color::srgba(0.18, 0.08, 0.14, 0.82), // bg_overlay tint
+                list_selection_border: Color::srgba(0.8, 0.4, 0.1, 0.95), // border_accent
 
                 // Familiar header
                 familiar_header_hover: Color::srgba(0.28, 0.28, 0.5, 0.75),
