@@ -165,6 +165,7 @@ pub struct ThemeSizes {
     // Tooltip
     pub tooltip_border_width: f32,
     pub tooltip_corner_radius: f32,
+    pub tooltip_min_width: f32,
     pub tooltip_max_width: f32,
     pub tooltip_padding: f32,
 
@@ -351,7 +352,8 @@ impl Default for UiTheme {
                 // Tooltip
                 tooltip_border_width: 1.0,
                 tooltip_corner_radius: 3.0,
-                tooltip_max_width: 280.0,
+                tooltip_min_width: 220.0,
+                tooltip_max_width: 340.0,
                 tooltip_padding: 8.0,
 
                 // Legacy

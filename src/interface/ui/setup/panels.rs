@@ -50,9 +50,11 @@ fn spawn_hover_tooltip(
                 position_type: PositionType::Absolute,
                 display: Display::None,
                 flex_direction: FlexDirection::Column,
+                row_gap: Val::Px(2.0),
                 border: UiRect::all(Val::Px(theme.sizes.tooltip_border_width)), // Semantic
                 padding: UiRect::all(Val::Px(theme.sizes.tooltip_padding)),     // Semantic
-                max_width: Val::Px(theme.sizes.tooltip_max_width),              // Constraint
+                min_width: Val::Px(theme.sizes.tooltip_min_width),
+                max_width: Val::Px(theme.sizes.tooltip_max_width), // Constraint
                 border_radius: bevy::ui::BorderRadius::all(Val::Px(
                     theme.sizes.tooltip_corner_radius,
                 )),
