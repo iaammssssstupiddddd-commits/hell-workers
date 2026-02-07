@@ -69,7 +69,7 @@ pub fn spawn_bottom_bar(
                             align_items: AlignItems::Center,
                             ..default()
                         },
-                        BackgroundColor(theme.colors.button_default),
+                        BackgroundColor(theme.colors.interactive_default), // Semantic
                         MenuButton(action),
                         UiTooltip(tooltip),
                     ))
@@ -78,10 +78,11 @@ pub fn spawn_bottom_bar(
                             Text::new(label),
                             TextFont {
                                 font: game_assets.font_ui.clone(),
-                                font_size: theme.typography.font_size_title,
+                                font_size: theme.typography.font_size_base, // Semantic
+                                weight: FontWeight::SEMIBOLD, // Variation
                                 ..default()
                             },
-                            TextColor(theme.colors.text_primary),
+                            TextColor(theme.colors.text_primary_semantic), // Semantic
                         ));
                     });
             }
@@ -92,10 +93,11 @@ pub fn spawn_bottom_bar(
                 Text::new("Mode: Normal"),
                 TextFont {
                     font: game_assets.font_ui.clone(),
-                    font_size: theme.typography.font_size_title,
+                    font_size: theme.typography.font_size_md, // Semantic
+                    weight: FontWeight::BOLD,
                     ..default()
                 },
-                TextColor(theme.colors.text_accent),
+                TextColor(theme.colors.text_accent_semantic), // Semantic
                 Node {
                     margin: UiRect::left(Val::Px(20.0)),
                     ..default()
