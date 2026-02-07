@@ -79,6 +79,7 @@ impl Plugin for InterfacePlugin {
                 crate::interface::ui::entity_list_interaction_system,
                 crate::interface::ui::entity_list_visual_feedback_system,
                 crate::interface::ui::entity_list_scroll_system,
+                crate::interface::ui::entity_list_scroll_hint_visibility_system,
                 crate::interface::ui::entity_list_tab_focus_system,
                 crate::interface::ui::update_unassigned_arrow_icon_system,
             )

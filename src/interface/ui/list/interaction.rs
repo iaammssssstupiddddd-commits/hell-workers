@@ -249,6 +249,33 @@ pub fn entity_list_tab_focus_system(
     );
 }
 
+pub fn entity_list_scroll_hint_visibility_system(
+    q_unassigned_section: Query<Has<UnassignedFolded>, With<UnassignedSoulSection>>,
+    q_unassigned_content: Query<&ComputedNode, With<UnassignedSoulContent>>,
+    mut q_hint_nodes: Query<&mut Node, With<EntityListScrollHint>>,
+) {
+    let unassigned_folded = q_unassigned_section.iter().next().unwrap_or(false);
+    let has_overflow = if unassigned_folded {
+        false
+    } else {
+        q_unassigned_content
+            .iter()
+            .next()
+            .is_some_and(|computed| computed.content_size().y > computed.size().y + 1.0)
+    };
+
+    let desired = if has_overflow {
+        Display::Flex
+    } else {
+        Display::None
+    };
+    for mut node in q_hint_nodes.iter_mut() {
+        if node.display != desired {
+            node.display = desired;
+        }
+    }
+}
+
 /// 未所属ソウルセクションの矢印アイコンを折りたたみ状態に応じて更新
 pub fn update_unassigned_arrow_icon_system(
     game_assets: Res<crate::assets::GameAssets>,
