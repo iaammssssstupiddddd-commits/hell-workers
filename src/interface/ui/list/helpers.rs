@@ -51,6 +51,13 @@ fn get_stress_color(bucket: StressBucket, theme: &UiTheme) -> Color {
     }
 }
 
+fn stress_weight(bucket: StressBucket) -> FontWeight {
+    match bucket {
+        StressBucket::High => FontWeight::BOLD,
+        _ => FontWeight::default(),
+    }
+}
+
 pub(super) fn familiar_state_label(ai_state: &FamiliarAiState) -> &'static str {
     match ai_state {
         FamiliarAiState::Idle => "Idle",
@@ -258,6 +265,7 @@ pub(super) fn spawn_soul_list_item(
                 Text::new(soul_vm.stress_text.clone()),
                 TextFont {
                     font_size: theme.typography.font_size_small,
+                    weight: stress_weight(soul_vm.stress_bucket),
                     ..default()
                 },
                 TextColor(stress_color),
@@ -406,6 +414,7 @@ pub(super) fn spawn_soul_list_item_entity(
             Text::new(soul_vm.stress_text.clone()),
             TextFont {
                 font_size: theme.typography.font_size_small,
+                weight: stress_weight(soul_vm.stress_bucket),
                 ..default()
             },
             TextColor(stress_color),
@@ -479,7 +488,7 @@ pub(super) fn spawn_familiar_section(
                 justify_content: JustifyContent::Center,
                 ..default()
             },
-            BackgroundColor(theme.colors.interactive_default),
+            BackgroundColor(theme.colors.fold_button_bg),
             SectionToggle(EntityListSectionType::Familiar(familiar.entity)),
         ))
         .id();
@@ -511,7 +520,7 @@ pub(super) fn spawn_familiar_section(
                 padding: UiRect::left(Val::Px(theme.spacing.text_left_padding)),
                 ..default()
             },
-            BackgroundColor(theme.colors.list_item_default),
+            BackgroundColor(theme.colors.familiar_button_bg),
             BorderColor::all(Color::NONE),
             FamiliarListItem(familiar.entity),
         ))
@@ -526,7 +535,7 @@ pub(super) fn spawn_familiar_section(
                 font_size: theme.typography.font_size_header,
                 ..default()
             },
-            TextColor(theme.colors.header_text),
+            TextColor(theme.colors.accent_soul),
         ))
         .id();
     commands.entity(familiar_button).add_child(header_text);

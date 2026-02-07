@@ -34,7 +34,7 @@ pub fn entity_list_interaction_system(
     for (interaction, toggle, mut color) in interaction_query.iter_mut() {
         match *interaction {
             Interaction::Pressed => {
-                *color = BackgroundColor(theme.colors.interactive_active);
+                *color = BackgroundColor(theme.colors.section_toggle_pressed);
                 match toggle.0 {
                     EntityListSectionType::Familiar(entity) => {
                         if q_folded.get(entity).unwrap_or(false) {
@@ -62,10 +62,10 @@ pub fn entity_list_interaction_system(
                 }
             }
             Interaction::Hovered => {
-                *color = BackgroundColor(theme.colors.interactive_hover);
+                *color = BackgroundColor(theme.colors.button_hover);
             }
             Interaction::None => {
-                *color = BackgroundColor(theme.colors.interactive_default);
+                *color = BackgroundColor(theme.colors.button_default);
             }
         }
     }
@@ -139,6 +139,7 @@ pub fn entity_list_visual_feedback_system(
             *interaction,
             is_selected,
             false,
+            false,
             &theme,
         );
     }
@@ -153,6 +154,7 @@ pub fn entity_list_visual_feedback_system(
             *interaction,
             is_selected,
             is_drop_target,
+            true,
             &theme,
         );
     }
@@ -165,6 +167,7 @@ fn apply_row_highlight(
     interaction: Interaction,
     is_selected: bool,
     is_drop_target: bool,
+    is_familiar_row: bool,
     theme: &UiTheme,
 ) {
     if is_drop_target {
@@ -175,11 +178,20 @@ fn apply_row_highlight(
     }
 
     let is_hovered = matches!(interaction, Interaction::Hovered | Interaction::Pressed);
-    bg.0 = match (is_selected, is_hovered) {
-        (true, true) => theme.colors.list_item_selected_hover,
-        (true, false) => theme.colors.list_item_selected,
-        (false, true) => theme.colors.list_item_hover,
-        (false, false) => theme.colors.list_item_default,
+    bg.0 = if is_familiar_row {
+        match (is_selected, is_hovered) {
+            (true, true) => theme.colors.familiar_header_selected_hover,
+            (true, false) => theme.colors.familiar_header_selected,
+            (false, true) => theme.colors.familiar_header_hover,
+            (false, false) => theme.colors.familiar_button_bg,
+        }
+    } else {
+        match (is_selected, is_hovered) {
+            (true, true) => theme.colors.list_item_selected_hover,
+            (true, false) => theme.colors.list_item_selected,
+            (false, true) => theme.colors.list_item_hover,
+            (false, false) => theme.colors.list_item_default,
+        }
     };
 
     if is_selected {

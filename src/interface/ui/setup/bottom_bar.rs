@@ -28,6 +28,8 @@ pub fn spawn_bottom_bar(
                 align_items: AlignItems::Center,
                 justify_content: JustifyContent::Start,
                 padding: UiRect::all(Val::Px(theme.spacing.bottom_bar_padding)),
+                border: UiRect::all(Val::Px(theme.sizes.panel_border_width)),
+                border_radius: BorderRadius::all(Val::Px(theme.sizes.panel_corner_radius)),
                 ..default()
             },
             BackgroundGradient::from(LinearGradient {
@@ -38,6 +40,7 @@ pub fn spawn_bottom_bar(
                 ],
                 ..default()
             }),
+            BorderColor::all(theme.colors.panel_accent_control_bar),
             RelativeCursorPosition::default(),
             UiInputBlocker,
         ))
@@ -73,7 +76,7 @@ pub fn spawn_bottom_bar(
                         align_items: AlignItems::Center,
                         ..default()
                     },
-                    BackgroundColor(theme.colors.interactive_default), // Semantic
+                    BackgroundColor(theme.colors.button_default), // Semantic
                     MenuButton(action),
                     match shortcut {
                         Some(shortcut) => UiTooltip::with_shortcut(tooltip, shortcut),
@@ -90,6 +93,8 @@ pub fn spawn_bottom_bar(
                             ..default()
                         },
                         TextColor(theme.colors.text_primary_semantic), // Semantic
+                        Underline,
+                        UnderlineColor(theme.colors.accent_ember_bright.with_alpha(0.35)),
                     ));
                 });
         }
@@ -104,7 +109,7 @@ pub fn spawn_bottom_bar(
                     weight: FontWeight::BOLD,
                     ..default()
                 },
-                TextColor(theme.colors.text_accent_semantic), // Semantic
+                TextColor(theme.colors.accent_ember.with_alpha(0.85)),
                 Node {
                     margin: UiRect::left(Val::Px(20.0)),
                     ..default()

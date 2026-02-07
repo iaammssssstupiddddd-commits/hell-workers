@@ -245,7 +245,7 @@ fn spawn_menu_item(
                 padding: UiRect::horizontal(Val::Px(8.0)),
                 ..default()
             },
-            BackgroundColor(theme.colors.interactive_default),
+            BackgroundColor(theme.colors.button_default),
             MenuButton(action),
         ))
         .with_children(|row| {

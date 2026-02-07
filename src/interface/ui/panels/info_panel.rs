@@ -121,6 +121,8 @@ pub fn spawn_info_panel_ui(
                 top: Val::Px(theme.spacing.panel_top),
                 flex_direction: FlexDirection::Column,
                 padding: UiRect::all(Val::Px(theme.spacing.panel_padding)),
+                border: UiRect::all(Val::Px(theme.sizes.panel_border_width)),
+                border_radius: BorderRadius::all(Val::Px(theme.sizes.panel_corner_radius)),
                 display: Display::None,
                 ..default()
             },
@@ -132,6 +134,7 @@ pub fn spawn_info_panel_ui(
                 ],
                 ..default()
             }),
+            BorderColor::all(theme.colors.border_default),
             RelativeCursorPosition::default(),
             UiInputBlocker,
             InfoPanel,
@@ -164,9 +167,10 @@ pub fn spawn_info_panel_ui(
                             TextFont {
                                 font: game_assets.font_ui.clone(),
                                 font_size: theme.typography.font_size_title,
+                                weight: FontWeight::BOLD,
                                 ..default()
                             },
-                            TextColor(theme.colors.text_accent),
+                            TextColor(theme.colors.panel_accent_info_panel),
                             UiSlot::Header,
                         ))
                         .id();
@@ -199,7 +203,7 @@ pub fn spawn_info_panel_ui(
                             padding: UiRect::horizontal(Val::Px(8.0)),
                             ..default()
                         },
-                        BackgroundColor(theme.colors.interactive_default),
+                        BackgroundColor(theme.colors.button_default),
                         MenuButton(MenuAction::ClearInspectPin),
                         UiSlot::InfoPanelUnpinButton,
                     ))
