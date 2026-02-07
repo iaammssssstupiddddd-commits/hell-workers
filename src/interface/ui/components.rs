@@ -80,7 +80,7 @@ pub enum UiSlot {
     ModeText,
     // Other
     TaskSummaryText,
-    HoverTooltipText,
+    TooltipAnchor,
     FpsText,
 }
 
@@ -106,11 +106,63 @@ pub struct InfoPanel;
 #[derive(Component)]
 pub struct ContextMenu;
 
-#[derive(Component)]
-pub struct HoverTooltip;
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum TooltipTemplate {
+    Soul,
+    Building,
+    Resource,
+    UiButton,
+    #[default]
+    Generic,
+}
 
 #[derive(Component)]
-pub struct UiTooltip(pub &'static str);
+pub struct HoverTooltip {
+    pub template_type: TooltipTemplate,
+    pub delay_timer: Timer,
+    pub fade_alpha: f32,
+}
+
+impl Default for HoverTooltip {
+    fn default() -> Self {
+        Self {
+            template_type: TooltipTemplate::Generic,
+            delay_timer: Timer::from_seconds(0.3, TimerMode::Once),
+            fade_alpha: 0.0,
+        }
+    }
+}
+
+#[derive(Component)]
+pub struct TooltipHeader;
+
+#[derive(Component)]
+pub struct TooltipBody;
+
+#[derive(Component)]
+pub struct TooltipProgressBar(pub f32);
+
+#[derive(Component)]
+pub struct UiTooltip {
+    pub text: &'static str,
+    pub shortcut: Option<&'static str>,
+}
+
+impl UiTooltip {
+    pub const fn new(text: &'static str) -> Self {
+        Self {
+            text,
+            shortcut: None,
+        }
+    }
+
+    pub const fn with_shortcut(text: &'static str, shortcut: &'static str) -> Self {
+        Self {
+            text,
+            shortcut: Some(shortcut),
+        }
+    }
+}
 
 #[derive(Component, Default)]
 pub struct UiInputBlocker;

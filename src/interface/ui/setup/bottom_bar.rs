@@ -44,52 +44,59 @@ pub fn spawn_bottom_bar(
         .id();
     commands.entity(parent_entity).add_child(bottom_bar);
 
-    commands
-        .entity(bottom_bar)
-        .with_children(|parent| {
-            let buttons = [
-                (
-                    "Architect",
-                    "建築モード切替 (B)",
-                    MenuAction::ToggleArchitect,
-                ),
-                ("Zones", "ゾーンモード切替 (Z)", MenuAction::ToggleZones),
-                ("Orders", "命令メニュー切替", MenuAction::ToggleOrders),
-            ];
+    commands.entity(bottom_bar).with_children(|parent| {
+        let buttons = [
+            (
+                "Architect",
+                "建築モード切替 (B)",
+                MenuAction::ToggleArchitect,
+                Some("B"),
+            ),
+            (
+                "Zones",
+                "ゾーンモード切替 (Z)",
+                MenuAction::ToggleZones,
+                Some("Z"),
+            ),
+            ("Orders", "命令メニュー切替", MenuAction::ToggleOrders, None),
+        ];
 
-            for (label, tooltip, action) in buttons {
-                parent
-                    .spawn((
-                        Button,
-                        Node {
-                            width: Val::Px(100.0),
-                            height: Val::Px(40.0),
-                            margin: UiRect::right(Val::Px(10.0)),
-                            justify_content: JustifyContent::Center,
-                            align_items: AlignItems::Center,
+        for (label, tooltip, action, shortcut) in buttons {
+            parent
+                .spawn((
+                    Button,
+                    Node {
+                        width: Val::Px(100.0),
+                        height: Val::Px(40.0),
+                        margin: UiRect::right(Val::Px(10.0)),
+                        justify_content: JustifyContent::Center,
+                        align_items: AlignItems::Center,
+                        ..default()
+                    },
+                    BackgroundColor(theme.colors.interactive_default), // Semantic
+                    MenuButton(action),
+                    match shortcut {
+                        Some(shortcut) => UiTooltip::with_shortcut(tooltip, shortcut),
+                        None => UiTooltip::new(tooltip),
+                    },
+                ))
+                .with_children(|button| {
+                    button.spawn((
+                        Text::new(label),
+                        TextFont {
+                            font: game_assets.font_ui.clone(),
+                            font_size: theme.typography.font_size_base, // Semantic
+                            weight: FontWeight::SEMIBOLD,               // Variation
                             ..default()
                         },
-                        BackgroundColor(theme.colors.interactive_default), // Semantic
-                        MenuButton(action),
-                        UiTooltip(tooltip),
-                    ))
-                    .with_children(|button| {
-                        button.spawn((
-                            Text::new(label),
-                            TextFont {
-                                font: game_assets.font_ui.clone(),
-                                font_size: theme.typography.font_size_base, // Semantic
-                                weight: FontWeight::SEMIBOLD, // Variation
-                                ..default()
-                            },
-                            TextColor(theme.colors.text_primary_semantic), // Semantic
-                        ));
-                    });
-            }
+                        TextColor(theme.colors.text_primary_semantic), // Semantic
+                    ));
+                });
+        }
 
-            // Mode Display
-            let mode_text = parent
-                .spawn((
+        // Mode Display
+        let mode_text = parent
+            .spawn((
                 Text::new("Mode: Normal"),
                 TextFont {
                     font: game_assets.font_ui.clone(),
@@ -104,7 +111,7 @@ pub fn spawn_bottom_bar(
                 },
                 UiSlot::ModeText,
             ))
-                .id();
-            ui_nodes.set_slot(UiSlot::ModeText, mode_text);
-        });
+            .id();
+        ui_nodes.set_slot(UiSlot::ModeText, mode_text);
+    });
 }

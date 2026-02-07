@@ -78,7 +78,11 @@ fn format_escape_info(
     format!(
         "Idle: {:?}\nEscape: {}\n- stress_ok: {}\n- threat_close: {}\n- commanded: {}\n- exhausted: {}",
         idle.behavior,
-        if escape_allowed { "eligible" } else { "blocked" },
+        if escape_allowed {
+            "eligible"
+        } else {
+            "blocked"
+        },
         soul.stress > ESCAPE_STRESS_THRESHOLD,
         escape_threat_close,
         under_command.is_some(),
@@ -166,7 +170,10 @@ pub fn build_entity_inspection_model(
     } else if let Ok((familiar, op)) = q_familiars.get(entity) {
         header = familiar.name.clone();
         common_lines.push(format!("Type: {:?}", familiar.familiar_type));
-        common_lines.push(format!("Range: {:.0} tiles", familiar.command_radius / 16.0));
+        common_lines.push(format!(
+            "Range: {:.0} tiles",
+            familiar.command_radius / 16.0
+        ));
         common_lines.push(format!(
             "Fatigue Threshold: {:.0}%",
             op.fatigue_threshold * 100.0
@@ -187,7 +194,9 @@ pub fn build_entity_inspection_model(
         tooltip_lines.push("Target: Rock".to_string());
     }
 
-    if let Ok((building, stockpile_opt, stored_items_opt, mixer_storage_opt)) = q_buildings.get(entity) {
+    if let Ok((building, stockpile_opt, stored_items_opt, mixer_storage_opt)) =
+        q_buildings.get(entity)
+    {
         if header.is_empty() {
             header = format!("Building: {:?}", building.kind);
         }
@@ -246,11 +255,14 @@ pub fn build_entity_inspection_model(
             let worker_names: Vec<String> = workers
                 .iter()
                 .filter_map(|&soul_entity| {
-                    q_souls.get(soul_entity).ok().map(|(_, _, _, _, _, _, identity_opt)| {
-                        identity_opt
-                            .map(|i| i.name.clone())
-                            .unwrap_or("Unknown".to_string())
-                    })
+                    q_souls
+                        .get(soul_entity)
+                        .ok()
+                        .map(|(_, _, _, _, _, _, identity_opt)| {
+                            identity_opt
+                                .map(|i| i.name.clone())
+                                .unwrap_or("Unknown".to_string())
+                        })
                 })
                 .collect();
 
