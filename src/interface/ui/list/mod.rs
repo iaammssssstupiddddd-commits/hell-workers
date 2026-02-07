@@ -3,11 +3,13 @@
 use bevy::prelude::*;
 use std::collections::HashMap;
 
+mod drag_drop;
 mod helpers;
 mod interaction;
 mod sync;
 mod view_model;
 
+pub use drag_drop::{DragState, entity_list_drag_drop_system};
 pub use interaction::{
     entity_list_interaction_system, entity_list_scroll_hint_visibility_system,
     entity_list_scroll_system, entity_list_tab_focus_system, entity_list_visual_feedback_system,

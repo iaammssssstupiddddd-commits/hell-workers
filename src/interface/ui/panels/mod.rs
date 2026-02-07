@@ -7,6 +7,6 @@ mod info_panel;
 mod menu;
 pub mod tooltip_builder;
 
-pub use context_menu::familiar_context_menu_system;
-pub use info_panel::{InfoPanelState, info_panel_system, spawn_info_panel_ui};
+pub use context_menu::context_menu_system;
+pub use info_panel::{InfoPanelPinState, InfoPanelState, info_panel_system, spawn_info_panel_ui};
 pub use menu::menu_visibility_system;

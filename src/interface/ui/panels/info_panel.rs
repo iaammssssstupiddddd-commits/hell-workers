@@ -5,7 +5,9 @@
 use crate::entities::damned_soul::Gender;
 use crate::entities::damned_soul::{DamnedSoul, IdleState};
 use crate::entities::familiar::Familiar;
-use crate::interface::ui::components::{InfoPanel, UiInputBlocker, UiNodeRegistry, UiSlot};
+use crate::interface::ui::components::{
+    InfoPanel, MenuAction, MenuButton, UiInputBlocker, UiNodeRegistry, UiSlot,
+};
 use crate::interface::ui::presentation::{EntityInspectionModel, build_entity_inspection_model};
 use crate::interface::ui::theme::UiTheme;
 use crate::relationships::{CommandedBy, TaskWorkers};
@@ -19,6 +21,12 @@ use bevy::ui::{BackgroundGradient, ColorStop, LinearGradient, RelativeCursorPosi
 #[derive(Resource, Default)]
 pub struct InfoPanelState {
     last: Option<InfoPanelViewModel>,
+    last_pinned: bool,
+}
+
+#[derive(Resource, Default)]
+pub struct InfoPanelPinState {
+    pub entity: Option<Entity>,
 }
 
 #[derive(Clone, PartialEq)]
@@ -136,40 +144,79 @@ pub fn spawn_info_panel_ui(
     commands.entity(root).with_children(|parent| {
         parent
             .spawn(Node {
+                width: Val::Percent(100.0),
                 flex_direction: FlexDirection::Row,
                 align_items: AlignItems::Center,
+                justify_content: JustifyContent::SpaceBetween,
                 margin: UiRect::bottom(Val::Px(5.0)),
                 ..default()
             })
             .with_children(|row| {
-                let header = row
-                    .spawn((
-                        Text::new(""),
-                        TextFont {
-                            font: game_assets.font_ui.clone(),
-                            font_size: theme.typography.font_size_title,
-                            ..default()
-                        },
-                        TextColor(theme.colors.text_accent),
-                        UiSlot::Header,
-                    ))
-                    .id();
-                ui_nodes.set_slot(UiSlot::Header, header);
+                row.spawn(Node {
+                    flex_direction: FlexDirection::Row,
+                    align_items: AlignItems::Center,
+                    ..default()
+                })
+                .with_children(|left| {
+                    let header = left
+                        .spawn((
+                            Text::new(""),
+                            TextFont {
+                                font: game_assets.font_ui.clone(),
+                                font_size: theme.typography.font_size_title,
+                                ..default()
+                            },
+                            TextColor(theme.colors.text_accent),
+                            UiSlot::Header,
+                        ))
+                        .id();
+                    ui_nodes.set_slot(UiSlot::Header, header);
 
-                let gender = row
+                    let gender = left
+                        .spawn((
+                            ImageNode::default(),
+                            Node {
+                                width: Val::Px(16.0),
+                                height: Val::Px(16.0),
+                                margin: UiRect::left(Val::Px(8.0)),
+                                display: Display::None,
+                                ..default()
+                            },
+                            UiSlot::GenderIcon,
+                        ))
+                        .id();
+                    ui_nodes.set_slot(UiSlot::GenderIcon, gender);
+                });
+
+                let unpin_button = row
                     .spawn((
-                        ImageNode::default(),
+                        Button,
                         Node {
-                            width: Val::Px(16.0),
-                            height: Val::Px(16.0),
-                            margin: UiRect::left(Val::Px(8.0)),
                             display: Display::None,
+                            min_height: Val::Px(24.0),
+                            align_items: AlignItems::Center,
+                            justify_content: JustifyContent::Center,
+                            padding: UiRect::horizontal(Val::Px(8.0)),
                             ..default()
                         },
-                        UiSlot::GenderIcon,
+                        BackgroundColor(theme.colors.interactive_default),
+                        MenuButton(MenuAction::ClearInspectPin),
+                        UiSlot::InfoPanelUnpinButton,
                     ))
+                    .with_children(|btn| {
+                        btn.spawn((
+                            Text::new("Unpin"),
+                            TextFont {
+                                font: game_assets.font_ui.clone(),
+                                font_size: theme.typography.font_size_xs,
+                                weight: FontWeight::SEMIBOLD,
+                                ..default()
+                            },
+                            TextColor(theme.colors.text_primary_semantic),
+                        ));
+                    })
                     .id();
-                ui_nodes.set_slot(UiSlot::GenderIcon, gender);
+                ui_nodes.set_slot(UiSlot::InfoPanelUnpinButton, unpin_button);
             });
 
         let stats = parent
@@ -439,6 +486,7 @@ pub(crate) struct InspectionQueryParam<'w, 's> {
 pub fn info_panel_system(
     game_assets: Res<crate::assets::GameAssets>,
     selected: Res<crate::interface::selection::SelectedEntity>,
+    mut pin_state: ResMut<InfoPanelPinState>,
     ui_nodes: Res<UiNodeRegistry>,
     mut panel_state: ResMut<InfoPanelState>,
     mut q_text: Query<&mut Text>,
@@ -446,7 +494,8 @@ pub fn info_panel_system(
     mut q_gender: Query<&mut ImageNode>,
     inspection: InspectionQueryParam,
 ) {
-    let next_model = selected.0.and_then(|entity| {
+    let mut inspected_entity = pin_state.entity.or(selected.0);
+    let mut next_model = inspected_entity.and_then(|entity| {
         build_entity_inspection_model(
             entity,
             &inspection.q_souls,
@@ -463,7 +512,29 @@ pub fn info_panel_system(
         .map(to_view_model)
     });
 
-    if panel_state.last == next_model {
+    if pin_state.entity.is_some() && next_model.is_none() {
+        pin_state.entity = None;
+        inspected_entity = selected.0;
+        next_model = inspected_entity.and_then(|entity| {
+            build_entity_inspection_model(
+                entity,
+                &inspection.q_souls,
+                &inspection.q_blueprints,
+                &inspection.q_familiars,
+                &inspection.q_familiars_escape,
+                &inspection.familiar_grid,
+                &inspection.q_items,
+                &inspection.q_trees,
+                &inspection.q_rocks,
+                &inspection.q_designations,
+                &inspection.q_buildings,
+            )
+            .map(to_view_model)
+        });
+    }
+
+    let pinned = pin_state.entity.is_some();
+    if panel_state.last == next_model && panel_state.last_pinned == pinned {
         return;
     }
 
@@ -476,6 +547,12 @@ pub fn info_panel_system(
         } else {
             Display::None
         },
+    );
+    set_display_slot(
+        &ui_nodes,
+        &mut q_node,
+        UiSlot::InfoPanelUnpinButton,
+        if pinned { Display::Flex } else { Display::None },
     );
 
     match &next_model {
@@ -539,4 +616,5 @@ pub fn info_panel_system(
     }
 
     panel_state.last = next_model;
+    panel_state.last_pinned = pinned;
 }
