@@ -67,6 +67,8 @@ impl Plugin for InterfacePlugin {
                 .in_set(GameSystemSet::Interface),
         )
         .init_resource::<crate::interface::ui::DragState>()
+        .init_resource::<crate::interface::ui::EntityListMinimizeState>()
+        .init_resource::<crate::interface::ui::EntityListResizeState>()
         .add_systems(
             Update,
             (
@@ -88,6 +90,10 @@ impl Plugin for InterfacePlugin {
                 crate::interface::ui::entity_list_scroll_system,
                 crate::interface::ui::entity_list_scroll_hint_visibility_system,
                 crate::interface::ui::entity_list_tab_focus_system,
+                crate::interface::ui::entity_list_minimize_toggle_system,
+                crate::interface::ui::entity_list_resize_system,
+                crate::interface::ui::entity_list_resize_cursor_system
+                    .after(crate::interface::ui::entity_list_resize_system),
                 crate::interface::ui::update_unassigned_arrow_icon_system,
             )
                 .in_set(GameSystemSet::Interface),

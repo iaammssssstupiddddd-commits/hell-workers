@@ -194,7 +194,16 @@ pub struct OperationDialog;
 pub struct EntityListPanel;
 
 #[derive(Component)]
+pub struct EntityListBody;
+
+#[derive(Component)]
 pub struct EntityListScrollHint;
+
+#[derive(Component)]
+pub struct EntityListMinimizeButton;
+
+#[derive(Component)]
+pub struct EntityListMinimizeButtonLabel;
 
 /// ヘッダーのリストコンテナ
 #[derive(Component)]
