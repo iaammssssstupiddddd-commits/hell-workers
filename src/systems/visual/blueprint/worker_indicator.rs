@@ -75,11 +75,8 @@ pub fn update_worker_indicators_system(
 
                     // 子エンティティなのでローカル座標で更新する
                     let bob = (time.elapsed_secs() * 5.0).sin() * 2.5;
-                    hammer_transform.translation = Vec3::new(
-                        0.0,
-                        32.0 + bob,
-                        Z_VISUAL_EFFECT - Z_CHARACTER,
-                    );
+                    hammer_transform.translation =
+                        Vec3::new(0.0, 32.0 + bob, Z_VISUAL_EFFECT - Z_CHARACTER);
                 }
             }
         }

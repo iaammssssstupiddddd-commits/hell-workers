@@ -6,6 +6,9 @@ use crate::interface::ui::presentation::EntityInspectionModel;
 use crate::interface::ui::theme::UiTheme;
 use bevy::prelude::*;
 
+const TOOLTIP_WRAP_LIMIT_BODY: usize = 42;
+const TOOLTIP_WRAP_LIMIT_ICON_ROW: usize = 36;
+
 pub fn rebuild_tooltip_content(
     commands: &mut Commands,
     tooltip_root: Entity,
@@ -334,6 +337,7 @@ pub fn spawn_icon_text_row(
         .spawn(Node {
             width: Val::Percent(100.0),
             flex_direction: FlexDirection::Row,
+            align_items: AlignItems::Start,
             column_gap: Val::Px(6.0),
             margin: UiRect::top(Val::Px(4.0)),
             ..default()
@@ -350,16 +354,31 @@ pub fn spawn_icon_text_row(
                 TextColor(theme.colors.text_accent_semantic),
                 TooltipBody,
             ));
-            row.spawn((
-                Text::new(text),
-                TextFont {
-                    font: game_assets.font_ui.clone(),
-                    font_size: theme.typography.font_size_sm,
-                    ..default()
-                },
-                TextColor(theme.colors.text_primary_semantic),
-                TooltipBody,
-            ));
+            row.spawn(Node {
+                flex_direction: FlexDirection::Column,
+                flex_grow: 1.0,
+                min_width: Val::Px(0.0),
+                ..default()
+            })
+            .with_children(|text_col| {
+                for line in wrap_tooltip_text(text, TOOLTIP_WRAP_LIMIT_ICON_ROW) {
+                    text_col.spawn((
+                        Text::new(line),
+                        TextFont {
+                            font: game_assets.font_ui.clone(),
+                            font_size: theme.typography.font_size_sm,
+                            ..default()
+                        },
+                        TextLayout::new(Justify::Left, LineBreak::WordOrCharacter),
+                        TextColor(theme.colors.text_primary_semantic),
+                        Node {
+                            width: Val::Percent(100.0),
+                            ..default()
+                        },
+                        TooltipBody,
+                    ));
+                }
+            });
         });
 }
 
@@ -369,15 +388,21 @@ fn spawn_header(
     game_assets: &GameAssets,
     theme: &UiTheme,
 ) {
+    let display_text = wrap_tooltip_text(text, TOOLTIP_WRAP_LIMIT_BODY).join("\n");
     parent.spawn((
-        Text::new(text),
+        Text::new(display_text),
         TextFont {
             font: game_assets.font_ui.clone(),
             font_size: theme.typography.font_size_md,
             weight: FontWeight::BOLD,
             ..default()
         },
+        TextLayout::new(Justify::Left, LineBreak::WordOrCharacter),
         TextColor(theme.colors.text_accent_semantic),
+        Node {
+            width: Val::Percent(100.0),
+            ..default()
+        },
         TooltipHeader,
     ));
 }
@@ -388,16 +413,23 @@ fn spawn_body_line(
     game_assets: &GameAssets,
     theme: &UiTheme,
 ) {
-    parent.spawn((
-        Text::new(text),
-        TextFont {
-            font: game_assets.font_ui.clone(),
-            font_size: theme.typography.font_size_sm,
-            ..default()
-        },
-        TextColor(theme.colors.text_primary_semantic),
-        TooltipBody,
-    ));
+    for line in wrap_tooltip_text(text, TOOLTIP_WRAP_LIMIT_BODY) {
+        parent.spawn((
+            Text::new(line),
+            TextFont {
+                font: game_assets.font_ui.clone(),
+                font_size: theme.typography.font_size_sm,
+                ..default()
+            },
+            TextLayout::new(Justify::Left, LineBreak::WordOrCharacter),
+            TextColor(theme.colors.text_primary_semantic),
+            Node {
+                width: Val::Percent(100.0),
+                ..default()
+            },
+            TooltipBody,
+        ));
+    }
 }
 
 fn parse_percent_value(text: &str) -> Option<f32> {
@@ -409,6 +441,63 @@ fn parse_percent_value(text: &str) -> Option<f32> {
         .trim_end_matches('%')
         .trim();
     raw.parse::<f32>().ok().map(|v| (v / 100.0).clamp(0.0, 1.0))
+}
+
+fn wrap_tooltip_text(text: &str, limit: usize) -> Vec<String> {
+    let mut output = Vec::new();
+    for raw_line in text.lines().map(str::trim).filter(|line| !line.is_empty()) {
+        let mut remaining = raw_line.to_string();
+        while remaining.chars().count() > limit {
+            let split_idx = preferred_split_index(&remaining, limit)
+                .or_else(|| whitespace_split_index(&remaining, limit))
+                .unwrap_or_else(|| char_to_byte_idx(&remaining, limit));
+            let (head, tail) = remaining.split_at(split_idx);
+            output.push(head.trim().to_string());
+            remaining = tail
+                .trim_start_matches(|ch: char| ch.is_whitespace() || [',', ';', '|'].contains(&ch))
+                .to_string();
+            if remaining.is_empty() {
+                break;
+            }
+        }
+        if !remaining.is_empty() {
+            output.push(remaining);
+        }
+    }
+
+    if output.is_empty() {
+        output.push(String::new());
+    }
+    output
+}
+
+fn preferred_split_index(text: &str, limit: usize) -> Option<usize> {
+    let limit_byte = char_to_byte_idx(text, limit);
+    let mut best: Option<usize> = None;
+    for pattern in [": ", ", ", " - ", " | ", "; "] {
+        if let Some((idx, _)) = text[..limit_byte].rmatch_indices(pattern).next() {
+            let split_at = if pattern == ": " { idx + 1 } else { idx };
+            if split_at > 0 {
+                best = best.max(Some(split_at));
+            }
+        }
+    }
+    best
+}
+
+fn whitespace_split_index(text: &str, limit: usize) -> Option<usize> {
+    let limit_byte = char_to_byte_idx(text, limit);
+    text[..limit_byte]
+        .char_indices()
+        .rev()
+        .find_map(|(idx, ch)| ch.is_whitespace().then_some(idx))
+}
+
+fn char_to_byte_idx(text: &str, char_idx: usize) -> usize {
+    text.char_indices()
+        .nth(char_idx)
+        .map(|(idx, _)| idx)
+        .unwrap_or(text.len())
 }
 
 fn clear_children(commands: &mut Commands, q_children: &Query<&Children>, parent: Entity) {
