@@ -3,9 +3,9 @@
 use crate::game_state::PlayMode;
 use crate::interface::camera::{MainCamera, PanCamera, PanCameraPlugin};
 use crate::interface::selection::{build_mode_cancel_system, handle_mouse_input};
+use crate::interface::ui::UiInputState;
 use crate::systems::GameSystemSet;
 use bevy::prelude::*;
-use bevy::ui::RelativeCursorPosition;
 
 pub struct InputPlugin;
 
@@ -31,16 +31,10 @@ impl Plugin for InputPlugin {
 /// UI パネル上にカーソルがある間は PanCamera を無効化する
 fn pan_camera_ui_guard_system(
     mut q_camera: Query<&mut PanCamera, With<MainCamera>>,
-    q_blockers: Query<&RelativeCursorPosition, With<crate::interface::ui::UiInputBlocker>>,
-    q_buttons: Query<&Interaction, With<Button>>,
+    ui_input_state: Res<UiInputState>,
 ) {
-    let pointer_over_ui = q_blockers.iter().any(RelativeCursorPosition::cursor_over)
-        || q_buttons
-            .iter()
-            .any(|interaction| matches!(*interaction, Interaction::Hovered | Interaction::Pressed));
-
     if let Ok(mut pan_camera) = q_camera.single_mut() {
-        pan_camera.enabled = !pointer_over_ui;
+        pan_camera.enabled = !ui_input_state.pointer_over_ui;
     }
 }
 

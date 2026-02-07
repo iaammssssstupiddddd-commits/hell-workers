@@ -1,19 +1,33 @@
-//! パネル UI (Hover Tooltip)
+//! パネル UI (Info Panel / Hover Tooltip)
 //!
-//! InfoPanelは選択変更時に動的にspawn/despawnされるため、
-//! ここではHoverTooltipのみをStartup時にspawnする。
+//! InfoPanel と HoverTooltip を Startup 時に生成する。
 
-use crate::interface::ui::components::{HoverTooltip, UiSlot};
+use crate::interface::ui::components::{HoverTooltip, UiNodeRegistry, UiSlot};
+use crate::interface::ui::panels::spawn_info_panel_ui;
 use crate::interface::ui::theme::UiTheme;
 use bevy::prelude::*;
 
 /// パネルをスポーン
-pub fn spawn_panels(commands: &mut Commands, game_assets: &Res<crate::assets::GameAssets>, theme: &UiTheme) {
-    spawn_hover_tooltip(commands, game_assets, theme);
+pub fn spawn_panels(
+    commands: &mut Commands,
+    game_assets: &Res<crate::assets::GameAssets>,
+    theme: &UiTheme,
+    info_panel_parent: Entity,
+    overlay_parent: Entity,
+    ui_nodes: &mut UiNodeRegistry,
+) {
+    spawn_info_panel_ui(commands, game_assets, theme, info_panel_parent, ui_nodes);
+    spawn_hover_tooltip(commands, game_assets, theme, overlay_parent, ui_nodes);
 }
 
-fn spawn_hover_tooltip(commands: &mut Commands, game_assets: &Res<crate::assets::GameAssets>, theme: &UiTheme) {
-    commands
+fn spawn_hover_tooltip(
+    commands: &mut Commands,
+    game_assets: &Res<crate::assets::GameAssets>,
+    theme: &UiTheme,
+    parent_entity: Entity,
+    ui_nodes: &mut UiNodeRegistry,
+) {
+    let tooltip_root = commands
         .spawn((
             Node {
                 position_type: PositionType::Absolute,
@@ -28,8 +42,14 @@ fn spawn_hover_tooltip(commands: &mut Commands, game_assets: &Res<crate::assets:
             HoverTooltip,
             ZIndex(100),
         ))
+        .id();
+    commands.entity(parent_entity).add_child(tooltip_root);
+
+    commands
+        .entity(tooltip_root)
         .with_children(|tooltip| {
-            tooltip.spawn((
+            let text_entity = tooltip
+                .spawn((
                 Text::new(""),
                 TextFont {
                     font: game_assets.font_ui.clone(),
@@ -38,6 +58,8 @@ fn spawn_hover_tooltip(commands: &mut Commands, game_assets: &Res<crate::assets:
                 },
                 TextColor(theme.colors.text_primary),
                 UiSlot::HoverTooltipText,
-            ));
+            ))
+                .id();
+            ui_nodes.set_slot(UiSlot::HoverTooltipText, text_entity);
         });
 }

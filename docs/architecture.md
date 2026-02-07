@@ -101,3 +101,17 @@ Perceive → Update → Decide → Execute
 - **タスク割り当て/管理**: [tasks.md](tasks.md)
 - **ビジュアル/セリフ**: [gather_haul_visual.md](gather_haul_visual.md) / [speech_system.md](speech_system.md)
 - **AI挙動**: [soul_ai.md](soul_ai.md) / [familiar_ai.md](familiar_ai.md)
+
+## UIアーキテクチャ補足（2026-02 更新）
+- ルート構造:
+  - `UiRoot` 配下に `UiMountSlot`（`LeftPanel` / `RightPanel` / `Bottom` / `Overlay` / `TopRight`）を作成
+  - 各UIはスロットにマウントしてレイアウト責務を分離
+- ノード参照:
+  - `UiNodeRegistry` で `UiSlot -> Entity` を保持
+  - テキスト/アイコン更新は `Query::get_mut(entity)` で直接更新
+- 情報表示:
+  - `src/interface/ui/presentation.rs` が `EntityInspectionModel` を構築
+  - `InfoPanel` と `HoverTooltip` は同一モデルを利用して表示差異を抑制
+- 入力判定:
+  - `UiInputState.pointer_over_ui` を単一の判定値として利用
+  - 選択/配置系と PanCamera ガードが同じ値を参照

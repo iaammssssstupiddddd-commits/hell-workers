@@ -1,14 +1,20 @@
 //! 時間操作 UI
 
-use crate::interface::ui::components::{UiInputBlocker, UiSlot, UiTooltip};
+use crate::interface::ui::components::{UiInputBlocker, UiNodeRegistry, UiSlot, UiTooltip};
 use crate::interface::ui::theme::UiTheme;
 use crate::systems::time::ClockText;
 use bevy::prelude::*;
 use bevy::ui::RelativeCursorPosition;
 
 /// 時間操作UIをスポーン
-pub fn spawn_time_control(commands: &mut Commands, game_assets: &Res<crate::assets::GameAssets>, theme: &UiTheme) {
-    commands
+pub fn spawn_time_control(
+    commands: &mut Commands,
+    game_assets: &Res<crate::assets::GameAssets>,
+    theme: &UiTheme,
+    parent_entity: Entity,
+    ui_nodes: &mut UiNodeRegistry,
+) {
+    let time_control_root = commands
         .spawn((
             Node {
                 position_type: PositionType::Absolute,
@@ -21,6 +27,11 @@ pub fn spawn_time_control(commands: &mut Commands, game_assets: &Res<crate::asse
             RelativeCursorPosition::default(),
             UiInputBlocker,
         ))
+        .id();
+    commands.entity(parent_entity).add_child(time_control_root);
+
+    commands
+        .entity(time_control_root)
         .with_children(|parent| {
             parent.spawn((
                 Text::new("Day 1, 00:00"),
@@ -90,7 +101,8 @@ pub fn spawn_time_control(commands: &mut Commands, game_assets: &Res<crate::asse
                     ..default()
                 })
                 .with_children(|summary| {
-                    summary.spawn((
+                    let text_entity = summary
+                        .spawn((
                         Text::new("Tasks: 0 (0 High)"),
                         TextFont {
                             font: game_assets.font_ui.clone(),
@@ -99,7 +111,9 @@ pub fn spawn_time_control(commands: &mut Commands, game_assets: &Res<crate::asse
                         },
                         TextColor(theme.colors.header_text),
                         UiSlot::TaskSummaryText,
-                    ));
+                    ))
+                        .id();
+                    ui_nodes.set_slot(UiSlot::TaskSummaryText, text_entity);
                 });
         });
 }

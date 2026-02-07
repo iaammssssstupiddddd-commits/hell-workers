@@ -9,8 +9,9 @@ pub fn spawn_entity_list_panel(
     commands: &mut Commands,
     game_assets: &Res<crate::assets::GameAssets>,
     theme: &UiTheme,
+    parent_entity: Entity,
 ) {
-    commands
+    let panel = commands
         .spawn((
             Node {
                 width: Val::Px(theme.sizes.entity_list_panel_width),
@@ -36,6 +37,11 @@ pub fn spawn_entity_list_panel(
             UiInputBlocker,
             EntityListPanel,
         ))
+        .id();
+    commands.entity(parent_entity).add_child(panel);
+
+    commands
+        .entity(panel)
         .with_children(|parent| {
             // パネルタイトル
             parent.spawn((

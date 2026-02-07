@@ -70,6 +70,7 @@ pub(super) enum TaskVisual {
 #[derive(Resource, Default)]
 pub struct EntityListNodeIndex {
     pub(super) familiar_sections: HashMap<Entity, FamiliarSectionNodes>,
+    pub(super) unassigned_rows: HashMap<Entity, Entity>,
 }
 
 #[derive(Clone, Copy)]
