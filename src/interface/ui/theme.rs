@@ -277,8 +277,8 @@ impl Default for UiTheme {
 
                 // Buttons (Legacy mapping to new interactive colors + alpha for some)
                 button_default: Color::srgb(0.25, 0.25, 0.3), // interactive_default
-                button_hover: Color::srgb(0.35, 0.15, 0.28), // interactive_hover
-                button_pressed: Color::srgb(0.8, 0.4, 0.1), // interactive_active
+                button_hover: Color::srgb(0.35, 0.15, 0.28),  // interactive_hover
+                button_pressed: Color::srgb(0.8, 0.4, 0.1),   // interactive_active
 
                 // List items
                 list_item_default: Color::NONE,
@@ -301,9 +301,9 @@ impl Default for UiTheme {
                 // Surface backgrounds
                 submenu_bg: Color::srgba(0.12, 0.05, 0.10, 0.95), // bg_elevated
                 tooltip_bg: Color::srgba(0.18, 0.08, 0.14, 0.95), // bg_overlay
-                tooltip_border: Color::srgb(0.25, 0.25, 0.3), // border_default
-                dialog_bg: Color::srgba(0.08, 0.03, 0.06, 0.98), // bg_surface
-                dialog_border: Color::srgb(0.8, 0.4, 0.1), // border_accent
+                tooltip_border: Color::srgb(0.25, 0.25, 0.3),     // border_default
+                dialog_bg: Color::srgba(0.08, 0.03, 0.06, 0.98),  // bg_surface
+                dialog_border: Color::srgb(0.8, 0.4, 0.1),        // border_accent
             },
             typography: ThemeTypography {
                 // New Modular Scale
@@ -377,15 +377,15 @@ impl Default for UiTheme {
             },
             panels: PanelThemes {
                 entity_list: PanelGradient {
-                    top: Color::srgb(0.12, 0.05, 0.10), // bg_elevated
+                    top: Color::srgb(0.12, 0.05, 0.10),    // bg_elevated
                     bottom: Color::srgb(0.08, 0.03, 0.06), // bg_surface
                 },
                 info_panel: PanelGradient {
-                    top: Color::srgb(0.12, 0.05, 0.10), // bg_elevated
+                    top: Color::srgb(0.12, 0.05, 0.10),    // bg_elevated
                     bottom: Color::srgb(0.08, 0.03, 0.06), // bg_surface
                 },
                 bottom_bar: PanelGradient {
-                    top: Color::srgb(0.12, 0.05, 0.10), // bg_elevated
+                    top: Color::srgb(0.12, 0.05, 0.10),    // bg_elevated
                     bottom: Color::srgb(0.08, 0.03, 0.06), // bg_surface
                 },
             },

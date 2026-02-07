@@ -40,114 +40,112 @@ pub fn spawn_entity_list_panel(
         .id();
     commands.entity(parent_entity).add_child(panel);
 
-    commands
-        .entity(panel)
-        .with_children(|parent| {
-            // パネルタイトル
-            parent.spawn((
-                Text::new("Entity List"),
-                TextFont {
-                    font: game_assets.font_ui.clone(),
-                    font_size: theme.typography.font_size_lg, // Semantic size
-                    weight: FontWeight::BOLD, // Font Variation
-                    ..default()
-                },
-                // Use panel accent color for the title
-                TextColor(theme.colors.panel_accent_entity_list),
-                Node {
-                    margin: UiRect::bottom(Val::Px(10.0)),
-                    ..default()
-                },
-            ));
+    commands.entity(panel).with_children(|parent| {
+        // パネルタイトル
+        parent.spawn((
+            Text::new("Entity List"),
+            TextFont {
+                font: game_assets.font_ui.clone(),
+                font_size: theme.typography.font_size_lg, // Semantic size
+                weight: FontWeight::BOLD,                 // Font Variation
+                ..default()
+            },
+            // Use panel accent color for the title
+            TextColor(theme.colors.panel_accent_entity_list),
+            Node {
+                margin: UiRect::bottom(Val::Px(10.0)),
+                ..default()
+            },
+        ));
 
-            // 使い魔リストコンテナ (動的に中身を追加される)
-            parent.spawn((
+        // 使い魔リストコンテナ (動的に中身を追加される)
+        parent.spawn((
+            Node {
+                flex_direction: FlexDirection::Column,
+                ..default()
+            },
+            FamiliarListContainer,
+            Name::new("Familiar List Container"),
+        ));
+
+        // 未所属ソウルセクション
+        parent
+            .spawn((
                 Node {
                     flex_direction: FlexDirection::Column,
+                    margin: UiRect::top(Val::Px(10.0)),
                     ..default()
                 },
-                FamiliarListContainer,
-                Name::new("Familiar List Container"),
-            ));
-
-            // 未所属ソウルセクション
-            parent
-                .spawn((
-                    Node {
-                        flex_direction: FlexDirection::Column,
-                        margin: UiRect::top(Val::Px(10.0)),
-                        ..default()
-                    },
-                    UnassignedSoulSection,
-                ))
-                .with_children(|section| {
-                    // セクションヘッダー
-                    section
-                        .spawn((
-                            Button,
-                            Node {
-                                width: Val::Percent(100.0),
-                                height: Val::Px(24.0),
-                                align_items: AlignItems::Center,
-                                padding: UiRect::horizontal(Val::Px(5.0)),
-                                ..default()
-                            },
-                            BackgroundColor(theme.colors.interactive_default), // Semantic
-                            SectionToggle(EntityListSectionType::Unassigned),
-                        ))
-                        .with_children(|button| {
-                            button.spawn((
-                                ImageNode::new(game_assets.icon_arrow_down.clone()),
-                                Node {
-                                    width: Val::Px(theme.sizes.fold_icon_size),
-                                    height: Val::Px(theme.sizes.fold_icon_size),
-                                    margin: UiRect::right(Val::Px(4.0)),
-                                    ..default()
-                                },
-                                UnassignedSectionArrowIcon,
-                            ));
-                            button.spawn((
-                                Text::new("Unassigned Souls"),
-                                TextFont {
-                                    font: game_assets.font_ui.clone(),
-                                    font_size: theme.typography.font_size_base, // Semantic
-                                    ..default()
-                                },
-                                TextColor(theme.colors.text_primary_semantic), // Semantic
-                            ));
-                        });
-
-                    // 未所属ソウルリストコンテナ
-                    section.spawn((
+                UnassignedSoulSection,
+            ))
+            .with_children(|section| {
+                // セクションヘッダー
+                section
+                    .spawn((
+                        Button,
                         Node {
-                            flex_direction: FlexDirection::Column,
-                            max_height: Val::Px(220.0),
-                            overflow: Overflow::scroll_y(),
+                            width: Val::Percent(100.0),
+                            height: Val::Px(24.0),
+                            align_items: AlignItems::Center,
+                            padding: UiRect::horizontal(Val::Px(5.0)),
                             ..default()
                         },
-                        RelativeCursorPosition::default(),
-                        UiInputBlocker,
-                        UiScrollArea { speed: 28.0 },
-                        UnassignedSoulContent,
-                    ));
-                });
+                        BackgroundColor(theme.colors.interactive_default), // Semantic
+                        SectionToggle(EntityListSectionType::Unassigned),
+                    ))
+                    .with_children(|button| {
+                        button.spawn((
+                            ImageNode::new(game_assets.icon_arrow_down.clone()),
+                            Node {
+                                width: Val::Px(theme.sizes.fold_icon_size),
+                                height: Val::Px(theme.sizes.fold_icon_size),
+                                margin: UiRect::right(Val::Px(4.0)),
+                                ..default()
+                            },
+                            UnassignedSectionArrowIcon,
+                        ));
+                        button.spawn((
+                            Text::new("Unassigned Souls"),
+                            TextFont {
+                                font: game_assets.font_ui.clone(),
+                                font_size: theme.typography.font_size_base, // Semantic
+                                ..default()
+                            },
+                            TextColor(theme.colors.text_primary_semantic), // Semantic
+                        ));
+                    });
 
-            // スクロール可能であることを示す固定ヒント
-            parent.spawn((
-                Text::new("Scroll: Mouse Wheel"),
-                TextFont {
-                    font: game_assets.font_ui.clone(),
-                    font_size: theme.typography.font_size_xs, // Semantic
-                    ..default()
-                },
-                TextColor(theme.colors.text_secondary_semantic), // Semantic
-                Node {
-                    align_self: AlignSelf::End,
-                    margin: UiRect::top(Val::Px(8.0)),
-                    ..default()
-                },
-                IgnoreScroll(BVec2::new(false, true)), // Bevy 0.18 Feature
-                EntityListScrollHint,
-            ));
-        });
+                // 未所属ソウルリストコンテナ
+                section.spawn((
+                    Node {
+                        flex_direction: FlexDirection::Column,
+                        max_height: Val::Px(220.0),
+                        overflow: Overflow::scroll_y(),
+                        ..default()
+                    },
+                    RelativeCursorPosition::default(),
+                    UiInputBlocker,
+                    UiScrollArea { speed: 28.0 },
+                    UnassignedSoulContent,
+                ));
+            });
+
+        // スクロール可能であることを示す固定ヒント
+        parent.spawn((
+            Text::new("Scroll: Mouse Wheel"),
+            TextFont {
+                font: game_assets.font_ui.clone(),
+                font_size: theme.typography.font_size_xs, // Semantic
+                ..default()
+            },
+            TextColor(theme.colors.text_secondary_semantic), // Semantic
+            Node {
+                align_self: AlignSelf::End,
+                margin: UiRect::top(Val::Px(8.0)),
+                ..default()
+            },
+            IgnoreScroll(BVec2::new(false, true)), // Bevy 0.18 Feature
+            EntityListScrollHint,
+        ));
+    });
 }

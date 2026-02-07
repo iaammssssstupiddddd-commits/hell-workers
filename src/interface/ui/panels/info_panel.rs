@@ -254,7 +254,12 @@ pub fn spawn_info_panel_ui(
     });
 }
 
-fn set_text_slot(ui_nodes: &UiNodeRegistry, q_text: &mut Query<&mut Text>, slot: UiSlot, value: &str) {
+fn set_text_slot(
+    ui_nodes: &UiNodeRegistry,
+    q_text: &mut Query<&mut Text>,
+    slot: UiSlot,
+    value: &str,
+) {
     let Some(entity) = ui_nodes.get_slot(slot) else {
         return;
     };
@@ -340,7 +345,14 @@ pub(crate) struct InspectionQueryParam<'w, 's> {
         ),
     >,
     q_blueprints: Query<'w, 's, &'static Blueprint>,
-    q_familiars: Query<'w, 's, (&'static Familiar, &'static crate::entities::familiar::FamiliarOperation)>,
+    q_familiars: Query<
+        'w,
+        's,
+        (
+            &'static Familiar,
+            &'static crate::entities::familiar::FamiliarOperation,
+        ),
+    >,
     q_familiars_escape: Query<'w, 's, (&'static Transform, &'static Familiar)>,
     familiar_grid: Res<'w, FamiliarSpatialGrid>,
     q_items: Query<'w, 's, &'static crate::systems::logistics::ResourceItem>,
@@ -427,7 +439,12 @@ pub fn info_panel_system(
             set_text_slot(&ui_nodes, &mut q_text, UiSlot::StatStress, &soul.stress);
             set_text_slot(&ui_nodes, &mut q_text, UiSlot::StatFatigue, &soul.fatigue);
             set_text_slot(&ui_nodes, &mut q_text, UiSlot::TaskText, &soul.task);
-            set_text_slot(&ui_nodes, &mut q_text, UiSlot::InventoryText, &soul.inventory);
+            set_text_slot(
+                &ui_nodes,
+                &mut q_text,
+                UiSlot::InventoryText,
+                &soul.inventory,
+            );
             set_text_slot(&ui_nodes, &mut q_text, UiSlot::CommonText, &soul.common);
             update_gender_icon(
                 &ui_nodes,

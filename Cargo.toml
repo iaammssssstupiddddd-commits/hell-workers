@@ -7,6 +7,7 @@ edition = "2024"
 bevy = { version = "0.18", default-features = false, features = [
     "2d",
     "bevy_dev_tools",
+    "experimental_bevy_ui_widgets",
     "pan_camera",
     "png",
     "jpeg",

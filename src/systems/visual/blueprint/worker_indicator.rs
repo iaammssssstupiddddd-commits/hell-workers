@@ -57,7 +57,7 @@ pub fn spawn_worker_indicators_system(
 pub fn update_worker_indicators_system(
     mut commands: Commands,
     time: Res<Time>,
-    q_workers: Query<(&AssignedTask, &Transform), With<DamnedSoul>>,
+    q_workers: Query<&AssignedTask, With<DamnedSoul>>,
     mut q_hammers: Query<
         (Entity, &ChildOf, &mut Transform),
         (With<WorkerHammerIcon>, Without<DamnedSoul>),
@@ -67,16 +67,19 @@ pub fn update_worker_indicators_system(
         let mut should_despawn = true;
         let worker_entity: Entity = child_of.parent();
 
-        if let Ok((assigned_task, worker_transform)) = q_workers.get(worker_entity) {
+        if let Ok(assigned_task) = q_workers.get(worker_entity) {
             if let AssignedTask::Build(data) = assigned_task {
                 let phase = &data.phase;
                 if matches!(phase, BuildPhase::Building { .. }) {
                     should_despawn = false;
 
-                    // 位置同期（Z=0.5で固定）
+                    // 子エンティティなのでローカル座標で更新する
                     let bob = (time.elapsed_secs() * 5.0).sin() * 2.5;
-                    hammer_transform.translation = worker_transform.translation
-                        + Vec3::new(0.0, 32.0 + bob, Z_VISUAL_EFFECT - Z_CHARACTER);
+                    hammer_transform.translation = Vec3::new(
+                        0.0,
+                        32.0 + bob,
+                        Z_VISUAL_EFFECT - Z_CHARACTER,
+                    );
                 }
             }
         }

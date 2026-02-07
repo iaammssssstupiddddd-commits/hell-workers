@@ -1,0 +1,420 @@
+use crate::assets::GameAssets;
+use crate::interface::ui::components::{
+    TooltipBody, TooltipHeader, TooltipProgressBar, TooltipTemplate, UiTooltip,
+};
+use crate::interface::ui::presentation::EntityInspectionModel;
+use crate::interface::ui::theme::UiTheme;
+use bevy::prelude::*;
+
+pub fn rebuild_tooltip_content(
+    commands: &mut Commands,
+    tooltip_root: Entity,
+    q_children: &Query<&Children>,
+    game_assets: &GameAssets,
+    theme: &UiTheme,
+    template: TooltipTemplate,
+    model: Option<&EntityInspectionModel>,
+    ui_tooltip: Option<&UiTooltip>,
+) {
+    clear_children(commands, q_children, tooltip_root);
+
+    commands
+        .entity(tooltip_root)
+        .with_children(|parent| match template {
+            TooltipTemplate::Soul => build_soul_tooltip(parent, model, game_assets, theme),
+            TooltipTemplate::Building => build_building_tooltip(parent, model, game_assets, theme),
+            TooltipTemplate::Resource => build_resource_tooltip(parent, model, game_assets, theme),
+            TooltipTemplate::UiButton => {
+                build_ui_button_tooltip(parent, ui_tooltip, game_assets, theme)
+            }
+            TooltipTemplate::Generic => {
+                build_generic_tooltip(parent, model, ui_tooltip, game_assets, theme)
+            }
+        });
+}
+
+pub fn build_soul_tooltip(
+    parent: &mut ChildSpawnerCommands,
+    model: Option<&EntityInspectionModel>,
+    game_assets: &GameAssets,
+    theme: &UiTheme,
+) {
+    let Some(model) = model else {
+        build_generic_tooltip(parent, None, None, game_assets, theme);
+        return;
+    };
+
+    let Some(soul) = &model.soul else {
+        build_generic_tooltip(parent, Some(model), None, game_assets, theme);
+        return;
+    };
+
+    spawn_header(
+        parent,
+        &format!("Soul: {}", model.header),
+        game_assets,
+        theme,
+    );
+
+    let motivation = parse_percent_value(&soul.motivation).unwrap_or(0.0);
+    let stress = parse_percent_value(&soul.stress).unwrap_or(0.0);
+    let fatigue = parse_percent_value(&soul.fatigue).unwrap_or(0.0);
+    let stress_color = if stress >= 0.8 {
+        theme.colors.status_danger
+    } else if stress >= 0.5 {
+        theme.colors.status_warning
+    } else {
+        theme.colors.status_healthy
+    };
+
+    spawn_progress_bar(
+        parent,
+        "Motivation",
+        motivation,
+        theme.colors.status_healthy,
+        game_assets,
+        theme,
+    );
+    spawn_progress_bar(parent, "Stress", stress, stress_color, game_assets, theme);
+    spawn_progress_bar(
+        parent,
+        "Fatigue",
+        fatigue,
+        theme.colors.status_info,
+        game_assets,
+        theme,
+    );
+
+    spawn_divider(parent, theme);
+    spawn_icon_text_row(parent, "TASK", &soul.task, game_assets, theme);
+    spawn_icon_text_row(parent, "BAG", &soul.inventory, game_assets, theme);
+
+    for line in soul
+        .common
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+    {
+        spawn_body_line(parent, line, game_assets, theme);
+    }
+}
+
+pub fn build_building_tooltip(
+    parent: &mut ChildSpawnerCommands,
+    model: Option<&EntityInspectionModel>,
+    game_assets: &GameAssets,
+    theme: &UiTheme,
+) {
+    let Some(model) = model else {
+        build_generic_tooltip(parent, None, None, game_assets, theme);
+        return;
+    };
+
+    let title = if model.header.is_empty() {
+        "Building".to_string()
+    } else {
+        model.header.clone()
+    };
+    spawn_header(parent, &title, game_assets, theme);
+
+    let mut progress_added = false;
+    for line in &model.tooltip_lines {
+        if !progress_added
+            && line.contains("Progress")
+            && let Some(progress) = parse_percent_value(line)
+        {
+            spawn_progress_bar(
+                parent,
+                "Progress",
+                progress,
+                theme.colors.status_info,
+                game_assets,
+                theme,
+            );
+            progress_added = true;
+            continue;
+        }
+        spawn_body_line(parent, line, game_assets, theme);
+    }
+
+    for line in model
+        .common_text
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+    {
+        spawn_body_line(parent, line, game_assets, theme);
+    }
+}
+
+pub fn build_resource_tooltip(
+    parent: &mut ChildSpawnerCommands,
+    model: Option<&EntityInspectionModel>,
+    game_assets: &GameAssets,
+    theme: &UiTheme,
+) {
+    let Some(model) = model else {
+        build_generic_tooltip(parent, None, None, game_assets, theme);
+        return;
+    };
+
+    let title = if model.header.is_empty() {
+        "Resource".to_string()
+    } else {
+        model.header.clone()
+    };
+    spawn_header(parent, &title, game_assets, theme);
+
+    for line in model
+        .tooltip_lines
+        .iter()
+        .filter(|line| !line.trim().is_empty())
+    {
+        spawn_icon_text_row(parent, "RES", line, game_assets, theme);
+    }
+
+    for line in model
+        .common_text
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+    {
+        spawn_body_line(parent, line, game_assets, theme);
+    }
+}
+
+pub fn build_ui_button_tooltip(
+    parent: &mut ChildSpawnerCommands,
+    tooltip: Option<&UiTooltip>,
+    game_assets: &GameAssets,
+    theme: &UiTheme,
+) {
+    let Some(tooltip) = tooltip else {
+        spawn_header(parent, "UI Action", game_assets, theme);
+        spawn_body_line(parent, "No tooltip text", game_assets, theme);
+        return;
+    };
+
+    spawn_header(parent, tooltip.text, game_assets, theme);
+    if let Some(shortcut) = tooltip.shortcut {
+        spawn_divider(parent, theme);
+        spawn_icon_text_row(
+            parent,
+            "KEY",
+            &format!("Shortcut: {}", shortcut),
+            game_assets,
+            theme,
+        );
+    }
+}
+
+pub fn build_generic_tooltip(
+    parent: &mut ChildSpawnerCommands,
+    model: Option<&EntityInspectionModel>,
+    ui_tooltip: Option<&UiTooltip>,
+    game_assets: &GameAssets,
+    theme: &UiTheme,
+) {
+    if let Some(model) = model {
+        let title = if model.header.is_empty() {
+            "Entity".to_string()
+        } else {
+            model.header.clone()
+        };
+        spawn_header(parent, &title, game_assets, theme);
+
+        for line in model
+            .tooltip_lines
+            .iter()
+            .filter(|line| !line.trim().is_empty())
+        {
+            spawn_body_line(parent, line, game_assets, theme);
+        }
+        for line in model
+            .common_text
+            .lines()
+            .map(str::trim)
+            .filter(|line| !line.is_empty())
+        {
+            spawn_body_line(parent, line, game_assets, theme);
+        }
+        return;
+    }
+
+    if let Some(tooltip) = ui_tooltip {
+        spawn_header(parent, tooltip.text, game_assets, theme);
+        if let Some(shortcut) = tooltip.shortcut {
+            spawn_body_line(
+                parent,
+                &format!("Shortcut: {}", shortcut),
+                game_assets,
+                theme,
+            );
+        }
+        return;
+    }
+
+    spawn_header(parent, "Tooltip", game_assets, theme);
+}
+
+pub fn spawn_progress_bar(
+    parent: &mut ChildSpawnerCommands,
+    label: &str,
+    value: f32,
+    color: Color,
+    game_assets: &GameAssets,
+    theme: &UiTheme,
+) {
+    let clamped = value.clamp(0.0, 1.0);
+    parent
+        .spawn(Node {
+            width: Val::Percent(100.0),
+            flex_direction: FlexDirection::Column,
+            margin: UiRect::top(Val::Px(4.0)),
+            ..default()
+        })
+        .with_children(|bar_col| {
+            bar_col.spawn((
+                Text::new(format!("{label}: {:.0}%", clamped * 100.0)),
+                TextFont {
+                    font: game_assets.font_ui.clone(),
+                    font_size: theme.typography.font_size_xs,
+                    ..default()
+                },
+                TextColor(theme.colors.text_secondary_semantic),
+                TooltipBody,
+            ));
+
+            bar_col
+                .spawn((
+                    Node {
+                        width: Val::Percent(100.0),
+                        height: Val::Px(6.0),
+                        border_radius: BorderRadius::all(Val::Px(2.0)),
+                        margin: UiRect::top(Val::Px(2.0)),
+                        ..default()
+                    },
+                    BackgroundColor(theme.colors.interactive_default),
+                ))
+                .with_children(|track| {
+                    track.spawn((
+                        Node {
+                            width: Val::Percent(clamped * 100.0),
+                            height: Val::Percent(100.0),
+                            border_radius: BorderRadius::all(Val::Px(2.0)),
+                            ..default()
+                        },
+                        BackgroundColor(color),
+                        TooltipProgressBar(clamped),
+                    ));
+                });
+        });
+}
+
+pub fn spawn_divider(parent: &mut ChildSpawnerCommands, theme: &UiTheme) {
+    parent.spawn((
+        Node {
+            width: Val::Percent(100.0),
+            height: Val::Px(1.0),
+            margin: UiRect::top(Val::Px(6.0)),
+            ..default()
+        },
+        BackgroundColor(theme.colors.border_default),
+    ));
+}
+
+pub fn spawn_icon_text_row(
+    parent: &mut ChildSpawnerCommands,
+    icon: &str,
+    text: &str,
+    game_assets: &GameAssets,
+    theme: &UiTheme,
+) {
+    parent
+        .spawn(Node {
+            width: Val::Percent(100.0),
+            flex_direction: FlexDirection::Row,
+            column_gap: Val::Px(6.0),
+            margin: UiRect::top(Val::Px(4.0)),
+            ..default()
+        })
+        .with_children(|row| {
+            row.spawn((
+                Text::new(icon),
+                TextFont {
+                    font: game_assets.font_ui.clone(),
+                    font_size: theme.typography.font_size_xs,
+                    weight: FontWeight::SEMIBOLD,
+                    ..default()
+                },
+                TextColor(theme.colors.text_accent_semantic),
+                TooltipBody,
+            ));
+            row.spawn((
+                Text::new(text),
+                TextFont {
+                    font: game_assets.font_ui.clone(),
+                    font_size: theme.typography.font_size_sm,
+                    ..default()
+                },
+                TextColor(theme.colors.text_primary_semantic),
+                TooltipBody,
+            ));
+        });
+}
+
+fn spawn_header(
+    parent: &mut ChildSpawnerCommands,
+    text: &str,
+    game_assets: &GameAssets,
+    theme: &UiTheme,
+) {
+    parent.spawn((
+        Text::new(text),
+        TextFont {
+            font: game_assets.font_ui.clone(),
+            font_size: theme.typography.font_size_md,
+            weight: FontWeight::BOLD,
+            ..default()
+        },
+        TextColor(theme.colors.text_accent_semantic),
+        TooltipHeader,
+    ));
+}
+
+fn spawn_body_line(
+    parent: &mut ChildSpawnerCommands,
+    text: &str,
+    game_assets: &GameAssets,
+    theme: &UiTheme,
+) {
+    parent.spawn((
+        Text::new(text),
+        TextFont {
+            font: game_assets.font_ui.clone(),
+            font_size: theme.typography.font_size_sm,
+            ..default()
+        },
+        TextColor(theme.colors.text_primary_semantic),
+        TooltipBody,
+    ));
+}
+
+fn parse_percent_value(text: &str) -> Option<f32> {
+    let raw = text
+        .split(':')
+        .next_back()
+        .unwrap_or(text)
+        .trim()
+        .trim_end_matches('%')
+        .trim();
+    raw.parse::<f32>().ok().map(|v| (v / 100.0).clamp(0.0, 1.0))
+}
+
+fn clear_children(commands: &mut Commands, q_children: &Query<&Children>, parent: Entity) {
+    if let Ok(children) = q_children.get(parent) {
+        for child in children.iter() {
+            commands.entity(child).despawn();
+        }
+    }
+}
