@@ -83,7 +83,7 @@ fn spawn_operation_dialog(
                             align_items: AlignItems::Center,
                             ..default()
                         },
-                        BackgroundColor(theme.panels.bottom_bar.top),
+                        BackgroundColor(theme.colors.interactive_default),
                         MenuButton(MenuAction::CloseDialog),
                     ))
                     .with_children(|btn| {
@@ -157,7 +157,7 @@ fn spawn_operation_dialog(
                         align_items: AlignItems::Center,
                         ..default()
                     },
-                    BackgroundColor(theme.colors.button_default),
+                    BackgroundColor(theme.colors.interactive_default),
                     MenuButton(MenuAction::AdjustFatigueThreshold(-0.1)),
                 ))
                 .with_children(|btn| {
@@ -200,7 +200,7 @@ fn spawn_operation_dialog(
                         align_items: AlignItems::Center,
                         ..default()
                     },
-                    BackgroundColor(theme.colors.button_default),
+                    BackgroundColor(theme.colors.interactive_default),
                     MenuButton(MenuAction::AdjustFatigueThreshold(0.1)),
                 ))
                 .with_children(|btn| {
@@ -256,7 +256,7 @@ fn spawn_operation_dialog(
                         align_items: AlignItems::Center,
                         ..default()
                     },
-                    BackgroundColor(theme.colors.button_default),
+                    BackgroundColor(theme.colors.interactive_default),
                     MenuButton(MenuAction::AdjustMaxControlledSoul(-1)),
                 ))
                 .with_children(|btn| {
@@ -297,7 +297,7 @@ fn spawn_operation_dialog(
                         align_items: AlignItems::Center,
                         ..default()
                     },
-                    BackgroundColor(theme.colors.button_default),
+                    BackgroundColor(theme.colors.interactive_default),
                     MenuButton(MenuAction::AdjustMaxControlledSoul(1)),
                 ))
                 .with_children(|btn| {
