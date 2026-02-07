@@ -30,7 +30,9 @@ impl Plugin for InterfacePlugin {
         app.register_type::<crate::interface::ui::SectionFolded>();
         app.register_type::<crate::interface::ui::UnassignedFolded>();
         app.init_resource::<crate::interface::ui::UiInputState>();
+        app.init_resource::<crate::interface::ui::UiNodeRegistry>();
         app.init_resource::<crate::interface::ui::theme::UiTheme>();
+        app.init_resource::<crate::interface::ui::InfoPanelState>();
         app.init_resource::<crate::interface::ui::EntityListViewModel>();
         app.init_resource::<crate::interface::ui::EntityListNodeIndex>();
         app.add_systems(

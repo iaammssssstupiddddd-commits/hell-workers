@@ -90,22 +90,106 @@ fn sync_unassigned_souls(
     game_assets: &crate::assets::GameAssets,
     theme: &UiTheme,
     view_model: &EntityListViewModel,
+    node_index: &mut EntityListNodeIndex,
     unassigned_content_entity: Entity,
     q_children: &Query<&Children>,
 ) {
-    if view_model.current.unassigned != view_model.previous.unassigned
-        || view_model.current.unassigned_folded != view_model.previous.unassigned_folded
-    {
+    if view_model.current.unassigned_folded != view_model.previous.unassigned_folded {
         super::helpers::clear_children(commands, q_children, unassigned_content_entity);
+        node_index.unassigned_rows.clear();
         if !view_model.current.unassigned_folded {
-            commands
-                .entity(unassigned_content_entity)
-                .with_children(|parent| {
-                    for soul_vm in &view_model.current.unassigned {
-                        super::helpers::spawn_soul_list_item(parent, soul_vm, game_assets, 0.0, theme);
-                    }
-                });
+            for soul_vm in &view_model.current.unassigned {
+                let row = super::helpers::spawn_soul_list_item_entity(
+                    commands,
+                    unassigned_content_entity,
+                    soul_vm,
+                    game_assets,
+                    0.0,
+                    theme,
+                );
+                node_index.unassigned_rows.insert(soul_vm.entity, row);
+            }
         }
+        return;
+    }
+
+    if view_model.current.unassigned_folded {
+        return;
+    }
+
+    if view_model.current.unassigned == view_model.previous.unassigned {
+        return;
+    }
+
+    let current_by_entity: HashMap<Entity, &super::SoulRowViewModel> = view_model
+        .current
+        .unassigned
+        .iter()
+        .map(|vm| (vm.entity, vm))
+        .collect();
+    let previous_by_entity: HashMap<Entity, &super::SoulRowViewModel> = view_model
+        .previous
+        .unassigned
+        .iter()
+        .map(|vm| (vm.entity, vm))
+        .collect();
+
+    let stale_entities: Vec<Entity> = node_index
+        .unassigned_rows
+        .keys()
+        .copied()
+        .filter(|entity| !current_by_entity.contains_key(entity))
+        .collect();
+    for entity in stale_entities {
+        if let Some(row) = node_index.unassigned_rows.remove(&entity) {
+            commands.entity(row).despawn();
+        }
+    }
+
+    for soul_vm in &view_model.current.unassigned {
+        if !node_index.unassigned_rows.contains_key(&soul_vm.entity) {
+            let row = super::helpers::spawn_soul_list_item_entity(
+                commands,
+                unassigned_content_entity,
+                soul_vm,
+                game_assets,
+                0.0,
+                theme,
+            );
+            node_index.unassigned_rows.insert(soul_vm.entity, row);
+            continue;
+        }
+
+        let has_changed = previous_by_entity
+            .get(&soul_vm.entity)
+            .map(|prev| *prev != soul_vm)
+            .unwrap_or(true);
+        if has_changed {
+            if let Some(old_row) = node_index.unassigned_rows.remove(&soul_vm.entity) {
+                commands.entity(old_row).despawn();
+            }
+            let row = super::helpers::spawn_soul_list_item_entity(
+                commands,
+                unassigned_content_entity,
+                soul_vm,
+                game_assets,
+                0.0,
+                theme,
+            );
+            node_index.unassigned_rows.insert(soul_vm.entity, row);
+        }
+    }
+
+    let ordered_rows: Vec<Entity> = view_model
+        .current
+        .unassigned
+        .iter()
+        .filter_map(|vm| node_index.unassigned_rows.get(&vm.entity).copied())
+        .collect();
+    if !ordered_rows.is_empty() {
+        commands
+            .entity(unassigned_content_entity)
+            .replace_children(&ordered_rows);
     }
 }
 
@@ -152,6 +236,7 @@ pub fn sync_entity_list_from_view_model_system(
         &game_assets,
         &theme,
         &view_model,
+        &mut node_index,
         unassigned_content_entity,
         &q_children,
     );

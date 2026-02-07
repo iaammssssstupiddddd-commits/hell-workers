@@ -24,6 +24,16 @@ UIは `EntityListViewModel` を経由して 100ms 間隔で同期されます。
 - ヘッダー直下の領域のみスクロール対象
 - `Scroll: Mouse Wheel` のヒントを表示
 
+## 同期方式（実装）
+- `build_entity_list_view_model_system` が `current/previous` スナップショットを構築
+- `sync_entity_list_from_view_model_system` が差分反映
+- 使い魔セクション:
+  - 追加/削除/折りたたみ状態/ヘッダーテキストを差分同期
+- 未所属ソウル行:
+  - `EntityListNodeIndex.unassigned_rows` でキー付きノード管理
+  - 全消し再生成ではなく、追加/削除/変更行のみ更新
+  - 表示順は `replace_children` でビュー順に再整列
+
 ## インタラクション
 
 ### マウス
@@ -39,11 +49,13 @@ UIは `EntityListViewModel` を経由して 100ms 間隔で同期されます。
 ## 入力ガード
 - `UiInputBlocker` と `UiInputState` により、UI上ホバー中のワールド操作を抑止
 - スクロール領域上でのホイール入力はリスト優先（ワールドズーム抑止）
+- PanCamera 側も `UiInputState.pointer_over_ui` を参照し、入力判定を共有
 
 ## 主な関連ファイル
 - `src/interface/ui/list/view_model.rs` - ビューモデル構築
-- `src/interface/ui/list/sync.rs` - ビューモデル同期
+- `src/interface/ui/list/sync.rs` - 差分同期（キー付き行管理）
 - `src/interface/ui/list/interaction.rs` - クリック/ホバー/スクロール/Tabフォーカス
 - `src/interface/ui/setup/entity_list.rs` - パネル初期生成
 - `src/interface/ui/components.rs` - UIコンポーネント定義
+- `src/interface/ui/setup/mod.rs` - `UiRoot` / `LeftPanel` スロットへのマウント
 - `src/interface/selection.rs` - 選択状態管理

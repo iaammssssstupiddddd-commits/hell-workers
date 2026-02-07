@@ -279,6 +279,159 @@ pub(super) fn spawn_soul_list_item(
         });
 }
 
+pub(super) fn spawn_soul_list_item_entity(
+    commands: &mut Commands,
+    parent_entity: Entity,
+    soul_vm: &SoulRowViewModel,
+    game_assets: &crate::assets::GameAssets,
+    left_margin: f32,
+    theme: &UiTheme,
+) -> Entity {
+    let (gender_handle, gender_color) = get_gender_icon_and_color(soul_vm.gender, game_assets, theme);
+    let (task_handle, task_color) = get_task_icon_and_color(soul_vm.task_visual, game_assets, theme);
+    let stress_color = get_stress_color(soul_vm.stress_bucket, theme);
+
+    let row = commands
+        .spawn((
+            Button,
+            Node {
+                width: Val::Percent(100.0),
+                height: Val::Px(theme.sizes.soul_item_height),
+                align_items: AlignItems::Center,
+                border: UiRect::left(Val::Px(0.0)),
+                margin: if left_margin > 0.0 {
+                    UiRect::left(Val::Px(left_margin))
+                } else {
+                    UiRect::default()
+                },
+                ..default()
+            },
+            BackgroundColor(theme.colors.list_item_default),
+            BorderColor::all(Color::NONE),
+            SoulListItem(soul_vm.entity),
+        ))
+        .id();
+    commands.entity(parent_entity).add_child(row);
+
+    let gender_icon = commands
+        .spawn((
+            ImageNode {
+                image: gender_handle,
+                color: gender_color,
+                ..default()
+            },
+            Node {
+                width: Val::Px(theme.sizes.icon_size),
+                height: Val::Px(theme.sizes.icon_size),
+                margin: UiRect::right(Val::Px(theme.spacing.margin_medium)),
+                ..default()
+            },
+        ))
+        .id();
+    commands.entity(row).add_child(gender_icon);
+
+    let name = commands
+        .spawn((
+            Text::new(soul_vm.name.clone()),
+            TextFont {
+                font: game_assets.font_soul_name.clone(),
+                font_size: theme.typography.font_size_item,
+                ..default()
+            },
+            TextColor(stress_color),
+            Node {
+                margin: UiRect::right(Val::Px(theme.spacing.margin_large)),
+                ..default()
+            },
+        ))
+        .id();
+    commands.entity(row).add_child(name);
+
+    let fatigue_icon = commands
+        .spawn((
+            ImageNode {
+                image: game_assets.icon_fatigue.clone(),
+                color: theme.colors.fatigue_icon,
+                ..default()
+            },
+            Node {
+                width: Val::Px(theme.sizes.icon_size),
+                height: Val::Px(theme.sizes.icon_size),
+                margin: UiRect::right(Val::Px(theme.spacing.margin_small)),
+                ..default()
+            },
+        ))
+        .id();
+    commands.entity(row).add_child(fatigue_icon);
+
+    let fatigue_text = commands
+        .spawn((
+            Text::new(soul_vm.fatigue_text.clone()),
+            TextFont {
+                font_size: theme.typography.font_size_small,
+                ..default()
+            },
+            TextColor(theme.colors.fatigue_text),
+            Node {
+                margin: UiRect::right(Val::Px(theme.spacing.margin_large)),
+                ..default()
+            },
+        ))
+        .id();
+    commands.entity(row).add_child(fatigue_text);
+
+    let stress_icon = commands
+        .spawn((
+            ImageNode {
+                image: game_assets.icon_stress.clone(),
+                color: theme.colors.stress_icon,
+                ..default()
+            },
+            Node {
+                width: Val::Px(theme.sizes.icon_size),
+                height: Val::Px(theme.sizes.icon_size),
+                margin: UiRect::right(Val::Px(theme.spacing.margin_small)),
+                ..default()
+            },
+        ))
+        .id();
+    commands.entity(row).add_child(stress_icon);
+
+    let stress_text = commands
+        .spawn((
+            Text::new(soul_vm.stress_text.clone()),
+            TextFont {
+                font_size: theme.typography.font_size_small,
+                ..default()
+            },
+            TextColor(stress_color),
+            Node {
+                margin: UiRect::right(Val::Px(theme.spacing.margin_large)),
+                ..default()
+            },
+        ))
+        .id();
+    commands.entity(row).add_child(stress_text);
+
+    let task_icon = commands
+        .spawn((
+            ImageNode {
+                image: task_handle,
+                color: task_color,
+                ..default()
+            },
+            Node {
+                width: Val::Px(theme.sizes.icon_size),
+                height: Val::Px(theme.sizes.icon_size),
+                ..default()
+            },
+        ))
+        .id();
+    commands.entity(row).add_child(task_icon);
+
+    row
+}
+
 pub(super) fn spawn_familiar_section(
     commands: &mut Commands,
     parent_container: Entity,

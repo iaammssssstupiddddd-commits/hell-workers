@@ -7,5 +7,5 @@ mod info_panel;
 mod menu;
 
 pub use context_menu::familiar_context_menu_system;
-pub use info_panel::info_panel_system;
+pub use info_panel::{InfoPanelState, info_panel_system, spawn_info_panel_ui};
 pub use menu::menu_visibility_system;

@@ -10,13 +10,23 @@ use bevy::prelude::*;
 use bevy::ui::RelativeCursorPosition;
 
 /// サブメニューをスポーン
-pub fn spawn_submenus(commands: &mut Commands, game_assets: &Res<crate::assets::GameAssets>, theme: &UiTheme) {
-    spawn_architect_submenu(commands, game_assets, theme);
-    spawn_zones_submenu(commands, game_assets, theme);
-    spawn_orders_submenu(commands, game_assets, theme);
+pub fn spawn_submenus(
+    commands: &mut Commands,
+    game_assets: &Res<crate::assets::GameAssets>,
+    theme: &UiTheme,
+    parent_entity: Entity,
+) {
+    spawn_architect_submenu(commands, game_assets, theme, parent_entity);
+    spawn_zones_submenu(commands, game_assets, theme, parent_entity);
+    spawn_orders_submenu(commands, game_assets, theme, parent_entity);
 }
 
-fn spawn_architect_submenu(commands: &mut Commands, game_assets: &Res<crate::assets::GameAssets>, theme: &UiTheme) {
+fn spawn_architect_submenu(
+    commands: &mut Commands,
+    game_assets: &Res<crate::assets::GameAssets>,
+    theme: &UiTheme,
+    parent_entity: Entity,
+) {
     let items = [
         ("Wall", BuildingType::Wall),
         ("Tank", BuildingType::Tank),
@@ -24,7 +34,7 @@ fn spawn_architect_submenu(commands: &mut Commands, game_assets: &Res<crate::ass
         ("MudMixer", BuildingType::MudMixer),
     ];
 
-    commands
+    let submenu = commands
         .spawn((
             Node {
                 display: Display::None,
@@ -42,6 +52,11 @@ fn spawn_architect_submenu(commands: &mut Commands, game_assets: &Res<crate::ass
             UiInputBlocker,
             ArchitectSubMenu,
         ))
+        .id();
+    commands.entity(parent_entity).add_child(submenu);
+
+    commands
+        .entity(submenu)
         .with_children(|parent| {
             for (label, kind) in items {
                 parent
@@ -73,8 +88,13 @@ fn spawn_architect_submenu(commands: &mut Commands, game_assets: &Res<crate::ass
         });
 }
 
-fn spawn_zones_submenu(commands: &mut Commands, game_assets: &Res<crate::assets::GameAssets>, theme: &UiTheme) {
-    commands
+fn spawn_zones_submenu(
+    commands: &mut Commands,
+    game_assets: &Res<crate::assets::GameAssets>,
+    theme: &UiTheme,
+    parent_entity: Entity,
+) {
+    let submenu = commands
         .spawn((
             Node {
                 display: Display::None,
@@ -92,6 +112,11 @@ fn spawn_zones_submenu(commands: &mut Commands, game_assets: &Res<crate::assets:
             UiInputBlocker,
             ZonesSubMenu,
         ))
+        .id();
+    commands.entity(parent_entity).add_child(submenu);
+
+    commands
+        .entity(submenu)
         .with_children(|parent| {
             parent
                 .spawn((
@@ -121,7 +146,12 @@ fn spawn_zones_submenu(commands: &mut Commands, game_assets: &Res<crate::assets:
         });
 }
 
-fn spawn_orders_submenu(commands: &mut Commands, game_assets: &Res<crate::assets::GameAssets>, theme: &UiTheme) {
+fn spawn_orders_submenu(
+    commands: &mut Commands,
+    game_assets: &Res<crate::assets::GameAssets>,
+    theme: &UiTheme,
+    parent_entity: Entity,
+) {
     let tasks = [
         (
             "Chop",
@@ -141,7 +171,7 @@ fn spawn_orders_submenu(commands: &mut Commands, game_assets: &Res<crate::assets
         ),
     ];
 
-    commands
+    let submenu = commands
         .spawn((
             Node {
                 display: Display::None,
@@ -159,6 +189,11 @@ fn spawn_orders_submenu(commands: &mut Commands, game_assets: &Res<crate::assets
             UiInputBlocker,
             OrdersSubMenu,
         ))
+        .id();
+    commands.entity(parent_entity).add_child(submenu);
+
+    commands
+        .entity(submenu)
         .with_children(|parent| {
             for (label, mode) in tasks {
                 parent
