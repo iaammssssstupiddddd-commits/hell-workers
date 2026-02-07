@@ -9,6 +9,40 @@ use bevy::prelude::*;
 // ============================================================
 
 pub struct ThemeColors {
+    // Base Palette
+    pub bg_surface: Color,
+    pub bg_elevated: Color,
+    pub bg_overlay: Color,
+
+    // Accents
+    pub accent_ember: Color,
+    pub accent_ember_bright: Color,
+    pub accent_soul: Color,
+    pub accent_soul_bright: Color,
+    pub accent_sulfur: Color,
+
+    // Semantic Mapping
+    pub text_primary_semantic: Color,
+    pub text_secondary_semantic: Color,
+    pub text_accent_semantic: Color,
+    pub border_default: Color,
+    pub border_accent: Color,
+    pub interactive_default: Color,
+    pub interactive_hover: Color,
+    pub interactive_active: Color,
+
+    // Status Colors
+    pub status_healthy: Color,
+    pub status_warning: Color,
+    pub status_danger: Color,
+    pub status_info: Color,
+
+    // Panel Accents
+    pub panel_accent_entity_list: Color,
+    pub panel_accent_info_panel: Color,
+    pub panel_accent_control_bar: Color,
+    pub panel_accent_time_control: Color,
+
     // Text
     pub text_primary: Color,
     pub text_secondary: Color,
@@ -83,6 +117,13 @@ pub struct PanelThemes {
 }
 
 pub struct ThemeTypography {
+    pub font_size_xs: f32,
+    pub font_size_sm: f32,
+    pub font_size_base: f32,
+    pub font_size_md: f32,
+    pub font_size_lg: f32,
+    pub font_size_xl: f32,
+
     pub font_size_title: f32,
     pub font_size_header: f32,
     pub font_size_item: f32,
@@ -109,6 +150,24 @@ pub struct ThemeSpacing {
 }
 
 pub struct ThemeSizes {
+    // Panel Frame
+    pub panel_border_width: f32,
+    pub panel_corner_radius: f32,
+
+    // Entity List Constraints
+    pub entity_list_min_width: f32,
+    pub entity_list_max_width: f32,
+
+    // Info Panel Constraints
+    pub info_panel_min_width: f32,
+    pub info_panel_max_width: f32,
+
+    // Tooltip
+    pub tooltip_border_width: f32,
+    pub tooltip_corner_radius: f32,
+    pub tooltip_max_width: f32,
+    pub tooltip_padding: f32,
+
     pub header_height: f32,
     pub soul_item_height: f32,
     pub icon_size: f32,
@@ -147,7 +206,45 @@ impl Default for UiTheme {
     fn default() -> Self {
         Self {
             colors: ThemeColors {
-                // Text
+                // Base Palette (Dark Purple/Hell Theme)
+                bg_surface: Color::srgb(0.08, 0.03, 0.06),
+                bg_elevated: Color::srgb(0.12, 0.05, 0.10),
+                bg_overlay: Color::srgb(0.18, 0.08, 0.14),
+
+                // Embers (Orange Accent)
+                accent_ember: Color::srgb(0.8, 0.4, 0.1),
+                accent_ember_bright: Color::srgb(1.0, 0.6, 0.2),
+
+                // Soul (Blue/Cyan Accent)
+                accent_soul: Color::srgb(0.3, 0.5, 0.8),
+                accent_soul_bright: Color::srgb(0.5, 0.7, 1.0),
+
+                // Sulfur (Yellow Warning)
+                accent_sulfur: Color::srgb(0.8, 0.7, 0.2),
+
+                // Semantic Mapping
+                text_primary_semantic: Color::srgb(0.9, 0.9, 0.92),
+                text_secondary_semantic: Color::srgb(0.5, 0.5, 0.55),
+                text_accent_semantic: Color::srgb(1.0, 0.6, 0.2),
+                border_default: Color::srgb(0.25, 0.25, 0.3),
+                border_accent: Color::srgb(0.8, 0.4, 0.1),
+                interactive_default: Color::srgb(0.25, 0.25, 0.3),
+                interactive_hover: Color::srgb(0.35, 0.15, 0.28),
+                interactive_active: Color::srgb(0.8, 0.4, 0.1),
+
+                // Status Colors
+                status_healthy: Color::srgb(0.3, 0.8, 0.4),
+                status_warning: Color::srgb(0.8, 0.7, 0.2),
+                status_danger: Color::srgb(0.9, 0.2, 0.1),
+                status_info: Color::srgb(0.3, 0.5, 0.8),
+
+                // Panel Accents
+                panel_accent_entity_list: Color::srgb(0.3, 0.5, 0.8),
+                panel_accent_info_panel: Color::srgb(0.7, 0.3, 0.6),
+                panel_accent_control_bar: Color::srgb(0.8, 0.3, 0.2),
+                panel_accent_time_control: Color::srgb(0.8, 0.7, 0.3),
+
+                // Legacy Colors (Keeping for compatibility)
                 text_primary: Color::WHITE,
                 text_secondary: Color::srgb(0.7, 0.7, 0.7),
                 text_accent: Color::srgb(0.0, 1.0, 1.0),
@@ -178,17 +275,17 @@ impl Default for UiTheme {
                 fatigue_icon: Color::srgb(0.6, 0.6, 1.0),
                 fatigue_text: Color::srgb(0.7, 0.7, 1.0),
 
-                // Buttons
-                button_default: Color::srgb(0.2, 0.2, 0.2),
-                button_hover: Color::srgb(0.4, 0.4, 0.4),
-                button_pressed: Color::srgb(0.5, 0.5, 0.5),
+                // Buttons (Legacy mapping to new interactive colors + alpha for some)
+                button_default: Color::srgb(0.25, 0.25, 0.3), // interactive_default
+                button_hover: Color::srgb(0.35, 0.15, 0.28), // interactive_hover
+                button_pressed: Color::srgb(0.8, 0.4, 0.1), // interactive_active
 
                 // List items
                 list_item_default: Color::NONE,
-                list_item_hover: Color::srgba(0.4, 0.4, 0.6, 0.3),
-                list_item_selected: Color::srgba(0.3, 0.5, 0.8, 0.35),
-                list_item_selected_hover: Color::srgba(0.35, 0.55, 0.85, 0.45),
-                list_selection_border: Color::srgba(0.7, 0.85, 1.0, 0.95),
+                list_item_hover: Color::srgba(0.35, 0.15, 0.28, 0.3), // Based on interactive_hover
+                list_item_selected: Color::srgba(0.3, 0.5, 0.8, 0.35), // Based on accent_soul
+                list_item_selected_hover: Color::srgba(0.5, 0.7, 1.0, 0.45), // Based on accent_soul_bright
+                list_selection_border: Color::srgba(0.8, 0.4, 0.1, 0.95), // Based on accent_ember
 
                 // Familiar header
                 familiar_header_hover: Color::srgba(0.28, 0.28, 0.5, 0.75),
@@ -202,13 +299,22 @@ impl Default for UiTheme {
                 overlay_row_bg: Color::srgba(1.0, 1.0, 1.0, 0.05),
 
                 // Surface backgrounds
-                submenu_bg: Color::srgba(0.1, 0.1, 0.1, 0.9),
-                tooltip_bg: Color::srgba(0.0, 0.0, 0.0, 0.9),
-                tooltip_border: Color::srgb(0.5, 0.5, 0.5),
-                dialog_bg: Color::srgba(0.05, 0.05, 0.05, 0.95),
-                dialog_border: Color::srgb(0.4, 0.4, 0.4),
+                submenu_bg: Color::srgba(0.12, 0.05, 0.10, 0.95), // bg_elevated
+                tooltip_bg: Color::srgba(0.18, 0.08, 0.14, 0.95), // bg_overlay
+                tooltip_border: Color::srgb(0.25, 0.25, 0.3), // border_default
+                dialog_bg: Color::srgba(0.08, 0.03, 0.06, 0.98), // bg_surface
+                dialog_border: Color::srgb(0.8, 0.4, 0.1), // border_accent
             },
             typography: ThemeTypography {
+                // New Modular Scale
+                font_size_xs: 9.0,
+                font_size_sm: 11.0,
+                font_size_base: 13.0,
+                font_size_md: 15.0,
+                font_size_lg: 18.0,
+                font_size_xl: 22.0,
+
+                // Legacy
                 font_size_title: 18.0,
                 font_size_header: 14.0,
                 font_size_item: 12.0,
@@ -230,6 +336,25 @@ impl Default for UiTheme {
                 bottom_bar_padding: 5.0,
             },
             sizes: ThemeSizes {
+                // Panel Frame
+                panel_border_width: 1.0,
+                panel_corner_radius: 4.0,
+
+                // Entity List Constraints
+                entity_list_min_width: 200.0,
+                entity_list_max_width: 450.0,
+
+                // Info Panel Constraints
+                info_panel_min_width: 200.0,
+                info_panel_max_width: 400.0,
+
+                // Tooltip
+                tooltip_border_width: 1.0,
+                tooltip_corner_radius: 3.0,
+                tooltip_max_width: 280.0,
+                tooltip_padding: 8.0,
+
+                // Legacy
                 header_height: 24.0,
                 soul_item_height: 20.0,
                 icon_size: 16.0,
@@ -241,7 +366,7 @@ impl Default for UiTheme {
                 list_selection_border_width: 3.0,
                 entity_list_panel_width: 300.0,
                 entity_list_max_height_percent: 70.0,
-                info_panel_width: 200.0,
+                info_panel_width: 260.0, // Increased from 200.0
                 submenu_width: 120.0,
                 submenu_left_architect: 0.0,
                 submenu_left_zones: 110.0,
@@ -252,16 +377,16 @@ impl Default for UiTheme {
             },
             panels: PanelThemes {
                 entity_list: PanelGradient {
-                    top: Color::srgba(0.1, 0.3, 0.5, 0.9),
-                    bottom: Color::srgba(0.0, 0.0, 0.0, 0.8),
+                    top: Color::srgb(0.12, 0.05, 0.10), // bg_elevated
+                    bottom: Color::srgb(0.08, 0.03, 0.06), // bg_surface
                 },
                 info_panel: PanelGradient {
-                    top: Color::srgba(0.3, 0.1, 0.3, 0.9),
-                    bottom: Color::srgba(0.0, 0.0, 0.0, 0.8),
+                    top: Color::srgb(0.12, 0.05, 0.10), // bg_elevated
+                    bottom: Color::srgb(0.08, 0.03, 0.06), // bg_surface
                 },
                 bottom_bar: PanelGradient {
-                    top: Color::srgba(0.4, 0.1, 0.1, 0.9),
-                    bottom: Color::srgba(0.0, 0.0, 0.0, 0.8),
+                    top: Color::srgb(0.12, 0.05, 0.10), // bg_elevated
+                    bottom: Color::srgb(0.08, 0.03, 0.06), // bg_surface
                 },
             },
         }

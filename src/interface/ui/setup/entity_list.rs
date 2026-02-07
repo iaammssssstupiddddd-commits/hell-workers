@@ -48,10 +48,12 @@ pub fn spawn_entity_list_panel(
                 Text::new("Entity List"),
                 TextFont {
                     font: game_assets.font_ui.clone(),
-                    font_size: theme.typography.font_size_title,
+                    font_size: theme.typography.font_size_lg, // Semantic size
+                    weight: FontWeight::BOLD, // Font Variation
                     ..default()
                 },
-                TextColor(theme.colors.text_accent),
+                // Use panel accent color for the title
+                TextColor(theme.colors.panel_accent_entity_list),
                 Node {
                     margin: UiRect::bottom(Val::Px(10.0)),
                     ..default()
@@ -90,15 +92,15 @@ pub fn spawn_entity_list_panel(
                                 padding: UiRect::horizontal(Val::Px(5.0)),
                                 ..default()
                             },
-                            BackgroundColor(theme.colors.button_default),
+                            BackgroundColor(theme.colors.interactive_default), // Semantic
                             SectionToggle(EntityListSectionType::Unassigned),
                         ))
                         .with_children(|button| {
                             button.spawn((
                                 ImageNode::new(game_assets.icon_arrow_down.clone()),
                                 Node {
-                                    width: Val::Px(12.0),
-                                    height: Val::Px(12.0),
+                                    width: Val::Px(theme.sizes.fold_icon_size),
+                                    height: Val::Px(theme.sizes.fold_icon_size),
                                     margin: UiRect::right(Val::Px(4.0)),
                                     ..default()
                                 },
@@ -108,10 +110,10 @@ pub fn spawn_entity_list_panel(
                                 Text::new("Unassigned Souls"),
                                 TextFont {
                                     font: game_assets.font_ui.clone(),
-                                    font_size: theme.typography.font_size_small,
+                                    font_size: theme.typography.font_size_base, // Semantic
                                     ..default()
                                 },
-                                TextColor(theme.colors.text_primary),
+                                TextColor(theme.colors.text_primary_semantic), // Semantic
                             ));
                         });
 
@@ -135,16 +137,16 @@ pub fn spawn_entity_list_panel(
                 Text::new("Scroll: Mouse Wheel"),
                 TextFont {
                     font: game_assets.font_ui.clone(),
-                    font_size: theme.typography.font_size_small,
+                    font_size: theme.typography.font_size_xs, // Semantic
                     ..default()
                 },
-                TextColor(theme.colors.text_secondary),
+                TextColor(theme.colors.text_secondary_semantic), // Semantic
                 Node {
                     align_self: AlignSelf::End,
                     margin: UiRect::top(Val::Px(8.0)),
                     ..default()
                 },
-                IgnoreScroll(BVec2::new(false, true)),
+                IgnoreScroll(BVec2::new(false, true)), // Bevy 0.18 Feature
                 EntityListScrollHint,
             ));
         });

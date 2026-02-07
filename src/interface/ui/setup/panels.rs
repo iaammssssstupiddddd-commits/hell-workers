@@ -33,8 +33,10 @@ fn spawn_hover_tooltip(
                 position_type: PositionType::Absolute,
                 display: Display::None,
                 flex_direction: FlexDirection::Column,
-                border: UiRect::all(Val::Px(1.0)),
-                padding: UiRect::all(Val::Px(4.0)),
+                border: UiRect::all(Val::Px(theme.sizes.tooltip_border_width)), // Semantic
+                padding: UiRect::all(Val::Px(theme.sizes.tooltip_padding)), // Semantic
+                max_width: Val::Px(theme.sizes.tooltip_max_width), // Constraint
+                border_radius: bevy::ui::BorderRadius::all(Val::Px(theme.sizes.tooltip_corner_radius)),
                 ..default()
             },
             BackgroundColor(theme.colors.tooltip_bg),
@@ -53,10 +55,10 @@ fn spawn_hover_tooltip(
                 Text::new(""),
                 TextFont {
                     font: game_assets.font_ui.clone(),
-                    font_size: theme.typography.font_size_small,
+                    font_size: theme.typography.font_size_sm, // Semantic
                     ..default()
                 },
-                TextColor(theme.colors.text_primary),
+                TextColor(theme.colors.text_primary_semantic), // Semantic
                 UiSlot::HoverTooltipText,
             ))
                 .id();
