@@ -3,6 +3,7 @@ use bevy::prelude::*;
 use crate::entities::familiar::FamiliarOperation;
 use crate::events::FamiliarOperationMaxSoulChangedEvent;
 use crate::game_state::{BuildContext, PlayMode, TaskContext, ZoneContext};
+use crate::interface::ui::InfoPanelPinState;
 use crate::interface::ui::components::{MenuAction, MenuState, OperationDialog};
 
 pub(super) fn handle_pressed_action(
@@ -12,12 +13,20 @@ pub(super) fn handle_pressed_action(
     build_context: &mut ResMut<BuildContext>,
     zone_context: &mut ResMut<ZoneContext>,
     task_context: &mut ResMut<TaskContext>,
-    selected_entity: &Res<crate::interface::selection::SelectedEntity>,
+    selected_entity: &mut ResMut<crate::interface::selection::SelectedEntity>,
+    info_panel_pin: &mut ResMut<InfoPanelPinState>,
     q_familiar_ops: &mut Query<&mut FamiliarOperation>,
     q_dialog: &mut Query<&mut Node, With<OperationDialog>>,
     ev_max_soul_changed: &mut MessageWriter<FamiliarOperationMaxSoulChangedEvent>,
 ) {
     match action {
+        MenuAction::InspectEntity(entity) => {
+            selected_entity.0 = Some(entity);
+            info_panel_pin.entity = Some(entity);
+        }
+        MenuAction::ClearInspectPin => {
+            info_panel_pin.entity = None;
+        }
         MenuAction::ToggleArchitect => super::mode::toggle_menu_and_reset_mode(
             menu_state,
             MenuState::Architect,

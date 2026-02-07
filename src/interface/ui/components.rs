@@ -45,6 +45,8 @@ pub enum MenuAction {
     ToggleArchitect,
     ToggleZones,
     ToggleOrders,
+    InspectEntity(Entity),
+    ClearInspectPin,
     SelectBuild(BuildingType),
     SelectZone(ZoneType),
     SelectTaskMode(crate::systems::command::TaskMode),
@@ -63,6 +65,7 @@ pub enum MenuAction {
 pub enum UiSlot {
     InfoPanelRoot,
     InfoPanelStatsGroup,
+    InfoPanelUnpinButton,
     // Info Panel
     Header,
     GenderIcon,

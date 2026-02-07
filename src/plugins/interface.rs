@@ -10,7 +10,7 @@ use crate::interface::selection::{
     cleanup_selection_references_system, update_hover_entity, update_selection_indicator,
 };
 use crate::interface::ui::{
-    familiar_context_menu_system, hover_tooltip_system, info_panel_system, menu_visibility_system,
+    context_menu_system, hover_tooltip_system, info_panel_system, menu_visibility_system,
     task_summary_ui_system, ui_interaction_system, ui_keyboard_shortcuts_system,
     update_fps_display_system, update_mode_text_system, update_operation_dialog_system,
 };
@@ -33,6 +33,7 @@ impl Plugin for InterfacePlugin {
         app.init_resource::<crate::interface::ui::UiNodeRegistry>();
         app.init_resource::<crate::interface::ui::theme::UiTheme>();
         app.init_resource::<crate::interface::ui::InfoPanelState>();
+        app.init_resource::<crate::interface::ui::InfoPanelPinState>();
         app.init_resource::<crate::interface::ui::EntityListViewModel>();
         app.init_resource::<crate::interface::ui::EntityListNodeIndex>();
         app.add_systems(
@@ -52,8 +53,12 @@ impl Plugin for InterfacePlugin {
                 ui_interaction_system,
                 menu_visibility_system,
                 info_panel_system.run_if(
-                    |selected: Res<crate::interface::selection::SelectedEntity>| {
-                        selected.is_changed() || selected.0.is_some()
+                    |selected: Res<crate::interface::selection::SelectedEntity>,
+                     pin_state: Res<crate::interface::ui::InfoPanelPinState>| {
+                        selected.is_changed()
+                            || pin_state.is_changed()
+                            || selected.0.is_some()
+                            || pin_state.entity.is_some()
                     },
                 ),
                 update_mode_text_system,
@@ -61,10 +66,11 @@ impl Plugin for InterfacePlugin {
                 .chain()
                 .in_set(GameSystemSet::Interface),
         )
+        .init_resource::<crate::interface::ui::DragState>()
         .add_systems(
             Update,
             (
-                familiar_context_menu_system,
+                context_menu_system,
                 task_summary_ui_system,
                 update_operation_dialog_system.run_if(
                     |selected: Res<crate::interface::selection::SelectedEntity>| {
@@ -77,6 +83,7 @@ impl Plugin for InterfacePlugin {
                 update_fps_display_system,
                 debug_spawn_system,
                 crate::interface::ui::entity_list_interaction_system,
+                crate::interface::ui::entity_list_drag_drop_system,
                 crate::interface::ui::entity_list_visual_feedback_system,
                 crate::interface::ui::entity_list_scroll_system,
                 crate::interface::ui::entity_list_scroll_hint_visibility_system,
