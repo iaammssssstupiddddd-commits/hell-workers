@@ -3,14 +3,14 @@
 //! 遠方の魂をリクルートするために接近している状態の処理を行います。
 
 use super::StateTransitionResult;
-use crate::systems::familiar_ai::helpers::scouting::FamiliarScoutingContext;
+use crate::systems::familiar_ai::decide::scouting::FamiliarScoutingContext;
 
 /// Scouting 状態のハンドラー
 pub fn handle_scouting_state(
     ctx: &mut FamiliarScoutingContext<'_, '_, '_>,
 ) -> StateTransitionResult {
     // 既存の scouting_logic を呼び出し
-    let state_changed = crate::systems::familiar_ai::helpers::scouting::scouting_logic(ctx);
+    let state_changed = crate::systems::familiar_ai::decide::scouting::scouting_logic(ctx);
 
     if state_changed {
         // 状態が変更された場合は、新しい状態を返す

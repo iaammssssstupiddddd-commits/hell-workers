@@ -2,7 +2,7 @@ use crate::entities::damned_soul::StressBreakdown;
 use crate::entities::familiar::FamiliarCommand;
 use crate::systems::familiar_ai::FamiliarAiState;
 use crate::systems::familiar_ai::decide::FamiliarDecideOutput;
-use crate::systems::familiar_ai::helpers::familiar_processor::{
+use crate::systems::familiar_ai::decide::familiar_processor::{
     FamiliarRecruitmentContext, FamiliarSquadContext, finalize_state_transitions,
     process_recruitment, process_squad_management,
 };
@@ -60,7 +60,7 @@ pub fn familiar_ai_state_system(params: FamiliarAiStateDecisionParams) {
             let old_state = ai_state.clone();
             let mut next_state = old_state.clone();
             let transition_result =
-                crate::systems::familiar_ai::helpers::state_handlers::idle::handle_idle_state(
+                crate::systems::familiar_ai::decide::state_handlers::idle::handle_idle_state(
                     active_command,
                     &next_state,
                     fam_transform.translation.truncate(),
@@ -110,7 +110,7 @@ pub fn familiar_ai_state_system(params: FamiliarAiStateDecisionParams) {
         match next_state.clone() {
             FamiliarAiState::Scouting { target_soul } => {
                 let mut scouting_ctx =
-                    crate::systems::familiar_ai::helpers::scouting::FamiliarScoutingContext {
+                    crate::systems::familiar_ai::decide::scouting::FamiliarScoutingContext {
                         fam_entity,
                         fam_pos,
                         target_soul,
@@ -124,7 +124,7 @@ pub fn familiar_ai_state_system(params: FamiliarAiStateDecisionParams) {
                         q_breakdown: &q_breakdown,
                         request_writer: &mut decide_output.squad_requests,
                     };
-                let transition_result = crate::systems::familiar_ai::helpers::state_handlers::scouting::handle_scouting_state(&mut scouting_ctx);
+                let transition_result = crate::systems::familiar_ai::decide::state_handlers::scouting::handle_scouting_state(&mut scouting_ctx);
                 state_changed = transition_result.apply_to(&mut next_state);
             }
             _ => {

@@ -7,9 +7,16 @@ use crate::events::{
 };
 
 pub mod encouragement;
+pub mod familiar_processor;
 pub mod following;
+pub mod recruitment;
+pub mod scouting;
+pub mod squad;
 pub mod state_decision;
+pub mod state_handlers;
+pub mod supervising;
 pub mod task_delegation;
+pub mod task_management;
 
 /// Familiar Decide フェーズの共通出力チャネル
 #[derive(SystemParam)]

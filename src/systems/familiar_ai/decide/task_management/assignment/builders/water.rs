@@ -1,5 +1,5 @@
 use crate::events::ResourceReservationOp;
-use crate::systems::familiar_ai::helpers::task_management::{AssignTaskContext, ReservationShadow};
+use crate::systems::familiar_ai::decide::task_management::{AssignTaskContext, ReservationShadow};
 use crate::systems::jobs::WorkType;
 use crate::systems::logistics::ResourceType;
 use crate::systems::soul_ai::execute::task_execution::types::GatherWaterPhase;
