@@ -7,15 +7,12 @@ mod dialog;
 mod menu_actions;
 mod mode;
 
-use crate::entities::damned_soul::DamnedSoul;
 use crate::entities::familiar::{Familiar, FamiliarOperation};
 use crate::game_state::{BuildContext, PlayMode, TaskContext, ZoneContext};
 use crate::interface::ui::components::*;
 use crate::interface::ui::panels::tooltip_builder;
-use crate::interface::ui::presentation::EntityInspectionModel;
+use crate::interface::ui::presentation::{EntityInspectionModel, EntityInspectionQuery};
 use crate::interface::ui::theme::UiTheme;
-use crate::relationships::TaskWorkers;
-use crate::systems::soul_ai::task_execution::AssignedTask;
 use bevy::ecs::system::SystemParam;
 use bevy::math::TryStableInterpolate;
 use bevy::prelude::*;
@@ -49,56 +46,6 @@ enum TooltipTarget {
 }
 
 #[derive(SystemParam)]
-pub(crate) struct TooltipInspectionQueryParam<'w, 's> {
-    q_souls: Query<
-        'w,
-        's,
-        (
-            &'static DamnedSoul,
-            &'static AssignedTask,
-            &'static Transform,
-            &'static crate::entities::damned_soul::IdleState,
-            Option<&'static crate::relationships::CommandedBy>,
-            Option<&'static crate::systems::logistics::Inventory>,
-            Option<&'static crate::entities::damned_soul::SoulIdentity>,
-        ),
-    >,
-    q_blueprints: Query<'w, 's, &'static crate::systems::jobs::Blueprint>,
-    q_familiars: Query<
-        'w,
-        's,
-        (
-            &'static Familiar,
-            &'static crate::entities::familiar::FamiliarOperation,
-        ),
-    >,
-    q_familiars_escape: Query<'w, 's, (&'static Transform, &'static Familiar)>,
-    familiar_grid: Res<'w, crate::systems::spatial::FamiliarSpatialGrid>,
-    q_items: Query<'w, 's, &'static crate::systems::logistics::ResourceItem>,
-    q_trees: Query<'w, 's, &'static crate::systems::jobs::Tree>,
-    q_rocks: Query<'w, 's, &'static crate::systems::jobs::Rock>,
-    q_designations: Query<
-        'w,
-        's,
-        (
-            &'static crate::systems::jobs::Designation,
-            Option<&'static crate::systems::jobs::IssuedBy>,
-            Option<&'static TaskWorkers>,
-        ),
-    >,
-    q_buildings: Query<
-        'w,
-        's,
-        (
-            &'static crate::systems::jobs::Building,
-            Option<&'static crate::systems::logistics::Stockpile>,
-            Option<&'static crate::relationships::StoredItems>,
-            Option<&'static crate::systems::jobs::MudMixerStorage>,
-        ),
-    >,
-}
-
-#[derive(SystemParam)]
 pub(crate) struct TooltipUiLayoutQueryParam<'w, 's> {
     q_ui_tooltip_buttons: Query<
         'w,
@@ -120,42 +67,6 @@ pub(crate) struct TooltipUiLayoutQueryParam<'w, 's> {
         Query<'w, 's, (&'static ComputedNode, &'static UiGlobalTransform), With<ZonesSubMenu>>,
     q_orders_submenu:
         Query<'w, 's, (&'static ComputedNode, &'static UiGlobalTransform), With<OrdersSubMenu>>,
-}
-
-fn classify_tooltip_template(
-    entity: Entity,
-    q_souls: &Query<(
-        &DamnedSoul,
-        &AssignedTask,
-        &Transform,
-        &crate::entities::damned_soul::IdleState,
-        Option<&crate::relationships::CommandedBy>,
-        Option<&crate::systems::logistics::Inventory>,
-        Option<&crate::entities::damned_soul::SoulIdentity>,
-    )>,
-    q_blueprints: &Query<&crate::systems::jobs::Blueprint>,
-    q_items: &Query<&crate::systems::logistics::ResourceItem>,
-    q_trees: &Query<&crate::systems::jobs::Tree>,
-    q_rocks: &Query<&crate::systems::jobs::Rock>,
-    q_buildings: &Query<(
-        &crate::systems::jobs::Building,
-        Option<&crate::systems::logistics::Stockpile>,
-        Option<&crate::relationships::StoredItems>,
-        Option<&crate::systems::jobs::MudMixerStorage>,
-    )>,
-) -> TooltipTemplate {
-    if q_souls.get(entity).is_ok() {
-        TooltipTemplate::Soul
-    } else if q_buildings.get(entity).is_ok() || q_blueprints.get(entity).is_ok() {
-        TooltipTemplate::Building
-    } else if q_items.get(entity).is_ok()
-        || q_trees.get(entity).is_ok()
-        || q_rocks.get(entity).is_ok()
-    {
-        TooltipTemplate::Resource
-    } else {
-        TooltipTemplate::Generic
-    }
 }
 
 fn is_tooltip_suppressed_for_expanded_menu(
@@ -392,7 +303,7 @@ pub fn hover_tooltip_system(
         Without<HoverTooltip>,
     >,
     ui_layout: TooltipUiLayoutQueryParam,
-    inspection: TooltipInspectionQueryParam,
+    inspection: EntityInspectionQuery,
     mut runtime: Local<TooltipRuntimeState>,
 ) {
     let Ok(window) = q_window.single() else {
@@ -449,29 +360,9 @@ pub fn hover_tooltip_system(
             tooltip_data.shortcut.unwrap_or_default()
         );
     } else if let Some(entity) = hovered.0
-        && let Some(built_model) = crate::interface::ui::presentation::build_entity_inspection_model(
-            entity,
-            &inspection.q_souls,
-            &inspection.q_blueprints,
-            &inspection.q_familiars,
-            &inspection.q_familiars_escape,
-            &inspection.familiar_grid,
-            &inspection.q_items,
-            &inspection.q_trees,
-            &inspection.q_rocks,
-            &inspection.q_designations,
-            &inspection.q_buildings,
-        )
+        && let Some(built_model) = inspection.build_model(entity)
     {
-        template = classify_tooltip_template(
-            entity,
-            &inspection.q_souls,
-            &inspection.q_blueprints,
-            &inspection.q_items,
-            &inspection.q_trees,
-            &inspection.q_rocks,
-            &inspection.q_buildings,
-        );
+        template = inspection.classify_template(entity);
         payload = format!(
             "entity:{entity:?}:{}:{}:{}",
             built_model.header,
