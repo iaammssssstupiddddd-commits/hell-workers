@@ -45,10 +45,10 @@ pub enum CompanionParentKind {
 }
 
 /// companion 配置中の状態
-#[derive(Debug, Clone, Copy, Reflect)]
+#[derive(Debug, Clone, Reflect)]
 pub struct CompanionPlacement {
-    pub parent_blueprint: Entity,
     pub parent_kind: CompanionParentKind,
+    pub parent_anchor: (i32, i32),
     pub kind: CompanionPlacementKind,
     pub center: Vec2,
     pub radius: f32,
