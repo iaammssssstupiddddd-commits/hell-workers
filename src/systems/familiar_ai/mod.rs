@@ -9,20 +9,65 @@ use crate::world::pathfinding::PathfindingContext;
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 
-pub mod encouragement; // 新規追加
-pub mod familiar_processor;
-pub mod following;
 pub mod helpers;
-pub mod max_soul_handler;
-pub mod query_types;
-pub mod recruitment;
-pub mod resource_cache;
-pub mod scouting;
-pub mod squad;
-pub mod state_handlers;
-pub mod state_transition;
-pub mod supervising;
-pub mod task_management;
+pub mod perceive;
+pub mod update;
+pub mod decide;
+pub mod execute;
+
+// 既存参照の互換レイヤー（M2移行中）
+pub mod query_types {
+    pub use super::helpers::query_types::*;
+}
+
+pub mod squad {
+    pub use super::helpers::squad::*;
+}
+
+#[allow(unused_imports)]
+pub mod recruitment {
+    pub use super::helpers::recruitment::*;
+}
+
+pub mod scouting {
+    pub use super::helpers::scouting::*;
+}
+
+pub mod supervising {
+    pub use super::helpers::supervising::*;
+}
+
+pub mod familiar_processor {
+    pub use super::helpers::familiar_processor::*;
+}
+
+pub mod state_handlers {
+    pub use super::helpers::state_handlers::*;
+}
+
+pub mod task_management {
+    pub use super::helpers::task_management::*;
+}
+
+pub mod state_transition {
+    pub use super::perceive::state_detection::*;
+}
+
+pub mod resource_cache {
+    pub use super::perceive::resource_sync::*;
+}
+
+pub mod max_soul_handler {
+    pub use super::perceive::max_soul::*;
+}
+
+pub mod following {
+    pub use super::decide::following::*;
+}
+
+pub mod encouragement {
+    pub use super::decide::encouragement::*;
+}
 
 use familiar_processor::{
     finalize_state_transitions, process_recruitment, process_squad_management,
