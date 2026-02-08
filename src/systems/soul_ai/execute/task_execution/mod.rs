@@ -19,7 +19,9 @@ pub mod types;
 pub use types::AssignedTask;
 
 use crate::entities::damned_soul::IdleBehavior;
-use crate::events::{OnGatheringLeft, OnTaskAssigned, OnTaskCompleted, TaskAssignmentRequest};
+use crate::events::{
+    OnGatheringLeft, OnSoulRecruited, OnTaskAssigned, OnTaskCompleted, TaskAssignmentRequest,
+};
 use crate::systems::familiar_ai::perceive::resource_sync::{
     SharedResourceCache, apply_reservation_op,
 };
@@ -44,6 +46,28 @@ use haul_to_blueprint::handle_haul_to_blueprint_task;
 use haul_to_mixer::handle_haul_to_mixer_task;
 use haul_water_to_mixer::handle_haul_water_to_mixer_task;
 use refine::handle_refine_task;
+
+fn prepare_worker_for_task_apply(
+    commands: &mut Commands,
+    worker_entity: Entity,
+    familiar_entity: Entity,
+    task_entity: Entity,
+    already_commanded: bool,
+) {
+    if !already_commanded {
+        commands.trigger(OnSoulRecruited {
+            entity: worker_entity,
+            familiar_entity,
+        });
+    }
+    commands.entity(worker_entity).insert((
+        crate::relationships::CommandedBy(familiar_entity),
+        crate::relationships::WorkingOn(task_entity),
+    ));
+    commands
+        .entity(task_entity)
+        .insert(crate::systems::jobs::IssuedBy(familiar_entity));
+}
 
 /// Thinkで生成されたタスク割り当て要求を適用する
 pub fn apply_task_assignment_requests_system(
@@ -89,7 +113,7 @@ pub fn apply_task_assignment_requests_system(
             });
         }
 
-        crate::systems::familiar_ai::helpers::task_management::prepare_worker_for_task(
+        prepare_worker_for_task_apply(
             &mut commands,
             worker_entity,
             request.familiar_entity,

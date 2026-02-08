@@ -2,7 +2,8 @@ use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 
 use crate::events::{
-    EncouragementRequest, FamiliarAiStateChangedEvent, FamiliarStateRequest, SquadManagementRequest,
+    EncouragementRequest, FamiliarAiStateChangedEvent, FamiliarIdleVisualRequest,
+    FamiliarStateRequest, SquadManagementRequest,
 };
 
 pub mod encouragement;
@@ -17,4 +18,5 @@ pub struct FamiliarDecideOutput<'w> {
     pub state_requests: MessageWriter<'w, FamiliarStateRequest>,
     pub squad_requests: MessageWriter<'w, SquadManagementRequest>,
     pub encouragement_requests: MessageWriter<'w, EncouragementRequest>,
+    pub idle_visual_requests: MessageWriter<'w, FamiliarIdleVisualRequest>,
 }
