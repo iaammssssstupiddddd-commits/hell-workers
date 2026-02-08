@@ -254,6 +254,12 @@ pub struct EncouragementRequest {
     pub soul_entity: Entity,
 }
 
+/// 使い魔のIdle遷移時ビジュアル要求
+#[derive(Message, Debug, Clone)]
+pub struct FamiliarIdleVisualRequest {
+    pub familiar_entity: Entity,
+}
+
 /// 使い魔の分隊管理要求
 #[derive(Message, Debug, Clone)]
 pub struct SquadManagementRequest {
