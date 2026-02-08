@@ -3,8 +3,9 @@ use bevy::prelude::*;
 use crate::constants::{ESCAPE_GATHERING_JOIN_RADIUS, ESCAPE_SAFE_DISTANCE_MULTIPLIER};
 use crate::entities::damned_soul::{DamnedSoul, IdleBehavior, IdleState};
 use crate::entities::familiar::Familiar;
-use crate::events::{GatheringManagementOp, GatheringManagementRequest};
+use crate::events::GatheringManagementOp;
 use crate::relationships::CommandedBy;
+use crate::systems::soul_ai::decide::SoulDecideOutput;
 use crate::systems::soul_ai::gathering::*;
 use crate::systems::soul_ai::task_execution::AssignedTask;
 use crate::systems::spatial::{SpatialGrid, SpatialGridOps};
@@ -31,7 +32,7 @@ fn is_gathering_spot_safe_from_familiars(
 pub fn gathering_maintenance_decision(
     q_spots: Query<(Entity, &GatheringSpot, &GatheringVisuals)>,
     update_timer: Res<GatheringUpdateTimer>,
-    mut request_writer: MessageWriter<GatheringManagementRequest>,
+    mut decide_output: SoulDecideOutput,
 ) {
     if !update_timer.timer.just_finished() {
         return;
@@ -42,13 +43,15 @@ pub fn gathering_maintenance_decision(
             && spot.grace_active
             && spot.grace_timer <= 0.0
         {
-            request_writer.write(GatheringManagementRequest {
-                operation: GatheringManagementOp::Dissolve {
-                    spot_entity,
-                    aura_entity: visuals.aura_entity,
-                    object_entity: visuals.object_entity,
-                },
-            });
+            decide_output
+                .gathering_requests
+                .write(crate::events::GatheringManagementRequest {
+                    operation: GatheringManagementOp::Dissolve {
+                        spot_entity,
+                        aura_entity: visuals.aura_entity,
+                        object_entity: visuals.object_entity,
+                    },
+                });
         }
     }
 }
@@ -59,7 +62,7 @@ pub fn gathering_merge_decision(
     q_spots: Query<(Entity, &GatheringSpot, &GatheringVisuals)>,
     q_participants: Query<(Entity, &ParticipatingIn)>,
     update_timer: Res<GatheringUpdateTimer>,
-    mut request_writer: MessageWriter<GatheringManagementRequest>,
+    mut decide_output: SoulDecideOutput,
 ) {
     if !update_timer.timer.just_finished() {
         return;
@@ -107,15 +110,17 @@ pub fn gathering_merge_decision(
                     })
                     .collect();
 
-                request_writer.write(GatheringManagementRequest {
-                    operation: GatheringManagementOp::Merge {
-                        absorber,
-                        absorbed,
-                        participants_to_move,
-                        absorbed_aura: absorbed_visuals.aura_entity,
-                        absorbed_object: absorbed_visuals.object_entity,
-                    },
-                });
+                decide_output
+                    .gathering_requests
+                    .write(crate::events::GatheringManagementRequest {
+                        operation: GatheringManagementOp::Merge {
+                            absorber,
+                            absorbed,
+                            participants_to_move,
+                            absorbed_aura: absorbed_visuals.aura_entity,
+                            absorbed_object: absorbed_visuals.object_entity,
+                        },
+                    });
 
                 return;
             }
@@ -137,7 +142,7 @@ pub fn gathering_recruitment_decision(
     >,
     q_familiars: Query<(&Transform, &Familiar)>,
     update_timer: Res<GatheringUpdateTimer>,
-    mut request_writer: MessageWriter<GatheringManagementRequest>,
+    mut decide_output: SoulDecideOutput,
 ) {
     if !update_timer.timer.just_finished() {
         return;
@@ -175,12 +180,14 @@ pub fn gathering_recruitment_decision(
                 }
 
                 current_participants += 1;
-                request_writer.write(GatheringManagementRequest {
-                    operation: GatheringManagementOp::Recruit {
-                        soul: soul_entity,
-                        spot: spot_entity,
-                    },
-                });
+                decide_output
+                    .gathering_requests
+                    .write(crate::events::GatheringManagementRequest {
+                        operation: GatheringManagementOp::Recruit {
+                            soul: soul_entity,
+                            spot: spot_entity,
+                        },
+                    });
             }
         }
     }
@@ -191,7 +198,7 @@ pub fn gathering_leave_decision(
     q_spots: Query<&GatheringSpot>,
     q_participants: Query<(Entity, &Transform, &IdleState, &ParticipatingIn), With<DamnedSoul>>,
     update_timer: Res<GatheringUpdateTimer>,
-    mut request_writer: MessageWriter<GatheringManagementRequest>,
+    mut decide_output: SoulDecideOutput,
 ) {
     if !update_timer.timer.just_finished() {
         return;
@@ -208,20 +215,24 @@ pub fn gathering_leave_decision(
         if let Ok(spot) = q_spots.get(participating_in.0) {
             let dist = (spot.center - transform.translation.truncate()).length();
             if dist > GATHERING_LEAVE_RADIUS {
-                request_writer.write(GatheringManagementRequest {
+                decide_output
+                    .gathering_requests
+                    .write(crate::events::GatheringManagementRequest {
+                        operation: GatheringManagementOp::Leave {
+                            soul: entity,
+                            spot: participating_in.0,
+                        },
+                    });
+            }
+        } else {
+            decide_output
+                .gathering_requests
+                .write(crate::events::GatheringManagementRequest {
                     operation: GatheringManagementOp::Leave {
                         soul: entity,
                         spot: participating_in.0,
                     },
                 });
-            }
-        } else {
-            request_writer.write(GatheringManagementRequest {
-                operation: GatheringManagementOp::Leave {
-                    soul: entity,
-                    spot: participating_in.0,
-                },
-            });
         }
     }
 }

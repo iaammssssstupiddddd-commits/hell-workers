@@ -3,8 +3,8 @@
 use crate::constants::*;
 use crate::entities::damned_soul::DamnedSoul;
 use crate::entities::familiar::{ActiveCommand, Familiar, FamiliarCommand};
-use crate::events::EncouragementRequest;
 use crate::systems::familiar_ai::FamiliarAiState;
+use crate::systems::familiar_ai::decide::FamiliarDecideOutput;
 use crate::systems::spatial::{SpatialGrid, SpatialGridOps};
 use bevy::prelude::*;
 use rand::Rng;
@@ -30,7 +30,7 @@ pub fn encouragement_decision_system(
     )>,
     q_souls: Query<(Entity, Has<EncouragementCooldown>), With<DamnedSoul>>,
     soul_grid: Res<SpatialGrid>,
-    mut request_writer: MessageWriter<EncouragementRequest>,
+    mut decide_output: FamiliarDecideOutput,
 ) {
     let dt = time.delta_secs();
     let mut rng = rand::thread_rng();
@@ -67,10 +67,12 @@ pub fn encouragement_decision_system(
             .collect();
 
         if let Some(&target_soul) = valid_targets.choose(&mut rng) {
-            request_writer.write(EncouragementRequest {
-                familiar_entity: fam_entity,
-                soul_entity: target_soul,
-            });
+            decide_output
+                .encouragement_requests
+                .write(crate::events::EncouragementRequest {
+                    familiar_entity: fam_entity,
+                    soul_entity: target_soul,
+                });
             break;
         }
     }

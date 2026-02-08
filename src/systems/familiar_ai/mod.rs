@@ -65,6 +65,7 @@ pub mod encouragement {
 }
 
 use familiar_processor::{
+    FamiliarDelegationContext, FamiliarRecruitmentContext, FamiliarSquadContext,
     finalize_state_transitions, process_recruitment, process_squad_management,
     process_task_delegation_and_movement,
 };
@@ -192,15 +193,11 @@ pub struct FamiliarAiParams<'w, 's> {
     // resource_cache removed (included in task_queries)
     pub game_assets: Res<'w, crate::assets::GameAssets>,
     pub q_bubbles: Query<'w, 's, (Entity, &'static SpeechBubble), With<FamiliarBubble>>,
-    // cooldowns removed (now a component)
-    pub ev_state_changed: MessageWriter<'w, crate::events::FamiliarAiStateChangedEvent>,
-    pub state_request_writer: MessageWriter<'w, crate::events::FamiliarStateRequest>,
-    pub request_writer: MessageWriter<'w, crate::events::SquadManagementRequest>,
+    pub decide_output: decide::FamiliarDecideOutput<'w>,
 }
 
 #[derive(SystemParam)]
 pub struct FamiliarAiTaskParams<'w, 's> {
-    pub commands: Commands<'w, 's>,
     pub time: Res<'w, Time>,
     pub delegation_timer: ResMut<'w, FamiliarTaskDelegationTimer>,
     pub q_familiars: FamiliarTaskQuery<'w, 's>,
@@ -223,9 +220,7 @@ pub fn familiar_ai_state_system(params: FamiliarAiParams) {
         q_breakdown,
         // fatigue_threshold removed
         // max_workers removed
-        mut ev_state_changed,
-        mut state_request_writer,
-        mut request_writer,
+        mut decide_output,
         q_bubbles,
         game_assets,
         ..
@@ -292,53 +287,56 @@ pub fn familiar_ai_state_system(params: FamiliarAiParams) {
         let max_workers = familiar_op.max_controlled_soul;
 
         // 分隊管理を実行
-        let mut squad_entities = process_squad_management(
+        let mut squad_ctx = FamiliarSquadContext {
             fam_entity,
-            fam_transform,
             familiar_op,
             commanding,
-            voice_opt,
-            &q_souls,
-            &mut request_writer,
-        );
+            q_souls: &q_souls,
+            request_writer: &mut decide_output.squad_requests,
+        };
+        let mut squad_entities = process_squad_management(&mut squad_ctx);
 
         // 状態に応じたロジック実行
         match *ai_state {
             FamiliarAiState::Scouting { target_soul } => {
                 // Scoutingロジックを実行 (分隊の空き状況に関わらず常にチェック)
-                let transition_result = state_handlers::scouting::handle_scouting_state(
+                let mut scouting_ctx = scouting::FamiliarScoutingContext {
                     fam_entity,
                     fam_pos,
                     target_soul,
                     fatigue_threshold,
                     max_workers,
-                    &mut squad_entities,
-                    &mut ai_state,
-                    &mut fam_dest,
-                    &mut fam_path,
-                    &mut q_souls,
-                    &q_breakdown,
-                    &mut request_writer,
-                );
+                    squad: &mut squad_entities,
+                    ai_state: &mut ai_state,
+                    fam_dest: &mut fam_dest,
+                    fam_path: &mut fam_path,
+                    q_souls: &mut q_souls,
+                    q_breakdown: &q_breakdown,
+                    request_writer: &mut decide_output.squad_requests,
+                };
+                let transition_result =
+                    state_handlers::scouting::handle_scouting_state(&mut scouting_ctx);
                 state_changed = transition_result.apply_to(&mut ai_state);
             }
             _ => {
                 // スカウト中以外でリクルートを試みる
-                if process_recruitment(
+                let mut recruitment_ctx = FamiliarRecruitmentContext {
                     fam_entity,
                     fam_transform,
                     familiar,
                     familiar_op,
-                    &mut ai_state,
-                    &mut fam_dest,
-                    &mut fam_path,
-                    &mut squad_entities,
+                    ai_state: &mut ai_state,
+                    fam_dest: &mut fam_dest,
+                    fam_path: &mut fam_path,
+                    squad_entities: &mut squad_entities,
                     max_workers,
-                    &*spatial_grid,
-                    &mut q_souls,
-                    &q_breakdown,
-                    &mut request_writer,
-                ) {
+                    spatial_grid: &spatial_grid,
+                    q_souls: &mut q_souls,
+                    q_breakdown: &q_breakdown,
+                    request_writer: &mut decide_output.squad_requests,
+                };
+
+                if process_recruitment(&mut recruitment_ctx) {
                     state_changed = true;
                 }
             }
@@ -350,17 +348,21 @@ pub fn familiar_ai_state_system(params: FamiliarAiParams) {
         }
 
         if state_changed {
-            state_request_writer.write(crate::events::FamiliarStateRequest {
-                familiar_entity: fam_entity,
-                new_state: ai_state.clone(),
-            });
+            decide_output
+                .state_requests
+                .write(crate::events::FamiliarStateRequest {
+                    familiar_entity: fam_entity,
+                    new_state: ai_state.clone(),
+                });
             // 状態遷移イベントを発火（Changed フィルタで検知できない場合の補完）
-            ev_state_changed.write(crate::events::FamiliarAiStateChangedEvent {
-                familiar_entity: fam_entity,
-                from: old_state.clone(),
-                to: ai_state.clone(),
-                reason: determine_transition_reason(&old_state, &*ai_state),
-            });
+            decide_output
+                .state_changed_events
+                .write(crate::events::FamiliarAiStateChangedEvent {
+                    familiar_entity: fam_entity,
+                    from: old_state.clone(),
+                    to: ai_state.clone(),
+                    reason: determine_transition_reason(&old_state, &*ai_state),
+                });
         }
     }
 }
@@ -368,7 +370,6 @@ pub fn familiar_ai_state_system(params: FamiliarAiParams) {
 /// 使い魔AIのタスク委譲・移動システム
 pub fn familiar_task_delegation_system(params: FamiliarAiTaskParams) {
     let FamiliarAiTaskParams {
-        mut commands,
         time,
         mut delegation_timer,
         mut q_familiars,
@@ -417,26 +418,26 @@ pub fn familiar_task_delegation_system(params: FamiliarAiTaskParams) {
                 &mut q_souls,
             );
 
-        process_task_delegation_and_movement(
+        let mut delegation_ctx = FamiliarDelegationContext {
             fam_entity,
             fam_transform,
             familiar_op,
-            &mut *ai_state,
-            &mut *fam_dest,
-            &mut *fam_path,
+            ai_state: &mut *ai_state,
+            fam_dest: &mut *fam_dest,
+            fam_path: &mut *fam_path,
             task_area_opt,
-            &squad_entities,
-            &mut commands,
-            &mut q_souls,
-            &mut task_queries,
-            &designation_grid,
+            squad_entities: &squad_entities,
+            q_souls: &mut q_souls,
+            task_queries: &mut task_queries,
+            designation_grid: &designation_grid,
             managed_tasks,
-            &world_map,
-            &mut *pf_context,
-            &time,
+            world_map: &world_map,
+            pf_context: &mut *pf_context,
+            delta_secs: time.delta_secs(),
             allow_task_delegation,
             state_changed,
-            &mut reservation_shadow,
-        );
+            reservation_shadow: &mut reservation_shadow,
+        };
+        process_task_delegation_and_movement(&mut delegation_ctx);
     }
 }

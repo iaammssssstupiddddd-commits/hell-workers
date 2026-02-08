@@ -3,13 +3,15 @@ use bevy::prelude::*;
 use crate::constants::*;
 use crate::entities::damned_soul::{DamnedSoul, IdleBehavior, IdleState};
 use crate::entities::familiar::Familiar;
-use crate::events::{EscapeOperation, EscapeRequest};
+use crate::events::EscapeOperation;
 use crate::relationships::CommandedBy;
+use crate::systems::soul_ai::decide::SoulDecideOutput;
 use crate::systems::soul_ai::decide::idle_behavior::GATHERING_ARRIVAL_RADIUS;
 use crate::systems::soul_ai::gathering::{GatheringSpot, ParticipatingIn};
 use crate::systems::soul_ai::perceive::escaping::{
-    EscapeBehaviorTimer, EscapeDetectionTimer, calculate_escape_destination, detect_nearest_familiar,
-    detect_reachable_familiar_within_safe_distance, find_safe_gathering_spot,
+    EscapeBehaviorTimer, EscapeDetectionTimer, calculate_escape_destination,
+    detect_nearest_familiar, detect_reachable_familiar_within_safe_distance,
+    find_safe_gathering_spot,
 };
 use crate::systems::spatial::FamiliarSpatialGrid;
 use crate::world::map::WorldMap;
@@ -25,26 +27,22 @@ pub fn escaping_decision_system(
     familiar_grid: Res<FamiliarSpatialGrid>,
     q_familiars: Query<(&Transform, &Familiar)>,
     q_gathering_spots: Query<(Entity, &GatheringSpot)>,
-    q_detect: Query<
-        (
-            Entity,
-            &Transform,
-            &DamnedSoul,
-            Option<&CommandedBy>,
-            Option<&ParticipatingIn>,
-            &IdleState,
-        ),
-    >,
-    q_behavior: Query<
-        (
-            Entity,
-            &Transform,
-            &IdleState,
-            Option<&CommandedBy>,
-            Option<&ParticipatingIn>,
-        ),
-    >,
-    mut request_writer: MessageWriter<EscapeRequest>,
+    q_detect: Query<(
+        Entity,
+        &Transform,
+        &DamnedSoul,
+        Option<&CommandedBy>,
+        Option<&ParticipatingIn>,
+        &IdleState,
+    )>,
+    q_behavior: Query<(
+        Entity,
+        &Transform,
+        &IdleState,
+        Option<&CommandedBy>,
+        Option<&ParticipatingIn>,
+    )>,
+    mut decide_output: SoulDecideOutput,
 ) {
     let detect_tick = detection_timer.timer.tick(time.delta()).just_finished();
 
@@ -63,7 +61,9 @@ pub fn escaping_decision_system(
     }
 
     if detect_tick {
-        for (entity, transform, soul, under_command, participating_in, idle_state) in q_detect.iter() {
+        for (entity, transform, soul, under_command, participating_in, idle_state) in
+            q_detect.iter()
+        {
             if idle_state.behavior == IdleBehavior::Escaping {
                 continue;
             }
@@ -83,12 +83,14 @@ pub fn escaping_decision_system(
                     "ESCAPE_DECIDE: {:?} detected threat {:?} dist {:.1}",
                     entity, threat.entity, threat.distance
                 );
-                request_writer.write(EscapeRequest {
-                    entity,
-                    operation: EscapeOperation::StartEscaping {
-                        leave_gathering: participating_in.map(|p| p.0),
-                    },
-                });
+                decide_output
+                    .escape_requests
+                    .write(crate::events::EscapeRequest {
+                        entity,
+                        operation: EscapeOperation::StartEscaping {
+                            leave_gathering: participating_in.map(|p| p.0),
+                        },
+                    });
             }
         }
     }
@@ -100,10 +102,12 @@ pub fn escaping_decision_system(
             }
 
             if under_command.is_some() {
-                request_writer.write(EscapeRequest {
-                    entity,
-                    operation: EscapeOperation::ReachSafety,
-                });
+                decide_output
+                    .escape_requests
+                    .write(crate::events::EscapeRequest {
+                        entity,
+                        operation: EscapeOperation::ReachSafety,
+                    });
                 continue;
             }
 
@@ -124,10 +128,12 @@ pub fn escaping_decision_system(
 
                 if let Some(spot_pos) = safe_spot {
                     if soul_pos.distance(spot_pos) <= GATHERING_ARRIVAL_RADIUS {
-                        request_writer.write(EscapeRequest {
-                            entity,
-                            operation: EscapeOperation::JoinSafeGathering,
-                        });
+                        decide_output
+                            .escape_requests
+                            .write(crate::events::EscapeRequest {
+                                entity,
+                                operation: EscapeOperation::JoinSafeGathering,
+                            });
                         continue;
                     }
                 }
@@ -135,15 +141,19 @@ pub fn escaping_decision_system(
                 let destination =
                     calculate_escape_destination(soul_pos, &threat, safe_spot, &world_map);
 
-                request_writer.write(EscapeRequest {
-                    entity,
-                    operation: EscapeOperation::UpdateDestination { destination },
-                });
+                decide_output
+                    .escape_requests
+                    .write(crate::events::EscapeRequest {
+                        entity,
+                        operation: EscapeOperation::UpdateDestination { destination },
+                    });
             } else {
-                request_writer.write(EscapeRequest {
-                    entity,
-                    operation: EscapeOperation::ReachSafety,
-                });
+                decide_output
+                    .escape_requests
+                    .write(crate::events::EscapeRequest {
+                        entity,
+                        operation: EscapeOperation::ReachSafety,
+                    });
             }
         }
     }
