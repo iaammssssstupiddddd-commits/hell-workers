@@ -4,10 +4,13 @@
 
 use crate::entities::damned_soul::{Destination, IdleBehavior, Path};
 use crate::entities::familiar::{Familiar, FamiliarOperation, FamiliarVoice};
+use crate::events::SquadManagementRequest;
 use crate::relationships::{CommandedBy, Commanding, ManagedTasks};
 use crate::systems::command::TaskArea;
 use crate::systems::familiar_ai::FamiliarSoulQuery;
+use crate::systems::familiar_ai::task_management::ReservationShadow;
 use crate::systems::soul_ai::gathering::ParticipatingIn;
+use crate::systems::soul_ai::task_execution::context::TaskAssignmentQueries;
 use crate::systems::spatial::{DesignationSpatialGrid, SpatialGrid};
 use crate::systems::visual::speech::components::{FamiliarBubble, SpeechBubble};
 use bevy::prelude::*;
@@ -16,33 +19,74 @@ use super::recruitment::RecruitmentManager;
 use super::squad::SquadManager;
 use super::state_handlers;
 use super::task_management::TaskManager;
+use crate::entities::damned_soul::StressBreakdown;
 use crate::systems::familiar_ai::FamiliarAiState;
 use crate::world::map::WorldMap;
 use crate::world::pathfinding::PathfindingContext;
 
+/// 分隊管理に必要なコンテキスト
+pub struct FamiliarSquadContext<'a, 'w, 's> {
+    pub fam_entity: Entity,
+    pub familiar_op: &'a FamiliarOperation,
+    pub commanding: Option<&'a Commanding>,
+    pub q_souls: &'a FamiliarSoulQuery<'w, 's>,
+    pub request_writer: &'a mut MessageWriter<'w, SquadManagementRequest>,
+}
+
+/// リクルート判定に必要なコンテキスト
+pub struct FamiliarRecruitmentContext<'a, 'w, 's> {
+    pub fam_entity: Entity,
+    pub fam_transform: &'a Transform,
+    pub familiar: &'a Familiar,
+    pub familiar_op: &'a FamiliarOperation,
+    pub ai_state: &'a mut FamiliarAiState,
+    pub fam_dest: &'a mut Destination,
+    pub fam_path: &'a mut Path,
+    pub squad_entities: &'a mut Vec<Entity>,
+    pub max_workers: usize,
+    pub spatial_grid: &'a SpatialGrid,
+    pub q_souls: &'a mut FamiliarSoulQuery<'w, 's>,
+    pub q_breakdown: &'a Query<'w, 's, &'static StressBreakdown>,
+    pub request_writer: &'a mut MessageWriter<'w, SquadManagementRequest>,
+}
+
+/// タスク委譲と移動制御に必要なコンテキスト
+pub struct FamiliarDelegationContext<'a, 'w, 's> {
+    pub fam_entity: Entity,
+    pub fam_transform: &'a Transform,
+    pub familiar_op: &'a FamiliarOperation,
+    pub ai_state: &'a mut FamiliarAiState,
+    pub fam_dest: &'a mut Destination,
+    pub fam_path: &'a mut Path,
+    pub task_area_opt: Option<&'a TaskArea>,
+    pub squad_entities: &'a [Entity],
+    pub q_souls: &'a mut FamiliarSoulQuery<'w, 's>,
+    pub task_queries: &'a mut TaskAssignmentQueries<'w, 's>,
+    pub designation_grid: &'a DesignationSpatialGrid,
+    pub managed_tasks: &'a ManagedTasks,
+    pub world_map: &'a WorldMap,
+    pub pf_context: &'a mut PathfindingContext,
+    pub delta_secs: f32,
+    pub allow_task_delegation: bool,
+    pub state_changed: bool,
+    pub reservation_shadow: &'a mut ReservationShadow,
+}
+
 /// 分隊管理を実行
-pub fn process_squad_management(
-    fam_entity: Entity,
-    _fam_transform: &Transform,
-    familiar_op: &FamiliarOperation,
-    commanding: Option<&Commanding>,
-    _voice_opt: Option<&FamiliarVoice>,
-    q_souls: &FamiliarSoulQuery,
-    request_writer: &mut MessageWriter<crate::events::SquadManagementRequest>,
-) -> Vec<Entity> {
-    let initial_squad = SquadManager::build_squad(commanding);
+pub fn process_squad_management(ctx: &mut FamiliarSquadContext<'_, '_, '_>) -> Vec<Entity> {
+    let initial_squad = SquadManager::build_squad(ctx.commanding);
 
     // 分隊を検証（無効なメンバーを除外）
     let (mut squad_entities, invalid_members) =
-        SquadManager::validate_squad(initial_squad, fam_entity, q_souls);
+        SquadManager::validate_squad(initial_squad, ctx.fam_entity, ctx.q_souls);
 
     // 疲労・崩壊したメンバーをリリース要求
     let released_entities = SquadManager::release_fatigued(
         &squad_entities,
-        fam_entity,
-        familiar_op.fatigue_threshold,
-        q_souls,
-        request_writer,
+        ctx.fam_entity,
+        ctx.familiar_op.fatigue_threshold,
+        ctx.q_souls,
+        ctx.request_writer,
     );
 
     // リリースされたメンバーを分隊から除外
@@ -59,43 +103,29 @@ pub fn process_squad_management(
 }
 
 /// リクルート処理を実行
-pub fn process_recruitment(
-    fam_entity: Entity,
-    fam_transform: &Transform,
-    familiar: &Familiar,
-    familiar_op: &FamiliarOperation,
-    ai_state: &mut FamiliarAiState,
-    fam_dest: &mut Destination,
-    fam_path: &mut Path,
-    squad_entities: &mut Vec<Entity>,
-    max_workers: usize,
-    spatial_grid: &SpatialGrid,
-    q_souls: &mut FamiliarSoulQuery,
-    q_breakdown: &Query<&crate::entities::damned_soul::StressBreakdown>,
-    request_writer: &mut MessageWriter<crate::events::SquadManagementRequest>,
-) -> bool {
-    let fam_pos = fam_transform.translation.truncate();
-    let command_radius = familiar.command_radius;
-    let fatigue_threshold = familiar_op.fatigue_threshold;
+pub fn process_recruitment(ctx: &mut FamiliarRecruitmentContext<'_, '_, '_>) -> bool {
+    let fam_pos = ctx.fam_transform.translation.truncate();
+    let command_radius = ctx.familiar.command_radius;
+    let fatigue_threshold = ctx.familiar_op.fatigue_threshold;
 
     // スカウト中以外で分隊に空きがあれば新規リクルートを試みる
-    if squad_entities.len() < max_workers {
+    if ctx.squad_entities.len() < ctx.max_workers {
         // 近場のリクルート検索 (即時勧誘)
         if let Some(new_recruit) = RecruitmentManager::try_immediate_recruit(
-            fam_entity,
+            ctx.fam_entity,
             fam_pos,
             command_radius,
             fatigue_threshold,
-            spatial_grid,
-            q_souls,
-            q_breakdown,
-            request_writer,
+            ctx.spatial_grid,
+            ctx.q_souls,
+            ctx.q_breakdown,
+            ctx.request_writer,
         ) {
             debug!(
                 "FAM_AI: {:?} recruiting nearby soul {:?}",
-                fam_entity, new_recruit
+                ctx.fam_entity, new_recruit
             );
-            squad_entities.push(new_recruit);
+            ctx.squad_entities.push(new_recruit);
             return true;
         }
         // 遠方のリクルート検索 (Scouting開始)
@@ -103,39 +133,39 @@ pub fn process_recruitment(
             if let Some(distant_recruit) = RecruitmentManager::start_scouting(
                 fam_pos,
                 fatigue_threshold,
-                spatial_grid,
-                &mut *q_souls,
-                q_breakdown,
+                ctx.spatial_grid,
+                &mut *ctx.q_souls,
+                ctx.q_breakdown,
             ) {
                 debug!(
                     "FAM_AI: {:?} scouting distant soul {:?}",
-                    fam_entity, distant_recruit
+                    ctx.fam_entity, distant_recruit
                 );
-                *ai_state = FamiliarAiState::Scouting {
+                *ctx.ai_state = FamiliarAiState::Scouting {
                     target_soul: distant_recruit,
                 };
 
                 // 即座に移動開始
                 if let Ok((_, target_transform, _, _, _, _, _, _, _, _)) =
-                    q_souls.get(distant_recruit)
+                    ctx.q_souls.get(distant_recruit)
                 {
                     let target_pos = target_transform.translation.truncate();
-                    fam_dest.0 = target_pos;
-                    fam_path.waypoints = vec![target_pos];
-                    fam_path.current_index = 0;
+                    ctx.fam_dest.0 = target_pos;
+                    ctx.fam_path.waypoints = vec![target_pos];
+                    ctx.fam_path.current_index = 0;
                 }
                 return true;
             } else {
                 // 何も見つからなければログに出す (デバッグ用)
-                debug!("FAM_AI: {:?} No recruitable souls found", fam_entity);
+                debug!("FAM_AI: {:?} No recruitable souls found", ctx.fam_entity);
             }
         }
     } else {
         debug!(
             "FAM_AI: {:?} Squad full ({}/{})",
-            fam_entity,
-            squad_entities.len(),
-            max_workers
+            ctx.fam_entity,
+            ctx.squad_entities.len(),
+            ctx.max_workers
         );
     }
     false
@@ -197,47 +227,26 @@ pub fn finalize_state_transitions(
 }
 
 /// タスク委譲と移動制御を実行
-pub fn process_task_delegation_and_movement(
-    fam_entity: Entity,
-    fam_transform: &Transform,
-    familiar_op: &FamiliarOperation,
-    ai_state: &mut FamiliarAiState,
-    fam_dest: &mut Destination,
-    fam_path: &mut Path,
-    task_area_opt: Option<&TaskArea>,
-    squad_entities: &[Entity],
-    _commands: &mut Commands,
-    q_souls: &mut FamiliarSoulQuery,
-    queries: &mut crate::systems::soul_ai::task_execution::context::TaskAssignmentQueries,
-    designation_grid: &DesignationSpatialGrid,
-    managed_tasks: &ManagedTasks,
-    // haul_cache removed
-    world_map: &WorldMap,
-    pf_context: &mut PathfindingContext,
-    time: &Res<Time>,
-    allow_task_delegation: bool,
-    state_changed: bool,
-    reservation_shadow: &mut crate::systems::familiar_ai::task_management::ReservationShadow,
-) {
-    let fam_pos = fam_transform.translation.truncate();
-    let fatigue_threshold = familiar_op.fatigue_threshold;
+pub fn process_task_delegation_and_movement(ctx: &mut FamiliarDelegationContext<'_, '_, '_>) {
+    let fam_pos = ctx.fam_transform.translation.truncate();
+    let fatigue_threshold = ctx.familiar_op.fatigue_threshold;
 
     // タスク委譲
-    let has_available_task = if allow_task_delegation {
+    let has_available_task = if ctx.allow_task_delegation {
         TaskManager::delegate_task(
-            fam_entity,
+            ctx.fam_entity,
             fam_pos,
-            &squad_entities,
-            task_area_opt,
+            ctx.squad_entities,
+            ctx.task_area_opt,
             fatigue_threshold,
-            queries,
-            q_souls,
-            designation_grid,
-            managed_tasks,
+            ctx.task_queries,
+            ctx.q_souls,
+            ctx.designation_grid,
+            ctx.managed_tasks,
             // haul_cache removed
-            world_map,
-            pf_context,
-            reservation_shadow,
+            ctx.world_map,
+            ctx.pf_context,
+            ctx.reservation_shadow,
         )
         .is_some()
     } else {
@@ -246,16 +255,17 @@ pub fn process_task_delegation_and_movement(
 
     // 移動制御
     // state_changed があっても、Supervising/SearchingTask なら各ロジックを呼ぶ
-    if !state_changed
+    if !ctx.state_changed
         || matches!(
-            *ai_state,
+            *ctx.ai_state,
             FamiliarAiState::Supervising { .. } | FamiliarAiState::SearchingTask
         )
     {
-        let active_members: Vec<Entity> = squad_entities
+        let active_members: Vec<Entity> = ctx
+            .squad_entities
             .iter()
             .filter(|&&e| {
-                if let Ok((_, _, _, _, _, _, idle, _, _, _)) = q_souls.get(e) {
+                if let Ok((_, _, _, _, _, _, idle, _, _, _)) = ctx.q_souls.get(e) {
                     idle.behavior != IdleBehavior::ExhaustedGathering
                 } else {
                     false
@@ -266,35 +276,36 @@ pub fn process_task_delegation_and_movement(
 
         debug!(
             "FAM_AI: Movement control - state: {:?}, active_members: {}, has_available_task: {}, state_changed: {}",
-            *ai_state,
+            *ctx.ai_state,
             active_members.len(),
             has_available_task,
-            state_changed
+            ctx.state_changed
         );
 
-        match *ai_state {
+        match *ctx.ai_state {
             FamiliarAiState::Supervising { .. } => {
-                state_handlers::supervising::handle_supervising_state(
-                    fam_entity,
-                    fam_pos,
-                    &active_members,
-                    task_area_opt,
-                    time,
-                    ai_state,
-                    fam_dest,
-                    fam_path,
-                    q_souls,
-                    has_available_task,
-                );
+                let mut supervising_ctx =
+                    crate::systems::familiar_ai::supervising::FamiliarSupervisingContext {
+                        fam_entity: ctx.fam_entity,
+                        fam_pos,
+                        active_members: &active_members,
+                        task_area_opt: ctx.task_area_opt,
+                        delta_secs: ctx.delta_secs,
+                        ai_state: ctx.ai_state,
+                        fam_dest: ctx.fam_dest,
+                        fam_path: ctx.fam_path,
+                        q_souls: ctx.q_souls,
+                    };
+                state_handlers::supervising::handle_supervising_state(&mut supervising_ctx);
             }
             FamiliarAiState::SearchingTask => {
-                debug!("FAM_AI: {:?} executing SearchingTask logic", fam_entity);
+                debug!("FAM_AI: {:?} executing SearchingTask logic", ctx.fam_entity);
                 state_handlers::searching::handle_searching_task_state(
-                    fam_entity,
+                    ctx.fam_entity,
                     fam_pos,
-                    task_area_opt,
-                    fam_dest,
-                    fam_path,
+                    ctx.task_area_opt,
+                    ctx.fam_dest,
+                    ctx.fam_path,
                 );
             }
             _ => {}

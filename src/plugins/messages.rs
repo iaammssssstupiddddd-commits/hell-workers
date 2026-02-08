@@ -3,9 +3,9 @@ use bevy::prelude::*;
 use crate::entities::damned_soul::DamnedSoulSpawnEvent;
 use crate::entities::familiar::FamiliarSpawnEvent;
 use crate::events::{
-    EncouragementRequest, EscapeRequest, FamiliarAiStateChangedEvent, FamiliarOperationMaxSoulChangedEvent,
-    FamiliarStateRequest, GatheringManagementRequest, IdleBehaviorRequest, ResourceReservationRequest,
-    SquadManagementRequest, TaskAssignmentRequest,
+    EncouragementRequest, EscapeRequest, FamiliarAiStateChangedEvent,
+    FamiliarOperationMaxSoulChangedEvent, FamiliarStateRequest, GatheringManagementRequest,
+    IdleBehaviorRequest, ResourceReservationRequest, SquadManagementRequest, TaskAssignmentRequest,
 };
 use crate::systems::visual::speech::conversation::events::{
     ConversationCompleted, RequestConversation,
