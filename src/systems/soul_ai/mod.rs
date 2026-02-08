@@ -4,13 +4,84 @@
 
 use bevy::prelude::*;
 
-pub mod gathering;
-pub mod idle;
-pub mod query_types;
+pub mod decide;
+pub mod execute;
+pub mod helpers;
+pub mod perceive;
 pub mod scheduling;
-pub mod task_execution; // タスク実行モジュール
-pub mod vitals;
-pub mod work;
+pub mod update;
+pub mod visual;
+
+// 既存参照の互換レイヤー（M1移行中）
+pub mod query_types {
+    pub use super::helpers::query_types::*;
+}
+
+pub mod gathering {
+    pub use super::helpers::gathering::*;
+
+    pub mod maintenance {
+        pub use super::super::update::gathering_maintenance::*;
+    }
+
+    pub mod spawn {
+        pub use super::super::execute::gathering_spawn::*;
+    }
+
+    pub mod visual {
+        pub use super::super::visual::gathering::*;
+    }
+}
+
+pub mod idle {
+    pub mod behavior {
+        pub use super::super::decide::idle_behavior::*;
+    }
+
+    pub mod escaping {
+        pub use super::super::perceive::escaping::*;
+    }
+
+    pub mod separation {
+        pub use super::super::decide::separation::*;
+    }
+
+    pub mod visual {
+        pub use super::super::visual::idle::*;
+    }
+}
+
+pub mod vitals {
+    pub use super::update::vitals::*;
+
+    pub mod influence {
+        pub use super::super::update::vitals_influence::*;
+    }
+
+    pub mod update {
+        pub use super::super::update::vitals_update::*;
+    }
+
+    pub mod visual {
+        pub use super::super::visual::vitals::*;
+    }
+}
+
+pub mod work {
+    pub use super::decide::work::*;
+
+    pub mod cleanup {
+        pub use super::super::execute::cleanup::*;
+    }
+
+    pub mod helpers {
+        pub use super::super::helpers::work::*;
+    }
+}
+
+pub mod task_execution {
+    pub use super::execute::task_execution::*;
+}
 
 use crate::systems::GameSystemSet;
 use scheduling::{FamiliarAiSystemSet, SoulAiSystemSet};
