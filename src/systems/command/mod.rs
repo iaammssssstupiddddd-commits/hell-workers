@@ -49,11 +49,35 @@ pub struct DesignationIndicator(pub Entity);
 #[derive(Component)]
 pub struct AreaSelectionIndicator;
 
+#[derive(Component, Clone, Copy, Debug)]
+pub struct AreaEditHandleVisual {
+    pub owner: Entity,
+    pub kind: AreaEditHandleKind,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AreaEditHandleKind {
+    TopLeft,
+    Top,
+    TopRight,
+    Right,
+    BottomRight,
+    Bottom,
+    BottomLeft,
+    Left,
+    Center,
+}
+
 // 公開API
-pub use area_selection::{area_selection_indicator_system, task_area_selection_system};
+pub use area_selection::{
+    AreaEditClipboard, AreaEditHistory, AreaEditPresets, AreaEditSession,
+    area_selection_indicator_system, task_area_edit_cursor_system,
+    task_area_edit_history_shortcuts_system,
+    task_area_selection_system,
+};
 pub use assign_task::assign_task_system;
 pub use indicators::{
-    sync_designation_indicator_system, task_area_indicator_system,
+    area_edit_handles_visual_system, sync_designation_indicator_system, task_area_indicator_system,
     update_designation_indicator_system,
 };
 pub use input::familiar_command_input_system;

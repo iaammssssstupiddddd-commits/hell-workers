@@ -1,10 +1,11 @@
 use bevy::prelude::*;
 
-use crate::entities::familiar::FamiliarOperation;
+use crate::entities::familiar::{Familiar, FamiliarOperation};
 use crate::events::FamiliarOperationMaxSoulChangedEvent;
 use crate::game_state::{BuildContext, PlayMode, TaskContext, ZoneContext};
 use crate::interface::ui::InfoPanelPinState;
 use crate::interface::ui::components::{MenuAction, MenuState, OperationDialog};
+use crate::systems::command::TaskArea;
 
 pub(super) fn handle_pressed_action(
     action: MenuAction,
@@ -16,6 +17,7 @@ pub(super) fn handle_pressed_action(
     selected_entity: &mut ResMut<crate::interface::selection::SelectedEntity>,
     info_panel_pin: &mut ResMut<InfoPanelPinState>,
     q_familiar_ops: &mut Query<&mut FamiliarOperation>,
+    q_familiars_for_area: &Query<(Entity, Option<&TaskArea>), With<Familiar>>,
     q_dialog: &mut Query<&mut Node, With<OperationDialog>>,
     ev_max_soul_changed: &mut MessageWriter<FamiliarOperationMaxSoulChangedEvent>,
 ) {
@@ -75,12 +77,44 @@ pub(super) fn handle_pressed_action(
             zone_context,
             task_context,
         ),
-        MenuAction::SelectAreaTask => super::mode::set_area_task_mode(
-            next_play_mode,
-            build_context,
-            zone_context,
-            task_context,
-        ),
+        MenuAction::SelectAreaTask => {
+            let selected_is_familiar = selected_entity
+                .0
+                .is_some_and(|entity| q_familiars_for_area.get(entity).is_ok());
+
+            if !selected_is_familiar {
+                // 1) TaskAreaを持っていないFamiliarを優先
+                // 2) 全員持っている場合は任意（Entity index最小）を選択
+                let mut familiars: Vec<(Entity, bool)> = q_familiars_for_area
+                    .iter()
+                    .map(|(entity, area_opt)| (entity, area_opt.is_some()))
+                    .collect();
+                familiars.sort_by_key(|(entity, _)| entity.index());
+
+                let fallback = familiars
+                    .iter()
+                    .find(|(_, has_area)| !*has_area)
+                    .map(|(entity, _)| *entity)
+                    .or_else(|| familiars.first().map(|(entity, _)| *entity));
+
+                if let Some(familiar_entity) = fallback {
+                    selected_entity.0 = Some(familiar_entity);
+                    info!(
+                        "UI: Area Edit target auto-selected Familiar {:?}",
+                        familiar_entity
+                    );
+                } else {
+                    info!("UI: Area Edit requested but no Familiar exists");
+                }
+            }
+
+            super::mode::set_area_task_mode(
+                next_play_mode,
+                build_context,
+                zone_context,
+                task_context,
+            );
+        }
         MenuAction::OpenOperationDialog => super::dialog::open_operation_dialog(q_dialog),
         MenuAction::CloseDialog => super::dialog::close_operation_dialog(q_dialog),
         MenuAction::AdjustFatigueThreshold(delta) => {
@@ -95,6 +129,7 @@ pub(super) fn handle_pressed_action(
             );
         }
     }
+
 }
 
 fn adjust_fatigue_threshold(

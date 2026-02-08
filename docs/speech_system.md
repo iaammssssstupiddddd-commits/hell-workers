@@ -8,6 +8,10 @@
 
 セリフは主に Bevy の **Observer** イベント、または **AI 状態の変化** によってトリガーされます。
 
+### Observer 登録方針
+- セリフ系オブザーバーは `SpeechPlugin` の `app.add_observer(...)` で一元登録します。
+- 同じハンドラをエンティティ生成時の `.observe(...)` と重複登録しない運用です。
+
 ### Soul (魂) のセリフ
 Soul は主に「感情」を絵文字で表現します。表示時は各感情に対応した色の **グロー（光彩）背景** が伴います。
 
@@ -18,7 +22,7 @@ Soul は主に「感情」を絵文字で表現します。表示時は各感情
 | `OnExhausted` | 😴 | Exhausted | High | 疲労限界に達し、休息へ向かう時 |
 | `OnStressBreakdown` | 😰 | Stressed | Critical | ストレス崩壊を起こした時 |
 | `OnSoulRecruited` | 😨 | Fearful | Normal | 勧誘された時 (0.3s遅延) | [NEW]
-| `OnReleased` | 😅 | Relieved | Normal | 使役から解放された時 | [NEW]
+| `OnReleasedFromService` | 😅 | Relieved | Normal | 使役から解放された時 | [NEW]
 | `OnGatheringJoined`| 😌 | Relaxed | Normal | 集会所に到着した時 | [NEW]
 | `OnTaskAbandoned` | 😓 | Frustrated | Normal | タスクがキャンセルされた時 | [NEW]
 | `Periodic: Idle` | 💤.. | Bored | Low | 長時間アイドル時 (10s+) | [NEW]

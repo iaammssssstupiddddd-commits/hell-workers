@@ -66,7 +66,7 @@ pub enum SoulAiSystemSet {
 
 **原則**:
 - コンポーネントの**読み取りのみ**
-- キャッシュの再構築
+- キャッシュの再構築（必要に応じてタイマーゲート）
 - 変化フラグの設定
 
 **システム例**:
@@ -77,7 +77,7 @@ pub enum SoulAiSystemSet {
 // Familiar AI
 - detect_state_changes_system    // 状態変化の検出
 - detect_command_changes_system  // コマンド変化の検出
-- sync_reservations_system       // リソース予約キャッシュの再構築
+- sync_reservations_system       // リソース予約キャッシュの再構築（0.2秒間隔, 初回即時）
 ```
 
 **sync_reservations_system の詳細**:
@@ -88,6 +88,9 @@ pub enum SoulAiSystemSet {
 2. **`Designation` (Without<TaskWorkers>)** - まだ割り当て待ちのタスク候補
 
 `Designation` からの予約は、付随するコンポーネント（`TargetMixer`, `TargetBlueprint`, `BelongsTo`）と `WorkType` に基づいて適切な予約カテゴリにカウントされます。これにより、自動発行システムが複数フレームにわたって過剰にタスクを発行することを防ぎます。
+
+- 再構築は **0.2秒間隔（初回即時）** で実行されます。
+- 同期間隔中の差分は `ResourceReservationRequest` により随時反映されます。
 
 ### Update（更新）
 
@@ -102,8 +105,7 @@ pub enum SoulAiSystemSet {
 ```rust
 // Soul AI
 - fatigue_update_system          // 疲労の増減
-- stress_system                  // ストレス更新
-- motivation_system              // やる気計算
+- familiar_influence_unified_system  // ストレス/やる気/怠惰の統合更新
 - gathering_maintenance_system   // 集会スポット状態管理
 
 // Familiar AI
@@ -124,12 +126,15 @@ pub enum SoulAiSystemSet {
 // Soul AI
 - idle_behavior_decision_system  // アイドル行動の決定
 - blueprint_auto_haul_system     // タスク割り当て要求
-- escaping_behavior_system       // 逃走行動の決定
+- escaping_behavior_system       // 逃走行動の決定（0.5秒間隔, 初回即時）
 
 // Familiar AI
 - familiar_ai_state_system       // 状態遷移判定
-- familiar_task_delegation_system
+- familiar_task_delegation_system // 0.5秒間隔, 初回即時
 ```
+
+- `escaping_behavior_system` は **0.5秒間隔（初回即時）** で再評価されます。
+- `familiar_task_delegation_system` も **0.5秒間隔（初回即時）** で実行されます。
 
 ### Execute（実行）
 

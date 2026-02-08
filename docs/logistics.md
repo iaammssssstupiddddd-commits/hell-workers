@@ -70,10 +70,13 @@ Hell-Workers における資源の備蓄、運搬、および管理の仕組み�
 自動発行システムが過剰にタスクを発行しないよう、`SharedResourceCache` と `sync_reservations_system` で予約を一元管理しています。
 
 ### 6.1. 予約の再構築
-`sync_reservations_system` は毎フレーム以下の2つのソースから予約を再構築します:
+`sync_reservations_system` は **0.2秒間隔（初回即時）** で、以下の2つのソースから予約を再構築します:
 
 1. **`AssignedTask`** - 既にSoulに割り当てられているタスク
 2. **`Designation` (Without<TaskWorkers>)** - まだ割り当て待ちのタスク候補
+
+補足:
+- 同期タイマーの間隔中でも、`ResourceReservationRequest` による差分更新は `apply_reservation_requests_system` で即時反映されます。
 
 ### 6.2. Designation からの予約カウント
 `Designation` を持つエンティティは、付随するコンポーネントによって適切な予約にカウントされます:

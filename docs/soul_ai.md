@@ -55,6 +55,7 @@
   - 警戒圏内にいる間はストレスが緩やかに増加する
 - `ExhaustedGathering` 中は対象外（疲労行動を優先）
 - `Gathering` 中も対象（ただし警戒圏内にいる場合のみストレスが増加する）
+- 判定は `escaping_detection_system` により **0.5秒間隔（初回即時）** で実行される
 
 **逃走終了条件:**
 - 全ての使い魔から `command_radius * 2.0` 以上離れた（距離判定は障害物を考慮した経路距離を優先）
@@ -65,6 +66,7 @@
 - 使い魔から離れる方向へ移動（基本ベクトル70%）
 - 安全な集会スポットがある場合はそちらへ誘導（30%）
 - 通常より速い速度で移動
+- 逃走先の再評価は `escaping_behavior_system` により **0.5秒間隔（初回即時）** で実行される
 
 **視覚フィードバック:**
 - 青白い色（パニック感）
@@ -84,7 +86,7 @@ Perceive → Update → Decide → Execute
 
 | フェーズ | 責任 | 主なシステム |
 |:--|:--|:--|
-| **Perceive** | 環境情報の読み取り、変化の検出 | `sync_reservations_system`, `escaping_detection_system` |
+| **Perceive** | 環境情報の読み取り、変化の検出 | `escaping_detection_system`（0.5秒間隔, 初回即時） |
 | **Update** | 時間経過による内部状態の変化 | バイタル更新、タイマー、集会スポットメンテナンス |
 | **Decide** | 次の行動の選択、要求の生成 | `idle_behavior_decision_system`, タスク割り当て要求 |
 | **Execute** | 決定された行動の実行 | `apply_task_assignment_requests_system`, `idle_behavior_apply_system`, `task_execution` |

@@ -7,6 +7,7 @@ use crate::interface::ui::{
     entity_list_tab_focus_system, entity_list_visual_feedback_system,
     sync_entity_list_from_view_model_system, update_unassigned_arrow_icon_system,
 };
+use crate::systems::command::task_area_edit_cursor_system;
 use crate::systems::GameSystemSet;
 use bevy::prelude::*;
 use bevy::time::common_conditions::on_timer;
@@ -33,6 +34,7 @@ impl Plugin for UiEntityListPlugin {
                 entity_list_minimize_toggle_system,
                 entity_list_resize_system,
                 entity_list_resize_cursor_system.after(entity_list_resize_system),
+                task_area_edit_cursor_system.after(entity_list_resize_cursor_system),
                 update_unassigned_arrow_icon_system,
             )
                 .in_set(GameSystemSet::Interface),

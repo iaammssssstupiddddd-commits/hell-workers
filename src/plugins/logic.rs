@@ -4,7 +4,9 @@ use crate::entities::familiar::{familiar_movement, familiar_spawning_system};
 use crate::game_state::PlayMode;
 use crate::systems::GameSystemSet;
 use crate::systems::command::{
-    assign_task_system, familiar_command_input_system, task_area_selection_system,
+    AreaEditClipboard, AreaEditHistory, AreaEditPresets, AreaEditSession, assign_task_system,
+    familiar_command_input_system, task_area_edit_history_shortcuts_system,
+    task_area_selection_system,
 };
 use crate::systems::obstacle::obstacle_cleanup_system;
 use crate::systems::soul_ai::SoulAiPlugin;
@@ -19,6 +21,10 @@ impl Plugin for LogicPlugin {
 
         // パスファインディング用の作業メモリを登録
         app.init_resource::<RegrowthManager>();
+        app.init_resource::<AreaEditSession>();
+        app.init_resource::<AreaEditHistory>();
+        app.init_resource::<AreaEditClipboard>();
+        app.init_resource::<AreaEditPresets>();
 
         app.add_systems(
             Update,
@@ -30,6 +36,8 @@ impl Plugin for LogicPlugin {
                     },
                 ),
                 task_area_selection_system.run_if(in_state(PlayMode::TaskDesignation)),
+                task_area_edit_history_shortcuts_system
+                    .run_if(in_state(PlayMode::TaskDesignation)),
                 familiar_spawning_system,
                 tree_regrowth_system,
                 obstacle_cleanup_system,
