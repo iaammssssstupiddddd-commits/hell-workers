@@ -1,5 +1,5 @@
 use crate::events::ResourceReservationOp;
-use crate::systems::familiar_ai::helpers::task_management::{AssignTaskContext, ReservationShadow};
+use crate::systems::familiar_ai::decide::task_management::{AssignTaskContext, ReservationShadow};
 use crate::systems::jobs::WorkType;
 use crate::systems::soul_ai::execute::task_execution::types::{BuildPhase, GatherPhase};
 use bevy::prelude::*;

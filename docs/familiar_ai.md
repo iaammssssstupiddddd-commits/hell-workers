@@ -90,25 +90,26 @@
 ### 5.2. 主要モジュール
 
 - **`mod.rs`**: プラグイン配線とフェーズスケジューリング定義
-- **`helpers/familiar_processor.rs`**: 使い魔の処理ロジックを複数の関数に分割
+- **`decide/familiar_processor.rs`**: 使い魔の処理ロジックを複数の関数に分割
   - `process_squad_management`: 分隊管理の意思決定（Request 発行）
   - `process_recruitment`: リクルート処理の意思決定（Request 発行）
   - `finalize_state_transitions`: 状態遷移の最終確定
   - `process_task_delegation_and_movement`: タスク委譲と移動制御
+- **`helpers/query_types.rs`**: Familiar AI 共通クエリ型定義（フェーズ横断で利用）
 - **`decide/state_decision.rs`**: 状態遷移の意思決定システム
   - `familiar_ai_state_system`: 状態判定と Request 生成
 - **`decide/task_delegation.rs`**: タスク委譲の意思決定システム
   - `familiar_task_delegation_system`: タスク委譲・移動制御（0.5秒間隔, 初回即時）
-- **`helpers/state_handlers/`**: 各状態のハンドラー
+- **`decide/state_handlers/`**: 各状態のハンドラー
   - `idle.rs`: Idle 状態の処理
   - `searching.rs`: SearchingTask 状態の処理
   - `scouting.rs`: Scouting 状態の処理
   - `supervising.rs`: Supervising 状態の処理
-- **`helpers/squad.rs`**: 分隊管理（`SquadManager`）
+- **`decide/squad.rs`**: 分隊管理（`SquadManager`）
   - `build_squad`: 分隊の構築
   - `validate_squad`: 分隊の検証
   - `release_fatigued`: 疲労・崩壊したメンバーのリリース要求発行
-- **`helpers/task_management/`**: タスク管理（`TaskManager`）
+- **`decide/task_management/`**: タスク管理（`TaskManager`）
   - `find_unassigned_task_in_area`: タスク検索
   - `assign_task_to_worker`: タスク割り当て
   - `delegate_task`: タスク委譲
@@ -119,7 +120,7 @@
     - **Ground Projection**: 使い魔（空中ユニット）の位置ではなく、常にワーカー（地上ユニット）が立つ地面の座標に投影してパス計算を開始します。
     - **4方向パス検索**: 上下左右の4方向移動に準拠したパス検索を行い、斜め移動による障害物のすり抜けを防止しています。
 - **assign_task_to_worker**: タスク割り当て要求の生成（`TaskAssignmentRequest` を発行し、実適用は Act で行う）
-- **`helpers/recruitment.rs`**: リクルート管理（`RecruitmentManager`）
+- **`decide/recruitment.rs`**: リクルート管理（`RecruitmentManager`）
   - `find_best_recruit`: リクルート候補の検索
   - `try_immediate_recruit`: 即時リクルート要求発行
   - `start_scouting`: スカウト開始・移動目標設定

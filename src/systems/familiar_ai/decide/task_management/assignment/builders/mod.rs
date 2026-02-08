@@ -7,7 +7,7 @@ pub use haul::{issue_haul_to_blueprint, issue_haul_to_mixer, issue_haul_to_stock
 pub use water::{issue_gather_water, issue_haul_water_to_mixer};
 
 use crate::events::{ResourceReservationOp, TaskAssignmentRequest};
-use crate::systems::familiar_ai::helpers::task_management::{AssignTaskContext, ReservationShadow};
+use crate::systems::familiar_ai::decide::task_management::{AssignTaskContext, ReservationShadow};
 use crate::systems::jobs::WorkType;
 use crate::systems::soul_ai::execute::task_execution::types::AssignedTask;
 use bevy::prelude::*;

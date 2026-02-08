@@ -1,6 +1,6 @@
 use crate::entities::familiar::FamiliarCommand;
 use crate::systems::familiar_ai::FamiliarTaskDelegationTimer;
-use crate::systems::familiar_ai::helpers::familiar_processor::{
+use crate::systems::familiar_ai::decide::familiar_processor::{
     FamiliarDelegationContext, process_task_delegation_and_movement,
 };
 use crate::systems::familiar_ai::helpers::query_types::{FamiliarSoulQuery, FamiliarTaskQuery};
@@ -43,7 +43,7 @@ pub fn familiar_task_delegation_system(params: FamiliarAiTaskDelegationParams) {
     delegation_timer.first_run_done = true;
 
     let mut reservation_shadow =
-        crate::systems::familiar_ai::helpers::task_management::ReservationShadow::default();
+        crate::systems::familiar_ai::decide::task_management::ReservationShadow::default();
 
     for (
         fam_entity,
@@ -67,9 +67,9 @@ pub fn familiar_task_delegation_system(params: FamiliarAiTaskDelegationParams) {
         let managed_tasks = managed_tasks_opt.unwrap_or(&default_tasks);
 
         let initial_squad =
-            crate::systems::familiar_ai::helpers::squad::SquadManager::build_squad(commanding);
+            crate::systems::familiar_ai::decide::squad::SquadManager::build_squad(commanding);
         let (squad_entities, _invalid_members) =
-            crate::systems::familiar_ai::helpers::squad::SquadManager::validate_squad(
+            crate::systems::familiar_ai::decide::squad::SquadManager::validate_squad(
                 initial_squad,
                 fam_entity,
                 &mut q_souls,

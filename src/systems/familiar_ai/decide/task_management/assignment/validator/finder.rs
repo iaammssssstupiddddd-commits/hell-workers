@@ -1,5 +1,5 @@
 use crate::systems::command::TaskArea;
-use crate::systems::familiar_ai::helpers::task_management::ReservationShadow;
+use crate::systems::familiar_ai::decide::task_management::ReservationShadow;
 use crate::systems::logistics::ResourceType;
 use bevy::prelude::*;
 
