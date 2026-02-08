@@ -281,6 +281,7 @@ fn apply_row_highlight(
 pub fn entity_list_scroll_system(
     mut mouse_wheel_events: MessageReader<MouseWheel>,
     mut q_scroll_areas: Query<(&RelativeCursorPosition, &mut ScrollPosition, &UiScrollArea)>,
+    theme: Res<UiTheme>,
 ) {
     let Some((_, mut scroll_position, scroll_area)) = q_scroll_areas
         .iter_mut()
@@ -301,8 +302,10 @@ pub fn entity_list_scroll_system(
         return;
     }
 
+    let step = theme.sizes.soul_item_height.max(1.0);
     // Wheel up should move list content down (toward earlier rows).
-    scroll_position.y = (scroll_position.y - delta_y).max(0.0);
+    let target = (scroll_position.y - delta_y).max(0.0);
+    scroll_position.y = (target / step).round() * step;
 }
 
 pub fn entity_list_tab_focus_system(

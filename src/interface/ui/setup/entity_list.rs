@@ -109,8 +109,10 @@ pub fn spawn_entity_list_panel(
             .spawn((
                 Node {
                     width: Val::Percent(100.0),
+                    flex_grow: 1.0,
                     min_height: Val::Px(0.0),
                     flex_direction: FlexDirection::Column,
+                    position_type: PositionType::Relative,
                     ..default()
                 },
                 BackgroundColor(theme.colors.bg_surface),
@@ -130,6 +132,8 @@ pub fn spawn_entity_list_panel(
                 // 未所属ソウルセクション
                 body.spawn((
                     Node {
+                        flex_grow: 1.0,
+                        min_height: Val::Px(0.0),
                         flex_direction: FlexDirection::Column,
                         margin: UiRect::top(Val::Px(10.0)),
                         ..default()
@@ -176,8 +180,9 @@ pub fn spawn_entity_list_panel(
                     // 未所属ソウルリストコンテナ
                     section.spawn((
                         Node {
+                            flex_grow: 1.0,
+                            min_height: Val::Px(0.0),
                             flex_direction: FlexDirection::Column,
-                            max_height: Val::Px(220.0),
                             overflow: Overflow::scroll_y(),
                             ..default()
                         },
@@ -199,8 +204,9 @@ pub fn spawn_entity_list_panel(
                     TextColor(theme.colors.text_secondary_semantic), // Semantic
                     Node {
                         display: Display::None,
-                        align_self: AlignSelf::End,
-                        margin: UiRect::top(Val::Px(8.0)),
+                        position_type: PositionType::Absolute,
+                        right: Val::Px(0.0),
+                        bottom: Val::Px(0.0),
                         ..default()
                     },
                     IgnoreScroll(BVec2::new(false, true)), // Bevy 0.18 Feature

@@ -72,7 +72,8 @@ When adding new tasks to `AssignedTask` enum:
 ### Image Generation Workflow
 1. **Generate**: Use `generate_image` with "solid pure magenta background (#FF00FF)"
    - Do NOT specify "transparent background" (AI draws checkerboard pattern)
-   - Specify style: "pixel art style", "32x32", etc.
+   - Art style: Refer to `docs/world_lore.md` section 6.2 (Rough Vector Sketch)
+   - Key rules: Orthographic projection only (no 3/4 view), loose wobbly lines, textured brush, Tim Burton-esque distorted silhouettes
 2. **Convert**: `python scripts/convert_to_png.py "source" "assets/textures/dest.png"`
 3. **Verify**: Check PNG signature is `89 50 4e 47 0d 0a 1a 0a`
 4. **Use**: Load with `.png` extension in code
