@@ -7,6 +7,8 @@ use crate::events::{
 
 pub mod encouragement;
 pub mod following;
+pub mod state_decision;
+pub mod task_delegation;
 
 /// Familiar Decide フェーズの共通出力チャネル
 #[derive(SystemParam)]

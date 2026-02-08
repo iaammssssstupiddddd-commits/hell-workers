@@ -89,14 +89,16 @@
 
 ### 5.2. 主要モジュール
 
-- **`mod.rs`**: メインのシステム定義と SystemParam の分割（`FamiliarAiParams` / `FamiliarAiTaskParams`）
-  - **Decide フェーズ**: 状態更新 → `ApplyDeferred` → タスク委譲/移動の順で実行
+- **`mod.rs`**: プラグイン配線とフェーズスケジューリング定義
 - **`helpers/familiar_processor.rs`**: 使い魔の処理ロジックを複数の関数に分割
   - `process_squad_management`: 分隊管理の意思決定（Request 発行）
   - `process_recruitment`: リクルート処理の意思決定（Request 発行）
-  - `apply_squad_management_requests_system`: 分隊管理要求の実際の適用（Executeフェーズ）
   - `finalize_state_transitions`: 状態遷移の最終確定
   - `process_task_delegation_and_movement`: タスク委譲と移動制御
+- **`decide/state_decision.rs`**: 状態遷移の意思決定システム
+  - `familiar_ai_state_system`: 状態判定と Request 生成
+- **`decide/task_delegation.rs`**: タスク委譲の意思決定システム
+  - `familiar_task_delegation_system`: タスク委譲・移動制御（0.5秒間隔, 初回即時）
 - **`helpers/state_handlers/`**: 各状態のハンドラー
   - `idle.rs`: Idle 状態の処理
   - `searching.rs`: SearchingTask 状態の処理
@@ -128,6 +130,8 @@
 - **`perceive/max_soul.rs`**: 使役数上限変更イベントの処理
   - `handle_max_soul_changed_system`: 上限超過分の魂をリリース
 - **`perceive/resource_sync.rs`**: `SharedResourceCache` の再構築と予約反映
+- **`execute/state_log.rs`**: 状態遷移イベントのログ処理
+- **`execute/squad_apply.rs`**: `SquadManagementRequest` の適用（分隊管理の副作用実行）
 - **`decide/encouragement.rs` / `execute/encouragement_apply.rs`**: 激励の決定と適用
 
 ### 5.2. 関連コンポーネント
