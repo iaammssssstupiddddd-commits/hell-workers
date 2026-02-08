@@ -8,7 +8,7 @@ use crate::events::SquadManagementRequest;
 use crate::relationships::{Commanding, ManagedTasks};
 use crate::systems::command::TaskArea;
 use crate::systems::familiar_ai::FamiliarSoulQuery;
-use crate::systems::familiar_ai::helpers::task_management::ReservationShadow;
+use crate::systems::familiar_ai::decide::task_management::ReservationShadow;
 use crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries;
 use crate::systems::spatial::{DesignationSpatialGrid, SpatialGrid};
 use bevy::prelude::*;
@@ -283,7 +283,7 @@ pub fn process_task_delegation_and_movement(ctx: &mut FamiliarDelegationContext<
         match *ctx.ai_state {
             FamiliarAiState::Supervising { .. } => {
                 let mut supervising_ctx =
-                    crate::systems::familiar_ai::helpers::supervising::FamiliarSupervisingContext {
+                    crate::systems::familiar_ai::decide::supervising::FamiliarSupervisingContext {
                         fam_entity: ctx.fam_entity,
                         fam_pos,
                         active_members: &active_members,

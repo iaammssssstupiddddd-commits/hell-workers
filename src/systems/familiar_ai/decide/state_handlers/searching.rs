@@ -24,7 +24,7 @@ pub fn handle_searching_task_state(
 ) -> StateTransitionResult {
     if let Some(area) = task_area_opt {
         let center = area.center();
-        crate::systems::familiar_ai::helpers::supervising::move_to_center(
+        crate::systems::familiar_ai::decide::supervising::move_to_center(
             fam_entity, fam_pos, center, fam_dest, fam_path,
         );
     }
