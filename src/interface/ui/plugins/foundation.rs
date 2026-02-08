@@ -1,4 +1,6 @@
-use crate::interface::ui::{SectionFolded, UiInputState, UiNodeRegistry, UnassignedFolded, UiTheme};
+use crate::interface::ui::{
+    SectionFolded, UiInputState, UiNodeRegistry, UiTheme, UnassignedFolded,
+};
 use crate::systems::GameSystemSet;
 use bevy::prelude::*;
 

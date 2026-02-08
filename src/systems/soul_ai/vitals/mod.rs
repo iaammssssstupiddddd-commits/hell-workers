@@ -3,7 +3,6 @@ use crate::entities::damned_soul::DamnedSoul;
 use crate::systems::jobs::WorkType;
 use bevy::prelude::*;
 
-pub mod helpers;
 pub mod influence;
 pub mod update;
 pub mod visual;

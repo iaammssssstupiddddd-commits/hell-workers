@@ -210,8 +210,7 @@ pub fn entity_list_resize_system(
                     &theme,
                 );
             }
-            let clamped_height =
-                clamp_height(snapped_height, ENTITY_LIST_MIN_HEIGHT, max_height);
+            let clamped_height = clamp_height(snapped_height, ENTITY_LIST_MIN_HEIGHT, max_height);
             let clamped_top = (start_bottom - clamped_height).max(theme.spacing.panel_margin_x);
             panel_node.top = Val::Px(clamped_top);
             panel_node.height = Val::Px(clamped_height);

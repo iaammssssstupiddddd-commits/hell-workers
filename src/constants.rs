@@ -171,6 +171,17 @@ pub const ESCAPE_PROXIMITY_STRESS_RATE: f32 = 0.005;
 pub const ESCAPE_GATHERING_JOIN_RADIUS: f32 = TILE_SIZE * 7.5;
 /// 逃走検出システムの実行間隔（秒）
 pub const ESCAPE_DETECTION_INTERVAL: f32 = 0.5;
+/// 逃走中行動（A*再評価）の実行間隔（秒）
+pub const ESCAPE_BEHAVIOR_INTERVAL: f32 = 0.5;
+
+// ============================================================
+// AI ロジック定数 - スケーラビリティ最適化
+// ============================================================
+
+/// Familiar のタスク委譲システム実行間隔（秒）
+pub const FAMILIAR_TASK_DELEGATION_INTERVAL: f32 = 0.5;
+/// 予約キャッシュ同期システム実行間隔（秒）
+pub const RESERVATION_SYNC_INTERVAL: f32 = 0.2;
 
 // ============================================================
 // AI ロジック定数 - 作業 (Work)

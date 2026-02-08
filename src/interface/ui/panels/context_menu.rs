@@ -261,4 +261,3 @@ fn spawn_menu_item(
             ));
         });
 }
-

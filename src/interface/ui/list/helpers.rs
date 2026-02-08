@@ -436,23 +436,25 @@ pub(super) fn spawn_empty_squad_hint_entity(
     theme: &UiTheme,
 ) -> Entity {
     let mut result = Entity::PLACEHOLDER;
-    commands.entity(parent_entity).with_children(|members_parent| {
-        result = members_parent
-            .spawn((
-                Text::new("  (empty)"),
-                TextFont {
-                    font: game_assets.font_ui.clone(),
-                    font_size: theme.typography.font_size_item,
-                    ..default()
-                },
-                TextColor(theme.colors.empty_text),
-                Node {
-                    margin: UiRect::left(Val::Px(theme.sizes.empty_squad_left_margin)),
-                    ..default()
-                },
-            ))
-            .id();
-    });
+    commands
+        .entity(parent_entity)
+        .with_children(|members_parent| {
+            result = members_parent
+                .spawn((
+                    Text::new("  (empty)"),
+                    TextFont {
+                        font: game_assets.font_ui.clone(),
+                        font_size: theme.typography.font_size_item,
+                        ..default()
+                    },
+                    TextColor(theme.colors.empty_text),
+                    Node {
+                        margin: UiRect::left(Val::Px(theme.sizes.empty_squad_left_margin)),
+                        ..default()
+                    },
+                ))
+                .id();
+        });
     result
 }
 

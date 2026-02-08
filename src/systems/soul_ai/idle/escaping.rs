@@ -28,6 +28,22 @@ impl Default for EscapeDetectionTimer {
     }
 }
 
+/// 逃走行動システム用のタイマーリソース
+#[derive(Resource)]
+pub struct EscapeBehaviorTimer {
+    pub timer: Timer,
+    pub first_run_done: bool,
+}
+
+impl Default for EscapeBehaviorTimer {
+    fn default() -> Self {
+        Self {
+            timer: Timer::from_seconds(ESCAPE_BEHAVIOR_INTERVAL, TimerMode::Repeating),
+            first_run_done: false,
+        }
+    }
+}
+
 /// 逃走対象となる使い魔情報
 #[derive(Debug, Clone, Copy)]
 struct FamiliarThreat {
@@ -160,15 +176,6 @@ pub(crate) fn is_escape_threat_close(
     q_familiars: &Query<(&Transform, &Familiar)>,
 ) -> bool {
     detect_nearest_familiar(soul_pos, familiar_grid, q_familiars).is_some()
-}
-
-/// 使い魔の影響範囲内にいるかを判定（command_radius）
-pub(crate) fn is_familiar_in_influence_range(
-    soul_pos: Vec2,
-    familiar_grid: &FamiliarSpatialGrid,
-    q_familiars: &Query<(&Transform, &Familiar)>,
-) -> bool {
-    detect_nearest_familiar_within_multiplier(soul_pos, familiar_grid, q_familiars, 1.0).is_some()
 }
 
 /// 逃走検出システム
@@ -323,6 +330,8 @@ fn find_safe_gathering_spot(
 /// 逃走行動システム
 /// Escaping状態のSoulの移動を制御
 pub fn escaping_behavior_system(
+    time: Res<Time>,
+    mut behavior_timer: ResMut<EscapeBehaviorTimer>,
     world_map: Res<WorldMap>,
     mut pf_context: Local<PathfindingContext>,
     familiar_grid: Res<FamiliarSpatialGrid>,
@@ -330,6 +339,12 @@ pub fn escaping_behavior_system(
     q_gathering_spots: Query<(Entity, &GatheringSpot)>,
     mut q_souls: EscapingBehaviorSoulQuery,
 ) {
+    let timer_finished = behavior_timer.timer.tick(time.delta()).just_finished();
+    if behavior_timer.first_run_done && !timer_finished {
+        return;
+    }
+    behavior_timer.first_run_done = true;
+
     for (entity, transform, mut idle_state, mut destination, mut path, under_command) in
         q_souls.iter_mut()
     {

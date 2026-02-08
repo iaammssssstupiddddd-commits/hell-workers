@@ -1,3 +1,4 @@
+use crate::constants::FAMILIAR_TASK_DELEGATION_INTERVAL;
 use crate::entities::damned_soul::StressBreakdown;
 use crate::entities::familiar::FamiliarCommand;
 use crate::systems::GameSystemSet;
@@ -73,7 +74,9 @@ impl Plugin for FamiliarAiPlugin {
         .register_type::<FamiliarAiState>()
         .register_type::<encouragement::EncouragementCooldown>()
         .init_resource::<resource_cache::SharedResourceCache>()
+        .init_resource::<resource_cache::ReservationSyncTimer>()
         .init_resource::<DesignationSpatialGrid>()
+        .init_resource::<FamiliarTaskDelegationTimer>()
         .add_systems(
             Update,
             (
@@ -124,6 +127,21 @@ impl Plugin for FamiliarAiPlugin {
 /// Redirect for name consistency if needed, or just use the one in processor
 pub use familiar_processor::apply_squad_management_requests_system as process_squad_management_apply_system;
 
+#[derive(Resource)]
+pub struct FamiliarTaskDelegationTimer {
+    pub timer: Timer,
+    pub first_run_done: bool,
+}
+
+impl Default for FamiliarTaskDelegationTimer {
+    fn default() -> Self {
+        Self {
+            timer: Timer::from_seconds(FAMILIAR_TASK_DELEGATION_INTERVAL, TimerMode::Repeating),
+            first_run_done: false,
+        }
+    }
+}
+
 #[derive(SystemParam)]
 pub struct FamiliarAiParams<'w, 's> {
     pub commands: Commands<'w, 's>,
@@ -144,6 +162,7 @@ pub struct FamiliarAiParams<'w, 's> {
 pub struct FamiliarAiTaskParams<'w, 's> {
     pub commands: Commands<'w, 's>,
     pub time: Res<'w, Time>,
+    pub delegation_timer: ResMut<'w, FamiliarTaskDelegationTimer>,
     pub q_familiars: FamiliarTaskQuery<'w, 's>,
     pub q_souls: FamiliarSoulQuery<'w, 's>,
     pub task_queries:
@@ -306,6 +325,7 @@ pub fn familiar_task_delegation_system(params: FamiliarAiTaskParams) {
     let FamiliarAiTaskParams {
         mut commands,
         time,
+        mut delegation_timer,
         mut q_familiars,
         mut q_souls,
         mut task_queries,
@@ -314,6 +334,10 @@ pub fn familiar_task_delegation_system(params: FamiliarAiTaskParams) {
         mut pf_context,
         ..
     } = params;
+
+    let timer_finished = delegation_timer.timer.tick(time.delta()).just_finished();
+    let allow_task_delegation = !delegation_timer.first_run_done || timer_finished;
+    delegation_timer.first_run_done = true;
 
     let mut reservation_shadow =
         crate::systems::familiar_ai::task_management::ReservationShadow::default();
@@ -365,6 +389,7 @@ pub fn familiar_task_delegation_system(params: FamiliarAiTaskParams) {
             &world_map,
             &mut *pf_context,
             &time,
+            allow_task_delegation,
             state_changed,
             &mut reservation_shadow,
         );

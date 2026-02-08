@@ -10,7 +10,6 @@ pub(super) fn collect_candidate_entities(
     task_area_opt: Option<&TaskArea>,
     managed_tasks: &ManagedTasks,
     designation_grid: &DesignationSpatialGrid,
-    queries: &crate::systems::soul_ai::task_execution::context::TaskAssignmentQueries,
 ) -> Vec<Entity> {
     if let Some(area) = task_area_opt {
         let mut ents = designation_grid.get_in_area(area.min, area.max);
@@ -18,21 +17,6 @@ pub(super) fn collect_candidate_entities(
         for &managed_entity in managed_tasks.iter() {
             if !ents.contains(&managed_entity) {
                 ents.push(managed_entity);
-            }
-        }
-
-        for (bp_entity, bp_transform, bp_designation, bp_issued_by, _, _, _, _) in
-            queries.designation.designations.iter()
-        {
-            if bp_designation.work_type == WorkType::Build {
-                let bp_pos = bp_transform.translation.truncate();
-                if area.contains(bp_pos) && bp_issued_by.is_none() {
-                    if let Ok((_, bp, _)) = queries.storage.blueprints.get(bp_entity) {
-                        if bp.materials_complete() && !ents.contains(&bp_entity) {
-                            ents.push(bp_entity);
-                        }
-                    }
-                }
             }
         }
 
