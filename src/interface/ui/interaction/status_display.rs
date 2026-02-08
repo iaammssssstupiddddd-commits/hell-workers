@@ -1,7 +1,9 @@
 use super::mode;
 use crate::constants::TILE_SIZE;
 use crate::entities::familiar::Familiar;
-use crate::game_state::{BuildContext, PlayMode, TaskContext, ZoneContext};
+use crate::game_state::{
+    BuildContext, CompanionPlacementState, PlayMode, TaskContext, ZoneContext,
+};
 use crate::interface::selection::SelectedEntity;
 use crate::interface::ui::components::*;
 use crate::relationships::ManagedBy;
@@ -30,10 +32,10 @@ fn overlap_summary_from_areas(
             continue;
         }
 
-        let overlap_w = (selected_area.max.x.min(area.max.x) - selected_area.min.x.max(area.min.x))
-            .max(0.0);
-        let overlap_h = (selected_area.max.y.min(area.max.y) - selected_area.min.y.max(area.min.y))
-            .max(0.0);
+        let overlap_w =
+            (selected_area.max.x.min(area.max.x) - selected_area.min.x.max(area.min.x)).max(0.0);
+        let overlap_h =
+            (selected_area.max.y.min(area.max.y) - selected_area.min.y.max(area.min.y)).max(0.0);
         let overlap_area = overlap_w * overlap_h;
         if overlap_area <= f32::EPSILON {
             continue;
@@ -69,6 +71,7 @@ fn count_unassigned_tasks_in_area(
 pub fn update_mode_text_system(
     play_mode: Res<State<PlayMode>>,
     build_context: Res<BuildContext>,
+    companion_state: Res<CompanionPlacementState>,
     zone_context: Res<ZoneContext>,
     task_context: Res<TaskContext>,
     selected_entity: Res<SelectedEntity>,
@@ -80,18 +83,20 @@ pub fn update_mode_text_system(
     q_unassigned_tasks: Query<&Transform, (With<Designation>, Without<ManagedBy>)>,
     mut q_text: Query<&mut Text>,
 ) {
-    let area_mode_active = matches!(task_context.0, crate::systems::command::TaskMode::AreaSelection(_));
-    let selected_area_changed = selected_entity
-        .0
-        .is_some_and(|selected| {
-            q_task_areas
-                .iter()
-                .find(|(entity, _)| *entity == selected)
-                .is_some_and(|(_, area)| area.is_changed())
-        });
+    let area_mode_active = matches!(
+        task_context.0,
+        crate::systems::command::TaskMode::AreaSelection(_)
+    );
+    let selected_area_changed = selected_entity.0.is_some_and(|selected| {
+        q_task_areas
+            .iter()
+            .find(|(entity, _)| *entity == selected)
+            .is_some_and(|(_, area)| area.is_changed())
+    });
 
     if !play_mode.is_changed()
         && !build_context.is_changed()
+        && !companion_state.is_changed()
         && !zone_context.is_changed()
         && !task_context.is_changed()
         && !selected_entity.is_changed()
@@ -146,6 +151,7 @@ pub fn update_mode_text_system(
         text.0 = mode::build_mode_text(
             play_mode.get(),
             &build_context,
+            &companion_state,
             &zone_context,
             &task_context,
             selected_familiar_name,
@@ -196,7 +202,10 @@ pub fn update_area_edit_preview_ui_system(
         return;
     };
 
-    if !matches!(task_context.0, crate::systems::command::TaskMode::AreaSelection(_)) {
+    if !matches!(
+        task_context.0,
+        crate::systems::command::TaskMode::AreaSelection(_)
+    ) {
         node.display = Display::None;
         return;
     }
@@ -239,7 +248,9 @@ pub fn update_area_edit_preview_ui_system(
     let overlap = overlap_summary_from_areas(
         selected,
         area,
-        q_task_areas.iter().map(|(entity, area)| (entity, area.clone())),
+        q_task_areas
+            .iter()
+            .map(|(entity, area)| (entity, area.clone())),
     );
     let overlap_text = if let Some((count, ratio)) = overlap {
         if count > 0 {
@@ -261,9 +272,7 @@ pub fn update_area_edit_preview_ui_system(
             .iter()
             .map(|transform| transform.translation.truncate()),
     );
-    let warn_text = if overlap
-        .is_some_and(|(count, ratio)| count > 0 && ratio >= 0.5)
-    {
+    let warn_text = if overlap.is_some_and(|(count, ratio)| count > 0 && ratio >= 0.5) {
         " | WARN:HighOverlap"
     } else {
         ""

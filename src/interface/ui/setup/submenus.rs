@@ -32,6 +32,7 @@ fn spawn_architect_submenu(
         ("Tank", BuildingType::Tank),
         ("Floor", BuildingType::Floor),
         ("MudMixer", BuildingType::MudMixer),
+        ("SandPile", BuildingType::SandPile),
     ];
 
     let submenu = commands

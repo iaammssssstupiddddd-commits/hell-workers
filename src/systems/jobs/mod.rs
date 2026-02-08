@@ -17,6 +17,7 @@ pub enum BuildingType {
     Floor,
     Tank,
     MudMixer,
+    SandPile,
 }
 
 impl BuildingType {
@@ -35,6 +36,9 @@ impl BuildingType {
             }
             BuildingType::MudMixer => {
                 materials.insert(ResourceType::Wood, 4);
+            }
+            BuildingType::SandPile => {
+                materials.insert(ResourceType::Wood, 1);
             }
         }
         materials

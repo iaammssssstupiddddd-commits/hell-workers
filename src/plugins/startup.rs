@@ -5,7 +5,7 @@ use crate::entities::damned_soul::{DamnedSoulSpawnEvent, spawn_damned_souls};
 use crate::entities::familiar::{
     ActiveCommand, FamiliarCommand, FamiliarOperation, FamiliarSpawnEvent,
 };
-use crate::game_state::{BuildContext, TaskContext, ZoneContext};
+use crate::game_state::{BuildContext, CompanionPlacementState, TaskContext, ZoneContext};
 use crate::interface::camera::{MainCamera, PanCamera};
 use crate::interface::selection::{HoveredEntity, SelectedEntity};
 use crate::interface::ui::{MenuState, setup_ui};
@@ -44,6 +44,7 @@ impl Plugin for StartupPlugin {
             .init_resource::<MenuState>()
             .init_resource::<BuildContext>()
             .init_resource::<ZoneContext>()
+            .init_resource::<CompanionPlacementState>()
             .init_resource::<ResourceLabels>()
             .init_resource::<GameTime>()
             .init_resource::<TaskContext>()

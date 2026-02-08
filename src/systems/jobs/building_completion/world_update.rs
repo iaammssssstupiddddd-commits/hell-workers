@@ -17,7 +17,7 @@ pub(super) fn update_world_for_completed_building(
 ) {
     let is_obstacle = matches!(
         bp.kind,
-        BuildingType::Wall | BuildingType::Tank | BuildingType::MudMixer
+        BuildingType::Wall | BuildingType::Tank | BuildingType::MudMixer | BuildingType::SandPile
     );
 
     if !is_obstacle {
