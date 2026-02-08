@@ -101,17 +101,3 @@ pub fn determine_transition_reason(
         _ => FamiliarAiStateTransitionReason::Unknown,
     }
 }
-
-/// 状態遷移イベントを処理するシステム
-/// ログ出力やその他の副作用を処理
-pub fn handle_state_changed_system(
-    mut ev_state_changed: MessageReader<FamiliarAiStateChangedEvent>,
-) {
-    for event in ev_state_changed.read() {
-        debug!(
-            "FAM_AI: {:?} state changed: {:?} -> {:?} (reason: {:?})",
-            event.familiar_entity, event.from, event.to, event.reason
-        );
-        // ここで状態遷移に応じた処理（アニメーション、音声など）を追加可能
-    }
-}
