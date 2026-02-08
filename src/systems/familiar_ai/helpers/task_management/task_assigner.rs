@@ -97,7 +97,7 @@ pub struct AssignTaskContext<'a> {
 /// ワーカーにタスクを割り当てる
 pub fn assign_task_to_worker(
     ctx: AssignTaskContext<'_>,
-    queries: &mut crate::systems::soul_ai::task_execution::context::TaskAssignmentQueries,
+    queries: &mut crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
     q_souls: &mut FamiliarSoulQuery,
     shadow: &mut ReservationShadow,
 ) -> bool {

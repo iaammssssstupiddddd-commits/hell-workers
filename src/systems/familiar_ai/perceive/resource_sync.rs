@@ -4,7 +4,7 @@ use crate::events::ResourceReservationRequest;
 use crate::relationships::TaskWorkers;
 use crate::systems::jobs::{Designation, TargetBlueprint, TargetMixer, WorkType};
 use crate::systems::logistics::{BelongsTo, ResourceItem, ResourceType};
-use crate::systems::soul_ai::task_execution::AssignedTask;
+use crate::systems::soul_ai::execute::task_execution::AssignedTask;
 use bevy::prelude::*;
 use std::collections::HashMap;
 
@@ -308,7 +308,7 @@ pub fn sync_reservations_system(
                 // ストックパイルへの搬送予約
                 *dest_res.entry(data.stockpile).or_insert(0) += 1;
                 // アイテム（ソース）への取り出し予約（まだ持っていない場合）
-                use crate::systems::soul_ai::task_execution::types::HaulPhase;
+                use crate::systems::soul_ai::execute::task_execution::types::HaulPhase;
                 if matches!(data.phase, HaulPhase::GoingToItem) {
                     *source_res.entry(data.item).or_insert(0) += 1;
                 }
@@ -325,7 +325,7 @@ pub fn sync_reservations_system(
                 // だとすると Destination Reservation で正しい。
                 *dest_res.entry(data.tank).or_insert(0) += 1;
 
-                use crate::systems::soul_ai::task_execution::types::GatherWaterPhase;
+                use crate::systems::soul_ai::execute::task_execution::types::GatherWaterPhase;
                 if matches!(data.phase, GatherWaterPhase::GoingToBucket) {
                     *source_res.entry(data.bucket).or_insert(0) += 1;
                 }
@@ -335,7 +335,7 @@ pub fn sync_reservations_system(
                     .entry((data.mixer, data.resource_type))
                     .or_insert(0) += 1;
 
-                use crate::systems::soul_ai::task_execution::types::HaulToMixerPhase;
+                use crate::systems::soul_ai::execute::task_execution::types::HaulToMixerPhase;
                 if matches!(data.phase, HaulToMixerPhase::GoingToItem) {
                     *source_res.entry(data.item).or_insert(0) += 1;
                 }
@@ -348,7 +348,7 @@ pub fn sync_reservations_system(
                 // つまり、1人の作業員が向かっている＝1予約、としている。水量は考慮されていない（あるいはバケツ1杯分と仮定？）
                 // ここでは既存のロジックを踏襲する。
 
-                use crate::systems::soul_ai::task_execution::types::HaulWaterToMixerPhase;
+                use crate::systems::soul_ai::execute::task_execution::types::HaulWaterToMixerPhase;
                 if matches!(data.phase, HaulWaterToMixerPhase::GoingToBucket) {
                     *source_res.entry(data.bucket).or_insert(0) += 1;
                 } else if matches!(data.phase, HaulWaterToMixerPhase::FillingFromTank) {
@@ -367,7 +367,7 @@ pub fn sync_reservations_system(
                 // 手持ちがない場合は別途HaulToBlueprintタスクになるはず（TaskAssignerが切り替える）。
                 // よって Build タスク中は既にアイテムを持っているか、あるいは不要。
                 // ... と思われたが、Cycle Framework移行によりSource Reservationが必要になったため追記
-                use crate::systems::soul_ai::task_execution::types::BuildPhase;
+                use crate::systems::soul_ai::execute::task_execution::types::BuildPhase;
                 if matches!(
                     data.phase,
                     BuildPhase::GoingToBlueprint | BuildPhase::Building { .. }
@@ -380,14 +380,14 @@ pub fn sync_reservations_system(
                 // 現状のSharedResourceCacheはEntity単位。Blueprint EntityへのDestination Reservationとする。
                 *dest_res.entry(data.blueprint).or_insert(0) += 1;
 
-                use crate::systems::soul_ai::task_execution::types::HaulToBpPhase;
+                use crate::systems::soul_ai::execute::task_execution::types::HaulToBpPhase;
                 if matches!(data.phase, HaulToBpPhase::GoingToItem) {
                     *source_res.entry(data.item).or_insert(0) += 1;
                 }
             }
             AssignedTask::Gather(data) => {
                 // 木や岩への予約（複数人同時作業の制御用）
-                use crate::systems::soul_ai::task_execution::types::GatherPhase;
+                use crate::systems::soul_ai::execute::task_execution::types::GatherPhase;
                 if matches!(
                     data.phase,
                     GatherPhase::GoingToResource | GatherPhase::Collecting { .. }
@@ -397,7 +397,7 @@ pub fn sync_reservations_system(
             }
             AssignedTask::CollectSand(data) => {
                 // SandPileへの予約
-                use crate::systems::soul_ai::task_execution::types::CollectSandPhase;
+                use crate::systems::soul_ai::execute::task_execution::types::CollectSandPhase;
                 if matches!(
                     data.phase,
                     CollectSandPhase::GoingToSand | CollectSandPhase::Collecting { .. }
@@ -407,7 +407,7 @@ pub fn sync_reservations_system(
             }
             AssignedTask::Refine(data) => {
                 // Mixerへの予約（精製作業の排他制御）
-                use crate::systems::soul_ai::task_execution::types::RefinePhase;
+                use crate::systems::soul_ai::execute::task_execution::types::RefinePhase;
                 if matches!(
                     data.phase,
                     RefinePhase::GoingToMixer | RefinePhase::Refining { .. }

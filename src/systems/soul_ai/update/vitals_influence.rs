@@ -5,7 +5,7 @@ use crate::entities::damned_soul::{DamnedSoul, IdleBehavior, IdleState, StressBr
 use crate::entities::familiar::{ActiveCommand, Familiar, FamiliarCommand};
 use crate::events::OnStressBreakdown;
 use crate::relationships::CommandedBy;
-use crate::systems::soul_ai::task_execution::AssignedTask;
+use crate::systems::soul_ai::execute::task_execution::AssignedTask;
 use crate::systems::spatial::{FamiliarSpatialGrid, SpatialGridOps};
 
 /// Familiar影響関連の更新を1パスで処理する統合システム

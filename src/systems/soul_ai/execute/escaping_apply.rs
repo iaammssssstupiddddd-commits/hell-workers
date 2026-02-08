@@ -2,8 +2,8 @@ use bevy::prelude::*;
 
 use crate::entities::damned_soul::IdleBehavior;
 use crate::events::{EscapeOperation, EscapeRequest};
-use crate::systems::soul_ai::gathering::ParticipatingIn;
-use crate::systems::soul_ai::query_types::EscapingBehaviorSoulQuery;
+use crate::systems::soul_ai::helpers::gathering::ParticipatingIn;
+use crate::systems::soul_ai::helpers::query_types::EscapingBehaviorSoulQuery;
 
 /// EscapeRequest を適用する（Execute Phase）
 pub fn escaping_apply_system(

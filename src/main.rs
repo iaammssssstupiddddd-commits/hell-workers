@@ -31,7 +31,7 @@ use crate::systems::GameSystemSet;
 use crate::systems::familiar_ai::FamiliarAiPlugin;
 use crate::systems::jobs::Designation;
 use crate::systems::logistics::ResourceItem;
-use crate::systems::soul_ai::gathering::GatheringSpot;
+use crate::systems::soul_ai::helpers::gathering::GatheringSpot;
 
 /// ゲーム内のデバッグ情報の表示状態（独自実装用）
 #[derive(Resource, Default)]

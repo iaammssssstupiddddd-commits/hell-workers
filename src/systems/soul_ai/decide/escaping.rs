@@ -7,7 +7,7 @@ use crate::events::EscapeOperation;
 use crate::relationships::CommandedBy;
 use crate::systems::soul_ai::decide::SoulDecideOutput;
 use crate::systems::soul_ai::decide::idle_behavior::GATHERING_ARRIVAL_RADIUS;
-use crate::systems::soul_ai::gathering::{GatheringSpot, ParticipatingIn};
+use crate::systems::soul_ai::helpers::gathering::{GatheringSpot, ParticipatingIn};
 use crate::systems::soul_ai::perceive::escaping::{
     EscapeBehaviorTimer, EscapeDetectionTimer, calculate_escape_destination,
     detect_nearest_familiar, detect_reachable_familiar_within_safe_distance,

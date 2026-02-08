@@ -2,10 +2,10 @@ use crate::constants::*;
 use crate::entities::damned_soul::{DamnedSoul, IdleBehavior, IdleState, Path};
 use crate::events::{ResourceReservationOp, ResourceReservationRequest};
 use crate::relationships::WorkingOn;
-// use crate::systems::familiar_ai::resource_cache::SharedResourceCache; // Removed unused import
+// use crate::systems::familiar_ai::perceive::resource_sync::SharedResourceCache; // Removed unused import
 use crate::systems::logistics::{Inventory, ResourceType};
-use crate::systems::soul_ai::task_execution::AssignedTask;
-use crate::systems::soul_ai::task_execution::context::TaskReservationAccess;
+use crate::systems::soul_ai::execute::task_execution::AssignedTask;
+use crate::systems::soul_ai::execute::task_execution::context::TaskReservationAccess;
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
 
@@ -66,7 +66,7 @@ pub fn unassign_task<'w, 's, Q: TaskReservationAccess<'w, 's>>(
                         target: data.stockpile,
                     },
                 });
-            use crate::systems::soul_ai::task_execution::types::HaulPhase;
+            use crate::systems::soul_ai::execute::task_execution::types::HaulPhase;
             if matches!(data.phase, HaulPhase::GoingToItem) {
                 queries
                     .reservation_writer()
@@ -84,7 +84,7 @@ pub fn unassign_task<'w, 's, Q: TaskReservationAccess<'w, 's>>(
                 .write(ResourceReservationRequest {
                     op: ResourceReservationOp::ReleaseDestination { target: data.tank },
                 });
-            use crate::systems::soul_ai::task_execution::types::GatherWaterPhase;
+            use crate::systems::soul_ai::execute::task_execution::types::GatherWaterPhase;
             if matches!(data.phase, GatherWaterPhase::GoingToBucket) {
                 queries
                     .reservation_writer()
@@ -107,7 +107,7 @@ pub fn unassign_task<'w, 's, Q: TaskReservationAccess<'w, 's>>(
                     },
                 });
 
-            use crate::systems::soul_ai::task_execution::types::HaulWaterToMixerPhase;
+            use crate::systems::soul_ai::execute::task_execution::types::HaulWaterToMixerPhase;
             if matches!(data.phase, HaulWaterToMixerPhase::GoingToBucket) {
                 queries
                     .reservation_writer()
@@ -138,7 +138,7 @@ pub fn unassign_task<'w, 's, Q: TaskReservationAccess<'w, 's>>(
                     },
                 });
 
-            use crate::systems::soul_ai::task_execution::types::HaulToMixerPhase;
+            use crate::systems::soul_ai::execute::task_execution::types::HaulToMixerPhase;
             if matches!(data.phase, HaulToMixerPhase::GoingToItem) {
                 queries
                     .reservation_writer()
@@ -159,7 +159,7 @@ pub fn unassign_task<'w, 's, Q: TaskReservationAccess<'w, 's>>(
                     },
                 });
 
-            use crate::systems::soul_ai::task_execution::types::HaulToBpPhase;
+            use crate::systems::soul_ai::execute::task_execution::types::HaulToBpPhase;
             if matches!(data.phase, HaulToBpPhase::GoingToItem) {
                 queries
                     .reservation_writer()

@@ -7,10 +7,10 @@ use crate::relationships::{Commanding, ManagedBy, TaskWorkers, WorkingOn};
 use crate::systems::command::TaskArea;
 use crate::systems::jobs::{Blueprint, Designation, Priority, TaskSlots, WorkType};
 use crate::systems::logistics::InStockpile;
-use crate::systems::soul_ai::query_types::AutoBuildSoulQuery;
-use crate::systems::soul_ai::task_execution::AssignedTask;
-use crate::systems::soul_ai::task_execution::types::BuildPhase;
-use crate::systems::soul_ai::work::helpers;
+use crate::systems::soul_ai::execute::task_execution::AssignedTask;
+use crate::systems::soul_ai::execute::task_execution::types::BuildPhase;
+use crate::systems::soul_ai::helpers::query_types::AutoBuildSoulQuery;
+use crate::systems::soul_ai::helpers::work as helpers;
 use crate::systems::spatial::BlueprintSpatialGrid;
 
 /// 資材が揃った建築タスクの自動割り当てシステム
@@ -127,7 +127,7 @@ pub fn blueprint_auto_build_system(
 
                         // 建築タスクを割り当て
                         *assigned_task = AssignedTask::Build(
-                            crate::systems::soul_ai::task_execution::types::BuildData {
+                            crate::systems::soul_ai::execute::task_execution::types::BuildData {
                                 blueprint: bp_entity,
                                 phase: BuildPhase::GoingToBlueprint,
                             },

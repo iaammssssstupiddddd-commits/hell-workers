@@ -2,8 +2,8 @@
 
 use super::*;
 use crate::constants::*;
-use crate::systems::soul_ai::task_execution::AssignedTask;
-use crate::systems::soul_ai::work::unassign_task;
+use crate::systems::soul_ai::execute::task_execution::AssignedTask;
+use crate::systems::soul_ai::helpers::work::unassign_task;
 use crate::world::map::WorldMap;
 use crate::world::pathfinding::{self, PathfindingContext};
 
@@ -49,7 +49,7 @@ pub fn pathfinding_system(
         With<DamnedSoul>,
     >,
     // haul_cache removed
-    mut queries: crate::systems::soul_ai::task_execution::context::TaskAssignmentQueries,
+    mut queries: crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
 ) {
     for (entity, transform, destination, mut path, mut task, idle, mut inventory_opt) in
         query.iter_mut()

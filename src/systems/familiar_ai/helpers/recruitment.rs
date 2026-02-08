@@ -9,8 +9,8 @@ use crate::entities::damned_soul::{
 use crate::relationships::CommandedBy;
 // use crate::events::OnSoulRecruited;
 use crate::systems::familiar_ai::FamiliarSoulQuery;
-use crate::systems::soul_ai::gathering::ParticipatingIn;
-use crate::systems::soul_ai::task_execution::AssignedTask;
+use crate::systems::soul_ai::execute::task_execution::AssignedTask;
+use crate::systems::soul_ai::helpers::gathering::ParticipatingIn;
 use crate::systems::spatial::{SpatialGrid, SpatialGridOps};
 use bevy::prelude::*;
 

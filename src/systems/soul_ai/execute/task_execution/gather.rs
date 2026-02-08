@@ -4,7 +4,7 @@ use crate::assets::GameAssets;
 use crate::constants::*;
 use crate::systems::jobs::WorkType;
 use crate::systems::logistics::ResourceItem;
-use crate::systems::soul_ai::task_execution::{
+use crate::systems::soul_ai::execute::task_execution::{
     common::*,
     context::TaskExecutionContext,
     types::{AssignedTask, GatherPhase},
@@ -60,7 +60,7 @@ pub fn handle_gather_task(
 
                 if is_near_target(soul_pos, res_pos) {
                     *ctx.task = AssignedTask::Gather(
-                        crate::systems::soul_ai::task_execution::types::GatherData {
+                        crate::systems::soul_ai::execute::task_execution::types::GatherData {
                             target,
                             work_type: *work_type,
                             phase: GatherPhase::Collecting { progress: 0.0 },
@@ -152,7 +152,7 @@ pub fn handle_gather_task(
                     });
 
                     *ctx.task = AssignedTask::Gather(
-                        crate::systems::soul_ai::task_execution::types::GatherData {
+                        crate::systems::soul_ai::execute::task_execution::types::GatherData {
                             target,
                             work_type: *work_type,
                             phase: GatherPhase::Done,
@@ -162,7 +162,7 @@ pub fn handle_gather_task(
                 } else {
                     // 進捗を保存
                     *ctx.task = AssignedTask::Gather(
-                        crate::systems::soul_ai::task_execution::types::GatherData {
+                        crate::systems::soul_ai::execute::task_execution::types::GatherData {
                             target,
                             work_type: *work_type,
                             phase: GatherPhase::Collecting { progress },

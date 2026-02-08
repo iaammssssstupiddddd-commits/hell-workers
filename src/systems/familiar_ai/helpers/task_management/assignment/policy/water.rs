@@ -1,4 +1,4 @@
-use crate::systems::familiar_ai::task_management::{AssignTaskContext, ReservationShadow};
+use crate::systems::familiar_ai::helpers::task_management::{AssignTaskContext, ReservationShadow};
 use bevy::prelude::*;
 
 use super::super::builders::{issue_gather_water, issue_haul_water_to_mixer};
@@ -10,7 +10,7 @@ pub(super) fn assign_gather_water(
     task_pos: Vec2,
     already_commanded: bool,
     ctx: &AssignTaskContext<'_>,
-    queries: &mut crate::systems::soul_ai::task_execution::context::TaskAssignmentQueries,
+    queries: &mut crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
     shadow: &mut ReservationShadow,
 ) -> bool {
     if !source_not_reserved(ctx.task_entity, queries, shadow) {
@@ -47,7 +47,7 @@ pub(super) fn assign_haul_water_to_mixer(
     task_pos: Vec2,
     already_commanded: bool,
     ctx: &AssignTaskContext<'_>,
-    queries: &mut crate::systems::soul_ai::task_execution::context::TaskAssignmentQueries,
+    queries: &mut crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
     shadow: &mut ReservationShadow,
 ) -> bool {
     let Some((mixer_entity, tank_entity)) =

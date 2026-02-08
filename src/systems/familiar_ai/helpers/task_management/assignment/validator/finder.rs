@@ -1,5 +1,5 @@
 use crate::systems::command::TaskArea;
-use crate::systems::familiar_ai::task_management::ReservationShadow;
+use crate::systems::familiar_ai::helpers::task_management::ReservationShadow;
 use crate::systems::logistics::ResourceType;
 use bevy::prelude::*;
 
@@ -8,7 +8,7 @@ pub fn find_best_stockpile_for_item(
     task_area_opt: Option<&TaskArea>,
     item_type: ResourceType,
     item_owner: Option<Entity>,
-    queries: &crate::systems::soul_ai::task_execution::context::TaskAssignmentQueries,
+    queries: &crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
     shadow: &ReservationShadow,
 ) -> Option<Entity> {
     queries
@@ -61,7 +61,7 @@ pub fn find_best_tank_for_bucket(
     task_entity: Entity,
     task_pos: Vec2,
     task_area_opt: Option<&TaskArea>,
-    queries: &crate::systems::soul_ai::task_execution::context::TaskAssignmentQueries,
+    queries: &crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
     shadow: &ReservationShadow,
 ) -> Option<Entity> {
     queries

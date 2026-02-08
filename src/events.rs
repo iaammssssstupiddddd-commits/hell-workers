@@ -1,6 +1,6 @@
 use crate::systems::jobs::WorkType;
 use crate::systems::logistics::ResourceType;
-use crate::systems::soul_ai::task_execution::types::AssignedTask;
+use crate::systems::soul_ai::execute::task_execution::types::AssignedTask;
 use bevy::prelude::*;
 
 /// 魂がタスクに割り当てられた

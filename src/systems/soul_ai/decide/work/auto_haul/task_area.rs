@@ -12,7 +12,7 @@ use crate::systems::jobs::{Designation, IssuedBy, TaskSlots, WorkType};
 use crate::systems::logistics::{
     BelongsTo, ReservedForTask, ResourceItem, ResourceType, Stockpile,
 };
-use crate::systems::soul_ai::work::auto_haul::ItemReservations;
+use crate::systems::soul_ai::decide::work::auto_haul::ItemReservations;
 use crate::systems::spatial::{ResourceSpatialGrid, SpatialGridOps, StockpileSpatialGrid};
 
 /// 指揮エリア内での自動運搬タスク生成システム

@@ -6,7 +6,7 @@ use bevy::prelude::*;
 
 use crate::constants::*;
 use crate::entities::familiar::Familiar;
-use crate::systems::soul_ai::gathering::GatheringSpot;
+use crate::systems::soul_ai::helpers::gathering::GatheringSpot;
 use crate::systems::spatial::{FamiliarSpatialGrid, SpatialGridOps};
 use crate::world::map::WorldMap;
 use crate::world::pathfinding::{self, PathfindingContext};

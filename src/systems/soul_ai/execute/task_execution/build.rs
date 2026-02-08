@@ -1,7 +1,7 @@
 //! 建築タスクの実行処理
 
 use crate::relationships::WorkingOn;
-use crate::systems::soul_ai::task_execution::{
+use crate::systems::soul_ai::execute::task_execution::{
     common::*,
     context::TaskExecutionContext,
     types::{AssignedTask, BuildPhase},
@@ -55,7 +55,7 @@ pub fn handle_build_task(
 
                 if is_near_blueprint(soul_pos, &bp.occupied_grids) {
                     *ctx.task = AssignedTask::Build(
-                        crate::systems::soul_ai::task_execution::types::BuildData {
+                        crate::systems::soul_ai::execute::task_execution::types::BuildData {
                             blueprint: blueprint_entity,
                             phase: BuildPhase::Building { progress: 0.0 },
                         },
@@ -87,7 +87,7 @@ pub fn handle_build_task(
                 // 位置を再確認（予定地内に入っていないか、離れすぎていないか）
                 if !is_near_blueprint(soul_pos, &bp.occupied_grids) {
                     *ctx.task = AssignedTask::Build(
-                        crate::systems::soul_ai::task_execution::types::BuildData {
+                        crate::systems::soul_ai::execute::task_execution::types::BuildData {
                             blueprint: blueprint_entity,
                             phase: BuildPhase::GoingToBlueprint,
                         },
@@ -101,7 +101,7 @@ pub fn handle_build_task(
 
                 if progress >= 1.0 {
                     *ctx.task = AssignedTask::Build(
-                        crate::systems::soul_ai::task_execution::types::BuildData {
+                        crate::systems::soul_ai::execute::task_execution::types::BuildData {
                             blueprint: blueprint_entity,
                             phase: BuildPhase::Done,
                         },
@@ -113,7 +113,7 @@ pub fn handle_build_task(
                     );
                 } else {
                     *ctx.task = AssignedTask::Build(
-                        crate::systems::soul_ai::task_execution::types::BuildData {
+                        crate::systems::soul_ai::execute::task_execution::types::BuildData {
                             blueprint: blueprint_entity,
                             phase: BuildPhase::Building { progress },
                         },

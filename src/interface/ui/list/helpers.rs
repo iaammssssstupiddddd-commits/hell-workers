@@ -9,7 +9,7 @@ use crate::relationships::CommandedBy;
 use crate::relationships::Commanding;
 use crate::systems::familiar_ai::FamiliarAiState;
 use crate::systems::jobs::WorkType;
-use crate::systems::soul_ai::task_execution::AssignedTask;
+use crate::systems::soul_ai::execute::task_execution::AssignedTask;
 use bevy::prelude::*;
 
 /// 性別に応じたアイコンハンドルと色を取得

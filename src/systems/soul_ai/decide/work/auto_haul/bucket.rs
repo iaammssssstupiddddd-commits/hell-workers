@@ -11,7 +11,7 @@ use crate::systems::jobs::{Designation, IssuedBy, TaskSlots, WorkType};
 use crate::systems::logistics::{
     BucketStorage, ReservedForTask, ResourceItem, ResourceType, Stockpile,
 };
-use crate::systems::soul_ai::work::auto_haul::ItemReservations;
+use crate::systems::soul_ai::decide::work::auto_haul::ItemReservations;
 use crate::systems::spatial::{SpatialGridOps, StockpileSpatialGrid};
 
 /// バケツ専用オートホールシステム

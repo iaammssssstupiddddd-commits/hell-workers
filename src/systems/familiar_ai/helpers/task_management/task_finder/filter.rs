@@ -34,7 +34,7 @@ pub(super) fn candidate_snapshot(
     worker_pos: Vec2,
     world_map: &WorldMap,
     pf_context: &mut PathfindingContext,
-    queries: &crate::systems::soul_ai::task_execution::context::TaskAssignmentQueries,
+    queries: &crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
 ) -> Option<(Vec2, WorkType, i32, bool)> {
     let (
         _entity,

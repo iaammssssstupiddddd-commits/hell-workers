@@ -1,8 +1,8 @@
 use crate::events::ResourceReservationOp;
-use crate::systems::familiar_ai::task_management::{AssignTaskContext, ReservationShadow};
+use crate::systems::familiar_ai::helpers::task_management::{AssignTaskContext, ReservationShadow};
 use crate::systems::jobs::WorkType;
 use crate::systems::logistics::ResourceType;
-use crate::systems::soul_ai::task_execution::types::{HaulPhase, HaulToBpPhase};
+use crate::systems::soul_ai::execute::task_execution::types::{HaulPhase, HaulToBpPhase};
 use bevy::prelude::*;
 
 use super::submit_assignment;
@@ -12,12 +12,12 @@ pub fn issue_haul_to_blueprint(
     task_pos: Vec2,
     already_commanded: bool,
     ctx: &AssignTaskContext<'_>,
-    queries: &mut crate::systems::soul_ai::task_execution::context::TaskAssignmentQueries,
+    queries: &mut crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
     shadow: &mut ReservationShadow,
 ) {
     let assigned_task =
-        crate::systems::soul_ai::task_execution::types::AssignedTask::HaulToBlueprint(
-            crate::systems::soul_ai::task_execution::types::HaulToBlueprintData {
+        crate::systems::soul_ai::execute::task_execution::types::AssignedTask::HaulToBlueprint(
+            crate::systems::soul_ai::execute::task_execution::types::HaulToBlueprintData {
                 item: ctx.task_entity,
                 blueprint,
                 phase: HaulToBpPhase::GoingToItem,
@@ -47,11 +47,11 @@ pub fn issue_haul_to_stockpile(
     task_pos: Vec2,
     already_commanded: bool,
     ctx: &AssignTaskContext<'_>,
-    queries: &mut crate::systems::soul_ai::task_execution::context::TaskAssignmentQueries,
+    queries: &mut crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
     shadow: &mut ReservationShadow,
 ) {
-    let assigned_task = crate::systems::soul_ai::task_execution::types::AssignedTask::Haul(
-        crate::systems::soul_ai::task_execution::types::HaulData {
+    let assigned_task = crate::systems::soul_ai::execute::task_execution::types::AssignedTask::Haul(
+        crate::systems::soul_ai::execute::task_execution::types::HaulData {
             item: ctx.task_entity,
             stockpile,
             phase: HaulPhase::GoingToItem,
@@ -82,15 +82,15 @@ pub fn issue_haul_to_mixer(
     task_pos: Vec2,
     already_commanded: bool,
     ctx: &AssignTaskContext<'_>,
-    queries: &mut crate::systems::soul_ai::task_execution::context::TaskAssignmentQueries,
+    queries: &mut crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
     shadow: &mut ReservationShadow,
 ) {
-    let assigned_task = crate::systems::soul_ai::task_execution::types::AssignedTask::HaulToMixer(
-        crate::systems::soul_ai::task_execution::types::HaulToMixerData {
+    let assigned_task = crate::systems::soul_ai::execute::task_execution::types::AssignedTask::HaulToMixer(
+        crate::systems::soul_ai::execute::task_execution::types::HaulToMixerData {
             item: ctx.task_entity,
             mixer,
             resource_type: item_type,
-            phase: crate::systems::soul_ai::task_execution::types::HaulToMixerPhase::GoingToItem,
+            phase: crate::systems::soul_ai::execute::task_execution::types::HaulToMixerPhase::GoingToItem,
         },
     );
     let reservation_ops = vec![
