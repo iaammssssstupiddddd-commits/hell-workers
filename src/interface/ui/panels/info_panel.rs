@@ -3,18 +3,11 @@
 //! Startup時に常駐UIを生成し、選択状態に応じて差分更新する。
 
 use crate::entities::damned_soul::Gender;
-use crate::entities::damned_soul::{DamnedSoul, IdleState};
-use crate::entities::familiar::Familiar;
 use crate::interface::ui::components::{
     InfoPanel, MenuAction, MenuButton, UiInputBlocker, UiNodeRegistry, UiSlot,
 };
-use crate::interface::ui::presentation::{EntityInspectionModel, build_entity_inspection_model};
+use crate::interface::ui::presentation::{EntityInspectionModel, EntityInspectionQuery};
 use crate::interface::ui::theme::UiTheme;
-use crate::relationships::{CommandedBy, TaskWorkers};
-use crate::systems::jobs::Blueprint;
-use crate::systems::soul_ai::task_execution::AssignedTask;
-use crate::systems::spatial::FamiliarSpatialGrid;
-use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use bevy::ui::{BackgroundGradient, ColorStop, LinearGradient, RelativeCursorPosition};
 
@@ -437,56 +430,6 @@ fn to_view_model(model: EntityInspectionModel) -> InfoPanelViewModel {
     }
 }
 
-#[derive(SystemParam)]
-pub(crate) struct InspectionQueryParam<'w, 's> {
-    q_souls: Query<
-        'w,
-        's,
-        (
-            &'static DamnedSoul,
-            &'static AssignedTask,
-            &'static Transform,
-            &'static IdleState,
-            Option<&'static CommandedBy>,
-            Option<&'static crate::systems::logistics::Inventory>,
-            Option<&'static crate::entities::damned_soul::SoulIdentity>,
-        ),
-    >,
-    q_blueprints: Query<'w, 's, &'static Blueprint>,
-    q_familiars: Query<
-        'w,
-        's,
-        (
-            &'static Familiar,
-            &'static crate::entities::familiar::FamiliarOperation,
-        ),
-    >,
-    q_familiars_escape: Query<'w, 's, (&'static Transform, &'static Familiar)>,
-    familiar_grid: Res<'w, FamiliarSpatialGrid>,
-    q_items: Query<'w, 's, &'static crate::systems::logistics::ResourceItem>,
-    q_trees: Query<'w, 's, &'static crate::systems::jobs::Tree>,
-    q_rocks: Query<'w, 's, &'static crate::systems::jobs::Rock>,
-    q_designations: Query<
-        'w,
-        's,
-        (
-            &'static crate::systems::jobs::Designation,
-            Option<&'static crate::systems::jobs::IssuedBy>,
-            Option<&'static TaskWorkers>,
-        ),
-    >,
-    q_buildings: Query<
-        'w,
-        's,
-        (
-            &'static crate::systems::jobs::Building,
-            Option<&'static crate::systems::logistics::Stockpile>,
-            Option<&'static crate::relationships::StoredItems>,
-            Option<&'static crate::systems::jobs::MudMixerStorage>,
-        ),
-    >,
-}
-
 pub fn info_panel_system(
     game_assets: Res<crate::assets::GameAssets>,
     selected: Res<crate::interface::selection::SelectedEntity>,
@@ -496,45 +439,17 @@ pub fn info_panel_system(
     mut q_text: Query<&mut Text>,
     mut q_node: Query<&mut Node>,
     mut q_gender: Query<&mut ImageNode>,
-    inspection: InspectionQueryParam,
+    inspection: EntityInspectionQuery,
 ) {
     let mut inspected_entity = pin_state.entity.or(selected.0);
-    let mut next_model = inspected_entity.and_then(|entity| {
-        build_entity_inspection_model(
-            entity,
-            &inspection.q_souls,
-            &inspection.q_blueprints,
-            &inspection.q_familiars,
-            &inspection.q_familiars_escape,
-            &inspection.familiar_grid,
-            &inspection.q_items,
-            &inspection.q_trees,
-            &inspection.q_rocks,
-            &inspection.q_designations,
-            &inspection.q_buildings,
-        )
-        .map(to_view_model)
-    });
+    let mut next_model = inspected_entity
+        .and_then(|entity| inspection.build_model(entity).map(to_view_model));
 
     if pin_state.entity.is_some() && next_model.is_none() {
         pin_state.entity = None;
         inspected_entity = selected.0;
-        next_model = inspected_entity.and_then(|entity| {
-            build_entity_inspection_model(
-                entity,
-                &inspection.q_souls,
-                &inspection.q_blueprints,
-                &inspection.q_familiars,
-                &inspection.q_familiars_escape,
-                &inspection.familiar_grid,
-                &inspection.q_items,
-                &inspection.q_trees,
-                &inspection.q_rocks,
-                &inspection.q_designations,
-                &inspection.q_buildings,
-            )
-            .map(to_view_model)
-        });
+        next_model = inspected_entity
+            .and_then(|entity| inspection.build_model(entity).map(to_view_model));
     }
 
     let pinned = pin_state.entity.is_some();
