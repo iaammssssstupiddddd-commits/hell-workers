@@ -184,6 +184,7 @@ pub(super) fn spawn_soul_list_item(
             Node {
                 width: Val::Percent(100.0),
                 height: Val::Px(theme.sizes.soul_item_height),
+                flex_shrink: 0.0,
                 align_items: AlignItems::Center,
                 border: UiRect::left(Val::Px(0.0)),
                 margin: if left_margin > 0.0 {
@@ -207,6 +208,7 @@ pub(super) fn spawn_soul_list_item(
                 Node {
                     width: Val::Px(theme.sizes.icon_size),
                     height: Val::Px(theme.sizes.icon_size),
+                    flex_shrink: 0.0,
                     margin: UiRect::right(Val::Px(theme.spacing.margin_medium)),
                     ..default()
                 },
@@ -220,6 +222,7 @@ pub(super) fn spawn_soul_list_item(
                 },
                 TextColor(stress_color),
                 Node {
+                    flex_shrink: 0.0,
                     margin: UiRect::right(Val::Px(theme.spacing.margin_large)),
                     ..default()
                 },
@@ -233,6 +236,7 @@ pub(super) fn spawn_soul_list_item(
                 Node {
                     width: Val::Px(theme.sizes.icon_size),
                     height: Val::Px(theme.sizes.icon_size),
+                    flex_shrink: 0.0,
                     margin: UiRect::right(Val::Px(theme.spacing.margin_small)),
                     ..default()
                 },
@@ -245,6 +249,7 @@ pub(super) fn spawn_soul_list_item(
                 },
                 TextColor(theme.colors.fatigue_text),
                 Node {
+                    flex_shrink: 0.0,
                     margin: UiRect::right(Val::Px(theme.spacing.margin_large)),
                     ..default()
                 },
@@ -258,6 +263,7 @@ pub(super) fn spawn_soul_list_item(
                 Node {
                     width: Val::Px(theme.sizes.icon_size),
                     height: Val::Px(theme.sizes.icon_size),
+                    flex_shrink: 0.0,
                     margin: UiRect::right(Val::Px(theme.spacing.margin_small)),
                     ..default()
                 },
@@ -271,6 +277,7 @@ pub(super) fn spawn_soul_list_item(
                 },
                 TextColor(stress_color),
                 Node {
+                    flex_shrink: 0.0,
                     margin: UiRect::right(Val::Px(theme.spacing.margin_large)),
                     ..default()
                 },
@@ -284,6 +291,7 @@ pub(super) fn spawn_soul_list_item(
                 Node {
                     width: Val::Px(theme.sizes.icon_size),
                     height: Val::Px(theme.sizes.icon_size),
+                    flex_shrink: 0.0,
                     ..default()
                 },
             ));
@@ -322,6 +330,7 @@ pub(super) fn spawn_familiar_section(
     let root = commands
         .spawn((Node {
             flex_direction: FlexDirection::Column,
+            flex_shrink: 0.0,
             margin: UiRect::top(Val::Px(theme.sizes.familiar_section_margin_top)),
             ..default()
         },))
@@ -332,6 +341,7 @@ pub(super) fn spawn_familiar_section(
         .spawn(Node {
             width: Val::Percent(100.0),
             height: Val::Px(theme.sizes.header_height),
+            flex_shrink: 0.0,
             align_items: AlignItems::Center,
             flex_direction: FlexDirection::Row,
             ..default()
@@ -345,6 +355,7 @@ pub(super) fn spawn_familiar_section(
             Node {
                 width: Val::Px(theme.sizes.fold_button_size),
                 height: Val::Px(theme.sizes.fold_button_size),
+                flex_shrink: 0.0,
                 align_items: AlignItems::Center,
                 justify_content: JustifyContent::Center,
                 ..default()
@@ -376,6 +387,7 @@ pub(super) fn spawn_familiar_section(
             Node {
                 flex_grow: 1.0,
                 height: Val::Px(theme.sizes.header_height),
+                flex_shrink: 0.0,
                 align_items: AlignItems::Center,
                 border: UiRect::left(Val::Px(0.0)),
                 padding: UiRect::left(Val::Px(theme.spacing.text_left_padding)),
@@ -404,6 +416,7 @@ pub(super) fn spawn_familiar_section(
     let adjust_container = commands
         .spawn(Node {
             flex_direction: FlexDirection::Row,
+            flex_shrink: 0.0,
             align_items: AlignItems::Center,
             column_gap: Val::Px(theme.spacing.margin_small),
             padding: UiRect::right(Val::Px(theme.spacing.margin_small)),
@@ -418,6 +431,7 @@ pub(super) fn spawn_familiar_section(
             Node {
                 width: Val::Px(18.0),
                 height: Val::Px(18.0),
+                flex_shrink: 0.0,
                 justify_content: JustifyContent::Center,
                 align_items: AlignItems::Center,
                 ..default()
@@ -450,6 +464,7 @@ pub(super) fn spawn_familiar_section(
             Node {
                 width: Val::Px(18.0),
                 height: Val::Px(18.0),
+                flex_shrink: 0.0,
                 justify_content: JustifyContent::Center,
                 align_items: AlignItems::Center,
                 ..default()
