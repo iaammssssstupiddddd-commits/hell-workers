@@ -2,20 +2,19 @@ use bevy::prelude::*;
 
 use crate::entities::damned_soul::StressBreakdown;
 use crate::entities::familiar::ActiveCommand;
-use crate::relationships::CommandedBy;
-use crate::relationships::{Commanding, ManagedBy, TaskWorkers, WorkingOn};
+use crate::events::TaskAssignmentRequest;
+use crate::relationships::{Commanding, ManagedBy, TaskWorkers};
 use crate::systems::command::TaskArea;
 use crate::systems::jobs::{Blueprint, Designation, Priority, TaskSlots, WorkType};
 use crate::systems::logistics::InStockpile;
-use crate::systems::soul_ai::execute::task_execution::AssignedTask;
-use crate::systems::soul_ai::execute::task_execution::types::BuildPhase;
+use crate::systems::soul_ai::execute::task_execution::types::{AssignedTask, BuildData, BuildPhase};
 use crate::systems::soul_ai::helpers::query_types::AutoBuildSoulQuery;
 use crate::systems::soul_ai::helpers::work as helpers;
 use crate::systems::spatial::BlueprintSpatialGrid;
 
 /// 資材が揃った建築タスクの自動割り当てシステム
 pub fn blueprint_auto_build_system(
-    mut commands: Commands,
+    mut assignment_writer: MessageWriter<TaskAssignmentRequest>,
     blueprint_grid: Res<BlueprintSpatialGrid>,
     q_familiars: Query<(Entity, &ActiveCommand, &TaskArea, Option<&Commanding>)>,
     q_blueprints: Query<(Entity, &Transform, &Blueprint, Option<&TaskWorkers>)>,
@@ -36,6 +35,7 @@ pub fn blueprint_auto_build_system(
         let Some(commanding) = commanding_opt else {
             continue;
         };
+        let mut already_requested_workers = std::collections::HashSet::new();
 
         // 最適化: タスクエリア内のブループリントのみを取得
         let blueprints_in_area = blueprint_grid.get_in_area(task_area.min, task_area.max);
@@ -78,8 +78,11 @@ pub fn blueprint_auto_build_system(
                 let mut min_dist_sq = f32::MAX;
 
                 for &soul_entity in commanding.iter() {
+                    if already_requested_workers.contains(&soul_entity) {
+                        continue;
+                    }
                     let Ok((_, soul_transform, soul, task, _, _, idle, uc_opt)) =
-                        q_souls.get(soul_entity)
+                        q_souls.get_mut(soul_entity)
                     else {
                         continue;
                     };
@@ -89,12 +92,12 @@ pub fn blueprint_auto_build_system(
                     }
 
                     // 待機中・健康チェックをヘルパーに委譲
-                    if !helpers::is_soul_available_for_work(
-                        soul,
-                        task,
-                        idle,
-                        q_breakdown.get(soul_entity).is_ok(),
-                        fatigue_threshold,
+                        if !helpers::is_soul_available_for_work(
+                            soul,
+                            &task,
+                            idle,
+                            q_breakdown.get(soul_entity).is_ok(),
+                            fatigue_threshold,
                     ) {
                         continue;
                     }
@@ -112,7 +115,7 @@ pub fn blueprint_auto_build_system(
 
                 // 見つかった魂に建築タスクを割り当て
                 if let Some(worker_entity) = best_worker {
-                    if let Ok((_, _, soul, mut assigned_task, mut dest, mut path, idle, _)) =
+                    if let Ok((_, _, soul, assigned_task, _, _, idle, _)) =
                         q_souls.get_mut(worker_entity)
                     {
                         if !helpers::is_soul_available_for_work(
@@ -125,21 +128,20 @@ pub fn blueprint_auto_build_system(
                             continue;
                         }
 
-                        // 建築タスクを割り当て
-                        *assigned_task = AssignedTask::Build(
-                            crate::systems::soul_ai::execute::task_execution::types::BuildData {
+                        assignment_writer.write(TaskAssignmentRequest {
+                            familiar_entity: fam_entity,
+                            worker_entity,
+                            task_entity: bp_entity,
+                            work_type: WorkType::Build,
+                            task_pos: bp_pos,
+                            assigned_task: AssignedTask::Build(BuildData {
                                 blueprint: bp_entity,
                                 phase: BuildPhase::GoingToBlueprint,
-                            },
-                        );
-                        dest.0 = bp_pos;
-                        path.waypoints = vec![bp_pos];
-                        path.current_index = 0;
-
-                        commands
-                            .entity(worker_entity)
-                            .insert((CommandedBy(fam_entity), WorkingOn(bp_entity)));
-                        commands.entity(bp_entity).insert(ManagedBy(fam_entity));
+                            }),
+                            reservation_ops: vec![],
+                            already_commanded: true,
+                        });
+                        already_requested_workers.insert(worker_entity);
 
                         info!(
                             "AUTO_BUILD: Assigned build task {:?} to worker {:?}",

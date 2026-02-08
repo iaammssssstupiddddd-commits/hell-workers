@@ -117,15 +117,15 @@ pub enum SoulAiSystemSet {
 **責任**: 次の行動の選択、要求の生成
 
 **原則**:
-- `TaskAssignmentRequest`等の要求を生成
+- `TaskAssignmentRequest` / `DesignationRequest` 等の要求を生成
 - 目的地の決定
-- **コマンド発行は最小限**
+- **`Commands` の発行は禁止**（自エンティティへの軽微な値更新のみ許容）
 
 **システム例**:
 ```rust
 // Soul AI
 - idle_behavior_decision_system  // アイドル行動の決定
-- blueprint_auto_haul_system     // タスク割り当て要求
+- blueprint_auto_haul_system     // DesignationRequest の生成
 - escaping_decision_system       // 逃走行動の決定（0.5秒間隔, 初回即時）
 
 // Familiar AI
@@ -149,9 +149,12 @@ pub enum SoulAiSystemSet {
 **システム例**:
 ```rust
 // Soul AI
+- apply_designation_requests_system
 - apply_task_assignment_requests_system
 - task_execution_system
 - idle_behavior_apply_system     // アイドル行動の適用
+- escaping_apply_system
+- clear_item_reservations_system
 - gathering_spawn_system         // 集会スポット生成
 
 // Familiar AI
@@ -181,7 +184,7 @@ pub enum IdleBehaviorOperation {
 }
 ```
 
-**使用例** (`idle/behavior.rs`):
+**使用例** (`decide/idle_behavior.rs` / `execute/idle_behavior_apply.rs`):
 
 ```rust
 // Decide フェーズ
@@ -209,6 +212,50 @@ pub fn idle_behavior_apply_system(
             }
 // ...
         }
+    }
+}
+```
+
+### DesignationRequest
+
+`src/events.rs`:
+
+```rust
+#[derive(Message, Debug, Clone)]
+pub struct DesignationRequest {
+    pub entity: Entity,
+    pub operation: DesignationOp,
+}
+
+pub enum DesignationOp {
+    Issue {
+        work_type: WorkType,
+        issued_by: Entity,
+        task_slots: u32,
+        priority: Option<u32>,
+        target_blueprint: Option<Entity>,
+        target_mixer: Option<Entity>,
+        reserved_for_task: bool,
+    },
+}
+```
+
+**使用例** (`soul_ai/decide/work/auto_haul/*.rs` / `soul_ai/execute/designation_apply.rs`):
+
+```rust
+// Decide フェーズ: Designation 発行要求をキュー
+designation_writer.write(DesignationRequest {
+    entity: item_entity,
+    operation: DesignationOp::Issue { ... },
+});
+
+// Execute フェーズ: 要求を実際のコンポーネントに反映
+pub fn apply_designation_requests_system(
+    mut commands: Commands,
+    mut request_reader: MessageReader<DesignationRequest>,
+) {
+    for request in request_reader.read() {
+        commands.entity(request.entity).insert(Designation { ... });
     }
 }
 ```
@@ -271,7 +318,7 @@ pub fn apply_squad_management_requests_system(
 1. **自動クリーンアップ**: 読み取り後に自動的に消費される
 2. **順序保証**: 書き込み順に読み取られる
 3. **エンティティ削除に強い**: エンティティに紐づかないため安全
-4. **既存パターンとの整合性**: `TaskAssignmentRequest`で実績あり
+4. **既存パターンとの整合性**: `TaskAssignmentRequest` / `DesignationRequest` で実績あり
 
 ## 新しいAI行動の追加パターン
 
@@ -324,7 +371,9 @@ fn rest_behavior_apply_system(
 | `src/systems/soul_ai/scheduling.rs` | `FamiliarAiSystemSet`, `SoulAiSystemSet`の定義 |
 | `src/systems/soul_ai/mod.rs` | Soul AIのフェーズ登録、レイヤー間順序設定 |
 | `src/systems/familiar_ai/mod.rs` | Familiar AIのフェーズ登録 |
-| `src/systems/soul_ai/decide/idle_behavior.rs` | Decide/Execute分割の実装例 |
+| `src/systems/soul_ai/decide/idle_behavior.rs` | Decide側のRequest生成例 |
+| `src/systems/soul_ai/execute/idle_behavior_apply.rs` | Execute側のIdleBehavior適用例 |
+| `src/systems/soul_ai/execute/designation_apply.rs` | Execute側のDesignation適用例 |
 | `src/events.rs` | Request型の定義 |
 | `docs/architecture.md` | 全体アーキテクチャ |
 | `docs/soul_ai.md` | Soul AI詳細 |

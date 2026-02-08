@@ -6,9 +6,10 @@ use bevy::prelude::*;
 
 use crate::constants::TILE_SIZE;
 use crate::entities::familiar::ActiveCommand;
+use crate::events::{DesignationOp, DesignationRequest};
 use crate::relationships::TaskWorkers;
 use crate::systems::command::TaskArea;
-use crate::systems::jobs::{Blueprint, Designation, IssuedBy, TaskSlots, WorkType};
+use crate::systems::jobs::{Blueprint, Designation, WorkType};
 use crate::systems::logistics::{ResourceItem, ResourceType};
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
 use crate::systems::soul_ai::helpers::query_types::AutoHaulAssignedTaskQuery;
@@ -19,7 +20,7 @@ const SEARCH_RADII: [f32; 4] = [20.0, 50.0, 100.0, 200.0];
 
 /// 設計図への自動資材運搬タスク生成システム
 pub fn blueprint_auto_haul_system(
-    mut commands: Commands,
+    mut designation_writer: MessageWriter<DesignationRequest>,
     resource_grid: Res<ResourceSpatialGrid>,
     blueprint_grid: Res<BlueprintSpatialGrid>,
     q_familiars: Query<(Entity, &ActiveCommand, &TaskArea)>,
@@ -119,15 +120,18 @@ pub fn blueprint_auto_haul_system(
                     *in_flight.entry((bp_entity, *resource_type)).or_insert(0) += 1;
 
                     // Designation を付与
-                    commands.entity(item_entity).insert((
-                        Designation {
+                    designation_writer.write(DesignationRequest {
+                        entity: item_entity,
+                        operation: DesignationOp::Issue {
                             work_type: WorkType::Haul,
+                            issued_by: fam_entity,
+                            task_slots: 1,
+                            priority: Some(0),
+                            target_blueprint: Some(bp_entity),
+                            target_mixer: None,
+                            reserved_for_task: false,
                         },
-                        IssuedBy(fam_entity),
-                        TaskSlots::new(1),
-                        crate::systems::jobs::TargetBlueprint(bp_entity),
-                        crate::systems::jobs::Priority(0),
-                    ));
+                    });
 
                     info!(
                         "AUTO_HAUL_BP: Assigned {:?} for bp {:?} (Total expected: {})",

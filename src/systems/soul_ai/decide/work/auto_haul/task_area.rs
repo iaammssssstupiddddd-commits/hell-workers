@@ -6,11 +6,12 @@ use bevy::prelude::*;
 
 use crate::constants::*;
 use crate::entities::familiar::ActiveCommand;
+use crate::events::{DesignationOp, DesignationRequest};
 use crate::relationships::{StoredItems, TaskWorkers};
 use crate::systems::command::TaskArea;
-use crate::systems::jobs::{Designation, IssuedBy, TaskSlots, WorkType};
+use crate::systems::jobs::{Designation, WorkType};
 use crate::systems::logistics::{
-    BelongsTo, ReservedForTask, ResourceItem, ResourceType, Stockpile,
+    BelongsTo, ResourceItem, ResourceType, Stockpile,
 };
 use crate::systems::soul_ai::decide::work::auto_haul::ItemReservations;
 use crate::systems::spatial::{ResourceSpatialGrid, SpatialGridOps, StockpileSpatialGrid};
@@ -19,7 +20,7 @@ use crate::systems::spatial::{ResourceSpatialGrid, SpatialGridOps, StockpileSpat
 ///
 /// 汎用アイテムは空間検索で、専用アイテム（所有権あり）はRelationshipで検索します。
 pub fn task_area_auto_haul_system(
-    mut commands: Commands,
+    mut designation_writer: MessageWriter<DesignationRequest>,
     resource_grid: Res<ResourceSpatialGrid>,
     stockpile_grid: Res<StockpileSpatialGrid>,
     q_familiars: Query<(Entity, &ActiveCommand, &TaskArea)>,
@@ -110,15 +111,18 @@ pub fn task_area_auto_haul_system(
             if let Some((fam_entity, _, _)) = q_familiars.iter().next() {
                 already_assigned.insert(item_entity);
                 item_reservations.0.insert(item_entity);
-                commands.entity(item_entity).insert((
-                    Designation {
+                designation_writer.write(DesignationRequest {
+                    entity: item_entity,
+                    operation: DesignationOp::Issue {
                         work_type: WorkType::Haul,
+                        issued_by: fam_entity,
+                        task_slots: 1,
+                        priority: Some(10), // 専用品の回収は最優先
+                        target_blueprint: None,
+                        target_mixer: None,
+                        reserved_for_task: true,
                     },
-                    IssuedBy(fam_entity),
-                    TaskSlots::new(1),
-                    crate::systems::jobs::Priority(10), // 専用品の回収は最優先
-                    ReservedForTask,
-                ));
+                });
                 break; // 1つ割り当てたら次のアイテムへ
             }
         }
@@ -192,15 +196,18 @@ pub fn task_area_auto_haul_system(
             if let Some(item_entity) = nearest_resource {
                 already_assigned.insert(item_entity);
                 item_reservations.0.insert(item_entity);
-                commands.entity(item_entity).insert((
-                    Designation {
+                designation_writer.write(DesignationRequest {
+                    entity: item_entity,
+                    operation: DesignationOp::Issue {
                         work_type: WorkType::Haul,
+                        issued_by: fam_entity,
+                        task_slots: 1,
+                        priority: Some(0),
+                        target_blueprint: None,
+                        target_mixer: None,
+                        reserved_for_task: true,
                     },
-                    IssuedBy(fam_entity),
-                    TaskSlots::new(1),
-                    crate::systems::jobs::Priority(0),
-                    ReservedForTask,
-                ));
+                });
             }
         }
     }

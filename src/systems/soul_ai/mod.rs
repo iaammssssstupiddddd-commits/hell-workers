@@ -97,20 +97,22 @@ impl Plugin for SoulAiPlugin {
                 // === Execute Phase ===
                 // 決定された行動の実行
                 (
+                    // Designation要求の適用
+                    execute::designation_apply::apply_designation_requests_system,
                     // タスク要求の適用
                     execute::task_execution::apply_task_assignment_requests_system
                         .before(execute::task_execution::task_execution_system),
                     execute::task_execution::task_execution_system,
                     // アイドル行動の適用
-                    decide::idle_behavior::idle_behavior_apply_system,
+                    execute::idle_behavior_apply::idle_behavior_apply_system,
                     execute::escaping_apply::escaping_apply_system,
                     execute::gathering_apply::gathering_apply_system,
                     // クリーンアップ
                     execute::cleanup::cleanup_commanded_souls_system,
-                    decide::work::auto_haul::clear_item_reservations_system,
+                    execute::designation_apply::clear_item_reservations_system,
                     // 予約の確定
                     crate::systems::familiar_ai::perceive::resource_sync::apply_reservation_requests_system
-                        .after(decide::work::auto_haul::clear_item_reservations_system),
+                        .after(execute::designation_apply::clear_item_reservations_system),
                     // エンティティ生成
                     execute::gathering_spawn::gathering_spawn_system,
                 )

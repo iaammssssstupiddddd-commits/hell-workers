@@ -6,19 +6,19 @@ use bevy::prelude::*;
 
 use crate::constants::{BUCKET_CAPACITY, MUD_MIXER_CAPACITY, TILE_SIZE};
 use crate::entities::familiar::ActiveCommand;
-use crate::events::{ResourceReservationOp, ResourceReservationRequest};
+use crate::events::{
+    DesignationOp, DesignationRequest, ResourceReservationOp, ResourceReservationRequest,
+};
 use crate::relationships::TaskWorkers;
 use crate::systems::command::TaskArea;
 use crate::systems::familiar_ai::perceive::resource_sync::SharedResourceCache;
-use crate::systems::jobs::{
-    Designation, IssuedBy, MudMixerStorage, Priority, TargetMixer, TaskSlots, WorkType,
-};
+use crate::systems::jobs::{Designation, MudMixerStorage, WorkType};
 use crate::systems::logistics::{ReservedForTask, ResourceItem, ResourceType, Stockpile};
 use crate::systems::soul_ai::decide::work::auto_haul::ItemReservations;
 
 /// MudMixer への自動資材運搬タスク生成システム
 pub fn mud_mixer_auto_haul_system(
-    mut commands: Commands,
+    mut designation_writer: MessageWriter<DesignationRequest>,
     haul_cache: Res<SharedResourceCache>,
     mut item_reservations: ResMut<ItemReservations>,
     mut reservation_writer: MessageWriter<ResourceReservationRequest>,
@@ -161,16 +161,18 @@ pub fn mud_mixer_auto_haul_system(
 
                 if let Some((item_entity, _)) = candidates.first() {
                     let item_entity = *item_entity;
-                    commands.entity(item_entity).insert((
-                        Designation {
+                    designation_writer.write(DesignationRequest {
+                        entity: item_entity,
+                        operation: DesignationOp::Issue {
                             work_type: WorkType::HaulToMixer,
+                            issued_by: _fam_entity,
+                            task_slots: 1,
+                            priority: Some(5),
+                            target_blueprint: None,
+                            target_mixer: Some(mixer_entity),
+                            reserved_for_task: true,
                         },
-                        TargetMixer(mixer_entity),
-                        TaskSlots::new(1),
-                        IssuedBy(_fam_entity),
-                        Priority(5),
-                        ReservedForTask,
-                    ));
+                    });
                     *mixer_reservation_delta
                         .entry((mixer_entity, resource_type))
                         .or_insert(0) += 1;
@@ -210,14 +212,18 @@ pub fn mud_mixer_auto_haul_system(
                         // 既にこのSandPileに仕事があるか確認
                         let has_designation = sp_designation.is_some() || sp_workers.is_some();
                         if !has_designation {
-                            commands.entity(sp_entity).insert((
-                                Designation {
+                            designation_writer.write(DesignationRequest {
+                                entity: sp_entity,
+                                operation: DesignationOp::Issue {
                                     work_type: WorkType::CollectSand,
+                                    issued_by: _fam_entity,
+                                    task_slots: 1,
+                                    priority: Some(4),
+                                    target_blueprint: None,
+                                    target_mixer: None,
+                                    reserved_for_task: false,
                                 },
-                                IssuedBy(_fam_entity),
-                                TaskSlots::new(1),
-                                Priority(4),
-                            ));
+                            });
                             info!(
                                 "AUTO_HAUL_MIXER: Issued CollectSand for Mixer {:?}",
                                 mixer_entity
@@ -379,16 +385,18 @@ pub fn mud_mixer_auto_haul_system(
                     });
 
                     if let Some((bucket_entity, _, _)) = bucket_candidates.first() {
-                        commands.entity(*bucket_entity).insert((
-                            Designation {
+                        designation_writer.write(DesignationRequest {
+                            entity: *bucket_entity,
+                            operation: DesignationOp::Issue {
                                 work_type: WorkType::HaulWaterToMixer,
+                                issued_by: _fam_entity,
+                                task_slots: 1,
+                                priority: Some(6), // 通常の運搬より優先
+                                target_blueprint: None,
+                                target_mixer: Some(mixer_entity),
+                                reserved_for_task: true,
                             },
-                            TargetMixer(mixer_entity),
-                            TaskSlots::new(1),
-                            IssuedBy(_fam_entity),
-                            Priority(6), // 通常の運搬より優先
-                            ReservedForTask,
-                        ));
+                        });
                         item_reservations.0.insert(*bucket_entity);
                         *mixer_reservation_delta
                             .entry((mixer_entity, ResourceType::Water))

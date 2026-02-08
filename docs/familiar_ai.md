@@ -96,6 +96,7 @@
   - `finalize_state_transitions`: 状態遷移の最終確定
   - `process_task_delegation_and_movement`: タスク委譲と移動制御
 - **`helpers/query_types.rs`**: Familiar AI 共通クエリ型定義（フェーズ横断で利用）
+- **設計メモ**: Familiar AI は「状態遷移」「分隊管理」「リクルート」で同じ判定ロジックを複数フェーズから再利用するため、`helpers/` が相対的に厚くなる設計です。副作用（`Commands`・イベント発火）は `execute/` に限定します。
 - **`decide/state_decision.rs`**: 状態遷移の意思決定システム
   - `familiar_ai_state_system`: 状態判定と Request 生成
 - **`decide/task_delegation.rs`**: タスク委譲の意思決定システム
