@@ -1,6 +1,8 @@
 use super::DragState;
+use crate::game_state::TaskContext;
 use crate::interface::ui::components::*;
 use crate::interface::ui::theme::UiTheme;
+use crate::systems::command::TaskMode;
 use bevy::input::mouse::{MouseScrollUnit, MouseWheel};
 use bevy::prelude::*;
 use bevy::ui::RelativeCursorPosition;
@@ -232,6 +234,7 @@ pub fn entity_list_scroll_system(
 
 pub fn entity_list_tab_focus_system(
     keyboard: Res<ButtonInput<KeyCode>>,
+    task_context: Res<TaskContext>,
     mut selected_entity: ResMut<crate::interface::selection::SelectedEntity>,
     q_soul_items: Query<&SoulListItem>,
     q_familiar_items: Query<&FamiliarListItem>,
@@ -242,11 +245,17 @@ pub fn entity_list_tab_focus_system(
         return;
     }
 
-    let mut candidates: Vec<Entity> = q_familiar_items
-        .iter()
-        .map(|item| item.0)
-        .chain(q_soul_items.iter().map(|item| item.0))
-        .collect();
+    let in_area_task_mode = matches!(task_context.0, TaskMode::AreaSelection(_));
+
+    let mut candidates: Vec<Entity> = if in_area_task_mode {
+        q_familiar_items.iter().map(|item| item.0).collect()
+    } else {
+        q_familiar_items
+            .iter()
+            .map(|item| item.0)
+            .chain(q_soul_items.iter().map(|item| item.0))
+            .collect()
+    };
     candidates.sort_by_key(|entity| entity.index());
     candidates.dedup();
 

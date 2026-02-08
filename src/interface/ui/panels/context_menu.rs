@@ -152,7 +152,7 @@ pub fn context_menu_system(
                     );
                     spawn_menu_item(
                         menu,
-                        "Assign Area Task",
+                        "Edit Task Area",
                         MenuAction::SelectAreaTask,
                         &game_assets,
                         &theme,

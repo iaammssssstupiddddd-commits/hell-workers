@@ -89,7 +89,9 @@ pub(super) fn set_area_task_mode(
     zone_context.0 = None;
     task_context.0 = mode;
     next_play_mode.set(PlayMode::TaskDesignation);
-    info!("UI: Area Selection Mode entered, PlayMode -> TaskDesignation");
+    info!(
+        "UI: Area Edit mode entered (continuous), PlayMode -> TaskDesignation"
+    );
 }
 
 pub(super) fn build_mode_text(
@@ -97,6 +99,13 @@ pub(super) fn build_mode_text(
     build_context: &BuildContext,
     zone_context: &ZoneContext,
     task_context: &TaskContext,
+    selected_familiar_name: Option<&str>,
+    selected_area_size_tiles: Option<UVec2>,
+    area_edit_dragging: bool,
+    area_edit_operation: Option<&str>,
+    area_overlap: Option<(usize, f32)>,
+    clipboard_has_area: bool,
+    unassigned_tasks_in_area: Option<usize>,
 ) -> String {
     match play_mode {
         PlayMode::Normal => "Mode: Normal".to_string(),
@@ -123,7 +132,49 @@ pub(super) fn build_mode_text(
             TaskMode::DesignateHaul(Some(_)) => "Mode: Haul (Dragging...)".to_string(),
             TaskMode::CancelDesignation(None) => "Mode: Cancel (Drag to select)".to_string(),
             TaskMode::CancelDesignation(Some(_)) => "Mode: Cancel (Dragging...)".to_string(),
-            TaskMode::AreaSelection(_) => "Mode: Area Selection".to_string(),
+            TaskMode::AreaSelection(None) => {
+                let target_name = selected_familiar_name.unwrap_or("No Familiar");
+                let size = selected_area_size_tiles
+                    .map(|v| format!("{}x{}t", v.x, v.y))
+                    .unwrap_or_else(|| "?x?t".to_string());
+                let state = if area_edit_dragging {
+                    if let Some(op) = area_edit_operation {
+                        format!("Dragging {}", op)
+                    } else {
+                        "Dragging".to_string()
+                    }
+                } else {
+                    "Ready".to_string()
+                };
+                let overlap_text = if let Some((count, max_ratio)) = area_overlap {
+                    if count > 0 {
+                        format!("Overlap:{}({:.0}%)", count, max_ratio * 100.0)
+                    } else {
+                        "Overlap:0".to_string()
+                    }
+                } else {
+                    "Overlap:-".to_string()
+                };
+                let clip = if clipboard_has_area {
+                    "Clip:Ready"
+                } else {
+                    "Clip:Empty"
+                };
+                let tasks = unassigned_tasks_in_area
+                    .map(|count| format!("Tasks:{}", count))
+                    .unwrap_or_else(|| "Tasks:-".to_string());
+                let overlap_warn = area_overlap
+                    .is_some_and(|(count, max_ratio)| count > 0 && max_ratio >= 0.5);
+                let warn = if overlap_warn { " WARN:HighOverlap" } else { "" };
+                format!(
+                    "Mode: Area Edit [{}] {} {} {} {} {}{} (Drag:Apply, Esc:Exit, Shift+Release:Exit, Ctrl+C/V, Ctrl+Z/Y, Ctrl+1..3 Save, Alt+1..3 Apply)",
+                    target_name, size, state, overlap_text, tasks, clip, warn
+                )
+            }
+            TaskMode::AreaSelection(Some(_)) => {
+                let target_name = selected_familiar_name.unwrap_or("No Familiar");
+                format!("Mode: Area Edit [{}] (New Area Dragging...)", target_name)
+            }
             TaskMode::AssignTask(_) => "Mode: Assign Task".to_string(),
             _ => "Mode: Task".to_string(),
         },

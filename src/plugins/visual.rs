@@ -4,8 +4,8 @@ use crate::entities::familiar::{familiar_animation_system, update_familiar_range
 use crate::game_state::PlayMode;
 use crate::systems::GameSystemSet;
 use crate::systems::command::{
-    area_selection_indicator_system, sync_designation_indicator_system,
-    update_designation_indicator_system,
+    area_edit_handles_visual_system, area_selection_indicator_system,
+    sync_designation_indicator_system, update_designation_indicator_system,
 };
 use crate::systems::jobs::building_completion_system;
 use crate::systems::logistics::resource_count_display_system;
@@ -130,6 +130,7 @@ impl Plugin for VisualPlugin {
             Update,
             (
                 crate::systems::command::task_area_indicator_system,
+                area_edit_handles_visual_system,
                 crate::systems::command::designation_visual_system,
                 crate::systems::command::familiar_command_visual_system,
                 crate::systems::visual::placement_ghost::placement_ghost_system,

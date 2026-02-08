@@ -6,7 +6,8 @@ use crate::interface::selection::{
 };
 use crate::interface::ui::{
     context_menu_system, menu_visibility_system, task_summary_ui_system, ui_interaction_system,
-    ui_keyboard_shortcuts_system, update_fps_display_system, update_mode_text_system,
+    ui_keyboard_shortcuts_system, update_area_edit_preview_ui_system, update_fps_display_system,
+    update_mode_text_system,
     update_operation_dialog_system,
 };
 use crate::systems::GameSystemSet;
@@ -32,6 +33,7 @@ impl Plugin for UiCorePlugin {
                 ui_interaction_system,
                 menu_visibility_system,
                 update_mode_text_system,
+                update_area_edit_preview_ui_system,
             )
                 .chain()
                 .in_set(GameSystemSet::Interface),

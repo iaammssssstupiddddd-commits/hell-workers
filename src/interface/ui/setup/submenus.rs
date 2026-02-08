@@ -148,23 +148,24 @@ fn spawn_orders_submenu(
     theme: &UiTheme,
     parent_entity: Entity,
 ) {
-    let tasks = [
+    let actions = [
         (
             "Chop",
-            crate::systems::command::TaskMode::DesignateChop(None),
+            MenuAction::SelectTaskMode(crate::systems::command::TaskMode::DesignateChop(None)),
         ),
         (
             "Mine",
-            crate::systems::command::TaskMode::DesignateMine(None),
+            MenuAction::SelectTaskMode(crate::systems::command::TaskMode::DesignateMine(None)),
         ),
         (
             "Haul",
-            crate::systems::command::TaskMode::DesignateHaul(None),
+            MenuAction::SelectTaskMode(crate::systems::command::TaskMode::DesignateHaul(None)),
         ),
         (
             "Cancel",
-            crate::systems::command::TaskMode::CancelDesignation(None),
+            MenuAction::SelectTaskMode(crate::systems::command::TaskMode::CancelDesignation(None)),
         ),
+        ("Area", MenuAction::SelectAreaTask),
     ];
 
     let submenu = commands
@@ -189,7 +190,7 @@ fn spawn_orders_submenu(
     commands.entity(parent_entity).add_child(submenu);
 
     commands.entity(submenu).with_children(|parent| {
-        for (label, mode) in tasks {
+        for (label, action) in actions {
             parent
                 .spawn((
                     Button,
@@ -202,7 +203,7 @@ fn spawn_orders_submenu(
                         ..default()
                     },
                     BackgroundColor(theme.colors.button_default),
-                    MenuButton(MenuAction::SelectTaskMode(mode)),
+                    MenuButton(action),
                 ))
                 .with_children(|button| {
                     button.spawn((

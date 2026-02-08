@@ -98,6 +98,7 @@ pub enum UiSlot {
     ModeText,
     // Other
     TaskSummaryText,
+    AreaEditPreview,
     TooltipAnchor,
     FpsText,
 }

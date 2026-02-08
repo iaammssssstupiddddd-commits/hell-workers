@@ -36,6 +36,24 @@ stateDiagram-v2
 | `ZoneContext` | `Option<ZoneType>` | 配置するゾーンの種類 |
 | `TaskContext` | `TaskMode` | タスクの詳細（伐採/採掘/運搬など） |
 
+## TaskDesignation の補足（TaskArea 編集）
+
+`PlayMode::TaskDesignation` で `TaskContext = TaskMode::AreaSelection(...)` のとき、TaskArea 専用の連続編集モードとして動作します。
+
+### AreaSelection の状態
+- `TaskMode::AreaSelection(None)`: 待機（新規ドラッグ開始 / 既存エリア直接編集）
+- `TaskMode::AreaSelection(Some(start_pos))`: 新規矩形ドラッグ中
+
+### 遷移ルール
+- `Orders -> Area` で `TaskMode::AreaSelection(None)` に遷移
+- 適用後はデフォルトで `TaskMode::AreaSelection(None)` を維持（連続編集）
+- `Shift + 左ボタンリリース` で適用と同時に `PlayMode::Normal` へ復帰
+- `Esc` で `PlayMode::Normal` へ復帰
+
+### 入力補足
+- Areaモード中の `Tab` / `Shift + Tab` は Familiar のみを循環対象にする
+- `Ctrl + Z / Y`（および `Ctrl + Shift + Z`）で TaskArea の Undo/Redo を行う
+
 ## 共通仕様
 
 ### Escキーによるキャンセル
@@ -72,5 +90,5 @@ stateDiagram-v2
 - `src/game_state.rs` - PlayMode、Context定義
 - `src/main.rs` - State登録、OnEnter/OnExit
 - `src/interface/selection.rs` - Escキーによるキャンセル処理
-- `src/interface/ui_interaction.rs` - ボタンによる状態遷移
+- `src/interface/ui/interaction/mod.rs` - ボタンによる状態遷移とモード表示更新
 - `src/systems/logistics.rs` - zone_placement（ZoneContext使用）

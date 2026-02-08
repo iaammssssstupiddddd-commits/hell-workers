@@ -34,6 +34,11 @@
 - 初期化漏れに備えて `Option<Messages<T>>` か `If<Messages<T>>` を検討する
   使わないフレームでもパニックしない形にしておく。
 
+### 5. EntityEvent Observer 登録の規約
+- `EntityEvent` のオブザーバーは、原則として Plugin 側の `app.add_observer(...)` に一元登録する。
+- 同じハンドラをスポーン時の `.observe(...)` と併用しない（重複実行の原因になる）。
+- 例外として、特定エンティティにのみ限定した監視が必要な場合に限り `.observe(...)` を使う。
+
 ## 便利なコマンド
 
 ### コンパイル確認
@@ -50,6 +55,17 @@ python scripts/convert_to_png.py "source_path" "assets/textures/dest.png"
 ```powershell
 powershell -Command "[BitConverter]::ToString((Get-Content 'file_path' -Encoding Byte -TotalCount 8))"
 ```
+
+### 高負荷パフォーマンス計測（500 Soul / 30 Familiar）
+```powershell
+cargo run -- --spawn-souls 500 --spawn-familiars 30 --perf-scenario --perf-log-fps
+```
+
+- `--spawn-souls`: 初期 Soul 数を上書き（既定: 10）
+- `--spawn-familiars`: 初期 Familiar 数を上書き（既定: 2）
+- `--perf-scenario`: 収集シナリオを自動セットアップ（TaskArea / command / designation）
+- `--perf-log-fps`: `PERF_FPS` ログを1秒ごとに出力
+- 環境変数でも指定可: `HW_SPAWN_SOULS`, `HW_SPAWN_FAMILIARS`, `HW_PERF_SCENARIO=1`
 
 ## トラブルシューティング
 
