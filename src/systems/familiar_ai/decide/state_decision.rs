@@ -9,36 +9,27 @@ use crate::systems::familiar_ai::helpers::familiar_processor::{
 use crate::systems::familiar_ai::helpers::query_types::{FamiliarSoulQuery, FamiliarStateQuery};
 use crate::systems::familiar_ai::perceive::state_detection::determine_transition_reason;
 use crate::systems::spatial::SpatialGrid;
-use crate::systems::visual::speech::components::{FamiliarBubble, SpeechBubble};
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 
 /// 使い魔AIの状態決定に必要なSystemParam
 #[derive(SystemParam)]
 pub struct FamiliarAiStateDecisionParams<'w, 's> {
-    pub commands: Commands<'w, 's>,
-    pub time: Res<'w, Time>,
     pub spatial_grid: Res<'w, SpatialGrid>,
     pub q_familiars: FamiliarStateQuery<'w, 's>,
     pub q_souls: FamiliarSoulQuery<'w, 's>,
     pub q_breakdown: Query<'w, 's, &'static StressBreakdown>,
-    pub game_assets: Res<'w, crate::assets::GameAssets>,
-    pub q_bubbles: Query<'w, 's, (Entity, &'static SpeechBubble), With<FamiliarBubble>>,
     pub decide_output: FamiliarDecideOutput<'w>,
 }
 
 /// 使い魔AIの状態更新システム（Decide Phase）
 pub fn familiar_ai_state_system(params: FamiliarAiStateDecisionParams) {
     let FamiliarAiStateDecisionParams {
-        mut commands,
-        time,
         spatial_grid,
         mut q_familiars,
         mut q_souls,
         q_breakdown,
         mut decide_output,
-        q_bubbles,
-        game_assets,
         ..
     } = params;
 
@@ -48,13 +39,13 @@ pub fn familiar_ai_state_system(params: FamiliarAiStateDecisionParams) {
         familiar,
         familiar_op,
         active_command,
-        mut ai_state,
+        ai_state,
         mut fam_dest,
         mut fam_path,
         task_area_opt,
         commanding,
-        voice_opt,
-        mut history_opt,
+        _voice_opt,
+        _history_opt,
     ) in q_familiars.iter_mut()
     {
         debug!(
@@ -66,28 +57,42 @@ pub fn familiar_ai_state_system(params: FamiliarAiStateDecisionParams) {
         );
 
         if matches!(active_command.command, FamiliarCommand::Idle) {
+            let old_state = ai_state.clone();
+            let mut next_state = old_state.clone();
             let transition_result =
                 crate::systems::familiar_ai::helpers::state_handlers::idle::handle_idle_state(
-                    fam_entity,
-                    fam_transform,
                     active_command,
-                    &mut ai_state,
+                    &next_state,
+                    fam_transform.translation.truncate(),
                     &mut fam_dest,
                     &mut fam_path,
-                    &mut commands,
-                    &time,
-                    &game_assets,
-                    &q_bubbles,
-                    history_opt.as_deref_mut(),
-                    voice_opt,
                 );
-            if transition_result.apply_to(&mut ai_state) {
-                debug!("FAM_AI: {:?} state changed to Idle", fam_entity);
+            if transition_result.apply_to(&mut next_state) {
+                decide_output
+                    .state_requests
+                    .write(crate::events::FamiliarStateRequest {
+                        familiar_entity: fam_entity,
+                        new_state: next_state.clone(),
+                    });
+                decide_output.state_changed_events.write(
+                    crate::events::FamiliarAiStateChangedEvent {
+                        familiar_entity: fam_entity,
+                        from: old_state.clone(),
+                        to: next_state.clone(),
+                        reason: determine_transition_reason(&old_state, &next_state),
+                    },
+                );
+                decide_output.idle_visual_requests.write(
+                    crate::events::FamiliarIdleVisualRequest {
+                        familiar_entity: fam_entity,
+                    },
+                );
             }
             continue;
         }
 
         let old_state = ai_state.clone();
+        let mut next_state = old_state.clone();
         let mut state_changed = false;
         let fam_pos = fam_transform.translation.truncate();
         let fatigue_threshold = familiar_op.fatigue_threshold;
@@ -102,7 +107,7 @@ pub fn familiar_ai_state_system(params: FamiliarAiStateDecisionParams) {
         };
         let mut squad_entities = process_squad_management(&mut squad_ctx);
 
-        match *ai_state {
+        match next_state.clone() {
             FamiliarAiState::Scouting { target_soul } => {
                 let mut scouting_ctx =
                     crate::systems::familiar_ai::helpers::scouting::FamiliarScoutingContext {
@@ -112,7 +117,7 @@ pub fn familiar_ai_state_system(params: FamiliarAiStateDecisionParams) {
                         fatigue_threshold,
                         max_workers,
                         squad: &mut squad_entities,
-                        ai_state: &mut ai_state,
+                        ai_state: &mut next_state,
                         fam_dest: &mut fam_dest,
                         fam_path: &mut fam_path,
                         q_souls: &mut q_souls,
@@ -120,7 +125,7 @@ pub fn familiar_ai_state_system(params: FamiliarAiStateDecisionParams) {
                         request_writer: &mut decide_output.squad_requests,
                     };
                 let transition_result = crate::systems::familiar_ai::helpers::state_handlers::scouting::handle_scouting_state(&mut scouting_ctx);
-                state_changed = transition_result.apply_to(&mut ai_state);
+                state_changed = transition_result.apply_to(&mut next_state);
             }
             _ => {
                 let mut recruitment_ctx = FamiliarRecruitmentContext {
@@ -128,7 +133,7 @@ pub fn familiar_ai_state_system(params: FamiliarAiStateDecisionParams) {
                     fam_transform,
                     familiar,
                     familiar_op,
-                    ai_state: &mut ai_state,
+                    ai_state: &mut next_state,
                     fam_dest: &mut fam_dest,
                     fam_path: &mut fam_path,
                     squad_entities: &mut squad_entities,
@@ -145,7 +150,7 @@ pub fn familiar_ai_state_system(params: FamiliarAiStateDecisionParams) {
             }
         }
 
-        if finalize_state_transitions(&mut ai_state, &squad_entities, fam_entity, max_workers) {
+        if finalize_state_transitions(&mut next_state, &squad_entities, fam_entity, max_workers) {
             state_changed = true;
         }
 
@@ -154,15 +159,15 @@ pub fn familiar_ai_state_system(params: FamiliarAiStateDecisionParams) {
                 .state_requests
                 .write(crate::events::FamiliarStateRequest {
                     familiar_entity: fam_entity,
-                    new_state: ai_state.clone(),
+                    new_state: next_state.clone(),
                 });
             decide_output
                 .state_changed_events
                 .write(crate::events::FamiliarAiStateChangedEvent {
                     familiar_entity: fam_entity,
                     from: old_state.clone(),
-                    to: ai_state.clone(),
-                    reason: determine_transition_reason(&old_state, &*ai_state),
+                    to: next_state.clone(),
+                    reason: determine_transition_reason(&old_state, &next_state),
                 });
         }
     }

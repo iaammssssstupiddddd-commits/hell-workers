@@ -82,17 +82,8 @@ impl SquadManager {
     /// - `squad`: 分隊メンバーのリスト
     /// - `fam_entity`: 使い魔のエンティティ
     /// - `fatigue_threshold`: 疲労閾値
-    /// - `commands`: Commands
     /// - `q_souls`: 魂のクエリ
-    /// - `q_designations`: タスクのクエリ
-    /// - `haul_cache`: 搬送キャッシュ
-    /// - `ev_created`: タスク作成イベント
-    /// - `cooldowns`: スピーチクールダウン
-    /// - `time`: Time
-    /// - `game_assets`: GameAssets
-    /// - `q_bubbles`: 吹き出しクエリ
-    /// - `fam_transform`: 使い魔のTransform
-    /// - `voice_opt`: 声の設定（オプション）
+    /// - `request_writer`: 分隊管理要求の出力
     ///
     /// # 戻り値
     /// リリースされたメンバーのリスト

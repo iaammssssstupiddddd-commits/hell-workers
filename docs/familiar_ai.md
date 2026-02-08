@@ -85,7 +85,7 @@
 | **Perceive** | 状態変化の検出、予約同期 | `detect_state_changes_system`, `sync_reservations_system`（0.2秒間隔, 初回即時） |
 | **Update** | 時間経過による内部状態更新 | 現時点では空（将来拡張ポイント） |
 | **Decide** | 状態遷移、タスク委譲 | `familiar_ai_state_system`, `familiar_task_delegation_system`（0.5秒間隔, 初回即時） |
-| **Execute** | 状態変更の適用、分隊管理、激励適用 | `familiar_state_apply_system`, `handle_state_changed_system`, `apply_squad_management_requests_system`, `encouragement_apply_system` |
+| **Execute** | 状態変更の適用、副作用の実行 | `handle_max_soul_changed_system`, `familiar_state_apply_system`, `familiar_idle_visual_apply_system`, `apply_squad_management_requests_system`, `encouragement_apply_system` |
 
 ### 5.2. 主要モジュール
 
@@ -127,11 +127,11 @@
   - `detect_state_changes_system`: 状態変更の検知（`Changed<FamiliarAiState>` 使用）
   - `detect_command_changes_system`: コマンド変更の検知（`Changed<ActiveCommand>` 使用）
   - `determine_transition_reason`: 状態遷移理由の判定
-- **`perceive/max_soul.rs`**: 使役数上限変更イベントの処理
-  - `handle_max_soul_changed_system`: 上限超過分の魂をリリース
 - **`perceive/resource_sync.rs`**: `SharedResourceCache` の再構築と予約反映
 - **`execute/state_log.rs`**: 状態遷移イベントのログ処理
 - **`execute/squad_apply.rs`**: `SquadManagementRequest` の適用（分隊管理の副作用実行）
+- **`execute/max_soul_apply.rs`**: 使役数上限変更イベントの適用（上限超過分の魂をリリース）
+- **`execute/idle_visual_apply.rs`**: Idle遷移時の吹き出し演出を適用
 - **`decide/encouragement.rs` / `execute/encouragement_apply.rs`**: 激励の決定と適用
 
 ### 5.2. 関連コンポーネント

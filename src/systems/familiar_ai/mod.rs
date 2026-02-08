@@ -66,7 +66,6 @@ impl Plugin for FamiliarAiPlugin {
                     perceive::state_detection::detect_state_changes_system,
                     perceive::state_detection::detect_command_changes_system,
                     perceive::resource_sync::sync_reservations_system,
-                    perceive::max_soul::handle_max_soul_changed_system,
                 )
                     .in_set(FamiliarAiSystemSet::Perceive),
                 ApplyDeferred
@@ -87,8 +86,10 @@ impl Plugin for FamiliarAiPlugin {
                     .in_set(FamiliarAiSystemSet::Decide),
                 // === Execute Phase ===
                 (
+                    execute::max_soul_apply::handle_max_soul_changed_system,
                     execute::state_apply::familiar_state_apply_system,
                     execute::state_log::handle_state_changed_system,
+                    execute::idle_visual_apply::familiar_idle_visual_apply_system,
                     execute::squad_apply::apply_squad_management_requests_system,
                     execute::encouragement_apply::encouragement_apply_system,
                     execute::encouragement_apply::cleanup_encouragement_cooldowns_system,

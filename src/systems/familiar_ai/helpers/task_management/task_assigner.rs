@@ -3,8 +3,6 @@
 //! ワーカーへのタスク割り当てロジックを提供します。
 
 use crate::entities::damned_soul::IdleBehavior;
-use crate::events::OnSoulRecruited;
-use crate::relationships::CommandedBy;
 use crate::systems::command::TaskArea;
 use crate::systems::familiar_ai::FamiliarSoulQuery;
 
@@ -61,29 +59,6 @@ impl ReservationShadow {
             }
         }
     }
-}
-
-/// ワーカーにタスク割り当てのための共通セットアップを行う
-pub fn prepare_worker_for_task(
-    commands: &mut Commands,
-    worker_entity: Entity,
-    fam_entity: Entity,
-    task_entity: Entity,
-    already_commanded: bool,
-) {
-    if !already_commanded {
-        commands.trigger(OnSoulRecruited {
-            entity: worker_entity,
-            familiar_entity: fam_entity,
-        });
-    }
-    commands.entity(worker_entity).insert((
-        CommandedBy(fam_entity),
-        crate::relationships::WorkingOn(task_entity),
-    ));
-    commands
-        .entity(task_entity)
-        .insert(crate::systems::jobs::IssuedBy(fam_entity));
 }
 
 pub struct AssignTaskContext<'a> {
