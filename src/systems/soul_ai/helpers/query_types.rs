@@ -86,20 +86,6 @@ pub type IdleVisualSoulQuery<'w, 's> = Query<
     ),
 >;
 
-/// 逃走検出に使うソウルの標準クエリ型
-pub type EscapingDetectionSoulQuery<'w, 's> = Query<
-    'w,
-    's,
-    (
-        Entity,
-        &'static Transform,
-        &'static DamnedSoul,
-        Option<&'static CommandedBy>,
-        Option<&'static ParticipatingIn>,
-        &'static mut IdleState,
-    ),
->;
-
 /// 逃走行動に使うソウルの標準クエリ型
 pub type EscapingBehaviorSoulQuery<'w, 's> = Query<
     'w,

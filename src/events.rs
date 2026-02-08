@@ -186,8 +186,73 @@ pub enum IdleBehaviorOperation {
 }
 
 // ============================================================
+// Soul AI Requests (Decide -> Execute)
+// ============================================================
+
+/// 逃走行動の変更要求
+#[derive(Message, Debug, Clone)]
+pub struct EscapeRequest {
+    pub entity: Entity,
+    pub operation: EscapeOperation,
+}
+
+/// 逃走行動の操作種別
+#[derive(Debug, Clone)]
+pub enum EscapeOperation {
+    StartEscaping { leave_gathering: Option<Entity> },
+    UpdateDestination { destination: Vec2 },
+    ReachSafety,
+    JoinSafeGathering,
+}
+
+/// 集会管理の変更要求
+#[derive(Message, Debug, Clone)]
+pub struct GatheringManagementRequest {
+    pub operation: GatheringManagementOp,
+}
+
+/// 集会管理の操作種別
+#[derive(Debug, Clone)]
+pub enum GatheringManagementOp {
+    Dissolve {
+        spot_entity: Entity,
+        aura_entity: Entity,
+        object_entity: Option<Entity>,
+    },
+    Merge {
+        absorber: Entity,
+        absorbed: Entity,
+        participants_to_move: Vec<Entity>,
+        absorbed_aura: Entity,
+        absorbed_object: Option<Entity>,
+    },
+    Recruit {
+        soul: Entity,
+        spot: Entity,
+    },
+    Leave {
+        soul: Entity,
+        spot: Entity,
+    },
+}
+
+// ============================================================
 // Familiar AI Requests (Decide -> Execute)
 // ============================================================
+
+/// 使い魔のAI状態変更要求
+#[derive(Message, Debug, Clone)]
+pub struct FamiliarStateRequest {
+    pub familiar_entity: Entity,
+    pub new_state: crate::systems::familiar_ai::FamiliarAiState,
+}
+
+/// 使い魔による激励要求
+#[derive(Message, Debug, Clone)]
+pub struct EncouragementRequest {
+    pub familiar_entity: Entity,
+    pub soul_entity: Entity,
+}
 
 /// 使い魔の分隊管理要求
 #[derive(Message, Debug, Clone)]
