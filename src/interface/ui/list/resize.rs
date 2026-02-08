@@ -7,7 +7,8 @@ use bevy::window::{CursorIcon, PrimaryWindow, SystemCursorIcon};
 pub const ENTITY_LIST_DEFAULT_HEIGHT: f32 = 420.0;
 pub const ENTITY_LIST_MIN_HEIGHT: f32 = 220.0;
 const EDGE_DRAG_THRESHOLD_PX: f32 = 10.0;
-const HEIGHT_SNAP_STEP_PX: f32 = 20.0;
+const ENTITY_LIST_HEADER_MARGIN_BOTTOM: f32 = 10.0;
+const ENTITY_LIST_ROW_SNAP_Y_OFFSET_ADJUST: f32 = 7.0;
 
 #[derive(Clone, Copy)]
 enum ResizeEdge {
@@ -46,9 +47,56 @@ fn is_cursor_on_vertical_resize_edge(
     dist_top <= EDGE_DRAG_THRESHOLD_PX || dist_bottom <= EDGE_DRAG_THRESHOLD_PX
 }
 
-fn snap_height(height: f32, min_height: f32, max_height: f32) -> f32 {
-    let snapped = (height / HEIGHT_SNAP_STEP_PX).round() * HEIGHT_SNAP_STEP_PX;
-    snapped.clamp(min_height, max_height)
+fn clamp_height(height: f32, min_height: f32, max_height: f32) -> f32 {
+    height.clamp(min_height, max_height)
+}
+
+fn panel_row_snap_offset(theme: &UiTheme) -> f32 {
+    theme.spacing.panel_padding * 2.0
+        + theme.sizes.header_height
+        + ENTITY_LIST_HEADER_MARGIN_BOTTOM
+        + theme.sizes.panel_border_width * 2.0
+        + ENTITY_LIST_ROW_SNAP_Y_OFFSET_ADJUST
+}
+
+fn snap_panel_height_to_row_grid(
+    height: f32,
+    min_height: f32,
+    max_height: f32,
+    theme: &UiTheme,
+) -> f32 {
+    let step = theme.sizes.soul_item_height.max(1.0);
+    let offset = panel_row_snap_offset(theme);
+
+    let min_rows = ((min_height - offset) / step).ceil();
+    let max_rows = ((max_height - offset) / step).floor();
+    if min_rows > max_rows {
+        return clamp_height(height, min_height, max_height);
+    }
+
+    let desired_rows = ((height - offset) / step).round().clamp(min_rows, max_rows);
+    let snapped = offset + desired_rows * step;
+    clamp_height(snapped, min_height, max_height)
+}
+
+fn snap_panel_height_to_row_grid_floor(
+    height: f32,
+    min_height: f32,
+    max_height: f32,
+    theme: &UiTheme,
+) -> f32 {
+    let step = theme.sizes.soul_item_height.max(1.0);
+    let offset = panel_row_snap_offset(theme);
+
+    let min_rows = ((min_height - offset) / step).ceil();
+    let max_rows = ((max_height - offset) / step).floor();
+    if min_rows > max_rows {
+        return clamp_height(height, min_height, max_height);
+    }
+
+    let desired_rows = ((height - offset) / step).floor().clamp(min_rows, max_rows);
+    let snapped = offset + desired_rows * step;
+    clamp_height(snapped, min_height, max_height)
 }
 
 pub fn entity_list_resize_system(
@@ -134,22 +182,40 @@ pub fn entity_list_resize_system(
 
     match resize_state.edge {
         Some(ResizeEdge::Bottom) => {
-            let new_height =
-                (resize_state.start_height + delta_y).clamp(ENTITY_LIST_MIN_HEIGHT, max_height);
-            let snapped_height = snap_height(new_height, ENTITY_LIST_MIN_HEIGHT, max_height);
+            let desired_height = resize_state.start_height + delta_y;
+            let snapped_height = snap_panel_height_to_row_grid(
+                desired_height,
+                ENTITY_LIST_MIN_HEIGHT,
+                max_height,
+                &theme,
+            );
             panel_node.height = Val::Px(snapped_height);
             minimize_state.expanded_height = snapped_height;
         }
         Some(ResizeEdge::Top) => {
             let start_bottom = resize_state.start_top + resize_state.start_height;
-            let mut new_top = resize_state.start_top + delta_y;
-            let mut new_height = start_bottom - new_top;
-            new_height = new_height.clamp(ENTITY_LIST_MIN_HEIGHT, max_height);
-            new_height = snap_height(new_height, ENTITY_LIST_MIN_HEIGHT, max_height);
-            new_top = start_bottom - new_height;
-            panel_node.top = Val::Px(new_top.max(theme.spacing.panel_margin_x));
-            panel_node.height = Val::Px(new_height);
-            minimize_state.expanded_height = new_height;
+            let desired_height = resize_state.start_height - delta_y;
+            let mut snapped_height = snap_panel_height_to_row_grid(
+                desired_height,
+                ENTITY_LIST_MIN_HEIGHT,
+                max_height,
+                &theme,
+            );
+            let max_height_by_top = start_bottom - theme.spacing.panel_margin_x;
+            if snapped_height > max_height_by_top {
+                snapped_height = snap_panel_height_to_row_grid_floor(
+                    max_height_by_top,
+                    ENTITY_LIST_MIN_HEIGHT,
+                    max_height,
+                    &theme,
+                );
+            }
+            let clamped_height =
+                clamp_height(snapped_height, ENTITY_LIST_MIN_HEIGHT, max_height);
+            let clamped_top = (start_bottom - clamped_height).max(theme.spacing.panel_margin_x);
+            panel_node.top = Val::Px(clamped_top);
+            panel_node.height = Val::Px(clamped_height);
+            minimize_state.expanded_height = clamped_height;
         }
         None => {}
     }

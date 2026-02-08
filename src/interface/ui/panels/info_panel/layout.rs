@@ -1,50 +1,9 @@
-//! 情報パネル
-//!
-//! Startup時に常駐UIを生成し、選択状態に応じて差分更新する。
-
-use crate::entities::damned_soul::Gender;
 use crate::interface::ui::components::{
-    InfoPanel, MenuAction, MenuButton, UiInputBlocker, UiNodeRegistry, UiSlot,
+    InfoPanel, InfoPanelNodes, MenuAction, MenuButton, UiInputBlocker, UiNodeRegistry, UiSlot,
 };
-use crate::interface::ui::presentation::{EntityInspectionModel, EntityInspectionQuery};
 use crate::interface::ui::theme::UiTheme;
 use bevy::prelude::*;
 use bevy::ui::{BackgroundGradient, ColorStop, LinearGradient, RelativeCursorPosition};
-
-#[derive(Resource, Default)]
-pub struct InfoPanelState {
-    last: Option<InfoPanelViewModel>,
-    last_pinned: bool,
-}
-
-#[derive(Resource, Default)]
-pub struct InfoPanelPinState {
-    pub entity: Option<Entity>,
-}
-
-#[derive(Clone, PartialEq)]
-enum InfoPanelViewModel {
-    Soul(SoulInfoViewModel),
-    Simple(SimpleInfoViewModel),
-}
-
-#[derive(Clone, PartialEq)]
-struct SoulInfoViewModel {
-    header: String,
-    gender: Option<Gender>,
-    motivation: String,
-    stress: String,
-    fatigue: String,
-    task: String,
-    inventory: String,
-    common: String,
-}
-
-#[derive(Clone, PartialEq)]
-struct SimpleInfoViewModel {
-    header: String,
-    common: String,
-}
 
 fn spawn_info_section_divider(
     parent: &mut ChildSpawnerCommands,
@@ -101,6 +60,7 @@ pub fn spawn_info_panel_ui(
     theme: &UiTheme,
     parent_entity: Entity,
     ui_nodes: &mut UiNodeRegistry,
+    info_panel_nodes: &mut InfoPanelNodes,
 ) {
     let root = commands
         .spawn((
@@ -136,6 +96,7 @@ pub fn spawn_info_panel_ui(
         .id();
     commands.entity(parent_entity).add_child(root);
     ui_nodes.set_slot(UiSlot::InfoPanelRoot, root);
+    info_panel_nodes.root = Some(root);
 
     commands.entity(root).with_children(|parent| {
         parent
@@ -168,6 +129,7 @@ pub fn spawn_info_panel_ui(
                         ))
                         .id();
                     ui_nodes.set_slot(UiSlot::Header, header);
+                    info_panel_nodes.header = Some(header);
 
                     let gender = left
                         .spawn((
@@ -183,6 +145,7 @@ pub fn spawn_info_panel_ui(
                         ))
                         .id();
                     ui_nodes.set_slot(UiSlot::GenderIcon, gender);
+                    info_panel_nodes.gender_icon = Some(gender);
                 });
 
                 let unpin_button = row
@@ -214,6 +177,7 @@ pub fn spawn_info_panel_ui(
                     })
                     .id();
                 ui_nodes.set_slot(UiSlot::InfoPanelUnpinButton, unpin_button);
+                info_panel_nodes.unpin_button = Some(unpin_button);
             });
 
         let stats = parent
@@ -239,6 +203,7 @@ pub fn spawn_info_panel_ui(
                     ))
                     .id();
                 ui_nodes.set_slot(UiSlot::StatMotivation, motivation);
+                info_panel_nodes.motivation = Some(motivation);
 
                 col.spawn(Node {
                     flex_direction: FlexDirection::Row,
@@ -267,6 +232,7 @@ pub fn spawn_info_panel_ui(
                         ))
                         .id();
                     ui_nodes.set_slot(UiSlot::StatStress, stress);
+                    info_panel_nodes.stress = Some(stress);
                 });
 
                 col.spawn(Node {
@@ -296,6 +262,7 @@ pub fn spawn_info_panel_ui(
                         ))
                         .id();
                     ui_nodes.set_slot(UiSlot::StatFatigue, fatigue);
+                    info_panel_nodes.fatigue = Some(fatigue);
                 });
 
                 spawn_info_section_divider(col, game_assets, theme, "Current Task");
@@ -319,6 +286,7 @@ pub fn spawn_info_panel_ui(
                         ))
                         .id();
                     ui_nodes.set_slot(UiSlot::TaskText, task);
+                    info_panel_nodes.task = Some(task);
                 });
 
                 spawn_info_section_divider(col, game_assets, theme, "Inventory");
@@ -335,9 +303,11 @@ pub fn spawn_info_panel_ui(
                     ))
                     .id();
                 ui_nodes.set_slot(UiSlot::InventoryText, inventory);
+                info_panel_nodes.inventory = Some(inventory);
             })
             .id();
         ui_nodes.set_slot(UiSlot::InfoPanelStatsGroup, stats);
+        info_panel_nodes.stats_group = Some(stats);
 
         let common = parent
             .spawn((
@@ -352,188 +322,6 @@ pub fn spawn_info_panel_ui(
             ))
             .id();
         ui_nodes.set_slot(UiSlot::CommonText, common);
+        info_panel_nodes.common = Some(common);
     });
-}
-
-fn set_text_slot(
-    ui_nodes: &UiNodeRegistry,
-    q_text: &mut Query<&mut Text>,
-    slot: UiSlot,
-    value: &str,
-) {
-    let Some(entity) = ui_nodes.get_slot(slot) else {
-        return;
-    };
-    if let Ok(mut text) = q_text.get_mut(entity) {
-        if text.0 != value {
-            text.0 = value.to_string();
-        }
-    }
-}
-
-fn set_display_slot(
-    ui_nodes: &UiNodeRegistry,
-    q_node: &mut Query<&mut Node>,
-    slot: UiSlot,
-    display: Display,
-) {
-    let Some(entity) = ui_nodes.get_slot(slot) else {
-        return;
-    };
-    if let Ok(mut node) = q_node.get_mut(entity) {
-        if node.display != display {
-            node.display = display;
-        }
-    }
-}
-
-fn update_gender_icon(
-    ui_nodes: &UiNodeRegistry,
-    q_gender: &mut Query<&mut ImageNode>,
-    q_node: &mut Query<&mut Node>,
-    game_assets: &crate::assets::GameAssets,
-    gender: Option<Gender>,
-) {
-    let Some(entity) = ui_nodes.get_slot(UiSlot::GenderIcon) else {
-        return;
-    };
-    if let Ok(mut icon) = q_gender.get_mut(entity) {
-        if let Some(gender) = gender {
-            set_display_slot(ui_nodes, q_node, UiSlot::GenderIcon, Display::Flex);
-            icon.image = match gender {
-                Gender::Male => game_assets.icon_male.clone(),
-                Gender::Female => game_assets.icon_female.clone(),
-            };
-        } else {
-            set_display_slot(ui_nodes, q_node, UiSlot::GenderIcon, Display::None);
-        }
-    }
-}
-
-fn to_view_model(model: EntityInspectionModel) -> InfoPanelViewModel {
-    if let Some(soul) = model.soul {
-        InfoPanelViewModel::Soul(SoulInfoViewModel {
-            header: model.header,
-            gender: soul.gender,
-            motivation: soul.motivation,
-            stress: soul.stress,
-            fatigue: soul.fatigue,
-            task: soul.task,
-            inventory: soul.inventory,
-            common: soul.common,
-        })
-    } else {
-        InfoPanelViewModel::Simple(SimpleInfoViewModel {
-            header: model.header,
-            common: model.common_text,
-        })
-    }
-}
-
-pub fn info_panel_system(
-    game_assets: Res<crate::assets::GameAssets>,
-    selected: Res<crate::interface::selection::SelectedEntity>,
-    mut pin_state: ResMut<InfoPanelPinState>,
-    ui_nodes: Res<UiNodeRegistry>,
-    mut panel_state: ResMut<InfoPanelState>,
-    mut q_text: Query<&mut Text>,
-    mut q_node: Query<&mut Node>,
-    mut q_gender: Query<&mut ImageNode>,
-    inspection: EntityInspectionQuery,
-) {
-    let mut inspected_entity = pin_state.entity.or(selected.0);
-    let mut next_model = inspected_entity
-        .and_then(|entity| inspection.build_model(entity).map(to_view_model));
-
-    if pin_state.entity.is_some() && next_model.is_none() {
-        pin_state.entity = None;
-        inspected_entity = selected.0;
-        next_model = inspected_entity
-            .and_then(|entity| inspection.build_model(entity).map(to_view_model));
-    }
-
-    let pinned = pin_state.entity.is_some();
-    if panel_state.last == next_model && panel_state.last_pinned == pinned {
-        return;
-    }
-
-    set_display_slot(
-        &ui_nodes,
-        &mut q_node,
-        UiSlot::InfoPanelRoot,
-        if next_model.is_some() {
-            Display::Flex
-        } else {
-            Display::None
-        },
-    );
-    set_display_slot(
-        &ui_nodes,
-        &mut q_node,
-        UiSlot::InfoPanelUnpinButton,
-        if pinned { Display::Flex } else { Display::None },
-    );
-
-    match &next_model {
-        Some(InfoPanelViewModel::Soul(soul)) => {
-            set_display_slot(
-                &ui_nodes,
-                &mut q_node,
-                UiSlot::InfoPanelStatsGroup,
-                Display::Flex,
-            );
-            set_text_slot(&ui_nodes, &mut q_text, UiSlot::Header, &soul.header);
-            set_text_slot(
-                &ui_nodes,
-                &mut q_text,
-                UiSlot::StatMotivation,
-                &soul.motivation,
-            );
-            set_text_slot(&ui_nodes, &mut q_text, UiSlot::StatStress, &soul.stress);
-            set_text_slot(&ui_nodes, &mut q_text, UiSlot::StatFatigue, &soul.fatigue);
-            set_text_slot(&ui_nodes, &mut q_text, UiSlot::TaskText, &soul.task);
-            set_text_slot(
-                &ui_nodes,
-                &mut q_text,
-                UiSlot::InventoryText,
-                &soul.inventory,
-            );
-            set_text_slot(&ui_nodes, &mut q_text, UiSlot::CommonText, &soul.common);
-            update_gender_icon(
-                &ui_nodes,
-                &mut q_gender,
-                &mut q_node,
-                &game_assets,
-                soul.gender,
-            );
-        }
-        Some(InfoPanelViewModel::Simple(simple)) => {
-            set_display_slot(
-                &ui_nodes,
-                &mut q_node,
-                UiSlot::InfoPanelStatsGroup,
-                Display::None,
-            );
-            set_text_slot(&ui_nodes, &mut q_text, UiSlot::Header, &simple.header);
-            set_text_slot(&ui_nodes, &mut q_text, UiSlot::CommonText, &simple.common);
-            update_gender_icon(&ui_nodes, &mut q_gender, &mut q_node, &game_assets, None);
-            set_text_slot(&ui_nodes, &mut q_text, UiSlot::StatMotivation, "");
-            set_text_slot(&ui_nodes, &mut q_text, UiSlot::StatStress, "");
-            set_text_slot(&ui_nodes, &mut q_text, UiSlot::StatFatigue, "");
-            set_text_slot(&ui_nodes, &mut q_text, UiSlot::TaskText, "");
-            set_text_slot(&ui_nodes, &mut q_text, UiSlot::InventoryText, "");
-        }
-        None => {
-            set_display_slot(
-                &ui_nodes,
-                &mut q_node,
-                UiSlot::InfoPanelStatsGroup,
-                Display::None,
-            );
-            update_gender_icon(&ui_nodes, &mut q_gender, &mut q_node, &game_assets, None);
-        }
-    }
-
-    panel_state.last = next_model;
-    panel_state.last_pinned = pinned;
 }

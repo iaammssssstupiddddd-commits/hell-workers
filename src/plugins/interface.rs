@@ -1,113 +1,26 @@
 //! インターフェース関連のプラグイン
 
-// インポート整理完了
 use crate::entities::damned_soul::DamnedSoulSpawnEvent;
 use crate::entities::familiar::{FamiliarSpawnEvent, FamiliarType};
-use crate::game_state::PlayMode;
 use crate::interface::camera::MainCamera;
-use crate::interface::selection::blueprint_placement;
-use crate::interface::selection::{
-    cleanup_selection_references_system, update_hover_entity, update_selection_indicator,
-};
-use crate::interface::ui::{
-    context_menu_system, hover_tooltip_system, info_panel_system, menu_visibility_system,
-    task_summary_ui_system, ui_interaction_system, ui_keyboard_shortcuts_system,
-    update_fps_display_system, update_mode_text_system, update_operation_dialog_system,
+use crate::interface::ui::plugins::{
+    UiCorePlugin, UiEntityListPlugin, UiFoundationPlugin, UiInfoPanelPlugin, UiTooltipPlugin,
 };
 use crate::systems::GameSystemSet;
-use crate::systems::logistics::zone_placement;
-use crate::systems::time::{
-    game_time_system, time_control_keyboard_system, time_control_ui_system,
-};
 use bevy::prelude::*;
-use bevy::time::common_conditions::on_timer;
-use std::time::Duration;
 
 pub struct InterfacePlugin;
 
 impl Plugin for InterfacePlugin {
     fn build(&self, app: &mut App) {
-        app.register_type::<crate::interface::ui::SectionFolded>();
-        app.register_type::<crate::interface::ui::UnassignedFolded>();
-        app.init_resource::<crate::interface::ui::UiInputState>();
-        app.init_resource::<crate::interface::ui::UiNodeRegistry>();
-        app.init_resource::<crate::interface::ui::theme::UiTheme>();
-        app.init_resource::<crate::interface::ui::InfoPanelState>();
-        app.init_resource::<crate::interface::ui::InfoPanelPinState>();
-        app.init_resource::<crate::interface::ui::EntityListViewModel>();
-        app.init_resource::<crate::interface::ui::EntityListNodeIndex>();
-        app.add_systems(
-            PreUpdate,
-            crate::interface::ui::update_ui_input_state_system.in_set(GameSystemSet::Interface),
-        )
-        .add_systems(
-            Update,
-            (
-                update_hover_entity,
-                cleanup_selection_references_system,
-                update_selection_indicator,
-                hover_tooltip_system,
-                blueprint_placement.run_if(in_state(PlayMode::BuildingPlace)),
-                zone_placement.run_if(in_state(PlayMode::ZonePlace)),
-                ui_keyboard_shortcuts_system,
-                ui_interaction_system,
-                menu_visibility_system,
-                info_panel_system.run_if(
-                    |selected: Res<crate::interface::selection::SelectedEntity>,
-                     pin_state: Res<crate::interface::ui::InfoPanelPinState>| {
-                        selected.is_changed()
-                            || pin_state.is_changed()
-                            || selected.0.is_some()
-                            || pin_state.entity.is_some()
-                    },
-                ),
-                update_mode_text_system,
-            )
-                .chain()
-                .in_set(GameSystemSet::Interface),
-        )
-        .init_resource::<crate::interface::ui::DragState>()
-        .init_resource::<crate::interface::ui::EntityListMinimizeState>()
-        .init_resource::<crate::interface::ui::EntityListResizeState>()
-        .add_systems(
-            Update,
-            (
-                context_menu_system,
-                task_summary_ui_system,
-                update_operation_dialog_system.run_if(
-                    |selected: Res<crate::interface::selection::SelectedEntity>| {
-                        selected.0.is_some()
-                    },
-                ),
-                game_time_system,
-                time_control_keyboard_system,
-                time_control_ui_system,
-                update_fps_display_system,
-                debug_spawn_system,
-                crate::interface::ui::entity_list_interaction_system,
-                crate::interface::ui::entity_list_drag_drop_system,
-                crate::interface::ui::entity_list_visual_feedback_system,
-                crate::interface::ui::entity_list_scroll_system,
-                crate::interface::ui::entity_list_scroll_hint_visibility_system,
-                crate::interface::ui::entity_list_tab_focus_system,
-                crate::interface::ui::entity_list_minimize_toggle_system,
-                crate::interface::ui::entity_list_resize_system,
-                crate::interface::ui::entity_list_resize_cursor_system
-                    .after(crate::interface::ui::entity_list_resize_system),
-                crate::interface::ui::update_unassigned_arrow_icon_system,
-            )
-                .in_set(GameSystemSet::Interface),
-        )
-        .add_systems(
-            Update,
-            (
-                crate::interface::ui::build_entity_list_view_model_system,
-                crate::interface::ui::sync_entity_list_from_view_model_system,
-            )
-                .chain()
-                .run_if(on_timer(Duration::from_millis(100)))
-                .in_set(GameSystemSet::Interface),
-        );
+        app.add_plugins((
+            UiFoundationPlugin,
+            UiCorePlugin,
+            UiTooltipPlugin,
+            UiInfoPanelPlugin,
+            UiEntityListPlugin,
+        ))
+        .add_systems(Update, debug_spawn_system.in_set(GameSystemSet::Interface));
     }
 }
 
@@ -120,14 +33,12 @@ fn debug_spawn_system(
 ) {
     let mut spawn_pos = Vec2::ZERO;
 
-    if let Ok(window) = q_window.single() {
-        if let Some(cursor_pos) = window.cursor_position() {
-            if let Ok((camera, camera_transform)) = q_camera.single() {
-                if let Ok(pos) = camera.viewport_to_world_2d(camera_transform, cursor_pos) {
-                    spawn_pos = pos;
-                }
-            }
-        }
+    if let Ok(window) = q_window.single()
+        && let Some(cursor_pos) = window.cursor_position()
+        && let Ok((camera, camera_transform)) = q_camera.single()
+        && let Ok(pos) = camera.viewport_to_world_2d(camera_transform, cursor_pos)
+    {
+        spawn_pos = pos;
     }
 
     if buttons.just_pressed(KeyCode::KeyP) {
