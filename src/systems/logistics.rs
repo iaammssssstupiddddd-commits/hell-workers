@@ -32,6 +32,16 @@ pub struct ReservedForTask;
 #[reflect(Component)]
 pub struct BelongsTo(pub Entity);
 
+/// タンク用バケツ置き場スロットであることを示す
+#[derive(Component, Reflect, Debug, Clone, Copy, PartialEq, Eq)]
+#[reflect(Component)]
+pub struct BucketStorage;
+
+/// Tank Blueprint との一時リンク（完成時に BelongsTo へ昇格）
+#[derive(Component, Reflect, Debug, Clone, Copy, PartialEq, Eq)]
+#[reflect(Component)]
+pub struct PendingBelongsToBlueprint(pub Entity);
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Reflect)]
 pub enum ZoneType {
     Stockpile,

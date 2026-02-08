@@ -1,6 +1,8 @@
 use bevy::prelude::*;
 
-use crate::game_state::{BuildContext, PlayMode, TaskContext, ZoneContext};
+use crate::game_state::{
+    BuildContext, CompanionPlacementState, PlayMode, TaskContext, ZoneContext,
+};
 use crate::interface::ui::components::MenuState;
 use crate::systems::command::TaskMode;
 use crate::systems::jobs::BuildingType;
@@ -89,14 +91,13 @@ pub(super) fn set_area_task_mode(
     zone_context.0 = None;
     task_context.0 = mode;
     next_play_mode.set(PlayMode::TaskDesignation);
-    info!(
-        "UI: Area Edit mode entered (continuous), PlayMode -> TaskDesignation"
-    );
+    info!("UI: Area Edit mode entered (continuous), PlayMode -> TaskDesignation");
 }
 
 pub(super) fn build_mode_text(
     play_mode: &PlayMode,
     build_context: &BuildContext,
+    companion_state: &CompanionPlacementState,
     zone_context: &ZoneContext,
     task_context: &TaskContext,
     selected_familiar_name: Option<&str>,
@@ -110,7 +111,12 @@ pub(super) fn build_mode_text(
     match play_mode {
         PlayMode::Normal => "Mode: Normal".to_string(),
         PlayMode::BuildingPlace => {
-            if let Some(kind) = build_context.0 {
+            if let Some(companion) = companion_state.0 {
+                format!(
+                    "Mode: Companion ({:?} -> {:?})",
+                    companion.parent_kind, companion.kind
+                )
+            } else if let Some(kind) = build_context.0 {
                 format!("Mode: Build ({:?})", kind)
             } else {
                 "Mode: Build".to_string()
@@ -163,9 +169,13 @@ pub(super) fn build_mode_text(
                 let tasks = unassigned_tasks_in_area
                     .map(|count| format!("Tasks:{}", count))
                     .unwrap_or_else(|| "Tasks:-".to_string());
-                let overlap_warn = area_overlap
-                    .is_some_and(|(count, max_ratio)| count > 0 && max_ratio >= 0.5);
-                let warn = if overlap_warn { " WARN:HighOverlap" } else { "" };
+                let overlap_warn =
+                    area_overlap.is_some_and(|(count, max_ratio)| count > 0 && max_ratio >= 0.5);
+                let warn = if overlap_warn {
+                    " WARN:HighOverlap"
+                } else {
+                    ""
+                };
                 format!(
                     "Mode: Area Edit [{}] {} {} {} {} {}{} (Drag:Apply, Esc:Exit, Shift+Release:Exit, Ctrl+C/V, Ctrl+Z/Y, Ctrl+1..3 Save, Alt+1..3 Apply)",
                     target_name, size, state, overlap_text, tasks, clip, warn

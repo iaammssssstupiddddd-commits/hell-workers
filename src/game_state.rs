@@ -30,6 +30,35 @@ pub struct ZoneContext(pub Option<ZoneType>);
 #[derive(Resource, Default)]
 pub struct TaskContext(pub TaskMode);
 
+/// companion 配置の対象種別
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Reflect)]
+pub enum CompanionPlacementKind {
+    BucketStorage,
+    SandPile,
+}
+
+/// companion 配置の親建物種別
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Reflect)]
+pub enum CompanionParentKind {
+    Tank,
+    MudMixer,
+}
+
+/// companion 配置中の状態
+#[derive(Debug, Clone, Copy, Reflect)]
+pub struct CompanionPlacement {
+    pub parent_blueprint: Entity,
+    pub parent_kind: CompanionParentKind,
+    pub kind: CompanionPlacementKind,
+    pub center: Vec2,
+    pub radius: f32,
+    pub required: bool,
+}
+
+/// companion 配置コンテキスト
+#[derive(Resource, Default)]
+pub struct CompanionPlacementState(pub Option<CompanionPlacement>);
+
 /// PlayMode切替時のログ出力（デバッグ用）
 pub fn log_enter_building_mode() {
     info!("STATE: Entered BuildingPlace mode");
