@@ -31,6 +31,21 @@ impl UiNodeRegistry {
     }
 }
 
+#[derive(Resource, Default)]
+pub struct InfoPanelNodes {
+    pub root: Option<Entity>,
+    pub stats_group: Option<Entity>,
+    pub unpin_button: Option<Entity>,
+    pub header: Option<Entity>,
+    pub gender_icon: Option<Entity>,
+    pub motivation: Option<Entity>,
+    pub stress: Option<Entity>,
+    pub fatigue: Option<Entity>,
+    pub task: Option<Entity>,
+    pub inventory: Option<Entity>,
+    pub common: Option<Entity>,
+}
+
 #[derive(Resource, Default, Debug, Clone, Copy)]
 pub enum MenuState {
     #[default]

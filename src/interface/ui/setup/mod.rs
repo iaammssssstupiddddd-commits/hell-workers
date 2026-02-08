@@ -9,7 +9,9 @@ mod panels;
 mod submenus;
 mod time_control;
 
-use crate::interface::ui::components::{UiMountSlot, UiNodeRegistry, UiRoot, UiSlot};
+use crate::interface::ui::components::{
+    InfoPanelNodes, UiMountSlot, UiNodeRegistry, UiRoot, UiSlot,
+};
 use crate::interface::ui::theme::UiTheme;
 use bevy::prelude::*;
 
@@ -153,8 +155,15 @@ pub fn setup_ui(
     game_assets: Res<crate::assets::GameAssets>,
     theme: Res<UiTheme>,
     mut ui_nodes: ResMut<UiNodeRegistry>,
+    mut info_panel_nodes: ResMut<InfoPanelNodes>,
 ) {
-    setup_ui_internal(commands, game_assets, theme, &mut ui_nodes);
+    setup_ui_internal(
+        commands,
+        game_assets,
+        theme,
+        &mut ui_nodes,
+        &mut info_panel_nodes,
+    );
 }
 
 fn setup_ui_internal(
@@ -162,6 +171,7 @@ fn setup_ui_internal(
     game_assets: Res<crate::assets::GameAssets>,
     theme: Res<UiTheme>,
     ui_nodes: &mut UiNodeRegistry,
+    info_panel_nodes: &mut InfoPanelNodes,
 ) {
     let (_, left_slot, right_slot, bottom_slot, overlay_slot, top_right_slot) =
         spawn_ui_root(&mut commands);
@@ -174,6 +184,7 @@ fn setup_ui_internal(
         right_slot,
         overlay_slot,
         ui_nodes,
+        info_panel_nodes,
     );
     entity_list::spawn_entity_list_panel(&mut commands, &game_assets, &theme, left_slot);
     time_control::spawn_time_control(
