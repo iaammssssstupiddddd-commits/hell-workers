@@ -232,6 +232,12 @@ pub struct SoulListItem(pub Entity);
 #[derive(Component)]
 pub struct FamiliarListItem(pub Entity);
 
+#[derive(Component, Clone, Copy)]
+pub struct FamiliarMaxSoulAdjustButton {
+    pub familiar: Entity,
+    pub delta: isize,
+}
+
 #[derive(Component)]
 pub struct UnassignedSoulSection;
 

@@ -401,6 +401,81 @@ pub(super) fn spawn_familiar_section(
         .id();
     commands.entity(familiar_button).add_child(header_text);
 
+    let adjust_container = commands
+        .spawn(Node {
+            flex_direction: FlexDirection::Row,
+            align_items: AlignItems::Center,
+            column_gap: Val::Px(theme.spacing.margin_small),
+            padding: UiRect::right(Val::Px(theme.spacing.margin_small)),
+            ..default()
+        })
+        .id();
+    commands.entity(header).add_child(adjust_container);
+
+    let decrease_button = commands
+        .spawn((
+            Button,
+            Node {
+                width: Val::Px(18.0),
+                height: Val::Px(18.0),
+                justify_content: JustifyContent::Center,
+                align_items: AlignItems::Center,
+                ..default()
+            },
+            BackgroundColor(theme.colors.button_default),
+            FamiliarMaxSoulAdjustButton {
+                familiar: familiar.entity,
+                delta: -1,
+            },
+        ))
+        .id();
+    commands.entity(adjust_container).add_child(decrease_button);
+    let decrease_text = commands
+        .spawn((
+            Text::new("-"),
+            TextFont {
+                font: game_assets.font_ui.clone(),
+                font_size: theme.typography.font_size_base,
+                weight: FontWeight::BOLD,
+                ..default()
+            },
+            TextColor(theme.colors.text_primary_semantic),
+        ))
+        .id();
+    commands.entity(decrease_button).add_child(decrease_text);
+
+    let increase_button = commands
+        .spawn((
+            Button,
+            Node {
+                width: Val::Px(18.0),
+                height: Val::Px(18.0),
+                justify_content: JustifyContent::Center,
+                align_items: AlignItems::Center,
+                ..default()
+            },
+            BackgroundColor(theme.colors.button_default),
+            FamiliarMaxSoulAdjustButton {
+                familiar: familiar.entity,
+                delta: 1,
+            },
+        ))
+        .id();
+    commands.entity(adjust_container).add_child(increase_button);
+    let increase_text = commands
+        .spawn((
+            Text::new("+"),
+            TextFont {
+                font: game_assets.font_ui.clone(),
+                font_size: theme.typography.font_size_base,
+                weight: FontWeight::BOLD,
+                ..default()
+            },
+            TextColor(theme.colors.text_primary_semantic),
+        ))
+        .id();
+    commands.entity(increase_button).add_child(increase_text);
+
     let members_container = commands
         .spawn(Node {
             flex_direction: FlexDirection::Column,
