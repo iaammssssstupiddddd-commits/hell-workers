@@ -234,7 +234,7 @@ pub enum ReleaseReason {
 }
 ```
 
-**使用例** (`familiar_ai/squad.rs`):
+**使用例** (`familiar_ai/execute/squad_apply.rs`):
 
 ```rust
 // Decide フェーズ: 疲労した魂のリリース要求
