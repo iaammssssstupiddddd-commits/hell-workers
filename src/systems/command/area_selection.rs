@@ -170,7 +170,9 @@ fn world_cursor_pos(
         return None;
     };
     let cursor_pos = window.cursor_position()?;
-    camera.viewport_to_world_2d(camera_transform, cursor_pos).ok()
+    camera
+        .viewport_to_world_2d(camera_transform, cursor_pos)
+        .ok()
 }
 
 fn detect_area_edit_operation(area: &TaskArea, world_pos: Vec2) -> Option<AreaEditOperation> {
@@ -434,14 +436,24 @@ pub fn task_area_selection_system(
             }
 
             match task_context.0 {
-                TaskMode::AreaSelection(None) => task_context.0 = TaskMode::AreaSelection(Some(snapped_pos)),
-                TaskMode::DesignateChop(None) => task_context.0 = TaskMode::DesignateChop(Some(snapped_pos)),
-                TaskMode::DesignateMine(None) => task_context.0 = TaskMode::DesignateMine(Some(snapped_pos)),
-                TaskMode::DesignateHaul(None) => task_context.0 = TaskMode::DesignateHaul(Some(snapped_pos)),
+                TaskMode::AreaSelection(None) => {
+                    task_context.0 = TaskMode::AreaSelection(Some(snapped_pos))
+                }
+                TaskMode::DesignateChop(None) => {
+                    task_context.0 = TaskMode::DesignateChop(Some(snapped_pos))
+                }
+                TaskMode::DesignateMine(None) => {
+                    task_context.0 = TaskMode::DesignateMine(Some(snapped_pos))
+                }
+                TaskMode::DesignateHaul(None) => {
+                    task_context.0 = TaskMode::DesignateHaul(Some(snapped_pos))
+                }
                 TaskMode::CancelDesignation(None) => {
                     task_context.0 = TaskMode::CancelDesignation(Some(snapped_pos))
                 }
-                TaskMode::AssignTask(None) => task_context.0 = TaskMode::AssignTask(Some(snapped_pos)),
+                TaskMode::AssignTask(None) => {
+                    task_context.0 = TaskMode::AssignTask(Some(snapped_pos))
+                }
                 _ => {}
             }
         }
@@ -680,9 +692,7 @@ pub fn task_area_edit_history_shortcuts_system(
         keyboard.pressed(KeyCode::ControlLeft) || keyboard.pressed(KeyCode::ControlRight);
     let alt_pressed = keyboard.pressed(KeyCode::AltLeft) || keyboard.pressed(KeyCode::AltRight);
 
-    if alt_pressed
-        && let Some(slot) = hotkey_slot_index(&keyboard)
-    {
+    if alt_pressed && let Some(slot) = hotkey_slot_index(&keyboard) {
         let Some(selected) = selected_entity.0 else {
             return;
         };
@@ -706,7 +716,11 @@ pub fn task_area_edit_history_shortcuts_system(
         let new_area = area_from_center_and_size(center, preset_size);
         apply_task_area_to_familiar(selected, Some(&new_area), &mut commands, &mut q_familiars);
         area_edit_history.push(selected, before, Some(new_area));
-        info!("AREA_EDIT: Applied preset {} to Familiar {:?}", slot + 1, selected);
+        info!(
+            "AREA_EDIT: Applied preset {} to Familiar {:?}",
+            slot + 1,
+            selected
+        );
         return;
     }
 
@@ -766,7 +780,12 @@ pub fn task_area_edit_history_shortcuts_system(
         };
 
         let before = q_task_areas.get(selected).ok().cloned();
-        apply_task_area_to_familiar(selected, Some(&copied_area), &mut commands, &mut q_familiars);
+        apply_task_area_to_familiar(
+            selected,
+            Some(&copied_area),
+            &mut commands,
+            &mut q_familiars,
+        );
         area_edit_history.push(selected, before, Some(copied_area));
         info!("AREA_EDIT: Pasted TaskArea to Familiar {:?}", selected);
         return;
@@ -785,7 +804,10 @@ pub fn task_area_edit_history_shortcuts_system(
             );
             selected_entity.0 = Some(entry.familiar_entity);
             area_edit_history.undo_stack.push(entry.clone());
-            info!("AREA_EDIT: Redo applied to Familiar {:?}", entry.familiar_entity);
+            info!(
+                "AREA_EDIT: Redo applied to Familiar {:?}",
+                entry.familiar_entity
+            );
         }
         return;
     }
@@ -801,7 +823,10 @@ pub fn task_area_edit_history_shortcuts_system(
         );
         selected_entity.0 = Some(entry.familiar_entity);
         area_edit_history.redo_stack.push(entry.clone());
-        info!("AREA_EDIT: Undo applied to Familiar {:?}", entry.familiar_entity);
+        info!(
+            "AREA_EDIT: Undo applied to Familiar {:?}",
+            entry.familiar_entity
+        );
     }
 }
 

@@ -129,7 +129,6 @@ pub(super) fn handle_pressed_action(
             );
         }
     }
-
 }
 
 fn adjust_fatigue_threshold(

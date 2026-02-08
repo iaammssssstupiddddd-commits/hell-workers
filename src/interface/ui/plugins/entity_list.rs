@@ -7,8 +7,8 @@ use crate::interface::ui::{
     entity_list_tab_focus_system, entity_list_visual_feedback_system,
     sync_entity_list_from_view_model_system, update_unassigned_arrow_icon_system,
 };
-use crate::systems::command::task_area_edit_cursor_system;
 use crate::systems::GameSystemSet;
+use crate::systems::command::task_area_edit_cursor_system;
 use bevy::prelude::*;
 use bevy::time::common_conditions::on_timer;
 use std::time::Duration;

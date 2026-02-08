@@ -9,11 +9,11 @@ use crate::world::pathfinding::PathfindingContext;
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 
+pub mod decide;
+pub mod execute;
 pub mod helpers;
 pub mod perceive;
 pub mod update;
-pub mod decide;
-pub mod execute;
 
 // 既存参照の互換レイヤー（M2移行中）
 pub mod query_types {

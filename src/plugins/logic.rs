@@ -36,8 +36,7 @@ impl Plugin for LogicPlugin {
                     },
                 ),
                 task_area_selection_system.run_if(in_state(PlayMode::TaskDesignation)),
-                task_area_edit_history_shortcuts_system
-                    .run_if(in_state(PlayMode::TaskDesignation)),
+                task_area_edit_history_shortcuts_system.run_if(in_state(PlayMode::TaskDesignation)),
                 familiar_spawning_system,
                 tree_regrowth_system,
                 obstacle_cleanup_system,
