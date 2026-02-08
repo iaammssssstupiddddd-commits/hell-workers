@@ -19,10 +19,6 @@ use std::collections::HashSet;
 #[derive(Resource, Default)]
 pub struct ItemReservations(pub HashSet<Entity>);
 
-pub fn clear_item_reservations_system(mut reservations: ResMut<ItemReservations>) {
-    reservations.0.clear();
-}
-
 pub use blueprint::blueprint_auto_haul_system;
 pub use bucket::bucket_auto_haul_system;
 pub use mixer::mud_mixer_auto_haul_system;

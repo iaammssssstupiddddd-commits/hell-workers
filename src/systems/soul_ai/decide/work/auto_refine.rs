@@ -5,16 +5,17 @@
 use bevy::prelude::*;
 
 use crate::entities::familiar::ActiveCommand;
+use crate::events::{DesignationOp, DesignationRequest};
 use crate::relationships::StoredItems;
 use crate::relationships::TaskWorkers;
 use crate::systems::command::TaskArea;
-use crate::systems::jobs::{Designation, IssuedBy, MudMixerStorage, TaskSlots, WorkType};
+use crate::systems::jobs::{Designation, MudMixerStorage, WorkType};
 use crate::systems::logistics::{ResourceType, Stockpile};
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
 
 /// MudMixer で精製タスクを自動発行するシステム
 pub fn mud_mixer_auto_refine_system(
-    mut commands: Commands,
+    mut designation_writer: MessageWriter<DesignationRequest>,
     q_familiars: Query<(Entity, &ActiveCommand, &TaskArea)>,
     q_mixers: Query<(
         Entity,
@@ -74,13 +75,18 @@ pub fn mud_mixer_auto_refine_system(
                 // 作業員が1名未満（精製は1人で行う）かつ、予約中のタスクがない場合
                 if current_workers + inflight_count < 1 {
                     // Refine タスクを発行
-                    commands.entity(mixer_entity).insert((
-                        Designation {
+                    designation_writer.write(DesignationRequest {
+                        entity: mixer_entity,
+                        operation: DesignationOp::Issue {
                             work_type: WorkType::Refine,
+                            issued_by: fam_entity,
+                            task_slots: 1,
+                            priority: None,
+                            target_blueprint: None,
+                            target_mixer: None,
+                            reserved_for_task: false,
                         },
-                        IssuedBy(fam_entity),
-                        TaskSlots::new(1),
-                    ));
+                    });
 
                     // カウントアップして同一フレーム内での重複を防ぐ
                     in_flight.insert(mixer_entity, inflight_count + 1);

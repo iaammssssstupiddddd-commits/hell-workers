@@ -7,7 +7,7 @@ use crate::entities::damned_soul::{GatheringBehavior, IdleBehavior};
 use crate::events::{IdleBehaviorOperation, IdleBehaviorRequest};
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
 use crate::systems::soul_ai::helpers::gathering::{
-    GATHERING_LEAVE_RADIUS, GatheringSpot, ParticipatingIn,
+    GATHERING_LEAVE_RADIUS, GatheringSpot,
 };
 use crate::systems::soul_ai::helpers::query_types::IdleDecisionSoulQuery;
 use crate::systems::spatial::{GatheringSpotSpatialGrid, SpatialGridOps};
@@ -141,7 +141,7 @@ pub fn idle_behavior_decision_system(
             continue;
         }
 
-        // 逃走中（Escaping）は escaping_behavior_system に任せる
+        // 逃走中（Escaping）は escaping_decision_system に任せる
         if idle.behavior == IdleBehavior::Escaping {
             continue;
         }
@@ -308,51 +308,8 @@ pub fn idle_behavior_decision_system(
             }
             IdleBehavior::Sitting | IdleBehavior::Sleeping => {}
             IdleBehavior::Escaping => {
-                // 逃走中はescaping_behavior_systemで処理されるため、
+                // 逃走中は escaping_decision_system で処理されるため、
                 // ここでは何もしない（continueされるはず）
-            }
-        }
-    }
-}
-
-/// アイドル行動の適用システム (Execute Phase)
-///
-/// IdleBehaviorRequestを読み取り、実際のエンティティ操作を行う。
-/// - ParticipatingInの追加/削除
-/// - イベントのトリガー
-pub fn idle_behavior_apply_system(
-    mut commands: Commands,
-    mut request_reader: MessageReader<IdleBehaviorRequest>,
-) {
-    for request in request_reader.read() {
-        match &request.operation {
-            IdleBehaviorOperation::JoinGathering { spot_entity } => {
-                commands
-                    .entity(request.entity)
-                    .insert(ParticipatingIn(*spot_entity));
-                commands.trigger(crate::events::OnGatheringParticipated {
-                    entity: request.entity,
-                    spot_entity: *spot_entity,
-                });
-            }
-            IdleBehaviorOperation::LeaveGathering { spot_entity } => {
-                commands.entity(request.entity).remove::<ParticipatingIn>();
-                commands.trigger(crate::events::OnGatheringLeft {
-                    entity: request.entity,
-                    spot_entity: *spot_entity,
-                });
-            }
-            IdleBehaviorOperation::ArriveAtGathering { spot_entity } => {
-                commands
-                    .entity(request.entity)
-                    .insert(ParticipatingIn(*spot_entity));
-                commands.trigger(crate::events::OnGatheringParticipated {
-                    entity: request.entity,
-                    spot_entity: *spot_entity,
-                });
-                commands.trigger(crate::events::OnGatheringJoined {
-                    entity: request.entity,
-                });
             }
         }
     }

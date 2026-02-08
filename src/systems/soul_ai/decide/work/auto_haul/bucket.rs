@@ -5,9 +5,10 @@
 use bevy::prelude::*;
 
 use crate::constants::*;
+use crate::events::{DesignationOp, DesignationRequest};
 use crate::relationships::TaskWorkers;
 use crate::systems::command::TaskArea;
-use crate::systems::jobs::{Designation, IssuedBy, TaskSlots, WorkType};
+use crate::systems::jobs::{Designation, WorkType};
 use crate::systems::logistics::{
     BucketStorage, ReservedForTask, ResourceItem, ResourceType, Stockpile,
 };
@@ -17,7 +18,7 @@ use crate::systems::spatial::{SpatialGridOps, StockpileSpatialGrid};
 /// バケツ専用オートホールシステム
 /// ドロップされたバケツを、BelongsTo で紐付いたタンクのバケツ置き場に運搬する
 pub fn bucket_auto_haul_system(
-    mut commands: Commands,
+    mut designation_writer: MessageWriter<DesignationRequest>,
     stockpile_grid: Res<StockpileSpatialGrid>,
     mut item_reservations: ResMut<ItemReservations>,
     q_familiars: Query<(Entity, &TaskArea), With<crate::entities::familiar::Familiar>>,
@@ -142,15 +143,18 @@ pub fn bucket_auto_haul_system(
                     "BUCKET_HAUL: Issuing Haul task for bucket {:?} to stockpile {:?}",
                     bucket_entity, _stockpile_entity
                 );
-                commands.entity(bucket_entity).insert((
-                    Designation {
+                designation_writer.write(DesignationRequest {
+                    entity: bucket_entity,
+                    operation: DesignationOp::Issue {
                         work_type: WorkType::Haul,
+                        issued_by: fam_entity,
+                        task_slots: 1,
+                        priority: Some(5), // バケツ返却は優先度高め
+                        target_blueprint: None,
+                        target_mixer: None,
+                        reserved_for_task: true,
                     },
-                    IssuedBy(fam_entity),
-                    TaskSlots::new(1),
-                    crate::systems::jobs::Priority(5), // バケツ返却は優先度高め
-                    ReservedForTask,
-                ));
+                });
             } else {
                 warn!(
                     "BUCKET_HAUL: Found bucket {:?} for tank {:?} but no suitable stockpile found!",

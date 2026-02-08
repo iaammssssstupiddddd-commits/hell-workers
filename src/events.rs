@@ -236,6 +236,27 @@ pub enum GatheringManagementOp {
     },
 }
 
+/// Designation の発行要求
+#[derive(Message, Debug, Clone)]
+pub struct DesignationRequest {
+    pub entity: Entity,
+    pub operation: DesignationOp,
+}
+
+/// Designation 発行の操作種別
+#[derive(Debug, Clone)]
+pub enum DesignationOp {
+    Issue {
+        work_type: WorkType,
+        issued_by: Entity,
+        task_slots: u32,
+        priority: Option<u32>,
+        target_blueprint: Option<Entity>,
+        target_mixer: Option<Entity>,
+        reserved_for_task: bool,
+    },
+}
+
 // ============================================================
 // Familiar AI Requests (Decide -> Execute)
 // ============================================================

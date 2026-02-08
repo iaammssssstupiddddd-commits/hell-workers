@@ -3,9 +3,10 @@ use bevy::prelude::*;
 use crate::entities::damned_soul::DamnedSoulSpawnEvent;
 use crate::entities::familiar::FamiliarSpawnEvent;
 use crate::events::{
-    EncouragementRequest, EscapeRequest, FamiliarAiStateChangedEvent, FamiliarIdleVisualRequest,
-    FamiliarOperationMaxSoulChangedEvent, FamiliarStateRequest, GatheringManagementRequest,
-    IdleBehaviorRequest, ResourceReservationRequest, SquadManagementRequest, TaskAssignmentRequest,
+    DesignationRequest, EncouragementRequest, EscapeRequest, FamiliarAiStateChangedEvent,
+    FamiliarIdleVisualRequest, FamiliarOperationMaxSoulChangedEvent, FamiliarStateRequest,
+    GatheringManagementRequest, IdleBehaviorRequest, ResourceReservationRequest,
+    SquadManagementRequest, TaskAssignmentRequest,
 };
 use crate::systems::visual::speech::conversation::events::{
     ConversationCompleted, RequestConversation,
@@ -25,6 +26,7 @@ impl Plugin for MessagesPlugin {
             .add_message::<IdleBehaviorRequest>()
             .add_message::<EscapeRequest>()
             .add_message::<GatheringManagementRequest>()
+            .add_message::<DesignationRequest>()
             .add_message::<FamiliarStateRequest>()
             .add_message::<EncouragementRequest>()
             .add_message::<FamiliarIdleVisualRequest>()

@@ -5,17 +5,18 @@
 use crate::constants::BUCKET_CAPACITY;
 use bevy::prelude::*;
 
+use crate::events::{DesignationOp, DesignationRequest};
 use crate::relationships::{StoredIn, StoredItems, TaskWorkers};
 use crate::systems::command::TaskArea;
 use crate::systems::familiar_ai::perceive::resource_sync::SharedResourceCache;
-use crate::systems::jobs::{Designation, IssuedBy, TaskSlots, WorkType};
+use crate::systems::jobs::{Designation, WorkType};
 use crate::systems::logistics::{
     BelongsTo, ReservedForTask, ResourceItem, ResourceType, Stockpile,
 };
 
 /// タンクの貯蔵量を監視し、空きがあればバケツに水汲み指示を出すシステム
 pub fn tank_water_request_system(
-    mut commands: Commands,
+    mut designation_writer: MessageWriter<DesignationRequest>,
     haul_cache: Res<SharedResourceCache>,
     q_familiars: Query<(Entity, &TaskArea)>,
     // タンク自体の在庫状況（Water を貯める Stockpile）
@@ -105,15 +106,18 @@ pub fn tank_water_request_system(
 
                 if let Some(fam_entity) = issued_by {
                     item_reservations.0.insert(bucket_entity);
-                    commands.entity(bucket_entity).insert((
-                        Designation {
+                    designation_writer.write(DesignationRequest {
+                        entity: bucket_entity,
+                        operation: DesignationOp::Issue {
                             work_type: WorkType::GatherWater,
+                            issued_by: fam_entity,
+                            task_slots: 1,
+                            priority: Some(3),
+                            target_blueprint: None,
+                            target_mixer: None,
+                            reserved_for_task: true,
                         },
-                        IssuedBy(fam_entity),
-                        TaskSlots::new(1),
-                        crate::systems::jobs::Priority(3),
-                        ReservedForTask,
-                    ));
+                    });
                     issued += 1;
                     info!(
                         "TANK_WATCH: Issued GatherWater for bucket {:?} (Tank {:?})",
