@@ -1,7 +1,6 @@
 use super::super::{Blueprint, BuildingType, MudMixerStorage, SandPile, TaskSlots};
 use crate::assets::GameAssets;
-use crate::constants::{MUD_MIXER_CAPACITY, TILE_SIZE, Z_FLOATING_TEXT, Z_ITEM_PICKUP, Z_MAP};
-use crate::systems::logistics::BucketStorage;
+use crate::constants::{MUD_MIXER_CAPACITY, TILE_SIZE, Z_FLOATING_TEXT, Z_ITEM_PICKUP};
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
 
@@ -57,38 +56,14 @@ fn setup_tank(
     let mut storage_entities = promoted_bucket_storage.to_vec();
     if storage_entities.is_empty() {
         warn!(
-            "TANK_SETUP: no companion bucket storage linked for {:?}; fallback auto-spawn",
+            "TANK_SETUP: no companion bucket storage linked for {:?}; skip bucket spawn",
             building_entity
         );
-        let (bx, by) = WorldMap::world_to_grid(transform.translation.truncate());
-        let fallback_grids = [(bx, by - 2), (bx + 1, by - 2)];
-        for (gx, gy) in fallback_grids {
-            let pos = WorldMap::grid_to_world(gx, gy);
-            let storage_entity = commands
-                .spawn((
-                    crate::systems::logistics::Stockpile {
-                        capacity: 10,
-                        resource_type: None,
-                    },
-                    BucketStorage,
-                    crate::systems::logistics::BelongsTo(building_entity),
-                    Sprite {
-                        color: Color::srgba(1.0, 1.0, 0.0, 0.2),
-                        custom_size: Some(Vec2::splat(TILE_SIZE)),
-                        ..default()
-                    },
-                    Transform::from_xyz(pos.x, pos.y, Z_MAP + 0.01),
-                    Name::new("Tank Bucket Storage (Fallback)"),
-                ))
-                .id();
-            world_map.stockpiles.insert((gx, gy), storage_entity);
-            storage_entities.push(storage_entity);
-        }
+        return;
     }
 
     storage_entities.sort_by_key(|entity| {
-        find_stockpile_grid(world_map, *entity)
-            .unwrap_or((i32::MAX, i32::MAX))
+        find_stockpile_grid(world_map, *entity).unwrap_or((i32::MAX, i32::MAX))
     });
 
     let bucket_count = 5usize;

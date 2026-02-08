@@ -111,7 +111,7 @@ pub(super) fn build_mode_text(
     match play_mode {
         PlayMode::Normal => "Mode: Normal".to_string(),
         PlayMode::BuildingPlace => {
-            if let Some(companion) = companion_state.0 {
+            if let Some(companion) = companion_state.0.as_ref() {
                 format!(
                     "Mode: Companion ({:?} -> {:?})",
                     companion.parent_kind, companion.kind

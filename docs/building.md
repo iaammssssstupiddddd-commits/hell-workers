@@ -12,7 +12,7 @@ Hell-Workers における建築システムの基礎実装について説明し�
 |:---|:---|
 | `Blueprint` | 建設中の建物。`kind`, `progress`, `required_materials`, `delivered_materials` フィールドを持つ |
 | `Building` | 完成した建物。`is_provisional` (仮設) フラグを持つ |
-| `BuildingType` | 建物の種類（`Wall`, `Floor`, `Tank`, `MudMixer`） |
+| `BuildingType` | 建物の種類（`Wall`, `Floor`, `Tank`, `MudMixer`, `SandPile`） |
 
 ### Blueprint フィールド
 
@@ -32,6 +32,7 @@ Hell-Workers における建築システムの基礎実装について説明し�
 | Floor | 石材 × 1 |
 | Tank | 木材 × 2 |
 | MudMixer | 木材 × 4 |
+| SandPile | 木材 × 1 |
 
 ## 3. ワークフロー
 
@@ -97,6 +98,18 @@ flowchart TD
     - **赤色（半透明）**: 配置不可（障害物や他の建物と重複、または通行不可地形）。
 - **サイズ対応**: 1x1（壁など）だけでなく、2x2（タンクなど）の建物も適切なオフセットで表示されます。
 
+### Companion 配置（Tank / MudMixer）
+一部の建物は、親Blueprint配置直後に companion 配置フローへ遷移します。
+
+- **Tank**:
+  - `BucketStorage`（1x2）を即時配置するまで companion モードを継続します。
+  - 親の `Tank` Blueprint は companion 配置が完了するまで確定しません（未確定状態では建築予約しない）。
+  - `Esc` でキャンセルした場合は、親Blueprintと未確定 companion をまとめて取り消します。
+- **MudMixer**:
+  - 近傍（グリッド3タイル以内）に `SandPile`（完成済み or Blueprint）がない場合、`SandPile` Blueprint 配置の companion モードに遷移します。
+  - 親の `MudMixer` Blueprint は companion 配置が完了するまで確定しません。
+  - 近傍外ではゴーストが赤表示になり、配置不可が明示されます。
+
 ## 8. ビジュアルフィードバック (Visual Feedback)
 
 `visual/blueprint/` モジュールによって、設計図の状態をプレイヤーに視覚的に伝えます。
@@ -160,7 +173,7 @@ flowchart TD
     - **建設**: 木材 × 4 で建設。
     - **機能**: 砂(1) + 水(1) + 岩(1) = Stasis Mud(5) を精製。
     - **要件**: 稼働には `Tank` からの水供給（`HaulWaterToMixer`）が必要です。
-    - **SandPile**: 建設完了時、周囲に砂採取場所 (`SandPile`) が生成されます。
+    - **SandPile**: 建設完了時の自動生成は行いません。必要時は companion フローで `SandPile` Blueprint を配置します。
 
 - **Stasis Mud**: 高度な建築（完全な壁など）に必要な強化建材。
 

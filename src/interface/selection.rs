@@ -12,6 +12,10 @@ use crate::systems::jobs::{Blueprint, BuildingType, SandPile};
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
 
+const COMPANION_PLACEMENT_RADIUS_TILES: f32 = 5.0;
+const MUD_MIXER_NEARBY_SANDPILE_TILES: i32 = 3;
+const TANK_NEARBY_BUCKET_STORAGE_TILES: i32 = 3;
+
 #[derive(Resource, Default)]
 pub struct SelectedEntity(pub Option<Entity>);
 
@@ -172,7 +176,7 @@ pub fn blueprint_placement(
     let grid = WorldMap::world_to_grid(world_pos);
 
     // companion 配置中は通常建築を抑止
-    if let Some(active) = companion_state.0 {
+    if let Some(active) = companion_state.0.clone() {
         let dist = world_pos.distance(active.center);
         if dist > active.radius {
             info!(
@@ -184,17 +188,45 @@ pub fn blueprint_placement(
 
         match active.kind {
             CompanionPlacementKind::BucketStorage => {
+                let parent_type = parent_building_type(active.parent_kind);
+                let parent_occupied_grids = occupied_grids_for_building(parent_type, active.parent_anchor);
+
+                let Some((parent_blueprint, _, _)) = place_building_blueprint(
+                    &mut commands,
+                    &mut world_map,
+                    &game_assets,
+                    parent_type,
+                    active.parent_anchor,
+                ) else {
+                    warn!("COMPANION: failed to confirm parent blueprint before bucket storage placement");
+                    return;
+                };
                 if try_place_bucket_storage_companion(
                     &mut commands,
                     &mut world_map,
-                    active.parent_blueprint,
+                    parent_blueprint,
+                    &parent_occupied_grids,
                     grid,
                 ) {
                     companion_state.0 = None;
                     info!("COMPANION: Bucket storage placed for tank blueprint");
+                } else {
+                    // 親Blueprintの確定に成功したが companion が置けない場合は巻き戻す
+                    for &(gx, gy) in &parent_occupied_grids {
+                        world_map.buildings.remove(&(gx, gy));
+                        world_map.remove_obstacle(gx, gy);
+                    }
+                    commands.entity(parent_blueprint).despawn();
                 }
             }
             CompanionPlacementKind::SandPile => {
+                let parent_type = parent_building_type(active.parent_kind);
+                let parent_occupied_grids =
+                    occupied_grids_for_building(parent_type, active.parent_anchor);
+                if parent_occupied_grids.contains(&grid) {
+                    info!("COMPANION: SandPile cannot be placed on parent blueprint area");
+                    return;
+                }
                 if place_building_blueprint(
                     &mut commands,
                     &mut world_map,
@@ -204,8 +236,20 @@ pub fn blueprint_placement(
                 )
                 .is_some()
                 {
-                    companion_state.0 = None;
-                    info!("COMPANION: SandPile blueprint placed for MudMixer");
+                    if place_building_blueprint(
+                        &mut commands,
+                        &mut world_map,
+                        &game_assets,
+                        parent_type,
+                        active.parent_anchor,
+                    )
+                    .is_some()
+                    {
+                        companion_state.0 = None;
+                        info!("COMPANION: SandPile and parent blueprint confirmed");
+                    } else {
+                        warn!("COMPANION: SandPile placed but failed to confirm parent blueprint");
+                    }
                 }
             }
         }
@@ -215,38 +259,35 @@ pub fn blueprint_placement(
     let Some(building_type) = build_context.0 else {
         return;
     };
-    let Some((entity, occupied_grids, spawn_pos)) = place_building_blueprint(
-        &mut commands,
-        &mut world_map,
-        &game_assets,
-        building_type,
-        grid,
-    ) else {
-        return;
-    };
+    let occupied_grids = occupied_grids_for_building(building_type, grid);
+    let spawn_pos = building_spawn_pos(building_type, grid);
 
     if building_type == BuildingType::Tank {
-        companion_state.0 = Some(CompanionPlacement {
-            parent_blueprint: entity,
-            parent_kind: CompanionParentKind::Tank,
-            kind: CompanionPlacementKind::BucketStorage,
-            center: spawn_pos,
-            radius: TILE_SIZE * 5.0,
-            required: true,
-        });
+        companion_state.0 = Some(make_companion_placement(
+            CompanionParentKind::Tank,
+            grid,
+            CompanionPlacementKind::BucketStorage,
+            spawn_pos,
+        ));
         info!("COMPANION: Tank placed, waiting for bucket storage placement");
     } else if building_type == BuildingType::MudMixer
-        && !has_nearby_sandpile(&occupied_grids, &q_sand_piles, &q_blueprints, Some(entity))
+        && !has_nearby_sandpile(&occupied_grids, &q_sand_piles, &q_blueprints, None)
     {
-        companion_state.0 = Some(CompanionPlacement {
-            parent_blueprint: entity,
-            parent_kind: CompanionParentKind::MudMixer,
-            kind: CompanionPlacementKind::SandPile,
-            center: spawn_pos,
-            radius: TILE_SIZE * 5.0,
-            required: true,
-        });
+        companion_state.0 = Some(make_companion_placement(
+            CompanionParentKind::MudMixer,
+            grid,
+            CompanionPlacementKind::SandPile,
+            spawn_pos,
+        ));
         info!("COMPANION: MudMixer needs nearby SandPile, placement requested");
+    } else {
+        let _ = place_building_blueprint(
+            &mut commands,
+            &mut world_map,
+            &game_assets,
+            building_type,
+            grid,
+        );
     }
 }
 
@@ -413,40 +454,11 @@ pub fn build_mode_cancel_system(
     mut zone_context: ResMut<ZoneContext>,
     mut task_context: ResMut<TaskContext>,
     mut companion_state: ResMut<CompanionPlacementState>,
-    q_blueprints: Query<&Blueprint>,
-    q_pending_bucket_storage: Query<
-        (
-            Entity,
-            &crate::systems::logistics::PendingBelongsToBlueprint,
-        ),
-        With<crate::systems::logistics::BucketStorage>,
-    >,
-    mut world_map: ResMut<WorldMap>,
     mut menu_state: ResMut<MenuState>,
-    mut commands: Commands,
 ) {
     if keyboard.just_pressed(KeyCode::Escape) {
         let current_mode = play_mode.get();
         if *current_mode == PlayMode::BuildingPlace {
-            if let Some(active) = companion_state.0 {
-                if let Ok(bp) = q_blueprints.get(active.parent_blueprint) {
-                    for &(gx, gy) in &bp.occupied_grids {
-                        world_map.buildings.remove(&(gx, gy));
-                        world_map.remove_obstacle(gx, gy);
-                    }
-                }
-                commands.entity(active.parent_blueprint).despawn();
-
-                let pending_entities: Vec<Entity> = q_pending_bucket_storage
-                    .iter()
-                    .filter(|(_, pending)| pending.0 == active.parent_blueprint)
-                    .map(|(entity, _)| entity)
-                    .collect();
-                for storage_entity in pending_entities {
-                    world_map.stockpiles.retain(|_, e| *e != storage_entity);
-                    commands.entity(storage_entity).despawn();
-                }
-            }
             companion_state.0 = None;
             build_context.0 = None;
             next_play_mode.set(PlayMode::Normal);
@@ -473,24 +485,9 @@ fn place_building_blueprint(
     building_type: BuildingType,
     grid: (i32, i32),
 ) -> Option<(Entity, Vec<(i32, i32)>, Vec2)> {
-    let (occupied_grids, spawn_pos, custom_size) = match building_type {
-        BuildingType::Tank | BuildingType::MudMixer => {
-            let grids = vec![
-                grid,
-                (grid.0 + 1, grid.1),
-                (grid.0, grid.1 + 1),
-                (grid.0 + 1, grid.1 + 1),
-            ];
-            let base_pos = WorldMap::grid_to_world(grid.0, grid.1);
-            let center_pos = base_pos + Vec2::new(TILE_SIZE * 0.5, TILE_SIZE * 0.5);
-            (grids, center_pos, Some(Vec2::splat(TILE_SIZE * 2.0)))
-        }
-        _ => {
-            let grids = vec![grid];
-            let center_pos = WorldMap::grid_to_world(grid.0, grid.1);
-            (grids, center_pos, Some(Vec2::splat(TILE_SIZE)))
-        }
-    };
+    let occupied_grids = occupied_grids_for_building(building_type, grid);
+    let spawn_pos = building_spawn_pos(building_type, grid);
+    let custom_size = Some(building_size(building_type));
 
     let can_place = occupied_grids.iter().all(|&g| {
         !world_map.buildings.contains_key(&g)
@@ -543,9 +540,19 @@ fn try_place_bucket_storage_companion(
     commands: &mut Commands,
     world_map: &mut WorldMap,
     parent_blueprint: Entity,
+    parent_occupied_grids: &[(i32, i32)],
     anchor_grid: (i32, i32),
 ) -> bool {
     let storage_grids = [anchor_grid, (anchor_grid.0 + 1, anchor_grid.1)];
+    let is_near_parent = storage_grids.iter().all(|&storage_grid| {
+        parent_occupied_grids.iter().any(|&parent_grid| {
+            grid_is_nearby(parent_grid, storage_grid, TANK_NEARBY_BUCKET_STORAGE_TILES)
+        })
+    });
+    if !is_near_parent {
+        return false;
+    }
+
     let can_place = storage_grids.iter().all(|&(gx, gy)| {
         !world_map.buildings.contains_key(&(gx, gy))
             && !world_map.stockpiles.contains_key(&(gx, gy))
@@ -589,7 +596,7 @@ fn has_nearby_sandpile(
         let sand_grid = WorldMap::world_to_grid(transform.translation.truncate());
         mixer_occupied_grids
             .iter()
-            .any(|&(mx, my)| (sand_grid.0 - mx).abs() <= 3 && (sand_grid.1 - my).abs() <= 3)
+            .any(|&(mx, my)| grid_is_nearby((mx, my), sand_grid, MUD_MIXER_NEARBY_SANDPILE_TILES))
     }) {
         return true;
     }
@@ -604,6 +611,62 @@ fn has_nearby_sandpile(
         let sand_grid = WorldMap::world_to_grid(transform.translation.truncate());
         mixer_occupied_grids
             .iter()
-            .any(|&(mx, my)| (sand_grid.0 - mx).abs() <= 3 && (sand_grid.1 - my).abs() <= 3)
+            .any(|&(mx, my)| grid_is_nearby((mx, my), sand_grid, MUD_MIXER_NEARBY_SANDPILE_TILES))
     })
+}
+
+fn make_companion_placement(
+    parent_kind: CompanionParentKind,
+    parent_anchor: (i32, i32),
+    kind: CompanionPlacementKind,
+    center: Vec2,
+) -> CompanionPlacement {
+    CompanionPlacement {
+        parent_kind,
+        parent_anchor,
+        kind,
+        center,
+        radius: TILE_SIZE * COMPANION_PLACEMENT_RADIUS_TILES,
+        required: true,
+    }
+}
+
+fn parent_building_type(parent_kind: CompanionParentKind) -> BuildingType {
+    match parent_kind {
+        CompanionParentKind::Tank => BuildingType::Tank,
+        CompanionParentKind::MudMixer => BuildingType::MudMixer,
+    }
+}
+
+fn occupied_grids_for_building(building_type: BuildingType, grid: (i32, i32)) -> Vec<(i32, i32)> {
+    match building_type {
+        BuildingType::Tank | BuildingType::MudMixer => vec![
+            grid,
+            (grid.0 + 1, grid.1),
+            (grid.0, grid.1 + 1),
+            (grid.0 + 1, grid.1 + 1),
+        ],
+        _ => vec![grid],
+    }
+}
+
+fn building_spawn_pos(building_type: BuildingType, grid: (i32, i32)) -> Vec2 {
+    let base_pos = WorldMap::grid_to_world(grid.0, grid.1);
+    match building_type {
+        BuildingType::Tank | BuildingType::MudMixer => {
+            base_pos + Vec2::new(TILE_SIZE * 0.5, TILE_SIZE * 0.5)
+        }
+        _ => base_pos,
+    }
+}
+
+fn building_size(building_type: BuildingType) -> Vec2 {
+    match building_type {
+        BuildingType::Tank | BuildingType::MudMixer => Vec2::splat(TILE_SIZE * 2.0),
+        _ => Vec2::splat(TILE_SIZE),
+    }
+}
+
+fn grid_is_nearby(base: (i32, i32), target: (i32, i32), tiles: i32) -> bool {
+    (target.0 - base.0).abs() <= tiles && (target.1 - base.1).abs() <= tiles
 }
