@@ -1,7 +1,12 @@
 use super::DragState;
+use super::EntityListNodeIndex;
+use crate::entities::familiar::FamiliarOperation;
+use crate::events::FamiliarOperationMaxSoulChangedEvent;
 use crate::game_state::TaskContext;
 use crate::interface::ui::components::*;
 use crate::interface::ui::theme::UiTheme;
+use crate::relationships::Commanding;
+use crate::systems::familiar_ai::FamiliarAiState;
 use crate::systems::command::TaskMode;
 use bevy::input::mouse::{MouseScrollUnit, MouseWheel};
 use bevy::prelude::*;
@@ -26,6 +31,31 @@ pub fn entity_list_interaction_system(
         (&Interaction, &FamiliarListItem),
         (Changed<Interaction>, With<Button>, Without<SoulListItem>),
     >,
+    mut familiar_max_soul_buttons: Query<
+        (
+            &Interaction,
+            &FamiliarMaxSoulAdjustButton,
+            &mut BackgroundColor,
+        ),
+        (
+            Changed<Interaction>,
+            With<Button>,
+            Without<FamiliarListItem>,
+            Without<SoulListItem>,
+            Without<SectionToggle>,
+        ),
+    >,
+    mut q_familiar_ops: Query<&mut FamiliarOperation>,
+    q_familiar_meta: Query<
+        (
+            &crate::entities::familiar::Familiar,
+            &FamiliarAiState,
+            Option<&Commanding>,
+        ),
+    >,
+    node_index: Res<EntityListNodeIndex>,
+    mut q_text: Query<&mut Text>,
+    mut ev_max_soul_changed: MessageWriter<FamiliarOperationMaxSoulChangedEvent>,
     mut selected_entity: ResMut<crate::interface::selection::SelectedEntity>,
     mut q_camera: Query<&mut Transform, With<crate::interface::camera::MainCamera>>,
     q_transforms: Query<&GlobalTransform>,
@@ -93,6 +123,49 @@ pub fn entity_list_interaction_system(
                 &mut q_camera,
                 &q_transforms,
             );
+        }
+    }
+
+    for (interaction, button, mut color) in familiar_max_soul_buttons.iter_mut() {
+        match *interaction {
+            Interaction::Pressed => {
+                *color = BackgroundColor(theme.colors.button_pressed);
+                if let Ok(mut op) = q_familiar_ops.get_mut(button.familiar) {
+                    let old_val = op.max_controlled_soul;
+                    let new_val = (old_val as isize + button.delta).clamp(1, 8) as usize;
+                    op.max_controlled_soul = new_val;
+
+                    // Optimistic update: reflect max soul change immediately on the row header.
+                    if let Some(nodes) = node_index.familiar_sections.get(&button.familiar)
+                        && let Ok((familiar, ai_state, commanding_opt)) =
+                            q_familiar_meta.get(button.familiar)
+                        && let Ok(mut text) = q_text.get_mut(nodes.header_text)
+                    {
+                        let squad_count = commanding_opt.map(|c| c.len()).unwrap_or(0);
+                        text.0 = format!(
+                            "{} ({}/{}) [{}]",
+                            familiar.name,
+                            squad_count,
+                            new_val,
+                            super::helpers::familiar_state_label(ai_state)
+                        );
+                    }
+
+                    if old_val != new_val {
+                        ev_max_soul_changed.write(FamiliarOperationMaxSoulChangedEvent {
+                            familiar_entity: button.familiar,
+                            old_value: old_val,
+                            new_value: new_val,
+                        });
+                    }
+                }
+            }
+            Interaction::Hovered => {
+                *color = BackgroundColor(theme.colors.button_hover);
+            }
+            Interaction::None => {
+                *color = BackgroundColor(theme.colors.button_default);
+            }
         }
     }
 }
