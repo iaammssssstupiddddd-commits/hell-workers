@@ -10,7 +10,7 @@ use super::{
 use crate::assets::GameAssets;
 use crate::entities::damned_soul::DamnedSoul;
 use crate::systems::jobs::WorkType;
-use crate::systems::soul_ai::task_execution::types::{AssignedTask, GatherPhase};
+use crate::systems::soul_ai::execute::task_execution::types::{AssignedTask, GatherPhase};
 use crate::systems::utils::worker_icon::{
     WorkerIcon, WorkerIconConfig, spawn_worker_icon, update_worker_icon_position,
 };

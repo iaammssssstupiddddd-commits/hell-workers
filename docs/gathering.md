@@ -65,5 +65,8 @@ Soulの待機行動に基づいて自然発生的に集会所が生成され、�
 
 ## 関連ファイル
 
-- [gathering.rs](file:///home/iaamm/projects/hell-workers/src/systems/soul_ai/gathering.rs)
+- `src/systems/soul_ai/helpers/gathering.rs`（型定義・定数・Observer）
+- `src/systems/soul_ai/update/gathering_tick.rs`（猶予タイマー更新）
+- `src/systems/soul_ai/decide/gathering_mgmt.rs`（Request生成）
+- `src/systems/soul_ai/execute/gathering_apply.rs` / `src/systems/soul_ai/execute/gathering_spawn.rs`（Request適用・生成）
 - [提案書](proposals/dynamic_gathering.md)

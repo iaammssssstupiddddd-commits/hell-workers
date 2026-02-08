@@ -7,7 +7,7 @@ use bevy::prelude::*;
 use super::components::{HasWorkerIndicator, WorkerHammerIcon};
 use crate::assets::GameAssets;
 use crate::entities::damned_soul::DamnedSoul;
-use crate::systems::soul_ai::task_execution::types::{AssignedTask, BuildPhase};
+use crate::systems::soul_ai::execute::task_execution::types::{AssignedTask, BuildPhase};
 
 /// 建築中のワーカーにハンマーアイコンを付与する
 pub fn spawn_worker_indicators_system(

@@ -1,6 +1,6 @@
 //! Helper functions for water gathering task
 
-use crate::systems::soul_ai::task_execution::context::TaskExecutionContext;
+use crate::systems::soul_ai::execute::task_execution::context::TaskExecutionContext;
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
 
@@ -45,7 +45,7 @@ pub fn drop_bucket_for_auto_haul(
         .remove::<crate::systems::jobs::TargetMixer>();
 
     ctx.inventory.0 = None;
-    crate::systems::soul_ai::work::unassign_task(
+    crate::systems::soul_ai::helpers::work::unassign_task(
         commands,
         ctx.soul_entity,
         soul_pos,
@@ -68,7 +68,7 @@ pub fn abort_task_without_item(
     world_map: &WorldMap,
 ) {
     let soul_pos = ctx.soul_pos();
-    crate::systems::soul_ai::work::unassign_task(
+    crate::systems::soul_ai::helpers::work::unassign_task(
         commands,
         ctx.soul_entity,
         soul_pos,
@@ -91,7 +91,7 @@ pub fn abort_task_with_item(
     world_map: &WorldMap,
 ) {
     let soul_pos = ctx.soul_pos();
-    crate::systems::soul_ai::work::unassign_task(
+    crate::systems::soul_ai::helpers::work::unassign_task(
         commands,
         ctx.soul_entity,
         soul_pos,

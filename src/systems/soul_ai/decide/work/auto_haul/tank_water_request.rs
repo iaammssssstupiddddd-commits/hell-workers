@@ -7,7 +7,7 @@ use bevy::prelude::*;
 
 use crate::relationships::{StoredIn, StoredItems, TaskWorkers};
 use crate::systems::command::TaskArea;
-use crate::systems::familiar_ai::resource_cache::SharedResourceCache;
+use crate::systems::familiar_ai::perceive::resource_sync::SharedResourceCache;
 use crate::systems::jobs::{Designation, IssuedBy, TaskSlots, WorkType};
 use crate::systems::logistics::{
     BelongsTo, ReservedForTask, ResourceItem, ResourceType, Stockpile,
@@ -31,7 +31,9 @@ pub fn tank_water_request_system(
         Option<&Designation>,
         Option<&TaskWorkers>,
     )>,
-    mut item_reservations: ResMut<crate::systems::soul_ai::work::auto_haul::ItemReservations>,
+    mut item_reservations: ResMut<
+        crate::systems::soul_ai::decide::work::auto_haul::ItemReservations,
+    >,
 ) {
     for (tank_entity, tank_transform, tank_stock, stored_opt) in q_tanks.iter() {
         // 水タンク以外はスキップ

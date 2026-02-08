@@ -3,7 +3,7 @@
 use super::*;
 use crate::assets::GameAssets;
 use crate::constants::*;
-use crate::systems::soul_ai::task_execution::AssignedTask;
+use crate::systems::soul_ai::execute::task_execution::AssignedTask;
 use crate::world::map::WorldMap;
 use rand::Rng;
 use std::env;

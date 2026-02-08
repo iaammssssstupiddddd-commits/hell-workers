@@ -7,7 +7,7 @@ pub(super) fn score_candidate(
     work_type: WorkType,
     mut priority: i32,
     in_stockpile_none: bool,
-    queries: &crate::systems::soul_ai::task_execution::context::TaskAssignmentQueries,
+    queries: &crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
     q_target_blueprints: &Query<&TargetBlueprint>,
 ) -> Option<i32> {
     if work_type == WorkType::Build {

@@ -2,8 +2,8 @@
 
 use crate::entities::damned_soul::StressBreakdown;
 use crate::relationships::WorkingOn;
-// use crate::systems::familiar_ai::resource_cache::SharedResourceCache; // Removed unused import
-use crate::systems::soul_ai::task_execution::{
+// use crate::systems::familiar_ai::perceive::resource_sync::SharedResourceCache; // Removed unused import
+use crate::systems::soul_ai::execute::task_execution::{
     common::*,
     context::TaskExecutionContext,
     types::{AssignedTask, HaulToBpPhase},
@@ -32,7 +32,7 @@ pub fn handle_haul_to_blueprint_task(
             ctx.soul_entity
         );
         let soul_pos = ctx.soul_transform.translation.truncate();
-        crate::systems::soul_ai::work::unassign_task(
+        crate::systems::soul_ai::helpers::work::unassign_task(
             commands,
             ctx.soul_entity,
             soul_pos,
@@ -105,7 +105,7 @@ pub fn handle_haul_to_blueprint_task(
                     );
 
                     *ctx.task = AssignedTask::HaulToBlueprint(
-                        crate::systems::soul_ai::task_execution::types::HaulToBlueprintData {
+                        crate::systems::soul_ai::execute::task_execution::types::HaulToBlueprintData {
                             item: item_entity,
                             blueprint: blueprint_entity,
                             phase: HaulToBpPhase::GoingToBlueprint,
@@ -143,7 +143,7 @@ pub fn handle_haul_to_blueprint_task(
                         ctx.soul_entity, blueprint_entity
                     );
                     *ctx.task = AssignedTask::HaulToBlueprint(
-                        crate::systems::soul_ai::task_execution::types::HaulToBlueprintData {
+                        crate::systems::soul_ai::execute::task_execution::types::HaulToBlueprintData {
                             item: item_entity,
                             blueprint: blueprint_entity,
                             phase: HaulToBpPhase::Delivering,
@@ -161,7 +161,7 @@ pub fn handle_haul_to_blueprint_task(
                     .get(item_entity)
                     .ok()
                     .and_then(|(_, _, _, ri, _, _)| ri.map(|r| r.0));
-                crate::systems::soul_ai::work::unassign_task(
+                crate::systems::soul_ai::helpers::work::unassign_task(
                     commands,
                     ctx.soul_entity,
                     soul_pos,

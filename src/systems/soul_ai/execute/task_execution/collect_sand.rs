@@ -58,7 +58,7 @@ pub fn handle_collect_sand_task(
 
                 if is_near_target(soul_pos, res_pos) {
                     *ctx.task = AssignedTask::CollectSand(
-                        crate::systems::soul_ai::task_execution::types::CollectSandData {
+                        crate::systems::soul_ai::execute::task_execution::types::CollectSandData {
                             target,
                             phase: CollectSandPhase::Collecting { progress: 0.0 },
                         },
@@ -114,7 +114,7 @@ pub fn handle_collect_sand_task(
                     info!("TASK_EXEC: Soul {:?} collected sand", ctx.soul_entity);
 
                     *ctx.task = AssignedTask::CollectSand(
-                        crate::systems::soul_ai::task_execution::types::CollectSandData {
+                        crate::systems::soul_ai::execute::task_execution::types::CollectSandData {
                             target,
                             phase: CollectSandPhase::Done,
                         },
@@ -123,7 +123,7 @@ pub fn handle_collect_sand_task(
                 } else {
                     // 進捗を保存
                     *ctx.task = AssignedTask::CollectSand(
-                        crate::systems::soul_ai::task_execution::types::CollectSandData {
+                        crate::systems::soul_ai::execute::task_execution::types::CollectSandData {
                             target,
                             phase: CollectSandPhase::Collecting { progress },
                         },

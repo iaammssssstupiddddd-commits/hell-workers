@@ -10,8 +10,8 @@ use crate::relationships::TaskWorkers;
 use crate::systems::command::TaskArea;
 use crate::systems::jobs::{Blueprint, Designation, IssuedBy, TaskSlots, WorkType};
 use crate::systems::logistics::{ResourceItem, ResourceType};
-use crate::systems::soul_ai::query_types::AutoHaulAssignedTaskQuery;
-use crate::systems::soul_ai::task_execution::AssignedTask;
+use crate::systems::soul_ai::execute::task_execution::AssignedTask;
+use crate::systems::soul_ai::helpers::query_types::AutoHaulAssignedTaskQuery;
 use crate::systems::spatial::{BlueprintSpatialGrid, ResourceSpatialGrid, SpatialGridOps};
 
 /// 段階的検索の半径（タイル単位）

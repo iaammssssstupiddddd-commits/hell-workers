@@ -72,7 +72,7 @@ pub enum SoulAiSystemSet {
 **システム例**:
 ```rust
 // Soul AI
-- escaping_detection_system      // 逃走条件の検出
+- (現状は専用システムなし。将来の拡張ポイント)
 
 // Familiar AI
 - detect_state_changes_system    // 状態変化の検出
@@ -106,10 +106,10 @@ pub enum SoulAiSystemSet {
 // Soul AI
 - fatigue_update_system          // 疲労の増減
 - familiar_influence_unified_system  // ストレス/やる気/怠惰の統合更新
-- gathering_maintenance_system   // 集会スポット状態管理
+- gathering_grace_tick_system    // 集会スポット猶予タイマー更新
 
 // Familiar AI
-- cleanup_encouragement_cooldowns_system  // クールダウン減少
+- (現状は専用システムなし。将来の拡張ポイント)
 ```
 
 ### Decide（決定）
@@ -126,14 +126,14 @@ pub enum SoulAiSystemSet {
 // Soul AI
 - idle_behavior_decision_system  // アイドル行動の決定
 - blueprint_auto_haul_system     // タスク割り当て要求
-- escaping_behavior_system       // 逃走行動の決定（0.5秒間隔, 初回即時）
+- escaping_decision_system       // 逃走行動の決定（0.5秒間隔, 初回即時）
 
 // Familiar AI
 - familiar_ai_state_system       // 状態遷移判定
 - familiar_task_delegation_system // 0.5秒間隔, 初回即時
 ```
 
-- `escaping_behavior_system` は **0.5秒間隔（初回即時）** で再評価されます。
+- `escaping_decision_system` は **0.5秒間隔（初回即時）** で再評価されます。
 - `familiar_task_delegation_system` も **0.5秒間隔（初回即時）** で実行されます。
 
 ### Execute（実行）
@@ -324,7 +324,7 @@ fn rest_behavior_apply_system(
 | `src/systems/soul_ai/scheduling.rs` | `FamiliarAiSystemSet`, `SoulAiSystemSet`の定義 |
 | `src/systems/soul_ai/mod.rs` | Soul AIのフェーズ登録、レイヤー間順序設定 |
 | `src/systems/familiar_ai/mod.rs` | Familiar AIのフェーズ登録 |
-| `src/systems/soul_ai/idle/behavior.rs` | Decide/Execute分割の実装例 |
+| `src/systems/soul_ai/decide/idle_behavior.rs` | Decide/Execute分割の実装例 |
 | `src/events.rs` | Request型の定義 |
 | `docs/architecture.md` | 全体アーキテクチャ |
 | `docs/soul_ai.md` | Soul AI詳細 |

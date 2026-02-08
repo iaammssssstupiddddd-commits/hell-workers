@@ -2,8 +2,8 @@ use crate::entities::damned_soul::{DamnedSoul, Destination, IdleState, Path, Str
 use crate::entities::familiar::Familiar;
 use crate::relationships::{CommandedBy, WorkingOn};
 use crate::systems::logistics::Inventory;
-use crate::systems::soul_ai::gathering::ParticipatingIn;
-use crate::systems::soul_ai::task_execution::AssignedTask;
+use crate::systems::soul_ai::execute::task_execution::AssignedTask;
+use crate::systems::soul_ai::helpers::gathering::ParticipatingIn;
 use bevy::prelude::*;
 
 /// タスク割り当て要求の適用に使うソウルの標準クエリ型
@@ -19,7 +19,7 @@ pub type TaskAssignmentSoulQuery<'w, 's> = Query<
         &'static IdleState,
         Option<&'static mut Inventory>,
         Option<&'static CommandedBy>,
-        Option<&'static crate::systems::soul_ai::gathering::ParticipatingIn>,
+        Option<&'static crate::systems::soul_ai::helpers::gathering::ParticipatingIn>,
     ),
     (With<DamnedSoul>, Without<Familiar>),
 >;

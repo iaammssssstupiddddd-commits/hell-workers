@@ -6,8 +6,8 @@ use crate::entities::familiar::Familiar;
 use crate::events::GatheringManagementOp;
 use crate::relationships::CommandedBy;
 use crate::systems::soul_ai::decide::SoulDecideOutput;
-use crate::systems::soul_ai::gathering::*;
-use crate::systems::soul_ai::task_execution::AssignedTask;
+use crate::systems::soul_ai::execute::task_execution::AssignedTask;
+use crate::systems::soul_ai::helpers::gathering::*;
 use crate::systems::spatial::{SpatialGrid, SpatialGridOps};
 
 fn is_gathering_spot_safe_from_familiars(

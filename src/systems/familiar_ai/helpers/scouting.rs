@@ -5,8 +5,8 @@ use crate::relationships::CommandedBy;
 // use crate::events::OnSoulRecruited;
 use crate::systems::familiar_ai::FamiliarAiState;
 use crate::systems::familiar_ai::FamiliarSoulQuery;
-use crate::systems::soul_ai::gathering::ParticipatingIn;
-use crate::systems::soul_ai::task_execution::AssignedTask;
+use crate::systems::soul_ai::execute::task_execution::AssignedTask;
+use crate::systems::soul_ai::helpers::gathering::ParticipatingIn;
 use bevy::prelude::*;
 
 /// スカウト状態の判定/適用に必要なコンテキスト

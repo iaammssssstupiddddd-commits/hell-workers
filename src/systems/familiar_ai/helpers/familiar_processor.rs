@@ -8,9 +8,9 @@ use crate::events::SquadManagementRequest;
 use crate::relationships::{CommandedBy, Commanding, ManagedTasks};
 use crate::systems::command::TaskArea;
 use crate::systems::familiar_ai::FamiliarSoulQuery;
-use crate::systems::familiar_ai::task_management::ReservationShadow;
-use crate::systems::soul_ai::gathering::ParticipatingIn;
-use crate::systems::soul_ai::task_execution::context::TaskAssignmentQueries;
+use crate::systems::familiar_ai::helpers::task_management::ReservationShadow;
+use crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries;
+use crate::systems::soul_ai::helpers::gathering::ParticipatingIn;
 use crate::systems::spatial::{DesignationSpatialGrid, SpatialGrid};
 use crate::systems::visual::speech::components::{FamiliarBubble, SpeechBubble};
 use bevy::prelude::*;
@@ -285,7 +285,7 @@ pub fn process_task_delegation_and_movement(ctx: &mut FamiliarDelegationContext<
         match *ctx.ai_state {
             FamiliarAiState::Supervising { .. } => {
                 let mut supervising_ctx =
-                    crate::systems::familiar_ai::supervising::FamiliarSupervisingContext {
+                    crate::systems::familiar_ai::helpers::supervising::FamiliarSupervisingContext {
                         fam_entity: ctx.fam_entity,
                         fam_pos,
                         active_members: &active_members,
@@ -318,7 +318,7 @@ pub fn apply_squad_management_requests_system(
     mut commands: Commands,
     mut request_reader: MessageReader<crate::events::SquadManagementRequest>,
     mut q_souls: FamiliarSoulQuery,
-    mut queries: crate::systems::soul_ai::task_execution::context::TaskAssignmentQueries,
+    mut queries: crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
     world_map: Res<WorldMap>,
     time: Res<Time>,
     game_assets: Res<crate::assets::GameAssets>,
@@ -388,7 +388,7 @@ pub fn apply_squad_management_requests_system(
                     // 現在、すべての解放は自動（疲労）のため、個別のタスク中断セリフは出さない
                     let emit_abandoned = false;
 
-                    crate::systems::soul_ai::work::unassign_task(
+                    crate::systems::soul_ai::helpers::work::unassign_task(
                         &mut commands,
                         entity,
                         transform.translation.truncate(),

@@ -1,5 +1,5 @@
 use super::grid::{GridData, SpatialGridOps};
-use crate::systems::soul_ai::gathering::GatheringSpot;
+use crate::systems::soul_ai::helpers::gathering::GatheringSpot;
 use bevy::prelude::*;
 
 /// 集会スポット用の空間グリッド

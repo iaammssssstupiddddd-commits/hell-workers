@@ -3,7 +3,7 @@ use bevy::prelude::*;
 
 pub fn resolve_haul_to_mixer_inputs(
     task_entity: Entity,
-    queries: &crate::systems::soul_ai::task_execution::context::TaskAssignmentQueries,
+    queries: &crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
 ) -> Option<(Entity, ResourceType)> {
     let mixer_entity = queries
         .storage
@@ -17,7 +17,7 @@ pub fn resolve_haul_to_mixer_inputs(
 
 pub fn resolve_haul_water_to_mixer_inputs(
     task_entity: Entity,
-    queries: &crate::systems::soul_ai::task_execution::context::TaskAssignmentQueries,
+    queries: &crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
 ) -> Option<(Entity, Entity)> {
     let mixer_entity = queries
         .storage

@@ -14,63 +14,13 @@ pub mod execute;
 pub mod helpers;
 pub mod perceive;
 pub mod update;
-
-// 既存参照の互換レイヤー（M2移行中）
-pub mod query_types {
-    pub use super::helpers::query_types::*;
-}
-
-pub mod squad {
-    pub use super::helpers::squad::*;
-}
-
-pub mod scouting {
-    pub use super::helpers::scouting::*;
-}
-
-pub mod supervising {
-    pub use super::helpers::supervising::*;
-}
-
-pub mod familiar_processor {
-    pub use super::helpers::familiar_processor::*;
-}
-
-pub mod state_handlers {
-    pub use super::helpers::state_handlers::*;
-}
-
-pub mod task_management {
-    pub use super::helpers::task_management::*;
-}
-
-pub mod state_transition {
-    pub use super::perceive::state_detection::*;
-}
-
-pub mod resource_cache {
-    pub use super::perceive::resource_sync::*;
-}
-
-pub mod max_soul_handler {
-    pub use super::perceive::max_soul::*;
-}
-
-pub mod following {
-    pub use super::decide::following::*;
-}
-
-pub mod encouragement {
-    pub use super::decide::encouragement::*;
-}
-
-use familiar_processor::{
+use helpers::familiar_processor::{
     FamiliarDelegationContext, FamiliarRecruitmentContext, FamiliarSquadContext,
     finalize_state_transitions, process_recruitment, process_squad_management,
     process_task_delegation_and_movement,
 };
-pub use query_types::{FamiliarSoulQuery, FamiliarStateQuery, FamiliarTaskQuery};
-use state_transition::determine_transition_reason;
+pub use helpers::query_types::{FamiliarSoulQuery, FamiliarStateQuery, FamiliarTaskQuery};
+use perceive::state_detection::determine_transition_reason;
 
 /// 使い魔のAI状態
 #[derive(Component, Debug, Clone, PartialEq, Reflect)]
@@ -113,9 +63,9 @@ impl Plugin for FamiliarAiPlugin {
                 .in_set(GameSystemSet::Logic),
         )
         .register_type::<FamiliarAiState>()
-        .register_type::<encouragement::EncouragementCooldown>()
-        .init_resource::<resource_cache::SharedResourceCache>()
-        .init_resource::<resource_cache::ReservationSyncTimer>()
+        .register_type::<decide::encouragement::EncouragementCooldown>()
+        .init_resource::<perceive::resource_sync::SharedResourceCache>()
+        .init_resource::<perceive::resource_sync::ReservationSyncTimer>()
         .init_resource::<DesignationSpatialGrid>()
         .init_resource::<FamiliarTaskDelegationTimer>()
         .add_systems(
@@ -124,10 +74,10 @@ impl Plugin for FamiliarAiPlugin {
                 // === Perceive Phase ===
                 // 環境情報の読み取り、変化の検出
                 (
-                    state_transition::detect_state_changes_system,
-                    state_transition::detect_command_changes_system,
-                    resource_cache::sync_reservations_system,
-                    max_soul_handler::handle_max_soul_changed_system,
+                    perceive::state_detection::detect_state_changes_system,
+                    perceive::state_detection::detect_command_changes_system,
+                    perceive::resource_sync::sync_reservations_system,
+                    perceive::max_soul::handle_max_soul_changed_system,
                 )
                     .in_set(crate::systems::soul_ai::scheduling::FamiliarAiSystemSet::Perceive),
                 // Perceive → Update 間の同期
@@ -144,8 +94,8 @@ impl Plugin for FamiliarAiPlugin {
                     familiar_ai_state_system,
                     ApplyDeferred,
                     familiar_task_delegation_system,
-                    following::following_familiar_system,
-                    encouragement::encouragement_decision_system,
+                    decide::following::following_familiar_system,
+                    decide::encouragement::encouragement_decision_system,
                 )
                     .chain(),)
                     .in_set(crate::systems::soul_ai::scheduling::FamiliarAiSystemSet::Decide),
@@ -153,7 +103,7 @@ impl Plugin for FamiliarAiPlugin {
                 // 決定された行動の実行
                 (
                     execute::state_apply::familiar_state_apply_system,
-                    state_transition::handle_state_changed_system,
+                    perceive::state_detection::handle_state_changed_system,
                     process_squad_management_apply_system,
                     execute::encouragement_apply::encouragement_apply_system,
                     execute::encouragement_apply::cleanup_encouragement_cooldowns_system,
@@ -165,7 +115,7 @@ impl Plugin for FamiliarAiPlugin {
 }
 
 /// Redirect for name consistency if needed, or just use the one in processor
-pub use familiar_processor::apply_squad_management_requests_system as process_squad_management_apply_system;
+pub use helpers::familiar_processor::apply_squad_management_requests_system as process_squad_management_apply_system;
 
 #[derive(Resource)]
 pub struct FamiliarTaskDelegationTimer {
@@ -203,7 +153,7 @@ pub struct FamiliarAiTaskParams<'w, 's> {
     pub q_familiars: FamiliarTaskQuery<'w, 's>,
     pub q_souls: FamiliarSoulQuery<'w, 's>,
     pub task_queries:
-        crate::systems::soul_ai::task_execution::context::TaskAssignmentQueries<'w, 's>,
+        crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries<'w, 's>,
     pub designation_grid: Res<'w, DesignationSpatialGrid>,
     pub world_map: Res<'w, crate::world::map::WorldMap>,
     pub pf_context: Local<'s, PathfindingContext>,
@@ -260,7 +210,8 @@ pub fn familiar_ai_state_system(params: FamiliarAiParams) {
 
         // 1. 基本コマンドチェック（Idle状態の処理）
         if matches!(active_command.command, FamiliarCommand::Idle) {
-            let transition_result = state_handlers::idle::handle_idle_state(
+            let transition_result = helpers::state_handlers::idle::handle_idle_state(
+                // state_handlers は helpers 配下に移動済み
                 fam_entity,
                 fam_transform,
                 active_command,
@@ -300,7 +251,7 @@ pub fn familiar_ai_state_system(params: FamiliarAiParams) {
         match *ai_state {
             FamiliarAiState::Scouting { target_soul } => {
                 // Scoutingロジックを実行 (分隊の空き状況に関わらず常にチェック)
-                let mut scouting_ctx = scouting::FamiliarScoutingContext {
+                let mut scouting_ctx = helpers::scouting::FamiliarScoutingContext {
                     fam_entity,
                     fam_pos,
                     target_soul,
@@ -315,7 +266,7 @@ pub fn familiar_ai_state_system(params: FamiliarAiParams) {
                     request_writer: &mut decide_output.squad_requests,
                 };
                 let transition_result =
-                    state_handlers::scouting::handle_scouting_state(&mut scouting_ctx);
+                    helpers::state_handlers::scouting::handle_scouting_state(&mut scouting_ctx);
                 state_changed = transition_result.apply_to(&mut ai_state);
             }
             _ => {
@@ -386,7 +337,7 @@ pub fn familiar_task_delegation_system(params: FamiliarAiTaskParams) {
     delegation_timer.first_run_done = true;
 
     let mut reservation_shadow =
-        crate::systems::familiar_ai::task_management::ReservationShadow::default();
+        crate::systems::familiar_ai::helpers::task_management::ReservationShadow::default();
 
     for (
         fam_entity,
@@ -410,9 +361,9 @@ pub fn familiar_task_delegation_system(params: FamiliarAiTaskParams) {
         let managed_tasks = managed_tasks_opt.unwrap_or(&default_tasks);
 
         let initial_squad =
-            crate::systems::familiar_ai::squad::SquadManager::build_squad(commanding);
+            crate::systems::familiar_ai::helpers::squad::SquadManager::build_squad(commanding);
         let (squad_entities, _invalid_members) =
-            crate::systems::familiar_ai::squad::SquadManager::validate_squad(
+            crate::systems::familiar_ai::helpers::squad::SquadManager::validate_squad(
                 initial_squad,
                 fam_entity,
                 &mut q_souls,
