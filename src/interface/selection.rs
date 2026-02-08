@@ -189,7 +189,8 @@ pub fn blueprint_placement(
         match active.kind {
             CompanionPlacementKind::BucketStorage => {
                 let parent_type = parent_building_type(active.parent_kind);
-                let parent_occupied_grids = occupied_grids_for_building(parent_type, active.parent_anchor);
+                let parent_occupied_grids =
+                    occupied_grids_for_building(parent_type, active.parent_anchor);
 
                 let Some((parent_blueprint, _, _)) = place_building_blueprint(
                     &mut commands,
@@ -198,7 +199,9 @@ pub fn blueprint_placement(
                     parent_type,
                     active.parent_anchor,
                 ) else {
-                    warn!("COMPANION: failed to confirm parent blueprint before bucket storage placement");
+                    warn!(
+                        "COMPANION: failed to confirm parent blueprint before bucket storage placement"
+                    );
                     return;
                 };
                 if try_place_bucket_storage_companion(
