@@ -4,6 +4,7 @@ use crate::entities::damned_soul::DamnedSoul;
 use crate::entities::familiar::Familiar;
 use crate::interface::selection::HoveredEntity;
 use crate::interface::ui::components::*;
+use crate::interface::ui::interaction::despawn_context_menus;
 use crate::interface::ui::theme::UiTheme;
 use bevy::prelude::*;
 use bevy::ui::RelativeCursorPosition;
@@ -261,11 +262,3 @@ fn spawn_menu_item(
         });
 }
 
-fn despawn_context_menus(
-    commands: &mut Commands,
-    q_context_menu: &Query<Entity, With<ContextMenu>>,
-) {
-    for entity in q_context_menu.iter() {
-        commands.entity(entity).despawn();
-    }
-}

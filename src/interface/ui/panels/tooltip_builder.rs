@@ -2,6 +2,7 @@ use crate::assets::GameAssets;
 use crate::interface::ui::components::{
     TooltipBody, TooltipHeader, TooltipProgressBar, TooltipTemplate, UiTooltip,
 };
+use crate::interface::ui::list::clear_children;
 use crate::interface::ui::presentation::EntityInspectionModel;
 use crate::interface::ui::theme::UiTheme;
 use bevy::prelude::*;
@@ -500,10 +501,3 @@ fn char_to_byte_idx(text: &str, char_idx: usize) -> usize {
         .unwrap_or(text.len())
 }
 
-fn clear_children(commands: &mut Commands, q_children: &Query<&Children>, parent: Entity) {
-    if let Ok(children) = q_children.get(parent) {
-        for child in children.iter() {
-            commands.entity(child).despawn();
-        }
-    }
-}

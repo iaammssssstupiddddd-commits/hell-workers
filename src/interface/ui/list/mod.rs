@@ -21,6 +21,7 @@ pub use minimize::{EntityListMinimizeState, entity_list_minimize_toggle_system};
 pub use resize::{
     EntityListResizeState, entity_list_resize_cursor_system, entity_list_resize_system,
 };
+pub(crate) use helpers::clear_children;
 pub use sync::sync_entity_list_from_view_model_system;
 pub use view_model::build_entity_list_view_model_system;
 
