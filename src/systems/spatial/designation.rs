@@ -50,10 +50,14 @@ impl SpatialGridOps for DesignationSpatialGrid {
 
 pub fn update_designation_spatial_grid_system(
     mut grid: ResMut<DesignationSpatialGrid>,
-    query: Query<(Entity, &Transform), With<Designation>>,
+    added_query: Query<(Entity, &Transform), Added<Designation>>,
+    mut removed: RemovedComponents<Designation>,
 ) {
-    grid.0.clear();
-    for (entity, transform) in query.iter() {
-        grid.0.insert(entity, transform.translation.truncate());
+    for (entity, transform) in added_query.iter() {
+        grid.insert(entity, transform.translation.truncate());
+    }
+
+    for entity in removed.read() {
+        grid.remove(entity);
     }
 }

@@ -3,7 +3,7 @@ use bevy::prelude::*;
 use crate::entities::damned_soul::StressBreakdown;
 use crate::entities::familiar::ActiveCommand;
 use crate::relationships::CommandedBy;
-use crate::relationships::{ManagedBy, TaskWorkers, WorkingOn};
+use crate::relationships::{Commanding, ManagedBy, TaskWorkers, WorkingOn};
 use crate::systems::command::TaskArea;
 use crate::systems::jobs::{Blueprint, Designation, Priority, TaskSlots, WorkType};
 use crate::systems::logistics::InStockpile;
@@ -17,7 +17,7 @@ use crate::systems::spatial::BlueprintSpatialGrid;
 pub fn blueprint_auto_build_system(
     mut commands: Commands,
     blueprint_grid: Res<BlueprintSpatialGrid>,
-    q_familiars: Query<(Entity, &ActiveCommand, &TaskArea)>,
+    q_familiars: Query<(Entity, &ActiveCommand, &TaskArea, Option<&Commanding>)>,
     q_blueprints: Query<(Entity, &Transform, &Blueprint, Option<&TaskWorkers>)>,
     q_designations: Query<(
         Entity,
@@ -32,7 +32,11 @@ pub fn blueprint_auto_build_system(
     mut q_souls: AutoBuildSoulQuery,
     q_breakdown: Query<&StressBreakdown>,
 ) {
-    for (fam_entity, _active_command, task_area) in q_familiars.iter() {
+    for (fam_entity, _active_command, task_area, commanding_opt) in q_familiars.iter() {
+        let Some(commanding) = commanding_opt else {
+            continue;
+        };
+
         // 最適化: タスクエリア内のブループリントのみを取得
         let blueprints_in_area = blueprint_grid.get_in_area(task_area.min, task_area.max);
 
@@ -73,14 +77,14 @@ pub fn blueprint_auto_build_system(
                 let mut best_worker = None;
                 let mut min_dist_sq = f32::MAX;
 
-                for (soul_entity, soul_transform, soul, task, _, _, idle, uc_opt) in q_souls.iter()
-                {
-                    // この使い魔の部下か確認
-                    if let Some(uc) = uc_opt {
-                        if uc.0 != fam_entity {
-                            continue;
-                        }
-                    } else {
+                for &soul_entity in commanding.iter() {
+                    let Ok((_, soul_transform, soul, task, _, _, idle, uc_opt)) =
+                        q_souls.get(soul_entity)
+                    else {
+                        continue;
+                    };
+
+                    if uc_opt.map(|uc| uc.0) != Some(fam_entity) {
                         continue;
                     }
 

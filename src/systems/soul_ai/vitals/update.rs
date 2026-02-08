@@ -1,13 +1,10 @@
 use bevy::prelude::*;
 
 use crate::constants::*;
-use crate::entities::damned_soul::{DamnedSoul, IdleBehavior, IdleState, StressBreakdown};
-use crate::entities::familiar::Familiar;
-use crate::events::{OnExhausted, OnStressBreakdown};
+use crate::entities::damned_soul::{DamnedSoul, IdleBehavior, IdleState};
+use crate::events::OnExhausted;
 use crate::relationships::CommandedBy;
-use crate::systems::soul_ai::idle::escaping::is_familiar_in_influence_range;
 use crate::systems::soul_ai::task_execution::AssignedTask;
-use crate::systems::spatial::FamiliarSpatialGrid;
 
 /// 疲労の増減を管理するシステム
 pub fn fatigue_update_system(
@@ -58,63 +55,6 @@ pub fn fatigue_penalty_system(time: Res<Time>, mut q_souls: Query<&mut DamnedSou
     for mut soul in q_souls.iter_mut() {
         if soul.fatigue > FATIGUE_MOTIVATION_PENALTY_THRESHOLD {
             soul.motivation = (soul.motivation - dt * FATIGUE_MOTIVATION_PENALTY_RATE).max(0.0);
-        }
-    }
-}
-
-/// ストレスの更新とブレイクダウン状態管理システム
-pub fn stress_system(
-    mut commands: Commands,
-    time: Res<Time>,
-    familiar_grid: Res<FamiliarSpatialGrid>,
-    q_familiars: Query<(&Transform, &Familiar)>,
-    mut q_souls: Query<(
-        Entity,
-        &Transform,
-        &mut DamnedSoul,
-        &AssignedTask,
-        &IdleState,
-        Option<&CommandedBy>,
-        Option<&mut StressBreakdown>,
-    )>,
-) {
-    let dt = time.delta_secs();
-
-    for (entity, transform, mut soul, task, idle, under_command, breakdown_opt) in
-        q_souls.iter_mut()
-    {
-        let has_task = !matches!(task, AssignedTask::None);
-        let is_gathering = matches!(
-            idle.behavior,
-            IdleBehavior::Gathering | IdleBehavior::ExhaustedGathering
-        );
-        let soul_pos = transform.translation.truncate();
-        let is_influence_close =
-            is_familiar_in_influence_range(soul_pos, &familiar_grid, &q_familiars);
-
-        if has_task {
-            soul.stress = (soul.stress + dt * STRESS_WORK_RATE).min(1.0);
-        } else if under_command.is_some() {
-            // 待機中（使役下）= 変化なし
-        } else if is_influence_close {
-            // 未使役で警戒圏内にいる場合はストレスを上昇させる
-            soul.stress = (soul.stress + dt * ESCAPE_PROXIMITY_STRESS_RATE).min(1.0);
-        } else if is_gathering {
-            soul.stress = (soul.stress - dt * STRESS_RECOVERY_RATE_GATHERING).max(0.0);
-        } else {
-            soul.stress = (soul.stress - dt * STRESS_RECOVERY_RATE_IDLE).max(0.0);
-        }
-
-        if soul.stress >= 1.0 {
-            if breakdown_opt.is_none() {
-                commands.trigger(OnStressBreakdown { entity });
-            }
-        } else if let Some(mut breakdown) = breakdown_opt {
-            if soul.stress <= STRESS_RECOVERY_THRESHOLD {
-                commands.entity(entity).remove::<StressBreakdown>();
-            } else if soul.stress <= STRESS_FREEZE_RECOVERY_THRESHOLD && breakdown.is_frozen {
-                breakdown.is_frozen = false;
-            }
         }
     }
 }

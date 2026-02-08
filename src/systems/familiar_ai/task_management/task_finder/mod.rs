@@ -30,8 +30,7 @@ pub fn find_unassigned_task_in_area(
     world_map: &WorldMap,
     pf_context: &mut PathfindingContext,
 ) -> Vec<Entity> {
-    let candidates =
-        collect_candidate_entities(task_area_opt, managed_tasks, designation_grid, queries);
+    let candidates = collect_candidate_entities(task_area_opt, managed_tasks, designation_grid);
 
     let mut valid_candidates: Vec<(Entity, i32, f32)> = candidates
         .into_iter()

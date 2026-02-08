@@ -9,7 +9,7 @@ mod relationships;
 mod systems;
 mod world;
 
-use bevy::diagnostic::FrameTimeDiagnosticsPlugin;
+use bevy::diagnostic::{DiagnosticsStore, FrameTimeDiagnosticsPlugin};
 use bevy::prelude::*;
 use bevy::render::RenderPlugin;
 use bevy::render::settings::{Backends, RenderCreation, WgpuSettings};
@@ -39,7 +39,8 @@ pub struct DebugVisible(pub bool);
 
 #[derive(Resource, Default)]
 struct FrameSpikeLogger {
-    last_logged_time: f32,
+    last_spike_logged_time: f32,
+    last_fps_logged_time: f32,
 }
 
 fn main() {
@@ -131,6 +132,7 @@ fn is_wsl() -> bool {
 
 fn frame_spike_logger_system(
     time: Res<Time>,
+    diagnostics: Res<DiagnosticsStore>,
     mut logger: ResMut<FrameSpikeLogger>,
     q_souls: Query<Entity, With<DamnedSoul>>,
     q_spots: Query<Entity, With<GatheringSpot>>,
@@ -138,20 +140,35 @@ fn frame_spike_logger_system(
     q_resources: Query<Entity, With<ResourceItem>>,
 ) {
     let dt = time.delta_secs();
-    if dt < 0.2 {
-        return;
-    }
     let now = time.elapsed_secs();
-    if now - logger.last_logged_time < 1.0 {
-        return;
+
+    let should_log_fps = env::args().any(|arg| arg == "--perf-log-fps");
+    if should_log_fps && now - logger.last_fps_logged_time >= 1.0 {
+        logger.last_fps_logged_time = now;
+        if let Some(fps) = diagnostics
+            .get(&FrameTimeDiagnosticsPlugin::FPS)
+            .and_then(|d| d.smoothed())
+        {
+            info!(
+                "PERF_FPS: fps={:.1} souls={} spots={} designations={} resources={}",
+                fps,
+                q_souls.iter().count(),
+                q_spots.iter().count(),
+                q_designations.iter().count(),
+                q_resources.iter().count()
+            );
+        }
     }
-    logger.last_logged_time = now;
-    info!(
-        "PERF_SPIKE: dt={:.3}s souls={} spots={} designations={} resources={}",
-        dt,
-        q_souls.iter().count(),
-        q_spots.iter().count(),
-        q_designations.iter().count(),
-        q_resources.iter().count()
-    );
+
+    if dt >= 0.2 && now - logger.last_spike_logged_time >= 1.0 {
+        logger.last_spike_logged_time = now;
+        info!(
+            "PERF_SPIKE: dt={:.3}s souls={} spots={} designations={} resources={}",
+            dt,
+            q_souls.iter().count(),
+            q_spots.iter().count(),
+            q_designations.iter().count(),
+            q_resources.iter().count()
+        );
+    }
 }

@@ -39,6 +39,7 @@ impl Plugin for SoulAiPlugin {
         .init_resource::<work::auto_haul::ItemReservations>()
         .init_resource::<gathering::GatheringUpdateTimer>()
         .init_resource::<idle::escaping::EscapeDetectionTimer>()
+        .init_resource::<idle::escaping::EscapeBehaviorTimer>()
         .add_systems(
             Update,
             (
@@ -62,9 +63,7 @@ impl Plugin for SoulAiPlugin {
                     // バイタル更新
                     vitals::update::fatigue_update_system,
                     vitals::update::fatigue_penalty_system,
-                    vitals::update::stress_system,
-                    vitals::influence::supervision_stress_system,
-                    vitals::influence::motivation_system,
+                    vitals::influence::familiar_influence_unified_system,
                     // メンテナンス処理
                     gathering::maintenance::gathering_recruitment_system,
                     gathering::maintenance::gathering_leave_system,

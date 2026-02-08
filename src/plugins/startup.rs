@@ -2,11 +2,15 @@
 
 use crate::assets::GameAssets;
 use crate::entities::damned_soul::{DamnedSoulSpawnEvent, spawn_damned_souls};
-use crate::entities::familiar::FamiliarSpawnEvent;
+use crate::entities::familiar::{
+    ActiveCommand, FamiliarCommand, FamiliarOperation, FamiliarSpawnEvent,
+};
 use crate::game_state::{BuildContext, TaskContext, ZoneContext};
 use crate::interface::camera::{MainCamera, PanCamera};
 use crate::interface::selection::{HoveredEntity, SelectedEntity};
 use crate::interface::ui::{MenuState, setup_ui};
+use crate::systems::command::TaskArea;
+use crate::systems::jobs::{Designation, Priority, Rock, TaskSlots, Tree, WorkType};
 use crate::systems::logistics::{ResourceLabels, initial_resource_spawner};
 use crate::systems::soul_ai::work::AutoHaulCounter;
 use crate::systems::spatial::{
@@ -18,9 +22,17 @@ use crate::world::map::{WorldMap, spawn_map};
 use bevy::prelude::*;
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 use bevy::render::view::NoIndirectDrawing;
+use std::env;
 use std::time::Instant;
 
+fn has_cli_flag(flag: &str) -> bool {
+    env::args().any(|arg| arg == flag)
+}
+
 pub struct StartupPlugin;
+
+#[derive(Resource, Default)]
+struct PerfScenarioApplied(bool);
 
 impl Plugin for StartupPlugin {
     fn build(&self, app: &mut App) {
@@ -42,6 +54,7 @@ impl Plugin for StartupPlugin {
             .init_resource::<BlueprintSpatialGrid>()
             .init_resource::<StockpileSpatialGrid>()
             .init_resource::<AutoHaulCounter>()
+            .init_resource::<PerfScenarioApplied>()
             // Startup systems
             .add_systems(Startup, (setup, initialize_gizmo_config))
             .add_systems(
@@ -52,11 +65,13 @@ impl Plugin for StartupPlugin {
                     initial_resource_spawner_timed, // 先に岩・木を配置して障害物情報を登録
                     spawn_entities,                 // その後、通行可能な場所にソウルを配置
                     spawn_familiar_wrapper,
+                    setup_perf_scenario_if_enabled,
                     setup_ui,
                     populate_resource_spatial_grid,
                 )
                     .chain(),
             );
+        app.add_systems(Update, setup_perf_scenario_runtime_if_enabled);
     }
 }
 
@@ -255,6 +270,95 @@ fn spawn_familiar_wrapper(spawn_events: MessageWriter<FamiliarSpawnEvent>) {
     info!(
         "STARTUP_TIMING: spawn_familiar_wrapper finished in {} ms",
         start.elapsed().as_millis()
+    );
+}
+
+fn setup_perf_scenario_if_enabled(
+    mut commands: Commands,
+    mut q_familiars: Query<(Entity, &mut ActiveCommand, &mut FamiliarOperation)>,
+    q_trees: Query<Entity, With<Tree>>,
+    q_rocks: Query<Entity, With<Rock>>,
+) {
+    let perf_enabled =
+        has_cli_flag("--perf-scenario") || env::var("HW_PERF_SCENARIO").is_ok_and(|v| v == "1");
+    if !perf_enabled {
+        return;
+    }
+
+    let area = TaskArea {
+        min: Vec2::new(-1600.0, -1600.0),
+        max: Vec2::new(1600.0, 1600.0),
+    };
+
+    let mut familiar_count = 0usize;
+    for (fam_entity, mut command, mut operation) in q_familiars.iter_mut() {
+        command.command = FamiliarCommand::GatherResources;
+        operation.max_controlled_soul = 20;
+        commands.entity(fam_entity).insert(area.clone());
+        familiar_count += 1;
+    }
+
+    let mut chop_designations = 0usize;
+    for tree_entity in q_trees.iter() {
+        commands.entity(tree_entity).insert((
+            Designation {
+                work_type: WorkType::Chop,
+            },
+            TaskSlots::new(1),
+            Priority(0),
+        ));
+        chop_designations += 1;
+    }
+
+    let mut mine_designations = 0usize;
+    for rock_entity in q_rocks.iter() {
+        commands.entity(rock_entity).insert((
+            Designation {
+                work_type: WorkType::Mine,
+            },
+            TaskSlots::new(1),
+            Priority(0),
+        ));
+        mine_designations += 1;
+    }
+
+    info!(
+        "PERF_SCENARIO: enabled familiars={} chop_designations={} mine_designations={}",
+        familiar_count, chop_designations, mine_designations
+    );
+}
+
+fn setup_perf_scenario_runtime_if_enabled(
+    mut commands: Commands,
+    mut applied: ResMut<PerfScenarioApplied>,
+    mut q_familiars: Query<(Entity, &mut ActiveCommand, &mut FamiliarOperation)>,
+) {
+    if applied.0 {
+        return;
+    }
+    if !has_cli_flag("--perf-scenario") && !env::var("HW_PERF_SCENARIO").is_ok_and(|v| v == "1") {
+        return;
+    }
+    if q_familiars.is_empty() {
+        return;
+    }
+
+    let area = TaskArea {
+        min: Vec2::new(-1600.0, -1600.0),
+        max: Vec2::new(1600.0, 1600.0),
+    };
+    let mut familiar_count = 0usize;
+    for (fam_entity, mut command, mut operation) in q_familiars.iter_mut() {
+        command.command = FamiliarCommand::GatherResources;
+        operation.max_controlled_soul = 20;
+        commands.entity(fam_entity).insert(area.clone());
+        familiar_count += 1;
+    }
+
+    applied.0 = true;
+    info!(
+        "PERF_SCENARIO_RUNTIME: configured familiars={} max_controlled_soul=20",
+        familiar_count
     );
 }
 

@@ -1,3 +1,4 @@
+use crate::constants::RESERVATION_SYNC_INTERVAL;
 use crate::events::ResourceReservationOp;
 use crate::events::ResourceReservationRequest;
 use crate::relationships::TaskWorkers;
@@ -6,6 +7,21 @@ use crate::systems::logistics::{BelongsTo, ResourceItem, ResourceType};
 use crate::systems::soul_ai::task_execution::AssignedTask;
 use bevy::prelude::*;
 use std::collections::HashMap;
+
+#[derive(Resource)]
+pub struct ReservationSyncTimer {
+    pub timer: Timer,
+    pub first_run_done: bool,
+}
+
+impl Default for ReservationSyncTimer {
+    fn default() -> Self {
+        Self {
+            timer: Timer::from_seconds(RESERVATION_SYNC_INTERVAL, TimerMode::Repeating),
+            first_run_done: false,
+        }
+    }
+}
 
 /// システム全体で共有されるリソース予約キャッシュ
 ///
@@ -219,6 +235,8 @@ pub fn apply_reservation_requests_system(
 ///
 /// これにより、自動発行システムが複数フレームにわたって過剰にタスクを発行することを防ぐ。
 pub fn sync_reservations_system(
+    time: Res<Time>,
+    mut sync_timer: ResMut<ReservationSyncTimer>,
     q_souls: Query<&AssignedTask>,
     // まだ割り当てられていない（TaskWorkers がない）タスク候補を汎用的にスキャン
     q_pending_tasks: Query<
@@ -233,6 +251,12 @@ pub fn sync_reservations_system(
     >,
     mut cache: ResMut<SharedResourceCache>,
 ) {
+    let timer_finished = sync_timer.timer.tick(time.delta()).just_finished();
+    if sync_timer.first_run_done && !timer_finished {
+        return;
+    }
+    sync_timer.first_run_done = true;
+
     let mut dest_res = HashMap::new();
     let mut mixer_dest_res = HashMap::new();
     let mut source_res = HashMap::new();
