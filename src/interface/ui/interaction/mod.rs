@@ -12,7 +12,8 @@ mod tooltip;
 pub(crate) use common::despawn_context_menus;
 
 pub use status_display::{
-    task_summary_ui_system, update_fps_display_system, update_mode_text_system,
+    task_summary_ui_system, update_area_edit_preview_ui_system, update_fps_display_system,
+    update_mode_text_system,
 };
 pub use tooltip::hover_tooltip_system;
 
@@ -20,6 +21,7 @@ use crate::entities::familiar::{Familiar, FamiliarOperation};
 use crate::game_state::{BuildContext, PlayMode, TaskContext, ZoneContext};
 use crate::interface::ui::components::*;
 use crate::interface::ui::theme::UiTheme;
+use crate::systems::command::TaskArea;
 use bevy::prelude::*;
 use bevy::ui::RelativeCursorPosition;
 
@@ -82,6 +84,7 @@ pub fn ui_interaction_system(
     mut selected_entity: ResMut<crate::interface::selection::SelectedEntity>,
     mut info_panel_pin: ResMut<crate::interface::ui::InfoPanelPinState>,
     mut q_familiar_ops: Query<&mut FamiliarOperation>,
+    q_familiars_for_area: Query<(Entity, Option<&TaskArea>), With<Familiar>>,
     mut q_dialog: Query<&mut Node, With<OperationDialog>>,
     q_context_menu: Query<Entity, With<ContextMenu>>,
     mut commands: Commands,
@@ -105,6 +108,7 @@ pub fn ui_interaction_system(
             &mut selected_entity,
             &mut info_panel_pin,
             &mut q_familiar_ops,
+            &q_familiars_for_area,
             &mut q_dialog,
             &mut ev_max_soul_changed,
         );

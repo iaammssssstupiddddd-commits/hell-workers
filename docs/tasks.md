@@ -11,7 +11,7 @@
 
 | フェーズ | システムセット (`SoulAiSystemSet`) | 役割 |
 | :--- | :--- | :--- |
-| **Perceive** | `Perceive` | 環境情報の収集と **リソース予約の再構築** (`sync_reservations_system`)。毎フレーム、`AssignedTask`（実行中タスク）と `Designation`（割り当て待ちタスク）の両方から `SharedResourceCache` をリセット・再計算します。 |
+| **Perceive** | `Perceive` | 環境情報の収集と **リソース予約の再構築** (`sync_reservations_system`)。`AssignedTask`（実行中タスク）と `Designation`（割り当て待ちタスク）の両方から `SharedResourceCache` を **0.2秒間隔（初回は即時）** で再構築します。 |
 | **Update** | `Update` | 時間経過による内部状態の変化（バイタル更新、タイマー等）。 |
 | **Decide** | `Decide` | 意思決定とタスク割り当て要求の生成（`TaskAssignmentRequest`）。`SharedResourceCache` を参照して候補を選定します。 |
 | **Execute** | `Execute` | 割り当て要求の適用 → 実際の行動 (`task_execution`) → 予約更新の反映 (`apply_reservation_requests_system`)。 |
@@ -59,10 +59,11 @@ Bevy 0.18 の **ECS Relationships** 機能を使用し、エンティティ間�
 - 使い魔 AI が自分のキュー、またはグローバルキューから最も近い有効なタスクを配下の魂に割り当てる。
 - **排他制御 (SharedResourceCache)**:
     - 割り当て時は `SharedResourceCache` を参照し、過剰割り当てを防ぎます。
-    - **予約の再構築**: `sync_reservations_system` は以下の2つのソースから予約を毎フレーム再構築します:
+    - **予約の再構築**: `sync_reservations_system` は以下の2つのソースから予約を **0.2秒間隔（初回即時）** で再構築します:
         1. `AssignedTask` - 既にSoulに割り当てられているタスク
         2. `Designation` (Without<TaskWorkers>) - まだ割り当て待ちのタスク候補
     - これにより、自動発行システムが複数フレームにわたって過剰にタスクを発行することを防ぎます。
+    - なお、フレーム内の即時更新は `ResourceReservationRequest` -> `apply_reservation_requests_system` で反映されます。
     - 決定したタスクは `TaskAssignmentRequest` と同時に予約更新要求がキューされ、Execute で反映されます。
 - **優先度 (Priority)**:
     - **High (10)**: 建築作業 (`WorkType::Build`)、建築資材の運搬（設計図への `Haul`）。これらは距離に関わらず最優先で割り当てられる。
@@ -116,3 +117,39 @@ Bevy 0.18 の **ECS Relationships** 機能を使用し、エンティティ間�
 ## 7. 疲労とストレス (Vitals)
 
 ワーカーの疲労、ストレス、やる気、およびそれらに基づく待機行動（休息、ブレイクダウン等）の詳細については、[soul_ai.md](soul_ai.md) を参照してください。
+
+## 8. TaskArea編集UI（高頻度運用向け）
+
+`Orders -> Area` から `TaskMode::AreaSelection` に入ると、使い魔の担当エリア（`TaskArea`）を連続編集できます。
+
+### 入口と対象選択
+- `Orders -> Area` 選択時、現在選択が Familiar でない場合は以下の優先順で対象 Familiar を自動選択
+1. `TaskArea` をまだ持っていない Familiar
+2. 全員が `TaskArea` を持っている場合は任意の Familiar（実装上は Entity index 最小）
+
+### 編集フロー
+- 新規指定: 左ドラッグで矩形を指定
+- 直接編集: 既存 `TaskArea` の内部ドラッグで移動、辺/角ドラッグでリサイズ
+- グリッド整列: 既存 `WorldMap::snap_to_grid_edge` の仕様に準拠
+
+### モード遷移
+- デフォルト: 適用後も `TaskMode::AreaSelection(None)` を維持（連続編集）
+- `Shift + 左ボタンリリース`: 適用して通常モードへ復帰
+- `Esc`: `PlayMode::Normal` へ復帰
+
+### ショートカット（Areaモード中）
+- `Tab` / `Shift + Tab`: Familiar のみ循環
+- `Ctrl + Z`: Undo
+- `Ctrl + Y` または `Ctrl + Shift + Z`: Redo
+- `Ctrl + C` / `Ctrl + V`: `TaskArea` のコピー / ペースト
+- `Ctrl + 1..3`: 現在エリアサイズをプリセット保存
+- `Alt + 1..3`: プリセットサイズを現在 Familiar に適用（中心維持）
+
+### 補助表示
+- モードテキストとカーソル近傍プレビューに以下を表示
+1. エリアサイズ（タイル数）
+2. 現在のドラッグ状態（Move/Resize）
+3. 他 Familiar の `TaskArea` との重複数・最大重複率
+4. エリア内未割当タスク数（`Designation` かつ `Without<ManagedBy>`）
+5. クリップボード状態（`Clip:Ready/Empty`）
+- 高重複（最大重複率 50%以上）の場合、`WARN:HighOverlap` を表示

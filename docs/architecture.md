@@ -46,7 +46,7 @@ graph TD
 
 ## 主要なデータフロー: タスク割り当て
 1.  **Designation**: `Player` または `Auto-Haul` システムが `WorkType` を持つ `Designation` を実体に付与。
-2.  **Notification**: `OnAdd<Designation>` を検知し、空間グリッド (`DesignationSpatialGrid`) に登録。
+2.  **Notification**: `Added<Designation>` / `RemovedComponents<Designation>` を検知し、空間グリッド (`DesignationSpatialGrid`) を増分更新。
 3.  **Assignment**: `Familiar AI` が定期的に周辺のタスクをスキャンし、配下の `魂` に `WorkingOn` 関係を結ぶ。
 4.  **Execution**: `Soul AI` が `WorkingOn` を通じて目的地を特定し、移動・作業を開始。
 5.  **Completion**: 資源が尽きると実体が消滅。`Observer` が検知し、`魂` のタスクを解除。
@@ -64,7 +64,7 @@ Perceive → Update → Decide → Execute
   (知覚)    (更新)   (決定)    (実行)
 ```
 
-1.  **Perceive**: 環境情報の読み取り、変化の検出、キャッシュ再構築 (`sync_reservations_system`, 状態変化検出)
+1.  **Perceive**: 環境情報の読み取り、変化の検出、キャッシュ再構築（`sync_reservations_system`: 0.2秒間隔, 初回即時）
 2.  **Update**: 時間経過による内部状態の変化（バイタル更新、タイマー、メンテナンス）
 3.  **Decide**: 次の行動の選択、要求の生成 (`TaskAssignmentRequest`, `IdleBehaviorRequest`)
 4.  **Execute**: 決定された行動の実行、コマンド発行 (`apply_task_assignment_requests_system`, `task_execution`)

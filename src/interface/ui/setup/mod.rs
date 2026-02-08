@@ -49,6 +49,43 @@ fn spawn_fps_display(
     });
 }
 
+fn spawn_area_edit_preview(
+    commands: &mut Commands,
+    game_assets: &Res<crate::assets::GameAssets>,
+    theme: &UiTheme,
+    parent: Entity,
+    ui_nodes: &mut UiNodeRegistry,
+) {
+    let preview = commands
+        .spawn((
+            Node {
+                display: Display::None,
+                position_type: PositionType::Absolute,
+                left: Val::Px(12.0),
+                top: Val::Px(12.0),
+                padding: UiRect::axes(Val::Px(8.0), Val::Px(5.0)),
+                border: UiRect::all(Val::Px(1.0)),
+                border_radius: BorderRadius::all(Val::Px(3.0)),
+                ..default()
+            },
+            BackgroundColor(theme.colors.tooltip_bg),
+            BorderColor::all(theme.colors.tooltip_border),
+            Text::new(""),
+            TextFont {
+                font: game_assets.font_ui.clone(),
+                font_size: theme.typography.font_size_sm,
+                ..default()
+            },
+            TextColor(theme.colors.text_primary_semantic),
+            ZIndex(260),
+            UiSlot::AreaEditPreview,
+            Name::new("Area Edit Preview"),
+        ))
+        .id();
+    commands.entity(parent).add_child(preview);
+    ui_nodes.set_slot(UiSlot::AreaEditPreview, preview);
+}
+
 fn spawn_ui_root(commands: &mut Commands) -> (Entity, Entity, Entity, Entity, Entity, Entity) {
     let ui_root = commands
         .spawn((
@@ -194,6 +231,7 @@ fn setup_ui_internal(
         top_right_slot,
         ui_nodes,
     );
+    spawn_area_edit_preview(&mut commands, &game_assets, &theme, overlay_slot, ui_nodes);
     spawn_fps_display(&mut commands, &theme, top_right_slot, ui_nodes);
     dialogs::spawn_dialogs(&mut commands, &game_assets, &theme, overlay_slot, ui_nodes);
 }

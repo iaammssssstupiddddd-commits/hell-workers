@@ -82,9 +82,9 @@
 
 | フェーズ | 責任 | 主なシステム |
 |:--|:--|:--|
-| **Perceive** | 状態変化の検出、予約同期 | `detect_state_changes_system`, `sync_reservations_system` |
+| **Perceive** | 状態変化の検出、予約同期 | `detect_state_changes_system`, `sync_reservations_system`（0.2秒間隔, 初回即時） |
 | **Update** | クールダウン減少 | `cleanup_encouragement_cooldowns_system` |
-| **Decide** | 状態遷移、タスク委譲 | `familiar_ai_state_system`, `familiar_task_delegation_system` |
+| **Decide** | 状態遷移、タスク委譲 | `familiar_ai_state_system`, `familiar_task_delegation_system`（0.5秒間隔, 初回即時） |
 | **Execute** | 状態変更の適用、分隊管理 | `handle_state_changed_system`, `apply_squad_management_requests_system` |
 
 ### 5.2. 主要モジュール
@@ -153,7 +153,7 @@
 
 ### 7.1. 共有リソースキャッシュ (SharedResourceCache)
 タスク間のリソース競合を O(1) で管理します。従来の `HaulReservationCache` を統合・拡張したものです。
-- **仕組み**: Senseフェーズで毎フレーム再構築され、Think/Actフェーズの更新は `ResourceReservationRequest` を通じて反映されます。
+- **仕組み**: Perceiveフェーズで **0.2秒間隔（初回即時）** に再構築され、各フレームの更新は `ResourceReservationRequest` を通じて反映されます。
 - **機能**: 
   - **Destination Reservation**: 搬送先（ストックパイル、タンク、ミキサー）への予約。
   - **Source Reservation**: アイテム（拾う対象）の重複予約防止。
@@ -187,6 +187,10 @@
 - **仕組み**: Bevy の `Changed<T>` フィルタにより、変更されたエンティティのみを処理
 - **効果**: 毎フレーム全使い魔の状態をチェックするコストを排除し、変更時のみ処理を実行
 - **イベント**: 状態遷移時に `FamiliarAiStateChangedEvent` を発火し、他のシステムが反応可能
+
+### 7.7. タスク委譲のタイマーゲート
+- **仕組み**: `familiar_task_delegation_system` は **0.5秒間隔（初回即時）** で実行されます。
+- **効果**: タスク候補ごとの到達可能性チェック（A*）の呼び出し頻度を抑制し、ピーク時のCPU負荷を削減します。
 
 ## 8. ビジュアルとアニメーション (Visuals & Animation)
 
