@@ -2,10 +2,13 @@ use crate::assets::GameAssets;
 use crate::constants::*;
 use crate::entities::damned_soul::{DamnedSoul, Destination};
 use crate::entities::familiar::Familiar;
-use crate::game_state::{BuildContext, PlayMode, TaskContext, ZoneContext};
+use crate::game_state::{
+    BuildContext, CompanionParentKind, CompanionPlacement, CompanionPlacementKind,
+    CompanionPlacementState, PlayMode, TaskContext, ZoneContext,
+};
 use crate::interface::camera::MainCamera;
 use crate::interface::ui::{MenuState, UiInputState};
-use crate::systems::jobs::{Blueprint, BuildingType};
+use crate::systems::jobs::{Blueprint, BuildingType, SandPile};
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
 
@@ -140,6 +143,9 @@ pub fn blueprint_placement(
     ui_input_state: Res<UiInputState>,
     mut world_map: ResMut<WorldMap>,
     build_context: Res<BuildContext>,
+    mut companion_state: ResMut<CompanionPlacementState>,
+    q_blueprints: Query<(Entity, &Blueprint, &Transform)>,
+    q_sand_piles: Query<&Transform, With<SandPile>>,
     game_assets: Res<GameAssets>,
     mut commands: Commands,
 ) {
@@ -147,87 +153,100 @@ pub fn blueprint_placement(
         return;
     }
 
-    if let Some(building_type) = build_context.0 {
-        if buttons.just_pressed(MouseButton::Left) {
-            let Ok((camera, camera_transform)) = q_camera.single() else {
-                return;
-            };
-            let Ok(window) = q_window.single() else {
-                return;
-            };
+    if !buttons.just_pressed(MouseButton::Left) {
+        return;
+    }
 
-            if let Some(cursor_pos) = window.cursor_position() {
-                if let Ok(world_pos) = camera.viewport_to_world_2d(camera_transform, cursor_pos) {
-                    let grid = WorldMap::world_to_grid(world_pos);
+    let Ok((camera, camera_transform)) = q_camera.single() else {
+        return;
+    };
+    let Ok(window) = q_window.single() else {
+        return;
+    };
+    let Some(cursor_pos) = window.cursor_position() else {
+        return;
+    };
+    let Ok(world_pos) = camera.viewport_to_world_2d(camera_transform, cursor_pos) else {
+        return;
+    };
+    let grid = WorldMap::world_to_grid(world_pos);
 
-                    // 建造物のサイズと占有グリッドの判定
-                    let (occupied_grids, spawn_pos, custom_size) = match building_type {
-                        BuildingType::Tank | BuildingType::MudMixer => {
-                            let grids = vec![
-                                grid,
-                                (grid.0 + 1, grid.1),
-                                (grid.0, grid.1 + 1),
-                                (grid.0 + 1, grid.1 + 1),
-                            ];
-                            // 2x2 の中心座標
-                            let base_pos = WorldMap::grid_to_world(grid.0, grid.1);
-                            let center_pos = base_pos + Vec2::new(TILE_SIZE * 0.5, TILE_SIZE * 0.5);
-                            (grids, center_pos, Some(Vec2::splat(TILE_SIZE * 2.0)))
-                        }
-                        _ => {
-                            let grids = vec![grid];
-                            let center_pos = WorldMap::grid_to_world(grid.0, grid.1);
-                            (grids, center_pos, Some(Vec2::splat(TILE_SIZE)))
-                        }
-                    };
+    // companion 配置中は通常建築を抑止
+    if let Some(active) = companion_state.0 {
+        let dist = world_pos.distance(active.center);
+        if dist > active.radius {
+            info!(
+                "COMPANION: Placement out of range ({:.1} > {:.1})",
+                dist, active.radius
+            );
+            return;
+        }
 
-                    // 配置可能かチェック（全占有予定マスが空きかつ通行可能か）
-                    let can_place = occupied_grids.iter().all(|&g| {
-                        !world_map.buildings.contains_key(&g)
-                            && !world_map.stockpiles.contains_key(&g)
-                            && world_map.is_walkable(g.0, g.1)
-                    });
-
-                    if can_place {
-                        let texture = match building_type {
-                            BuildingType::Wall => game_assets.wall_isolated.clone(),
-                            BuildingType::Floor => game_assets.dirt.clone(),
-                            BuildingType::Tank => game_assets.tank_empty.clone(),
-                            BuildingType::MudMixer => game_assets.mud_mixer.clone(),
-                        };
-
-                        let entity = commands
-                            .spawn((
-                                Blueprint::new(building_type, occupied_grids.clone()),
-                                crate::systems::jobs::Designation {
-                                    work_type: crate::systems::jobs::WorkType::Build,
-                                },
-                                crate::systems::jobs::TaskSlots::new(1),
-                                Sprite {
-                                    image: texture,
-                                    color: Color::srgba(1.0, 1.0, 1.0, 0.5),
-                                    custom_size,
-                                    ..default()
-                                },
-                                Transform::from_xyz(spawn_pos.x, spawn_pos.y, Z_AURA),
-                                Name::new(format!("Blueprint ({:?})", building_type)),
-                            ))
-                            .id();
-
-                        // 全グリッドを登録
-                        for &g in &occupied_grids {
-                            world_map.buildings.insert(g, entity);
-                            // 建築中は障害物としても登録しておく
-                            world_map.add_obstacle(g.0, g.1);
-                        }
-                        info!(
-                            "BLUEPRINT: Placed {:?} at {:?}",
-                            building_type, occupied_grids
-                        );
-                    }
+        match active.kind {
+            CompanionPlacementKind::BucketStorage => {
+                if try_place_bucket_storage_companion(
+                    &mut commands,
+                    &mut world_map,
+                    active.parent_blueprint,
+                    grid,
+                ) {
+                    companion_state.0 = None;
+                    info!("COMPANION: Bucket storage placed for tank blueprint");
+                }
+            }
+            CompanionPlacementKind::SandPile => {
+                if place_building_blueprint(
+                    &mut commands,
+                    &mut world_map,
+                    &game_assets,
+                    BuildingType::SandPile,
+                    grid,
+                )
+                .is_some()
+                {
+                    companion_state.0 = None;
+                    info!("COMPANION: SandPile blueprint placed for MudMixer");
                 }
             }
         }
+        return;
+    }
+
+    let Some(building_type) = build_context.0 else {
+        return;
+    };
+    let Some((entity, occupied_grids, spawn_pos)) = place_building_blueprint(
+        &mut commands,
+        &mut world_map,
+        &game_assets,
+        building_type,
+        grid,
+    ) else {
+        return;
+    };
+
+    if building_type == BuildingType::Tank {
+        companion_state.0 = Some(CompanionPlacement {
+            parent_blueprint: entity,
+            parent_kind: CompanionParentKind::Tank,
+            kind: CompanionPlacementKind::BucketStorage,
+            center: spawn_pos,
+            radius: TILE_SIZE * 5.0,
+            required: true,
+        });
+        info!("COMPANION: Tank placed, waiting for bucket storage placement");
+    } else if building_type == BuildingType::MudMixer
+        && !has_nearby_sandpile(&occupied_grids, &q_sand_piles, &q_blueprints, Some(entity))
+    {
+        companion_state.0 = Some(CompanionPlacement {
+            parent_blueprint: entity,
+            parent_kind: CompanionParentKind::MudMixer,
+            kind: CompanionPlacementKind::SandPile,
+            center: spawn_pos,
+            radius: TILE_SIZE * 5.0,
+            required: true,
+        });
+        info!("COMPANION: MudMixer needs nearby SandPile, placement requested");
     }
 }
 
@@ -375,6 +394,15 @@ pub fn cleanup_selection_references_system(
     }
 }
 
+pub fn clear_companion_state_outside_build_mode(
+    play_mode: Res<State<PlayMode>>,
+    mut companion_state: ResMut<CompanionPlacementState>,
+) {
+    if *play_mode.get() != PlayMode::BuildingPlace && companion_state.0.is_some() {
+        companion_state.0 = None;
+    }
+}
+
 /// Escキーでビルド/ゾーン/タスクモードを解除し、PlayMode::Normalに戻す
 /// 共通仕様: Normalに戻る際はMenuStateもHiddenに戻す
 pub fn build_mode_cancel_system(
@@ -384,11 +412,42 @@ pub fn build_mode_cancel_system(
     mut build_context: ResMut<BuildContext>,
     mut zone_context: ResMut<ZoneContext>,
     mut task_context: ResMut<TaskContext>,
+    mut companion_state: ResMut<CompanionPlacementState>,
+    q_blueprints: Query<&Blueprint>,
+    q_pending_bucket_storage: Query<
+        (
+            Entity,
+            &crate::systems::logistics::PendingBelongsToBlueprint,
+        ),
+        With<crate::systems::logistics::BucketStorage>,
+    >,
+    mut world_map: ResMut<WorldMap>,
     mut menu_state: ResMut<MenuState>,
+    mut commands: Commands,
 ) {
     if keyboard.just_pressed(KeyCode::Escape) {
         let current_mode = play_mode.get();
         if *current_mode == PlayMode::BuildingPlace {
+            if let Some(active) = companion_state.0 {
+                if let Ok(bp) = q_blueprints.get(active.parent_blueprint) {
+                    for &(gx, gy) in &bp.occupied_grids {
+                        world_map.buildings.remove(&(gx, gy));
+                        world_map.remove_obstacle(gx, gy);
+                    }
+                }
+                commands.entity(active.parent_blueprint).despawn();
+
+                let pending_entities: Vec<Entity> = q_pending_bucket_storage
+                    .iter()
+                    .filter(|(_, pending)| pending.0 == active.parent_blueprint)
+                    .map(|(entity, _)| entity)
+                    .collect();
+                for storage_entity in pending_entities {
+                    world_map.stockpiles.retain(|_, e| *e != storage_entity);
+                    commands.entity(storage_entity).despawn();
+                }
+            }
+            companion_state.0 = None;
             build_context.0 = None;
             next_play_mode.set(PlayMode::Normal);
             *menu_state = MenuState::Hidden;
@@ -405,4 +464,146 @@ pub fn build_mode_cancel_system(
             info!("STATE: Cancelled TaskDesignation -> Normal, Menu hidden");
         }
     }
+}
+
+fn place_building_blueprint(
+    commands: &mut Commands,
+    world_map: &mut WorldMap,
+    game_assets: &GameAssets,
+    building_type: BuildingType,
+    grid: (i32, i32),
+) -> Option<(Entity, Vec<(i32, i32)>, Vec2)> {
+    let (occupied_grids, spawn_pos, custom_size) = match building_type {
+        BuildingType::Tank | BuildingType::MudMixer => {
+            let grids = vec![
+                grid,
+                (grid.0 + 1, grid.1),
+                (grid.0, grid.1 + 1),
+                (grid.0 + 1, grid.1 + 1),
+            ];
+            let base_pos = WorldMap::grid_to_world(grid.0, grid.1);
+            let center_pos = base_pos + Vec2::new(TILE_SIZE * 0.5, TILE_SIZE * 0.5);
+            (grids, center_pos, Some(Vec2::splat(TILE_SIZE * 2.0)))
+        }
+        _ => {
+            let grids = vec![grid];
+            let center_pos = WorldMap::grid_to_world(grid.0, grid.1);
+            (grids, center_pos, Some(Vec2::splat(TILE_SIZE)))
+        }
+    };
+
+    let can_place = occupied_grids.iter().all(|&g| {
+        !world_map.buildings.contains_key(&g)
+            && !world_map.stockpiles.contains_key(&g)
+            && world_map.is_walkable(g.0, g.1)
+    });
+    if !can_place {
+        return None;
+    }
+
+    let texture = match building_type {
+        BuildingType::Wall => game_assets.wall_isolated.clone(),
+        BuildingType::Floor => game_assets.dirt.clone(),
+        BuildingType::Tank => game_assets.tank_empty.clone(),
+        BuildingType::MudMixer => game_assets.mud_mixer.clone(),
+        BuildingType::SandPile => game_assets.sand_pile.clone(),
+    };
+
+    let entity = commands
+        .spawn((
+            Blueprint::new(building_type, occupied_grids.clone()),
+            crate::systems::jobs::Designation {
+                work_type: crate::systems::jobs::WorkType::Build,
+            },
+            crate::systems::jobs::TaskSlots::new(1),
+            Sprite {
+                image: texture,
+                color: Color::srgba(1.0, 1.0, 1.0, 0.5),
+                custom_size,
+                ..default()
+            },
+            Transform::from_xyz(spawn_pos.x, spawn_pos.y, Z_AURA),
+            Name::new(format!("Blueprint ({:?})", building_type)),
+        ))
+        .id();
+
+    for &g in &occupied_grids {
+        world_map.buildings.insert(g, entity);
+        world_map.add_obstacle(g.0, g.1);
+    }
+    info!(
+        "BLUEPRINT: Placed {:?} at {:?}",
+        building_type, occupied_grids
+    );
+
+    Some((entity, occupied_grids, spawn_pos))
+}
+
+fn try_place_bucket_storage_companion(
+    commands: &mut Commands,
+    world_map: &mut WorldMap,
+    parent_blueprint: Entity,
+    anchor_grid: (i32, i32),
+) -> bool {
+    let storage_grids = [anchor_grid, (anchor_grid.0 + 1, anchor_grid.1)];
+    let can_place = storage_grids.iter().all(|&(gx, gy)| {
+        !world_map.buildings.contains_key(&(gx, gy))
+            && !world_map.stockpiles.contains_key(&(gx, gy))
+            && world_map.is_walkable(gx, gy)
+    });
+    if !can_place {
+        return false;
+    }
+
+    for (gx, gy) in storage_grids {
+        let pos = WorldMap::grid_to_world(gx, gy);
+        let storage_entity = commands
+            .spawn((
+                crate::systems::logistics::Stockpile {
+                    capacity: 10,
+                    resource_type: None,
+                },
+                crate::systems::logistics::BucketStorage,
+                crate::systems::logistics::PendingBelongsToBlueprint(parent_blueprint),
+                Sprite {
+                    color: Color::srgba(1.0, 1.0, 0.0, 0.2),
+                    custom_size: Some(Vec2::splat(TILE_SIZE)),
+                    ..default()
+                },
+                Transform::from_xyz(pos.x, pos.y, Z_MAP + 0.01),
+                Name::new("Pending Tank Bucket Storage"),
+            ))
+            .id();
+        world_map.stockpiles.insert((gx, gy), storage_entity);
+    }
+    true
+}
+
+fn has_nearby_sandpile(
+    mixer_occupied_grids: &[(i32, i32)],
+    q_sand_piles: &Query<&Transform, With<SandPile>>,
+    q_blueprints: &Query<(Entity, &Blueprint, &Transform)>,
+    ignore_blueprint: Option<Entity>,
+) -> bool {
+    if q_sand_piles.iter().any(|transform| {
+        let sand_grid = WorldMap::world_to_grid(transform.translation.truncate());
+        mixer_occupied_grids
+            .iter()
+            .any(|&(mx, my)| (sand_grid.0 - mx).abs() <= 3 && (sand_grid.1 - my).abs() <= 3)
+    }) {
+        return true;
+    }
+
+    q_blueprints.iter().any(|(entity, bp, transform)| {
+        if Some(entity) == ignore_blueprint {
+            return false;
+        }
+        if bp.kind != BuildingType::SandPile {
+            return false;
+        }
+        let sand_grid = WorldMap::world_to_grid(transform.translation.truncate());
+        mixer_occupied_grids
+            .iter()
+            .any(|&(mx, my)| (sand_grid.0 - mx).abs() <= 3 && (sand_grid.1 - my).abs() <= 3)
+    })
 }

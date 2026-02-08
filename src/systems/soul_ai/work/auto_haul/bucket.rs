@@ -8,7 +8,9 @@ use crate::constants::*;
 use crate::relationships::TaskWorkers;
 use crate::systems::command::TaskArea;
 use crate::systems::jobs::{Designation, IssuedBy, TaskSlots, WorkType};
-use crate::systems::logistics::{ReservedForTask, ResourceItem, ResourceType, Stockpile};
+use crate::systems::logistics::{
+    BucketStorage, ReservedForTask, ResourceItem, ResourceType, Stockpile,
+};
 use crate::systems::soul_ai::work::auto_haul::ItemReservations;
 use crate::systems::spatial::{SpatialGridOps, StockpileSpatialGrid};
 
@@ -38,6 +40,7 @@ pub fn bucket_auto_haul_system(
         Entity,
         &Transform,
         &Stockpile,
+        &BucketStorage,
         &crate::systems::logistics::BelongsTo,
         Option<&crate::relationships::StoredItems>,
     )>,
@@ -103,7 +106,7 @@ pub fn bucket_auto_haul_system(
             let target_stockpile = nearby_stockpiles
                 .iter()
                 .filter_map(|&entity| q_stockpiles.get(entity).ok())
-                .filter(|(_, _, stock, stock_belongs, stored_opt)| {
+                .filter(|(_, _, stock, _, stock_belongs, stored_opt)| {
                     // 同じタンクに紐付いているか
                     if stock_belongs.0 != tank_entity {
                         return false;
@@ -125,12 +128,12 @@ pub fn bucket_auto_haul_system(
                     let current = stored_opt.map(|s| s.len()).unwrap_or(0);
                     current < stock.capacity
                 })
-                .min_by(|(_, t1, _, _, _), (_, t2, _, _, _)| {
+                .min_by(|(_, t1, _, _, _, _), (_, t2, _, _, _, _)| {
                     let d1 = t1.translation.truncate().distance_squared(bucket_pos);
                     let d2 = t2.translation.truncate().distance_squared(bucket_pos);
                     d1.partial_cmp(&d2).unwrap_or(std::cmp::Ordering::Equal)
                 })
-                .map(|(entity, _, _, _, _)| entity);
+                .map(|(entity, _, _, _, _, _)| entity);
 
             if let Some(_stockpile_entity) = target_stockpile {
                 already_assigned.insert(bucket_entity);

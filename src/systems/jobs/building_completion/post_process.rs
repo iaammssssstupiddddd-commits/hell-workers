@@ -1,25 +1,38 @@
 use super::super::{Blueprint, BuildingType, MudMixerStorage, SandPile, TaskSlots};
 use crate::assets::GameAssets;
-use crate::constants::{
-    MUD_MIXER_CAPACITY, TILE_SIZE, Z_FLOATING_TEXT, Z_ITEM_OBSTACLE, Z_ITEM_PICKUP, Z_MAP,
-};
+use crate::constants::{MUD_MIXER_CAPACITY, TILE_SIZE, Z_FLOATING_TEXT, Z_ITEM_PICKUP, Z_MAP};
+use crate::systems::logistics::BucketStorage;
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
 
 pub(super) fn apply_building_specific_post_process(
     commands: &mut Commands,
+    blueprint_entity: Entity,
     building_entity: Entity,
     bp: &Blueprint,
     transform: &Transform,
     game_assets: &GameAssets,
     world_map: &mut WorldMap,
+    promoted_bucket_storage: &[Entity],
 ) {
     if bp.kind == BuildingType::Tank {
-        setup_tank(commands, building_entity, transform, game_assets, world_map);
+        setup_tank(
+            commands,
+            blueprint_entity,
+            building_entity,
+            transform,
+            game_assets,
+            world_map,
+            promoted_bucket_storage,
+        );
     }
 
     if bp.kind == BuildingType::MudMixer {
-        setup_mud_mixer(commands, building_entity, transform, game_assets, world_map);
+        setup_mud_mixer(commands, building_entity);
+    }
+
+    if bp.kind == BuildingType::SandPile {
+        setup_sand_pile(commands, building_entity);
     }
 
     spawn_completion_text(commands, transform, game_assets);
@@ -27,10 +40,12 @@ pub(super) fn apply_building_specific_post_process(
 
 fn setup_tank(
     commands: &mut Commands,
+    blueprint_entity: Entity,
     building_entity: Entity,
     transform: &Transform,
     game_assets: &GameAssets,
     world_map: &mut WorldMap,
+    promoted_bucket_storage: &[Entity],
 ) {
     commands
         .entity(building_entity)
@@ -39,38 +54,49 @@ fn setup_tank(
             resource_type: Some(crate::systems::logistics::ResourceType::Water),
         });
 
-    let (bx, by) = WorldMap::world_to_grid(transform.translation.truncate());
-    let storage_grids = [(bx, by - 2), (bx + 1, by - 2)];
-    let mut storage_entities = Vec::new();
-
-    for (gx, gy) in storage_grids {
-        let pos = WorldMap::grid_to_world(gx, gy);
-        let storage_entity = commands
-            .spawn((
-                crate::systems::logistics::Stockpile {
-                    capacity: 10,
-                    resource_type: None,
-                },
-                crate::systems::logistics::BelongsTo(building_entity),
-                Sprite {
-                    color: Color::srgba(1.0, 1.0, 0.0, 0.2),
-                    custom_size: Some(Vec2::splat(TILE_SIZE)),
-                    ..default()
-                },
-                Transform::from_xyz(pos.x, pos.y, Z_MAP + 0.01),
-                Name::new("Tank Bucket Storage"),
-            ))
-            .id();
-        world_map.stockpiles.insert((gx, gy), storage_entity);
-        storage_entities.push(storage_entity);
+    let mut storage_entities = promoted_bucket_storage.to_vec();
+    if storage_entities.is_empty() {
+        warn!(
+            "TANK_SETUP: no companion bucket storage linked for {:?}; fallback auto-spawn",
+            building_entity
+        );
+        let (bx, by) = WorldMap::world_to_grid(transform.translation.truncate());
+        let fallback_grids = [(bx, by - 2), (bx + 1, by - 2)];
+        for (gx, gy) in fallback_grids {
+            let pos = WorldMap::grid_to_world(gx, gy);
+            let storage_entity = commands
+                .spawn((
+                    crate::systems::logistics::Stockpile {
+                        capacity: 10,
+                        resource_type: None,
+                    },
+                    BucketStorage,
+                    crate::systems::logistics::BelongsTo(building_entity),
+                    Sprite {
+                        color: Color::srgba(1.0, 1.0, 0.0, 0.2),
+                        custom_size: Some(Vec2::splat(TILE_SIZE)),
+                        ..default()
+                    },
+                    Transform::from_xyz(pos.x, pos.y, Z_MAP + 0.01),
+                    Name::new("Tank Bucket Storage (Fallback)"),
+                ))
+                .id();
+            world_map.stockpiles.insert((gx, gy), storage_entity);
+            storage_entities.push(storage_entity);
+        }
     }
 
-    for i in 0..5 {
-        let storage_idx = if i < 3 { 0 } else { 1 };
-        let storage_entity = storage_entities[storage_idx];
-        let grid = storage_grids[storage_idx];
-        let spawn_pos = WorldMap::grid_to_world(grid.0, grid.1);
+    storage_entities.sort_by_key(|entity| {
+        find_stockpile_grid(world_map, *entity)
+            .unwrap_or((i32::MAX, i32::MAX))
+    });
 
+    let bucket_count = 5usize;
+    for i in 0..bucket_count {
+        let storage_entity = storage_entities[i % storage_entities.len()];
+        let spawn_pos = find_stockpile_grid(world_map, storage_entity)
+            .map(|(gx, gy)| WorldMap::grid_to_world(gx, gy))
+            .unwrap_or_else(|| transform.translation.truncate());
         commands.spawn((
             crate::systems::logistics::ResourceItem(
                 crate::systems::logistics::ResourceType::BucketEmpty,
@@ -85,18 +111,15 @@ fn setup_tank(
                 ..default()
             },
             Transform::from_xyz(spawn_pos.x, spawn_pos.y, Z_ITEM_PICKUP),
-            Name::new("Empty Bucket (Tank Dedicated)"),
+            Name::new(format!(
+                "Empty Bucket (Tank Dedicated, from {:?})",
+                blueprint_entity
+            )),
         ));
     }
 }
 
-fn setup_mud_mixer(
-    commands: &mut Commands,
-    building_entity: Entity,
-    transform: &Transform,
-    game_assets: &GameAssets,
-    world_map: &mut WorldMap,
-) {
+fn setup_mud_mixer(commands: &mut Commands, building_entity: Entity) {
     commands.entity(building_entity).insert((
         MudMixerStorage::default(),
         crate::systems::logistics::Stockpile {
@@ -104,26 +127,17 @@ fn setup_mud_mixer(
             resource_type: Some(crate::systems::logistics::ResourceType::Water),
         },
     ));
+}
 
-    let (bx, by) = WorldMap::world_to_grid(transform.translation.truncate());
-    let sand_positions = [(bx - 2, by - 1), (bx - 2, by)];
+fn setup_sand_pile(commands: &mut Commands, building_entity: Entity) {
+    commands.entity(building_entity).insert(SandPile);
+}
 
-    for (sx, sy) in sand_positions {
-        let pos = WorldMap::grid_to_world(sx, sy);
-        commands.spawn((
-            SandPile,
-            super::super::ObstaclePosition(sx, sy),
-            crate::systems::logistics::BelongsTo(building_entity),
-            Sprite {
-                image: game_assets.sand_pile.clone(),
-                custom_size: Some(Vec2::splat(TILE_SIZE * 0.8)),
-                ..default()
-            },
-            Transform::from_xyz(pos.x, pos.y, Z_ITEM_OBSTACLE),
-            Name::new("SandPile"),
-        ));
-        world_map.add_obstacle(sx, sy);
-    }
+fn find_stockpile_grid(world_map: &WorldMap, stockpile_entity: Entity) -> Option<(i32, i32)> {
+    world_map
+        .stockpiles
+        .iter()
+        .find_map(|(grid, entity)| (*entity == stockpile_entity).then_some(*grid))
 }
 
 fn spawn_completion_text(commands: &mut Commands, transform: &Transform, game_assets: &GameAssets) {
