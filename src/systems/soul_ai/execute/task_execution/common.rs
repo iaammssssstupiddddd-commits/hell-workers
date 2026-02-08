@@ -4,7 +4,7 @@ use crate::constants::*;
 use crate::entities::damned_soul::{Destination, Path};
 use crate::systems::jobs::Designation;
 use crate::systems::logistics::{Inventory, ReservedForTask, Stockpile};
-use crate::systems::soul_ai::task_execution::types::AssignedTask;
+use crate::systems::soul_ai::execute::task_execution::types::AssignedTask;
 use bevy::prelude::*;
 
 use crate::world::map::WorldMap; // 追加

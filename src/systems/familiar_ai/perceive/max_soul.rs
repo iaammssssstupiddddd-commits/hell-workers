@@ -6,8 +6,8 @@ use crate::entities::damned_soul::{DamnedSoul, Path};
 use crate::entities::familiar::{Familiar, FamiliarVoice};
 use crate::events::FamiliarOperationMaxSoulChangedEvent;
 use crate::relationships::{CommandedBy, Commanding};
-use crate::systems::soul_ai::task_execution::AssignedTask;
-use crate::systems::soul_ai::work::unassign_task;
+use crate::systems::soul_ai::execute::task_execution::AssignedTask;
+use crate::systems::soul_ai::helpers::work::unassign_task;
 use crate::systems::visual::speech::components::{
     BubbleEmotion, BubblePriority, FamiliarBubble, SpeechBubble,
 };
@@ -37,7 +37,7 @@ pub fn handle_max_soul_changed_system(
         ),
         (With<DamnedSoul>, Without<Familiar>),
     >,
-    mut queries: crate::systems::soul_ai::task_execution::context::TaskAssignmentQueries,
+    mut queries: crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
     game_assets: Res<crate::assets::GameAssets>,
     q_bubbles: Query<(Entity, &SpeechBubble), With<FamiliarBubble>>,
     time: Res<Time>,

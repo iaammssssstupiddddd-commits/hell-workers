@@ -2,8 +2,8 @@
 
 use crate::constants::BUCKET_CAPACITY;
 use crate::systems::logistics::{ResourceItem, ResourceType};
-use crate::systems::soul_ai::task_execution::context::TaskExecutionContext;
-use crate::systems::soul_ai::task_execution::types::{AssignedTask, GatherWaterPhase};
+use crate::systems::soul_ai::execute::task_execution::context::TaskExecutionContext;
+use crate::systems::soul_ai::execute::task_execution::types::{AssignedTask, GatherWaterPhase};
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
 
@@ -99,7 +99,7 @@ fn handle_going_to_bucket(
         {
             let river_pos = WorldMap::grid_to_world(river_grid.0, river_grid.1);
             *ctx.task = AssignedTask::GatherWater(
-                crate::systems::soul_ai::task_execution::types::GatherWaterData {
+                crate::systems::soul_ai::execute::task_execution::types::GatherWaterData {
                     bucket: bucket_entity,
                     tank: tank_entity,
                     phase: GatherWaterPhase::GoingToRiver,
@@ -139,8 +139,10 @@ fn handle_going_to_bucket(
     let bucket_pos = bucket_transform.translation.truncate();
 
     // 隣接マスにいればピックアップ可能とする
-    if crate::systems::soul_ai::task_execution::common::can_pickup_item(soul_pos, bucket_pos) {
-        if !crate::systems::soul_ai::task_execution::common::try_pickup_item(
+    if crate::systems::soul_ai::execute::task_execution::common::can_pickup_item(
+        soul_pos, bucket_pos,
+    ) {
+        if !crate::systems::soul_ai::execute::task_execution::common::try_pickup_item(
             commands,
             ctx.soul_entity,
             bucket_entity,
@@ -162,7 +164,7 @@ fn handle_going_to_bucket(
         // もしアイテムが備蓄場所にあったなら、その備蓄場所の型管理を更新する
         if let Some(stored_in) = stored_in_entity {
             let q_stockpiles = &mut ctx.queries.storage.stockpiles;
-            crate::systems::soul_ai::task_execution::common::update_stockpile_on_item_removal(
+            crate::systems::soul_ai::execute::task_execution::common::update_stockpile_on_item_removal(
                 stored_in,
                 q_stockpiles,
             );
@@ -185,7 +187,7 @@ fn handle_going_to_bucket(
                     &tank_grids,
                 ) {
                     *ctx.task = AssignedTask::GatherWater(
-                        crate::systems::soul_ai::task_execution::types::GatherWaterData {
+                        crate::systems::soul_ai::execute::task_execution::types::GatherWaterData {
                             bucket: bucket_entity,
                             tank: tank_entity,
                             phase: GatherWaterPhase::GoingToTank,
@@ -216,7 +218,7 @@ fn handle_going_to_bucket(
                 river_grid,
             ) {
                 *ctx.task = AssignedTask::GatherWater(
-                    crate::systems::soul_ai::task_execution::types::GatherWaterData {
+                    crate::systems::soul_ai::execute::task_execution::types::GatherWaterData {
                         bucket: bucket_entity,
                         tank: tank_entity,
                         phase: GatherWaterPhase::GoingToRiver,
@@ -318,7 +320,7 @@ fn handle_going_to_river(
 
         // 水を汲むフェーズへ
         *ctx.task = AssignedTask::GatherWater(
-            crate::systems::soul_ai::task_execution::types::GatherWaterData {
+            crate::systems::soul_ai::execute::task_execution::types::GatherWaterData {
                 bucket: bucket_entity,
                 tank: tank_entity,
                 phase: GatherWaterPhase::Filling { progress: 0.0 },
@@ -379,7 +381,7 @@ fn handle_filling(
                 &tank_grids,
             ) {
                 *ctx.task = AssignedTask::GatherWater(
-                    crate::systems::soul_ai::task_execution::types::GatherWaterData {
+                    crate::systems::soul_ai::execute::task_execution::types::GatherWaterData {
                         bucket: bucket_entity,
                         tank: tank_entity,
                         phase: GatherWaterPhase::GoingToTank,
@@ -406,7 +408,7 @@ fn handle_filling(
         }
     } else {
         *ctx.task = AssignedTask::GatherWater(
-            crate::systems::soul_ai::task_execution::types::GatherWaterData {
+            crate::systems::soul_ai::execute::task_execution::types::GatherWaterData {
                 bucket: bucket_entity,
                 tank: tank_entity,
                 phase: GatherWaterPhase::Filling {
@@ -461,7 +463,7 @@ fn handle_going_to_tank(
     {
         // 2x2なので少し広めに (2タイル分=64.0未満)
         *ctx.task = AssignedTask::GatherWater(
-            crate::systems::soul_ai::task_execution::types::GatherWaterData {
+            crate::systems::soul_ai::execute::task_execution::types::GatherWaterData {
                 bucket: bucket_entity,
                 tank: tank_entity,
                 phase: GatherWaterPhase::Pouring { progress: 0.0 },
@@ -519,7 +521,7 @@ fn handle_pouring(
         drop_bucket_for_auto_haul(commands, ctx, bucket_entity, tank_entity, world_map);
     } else {
         *ctx.task = AssignedTask::GatherWater(
-            crate::systems::soul_ai::task_execution::types::GatherWaterData {
+            crate::systems::soul_ai::execute::task_execution::types::GatherWaterData {
                 bucket: bucket_entity,
                 tank: tank_entity,
                 phase: GatherWaterPhase::Pouring {

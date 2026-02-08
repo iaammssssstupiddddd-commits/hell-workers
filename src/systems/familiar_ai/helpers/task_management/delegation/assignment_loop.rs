@@ -1,6 +1,6 @@
 use crate::relationships::ManagedTasks;
 use crate::systems::command::TaskArea;
-use crate::systems::familiar_ai::task_management::{
+use crate::systems::familiar_ai::helpers::task_management::{
     AssignTaskContext, ReservationShadow, assign_task_to_worker, find_unassigned_task_in_area,
 };
 use crate::systems::spatial::DesignationSpatialGrid;
@@ -16,7 +16,7 @@ pub(super) fn try_assign_for_workers(
     fam_pos: Vec2,
     task_area_opt: Option<&TaskArea>,
     fatigue_threshold: f32,
-    queries: &mut crate::systems::soul_ai::task_execution::context::TaskAssignmentQueries,
+    queries: &mut crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
     q_souls: &mut FamiliarSoulQuery,
     designation_grid: &DesignationSpatialGrid,
     managed_tasks: &ManagedTasks,

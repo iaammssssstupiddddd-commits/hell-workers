@@ -55,7 +55,7 @@ pub fn handle_refine_task(
 
                 if is_near_target_or_dest(soul_pos, mixer_pos, ctx.dest.0) {
                     *ctx.task = AssignedTask::Refine(
-                        crate::systems::soul_ai::task_execution::types::RefineData {
+                        crate::systems::soul_ai::execute::task_execution::types::RefineData {
                             mixer: mixer_entity,
                             phase: RefinePhase::Refining { progress: 0.0 },
                         },
@@ -157,7 +157,7 @@ pub fn handle_refine_task(
                     info!("TASK_EXEC: Soul {:?} refined 5 StasisMud", ctx.soul_entity);
 
                     *ctx.task = AssignedTask::Refine(
-                        crate::systems::soul_ai::task_execution::types::RefineData {
+                        crate::systems::soul_ai::execute::task_execution::types::RefineData {
                             mixer: mixer_entity,
                             phase: RefinePhase::Done,
                         },
@@ -165,7 +165,7 @@ pub fn handle_refine_task(
                     ctx.soul.fatigue = (ctx.soul.fatigue + FATIGUE_GAIN_ON_COMPLETION).min(1.0);
                 } else {
                     *ctx.task = AssignedTask::Refine(
-                        crate::systems::soul_ai::task_execution::types::RefineData {
+                        crate::systems::soul_ai::execute::task_execution::types::RefineData {
                             mixer: mixer_entity,
                             phase: RefinePhase::Refining { progress },
                         },

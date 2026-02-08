@@ -3,7 +3,7 @@ mod members;
 
 use crate::relationships::ManagedTasks;
 use crate::systems::command::TaskArea;
-use crate::systems::familiar_ai::task_management::ReservationShadow;
+use crate::systems::familiar_ai::helpers::task_management::ReservationShadow;
 use crate::systems::spatial::DesignationSpatialGrid;
 use crate::world::map::WorldMap;
 use crate::world::pathfinding::PathfindingContext;
@@ -25,7 +25,7 @@ impl TaskManager {
         squad: &[Entity],
         task_area_opt: Option<&TaskArea>,
         fatigue_threshold: f32,
-        queries: &mut crate::systems::soul_ai::task_execution::context::TaskAssignmentQueries,
+        queries: &mut crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
         q_souls: &mut FamiliarSoulQuery,
         designation_grid: &DesignationSpatialGrid,
         managed_tasks: &ManagedTasks,

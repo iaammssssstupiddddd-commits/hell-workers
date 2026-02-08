@@ -20,13 +20,17 @@ pub use types::AssignedTask;
 
 use crate::entities::damned_soul::IdleBehavior;
 use crate::events::{OnGatheringLeft, OnTaskAssigned, OnTaskCompleted, TaskAssignmentRequest};
-use crate::systems::familiar_ai::resource_cache::{SharedResourceCache, apply_reservation_op};
-// use crate::systems::familiar_ai::resource_cache::SharedResourceCache; // Removed unused import
-use crate::systems::soul_ai::query_types::{TaskAssignmentSoulQuery, TaskExecutionSoulQuery};
-use crate::systems::soul_ai::task_execution::types::{
+use crate::systems::familiar_ai::perceive::resource_sync::{
+    SharedResourceCache, apply_reservation_op,
+};
+// use crate::systems::familiar_ai::perceive::resource_sync::SharedResourceCache; // Removed unused import
+use crate::systems::soul_ai::execute::task_execution::types::{
     GatherWaterPhase, HaulPhase, HaulToBpPhase, HaulToMixerPhase, HaulWaterToMixerPhase,
 };
-use crate::systems::soul_ai::work::unassign_task;
+use crate::systems::soul_ai::helpers::query_types::{
+    TaskAssignmentSoulQuery, TaskExecutionSoulQuery,
+};
+use crate::systems::soul_ai::helpers::work::unassign_task;
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
 
@@ -78,14 +82,14 @@ pub fn apply_task_assignment_requests_system(
         if let Some(p) = participating_opt {
             commands
                 .entity(worker_entity)
-                .remove::<crate::systems::soul_ai::gathering::ParticipatingIn>();
+                .remove::<crate::systems::soul_ai::helpers::gathering::ParticipatingIn>();
             commands.trigger(OnGatheringLeft {
                 entity: worker_entity,
                 spot_entity: p.0,
             });
         }
 
-        crate::systems::familiar_ai::task_management::prepare_worker_for_task(
+        crate::systems::familiar_ai::helpers::task_management::prepare_worker_for_task(
             &mut commands,
             worker_entity,
             request.familiar_entity,

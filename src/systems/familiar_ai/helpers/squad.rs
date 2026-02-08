@@ -4,7 +4,7 @@
 
 use crate::entities::damned_soul::IdleBehavior;
 use crate::relationships::Commanding;
-// use crate::systems::soul_ai::work::unassign_task;
+// use crate::systems::soul_ai::helpers::work::unassign_task;
 // use crate::systems::visual::speech::components::{
 //     BubbleEmotion, BubblePriority, FamiliarBubble, SpeechBubble,
 // };

@@ -6,8 +6,8 @@ use crate::events::{
     OnExhausted, OnSoulRecruited, OnStressBreakdown, OnTaskAssigned, OnTaskCompleted,
 };
 use crate::relationships::CommandedBy;
-use crate::systems::soul_ai::task_execution::AssignedTask;
-use crate::systems::soul_ai::work::unassign_task;
+use crate::systems::soul_ai::execute::task_execution::AssignedTask;
+use crate::systems::soul_ai::helpers::work::unassign_task;
 use crate::world::map::WorldMap;
 use rand::Rng;
 
@@ -51,7 +51,7 @@ pub fn on_stress_breakdown(
         Option<&crate::relationships::CommandedBy>,
     )>,
     world_map: Res<WorldMap>,
-    mut queries: crate::systems::soul_ai::task_execution::context::TaskAssignmentQueries,
+    mut queries: crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
 ) {
     let soul_entity = on.entity;
     if let Ok((
@@ -94,7 +94,7 @@ pub fn on_stress_breakdown(
 pub fn on_exhausted(
     on: On<OnExhausted>,
     mut commands: Commands,
-    q_spots: Query<&crate::systems::soul_ai::gathering::GatheringSpot>,
+    q_spots: Query<&crate::systems::soul_ai::helpers::gathering::GatheringSpot>,
     mut q_souls: Query<(
         Entity,
         &Transform,
@@ -106,7 +106,7 @@ pub fn on_exhausted(
         Option<&crate::relationships::CommandedBy>,
     )>,
     world_map: Res<WorldMap>,
-    mut queries: crate::systems::soul_ai::task_execution::context::TaskAssignmentQueries,
+    mut queries: crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
 ) {
     let soul_entity = on.entity;
     if let Ok((

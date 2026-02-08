@@ -1,4 +1,4 @@
-use crate::systems::familiar_ai::task_management::{AssignTaskContext, ReservationShadow};
+use crate::systems::familiar_ai::helpers::task_management::{AssignTaskContext, ReservationShadow};
 use bevy::prelude::*;
 
 use super::super::builders::{
@@ -13,7 +13,7 @@ pub(super) fn assign_haul_to_mixer(
     task_pos: Vec2,
     already_commanded: bool,
     ctx: &AssignTaskContext<'_>,
-    queries: &mut crate::systems::soul_ai::task_execution::context::TaskAssignmentQueries,
+    queries: &mut crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
     shadow: &mut ReservationShadow,
 ) -> bool {
     let Some((mixer_entity, item_type)) = resolve_haul_to_mixer_inputs(ctx.task_entity, queries)
@@ -59,7 +59,7 @@ pub(super) fn assign_haul(
     task_pos: Vec2,
     already_commanded: bool,
     ctx: &AssignTaskContext<'_>,
-    queries: &mut crate::systems::soul_ai::task_execution::context::TaskAssignmentQueries,
+    queries: &mut crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
     shadow: &mut ReservationShadow,
 ) -> bool {
     if let Ok(target_bp) = queries.storage.target_blueprints.get(ctx.task_entity) {

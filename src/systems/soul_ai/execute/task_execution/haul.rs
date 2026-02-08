@@ -1,12 +1,12 @@
 //! 運搬タスクの実行処理（ストックパイルへ）
 
 use crate::relationships::WorkingOn;
-use crate::systems::soul_ai::task_execution::common::*;
-use crate::systems::soul_ai::task_execution::{
+use crate::systems::soul_ai::execute::task_execution::common::*;
+use crate::systems::soul_ai::execute::task_execution::{
     context::TaskExecutionContext,
     types::{AssignedTask, HaulPhase},
 };
-use crate::systems::soul_ai::work::unassign_task;
+use crate::systems::soul_ai::helpers::work::unassign_task;
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
 
@@ -108,7 +108,7 @@ pub fn handle_haul_task(
                     }
 
                     *ctx.task = AssignedTask::Haul(
-                        crate::systems::soul_ai::task_execution::types::HaulData {
+                        crate::systems::soul_ai::execute::task_execution::types::HaulData {
                             item,
                             stockpile,
                             phase: HaulPhase::GoingToStockpile,
@@ -143,7 +143,7 @@ pub fn handle_haul_task(
 
                 if is_near_target(soul_pos, stock_pos) {
                     *ctx.task = AssignedTask::Haul(
-                        crate::systems::soul_ai::task_execution::types::HaulData {
+                        crate::systems::soul_ai::execute::task_execution::types::HaulData {
                             item,
                             stockpile,
                             phase: HaulPhase::Dropping,

@@ -50,9 +50,9 @@ Bevy 0.18 の **ECS Relationships** 機能を使用し、エンティティ間�
 ### 1. 指定 (Designation)
 - **手動**: プレイヤーが UI やドラッグ操作で指定。
 - **自動**:
-    - `soul_ai::work::task_area_auto_haul_system` が備蓄場所周辺の資源を自動的に `Haul` 指定。
-    - `soul_ai::work::tank_water_request_system` がタンクの空きに応じてバケツに自動的に `GatherWater` 指定。
-    - `soul_ai::work::auto_haul::mixer` システムが、MudMixerの空き状況とTankの在庫に応じて `HaulToMixer` (Sand/Rock) および `HaulWaterToMixer` (Water) を自動指定。
+    - `soul_ai::decide::work::task_area_auto_haul_system` が備蓄場所周辺の資源を自動的に `Haul` 指定。
+    - `soul_ai::decide::work::tank_water_request_system` がタンクの空きに応じてバケツに自動的に `GatherWater` 指定。
+    - `soul_ai::decide::work::auto_haul::mud_mixer_auto_haul_system` が、MudMixerの空き状況とTankの在庫に応じて `HaulToMixer` (Sand/Rock) および `HaulWaterToMixer` (Water) を自動指定。
 
 
 ### 2. 割り当て (Assignment)

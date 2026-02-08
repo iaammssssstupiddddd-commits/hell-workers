@@ -2,9 +2,9 @@ use bevy::prelude::*;
 
 use crate::constants::*;
 use crate::entities::damned_soul::{GatheringBehavior, IdleBehavior};
-use crate::systems::soul_ai::gathering::{GATHERING_LEAVE_RADIUS, GatheringSpot};
-use crate::systems::soul_ai::query_types::IdleVisualSoulQuery;
-use crate::systems::soul_ai::task_execution::AssignedTask;
+use crate::systems::soul_ai::execute::task_execution::AssignedTask;
+use crate::systems::soul_ai::helpers::gathering::{GATHERING_LEAVE_RADIUS, GatheringSpot};
+use crate::systems::soul_ai::helpers::query_types::IdleVisualSoulQuery;
 use crate::systems::spatial::{GatheringSpotSpatialGrid, SpatialGridOps};
 
 /// 怠惰行動のビジュアルフィードバック

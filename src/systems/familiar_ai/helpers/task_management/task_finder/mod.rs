@@ -23,7 +23,7 @@ pub fn find_unassigned_task_in_area(
     fam_pos: Vec2,
     worker_pos: Vec2,
     task_area_opt: Option<&TaskArea>,
-    queries: &crate::systems::soul_ai::task_execution::context::TaskAssignmentQueries,
+    queries: &crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
     designation_grid: &DesignationSpatialGrid,
     managed_tasks: &ManagedTasks,
     q_target_blueprints: &Query<&TargetBlueprint>,

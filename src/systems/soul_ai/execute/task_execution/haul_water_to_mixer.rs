@@ -3,7 +3,7 @@ use super::context::TaskExecutionContext;
 use super::types::{AssignedTask, HaulWaterToMixerPhase};
 use crate::constants::*;
 use crate::systems::logistics::{ResourceItem, ResourceType};
-use crate::systems::soul_ai::task_execution::gather_water::helpers::drop_bucket_for_auto_haul;
+use crate::systems::soul_ai::execute::task_execution::gather_water::helpers::drop_bucket_for_auto_haul;
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
 
@@ -162,7 +162,7 @@ pub fn handle_haul_water_to_mixer_task(
 
                 if is_near_target_or_dest(soul_pos, tank_pos, ctx.dest.0) {
                     *ctx.task = AssignedTask::HaulWaterToMixer(
-                        crate::systems::soul_ai::task_execution::types::HaulWaterToMixerData {
+                        crate::systems::soul_ai::execute::task_execution::types::HaulWaterToMixerData {
                             bucket: bucket_entity,
                             tank: tank_entity,
                             mixer: mixer_entity,
@@ -218,7 +218,7 @@ pub fn handle_haul_water_to_mixer_task(
                     let mixer_pos = mixer_transform.translation.truncate();
 
                     *ctx.task = AssignedTask::HaulWaterToMixer(
-                        crate::systems::soul_ai::task_execution::types::HaulWaterToMixerData {
+                        crate::systems::soul_ai::execute::task_execution::types::HaulWaterToMixerData {
                             bucket: bucket_entity,
                             tank: tank_entity,
                             mixer: mixer_entity,
@@ -311,7 +311,7 @@ pub fn handle_haul_water_to_mixer_task(
 
                 if is_near_target_or_dest(soul_pos, mixer_pos, ctx.dest.0) {
                     *ctx.task = AssignedTask::HaulWaterToMixer(
-                        crate::systems::soul_ai::task_execution::types::HaulWaterToMixerData {
+                        crate::systems::soul_ai::execute::task_execution::types::HaulWaterToMixerData {
                             bucket: bucket_entity,
                             tank: tank_entity,
                             mixer: mixer_entity,
@@ -443,7 +443,7 @@ pub fn handle_haul_water_to_mixer_task(
 
                     if let Some(pos) = return_pos {
                         *ctx.task = AssignedTask::HaulWaterToMixer(
-                            crate::systems::soul_ai::task_execution::types::HaulWaterToMixerData {
+                            crate::systems::soul_ai::execute::task_execution::types::HaulWaterToMixerData {
                                 bucket: bucket_entity,
                                 tank: tank_entity,
                                 mixer: mixer_entity,
@@ -489,7 +489,7 @@ fn transition_to_tank(
         let tank_pos = tank_transform.translation.truncate();
 
         *ctx.task = AssignedTask::HaulWaterToMixer(
-            crate::systems::soul_ai::task_execution::types::HaulWaterToMixerData {
+            crate::systems::soul_ai::execute::task_execution::types::HaulWaterToMixerData {
                 bucket: bucket_entity,
                 tank: tank_entity,
                 mixer: mixer_entity,
@@ -521,7 +521,7 @@ fn transition_to_mixer(
         let mixer_pos = mixer_transform.translation.truncate();
 
         *ctx.task = AssignedTask::HaulWaterToMixer(
-            crate::systems::soul_ai::task_execution::types::HaulWaterToMixerData {
+            crate::systems::soul_ai::execute::task_execution::types::HaulWaterToMixerData {
                 bucket: bucket_entity,
                 tank: tank_entity,
                 mixer: mixer_entity,

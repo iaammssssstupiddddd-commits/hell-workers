@@ -2,7 +2,7 @@ use bevy::prelude::*;
 
 use crate::constants::*;
 use crate::entities::damned_soul::DamnedSoul;
-use crate::systems::soul_ai::gathering::*;
+use crate::systems::soul_ai::helpers::gathering::*;
 
 /// 集会オーラのサイズと位置の更新システム
 pub fn gathering_visual_update_system(

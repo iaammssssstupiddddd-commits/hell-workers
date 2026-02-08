@@ -7,14 +7,14 @@ pub use haul::{issue_haul_to_blueprint, issue_haul_to_mixer, issue_haul_to_stock
 pub use water::{issue_gather_water, issue_haul_water_to_mixer};
 
 use crate::events::{ResourceReservationOp, TaskAssignmentRequest};
-use crate::systems::familiar_ai::task_management::{AssignTaskContext, ReservationShadow};
+use crate::systems::familiar_ai::helpers::task_management::{AssignTaskContext, ReservationShadow};
 use crate::systems::jobs::WorkType;
-use crate::systems::soul_ai::task_execution::types::AssignedTask;
+use crate::systems::soul_ai::execute::task_execution::types::AssignedTask;
 use bevy::prelude::*;
 
 pub fn submit_assignment(
     ctx: &AssignTaskContext<'_>,
-    queries: &mut crate::systems::soul_ai::task_execution::context::TaskAssignmentQueries,
+    queries: &mut crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
     shadow: &mut ReservationShadow,
     work_type: WorkType,
     task_pos: Vec2,

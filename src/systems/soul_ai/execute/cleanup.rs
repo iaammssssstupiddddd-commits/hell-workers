@@ -2,16 +2,16 @@ use bevy::prelude::*;
 
 use crate::entities::familiar::{ActiveCommand, Familiar, FamiliarCommand};
 use crate::relationships::CommandedBy;
-// use crate::systems::familiar_ai::resource_cache::SharedResourceCache; // Removed unused import
+// use crate::systems::familiar_ai::perceive::resource_sync::SharedResourceCache; // Removed unused import
 
-use crate::systems::soul_ai::query_types::CleanupSoulQuery;
-use crate::systems::soul_ai::work::helpers;
+use crate::systems::soul_ai::helpers::query_types::CleanupSoulQuery;
+use crate::systems::soul_ai::helpers::work as helpers;
 
 /// 使い魔が Idle コマンドの場合、または使い魔が存在しない場合に部下をリリースする
 pub fn cleanup_commanded_souls_system(
     mut commands: Commands,
     mut q_souls: CleanupSoulQuery,
-    mut queries: crate::systems::soul_ai::task_execution::context::TaskAssignmentQueries,
+    mut queries: crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
     q_familiars: Query<&ActiveCommand, With<Familiar>>,
     world_map: Res<crate::world::map::WorldMap>,
 ) {

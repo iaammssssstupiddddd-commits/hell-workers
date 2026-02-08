@@ -1,6 +1,6 @@
 use crate::entities::damned_soul::IdleBehavior;
 use crate::systems::familiar_ai::FamiliarSoulQuery;
-use crate::systems::soul_ai::task_execution::types::AssignedTask;
+use crate::systems::soul_ai::execute::task_execution::types::AssignedTask;
 use bevy::prelude::*;
 
 pub(super) fn collect_idle_members(

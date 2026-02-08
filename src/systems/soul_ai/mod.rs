@@ -12,73 +12,6 @@ pub mod scheduling;
 pub mod update;
 pub mod visual;
 
-// 既存参照の互換レイヤー（M1移行中）
-pub mod query_types {
-    pub use super::helpers::query_types::*;
-}
-
-pub mod gathering {
-    pub use super::helpers::gathering::*;
-
-    pub mod spawn {
-        pub use super::super::execute::gathering_spawn::*;
-    }
-
-    pub mod visual {
-        pub use super::super::visual::gathering::*;
-    }
-}
-
-pub mod idle {
-    pub mod behavior {
-        pub use super::super::decide::idle_behavior::*;
-    }
-
-    pub mod escaping {
-        pub use super::super::perceive::escaping::*;
-    }
-
-    pub mod separation {
-        pub use super::super::decide::separation::*;
-    }
-
-    pub mod visual {
-        pub use super::super::visual::idle::*;
-    }
-}
-
-pub mod vitals {
-    pub use super::update::vitals::*;
-
-    pub mod influence {
-        pub use super::super::update::vitals_influence::*;
-    }
-
-    pub mod update {
-        pub use super::super::update::vitals_update::*;
-    }
-
-    pub mod visual {
-        pub use super::super::visual::vitals::*;
-    }
-}
-
-pub mod work {
-    pub use super::decide::work::*;
-
-    pub mod cleanup {
-        pub use super::super::execute::cleanup::*;
-    }
-
-    pub mod helpers {
-        pub use super::super::helpers::work::*;
-    }
-}
-
-pub mod task_execution {
-    pub use super::execute::task_execution::*;
-}
-
 use crate::systems::GameSystemSet;
 use scheduling::{FamiliarAiSystemSet, SoulAiSystemSet};
 
@@ -100,13 +33,13 @@ impl Plugin for SoulAiPlugin {
                 .after(FamiliarAiSystemSet::Execute)
                 .in_set(GameSystemSet::Logic),
         )
-        .register_type::<task_execution::AssignedTask>()
-        .register_type::<gathering::GatheringSpot>()
-        .init_resource::<work::AutoHaulCounter>()
-        .init_resource::<work::auto_haul::ItemReservations>()
-        .init_resource::<gathering::GatheringUpdateTimer>()
-        .init_resource::<idle::escaping::EscapeDetectionTimer>()
-        .init_resource::<idle::escaping::EscapeBehaviorTimer>()
+        .register_type::<execute::task_execution::AssignedTask>()
+        .register_type::<helpers::gathering::GatheringSpot>()
+        .init_resource::<decide::work::AutoHaulCounter>()
+        .init_resource::<decide::work::auto_haul::ItemReservations>()
+        .init_resource::<helpers::gathering::GatheringUpdateTimer>()
+        .init_resource::<perceive::escaping::EscapeDetectionTimer>()
+        .init_resource::<perceive::escaping::EscapeBehaviorTimer>()
         .add_systems(
             Update,
             (
@@ -123,12 +56,12 @@ impl Plugin for SoulAiPlugin {
                 // 時間経過による内部状態の変化
                 (
                     // タイマー更新
-                    gathering::tick_gathering_timer_system,
+                    helpers::gathering::tick_gathering_timer_system,
                     update::gathering_tick::gathering_grace_tick_system,
                     // バイタル更新
-                    vitals::update::fatigue_update_system,
-                    vitals::update::fatigue_penalty_system,
-                    vitals::influence::familiar_influence_unified_system,
+                    update::vitals_update::fatigue_update_system,
+                    update::vitals_update::fatigue_penalty_system,
+                    update::vitals_influence::familiar_influence_unified_system,
                 )
                     .in_set(SoulAiSystemSet::Update),
                 // Update → Decide 間の同期
@@ -139,16 +72,16 @@ impl Plugin for SoulAiPlugin {
                 // 次の行動の選択、要求の生成
                 (
                     // タスク割り当て要求
-                    work::auto_haul::blueprint_auto_haul_system,
-                    work::tank_water_request_system,
-                    work::auto_haul::mud_mixer_auto_haul_system,
-                    work::auto_haul::bucket_auto_haul_system,
-                    work::auto_refine::mud_mixer_auto_refine_system,
-                    work::auto_build::blueprint_auto_build_system,
-                    work::task_area_auto_haul_system,
+                    decide::work::auto_haul::blueprint_auto_haul_system,
+                    decide::work::tank_water_request_system,
+                    decide::work::auto_haul::mud_mixer_auto_haul_system,
+                    decide::work::auto_haul::bucket_auto_haul_system,
+                    decide::work::auto_refine::mud_mixer_auto_refine_system,
+                    decide::work::auto_build::blueprint_auto_build_system,
+                    decide::work::task_area_auto_haul_system,
                     // アイドル行動の決定
-                    idle::behavior::idle_behavior_decision_system,
-                    idle::separation::gathering_separation_system,
+                    decide::idle_behavior::idle_behavior_decision_system,
+                    decide::separation::gathering_separation_system,
                     decide::escaping::escaping_decision_system,
                     // 集会管理の決定
                     decide::gathering_mgmt::gathering_maintenance_decision,
@@ -165,29 +98,29 @@ impl Plugin for SoulAiPlugin {
                 // 決定された行動の実行
                 (
                     // タスク要求の適用
-                    task_execution::apply_task_assignment_requests_system
-                        .before(task_execution::task_execution_system),
-                    task_execution::task_execution_system,
+                    execute::task_execution::apply_task_assignment_requests_system
+                        .before(execute::task_execution::task_execution_system),
+                    execute::task_execution::task_execution_system,
                     // アイドル行動の適用
-                    idle::behavior::idle_behavior_apply_system,
+                    decide::idle_behavior::idle_behavior_apply_system,
                     execute::escaping_apply::escaping_apply_system,
                     execute::gathering_apply::gathering_apply_system,
                     // クリーンアップ
-                    work::cleanup::cleanup_commanded_souls_system,
-                    work::auto_haul::clear_item_reservations_system,
+                    execute::cleanup::cleanup_commanded_souls_system,
+                    decide::work::auto_haul::clear_item_reservations_system,
                     // 予約の確定
-                    crate::systems::familiar_ai::resource_cache::apply_reservation_requests_system
-                        .after(work::auto_haul::clear_item_reservations_system),
+                    crate::systems::familiar_ai::perceive::resource_sync::apply_reservation_requests_system
+                        .after(decide::work::auto_haul::clear_item_reservations_system),
                     // エンティティ生成
-                    gathering::spawn::gathering_spawn_system,
+                    execute::gathering_spawn::gathering_spawn_system,
                 )
                     .in_set(SoulAiSystemSet::Execute),
             ),
         )
-        .add_observer(vitals::on_task_completed_motivation_bonus)
-        .add_observer(vitals::on_encouraged_effect)
-        .add_observer(vitals::on_soul_recruited_effect)
-        .add_observer(gathering::on_participating_added)
-        .add_observer(gathering::on_participating_removed);
+        .add_observer(update::vitals::on_task_completed_motivation_bonus)
+        .add_observer(update::vitals::on_encouraged_effect)
+        .add_observer(update::vitals::on_soul_recruited_effect)
+        .add_observer(helpers::gathering::on_participating_added)
+        .add_observer(helpers::gathering::on_participating_removed);
     }
 }

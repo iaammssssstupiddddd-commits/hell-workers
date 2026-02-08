@@ -12,7 +12,7 @@ use crate::interface::ui::{MenuState, setup_ui};
 use crate::systems::command::TaskArea;
 use crate::systems::jobs::{Designation, Priority, Rock, TaskSlots, Tree, WorkType};
 use crate::systems::logistics::{ResourceLabels, initial_resource_spawner};
-use crate::systems::soul_ai::work::AutoHaulCounter;
+use crate::systems::soul_ai::decide::work::AutoHaulCounter;
 use crate::systems::spatial::{
     BlueprintSpatialGrid, FamiliarSpatialGrid, GatheringSpotSpatialGrid, ResourceSpatialGrid,
     SpatialGrid, SpatialGridOps, StockpileSpatialGrid,

@@ -83,30 +83,30 @@
 | フェーズ | 責任 | 主なシステム |
 |:--|:--|:--|
 | **Perceive** | 状態変化の検出、予約同期 | `detect_state_changes_system`, `sync_reservations_system`（0.2秒間隔, 初回即時） |
-| **Update** | クールダウン減少 | `cleanup_encouragement_cooldowns_system` |
+| **Update** | 時間経過による内部状態更新 | 現時点では空（将来拡張ポイント） |
 | **Decide** | 状態遷移、タスク委譲 | `familiar_ai_state_system`, `familiar_task_delegation_system`（0.5秒間隔, 初回即時） |
-| **Execute** | 状態変更の適用、分隊管理 | `handle_state_changed_system`, `apply_squad_management_requests_system` |
+| **Execute** | 状態変更の適用、分隊管理、激励適用 | `familiar_state_apply_system`, `handle_state_changed_system`, `apply_squad_management_requests_system`, `encouragement_apply_system` |
 
 ### 5.2. 主要モジュール
 
 - **`mod.rs`**: メインのシステム定義と SystemParam の分割（`FamiliarAiParams` / `FamiliarAiTaskParams`）
   - **Decide フェーズ**: 状態更新 → `ApplyDeferred` → タスク委譲/移動の順で実行
-- **`familiar_processor.rs`**: 使い魔の処理ロジックを複数の関数に分割
+- **`helpers/familiar_processor.rs`**: 使い魔の処理ロジックを複数の関数に分割
   - `process_squad_management`: 分隊管理の意思決定（Request 発行）
   - `process_recruitment`: リクルート処理の意思決定（Request 発行）
   - `apply_squad_management_requests_system`: 分隊管理要求の実際の適用（Executeフェーズ）
   - `finalize_state_transitions`: 状態遷移の最終確定
   - `process_task_delegation_and_movement`: タスク委譲と移動制御
-- **`state_handlers/`**: 各状態のハンドラー
+- **`helpers/state_handlers/`**: 各状態のハンドラー
   - `idle.rs`: Idle 状態の処理
   - `searching.rs`: SearchingTask 状態の処理
   - `scouting.rs`: Scouting 状態の処理
   - `supervising.rs`: Supervising 状態の処理
-- **`squad.rs`**: 分隊管理（`SquadManager`）
+- **`helpers/squad.rs`**: 分隊管理（`SquadManager`）
   - `build_squad`: 分隊の構築
   - `validate_squad`: 分隊の検証
   - `release_fatigued`: 疲労・崩壊したメンバーのリリース要求発行
-- **`task_management.rs`**: タスク管理（`TaskManager`）
+- **`helpers/task_management/`**: タスク管理（`TaskManager`）
   - `find_unassigned_task_in_area`: タスク検索
   - `assign_task_to_worker`: タスク割り当て
   - `delegate_task`: タスク委譲
@@ -117,16 +117,18 @@
     - **Ground Projection**: 使い魔（空中ユニット）の位置ではなく、常にワーカー（地上ユニット）が立つ地面の座標に投影してパス計算を開始します。
     - **4方向パス検索**: 上下左右の4方向移動に準拠したパス検索を行い、斜め移動による障害物のすり抜けを防止しています。
 - **assign_task_to_worker**: タスク割り当て要求の生成（`TaskAssignmentRequest` を発行し、実適用は Act で行う）
-- **`recruitment.rs`**: リクルート管理（`RecruitmentManager`）
+- **`helpers/recruitment.rs`**: リクルート管理（`RecruitmentManager`）
   - `find_best_recruit`: リクルート候補の検索
   - `try_immediate_recruit`: 即時リクルート要求発行
   - `start_scouting`: スカウト開始・移動目標設定
-- **`state_transition.rs`**: 状態遷移の検知とイベント発火
+- **`perceive/state_detection.rs`**: 状態遷移の検知とイベント発火
   - `detect_state_changes_system`: 状態変更の検知（`Changed<FamiliarAiState>` 使用）
   - `detect_command_changes_system`: コマンド変更の検知（`Changed<ActiveCommand>` 使用）
   - `determine_transition_reason`: 状態遷移理由の判定
-- **`max_soul_handler.rs`**: 使役数上限変更イベントの処理
+- **`perceive/max_soul.rs`**: 使役数上限変更イベントの処理
   - `handle_max_soul_changed_system`: 上限超過分の魂をリリース
+- **`perceive/resource_sync.rs`**: `SharedResourceCache` の再構築と予約反映
+- **`decide/encouragement.rs` / `execute/encouragement_apply.rs`**: 激励の決定と適用
 
 ### 5.2. 関連コンポーネント
 
@@ -136,8 +138,8 @@
 - `FamiliarAiState`: AI の現在の状態（Idle, SearchingTask, Scouting, Supervising）。
 - `Commanding` (Relationship): 配下の魂への参照リスト。**オプショナル**（分隊が空のとき削除される）。
 - `ManagedTasks` (Relationship Target): 管理下のタスクリスト。**オプショナル**（タスクがゼロのとき削除されるため、AI クエリでは `Option` として扱う）。
-- `AssignedTask`: 魂が現在実行中のタスク（採取・運搬・建築）を管理。`src/systems/soul_ai/task_execution/types.rs` で定義。
-- `IdleState`: 待機中の振る舞いを管理。`src/systems/soul_ai/idle.rs` で管理。
+- `AssignedTask`: 魂が現在実行中のタスク（採取・運搬・建築）を管理。`src/systems/soul_ai/execute/task_execution/types.rs` で定義。
+- `IdleState`: 待機中の振る舞いを管理。`src/entities/damned_soul/mod.rs` で定義。
 
 ## 6. 分隊が空になったときの挙動
 

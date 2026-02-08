@@ -55,7 +55,7 @@
   - 警戒圏内にいる間はストレスが緩やかに増加する
 - `ExhaustedGathering` 中は対象外（疲労行動を優先）
 - `Gathering` 中も対象（ただし警戒圏内にいる場合のみストレスが増加する）
-- 判定は `escaping_detection_system` により **0.5秒間隔（初回即時）** で実行される
+- 判定は `decide::escaping::escaping_decision_system` 内の検出タイマーにより **0.5秒間隔（初回即時）** で実行される
 
 **逃走終了条件:**
 - 全ての使い魔から `command_radius * 2.0` 以上離れた（距離判定は障害物を考慮した経路距離を優先）
@@ -66,7 +66,7 @@
 - 使い魔から離れる方向へ移動（基本ベクトル70%）
 - 安全な集会スポットがある場合はそちらへ誘導（30%）
 - 通常より速い速度で移動
-- 逃走先の再評価は `escaping_behavior_system` により **0.5秒間隔（初回即時）** で実行される
+- 逃走先の再評価は `decide::escaping::escaping_decision_system` 内の行動タイマーにより **0.5秒間隔（初回即時）** で実行される
 
 **視覚フィードバック:**
 - 青白い色（パニック感）
@@ -86,10 +86,10 @@ Perceive → Update → Decide → Execute
 
 | フェーズ | 責任 | 主なシステム |
 |:--|:--|:--|
-| **Perceive** | 環境情報の読み取り、変化の検出 | `escaping_detection_system`（0.5秒間隔, 初回即時） |
+| **Perceive** | 環境情報の読み取り、変化の検出 | 現時点では拡張ポイント（逃走ヘルパー/タイマー資源の定義） |
 | **Update** | 時間経過による内部状態の変化 | バイタル更新、タイマー、集会スポットメンテナンス |
-| **Decide** | 次の行動の選択、要求の生成 | `idle_behavior_decision_system`, タスク割り当て要求 |
-| **Execute** | 決定された行動の実行 | `apply_task_assignment_requests_system`, `idle_behavior_apply_system`, `task_execution` |
+| **Decide** | 次の行動の選択、要求の生成 | `idle_behavior_decision_system`, `escaping_decision_system`, タスク割り当て要求 |
+| **Execute** | 決定された行動の実行 | `apply_task_assignment_requests_system`, `idle_behavior_apply_system`, `escaping_apply_system`, `task_execution` |
 
 **Message/Request パターン**: Decideフェーズで生成された `TaskAssignmentRequest` や `IdleBehaviorRequest` はExecuteフェーズで読み取られ、実際のコンポーネント更新が行われます。これにより堅牢なフェーズ間通信が実現されています。
 
@@ -139,8 +139,8 @@ Bevy 0.18 の ECS Relationships を使用して、状態を管理しています
 ## 6. 関連システム
  
 これらは `SoulAiPlugin` によって管理されています。
-- `src/systems/soul_ai/vitals/`: バイタル（疲労、ストレス、やる気）の更新ロジック。
-- `src/systems/soul_ai/idle/`: 待機行動の意思決定、ビジュアルフィードバック、重なり回避。
-- `src/systems/soul_ai/gathering/`: 動的な集会所（休息ポイント）の生成、維持。
-- `src/systems/soul_ai/work/`: 指揮エリアのオートホール、タスク解除、監視部下の管理。
-- `src/systems/soul_ai/task_execution/`: 割り当てられたタスク（採取、運搬、建築）の具体的な実行プロセス。
+- `src/systems/soul_ai/update/`: バイタル更新、影響計算、集会猶予タイマー更新。
+- `src/systems/soul_ai/decide/`: 待機行動・逃走・作業割り当て・集会管理の意思決定。
+- `src/systems/soul_ai/execute/`: Request 適用、タスク実行、クリーンアップ、集会スポット生成。
+- `src/systems/soul_ai/helpers/`: 集会型定義、クエリ型、作業共通ヘルパー。
+- `src/systems/soul_ai/visual/`: アイドル/集会/バイタルの視覚フィードバック。

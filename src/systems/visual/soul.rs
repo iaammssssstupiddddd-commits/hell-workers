@@ -8,7 +8,9 @@ use crate::constants::*;
 use crate::entities::damned_soul::{
     DamnedSoul, GatheringBehavior, IdleBehavior, IdleState, SoulUiLinks,
 };
-use crate::systems::soul_ai::task_execution::types::{AssignedTask, GatherPhase, HaulPhase};
+use crate::systems::soul_ai::execute::task_execution::types::{
+    AssignedTask, GatherPhase, HaulPhase,
+};
 use crate::systems::utils::progress_bar::{
     GenericProgressBar, ProgressBarBackground, ProgressBarConfig, ProgressBarFill,
     spawn_progress_bar, sync_progress_bar_fill_position, sync_progress_bar_position,

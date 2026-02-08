@@ -3,9 +3,9 @@ use rand::Rng;
 
 use crate::constants::*;
 use crate::entities::damned_soul::GatheringBehavior;
-use crate::systems::soul_ai::gathering::{GatheringSpot, GatheringUpdateTimer};
-use crate::systems::soul_ai::query_types::IdleSeparationSoulQuery;
-use crate::systems::soul_ai::task_execution::AssignedTask;
+use crate::systems::soul_ai::execute::task_execution::AssignedTask;
+use crate::systems::soul_ai::helpers::gathering::{GatheringSpot, GatheringUpdateTimer};
+use crate::systems::soul_ai::helpers::query_types::IdleSeparationSoulQuery;
 use crate::systems::spatial::{SpatialGrid, SpatialGridOps};
 use crate::world::map::WorldMap;
 

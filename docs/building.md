@@ -180,19 +180,19 @@ flowchart TD
 
 ## 9. 関連ファイル
 
-- [jobs.rs](file:///f:/DevData/projects/hell-workers/src/systems/jobs.rs): `Blueprint`, `Building`, 建設完了ロジック
-- [visual/blueprint/mod.rs](file:///f:/DevData/projects/hell-workers/src/systems/visual/blueprint/mod.rs): ビジュアルフィードバック（統括モジュール）
-- [visual/blueprint/components.rs](file:///f:/DevData/projects/hell-workers/src/systems/visual/blueprint/components.rs): コンポーネント定義
-- [visual/blueprint/progress_bar.rs](file:///f:/DevData/projects/hell-workers/src/systems/visual/blueprint/progress_bar.rs): プログレスバー
-- [visual/blueprint/material_display.rs](file:///f:/DevData/projects/hell-workers/src/systems/visual/blueprint/material_display.rs): 資材表示
-- [visual/blueprint/effects.rs](file:///f:/DevData/projects/hell-workers/src/systems/visual/blueprint/effects.rs): エフェクト
-- [visual/blueprint/worker_indicator.rs](file:///f:/DevData/projects/hell-workers/src/systems/visual/blueprint/worker_indicator.rs): ワーカーインジケータ
-- [utils/progress_bar.rs](file:///f:/DevData/projects/hell-workers/src/systems/utils/progress_bar.rs): 汎用プログレスバー実装
-- [utils/animations.rs](file:///f:/DevData/projects/hell-workers/src/systems/utils/animations.rs): パルス・バウンスアニメーション実装
-- [utils/floating_text.rs](file:///f:/DevData/projects/hell-workers/src/systems/utils/floating_text.rs): フローティングテキスト実装
-- [visual.rs](file:///f:/DevData/projects/hell-workers/src/plugins/visual.rs): システム登録
-- [wall_connection.rs](file:///f:/DevData/projects/hell-workers/src/systems/visual/wall_connection.rs): 壁の自動接続ロジック
-- [build.rs](file:///f:/DevData/projects/hell-workers/src/systems/soul_ai/task_execution/build.rs): `handle_build_task` (進捗更新)
-- [selection.rs](file:///f:/DevData/projects/hell-workers/src/interface/selection.rs): `blueprint_placement`
-- [placement_ghost.rs](file:///f:/DevData/projects/hell-workers/src/systems/visual/placement_ghost.rs): 建築ゴースト表示システム
-- [assets.rs](file:///f:/DevData/projects/hell-workers/src/assets.rs): 各種アイコンアセット
+- `src/systems/jobs.rs`: `Blueprint`, `Building`, 建設完了ロジック
+- `src/systems/visual/blueprint/mod.rs`: ビジュアルフィードバック（統括モジュール）
+- `src/systems/visual/blueprint/components.rs`: コンポーネント定義
+- `src/systems/visual/blueprint/progress_bar.rs`: プログレスバー
+- `src/systems/visual/blueprint/material_display.rs`: 資材表示
+- `src/systems/visual/blueprint/effects.rs`: エフェクト
+- `src/systems/visual/blueprint/worker_indicator.rs`: ワーカーインジケータ
+- `src/systems/utils/progress_bar.rs`: 汎用プログレスバー実装
+- `src/systems/utils/animations.rs`: パルス・バウンスアニメーション実装
+- `src/systems/utils/floating_text.rs`: フローティングテキスト実装
+- `src/plugins/visual.rs`: システム登録
+- `src/systems/visual/wall_connection.rs`: 壁の自動接続ロジック
+- `src/systems/soul_ai/execute/task_execution/build.rs`: `handle_build_task`（進捗更新）
+- `src/interface/selection.rs`: `blueprint_placement`
+- `src/systems/visual/placement_ghost.rs`: 建築ゴースト表示システム
+- `src/assets.rs`: 各種アイコンアセット

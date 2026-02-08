@@ -1,10 +1,10 @@
-use crate::systems::familiar_ai::task_management::ReservationShadow;
+use crate::systems::familiar_ai::helpers::task_management::ReservationShadow;
 use crate::systems::logistics::ResourceType;
 use bevy::prelude::*;
 
 pub fn can_reserve_source(
     task_entity: Entity,
-    queries: &crate::systems::soul_ai::task_execution::context::TaskAssignmentQueries,
+    queries: &crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
     shadow: &ReservationShadow,
 ) -> bool {
     let current_reserved = queries
@@ -24,7 +24,7 @@ pub fn can_reserve_source(
 
 pub fn source_not_reserved(
     task_entity: Entity,
-    queries: &crate::systems::soul_ai::task_execution::context::TaskAssignmentQueries,
+    queries: &crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
     shadow: &ReservationShadow,
 ) -> bool {
     queries
@@ -38,7 +38,7 @@ pub fn source_not_reserved(
 pub fn can_accept_mixer_item(
     mixer_entity: Entity,
     item_type: ResourceType,
-    queries: &crate::systems::soul_ai::task_execution::context::TaskAssignmentQueries,
+    queries: &crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
     shadow: &ReservationShadow,
 ) -> bool {
     if let Ok((_, storage, _)) = queries.storage.mixers.get(mixer_entity) {

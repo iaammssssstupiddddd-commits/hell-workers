@@ -5,9 +5,11 @@ use rand::Rng;
 use crate::constants::*;
 use crate::entities::damned_soul::{GatheringBehavior, IdleBehavior};
 use crate::events::{IdleBehaviorOperation, IdleBehaviorRequest};
-use crate::systems::soul_ai::gathering::{GATHERING_LEAVE_RADIUS, GatheringSpot, ParticipatingIn};
-use crate::systems::soul_ai::query_types::IdleDecisionSoulQuery;
-use crate::systems::soul_ai::task_execution::AssignedTask;
+use crate::systems::soul_ai::execute::task_execution::AssignedTask;
+use crate::systems::soul_ai::helpers::gathering::{
+    GATHERING_LEAVE_RADIUS, GatheringSpot, ParticipatingIn,
+};
+use crate::systems::soul_ai::helpers::query_types::IdleDecisionSoulQuery;
 use crate::systems::spatial::{GatheringSpotSpatialGrid, SpatialGridOps};
 use crate::world::map::WorldMap;
 

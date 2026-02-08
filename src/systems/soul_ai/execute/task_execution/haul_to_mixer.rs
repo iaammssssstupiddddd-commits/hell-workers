@@ -4,7 +4,7 @@ use super::types::{AssignedTask, HaulToMixerPhase};
 use crate::systems::logistics::ResourceType;
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
-// use crate::systems::familiar_ai::resource_cache::SharedResourceCache; // Removed unused import
+// use crate::systems::familiar_ai::perceive::resource_sync::SharedResourceCache; // Removed unused import
 
 pub fn handle_haul_to_mixer_task(
     ctx: &mut TaskExecutionContext,
@@ -132,7 +132,7 @@ pub fn handle_haul_to_mixer_task(
                     }
 
                     *ctx.task = AssignedTask::HaulToMixer(
-                        crate::systems::soul_ai::task_execution::types::HaulToMixerData {
+                        crate::systems::soul_ai::execute::task_execution::types::HaulToMixerData {
                             item: item_entity,
                             mixer: mixer_entity,
                             resource_type,
@@ -246,7 +246,7 @@ pub fn handle_haul_to_mixer_task(
 
                 if is_near_target_or_dest(soul_pos, mixer_pos, ctx.dest.0) {
                     *ctx.task = AssignedTask::HaulToMixer(
-                        crate::systems::soul_ai::task_execution::types::HaulToMixerData {
+                        crate::systems::soul_ai::execute::task_execution::types::HaulToMixerData {
                             item: item_entity,
                             mixer: mixer_entity,
                             resource_type,

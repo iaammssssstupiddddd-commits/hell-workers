@@ -10,7 +10,7 @@ use crate::relationships::TaskWorkers;
 use crate::systems::command::TaskArea;
 use crate::systems::jobs::{Designation, IssuedBy, MudMixerStorage, TaskSlots, WorkType};
 use crate::systems::logistics::{ResourceType, Stockpile};
-use crate::systems::soul_ai::task_execution::AssignedTask;
+use crate::systems::soul_ai::execute::task_execution::AssignedTask;
 
 /// MudMixer で精製タスクを自動発行するシステム
 pub fn mud_mixer_auto_refine_system(

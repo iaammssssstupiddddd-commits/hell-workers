@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 
 use crate::events::{GatheringManagementOp, GatheringManagementRequest};
-use crate::systems::soul_ai::gathering::{GatheringSpot, ParticipatingIn};
+use crate::systems::soul_ai::helpers::gathering::{GatheringSpot, ParticipatingIn};
 
 /// GatheringManagementRequest を適用する（Execute Phase）
 pub fn gathering_apply_system(

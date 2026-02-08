@@ -4,7 +4,7 @@ use crate::constants::*;
 use crate::entities::damned_soul::{DamnedSoul, IdleBehavior, IdleState};
 use crate::events::OnExhausted;
 use crate::relationships::CommandedBy;
-use crate::systems::soul_ai::task_execution::AssignedTask;
+use crate::systems::soul_ai::execute::task_execution::AssignedTask;
 
 /// 疲労の増減を管理するシステム
 pub fn fatigue_update_system(

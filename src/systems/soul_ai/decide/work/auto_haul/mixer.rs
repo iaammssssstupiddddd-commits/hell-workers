@@ -9,12 +9,12 @@ use crate::entities::familiar::ActiveCommand;
 use crate::events::{ResourceReservationOp, ResourceReservationRequest};
 use crate::relationships::TaskWorkers;
 use crate::systems::command::TaskArea;
-use crate::systems::familiar_ai::resource_cache::SharedResourceCache;
+use crate::systems::familiar_ai::perceive::resource_sync::SharedResourceCache;
 use crate::systems::jobs::{
     Designation, IssuedBy, MudMixerStorage, Priority, TargetMixer, TaskSlots, WorkType,
 };
 use crate::systems::logistics::{ReservedForTask, ResourceItem, ResourceType, Stockpile};
-use crate::systems::soul_ai::work::auto_haul::ItemReservations;
+use crate::systems::soul_ai::decide::work::auto_haul::ItemReservations;
 
 /// MudMixer への自動資材運搬タスク生成システム
 pub fn mud_mixer_auto_haul_system(

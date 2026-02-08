@@ -1,8 +1,8 @@
 use crate::events::ResourceReservationOp;
-use crate::systems::familiar_ai::task_management::{AssignTaskContext, ReservationShadow};
+use crate::systems::familiar_ai::helpers::task_management::{AssignTaskContext, ReservationShadow};
 use crate::systems::jobs::WorkType;
 use crate::systems::logistics::ResourceType;
-use crate::systems::soul_ai::task_execution::types::GatherWaterPhase;
+use crate::systems::soul_ai::execute::task_execution::types::GatherWaterPhase;
 use bevy::prelude::*;
 
 use super::submit_assignment;
@@ -12,16 +12,17 @@ pub fn issue_gather_water(
     task_pos: Vec2,
     already_commanded: bool,
     ctx: &AssignTaskContext<'_>,
-    queries: &mut crate::systems::soul_ai::task_execution::context::TaskAssignmentQueries,
+    queries: &mut crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
     shadow: &mut ReservationShadow,
 ) {
-    let assigned_task = crate::systems::soul_ai::task_execution::types::AssignedTask::GatherWater(
-        crate::systems::soul_ai::task_execution::types::GatherWaterData {
-            bucket: ctx.task_entity,
-            tank,
-            phase: GatherWaterPhase::GoingToBucket,
-        },
-    );
+    let assigned_task =
+        crate::systems::soul_ai::execute::task_execution::types::AssignedTask::GatherWater(
+            crate::systems::soul_ai::execute::task_execution::types::GatherWaterData {
+                bucket: ctx.task_entity,
+                tank,
+                phase: GatherWaterPhase::GoingToBucket,
+            },
+        );
     let reservation_ops = vec![
         ResourceReservationOp::ReserveDestination { target: tank },
         ResourceReservationOp::ReserveSource {
@@ -47,16 +48,16 @@ pub fn issue_haul_water_to_mixer(
     task_pos: Vec2,
     already_commanded: bool,
     ctx: &AssignTaskContext<'_>,
-    queries: &mut crate::systems::soul_ai::task_execution::context::TaskAssignmentQueries,
+    queries: &mut crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
     shadow: &mut ReservationShadow,
 ) {
-    let assigned_task = crate::systems::soul_ai::task_execution::types::AssignedTask::HaulWaterToMixer(
-        crate::systems::soul_ai::task_execution::types::HaulWaterToMixerData {
+    let assigned_task = crate::systems::soul_ai::execute::task_execution::types::AssignedTask::HaulWaterToMixer(
+        crate::systems::soul_ai::execute::task_execution::types::HaulWaterToMixerData {
             bucket: ctx.task_entity,
             tank,
             mixer,
             amount: 0,
-            phase: crate::systems::soul_ai::task_execution::types::HaulWaterToMixerPhase::GoingToBucket,
+            phase: crate::systems::soul_ai::execute::task_execution::types::HaulWaterToMixerPhase::GoingToBucket,
         },
     );
     let reservation_ops = vec![

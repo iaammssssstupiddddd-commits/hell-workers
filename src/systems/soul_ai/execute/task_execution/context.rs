@@ -2,7 +2,7 @@
 
 use crate::entities::damned_soul::{DamnedSoul, Destination, Path};
 use crate::systems::logistics::{Inventory, ResourceItem};
-use crate::systems::soul_ai::task_execution::types::AssignedTask;
+use crate::systems::soul_ai::execute::task_execution::types::AssignedTask;
 use bevy::prelude::*;
 
 use crate::events::{ResourceReservationOp, ResourceReservationRequest, TaskAssignmentRequest};
@@ -11,7 +11,7 @@ use crate::events::{ResourceReservationOp, ResourceReservationRequest, TaskAssig
 /// 各ハンドラー関数に共通する引数をまとめます。
 /// CommandsとQueryはライフタイムが複雑なため、引数として残します。
 use crate::relationships::{ManagedBy, TaskWorkers};
-use crate::systems::familiar_ai::resource_cache::SharedResourceCache;
+use crate::systems::familiar_ai::perceive::resource_sync::SharedResourceCache;
 use crate::systems::jobs::{Blueprint, Designation, Priority, TaskSlots};
 use crate::systems::logistics::{InStockpile, Stockpile};
 use bevy::ecs::system::SystemParam;
