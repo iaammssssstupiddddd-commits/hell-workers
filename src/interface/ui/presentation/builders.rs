@@ -168,7 +168,6 @@ impl EntityInspectionQuery<'_, '_> {
             );
         }
         model.push_tooltip(building_info.clone());
-        model.push_common(building_info);
 
         if let Some(storage) = mixer_storage_opt {
             let water_count = match (stockpile_opt, stored_items_opt) {
@@ -185,7 +184,6 @@ impl EntityInspectionQuery<'_, '_> {
                 storage.sand, storage.rock, water_count
             );
             model.push_tooltip(storage_line.clone());
-            model.push_common(storage_line);
         }
     }
 
@@ -201,14 +199,12 @@ impl EntityInspectionQuery<'_, '_> {
 
         let task_line = format!("Task: {:?}", designation.work_type);
         model.push_tooltip(task_line.clone());
-        model.push_common(task_line);
 
         if let Some(issued_by) = issued_by_opt
             && let Ok((familiar, _)) = self.q_familiars.get(issued_by.0)
         {
             let line = format!("Issued by: {}", familiar.name);
             model.push_tooltip(line.clone());
-            model.push_common(line);
         }
 
         if let Some(workers) = task_workers_opt {
@@ -229,7 +225,6 @@ impl EntityInspectionQuery<'_, '_> {
             if !worker_names.is_empty() {
                 let line = format!("Assigned to: {}", worker_names.join(", "));
                 model.push_tooltip(line.clone());
-                model.push_common(line);
             }
         }
     }
