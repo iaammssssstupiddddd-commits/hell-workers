@@ -12,11 +12,11 @@ use crate::systems::spatial::{DesignationSpatialGrid, SpatialGrid};
 use crate::systems::visual::speech::components::{FamiliarBubble, SpeechBubble};
 use bevy::prelude::*;
 
-use super::FamiliarAiState;
 use super::recruitment::RecruitmentManager;
 use super::squad::SquadManager;
 use super::state_handlers;
 use super::task_management::TaskManager;
+use crate::systems::familiar_ai::FamiliarAiState;
 use crate::world::map::WorldMap;
 use crate::world::pathfinding::PathfindingContext;
 

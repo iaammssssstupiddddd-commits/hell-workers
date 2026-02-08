@@ -1,4 +1,4 @@
-use super::FamiliarAiState;
+use crate::systems::familiar_ai::FamiliarAiState;
 use crate::entities::damned_soul::{DamnedSoul, Destination, IdleState, Path};
 use crate::entities::familiar::{ActiveCommand, Familiar, FamiliarOperation, FamiliarVoice};
 use crate::relationships::{CommandedBy, Commanding, ManagedTasks};
