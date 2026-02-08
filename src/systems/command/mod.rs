@@ -72,8 +72,7 @@ pub enum AreaEditHandleKind {
 pub use area_selection::{
     AreaEditClipboard, AreaEditHistory, AreaEditPresets, AreaEditSession,
     area_selection_indicator_system, task_area_edit_cursor_system,
-    task_area_edit_history_shortcuts_system,
-    task_area_selection_system,
+    task_area_edit_history_shortcuts_system, task_area_selection_system,
 };
 pub use assign_task::assign_task_system;
 pub use indicators::{

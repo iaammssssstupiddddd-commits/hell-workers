@@ -429,11 +429,7 @@ pub(crate) fn clear_children(
     }
 }
 
-fn despawn_with_children(
-    commands: &mut Commands,
-    q_children: &Query<&Children>,
-    entity: Entity,
-) {
+fn despawn_with_children(commands: &mut Commands, q_children: &Query<&Children>, entity: Entity) {
     if let Ok(children) = q_children.get(entity) {
         for child in children.iter() {
             despawn_with_children(commands, q_children, child);

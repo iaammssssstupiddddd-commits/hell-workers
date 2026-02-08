@@ -1,8 +1,8 @@
-use crate::systems::familiar_ai::FamiliarAiState;
 use crate::entities::damned_soul::{DamnedSoul, Destination, IdleState, Path};
 use crate::entities::familiar::{ActiveCommand, Familiar, FamiliarOperation, FamiliarVoice};
 use crate::relationships::{CommandedBy, Commanding, ManagedTasks};
 use crate::systems::command::TaskArea;
+use crate::systems::familiar_ai::FamiliarAiState;
 use crate::systems::soul_ai::gathering::ParticipatingIn;
 use crate::systems::soul_ai::task_execution::AssignedTask;
 use crate::systems::visual::speech::cooldown::SpeechHistory;

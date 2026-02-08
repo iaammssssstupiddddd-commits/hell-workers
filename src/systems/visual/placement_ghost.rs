@@ -190,7 +190,8 @@ pub fn placement_ghost_system(
             CompanionParentKind::Tank => BuildingType::Tank,
             CompanionParentKind::MudMixer => BuildingType::MudMixer,
         };
-        let partner_base = WorldMap::grid_to_world(companion.parent_anchor.0, companion.parent_anchor.1);
+        let partner_base =
+            WorldMap::grid_to_world(companion.parent_anchor.0, companion.parent_anchor.1);
         let partner_pos = match partner_type {
             BuildingType::Tank | BuildingType::MudMixer => {
                 partner_base + Vec2::new(TILE_SIZE * 0.5, TILE_SIZE * 0.5)
