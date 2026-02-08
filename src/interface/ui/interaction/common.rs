@@ -13,7 +13,7 @@ pub(super) fn update_interaction_color(
     };
 }
 
-pub(super) fn despawn_context_menus(
+pub(crate) fn despawn_context_menus(
     commands: &mut Commands,
     q_context_menu: &Query<Entity, With<crate::interface::ui::components::ContextMenu>>,
 ) {
