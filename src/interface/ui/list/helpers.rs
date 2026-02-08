@@ -145,6 +145,7 @@ pub(super) fn build_familiar_row_view_model(
                         souls.push(build_soul_view_model(soul_entity, soul, task, identity));
                     }
                 }
+                souls.sort_by_key(|vm| vm.entity.index());
             }
         }
     }
@@ -428,50 +429,31 @@ pub(crate) fn clear_children(
     }
 }
 
-pub(super) fn sync_familiar_section_content(
+pub(super) fn spawn_empty_squad_hint_entity(
     commands: &mut Commands,
-    q_children: &Query<&Children>,
-    familiar: &FamiliarRowViewModel,
-    nodes: FamiliarSectionNodes,
+    parent_entity: Entity,
     game_assets: &crate::assets::GameAssets,
     theme: &UiTheme,
-) {
-    clear_children(commands, q_children, nodes.members_container);
-
-    if familiar.is_folded {
-        return;
-    }
-
-    commands
-        .entity(nodes.members_container)
-        .with_children(|members_parent| {
-            if familiar.show_empty {
-                members_parent.spawn((
-                    Text::new("  (empty)"),
-                    TextFont {
-                        font: game_assets.font_ui.clone(),
-                        font_size: theme.typography.font_size_item,
-                        ..default()
-                    },
-                    TextColor(theme.colors.empty_text),
-                    Node {
-                        margin: UiRect::left(Val::Px(theme.sizes.empty_squad_left_margin)),
-                        ..default()
-                    },
-                ));
-                return;
-            }
-
-            for soul_vm in &familiar.souls {
-                spawn_soul_list_item(
-                    members_parent,
-                    soul_vm,
-                    game_assets,
-                    theme.sizes.squad_member_left_margin,
-                    theme,
-                );
-            }
-        });
+) -> Entity {
+    let mut result = Entity::PLACEHOLDER;
+    commands.entity(parent_entity).with_children(|members_parent| {
+        result = members_parent
+            .spawn((
+                Text::new("  (empty)"),
+                TextFont {
+                    font: game_assets.font_ui.clone(),
+                    font_size: theme.typography.font_size_item,
+                    ..default()
+                },
+                TextColor(theme.colors.empty_text),
+                Node {
+                    margin: UiRect::left(Val::Px(theme.sizes.empty_squad_left_margin)),
+                    ..default()
+                },
+            ))
+            .id();
+    });
+    result
 }
 
 pub(super) fn select_entity_and_focus_camera(
