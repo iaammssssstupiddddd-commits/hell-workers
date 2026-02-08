@@ -3,10 +3,6 @@ use crate::entities::damned_soul::DamnedSoul;
 use crate::systems::jobs::WorkType;
 use bevy::prelude::*;
 
-pub mod influence;
-pub mod update;
-pub mod visual;
-
 /// タスク完了時のモチベーションボーナス
 pub fn on_task_completed_motivation_bonus(
     trigger: On<crate::events::OnTaskCompleted>,
