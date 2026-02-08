@@ -4,6 +4,20 @@ use crate::entities::damned_soul::{Destination, Path};
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
 use rand::Rng;
+use std::env;
+
+fn parse_spawn_familiars_from_args() -> Option<usize> {
+    let mut args = env::args().skip(1);
+    while let Some(arg) = args.next() {
+        if arg == "--spawn-familiars" {
+            let value = args.next()?;
+            if let Ok(parsed) = value.parse::<usize>() {
+                return Some(parsed);
+            }
+        }
+    }
+    None
+}
 
 /// 使い魔のスポーンイベント
 #[derive(Message)]
@@ -162,14 +176,24 @@ impl FamiliarVoice {
 
 /// 使い魔をスポーンする
 pub fn spawn_familiar(mut spawn_events: MessageWriter<FamiliarSpawnEvent>) {
-    spawn_events.write(FamiliarSpawnEvent {
-        position: Vec2::new(-20.0, 0.0),
-        familiar_type: FamiliarType::Imp,
+    let spawn_count = parse_spawn_familiars_from_args().unwrap_or_else(|| {
+        env::var("HW_SPAWN_FAMILIARS")
+            .ok()
+            .and_then(|v| v.parse::<usize>().ok())
+            .unwrap_or(2)
     });
-    spawn_events.write(FamiliarSpawnEvent {
-        position: Vec2::new(20.0, 0.0),
-        familiar_type: FamiliarType::Imp,
-    });
+
+    let mut rng = rand::thread_rng();
+    for _ in 0..spawn_count {
+        let x = rng.gen_range(-120.0..120.0);
+        let y = rng.gen_range(-120.0..120.0);
+        spawn_events.write(FamiliarSpawnEvent {
+            position: Vec2::new(x, y),
+            familiar_type: FamiliarType::Imp,
+        });
+    }
+
+    info!("SPAWN_CONFIG: Familiars requested={}", spawn_count);
 }
 
 /// 使い魔のスポーンを処理するシステム

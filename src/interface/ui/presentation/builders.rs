@@ -81,8 +81,14 @@ impl EntityInspectionQuery<'_, '_> {
 
         model.header = familiar.name.clone();
         model.push_common(format!("Type: {:?}", familiar.familiar_type));
-        model.push_common(format!("Range: {:.0} tiles", familiar.command_radius / 16.0));
-        model.push_common(format!("Fatigue Threshold: {:.0}%", op.fatigue_threshold * 100.0));
+        model.push_common(format!(
+            "Range: {:.0} tiles",
+            familiar.command_radius / 16.0
+        ));
+        model.push_common(format!(
+            "Fatigue Threshold: {:.0}%",
+            op.fatigue_threshold * 100.0
+        ));
         model.push_tooltip(format!("Familiar: {}", familiar.name));
         true
     }
@@ -149,7 +155,9 @@ impl EntityInspectionQuery<'_, '_> {
             building_info.push_str(" (Provisional)");
         }
         if let Some(stockpile) = stockpile_opt {
-            let current = stored_items_opt.map(|stored_items| stored_items.len()).unwrap_or(0);
+            let current = stored_items_opt
+                .map(|stored_items| stored_items.len())
+                .unwrap_or(0);
             let resource_name = stockpile
                 .resource_type
                 .map(|resource| format!("{:?}", resource))

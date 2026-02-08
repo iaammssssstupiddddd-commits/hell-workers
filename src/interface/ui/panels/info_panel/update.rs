@@ -110,14 +110,14 @@ pub fn info_panel_system(
     inspection: EntityInspectionQuery,
 ) {
     let mut inspected_entity = pin_state.entity.or(selected.0);
-    let mut next_model = inspected_entity
-        .and_then(|entity| inspection.build_model(entity).map(to_view_model));
+    let mut next_model =
+        inspected_entity.and_then(|entity| inspection.build_model(entity).map(to_view_model));
 
     if pin_state.entity.is_some() && next_model.is_none() {
         pin_state.entity = None;
         inspected_entity = selected.0;
-        next_model = inspected_entity
-            .and_then(|entity| inspection.build_model(entity).map(to_view_model));
+        next_model =
+            inspected_entity.and_then(|entity| inspection.build_model(entity).map(to_view_model));
     }
 
     let pinned = pin_state.entity.is_some();
@@ -153,7 +153,13 @@ pub fn info_panel_system(
                 UiSlot::InfoPanelStatsGroup,
                 Display::Flex,
             );
-            set_text_slot(&info_nodes, &ui_nodes, &mut q_text, UiSlot::Header, &soul.header);
+            set_text_slot(
+                &info_nodes,
+                &ui_nodes,
+                &mut q_text,
+                UiSlot::Header,
+                &soul.header,
+            );
             set_text_slot(
                 &info_nodes,
                 &ui_nodes,
@@ -175,7 +181,13 @@ pub fn info_panel_system(
                 UiSlot::StatFatigue,
                 &soul.fatigue,
             );
-            set_text_slot(&info_nodes, &ui_nodes, &mut q_text, UiSlot::TaskText, &soul.task);
+            set_text_slot(
+                &info_nodes,
+                &ui_nodes,
+                &mut q_text,
+                UiSlot::TaskText,
+                &soul.task,
+            );
             set_text_slot(
                 &info_nodes,
                 &ui_nodes,
@@ -236,20 +248,8 @@ pub fn info_panel_system(
                 UiSlot::StatMotivation,
                 "",
             );
-            set_text_slot(
-                &info_nodes,
-                &ui_nodes,
-                &mut q_text,
-                UiSlot::StatStress,
-                "",
-            );
-            set_text_slot(
-                &info_nodes,
-                &ui_nodes,
-                &mut q_text,
-                UiSlot::StatFatigue,
-                "",
-            );
+            set_text_slot(&info_nodes, &ui_nodes, &mut q_text, UiSlot::StatStress, "");
+            set_text_slot(&info_nodes, &ui_nodes, &mut q_text, UiSlot::StatFatigue, "");
             set_text_slot(&info_nodes, &ui_nodes, &mut q_text, UiSlot::TaskText, "");
             set_text_slot(
                 &info_nodes,

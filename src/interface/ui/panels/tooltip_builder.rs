@@ -500,4 +500,3 @@ fn char_to_byte_idx(text: &str, char_idx: usize) -> usize {
         .map(|(idx, _)| idx)
         .unwrap_or(text.len())
 }
-

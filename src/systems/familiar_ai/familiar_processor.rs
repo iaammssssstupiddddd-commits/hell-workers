@@ -215,6 +215,7 @@ pub fn process_task_delegation_and_movement(
     world_map: &WorldMap,
     pf_context: &mut PathfindingContext,
     time: &Res<Time>,
+    allow_task_delegation: bool,
     state_changed: bool,
     reservation_shadow: &mut crate::systems::familiar_ai::task_management::ReservationShadow,
 ) {
@@ -222,22 +223,26 @@ pub fn process_task_delegation_and_movement(
     let fatigue_threshold = familiar_op.fatigue_threshold;
 
     // タスク委譲
-    let assigned_task_opt = TaskManager::delegate_task(
-        fam_entity,
-        fam_pos,
-        &squad_entities,
-        task_area_opt,
-        fatigue_threshold,
-        queries,
-        q_souls,
-        designation_grid,
-        managed_tasks,
-        // haul_cache removed
-        world_map,
-        pf_context,
-        reservation_shadow,
-    );
-    let has_available_task = assigned_task_opt.is_some();
+    let has_available_task = if allow_task_delegation {
+        TaskManager::delegate_task(
+            fam_entity,
+            fam_pos,
+            &squad_entities,
+            task_area_opt,
+            fatigue_threshold,
+            queries,
+            q_souls,
+            designation_grid,
+            managed_tasks,
+            // haul_cache removed
+            world_map,
+            pf_context,
+            reservation_shadow,
+        )
+        .is_some()
+    } else {
+        false
+    };
 
     // 移動制御
     // state_changed があっても、Supervising/SearchingTask なら各ロジックを呼ぶ

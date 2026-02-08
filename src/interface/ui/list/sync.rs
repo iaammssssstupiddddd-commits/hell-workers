@@ -20,7 +20,10 @@ fn sync_familiar_member_rows(
         .or_default();
 
     if familiar.is_folded {
-        if !member_rows.is_empty() || node_index.familiar_empty_rows.contains_key(&familiar.entity)
+        if !member_rows.is_empty()
+            || node_index
+                .familiar_empty_rows
+                .contains_key(&familiar.entity)
         {
             super::helpers::clear_children(commands, q_children, nodes.members_container);
             member_rows.clear();
