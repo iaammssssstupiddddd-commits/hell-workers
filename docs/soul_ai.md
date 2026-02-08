@@ -88,10 +88,10 @@ Perceive → Update → Decide → Execute
 |:--|:--|:--|
 | **Perceive** | 環境情報の読み取り、変化の検出 | 現時点では拡張ポイント（逃走ヘルパー/タイマー資源の定義） |
 | **Update** | 時間経過による内部状態の変化 | バイタル更新、タイマー、集会スポットメンテナンス |
-| **Decide** | 次の行動の選択、要求の生成 | `idle_behavior_decision_system`, `escaping_decision_system`, タスク割り当て要求 |
-| **Execute** | 決定された行動の実行 | `apply_task_assignment_requests_system`, `idle_behavior_apply_system`, `escaping_apply_system`, `task_execution` |
+| **Decide** | 次の行動の選択、要求の生成 | `idle_behavior_decision_system`, `escaping_decision_system`, `DesignationRequest`/`TaskAssignmentRequest` の生成 |
+| **Execute** | 決定された行動の実行 | `apply_designation_requests_system`, `apply_task_assignment_requests_system`, `idle_behavior_apply_system`, `escaping_apply_system`, `task_execution` |
 
-**Message/Request パターン**: Decideフェーズで生成された `TaskAssignmentRequest` や `IdleBehaviorRequest` はExecuteフェーズで読み取られ、実際のコンポーネント更新が行われます。これにより堅牢なフェーズ間通信が実現されています。
+**Message/Request パターン**: Decideフェーズで生成された `DesignationRequest`、`TaskAssignmentRequest`、`IdleBehaviorRequest` はExecuteフェーズで読み取られ、実際のコンポーネント更新が行われます。これにより堅牢なフェーズ間通信が実現されています。
 
 ### 3.1. 採取 (Gather)
 - **対象**: 木、岩、建築物など。

@@ -13,8 +13,8 @@
 | :--- | :--- | :--- |
 | **Perceive** | `Perceive` | 環境情報の収集と **リソース予約の再構築** (`sync_reservations_system`)。`AssignedTask`（実行中タスク）と `Designation`（割り当て待ちタスク）の両方から `SharedResourceCache` を **0.2秒間隔（初回は即時）** で再構築します。 |
 | **Update** | `Update` | 時間経過による内部状態の変化（バイタル更新、タイマー等）。 |
-| **Decide** | `Decide` | 意思決定とタスク割り当て要求の生成（`TaskAssignmentRequest`）。`SharedResourceCache` を参照して候補を選定します。 |
-| **Execute** | `Execute` | 割り当て要求の適用 → 実際の行動 (`task_execution`) → 予約更新の反映 (`apply_reservation_requests_system`)。 |
+| **Decide** | `Decide` | 意思決定と要求生成（`DesignationRequest`, `TaskAssignmentRequest`）。`SharedResourceCache` を参照して候補を選定します。 |
+| **Execute** | `Execute` | 要求適用（`apply_designation_requests_system`, `apply_task_assignment_requests_system`）→ 実際の行動 (`task_execution`) → 予約更新の反映 (`apply_reservation_requests_system`)。 |
 
 ## 3. 主要なコンポーネント
 
@@ -50,9 +50,10 @@ Bevy 0.18 の **ECS Relationships** 機能を使用し、エンティティ間�
 ### 1. 指定 (Designation)
 - **手動**: プレイヤーが UI やドラッグ操作で指定。
 - **自動**:
-    - `soul_ai::decide::work::task_area_auto_haul_system` が備蓄場所周辺の資源を自動的に `Haul` 指定。
-    - `soul_ai::decide::work::tank_water_request_system` がタンクの空きに応じてバケツに自動的に `GatherWater` 指定。
-    - `soul_ai::decide::work::auto_haul::mud_mixer_auto_haul_system` が、MudMixerの空き状況とTankの在庫に応じて `HaulToMixer` (Sand/Rock) および `HaulWaterToMixer` (Water) を自動指定。
+    - `soul_ai::decide::work::task_area_auto_haul_system` が備蓄場所周辺の資源を `DesignationRequest` として `Haul` 発行要求。
+    - `soul_ai::decide::work::tank_water_request_system` がタンクの空きに応じて `GatherWater` 発行要求。
+    - `soul_ai::decide::work::auto_haul::mud_mixer_auto_haul_system` が、MudMixerの空き状況とTankの在庫に応じて `HaulToMixer` (Sand/Rock) および `HaulWaterToMixer` (Water) の発行要求。
+    - これらの要求は Execute フェーズの `apply_designation_requests_system` で `Designation` 等のコンポーネントに反映される。
 
 
 ### 2. 割り当て (Assignment)
