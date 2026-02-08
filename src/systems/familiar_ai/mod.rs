@@ -24,11 +24,6 @@ pub mod squad {
     pub use super::helpers::squad::*;
 }
 
-#[allow(unused_imports)]
-pub mod recruitment {
-    pub use super::helpers::recruitment::*;
-}
-
 pub mod scouting {
     pub use super::helpers::scouting::*;
 }
@@ -138,10 +133,6 @@ impl Plugin for FamiliarAiPlugin {
                 ApplyDeferred
                     .after(crate::systems::soul_ai::scheduling::FamiliarAiSystemSet::Perceive)
                     .before(crate::systems::soul_ai::scheduling::FamiliarAiSystemSet::Update),
-                // === Update Phase ===
-                // 時間経過による内部状態の変化
-                (encouragement::cleanup_encouragement_cooldowns_system,)
-                    .in_set(crate::systems::soul_ai::scheduling::FamiliarAiSystemSet::Update),
                 // Update → Decide 間の同期
                 ApplyDeferred
                     .after(crate::systems::soul_ai::scheduling::FamiliarAiSystemSet::Update)
@@ -153,15 +144,18 @@ impl Plugin for FamiliarAiPlugin {
                     ApplyDeferred,
                     familiar_task_delegation_system,
                     following::following_familiar_system,
-                    encouragement::encouragement_system,
+                    encouragement::encouragement_decision_system,
                 )
                     .chain(),)
                     .in_set(crate::systems::soul_ai::scheduling::FamiliarAiSystemSet::Decide),
                 // === Execute Phase ===
                 // 決定された行動の実行
                 (
+                    execute::state_apply::familiar_state_apply_system,
                     state_transition::handle_state_changed_system,
                     process_squad_management_apply_system,
+                    execute::encouragement_apply::encouragement_apply_system,
+                    execute::encouragement_apply::cleanup_encouragement_cooldowns_system,
                 )
                     .in_set(crate::systems::soul_ai::scheduling::FamiliarAiSystemSet::Execute),
             ),
@@ -200,6 +194,7 @@ pub struct FamiliarAiParams<'w, 's> {
     pub q_bubbles: Query<'w, 's, (Entity, &'static SpeechBubble), With<FamiliarBubble>>,
     // cooldowns removed (now a component)
     pub ev_state_changed: MessageWriter<'w, crate::events::FamiliarAiStateChangedEvent>,
+    pub state_request_writer: MessageWriter<'w, crate::events::FamiliarStateRequest>,
     pub request_writer: MessageWriter<'w, crate::events::SquadManagementRequest>,
 }
 
@@ -229,6 +224,7 @@ pub fn familiar_ai_state_system(params: FamiliarAiParams) {
         // fatigue_threshold removed
         // max_workers removed
         mut ev_state_changed,
+        mut state_request_writer,
         mut request_writer,
         q_bubbles,
         game_assets,
@@ -354,6 +350,10 @@ pub fn familiar_ai_state_system(params: FamiliarAiParams) {
         }
 
         if state_changed {
+            state_request_writer.write(crate::events::FamiliarStateRequest {
+                familiar_entity: fam_entity,
+                new_state: ai_state.clone(),
+            });
             // 状態遷移イベントを発火（Changed フィルタで検知できない場合の補完）
             ev_state_changed.write(crate::events::FamiliarAiStateChangedEvent {
                 familiar_entity: fam_entity,

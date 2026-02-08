@@ -20,10 +20,6 @@ pub mod query_types {
 pub mod gathering {
     pub use super::helpers::gathering::*;
 
-    pub mod maintenance {
-        pub use super::super::update::gathering_maintenance::*;
-    }
-
     pub mod spawn {
         pub use super::super::execute::gathering_spawn::*;
     }
@@ -119,9 +115,6 @@ impl Plugin for SoulAiPlugin {
                 bevy::ecs::schedule::ApplyDeferred
                     .after(FamiliarAiSystemSet::Execute)
                     .before(SoulAiSystemSet::Perceive),
-                // === Perceive Phase ===
-                // 環境情報の読み取り、変化の検出
-                (idle::escaping::escaping_detection_system,).in_set(SoulAiSystemSet::Perceive),
                 // Perceive → Update 間の同期
                 bevy::ecs::schedule::ApplyDeferred
                     .after(SoulAiSystemSet::Perceive)
@@ -131,15 +124,11 @@ impl Plugin for SoulAiPlugin {
                 (
                     // タイマー更新
                     gathering::tick_gathering_timer_system,
+                    update::gathering_tick::gathering_grace_tick_system,
                     // バイタル更新
                     vitals::update::fatigue_update_system,
                     vitals::update::fatigue_penalty_system,
                     vitals::influence::familiar_influence_unified_system,
-                    // メンテナンス処理
-                    gathering::maintenance::gathering_recruitment_system,
-                    gathering::maintenance::gathering_leave_system,
-                    gathering::maintenance::gathering_maintenance_system,
-                    gathering::maintenance::gathering_merge_system,
                 )
                     .in_set(SoulAiSystemSet::Update),
                 // Update → Decide 間の同期
@@ -160,7 +149,12 @@ impl Plugin for SoulAiPlugin {
                     // アイドル行動の決定
                     idle::behavior::idle_behavior_decision_system,
                     idle::separation::gathering_separation_system,
-                    idle::escaping::escaping_behavior_system,
+                    decide::escaping::escaping_decision_system,
+                    // 集会管理の決定
+                    decide::gathering_mgmt::gathering_maintenance_decision,
+                    decide::gathering_mgmt::gathering_merge_decision,
+                    decide::gathering_mgmt::gathering_recruitment_decision,
+                    decide::gathering_mgmt::gathering_leave_decision,
                 )
                     .in_set(SoulAiSystemSet::Decide),
                 // Decide → Execute 間の同期
@@ -176,6 +170,8 @@ impl Plugin for SoulAiPlugin {
                     task_execution::task_execution_system,
                     // アイドル行動の適用
                     idle::behavior::idle_behavior_apply_system,
+                    execute::escaping_apply::escaping_apply_system,
+                    execute::gathering_apply::gathering_apply_system,
                     // クリーンアップ
                     work::cleanup::cleanup_commanded_souls_system,
                     work::auto_haul::clear_item_reservations_system,
