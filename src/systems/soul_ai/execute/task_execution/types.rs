@@ -27,6 +27,8 @@ pub enum AssignedTask {
     HaulToMixer(HaulToMixerData),
     /// Tankの水をバケツでMudMixerへ運ぶ
     HaulWaterToMixer(HaulWaterToMixerData),
+    /// 手押し車で一括運搬
+    HaulWithWheelbarrow(HaulWithWheelbarrowData),
 }
 
 #[derive(Reflect, Clone, Debug, PartialEq)]
@@ -170,6 +172,28 @@ pub enum HaulToMixerPhase {
     Delivering,
 }
 
+/// 手押し車による一括運搬タスク
+#[derive(Reflect, Clone, Debug, PartialEq)]
+pub struct HaulWithWheelbarrowData {
+    pub wheelbarrow: Entity,
+    pub source_pos: Vec2,
+    pub dest_stockpile: Entity,
+    pub items: Vec<Entity>,
+    pub phase: HaulWithWheelbarrowPhase,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Reflect, Default)]
+pub enum HaulWithWheelbarrowPhase {
+    #[default]
+    GoingToParking,
+    PickingUpWheelbarrow,
+    GoingToSource,
+    Loading,
+    GoingToDestination,
+    Unloading,
+    ReturningWheelbarrow,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Reflect, Default)]
 pub enum HaulWaterToMixerPhase {
     #[default]
@@ -194,6 +218,7 @@ impl AssignedTask {
             AssignedTask::Refine(_) => Some(WorkType::Refine),
             AssignedTask::HaulToMixer(_) => Some(WorkType::Haul),
             AssignedTask::HaulWaterToMixer(_) => Some(WorkType::HaulWaterToMixer),
+            AssignedTask::HaulWithWheelbarrow(_) => Some(WorkType::WheelbarrowHaul),
             AssignedTask::None => None,
         }
     }
@@ -210,6 +235,7 @@ impl AssignedTask {
             AssignedTask::Refine(data) => Some(data.mixer),
             AssignedTask::HaulToMixer(data) => Some(data.item),
             AssignedTask::HaulWaterToMixer(data) => Some(data.bucket),
+            AssignedTask::HaulWithWheelbarrow(data) => Some(data.wheelbarrow),
             AssignedTask::None => None,
         }
     }

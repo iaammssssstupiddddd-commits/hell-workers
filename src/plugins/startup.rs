@@ -130,47 +130,64 @@ fn setup(
         dirt: asset_server.load("textures/dirt.jpg"),
         stone: asset_server.load("textures/stone.jpg"),
         river: asset_server.load("textures/river.png"),
-        sand: asset_server.load("textures/sand.png"),
-        colonist: asset_server.load("textures/colonist.png"),
+        sand: asset_server.load("textures/resources/sandpile/sandpile.png"),
         familiar: asset_server.load("textures/familiar_spritesheet.png"),
+        // Soul Animations
+        soul_move: asset_server.load("textures/character/soul_move_spritesheet.png"),
+        soul_layout: {
+            // 1024x1024 を 3x3 に整数分割し、端数ピクセルも最後の列/行に含める。
+            let mut layout = TextureAtlasLayout::new_empty(UVec2::new(1024, 1024));
+            for row in 0..3 {
+                for col in 0..3 {
+                    let left = col * 1024 / 3;
+                    let top = row * 1024 / 3;
+                    let right = (col + 1) * 1024 / 3;
+                    let bottom = (row + 1) * 1024 / 3;
+                    layout.add_texture(URect::new(left, top, right, bottom));
+                }
+            }
+            layouts.add(layout)
+        },
         // wall: asset_server.load("textures/stone.jpg"),
         // Wall connections
-        wall_isolated: asset_server.load("textures/wooden_wall/wall_isolated.png"),
+        wall_isolated: asset_server.load("textures/buildings/wooden_wall/wall_isolated.png"),
         wall_horizontal_left: asset_server
-            .load("textures/wooden_wall/wall_horizontal_left_side_connected.png"),
+            .load("textures/buildings/wooden_wall/wall_horizontal_left_side_connected.png"),
         wall_horizontal_right: asset_server
-            .load("textures/wooden_wall/wall_horizontal_right_side_connected.png"),
+            .load("textures/buildings/wooden_wall/wall_horizontal_right_side_connected.png"),
         wall_horizontal_both: asset_server
-            .load("textures/wooden_wall/wall_horizontal_connected_both_side.png"),
+            .load("textures/buildings/wooden_wall/wall_horizontal_connected_both_side.png"),
         wall_vertical_top: asset_server
-            .load("textures/wooden_wall/wall_vertical_top_side_connected.png"),
+            .load("textures/buildings/wooden_wall/wall_vertical_top_side_connected.png"),
         wall_vertical_bottom: asset_server
-            .load("textures/wooden_wall/wall_vertical_bottom_side_connected.png"),
+            .load("textures/buildings/wooden_wall/wall_vertical_bottom_side_connected.png"),
         wall_vertical_both: asset_server
-            .load("textures/wooden_wall/wall_vertical_both_side_connected.png"),
-        wall_corner_top_left: asset_server.load("textures/wooden_wall/wall_corner_left_top.png"),
-        wall_corner_top_right: asset_server.load("textures/wooden_wall/wall_corner_right_top.png"),
+            .load("textures/buildings/wooden_wall/wall_vertical_both_side_connected.png"),
+        wall_corner_top_left: asset_server
+            .load("textures/buildings/wooden_wall/wall_corner_left_top.png"),
+        wall_corner_top_right: asset_server
+            .load("textures/buildings/wooden_wall/wall_corner_right_top.png"),
         wall_corner_bottom_left: asset_server
-            .load("textures/wooden_wall/wall_corner_left_down.png"),
+            .load("textures/buildings/wooden_wall/wall_corner_left_down.png"),
         wall_corner_bottom_right: asset_server
-            .load("textures/wooden_wall/wall_corner_right_down.png"),
-        wall_t_up: asset_server.load("textures/wooden_wall/wall_t_up.png"),
-        wall_t_down: asset_server.load("textures/wooden_wall/wall_t_down.png"),
-        wall_t_left: asset_server.load("textures/wooden_wall/wall_t_left.png"),
-        wall_t_right: asset_server.load("textures/wooden_wall/wall_t_right.png"),
-        wall_cross: asset_server.load("textures/wooden_wall/wall_cross.png"),
+            .load("textures/buildings/wooden_wall/wall_corner_right_down.png"),
+        wall_t_up: asset_server.load("textures/buildings/wooden_wall/wall_t_up.png"),
+        wall_t_down: asset_server.load("textures/buildings/wooden_wall/wall_t_down.png"),
+        wall_t_left: asset_server.load("textures/buildings/wooden_wall/wall_t_left.png"),
+        wall_t_right: asset_server.load("textures/buildings/wooden_wall/wall_t_right.png"),
+        wall_cross: asset_server.load("textures/buildings/wooden_wall/wall_cross.png"),
 
         wood: asset_server.load("textures/dirt.jpg"),
-        tree: asset_server.load("textures/tree.png"),
+        tree: asset_server.load("textures/environment/tree/tree_1.png"),
         rock: asset_server.load("textures/rock.png"),
         aura_circle,
         aura_ring,
         // Water related
-        tank_empty: asset_server.load("textures/tank_empty.png"),
-        tank_partial: asset_server.load("textures/tank_partial.png"),
-        tank_full: asset_server.load("textures/tank_full.png"),
-        bucket_empty: asset_server.load("textures/bucket_empty.png"),
-        bucket_water: asset_server.load("textures/bucket_water.png"),
+        tank_empty: asset_server.load("textures/buildings/tank/empty_tank.png"),
+        tank_partial: asset_server.load("textures/buildings/tank/half_tank.png"),
+        tank_full: asset_server.load("textures/buildings/tank/full_tank.png"),
+        bucket_empty: asset_server.load("textures/items/bucket/bucket_empty.png"),
+        bucket_water: asset_server.load("textures/items/bucket/bucket_water.png"),
         icon_male: asset_server.load("textures/ui/male.png"),
         icon_female: asset_server.load("textures/ui/female.png"),
         icon_fatigue: asset_server.load("textures/ui/fatigue.png"),
@@ -197,17 +214,24 @@ fn setup(
         icon_hammer: asset_server.load("textures/ui/hammer.png"),
         icon_wood_small: asset_server.load("textures/ui/wood_small.png"),
         icon_rock_small: asset_server.load("textures/ui/rock_small.png"),
-        icon_water_small: asset_server.load("textures/bucket_water.png"),
-        icon_sand_small: asset_server.load("textures/sand.png"),
+        icon_water_small: asset_server.load("textures/items/bucket/bucket_water.png"),
+        icon_sand_small: asset_server.load("textures/resources/sandpile/sandpile.png"),
         icon_stasis_mud_small: asset_server.load("textures/ui/wood_small.png"),
         // Gathering Objects
         gathering_card_table: asset_server.load("textures/ui/card_table.png"),
         gathering_campfire: asset_server.load("textures/ui/campfire.png"),
         gathering_barrel: asset_server.load("textures/ui/barrel.png"),
         // New Resource & Station
-        sand_pile: asset_server.load("textures/sand.png"),
+        sand_pile: asset_server.load("textures/resources/sandpile/sandpile.png"),
         stasis_mud: asset_server.load("textures/stone.jpg"),
-        mud_mixer: asset_server.load("textures/tank_empty.png"),
+        mud_mixer: asset_server.load("textures/buildings/mud_mixer/mud mixer.png"),
+        // Wheelbarrow
+        wheelbarrow_empty: asset_server.load("textures/items/wheel_barrow/wheel_barrow.png"),
+        wheelbarrow_loaded: asset_server.load("textures/items/wheel_barrow/wheel_barrow_full.png"),
+        wheelbarrow_parking: asset_server
+            .load("textures/items/wheel_barrow/wheel_barrow_parking.png"),
+        icon_wheelbarrow_small: asset_server
+            .load("textures/items/wheel_barrow/wheel_barrow_icon.png"),
         // Fonts
         font_ui,
         font_familiar,

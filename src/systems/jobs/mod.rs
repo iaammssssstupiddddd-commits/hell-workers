@@ -18,6 +18,7 @@ pub enum BuildingType {
     Tank,
     MudMixer,
     SandPile,
+    WheelbarrowParking,
 }
 
 impl BuildingType {
@@ -39,6 +40,9 @@ impl BuildingType {
             }
             BuildingType::SandPile => {
                 materials.insert(ResourceType::Wood, 1);
+            }
+            BuildingType::WheelbarrowParking => {
+                materials.insert(ResourceType::Wood, 2);
             }
         }
         materials
@@ -146,6 +150,7 @@ pub enum WorkType {
     CollectSand,      // 砂採取
     Refine,           // 精製
     HaulWaterToMixer, // Tankから水をミキサーへ運ぶ
+    WheelbarrowHaul,  // 手押し車で一括運搬
 }
 
 #[derive(Component)]

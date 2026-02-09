@@ -15,7 +15,8 @@ pub fn on_task_completed_motivation_bonus(
             WorkType::Haul
             | WorkType::HaulToMixer
             | WorkType::GatherWater
-            | WorkType::HaulWaterToMixer => MOTIVATION_BONUS_HAUL,
+            | WorkType::HaulWaterToMixer
+            | WorkType::WheelbarrowHaul => MOTIVATION_BONUS_HAUL,
             WorkType::Build | WorkType::Refine => MOTIVATION_BONUS_BUILD,
         };
 

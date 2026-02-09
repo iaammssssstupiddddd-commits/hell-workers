@@ -3,7 +3,10 @@ mod haul;
 mod water;
 
 pub use basic::{issue_build, issue_collect_sand, issue_gather, issue_refine};
-pub use haul::{issue_haul_to_blueprint, issue_haul_to_mixer, issue_haul_to_stockpile};
+pub use haul::{
+    issue_haul_to_blueprint, issue_haul_to_mixer, issue_haul_to_stockpile,
+    issue_haul_with_wheelbarrow,
+};
 pub use water::{issue_gather_water, issue_haul_water_to_mixer};
 
 use crate::events::{ResourceReservationOp, TaskAssignmentRequest};
