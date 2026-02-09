@@ -153,6 +153,7 @@ pub struct AnimationState {
     pub is_moving: bool,
     pub facing_right: bool,
     pub bob_timer: f32,
+    pub frame_timer: f32,
 }
 
 impl Default for AnimationState {
@@ -161,6 +162,7 @@ impl Default for AnimationState {
             is_moving: false,
             facing_right: true,
             bob_timer: 0.0,
+            frame_timer: 0.0,
         }
     }
 }

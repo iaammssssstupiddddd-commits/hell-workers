@@ -7,6 +7,7 @@
 mod carrying_item;
 mod components;
 mod effects;
+mod wheelbarrow_follow;
 
 // ============================================================================
 // Re-exports
@@ -14,6 +15,7 @@ mod effects;
 
 pub use carrying_item::*;
 pub use effects::*;
+pub use wheelbarrow_follow::*;
 
 // ============================================================================
 // 定数

@@ -91,9 +91,13 @@ pub fn spawn_damned_soul_at(
         IdleState::default(),
         AssignedTask::default(),
         Sprite {
-            image: game_assets.colonist.clone(),
+            image: game_assets.soul_move.clone(),
             custom_size: Some(Vec2::splat(TILE_SIZE * 0.8)),
             color: sprite_color,
+            texture_atlas: Some(TextureAtlas {
+                layout: game_assets.soul_layout.clone(),
+                index: 0,
+            }),
             ..default()
         },
         Transform::from_xyz(actual_pos.x, actual_pos.y, Z_CHARACTER),

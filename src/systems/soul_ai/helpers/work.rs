@@ -171,6 +171,47 @@ pub fn unassign_task<'w, 's, Q: TaskReservationAccess<'w, 's>>(
                     });
             }
         }
+        AssignedTask::HaulWithWheelbarrow(data) => {
+            // ソースアイテムの予約と目的地の予約を解放（各アイテムにつき1つずつ）
+            for &item in &data.items {
+                queries
+                    .reservation_writer()
+                    .write(ResourceReservationRequest {
+                        op: ResourceReservationOp::ReleaseSource {
+                            source: item,
+                            amount: 1,
+                        },
+                    });
+                queries
+                    .reservation_writer()
+                    .write(ResourceReservationRequest {
+                        op: ResourceReservationOp::ReleaseDestination {
+                            target: data.dest_stockpile,
+                        },
+                    });
+            }
+            // 積載中のアイテムを地面に落とす
+            for &item_entity in &data.items {
+                if let Ok(mut entity_commands) = commands.get_entity(item_entity) {
+                    entity_commands.remove::<crate::relationships::LoadedIn>();
+                    entity_commands.insert((
+                        Visibility::Visible,
+                        Transform::from_xyz(drop_pos.x, drop_pos.y, Z_ITEM_PICKUP),
+                    ));
+                }
+            }
+            // 手押し車を駐車状態に戻す
+            if let Ok(mut wb_commands) = commands.get_entity(data.wheelbarrow) {
+                wb_commands.remove::<crate::relationships::PushedBy>();
+                wb_commands.insert((
+                    Visibility::Visible,
+                    Transform::from_xyz(drop_pos.x, drop_pos.y, Z_ITEM_PICKUP),
+                ));
+                // BelongsTo があれば ParkedAt を復元
+                // ここでは BelongsTo の照会が困難なため、ParkedAt なしで放置
+                // （auto_haul が再検知する）
+            }
+        }
         AssignedTask::CollectSand(_) | AssignedTask::Refine(_) => {}
         _ => {}
     }

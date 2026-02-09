@@ -7,9 +7,10 @@ pub struct GameAssets {
     pub stone: Handle<Image>,
     pub river: Handle<Image>,
     pub sand: Handle<Image>,
-    pub colonist: Handle<Image>,
     pub familiar: Handle<Image>,
-    // pub wall: Handle<Image>, // Removed single wall texture
+    // Soul Animations
+    pub soul_move: Handle<Image>,
+    pub soul_layout: Handle<TextureAtlasLayout>,
     // Wall connections
     pub wall_isolated: Handle<Image>,
     pub wall_horizontal_left: Handle<Image>,
@@ -69,6 +70,11 @@ pub struct GameAssets {
     pub sand_pile: Handle<Image>,
     pub stasis_mud: Handle<Image>,
     pub mud_mixer: Handle<Image>,
+    // Wheelbarrow
+    pub wheelbarrow_empty: Handle<Image>,
+    pub wheelbarrow_loaded: Handle<Image>,
+    pub wheelbarrow_parking: Handle<Image>,
+    pub icon_wheelbarrow_small: Handle<Image>,
     // Fonts
     pub font_ui: Handle<Font>,         // UI全般
     pub font_familiar: Handle<Font>,   // Familiar吹き出し

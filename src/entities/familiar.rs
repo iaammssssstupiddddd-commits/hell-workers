@@ -435,8 +435,9 @@ pub fn familiar_animation_system(
 
         // アニメーションフレームの更新
         if anim.is_moving {
-            anim.timer += time.delta_secs() * 5.0; // 5 FPS 程度 (以前は 10.0)
-            anim.frame = (anim.timer as usize) % 3; // 3フレームのループ
+            anim.timer += time.delta_secs();
+            anim.frame = ((anim.timer * FAMILIAR_MOVE_ANIMATION_FPS) as usize)
+                % FAMILIAR_MOVE_ANIMATION_FRAMES;
         } else {
             anim.timer = 0.0;
             anim.frame = 0; // 停止時は最初のフレーム
