@@ -73,6 +73,21 @@
 - 少し傾けた姿勢（走っている感じ）
 - 軽い点滅アニメーション
 
+### 2.2 イベント駆動スプライト差し替え
+
+Soul 本体画像は、Idle 状態だけでなくイベントでも一時差し替えされます。  
+実装は `ConversationExpression`（画像種別・優先度・残り秒）でロック制御されています。
+
+- `OnExhausted` -> `soul_exhausted`（4.0秒, 優先度30）
+- `ConversationToneTriggered(Positive/Negative)` -> `soul_lough` / `soul_stress`（3.0秒 / 3.4秒, 優先度20）
+- `OnGatheringParticipated` + `GatheringSpot.object_type`:
+  - `Barrel` -> `soul_wine`（2.2秒, 優先度15）
+  - `CardTable` -> `soul_trump`（2.2秒, 優先度15）
+- `ConversationCompleted(Positive/Negative)` -> `soul_lough` / `soul_stress`（1.4秒 / 1.8秒, 優先度10）
+
+優先度の高いイベントだけが低いイベントを上書きし、低優先度イベントはロック中に破棄されます。  
+詳細は `docs/speech_system.md` の「Soul 画像イベント」節を参照してください。
+
 ## 3. タスク実行ロジック (Task Execution)
 
 割り当てられた `AssignedTask` に基づき、**Global Cycle Framework (4フェーズ)** に従ってタスクを実行します。

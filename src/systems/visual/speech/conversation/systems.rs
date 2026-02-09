@@ -10,6 +10,7 @@ use crate::systems::visual::speech::spawn::spawn_soul_bubble;
 use bevy::prelude::*;
 use rand::Rng;
 use rand::seq::SliceRandom;
+use std::collections::HashMap;
 
 pub fn check_conversation_triggers(
     time: Res<Time>,
@@ -112,6 +113,8 @@ pub fn handle_conversation_requests(
                     phase: ConversationPhase::Greeting,
                     timer: Timer::from_seconds(0.1, TimerMode::Once),
                     turns: 0,
+                    positive_turns: 0,
+                    negative_turns: 0,
                 });
             commands
                 .entity(event.target)
@@ -121,6 +124,8 @@ pub fn handle_conversation_requests(
                     phase: ConversationPhase::Greeting,
                     timer: Timer::from_seconds(1.0, TimerMode::Once),
                     turns: 0,
+                    positive_turns: 0,
+                    negative_turns: 0,
                 });
         }
     }
@@ -131,12 +136,17 @@ pub fn process_conversation_logic(
     mut commands: Commands,
     assets: Res<GameAssets>,
     mut q_participants: Query<(Entity, &mut ConversationParticipant, &Transform, &IdleState)>,
+    mut ev_tone: MessageWriter<ConversationToneTriggered>,
     mut ev_completed: MessageWriter<ConversationCompleted>,
 ) {
     let dt = time.delta_secs();
     let mut rng = rand::thread_rng();
 
     let participant_entities: Vec<Entity> = q_participants.iter().map(|(e, _, _, _)| e).collect();
+    let participant_tone_snapshot: HashMap<Entity, (u8, u8)> = q_participants
+        .iter()
+        .map(|(e, p, _, _)| (e, (p.positive_turns, p.negative_turns)))
+        .collect();
 
     for (entity, mut participant, transform, idle_state) in q_participants.iter_mut() {
         participant
@@ -177,7 +187,19 @@ pub fn process_conversation_logic(
                     let max_turns = if is_gathering { 2 } else { 1 };
 
                     if participant.turns <= max_turns {
-                        let emoji_set = if rng.gen_bool(0.2) {
+                        let emoji_set = if is_gathering {
+                            // 集会中はポジティブ寄りの会話を増やす
+                            let roll: f32 = rng.gen_range(0.0..1.0);
+                            if roll < 0.75 {
+                                EMOJIS_FOOD
+                            } else if roll < 0.88 {
+                                EMOJIS_QUESTION
+                            } else if roll < 0.98 {
+                                EMOJIS_SLACKING
+                            } else {
+                                EMOJIS_COMPLAINING
+                            }
+                        } else if rng.gen_bool(0.2) {
                             EMOJIS_QUESTION
                         } else if rng.gen_bool(0.3) {
                             EMOJIS_FOOD
@@ -189,9 +211,21 @@ pub fn process_conversation_logic(
                         let emoji = emoji_set.choose(&mut rng).unwrap();
 
                         let emotion = if emoji_set == EMOJIS_FOOD {
+                            participant.positive_turns = participant.positive_turns.saturating_add(1);
+                            ev_tone.write(ConversationToneTriggered {
+                                speaker: entity,
+                                tone: ConversationTone::Positive,
+                            });
                             BubbleEmotion::Happy
                         } else if emoji_set == EMOJIS_SLACKING {
                             BubbleEmotion::Slacking
+                        } else if emoji_set == EMOJIS_COMPLAINING {
+                            participant.negative_turns = participant.negative_turns.saturating_add(1);
+                            ev_tone.write(ConversationToneTriggered {
+                                speaker: entity,
+                                tone: ConversationTone::Negative,
+                            });
+                            BubbleEmotion::Chatting
                         } else {
                             BubbleEmotion::Chatting
                         };
@@ -216,7 +250,17 @@ pub fn process_conversation_logic(
                     }
                 }
                 ConversationPhase::Closing => {
-                    if rng.gen_bool(0.5) {
+                    let is_gathering = matches!(
+                        idle_state.behavior,
+                        IdleBehavior::Gathering | IdleBehavior::ExhaustedGathering
+                    );
+                    let agreement_chance = if is_gathering { 0.95 } else { 0.5 };
+                    if rng.gen_bool(agreement_chance) {
+                        participant.positive_turns = participant.positive_turns.saturating_add(1);
+                        ev_tone.write(ConversationToneTriggered {
+                            speaker: entity,
+                            tone: ConversationTone::Positive,
+                        });
                         let emoji = EMOJIS_AGREEMENT.choose(&mut rng).unwrap();
                         spawn_soul_bubble(
                             &mut commands,
@@ -230,9 +274,31 @@ pub fn process_conversation_logic(
                     }
 
                     if participant.role == ConversationRole::Initiator {
+                        let mut positive_turns = participant.positive_turns;
+                        let mut negative_turns = participant.negative_turns;
+                        if let Some((target_pos, target_neg)) =
+                            participant_tone_snapshot.get(&participant.target)
+                        {
+                            positive_turns = positive_turns.saturating_add(*target_pos);
+                            negative_turns = negative_turns.saturating_add(*target_neg);
+                        }
+                        let is_gathering = matches!(
+                            idle_state.behavior,
+                            IdleBehavior::Gathering | IdleBehavior::ExhaustedGathering
+                        );
+                        let tone = if positive_turns > negative_turns {
+                            ConversationTone::Positive
+                        } else if negative_turns > positive_turns {
+                            ConversationTone::Negative
+                        } else if is_gathering {
+                            ConversationTone::Positive
+                        } else {
+                            ConversationTone::Neutral
+                        };
                         ev_completed.write(ConversationCompleted {
                             participants: vec![entity, participant.target],
                             turns: participant.turns,
+                            tone,
                         });
                     }
 

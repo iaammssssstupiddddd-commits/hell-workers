@@ -415,7 +415,31 @@ pub fn sync_reservations_system(
                     *source_res.entry(data.mixer).or_insert(0) += 1;
                 }
             }
-            _ => {}
+            AssignedTask::HaulWithWheelbarrow(data) => {
+                use crate::systems::soul_ai::execute::task_execution::types::HaulWithWheelbarrowPhase;
+
+                // 手押し車自体をソース予約（二重使用防止）— 全フェーズで有効
+                *source_res.entry(data.wheelbarrow).or_insert(0) += 1;
+
+                // 目的地ストックパイルへの予約（アイテム数分）— 全フェーズで有効
+                for _ in &data.items {
+                    *dest_res.entry(data.dest_stockpile).or_insert(0) += 1;
+                }
+
+                // アイテムのソース予約（まだピックアップしていない場合のみ）
+                // Loading以降のフェーズではアイテムは既にwheelbarrowにLoadedInされているため不要
+                if matches!(
+                    data.phase,
+                    HaulWithWheelbarrowPhase::GoingToParking
+                        | HaulWithWheelbarrowPhase::PickingUpWheelbarrow
+                        | HaulWithWheelbarrowPhase::GoingToSource
+                ) {
+                    for &item in &data.items {
+                        *source_res.entry(item).or_insert(0) += 1;
+                    }
+                }
+            }
+            AssignedTask::None => {}
         }
     }
 

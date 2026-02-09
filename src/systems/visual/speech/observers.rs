@@ -5,6 +5,7 @@ use super::cooldown::SpeechHistory;
 use super::phrases::LatinPhrase;
 use super::spawn::*;
 use crate::assets::GameAssets;
+use crate::constants::COMMAND_REACTION_NEGATIVE_EVENT_CHANCE;
 use crate::entities::damned_soul::DamnedSoul;
 use crate::entities::familiar::{Familiar, FamiliarVoice};
 use crate::events::{
@@ -13,13 +14,18 @@ use crate::events::{
 };
 use crate::relationships::CommandedBy;
 use crate::systems::jobs::WorkType;
+use crate::systems::visual::speech::conversation::events::{
+    ConversationTone, ConversationToneTriggered,
+};
 use bevy::prelude::*;
+use rand::Rng;
 
 /// タスク開始時のオブザーバー
 pub fn on_task_assigned(
     on: On<OnTaskAssigned>,
     mut commands: Commands,
     assets: Res<GameAssets>,
+    mut tone_writer: MessageWriter<ConversationToneTriggered>,
     mut q_souls: Query<
         (
             &GlobalTransform,
@@ -45,6 +51,15 @@ pub fn on_task_assigned(
 
     if let Ok((soul_transform, under_command, soul_history_opt)) = q_souls.get_mut(soul_entity) {
         let soul_pos = soul_transform.translation();
+        if under_command.is_some() {
+            let mut rng = rand::thread_rng();
+            if rng.gen_bool(COMMAND_REACTION_NEGATIVE_EVENT_CHANCE as f64) {
+                tone_writer.write(ConversationToneTriggered {
+                    speaker: soul_entity,
+                    tone: ConversationTone::Negative,
+                });
+            }
+        }
 
         let can_speak = if let Some(history) = &soul_history_opt {
             history.can_speak(BubblePriority::Low, current_time)
@@ -166,6 +181,7 @@ pub fn on_soul_recruited(
     on: On<OnSoulRecruited>,
     mut commands: Commands,
     assets: Res<GameAssets>,
+    mut tone_writer: MessageWriter<ConversationToneTriggered>,
     mut q_familiars: Query<
         (
             &GlobalTransform,
@@ -180,6 +196,12 @@ pub fn on_soul_recruited(
     let fam_entity = on.event().familiar_entity;
     let soul_entity = on.entity;
     let current_time = time.elapsed_secs();
+
+    // リクルート時は必ずネガティブイベントを発火する
+    tone_writer.write(ConversationToneTriggered {
+        speaker: soul_entity,
+        tone: ConversationTone::Negative,
+    });
 
     if let Ok((transform, voice, history_opt)) = q_familiars.get_mut(fam_entity) {
         let can_speak = if let Some(history) = &history_opt {

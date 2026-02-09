@@ -153,7 +153,6 @@ pub struct AnimationState {
     pub is_moving: bool,
     pub facing_right: bool,
     pub bob_timer: f32,
-    pub frame_timer: f32,
 }
 
 impl Default for AnimationState {
@@ -162,9 +161,27 @@ impl Default for AnimationState {
             is_moving: false,
             facing_right: true,
             bob_timer: 0.0,
-            frame_timer: 0.0,
         }
     }
+}
+
+/// 会話イベント起点の一時的な表情オーバーレイ
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConversationExpressionKind {
+    Positive,
+    Negative,
+    Exhausted,
+    GatheringWine,
+    GatheringTrump,
+}
+
+/// 会話表情の残り表示時間（秒）
+#[derive(Component, Debug, Clone, Copy)]
+pub struct ConversationExpression {
+    pub kind: ConversationExpressionKind,
+    /// 表情イベントの優先度（高いほど上書き可能）
+    pub priority: u8,
+    pub remaining_secs: f32,
 }
 
 pub struct DamnedSoulPlugin;
@@ -188,7 +205,17 @@ impl Plugin for DamnedSoulPlugin {
                         .before(movement::pathfinding_system),
                     movement::pathfinding_system.in_set(GameSystemSet::Actor),
                     movement::soul_movement.in_set(GameSystemSet::Actor),
-                    movement::animation_system.in_set(GameSystemSet::Visual),
+                    movement::apply_conversation_expression_event_system
+                        .in_set(GameSystemSet::Visual)
+                        .after(
+                            crate::systems::visual::speech::conversation::systems::process_conversation_logic,
+                        ),
+                    movement::update_conversation_expression_timer_system
+                        .in_set(GameSystemSet::Visual),
+                    movement::animation_system
+                        .in_set(GameSystemSet::Visual)
+                        .after(movement::apply_conversation_expression_event_system)
+                        .after(movement::update_conversation_expression_timer_system),
                 ),
             )
             .add_observer(observers::on_task_assigned)
