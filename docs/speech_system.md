@@ -95,7 +95,7 @@ Familiar は命令や状態を「ラテン語」で表現します。表示は *
 
 ---
 
-## 3. 関連コンポーネント・定数
+## 4. 関連コンポーネント・定数
 
 - **コンポーネント**: `SpeechBubble`, `BubbleAnimation`, `TypewriterEffect`, `BubbleEmotion`
 - **定数**: [src/constants.rs](file:///home/iaamm/projects/hell-workers/src/constants.rs) 内の `BUBBLE_` プレフィックスが付いた各定数（速度、色、サイズ等）
@@ -109,7 +109,7 @@ Familiar は命令や状態を「ラテン語」で表現します。表示は *
 
 ---
 
-## 4. Soul 会話システム (Soul Conversation System) [NEW]
+## 5. Soul 会話システム (Soul Conversation System) [NEW]
 
 Soul 同士が近接した際に発生する、動的な対話システムです。
 
@@ -130,9 +130,35 @@ Soul 同士が近接した際に発生する、動的な対話システムです
 
 ---
 
+## 6. Soul 画像イベント (Sprite Event Overlay) [NEW]
+
+吹き出しとは別に、Soul 本体スプライトはイベント起点で一時的に差し替わります。  
+`ConversationExpression` コンポーネントに「画像種別・優先度・残り秒数」を保持し、毎フレーム減衰させる方式です。
+
+### トリガー一覧（画像差し替え）
+| イベント | 条件 | 画像 | 優先度 | ロック秒 |
+| :--- | :--- | :--- | :--- | :--- |
+| `OnExhausted` | 疲労限界 | `soul_exhausted` | 30 | 4.0 |
+| `ConversationToneTriggered` | `Positive` | `soul_lough` | 20 | 3.0 |
+| `ConversationToneTriggered` | `Negative` | `soul_stress` | 20 | 3.4 |
+| `OnGatheringParticipated` | `GatheringSpot.object_type == Barrel` | `soul_wine` | 15 | 2.2 |
+| `OnGatheringParticipated` | `GatheringSpot.object_type == CardTable` | `soul_trump` | 15 | 2.2 |
+| `ConversationCompleted` | `tone == Positive` | `soul_lough` | 10 | 1.4 |
+| `ConversationCompleted` | `tone == Negative` | `soul_stress` | 10 | 1.8 |
+
+### 上書きルール
+- **高優先度 > 低優先度**: 上書き可能
+- **同優先度**: 同じ画像種別は `remaining_secs` を延長、異なる画像種別は新イベント側に切替
+- **低優先度 < 高優先度**: 無視（現在のロック維持）
+
+### 表示優先順位（最終決定）
+1. `StressBreakdown`（最優先。`is_frozen` なら `soul_stress_breakdown`）
+2. イベントロック中の一時画像（上表）
+3. Idle 行動ベース画像（`soul`, `soul_sleep`, `soul_exhausted` など）
+
 ---
 
-## 5. パフォーマンス最適化 (Performance Optimization)
+## 7. パフォーマンス最適化 (Performance Optimization)
 
 大規模環境（Soul 300体、使い魔 30体以上）での動作を支える以下の最適化が導入されています。
 
@@ -149,7 +175,7 @@ Soul 同士が近接した際に発生する、動的な対話システムです
 
 ---
 
-## 4. ランダムフレーズシステム
+## 8. ランダムフレーズシステム
 
 各使い魔はスポーン時にランダムな「口癖傾向」（`FamiliarVoice`）を持つ。
 

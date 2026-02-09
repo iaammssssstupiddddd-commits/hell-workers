@@ -10,7 +10,7 @@
 4.  **アーキテクチャ詳細**: [docs/architecture.md](file:///f:/DevData\projects\hell-workers\docs\architecture.md)
 
 ## 技術的制約・ルール
-- **エンジン**: Bevy 0.17 を使用。
+- **エンジン**: Bevy 0.18 を使用。
 - **ECS Relationships**: エンティティ間の参照には必ず Relationship を使用する。
 - **検証**: 完了報告の前に必ず `cargo check` を実行し、Rust-analyzer の警告・エラーをゼロにすること。
 - **画像生成**: [docs/DEVELOPMENT.md](file:///f:/DevData\projects\hell-workers\docs\DEVELOPMENT.md) に記載されたマゼンタ背景のワークフローを厳守すること。

@@ -24,7 +24,8 @@ systems/visual/
 │   ├── mod.rs              # 定数・re-exports
 │   ├── components.rs       # コンポーネント定義
 │   ├── carrying_item.rs    # 運搬中アイテム表示
-│   └── effects.rs          # ドロップエフェクト
+│   ├── effects.rs          # ドロップエフェクト
+│   └── wheelbarrow_follow.rs # 手押し車追従・回転・スプライト切替
 ├── speech/                 # セリフ吹き出しシステム (NEW)
 │   ├── mod.rs              # システム登録
 │   ├── components.rs       # 感情・アニメーション定義
@@ -74,6 +75,21 @@ systems/visual/
 ### 運搬中アイテム
 
 `Holding` リレーションシップを持つワーカーの頭上に、運搬中のリソースタイプに応じたミニアイコンが表示されます。
+
+### 手押し車の追従表示
+
+`HaulWithWheelbarrow` タスク中、手押し車は独立エンティティとして魂の進行方向前方に追従します。
+
+| コンポーネント | 役割 |
+|:---|:---|
+| `WheelbarrowMovement` | 前フレーム位置と現在の回転角度を追跡 |
+
+- **回転**: フレーム間の移動差分（`atan2`）で全方向に対応（将来の経路平滑化にも対応可能）
+- **スプライト切替**: `LoadedItems` の有無で `wheelbarrow_empty` / `wheelbarrow_loaded` を差し替え
+- **スケール**: 運搬中は `WHEELBARROW_ACTIVE_SCALE` (1.8) で拡大表示し、歩行bobに同期した振動を適用
+- **注意**: `LoadedItems` は `#[relationship_target]` の自動管理で空時に除去されるため `Option` でクエリ
+
+手押し車タスク中は通常の頭上運搬アイコン（`CarryingItemVisual`）は表示されません。
 
 ### タスクリンク
 

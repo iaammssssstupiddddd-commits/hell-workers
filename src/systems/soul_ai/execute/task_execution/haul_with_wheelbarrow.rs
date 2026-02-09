@@ -2,6 +2,7 @@
 
 use crate::constants::*;
 use crate::relationships::{LoadedIn, ParkedAt, PushedBy, WorkingOn};
+use crate::systems::visual::haul::WheelbarrowMovement;
 use crate::systems::logistics::{InStockpile, Wheelbarrow};
 use crate::systems::soul_ai::execute::task_execution::common::*;
 use crate::systems::soul_ai::execute::task_execution::{
@@ -344,7 +345,7 @@ fn park_wheelbarrow_here(
     }
 
     // PushedBy を削除
-    commands.entity(data.wheelbarrow).remove::<PushedBy>();
+    commands.entity(data.wheelbarrow).remove::<(PushedBy, WheelbarrowMovement)>();
 
     // 手押し車の位置を更新
     commands.entity(data.wheelbarrow).insert((
@@ -388,7 +389,7 @@ fn cancel_wheelbarrow_task(
             .entity(data.wheelbarrow)
             .insert(ParkedAt(belongs.0));
     }
-    commands.entity(data.wheelbarrow).remove::<PushedBy>();
+    commands.entity(data.wheelbarrow).remove::<(PushedBy, WheelbarrowMovement)>();
     commands.entity(data.wheelbarrow).insert((
         Visibility::Visible,
         Transform::from_xyz(soul_pos.x, soul_pos.y, Z_ITEM_PICKUP),

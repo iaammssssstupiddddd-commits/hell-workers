@@ -1,12 +1,224 @@
 //! ソウルの移動・パス追従・アニメーションシステム
 
 use super::*;
+use crate::assets::GameAssets;
 use crate::constants::*;
+use crate::events::{OnExhausted, OnGatheringParticipated};
 use crate::relationships::PushingWheelbarrow;
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
+use crate::systems::soul_ai::helpers::gathering::{GatheringObjectType, GatheringSpot};
 use crate::systems::soul_ai::helpers::work::unassign_task;
+use crate::systems::visual::speech::conversation::events::{
+    ConversationCompleted, ConversationTone, ConversationToneTriggered,
+};
 use crate::world::map::WorldMap;
 use crate::world::pathfinding::{self, PathfindingContext};
+
+const EXPRESSION_PRIORITY_CONVERSATION_TONE: u8 = 20;
+const EXPRESSION_PRIORITY_CONVERSATION_COMPLETED: u8 = 10;
+const EXPRESSION_PRIORITY_GATHERING_OBJECT: u8 = 15;
+const EXPRESSION_PRIORITY_EXHAUSTED: u8 = 30;
+
+fn tone_to_expression_kind(tone: ConversationTone) -> Option<ConversationExpressionKind> {
+    match tone {
+        ConversationTone::Positive => Some(ConversationExpressionKind::Positive),
+        ConversationTone::Negative => Some(ConversationExpressionKind::Negative),
+        ConversationTone::Neutral => None,
+    }
+}
+
+fn lock_seconds_for_tone_event(tone: ConversationTone) -> Option<f32> {
+    match tone {
+        ConversationTone::Positive => Some(SOUL_EVENT_LOCK_TONE_POSITIVE),
+        ConversationTone::Negative => Some(SOUL_EVENT_LOCK_TONE_NEGATIVE),
+        ConversationTone::Neutral => None,
+    }
+}
+
+fn lock_seconds_for_completed_event(tone: ConversationTone) -> Option<f32> {
+    match tone {
+        ConversationTone::Positive => Some(SOUL_EVENT_LOCK_COMPLETED_POSITIVE),
+        ConversationTone::Negative => Some(SOUL_EVENT_LOCK_COMPLETED_NEGATIVE),
+        ConversationTone::Neutral => None,
+    }
+}
+
+fn apply_expression_lock(
+    commands: &mut Commands,
+    entity: Entity,
+    kind: ConversationExpressionKind,
+    lock_secs: f32,
+    priority: u8,
+    q_expression: &mut Query<&mut ConversationExpression, With<DamnedSoul>>,
+) {
+    if let Ok(mut expression) = q_expression.get_mut(entity) {
+        if priority > expression.priority {
+            expression.kind = kind;
+            expression.priority = priority;
+            expression.remaining_secs = lock_secs;
+        } else if priority == expression.priority {
+            if expression.kind == kind {
+                expression.remaining_secs = expression.remaining_secs.max(lock_secs);
+            } else {
+                expression.kind = kind;
+                expression.remaining_secs = lock_secs;
+            }
+        }
+        return;
+    }
+
+    commands.entity(entity).insert(ConversationExpression {
+        kind,
+        priority,
+        remaining_secs: lock_secs,
+    });
+}
+
+fn select_soul_image<'a>(
+    game_assets: &'a GameAssets,
+    idle: &IdleState,
+    breakdown_opt: Option<&StressBreakdown>,
+    expression_opt: Option<&ConversationExpression>,
+) -> &'a Handle<Image> {
+    if let Some(breakdown) = breakdown_opt {
+        if breakdown.is_frozen {
+            return &game_assets.soul_stress_breakdown;
+        }
+        return &game_assets.soul_stress;
+    }
+
+    if let Some(expression) = expression_opt {
+        match expression.kind {
+            ConversationExpressionKind::Positive => return &game_assets.soul_lough,
+            ConversationExpressionKind::Negative => return &game_assets.soul_stress,
+            ConversationExpressionKind::Exhausted => return &game_assets.soul_exhausted,
+            ConversationExpressionKind::GatheringWine => return &game_assets.soul_wine,
+            ConversationExpressionKind::GatheringTrump => return &game_assets.soul_trump,
+        }
+    }
+
+    match idle.behavior {
+        IdleBehavior::Sleeping => &game_assets.soul_sleep,
+        IdleBehavior::ExhaustedGathering => &game_assets.soul_exhausted,
+        IdleBehavior::Escaping => &game_assets.soul,
+        IdleBehavior::Gathering => match idle.gathering_behavior {
+            GatheringBehavior::Sleeping => &game_assets.soul_sleep,
+            GatheringBehavior::Wandering
+            | GatheringBehavior::Standing
+            | GatheringBehavior::Dancing => &game_assets.soul,
+        },
+        IdleBehavior::Wandering | IdleBehavior::Sitting => &game_assets.soul,
+    }
+}
+
+pub fn apply_conversation_expression_event_system(
+    mut commands: Commands,
+    q_souls: Query<(), With<DamnedSoul>>,
+    q_spots: Query<&GatheringSpot>,
+    mut q_expression: Query<&mut ConversationExpression, With<DamnedSoul>>,
+    mut ev_exhausted_reader: MessageReader<OnExhausted>,
+    mut ev_gathering_participated_reader: MessageReader<OnGatheringParticipated>,
+    mut ev_tone_reader: MessageReader<ConversationToneTriggered>,
+    mut ev_reader: MessageReader<ConversationCompleted>,
+) {
+    for event in ev_exhausted_reader.read() {
+        if q_souls.get(event.entity).is_err() {
+            continue;
+        }
+        apply_expression_lock(
+            &mut commands,
+            event.entity,
+            ConversationExpressionKind::Exhausted,
+            SOUL_EVENT_LOCK_EXHAUSTED,
+            EXPRESSION_PRIORITY_EXHAUSTED,
+            &mut q_expression,
+        );
+    }
+
+    for event in ev_gathering_participated_reader.read() {
+        if q_souls.get(event.entity).is_err() {
+            continue;
+        }
+        let Ok(spot) = q_spots.get(event.spot_entity) else {
+            continue;
+        };
+        let kind = match spot.object_type {
+            GatheringObjectType::Barrel => Some(ConversationExpressionKind::GatheringWine),
+            GatheringObjectType::CardTable => Some(ConversationExpressionKind::GatheringTrump),
+            GatheringObjectType::Nothing | GatheringObjectType::Campfire => None,
+        };
+        let Some(kind) = kind else {
+            continue;
+        };
+
+        apply_expression_lock(
+            &mut commands,
+            event.entity,
+            kind,
+            SOUL_EVENT_LOCK_GATHERING_OBJECT,
+            EXPRESSION_PRIORITY_GATHERING_OBJECT,
+            &mut q_expression,
+        );
+    }
+
+    for event in ev_tone_reader.read() {
+        if q_souls.get(event.speaker).is_err() {
+            continue;
+        }
+        let Some(kind) = tone_to_expression_kind(event.tone) else {
+            continue;
+        };
+        let Some(lock_secs) = lock_seconds_for_tone_event(event.tone) else {
+            continue;
+        };
+
+        apply_expression_lock(
+            &mut commands,
+            event.speaker,
+            kind,
+            lock_secs,
+            EXPRESSION_PRIORITY_CONVERSATION_TONE,
+            &mut q_expression,
+        );
+    }
+
+    for event in ev_reader.read() {
+        let Some(kind) = tone_to_expression_kind(event.tone) else {
+            continue;
+        };
+        let Some(lock_secs) = lock_seconds_for_completed_event(event.tone) else {
+            continue;
+        };
+
+        for &entity in &event.participants {
+            if q_souls.get(entity).is_err() {
+                continue;
+            }
+            apply_expression_lock(
+                &mut commands,
+                entity,
+                kind,
+                lock_secs,
+                EXPRESSION_PRIORITY_CONVERSATION_COMPLETED,
+                &mut q_expression,
+            );
+        }
+    }
+}
+
+pub fn update_conversation_expression_timer_system(
+    time: Res<Time>,
+    mut commands: Commands,
+    mut query: Query<(Entity, &mut ConversationExpression), With<DamnedSoul>>,
+) {
+    let dt = time.delta_secs();
+    for (entity, mut expression) in query.iter_mut() {
+        expression.remaining_secs -= dt;
+        if expression.remaining_secs <= 0.0 {
+            commands.entity(entity).remove::<ConversationExpression>();
+        }
+    }
+}
 
 /// 障害物に埋まったソウルを最寄りの歩行可能タイルへ逃がす。
 /// 建築物の配置や障害物の追加で現在位置が通行不可になった場合に実行される。
@@ -261,43 +473,52 @@ pub fn soul_movement(
 /// アニメーションシステム
 pub fn animation_system(
     time: Res<Time>,
+    game_assets: Res<GameAssets>,
     mut query: Query<(
         &mut Transform,
         &mut Sprite,
         &mut AnimationState,
         &DamnedSoul,
+        &IdleState,
+        Option<&StressBreakdown>,
+        Option<&ConversationExpression>,
     )>,
 ) {
-    for (mut transform, mut sprite, mut anim, soul) in query.iter_mut() {
-        // 向きの更新
-        sprite.flip_x = !anim.facing_right;
-
-        // アニメーション更新
-        if anim.is_moving {
-            // スケールアニメーション（ボブ）
-            anim.bob_timer += time.delta_secs() * ANIM_BOB_SPEED;
-            let bob = (anim.bob_timer.sin() * ANIM_BOB_AMPLITUDE) + 1.0;
-            transform.scale = Vec3::new(1.0, bob, 1.0);
-            anim.frame_timer += time.delta_secs();
-
-            // スプライトアニメーション（9フレーム: 3x3）
-            if let Some(atlas) = &mut sprite.texture_atlas {
-                let frame_index = ((anim.frame_timer * SOUL_MOVE_ANIMATION_FPS) as usize)
-                    % SOUL_MOVE_ANIMATION_FRAMES;
-                atlas.index = frame_index;
-            }
-        } else {
-            // 待機時の呼吸アニメーション
-            let breath_speed = ANIM_BREATH_SPEED_BASE - soul.laziness;
-            anim.bob_timer += time.delta_secs() * breath_speed;
-            let breath = (anim.bob_timer.sin() * ANIM_BREATH_AMPLITUDE) + 1.0;
-            transform.scale = Vec3::splat(breath);
-
-            // 待機時はフレーム0に戻す
-            anim.frame_timer = 0.0;
-            if let Some(atlas) = &mut sprite.texture_atlas {
-                atlas.index = 0;
-            }
+    for (mut transform, mut sprite, mut anim, soul, idle, breakdown_opt, expression_opt) in
+        query.iter_mut()
+    {
+        // 進行方向に応じて左右反転（facing_right は movement 側で更新）
+        sprite.flip_x = anim.facing_right;
+        let desired_image = select_soul_image(&game_assets, idle, breakdown_opt, expression_opt);
+        if sprite.image != *desired_image {
+            sprite.image = desired_image.clone();
         }
+
+        // 浮遊アニメーション（translation はロジック座標と干渉するため変更しない）
+        anim.bob_timer += time.delta_secs();
+        let sway = (anim.bob_timer * SOUL_FLOAT_SWAY_SPEED).sin();
+
+        let speed_scale = if anim.is_moving { 1.3 } else { 1.0 };
+        let pulse_speed = (SOUL_FLOAT_PULSE_SPEED_BASE + (1.0 - soul.laziness) * 0.4) * speed_scale;
+        let pulse = (anim.bob_timer * pulse_speed).sin();
+        let pulse_amplitude = if anim.is_moving {
+            SOUL_FLOAT_PULSE_AMPLITUDE_MOVE
+        } else {
+            SOUL_FLOAT_PULSE_AMPLITUDE_IDLE
+        };
+        let base_scale = if anim.is_moving { 1.02 } else { 1.0 };
+
+        transform.scale = Vec3::new(
+            base_scale + pulse * (pulse_amplitude * 0.6),
+            base_scale + pulse * pulse_amplitude,
+            1.0,
+        );
+
+        let tilt = if anim.is_moving {
+            SOUL_FLOAT_SWAY_TILT_MOVE
+        } else {
+            SOUL_FLOAT_SWAY_TILT_IDLE
+        };
+        transform.rotation = Quat::from_rotation_z(sway * tilt);
     }
 }

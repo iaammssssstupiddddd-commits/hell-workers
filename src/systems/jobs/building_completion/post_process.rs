@@ -146,6 +146,7 @@ fn setup_wheelbarrow_parking(
                 ..default()
             },
             Transform::from_xyz(pos.x, pos.y, Z_ITEM_PICKUP),
+            Visibility::Visible,
             Name::new(format!("Wheelbarrow #{}", i)),
         ));
     }

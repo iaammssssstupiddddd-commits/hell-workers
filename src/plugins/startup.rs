@@ -132,22 +132,15 @@ fn setup(
         river: asset_server.load("textures/river.png"),
         sand: asset_server.load("textures/resources/sandpile/sandpile.png"),
         familiar: asset_server.load("textures/familiar_spritesheet.png"),
-        // Soul Animations
-        soul_move: asset_server.load("textures/character/soul_move_spritesheet.png"),
-        soul_layout: {
-            // 1024x1024 を 3x3 に整数分割し、端数ピクセルも最後の列/行に含める。
-            let mut layout = TextureAtlasLayout::new_empty(UVec2::new(1024, 1024));
-            for row in 0..3 {
-                for col in 0..3 {
-                    let left = col * 1024 / 3;
-                    let top = row * 1024 / 3;
-                    let right = (col + 1) * 1024 / 3;
-                    let bottom = (row + 1) * 1024 / 3;
-                    layout.add_texture(URect::new(left, top, right, bottom));
-                }
-            }
-            layouts.add(layout)
-        },
+        // Soul
+        soul: asset_server.load("textures/character/soul.png"),
+        soul_exhausted: asset_server.load("textures/character/soul_exhausted.png"),
+        soul_lough: asset_server.load("textures/character/soul_lough.png"),
+        soul_sleep: asset_server.load("textures/character/soul_sleep.png"),
+        soul_wine: asset_server.load("textures/character/soul_wine.png"),
+        soul_trump: asset_server.load("textures/character/soul_trump.png"),
+        soul_stress: asset_server.load("textures/character/soul_stress.png"),
+        soul_stress_breakdown: asset_server.load("textures/character/soul_stressBreakdown.png"),
         // wall: asset_server.load("textures/stone.jpg"),
         // Wall connections
         wall_isolated: asset_server.load("textures/buildings/wooden_wall/wall_isolated.png"),
