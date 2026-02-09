@@ -106,7 +106,6 @@ fn setup(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
     mut images: ResMut<Assets<Image>>,
-    mut layouts: ResMut<Assets<TextureAtlasLayout>>,
 ) {
     let start = Instant::now();
     commands.spawn((
@@ -131,7 +130,10 @@ fn setup(
         stone: asset_server.load("textures/stone.jpg"),
         river: asset_server.load("textures/river.png"),
         sand: asset_server.load("textures/resources/sandpile/sandpile.png"),
-        familiar: asset_server.load("textures/familiar_spritesheet.png"),
+        familiar: asset_server.load("new_assets/imp/imp anime 1.png"),
+        familiar_anim_2: asset_server.load("new_assets/imp/imp anime 2.png"),
+        familiar_anim_3: asset_server.load("new_assets/imp/imp anime 3.png"),
+        familiar_anim_4: asset_server.load("new_assets/imp/imp anime 4.png"),
         // Soul
         soul: asset_server.load("textures/character/soul.png"),
         soul_exhausted: asset_server.load("textures/character/soul_exhausted.png"),
@@ -191,16 +193,6 @@ fn setup(
         icon_haul: asset_server.load("textures/ui/haul.png"),
         icon_arrow_down: asset_server.load("textures/ui/arrow_down.png"),
         icon_arrow_right: asset_server.load("textures/ui/arrow_right.png"),
-        familiar_layout: {
-            let mut layout = TextureAtlasLayout::new_empty(UVec2::new(1024, 1024));
-            // フレーム1: 左上
-            layout.add_texture(URect::new(0, 0, 512, 512));
-            // フレーム2: 右上
-            layout.add_texture(URect::new(512, 0, 1024, 512));
-            // フレーム3: 下段中央
-            layout.add_texture(URect::new(256, 512, 768, 1024));
-            layouts.add(layout)
-        },
         glow_circle: asset_server.load("textures/ui/glow_circle.png"),
         bubble_9slice: asset_server.load("textures/ui/bubble_9slice.png"),
         // Building Visual Icons
@@ -218,6 +210,10 @@ fn setup(
         sand_pile: asset_server.load("textures/resources/sandpile/sandpile.png"),
         stasis_mud: asset_server.load("textures/stone.jpg"),
         mud_mixer: asset_server.load("textures/buildings/mud_mixer/mud mixer.png"),
+        mud_mixer_anim_1: asset_server.load("textures/buildings/mud_mixer/mud mixer anime 1.png"),
+        mud_mixer_anim_2: asset_server.load("textures/buildings/mud_mixer/mud mixer anime 2.png"),
+        mud_mixer_anim_3: asset_server.load("textures/buildings/mud_mixer/mud mixer anime 3.png"),
+        mud_mixer_anim_4: asset_server.load("textures/buildings/mud_mixer/mud mixer anime 4.png"),
         // Wheelbarrow
         wheelbarrow_empty: asset_server.load("textures/items/wheel_barrow/wheel_barrow.png"),
         wheelbarrow_loaded: asset_server.load("textures/items/wheel_barrow/wheel_barrow_full.png"),

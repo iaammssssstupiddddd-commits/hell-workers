@@ -45,6 +45,7 @@ pub fn issue_gather_water(
 pub fn issue_haul_water_to_mixer(
     mixer: Entity,
     tank: Entity,
+    mixer_already_reserved: bool,
     task_pos: Vec2,
     already_commanded: bool,
     ctx: &AssignTaskContext<'_>,
@@ -60,16 +61,23 @@ pub fn issue_haul_water_to_mixer(
             phase: crate::systems::soul_ai::execute::task_execution::types::HaulWaterToMixerPhase::GoingToBucket,
         },
     );
-    let reservation_ops = vec![
-        ResourceReservationOp::ReserveMixerDestination {
-            target: mixer,
-            resource_type: ResourceType::Water,
-        },
+    let mut reservation_ops = vec![
         ResourceReservationOp::ReserveSource {
             source: ctx.task_entity,
             amount: 1,
         },
+        // タンクから水を汲む作業は同時実行を1件に制限して競合を防ぐ
+        ResourceReservationOp::ReserveSource {
+            source: tank,
+            amount: 1,
+        },
     ];
+    if !mixer_already_reserved {
+        reservation_ops.push(ResourceReservationOp::ReserveMixerDestination {
+            target: mixer,
+            resource_type: ResourceType::Water,
+        });
+    }
     submit_assignment(
         ctx,
         queries,

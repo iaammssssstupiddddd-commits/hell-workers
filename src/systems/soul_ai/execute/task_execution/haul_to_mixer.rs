@@ -64,8 +64,18 @@ pub fn handle_haul_to_mixer_task(
             if let Ok((res_transform, _, _, _, des_opt, _)) =
                 ctx.queries.designation.targets.get(item_entity)
             {
-                // 指定が解除されていたら中止
-                if des_opt.is_none() {
+                let has_item_target_mixer = ctx
+                    .queries
+                    .storage
+                    .target_mixers
+                    .get(item_entity)
+                    .ok()
+                    .map(|tm| tm.0 == mixer_entity)
+                    .unwrap_or(false);
+
+                // 既存の「アイテム直接Designation」方式では、Designation解除をキャンセル条件とする。
+                // request方式（ソース遅延解決）では item にDesignationが無いので継続する。
+                if des_opt.is_none() && has_item_target_mixer {
                     info!(
                         "HAUL_TO_MIXER: Soul {:?} - item {:?} designation removed, canceling",
                         ctx.soul_entity, item_entity

@@ -7,9 +7,16 @@ use bevy::prelude::*;
 
 pub fn designation_visual_system(
     mut commands: Commands,
-    q_designated: Query<(Entity, &Transform, &Designation), Changed<Designation>>,
+    q_designated: Query<
+        (Entity, &Transform, &Designation, Option<&Visibility>),
+        Changed<Designation>,
+    >,
 ) {
-    for (entity, transform, designation) in q_designated.iter() {
+    for (entity, transform, designation, visibility_opt) in q_designated.iter() {
+        if visibility_opt == Some(&Visibility::Hidden) {
+            continue;
+        }
+
         let color = match designation.work_type {
             WorkType::Chop => Color::srgb(0.0, 1.0, 0.0),
             WorkType::Mine => Color::srgb(1.0, 0.0, 0.0),

@@ -11,6 +11,13 @@ pub fn resolve_haul_to_mixer_inputs(
         .get(task_entity)
         .ok()
         .map(|tm| tm.0)?;
+
+    // requestタスクは resource_type を専用コンポーネントから取得する
+    if let Ok(req) = queries.mixer_haul_requests.get(task_entity) {
+        return Some((mixer_entity, req.resource_type));
+    }
+
+    // 従来タスクはアイテム実体から取得する
     let item_type = queries.items.get(task_entity).ok().map(|(it, _)| it.0)?;
     Some((mixer_entity, item_type))
 }

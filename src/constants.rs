@@ -242,7 +242,15 @@ pub const ANIM_BOB_AMPLITUDE: f32 = 0.05;
 /// Familiar 移動時のスプライト切り替え速度（FPS）
 pub const FAMILIAR_MOVE_ANIMATION_FPS: f32 = 5.0;
 /// Familiar 移動アニメーションのフレーム数
-pub const FAMILIAR_MOVE_ANIMATION_FRAMES: usize = 3;
+pub const FAMILIAR_MOVE_ANIMATION_FRAMES: usize = 4;
+/// Familiar 浮遊アニメーションの速度係数
+pub const FAMILIAR_HOVER_SPEED: f32 = 2.8;
+/// Familiar の上下浮遊量（Idle時）
+pub const FAMILIAR_HOVER_AMPLITUDE_IDLE: f32 = 4.5;
+/// Familiar の上下浮遊量（移動時）
+pub const FAMILIAR_HOVER_AMPLITUDE_MOVE: f32 = 3.0;
+/// Familiar の傾き振幅（ラジアン）
+pub const FAMILIAR_HOVER_TILT_AMPLITUDE: f32 = 0.03;
 /// Soul 浮遊の左右スウェイ速度
 pub const SOUL_FLOAT_SWAY_SPEED: f32 = 2.4;
 /// Soul 浮遊の回転角（待機時）

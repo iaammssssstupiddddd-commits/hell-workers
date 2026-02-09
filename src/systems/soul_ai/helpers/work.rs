@@ -117,7 +117,14 @@ pub fn unassign_task<'w, 's, Q: TaskReservationAccess<'w, 's>>(
                             amount: 1,
                         },
                     });
-            } else if matches!(data.phase, HaulWaterToMixerPhase::FillingFromTank) {
+            }
+            // タンク取水ロックは「実際に取水完了するまで」保持する
+            if matches!(
+                data.phase,
+                HaulWaterToMixerPhase::GoingToBucket
+                    | HaulWaterToMixerPhase::GoingToTank
+                    | HaulWaterToMixerPhase::FillingFromTank
+            ) {
                 queries
                     .reservation_writer()
                     .write(ResourceReservationRequest {

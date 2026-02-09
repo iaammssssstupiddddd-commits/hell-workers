@@ -4,7 +4,7 @@
 
 use bevy::prelude::*;
 
-use crate::entities::familiar::ActiveCommand;
+use crate::entities::familiar::{ActiveCommand, FamiliarCommand};
 use crate::events::{DesignationOp, DesignationRequest};
 use crate::relationships::StoredItems;
 use crate::relationships::TaskWorkers;
@@ -37,7 +37,11 @@ pub fn mud_mixer_auto_refine_system(
         }
     }
 
-    for (fam_entity, _active_command, task_area) in q_familiars.iter() {
+    for (fam_entity, active_command, task_area) in q_familiars.iter() {
+        if matches!(active_command.command, FamiliarCommand::Idle) {
+            continue;
+        }
+
         for (
             mixer_entity,
             mixer_transform,

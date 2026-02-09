@@ -8,6 +8,9 @@ pub struct GameAssets {
     pub river: Handle<Image>,
     pub sand: Handle<Image>,
     pub familiar: Handle<Image>,
+    pub familiar_anim_2: Handle<Image>,
+    pub familiar_anim_3: Handle<Image>,
+    pub familiar_anim_4: Handle<Image>,
     // Soul
     pub soul: Handle<Image>,
     pub soul_exhausted: Handle<Image>,
@@ -59,7 +62,6 @@ pub struct GameAssets {
     pub icon_water_small: Handle<Image>,
     pub icon_arrow_down: Handle<Image>,
     pub icon_arrow_right: Handle<Image>,
-    pub familiar_layout: Handle<TextureAtlasLayout>,
     pub glow_circle: Handle<Image>,   // グロー効果用
     pub bubble_9slice: Handle<Image>, // 9-slice吹き出し画像
     // Building Visual Icons
@@ -76,6 +78,10 @@ pub struct GameAssets {
     pub sand_pile: Handle<Image>,
     pub stasis_mud: Handle<Image>,
     pub mud_mixer: Handle<Image>,
+    pub mud_mixer_anim_1: Handle<Image>,
+    pub mud_mixer_anim_2: Handle<Image>,
+    pub mud_mixer_anim_3: Handle<Image>,
+    pub mud_mixer_anim_4: Handle<Image>,
     // Wheelbarrow
     pub wheelbarrow_empty: Handle<Image>,
     pub wheelbarrow_loaded: Handle<Image>,

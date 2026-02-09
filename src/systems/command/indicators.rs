@@ -7,61 +7,70 @@ use crate::entities::familiar::Familiar;
 use crate::game_state::TaskContext;
 use crate::interface::selection::SelectedEntity;
 use crate::systems::jobs::Designation;
+use crate::systems::visual::task_area_visual::{TaskAreaMaterial, TaskAreaVisual};
 use bevy::prelude::*;
 
 pub fn task_area_indicator_system(
-    q_familiars: Query<(Entity, &Transform, &TaskArea), With<Familiar>>,
-    selected: Res<SelectedEntity>,
-    task_context: Res<TaskContext>,
+    q_familiars: Query<(Entity, &Transform, &TaskArea, &Familiar), With<Familiar>>,
     mut q_indicators: Query<
         (
             Entity,
             &TaskAreaIndicator,
             &mut Transform,
             &mut Visibility,
-            &mut Sprite,
+            &MeshMaterial2d<TaskAreaMaterial>,
         ),
-        Without<Familiar>,
+        (Without<Familiar>, With<TaskAreaVisual>),
     >,
     mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<TaskAreaMaterial>>,
 ) {
-    let area_edit_mode = matches!(task_context.0, TaskMode::AreaSelection(_));
-
-    for (indicator_entity, indicator, mut transform, mut visibility, mut sprite) in
+    for (indicator_entity, indicator, mut transform, mut visibility, material_handle) in
         q_indicators.iter_mut()
     {
-        if let Ok((_, _, task_area)) = q_familiars.get(indicator.0) {
+        if let Ok((_, _, task_area, _)) = q_familiars.get(indicator.0) {
             transform.translation = task_area.center().extend(0.2);
-            sprite.custom_size = Some(task_area.size());
-            sprite.color = if area_edit_mode && selected.0 == Some(indicator.0) {
-                Color::srgba(0.9, 1.0, 0.6, 0.28)
-            } else {
-                Color::srgba(0.0, 1.0, 0.0, 0.15)
-            };
+            transform.scale = task_area.size().extend(1.0);
+
+            if let Some(material) = materials.get_mut(&material_handle.0) {
+                material.size = task_area.size();
+            }
+
             *visibility = Visibility::Visible;
         } else {
             commands.entity(indicator_entity).despawn();
         }
     }
 
-    for (fam_entity, _, task_area) in q_familiars.iter() {
+    for (fam_entity, _, task_area, familiar_comp) in q_familiars.iter() {
         let has_indicator = q_indicators
             .iter()
             .any(|(_, ind, _, _, _)| ind.0 == fam_entity);
 
         if !has_indicator {
+            // 使い魔のコンポーネントに保持されている色インデックスを使用
+            let palette = [
+                LinearRgba::from(Color::srgba(0.7, 0.3, 1.0, 1.0)), // Purple (鮮明化)
+                LinearRgba::from(Color::srgba(1.0, 0.7, 0.0, 1.0)), // Yellow-Orange (赤と区別)
+                LinearRgba::from(Color::srgba(0.1, 1.0, 0.4, 1.0)), // Toxic Green
+                LinearRgba::from(Color::srgba(1.0, 0.0, 0.1, 1.0)), // Red
+            ];
+            let color = palette[familiar_comp.color_index as usize % palette.len()];
+
             commands.spawn((
                 TaskAreaIndicator(fam_entity),
-                Sprite {
-                    color: if area_edit_mode && selected.0 == Some(fam_entity) {
-                        Color::srgba(0.9, 1.0, 0.6, 0.28)
-                    } else {
-                        Color::srgba(0.0, 1.0, 0.0, 0.15)
-                    },
-                    custom_size: Some(task_area.size()),
-                    ..default()
-                },
-                Transform::from_translation(task_area.center().extend(0.2)),
+                TaskAreaVisual { familiar: fam_entity },
+                Mesh2d(meshes.add(Rectangle::default().mesh())),
+                MeshMaterial2d(materials.add(TaskAreaMaterial {
+                    color,
+                    size: task_area.size(),
+                    time: 0.0,
+                    state: 0,
+                })),
+                Transform::from_translation(task_area.center().extend(0.2))
+                    .with_scale(task_area.size().extend(1.0)),
+                Visibility::Visible,
             ));
         }
     }

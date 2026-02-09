@@ -2,12 +2,12 @@ mod assets;
 mod constants;
 mod entities;
 mod events;
-mod game_state;
-mod interface;
-mod plugins;
-mod relationships;
-mod systems;
-mod world;
+pub mod game_state;
+pub mod interface;
+pub mod plugins;
+pub mod relationships;
+pub mod systems;
+pub mod world;
 
 use bevy::diagnostic::{DiagnosticsStore, FrameTimeDiagnosticsPlugin};
 use bevy::prelude::*;

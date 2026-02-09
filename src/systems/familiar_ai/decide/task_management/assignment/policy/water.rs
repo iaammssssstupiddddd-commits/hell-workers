@@ -63,10 +63,16 @@ pub(super) fn assign_haul_water_to_mixer(
     if !source_not_reserved(ctx.task_entity, queries, shadow) {
         return false;
     }
+    // Tankからの取水競合を避けるため、1タンク1作業のロックを確認
+    if !source_not_reserved(tank_entity, queries, shadow) {
+        return false;
+    }
+    let mixer_already_reserved = queries.reserved_for_task.get(ctx.task_entity).is_ok();
 
     issue_haul_water_to_mixer(
         mixer_entity,
         tank_entity,
+        mixer_already_reserved,
         task_pos,
         already_commanded,
         ctx,
