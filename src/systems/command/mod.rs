@@ -37,6 +37,17 @@ impl TaskArea {
     pub fn contains(&self, pos: Vec2) -> bool {
         pos.x >= self.min.x && pos.x <= self.max.x && pos.y >= self.min.y && pos.y <= self.max.y
     }
+    pub fn contains_border(&self, pos: Vec2, thickness: f32) -> bool {
+        let in_outer = pos.x >= self.min.x - thickness
+            && pos.x <= self.max.x + thickness
+            && pos.y >= self.min.y - thickness
+            && pos.y <= self.max.y + thickness;
+        let in_inner = pos.x >= self.min.x + thickness
+            && pos.x <= self.max.x - thickness
+            && pos.y >= self.min.y + thickness
+            && pos.y <= self.max.y - thickness;
+        in_outer && !in_inner
+    }
 }
 
 /// タスクエリア表示用
