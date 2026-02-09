@@ -10,6 +10,7 @@ pub mod gather;
 pub mod gather_water;
 pub mod haul;
 pub mod haul_to_blueprint;
+pub mod haul_with_wheelbarrow;
 pub mod haul_to_mixer;
 pub mod haul_water_to_mixer;
 pub mod refine;
@@ -28,6 +29,7 @@ use crate::systems::familiar_ai::perceive::resource_sync::{
 // use crate::systems::familiar_ai::perceive::resource_sync::SharedResourceCache; // Removed unused import
 use crate::systems::soul_ai::execute::task_execution::types::{
     GatherWaterPhase, HaulPhase, HaulToBpPhase, HaulToMixerPhase, HaulWaterToMixerPhase,
+    HaulWithWheelbarrowPhase,
 };
 use crate::systems::soul_ai::helpers::query_types::{
     TaskAssignmentSoulQuery, TaskExecutionSoulQuery,
@@ -45,6 +47,7 @@ use haul::handle_haul_task;
 use haul_to_blueprint::handle_haul_to_blueprint_task;
 use haul_to_mixer::handle_haul_to_mixer_task;
 use haul_water_to_mixer::handle_haul_water_to_mixer_task;
+use haul_with_wheelbarrow::handle_haul_with_wheelbarrow_task;
 use refine::handle_refine_task;
 
 fn prepare_worker_for_task_apply(
@@ -152,6 +155,7 @@ fn expected_item_for_task(task: &AssignedTask) -> Option<Entity> {
         AssignedTask::HaulToMixer(data) => Some(data.item),
         AssignedTask::GatherWater(data) => Some(data.bucket),
         AssignedTask::HaulWaterToMixer(data) => Some(data.bucket),
+        AssignedTask::HaulWithWheelbarrow(data) => Some(data.wheelbarrow),
         _ => None,
     }
 }
@@ -170,6 +174,13 @@ fn requires_item_in_inventory(task: &AssignedTask) -> bool {
         AssignedTask::HaulWaterToMixer(data) => {
             !matches!(data.phase, HaulWaterToMixerPhase::GoingToBucket)
         }
+        AssignedTask::HaulWithWheelbarrow(data) => {
+            !matches!(
+                data.phase,
+                HaulWithWheelbarrowPhase::GoingToParking
+                    | HaulWithWheelbarrowPhase::PickingUpWheelbarrow
+            )
+        }
         _ => false,
     }
 }
@@ -183,6 +194,13 @@ pub fn task_execution_system(
     // haul_cache is removed
     world_map: Res<WorldMap>,
     mut pf_context: Local<crate::world::pathfinding::PathfindingContext>,
+    q_wheelbarrows: Query<
+        (
+            &Transform,
+            Option<&crate::relationships::ParkedAt>,
+        ),
+        With<crate::systems::logistics::Wheelbarrow>,
+    >,
 ) {
     for (
         soul_entity,
@@ -350,6 +368,16 @@ pub fn task_execution_system(
                     // haul_cache removed
                     &time,
                     &world_map,
+                );
+            }
+            AssignedTask::HaulWithWheelbarrow(data) => {
+                let data = data.clone();
+                handle_haul_with_wheelbarrow_task(
+                    &mut ctx,
+                    data,
+                    &mut commands,
+                    &world_map,
+                    &q_wheelbarrows,
                 );
             }
             AssignedTask::None => {}

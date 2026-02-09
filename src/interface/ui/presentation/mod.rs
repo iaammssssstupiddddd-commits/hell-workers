@@ -162,6 +162,7 @@ pub(super) fn format_task_str(task: &AssignedTask) -> String {
         AssignedTask::Refine(data) => format!("Refine ({:?})", data.phase),
         AssignedTask::HaulToMixer(data) => format!("HaulToMixer ({:?})", data.phase),
         AssignedTask::HaulWaterToMixer(data) => format!("HaulWaterToMixer ({:?})", data.phase),
+        AssignedTask::HaulWithWheelbarrow(data) => format!("HaulWheelbarrow ({:?})", data.phase),
     }
 }
 

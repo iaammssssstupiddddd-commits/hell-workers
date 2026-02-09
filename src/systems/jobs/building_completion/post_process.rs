@@ -1,6 +1,8 @@
 use super::super::{Blueprint, BuildingType, MudMixerStorage, SandPile, TaskSlots};
 use crate::assets::GameAssets;
-use crate::constants::{MUD_MIXER_CAPACITY, TILE_SIZE, Z_FLOATING_TEXT, Z_ITEM_PICKUP};
+use crate::constants::{
+    MUD_MIXER_CAPACITY, TILE_SIZE, WHEELBARROW_CAPACITY, Z_FLOATING_TEXT, Z_ITEM_PICKUP,
+};
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
 
@@ -32,6 +34,10 @@ pub(super) fn apply_building_specific_post_process(
 
     if bp.kind == BuildingType::SandPile {
         setup_sand_pile(commands, building_entity);
+    }
+
+    if bp.kind == BuildingType::WheelbarrowParking {
+        setup_wheelbarrow_parking(commands, building_entity, transform, game_assets);
     }
 
     spawn_completion_text(commands, transform, game_assets);
@@ -106,6 +112,43 @@ fn setup_mud_mixer(commands: &mut Commands, building_entity: Entity) {
 
 fn setup_sand_pile(commands: &mut Commands, building_entity: Entity) {
     commands.entity(building_entity).insert(SandPile);
+}
+
+fn setup_wheelbarrow_parking(
+    commands: &mut Commands,
+    building_entity: Entity,
+    transform: &Transform,
+    game_assets: &GameAssets,
+) {
+    let parking_capacity = 2usize;
+    commands.entity(building_entity).insert(
+        crate::systems::logistics::WheelbarrowParking {
+            capacity: parking_capacity,
+        },
+    );
+
+    let pos = transform.translation.truncate();
+    for i in 0..parking_capacity {
+        commands.spawn((
+            crate::systems::logistics::ResourceItem(
+                crate::systems::logistics::ResourceType::Wheelbarrow,
+            ),
+            crate::systems::logistics::Wheelbarrow {
+                capacity: WHEELBARROW_CAPACITY,
+            },
+            crate::systems::logistics::BelongsTo(building_entity),
+            crate::relationships::ParkedAt(building_entity),
+            crate::relationships::LoadedItems::default(),
+            TaskSlots::new(1),
+            Sprite {
+                image: game_assets.wheelbarrow_empty.clone(),
+                custom_size: Some(Vec2::splat(TILE_SIZE * 0.6)),
+                ..default()
+            },
+            Transform::from_xyz(pos.x, pos.y, Z_ITEM_PICKUP),
+            Name::new(format!("Wheelbarrow #{}", i)),
+        ));
+    }
 }
 
 fn find_stockpile_grid(world_map: &WorldMap, stockpile_entity: Entity) -> Option<(i32, i32)> {

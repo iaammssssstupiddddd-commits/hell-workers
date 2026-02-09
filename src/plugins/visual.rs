@@ -31,6 +31,7 @@ use crate::systems::visual::gather::{
 };
 use crate::systems::visual::haul::{
     spawn_carrying_item_system, update_carrying_item_system, update_drop_popup_system,
+    wheelbarrow_follow_system,
 };
 use crate::systems::visual::soul::{
     progress_bar_system, soul_status_visual_system, sync_progress_bar_position_system,
@@ -153,6 +154,7 @@ impl Plugin for VisualPlugin {
                 spawn_carrying_item_system,
                 update_carrying_item_system,
                 update_drop_popup_system,
+                wheelbarrow_follow_system,
             )
                 .chain()
                 .in_set(GameSystemSet::Visual),

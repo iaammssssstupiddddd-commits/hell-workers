@@ -16,6 +16,20 @@ pub enum ResourceType {
     BucketWater,
     Sand,
     StasisMud,
+    Wheelbarrow,
+}
+
+impl ResourceType {
+    /// 手押し車に積載可能か
+    pub fn is_loadable(&self) -> bool {
+        match self {
+            ResourceType::Water => false,
+            ResourceType::BucketWater => false,
+            ResourceType::BucketEmpty => false,
+            ResourceType::Wheelbarrow => false,
+            _ => true, // Wood, Rock, Sand, StasisMud
+        }
+    }
 }
 
 #[derive(Component, Reflect)]
@@ -36,6 +50,20 @@ pub struct BelongsTo(pub Entity);
 #[derive(Component, Reflect, Debug, Clone, Copy, PartialEq, Eq)]
 #[reflect(Component)]
 pub struct BucketStorage;
+
+/// 手押し車コンポーネント
+#[derive(Component, Reflect, Debug)]
+#[reflect(Component)]
+pub struct Wheelbarrow {
+    pub capacity: usize,
+}
+
+/// 手押し車の駐車エリア
+#[derive(Component, Reflect, Debug)]
+#[reflect(Component)]
+pub struct WheelbarrowParking {
+    pub capacity: usize,
+}
 
 /// Tank Blueprint との一時リンク（完成時に BelongsTo へ昇格）
 #[derive(Component, Reflect, Debug, Clone, Copy, PartialEq, Eq)]

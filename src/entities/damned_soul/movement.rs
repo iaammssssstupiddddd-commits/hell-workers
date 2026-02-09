@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::constants::*;
+use crate::relationships::PushingWheelbarrow;
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
 use crate::systems::soul_ai::helpers::work::unassign_task;
 use crate::world::map::WorldMap;
@@ -172,9 +173,11 @@ pub fn soul_movement(
         &DamnedSoul,
         &IdleState,
         Option<&StressBreakdown>,
+        Option<&PushingWheelbarrow>,
     )>,
 ) {
-    for (_entity, mut transform, mut path, mut anim, soul, idle, breakdown_opt) in query.iter_mut()
+    for (_entity, mut transform, mut path, mut anim, soul, idle, breakdown_opt, pushing_wb) in
+        query.iter_mut()
     {
         if let Some(breakdown) = breakdown_opt {
             if breakdown.is_frozen {
@@ -202,6 +205,9 @@ pub fn soul_movement(
                 }
                 if idle.behavior == IdleBehavior::Escaping {
                     speed *= ESCAPE_SPEED_MULTIPLIER;
+                }
+                if pushing_wb.is_some_and(|wb| wb.get().is_some()) {
+                    speed *= SOUL_SPEED_WHEELBARROW_MULTIPLIER;
                 }
 
                 let move_dist = (speed * time.delta_secs()).min(distance);
@@ -263,17 +269,35 @@ pub fn animation_system(
     )>,
 ) {
     for (mut transform, mut sprite, mut anim, soul) in query.iter_mut() {
+        // 向きの更新
         sprite.flip_x = !anim.facing_right;
 
+        // アニメーション更新
         if anim.is_moving {
+            // スケールアニメーション（ボブ）
             anim.bob_timer += time.delta_secs() * ANIM_BOB_SPEED;
             let bob = (anim.bob_timer.sin() * ANIM_BOB_AMPLITUDE) + 1.0;
             transform.scale = Vec3::new(1.0, bob, 1.0);
+            anim.frame_timer += time.delta_secs();
+
+            // スプライトアニメーション（9フレーム: 3x3）
+            if let Some(atlas) = &mut sprite.texture_atlas {
+                let frame_index = ((anim.frame_timer * SOUL_MOVE_ANIMATION_FPS) as usize)
+                    % SOUL_MOVE_ANIMATION_FRAMES;
+                atlas.index = frame_index;
+            }
         } else {
+            // 待機時の呼吸アニメーション
             let breath_speed = ANIM_BREATH_SPEED_BASE - soul.laziness;
             anim.bob_timer += time.delta_secs() * breath_speed;
             let breath = (anim.bob_timer.sin() * ANIM_BREATH_AMPLITUDE) + 1.0;
             transform.scale = Vec3::splat(breath);
+
+            // 待機時はフレーム0に戻す
+            anim.frame_timer = 0.0;
+            if let Some(atlas) = &mut sprite.texture_atlas {
+                atlas.index = 0;
+            }
         }
     }
 }

@@ -2,7 +2,9 @@ use crate::events::ResourceReservationOp;
 use crate::systems::familiar_ai::decide::task_management::{AssignTaskContext, ReservationShadow};
 use crate::systems::jobs::WorkType;
 use crate::systems::logistics::ResourceType;
-use crate::systems::soul_ai::execute::task_execution::types::{HaulPhase, HaulToBpPhase};
+use crate::systems::soul_ai::execute::task_execution::types::{
+    HaulPhase, HaulToBpPhase, HaulWithWheelbarrowPhase,
+};
 use bevy::prelude::*;
 
 use super::submit_assignment;
@@ -108,6 +110,61 @@ pub fn issue_haul_to_mixer(
         queries,
         shadow,
         WorkType::HaulToMixer,
+        task_pos,
+        assigned_task,
+        reservation_ops,
+        already_commanded,
+    );
+}
+
+pub fn issue_haul_with_wheelbarrow(
+    wheelbarrow: Entity,
+    source_pos: Vec2,
+    dest_stockpile: Entity,
+    items: Vec<Entity>,
+    task_pos: Vec2,
+    already_commanded: bool,
+    ctx: &AssignTaskContext<'_>,
+    queries: &mut crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
+    shadow: &mut ReservationShadow,
+) {
+    let assigned_task =
+        crate::systems::soul_ai::execute::task_execution::types::AssignedTask::HaulWithWheelbarrow(
+            crate::systems::soul_ai::execute::task_execution::types::HaulWithWheelbarrowData {
+                wheelbarrow,
+                source_pos,
+                dest_stockpile,
+                items: items.clone(),
+                phase: HaulWithWheelbarrowPhase::GoingToParking,
+            },
+        );
+
+    let mut reservation_ops = vec![
+        // 手押し車自体をソース予約して二重使用を防止
+        ResourceReservationOp::ReserveSource {
+            source: wheelbarrow,
+            amount: 1,
+        },
+    ];
+    // 目的地をアイテム数分予約
+    for _ in &items {
+        reservation_ops.push(ResourceReservationOp::ReserveDestination {
+            target: dest_stockpile,
+        });
+    }
+    // 全アイテムをソース予約
+    for &item in &items {
+        reservation_ops.push(ResourceReservationOp::ReserveSource {
+            source: item,
+            amount: 1,
+        });
+    }
+
+    submit_assignment(
+        ctx,
+        queries,
+        shadow,
+        WorkType::WheelbarrowHaul,
         task_pos,
         assigned_task,
         reservation_ops,

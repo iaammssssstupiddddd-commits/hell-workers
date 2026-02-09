@@ -83,6 +83,7 @@ pub(super) fn task_visual(task: &AssignedTask) -> TaskVisual {
         AssignedTask::Refine { .. } => TaskVisual::Build,
         AssignedTask::HaulToMixer { .. } => TaskVisual::HaulToBlueprint,
         AssignedTask::HaulWaterToMixer { .. } => TaskVisual::Water,
+        AssignedTask::HaulWithWheelbarrow { .. } => TaskVisual::Haul,
     }
 }
 

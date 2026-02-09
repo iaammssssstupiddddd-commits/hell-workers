@@ -36,6 +36,7 @@ pub fn spawn_carrying_item_system(
             ResourceType::BucketWater => game_assets.bucket_water.clone(),
             ResourceType::Sand => game_assets.sand_pile.clone(),
             ResourceType::StasisMud => game_assets.stasis_mud.clone(),
+            ResourceType::Wheelbarrow => continue, // 手押し車自体は頭上アイコン不要
         };
 
         info!(
@@ -100,6 +101,7 @@ pub fn update_carrying_item_system(
                         ResourceType::BucketWater => game_assets.bucket_water.clone(),
                         ResourceType::Sand => game_assets.sand_pile.clone(),
                         ResourceType::StasisMud => game_assets.stasis_mud.clone(),
+                        ResourceType::Wheelbarrow => game_assets.icon_wheelbarrow_small.clone(),
                     };
                     // 画像が変更された場合のみ更新
                     if icon_sprite.image != new_icon_handle {

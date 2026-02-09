@@ -171,3 +171,89 @@ impl StoredItems {
 
 // Item -> Stockpile 関係のみを維持します。
 // Familiar -> Stockpile の管理は空間検索 (TaskArea) で行います。
+
+// ============================================================
+// 手押し車 ⇔ 積載アイテム 関係
+// ============================================================
+
+/// アイテムが手押し車に積載されていることを示す Relationship
+/// アイテム側に付与される（アイテム → 手押し車への参照）
+#[derive(Component, Reflect, Debug, Clone, Copy)]
+#[reflect(Component)]
+#[relationship(relationship_target = LoadedItems)]
+pub struct LoadedIn(pub Entity);
+
+impl Default for LoadedIn {
+    fn default() -> Self {
+        Self(Entity::PLACEHOLDER)
+    }
+}
+
+/// 手押し車に積載されているアイテムの一覧
+/// 手押し車側に自動的に付与・維持される RelationshipTarget
+#[derive(Component, Reflect, Debug, Default)]
+#[reflect(Component)]
+#[relationship_target(relationship = LoadedIn)]
+pub struct LoadedItems(Vec<Entity>);
+
+impl LoadedItems {
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+}
+
+// ============================================================
+// 手押し車 ⇔ 駐車エリア 関係
+// ============================================================
+
+/// 手押し車が駐車エリアに駐車されていることを示す Relationship
+/// 手押し車側に付与される（手押し車 → 駐車エリアへの参照）
+#[derive(Component, Reflect, Debug, Clone, Copy)]
+#[reflect(Component)]
+#[relationship(relationship_target = ParkedWheelbarrows)]
+pub struct ParkedAt(pub Entity);
+
+impl Default for ParkedAt {
+    fn default() -> Self {
+        Self(Entity::PLACEHOLDER)
+    }
+}
+
+/// 駐車エリアに駐車されている手押し車の一覧
+/// 駐車エリア側に自動的に付与・維持される RelationshipTarget
+#[derive(Component, Reflect, Debug, Default)]
+#[reflect(Component)]
+#[relationship_target(relationship = ParkedAt)]
+pub struct ParkedWheelbarrows(Vec<Entity>);
+
+impl ParkedWheelbarrows {}
+
+// ============================================================
+// 手押し車 ⇔ ソウル（使用中）関係
+// ============================================================
+
+/// 手押し車が特定のソウルに押されていることを示す Relationship
+/// 手押し車側に付与される（手押し車 → ソウルへの参照）
+#[derive(Component, Reflect, Debug, Clone, Copy)]
+#[reflect(Component)]
+#[relationship(relationship_target = PushingWheelbarrow)]
+pub struct PushedBy(pub Entity);
+
+impl Default for PushedBy {
+    fn default() -> Self {
+        Self(Entity::PLACEHOLDER)
+    }
+}
+
+/// ソウルが押している手押し車の一覧
+/// ソウル側に自動的に付与・維持される RelationshipTarget
+#[derive(Component, Reflect, Debug, Default)]
+#[reflect(Component)]
+#[relationship_target(relationship = PushedBy)]
+pub struct PushingWheelbarrow(Vec<Entity>);
+
+impl PushingWheelbarrow {
+    pub fn get(&self) -> Option<Entity> {
+        self.0.first().copied()
+    }
+}

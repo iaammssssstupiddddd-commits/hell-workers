@@ -101,7 +101,8 @@ pub(super) fn candidate_snapshot(
         | WorkType::GatherWater
         | WorkType::CollectSand
         | WorkType::Refine
-        | WorkType::HaulWaterToMixer => true,
+        | WorkType::HaulWaterToMixer
+        | WorkType::WheelbarrowHaul => true,
         WorkType::Build => {
             if let Ok((_, bp, _)) = queries.storage.blueprints.get(entity) {
                 bp.materials_complete()

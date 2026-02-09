@@ -226,6 +226,14 @@ pub const SOUL_SPEED_MOTIVATION_BONUS: f32 = 40.0;
 pub const SOUL_SPEED_LAZINESS_PENALTY: f32 = 30.0;
 /// 疲労困憊時の速度デバフ倍率
 pub const SOUL_SPEED_EXHAUSTED_MULTIPLIER: f32 = 0.7;
+/// 手押し車使用時の速度デバフ倍率
+pub const SOUL_SPEED_WHEELBARROW_MULTIPLIER: f32 = 0.7;
+/// 手押し車の最大積載数（混載含む合計）
+pub const WHEELBARROW_CAPACITY: usize = 10;
+/// 手押し車の追従オフセット距離
+pub const WHEELBARROW_OFFSET: f32 = TILE_SIZE * 0.5;
+/// 手押し車使用の最小アイテム数（これ以上あれば手押し車を使う）
+pub const WHEELBARROW_MIN_BATCH_SIZE: usize = 3;
 
 /// 移動アニメーション (Bob) の速度
 pub const ANIM_BOB_SPEED: f32 = 10.0;
@@ -235,6 +243,14 @@ pub const ANIM_BOB_AMPLITUDE: f32 = 0.05;
 pub const ANIM_BREATH_SPEED_BASE: f32 = 2.0;
 /// 待機中呼吸アニメーションの振幅
 pub const ANIM_BREATH_AMPLITUDE: f32 = 0.02;
+/// Soul 移動時のスプライト切り替え速度（FPS）
+pub const SOUL_MOVE_ANIMATION_FPS: f32 = 10.0;
+/// Soul 移動アニメーションのフレーム数（3x3）
+pub const SOUL_MOVE_ANIMATION_FRAMES: usize = 9;
+/// Familiar 移動時のスプライト切り替え速度（FPS）
+pub const FAMILIAR_MOVE_ANIMATION_FPS: f32 = 5.0;
+/// Familiar 移動アニメーションのフレーム数
+pub const FAMILIAR_MOVE_ANIMATION_FRAMES: usize = 3;
 
 // UI font constants moved to UiTheme resource (src/interface/ui/theme.rs)
 // Keep FONT_SIZE_BODY for in-game visual elements (not UI)

@@ -135,6 +135,16 @@ pub struct TaskAssignmentQueries<'w, 's> {
     pub items: Query<'w, 's, (&'static ResourceItem, Option<&'static Designation>)>,
     pub assignment_writer: MessageWriter<'w, TaskAssignmentRequest>,
     pub task_slots: Query<'w, 's, &'static crate::systems::jobs::TaskSlots>,
+    pub wheelbarrows: Query<
+        'w,
+        's,
+        (Entity, &'static Transform),
+        (
+            With<crate::systems::logistics::Wheelbarrow>,
+            With<crate::relationships::ParkedAt>,
+            Without<crate::relationships::PushedBy>,
+        ),
+    >,
 }
 
 /// タスク実行に必要なクエリ群
