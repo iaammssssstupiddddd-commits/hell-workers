@@ -202,7 +202,7 @@ pub fn unassign_task<'w, 's, Q: TaskReservationAccess<'w, 's>>(
             }
             // 手押し車を駐車状態に戻す
             if let Ok(mut wb_commands) = commands.get_entity(data.wheelbarrow) {
-                wb_commands.remove::<crate::relationships::PushedBy>();
+                wb_commands.remove::<(crate::relationships::PushedBy, crate::systems::visual::haul::WheelbarrowMovement)>();
                 wb_commands.insert((
                     Visibility::Visible,
                     Transform::from_xyz(drop_pos.x, drop_pos.y, Z_ITEM_PICKUP),

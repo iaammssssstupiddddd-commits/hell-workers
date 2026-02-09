@@ -8,9 +8,15 @@ pub struct GameAssets {
     pub river: Handle<Image>,
     pub sand: Handle<Image>,
     pub familiar: Handle<Image>,
-    // Soul Animations
-    pub soul_move: Handle<Image>,
-    pub soul_layout: Handle<TextureAtlasLayout>,
+    // Soul
+    pub soul: Handle<Image>,
+    pub soul_exhausted: Handle<Image>,
+    pub soul_lough: Handle<Image>,
+    pub soul_sleep: Handle<Image>,
+    pub soul_wine: Handle<Image>,
+    pub soul_trump: Handle<Image>,
+    pub soul_stress: Handle<Image>,
+    pub soul_stress_breakdown: Handle<Image>,
     // Wall connections
     pub wall_isolated: Handle<Image>,
     pub wall_horizontal_left: Handle<Image>,

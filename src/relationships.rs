@@ -1,6 +1,6 @@
 //! ECS Relationships モジュール
 //!
-//! エンティティ間の関係を Bevy 0.17 の Relationship 機能で管理します。
+//! エンティティ間の関係を Bevy 0.18 の Relationship 機能で管理します。
 
 use bevy::prelude::*;
 

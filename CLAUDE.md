@@ -9,7 +9,7 @@
 4. **Architecture Details**: [docs/architecture.md](docs/architecture.md)
 
 ## Key Technical Context
-- **Engine**: Bevy 0.17
+- **Engine**: Bevy 0.18
 - **Language**: Rust
 - **Critical Mechanism**: ECS Relationships are used for most entity connections
 - **Build Target**: Windows (x86_64-pc-windows-gnu)

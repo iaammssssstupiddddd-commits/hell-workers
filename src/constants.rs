@@ -234,23 +234,39 @@ pub const WHEELBARROW_CAPACITY: usize = 10;
 pub const WHEELBARROW_OFFSET: f32 = TILE_SIZE * 0.5;
 /// 手押し車使用の最小アイテム数（これ以上あれば手押し車を使う）
 pub const WHEELBARROW_MIN_BATCH_SIZE: usize = 3;
+/// 運搬中の手押し車のスケール倍率（駐車時は1.0、運搬中は大きく表示）
+pub const WHEELBARROW_ACTIVE_SCALE: f32 = 1.8;
 
-/// 移動アニメーション (Bob) の速度
-pub const ANIM_BOB_SPEED: f32 = 10.0;
 /// 移動アニメーション (Bob) の振幅
 pub const ANIM_BOB_AMPLITUDE: f32 = 0.05;
-/// 待機中呼吸アニメーションの基本速度
-pub const ANIM_BREATH_SPEED_BASE: f32 = 2.0;
-/// 待機中呼吸アニメーションの振幅
-pub const ANIM_BREATH_AMPLITUDE: f32 = 0.02;
-/// Soul 移動時のスプライト切り替え速度（FPS）
-pub const SOUL_MOVE_ANIMATION_FPS: f32 = 10.0;
-/// Soul 移動アニメーションのフレーム数（3x3）
-pub const SOUL_MOVE_ANIMATION_FRAMES: usize = 9;
 /// Familiar 移動時のスプライト切り替え速度（FPS）
 pub const FAMILIAR_MOVE_ANIMATION_FPS: f32 = 5.0;
 /// Familiar 移動アニメーションのフレーム数
 pub const FAMILIAR_MOVE_ANIMATION_FRAMES: usize = 3;
+/// Soul 浮遊の左右スウェイ速度
+pub const SOUL_FLOAT_SWAY_SPEED: f32 = 2.4;
+/// Soul 浮遊の回転角（待機時）
+pub const SOUL_FLOAT_SWAY_TILT_IDLE: f32 = 0.06;
+/// Soul 浮遊の回転角（移動時）
+pub const SOUL_FLOAT_SWAY_TILT_MOVE: f32 = 0.12;
+/// Soul 浮遊の脈動速度の基準値
+pub const SOUL_FLOAT_PULSE_SPEED_BASE: f32 = 2.2;
+/// Soul 浮遊の脈動振幅（待機時）
+pub const SOUL_FLOAT_PULSE_AMPLITUDE_IDLE: f32 = 0.025;
+/// Soul 浮遊の脈動振幅（移動時）
+pub const SOUL_FLOAT_PULSE_AMPLITUDE_MOVE: f32 = 0.04;
+/// 会話中トーンイベント（即時）の表情ロック時間: Positive（秒）
+pub const SOUL_EVENT_LOCK_TONE_POSITIVE: f32 = 3.0;
+/// 会話中トーンイベント（即時）の表情ロック時間: Negative（秒）
+pub const SOUL_EVENT_LOCK_TONE_NEGATIVE: f32 = 3.4;
+/// 会話完了イベントの表情ロック時間: Positive（秒）
+pub const SOUL_EVENT_LOCK_COMPLETED_POSITIVE: f32 = 1.4;
+/// 会話完了イベントの表情ロック時間: Negative（秒）
+pub const SOUL_EVENT_LOCK_COMPLETED_NEGATIVE: f32 = 1.8;
+/// 疲労限界イベントの表情ロック時間（秒）
+pub const SOUL_EVENT_LOCK_EXHAUSTED: f32 = 4.0;
+/// 集会オブジェクト起点（wine/trump）の表情ロック時間（秒）
+pub const SOUL_EVENT_LOCK_GATHERING_OBJECT: f32 = 2.2;
 
 // UI font constants moved to UiTheme resource (src/interface/ui/theme.rs)
 // Keep FONT_SIZE_BODY for in-game visual elements (not UI)
@@ -376,3 +392,5 @@ pub const EMOJIS_AGREEMENT: &[&str] = &["🙆‍♂️", "👍", "👌"];
 pub const EMOJIS_SLACKING: &[&str] = &["🛌", "🛑", "🐌"];
 pub const EMOJIS_FOOD: &[&str] = &["🍖", "🍺", "🥤"];
 pub const EMOJIS_COMPLAINING: &[&str] = &["😓", "😴", "😒", "🥱"];
+/// 使い魔の指示リアクション時にネガティブトーンを発火する確率
+pub const COMMAND_REACTION_NEGATIVE_EVENT_CHANCE: f32 = 0.75;

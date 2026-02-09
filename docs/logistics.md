@@ -68,11 +68,11 @@ Hell-Workers における資源の備蓄、運搬、および管理の仕組み�
 - **満杯時の制御**:
     - ミキサーが満杯になった場合、搬送中のタスクは即座にキャンセルされ、アイテムは適切に処分（Sandは消去、他はドロップ）されます。
 
-## 6. 競合回避システム (Contention Avoidance)
+## 7. 競合回避システム (Contention Avoidance)
 
 自動発行システムが過剰にタスクを発行しないよう、`SharedResourceCache` と `sync_reservations_system` で予約を一元管理しています。
 
-### 6.1. 予約の再構築
+### 7.1. 予約の再構築
 `sync_reservations_system` は **0.2秒間隔（初回即時）** で、以下の2つのソースから予約を再構築します:
 
 1. **`AssignedTask`** - 既にSoulに割り当てられているタスク
@@ -81,7 +81,7 @@ Hell-Workers における資源の備蓄、運搬、および管理の仕組み�
 補足:
 - 同期タイマーの間隔中でも、`ResourceReservationRequest` による差分更新は `apply_reservation_requests_system` で即時反映されます。
 
-### 6.2. Designation からの予約カウント
+### 7.2. Designation からの予約カウント
 `Designation` を持つエンティティは、付随するコンポーネントによって適切な予約にカウントされます:
 
 | WorkType | 条件 | 予約先 |
@@ -91,7 +91,7 @@ Hell-Workers における資源の備蓄、運搬、および管理の仕組み�
 | `HaulWaterToMixer` | `TargetMixer` あり | `mixer_dest_reservations` (Water) |
 | `GatherWater` | `BelongsTo` あり | `destination_reservations` |
 
-### 6.3. 自動発行システムのフィルタリング
+### 7.3. 自動発行システムのフィルタリング
 各自動発行システムは、以下の方法で重複を防いでいます:
 
 - **`Without<Designation>`**: 既にタスクが付与されているアイテムをクエリから除外
@@ -99,21 +99,61 @@ Hell-Workers における資源の備蓄、運搬、および管理の仕組み�
 - **`SharedResourceCache` 参照**: 予約数を確認して容量超過を防止
   - `mud_mixer_auto_haul_system`, `tank_water_request_system`
 
-### 6.4. 拡張性
+### 7.4. `AssignedTask::HaulWithWheelbarrow` の予約
+
+手押し車タスクは複数の予約を同時に必要とするため、フェーズに応じた予約管理を行います:
+
+| 予約対象 | 予約先 | 有効フェーズ |
+| :--- | :--- | :--- |
+| 手押し車エンティティ | `source_reservations` | 全フェーズ（二重使用防止） |
+| 目的地ストックパイル | `destination_reservations` × N個 | 全フェーズ |
+| アイテムソース | `source_reservations` | `GoingToParking`, `PickingUpWheelbarrow`, `GoingToSource` のみ |
+
+`Loading` 以降のフェーズではアイテムは既に手押し車に `LoadedIn` されているため、アイテムソースの予約は不要です。
+
+### 7.5. 拡張性
 新しい自動発行システムを追加する場合:
 1. `sync_reservations_system` の `match designation.work_type` に新しい `WorkType` を追加
 2. 必要なターゲットコンポーネント（例: `TargetFurnace`）をクエリに追加
 3. 適切な予約カテゴリにカウントを追加
 
 
-## 4. 備蓄からの利用 (Retrieval)
+## 4. 手押し車運搬 (Wheelbarrow Hauling)
+
+手押し車は、複数のアイテム（最大 `WHEELBARROW_CAPACITY=10` 個、混載可）をまとめて運搬する手段です。
+
+### 4.1. 手押し車の管理
+
+- **駐車エリア (`WheelbarrowParking`)**: `BuildingType::WheelbarrowParking` として建設（2x2タイル、Wood x 2）
+- **スポーン**: 建設完了時のポストプロセスで `capacity` 分の手押し車エンティティをスポーン
+- **関連 Relationship**:
+  - `PushedBy(Entity)` — 手押し車 → 使用中の魂
+  - `LoadedIn(Entity)` / `LoadedItems(Vec)` — アイテム → 手押し車の積載関係
+  - `ParkedAt(Entity)` / `ParkedWheelbarrows(Vec)` — 手押し車 → 駐車エリア
+
+### 4.2. 発行条件
+
+- ストックパイル間で移動が必要なアイテムが `WHEELBARROW_MIN_BATCH_SIZE` 個以上
+- 駐車エリアに利用可能（未予約）な手押し車がある
+- アイテムの `ResourceType` が `is_loadable() == true`（液体・バケツ・手押し車自体は不可）
+
+### 4.3. 速度ペナルティ
+
+手押し車使用中の魂は `SOUL_SPEED_WHEELBARROW_MULTIPLIER` (0.7) の速度補正を受けます。
+
+### 4.4. ビジュアル
+
+手押し車は独立エンティティとして魂の進行方向前方に追従表示されます。
+詳細は [gather_haul_visual.md](gather_haul_visual.md) を参照。
+
+## 5. 備蓄からの利用 (Retrieval)
 
 建築など、特定のタスクでは備蓄された資源を再利用します。
 - **検索**: 建築現場から最も近い資源が検索されます。これにはストックパイル内のアイテムも含まれます。
 - **エリア制限**: 使い魔は、**自分の担当エリア（TaskArea）内にあるストックパイル**からのみ資源を持ち出します。他者の備蓄を勝手に消費することはありません。
 - **自動更新**: アイテムが持ち出されると `StoredIn` 関係が解除され、ストックパイル側の在庫リストも自動更新されます。最後の1個がなくなると、ストックパイルの管理リソース型は `None` にリセットされます。
 
-## 5. 座標とレイヤー
+## 6. 座標とレイヤー
 
 - **スナッピング**: 備蓄場所にアイテムを置く際、座標はタイルの中心に正確に補完されます。
 - **表示レイヤー (Z-Index)**:

@@ -82,6 +82,14 @@ Bevy 0.18 の **ECS Relationships** 機能を使用し、エンティティ間�
     - **岩 (Rock)**: `Rock` x 10 をドロップ。**作業時間は木の約2倍**かかる重労働です。
     - **スタック**: 報酬は同一タイル内にドロップされ、アイテム個数としてまとめてカウント（スタック）されます。
 - **運搬 (Haul)**: 「拾う」「備蓄場所へ運ぶ」「置く」のフェーズを経る。
+- **手押し車運搬 (HaulWithWheelbarrow)**: 手押し車を使って複数アイテムをまとめて運搬する。以下の7フェーズを経る:
+    1. `GoingToParking` — 駐車エリアへ移動
+    2. `PickingUpWheelbarrow` — 手押し車を取得（`PushedBy` 設定）
+    3. `GoingToSource` — 積み込み元ストックパイルへ移動
+    4. `Loading` — アイテムを手押し車に積む（`LoadedIn` 設定、`Visibility::Hidden`）
+    5. `GoingToDestination` — 目的地へ移動（速度ペナルティ `SOUL_SPEED_WHEELBARROW_MULTIPLIER`）
+    6. `Unloading` — アイテムをストックパイルに荷下ろし
+    7. `ReturningWheelbarrow` — 手押し車を駐車エリアに返却
 - **水運搬 (HaulWater)**: Tankから水を汲み、MudMixerへ運ぶ一連のプロセス。
     - バケツ確保 -> Tankへ移動 -> 汲む -> Mixerへ移動 -> 注ぐ -> バケツ返却
 
