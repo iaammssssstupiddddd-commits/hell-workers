@@ -122,6 +122,7 @@ pub struct MutStorageAccess<'w, 's> {
             Option<&'static TaskWorkers>,
         ),
     >,
+    pub target_mixers: Query<'w, 's, &'static crate::systems::jobs::TargetMixer>,
 }
 
 /// タスク割り当てに必要なクエリ群（Familiar AI向け）
@@ -133,6 +134,24 @@ pub struct TaskAssignmentQueries<'w, 's> {
 
     // 固有フィールド
     pub items: Query<'w, 's, (&'static ResourceItem, Option<&'static Designation>)>,
+    pub mixer_haul_requests: Query<'w, 's, &'static crate::systems::jobs::MixerHaulRequest>,
+    pub free_resource_items: Query<
+        'w,
+        's,
+        (
+            Entity,
+            &'static Transform,
+            &'static Visibility,
+            &'static ResourceItem,
+        ),
+        (
+            Without<Designation>,
+            Without<crate::relationships::TaskWorkers>,
+            Without<crate::systems::logistics::ReservedForTask>,
+        ),
+    >,
+    pub reserved_for_task:
+        Query<'w, 's, &'static crate::systems::logistics::ReservedForTask>,
     pub assignment_writer: MessageWriter<'w, TaskAssignmentRequest>,
     pub task_slots: Query<'w, 's, &'static crate::systems::jobs::TaskSlots>,
     pub wheelbarrows: Query<

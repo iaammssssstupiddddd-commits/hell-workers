@@ -79,8 +79,10 @@ pub fn issue_haul_to_stockpile(
 }
 
 pub fn issue_haul_to_mixer(
+    source_item: Entity,
     mixer: Entity,
     item_type: ResourceType,
+    mixer_already_reserved: bool,
     task_pos: Vec2,
     already_commanded: bool,
     ctx: &AssignTaskContext<'_>,
@@ -89,22 +91,22 @@ pub fn issue_haul_to_mixer(
 ) {
     let assigned_task = crate::systems::soul_ai::execute::task_execution::types::AssignedTask::HaulToMixer(
         crate::systems::soul_ai::execute::task_execution::types::HaulToMixerData {
-            item: ctx.task_entity,
+            item: source_item,
             mixer,
             resource_type: item_type,
             phase: crate::systems::soul_ai::execute::task_execution::types::HaulToMixerPhase::GoingToItem,
         },
     );
-    let reservation_ops = vec![
-        ResourceReservationOp::ReserveMixerDestination {
+    let mut reservation_ops = vec![ResourceReservationOp::ReserveSource {
+        source: source_item,
+        amount: 1,
+    }];
+    if !mixer_already_reserved {
+        reservation_ops.push(ResourceReservationOp::ReserveMixerDestination {
             target: mixer,
             resource_type: item_type,
-        },
-        ResourceReservationOp::ReserveSource {
-            source: ctx.task_entity,
-            amount: 1,
-        },
-    ];
+        });
+    }
     submit_assignment(
         ctx,
         queries,

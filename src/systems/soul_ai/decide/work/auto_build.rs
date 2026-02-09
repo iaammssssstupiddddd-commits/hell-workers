@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 
 use crate::entities::damned_soul::StressBreakdown;
-use crate::entities::familiar::ActiveCommand;
+use crate::entities::familiar::{ActiveCommand, FamiliarCommand};
 use crate::events::TaskAssignmentRequest;
 use crate::relationships::{Commanding, ManagedBy, TaskWorkers};
 use crate::systems::command::TaskArea;
@@ -31,7 +31,11 @@ pub fn blueprint_auto_build_system(
     mut q_souls: AutoBuildSoulQuery,
     q_breakdown: Query<&StressBreakdown>,
 ) {
-    for (fam_entity, _active_command, task_area, commanding_opt) in q_familiars.iter() {
+    for (fam_entity, active_command, task_area, commanding_opt) in q_familiars.iter() {
+        if matches!(active_command.command, FamiliarCommand::Idle) {
+            continue;
+        }
+
         let Some(commanding) = commanding_opt else {
             continue;
         };

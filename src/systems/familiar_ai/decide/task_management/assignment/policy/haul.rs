@@ -1,6 +1,7 @@
 use crate::constants::*;
 use crate::systems::familiar_ai::decide::task_management::{AssignTaskContext, ReservationShadow};
 use crate::systems::jobs::WorkType;
+use crate::systems::logistics::ResourceType;
 use bevy::prelude::*;
 
 use super::super::builders::{
@@ -8,8 +9,7 @@ use super::super::builders::{
     issue_haul_with_wheelbarrow,
 };
 use super::super::validator::{
-    can_accept_mixer_item, find_best_stockpile_for_item, resolve_haul_to_mixer_inputs,
-    source_not_reserved,
+    find_best_stockpile_for_item, resolve_haul_to_mixer_inputs, source_not_reserved,
 };
 
 pub(super) fn assign_haul_to_mixer(
@@ -28,15 +28,47 @@ pub(super) fn assign_haul_to_mixer(
         return false;
     };
 
-    if !source_not_reserved(ctx.task_entity, queries, shadow) {
-        debug!(
-            "ASSIGN: HaulToMixer item {:?} is already reserved",
-            ctx.task_entity
-        );
-        return false;
-    }
+    let is_request_task = queries.mixer_haul_requests.get(ctx.task_entity).is_ok();
+    let (source_item, source_pos) = if is_request_task {
+        let Some((source, pos)) =
+            find_nearest_mixer_source_item(item_type, task_pos, queries, shadow)
+        else {
+            debug!(
+                "ASSIGN: HaulToMixer request {:?} has no available {:?} source",
+                ctx.task_entity, item_type
+            );
+            return false;
+        };
+        (source, pos)
+    } else {
+        if !source_not_reserved(ctx.task_entity, queries, shadow) {
+            debug!(
+                "ASSIGN: HaulToMixer item {:?} is already reserved",
+                ctx.task_entity
+            );
+            return false;
+        }
+        (ctx.task_entity, task_pos)
+    };
 
-    let can_accept = can_accept_mixer_item(mixer_entity, item_type, queries, shadow);
+    let mixer_already_reserved =
+        !is_request_task && queries.reserved_for_task.get(ctx.task_entity).is_ok();
+    let can_accept = if let Ok((_, storage, _)) = queries.storage.mixers.get(mixer_entity) {
+        let reserved = queries
+            .reservation
+            .resource_cache
+            .get_mixer_destination_reservation(mixer_entity, item_type)
+            + shadow.mixer_reserved(mixer_entity, item_type);
+        // 既に発行時に予約済みなら、割り当て時は追加1件を見込まない
+        let required = if mixer_already_reserved {
+            reserved as u32
+        } else {
+            (reserved + 1) as u32
+        };
+        storage.can_accept(item_type, required)
+    } else {
+        false
+    };
 
     if !can_accept {
         debug!(
@@ -47,15 +79,38 @@ pub(super) fn assign_haul_to_mixer(
     }
 
     issue_haul_to_mixer(
+        source_item,
         mixer_entity,
         item_type,
-        task_pos,
+        mixer_already_reserved,
+        source_pos,
         already_commanded,
         ctx,
         queries,
         shadow,
     );
     true
+}
+
+fn find_nearest_mixer_source_item(
+    item_type: ResourceType,
+    mixer_pos: Vec2,
+    queries: &crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
+    shadow: &ReservationShadow,
+) -> Option<(Entity, Vec2)> {
+    queries
+        .free_resource_items
+        .iter()
+        .filter(|(_, _, visibility, res_item)| {
+            **visibility != Visibility::Hidden && res_item.0 == item_type
+        })
+        .filter(|(entity, _, _, _)| source_not_reserved(*entity, queries, shadow))
+        .min_by(|(_, t1, _, _), (_, t2, _, _)| {
+            let d1 = t1.translation.truncate().distance_squared(mixer_pos);
+            let d2 = t2.translation.truncate().distance_squared(mixer_pos);
+            d1.partial_cmp(&d2).unwrap_or(std::cmp::Ordering::Equal)
+        })
+        .map(|(e, t, _, _)| (e, t.translation.truncate()))
 }
 
 pub(super) fn assign_haul(

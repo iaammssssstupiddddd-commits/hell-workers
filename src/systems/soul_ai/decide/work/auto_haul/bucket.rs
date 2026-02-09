@@ -5,6 +5,7 @@
 use bevy::prelude::*;
 
 use crate::constants::*;
+use crate::entities::familiar::{ActiveCommand, Familiar, FamiliarCommand};
 use crate::events::{DesignationOp, DesignationRequest};
 use crate::relationships::TaskWorkers;
 use crate::systems::command::TaskArea;
@@ -21,7 +22,7 @@ pub fn bucket_auto_haul_system(
     mut designation_writer: MessageWriter<DesignationRequest>,
     stockpile_grid: Res<StockpileSpatialGrid>,
     mut item_reservations: ResMut<ItemReservations>,
-    q_familiars: Query<(Entity, &TaskArea), With<crate::entities::familiar::Familiar>>,
+    q_familiars: Query<(Entity, &ActiveCommand, &TaskArea), With<Familiar>>,
     q_buckets: Query<
         (
             Entity,
@@ -48,7 +49,11 @@ pub fn bucket_auto_haul_system(
 ) {
     let mut already_assigned = std::collections::HashSet::new();
 
-    for (fam_entity, task_area) in q_familiars.iter() {
+    for (fam_entity, active_command, task_area) in q_familiars.iter() {
+        if matches!(active_command.command, FamiliarCommand::Idle) {
+            continue;
+        }
+
         for (
             bucket_entity,
             bucket_transform,

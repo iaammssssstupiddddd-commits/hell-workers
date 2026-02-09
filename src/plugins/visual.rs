@@ -33,15 +33,18 @@ use crate::systems::visual::haul::{
     spawn_carrying_item_system, update_carrying_item_system, update_drop_popup_system,
     wheelbarrow_follow_system,
 };
+use crate::systems::visual::mud_mixer::update_mud_mixer_visual_system;
 use crate::systems::visual::soul::{
     progress_bar_system, soul_status_visual_system, sync_progress_bar_position_system,
     task_link_system, update_progress_bar_fill_system,
 };
 use crate::systems::visual::speech::SpeechPlugin;
 use crate::systems::visual::tank::update_tank_visual_system;
+use crate::systems::visual::task_area_visual::{TaskAreaMaterial, update_task_area_material_system};
 use crate::systems::visual::wall_connection::WallConnectionPlugin;
 
 use bevy::prelude::*;
+use bevy::sprite_render::Material2dPlugin;
 
 pub struct VisualPlugin;
 
@@ -49,6 +52,7 @@ impl Plugin for VisualPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(SpeechPlugin);
         app.add_plugins(WallConnectionPlugin);
+        app.add_plugins(Material2dPlugin::<TaskAreaMaterial>::default());
         // Blueprint visual systems (separate to avoid tuple limit)
         app.add_systems(
             Update,
@@ -168,9 +172,11 @@ impl Plugin for VisualPlugin {
                 familiar_animation_system,
                 update_familiar_range_indicator,
                 update_tank_visual_system,
+                update_mud_mixer_visual_system,
                 familiar_hover_visualization_system,
                 gathering_visual_update_system,
                 gathering_debug_visualization_system,
+                update_task_area_material_system,
             )
                 .chain()
                 .in_set(GameSystemSet::Visual),

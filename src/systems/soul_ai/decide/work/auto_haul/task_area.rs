@@ -5,7 +5,7 @@
 use bevy::prelude::*;
 
 use crate::constants::*;
-use crate::entities::familiar::ActiveCommand;
+use crate::entities::familiar::{ActiveCommand, FamiliarCommand};
 use crate::events::{DesignationOp, DesignationRequest};
 use crate::relationships::{StoredItems, TaskWorkers};
 use crate::systems::command::TaskArea;
@@ -103,12 +103,34 @@ pub fn task_area_auto_haul_system(
                 }
             }
 
-            // タスク発行（発行者はそのアイテムの持ち主であるFamiliarを探すべきだが、
-            // 簡易的に TaskArea を持っている Familiar を使うか、あるいはランダムに選ぶ）
-            // バケツはタンクに属しており、タンクはエリア内にあるはず。
-            // ここでは「エリア内にあるFamiliar」を代表として使う。
+            // タスク発行:
+            // ランダムな Familiar に紐付けると、割り当て時に TaskArea 制約で
+            // 受け入れ先ストックパイルが見えず、未割り当て化しやすい。
+            // 受け入れ先ストックパイルを含む TaskArea の Familiar に発行する。
+            let stock_pos = _stock_transform.translation.truncate();
+            let issuing_familiar = q_familiars
+                .iter()
+                .filter(|(_, active_command, _)| {
+                    !matches!(active_command.command, FamiliarCommand::Idle)
+                })
+                .find(|(_, _, area)| area.contains(stock_pos))
+                .map(|(fam_entity, _, _)| fam_entity)
+                .or_else(|| {
+                    // どのエリアにも含まれない場合は、最も近い Familiar をフォールバックで使用。
+                    q_familiars
+                        .iter()
+                        .filter(|(_, active_command, _)| {
+                            !matches!(active_command.command, FamiliarCommand::Idle)
+                        })
+                        .min_by(|(_, _, area1), (_, _, area2)| {
+                            let d1 = area1.center().distance_squared(stock_pos);
+                            let d2 = area2.center().distance_squared(stock_pos);
+                            d1.partial_cmp(&d2).unwrap_or(std::cmp::Ordering::Equal)
+                        })
+                        .map(|(fam_entity, _, _)| fam_entity)
+                });
 
-            if let Some((fam_entity, _, _)) = q_familiars.iter().next() {
+            if let Some(fam_entity) = issuing_familiar {
                 already_assigned.insert(item_entity);
                 item_reservations.0.insert(item_entity);
                 designation_writer.write(DesignationRequest {
@@ -132,7 +154,11 @@ pub fn task_area_auto_haul_system(
     // 2. 汎用アイテム（所有権なし）の回収
     // エリア内のストックパイルを中心に、近くのアイテムを空間検索で探す
     // -----------------------------------------------------------------------
-    for (fam_entity, _active_command, task_area) in q_familiars.iter() {
+    for (fam_entity, active_command, task_area) in q_familiars.iter() {
+        if matches!(active_command.command, FamiliarCommand::Idle) {
+            continue;
+        }
+
         // タスクエリア内のストックパイルのみを取得
         let stockpiles_in_area = stockpile_grid.get_in_area(task_area.min, task_area.max);
 
