@@ -5,7 +5,7 @@
 use bevy::prelude::*;
 
 use crate::constants::TILE_SIZE;
-use crate::entities::familiar::ActiveCommand;
+use crate::entities::familiar::{ActiveCommand, FamiliarCommand};
 use crate::events::{DesignationOp, DesignationRequest};
 use crate::relationships::TaskWorkers;
 use crate::systems::command::TaskArea;
@@ -66,9 +66,12 @@ pub fn blueprint_auto_haul_system(
 
     let mut already_assigned_this_frame = std::collections::HashSet::new();
 
-    for (fam_entity, _active_command, task_area) in q_familiars.iter() {
-        let (fam_entity, _active_command, task_area): (Entity, &ActiveCommand, &TaskArea) =
-            (fam_entity, _active_command, task_area);
+    for (fam_entity, active_command, task_area) in q_familiars.iter() {
+        let (fam_entity, active_command, task_area): (Entity, &ActiveCommand, &TaskArea) =
+            (fam_entity, active_command, task_area);
+        if matches!(active_command.command, FamiliarCommand::Idle) {
+            continue;
+        }
 
         // 最適化: タスクエリア内のブループリントのみを取得
         let blueprints_in_area = blueprint_grid.get_in_area(task_area.min, task_area.max);

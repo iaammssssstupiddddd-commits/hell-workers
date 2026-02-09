@@ -27,7 +27,7 @@ graph TD
     end
 
     subgraph View["Visual & UI"]
-        Visual["Visual Systems"]
+        Visual["Visual Systems<br/>(Custom Shaders: TaskArea)"]
         UI["Bevy UI Nodes"]
     end
 

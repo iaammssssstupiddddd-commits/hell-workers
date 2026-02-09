@@ -351,11 +351,14 @@ pub fn sync_reservations_system(
                 use crate::systems::soul_ai::execute::task_execution::types::HaulWaterToMixerPhase;
                 if matches!(data.phase, HaulWaterToMixerPhase::GoingToBucket) {
                     *source_res.entry(data.bucket).or_insert(0) += 1;
-                } else if matches!(data.phase, HaulWaterToMixerPhase::FillingFromTank) {
-                    // タンクから水を汲む予約。ここでタンクをSourceとして予約すべきか？
-                    // 水リソースそのものを予約するのは難しい（水アイテムは動的に生成/消滅したりする？）
-                    // タンクロジック依存だが、ここではタンクEntityをSourceとして予約数に入れておく
-                    // amountはとりあえず1（作業員一人分）とする
+                }
+                // タンク取水ロック: バケツ取得〜取水完了まで保持する
+                if matches!(
+                    data.phase,
+                    HaulWaterToMixerPhase::GoingToBucket
+                        | HaulWaterToMixerPhase::GoingToTank
+                        | HaulWaterToMixerPhase::FillingFromTank
+                ) {
                     *source_res.entry(data.tank).or_insert(0) += 1;
                 }
             }

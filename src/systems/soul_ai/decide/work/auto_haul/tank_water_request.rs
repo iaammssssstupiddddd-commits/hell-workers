@@ -5,6 +5,7 @@
 use crate::constants::BUCKET_CAPACITY;
 use bevy::prelude::*;
 
+use crate::entities::familiar::{ActiveCommand, FamiliarCommand};
 use crate::events::{DesignationOp, DesignationRequest};
 use crate::relationships::{StoredIn, StoredItems, TaskWorkers};
 use crate::systems::command::TaskArea;
@@ -18,7 +19,7 @@ use crate::systems::logistics::{
 pub fn tank_water_request_system(
     mut designation_writer: MessageWriter<DesignationRequest>,
     haul_cache: Res<SharedResourceCache>,
-    q_familiars: Query<(Entity, &TaskArea)>,
+    q_familiars: Query<(Entity, &ActiveCommand, &TaskArea)>,
     // タンク自体の在庫状況（Water を貯める Stockpile）
     q_tanks: Query<(Entity, &Transform, &Stockpile, Option<&StoredItems>)>,
     // 全てのバケツ
@@ -100,8 +101,11 @@ pub fn tank_water_request_system(
                 let tank_pos = tank_transform.translation.truncate();
                 let issued_by = q_familiars
                     .iter()
-                    .filter(|(_, area)| area.contains(tank_pos))
-                    .map(|(fam, _)| fam)
+                    .filter(|(_, active_command, area)| {
+                        !matches!(active_command.command, FamiliarCommand::Idle)
+                            && area.contains(tank_pos)
+                    })
+                    .map(|(fam, _, _)| fam)
                     .next();
 
                 if let Some(fam_entity) = issued_by {

@@ -48,6 +48,7 @@ pub struct Familiar {
     pub command_radius: f32, // 指示を出せる範囲
     pub efficiency: f32,     // 人間を動かす効率 (0.0-1.0)
     pub name: String,        // 使い魔の名前
+    pub color_index: u32,    // タスクエリア等の配色用インデックス (0-3)
 }
 
 impl Default for Familiar {
@@ -57,12 +58,13 @@ impl Default for Familiar {
             command_radius: TILE_SIZE * 7.0, // Impのデフォルト値
             efficiency: 0.5,                 // Impのデフォルト値
             name: String::new(),
+            color_index: 0,
         }
     }
 }
 
 impl Familiar {
-    pub fn new(familiar_type: FamiliarType) -> Self {
+    pub fn new(familiar_type: FamiliarType, color_index: u32) -> Self {
         let (command_radius, efficiency) = match familiar_type {
             FamiliarType::Imp => (TILE_SIZE * 7.0, 0.5),
         };
@@ -73,9 +75,14 @@ impl Familiar {
             command_radius,
             efficiency,
             name,
+            color_index,
         }
     }
 }
+
+/// 使い魔の色割り当てを管理するリソース
+#[derive(Resource, Default)]
+pub struct FamiliarColorAllocator(pub u32);
 
 /// オーラ演出用コンポーネント
 #[derive(Component)]
@@ -121,6 +128,8 @@ pub struct FamiliarAnimation {
     pub frame: usize,
     pub is_moving: bool,
     pub facing_right: bool,
+    pub hover_timer: f32,
+    pub hover_offset: f32,
 }
 
 /// 使い魔の運用設定（閾値など）
@@ -202,14 +211,20 @@ pub fn familiar_spawning_system(
     mut spawn_events: MessageReader<FamiliarSpawnEvent>,
     game_assets: Res<GameAssets>,
     world_map: Res<WorldMap>,
+    mut color_allocator: ResMut<FamiliarColorAllocator>,
 ) {
     for event in spawn_events.read() {
+        // 色インデックスを割り当ててカウントアップ
+        let color_index = color_allocator.0 % 4;
+        color_allocator.0 += 1;
+
         spawn_familiar_at(
             &mut commands,
             &game_assets,
             &world_map,
             event.position,
             event.familiar_type,
+            color_index,
         );
     }
 }
@@ -221,6 +236,7 @@ pub fn spawn_familiar_at(
     world_map: &Res<WorldMap>,
     pos: Vec2,
     familiar_type: FamiliarType,
+    color_index: u32,
 ) {
     let spawn_grid = WorldMap::world_to_grid(pos);
 
@@ -237,7 +253,7 @@ pub fn spawn_familiar_at(
     }
     let actual_pos = WorldMap::grid_to_world(actual_grid.0, actual_grid.1);
 
-    let familiar = Familiar::new(familiar_type);
+    let familiar = Familiar::new(familiar_type, color_index);
     let familiar_name = familiar.name.clone();
     let command_radius = familiar.command_radius;
 
@@ -258,10 +274,6 @@ pub fn spawn_familiar_at(
             FamiliarVoice::random(),                       // ランダムな口癖傾向
             Sprite {
                 image: game_assets.familiar.clone(),
-                texture_atlas: Some(TextureAtlas {
-                    layout: game_assets.familiar_layout.clone(),
-                    index: 0,
-                }),
                 custom_size: Some(Vec2::splat(TILE_SIZE * 0.9)),
                 color: Color::WHITE,
                 ..default()
@@ -323,7 +335,7 @@ pub struct FamiliarRangeIndicator(pub Entity); // 親の使い魔Entity
 /// オーラのパルスアニメーションと位置追従システム
 pub fn update_familiar_range_indicator(
     time: Res<Time>,
-    q_familiars: Query<(Entity, &Transform, &Familiar)>,
+    q_familiars: Query<(Entity, &Transform, &Familiar, &FamiliarAnimation)>,
     selected: Res<crate::interface::selection::SelectedEntity>,
     mut q_indicators: Query<
         (
@@ -340,7 +352,7 @@ pub fn update_familiar_range_indicator(
 
     for (indicator, mut transform, mut sprite, aura_opt, layer_opt) in q_indicators.iter_mut() {
         // 親の使い魔の位置を取得
-        if let Ok((_, fam_transform, familiar)) = q_familiars.get(indicator.0) {
+        if let Ok((_, fam_transform, familiar, fam_anim)) = q_familiars.get(indicator.0) {
             // 位置追従
             let z = match layer_opt {
                 Some(AuraLayer::Border) => Z_AURA,
@@ -348,7 +360,9 @@ pub fn update_familiar_range_indicator(
                 Some(AuraLayer::Pulse) => Z_AURA + 0.03,
                 None => Z_AURA,
             };
-            transform.translation = fam_transform.translation.truncate().extend(z);
+            // 使い魔は浮遊するが、指揮範囲オーラは地面基準で固定表示する
+            let ground_pos = fam_transform.translation - Vec3::Y * fam_anim.hover_offset;
+            transform.translation = ground_pos.truncate().extend(z);
 
             // 選択状態を確認
             let is_selected = selected_fam == Some(indicator.0);
@@ -390,6 +404,12 @@ pub fn familiar_movement(
     mut query: Query<(&mut Transform, &mut Path, &mut FamiliarAnimation), With<Familiar>>,
 ) {
     for (mut transform, mut path, mut anim) in query.iter_mut() {
+        // 前フレームの見た目用オフセットを外してから、論理座標で移動計算する
+        if anim.hover_offset != 0.0 {
+            transform.translation.y -= anim.hover_offset;
+            anim.hover_offset = 0.0;
+        }
+
         if path.current_index < path.waypoints.len() {
             let target = path.waypoints[path.current_index];
             let current_pos = transform.translation.truncate();
@@ -426,12 +446,13 @@ pub fn familiar_movement(
 /// 使い魔のアニメーション更新システム
 pub fn familiar_animation_system(
     time: Res<Time>,
-    mut query: Query<(&mut Sprite, &mut FamiliarAnimation), With<Familiar>>,
+    game_assets: Res<GameAssets>,
+    mut query: Query<(&mut Sprite, &mut FamiliarAnimation, &mut Transform), With<Familiar>>,
 ) {
-    for (mut sprite, mut anim) in query.iter_mut() {
+    for (mut sprite, mut anim, mut transform) in query.iter_mut() {
         // 向きの更新
-        // アセットがデフォルトで左向きのため、右を向くときに flip_x を true にする
-        sprite.flip_x = anim.facing_right;
+        // imp画像はデフォルトで右向きのため、右を向くときは反転しない
+        sprite.flip_x = !anim.facing_right;
 
         // アニメーションフレームの更新
         if anim.is_moving {
@@ -443,8 +464,30 @@ pub fn familiar_animation_system(
             anim.frame = 0; // 停止時は最初のフレーム
         }
 
-        if let Some(atlas) = &mut sprite.texture_atlas {
-            atlas.index = anim.frame;
-        }
+        sprite.texture_atlas = None;
+        sprite.image = match anim.frame {
+            0 => game_assets.familiar.clone(),
+            1 => game_assets.familiar_anim_2.clone(),
+            2 => game_assets.familiar_anim_3.clone(),
+            _ => game_assets.familiar_anim_4.clone(),
+        };
+
+        anim.hover_timer += time.delta_secs() * FAMILIAR_HOVER_SPEED;
+        let hover_amplitude = if anim.is_moving {
+            FAMILIAR_HOVER_AMPLITUDE_MOVE
+        } else {
+            FAMILIAR_HOVER_AMPLITUDE_IDLE
+        };
+        let hover_offset = anim.hover_timer.sin() * hover_amplitude;
+        anim.hover_offset = hover_offset;
+        transform.translation.y += hover_offset;
+
+        let dir_tilt = if anim.is_moving {
+            if anim.facing_right { -0.04 } else { 0.04 }
+        } else {
+            0.0
+        };
+        let wobble_tilt = (anim.hover_timer * 0.8).sin() * FAMILIAR_HOVER_TILT_AMPLITUDE;
+        transform.rotation = Quat::from_rotation_z(dir_tilt + wobble_tilt);
     }
 }

@@ -25,6 +25,7 @@ impl Plugin for LogicPlugin {
         app.init_resource::<AreaEditHistory>();
         app.init_resource::<AreaEditClipboard>();
         app.init_resource::<AreaEditPresets>();
+        app.init_resource::<crate::entities::familiar::FamiliarColorAllocator>();
 
         app.add_systems(
             Update,
