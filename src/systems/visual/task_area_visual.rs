@@ -1,6 +1,6 @@
 use crate::game_state::TaskContext;
 use crate::interface::camera::MainCamera;
-use crate::interface::selection::SelectedEntity;
+use crate::interface::selection::{HoveredEntity, SelectedEntity};
 use crate::systems::command::{TaskArea, TaskMode};
 use bevy::prelude::*;
 use bevy::render::render_resource::AsBindGroup;
@@ -46,6 +46,7 @@ pub fn update_task_area_material_system(
     mut materials: ResMut<Assets<TaskAreaMaterial>>,
     q_familiars: Query<(Entity, &TaskArea)>,
     selected: Res<SelectedEntity>,
+    hovered_entity: Res<HoveredEntity>,
     task_context: Res<TaskContext>,
     q_window: Query<&Window, With<bevy::window::PrimaryWindow>>,
     q_camera: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
@@ -70,7 +71,12 @@ pub fn update_task_area_material_system(
                 material.size = area.size();
 
                 let is_selected = selected.0 == Some(fam_entity);
-                let is_hovered = cursor_pos.map_or(false, |pos| area.contains(pos));
+
+                // 強調条件: 境界線をホバーしているか、使い魔本体をホバーしているか
+                let is_border_hovered =
+                    cursor_pos.map_or(false, |pos| area.contains_border(pos, 6.0));
+                let is_familiar_hovered = hovered_entity.0 == Some(fam_entity);
+                let is_hovered = is_border_hovered || is_familiar_hovered;
 
                 let state = if editing_mode && is_selected {
                     3 // Editing
@@ -81,7 +87,6 @@ pub fn update_task_area_material_system(
                 } else {
                     0 // Idle
                 };
-
                 material.state = state;
             }
         }
