@@ -252,7 +252,7 @@ fn update_tooltip_popover_positions(
     }
 }
 
-pub fn hover_tooltip_system(
+pub(crate) fn hover_tooltip_system(
     mut commands: Commands,
     time: Res<Time>,
     hovered: Res<crate::interface::selection::HoveredEntity>,

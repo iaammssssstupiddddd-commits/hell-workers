@@ -15,7 +15,7 @@ pub use status_display::{
     task_summary_ui_system, update_area_edit_preview_ui_system, update_fps_display_system,
     update_mode_text_system,
 };
-pub use tooltip::hover_tooltip_system;
+pub(crate) use tooltip::hover_tooltip_system;
 
 use crate::entities::familiar::{Familiar, FamiliarOperation};
 use crate::game_state::{BuildContext, PlayMode, TaskContext, ZoneContext};
