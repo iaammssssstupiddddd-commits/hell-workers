@@ -39,7 +39,7 @@
 - Before starting work, skim `README.md`, `docs/DEVELOPMENT.md`, and `docs/README.md` for current rules and specs.
 - Keep `cargo check` green; do not report completion with Rust-analyzer errors.
 - Avoid dead code and `#[allow(dead_code)]` unless currently required.
-- Task system conventions: add new `AssignedTask` variants as struct variants and keep task queries aggregated in `TaskQueries` (see `src/systems/soul_ai/task_execution/`).
+- Task system conventions: add new `AssignedTask` variants as struct variants and keep task queries aggregated in `TaskQueries` (see `src/systems/soul_ai/execute/task_execution/`).
 - Context hygiene: respect `.cursorignore` and `.geminiignore` by avoiding large build artifacts/logs (`target/`, `dist/`, `.trunk/`, `logs/`, `build_*.txt`, `*_output*.txt`) unless explicitly needed.
 
 ## Assets & Configuration Tips

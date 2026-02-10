@@ -4,15 +4,17 @@ use bevy::prelude::*;
 use std::collections::HashMap;
 
 mod drag_drop;
-mod helpers;
 mod interaction;
 mod minimize;
 mod resize;
+mod spawn;
 mod sync;
+mod tree_ops;
 mod view_model;
+mod selection_focus;
 
 pub use drag_drop::{DragState, entity_list_drag_drop_system};
-pub(crate) use helpers::clear_children;
+pub(crate) use tree_ops::clear_children;
 pub use interaction::{
     entity_list_interaction_system, entity_list_scroll_hint_visibility_system,
     entity_list_scroll_system, entity_list_tab_focus_system, entity_list_visual_feedback_system,
