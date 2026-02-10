@@ -450,6 +450,12 @@ pub fn familiar_animation_system(
     mut query: Query<(&mut Sprite, &mut FamiliarAnimation, &mut Transform), With<Familiar>>,
 ) {
     for (mut sprite, mut anim, mut transform) in query.iter_mut() {
+        // 移動システムが停止しているフレーム（ポーズ中など）でも
+        // hover_offset が累積しないよう、前回分を先に打ち消す。
+        if anim.hover_offset != 0.0 {
+            transform.translation.y -= anim.hover_offset;
+        }
+
         // 向きの更新
         // imp画像はデフォルトで右向きのため、右を向くときは反転しない
         sprite.flip_x = !anim.facing_right;
