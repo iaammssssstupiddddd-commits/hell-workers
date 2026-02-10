@@ -4,7 +4,7 @@ mod members;
 use crate::relationships::ManagedTasks;
 use crate::systems::command::TaskArea;
 use crate::systems::familiar_ai::decide::task_management::ReservationShadow;
-use crate::systems::spatial::DesignationSpatialGrid;
+use crate::systems::spatial::{DesignationSpatialGrid, TransportRequestSpatialGrid};
 use crate::world::map::WorldMap;
 use crate::world::pathfinding::PathfindingContext;
 use bevy::prelude::*;
@@ -28,6 +28,7 @@ impl TaskManager {
         queries: &mut crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
         q_souls: &mut FamiliarSoulQuery,
         designation_grid: &DesignationSpatialGrid,
+        transport_request_grid: &TransportRequestSpatialGrid,
         managed_tasks: &ManagedTasks,
         world_map: &WorldMap,
         pf_context: &mut PathfindingContext,
@@ -44,6 +45,7 @@ impl TaskManager {
             queries,
             q_souls,
             designation_grid,
+            transport_request_grid,
             managed_tasks,
             world_map,
             pf_context,

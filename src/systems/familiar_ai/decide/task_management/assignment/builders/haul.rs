@@ -9,7 +9,21 @@ use bevy::prelude::*;
 
 use super::submit_assignment;
 
+/// アイテムエンティティに対して Blueprint 運搬を割り当てる（従来方式）
 pub fn issue_haul_to_blueprint(
+    blueprint: Entity,
+    task_pos: Vec2,
+    already_commanded: bool,
+    ctx: &AssignTaskContext<'_>,
+    queries: &mut crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
+    shadow: &mut ReservationShadow,
+) {
+    issue_haul_to_blueprint_with_source(ctx.task_entity, blueprint, task_pos, already_commanded, ctx, queries, shadow);
+}
+
+/// 指定のソースアイテムを使って Blueprint 運搬を割り当てる（request 方式の遅延解決用）
+pub fn issue_haul_to_blueprint_with_source(
+    source_item: Entity,
     blueprint: Entity,
     task_pos: Vec2,
     already_commanded: bool,
@@ -20,7 +34,7 @@ pub fn issue_haul_to_blueprint(
     let assigned_task =
         crate::systems::soul_ai::execute::task_execution::types::AssignedTask::HaulToBlueprint(
             crate::systems::soul_ai::execute::task_execution::types::HaulToBlueprintData {
-                item: ctx.task_entity,
+                item: source_item,
                 blueprint,
                 phase: HaulToBpPhase::GoingToItem,
             },
@@ -28,7 +42,7 @@ pub fn issue_haul_to_blueprint(
     let reservation_ops = vec![
         ResourceReservationOp::ReserveDestination { target: blueprint },
         ResourceReservationOp::ReserveSource {
-            source: ctx.task_entity,
+            source: source_item,
             amount: 1,
         },
     ];
