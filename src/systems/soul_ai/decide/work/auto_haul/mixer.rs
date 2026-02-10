@@ -6,9 +6,7 @@ use bevy::prelude::*;
 
 use crate::constants::{BUCKET_CAPACITY, MUD_MIXER_CAPACITY, TILE_SIZE};
 use crate::entities::familiar::{ActiveCommand, FamiliarCommand};
-use crate::events::{
-    DesignationOp, DesignationRequest, ResourceReservationOp, ResourceReservationRequest,
-};
+use crate::events::{DesignationOp, DesignationRequest};
 use crate::relationships::TaskWorkers;
 use crate::systems::command::TaskArea;
 use crate::systems::familiar_ai::perceive::resource_sync::SharedResourceCache;
@@ -19,16 +17,13 @@ use crate::systems::logistics::transport_request::{
     TransportDemand, TransportPolicy, TransportPriority, TransportRequest, TransportRequestKind,
     TransportRequestState,
 };
-use crate::systems::logistics::{ReservedForTask, ResourceItem, ResourceType, Stockpile};
-use crate::systems::soul_ai::decide::work::auto_haul::ItemReservations;
+use crate::systems::logistics::{ResourceType, Stockpile};
 
 /// MudMixer への自動資材運搬タスク生成システム
 pub fn mud_mixer_auto_haul_system(
     mut commands: Commands,
     mut designation_writer: MessageWriter<DesignationRequest>,
     haul_cache: Res<SharedResourceCache>,
-    mut item_reservations: ResMut<ItemReservations>,
-    mut reservation_writer: MessageWriter<ResourceReservationRequest>,
     q_familiars: Query<(Entity, &ActiveCommand, &TaskArea)>,
     q_mixers: Query<(Entity, &Transform, &MudMixerStorage, Option<&TaskWorkers>)>,
     q_mixer_requests: Query<(
@@ -43,17 +38,6 @@ pub fn mud_mixer_auto_haul_system(
         &Transform,
         &Stockpile,
         Option<&crate::relationships::StoredItems>,
-    )>,
-    q_resources_with_belongs: Query<(
-        Entity,
-        &Transform,
-        &Visibility,
-        &ResourceItem,
-        Option<&crate::systems::logistics::BelongsTo>,
-        Option<&crate::relationships::StoredIn>,
-        Option<&ReservedForTask>,
-        Option<&Designation>,
-        Option<&TaskWorkers>,
     )>,
     q_sand_piles: Query<
         (
@@ -73,10 +57,6 @@ pub fn mud_mixer_auto_haul_system(
         .map(|(entity, _, area)| (entity, area.clone()))
         .collect();
 
-    let mut already_assigned_this_frame = std::collections::HashSet::new();
-    let mut mixer_reservation_delta =
-        std::collections::HashMap::<(Entity, ResourceType), usize>::new();
-
     // (mixer, resource_type) -> (issued_by, desired_slots, mixer_pos)
     let mut desired_requests =
         std::collections::HashMap::<(Entity, ResourceType), (Entity, u32, Vec2)>::new();
@@ -90,12 +70,6 @@ pub fn mud_mixer_auto_haul_system(
             continue;
         };
 
-        let other_areas: Vec<&TaskArea> = active_familiars
-            .iter()
-            .filter(|(entity, _)| *entity != fam_entity)
-            .map(|(_, area)| area)
-            .collect();
-
         // -----------------------------------------------------------------
         // 固体原料は request タスクを発行（ソースは割り当て時に遅延解決）
         // -----------------------------------------------------------------
@@ -106,11 +80,8 @@ pub fn mud_mixer_auto_haul_system(
                 _ => 0,
             };
 
-            let inflight = haul_cache.get_mixer_destination_reservation(mixer_entity, resource_type)
-                + mixer_reservation_delta
-                    .get(&(mixer_entity, resource_type))
-                    .cloned()
-                    .unwrap_or(0);
+            let inflight =
+                haul_cache.get_mixer_destination_reservation(mixer_entity, resource_type);
 
             let needed = MUD_MIXER_CAPACITY.saturating_sub(current + inflight as u32);
             if needed > 0 {
@@ -122,11 +93,8 @@ pub fn mud_mixer_auto_haul_system(
         }
 
         // --- 砂採取タスクの自動発行 ---
-        let sand_inflight = haul_cache.get_mixer_destination_reservation(mixer_entity, ResourceType::Sand)
-            + mixer_reservation_delta
-                .get(&(mixer_entity, ResourceType::Sand))
-                .cloned()
-                .unwrap_or(0);
+        let sand_inflight =
+            haul_cache.get_mixer_destination_reservation(mixer_entity, ResourceType::Sand);
         if storage.sand + (sand_inflight as u32) < 2 {
             for (sp_entity, sp_transform, sp_designation, sp_workers) in q_sand_piles.iter() {
                 let dist = sp_transform.translation.truncate().distance(mixer_pos);
@@ -156,12 +124,8 @@ pub fn mud_mixer_auto_haul_system(
         }
 
         // --- 水の自動リクエスト（従来方式） ---
-        let water_inflight_tasks = haul_cache
-            .get_mixer_destination_reservation(mixer_entity, ResourceType::Water)
-            + mixer_reservation_delta
-                .get(&(mixer_entity, ResourceType::Water))
-                .cloned()
-                .unwrap_or(0);
+        let water_inflight_tasks =
+            haul_cache.get_mixer_destination_reservation(mixer_entity, ResourceType::Water);
         let water_inflight = (water_inflight_tasks as u32) * BUCKET_CAPACITY;
 
         let (water_current, water_capacity) =
@@ -179,134 +143,12 @@ pub fn mud_mixer_auto_haul_system(
             };
         let issue_threshold = water_capacity.saturating_sub(BUCKET_CAPACITY);
 
+        // M5: 水は request エンティティ化（割り当て時にタンク・バケツを遅延解決）
         if water_current < water_capacity && water_current + water_inflight <= issue_threshold {
-            let mut tank_candidates = Vec::new();
-
-            for (stock_entity, stock_transform, stock, stored_opt) in q_stockpiles_detailed.iter() {
-                if stock.resource_type != Some(ResourceType::Water) {
-                    continue;
-                }
-
-                let tank_pos = stock_transform.translation.truncate();
-                if other_areas.iter().any(|area| area.contains(tank_pos)) {
-                    continue;
-                }
-
-                let water_count = stored_opt.map(|s| s.len()).unwrap_or(0);
-                if water_count >= BUCKET_CAPACITY as usize {
-                    let dist_sq = tank_pos.distance_squared(mixer_pos);
-                    tank_candidates.push((stock_entity, dist_sq));
-                }
-            }
-
-            tank_candidates
-                .sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
-            let tank_with_water = tank_candidates.first().map(|(e, _)| *e);
-
-            if let Some(tank_entity) = tank_with_water {
-                let mut bucket_candidates = Vec::new();
-
-                for (
-                    e,
-                    transform,
-                    vis,
-                    res_item,
-                    belongs_opt,
-                    stored_in_opt,
-                    reserved_opt,
-                    designation,
-                    workers,
-                ) in q_resources_with_belongs.iter()
-                {
-                    if *vis == Visibility::Hidden || workers.is_some() {
-                        continue;
-                    }
-                    if !matches!(
-                        res_item.0,
-                        ResourceType::BucketEmpty | ResourceType::BucketWater
-                    ) {
-                        continue;
-                    }
-                    if reserved_opt.is_some() {
-                        continue;
-                    }
-                    if already_assigned_this_frame.contains(&e) {
-                        continue;
-                    }
-                    if item_reservations.0.contains(&e) {
-                        continue;
-                    }
-                    if designation.is_some() {
-                        continue;
-                    }
-
-                    if let Some(stored_in) = stored_in_opt {
-                        if let Ok((_, stock_transform, _, _)) = q_stockpiles_detailed.get(stored_in.0)
-                        {
-                            let stock_pos = stock_transform.translation.truncate();
-                            if other_areas.iter().any(|area| area.contains(stock_pos)) {
-                                continue;
-                            }
-                        }
-                    }
-
-                    if let Some(belongs) = belongs_opt {
-                        if belongs.0 == tank_entity {
-                            let item_pos = transform.translation.truncate();
-                            let dist_sq = item_pos.distance_squared(mixer_pos);
-                            bucket_candidates.push((e, dist_sq, res_item.0));
-                        }
-                    }
-                }
-
-                bucket_candidates.sort_by(|a, b| {
-                    let type_order_a = if a.2 == ResourceType::BucketEmpty { 0 } else { 1 };
-                    let type_order_b = if b.2 == ResourceType::BucketEmpty { 0 } else { 1 };
-                    match type_order_a.cmp(&type_order_b) {
-                        std::cmp::Ordering::Equal => {
-                            a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal)
-                        }
-                        other => other,
-                    }
-                });
-
-                if let Some((bucket_entity, _, _)) = bucket_candidates.first() {
-                    designation_writer.write(DesignationRequest {
-                        entity: *bucket_entity,
-                        operation: DesignationOp::Issue {
-                            work_type: WorkType::HaulWaterToMixer,
-                            issued_by: fam_entity,
-                            task_slots: 1,
-                            priority: Some(6),
-                            target_blueprint: None,
-                            target_mixer: Some(mixer_entity),
-                            reserved_for_task: true,
-                        },
-                    });
-                    commands.entity(*bucket_entity).insert(TransportRequest {
-                        kind: TransportRequestKind::DeliverWaterToMixer,
-                        anchor: mixer_entity,
-                        resource_type: ResourceType::Water,
-                        issued_by: fam_entity,
-                        priority: TransportPriority::Normal,
-                    });
-                    item_reservations.0.insert(*bucket_entity);
-                    *mixer_reservation_delta
-                        .entry((mixer_entity, ResourceType::Water))
-                        .or_insert(0) += 1;
-                    reservation_writer.write(ResourceReservationRequest {
-                        op: ResourceReservationOp::ReserveMixerDestination {
-                            target: mixer_entity,
-                            resource_type: ResourceType::Water,
-                        },
-                    });
-                    already_assigned_this_frame.insert(*bucket_entity);
-                    info!(
-                        "AUTO_HAUL_MIXER: Issued HaulWaterToMixer for bucket {:?} (Mixer {:?})",
-                        bucket_entity, mixer_entity
-                    );
-                }
-            }
+            desired_requests.insert(
+                (mixer_entity, ResourceType::Water),
+                (fam_entity, 1, mixer_pos),
+            );
         }
     }
 
@@ -317,11 +159,9 @@ pub fn mud_mixer_auto_haul_system(
 
     for (request_entity, target_mixer, request, _designation_opt, workers_opt) in q_mixer_requests.iter()
     {
-        // 固体 request エンティティのみ対象。水バケツ等は除外する。
-        if !matches!(request.kind, TransportRequestKind::DeliverToMixerSolid) {
-            continue;
-        }
+        // 固体・水 request エンティティを対象
         let key = (target_mixer.0, request.resource_type);
+        let is_water = request.kind == TransportRequestKind::DeliverWaterToMixer;
         let workers = workers_opt.map(|w| w.len()).unwrap_or(0);
 
         if !seen_existing_keys.insert(key) {
@@ -332,18 +172,21 @@ pub fn mud_mixer_auto_haul_system(
         }
 
         if let Some((issued_by, slots, mixer_pos)) = desired_requests.get(&key) {
+            let (work_type, kind) = if is_water {
+                (WorkType::HaulWaterToMixer, TransportRequestKind::DeliverWaterToMixer)
+            } else {
+                (WorkType::HaulToMixer, TransportRequestKind::DeliverToMixerSolid)
+            };
             commands.entity(request_entity).insert((
                 Transform::from_xyz(mixer_pos.x, mixer_pos.y, 0.0),
                 Visibility::Hidden,
-                Designation {
-                    work_type: WorkType::HaulToMixer,
-                },
+                Designation { work_type },
                 crate::relationships::ManagedBy(*issued_by),
                 TaskSlots::new(*slots),
                 Priority(5),
                 TargetMixer(key.0),
                 TransportRequest {
-                    kind: TransportRequestKind::DeliverToMixerSolid,
+                    kind,
                     anchor: key.0,
                     resource_type: key.1,
                     issued_by: *issued_by,
@@ -377,19 +220,31 @@ pub fn mud_mixer_auto_haul_system(
             continue;
         }
 
+        let (work_type, kind, name) = if key.1 == ResourceType::Water {
+            (
+                WorkType::HaulWaterToMixer,
+                TransportRequestKind::DeliverWaterToMixer,
+                "TransportRequest::DeliverWaterToMixer",
+            )
+        } else {
+            (
+                WorkType::HaulToMixer,
+                TransportRequestKind::DeliverToMixerSolid,
+                "TransportRequest::DeliverToMixerSolid",
+            )
+        };
+
         commands.spawn((
-            Name::new("TransportRequest::DeliverToMixerSolid"),
+            Name::new(name),
             Transform::from_xyz(mixer_pos.x, mixer_pos.y, 0.0),
             Visibility::Hidden,
-            Designation {
-                work_type: WorkType::HaulToMixer,
-            },
+            Designation { work_type },
             crate::relationships::ManagedBy(issued_by),
             TaskSlots::new(slots),
             Priority(5),
             TargetMixer(key.0),
             TransportRequest {
-                kind: TransportRequestKind::DeliverToMixerSolid,
+                kind,
                 anchor: key.0,
                 resource_type: key.1,
                 issued_by,
