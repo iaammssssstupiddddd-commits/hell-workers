@@ -66,7 +66,7 @@ pub fn mud_mixer_auto_haul_system(
         active_mixers.insert(mixer_entity);
 
         let mixer_pos = mixer_transform.translation.truncate();
-        let Some((fam_entity, task_area)) = find_owner_familiar(mixer_pos, &active_familiars) else {
+        let Some((fam_entity, task_area)) = super::find_owner_familiar(mixer_pos, &active_familiars) else {
             continue;
         };
 
@@ -260,14 +260,3 @@ pub fn mud_mixer_auto_haul_system(
     }
 }
 
-fn find_owner_familiar(mixer_pos: Vec2, familiars: &[(Entity, TaskArea)]) -> Option<(Entity, &TaskArea)> {
-    familiars
-        .iter()
-        .filter(|(_, area)| area.contains(mixer_pos))
-        .min_by(|(_, area1), (_, area2)| {
-            let d1 = area1.center().distance_squared(mixer_pos);
-            let d2 = area2.center().distance_squared(mixer_pos);
-            d1.partial_cmp(&d2).unwrap_or(std::cmp::Ordering::Equal)
-        })
-        .map(|(entity, area)| (*entity, area))
-}

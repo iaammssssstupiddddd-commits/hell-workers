@@ -102,10 +102,8 @@ impl Plugin for SoulAiPlugin {
                     execute::gathering_apply::gathering_apply_system,
                     // クリーンアップ
                     execute::cleanup::cleanup_commanded_souls_system,
-                    execute::designation_apply::clear_item_reservations_system,
-                    // 予約の確定
-                    crate::systems::familiar_ai::perceive::resource_sync::apply_reservation_requests_system
-                        .after(execute::designation_apply::clear_item_reservations_system),
+                    // タスク要求の適用
+                    crate::systems::familiar_ai::perceive::resource_sync::apply_reservation_requests_system,
                     // エンティティ生成
                     execute::gathering_spawn::gathering_spawn_system,
                 )
