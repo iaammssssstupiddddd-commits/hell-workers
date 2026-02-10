@@ -5,6 +5,7 @@ use crate::systems::logistics::ResourceType;
 use bevy::prelude::*;
 
 use crate::systems::familiar_ai::decide::task_management::ReservationShadow;
+use super::finder::{find_best_tank_for_bucket, find_nearest_bucket_for_tank};
 use super::reservation::source_not_reserved;
 
 pub fn resolve_haul_to_stockpile_inputs(
@@ -20,6 +21,46 @@ pub fn resolve_haul_to_stockpile_inputs(
     let resource_type = req.resource_type;
     let item_owner = queries.designation.belongs.get(stockpile).ok().map(|b| b.0);
     Some((stockpile, resource_type, item_owner))
+}
+
+/// Resolves (bucket, tank) for GatherWater.
+/// - Bucket-based: task_entity = bucket, tank is selected from bucket owner.
+/// - Request-based: task_entity = request, tank is request.anchor, bucket is resolved lazily.
+pub fn resolve_gather_water_inputs(
+    task_entity: Entity,
+    task_pos: Vec2,
+    task_area_opt: Option<&TaskArea>,
+    queries: &crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
+    shadow: &ReservationShadow,
+) -> Option<(Entity, Entity)> {
+    if let Ok(req) = queries.transport_requests.get(task_entity) {
+        if req.kind == TransportRequestKind::GatherWaterToTank {
+            let tank_entity = req.anchor;
+            let Ok((_, _, tank_stock, stored_opt)) = queries.storage.stockpiles.get(tank_entity) else {
+                return None;
+            };
+            if tank_stock.resource_type != Some(ResourceType::Water) {
+                return None;
+            }
+            let current_water = stored_opt.map(|s| s.len()).unwrap_or(0);
+            let reserved_water = queries
+                .reservation
+                .resource_cache
+                .get_destination_reservation(tank_entity)
+                + shadow.destination_reserved(tank_entity);
+            if (current_water + reserved_water) >= tank_stock.capacity {
+                return None;
+            }
+
+            let (bucket_entity, _) =
+                find_nearest_bucket_for_tank(tank_entity, task_pos, queries, shadow)?;
+            return Some((bucket_entity, tank_entity));
+        }
+    }
+
+    let tank_entity =
+        find_best_tank_for_bucket(task_entity, task_pos, task_area_opt, queries, shadow)?;
+    Some((task_entity, tank_entity))
 }
 
 /// M7: ReturnBucket request の (stockpile, tank) を解決

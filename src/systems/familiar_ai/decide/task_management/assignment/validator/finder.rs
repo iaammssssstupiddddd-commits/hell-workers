@@ -110,6 +110,15 @@ pub fn find_nearest_bucket_for_return(
     queries: &crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
     shadow: &ReservationShadow,
 ) -> Option<(Entity, Vec2)> {
+    find_nearest_bucket_for_tank(tank_entity, task_pos, queries, shadow)
+}
+
+pub fn find_nearest_bucket_for_tank(
+    tank_entity: Entity,
+    task_pos: Vec2,
+    queries: &crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
+    shadow: &ReservationShadow,
+) -> Option<(Entity, Vec2)> {
     queries
         .free_resource_items
         .iter()

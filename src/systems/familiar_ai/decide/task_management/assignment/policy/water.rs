@@ -3,7 +3,7 @@ use bevy::prelude::*;
 
 use super::super::builders::{issue_gather_water, issue_haul_water_to_mixer};
 use super::super::validator::{
-    find_best_tank_for_bucket, resolve_haul_water_to_mixer_inputs, source_not_reserved,
+    resolve_gather_water_inputs, resolve_haul_water_to_mixer_inputs, source_not_reserved,
 };
 
 pub(super) fn assign_gather_water(
@@ -13,34 +13,34 @@ pub(super) fn assign_gather_water(
     queries: &mut crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
     shadow: &mut ReservationShadow,
 ) -> bool {
-    if !source_not_reserved(ctx.task_entity, queries, shadow) {
-        return false;
-    }
-
-    let best_tank = find_best_tank_for_bucket(
+    let Some((bucket_entity, tank_entity)) = resolve_gather_water_inputs(
         ctx.task_entity,
         task_pos,
         ctx.task_area_opt,
         queries,
         shadow,
-    );
-
-    if let Some(tank_entity) = best_tank {
-        issue_gather_water(
-            tank_entity,
-            task_pos,
-            already_commanded,
-            ctx,
-            queries,
-            shadow,
+    ) else {
+        debug!(
+            "ASSIGN: No suitable bucket/tank found for GatherWater task {:?}",
+            ctx.task_entity
         );
-        return true;
+        return false;
+    };
+
+    if !source_not_reserved(bucket_entity, queries, shadow) {
+        return false;
     }
-    debug!(
-        "ASSIGN: No suitable tank/mixer found for bucket {:?}",
-        ctx.task_entity
+
+    issue_gather_water(
+        bucket_entity,
+        tank_entity,
+        task_pos,
+        already_commanded,
+        ctx,
+        queries,
+        shadow,
     );
-    false
+    true
 }
 
 pub(super) fn assign_haul_water_to_mixer(

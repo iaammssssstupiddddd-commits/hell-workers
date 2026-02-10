@@ -134,6 +134,16 @@ fn find_nearest_stockpile_source_item(
             **visibility != Visibility::Hidden && res_item.0 == resource_type
         })
         .filter(|(entity, _, _, _)| source_not_reserved(*entity, queries, shadow))
+        // DepositToStockpile request は地面アイテムのみ対象にする。
+        // InStockpile を再搬送対象にすると pick-drop ループを起こす。
+        .filter(|(entity, _, _, _)| {
+            queries
+                .designation
+                .targets
+                .get(*entity)
+                .ok()
+                .is_some_and(|(_, _, _, _, _, stored_in_opt)| stored_in_opt.is_none())
+        })
         .filter(|(entity, _, _, _)| {
             let belongs = queries.designation.belongs.get(*entity).ok().map(|b| b.0);
             item_owner == belongs
@@ -469,4 +479,3 @@ fn remaining_stockpile_capacity(
         0
     }
 }
-
