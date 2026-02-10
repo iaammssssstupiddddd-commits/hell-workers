@@ -12,7 +12,7 @@ use crate::interface::ui::{MenuState, setup_ui};
 use crate::systems::command::TaskArea;
 use crate::systems::jobs::{Designation, Priority, Rock, TaskSlots, Tree, WorkType};
 use crate::systems::logistics::{ResourceLabels, initial_resource_spawner};
-use crate::systems::soul_ai::decide::work::AutoHaulCounter;
+
 use crate::systems::spatial::{
     BlueprintSpatialGrid, FamiliarSpatialGrid, GatheringSpotSpatialGrid, ResourceSpatialGrid,
     SpatialGrid, SpatialGridOps, StockpileSpatialGrid,
@@ -54,7 +54,7 @@ impl Plugin for StartupPlugin {
             .init_resource::<GatheringSpotSpatialGrid>()
             .init_resource::<BlueprintSpatialGrid>()
             .init_resource::<StockpileSpatialGrid>()
-            .init_resource::<AutoHaulCounter>()
+
             .init_resource::<PerfScenarioApplied>()
             // Startup systems
             .add_systems(Startup, (setup, initialize_gizmo_config))

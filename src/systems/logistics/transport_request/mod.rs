@@ -3,6 +3,7 @@ mod kinds;
 mod lifecycle;
 mod metrics;
 pub mod plugin;
+pub mod producer;
 
 pub use components::*;
 pub use kinds::*;

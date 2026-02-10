@@ -95,3 +95,7 @@ impl Default for TransportRequestState {
         Self::Pending
     }
 }
+
+/// 同フレーム内の競合回避用: タスク発行済みアイテム
+#[derive(Resource, Default)]
+pub struct ItemReservations(pub std::collections::HashSet<Entity>);
