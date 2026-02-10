@@ -21,13 +21,19 @@ pub enum TaskMode {
 }
 
 /// タスクエリア - 使い魔が担当するエリア
-#[derive(Component, Clone, Debug)]
+#[derive(Component, Clone, Debug, PartialEq)]
 pub struct TaskArea {
     pub min: Vec2,
     pub max: Vec2,
 }
 
 impl TaskArea {
+    pub fn from_points(a: Vec2, b: Vec2) -> Self {
+        Self {
+            min: Vec2::new(a.x.min(b.x), a.y.min(b.y)),
+            max: Vec2::new(a.x.max(b.x), a.y.max(b.y)),
+        }
+    }
     pub fn center(&self) -> Vec2 {
         (self.min + self.max) / 2.0
     }
@@ -35,7 +41,14 @@ impl TaskArea {
         (self.max - self.min).abs()
     }
     pub fn contains(&self, pos: Vec2) -> bool {
-        pos.x >= self.min.x && pos.x <= self.max.x && pos.y >= self.min.y && pos.y <= self.max.y
+        self.contains_with_margin(pos, 0.0)
+    }
+    pub fn contains_with_margin(&self, pos: Vec2, margin: f32) -> bool {
+        let m = margin.abs();
+        pos.x >= self.min.x - m
+            && pos.x <= self.max.x + m
+            && pos.y >= self.min.y - m
+            && pos.y <= self.max.y + m
     }
     pub fn contains_border(&self, pos: Vec2, thickness: f32) -> bool {
         let in_outer = pos.x >= self.min.x - thickness
@@ -82,8 +95,9 @@ pub enum AreaEditHandleKind {
 // 公開API
 pub use area_selection::{
     AreaEditClipboard, AreaEditHistory, AreaEditPresets, AreaEditSession,
-    area_selection_indicator_system, task_area_edit_cursor_system,
-    task_area_edit_history_shortcuts_system, task_area_selection_system,
+    area_selection_indicator_system, count_positions_in_area, overlap_summary_from_areas,
+    task_area_edit_cursor_system, task_area_edit_history_shortcuts_system,
+    task_area_selection_system,
 };
 pub use assign_task::assign_task_system;
 pub use indicators::{

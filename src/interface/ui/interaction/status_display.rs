@@ -7,66 +7,14 @@ use crate::game_state::{
 use crate::interface::selection::SelectedEntity;
 use crate::interface::ui::components::*;
 use crate::relationships::ManagedBy;
-use crate::systems::command::{AreaEditClipboard, AreaEditSession, TaskArea};
+use crate::systems::command::{
+    AreaEditClipboard, AreaEditSession, TaskArea, count_positions_in_area,
+    overlap_summary_from_areas,
+};
 use crate::systems::jobs::Designation;
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use std::time::Duration;
-
-fn overlap_summary_from_areas(
-    selected_entity: Entity,
-    selected_area: &TaskArea,
-    areas: impl Iterator<Item = (Entity, TaskArea)>,
-) -> Option<(usize, f32)> {
-    let selected_size = selected_area.size();
-    let selected_area_value = selected_size.x.abs() * selected_size.y.abs();
-    if selected_area_value <= f32::EPSILON {
-        return None;
-    }
-
-    let mut overlap_count = 0usize;
-    let mut max_ratio = 0.0f32;
-
-    for (entity, area) in areas {
-        if entity == selected_entity {
-            continue;
-        }
-
-        let overlap_w =
-            (selected_area.max.x.min(area.max.x) - selected_area.min.x.max(area.min.x)).max(0.0);
-        let overlap_h =
-            (selected_area.max.y.min(area.max.y) - selected_area.min.y.max(area.min.y)).max(0.0);
-        let overlap_area = overlap_w * overlap_h;
-        if overlap_area <= f32::EPSILON {
-            continue;
-        }
-
-        overlap_count += 1;
-        let ratio = (overlap_area / selected_area_value).clamp(0.0, 1.0);
-        if ratio > max_ratio {
-            max_ratio = ratio;
-        }
-    }
-
-    Some((overlap_count, max_ratio))
-}
-
-fn count_unassigned_tasks_in_area(
-    selected_area: &TaskArea,
-    task_positions: impl Iterator<Item = Vec2>,
-) -> usize {
-    let mut count = 0usize;
-    for pos in task_positions {
-        if pos.x >= selected_area.min.x - 0.1
-            && pos.x <= selected_area.max.x + 0.1
-            && pos.y >= selected_area.min.y - 0.1
-            && pos.y <= selected_area.max.y + 0.1
-        {
-            count += 1;
-        }
-    }
-    count
-}
 
 pub fn update_mode_text_system(
     play_mode: Res<State<PlayMode>>,
@@ -140,7 +88,7 @@ pub fn update_mode_text_system(
             })
         });
         let unassigned_tasks_in_area = selected_area.as_ref().map(|area| {
-            count_unassigned_tasks_in_area(
+            count_positions_in_area(
                 area,
                 q_unassigned_tasks
                     .iter()
@@ -266,7 +214,7 @@ pub fn update_area_edit_preview_ui_system(
     } else {
         "Clip:Empty"
     };
-    let tasks_in_area = count_unassigned_tasks_in_area(
+    let tasks_in_area = count_positions_in_area(
         area,
         q_unassigned_tasks
             .iter()
