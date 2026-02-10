@@ -34,7 +34,7 @@ pub fn tank_water_request_system(
         Option<&TaskWorkers>,
     )>,
     mut item_reservations: ResMut<
-        crate::systems::soul_ai::decide::work::auto_haul::ItemReservations,
+        crate::systems::logistics::transport_request::ItemReservations,
     >,
 ) {
     for (tank_entity, tank_transform, tank_stock, stored_opt) in q_tanks.iter() {

@@ -35,8 +35,6 @@ impl Plugin for SoulAiPlugin {
         )
         .register_type::<execute::task_execution::AssignedTask>()
         .register_type::<helpers::gathering::GatheringSpot>()
-        .init_resource::<decide::work::AutoHaulCounter>()
-        .init_resource::<decide::work::auto_haul::ItemReservations>()
         .init_resource::<helpers::gathering::GatheringUpdateTimer>()
         .init_resource::<perceive::escaping::EscapeDetectionTimer>()
         .init_resource::<perceive::escaping::EscapeBehaviorTimer>()
@@ -72,13 +70,8 @@ impl Plugin for SoulAiPlugin {
                 // 次の行動の選択、要求の生成
                 (
                     // タスク割り当て要求
-                    decide::work::auto_haul::blueprint_auto_haul_system,
-                    decide::work::tank_water_request_system,
-                    decide::work::auto_haul::mud_mixer_auto_haul_system,
-                    decide::work::auto_haul::bucket_auto_haul_system,
                     decide::work::auto_refine::mud_mixer_auto_refine_system,
                     decide::work::auto_build::blueprint_auto_build_system,
-                    decide::work::task_area_auto_haul_system,
                     // アイドル行動の決定
                     decide::idle_behavior::idle_behavior_decision_system,
                     decide::separation::gathering_separation_system,
