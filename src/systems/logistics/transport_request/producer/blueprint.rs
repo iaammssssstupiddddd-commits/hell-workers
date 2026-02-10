@@ -14,8 +14,7 @@ use crate::systems::logistics::transport_request::{
     TransportRequestState,
 };
 use crate::systems::logistics::ResourceType;
-use crate::systems::soul_ai::execute::task_execution::AssignedTask;
-use crate::systems::soul_ai::helpers::query_types::AutoHaulAssignedTaskQuery;
+
 use crate::systems::spatial::BlueprintSpatialGrid;
 
 /// 設計図への自動資材運搬タスク生成システム
@@ -27,8 +26,6 @@ pub fn blueprint_auto_haul_system(
     blueprint_grid: Res<BlueprintSpatialGrid>,
     q_familiars: Query<(Entity, &ActiveCommand, &TaskArea)>,
     q_blueprints: Query<(Entity, &Transform, &Blueprint, Option<&TaskWorkers>)>,
-    q_souls: AutoHaulAssignedTaskQuery,
-    q_all_resources: Query<&crate::systems::logistics::ResourceItem>,
     q_bp_requests: Query<(
         Entity,
         &TargetBlueprint,
@@ -40,18 +37,8 @@ pub fn blueprint_auto_haul_system(
     // (BlueprintEntity, ResourceType) -> Count
     let mut in_flight = std::collections::HashMap::<(Entity, ResourceType), usize>::new();
 
-    for task in q_souls.iter() {
-        let task: &AssignedTask = task;
-        if let AssignedTask::HaulToBlueprint(data) = task {
-            let item = &data.item;
-            let blueprint = &data.blueprint;
-            if let Ok(res_item) = q_all_resources.get(*item) {
-                *in_flight.entry((*blueprint, res_item.0)).or_insert(0) += 1;
-            }
-        }
-    }
-
-    // request エンティティの TaskWorkers も inflight にカウント
+    // TransportRequest エンティティの TaskWorkers を inflight にカウント
+    // M3: AssignedTask ベースのカウントをやめ、TransportRequest / TaskWorkers に一本化する
     for (_, target_bp, req, workers_opt) in q_bp_requests.iter() {
         if matches!(req.kind, TransportRequestKind::DeliverToBlueprint) {
             let count = workers_opt.map(|w| w.len()).unwrap_or(0);
@@ -95,7 +82,7 @@ pub fn blueprint_auto_haul_system(
             continue;
         }
 
-        let Some((fam_entity, _)) = find_owner_familiar(bp_pos, &active_familiars) else {
+        let Some((fam_entity, _)) = super::find_owner_familiar(bp_pos, &active_familiars) else {
             continue;
         };
 
@@ -202,17 +189,3 @@ pub fn blueprint_auto_haul_system(
     }
 }
 
-fn find_owner_familiar(
-    bp_pos: Vec2,
-    familiars: &[(Entity, TaskArea)],
-) -> Option<(Entity, &TaskArea)> {
-    familiars
-        .iter()
-        .filter(|(_, area)| area.contains(bp_pos))
-        .min_by(|(_, area1), (_, area2)| {
-            let d1 = area1.center().distance_squared(bp_pos);
-            let d2 = area2.center().distance_squared(bp_pos);
-            d1.partial_cmp(&d2).unwrap_or(std::cmp::Ordering::Equal)
-        })
-        .map(|(entity, area)| (*entity, area))
-}

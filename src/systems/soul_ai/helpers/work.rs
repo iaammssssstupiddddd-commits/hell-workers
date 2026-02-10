@@ -56,7 +56,6 @@ pub fn unassign_task<'w, 's, Q: TaskReservationAccess<'w, 's>>(
     }
 
     // 運搬・水汲みタスクの予約を解除
-    // 運搬・水汲みタスクの予約を解除
     match task {
         AssignedTask::Haul(data) => {
             queries

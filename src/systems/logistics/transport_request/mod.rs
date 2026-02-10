@@ -2,6 +2,7 @@ mod components;
 mod kinds;
 mod lifecycle;
 mod metrics;
+pub mod state_machine;
 pub mod plugin;
 pub mod producer;
 

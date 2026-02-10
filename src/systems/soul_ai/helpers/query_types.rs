@@ -131,5 +131,3 @@ pub type AutoBuildSoulQuery<'w, 's> = Query<
     Without<Familiar>,
 >;
 
-/// オートホールの集計に使うソウルの標準クエリ型
-pub type AutoHaulAssignedTaskQuery<'w, 's> = Query<'w, 's, &'static AssignedTask>;

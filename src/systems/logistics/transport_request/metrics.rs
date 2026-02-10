@@ -40,6 +40,7 @@ impl TransportRequestKind {
             Self::DeliverToBlueprint => "DeliverToBlueprint",
             Self::DeliverToMixerSolid => "DeliverToMixerSolid",
             Self::DeliverWaterToMixer => "DeliverWaterToMixer",
+            Self::GatherWaterToTank => "GatherWaterToTank",
             Self::ReturnBucket => "ReturnBucket",
             Self::BatchWheelbarrow => "BatchWheelbarrow",
         }
