@@ -81,7 +81,10 @@
 ## 主な関連ファイル
 - `src/interface/ui/setup/entity_list.rs` - パネル初期生成
 - `src/interface/ui/list/view_model.rs` - ビューモデル構築
+- `src/interface/ui/list/spawn.rs` - ソウル・使い魔セクションのUIノード生成
 - `src/interface/ui/list/sync.rs` - 差分同期
+- `src/interface/ui/list/tree_ops.rs` - 子ノード削除（clear_children）
+- `src/interface/ui/list/selection_focus.rs` - 選択とカメラフォーカス
 - `src/interface/ui/list/interaction.rs` - 行操作/スクロール/ハイライト
 - `src/interface/ui/list/drag_drop.rs` - ドラッグ&ドロップ配属
 - `src/interface/ui/list/minimize.rs` - 最小化トグル

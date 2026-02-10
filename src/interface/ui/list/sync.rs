@@ -25,7 +25,7 @@ fn sync_familiar_member_rows(
                 .familiar_empty_rows
                 .contains_key(&familiar.entity)
         {
-            super::helpers::clear_children(commands, q_children, nodes.members_container);
+            super::tree_ops::clear_children(commands, q_children, nodes.members_container);
             member_rows.clear();
             node_index.familiar_empty_rows.remove(&familiar.entity);
         }
@@ -41,7 +41,7 @@ fn sync_familiar_member_rows(
         let empty_row = if let Some(row) = node_index.familiar_empty_rows.get(&familiar.entity) {
             *row
         } else {
-            let row = super::helpers::spawn_empty_squad_hint_entity(
+            let row = super::spawn::spawn_empty_squad_hint_entity(
                 commands,
                 nodes.members_container,
                 game_assets,
@@ -88,7 +88,7 @@ fn sync_familiar_member_rows(
         if let Some(existing_row) = member_rows.get(&soul_vm.entity).copied() {
             if has_changed {
                 commands.entity(existing_row).despawn();
-                let row = super::helpers::spawn_soul_list_item_entity(
+                let row = super::spawn::spawn_soul_list_item_entity(
                     commands,
                     nodes.members_container,
                     soul_vm,
@@ -99,7 +99,7 @@ fn sync_familiar_member_rows(
                 member_rows.insert(soul_vm.entity, row);
             }
         } else {
-            let row = super::helpers::spawn_soul_list_item_entity(
+            let row = super::spawn::spawn_soul_list_item_entity(
                 commands,
                 nodes.members_container,
                 soul_vm,
@@ -118,7 +118,7 @@ fn sync_familiar_member_rows(
         .collect();
 
     if ordered_rows.is_empty() {
-        super::helpers::clear_children(commands, q_children, nodes.members_container);
+        super::tree_ops::clear_children(commands, q_children, nodes.members_container);
     } else {
         commands
             .entity(nodes.members_container)
@@ -163,7 +163,7 @@ fn sync_familiar_sections(
             .familiar_sections
             .entry(familiar.entity)
             .or_insert_with(|| {
-                super::helpers::spawn_familiar_section(
+                super::spawn::spawn_familiar_section(
                     commands,
                     fam_container_entity,
                     familiar,
@@ -241,7 +241,7 @@ fn sync_familiar_sections(
             .map(|children| !children.is_empty())
             .unwrap_or(false)
         {
-            super::helpers::clear_children(commands, q_children, fam_container_entity);
+            super::tree_ops::clear_children(commands, q_children, fam_container_entity);
         }
     } else {
         let needs_reorder = q_children
@@ -272,11 +272,11 @@ fn sync_unassigned_souls(
     q_children: &Query<&Children>,
 ) {
     if view_model.current.unassigned_folded != view_model.previous.unassigned_folded {
-        super::helpers::clear_children(commands, q_children, unassigned_content_entity);
+        super::tree_ops::clear_children(commands, q_children, unassigned_content_entity);
         node_index.unassigned_rows.clear();
         if !view_model.current.unassigned_folded {
             for soul_vm in &view_model.current.unassigned {
-                let row = super::helpers::spawn_soul_list_item_entity(
+                let row = super::spawn::spawn_soul_list_item_entity(
                     commands,
                     unassigned_content_entity,
                     soul_vm,
@@ -325,7 +325,7 @@ fn sync_unassigned_souls(
 
     for soul_vm in &view_model.current.unassigned {
         if !node_index.unassigned_rows.contains_key(&soul_vm.entity) {
-            let row = super::helpers::spawn_soul_list_item_entity(
+            let row = super::spawn::spawn_soul_list_item_entity(
                 commands,
                 unassigned_content_entity,
                 soul_vm,
@@ -345,7 +345,7 @@ fn sync_unassigned_souls(
             if let Some(old_row) = node_index.unassigned_rows.remove(&soul_vm.entity) {
                 commands.entity(old_row).despawn();
             }
-            let row = super::helpers::spawn_soul_list_item_entity(
+            let row = super::spawn::spawn_soul_list_item_entity(
                 commands,
                 unassigned_content_entity,
                 soul_vm,

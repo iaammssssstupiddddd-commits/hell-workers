@@ -51,7 +51,7 @@ pub const FONT_SIZE_BUBBLE_FAMILIAR: f32 = 12.0;
 | ファイル | 適用内容 |
 |:--|:--|
 | [entity_list.rs](file:///f:/DevData/projects/hell-workers/src/interface/ui/setup/entity_list.rs) | タイトル、セクションヘッダー |
-| [list.rs](file:///f:/DevData/projects/hell-workers/src/interface/ui/list.rs) | ソウル名、使い魔名、空欄テキスト |
+| `src/interface/ui/list/` | ソウル名、使い魔名、空欄テキスト（view_model, spawn 等） |
 | [panels.rs](file:///f:/DevData/projects/hell-workers/src/interface/ui/setup/panels.rs) | InfoPanel、HoverTooltip |
 | [dialogs.rs](file:///f:/DevData/projects/hell-workers/src/interface/ui/setup/dialogs.rs) | 操作ダイアログ |
 | [bottom_bar.rs](file:///f:/DevData/projects/hell-workers/src/interface/ui/setup/bottom_bar.rs) | メニューボタン、モード表示 |

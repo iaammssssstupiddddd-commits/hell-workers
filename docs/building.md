@@ -193,6 +193,6 @@ flowchart TD
 - `src/plugins/visual.rs`: システム登録
 - `src/systems/visual/wall_connection.rs`: 壁の自動接続ロジック
 - `src/systems/soul_ai/execute/task_execution/build.rs`: `handle_build_task`（進捗更新）
-- `src/interface/selection.rs`: `blueprint_placement`
+- `src/interface/selection/`: `blueprint_placement`（input, building_place, hit_test, state に分割）
 - `src/systems/visual/placement_ghost.rs`: 建築ゴースト表示システム
 - `src/assets.rs`: 各種アイコンアセット

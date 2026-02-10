@@ -7,7 +7,9 @@
 //! 4. GoingToTank - Navigate to storage tank
 //! 5. Pouring - Pour water into tank
 
+mod guards;
 pub mod helpers;
 mod phases;
+mod routing;
 
 pub use phases::handle_gather_water_task;

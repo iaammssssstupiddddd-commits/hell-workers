@@ -110,7 +110,7 @@ Perceive → Update → Decide → Execute
   - `UiNodeRegistry` で `UiSlot -> Entity` を保持
   - テキスト/アイコン更新は `Query::get_mut(entity)` で直接更新
 - 情報表示:
-  - `src/interface/ui/presentation.rs` が `EntityInspectionModel` を構築
+  - `src/interface/ui/presentation/` が `EntityInspectionModel` を構築
   - `InfoPanel` と `HoverTooltip` は同一モデルを利用して表示差異を抑制
 - 入力判定:
   - `UiInputState.pointer_over_ui` を単一の判定値として利用

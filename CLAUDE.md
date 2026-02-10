@@ -48,10 +48,10 @@ After any code change, ensure zero compilation errors:
 ### AssignedTask Structure
 When adding new tasks to `AssignedTask` enum:
 - Use **struct variants** (not tuple variants)
-- Define data structures in `src/systems/soul_ai/task_execution/types.rs`
+- Define data structures in `src/systems/soul_ai/execute/task_execution/types.rs`
 
 ### Query Aggregation
-- Aggregate task queries in `TaskQueries` struct at `src/systems/soul_ai/task_execution/context.rs`
+- Aggregate task queries in `TaskQueries` struct at `src/systems/soul_ai/execute/task_execution/context.rs`
 - Do not define individual queries separately
 
 ### Execution Context
