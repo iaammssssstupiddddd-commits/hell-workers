@@ -2,8 +2,6 @@
 //!
 //! M4: ストックパイルへの汎用運搬を request エンティティ（アンカー側）で発行する。
 //! 割り当て時にアイテムソースを遅延解決する。
-//!
-//! 制限: resource_type が確定しているストックパイルのみ request 化。
 
 use bevy::prelude::*;
 
@@ -19,6 +17,40 @@ use crate::systems::logistics::{BelongsTo, ResourceType, Stockpile};
 
 use crate::systems::spatial::StockpileSpatialGrid;
 
+fn resolve_request_resource_type(
+    stock_pos: Vec2,
+    stockpile: &Stockpile,
+    stock_belongs: Option<&BelongsTo>,
+    q_free_items: &Query<
+        (&Transform, &crate::systems::logistics::ResourceItem, &Visibility, Option<&BelongsTo>),
+        (
+            Without<Designation>,
+            Without<TaskWorkers>,
+            Without<crate::systems::logistics::ReservedForTask>,
+            Without<crate::systems::logistics::InStockpile>,
+        ),
+    >,
+) -> Option<ResourceType> {
+    if let Some(resource_type) = stockpile.resource_type {
+        return Some(resource_type);
+    }
+
+    let owner = stock_belongs.map(|b| b.0);
+    q_free_items
+        .iter()
+        .filter(|(_, item_type, visibility, item_belongs)| {
+            *visibility != Visibility::Hidden
+                && item_type.0.is_loadable()
+                && owner == item_belongs.map(|b| b.0)
+        })
+        .min_by(|(t1, _, _, _), (t2, _, _, _)| {
+            let d1 = t1.translation.truncate().distance_squared(stock_pos);
+            let d2 = t2.translation.truncate().distance_squared(stock_pos);
+            d1.partial_cmp(&d2).unwrap_or(std::cmp::Ordering::Equal)
+        })
+        .map(|(_, item_type, _, _)| item_type.0)
+}
+
 /// 指揮エリア内での自動運搬タスク生成システム
 pub fn task_area_auto_haul_system(
     mut commands: Commands,
@@ -32,6 +64,15 @@ pub fn task_area_auto_haul_system(
         Option<&BelongsTo>,
     )>,
     q_stockpile_requests: Query<(Entity, &TransportRequest, Option<&TaskWorkers>)>,
+    q_free_items: Query<
+        (&Transform, &crate::systems::logistics::ResourceItem, &Visibility, Option<&BelongsTo>),
+        (
+            Without<Designation>,
+            Without<TaskWorkers>,
+            Without<crate::systems::logistics::ReservedForTask>,
+            Without<crate::systems::logistics::InStockpile>,
+        ),
+    >,
 ) {
     let mut in_flight = std::collections::HashMap::<(Entity, ResourceType), usize>::new();
 
@@ -63,24 +104,26 @@ pub fn task_area_auto_haul_system(
     }
 
     for stock_entity in stockpiles_to_process {
-        let Ok((_, stock_transform, stockpile, stored_opt, _stock_belongs)) =
+        let Ok((_, stock_transform, stockpile, stored_opt, stock_belongs)) =
             q_stockpiles.get(stock_entity)
         else {
             continue;
         };
 
-        let Some(resource_type) = stockpile.resource_type else {
+        let stock_pos = stock_transform.translation.truncate();
+        let Some(resource_type) = resolve_request_resource_type(
+            stock_pos,
+            stockpile,
+            stock_belongs,
+            &q_free_items,
+        ) else {
             continue;
         };
 
-        if matches!(
-            resource_type,
-            ResourceType::BucketEmpty | ResourceType::BucketWater
-        ) {
+        if !resource_type.is_loadable() {
             continue;
         }
 
-        let stock_pos = stock_transform.translation.truncate();
         let current = stored_opt.map(|s| s.len()).unwrap_or(0);
         if current >= stockpile.capacity {
             continue;
@@ -181,4 +224,3 @@ pub fn task_area_auto_haul_system(
         ));
     }
 }
-

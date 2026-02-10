@@ -1,4 +1,5 @@
 use crate::systems::jobs::{TargetBlueprint, WorkType};
+use crate::systems::logistics::transport_request::TransportRequestKind;
 use crate::systems::logistics::ResourceType;
 use bevy::prelude::*;
 
@@ -22,8 +23,27 @@ pub(super) fn score_candidate(
     } else if work_type == WorkType::GatherWater {
         priority += 5;
 
-        let bucket_belongs = queries.designation.belongs.get(entity).ok();
-        let has_tank_space =
+        let has_tank_space = if let Ok(req) = queries.transport_requests.get(entity) {
+            if req.kind == TransportRequestKind::GatherWaterToTank {
+                if let Ok((_, _, stock, stored)) = queries.storage.stockpiles.get(req.anchor) {
+                    if stock.resource_type != Some(ResourceType::Water) {
+                        false
+                    } else {
+                        let current_count = stored.map(|s| s.len()).unwrap_or(0);
+                        let reserved = queries
+                            .reservation
+                            .resource_cache
+                            .get_destination_reservation(req.anchor);
+                        (current_count + reserved) < stock.capacity
+                    }
+                } else {
+                    false
+                }
+            } else {
+                false
+            }
+        } else {
+            let bucket_belongs = queries.designation.belongs.get(entity).ok();
             queries
                 .storage
                 .stockpiles
@@ -41,7 +61,8 @@ pub(super) fn score_candidate(
                     } else {
                         false
                     }
-                });
+                })
+        };
 
         if !has_tank_space {
             return None;

@@ -1,196 +1,184 @@
 # 物流と備蓄システム (Logistics & Stockpile)
 
-Hell-Workers における資源の備蓄、運搬、および管理の仕組みについて解説します。
+Hell-Workers の物流は、`TransportRequest` を中心にした自動発行 + 遅延解決方式で動作します。  
+このドキュメントは「現在の仕様」と「実装上の挙動」に絞って記載します。
 
-## 1. 備蓄場所 (Stockpile)
+## 1. 主要データモデル
 
-備蓄場所は、採取された資源（木材、石材）を保管する拠点です。Bevy 0.18 の **ECS Relationships** を活用し、アイテムとの関係を厳格に管理しています。
+### 1.1 Stockpile
+- コンポーネント: `Stockpile { capacity, resource_type }`
+- 初期配置（ゾーン配置）時:
+  - `capacity = 10`
+  - `resource_type = None`
+- `resource_type` は最初の格納で確定し、最後の1個が取り出されると `None` に戻ります。
 
-### 主要な Relationship
-| コンポーネント | 役割 | 説明 |
-| :--- | :--- | :--- |
-| **`StoredIn(Entity)`** | **Relationship** | アイテムから**備蓄場所**への参照。 |
-| **`StoredItems(Vec)`** | **Target** | 備蓄場所側の**格納アイテム一覧**。自動的に維持される。 |
+### 1.2 Relationship
+- `StoredIn(Entity)`:
+  - アイテム -> 格納先 Stockpile
+- `StoredItems(Vec<Entity>)`:
+  - Stockpile 側の逆参照
+- `InStockpile(Entity)`:
+  - 「備蓄中」判定用マーカー
 
-### 制限事項
-- **資源タイプ制限**: 1つの備蓄場には1種類の資源のみ保管可能です。
-    - 最初にアイテムが置かれた時点でタイプ（木材 or 石材）が決定されます。
-    - アイテムがゼロになるとタイプはリセットされ、別の資源を置けるようになります。
-- **容量制限 (10個)**: 1つの備蓄場所の最大容量は **10個** です。
-    - **同一フレーム競合の回避**: `SharedResourceCache` の **Intra-frame tracking** により、複数のワーカーが同時に到着しても論理在庫を追跡し、上限を超えないよう制御されます。
+### 1.3 物流関連コンポーネント
+- `BelongsTo(Entity)`:
+  - 所有関係（主にタンクとバケツ/バケツ置き場）
+- `BucketStorage`:
+  - バケツ返却先として扱う Stockpile マーカー
+- `ReservedForTask`:
+  - タスクで予約済みのアイテム
 
-## 2. 運搬プロセス (Hauling)
+### 1.4 TransportRequest
+- `TransportRequest { kind, anchor, resource_type, issued_by, priority }`
+- `TransportDemand { desired_slots, inflight }`
+- `TransportRequestState`:
+  - `Pending` / `Claimed` / `InFlight` / `CoolingDown` / `Completed`
+- request エンティティには通常 `Designation`, `ManagedBy`, `TaskSlots`, `Priority` も付与されます。
 
-資源が備蓄場所へ運ばれるまでの流れは以下の通りです。
+## 2. TransportRequest 基盤
 
-1.  **タスク発行**: `task_area_auto_haul_system` またはプレイヤーが資源に `WorkType::Haul` を指定。
-2.  **割り当て**: 使い魔 AI が配下の魂に搬送タスクを割り当てる（`assign_task_to_worker`）。
-3.  **エリア制限**: ワーカーは管理している**使い魔の `TaskArea`（担当エリア）内**にある備蓄場所のみを利用します。
-4.  **搬送中（インフライト）の考慮**: 割り当て時に「現在搬送目的地となっている数」もカウントし、将来の満杯を予測して割り当てを制限します。
-5.  **実行**:
-    - **収集フェーズ**: 資源の場所へ移動し、`Holding` 状態にする。
-    - **ドロップフェーズ**: 備蓄場所へ移動し、`StoredIn` 関係を構築して置く。
-6.  **安全なドロップ**: 到着時に備蓄場所が満杯や消失していた場合、ワーカーはその場に資源を安全にドロップします。
+`TransportRequestPlugin` は以下の順で実行されます。
 
-## 3. オートホール (Auto-Haul)
+1. `Perceive`
+2. `Decide`（各 producer が request を upsert）
+3. `Execute`（`TaskWorkers` に応じた state 同期）
+4. `Maintain`（アンカー消失や不要 request の cleanup）
 
-オートホールシステムは、物流を自動化する重要なコンポーネントです。
+`task_finder` は `DesignationSpatialGrid` と `TransportRequestSpatialGrid` の両方を探索して候補を集約します。
 
-### 3.1. 資源運搬（木材・石材）
-- **トリガー**: 使い魔の担当エリア内に空きのある `Stockpile` が存在すること。
-- **スキャン**: 備蓄場所の周辺にある「未指定のアイテム」を検索します。
-- **自動指定**: 条件（エリア、型、容量）に合う資源を見つけると、自動的に `Haul` タスクを発行します。
-- **優先度**: 通常の備蓄運搬タスクの優先度は **Low (0)** です。
+## 3. Request 種別と実装
 
-### 3.2. バケツの自動返却
-- **トリガー**: バケツ（空または水入り）が地面にドロップされ、紐付いたタンクの「バケツ置き場」に空きがあること。
-- **自動指定**: `bucket_auto_haul_system` により、ドロップされたバケツは `BelongsTo` で紐付いたタンクかつ `BucketStorage` マーカー付きストレージへ自動搬送 (`Haul`) されます。
-- **優先度**: バケツ返却は物流を止めないために優先度 **Medium-High (5)** で処理されます。
+| kind | WorkType | producer | anchor | ソース解決 |
+| :--- | :--- | :--- | :--- | :--- |
+| `DepositToStockpile` | `Haul` | `task_area_auto_haul_system` | Stockpile | 割り当て時にアイテムを遅延解決 |
+| `DeliverToBlueprint` | `Haul` | `blueprint_auto_haul_system` | Blueprint | 割り当て時に必要資材を遅延解決 |
+| `DeliverToMixerSolid` | `HaulToMixer` | `mud_mixer_auto_haul_system` | Mixer | 割り当て時に Sand/Rock を遅延解決 |
+| `DeliverWaterToMixer` | `HaulWaterToMixer` | `mud_mixer_auto_haul_system` | Mixer | 割り当て時に tank + bucket を遅延解決 |
+| `GatherWaterToTank` | `GatherWater` | `tank_water_request_system` | Tank | 割り当て時に bucket を遅延解決 |
+| `ReturnBucket` | `Haul` | `bucket_auto_haul_system` | バケツ置き場 Stockpile | 割り当て時に dropped bucket を遅延解決 |
+| `BatchWheelbarrow` | `WheelbarrowHaul` | `wheelbarrow_auto_haul_system` | Wheelbarrow | 現状の主運搬経路では未使用（将来拡張用） |
 
-### 3.3. 水汲み指示の自動発行
-- **トリガー**: 水タンク内の現在量（＋搬送予約分）が容量未満になり、かつ紐付いたバケツが「バケツ置き場」にあること。
-- **自動指定**: `tank_water_request_system` が不足分を計算し、必要な数のバケツに対して `GatherWater` タスクを自動発行します。
+## 4. 自動運搬の仕様
 
-### 3.4. MudMixerへの資材・水供給
-- **トリガー**: MudMixerの在庫（Sand/Rock/Water）が容量（5個）未満であること。
-- **Sand/Rock**:
-    - 周辺のアイテムから検索対象を絞り込む。
-    - `SharedResourceCache` を使用して、「搬送中 + 予約済み」の数が容量を超えないように厳密に管理する。
-    - `MudMixerStorage::can_accept` メソッドにより、リソース種別ごとの受入可否を判定。
-- **Water**:
-    - **要件**: エリア内に水が入った `Tank`（貯水槽）が存在すること。
-    - 川から直接ではなく、**Tankからバケツで水を汲んで** 運びます。
-    - Mixer 位置に `DeliverWaterToMixer` の request エンティティを生成。割り当て時にタンク・バケツを遅延解決。
-    - 水量はタスク数 × `BUCKET_CAPACITY` で計算されます。
-- **Sand採取の発行**:
-    - ミキサー近傍（3タイル以内）の `SandPile` に対して `CollectSand` を自動発行します。
-    - `BelongsTo` 依存ではなく、近接判定ベースで動作します。
-- **満杯時の制御**:
-    - ミキサーが満杯になった場合、搬送中のタスクは即座にキャンセルされ、アイテムは適切に処分（Sandは消去、他はドロップ）されます。
+### 4.1 TaskArea -> Stockpile (`DepositToStockpile`)
+- 対象は「非 Idle の Familiar」が持つ `TaskArea` 内の Stockpile。
+- 需要は `capacity - current - in_flight` で算出。
+- `resource_type = None` の空 Stockpile は、近傍の地面アイテムから搬入種別を推定して request を発行。
+- 搬入対象は `ResourceType::is_loadable() == true` の資材のみ（液体/バケツ/手押し車は除外）。
+- 割り当て時のソース選定は「地面アイテムのみ」。
+  - 既に `InStockpile` のアイテムは対象外。
+  - 同一 Stockpile での pick-drop ループを防止。
 
-## 7. 競合回避システム (Contention Avoidance)
+### 4.2 Blueprint 搬入 (`DeliverToBlueprint`)
+- `required_materials - delivered_materials - in_flight` を不足分として request 化。
+- request は Blueprint 位置に生成し、ソースは割り当て時に探索。
 
-自動発行システムが過剰にタスクを発行しないよう、`SharedResourceCache` と `sync_reservations_system` で予約を一元管理しています。
+### 4.3 MudMixer 固体搬入 (`DeliverToMixerSolid`)
+- `Sand` / `Rock` の不足量を `SharedResourceCache` を含めて判定。
+- request は Mixer 位置に生成し、ソースは割り当て時に探索。
 
-### 7.1. 予約の再構築
-`sync_reservations_system` は **0.2秒間隔（初回即時）** で、以下の2つのソースから予約を再構築します:
+### 4.4 MudMixer 水搬入 (`DeliverWaterToMixer`)
+- 水不足時に request を発行。
+- 割り当て時に、エリア内の有効タンクと利用可能バケツを遅延解決して搬送。
 
-1. **`AssignedTask`** - 既にSoulに割り当てられているタスク
-2. **`Designation` (Without<TaskWorkers>)** - まだ割り当て待ちのタスク候補
+### 4.5 バケツ返却 (`ReturnBucket`)
+- dropped bucket（空/水入り）を検知。
+- `BelongsTo` で紐づくタンクの `BucketStorage` 付き Stockpile へ返却 request を生成。
 
-補足:
-- 同期タイマーの間隔中でも、`ResourceReservationRequest` による差分更新は `apply_reservation_requests_system` で即時反映されます。
+### 4.6 Tank 自動補充 (`GatherWaterToTank`)
+- 水タンクの不足量を監視し、`BUCKET_CAPACITY` 単位で必要タスク数を算出して request 化。
+- 割り当て時に request anchor（tank）に紐づく利用可能バケツを選択して `GatherWater` を実行。
+- タンク容量（現在量 + 予約）を割り当て時にも再検証。
 
-### 7.2. Designation からの予約カウント
-`Designation` を持つエンティティは、付随するコンポーネントによって適切な予約にカウントされます:
+## 5. 手押し車運搬
 
-| WorkType | 条件 | 予約先 |
-| :--- | :--- | :--- |
-| `Haul` | `TargetBlueprint` あり | `destination_reservations` |
-| `HaulToMixer` | `TargetMixer` + `ResourceItem` あり | `mixer_dest_reservations` |
-| `HaulWaterToMixer` | `TargetMixer` あり | `mixer_dest_reservations` (Water) |
-| `GatherWater` | `BelongsTo` あり | `destination_reservations` |
+手押し車の実運用は `DepositToStockpile` の割り当て時に判定されます。
 
-### 7.3. 自動発行システムのフィルタリング
-各自動発行システムは、以下の方法で重複を防いでいます:
+- `resolve_wheelbarrow_batch_for_stockpile` が以下を満たすと一括運搬を選択:
+  - 利用可能な手押し車あり
+  - 同種アイテムが `WHEELBARROW_MIN_BATCH_SIZE` 以上
+  - 目的 Stockpile の残容量あり
+- 上限:
+  - `WHEELBARROW_CAPACITY`
+  - Stockpile 残容量
+- 対象アイテムは地面上のみ（`InStockpile` は除外）。
 
-- **`Without<Designation>`**: 既にタスクが付与されているアイテムをクエリから除外
-  - `task_area_auto_haul_system`, `blueprint_auto_haul_system`, `bucket_auto_haul_system`
-- **`SharedResourceCache` 参照**: 予約数を確認して容量超過を防止
-  - `mud_mixer_auto_haul_system`, `tank_water_request_system`
+## 6. 予約と競合回避
 
-### 7.4. `AssignedTask::HaulWithWheelbarrow` の予約
+`SharedResourceCache` で以下を一元管理します。
 
-手押し車タスクは複数の予約を同時に必要とするため、フェーズに応じた予約管理を行います:
+- `destination_reservations`（Stockpile/Tank など）
+- `mixer_dest_reservations`（Mixer + ResourceType）
+- `source_reservations`（アイテムやタンク）
 
-| 予約対象 | 予約先 | 有効フェーズ |
-| :--- | :--- | :--- |
-| 手押し車エンティティ | `source_reservations` | 全フェーズ（二重使用防止） |
-| 目的地ストックパイル | `destination_reservations` × N個 | 全フェーズ |
-| アイテムソース | `source_reservations` | `GoingToParking`, `PickingUpWheelbarrow`, `GoingToSource` のみ |
+### 6.1 再構築
+- `sync_reservations_system` が `AssignedTask` と未割り当て `Designation` から予約を再構築。
+- 同期間隔は `RESERVATION_SYNC_INTERVAL`（初回は即時）。
 
-`Loading` 以降のフェーズではアイテムは既に手押し車に `LoadedIn` されているため、アイテムソースの予約は不要です。
+### 6.2 差分適用
+- `ResourceReservationRequest` を `apply_reservation_requests_system` でフレーム内反映。
+- `RecordStoredDestination` / `RecordPickedSource` によりフレーム内の論理在庫差分も追跡。
 
-### 7.5. TransportRequest 基盤（計画: グローバル運搬 Request 化）
+### 6.3 水搬送の排他
+- `HaulWaterToMixer` はタンクを source 予約して同時取水競合を抑制。
 
-**観測基盤（M0）**:
-- `TransportRequestMetrics`: 種別・状態ごとの request 数を5秒間隔でデバッグログ出力
-- `transport_request_anchor_cleanup_system`: アンカー消失時に request を close（standalone は despawn、アイテム付きは TransportRequest/Designation を remove）
+## 7. 備蓄資材の取り出し
 
-**タスク検索**:
-- `task_finder` は `DesignationSpatialGrid` と `TransportRequestSpatialGrid` の両方から候補を収集し、重複を除外
+- 建築/製造向けの搬送ソースには、条件を満たす `InStockpile` アイテムも利用されます。
+- アイテムを持ち出すと `StoredIn`/`InStockpile` が外れ、`StoredItems` は自動更新されます。
+- 取り出し後に Stockpile が空になると `resource_type` は `None` に戻ります。
 
-**M3 Blueprint 搬入 request 化（完了）**:
-- `blueprint_auto_haul_system` は Blueprint 単位で request エンティティをアンカー位置に生成
-- アイテムへの直接 Designation 発行を廃止
-- 割り当て時に `find_nearest_blueprint_source_item` で資材ソースを遅延解決
+## 8. 関連実装
 
-| auto_haul システム | 方式 | TransportRequestKind | anchor |
-| :--- | :--- | :--- | :--- |
-| `blueprint_auto_haul` | **request エンティティ** | DeliverToBlueprint | Blueprint |
-| `mud_mixer_auto_haul`（固体） | **request エンティティ** | DeliverToMixerSolid | Mixer |
-| `task_area_auto_haul` | **request エンティティ** | DepositToStockpile | Stockpile |
-| `bucket_auto_haul` | **request エンティティ** | ReturnBucket | Stockpile |
-| `mud_mixer_auto_haul`（水） | **request エンティティ** | DeliverWaterToMixer | Mixer |
+- request producer:
+  - `src/systems/logistics/transport_request/producer/`
+- request plugin:
+  - `src/systems/logistics/transport_request/plugin.rs`
+- request lifecycle:
+  - `src/systems/logistics/transport_request/lifecycle.rs`
+- 割り当てロジック:
+  - `src/systems/familiar_ai/decide/task_management/assignment/`
+- 実行ロジック:
+  - `src/systems/soul_ai/execute/task_execution/`
 
-**M4 TaskArea request 化（完了）**: resource_type 確定済みストックパイルについて、request エンティティを発行。バケツは `bucket_auto_haul` 専用のため除外。
+## 9. システム追加時の実装ルール
 
-**M5 水搬送 request 化（完了）**: Mixer への水供給を request エンティティ化。`mud_mixer_auto_haul_system` が Mixer 位置に `DeliverWaterToMixer` request を生成。割り当て時に `find_tank_bucket_for_water_mixer` でタンク・バケツを遅延解決。
+物流系システムを追加する際は、以下を満たしてください。
 
-**M6 手押し車 request 化（完了）**: `DepositToStockpile` request の割り当て時に、`resolve_wheelbarrow_batch_for_stockpile` で手押し車＋積載可能アイテムのバッチを遅延解決。batch 生成・容量制約（`WHEELBARROW_MIN_BATCH_SIZE`、`WHEELBARROW_CAPACITY`、ストックパイル残容量）を request resolver に集約。
+### 9.1 Request 発行方式の統一
+- 新しい自動物流は、原則として「anchor に紐づく `TransportRequest` エンティティ」を発行する。
+- アイテム実体への直接 `Designation` 連打は避け、ソースは割り当て時に遅延解決する。
+- request の `kind` / `work_type` / `anchor` / `resource_type` の組み合わせは必ず一貫させる。
 
-**M7 バケツ返却 request 化（完了）**: `bucket_auto_haul_system` を request エンティティ化。バケツ置き場（Stockpile）位置に `ReturnBucket` request を生成。割り当て時に `find_nearest_bucket_for_return` でタンクに紐づくドロップバケツを遅延解決。運搬系のアイテム直接 Designation 発行を廃止。
+### 9.2 Producer の upsert/cleanup 規約
+- 既存 request があれば再利用（upsert）し、不要時は以下で閉じる。
+  - `TaskWorkers == 0` のときは `Designation` / `TaskSlots` / `Priority` を外す、または despawn。
+- 同一 key（anchor + resource_type など）の重複 request は許可しない。
+- demand 計算は `current + in_flight(+ reservation)` を使い、過剰発行を防ぐ。
 
-**Blueprint / Mixer 固体・水 / Bucket**: request エンティティをアンカー位置に生成し、割り当て時にソースを遅延解決。`TransportRequestSet::Maintain` でアンカー消失時の cleanup を実施。
+### 9.3 予約の責務を統一
+- 予約は「割り当て時」に `ResourceReservationOp` で付与し、成功・失敗・中断の全経路で解放/記録する。
+- タスク実行で取得・格納が成功したら、`RecordPickedSource` / `RecordStoredDestination` を使う。
+- 共有ソース（例: tank 取水）は `ReserveSource` で排他を取る。
 
-### 7.6. 拡張性
-新しい自動発行システムを追加する場合:
-1. `sync_reservations_system` の `match designation.work_type` に新しい `WorkType` を追加
-2. 必要なターゲットコンポーネント（例: `TargetFurnace`）をクエリに追加
-3. 適切な予約カテゴリにカウントを追加
+### 9.4 ソース選定の安全条件
+- `DepositToStockpile` のソースは地面アイテムのみを対象にする（`InStockpile` は除外）。
+- 所有物資がある場合は `BelongsTo` を一致させ、他 owner の資材を混在させない。
+- `Visibility::Hidden` / `ReservedForTask` / `TaskWorkers` 付きエンティティは候補から外す。
 
+### 9.5 追加時に必ず更新する箇所
+- 新しい producer を `TransportRequestPlugin`（`Decide`）へ登録する。
+- 新しい `WorkType` / request 種別を導入した場合:
+  - `task_finder/filter.rs`（有効タスク判定）
+  - `assignment/policy/mod.rs`（割り当て分岐）
+  - `sync_reservations_system`（予約再構築）
+  - 必要なら `task_finder/score.rs`（優先度）
+  - `transport_request_anchor_cleanup_system` で cleanup 要件を満たすこと
 
-## 4. 手押し車運搬 (Wheelbarrow Hauling)
-
-手押し車は、複数のアイテム（最大 `WHEELBARROW_CAPACITY=10` 個、混載可）をまとめて運搬する手段です。
-
-### 4.1. 手押し車の管理
-
-- **駐車エリア (`WheelbarrowParking`)**: `BuildingType::WheelbarrowParking` として建設（2x2タイル、Wood x 2）
-- **スポーン**: 建設完了時のポストプロセスで `capacity` 分の手押し車エンティティをスポーン
-- **関連 Relationship**:
-  - `PushedBy(Entity)` — 手押し車 → 使用中の魂
-  - `LoadedIn(Entity)` / `LoadedItems(Vec)` — アイテム → 手押し車の積載関係
-  - `ParkedAt(Entity)` / `ParkedWheelbarrows(Vec)` — 手押し車 → 駐車エリア
-
-### 4.2. 発行条件（M6: request resolver で遅延解決）
-
-- `DepositToStockpile` request の割り当て時に `resolve_wheelbarrow_batch_for_stockpile` で判定
-- ストックパイルへ移動が必要な積載可能アイテムが `WHEELBARROW_MIN_BATCH_SIZE` 個以上
-- 駐車エリアに利用可能（未予約）な手押し車がある
-- アイテムの `ResourceType` が `is_loadable() == true`（液体・バケツ・手押し車自体は不可）
-
-### 4.3. 速度ペナルティ
-
-手押し車使用中の魂は `SOUL_SPEED_WHEELBARROW_MULTIPLIER` (0.7) の速度補正を受けます。
-
-### 4.4. ビジュアル
-
-手押し車は独立エンティティとして魂の進行方向前方に追従表示されます。
-詳細は [gather_haul_visual.md](gather_haul_visual.md) を参照。
-
-## 5. 備蓄からの利用 (Retrieval)
-
-建築など、特定のタスクでは備蓄された資源を再利用します。
-- **検索**: 建築現場から最も近い資源が検索されます。これにはストックパイル内のアイテムも含まれます。
-- **エリア制限**: 使い魔は、**自分の担当エリア（TaskArea）内にあるストックパイル**からのみ資源を持ち出します。他者の備蓄を勝手に消費することはありません。
-- **自動更新**: アイテムが持ち出されると `StoredIn` 関係が解除され、ストックパイル側の在庫リストも自動更新されます。最後の1個がなくなると、ストックパイルの管理リソース型は `None` にリセットされます。
-
-## 6. 座標とレイヤー
-
-- **スナッピング**: 備蓄場所にアイテムを置く際、座標はタイルの中心に正確に補完されます。
-- **表示レイヤー (Z-Index)**:
-    - 地面: `0.0`
-    - ストックパイルタイル: `0.1`
-    - **備蓄アイテム: `0.6`**
-    - ソウル: `1.0`
+### 9.6 動作確認の最低ライン
+- `cargo check` を通す。
+- 少なくとも以下を確認する:
+  - request が1フレームで増殖しない
+  - 同一ソースへの二重割り当てがない
+  - 需要 0 時に request が休止/消滅する
+  - anchor 消失時に request が cleanup される
