@@ -7,11 +7,11 @@ use bevy::prelude::*;
 
 use super::super::builders::{
     issue_haul_to_blueprint, issue_haul_to_blueprint_with_source, issue_haul_to_mixer,
-    issue_haul_to_stockpile, issue_haul_with_wheelbarrow,
+    issue_haul_to_stockpile, issue_haul_to_stockpile_with_source, issue_haul_with_wheelbarrow,
 };
 use super::super::validator::{
     find_best_stockpile_for_item, resolve_haul_to_blueprint_inputs,
-    resolve_haul_to_mixer_inputs, source_not_reserved,
+    resolve_haul_to_mixer_inputs, resolve_haul_to_stockpile_inputs, source_not_reserved,
 };
 
 pub(super) fn assign_haul_to_mixer(
@@ -118,6 +118,32 @@ fn find_nearest_mixer_source_item(
         .map(|(e, t, _, _)| (e, t.translation.truncate()))
 }
 
+fn find_nearest_stockpile_source_item(
+    resource_type: ResourceType,
+    item_owner: Option<Entity>,
+    stock_pos: Vec2,
+    queries: &crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
+    shadow: &ReservationShadow,
+) -> Option<(Entity, Vec2)> {
+    queries
+        .free_resource_items
+        .iter()
+        .filter(|(_, _, visibility, res_item)| {
+            **visibility != Visibility::Hidden && res_item.0 == resource_type
+        })
+        .filter(|(entity, _, _, _)| source_not_reserved(*entity, queries, shadow))
+        .filter(|(entity, _, _, _)| {
+            let belongs = queries.designation.belongs.get(*entity).ok().map(|b| b.0);
+            item_owner == belongs
+        })
+        .min_by(|(_, t1, _, _), (_, t2, _, _)| {
+            let d1 = t1.translation.truncate().distance_squared(stock_pos);
+            let d2 = t2.translation.truncate().distance_squared(stock_pos);
+            d1.partial_cmp(&d2).unwrap_or(std::cmp::Ordering::Equal)
+        })
+        .map(|(e, t, _, _)| (e, t.translation.truncate()))
+}
+
 fn find_nearest_blueprint_source_item(
     resource_type: ResourceType,
     bp_pos: Vec2,
@@ -183,6 +209,34 @@ pub(super) fn assign_haul(
             }
             issue_haul_to_blueprint(blueprint, task_pos, already_commanded, ctx, queries, shadow);
         }
+        return true;
+    }
+
+    if let Some((stockpile, resource_type, item_owner)) =
+        resolve_haul_to_stockpile_inputs(ctx.task_entity, queries)
+    {
+        let Some((source_item, source_pos)) = find_nearest_stockpile_source_item(
+            resource_type,
+            item_owner,
+            task_pos,
+            queries,
+            shadow,
+        ) else {
+            debug!(
+                "ASSIGN: Stockpile request {:?} has no available {:?} source",
+                ctx.task_entity, resource_type
+            );
+            return false;
+        };
+        issue_haul_to_stockpile_with_source(
+            source_item,
+            stockpile,
+            source_pos,
+            already_commanded,
+            ctx,
+            queries,
+            shadow,
+        );
         return true;
     }
 

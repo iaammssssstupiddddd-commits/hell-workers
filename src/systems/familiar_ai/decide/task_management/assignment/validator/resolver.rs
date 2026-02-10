@@ -2,6 +2,21 @@ use crate::systems::logistics::transport_request::TransportRequestKind;
 use crate::systems::logistics::ResourceType;
 use bevy::prelude::*;
 
+pub fn resolve_haul_to_stockpile_inputs(
+    task_entity: Entity,
+    queries: &crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
+) -> Option<(Entity, ResourceType, Option<Entity>)> {
+    let req = queries.transport_requests.get(task_entity).ok()?;
+    if !matches!(req.kind, TransportRequestKind::DepositToStockpile) {
+        return None;
+    }
+
+    let stockpile = req.anchor;
+    let resource_type = req.resource_type;
+    let item_owner = queries.designation.belongs.get(stockpile).ok().map(|b| b.0);
+    Some((stockpile, resource_type, item_owner))
+}
+
 pub fn resolve_haul_to_blueprint_inputs(
     task_entity: Entity,
     queries: &crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,

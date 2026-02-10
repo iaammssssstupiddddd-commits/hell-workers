@@ -238,7 +238,6 @@ pub fn sync_reservations_system(
     time: Res<Time>,
     mut sync_timer: ResMut<ReservationSyncTimer>,
     q_souls: Query<&AssignedTask>,
-    // まだ割り当てられていない（TaskWorkers がない）タスク候補を汎用的にスキャン
     q_pending_tasks: Query<
         (
             &Designation,
@@ -246,6 +245,7 @@ pub fn sync_reservations_system(
             Option<&TargetBlueprint>,
             Option<&BelongsTo>,
             Option<&ResourceItem>,
+            Option<&crate::systems::logistics::transport_request::TransportRequest>,
         ),
         Without<TaskWorkers>,
     >,
@@ -263,17 +263,22 @@ pub fn sync_reservations_system(
 
     // Designation（タスク割り当て待ち）のアイテムも予約としてカウント
     // Without<TaskWorkers> により、既に割り当て済みのものは除外（AssignedTask 側でカウント）
-    for (designation, target_mixer, target_blueprint, belongs_to, resource_item) in
+    for (designation, target_mixer, target_blueprint, belongs_to, resource_item, transport_req) in
         q_pending_tasks.iter()
     {
         match designation.work_type {
             WorkType::Haul => {
-                // ブループリント向け運搬
                 if let Some(blueprint) = target_blueprint {
                     *dest_res.entry(blueprint.0).or_insert(0) += 1;
                 }
-                // 通常のStockpile向けHaulは、どのStockpileか不明のためカウントしない
-                // （task_area_auto_haul は Without<Designation> でフィルタしているので問題なし）
+                if let Some(req) = transport_req {
+                    if matches!(
+                        req.kind,
+                        crate::systems::logistics::transport_request::TransportRequestKind::DepositToStockpile
+                    ) {
+                        *dest_res.entry(req.anchor).or_insert(0) += 1;
+                    }
+                }
             }
             WorkType::HaulToMixer => {
                 // 固体原料（Sand/Rock）のミキサー向け運搬

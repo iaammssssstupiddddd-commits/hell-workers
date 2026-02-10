@@ -129,9 +129,11 @@ Hell-Workers における資源の備蓄、運搬、および管理の仕組み�
 | :--- | :--- | :--- | :--- |
 | `blueprint_auto_haul` | **request エンティティ** | DeliverToBlueprint | Blueprint |
 | `mud_mixer_auto_haul`（固体） | **request エンティティ** | DeliverToMixerSolid | Mixer |
-| `task_area_auto_haul` | アイテム直接（M4 で request 化予定） | DepositToStockpile | Stockpile |
+| `task_area_auto_haul` | **request エンティティ** | DepositToStockpile | Stockpile |
 | `bucket_auto_haul` | アイテム直接 | ReturnBucket | Stockpile |
 | `mud_mixer_auto_haul`（水） | アイテム直接 | DeliverWaterToMixer | Mixer |
+
+**M4 TaskArea request 化（完了）**: resource_type 確定済みストックパイルについて、request エンティティを発行。バケツは `bucket_auto_haul` 専用のため除外。
 
 **Blueprint / Mixer 固体**: request エンティティをアンカー位置に生成し、割り当て時にソースを遅延解決。`TransportRequestSet::Maintain` でアンカー消失時の cleanup を実施。
 
