@@ -52,8 +52,11 @@ pub fn handle_haul_to_blueprint_task(
             if let Ok((item_transform, _, _, _, des_opt, stored_in_opt)) =
                 q_targets.get(item_entity)
             {
-                // 指示がキャンセルされていないか確認
-                if cancel_task_if_designation_missing(des_opt, ctx.task, ctx.path) {
+                // M3: request 方式ではアイテムに Designation を付けないため、
+                // des_opt が None でもキャンセルしない。従来のアイテム方式の場合のみ確認。
+                if des_opt.is_some()
+                    && cancel_task_if_designation_missing(des_opt, ctx.task, ctx.path)
+                {
                     info!(
                         "HAUL_TO_BP: Cancelled for {:?} - Designation missing",
                         ctx.soul_entity

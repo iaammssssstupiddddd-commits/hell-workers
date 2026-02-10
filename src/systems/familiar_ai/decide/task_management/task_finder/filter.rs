@@ -1,29 +1,38 @@
 use crate::relationships::ManagedTasks;
 use crate::systems::command::TaskArea;
 use crate::systems::jobs::WorkType;
-use crate::systems::spatial::DesignationSpatialGrid;
+use crate::systems::spatial::{DesignationSpatialGrid, TransportRequestSpatialGrid};
 use crate::world::map::WorldMap;
 use crate::world::pathfinding::{self, PathfindingContext};
 use bevy::prelude::*;
+use std::collections::HashSet;
 
+/// タスク候補エンティティを収集する。
+///
+/// 計画: TransportRequestSpatialGrid を主に参照し、DesignationSpatialGrid と統合して
+/// 「自分の TaskArea 内の request + 自分の ManagedRequests」を返す。
 pub(super) fn collect_candidate_entities(
     task_area_opt: Option<&TaskArea>,
     managed_tasks: &ManagedTasks,
     designation_grid: &DesignationSpatialGrid,
+    transport_request_grid: &TransportRequestSpatialGrid,
 ) -> Vec<Entity> {
+    let mut seen = HashSet::new();
+
     if let Some(area) = task_area_opt {
-        let mut ents = designation_grid.get_in_area(area.min, area.max);
-
-        for &managed_entity in managed_tasks.iter() {
-            if !ents.contains(&managed_entity) {
-                ents.push(managed_entity);
-            }
+        for &e in designation_grid.get_in_area(area.min, area.max).iter() {
+            seen.insert(e);
         }
-
-        ents
-    } else {
-        managed_tasks.iter().copied().collect::<Vec<_>>()
+        for &e in transport_request_grid.get_in_area(area.min, area.max).iter() {
+            seen.insert(e);
+        }
     }
+
+    for &managed_entity in managed_tasks.iter() {
+        seen.insert(managed_entity);
+    }
+
+    seen.into_iter().collect()
 }
 
 pub(super) fn candidate_snapshot(

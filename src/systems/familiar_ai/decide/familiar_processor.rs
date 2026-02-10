@@ -10,7 +10,7 @@ use crate::systems::command::TaskArea;
 use crate::systems::familiar_ai::FamiliarSoulQuery;
 use crate::systems::familiar_ai::decide::task_management::ReservationShadow;
 use crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries;
-use crate::systems::spatial::{DesignationSpatialGrid, SpatialGrid};
+use crate::systems::spatial::{DesignationSpatialGrid, SpatialGrid, TransportRequestSpatialGrid};
 use bevy::prelude::*;
 
 use super::recruitment::RecruitmentManager;
@@ -61,6 +61,7 @@ pub struct FamiliarDelegationContext<'a, 'w, 's> {
     pub q_souls: &'a mut FamiliarSoulQuery<'w, 's>,
     pub task_queries: &'a mut TaskAssignmentQueries<'w, 's>,
     pub designation_grid: &'a DesignationSpatialGrid,
+    pub transport_request_grid: &'a TransportRequestSpatialGrid,
     pub managed_tasks: &'a ManagedTasks,
     pub world_map: &'a WorldMap,
     pub pf_context: &'a mut PathfindingContext,
@@ -240,8 +241,8 @@ pub fn process_task_delegation_and_movement(ctx: &mut FamiliarDelegationContext<
             ctx.task_queries,
             ctx.q_souls,
             ctx.designation_grid,
+            ctx.transport_request_grid,
             ctx.managed_tasks,
-            // haul_cache removed
             ctx.world_map,
             ctx.pf_context,
             ctx.reservation_shadow,

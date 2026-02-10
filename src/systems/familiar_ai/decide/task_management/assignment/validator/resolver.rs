@@ -2,6 +2,29 @@ use crate::systems::logistics::transport_request::TransportRequestKind;
 use crate::systems::logistics::ResourceType;
 use bevy::prelude::*;
 
+pub fn resolve_haul_to_blueprint_inputs(
+    task_entity: Entity,
+    queries: &crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
+) -> Option<(Entity, ResourceType)> {
+    let blueprint = queries
+        .storage
+        .target_blueprints
+        .get(task_entity)
+        .ok()
+        .map(|tb| tb.0)?;
+
+    // request タスクは resource_type を TransportRequest から取得
+    if let Ok(req) = queries.transport_requests.get(task_entity) {
+        if matches!(req.kind, TransportRequestKind::DeliverToBlueprint) {
+            return Some((blueprint, req.resource_type));
+        }
+    }
+
+    // 従来タスクはアイテム実体から取得
+    let item_type = queries.items.get(task_entity).ok().map(|(it, _)| it.0)?;
+    Some((blueprint, item_type))
+}
+
 pub fn resolve_haul_to_mixer_inputs(
     task_entity: Entity,
     queries: &crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,

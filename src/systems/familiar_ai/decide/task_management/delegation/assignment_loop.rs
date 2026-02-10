@@ -3,7 +3,7 @@ use crate::systems::command::TaskArea;
 use crate::systems::familiar_ai::decide::task_management::{
     AssignTaskContext, ReservationShadow, assign_task_to_worker, find_unassigned_task_in_area,
 };
-use crate::systems::spatial::DesignationSpatialGrid;
+use crate::systems::spatial::{DesignationSpatialGrid, TransportRequestSpatialGrid};
 use crate::world::map::WorldMap;
 use crate::world::pathfinding::PathfindingContext;
 use bevy::prelude::*;
@@ -19,6 +19,7 @@ pub(super) fn try_assign_for_workers(
     queries: &mut crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
     q_souls: &mut FamiliarSoulQuery,
     designation_grid: &DesignationSpatialGrid,
+    transport_request_grid: &TransportRequestSpatialGrid,
     managed_tasks: &ManagedTasks,
     world_map: &WorldMap,
     pf_context: &mut PathfindingContext,
@@ -32,6 +33,7 @@ pub(super) fn try_assign_for_workers(
             task_area_opt,
             queries,
             designation_grid,
+            transport_request_grid,
             managed_tasks,
             &queries.storage.target_blueprints,
             world_map,

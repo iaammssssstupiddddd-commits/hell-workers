@@ -8,7 +8,7 @@ mod score;
 use crate::relationships::ManagedTasks;
 use crate::systems::command::TaskArea;
 use crate::systems::jobs::{TargetBlueprint, WorkType};
-use crate::systems::spatial::DesignationSpatialGrid;
+use crate::systems::spatial::{DesignationSpatialGrid, TransportRequestSpatialGrid};
 use crate::world::map::WorldMap;
 use crate::world::pathfinding::PathfindingContext;
 use bevy::prelude::*;
@@ -25,12 +25,18 @@ pub fn find_unassigned_task_in_area(
     task_area_opt: Option<&TaskArea>,
     queries: &crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
     designation_grid: &DesignationSpatialGrid,
+    transport_request_grid: &TransportRequestSpatialGrid,
     managed_tasks: &ManagedTasks,
     q_target_blueprints: &Query<&TargetBlueprint>,
     world_map: &WorldMap,
     pf_context: &mut PathfindingContext,
 ) -> Vec<Entity> {
-    let candidates = collect_candidate_entities(task_area_opt, managed_tasks, designation_grid);
+    let candidates = collect_candidate_entities(
+        task_area_opt,
+        managed_tasks,
+        designation_grid,
+        transport_request_grid,
+    );
 
     let mut valid_candidates: Vec<(Entity, i32, f32)> = candidates
         .into_iter()

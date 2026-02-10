@@ -111,19 +111,29 @@ Hell-Workers における資源の備蓄、運搬、および管理の仕組み�
 
 `Loading` 以降のフェーズではアイテムは既に手押し車に `LoadedIn` されているため、アイテムソースの予約は不要です。
 
-### 7.5. TransportRequest マーカー
+### 7.5. TransportRequest 基盤（計画: グローバル運搬 Request 化）
 
-全ての auto_haul システムは、`Designation` の発行と同時に対象アイテム（またはリクエストエンティティ）に `TransportRequest` コンポーネントを挿入します。これにより `TransportRequestSpatialGrid` に自動登録され、将来の統一輸送システムで利用可能になります。
+**観測基盤（M0）**:
+- `TransportRequestMetrics`: 種別・状態ごとの request 数を5秒間隔でデバッグログ出力
+- `transport_request_anchor_cleanup_system`: アンカー消失時に request を close（standalone は despawn、アイテム付きは TransportRequest/Designation を remove）
 
-| auto_haul システム | TransportRequestKind | anchor |
-| :--- | :--- | :--- |
-| `task_area_auto_haul` | `DepositToStockpile` | 目的地 Stockpile |
-| `bucket_auto_haul` | `ReturnBucket` | 目的地 Stockpile |
-| `blueprint_auto_haul` | `DeliverToBlueprint` | 目的地 Blueprint |
-| `mud_mixer_auto_haul`（固体） | `DeliverToMixerSolid` | 目的地 Mixer |
-| `mud_mixer_auto_haul`（水） | `DeliverWaterToMixer` | 目的地 Mixer |
+**タスク検索**:
+- `task_finder` は `DesignationSpatialGrid` と `TransportRequestSpatialGrid` の両方から候補を収集し、重複を除外
 
-**注意**: 現時点では `TransportRequest` は追加マーカーであり、タスク発見・割り当て・実行は従来の `Designation` 経由で行われます。タスク完了後の `TransportRequest` クリーンアップは将来の `TransportRequestSet::Maintain` フェーズで実装予定です。
+**M3 Blueprint 搬入 request 化（完了）**:
+- `blueprint_auto_haul_system` は Blueprint 単位で request エンティティをアンカー位置に生成
+- アイテムへの直接 Designation 発行を廃止
+- 割り当て時に `find_nearest_blueprint_source_item` で資材ソースを遅延解決
+
+| auto_haul システム | 方式 | TransportRequestKind | anchor |
+| :--- | :--- | :--- | :--- |
+| `blueprint_auto_haul` | **request エンティティ** | DeliverToBlueprint | Blueprint |
+| `mud_mixer_auto_haul`（固体） | **request エンティティ** | DeliverToMixerSolid | Mixer |
+| `task_area_auto_haul` | アイテム直接（M4 で request 化予定） | DepositToStockpile | Stockpile |
+| `bucket_auto_haul` | アイテム直接 | ReturnBucket | Stockpile |
+| `mud_mixer_auto_haul`（水） | アイテム直接 | DeliverWaterToMixer | Mixer |
+
+**Blueprint / Mixer 固体**: request エンティティをアンカー位置に生成し、割り当て時にソースを遅延解決。`TransportRequestSet::Maintain` でアンカー消失時の cleanup を実施。
 
 ### 7.6. 拡張性
 新しい自動発行システムを追加する場合:

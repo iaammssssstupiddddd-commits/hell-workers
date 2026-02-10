@@ -1,3 +1,7 @@
+use super::{
+    transport_request_anchor_cleanup_system, TransportRequestMetrics,
+    transport_request_metrics_system,
+};
 use crate::systems::GameSystemSet;
 use crate::systems::soul_ai::scheduling::{FamiliarAiSystemSet, SoulAiSystemSet};
 use bevy::prelude::*;
@@ -19,6 +23,8 @@ pub struct TransportRequestPlugin;
 
 impl Plugin for TransportRequestPlugin {
     fn build(&self, app: &mut App) {
+        app.init_resource::<TransportRequestMetrics>();
+
         // Perceive → Decide → Execute: FamiliarAi::Update の後、FamiliarAi::Decide の前
         app.configure_sets(
             Update,
@@ -49,20 +55,17 @@ impl Plugin for TransportRequestPlugin {
                 .before(FamiliarAiSystemSet::Decide),
         );
 
-        // プレースホルダーシステム（各セットに1つずつ）
         app.add_systems(
             Update,
             (
-                transport_request_perceive_placeholder.in_set(TransportRequestSet::Perceive),
+                transport_request_metrics_system.in_set(TransportRequestSet::Perceive),
                 transport_request_decide_placeholder.in_set(TransportRequestSet::Decide),
                 transport_request_execute_placeholder.in_set(TransportRequestSet::Execute),
-                transport_request_maintain_placeholder.in_set(TransportRequestSet::Maintain),
+                transport_request_anchor_cleanup_system.in_set(TransportRequestSet::Maintain),
             ),
         );
     }
 }
 
-fn transport_request_perceive_placeholder() {}
 fn transport_request_decide_placeholder() {}
 fn transport_request_execute_placeholder() {}
-fn transport_request_maintain_placeholder() {}

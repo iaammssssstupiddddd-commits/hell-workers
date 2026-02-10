@@ -1,59 +1,45 @@
 //! Blueprint auto-haul system
 //!
-//! Automatically creates haul tasks for materials needed by blueprints.
+//! M3: 設計図への資材運搬を request エンティティ（アンカー側）で発行する。
+//! 割り当て時に資材ソースを遅延解決する。
 
 use bevy::prelude::*;
 
-use crate::constants::TILE_SIZE;
 use crate::entities::familiar::{ActiveCommand, FamiliarCommand};
-use crate::events::{DesignationOp, DesignationRequest};
 use crate::relationships::TaskWorkers;
 use crate::systems::command::TaskArea;
-use crate::systems::jobs::{Blueprint, Designation, WorkType};
+use crate::systems::jobs::{Blueprint, Designation, Priority, TaskSlots, TargetBlueprint, WorkType};
 use crate::systems::logistics::transport_request::{
-    TransportPriority, TransportRequest, TransportRequestKind,
+    TransportDemand, TransportPolicy, TransportPriority, TransportRequest, TransportRequestKind,
+    TransportRequestState,
 };
-use crate::systems::logistics::{ResourceItem, ResourceType};
-use crate::systems::soul_ai::decide::work::auto_haul::ItemReservations;
+use crate::systems::logistics::ResourceType;
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
 use crate::systems::soul_ai::helpers::query_types::AutoHaulAssignedTaskQuery;
-use crate::systems::spatial::{BlueprintSpatialGrid, ResourceSpatialGrid, SpatialGridOps};
-
-/// 段階的検索の半径（タイル単位）
-const SEARCH_RADII: [f32; 4] = [20.0, 50.0, 100.0, 200.0];
+use crate::systems::spatial::BlueprintSpatialGrid;
 
 /// 設計図への自動資材運搬タスク生成システム
+///
+/// Blueprint 単位の demand を request エンティティとして発行し、
+/// 割り当て時（assign_haul）に資材ソースを遅延解決する。
 pub fn blueprint_auto_haul_system(
     mut commands: Commands,
-    mut designation_writer: MessageWriter<DesignationRequest>,
-    mut item_reservations: ResMut<ItemReservations>,
-    resource_grid: Res<ResourceSpatialGrid>,
     blueprint_grid: Res<BlueprintSpatialGrid>,
     q_familiars: Query<(Entity, &ActiveCommand, &TaskArea)>,
     q_blueprints: Query<(Entity, &Transform, &Blueprint, Option<&TaskWorkers>)>,
-    q_resources: Query<
-        (
-            Entity,
-            &Transform,
-            &Visibility,
-            &ResourceItem,
-            Option<&crate::relationships::StoredIn>,
-        ),
-        (Without<Designation>, Without<TaskWorkers>),
-    >,
-    q_stockpiles: Query<&Transform, With<crate::systems::logistics::Stockpile>>,
     q_souls: AutoHaulAssignedTaskQuery,
-    q_all_resources: Query<&ResourceItem>,
-    q_reserved_items: Query<
-        (&ResourceItem, &crate::systems::jobs::TargetBlueprint),
-        With<Designation>,
-    >,
+    q_all_resources: Query<&crate::systems::logistics::ResourceItem>,
+    q_bp_requests: Query<(
+        Entity,
+        &TargetBlueprint,
+        &TransportRequest,
+        Option<&TaskWorkers>,
+    )>,
 ) {
-    // 1. 集計フェーズ: 各設計図への「運搬中」および「予約済み」の数を集計
+    // 1. 集計: 各設計図への「運搬中」の数
     // (BlueprintEntity, ResourceType) -> Count
     let mut in_flight = std::collections::HashMap::<(Entity, ResourceType), usize>::new();
 
-    // 運搬中 (ソウルが持っている、または向かっている)
     for task in q_souls.iter() {
         let task: &AssignedTask = task;
         if let AssignedTask::HaulToBlueprint(data) = task {
@@ -65,185 +51,168 @@ pub fn blueprint_auto_haul_system(
         }
     }
 
-    // 予約済み (Designation はあるが、まだソウルに割り当てられていないアイテム)
-    for (res_item, target_bp) in q_reserved_items.iter() {
-        *in_flight.entry((target_bp.0, res_item.0)).or_insert(0) += 1;
+    // request エンティティの TaskWorkers も inflight にカウント
+    for (_, target_bp, req, workers_opt) in q_bp_requests.iter() {
+        if matches!(req.kind, TransportRequestKind::DeliverToBlueprint) {
+            let count = workers_opt.map(|w| w.len()).unwrap_or(0);
+            if count > 0 {
+                *in_flight
+                    .entry((target_bp.0, req.resource_type))
+                    .or_insert(0) += count;
+            }
+        }
     }
 
-    let mut already_assigned_this_frame = std::collections::HashSet::new();
+    let active_familiars: Vec<(Entity, TaskArea)> = q_familiars
+        .iter()
+        .filter(|(_, active_command, _)| {
+            !matches!(active_command.command, FamiliarCommand::Idle)
+        })
+        .map(|(entity, _, area)| (entity, area.clone()))
+        .collect();
 
-    for (fam_entity, active_command, task_area) in q_familiars.iter() {
-        let (fam_entity, active_command, task_area): (Entity, &ActiveCommand, &TaskArea) =
-            (fam_entity, active_command, task_area);
-        if matches!(active_command.command, FamiliarCommand::Idle) {
+    // 2. 各 Blueprint の不足分を計算し、desired_requests に格納
+    let mut desired_requests =
+        std::collections::HashMap::<(Entity, ResourceType), (Entity, u32, Vec2)>::new();
+
+    let mut blueprints_to_process = std::collections::HashSet::new();
+    for (_, area) in &active_familiars {
+        for &bp_entity in blueprint_grid.get_in_area(area.min, area.max).iter() {
+            blueprints_to_process.insert(bp_entity);
+        }
+    }
+
+    for bp_entity in blueprints_to_process {
+        let Ok((_, bp_transform, blueprint, workers_opt)) = q_blueprints.get(bp_entity) else {
+            continue;
+        };
+        let bp_pos = bp_transform.translation.truncate();
+
+        if workers_opt.map(|w| w.len()).unwrap_or(0) > 0 {
+            continue;
+        }
+        if blueprint.materials_complete() {
             continue;
         }
 
-        // 最適化: タスクエリア内のブループリントのみを取得
-        let blueprints_in_area = blueprint_grid.get_in_area(task_area.min, task_area.max);
+        let Some((fam_entity, _)) = find_owner_familiar(bp_pos, &active_familiars) else {
+            continue;
+        };
 
-        for bp_entity in blueprints_in_area {
-            // クエリで詳細データを取得
-            let Ok((_, bp_transform, blueprint, workers_opt)) = q_blueprints.get(bp_entity) else {
-                continue;
-            };
-            let bp_pos = bp_transform.translation.truncate();
+        for (resource_type, &required) in &blueprint.required_materials {
+            let delivered = *blueprint.delivered_materials.get(resource_type).unwrap_or(&0);
+            let inflight_count = *in_flight.get(&(bp_entity, *resource_type)).unwrap_or(&0);
 
-            // 既に作業員が割り当てられている場合はスキップ（建築中）
-            if workers_opt.map(|w| w.len()).unwrap_or(0) > 0 {
+            if delivered + inflight_count as u32 >= required {
                 continue;
             }
 
-            // 資材が揃っている場合はスキップ（建築タスクへ遷移）
-            if blueprint.materials_complete() {
-                continue;
-            }
-
-            // 必要な資材タイプを探す
-            for (resource_type, &required) in &blueprint.required_materials {
-                let delivered = *blueprint
-                    .delivered_materials
-                    .get(resource_type)
-                    .unwrap_or(&0);
-                let inflight_count = *in_flight.get(&(bp_entity, *resource_type)).unwrap_or(&0);
-
-                // 配達済み + 運搬中 + 予約済み >= 必要数 ならこれ以上探さない
-                if delivered + inflight_count as u32 >= required {
-                    continue;
-                }
-
-                // 段階的に検索範囲を広げて資材を探す
-                let matching_resource = find_resource_progressively(
-                    bp_pos,
-                    *resource_type,
-                    task_area,
-                    &resource_grid,
-                    &q_resources,
-                    &q_stockpiles,
-                    &already_assigned_this_frame,
-                    &item_reservations,
-                );
-
-                if let Some(item_entity) = matching_resource {
-                    already_assigned_this_frame.insert(item_entity);
-                    item_reservations.0.insert(item_entity);
-                    // 次の集計に備えてカウントアップ（同フレーム内の別使い魔が重複させないため）
-                    *in_flight.entry((bp_entity, *resource_type)).or_insert(0) += 1;
-
-                    // Designation を付与
-                    designation_writer.write(DesignationRequest {
-                        entity: item_entity,
-                        operation: DesignationOp::Issue {
-                            work_type: WorkType::Haul,
-                            issued_by: fam_entity,
-                            task_slots: 1,
-                            priority: Some(0),
-                            target_blueprint: Some(bp_entity),
-                            target_mixer: None,
-                            reserved_for_task: false,
-                        },
-                    });
-                    commands.entity(item_entity).insert(TransportRequest {
-                        kind: TransportRequestKind::DeliverToBlueprint,
-                        anchor: bp_entity,
-                        resource_type: *resource_type,
-                        issued_by: fam_entity,
-                        priority: TransportPriority::Normal,
-                    });
-
-                    info!(
-                        "AUTO_HAUL_BP: Assigned {:?} for bp {:?} (Total expected: {})",
-                        resource_type,
-                        bp_entity,
-                        delivered + inflight_count as u32 + 1
-                    );
-
-                    // 1つ割り当てたら、この Blueprint のこのリソースについては一旦終了して次のリソースまたは次の設計図へ
-                }
-            }
+            let needed = required.saturating_sub(delivered + inflight_count as u32);
+            desired_requests.insert(
+                (bp_entity, *resource_type),
+                (fam_entity, needed.max(1), bp_pos),
+            );
         }
+    }
+
+    // 3. request エンティティの upsert / cleanup
+    let mut seen_existing_keys = std::collections::HashSet::<(Entity, ResourceType)>::new();
+
+    for (request_entity, target_bp, request, workers_opt) in q_bp_requests.iter() {
+        if !matches!(request.kind, TransportRequestKind::DeliverToBlueprint) {
+            continue;
+        }
+        let key = (target_bp.0, request.resource_type);
+        let workers = workers_opt.map(|w| w.len()).unwrap_or(0);
+
+        if !seen_existing_keys.insert(key) {
+            if workers == 0 {
+                commands.entity(request_entity).despawn();
+            }
+            continue;
+        }
+
+        if let Some((issued_by, slots, bp_pos)) = desired_requests.get(&key) {
+            commands.entity(request_entity).insert((
+                Transform::from_xyz(bp_pos.x, bp_pos.y, 0.0),
+                Visibility::Hidden,
+                Designation {
+                    work_type: WorkType::Haul,
+                },
+                crate::relationships::ManagedBy(*issued_by),
+                TaskSlots::new(*slots),
+                Priority(0),
+                TargetBlueprint(key.0),
+                TransportRequest {
+                    kind: TransportRequestKind::DeliverToBlueprint,
+                    anchor: key.0,
+                    resource_type: key.1,
+                    issued_by: *issued_by,
+                    priority: TransportPriority::Normal,
+                },
+                TransportDemand {
+                    desired_slots: *slots,
+                    inflight: 0,
+                },
+                TransportRequestState::Pending,
+                TransportPolicy::default(),
+            ));
+            continue;
+        }
+
+        if workers == 0 {
+            commands
+                .entity(request_entity)
+                .remove::<Designation>()
+                .remove::<TaskSlots>()
+                .remove::<Priority>();
+        }
+    }
+
+    for (key, (issued_by, slots, bp_pos)) in desired_requests {
+        if seen_existing_keys.contains(&key) {
+            continue;
+        }
+
+        commands.spawn((
+            Name::new("TransportRequest::DeliverToBlueprint"),
+            Transform::from_xyz(bp_pos.x, bp_pos.y, 0.0),
+            Visibility::Hidden,
+            Designation {
+                work_type: WorkType::Haul,
+            },
+            crate::relationships::ManagedBy(issued_by),
+            TaskSlots::new(slots),
+            Priority(0),
+            TargetBlueprint(key.0),
+            TransportRequest {
+                kind: TransportRequestKind::DeliverToBlueprint,
+                anchor: key.0,
+                resource_type: key.1,
+                issued_by,
+                priority: TransportPriority::Normal,
+            },
+            TransportDemand {
+                desired_slots: slots,
+                inflight: 0,
+            },
+            TransportRequestState::Pending,
+            TransportPolicy::default(),
+        ));
     }
 }
 
-/// 設計図の位置から段階的に検索範囲を広げて資材を探す
-///
-/// 1. まず近い範囲から検索
-/// 2. 見つからなければ範囲を広げる
-/// 3. TaskArea内はストックパイルチェックを適用
-/// 4. TaskArea外の資材も検索対象に含める（ただしストックパイル外の資材のみ）
-fn find_resource_progressively(
+fn find_owner_familiar(
     bp_pos: Vec2,
-    resource_type: ResourceType,
-    task_area: &TaskArea,
-    resource_grid: &ResourceSpatialGrid,
-    q_resources: &Query<
-        (
-            Entity,
-            &Transform,
-            &Visibility,
-            &ResourceItem,
-            Option<&crate::relationships::StoredIn>,
-        ),
-        (Without<Designation>, Without<TaskWorkers>),
-    >,
-    q_stockpiles: &Query<&Transform, With<crate::systems::logistics::Stockpile>>,
-    already_assigned: &std::collections::HashSet<Entity>,
-    item_reservations: &ItemReservations,
-) -> Option<Entity> {
-    // 段階的に検索範囲を広げる
-    for &radius_tiles in &SEARCH_RADII {
-        let search_radius = TILE_SIZE * radius_tiles;
-        let nearby_resources = resource_grid.get_nearby_in_radius(bp_pos, search_radius);
-
-        // 距離でソートして近いものから優先
-        let mut candidates: Vec<(Entity, f32)> = nearby_resources
-            .iter()
-            .filter(|&&entity| !already_assigned.contains(&entity))
-            .filter(|&&entity| !item_reservations.0.contains(&entity))
-            .filter_map(|&entity| {
-                let Ok((_, transform, visibility, res_item, stored_in_opt)) =
-                    q_resources.get(entity)
-                else {
-                    return None;
-                };
-
-                if *visibility == Visibility::Hidden {
-                    return None;
-                }
-                if res_item.0 != resource_type {
-                    return None;
-                }
-
-                let item_pos = transform.translation.truncate();
-
-                // ストックパイル内にある場合のチェック
-                if let Some(crate::relationships::StoredIn(stock_entity)) = stored_in_opt {
-                    if let Ok(stock_transform) = q_stockpiles.get(*stock_entity) {
-                        let stock_pos = stock_transform.translation.truncate();
-                        // ストックパイルがTaskArea外なら除外（他の使い魔の管轄）
-                        if !task_area.contains(stock_pos) {
-                            return None;
-                        }
-                    } else {
-                        return None;
-                    }
-                }
-                // ストックパイル外の資材は位置に関わらず利用可能
-
-                let dist_sq = item_pos.distance_squared(bp_pos);
-                Some((entity, dist_sq))
-            })
-            .collect();
-
-        // 距離でソート
-        candidates
-            .sort_by(|(_, d1), (_, d2)| d1.partial_cmp(d2).unwrap_or(std::cmp::Ordering::Equal));
-
-        // 最も近い資材を返す
-        if let Some((entity, _)) = candidates.first() {
-            return Some(*entity);
-        }
-    }
-
-    None
+    familiars: &[(Entity, TaskArea)],
+) -> Option<(Entity, &TaskArea)> {
+    familiars
+        .iter()
+        .filter(|(_, area)| area.contains(bp_pos))
+        .min_by(|(_, area1), (_, area2)| {
+            let d1 = area1.center().distance_squared(bp_pos);
+            let d2 = area2.center().distance_squared(bp_pos);
+            d1.partial_cmp(&d2).unwrap_or(std::cmp::Ordering::Equal)
+        })
+        .map(|(entity, area)| (*entity, area))
 }
