@@ -137,6 +137,8 @@ Hell-Workers における資源の備蓄、運搬、および管理の仕組み�
 
 **M5 水搬送 request 化（完了）**: Mixer への水供給を request エンティティ化。`mud_mixer_auto_haul_system` が Mixer 位置に `DeliverWaterToMixer` request を生成。割り当て時に `find_tank_bucket_for_water_mixer` でタンク・バケツを遅延解決。
 
+**M6 手押し車 request 化（完了）**: `DepositToStockpile` request の割り当て時に、`resolve_wheelbarrow_batch_for_stockpile` で手押し車＋積載可能アイテムのバッチを遅延解決。batch 生成・容量制約（`WHEELBARROW_MIN_BATCH_SIZE`、`WHEELBARROW_CAPACITY`、ストックパイル残容量）を request resolver に集約。
+
 **Blueprint / Mixer 固体・水**: request エンティティをアンカー位置に生成し、割り当て時にソースを遅延解決。`TransportRequestSet::Maintain` でアンカー消失時の cleanup を実施。
 
 ### 7.6. 拡張性
@@ -159,9 +161,10 @@ Hell-Workers における資源の備蓄、運搬、および管理の仕組み�
   - `LoadedIn(Entity)` / `LoadedItems(Vec)` — アイテム → 手押し車の積載関係
   - `ParkedAt(Entity)` / `ParkedWheelbarrows(Vec)` — 手押し車 → 駐車エリア
 
-### 4.2. 発行条件
+### 4.2. 発行条件（M6: request resolver で遅延解決）
 
-- ストックパイル間で移動が必要なアイテムが `WHEELBARROW_MIN_BATCH_SIZE` 個以上
+- `DepositToStockpile` request の割り当て時に `resolve_wheelbarrow_batch_for_stockpile` で判定
+- ストックパイルへ移動が必要な積載可能アイテムが `WHEELBARROW_MIN_BATCH_SIZE` 個以上
 - 駐車エリアに利用可能（未予約）な手押し車がある
 - アイテムの `ResourceType` が `is_loadable() == true`（液体・バケツ・手押し車自体は不可）
 

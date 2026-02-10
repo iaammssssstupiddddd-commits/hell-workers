@@ -10,8 +10,9 @@ use super::super::builders::{
     issue_haul_to_stockpile, issue_haul_to_stockpile_with_source, issue_haul_with_wheelbarrow,
 };
 use super::super::validator::{
-    find_best_stockpile_for_item, resolve_haul_to_blueprint_inputs,
-    resolve_haul_to_mixer_inputs, resolve_haul_to_stockpile_inputs, source_not_reserved,
+    compute_centroid, find_best_stockpile_for_item, resolve_haul_to_blueprint_inputs,
+    resolve_haul_to_mixer_inputs, resolve_haul_to_stockpile_inputs,
+    resolve_wheelbarrow_batch_for_stockpile, source_not_reserved,
 };
 
 pub(super) fn assign_haul_to_mixer(
@@ -215,6 +216,30 @@ pub(super) fn assign_haul(
     if let Some((stockpile, resource_type, item_owner)) =
         resolve_haul_to_stockpile_inputs(ctx.task_entity, queries)
     {
+        // M6: 手押し車バッチを優先（request resolver で遅延解決）
+        if let Some((wb_entity, items)) = resolve_wheelbarrow_batch_for_stockpile(
+            stockpile,
+            resource_type,
+            item_owner,
+            task_pos,
+            queries,
+            shadow,
+        ) {
+            let source_pos = compute_centroid(&items, queries);
+            issue_haul_with_wheelbarrow(
+                wb_entity,
+                source_pos,
+                stockpile,
+                items,
+                task_pos,
+                already_commanded,
+                ctx,
+                queries,
+                shadow,
+            );
+            return true;
+        }
+
         let Some((source_item, source_pos)) = find_nearest_stockpile_source_item(
             resource_type,
             item_owner,
@@ -278,20 +303,18 @@ pub(super) fn assign_haul(
         return false;
     };
 
-    // 手押し車による一括運搬を検討
+    // 手押し車による一括運搬を検討（アイテム直接 Designation 経路）
     if item_type.is_loadable() {
         if let Some(wb_entity) = find_nearest_wheelbarrow(task_pos, queries, shadow) {
             let batch_items =
                 collect_nearby_haulable_items(ctx.task_entity, task_pos, queries, shadow);
 
             if batch_items.len() >= WHEELBARROW_MIN_BATCH_SIZE {
-                // アイテム数を目的地容量と手押し車容量で制限
                 let dest_capacity = remaining_stockpile_capacity(stock_entity, queries, shadow);
                 let max_items = dest_capacity.min(WHEELBARROW_CAPACITY);
                 let items: Vec<Entity> = batch_items.into_iter().take(max_items).collect();
 
                 if items.len() >= WHEELBARROW_MIN_BATCH_SIZE {
-                    // アイテムの重心を積み込み地点として使用
                     let source_pos = compute_centroid(&items, queries);
 
                     issue_haul_with_wheelbarrow(
@@ -422,22 +445,3 @@ fn remaining_stockpile_capacity(
     }
 }
 
-/// アイテム群の位置の重心を計算
-fn compute_centroid(
-    items: &[Entity],
-    queries: &crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
-) -> Vec2 {
-    let mut sum = Vec2::ZERO;
-    let mut count = 0;
-    for &item in items {
-        if let Ok((_, transform, _, _, _, _, _, _)) = queries.designation.designations.get(item) {
-            sum += transform.translation.truncate();
-            count += 1;
-        }
-    }
-    if count > 0 {
-        sum / count as f32
-    } else {
-        Vec2::ZERO
-    }
-}
