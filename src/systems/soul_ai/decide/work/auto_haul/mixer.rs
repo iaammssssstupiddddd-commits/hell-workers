@@ -13,7 +13,11 @@ use crate::relationships::TaskWorkers;
 use crate::systems::command::TaskArea;
 use crate::systems::familiar_ai::perceive::resource_sync::SharedResourceCache;
 use crate::systems::jobs::{
-    Designation, MixerHaulRequest, MudMixerStorage, Priority, TargetMixer, TaskSlots, WorkType,
+    Designation, MudMixerStorage, Priority, TargetMixer, TaskSlots, WorkType,
+};
+use crate::systems::logistics::transport_request::{
+    TransportDemand, TransportPolicy, TransportPriority, TransportRequest, TransportRequestKind,
+    TransportRequestState,
 };
 use crate::systems::logistics::{ReservedForTask, ResourceItem, ResourceType, Stockpile};
 use crate::systems::soul_ai::decide::work::auto_haul::ItemReservations;
@@ -30,7 +34,7 @@ pub fn mud_mixer_auto_haul_system(
     q_mixer_requests: Query<(
         Entity,
         &TargetMixer,
-        &MixerHaulRequest,
+        &TransportRequest,
         Option<&Designation>,
         Option<&TaskWorkers>,
     )>,
@@ -279,6 +283,13 @@ pub fn mud_mixer_auto_haul_system(
                             reserved_for_task: true,
                         },
                     });
+                    commands.entity(*bucket_entity).insert(TransportRequest {
+                        kind: TransportRequestKind::DeliverWaterToMixer,
+                        anchor: mixer_entity,
+                        resource_type: ResourceType::Water,
+                        issued_by: fam_entity,
+                        priority: TransportPriority::Normal,
+                    });
                     item_reservations.0.insert(*bucket_entity);
                     *mixer_reservation_delta
                         .entry((mixer_entity, ResourceType::Water))
@@ -306,6 +317,10 @@ pub fn mud_mixer_auto_haul_system(
 
     for (request_entity, target_mixer, request, _designation_opt, workers_opt) in q_mixer_requests.iter()
     {
+        // 固体 request エンティティのみ対象。水バケツ等は除外する。
+        if !matches!(request.kind, TransportRequestKind::DeliverToMixerSolid) {
+            continue;
+        }
         let key = (target_mixer.0, request.resource_type);
         let workers = workers_opt.map(|w| w.len()).unwrap_or(0);
 
@@ -327,9 +342,19 @@ pub fn mud_mixer_auto_haul_system(
                 TaskSlots::new(*slots),
                 Priority(5),
                 TargetMixer(key.0),
-                MixerHaulRequest {
+                TransportRequest {
+                    kind: TransportRequestKind::DeliverToMixerSolid,
+                    anchor: key.0,
                     resource_type: key.1,
+                    issued_by: *issued_by,
+                    priority: TransportPriority::Normal,
                 },
+                TransportDemand {
+                    desired_slots: *slots,
+                    inflight: 0,
+                },
+                TransportRequestState::Pending,
+                TransportPolicy::default(),
             ));
             continue;
         }
@@ -353,7 +378,7 @@ pub fn mud_mixer_auto_haul_system(
         }
 
         commands.spawn((
-            Name::new("MixerHaulRequest"),
+            Name::new("TransportRequest::DeliverToMixerSolid"),
             Transform::from_xyz(mixer_pos.x, mixer_pos.y, 0.0),
             Visibility::Hidden,
             Designation {
@@ -363,9 +388,19 @@ pub fn mud_mixer_auto_haul_system(
             TaskSlots::new(slots),
             Priority(5),
             TargetMixer(key.0),
-            MixerHaulRequest {
+            TransportRequest {
+                kind: TransportRequestKind::DeliverToMixerSolid,
+                anchor: key.0,
                 resource_type: key.1,
+                issued_by,
+                priority: TransportPriority::Normal,
             },
+            TransportDemand {
+                desired_slots: slots,
+                inflight: 0,
+            },
+            TransportRequestState::Pending,
+            TransportPolicy::default(),
         ));
     }
 }

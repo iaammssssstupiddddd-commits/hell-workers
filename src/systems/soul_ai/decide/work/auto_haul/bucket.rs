@@ -10,6 +10,9 @@ use crate::events::{DesignationOp, DesignationRequest};
 use crate::relationships::TaskWorkers;
 use crate::systems::command::TaskArea;
 use crate::systems::jobs::{Designation, WorkType};
+use crate::systems::logistics::transport_request::{
+    TransportPriority, TransportRequest, TransportRequestKind,
+};
 use crate::systems::logistics::{
     BucketStorage, ReservedForTask, ResourceItem, ResourceType, Stockpile,
 };
@@ -19,6 +22,7 @@ use crate::systems::spatial::{SpatialGridOps, StockpileSpatialGrid};
 /// バケツ専用オートホールシステム
 /// ドロップされたバケツを、BelongsTo で紐付いたタンクのバケツ置き場に運搬する
 pub fn bucket_auto_haul_system(
+    mut commands: Commands,
     mut designation_writer: MessageWriter<DesignationRequest>,
     stockpile_grid: Res<StockpileSpatialGrid>,
     mut item_reservations: ResMut<ItemReservations>,
@@ -141,12 +145,12 @@ pub fn bucket_auto_haul_system(
                 })
                 .map(|(entity, _, _, _, _, _)| entity);
 
-            if let Some(_stockpile_entity) = target_stockpile {
+            if let Some(stockpile_entity) = target_stockpile {
                 already_assigned.insert(bucket_entity);
                 item_reservations.0.insert(bucket_entity);
                 info!(
                     "BUCKET_HAUL: Issuing Haul task for bucket {:?} to stockpile {:?}",
-                    bucket_entity, _stockpile_entity
+                    bucket_entity, stockpile_entity
                 );
                 designation_writer.write(DesignationRequest {
                     entity: bucket_entity,
@@ -159,6 +163,13 @@ pub fn bucket_auto_haul_system(
                         target_mixer: None,
                         reserved_for_task: true,
                     },
+                });
+                commands.entity(bucket_entity).insert(TransportRequest {
+                    kind: TransportRequestKind::ReturnBucket,
+                    anchor: stockpile_entity,
+                    resource_type: res_item.0,
+                    issued_by: fam_entity,
+                    priority: TransportPriority::Normal,
                 });
             } else {
                 warn!(

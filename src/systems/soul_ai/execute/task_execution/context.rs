@@ -134,7 +134,7 @@ pub struct TaskAssignmentQueries<'w, 's> {
 
     // 固有フィールド
     pub items: Query<'w, 's, (&'static ResourceItem, Option<&'static Designation>)>,
-    pub mixer_haul_requests: Query<'w, 's, &'static crate::systems::jobs::MixerHaulRequest>,
+    pub transport_requests: Query<'w, 's, &'static crate::systems::logistics::transport_request::TransportRequest>,
     pub free_resource_items: Query<
         'w,
         's,
