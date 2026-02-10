@@ -48,14 +48,14 @@
 - フェーズ移行で不要になったロックは即時解除し、`unassign_task` 側でもフェーズに応じて解放漏れを防ぐ。
 - `sync_reservations_system` の再構築条件は、実行フェーズの予約寿命と一致させる（フェーズ定義を変更したら同時更新する）。
 
-### 7. TransportRequest の規約
-全ての auto_haul システムは `Designation` と同時に `TransportRequest` コンポーネントを挿入する。
+### 7. TransportRequest の規約（M3〜M7 完了）
+運搬系は全て **Anchor Request パターン** に統一済み。request エンティティをアンカー位置（Blueprint/Mixer/Stockpile）に生成し、割り当て時にソースを遅延解決する。
 
-- **Item Direct パターン**（task_area, bucket, blueprint, mixer水）: アイテム実体に `TransportRequest` を追加マーカーとして付与。タスク発見・割り当て・実行は従来の `Designation` 経由。
-- **Anchor Request パターン**（mixer固体）: request エンティティに `TransportRequest::DeliverToMixerSolid` + `Designation(HaulToMixer)` を付与し、`TargetMixer` と `TaskSlots` で需要を表現。ソース選定は割り当て時に遅延解決。
-- `is_request_task` 判定は `TransportRequest` の存在ではなく `TransportRequestKind` で行う（全アイテムに TransportRequest が付くため）。
-- request は `mixer + resource_type` 単位で再利用し、需要 0 のときは `Designation` を外して休止する。
-- タスク完了後の `TransportRequest` クリーンアップは将来の `TransportRequestSet::Maintain` で実装予定。
+- **request 化済み**: `DepositToStockpile`, `DeliverToBlueprint`, `DeliverToMixerSolid`, `DeliverWaterToMixer`, `ReturnBucket`
+- `task_finder` は `DesignationSpatialGrid` と `TransportRequestSpatialGrid` の両方から候補を収集。
+- `is_request_task` 判定は `TransportRequestKind` で行う。
+- request は需要 0 のとき `Designation` を外して休止、または despawn。
+- アンカー消失時は `transport_request_anchor_cleanup_system` で request を close。
 
 ## 便利なコマンド
 

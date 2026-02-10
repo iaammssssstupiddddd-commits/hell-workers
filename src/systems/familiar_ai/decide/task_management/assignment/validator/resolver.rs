@@ -22,6 +22,20 @@ pub fn resolve_haul_to_stockpile_inputs(
     Some((stockpile, resource_type, item_owner))
 }
 
+/// M7: ReturnBucket request の (stockpile, tank) を解決
+pub fn resolve_haul_return_bucket_inputs(
+    task_entity: Entity,
+    queries: &crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
+) -> Option<(Entity, Entity)> {
+    let req = queries.transport_requests.get(task_entity).ok()?;
+    if req.kind != TransportRequestKind::ReturnBucket {
+        return None;
+    }
+    let stockpile = req.anchor;
+    let tank = queries.designation.belongs.get(stockpile).ok().map(|b| b.0)?;
+    Some((stockpile, tank))
+}
+
 pub fn resolve_haul_to_blueprint_inputs(
     task_entity: Entity,
     queries: &crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,

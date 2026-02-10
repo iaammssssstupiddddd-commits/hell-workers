@@ -3,6 +3,8 @@ use crate::systems::familiar_ai::decide::task_management::ReservationShadow;
 use crate::systems::logistics::ResourceType;
 use bevy::prelude::*;
 
+use super::reservation::source_not_reserved;
+
 pub fn find_best_stockpile_for_item(
     task_pos: Vec2,
     task_area_opt: Option<&TaskArea>,
@@ -99,4 +101,30 @@ pub fn find_best_tank_for_bucket(
             d1.partial_cmp(&d2).unwrap_or(std::cmp::Ordering::Equal)
         })
         .map(|(e, _, _, _)| e)
+}
+
+/// M7: ReturnBucket request 用に、指定タンクに紐づくドロップバケツで最も近いものを検索
+pub fn find_nearest_bucket_for_return(
+    tank_entity: Entity,
+    task_pos: Vec2,
+    queries: &crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
+    shadow: &ReservationShadow,
+) -> Option<(Entity, Vec2)> {
+    queries
+        .free_resource_items
+        .iter()
+        .filter(|(_, _, vis, res)| {
+            *vis != Visibility::Hidden
+                && matches!(res.0, ResourceType::BucketEmpty | ResourceType::BucketWater)
+        })
+        .filter(|(e, _, _, _)| {
+            queries.designation.belongs.get(*e).ok().map(|b| b.0) == Some(tank_entity)
+        })
+        .filter(|(e, _, _, _)| source_not_reserved(*e, queries, shadow))
+        .min_by(|(_, t1, _, _), (_, t2, _, _)| {
+            let d1 = t1.translation.truncate().distance_squared(task_pos);
+            let d2 = t2.translation.truncate().distance_squared(task_pos);
+            d1.partial_cmp(&d2).unwrap_or(std::cmp::Ordering::Equal)
+        })
+        .map(|(e, t, _, _)| (e, t.translation.truncate()))
 }

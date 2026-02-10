@@ -275,6 +275,7 @@ pub fn sync_reservations_system(
                     if matches!(
                         req.kind,
                         crate::systems::logistics::transport_request::TransportRequestKind::DepositToStockpile
+                            | crate::systems::logistics::transport_request::TransportRequestKind::ReturnBucket
                     ) {
                         *dest_res.entry(req.anchor).or_insert(0) += 1;
                     }

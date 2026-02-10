@@ -1,31 +1,28 @@
 //! Bucket auto-haul system
 //!
-//! Automatically creates haul tasks for dropped buckets to return them to bucket storage.
+//! M7: ドロップされたバケツの返却を request エンティティ化。
+//! ストックパイル（バケツ置き場）位置に request を生成し、割り当て時にバケツを遅延解決する。
 
 use bevy::prelude::*;
 
-use crate::constants::*;
+use crate::constants::TILE_SIZE;
 use crate::entities::familiar::{ActiveCommand, Familiar, FamiliarCommand};
-use crate::events::{DesignationOp, DesignationRequest};
 use crate::relationships::TaskWorkers;
 use crate::systems::command::TaskArea;
-use crate::systems::jobs::{Designation, WorkType};
+use crate::systems::jobs::{Designation, Priority, TaskSlots, WorkType};
 use crate::systems::logistics::transport_request::{
-    TransportPriority, TransportRequest, TransportRequestKind,
+    TransportDemand, TransportPolicy, TransportPriority, TransportRequest, TransportRequestKind,
+    TransportRequestState,
 };
 use crate::systems::logistics::{
     BucketStorage, ReservedForTask, ResourceItem, ResourceType, Stockpile,
 };
-use crate::systems::soul_ai::decide::work::auto_haul::ItemReservations;
 use crate::systems::spatial::{SpatialGridOps, StockpileSpatialGrid};
 
-/// バケツ専用オートホールシステム
-/// ドロップされたバケツを、BelongsTo で紐付いたタンクのバケツ置き場に運搬する
+/// バケツ専用オートホールシステム（M7: request エンティティ化）
 pub fn bucket_auto_haul_system(
     mut commands: Commands,
-    mut designation_writer: MessageWriter<DesignationRequest>,
     stockpile_grid: Res<StockpileSpatialGrid>,
-    mut item_reservations: ResMut<ItemReservations>,
     q_familiars: Query<(Entity, &ActiveCommand, &TaskArea), With<Familiar>>,
     q_buckets: Query<
         (
@@ -50,16 +47,20 @@ pub fn bucket_auto_haul_system(
         &crate::systems::logistics::BelongsTo,
         Option<&crate::relationships::StoredItems>,
     )>,
+    q_bucket_requests: Query<(Entity, &TransportRequest, Option<&TaskWorkers>)>,
 ) {
-    let mut already_assigned = std::collections::HashSet::new();
+    let active_familiars: Vec<(Entity, TaskArea)> = q_familiars
+        .iter()
+        .filter(|(_, ac, _)| !matches!(ac.command, FamiliarCommand::Idle))
+        .map(|(e, _, area)| (e, area.clone()))
+        .collect();
 
-    for (fam_entity, active_command, task_area) in q_familiars.iter() {
-        if matches!(active_command.command, FamiliarCommand::Idle) {
-            continue;
-        }
+    // (stockpile_entity) -> (fam_entity, stock_pos)
+    let mut desired_returns = std::collections::HashMap::<Entity, (Entity, Vec2)>::new();
 
+    for (fam_entity, task_area) in active_familiars.iter() {
         for (
-            bucket_entity,
+            _bucket_entity,
             bucket_transform,
             visibility,
             res_item,
@@ -68,115 +69,133 @@ pub fn bucket_auto_haul_system(
             workers_opt,
         ) in q_buckets.iter()
         {
-            // バケツ以外はスキップ
             if !matches!(
                 res_item.0,
                 ResourceType::BucketEmpty | ResourceType::BucketWater
             ) {
                 continue;
             }
-
-            // 作業中のバケツはスキップ (TaskWorkersが存在し、かつ空でない場合)
-            if let Some(workers) = workers_opt {
-                if workers.len() > 0 {
-                    continue;
-                }
-            }
-
-            // 既に割り当て済みならスキップ
-            if already_assigned.contains(&bucket_entity) {
+            if workers_opt.is_some_and(|w| !w.is_empty()) {
                 continue;
             }
-
-            // 既にタスク発行済みならスキップ
-            if item_reservations.0.contains(&bucket_entity) || reserved_opt.is_some() {
+            if reserved_opt.is_some() {
                 continue;
             }
-
-            // 非表示ならスキップ
             if *visibility == Visibility::Hidden {
                 continue;
             }
 
             let bucket_pos = bucket_transform.translation.truncate();
-
-            // タスクエリア内にあるかチェック
             if !task_area.contains(bucket_pos) {
                 continue;
             }
 
-            // バケツが紐付いているタンク
             let tank_entity = bucket_belongs.0;
-
-            // 近くのストックパイルを空間グリッドで検索
             let search_radius = TILE_SIZE * 20.0;
             let nearby_stockpiles = stockpile_grid.get_nearby_in_radius(bucket_pos, search_radius);
 
-            // 同じタンクに紐付いた、条件に合うストックパイルを探す
             let target_stockpile = nearby_stockpiles
                 .iter()
-                .filter_map(|&entity| q_stockpiles.get(entity).ok())
+                .filter_map(|&e| q_stockpiles.get(e).ok())
                 .filter(|(_, _, stock, _, stock_belongs, stored_opt)| {
-                    // 同じタンクに紐付いているか
-                    if stock_belongs.0 != tank_entity {
-                        return false;
-                    }
-
-                    // バケツ置き場（Stockpile）が「バケツ」または「未設定」を受け入れるか確認
-                    // 通常、タンクのバケツ置き場は resource_type が None または BucketEmpty/Water
-                    let type_match = match stock.resource_type {
-                        None => true,
-                        Some(t) => {
-                            matches!(t, ResourceType::BucketEmpty | ResourceType::BucketWater)
-                        }
-                    };
-                    if !type_match {
-                        return false;
-                    }
-
-                    // 容量に空きがあるか
-                    let current = stored_opt.map(|s| s.len()).unwrap_or(0);
-                    current < stock.capacity
+                    stock_belongs.0 == tank_entity
+                        && matches!(
+                            stock.resource_type,
+                            None | Some(ResourceType::BucketEmpty) | Some(ResourceType::BucketWater)
+                        )
+                        && stored_opt.map(|s| s.len()).unwrap_or(0) < stock.capacity
                 })
                 .min_by(|(_, t1, _, _, _, _), (_, t2, _, _, _, _)| {
                     let d1 = t1.translation.truncate().distance_squared(bucket_pos);
                     let d2 = t2.translation.truncate().distance_squared(bucket_pos);
                     d1.partial_cmp(&d2).unwrap_or(std::cmp::Ordering::Equal)
                 })
-                .map(|(entity, _, _, _, _, _)| entity);
+                .map(|(e, t, _, _, _, _)| (e, t.translation.truncate()));
 
-            if let Some(stockpile_entity) = target_stockpile {
-                already_assigned.insert(bucket_entity);
-                item_reservations.0.insert(bucket_entity);
-                info!(
-                    "BUCKET_HAUL: Issuing Haul task for bucket {:?} to stockpile {:?}",
-                    bucket_entity, stockpile_entity
-                );
-                designation_writer.write(DesignationRequest {
-                    entity: bucket_entity,
-                    operation: DesignationOp::Issue {
-                        work_type: WorkType::Haul,
-                        issued_by: fam_entity,
-                        task_slots: 1,
-                        priority: Some(5), // バケツ返却は優先度高め
-                        target_blueprint: None,
-                        target_mixer: None,
-                        reserved_for_task: true,
-                    },
-                });
-                commands.entity(bucket_entity).insert(TransportRequest {
-                    kind: TransportRequestKind::ReturnBucket,
-                    anchor: stockpile_entity,
-                    resource_type: res_item.0,
-                    issued_by: fam_entity,
-                    priority: TransportPriority::Normal,
-                });
-            } else {
-                warn!(
-                    "BUCKET_HAUL: Found bucket {:?} for tank {:?} but no suitable stockpile found!",
-                    bucket_entity, tank_entity
-                );
+            if let Some((stockpile_entity, stock_pos)) = target_stockpile {
+                desired_returns
+                    .entry(stockpile_entity)
+                    .or_insert_with(|| (*fam_entity, stock_pos));
             }
         }
+    }
+
+    let mut seen = std::collections::HashSet::new();
+    for (req_entity, req, workers_opt) in q_bucket_requests.iter() {
+        if req.kind != TransportRequestKind::ReturnBucket {
+            continue;
+        }
+        let stockpile = req.anchor;
+        let workers = workers_opt.map(|w| w.len()).unwrap_or(0);
+
+        if !seen.insert(stockpile) {
+            if workers == 0 {
+                commands.entity(req_entity).despawn();
+            }
+            continue;
+        }
+
+        if let Some((issued_by, pos)) = desired_returns.get(&stockpile) {
+            commands.entity(req_entity).insert((
+                Transform::from_xyz(pos.x, pos.y, 0.0),
+                Visibility::Hidden,
+                Designation {
+                    work_type: WorkType::Haul,
+                },
+                crate::relationships::ManagedBy(*issued_by),
+                TaskSlots::new(1),
+                Priority(5),
+                TransportRequest {
+                    kind: TransportRequestKind::ReturnBucket,
+                    anchor: stockpile,
+                    resource_type: ResourceType::BucketEmpty,
+                    issued_by: *issued_by,
+                    priority: TransportPriority::Normal,
+                },
+                TransportDemand {
+                    desired_slots: 1,
+                    inflight: 0,
+                },
+                TransportRequestState::Pending,
+                TransportPolicy::default(),
+            ));
+        } else if workers == 0 {
+            commands
+                .entity(req_entity)
+                .remove::<Designation>()
+                .remove::<TaskSlots>()
+                .remove::<Priority>();
+        }
+    }
+
+    for (stockpile, (issued_by, pos)) in desired_returns {
+        if seen.contains(&stockpile) {
+            continue;
+        }
+
+        commands.spawn((
+            Name::new("TransportRequest::ReturnBucket"),
+            Transform::from_xyz(pos.x, pos.y, 0.0),
+            Visibility::Hidden,
+            Designation {
+                work_type: WorkType::Haul,
+            },
+            crate::relationships::ManagedBy(issued_by),
+            TaskSlots::new(1),
+            Priority(5),
+            TransportRequest {
+                kind: TransportRequestKind::ReturnBucket,
+                anchor: stockpile,
+                resource_type: ResourceType::BucketEmpty,
+                issued_by,
+                priority: TransportPriority::Normal,
+            },
+            TransportDemand {
+                desired_slots: 1,
+                inflight: 0,
+            },
+            TransportRequestState::Pending,
+            TransportPolicy::default(),
+        ));
     }
 }
