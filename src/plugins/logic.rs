@@ -9,6 +9,7 @@ use crate::systems::command::{
     task_area_selection_system,
 };
 use crate::systems::obstacle::obstacle_cleanup_system;
+use crate::systems::logistics::transport_request::TransportRequestPlugin;
 use crate::systems::soul_ai::SoulAiPlugin;
 use crate::world::regrowth::{RegrowthManager, tree_regrowth_system};
 use bevy::prelude::*;
@@ -18,6 +19,7 @@ pub struct LogicPlugin;
 impl Plugin for LogicPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(SoulAiPlugin);
+        app.add_plugins(TransportRequestPlugin);
 
         // パスファインディング用の作業メモリを登録
         app.init_resource::<RegrowthManager>();
