@@ -66,9 +66,29 @@ pub fn issue_haul_to_stockpile(
     queries: &mut crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
     shadow: &mut ReservationShadow,
 ) {
+    issue_haul_to_stockpile_with_source(
+        ctx.task_entity,
+        stockpile,
+        task_pos,
+        already_commanded,
+        ctx,
+        queries,
+        shadow,
+    );
+}
+
+pub fn issue_haul_to_stockpile_with_source(
+    source_item: Entity,
+    stockpile: Entity,
+    task_pos: Vec2,
+    already_commanded: bool,
+    ctx: &AssignTaskContext<'_>,
+    queries: &mut crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
+    shadow: &mut ReservationShadow,
+) {
     let assigned_task = crate::systems::soul_ai::execute::task_execution::types::AssignedTask::Haul(
         crate::systems::soul_ai::execute::task_execution::types::HaulData {
-            item: ctx.task_entity,
+            item: source_item,
             stockpile,
             phase: HaulPhase::GoingToItem,
         },
@@ -76,7 +96,7 @@ pub fn issue_haul_to_stockpile(
     let reservation_ops = vec![
         ResourceReservationOp::ReserveDestination { target: stockpile },
         ResourceReservationOp::ReserveSource {
-            source: ctx.task_entity,
+            source: source_item,
             amount: 1,
         },
     ];

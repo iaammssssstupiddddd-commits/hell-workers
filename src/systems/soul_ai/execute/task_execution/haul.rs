@@ -28,8 +28,11 @@ pub fn handle_haul_task(
             if let Ok((res_transform, _, _, _res_item_opt, des_opt, stored_in_opt)) =
                 q_targets.get(item)
             {
-                // 指示がキャンセルされていないか確認
-                if cancel_task_if_designation_missing(des_opt, ctx.task, ctx.path) {
+                // M4: request 方式ではアイテムに Designation を付けないため、
+                // des_opt が None でもキャンセルしない。
+                if des_opt.is_some()
+                    && cancel_task_if_designation_missing(des_opt, ctx.task, ctx.path)
+                {
                     ctx.queue_reservation(
                         crate::events::ResourceReservationOp::ReleaseDestination {
                             target: stockpile,
