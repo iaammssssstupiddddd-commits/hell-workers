@@ -10,7 +10,11 @@ use crate::events::{DesignationOp, DesignationRequest};
 use crate::relationships::TaskWorkers;
 use crate::systems::command::TaskArea;
 use crate::systems::jobs::{Blueprint, Designation, WorkType};
+use crate::systems::logistics::transport_request::{
+    TransportPriority, TransportRequest, TransportRequestKind,
+};
 use crate::systems::logistics::{ResourceItem, ResourceType};
+use crate::systems::soul_ai::decide::work::auto_haul::ItemReservations;
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
 use crate::systems::soul_ai::helpers::query_types::AutoHaulAssignedTaskQuery;
 use crate::systems::spatial::{BlueprintSpatialGrid, ResourceSpatialGrid, SpatialGridOps};
@@ -20,7 +24,9 @@ const SEARCH_RADII: [f32; 4] = [20.0, 50.0, 100.0, 200.0];
 
 /// 設計図への自動資材運搬タスク生成システム
 pub fn blueprint_auto_haul_system(
+    mut commands: Commands,
     mut designation_writer: MessageWriter<DesignationRequest>,
+    mut item_reservations: ResMut<ItemReservations>,
     resource_grid: Res<ResourceSpatialGrid>,
     blueprint_grid: Res<BlueprintSpatialGrid>,
     q_familiars: Query<(Entity, &ActiveCommand, &TaskArea)>,
@@ -115,10 +121,12 @@ pub fn blueprint_auto_haul_system(
                     &q_resources,
                     &q_stockpiles,
                     &already_assigned_this_frame,
+                    &item_reservations,
                 );
 
                 if let Some(item_entity) = matching_resource {
                     already_assigned_this_frame.insert(item_entity);
+                    item_reservations.0.insert(item_entity);
                     // 次の集計に備えてカウントアップ（同フレーム内の別使い魔が重複させないため）
                     *in_flight.entry((bp_entity, *resource_type)).or_insert(0) += 1;
 
@@ -134,6 +142,13 @@ pub fn blueprint_auto_haul_system(
                             target_mixer: None,
                             reserved_for_task: false,
                         },
+                    });
+                    commands.entity(item_entity).insert(TransportRequest {
+                        kind: TransportRequestKind::DeliverToBlueprint,
+                        anchor: bp_entity,
+                        resource_type: *resource_type,
+                        issued_by: fam_entity,
+                        priority: TransportPriority::Normal,
                     });
 
                     info!(
@@ -173,6 +188,7 @@ fn find_resource_progressively(
     >,
     q_stockpiles: &Query<&Transform, With<crate::systems::logistics::Stockpile>>,
     already_assigned: &std::collections::HashSet<Entity>,
+    item_reservations: &ItemReservations,
 ) -> Option<Entity> {
     // 段階的に検索範囲を広げる
     for &radius_tiles in &SEARCH_RADII {
@@ -183,6 +199,7 @@ fn find_resource_progressively(
         let mut candidates: Vec<(Entity, f32)> = nearby_resources
             .iter()
             .filter(|&&entity| !already_assigned.contains(&entity))
+            .filter(|&&entity| !item_reservations.0.contains(&entity))
             .filter_map(|&entity| {
                 let Ok((_, transform, visibility, res_item, stored_in_opt)) =
                     q_resources.get(entity)

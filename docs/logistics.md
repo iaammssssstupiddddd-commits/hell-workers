@@ -111,7 +111,21 @@ Hell-Workers における資源の備蓄、運搬、および管理の仕組み�
 
 `Loading` 以降のフェーズではアイテムは既に手押し車に `LoadedIn` されているため、アイテムソースの予約は不要です。
 
-### 7.5. 拡張性
+### 7.5. TransportRequest マーカー
+
+全ての auto_haul システムは、`Designation` の発行と同時に対象アイテム（またはリクエストエンティティ）に `TransportRequest` コンポーネントを挿入します。これにより `TransportRequestSpatialGrid` に自動登録され、将来の統一輸送システムで利用可能になります。
+
+| auto_haul システム | TransportRequestKind | anchor |
+| :--- | :--- | :--- |
+| `task_area_auto_haul` | `DepositToStockpile` | 目的地 Stockpile |
+| `bucket_auto_haul` | `ReturnBucket` | 目的地 Stockpile |
+| `blueprint_auto_haul` | `DeliverToBlueprint` | 目的地 Blueprint |
+| `mud_mixer_auto_haul`（固体） | `DeliverToMixerSolid` | 目的地 Mixer |
+| `mud_mixer_auto_haul`（水） | `DeliverWaterToMixer` | 目的地 Mixer |
+
+**注意**: 現時点では `TransportRequest` は追加マーカーであり、タスク発見・割り当て・実行は従来の `Designation` 経由で行われます。タスク完了後の `TransportRequest` クリーンアップは将来の `TransportRequestSet::Maintain` フェーズで実装予定です。
+
+### 7.6. 拡張性
 新しい自動発行システムを追加する場合:
 1. `sync_reservations_system` の `match designation.work_type` に新しい `WorkType` を追加
 2. 必要なターゲットコンポーネント（例: `TargetFurnace`）をクエリに追加

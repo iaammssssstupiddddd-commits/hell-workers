@@ -1,6 +1,7 @@
 use crate::constants::*;
 use crate::systems::familiar_ai::decide::task_management::{AssignTaskContext, ReservationShadow};
 use crate::systems::jobs::WorkType;
+use crate::systems::logistics::transport_request::TransportRequestKind;
 use crate::systems::logistics::ResourceType;
 use bevy::prelude::*;
 
@@ -28,7 +29,10 @@ pub(super) fn assign_haul_to_mixer(
         return false;
     };
 
-    let is_request_task = queries.mixer_haul_requests.get(ctx.task_entity).is_ok();
+    let is_request_task = queries
+        .transport_requests
+        .get(ctx.task_entity)
+        .is_ok_and(|req| matches!(req.kind, TransportRequestKind::DeliverToMixerSolid));
     let (source_item, source_pos) = if is_request_task {
         let Some((source, pos)) =
             find_nearest_mixer_source_item(item_type, task_pos, queries, shadow)

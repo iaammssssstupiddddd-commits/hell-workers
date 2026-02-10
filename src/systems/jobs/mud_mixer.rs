@@ -15,15 +15,6 @@ pub struct MudMixerStorage {
 #[reflect(Component)]
 pub struct TargetMixer(pub Entity);
 
-/// ミキサー向け固体資材運搬の要求タスク（アンカー方式）
-///
-/// `Designation(HaulToMixer)` をこの要求エンティティに付与し、
-/// 割り当て時に実際のソースアイテムを遅延解決する。
-#[derive(Component, Reflect, Debug, Clone, Copy)]
-#[reflect(Component)]
-pub struct MixerHaulRequest {
-    pub resource_type: ResourceType,
-}
 
 impl MudMixerStorage {
     /// 指定されたリソースが満杯かチェック

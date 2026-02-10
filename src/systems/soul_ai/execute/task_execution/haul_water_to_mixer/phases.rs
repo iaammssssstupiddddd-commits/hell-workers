@@ -1,11 +1,16 @@
-use super::common::*;
-use super::context::TaskExecutionContext;
-use super::types::{AssignedTask, HaulWaterToMixerPhase};
 use crate::constants::*;
 use crate::systems::logistics::{ResourceItem, ResourceType};
+use crate::systems::soul_ai::execute::task_execution::common::*;
+use crate::systems::soul_ai::execute::task_execution::context::TaskExecutionContext;
 use crate::systems::soul_ai::execute::task_execution::gather_water::helpers::drop_bucket_for_auto_haul;
+use crate::systems::soul_ai::execute::task_execution::types::{
+    AssignedTask, HaulWaterToMixerData, HaulWaterToMixerPhase,
+};
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
+
+use super::abort::abort_and_drop_bucket;
+use super::transitions::{transition_to_mixer, transition_to_tank};
 
 pub fn handle_haul_water_to_mixer_task(
     ctx: &mut TaskExecutionContext,
@@ -15,7 +20,6 @@ pub fn handle_haul_water_to_mixer_task(
     phase: HaulWaterToMixerPhase,
     commands: &mut Commands,
     game_assets: &Res<crate::assets::GameAssets>,
-    // haul_cache removed
     _time: &Res<Time>,
     world_map: &Res<WorldMap>,
 ) {
@@ -172,15 +176,13 @@ pub fn handle_haul_water_to_mixer_task(
                 }
 
                 if is_near_target_or_dest(soul_pos, tank_pos, ctx.dest.0) {
-                    *ctx.task = AssignedTask::HaulWaterToMixer(
-                        crate::systems::soul_ai::execute::task_execution::types::HaulWaterToMixerData {
-                            bucket: bucket_entity,
-                            tank: tank_entity,
-                            mixer: mixer_entity,
-                            amount: 0,
-                            phase: HaulWaterToMixerPhase::FillingFromTank,
-                        },
-                    );
+                    *ctx.task = AssignedTask::HaulWaterToMixer(HaulWaterToMixerData {
+                        bucket: bucket_entity,
+                        tank: tank_entity,
+                        mixer: mixer_entity,
+                        amount: 0,
+                        phase: HaulWaterToMixerPhase::FillingFromTank,
+                    });
                     ctx.path.waypoints.clear();
                 }
             } else {
@@ -240,15 +242,13 @@ pub fn handle_haul_water_to_mixer_task(
                     let (mixer_transform, _, _) = mixer_data;
                     let mixer_pos = mixer_transform.translation.truncate();
 
-                    *ctx.task = AssignedTask::HaulWaterToMixer(
-                        crate::systems::soul_ai::execute::task_execution::types::HaulWaterToMixerData {
-                            bucket: bucket_entity,
-                            tank: tank_entity,
-                            mixer: mixer_entity,
-                            amount: take_amount,
-                            phase: HaulWaterToMixerPhase::GoingToMixer,
-                        },
-                    );
+                    *ctx.task = AssignedTask::HaulWaterToMixer(HaulWaterToMixerData {
+                        bucket: bucket_entity,
+                        tank: tank_entity,
+                        mixer: mixer_entity,
+                        amount: take_amount,
+                        phase: HaulWaterToMixerPhase::GoingToMixer,
+                    });
                     update_destination_to_adjacent(
                         ctx.dest,
                         mixer_pos,
@@ -368,15 +368,13 @@ pub fn handle_haul_water_to_mixer_task(
                 }
 
                 if is_near_target_or_dest(soul_pos, mixer_pos, ctx.dest.0) {
-                    *ctx.task = AssignedTask::HaulWaterToMixer(
-                        crate::systems::soul_ai::execute::task_execution::types::HaulWaterToMixerData {
-                            bucket: bucket_entity,
-                            tank: tank_entity,
-                            mixer: mixer_entity,
-                            amount,
-                            phase: HaulWaterToMixerPhase::Pouring,
-                        },
-                    );
+                    *ctx.task = AssignedTask::HaulWaterToMixer(HaulWaterToMixerData {
+                        bucket: bucket_entity,
+                        tank: tank_entity,
+                        mixer: mixer_entity,
+                        amount,
+                        phase: HaulWaterToMixerPhase::Pouring,
+                    });
                     ctx.path.waypoints.clear();
                 }
             } else {
@@ -468,10 +466,7 @@ pub fn handle_haul_water_to_mixer_task(
                     };
 
                 if current_count < capacity {
-                    let amount = ctx
-                        .task
-                        .get_amount_if_haul_water()
-                        .unwrap_or(BUCKET_CAPACITY);
+                    let amount = ctx.task.get_amount_if_haul_water().unwrap_or(BUCKET_CAPACITY);
                     let available = capacity.saturating_sub(current_count) as u32;
                     let added = amount.min(available);
 
@@ -521,15 +516,13 @@ pub fn handle_haul_water_to_mixer_task(
                     }
 
                     if let Some(pos) = return_pos {
-                        *ctx.task = AssignedTask::HaulWaterToMixer(
-                            crate::systems::soul_ai::execute::task_execution::types::HaulWaterToMixerData {
-                                bucket: bucket_entity,
-                                tank: tank_entity,
-                                mixer: mixer_entity,
-                                amount: 0,
-                                phase: HaulWaterToMixerPhase::ReturningBucket,
-                            },
-                        );
+                        *ctx.task = AssignedTask::HaulWaterToMixer(HaulWaterToMixerData {
+                            bucket: bucket_entity,
+                            tank: tank_entity,
+                            mixer: mixer_entity,
+                            amount: 0,
+                            phase: HaulWaterToMixerPhase::ReturningBucket,
+                        });
                         update_destination_if_needed(ctx.dest, pos, ctx.path);
                     } else {
                         // 戻し先が見つからなければその場にドロップ
@@ -566,151 +559,4 @@ pub fn handle_haul_water_to_mixer_task(
             }
         }
     }
-}
-
-fn transition_to_tank(
-    commands: &mut Commands,
-    ctx: &mut TaskExecutionContext,
-    bucket_entity: Entity,
-    tank_entity: Entity,
-    mixer_entity: Entity,
-    // haul_cache removed
-    soul_pos: Vec2,
-) {
-    if let Ok(tank_data) = ctx.queries.storage.stockpiles.get(tank_entity) {
-        let (_, tank_transform, _, _) = tank_data;
-        let tank_pos = tank_transform.translation.truncate();
-
-        *ctx.task = AssignedTask::HaulWaterToMixer(
-            crate::systems::soul_ai::execute::task_execution::types::HaulWaterToMixerData {
-                bucket: bucket_entity,
-                tank: tank_entity,
-                mixer: mixer_entity,
-                amount: 0,
-                phase: HaulWaterToMixerPhase::GoingToTank,
-            },
-        );
-        ctx.dest.0 = tank_pos;
-        ctx.path.waypoints.clear();
-    } else {
-        // Tankがなければバケツをドロップして中止
-        abort_and_drop_bucket(
-            commands,
-            ctx,
-            bucket_entity,
-            tank_entity,
-            mixer_entity,
-            soul_pos,
-        );
-    }
-}
-
-/// バケツが既に水入りの場合、直接ミキサーへ向かう
-fn transition_to_mixer(
-    commands: &mut Commands,
-    ctx: &mut TaskExecutionContext,
-    bucket_entity: Entity,
-    tank_entity: Entity,
-    mixer_entity: Entity,
-    // haul_cache removed
-    world_map: &WorldMap,
-    soul_pos: Vec2,
-) {
-    if let Ok(mixer_data) = ctx.queries.storage.mixers.get(mixer_entity) {
-        let (mixer_transform, _, _) = mixer_data;
-        let mixer_pos = mixer_transform.translation.truncate();
-
-        *ctx.task = AssignedTask::HaulWaterToMixer(
-            crate::systems::soul_ai::execute::task_execution::types::HaulWaterToMixerData {
-                bucket: bucket_entity,
-                tank: tank_entity,
-                mixer: mixer_entity,
-                amount: BUCKET_CAPACITY, // 既に水入りなので満タンとみなす
-                phase: HaulWaterToMixerPhase::GoingToMixer,
-            },
-        );
-        update_destination_to_adjacent(
-            ctx.dest,
-            mixer_pos,
-            ctx.path,
-            soul_pos,
-            world_map,
-            ctx.pf_context,
-        );
-    } else {
-        // ミキサーがなければバケツをドロップして中止
-        abort_and_drop_bucket(
-            commands,
-            ctx,
-            bucket_entity,
-            tank_entity,
-            mixer_entity,
-            soul_pos,
-        );
-    }
-}
-
-fn abort_and_drop_bucket(
-    commands: &mut Commands,
-    ctx: &mut TaskExecutionContext,
-    bucket_entity: Entity,
-    tank_entity: Entity,
-    mixer_entity: Entity,
-    // haul_cache removed
-    pos: Vec2,
-) {
-    ctx.queue_reservation(
-        crate::events::ResourceReservationOp::ReleaseMixerDestination {
-            target: mixer_entity,
-            resource_type: ResourceType::Water,
-        },
-    );
-    let should_release_tank_lock = matches!(
-        ctx.task,
-        AssignedTask::HaulWaterToMixer(data)
-            if matches!(
-                data.phase,
-                HaulWaterToMixerPhase::GoingToBucket
-                    | HaulWaterToMixerPhase::GoingToTank
-                    | HaulWaterToMixerPhase::FillingFromTank
-            )
-    );
-    if should_release_tank_lock {
-        ctx.queue_reservation(crate::events::ResourceReservationOp::ReleaseSource {
-            source: tank_entity,
-            amount: 1,
-        });
-    }
-
-    // バケツを地面にドロップして、関連コンポーネントをクリーンアップ
-    let drop_grid = WorldMap::world_to_grid(pos);
-    let drop_pos = WorldMap::grid_to_world(drop_grid.0, drop_grid.1);
-    commands.entity(bucket_entity).insert((
-        Visibility::Visible,
-        Transform::from_xyz(drop_pos.x, drop_pos.y, crate::constants::Z_ITEM_PICKUP),
-    ));
-    commands
-        .entity(bucket_entity)
-        .remove::<crate::relationships::StoredIn>();
-    commands
-        .entity(bucket_entity)
-        .remove::<crate::systems::logistics::InStockpile>();
-    commands
-        .entity(bucket_entity)
-        .remove::<crate::systems::jobs::IssuedBy>();
-    commands
-        .entity(bucket_entity)
-        .remove::<crate::relationships::TaskWorkers>();
-    commands
-        .entity(bucket_entity)
-        .remove::<crate::systems::jobs::Designation>();
-    commands
-        .entity(bucket_entity)
-        .remove::<crate::systems::jobs::TaskSlots>();
-    commands
-        .entity(bucket_entity)
-        .remove::<crate::systems::jobs::TargetMixer>();
-
-    ctx.inventory.0 = None;
-    clear_task_and_path(ctx.task, ctx.path);
 }

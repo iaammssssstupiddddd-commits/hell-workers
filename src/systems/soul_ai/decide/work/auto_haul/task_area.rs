@@ -10,6 +10,9 @@ use crate::events::{DesignationOp, DesignationRequest};
 use crate::relationships::{StoredItems, TaskWorkers};
 use crate::systems::command::TaskArea;
 use crate::systems::jobs::{Designation, WorkType};
+use crate::systems::logistics::transport_request::{
+    TransportPriority, TransportRequest, TransportRequestKind,
+};
 use crate::systems::logistics::{
     BelongsTo, ResourceItem, ResourceType, Stockpile,
 };
@@ -20,6 +23,7 @@ use crate::systems::spatial::{ResourceSpatialGrid, SpatialGridOps, StockpileSpat
 ///
 /// 汎用アイテムは空間検索で、専用アイテム（所有権あり）はRelationshipで検索します。
 pub fn task_area_auto_haul_system(
+    mut commands: Commands,
     mut designation_writer: MessageWriter<DesignationRequest>,
     resource_grid: Res<ResourceSpatialGrid>,
     stockpile_grid: Res<StockpileSpatialGrid>,
@@ -70,9 +74,17 @@ pub fn task_area_auto_haul_system(
             continue;
         };
 
+        // バケツは bucket_auto_haul_system で専用処理するため除外
+        if matches!(
+            res_item.0,
+            ResourceType::BucketEmpty | ResourceType::BucketWater
+        ) {
+            continue;
+        }
+
         // このアイテムを受け入れるストックパイルを探す
         // Note: 単純化のため、最初に見つかった適切なストックパイルに割り当てる
-        for (_stock_entity, _stock_transform, stockpile, stored, stock_belongs_opt) in
+        for (stock_entity, _stock_transform, stockpile, stored, stock_belongs_opt) in
             q_stockpiles.iter()
         {
             // ストックパイルも同じ所有者でなければならない
@@ -145,6 +157,13 @@ pub fn task_area_auto_haul_system(
                         reserved_for_task: true,
                     },
                 });
+                commands.entity(item_entity).insert(TransportRequest {
+                    kind: TransportRequestKind::DepositToStockpile,
+                    anchor: stock_entity,
+                    resource_type: res_item.0,
+                    issued_by: fam_entity,
+                    priority: TransportPriority::High,
+                });
                 break; // 1つ割り当てたら次のアイテムへ
             }
         }
@@ -211,15 +230,15 @@ pub fn task_area_auto_haul_system(
 
                     let dist_sq = transform.translation.truncate().distance_squared(stock_pos);
                     if dist_sq < search_radius * search_radius {
-                        Some((entity, dist_sq))
+                        Some((entity, dist_sq, res_item.0))
                     } else {
                         None
                     }
                 })
-                .min_by(|(_, d1), (_, d2)| d1.partial_cmp(d2).unwrap_or(std::cmp::Ordering::Equal))
-                .map(|(entity, _)| entity);
+                .min_by(|(_, d1, _), (_, d2, _)| d1.partial_cmp(d2).unwrap_or(std::cmp::Ordering::Equal))
+                .map(|(entity, _, resource_type)| (entity, resource_type));
 
-            if let Some(item_entity) = nearest_resource {
+            if let Some((item_entity, resource_type)) = nearest_resource {
                 already_assigned.insert(item_entity);
                 item_reservations.0.insert(item_entity);
                 designation_writer.write(DesignationRequest {
@@ -233,6 +252,13 @@ pub fn task_area_auto_haul_system(
                         target_mixer: None,
                         reserved_for_task: true,
                     },
+                });
+                commands.entity(item_entity).insert(TransportRequest {
+                    kind: TransportRequestKind::DepositToStockpile,
+                    anchor: stock_entity,
+                    resource_type,
+                    issued_by: fam_entity,
+                    priority: TransportPriority::Normal,
                 });
             }
         }

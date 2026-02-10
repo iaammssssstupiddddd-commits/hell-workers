@@ -48,13 +48,14 @@
 - フェーズ移行で不要になったロックは即時解除し、`unassign_task` 側でもフェーズに応じて解放漏れを防ぐ。
 - `sync_reservations_system` の再構築条件は、実行フェーズの予約寿命と一致させる（フェーズ定義を変更したら同時更新する）。
 
-### 7. 自動運搬 request 方式（Mixer）の規約
-ポーリングの全域走査を避けるため、Mixer 向け固体運搬は「アイテム直接 Designation」ではなく「搬入先アンカー request」を使う。
+### 7. TransportRequest の規約
+全ての auto_haul システムは `Designation` と同時に `TransportRequest` コンポーネントを挿入する。
 
-- request エンティティ（`MixerHaulRequest`）に `Designation(HaulToMixer)` を付与し、`TargetMixer` と `TaskSlots` で需要を表現する。
-- request 発行時にソース資材を探索しない。ソース選定は Familiar の割り当て時に遅延解決する。
-- request は `mixer + resource_type` 単位で再利用し、需要 0 のときは `Designation` を外して休止する（不要増殖を避ける）。
-- 実行系は request 由来タスクでも成立するようにするが、既存のアイテム直接方式のキャンセル条件（Designation除去検知）は維持する。
+- **Item Direct パターン**（task_area, bucket, blueprint, mixer水）: アイテム実体に `TransportRequest` を追加マーカーとして付与。タスク発見・割り当て・実行は従来の `Designation` 経由。
+- **Anchor Request パターン**（mixer固体）: request エンティティに `TransportRequest::DeliverToMixerSolid` + `Designation(HaulToMixer)` を付与し、`TargetMixer` と `TaskSlots` で需要を表現。ソース選定は割り当て時に遅延解決。
+- `is_request_task` 判定は `TransportRequest` の存在ではなく `TransportRequestKind` で行う（全アイテムに TransportRequest が付くため）。
+- request は `mixer + resource_type` 単位で再利用し、需要 0 のときは `Designation` を外して休止する。
+- タスク完了後の `TransportRequest` クリーンアップは将来の `TransportRequestSet::Maintain` で実装予定。
 
 ## 便利なコマンド
 

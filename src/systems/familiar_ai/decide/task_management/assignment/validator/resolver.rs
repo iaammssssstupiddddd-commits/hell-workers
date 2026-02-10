@@ -1,3 +1,4 @@
+use crate::systems::logistics::transport_request::TransportRequestKind;
 use crate::systems::logistics::ResourceType;
 use bevy::prelude::*;
 
@@ -13,8 +14,10 @@ pub fn resolve_haul_to_mixer_inputs(
         .map(|tm| tm.0)?;
 
     // requestタスクは resource_type を専用コンポーネントから取得する
-    if let Ok(req) = queries.mixer_haul_requests.get(task_entity) {
-        return Some((mixer_entity, req.resource_type));
+    if let Ok(req) = queries.transport_requests.get(task_entity) {
+        if matches!(req.kind, TransportRequestKind::DeliverToMixerSolid) {
+            return Some((mixer_entity, req.resource_type));
+        }
     }
 
     // 従来タスクはアイテム実体から取得する
