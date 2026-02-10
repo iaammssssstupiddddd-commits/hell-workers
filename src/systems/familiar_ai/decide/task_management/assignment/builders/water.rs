@@ -8,6 +8,7 @@ use bevy::prelude::*;
 use super::submit_assignment;
 
 pub fn issue_gather_water(
+    bucket: Entity,
     tank: Entity,
     task_pos: Vec2,
     already_commanded: bool,
@@ -18,7 +19,7 @@ pub fn issue_gather_water(
     let assigned_task =
         crate::systems::soul_ai::execute::task_execution::types::AssignedTask::GatherWater(
             crate::systems::soul_ai::execute::task_execution::types::GatherWaterData {
-                bucket: ctx.task_entity,
+                bucket,
                 tank,
                 phase: GatherWaterPhase::GoingToBucket,
             },
@@ -26,7 +27,7 @@ pub fn issue_gather_water(
     let reservation_ops = vec![
         ResourceReservationOp::ReserveDestination { target: tank },
         ResourceReservationOp::ReserveSource {
-            source: ctx.task_entity,
+            source: bucket,
             amount: 1,
         },
     ];
