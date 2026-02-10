@@ -89,6 +89,6 @@ stateDiagram-v2
 
 - `src/game_state.rs` - PlayMode、Context定義
 - `src/main.rs` - State登録、OnEnter/OnExit
-- `src/interface/selection.rs` - Escキーによるキャンセル処理
+- `src/interface/selection/` - Escキーによるキャンセル処理
 - `src/interface/ui/interaction/mod.rs` - ボタンによる状態遷移とモード表示更新
 - `src/systems/logistics.rs` - zone_placement（ZoneContext使用）

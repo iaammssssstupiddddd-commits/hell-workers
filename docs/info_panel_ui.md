@@ -56,8 +56,8 @@
 - セクションディバイダー: `Status / Current Task / Inventory`
 
 ## 関連ファイル
-- `src/interface/ui/panels/info_panel.rs` - パネル生成と差分更新
-- `src/interface/ui/presentation.rs` - `EntityInspectionModel` 構築
+- `src/interface/ui/panels/info_panel/` - パネル生成と差分更新
+- `src/interface/ui/presentation/` - `EntityInspectionModel` 構築
 - `src/interface/ui/panels/context_menu.rs` - `Inspect (Pin)` メニュー
 - `src/interface/ui/interaction/menu_actions.rs` - `InspectEntity` / `ClearInspectPin`
 - `src/interface/ui/components.rs` - `UiSlot` / `InfoPanelPinState` 関連

@@ -59,7 +59,7 @@
     - **境界到達 (Boundary Reaching)**: 2x2以上の建築物など、ターゲット領域に入り込まずにその境界（隣接マス）で停止する高度なパス探索ロジック（`find_path_to_boundary`）を実装しています。
 
 ## 関連ファイル
-- [map.rs](file:///home/iaamm/projects/hell-workers/src/world/map.rs): マップデータ構造と生成システム
+- `src/world/map/`: マップデータ構造（mod）・レイアウト定数（layout）・生成システム（spawn）
 - [river.rs](file:///home/iaamm/projects/hell-workers/src/world/river.rs): 川生成アルゴリズム
 - [regrowth.rs](file:///home/iaamm/projects/hell-workers/src/world/regrowth.rs): 木の再生システム
 - [pathfinding.rs](file:///home/iaamm/projects/hell-workers/src/world/pathfinding.rs): 通行制御を伴うパス検索

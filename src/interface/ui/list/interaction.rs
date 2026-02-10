@@ -104,7 +104,7 @@ pub fn entity_list_interaction_system(
 
     for (interaction, item) in soul_list_interaction.iter_mut() {
         if *interaction == Interaction::Pressed {
-            super::helpers::select_entity_and_focus_camera(
+            super::selection_focus::select_entity_and_focus_camera(
                 item.0,
                 "soul",
                 &mut selected_entity,
@@ -116,7 +116,7 @@ pub fn entity_list_interaction_system(
 
     for (interaction, item) in familiar_list_interaction.iter_mut() {
         if *interaction == Interaction::Pressed {
-            super::helpers::select_entity_and_focus_camera(
+            super::selection_focus::select_entity_and_focus_camera(
                 item.0,
                 "familiar",
                 &mut selected_entity,
@@ -147,7 +147,7 @@ pub fn entity_list_interaction_system(
                             familiar.name,
                             squad_count,
                             new_val,
-                            super::helpers::familiar_state_label(ai_state)
+                            super::view_model::familiar_state_label(ai_state)
                         );
                     }
 
@@ -354,7 +354,7 @@ pub fn entity_list_tab_focus_system(
     };
     let target = candidates[next_index];
 
-    super::helpers::select_entity_and_focus_camera(
+    super::selection_focus::select_entity_and_focus_camera(
         target,
         "tab-focus",
         &mut selected_entity,
