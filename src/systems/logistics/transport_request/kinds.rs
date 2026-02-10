@@ -6,6 +6,7 @@ pub enum TransportRequestKind {
     DeliverToBlueprint,
     DeliverToMixerSolid,
     DeliverWaterToMixer,
+    GatherWaterToTank,
     ReturnBucket,
     BatchWheelbarrow,
 }

@@ -15,9 +15,8 @@ use crate::systems::logistics::transport_request::{
     TransportDemand, TransportPolicy, TransportPriority, TransportRequest, TransportRequestKind,
     TransportRequestState,
 };
-use crate::systems::logistics::{BelongsTo, ResourceItem, ResourceType, Stockpile};
-use crate::systems::soul_ai::execute::task_execution::AssignedTask;
-use crate::systems::soul_ai::helpers::query_types::AutoHaulAssignedTaskQuery;
+use crate::systems::logistics::{BelongsTo, ResourceType, Stockpile};
+
 use crate::systems::spatial::StockpileSpatialGrid;
 
 /// 指揮エリア内での自動運搬タスク生成システム
@@ -32,20 +31,9 @@ pub fn task_area_auto_haul_system(
         Option<&StoredItems>,
         Option<&BelongsTo>,
     )>,
-    q_souls: AutoHaulAssignedTaskQuery,
-    q_all_resources: Query<&ResourceItem>,
     q_stockpile_requests: Query<(Entity, &TransportRequest, Option<&TaskWorkers>)>,
 ) {
     let mut in_flight = std::collections::HashMap::<(Entity, ResourceType), usize>::new();
-
-    for task in q_souls.iter() {
-        if let AssignedTask::Haul(data) = task {
-            let stockpile = data.stockpile;
-            if let Ok(res_item) = q_all_resources.get(data.item) {
-                *in_flight.entry((stockpile, res_item.0)).or_insert(0) += 1;
-            }
-        }
-    }
 
     for (_, req, workers_opt) in q_stockpile_requests.iter() {
         if matches!(req.kind, TransportRequestKind::DepositToStockpile) {
@@ -98,7 +86,7 @@ pub fn task_area_auto_haul_system(
             continue;
         }
 
-        let Some((fam_entity, _)) = find_owner_familiar(stock_pos, &active_familiars) else {
+        let Some((fam_entity, _)) = super::find_owner_familiar(stock_pos, &active_familiars) else {
             continue;
         };
 
@@ -194,17 +182,3 @@ pub fn task_area_auto_haul_system(
     }
 }
 
-fn find_owner_familiar(
-    pos: Vec2,
-    familiars: &[(Entity, TaskArea)],
-) -> Option<(Entity, &TaskArea)> {
-    familiars
-        .iter()
-        .filter(|(_, area)| area.contains(pos))
-        .min_by(|(_, a1), (_, a2)| {
-            let d1 = a1.center().distance_squared(pos);
-            let d2 = a2.center().distance_squared(pos);
-            d1.partial_cmp(&d2).unwrap_or(std::cmp::Ordering::Equal)
-        })
-        .map(|(e, a)| (*e, a))
-}
