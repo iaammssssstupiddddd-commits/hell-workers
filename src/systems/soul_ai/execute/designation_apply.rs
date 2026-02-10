@@ -51,7 +51,7 @@ pub fn apply_designation_requests_system(
 
 /// 同フレーム内の競合回避予約をクリアする
 pub fn clear_item_reservations_system(
-    mut reservations: ResMut<crate::systems::soul_ai::decide::work::auto_haul::ItemReservations>,
+    mut reservations: ResMut<crate::systems::logistics::transport_request::ItemReservations>,
 ) {
     reservations.0.clear();
 }
