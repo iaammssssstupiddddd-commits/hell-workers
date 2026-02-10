@@ -60,7 +60,7 @@ Hell-Workers における資源の備蓄、運搬、および管理の仕組み�
 - **Water**:
     - **要件**: エリア内に水が入った `Tank`（貯水槽）が存在すること。
     - 川から直接ではなく、**Tankからバケツで水を汲んで** 運びます。
-    - タスク `HaulWaterToMixer` が自動発行されます。
+    - Mixer 位置に `DeliverWaterToMixer` の request エンティティを生成。割り当て時にタンク・バケツを遅延解決。
     - 水量はタスク数 × `BUCKET_CAPACITY` で計算されます。
 - **Sand採取の発行**:
     - ミキサー近傍（3タイル以内）の `SandPile` に対して `CollectSand` を自動発行します。
@@ -131,11 +131,13 @@ Hell-Workers における資源の備蓄、運搬、および管理の仕組み�
 | `mud_mixer_auto_haul`（固体） | **request エンティティ** | DeliverToMixerSolid | Mixer |
 | `task_area_auto_haul` | **request エンティティ** | DepositToStockpile | Stockpile |
 | `bucket_auto_haul` | アイテム直接 | ReturnBucket | Stockpile |
-| `mud_mixer_auto_haul`（水） | アイテム直接 | DeliverWaterToMixer | Mixer |
+| `mud_mixer_auto_haul`（水） | **request エンティティ** | DeliverWaterToMixer | Mixer |
 
 **M4 TaskArea request 化（完了）**: resource_type 確定済みストックパイルについて、request エンティティを発行。バケツは `bucket_auto_haul` 専用のため除外。
 
-**Blueprint / Mixer 固体**: request エンティティをアンカー位置に生成し、割り当て時にソースを遅延解決。`TransportRequestSet::Maintain` でアンカー消失時の cleanup を実施。
+**M5 水搬送 request 化（完了）**: Mixer への水供給を request エンティティ化。`mud_mixer_auto_haul_system` が Mixer 位置に `DeliverWaterToMixer` request を生成。割り当て時に `find_tank_bucket_for_water_mixer` でタンク・バケツを遅延解決。
+
+**Blueprint / Mixer 固体・水**: request エンティティをアンカー位置に生成し、割り当て時にソースを遅延解決。`TransportRequestSet::Maintain` でアンカー消失時の cleanup を実施。
 
 ### 7.6. 拡張性
 新しい自動発行システムを追加する場合:

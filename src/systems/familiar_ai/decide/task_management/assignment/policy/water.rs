@@ -50,17 +50,21 @@ pub(super) fn assign_haul_water_to_mixer(
     queries: &mut crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
     shadow: &mut ReservationShadow,
 ) -> bool {
-    let Some((mixer_entity, tank_entity)) =
-        resolve_haul_water_to_mixer_inputs(ctx.task_entity, queries)
-    else {
+    let Some((mixer_entity, tank_entity, bucket_entity)) = resolve_haul_water_to_mixer_inputs(
+        ctx.task_entity,
+        task_pos,
+        ctx.task_area_opt,
+        queries,
+        shadow,
+    ) else {
         debug!(
-            "ASSIGN: HaulWaterToMixer task {:?} has no TargetMixer",
+            "ASSIGN: HaulWaterToMixer task {:?} has no TargetMixer or no available tank/bucket",
             ctx.task_entity
         );
         return false;
     };
 
-    if !source_not_reserved(ctx.task_entity, queries, shadow) {
+    if !source_not_reserved(bucket_entity, queries, shadow) {
         return false;
     }
     // Tankからの取水競合を避けるため、1タンク1作業のロックを確認
@@ -70,6 +74,7 @@ pub(super) fn assign_haul_water_to_mixer(
     let mixer_already_reserved = queries.reserved_for_task.get(ctx.task_entity).is_ok();
 
     issue_haul_water_to_mixer(
+        bucket_entity,
         mixer_entity,
         tank_entity,
         mixer_already_reserved,
