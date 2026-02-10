@@ -130,7 +130,7 @@ Hell-Workers における資源の備蓄、運搬、および管理の仕組み�
 | `blueprint_auto_haul` | **request エンティティ** | DeliverToBlueprint | Blueprint |
 | `mud_mixer_auto_haul`（固体） | **request エンティティ** | DeliverToMixerSolid | Mixer |
 | `task_area_auto_haul` | **request エンティティ** | DepositToStockpile | Stockpile |
-| `bucket_auto_haul` | アイテム直接 | ReturnBucket | Stockpile |
+| `bucket_auto_haul` | **request エンティティ** | ReturnBucket | Stockpile |
 | `mud_mixer_auto_haul`（水） | **request エンティティ** | DeliverWaterToMixer | Mixer |
 
 **M4 TaskArea request 化（完了）**: resource_type 確定済みストックパイルについて、request エンティティを発行。バケツは `bucket_auto_haul` 専用のため除外。
@@ -139,7 +139,9 @@ Hell-Workers における資源の備蓄、運搬、および管理の仕組み�
 
 **M6 手押し車 request 化（完了）**: `DepositToStockpile` request の割り当て時に、`resolve_wheelbarrow_batch_for_stockpile` で手押し車＋積載可能アイテムのバッチを遅延解決。batch 生成・容量制約（`WHEELBARROW_MIN_BATCH_SIZE`、`WHEELBARROW_CAPACITY`、ストックパイル残容量）を request resolver に集約。
 
-**Blueprint / Mixer 固体・水**: request エンティティをアンカー位置に生成し、割り当て時にソースを遅延解決。`TransportRequestSet::Maintain` でアンカー消失時の cleanup を実施。
+**M7 バケツ返却 request 化（完了）**: `bucket_auto_haul_system` を request エンティティ化。バケツ置き場（Stockpile）位置に `ReturnBucket` request を生成。割り当て時に `find_nearest_bucket_for_return` でタンクに紐づくドロップバケツを遅延解決。運搬系のアイテム直接 Designation 発行を廃止。
+
+**Blueprint / Mixer 固体・水 / Bucket**: request エンティティをアンカー位置に生成し、割り当て時にソースを遅延解決。`TransportRequestSet::Maintain` でアンカー消失時の cleanup を実施。
 
 ### 7.6. 拡張性
 新しい自動発行システムを追加する場合:

@@ -49,11 +49,13 @@ Bevy 0.18 の **ECS Relationships** 機能を使用し、エンティティ間�
 
 ### 1. 指定 (Designation)
 - **手動**: プレイヤーが UI やドラッグ操作で指定。
-- **自動**:
-    - `soul_ai::decide::work::task_area_auto_haul_system` が備蓄場所周辺の資源を `DesignationRequest` として `Haul` 発行要求。
-    - `soul_ai::decide::work::tank_water_request_system` がタンクの空きに応じて `GatherWater` 発行要求。
-    - `soul_ai::decide::work::auto_haul::mud_mixer_auto_haul_system` が、MudMixerの空き状況とTankの在庫に応じて `HaulToMixer` (Sand/Rock) および `HaulWaterToMixer` (Water) の発行要求。
-    - これらの要求は Execute フェーズの `apply_designation_requests_system` で `Designation` 等のコンポーネントに反映される。
+- **自動**（request エンティティ方式、M3〜M7 完了）:
+    - `task_area_auto_haul_system`: ストックパイル位置に `DepositToStockpile` request を生成。割り当て時にソースを遅延解決。
+    - `bucket_auto_haul_system`: バケツ置き場位置に `ReturnBucket` request を生成。割り当て時にドロップバケツを遅延解決。
+    - `blueprint_auto_haul_system`: 設計図位置に `DeliverToBlueprint` request を生成。
+    - `mud_mixer_auto_haul_system`: Mixer 位置に `DeliverToMixerSolid`（固体）および `DeliverWaterToMixer`（水）request を生成。
+    - `tank_water_request_system`: タンクの空きに応じて `GatherWater` をバケツへ Designation 発行（request 未対応）。
+    - request エンティティは Execute フェーズの `apply_designation_requests_system` で反映。ソース探索は割り当て時（`task_finder` → `assign_haul` 等）に遅延実行される。
 
 
 ### 2. 割り当て (Assignment)

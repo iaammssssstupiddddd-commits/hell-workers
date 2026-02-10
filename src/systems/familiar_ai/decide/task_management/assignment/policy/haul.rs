@@ -10,7 +10,8 @@ use super::super::builders::{
     issue_haul_to_stockpile, issue_haul_to_stockpile_with_source, issue_haul_with_wheelbarrow,
 };
 use super::super::validator::{
-    compute_centroid, find_best_stockpile_for_item, resolve_haul_to_blueprint_inputs,
+    compute_centroid, find_best_stockpile_for_item, find_nearest_bucket_for_return,
+    resolve_haul_return_bucket_inputs, resolve_haul_to_blueprint_inputs,
     resolve_haul_to_mixer_inputs, resolve_haul_to_stockpile_inputs,
     resolve_wheelbarrow_batch_for_stockpile, source_not_reserved,
 };
@@ -210,6 +211,30 @@ pub(super) fn assign_haul(
             }
             issue_haul_to_blueprint(blueprint, task_pos, already_commanded, ctx, queries, shadow);
         }
+        return true;
+    }
+
+    if let Some((stockpile, tank)) =
+        resolve_haul_return_bucket_inputs(ctx.task_entity, queries)
+    {
+        let Some((source_item, source_pos)) =
+            find_nearest_bucket_for_return(tank, task_pos, queries, shadow)
+        else {
+            debug!(
+                "ASSIGN: ReturnBucket request {:?} has no available bucket for tank {:?}",
+                ctx.task_entity, tank
+            );
+            return false;
+        };
+        issue_haul_to_stockpile_with_source(
+            source_item,
+            stockpile,
+            source_pos,
+            already_commanded,
+            ctx,
+            queries,
+            shadow,
+        );
         return true;
     }
 

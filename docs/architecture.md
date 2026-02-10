@@ -45,9 +45,9 @@ graph TD
 ```
 
 ## 主要なデータフロー: タスク割り当て
-1.  **Designation**: `Player` または `Auto-Haul` システムが `WorkType` を持つ `Designation` を実体に付与。
-2.  **Notification**: `Added<Designation>` / `RemovedComponents<Designation>` を検知し、空間グリッド (`DesignationSpatialGrid`) を増分更新。
-3.  **Assignment**: `Familiar AI` が定期的に周辺のタスクをスキャンし、配下の `魂` に `WorkingOn` 関係を結ぶ。
+1.  **Designation / Request**: 手動指定、または Auto-Haul システムが **request エンティティ**（アンカー位置）に `Designation` + `TransportRequest` を付与。運搬系は M3〜M7 で request 化済み。
+2.  **Spatial Grid**: `DesignationSpatialGrid` と `TransportRequestSpatialGrid` でタスク候補を空間検索（毎フレームフル同期）。
+3.  **Assignment**: `Familiar AI` が task_finder で候補を収集し、割り当て時にソース（資材・バケツ等）を遅延解決。配下の `魂` に `WorkingOn` を結ぶ。
 4.  **Execution**: `Soul AI` が `WorkingOn` を通じて目的地を特定し、移動・作業を開始。
 5.  **Completion**: 資源が尽きると実体が消滅。`Observer` が検知し、`魂` のタスクを解除。
 
