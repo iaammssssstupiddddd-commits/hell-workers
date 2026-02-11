@@ -57,10 +57,10 @@ pub(super) fn set_zone_mode(
     task_context: &mut TaskContext,
 ) {
     build_context.0 = None;
-    task_context.0 = TaskMode::None;
     zone_context.0 = Some(kind);
-    next_play_mode.set(PlayMode::ZonePlace);
-    info!("UI: Zone mode set to {:?}, PlayMode -> ZonePlace", kind);
+    task_context.0 = TaskMode::ZonePlacement(kind, None);
+    next_play_mode.set(PlayMode::TaskDesignation);
+    info!("UI: Zone mode set to {:?}, PlayMode -> TaskDesignation", kind);
 }
 
 pub(super) fn set_task_mode(
@@ -186,6 +186,13 @@ pub(super) fn build_mode_text(
                 format!("Mode: Area Edit [{}] (New Area Dragging...)", target_name)
             }
             TaskMode::AssignTask(_) => "Mode: Assign Task".to_string(),
+            TaskMode::ZonePlacement(kind, start_pos) => {
+                if start_pos.is_some() {
+                    format!("Mode: Zone {:?} (Dragging...)", kind)
+                } else {
+                    format!("Mode: Zone {:?} (Drag to place)", kind)
+                }
+            }
             _ => "Mode: Task".to_string(),
         },
     }
