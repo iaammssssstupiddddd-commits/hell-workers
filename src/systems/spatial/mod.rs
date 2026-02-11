@@ -13,7 +13,8 @@ pub use designation::{DesignationSpatialGrid, update_designation_spatial_grid_sy
 pub use familiar::{FamiliarSpatialGrid, update_familiar_spatial_grid_system};
 pub use gathering::{GatheringSpotSpatialGrid, update_gathering_spot_spatial_grid_system};
 pub use grid::{
-    tick_spatial_grid_sync_timer_system, SpatialGridOps, SpatialGridSyncTimer,
+    sync_grid_timed, tick_spatial_grid_sync_timer_system, SpatialGridOps, SpatialGridSyncTimer,
+    SyncGridClear,
 };
 pub use resource::{ResourceSpatialGrid, update_resource_spatial_grid_system};
 pub use soul::{SpatialGrid, update_spatial_grid_system};
