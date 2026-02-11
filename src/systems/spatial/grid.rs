@@ -1,5 +1,32 @@
+use crate::constants::SPATIAL_GRID_SYNC_INTERVAL;
 use bevy::prelude::*;
 use std::collections::{HashMap, HashSet};
+
+/// 空間グリッド（Designation/Familiar等）の同期タイマー
+///
+/// 毎フレームのフル再構築を避け、0.15秒間隔で同期する。
+#[derive(Resource)]
+pub struct SpatialGridSyncTimer {
+    pub timer: Timer,
+    pub first_run_done: bool,
+}
+
+impl Default for SpatialGridSyncTimer {
+    fn default() -> Self {
+        Self {
+            timer: Timer::from_seconds(SPATIAL_GRID_SYNC_INTERVAL, TimerMode::Repeating),
+            first_run_done: false,
+        }
+    }
+}
+
+/// 空間グリッド同期タイマーを進める。6つの update システムより先に実行する。
+pub fn tick_spatial_grid_sync_timer_system(
+    time: Res<Time>,
+    mut sync_timer: ResMut<SpatialGridSyncTimer>,
+) {
+    sync_timer.timer.tick(time.delta());
+}
 
 /// 空間グリッドの共通操作を定義するトレイト
 pub trait SpatialGridOps {
