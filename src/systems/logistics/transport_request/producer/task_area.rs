@@ -13,7 +13,7 @@ use crate::systems::logistics::transport_request::{
     TransportDemand, TransportPolicy, TransportPriority, TransportRequest, TransportRequestKind,
     TransportRequestState,
 };
-use crate::systems::logistics::{BelongsTo, ResourceType, Stockpile};
+use crate::systems::logistics::{BelongsTo, BucketStorage, ResourceType, Stockpile};
 
 use crate::systems::spatial::StockpileSpatialGrid;
 
@@ -62,6 +62,7 @@ pub fn task_area_auto_haul_system(
         &Stockpile,
         Option<&StoredItems>,
         Option<&BelongsTo>,
+        Option<&BucketStorage>,
     )>,
     q_stockpile_requests: Query<(Entity, &TransportRequest, Option<&TaskWorkers>)>,
     q_free_items: Query<
@@ -104,11 +105,16 @@ pub fn task_area_auto_haul_system(
     }
 
     for stock_entity in stockpiles_to_process {
-        let Ok((_, stock_transform, stockpile, stored_opt, stock_belongs)) =
+        let Ok((_, stock_transform, stockpile, stored_opt, stock_belongs, bucket_storage)) =
             q_stockpiles.get(stock_entity)
         else {
             continue;
         };
+
+        // バケツ置き場は bucket_auto_haul_system が管理するためスキップ
+        if bucket_storage.is_some() {
+            continue;
+        }
 
         let stock_pos = stock_transform.translation.truncate();
         let Some(resource_type) = resolve_request_resource_type(
