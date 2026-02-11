@@ -55,6 +55,18 @@ pub fn unassign_task<'w, 's, Q: TaskReservationAccess<'w, 's>>(
         });
     }
 
+    let (gx, gy) = WorldMap::world_to_grid(drop_pos);
+    let drop_grid = if world_map.is_walkable(gx, gy) {
+        (gx, gy)
+    } else {
+        world_map
+            .get_nearest_walkable_grid(drop_pos)
+            .unwrap_or((gx, gy))
+    };
+    let snapped_pos = WorldMap::grid_to_world(drop_grid.0, drop_grid.1);
+
+    let mut skip_inventory_drop_for: Option<Entity> = None;
+
     // 運搬・水汲みタスクの予約を解除
     match task {
         AssignedTask::Haul(data) => {
@@ -202,21 +214,22 @@ pub fn unassign_task<'w, 's, Q: TaskReservationAccess<'w, 's>>(
                     entity_commands.remove::<crate::relationships::LoadedIn>();
                     entity_commands.insert((
                         Visibility::Visible,
-                        Transform::from_xyz(drop_pos.x, drop_pos.y, Z_ITEM_PICKUP),
+                        Transform::from_xyz(snapped_pos.x, snapped_pos.y, Z_ITEM_PICKUP),
                     ));
                 }
             }
             // 手押し車を駐車状態に戻す
             if let Ok(mut wb_commands) = commands.get_entity(data.wheelbarrow) {
                 wb_commands.remove::<(crate::relationships::PushedBy, crate::systems::visual::haul::WheelbarrowMovement)>();
+                if let Some(parking_entity) = queries.belongs_to(data.wheelbarrow) {
+                    wb_commands.insert(crate::relationships::ParkedAt(parking_entity));
+                }
                 wb_commands.insert((
                     Visibility::Visible,
-                    Transform::from_xyz(drop_pos.x, drop_pos.y, Z_ITEM_PICKUP),
+                    Transform::from_xyz(snapped_pos.x, snapped_pos.y, Z_ITEM_PICKUP),
                 ));
-                // BelongsTo があれば ParkedAt を復元
-                // ここでは BelongsTo の照会が困難なため、ParkedAt なしで放置
-                // （auto_haul が再検知する）
             }
+            skip_inventory_drop_for = Some(data.wheelbarrow);
         }
         AssignedTask::CollectSand(_) | AssignedTask::Refine(_) => {}
         _ => {}
@@ -225,63 +238,49 @@ pub fn unassign_task<'w, 's, Q: TaskReservationAccess<'w, 's>>(
     // アイテムのドロップ処理（運搬タスクの場合）
     if let Some(inventory) = inventory.as_deref_mut() {
         if let Some(item_entity) = inventory.0 {
-            // インベントリから削除
-            // 注意: inventoryは可変参照なので直接書き換える
-            // しかし、呼び出し元でinventory.0 = Noneする必要があるため、ここではドロップ処理のみ行う
-            // あるいはここでinventory.0 = Noneする?
-            // argument is Option<&mut Inventory>.
+            if Some(item_entity) != skip_inventory_drop_for {
+                // インベントリから削除
+                // 注意: inventoryは可変参照なので直接書き換える
+                // しかし、呼び出し元でinventory.0 = Noneする必要があるため、ここではドロップ処理のみ行う
+                // あるいはここでinventory.0 = Noneする?
+                // argument is Option<&mut Inventory>.
 
-            let (gx, gy) = WorldMap::world_to_grid(drop_pos);
-            let drop_grid = if world_map.is_walkable(gx, gy) {
-                (gx, gy)
-            } else {
-                // 通行不能（壁の中など）なら、近くの通行可能な場所を探す
-                world_map
-                    .get_nearest_walkable_grid(drop_pos)
-                    .unwrap_or((gx, gy))
-            };
+                // クリーンな状態でドロップ（Designation なし）
+                commands.entity(item_entity).insert((
+                    Visibility::Visible,
+                    Transform::from_xyz(snapped_pos.x, snapped_pos.y, Z_ITEM_PICKUP),
+                ));
 
-            let snapped_pos = WorldMap::grid_to_world(drop_grid.0, drop_grid.1);
+                let _res_item = dropped_item_res
+                    .or_else(|| queries.resources().get(item_entity).ok().map(|r| r.0));
 
-            // クリーンな状態でドロップ（Designation なし）
-            commands.entity(item_entity).insert((
-                Visibility::Visible,
-                Transform::from_xyz(snapped_pos.x, snapped_pos.y, Z_ITEM_PICKUP),
-            ));
+                // 管理コンポーネントは削除せず維持する...
+                commands
+                    .entity(item_entity)
+                    .remove::<crate::systems::jobs::TargetBlueprint>();
+                commands
+                    .entity(item_entity)
+                    .remove::<crate::systems::jobs::Priority>();
 
-            let _res_item =
-                dropped_item_res.or_else(|| queries.resources().get(item_entity).ok().map(|r| r.0));
+                // TaskWorkersも確実に削除してリセットする
+                commands
+                    .entity(item_entity)
+                    .remove::<crate::relationships::TaskWorkers>();
 
-            // 管理コンポーネントは削除せず維持する...
-            commands
-                .entity(item_entity)
-                .remove::<crate::systems::jobs::TargetBlueprint>();
-            commands
-                .entity(item_entity)
-                .remove::<crate::systems::jobs::Priority>();
+                // StoredIn関係は削除（地面に落ちるため）
+                commands
+                    .entity(item_entity)
+                    .remove::<crate::relationships::StoredIn>();
+                // ストックパイル情報も削除（地面に落ちるため、確実に非備蓄状態にする）
+                commands
+                    .entity(item_entity)
+                    .remove::<crate::systems::logistics::InStockpile>();
 
-            // TaskWorkersも確実に削除してリセットする
-            commands
-                .entity(item_entity)
-                .remove::<crate::relationships::TaskWorkers>();
-
-            // StoredIn関係は削除（地面に落ちるため）
-            commands
-                .entity(item_entity)
-                .remove::<crate::relationships::StoredIn>();
-            // ストックパイル情報も削除（地面に落ちるため、確実に非備蓄状態にする）
-            commands
-                .entity(item_entity)
-                .remove::<crate::systems::logistics::InStockpile>();
-
-            // Note: ここで即座に新しいタスク(Designation)を付与しない。
-            // オートホールシステム(task_area_auto_haul_system)に回収を任せることで、
-            // 状況に応じた適切なタスク(Haul)が発行されるようにする。
+                // Note: ここで即座に新しいタスク(Designation)を付与しない。
+                // オートホールシステム(task_area_auto_haul_system)に回収を任せることで、
+                // 状況に応じた適切なタスク(Haul)が発行されるようにする。
+            }
         }
-    }
-
-    // インベントリを空にする（ドロップしたとみなす）
-    if let Some(inventory) = inventory {
         inventory.0 = None;
     }
 
