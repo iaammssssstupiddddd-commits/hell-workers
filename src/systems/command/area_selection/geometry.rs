@@ -1,7 +1,7 @@
 use super::state::{Drag, Operation};
 use crate::constants::TILE_SIZE;
 use crate::interface::camera::MainCamera;
-use crate::systems::command::{AreaEditHandleKind, TaskArea};
+use crate::systems::command::{AreaEditHandleKind, TaskArea, TaskMode};
 use bevy::prelude::*;
 use bevy::window::{CursorIcon, PrimaryWindow, SystemCursorIcon};
 
@@ -16,6 +16,27 @@ pub(super) fn hotkey_slot_index(keyboard: &ButtonInput<KeyCode>) -> Option<usize
         Some(2)
     } else {
         None
+    }
+}
+
+pub fn get_drag_start(mode: TaskMode) -> Option<Vec2> {
+    match mode {
+        TaskMode::AreaSelection(s) => s,
+        TaskMode::DesignateChop(s) => s,
+        TaskMode::DesignateMine(s) => s,
+        TaskMode::DesignateHaul(s) => s,
+        TaskMode::CancelDesignation(s) => s,
+        TaskMode::ZonePlacement(_, s) => s,
+        _ => None,
+    }
+}
+
+pub fn get_indicator_color(mode: TaskMode) -> LinearRgba {
+    match mode {
+        TaskMode::AreaSelection(_) => LinearRgba::from(Color::srgba(1.0, 1.0, 1.0, 0.4)),
+        TaskMode::CancelDesignation(_) => LinearRgba::from(Color::srgba(1.0, 0.2, 0.2, 0.5)),
+        TaskMode::ZonePlacement(_, _) => LinearRgba::from(Color::srgba(1.0, 1.0, 1.0, 0.4)), // TaskAreaと同様に白/透明
+        _ => LinearRgba::from(Color::srgba(0.2, 1.0, 0.2, 0.5)),
     }
 }
 

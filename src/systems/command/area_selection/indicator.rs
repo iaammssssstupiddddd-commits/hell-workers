@@ -1,7 +1,8 @@
 use super::geometry::world_cursor_pos;
 use crate::game_state::TaskContext;
 use crate::interface::camera::MainCamera;
-use crate::systems::command::{AreaSelectionIndicator, TaskMode};
+use crate::systems::command::AreaSelectionIndicator;
+use crate::systems::visual::task_area_visual::TaskAreaMaterial;
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
@@ -11,53 +12,55 @@ pub fn area_selection_indicator_system(
     q_camera: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
     q_window: Query<&Window, With<PrimaryWindow>>,
     mut q_indicator: Query<
-        (Entity, &mut Transform, &mut Sprite, &mut Visibility),
+        (
+            &mut Transform,
+            &MeshMaterial2d<TaskAreaMaterial>,
+            &mut Visibility,
+        ),
         With<AreaSelectionIndicator>,
     >,
     mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<TaskAreaMaterial>>,
 ) {
-    let drag_start = match task_context.0 {
-        TaskMode::AreaSelection(s) => s,
-        TaskMode::DesignateChop(s) => s,
-        TaskMode::DesignateMine(s) => s,
-        TaskMode::DesignateHaul(s) => s,
-        TaskMode::CancelDesignation(s) => s,
-        _ => None,
-    };
+    let drag_start = super::geometry::get_drag_start(task_context.0);
 
     if let Some(start_pos) = drag_start
         && let Some(world_pos) = world_cursor_pos(&q_window, &q_camera)
     {
-        let end_pos = WorldMap::snap_to_grid_edge(world_pos);
-        let center = (start_pos + end_pos) / 2.0;
-        let size = (start_pos - end_pos).abs();
+        let end_pos: Vec2 = WorldMap::snap_to_grid_edge(world_pos);
+        let center: Vec2 = (start_pos + end_pos) / 2.0;
+        let size: Vec2 = (start_pos - end_pos).abs();
+        let color = super::geometry::get_indicator_color(task_context.0);
 
-        let color = match task_context.0 {
-            TaskMode::AreaSelection(_) => Color::srgba(1.0, 1.0, 1.0, 0.2),
-            TaskMode::CancelDesignation(_) => Color::srgba(1.0, 0.2, 0.2, 0.3),
-            _ => Color::srgba(0.2, 1.0, 0.2, 0.3),
-        };
-
-        if let Ok((_, mut transform, mut sprite, mut visibility)) = q_indicator.single_mut() {
+        if let Some((mut transform, material_handle, mut visibility)) = q_indicator.iter_mut().next()
+        {
             transform.translation = center.extend(0.6);
-            sprite.custom_size = Some(size);
-            sprite.color = color;
+            transform.scale = size.extend(1.0);
+            if let Some(material) = materials.get_mut(&material_handle.0) {
+                material.color = color;
+                material.size = size;
+                material.state = 3; // Editing state (dashed border)
+            }
             *visibility = Visibility::Visible;
         } else {
             commands.spawn((
                 AreaSelectionIndicator,
-                Sprite {
+                Mesh2d(meshes.add(Rectangle::default().mesh())),
+                MeshMaterial2d(materials.add(TaskAreaMaterial {
                     color,
-                    custom_size: Some(size),
-                    ..default()
-                },
-                Transform::from_translation(center.extend(0.6)),
+                    size,
+                    time: 0.0,
+                    state: 3,
+                })),
+                Transform::from_translation(center.extend(0.6)).with_scale(size.extend(1.0)),
+                Visibility::Visible,
             ));
         }
         return;
     }
 
-    if let Ok((_, _, _, mut visibility)) = q_indicator.single_mut() {
+    if let Some((_, _, mut visibility)) = q_indicator.iter_mut().next() {
         *visibility = Visibility::Hidden;
     }
 }
