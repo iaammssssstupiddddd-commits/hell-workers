@@ -1,6 +1,5 @@
-use super::grid::{GridData, SpatialGridOps};
+use super::grid::{sync_grid_timed, GridData, SpatialGridOps, SpatialGridSyncTimer, SyncGridClear};
 use crate::entities::familiar::Familiar;
-use crate::systems::spatial::SpatialGridSyncTimer;
 use bevy::prelude::*;
 
 /// 使い魔用の空間グリッド - モチベーション計算の高速化用
@@ -26,19 +25,26 @@ impl SpatialGridOps for FamiliarSpatialGrid {
     }
 }
 
+impl SyncGridClear for FamiliarSpatialGrid {
+    fn clear_and_sync<I>(&mut self, entities: I)
+    where
+        I: Iterator<Item = (Entity, Vec2)>,
+    {
+        self.0.clear();
+        for (entity, pos) in entities {
+            self.0.insert(entity, pos);
+        }
+    }
+}
+
 pub fn update_familiar_spatial_grid_system(
     mut sync_timer: ResMut<SpatialGridSyncTimer>,
     mut grid: ResMut<FamiliarSpatialGrid>,
     query: Query<(Entity, &Transform), With<Familiar>>,
 ) {
-    let timer_finished = sync_timer.timer.just_finished();
-    if sync_timer.first_run_done && !timer_finished {
-        return;
-    }
-    sync_timer.first_run_done = true;
-
-    grid.0.clear();
-    for (entity, transform) in query.iter() {
-        grid.0.insert(entity, transform.translation.truncate());
-    }
+    sync_grid_timed(
+        &mut sync_timer,
+        &mut *grid,
+        query.iter().map(|(e, t)| (e, t.translation.truncate())),
+    );
 }

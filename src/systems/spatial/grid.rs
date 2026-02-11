@@ -36,6 +36,32 @@ pub trait SpatialGridOps {
     fn get_nearby_in_radius(&self, pos: Vec2, radius: f32) -> Vec<Entity>;
 }
 
+/// フル再構築（clear + insert）をサポートするグリッド向けトレイト
+pub trait SyncGridClear: SpatialGridOps {
+    fn clear_and_sync<I>(&mut self, entities: I)
+    where
+        I: Iterator<Item = (Entity, Vec2)>;
+}
+
+/// タイマー付きの空間グリッド同期（6つの update システムで共有）
+///
+/// タイマーが満了したときのみ clear + insert を実行する。
+pub fn sync_grid_timed<G, I>(
+    sync_timer: &mut SpatialGridSyncTimer,
+    grid: &mut G,
+    entities: I,
+) where
+    G: SyncGridClear,
+    I: Iterator<Item = (Entity, Vec2)>,
+{
+    let timer_finished = sync_timer.timer.just_finished();
+    if sync_timer.first_run_done && !timer_finished {
+        return;
+    }
+    sync_timer.first_run_done = true;
+    grid.clear_and_sync(entities);
+}
+
 /// 汎用的なグリッドデータ構造
 #[derive(Clone)]
 pub struct GridData {

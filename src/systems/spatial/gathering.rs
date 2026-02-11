@@ -1,6 +1,5 @@
-use super::grid::{GridData, SpatialGridOps};
+use super::grid::{sync_grid_timed, GridData, SpatialGridOps, SpatialGridSyncTimer, SyncGridClear};
 use crate::systems::soul_ai::helpers::gathering::GatheringSpot;
-use crate::systems::spatial::SpatialGridSyncTimer;
 use bevy::prelude::*;
 
 /// 集会スポット用の空間グリッド
@@ -22,19 +21,26 @@ impl SpatialGridOps for GatheringSpotSpatialGrid {
     }
 }
 
+impl SyncGridClear for GatheringSpotSpatialGrid {
+    fn clear_and_sync<I>(&mut self, entities: I)
+    where
+        I: Iterator<Item = (Entity, Vec2)>,
+    {
+        self.0.clear();
+        for (entity, pos) in entities {
+            self.0.insert(entity, pos);
+        }
+    }
+}
+
 pub fn update_gathering_spot_spatial_grid_system(
     mut sync_timer: ResMut<SpatialGridSyncTimer>,
     mut grid: ResMut<GatheringSpotSpatialGrid>,
     query: Query<(Entity, &GatheringSpot)>,
 ) {
-    let timer_finished = sync_timer.timer.just_finished();
-    if sync_timer.first_run_done && !timer_finished {
-        return;
-    }
-    sync_timer.first_run_done = true;
-
-    grid.0.clear();
-    for (entity, spot) in query.iter() {
-        grid.0.insert(entity, spot.center);
-    }
+    sync_grid_timed(
+        &mut sync_timer,
+        &mut *grid,
+        query.iter().map(|(e, s)| (e, s.center)),
+    );
 }
