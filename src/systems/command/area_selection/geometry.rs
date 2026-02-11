@@ -27,6 +27,7 @@ pub fn get_drag_start(mode: TaskMode) -> Option<Vec2> {
         TaskMode::DesignateHaul(s) => s,
         TaskMode::CancelDesignation(s) => s,
         TaskMode::ZonePlacement(_, s) => s,
+        TaskMode::ZoneRemoval(_, s) => s,
         _ => None,
     }
 }
@@ -36,6 +37,7 @@ pub fn get_indicator_color(mode: TaskMode) -> LinearRgba {
         TaskMode::AreaSelection(_) => LinearRgba::from(Color::srgba(1.0, 1.0, 1.0, 0.4)),
         TaskMode::CancelDesignation(_) => LinearRgba::from(Color::srgba(1.0, 0.2, 0.2, 0.5)),
         TaskMode::ZonePlacement(_, _) => LinearRgba::from(Color::srgba(1.0, 1.0, 1.0, 0.4)), // TaskAreaと同様に白/透明
+        TaskMode::ZoneRemoval(_, _) => LinearRgba::from(Color::srgba(1.0, 0.2, 0.2, 0.5)),   // 削除は赤
         _ => LinearRgba::from(Color::srgba(0.2, 1.0, 0.2, 0.5)),
     }
 }
