@@ -70,6 +70,13 @@ pub(super) fn handle_pressed_action(
             zone_context,
             task_context,
         ),
+        MenuAction::RemoveZone(kind) => super::mode::set_zone_removal_mode(
+            kind,
+            next_play_mode,
+            build_context,
+            zone_context,
+            task_context,
+        ),
         MenuAction::SelectTaskMode(mode) => super::mode::set_task_mode(
             mode,
             next_play_mode,

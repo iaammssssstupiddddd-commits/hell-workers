@@ -63,6 +63,23 @@ pub(super) fn set_zone_mode(
     info!("UI: Zone mode set to {:?}, PlayMode -> TaskDesignation", kind);
 }
 
+pub(super) fn set_zone_removal_mode(
+    kind: ZoneType,
+    next_play_mode: &mut NextState<PlayMode>,
+    build_context: &mut BuildContext,
+    zone_context: &mut ZoneContext,
+    task_context: &mut TaskContext,
+) {
+    build_context.0 = None;
+    zone_context.0 = Some(kind); // 削除モードでも一応セットしておく
+    task_context.0 = TaskMode::ZoneRemoval(kind, None);
+    next_play_mode.set(PlayMode::TaskDesignation);
+    info!(
+        "UI: Zone Removal mode set to {:?}, PlayMode -> TaskDesignation",
+        kind
+    );
+}
+
 pub(super) fn set_task_mode(
     mode: TaskMode,
     next_play_mode: &mut NextState<PlayMode>,
@@ -191,6 +208,13 @@ pub(super) fn build_mode_text(
                     format!("Mode: Zone {:?} (Dragging...)", kind)
                 } else {
                     format!("Mode: Zone {:?} (Drag to place)", kind)
+                }
+            }
+            TaskMode::ZoneRemoval(kind, start_pos) => {
+                if start_pos.is_some() {
+                    format!("Mode: Remove Zone {:?} (Dragging...)", kind)
+                } else {
+                    format!("Mode: Remove Zone {:?} (Drag to remove)", kind)
                 }
             }
             _ => "Mode: Task".to_string(),

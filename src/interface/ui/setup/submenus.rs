@@ -141,6 +141,32 @@ fn spawn_zones_submenu(
                     TextColor(theme.colors.text_primary),
                 ));
             });
+
+        parent
+            .spawn((
+                Button,
+                Node {
+                    width: Val::Percent(100.0),
+                    height: Val::Px(40.0),
+                    margin: UiRect::bottom(Val::Px(5.0)),
+                    justify_content: JustifyContent::Center,
+                    align_items: AlignItems::Center,
+                    ..default()
+                },
+                BackgroundColor(theme.colors.status_danger), // 削除アクションなので赤系
+                MenuButton(MenuAction::RemoveZone(ZoneType::Stockpile)),
+            ))
+            .with_children(|button| {
+                button.spawn((
+                    Text::new("Remove"),
+                    TextFont {
+                        font: game_assets.font_ui.clone(),
+                        font_size: theme.typography.font_size_title,
+                        ..default()
+                    },
+                    TextColor(theme.colors.text_primary),
+                ));
+            });
     });
 }
 
