@@ -7,6 +7,7 @@ use crate::systems::command::{
     AreaEditClipboard, AreaEditHistory, AreaEditPresets, AreaEditSession, assign_task_system,
     blueprint_cancel_cleanup_system, familiar_command_input_system,
     task_area_edit_history_shortcuts_system, task_area_selection_system, zone_placement_system,
+    zone_removal_system,
 };
 use crate::systems::obstacle::obstacle_cleanup_system;
 use crate::systems::logistics::transport_request::TransportRequestPlugin;
@@ -40,6 +41,7 @@ impl Plugin for LogicPlugin {
                 ),
                 task_area_selection_system.run_if(in_state(PlayMode::TaskDesignation)),
                 zone_placement_system.run_if(in_state(PlayMode::TaskDesignation)),
+                zone_removal_system.run_if(in_state(PlayMode::TaskDesignation)),
                 task_area_edit_history_shortcuts_system.run_if(in_state(PlayMode::TaskDesignation)),
                 familiar_spawning_system,
                 tree_regrowth_system,

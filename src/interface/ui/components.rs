@@ -64,6 +64,7 @@ pub enum MenuAction {
     ClearInspectPin,
     SelectBuild(BuildingType),
     SelectZone(ZoneType),
+    RemoveZone(ZoneType), // ゾーン削除
     SelectTaskMode(crate::systems::command::TaskMode),
     SelectAreaTask,
     OpenOperationDialog,
