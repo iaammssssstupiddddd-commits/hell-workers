@@ -26,11 +26,6 @@ use crate::events::{
 use crate::systems::familiar_ai::perceive::resource_sync::{
     SharedResourceCache, apply_reservation_op,
 };
-// use crate::systems::familiar_ai::perceive::resource_sync::SharedResourceCache; // Removed unused import
-use crate::systems::soul_ai::execute::task_execution::types::{
-    GatherWaterPhase, HaulPhase, HaulToBpPhase, HaulToMixerPhase, HaulWaterToMixerPhase,
-    HaulWithWheelbarrowPhase,
-};
 use crate::systems::soul_ai::helpers::query_types::{
     TaskAssignmentSoulQuery, TaskExecutionSoulQuery,
 };
@@ -148,43 +143,6 @@ pub fn apply_task_assignment_requests_system(
     }
 }
 
-fn expected_item_for_task(task: &AssignedTask) -> Option<Entity> {
-    match task {
-        AssignedTask::Haul(data) => Some(data.item),
-        AssignedTask::HaulToBlueprint(data) => Some(data.item),
-        AssignedTask::HaulToMixer(data) => Some(data.item),
-        AssignedTask::GatherWater(data) => Some(data.bucket),
-        AssignedTask::HaulWaterToMixer(data) => Some(data.bucket),
-        AssignedTask::HaulWithWheelbarrow(data) => Some(data.wheelbarrow),
-        _ => None,
-    }
-}
-
-fn requires_item_in_inventory(task: &AssignedTask) -> bool {
-    match task {
-        AssignedTask::Haul(data) => matches!(data.phase, HaulPhase::GoingToStockpile),
-        AssignedTask::HaulToBlueprint(data) => {
-            matches!(data.phase, HaulToBpPhase::GoingToBlueprint)
-        }
-        AssignedTask::HaulToMixer(data) => matches!(
-            data.phase,
-            HaulToMixerPhase::GoingToMixer | HaulToMixerPhase::Delivering
-        ),
-        AssignedTask::GatherWater(data) => !matches!(data.phase, GatherWaterPhase::GoingToBucket),
-        AssignedTask::HaulWaterToMixer(data) => {
-            !matches!(data.phase, HaulWaterToMixerPhase::GoingToBucket)
-        }
-        AssignedTask::HaulWithWheelbarrow(data) => {
-            !matches!(
-                data.phase,
-                HaulWithWheelbarrowPhase::GoingToParking
-                    | HaulWithWheelbarrowPhase::PickingUpWheelbarrow
-            )
-        }
-        _ => false,
-    }
-}
-
 pub fn task_execution_system(
     mut commands: Commands,
     mut q_souls: TaskExecutionSoulQuery,
@@ -213,8 +171,8 @@ pub fn task_execution_system(
         breakdown_opt,
     ) in q_souls.iter_mut()
     {
-        if let Some(expected_item) = expected_item_for_task(&task) {
-            let needs_item = requires_item_in_inventory(&task);
+        if let Some(expected_item) = task.expected_item() {
+            let needs_item = task.requires_item_in_inventory();
             let has_expected = inventory.0 == Some(expected_item);
             let has_mismatch = inventory.0.is_some() && !has_expected;
             let missing_required = needs_item && !has_expected;
