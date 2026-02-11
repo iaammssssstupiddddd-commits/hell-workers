@@ -182,6 +182,8 @@ pub const ESCAPE_BEHAVIOR_INTERVAL: f32 = 0.5;
 pub const FAMILIAR_TASK_DELEGATION_INTERVAL: f32 = 0.5;
 /// 予約キャッシュ同期システム実行間隔（秒）
 pub const RESERVATION_SYNC_INTERVAL: f32 = 0.2;
+/// 空間グリッド（Designation/Familiar等）の同期間隔（秒）
+pub const SPATIAL_GRID_SYNC_INTERVAL: f32 = 0.15;
 
 // ============================================================
 // AI ロジック定数 - 作業 (Work)
