@@ -234,6 +234,14 @@ pub const WHEELBARROW_CAPACITY: usize = 10;
 pub const WHEELBARROW_OFFSET: f32 = TILE_SIZE * 0.5;
 /// 手押し車使用の最小アイテム数（これ以上あれば手押し車を使う）
 pub const WHEELBARROW_MIN_BATCH_SIZE: usize = 3;
+/// 手押し車リースの有効期間（秒）
+pub const WHEELBARROW_LEASE_DURATION_SECS: f64 = 30.0;
+/// 仲裁スコア: バッチサイズの重み
+pub const WHEELBARROW_SCORE_BATCH_SIZE: f32 = 10.0;
+/// 仲裁スコア: 優先度の重み
+pub const WHEELBARROW_SCORE_PRIORITY: f32 = 5.0;
+/// 仲裁スコア: 距離のペナルティ重み
+pub const WHEELBARROW_SCORE_DISTANCE: f32 = 0.1;
 /// 運搬中の手押し車のスケール倍率（駐車時は1.0、運搬中は大きく表示）
 pub const WHEELBARROW_ACTIVE_SCALE: f32 = 1.8;
 

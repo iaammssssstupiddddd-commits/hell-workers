@@ -39,10 +39,11 @@ Hell-Workers の物流は、`TransportRequest` を中心にした自動発行 + 
 
 `TransportRequestPlugin` は以下の順で実行されます。
 
-1. `Perceive`
+1. `Perceive`（メトリクス集計）
 2. `Decide`（各 producer が request を upsert）
-3. `Execute`（`TaskWorkers` に応じた state 同期）
-4. `Maintain`（アンカー消失や不要 request の cleanup）
+3. `Arbitrate`（手押し車仲裁 — 後述 §5.2）
+4. `Execute`（`TaskWorkers` に応じた state 同期）
+5. `Maintain`（アンカー消失や不要 request の cleanup）
 
 `task_finder` は `DesignationSpatialGrid` と `TransportRequestSpatialGrid` の両方を探索して候補を集約します。
 
@@ -92,6 +93,8 @@ Hell-Workers の物流は、`TransportRequest` を中心にした自動発行 + 
 
 ## 5. 手押し車運搬
 
+### 5.1 基本動作
+
 手押し車の実運用は `DepositToStockpile` の割り当て時に判定されます。
 
 - `resolve_wheelbarrow_batch_for_stockpile` が以下を満たすと一括運搬を選択:
@@ -102,6 +105,77 @@ Hell-Workers の物流は、`TransportRequest` を中心にした自動発行 + 
   - `WHEELBARROW_CAPACITY`
   - Stockpile 残容量
 - 対象アイテムは地面上のみ（`InStockpile` は除外）。
+
+### 5.2 手押し車仲裁システム (Wheelbarrow Arbitration)
+
+複数の `DepositToStockpile` request が同時に手押し車を必要とする場合に、
+全体最適に近い割り当てを一括決定する仲裁フェーズ。
+`TransportRequestSet::Arbitrate`（`Decide` → `Execute` 間）で毎フレーム実行される。
+
+#### 5.2.1 WheelbarrowLease コンポーネント
+
+仲裁結果は request エンティティに `WheelbarrowLease` として付与される。
+
+```
+WheelbarrowLease {
+    wheelbarrow: Entity,     // 割り当てられた手押し車
+    items: Vec<Entity>,      // 積載対象アイテム群
+    source_pos: Vec2,        // アイテム重心（積み込み地点）
+    dest_stockpile: Entity,  // 搬入先 Stockpile
+    lease_until: f64,        // 有効期限（ゲーム時刻）
+}
+```
+
+#### 5.2.2 仲裁アルゴリズム
+
+1. **期限切れ lease の除去** — `lease_until < now` の lease を remove。
+2. **使用中 wheelbarrow の収集** — 有効な lease が付いている wheelbarrow を除外リストに追加。
+3. **eligible request の抽出** — 以下すべてを満たす request:
+   - `kind == DepositToStockpile`
+   - `state == Pending`（ワーカー未割当）
+   - lease なし
+   - `resource_type.is_loadable()`
+4. **バッチ候補の評価** — 各 eligible request に対して:
+   - 地面上の未予約フリーアイテムを `resource_type` + `BelongsTo` 一致で収集（半径 `TILE_SIZE * 10.0`）
+   - Stockpile 残容量を確認
+   - `batch_size < WHEELBARROW_MIN_BATCH_SIZE` なら除外
+5. **スコア計算** — `score = batch_size * SCORE_BATCH_SIZE + priority * SCORE_PRIORITY - distance * SCORE_DISTANCE`
+   - `distance` = 最近の wheelbarrow からアイテム重心までの距離
+6. **Greedy 割り当て** — スコア降順にソートし、各 request に最近の available wheelbarrow を割り当て。
+   - 割り当て済みの wheelbarrow は available set から除去。
+
+#### 5.2.3 定数
+
+| 定数 | 値 | 用途 |
+| :--- | :--- | :--- |
+| `WHEELBARROW_LEASE_DURATION_SECS` | 30.0 | lease 有効期間（秒） |
+| `WHEELBARROW_SCORE_BATCH_SIZE` | 10.0 | スコア: バッチサイズの重み |
+| `WHEELBARROW_SCORE_PRIORITY` | 5.0 | スコア: 優先度の重み |
+| `WHEELBARROW_SCORE_DISTANCE` | 0.1 | スコア: 距離のペナルティ重み |
+
+#### 5.2.4 割り当て時の lease 優先
+
+`assign_haul`（DepositToStockpile 経路）は以下の順で手押し車を解決する:
+
+1. **WheelbarrowLease あり** → lease の有効性を検証（wheelbarrow が parked か、items が未予約か）し、有効なら即採用。
+2. **lease なし** → 既存の `resolve_wheelbarrow_batch_for_stockpile` でフォールバック。
+3. **手押し車不要** → 単品運搬。
+
+#### 5.2.5 lease のライフサイクル
+
+- **付与**: 仲裁システム（Arbitrate フェーズ）が `WheelbarrowLease` を insert。
+- **消費**: `assign_haul` が lease を読み取り `HaulWithWheelbarrow` タスクを発行。割り当て後は request の state が Pending でなくなるため、次フレームの仲裁で自動的に対象外。
+- **期限切れ**: 仲裁システムが毎フレーム `lease_until < now` をチェックして remove。
+- **request close**: `transport_request_anchor_cleanup_system` が request を閉じる際に `WheelbarrowLease` も除去。
+
+#### 5.2.6 メトリクス
+
+`TransportRequestMetrics` に以下が追加:
+
+- `wheelbarrow_leases_active` — アクティブな lease 数
+- `wheelbarrow_leases_granted_this_frame` — そのフレームで新規付与された lease 数
+
+5秒間隔のデバッグログに `wb_leases=N` として出力される。
 
 ## 6. 予約と競合回避
 
@@ -132,6 +206,8 @@ Hell-Workers の物流は、`TransportRequest` を中心にした自動発行 + 
 
 - request producer:
   - `src/systems/logistics/transport_request/producer/`
+- 手押し車仲裁:
+  - `src/systems/logistics/transport_request/arbitration.rs`
 - request plugin:
   - `src/systems/logistics/transport_request/plugin.rs`
 - request lifecycle:
