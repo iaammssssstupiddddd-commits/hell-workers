@@ -69,6 +69,7 @@ pub struct StorageAccess<'w, 's> {
             Option<&'static crate::relationships::StoredItems>,
         ),
     >,
+    pub bucket_storages: Query<'w, 's, (), With<crate::systems::logistics::BucketStorage>>,
     pub blueprints: Query<
         'w,
         's,
@@ -104,6 +105,7 @@ pub struct MutStorageAccess<'w, 's> {
             Option<&'static crate::relationships::StoredItems>,
         ),
     >,
+    pub bucket_storages: Query<'w, 's, (), With<crate::systems::logistics::BucketStorage>>,
     pub blueprints: Query<
         'w,
         's,

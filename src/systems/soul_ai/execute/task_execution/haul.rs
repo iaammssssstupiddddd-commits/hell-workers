@@ -194,7 +194,21 @@ pub fn handle_haul_task(
                         || stockpile_comp.resource_type == Some(res_type);
 
                     // 専用エリアの場合、型チェックを緩和（所有権が一致すれば空/満タンバケツ混在OK）
-                    let type_allowed = if stock_belongs.is_some() {
+                    // ただしバケツ置き場には非バケツアイテムを入れない
+                    let is_bucket_storage = ctx
+                        .queries
+                        .storage
+                        .bucket_storages
+                        .get(stockpile)
+                        .is_ok();
+                    let is_bucket_item = matches!(
+                        res_type,
+                        crate::systems::logistics::ResourceType::BucketEmpty
+                            | crate::systems::logistics::ResourceType::BucketWater
+                    );
+                    let type_allowed = if is_bucket_storage && !is_bucket_item {
+                        false
+                    } else if stock_belongs.is_some() {
                         belongs_match
                     } else {
                         type_match
