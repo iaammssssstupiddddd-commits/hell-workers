@@ -34,6 +34,12 @@ pub fn find_best_stockpile_for_item(
                 item_type,
                 ResourceType::BucketEmpty | ResourceType::BucketWater
             );
+            let is_bucket_storage = queries.storage.bucket_storages.get(*s_entity).is_ok();
+
+            // バケツ置き場には非バケツアイテムを入れない
+            if is_bucket_storage && !is_bucket {
+                return false;
+            }
 
             let type_match = if is_dedicated && is_bucket {
                 true
@@ -104,13 +110,39 @@ pub fn find_best_tank_for_bucket(
 }
 
 /// M7: ReturnBucket request 用に、指定タンクに紐づくドロップバケツで最も近いものを検索
+/// ストックパイル内のバケツは除外する（既に返却済み）
 pub fn find_nearest_bucket_for_return(
     tank_entity: Entity,
     task_pos: Vec2,
     queries: &crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
     shadow: &ReservationShadow,
 ) -> Option<(Entity, Vec2)> {
-    find_nearest_bucket_for_tank(tank_entity, task_pos, queries, shadow)
+    queries
+        .free_resource_items
+        .iter()
+        .filter(|(_, _, vis, res)| {
+            *vis != Visibility::Hidden
+                && matches!(res.0, ResourceType::BucketEmpty | ResourceType::BucketWater)
+        })
+        .filter(|(e, _, _, _)| {
+            queries.designation.belongs.get(*e).ok().map(|b| b.0) == Some(tank_entity)
+        })
+        // ストックパイル内のバケツを除外（返却対象は地面にあるもののみ）
+        .filter(|(e, _, _, _)| {
+            queries
+                .designation
+                .targets
+                .get(*e)
+                .ok()
+                .is_some_and(|(_, _, _, _, _, stored_in_opt)| stored_in_opt.is_none())
+        })
+        .filter(|(e, _, _, _)| source_not_reserved(*e, queries, shadow))
+        .min_by(|(_, t1, _, _), (_, t2, _, _)| {
+            let d1 = t1.translation.truncate().distance_squared(task_pos);
+            let d2 = t2.translation.truncate().distance_squared(task_pos);
+            d1.partial_cmp(&d2).unwrap_or(std::cmp::Ordering::Equal)
+        })
+        .map(|(e, t, _, _)| (e, t.translation.truncate()))
 }
 
 pub fn find_nearest_bucket_for_tank(

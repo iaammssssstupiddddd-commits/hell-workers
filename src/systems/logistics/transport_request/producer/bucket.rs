@@ -55,12 +55,22 @@ pub fn bucket_auto_haul_system(
         .map(|(e, _, area)| (e, area.clone()))
         .collect();
 
-    // (stockpile_entity) -> (fam_entity, stock_pos)
-    let mut desired_returns = std::collections::HashMap::<Entity, (Entity, Vec2)>::new();
+    // (stockpile_entity) -> (fam_entity, stock_pos, dropped_bucket_count)
+    let mut desired_returns =
+        std::collections::HashMap::<Entity, (Entity, Vec2, u32)>::new();
+
+    let total_buckets = q_buckets.iter().count();
+    let total_bucket_stockpiles = q_stockpiles.iter().count();
+    if total_buckets > 0 {
+        debug!(
+            "BUCKET_RETURN: {} dropped buckets found, {} bucket stockpiles, {} active familiars",
+            total_buckets, total_bucket_stockpiles, active_familiars.len()
+        );
+    }
 
     for (fam_entity, task_area) in active_familiars.iter() {
         for (
-            _bucket_entity,
+            bucket_entity,
             bucket_transform,
             visibility,
             res_item,
@@ -76,17 +86,24 @@ pub fn bucket_auto_haul_system(
                 continue;
             }
             if workers_opt.is_some_and(|w| !w.is_empty()) {
+                debug!("BUCKET_RETURN: bucket {:?} skipped: has workers", bucket_entity);
                 continue;
             }
             if reserved_opt.is_some() {
+                debug!("BUCKET_RETURN: bucket {:?} skipped: reserved", bucket_entity);
                 continue;
             }
             if *visibility == Visibility::Hidden {
+                debug!("BUCKET_RETURN: bucket {:?} skipped: hidden", bucket_entity);
                 continue;
             }
 
             let bucket_pos = bucket_transform.translation.truncate();
             if !task_area.contains(bucket_pos) {
+                debug!(
+                    "BUCKET_RETURN: bucket {:?} at {:?} skipped: outside task area",
+                    bucket_entity, bucket_pos
+                );
                 continue;
             }
 
@@ -98,12 +115,20 @@ pub fn bucket_auto_haul_system(
                 .iter()
                 .filter_map(|&e| q_stockpiles.get(e).ok())
                 .filter(|(_, _, stock, _, stock_belongs, stored_opt)| {
-                    stock_belongs.0 == tank_entity
-                        && matches!(
-                            stock.resource_type,
-                            None | Some(ResourceType::BucketEmpty) | Some(ResourceType::BucketWater)
-                        )
-                        && stored_opt.map(|s| s.len()).unwrap_or(0) < stock.capacity
+                    let owner_match = stock_belongs.0 == tank_entity;
+                    let type_ok = matches!(
+                        stock.resource_type,
+                        None | Some(ResourceType::BucketEmpty) | Some(ResourceType::BucketWater)
+                    );
+                    let capacity_ok =
+                        stored_opt.map(|s| s.len()).unwrap_or(0) < stock.capacity;
+                    if !owner_match || !type_ok || !capacity_ok {
+                        debug!(
+                            "BUCKET_RETURN: stockpile filtered out: owner={}, type={}, capacity={}",
+                            owner_match, type_ok, capacity_ok
+                        );
+                    }
+                    owner_match && type_ok && capacity_ok
                 })
                 .min_by(|(_, t1, _, _, _, _), (_, t2, _, _, _, _)| {
                     let d1 = t1.translation.truncate().distance_squared(bucket_pos);
@@ -115,9 +140,22 @@ pub fn bucket_auto_haul_system(
             if let Some((stockpile_entity, stock_pos)) = target_stockpile {
                 desired_returns
                     .entry(stockpile_entity)
-                    .or_insert_with(|| (*fam_entity, stock_pos));
+                    .and_modify(|(_, _, count)| *count += 1)
+                    .or_insert_with(|| (*fam_entity, stock_pos, 1));
+            } else {
+                debug!(
+                    "BUCKET_RETURN: bucket {:?} (tank {:?}) has no matching stockpile in {} nearby",
+                    bucket_entity, tank_entity, nearby_stockpiles.len()
+                );
             }
         }
+    }
+
+    if !desired_returns.is_empty() {
+        info!(
+            "BUCKET_RETURN: creating/updating {} return requests",
+            desired_returns.len()
+        );
     }
 
     let mut seen = std::collections::HashSet::new();
@@ -135,7 +173,7 @@ pub fn bucket_auto_haul_system(
             continue;
         }
 
-        if let Some((issued_by, pos)) = desired_returns.get(&stockpile) {
+        if let Some((issued_by, pos, bucket_count)) = desired_returns.get(&stockpile) {
             commands.entity(req_entity).insert((
                 Transform::from_xyz(pos.x, pos.y, 0.0),
                 Visibility::Hidden,
@@ -143,7 +181,7 @@ pub fn bucket_auto_haul_system(
                     work_type: WorkType::Haul,
                 },
                 crate::relationships::ManagedBy(*issued_by),
-                TaskSlots::new(1),
+                TaskSlots::new(*bucket_count),
                 Priority(5),
                 TransportRequest {
                     kind: TransportRequestKind::ReturnBucket,
@@ -153,7 +191,7 @@ pub fn bucket_auto_haul_system(
                     priority: TransportPriority::Normal,
                 },
                 TransportDemand {
-                    desired_slots: 1,
+                    desired_slots: *bucket_count,
                     inflight: 0,
                 },
                 TransportRequestState::Pending,
@@ -168,7 +206,7 @@ pub fn bucket_auto_haul_system(
         }
     }
 
-    for (stockpile, (issued_by, pos)) in desired_returns {
+    for (stockpile, (issued_by, pos, bucket_count)) in desired_returns {
         if seen.contains(&stockpile) {
             continue;
         }
@@ -181,7 +219,7 @@ pub fn bucket_auto_haul_system(
                 work_type: WorkType::Haul,
             },
             crate::relationships::ManagedBy(issued_by),
-            TaskSlots::new(1),
+            TaskSlots::new(bucket_count),
             Priority(5),
             TransportRequest {
                 kind: TransportRequestKind::ReturnBucket,
@@ -191,7 +229,7 @@ pub fn bucket_auto_haul_system(
                 priority: TransportPriority::Normal,
             },
             TransportDemand {
-                desired_slots: 1,
+                desired_slots: bucket_count,
                 inflight: 0,
             },
             TransportRequestState::Pending,
