@@ -5,6 +5,7 @@ pub mod assign_task;
 pub mod indicators;
 pub mod input;
 pub mod visualization;
+pub mod zone_placement;
 
 /// タスクモード - どのタスクを指定中か
 #[derive(Resource, Default, Debug, Clone, Copy, PartialEq)]
@@ -18,6 +19,7 @@ pub enum TaskMode {
     SelectBuildTarget,               // 建築対象選択中
     AreaSelection(Option<Vec2>),     // エリア選択モード (始点)
     AssignTask(Option<Vec2>),        // 未アサインタスクを使い魔に割り当てるモード
+    ZonePlacement(crate::systems::logistics::ZoneType, Option<Vec2>), // ゾーン（ストックパイル等）配置モード
 }
 
 /// タスクエリア - 使い魔が担当するエリア
@@ -106,3 +108,4 @@ pub use indicators::{
 };
 pub use input::familiar_command_input_system;
 pub use visualization::{designation_visual_system, familiar_command_visual_system};
+pub use zone_placement::zone_placement_system;

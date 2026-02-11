@@ -11,7 +11,6 @@ use crate::interface::ui::{
     update_mode_text_system, update_operation_dialog_system,
 };
 use crate::systems::GameSystemSet;
-use crate::systems::logistics::zone_placement;
 use crate::systems::time::{
     game_time_system, time_control_keyboard_system, time_control_ui_system,
 };
@@ -29,7 +28,6 @@ impl Plugin for UiCorePlugin {
                 cleanup_selection_references_system,
                 update_selection_indicator,
                 blueprint_placement.run_if(in_state(PlayMode::BuildingPlace)),
-                zone_placement.run_if(in_state(PlayMode::ZonePlace)),
                 ui_keyboard_shortcuts_system,
                 ui_interaction_system,
                 menu_visibility_system,
