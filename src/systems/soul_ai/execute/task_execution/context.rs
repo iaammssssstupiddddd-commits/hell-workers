@@ -189,6 +189,7 @@ pub struct TaskQueries<'w, 's> {
 pub trait TaskReservationAccess<'w, 's> {
     fn reservation_writer(&mut self) -> &mut MessageWriter<'w, ResourceReservationRequest>;
     fn resources(&self) -> &Query<'w, 's, &'static ResourceItem>;
+    fn belongs_to(&self, entity: Entity) -> Option<Entity>;
 }
 
 impl<'w, 's> TaskReservationAccess<'w, 's> for TaskQueries<'w, 's> {
@@ -199,6 +200,10 @@ impl<'w, 's> TaskReservationAccess<'w, 's> for TaskQueries<'w, 's> {
     fn resources(&self) -> &Query<'w, 's, &'static ResourceItem> {
         &self.reservation.resources
     }
+
+    fn belongs_to(&self, entity: Entity) -> Option<Entity> {
+        self.designation.belongs.get(entity).ok().map(|belongs| belongs.0)
+    }
 }
 
 impl<'w, 's> TaskReservationAccess<'w, 's> for TaskAssignmentQueries<'w, 's> {
@@ -208,6 +213,10 @@ impl<'w, 's> TaskReservationAccess<'w, 's> for TaskAssignmentQueries<'w, 's> {
 
     fn resources(&self) -> &Query<'w, 's, &'static ResourceItem> {
         &self.reservation.resources
+    }
+
+    fn belongs_to(&self, entity: Entity) -> Option<Entity> {
+        self.designation.belongs.get(entity).ok().map(|belongs| belongs.0)
     }
 }
 
