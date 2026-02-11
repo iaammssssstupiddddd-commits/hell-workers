@@ -213,7 +213,7 @@ WheelbarrowLease {
 - request lifecycle:
   - `src/systems/logistics/transport_request/lifecycle.rs`
 - 割り当てロジック:
-  - `src/systems/familiar_ai/decide/task_management/assignment/`
+  - `src/systems/familiar_ai/decide/task_management/`（builders, policy, validator）
 - 実行ロジック:
   - `src/systems/soul_ai/execute/task_execution/`
 
@@ -246,7 +246,7 @@ WheelbarrowLease {
 - 新しい producer を `TransportRequestPlugin`（`Decide`）へ登録する。
 - 新しい `WorkType` / request 種別を導入した場合:
   - `task_finder/filter.rs`（有効タスク判定）
-  - `assignment/policy/mod.rs`（割り当て分岐）
+  - `policy/mod.rs`（割り当て分岐、`task_management` 配下）
   - `sync_reservations_system`（予約再構築）
   - 必要なら `task_finder/score.rs`（優先度）
   - `transport_request_anchor_cleanup_system` で cleanup 要件を満たすこと
