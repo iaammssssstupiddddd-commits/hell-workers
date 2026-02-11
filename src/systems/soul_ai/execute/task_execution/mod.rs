@@ -7,6 +7,7 @@ pub mod collect_sand;
 pub mod common;
 pub mod context;
 pub mod gather;
+pub mod handler;
 pub mod gather_water;
 pub mod haul;
 pub mod haul_to_blueprint;
@@ -33,17 +34,8 @@ use crate::systems::soul_ai::helpers::work::unassign_task;
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
 
-use build::handle_build_task;
-use collect_sand::handle_collect_sand_task;
 use context::TaskExecutionContext;
-use gather::handle_gather_task;
-use gather_water::handle_gather_water_task;
-use haul::handle_haul_task;
-use haul_to_blueprint::handle_haul_to_blueprint_task;
-use haul_to_mixer::handle_haul_to_mixer_task;
-use haul_water_to_mixer::handle_haul_water_to_mixer_task;
-use haul_with_wheelbarrow::handle_haul_with_wheelbarrow_task;
-use refine::handle_refine_task;
+use handler::{execute_haul_with_wheelbarrow, TaskHandler};
 
 fn prepare_worker_for_task_apply(
     commands: &mut Commands,
@@ -212,121 +204,119 @@ pub fn task_execution_system(
             queries: &mut queries,
         };
 
-        // タスクタイプに応じてルーティング
+        // タスクタイプに応じてルーティング（TaskHandler トレイトでディスパッチ）
         match &*ctx.task {
             AssignedTask::Gather(data) => {
                 let data = data.clone();
-                handle_gather_task(
+                AssignedTask::execute(
                     &mut ctx,
-                    data.target,
-                    &data.work_type,
-                    data.phase,
+                    data,
                     &mut commands,
                     &game_assets,
                     &time,
                     &world_map,
+                    breakdown_opt.as_deref(),
                 );
             }
             AssignedTask::Haul(data) => {
                 let data = data.clone();
-                handle_haul_task(
+                AssignedTask::execute(
                     &mut ctx,
-                    data.item,
-                    data.stockpile,
-                    data.phase,
+                    data,
                     &mut commands,
+                    &game_assets,
+                    &time,
                     &world_map,
+                    breakdown_opt.as_deref(),
                 );
             }
             AssignedTask::Build(data) => {
                 let data = data.clone();
-                handle_build_task(
+                AssignedTask::execute(
                     &mut ctx,
-                    data.blueprint,
-                    data.phase,
+                    data,
                     &mut commands,
+                    &game_assets,
                     &time,
                     &world_map,
+                    breakdown_opt.as_deref(),
                 );
             }
             AssignedTask::HaulToBlueprint(data) => {
                 let data = data.clone();
-                handle_haul_to_blueprint_task(
+                AssignedTask::execute(
                     &mut ctx,
-                    breakdown_opt,
-                    data.item,
-                    data.blueprint,
-                    data.phase,
+                    data,
                     &mut commands,
+                    &game_assets,
+                    &time,
                     &world_map,
+                    breakdown_opt.as_deref(),
                 );
             }
             AssignedTask::GatherWater(data) => {
                 let data = data.clone();
-                handle_gather_water_task(
+                AssignedTask::execute(
                     &mut ctx,
-                    data.bucket,
-                    data.tank,
-                    data.phase,
+                    data,
                     &mut commands,
                     &game_assets,
                     &time,
                     &world_map,
+                    breakdown_opt.as_deref(),
                 );
             }
             AssignedTask::CollectSand(data) => {
                 let data = data.clone();
-                handle_collect_sand_task(
+                AssignedTask::execute(
                     &mut ctx,
-                    data.target,
-                    data.phase,
+                    data,
                     &mut commands,
                     &game_assets,
                     &time,
                     &world_map,
+                    breakdown_opt.as_deref(),
                 );
             }
             AssignedTask::Refine(data) => {
                 let data = data.clone();
-                handle_refine_task(
+                AssignedTask::execute(
                     &mut ctx,
-                    data.mixer,
-                    data.phase,
+                    data,
                     &mut commands,
                     &game_assets,
                     &time,
                     &world_map,
+                    breakdown_opt.as_deref(),
                 );
             }
             AssignedTask::HaulToMixer(data) => {
                 let data = data.clone();
-                handle_haul_to_mixer_task(
+                AssignedTask::execute(
                     &mut ctx,
-                    data.item,
-                    data.mixer,
-                    data.resource_type,
-                    data.phase,
-                    &mut commands,
-                    &world_map,
-                );
-            }
-            AssignedTask::HaulWaterToMixer(data) => {
-                let data = data.clone();
-                handle_haul_water_to_mixer_task(
-                    &mut ctx,
-                    data.bucket,
-                    data.tank,
-                    data.mixer,
-                    data.phase,
+                    data,
                     &mut commands,
                     &game_assets,
                     &time,
                     &world_map,
+                    breakdown_opt.as_deref(),
+                );
+            }
+            AssignedTask::HaulWaterToMixer(data) => {
+                let data = data.clone();
+                AssignedTask::execute(
+                    &mut ctx,
+                    data,
+                    &mut commands,
+                    &game_assets,
+                    &time,
+                    &world_map,
+                    breakdown_opt.as_deref(),
                 );
             }
             AssignedTask::HaulWithWheelbarrow(data) => {
                 let data = data.clone();
-                handle_haul_with_wheelbarrow_task(
+                execute_haul_with_wheelbarrow(
                     &mut ctx,
                     data,
                     &mut commands,
