@@ -8,6 +8,17 @@ use bevy::prelude::*;
 use std::collections::HashMap;
 
 // ============================================================
+// 右パネルモード
+// ============================================================
+
+#[derive(Resource, Default, PartialEq, Eq, Clone, Copy, Debug)]
+pub enum RightPanelMode {
+    #[default]
+    Info,
+    TaskList,
+}
+
+// ============================================================
 // UI列挙型
 // ============================================================
 
@@ -97,6 +108,8 @@ pub enum UiSlot {
     DialogMaxSoulText,
     // Bottom bar
     ModeText,
+    // Task List
+    TaskListRoot,
     // Other
     TaskSummaryText,
     AreaEditPreview,
@@ -274,3 +287,19 @@ pub struct SectionFolded;
 #[derive(Component, Default, Debug, Reflect)]
 #[reflect(Component)]
 pub struct UnassignedFolded;
+
+// ============================================================
+// タスクリストパネル UI コンポーネント
+// ============================================================
+
+#[derive(Component)]
+pub struct TaskListPanel;
+
+#[derive(Component)]
+pub struct TaskListItem(pub Entity);
+
+#[derive(Component)]
+pub struct TaskListTabButton(pub RightPanelMode);
+
+#[derive(Component)]
+pub struct TaskListBody;

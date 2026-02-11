@@ -1,5 +1,6 @@
 use crate::interface::ui::components::{
-    InfoPanel, InfoPanelNodes, MenuAction, MenuButton, UiInputBlocker, UiNodeRegistry, UiSlot,
+    InfoPanel, InfoPanelNodes, MenuAction, MenuButton, RightPanelMode, TaskListTabButton,
+    UiInputBlocker, UiNodeRegistry, UiSlot,
 };
 use crate::interface::ui::theme::UiTheme;
 use bevy::prelude::*;
@@ -99,6 +100,9 @@ pub fn spawn_info_panel_ui(
     info_panel_nodes.root = Some(root);
 
     commands.entity(root).with_children(|parent| {
+        // タブバー
+        spawn_info_tab_bar(parent, game_assets, theme);
+
         parent
             .spawn(Node {
                 width: Val::Percent(100.0),
@@ -324,4 +328,56 @@ pub fn spawn_info_panel_ui(
         ui_nodes.set_slot(UiSlot::CommonText, common);
         info_panel_nodes.common = Some(common);
     });
+}
+
+fn spawn_info_tab_bar(
+    parent: &mut ChildSpawnerCommands,
+    game_assets: &crate::assets::GameAssets,
+    theme: &UiTheme,
+) {
+    parent
+        .spawn(Node {
+            width: Val::Percent(100.0),
+            flex_direction: FlexDirection::Row,
+            margin: UiRect::bottom(Val::Px(6.0)),
+            column_gap: Val::Px(4.0),
+            ..default()
+        })
+        .with_children(|row| {
+            spawn_tab_button(row, game_assets, theme, "Info", RightPanelMode::Info);
+            spawn_tab_button(row, game_assets, theme, "Tasks", RightPanelMode::TaskList);
+        });
+}
+
+fn spawn_tab_button(
+    parent: &mut ChildSpawnerCommands,
+    game_assets: &crate::assets::GameAssets,
+    theme: &UiTheme,
+    label: &str,
+    mode: RightPanelMode,
+) {
+    parent
+        .spawn((
+            Button,
+            Node {
+                padding: UiRect::axes(Val::Px(10.0), Val::Px(4.0)),
+                border: UiRect::bottom(Val::Px(2.0)),
+                ..default()
+            },
+            BackgroundColor(Color::NONE),
+            BorderColor::all(Color::NONE),
+            TaskListTabButton(mode),
+        ))
+        .with_children(|btn| {
+            btn.spawn((
+                Text::new(label),
+                TextFont {
+                    font: game_assets.font_ui.clone(),
+                    font_size: theme.typography.font_size_sm,
+                    weight: FontWeight::SEMIBOLD,
+                    ..default()
+                },
+                TextColor(theme.colors.text_secondary_semantic),
+            ));
+        });
 }
