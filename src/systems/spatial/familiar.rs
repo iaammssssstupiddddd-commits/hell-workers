@@ -1,5 +1,6 @@
 use super::grid::{GridData, SpatialGridOps};
 use crate::entities::familiar::Familiar;
+use crate::systems::spatial::SpatialGridSyncTimer;
 use bevy::prelude::*;
 
 /// 使い魔用の空間グリッド - モチベーション計算の高速化用
@@ -26,9 +27,16 @@ impl SpatialGridOps for FamiliarSpatialGrid {
 }
 
 pub fn update_familiar_spatial_grid_system(
+    mut sync_timer: ResMut<SpatialGridSyncTimer>,
     mut grid: ResMut<FamiliarSpatialGrid>,
     query: Query<(Entity, &Transform), With<Familiar>>,
 ) {
+    let timer_finished = sync_timer.timer.just_finished();
+    if sync_timer.first_run_done && !timer_finished {
+        return;
+    }
+    sync_timer.first_run_done = true;
+
     grid.0.clear();
     for (entity, transform) in query.iter() {
         grid.0.insert(entity, transform.translation.truncate());

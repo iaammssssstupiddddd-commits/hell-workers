@@ -235,7 +235,6 @@ pub fn task_execution_system(
                     data.stockpile,
                     data.phase,
                     &mut commands,
-                    // haul_cache removed
                     &world_map,
                 );
             }
@@ -271,7 +270,6 @@ pub fn task_execution_system(
                     data.phase,
                     &mut commands,
                     &game_assets,
-                    // haul_cache removed
                     &time,
                     &world_map,
                 );
@@ -309,7 +307,6 @@ pub fn task_execution_system(
                     data.resource_type,
                     data.phase,
                     &mut commands,
-                    // haul_cache removed
                     &world_map,
                 );
             }
@@ -323,7 +320,6 @@ pub fn task_execution_system(
                     data.phase,
                     &mut commands,
                     &game_assets,
-                    // haul_cache removed
                     &time,
                     &world_map,
                 );

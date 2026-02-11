@@ -1,5 +1,6 @@
 use super::grid::{GridData, SpatialGridOps};
 use crate::systems::logistics::transport_request::TransportRequest;
+use crate::systems::spatial::SpatialGridSyncTimer;
 use bevy::prelude::*;
 
 /// TransportRequest 用の空間グリッド
@@ -49,10 +50,18 @@ impl SpatialGridOps for TransportRequestSpatialGrid {
 /// TransportRequest + Transform を持つ全エンティティでグリッドを再構築する。
 /// Spatial が Logic より先に実行されるため、Added<> だと Soul 生成の request が
 /// 同一フレームで取り込まれず task_finder に見つからない問題を回避する。
+/// 0.15秒間隔で同期し、毎フレームの負荷を軽減する。
 pub fn update_transport_request_spatial_grid_system(
+    mut sync_timer: ResMut<SpatialGridSyncTimer>,
     mut grid: ResMut<TransportRequestSpatialGrid>,
     query: Query<(Entity, &Transform), With<TransportRequest>>,
 ) {
+    let timer_finished = sync_timer.timer.just_finished();
+    if sync_timer.first_run_done && !timer_finished {
+        return;
+    }
+    sync_timer.first_run_done = true;
+
     grid.0.clear();
     for (entity, transform) in query.iter() {
         grid.0.insert(entity, transform.translation.truncate());
