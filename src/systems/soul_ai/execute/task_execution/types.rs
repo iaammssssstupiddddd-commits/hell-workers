@@ -247,4 +247,45 @@ impl AssignedTask {
             None
         }
     }
+
+    /// インベントリ整合性チェック用: タスクが期待するアイテム（バケツ・手押し車等）を返す
+    pub fn expected_item(&self) -> Option<Entity> {
+        match self {
+            AssignedTask::Haul(data) => Some(data.item),
+            AssignedTask::HaulToBlueprint(data) => Some(data.item),
+            AssignedTask::HaulToMixer(data) => Some(data.item),
+            AssignedTask::GatherWater(data) => Some(data.bucket),
+            AssignedTask::HaulWaterToMixer(data) => Some(data.bucket),
+            AssignedTask::HaulWithWheelbarrow(data) => Some(data.wheelbarrow),
+            _ => None,
+        }
+    }
+
+    /// インベントリ整合性チェック用: 現在フェーズでインベントリにアイテムが必須か
+    pub fn requires_item_in_inventory(&self) -> bool {
+        match self {
+            AssignedTask::Haul(data) => matches!(data.phase, HaulPhase::GoingToStockpile),
+            AssignedTask::HaulToBlueprint(data) => {
+                matches!(data.phase, HaulToBpPhase::GoingToBlueprint)
+            }
+            AssignedTask::HaulToMixer(data) => matches!(
+                data.phase,
+                HaulToMixerPhase::GoingToMixer | HaulToMixerPhase::Delivering
+            ),
+            AssignedTask::GatherWater(data) => {
+                !matches!(data.phase, GatherWaterPhase::GoingToBucket)
+            }
+            AssignedTask::HaulWaterToMixer(data) => {
+                !matches!(data.phase, HaulWaterToMixerPhase::GoingToBucket)
+            }
+            AssignedTask::HaulWithWheelbarrow(data) => {
+                !matches!(
+                    data.phase,
+                    HaulWithWheelbarrowPhase::GoingToParking
+                        | HaulWithWheelbarrowPhase::PickingUpWheelbarrow
+                )
+            }
+            _ => false,
+        }
+    }
 }
