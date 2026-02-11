@@ -164,6 +164,7 @@ pub struct TaskAssignmentQueries<'w, 's> {
             Without<crate::relationships::PushedBy>,
         ),
     >,
+    pub wheelbarrow_leases: Query<'w, 's, &'static crate::systems::logistics::transport_request::WheelbarrowLease>,
 }
 
 /// タスク実行に必要なクエリ群

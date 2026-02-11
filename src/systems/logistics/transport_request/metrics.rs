@@ -17,6 +17,10 @@ pub struct TransportRequestMetrics {
     pub total: u32,
     /// 前回ログ出力からの経過秒数（デバッグ間隔制御用）
     pub _log_interval: f32,
+    /// 手押し車リースのアクティブ数
+    pub wheelbarrow_leases_active: u32,
+    /// このフレームで付与された手押し車リース数
+    pub wheelbarrow_leases_granted_this_frame: u32,
 }
 
 impl TransportRequestMetrics {
@@ -101,9 +105,10 @@ pub fn transport_request_metrics_system(
                 parts.push(format!("{}={}", kind.as_str(), count));
             }
             debug!(
-                "TransportRequest: total={} [{}]",
+                "TransportRequest: total={} [{}] wb_leases={}",
                 total,
-                parts.join(", ")
+                parts.join(", "),
+                metrics.wheelbarrow_leases_active,
             );
         }
     }

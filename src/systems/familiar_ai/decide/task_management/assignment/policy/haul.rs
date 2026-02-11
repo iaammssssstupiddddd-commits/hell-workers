@@ -1,7 +1,7 @@
 use crate::constants::*;
 use crate::systems::familiar_ai::decide::task_management::{AssignTaskContext, ReservationShadow};
 use crate::systems::jobs::WorkType;
-use crate::systems::logistics::transport_request::TransportRequestKind;
+use crate::systems::logistics::transport_request::{TransportRequestKind, WheelbarrowLease};
 use crate::systems::logistics::ResourceType;
 use bevy::prelude::*;
 
@@ -251,7 +251,29 @@ pub(super) fn assign_haul(
     if let Some((stockpile, resource_type, item_owner)) =
         resolve_haul_to_stockpile_inputs(ctx.task_entity, queries)
     {
-        // M6: 手押し車バッチを優先（request resolver で遅延解決）
+        // 1. WheelbarrowLease があればそれを使う（仲裁システムによる事前割り当て）
+        if let Ok(lease) = queries.wheelbarrow_leases.get(ctx.task_entity) {
+            if validate_lease(lease, queries, shadow) {
+                let source_pos = lease.source_pos;
+                let items = lease.items.clone();
+                let wb = lease.wheelbarrow;
+                let dest = lease.dest_stockpile;
+                issue_haul_with_wheelbarrow(
+                    wb,
+                    source_pos,
+                    dest,
+                    items,
+                    task_pos,
+                    already_commanded,
+                    ctx,
+                    queries,
+                    shadow,
+                );
+                return true;
+            }
+        }
+
+        // 2. lease なし → 既存 resolve_wheelbarrow_batch_for_stockpile をフォールバック
         if let Some((wb_entity, items)) = resolve_wheelbarrow_batch_for_stockpile(
             stockpile,
             resource_type,
@@ -478,4 +500,29 @@ fn remaining_stockpile_capacity(
     } else {
         0
     }
+}
+
+/// WheelbarrowLease の有効性を検証
+///
+/// - wheelbarrow がまだ利用可能（parked かつ未使用）か
+/// - items のうち最低 1 つが未予約の地面アイテムか
+fn validate_lease(
+    lease: &WheelbarrowLease,
+    queries: &crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
+    shadow: &ReservationShadow,
+) -> bool {
+    // wheelbarrow がまだ parked で利用可能か
+    if queries.wheelbarrows.get(lease.wheelbarrow).is_err() {
+        return false;
+    }
+    if !source_not_reserved(lease.wheelbarrow, queries, shadow) {
+        return false;
+    }
+    // items のうち少なくとも MIN_BATCH_SIZE 個が未予約か
+    let valid_count = lease
+        .items
+        .iter()
+        .filter(|item| source_not_reserved(**item, queries, shadow))
+        .count();
+    valid_count >= WHEELBARROW_MIN_BATCH_SIZE
 }
