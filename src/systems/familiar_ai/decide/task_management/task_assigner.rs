@@ -109,7 +109,7 @@ pub fn assign_task_to_worker(
         return false;
     };
 
-    super::assignment::assign_by_work_type(
+    super::policy::assign_by_work_type(
         work_type,
         task_pos,
         uc_opt.is_some(),
