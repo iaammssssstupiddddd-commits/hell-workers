@@ -79,6 +79,20 @@ impl Default for TransportPolicy {
     }
 }
 
+/// 手押し車リース（仲裁システムによる割り当て結果）
+///
+/// request エンティティに付与される。仲裁システムが「どの request に手押し車を割り当てるか」を
+/// 一括決定し、その結果をこのコンポーネントで保持する。
+#[derive(Component, Debug, Clone, Reflect)]
+#[reflect(Component)]
+pub struct WheelbarrowLease {
+    pub wheelbarrow: Entity,
+    pub items: Vec<Entity>,
+    pub source_pos: Vec2,
+    pub dest_stockpile: Entity,
+    pub lease_until: f64,
+}
+
 /// 運搬リクエストの状態
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Hash, Reflect)]
 #[reflect(Component)]

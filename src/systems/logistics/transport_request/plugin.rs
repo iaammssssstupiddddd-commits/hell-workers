@@ -1,6 +1,6 @@
 use super::{
-    transport_request_anchor_cleanup_system, TransportRequestMetrics,
-    transport_request_metrics_system,
+    transport_request_anchor_cleanup_system, wheelbarrow_arbitration_system,
+    TransportRequestMetrics, transport_request_metrics_system,
 };
 use super::producer::{
     blueprint::blueprint_auto_haul_system, bucket::bucket_auto_haul_system,
@@ -19,6 +19,8 @@ pub enum TransportRequestSet {
     Perceive,
     /// upsert/close 決定
     Decide,
+    /// 手押し車仲裁（Decide → Execute 間）
+    Arbitrate,
     /// Commands 適用
     Execute,
     /// timeout/retry/cleanup
@@ -31,12 +33,13 @@ impl Plugin for TransportRequestPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<TransportRequestMetrics>();
 
-        // Perceive → Decide → Execute: FamiliarAi::Update の後、FamiliarAi::Decide の前
+        // Perceive → Decide → Arbitrate → Execute: FamiliarAi::Update の後、FamiliarAi::Decide の前
         app.configure_sets(
             Update,
             (
                 TransportRequestSet::Perceive,
                 TransportRequestSet::Decide,
+                TransportRequestSet::Arbitrate,
                 TransportRequestSet::Execute,
             )
                 .chain()
@@ -74,6 +77,7 @@ impl Plugin for TransportRequestPlugin {
                     wheelbarrow_auto_haul_system,
                 )
                     .in_set(TransportRequestSet::Decide),
+                wheelbarrow_arbitration_system.in_set(TransportRequestSet::Arbitrate),
                 transport_request_state_sync_system.in_set(TransportRequestSet::Execute),
                 transport_request_anchor_cleanup_system.in_set(TransportRequestSet::Maintain),
             ),
