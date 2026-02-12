@@ -3,6 +3,8 @@
 use bevy::prelude::*;
 use std::collections::HashMap;
 
+pub(crate) mod change_detection;
+pub(crate) mod dirty;
 mod drag_drop;
 mod interaction;
 mod minimize;

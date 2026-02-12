@@ -2,7 +2,7 @@
 
 use crate::game_state::PlayMode;
 use crate::interface::camera::{MainCamera, PanCamera, PanCameraPlugin};
-use crate::interface::selection::{build_mode_cancel_system, handle_mouse_input};
+use crate::interface::selection::handle_mouse_input;
 use crate::interface::ui::UiInputState;
 use crate::systems::GameSystemSet;
 use bevy::prelude::*;
@@ -20,7 +20,6 @@ impl Plugin for InputPlugin {
             Update,
             (
                 handle_mouse_input.run_if(in_state(PlayMode::Normal)),
-                build_mode_cancel_system,
                 debug_toggle_system,
             )
                 .in_set(GameSystemSet::Input),

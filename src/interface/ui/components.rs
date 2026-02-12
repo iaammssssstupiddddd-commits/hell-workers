@@ -4,6 +4,7 @@
 
 use crate::systems::jobs::BuildingType;
 use crate::systems::logistics::ZoneType;
+use crate::systems::time::TimeSpeed;
 use bevy::prelude::*;
 use std::collections::HashMap;
 
@@ -82,6 +83,8 @@ pub enum MenuAction {
     AdjustFatigueThreshold(f32),
     AdjustMaxControlledSoul(isize),
     CloseDialog,
+    SetTimeSpeed(TimeSpeed),
+    TogglePause,
 }
 
 // ============================================================
