@@ -1,36 +1,64 @@
 //! Bucket auto-haul system
 //!
-//! M7: ドロップされたバケツの返却を request エンティティ化。
-//! ストックパイル（バケツ置き場）位置に request を生成し、割り当て時にバケツを遅延解決する。
+//! ドロップされたバケツの返却 request を、タンク anchor で管理する。
+//! 返却件数は `TransportDemand.desired_slots` で表現し、request はタンクごと最大1件に保つ。
 
 use bevy::prelude::*;
 
-use crate::constants::TILE_SIZE;
 use crate::entities::familiar::{ActiveCommand, Familiar, FamiliarCommand};
-use crate::relationships::TaskWorkers;
+use crate::relationships::{StoredItems, TaskWorkers};
 use crate::systems::command::TaskArea;
+use crate::systems::familiar_ai::perceive::resource_sync::SharedResourceCache;
 use crate::systems::jobs::{Designation, Priority, TaskSlots, WorkType};
 use crate::systems::logistics::transport_request::{
     TransportDemand, TransportPolicy, TransportPriority, TransportRequest, TransportRequestKind,
     TransportRequestState,
 };
 use crate::systems::logistics::{
-    BucketStorage, ReservedForTask, ResourceItem, ResourceType, Stockpile,
+    BelongsTo, BucketStorage, ReservedForTask, ResourceItem, ResourceType, Stockpile,
 };
-use crate::systems::spatial::{SpatialGridOps, StockpileSpatialGrid};
 
-/// バケツ専用オートホールシステム（M7: request エンティティ化）
+#[derive(Clone, Copy)]
+struct DesiredBucketReturn {
+    issued_by: Entity,
+    tank_pos: Vec2,
+    desired_slots: u32,
+}
+
+#[derive(Default)]
+struct TankDemand {
+    dropped_buckets: u32,
+    free_slots_total: u32,
+}
+
+fn is_bucket_resource(resource_type: ResourceType) -> bool {
+    matches!(
+        resource_type,
+        ResourceType::BucketEmpty | ResourceType::BucketWater
+    )
+}
+
+fn bucket_storage_accepts_buckets(stockpile: &Stockpile) -> bool {
+    matches!(
+        stockpile.resource_type,
+        None | Some(ResourceType::BucketEmpty) | Some(ResourceType::BucketWater)
+    )
+}
+
+fn to_u32_saturating(value: usize) -> u32 {
+    value.min(u32::MAX as usize) as u32
+}
+
 pub fn bucket_auto_haul_system(
     mut commands: Commands,
-    stockpile_grid: Res<StockpileSpatialGrid>,
+    haul_cache: Res<SharedResourceCache>,
     q_familiars: Query<(Entity, &ActiveCommand, &TaskArea), With<Familiar>>,
-    q_buckets: Query<
+    q_tanks: Query<(&Transform, &Stockpile), Without<BucketStorage>>,
+    q_dropped_buckets: Query<
         (
-            Entity,
-            &Transform,
             &Visibility,
             &ResourceItem,
-            &crate::systems::logistics::BelongsTo,
+            &BelongsTo,
             Option<&ReservedForTask>,
             Option<&TaskWorkers>,
         ),
@@ -39,198 +67,205 @@ pub fn bucket_auto_haul_system(
             Without<Designation>,
         ),
     >,
-    q_stockpiles: Query<(
-        Entity,
-        &Transform,
-        &Stockpile,
-        &BucketStorage,
-        &crate::systems::logistics::BelongsTo,
-        Option<&crate::relationships::StoredItems>,
-    )>,
+    q_bucket_storages: Query<
+        (Entity, &Stockpile, &BelongsTo, Option<&StoredItems>),
+        With<BucketStorage>,
+    >,
     q_bucket_requests: Query<(Entity, &TransportRequest, Option<&TaskWorkers>)>,
 ) {
     let active_familiars: Vec<(Entity, TaskArea)> = q_familiars
         .iter()
-        .filter(|(_, ac, _)| !matches!(ac.command, FamiliarCommand::Idle))
-        .map(|(e, _, area)| (e, area.clone()))
+        .filter(|(_, active_command, _)| !matches!(active_command.command, FamiliarCommand::Idle))
+        .map(|(entity, _, area)| (entity, area.clone()))
         .collect();
 
-    // (stockpile_entity) -> (fam_entity, stock_pos, dropped_bucket_count)
-    let mut desired_returns =
-        std::collections::HashMap::<Entity, (Entity, Vec2, u32)>::new();
+    let mut tank_demands = std::collections::HashMap::<Entity, TankDemand>::new();
 
-    let total_buckets = q_buckets.iter().count();
-    let total_bucket_stockpiles = q_stockpiles.iter().count();
-    if total_buckets > 0 {
-        debug!(
-            "BUCKET_RETURN: {} dropped buckets found, {} bucket stockpiles, {} active familiars",
-            total_buckets, total_bucket_stockpiles, active_familiars.len()
-        );
-    }
-
-    for (fam_entity, task_area) in active_familiars.iter() {
-        for (
-            bucket_entity,
-            bucket_transform,
-            visibility,
-            res_item,
-            bucket_belongs,
-            reserved_opt,
-            workers_opt,
-        ) in q_buckets.iter()
-        {
-            if !matches!(
-                res_item.0,
-                ResourceType::BucketEmpty | ResourceType::BucketWater
-            ) {
-                continue;
-            }
-            if workers_opt.is_some_and(|w| !w.is_empty()) {
-                debug!("BUCKET_RETURN: bucket {:?} skipped: has workers", bucket_entity);
-                continue;
-            }
-            if reserved_opt.is_some() {
-                debug!("BUCKET_RETURN: bucket {:?} skipped: reserved", bucket_entity);
-                continue;
-            }
-            if *visibility == Visibility::Hidden {
-                debug!("BUCKET_RETURN: bucket {:?} skipped: hidden", bucket_entity);
-                continue;
-            }
-
-            let bucket_pos = bucket_transform.translation.truncate();
-            if !task_area.contains(bucket_pos) {
-                debug!(
-                    "BUCKET_RETURN: bucket {:?} at {:?} skipped: outside task area",
-                    bucket_entity, bucket_pos
-                );
-                continue;
-            }
-
-            let tank_entity = bucket_belongs.0;
-            let search_radius = TILE_SIZE * 20.0;
-            let nearby_stockpiles = stockpile_grid.get_nearby_in_radius(bucket_pos, search_radius);
-
-            let target_stockpile = nearby_stockpiles
-                .iter()
-                .filter_map(|&e| q_stockpiles.get(e).ok())
-                .filter(|(_, _, stock, _, stock_belongs, stored_opt)| {
-                    let owner_match = stock_belongs.0 == tank_entity;
-                    let type_ok = matches!(
-                        stock.resource_type,
-                        None | Some(ResourceType::BucketEmpty) | Some(ResourceType::BucketWater)
-                    );
-                    let capacity_ok =
-                        stored_opt.map(|s| s.len()).unwrap_or(0) < stock.capacity;
-                    if !owner_match || !type_ok || !capacity_ok {
-                        debug!(
-                            "BUCKET_RETURN: stockpile filtered out: owner={}, type={}, capacity={}",
-                            owner_match, type_ok, capacity_ok
-                        );
-                    }
-                    owner_match && type_ok && capacity_ok
-                })
-                .min_by(|(_, t1, _, _, _, _), (_, t2, _, _, _, _)| {
-                    let d1 = t1.translation.truncate().distance_squared(bucket_pos);
-                    let d2 = t2.translation.truncate().distance_squared(bucket_pos);
-                    d1.partial_cmp(&d2).unwrap_or(std::cmp::Ordering::Equal)
-                })
-                .map(|(e, t, _, _, _, _)| (e, t.translation.truncate()));
-
-            if let Some((stockpile_entity, stock_pos)) = target_stockpile {
-                desired_returns
-                    .entry(stockpile_entity)
-                    .and_modify(|(_, _, count)| *count += 1)
-                    .or_insert_with(|| (*fam_entity, stock_pos, 1));
-            } else {
-                debug!(
-                    "BUCKET_RETURN: bucket {:?} (tank {:?}) has no matching stockpile in {} nearby",
-                    bucket_entity, tank_entity, nearby_stockpiles.len()
-                );
-            }
-        }
-    }
-
-    if !desired_returns.is_empty() {
-        info!(
-            "BUCKET_RETURN: creating/updating {} return requests",
-            desired_returns.len()
-        );
-    }
-
-    let mut seen = std::collections::HashSet::new();
-    for (req_entity, req, workers_opt) in q_bucket_requests.iter() {
-        if req.kind != TransportRequestKind::ReturnBucket {
+    for (storage_entity, stockpile, storage_belongs, stored_opt) in q_bucket_storages.iter() {
+        if !bucket_storage_accepts_buckets(stockpile) {
             continue;
         }
-        let stockpile = req.anchor;
-        let workers = workers_opt.map(|w| w.len()).unwrap_or(0);
 
-        if !seen.insert(stockpile) {
+        let current = stored_opt.map(|stored| stored.len()).unwrap_or(0);
+        let reserved = haul_cache.get_destination_reservation(storage_entity);
+        let anticipated = current + reserved;
+        let free_slots = stockpile.capacity.saturating_sub(anticipated);
+
+        let tank = storage_belongs.0;
+        let demand = tank_demands.entry(tank).or_default();
+        demand.free_slots_total = demand
+            .free_slots_total
+            .saturating_add(to_u32_saturating(free_slots));
+    }
+
+    for (visibility, resource_item, belongs_to, reserved_opt, workers_opt) in
+        q_dropped_buckets.iter()
+    {
+        if *visibility == Visibility::Hidden {
+            continue;
+        }
+        if !is_bucket_resource(resource_item.0) {
+            continue;
+        }
+        if reserved_opt.is_some() {
+            continue;
+        }
+        if workers_opt.is_some_and(|workers| !workers.is_empty()) {
+            continue;
+        }
+
+        let demand = tank_demands.entry(belongs_to.0).or_default();
+        demand.dropped_buckets = demand.dropped_buckets.saturating_add(1);
+    }
+
+    let mut desired_requests = std::collections::HashMap::<Entity, DesiredBucketReturn>::new();
+    for (tank_entity, demand) in tank_demands.iter() {
+        let Ok((tank_transform, tank_stockpile)) = q_tanks.get(*tank_entity) else {
+            continue;
+        };
+        if tank_stockpile.resource_type != Some(ResourceType::Water) {
+            continue;
+        }
+
+        let tank_pos = tank_transform.translation.truncate();
+        let Some((issued_by, _)) = super::find_owner_familiar(tank_pos, &active_familiars) else {
+            continue;
+        };
+
+        let desired_slots = demand.dropped_buckets.min(demand.free_slots_total);
+        if desired_slots == 0 {
+            continue;
+        }
+
+        desired_requests.insert(
+            *tank_entity,
+            DesiredBucketReturn {
+                issued_by,
+                tank_pos,
+                desired_slots,
+            },
+        );
+    }
+
+    let mut seen_existing = std::collections::HashSet::<Entity>::new();
+    for (request_entity, request, workers_opt) in q_bucket_requests.iter() {
+        if request.kind != TransportRequestKind::ReturnBucket {
+            continue;
+        }
+
+        let tank_entity = request.anchor;
+        let workers = workers_opt.map(|workers| workers.len()).unwrap_or(0);
+        let inflight = to_u32_saturating(workers);
+        let valid_tank = q_tanks
+            .get(tank_entity)
+            .is_ok_and(|(_, stockpile)| stockpile.resource_type == Some(ResourceType::Water));
+
+        if !valid_tank {
             if workers == 0 {
-                commands.entity(req_entity).despawn();
+                commands.entity(request_entity).despawn();
+            } else {
+                commands
+                    .entity(request_entity)
+                    .remove::<Designation>()
+                    .remove::<TaskSlots>()
+                    .remove::<Priority>()
+                    .insert(TransportDemand {
+                        desired_slots: 0,
+                        inflight,
+                    });
             }
             continue;
         }
 
-        if let Some((issued_by, pos, bucket_count)) = desired_returns.get(&stockpile) {
-            commands.entity(req_entity).insert((
-                Transform::from_xyz(pos.x, pos.y, 0.0),
+        if !seen_existing.insert(tank_entity) {
+            if workers == 0 {
+                commands.entity(request_entity).despawn();
+            } else {
+                commands
+                    .entity(request_entity)
+                    .remove::<Designation>()
+                    .remove::<TaskSlots>()
+                    .remove::<Priority>()
+                    .insert(TransportDemand {
+                        desired_slots: 0,
+                        inflight,
+                    });
+            }
+            continue;
+        }
+
+        if let Some(desired) = desired_requests.get(&tank_entity) {
+            commands.entity(request_entity).insert((
+                Transform::from_xyz(desired.tank_pos.x, desired.tank_pos.y, 0.0),
                 Visibility::Hidden,
                 Designation {
                     work_type: WorkType::Haul,
                 },
-                crate::relationships::ManagedBy(*issued_by),
-                TaskSlots::new(*bucket_count),
+                crate::relationships::ManagedBy(desired.issued_by),
+                TaskSlots::new(desired.desired_slots),
                 Priority(5),
                 TransportRequest {
                     kind: TransportRequestKind::ReturnBucket,
-                    anchor: stockpile,
+                    anchor: tank_entity,
                     resource_type: ResourceType::BucketEmpty,
-                    issued_by: *issued_by,
+                    issued_by: desired.issued_by,
                     priority: TransportPriority::Normal,
                 },
                 TransportDemand {
-                    desired_slots: *bucket_count,
-                    inflight: 0,
+                    desired_slots: desired.desired_slots,
+                    inflight,
                 },
                 TransportRequestState::Pending,
                 TransportPolicy::default(),
             ));
         } else if workers == 0 {
             commands
-                .entity(req_entity)
+                .entity(request_entity)
                 .remove::<Designation>()
                 .remove::<TaskSlots>()
-                .remove::<Priority>();
+                .remove::<Priority>()
+                .insert(TransportDemand {
+                    desired_slots: 0,
+                    inflight: 0,
+                });
+        } else {
+            commands
+                .entity(request_entity)
+                .remove::<Designation>()
+                .remove::<TaskSlots>()
+                .remove::<Priority>()
+                .insert(TransportDemand {
+                    desired_slots: 0,
+                    inflight,
+                });
         }
     }
 
-    for (stockpile, (issued_by, pos, bucket_count)) in desired_returns {
-        if seen.contains(&stockpile) {
+    for (tank_entity, desired) in desired_requests {
+        if seen_existing.contains(&tank_entity) {
             continue;
         }
 
         commands.spawn((
             Name::new("TransportRequest::ReturnBucket"),
-            Transform::from_xyz(pos.x, pos.y, 0.0),
+            Transform::from_xyz(desired.tank_pos.x, desired.tank_pos.y, 0.0),
             Visibility::Hidden,
             Designation {
                 work_type: WorkType::Haul,
             },
-            crate::relationships::ManagedBy(issued_by),
-            TaskSlots::new(bucket_count),
+            crate::relationships::ManagedBy(desired.issued_by),
+            TaskSlots::new(desired.desired_slots),
             Priority(5),
             TransportRequest {
                 kind: TransportRequestKind::ReturnBucket,
-                anchor: stockpile,
+                anchor: tank_entity,
                 resource_type: ResourceType::BucketEmpty,
-                issued_by,
+                issued_by: desired.issued_by,
                 priority: TransportPriority::Normal,
             },
             TransportDemand {
-                desired_slots: bucket_count,
-                inflight: 0,
+                desired_slots: desired.desired_slots,
+                inflight: 0_u32,
             },
             TransportRequestState::Pending,
             TransportPolicy::default(),

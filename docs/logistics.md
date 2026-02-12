@@ -56,7 +56,7 @@ Hell-Workers の物流は、`TransportRequest` を中心にした自動発行 + 
 | `DeliverToMixerSolid` | `HaulToMixer` | `mud_mixer_auto_haul_system` | Mixer | 割り当て時に Sand/Rock を遅延解決 |
 | `DeliverWaterToMixer` | `HaulWaterToMixer` | `mud_mixer_auto_haul_system` | Mixer | 割り当て時に tank + bucket を遅延解決 |
 | `GatherWaterToTank` | `GatherWater` | `tank_water_request_system` | Tank | 割り当て時に bucket を遅延解決 |
-| `ReturnBucket` | `Haul` | `bucket_auto_haul_system` | バケツ置き場 Stockpile | 割り当て時に dropped bucket を遅延解決 |
+| `ReturnBucket` | `Haul` | `bucket_auto_haul_system` | Tank | 割り当て時に dropped bucket と返却先 BucketStorage を同時遅延解決 |
 | `BatchWheelbarrow` | `WheelbarrowHaul` | `wheelbarrow_auto_haul_system` | Wheelbarrow | 現状の主運搬経路では未使用（将来拡張用） |
 
 ## 4. 自動運搬の仕様
@@ -83,8 +83,20 @@ Hell-Workers の物流は、`TransportRequest` を中心にした自動発行 + 
 - 割り当て時に、エリア内の有効タンクと利用可能バケツを遅延解決して搬送。
 
 ### 4.5 バケツ返却 (`ReturnBucket`)
-- dropped bucket（空/水入り）を検知。
-- `BelongsTo` で紐づくタンクの `BucketStorage` 付き Stockpile へ返却 request を生成。
+- 返却対象は「地面上のバケツ（`BucketEmpty` / `BucketWater`、`StoredIn` なし）」のみ。
+- request は **タンクごとに最大1件**（`anchor = tank`）を維持する。
+- 需要算出:
+  - `dropped_buckets`: owner 一致の地面バケツ数
+  - `free_slots_total`: owner 一致の `BucketStorage` 空き合計（予約込み）
+  - `desired_slots = min(dropped_buckets, free_slots_total)`
+- `desired_slots == 0` のときは request を休止（`Designation` / `TaskSlots` / `Priority` を remove）。
+- 割り当て時に source と destination を同時解決:
+  - source: owner 一致の dropped bucket（未予約）
+  - destination: owner 一致かつ容量ありの `BucketStorage`（source から最短）
+- 実行フェーズ（Dropping）で `BucketStorage` 専用ガードを適用:
+  - バケツ型のみ
+  - owner 一致
+  - 予約込み容量チェック
 
 ### 4.6 Tank 自動補充 (`GatherWaterToTank`)
 - 水タンクの不足量を監視し、`BUCKET_CAPACITY` 単位で必要タスク数を算出して request 化。
@@ -188,6 +200,8 @@ WheelbarrowLease {
 ### 6.1 再構築
 - `sync_reservations_system` が `AssignedTask` と未割り当て `Designation` から予約を再構築。
 - 同期間隔は `RESERVATION_SYNC_INTERVAL`（初回は即時）。
+- `ReturnBucket` request は `anchor = tank` のため、pending request 段階では destination 予約を直接積まず、
+  実際の返却先 `BucketStorage` が割り当て時に確定した時点で予約する。
 
 ### 6.2 差分適用
 - `ResourceReservationRequest` を `apply_reservation_requests_system` でフレーム内反映。

@@ -1,8 +1,8 @@
 use crate::constants::*;
 use crate::systems::familiar_ai::decide::task_management::{AssignTaskContext, ReservationShadow};
 use crate::systems::jobs::WorkType;
-use crate::systems::logistics::transport_request::{TransportRequestKind, WheelbarrowLease};
 use crate::systems::logistics::ResourceType;
+use crate::systems::logistics::transport_request::{TransportRequestKind, WheelbarrowLease};
 use bevy::prelude::*;
 
 use super::super::builders::{
@@ -10,9 +10,9 @@ use super::super::builders::{
     issue_haul_to_stockpile, issue_haul_to_stockpile_with_source, issue_haul_with_wheelbarrow,
 };
 use super::super::validator::{
-    compute_centroid, find_best_stockpile_for_item, find_nearest_bucket_for_return,
-    resolve_haul_return_bucket_inputs, resolve_haul_to_blueprint_inputs,
-    resolve_haul_to_mixer_inputs, resolve_haul_to_stockpile_inputs,
+    compute_centroid, find_best_stockpile_for_item, find_bucket_return_assignment,
+    resolve_haul_to_blueprint_inputs, resolve_haul_to_mixer_inputs,
+    resolve_haul_to_stockpile_inputs, resolve_return_bucket_tank,
     resolve_wheelbarrow_batch_for_stockpile, source_not_reserved,
 };
 
@@ -224,21 +224,19 @@ pub(super) fn assign_haul(
         return true;
     }
 
-    if let Some((stockpile, tank)) =
-        resolve_haul_return_bucket_inputs(ctx.task_entity, queries)
-    {
-        let Some((source_item, source_pos)) =
-            find_nearest_bucket_for_return(tank, task_pos, queries, shadow)
+    if let Some(tank) = resolve_return_bucket_tank(ctx.task_entity, queries) {
+        let Some((source_item, source_pos, destination_stockpile)) =
+            find_bucket_return_assignment(tank, task_pos, queries, shadow)
         else {
             debug!(
-                "ASSIGN: ReturnBucket request {:?} has no available bucket for tank {:?}",
+                "ASSIGN: ReturnBucket request {:?} has no valid source/destination for tank {:?}",
                 ctx.task_entity, tank
             );
             return false;
         };
         issue_haul_to_stockpile_with_source(
             source_item,
-            stockpile,
+            destination_stockpile,
             source_pos,
             already_commanded,
             ctx,
@@ -434,32 +432,34 @@ fn collect_nearby_haulable_items(
         .designation
         .designations
         .iter()
-        .filter_map(|(entity, transform, designation, _, _, task_workers, _, _)| {
-            // Haul タスクのみ
-            if designation.work_type != WorkType::Haul {
-                return None;
-            }
-            // 既にワーカーが付いているものは除外
-            if task_workers.is_some_and(|tw| !tw.is_empty()) {
-                return None;
-            }
-            // 予約済みは除外
-            if !source_not_reserved(entity, queries, shadow) {
-                return None;
-            }
-            // 積載可能か確認
-            let item_type = queries.items.get(entity).ok().map(|(it, _)| it.0)?;
-            if !item_type.is_loadable() {
-                return None;
-            }
-            // 距離チェック
-            let pos = transform.translation.truncate();
-            let dist_sq = pos.distance_squared(task_pos);
-            if dist_sq > search_radius_sq {
-                return None;
-            }
-            Some((entity, dist_sq))
-        })
+        .filter_map(
+            |(entity, transform, designation, _, _, task_workers, _, _)| {
+                // Haul タスクのみ
+                if designation.work_type != WorkType::Haul {
+                    return None;
+                }
+                // 既にワーカーが付いているものは除外
+                if task_workers.is_some_and(|tw| !tw.is_empty()) {
+                    return None;
+                }
+                // 予約済みは除外
+                if !source_not_reserved(entity, queries, shadow) {
+                    return None;
+                }
+                // 積載可能か確認
+                let item_type = queries.items.get(entity).ok().map(|(it, _)| it.0)?;
+                if !item_type.is_loadable() {
+                    return None;
+                }
+                // 距離チェック
+                let pos = transform.translation.truncate();
+                let dist_sq = pos.distance_squared(task_pos);
+                if dist_sq > search_radius_sq {
+                    return None;
+                }
+                Some((entity, dist_sq))
+            },
+        )
         .collect();
 
     // 近い順にソート
