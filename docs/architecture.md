@@ -115,3 +115,29 @@ Perceive → Update → Decide → Execute
 - 入力判定:
   - `UiInputState.pointer_over_ui` を単一の判定値として利用
   - 選択/配置系と PanCamera ガードが同じ値を参照
+
+## キーボードショートカット
+
+### グローバルショートカット（統一管理）
+
+`src/interface/ui/interaction/mod.rs` の `ui_keyboard_shortcuts_system` で一元管理:
+
+| キー | 機能 | 備考 |
+|:--|:--|:--|
+| `B` | Architectメニュートグル | |
+| `Z` | Zonesメニュートグル | |
+| `Space` | 一時停止/再開トグル | |
+| `1` | 一時停止 | |
+| `2` | 通常速度 (x1) | |
+| `3` | 高速 (x2) | |
+| `4` | 超高速 (x4) | |
+| `Escape` | BuildingPlace/ZonePlace/TaskDesignation キャンセル | PlayMode依存 |
+| `F12` | デバッグ表示トグル | `plugins/input.rs` |
+
+### コンテキスト依存ショートカット（個別管理）
+
+| キー | 機能 | 条件 | 実装場所 |
+|:--|:--|:--|:--|
+| `C/M/H/B`, `Digit1-4` | Familiarコマンド | Familiar選択時 | `systems/command/input.rs` |
+| `Ctrl+C/V/Z/Y` | エリア編集操作 | AreaSelection時 | `systems/command/area_selection/shortcuts.rs` |
+| `Tab/Shift+Tab` | Entity Listフォーカス移動 | 常時 | `list/interaction.rs` |

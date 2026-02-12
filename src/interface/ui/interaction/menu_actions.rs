@@ -6,6 +6,7 @@ use crate::game_state::{BuildContext, PlayMode, TaskContext, ZoneContext};
 use crate::interface::ui::InfoPanelPinState;
 use crate::interface::ui::components::{MenuAction, MenuState, OperationDialog};
 use crate::systems::command::TaskArea;
+use crate::systems::time::TimeSpeed;
 
 pub(super) fn handle_pressed_action(
     action: MenuAction,
@@ -20,6 +21,7 @@ pub(super) fn handle_pressed_action(
     q_familiars_for_area: &Query<(Entity, Option<&TaskArea>), With<Familiar>>,
     q_dialog: &mut Query<&mut Node, With<OperationDialog>>,
     ev_max_soul_changed: &mut MessageWriter<FamiliarOperationMaxSoulChangedEvent>,
+    time: &mut ResMut<Time<Virtual>>,
 ) {
     match action {
         MenuAction::InspectEntity(entity) => {
@@ -135,6 +137,28 @@ pub(super) fn handle_pressed_action(
                 ev_max_soul_changed,
             );
         }
+        MenuAction::TogglePause => {
+            if time.is_paused() {
+                time.unpause();
+            } else {
+                time.pause();
+            }
+        }
+        MenuAction::SetTimeSpeed(speed) => match speed {
+            TimeSpeed::Paused => time.pause(),
+            TimeSpeed::Normal => {
+                time.unpause();
+                time.set_relative_speed(1.0);
+            }
+            TimeSpeed::Fast => {
+                time.unpause();
+                time.set_relative_speed(2.0);
+            }
+            TimeSpeed::Super => {
+                time.unpause();
+                time.set_relative_speed(4.0);
+            }
+        },
     }
 }
 
