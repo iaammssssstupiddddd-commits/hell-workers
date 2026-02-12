@@ -5,6 +5,7 @@ use crate::relationships::{LoadedIn, ParkedAt, PushedBy, WorkingOn};
 use crate::systems::visual::haul::WheelbarrowMovement;
 use crate::systems::logistics::{InStockpile, Wheelbarrow};
 use crate::systems::soul_ai::execute::task_execution::common::*;
+use crate::systems::soul_ai::execute::task_execution::transport_common::reservation;
 use crate::systems::soul_ai::execute::task_execution::{
     context::TaskExecutionContext,
     types::{AssignedTask, HaulWithWheelbarrowData, HaulWithWheelbarrowPhase},
@@ -150,12 +151,7 @@ pub fn handle_haul_with_wheelbarrow_task(
                     );
                 }
 
-                ctx.queue_reservation(
-                    crate::events::ResourceReservationOp::RecordPickedSource {
-                        source: *item_entity,
-                        amount: 1,
-                    },
-                );
+                reservation::record_picked_source(ctx, *item_entity, 1);
             }
 
             // 全アイテムの積み込み完了後、移動先へ
@@ -259,13 +255,8 @@ pub fn handle_haul_with_wheelbarrow_task(
                 }
             }
 
-            // 予約操作（borrowing conflict 回避のためループ外）
             for _ in &unloaded_items {
-                ctx.queue_reservation(
-                    crate::events::ResourceReservationOp::RecordStoredDestination {
-                        target: data.dest_stockpile,
-                    },
-                );
+                reservation::record_stored_destination(ctx, data.dest_stockpile);
             }
 
             info!(
@@ -395,17 +386,9 @@ fn cancel_wheelbarrow_task(
         Transform::from_xyz(soul_pos.x, soul_pos.y, Z_ITEM_PICKUP),
     ));
 
-    // 予約解放
     for &item_entity in &data.items {
-        ctx.queue_reservation(crate::events::ResourceReservationOp::ReleaseSource {
-            source: item_entity,
-            amount: 1,
-        });
-        ctx.queue_reservation(
-            crate::events::ResourceReservationOp::ReleaseDestination {
-                target: data.dest_stockpile,
-            },
-        );
+        reservation::release_source(ctx, item_entity, 1);
+        reservation::release_destination(ctx, data.dest_stockpile);
     }
 
     ctx.inventory.0 = None;
