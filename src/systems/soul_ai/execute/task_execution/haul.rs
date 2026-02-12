@@ -178,6 +178,7 @@ pub fn handle_haul_task(
                 q_stockpiles.get_mut(stockpile)
             {
                 let current_count = stored_items_opt.map(|si| si.len()).unwrap_or(0);
+                let is_bucket_storage = ctx.queries.storage.bucket_storages.get(stockpile).is_ok();
 
                 // アイテムの型と所有権を取得
                 let item_info = q_targets.get(item).ok().map(|(_, _, _, ri, _, _)| {
@@ -190,26 +191,27 @@ pub fn handle_haul_task(
                     let stock_belongs = q_belongs.get(stockpile).ok();
                     let belongs_match = item_belongs == stock_belongs;
 
-                    let type_match = stockpile_comp.resource_type.is_none()
-                        || stockpile_comp.resource_type == Some(res_type);
-
-                    // 専用エリアの場合、型チェックを緩和（所有権が一致すれば空/満タンバケツ混在OK）
-                    // ただしバケツ置き場には非バケツアイテムを入れない
-                    let is_bucket_storage = ctx
-                        .queries
-                        .storage
-                        .bucket_storages
-                        .get(stockpile)
-                        .is_ok();
                     let is_bucket_item = matches!(
                         res_type,
                         crate::systems::logistics::ResourceType::BucketEmpty
                             | crate::systems::logistics::ResourceType::BucketWater
                     );
-                    let type_allowed = if is_bucket_storage && !is_bucket_item {
-                        false
-                    } else if stock_belongs.is_some() {
+                    let type_match = stockpile_comp.resource_type.is_none()
+                        || stockpile_comp.resource_type == Some(res_type);
+
+                    let ownership_ok = if is_bucket_storage {
+                        stock_belongs.is_some() && item_belongs.is_some() && belongs_match
+                    } else {
                         belongs_match
+                    };
+
+                    let type_allowed = if is_bucket_storage {
+                        let bucket_storage_type_ok = matches!(
+                            stockpile_comp.resource_type,
+                            None | Some(crate::systems::logistics::ResourceType::BucketEmpty)
+                                | Some(crate::systems::logistics::ResourceType::BucketWater)
+                        );
+                        is_bucket_item && bucket_storage_type_ok
                     } else {
                         type_match
                     };
@@ -227,14 +229,14 @@ pub fn handle_haul_task(
                     // anticipated <= capacity でOK（自分が最後の1個かもしれないので < ではなく <= ? いや index 0 ベースなら < だが、capacity は数か？）
                     let capacity_ok = anticipated <= stockpile_comp.capacity;
 
-                    belongs_match && type_allowed && capacity_ok
+                    ownership_ok && type_allowed && capacity_ok
                 } else {
                     false
                 };
 
                 if can_drop {
                     // 資源タイプがNoneなら設定
-                    if stockpile_comp.resource_type.is_none() {
+                    if !is_bucket_storage && stockpile_comp.resource_type.is_none() {
                         if let Some((res_type, _)) = item_info {
                             stockpile_comp.resource_type = res_type;
                         }

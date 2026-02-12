@@ -51,10 +51,10 @@ Bevy 0.18 の **ECS Relationships** 機能を使用し、エンティティ間�
 - **手動**: プレイヤーが UI やドラッグ操作で指定。
 - **自動**（request エンティティ方式、M3〜M7 完了）:
     - `task_area_auto_haul_system`: ストックパイル位置に `DepositToStockpile` request を生成。割り当て時にソースを遅延解決。
-    - `bucket_auto_haul_system`: バケツ置き場位置に `ReturnBucket` request を生成。割り当て時にドロップバケツを遅延解決。
+    - `bucket_auto_haul_system`: タンク位置（`anchor = tank`）に `ReturnBucket` request を生成。返却件数は `TransportDemand.desired_slots` で管理し、割り当て時にドロップバケツと返却先 `BucketStorage` を同時遅延解決。
     - `blueprint_auto_haul_system`: 設計図位置に `DeliverToBlueprint` request を生成。
     - `mud_mixer_auto_haul_system`: Mixer 位置に `DeliverToMixerSolid`（固体）および `DeliverWaterToMixer`（水）request を生成。
-    - `tank_water_request_system`: タンクの空きに応じて `GatherWater` をバケツへ Designation 発行（request 未対応）。
+    - `tank_water_request_system`: タンクの空きに応じて `GatherWaterToTank` request を生成し、割り当て時にバケツを遅延解決。
     - request エンティティは Execute フェーズの `apply_designation_requests_system` で反映。ソース探索は割り当て時（`task_finder` → `assign_haul` 等）に遅延実行される。
 
 
