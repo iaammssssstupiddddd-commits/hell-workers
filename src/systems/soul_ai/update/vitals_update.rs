@@ -29,6 +29,7 @@ pub fn fatigue_update_system(
             Option<&CommandedBy>,
         ) = (entity, soul, task, idle, under_command);
         let has_task = !matches!(task, AssignedTask::None);
+        let prev_fatigue = soul.fatigue;
 
         if has_task {
             // タスク実行中: 疲労増加
@@ -41,9 +42,10 @@ pub fn fatigue_update_system(
             soul.fatigue = (soul.fatigue - dt * FATIGUE_RECOVERY_RATE_IDLE).max(0.0);
         }
 
-        if soul.fatigue > FATIGUE_GATHERING_THRESHOLD
-            && idle.behavior != IdleBehavior::ExhaustedGathering
-        {
+        let crossed_exhausted_threshold =
+            prev_fatigue <= FATIGUE_GATHERING_THRESHOLD && soul.fatigue > FATIGUE_GATHERING_THRESHOLD;
+
+        if crossed_exhausted_threshold && idle.behavior != IdleBehavior::ExhaustedGathering {
             commands.trigger(OnExhausted { entity });
         }
     }
