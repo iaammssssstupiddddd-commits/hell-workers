@@ -145,6 +145,73 @@ pub fn find_nearest_bucket_for_return(
         .map(|(e, t, _, _)| (e, t.translation.truncate()))
 }
 
+fn find_best_bucket_storage_for_return(
+    tank_entity: Entity,
+    source_pos: Vec2,
+    queries: &crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
+    shadow: &ReservationShadow,
+) -> Option<Entity> {
+    queries
+        .storage
+        .stockpiles
+        .iter()
+        .filter(|(stockpile_entity, _, stockpile, stored_opt)| {
+            if queries
+                .storage
+                .bucket_storages
+                .get(*stockpile_entity)
+                .is_err()
+            {
+                return false;
+            }
+
+            let owner = queries
+                .designation
+                .belongs
+                .get(*stockpile_entity)
+                .ok()
+                .map(|belongs| belongs.0);
+            if owner != Some(tank_entity) {
+                return false;
+            }
+
+            let type_ok = matches!(
+                stockpile.resource_type,
+                None | Some(ResourceType::BucketEmpty) | Some(ResourceType::BucketWater)
+            );
+            if !type_ok {
+                return false;
+            }
+
+            let current = stored_opt.map(|stored| stored.len()).unwrap_or(0);
+            let reserved = queries
+                .reservation
+                .resource_cache
+                .get_destination_reservation(*stockpile_entity)
+                + shadow.destination_reserved(*stockpile_entity);
+            (current + reserved) < stockpile.capacity
+        })
+        .min_by(|(_, t1, _, _), (_, t2, _, _)| {
+            let d1 = t1.translation.truncate().distance_squared(source_pos);
+            let d2 = t2.translation.truncate().distance_squared(source_pos);
+            d1.partial_cmp(&d2).unwrap_or(std::cmp::Ordering::Equal)
+        })
+        .map(|(entity, _, _, _)| entity)
+}
+
+pub fn find_bucket_return_assignment(
+    tank_entity: Entity,
+    task_pos: Vec2,
+    queries: &crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
+    shadow: &ReservationShadow,
+) -> Option<(Entity, Vec2, Entity)> {
+    let (source_item, source_pos) =
+        find_nearest_bucket_for_return(tank_entity, task_pos, queries, shadow)?;
+    let destination =
+        find_best_bucket_storage_for_return(tank_entity, source_pos, queries, shadow)?;
+    Some((source_item, source_pos, destination))
+}
+
 pub fn find_nearest_bucket_for_tank(
     tank_entity: Entity,
     task_pos: Vec2,

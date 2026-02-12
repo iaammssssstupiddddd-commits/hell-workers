@@ -1,12 +1,12 @@
 use crate::constants::BUCKET_CAPACITY;
 use crate::systems::command::TaskArea;
-use crate::systems::logistics::transport_request::TransportRequestKind;
 use crate::systems::logistics::ResourceType;
+use crate::systems::logistics::transport_request::TransportRequestKind;
 use bevy::prelude::*;
 
-use crate::systems::familiar_ai::decide::task_management::ReservationShadow;
 use super::finder::{find_best_tank_for_bucket, find_nearest_bucket_for_tank};
 use super::reservation::source_not_reserved;
+use crate::systems::familiar_ai::decide::task_management::ReservationShadow;
 
 pub fn resolve_haul_to_stockpile_inputs(
     task_entity: Entity,
@@ -36,7 +36,8 @@ pub fn resolve_gather_water_inputs(
     if let Ok(req) = queries.transport_requests.get(task_entity) {
         if req.kind == TransportRequestKind::GatherWaterToTank {
             let tank_entity = req.anchor;
-            let Ok((_, _, tank_stock, stored_opt)) = queries.storage.stockpiles.get(tank_entity) else {
+            let Ok((_, _, tank_stock, stored_opt)) = queries.storage.stockpiles.get(tank_entity)
+            else {
                 return None;
             };
             if tank_stock.resource_type != Some(ResourceType::Water) {
@@ -63,18 +64,21 @@ pub fn resolve_gather_water_inputs(
     Some((task_entity, tank_entity))
 }
 
-/// M7: ReturnBucket request の (stockpile, tank) を解決
-pub fn resolve_haul_return_bucket_inputs(
+/// ReturnBucket request の tank anchor を解決する。
+pub fn resolve_return_bucket_tank(
     task_entity: Entity,
     queries: &crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
-) -> Option<(Entity, Entity)> {
+) -> Option<Entity> {
     let req = queries.transport_requests.get(task_entity).ok()?;
     if req.kind != TransportRequestKind::ReturnBucket {
         return None;
     }
-    let stockpile = req.anchor;
-    let tank = queries.designation.belongs.get(stockpile).ok().map(|b| b.0)?;
-    Some((stockpile, tank))
+    let tank = req.anchor;
+    let (_, _, stockpile, _) = queries.storage.stockpiles.get(tank).ok()?;
+    if stockpile.resource_type != Some(ResourceType::Water) {
+        return None;
+    }
+    Some(tank)
 }
 
 pub fn resolve_haul_to_blueprint_inputs(
