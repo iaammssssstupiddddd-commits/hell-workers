@@ -4,12 +4,12 @@
 
 ## 1. AssignedTask のデータ構造化
 新しいタスクを `AssignedTask` エナムに追加する際は、タプルバリアントではなく**構造体バリアント（Struct variants）**を使用すること。
-また、そのデータは `src/systems/soul_ai/task_execution/types.rs` に専用の構造体として定義すること。
+また、そのデータは `src/systems/soul_ai/execute/task_execution/types.rs` に専用の構造体として定義すること。
 
 **理由**: フィールド名の明示により引数の誤渡しを防止し、コードの可読性を高めるため。
 
 ## 2. クエリの集約（TaskQueries）
-タスクの検索（Familiar側）や実行（Soul側）に必要なクエリは、個別に定義するのではなく `src/systems/soul_ai/task_execution/context.rs` の `TaskQueries` 構造体に集約すること。
+タスクの検索（Familiar側）や実行（Soul側）に必要なクエリは、個別に定義するのではなく `src/systems/soul_ai/execute/task_execution/context.rs` の `TaskQueries` 構造体に集約すること。
 
 **理由**: 使い魔と魂の間で検索条件やアクセスするコンポーネントの整合性を強制し、一方の変更による他方の不整合を防止するため。
 

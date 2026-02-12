@@ -108,8 +108,8 @@ systems/visual/
 
 ## 5. 関連ファイル
 
-- [visual/gather/mod.rs](file:///home/iaamm/projects/hell-workers/src/systems/visual/gather/mod.rs)
-- [visual/haul/mod.rs](file:///home/iaamm/projects/hell-workers/src/systems/visual/haul/mod.rs)
-- [visual/soul.rs](file:///home/iaamm/projects/hell-workers/src/systems/visual/soul.rs)
-- [utils/worker_icon.rs](file:///home/iaamm/projects/hell-workers/src/systems/utils/worker_icon.rs)
-- [visual.rs](file:///home/iaamm/projects/hell-workers/src/plugins/visual.rs)
+- [visual/gather/mod.rs](src/systems/visual/gather/mod.rs)
+- [visual/haul/mod.rs](src/systems/visual/haul/mod.rs)
+- [visual/soul.rs](src/systems/visual/soul.rs)
+- [utils/worker_icon.rs](src/systems/utils/worker_icon.rs)
+- [visual.rs](src/plugins/visual.rs)
