@@ -17,7 +17,7 @@
 
 ## フォントハンドル
 
-[assets.rs](file:///f:/DevData/projects/hell-workers/src/assets.rs) の `GameAssets` で管理:
+[assets.rs](src/assets.rs) の `GameAssets` で管理:
 
 ```rust
 pub font_ui: Handle<Font>,         // UI全般
@@ -30,7 +30,7 @@ pub font_soul_emoji: Handle<Font>, // Soulセリフ（絵文字）
 
 ## フォントサイズ定数
 
-[constants.rs](file:///f:/DevData/projects/hell-workers/src/constants.rs) で定義:
+[constants.rs](src/constants.rs) で定義:
 
 ```rust
 pub const FONT_SIZE_TITLE: f32 = 24.0;
@@ -50,14 +50,14 @@ pub const FONT_SIZE_BUBBLE_FAMILIAR: f32 = 12.0;
 
 | ファイル | 適用内容 |
 |:--|:--|
-| [entity_list.rs](file:///f:/DevData/projects/hell-workers/src/interface/ui/setup/entity_list.rs) | タイトル、セクションヘッダー |
+| [entity_list.rs](src/interface/ui/setup/entity_list.rs) | タイトル、セクションヘッダー |
 | `src/interface/ui/list/` | ソウル名、使い魔名、空欄テキスト（view_model, spawn 等） |
-| [panels.rs](file:///f:/DevData/projects/hell-workers/src/interface/ui/setup/panels.rs) | InfoPanel、HoverTooltip |
-| [dialogs.rs](file:///f:/DevData/projects/hell-workers/src/interface/ui/setup/dialogs.rs) | 操作ダイアログ |
-| [bottom_bar.rs](file:///f:/DevData/projects/hell-workers/src/interface/ui/setup/bottom_bar.rs) | メニューボタン、モード表示 |
-| [submenus.rs](file:///f:/DevData/projects/hell-workers/src/interface/ui/setup/submenus.rs) | サブメニュー項目 |
-| [time_control.rs](file:///f:/DevData/projects/hell-workers/src/interface/ui/setup/time_control.rs) | 時計、速度ボタン、タスクサマリー |
-| [soul.rs](file:///f:/DevData/projects/hell-workers/src/systems/visual/soul.rs) | ステータスアイコン |
-| [effects.rs](file:///f:/DevData/projects/hell-workers/src/systems/visual/blueprint/effects.rs) | 搬入ポップアップ |
-| [jobs.rs](file:///f:/DevData/projects/hell-workers/src/systems/jobs.rs) | 建物完成テキスト |
-| [speech/update.rs](file:///f:/DevData/projects/hell-workers/src/systems/visual/speech/update.rs) | 吹き出しシステム（Soul/Familiar） |
+| [panels.rs](src/interface/ui/setup/panels.rs) | InfoPanel、HoverTooltip |
+| [dialogs.rs](src/interface/ui/setup/dialogs.rs) | 操作ダイアログ |
+| [bottom_bar.rs](src/interface/ui/setup/bottom_bar.rs) | メニューボタン、モード表示 |
+| [submenus.rs](src/interface/ui/setup/submenus.rs) | サブメニュー項目 |
+| [time_control.rs](src/interface/ui/setup/time_control.rs) | 時計、速度ボタン、タスクサマリー |
+| [soul.rs](src/systems/visual/soul.rs) | ステータスアイコン |
+| [effects.rs](src/systems/visual/blueprint/effects.rs) | 搬入ポップアップ |
+| [jobs.rs](src/systems/jobs.rs) | 建物完成テキスト |
+| [speech/update.rs](src/systems/visual/speech/update.rs) | 吹き出しシステム（Soul/Familiar） |
