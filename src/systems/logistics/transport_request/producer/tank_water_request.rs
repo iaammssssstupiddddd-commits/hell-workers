@@ -98,6 +98,7 @@ pub fn tank_water_request_system(
                     resource_type: ResourceType::Water,
                     issued_by: *issued_by,
                     priority: TransportPriority::Normal,
+                    stockpile_group: vec![],
                 },
                 TransportDemand {
                     desired_slots: *slots,
@@ -139,6 +140,7 @@ pub fn tank_water_request_system(
                 resource_type: ResourceType::Water,
                 issued_by,
                 priority: TransportPriority::Normal,
+                stockpile_group: vec![],
             },
             TransportDemand {
                 desired_slots: slots,

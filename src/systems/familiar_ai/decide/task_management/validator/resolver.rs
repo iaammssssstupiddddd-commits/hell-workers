@@ -17,9 +17,29 @@ pub fn resolve_haul_to_stockpile_inputs(
         return None;
     }
 
-    let stockpile = req.anchor;
     let resource_type = req.resource_type;
-    let item_owner = queries.designation.belongs.get(stockpile).ok().map(|b| b.0);
+    let item_owner = queries.designation.belongs.get(req.anchor).ok().map(|b| b.0);
+
+    // グループ内の空きセルを探す（stored < capacity）
+    let stockpile = if req.stockpile_group.is_empty() {
+        req.anchor
+    } else {
+        req.stockpile_group
+            .iter()
+            .filter_map(|&cell| {
+                let (_, _, stock, stored_opt) = queries.storage.stockpiles.get(cell).ok()?;
+                let stored = stored_opt.map(|s| s.len()).unwrap_or(0);
+                if stored < stock.capacity {
+                    Some((cell, stock.capacity - stored))
+                } else {
+                    None
+                }
+            })
+            .max_by_key(|(_, free)| *free)
+            .map(|(cell, _)| cell)
+            .unwrap_or(req.anchor)
+    };
+
     Some((stockpile, resource_type, item_owner))
 }
 
