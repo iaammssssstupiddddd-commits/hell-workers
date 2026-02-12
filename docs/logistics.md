@@ -62,13 +62,19 @@ Hell-Workers の物流は、`TransportRequest` を中心にした自動発行 + 
 ## 4. 自動運搬の仕様
 
 ### 4.1 TaskArea -> Stockpile (`DepositToStockpile`)
-- 対象は「非 Idle の Familiar」が持つ `TaskArea` 内の Stockpile。
-- 需要は `capacity - current - in_flight` で算出。
-- `resource_type = None` の空 Stockpile は、近傍の地面アイテムから搬入種別を推定して request を発行。
-- 搬入対象は `ResourceType::is_loadable() == true` の資材のみ（液体/バケツ/手押し車は除外）。
-- 割り当て時のソース選定は「地面アイテムのみ」。
-  - 既に `InStockpile` のアイテムは対象外。
-  - 同一 Stockpile での pick-drop ループを防止。
+- **グループ単位の発行**:
+  - ファミリアの `TaskArea` 内にある Stockpile をひとつのグループとして扱い、グループごとに `TransportRequest` を発行します（`anchor` = 代表セル）。
+  - 複数の `TaskArea` に含まれる共有セルは、それぞれのファミリアのグループに重複して含まれ、双方向から利用可能です。
+- **需要計算**:
+  - グループ全体の `total_capacity - total_stored - total_in_flight` で算出。
+- **収集対象範囲**:
+  - **TaskArea 内全域** ∪ **グループ外周セルから 10 タイル以内** の和集合。
+  - 複数グループの範囲に入るアイテムは、最寄りグループ（外周距離）に排他的に割り当てられます。
+- **搬入・ソース選定**:
+  - `resource_type = None` の空グループは、範囲内の近傍アイテムから搬入種別を推定。
+  - 搬入対象は `ResourceType::is_loadable() == true` の資材のみ。
+  - 割り当て時にグループ内の**空き容量があるセル**を動的に決定して搬入します。
+  - ソースは「地面アイテムのみ」（`InStockpile` 除外）で、同一 Stockpile での pick-drop ループを防止します。
 
 ### 4.2 Blueprint 搬入 (`DeliverToBlueprint`)
 - `required_materials - delivered_materials - in_flight` を不足分として request 化。

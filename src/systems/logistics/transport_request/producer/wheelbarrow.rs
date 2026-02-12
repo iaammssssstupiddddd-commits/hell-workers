@@ -70,6 +70,7 @@ pub fn wheelbarrow_auto_haul_system(
                     resource_type: ResourceType::Wheelbarrow,
                     issued_by: *issued_by,
                     priority: TransportPriority::Normal,
+                    stockpile_group: vec![],
                 },
                 TransportDemand {
                     desired_slots: 1,
@@ -106,6 +107,7 @@ pub fn wheelbarrow_auto_haul_system(
                 resource_type: ResourceType::Wheelbarrow,
                 issued_by,
                 priority: TransportPriority::Normal,
+                stockpile_group: vec![],
             },
             TransportDemand {
                 desired_slots: 1,

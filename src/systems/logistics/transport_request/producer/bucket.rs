@@ -210,6 +210,7 @@ pub fn bucket_auto_haul_system(
                     resource_type: ResourceType::BucketEmpty,
                     issued_by: desired.issued_by,
                     priority: TransportPriority::Normal,
+                    stockpile_group: vec![],
                 },
                 TransportDemand {
                     desired_slots: desired.desired_slots,
@@ -262,6 +263,7 @@ pub fn bucket_auto_haul_system(
                 resource_type: ResourceType::BucketEmpty,
                 issued_by: desired.issued_by,
                 priority: TransportPriority::Normal,
+                stockpile_group: vec![],
             },
             TransportDemand {
                 desired_slots: desired.desired_slots,

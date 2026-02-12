@@ -107,8 +107,18 @@ pub fn wheelbarrow_arbitration_system(
         let item_owner = Some(req.issued_by);
         let resource_type = req.resource_type;
 
-        // dest_capacity を確認
-        let dest_capacity = if let Ok((stock, stored_opt)) = q_stockpiles.get(stockpile_entity) {
+        // dest_capacity を確認（グループ対応）
+        let dest_capacity = if !req.stockpile_group.is_empty() {
+            // グループ全体の空き容量を合算
+            let mut total_free = 0usize;
+            for &cell in &req.stockpile_group {
+                if let Ok((stock, stored_opt)) = q_stockpiles.get(cell) {
+                    let current = stored_opt.map(|s| s.len()).unwrap_or(0);
+                    total_free += stock.capacity.saturating_sub(current);
+                }
+            }
+            total_free
+        } else if let Ok((stock, stored_opt)) = q_stockpiles.get(stockpile_entity) {
             let current = stored_opt.map(|s| s.len()).unwrap_or(0);
             if current >= stock.capacity {
                 0

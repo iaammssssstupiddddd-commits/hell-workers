@@ -136,6 +136,7 @@ pub fn blueprint_auto_haul_system(
                     resource_type: key.1,
                     issued_by: *issued_by,
                     priority: TransportPriority::Normal,
+                    stockpile_group: vec![],
                 },
                 TransportDemand {
                     desired_slots: *slots,
@@ -178,6 +179,7 @@ pub fn blueprint_auto_haul_system(
                 resource_type: key.1,
                 issued_by,
                 priority: TransportPriority::Normal,
+                stockpile_group: vec![],
             },
             TransportDemand {
                 desired_slots: slots,

@@ -28,6 +28,8 @@ pub struct TransportRequest {
     /// リクエストを発行した Familiar
     pub issued_by: Entity,
     pub priority: TransportPriority,
+    /// DepositToStockpile: グループ内全セル（他種別では空Vec）
+    pub stockpile_group: Vec<Entity>,
 }
 
 /// 需要管理
