@@ -1,10 +1,10 @@
 use super::common::*;
 use super::context::TaskExecutionContext;
+use super::transport_common::{cancel, reservation};
 use super::types::{AssignedTask, HaulToMixerPhase};
 use crate::systems::logistics::ResourceType;
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
-// use crate::systems::familiar_ai::perceive::resource_sync::SharedResourceCache; // Removed unused import
 
 pub fn handle_haul_to_mixer_task(
     ctx: &mut TaskExecutionContext,
@@ -28,36 +28,21 @@ pub fn handle_haul_to_mixer_task(
                         "HAUL_TO_MIXER: Soul {:?} - mixer {:?} storage full for {:?}, canceling",
                         ctx.soul_entity, mixer_entity, resource_type
                     );
-                    // 予約解除
-                    ctx.queue_reservation(
-                        crate::events::ResourceReservationOp::ReleaseMixerDestination {
-                            target: mixer_entity,
-                            resource_type,
-                        },
-                    );
-                    // アイテムのDesignationとTargetMixerを解除
                     commands
                         .entity(item_entity)
                         .remove::<crate::systems::jobs::Designation>();
                     commands
                         .entity(item_entity)
                         .remove::<crate::systems::jobs::TargetMixer>();
-                    clear_task_and_path(ctx.task, ctx.path);
+                    cancel::cancel_haul_to_mixer(ctx, mixer_entity, resource_type);
                     return;
                 }
             } else {
-                // ミキサーが存在しない
                 info!(
                     "HAUL_TO_MIXER: Soul {:?} - mixer {:?} not found, canceling",
                     ctx.soul_entity, mixer_entity
                 );
-                ctx.queue_reservation(
-                    crate::events::ResourceReservationOp::ReleaseMixerDestination {
-                        target: mixer_entity,
-                        resource_type,
-                    },
-                );
-                clear_task_and_path(ctx.task, ctx.path);
+                cancel::cancel_haul_to_mixer(ctx, mixer_entity, resource_type);
                 return;
             }
 
@@ -80,16 +65,10 @@ pub fn handle_haul_to_mixer_task(
                         "HAUL_TO_MIXER: Soul {:?} - item {:?} designation removed, canceling",
                         ctx.soul_entity, item_entity
                     );
-                    ctx.queue_reservation(
-                        crate::events::ResourceReservationOp::ReleaseMixerDestination {
-                            target: mixer_entity,
-                            resource_type,
-                        },
-                    );
                     commands
                         .entity(item_entity)
                         .remove::<crate::systems::jobs::TargetMixer>();
-                    clear_task_and_path(ctx.task, ctx.path);
+                    cancel::cancel_haul_to_mixer(ctx, mixer_entity, resource_type);
                     return;
                 }
 
@@ -110,19 +89,13 @@ pub fn handle_haul_to_mixer_task(
                         "HAUL_TO_MIXER: Soul {:?} cannot reach item {:?}, canceling",
                         ctx.soul_entity, item_entity
                     );
-                    ctx.queue_reservation(
-                        crate::events::ResourceReservationOp::ReleaseMixerDestination {
-                            target: mixer_entity,
-                            resource_type,
-                        },
-                    );
                     commands
                         .entity(item_entity)
                         .remove::<crate::systems::jobs::Designation>();
                     commands
                         .entity(item_entity)
                         .remove::<crate::systems::jobs::TargetMixer>();
-                    clear_task_and_path(ctx.task, ctx.path);
+                    cancel::cancel_haul_to_mixer(ctx, mixer_entity, resource_type);
                     return;
                 }
 
@@ -151,27 +124,14 @@ pub fn handle_haul_to_mixer_task(
                     );
                     ctx.path.waypoints.clear();
 
-                    // ソース取得記録
-                    ctx.queue_reservation(
-                        crate::events::ResourceReservationOp::RecordPickedSource {
-                            source: item_entity,
-                            amount: 1,
-                        },
-                    );
+                    reservation::record_picked_source(ctx, item_entity, 1);
                 }
             } else {
                 info!(
                     "HAUL_TO_MIXER: Soul {:?} - item {:?} not found, canceling",
                     ctx.soul_entity, item_entity
                 );
-                ctx.queue_reservation(
-                    crate::events::ResourceReservationOp::ReleaseMixerDestination {
-                        target: mixer_entity,
-                        resource_type,
-                    },
-                );
-                // アイテムが存在しない場合は削除できないが、念のためコマンドは発行しない（IDが無効なため）
-                clear_task_and_path(ctx.task, ctx.path);
+                cancel::cancel_haul_to_mixer(ctx, mixer_entity, resource_type);
             }
         }
 
@@ -182,13 +142,7 @@ pub fn handle_haul_to_mixer_task(
                     "HAUL_TO_MIXER: Soul {:?} - item not in inventory, canceling",
                     ctx.soul_entity
                 );
-                ctx.queue_reservation(
-                    crate::events::ResourceReservationOp::ReleaseMixerDestination {
-                        target: mixer_entity,
-                        resource_type,
-                    },
-                );
-                clear_task_and_path(ctx.task, ctx.path);
+                cancel::cancel_haul_to_mixer(ctx, mixer_entity, resource_type);
                 return;
             }
 
@@ -203,13 +157,7 @@ pub fn handle_haul_to_mixer_task(
                         "HAUL_TO_MIXER: Mixer {:?} full for {:?}, disposing item",
                         mixer_entity, resource_type
                     );
-                    ctx.queue_reservation(
-                        crate::events::ResourceReservationOp::ReleaseMixerDestination {
-                            target: mixer_entity,
-                            resource_type,
-                        },
-                    );
-
+                    reservation::release_mixer_destination(ctx, mixer_entity, resource_type);
                     if resource_type == ResourceType::Sand {
                         commands.entity(item_entity).despawn();
                     } else {
@@ -239,12 +187,7 @@ pub fn handle_haul_to_mixer_task(
                         "HAUL_TO_MIXER: Soul {:?} cannot reach mixer {:?}, dropping item",
                         ctx.soul_entity, mixer_entity
                     );
-                    ctx.queue_reservation(
-                        crate::events::ResourceReservationOp::ReleaseMixerDestination {
-                            target: mixer_entity,
-                            resource_type,
-                        },
-                    );
+                    reservation::release_mixer_destination(ctx, mixer_entity, resource_type);
                     commands
                         .entity(item_entity)
                         .remove::<crate::systems::jobs::TargetMixer>();
@@ -267,12 +210,7 @@ pub fn handle_haul_to_mixer_task(
                 }
             } else {
                 // ミキサーが消失した場合はアイテムをドロップして終了
-                ctx.queue_reservation(
-                    crate::events::ResourceReservationOp::ReleaseMixerDestination {
-                        target: mixer_entity,
-                        resource_type,
-                    },
-                );
+                reservation::release_mixer_destination(ctx, mixer_entity, resource_type);
                 if let Some(item) = ctx.inventory.0 {
                     commands
                         .entity(item)
@@ -312,13 +250,7 @@ pub fn handle_haul_to_mixer_task(
                     ctx.inventory.0 = None;
                 }
             }
-            // 完了したので予約解除
-            ctx.queue_reservation(
-                crate::events::ResourceReservationOp::ReleaseMixerDestination {
-                    target: mixer_entity,
-                    resource_type,
-                },
-            );
+            reservation::release_mixer_destination(ctx, mixer_entity, resource_type);
             clear_task_and_path(ctx.task, ctx.path);
         }
     }

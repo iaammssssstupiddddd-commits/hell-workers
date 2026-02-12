@@ -15,6 +15,7 @@ pub mod haul_with_wheelbarrow;
 pub mod haul_to_mixer;
 pub mod haul_water_to_mixer;
 pub mod refine;
+pub mod transport_common;
 pub mod types;
 
 // 型の再エクスポート（外部からのアクセスを簡潔に）

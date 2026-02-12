@@ -6,6 +6,7 @@ use crate::relationships::WorkingOn;
 use crate::systems::soul_ai::execute::task_execution::{
     common::*,
     context::TaskExecutionContext,
+    transport_common::reservation,
     types::{AssignedTask, HaulToBpPhase},
 };
 use crate::world::map::WorldMap;
@@ -99,13 +100,7 @@ pub fn handle_haul_to_blueprint_task(
                     // update_destination_to_blueprint により自動的に（一貫したロジックで）行われるため、
                     // ここではパスをクリアするのみとする。
 
-                    // ソース予約解放と取得記録
-                    ctx.queue_reservation(
-                        crate::events::ResourceReservationOp::RecordPickedSource {
-                            source: item_entity,
-                            amount: 1,
-                        },
-                    );
+                    reservation::record_picked_source(ctx, item_entity, 1);
 
                     *ctx.task = AssignedTask::HaulToBlueprint(
                         crate::systems::soul_ai::execute::task_execution::types::HaulToBlueprintData {
@@ -230,10 +225,7 @@ pub fn handle_haul_to_blueprint_task(
             clear_task_and_path(ctx.task, ctx.path);
             ctx.soul.fatigue = (ctx.soul.fatigue + 0.05).min(1.0);
 
-            // 完了したので予約解除
-            ctx.queue_reservation(crate::events::ResourceReservationOp::ReleaseDestination {
-                target: blueprint_entity,
-            });
+            reservation::release_destination(ctx, blueprint_entity);
         }
     }
 }
