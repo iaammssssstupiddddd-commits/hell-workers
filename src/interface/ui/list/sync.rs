@@ -376,12 +376,15 @@ pub fn sync_entity_list_from_view_model_system(
     theme: Res<UiTheme>,
     view_model: Res<EntityListViewModel>,
     mut node_index: ResMut<EntityListNodeIndex>,
+    mut dirty: ResMut<super::dirty::EntityListDirty>,
     q_fam_container: Query<Entity, With<FamiliarListContainer>>,
     q_unassigned_container: Query<Entity, With<UnassignedSoulContent>>,
     q_children: Query<&Children>,
     mut q_text: Query<&mut Text>,
     mut q_image: Query<&mut ImageNode>,
 ) {
+    dirty.clear();
+
     if view_model.current == view_model.previous {
         return;
     }

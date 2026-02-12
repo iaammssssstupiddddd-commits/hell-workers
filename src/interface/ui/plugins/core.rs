@@ -11,9 +11,7 @@ use crate::interface::ui::{
     update_mode_text_system, update_operation_dialog_system,
 };
 use crate::systems::GameSystemSet;
-use crate::systems::time::{
-    game_time_system, time_control_keyboard_system, time_control_ui_system,
-};
+use crate::systems::time::game_time_system;
 use bevy::prelude::*;
 
 pub struct UiCorePlugin;
@@ -45,8 +43,6 @@ impl Plugin for UiCorePlugin {
                 update_operation_dialog_system
                     .run_if(|selected: Res<SelectedEntity>| selected.0.is_some()),
                 game_time_system,
-                time_control_keyboard_system,
-                time_control_ui_system,
                 update_fps_display_system,
             )
                 .in_set(GameSystemSet::Interface),

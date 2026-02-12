@@ -1,8 +1,10 @@
 //! 時間操作 UI
 
-use crate::interface::ui::components::{UiInputBlocker, UiNodeRegistry, UiSlot, UiTooltip};
+use crate::interface::ui::components::{
+    MenuAction, MenuButton, UiInputBlocker, UiNodeRegistry, UiSlot, UiTooltip,
+};
 use crate::interface::ui::theme::UiTheme;
-use crate::systems::time::ClockText;
+use crate::systems::time::{ClockText, TimeSpeed};
 use bevy::prelude::*;
 use bevy::ui::RelativeCursorPosition;
 
@@ -50,30 +52,10 @@ pub fn spawn_time_control(
             })
             .with_children(|speed_row| {
                 let speeds = [
-                    (
-                        crate::systems::time::TimeSpeed::Paused,
-                        "||",
-                        "一時停止",
-                        "1",
-                    ),
-                    (
-                        crate::systems::time::TimeSpeed::Normal,
-                        ">",
-                        "通常速度 (x1)",
-                        "2",
-                    ),
-                    (
-                        crate::systems::time::TimeSpeed::Fast,
-                        ">>",
-                        "高速 (x2)",
-                        "3",
-                    ),
-                    (
-                        crate::systems::time::TimeSpeed::Super,
-                        ">>>",
-                        "超高速 (x4)",
-                        "4",
-                    ),
+                    (TimeSpeed::Paused, "||", "一時停止", "1"),
+                    (TimeSpeed::Normal, ">", "通常速度 (x1)", "2"),
+                    (TimeSpeed::Fast, ">>", "高速 (x2)", "3"),
+                    (TimeSpeed::Super, ">>>", "超高速 (x4)", "4"),
                 ];
 
                 for (speed, label, tooltip, shortcut) in speeds {
@@ -89,7 +71,7 @@ pub fn spawn_time_control(
                                 ..default()
                             },
                             BackgroundColor(theme.colors.button_default),
-                            crate::systems::time::SpeedButton(speed),
+                            MenuButton(MenuAction::SetTimeSpeed(speed)),
                             UiTooltip::with_shortcut(tooltip, shortcut),
                         ))
                         .with_children(|btn| {

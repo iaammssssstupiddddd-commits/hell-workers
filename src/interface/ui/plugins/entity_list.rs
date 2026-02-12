@@ -1,3 +1,5 @@
+use crate::interface::ui::list::change_detection::detect_entity_list_changes;
+use crate::interface::ui::list::dirty::EntityListDirty;
 use crate::interface::ui::{
     DragState, EntityListMinimizeState, EntityListNodeIndex, EntityListResizeState,
     EntityListViewModel, build_entity_list_view_model_system, entity_list_drag_drop_system,
@@ -10,8 +12,6 @@ use crate::interface::ui::{
 use crate::systems::GameSystemSet;
 use crate::systems::command::task_area_edit_cursor_system;
 use bevy::prelude::*;
-use bevy::time::common_conditions::on_timer;
-use std::time::Duration;
 
 pub struct UiEntityListPlugin;
 
@@ -22,6 +22,7 @@ impl Plugin for UiEntityListPlugin {
         app.init_resource::<DragState>();
         app.init_resource::<EntityListMinimizeState>();
         app.init_resource::<EntityListResizeState>();
+        app.init_resource::<EntityListDirty>();
         app.add_systems(
             Update,
             (
@@ -41,12 +42,17 @@ impl Plugin for UiEntityListPlugin {
         )
         .add_systems(
             Update,
+            detect_entity_list_changes.in_set(GameSystemSet::Interface),
+        )
+        .add_systems(
+            Update,
             (
                 build_entity_list_view_model_system,
                 sync_entity_list_from_view_model_system,
             )
                 .chain()
-                .run_if(on_timer(Duration::from_millis(100)))
+                .run_if(|dirty: Res<EntityListDirty>| dirty.is_dirty())
+                .after(detect_entity_list_changes)
                 .in_set(GameSystemSet::Interface),
         );
     }
