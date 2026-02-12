@@ -60,6 +60,6 @@
 
 ## 関連ファイル
 - `src/world/map/`: マップデータ構造（mod）・レイアウト定数（layout）・生成システム（spawn）
-- [river.rs](file:///home/iaamm/projects/hell-workers/src/world/river.rs): 川生成アルゴリズム
-- [regrowth.rs](file:///home/iaamm/projects/hell-workers/src/world/regrowth.rs): 木の再生システム
-- [pathfinding.rs](file:///home/iaamm/projects/hell-workers/src/world/pathfinding.rs): 通行制御を伴うパス検索
+- [river.rs](src/world/river.rs): 川生成アルゴリズム
+- [regrowth.rs](src/world/regrowth.rs): 木の再生システム
+- [pathfinding.rs](src/world/pathfinding.rs): 通行制御を伴うパス検索

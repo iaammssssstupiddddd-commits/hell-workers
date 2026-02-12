@@ -228,8 +228,10 @@ WheelbarrowLease {
   - `src/systems/logistics/transport_request/lifecycle.rs`
 - 割り当てロジック:
   - `src/systems/familiar_ai/decide/task_management/`（builders, policy, validator）
+  - `task_management/policy/haul/`（source_selector, lease_validation, wheelbarrow）: 運搬割り当ての責務分割
 - 実行ロジック:
-  - `src/systems/soul_ai/execute/task_execution/`
+  - `src/systems/soul_ai/execute/task_execution/`（haul, haul_to_mixer, haul_to_blueprint, haul_with_wheelbarrow, haul_water_to_mixer 等）
+  - `task_execution/transport_common/`（reservation, cancel）: 予約解放・中断の共通API
 
 ## 9. システム追加時の実装ルール
 
@@ -260,7 +262,7 @@ WheelbarrowLease {
 - 新しい producer を `TransportRequestPlugin`（`Decide`）へ登録する。
 - 新しい `WorkType` / request 種別を導入した場合:
   - `task_finder/filter.rs`（有効タスク判定）
-  - `policy/mod.rs`（割り当て分岐、`task_management` 配下）
+  - `policy/mod.rs`（割り当て分岐、`task_management` 配下。運搬は `policy/haul/mod.rs`）
   - `sync_reservations_system`（予約再構築）
   - 必要なら `task_finder/score.rs`（優先度）
   - `transport_request_anchor_cleanup_system` で cleanup 要件を満たすこと
