@@ -1,7 +1,7 @@
-use crate::interface::ui::components::RightPanelMode;
+use crate::interface::ui::components::LeftPanelMode;
 use crate::interface::ui::panels::task_list::{
-    right_panel_tab_system, right_panel_visibility_system, task_list_click_system,
-    task_list_update_system,
+    left_panel_tab_system, left_panel_visibility_system, task_list_click_system,
+    task_list_update_system, task_list_visual_feedback_system,
 };
 use crate::interface::ui::panels::task_list::update::TaskListState;
 use crate::interface::ui::{
@@ -18,7 +18,7 @@ impl Plugin for UiInfoPanelPlugin {
         app.init_resource::<InfoPanelState>();
         app.init_resource::<InfoPanelPinState>();
         app.init_resource::<InfoPanelNodes>();
-        app.init_resource::<RightPanelMode>();
+        app.init_resource::<LeftPanelMode>();
         app.init_resource::<TaskListState>();
         app.add_systems(
             Update,
@@ -35,12 +35,11 @@ impl Plugin for UiInfoPanelPlugin {
                     )
                     .after(menu_visibility_system)
                     .before(update_mode_text_system),
-                right_panel_tab_system,
-                right_panel_visibility_system
-                    .after(info_panel_system)
-                    .after(right_panel_tab_system),
-                task_list_update_system.after(right_panel_tab_system),
+                left_panel_tab_system,
+                left_panel_visibility_system.after(left_panel_tab_system),
+                task_list_update_system.after(left_panel_tab_system),
                 task_list_click_system,
+                task_list_visual_feedback_system.after(task_list_click_system),
             )
                 .in_set(GameSystemSet::Interface),
         );
