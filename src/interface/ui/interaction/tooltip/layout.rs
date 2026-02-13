@@ -22,6 +22,7 @@ pub(crate) struct TooltipUiLayoutQueryParam<'w, 's> {
         ),
         With<Button>,
     >,
+    pub q_speed_buttons: Query<'w, 's, (), With<SpeedButtonMarker>>,
     pub q_layout: Query<'w, 's, (&'static ComputedNode, &'static UiGlobalTransform)>,
     pub q_architect_submenu:
         Query<'w, 's, (&'static ComputedNode, &'static UiGlobalTransform), With<ArchitectSubMenu>>,
