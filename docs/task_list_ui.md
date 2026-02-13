@@ -1,44 +1,69 @@
 # タスクリストUI仕様
 
-最終更新: 2026-02-11
+最終更新: 2026-02-13
 
 ## 概要
-画面右側に表示される常駐パネルのモードの1つです（Info Panelとタブ切替）。
-現在の **Designation（仕事の指示）** の一覧を表示し、進捗状況や優先度を可視化します。
+画面左側に表示される常駐パネルのモードの1つです（エンティティリストとタブ切替）。
+現在の **Designation（仕事の指示）** の一覧を表示し、進捗状況を可視化します。
 
 ## 表示構成
 
-### 表示内容
-以下の情報をリスト形式で表示します：
-- **タスク内容**: `Construct Wall`, `Mine Rock`, `Haul Wood` など、具体的な作業内容
-- **ステータス**: 割り当て状況と優先度
+### グループヘッダー
+タスクは `WorkType` ごとにグループ化され、各グループにヘッダーが表示されます。
 
-### 表示フォーマット
-`[優先度] [ステータス] [タスク内容]`
+`[WorkTypeアイコン] [ラベル] ([件数])`
 
-#### 1. 優先度 (Priority)
-タスクの重要度を示します。
-- **高優先**: `★[P:n]` (Priority >= 5) - MudMixerへの自動供給や緊急タスク
-- **低優先**: `▼[P:n]` (Priority < 0) - 後回しにしてよいタスク
-- **通常**: `[P:n]` - 一般的な指示
+- アイコンは WorkType に対応（斧=Chop、ピッケル=Mine、ハンマー=Build、運搬=Haul系）
+- テーマカラーで着色
 
-#### 2. ステータス (Status)
-タスクへの人員割り当て状況を示します。
-- **待機中**: `[WAIT]` - 誰も割り当てられていない状態
-- **実行中**: `[RUN:n]` - n 人の作業員がそのタスクに従事している状態
+### タスクアイテム
+各アイテムは固定高さ（20px）の行で、以下の要素を横並びに配置します：
 
-#### 3. タスク内容 (Description)
-作業種別 (`WorkType`) と対象エンティティ (`Designation` のターゲット) に基づいて自動生成されます。
+`[WorkTypeアイコン 16px] [説明テキスト 12px] [ワーカーカウント ×N]`
+
+#### 1. WorkType アイコン (16px)
+作業種別ごとに異なるアイコンとテーマカラーを表示：
+- **Chop**: 斧アイコン / `chop` 色
+- **Mine**: ピッケルアイコン / `mine` 色
+- **Build**: ハンマーアイコン / `build` 色
+- **Haul / HaulToMixer / WheelbarrowHaul**: 運搬アイコン / `haul` 色
+- **GatherWater / HaulWaterToMixer**: 運搬アイコン / `water` 色
+- **CollectSand**: ピッケルアイコン / `gather_default` 色
+- **Refine**: ハンマーアイコン / `build` 色
+
+#### 2. 説明テキスト (12px)
+作業種別と対象エンティティに基づいて自動生成されます。
 - **建築**: `Construct [BuildingType]` (例: `Construct Wall`)
 - **採掘**: `Mine Rock`
 - **伐採**: `Chop Tree`
 - **運搬**: `Haul [Resource]` (手動), `Haul [Resource] to Mixer` (自動)
 - **水汲み**: `Gather Water`
 
+高優先度タスク (Priority >= 5) は `accent_ember` 色で強調表示されます。
+
+#### 3. ワーカーカウント (10px)
+作業員が割り当てられている場合のみ `×N` を `text_secondary` 色で表示します。
+
+## ビジュアルフィードバック
+
+エンティティリストと統一されたホバー・選択ハイライトを提供します。
+
+### 背景色
+- **デフォルト**: `list_item_default`
+- **ホバー**: `list_item_hover`
+- **選択中**: `list_item_selected`
+- **選択中+ホバー**: `list_item_selected_hover`
+
+### 選択ボーダー
+ピン留めされたエンティティに対応するアイテムに左 3px の `list_selection_border` 色ボーダーを表示します。
+
 ## 実装アーキテクチャ
-- `RightPanelMode::TaskList` 時に表示
-- `src/interface/ui/panels/task_list/update.rs` で `TaskListState` を用いて差分検知を行い、変更がある場合のみ再描画します。
-- `Designation` コンポーネントを持つエンティティをクエリし、関連コンポーネント（Blueprint, TransportRequest等）を参照して説明文を生成します。
+- `LeftPanelMode::TaskList` 時に表示
+- `src/interface/ui/panels/task_list/update.rs` で `TaskListState` を用いて差分検知を行い、変更がある場合のみ再描画
+- `Designation` コンポーネントを持つエンティティをクエリし、関連コンポーネント（Blueprint, TransportRequest等）を参照して説明文を生成
+- `task_list_visual_feedback_system` が `Interaction` と `InfoPanelPinState` を監視し、ホバー・選択ハイライトを適用
 
 ## インタラクション
-- **リストクリック**: カメラをそのタスク（対象エンティティ）の位置へ移動し、詳細情報（Info Panel）を表示します。
+- **ホバー**: 背景色がハイライト
+- **クリック**: カメラをそのタスク（対象エンティティ）の位置へ移動し、InfoPanel にピン留め
+- **選択状態**: ピン留めされたエンティティに対応するアイテムに選択ボーダーと背景色が表示
