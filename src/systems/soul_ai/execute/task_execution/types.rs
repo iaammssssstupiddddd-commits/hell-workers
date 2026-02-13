@@ -1,6 +1,7 @@
 //! タスク実行関連の型定義
 
 use crate::systems::jobs::WorkType;
+use crate::systems::logistics::transport_request::WheelbarrowDestination;
 use bevy::prelude::*;
 
 /// 魂に割り当てられたタスク
@@ -177,7 +178,7 @@ pub enum HaulToMixerPhase {
 pub struct HaulWithWheelbarrowData {
     pub wheelbarrow: Entity,
     pub source_pos: Vec2,
-    pub dest_stockpile: Entity,
+    pub destination: WheelbarrowDestination,
     pub items: Vec<Entity>,
     pub phase: HaulWithWheelbarrowPhase,
 }

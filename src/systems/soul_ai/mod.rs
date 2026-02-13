@@ -60,6 +60,8 @@ impl Plugin for SoulAiPlugin {
                     update::vitals_update::fatigue_update_system,
                     update::vitals_update::fatigue_penalty_system,
                     update::vitals_influence::familiar_influence_unified_system,
+                    // Dream蓄積
+                    update::dream_update::dream_update_system,
                 )
                     .in_set(SoulAiSystemSet::Update),
                 // Update → Decide 間の同期

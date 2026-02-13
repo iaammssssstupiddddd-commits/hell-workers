@@ -118,6 +118,7 @@ pub enum UiSlot {
     AreaEditPreview,
     TooltipAnchor,
     FpsText,
+    DreamPoolText,
 }
 
 // ============================================================

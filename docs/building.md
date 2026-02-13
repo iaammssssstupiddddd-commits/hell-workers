@@ -174,8 +174,15 @@ flowchart TD
     - **機能**: 砂(1) + 水(1) + 岩(1) = Stasis Mud(5) を精製。
     - **要件**: 稼働には `Tank` からの水供給（`HaulWaterToMixer`）が必要です。
     - **SandPile**: 建設完了時の自動生成は行いません。必要時は companion フローで `SandPile` Blueprint を配置します。
+    - **運搬制約**: `Sand` 搬入は原則猫車運搬（ただしピックドロップ完結可能な近接ケースは徒歩許可）。
 
 - **Stasis Mud**: 高度な建築（完全な壁など）に必要な強化建材。
+    - **運搬制約**: `StasisMud` 搬送は原則猫車運搬（Stockpile / Blueprint）。
+      - ただし、ピックドロップ完結可能な近接ケースは徒歩許可。
+    - **Stockpile 自動搬送 request 発行条件**: `TaskArea` 内の Stockpile グループに、型互換（`None` または `Some(StasisMud)`）かつ空き容量ありのセルがある場合のみ発行されます。
+
+- **WheelbarrowParking（初期配布）**:
+    - ゲーム開始時に1棟が初期配置され、猫車不足による初期停滞を防止します。
 
 
 ## 9. 関連ファイル

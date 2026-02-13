@@ -53,7 +53,7 @@ pub fn handle(
         return;
     }
 
-    let Ok((bucket_transform, _, _, _res_item_opt, _, _)) =
+    let Ok((bucket_transform, _, _, _, _res_item_opt, _, _)) =
         ctx.queries.designation.targets.get(bucket_entity)
     else {
         reservation::release_mixer_destination(ctx, mixer_entity, ResourceType::Water);

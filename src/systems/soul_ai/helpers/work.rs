@@ -200,13 +200,39 @@ pub fn unassign_task<'w, 's, Q: TaskReservationAccess<'w, 's>>(
                             amount: 1,
                         },
                     });
-                queries
-                    .reservation_writer()
-                    .write(ResourceReservationRequest {
-                        op: ResourceReservationOp::ReleaseDestination {
-                            target: data.dest_stockpile,
-                        },
-                    });
+                match data.destination {
+                    crate::systems::logistics::transport_request::WheelbarrowDestination::Stockpile(
+                        target,
+                    )
+                    | crate::systems::logistics::transport_request::WheelbarrowDestination::Blueprint(
+                        target,
+                    ) => {
+                        queries
+                            .reservation_writer()
+                            .write(ResourceReservationRequest {
+                                op: ResourceReservationOp::ReleaseDestination { target },
+                            });
+                    }
+                    crate::systems::logistics::transport_request::WheelbarrowDestination::Mixer {
+                        entity: target,
+                        resource_type,
+                    } => {
+                        let item_type = queries
+                            .resources()
+                            .get(item)
+                            .ok()
+                            .map(|r| r.0)
+                            .unwrap_or(resource_type);
+                        queries
+                            .reservation_writer()
+                            .write(ResourceReservationRequest {
+                                op: ResourceReservationOp::ReleaseMixerDestination {
+                                    target,
+                                    resource_type: item_type,
+                                },
+                            });
+                    }
+                }
             }
             // 積載中のアイテムを地面に落とす
             for &item_entity in &data.items {

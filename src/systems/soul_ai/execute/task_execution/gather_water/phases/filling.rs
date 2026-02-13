@@ -45,7 +45,7 @@ pub fn handle(
             },
         ));
 
-        if let Ok((tank_transform, _, _, _, _, _)) = q_targets.get(tank_entity) {
+        if let Ok((tank_transform, _, _, _, _, _, _)) = q_targets.get(tank_entity) {
             let tank_pos = tank_transform.translation.truncate();
             if routing::set_path_to_tank_boundary(
                 ctx,

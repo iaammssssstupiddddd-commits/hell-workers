@@ -6,7 +6,8 @@ mod wheelbarrow;
 
 use crate::constants::*;
 use crate::systems::familiar_ai::decide::task_management::{AssignTaskContext, ReservationShadow};
-use crate::systems::logistics::transport_request::TransportRequestKind;
+use crate::systems::logistics::transport_request::{TransportRequestKind, WheelbarrowDestination};
+use crate::world::map::WorldMap;
 use bevy::prelude::*;
 
 use super::super::builders::{
@@ -19,6 +20,68 @@ use super::super::validator::{
     resolve_haul_to_stockpile_inputs, resolve_return_bucket_tank,
     resolve_wheelbarrow_batch_for_stockpile, source_not_reserved,
 };
+
+fn can_complete_pick_drop_to_point(source_pos: Vec2, destination_pos: Vec2) -> bool {
+    let source_grid = WorldMap::world_to_grid(source_pos);
+    // 実タスク条件に合わせる:
+    // 1) source に隣接して拾える立ち位置が存在し
+    // 2) その立ち位置が destination へのドロップ判定を満たす
+    for dx in -1..=1 {
+        for dy in -1..=1 {
+            let stand_pos = WorldMap::grid_to_world(source_grid.0 + dx, source_grid.1 + dy);
+            if stand_pos.distance(destination_pos) < TILE_SIZE * 1.8 {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+fn can_complete_pick_drop_to_blueprint(
+    source_pos: Vec2,
+    occupied_grids: &[(i32, i32)],
+) -> bool {
+    let source_grid = WorldMap::world_to_grid(source_pos);
+    for dx in -1..=1 {
+        for dy in -1..=1 {
+            let stand_grid = (source_grid.0 + dx, source_grid.1 + dy);
+            if occupied_grids.contains(&stand_grid) {
+                continue;
+            }
+            let stand_pos = WorldMap::grid_to_world(stand_grid.0, stand_grid.1);
+            if occupied_grids.iter().any(|&(gx, gy)| {
+                let bp_pos = WorldMap::grid_to_world(gx, gy);
+                stand_pos.distance(bp_pos) < TILE_SIZE * 1.5
+            }) {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+fn mixer_can_accept_item(
+    mixer_entity: Entity,
+    item_type: crate::systems::logistics::ResourceType,
+    mixer_already_reserved: bool,
+    queries: &crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
+    shadow: &ReservationShadow,
+) -> bool {
+    let Ok((_, storage, _)) = queries.storage.mixers.get(mixer_entity) else {
+        return false;
+    };
+    let reserved = queries
+        .reservation
+        .resource_cache
+        .get_mixer_destination_reservation(mixer_entity, item_type)
+        + shadow.mixer_reserved(mixer_entity, item_type);
+    let required = if mixer_already_reserved {
+        reserved as u32
+    } else {
+        (reserved + 1) as u32
+    };
+    storage.can_accept(item_type, required)
+}
 
 pub fn assign_haul_to_mixer(
     task_pos: Vec2,
@@ -40,6 +103,97 @@ pub fn assign_haul_to_mixer(
         .transport_requests
         .get(ctx.task_entity)
         .is_ok_and(|req| matches!(req.kind, TransportRequestKind::DeliverToMixerSolid));
+
+    if item_type.requires_wheelbarrow() {
+        // その場ピック→ドロップで完了できるなら、猫車より徒歩運搬を優先する
+        let can_try_pick_drop =
+            !is_request_task || queries.wheelbarrow_leases.get(ctx.task_entity).is_err();
+        if can_try_pick_drop
+            && let Ok((mixer_transform, _, _)) = queries.storage.mixers.get(mixer_entity)
+        {
+            let mixer_pos = mixer_transform.translation.truncate();
+            let pick_drop_source = if is_request_task {
+                source_selector::find_nearest_mixer_source_item(
+                    item_type, mixer_pos, queries, shadow,
+                )
+            } else if source_not_reserved(ctx.task_entity, queries, shadow) {
+                Some((ctx.task_entity, task_pos))
+            } else {
+                None
+            };
+
+            if let Some((source_item, source_pos)) = pick_drop_source {
+                let mixer_already_reserved =
+                    !is_request_task && queries.reserved_for_task.get(ctx.task_entity).is_ok();
+                if can_complete_pick_drop_to_point(source_pos, mixer_pos)
+                    && mixer_can_accept_item(
+                        mixer_entity,
+                        item_type,
+                        mixer_already_reserved,
+                        queries,
+                        shadow,
+                    )
+                {
+                    issue_haul_to_mixer(
+                        source_item,
+                        mixer_entity,
+                        item_type,
+                        mixer_already_reserved,
+                        source_pos,
+                        already_commanded,
+                        ctx,
+                        queries,
+                        shadow,
+                    );
+                    return true;
+                }
+            }
+        }
+
+        if let Ok(lease) = queries.wheelbarrow_leases.get(ctx.task_entity) {
+            if lease_validation::validate_lease(lease, queries, shadow, 1) {
+                issue_haul_with_wheelbarrow(
+                    lease.wheelbarrow,
+                    lease.source_pos,
+                    lease.destination,
+                    lease.items.clone(),
+                    task_pos,
+                    already_commanded,
+                    ctx,
+                    queries,
+                    shadow,
+                );
+                return true;
+            }
+        }
+
+        // 旧方式（アイテム直接タスク）との後方互換
+        if !is_request_task
+            && source_not_reserved(ctx.task_entity, queries, shadow)
+            && let Some(wb_entity) =
+                wheelbarrow::find_nearest_wheelbarrow(task_pos, queries, shadow)
+        {
+            issue_haul_with_wheelbarrow(
+                wb_entity,
+                task_pos,
+                WheelbarrowDestination::Mixer {
+                    entity: mixer_entity,
+                    resource_type: item_type,
+                },
+                vec![ctx.task_entity],
+                task_pos,
+                already_commanded,
+                ctx,
+                queries,
+                shadow,
+            );
+            return true;
+        }
+
+        // 猫車必須資源は徒歩運搬へフォールバックしない
+        return false;
+    }
+
     let (source_item, source_pos) = if is_request_task {
         let Some((source, pos)) =
             source_selector::find_nearest_mixer_source_item(item_type, task_pos, queries, shadow)
@@ -64,21 +218,8 @@ pub fn assign_haul_to_mixer(
 
     let mixer_already_reserved =
         !is_request_task && queries.reserved_for_task.get(ctx.task_entity).is_ok();
-    let can_accept = if let Ok((_, storage, _)) = queries.storage.mixers.get(mixer_entity) {
-        let reserved = queries
-            .reservation
-            .resource_cache
-            .get_mixer_destination_reservation(mixer_entity, item_type)
-            + shadow.mixer_reserved(mixer_entity, item_type);
-        let required = if mixer_already_reserved {
-            reserved as u32
-        } else {
-            (reserved + 1) as u32
-        };
-        storage.can_accept(item_type, required)
-    } else {
-        false
-    };
+    let can_accept =
+        mixer_can_accept_item(mixer_entity, item_type, mixer_already_reserved, queries, shadow);
 
     if !can_accept {
         debug!(
@@ -116,6 +257,95 @@ pub fn assign_haul(
             .transport_requests
             .get(ctx.task_entity)
             .is_ok_and(|req| matches!(req.kind, TransportRequestKind::DeliverToBlueprint));
+
+        if resource_type.requires_wheelbarrow() {
+            // その場ピック→ドロップで完了できるなら、猫車より徒歩運搬を優先する
+            let can_try_pick_drop =
+                !is_request_task || queries.wheelbarrow_leases.get(ctx.task_entity).is_err();
+            if can_try_pick_drop
+                && let Ok((bp_transform, bp, _)) = queries.storage.blueprints.get(blueprint)
+            {
+                let bp_pos = bp_transform.translation.truncate();
+                let pick_drop_source = if is_request_task {
+                    source_selector::find_nearest_blueprint_source_item(
+                        resource_type,
+                        bp_pos,
+                        queries,
+                        shadow,
+                    )
+                } else if source_not_reserved(ctx.task_entity, queries, shadow) {
+                    Some((ctx.task_entity, task_pos))
+                } else {
+                    None
+                };
+
+                if let Some((source_item, source_pos)) = pick_drop_source {
+                    if can_complete_pick_drop_to_blueprint(source_pos, &bp.occupied_grids) {
+                        if is_request_task {
+                            issue_haul_to_blueprint_with_source(
+                                source_item,
+                                blueprint,
+                                source_pos,
+                                already_commanded,
+                                ctx,
+                                queries,
+                                shadow,
+                            );
+                        } else {
+                            issue_haul_to_blueprint(
+                                blueprint,
+                                task_pos,
+                                already_commanded,
+                                ctx,
+                                queries,
+                                shadow,
+                            );
+                        }
+                        return true;
+                    }
+                }
+            }
+
+            if let Ok(lease) = queries.wheelbarrow_leases.get(ctx.task_entity) {
+                if lease_validation::validate_lease(lease, queries, shadow, 1) {
+                    issue_haul_with_wheelbarrow(
+                        lease.wheelbarrow,
+                        lease.source_pos,
+                        lease.destination,
+                        lease.items.clone(),
+                        task_pos,
+                        already_commanded,
+                        ctx,
+                        queries,
+                        shadow,
+                    );
+                    return true;
+                }
+            }
+
+            // 旧方式（アイテム直接タスク）との後方互換
+            if !is_request_task
+                && source_not_reserved(ctx.task_entity, queries, shadow)
+                && let Some(wb_entity) =
+                    wheelbarrow::find_nearest_wheelbarrow(task_pos, queries, shadow)
+            {
+                issue_haul_with_wheelbarrow(
+                    wb_entity,
+                    task_pos,
+                    WheelbarrowDestination::Blueprint(blueprint),
+                    vec![ctx.task_entity],
+                    task_pos,
+                    already_commanded,
+                    ctx,
+                    queries,
+                    shadow,
+                );
+                return true;
+            }
+
+            // 猫車必須資源は徒歩運搬へフォールバックしない
+            return false;
+        }
 
         if is_request_task {
             let Some((source_item, source_pos)) =
@@ -179,16 +409,50 @@ pub fn assign_haul(
     if let Some((stockpile, resource_type, item_owner)) =
         resolve_haul_to_stockpile_inputs(ctx.task_entity, queries)
     {
+        if resource_type.requires_wheelbarrow()
+            && queries.wheelbarrow_leases.get(ctx.task_entity).is_err()
+            && let Ok((_, stock_transform, _, _)) = queries.storage.stockpiles.get(stockpile)
+        {
+            // その場ピック→ドロップで完了できるなら、猫車より徒歩運搬を優先する
+            let stock_pos = stock_transform.translation.truncate();
+            if let Some((source_item, source_pos)) =
+                source_selector::find_nearest_stockpile_source_item(
+                    resource_type,
+                    item_owner,
+                    stock_pos,
+                    queries,
+                    shadow,
+                )
+            {
+                if can_complete_pick_drop_to_point(source_pos, stock_pos) {
+                    issue_haul_to_stockpile_with_source(
+                        source_item,
+                        stockpile,
+                        source_pos,
+                        already_commanded,
+                        ctx,
+                        queries,
+                        shadow,
+                    );
+                    return true;
+                }
+            }
+        }
+
         if let Ok(lease) = queries.wheelbarrow_leases.get(ctx.task_entity) {
-            if lease_validation::validate_lease(lease, queries, shadow) {
+            let min_valid_items = if resource_type.requires_wheelbarrow() {
+                1
+            } else {
+                WHEELBARROW_MIN_BATCH_SIZE
+            };
+            if lease_validation::validate_lease(lease, queries, shadow, min_valid_items) {
                 let source_pos = lease.source_pos;
                 let items = lease.items.clone();
                 let wb = lease.wheelbarrow;
-                let dest = lease.dest_stockpile;
                 issue_haul_with_wheelbarrow(
                     wb,
                     source_pos,
-                    dest,
+                    lease.destination,
                     items,
                     task_pos,
                     already_commanded,
@@ -198,6 +462,11 @@ pub fn assign_haul(
                 );
                 return true;
             }
+        }
+
+        if resource_type.requires_wheelbarrow() {
+            // 猫車必須資源は徒歩運搬へフォールバックしない
+            return false;
         }
 
         if let Some((wb_entity, items)) = resolve_wheelbarrow_batch_for_stockpile(
@@ -212,7 +481,7 @@ pub fn assign_haul(
             issue_haul_with_wheelbarrow(
                 wb_entity,
                 source_pos,
-                stockpile,
+                WheelbarrowDestination::Stockpile(stockpile),
                 items,
                 task_pos,
                 already_commanded,
@@ -286,24 +555,46 @@ pub fn assign_haul(
         return false;
     };
 
+    if item_type.requires_wheelbarrow()
+        && let Ok((_, stock_transform, _, _)) = queries.storage.stockpiles.get(stock_entity)
+        && can_complete_pick_drop_to_point(task_pos, stock_transform.translation.truncate())
+    {
+        // その場ピック→ドロップで完了できるなら、猫車より徒歩運搬を優先する
+        issue_haul_to_stockpile(
+            stock_entity,
+            task_pos,
+            already_commanded,
+            ctx,
+            queries,
+            shadow,
+        );
+        return true;
+    }
+
     if item_type.is_loadable() {
         if let Some(wb_entity) = wheelbarrow::find_nearest_wheelbarrow(task_pos, queries, shadow) {
             let batch_items =
                 wheelbarrow::collect_nearby_haulable_items(ctx.task_entity, task_pos, queries, shadow);
 
-            if batch_items.len() >= WHEELBARROW_MIN_BATCH_SIZE {
+            let min_batch = if item_type.requires_wheelbarrow() {
+                1
+            } else {
+                WHEELBARROW_MIN_BATCH_SIZE
+            };
+
+            if batch_items.len() >= min_batch {
                 let dest_capacity =
                     wheelbarrow::remaining_stockpile_capacity(stock_entity, queries, shadow);
                 let max_items = dest_capacity.min(WHEELBARROW_CAPACITY);
                 let items: Vec<Entity> = batch_items.into_iter().take(max_items).collect();
 
-                if items.len() >= WHEELBARROW_MIN_BATCH_SIZE {
+                if items.len() >= min_batch {
                     let source_pos = compute_centroid(&items, queries);
 
                     issue_haul_with_wheelbarrow(
                         wb_entity,
                         source_pos,
-                        stock_entity,
+                        WheelbarrowDestination::Stockpile(stock_entity),
                         items,
                         task_pos,
                         already_commanded,
@@ -315,6 +606,11 @@ pub fn assign_haul(
                 }
             }
         }
+    }
+
+    if item_type.requires_wheelbarrow() {
+        // 猫車必須資源は徒歩運搬へフォールバックしない
+        return false;
     }
 
     issue_haul_to_stockpile(

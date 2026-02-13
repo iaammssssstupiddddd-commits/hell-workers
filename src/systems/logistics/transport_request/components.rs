@@ -81,6 +81,31 @@ impl Default for TransportPolicy {
     }
 }
 
+/// 猫車運搬の搬送先
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Reflect)]
+pub enum WheelbarrowDestination {
+    Stockpile(Entity),
+    Blueprint(Entity),
+    Mixer {
+        entity: Entity,
+        resource_type: ResourceType,
+    },
+}
+
+impl WheelbarrowDestination {
+    pub fn entity(self) -> Entity {
+        match self {
+            Self::Stockpile(entity) | Self::Blueprint(entity) => entity,
+            Self::Mixer { entity, .. } => entity,
+        }
+    }
+}
+
+/// 猫車小バッチ許可制御のため、request が Pending になった時刻を保持
+#[derive(Component, Debug, Clone, Copy, Reflect)]
+#[reflect(Component)]
+pub struct WheelbarrowPendingSince(pub f64);
+
 /// 手押し車リース（仲裁システムによる割り当て結果）
 ///
 /// request エンティティに付与される。仲裁システムが「どの request に手押し車を割り当てるか」を
@@ -91,7 +116,7 @@ pub struct WheelbarrowLease {
     pub wheelbarrow: Entity,
     pub items: Vec<Entity>,
     pub source_pos: Vec2,
-    pub dest_stockpile: Entity,
+    pub destination: WheelbarrowDestination,
     pub lease_until: f64,
 }
 

@@ -12,6 +12,7 @@ use crate::systems::logistics::resource_count_display_system;
 use crate::systems::soul_ai::visual::gathering::{
     gathering_debug_visualization_system, gathering_visual_update_system,
 };
+use crate::systems::visual::fade::fade_out_system;
 use crate::systems::soul_ai::visual::idle::idle_visual_system;
 use crate::systems::soul_ai::visual::vitals::familiar_hover_visualization_system;
 use crate::systems::visual::blueprint::{
@@ -125,6 +126,7 @@ impl Plugin for VisualPlugin {
                 attach_resource_visual_system,
                 update_resource_visual_system,
                 cleanup_resource_visual_system,
+                fade_out_system,
             )
                 .chain()
                 .in_set(GameSystemSet::Visual),

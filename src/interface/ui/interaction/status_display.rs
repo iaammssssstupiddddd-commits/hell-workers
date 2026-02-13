@@ -262,3 +262,19 @@ pub fn update_fps_display_system(
         }
     }
 }
+
+pub fn update_dream_pool_display_system(
+    dream_pool: Res<crate::entities::damned_soul::DreamPool>,
+    ui_nodes: Res<UiNodeRegistry>,
+    mut q_text: Query<&mut Text>,
+) {
+    if !dream_pool.is_changed() {
+        return;
+    }
+    let Some(entity) = ui_nodes.get_slot(UiSlot::DreamPoolText) else {
+        return;
+    };
+    if let Ok(mut text) = q_text.get_mut(entity) {
+        text.0 = format!("Dream: {:.1}", dream_pool.points);
+    }
+}

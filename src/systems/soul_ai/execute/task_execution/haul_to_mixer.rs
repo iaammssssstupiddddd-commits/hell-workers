@@ -46,7 +46,7 @@ pub fn handle_haul_to_mixer_task(
                 return;
             }
 
-            if let Ok((res_transform, _, _, _, des_opt, _)) =
+            if let Ok((res_transform, _, _, _, _, des_opt, _)) =
                 ctx.queries.designation.targets.get(item_entity)
             {
                 let has_item_target_mixer = ctx

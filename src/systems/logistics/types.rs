@@ -23,6 +23,11 @@ impl ResourceType {
             _ => true, // Wood, Rock, Sand, StasisMud
         }
     }
+
+    /// 猫車運搬が必須の資源か
+    pub fn requires_wheelbarrow(&self) -> bool {
+        matches!(self, ResourceType::Sand | ResourceType::StasisMud)
+    }
 }
 
 #[derive(Component, Reflect)]

@@ -28,7 +28,7 @@ pub fn handle_haul_task(
     let q_belongs = &ctx.queries.designation.belongs;
     match phase {
         HaulPhase::GoingToItem => {
-            if let Ok((res_transform, _, _, _res_item_opt, des_opt, stored_in_opt)) =
+            if let Ok((res_transform, _, _, _, _res_item_opt, des_opt, stored_in_opt)) =
                 q_targets.get(item)
             {
                 // M4: request 方式ではアイテムに Designation を付けないため、
@@ -144,14 +144,14 @@ pub fn handle_haul_task(
                 let is_bucket_storage = ctx.queries.storage.bucket_storages.get(stockpile).is_ok();
 
                 // アイテムの型と所有権を取得
-                let item_info = q_targets.get(item).ok().map(|(_, _, _, ri, _, _)| {
+                let item_info = q_targets.get(item).ok().map(|(_, _, _, _, ri, _, _)| {
                     let res_type = ri.map(|r| r.0);
-                    let belongs = q_belongs.get(item).ok();
+                    let belongs = q_belongs.get(item).ok().map(|b| b.0);
                     (res_type, belongs)
                 });
                 let can_drop = if let Some((Some(res_type), item_belongs)) = item_info {
                     // 所有権チェック
-                    let stock_belongs = q_belongs.get(stockpile).ok();
+                    let stock_belongs = q_belongs.get(stockpile).ok().map(|b| b.0);
                     let belongs_match = item_belongs == stock_belongs;
 
                     let is_bucket_item = matches!(

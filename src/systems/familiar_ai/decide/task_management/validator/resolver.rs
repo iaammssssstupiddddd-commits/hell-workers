@@ -20,24 +20,33 @@ pub fn resolve_haul_to_stockpile_inputs(
     let resource_type = req.resource_type;
     let item_owner = queries.designation.belongs.get(req.anchor).ok().map(|b| b.0);
 
-    // グループ内の空きセルを探す（stored < capacity）
+    // グループ内の受け入れ可能な空きセルを探す
     let stockpile = if req.stockpile_group.is_empty() {
-        req.anchor
+        let (_, _, stock, stored_opt) = queries.storage.stockpiles.get(req.anchor).ok()?;
+        let stored = stored_opt.map(|s| s.len()).unwrap_or(0);
+        let has_capacity = stored < stock.capacity;
+        let type_ok = stock.resource_type.is_none() || stock.resource_type == Some(resource_type);
+        if has_capacity && type_ok {
+            req.anchor
+        } else {
+            return None;
+        }
     } else {
         req.stockpile_group
             .iter()
             .filter_map(|&cell| {
                 let (_, _, stock, stored_opt) = queries.storage.stockpiles.get(cell).ok()?;
                 let stored = stored_opt.map(|s| s.len()).unwrap_or(0);
-                if stored < stock.capacity {
+                let has_capacity = stored < stock.capacity;
+                let type_ok = stock.resource_type.is_none() || stock.resource_type == Some(resource_type);
+                if has_capacity && type_ok {
                     Some((cell, stock.capacity - stored))
                 } else {
                     None
                 }
             })
             .max_by_key(|(_, free)| *free)
-            .map(|(cell, _)| cell)
-            .unwrap_or(req.anchor)
+            .map(|(cell, _)| cell)?
     };
 
     Some((stockpile, resource_type, item_owner))

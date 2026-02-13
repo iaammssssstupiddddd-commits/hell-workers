@@ -26,7 +26,7 @@ pub fn handle(
         return;
     }
 
-    let Ok((bucket_transform, _, _, res_item_opt, _, stored_in_opt)) =
+    let Ok((bucket_transform, _, _, _, res_item_opt, _, stored_in_opt)) =
         ctx.queries.designation.targets.get(bucket_entity)
     else {
         abort_task_with_item(commands, ctx, world_map);
@@ -71,7 +71,7 @@ pub fn handle(
 
         let is_already_full = res_type == Some(ResourceType::BucketWater);
         if is_already_full {
-            if let Ok((tank_transform, _, _, _, _, _)) =
+            if let Ok((tank_transform, _, _, _, _, _, _)) =
                 ctx.queries.designation.targets.get(tank_entity)
             {
                 let tank_pos = tank_transform.translation.truncate();

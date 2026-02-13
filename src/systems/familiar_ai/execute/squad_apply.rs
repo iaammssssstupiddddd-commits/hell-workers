@@ -73,7 +73,7 @@ pub fn apply_squad_management_requests_system(
                                 .targets
                                 .get(e)
                                 .ok()
-                                .and_then(|(_, _, _, ri, _, _)| ri.map(|r| r.0))
+                                .and_then(|(_, _, _, _, ri, _, _)| ri.map(|r| r.0))
                         })
                     });
 

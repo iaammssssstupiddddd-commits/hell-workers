@@ -111,5 +111,30 @@ pub fn spawn_time_control(
                     .id();
                 ui_nodes.set_slot(UiSlot::TaskSummaryText, text_entity);
             });
+
+        // Dream Pool
+        parent
+            .spawn(Node {
+                flex_direction: FlexDirection::Row,
+                align_items: AlignItems::Center,
+                margin: UiRect::top(Val::Px(5.0)),
+                padding: UiRect::all(Val::Px(5.0)),
+                ..default()
+            })
+            .with_children(|dream_row| {
+                let text_entity = dream_row
+                    .spawn((
+                        Text::new("Dream: 0"),
+                        TextFont {
+                            font: game_assets.font_ui.clone(),
+                            font_size: theme.typography.font_size_header,
+                            ..default()
+                        },
+                        TextColor(theme.colors.accent_soul_bright),
+                        UiSlot::DreamPoolText,
+                    ))
+                    .id();
+                ui_nodes.set_slot(UiSlot::DreamPoolText, text_entity);
+            });
     });
 }
