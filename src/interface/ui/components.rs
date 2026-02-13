@@ -217,6 +217,10 @@ pub enum UiMountSlot {
     TopLeft,
 }
 
+/// 速度ボタンに付与し、アクティブ状態のハイライトに使用
+#[derive(Component)]
+pub struct SpeedButtonMarker(pub TimeSpeed);
+
 #[derive(Component)]
 pub struct OperationDialog;
 

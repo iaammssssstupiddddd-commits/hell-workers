@@ -100,6 +100,13 @@ pub struct ThemeColors {
     pub tooltip_border: Color,
     pub dialog_bg: Color,
     pub dialog_border: Color,
+
+    // Time control panel
+    pub time_control_bg: Color,
+    pub time_control_border: Color,
+    pub time_control_separator: Color,
+    pub speed_button_active: Color,
+    pub task_high_warning: Color,
 }
 
 pub struct PanelGradient {
@@ -126,6 +133,7 @@ pub struct ThemeTypography {
     pub font_size_item: f32,
     pub font_size_small: f32,
     pub font_size_clock: f32,
+    pub font_size_status: f32,
     /// Dialog small font size (previously constants::FONT_SIZE_SMALL)
     pub font_size_dialog_small: f32,
     /// Dialog tiny font size (previously constants::FONT_SIZE_TINY)
@@ -297,6 +305,13 @@ impl Default for UiTheme {
                 tooltip_border: Color::srgb(0.25, 0.25, 0.3),     // border_default
                 dialog_bg: Color::srgba(0.08, 0.03, 0.06, 0.98),  // bg_surface
                 dialog_border: Color::srgb(0.8, 0.4, 0.1),        // border_accent
+
+                // Time control panel
+                time_control_bg: Color::srgba(0.05, 0.03, 0.08, 0.80),
+                time_control_border: Color::srgba(0.4, 0.25, 0.35, 0.6),
+                time_control_separator: Color::srgba(0.4, 0.3, 0.35, 0.4),
+                speed_button_active: Color::srgba(0.8, 0.4, 0.1, 0.9),
+                task_high_warning: Color::srgb(0.95, 0.35, 0.2),
             },
             typography: ThemeTypography {
                 // New Modular Scale
@@ -312,7 +327,8 @@ impl Default for UiTheme {
                 font_size_header: 14.0,
                 font_size_item: 12.0,
                 font_size_small: 10.0,
-                font_size_clock: 18.0,
+                font_size_clock: 22.0,
+                font_size_status: 16.0,
                 font_size_dialog_small: 14.0,
                 font_size_dialog_tiny: 10.0,
             },
@@ -323,7 +339,7 @@ impl Default for UiTheme {
                 text_left_padding: 4.0,
                 panel_padding: 10.0,
                 panel_margin_x: 20.0,
-                panel_top: 120.0,
+                panel_top: 170.0,
                 bottom_bar_height: 50.0,
                 bottom_bar_padding: 5.0,
             },
