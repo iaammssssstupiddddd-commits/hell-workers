@@ -295,7 +295,7 @@ pub fn update_speed_button_highlight_system(
     for (marker, mut bg, mut border) in q_buttons.iter_mut() {
         if marker.0 == current_speed {
             bg.0 = theme.colors.speed_button_active;
-            *border = BorderColor::all(theme.colors.accent_ember_bright);
+            *border = BorderColor::all(theme.colors.accent_ember);
         } else {
             bg.0 = theme.colors.button_default;
             *border = BorderColor::all(Color::NONE);

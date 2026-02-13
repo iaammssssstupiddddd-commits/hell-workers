@@ -111,15 +111,20 @@
   - `validate_squad`: 分隊の検証
   - `release_fatigued`: 疲労・崩壊したメンバーのリリース要求発行
 - **`decide/task_management/`**: タスク管理（`TaskManager`）
-  - `find_unassigned_task_in_area`: タスク検索
+  - `collect_scored_candidates`: Familiar単位でタスク候補を1回収集し、優先度順に並べ替え
+  - `try_assign_for_workers`（`delegation/assignment_loop.rs`）: アイドルワーカーごとの委譲ループ
   - `assign_task_to_worker`: タスク割り当て
   - `delegate_task`: タスク委譲
-    - 各アイドル状態のワーカーに対し、その現在地から到達可能なタスクを個別に検索して割り当てます。
-- **find_unassigned_task_in_area**: タスク検索
-    - **到達可能性チェック**: 空間グリッドから見つかった候補タスクに対し、ワーカーが物理的に到達可能か（パスが存在するか）をチェックします。
-    - **Worker-Centric**: 使い魔の現在地ではなく、**ワーカー個々の現在地**を起点として判定を行います。
-    - **Ground Projection**: 使い魔（空中ユニット）の位置ではなく、常にワーカー（地上ユニット）が立つ地面の座標に投影してパス計算を開始します。
-    - **4方向パス検索**: 上下左右の4方向移動に準拠したパス検索を行い、斜め移動による障害物のすり抜けを防止しています。
+    - Familiar単位で作成した候補プールを全ワーカーで共有し、候補再収集を避けます。
+    - 到達判定はワーカー座標を起点に実施し、`(worker_grid, target_grid)` の結果を委譲1回内でキャッシュします。
+    - 候補は `Top-K` を先に評価し、未割り当て時のみ残り候補をフォールバック評価します。
+- **`collect_scored_candidates`**: タスク検索
+    - **候補収集**: `DesignationSpatialGrid` + `TransportRequestSpatialGrid` + `ManagedTasks` を統合して候補を作成します。
+    - **静的フィルタ**: 管理権、TaskSlots、TaskArea、Build材料完了条件など worker非依存条件を先に適用します。
+    - **優先度付け**: `score_candidate` でスコア化し、使い魔からの距離でタイブレークします。
+- **到達判定（Worker-Centric）**:
+    - **Ground Projection**: 常にワーカー（地上ユニット）の可歩行グリッドを起点にします。
+    - **経路探索**: `find_path` / `find_path_to_adjacent`（8方向移動対応）で可到達性を判定します。
 - **assign_task_to_worker**: タスク割り当て要求の生成（`TaskAssignmentRequest` を発行し、実適用は Act で行う）
 - **`decide/recruitment.rs`**: リクルート管理（`RecruitmentManager`）
   - `find_best_recruit`: リクルート候補の検索
@@ -187,9 +192,12 @@
 - **仕組み**: UIで使役数が変更されたときのみ `FamiliarOperationMaxSoulChangedEvent` を発火し、超過分の魂をリリースします。
 - **効果**: 毎フレーム全使い魔の使役数をチェックするコストを排除し、変更時のみ処理を実行することでパフォーマンスを向上させています。
 
-### 7.5. タスク検索結果のキャッシュ
-タスクの「有無の判定」と「実際の割り当て」で、同じ条件の空間検索（`find_unassigned_task_in_area`）を繰り返さないように修正しました。
-- **効果**: 重い空間検索の回数を半減させ、判断の重複（二重スキャン）による CPU 負荷を抑制しました。
+### 7.5. 委譲候補の一回収集と到達判定キャッシュ
+委譲処理を「Familiar単位の候補収集」と「worker単位の到達判定」に分割し、重複計算を削減しました。
+- **候補一回化**: `collect_scored_candidates` を1回だけ実行し、全アイドルワーカーで候補を使い回します。
+- **到達判定キャッシュ**: `(worker_grid, target_grid)` をキーに、同一委譲処理内のA*再実行を回避します。
+- **Top-K 先行評価**: 優先候補（`TASK_DELEGATION_TOP_K`）を先に評価し、必要時のみ残り候補を評価します。
+- **効果**: ワーカー数・候補数増加時の `A*` 呼び出し回数と委譲処理時間の増加を抑制します。
 
 ### 7.6. 状態遷移の自動検知（Bevy 標準機能の活用）
 `Changed<FamiliarAiState>` フィルタを使用して状態遷移を自動検知します。

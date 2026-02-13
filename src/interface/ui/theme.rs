@@ -310,7 +310,7 @@ impl Default for UiTheme {
                 time_control_bg: Color::srgba(0.05, 0.03, 0.08, 0.80),
                 time_control_border: Color::srgba(0.4, 0.25, 0.35, 0.6),
                 time_control_separator: Color::srgba(0.4, 0.3, 0.35, 0.4),
-                speed_button_active: Color::srgba(0.8, 0.4, 0.1, 0.9),
+                speed_button_active: Color::srgba(0.5, 0.25, 0.05, 0.7),
                 task_high_warning: Color::srgb(0.95, 0.35, 0.2),
             },
             typography: ThemeTypography {
