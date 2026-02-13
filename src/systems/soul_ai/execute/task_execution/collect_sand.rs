@@ -21,7 +21,7 @@ pub fn handle_collect_sand_task(
 
     match phase {
         CollectSandPhase::GoingToSand => {
-            if let Ok((res_transform, _, _, _, des_opt, _)) = q_targets.get(target) {
+            if let Ok((res_transform, _, _, _, _, des_opt, _)) = q_targets.get(target) {
                 // 指定が解除されていたら中止
                 if cancel_task_if_designation_missing(des_opt, ctx.task, ctx.path) {
                     return;
@@ -82,7 +82,7 @@ pub fn handle_collect_sand_task(
         }
         CollectSandPhase::Collecting { mut progress } => {
             if let Ok(target_data) = q_targets.get(target) {
-                let (res_transform, _, _, _, des_opt, _) = target_data;
+                let (res_transform, _, _, _, _, des_opt, _) = target_data;
                 // 指定が解除されていたら中止
                 if cancel_task_if_designation_missing(des_opt, ctx.task, ctx.path) {
                     return;

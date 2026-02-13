@@ -48,7 +48,7 @@ pub fn find_nearest_stockpile_source_item(
                 .targets
                 .get(*entity)
                 .ok()
-                .is_some_and(|(_, _, _, _, _, stored_in_opt)| stored_in_opt.is_none())
+                .is_some_and(|(_, _, _, _, _, _, stored_in_opt)| stored_in_opt.is_none())
         })
         .filter(|(entity, _, _, _)| {
             let belongs = queries.designation.belongs.get(*entity).ok().map(|b| b.0);

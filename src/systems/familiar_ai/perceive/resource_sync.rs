@@ -429,9 +429,24 @@ pub fn sync_reservations_system(
                 // 手押し車自体をソース予約（二重使用防止）— 全フェーズで有効
                 *source_res.entry(data.wheelbarrow).or_insert(0) += 1;
 
-                // 目的地ストックパイルへの予約（アイテム数分）— 全フェーズで有効
+                // 目的地への予約（アイテム数分）— 全フェーズで有効
                 for _ in &data.items {
-                    *dest_res.entry(data.dest_stockpile).or_insert(0) += 1;
+                    match data.destination {
+                        crate::systems::logistics::transport_request::WheelbarrowDestination::Stockpile(
+                            target,
+                        )
+                        | crate::systems::logistics::transport_request::WheelbarrowDestination::Blueprint(
+                            target,
+                        ) => {
+                            *dest_res.entry(target).or_insert(0) += 1;
+                        }
+                        crate::systems::logistics::transport_request::WheelbarrowDestination::Mixer {
+                            entity: target,
+                            resource_type,
+                        } => {
+                            *mixer_dest_res.entry((target, resource_type)).or_insert(0) += 1;
+                        }
+                    }
                 }
 
                 // アイテムのソース予約（まだピックアップしていない場合のみ）

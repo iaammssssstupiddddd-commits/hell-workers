@@ -7,8 +7,9 @@ use crate::interface::selection::{
 };
 use crate::interface::ui::{
     context_menu_system, menu_visibility_system, task_summary_ui_system, ui_interaction_system,
-    ui_keyboard_shortcuts_system, update_area_edit_preview_ui_system, update_fps_display_system,
-    update_mode_text_system, update_operation_dialog_system,
+    ui_keyboard_shortcuts_system, update_area_edit_preview_ui_system,
+    update_dream_pool_display_system, update_fps_display_system, update_mode_text_system,
+    update_operation_dialog_system,
 };
 use crate::systems::GameSystemSet;
 use crate::systems::time::game_time_system;
@@ -44,6 +45,7 @@ impl Plugin for UiCorePlugin {
                     .run_if(|selected: Res<SelectedEntity>| selected.0.is_some()),
                 game_time_system,
                 update_fps_display_system,
+                update_dream_pool_display_system,
             )
                 .in_set(GameSystemSet::Interface),
         );

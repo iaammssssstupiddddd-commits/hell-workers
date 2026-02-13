@@ -122,7 +122,7 @@ fn collect_free_items_for_stockpile(
                 .targets
                 .get(*e)
                 .ok()
-                .is_some_and(|(_, _, _, _, _, stored_in_opt)| stored_in_opt.is_none())
+                .is_some_and(|(_, _, _, _, _, _, stored_in_opt)| stored_in_opt.is_none())
         })
         .filter(|(e, _, _, _)| {
             let belongs = queries.designation.belongs.get(*e).ok().map(|b| b.0);

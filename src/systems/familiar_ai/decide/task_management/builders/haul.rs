@@ -156,7 +156,7 @@ pub fn issue_haul_to_mixer(
 pub fn issue_haul_with_wheelbarrow(
     wheelbarrow: Entity,
     source_pos: Vec2,
-    dest_stockpile: Entity,
+    destination: crate::systems::logistics::transport_request::WheelbarrowDestination,
     items: Vec<Entity>,
     task_pos: Vec2,
     already_commanded: bool,
@@ -169,7 +169,7 @@ pub fn issue_haul_with_wheelbarrow(
             crate::systems::soul_ai::execute::task_execution::types::HaulWithWheelbarrowData {
                 wheelbarrow,
                 source_pos,
-                dest_stockpile,
+                destination,
                 items: items.clone(),
                 phase: HaulWithWheelbarrowPhase::GoingToParking,
             },
@@ -183,10 +183,32 @@ pub fn issue_haul_with_wheelbarrow(
         },
     ];
     // 目的地をアイテム数分予約
-    for _ in &items {
-        reservation_ops.push(ResourceReservationOp::ReserveDestination {
-            target: dest_stockpile,
-        });
+    for &item in &items {
+        match destination {
+            crate::systems::logistics::transport_request::WheelbarrowDestination::Stockpile(
+                target,
+            )
+            | crate::systems::logistics::transport_request::WheelbarrowDestination::Blueprint(
+                target,
+            ) => {
+                reservation_ops.push(ResourceReservationOp::ReserveDestination { target });
+            }
+            crate::systems::logistics::transport_request::WheelbarrowDestination::Mixer {
+                entity: target,
+                resource_type,
+            } => {
+                let item_type = queries
+                    .items
+                    .get(item)
+                    .ok()
+                    .map(|(it, _)| it.0)
+                    .unwrap_or(resource_type);
+                reservation_ops.push(ResourceReservationOp::ReserveMixerDestination {
+                    target,
+                    resource_type: item_type,
+                });
+            }
+        }
     }
     // 全アイテムをソース予約
     for &item in &items {

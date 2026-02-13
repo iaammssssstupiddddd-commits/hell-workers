@@ -2,10 +2,11 @@
 
 use crate::constants::*;
 use crate::relationships::{LoadedIn, ParkedAt, PushedBy, WorkingOn};
-use crate::systems::visual::haul::WheelbarrowMovement;
+use crate::systems::logistics::transport_request::WheelbarrowDestination;
 use crate::systems::logistics::{InStockpile, Wheelbarrow};
 use crate::systems::soul_ai::execute::task_execution::common::*;
 use crate::systems::soul_ai::execute::task_execution::transport_common::reservation;
+use crate::systems::visual::haul::WheelbarrowMovement;
 use crate::systems::soul_ai::execute::task_execution::{
     context::TaskExecutionContext,
     types::{AssignedTask, HaulWithWheelbarrowData, HaulWithWheelbarrowPhase},
@@ -112,7 +113,7 @@ pub fn handle_haul_with_wheelbarrow_task(
                 .items
                 .iter()
                 .filter_map(|&item_entity| {
-                    let Ok((_, _, _, _, _, stored_in_opt)) =
+                    let Ok((_, _, _, _, _, _, stored_in_opt)) =
                         ctx.queries.designation.targets.get(item_entity)
                     else {
                         return None;
@@ -123,10 +124,9 @@ pub fn handle_haul_with_wheelbarrow_task(
 
             // 収集した情報を使ってアイテムを積み込む
             for (item_entity, stored_in_stockpile) in &items_to_load {
-                commands.entity(*item_entity).insert((
-                    Visibility::Hidden,
-                    LoadedIn(data.wheelbarrow),
-                ));
+                commands
+                    .entity(*item_entity)
+                    .insert((Visibility::Hidden, LoadedIn(data.wheelbarrow)));
                 commands
                     .entity(*item_entity)
                     .remove::<crate::relationships::StoredIn>();
@@ -145,10 +145,7 @@ pub fn handle_haul_with_wheelbarrow_task(
                     .remove::<crate::systems::logistics::ReservedForTask>();
 
                 if let Some(stock_entity) = stored_in_stockpile {
-                    update_stockpile_on_item_removal(
-                        *stock_entity,
-                        &mut ctx.queries.storage.stockpiles,
-                    );
+                    update_stockpile_on_item_removal(*stock_entity, &mut ctx.queries.storage.stockpiles);
                 }
 
                 reservation::record_picked_source(ctx, *item_entity, 1);
@@ -168,30 +165,75 @@ pub fn handle_haul_with_wheelbarrow_task(
         }
 
         HaulWithWheelbarrowPhase::GoingToDestination => {
-            // 目的地ストックパイルへ移動（速度ペナルティは movement system で適用）
-            let q_stockpiles = &ctx.queries.storage.stockpiles;
-            let Ok((_, stock_transform, _, _)) = q_stockpiles.get(data.dest_stockpile) else {
-                info!("WB_HAUL: Destination stockpile not found, canceling");
-                cancel_wheelbarrow_task(ctx, &data, commands);
-                return;
-            };
+            // 目的地へ移動（速度ペナルティは movement system で適用）
+            let (reachable, arrived) = match data.destination {
+                WheelbarrowDestination::Stockpile(stockpile_entity) => {
+                    let Ok((_, stock_transform, _, _)) =
+                        ctx.queries.storage.stockpiles.get(stockpile_entity)
+                    else {
+                        info!("WB_HAUL: Destination stockpile not found, canceling");
+                        cancel_wheelbarrow_task(ctx, &data, commands);
+                        return;
+                    };
 
-            let stock_pos = stock_transform.translation.truncate();
-            let reachable = update_destination_to_adjacent(
-                ctx.dest,
-                stock_pos,
-                ctx.path,
-                soul_pos,
-                world_map,
-                ctx.pf_context,
-            );
+                    let stock_pos = stock_transform.translation.truncate();
+                    let reachable = update_destination_to_adjacent(
+                        ctx.dest,
+                        stock_pos,
+                        ctx.path,
+                        soul_pos,
+                        world_map,
+                        ctx.pf_context,
+                    );
+                    (reachable, is_near_target(soul_pos, stock_pos))
+                }
+                WheelbarrowDestination::Blueprint(blueprint_entity) => {
+                    let Ok((_, blueprint, _)) = ctx.queries.storage.blueprints.get(blueprint_entity)
+                    else {
+                        info!("WB_HAUL: Destination blueprint not found, canceling");
+                        cancel_wheelbarrow_task(ctx, &data, commands);
+                        return;
+                    };
+
+                    update_destination_to_blueprint(
+                        ctx.dest,
+                        &blueprint.occupied_grids,
+                        ctx.path,
+                        soul_pos,
+                        world_map,
+                        ctx.pf_context,
+                    );
+                    (
+                        true,
+                        is_near_blueprint(soul_pos, &blueprint.occupied_grids),
+                    )
+                }
+                WheelbarrowDestination::Mixer { entity, .. } => {
+                    let Ok((mixer_transform, _, _)) = ctx.queries.storage.mixers.get(entity) else {
+                        info!("WB_HAUL: Destination mixer not found, canceling");
+                        cancel_wheelbarrow_task(ctx, &data, commands);
+                        return;
+                    };
+
+                    let mixer_pos = mixer_transform.translation.truncate();
+                    let reachable = update_destination_to_adjacent(
+                        ctx.dest,
+                        mixer_pos,
+                        ctx.path,
+                        soul_pos,
+                        world_map,
+                        ctx.pf_context,
+                    );
+                    (reachable, is_near_target_or_dest(soul_pos, mixer_pos, ctx.dest.0))
+                }
+            };
 
             if !reachable {
                 cancel_wheelbarrow_task(ctx, &data, commands);
                 return;
             }
 
-            if is_near_target(soul_pos, stock_pos) {
+            if arrived {
                 *ctx.task = AssignedTask::HaulWithWheelbarrow(HaulWithWheelbarrowData {
                     phase: HaulWithWheelbarrowPhase::Unloading,
                     ..data
@@ -206,7 +248,7 @@ pub fn handle_haul_with_wheelbarrow_task(
                 .items
                 .iter()
                 .filter_map(|&item_entity| {
-                    let Ok((_, _, _, res_item_opt, _, _)) =
+                    let Ok((_, _, _, _, res_item_opt, _, _)) =
                         ctx.queries.designation.targets.get(item_entity)
                     else {
                         return None;
@@ -215,54 +257,128 @@ pub fn handle_haul_with_wheelbarrow_task(
                 })
                 .collect();
 
-            // ストックパイルの情報を取得して荷下ろし
-            let mut unloaded_items: Vec<Entity> = Vec::new();
-            if let Ok((_, stock_transform, mut stockpile_comp, stored_items_opt)) =
-                ctx.queries.storage.stockpiles.get_mut(data.dest_stockpile)
-            {
-                let stock_pos = stock_transform.translation;
-                let current_count = stored_items_opt.map(|si| si.len()).unwrap_or(0);
+            let mut unloaded_count = 0usize;
+            let mut destination_store_count = 0usize;
+            let mut mixer_release_types = Vec::new();
 
-                for (item_entity, res_type_opt) in &item_types {
-                    if current_count + unloaded_items.len() >= stockpile_comp.capacity {
-                        break;
+            match data.destination {
+                WheelbarrowDestination::Stockpile(dest_stockpile) => {
+                    // ストックパイルの情報を取得して荷下ろし
+                    if let Ok((_, stock_transform, mut stockpile_comp, stored_items_opt)) =
+                        ctx.queries.storage.stockpiles.get_mut(dest_stockpile)
+                    {
+                        let stock_pos = stock_transform.translation;
+                        let current_count = stored_items_opt.map(|si| si.len()).unwrap_or(0);
+
+                        for (item_entity, res_type_opt) in &item_types {
+                            if current_count + unloaded_count >= stockpile_comp.capacity {
+                                break;
+                            }
+                            let Some(res_type) = res_type_opt else {
+                                continue;
+                            };
+
+                            if stockpile_comp.resource_type.is_none() {
+                                stockpile_comp.resource_type = Some(*res_type);
+                            } else if stockpile_comp.resource_type != Some(*res_type) {
+                                continue;
+                            }
+
+                            commands.entity(*item_entity).insert((
+                                Visibility::Visible,
+                                Transform::from_xyz(stock_pos.x, stock_pos.y, Z_ITEM_PICKUP),
+                                crate::relationships::StoredIn(dest_stockpile),
+                                InStockpile(dest_stockpile),
+                            ));
+                            commands.entity(*item_entity).remove::<LoadedIn>();
+                            commands
+                                .entity(*item_entity)
+                                .remove::<crate::systems::jobs::IssuedBy>();
+                            commands
+                                .entity(*item_entity)
+                                .remove::<crate::relationships::TaskWorkers>();
+
+                            destination_store_count += 1;
+                            unloaded_count += 1;
+                        }
+                    } else {
+                        cancel_wheelbarrow_task(ctx, &data, commands);
+                        return;
                     }
-                    let Some(res_type) = res_type_opt else {
-                        continue;
-                    };
+                }
+                WheelbarrowDestination::Blueprint(blueprint_entity) => {
+                    if let Ok((_, mut blueprint, _)) =
+                        ctx.queries.storage.blueprints.get_mut(blueprint_entity)
+                    {
+                        for (item_entity, res_type_opt) in &item_types {
+                            let Some(res_type) = res_type_opt else {
+                                continue;
+                            };
 
-                    if stockpile_comp.resource_type.is_none() {
-                        stockpile_comp.resource_type = Some(*res_type);
-                    } else if stockpile_comp.resource_type != Some(*res_type) {
-                        continue;
+                            blueprint.deliver_material(*res_type, 1);
+                            commands.entity(*item_entity).despawn();
+                            destination_store_count += 1;
+                            unloaded_count += 1;
+                        }
+
+                        if blueprint.materials_complete() {
+                            commands
+                                .entity(blueprint_entity)
+                                .remove::<crate::relationships::ManagedBy>();
+                            commands
+                                .entity(blueprint_entity)
+                                .insert(crate::systems::jobs::Priority(10));
+                        }
+                    } else {
+                        cancel_wheelbarrow_task(ctx, &data, commands);
+                        return;
                     }
+                }
+                WheelbarrowDestination::Mixer {
+                    entity: mixer_entity,
+                    resource_type,
+                } => {
+                    if let Ok((_, mut storage, _)) = ctx.queries.storage.mixers.get_mut(mixer_entity) {
+                        for (item_entity, res_type_opt) in &item_types {
+                            let res_type = (*res_type_opt).unwrap_or(resource_type);
 
-                    commands.entity(*item_entity).insert((
-                        Visibility::Visible,
-                        Transform::from_xyz(stock_pos.x, stock_pos.y, Z_ITEM_PICKUP),
-                        crate::relationships::StoredIn(data.dest_stockpile),
-                        InStockpile(data.dest_stockpile),
-                    ));
-                    commands.entity(*item_entity).remove::<LoadedIn>();
-                    commands
-                        .entity(*item_entity)
-                        .remove::<crate::systems::jobs::IssuedBy>();
-                    commands
-                        .entity(*item_entity)
-                        .remove::<crate::relationships::TaskWorkers>();
+                            if storage.add_material(res_type).is_ok() {
+                                commands.entity(*item_entity).despawn();
+                                unloaded_count += 1;
+                            } else {
+                                commands.entity(*item_entity).remove::<LoadedIn>();
+                                commands.entity(*item_entity).insert((
+                                    Visibility::Visible,
+                                    Transform::from_xyz(soul_pos.x, soul_pos.y, Z_ITEM_PICKUP),
+                                ));
+                            }
 
-                    unloaded_items.push(*item_entity);
+                            mixer_release_types.push(res_type);
+                        }
+                    } else {
+                        cancel_wheelbarrow_task(ctx, &data, commands);
+                        return;
+                    }
                 }
             }
 
-            for _ in &unloaded_items {
-                reservation::record_stored_destination(ctx, data.dest_stockpile);
+            match data.destination {
+                WheelbarrowDestination::Stockpile(target)
+                | WheelbarrowDestination::Blueprint(target) => {
+                    for _ in 0..destination_store_count {
+                        reservation::record_stored_destination(ctx, target);
+                    }
+                }
+                WheelbarrowDestination::Mixer { entity: target, .. } => {
+                    for res_type in mixer_release_types {
+                        reservation::release_mixer_destination(ctx, target, res_type);
+                    }
+                }
             }
 
             info!(
                 "WB_HAUL: Soul {:?} unloaded {} items",
-                ctx.soul_entity,
-                unloaded_items.len()
+                ctx.soul_entity, unloaded_count
             );
 
             // 手押し車を返却するフェーズへ
@@ -295,7 +411,7 @@ pub fn handle_haul_with_wheelbarrow_task(
                         .targets
                         .get(belongs.0)
                         .ok()
-                        .map(|(tf, _, _, _, _, _)| tf.translation.truncate())
+                        .map(|(tf, _, _, _, _, _, _)| tf.translation.truncate())
                 })
                 .unwrap_or(soul_pos);
 
@@ -330,13 +446,13 @@ fn park_wheelbarrow_here(
 ) {
     // 駐車エリアを取得して ParkedAt を設定
     if let Ok(belongs) = ctx.queries.designation.belongs.get(data.wheelbarrow) {
-        commands
-            .entity(data.wheelbarrow)
-            .insert(ParkedAt(belongs.0));
+        commands.entity(data.wheelbarrow).insert(ParkedAt(belongs.0));
     }
 
     // PushedBy を削除
-    commands.entity(data.wheelbarrow).remove::<(PushedBy, WheelbarrowMovement)>();
+    commands
+        .entity(data.wheelbarrow)
+        .remove::<(PushedBy, WheelbarrowMovement)>();
 
     // 手押し車の位置を更新
     commands.entity(data.wheelbarrow).insert((
@@ -376,11 +492,11 @@ fn cancel_wheelbarrow_task(
 
     // 手押し車を駐車状態に戻す
     if let Ok(belongs) = ctx.queries.designation.belongs.get(data.wheelbarrow) {
-        commands
-            .entity(data.wheelbarrow)
-            .insert(ParkedAt(belongs.0));
+        commands.entity(data.wheelbarrow).insert(ParkedAt(belongs.0));
     }
-    commands.entity(data.wheelbarrow).remove::<(PushedBy, WheelbarrowMovement)>();
+    commands
+        .entity(data.wheelbarrow)
+        .remove::<(PushedBy, WheelbarrowMovement)>();
     commands.entity(data.wheelbarrow).insert((
         Visibility::Visible,
         Transform::from_xyz(soul_pos.x, soul_pos.y, Z_ITEM_PICKUP),
@@ -388,7 +504,27 @@ fn cancel_wheelbarrow_task(
 
     for &item_entity in &data.items {
         reservation::release_source(ctx, item_entity, 1);
-        reservation::release_destination(ctx, data.dest_stockpile);
+
+        match data.destination {
+            WheelbarrowDestination::Stockpile(target)
+            | WheelbarrowDestination::Blueprint(target) => {
+                reservation::release_destination(ctx, target);
+            }
+            WheelbarrowDestination::Mixer {
+                entity: target,
+                resource_type,
+            } => {
+                let item_type = ctx
+                    .queries
+                    .reservation
+                    .resources
+                    .get(item_entity)
+                    .ok()
+                    .map(|r| r.0)
+                    .unwrap_or(resource_type);
+                reservation::release_mixer_destination(ctx, target, item_type);
+            }
+        }
     }
 
     ctx.inventory.0 = None;

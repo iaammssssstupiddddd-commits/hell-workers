@@ -50,7 +50,7 @@ pub fn handle_haul_to_blueprint_task(
 
     match phase {
         HaulToBpPhase::GoingToItem => {
-            if let Ok((item_transform, _, _, _, des_opt, stored_in_opt)) =
+            if let Ok((item_transform, _, _, _, _, des_opt, stored_in_opt)) =
                 q_targets.get(item_entity)
             {
                 // M3: request 方式ではアイテムに Designation を付けないため、
@@ -158,7 +158,7 @@ pub fn handle_haul_to_blueprint_task(
                 let dropped_res = q_targets
                     .get(item_entity)
                     .ok()
-                    .and_then(|(_, _, _, ri, _, _)| ri.map(|r| r.0));
+                    .and_then(|(_, _, _, _, ri, _, _)| ri.map(|r| r.0));
                 crate::systems::soul_ai::helpers::work::unassign_task(
                     commands,
                     ctx.soul_entity,
@@ -176,7 +176,7 @@ pub fn handle_haul_to_blueprint_task(
         HaulToBpPhase::Delivering => {
             if let Ok((_, mut bp, _)) = q_blueprints.get_mut(blueprint_entity) {
                 // アイテムの資材タイプを取得
-                if let Ok((_, _, _, Some(res_item), _, _)) = q_targets.get(item_entity) {
+                if let Ok((_, _, _, _, Some(res_item), _, _)) = q_targets.get(item_entity) {
                     let resource_type = res_item.0;
 
                     // Blueprint に資材を搬入

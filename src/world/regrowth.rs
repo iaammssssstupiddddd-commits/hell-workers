@@ -205,10 +205,12 @@ pub fn tree_regrowth_system(
             for &(px, py) in &zone.tree_positions {
                 if !occupied_positions.contains(&(px, py)) && world_map.is_walkable(px, py) {
                     let pos = WorldMap::grid_to_world(px, py);
+                    let variant_index = rand::random::<usize>() % game_assets.trees.len();
                     commands.spawn((
                         Tree,
+                        crate::systems::jobs::TreeVariant(variant_index),
                         Sprite {
-                            image: game_assets.tree.clone(),
+                            image: game_assets.trees[variant_index].clone(),
                             custom_size: Some(Vec2::splat(TILE_SIZE * 1.5)),
                             ..default()
                         },

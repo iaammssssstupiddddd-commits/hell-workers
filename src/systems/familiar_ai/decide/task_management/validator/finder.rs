@@ -134,7 +134,7 @@ pub fn find_nearest_bucket_for_return(
                 .targets
                 .get(*e)
                 .ok()
-                .is_some_and(|(_, _, _, _, _, stored_in_opt)| stored_in_opt.is_none())
+                .is_some_and(|(_, _, _, _, _, _, stored_in_opt)| stored_in_opt.is_none())
         })
         .filter(|(e, _, _, _)| source_not_reserved(*e, queries, shadow))
         .min_by(|(_, t1, _, _), (_, t2, _, _)| {

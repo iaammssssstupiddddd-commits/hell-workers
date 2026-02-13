@@ -12,5 +12,6 @@ pub mod speech;
 pub mod tank;
 pub mod wall_connection;
 pub mod task_area_visual;
+pub mod fade;
 
 pub use task_area_visual::TaskAreaMaterial;

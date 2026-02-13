@@ -83,6 +83,7 @@ pub type IdleVisualSoulQuery<'w, 's> = Query<
         &'static DamnedSoul,
         &'static AssignedTask,
         Option<&'static ParticipatingIn>,
+        &'static crate::entities::damned_soul::DreamState,
     ),
 >;
 

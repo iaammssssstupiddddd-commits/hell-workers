@@ -33,6 +33,7 @@ pub struct DesignationAccess<'w, 's> {
         (
             &'static Transform,
             Option<&'static crate::systems::jobs::Tree>,
+            Option<&'static crate::systems::jobs::TreeVariant>,
             Option<&'static crate::systems::jobs::Rock>,
             Option<&'static ResourceItem>,
             Option<&'static Designation>,

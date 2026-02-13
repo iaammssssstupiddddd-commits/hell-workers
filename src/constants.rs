@@ -236,6 +236,10 @@ pub const WHEELBARROW_CAPACITY: usize = 10;
 pub const WHEELBARROW_OFFSET: f32 = TILE_SIZE * 0.5;
 /// 手押し車使用の最小アイテム数（これ以上あれば手押し車を使う）
 pub const WHEELBARROW_MIN_BATCH_SIZE: usize = 3;
+/// 猫車必須資源で優先する最小バッチサイズ（これ未満は一定時間待機してから許可）
+pub const WHEELBARROW_PREFERRED_MIN_BATCH_SIZE: usize = 3;
+/// 猫車必須資源で 1〜2 個搬送を許可するまでの待機秒数
+pub const SINGLE_BATCH_WAIT_SECS: f64 = 5.0;
 /// 手押し車リースの有効期間（秒）
 pub const WHEELBARROW_LEASE_DURATION_SECS: f64 = 30.0;
 /// 仲裁スコア: バッチサイズの重み
@@ -244,6 +248,8 @@ pub const WHEELBARROW_SCORE_BATCH_SIZE: f32 = 10.0;
 pub const WHEELBARROW_SCORE_PRIORITY: f32 = 5.0;
 /// 仲裁スコア: 距離のペナルティ重み
 pub const WHEELBARROW_SCORE_DISTANCE: f32 = 0.1;
+/// 仲裁スコア: 1〜2 個バッチに対する減点
+pub const WHEELBARROW_SCORE_SMALL_BATCH_PENALTY: f32 = 20.0;
 /// 運搬中の手押し車のスケール倍率（駐車時は1.0、運搬中は大きく表示）
 pub const WHEELBARROW_ACTIVE_SCALE: f32 = 1.8;
 
@@ -412,3 +418,16 @@ pub const EMOJIS_FOOD: &[&str] = &["🍖", "🍺", "🥤"];
 pub const EMOJIS_COMPLAINING: &[&str] = &["😓", "😴", "😒", "🥱"];
 /// 使い魔の指示リアクション時にネガティブトーンを発火する確率
 pub const COMMAND_REACTION_NEGATIVE_EVENT_CHANCE: f32 = 0.75;
+
+// ============================================================
+// Dream システム
+// ============================================================
+
+/// VividDream の蓄積レート (ポイント/秒)
+pub const DREAM_RATE_VIVID: f32 = 0.15;
+/// NormalDream の蓄積レート (ポイント/秒)
+pub const DREAM_RATE_NORMAL: f32 = 0.1;
+/// 悪夢判定のストレス閾値（これ以上で NightTerror）
+pub const DREAM_NIGHTMARE_STRESS_THRESHOLD: f32 = 0.7;
+/// VividDream 判定のストレス閾値（これ以下＋集会中で VividDream）
+pub const DREAM_VIVID_STRESS_THRESHOLD: f32 = 0.3;

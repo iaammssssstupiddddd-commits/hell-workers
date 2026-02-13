@@ -45,6 +45,30 @@ impl SoulIdentity {
     }
 }
 
+/// 睡眠中の夢の質
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Reflect, Default)]
+pub enum DreamQuality {
+    #[default]
+    Awake,       // 起きている
+    NightTerror, // 悪夢（高ストレス時）
+    NormalDream, // 普通の夢
+    VividDream,  // 鮮明な夢（低ストレス＋集会中）
+}
+
+/// Soul個別の夢状態（質の追跡用）
+#[derive(Component, Reflect, Default)]
+#[reflect(Component)]
+pub struct DreamState {
+    pub quality: DreamQuality,
+}
+
+/// グローバルDreamプール（通貨）
+#[derive(Resource, Default, Reflect)]
+#[reflect(Resource)]
+pub struct DreamPool {
+    pub points: f32,
+}
+
 /// 地獄に堕ちた人間（怠惰な魂）
 #[derive(Component, Reflect)]
 #[reflect(Component)]
@@ -196,6 +220,9 @@ impl Plugin for DamnedSoulPlugin {
             .register_type::<SoulUiLinks>()
             .register_type::<IdleState>()
             .register_type::<StressBreakdown>()
+            .register_type::<DreamState>()
+            .register_type::<DreamPool>()
+            .init_resource::<DreamPool>()
             .add_systems(
                 Update,
                 (

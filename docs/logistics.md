@@ -53,7 +53,7 @@ Hell-Workers の物流は、`TransportRequest` を中心にした自動発行 + 
 | :--- | :--- | :--- | :--- | :--- |
 | `DepositToStockpile` | `Haul` | `task_area_auto_haul_system` | Stockpile | 割り当て時にアイテムを遅延解決 |
 | `DeliverToBlueprint` | `Haul` | `blueprint_auto_haul_system` | Blueprint | 割り当て時に必要資材を遅延解決 |
-| `DeliverToMixerSolid` | `HaulToMixer` | `mud_mixer_auto_haul_system` | Mixer | 割り当て時に Sand/Rock を遅延解決 |
+| `DeliverToMixerSolid` | `HaulToMixer` | `mud_mixer_auto_haul_system` | Mixer | 割り当て時に Sand/Rock を遅延解決（Sand は原則猫車必須、近接ピックドロップ完結時は徒歩許可） |
 | `DeliverWaterToMixer` | `HaulWaterToMixer` | `mud_mixer_auto_haul_system` | Mixer | 割り当て時に tank + bucket を遅延解決 |
 | `GatherWaterToTank` | `GatherWater` | `tank_water_request_system` | Tank | 割り当て時に bucket を遅延解決 |
 | `ReturnBucket` | `Haul` | `bucket_auto_haul_system` | Tank | 割り当て時に dropped bucket と返却先 BucketStorage を同時遅延解決 |
@@ -71,9 +71,10 @@ Hell-Workers の物流は、`TransportRequest` を中心にした自動発行 + 
   - **TaskArea 内全域** ∪ **グループ外周セルから 10 タイル以内** の和集合。
   - 複数グループの範囲に入るアイテムは、最寄りグループ（外周距離）に排他的に割り当てられます。
 - **搬入・ソース選定**:
-  - `resource_type = None` の空グループは、範囲内の近傍アイテムから搬入種別を推定。
+  - request の `resource_type` は、収集範囲内の近傍フリーアイテムから推定します。
+  - ただし、グループ内に「空き容量あり」かつ「`resource_type = None` または対象型と一致」のセルが1つ以上ある型のみ候補になります。
   - 搬入対象は `ResourceType::is_loadable() == true` の資材のみ。
-  - 割り当て時にグループ内の**空き容量があるセル**を動的に決定して搬入します。
+  - 割り当て時にグループ内の**型互換かつ空き容量があるセル**を動的に決定して搬入します。
   - ソースは「地面アイテムのみ」（`InStockpile` 除外）で、同一 Stockpile での pick-drop ループを防止します。
 
 ### 4.2 Blueprint 搬入 (`DeliverToBlueprint`)
@@ -113,7 +114,18 @@ Hell-Workers の物流は、`TransportRequest` を中心にした自動発行 + 
 
 ### 5.1 基本動作
 
-手押し車の実運用は `DepositToStockpile` の割り当て時に判定されます。
+手押し車の実運用は request 割り当て時に判定されます。
+
+- `Sand` / `StasisMud` は原則猫車必須資源（徒歩フォールバックなし）。
+  - 例外: 「その場ピック→ドロップ」で1件を完了できる距離関係なら徒歩運搬を許可し、猫車を使わない。
+  - 判定は `source` 周囲 3x3 の立ち位置を評価して行う（実行時の距離しきい値に合わせる）。
+  - Stockpile / Mixer へのドロップ成立条件: `distance(stand_pos, destination_pos) < TILE_SIZE * 1.8`
+  - Blueprint へのドロップ成立条件: `stand_pos` が `occupied_grids` 外、かつ `distance(stand_pos, occupied_tile) < TILE_SIZE * 1.5`
+- 対象搬送先:
+  - `DepositToStockpile`
+  - `DeliverToBlueprint`（`Sand` / `StasisMud`）
+  - `DeliverToMixerSolid`（`Sand`）
+- 猫車不足時は request は `Pending` のまま待機する。
 
 - `resolve_wheelbarrow_batch_for_stockpile` が以下を満たすと一括運搬を選択:
   - 利用可能な手押し車あり
@@ -139,7 +151,7 @@ WheelbarrowLease {
     wheelbarrow: Entity,     // 割り当てられた手押し車
     items: Vec<Entity>,      // 積載対象アイテム群
     source_pos: Vec2,        // アイテム重心（積み込み地点）
-    dest_stockpile: Entity,  // 搬入先 Stockpile
+    destination: WheelbarrowDestination, // 搬送先（Stockpile/Blueprint/Mixer）
     lease_until: f64,        // 有効期限（ゲーム時刻）
 }
 ```
@@ -149,35 +161,44 @@ WheelbarrowLease {
 1. **期限切れ lease の除去** — `lease_until < now` の lease を remove。
 2. **使用中 wheelbarrow の収集** — 有効な lease が付いている wheelbarrow を除外リストに追加。
 3. **eligible request の抽出** — 以下すべてを満たす request:
-   - `kind == DepositToStockpile`
+   - `kind` が仲裁対象（`DepositToStockpile` / 猫車必須資源の `DeliverToBlueprint` / 猫車必須資源の `DeliverToMixerSolid`）
    - `state == Pending`（ワーカー未割当）
    - lease なし
    - `resource_type.is_loadable()`
 4. **バッチ候補の評価** — 各 eligible request に対して:
    - 地面上の未予約フリーアイテムを `resource_type` + `BelongsTo` 一致で収集（半径 `TILE_SIZE * 10.0`）
-   - Stockpile 残容量を確認
-   - `batch_size < WHEELBARROW_MIN_BATCH_SIZE` なら除外
+   - `DepositToStockpile` では「型互換セルのみ」で残容量を計算
+   - 猫車必須資源は、ピックドロップ完結可能な request を仲裁候補から除外
+   - 最小バッチ条件: 猫車必須資源は `1`、それ以外は `WHEELBARROW_MIN_BATCH_SIZE`
 5. **スコア計算** — `score = batch_size * SCORE_BATCH_SIZE + priority * SCORE_PRIORITY - distance * SCORE_DISTANCE`
    - `distance` = 最近の wheelbarrow からアイテム重心までの距離
+   - 小バッチ（1〜2個）には減点を適用
 6. **Greedy 割り当て** — スコア降順にソートし、各 request に最近の available wheelbarrow を割り当て。
    - 割り当て済みの wheelbarrow は available set から除去。
+7. **小バッチ抑制** — 猫車必須資源で `batch_size < WHEELBARROW_PREFERRED_MIN_BATCH_SIZE` の場合:
+   - `pending_since` から `SINGLE_BATCH_WAIT_SECS` 経過前は候補から除外
+   - 経過後にのみ割り当て可能
 
 #### 5.2.3 定数
 
 | 定数 | 値 | 用途 |
 | :--- | :--- | :--- |
+| `WHEELBARROW_PREFERRED_MIN_BATCH_SIZE` | 3 | 猫車必須資源で優先する最小バッチ |
+| `SINGLE_BATCH_WAIT_SECS` | 5.0 | 1〜2個搬送を許可する待機時間 |
 | `WHEELBARROW_LEASE_DURATION_SECS` | 30.0 | lease 有効期間（秒） |
 | `WHEELBARROW_SCORE_BATCH_SIZE` | 10.0 | スコア: バッチサイズの重み |
 | `WHEELBARROW_SCORE_PRIORITY` | 5.0 | スコア: 優先度の重み |
 | `WHEELBARROW_SCORE_DISTANCE` | 0.1 | スコア: 距離のペナルティ重み |
+| `WHEELBARROW_SCORE_SMALL_BATCH_PENALTY` | 20.0 | 小バッチ減点 |
 
 #### 5.2.4 割り当て時の lease 優先
 
-`assign_haul`（DepositToStockpile 経路）は以下の順で手押し車を解決する:
+`assign_haul` / `assign_haul_to_blueprint` / `assign_haul_to_mixer` は以下の順で手押し車を解決する:
 
 1. **WheelbarrowLease あり** → lease の有効性を検証（wheelbarrow が parked か、items が未予約か）し、有効なら即採用。
-2. **lease なし** → 既存の `resolve_wheelbarrow_batch_for_stockpile` でフォールバック。
-3. **手押し車不要** → 単品運搬。
+2. **猫車必須資源かつ lease なし** → 原則待機（徒歩フォールバックなし）。
+   - ただし、ピックドロップ完結可能な request は徒歩運搬を優先。
+3. **猫車任意資源** → 既存の `resolve_wheelbarrow_batch_for_stockpile` または単品運搬へフォールバック。
 
 #### 5.2.5 lease のライフサイクル
 
