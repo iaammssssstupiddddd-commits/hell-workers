@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 
 use crate::constants::*;
-use crate::entities::damned_soul::{GatheringBehavior, IdleBehavior};
+use crate::entities::damned_soul::{DreamQuality, GatheringBehavior, IdleBehavior};
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
 use crate::systems::soul_ai::helpers::gathering::{GATHERING_LEAVE_RADIUS, GatheringSpot};
 use crate::systems::soul_ai::helpers::query_types::IdleVisualSoulQuery;
@@ -16,7 +16,7 @@ pub fn idle_visual_system(
     // idle_behavior_system で定義されている定数を使用
     const GATHERING_ARRIVAL_RADIUS: f32 = TILE_SIZE * GATHERING_ARRIVAL_RADIUS_BASE;
 
-    for (mut transform, mut sprite, idle, soul, task, participating_in) in query.iter_mut() {
+    for (mut transform, mut sprite, idle, soul, task, participating_in, dream) in query.iter_mut() {
         if !matches!(task, AssignedTask::None) {
             transform.rotation = Quat::IDENTITY;
             transform.scale = Vec3::ONE;
@@ -27,7 +27,11 @@ pub fn idle_visual_system(
         match idle.behavior {
             IdleBehavior::Sleeping => {
                 transform.rotation = Quat::from_rotation_z(std::f32::consts::FRAC_PI_4);
-                sprite.color = Color::srgba(0.6, 0.6, 0.7, 1.0);
+                sprite.color = match dream.quality {
+                    DreamQuality::VividDream => Color::srgba(0.5, 0.6, 0.9, 1.0),
+                    DreamQuality::NightTerror => Color::srgba(0.8, 0.4, 0.4, 1.0),
+                    _ => Color::srgba(0.6, 0.6, 0.7, 1.0),
+                };
             }
             IdleBehavior::Sitting => {
                 transform.rotation = Quat::IDENTITY;
@@ -93,7 +97,11 @@ pub fn idle_visual_system(
                             GatheringBehavior::Sleeping => {
                                 transform.rotation =
                                     Quat::from_rotation_z(std::f32::consts::FRAC_PI_4);
-                                sprite.color = Color::srgba(0.6, 0.5, 0.8, 0.6);
+                                sprite.color = match dream.quality {
+                                    DreamQuality::VividDream => Color::srgba(0.5, 0.5, 0.9, 0.7),
+                                    DreamQuality::NightTerror => Color::srgba(0.8, 0.4, 0.5, 0.6),
+                                    _ => Color::srgba(0.6, 0.5, 0.8, 0.6),
+                                };
                                 let breath = (idle.total_idle_time * 0.3).sin() * 0.02 + 0.95;
                                 transform.scale = Vec3::splat(breath);
                             }

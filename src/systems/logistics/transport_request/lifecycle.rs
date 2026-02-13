@@ -48,7 +48,8 @@ pub fn transport_request_anchor_cleanup_system(
                     .remove::<Designation>()
                     .remove::<super::TransportDemand>()
                     .remove::<super::TransportPolicy>()
-                    .remove::<super::WheelbarrowLease>();
+                    .remove::<super::WheelbarrowLease>()
+                    .remove::<super::WheelbarrowPendingSince>();
             } else {
                 commands.entity(request_entity).despawn();
             }

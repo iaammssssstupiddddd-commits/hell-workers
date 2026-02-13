@@ -46,16 +46,7 @@ fn resolve_group_resource_type(
     >,
     familiars_with_areas: &[(Entity, TaskArea)],
 ) -> Option<ResourceType> {
-    // 1. グループ内セルに固定リソースタイプがあればそれを使用
-    for &cell in &group.cells {
-        if let Ok((_, _, stockpile, _, _, _)) = q_stockpiles_detail.get(cell) {
-            if let Some(rt) = stockpile.resource_type {
-                return Some(rt);
-            }
-        }
-    }
-
-    // 2. 収集範囲内のフリーアイテムから推定
+    // 収集範囲内のフリーアイテムから推定（実際に受け入れ可能な型のみ）
     let owner = group.cells.first().and_then(|&cell| {
         q_stockpiles_detail
             .get(cell)
@@ -63,12 +54,30 @@ fn resolve_group_resource_type(
             .and_then(|(_, _, _, _, belongs, _)| belongs.map(|b| b.0))
     });
 
+    let can_accept_in_group = |resource_type: ResourceType| -> bool {
+        group.cells.iter().any(|&cell| {
+            q_stockpiles_detail.get(cell).ok().is_some_and(
+                |(_, _, stockpile, stored_opt, _, bucket_opt)| {
+                    if bucket_opt.is_some() {
+                        return false;
+                    }
+                    let current = stored_opt.map(|s| s.len()).unwrap_or(0);
+                    let has_capacity = current < stockpile.capacity;
+                    let type_ok = stockpile.resource_type.is_none()
+                        || stockpile.resource_type == Some(resource_type);
+                    has_capacity && type_ok
+                },
+            )
+        })
+    };
+
     q_free_items
         .iter()
         .filter(|(_, item_type, visibility, item_belongs)| {
             *visibility != Visibility::Hidden
                 && item_type.0.is_loadable()
                 && owner == item_belongs.map(|b| b.0)
+                && can_accept_in_group(item_type.0)
         })
         .filter(|(transform, _, _, _)| {
             // 収集範囲内かチェック

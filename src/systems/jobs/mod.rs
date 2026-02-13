@@ -65,6 +65,9 @@ pub struct TargetBlueprint(pub Entity);
 #[derive(Component)]
 pub struct Tree;
 
+#[derive(Component, Clone, Copy, Debug)]
+pub struct TreeVariant(pub usize);
+
 #[derive(Component)]
 pub struct Rock;
 
