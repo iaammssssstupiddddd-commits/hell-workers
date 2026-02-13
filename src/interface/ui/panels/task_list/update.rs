@@ -2,9 +2,10 @@
 
 use crate::interface::camera::MainCamera;
 use crate::interface::ui::components::{
-    InfoPanel, RightPanelMode, TaskListBody, TaskListItem, TaskListPanel, TaskListTabButton,
+    EntityListBody, LeftPanelMode, LeftPanelTabButton, TaskListBody, TaskListItem,
 };
 use crate::interface::ui::panels::info_panel::InfoPanelPinState;
+use crate::interface::ui::theme::UiTheme;
 use crate::relationships::TaskWorkers;
 use crate::systems::jobs::{
     Blueprint, BuildingType, Designation, Priority, Rock, SandPile, Tree, WorkType,
@@ -50,6 +51,25 @@ fn work_type_label(wt: &WorkType) -> &'static str {
     }
 }
 
+fn get_work_type_icon(
+    wt: &WorkType,
+    game_assets: &crate::assets::GameAssets,
+    theme: &UiTheme,
+) -> (Handle<Image>, Color) {
+    match wt {
+        WorkType::Chop => (game_assets.icon_axe.clone(), theme.colors.chop),
+        WorkType::Mine => (game_assets.icon_pick.clone(), theme.colors.mine),
+        WorkType::Build => (game_assets.icon_hammer.clone(), theme.colors.build),
+        WorkType::Haul | WorkType::HaulToMixer | WorkType::WheelbarrowHaul => {
+            (game_assets.icon_haul.clone(), theme.colors.haul)
+        }
+        WorkType::GatherWater | WorkType::HaulWaterToMixer => {
+            (game_assets.icon_haul.clone(), theme.colors.water)
+        }
+        WorkType::CollectSand => (game_assets.icon_pick.clone(), theme.colors.gather_default),
+        WorkType::Refine => (game_assets.icon_hammer.clone(), theme.colors.build),
+    }
+}
 
 fn generate_task_description(
     wt: WorkType,
@@ -131,8 +151,8 @@ fn generate_task_description(
 pub fn task_list_update_system(
     mut commands: Commands,
     game_assets: Res<crate::assets::GameAssets>,
-    theme: Res<crate::interface::ui::theme::UiTheme>,
-    mode: Res<RightPanelMode>,
+    theme: Res<UiTheme>,
+    mode: Res<LeftPanelMode>,
     mut state: ResMut<TaskListState>,
     designations: Query<(
         Entity,
@@ -150,7 +170,7 @@ pub fn task_list_update_system(
     body_query: Query<Entity, With<TaskListBody>>,
     children_query: Query<&Children>,
 ) {
-    if *mode != RightPanelMode::TaskList {
+    if *mode != LeftPanelMode::TaskList {
         return;
     }
 
@@ -228,7 +248,9 @@ pub fn task_list_update_system(
         }
 
         for (work_type, entries) in &snapshot {
-            // Group header
+            let (header_icon, header_color) = get_work_type_icon(work_type, &game_assets, &theme);
+
+            // Group header with icon
             parent
                 .spawn(Node {
                     width: Val::Percent(100.0),
@@ -239,10 +261,25 @@ pub fn task_list_update_system(
                         bottom: Val::Px(2.0),
                         ..default()
                     },
+                    padding: UiRect::horizontal(Val::Px(6.0)),
                     column_gap: Val::Px(4.0),
                     ..default()
                 })
                 .with_children(|row| {
+                    // WorkType icon
+                    row.spawn((
+                        ImageNode {
+                            image: header_icon,
+                            color: header_color,
+                            ..default()
+                        },
+                        Node {
+                            width: Val::Px(theme.sizes.icon_size),
+                            height: Val::Px(theme.sizes.icon_size),
+                            ..default()
+                        },
+                    ));
+                    // Label + count
                     row.spawn((
                         Text::new(format!(
                             "{} ({})",
@@ -260,20 +297,13 @@ pub fn task_list_update_system(
                 });
 
             for entry in entries {
-                // Status indicator
-                let status_text = if entry.worker_count > 0 {
-                    format!("[RUN:{}]", entry.worker_count)
-                } else {
-                    "[WAIT]".to_string()
-                };
+                let (item_icon, item_color) = get_work_type_icon(work_type, &game_assets, &theme);
 
-                // Priority indicator
-                let priority_display = if entry.priority >= 5 {
-                    format!("★[P:{}] ", entry.priority)
-                } else if (entry.priority as i32) < 0 {
-                    format!("▼[P:{}] ", entry.priority)
+                // Description text color: high priority uses accent_ember
+                let desc_color = if entry.priority >= 5 {
+                    theme.colors.accent_ember
                 } else {
-                    format!("[P:{}] ", entry.priority)
+                    theme.colors.text_primary
                 };
 
                 parent
@@ -281,25 +311,61 @@ pub fn task_list_update_system(
                         Button,
                         Node {
                             width: Val::Percent(100.0),
+                            height: Val::Px(theme.sizes.soul_item_height),
+                            flex_shrink: 0.0,
                             padding: UiRect::axes(Val::Px(6.0), Val::Px(2.0)),
+                            flex_direction: FlexDirection::Row,
+                            align_items: AlignItems::Center,
+                            column_gap: Val::Px(4.0),
+                            border: UiRect::left(Val::Px(0.0)),
                             ..default()
                         },
+                        BorderColor::all(Color::NONE),
                         BackgroundColor(theme.colors.list_item_default),
                         TaskListItem(entry.entity),
                     ))
                     .with_children(|btn| {
+                        // WorkType icon
                         btn.spawn((
-                            Text::new(format!(
-                                "{}{}{}",
-                                priority_display, status_text, entry.description
-                            )),
-                            TextFont {
-                                font: game_assets.font_ui.clone(),
-                                font_size: theme.typography.font_size_small,
+                            ImageNode {
+                                image: item_icon,
+                                color: item_color,
                                 ..default()
                             },
-                            TextColor(theme.colors.text_primary),
+                            Node {
+                                width: Val::Px(theme.sizes.icon_size),
+                                height: Val::Px(theme.sizes.icon_size),
+                                ..default()
+                            },
                         ));
+
+                        // Description text
+                        btn.spawn((
+                            Text::new(&entry.description),
+                            TextFont {
+                                font: game_assets.font_ui.clone(),
+                                font_size: theme.typography.font_size_item,
+                                ..default()
+                            },
+                            TextColor(desc_color),
+                            Node {
+                                flex_grow: 1.0,
+                                ..default()
+                            },
+                        ));
+
+                        // Worker count
+                        if entry.worker_count > 0 {
+                            btn.spawn((
+                                Text::new(format!("\u{00d7}{}", entry.worker_count)),
+                                TextFont {
+                                    font: game_assets.font_ui.clone(),
+                                    font_size: theme.typography.font_size_small,
+                                    ..default()
+                                },
+                                TextColor(theme.colors.text_secondary),
+                            ));
+                        }
                     });
             }
         }
@@ -307,14 +373,58 @@ pub fn task_list_update_system(
 }
 
 // ============================================================
-// タブ切り替えシステム
+// ビジュアルフィードバックシステム
 // ============================================================
 
-pub fn right_panel_tab_system(
-    mut mode: ResMut<RightPanelMode>,
-    theme: Res<crate::interface::ui::theme::UiTheme>,
-    interactions: Query<(&Interaction, &TaskListTabButton), Changed<Interaction>>,
-    tab_buttons: Query<(Entity, &TaskListTabButton, &Children)>,
+pub fn task_list_visual_feedback_system(
+    pin_state: Res<InfoPanelPinState>,
+    q_changed: Query<(), Or<(Changed<Interaction>, Added<TaskListItem>)>>,
+    mut q_items: Query<
+        (
+            &Interaction,
+            &TaskListItem,
+            &mut Node,
+            &mut BackgroundColor,
+            &mut BorderColor,
+        ),
+        With<Button>,
+    >,
+    theme: Res<UiTheme>,
+) {
+    if !pin_state.is_changed() && q_changed.is_empty() {
+        return;
+    }
+
+    for (interaction, item, mut node, mut bg, mut border_color) in q_items.iter_mut() {
+        let is_selected = pin_state.entity == Some(item.0);
+        let is_hovered = matches!(interaction, Interaction::Hovered | Interaction::Pressed);
+
+        bg.0 = match (is_selected, is_hovered) {
+            (true, true) => theme.colors.list_item_selected_hover,
+            (true, false) => theme.colors.list_item_selected,
+            (false, true) => theme.colors.list_item_hover,
+            (false, false) => theme.colors.list_item_default,
+        };
+
+        if is_selected {
+            node.border.left = Val::Px(theme.sizes.list_selection_border_width);
+            *border_color = BorderColor::all(theme.colors.list_selection_border);
+        } else {
+            node.border.left = Val::Px(0.0);
+            *border_color = BorderColor::all(Color::NONE);
+        }
+    }
+}
+
+// ============================================================
+// 左パネル タブ切り替えシステム
+// ============================================================
+
+pub fn left_panel_tab_system(
+    mut mode: ResMut<LeftPanelMode>,
+    theme: Res<UiTheme>,
+    interactions: Query<(&Interaction, &LeftPanelTabButton), Changed<Interaction>>,
+    tab_buttons: Query<(Entity, &LeftPanelTabButton, &Children)>,
     mut text_colors: Query<&mut TextColor>,
     mut border_colors: Query<&mut BorderColor>,
 ) {
@@ -354,38 +464,38 @@ pub fn right_panel_tab_system(
 }
 
 // ============================================================
-// パネル表示切替システム
+// 左パネル表示切替システム
 // ============================================================
 
-pub fn right_panel_visibility_system(
-    mode: Res<RightPanelMode>,
-    mut info_panels: Query<&mut Node, (With<InfoPanel>, Without<TaskListPanel>)>,
-    mut task_panels: Query<&mut Node, (With<TaskListPanel>, Without<InfoPanel>)>,
-    selected: Res<crate::interface::selection::SelectedEntity>,
-    pin_state: Res<InfoPanelPinState>,
+pub fn left_panel_visibility_system(
+    mode: Res<LeftPanelMode>,
+    mut entity_list_bodies: Query<&mut Node, (With<EntityListBody>, Without<TaskListBody>)>,
+    mut task_list_bodies: Query<&mut Node, (With<TaskListBody>, Without<EntityListBody>)>,
 ) {
-    if !mode.is_changed() && !selected.is_changed() && !pin_state.is_changed() {
+    if !mode.is_changed() {
         return;
     }
 
     match *mode {
-        RightPanelMode::Info => {
-            // InfoPanel's own visibility is handled by info_panel_system
-            // Just hide task list
-            for mut node in &mut task_panels {
+        LeftPanelMode::EntityList => {
+            for mut node in &mut entity_list_bodies {
+                if node.display != Display::Flex {
+                    node.display = Display::Flex;
+                }
+            }
+            for mut node in &mut task_list_bodies {
                 if node.display != Display::None {
                     node.display = Display::None;
                 }
             }
         }
-        RightPanelMode::TaskList => {
-            // Hide info panel, show task list
-            for mut node in &mut info_panels {
+        LeftPanelMode::TaskList => {
+            for mut node in &mut entity_list_bodies {
                 if node.display != Display::None {
                     node.display = Display::None;
                 }
             }
-            for mut node in &mut task_panels {
+            for mut node in &mut task_list_bodies {
                 if node.display != Display::Flex {
                     node.display = Display::Flex;
                 }
@@ -399,7 +509,6 @@ pub fn right_panel_visibility_system(
 // ============================================================
 
 pub fn task_list_click_system(
-    mut mode: ResMut<RightPanelMode>,
     mut pin_state: ResMut<InfoPanelPinState>,
     interactions: Query<(&Interaction, &TaskListItem), Changed<Interaction>>,
     target_transforms: Query<&GlobalTransform, Without<MainCamera>>,
@@ -421,8 +530,7 @@ pub fn task_list_click_system(
             }
         }
 
-        // Pin info panel to this entity and switch to Info mode
+        // Pin info panel to this entity
         pin_state.entity = Some(target_entity);
-        *mode = RightPanelMode::Info;
     }
 }

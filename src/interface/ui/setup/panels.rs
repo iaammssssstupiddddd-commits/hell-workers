@@ -3,7 +3,7 @@
 //! InfoPanel と HoverTooltip を Startup 時に生成する。
 
 use crate::interface::ui::components::{HoverTooltip, InfoPanelNodes, UiNodeRegistry, UiSlot};
-use crate::interface::ui::panels::{spawn_info_panel_ui, spawn_task_list_panel_ui};
+use crate::interface::ui::panels::spawn_info_panel_ui;
 use crate::interface::ui::theme::UiTheme;
 use bevy::prelude::*;
 use bevy::ui_widgets::popover::{Popover, PopoverAlign, PopoverPlacement, PopoverSide};
@@ -26,7 +26,6 @@ pub fn spawn_panels(
         ui_nodes,
         info_panel_nodes,
     );
-    spawn_task_list_panel_ui(commands, game_assets, theme, info_panel_parent, ui_nodes);
     spawn_hover_tooltip(commands, theme, overlay_parent, ui_nodes);
 }
 

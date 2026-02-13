@@ -1,4 +1,4 @@
-//! エンティティリスト UI (Familiar & Soul List)
+//! 左パネル UI (Entity List / Task List のタブ切り替え)
 
 use crate::interface::ui::components::*;
 use crate::interface::ui::theme::UiTheme;
@@ -47,6 +47,7 @@ pub fn spawn_entity_list_panel(
     commands.entity(parent_entity).add_child(panel);
 
     commands.entity(panel).with_children(|parent| {
+        // ヘッダー行（タブバー + 最小化ボタン）
         parent
             .spawn((
                 Node {
@@ -55,25 +56,14 @@ pub fn spawn_entity_list_panel(
                     flex_direction: FlexDirection::Row,
                     justify_content: JustifyContent::SpaceBetween,
                     align_items: AlignItems::Center,
-                    margin: UiRect::bottom(Val::Px(10.0)),
+                    margin: UiRect::bottom(Val::Px(6.0)),
                     ..default()
                 },
                 BackgroundColor(theme.colors.bg_elevated),
             ))
             .with_children(|header| {
-                // パネルタイトル
-                header.spawn((
-                    Text::new("Entity List"),
-                    TextFont {
-                        font: game_assets.font_ui.clone(),
-                        font_size: theme.typography.font_size_lg, // Semantic size
-                        weight: FontWeight::BOLD,                 // Font Variation
-                        ..default()
-                    },
-                    // Use panel accent color for the title
-                    TextColor(theme.colors.panel_accent_entity_list),
-                    IgnoreScroll(BVec2::new(false, true)),
-                ));
+                // タブバー
+                spawn_left_panel_tab_bar(header, game_assets, theme);
 
                 // 最小化ボタン
                 header
@@ -104,7 +94,7 @@ pub fn spawn_entity_list_panel(
                     });
             });
 
-        // 最小化対象のボディ
+        // エンティティリスト ボディ（EntityList モード時に表示）
         parent
             .spawn((
                 Node {
@@ -152,7 +142,7 @@ pub fn spawn_entity_list_panel(
                                 padding: UiRect::horizontal(Val::Px(5.0)),
                                 ..default()
                             },
-                            BackgroundColor(theme.colors.button_default), // Semantic
+                            BackgroundColor(theme.colors.button_default),
                             SectionToggle(EntityListSectionType::Unassigned),
                         ))
                         .with_children(|button| {
@@ -170,10 +160,10 @@ pub fn spawn_entity_list_panel(
                                 Text::new("Unassigned Souls"),
                                 TextFont {
                                     font: game_assets.font_ui.clone(),
-                                    font_size: theme.typography.font_size_base, // Semantic
+                                    font_size: theme.typography.font_size_base,
                                     ..default()
                                 },
-                                TextColor(theme.colors.text_primary_semantic), // Semantic
+                                TextColor(theme.colors.text_primary_semantic),
                             ));
                         });
 
@@ -198,10 +188,10 @@ pub fn spawn_entity_list_panel(
                     Text::new("Scroll: Mouse Wheel"),
                     TextFont {
                         font: game_assets.font_ui.clone(),
-                        font_size: theme.typography.font_size_xs, // Semantic
+                        font_size: theme.typography.font_size_xs,
                         ..default()
                     },
-                    TextColor(theme.colors.text_secondary_semantic), // Semantic
+                    TextColor(theme.colors.text_secondary_semantic),
                     Node {
                         display: Display::None,
                         position_type: PositionType::Absolute,
@@ -209,9 +199,96 @@ pub fn spawn_entity_list_panel(
                         bottom: Val::Px(0.0),
                         ..default()
                     },
-                    IgnoreScroll(BVec2::new(false, true)), // Bevy 0.18 Feature
+                    IgnoreScroll(BVec2::new(false, true)),
                     EntityListScrollHint,
                 ));
             });
+
+        // タスクリスト ボディ（TaskList モード時に表示）
+        parent.spawn((
+            Node {
+                width: Val::Percent(100.0),
+                flex_grow: 1.0,
+                min_height: Val::Px(0.0),
+                flex_direction: FlexDirection::Column,
+                overflow: Overflow::clip_y(),
+                display: Display::None,
+                ..default()
+            },
+            TaskListBody,
+        ));
     });
+}
+
+fn spawn_left_panel_tab_bar(
+    parent: &mut ChildSpawnerCommands,
+    game_assets: &crate::assets::GameAssets,
+    theme: &UiTheme,
+) {
+    parent
+        .spawn(Node {
+            flex_direction: FlexDirection::Row,
+            column_gap: Val::Px(4.0),
+            ..default()
+        })
+        .with_children(|row| {
+            spawn_left_panel_tab_button(
+                row,
+                game_assets,
+                theme,
+                "Entities",
+                LeftPanelMode::EntityList,
+                true,
+            );
+            spawn_left_panel_tab_button(
+                row,
+                game_assets,
+                theme,
+                "Tasks",
+                LeftPanelMode::TaskList,
+                false,
+            );
+        });
+}
+
+fn spawn_left_panel_tab_button(
+    parent: &mut ChildSpawnerCommands,
+    game_assets: &crate::assets::GameAssets,
+    theme: &UiTheme,
+    label: &str,
+    mode: LeftPanelMode,
+    is_active: bool,
+) {
+    parent
+        .spawn((
+            Button,
+            Node {
+                padding: UiRect::axes(Val::Px(10.0), Val::Px(4.0)),
+                border: UiRect::bottom(Val::Px(2.0)),
+                ..default()
+            },
+            BackgroundColor(Color::NONE),
+            BorderColor::all(if is_active {
+                theme.colors.text_accent_semantic
+            } else {
+                Color::NONE
+            }),
+            LeftPanelTabButton(mode),
+        ))
+        .with_children(|btn| {
+            btn.spawn((
+                Text::new(label),
+                TextFont {
+                    font: game_assets.font_ui.clone(),
+                    font_size: theme.typography.font_size_sm,
+                    weight: FontWeight::SEMIBOLD,
+                    ..default()
+                },
+                TextColor(if is_active {
+                    theme.colors.text_accent_semantic
+                } else {
+                    theme.colors.text_secondary_semantic
+                }),
+            ));
+        });
 }
