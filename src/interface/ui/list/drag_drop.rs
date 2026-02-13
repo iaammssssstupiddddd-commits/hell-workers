@@ -165,7 +165,7 @@ fn spawn_drag_ghost(
             BackgroundColor(Color::srgba(0.10, 0.06, 0.09, 0.92)),
             BorderColor::all(theme.colors.border_accent),
             FocusPolicy::Pass,
-            ZIndex(250),
+            ZIndex(60),
             Name::new("Soul Drag Ghost"),
         ))
         .with_children(|parent| {

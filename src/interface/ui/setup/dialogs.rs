@@ -46,7 +46,7 @@ fn spawn_operation_dialog(
             RelativeCursorPosition::default(),
             UiInputBlocker,
             OperationDialog,
-            ZIndex(200),
+            ZIndex(30),
         ))
         .id();
     commands.entity(parent_entity).add_child(dialog_root);

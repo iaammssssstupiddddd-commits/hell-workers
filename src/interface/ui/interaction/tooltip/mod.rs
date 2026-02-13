@@ -11,6 +11,7 @@ use crate::interface::ui::theme::UiTheme;
 use bevy::prelude::*;
 use bevy::ui_widgets::popover::Popover;
 
+
 pub(crate) use target::TooltipTarget;
 
 #[derive(Default)]
@@ -120,8 +121,10 @@ pub(crate) fn hover_tooltip_system(
         && hovered_menu_action.is_some_and(|a| {
             matches!(a, MenuAction::ToggleArchitect | MenuAction::ToggleZones | MenuAction::ToggleOrders)
         });
+    // ZIndex付きパネル内のボタン（速度ボタン等）はアンカーに留める（スタッキングコンテキスト回避）
+    let button_in_zindex_panel = matches!(target, Some(TooltipTarget::UiButton(e)) if ui_layout.q_speed_buttons.contains(e));
     let attach_to_anchor =
-        !matches!(target, Some(TooltipTarget::UiButton(_))) || expanded_toggle_hover;
+        !matches!(target, Some(TooltipTarget::UiButton(_))) || expanded_toggle_hover || button_in_zindex_panel;
     let attachment_changed = runtime.attach_to_anchor != attach_to_anchor;
 
     if target_changed || attachment_changed {

@@ -9,7 +9,7 @@ use crate::interface::ui::{
     context_menu_system, menu_visibility_system, task_summary_ui_system, ui_interaction_system,
     ui_keyboard_shortcuts_system, update_area_edit_preview_ui_system,
     update_dream_pool_display_system, update_fps_display_system, update_mode_text_system,
-    update_operation_dialog_system,
+    update_operation_dialog_system, update_speed_button_highlight_system,
 };
 use crate::systems::GameSystemSet;
 use crate::systems::time::game_time_system;
@@ -46,6 +46,7 @@ impl Plugin for UiCorePlugin {
                 game_time_system,
                 update_fps_display_system,
                 update_dream_pool_display_system,
+                update_speed_button_highlight_system,
             )
                 .in_set(GameSystemSet::Interface),
         );

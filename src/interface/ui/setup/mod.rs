@@ -77,7 +77,7 @@ fn spawn_area_edit_preview(
                 ..default()
             },
             TextColor(theme.colors.text_primary_semantic),
-            ZIndex(260),
+            ZIndex(40),
             UiSlot::AreaEditPreview,
             Name::new("Area Edit Preview"),
         ))
@@ -182,7 +182,7 @@ fn spawn_ui_root(commands: &mut Commands) -> (Entity, Entity, Entity, Entity, En
 
     commands
         .entity(ui_root)
-        .add_children(&[left, right, bottom, overlay, top_right, top_left]);
+        .add_children(&[left, right, bottom, top_right, top_left, overlay]);
     (ui_root, left, right, bottom, overlay, top_right)
 }
 

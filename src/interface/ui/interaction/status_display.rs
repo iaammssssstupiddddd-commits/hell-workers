@@ -115,16 +115,23 @@ pub fn update_mode_text_system(
 
 pub fn task_summary_ui_system(
     q_designations: Query<&crate::systems::jobs::Priority, With<crate::systems::jobs::Designation>>,
+    theme: Res<crate::interface::ui::theme::UiTheme>,
     ui_nodes: Res<UiNodeRegistry>,
-    mut q_text: Query<&mut Text>,
+    mut q_text: Query<(&mut Text, &mut TextColor)>,
 ) {
     let Some(entity) = ui_nodes.get_slot(UiSlot::TaskSummaryText) else {
         return;
     };
-    if let Ok(mut text) = q_text.get_mut(entity) {
+    if let Ok((mut text, mut color)) = q_text.get_mut(entity) {
         let total = q_designations.iter().count();
         let high = q_designations.iter().filter(|p| p.0 > 0).count();
         text.0 = format!("Tasks: {} ({} High)", total, high);
+        // High task warning color
+        if high > 0 {
+            color.0 = theme.colors.task_high_warning;
+        } else {
+            color.0 = theme.colors.panel_accent_time_control;
+        }
     }
 }
 
@@ -259,6 +266,39 @@ pub fn update_fps_display_system(
             text.0 = format!("FPS: {:.0}", fps);
             fps_counter.frame_count = 0;
             fps_counter.elapsed_time = Duration::ZERO;
+        }
+    }
+}
+
+pub fn update_speed_button_highlight_system(
+    time: Res<Time<Virtual>>,
+    theme: Res<crate::interface::ui::theme::UiTheme>,
+    mut q_buttons: Query<(
+        &crate::interface::ui::components::SpeedButtonMarker,
+        &mut BackgroundColor,
+        &mut BorderColor,
+    )>,
+) {
+    let current_speed = if time.is_paused() {
+        crate::systems::time::TimeSpeed::Paused
+    } else {
+        let speed = time.relative_speed();
+        if speed <= 1.0 {
+            crate::systems::time::TimeSpeed::Normal
+        } else if speed <= 2.0 {
+            crate::systems::time::TimeSpeed::Fast
+        } else {
+            crate::systems::time::TimeSpeed::Super
+        }
+    };
+
+    for (marker, mut bg, mut border) in q_buttons.iter_mut() {
+        if marker.0 == current_speed {
+            bg.0 = theme.colors.speed_button_active;
+            *border = BorderColor::all(theme.colors.accent_ember_bright);
+        } else {
+            bg.0 = theme.colors.button_default;
+            *border = BorderColor::all(Color::NONE);
         }
     }
 }

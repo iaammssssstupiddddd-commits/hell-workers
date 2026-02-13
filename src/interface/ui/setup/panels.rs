@@ -88,7 +88,7 @@ fn spawn_hover_tooltip(
                 window_margin: 8.0,
             },
             OverrideClip,
-            ZIndex(100),
+            ZIndex(50),
             Name::new("Hover Tooltip"),
         ))
         .id();

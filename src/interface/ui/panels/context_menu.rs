@@ -138,7 +138,7 @@ pub fn context_menu_system(
                     ],
                     window_margin: 8.0,
                 },
-                ZIndex(220),
+                ZIndex(20),
                 Name::new("Context Menu"),
             ))
             .with_children(|menu| match target {
