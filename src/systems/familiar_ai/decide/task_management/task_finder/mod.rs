@@ -10,18 +10,23 @@ use crate::systems::command::TaskArea;
 use crate::systems::jobs::{TargetBlueprint, WorkType};
 use crate::systems::spatial::{DesignationSpatialGrid, TransportRequestSpatialGrid};
 use crate::world::map::WorldMap;
-use crate::world::pathfinding::PathfindingContext;
 use bevy::prelude::*;
 
 use filter::{candidate_snapshot, collect_candidate_entities};
 use score::score_candidate;
 
-/// 指定ワーカーの位置から到達可能な未割り当てタスクを探す
+#[derive(Clone, Copy, Debug)]
+pub struct DelegationCandidate {
+    pub entity: Entity,
+    pub target_grid: (i32, i32),
+    pub target_walkable: bool,
+}
+
+/// Familiar単位で委譲候補を収集し、優先度順に返す
 #[allow(clippy::too_many_arguments)]
-pub fn find_unassigned_task_in_area(
+pub fn collect_scored_candidates(
     fam_entity: Entity,
     fam_pos: Vec2,
-    worker_pos: Vec2,
     task_area_opt: Option<&TaskArea>,
     queries: &crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
     designation_grid: &DesignationSpatialGrid,
@@ -29,8 +34,7 @@ pub fn find_unassigned_task_in_area(
     managed_tasks: &ManagedTasks,
     q_target_blueprints: &Query<&TargetBlueprint>,
     world_map: &WorldMap,
-    pf_context: &mut PathfindingContext,
-) -> Vec<Entity> {
+) -> Vec<DelegationCandidate> {
     let candidates = collect_candidate_entities(
         task_area_opt,
         managed_tasks,
@@ -38,20 +42,19 @@ pub fn find_unassigned_task_in_area(
         transport_request_grid,
     );
 
-    let mut valid_candidates: Vec<(Entity, i32, f32)> = candidates
+    let mut valid_candidates: Vec<(DelegationCandidate, i32, f32)> = candidates
         .into_iter()
         .filter_map(|entity| {
-            let (pos, work_type, base_priority, in_stockpile_none) = candidate_snapshot(
+            let snapshot = candidate_snapshot(
                 fam_entity,
                 entity,
                 task_area_opt,
                 managed_tasks,
-                worker_pos,
                 world_map,
-                pf_context,
                 queries,
             )?;
 
+            let work_type = snapshot.work_type;
             if work_type == WorkType::HaulWaterToMixer {
                 debug!("TASK_FINDER: HaulWaterToMixer {:?} passed filter", entity);
             }
@@ -59,13 +62,13 @@ pub fn find_unassigned_task_in_area(
             let priority = score_candidate(
                 entity,
                 work_type,
-                base_priority,
-                in_stockpile_none,
+                snapshot.base_priority,
+                snapshot.in_stockpile_none,
                 queries,
                 q_target_blueprints,
             )?;
 
-            let dist_sq = pos.distance_squared(fam_pos);
+            let dist_sq = snapshot.pos.distance_squared(fam_pos);
 
             if work_type == WorkType::HaulWaterToMixer {
                 debug!(
@@ -74,7 +77,15 @@ pub fn find_unassigned_task_in_area(
                 );
             }
 
-            Some((entity, priority, dist_sq))
+            Some((
+                DelegationCandidate {
+                    entity,
+                    target_grid: snapshot.target_grid,
+                    target_walkable: snapshot.target_walkable,
+                },
+                priority,
+                dist_sq,
+            ))
         })
         .collect();
 
@@ -89,6 +100,6 @@ pub fn find_unassigned_task_in_area(
 
     valid_candidates
         .into_iter()
-        .map(|(entity, _, _)| entity)
+        .map(|(candidate, _, _)| candidate)
         .collect()
 }

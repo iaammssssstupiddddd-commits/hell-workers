@@ -3,9 +3,17 @@ use crate::systems::command::TaskArea;
 use crate::systems::jobs::WorkType;
 use crate::systems::spatial::{DesignationSpatialGrid, TransportRequestSpatialGrid};
 use crate::world::map::WorldMap;
-use crate::world::pathfinding::{self, PathfindingContext};
 use bevy::prelude::*;
 use std::collections::HashSet;
+
+pub(super) struct CandidateSnapshot {
+    pub pos: Vec2,
+    pub target_grid: (i32, i32),
+    pub target_walkable: bool,
+    pub work_type: WorkType,
+    pub base_priority: i32,
+    pub in_stockpile_none: bool,
+}
 
 /// タスク候補エンティティを収集する。
 ///
@@ -40,11 +48,9 @@ pub(super) fn candidate_snapshot(
     entity: Entity,
     task_area_opt: Option<&TaskArea>,
     managed_tasks: &ManagedTasks,
-    worker_pos: Vec2,
     world_map: &WorldMap,
-    pf_context: &mut PathfindingContext,
     queries: &crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
-) -> Option<(Vec2, WorkType, i32, bool)> {
+) -> Option<CandidateSnapshot> {
     let (
         _entity,
         transform,
@@ -83,24 +89,8 @@ pub(super) fn candidate_snapshot(
         return None;
     }
 
-    let worker_grid = world_map.get_nearest_walkable_grid(worker_pos)?;
     let target_grid = WorldMap::world_to_grid(pos);
-
-    let is_reachable = if world_map.is_walkable(target_grid.0, target_grid.1) {
-        if pathfinding::find_path(world_map, pf_context, target_grid, worker_grid).is_some() {
-            true
-        } else {
-            pathfinding::find_path_to_adjacent(world_map, pf_context, worker_grid, target_grid)
-                .is_some()
-        }
-    } else {
-        pathfinding::find_path_to_adjacent(world_map, pf_context, worker_grid, target_grid)
-            .is_some()
-    };
-
-    if !is_reachable {
-        return None;
-    }
+    let target_walkable = world_map.is_walkable(target_grid.0, target_grid.1);
 
     let is_valid = match designation.work_type {
         WorkType::Chop
@@ -127,5 +117,12 @@ pub(super) fn candidate_snapshot(
 
     let base_priority = priority_opt.map(|p| p.0).unwrap_or(0) as i32;
     let in_stockpile_none = in_stockpile_opt.is_none();
-    Some((pos, designation.work_type, base_priority, in_stockpile_none))
+    Some(CandidateSnapshot {
+        pos,
+        target_grid,
+        target_walkable,
+        work_type: designation.work_type,
+        base_priority,
+        in_stockpile_none,
+    })
 }

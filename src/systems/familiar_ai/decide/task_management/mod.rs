@@ -13,4 +13,5 @@ pub use delegation::TaskManager;
 pub use task_assigner::AssignTaskContext;
 pub use task_assigner::ReservationShadow;
 pub use task_assigner::assign_task_to_worker;
-pub use task_finder::find_unassigned_task_in_area;
+pub use task_finder::DelegationCandidate;
+pub use task_finder::collect_scored_candidates;
