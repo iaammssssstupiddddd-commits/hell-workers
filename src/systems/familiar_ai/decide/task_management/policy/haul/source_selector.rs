@@ -102,6 +102,60 @@ pub fn find_nearest_blueprint_source_item<'w, 's>(
     find_nearest_source_item(resource_type, bp_pos, queries, shadow, |_| true)
 }
 
+/// ドナーセルから未予約のアイテムを1つ検索する（統合用）。
+/// 最少格納のドナーセルから優先的に選択（空にしやすくする）。
+pub fn find_consolidation_source_item<'w, 's>(
+    resource_type: ResourceType,
+    donor_cells: &[Entity],
+    queries: &TaskQueries<'w, 's>,
+    shadow: &ReservationShadow,
+) -> Option<(Entity, Vec2)> {
+    // ドナーセルごとに格納数を取得してソート（最少格納優先）
+    let mut donor_with_count: Vec<(Entity, usize)> = donor_cells
+        .iter()
+        .filter_map(|&cell| {
+            let (_, _, stock, stored_opt) = queries.storage.stockpiles.get(cell).ok()?;
+            let stored = stored_opt.map(|s| s.len()).unwrap_or(0);
+            if stored > 0
+                && (stock.resource_type.is_none() || stock.resource_type == Some(resource_type))
+            {
+                Some((cell, stored))
+            } else {
+                None
+            }
+        })
+        .collect();
+    donor_with_count.sort_by_key(|(_, count)| *count);
+
+    // 最少格納セルから順にアイテムを探す
+    for (cell, _) in donor_with_count {
+        let found = queries
+            .stored_items_query
+            .iter()
+            .filter(|(_, res, in_stockpile)| {
+                res.0 == resource_type && in_stockpile.0 == cell
+            })
+            .filter(|(entity, _, _)| {
+                crate::systems::familiar_ai::decide::task_management::validator::source_not_reserved(
+                    *entity, queries, shadow,
+                )
+            })
+            .next();
+
+        if let Some((entity, _, _)) = found {
+            // アイテムの位置はセルの位置を使用
+            let pos = queries
+                .storage
+                .stockpiles
+                .get(cell)
+                .map(|(_, t, _, _)| t.translation.truncate())
+                .unwrap_or(Vec2::ZERO);
+            return Some((entity, pos));
+        }
+    }
+    None
+}
+
 /// center_pos 付近の未予約アイテムを最寄り順に最大 max_count 個収集する。
 /// 探索範囲は TILE_SIZE * 10.0。
 pub fn collect_nearby_items_for_wheelbarrow(

@@ -83,6 +83,9 @@ Bevy 0.18 の **ECS Relationships** 機能を使用し、エンティティ間�
     - **木 (Tree)**: `Wood` x 5 をドロップ。
     - **岩 (Rock)**: `Rock` x 10 をドロップ。**作業時間は木の約2倍**かかる重労働です。
     - **スタック**: 報酬は同一タイル内にドロップされ、アイテム個数としてまとめてカウント（スタック）されます。
+- **砂採取 (CollectSand)**:
+    - `SandPile` / 砂タイル（`TerrainType::Sand`）はどちらも**無限ソース**として扱われます（採取で枯渇しない）。
+    - 採取は**即時完了**（待機プログレスなし）で、到達フレームで砂を生成して `Done` へ遷移します。
 - **運搬 (Haul)**: 「拾う」「備蓄場所へ運ぶ」「置く」のフェーズを経る。
 - **猫車必須資源**: `Sand` / `StasisMud` は原則徒歩運搬不可。`HaulWithWheelbarrow` で搬送される。
   - 例外: ピック→ドロップでその運搬1件を完了できる場合は徒歩運搬を許可。
@@ -94,6 +97,7 @@ Bevy 0.18 の **ECS Relationships** 機能を使用し、エンティティ間�
     2. `PickingUpWheelbarrow` — 手押し車を取得（`PushedBy` 設定）
     3. `GoingToSource` — 積み込み元（地面/備蓄を含むアイテム群）へ移動
     4. `Loading` — アイテムを手押し車に積む（`LoadedIn` 設定、`Visibility::Hidden`）
+       - Blueprint 向け `Sand` では直採取モードがあり、同一 Soul がこのフェーズで砂をその場生成して積載します（別の `CollectSand` タスクは使わない）。
     5. `GoingToDestination` — 目的地へ移動（速度ペナルティ `SOUL_SPEED_WHEELBARROW_MULTIPLIER`）
     6. `Unloading` — 搬送先（Stockpile / Blueprint / Mixer）に荷下ろし
     7. `ReturningWheelbarrow` — 手押し車を駐車エリアに返却

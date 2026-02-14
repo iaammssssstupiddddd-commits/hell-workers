@@ -190,7 +190,7 @@ fn place_building_blueprint(
 
     let texture = match building_type {
         BuildingType::Wall => game_assets.wall_isolated.clone(),
-        BuildingType::Floor => game_assets.dirt.clone(),
+        BuildingType::Floor => game_assets.stone.clone(),
         BuildingType::Tank => game_assets.tank_empty.clone(),
         BuildingType::MudMixer => game_assets.mud_mixer.clone(),
         BuildingType::SandPile => game_assets.sand_pile.clone(),

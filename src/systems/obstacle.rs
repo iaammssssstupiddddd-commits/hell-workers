@@ -46,7 +46,7 @@ pub fn obstacle_cleanup_system(
     for idx in 0..world_map.obstacles.len() {
         if world_map.obstacles[idx] {
             let pos = WorldMap::idx_to_pos(idx);
-            if !current_obstacles.contains(&pos) {
+            if !current_obstacles.contains(&pos) && !world_map.buildings.contains_key(&pos) {
                 to_remove.push(pos);
             }
         }
