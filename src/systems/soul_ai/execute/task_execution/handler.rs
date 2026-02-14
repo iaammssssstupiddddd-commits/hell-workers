@@ -13,8 +13,7 @@ use bevy::prelude::*;
 
 use super::types::{
     AssignedTask, BuildData, CollectSandData, GatherData, GatherWaterData, HaulData,
-    HaulToBlueprintData, HaulWaterToMixerData, HaulWithWheelbarrowData,
-    RefineData,
+    HaulToBlueprintData, HaulWaterToMixerData, HaulWithWheelbarrowData, RefineData,
 };
 
 /// タスクタイプごとの実行ロジックを表すトレイト
@@ -232,7 +231,56 @@ impl TaskHandler<HaulWaterToMixerData> for AssignedTask {
     }
 }
 
-/// HaulWithWheelbarrow 専用: q_wheelbarrows を追加で受け取る
+/// Phase 4: タスクルーティングの共通ディスパッチ
+/// 標準ハンドラは TaskHandler 経由、HaulWithWheelbarrow は API 境界で特別扱い
+pub fn run_task_handler(
+    ctx: &mut TaskExecutionContext,
+    commands: &mut Commands,
+    game_assets: &Res<GameAssets>,
+    time: &Res<Time>,
+    world_map: &Res<WorldMap>,
+    breakdown_opt: Option<&StressBreakdown>,
+    q_wheelbarrows: &Query<
+        (&Transform, Option<&crate::relationships::ParkedAt>),
+        With<Wheelbarrow>,
+    >,
+) {
+    match &*ctx.task {
+        AssignedTask::Gather(data) => {
+            AssignedTask::execute(ctx, data.clone(), commands, game_assets, time, world_map, breakdown_opt);
+        }
+        AssignedTask::Haul(data) => {
+            AssignedTask::execute(ctx, data.clone(), commands, game_assets, time, world_map, breakdown_opt);
+        }
+        AssignedTask::Build(data) => {
+            AssignedTask::execute(ctx, data.clone(), commands, game_assets, time, world_map, breakdown_opt);
+        }
+        AssignedTask::HaulToBlueprint(data) => {
+            AssignedTask::execute(ctx, data.clone(), commands, game_assets, time, world_map, breakdown_opt);
+        }
+        AssignedTask::GatherWater(data) => {
+            AssignedTask::execute(ctx, data.clone(), commands, game_assets, time, world_map, breakdown_opt);
+        }
+        AssignedTask::CollectSand(data) => {
+            AssignedTask::execute(ctx, data.clone(), commands, game_assets, time, world_map, breakdown_opt);
+        }
+        AssignedTask::Refine(data) => {
+            AssignedTask::execute(ctx, data.clone(), commands, game_assets, time, world_map, breakdown_opt);
+        }
+        AssignedTask::HaulToMixer(data) => {
+            AssignedTask::execute(ctx, data.clone(), commands, game_assets, time, world_map, breakdown_opt);
+        }
+        AssignedTask::HaulWaterToMixer(data) => {
+            AssignedTask::execute(ctx, data.clone(), commands, game_assets, time, world_map, breakdown_opt);
+        }
+        AssignedTask::HaulWithWheelbarrow(data) => {
+            execute_haul_with_wheelbarrow(ctx, data.clone(), commands, world_map, q_wheelbarrows);
+        }
+        AssignedTask::None => {}
+    }
+}
+
+/// HaulWithWheelbarrow 専用: q_wheelbarrows を追加で受け取る（API 境界で明示）
 pub fn execute_haul_with_wheelbarrow(
     ctx: &mut TaskExecutionContext,
     data: HaulWithWheelbarrowData,

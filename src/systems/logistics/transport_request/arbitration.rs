@@ -13,13 +13,13 @@ use crate::constants::*;
 use crate::relationships::{ParkedAt, PushedBy, StoredIn, StoredItems};
 use crate::systems::jobs::Blueprint;
 use crate::systems::logistics::transport_request::{
+    can_complete_pick_drop_to_blueprint, can_complete_pick_drop_to_point,
     TransportDemand, TransportRequest, TransportRequestKind, TransportRequestState,
     WheelbarrowDestination, WheelbarrowLease, WheelbarrowPendingSince,
 };
 use crate::systems::logistics::{
     BelongsTo, ReservedForTask, ResourceItem, ResourceType, Stockpile, Wheelbarrow,
 };
-use crate::world::map::WorldMap;
 
 use super::metrics::TransportRequestMetrics;
 
@@ -607,38 +607,3 @@ fn score_candidate(batch_size: f32, priority: f32, wb_distance: f32, is_small_ba
     score
 }
 
-fn can_complete_pick_drop_to_point(source_pos: Vec2, destination_pos: Vec2) -> bool {
-    let source_grid = WorldMap::world_to_grid(source_pos);
-    // 実タスク条件に合わせる:
-    // 1) source に隣接して拾える立ち位置が存在し
-    // 2) その立ち位置が destination へのドロップ判定を満たす
-    for dx in -1..=1 {
-        for dy in -1..=1 {
-            let stand_pos = WorldMap::grid_to_world(source_grid.0 + dx, source_grid.1 + dy);
-            if stand_pos.distance(destination_pos) < TILE_SIZE * 1.8 {
-                return true;
-            }
-        }
-    }
-    false
-}
-
-fn can_complete_pick_drop_to_blueprint(source_pos: Vec2, occupied_grids: &[(i32, i32)]) -> bool {
-    let source_grid = WorldMap::world_to_grid(source_pos);
-    for dx in -1..=1 {
-        for dy in -1..=1 {
-            let stand_grid = (source_grid.0 + dx, source_grid.1 + dy);
-            if occupied_grids.contains(&stand_grid) {
-                continue;
-            }
-            let stand_pos = WorldMap::grid_to_world(stand_grid.0, stand_grid.1);
-            if occupied_grids.iter().any(|&(gx, gy)| {
-                let bp_pos = WorldMap::grid_to_world(gx, gy);
-                stand_pos.distance(bp_pos) < TILE_SIZE * 1.5
-            }) {
-                return true;
-            }
-        }
-    }
-    false
-}

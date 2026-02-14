@@ -64,7 +64,7 @@ pub fn tank_water_request_system(
     }
 
     // -----------------------------------------------------------------
-    // request エンティティを upsert / cleanup
+    // request エンティティを upsert / cleanup（共通ヘルパー使用）
     // -----------------------------------------------------------------
     let mut seen_existing = std::collections::HashSet::<Entity>::new();
 
@@ -75,10 +75,13 @@ pub fn tank_water_request_system(
         let tank_entity = request.anchor;
         let workers = workers_opt.map(|w| w.len()).unwrap_or(0);
 
-        if !seen_existing.insert(tank_entity) {
-            if workers == 0 {
-                commands.entity(request_entity).despawn();
-            }
+        if !super::upsert::process_duplicate_key(
+            &mut commands,
+            request_entity,
+            workers,
+            &mut seen_existing,
+            tank_entity,
+        ) {
             continue;
         }
 
@@ -111,11 +114,7 @@ pub fn tank_water_request_system(
         }
 
         if workers == 0 {
-            commands
-                .entity(request_entity)
-                .remove::<Designation>()
-                .remove::<TaskSlots>()
-                .remove::<Priority>();
+            super::upsert::disable_request(&mut commands, request_entity);
         }
     }
 
