@@ -242,7 +242,7 @@ WheelbarrowLease {
 - `source_reservations`（アイテムやタンク）
 
 ### 6.1 再構築
-- `sync_reservations_system` が `AssignedTask` と未割り当て `Designation` から予約を再構築。
+- `sync_reservations_system` が `AssignedTask` と未割り当て request（`Designation` + `TransportRequest`）から予約を再構築。
 - 同期間隔は `RESERVATION_SYNC_INTERVAL`（初回は即時）。
 - `ReturnBucket` request は `anchor = tank` のため、pending request 段階では destination 予約を直接積まず、
   実際の返却先 `BucketStorage` が割り当て時に確定した時点で予約する。
@@ -275,7 +275,7 @@ WheelbarrowLease {
   - `task_management/policy/haul/`（blueprint, stockpile, source_selector, lease_validation, wheelbarrow）: 運搬割り当ての責務分割
 - 実行ロジック:
   - `src/systems/soul_ai/execute/task_execution/`（haul, haul_to_mixer, haul_to_blueprint, haul_with_wheelbarrow, haul_water_to_mixer 等）
-  - `task_execution/transport_common/`（reservation, cancel, wheelbarrow）: 予約解放・中断・手押し車駐車の共通API
+  - `task_execution/transport_common/`（reservation, cancel, lifecycle, wheelbarrow）: 予約解放・中断・予約寿命定義・手押し車駐車の共通API
 
 ## 9. システム追加時の実装ルール
 

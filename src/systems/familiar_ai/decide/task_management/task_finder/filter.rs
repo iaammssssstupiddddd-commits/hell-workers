@@ -98,7 +98,11 @@ pub(super) fn candidate_snapshot(
     let is_transport_request = queries.transport_requests.get(entity).is_ok();
     let requires_transport_request = matches!(
         designation.work_type,
-        WorkType::Haul | WorkType::HaulToMixer | WorkType::WheelbarrowHaul
+        WorkType::Haul
+            | WorkType::HaulToMixer
+            | WorkType::GatherWater
+            | WorkType::HaulWaterToMixer
+            | WorkType::WheelbarrowHaul
     );
     if requires_transport_request && !is_transport_request {
         return None;
