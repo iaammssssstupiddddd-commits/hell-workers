@@ -2,6 +2,7 @@ use super::common::*;
 use super::context::TaskExecutionContext;
 use super::types::{AssignedTask, RefinePhase};
 use crate::constants::*;
+use crate::systems::jobs::StoredByMixer;
 use crate::systems::logistics::{ResourceItem, ResourceType};
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
@@ -91,9 +92,11 @@ pub fn handle_refine_task(
                 };
 
                 // 原料がまだあるか確認
-                if !storage.has_materials_for_refining(water_count) {
+                if !storage.has_materials_for_refining(water_count)
+                    || !storage.has_output_capacity_for_refining()
+                {
                     info!(
-                        "TASK_EXEC: Soul {:?} canceled refining due to lack of materials",
+                        "TASK_EXEC: Soul {:?} canceled refining due to lack of materials or mud storage",
                         ctx.soul_entity
                     );
                     commands
@@ -142,6 +145,7 @@ pub fn handle_refine_task(
                             Vec3::new(((i % 3) as f32 - 1.0) * 8.0, ((i / 3) as f32) * 8.0, 0.0);
                         commands.spawn((
                             ResourceItem(ResourceType::StasisMud),
+                            StoredByMixer(mixer_entity),
                             Sprite {
                                 image: game_assets.icon_stasis_mud_small.clone(),
                                 custom_size: Some(Vec2::splat(TILE_SIZE * 0.5)),
@@ -153,6 +157,7 @@ pub fn handle_refine_task(
                             Name::new("Item (StasisMud)"),
                         ));
                     }
+                    storage.mud += STASIS_MUD_OUTPUT;
 
                     info!("TASK_EXEC: Soul {:?} refined 5 StasisMud", ctx.soul_entity);
 

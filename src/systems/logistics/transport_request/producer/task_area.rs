@@ -37,7 +37,8 @@ struct GroupEvalContext {
 
 impl GroupEvalContext {
     fn can_accept(&self, resource_type: ResourceType) -> bool {
-        self.has_untyped_capacity || self.typed_accept.contains(&resource_type)
+        resource_type.can_store_in_stockpile()
+            && (self.has_untyped_capacity || self.typed_accept.contains(&resource_type))
     }
 }
 

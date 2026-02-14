@@ -220,6 +220,7 @@ fn handle_loading(
 
     // 収集した情報を使ってアイテムを積み込む
     for (item_entity, stored_in_stockpile) in &items_to_load {
+        release_mixer_mud_storage_for_item(ctx, *item_entity, commands);
         commands
             .entity(*item_entity)
             .insert((Visibility::Hidden, LoadedIn(data.wheelbarrow)));
@@ -416,6 +417,9 @@ fn handle_unloading(
                     if stockpile_comp.resource_type.is_none() {
                         stockpile_comp.resource_type = Some(*res_type);
                     } else if stockpile_comp.resource_type != Some(*res_type) {
+                        continue;
+                    }
+                    if !res_type.can_store_in_stockpile() {
                         continue;
                     }
 

@@ -266,6 +266,25 @@ pub fn update_stockpile_on_item_removal(
     }
 }
 
+/// MudMixer 在庫として保持していた mud アイテムが持ち出された際の在庫解放
+pub fn release_mixer_mud_storage_for_item(
+    ctx: &mut crate::systems::soul_ai::execute::task_execution::context::TaskExecutionContext,
+    item_entity: Entity,
+    commands: &mut Commands,
+) {
+    let Ok(stored_by_mixer) = ctx.queries.mixer_stored_mud.get(item_entity) else {
+        return;
+    };
+
+    if let Ok((_, mut mixer_storage, _)) = ctx.queries.storage.mixers.get_mut(stored_by_mixer.0) {
+        mixer_storage.mud = mixer_storage.mud.saturating_sub(1);
+    }
+
+    commands
+        .entity(item_entity)
+        .remove::<crate::systems::jobs::StoredByMixer>();
+}
+
 /// 距離チェック: 魂がターゲットに近づいたかどうか
 ///
 /// 隣接マス（中心間距離32px）からでも確実に「近い」と判定されるように、

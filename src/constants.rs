@@ -217,6 +217,8 @@ pub const SAND_DROP_AMOUNT: u32 = 1;
 pub const STASIS_MUD_OUTPUT: u32 = 5;
 /// MudMixer の原料最大保存数
 pub const MUD_MIXER_CAPACITY: u32 = 5;
+/// MudMixer の mud 最大保存数
+pub const MUD_MIXER_MUD_CAPACITY: u32 = 10;
 /// Wall の本設化に必要な StasisMud 数
 pub const _STASIS_MUD_REQUIREMENT: u32 = 1;
 

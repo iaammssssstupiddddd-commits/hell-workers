@@ -13,7 +13,7 @@ pub fn handle_collect_sand_task(
     phase: CollectSandPhase,
     commands: &mut Commands,
     game_assets: &Res<GameAssets>,
-    time: &Res<Time>,
+    _time: &Res<Time>,
     world_map: &Res<WorldMap>,
 ) {
     let soul_pos = ctx.soul_pos();
@@ -57,12 +57,7 @@ pub fn handle_collect_sand_task(
                 }
 
                 if is_near_target(soul_pos, res_pos) {
-                    *ctx.task = AssignedTask::CollectSand(
-                        crate::systems::soul_ai::execute::task_execution::types::CollectSandData {
-                            target,
-                            phase: CollectSandPhase::Collecting { progress: 0.0 },
-                        },
-                    );
+                    complete_collect_sand_now(ctx, target, res_transform.translation, commands, game_assets);
                     ctx.path.waypoints.clear();
                 }
             } else {
@@ -80,7 +75,7 @@ pub fn handle_collect_sand_task(
                 clear_task_and_path(ctx.task, ctx.path);
             }
         }
-        CollectSandPhase::Collecting { mut progress } => {
+        CollectSandPhase::Collecting { .. } => {
             if let Ok(target_data) = q_targets.get(target) {
                 let (res_transform, _, _, _, _, des_opt, _) = target_data;
                 // 指定が解除されていたら中止
@@ -88,47 +83,7 @@ pub fn handle_collect_sand_task(
                     return;
                 }
 
-                // 進行度を更新
-                progress += time.delta_secs() * GATHER_SPEED_BASE;
-
-                if progress >= 1.0 {
-                    // Sand をドロップ（MudMixer オートホールで自動的に運搬される）
-                    let pos = res_transform.translation;
-                    for i in 0..SAND_DROP_AMOUNT {
-                        // 少しオフセットをつけて spawn
-                        let offset = Vec3::new((i as f32) * 4.0, 0.0, 0.0);
-                        commands.spawn((
-                            ResourceItem(ResourceType::Sand),
-                            Sprite {
-                                image: game_assets.icon_sand_small.clone(),
-                                custom_size: Some(Vec2::splat(TILE_SIZE * 0.5)),
-                                ..default()
-                            },
-                            Transform::from_translation(
-                                pos.truncate().extend(Z_ITEM_PICKUP) + offset,
-                            ),
-                            Name::new("Item (Sand)"),
-                        ));
-                    }
-
-                    info!("TASK_EXEC: Soul {:?} collected sand", ctx.soul_entity);
-
-                    *ctx.task = AssignedTask::CollectSand(
-                        crate::systems::soul_ai::execute::task_execution::types::CollectSandData {
-                            target,
-                            phase: CollectSandPhase::Done,
-                        },
-                    );
-                    ctx.soul.fatigue = (ctx.soul.fatigue + FATIGUE_GAIN_ON_COMPLETION).min(1.0);
-                } else {
-                    // 進捗を保存
-                    *ctx.task = AssignedTask::CollectSand(
-                        crate::systems::soul_ai::execute::task_execution::types::CollectSandData {
-                            target,
-                            phase: CollectSandPhase::Collecting { progress },
-                        },
-                    );
-                }
+                complete_collect_sand_now(ctx, target, res_transform.translation, commands, game_assets);
             } else {
                 // SandPile が存在しない場合も Designation を削除
                 commands
@@ -162,4 +117,37 @@ pub fn handle_collect_sand_task(
             clear_task_and_path(ctx.task, ctx.path);
         }
     }
+}
+
+fn complete_collect_sand_now(
+    ctx: &mut TaskExecutionContext,
+    target: Entity,
+    source_translation: Vec3,
+    commands: &mut Commands,
+    game_assets: &Res<GameAssets>,
+) {
+    // Sand をドロップ（砂タイル/砂置き場とも無限ソースとして扱う）
+    for i in 0..SAND_DROP_AMOUNT {
+        let offset = Vec3::new((i as f32) * 4.0, 0.0, 0.0);
+        commands.spawn((
+            ResourceItem(ResourceType::Sand),
+            Sprite {
+                image: game_assets.icon_sand_small.clone(),
+                custom_size: Some(Vec2::splat(TILE_SIZE * 0.5)),
+                ..default()
+            },
+            Transform::from_translation(source_translation.truncate().extend(Z_ITEM_PICKUP) + offset),
+            Name::new("Item (Sand)"),
+        ));
+    }
+
+    info!("TASK_EXEC: Soul {:?} collected sand instantly", ctx.soul_entity);
+
+    *ctx.task = AssignedTask::CollectSand(
+        crate::systems::soul_ai::execute::task_execution::types::CollectSandData {
+            target,
+            phase: CollectSandPhase::Done,
+        },
+    );
+    ctx.soul.fatigue = (ctx.soul.fatigue + FATIGUE_GAIN_ON_COMPLETION).min(1.0);
 }
