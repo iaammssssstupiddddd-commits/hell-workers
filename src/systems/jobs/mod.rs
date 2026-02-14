@@ -39,7 +39,7 @@ impl BuildingType {
                 materials.insert(ResourceType::Wood, 4);
             }
             BuildingType::SandPile => {
-                materials.insert(ResourceType::Wood, 1);
+                materials.insert(ResourceType::Sand, 10);
             }
             BuildingType::WheelbarrowParking => {
                 materials.insert(ResourceType::Wood, 2);

@@ -20,6 +20,7 @@ pub struct DelegationCandidate {
     pub entity: Entity,
     pub target_grid: (i32, i32),
     pub target_walkable: bool,
+    pub skip_reachability_check: bool,
 }
 
 /// Familiar単位で委譲候補を収集し、優先度順に返す
@@ -82,6 +83,7 @@ pub fn collect_scored_candidates(
                     entity,
                     target_grid: snapshot.target_grid,
                     target_walkable: snapshot.target_walkable,
+                    skip_reachability_check: snapshot.skip_reachability_check,
                 },
                 priority,
                 dist_sq,
