@@ -2,6 +2,7 @@
 
 mod layout;
 mod spawn;
+pub mod terrain_border;
 
 pub use layout::{
     INITIAL_WOOD_POSITIONS, RIVER_X_MAX, RIVER_X_MIN, RIVER_Y_MAX, RIVER_Y_MIN, ROCK_POSITIONS,
@@ -29,6 +30,24 @@ impl TerrainType {
         match self {
             TerrainType::Grass | TerrainType::Dirt | TerrainType::Sand => true,
             TerrainType::River => false,
+        }
+    }
+
+    pub fn z_layer(&self) -> f32 {
+        match self {
+            TerrainType::River => Z_MAP,
+            TerrainType::Sand => Z_MAP_SAND,
+            TerrainType::Dirt => Z_MAP_DIRT,
+            TerrainType::Grass => Z_MAP_GRASS,
+        }
+    }
+
+    pub fn priority(&self) -> u8 {
+        match self {
+            TerrainType::River => 0,
+            TerrainType::Sand => 1,
+            TerrainType::Dirt => 2,
+            TerrainType::Grass => 3,
         }
     }
 }
@@ -149,9 +168,25 @@ impl WorldMap {
     }
 
     pub fn get_nearest_river_grid(&self, pos: Vec2) -> Option<(i32, i32)> {
-        let grid = Self::world_to_grid(pos);
-        let target_y = grid.1.clamp(layout::RIVER_Y_MIN, layout::RIVER_Y_MAX);
-        let target_x = grid.0.clamp(layout::RIVER_X_MIN, layout::RIVER_X_MAX);
-        Some((target_x, target_y))
+        let from = Self::world_to_grid(pos);
+        let mut nearest: Option<(i32, i32)> = None;
+        let mut nearest_dist_sq = i64::MAX;
+
+        for (idx, terrain) in self.tiles.iter().enumerate() {
+            if *terrain != TerrainType::River {
+                continue;
+            }
+
+            let (x, y) = Self::idx_to_pos(idx);
+            let dx = (x - from.0) as i64;
+            let dy = (y - from.1) as i64;
+            let dist_sq = dx * dx + dy * dy;
+            if dist_sq < nearest_dist_sq {
+                nearest_dist_sq = dist_sq;
+                nearest = Some((x, y));
+            }
+        }
+
+        nearest
     }
 }
