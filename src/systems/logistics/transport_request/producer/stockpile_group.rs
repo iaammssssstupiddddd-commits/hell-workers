@@ -1,7 +1,7 @@
 //! Stockpileグループ構築ユーティリティ
 //!
 //! ファミリア単位でStockpileセルをグループ化し、
-//! 外周セル（収集距離判定用）と代表セル（anchor用）を決定する。
+//! 代表セル（anchor用）を決定する。
 
 use bevy::prelude::*;
 use std::collections::{HashMap, HashSet};
@@ -16,8 +16,6 @@ use crate::systems::spatial::StockpileSpatialGrid;
 pub struct StockpileGroup {
     /// グループ内の全セルエンティティ
     pub cells: Vec<Entity>,
-    /// 外周セルの座標（収集距離判定用）
-    pub edge_positions: Vec<Vec2>,
     /// リクエスト発行者のファミリア
     pub owner_familiar: Entity,
     /// 代表セル（anchor用、重心に最も近いセル）
@@ -30,13 +28,12 @@ pub struct StockpileGroup {
 
 /// StockpileGroup の探索用空間インデックス
 pub struct StockpileGroupSpatialIndex {
-    edge_cells: HashMap<(i32, i32), Vec<usize>>,
     groups_by_owner: HashMap<Entity, Vec<usize>>,
     owner_task_areas: HashMap<Entity, TaskArea>,
 }
 
-/// 収集範囲: 外周セルからの距離（タイル単位）
-const EDGE_SEARCH_RADIUS_TILES: f32 = 10.0;
+/// 収集範囲: TaskArea外周からの距離（タイル単位）
+const TASK_AREA_PERIMETER_SEARCH_RADIUS_TILES: f32 = 10.0;
 
 /// ファミリアごとにTaskArea内のStockpileセルをグループ化する
 ///
@@ -87,25 +84,6 @@ pub fn build_stockpile_groups(
             continue;
         }
 
-        // 外周セル判定: グリッド上で4方向隣接にグループ外セルがあるセルを外周とする
-        let cell_positions: std::collections::HashSet<(i32, i32)> =
-            positions.iter().map(|pos| world_to_grid(*pos)).collect();
-
-        let edge_positions: Vec<Vec2> = positions
-            .iter()
-            .filter(|pos| {
-                let grid = world_to_grid(**pos);
-                let neighbors = [
-                    (grid.0 + 1, grid.1),
-                    (grid.0 - 1, grid.1),
-                    (grid.0, grid.1 + 1),
-                    (grid.0, grid.1 - 1),
-                ];
-                neighbors.iter().any(|n| !cell_positions.contains(n))
-            })
-            .copied()
-            .collect();
-
         // 代表セル = 重心に最も近いセル
         let centroid = if positions.is_empty() {
             Vec2::ZERO
@@ -128,7 +106,6 @@ pub fn build_stockpile_groups(
         groups.push(StockpileGroup {
             representative: cells[representative_idx],
             cells,
-            edge_positions,
             owner_familiar: *fam_entity,
             total_capacity,
             total_stored,
@@ -143,7 +120,6 @@ pub fn build_group_spatial_index(
     groups: &[StockpileGroup],
     familiars_with_areas: &[(Entity, TaskArea)],
 ) -> StockpileGroupSpatialIndex {
-    let mut edge_cells: HashMap<(i32, i32), Vec<usize>> = HashMap::new();
     let mut groups_by_owner: HashMap<Entity, Vec<usize>> = HashMap::new();
     let mut owner_task_areas: HashMap<Entity, TaskArea> = HashMap::new();
 
@@ -156,20 +132,9 @@ pub fn build_group_spatial_index(
             .entry(group.owner_familiar)
             .or_default()
             .push(group_idx);
-
-        // 同一グループ内で同じ edge cell が重複登録されるのを防ぐ
-        let mut unique_edge_cells = HashSet::new();
-        for edge_pos in &group.edge_positions {
-            let grid = world_to_grid(*edge_pos);
-            if !unique_edge_cells.insert(grid) {
-                continue;
-            }
-            edge_cells.entry(grid).or_default().push(group_idx);
-        }
     }
 
     StockpileGroupSpatialIndex {
-        edge_cells,
         groups_by_owner,
         owner_task_areas,
     }
@@ -177,8 +142,9 @@ pub fn build_group_spatial_index(
 
 /// アイテムが収集範囲内にあるかを判定し、最寄りグループを返す
 ///
-/// 収集範囲 = TaskArea内全域 ∪ 外周セルから10タイル以内
-/// 複数グループの範囲に入る場合は最寄り外周セル距離で排他決定
+/// 収集範囲 = TaskArea外周から10タイル以内
+/// ただし、TaskArea外側の「外周+10」領域では、他TaskArea内の位置を除外する。
+/// 複数グループの範囲に入る場合は最寄りTaskArea外周距離で排他決定する。
 pub fn find_nearest_group_for_item<'a>(
     item_pos: Vec2,
     groups: &'a [StockpileGroup],
@@ -194,28 +160,24 @@ pub fn find_nearest_group_for_item_indexed<'a>(
     groups: &'a [StockpileGroup],
     index: &StockpileGroupSpatialIndex,
 ) -> Option<&'a StockpileGroup> {
-    let search_radius = EDGE_SEARCH_RADIUS_TILES * TILE_SIZE;
+    let search_radius = TASK_AREA_PERIMETER_SEARCH_RADIUS_TILES * TILE_SIZE;
     let search_radius_sq = search_radius * search_radius;
 
     let mut candidate_group_indices = HashSet::new();
-    let item_grid = world_to_grid(item_pos);
-    let search_radius_tiles = EDGE_SEARCH_RADIUS_TILES.ceil() as i32;
+    let mut owners_containing_item = HashSet::new();
+    let mut owner_perimeter_dist_sq = HashMap::new();
 
-    // 1) TaskArea 内候補を owner ごとに追加
+    // 1) TaskArea 外周 + 10 タイル以内の owner 候補を収集
     for (owner, area) in &index.owner_task_areas {
         if area.contains(item_pos) {
+            owners_containing_item.insert(*owner);
+        }
+
+        let perimeter_dist_sq = distance_sq_to_task_area_perimeter(item_pos, area);
+        if perimeter_dist_sq <= search_radius_sq {
+            owner_perimeter_dist_sq.insert(*owner, perimeter_dist_sq);
             if let Some(owner_groups) = index.groups_by_owner.get(owner) {
                 candidate_group_indices.extend(owner_groups.iter().copied());
-            }
-        }
-    }
-
-    // 2) edge 近傍候補をセルバケットから追加
-    for dy in -search_radius_tiles..=search_radius_tiles {
-        for dx in -search_radius_tiles..=search_radius_tiles {
-            let cell = (item_grid.0 + dx, item_grid.1 + dy);
-            if let Some(cell_groups) = index.edge_cells.get(&cell) {
-                candidate_group_indices.extend(cell_groups.iter().copied());
             }
         }
     }
@@ -224,26 +186,17 @@ pub fn find_nearest_group_for_item_indexed<'a>(
 
     for group_idx in candidate_group_indices {
         let group = &groups[group_idx];
-        // 1. TaskArea内かチェック
-        let in_task_area = index
-            .owner_task_areas
-            .get(&group.owner_familiar)
-            .is_some_and(|area| area.contains(item_pos));
+        let Some(&perimeter_dist_sq) = owner_perimeter_dist_sq.get(&group.owner_familiar) else {
+            continue;
+        };
 
-        // 2. 外周セルからの距離チェック
-        let min_edge_dist_sq = group
-            .edge_positions
-            .iter()
-            .map(|edge| edge.distance_squared(item_pos))
-            .fold(f32::MAX, f32::min);
-
-        let in_range = in_task_area || min_edge_dist_sq <= search_radius_sq;
-        if !in_range {
+        // 外周+10領域（TaskArea外）では、他TaskAreaに含まれる位置を除外する
+        let in_owner_task_area = owners_containing_item.contains(&group.owner_familiar);
+        if !in_owner_task_area && !owners_containing_item.is_empty() {
             continue;
         }
 
-        // 距離スコア: TaskArea内は外周距離、TaskArea外は外周距離
-        let dist = min_edge_dist_sq;
+        let dist = perimeter_dist_sq;
 
         match &best {
             None => best = Some((group_idx, dist)),
@@ -261,9 +214,25 @@ pub fn find_nearest_group_for_item_indexed<'a>(
     best.map(|(idx, _)| &groups[idx])
 }
 
-fn world_to_grid(pos: Vec2) -> (i32, i32) {
-    (
-        (pos.x / TILE_SIZE).floor() as i32,
-        (pos.y / TILE_SIZE).floor() as i32,
-    )
+fn distance_sq_to_task_area_perimeter(pos: Vec2, area: &TaskArea) -> f32 {
+    let inside_x = pos.x >= area.min.x && pos.x <= area.max.x;
+    let inside_y = pos.y >= area.min.y && pos.y <= area.max.y;
+
+    if inside_x && inside_y {
+        let dist_to_left = pos.x - area.min.x;
+        let dist_to_right = area.max.x - pos.x;
+        let dist_to_bottom = pos.y - area.min.y;
+        let dist_to_top = area.max.y - pos.y;
+        let min_dist = dist_to_left
+            .min(dist_to_right)
+            .min(dist_to_bottom)
+            .min(dist_to_top);
+        min_dist * min_dist
+    } else {
+        let clamped_x = pos.x.clamp(area.min.x, area.max.x);
+        let clamped_y = pos.y.clamp(area.min.y, area.max.y);
+        let dx = pos.x - clamped_x;
+        let dy = pos.y - clamped_y;
+        dx * dx + dy * dy
+    }
 }
