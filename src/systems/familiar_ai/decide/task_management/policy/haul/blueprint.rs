@@ -2,15 +2,18 @@
 
 use crate::constants::WHEELBARROW_CAPACITY;
 use crate::systems::familiar_ai::decide::task_management::{AssignTaskContext, ReservationShadow};
+use crate::systems::jobs::WorkType;
+use crate::systems::logistics::ResourceType;
 use crate::systems::logistics::transport_request::{
     can_complete_pick_drop_to_blueprint, WheelbarrowDestination,
 };
 use bevy::prelude::*;
 
 use super::super::super::builders::{
-    issue_haul_to_blueprint_with_source, issue_haul_with_wheelbarrow,
+    issue_collect_sand_with_wheelbarrow_to_blueprint, issue_haul_to_blueprint_with_source,
+    issue_haul_with_wheelbarrow,
 };
-use super::super::super::validator::resolve_haul_to_blueprint_inputs;
+use super::super::super::validator::{resolve_haul_to_blueprint_inputs, source_not_reserved};
 use super::lease_validation;
 use super::source_selector;
 use super::wheelbarrow;
@@ -108,6 +111,20 @@ pub fn assign_haul_to_blueprint(
         }
     }
 
+    // 4. Sand 専用フォールバック: 砂ソースへ猫車で向かい、必要量を直接採取して搬入
+    if resource_type == ResourceType::Sand
+        && try_direct_sand_collect_with_wheelbarrow(
+            blueprint,
+            task_pos,
+            already_commanded,
+            ctx,
+            queries,
+            shadow,
+        )
+    {
+        return true;
+    }
+
     false
 }
 
@@ -177,4 +194,75 @@ fn assign_single_item_haul(
         shadow,
     );
     true
+}
+
+fn try_direct_sand_collect_with_wheelbarrow(
+    blueprint: Entity,
+    task_pos: Vec2,
+    already_commanded: bool,
+    ctx: &AssignTaskContext<'_>,
+    queries: &mut crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
+    shadow: &mut ReservationShadow,
+) -> bool {
+    let Some((source_entity, source_pos)) =
+        find_collect_sand_source(task_pos, ctx.fam_entity, queries, shadow)
+    else {
+        return false;
+    };
+
+    let Some(wb_entity) = wheelbarrow::find_nearest_wheelbarrow(source_pos, queries, shadow) else {
+        return false;
+    };
+
+    let remaining = queries
+        .transport_demands
+        .get(ctx.task_entity)
+        .ok()
+        .map(|d| d.remaining())
+        .unwrap_or(1);
+    let amount = remaining.max(1).min(WHEELBARROW_CAPACITY as u32);
+
+    issue_collect_sand_with_wheelbarrow_to_blueprint(
+        wb_entity,
+        source_entity,
+        source_pos,
+        blueprint,
+        amount,
+        task_pos,
+        already_commanded,
+        ctx,
+        queries,
+        shadow,
+    );
+    true
+}
+
+fn find_collect_sand_source(
+    target_pos: Vec2,
+    fam_entity: Entity,
+    queries: &crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
+    shadow: &ReservationShadow,
+) -> Option<(Entity, Vec2)> {
+    queries
+        .designation
+        .designations
+        .iter()
+        .filter(|(_, _, designation, managed_by_opt, slots_opt, workers_opt, _, _)| {
+            if designation.work_type != WorkType::CollectSand {
+                return false;
+            }
+            if managed_by_opt.is_some_and(|managed_by| managed_by.0 != fam_entity) {
+                return false;
+            }
+            let max_slots = slots_opt.map(|slots| slots.max as usize).unwrap_or(1);
+            let workers = workers_opt.map(|workers| workers.len()).unwrap_or(0);
+            workers < max_slots
+        })
+        .filter(|(entity, _, _, _, _, _, _, _)| source_not_reserved(*entity, queries, shadow))
+        .min_by(|(_, t1, _, _, _, _, _, _), (_, t2, _, _, _, _, _, _)| {
+            let d1 = t1.translation.truncate().distance_squared(target_pos);
+            let d2 = t2.translation.truncate().distance_squared(target_pos);
+            d1.partial_cmp(&d2).unwrap_or(std::cmp::Ordering::Equal)
+        })
+        .map(|(entity, transform, _, _, _, _, _, _)| (entity, transform.translation.truncate()))
 }
