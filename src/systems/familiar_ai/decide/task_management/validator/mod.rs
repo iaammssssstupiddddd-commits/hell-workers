@@ -3,7 +3,7 @@ mod reservation;
 mod resolver;
 mod wheelbarrow;
 
-pub use finder::{find_best_stockpile_for_item, find_bucket_return_assignment};
+pub use finder::find_bucket_return_assignment;
 pub use reservation::{can_reserve_source, source_not_reserved};
 pub use resolver::{
     resolve_gather_water_inputs, resolve_haul_to_blueprint_inputs, resolve_haul_to_mixer_inputs,
@@ -11,6 +11,5 @@ pub use resolver::{
     resolve_return_bucket_tank,
 };
 pub use wheelbarrow::{
-    compute_centroid, find_nearest_wheelbarrow, remaining_stockpile_capacity,
-    resolve_wheelbarrow_batch_for_stockpile,
+    compute_centroid, find_nearest_wheelbarrow, resolve_wheelbarrow_batch_for_stockpile,
 };
