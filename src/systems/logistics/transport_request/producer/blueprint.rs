@@ -102,7 +102,7 @@ pub fn blueprint_auto_haul_system(
         }
     }
 
-    // 3. request エンティティの upsert / cleanup
+    // 3. request エンティティの upsert / cleanup（共通ヘルパー使用）
     let mut seen_existing_keys = std::collections::HashSet::<(Entity, ResourceType)>::new();
 
     for (request_entity, target_bp, request, workers_opt) in q_bp_requests.iter() {
@@ -112,10 +112,13 @@ pub fn blueprint_auto_haul_system(
         let key = (target_bp.0, request.resource_type);
         let workers = workers_opt.map(|w| w.len()).unwrap_or(0);
 
-        if !seen_existing_keys.insert(key) {
-            if workers == 0 {
-                commands.entity(request_entity).despawn();
-            }
+        if !super::upsert::process_duplicate_key(
+            &mut commands,
+            request_entity,
+            workers,
+            &mut seen_existing_keys,
+            key,
+        ) {
             continue;
         }
 
@@ -149,11 +152,7 @@ pub fn blueprint_auto_haul_system(
         }
 
         if workers == 0 {
-            commands
-                .entity(request_entity)
-                .remove::<Designation>()
-                .remove::<TaskSlots>()
-                .remove::<Priority>();
+            super::upsert::disable_request(&mut commands, request_entity);
         }
     }
 

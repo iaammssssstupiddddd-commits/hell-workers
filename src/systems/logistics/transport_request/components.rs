@@ -52,16 +52,6 @@ impl TransportDemand {
     }
 }
 
-/// リース（ワーカーによるクレーム）
-#[derive(Component, Debug, Clone, Reflect)]
-#[reflect(Component)]
-pub struct TransportLease {
-    pub claimed_by_worker: Entity,
-    pub lease_until: f64,
-    pub attempts: u32,
-    pub retry_at: Option<f64>,
-}
-
 /// 運搬ポリシー
 #[derive(Component, Debug, Clone, Reflect)]
 #[reflect(Component)]
@@ -121,14 +111,14 @@ pub struct WheelbarrowLease {
 }
 
 /// 運搬リクエストの状態
+///
+/// Phase 3: 実運用は Pending/Claimed のみ。TaskWorkers の有無に応じて state_machine が同期。
+/// InFlight/CoolingDown/Completed は未使用のため削除し、方針A（2状態に縮退）を採用。
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Hash, Reflect)]
 #[reflect(Component)]
 pub enum TransportRequestState {
     Pending,
     Claimed,
-    InFlight,
-    CoolingDown,
-    Completed,
 }
 
 impl Default for TransportRequestState {
