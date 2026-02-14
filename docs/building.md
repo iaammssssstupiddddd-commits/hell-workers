@@ -32,7 +32,7 @@ Hell-Workers における建築システムの基礎実装について説明し�
 | Floor | 石材 × 1 |
 | Tank | 木材 × 2 |
 | MudMixer | 木材 × 4 |
-| SandPile | 木材 × 1 |
+| SandPile | 砂 × 10 |
 
 ## 3. ワークフロー
 

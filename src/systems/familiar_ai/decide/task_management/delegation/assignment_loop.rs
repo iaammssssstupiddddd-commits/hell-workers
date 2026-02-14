@@ -93,14 +93,16 @@ fn try_assign_from_candidates(
             continue;
         }
 
-        if !reachable_with_cache(
-            worker_grid,
-            candidate,
-            world_map,
-            pf_context,
-            reachability_cache,
-        ) {
-            continue;
+        if !candidate.skip_reachability_check {
+            if !reachable_with_cache(
+                worker_grid,
+                candidate,
+                world_map,
+                pf_context,
+                reachability_cache,
+            ) {
+                continue;
+            }
         }
 
         if assign_task_to_worker(

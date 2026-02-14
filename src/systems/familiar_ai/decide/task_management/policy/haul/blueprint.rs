@@ -97,22 +97,36 @@ pub fn assign_haul_to_blueprint(
             }
         }
 
-        if !is_request_task
-            && source_not_reserved(ctx.task_entity, queries, shadow)
-            && let Some(wb_entity) = wheelbarrow::find_nearest_wheelbarrow(task_pos, queries, shadow)
-        {
-            issue_haul_with_wheelbarrow(
-                wb_entity,
-                task_pos,
-                WheelbarrowDestination::Blueprint(blueprint),
-                vec![ctx.task_entity],
-                task_pos,
-                already_commanded,
-                ctx,
-                queries,
-                shadow,
-            );
-            return true;
+        // lease が無い場合のフォールバック:
+        // request タスクでも、最寄りの猫車 + 最寄りのソース1件で直接割り当てる。
+        if let Some(wb_entity) = wheelbarrow::find_nearest_wheelbarrow(task_pos, queries, shadow) {
+            let source = if is_request_task {
+                source_selector::find_nearest_blueprint_source_item(
+                    resource_type,
+                    task_pos,
+                    queries,
+                    shadow,
+                )
+            } else if source_not_reserved(ctx.task_entity, queries, shadow) {
+                Some((ctx.task_entity, task_pos))
+            } else {
+                None
+            };
+
+            if let Some((source_item, source_pos)) = source {
+                issue_haul_with_wheelbarrow(
+                    wb_entity,
+                    source_pos,
+                    WheelbarrowDestination::Blueprint(blueprint),
+                    vec![source_item],
+                    task_pos,
+                    already_commanded,
+                    ctx,
+                    queries,
+                    shadow,
+                );
+                return true;
+            }
         }
 
         return false;
