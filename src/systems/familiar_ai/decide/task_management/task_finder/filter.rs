@@ -96,6 +96,13 @@ pub(super) fn candidate_snapshot(
     let target_grid = WorldMap::world_to_grid(pos);
     let target_walkable = world_map.is_walkable(target_grid.0, target_grid.1);
     let is_transport_request = queries.transport_requests.get(entity).is_ok();
+    let requires_transport_request = matches!(
+        designation.work_type,
+        WorkType::Haul | WorkType::HaulToMixer | WorkType::WheelbarrowHaul
+    );
+    if requires_transport_request && !is_transport_request {
+        return None;
+    }
 
     let is_valid = match designation.work_type {
         WorkType::Chop

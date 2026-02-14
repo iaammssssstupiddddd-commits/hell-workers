@@ -119,6 +119,10 @@ pub fn resolve_haul_to_blueprint_inputs(
     task_entity: Entity,
     queries: &crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
 ) -> Option<(Entity, ResourceType)> {
+    let req = queries.transport_requests.get(task_entity).ok()?;
+    if !matches!(req.kind, TransportRequestKind::DeliverToBlueprint) {
+        return None;
+    }
     let blueprint = queries
         .storage
         .target_blueprints
@@ -126,22 +130,17 @@ pub fn resolve_haul_to_blueprint_inputs(
         .ok()
         .map(|tb| tb.0)?;
 
-    // request タスクは resource_type を TransportRequest から取得
-    if let Ok(req) = queries.transport_requests.get(task_entity) {
-        if matches!(req.kind, TransportRequestKind::DeliverToBlueprint) {
-            return Some((blueprint, req.resource_type));
-        }
-    }
-
-    // 従来タスクはアイテム実体から取得
-    let item_type = queries.items.get(task_entity).ok().map(|(it, _)| it.0)?;
-    Some((blueprint, item_type))
+    Some((blueprint, req.resource_type))
 }
 
 pub fn resolve_haul_to_mixer_inputs(
     task_entity: Entity,
     queries: &crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
 ) -> Option<(Entity, ResourceType)> {
+    let req = queries.transport_requests.get(task_entity).ok()?;
+    if !matches!(req.kind, TransportRequestKind::DeliverToMixerSolid) {
+        return None;
+    }
     let mixer_entity = queries
         .storage
         .target_mixers
@@ -149,16 +148,7 @@ pub fn resolve_haul_to_mixer_inputs(
         .ok()
         .map(|tm| tm.0)?;
 
-    // requestタスクは resource_type を専用コンポーネントから取得する
-    if let Ok(req) = queries.transport_requests.get(task_entity) {
-        if matches!(req.kind, TransportRequestKind::DeliverToMixerSolid) {
-            return Some((mixer_entity, req.resource_type));
-        }
-    }
-
-    // 従来タスクはアイテム実体から取得する
-    let item_type = queries.items.get(task_entity).ok().map(|(it, _)| it.0)?;
-    Some((mixer_entity, item_type))
+    Some((mixer_entity, req.resource_type))
 }
 
 /// Resolves (mixer, tank, bucket) for HaulWaterToMixer.
