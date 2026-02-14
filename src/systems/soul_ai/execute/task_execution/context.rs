@@ -138,6 +138,8 @@ pub struct TaskAssignmentQueries<'w, 's> {
     // 固有フィールド
     pub items: Query<'w, 's, (&'static ResourceItem, Option<&'static Designation>)>,
     pub transport_requests: Query<'w, 's, &'static crate::systems::logistics::transport_request::TransportRequest>,
+    pub transport_request_fixed_sources:
+        Query<'w, 's, &'static crate::systems::logistics::transport_request::TransportRequestFixedSource>,
     pub free_resource_items: Query<
         'w,
         's,
@@ -151,6 +153,7 @@ pub struct TaskAssignmentQueries<'w, 's> {
             Without<Designation>,
             Without<crate::relationships::TaskWorkers>,
             Without<crate::systems::logistics::ReservedForTask>,
+            Without<crate::systems::logistics::transport_request::ManualHaulPinnedSource>,
         ),
     >,
     pub reserved_for_task:
