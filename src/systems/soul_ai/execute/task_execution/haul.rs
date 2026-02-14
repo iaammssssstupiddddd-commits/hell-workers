@@ -28,18 +28,9 @@ pub fn handle_haul_task(
     let q_belongs = &ctx.queries.designation.belongs;
     match phase {
         HaulPhase::GoingToItem => {
-            if let Ok((res_transform, _, _, _, _res_item_opt, des_opt, stored_in_opt)) =
+            if let Ok((res_transform, _, _, _, _res_item_opt, _, stored_in_opt)) =
                 q_targets.get(item)
             {
-                // M4: request 方式ではアイテムに Designation を付けないため、
-                // des_opt が None でもキャンセルしない。
-                if des_opt.is_some()
-                    && cancel_task_if_designation_missing(des_opt, ctx.task, ctx.path)
-                {
-                    cancel::cancel_haul_to_stockpile(ctx, item, stockpile);
-                    return;
-                }
-
                 let res_pos = res_transform.translation.truncate();
                 // アイテムが障害物の上にある可能性があるため、隣接マスを目的地として設定
                 let reachable = update_destination_to_adjacent(
@@ -130,7 +121,6 @@ pub fn handle_haul_task(
                         .insert(Visibility::Visible);
                 }
                 ctx.inventory.0 = None;
-                commands.entity(ctx.soul_entity).remove::<WorkingOn>();
                 commands.entity(ctx.soul_entity).remove::<WorkingOn>();
                 clear_task_and_path(ctx.task, ctx.path);
                 reservation::release_destination(ctx, stockpile);

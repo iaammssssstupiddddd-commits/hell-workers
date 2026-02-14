@@ -1,6 +1,7 @@
 //! Helper functions for water gathering task
 
 use crate::systems::soul_ai::execute::task_execution::context::TaskExecutionContext;
+use crate::systems::soul_ai::execute::task_execution::transport_common::cancel;
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
 
@@ -15,34 +16,7 @@ pub fn drop_bucket_for_auto_haul(
     world_map: &WorldMap,
 ) {
     let soul_pos = ctx.soul_pos();
-    let drop_grid = WorldMap::world_to_grid(soul_pos);
-    let drop_pos = WorldMap::grid_to_world(drop_grid.0, drop_grid.1);
-
-    commands.entity(bucket_entity).insert((
-        Visibility::Visible,
-        Transform::from_xyz(drop_pos.x, drop_pos.y, crate::constants::Z_ITEM_PICKUP),
-    ));
-    commands
-        .entity(bucket_entity)
-        .remove::<crate::relationships::StoredIn>();
-    commands
-        .entity(bucket_entity)
-        .remove::<crate::systems::logistics::InStockpile>();
-    commands
-        .entity(bucket_entity)
-        .remove::<crate::systems::jobs::IssuedBy>();
-    commands
-        .entity(bucket_entity)
-        .remove::<crate::relationships::TaskWorkers>();
-    commands
-        .entity(bucket_entity)
-        .remove::<crate::systems::jobs::Designation>();
-    commands
-        .entity(bucket_entity)
-        .remove::<crate::systems::jobs::TaskSlots>();
-    commands
-        .entity(bucket_entity)
-        .remove::<crate::systems::jobs::TargetMixer>();
+    cancel::drop_bucket_with_cleanup(commands, bucket_entity, soul_pos);
 
     ctx.inventory.0 = None;
     crate::systems::soul_ai::helpers::work::unassign_task(

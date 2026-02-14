@@ -28,13 +28,12 @@ pub fn handle_haul_to_mixer_task(
                         "HAUL_TO_MIXER: Soul {:?} - mixer {:?} storage full for {:?}, canceling",
                         ctx.soul_entity, mixer_entity, resource_type
                     );
-                    commands
-                        .entity(item_entity)
-                        .remove::<crate::systems::jobs::Designation>();
-                    commands
-                        .entity(item_entity)
-                        .remove::<crate::systems::jobs::TargetMixer>();
-                    cancel::cancel_haul_to_mixer(ctx, mixer_entity, resource_type);
+                    cancel::cancel_haul_to_mixer_before_pickup(
+                        ctx,
+                        item_entity,
+                        mixer_entity,
+                        resource_type,
+                    );
                     return;
                 }
             } else {
@@ -42,36 +41,18 @@ pub fn handle_haul_to_mixer_task(
                     "HAUL_TO_MIXER: Soul {:?} - mixer {:?} not found, canceling",
                     ctx.soul_entity, mixer_entity
                 );
-                cancel::cancel_haul_to_mixer(ctx, mixer_entity, resource_type);
+                cancel::cancel_haul_to_mixer_before_pickup(
+                    ctx,
+                    item_entity,
+                    mixer_entity,
+                    resource_type,
+                );
                 return;
             }
 
-            if let Ok((res_transform, _, _, _, _, des_opt, _)) =
+            if let Ok((res_transform, _, _, _, _, _, _)) =
                 ctx.queries.designation.targets.get(item_entity)
             {
-                let has_item_target_mixer = ctx
-                    .queries
-                    .storage
-                    .target_mixers
-                    .get(item_entity)
-                    .ok()
-                    .map(|tm| tm.0 == mixer_entity)
-                    .unwrap_or(false);
-
-                // 既存の「アイテム直接Designation」方式では、Designation解除をキャンセル条件とする。
-                // request方式（ソース遅延解決）では item にDesignationが無いので継続する。
-                if des_opt.is_none() && has_item_target_mixer {
-                    info!(
-                        "HAUL_TO_MIXER: Soul {:?} - item {:?} designation removed, canceling",
-                        ctx.soul_entity, item_entity
-                    );
-                    commands
-                        .entity(item_entity)
-                        .remove::<crate::systems::jobs::TargetMixer>();
-                    cancel::cancel_haul_to_mixer(ctx, mixer_entity, resource_type);
-                    return;
-                }
-
                 let item_pos = res_transform.translation.truncate();
                 // アイテムが障害物の上にある可能性があるため、隣接マスを目的地として設定
                 let reachable = update_destination_to_adjacent(
@@ -89,13 +70,12 @@ pub fn handle_haul_to_mixer_task(
                         "HAUL_TO_MIXER: Soul {:?} cannot reach item {:?}, canceling",
                         ctx.soul_entity, item_entity
                     );
-                    commands
-                        .entity(item_entity)
-                        .remove::<crate::systems::jobs::Designation>();
-                    commands
-                        .entity(item_entity)
-                        .remove::<crate::systems::jobs::TargetMixer>();
-                    cancel::cancel_haul_to_mixer(ctx, mixer_entity, resource_type);
+                    cancel::cancel_haul_to_mixer_before_pickup(
+                        ctx,
+                        item_entity,
+                        mixer_entity,
+                        resource_type,
+                    );
                     return;
                 }
 
@@ -131,7 +111,12 @@ pub fn handle_haul_to_mixer_task(
                     "HAUL_TO_MIXER: Soul {:?} - item {:?} not found, canceling",
                     ctx.soul_entity, item_entity
                 );
-                cancel::cancel_haul_to_mixer(ctx, mixer_entity, resource_type);
+                cancel::cancel_haul_to_mixer_before_pickup(
+                    ctx,
+                    item_entity,
+                    mixer_entity,
+                    resource_type,
+                );
             }
         }
 
@@ -161,9 +146,6 @@ pub fn handle_haul_to_mixer_task(
                     if resource_type == ResourceType::Sand {
                         commands.entity(item_entity).despawn();
                     } else {
-                        commands
-                            .entity(item_entity)
-                            .remove::<crate::systems::jobs::TargetMixer>();
                         drop_item(commands, ctx.soul_entity, item_entity, soul_pos);
                     }
                     ctx.inventory.0 = None;
@@ -188,9 +170,6 @@ pub fn handle_haul_to_mixer_task(
                         ctx.soul_entity, mixer_entity
                     );
                     reservation::release_mixer_destination(ctx, mixer_entity, resource_type);
-                    commands
-                        .entity(item_entity)
-                        .remove::<crate::systems::jobs::TargetMixer>();
                     drop_item(commands, ctx.soul_entity, item_entity, soul_pos);
                     ctx.inventory.0 = None;
                     clear_task_and_path(ctx.task, ctx.path);
@@ -212,9 +191,6 @@ pub fn handle_haul_to_mixer_task(
                 // ミキサーが消失した場合はアイテムをドロップして終了
                 reservation::release_mixer_destination(ctx, mixer_entity, resource_type);
                 if let Some(item) = ctx.inventory.0 {
-                    commands
-                        .entity(item)
-                        .remove::<crate::systems::jobs::TargetMixer>();
                     drop_item(commands, ctx.soul_entity, item, soul_pos);
                     ctx.inventory.0 = None;
                 }

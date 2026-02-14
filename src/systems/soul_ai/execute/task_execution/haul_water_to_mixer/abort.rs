@@ -1,9 +1,8 @@
 use crate::systems::logistics::ResourceType;
 use crate::systems::soul_ai::execute::task_execution::common::clear_task_and_path;
 use crate::systems::soul_ai::execute::task_execution::context::TaskExecutionContext;
-use crate::systems::soul_ai::execute::task_execution::transport_common::reservation;
+use crate::systems::soul_ai::execute::task_execution::transport_common::{cancel, reservation};
 use crate::systems::soul_ai::execute::task_execution::types::{AssignedTask, HaulWaterToMixerPhase};
-use crate::world::map::WorldMap;
 use bevy::prelude::*;
 
 pub(super) fn abort_and_drop_bucket(
@@ -30,33 +29,7 @@ pub(super) fn abort_and_drop_bucket(
     }
 
     // バケツを地面にドロップして、関連コンポーネントをクリーンアップ
-    let drop_grid = WorldMap::world_to_grid(pos);
-    let drop_pos = WorldMap::grid_to_world(drop_grid.0, drop_grid.1);
-    commands.entity(bucket_entity).insert((
-        Visibility::Visible,
-        Transform::from_xyz(drop_pos.x, drop_pos.y, crate::constants::Z_ITEM_PICKUP),
-    ));
-    commands
-        .entity(bucket_entity)
-        .remove::<crate::relationships::StoredIn>();
-    commands
-        .entity(bucket_entity)
-        .remove::<crate::systems::logistics::InStockpile>();
-    commands
-        .entity(bucket_entity)
-        .remove::<crate::systems::jobs::IssuedBy>();
-    commands
-        .entity(bucket_entity)
-        .remove::<crate::relationships::TaskWorkers>();
-    commands
-        .entity(bucket_entity)
-        .remove::<crate::systems::jobs::Designation>();
-    commands
-        .entity(bucket_entity)
-        .remove::<crate::systems::jobs::TaskSlots>();
-    commands
-        .entity(bucket_entity)
-        .remove::<crate::systems::jobs::TargetMixer>();
+    cancel::drop_bucket_with_cleanup(commands, bucket_entity, pos);
 
     ctx.inventory.0 = None;
     clear_task_and_path(ctx.task, ctx.path);
