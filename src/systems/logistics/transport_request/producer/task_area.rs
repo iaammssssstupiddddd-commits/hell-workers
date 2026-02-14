@@ -4,6 +4,8 @@
 //! グループ単位で TransportRequest を発行する。
 
 use bevy::prelude::*;
+use std::collections::{HashMap, HashSet};
+use std::time::Instant;
 
 use crate::entities::familiar::{ActiveCommand, FamiliarCommand};
 use crate::relationships::{StoredItems, TaskWorkers};
@@ -11,32 +13,109 @@ use crate::systems::command::TaskArea;
 use crate::systems::jobs::{Designation, Priority, TaskSlots, WorkType};
 use crate::systems::logistics::transport_request::{
     TransportDemand, TransportPolicy, TransportPriority, TransportRequest, TransportRequestKind,
-    TransportRequestState,
+    TransportRequestMetrics, TransportRequestState,
 };
 use crate::systems::logistics::{BelongsTo, BucketStorage, ResourceType, Stockpile};
 
 use crate::systems::spatial::StockpileSpatialGrid;
 
-use super::stockpile_group::{build_stockpile_groups, find_nearest_group_for_item};
+use super::stockpile_group::{
+    build_group_spatial_index, build_stockpile_groups, find_nearest_group_for_item_indexed,
+    StockpileGroup, StockpileGroupSpatialIndex,
+};
 
-/// グループの代表リソースタイプを決定する
-///
-/// グループ内セルに固定リソースタイプがあればそれを返す。
-/// なければ収集範囲内の最寄りフリーアイテムから推定する。
-fn resolve_group_resource_type(
-    group: &super::stockpile_group::StockpileGroup,
-    q_stockpiles_detail: &Query<
-        (
-            Entity,
-            &Transform,
-            &Stockpile,
-            Option<&StoredItems>,
-            Option<&BelongsTo>,
-            Option<&BucketStorage>,
-        ),
-    >,
+struct GroupEvalContext {
+    representative: Entity,
+    owner: Option<Entity>,
+    rep_pos: Vec2,
+    total_capacity: usize,
+    total_stored: usize,
+    has_untyped_capacity: bool,
+    typed_accept: HashSet<ResourceType>,
+}
+
+impl GroupEvalContext {
+    fn can_accept(&self, resource_type: ResourceType) -> bool {
+        self.has_untyped_capacity || self.typed_accept.contains(&resource_type)
+    }
+}
+
+fn build_group_eval_contexts(
+    groups: &[StockpileGroup],
+    q_stockpiles_detail: &Query<(
+        Entity,
+        &Transform,
+        &Stockpile,
+        Option<&StoredItems>,
+        Option<&BelongsTo>,
+        Option<&BucketStorage>,
+    )>,
+) -> Vec<GroupEvalContext> {
+    let mut contexts = Vec::with_capacity(groups.len());
+
+    for group in groups {
+        let owner = group.cells.first().and_then(|&cell| {
+            q_stockpiles_detail
+                .get(cell)
+                .ok()
+                .and_then(|(_, _, _, _, belongs, _)| belongs.map(|b| b.0))
+        });
+
+        let rep_pos = q_stockpiles_detail
+            .get(group.representative)
+            .map(|(_, t, _, _, _, _)| t.translation.truncate())
+            .unwrap_or(Vec2::ZERO);
+
+        let mut has_untyped_capacity = false;
+        let mut typed_accept = HashSet::new();
+
+        for &cell in &group.cells {
+            let Ok((_, _, stockpile, stored_opt, _, bucket_opt)) = q_stockpiles_detail.get(cell)
+            else {
+                continue;
+            };
+
+            if bucket_opt.is_some() {
+                continue;
+            }
+
+            let current = stored_opt.map(|s| s.len()).unwrap_or(0);
+            if current >= stockpile.capacity {
+                continue;
+            }
+
+            if let Some(resource_type) = stockpile.resource_type {
+                typed_accept.insert(resource_type);
+            } else {
+                has_untyped_capacity = true;
+            }
+        }
+
+        contexts.push(GroupEvalContext {
+            representative: group.representative,
+            owner,
+            rep_pos,
+            total_capacity: group.total_capacity,
+            total_stored: group.total_stored,
+            has_untyped_capacity,
+            typed_accept,
+        });
+    }
+
+    contexts
+}
+
+fn pick_representative_resource_type_per_group(
+    groups: &[StockpileGroup],
+    spatial_index: &StockpileGroupSpatialIndex,
+    contexts: &[GroupEvalContext],
     q_free_items: &Query<
-        (&Transform, &crate::systems::logistics::ResourceItem, &Visibility, Option<&BelongsTo>),
+        (
+            &Transform,
+            &crate::systems::logistics::ResourceItem,
+            &Visibility,
+            Option<&BelongsTo>,
+        ),
         (
             Without<Designation>,
             Without<TaskWorkers>,
@@ -44,59 +123,56 @@ fn resolve_group_resource_type(
             Without<crate::systems::logistics::InStockpile>,
         ),
     >,
-    familiars_with_areas: &[(Entity, TaskArea)],
-) -> Option<ResourceType> {
-    // 収集範囲内のフリーアイテムから推定（実際に受け入れ可能な型のみ）
-    let owner = group.cells.first().and_then(|&cell| {
-        q_stockpiles_detail
-            .get(cell)
-            .ok()
-            .and_then(|(_, _, _, _, belongs, _)| belongs.map(|b| b.0))
-    });
+) -> (Vec<Option<ResourceType>>, u32, u32) {
+    let mut best_types: Vec<Option<(ResourceType, f32)>> = vec![None; groups.len()];
+    let mut free_items_scanned = 0u32;
+    let mut items_matched = 0u32;
 
-    let can_accept_in_group = |resource_type: ResourceType| -> bool {
-        group.cells.iter().any(|&cell| {
-            q_stockpiles_detail.get(cell).ok().is_some_and(
-                |(_, _, stockpile, stored_opt, _, bucket_opt)| {
-                    if bucket_opt.is_some() {
-                        return false;
-                    }
-                    let current = stored_opt.map(|s| s.len()).unwrap_or(0);
-                    let has_capacity = current < stockpile.capacity;
-                    let type_ok = stockpile.resource_type.is_none()
-                        || stockpile.resource_type == Some(resource_type);
-                    has_capacity && type_ok
-                },
-            )
-        })
-    };
+    let mut group_lookup = HashMap::<(Entity, Entity), usize>::new();
+    for (idx, group) in groups.iter().enumerate() {
+        group_lookup.insert((group.representative, group.owner_familiar), idx);
+    }
 
-    q_free_items
-        .iter()
-        .filter(|(_, item_type, visibility, item_belongs)| {
-            *visibility != Visibility::Hidden
-                && item_type.0.is_loadable()
-                && owner == item_belongs.map(|b| b.0)
-                && can_accept_in_group(item_type.0)
-        })
-        .filter(|(transform, _, _, _)| {
-            // 収集範囲内かチェック
-            let item_pos = transform.translation.truncate();
-            let groups_slice = std::slice::from_ref(group);
-            find_nearest_group_for_item(item_pos, groups_slice, familiars_with_areas).is_some()
-        })
-        .min_by(|(t1, _, _, _), (t2, _, _, _)| {
-            // 代表セルからの距離で最寄りを選択
-            if let Ok((_, rep_t, _, _, _, _)) = q_stockpiles_detail.get(group.representative) {
-                let rep_pos = rep_t.translation.truncate();
-                let d1 = t1.translation.truncate().distance_squared(rep_pos);
-                let d2 = t2.translation.truncate().distance_squared(rep_pos);
-                d1.partial_cmp(&d2).unwrap_or(std::cmp::Ordering::Equal)
-            } else {
-                std::cmp::Ordering::Equal
+    for (transform, item_type, visibility, item_belongs) in q_free_items.iter() {
+        free_items_scanned += 1;
+
+        if *visibility == Visibility::Hidden || !item_type.0.is_loadable() {
+            continue;
+        }
+
+        let item_pos = transform.translation.truncate();
+        let Some(group) = find_nearest_group_for_item_indexed(item_pos, groups, spatial_index)
+        else {
+            continue;
+        };
+
+        let Some(&group_idx) = group_lookup.get(&(group.representative, group.owner_familiar))
+        else {
+            continue;
+        };
+
+        let context = &contexts[group_idx];
+        if item_belongs.map(|b| b.0) != context.owner || !context.can_accept(item_type.0) {
+            continue;
+        }
+
+        items_matched += 1;
+        let dist_sq = item_pos.distance_squared(context.rep_pos);
+
+        match &mut best_types[group_idx] {
+            Some((_, best_dist_sq)) if dist_sq >= *best_dist_sq => {}
+            slot => {
+                *slot = Some((item_type.0, dist_sq));
             }
-        })
-        .map(|(_, item_type, _, _)| item_type.0)
+        }
+    }
+
+    let representative_types = best_types
+        .into_iter()
+        .map(|entry| entry.map(|(resource_type, _)| resource_type))
+        .collect();
+
+    (representative_types, free_items_scanned, items_matched)
 }
 
 /// 指揮エリア内での自動運搬タスク生成システム（グループベース）
@@ -104,28 +180,29 @@ pub fn task_area_auto_haul_system(
     mut commands: Commands,
     stockpile_grid: Res<StockpileSpatialGrid>,
     q_familiars: Query<(Entity, &ActiveCommand, &TaskArea)>,
-    q_stockpiles: Query<
-        (
-            Entity,
-            &Transform,
-            &Stockpile,
-            Option<&StoredItems>,
-            Option<&BucketStorage>,
-        ),
-    >,
-    q_stockpiles_detail: Query<
-        (
-            Entity,
-            &Transform,
-            &Stockpile,
-            Option<&StoredItems>,
-            Option<&BelongsTo>,
-            Option<&BucketStorage>,
-        ),
-    >,
+    q_stockpiles: Query<(
+        Entity,
+        &Transform,
+        &Stockpile,
+        Option<&StoredItems>,
+        Option<&BucketStorage>,
+    )>,
+    q_stockpiles_detail: Query<(
+        Entity,
+        &Transform,
+        &Stockpile,
+        Option<&StoredItems>,
+        Option<&BelongsTo>,
+        Option<&BucketStorage>,
+    )>,
     q_stockpile_requests: Query<(Entity, &TransportRequest, Option<&TaskWorkers>)>,
     q_free_items: Query<
-        (&Transform, &crate::systems::logistics::ResourceItem, &Visibility, Option<&BelongsTo>),
+        (
+            &Transform,
+            &crate::systems::logistics::ResourceItem,
+            &Visibility,
+            Option<&BelongsTo>,
+        ),
         (
             Without<Designation>,
             Without<TaskWorkers>,
@@ -133,9 +210,12 @@ pub fn task_area_auto_haul_system(
             Without<crate::systems::logistics::InStockpile>,
         ),
     >,
+    mut metrics: ResMut<TransportRequestMetrics>,
 ) {
+    let started_at = Instant::now();
+
     // inflight集計: (anchor, resource_type) -> count
-    let mut in_flight = std::collections::HashMap::<(Entity, ResourceType), usize>::new();
+    let mut in_flight = HashMap::<(Entity, ResourceType), usize>::new();
 
     for (_, req, workers_opt) in q_stockpile_requests.iter() {
         if matches!(req.kind, TransportRequestKind::DepositToStockpile) {
@@ -156,45 +236,46 @@ pub fn task_area_auto_haul_system(
 
     // グループ構築
     let groups = build_stockpile_groups(&stockpile_grid, &active_familiars, &q_stockpiles);
+    let group_spatial_index = build_group_spatial_index(&groups, &active_familiars);
+    let group_contexts = build_group_eval_contexts(&groups, &q_stockpiles_detail);
+    let (group_resource_types, free_items_scanned, items_matched) =
+        pick_representative_resource_type_per_group(
+            &groups,
+            &group_spatial_index,
+            &group_contexts,
+            &q_free_items,
+        );
 
     // グループごとの desired requests: (representative, resource_type) -> (fam, slots, pos, group_cells)
-    let mut desired_requests = std::collections::HashMap::<
-        (Entity, ResourceType),
-        (Entity, u32, Vec2, Vec<Entity>),
-    >::new();
+    let mut desired_requests =
+        HashMap::<(Entity, ResourceType), (Entity, u32, Vec2, Vec<Entity>)>::new();
 
-    for group in &groups {
-        let Some(resource_type) = resolve_group_resource_type(
-            group,
-            &q_stockpiles_detail,
-            &q_free_items,
-            &active_familiars,
-        ) else {
+    for (idx, group) in groups.iter().enumerate() {
+        let Some(resource_type) = group_resource_types[idx] else {
             continue;
         };
 
-        if !resource_type.is_loadable() {
-            continue;
-        }
+        let context = &group_contexts[idx];
 
         // グループ全体の需要計算
         let inflight = *in_flight
-            .get(&(group.representative, resource_type))
+            .get(&(context.representative, resource_type))
             .unwrap_or(&0);
-        let needed = group.total_capacity.saturating_sub(group.total_stored + inflight);
+        let needed = context
+            .total_capacity
+            .saturating_sub(context.total_stored + inflight);
         if needed == 0 {
             continue;
         }
 
-        // 代表セルのポジション
-        let rep_pos = q_stockpiles
-            .get(group.representative)
-            .map(|(_, t, _, _, _)| t.translation.truncate())
-            .unwrap_or(Vec2::ZERO);
-
         desired_requests.insert(
-            (group.representative, resource_type),
-            (group.owner_familiar, needed as u32, rep_pos, group.cells.clone()),
+            (context.representative, resource_type),
+            (
+                group.owner_familiar,
+                needed as u32,
+                context.rep_pos,
+                group.cells.clone(),
+            ),
         );
     }
 
@@ -279,4 +360,9 @@ pub fn task_area_auto_haul_system(
             TransportPolicy::default(),
         ));
     }
+
+    metrics.task_area_groups = groups.len() as u32;
+    metrics.task_area_free_items_scanned = free_items_scanned;
+    metrics.task_area_items_matched = items_matched;
+    metrics.task_area_elapsed_ms = started_at.elapsed().as_secs_f32() * 1000.0;
 }

@@ -250,6 +250,8 @@ pub const WHEELBARROW_SCORE_PRIORITY: f32 = 5.0;
 pub const WHEELBARROW_SCORE_DISTANCE: f32 = 0.1;
 /// 仲裁スコア: 1〜2 個バッチに対する減点
 pub const WHEELBARROW_SCORE_SMALL_BATCH_PENALTY: f32 = 20.0;
+/// 猫車仲裁で request ごとに評価する近傍候補の上限件数
+pub const WHEELBARROW_ARBITRATION_TOP_K: usize = 24;
 /// 運搬中の手押し車のスケール倍率（駐車時は1.0、運搬中は大きく表示）
 pub const WHEELBARROW_ACTIVE_SCALE: f32 = 1.8;
 

@@ -36,8 +36,13 @@ fn evaluate_reachability(
             )
             .is_some()
     } else {
-        pathfinding::find_path_to_adjacent(world_map, pf_context, worker_grid, candidate.target_grid)
-            .is_some()
+        pathfinding::find_path_to_adjacent(
+            world_map,
+            pf_context,
+            worker_grid,
+            candidate.target_grid,
+        )
+        .is_some()
     }
 }
 

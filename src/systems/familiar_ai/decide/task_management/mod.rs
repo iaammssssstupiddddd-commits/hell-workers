@@ -5,9 +5,9 @@
 mod builders;
 mod delegation;
 mod policy;
-mod validator;
 mod task_assigner;
 mod task_finder;
+mod validator;
 
 pub use delegation::TaskManager;
 pub use task_assigner::AssignTaskContext;
