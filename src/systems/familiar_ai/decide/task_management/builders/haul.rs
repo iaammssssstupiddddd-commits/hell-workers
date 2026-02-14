@@ -139,6 +139,10 @@ pub fn issue_haul_with_wheelbarrow(
                 wheelbarrow,
                 source_pos,
                 destination,
+                destination_reserved: items.len() as u32,
+                collect_source: None,
+                collect_amount: 0,
+                collect_resource_type: None,
                 items: items.clone(),
                 phase: HaulWithWheelbarrowPhase::GoingToParking,
             },
@@ -185,6 +189,64 @@ pub fn issue_haul_with_wheelbarrow(
             source: item,
             amount: 1,
         });
+    }
+
+    submit_assignment(
+        ctx,
+        queries,
+        shadow,
+        WorkType::WheelbarrowHaul,
+        task_pos,
+        assigned_task,
+        reservation_ops,
+        already_commanded,
+    );
+}
+
+/// 砂ソースから直接採取して Blueprint へ猫車搬入する。
+pub fn issue_collect_sand_with_wheelbarrow_to_blueprint(
+    wheelbarrow: Entity,
+    source_entity: Entity,
+    source_pos: Vec2,
+    blueprint: Entity,
+    amount: u32,
+    task_pos: Vec2,
+    already_commanded: bool,
+    ctx: &AssignTaskContext<'_>,
+    queries: &mut crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
+    shadow: &mut ReservationShadow,
+) {
+    let haul_amount = amount.max(1);
+    let assigned_task =
+        crate::systems::soul_ai::execute::task_execution::types::AssignedTask::HaulWithWheelbarrow(
+            crate::systems::soul_ai::execute::task_execution::types::HaulWithWheelbarrowData {
+                wheelbarrow,
+                source_pos,
+                destination:
+                    crate::systems::logistics::transport_request::WheelbarrowDestination::Blueprint(
+                        blueprint,
+                    ),
+                destination_reserved: haul_amount,
+                collect_source: Some(source_entity),
+                collect_amount: haul_amount,
+                collect_resource_type: Some(ResourceType::Sand),
+                items: Vec::new(),
+                phase: HaulWithWheelbarrowPhase::GoingToParking,
+            },
+        );
+
+    let mut reservation_ops = vec![
+        ResourceReservationOp::ReserveSource {
+            source: wheelbarrow,
+            amount: 1,
+        },
+        ResourceReservationOp::ReserveSource {
+            source: source_entity,
+            amount: 1,
+        },
+    ];
+    for _ in 0..haul_amount {
+        reservation_ops.push(ResourceReservationOp::ReserveDestination { target: blueprint });
     }
 
     submit_assignment(
