@@ -162,10 +162,10 @@ pub fn bucket_auto_haul_system(
 
         if !valid_tank {
             if workers == 0 {
-                commands.entity(request_entity).despawn();
+                commands.entity(request_entity).try_despawn();
             } else {
                 super::upsert::disable_request(&mut commands, request_entity);
-                commands.entity(request_entity).insert(TransportDemand {
+                commands.entity(request_entity).try_insert(TransportDemand {
                     desired_slots: 0,
                     inflight,
                 });
@@ -182,7 +182,7 @@ pub fn bucket_auto_haul_system(
         ) {
             if workers > 0 {
                 super::upsert::disable_request(&mut commands, request_entity);
-                commands.entity(request_entity).insert(TransportDemand {
+                commands.entity(request_entity).try_insert(TransportDemand {
                     desired_slots: 0,
                     inflight,
                 });
@@ -191,7 +191,7 @@ pub fn bucket_auto_haul_system(
         }
 
         if let Some(desired) = desired_requests.get(&tank_entity) {
-            commands.entity(request_entity).insert((
+            commands.entity(request_entity).try_insert((
                 Transform::from_xyz(desired.tank_pos.x, desired.tank_pos.y, 0.0),
                 Visibility::Hidden,
                 Designation {
@@ -219,7 +219,7 @@ pub fn bucket_auto_haul_system(
             super::upsert::disable_request(&mut commands, request_entity);
             commands
                 .entity(request_entity)
-                .insert(TransportDemand {
+                .try_insert(TransportDemand {
                     desired_slots: 0,
                     inflight: 0,
                 });
@@ -227,7 +227,7 @@ pub fn bucket_auto_haul_system(
             super::upsert::disable_request(&mut commands, request_entity);
             commands
                 .entity(request_entity)
-                .insert(TransportDemand {
+                .try_insert(TransportDemand {
                     desired_slots: 0,
                     inflight,
                 });

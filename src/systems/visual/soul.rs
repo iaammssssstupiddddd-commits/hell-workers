@@ -49,8 +49,8 @@ pub fn progress_bar_system(
                         spawn_progress_bar(&mut commands, soul_entity, transform, config);
 
                     // 親子関係を設定（Lifecycle管理のため）
-                    commands.entity(soul_entity).add_child(bg_entity);
-                    commands.entity(soul_entity).add_child(fill_entity);
+                    commands.entity(bg_entity).try_insert(ChildOf(soul_entity));
+                    commands.entity(fill_entity).try_insert(ChildOf(soul_entity));
 
                     commands.entity(bg_entity).insert(SoulProgressBar);
                     commands.entity(fill_entity).insert(SoulProgressBar);
@@ -77,7 +77,7 @@ pub fn progress_bar_system(
             }
 
             for entity in to_despawn {
-                commands.entity(entity).despawn();
+                commands.entity(entity).try_despawn();
             }
         }
     }
@@ -286,11 +286,11 @@ pub fn soul_status_visual_system(
                         )),
                     ))
                     .id();
-                commands.entity(soul_entity).add_child(icon_id);
+                commands.entity(icon_id).try_insert(ChildOf(soul_entity));
                 ui_links.icon_entity = Some(icon_id);
             }
         } else if let Some(icon_entity) = ui_links.icon_entity.take() {
-            commands.entity(icon_entity).despawn();
+            commands.entity(icon_entity).try_despawn();
         }
     }
 }

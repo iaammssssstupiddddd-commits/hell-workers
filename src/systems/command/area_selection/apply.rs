@@ -205,28 +205,36 @@ pub(super) fn cancel_single_designation(
     is_transport_request: bool,
     fixed_source: Option<Entity>,
 ) {
+    fn trigger_task_abandoned_if_alive(commands: &mut Commands, soul: Entity) {
+        commands.queue(move |world: &mut World| {
+            if world.get_entity(soul).is_ok() {
+                world.trigger(OnTaskAbandoned { entity: soul });
+            }
+        });
+    }
+
     // 作業者への通知
     if let Some(workers) = task_workers {
         for &soul in workers.iter() {
-            commands.entity(soul).remove::<WorkingOn>();
-            commands.trigger(OnTaskAbandoned { entity: soul });
+            commands.entity(soul).try_remove::<WorkingOn>();
+            trigger_task_abandoned_if_alive(commands, soul);
         }
     }
 
     if let Some(source_entity) = fixed_source {
         commands
             .entity(source_entity)
-            .remove::<ManualHaulPinnedSource>();
+            .try_remove::<ManualHaulPinnedSource>();
     }
 
     if is_blueprint || is_transport_request {
         // Blueprint はエンティティごと despawn する
         // WorldMap のクリーンアップは blueprint_cancel_cleanup_system が担当
-        commands.entity(target_entity).despawn();
+        commands.entity(target_entity).try_despawn();
     } else {
-        commands.entity(target_entity).remove::<Designation>();
-        commands.entity(target_entity).remove::<TaskSlots>();
-        commands.entity(target_entity).remove::<ManagedBy>();
+        commands
+            .entity(target_entity)
+            .try_remove::<(Designation, TaskSlots, ManagedBy)>();
     }
 }
 
@@ -441,7 +449,7 @@ pub fn blueprint_cancel_cleanup_system(
         for (companion_entity, pending) in q_pending.iter() {
             if pending.0 == removed_entity {
                 // コンパニオンも Blueprint なので despawn すれば次フレームでこのシステムが再度クリーンアップ
-                commands.entity(companion_entity).despawn();
+                commands.entity(companion_entity).try_despawn();
                 info!(
                     "BLUEPRINT_CANCEL: Despawned companion {:?} for {:?}",
                     companion_entity, removed_entity

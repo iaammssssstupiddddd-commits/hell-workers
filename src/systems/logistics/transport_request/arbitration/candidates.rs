@@ -88,9 +88,9 @@ pub fn build_request_eval_context(
     }
     let eligible_kind = match req.kind {
         TransportRequestKind::DepositToStockpile => true,
-        TransportRequestKind::DeliverToBlueprint | TransportRequestKind::DeliverToMixerSolid => {
-            req.resource_type.requires_wheelbarrow()
-        }
+        TransportRequestKind::DeliverToBlueprint => req.resource_type.requires_wheelbarrow(),
+        // Mixer 固体はどのリソースでも猫車で一括運搬可能
+        TransportRequestKind::DeliverToMixerSolid => true,
         _ => false,
     };
     if !eligible_kind {
@@ -169,11 +169,14 @@ pub fn build_request_eval_context(
         _ => return None,
     };
 
-    let hard_min = if req.resource_type.requires_wheelbarrow() {
-        1
-    } else {
-        WHEELBARROW_MIN_BATCH_SIZE
-    };
+    // Blueprint 向けの猫車必須リソースは1個でもリース対象
+    // それ以外（Mixer・Stockpile）はバッチ最小数を要求
+    let hard_min =
+        if req.resource_type.requires_wheelbarrow() && req.kind == TransportRequestKind::DeliverToBlueprint {
+            1
+        } else {
+            WHEELBARROW_MIN_BATCH_SIZE
+        };
     if max_items < hard_min {
         return None;
     }

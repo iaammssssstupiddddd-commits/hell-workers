@@ -7,7 +7,6 @@ mod stockpile;
 mod wheelbarrow;
 
 use crate::systems::familiar_ai::decide::task_management::{AssignTaskContext, ReservationShadow};
-use crate::systems::logistics::transport_request::can_complete_pick_drop_to_point;
 use bevy::prelude::*;
 
 use super::super::builders::{
@@ -16,6 +15,7 @@ use super::super::builders::{
 use super::super::validator::{
     find_bucket_return_assignment, resolve_haul_to_mixer_inputs, resolve_return_bucket_tank,
 };
+
 fn mixer_can_accept_item(
     mixer_entity: Entity,
     item_type: crate::systems::logistics::ResourceType,
@@ -55,57 +55,48 @@ pub fn assign_haul_to_mixer(
         return false;
     };
 
-    if item_type.requires_wheelbarrow() {
-        // その場ピック→ドロップで完了できるなら、猫車より徒歩運搬を優先する
-        let can_try_pick_drop = queries.wheelbarrow_leases.get(ctx.task_entity).is_err();
-        if can_try_pick_drop
-            && let Ok((mixer_transform, _, _)) = queries.storage.mixers.get(mixer_entity)
-        {
-            let mixer_pos = mixer_transform.translation.truncate();
-            let pick_drop_source =
-                source_selector::find_nearest_mixer_source_item(item_type, mixer_pos, queries, shadow);
+    // --- 全固体リソース共通: リースがあれば猫車、なければ単品手運び ---
 
-            if let Some((source_item, source_pos)) = pick_drop_source {
-                if can_complete_pick_drop_to_point(source_pos, mixer_pos)
-                    && mixer_can_accept_item(mixer_entity, item_type, false, queries, shadow)
-                {
-                    issue_haul_to_mixer(
-                        source_item,
-                        mixer_entity,
-                        item_type,
-                        false,
-                        source_pos,
-                        already_commanded,
-                        ctx,
-                        queries,
-                        shadow,
-                    );
-                    return true;
-                }
-            }
+    // 1. Arbitration がリースを付与していれば猫車で一括運搬
+    if let Ok(lease) = queries.wheelbarrow_leases.get(ctx.task_entity) {
+        if lease_validation::validate_lease(lease, queries, shadow, 1) {
+            issue_haul_with_wheelbarrow(
+                lease.wheelbarrow,
+                lease.source_pos,
+                lease.destination,
+                lease.items.clone(),
+                task_pos,
+                already_commanded,
+                ctx,
+                queries,
+                shadow,
+            );
+            return true;
         }
-
-        if let Ok(lease) = queries.wheelbarrow_leases.get(ctx.task_entity) {
-            if lease_validation::validate_lease(lease, queries, shadow, 1) {
-                issue_haul_with_wheelbarrow(
-                    lease.wheelbarrow,
-                    lease.source_pos,
-                    lease.destination,
-                    lease.items.clone(),
-                    task_pos,
-                    already_commanded,
-                    ctx,
-                    queries,
-                    shadow,
-                );
-                return true;
-            }
-        }
-
-        // 猫車必須資源は徒歩運搬へフォールバックしない
-        return false;
     }
 
+    // 2. リースなし → 単品手運び
+    assign_single_item_haul_to_mixer(
+        mixer_entity,
+        item_type,
+        task_pos,
+        already_commanded,
+        ctx,
+        queries,
+        shadow,
+    )
+}
+
+/// 単品運搬（Mixer向け）
+fn assign_single_item_haul_to_mixer(
+    mixer_entity: Entity,
+    item_type: crate::systems::logistics::ResourceType,
+    task_pos: Vec2,
+    already_commanded: bool,
+    ctx: &AssignTaskContext<'_>,
+    queries: &mut crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
+    shadow: &mut ReservationShadow,
+) -> bool {
     let Some((source_item, source_pos)) =
         source_selector::find_nearest_mixer_source_item(item_type, task_pos, queries, shadow)
     else {
@@ -116,9 +107,7 @@ pub fn assign_haul_to_mixer(
         return false;
     };
 
-    let can_accept = mixer_can_accept_item(mixer_entity, item_type, false, queries, shadow);
-
-    if !can_accept {
+    if !mixer_can_accept_item(mixer_entity, item_type, false, queries, shadow) {
         debug!(
             "ASSIGN: Mixer {:?} cannot accept item {:?} (Full or Reserved)",
             mixer_entity, item_type

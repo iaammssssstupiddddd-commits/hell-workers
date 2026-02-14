@@ -101,3 +101,41 @@ pub fn find_nearest_blueprint_source_item<'w, 's>(
 ) -> Option<(Entity, Vec2)> {
     find_nearest_source_item(resource_type, bp_pos, queries, shadow, |_| true)
 }
+
+/// center_pos 付近の未予約アイテムを最寄り順に最大 max_count 個収集する。
+/// 探索範囲は TILE_SIZE * 10.0。
+pub fn collect_nearby_items_for_wheelbarrow(
+    resource_type: ResourceType,
+    center_pos: Vec2,
+    max_count: usize,
+    queries: &TaskQueries<'_, '_>,
+    shadow: &ReservationShadow,
+) -> Vec<(Entity, Vec2)> {
+    let search_radius_sq =
+        (crate::constants::TILE_SIZE * 10.0) * (crate::constants::TILE_SIZE * 10.0);
+
+    let mut items: Vec<(Entity, Vec2, f32)> = queries
+        .free_resource_items
+        .iter()
+        .filter(|(_, _, visibility, res_item)| {
+            **visibility != Visibility::Hidden && res_item.0 == resource_type
+        })
+        .filter(|(entity, _, _, _)| source_not_reserved(*entity, queries, shadow))
+        .filter_map(|(entity, transform, _, _)| {
+            let pos = transform.translation.truncate();
+            let dist_sq = pos.distance_squared(center_pos);
+            if dist_sq <= search_radius_sq {
+                Some((entity, pos, dist_sq))
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    items.sort_by(|a, b| a.2.partial_cmp(&b.2).unwrap_or(std::cmp::Ordering::Equal));
+    items
+        .into_iter()
+        .take(max_count)
+        .map(|(e, pos, _)| (e, pos))
+        .collect()
+}

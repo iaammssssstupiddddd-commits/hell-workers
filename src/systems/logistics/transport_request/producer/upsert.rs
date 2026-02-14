@@ -22,7 +22,7 @@ pub fn process_duplicate_key<K: Hash + Eq>(
 ) -> bool {
     if !seen.insert(key) {
         if workers == 0 {
-            commands.entity(entity).despawn();
+            commands.entity(entity).try_despawn();
         }
         return false;
     }
@@ -35,7 +35,5 @@ pub fn process_duplicate_key<K: Hash + Eq>(
 pub fn disable_request(commands: &mut Commands, entity: Entity) {
     commands
         .entity(entity)
-        .remove::<Designation>()
-        .remove::<TaskSlots>()
-        .remove::<Priority>();
+        .try_remove::<(Designation, TaskSlots, Priority)>();
 }

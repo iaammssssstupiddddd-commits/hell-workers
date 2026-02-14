@@ -104,13 +104,13 @@ pub fn cleanup_material_display_system(
 
     for (entity, child_of, _) in q_icons.iter() {
         if !bp_entities.contains(&child_of.parent()) {
-            commands.entity(entity).despawn();
+            commands.entity(entity).try_despawn();
         }
     }
 
     for (entity, child_of, _) in q_counters.iter() {
         if !bp_entities.contains(&child_of.parent()) {
-            commands.entity(entity).despawn();
+            commands.entity(entity).try_despawn();
         }
     }
 }

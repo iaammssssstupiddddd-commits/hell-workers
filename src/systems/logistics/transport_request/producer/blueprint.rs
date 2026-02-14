@@ -166,7 +166,7 @@ pub fn blueprint_auto_haul_system(
         }
 
         if let Some((issued_by, slots, bp_pos)) = desired_requests.get(&key) {
-            commands.entity(request_entity).insert((
+            commands.entity(request_entity).try_insert((
                 Transform::from_xyz(bp_pos.x, bp_pos.y, 0.0),
                 Visibility::Hidden,
                 Designation {
