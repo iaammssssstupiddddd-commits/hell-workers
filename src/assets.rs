@@ -89,6 +89,16 @@ pub struct GameAssets {
     pub wheelbarrow_loaded: Handle<Image>,
     pub wheelbarrow_parking: Handle<Image>,
     pub icon_wheelbarrow_small: Handle<Image>,
+    // Terrain border overlays
+    pub grass_edge: Handle<Image>,
+    pub grass_corner: Handle<Image>,
+    pub dirt_edge: Handle<Image>,
+    pub dirt_corner: Handle<Image>,
+    pub sand_edge: Handle<Image>,
+    pub sand_corner: Handle<Image>,
+    pub grass_inner_corner: Handle<Image>,
+    pub dirt_inner_corner: Handle<Image>,
+    pub sand_inner_corner: Handle<Image>,
     // Fonts
     pub font_ui: Handle<Font>,         // UI全般
     pub font_familiar: Handle<Font>,   // Familiar吹き出し
