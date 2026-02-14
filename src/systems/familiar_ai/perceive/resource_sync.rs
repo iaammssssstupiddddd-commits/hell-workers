@@ -272,7 +272,8 @@ pub fn sync_reservations_system(
         match req.kind {
             TransportRequestKind::DepositToStockpile
             | TransportRequestKind::DeliverToBlueprint
-            | TransportRequestKind::GatherWaterToTank => {
+            | TransportRequestKind::GatherWaterToTank
+            | TransportRequestKind::ConsolidateStockpile => {
                 *dest_res.entry(req.anchor).or_insert(0) += 1;
             }
             TransportRequestKind::DeliverToMixerSolid => {

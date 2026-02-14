@@ -9,4 +9,5 @@ pub enum TransportRequestKind {
     GatherWaterToTank,
     ReturnBucket,
     BatchWheelbarrow,
+    ConsolidateStockpile,
 }

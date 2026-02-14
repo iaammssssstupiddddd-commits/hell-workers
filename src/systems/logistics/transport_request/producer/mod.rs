@@ -1,5 +1,6 @@
 pub mod blueprint;
 pub mod bucket;
+pub mod consolidation;
 pub mod mixer;
 pub mod stockpile_group;
 pub mod tank_water_request;
