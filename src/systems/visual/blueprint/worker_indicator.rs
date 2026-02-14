@@ -45,7 +45,9 @@ pub fn spawn_worker_indicators_system(
                         Name::new("WorkerHammerIcon"),
                     ))
                     .id();
-                commands.entity(worker_entity).add_child(hammer_id);
+                commands
+                    .entity(hammer_id)
+                    .try_insert(ChildOf(worker_entity));
 
                 commands.entity(worker_entity).insert(HasWorkerIndicator);
             }
@@ -83,10 +85,10 @@ pub fn update_worker_indicators_system(
 
         if should_despawn {
             info!("VISUAL: Despawning hammer for worker {:?}", worker_entity);
-            commands.entity(hammer_entity).despawn();
+            commands.entity(hammer_entity).try_despawn();
             commands
                 .entity(worker_entity)
-                .remove::<HasWorkerIndicator>();
+                .try_remove::<HasWorkerIndicator>();
         }
     }
 }

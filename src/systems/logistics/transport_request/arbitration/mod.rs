@@ -140,7 +140,9 @@ fn update_lease_state(
         q_requests.iter()
     {
         if let Some(lease) = lease_opt {
-            let min_valid_items = if req.resource_type.requires_wheelbarrow() {
+            let min_valid_items = if req.resource_type.requires_wheelbarrow()
+                && req.kind == TransportRequestKind::DeliverToBlueprint
+            {
                 1
             } else {
                 WHEELBARROW_MIN_BATCH_SIZE
@@ -266,14 +268,13 @@ fn collect_candidates(
             WHEELBARROW_ARBITRATION_TOP_K,
         );
 
-        // 近傍に候補がいない場合のみ、猫車必須の request では探索範囲を全域へ拡張する。
-        // これにより近距離 pick&drop 判定は維持しつつ、遠距離搬送でも猫車 lease を作れる。
+        // 近傍に候補がいない場合は探索範囲を全域へ拡張。
+        // - Blueprint: 猫車必須資源のみ
+        // - Mixer 固体: ResourceType に関係なく適用（例: Rock）
         if nearby_items.is_empty()
-            && req.resource_type.requires_wheelbarrow()
-            && matches!(
-                req.kind,
-                TransportRequestKind::DeliverToBlueprint | TransportRequestKind::DeliverToMixerSolid
-            )
+            && ((req.resource_type.requires_wheelbarrow()
+                && req.kind == TransportRequestKind::DeliverToBlueprint)
+                || req.kind == TransportRequestKind::DeliverToMixerSolid)
         {
             nearby_items = collect_top_k_nearest(
                 bucket,
@@ -298,7 +299,10 @@ fn collect_candidates(
             continue;
         }
 
+        // Blueprint 向け猫車必須リソースのみ少量バッチ待機を適用
+        // Mixer 向けは単品手運びフォールバックがあるため待機不要
         let is_small_batch = eval.resource_type.requires_wheelbarrow()
+            && req.kind == TransportRequestKind::DeliverToBlueprint
             && selected_count < WHEELBARROW_PREFERRED_MIN_BATCH_SIZE;
         if is_small_batch && eval.pending_for < SINGLE_BATCH_WAIT_SECS {
             continue;

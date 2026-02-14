@@ -39,7 +39,7 @@ pub fn task_area_indicator_system(
 
             *visibility = Visibility::Visible;
         } else {
-            commands.entity(indicator_entity).despawn();
+            commands.entity(indicator_entity).try_despawn();
         }
     }
 
@@ -85,7 +85,7 @@ pub fn area_edit_handles_visual_system(
 ) {
     for (handle_entity, handle) in q_handles.iter() {
         let _ = (handle.owner, handle.kind);
-        commands.entity(handle_entity).despawn();
+        commands.entity(handle_entity).try_despawn();
     }
 
     if !matches!(task_context.0, TaskMode::AreaSelection(_)) {
@@ -145,7 +145,7 @@ pub fn update_designation_indicator_system(
     for entity in removed.read() {
         for (indicator_entity, indicator) in q_indicators.iter() {
             if indicator.0 == entity {
-                commands.entity(indicator_entity).despawn();
+                commands.entity(indicator_entity).try_despawn();
             }
         }
     }

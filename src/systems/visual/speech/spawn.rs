@@ -3,6 +3,7 @@ use super::phrases::LatinPhrase;
 use crate::assets::GameAssets;
 use crate::constants::*;
 use crate::entities::familiar::FamiliarVoice;
+use bevy::prelude::ChildOf;
 use bevy::prelude::*;
 
 /// Soul用の絵文字吹き出しをスポーンする
@@ -97,10 +98,9 @@ pub fn spawn_soul_bubble(
         ))
         .id();
 
-    // 背景を吹き出しの子にする
-    commands.entity(bubble_entity).add_child(bg_entity);
-    // 吹き出しをソウルの子にする
-    commands.entity(soul_entity).add_child(bubble_entity);
+    // 親が先に消えていても panic しないように try_insert を使う
+    commands.entity(bg_entity).try_insert(ChildOf(bubble_entity));
+    commands.entity(bubble_entity).try_insert(ChildOf(soul_entity));
 }
 
 /// Familiar用のラテン語フレーズ吹き出しをスポーンする
@@ -134,7 +134,7 @@ pub fn spawn_familiar_bubble(
     // 既存の吹き出しを削除
     for (bubble_entity, bubble) in q_bubbles.iter() {
         if bubble.speaker == fam_entity {
-            commands.entity(bubble_entity).despawn();
+            commands.entity(bubble_entity).try_despawn();
         }
     }
     // テキスト長に応じたサイズ計算 (概算: 1文字平均 8px + 左右余白 16px)
@@ -215,6 +215,7 @@ pub fn spawn_familiar_bubble(
         ))
         .id();
 
-    commands.entity(bubble_entity).add_child(bg_entity);
-    commands.entity(fam_entity).add_child(bubble_entity);
+    // 親が先に消えていても panic しないように try_insert を使う
+    commands.entity(bg_entity).try_insert(ChildOf(bubble_entity));
+    commands.entity(bubble_entity).try_insert(ChildOf(fam_entity));
 }

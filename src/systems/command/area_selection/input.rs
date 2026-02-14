@@ -79,7 +79,7 @@ fn despawn_selection_indicators(
     commands: &mut Commands,
 ) {
     for indicator_entity in q_selection_indicator.iter() {
-        commands.entity(indicator_entity).despawn();
+        commands.entity(indicator_entity).try_despawn();
     }
 }
 

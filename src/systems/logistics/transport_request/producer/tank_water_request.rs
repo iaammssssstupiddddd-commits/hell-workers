@@ -86,7 +86,7 @@ pub fn tank_water_request_system(
         }
 
         if let Some((issued_by, slots, tank_pos)) = desired_requests.get(&tank_entity) {
-            commands.entity(request_entity).insert((
+            commands.entity(request_entity).try_insert((
                 Transform::from_xyz(tank_pos.x, tank_pos.y, 0.0),
                 Visibility::Hidden,
                 Designation {

@@ -58,7 +58,7 @@ pub fn wheelbarrow_auto_haul_system(
 
         if let Some((issued_by, wb_pos)) = desired_requests.get(&wb_entity) {
             // Update: 位置が移動している可能性があるため Transform を更新
-            commands.entity(req_entity).insert((
+            commands.entity(req_entity).try_insert((
                 Transform::from_xyz(wb_pos.x, wb_pos.y, 0.0),
                 Visibility::Hidden,
                 Designation {
@@ -84,7 +84,7 @@ pub fn wheelbarrow_auto_haul_system(
             ));
         } else if workers == 0 {
             // 需要がなくなった
-            commands.entity(req_entity).despawn();
+            commands.entity(req_entity).try_despawn();
         }
     }
 
