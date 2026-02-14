@@ -47,8 +47,8 @@ pub fn spawn_progress_bar_system(
         commands.entity(fill_entity).insert(ProgressBar);
 
         // 親子関係を設定（Lifecycle管理のため）
-        commands.entity(bp_entity).add_child(bg_entity);
-        commands.entity(bp_entity).add_child(fill_entity);
+        commands.entity(bg_entity).try_insert(ChildOf(bp_entity));
+        commands.entity(fill_entity).try_insert(ChildOf(bp_entity));
     }
 }
 
@@ -152,7 +152,7 @@ pub fn cleanup_progress_bars_system(
     let bp_entities: std::collections::HashSet<Entity> = q_blueprints.iter().collect();
     for (bar_entity, child_of, _) in q_bars.iter() {
         if !bp_entities.contains(&child_of.parent()) {
-            commands.entity(bar_entity).despawn();
+            commands.entity(bar_entity).try_despawn();
         }
     }
 }

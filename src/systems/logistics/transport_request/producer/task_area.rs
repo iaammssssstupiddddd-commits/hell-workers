@@ -303,7 +303,7 @@ pub fn task_area_auto_haul_system(
         }
 
         if let Some((issued_by, slots, pos, group_cells)) = desired_requests.get(&key) {
-            commands.entity(req_entity).insert((
+            commands.entity(req_entity).try_insert((
                 Transform::from_xyz(pos.x, pos.y, 0.0),
                 Visibility::Hidden,
                 Designation {

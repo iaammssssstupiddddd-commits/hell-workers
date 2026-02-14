@@ -210,7 +210,7 @@ pub fn mud_mixer_auto_haul_system(
             } else {
                 (WorkType::HaulToMixer, TransportRequestKind::DeliverToMixerSolid)
             };
-            commands.entity(request_entity).insert((
+            commands.entity(request_entity).try_insert((
                 Transform::from_xyz(mixer_pos.x, mixer_pos.y, 0.0),
                 Visibility::Hidden,
                 Designation { work_type },
@@ -238,7 +238,7 @@ pub fn mud_mixer_auto_haul_system(
 
         if workers == 0 {
             if !active_mixers.contains(&target_mixer.0) {
-                commands.entity(request_entity).despawn();
+                commands.entity(request_entity).try_despawn();
             } else {
                 super::upsert::disable_request(&mut commands, request_entity);
             }
