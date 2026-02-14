@@ -64,7 +64,7 @@ Bevy 0.18 の **ECS Relationships** 機能を使用し、エンティティ間�
     - 割り当て時は `SharedResourceCache` を参照し、過剰割り当てを防ぎます。
     - **予約の再構築**: `sync_reservations_system` は以下の2つのソースから予約を **0.2秒間隔（初回即時）** で再構築します:
         1. `AssignedTask` - 既にSoulに割り当てられているタスク
-        2. `Designation` (Without<TaskWorkers>) - まだ割り当て待ちのタスク候補
+        2. `Designation` + `TransportRequest` (Without<TaskWorkers>) - まだ割り当て待ちの request 候補
     - これにより、自動発行システムが複数フレームにわたって過剰にタスクを発行することを防ぎます。
     - なお、フレーム内の即時更新は `ResourceReservationRequest` -> `apply_reservation_requests_system` で反映されます。
     - 決定したタスクは `TaskAssignmentRequest` と同時に予約更新要求がキューされ、Execute で反映されます。
