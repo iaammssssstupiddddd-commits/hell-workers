@@ -1,6 +1,7 @@
 //! 運搬タスクの割り当てポリシー
 
 mod blueprint;
+mod consolidation;
 mod lease_validation;
 mod source_selector;
 mod stockpile;
@@ -165,6 +166,17 @@ pub fn assign_haul(
     if stockpile::assign_haul_to_stockpile(task_pos, already_commanded, ctx, queries, shadow) {
         return true;
     }
+
+    if consolidation::assign_consolidation_to_stockpile(
+        task_pos,
+        already_commanded,
+        ctx,
+        queries,
+        shadow,
+    ) {
+        return true;
+    }
+
     debug!(
         "ASSIGN: Haul task {:?} is not a valid transport request candidate",
         ctx.task_entity

@@ -186,6 +186,20 @@ pub struct TaskAssignmentQueries<'w, 's> {
         ),
     >,
     pub wheelbarrow_leases: Query<'w, 's, &'static crate::systems::logistics::transport_request::WheelbarrowLease>,
+    pub stored_items_query: Query<
+        'w,
+        's,
+        (
+            Entity,
+            &'static ResourceItem,
+            &'static InStockpile,
+        ),
+        (
+            Without<Designation>,
+            Without<crate::relationships::TaskWorkers>,
+            Without<crate::systems::logistics::ReservedForTask>,
+        ),
+    >,
 }
 
 /// タスク実行に必要なクエリ群

@@ -8,6 +8,41 @@ use super::finder::find_nearest_bucket_for_tank;
 use super::reservation::source_not_reserved;
 use crate::systems::familiar_ai::decide::task_management::ReservationShadow;
 
+/// ConsolidateStockpile request の入力を解決する。
+/// 返り値: (receiver_cell, resource_type, donor_cells)
+pub fn resolve_consolidation_inputs(
+    task_entity: Entity,
+    queries: &crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
+) -> Option<(Entity, ResourceType, Vec<Entity>)> {
+    let req = queries.transport_requests.get(task_entity).ok()?;
+    if req.kind != TransportRequestKind::ConsolidateStockpile {
+        return None;
+    }
+
+    let receiver = req.anchor;
+    let resource_type = req.resource_type;
+    let donor_cells = req.stockpile_group.clone();
+
+    // レシーバーの空き容量を確認
+    let (_, _, stock, stored_opt) = queries.storage.stockpiles.get(receiver).ok()?;
+    let stored = stored_opt.map(|s| s.len()).unwrap_or(0);
+    if stored >= stock.capacity {
+        return None;
+    }
+
+    // 型互換チェック
+    let type_ok = stock.resource_type.is_none() || stock.resource_type == Some(resource_type);
+    if !type_ok {
+        return None;
+    }
+
+    if donor_cells.is_empty() {
+        return None;
+    }
+
+    Some((receiver, resource_type, donor_cells))
+}
+
 pub fn resolve_haul_to_stockpile_inputs(
     task_entity: Entity,
     queries: &crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,

@@ -58,13 +58,17 @@ Hell-Workers の物流は、`TransportRequest` を中心にした自動発行 + 
 | `GatherWaterToTank` | `GatherWater` | `tank_water_request_system` | Tank | 割り当て時に bucket を遅延解決 |
 | `ReturnBucket` | `Haul` | `bucket_auto_haul_system` | Tank | 割り当て時に dropped bucket と返却先 BucketStorage を同時遅延解決 |
 | `BatchWheelbarrow` | `WheelbarrowHaul` | `wheelbarrow_auto_haul_system` | Wheelbarrow | 現状の主運搬経路では未使用（将来拡張用） |
+| `ConsolidateStockpile` | `Haul` | `stockpile_consolidation_producer_system` | Stockpile（レシーバーセル） | 割り当て時にドナーセルの InStockpile アイテムを遅延解決 |
 
 ## 4. 自動運搬の仕様
 
 ### 4.1 TaskArea -> Stockpile (`DepositToStockpile`)
 - **グループ単位の発行**:
-  - ファミリアの `TaskArea` 内にある Stockpile をひとつのグループとして扱い、グループごとに `TransportRequest` を発行します（`anchor` = 代表セル）。
-  - 複数の `TaskArea` に含まれる共有セルは、それぞれのファミリアのグループに重複して含まれ、双方向から利用可能です。
+  - **ファミリア (Active Familiars) 単位**で、それぞれの `TaskArea` 内にある Stockpile をひとつのグループとして構成します。
+  - `TransportRequest` は**各ファミリアのグループごとに別個に発行**されます（`anchor` = 代表セル, `issued_by` = ファミリア）。
+  - **共有セルの扱い**: 複数の `TaskArea` が重複する場合、その領域内の Stockpile はそれぞれのファミリアのグループに含まれます。
+    - 結果として、同一セルに対する搬入リクエストが複数ファミリアから並行して存在する可能性があります。
+    - **競合回避**: 実際の搬入（Assign時）には `SharedResourceCache` の `destination_reservations` を確認するため、同一セルへの重複予約は発生しません。
 - **需要計算**:
   - グループ全体の `total_capacity - total_stored - total_in_flight` で算出。
 - **収集対象範囲**:
@@ -82,6 +86,12 @@ Hell-Workers の物流は、`TransportRequest` を中心にした自動発行 + 
 ### 4.2 Blueprint 搬入 (`DeliverToBlueprint`)
 - `required_materials - delivered_materials - in_flight` を不足分として request 化。
 - request は Blueprint 位置に生成し、ソースは割り当て時に探索。
+- `Sand` 搬入は、`CollectSand` の別タスクを経由せず **同一 Soul の `HaulWithWheelbarrow` 1タスク内で完結**する。
+  - ソース探索順: `SandPile` 優先、見つからない場合は `TerrainType::Sand` タイル。
+  - 範囲: まず TaskArea 内を探索し、見つからなければ全体探索にフォールバック。
+  - 積込: `Loading` フェーズで砂アイテムをその場生成し、1回で `min(不足量, WHEELBARROW_CAPACITY)` を猫車に積載。
+  - ソース（砂置き場/砂タイル）は消費しない（無限ソース）。
+  - 過剰割り当て防止のため、割り当て時に「必要量 - 予約済み」を再計算して積載量を決定する。
 
 ### 4.3 MudMixer 固体搬入 (`DeliverToMixerSolid`)
 - `Sand` / `Rock` の不足量を `SharedResourceCache` を含めて判定。
@@ -107,7 +117,26 @@ Hell-Workers の物流は、`TransportRequest` を中心にした自動発行 + 
   - owner 一致
   - 予約込み容量チェック
 
-### 4.6 Tank 自動補充 (`GatherWaterToTank`)
+### 4.6 ストックパイル統合 (`ConsolidateStockpile`)
+- **概要**: 
+  - **Soul** が行う `Haul` タスクの一種です。
+  - グループ内で同種の資材が複数セルに分散している場合、それらを少数のセルに集約し、空きセル（`None` 状態の Stockpile）を確保することを目的とします。
+- **発動条件**:
+  - 同一 `ResourceType` のアイテムが 2つ以上のセルに分散して格納されている。
+  - 移動を行うことによって、**少なくとも1つのセルが完全に空になる** 見込みがある。
+  - そのグループに対して有効な `DepositToStockpile`（新規搬入）リクエストが存在しない（新規アイテムの実装/収納を優先するため）。
+- **優先度**: 
+  - `TransportPriority::Low`
+  - 建築や製造への搬入、新規アイテムの収納などの通常タスクが存在しない場合にのみ実行されます（手空きの Soul が整理を行うイメージ）。
+- **統合ロジック (Greedy)**:
+  - **Receiver（搬入先）**: グループ内でその資源を **最も多く** 格納しているセル。ここを満杯にすることを目指します。
+  - **Donor（搬出元）**: それ以外のセル。格納数が少ないセルから順に搬出元として選ばれます。
+  - `anchor` = Receiver セル, `stockpile_group` = Donor セル一覧 としてリクエストが発行されます。
+- **ソース選定と実行**:
+  - 割り当て時に、Donor セルの `InStockpile` アイテムから未予約のものを選択します。
+  - 既存の `Haul` タスクロジックを再利用して実行されます。アイテムを持ち出すと `StoredIn`/`InStockpile` が外れ、Receiver に格納されると再付与されます。
+
+### 4.7 Tank 自動補充 (`GatherWaterToTank`)
 - 水タンクの不足量を監視し、`BUCKET_CAPACITY` 単位で必要タスク数を算出して request 化。
 - 割り当て時に request anchor（tank）に紐づく利用可能バケツを選択して `GatherWater` を実行。
 - タンク容量（現在量 + 予約）を割り当て時にも再検証。
@@ -123,6 +152,7 @@ Hell-Workers の物流は、`TransportRequest` を中心にした自動発行 + 
   - 判定は `source` 周囲 3x3 の立ち位置を評価して行う（実行時の距離しきい値に合わせる）。
   - Stockpile / Mixer へのドロップ成立条件: `distance(stand_pos, destination_pos) < TILE_SIZE * 1.8`
   - Blueprint へのドロップ成立条件: `stand_pos` が `occupied_grids` 外、かつ `distance(stand_pos, occupied_tile) < TILE_SIZE * 1.5`
+  - Blueprint への `Sand` 搬入では「直採取モード」を使用し、同一 Soul が採取と運搬を連続実行する。
 - 対象搬送先:
   - `DepositToStockpile`
   - `DeliverToBlueprint`（`Sand` / `StasisMud`）
@@ -272,7 +302,7 @@ WheelbarrowLease {
   - `src/systems/logistics/transport_request/lifecycle.rs`
 - 割り当てロジック:
   - `src/systems/familiar_ai/decide/task_management/`（builders, policy, validator）
-  - `task_management/policy/haul/`（blueprint, stockpile, source_selector, lease_validation, wheelbarrow）: 運搬割り当ての責務分割
+  - `task_management/policy/haul/`（blueprint, consolidation, stockpile, source_selector, lease_validation, wheelbarrow）: 運搬割り当ての責務分割
 - 実行ロジック:
   - `src/systems/soul_ai/execute/task_execution/`（haul, haul_to_mixer, haul_to_blueprint, haul_with_wheelbarrow, haul_water_to_mixer 等）
   - `task_execution/transport_common/`（reservation, cancel, lifecycle, wheelbarrow）: 予約解放・中断・予約寿命定義・手押し車駐車の共通API
