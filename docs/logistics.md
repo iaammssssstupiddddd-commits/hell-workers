@@ -72,6 +72,7 @@ Hell-Workers の物流は、`TransportRequest` を中心にした自動発行 + 
   - 複数グループの範囲に入るアイテムは、最寄りグループ（外周距離）に排他的に割り当てられます。
 - **搬入・ソース選定**:
   - request の `resource_type` は、収集範囲内の近傍フリーアイテムから推定します。
+  - producer 内部では、グループ受入可否（空き容量/固定型）を前計算し、`q_free_items` を **1回だけ走査**して代表型を決定します。
   - ただし、グループ内に「空き容量あり」かつ「`resource_type = None` または対象型と一致」のセルが1つ以上ある型のみ候補になります。
   - 搬入対象は `ResourceType::is_loadable() == true` の資材のみ。
   - 割り当て時にグループ内の**型互換かつ空き容量があるセル**を動的に決定して搬入します。
@@ -165,17 +166,23 @@ WheelbarrowLease {
    - `state == Pending`（ワーカー未割当）
    - lease なし
    - `resource_type.is_loadable()`
-4. **バッチ候補の評価** — 各 eligible request に対して:
-   - 地面上の未予約フリーアイテムを `resource_type` + `BelongsTo` 一致で収集（半径 `TILE_SIZE * 10.0`）
+4. **free item 前処理（1回走査）**:
+   - `q_free_items` を1回だけ走査して `FreeItemSnapshot` を作成
+   - 以下のバケットを構築:
+     - `by_resource`
+     - `by_resource_owner_ground`
+5. **バッチ候補の評価** — 各 eligible request に対して:
+   - request 種別に応じて対応バケットのみ参照（全 free item の再走査はしない）
+   - 半径 `TILE_SIZE * 10.0` 内で近傍 `Top-K`（`WHEELBARROW_ARBITRATION_TOP_K`）を抽出
    - `DepositToStockpile` では「型互換セルのみ」で残容量を計算
-   - 猫車必須資源は、ピックドロップ完結可能な request を仲裁候補から除外
+   - 猫車必須資源は、`Top-K` 候補に対してピックドロップ完結可能判定を行い、成立時は仲裁候補から除外
    - 最小バッチ条件: 猫車必須資源は `1`、それ以外は `WHEELBARROW_MIN_BATCH_SIZE`
-5. **スコア計算** — `score = batch_size * SCORE_BATCH_SIZE + priority * SCORE_PRIORITY - distance * SCORE_DISTANCE`
+6. **スコア計算** — `score = batch_size * SCORE_BATCH_SIZE + priority * SCORE_PRIORITY - distance * SCORE_DISTANCE`
    - `distance` = 最近の wheelbarrow からアイテム重心までの距離
    - 小バッチ（1〜2個）には減点を適用
-6. **Greedy 割り当て** — スコア降順にソートし、各 request に最近の available wheelbarrow を割り当て。
+7. **Greedy 割り当て** — スコア降順にソートし、各 request に最近の available wheelbarrow を割り当て。
    - 割り当て済みの wheelbarrow は available set から除去。
-7. **小バッチ抑制** — 猫車必須資源で `batch_size < WHEELBARROW_PREFERRED_MIN_BATCH_SIZE` の場合:
+8. **小バッチ抑制** — 猫車必須資源で `batch_size < WHEELBARROW_PREFERRED_MIN_BATCH_SIZE` の場合:
    - `pending_since` から `SINGLE_BATCH_WAIT_SECS` 経過前は候補から除外
    - 経過後にのみ割り当て可能
 
@@ -190,6 +197,7 @@ WheelbarrowLease {
 | `WHEELBARROW_SCORE_PRIORITY` | 5.0 | スコア: 優先度の重み |
 | `WHEELBARROW_SCORE_DISTANCE` | 0.1 | スコア: 距離のペナルティ重み |
 | `WHEELBARROW_SCORE_SMALL_BATCH_PENALTY` | 20.0 | 小バッチ減点 |
+| `WHEELBARROW_ARBITRATION_TOP_K` | 24 | request ごとに評価する近傍候補上限 |
 
 #### 5.2.4 割り当て時の lease 優先
 
@@ -213,8 +221,16 @@ WheelbarrowLease {
 
 - `wheelbarrow_leases_active` — アクティブな lease 数
 - `wheelbarrow_leases_granted_this_frame` — そのフレームで新規付与された lease 数
+- `wheelbarrow_arb_eligible_requests` — 仲裁対象として評価した request 数
+- `wheelbarrow_arb_bucket_items_total` — request が参照したバケット候補数（Top-K 前）
+- `wheelbarrow_arb_candidates_after_topk` — Top-K 抽出後に残った候補数
+- `wheelbarrow_arb_elapsed_ms` — 仲裁システム実行時間（ms）
+- `task_area_groups` — TaskArea producer が評価したグループ数
+- `task_area_free_items_scanned` — TaskArea producer が走査した free item 数
+- `task_area_items_matched` — TaskArea producer で条件一致した item 数
+- `task_area_elapsed_ms` — TaskArea producer 実行時間（ms）
 
-5秒間隔のデバッグログに `wb_leases=N` として出力される。
+5秒間隔のデバッグログに `wb_leases` / `wb_arb(...)` / `task_area(...)` として出力される。
 
 ## 6. 予約と競合回避
 

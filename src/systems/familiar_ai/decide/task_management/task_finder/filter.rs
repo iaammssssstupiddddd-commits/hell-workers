@@ -31,7 +31,10 @@ pub(super) fn collect_candidate_entities(
         for &e in designation_grid.get_in_area(area.min, area.max).iter() {
             seen.insert(e);
         }
-        for &e in transport_request_grid.get_in_area(area.min, area.max).iter() {
+        for &e in transport_request_grid
+            .get_in_area(area.min, area.max)
+            .iter()
+        {
             seen.insert(e);
         }
     }

@@ -21,19 +21,44 @@ pub struct TransportRequestMetrics {
     pub wheelbarrow_leases_active: u32,
     /// このフレームで付与された手押し車リース数
     pub wheelbarrow_leases_granted_this_frame: u32,
+    /// 仲裁対象として評価した request 数
+    pub wheelbarrow_arb_eligible_requests: u32,
+    /// 仲裁時に request が参照したバケット候補数（Top-K 前）
+    pub wheelbarrow_arb_bucket_items_total: u32,
+    /// 仲裁時に Top-K 抽出後に残った候補数
+    pub wheelbarrow_arb_candidates_after_topk: u32,
+    /// 仲裁システムの実行時間（ms）
+    pub wheelbarrow_arb_elapsed_ms: f32,
+    /// task area producer が評価した Stockpile グループ数
+    pub task_area_groups: u32,
+    /// task area producer が走査した free item 数
+    pub task_area_free_items_scanned: u32,
+    /// task area producer で条件一致した item 数
+    pub task_area_items_matched: u32,
+    /// task area producer システムの実行時間（ms）
+    pub task_area_elapsed_ms: f32,
 }
 
 impl TransportRequestMetrics {
     pub fn count_pending(&self) -> u32 {
-        *self.by_state.get(&TransportRequestState::Pending).unwrap_or(&0)
+        *self
+            .by_state
+            .get(&TransportRequestState::Pending)
+            .unwrap_or(&0)
     }
 
     pub fn count_claimed(&self) -> u32 {
-        *self.by_state.get(&TransportRequestState::Claimed).unwrap_or(&0)
+        *self
+            .by_state
+            .get(&TransportRequestState::Claimed)
+            .unwrap_or(&0)
     }
 
     pub fn count_in_flight(&self) -> u32 {
-        *self.by_state.get(&TransportRequestState::InFlight).unwrap_or(&0)
+        *self
+            .by_state
+            .get(&TransportRequestState::InFlight)
+            .unwrap_or(&0)
     }
 }
 
@@ -54,14 +79,12 @@ impl TransportRequestKind {
 /// Perceive フェーズ: メトリクスを再集計し、間隔ごとにデバッグログを出力
 pub fn transport_request_metrics_system(
     time: Res<Time>,
-    q_requests: Query<
-        (
-            Entity,
-            &TransportRequest,
-            Option<&TransportRequestState>,
-            Option<&TransportLease>,
-        ),
-    >,
+    q_requests: Query<(
+        Entity,
+        &TransportRequest,
+        Option<&TransportRequestState>,
+        Option<&TransportLease>,
+    )>,
     mut metrics: ResMut<TransportRequestMetrics>,
 ) {
     let delta = time.delta_secs();
@@ -105,10 +128,18 @@ pub fn transport_request_metrics_system(
                 parts.push(format!("{}={}", kind.as_str(), count));
             }
             debug!(
-                "TransportRequest: total={} [{}] wb_leases={}",
+                "TransportRequest: total={} [{}] wb_leases={} wb_arb(eligible={}, bucket={}, topk={}, ms={:.3}) task_area(groups={}, scanned={}, matched={}, ms={:.3})",
                 total,
                 parts.join(", "),
                 metrics.wheelbarrow_leases_active,
+                metrics.wheelbarrow_arb_eligible_requests,
+                metrics.wheelbarrow_arb_bucket_items_total,
+                metrics.wheelbarrow_arb_candidates_after_topk,
+                metrics.wheelbarrow_arb_elapsed_ms,
+                metrics.task_area_groups,
+                metrics.task_area_free_items_scanned,
+                metrics.task_area_items_matched,
+                metrics.task_area_elapsed_ms,
             );
         }
     }
