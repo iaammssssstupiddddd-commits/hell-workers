@@ -5,19 +5,16 @@
 
 use bevy::prelude::*;
 
+use crate::constants::WHEELBARROW_CAPACITY;
 use crate::entities::familiar::{ActiveCommand, FamiliarCommand};
-use crate::events::{DesignationOp, DesignationRequest};
 use crate::relationships::TaskWorkers;
 use crate::systems::command::TaskArea;
-use crate::systems::jobs::{
-    Blueprint, Designation, Priority, SandPile, TaskSlots, TargetBlueprint, WorkType,
-};
+use crate::systems::jobs::{Blueprint, Designation, Priority, TaskSlots, TargetBlueprint, WorkType};
 use crate::systems::logistics::transport_request::{
     TransportDemand, TransportPolicy, TransportPriority, TransportRequest, TransportRequestKind,
     TransportRequestState,
 };
 use crate::systems::logistics::ResourceType;
-use crate::world::map::{TerrainType, WorldMap};
 
 use crate::systems::spatial::BlueprintSpatialGrid;
 
@@ -27,8 +24,6 @@ use crate::systems::spatial::BlueprintSpatialGrid;
 /// 割り当て時（assign_haul）に資材ソースを遅延解決する。
 pub fn blueprint_auto_haul_system(
     mut commands: Commands,
-    mut designation_writer: MessageWriter<DesignationRequest>,
-    world_map: Res<WorldMap>,
     blueprint_grid: Res<BlueprintSpatialGrid>,
     q_familiars: Query<(Entity, &ActiveCommand, &TaskArea)>,
     q_blueprints: Query<(Entity, &Transform, &Blueprint, Option<&TaskWorkers>)>,
@@ -38,16 +33,6 @@ pub fn blueprint_auto_haul_system(
         &TransportRequest,
         Option<&TaskWorkers>,
     )>,
-    q_sand_piles: Query<
-        (
-            Entity,
-            &Transform,
-            Option<&Designation>,
-            Option<&TaskWorkers>,
-        ),
-        With<SandPile>,
-    >,
-    q_task_state: Query<(Option<&Designation>, Option<&TaskWorkers>)>,
 ) {
     // 1. 集計: 各設計図への「運搬中」の数
     // (BlueprintEntity, ResourceType) -> Count
@@ -77,7 +62,6 @@ pub fn blueprint_auto_haul_system(
     // 2. 各 Blueprint の不足分を計算し、desired_requests に格納
     let mut desired_requests =
         std::collections::HashMap::<(Entity, ResourceType), (Entity, u32, Vec2)>::new();
-    let mut collect_sand_pending_fam = std::collections::HashSet::<Entity>::new();
 
     let mut blueprints_to_process = std::collections::HashSet::new();
     for (_, area) in &active_familiars {
@@ -99,7 +83,7 @@ pub fn blueprint_auto_haul_system(
             continue;
         }
 
-        let Some((fam_entity, task_area)) = super::find_owner_familiar(bp_pos, &active_familiars)
+        let Some((fam_entity, _task_area)) = super::find_owner_familiar(bp_pos, &active_familiars)
         else {
             continue;
         };
@@ -113,35 +97,15 @@ pub fn blueprint_auto_haul_system(
             }
 
             let needed = required.saturating_sub(delivered + inflight_count as u32);
+            let desired_slots = if resource_type.requires_wheelbarrow() {
+                needed.div_ceil(WHEELBARROW_CAPACITY as u32).max(1)
+            } else {
+                needed.max(1)
+            };
             desired_requests.insert(
                 (bp_entity, *resource_type),
-                (fam_entity, needed.max(1), bp_pos),
+                (fam_entity, desired_slots, bp_pos),
             );
-
-            if *resource_type == ResourceType::Sand
-                && !collect_sand_pending_fam.contains(&fam_entity)
-                && let Some(source_entity) = find_available_sand_source(
-                    &world_map,
-                    Some(task_area),
-                    bp_pos,
-                    &q_sand_piles,
-                    &q_task_state,
-                )
-            {
-                designation_writer.write(DesignationRequest {
-                    entity: source_entity,
-                    operation: DesignationOp::Issue {
-                        work_type: WorkType::CollectSand,
-                        issued_by: fam_entity,
-                        task_slots: 1,
-                        priority: Some(4),
-                        target_blueprint: None,
-                        target_mixer: None,
-                        reserved_for_task: false,
-                    },
-                });
-                collect_sand_pending_fam.insert(fam_entity);
-            }
         }
     }
 
@@ -231,125 +195,4 @@ pub fn blueprint_auto_haul_system(
             TransportPolicy::default(),
         ));
     }
-}
-
-fn find_available_sand_source(
-    world_map: &WorldMap,
-    task_area: Option<&TaskArea>,
-    target_pos: Vec2,
-    q_sand_piles: &Query<
-        (
-            Entity,
-            &Transform,
-            Option<&Designation>,
-            Option<&TaskWorkers>,
-        ),
-        With<SandPile>,
-    >,
-    q_task_state: &Query<(Option<&Designation>, Option<&TaskWorkers>)>,
-) -> Option<Entity> {
-    let mut best: Option<(Entity, f32)> = None;
-
-    // 1st pass: TaskArea 内を優先
-    for (sp_entity, sp_transform, sp_designation, sp_workers) in q_sand_piles.iter() {
-        let pos = sp_transform.translation.truncate();
-        if let Some(area) = task_area {
-            if !area.contains(pos) {
-                continue;
-            }
-        }
-        if sp_designation.is_some() || sp_workers.map(|w| w.len()).unwrap_or(0) > 0 {
-            continue;
-        }
-
-        let dist_sq = pos.distance_squared(target_pos);
-        match best {
-            Some((_, best_dist_sq)) if best_dist_sq <= dist_sq => {}
-            _ => best = Some((sp_entity, dist_sq)),
-        }
-    }
-
-    // 2nd pass: 水くみと同様に、TaskArea 内に無ければ全体から取得
-    if best.is_none() && task_area.is_some() {
-        for (sp_entity, sp_transform, sp_designation, sp_workers) in q_sand_piles.iter() {
-            let pos = sp_transform.translation.truncate();
-            if sp_designation.is_some() || sp_workers.map(|w| w.len()).unwrap_or(0) > 0 {
-                continue;
-            }
-
-            let dist_sq = pos.distance_squared(target_pos);
-            match best {
-                Some((_, best_dist_sq)) if best_dist_sq <= dist_sq => {}
-                _ => best = Some((sp_entity, dist_sq)),
-            }
-        }
-    }
-
-    if let Some((entity, _)) = best {
-        return Some(entity);
-    }
-
-    let scan_sand_tiles = |area_filter: Option<&TaskArea>| -> Option<(Entity, f32)> {
-        let (x0, y0, x1, y1) = if let Some(area) = area_filter {
-            let (ax0, ay0) = WorldMap::world_to_grid(area.min);
-            let (ax1, ay1) = WorldMap::world_to_grid(area.max);
-            (ax0, ay0, ax1, ay1)
-        } else {
-            (
-                0,
-                0,
-                crate::constants::MAP_WIDTH - 1,
-                crate::constants::MAP_HEIGHT - 1,
-            )
-        };
-
-        let min_x = x0.min(x1);
-        let max_x = x0.max(x1);
-        let min_y = y0.min(y1);
-        let max_y = y0.max(y1);
-
-        let mut best_tile: Option<(Entity, f32)> = None;
-        for gy in min_y..=max_y {
-            for gx in min_x..=max_x {
-                let Some(idx) = world_map.pos_to_idx(gx, gy) else {
-                    continue;
-                };
-                if world_map.tiles[idx] != TerrainType::Sand {
-                    continue;
-                }
-
-                let Some(tile_entity) = world_map.tile_entities[idx] else {
-                    continue;
-                };
-                let Ok((designation, workers)) = q_task_state.get(tile_entity) else {
-                    continue;
-                };
-                if designation.is_some() || workers.map(|w| w.len()).unwrap_or(0) > 0 {
-                    continue;
-                }
-
-                let tile_pos = WorldMap::grid_to_world(gx, gy);
-                if let Some(area) = area_filter {
-                    if !area.contains(tile_pos) {
-                        continue;
-                    }
-                }
-
-                let dist_sq = tile_pos.distance_squared(target_pos);
-                match best_tile {
-                    Some((_, best_dist_sq)) if best_dist_sq <= dist_sq => {}
-                    _ => best_tile = Some((tile_entity, dist_sq)),
-                }
-            }
-        }
-
-        best_tile
-    };
-
-    let mut best_tile = scan_sand_tiles(task_area);
-    if best_tile.is_none() && task_area.is_some() {
-        best_tile = scan_sand_tiles(None);
-    }
-
-    best_tile.map(|(entity, _)| entity)
 }

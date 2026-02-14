@@ -1,12 +1,15 @@
 //! Blueprint 向け運搬タスクの割り当て
 
 use crate::constants::WHEELBARROW_CAPACITY;
+use crate::constants::{MAP_HEIGHT, MAP_WIDTH};
+use crate::systems::command::TaskArea;
 use crate::systems::familiar_ai::decide::task_management::{AssignTaskContext, ReservationShadow};
-use crate::systems::jobs::WorkType;
 use crate::systems::logistics::ResourceType;
 use crate::systems::logistics::transport_request::{
     can_complete_pick_drop_to_blueprint, WheelbarrowDestination,
 };
+use crate::world::map::TerrainType;
+use crate::world::map::WorldMap;
 use bevy::prelude::*;
 
 use super::super::super::builders::{
@@ -45,6 +48,16 @@ pub fn assign_haul_to_blueprint(
     }
 
     // --- 猫車必須リソース ---
+    let remaining_needed = compute_remaining_blueprint_wheelbarrow_amount(
+        blueprint,
+        resource_type,
+        ctx.task_entity,
+        queries,
+        shadow,
+    );
+    if remaining_needed == 0 {
+        return false;
+    }
 
     // 1. Pick-drop チェック: リースがなく、最寄りアイテムが BP 隣接なら単品手運び
     if queries.wheelbarrow_leases.get(ctx.task_entity).is_err() {
@@ -63,11 +76,16 @@ pub fn assign_haul_to_blueprint(
     // 2. リースあり → バリデーションして猫車運搬
     if let Ok(lease) = queries.wheelbarrow_leases.get(ctx.task_entity) {
         if lease_validation::validate_lease(lease, queries, shadow, 1) {
+            let max_items = remaining_needed.min(WHEELBARROW_CAPACITY as u32) as usize;
+            let lease_items: Vec<Entity> = lease.items.iter().copied().take(max_items).collect();
+            if lease_items.is_empty() {
+                return false;
+            }
             issue_haul_with_wheelbarrow(
                 lease.wheelbarrow,
                 lease.source_pos,
                 lease.destination,
-                lease.items.clone(),
+                lease_items,
                 task_pos,
                 already_commanded,
                 ctx,
@@ -80,10 +98,11 @@ pub fn assign_haul_to_blueprint(
 
     // 3. リースなしフォールバック: 最寄り猫車 + 複数アイテム収集
     if let Some(wb_entity) = wheelbarrow::find_nearest_wheelbarrow(task_pos, queries, shadow) {
+        let max_items = remaining_needed.min(WHEELBARROW_CAPACITY as u32) as usize;
         let items = source_selector::collect_nearby_items_for_wheelbarrow(
             resource_type,
             task_pos,
-            WHEELBARROW_CAPACITY,
+            max_items,
             queries,
             shadow,
         );
@@ -115,6 +134,7 @@ pub fn assign_haul_to_blueprint(
     if resource_type == ResourceType::Sand
         && try_direct_sand_collect_with_wheelbarrow(
             blueprint,
+            remaining_needed,
             task_pos,
             already_commanded,
             ctx,
@@ -126,6 +146,52 @@ pub fn assign_haul_to_blueprint(
     }
 
     false
+}
+
+fn compute_remaining_blueprint_wheelbarrow_amount(
+    blueprint: Entity,
+    resource_type: ResourceType,
+    task_entity: Entity,
+    queries: &crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
+    shadow: &ReservationShadow,
+) -> u32 {
+    let Ok((_, blueprint_comp, _)) = queries.storage.blueprints.get(blueprint) else {
+        return 0;
+    };
+
+    let required = *blueprint_comp
+        .required_materials
+        .get(&resource_type)
+        .unwrap_or(&0);
+    let delivered = *blueprint_comp
+        .delivered_materials
+        .get(&resource_type)
+        .unwrap_or(&0);
+    let needed_material = required.saturating_sub(delivered);
+    if needed_material == 0 {
+        return 0;
+    }
+
+    let current_workers = queries
+        .designation
+        .designations
+        .get(task_entity)
+        .ok()
+        .and_then(|(_, _, _, _, _, workers_opt, _, _)| workers_opt.map(|workers| workers.len()))
+        .unwrap_or(0);
+
+    // pending request の仮予約(1)を避けるため、実ワーカーがいる場合のみ cache を参照
+    let reserved_from_cache = if current_workers > 0 {
+        queries
+            .reservation
+            .resource_cache
+            .get_destination_reservation(blueprint)
+    } else {
+        0
+    };
+    let reserved_total = reserved_from_cache + shadow.destination_reserved(blueprint);
+
+    needed_material.saturating_sub(reserved_total as u32)
 }
 
 /// BP 隣接アイテムがあれば単品手運びで運ぶ（pick-drop）
@@ -198,6 +264,7 @@ fn assign_single_item_haul(
 
 fn try_direct_sand_collect_with_wheelbarrow(
     blueprint: Entity,
+    remaining_needed: u32,
     task_pos: Vec2,
     already_commanded: bool,
     ctx: &AssignTaskContext<'_>,
@@ -205,7 +272,7 @@ fn try_direct_sand_collect_with_wheelbarrow(
     shadow: &mut ReservationShadow,
 ) -> bool {
     let Some((source_entity, source_pos)) =
-        find_collect_sand_source(task_pos, ctx.fam_entity, queries, shadow)
+        find_collect_sand_source(task_pos, ctx.task_area_opt, queries, shadow)
     else {
         return false;
     };
@@ -214,13 +281,7 @@ fn try_direct_sand_collect_with_wheelbarrow(
         return false;
     };
 
-    let remaining = queries
-        .transport_demands
-        .get(ctx.task_entity)
-        .ok()
-        .map(|d| d.remaining())
-        .unwrap_or(1);
-    let amount = remaining.max(1).min(WHEELBARROW_CAPACITY as u32);
+    let amount = remaining_needed.max(1).min(WHEELBARROW_CAPACITY as u32);
 
     issue_collect_sand_with_wheelbarrow_to_blueprint(
         wb_entity,
@@ -239,30 +300,107 @@ fn try_direct_sand_collect_with_wheelbarrow(
 
 fn find_collect_sand_source(
     target_pos: Vec2,
-    fam_entity: Entity,
+    task_area_opt: Option<&TaskArea>,
     queries: &crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
     shadow: &ReservationShadow,
 ) -> Option<(Entity, Vec2)> {
-    queries
-        .designation
-        .designations
-        .iter()
-        .filter(|(_, _, designation, managed_by_opt, slots_opt, workers_opt, _, _)| {
-            if designation.work_type != WorkType::CollectSand {
-                return false;
+    let find_sand_pile = |area_filter: Option<&TaskArea>| -> Option<(Entity, Vec2)> {
+        queries
+            .sand_piles
+            .iter()
+            .filter(|(entity, transform, designation_opt, workers_opt)| {
+                if designation_opt.is_some() {
+                    return false;
+                }
+                if workers_opt.map(|workers| workers.len()).unwrap_or(0) > 0 {
+                    return false;
+                }
+                if !source_not_reserved(*entity, queries, shadow) {
+                    return false;
+                }
+                if let Some(area) = area_filter {
+                    area.contains(transform.translation.truncate())
+                } else {
+                    true
+                }
+            })
+            .min_by(|(_, t1, _, _), (_, t2, _, _)| {
+                let d1 = t1.translation.truncate().distance_squared(target_pos);
+                let d2 = t2.translation.truncate().distance_squared(target_pos);
+                d1.partial_cmp(&d2).unwrap_or(std::cmp::Ordering::Equal)
+            })
+            .map(|(entity, transform, _, _)| (entity, transform.translation.truncate()))
+    };
+
+    if let Some(best) = find_sand_pile(task_area_opt) {
+        return Some(best);
+    }
+    if task_area_opt.is_some() && let Some(best) = find_sand_pile(None) {
+        return Some(best);
+    }
+
+    let scan_sand_tiles = |area_filter: Option<&TaskArea>| -> Option<(Entity, Vec2)> {
+        let (x0, y0, x1, y1) = if let Some(area) = area_filter {
+            let (ax0, ay0) = WorldMap::world_to_grid(area.min);
+            let (ax1, ay1) = WorldMap::world_to_grid(area.max);
+            (ax0, ay0, ax1, ay1)
+        } else {
+            (0, 0, MAP_WIDTH - 1, MAP_HEIGHT - 1)
+        };
+
+        let min_x = x0.min(x1);
+        let max_x = x0.max(x1);
+        let min_y = y0.min(y1);
+        let max_y = y0.max(y1);
+
+        let mut best: Option<(Entity, Vec2, f32)> = None;
+        for gy in min_y..=max_y {
+            for gx in min_x..=max_x {
+                let Some(idx) = queries.world_map.pos_to_idx(gx, gy) else {
+                    continue;
+                };
+                if queries.world_map.tiles[idx] != TerrainType::Sand {
+                    continue;
+                }
+
+                let Some(tile_entity) = queries.world_map.tile_entities[idx] else {
+                    continue;
+                };
+                let Ok((designation_opt, workers_opt)) = queries.task_state.get(tile_entity) else {
+                    continue;
+                };
+                if designation_opt.is_some() {
+                    continue;
+                }
+                if workers_opt.map(|workers| workers.len()).unwrap_or(0) > 0 {
+                    continue;
+                }
+                if !source_not_reserved(tile_entity, queries, shadow) {
+                    continue;
+                }
+
+                let tile_pos = WorldMap::grid_to_world(gx, gy);
+                if let Some(area) = area_filter && !area.contains(tile_pos) {
+                    continue;
+                }
+
+                let dist_sq = tile_pos.distance_squared(target_pos);
+                match best {
+                    Some((_, _, best_dist)) if best_dist <= dist_sq => {}
+                    _ => best = Some((tile_entity, tile_pos, dist_sq)),
+                }
             }
-            if managed_by_opt.is_some_and(|managed_by| managed_by.0 != fam_entity) {
-                return false;
-            }
-            let max_slots = slots_opt.map(|slots| slots.max as usize).unwrap_or(1);
-            let workers = workers_opt.map(|workers| workers.len()).unwrap_or(0);
-            workers < max_slots
-        })
-        .filter(|(entity, _, _, _, _, _, _, _)| source_not_reserved(*entity, queries, shadow))
-        .min_by(|(_, t1, _, _, _, _, _, _), (_, t2, _, _, _, _, _, _)| {
-            let d1 = t1.translation.truncate().distance_squared(target_pos);
-            let d2 = t2.translation.truncate().distance_squared(target_pos);
-            d1.partial_cmp(&d2).unwrap_or(std::cmp::Ordering::Equal)
-        })
-        .map(|(entity, transform, _, _, _, _, _, _)| (entity, transform.translation.truncate()))
+        }
+
+        best.map(|(entity, pos, _)| (entity, pos))
+    };
+
+    if let Some(best) = scan_sand_tiles(task_area_opt) {
+        return Some(best);
+    }
+    if task_area_opt.is_some() {
+        return scan_sand_tiles(None);
+    }
+
+    None
 }

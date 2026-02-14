@@ -3,6 +3,7 @@ use super::{
     format_inventory_str, format_task_str,
 };
 use bevy::prelude::*;
+use crate::constants::MUD_MIXER_MUD_CAPACITY;
 
 impl EntityInspectionQuery<'_, '_> {
     pub(super) fn build_soul_model(
@@ -180,8 +181,8 @@ impl EntityInspectionQuery<'_, '_> {
                 _ => 0,
             };
             let storage_line = format!(
-                "Storage: Sand {}, Rock {}, Water {}",
-                storage.sand, storage.rock, water_count
+                "Storage: Sand {}, Rock {}, Water {}, Mud {}/{}",
+                storage.sand, storage.rock, water_count, storage.mud, MUD_MIXER_MUD_CAPACITY
             );
             model.push_tooltip(storage_line.clone());
         }

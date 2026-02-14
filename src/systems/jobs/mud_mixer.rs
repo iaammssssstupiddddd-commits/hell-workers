@@ -1,5 +1,5 @@
 //! MudMixer 関連の定義とロジック
-use crate::constants::MUD_MIXER_CAPACITY;
+use crate::constants::{MUD_MIXER_CAPACITY, MUD_MIXER_MUD_CAPACITY, STASIS_MUD_OUTPUT};
 use crate::systems::logistics::ResourceType;
 use bevy::prelude::*;
 
@@ -8,12 +8,18 @@ use bevy::prelude::*;
 pub struct MudMixerStorage {
     pub sand: u32,
     pub rock: u32,
+    pub mud: u32,
 }
 
 /// ミキサーを対象としたターゲットマーカー
 #[derive(Component, Reflect)]
 #[reflect(Component)]
 pub struct TargetMixer(pub Entity);
+
+/// MudMixer が内部在庫として保持している mud アイテム
+#[derive(Component, Reflect, Debug, Clone, Copy)]
+#[reflect(Component)]
+pub struct StoredByMixer(pub Entity);
 
 
 impl MudMixerStorage {
@@ -71,9 +77,14 @@ impl MudMixerStorage {
         self.sand >= 1 && water_count >= 1 && self.rock >= 1
     }
 
+    /// 次回精製分の mud を保存する空きがあるか
+    pub fn has_output_capacity_for_refining(&self) -> bool {
+        self.mud + STASIS_MUD_OUTPUT <= MUD_MIXER_MUD_CAPACITY
+    }
+
     /// 素材を消費して精製を開始する。成功した場合は Ok(())
     pub fn consume_materials_for_refining(&mut self, water_count: u32) -> Result<(), ()> {
-        if !self.has_materials_for_refining(water_count) {
+        if !self.has_materials_for_refining(water_count) || !self.has_output_capacity_for_refining() {
             return Err(());
         }
 

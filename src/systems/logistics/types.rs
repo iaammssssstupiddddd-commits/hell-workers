@@ -28,6 +28,11 @@ impl ResourceType {
     pub fn requires_wheelbarrow(&self) -> bool {
         matches!(self, ResourceType::Sand | ResourceType::StasisMud)
     }
+
+    /// 汎用 Stockpile に格納できる資源か
+    pub fn can_store_in_stockpile(&self) -> bool {
+        !matches!(self, ResourceType::Sand | ResourceType::StasisMud)
+    }
 }
 
 #[derive(Component, Reflect)]
