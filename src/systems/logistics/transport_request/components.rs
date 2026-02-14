@@ -32,6 +32,21 @@ pub struct TransportRequest {
     pub stockpile_group: Vec<Entity>,
 }
 
+/// 手動 DesignateHaul 由来の request であることを示すマーカー
+#[derive(Component, Debug, Clone, Copy, Reflect, Default)]
+#[reflect(Component, Default)]
+pub struct ManualTransportRequest;
+
+/// 手動 request が固定追跡する source アイテム
+#[derive(Component, Debug, Clone, Copy, Reflect)]
+#[reflect(Component)]
+pub struct TransportRequestFixedSource(pub Entity);
+
+/// 手動 request 向けに source アイテムを占有していることを示す
+#[derive(Component, Debug, Clone, Copy, Reflect, Default)]
+#[reflect(Component, Default)]
+pub struct ManualHaulPinnedSource;
+
 /// 需要管理
 #[derive(Component, Debug, Clone, Reflect)]
 #[reflect(Component)]

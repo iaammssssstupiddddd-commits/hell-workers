@@ -13,6 +13,7 @@ use super::super::super::validator::{
 };
 use super::lease_validation;
 use super::source_selector;
+use super::wheelbarrow;
 
 pub fn assign_haul_to_stockpile(
     task_pos: Vec2,
@@ -21,11 +22,72 @@ pub fn assign_haul_to_stockpile(
     queries: &mut crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
     shadow: &mut ReservationShadow,
 ) -> bool {
-    let Some((stockpile, resource_type, item_owner)) =
+    let Some((stockpile, resource_type, item_owner, fixed_source)) =
         resolve_haul_to_stockpile_inputs(ctx.task_entity, queries)
     else {
         return false;
     };
+
+    if let Some(fixed_source_item) = fixed_source {
+        let Some((source_item, source_pos)) = source_selector::find_fixed_stockpile_source_item(
+            fixed_source_item,
+            resource_type,
+            item_owner,
+            queries,
+            shadow,
+        ) else {
+            debug!(
+                "ASSIGN: Manual stockpile request {:?} fixed source {:?} unavailable",
+                ctx.task_entity, fixed_source_item
+            );
+            return false;
+        };
+
+        if resource_type.requires_wheelbarrow()
+            && let Ok((_, stock_transform, _, _)) = queries.storage.stockpiles.get(stockpile)
+        {
+            let stock_pos = stock_transform.translation.truncate();
+            if can_complete_pick_drop_to_point(source_pos, stock_pos) {
+                issue_haul_to_stockpile_with_source(
+                    source_item,
+                    stockpile,
+                    source_pos,
+                    already_commanded,
+                    ctx,
+                    queries,
+                    shadow,
+                );
+                return true;
+            }
+            if let Some(wb_entity) = wheelbarrow::find_nearest_wheelbarrow(task_pos, queries, shadow)
+            {
+                issue_haul_with_wheelbarrow(
+                    wb_entity,
+                    source_pos,
+                    WheelbarrowDestination::Stockpile(stockpile),
+                    vec![source_item],
+                    task_pos,
+                    already_commanded,
+                    ctx,
+                    queries,
+                    shadow,
+                );
+                return true;
+            }
+            return false;
+        }
+
+        issue_haul_to_stockpile_with_source(
+            source_item,
+            stockpile,
+            source_pos,
+            already_commanded,
+            ctx,
+            queries,
+            shadow,
+        );
+        return true;
+    }
 
     if resource_type.requires_wheelbarrow()
         && queries.wheelbarrow_leases.get(ctx.task_entity).is_err()
