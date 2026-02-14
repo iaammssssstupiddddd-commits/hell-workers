@@ -6,7 +6,7 @@ use crate::relationships::WorkingOn;
 use crate::systems::soul_ai::execute::task_execution::{
     common::*,
     context::TaskExecutionContext,
-    transport_common::reservation,
+    transport_common::{cancel, reservation},
     types::{AssignedTask, HaulToBpPhase},
 };
 use crate::world::map::WorldMap;
@@ -50,22 +50,9 @@ pub fn handle_haul_to_blueprint_task(
 
     match phase {
         HaulToBpPhase::GoingToItem => {
-            if let Ok((item_transform, _, _, _, _, des_opt, stored_in_opt)) =
+            if let Ok((item_transform, _, _, _, _, _, stored_in_opt)) =
                 q_targets.get(item_entity)
             {
-                // M3: request 方式ではアイテムに Designation を付けないため、
-                // des_opt が None でもキャンセルしない。従来のアイテム方式の場合のみ確認。
-                if des_opt.is_some()
-                    && cancel_task_if_designation_missing(des_opt, ctx.task, ctx.path)
-                {
-                    info!(
-                        "HAUL_TO_BP: Cancelled for {:?} - Designation missing",
-                        ctx.soul_entity
-                    );
-                    commands.entity(ctx.soul_entity).remove::<WorkingOn>();
-                    return;
-                }
-
                 let item_pos = item_transform.translation.truncate();
                 update_destination_to_adjacent(
                     ctx.dest,
@@ -120,8 +107,7 @@ pub fn handle_haul_to_blueprint_task(
                     "HAUL_TO_BP: Cancelled for {:?} - Item {:?} gone",
                     ctx.soul_entity, item_entity
                 );
-                clear_task_and_path(ctx.task, ctx.path);
-                commands.entity(ctx.soul_entity).remove::<WorkingOn>();
+                cancel::cancel_haul_to_blueprint(ctx, item_entity, blueprint_entity);
             }
         }
         HaulToBpPhase::GoingToBlueprint => {
