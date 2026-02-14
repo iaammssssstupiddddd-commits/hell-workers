@@ -2,11 +2,157 @@ use super::geometry::in_selection_area;
 use crate::entities::damned_soul::Destination;
 use crate::entities::familiar::{ActiveCommand, Familiar, FamiliarCommand};
 use crate::events::OnTaskAbandoned;
-use crate::relationships::{ManagedBy, TaskWorkers, WorkingOn};
+use crate::relationships::{ManagedBy, StoredItems, TaskWorkers, WorkingOn};
 use crate::systems::command::{TaskArea, TaskMode};
 use crate::systems::jobs::{Blueprint, Designation, Priority, Rock, TaskSlots, Tree, WorkType};
-use crate::systems::logistics::ResourceItem;
+use crate::systems::logistics::transport_request::{
+    ManualHaulPinnedSource, ManualTransportRequest, TransportDemand, TransportPolicy,
+    TransportPriority, TransportRequest, TransportRequestFixedSource, TransportRequestKind,
+    TransportRequestState,
+};
+use crate::systems::logistics::{BelongsTo, BucketStorage, ResourceItem, ResourceType, Stockpile};
 use bevy::prelude::*;
+
+fn pick_manual_haul_stockpile_anchor(
+    source_pos: Vec2,
+    resource_type: ResourceType,
+    item_owner: Option<Entity>,
+    q_targets: &Query<(
+        Entity,
+        &Transform,
+        Option<&Tree>,
+        Option<&Rock>,
+        Option<&ResourceItem>,
+        Option<&Designation>,
+        Option<&TaskWorkers>,
+        Option<&Blueprint>,
+        Option<&BelongsTo>,
+        Option<&TransportRequest>,
+        Option<&TransportRequestFixedSource>,
+        Option<&Stockpile>,
+        Option<&StoredItems>,
+        Option<&BucketStorage>,
+        Option<&ManualTransportRequest>,
+    )>,
+) -> Option<Entity> {
+    let is_bucket = matches!(
+        resource_type,
+        ResourceType::BucketEmpty | ResourceType::BucketWater
+    );
+
+    let mut best_with_capacity: Option<(Entity, f32)> = None;
+    let mut best_any_capacity: Option<(Entity, f32)> = None;
+
+    for (
+        stock_entity,
+        stock_transform,
+        _,
+        _,
+        _,
+        _,
+        _,
+        _,
+        stock_owner_opt,
+        _,
+        _,
+        stockpile_opt,
+        stored_opt,
+        bucket_opt,
+        _,
+    ) in q_targets.iter()
+    {
+        let Some(stockpile) = stockpile_opt else {
+            continue;
+        };
+        let stock_owner = stock_owner_opt.map(|belongs| belongs.0);
+        if stock_owner != item_owner {
+            continue;
+        }
+
+        let is_bucket_storage = bucket_opt.is_some();
+        if is_bucket_storage && !is_bucket {
+            continue;
+        }
+
+        let is_dedicated = stock_owner.is_some();
+        let type_match = if is_dedicated && is_bucket {
+            true
+        } else {
+            stockpile.resource_type.is_none() || stockpile.resource_type == Some(resource_type)
+        };
+        if !type_match {
+            continue;
+        }
+
+        let dist_sq = stock_transform
+            .translation
+            .truncate()
+            .distance_squared(source_pos);
+        match best_any_capacity {
+            Some((_, best_dist_sq)) if best_dist_sq <= dist_sq => {}
+            _ => best_any_capacity = Some((stock_entity, dist_sq)),
+        }
+
+        let current = stored_opt.map(|stored| stored.len()).unwrap_or(0);
+        if current >= stockpile.capacity {
+            continue;
+        }
+        match best_with_capacity {
+            Some((_, best_dist_sq)) if best_dist_sq <= dist_sq => {}
+            _ => best_with_capacity = Some((stock_entity, dist_sq)),
+        }
+    }
+
+    best_with_capacity
+        .or(best_any_capacity)
+        .map(|(entity, _)| entity)
+}
+
+fn find_manual_request_for_source(
+    source_entity: Entity,
+    q_targets: &Query<(
+        Entity,
+        &Transform,
+        Option<&Tree>,
+        Option<&Rock>,
+        Option<&ResourceItem>,
+        Option<&Designation>,
+        Option<&TaskWorkers>,
+        Option<&Blueprint>,
+        Option<&BelongsTo>,
+        Option<&TransportRequest>,
+        Option<&TransportRequestFixedSource>,
+        Option<&Stockpile>,
+        Option<&StoredItems>,
+        Option<&BucketStorage>,
+        Option<&ManualTransportRequest>,
+    )>,
+) -> Option<Entity> {
+    q_targets.iter().find_map(
+        |(
+            request_entity,
+            _,
+            _,
+            _,
+            _,
+            _,
+            _,
+            _,
+            _,
+            transport_request_opt,
+            fixed_source_opt,
+            _,
+            _,
+            _,
+            manual_opt,
+        )| {
+            (manual_opt.is_some()
+                && transport_request_opt.is_some()
+                && fixed_source_opt.map(|source| source.0) == Some(source_entity))
+            .then_some(request_entity)
+        },
+    )
+}
 
 pub(super) fn apply_task_area_to_familiar(
     familiar_entity: Entity,
@@ -56,6 +202,8 @@ pub(super) fn cancel_single_designation(
     target_entity: Entity,
     task_workers: Option<&TaskWorkers>,
     is_blueprint: bool,
+    is_transport_request: bool,
+    fixed_source: Option<Entity>,
 ) {
     // 作業者への通知
     if let Some(workers) = task_workers {
@@ -65,7 +213,13 @@ pub(super) fn cancel_single_designation(
         }
     }
 
-    if is_blueprint {
+    if let Some(source_entity) = fixed_source {
+        commands
+            .entity(source_entity)
+            .remove::<ManualHaulPinnedSource>();
+    }
+
+    if is_blueprint || is_transport_request {
         // Blueprint はエンティティごと despawn する
         // WorldMap のクリーンアップは blueprint_cancel_cleanup_system が担当
         commands.entity(target_entity).despawn();
@@ -90,6 +244,13 @@ pub(super) fn apply_designation_in_area(
         Option<&Designation>,
         Option<&TaskWorkers>,
         Option<&Blueprint>,
+        Option<&BelongsTo>,
+        Option<&TransportRequest>,
+        Option<&TransportRequestFixedSource>,
+        Option<&Stockpile>,
+        Option<&StoredItems>,
+        Option<&BucketStorage>,
+        Option<&ManualTransportRequest>,
     )>,
 ) {
     let work_type = match mode {
@@ -99,8 +260,23 @@ pub(super) fn apply_designation_in_area(
         _ => None,
     };
 
-    for (target_entity, transform, tree, rock, item, designation, task_workers, blueprint) in
-        q_targets.iter()
+    for (
+        target_entity,
+        transform,
+        tree,
+        rock,
+        item,
+        designation,
+        task_workers,
+        blueprint,
+        belongs_to,
+        transport_request,
+        fixed_source,
+        _stockpile,
+        _stored_items,
+        _bucket_storage,
+        _manual_request,
+    ) in q_targets.iter()
     {
         let pos = transform.translation.truncate();
         if !in_selection_area(area, pos) {
@@ -115,6 +291,86 @@ pub(super) fn apply_designation_in_area(
                 _ => false,
             };
             if !match_found {
+                continue;
+            }
+
+            if wt == WorkType::Haul {
+                let Some(issuer) = issued_by else {
+                    warn!(
+                        "MANUAL_HAUL: Skipped source {:?} because no familiar is selected",
+                        target_entity
+                    );
+                    continue;
+                };
+                let Some(item_type) = item.map(|it| it.0) else {
+                    continue;
+                };
+
+                let item_owner = belongs_to.map(|belongs| belongs.0);
+                let Some(anchor_stockpile) =
+                    pick_manual_haul_stockpile_anchor(pos, item_type, item_owner, q_targets)
+                else {
+                    debug!(
+                        "MANUAL_HAUL: No stockpile anchor found for source {:?} ({:?})",
+                        target_entity, item_type
+                    );
+                    continue;
+                };
+
+                if designation.is_some()
+                    && transport_request.is_none()
+                    && designation.is_some_and(|d| d.work_type == WorkType::Haul)
+                {
+                    commands
+                        .entity(target_entity)
+                        .remove::<Designation>()
+                        .remove::<TaskSlots>()
+                        .remove::<ManagedBy>()
+                        .remove::<Priority>();
+                }
+
+                commands.entity(target_entity).insert(ManualHaulPinnedSource);
+
+                let request_entity =
+                    find_manual_request_for_source(target_entity, q_targets);
+                let mut request_cmd = if let Some(existing) = request_entity {
+                    commands.entity(existing)
+                } else {
+                    commands.spawn_empty()
+                };
+
+                request_cmd.insert((
+                    Name::new("TransportRequest::ManualDesignateHaul"),
+                    Transform::from_xyz(pos.x, pos.y, 0.0),
+                    Visibility::Inherited,
+                    Designation {
+                        work_type: WorkType::Haul,
+                    },
+                    ManagedBy(issuer),
+                    TaskSlots::new(1),
+                    Priority(0),
+                    TransportRequest {
+                        kind: TransportRequestKind::DepositToStockpile,
+                        anchor: anchor_stockpile,
+                        resource_type: item_type,
+                        issued_by: issuer,
+                        priority: TransportPriority::Normal,
+                        stockpile_group: vec![],
+                    },
+                    TransportDemand {
+                        desired_slots: 1,
+                        inflight: 0,
+                    },
+                    TransportRequestState::Pending,
+                    TransportPolicy::default(),
+                    ManualTransportRequest,
+                    TransportRequestFixedSource(target_entity),
+                ));
+
+                info!(
+                    "MANUAL_HAUL: Upserted request for source {:?} -> stockpile {:?}",
+                    target_entity, anchor_stockpile
+                );
                 continue;
             }
 
@@ -150,6 +406,8 @@ pub(super) fn apply_designation_in_area(
                 target_entity,
                 task_workers,
                 blueprint.is_some(),
+                transport_request.is_some(),
+                fixed_source.map(|source| source.0),
             );
         }
     }

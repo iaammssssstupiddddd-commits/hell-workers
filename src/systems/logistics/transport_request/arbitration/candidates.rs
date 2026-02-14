@@ -7,9 +7,9 @@ use crate::constants::*;
 use crate::relationships::{StoredIn, StoredItems};
 use crate::systems::jobs::Blueprint;
 use crate::systems::logistics::transport_request::{
-    can_complete_pick_drop_to_blueprint, can_complete_pick_drop_to_point,
-    TransportDemand, TransportRequest, TransportRequestKind, TransportRequestState,
-    WheelbarrowDestination, WheelbarrowLease, WheelbarrowPendingSince,
+    can_complete_pick_drop_to_blueprint, can_complete_pick_drop_to_point, ManualHaulPinnedSource,
+    ManualTransportRequest, TransportDemand, TransportRequest, TransportRequestKind,
+    TransportRequestState, WheelbarrowDestination, WheelbarrowLease, WheelbarrowPendingSince,
 };
 use crate::systems::logistics::{BelongsTo, ResourceItem, ResourceType, ReservedForTask, Stockpile};
 use bevy::prelude::*;
@@ -23,6 +23,7 @@ pub fn build_free_item_buckets(
             Without<crate::systems::jobs::Designation>,
             Without<crate::relationships::TaskWorkers>,
             Without<ReservedForTask>,
+            Without<ManualHaulPinnedSource>,
         ),
     >,
     q_belongs: &Query<&BelongsTo>,
@@ -77,10 +78,14 @@ pub fn build_request_eval_context(
     transform: &Transform,
     lease_opt: Option<&WheelbarrowLease>,
     pending_since_opt: Option<&WheelbarrowPendingSince>,
+    manual_opt: Option<&ManualTransportRequest>,
     now: f64,
     q_belongs: &Query<&BelongsTo>,
     q_stockpiles: &Query<(&Stockpile, Option<&StoredItems>)>,
 ) -> Option<RequestEvalContext> {
+    if manual_opt.is_some() {
+        return None;
+    }
     let eligible_kind = match req.kind {
         TransportRequestKind::DepositToStockpile => true,
         TransportRequestKind::DeliverToBlueprint | TransportRequestKind::DeliverToMixerSolid => {

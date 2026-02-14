@@ -11,7 +11,7 @@ use crate::systems::familiar_ai::decide::task_management::ReservationShadow;
 pub fn resolve_haul_to_stockpile_inputs(
     task_entity: Entity,
     queries: &crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
-) -> Option<(Entity, ResourceType, Option<Entity>)> {
+) -> Option<(Entity, ResourceType, Option<Entity>, Option<Entity>)> {
     let req = queries.transport_requests.get(task_entity).ok()?;
     if !matches!(req.kind, TransportRequestKind::DepositToStockpile) {
         return None;
@@ -19,6 +19,11 @@ pub fn resolve_haul_to_stockpile_inputs(
 
     let resource_type = req.resource_type;
     let item_owner = queries.designation.belongs.get(req.anchor).ok().map(|b| b.0);
+    let fixed_source = queries
+        .transport_request_fixed_sources
+        .get(task_entity)
+        .ok()
+        .map(|source| source.0);
 
     // グループ内の受け入れ可能な空きセルを探す
     let stockpile = if req.stockpile_group.is_empty() {
@@ -49,7 +54,7 @@ pub fn resolve_haul_to_stockpile_inputs(
             .map(|(cell, _)| cell)?
     };
 
-    Some((stockpile, resource_type, item_owner))
+    Some((stockpile, resource_type, item_owner, fixed_source))
 }
 
 /// Resolves (bucket, tank) for GatherWater.

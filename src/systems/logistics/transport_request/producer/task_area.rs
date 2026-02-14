@@ -12,8 +12,9 @@ use crate::relationships::{StoredItems, TaskWorkers};
 use crate::systems::command::TaskArea;
 use crate::systems::jobs::{Designation, Priority, TaskSlots, WorkType};
 use crate::systems::logistics::transport_request::{
-    TransportDemand, TransportPolicy, TransportPriority, TransportRequest, TransportRequestKind,
-    TransportRequestMetrics, TransportRequestState,
+    ManualHaulPinnedSource, ManualTransportRequest, TransportDemand, TransportPolicy,
+    TransportPriority, TransportRequest, TransportRequestKind, TransportRequestMetrics,
+    TransportRequestState,
 };
 use crate::systems::logistics::{BelongsTo, BucketStorage, ResourceType, Stockpile};
 
@@ -120,6 +121,7 @@ fn pick_representative_resource_type_per_group(
             Without<Designation>,
             Without<TaskWorkers>,
             Without<crate::systems::logistics::ReservedForTask>,
+            Without<ManualHaulPinnedSource>,
             Without<crate::systems::logistics::InStockpile>,
         ),
     >,
@@ -195,7 +197,8 @@ pub fn task_area_auto_haul_system(
         Option<&BelongsTo>,
         Option<&BucketStorage>,
     )>,
-    q_stockpile_requests: Query<(Entity, &TransportRequest, Option<&TaskWorkers>)>,
+    q_stockpile_requests:
+        Query<(Entity, &TransportRequest, Option<&TaskWorkers>), Without<ManualTransportRequest>>,
     q_free_items: Query<
         (
             &Transform,
@@ -207,6 +210,7 @@ pub fn task_area_auto_haul_system(
             Without<Designation>,
             Without<TaskWorkers>,
             Without<crate::systems::logistics::ReservedForTask>,
+            Without<ManualHaulPinnedSource>,
             Without<crate::systems::logistics::InStockpile>,
         ),
     >,

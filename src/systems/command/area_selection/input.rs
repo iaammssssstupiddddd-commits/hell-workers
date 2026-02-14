@@ -11,10 +11,15 @@ use crate::game_state::{PlayMode, TaskContext};
 use crate::interface::camera::MainCamera;
 use crate::interface::selection::SelectedEntity;
 use crate::interface::ui::UiInputState;
-use crate::relationships::TaskWorkers;
+use crate::relationships::{StoredItems, TaskWorkers};
 use crate::systems::command::{AreaSelectionIndicator, TaskArea, TaskMode};
 use crate::systems::jobs::{Blueprint, Designation, Rock, Tree};
-use crate::systems::logistics::ResourceItem;
+use crate::systems::logistics::transport_request::{
+    ManualTransportRequest, TransportRequest, TransportRequestFixedSource,
+};
+use crate::systems::logistics::{
+    BelongsTo, BucketStorage, ResourceItem, Stockpile,
+};
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
@@ -97,6 +102,13 @@ pub fn task_area_selection_system(
         Option<&Designation>,
         Option<&TaskWorkers>,
         Option<&Blueprint>,
+        Option<&BelongsTo>,
+        Option<&TransportRequest>,
+        Option<&TransportRequestFixedSource>,
+        Option<&Stockpile>,
+        Option<&StoredItems>,
+        Option<&BucketStorage>,
+        Option<&ManualTransportRequest>,
     )>,
     mut commands: Commands,
     keyboard: Res<ButtonInput<KeyCode>>,
@@ -284,7 +296,13 @@ pub fn task_area_selection_system(
         | TaskMode::DesignateHaul(Some(start_pos)) => {
             let mode = task_context.0;
             let area = TaskArea::from_points(start_pos, WorldMap::snap_to_grid_edge(world_pos));
-            apply_designation_in_area(&mut commands, mode, &area, selected.0, &q_targets);
+            apply_designation_in_area(
+                &mut commands,
+                mode,
+                &area,
+                selected.0,
+                &q_targets,
+            );
             task_context.0 = reset_designation_mode(mode);
         }
         TaskMode::CancelDesignation(Some(start_pos)) => {
@@ -293,9 +311,31 @@ pub fn task_area_selection_system(
 
             if drag_distance < TILE_SIZE * 0.5 {
                 // クリックキャンセル: 最も近い Designation 持ちエンティティを個別キャンセル
-                let mut closest: Option<(Entity, f32, Option<&TaskWorkers>, bool)> = None;
-                for (entity, transform, _, _, _, designation, task_workers, blueprint) in
-                    q_targets.iter()
+                let mut closest: Option<(
+                    Entity,
+                    f32,
+                    Option<&TaskWorkers>,
+                    bool,
+                    bool,
+                    Option<Entity>,
+                )> = None;
+                for (
+                    entity,
+                    transform,
+                    _,
+                    _,
+                    _,
+                    designation,
+                    task_workers,
+                    blueprint,
+                    _,
+                    transport_request,
+                    fixed_source,
+                    _,
+                    _,
+                    _,
+                    _,
+                ) in q_targets.iter()
                 {
                     if designation.is_none() {
                         continue;
@@ -304,17 +344,34 @@ pub fn task_area_selection_system(
                     let dist = pos.distance(start_pos);
                     if dist < TILE_SIZE {
                         if closest.is_none() || dist < closest.unwrap().1 {
-                            closest = Some((entity, dist, task_workers, blueprint.is_some()));
+                            closest = Some((
+                                entity,
+                                dist,
+                                task_workers,
+                                blueprint.is_some(),
+                                transport_request.is_some(),
+                                fixed_source.map(|source| source.0),
+                            ));
                         }
                     }
                 }
 
-                if let Some((target_entity, _, task_workers, is_blueprint)) = closest {
+                if let Some((
+                    target_entity,
+                    _,
+                    task_workers,
+                    is_blueprint,
+                    is_transport_request,
+                    fixed_source,
+                )) = closest
+                {
                     cancel_single_designation(
                         &mut commands,
                         target_entity,
                         task_workers,
                         is_blueprint,
+                        is_transport_request,
+                        fixed_source,
                     );
                     info!(
                         "CANCEL: Click-cancelled designation on {:?}",

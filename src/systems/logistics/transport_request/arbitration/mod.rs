@@ -16,8 +16,8 @@ use crate::constants::*;
 use crate::relationships::{ParkedAt, PushedBy};
 use crate::systems::jobs::Blueprint;
 use crate::systems::logistics::transport_request::{
-    TransportDemand, TransportRequest, TransportRequestKind, TransportRequestState,
-    WheelbarrowLease, WheelbarrowPendingSince,
+    ManualHaulPinnedSource, ManualTransportRequest, TransportDemand, TransportRequest,
+    TransportRequestKind, TransportRequestState, WheelbarrowLease, WheelbarrowPendingSince,
 };
 use crate::systems::logistics::{ReservedForTask, Wheelbarrow};
 use bevy::prelude::*;
@@ -41,6 +41,7 @@ pub fn wheelbarrow_arbitration_system(
         &Transform,
         Option<&WheelbarrowLease>,
         Option<&WheelbarrowPendingSince>,
+        Option<&ManualTransportRequest>,
     )>,
     q_wheelbarrows: Query<
         (Entity, &Transform),
@@ -52,6 +53,7 @@ pub fn wheelbarrow_arbitration_system(
             Without<crate::systems::jobs::Designation>,
             Without<crate::relationships::TaskWorkers>,
             Without<ReservedForTask>,
+            Without<ManualHaulPinnedSource>,
         ),
     >,
     q_belongs: Query<&crate::systems::logistics::BelongsTo>,
@@ -115,6 +117,7 @@ fn update_lease_state(
         &Transform,
         Option<&WheelbarrowLease>,
         Option<&WheelbarrowPendingSince>,
+        Option<&ManualTransportRequest>,
     )>,
     q_free_items: &Query<
         (Entity, &Transform, &Visibility, &crate::systems::logistics::ResourceItem),
@@ -122,6 +125,7 @@ fn update_lease_state(
             Without<crate::systems::jobs::Designation>,
             Without<crate::relationships::TaskWorkers>,
             Without<ReservedForTask>,
+            Without<ManualHaulPinnedSource>,
         ),
     >,
     q_wheelbarrows: &Query<
@@ -132,7 +136,7 @@ fn update_lease_state(
 ) -> HashSet<Entity> {
     let mut used_wheelbarrows = HashSet::new();
 
-    for (req_entity, req, state, _demand, _transform, lease_opt, pending_since_opt) in
+    for (req_entity, req, state, _demand, _transform, lease_opt, pending_since_opt, _) in
         q_requests.iter()
     {
         if let Some(lease) = lease_opt {
@@ -184,6 +188,7 @@ fn collect_candidates(
         &Transform,
         Option<&WheelbarrowLease>,
         Option<&WheelbarrowPendingSince>,
+        Option<&ManualTransportRequest>,
     )>,
     q_free_items: &Query<
         (Entity, &Transform, &Visibility, &crate::systems::logistics::ResourceItem),
@@ -191,6 +196,7 @@ fn collect_candidates(
             Without<crate::systems::jobs::Designation>,
             Without<crate::relationships::TaskWorkers>,
             Without<ReservedForTask>,
+            Without<ManualHaulPinnedSource>,
         ),
     >,
     q_belongs: &Query<&crate::systems::logistics::BelongsTo>,
@@ -217,7 +223,7 @@ fn collect_candidates(
     let search_radius_sq = (crate::constants::TILE_SIZE * 10.0)
         * (crate::constants::TILE_SIZE * 10.0);
 
-    for (req_entity, req, state, demand, transform, lease_opt, pending_since_opt) in
+    for (req_entity, req, state, demand, transform, lease_opt, pending_since_opt, manual_opt) in
         q_requests.iter()
     {
         let Some(eval) = build_request_eval_context(
@@ -228,6 +234,7 @@ fn collect_candidates(
             transform,
             lease_opt,
             pending_since_opt,
+            manual_opt,
             now,
             q_belongs,
             q_stockpiles,
