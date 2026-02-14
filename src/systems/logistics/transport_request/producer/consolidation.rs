@@ -46,10 +46,6 @@ pub fn stockpile_consolidation_producer_system(
         (Entity, &TransportRequest, Option<&TaskWorkers>),
         Without<ManualTransportRequest>,
     >,
-    q_active_deposit_requests: Query<
-        &TransportRequest,
-        (Without<ManualTransportRequest>, With<Designation>),
-    >,
 ) {
     let active_familiars: Vec<(Entity, TaskArea)> = q_familiars
         .iter()
@@ -59,24 +55,11 @@ pub fn stockpile_consolidation_producer_system(
 
     let groups = build_stockpile_groups(&stockpile_grid, &active_familiars, &q_stockpiles);
 
-    // グループにアクティブな（Designation付き）DepositToStockpile がある場合はスキップ
-    let mut groups_with_active_deposit = std::collections::HashSet::<Entity>::new();
-    for req in q_active_deposit_requests.iter() {
-        if req.kind == TransportRequestKind::DepositToStockpile {
-            groups_with_active_deposit.insert(req.anchor);
-        }
-    }
-
     // 統合候補を算出
     let mut desired_requests =
         HashMap::<(Entity, ResourceType), (Entity, Vec<Entity>, usize, Vec2)>::new();
 
     for group in &groups {
-        // グループにアクティブな DepositToStockpile がある場合はスキップ（通常搬入を優先）
-        if groups_with_active_deposit.contains(&group.representative) {
-            continue;
-        }
-
         // セル情報を収集
         let mut cells: Vec<CellInfo> = Vec::new();
         for &cell in &group.cells {
@@ -134,12 +117,17 @@ pub fn stockpile_consolidation_producer_system(
                 continue;
             }
 
-            // レシーバー = 最多格納セル、ドナー = それ以外
-            let receiver = type_cells[0].entity;
-            let donor_cells: Vec<Entity> = type_cells[1..]
-                .iter()
-                .filter(|c| c.stored > 0)
-                .map(|c| c.entity)
+            // レシーバー = 最初に見つかった満杯でないセル、ドナー = それ以外
+            let receiver_idx = type_cells.iter().position(|c| c.stored < c.capacity);
+            let Some(r_idx) = receiver_idx else {
+                continue; // 全セル満杯
+            };
+            
+            let receiver = type_cells[r_idx].entity;
+            let donor_cells: Vec<Entity> = type_cells.iter()
+                .enumerate()
+                .filter(|(i, c)| *i != r_idx && c.stored > 0)
+                .map(|(_, c)| c.entity)
                 .collect();
 
             if donor_cells.is_empty() {
@@ -147,7 +135,7 @@ pub fn stockpile_consolidation_producer_system(
             }
 
             // 移動数 = レシーバーの空き容量（実際に移動可能な量）
-            let receiver_free = type_cells[0].capacity.saturating_sub(type_cells[0].stored);
+            let receiver_free = type_cells[r_idx].capacity.saturating_sub(type_cells[r_idx].stored);
             let donor_total: usize = donor_cells
                 .iter()
                 .filter_map(|&e| type_cells.iter().find(|c| c.entity == e))
