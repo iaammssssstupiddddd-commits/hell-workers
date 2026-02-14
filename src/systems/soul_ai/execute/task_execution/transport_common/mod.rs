@@ -5,4 +5,5 @@
 pub mod cancel;
 pub mod lifecycle;
 pub mod reservation;
+pub mod sand_collect;
 pub mod wheelbarrow;

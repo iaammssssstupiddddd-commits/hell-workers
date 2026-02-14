@@ -6,7 +6,7 @@ use crate::systems::logistics::transport_request::WheelbarrowDestination;
 use crate::systems::logistics::{InStockpile, Wheelbarrow};
 use crate::systems::soul_ai::execute::task_execution::common::*;
 use crate::systems::soul_ai::execute::task_execution::transport_common::{
-    reservation,
+    reservation, sand_collect,
     wheelbarrow as wheelbarrow_common,
 };
 use crate::systems::soul_ai::execute::task_execution::{
@@ -152,6 +152,48 @@ fn handle_loading(
     data: HaulWithWheelbarrowData,
     commands: &mut Commands,
 ) {
+    if let Some(source_entity) = data.collect_source {
+        let collect_amount = data.collect_amount.max(1);
+        if data.collect_resource_type != Some(crate::systems::logistics::ResourceType::Sand) {
+            cancel_wheelbarrow_task(ctx, &data, commands);
+            return;
+        }
+        if ctx.queries.designation.targets.get(source_entity).is_err() {
+            cancel_wheelbarrow_task(ctx, &data, commands);
+            return;
+        }
+
+        let collected_items = sand_collect::spawn_loaded_sand_items(
+            commands,
+            data.wheelbarrow,
+            data.source_pos,
+            collect_amount,
+        );
+        if collected_items.is_empty() {
+            cancel_wheelbarrow_task(ctx, &data, commands);
+            return;
+        }
+
+        sand_collect::clear_collect_sand_designation(commands, source_entity);
+        reservation::release_source(ctx, source_entity, 1);
+
+        let loaded_count = collected_items.len();
+        let mut next_data = data;
+        next_data.items = collected_items;
+        next_data.destination_reserved = loaded_count as u32;
+        next_data.collect_source = None;
+        next_data.collect_amount = 0;
+        next_data.collect_resource_type = None;
+        next_data.phase = HaulWithWheelbarrowPhase::GoingToDestination;
+        *ctx.task = AssignedTask::HaulWithWheelbarrow(next_data);
+
+        info!(
+            "WB_HAUL: Soul {:?} collected {} sand directly into wheelbarrow",
+            ctx.soul_entity, loaded_count
+        );
+        return;
+    }
+
     // アイテム情報を先に収集（borrowing conflict 回避）
     let items_to_load: Vec<(Entity, Option<Entity>)> = data
         .items
@@ -498,6 +540,7 @@ fn handle_returning_wheelbarrow(
 ) {
     let Ok(_) = q_wheelbarrows.get(data.wheelbarrow) else {
         // 手押し車消失
+        reservation::release_source(ctx, data.wheelbarrow, 1);
         ctx.inventory.0 = None;
         commands.entity(ctx.soul_entity).remove::<WorkingOn>();
         clear_task_and_path(ctx.task, ctx.path);
@@ -531,6 +574,7 @@ fn handle_returning_wheelbarrow(
     );
 
     if !reachable {
+        reservation::release_source(ctx, data.wheelbarrow, 1);
         wheelbarrow_common::complete_wheelbarrow_task(commands, ctx, &data, soul_pos);
         info!(
             "WB_HAUL: Soul {:?} returned wheelbarrow {:?} (unreachable, parked here)",
@@ -540,6 +584,7 @@ fn handle_returning_wheelbarrow(
     }
 
     if is_near_target(soul_pos, parking_pos) {
+        reservation::release_source(ctx, data.wheelbarrow, 1);
         wheelbarrow_common::complete_wheelbarrow_task(commands, ctx, &data, parking_pos);
         info!(
             "WB_HAUL: Soul {:?} returned wheelbarrow {:?}",
@@ -610,6 +655,13 @@ fn drop_items_and_cancel(
 
 /// 全アイテムの予約（ソース + 宛先）を解放
 fn release_all_reservations(ctx: &mut TaskExecutionContext, data: &HaulWithWheelbarrowData) {
+    reservation::release_source(ctx, data.wheelbarrow, 1);
+
+    if let Some(source_entity) = data.collect_source {
+        reservation::release_source(ctx, source_entity, 1);
+    }
+
+    let mut remaining_destination_releases = data.destination_reserved as usize;
     for &item_entity in &data.items {
         reservation::release_source(ctx, item_entity, 1);
 
@@ -617,6 +669,7 @@ fn release_all_reservations(ctx: &mut TaskExecutionContext, data: &HaulWithWheel
             WheelbarrowDestination::Stockpile(target)
             | WheelbarrowDestination::Blueprint(target) => {
                 reservation::release_destination(ctx, target);
+                remaining_destination_releases = remaining_destination_releases.saturating_sub(1);
             }
             WheelbarrowDestination::Mixer {
                 entity: target,
@@ -631,6 +684,27 @@ fn release_all_reservations(ctx: &mut TaskExecutionContext, data: &HaulWithWheel
                     .map(|r| r.0)
                     .unwrap_or(resource_type);
                 reservation::release_mixer_destination(ctx, target, item_type);
+                remaining_destination_releases = remaining_destination_releases.saturating_sub(1);
+            }
+        }
+    }
+
+    if remaining_destination_releases > 0 {
+        match data.destination {
+            WheelbarrowDestination::Stockpile(target)
+            | WheelbarrowDestination::Blueprint(target) => {
+                for _ in 0..remaining_destination_releases {
+                    reservation::release_destination(ctx, target);
+                }
+            }
+            WheelbarrowDestination::Mixer {
+                entity: target,
+                resource_type,
+            } => {
+                let item_type = data.collect_resource_type.unwrap_or(resource_type);
+                for _ in 0..remaining_destination_releases {
+                    reservation::release_mixer_destination(ctx, target, item_type);
+                }
             }
         }
     }

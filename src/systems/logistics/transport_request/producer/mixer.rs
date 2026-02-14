@@ -105,7 +105,7 @@ pub fn mud_mixer_auto_haul_system(
                 if !task_area.contains(sp_transform.translation.truncate()) {
                     continue;
                 }
-                if sp_designation.is_some() || sp_workers.is_some() {
+                if sp_designation.is_some() || sp_workers.map(|w| w.len()).unwrap_or(0) > 0 {
                     continue;
                 }
 
@@ -322,7 +322,7 @@ fn find_available_sand_tile(
             let Ok((designation, workers)) = q_task_state.get(tile_entity) else {
                 continue;
             };
-            if designation.is_some() || workers.is_some() {
+            if designation.is_some() || workers.map(|w| w.len()).unwrap_or(0) > 0 {
                 continue;
             }
 

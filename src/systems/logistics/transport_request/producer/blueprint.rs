@@ -122,7 +122,7 @@ pub fn blueprint_auto_haul_system(
                 && !collect_sand_pending_fam.contains(&fam_entity)
                 && let Some(source_entity) = find_available_sand_source(
                     &world_map,
-                    &task_area,
+                    Some(task_area),
                     bp_pos,
                     &q_sand_piles,
                     &q_task_state,
@@ -235,7 +235,7 @@ pub fn blueprint_auto_haul_system(
 
 fn find_available_sand_source(
     world_map: &WorldMap,
-    task_area: &TaskArea,
+    task_area: Option<&TaskArea>,
     target_pos: Vec2,
     q_sand_piles: &Query<
         (
@@ -250,12 +250,15 @@ fn find_available_sand_source(
 ) -> Option<Entity> {
     let mut best: Option<(Entity, f32)> = None;
 
+    // 1st pass: TaskArea 内を優先
     for (sp_entity, sp_transform, sp_designation, sp_workers) in q_sand_piles.iter() {
         let pos = sp_transform.translation.truncate();
-        if !task_area.contains(pos) {
-            continue;
+        if let Some(area) = task_area {
+            if !area.contains(pos) {
+                continue;
+            }
         }
-        if sp_designation.is_some() || sp_workers.is_some() {
+        if sp_designation.is_some() || sp_workers.map(|w| w.len()).unwrap_or(0) > 0 {
             continue;
         }
 
@@ -266,48 +269,86 @@ fn find_available_sand_source(
         }
     }
 
+    // 2nd pass: 水くみと同様に、TaskArea 内に無ければ全体から取得
+    if best.is_none() && task_area.is_some() {
+        for (sp_entity, sp_transform, sp_designation, sp_workers) in q_sand_piles.iter() {
+            let pos = sp_transform.translation.truncate();
+            if sp_designation.is_some() || sp_workers.map(|w| w.len()).unwrap_or(0) > 0 {
+                continue;
+            }
+
+            let dist_sq = pos.distance_squared(target_pos);
+            match best {
+                Some((_, best_dist_sq)) if best_dist_sq <= dist_sq => {}
+                _ => best = Some((sp_entity, dist_sq)),
+            }
+        }
+    }
+
     if let Some((entity, _)) = best {
         return Some(entity);
     }
 
-    let (x0, y0) = WorldMap::world_to_grid(task_area.min);
-    let (x1, y1) = WorldMap::world_to_grid(task_area.max);
-    let min_x = x0.min(x1);
-    let max_x = x0.max(x1);
-    let min_y = y0.min(y1);
-    let max_y = y0.max(y1);
+    let scan_sand_tiles = |area_filter: Option<&TaskArea>| -> Option<(Entity, f32)> {
+        let (x0, y0, x1, y1) = if let Some(area) = area_filter {
+            let (ax0, ay0) = WorldMap::world_to_grid(area.min);
+            let (ax1, ay1) = WorldMap::world_to_grid(area.max);
+            (ax0, ay0, ax1, ay1)
+        } else {
+            (
+                0,
+                0,
+                crate::constants::MAP_WIDTH - 1,
+                crate::constants::MAP_HEIGHT - 1,
+            )
+        };
 
-    let mut best_tile: Option<(Entity, f32)> = None;
-    for gy in min_y..=max_y {
-        for gx in min_x..=max_x {
-            let Some(idx) = world_map.pos_to_idx(gx, gy) else {
-                continue;
-            };
-            if world_map.tiles[idx] != TerrainType::Sand {
-                continue;
-            }
+        let min_x = x0.min(x1);
+        let max_x = x0.max(x1);
+        let min_y = y0.min(y1);
+        let max_y = y0.max(y1);
 
-            let Some(tile_entity) = world_map.tile_entities[idx] else {
-                continue;
-            };
-            let Ok((designation, workers)) = q_task_state.get(tile_entity) else {
-                continue;
-            };
-            if designation.is_some() || workers.is_some() {
-                continue;
-            }
+        let mut best_tile: Option<(Entity, f32)> = None;
+        for gy in min_y..=max_y {
+            for gx in min_x..=max_x {
+                let Some(idx) = world_map.pos_to_idx(gx, gy) else {
+                    continue;
+                };
+                if world_map.tiles[idx] != TerrainType::Sand {
+                    continue;
+                }
 
-            let tile_pos = WorldMap::grid_to_world(gx, gy);
-            if !task_area.contains(tile_pos) {
-                continue;
-            }
+                let Some(tile_entity) = world_map.tile_entities[idx] else {
+                    continue;
+                };
+                let Ok((designation, workers)) = q_task_state.get(tile_entity) else {
+                    continue;
+                };
+                if designation.is_some() || workers.map(|w| w.len()).unwrap_or(0) > 0 {
+                    continue;
+                }
 
-            let dist_sq = tile_pos.distance_squared(target_pos);
-            match best_tile {
-                Some((_, best_dist_sq)) if best_dist_sq <= dist_sq => {}
-                _ => best_tile = Some((tile_entity, dist_sq)),
+                let tile_pos = WorldMap::grid_to_world(gx, gy);
+                if let Some(area) = area_filter {
+                    if !area.contains(tile_pos) {
+                        continue;
+                    }
+                }
+
+                let dist_sq = tile_pos.distance_squared(target_pos);
+                match best_tile {
+                    Some((_, best_dist_sq)) if best_dist_sq <= dist_sq => {}
+                    _ => best_tile = Some((tile_entity, dist_sq)),
+                }
             }
         }
+
+        best_tile
+    };
+
+    let mut best_tile = scan_sand_tiles(task_area);
+    if best_tile.is_none() && task_area.is_some() {
+        best_tile = scan_sand_tiles(None);
     }
 
     best_tile.map(|(entity, _)| entity)

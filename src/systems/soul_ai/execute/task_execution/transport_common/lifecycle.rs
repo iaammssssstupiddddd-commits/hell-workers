@@ -158,17 +158,35 @@ pub fn collect_active_reservation_ops(
                 }
             }
 
+            let reserved_by_items = data.items.len() as u32;
+            if data.destination_reserved > reserved_by_items {
+                let extra = data.destination_reserved - reserved_by_items;
+                if let WheelbarrowDestination::Stockpile(target)
+                | WheelbarrowDestination::Blueprint(target) = data.destination
+                {
+                    for _ in 0..extra {
+                        ops.push(ResourceReservationOp::ReserveDestination { target });
+                    }
+                }
+            }
+
             if matches!(
                 data.phase,
                 HaulWithWheelbarrowPhase::GoingToParking
                     | HaulWithWheelbarrowPhase::PickingUpWheelbarrow
                     | HaulWithWheelbarrowPhase::GoingToSource
-            ) {
-                for &item in &data.items {
-                    ops.push(ResourceReservationOp::ReserveSource {
-                        source: item,
-                        amount: 1,
-                    });
+            ) || (matches!(data.phase, HaulWithWheelbarrowPhase::Loading)
+                && data.collect_source.is_some())
+            {
+                if let Some(source) = data.collect_source {
+                    ops.push(ResourceReservationOp::ReserveSource { source, amount: 1 });
+                } else {
+                    for &item in &data.items {
+                        ops.push(ResourceReservationOp::ReserveSource {
+                            source: item,
+                            amount: 1,
+                        });
+                    }
                 }
             }
         }
