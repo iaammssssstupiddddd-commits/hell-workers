@@ -10,6 +10,7 @@ pub(super) struct CandidateSnapshot {
     pub pos: Vec2,
     pub target_grid: (i32, i32),
     pub target_walkable: bool,
+    pub skip_reachability_check: bool,
     pub work_type: WorkType,
     pub base_priority: i32,
     pub in_stockpile_none: bool,
@@ -94,6 +95,7 @@ pub(super) fn candidate_snapshot(
 
     let target_grid = WorldMap::world_to_grid(pos);
     let target_walkable = world_map.is_walkable(target_grid.0, target_grid.1);
+    let is_transport_request = queries.transport_requests.get(entity).is_ok();
 
     let is_valid = match designation.work_type {
         WorkType::Chop
@@ -124,6 +126,9 @@ pub(super) fn candidate_snapshot(
         pos,
         target_grid,
         target_walkable,
+        // request タスクは source/destination を遅延解決するため、
+        // request 自体の座標への到達判定を事前に強制しない。
+        skip_reachability_check: is_transport_request,
         work_type: designation.work_type,
         base_priority,
         in_stockpile_none,

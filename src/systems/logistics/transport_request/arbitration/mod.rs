@@ -16,7 +16,7 @@ use crate::constants::*;
 use crate::relationships::{ParkedAt, PushedBy};
 use crate::systems::jobs::Blueprint;
 use crate::systems::logistics::transport_request::{
-    TransportDemand, TransportRequest, TransportRequestState,
+    TransportDemand, TransportRequest, TransportRequestKind, TransportRequestState,
     WheelbarrowLease, WheelbarrowPendingSince,
 };
 use crate::systems::logistics::{ReservedForTask, Wheelbarrow};
@@ -251,13 +251,32 @@ fn collect_candidates(
         };
         bucket_items_total += bucket.len() as u32;
 
-        let nearby_items = collect_top_k_nearest(
+        let mut nearby_items = collect_top_k_nearest(
             bucket,
             &free_items,
             eval.request_pos,
             search_radius_sq,
             WHEELBARROW_ARBITRATION_TOP_K,
         );
+
+        // 近傍に候補がいない場合のみ、猫車必須の request では探索範囲を全域へ拡張する。
+        // これにより近距離 pick&drop 判定は維持しつつ、遠距離搬送でも猫車 lease を作れる。
+        if nearby_items.is_empty()
+            && req.resource_type.requires_wheelbarrow()
+            && matches!(
+                req.kind,
+                TransportRequestKind::DeliverToBlueprint | TransportRequestKind::DeliverToMixerSolid
+            )
+        {
+            nearby_items = collect_top_k_nearest(
+                bucket,
+                &free_items,
+                eval.request_pos,
+                f32::INFINITY,
+                WHEELBARROW_ARBITRATION_TOP_K,
+            );
+        }
+
         candidates_after_top_k += nearby_items.len() as u32;
         if nearby_items.is_empty() {
             continue;
