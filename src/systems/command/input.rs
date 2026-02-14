@@ -1,4 +1,4 @@
-use super::TaskMode;
+use super::{TaskArea, TaskMode};
 use crate::entities::familiar::{ActiveCommand, Familiar, FamiliarCommand};
 use crate::game_state::TaskContext;
 use crate::interface::selection::SelectedEntity;
@@ -8,8 +8,8 @@ use bevy::prelude::*;
 pub fn familiar_command_input_system(
     keyboard: Res<ButtonInput<KeyCode>>,
     selected: Res<SelectedEntity>,
-    q_familiars: Query<Entity, With<Familiar>>,
-    mut q_active_commands: Query<&mut ActiveCommand>,
+    q_familiars: Query<(), With<Familiar>>,
+    mut q_active_commands: Query<(&mut ActiveCommand, Option<&TaskArea>), With<Familiar>>,
     mut task_context: ResMut<TaskContext>,
 ) {
     // 選択されたエンティティが使い魔の場合のみ処理（Soulは直接指示不可）
@@ -35,10 +35,14 @@ pub fn familiar_command_input_system(
         info!("TASK_MODE: 指示をキャンセルする範囲を指定してください");
     } else if keyboard.just_pressed(KeyCode::Escape) {
         task_context.0 = TaskMode::None;
-        // 待機状態に戻す
-        if let Ok(mut active) = q_active_commands.get_mut(entity) {
-            active.command = FamiliarCommand::Idle;
+        if let Ok((mut active, area_opt)) = q_active_commands.get_mut(entity) {
+            if matches!(active.command, FamiliarCommand::Idle) && area_opt.is_some() {
+                active.command = FamiliarCommand::Patrol;
+                info!("TASK_MODE: 待機解除 / 巡回再開");
+            } else {
+                active.command = FamiliarCommand::Idle;
+                info!("TASK_MODE: キャンセル / 待機状態");
+            }
         }
-        info!("TASK_MODE: キャンセル / 待機状態");
     }
 }
