@@ -279,7 +279,7 @@ pub fn task_area_auto_haul_system(
         );
     }
 
-    // 既存リクエストの upsert / cleanup
+    // 既存リクエストの upsert / cleanup（共通ヘルパー使用）
     let mut seen = std::collections::HashSet::new();
     for (req_entity, req, workers_opt) in q_stockpile_requests.iter() {
         if !matches!(req.kind, TransportRequestKind::DepositToStockpile) {
@@ -288,10 +288,13 @@ pub fn task_area_auto_haul_system(
         let key = (req.anchor, req.resource_type);
         let workers = workers_opt.map(|w| w.len()).unwrap_or(0);
 
-        if !seen.insert(key) {
-            if workers == 0 {
-                commands.entity(req_entity).despawn();
-            }
+        if !super::upsert::process_duplicate_key(
+            &mut commands,
+            req_entity,
+            workers,
+            &mut seen,
+            key,
+        ) {
             continue;
         }
 
@@ -321,11 +324,7 @@ pub fn task_area_auto_haul_system(
                 TransportPolicy::default(),
             ));
         } else if workers == 0 {
-            commands
-                .entity(req_entity)
-                .remove::<Designation>()
-                .remove::<TaskSlots>()
-                .remove::<Priority>();
+            super::upsert::disable_request(&mut commands, req_entity);
         }
     }
 

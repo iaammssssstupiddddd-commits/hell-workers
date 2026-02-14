@@ -46,10 +46,13 @@ pub fn wheelbarrow_auto_haul_system(
         let wb_entity = req.anchor;
         let workers = workers_opt.map(|w| w.len()).unwrap_or(0);
 
-        if !seen.insert(wb_entity) {
-            if workers == 0 {
-                commands.entity(req_entity).despawn();
-            }
+        if !super::upsert::process_duplicate_key(
+            &mut commands,
+            req_entity,
+            workers,
+            &mut seen,
+            wb_entity,
+        ) {
             continue;
         }
 

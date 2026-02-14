@@ -153,7 +153,7 @@ pub fn mud_mixer_auto_haul_system(
     }
 
     // -----------------------------------------------------------------
-    // request エンティティを upsert / cleanup
+    // request エンティティを upsert / cleanup（共通ヘルパー使用）
     // -----------------------------------------------------------------
     let mut seen_existing_keys = std::collections::HashSet::<(Entity, ResourceType)>::new();
 
@@ -164,10 +164,13 @@ pub fn mud_mixer_auto_haul_system(
         let is_water = request.kind == TransportRequestKind::DeliverWaterToMixer;
         let workers = workers_opt.map(|w| w.len()).unwrap_or(0);
 
-        if !seen_existing_keys.insert(key) {
-            if workers == 0 {
-                commands.entity(request_entity).despawn();
-            }
+        if !super::upsert::process_duplicate_key(
+            &mut commands,
+            request_entity,
+            workers,
+            &mut seen_existing_keys,
+            key,
+        ) {
             continue;
         }
 
@@ -207,11 +210,7 @@ pub fn mud_mixer_auto_haul_system(
             if !active_mixers.contains(&target_mixer.0) {
                 commands.entity(request_entity).despawn();
             } else {
-                commands
-                    .entity(request_entity)
-                    .remove::<Designation>()
-                    .remove::<TaskSlots>()
-                    .remove::<Priority>();
+                super::upsert::disable_request(&mut commands, request_entity);
             }
         }
     }

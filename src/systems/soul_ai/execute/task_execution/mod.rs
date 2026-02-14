@@ -36,7 +36,7 @@ use crate::world::map::WorldMap;
 use bevy::prelude::*;
 
 use context::TaskExecutionContext;
-use handler::{execute_haul_with_wheelbarrow, TaskHandler};
+use handler::run_task_handler;
 
 fn prepare_worker_for_task_apply(
     commands: &mut Commands,
@@ -205,128 +205,16 @@ pub fn task_execution_system(
             queries: &mut queries,
         };
 
-        // タスクタイプに応じてルーティング（TaskHandler トレイトでディスパッチ）
-        match &*ctx.task {
-            AssignedTask::Gather(data) => {
-                let data = data.clone();
-                AssignedTask::execute(
-                    &mut ctx,
-                    data,
-                    &mut commands,
-                    &game_assets,
-                    &time,
-                    &world_map,
-                    breakdown_opt.as_deref(),
-                );
-            }
-            AssignedTask::Haul(data) => {
-                let data = data.clone();
-                AssignedTask::execute(
-                    &mut ctx,
-                    data,
-                    &mut commands,
-                    &game_assets,
-                    &time,
-                    &world_map,
-                    breakdown_opt.as_deref(),
-                );
-            }
-            AssignedTask::Build(data) => {
-                let data = data.clone();
-                AssignedTask::execute(
-                    &mut ctx,
-                    data,
-                    &mut commands,
-                    &game_assets,
-                    &time,
-                    &world_map,
-                    breakdown_opt.as_deref(),
-                );
-            }
-            AssignedTask::HaulToBlueprint(data) => {
-                let data = data.clone();
-                AssignedTask::execute(
-                    &mut ctx,
-                    data,
-                    &mut commands,
-                    &game_assets,
-                    &time,
-                    &world_map,
-                    breakdown_opt.as_deref(),
-                );
-            }
-            AssignedTask::GatherWater(data) => {
-                let data = data.clone();
-                AssignedTask::execute(
-                    &mut ctx,
-                    data,
-                    &mut commands,
-                    &game_assets,
-                    &time,
-                    &world_map,
-                    breakdown_opt.as_deref(),
-                );
-            }
-            AssignedTask::CollectSand(data) => {
-                let data = data.clone();
-                AssignedTask::execute(
-                    &mut ctx,
-                    data,
-                    &mut commands,
-                    &game_assets,
-                    &time,
-                    &world_map,
-                    breakdown_opt.as_deref(),
-                );
-            }
-            AssignedTask::Refine(data) => {
-                let data = data.clone();
-                AssignedTask::execute(
-                    &mut ctx,
-                    data,
-                    &mut commands,
-                    &game_assets,
-                    &time,
-                    &world_map,
-                    breakdown_opt.as_deref(),
-                );
-            }
-            AssignedTask::HaulToMixer(data) => {
-                let data = data.clone();
-                AssignedTask::execute(
-                    &mut ctx,
-                    data,
-                    &mut commands,
-                    &game_assets,
-                    &time,
-                    &world_map,
-                    breakdown_opt.as_deref(),
-                );
-            }
-            AssignedTask::HaulWaterToMixer(data) => {
-                let data = data.clone();
-                AssignedTask::execute(
-                    &mut ctx,
-                    data,
-                    &mut commands,
-                    &game_assets,
-                    &time,
-                    &world_map,
-                    breakdown_opt.as_deref(),
-                );
-            }
-            AssignedTask::HaulWithWheelbarrow(data) => {
-                let data = data.clone();
-                execute_haul_with_wheelbarrow(
-                    &mut ctx,
-                    data,
-                    &mut commands,
-                    &world_map,
-                    &q_wheelbarrows,
-                );
-            }
-            AssignedTask::None => {}
-        }
+        // Phase 4: タスクタイプに応じてルーティング（共通ディスパッチ + HaulWithWheelbarrow 特別扱い）
+        run_task_handler(
+            &mut ctx,
+            &mut commands,
+            &game_assets,
+            &time,
+            &world_map,
+            breakdown_opt.as_deref(),
+            &q_wheelbarrows,
+        );
 
         // 完了イベントの発行
         if was_busy && matches!(*task, AssignedTask::None) {

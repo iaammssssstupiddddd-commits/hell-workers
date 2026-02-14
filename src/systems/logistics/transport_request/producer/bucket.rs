@@ -164,32 +164,28 @@ pub fn bucket_auto_haul_system(
             if workers == 0 {
                 commands.entity(request_entity).despawn();
             } else {
-                commands
-                    .entity(request_entity)
-                    .remove::<Designation>()
-                    .remove::<TaskSlots>()
-                    .remove::<Priority>()
-                    .insert(TransportDemand {
-                        desired_slots: 0,
-                        inflight,
-                    });
+                super::upsert::disable_request(&mut commands, request_entity);
+                commands.entity(request_entity).insert(TransportDemand {
+                    desired_slots: 0,
+                    inflight,
+                });
             }
             continue;
         }
 
-        if !seen_existing.insert(tank_entity) {
-            if workers == 0 {
-                commands.entity(request_entity).despawn();
-            } else {
-                commands
-                    .entity(request_entity)
-                    .remove::<Designation>()
-                    .remove::<TaskSlots>()
-                    .remove::<Priority>()
-                    .insert(TransportDemand {
-                        desired_slots: 0,
-                        inflight,
-                    });
+        if !super::upsert::process_duplicate_key(
+            &mut commands,
+            request_entity,
+            workers,
+            &mut seen_existing,
+            tank_entity,
+        ) {
+            if workers > 0 {
+                super::upsert::disable_request(&mut commands, request_entity);
+                commands.entity(request_entity).insert(TransportDemand {
+                    desired_slots: 0,
+                    inflight,
+                });
             }
             continue;
         }
@@ -220,21 +216,17 @@ pub fn bucket_auto_haul_system(
                 TransportPolicy::default(),
             ));
         } else if workers == 0 {
+            super::upsert::disable_request(&mut commands, request_entity);
             commands
                 .entity(request_entity)
-                .remove::<Designation>()
-                .remove::<TaskSlots>()
-                .remove::<Priority>()
                 .insert(TransportDemand {
                     desired_slots: 0,
                     inflight: 0,
                 });
         } else {
+            super::upsert::disable_request(&mut commands, request_entity);
             commands
                 .entity(request_entity)
-                .remove::<Designation>()
-                .remove::<TaskSlots>()
-                .remove::<Priority>()
                 .insert(TransportDemand {
                     desired_slots: 0,
                     inflight,
