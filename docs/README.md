@@ -15,6 +15,7 @@
 
 ## UI & Visuals
 - [entity_list_ui.md](entity_list_ui.md): エンティティリストのフィルタリングと操作。
+- [task_list_ui.md](task_list_ui.md): タスクリストの表示・タブ切替・クリック操作。
 - [info_panel_ui.md](info_panel_ui.md): 選択されたエンティティの詳細情報表示。
 - [gather_haul_visual.md](gather_haul_visual.md): 採取や搬送の視覚的なフィードバック。
 - [speech_system.md](speech_system.md): 吹き出しと Soul 画像イベントの仕様。
@@ -22,3 +23,4 @@
 ## 開発ガイド
 - [architecture.md](architecture.md): 全体構造とシステムの依存関係。
 - [DEVELOPMENT.md](DEVELOPMENT.md): AIエージェントおよび開発者向けガイドライン。
+- [plan/README.md](plan/README.md): フェーズ分割した実装計画ドキュメント。

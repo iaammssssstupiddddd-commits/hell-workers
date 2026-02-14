@@ -10,4 +10,7 @@ pub use resolver::{
     resolve_haul_to_stockpile_inputs, resolve_haul_water_to_mixer_inputs,
     resolve_return_bucket_tank,
 };
-pub use wheelbarrow::{compute_centroid, resolve_wheelbarrow_batch_for_stockpile};
+pub use wheelbarrow::{
+    compute_centroid, find_nearest_wheelbarrow, remaining_stockpile_capacity,
+    resolve_wheelbarrow_batch_for_stockpile,
+};

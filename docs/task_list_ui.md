@@ -59,9 +59,14 @@
 
 ## 実装アーキテクチャ
 - `LeftPanelMode::TaskList` 時に表示
-- `src/interface/ui/panels/task_list/update.rs` で `TaskListState` を用いて差分検知を行い、変更がある場合のみ再描画
+- `src/interface/ui/panels/task_list/`：責務別に分割
+  - `view_model.rs` - スナップショット生成（`TaskListState`, `TaskEntry`）
+  - `presenter.rs` - WorkType → icon / label / description
+  - `render.rs` - UI 再構築
+  - `interaction.rs` - クリック、タブ、可視、ハイライト（`task_list_visual_feedback_system` 等）
+  - `update.rs` - オーケストレーション、差分検知・再描画のトリガー
 - `Designation` コンポーネントを持つエンティティをクエリし、関連コンポーネント（Blueprint, TransportRequest等）を参照して説明文を生成
-- `task_list_visual_feedback_system` が `Interaction` と `InfoPanelPinState` を監視し、ホバー・選択ハイライトを適用
+- `task_list_visual_feedback_system` が `Interaction` と `InfoPanelPinState` を監視し、`ui/list::apply_row_highlight` でホバー・選択ハイライトを適用
 
 ## インタラクション
 - **ホバー**: 背景色がハイライト
