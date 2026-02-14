@@ -4,7 +4,7 @@ use crate::systems::logistics::ResourceType;
 use crate::systems::logistics::transport_request::TransportRequestKind;
 use bevy::prelude::*;
 
-use super::finder::{find_best_tank_for_bucket, find_nearest_bucket_for_tank};
+use super::finder::find_nearest_bucket_for_tank;
 use super::reservation::source_not_reserved;
 use crate::systems::familiar_ai::decide::task_management::ReservationShadow;
 
@@ -57,45 +57,40 @@ pub fn resolve_haul_to_stockpile_inputs(
     Some((stockpile, resource_type, item_owner, fixed_source))
 }
 
-/// Resolves (bucket, tank) for GatherWater.
-/// - Bucket-based: task_entity = bucket, tank is selected from bucket owner.
-/// - Request-based: task_entity = request, tank is request.anchor, bucket is resolved lazily.
+/// Resolves (bucket, tank) for GatherWater request.
 pub fn resolve_gather_water_inputs(
     task_entity: Entity,
     task_pos: Vec2,
-    task_area_opt: Option<&TaskArea>,
+    _task_area_opt: Option<&TaskArea>,
     queries: &crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
     shadow: &ReservationShadow,
 ) -> Option<(Entity, Entity)> {
-    if let Ok(req) = queries.transport_requests.get(task_entity) {
-        if req.kind == TransportRequestKind::GatherWaterToTank {
-            let tank_entity = req.anchor;
-            let Ok((_, _, tank_stock, stored_opt)) = queries.storage.stockpiles.get(tank_entity)
-            else {
-                return None;
-            };
-            if tank_stock.resource_type != Some(ResourceType::Water) {
-                return None;
-            }
-            let current_water = stored_opt.map(|s| s.len()).unwrap_or(0);
-            let reserved_water = queries
-                .reservation
-                .resource_cache
-                .get_destination_reservation(tank_entity)
-                + shadow.destination_reserved(tank_entity);
-            if (current_water + reserved_water) >= tank_stock.capacity {
-                return None;
-            }
-
-            let (bucket_entity, _) =
-                find_nearest_bucket_for_tank(tank_entity, task_pos, queries, shadow)?;
-            return Some((bucket_entity, tank_entity));
-        }
+    let req = queries.transport_requests.get(task_entity).ok()?;
+    if req.kind != TransportRequestKind::GatherWaterToTank {
+        return None;
     }
 
-    let tank_entity =
-        find_best_tank_for_bucket(task_entity, task_pos, task_area_opt, queries, shadow)?;
-    Some((task_entity, tank_entity))
+    let tank_entity = req.anchor;
+    let Ok((_, _, tank_stock, stored_opt)) = queries.storage.stockpiles.get(tank_entity)
+    else {
+        return None;
+    };
+    if tank_stock.resource_type != Some(ResourceType::Water) {
+        return None;
+    }
+    let current_water = stored_opt.map(|s| s.len()).unwrap_or(0);
+    let reserved_water = queries
+        .reservation
+        .resource_cache
+        .get_destination_reservation(tank_entity)
+        + shadow.destination_reserved(tank_entity);
+    if (current_water + reserved_water) >= tank_stock.capacity {
+        return None;
+    }
+
+    let (bucket_entity, _) =
+        find_nearest_bucket_for_tank(tank_entity, task_pos, queries, shadow)?;
+    Some((bucket_entity, tank_entity))
 }
 
 /// ReturnBucket request の tank anchor を解決する。
@@ -123,12 +118,7 @@ pub fn resolve_haul_to_blueprint_inputs(
     if !matches!(req.kind, TransportRequestKind::DeliverToBlueprint) {
         return None;
     }
-    let blueprint = queries
-        .storage
-        .target_blueprints
-        .get(task_entity)
-        .ok()
-        .map(|tb| tb.0)?;
+    let blueprint = req.anchor;
 
     Some((blueprint, req.resource_type))
 }
@@ -141,19 +131,12 @@ pub fn resolve_haul_to_mixer_inputs(
     if !matches!(req.kind, TransportRequestKind::DeliverToMixerSolid) {
         return None;
     }
-    let mixer_entity = queries
-        .storage
-        .target_mixers
-        .get(task_entity)
-        .ok()
-        .map(|tm| tm.0)?;
+    let mixer_entity = req.anchor;
 
     Some((mixer_entity, req.resource_type))
 }
 
-/// Resolves (mixer, tank, bucket) for HaulWaterToMixer.
-/// - Bucket-based: task_entity = bucket, tank from BelongsTo.
-/// - Request-based: task_entity = request, finds (tank, bucket) via find_tank_bucket_for_water_mixer.
+/// Resolves (mixer, tank, bucket) for HaulWaterToMixer request.
 pub fn resolve_haul_water_to_mixer_inputs(
     task_entity: Entity,
     task_pos: Vec2,
@@ -161,31 +144,14 @@ pub fn resolve_haul_water_to_mixer_inputs(
     queries: &crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
     shadow: &ReservationShadow,
 ) -> Option<(Entity, Entity, Entity)> {
-    let mixer_entity = queries
-        .storage
-        .target_mixers
-        .get(task_entity)
-        .ok()
-        .map(|tm| tm.0)?;
-
-    let is_request = queries
-        .transport_requests
-        .get(task_entity)
-        .is_ok_and(|r| r.kind == TransportRequestKind::DeliverWaterToMixer);
-
-    if is_request {
-        find_tank_bucket_for_water_mixer(mixer_entity, task_pos, task_area_opt, queries, shadow)
-            .map(|(tank, bucket)| (mixer_entity, tank, bucket))
-    } else {
-        // Bucket-based: task_entity is the bucket
-        let tank_entity = queries
-            .designation
-            .belongs
-            .get(task_entity)
-            .ok()
-            .map(|b| b.0)?;
-        Some((mixer_entity, tank_entity, task_entity))
+    let req = queries.transport_requests.get(task_entity).ok()?;
+    if req.kind != TransportRequestKind::DeliverWaterToMixer {
+        return None;
     }
+    let mixer_entity = req.anchor;
+
+    find_tank_bucket_for_water_mixer(mixer_entity, task_pos, task_area_opt, queries, shadow)
+        .map(|(tank, bucket)| (mixer_entity, tank, bucket))
 }
 
 /// Finds (tank, bucket) for a DeliverWaterToMixer request at mixer_entity.

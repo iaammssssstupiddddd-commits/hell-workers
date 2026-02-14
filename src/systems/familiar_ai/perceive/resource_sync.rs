@@ -2,9 +2,11 @@ use crate::constants::RESERVATION_SYNC_INTERVAL;
 use crate::events::ResourceReservationOp;
 use crate::events::ResourceReservationRequest;
 use crate::relationships::TaskWorkers;
-use crate::systems::jobs::{Designation, TargetBlueprint, TargetMixer, WorkType};
-use crate::systems::logistics::{BelongsTo, ResourceItem, ResourceType};
+use crate::systems::jobs::{Designation, WorkType};
+use crate::systems::logistics::transport_request::{TransportRequest, TransportRequestKind};
+use crate::systems::logistics::ResourceType;
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
+use crate::systems::soul_ai::execute::task_execution::transport_common::lifecycle;
 use bevy::prelude::*;
 use std::collections::HashMap;
 
@@ -238,17 +240,7 @@ pub fn sync_reservations_system(
     time: Res<Time>,
     mut sync_timer: ResMut<ReservationSyncTimer>,
     q_souls: Query<&AssignedTask>,
-    q_pending_tasks: Query<
-        (
-            &Designation,
-            Option<&TargetMixer>,
-            Option<&TargetBlueprint>,
-            Option<&BelongsTo>,
-            Option<&ResourceItem>,
-            Option<&crate::systems::logistics::transport_request::TransportRequest>,
-        ),
-        Without<TaskWorkers>,
-    >,
+    q_pending_tasks: Query<(&Designation, Option<&TransportRequest>), Without<TaskWorkers>>,
     mut cache: ResMut<SharedResourceCache>,
 ) {
     let timer_finished = sync_timer.timer.tick(time.delta()).just_finished();
@@ -261,210 +253,81 @@ pub fn sync_reservations_system(
     let mut mixer_dest_res = HashMap::new();
     let mut source_res = HashMap::new();
 
-    // Designation（タスク割り当て待ち）のアイテムも予約としてカウント
-    // Without<TaskWorkers> により、既に割り当て済みのものは除外（AssignedTask 側でカウント）
-    for (designation, target_mixer, target_blueprint, belongs_to, resource_item, transport_req) in
-        q_pending_tasks.iter()
-    {
-        match designation.work_type {
-            WorkType::Haul => {
-                if let Some(blueprint) = target_blueprint {
-                    *dest_res.entry(blueprint.0).or_insert(0) += 1;
-                }
-                if let Some(req) = transport_req {
-                    if matches!(
-                        req.kind,
-                        crate::systems::logistics::transport_request::TransportRequestKind::DepositToStockpile
-                    ) {
-                        *dest_res.entry(req.anchor).or_insert(0) += 1;
-                    }
-                }
+    // request エンティティ起点で pending 予約を再構築する。
+    for (designation, transport_req) in q_pending_tasks.iter() {
+        let is_transport_designation = matches!(
+            designation.work_type,
+            WorkType::Haul
+                | WorkType::HaulToMixer
+                | WorkType::GatherWater
+                | WorkType::HaulWaterToMixer
+                | WorkType::WheelbarrowHaul
+        );
+        if !is_transport_designation {
+            continue;
+        }
+        let Some(req) = transport_req else {
+            continue;
+        };
+        match req.kind {
+            TransportRequestKind::DepositToStockpile
+            | TransportRequestKind::DeliverToBlueprint
+            | TransportRequestKind::GatherWaterToTank => {
+                *dest_res.entry(req.anchor).or_insert(0) += 1;
             }
-            WorkType::HaulToMixer => {
-                // 固体原料（Sand/Rock）のミキサー向け運搬
-                if let (Some(mixer), Some(res)) = (target_mixer, resource_item) {
-                    *mixer_dest_res.entry((mixer.0, res.0)).or_insert(0) += 1;
-                }
+            TransportRequestKind::DeliverToMixerSolid => {
+                *mixer_dest_res
+                    .entry((req.anchor, req.resource_type))
+                    .or_insert(0) += 1;
             }
-            WorkType::HaulWaterToMixer => {
-                // ミキサー向け水運搬（バケツ1杯 = 1予約）
-                if let Some(mixer) = target_mixer {
-                    *mixer_dest_res
-                        .entry((mixer.0, ResourceType::Water))
-                        .or_insert(0) += 1;
-                }
+            TransportRequestKind::DeliverWaterToMixer => {
+                *mixer_dest_res
+                    .entry((req.anchor, ResourceType::Water))
+                    .or_insert(0) += 1;
             }
-            WorkType::GatherWater => {
-                // 水汲みタスク（BelongsTo はタンクを指す）
-                if let Some(belongs) = belongs_to {
-                    *dest_res.entry(belongs.0).or_insert(0) += 1;
-                }
-            }
-            // 他の WorkType は現状予約カウント不要
-            // CollectSand, Refine, Build 等は source_res で管理されるが、
-            // Designation 段階では不要（AssignedTask になってからカウント）
-            _ => {}
+            // ReturnBucket は返却先 BucketStorage を割り当て時に確定するため、
+            // pending request 段階では destination 予約を積まない。
+            TransportRequestKind::ReturnBucket | TransportRequestKind::BatchWheelbarrow => {}
         }
     }
 
     for task in q_souls.iter() {
-        match task {
-            AssignedTask::Haul(data) => {
-                // ストックパイルへの搬送予約
-                *dest_res.entry(data.stockpile).or_insert(0) += 1;
-                // アイテム（ソース）への取り出し予約（まだ持っていない場合）
-                use crate::systems::soul_ai::execute::task_execution::types::HaulPhase;
-                if matches!(data.phase, HaulPhase::GoingToItem) {
-                    *source_res.entry(data.item).or_insert(0) += 1;
-                }
-            }
-            AssignedTask::GatherWater(data) => {
-                // タンクへの搬送（返却）予約... はGatherWaterだと「バケツを取りに行く」フェーズか「水を汲む」フェーズかによる
-                // GatherWaterタスクの意味合い定義によるが、通常は水を汲んで戻ってくるまでを含む？
-                // 既存実装: GatherWaterは「バケツを持ってタンクに行き、水を汲む」まで。
-                // 水を汲んだ後は HaulWaterToMixer などに派生しそうだが、ここでは「タンクそのもの」への予約（他人が使わないように？）
-                // いや、HaulReservationCacheの実装を見ると `AssignedTask::GatherWater(data) => reserves(data.tank)` となっていた。
-                // これは「タンクのキャパシティ（バケツを戻す場所としての？）」を予約しているのか？
-                // コードを読むと `best_tank` 選定時に `has_capacity` をチェックしている。
-                // つまり「水入りバケツを作るための空き容量」ではなく「バケツ（アイテム）をタンクエリアに置くための容量」か？
-                // だとすると Destination Reservation で正しい。
-                *dest_res.entry(data.tank).or_insert(0) += 1;
-
-                use crate::systems::soul_ai::execute::task_execution::types::GatherWaterPhase;
-                if matches!(data.phase, GatherWaterPhase::GoingToBucket) {
-                    *source_res.entry(data.bucket).or_insert(0) += 1;
-                }
-            }
-            AssignedTask::HaulToMixer(data) => {
-                *mixer_dest_res
-                    .entry((data.mixer, data.resource_type))
-                    .or_insert(0) += 1;
-
-                use crate::systems::soul_ai::execute::task_execution::types::HaulToMixerPhase;
-                if matches!(data.phase, HaulToMixerPhase::GoingToItem) {
-                    *source_res.entry(data.item).or_insert(0) += 1;
-                }
-            }
-            AssignedTask::HaulWaterToMixer(data) => {
-                *mixer_dest_res
-                    .entry((data.mixer, ResourceType::Water))
-                    .or_insert(0) += 1; // ここは水量単位ではなく「作業員数単位」で予約しているかもしれない（既存実装依存）
-                // 既存実装では `*mixer_reservations.entry((data.mixer, ResourceType::Water)).or_insert(0) += 1;` となっていた。
-                // つまり、1人の作業員が向かっている＝1予約、としている。水量は考慮されていない（あるいはバケツ1杯分と仮定？）
-                // ここでは既存のロジックを踏襲する。
-
-                use crate::systems::soul_ai::execute::task_execution::types::HaulWaterToMixerPhase;
-                if matches!(data.phase, HaulWaterToMixerPhase::GoingToBucket) {
-                    *source_res.entry(data.bucket).or_insert(0) += 1;
-                }
-                // タンク取水ロック: バケツ取得〜取水完了まで保持する
-                if matches!(
-                    data.phase,
-                    HaulWaterToMixerPhase::GoingToBucket
-                        | HaulWaterToMixerPhase::GoingToTank
-                        | HaulWaterToMixerPhase::FillingFromTank
-                ) {
-                    *source_res.entry(data.tank).or_insert(0) += 1;
-                }
-            }
-            // 他のタスク（Build, CollectSand, Refine）も必要に応じて追加
-            AssignedTask::Build(data) => {
-                // 建材を持っていくソース予約が必要かもしれないが、
-                // Buildタスク自体は「資材を持って現地に行く」のか「現地で建築する」のか。
-                // 既存実装では `GoingToBlueprint` で移動。
-                // 手持ちがない場合は別途HaulToBlueprintタスクになるはず（TaskAssignerが切り替える）。
-                // よって Build タスク中は既にアイテムを持っているか、あるいは不要。
-                // ... と思われたが、Cycle Framework移行によりSource Reservationが必要になったため追記
-                use crate::systems::soul_ai::execute::task_execution::types::BuildPhase;
-                if matches!(
-                    data.phase,
-                    BuildPhase::GoingToBlueprint | BuildPhase::Building { .. }
-                ) {
-                    *source_res.entry(data.blueprint).or_insert(0) += 1;
-                }
-            }
-            AssignedTask::HaulToBlueprint(data) => {
-                // ブループリントへの搬送予約（正しくはBlueprintが必要とする資材枠への予約）
-                // 現状のSharedResourceCacheはEntity単位。Blueprint EntityへのDestination Reservationとする。
-                *dest_res.entry(data.blueprint).or_insert(0) += 1;
-
-                use crate::systems::soul_ai::execute::task_execution::types::HaulToBpPhase;
-                if matches!(data.phase, HaulToBpPhase::GoingToItem) {
-                    *source_res.entry(data.item).or_insert(0) += 1;
-                }
-            }
-            AssignedTask::Gather(data) => {
-                // 木や岩への予約（複数人同時作業の制御用）
-                use crate::systems::soul_ai::execute::task_execution::types::GatherPhase;
-                if matches!(
-                    data.phase,
-                    GatherPhase::GoingToResource | GatherPhase::Collecting { .. }
-                ) {
-                    *source_res.entry(data.target).or_insert(0) += 1;
-                }
-            }
-            AssignedTask::CollectSand(data) => {
-                // SandPileへの予約
-                use crate::systems::soul_ai::execute::task_execution::types::CollectSandPhase;
-                if matches!(
-                    data.phase,
-                    CollectSandPhase::GoingToSand | CollectSandPhase::Collecting { .. }
-                ) {
-                    *source_res.entry(data.target).or_insert(0) += 1;
-                }
-            }
-            AssignedTask::Refine(data) => {
-                // Mixerへの予約（精製作業の排他制御）
-                use crate::systems::soul_ai::execute::task_execution::types::RefinePhase;
-                if matches!(
-                    data.phase,
-                    RefinePhase::GoingToMixer | RefinePhase::Refining { .. }
-                ) {
-                    *source_res.entry(data.mixer).or_insert(0) += 1;
-                }
-            }
-            AssignedTask::HaulWithWheelbarrow(data) => {
-                use crate::systems::soul_ai::execute::task_execution::types::HaulWithWheelbarrowPhase;
-
-                // 手押し車自体をソース予約（二重使用防止）— 全フェーズで有効
-                *source_res.entry(data.wheelbarrow).or_insert(0) += 1;
-
-                // 目的地への予約（アイテム数分）— 全フェーズで有効
-                for _ in &data.items {
-                    match data.destination {
-                        crate::systems::logistics::transport_request::WheelbarrowDestination::Stockpile(
-                            target,
-                        )
-                        | crate::systems::logistics::transport_request::WheelbarrowDestination::Blueprint(
-                            target,
-                        ) => {
-                            *dest_res.entry(target).or_insert(0) += 1;
-                        }
-                        crate::systems::logistics::transport_request::WheelbarrowDestination::Mixer {
-                            entity: target,
-                            resource_type,
-                        } => {
-                            *mixer_dest_res.entry((target, resource_type)).or_insert(0) += 1;
-                        }
-                    }
-                }
-
-                // アイテムのソース予約（まだピックアップしていない場合のみ）
-                // Loading以降のフェーズではアイテムは既にwheelbarrowにLoadedInされているため不要
-                if matches!(
-                    data.phase,
-                    HaulWithWheelbarrowPhase::GoingToParking
-                        | HaulWithWheelbarrowPhase::PickingUpWheelbarrow
-                        | HaulWithWheelbarrowPhase::GoingToSource
-                ) {
-                    for &item in &data.items {
-                        *source_res.entry(item).or_insert(0) += 1;
-                    }
-                }
-            }
-            AssignedTask::None => {}
+        for op in lifecycle::collect_active_reservation_ops(task, |_, fallback| fallback) {
+            apply_active_reservation_op(
+                &mut dest_res,
+                &mut mixer_dest_res,
+                &mut source_res,
+                op,
+            );
         }
     }
 
     cache.reset(dest_res, mixer_dest_res, source_res);
+}
+
+fn apply_active_reservation_op(
+    dest_res: &mut HashMap<Entity, usize>,
+    mixer_dest_res: &mut HashMap<(Entity, ResourceType), usize>,
+    source_res: &mut HashMap<Entity, usize>,
+    op: ResourceReservationOp,
+) {
+    match op {
+        ResourceReservationOp::ReserveDestination { target } => {
+            *dest_res.entry(target).or_insert(0) += 1;
+        }
+        ResourceReservationOp::ReserveMixerDestination {
+            target,
+            resource_type,
+        } => {
+            *mixer_dest_res.entry((target, resource_type)).or_insert(0) += 1;
+        }
+        ResourceReservationOp::ReserveSource { source, amount } => {
+            *source_res.entry(source).or_insert(0) += amount;
+        }
+        ResourceReservationOp::ReleaseDestination { .. }
+        | ResourceReservationOp::ReleaseMixerDestination { .. }
+        | ResourceReservationOp::ReleaseSource { .. }
+        | ResourceReservationOp::RecordStoredDestination { .. }
+        | ResourceReservationOp::RecordPickedSource { .. } => {}
+    }
 }

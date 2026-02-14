@@ -1,11 +1,12 @@
 use crate::constants::*;
 use crate::entities::damned_soul::{DamnedSoul, IdleBehavior, IdleState, Path};
-use crate::events::{ResourceReservationOp, ResourceReservationRequest};
+use crate::events::ResourceReservationRequest;
 use crate::relationships::WorkingOn;
 // use crate::systems::familiar_ai::perceive::resource_sync::SharedResourceCache; // Removed unused import
 use crate::systems::logistics::{Inventory, ResourceType};
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
 use crate::systems::soul_ai::execute::task_execution::context::TaskReservationAccess;
+use crate::systems::soul_ai::execute::task_execution::transport_common::lifecycle;
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
 
@@ -67,198 +68,48 @@ pub fn unassign_task<'w, 's, Q: TaskReservationAccess<'w, 's>>(
 
     let mut skip_inventory_drop_for: Option<Entity> = None;
 
-    // 運搬・水汲みタスクの予約を解除
-    match task {
-        AssignedTask::Haul(data) => {
-            queries
-                .reservation_writer()
-                .write(ResourceReservationRequest {
-                    op: ResourceReservationOp::ReleaseDestination {
-                        target: data.stockpile,
-                    },
-                });
-            use crate::systems::soul_ai::execute::task_execution::types::HaulPhase;
-            if matches!(data.phase, HaulPhase::GoingToItem) {
-                queries
-                    .reservation_writer()
-                    .write(ResourceReservationRequest {
-                        op: ResourceReservationOp::ReleaseSource {
-                            source: data.item,
-                            amount: 1,
-                        },
-                    });
-            }
-        }
-        AssignedTask::GatherWater(data) => {
-            queries
-                .reservation_writer()
-                .write(ResourceReservationRequest {
-                    op: ResourceReservationOp::ReleaseDestination { target: data.tank },
-                });
-            use crate::systems::soul_ai::execute::task_execution::types::GatherWaterPhase;
-            if matches!(data.phase, GatherWaterPhase::GoingToBucket) {
-                queries
-                    .reservation_writer()
-                    .write(ResourceReservationRequest {
-                        op: ResourceReservationOp::ReleaseSource {
-                            source: data.bucket,
-                            amount: 1,
-                        },
-                    });
-            }
-        }
-        AssignedTask::HaulWaterToMixer(data) => {
-            // 作業員スロットとしてのMixer予約解除
-            queries
-                .reservation_writer()
-                .write(ResourceReservationRequest {
-                    op: ResourceReservationOp::ReleaseMixerDestination {
-                        target: data.mixer,
-                        resource_type: ResourceType::Water,
-                    },
-                });
+    // 中断時の予約解放は AssignedTask のフェーズ定義に従って共通化する。
+    let release_ops = lifecycle::collect_release_reservation_ops(task, |item, fallback| {
+        queries
+            .resources()
+            .get(item)
+            .ok()
+            .map(|r| r.0)
+            .unwrap_or(fallback)
+    });
+    for op in release_ops {
+        queries
+            .reservation_writer()
+            .write(ResourceReservationRequest { op });
+    }
 
-            use crate::systems::soul_ai::execute::task_execution::types::HaulWaterToMixerPhase;
-            if matches!(data.phase, HaulWaterToMixerPhase::GoingToBucket) {
-                queries
-                    .reservation_writer()
-                    .write(ResourceReservationRequest {
-                        op: ResourceReservationOp::ReleaseSource {
-                            source: data.bucket,
-                            amount: 1,
-                        },
-                    });
-            }
-            // タンク取水ロックは「実際に取水完了するまで」保持する
-            if matches!(
-                data.phase,
-                HaulWaterToMixerPhase::GoingToBucket
-                    | HaulWaterToMixerPhase::GoingToTank
-                    | HaulWaterToMixerPhase::FillingFromTank
-            ) {
-                queries
-                    .reservation_writer()
-                    .write(ResourceReservationRequest {
-                        op: ResourceReservationOp::ReleaseSource {
-                            source: data.tank,
-                            amount: 1,
-                        },
-                    });
-            }
-        }
-        AssignedTask::HaulToMixer(data) => {
-            queries
-                .reservation_writer()
-                .write(ResourceReservationRequest {
-                    op: ResourceReservationOp::ReleaseMixerDestination {
-                        target: data.mixer,
-                        resource_type: data.resource_type,
-                    },
-                });
-
-            use crate::systems::soul_ai::execute::task_execution::types::HaulToMixerPhase;
-            if matches!(data.phase, HaulToMixerPhase::GoingToItem) {
-                queries
-                    .reservation_writer()
-                    .write(ResourceReservationRequest {
-                        op: ResourceReservationOp::ReleaseSource {
-                            source: data.item,
-                            amount: 1,
-                        },
-                    });
-            }
-        }
-        AssignedTask::HaulToBlueprint(data) => {
-            queries
-                .reservation_writer()
-                .write(ResourceReservationRequest {
-                    op: ResourceReservationOp::ReleaseDestination {
-                        target: data.blueprint,
-                    },
-                });
-
-            use crate::systems::soul_ai::execute::task_execution::types::HaulToBpPhase;
-            if matches!(data.phase, HaulToBpPhase::GoingToItem) {
-                queries
-                    .reservation_writer()
-                    .write(ResourceReservationRequest {
-                        op: ResourceReservationOp::ReleaseSource {
-                            source: data.item,
-                            amount: 1,
-                        },
-                    });
-            }
-        }
-        AssignedTask::HaulWithWheelbarrow(data) => {
-            // ソースアイテムの予約と目的地の予約を解放（各アイテムにつき1つずつ）
-            for &item in &data.items {
-                queries
-                    .reservation_writer()
-                    .write(ResourceReservationRequest {
-                        op: ResourceReservationOp::ReleaseSource {
-                            source: item,
-                            amount: 1,
-                        },
-                    });
-                match data.destination {
-                    crate::systems::logistics::transport_request::WheelbarrowDestination::Stockpile(
-                        target,
-                    )
-                    | crate::systems::logistics::transport_request::WheelbarrowDestination::Blueprint(
-                        target,
-                    ) => {
-                        queries
-                            .reservation_writer()
-                            .write(ResourceReservationRequest {
-                                op: ResourceReservationOp::ReleaseDestination { target },
-                            });
-                    }
-                    crate::systems::logistics::transport_request::WheelbarrowDestination::Mixer {
-                        entity: target,
-                        resource_type,
-                    } => {
-                        let item_type = queries
-                            .resources()
-                            .get(item)
-                            .ok()
-                            .map(|r| r.0)
-                            .unwrap_or(resource_type);
-                        queries
-                            .reservation_writer()
-                            .write(ResourceReservationRequest {
-                                op: ResourceReservationOp::ReleaseMixerDestination {
-                                    target,
-                                    resource_type: item_type,
-                                },
-                            });
-                    }
-                }
-            }
-            // 積載中のアイテムを地面に落とす
-            for &item_entity in &data.items {
-                if let Ok(mut entity_commands) = commands.get_entity(item_entity) {
-                    entity_commands.remove::<crate::relationships::LoadedIn>();
-                    entity_commands.insert((
-                        Visibility::Visible,
-                        Transform::from_xyz(snapped_pos.x, snapped_pos.y, Z_ITEM_PICKUP),
-                    ));
-                }
-            }
-            // 手押し車を駐車状態に戻す
-            if let Ok(mut wb_commands) = commands.get_entity(data.wheelbarrow) {
-                wb_commands.remove::<(crate::relationships::PushedBy, crate::systems::visual::haul::WheelbarrowMovement)>();
-                if let Some(parking_entity) = queries.belongs_to(data.wheelbarrow) {
-                    wb_commands.insert(crate::relationships::ParkedAt(parking_entity));
-                }
-                wb_commands.insert((
+    // 運搬タスクのうち、追加の実体クリーンアップが必要なものを処理する。
+    if let AssignedTask::HaulWithWheelbarrow(data) = task {
+        // 積載中のアイテムを地面に落とす
+        for &item_entity in &data.items {
+            if let Ok(mut entity_commands) = commands.get_entity(item_entity) {
+                entity_commands.remove::<crate::relationships::LoadedIn>();
+                entity_commands.insert((
                     Visibility::Visible,
                     Transform::from_xyz(snapped_pos.x, snapped_pos.y, Z_ITEM_PICKUP),
                 ));
             }
-            skip_inventory_drop_for = Some(data.wheelbarrow);
         }
-        AssignedTask::CollectSand(_) | AssignedTask::Refine(_) => {}
-        _ => {}
+        // 手押し車を駐車状態に戻す
+        if let Ok(mut wb_commands) = commands.get_entity(data.wheelbarrow) {
+            wb_commands.remove::<(
+                crate::relationships::PushedBy,
+                crate::systems::visual::haul::WheelbarrowMovement,
+            )>();
+            if let Some(parking_entity) = queries.belongs_to(data.wheelbarrow) {
+                wb_commands.insert(crate::relationships::ParkedAt(parking_entity));
+            }
+            wb_commands.insert((
+                Visibility::Visible,
+                Transform::from_xyz(snapped_pos.x, snapped_pos.y, Z_ITEM_PICKUP),
+            ));
+        }
+        skip_inventory_drop_for = Some(data.wheelbarrow);
     }
 
     // アイテムのドロップ処理（運搬タスクの場合）
