@@ -73,6 +73,9 @@ pub fn mud_mixer_auto_refine_system(
             };
 
             if storage.has_materials_for_refining(water_count) {
+                if !storage.has_output_capacity_for_refining() {
+                    continue;
+                }
                 let inflight_count = *in_flight.get(&mixer_entity).unwrap_or(&0);
                 let current_workers = workers_opt.map(|w| w.len()).unwrap_or(0);
 

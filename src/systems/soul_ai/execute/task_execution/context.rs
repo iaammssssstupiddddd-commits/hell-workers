@@ -12,7 +12,7 @@ use crate::events::{ResourceReservationOp, ResourceReservationRequest, TaskAssig
 /// CommandsとQueryはライフタイムが複雑なため、引数として残します。
 use crate::relationships::{ManagedBy, TaskWorkers};
 use crate::systems::familiar_ai::perceive::resource_sync::SharedResourceCache;
-use crate::systems::jobs::{Blueprint, Designation, Priority, TaskSlots};
+use crate::systems::jobs::{Blueprint, Designation, Priority, StoredByMixer, TaskSlots};
 use crate::systems::logistics::{InStockpile, Stockpile};
 use bevy::ecs::system::SystemParam;
 
@@ -136,7 +136,20 @@ pub struct TaskAssignmentQueries<'w, 's> {
     pub storage: StorageAccess<'w, 's>,
 
     // 固有フィールド
+    pub world_map: Res<'w, crate::world::map::WorldMap>,
     pub items: Query<'w, 's, (&'static ResourceItem, Option<&'static Designation>)>,
+    pub sand_piles: Query<
+        'w,
+        's,
+        (
+            Entity,
+            &'static Transform,
+            Option<&'static Designation>,
+            Option<&'static TaskWorkers>,
+        ),
+        With<crate::systems::jobs::SandPile>,
+    >,
+    pub task_state: Query<'w, 's, (Option<&'static Designation>, Option<&'static TaskWorkers>)>,
     pub transport_requests: Query<'w, 's, &'static crate::systems::logistics::transport_request::TransportRequest>,
     pub transport_demands:
         Query<'w, 's, &'static crate::systems::logistics::transport_request::TransportDemand>,
@@ -192,6 +205,7 @@ pub struct TaskQueries<'w, 's> {
             Option<&'static crate::relationships::StoredIn>,
         ),
     >,
+    pub mixer_stored_mud: Query<'w, 's, &'static StoredByMixer>,
 }
 
 /// タスク解除に必要なアクセス

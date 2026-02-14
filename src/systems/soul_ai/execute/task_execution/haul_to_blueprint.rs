@@ -25,7 +25,6 @@ pub fn handle_haul_to_blueprint_task(
     let q_designations = &ctx.queries.designation.designations;
     let soul_pos = ctx.soul_pos();
     let q_blueprints = &mut ctx.queries.storage.blueprints;
-    let q_stockpiles = &mut ctx.queries.storage.stockpiles;
     // 疲労またはストレス崩壊のチェック
     if ctx.soul.fatigue > 0.95 || breakdown_opt.is_some() {
         info!(
@@ -54,6 +53,7 @@ pub fn handle_haul_to_blueprint_task(
                 q_targets.get(item_entity)
             {
                 let item_pos = item_transform.translation.truncate();
+                let stored_in_entity = stored_in_opt.map(|stored_in| stored_in.0);
                 update_destination_to_adjacent(
                     ctx.dest,
                     item_pos,
@@ -77,10 +77,11 @@ pub fn handle_haul_to_blueprint_task(
                     ) {
                         return;
                     }
+                    release_mixer_mud_storage_for_item(ctx, item_entity, commands);
 
                     // もしアイテムが備蓄場所にあったなら、その備蓄場所の型管理を更新する
-                    if let Some(stored_in) = stored_in_opt {
-                        update_stockpile_on_item_removal(stored_in.0, q_stockpiles);
+                    if let Some(stored_in) = stored_in_entity {
+                        update_stockpile_on_item_removal(stored_in, &mut ctx.queries.storage.stockpiles);
                     }
 
                     // ブループリントへの目的地設定は、次のフレームの GoingToBlueprint フェーズで

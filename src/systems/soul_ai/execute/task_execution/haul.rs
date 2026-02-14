@@ -24,7 +24,6 @@ pub fn handle_haul_task(
 ) {
     let soul_pos = ctx.soul_pos();
     let q_targets = &ctx.queries.designation.targets;
-    let q_stockpiles = &mut ctx.queries.storage.stockpiles;
     let q_belongs = &ctx.queries.designation.belongs;
     match phase {
         HaulPhase::GoingToItem => {
@@ -32,6 +31,7 @@ pub fn handle_haul_task(
                 q_targets.get(item)
             {
                 let res_pos = res_transform.translation.truncate();
+                let stored_in_entity = stored_in_opt.map(|stored_in| stored_in.0);
                 // アイテムが障害物の上にある可能性があるため、隣接マスを目的地として設定
                 let reachable = update_destination_to_adjacent(
                     ctx.dest,
@@ -66,12 +66,13 @@ pub fn handle_haul_task(
                     ) {
                         return;
                     }
+                    release_mixer_mud_storage_for_item(ctx, item, commands);
 
-                    if let Some(stored_in) = stored_in_opt {
-                        update_stockpile_on_item_removal(stored_in.0, q_stockpiles);
+                    if let Some(stored_in) = stored_in_entity {
+                        update_stockpile_on_item_removal(stored_in, &mut ctx.queries.storage.stockpiles);
                     }
 
-                    if let Ok((_, stock_transform, _, _)) = q_stockpiles.get(stockpile) {
+                    if let Ok((_, stock_transform, _, _)) = ctx.queries.storage.stockpiles.get(stockpile) {
                         let stock_pos = stock_transform.translation.truncate();
                         let stock_grid = WorldMap::world_to_grid(stock_pos);
                         let stock_dest = WorldMap::grid_to_world(stock_grid.0, stock_grid.1);
@@ -94,7 +95,7 @@ pub fn handle_haul_task(
             }
         }
         HaulPhase::GoingToStockpile => {
-            if let Ok((_, stock_transform, _, _)) = q_stockpiles.get(stockpile) {
+            if let Ok((_, stock_transform, _, _)) = ctx.queries.storage.stockpiles.get(stockpile) {
                 let stock_pos = stock_transform.translation.truncate();
                 let stock_grid = WorldMap::world_to_grid(stock_pos);
                 let stock_dest = WorldMap::grid_to_world(stock_grid.0, stock_grid.1);
@@ -128,7 +129,7 @@ pub fn handle_haul_task(
         }
         HaulPhase::Dropping => {
             if let Ok((_, stock_transform, mut stockpile_comp, stored_items_opt)) =
-                q_stockpiles.get_mut(stockpile)
+                ctx.queries.storage.stockpiles.get_mut(stockpile)
             {
                 let current_count = stored_items_opt.map(|si| si.len()).unwrap_or(0);
                 let is_bucket_storage = ctx.queries.storage.bucket_storages.get(stockpile).is_ok();
@@ -166,7 +167,7 @@ pub fn handle_haul_task(
                         );
                         is_bucket_item && bucket_storage_type_ok
                     } else {
-                        type_match
+                        type_match && res_type.can_store_in_stockpile()
                     };
 
                     // 現在の数 + 予約分 + フレーム内増加分 < capacity
