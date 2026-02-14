@@ -20,11 +20,11 @@ pub fn create_game_assets(
     let font_soul_emoji = asset_server.load("fonts/NotoEmoji-VF.ttf");
 
     GameAssets {
-        grass: asset_server.load("textures/grass.jpg"),
-        dirt: asset_server.load("textures/dirt.jpg"),
+        grass: asset_server.load("textures/grass.png"),
+        dirt: asset_server.load("textures/dirt.png"),
         stone: asset_server.load("textures/stone.jpg"),
         river: asset_server.load("textures/river.png"),
-        sand: asset_server.load("textures/resources/sandpile/sandpile.png"),
+        sand: asset_server.load("textures/sand_terrain.png"),
         familiar: asset_server.load("textures/character/familiar/imp anime 1.png"),
         familiar_anim_2: asset_server.load("textures/character/familiar/imp anime 2.png"),
         familiar_anim_3: asset_server.load("textures/character/familiar/imp anime 3.png"),
@@ -63,7 +63,7 @@ pub fn create_game_assets(
         wall_t_left: asset_server.load("textures/buildings/wooden_wall/wall_t_left.png"),
         wall_t_right: asset_server.load("textures/buildings/wooden_wall/wall_t_right.png"),
         wall_cross: asset_server.load("textures/buildings/wooden_wall/wall_cross.png"),
-        wood: asset_server.load("textures/dirt.jpg"),
+        wood: asset_server.load("textures/dirt.png"),
         tree: asset_server.load("textures/environment/tree/tree_1.png"),
         trees: vec![
             asset_server.load("textures/environment/tree/tree_1.png"),
@@ -117,6 +117,15 @@ pub fn create_game_assets(
             .load("textures/items/wheel_barrow/wheel_barrow_parking.png"),
         icon_wheelbarrow_small: asset_server
             .load("textures/items/wheel_barrow/wheel_barrow_icon.png"),
+        grass_edge: asset_server.load("textures/terrain/grass_edge.png"),
+        grass_corner: asset_server.load("textures/terrain/grass_corner.png"),
+        dirt_edge: asset_server.load("textures/terrain/dirt_edge.png"),
+        dirt_corner: asset_server.load("textures/terrain/dirt_corner.png"),
+        sand_edge: asset_server.load("textures/terrain/sand_edge.png"),
+        sand_corner: asset_server.load("textures/terrain/sand_corner.png"),
+        grass_inner_corner: asset_server.load("textures/terrain/grass_inner_corner.png"),
+        dirt_inner_corner: asset_server.load("textures/terrain/dirt_inner_corner.png"),
+        sand_inner_corner: asset_server.load("textures/terrain/sand_inner_corner.png"),
         font_ui,
         font_familiar,
         font_soul_name,

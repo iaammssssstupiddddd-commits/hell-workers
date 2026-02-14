@@ -24,6 +24,12 @@ pub const FATIGUE_IDLE_THRESHOLD: f32 = 0.8;
 
 /// 背景マップのレイヤー
 pub const Z_MAP: f32 = 0.0;
+/// 地形境界オーバーレイ: Sand（Riverの上）
+pub const Z_MAP_SAND: f32 = 0.01;
+/// 地形境界オーバーレイ: Dirt（Sandの上）
+pub const Z_MAP_DIRT: f32 = 0.02;
+/// 地形境界オーバーレイ: Grass（最高優先度）
+pub const Z_MAP_GRASS: f32 = 0.03;
 /// 地面にあるアイテム（資材など）のベースレイヤー
 pub const Z_ITEM: f32 = 0.1;
 /// オーラや範囲表示のレイヤー（地面とキャラクターの間）

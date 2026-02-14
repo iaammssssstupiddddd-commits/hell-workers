@@ -21,7 +21,7 @@ use crate::systems::spatial::{
     SpatialGrid, SpatialGridOps, StockpileSpatialGrid,
 };
 use crate::systems::time::GameTime;
-use crate::world::map::{WorldMap, spawn_map};
+use crate::world::map::{WorldMap, spawn_map, terrain_border::spawn_terrain_borders};
 use bevy::prelude::*;
 use bevy::render::view::NoIndirectDrawing;
 use std::time::Instant;
@@ -53,6 +53,7 @@ impl Plugin for StartupPlugin {
                 (
                     log_post_startup_begin,
                     spawn_map_timed,
+                    spawn_terrain_borders,
                     initial_resource_spawner_timed,
                     spawn_entities,
                     spawn_familiar_wrapper,
