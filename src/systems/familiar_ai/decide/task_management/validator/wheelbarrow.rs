@@ -75,7 +75,7 @@ pub fn compute_centroid(
     }
 }
 
-fn find_nearest_wheelbarrow(
+pub fn find_nearest_wheelbarrow(
     task_pos: Vec2,
     queries: &crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
     shadow: &ReservationShadow,
@@ -152,7 +152,7 @@ fn collect_free_items_for_stockpile(
     }
 }
 
-fn remaining_stockpile_capacity(
+pub fn remaining_stockpile_capacity(
     stockpile: Entity,
     queries: &crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
     shadow: &ReservationShadow,

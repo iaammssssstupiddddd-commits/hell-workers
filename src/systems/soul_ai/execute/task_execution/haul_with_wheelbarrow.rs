@@ -5,8 +5,10 @@ use crate::relationships::{LoadedIn, ParkedAt, PushedBy, WorkingOn};
 use crate::systems::logistics::transport_request::WheelbarrowDestination;
 use crate::systems::logistics::{InStockpile, Wheelbarrow};
 use crate::systems::soul_ai::execute::task_execution::common::*;
-use crate::systems::soul_ai::execute::task_execution::transport_common::reservation;
-use crate::systems::visual::haul::WheelbarrowMovement;
+use crate::systems::soul_ai::execute::task_execution::transport_common::{
+    reservation,
+    wheelbarrow as wheelbarrow_common,
+};
 use crate::systems::soul_ai::execute::task_execution::{
     context::TaskExecutionContext,
     types::{AssignedTask, HaulWithWheelbarrowData, HaulWithWheelbarrowPhase},
@@ -425,50 +427,23 @@ pub fn handle_haul_with_wheelbarrow_task(
             );
 
             if !reachable {
-                // 到達不能: 現在位置に駐車
-                park_wheelbarrow_here(commands, ctx, &data, soul_pos);
+                wheelbarrow_common::complete_wheelbarrow_task(commands, ctx, &data, soul_pos);
+                info!(
+                    "WB_HAUL: Soul {:?} returned wheelbarrow {:?} (unreachable, parked here)",
+                    ctx.soul_entity, data.wheelbarrow
+                );
                 return;
             }
 
             if is_near_target(soul_pos, parking_pos) {
-                park_wheelbarrow_here(commands, ctx, &data, parking_pos);
+                wheelbarrow_common::complete_wheelbarrow_task(commands, ctx, &data, parking_pos);
+                info!(
+                    "WB_HAUL: Soul {:?} returned wheelbarrow {:?}",
+                    ctx.soul_entity, data.wheelbarrow
+                );
             }
         }
     }
-}
-
-/// 手押し車を現在位置に駐車してタスクを完了
-fn park_wheelbarrow_here(
-    commands: &mut Commands,
-    ctx: &mut TaskExecutionContext,
-    data: &HaulWithWheelbarrowData,
-    pos: Vec2,
-) {
-    // 駐車エリアを取得して ParkedAt を設定
-    if let Ok(belongs) = ctx.queries.designation.belongs.get(data.wheelbarrow) {
-        commands.entity(data.wheelbarrow).insert(ParkedAt(belongs.0));
-    }
-
-    // PushedBy を削除
-    commands
-        .entity(data.wheelbarrow)
-        .remove::<(PushedBy, WheelbarrowMovement)>();
-
-    // 手押し車の位置を更新
-    commands.entity(data.wheelbarrow).insert((
-        Visibility::Visible,
-        Transform::from_xyz(pos.x, pos.y, Z_ITEM_PICKUP),
-    ));
-
-    // インベントリクリア
-    ctx.inventory.0 = None;
-    commands.entity(ctx.soul_entity).remove::<WorkingOn>();
-    clear_task_and_path(ctx.task, ctx.path);
-
-    info!(
-        "WB_HAUL: Soul {:?} returned wheelbarrow {:?}",
-        ctx.soul_entity, data.wheelbarrow
-    );
 }
 
 /// 手押し車タスクのキャンセル処理
@@ -491,16 +466,19 @@ fn cancel_wheelbarrow_task(
     }
 
     // 手押し車を駐車状態に戻す
-    if let Ok(belongs) = ctx.queries.designation.belongs.get(data.wheelbarrow) {
-        commands.entity(data.wheelbarrow).insert(ParkedAt(belongs.0));
-    }
-    commands
-        .entity(data.wheelbarrow)
-        .remove::<(PushedBy, WheelbarrowMovement)>();
-    commands.entity(data.wheelbarrow).insert((
-        Visibility::Visible,
-        Transform::from_xyz(soul_pos.x, soul_pos.y, Z_ITEM_PICKUP),
-    ));
+    let parking_anchor = ctx
+        .queries
+        .designation
+        .belongs
+        .get(data.wheelbarrow)
+        .ok()
+        .map(|b| b.0);
+    wheelbarrow_common::park_wheelbarrow_entity(
+        commands,
+        data.wheelbarrow,
+        parking_anchor,
+        soul_pos,
+    );
 
     for &item_entity in &data.items {
         reservation::release_source(ctx, item_entity, 1);

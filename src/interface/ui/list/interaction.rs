@@ -235,7 +235,8 @@ pub fn entity_list_visual_feedback_system(
     }
 }
 
-fn apply_row_highlight(
+/// リスト行の選択・ホバー状態に応じたハイライト適用（タスクリスト等で再利用）
+pub fn apply_row_highlight(
     node: &mut Node,
     bg: &mut BackgroundColor,
     border_color: &mut BorderColor,
