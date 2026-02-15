@@ -16,6 +16,7 @@ pub mod haul_with_wheelbarrow;
 pub mod haul_to_mixer;
 pub mod haul_water_to_mixer;
 pub mod refine;
+pub mod pour_floor;
 pub mod reinforce_floor;
 pub mod transport_common;
 pub mod types;
