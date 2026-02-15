@@ -7,7 +7,8 @@ pub use finder::find_bucket_return_assignment;
 pub use reservation::{can_reserve_source, source_not_reserved};
 pub use resolver::{
     resolve_consolidation_inputs, resolve_gather_water_inputs, resolve_haul_to_blueprint_inputs,
-    resolve_haul_to_mixer_inputs, resolve_haul_to_stockpile_inputs,
+    resolve_haul_to_floor_construction_inputs, resolve_haul_to_mixer_inputs,
+    resolve_haul_to_stockpile_inputs,
     resolve_haul_water_to_mixer_inputs, resolve_return_bucket_tank,
 };
 pub use wheelbarrow::{
