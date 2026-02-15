@@ -69,31 +69,44 @@ pub fn animation_system(
             sprite.image = desired_image.clone();
         }
 
-        // 浮遊アニメーション（translation はロジック座標と干渉するため変更しない）
-        anim.bob_timer += time.delta_secs();
-        let sway = (anim.bob_timer * SOUL_FLOAT_SWAY_SPEED).sin();
-
-        let speed_scale = if anim.is_moving { 1.3 } else { 1.0 };
-        let pulse_speed = (SOUL_FLOAT_PULSE_SPEED_BASE + (1.0 - soul.laziness) * 0.4) * speed_scale;
-        let pulse = (anim.bob_timer * pulse_speed).sin();
-        let pulse_amplitude = if anim.is_moving {
-            SOUL_FLOAT_PULSE_AMPLITUDE_MOVE
-        } else {
-            SOUL_FLOAT_PULSE_AMPLITUDE_IDLE
-        };
-        let base_scale = if anim.is_moving { 1.02 } else { 1.0 };
-
-        transform.scale = Vec3::new(
-            base_scale + pulse * (pulse_amplitude * 0.6),
-            base_scale + pulse * pulse_amplitude,
-            1.0,
+        // 集会中の特定の行動では、idle_visual_systemがアニメーションを管理するため
+        // ここでは通常の浮遊アニメーションをスキップ
+        use crate::entities::damned_soul::{GatheringBehavior, IdleBehavior};
+        let is_gathering_with_custom_animation = matches!(
+            idle.behavior,
+            IdleBehavior::Gathering | IdleBehavior::ExhaustedGathering
+        ) && matches!(
+            idle.gathering_behavior,
+            GatheringBehavior::Dancing | GatheringBehavior::Standing | GatheringBehavior::Sleeping
         );
 
-        let tilt = if anim.is_moving {
-            SOUL_FLOAT_SWAY_TILT_MOVE
-        } else {
-            SOUL_FLOAT_SWAY_TILT_IDLE
-        };
-        transform.rotation = Quat::from_rotation_z(sway * tilt);
+        if !is_gathering_with_custom_animation {
+            // 浮遊アニメーション（translation はロジック座標と干渉するため変更しない）
+            anim.bob_timer += time.delta_secs();
+            let sway = (anim.bob_timer * SOUL_FLOAT_SWAY_SPEED).sin();
+
+            let speed_scale = if anim.is_moving { 1.3 } else { 1.0 };
+            let pulse_speed = (SOUL_FLOAT_PULSE_SPEED_BASE + (1.0 - soul.laziness) * 0.4) * speed_scale;
+            let pulse = (anim.bob_timer * pulse_speed).sin();
+            let pulse_amplitude = if anim.is_moving {
+                SOUL_FLOAT_PULSE_AMPLITUDE_MOVE
+            } else {
+                SOUL_FLOAT_PULSE_AMPLITUDE_IDLE
+            };
+            let base_scale = if anim.is_moving { 1.02 } else { 1.0 };
+
+            transform.scale = Vec3::new(
+                base_scale + pulse * (pulse_amplitude * 0.6),
+                base_scale + pulse * pulse_amplitude,
+                1.0,
+            );
+
+            let tilt = if anim.is_moving {
+                SOUL_FLOAT_SWAY_TILT_MOVE
+            } else {
+                SOUL_FLOAT_SWAY_TILT_IDLE
+            };
+            transform.rotation = Quat::from_rotation_z(sway * tilt);
+        }
     }
 }

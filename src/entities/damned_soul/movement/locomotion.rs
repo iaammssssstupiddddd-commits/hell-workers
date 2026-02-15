@@ -37,6 +37,14 @@ pub fn soul_movement(
             let to_target = target - current_pos;
             let distance = to_target.length();
 
+            // デバッグ：集会中のsoulで特定位置付近の場合
+            if idle.behavior == IdleBehavior::Gathering && current_pos.x.abs() < 150.0 && current_pos.y.abs() < 250.0 {
+                debug!(
+                    "MOVEMENT: {:?} at {:?}, target: {:?}, dist: {:.1}, waypoints: {}/{}",
+                    _entity, current_pos, target, distance, path.current_index, path.waypoints.len()
+                );
+            }
+
             // 目的地への距離が十分近い場合は到着とみなす (1.0)
             if distance > 1.0 {
                 let base_speed = SOUL_SPEED_BASE;

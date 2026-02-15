@@ -128,6 +128,7 @@ pub struct GatheringUpdateTimer {
 impl Default for GatheringUpdateTimer {
     fn default() -> Self {
         Self {
+            // 0.5秒間隔で実行（パフォーマンス最適化）
             timer: Timer::from_seconds(0.5, TimerMode::Repeating),
         }
     }

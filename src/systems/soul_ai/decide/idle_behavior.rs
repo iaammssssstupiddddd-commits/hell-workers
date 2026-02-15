@@ -58,6 +58,7 @@ pub fn idle_behavior_decision_system(
     q_spots: Query<(Entity, &GatheringSpot, &crate::relationships::GatheringParticipants)>,
     mut query: IdleDecisionSoulQuery,
     spot_grid: Res<GatheringSpotSpatialGrid>,
+    soul_grid: Res<crate::systems::spatial::SpatialGrid>,
 ) {
     let dt = time.delta_secs();
 
@@ -101,6 +102,7 @@ pub fn idle_behavior_decision_system(
                 if has_arrived {
                     debug!("IDLE: Soul transitioned from ExhaustedGathering to Gathering");
                     idle.behavior = IdleBehavior::Gathering;
+                    idle.needs_separation = true; // 到着時に重なり回避を発動
                     // ParticipatingIn を追加（Executeフェーズで処理）
                     if participating_in.is_none() {
                         if let Some(spot_entity) = target_spot_entity {
@@ -263,7 +265,8 @@ pub fn idle_behavior_decision_system(
                         }
                     } else {
                         // 到着時にParticipatingInを追加（Executeフェーズで処理）
-                        if participating_in.is_none() {
+                        let just_arrived = participating_in.is_none();
+                        if just_arrived {
                             if let Some(spot_entity) = target_spot_entity {
                                 request_writer.write(IdleBehaviorRequest {
                                     entity,
@@ -276,29 +279,165 @@ pub fn idle_behavior_decision_system(
                             idle.behavior = IdleBehavior::Gathering;
                         }
 
+                        // 到着直後、または中心に近すぎる場合は離れた位置を設定
+                        // ただし、既に移動中（waypointsがある）の場合はスキップ（separation_systemによる移動を妨げない）
+                        let is_moving = !path.waypoints.is_empty() && path.current_index < path.waypoints.len();
+
+                        if !is_moving && (just_arrived || dist_from_center < TILE_SIZE * GATHERING_KEEP_DISTANCE_MIN) {
+                            let mut found = false;
+                            const MIN_SEPARATION: f32 = TILE_SIZE * 1.2;
+
+                            for _ in 0..20 {
+                                let new_target = random_position_around(
+                                    center,
+                                    TILE_SIZE * GATHERING_KEEP_DISTANCE_TARGET_MIN,
+                                    TILE_SIZE * GATHERING_KEEP_DISTANCE_TARGET_MAX,
+                                );
+
+                                // 他のSoulと重ならないかチェック
+                                let nearby_souls = soul_grid.get_nearby_in_radius(new_target, MIN_SEPARATION);
+                                let position_occupied = nearby_souls.iter().any(|&other| other != entity);
+
+                                if !position_occupied {
+                                    let target_grid = WorldMap::world_to_grid(new_target);
+                                    if world_map.is_walkable(target_grid.0, target_grid.1) {
+                                        dest.0 = new_target;
+                                        path.waypoints.clear();
+                                        path.current_index = 0;
+                                        found = true;
+                                        break;
+                                    }
+                                }
+                            }
+                            if !found {
+                                // 見つからない場合は中心の反対方向に移動
+                                // ただしoverlapチェックを行う
+                                let away = (current_pos - center).normalize_or_zero();
+                                let fallback_target = center + away * TILE_SIZE * GATHERING_KEEP_DISTANCE_TARGET_MAX;
+
+                                // フォールバック位置でもoverlapをチェック
+                                let nearby_souls = soul_grid.get_nearby_in_radius(fallback_target, MIN_SEPARATION);
+                                let position_occupied = nearby_souls.iter().any(|&other| other != entity);
+
+                                if !position_occupied {
+                                    let target_grid = WorldMap::world_to_grid(fallback_target);
+                                    if world_map.is_walkable(target_grid.0, target_grid.1) {
+                                        dest.0 = fallback_target;
+                                        path.waypoints.clear();
+                                        path.current_index = 0;
+                                    }
+                                }
+                                // overlap回避できない場合は目的地を変更しない（separation_systemに任せる）
+                            }
+                        }
+
                         match idle.gathering_behavior {
                             GatheringBehavior::Wandering => {
                                 let path_complete = path.waypoints.is_empty()
                                     || path.current_index >= path.waypoints.len();
-                                if path_complete && idle.idle_timer >= idle.behavior_duration * 0.8
-                                {
-                                    let new_target = random_position_around(
-                                        center,
-                                        TILE_SIZE * GATHERING_KEEP_DISTANCE_TARGET_MIN,
-                                        TILE_SIZE * GATHERING_KEEP_DISTANCE_TARGET_MAX,
-                                    );
-                                    let target_grid = WorldMap::world_to_grid(new_target);
-                                    if world_map.is_walkable(target_grid.0, target_grid.1) {
-                                        dest.0 = new_target;
-                                    } else {
-                                        dest.0 = center;
+                                // パス完了時に新しい目的地を設定（うろつき）
+                                if path_complete {
+                                    let mut found = false;
+                                    const MIN_SEPARATION: f32 = TILE_SIZE * 1.2;
+
+                                    for _ in 0..10 {
+                                        let new_target = random_position_around(
+                                            center,
+                                            TILE_SIZE * GATHERING_KEEP_DISTANCE_TARGET_MIN,
+                                            TILE_SIZE * GATHERING_KEEP_DISTANCE_TARGET_MAX,
+                                        );
+
+                                        // 現在位置から十分離れているか（うろつき感を出すため）
+                                        let dist_from_current = (new_target - current_pos).length();
+                                        if dist_from_current < TILE_SIZE * 2.0 {
+                                            continue; // 近すぎる場合はスキップ
+                                        }
+
+                                        // 他のSoulと重ならないかチェック
+                                        let nearby_souls = soul_grid.get_nearby_in_radius(new_target, MIN_SEPARATION);
+                                        let position_occupied = nearby_souls.iter().any(|&other| other != entity);
+
+                                        if !position_occupied {
+                                            let target_grid = WorldMap::world_to_grid(new_target);
+                                            if world_map.is_walkable(target_grid.0, target_grid.1) {
+                                                dest.0 = new_target;
+                                                path.waypoints.clear();
+                                                path.current_index = 0;
+                                                found = true;
+                                                break;
+                                            }
+                                        }
                                     }
-                                    idle.idle_timer = 0.0;
-                                    let mut rng = rand::thread_rng();
-                                    idle.behavior_duration = rng.gen_range(2.0..3.0);
+                                    if !found {
+                                        // 見つからない場合はランダムな方向に移動
+                                        // ただしoverlapチェックを行う
+                                        let mut rng = rand::thread_rng();
+                                        let mut fallback_found = false;
+
+                                        // フォールバック用の追加試行
+                                        for _ in 0..5 {
+                                            let angle: f32 = rng.gen_range(0.0..std::f32::consts::TAU);
+                                            let dist = TILE_SIZE * GATHERING_KEEP_DISTANCE_TARGET_MAX;
+                                            let offset = Vec2::new(angle.cos() * dist, angle.sin() * dist);
+                                            let fallback_target = center + offset;
+
+                                            let nearby_souls = soul_grid.get_nearby_in_radius(fallback_target, MIN_SEPARATION);
+                                            let position_occupied = nearby_souls.iter().any(|&other| other != entity);
+
+                                            if !position_occupied {
+                                                let target_grid = WorldMap::world_to_grid(fallback_target);
+                                                if world_map.is_walkable(target_grid.0, target_grid.1) {
+                                                    dest.0 = fallback_target;
+                                                    path.waypoints.clear();
+                                                    path.current_index = 0;
+                                                    fallback_found = true;
+                                                    break;
+                                                }
+                                            }
+                                        }
+                                        // 5回試してもダメなら目的地を変更しない（separation_systemに任せる）
+                                        if !fallback_found {
+                                            warn!("IDLE: Soul {:?} Wandering fallback failed after 5 attempts, keeping current destination", entity);
+                                        }
+                                    }
                                 }
                             }
-                            _ => {}
+                            GatheringBehavior::Sleeping | GatheringBehavior::Standing | GatheringBehavior::Dancing => {
+                                // これらの状態では移動しないが、中心に近すぎる場合は離れる
+                                if dist_from_center < TILE_SIZE * GATHERING_KEEP_DISTANCE_MIN {
+                                    let away = (current_pos - center).normalize_or_zero();
+                                    let target = center + away * TILE_SIZE * GATHERING_KEEP_DISTANCE_TARGET_MIN;
+
+                                    // 中心に近すぎる時の移動先もoverlapチェック
+                                    const MIN_SEPARATION: f32 = TILE_SIZE * 1.2;
+                                    let nearby_souls = soul_grid.get_nearby_in_radius(target, MIN_SEPARATION);
+                                    let position_occupied = nearby_souls.iter().any(|&other| other != entity);
+
+                                    if !position_occupied {
+                                        let target_grid = WorldMap::world_to_grid(target);
+                                        if world_map.is_walkable(target_grid.0, target_grid.1) {
+                                            dest.0 = target;
+                                            path.waypoints.clear();
+                                            path.current_index = 0;
+                                        }
+                                    }
+                                    // overlap回避できない場合は目的地を変更しない（separation_systemに任せる）
+                                } else {
+                                    // 重なり回避移動中かチェック（separation_systemによる移動を妨げない）
+                                    const MIN_SEPARATION: f32 = TILE_SIZE * 1.2;
+                                    let nearby_souls = soul_grid.get_nearby_in_radius(current_pos, MIN_SEPARATION);
+                                    let has_overlap = nearby_souls.iter().any(|&other| other != entity);
+                                    let dist_to_dest = (dest.0 - current_pos).length();
+
+                                    // 重なりがある、または目的地まで遠い場合は、移動を継続（waypointsをクリアしない）
+                                    if !has_overlap && dist_to_dest < TILE_SIZE * 0.5 {
+                                        // 重なりなし & 目的地に近い → 移動停止
+                                        path.waypoints.clear();
+                                        path.current_index = 0;
+                                    }
+                                    // それ以外の場合は、waypoints はそのまま（separation による移動を継続）
+                                }
+                            }
                         }
                     }
                 } else {
