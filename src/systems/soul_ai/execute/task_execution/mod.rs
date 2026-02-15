@@ -94,13 +94,12 @@ pub fn apply_task_assignment_requests_system(
             continue;
         }
 
-        if let Some(p) = participating_opt {
+        if let Some(_p) = participating_opt {
             commands
                 .entity(worker_entity)
-                .remove::<crate::systems::soul_ai::helpers::gathering::ParticipatingIn>();
+                .remove::<crate::relationships::ParticipatingIn>();
             commands.trigger(OnGatheringLeft {
                 entity: worker_entity,
-                spot_entity: p.0,
             });
         }
 

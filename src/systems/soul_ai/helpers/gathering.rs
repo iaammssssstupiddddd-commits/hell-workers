@@ -78,8 +78,6 @@ impl GatheringObjectType {
 pub struct GatheringSpot {
     /// 中心座標
     pub center: Vec2,
-    /// 現在の参加人数
-    pub participants: usize,
     /// 最大参加人数
     pub max_capacity: usize,
     /// 消滅猶予タイマー (残り秒)
@@ -96,7 +94,6 @@ impl Default for GatheringSpot {
     fn default() -> Self {
         Self {
             center: Vec2::ZERO,
-            participants: 0,
             max_capacity: GATHERING_MAX_CAPACITY,
             grace_timer: GATHERING_GRACE_PERIOD,
             grace_active: true, // 発生直後は猶予期間
@@ -114,10 +111,6 @@ pub struct GatheringVisuals {
     /// 中心オブジェクトエンティティ (Nothing の場合は None)
     pub object_entity: Option<Entity>,
 }
-
-/// Soulが参加中の集会スポットへの参照
-#[derive(Component, Debug)]
-pub struct ParticipatingIn(pub Entity);
 
 /// 集会発生の準備状態 (Soulに付与)
 #[derive(Component, Debug, Default)]
@@ -158,30 +151,8 @@ pub fn calculate_aura_size(participant_count: usize) -> f32 {
 }
 
 // ============================================================
-// Observers (イベント駆動による参加者数更新)
+// Observers (移行済みにつき削除)
 // ============================================================
-
-/// ParticipatingIn追加時に参加者数をインクリメント
-pub fn on_participating_added(
-    on: On<crate::events::OnGatheringParticipated>,
-    mut q_spots: Query<&mut GatheringSpot>,
-) {
-    let event = on.event();
-    if let Ok(mut spot) = q_spots.get_mut(event.spot_entity) {
-        spot.participants += 1;
-    }
-}
-
-/// ParticipatingIn削除時に参加者数をデクリメント
-pub fn on_participating_removed(
-    on: On<crate::events::OnGatheringLeft>,
-    mut q_spots: Query<&mut GatheringSpot>,
-) {
-    let event = on.event();
-    if let Ok(mut spot) = q_spots.get_mut(event.spot_entity) {
-        spot.participants = spot.participants.saturating_sub(1);
-    }
-}
 
 /// 集会システムのタイマーを更新するシステム
 pub fn tick_gathering_timer_system(time: Res<Time>, mut timer: ResMut<GatheringUpdateTimer>) {

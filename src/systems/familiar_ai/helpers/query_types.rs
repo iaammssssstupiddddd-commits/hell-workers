@@ -4,7 +4,7 @@ use crate::relationships::{CommandedBy, Commanding, ManagedTasks};
 use crate::systems::command::TaskArea;
 use crate::systems::familiar_ai::FamiliarAiState;
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
-use crate::systems::soul_ai::helpers::gathering::ParticipatingIn;
+use crate::relationships::ParticipatingIn;
 use crate::systems::visual::speech::cooldown::SpeechHistory;
 use bevy::prelude::*;
 

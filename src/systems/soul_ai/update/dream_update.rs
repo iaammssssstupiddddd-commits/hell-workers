@@ -9,7 +9,7 @@ use crate::constants::*;
 use crate::entities::damned_soul::{
     DamnedSoul, DreamPool, DreamQuality, DreamState, GatheringBehavior, IdleBehavior, IdleState,
 };
-use crate::systems::soul_ai::helpers::gathering::ParticipatingIn;
+use crate::relationships::ParticipatingIn;
 
 /// 睡眠中のSoulのDream蓄積を処理するシステム
 pub fn dream_update_system(

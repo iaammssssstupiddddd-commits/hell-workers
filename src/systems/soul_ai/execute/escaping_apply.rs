@@ -2,7 +2,7 @@ use bevy::prelude::*;
 
 use crate::entities::damned_soul::IdleBehavior;
 use crate::events::{EscapeOperation, EscapeRequest};
-use crate::systems::soul_ai::helpers::gathering::ParticipatingIn;
+use crate::relationships::ParticipatingIn;
 use crate::systems::soul_ai::helpers::query_types::EscapingBehaviorSoulQuery;
 
 /// EscapeRequest を適用する（Execute Phase）
@@ -20,11 +20,10 @@ pub fn escaping_apply_system(
 
         match &request.operation {
             EscapeOperation::StartEscaping { leave_gathering } => {
-                if let Some(spot_entity) = leave_gathering {
+                if let Some(_spot_entity) = *leave_gathering {
                     commands.entity(entity).remove::<ParticipatingIn>();
                     commands.trigger(crate::events::OnGatheringLeft {
                         entity,
-                        spot_entity: *spot_entity,
                     });
                 }
 
