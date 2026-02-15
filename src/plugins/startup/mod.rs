@@ -17,8 +17,9 @@ use crate::interface::selection::{HoveredEntity, SelectedEntity};
 use crate::interface::ui::{MenuState, setup_ui};
 use crate::systems::logistics::{ResourceLabels, initial_resource_spawner};
 use crate::systems::spatial::{
-    BlueprintSpatialGrid, FamiliarSpatialGrid, GatheringSpotSpatialGrid, ResourceSpatialGrid,
-    SpatialGrid, SpatialGridOps, StockpileSpatialGrid,
+    BlueprintSpatialGrid, FamiliarSpatialGrid, FloorConstructionSpatialGrid,
+    GatheringSpotSpatialGrid, ResourceSpatialGrid, SpatialGrid, SpatialGridOps,
+    StockpileSpatialGrid,
 };
 use crate::systems::time::GameTime;
 use crate::world::map::{WorldMap, spawn_map, terrain_border::spawn_terrain_borders};
@@ -45,6 +46,7 @@ impl Plugin for StartupPlugin {
             .init_resource::<ResourceSpatialGrid>()
             .init_resource::<GatheringSpotSpatialGrid>()
             .init_resource::<BlueprintSpatialGrid>()
+            .init_resource::<FloorConstructionSpatialGrid>()
             .init_resource::<StockpileSpatialGrid>()
             .init_resource::<PerfScenarioApplied>()
             .add_systems(Startup, (setup, initialize_gizmo_config))

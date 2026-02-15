@@ -131,6 +131,20 @@ pub struct MutStorageAccess<'w, 's> {
         ),
     >,
     pub target_mixers: Query<'w, 's, &'static crate::systems::jobs::TargetMixer>,
+    pub floor_sites: Query<
+        'w,
+        's,
+        (
+            &'static Transform,
+            &'static mut crate::systems::jobs::floor_construction::FloorConstructionSite,
+            Option<&'static TaskWorkers>,
+        ),
+    >,
+    pub floor_tiles: Query<
+        'w,
+        's,
+        &'static mut crate::systems::jobs::floor_construction::FloorTileBlueprint,
+    >,
 }
 
 /// タスク割り当てに必要なクエリ群（Familiar AI向け）
