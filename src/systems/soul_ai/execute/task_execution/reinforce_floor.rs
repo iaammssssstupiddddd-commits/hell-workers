@@ -1,6 +1,7 @@
 //! Floor tile reinforcement task execution
 
 use crate::relationships::WorkingOn;
+use crate::constants::{FLOOR_BONES_PER_TILE, FLOOR_REINFORCE_DURATION_SECS};
 use crate::systems::jobs::floor_construction::FloorTileState;
 use crate::systems::logistics::ResourceType;
 use crate::systems::soul_ai::execute::task_execution::{
@@ -10,9 +11,6 @@ use crate::systems::soul_ai::execute::task_execution::{
 };
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
-
-const FLOOR_BONES_PER_TILE: u32 = 2;
-const FLOOR_REINFORCE_DURATION_SECS: f32 = 3.0;
 
 pub fn handle_reinforce_floor_task(
     ctx: &mut TaskExecutionContext,
