@@ -75,6 +75,7 @@ pub enum MenuAction {
     InspectEntity(Entity),
     ClearInspectPin,
     SelectBuild(BuildingType),
+    SelectFloorPlace, // Floor area placement
     SelectZone(ZoneType),
     RemoveZone(ZoneType), // ゾーン削除
     SelectTaskMode(crate::systems::command::TaskMode),

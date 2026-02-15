@@ -186,6 +186,9 @@ pub fn collect_active_reservation_ops(
                 }
             }
         }
+        AssignedTask::ReinforceFloorTile(_) | AssignedTask::PourFloorTile(_) => {
+            // TODO: Floor construction reservations (Phase 4 & 8)
+        }
         AssignedTask::None => {}
     }
 

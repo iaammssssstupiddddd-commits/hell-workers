@@ -1,6 +1,7 @@
 use crate::game_state::PlayMode;
 use crate::interface::selection::SelectedEntity;
 use crate::interface::selection::blueprint_placement;
+use crate::interface::selection::floor_placement_system;
 use crate::interface::selection::{
     cleanup_selection_references_system, clear_companion_state_outside_build_mode,
     update_hover_entity, update_selection_indicator,
@@ -27,6 +28,7 @@ impl Plugin for UiCorePlugin {
                 cleanup_selection_references_system,
                 update_selection_indicator,
                 blueprint_placement.run_if(in_state(PlayMode::BuildingPlace)),
+                floor_placement_system.run_if(in_state(PlayMode::FloorPlace)),
                 ui_keyboard_shortcuts_system,
                 ui_interaction_system,
                 menu_visibility_system,
