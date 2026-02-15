@@ -1,7 +1,7 @@
 //! タスクリストのスナップショット生成
 
 use crate::relationships::TaskWorkers;
-use crate::systems::jobs::{Blueprint, Designation, Priority, Rock, SandPile, Tree, WorkType};
+use crate::systems::jobs::{Blueprint, BonePile, Designation, Priority, Rock, SandPile, Tree, WorkType};
 use crate::systems::logistics::transport_request::TransportRequest;
 use crate::systems::logistics::ResourceItem;
 use bevy::prelude::*;
@@ -36,6 +36,7 @@ pub fn build_task_list_snapshot(
         Option<&Tree>,
         Option<&Rock>,
         Option<&SandPile>,
+        Option<&BonePile>,
     )>,
 ) -> Vec<(WorkType, Vec<TaskEntry>)> {
     let mut groups: BTreeMap<u8, (WorkType, Vec<TaskEntry>)> = BTreeMap::new();
@@ -52,6 +53,7 @@ pub fn build_task_list_snapshot(
         tree,
         rock,
         sand_pile,
+        bone_pile,
     ) in designations.iter()
     {
         let wt = designation.work_type;
@@ -66,6 +68,7 @@ pub fn build_task_list_snapshot(
             tree,
             rock,
             sand_pile,
+            bone_pile,
         );
 
         let entry = TaskEntry {

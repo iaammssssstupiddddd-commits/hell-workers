@@ -40,7 +40,7 @@ pub fn handle(
                 ctx.queries.storage.stockpiles.get_mut(dest_stockpile)
             {
                 let stock_pos = stock_transform.translation;
-                let incoming = ctx
+                let incoming_total = ctx
                     .queries
                     .reservation
                     .incoming_deliveries_query
@@ -48,10 +48,14 @@ pub fn handle(
                     .ok()
                     .map(|inc: &crate::relationships::IncomingDeliveries| inc.len())
                     .unwrap_or(0);
+                // `incoming_total` には自分が運んでいるアイテムも含まれるため、
+                // 他タスク分だけを容量判定に使う。
+                let incoming_self = incoming_total.min(item_types.len());
+                let incoming_other = incoming_total.saturating_sub(incoming_self);
                 let current_count = stored_items_opt.map(|si| si.len()).unwrap_or(0);
 
                 for (item_entity, res_type_opt) in &item_types {
-                    if current_count + incoming + unloaded_count >= stockpile_comp.capacity {
+                    if current_count + incoming_other + unloaded_count >= stockpile_comp.capacity {
                         break;
                     }
                     let Some(res_type) = res_type_opt else {
@@ -131,6 +135,9 @@ pub fn handle(
                         unloaded_count += 1;
                     } else {
                         commands.entity(*item_entity).remove::<LoadedIn>();
+                        commands
+                            .entity(*item_entity)
+                            .remove::<crate::relationships::DeliveringTo>();
                         commands.entity(*item_entity).insert((
                             Visibility::Visible,
                             Transform::from_xyz(soul_pos.x, soul_pos.y, Z_ITEM_PICKUP),

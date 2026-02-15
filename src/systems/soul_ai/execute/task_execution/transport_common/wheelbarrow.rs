@@ -25,6 +25,9 @@ pub fn park_wheelbarrow_entity(
     commands
         .entity(wheelbarrow)
         .remove::<(PushedBy, WheelbarrowMovement)>();
+    commands
+        .entity(wheelbarrow)
+        .remove::<crate::relationships::DeliveringTo>();
     commands.entity(wheelbarrow).insert((
         Visibility::Visible,
         Transform::from_xyz(pos.x, pos.y, Z_ITEM_PICKUP),
@@ -38,6 +41,21 @@ pub fn complete_wheelbarrow_task(
     data: &HaulWithWheelbarrowData,
     pos: Vec2,
 ) {
+    if let Ok(loaded_items) = ctx.queries.storage.loaded_items.get(data.wheelbarrow) {
+        for item_entity in loaded_items.iter() {
+            commands
+                .entity(item_entity)
+                .remove::<crate::relationships::LoadedIn>();
+            commands
+                .entity(item_entity)
+                .remove::<crate::relationships::DeliveringTo>();
+            commands.entity(item_entity).insert((
+                Visibility::Visible,
+                Transform::from_xyz(pos.x, pos.y, Z_ITEM_PICKUP),
+            ));
+        }
+    }
+
     let parking_anchor = ctx
         .queries
         .designation

@@ -2,7 +2,7 @@ use crate::systems::familiar_ai::decide::task_management::{AssignTaskContext, Re
 use crate::systems::jobs::WorkType;
 use bevy::prelude::*;
 
-use super::super::builders::{issue_build, issue_collect_sand, issue_gather, issue_refine};
+use super::super::builders::{issue_build, issue_collect_bone, issue_collect_sand, issue_gather, issue_refine};
 use super::super::validator::can_reserve_source;
 
 pub(super) fn assign_gather(
@@ -69,5 +69,19 @@ pub(super) fn assign_refine(
         return false;
     }
     issue_refine(task_pos, already_commanded, ctx, queries, shadow);
+    true
+}
+
+pub(super) fn assign_collect_bone(
+    task_pos: Vec2,
+    already_commanded: bool,
+    ctx: &AssignTaskContext<'_>,
+    queries: &mut crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
+    shadow: &mut ReservationShadow,
+) -> bool {
+    if !can_reserve_source(ctx.task_entity, queries, shadow) {
+        return false;
+    }
+    issue_collect_bone(task_pos, already_commanded, ctx, queries, shadow);
     true
 }

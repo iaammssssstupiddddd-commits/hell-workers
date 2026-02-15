@@ -18,6 +18,7 @@ pub enum BuildingType {
     Tank,
     MudMixer,
     SandPile,
+    BonePile,
     WheelbarrowParking,
 }
 
@@ -41,6 +42,9 @@ impl BuildingType {
             BuildingType::SandPile => {
                 materials.insert(ResourceType::Sand, 10);
             }
+            BuildingType::BonePile => {
+                materials.insert(ResourceType::Bone, 10);
+            }
             BuildingType::WheelbarrowParking => {
                 materials.insert(ResourceType::Wood, 2);
             }
@@ -58,6 +62,9 @@ pub struct Building {
 
 #[derive(Component)]
 pub struct SandPile;
+
+#[derive(Component)]
+pub struct BonePile;
 
 #[derive(Component)]
 pub struct TargetBlueprint(pub Entity);
@@ -151,6 +158,7 @@ pub enum WorkType {
     HaulToMixer,      // 固体原料（Sand/Rock）をミキサーへ運ぶ
     GatherWater,      // 水汲み
     CollectSand,      // 砂採取
+    CollectBone,      // 骨採取
     Refine,           // 精製
     HaulWaterToMixer, // Tankから水をミキサーへ運ぶ
     WheelbarrowHaul,  // 手押し車で一括運搬

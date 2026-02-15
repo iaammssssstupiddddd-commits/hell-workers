@@ -33,6 +33,7 @@ fn spawn_architect_submenu(
         ("Floor", BuildingType::Floor),
         ("MudMixer", BuildingType::MudMixer),
         ("SandPile", BuildingType::SandPile),
+        ("BonePile", BuildingType::BonePile),
         ("WB Parking", BuildingType::WheelbarrowParking),
     ];
 

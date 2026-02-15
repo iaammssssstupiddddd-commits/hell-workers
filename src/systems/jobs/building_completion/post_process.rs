@@ -1,4 +1,4 @@
-use super::super::{Blueprint, BuildingType, MudMixerStorage, SandPile, TaskSlots};
+use super::super::{Blueprint, BonePile, BuildingType, MudMixerStorage, SandPile, TaskSlots};
 use crate::assets::GameAssets;
 use crate::constants::{
     MUD_MIXER_CAPACITY, TILE_SIZE, WHEELBARROW_CAPACITY, Z_FLOATING_TEXT, Z_ITEM_PICKUP,
@@ -34,6 +34,10 @@ pub(super) fn apply_building_specific_post_process(
 
     if bp.kind == BuildingType::SandPile {
         setup_sand_pile(commands, building_entity);
+    }
+
+    if bp.kind == BuildingType::BonePile {
+        setup_bone_pile(commands, building_entity);
     }
 
     if bp.kind == BuildingType::WheelbarrowParking {
@@ -111,6 +115,10 @@ fn setup_mud_mixer(commands: &mut Commands, building_entity: Entity) {
 
 fn setup_sand_pile(commands: &mut Commands, building_entity: Entity) {
     commands.entity(building_entity).insert(SandPile);
+}
+
+fn setup_bone_pile(commands: &mut Commands, building_entity: Entity) {
+    commands.entity(building_entity).insert(BonePile);
 }
 
 fn setup_wheelbarrow_parking(

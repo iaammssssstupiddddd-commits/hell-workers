@@ -4,6 +4,7 @@
 
 pub mod build;
 pub mod collect_sand;
+pub mod collect_bone;
 pub mod common;
 pub mod context;
 pub mod gather;
@@ -150,8 +151,6 @@ pub fn apply_task_assignment_requests_system(
                     crate::systems::logistics::transport_request::WheelbarrowDestination::Blueprint(e) => e,
                     crate::systems::logistics::transport_request::WheelbarrowDestination::Mixer { entity, .. } => entity,
                 };
-                // 猫車自体が目的地に向かう
-                commands.entity(data.wheelbarrow).insert(crate::relationships::DeliveringTo(dest_entity));
                 // 積載済みアイテムも目的地に向かう
                 for &item in &data.items {
                     commands.entity(item).insert(crate::relationships::DeliveringTo(dest_entity));

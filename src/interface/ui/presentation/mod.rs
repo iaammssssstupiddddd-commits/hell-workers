@@ -159,6 +159,7 @@ pub(super) fn format_task_str(task: &AssignedTask) -> String {
         AssignedTask::Build(data) => format!("Build ({:?})", data.phase),
         AssignedTask::GatherWater(data) => format!("GatherWater ({:?})", data.phase),
         AssignedTask::CollectSand(data) => format!("CollectSand ({:?})", data.phase),
+        AssignedTask::CollectBone(data) => format!("CollectBone ({:?})", data.phase),
         AssignedTask::Refine(data) => format!("Refine ({:?})", data.phase),
         AssignedTask::HaulToMixer(data) => format!("HaulToMixer ({:?})", data.phase),
         AssignedTask::HaulWaterToMixer(data) => format!("HaulWaterToMixer ({:?})", data.phase),
