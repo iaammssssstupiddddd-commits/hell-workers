@@ -126,9 +126,35 @@ pub(super) fn candidate_snapshot(
                 false
             }
         }
-        WorkType::ReinforceFloorTile | WorkType::PourFloorTile => {
-            // TODO: Floor tile validation (Phase 5)
-            false
+        WorkType::ReinforceFloorTile => {
+            // Validate tile is in ReinforcingReady state
+            if let Ok(tile) = queries
+                .storage
+                .floor_tiles
+                .get(entity)
+            {
+                matches!(
+                    tile.state,
+                    crate::systems::jobs::floor_construction::FloorTileState::ReinforcingReady
+                )
+            } else {
+                false
+            }
+        }
+        WorkType::PourFloorTile => {
+            // Validate tile is in PouringReady state
+            if let Ok(tile) = queries
+                .storage
+                .floor_tiles
+                .get(entity)
+            {
+                matches!(
+                    tile.state,
+                    crate::systems::jobs::floor_construction::FloorTileState::PouringReady
+                )
+            } else {
+                false
+            }
         }
     };
 
