@@ -2,19 +2,23 @@ use bevy::prelude::*;
 
 use crate::constants::*;
 use crate::entities::damned_soul::DamnedSoul;
+use crate::relationships::{GatheringParticipants, ParticipatingIn};
 use crate::systems::soul_ai::helpers::gathering::*;
 
 /// 集会オーラのサイズと位置の更新システム
 pub fn gathering_visual_update_system(
-    q_spots: Query<(Entity, &GatheringSpot, &GatheringVisuals), Changed<GatheringSpot>>,
+    q_spots: Query<
+        (Entity, &GatheringSpot, &GatheringParticipants, &GatheringVisuals),
+        Changed<GatheringSpot>,
+    >,
     mut q_visuals: Query<
         (&mut Sprite, &mut Transform, &mut Visibility),
         (Without<DamnedSoul>, Without<ParticipatingIn>),
     >,
 ) {
-    for (_spot_entity, spot, visuals) in q_spots.iter() {
+    for (_spot_entity, spot, participants, visuals) in q_spots.iter() {
         // ビジュアルの更新 (サイズのみ - 位置はスポーン時のcenterを維持)
-        let target_size = calculate_aura_size(spot.participants);
+        let target_size = calculate_aura_size(participants.len());
         let target_pos = spot.center.extend(Z_AURA);
         let target_obj_pos = spot.center.extend(Z_ITEM);
 
@@ -42,7 +46,7 @@ pub fn gathering_visual_update_system(
                 }
 
                 // 1人以下（0人の猶予期間を含む）なら非表示
-                let target_visibility = if spot.participants < 2 {
+                let target_visibility = if participants.len() < 2 {
                     Visibility::Hidden
                 } else {
                     Visibility::Inherited
@@ -61,8 +65,9 @@ pub fn gathering_debug_visualization_system(
     q_window: Query<&Window, With<bevy::window::PrimaryWindow>>,
     q_camera: Query<(&Camera, &GlobalTransform), With<crate::interface::camera::MainCamera>>,
     hovered_entity: Res<crate::interface::selection::HoveredEntity>,
-    q_spots: Query<(Entity, &GatheringSpot)>,
-    q_participants: Query<(&GlobalTransform, &ParticipatingIn), With<DamnedSoul>>,
+    q_spots: Query<(Entity, &GatheringSpot, &GatheringParticipants)>,
+    q_participants: Query<&GlobalTransform, With<DamnedSoul>>,
+    q_soul_participating: Query<&ParticipatingIn, With<DamnedSoul>>,
     mut gizmos: Gizmos,
 ) {
     let Ok(window) = q_window.single() else {
@@ -83,7 +88,7 @@ pub fn gathering_debug_visualization_system(
 
     // 1. マウス座標がスポットの中心に近いかチェック (1タイル以内)
     if let Some(world_pos) = cursor_world_pos {
-        for (entity, spot) in q_spots.iter() {
+        for (entity, spot, _) in q_spots.iter() {
             if spot.center.distance(world_pos) < TILE_SIZE {
                 target_spots.insert(entity);
             }
@@ -92,20 +97,18 @@ pub fn gathering_debug_visualization_system(
 
     // 2. もしSoulをホバーしていたら、そのSoulが参加しているスポットを対象にする
     if let Some(hovered) = hovered_entity.0 {
-        if let Ok((_, participating_in)) = q_participants.get(hovered) {
+        if let Ok(participating_in) = q_soul_participating.get(hovered) {
             target_spots.insert(participating_in.0);
         }
     }
 
     // 対象のスポットをすべて描画
     for spot_entity in target_spots {
-        if let Ok((_, spot)) = q_spots.get(spot_entity) {
+        if let Ok((_, spot, participants)) = q_spots.get(spot_entity) {
             let center = spot.center;
 
-            for (soul_transform, participating_in) in q_participants.iter() {
-                let (soul_transform, participating_in): (&GlobalTransform, &ParticipatingIn) =
-                    (soul_transform, participating_in);
-                if participating_in.0 == spot_entity {
+            for &soul_entity in participants.iter() {
+                if let Ok(soul_transform) = q_participants.get(soul_entity) {
                     let soul_pos = soul_transform.translation().truncate();
                     // 紫の線とドット
                     gizmos.line_2d(center, soul_pos, Color::srgba(0.8, 0.4, 1.0, 0.8));

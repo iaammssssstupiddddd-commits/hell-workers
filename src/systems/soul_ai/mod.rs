@@ -114,8 +114,6 @@ impl Plugin for SoulAiPlugin {
         )
         .add_observer(update::vitals::on_task_completed_motivation_bonus)
         .add_observer(update::vitals::on_encouraged_effect)
-        .add_observer(update::vitals::on_soul_recruited_effect)
-        .add_observer(helpers::gathering::on_participating_added)
-        .add_observer(helpers::gathering::on_participating_removed);
+        .add_observer(update::vitals::on_soul_recruited_effect);
     }
 }

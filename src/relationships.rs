@@ -291,3 +291,39 @@ impl IncomingDeliveries {
         self.0.iter()
     }
 }
+
+// ============================================================
+// ソウル ⇔ 集会スポット 関係
+// ============================================================
+
+/// ソウルが集会に参加していることを示す Relationship
+/// ソウル側に付与される（ソウル → 集会スポットへの参照）
+#[derive(Component, Reflect, Debug, Clone, Copy)]
+#[reflect(Component)]
+#[relationship(relationship_target = GatheringParticipants)]
+pub struct ParticipatingIn(pub Entity);
+
+impl Default for ParticipatingIn {
+    fn default() -> Self {
+        Self(Entity::PLACEHOLDER)
+    }
+}
+
+/// 集会スポットに参加しているソウルの一覧
+/// 集会スポット側に自動的に付与・維持される RelationshipTarget
+#[derive(Component, Reflect, Debug, Default)]
+#[reflect(Component)]
+#[relationship_target(relationship = ParticipatingIn)]
+pub struct GatheringParticipants(Vec<Entity>);
+
+impl GatheringParticipants {
+    /// 参加中のソウル一覧をイテレータで取得
+    pub fn iter(&self) -> impl Iterator<Item = &Entity> {
+        self.0.iter()
+    }
+
+    /// 参加人数を取得
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+}

@@ -4,10 +4,10 @@ use crate::constants::{ESCAPE_GATHERING_JOIN_RADIUS, ESCAPE_SAFE_DISTANCE_MULTIP
 use crate::entities::damned_soul::{DamnedSoul, IdleBehavior, IdleState};
 use crate::entities::familiar::Familiar;
 use crate::events::GatheringManagementOp;
-use crate::relationships::CommandedBy;
 use crate::systems::soul_ai::decide::SoulDecideOutput;
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
 use crate::systems::soul_ai::helpers::gathering::*;
+use crate::relationships::{CommandedBy, GatheringParticipants, ParticipatingIn};
 use crate::systems::spatial::{SpatialGrid, SpatialGridOps};
 
 fn is_gathering_spot_safe_from_familiars(
@@ -30,7 +30,7 @@ fn is_gathering_spot_safe_from_familiars(
 
 /// 人数不足で猶予切れの集会を Dissolve 要求に変換する
 pub fn gathering_maintenance_decision(
-    q_spots: Query<(Entity, &GatheringSpot, &GatheringVisuals)>,
+    q_spots: Query<(Entity, &GatheringSpot, &GatheringParticipants, &GatheringVisuals)>,
     update_timer: Res<GatheringUpdateTimer>,
     mut decide_output: SoulDecideOutput,
 ) {
@@ -38,8 +38,8 @@ pub fn gathering_maintenance_decision(
         return;
     }
 
-    for (spot_entity, spot, visuals) in q_spots.iter() {
-        if spot.participants < GATHERING_MIN_PARTICIPANTS
+    for (spot_entity, spot, participants, visuals) in q_spots.iter() {
+        if participants.len() < GATHERING_MIN_PARTICIPANTS
             && spot.grace_active
             && spot.grace_timer <= 0.0
         {
@@ -59,8 +59,8 @@ pub fn gathering_maintenance_decision(
 /// 近接する集会の統合を Merge 要求に変換する
 pub fn gathering_merge_decision(
     time: Res<Time>,
-    q_spots: Query<(Entity, &GatheringSpot, &GatheringVisuals)>,
-    q_participants: Query<(Entity, &ParticipatingIn)>,
+    q_spots: Query<(Entity, &GatheringSpot, &GatheringParticipants, &GatheringVisuals)>,
+    q_gathering_participants: Query<&GatheringParticipants>,
     update_timer: Res<GatheringUpdateTimer>,
     mut decide_output: SoulDecideOutput,
 ) {
@@ -73,10 +73,10 @@ pub fn gathering_merge_decision(
 
     for i in 0..spots.len() {
         for j in (i + 1)..spots.len() {
-            let (entity_a, spot_a, visuals_a) = &spots[i];
-            let (entity_b, spot_b, visuals_b) = &spots[j];
+            let (entity_a, spot_a, gp_a, visuals_a) = &spots[i];
+            let (entity_b, spot_b, gp_b, visuals_b) = &spots[j];
 
-            let combined_participants = spot_a.participants + spot_b.participants;
+            let combined_participants = gp_a.len() + gp_b.len();
             if combined_participants > GATHERING_MAX_CAPACITY {
                 continue;
             }
@@ -84,14 +84,14 @@ pub fn gathering_merge_decision(
             let distance = (spot_a.center - spot_b.center).length();
             let elapsed_a = current_time - spot_a.created_at;
             let elapsed_b = current_time - spot_b.created_at;
-            let merge_distance_a = calculate_merge_distance(spot_a.participants, elapsed_a);
-            let merge_distance_b = calculate_merge_distance(spot_b.participants, elapsed_b);
+            let merge_distance_a = calculate_merge_distance(gp_a.len(), elapsed_a);
+            let merge_distance_b = calculate_merge_distance(gp_b.len(), elapsed_b);
 
             if distance < merge_distance_a.max(merge_distance_b) {
                 let (absorber, absorbed, absorbed_visuals) =
-                    if spot_a.participants > spot_b.participants {
+                    if gp_a.len() > gp_b.len() {
                         (*entity_a, *entity_b, visuals_b)
-                    } else if spot_b.participants > spot_a.participants {
+                    } else if gp_b.len() > gp_a.len() {
                         (*entity_b, *entity_a, visuals_a)
                     } else if spot_a.created_at < spot_b.created_at {
                         (*entity_a, *entity_b, visuals_b)
@@ -99,16 +99,11 @@ pub fn gathering_merge_decision(
                         (*entity_b, *entity_a, visuals_a)
                     };
 
-                let participants_to_move = q_participants
-                    .iter()
-                    .filter_map(|(soul_entity, participating)| {
-                        if participating.0 == absorbed {
-                            Some(soul_entity)
-                        } else {
-                            None
-                        }
-                    })
-                    .collect();
+                let participants_to_move = if let Ok(gp) = q_gathering_participants.get(absorbed) {
+                    gp.iter().copied().collect()
+                } else {
+                    vec![]
+                };
 
                 decide_output
                     .gathering_requests
@@ -130,7 +125,7 @@ pub fn gathering_merge_decision(
 
 /// 条件を満たすSoulの集会参加を Recruit 要求に変換する
 pub fn gathering_recruitment_decision(
-    q_spots: Query<(Entity, &GatheringSpot)>,
+    q_spots: Query<(Entity, &GatheringSpot, &GatheringParticipants)>,
     soul_grid: Res<SpatialGrid>,
     q_souls: Query<
         (Entity, &Transform, &AssignedTask, &IdleState),
@@ -148,8 +143,8 @@ pub fn gathering_recruitment_decision(
         return;
     }
 
-    for (spot_entity, spot) in q_spots.iter() {
-        if spot.participants >= spot.max_capacity {
+    for (spot_entity, spot, gp) in q_spots.iter() {
+        if gp.len() >= spot.max_capacity {
             continue;
         }
 
@@ -159,7 +154,7 @@ pub fn gathering_recruitment_decision(
         let search_radius = GATHERING_DETECTION_RADIUS.max(ESCAPE_GATHERING_JOIN_RADIUS);
         let nearby_souls = soul_grid.get_nearby_in_radius(spot.center, search_radius);
 
-        let mut current_participants = spot.participants;
+        let mut current_participants = gp.len();
         for soul_entity in nearby_souls {
             if current_participants >= spot.max_capacity {
                 break;
@@ -195,7 +190,7 @@ pub fn gathering_recruitment_decision(
 
 /// 離脱条件を満たす参加者を Leave 要求に変換する
 pub fn gathering_leave_decision(
-    q_spots: Query<&GatheringSpot>,
+    q_spots: Query<(&GatheringSpot, &GatheringParticipants)>,
     q_participants: Query<(Entity, &Transform, &IdleState, &ParticipatingIn), With<DamnedSoul>>,
     update_timer: Res<GatheringUpdateTimer>,
     mut decide_output: SoulDecideOutput,
@@ -212,7 +207,7 @@ pub fn gathering_leave_decision(
             continue;
         }
 
-        if let Ok(spot) = q_spots.get(participating_in.0) {
+        if let Ok((spot, _)) = q_spots.get(participating_in.0) {
             let dist = (spot.center - transform.translation.truncate()).length();
             if dist > GATHERING_LEAVE_RADIUS {
                 decide_output
