@@ -230,3 +230,45 @@ pub fn floor_construction_auto_haul_system(
         ));
     }
 }
+
+/// System to assign Designation to FloorTileBlueprint based on their state
+///
+/// This system runs in TransportRequestSet::Decide phase (after material delivery logic)
+/// to prepare tiles for worker assignment.
+pub fn floor_tile_designation_system(
+    mut commands: Commands,
+    q_tiles: Query<(Entity, &Transform, &FloorTileBlueprint, Option<&Designation>)>,
+) {
+    for (tile_entity, tile_transform, tile, designation_opt) in q_tiles.iter() {
+        let desired_work_type = match tile.state {
+            FloorTileState::ReinforcingReady => Some(WorkType::ReinforceFloorTile),
+            FloorTileState::PouringReady => Some(WorkType::PourFloorTile),
+            _ => None,
+        };
+
+        match (desired_work_type, designation_opt) {
+            // Need to add designation
+            (Some(work_type), None) => {
+                commands.entity(tile_entity).try_insert((
+                    Transform::from_xyz(
+                        tile_transform.translation.x,
+                        tile_transform.translation.y,
+                        tile_transform.translation.z,
+                    ),
+                    Visibility::Hidden,
+                    Designation { work_type },
+                    TaskSlots::new(1), // Only 1 worker per tile
+                    Priority(FLOOR_CONSTRUCTION_PRIORITY),
+                ));
+            }
+            // Need to remove designation
+            (None, Some(_)) => {
+                commands.entity(tile_entity).remove::<Designation>();
+                commands.entity(tile_entity).remove::<TaskSlots>();
+                commands.entity(tile_entity).remove::<Priority>();
+            }
+            // Already correct or no change needed
+            _ => {}
+        }
+    }
+}

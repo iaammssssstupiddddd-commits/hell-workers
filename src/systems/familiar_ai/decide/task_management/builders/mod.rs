@@ -2,7 +2,10 @@ mod basic;
 mod haul;
 mod water;
 
-pub use basic::{issue_build, issue_collect_bone, issue_collect_sand, issue_gather, issue_refine};
+pub use basic::{
+    issue_build, issue_collect_bone, issue_collect_sand, issue_gather, issue_pour_floor,
+    issue_refine, issue_reinforce_floor,
+};
 pub use haul::{
     issue_collect_sand_with_wheelbarrow_to_blueprint, issue_haul_to_blueprint_with_source,
     issue_haul_to_mixer, issue_haul_to_stockpile_with_source, issue_haul_with_wheelbarrow,

@@ -94,6 +94,20 @@ pub struct StorageAccess<'w, 's> {
         ),
     >,
     pub target_mixers: Query<'w, 's, &'static crate::systems::jobs::TargetMixer>,
+    pub floor_sites: Query<
+        'w,
+        's,
+        (
+            &'static Transform,
+            &'static crate::systems::jobs::floor_construction::FloorConstructionSite,
+            Option<&'static TaskWorkers>,
+        ),
+    >,
+    pub floor_tiles: Query<
+        'w,
+        's,
+        &'static crate::systems::jobs::floor_construction::FloorTileBlueprint,
+    >,
 }
 
 /// 倉庫・設備・ブループリントへの変更可能アクセス
