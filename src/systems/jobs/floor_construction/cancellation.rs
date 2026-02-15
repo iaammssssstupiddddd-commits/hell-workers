@@ -4,9 +4,11 @@ use super::components::{
     FloorConstructionCancelRequested, FloorConstructionSite, FloorTileBlueprint,
     TargetFloorConstructionSite,
 };
+use crate::assets::GameAssets;
+use crate::constants::{TILE_SIZE, Z_ITEM_PICKUP};
 use crate::entities::damned_soul::{DamnedSoul, Path};
 use crate::relationships::WorkingOn;
-use crate::systems::logistics::Inventory;
+use crate::systems::logistics::{Inventory, ResourceItem, ResourceType};
 use crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries;
 use crate::systems::soul_ai::execute::task_execution::types::AssignedTask;
 use crate::systems::soul_ai::helpers::work::unassign_task;
@@ -19,6 +21,51 @@ fn is_floor_task_for_site(task: &AssignedTask, site_entity: Entity) -> bool {
         AssignedTask::ReinforceFloorTile(data) => data.site == site_entity,
         AssignedTask::PourFloorTile(data) => data.site == site_entity,
         _ => false,
+    }
+}
+
+fn spawn_refund_items(
+    commands: &mut Commands,
+    game_assets: &GameAssets,
+    center: Vec2,
+    resource_type: ResourceType,
+    amount: u32,
+) {
+    if amount == 0 {
+        return;
+    }
+
+    let image = match resource_type {
+        ResourceType::Bone => game_assets.icon_bone_small.clone(),
+        ResourceType::StasisMud => game_assets.icon_stasis_mud_small.clone(),
+        _ => return,
+    };
+
+    let name = match resource_type {
+        ResourceType::Bone => "Item (Bone, FloorRefund)",
+        ResourceType::StasisMud => "Item (StasisMud, FloorRefund)",
+        _ => return,
+    };
+
+    // Keep refund items clustered around material_center.
+    let columns = 8usize;
+    for i in 0..amount as usize {
+        let col = (i % columns) as f32;
+        let row = (i / columns) as f32;
+        let offset_x = (col - (columns as f32 - 1.0) * 0.5) * (TILE_SIZE * 0.18);
+        let offset_y = row * (TILE_SIZE * 0.18);
+        commands.spawn((
+            ResourceItem(resource_type),
+            Sprite {
+                image: image.clone(),
+                custom_size: Some(Vec2::splat(TILE_SIZE * 0.5)),
+                ..default()
+            },
+            Transform::from_translation(
+                Vec3::new(center.x + offset_x, center.y + offset_y, Z_ITEM_PICKUP),
+            ),
+            Name::new(name),
+        ));
     }
 }
 
@@ -49,13 +96,13 @@ pub fn floor_construction_cancellation_system(
         With<DamnedSoul>,
     >,
     mut reservation_queries: TaskAssignmentQueries,
-    world_map: Res<WorldMap>,
+    mut world_map: ResMut<WorldMap>,
+    game_assets: Res<GameAssets>,
 ) {
     for (site_entity, site) in q_sites.iter() {
-        let site_tiles: Vec<Entity> = q_tiles
+        let site_tiles: Vec<(Entity, &FloorTileBlueprint)> = q_tiles
             .iter()
             .filter(|(_, tile)| tile.parent_site == site_entity)
-            .map(|(tile_entity, _)| tile_entity)
             .collect();
 
         let site_requests: Vec<Entity> = q_floor_requests
@@ -66,7 +113,7 @@ pub fn floor_construction_cancellation_system(
 
         let mut related_targets: HashSet<Entity> =
             HashSet::with_capacity(site_tiles.len() + site_requests.len() + 1);
-        related_targets.extend(site_tiles.iter().copied());
+        related_targets.extend(site_tiles.iter().map(|(tile_entity, _)| *tile_entity));
         related_targets.extend(site_requests.iter().copied());
         related_targets.insert(site_entity);
 
@@ -104,21 +151,41 @@ pub fn floor_construction_cancellation_system(
             released_workers += 1;
         }
 
+        let refunded_bones: u32 = site_tiles.iter().map(|(_, tile)| tile.bones_delivered).sum();
+        let refunded_mud: u32 = site_tiles.iter().map(|(_, tile)| tile.mud_delivered).sum();
+        spawn_refund_items(
+            &mut commands,
+            &game_assets,
+            site.material_center,
+            ResourceType::Bone,
+            refunded_bones,
+        );
+        spawn_refund_items(
+            &mut commands,
+            &game_assets,
+            site.material_center,
+            ResourceType::StasisMud,
+            refunded_mud,
+        );
+
         for request_entity in site_requests {
             commands.entity(request_entity).try_despawn();
         }
 
-        for tile_entity in site_tiles {
+        for (tile_entity, tile) in site_tiles {
+            world_map.remove_obstacle(tile.grid_pos.0, tile.grid_pos.1);
             commands.entity(tile_entity).try_despawn();
         }
 
         commands.entity(site_entity).try_despawn();
 
         info!(
-            "FLOOR_CANCEL: Site {:?} cancelled (tiles: {}, workers released: {})",
+            "FLOOR_CANCEL: Site {:?} cancelled (tiles: {}, workers: {}, refund bone: {}, refund mud: {})",
             site_entity,
             site.tiles_total,
-            released_workers
+            released_workers,
+            refunded_bones,
+            refunded_mud
         );
     }
 }
