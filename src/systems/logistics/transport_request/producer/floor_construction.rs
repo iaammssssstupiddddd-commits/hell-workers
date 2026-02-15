@@ -23,6 +23,10 @@ use crate::systems::logistics::transport_request::{
 use crate::systems::logistics::ResourceType;
 use crate::systems::spatial::FloorConstructionSpatialGrid;
 
+fn to_u32_saturating(value: usize) -> u32 {
+    u32::try_from(value).unwrap_or(u32::MAX)
+}
+
 /// Auto-haul system for floor construction materials
 pub fn floor_construction_auto_haul_system(
     mut commands: Commands,
@@ -161,8 +165,10 @@ pub fn floor_construction_auto_haul_system(
             continue;
         }
 
+        let inflight = to_u32_saturating(workers);
+
         if let Some((issued_by, slots, site_pos)) = desired_requests.get(&key) {
-            commands.entity(request_entity).try_insert((
+            commands.entity(request_entity).insert((
                 Transform::from_xyz(site_pos.x, site_pos.y, 0.0),
                 Visibility::Hidden,
                 Designation {
@@ -182,17 +188,19 @@ pub fn floor_construction_auto_haul_system(
                 },
                 TransportDemand {
                     desired_slots: *slots,
-                    inflight: 0,
+                    inflight,
                 },
-                TransportRequestState::Pending,
                 TransportPolicy::default(),
             ));
             continue;
         }
 
-        if workers == 0 {
-            super::upsert::disable_request(&mut commands, request_entity);
-        }
+        // Need is satisfied: stop new claims immediately, keep active workers intact.
+        super::upsert::disable_request(&mut commands, request_entity);
+        commands.entity(request_entity).insert(TransportDemand {
+            desired_slots: 0,
+            inflight,
+        });
     }
 
     // 4. Spawn new request entities
@@ -266,6 +274,7 @@ pub fn floor_material_delivery_sync_system(
                 FloorTileState::WaitingMud,
                 FloorTileState::PouringReady,
             ),
+            FloorConstructionPhase::Curing => continue,
         };
 
         let mut nearby_resources: Vec<Entity> = q_resources
@@ -296,6 +305,7 @@ pub fn floor_material_delivery_sync_system(
             let delivered = match site.phase {
                 FloorConstructionPhase::Reinforcing => &mut tile.bones_delivered,
                 FloorConstructionPhase::Pouring => &mut tile.mud_delivered,
+                FloorConstructionPhase::Curing => unreachable!("curing phase should be skipped"),
             };
 
             while *delivered < required_amount {

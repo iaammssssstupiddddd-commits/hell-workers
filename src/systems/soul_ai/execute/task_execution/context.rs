@@ -264,6 +264,17 @@ pub struct TaskQueries<'w, 's> {
         ),
     >,
     pub mixer_stored_mud: Query<'w, 's, &'static StoredByMixer>,
+    pub transport_request_status: Query<
+        'w,
+        's,
+        (
+            &'static crate::systems::logistics::transport_request::TransportRequest,
+            &'static crate::systems::logistics::transport_request::TransportDemand,
+            &'static crate::systems::logistics::transport_request::TransportRequestState,
+            Option<&'static crate::systems::logistics::transport_request::WheelbarrowLease>,
+            Option<&'static crate::relationships::TaskWorkers>,
+        ),
+    >,
 }
 
 /// タスク解除に必要なアクセス
