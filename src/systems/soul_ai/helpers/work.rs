@@ -153,6 +153,11 @@ pub fn unassign_task<'w, 's, Q: TaskReservationAccess<'w, 's>>(
                     .entity(item_entity)
                     .remove::<crate::systems::logistics::InStockpile>();
 
+                // 搬送予約リレーションも削除
+                commands
+                    .entity(item_entity)
+                    .remove::<crate::relationships::DeliveringTo>();
+
                 // Note: ここで即座に新しいタスク(Designation)を付与しない。
                 // オートホールシステム(task_area_auto_haul_system)に回収を任せることで、
                 // 状況に応じた適切なタスク(Haul)が発行されるようにする。

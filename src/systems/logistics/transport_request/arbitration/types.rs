@@ -12,6 +12,7 @@ pub struct BatchCandidate {
     pub items: Vec<Entity>,
     pub source_pos: Vec2,
     pub destination: WheelbarrowDestination,
+    pub group_cells: Vec<Entity>,
     pub is_small_batch: bool,
 }
 

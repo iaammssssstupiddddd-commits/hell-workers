@@ -82,6 +82,8 @@ pub fn build_request_eval_context(
     now: f64,
     q_belongs: &Query<&BelongsTo>,
     q_stockpiles: &Query<(&Stockpile, Option<&StoredItems>)>,
+    _cache: &crate::systems::familiar_ai::perceive::resource_sync::SharedResourceCache,
+    q_incoming: &Query<&crate::relationships::IncomingDeliveries>,
 ) -> Option<RequestEvalContext> {
     if manual_opt.is_some() {
         return None;
@@ -122,7 +124,9 @@ pub fn build_request_eval_context(
                             continue;
                         }
                         let current = stored_opt.map(|stored| stored.len()).unwrap_or(0);
-                        let free = stock.capacity.saturating_sub(current);
+                        let incoming = q_incoming.get(cell).ok().map(|inc: &crate::relationships::IncomingDeliveries| inc.len()).unwrap_or(0);
+                        let anticipated = current + incoming;
+                        let free = stock.capacity.saturating_sub(anticipated);
                         total_free += free;
                         if free > best_free {
                             best_free = free;
@@ -138,8 +142,9 @@ pub fn build_request_eval_context(
                     return None;
                 }
                 let current = stored_opt.map(|stored| stored.len()).unwrap_or(0);
-                let free = stock.capacity.saturating_sub(current);
-                (req.anchor, free)
+                let incoming = q_incoming.get(req.anchor).ok().map(|inc: &crate::relationships::IncomingDeliveries| inc.len()).unwrap_or(0);
+                let anticipated = current + incoming;
+                (req.anchor, stock.capacity.saturating_sub(anticipated))
             } else {
                 return None;
             };

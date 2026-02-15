@@ -22,6 +22,7 @@ pub struct ReservationAccess<'w, 's> {
     pub resources: Query<'w, 's, &'static ResourceItem>,
     pub resource_cache: Res<'w, SharedResourceCache>,
     pub reservation_writer: MessageWriter<'w, ResourceReservationRequest>,
+    pub incoming_deliveries_query: Query<'w, 's, &'static crate::relationships::IncomingDeliveries>,
 }
 
 /// 指定・場所・属性確認に必要な共通アクセス
@@ -70,6 +71,8 @@ pub struct StorageAccess<'w, 's> {
             Option<&'static crate::relationships::StoredItems>,
         ),
     >,
+    pub loaded_in: Query<'w, 's, &'static crate::relationships::LoadedIn>,
+    pub loaded_items: Query<'w, 's, &'static crate::relationships::LoadedItems>,
     pub bucket_storages: Query<'w, 's, (), With<crate::systems::logistics::BucketStorage>>,
     pub blueprints: Query<
         'w,
@@ -106,6 +109,8 @@ pub struct MutStorageAccess<'w, 's> {
             Option<&'static crate::relationships::StoredItems>,
         ),
     >,
+    pub loaded_in: Query<'w, 's, &'static crate::relationships::LoadedIn>,
+    pub loaded_items: Query<'w, 's, &'static crate::relationships::LoadedItems>,
     pub bucket_storages: Query<'w, 's, (), With<crate::systems::logistics::BucketStorage>>,
     pub blueprints: Query<
         'w,

@@ -139,6 +139,25 @@ fn handle_going_to_source(
     }
 
     if is_near_target(soul_pos, data.source_pos) {
+        // 搬入先の空き容量チェック
+        if let WheelbarrowDestination::Stockpile(stockpile) = data.destination {
+            if let Ok((_, _, stock, stored_items)) = ctx.queries.storage.stockpiles.get(stockpile) {
+                let current_count = stored_items.map(|s| s.len()).unwrap_or(0);
+                let incoming = ctx
+                    .queries
+                    .reservation
+                    .incoming_deliveries_query
+                    .get(stockpile)
+                    .ok()
+                    .map(|inc: &crate::relationships::IncomingDeliveries| inc.len())
+                    .unwrap_or(0);
+                if (current_count + incoming) >= stock.capacity {
+                    cancel_wheelbarrow_task(ctx, &data, commands);
+                    return;
+                }
+            }
+        }
+
         *ctx.task = AssignedTask::HaulWithWheelbarrow(HaulWithWheelbarrowData {
             phase: HaulWithWheelbarrowPhase::Loading,
             ..data
@@ -178,9 +197,11 @@ fn handle_loading(
         reservation::release_source(ctx, source_entity, 1);
 
         let loaded_count = collected_items.len();
+        for &item in &collected_items {
+            commands.entity(item).insert(crate::relationships::DeliveringTo(data.destination.stockpile_or_blueprint().unwrap()));
+        }
         let mut next_data = data;
         next_data.items = collected_items;
-        next_data.destination_reserved = loaded_count as u32;
         next_data.collect_source = None;
         next_data.collect_amount = 0;
         next_data.collect_resource_type = None;
@@ -254,23 +275,14 @@ fn handle_loading(
     if loaded_count < total_count {
         let loaded_entities: std::collections::HashSet<Entity> =
             items_to_load.iter().map(|(e, _)| *e).collect();
-        for &item_entity in &data.items {
-            if !loaded_entities.contains(&item_entity) {
-                reservation::release_source(ctx, item_entity, 1);
-                match data.destination {
-                    WheelbarrowDestination::Stockpile(target)
-                    | WheelbarrowDestination::Blueprint(target) => {
-                        reservation::release_destination(ctx, target);
-                    }
-                    WheelbarrowDestination::Mixer {
-                        entity: target,
-                        resource_type,
-                    } => {
-                        reservation::release_mixer_destination(ctx, target, resource_type);
+                for &item_entity in &data.items {
+                    if !loaded_entities.contains(&item_entity) {
+                        reservation::release_source(ctx, item_entity, 1);
+                        commands
+                            .entity(item_entity)
+                            .remove::<crate::relationships::DeliveringTo>();
                     }
                 }
-            }
-        }
         info!(
             "WB_HAUL: {} of {} items missing, released reservations",
             total_count - loaded_count,
@@ -404,10 +416,22 @@ fn handle_unloading(
                 ctx.queries.storage.stockpiles.get_mut(dest_stockpile)
             {
                 let stock_pos = stock_transform.translation;
+                let incoming = ctx
+                    .queries
+                    .reservation
+                    .incoming_deliveries_query
+                    .get(dest_stockpile)
+                    .ok()
+                    .map(|inc: &crate::relationships::IncomingDeliveries| inc.len())
+                    .unwrap_or(0);
                 let current_count = stored_items_opt.map(|si| si.len()).unwrap_or(0);
 
                 for (item_entity, res_type_opt) in &item_types {
-                    if current_count + unloaded_count >= stockpile_comp.capacity {
+                    // 現在の在庫 + 搬入中（自分を含む）が容量を超えないようにする
+                    // すでに自分たちが積んでいる分は incoming に含まれているはずなので、
+                    // ここでの unloaded_count 加算は重複になる可能性があるが、
+                    // 同一フレーム内の安全策として unloaded_count も考慮する。
+                    if current_count + incoming + unloaded_count >= stockpile_comp.capacity {
                         break;
                     }
                     let Some(res_type) = res_type_opt else {
@@ -430,6 +454,7 @@ fn handle_unloading(
                         InStockpile(dest_stockpile),
                     ));
                     commands.entity(*item_entity).remove::<LoadedIn>();
+                    commands.entity(*item_entity).remove::<crate::relationships::DeliveringTo>();
                     commands
                         .entity(*item_entity)
                         .remove::<crate::systems::jobs::IssuedBy>();
@@ -456,6 +481,7 @@ fn handle_unloading(
 
                     blueprint.deliver_material(*res_type, 1);
                     commands.entity(*item_entity).despawn();
+                    // DeliveringTo is removed with despawn
                     destination_store_count += 1;
                     unloaded_count += 1;
                 }
@@ -485,6 +511,7 @@ fn handle_unloading(
 
                     if storage.add_material(res_type).is_ok() {
                         commands.entity(*item_entity).despawn();
+                        // DeliveringTo is removed with despawn
                         unloaded_count += 1;
                     } else {
                         // 溢れ時は地面にドロップ
@@ -607,15 +634,17 @@ fn cancel_wheelbarrow_task(
     commands: &mut Commands,
 ) {
     let soul_pos = ctx.soul_pos();
-
-    // 積載中のアイテムを地面に落とす
-    for &item_entity in &data.items {
-        if commands.get_entity(item_entity).is_ok() {
-            commands.entity(item_entity).remove::<LoadedIn>();
+    // 積載済みアイテムを地面にドロップ
+    if let Some(loaded_items) = ctx.queries.storage.loaded_items.get(data.wheelbarrow).ok() {
+        for item_entity in loaded_items.iter() {
             commands.entity(item_entity).insert((
                 Visibility::Visible,
                 Transform::from_xyz(soul_pos.x, soul_pos.y, Z_ITEM_PICKUP),
             ));
+            commands
+                .entity(item_entity)
+                .remove::<crate::relationships::DeliveringTo>();
+            commands.entity(item_entity).remove::<LoadedIn>();
         }
     }
 
@@ -665,15 +694,15 @@ fn release_all_reservations(ctx: &mut TaskExecutionContext, data: &HaulWithWheel
         reservation::release_source(ctx, source_entity, 1);
     }
 
-    let mut remaining_destination_releases = data.destination_reserved as usize;
     for &item_entity in &data.items {
         reservation::release_source(ctx, item_entity, 1);
 
         match data.destination {
-            WheelbarrowDestination::Stockpile(target)
-            | WheelbarrowDestination::Blueprint(target) => {
-                reservation::release_destination(ctx, target);
-                remaining_destination_releases = remaining_destination_releases.saturating_sub(1);
+            WheelbarrowDestination::Stockpile(_) | WheelbarrowDestination::Blueprint(_) => {
+                // DeliveringTo リレーションシップの削除は
+                // cancel_wheelbarrow_task や unload 各所で行われる。
+                // 旧予約キャッシュ(Hashmap)にはもう destination_reservations が存在しないため、
+                // ここでの Stockpile/Blueprint 向け release_destination は不要（かつエラー）。
             }
             WheelbarrowDestination::Mixer {
                 entity: target,
@@ -688,27 +717,6 @@ fn release_all_reservations(ctx: &mut TaskExecutionContext, data: &HaulWithWheel
                     .map(|r| r.0)
                     .unwrap_or(resource_type);
                 reservation::release_mixer_destination(ctx, target, item_type);
-                remaining_destination_releases = remaining_destination_releases.saturating_sub(1);
-            }
-        }
-    }
-
-    if remaining_destination_releases > 0 {
-        match data.destination {
-            WheelbarrowDestination::Stockpile(target)
-            | WheelbarrowDestination::Blueprint(target) => {
-                for _ in 0..remaining_destination_releases {
-                    reservation::release_destination(ctx, target);
-                }
-            }
-            WheelbarrowDestination::Mixer {
-                entity: target,
-                resource_type,
-            } => {
-                let item_type = data.collect_resource_type.unwrap_or(resource_type);
-                for _ in 0..remaining_destination_releases {
-                    reservation::release_mixer_destination(ctx, target, item_type);
-                }
             }
         }
     }

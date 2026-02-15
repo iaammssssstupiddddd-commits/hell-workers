@@ -127,6 +127,40 @@ pub fn apply_task_assignment_requests_system(
             work_type: request.work_type,
         });
 
+        // タスクの内容に応じて DeliveringTo リレーションシップを自動適用する
+        match &request.assigned_task {
+            AssignedTask::Haul(data) => {
+                commands.entity(data.item).insert(crate::relationships::DeliveringTo(data.stockpile));
+            }
+            AssignedTask::HaulToBlueprint(data) => {
+                commands.entity(data.item).insert(crate::relationships::DeliveringTo(data.blueprint));
+            }
+            AssignedTask::GatherWater(data) => {
+                commands.entity(data.bucket).insert(crate::relationships::DeliveringTo(data.tank));
+            }
+            AssignedTask::HaulToMixer(data) => {
+                commands.entity(data.item).insert(crate::relationships::DeliveringTo(data.mixer));
+            }
+            AssignedTask::HaulWaterToMixer(data) => {
+                // バケツがミキサーに向かう
+                commands.entity(data.bucket).insert(crate::relationships::DeliveringTo(data.mixer));
+            }
+            AssignedTask::HaulWithWheelbarrow(data) => {
+                let dest_entity = match data.destination {
+                    crate::systems::logistics::transport_request::WheelbarrowDestination::Stockpile(e) => e,
+                    crate::systems::logistics::transport_request::WheelbarrowDestination::Blueprint(e) => e,
+                    crate::systems::logistics::transport_request::WheelbarrowDestination::Mixer { entity, .. } => entity,
+                };
+                // 猫車自体が目的地に向かう
+                commands.entity(data.wheelbarrow).insert(crate::relationships::DeliveringTo(dest_entity));
+                // 積載済みアイテムも目的地に向かう
+                for &item in &data.items {
+                    commands.entity(item).insert(crate::relationships::DeliveringTo(dest_entity));
+                }
+            }
+            _ => {}
+        }
+
         debug!(
             "ASSIGN_REQUEST: Assigned {:?} to {:?} at {:?}",
             request.work_type,

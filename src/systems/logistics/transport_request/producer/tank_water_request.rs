@@ -8,7 +8,6 @@ use bevy::prelude::*;
 use crate::entities::familiar::{ActiveCommand, FamiliarCommand};
 use crate::relationships::{StoredItems, TaskWorkers};
 use crate::systems::command::TaskArea;
-use crate::systems::familiar_ai::perceive::resource_sync::SharedResourceCache;
 use crate::systems::jobs::{Designation, Priority, TaskSlots, WorkType};
 use crate::systems::logistics::transport_request::{
     TransportDemand, TransportPolicy, TransportPriority, TransportRequest, TransportRequestKind,
@@ -19,7 +18,7 @@ use crate::systems::logistics::{ResourceType, Stockpile};
 /// タンクの貯蔵量を監視し、空きがあれば TransportRequest を発行するシステム
 pub fn tank_water_request_system(
     mut commands: Commands,
-    haul_cache: Res<SharedResourceCache>,
+    q_incoming: Query<&crate::relationships::IncomingDeliveries>,
     q_familiars: Query<(Entity, &ActiveCommand, &TaskArea)>,
     // タンク自体の在庫状況（Water を貯める Stockpile）
     q_tanks: Query<(Entity, &Transform, &Stockpile, Option<&StoredItems>)>,
@@ -49,8 +48,9 @@ pub fn tank_water_request_system(
         };
 
         let current_water = stored_opt.map(|s| s.len()).unwrap_or(0);
-        let reserved_water_tasks = haul_cache.get_destination_reservation(tank_entity);
-        let total_water = (current_water as u32) + (reserved_water_tasks as u32 * BUCKET_CAPACITY);
+        let incoming_water_tasks = q_incoming.get(tank_entity).ok()
+            .map(|inc: &crate::relationships::IncomingDeliveries| inc.len()).unwrap_or(0);
+        let total_water = (current_water as u32) + (incoming_water_tasks as u32 * BUCKET_CAPACITY);
 
         if total_water < tank_stock.capacity as u32 {
             let needed_water = tank_stock.capacity as u32 - total_water;

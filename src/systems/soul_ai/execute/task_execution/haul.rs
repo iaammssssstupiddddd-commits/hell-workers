@@ -124,7 +124,6 @@ pub fn handle_haul_task(
                 ctx.inventory.0 = None;
                 commands.entity(ctx.soul_entity).remove::<WorkingOn>();
                 clear_task_and_path(ctx.task, ctx.path);
-                reservation::release_destination(ctx, stockpile);
             }
         }
         HaulPhase::Dropping => {
@@ -170,18 +169,14 @@ pub fn handle_haul_task(
                         type_match && res_type.can_store_in_stockpile()
                     };
 
-                    // 現在の数 + 予約分 + フレーム内増加分 < capacity
-                    let anticipated = ctx
-                        .queries
-                        .reservation
-                        .resource_cache
-                        .get_total_anticipated_count(stockpile, current_count);
-                    // ただし、自分自身の予約が含まれている（はず）。
-                    // Thinkフェーズで予約しているなら、anticipatedには自分の分(1)が含まれる。
-                    // なのでキャパシティ計算時には、その分を考慮する（つまり自分は入れるはず）。
-                    // ここで確認するのは「異常なオーバーフローがないか」程度でいいが、一応判定するなら:
-                    // anticipated <= capacity でOK（自分が最後の1個かもしれないので < ではなく <= ? いや index 0 ベースなら < だが、capacity は数か？）
-                    let capacity_ok = anticipated <= stockpile_comp.capacity;
+                    // IncomingDeliveries の長さ（＝このセルに向かっているアイテム数）を取得
+                    let incoming_count = ctx.queries.reservation.incoming_deliveries_query.get(stockpile).ok()
+                        .map(|incoming: &crate::relationships::IncomingDeliveries| incoming.len())
+                        .unwrap_or(0);
+                    
+                    // すでに自分の分が IncomingDeliveries に含まれているため、
+                    // (現在庫 + 搬入予定数) <= capacity で満杯チェック
+                    let capacity_ok = (current_count + incoming_count) <= stockpile_comp.capacity;
 
                     ownership_ok && type_allowed && capacity_ok
                 } else {
@@ -206,6 +201,7 @@ pub fn handle_haul_task(
                         crate::relationships::StoredIn(stockpile),
                         crate::systems::logistics::InStockpile(stockpile),
                     ));
+                    commands.entity(item).remove::<crate::relationships::DeliveringTo>();
                     // タスク完了: ManagedTasks を肥大化させないため、管理者を解除する
                     commands
                         .entity(item)
