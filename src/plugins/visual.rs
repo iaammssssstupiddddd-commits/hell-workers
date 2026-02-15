@@ -82,7 +82,14 @@ impl Plugin for VisualPlugin {
                 soul_status_visual_system,
                 task_link_system,
                 building_completion_system,
-                area_selection_indicator_system.run_if(in_state(PlayMode::TaskDesignation)),
+                area_selection_indicator_system.run_if(
+                    |play_mode: Res<State<PlayMode>>| {
+                        matches!(
+                            play_mode.get(),
+                            PlayMode::TaskDesignation | PlayMode::FloorPlace
+                        )
+                    },
+                ),
                 update_designation_indicator_system,
                 sync_designation_indicator_system,
                 resource_count_display_system,

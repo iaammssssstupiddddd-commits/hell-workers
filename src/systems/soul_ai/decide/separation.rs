@@ -34,10 +34,6 @@ pub fn gathering_separation_system(
         return;
     }
 
-    info!("SEPARATION: System running, checking {} souls", q_souls.iter().count());
-    let mut souls_needing_separation = 0;
-    let mut souls_with_overlap = 0;
-    let mut souls_too_close_to_center = 0;
 
     for (entity, transform, mut dest, mut path, task, participating_in_opt) in q_souls.iter_mut() {
         // タスク実行中は重なり回避しない
@@ -66,27 +62,12 @@ pub fn gathering_separation_system(
         let too_close_to_center = dist_from_center < TILE_SIZE * GATHERING_KEEP_DISTANCE_MIN;
 
         if too_close_to_center || has_overlap {
-            souls_needing_separation += 1;
-            if has_overlap {
-                souls_with_overlap += 1;
-            }
-            if too_close_to_center {
-                souls_too_close_to_center += 1;
-            }
-            let dist_to_dest = (dest.0 - current_pos).length();
-            info!(
-                "SEPARATION: Soul {:?} needs separation - pos: {:?}, dest: {:?}, dist_to_dest: {:.1}, center_dist: {:.1}, overlap: {}, nearby: {}",
-                entity, current_pos, dest.0, dist_to_dest, dist_from_center, has_overlap, nearby_souls.len()
-            );
 
             let mut rng = rand::thread_rng();
             let mut found_valid_position = false;
-            let old_dest = dest.0;
-            let has_waypoints = !path.waypoints.is_empty();
-            let waypoint_count = path.waypoints.len();
 
             // 適切な位置を探す
-            for attempt in 0..30 {
+            for _attempt in 0..30 {
                 let angle: f32 = rng.gen_range(0.0..std::f32::consts::TAU);
                 let dist: f32 = rng.gen_range(
                     TILE_SIZE * GATHERING_KEEP_DISTANCE_TARGET_MIN
@@ -107,16 +88,6 @@ pub fn gathering_separation_system(
                         path.waypoints.clear();
                         path.current_index = 0;
                         found_valid_position = true;
-                        info!(
-                            "SEPARATION: Soul {:?} SET NEW DEST at attempt {} - from {:?} to {:?} (dist: {:.1}, had_waypoints: {}, count: {})",
-                            entity,
-                            attempt + 1,
-                            old_dest,
-                            new_pos,
-                            dist,
-                            has_waypoints,
-                            waypoint_count
-                        );
                         break;
                     }
                 }
@@ -139,24 +110,8 @@ pub fn gathering_separation_system(
                     dest.0 = new_pos;
                     path.waypoints.clear();
                     path.current_index = 0;
-                    warn!(
-                        "SEPARATION: Soul {:?} FALLBACK - from {:?} to {:?} (had_waypoints: {}, count: {})",
-                        entity, old_dest, new_pos, has_waypoints, waypoint_count
-                    );
-                } else {
-                    warn!(
-                        "SEPARATION: Soul {:?} FALLBACK FAILED - position {:?} not walkable, keeping old dest",
-                        entity, new_pos
-                    );
                 }
             }
         }
-    }
-
-    if souls_needing_separation > 0 {
-        info!(
-            "SEPARATION: Found {} souls needing separation ({} with overlap, {} too close to center)",
-            souls_needing_separation, souls_with_overlap, souls_too_close_to_center
-        );
     }
 }

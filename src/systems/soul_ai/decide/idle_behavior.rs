@@ -100,7 +100,6 @@ pub fn idle_behavior_decision_system(
                 let has_arrived = dist_from_center <= GATHERING_ARRIVAL_RADIUS;
 
                 if has_arrived {
-                    debug!("IDLE: Soul transitioned from ExhaustedGathering to Gathering");
                     idle.behavior = IdleBehavior::Gathering;
                     idle.needs_separation = true; // 到着時に重なり回避を発動
                     // ParticipatingIn を追加（Executeフェーズで処理）
@@ -397,7 +396,6 @@ pub fn idle_behavior_decision_system(
                                         }
                                         // 5回試してもダメなら目的地を変更しない（separation_systemに任せる）
                                         if !fallback_found {
-                                            warn!("IDLE: Soul {:?} Wandering fallback failed after 5 attempts, keeping current destination", entity);
                                         }
                                     }
                                 }
