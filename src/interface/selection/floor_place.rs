@@ -6,16 +6,19 @@ use crate::interface::camera::MainCamera;
 use crate::interface::ui::UiInputState;
 use crate::systems::command::{TaskArea, TaskMode};
 use crate::systems::jobs::floor_construction::{FloorConstructionSite, FloorTileBlueprint};
-use crate::systems::jobs::TaskSlots;
+use crate::systems::jobs::{Building, BuildingType, ObstaclePosition, TaskSlots};
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
+use std::collections::HashSet;
 
 pub fn floor_placement_system(
     buttons: Res<ButtonInput<MouseButton>>,
     q_window: Query<&Window, With<PrimaryWindow>>,
     q_camera: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
     ui_input_state: Res<UiInputState>,
+    q_existing_floor_tiles: Query<&FloorTileBlueprint>,
+    q_floor_buildings: Query<(&Building, &Transform)>,
     mut task_context: ResMut<TaskContext>,
     mut next_play_mode: ResMut<NextState<PlayMode>>,
     mut world_map: ResMut<WorldMap>,
@@ -44,7 +47,22 @@ pub fn floor_placement_system(
     if buttons.just_released(MouseButton::Left) {
         if let Some(start_pos) = start_pos_opt {
             let area = TaskArea::from_points(start_pos, snapped_pos);
-            apply_floor_placement(&mut commands, &mut world_map, &area);
+            let existing_floor_tile_grids: HashSet<(i32, i32)> =
+                q_existing_floor_tiles.iter().map(|tile| tile.grid_pos).collect();
+            let existing_floor_building_grids: HashSet<(i32, i32)> = q_floor_buildings
+                .iter()
+                .filter_map(|(building, transform)| {
+                    (building.kind == BuildingType::Floor)
+                        .then(|| WorldMap::world_to_grid(transform.translation.truncate()))
+                })
+                .collect();
+            apply_floor_placement(
+                &mut commands,
+                &mut world_map,
+                &area,
+                &existing_floor_tile_grids,
+                &existing_floor_building_grids,
+            );
 
             // Reset mode (continue placing if shift held - TODO)
             task_context.0 = TaskMode::FloorPlace(None);
@@ -79,6 +97,8 @@ fn apply_floor_placement(
     commands: &mut Commands,
     world_map: &mut WorldMap,
     area: &TaskArea,
+    existing_floor_tile_grids: &HashSet<(i32, i32)>,
+    existing_floor_building_grids: &HashSet<(i32, i32)>,
 ) {
     let min_grid = WorldMap::world_to_grid(area.min + Vec2::splat(0.1));
     let max_grid = WorldMap::world_to_grid(area.max - Vec2::splat(0.1));
@@ -105,6 +125,11 @@ fn apply_floor_placement(
             }
             if world_map.buildings.contains_key(&(gx, gy))
                 || world_map.stockpiles.contains_key(&(gx, gy))
+            {
+                continue;
+            }
+            if existing_floor_tile_grids.contains(&(gx, gy))
+                || existing_floor_building_grids.contains(&(gx, gy))
             {
                 continue;
             }
@@ -140,6 +165,7 @@ fn apply_floor_placement(
 
         commands.spawn((
             FloorTileBlueprint::new(site_entity, (gx, gy)),
+            ObstaclePosition(gx, gy),
             TaskSlots::new(1), // One worker per tile
             Sprite {
                 color: Color::srgba(0.5, 0.5, 0.8, 0.2), // Light blue overlay
