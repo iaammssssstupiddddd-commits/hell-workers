@@ -43,9 +43,6 @@ use crate::systems::visual::speech::SpeechPlugin;
 use crate::systems::visual::tank::update_tank_visual_system;
 use crate::systems::visual::task_area_visual::{TaskAreaMaterial, update_task_area_material_system};
 use crate::systems::visual::wall_connection::WallConnectionPlugin;
-use crate::systems::visual::floor_construction::tile_overlay::{
-    attach_floor_tile_visual_system, update_floor_tile_visual_system,
-};
 
 use bevy::prelude::*;
 use bevy::sprite_render::Material2dPlugin;
@@ -182,17 +179,6 @@ impl Plugin for VisualPlugin {
                 gathering_visual_update_system,
                 gathering_debug_visualization_system,
                 update_task_area_material_system,
-            )
-                .chain()
-                .in_set(GameSystemSet::Visual),
-        );
-
-        // Floor Construction Visuals (Phase 9)
-        app.add_systems(
-            Update,
-            (
-                attach_floor_tile_visual_system,
-                update_floor_tile_visual_system,
             )
                 .chain()
                 .in_set(GameSystemSet::Visual),
