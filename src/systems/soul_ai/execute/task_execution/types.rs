@@ -22,6 +22,8 @@ pub enum AssignedTask {
     GatherWater(GatherWaterData),
     /// 砂を採取する
     CollectSand(CollectSandData),
+    /// 骨を採取する
+    CollectBone(CollectBoneData),
     /// 精製作業を行う
     Refine(RefineData),
     /// ミキサーへ資材を運搬する
@@ -70,6 +72,12 @@ pub struct GatherWaterData {
 pub struct CollectSandData {
     pub target: Entity,
     pub phase: CollectSandPhase,
+}
+
+#[derive(Reflect, Clone, Debug, PartialEq)]
+pub struct CollectBoneData {
+    pub target: Entity,
+    pub phase: CollectBonePhase,
 }
 
 #[derive(Reflect, Clone, Debug, PartialEq)]
@@ -156,6 +164,16 @@ pub enum CollectSandPhase {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Reflect, Default)]
+pub enum CollectBonePhase {
+    #[default]
+    GoingToBone,
+    Collecting {
+        progress: f32,
+    },
+    Done,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Reflect, Default)]
 pub enum RefinePhase {
     #[default]
     GoingToMixer,
@@ -222,6 +240,7 @@ impl AssignedTask {
             AssignedTask::Build(_) => Some(WorkType::Build),
             AssignedTask::GatherWater(_) => Some(WorkType::GatherWater),
             AssignedTask::CollectSand(_) => Some(WorkType::CollectSand),
+            AssignedTask::CollectBone(_) => Some(WorkType::CollectBone),
             AssignedTask::Refine(_) => Some(WorkType::Refine),
             AssignedTask::HaulToMixer(_) => Some(WorkType::Haul),
             AssignedTask::HaulWaterToMixer(_) => Some(WorkType::HaulWaterToMixer),
@@ -239,6 +258,7 @@ impl AssignedTask {
             AssignedTask::Build(data) => Some(data.blueprint),
             AssignedTask::GatherWater(data) => Some(data.bucket),
             AssignedTask::CollectSand(data) => Some(data.target),
+            AssignedTask::CollectBone(data) => Some(data.target),
             AssignedTask::Refine(data) => Some(data.mixer),
             AssignedTask::HaulToMixer(data) => Some(data.item),
             AssignedTask::HaulWaterToMixer(data) => Some(data.bucket),

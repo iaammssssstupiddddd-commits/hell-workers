@@ -32,6 +32,7 @@ fn task_visual(task: &AssignedTask) -> TaskVisual {
         AssignedTask::HaulToBlueprint { .. } => TaskVisual::HaulToBlueprint,
         AssignedTask::GatherWater { .. } => TaskVisual::Water,
         AssignedTask::CollectSand { .. } => TaskVisual::GatherDefault,
+        AssignedTask::CollectBone { .. } => TaskVisual::GatherDefault,
         AssignedTask::Refine { .. } => TaskVisual::Build,
         AssignedTask::HaulToMixer { .. } => TaskVisual::HaulToBlueprint,
         AssignedTask::HaulWaterToMixer { .. } => TaskVisual::Water,

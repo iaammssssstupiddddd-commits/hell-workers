@@ -194,6 +194,7 @@ fn place_building_blueprint(
         BuildingType::Tank => game_assets.tank_empty.clone(),
         BuildingType::MudMixer => game_assets.mud_mixer.clone(),
         BuildingType::SandPile => game_assets.sand_pile.clone(),
+        BuildingType::BonePile => game_assets.bone_pile.clone(),
         BuildingType::WheelbarrowParking => game_assets.wheelbarrow_parking.clone(),
     };
 

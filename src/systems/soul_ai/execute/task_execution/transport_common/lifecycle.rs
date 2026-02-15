@@ -8,7 +8,7 @@ use crate::events::ResourceReservationOp;
 use crate::systems::logistics::transport_request::WheelbarrowDestination;
 use crate::systems::logistics::ResourceType;
 use crate::systems::soul_ai::execute::task_execution::types::{
-    AssignedTask, BuildPhase, CollectSandPhase, GatherPhase, GatherWaterPhase, HaulPhase,
+    AssignedTask, BuildPhase, CollectBonePhase, CollectSandPhase, GatherPhase, GatherWaterPhase, HaulPhase,
     HaulToBpPhase, HaulToMixerPhase, HaulWaterToMixerPhase, HaulWithWheelbarrowPhase, RefinePhase,
 };
 use bevy::prelude::*;
@@ -108,6 +108,17 @@ pub fn collect_active_reservation_ops(
             if matches!(
                 data.phase,
                 CollectSandPhase::GoingToSand | CollectSandPhase::Collecting { .. }
+            ) {
+                ops.push(ResourceReservationOp::ReserveSource {
+                    source: data.target,
+                    amount: 1,
+                });
+            }
+        }
+        AssignedTask::CollectBone(data) => {
+            if matches!(
+                data.phase,
+                CollectBonePhase::GoingToBone | CollectBonePhase::Collecting { .. }
             ) {
                 ops.push(ResourceReservationOp::ReserveSource {
                     source: data.target,

@@ -3,7 +3,7 @@
 use crate::interface::ui::components::{LeftPanelMode, TaskListBody};
 use crate::interface::ui::theme::UiTheme;
 use crate::relationships::TaskWorkers;
-use crate::systems::jobs::{Blueprint, Designation, Priority, Rock, SandPile, Tree};
+use crate::systems::jobs::{Blueprint, BonePile, Designation, Priority, Rock, SandPile, Tree};
 use crate::systems::logistics::transport_request::TransportRequest;
 use crate::systems::logistics::ResourceItem;
 use bevy::prelude::*;
@@ -34,6 +34,7 @@ pub fn task_list_update_system(
         Option<&Tree>,
         Option<&Rock>,
         Option<&SandPile>,
+        Option<&BonePile>,
     )>,
     body_query: Query<Entity, With<TaskListBody>>,
     children_query: Query<&Children>,

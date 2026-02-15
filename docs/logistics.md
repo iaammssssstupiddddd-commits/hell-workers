@@ -154,7 +154,8 @@ Hell-Workers の物流は、`TransportRequest` を中心にした自動発行 + 
 
 手押し車の実運用は request 割り当て時に判定されます。
 
-- `Sand` / `StasisMud` は原則猫車必須資源（徒歩フォールバックなし）。
+- `Sand` / `StasisMud` / `Bone` は原則猫車必須資源（徒歩フォールバックなし）。
+  - `Bone` は `BonePile` 建設時にも使用され、川タイルからの収集・搬入には手押し車が必須となります。
   - 例外: 「その場ピック→ドロップ」で1件を完了できる距離関係なら徒歩運搬を許可し、猫車を使わない。
   - 判定は `source` 周囲 3x3 の立ち位置を評価して行う（実行時の距離しきい値に合わせる）。
   - Stockpile / Mixer へのドロップ成立条件: `distance(stand_pos, destination_pos) < TILE_SIZE * 1.8`
