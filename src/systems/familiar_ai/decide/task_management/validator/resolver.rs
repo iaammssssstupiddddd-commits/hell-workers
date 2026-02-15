@@ -163,6 +163,28 @@ pub fn resolve_return_bucket_tank(
     Some(tank)
 }
 
+/// ReturnWheelbarrow request の対象を解決する。
+/// 返り値: (wheelbarrow, parking_anchor, wheelbarrow_pos)
+pub fn resolve_return_wheelbarrow(
+    task_entity: Entity,
+    queries: &crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
+) -> Option<(Entity, Entity, Vec2)> {
+    let req = queries.transport_requests.get(task_entity).ok()?;
+    if req.kind != TransportRequestKind::ReturnWheelbarrow {
+        return None;
+    }
+
+    let wheelbarrow = req.anchor;
+    let parking_anchor = queries.designation.belongs.get(wheelbarrow).ok()?.0;
+    let (_, wheelbarrow_transform) = queries.wheelbarrows.get(wheelbarrow).ok()?;
+
+    Some((
+        wheelbarrow,
+        parking_anchor,
+        wheelbarrow_transform.translation.truncate(),
+    ))
+}
+
 pub fn resolve_haul_to_blueprint_inputs(
     task_entity: Entity,
     queries: &crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,

@@ -26,8 +26,14 @@ pub fn handle(
         ctx.soul_entity, data.wheelbarrow
     );
 
+    let next_phase = if data.items.is_empty() && data.collect_source.is_none() {
+        HaulWithWheelbarrowPhase::ReturningWheelbarrow
+    } else {
+        HaulWithWheelbarrowPhase::GoingToSource
+    };
+
     *ctx.task = AssignedTask::HaulWithWheelbarrow(HaulWithWheelbarrowData {
-        phase: HaulWithWheelbarrowPhase::GoingToSource,
+        phase: next_phase,
         ..data
     });
 }

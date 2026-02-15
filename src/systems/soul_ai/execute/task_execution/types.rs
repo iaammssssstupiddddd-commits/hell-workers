@@ -248,7 +248,7 @@ pub enum ReinforceFloorPhase {
     GoingToMaterialCenter,
     PickingUpBones,
     GoingToTile,
-    Reinforcing { progress: u8 },
+    Reinforcing { progress_bp: u16 },
     Done,
 }
 
@@ -266,7 +266,7 @@ pub enum PourFloorPhase {
     GoingToMaterialCenter,
     PickingUpMud,
     GoingToTile,
-    Pouring { progress: u8 },
+    Pouring { progress_bp: u16 },
     Done,
 }
 

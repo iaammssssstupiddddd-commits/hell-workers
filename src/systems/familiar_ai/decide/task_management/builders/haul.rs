@@ -197,6 +197,50 @@ pub fn issue_haul_with_wheelbarrow(
     });
 }
 
+pub fn issue_return_wheelbarrow(
+    wheelbarrow: Entity,
+    parking_anchor: Entity,
+    wheelbarrow_pos: Vec2,
+    task_pos: Vec2,
+    already_commanded: bool,
+    ctx: &AssignTaskContext<'_>,
+    queries: &mut crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
+    _shadow: &mut ReservationShadow,
+) {
+    let assigned_task =
+        crate::systems::soul_ai::execute::task_execution::types::AssignedTask::HaulWithWheelbarrow(
+            crate::systems::soul_ai::execute::task_execution::types::HaulWithWheelbarrowData {
+                wheelbarrow,
+                source_pos: wheelbarrow_pos,
+                destination:
+                    crate::systems::logistics::transport_request::WheelbarrowDestination::Stockpile(
+                        parking_anchor,
+                    ),
+                collect_source: None,
+                collect_amount: 0,
+                collect_resource_type: None,
+                items: Vec::new(),
+                phase: HaulWithWheelbarrowPhase::GoingToParking,
+            },
+        );
+
+    let reservation_ops = vec![ResourceReservationOp::ReserveSource {
+        source: wheelbarrow,
+        amount: 1,
+    }];
+
+    queries.assignment_writer.write(crate::events::TaskAssignmentRequest {
+        familiar_entity: ctx.fam_entity,
+        worker_entity: ctx.worker_entity,
+        task_entity: ctx.task_entity,
+        work_type: WorkType::WheelbarrowHaul,
+        task_pos,
+        assigned_task,
+        reservation_ops,
+        already_commanded,
+    });
+}
+
 /// 砂ソースから直接採取して Blueprint へ猫車搬入する。
 pub fn issue_collect_sand_with_wheelbarrow_to_blueprint(
     wheelbarrow: Entity,

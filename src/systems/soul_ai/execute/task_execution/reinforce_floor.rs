@@ -127,7 +127,7 @@ pub fn handle_reinforce_floor_task(
                     crate::systems::soul_ai::execute::task_execution::types::ReinforceFloorTileData {
                         tile: tile_entity,
                         site: site_entity,
-                        phase: ReinforceFloorPhase::Reinforcing { progress: 0 },
+                        phase: ReinforceFloorPhase::Reinforcing { progress_bp: 0 },
                     },
                 );
                 ctx.path.waypoints.clear();
@@ -138,7 +138,7 @@ pub fn handle_reinforce_floor_task(
             }
         }
 
-        ReinforceFloorPhase::Reinforcing { progress } => {
+        ReinforceFloorPhase::Reinforcing { progress_bp } => {
             // Get tile and update state
             let Ok(mut tile_blueprint) = ctx.queries.storage.floor_tiles.get_mut(tile_entity)
             else {
@@ -151,16 +151,22 @@ pub fn handle_reinforce_floor_task(
                 return;
             };
 
-            // Update progress
-            let delta = (time.delta_secs() / FLOOR_REINFORCE_DURATION_SECS * 100.0) as u8;
-            let new_progress = progress.saturating_add(delta).min(100);
+            // Update progress (basis points) to avoid truncation at 1x speed.
+            const MAX_PROGRESS_BP: u16 = 10_000;
+            let delta_bp = ((time.delta_secs() / FLOOR_REINFORCE_DURATION_SECS
+                * MAX_PROGRESS_BP as f32)
+                .round()
+                .max(1.0)) as u16;
+            let new_progress_bp = progress_bp.saturating_add(delta_bp).min(MAX_PROGRESS_BP);
+            let visual_progress =
+                ((new_progress_bp as f32 / MAX_PROGRESS_BP as f32) * 100.0).round() as u8;
 
             // Update tile visual state
             tile_blueprint.state = FloorTileState::Reinforcing {
-                progress: new_progress,
+                progress: visual_progress.min(100),
             };
 
-            if new_progress >= 100 {
+            if new_progress_bp >= MAX_PROGRESS_BP {
                 // Update tile state
                 tile_blueprint.bones_delivered =
                     tile_blueprint.bones_delivered.max(FLOOR_BONES_PER_TILE);
@@ -195,7 +201,7 @@ pub fn handle_reinforce_floor_task(
                         tile: tile_entity,
                         site: site_entity,
                         phase: ReinforceFloorPhase::Reinforcing {
-                            progress: new_progress,
+                            progress_bp: new_progress_bp,
                         },
                     },
                 );

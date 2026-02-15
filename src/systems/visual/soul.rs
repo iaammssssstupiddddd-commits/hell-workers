@@ -9,7 +9,7 @@ use crate::entities::damned_soul::{
     DamnedSoul, GatheringBehavior, IdleBehavior, IdleState, SoulUiLinks,
 };
 use crate::systems::soul_ai::execute::task_execution::types::{
-    AssignedTask, GatherPhase, HaulPhase,
+    AssignedTask, GatherPhase, HaulPhase, PourFloorPhase, ReinforceFloorPhase,
 };
 use crate::systems::utils::progress_bar::{
     GenericProgressBar, ProgressBarBackground, ProgressBarConfig, ProgressBarFill,
@@ -32,37 +32,46 @@ pub fn progress_bar_system(
     mut q_souls: Query<(Entity, &AssignedTask, &Transform, &mut SoulUiLinks), With<DamnedSoul>>,
 ) {
     for (soul_entity, task, transform, mut ui_links) in q_souls.iter_mut() {
-        if let AssignedTask::Gather(data) = task {
-            if matches!(data.phase, GatherPhase::Collecting { .. }) {
-                if ui_links.bar_entity.is_none() {
-                    // utilを使用してプログレスバーを生成
-                    let config = ProgressBarConfig {
-                        width: TILE_SIZE * 0.8,
-                        height: TILE_SIZE * 0.15,
-                        y_offset: TILE_SIZE * 0.6,
-                        bg_color: Color::srgba(0.0, 0.0, 0.0, 0.8),
-                        fill_color: Color::srgb(0.0, 1.0, 0.0),
-                        z_index: Z_BAR_BG,
-                    };
+        let needs_bar = match task {
+            AssignedTask::Gather(data) => matches!(data.phase, GatherPhase::Collecting { .. }),
+            AssignedTask::ReinforceFloorTile(data) => {
+                matches!(data.phase, ReinforceFloorPhase::Reinforcing { .. })
+            }
+            AssignedTask::PourFloorTile(data) => {
+                matches!(data.phase, PourFloorPhase::Pouring { .. })
+            }
+            _ => false,
+        };
 
-                    let (bg_entity, fill_entity) =
-                        spawn_progress_bar(&mut commands, soul_entity, transform, config);
+        if needs_bar {
+            if ui_links.bar_entity.is_none() {
+                // utilを使用してプログレスバーを生成
+                let config = ProgressBarConfig {
+                    width: TILE_SIZE * 0.8,
+                    height: TILE_SIZE * 0.15,
+                    y_offset: TILE_SIZE * 0.6,
+                    bg_color: Color::srgba(0.0, 0.0, 0.0, 0.8),
+                    fill_color: Color::srgb(0.0, 1.0, 0.0),
+                    z_index: Z_BAR_BG,
+                };
 
-                    // 親子関係を設定（Lifecycle管理のため）
-                    commands.entity(bg_entity).try_insert(ChildOf(soul_entity));
-                    commands.entity(fill_entity).try_insert(ChildOf(soul_entity));
+                let (bg_entity, fill_entity) =
+                    spawn_progress_bar(&mut commands, soul_entity, transform, config);
 
-                    commands.entity(bg_entity).insert(SoulProgressBar);
-                    commands.entity(fill_entity).insert(SoulProgressBar);
+                // 親子関係を設定（Lifecycle管理のため）
+                commands.entity(bg_entity).try_insert(ChildOf(soul_entity));
+                commands.entity(fill_entity).try_insert(ChildOf(soul_entity));
 
-                    // Fillの色を緑に設定
-                    commands.entity(fill_entity).insert(Sprite {
-                        color: Color::srgb(0.0, 1.0, 0.0),
-                        ..default()
-                    });
+                commands.entity(bg_entity).insert(SoulProgressBar);
+                commands.entity(fill_entity).insert(SoulProgressBar);
 
-                    ui_links.bar_entity = Some(bg_entity);
-                }
+                // Fillの色を緑に設定
+                commands.entity(fill_entity).insert(Sprite {
+                    color: Color::srgb(0.0, 1.0, 0.0),
+                    ..default()
+                });
+
+                ui_links.bar_entity = Some(bg_entity);
             }
         } else if let Some(bar_entity) = ui_links.bar_entity.take() {
             // プログレスバーを削除（背景とFillの両方）
@@ -93,17 +102,40 @@ pub fn update_progress_bar_fill_system(
         // Parentコンポーネントを介して親ソウルを取得
         if let Ok(child_of) = q_soul_bars.get(fill_entity) {
             if let Ok(task) = q_souls.get(child_of.parent()) {
-                if let AssignedTask::Gather(data) = task {
-                    if let GatherPhase::Collecting { progress } = data.phase {
-                        if let Ok(generic_bar) = q_generic_bars.get(fill_entity) {
-                            update_progress_bar_fill(
-                                progress,
-                                &generic_bar.config,
-                                &mut sprite,
-                                &mut transform,
-                                None, // 色は変更しない（緑のまま）
-                            );
+                let progress = match task {
+                    AssignedTask::Gather(data) => {
+                        if let GatherPhase::Collecting { progress } = data.phase {
+                            Some(progress)
+                        } else {
+                            None
                         }
+                    }
+                    AssignedTask::ReinforceFloorTile(data) => {
+                        if let ReinforceFloorPhase::Reinforcing { progress_bp } = data.phase {
+                            Some((progress_bp as f32 / 10_000.0).clamp(0.0, 1.0))
+                        } else {
+                            None
+                        }
+                    }
+                    AssignedTask::PourFloorTile(data) => {
+                        if let PourFloorPhase::Pouring { progress_bp } = data.phase {
+                            Some((progress_bp as f32 / 10_000.0).clamp(0.0, 1.0))
+                        } else {
+                            None
+                        }
+                    }
+                    _ => None,
+                };
+
+                if let Some(progress) = progress {
+                    if let Ok(generic_bar) = q_generic_bars.get(fill_entity) {
+                        update_progress_bar_fill(
+                            progress,
+                            &generic_bar.config,
+                            &mut sprite,
+                            &mut transform,
+                            None, // 色は変更しない（緑のまま）
+                        );
                     }
                 }
             }

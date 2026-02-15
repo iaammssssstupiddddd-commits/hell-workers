@@ -11,6 +11,14 @@ pub(super) fn score_candidate(
     queries: &crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
     q_target_blueprints: &Query<&TargetBlueprint>,
 ) -> Option<i32> {
+    if queries
+        .transport_requests
+        .get(entity)
+        .is_ok_and(|req| req.kind == TransportRequestKind::ReturnWheelbarrow)
+    {
+        priority -= 20;
+    }
+
     if work_type == WorkType::Build {
         priority += 10;
     } else if work_type == WorkType::Haul {

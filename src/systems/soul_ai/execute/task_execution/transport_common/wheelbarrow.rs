@@ -42,17 +42,27 @@ pub fn complete_wheelbarrow_task(
     pos: Vec2,
 ) {
     if let Ok(loaded_items) = ctx.queries.storage.loaded_items.get(data.wheelbarrow) {
-        for item_entity in loaded_items.iter() {
-            commands
-                .entity(item_entity)
-                .remove::<crate::relationships::LoadedIn>();
-            commands
-                .entity(item_entity)
-                .remove::<crate::relationships::DeliveringTo>();
-            commands.entity(item_entity).insert((
-                Visibility::Visible,
-                Transform::from_xyz(pos.x, pos.y, Z_ITEM_PICKUP),
-            ));
+        let still_loaded: Vec<Entity> = loaded_items
+            .iter()
+            .filter(|item_entity| {
+                ctx.queries
+                    .storage
+                    .loaded_in
+                    .get(*item_entity)
+                    .ok()
+                    .is_some_and(|loaded_in| loaded_in.0 == data.wheelbarrow)
+            })
+            .collect();
+
+        for item_entity in still_loaded {
+            if let Ok(mut item_commands) = commands.get_entity(item_entity) {
+                item_commands.remove::<crate::relationships::LoadedIn>();
+                item_commands.remove::<crate::relationships::DeliveringTo>();
+                item_commands.insert((
+                    Visibility::Visible,
+                    Transform::from_xyz(pos.x, pos.y, Z_ITEM_PICKUP),
+                ));
+            }
         }
     }
 
