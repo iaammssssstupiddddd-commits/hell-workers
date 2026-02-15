@@ -13,6 +13,7 @@ use crate::systems::soul_ai::visual::gathering::{
     gathering_debug_visualization_system, gathering_visual_update_system,
 };
 use crate::systems::visual::fade::fade_out_system;
+use crate::systems::visual::floor_construction::update_floor_tile_visuals_system;
 use crate::systems::soul_ai::visual::idle::idle_visual_system;
 use crate::systems::soul_ai::visual::vitals::familiar_hover_visualization_system;
 use crate::systems::visual::blueprint::{
@@ -175,6 +176,7 @@ impl Plugin for VisualPlugin {
                 update_familiar_range_indicator,
                 update_tank_visual_system,
                 update_mud_mixer_visual_system,
+                update_floor_tile_visuals_system,
                 familiar_hover_visualization_system,
                 gathering_visual_update_system,
                 gathering_debug_visualization_system,

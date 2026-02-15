@@ -11,8 +11,6 @@ use crate::world::map::WorldMap;
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 
-const MAX_FLOOR_AREA_SIZE: i32 = 10;
-
 pub fn floor_placement_system(
     buttons: Res<ButtonInput<MouseButton>>,
     q_window: Query<&Window, With<PrimaryWindow>>,
@@ -89,10 +87,10 @@ fn apply_floor_placement(
     let width = (max_grid.0 - min_grid.0 + 1).abs();
     let height = (max_grid.1 - min_grid.1 + 1).abs();
 
-    if width > MAX_FLOOR_AREA_SIZE || height > MAX_FLOOR_AREA_SIZE {
+    if width > FLOOR_MAX_AREA_SIZE || height > FLOOR_MAX_AREA_SIZE {
         warn!(
             "Floor area too large: {}x{} (max {}x{})",
-            width, height, MAX_FLOOR_AREA_SIZE, MAX_FLOOR_AREA_SIZE
+            width, height, FLOOR_MAX_AREA_SIZE, FLOOR_MAX_AREA_SIZE
         );
         return;
     }

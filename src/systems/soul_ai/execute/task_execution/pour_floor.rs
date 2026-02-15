@@ -1,6 +1,7 @@
 //! Floor tile pouring task execution
 
 use crate::relationships::WorkingOn;
+use crate::constants::{FLOOR_MUD_PER_TILE, FLOOR_POUR_DURATION_SECS};
 use crate::systems::jobs::floor_construction::FloorTileState;
 use crate::systems::logistics::ResourceType;
 use crate::systems::soul_ai::execute::task_execution::{
@@ -10,9 +11,6 @@ use crate::systems::soul_ai::execute::task_execution::{
 };
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
-
-const FLOOR_MUD_PER_TILE: u32 = 1;
-const FLOOR_POUR_DURATION_SECS: f32 = 2.0;
 
 pub fn handle_pour_floor_task(
     ctx: &mut TaskExecutionContext,
