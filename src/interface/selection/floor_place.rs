@@ -6,7 +6,7 @@ use crate::interface::camera::MainCamera;
 use crate::interface::ui::UiInputState;
 use crate::systems::command::{TaskArea, TaskMode};
 use crate::systems::jobs::floor_construction::{FloorConstructionSite, FloorTileBlueprint};
-use crate::systems::jobs::{Building, BuildingType, ObstaclePosition, TaskSlots};
+use crate::systems::jobs::{Building, BuildingType, TaskSlots};
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
@@ -21,7 +21,7 @@ pub fn floor_placement_system(
     q_floor_buildings: Query<(&Building, &Transform)>,
     mut task_context: ResMut<TaskContext>,
     mut next_play_mode: ResMut<NextState<PlayMode>>,
-    mut world_map: ResMut<WorldMap>,
+    world_map: Res<WorldMap>,
     mut commands: Commands,
 ) {
     if ui_input_state.pointer_over_ui {
@@ -58,7 +58,7 @@ pub fn floor_placement_system(
                 .collect();
             apply_floor_placement(
                 &mut commands,
-                &mut world_map,
+                &world_map,
                 &area,
                 &existing_floor_tile_grids,
                 &existing_floor_building_grids,
@@ -95,7 +95,7 @@ fn world_cursor_pos(
 
 fn apply_floor_placement(
     commands: &mut Commands,
-    world_map: &mut WorldMap,
+    world_map: &WorldMap,
     area: &TaskArea,
     existing_floor_tile_grids: &HashSet<(i32, i32)>,
     existing_floor_building_grids: &HashSet<(i32, i32)>,
@@ -165,7 +165,6 @@ fn apply_floor_placement(
 
         commands.spawn((
             FloorTileBlueprint::new(site_entity, (gx, gy)),
-            ObstaclePosition(gx, gy),
             TaskSlots::new(1), // One worker per tile
             Sprite {
                 color: Color::srgba(0.5, 0.5, 0.8, 0.2), // Light blue overlay
@@ -176,9 +175,6 @@ fn apply_floor_placement(
             Visibility::default(),
             Name::new(format!("FloorTile({},{})", gx, gy)),
         ));
-
-        // Under-construction floor tiles are blocked until completion/cancellation.
-        world_map.add_obstacle(gx, gy);
     }
 
     info!(

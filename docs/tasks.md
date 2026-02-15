@@ -53,6 +53,7 @@ Bevy 0.18 の **ECS Relationships** 機能を使用し、エンティティ間�
     - `task_area_auto_haul_system`: ファミリアの **TaskArea 内 Stockpile グループ** 単位で `DepositToStockpile` request を生成（anchor=代表セル）。割り当て時にソースおよび**具体的な格納先セル**を遅延解決。
     - `bucket_auto_haul_system`: タンク位置（`anchor = tank`）に `ReturnBucket` request を生成。返却件数は `TransportDemand.desired_slots` で管理し、割り当て時にドロップバケツと返却先 `BucketStorage` を同時遅延解決。
     - `blueprint_auto_haul_system`: 設計図位置に `DeliverToBlueprint` request を生成。
+    - `floor_construction_auto_haul_system`: 床建築サイト位置に `DeliverToFloorConstruction` request を生成。
     - `mud_mixer_auto_haul_system`: Mixer 位置に `DeliverToMixerSolid`（固体）および `DeliverWaterToMixer`（水）request を生成。
     - `tank_water_request_system`: タンクの空きに応じて `GatherWaterToTank` request を生成し、割り当て時にバケツを遅延解決。
     - request エンティティは Execute フェーズの `apply_designation_requests_system` で反映。ソース探索は割り当て時（`task_finder` → `assign_haul` 等）に遅延実行される。
@@ -99,7 +100,7 @@ Bevy 0.18 の **ECS Relationships** 機能を使用し、エンティティ間�
     4. `Loading` — アイテムを手押し車に積む（`LoadedIn` 設定、`Visibility::Hidden`）
        - Blueprint 向け `Sand` では直採取モードがあり、同一 Soul がこのフェーズで砂をその場生成して積載します（別の `CollectSand` タスクは使わない）。
     5. `GoingToDestination` — 目的地へ移動（速度ペナルティ `SOUL_SPEED_WHEELBARROW_MULTIPLIER`）
-    6. `Unloading` — 搬送先（Stockpile / Blueprint / Mixer）に荷下ろし
+    6. `Unloading` — 搬送先（Stockpile / Blueprint / Mixer / FloorConstructionSite）に荷下ろし
     7. `ReturningWheelbarrow` — 手押し車を駐車エリアに返却
 - **水運搬 (HaulWater)**: Tankから水を汲み、MudMixerへ運ぶ一連のプロセス。
     - バケツ確保 -> Tankへ移動 -> 汲む -> Mixerへ移動 -> 注ぐ -> バケツ返却

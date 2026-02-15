@@ -60,6 +60,7 @@ Hell-Workers の物流は、`TransportRequest` を中心にした自動発行 + 
 | `DepositToStockpile` | `Haul` | `task_area_auto_haul_system` | Stockpile | 割り当て時にアイテムを遅延解決 |
 | `DeliverToBlueprint` | `Haul` | `blueprint_auto_haul_system` | Blueprint | 割り当て時に必要資材を遅延解決 |
 | `DeliverToMixerSolid` | `HaulToMixer` | `mud_mixer_auto_haul_system` | Mixer | 割り当て時に Sand/Rock を遅延解決（Sand は原則猫車必須、近接ピックドロップ完結時は徒歩許可） |
+| `DeliverToFloorConstruction` | `Haul` | `floor_construction_auto_haul_system` | FloorConstructionSite | 割り当て時に Bone / StasisMud ソースを遅延解決（搬入先は `site.material_center`） |
 | `DeliverWaterToMixer` | `HaulWaterToMixer` | `mud_mixer_auto_haul_system` | Mixer | 割り当て時に tank + bucket を遅延解決 |
 | `GatherWaterToTank` | `GatherWater` | `tank_water_request_system` | Tank | 割り当て時に bucket を遅延解決 |
 | `ReturnBucket` | `Haul` | `bucket_auto_haul_system` | Tank | 割り当て時に dropped bucket と返却先 BucketStorage を同時遅延解決 |
@@ -148,14 +149,24 @@ Hell-Workers の物流は、`TransportRequest` を中心にした自動発行 + 
 - 割り当て時に request anchor（tank）に紐づく利用可能バケツを選択して `GatherWater` を実行。
 - タンク容量（現在量 + 予約）を割り当て時にも再検証。
 
+### 4.8 床建築搬入 (`DeliverToFloorConstruction`)
+- `floor_construction_auto_haul_system` が site ごとに不足資材を算出し request を upsert。
+- Reinforcing フェーズでは `Bone`、Pouring フェーズでは `StasisMud` を要求。
+- 搬入先は常に `FloorConstructionSite.material_center`。
+- `floor_material_delivery_sync_system` が `material_center` 周辺の資材を消費し、各タイルの `bones_delivered` / `mud_delivered` を進める。
+- `Bone` は以下の優先順で解決される:
+  1. 地面アイテムを通常 `Haul` で搬送
+  2. 地面アイテムがない場合は `BonePile` / River からの猫車直採取へフォールバック
+
 ## 5. 手押し車運搬
 
 ### 5.1 基本動作
 
 手押し車の実運用は request 割り当て時に判定されます。
 
-- `Sand` / `StasisMud` / `Bone` は原則猫車必須資源（徒歩フォールバックなし）。
-  - `Bone` は `BonePile` 建設時にも使用され、川タイルからの収集・搬入には手押し車が必須となります。
+- `Sand` / `StasisMud` は原則猫車必須資源（徒歩フォールバックなし）。
+  - `Bone` は「地面アイテム搬送」では徒歩 `Haul` を許可。
+  - ただし `BonePile` / River からの直接採取ルートでは猫車を使用。
   - 例外: 「その場ピック→ドロップ」で1件を完了できる距離関係なら徒歩運搬を許可し、猫車を使わない。
   - 判定は `source` 周囲 3x3 の立ち位置を評価して行う（実行時の距離しきい値に合わせる）。
   - Stockpile / Mixer へのドロップ成立条件: `distance(stand_pos, destination_pos) < TILE_SIZE * 1.8`
@@ -165,6 +176,7 @@ Hell-Workers の物流は、`TransportRequest` を中心にした自動発行 + 
   - `DepositToStockpile`
   - `DeliverToBlueprint`（`Sand` / `StasisMud`）
   - `DeliverToMixerSolid`（`Sand`）
+  - `DeliverToFloorConstruction`（`StasisMud` / 直採取 `Bone`）
 - 猫車不足時は request は `Pending` のまま待機する。
 
 - `resolve_wheelbarrow_batch_for_stockpile` が以下を満たすと一括運搬を選択:

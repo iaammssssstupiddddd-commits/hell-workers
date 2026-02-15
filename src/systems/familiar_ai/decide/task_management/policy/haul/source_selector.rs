@@ -165,8 +165,42 @@ pub fn collect_nearby_items_for_wheelbarrow(
     queries: &TaskQueries<'_, '_>,
     shadow: &ReservationShadow,
 ) -> Vec<(Entity, Vec2)> {
-    let search_radius_sq =
-        (crate::constants::TILE_SIZE * 10.0) * (crate::constants::TILE_SIZE * 10.0);
+    collect_items_for_wheelbarrow_in_radius(
+        resource_type,
+        center_pos,
+        max_count,
+        queries,
+        shadow,
+        Some(crate::constants::TILE_SIZE * 10.0),
+    )
+}
+
+pub fn collect_items_for_wheelbarrow_unbounded(
+    resource_type: ResourceType,
+    center_pos: Vec2,
+    max_count: usize,
+    queries: &TaskQueries<'_, '_>,
+    shadow: &ReservationShadow,
+) -> Vec<(Entity, Vec2)> {
+    collect_items_for_wheelbarrow_in_radius(
+        resource_type,
+        center_pos,
+        max_count,
+        queries,
+        shadow,
+        None,
+    )
+}
+
+fn collect_items_for_wheelbarrow_in_radius(
+    resource_type: ResourceType,
+    center_pos: Vec2,
+    max_count: usize,
+    queries: &TaskQueries<'_, '_>,
+    shadow: &ReservationShadow,
+    search_radius: Option<f32>,
+) -> Vec<(Entity, Vec2)> {
+    let search_radius_sq = search_radius.map(|r| r * r);
 
     let mut items: Vec<(Entity, Vec2, f32)> = queries
         .free_resource_items
@@ -178,11 +212,10 @@ pub fn collect_nearby_items_for_wheelbarrow(
         .filter_map(|(entity, transform, _, _)| {
             let pos = transform.translation.truncate();
             let dist_sq = pos.distance_squared(center_pos);
-            if dist_sq <= search_radius_sq {
-                Some((entity, pos, dist_sq))
-            } else {
-                None
+            if search_radius_sq.is_some_and(|radius_sq| dist_sq > radius_sq) {
+                return None;
             }
+            Some((entity, pos, dist_sq))
         })
         .collect();
 

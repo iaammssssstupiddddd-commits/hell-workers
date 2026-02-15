@@ -99,13 +99,22 @@ pub fn assign_haul_to_blueprint(
     // 3. リースなしフォールバック: 最寄り猫車 + 複数アイテム収集
     if let Some(wb_entity) = wheelbarrow::find_nearest_wheelbarrow(task_pos, queries, shadow) {
         let max_items = remaining_needed.min(WHEELBARROW_CAPACITY as u32) as usize;
-        let items = source_selector::collect_nearby_items_for_wheelbarrow(
+        let mut items = source_selector::collect_nearby_items_for_wheelbarrow(
             resource_type,
             task_pos,
             max_items,
             queries,
             shadow,
         );
+        if items.is_empty() {
+            items = source_selector::collect_items_for_wheelbarrow_unbounded(
+                resource_type,
+                task_pos,
+                max_items,
+                queries,
+                shadow,
+            );
+        }
         if !items.is_empty() {
             let source_pos = items
                 .iter()
@@ -433,10 +442,18 @@ fn try_direct_bone_collect_with_wheelbarrow(
     let Some((source_entity, source_pos)) =
         find_collect_bone_source(task_pos, ctx.task_area_opt, queries, shadow)
     else {
+        debug!(
+            "ASSIGN: Blueprint {:?} has no available Bone source for direct collect",
+            blueprint
+        );
         return false;
     };
 
     let Some(wb_entity) = wheelbarrow::find_nearest_wheelbarrow(source_pos, queries, shadow) else {
+        debug!(
+            "ASSIGN: Blueprint {:?} has no available wheelbarrow for direct Bone collect",
+            blueprint
+        );
         return false;
     };
 
@@ -457,15 +474,39 @@ fn try_direct_bone_collect_with_wheelbarrow(
     true
 }
 
-fn find_collect_bone_source(
+pub(super) fn find_collect_bone_source(
     target_pos: Vec2,
     task_area_opt: Option<&TaskArea>,
     queries: &crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
     shadow: &ReservationShadow,
 ) -> Option<(Entity, Vec2)> {
-    // 1. BonePile 建物があればそこから (SandPile と同様)
-    // ただし現在 BonePile コンポーネント用のクエリがないため、WorldMap からさがす
-    // 実は BonePile も TerrainType::Bone ではないため、現状は River タイルのみ検索とする
+    let find_bone_pile = |area_filter: Option<&TaskArea>| -> Option<(Entity, Vec2)> {
+        queries
+            .bone_piles
+            .iter()
+            .filter(|(entity, transform, designation_opt, workers_opt)| {
+                if designation_opt.is_some() {
+                    return false;
+                }
+                if workers_opt.map(|workers| workers.len()).unwrap_or(0) > 0 {
+                    return false;
+                }
+                if !source_not_reserved(*entity, queries, shadow) {
+                    return false;
+                }
+                if let Some(area) = area_filter {
+                    area.contains(transform.translation.truncate())
+                } else {
+                    true
+                }
+            })
+            .min_by(|(_, t1, _, _), (_, t2, _, _)| {
+                let d1 = t1.translation.truncate().distance_squared(target_pos);
+                let d2 = t2.translation.truncate().distance_squared(target_pos);
+                d1.partial_cmp(&d2).unwrap_or(std::cmp::Ordering::Equal)
+            })
+            .map(|(entity, transform, _, _)| (entity, transform.translation.truncate()))
+    };
 
     let scan_river_tiles = |area_filter: Option<&TaskArea>| -> Option<(Entity, Vec2)> {
         let (x0, y0, x1, y1) = if let Some(area) = area_filter {
@@ -524,6 +565,15 @@ fn find_collect_bone_source(
 
         best.map(|(entity, pos, _)| (entity, pos))
     };
+
+    if let Some(best) = find_bone_pile(task_area_opt) {
+        return Some(best);
+    }
+    if task_area_opt.is_some() {
+        if let Some(best) = find_bone_pile(None) {
+            return Some(best);
+        }
+    }
 
     if let Some(best) = scan_river_tiles(task_area_opt) {
         return Some(best);
