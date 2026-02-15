@@ -18,7 +18,7 @@ pub fn floor_placement_system(
     ui_input_state: Res<UiInputState>,
     mut task_context: ResMut<TaskContext>,
     mut next_play_mode: ResMut<NextState<PlayMode>>,
-    world_map: Res<WorldMap>,
+    mut world_map: ResMut<WorldMap>,
     mut commands: Commands,
 ) {
     if ui_input_state.pointer_over_ui {
@@ -44,7 +44,7 @@ pub fn floor_placement_system(
     if buttons.just_released(MouseButton::Left) {
         if let Some(start_pos) = start_pos_opt {
             let area = TaskArea::from_points(start_pos, snapped_pos);
-            apply_floor_placement(&mut commands, &world_map, &area);
+            apply_floor_placement(&mut commands, &mut world_map, &area);
 
             // Reset mode (continue placing if shift held - TODO)
             task_context.0 = TaskMode::FloorPlace(None);
@@ -77,7 +77,7 @@ fn world_cursor_pos(
 
 fn apply_floor_placement(
     commands: &mut Commands,
-    world_map: &WorldMap,
+    world_map: &mut WorldMap,
     area: &TaskArea,
 ) {
     let min_grid = WorldMap::world_to_grid(area.min + Vec2::splat(0.1));
@@ -150,6 +150,9 @@ fn apply_floor_placement(
             Visibility::default(),
             Name::new(format!("FloorTile({},{})", gx, gy)),
         ));
+
+        // Under-construction floor tiles are blocked until completion/cancellation.
+        world_map.add_obstacle(gx, gy);
     }
 
     info!(
