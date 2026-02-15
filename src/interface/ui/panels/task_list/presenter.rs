@@ -1,6 +1,6 @@
 //! WorkType のアイコン・ラベル・説明文言
 
-use crate::systems::jobs::{Blueprint, BuildingType, Rock, SandPile, Tree, WorkType};
+use crate::systems::jobs::{Blueprint, BonePile, BuildingType, Rock, SandPile, Tree, WorkType};
 use crate::systems::logistics::transport_request::{TransportRequest, TransportRequestKind};
 use crate::systems::logistics::ResourceItem;
 use bevy::prelude::*;
@@ -19,6 +19,7 @@ pub fn work_type_label(wt: &WorkType) -> &'static str {
         WorkType::Refine => "Refine",
         WorkType::HaulWaterToMixer => "Water (Mixer)",
         WorkType::WheelbarrowHaul => "Wheelbarrow",
+        WorkType::CollectBone => "Bone",
     }
 }
 
@@ -38,6 +39,7 @@ pub fn get_work_type_icon(
             (game_assets.icon_haul.clone(), theme.colors.water)
         }
         WorkType::CollectSand => (game_assets.icon_pick.clone(), theme.colors.gather_default),
+        WorkType::CollectBone => (game_assets.icon_bone_small.clone(), theme.colors.gather_default),
         WorkType::Refine => (game_assets.icon_hammer.clone(), theme.colors.build),
     }
 }
@@ -51,6 +53,7 @@ pub fn generate_task_description(
     tree: Option<&Tree>,
     rock: Option<&Rock>,
     sand_pile: Option<&SandPile>,
+    bone_pile: Option<&BonePile>,
 ) -> String {
     match wt {
         WorkType::Build => {
@@ -61,6 +64,7 @@ pub fn generate_task_description(
                     BuildingType::Tank => "Construct Tank".to_string(),
                     BuildingType::MudMixer => "Construct Mixer".to_string(),
                     BuildingType::SandPile => "Construct SandPile".to_string(),
+                    BuildingType::BonePile => "Construct BonePile".to_string(),
                     BuildingType::WheelbarrowParking => "Construct Parking".to_string(),
                 }
             } else {
@@ -112,5 +116,12 @@ pub fn generate_task_description(
         }
         WorkType::Refine => "Refine".to_string(),
         WorkType::WheelbarrowHaul => "Wheelbarrow Haul".to_string(),
+        WorkType::CollectBone => {
+            if bone_pile.is_some() {
+                "Collect Bone Pile".to_string()
+            } else {
+                "Collect Bone".to_string()
+            }
+        }
     }
 }

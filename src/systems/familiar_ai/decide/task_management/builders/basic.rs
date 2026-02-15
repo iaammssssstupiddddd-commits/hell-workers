@@ -125,3 +125,32 @@ pub fn issue_refine(
         already_commanded,
     );
 }
+
+pub fn issue_collect_bone(
+    task_pos: Vec2,
+    already_commanded: bool,
+    ctx: &AssignTaskContext<'_>,
+    queries: &mut crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
+    shadow: &mut ReservationShadow,
+) {
+    let assigned_task = crate::systems::soul_ai::execute::task_execution::types::AssignedTask::CollectBone(
+        crate::systems::soul_ai::execute::task_execution::types::CollectBoneData {
+            target: ctx.task_entity,
+            phase: crate::systems::soul_ai::execute::task_execution::types::CollectBonePhase::GoingToBone,
+        },
+    );
+    let reservation_ops = vec![ResourceReservationOp::ReserveSource {
+        source: ctx.task_entity,
+        amount: 1,
+    }];
+    submit_assignment(
+        ctx,
+        queries,
+        shadow,
+        WorkType::CollectBone,
+        task_pos,
+        assigned_task,
+        reservation_ops,
+        already_commanded,
+    );
+}

@@ -26,6 +26,7 @@ pub fn spawn_material_display_system(
                 ResourceType::Rock => game_assets.icon_rock_small.clone(),
                 ResourceType::Water => game_assets.icon_water_small.clone(),
                 ResourceType::Sand => game_assets.icon_sand_small.clone(),
+                ResourceType::Bone => game_assets.icon_bone_small.clone(),
                 ResourceType::StasisMud => game_assets.icon_stasis_mud_small.clone(),
                 _ => game_assets.icon_hammer.clone(),
             };

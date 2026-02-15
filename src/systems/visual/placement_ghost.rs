@@ -148,6 +148,7 @@ pub fn placement_ghost_system(
             BuildingType::Tank => (game_assets.tank_empty.clone(), Vec2::splat(TILE_SIZE * 2.0)),
             BuildingType::MudMixer => (game_assets.mud_mixer.clone(), Vec2::splat(TILE_SIZE * 2.0)),
             BuildingType::SandPile => (game_assets.sand_pile.clone(), Vec2::splat(TILE_SIZE)),
+            BuildingType::BonePile => (game_assets.bone_pile.clone(), Vec2::splat(TILE_SIZE)),
             BuildingType::WheelbarrowParking => (
                 game_assets.wheelbarrow_parking.clone(),
                 Vec2::splat(TILE_SIZE * 2.0),

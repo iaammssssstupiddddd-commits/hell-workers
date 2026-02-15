@@ -13,21 +13,41 @@ use bevy::prelude::*;
 pub fn handle(ctx: &mut TaskExecutionContext, data: HaulWithWheelbarrowData, commands: &mut Commands) {
     if let Some(source_entity) = data.collect_source {
         let collect_amount = data.collect_amount.max(1);
-        if data.collect_resource_type != Some(crate::systems::logistics::ResourceType::Sand) {
-            cancel::cancel_wheelbarrow_task(ctx, &data, commands);
-            return;
-        }
-        if ctx.queries.designation.targets.get(source_entity).is_err() {
-            cancel::cancel_wheelbarrow_task(ctx, &data, commands);
-            return;
-        }
-
-        let collected_items = sand_collect::spawn_loaded_sand_items(
-            commands,
-            data.wheelbarrow,
-            data.source_pos,
-            collect_amount,
-        );
+        let collected_items = match data.collect_resource_type {
+            Some(crate::systems::logistics::ResourceType::Sand) => {
+                if ctx.queries.designation.targets.get(source_entity).is_err() {
+                    cancel::cancel_wheelbarrow_task(ctx, &data, commands);
+                    return;
+                }
+                sand_collect::spawn_loaded_sand_items(
+                    commands,
+                    data.wheelbarrow,
+                    data.source_pos,
+                    collect_amount,
+                )
+            }
+            Some(crate::systems::logistics::ResourceType::Bone) => {
+                // 川タイルなどは Designation がない場合もあるが、とりあえずチェックなしで進めるか
+                // あるいは find_collect_bone_source で Designation がないことを確認しているはず
+                // ここではソースエンティティの存在チェックぐらいはすべきか？
+                // しかし TileEntity は常に存在するはず
+                // Bone の場合、sand_collect::clear_collect_sand_designation は呼ばなくて良い？
+                // Sand の場合は `task_state` (Designation) を削除している。
+                // Bone (River) の場合、Designation は付いていないはず (find_collect_bone_source で除外)。
+                // したがって、Designation の削除も不要。
+                
+                sand_collect::spawn_loaded_bone_items(
+                    commands,
+                    data.wheelbarrow,
+                    data.source_pos,
+                    collect_amount,
+                )
+            }
+            _ => {
+                cancel::cancel_wheelbarrow_task(ctx, &data, commands);
+                return;
+            }
+        };
         if collected_items.is_empty() {
             cancel::cancel_wheelbarrow_task(ctx, &data, commands);
             return;

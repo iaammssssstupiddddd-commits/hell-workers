@@ -12,7 +12,7 @@ use crate::world::map::WorldMap;
 use bevy::prelude::*;
 
 use super::types::{
-    AssignedTask, BuildData, CollectSandData, GatherData, GatherWaterData, HaulData,
+    AssignedTask, BuildData, CollectBoneData, CollectSandData, GatherData, GatherWaterData, HaulData,
     HaulToBlueprintData, HaulWaterToMixerData, HaulWithWheelbarrowData, RefineData,
 };
 
@@ -163,6 +163,28 @@ impl TaskHandler<CollectSandData> for AssignedTask {
     }
 }
 
+impl TaskHandler<CollectBoneData> for AssignedTask {
+    fn execute(
+        ctx: &mut TaskExecutionContext,
+        data: CollectBoneData,
+        commands: &mut Commands,
+        game_assets: &Res<GameAssets>,
+        time: &Res<Time>,
+        world_map: &Res<WorldMap>,
+        _breakdown_opt: Option<&StressBreakdown>,
+    ) {
+        super::collect_bone::handle_collect_bone_task(
+            ctx,
+            data.target,
+            data.phase,
+            commands,
+            game_assets,
+            time,
+            world_map,
+        );
+    }
+}
+
 impl TaskHandler<RefineData> for AssignedTask {
     fn execute(
         ctx: &mut TaskExecutionContext,
@@ -262,6 +284,9 @@ pub fn run_task_handler(
             AssignedTask::execute(ctx, data.clone(), commands, game_assets, time, world_map, breakdown_opt);
         }
         AssignedTask::CollectSand(data) => {
+            AssignedTask::execute(ctx, data.clone(), commands, game_assets, time, world_map, breakdown_opt);
+        }
+        AssignedTask::CollectBone(data) => {
             AssignedTask::execute(ctx, data.clone(), commands, game_assets, time, world_map, breakdown_opt);
         }
         AssignedTask::Refine(data) => {

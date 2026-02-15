@@ -22,6 +22,9 @@ pub fn assign_by_work_type(
         WorkType::CollectSand => {
             basic::assign_collect_sand(task_pos, already_commanded, ctx, queries, shadow)
         }
+        WorkType::CollectBone => {
+            basic::assign_collect_bone(task_pos, already_commanded, ctx, queries, shadow)
+        }
         WorkType::Refine => basic::assign_refine(task_pos, already_commanded, ctx, queries, shadow),
         WorkType::Haul | WorkType::WheelbarrowHaul => {
             haul::assign_haul(task_pos, already_commanded, ctx, queries, shadow)

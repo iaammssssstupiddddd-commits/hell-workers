@@ -12,7 +12,7 @@ Hell-Workers における建築システムの基礎実装について説明し�
 |:---|:---|
 | `Blueprint` | 建設中の建物。`kind`, `progress`, `required_materials`, `delivered_materials` フィールドを持つ |
 | `Building` | 完成した建物。`is_provisional` (仮設) フラグを持つ |
-| `BuildingType` | 建物の種類（`Wall`, `Floor`, `Tank`, `MudMixer`, `SandPile`） |
+| `BuildingType` | 建物の種類（`Wall`, `Floor`, `Tank`, `MudMixer`, `SandPile`, `BonePile`） |
 
 ### Blueprint フィールド
 
@@ -33,6 +33,7 @@ Hell-Workers における建築システムの基礎実装について説明し�
 | Tank | 木材 × 2 |
 | MudMixer | 木材 × 4 |
 | SandPile | 砂 × 10 |
+| BonePile | 骨 × 10 |
 
 ## 3. ワークフロー
 

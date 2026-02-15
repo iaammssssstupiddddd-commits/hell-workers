@@ -31,6 +31,11 @@ pub fn cancel_wheelbarrow_task(
             commands.entity(item_entity).remove::<crate::relationships::LoadedIn>();
         }
     }
+    for &item_entity in &data.items {
+        commands
+            .entity(item_entity)
+            .remove::<crate::relationships::DeliveringTo>();
+    }
 
     // 手押し車を駐車状態に戻す
     let parking_anchor = ctx
@@ -46,6 +51,9 @@ pub fn cancel_wheelbarrow_task(
         parking_anchor,
         soul_pos,
     );
+    commands
+        .entity(data.wheelbarrow)
+        .remove::<crate::relationships::DeliveringTo>();
 
     // 全予約を解放
     release_all_reservations(ctx, data);

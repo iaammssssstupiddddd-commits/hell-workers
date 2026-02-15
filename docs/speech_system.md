@@ -45,6 +45,7 @@ Familiar は命令や状態を「ラテン語」で表現します。表示は *
 | `Mine` (採掘) | **Fodere** | 掘れ / 採掘せよ |
 | `Haul` (搬送) | **Portare** | 運べ |
 | `Build` (建築) | **Laborare** | 働け / 構築せよ | -- |
+| `CollectBone` (骨回収) | **Colligere** | 集めよ / 回収せよ | -- |
 | `Release` (解放) | **Abi** | 去れ / 去りなさい | 疲労・崩壊時 |
 
 ---

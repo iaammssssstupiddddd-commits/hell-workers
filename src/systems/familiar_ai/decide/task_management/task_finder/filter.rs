@@ -115,6 +115,7 @@ pub(super) fn candidate_snapshot(
         | WorkType::HaulToMixer
         | WorkType::GatherWater
         | WorkType::CollectSand
+        | WorkType::CollectBone
         | WorkType::Refine
         | WorkType::HaulWaterToMixer
         | WorkType::WheelbarrowHaul => true,
