@@ -190,7 +190,7 @@ flowchart TD
 
 ### 9. 実装状況
 
-**※ 実装状況: Phase 9/12 完了（75%）- 基本機能実装済み、ビジュアル・キャンセル未実装**
+**※ 実装状況: 実装完了（主要フェーズ + 運用修正反映済み）**
 
 従来の Blueprint システム（単一タイル配置）とは異なる、**エリア指定型の床建設システム**です。ドラッグ操作で矩形エリアを指定し、複数タイルを一括で建設します。
 
@@ -201,6 +201,7 @@ flowchart TD
   1. **Reinforcing Phase**: 骨（2個/タイル）を使って補強
   2. **Pouring Phase**: 泥（1個/タイル）を注いで完成
 - **資材コスト**: 骨 × 2 + Stasis Mud × 1 per tile
+- **通行性**: 建築中の `FloorTileBlueprint` は通行可能（障害物として扱わない）
 - **キャンセル**: エリア全体を一括キャンセル（部分キャンセル不可）
 
 ### 9.2 エンティティ構造
@@ -262,7 +263,9 @@ flowchart TD
 - Priority: 10 (Blueprint と同等の高優先度)
 
 **Phase に応じた資材**:
-- **Reinforcing Phase**: 骨（Bone）を配送（猫車不要）
+- **Reinforcing Phase**: 骨（Bone）を配送
+  - 地面Boneがあれば通常 `Haul` で搬送
+  - 地面Boneが無い場合は `BonePile` / River からの猫車直採取にフォールバック
 - **Pouring Phase**: 泥（StasisMud）を配送（猫車必須）
 
 ### 9.6 タスク割り当て
@@ -276,16 +279,16 @@ flowchart TD
 **タスク実行**:
 - **ReinforceFloorTile**: `reinforce_floor.rs`
   1. `GoingToMaterialCenter`: Site の material_center へ移動
-  2. `PickingUpBones`: 骨2個の存在を確認
+  2. `PickingUpBones`: タイルが `ReinforcingReady` であることを確認
   3. `GoingToTile`: タイル位置へ移動
-  4. `Reinforcing`: 作業実行（約3秒）、完了時に骨を消費
+  4. `Reinforcing`: 作業実行（約3秒）
   5. `Done`: タスク完了、Designation 解放
 
-- **PourFloorTile**: `pour_floor.rs`（Phase 8 で実装予定）
+- **PourFloorTile**: `pour_floor.rs`
   1. `GoingToMaterialCenter`: Site の material_center へ移動
-  2. `PickingUpMud`: 泥1個の存在を確認
+  2. `PickingUpMud`: タイルが `PouringReady` であることを確認
   3. `GoingToTile`: タイル位置へ移動
-  4. `Pouring`: 作業実行（約2秒）、完了時に泥を消費
+  4. `Pouring`: 作業実行（約2秒）
   5. `Done`: タスク完了、Designation 解放
 
 ### 9.7 Phase Transition System
@@ -305,36 +308,27 @@ flowchart TD
 - 条件: 全タイルが `Complete` 状態
 - 処理:
   1. 各タイルに `Floor` Building をスパウン
-  2. WorldMap の walkability を更新（障害物解除）
+  2. 建築中タイルを完成床へ置換（床として通行可能）
   3. FloorTileBlueprint エンティティを despawn
   4. FloorConstructionSite エンティティを despawn
 
-### 9.9 実装状況
 
-**完了済み**:
-- ✅ Phase 1: Core components & data structures
-- ✅ Phase 2: Drag-drop UI placement
-- ✅ Phase 3: Material auto-haul system
-- ✅ Phase 4: Task execution handlers (reinforce)
-- ✅ Phase 5: Familiar AI task assignment
-- ✅ Phase 6: Phase transition system
-- ✅ Phase 7: Completion system
-- ✅ Phase 8: Task execution (pour)
-- ✅ Phase 10: Spatial grid integration
-
-**未実装**:
-- ⏳ Phase 9: Cancellation system - エリア全体のキャンセル処理
-- ⏳ Phase 11: Visual feedback - タイル状態の視覚表示
-- ⏳ Phase 12: Constants & final integration - 定数定義と最終調整
 
 ### 9.10 関連ファイル (Floor Construction)
 
 - `src/systems/jobs/floor_construction/components.rs`: コンポーネント定義
 - `src/systems/jobs/floor_construction/phase_transition.rs`: Phase 移行システム
 - `src/systems/jobs/floor_construction/completion.rs`: 完了処理
+- `src/systems/jobs/floor_construction/cancellation.rs`: サイト単位キャンセル・資材返却
 - `src/systems/logistics/transport_request/producer/floor_construction.rs`: 資材配送・Designation付与
 - `src/systems/soul_ai/execute/task_execution/reinforce_floor.rs`: 補強タスク実行
+- `src/systems/soul_ai/execute/task_execution/pour_floor.rs`: 打設タスク実行
+- `src/systems/soul_ai/execute/task_execution/haul.rs`: floor site への徒歩搬送
+- `src/systems/soul_ai/execute/task_execution/haul_with_wheelbarrow/`: floor site への猫車搬送
 - `src/systems/familiar_ai/decide/task_management/policy/floor.rs`: タスク割り当てポリシー
+- `src/systems/familiar_ai/decide/task_management/policy/haul/`: floor request の搬送元解決・割り当て
+- `src/systems/visual/floor_construction.rs`: タイル色・配筋マーカーの可視化
+- `src/interface/selection/floor_place.rs`: ドラッグ配置と重複防止
 - `src/systems/spatial/floor_construction.rs`: Spatial grid
 - `src/plugins/logic.rs`: システム登録
 
