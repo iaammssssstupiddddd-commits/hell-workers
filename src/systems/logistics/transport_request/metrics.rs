@@ -69,6 +69,7 @@ impl TransportRequestKind {
         match self {
             Self::DepositToStockpile => "DepositToStockpile",
             Self::DeliverToBlueprint => "DeliverToBlueprint",
+            Self::DeliverToFloorConstruction => "DeliverToFloorConstruction",
             Self::DeliverToMixerSolid => "DeliverToMixerSolid",
             Self::DeliverWaterToMixer => "DeliverWaterToMixer",
             Self::GatherWaterToTank => "GatherWaterToTank",

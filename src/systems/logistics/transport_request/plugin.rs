@@ -5,6 +5,7 @@ use super::{
 use super::producer::{
     blueprint::blueprint_auto_haul_system, bucket::bucket_auto_haul_system,
     consolidation::stockpile_consolidation_producer_system,
+    floor_construction::floor_construction_auto_haul_system,
     mixer::mud_mixer_auto_haul_system, tank_water_request::tank_water_request_system,
     task_area::task_area_auto_haul_system, wheelbarrow::wheelbarrow_auto_haul_system,
 };
@@ -72,6 +73,7 @@ impl Plugin for TransportRequestPlugin {
                 (
                     blueprint_auto_haul_system,
                     bucket_auto_haul_system,
+                    floor_construction_auto_haul_system,
                     mud_mixer_auto_haul_system,
                     tank_water_request_system,
                     task_area_auto_haul_system,
