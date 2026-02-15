@@ -143,13 +143,13 @@ pub const LAZINESS_THRESHOLD_HIGH: f32 = 0.8;
 pub const LAZINESS_THRESHOLD_MID: f32 = 0.5;
 /// 集会エリアへの到着判定半径
 pub const GATHERING_ARRIVAL_RADIUS_BASE: f32 = 5.0; // TILE_SIZE 倍 (この範囲に入れば集会参加とみなす)
-pub const GATHERING_KEEP_DISTANCE_MIN: f32 = 2.0; // 中心から最低限離れる距離
-pub const GATHERING_KEEP_DISTANCE_TARGET_MIN: f32 = 2.5; // 移動先の最小距離 (バッファ込)
+pub const GATHERING_KEEP_DISTANCE_MIN: f32 = 3.0; // 中心から最低限離れる距離（オブジェクトサイズ1.5タイル+バッファ）
+pub const GATHERING_KEEP_DISTANCE_TARGET_MIN: f32 = 3.0; // 移動先の最小距離 (バッファ込)
 pub const GATHERING_KEEP_DISTANCE_TARGET_MAX: f32 = 4.5; // 移動先の最大距離
 
 /// 集会中の行動変化間隔 (最小/最大)
-pub const GATHERING_BEHAVIOR_DURATION_MIN: f32 = 60.0;
-pub const GATHERING_BEHAVIOR_DURATION_MAX: f32 = 90.0;
+pub const GATHERING_BEHAVIOR_DURATION_MIN: f32 = 10.0;
+pub const GATHERING_BEHAVIOR_DURATION_MAX: f32 = 20.0;
 
 /// 怠惰行動の持続時間 (最小/最大)
 pub const IDLE_DURATION_SLEEP_MIN: f32 = 5.0;

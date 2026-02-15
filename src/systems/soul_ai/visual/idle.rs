@@ -89,10 +89,13 @@ pub fn idle_visual_system(
                         match idle.gathering_behavior {
                             GatheringBehavior::Wandering => {
                                 transform.rotation = Quat::IDENTITY;
-                                let pulse_speed = 0.5;
+                                // パルスアニメーションで動いている感じを出す
+                                let pulse_speed = 1.5;
                                 let scale_offset =
-                                    (idle.total_idle_time * pulse_speed).sin() * 0.03 + 1.0;
+                                    (idle.total_idle_time * pulse_speed).sin() * 0.05 + 1.0;
                                 transform.scale = Vec3::splat(scale_offset);
+                                // 少し明るい色にしてうろつき中であることを示す
+                                sprite.color = Color::srgba(0.9, 0.8, 1.0, 0.85);
                             }
                             GatheringBehavior::Sleeping => {
                                 transform.rotation =
@@ -107,15 +110,19 @@ pub fn idle_visual_system(
                             }
                             GatheringBehavior::Standing => {
                                 transform.rotation = Quat::IDENTITY;
-                                let breath = (idle.total_idle_time * 0.2).sin() * 0.01 + 1.0;
+                                // 呼吸アニメーションを少し大きく（3%）
+                                let breath = (idle.total_idle_time * 0.4).sin() * 0.03 + 1.0;
                                 transform.scale = Vec3::splat(breath);
                             }
                             GatheringBehavior::Dancing => {
-                                let sway_angle = (idle.total_idle_time * 3.0).sin() * 0.15;
+                                // 揺れを大きく（±0.3ラジアン ≈ ±17度）、速く（5倍速）
+                                let sway_angle = (idle.total_idle_time * 5.0).sin() * 0.3;
                                 transform.rotation = Quat::from_rotation_z(sway_angle);
-                                let bounce = (idle.total_idle_time * 4.0).sin() * 0.05 + 1.0;
+                                // バウンスを大きく（15%）、速く（6倍速）
+                                let bounce = (idle.total_idle_time * 6.0).sin() * 0.15 + 1.0;
                                 transform.scale = Vec3::new(1.0, bounce, 1.0);
-                                sprite.color = Color::srgba(1.0, 0.8, 1.0, 0.8);
+                                // 明るいピンク色で目立たせる
+                                sprite.color = Color::srgba(1.0, 0.7, 1.0, 1.0);
                             }
                         }
                     }
@@ -126,7 +133,11 @@ pub fn idle_visual_system(
             }
         }
 
-        if soul.motivation > 0.5 {
+        // やる気が高い場合は視覚効果を上書きするが、集会中とタスク中は除外
+        if soul.motivation > 0.5
+            && !matches!(idle.behavior, IdleBehavior::Gathering | IdleBehavior::ExhaustedGathering)
+            && matches!(task, AssignedTask::None)
+        {
             sprite.color = Color::srgb(1.0, 1.0, 0.8);
             transform.rotation = Quat::IDENTITY;
             transform.scale = Vec3::ONE;

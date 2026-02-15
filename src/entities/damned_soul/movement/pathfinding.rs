@@ -108,6 +108,14 @@ pub fn pathfinding_system(
         if start_grid == goal_grid {
             path.waypoints = vec![destination.0];
             path.current_index = 0;
+            // デバッグ：集会中のsoulで特定位置付近の場合
+            if matches!(idle.behavior, IdleBehavior::Gathering) && current_pos.x.abs() < 150.0 && current_pos.y.abs() < 250.0 {
+                let dist = (destination.0 - current_pos).length();
+                info!(
+                    "PATHFIND: {:?} same grid - pos: {:?}, dest: {:?}, dist: {:.1}",
+                    entity, current_pos, destination.0, dist
+                );
+            }
             continue;
         }
 
@@ -126,6 +134,13 @@ pub fn pathfinding_system(
             );
             pathfinding::find_path_to_adjacent(&*world_map, &mut *pf_context, start_grid, goal_grid)
         }) {
+            // デバッグ：集会中のsoulで特定位置付近の場合
+            if matches!(idle.behavior, IdleBehavior::Gathering) && current_pos.x.abs() < 150.0 && current_pos.y.abs() < 250.0 {
+                info!(
+                    "PATHFIND: {:?} found path - waypoints: {}, from {:?} to {:?}",
+                    entity, grid_path.len(), start_grid, goal_grid
+                );
+            }
             path.waypoints = grid_path
                 .iter()
                 .map(|&(x, y)| WorldMap::grid_to_world(x, y))
@@ -134,6 +149,13 @@ pub fn pathfinding_system(
             debug!("PATH: Soul {:?} found new path", entity);
         } else {
             debug!("PATH: Soul {:?} failed to find path", entity);
+            // デバッグ：集会中のsoulで特定位置付近の場合
+            if matches!(idle.behavior, IdleBehavior::Gathering) && current_pos.x.abs() < 150.0 && current_pos.y.abs() < 250.0 {
+                warn!(
+                    "PATHFIND: {:?} FAILED to find path - from grid {:?} to grid {:?}, dest: {:?}",
+                    entity, start_grid, goal_grid, destination.0
+                );
+            }
             path.waypoints.clear();
 
             // タスク実行中なら放棄
