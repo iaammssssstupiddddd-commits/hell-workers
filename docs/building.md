@@ -188,7 +188,157 @@ flowchart TD
     - ゲーム開始時に1棟が初期配置され、猫車不足による初期停滞を防止します。
 
 
-## 9. 関連ファイル
+## 9. Floor Construction System (エリア型床建設)
+
+**※ 実装状況: Phase 8/12 完了（67%）- 基本機能実装済み、ビジュアル・キャンセル未実装**
+
+従来の Blueprint システム（単一タイル配置）とは異なる、**エリア指定型の床建設システム**です。ドラッグ操作で矩形エリアを指定し、複数タイルを一括で建設します。
+
+### 9.1 基本仕様
+
+- **配置方法**: ドラッグ&ドロップで矩形エリアを指定（最大 10×10 タイル）
+- **建設フェーズ**: 2段階の建設プロセス
+  1. **Reinforcing Phase**: 骨（2個/タイル）を使って補強
+  2. **Pouring Phase**: 泥（1個/タイル）を注いで完成
+- **資材コスト**: 骨 × 2 + Stasis Mud × 1 per tile
+- **キャンセル**: エリア全体を一括キャンセル（部分キャンセル不可）
+
+### 9.2 エンティティ構造
+
+```
+FloorConstructionSite (親エンティティ)
+  ├─ phase: FloorConstructionPhase (Reinforcing | Pouring)
+  ├─ area_bounds: TaskArea (エリア範囲)
+  ├─ material_center: Vec2 (資材配送の集約地点)
+  ├─ tiles_total, tiles_reinforced, tiles_poured
+  └─ children: Vec<FloorTileBlueprint>
+
+FloorTileBlueprint (子エンティティ、タイルごと)
+  ├─ parent_site: Entity
+  ├─ grid_pos: (i32, i32)
+  ├─ state: FloorTileState
+  └─ bones_delivered, mud_delivered
+```
+
+### 9.3 フェーズフロー
+
+```mermaid
+flowchart TD
+    A[エリア作成] --> B[Reinforcing Phase]
+    B --> C[骨を material_center へ配送]
+    C --> D[ワーカーが各タイルを補強]
+    D --> E{全タイル補強完了?}
+    E -->|No| C
+    E -->|Yes| F[Phase Transition]
+    F --> G[Pouring Phase]
+    G --> H[泥を material_center へ配送]
+    H --> I[ワーカーが各タイルに泥を注ぐ]
+    I --> J{全タイル注ぎ完了?}
+    J -->|No| H
+    J -->|Yes| K[Completion]
+    K --> L[Floor Building 生成]
+    L --> M[Site と Tile を despawn]
+```
+
+### 9.4 タイル状態 (FloorTileState)
+
+| 状態 | 説明 |
+|:---|:---|
+| `WaitingBones` | 骨の配送待ち |
+| `ReinforcingReady` | 骨が届き、補強作業可能 |
+| `Reinforcing { progress }` | ワーカーが補強作業中 |
+| `ReinforcedComplete` | 補強完了、phase transition 待ち |
+| `WaitingMud` | 泥の配送待ち（Pouring phase 移行後） |
+| `PouringReady` | 泥が届き、注ぎ作業可能 |
+| `Pouring { progress }` | ワーカーが注ぎ作業中 |
+| `Complete` | 建設完了 |
+
+### 9.5 資材配送システム
+
+**TransportRequest による自動配送**:
+- `floor_construction_auto_haul_system` が Site ごとに必要資材を計算
+- TransportRequest エンティティを生成（`TransportRequestKind::DeliverToFloorConstruction`）
+- 資材は `material_center` 位置に集約配送される
+- Priority: 10 (Blueprint と同等の高優先度)
+
+**Phase に応じた資材**:
+- **Reinforcing Phase**: 骨（Bone）を配送（猫車不要）
+- **Pouring Phase**: 泥（StasisMud）を配送（猫車必須）
+
+### 9.6 タスク割り当て
+
+**Designation の自動付与**:
+- `floor_tile_designation_system` が各タイルの state を監視
+- `ReinforcingReady` → `WorkType::ReinforceFloorTile` の Designation を付与
+- `PouringReady` → `WorkType::PourFloorTile` の Designation を付与
+- TaskSlots: 1（1タイルに1ワーカー）
+
+**タスク実行**:
+- **ReinforceFloorTile**: `reinforce_floor.rs`
+  1. `GoingToMaterialCenter`: Site の material_center へ移動
+  2. `PickingUpBones`: 骨2個の存在を確認
+  3. `GoingToTile`: タイル位置へ移動
+  4. `Reinforcing`: 作業実行（約3秒）、完了時に骨を消費
+  5. `Done`: タスク完了、Designation 解放
+
+- **PourFloorTile**: `pour_floor.rs`（Phase 8 で実装予定）
+  1. `GoingToMaterialCenter`: Site の material_center へ移動
+  2. `PickingUpMud`: 泥1個の存在を確認
+  3. `GoingToTile`: タイル位置へ移動
+  4. `Pouring`: 作業実行（約2秒）、完了時に泥を消費
+  5. `Done`: タスク完了、Designation 解放
+
+### 9.7 Phase Transition System
+
+**Reinforcing → Pouring の移行**:
+- `floor_construction_phase_transition_system` が実行
+- 条件: `site.tiles_reinforced == site.tiles_total` かつ全タイルが `ReinforcedComplete`
+- 処理:
+  1. `site.phase` を `Pouring` に更新
+  2. 全タイルの state を `WaitingMud` に更新
+  3. 既存の Designation を削除（泥配送後に再付与される）
+
+### 9.8 Completion System
+
+**建設完了処理**:
+- `floor_construction_completion_system` が実行
+- 条件: 全タイルが `Complete` 状態
+- 処理:
+  1. 各タイルに `Floor` Building をスパウン
+  2. WorldMap の walkability を更新（障害物解除）
+  3. FloorTileBlueprint エンティティを despawn
+  4. FloorConstructionSite エンティティを despawn
+
+### 9.9 実装状況
+
+**完了済み**:
+- ✅ Phase 1: Core components & data structures
+- ✅ Phase 2: Drag-drop UI placement
+- ✅ Phase 3: Material auto-haul system
+- ✅ Phase 4: Task execution handlers (reinforce)
+- ✅ Phase 5: Familiar AI task assignment
+- ✅ Phase 6: Phase transition system
+- ✅ Phase 7: Completion system
+- ✅ Phase 10: Spatial grid integration
+
+**未実装**:
+- ⏳ Phase 8: Task execution (pour) - 注ぎタスクの実行ハンドラー
+- ⏳ Phase 9: Cancellation system - エリア全体のキャンセル処理
+- ⏳ Phase 11: Visual feedback - タイル状態の視覚表示
+- ⏳ Phase 12: Constants & final integration - 定数定義と最終調整
+
+### 9.10 関連ファイル (Floor Construction)
+
+- `src/systems/jobs/floor_construction/components.rs`: コンポーネント定義
+- `src/systems/jobs/floor_construction/phase_transition.rs`: Phase 移行システム
+- `src/systems/jobs/floor_construction/completion.rs`: 完了処理
+- `src/systems/logistics/transport_request/producer/floor_construction.rs`: 資材配送・Designation付与
+- `src/systems/soul_ai/execute/task_execution/reinforce_floor.rs`: 補強タスク実行
+- `src/systems/familiar_ai/decide/task_management/policy/floor.rs`: タスク割り当てポリシー
+- `src/systems/spatial/floor_construction.rs`: Spatial grid
+- `src/plugins/logic.rs`: システム登録
+
+## 10. 関連ファイル (Blueprint System)
 
 - `src/systems/jobs.rs`: `Blueprint`, `Building`, 建設完了ロジック
 - `src/systems/visual/blueprint/mod.rs`: ビジュアルフィードバック（統括モジュール）
