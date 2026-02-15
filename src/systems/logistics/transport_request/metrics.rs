@@ -74,6 +74,7 @@ impl TransportRequestKind {
             Self::DeliverWaterToMixer => "DeliverWaterToMixer",
             Self::GatherWaterToTank => "GatherWaterToTank",
             Self::ReturnBucket => "ReturnBucket",
+            Self::ReturnWheelbarrow => "ReturnWheelbarrow",
             Self::BatchWheelbarrow => "BatchWheelbarrow",
             Self::ConsolidateStockpile => "ConsolidateStockpile",
         }

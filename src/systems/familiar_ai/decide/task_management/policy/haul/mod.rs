@@ -12,11 +12,11 @@ use bevy::prelude::*;
 
 use super::super::builders::{
     issue_collect_bone_with_wheelbarrow_to_floor, issue_haul_to_mixer,
-    issue_haul_to_stockpile_with_source, issue_haul_with_wheelbarrow,
+    issue_haul_to_stockpile_with_source, issue_haul_with_wheelbarrow, issue_return_wheelbarrow,
 };
 use super::super::validator::{
     find_bucket_return_assignment, resolve_haul_to_floor_construction_inputs,
-    resolve_haul_to_mixer_inputs, resolve_return_bucket_tank,
+    resolve_haul_to_mixer_inputs, resolve_return_bucket_tank, resolve_return_wheelbarrow,
 };
 
 fn mixer_can_accept_item(
@@ -307,6 +307,22 @@ pub fn assign_haul(
             source_item,
             destination_stockpile,
             source_pos,
+            already_commanded,
+            ctx,
+            queries,
+            shadow,
+        );
+        return true;
+    }
+
+    if let Some((wheelbarrow, parking_anchor, wheelbarrow_pos)) =
+        resolve_return_wheelbarrow(ctx.task_entity, queries)
+    {
+        issue_return_wheelbarrow(
+            wheelbarrow,
+            parking_anchor,
+            wheelbarrow_pos,
+            task_pos,
             already_commanded,
             ctx,
             queries,

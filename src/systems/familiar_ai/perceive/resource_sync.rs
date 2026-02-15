@@ -224,7 +224,9 @@ pub fn sync_reservations_system(
             }
             // ReturnBucket は返却先 BucketStorage を割り当て時に確定するため、
             // pending request 段階では destination 予約を積まない。
-            TransportRequestKind::ReturnBucket | TransportRequestKind::BatchWheelbarrow => {}
+            TransportRequestKind::ReturnBucket
+            | TransportRequestKind::ReturnWheelbarrow
+            | TransportRequestKind::BatchWheelbarrow => {}
         }
     }
 
