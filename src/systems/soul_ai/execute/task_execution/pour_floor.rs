@@ -3,7 +3,6 @@
 use crate::relationships::WorkingOn;
 use crate::constants::{FLOOR_MUD_PER_TILE, FLOOR_POUR_DURATION_SECS};
 use crate::systems::jobs::floor_construction::FloorTileState;
-use crate::systems::logistics::ResourceType;
 use crate::systems::soul_ai::execute::task_execution::{
     common::*,
     context::TaskExecutionContext,
@@ -69,19 +68,17 @@ pub fn handle_pour_floor_task(
         }
 
         PourFloorPhase::PickingUpMud => {
-            // Find nearby mud at material center
-            let nearby_mud: Vec<Entity> = ctx
-                .queries
-                .resource_items
-                .iter()
-                .filter(|(_, item, _)| item.0 == ResourceType::StasisMud)
-                .filter(|(_, _, stored_opt)| stored_opt.is_none()) // Not stored
-                .map(|(entity, _, _)| entity)
-                .take(FLOOR_MUD_PER_TILE as usize)
-                .collect();
+            let Ok(tile_blueprint) = ctx.queries.storage.floor_tiles.get(tile_entity) else {
+                info!(
+                    "POUR_FLOOR: Cancelled for {:?} - Tile {:?} gone",
+                    ctx.soul_entity, tile_entity
+                );
+                clear_task_and_path(ctx.task, ctx.path);
+                commands.entity(ctx.soul_entity).remove::<WorkingOn>();
+                return;
+            };
 
-            if nearby_mud.len() >= FLOOR_MUD_PER_TILE as usize {
-                // Transition to going to tile
+            if matches!(tile_blueprint.state, FloorTileState::PouringReady) {
                 *ctx.task = AssignedTask::PourFloorTile(PourFloorTileData {
                     tile: tile_entity,
                     site: site_entity,
@@ -89,14 +86,8 @@ pub fn handle_pour_floor_task(
                 });
                 ctx.path.waypoints.clear();
                 info!(
-                    "POUR_FLOOR: Soul {:?} found mud, heading to tile {:?}",
+                    "POUR_FLOOR: Soul {:?} material ready, heading to tile {:?}",
                     ctx.soul_entity, tile_entity
-                );
-            } else {
-                // Not enough mud, wait
-                info!(
-                    "POUR_FLOOR: Soul {:?} waiting for mud at material center (found {}/{})",
-                    ctx.soul_entity, nearby_mud.len(), FLOOR_MUD_PER_TILE
                 );
             }
         }
@@ -164,46 +155,9 @@ pub fn handle_pour_floor_task(
             };
 
             if new_progress >= 100 {
-                // Pouring complete
-                // Consume mud from nearby material center
-                let site_pos = if let Ok((site_transform, _, _)) =
-                    ctx.queries.storage.floor_sites.get(site_entity)
-                {
-                    site_transform.translation.truncate()
-                } else {
-                    Vec2::ZERO
-                };
-
-                let nearby_mud: Vec<Entity> = ctx
-                    .queries
-                    .resource_items
-                    .iter()
-                    .filter(|(_entity, item, stored_opt)| {
-                        item.0 == ResourceType::StasisMud && stored_opt.is_none()
-                    })
-                    .filter(|(entity, _, _)| {
-                        if let Ok((_mud_entity, _, _)) = ctx.queries.resource_items.get(*entity) {
-                            // Check proximity to material center
-                            if let Ok((t, _, _, _, _, _, _)) = ctx.queries.designation.targets.get(*entity) {
-                                t.translation.truncate().distance(site_pos) < 64.0
-                            } else {
-                                false
-                            }
-                        } else {
-                            false
-                        }
-                    })
-                    .map(|(entity, _, _)| entity)
-                    .take(FLOOR_MUD_PER_TILE as usize)
-                    .collect();
-
-                // Despawn consumed mud
-                for mud_entity in nearby_mud.iter().take(FLOOR_MUD_PER_TILE as usize) {
-                    commands.entity(*mud_entity).despawn();
-                }
-
                 // Update tile state
-                tile_blueprint.mud_delivered += FLOOR_MUD_PER_TILE;
+                tile_blueprint.mud_delivered =
+                    tile_blueprint.mud_delivered.max(FLOOR_MUD_PER_TILE);
                 tile_blueprint.state = FloorTileState::Complete;
 
                 // Update site counter

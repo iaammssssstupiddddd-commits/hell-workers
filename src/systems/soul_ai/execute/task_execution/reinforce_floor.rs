@@ -3,7 +3,6 @@
 use crate::relationships::WorkingOn;
 use crate::constants::{FLOOR_BONES_PER_TILE, FLOOR_REINFORCE_DURATION_SECS};
 use crate::systems::jobs::floor_construction::FloorTileState;
-use crate::systems::logistics::ResourceType;
 use crate::systems::soul_ai::execute::task_execution::{
     common::*,
     context::TaskExecutionContext,
@@ -71,19 +70,17 @@ pub fn handle_reinforce_floor_task(
         }
 
         ReinforceFloorPhase::PickingUpBones => {
-            // Find nearby bones at material center
-            let nearby_bones: Vec<Entity> = ctx
-                .queries
-                .resource_items
-                .iter()
-                .filter(|(_, item, _)| item.0 == ResourceType::Bone)
-                .filter(|(_, _, stored_opt)| stored_opt.is_none()) // Not stored
-                .map(|(entity, _, _)| entity)
-                .take(FLOOR_BONES_PER_TILE as usize)
-                .collect();
+            let Ok(tile_blueprint) = ctx.queries.storage.floor_tiles.get(tile_entity) else {
+                info!(
+                    "REINFORCE_FLOOR: Cancelled for {:?} - Tile {:?} gone",
+                    ctx.soul_entity, tile_entity
+                );
+                clear_task_and_path(ctx.task, ctx.path);
+                commands.entity(ctx.soul_entity).remove::<WorkingOn>();
+                return;
+            };
 
-            if nearby_bones.len() >= FLOOR_BONES_PER_TILE as usize {
-                // Transition to going to tile
+            if matches!(tile_blueprint.state, FloorTileState::ReinforcingReady) {
                 *ctx.task = AssignedTask::ReinforceFloorTile(
                     crate::systems::soul_ai::execute::task_execution::types::ReinforceFloorTileData {
                         tile: tile_entity,
@@ -93,14 +90,8 @@ pub fn handle_reinforce_floor_task(
                 );
                 ctx.path.waypoints.clear();
                 info!(
-                    "REINFORCE_FLOOR: Soul {:?} found bones, heading to tile {:?}",
+                    "REINFORCE_FLOOR: Soul {:?} material ready, heading to tile {:?}",
                     ctx.soul_entity, tile_entity
-                );
-            } else {
-                // Not enough bones, wait
-                info!(
-                    "REINFORCE_FLOOR: Soul {:?} waiting for bones at material center (found {}/{})",
-                    ctx.soul_entity, nearby_bones.len(), FLOOR_BONES_PER_TILE
                 );
             }
         }
@@ -170,46 +161,9 @@ pub fn handle_reinforce_floor_task(
             };
 
             if new_progress >= 100 {
-                // Reinforcing complete
-                // Consume bones from nearby material center
-                let site_pos = if let Ok((site_transform, _, _)) =
-                    ctx.queries.storage.floor_sites.get(site_entity)
-                {
-                    site_transform.translation.truncate()
-                } else {
-                    Vec2::ZERO
-                };
-
-                let nearby_bones: Vec<Entity> = ctx
-                    .queries
-                    .resource_items
-                    .iter()
-                    .filter(|(_entity, item, stored_opt)| {
-                        item.0 == ResourceType::Bone && stored_opt.is_none()
-                    })
-                    .filter(|(entity, _, _)| {
-                        if let Ok((_bone_entity, _, _)) = ctx.queries.resource_items.get(*entity) {
-                            // Check proximity to material center
-                            if let Ok((t, _, _, _, _, _, _)) = ctx.queries.designation.targets.get(*entity) {
-                                t.translation.truncate().distance(site_pos) < 64.0
-                            } else {
-                                false
-                            }
-                        } else {
-                            false
-                        }
-                    })
-                    .map(|(entity, _, _)| entity)
-                    .take(FLOOR_BONES_PER_TILE as usize)
-                    .collect();
-
-                // Despawn consumed bones
-                for bone_entity in nearby_bones.iter().take(FLOOR_BONES_PER_TILE as usize) {
-                    commands.entity(*bone_entity).despawn();
-                }
-
                 // Update tile state
-                tile_blueprint.bones_delivered += FLOOR_BONES_PER_TILE;
+                tile_blueprint.bones_delivered =
+                    tile_blueprint.bones_delivered.max(FLOOR_BONES_PER_TILE);
                 tile_blueprint.state = FloorTileState::ReinforcedComplete;
 
                 // Update site counter

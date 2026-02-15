@@ -14,7 +14,8 @@ use super::super::builders::{
     issue_haul_to_mixer, issue_haul_to_stockpile_with_source, issue_haul_with_wheelbarrow,
 };
 use super::super::validator::{
-    find_bucket_return_assignment, resolve_haul_to_mixer_inputs, resolve_return_bucket_tank,
+    find_bucket_return_assignment, resolve_haul_to_floor_construction_inputs,
+    resolve_haul_to_mixer_inputs, resolve_return_bucket_tank,
 };
 
 fn mixer_can_accept_item(
@@ -130,6 +131,53 @@ fn assign_single_item_haul_to_mixer(
     true
 }
 
+fn assign_haul_to_floor_construction(
+    _task_pos: Vec2,
+    already_commanded: bool,
+    ctx: &AssignTaskContext<'_>,
+    queries: &mut crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
+    shadow: &mut ReservationShadow,
+) -> bool {
+    let Some((site_entity, resource_type)) =
+        resolve_haul_to_floor_construction_inputs(ctx.task_entity, queries)
+    else {
+        return false;
+    };
+
+    let site_pos = if let Ok((site_transform, _, _)) = queries.storage.floor_sites.get(site_entity) {
+        site_transform.translation.truncate()
+    } else {
+        debug!(
+            "ASSIGN: Floor request {:?} site {:?} not found",
+            ctx.task_entity, site_entity
+        );
+        return false;
+    };
+
+    // Floor construction requests deliver items onto the site material center.
+    // Reuse Haul task path and let execution drop the item near the site anchor.
+    let Some((source_item, source_pos)) =
+        source_selector::find_nearest_blueprint_source_item(resource_type, site_pos, queries, shadow)
+    else {
+        debug!(
+            "ASSIGN: Floor request {:?} has no available {:?} source",
+            ctx.task_entity, resource_type
+        );
+        return false;
+    };
+
+    issue_haul_to_stockpile_with_source(
+        source_item,
+        site_entity,
+        source_pos,
+        already_commanded,
+        ctx,
+        queries,
+        shadow,
+    );
+    true
+}
+
 pub fn assign_haul(
     task_pos: Vec2,
     already_commanded: bool,
@@ -160,6 +208,10 @@ pub fn assign_haul(
             queries,
             shadow,
         );
+        return true;
+    }
+
+    if assign_haul_to_floor_construction(task_pos, already_commanded, ctx, queries, shadow) {
         return true;
     }
 

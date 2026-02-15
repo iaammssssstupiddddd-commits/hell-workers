@@ -5,7 +5,8 @@
 use bevy::prelude::*;
 
 use crate::constants::{
-    FLOOR_BONES_PER_TILE, FLOOR_CONSTRUCTION_PRIORITY, FLOOR_MUD_PER_TILE, WHEELBARROW_CAPACITY,
+    FLOOR_BONES_PER_TILE, FLOOR_CONSTRUCTION_PRIORITY, FLOOR_MUD_PER_TILE, TILE_SIZE,
+    WHEELBARROW_CAPACITY,
 };
 use crate::entities::familiar::{ActiveCommand, FamiliarCommand};
 use crate::relationships::TaskWorkers;
@@ -226,6 +227,101 @@ pub fn floor_construction_auto_haul_system(
             TransportRequestState::Pending,
             TransportPolicy::default(),
         ));
+    }
+}
+
+/// Consumes delivered materials around each site and advances tiles to ready states.
+///
+/// `DeliverToFloorConstruction` requests drop items near `site.material_center`.
+/// This system binds those items to waiting tiles (by incrementing `*_delivered`) and
+/// despawns consumed items so each resource is counted exactly once.
+pub fn floor_material_delivery_sync_system(
+    mut commands: Commands,
+    q_sites: Query<(Entity, &FloorConstructionSite)>,
+    mut q_tiles: Query<&mut FloorTileBlueprint>,
+    q_resources: Query<
+        (
+            Entity,
+            &Transform,
+            &Visibility,
+            &crate::systems::logistics::ResourceItem,
+            Option<&crate::relationships::StoredIn>,
+        ),
+    >,
+) {
+    let pickup_radius = TILE_SIZE * 2.0;
+    let pickup_radius_sq = pickup_radius * pickup_radius;
+
+    for (site_entity, site) in q_sites.iter() {
+        let (target_resource, required_amount, waiting_state, ready_state) = match site.phase {
+            FloorConstructionPhase::Reinforcing => (
+                ResourceType::Bone,
+                FLOOR_BONES_PER_TILE,
+                FloorTileState::WaitingBones,
+                FloorTileState::ReinforcingReady,
+            ),
+            FloorConstructionPhase::Pouring => (
+                ResourceType::StasisMud,
+                FLOOR_MUD_PER_TILE,
+                FloorTileState::WaitingMud,
+                FloorTileState::PouringReady,
+            ),
+        };
+
+        let mut nearby_resources: Vec<Entity> = q_resources
+            .iter()
+            .filter(|(_, transform, visibility, resource_item, stored_in_opt)| {
+                *visibility != &Visibility::Hidden
+                    && stored_in_opt.is_none()
+                    && resource_item.0 == target_resource
+                    && transform
+                        .translation
+                        .truncate()
+                        .distance_squared(site.material_center)
+                        <= pickup_radius_sq
+            })
+            .map(|(entity, ..)| entity)
+            .collect();
+
+        if nearby_resources.is_empty() {
+            continue;
+        }
+
+        let mut consumed = 0u32;
+        for mut tile in q_tiles.iter_mut().filter(|tile| tile.parent_site == site_entity) {
+            if tile.state != waiting_state {
+                continue;
+            }
+
+            let delivered = match site.phase {
+                FloorConstructionPhase::Reinforcing => &mut tile.bones_delivered,
+                FloorConstructionPhase::Pouring => &mut tile.mud_delivered,
+            };
+
+            while *delivered < required_amount {
+                let Some(resource_entity) = nearby_resources.pop() else {
+                    break;
+                };
+                commands.entity(resource_entity).try_despawn();
+                *delivered += 1;
+                consumed += 1;
+            }
+
+            if *delivered >= required_amount {
+                tile.state = ready_state;
+            }
+
+            if nearby_resources.is_empty() {
+                break;
+            }
+        }
+
+        if consumed > 0 {
+            debug!(
+                "FLOOR_MATERIAL_SYNC: site {:?} consumed {} {:?}",
+                site_entity, consumed, target_resource
+            );
+        }
     }
 }
 
