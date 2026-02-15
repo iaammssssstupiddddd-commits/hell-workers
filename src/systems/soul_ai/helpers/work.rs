@@ -148,10 +148,6 @@ pub fn unassign_task<'w, 's, Q: TaskReservationAccess<'w, 's>>(
                 commands
                     .entity(item_entity)
                     .remove::<crate::relationships::StoredIn>();
-                // ストックパイル情報も削除（地面に落ちるため、確実に非備蓄状態にする）
-                commands
-                    .entity(item_entity)
-                    .remove::<crate::systems::logistics::InStockpile>();
 
                 // 搬送予約リレーションも削除
                 commands

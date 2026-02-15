@@ -123,7 +123,7 @@ fn pick_representative_resource_type_per_group(
             Without<TaskWorkers>,
             Without<crate::systems::logistics::ReservedForTask>,
             Without<ManualHaulPinnedSource>,
-            Without<crate::systems::logistics::InStockpile>,
+            Without<crate::relationships::StoredIn>,
         ),
     >,
 ) -> (Vec<Option<ResourceType>>, u32, u32) {
@@ -212,7 +212,7 @@ pub fn task_area_auto_haul_system(
             Without<TaskWorkers>,
             Without<crate::systems::logistics::ReservedForTask>,
             Without<ManualHaulPinnedSource>,
-            Without<crate::systems::logistics::InStockpile>,
+            Without<crate::relationships::StoredIn>,
         ),
     >,
     mut metrics: ResMut<TransportRequestMetrics>,
