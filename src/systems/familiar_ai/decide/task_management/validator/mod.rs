@@ -9,7 +9,7 @@ pub use resolver::{
     resolve_consolidation_inputs, resolve_gather_water_inputs, resolve_haul_to_blueprint_inputs,
     resolve_haul_to_floor_construction_inputs, resolve_haul_to_mixer_inputs,
     resolve_haul_to_stockpile_inputs,
-    resolve_haul_water_to_mixer_inputs, resolve_return_bucket_tank,
+    resolve_haul_water_to_mixer_inputs, resolve_return_bucket_tank, resolve_return_wheelbarrow,
 };
 pub use wheelbarrow::{
     compute_centroid, find_nearest_wheelbarrow, resolve_wheelbarrow_batch_for_stockpile,

@@ -9,7 +9,7 @@ use crate::systems::soul_ai::execute::task_execution::{
     common::clear_task_and_path,
     context::TaskExecutionContext,
     transport_common::{reservation, wheelbarrow as wheelbarrow_common},
-    types::{AssignedTask, HaulWithWheelbarrowData, HaulWithWheelbarrowPhase},
+    types::HaulWithWheelbarrowData,
 };
 use super::super::cancel;
 use bevy::prelude::*;
@@ -228,31 +228,31 @@ pub fn handle(
         ctx.soul_entity, unloaded_count
     );
 
+    reservation::release_source(ctx, data.wheelbarrow, 1);
+    // unloading 内で despawn 済みの積載物へ追加入力しないよう、loaded cleanup はスキップする。
+    let parking_anchor = ctx
+        .queries
+        .designation
+        .belongs
+        .get(data.wheelbarrow)
+        .ok()
+        .map(|b| b.0);
+    wheelbarrow_common::park_wheelbarrow_entity(commands, data.wheelbarrow, parking_anchor, soul_pos);
+    ctx.inventory.0 = None;
+    commands
+        .entity(ctx.soul_entity)
+        .remove::<crate::relationships::WorkingOn>();
+    clear_task_and_path(ctx.task, ctx.path);
+
     if has_pending_wheelbarrow_task(ctx) {
-        reservation::release_source(ctx, data.wheelbarrow, 1);
-        // unloading 内で despawn 済みの積載物へ追加入力しないよう、loaded cleanup はスキップする。
-        let parking_anchor = ctx
-            .queries
-            .designation
-            .belongs
-            .get(data.wheelbarrow)
-            .ok()
-            .map(|b| b.0);
-        wheelbarrow_common::park_wheelbarrow_entity(commands, data.wheelbarrow, parking_anchor, soul_pos);
-        ctx.inventory.0 = None;
-        commands
-            .entity(ctx.soul_entity)
-            .remove::<crate::relationships::WorkingOn>();
-        clear_task_and_path(ctx.task, ctx.path);
         info!(
             "WB_HAUL: Soul {:?} kept wheelbarrow {:?} for next assignment",
             ctx.soul_entity, data.wheelbarrow
         );
-        return;
+    } else {
+        info!(
+            "WB_HAUL: Soul {:?} parked wheelbarrow {:?} and waits low-priority return",
+            ctx.soul_entity, data.wheelbarrow
+        );
     }
-
-    *ctx.task = AssignedTask::HaulWithWheelbarrow(HaulWithWheelbarrowData {
-        phase: HaulWithWheelbarrowPhase::ReturningWheelbarrow,
-        ..data
-    });
 }
