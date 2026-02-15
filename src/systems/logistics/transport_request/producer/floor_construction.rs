@@ -4,7 +4,9 @@
 
 use bevy::prelude::*;
 
-use crate::constants::WHEELBARROW_CAPACITY;
+use crate::constants::{
+    FLOOR_BONES_PER_TILE, FLOOR_CONSTRUCTION_PRIORITY, FLOOR_MUD_PER_TILE, WHEELBARROW_CAPACITY,
+};
 use crate::entities::familiar::{ActiveCommand, FamiliarCommand};
 use crate::relationships::TaskWorkers;
 use crate::systems::command::TaskArea;
@@ -19,10 +21,6 @@ use crate::systems::logistics::transport_request::{
 };
 use crate::systems::logistics::ResourceType;
 use crate::systems::spatial::FloorConstructionSpatialGrid;
-
-const FLOOR_BONES_PER_TILE: u32 = 2;
-const FLOOR_MUD_PER_TILE: u32 = 1;
-const FLOOR_CONSTRUCTION_PRIORITY: u32 = 10;
 
 /// Auto-haul system for floor construction materials
 pub fn floor_construction_auto_haul_system(

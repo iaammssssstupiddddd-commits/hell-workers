@@ -208,6 +208,23 @@ pub const ROCK_DROP_AMOUNT: u32 = 10;
 pub const BUCKET_CAPACITY: u32 = 5;
 
 // ============================================================
+// AI ロジック定数 - 床建築 (Floor Construction)
+// ============================================================
+
+/// 床建築の最大選択サイズ（タイル数）
+pub const FLOOR_MAX_AREA_SIZE: i32 = 10;
+/// 1 タイルあたりに必要な Bone 数
+pub const FLOOR_BONES_PER_TILE: u32 = 2;
+/// 1 タイルあたりに必要な StasisMud 数
+pub const FLOOR_MUD_PER_TILE: u32 = 1;
+/// 補強フェーズの所要時間（秒）
+pub const FLOOR_REINFORCE_DURATION_SECS: f32 = 3.0;
+/// 打設フェーズの所要時間（秒）
+pub const FLOOR_POUR_DURATION_SECS: f32 = 2.0;
+/// 床建築関連タスクの優先度
+pub const FLOOR_CONSTRUCTION_PRIORITY: u32 = 10;
+
+// ============================================================
 // AI ロジック定数 - 精製 (Refining)
 // ============================================================
 
