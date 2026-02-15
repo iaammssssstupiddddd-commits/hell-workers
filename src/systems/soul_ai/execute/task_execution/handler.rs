@@ -14,7 +14,7 @@ use bevy::prelude::*;
 use super::types::{
     AssignedTask, BuildData, CollectBoneData, CollectSandData, GatherData, GatherWaterData,
     HaulData, HaulToBlueprintData, HaulWaterToMixerData, HaulWithWheelbarrowData,
-    ReinforceFloorTileData, RefineData,
+    ReinforceFloorTileData, PourFloorTileData, RefineData,
 };
 
 /// タスクタイプごとの実行ロジックを表すトレイト
@@ -276,6 +276,28 @@ impl TaskHandler<ReinforceFloorTileData> for AssignedTask {
     }
 }
 
+impl TaskHandler<PourFloorTileData> for AssignedTask {
+    fn execute(
+        ctx: &mut TaskExecutionContext,
+        data: PourFloorTileData,
+        commands: &mut Commands,
+        _game_assets: &Res<GameAssets>,
+        time: &Res<Time>,
+        world_map: &Res<WorldMap>,
+        _breakdown_opt: Option<&StressBreakdown>,
+    ) {
+        super::pour_floor::handle_pour_floor_task(
+            ctx,
+            data.tile,
+            data.site,
+            data.phase,
+            commands,
+            time,
+            world_map,
+        );
+    }
+}
+
 /// Phase 4: タスクルーティングの共通ディスパッチ
 /// 標準ハンドラは TaskHandler 経由、HaulWithWheelbarrow は API 境界で特別扱い
 pub fn run_task_handler(
@@ -327,8 +349,8 @@ pub fn run_task_handler(
         AssignedTask::ReinforceFloorTile(data) => {
             AssignedTask::execute(ctx, data.clone(), commands, game_assets, time, world_map, breakdown_opt);
         }
-        AssignedTask::PourFloorTile(_data) => {
-            // TODO: Floor pouring execution (Phase 8)
+        AssignedTask::PourFloorTile(data) => {
+            AssignedTask::execute(ctx, data.clone(), commands, game_assets, time, world_map, breakdown_opt);
         }
         AssignedTask::None => {}
     }

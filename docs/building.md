@@ -188,9 +188,9 @@ flowchart TD
     - ゲーム開始時に1棟が初期配置され、猫車不足による初期停滞を防止します。
 
 
-## 9. Floor Construction System (エリア型床建設)
+### 9. 実装状況
 
-**※ 実装状況: Phase 8/12 完了（67%）- 基本機能実装済み、ビジュアル・キャンセル未実装**
+**※ 実装状況: Phase 9/12 完了（75%）- 基本機能実装済み、ビジュアル・キャンセル未実装**
 
 従来の Blueprint システム（単一タイル配置）とは異なる、**エリア指定型の床建設システム**です。ドラッグ操作で矩形エリアを指定し、複数タイルを一括で建設します。
 
@@ -319,10 +319,10 @@ flowchart TD
 - ✅ Phase 5: Familiar AI task assignment
 - ✅ Phase 6: Phase transition system
 - ✅ Phase 7: Completion system
+- ✅ Phase 8: Task execution (pour)
 - ✅ Phase 10: Spatial grid integration
 
 **未実装**:
-- ⏳ Phase 8: Task execution (pour) - 注ぎタスクの実行ハンドラー
 - ⏳ Phase 9: Cancellation system - エリア全体のキャンセル処理
 - ⏳ Phase 11: Visual feedback - タイル状態の視覚表示
 - ⏳ Phase 12: Constants & final integration - 定数定義と最終調整
