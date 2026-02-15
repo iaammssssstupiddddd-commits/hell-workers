@@ -20,6 +20,8 @@ pub fn work_type_label(wt: &WorkType) -> &'static str {
         WorkType::HaulWaterToMixer => "Water (Mixer)",
         WorkType::WheelbarrowHaul => "Wheelbarrow",
         WorkType::CollectBone => "Bone",
+        WorkType::ReinforceFloorTile => "Reinforce",
+        WorkType::PourFloorTile => "Pour",
     }
 }
 
@@ -41,6 +43,9 @@ pub fn get_work_type_icon(
         WorkType::CollectSand => (game_assets.icon_pick.clone(), theme.colors.gather_default),
         WorkType::CollectBone => (game_assets.icon_bone_small.clone(), theme.colors.gather_default),
         WorkType::Refine => (game_assets.icon_hammer.clone(), theme.colors.build),
+        WorkType::ReinforceFloorTile | WorkType::PourFloorTile => {
+            (game_assets.icon_hammer.clone(), theme.colors.build)
+        }
     }
 }
 
@@ -123,5 +128,7 @@ pub fn generate_task_description(
                 "Collect Bone".to_string()
             }
         }
+        WorkType::ReinforceFloorTile => "Reinforce Floor".to_string(),
+        WorkType::PourFloorTile => "Pour Floor".to_string(),
     }
 }

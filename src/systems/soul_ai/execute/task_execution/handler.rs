@@ -301,6 +301,12 @@ pub fn run_task_handler(
         AssignedTask::HaulWithWheelbarrow(data) => {
             execute_haul_with_wheelbarrow(ctx, data.clone(), commands, world_map, q_wheelbarrows);
         }
+        AssignedTask::ReinforceFloorTile(_data) => {
+            // TODO: Floor reinforcement execution (Phase 4)
+        }
+        AssignedTask::PourFloorTile(_data) => {
+            // TODO: Floor pouring execution (Phase 8)
+        }
         AssignedTask::None => {}
     }
 }

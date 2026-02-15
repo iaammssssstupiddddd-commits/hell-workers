@@ -65,6 +65,12 @@ pub(super) fn handle_pressed_action(
             zone_context,
             task_context,
         ),
+        MenuAction::SelectFloorPlace => super::mode::set_floor_place_mode(
+            next_play_mode,
+            build_context,
+            zone_context,
+            task_context,
+        ),
         MenuAction::SelectZone(kind) => super::mode::set_zone_mode(
             kind,
             next_play_mode,

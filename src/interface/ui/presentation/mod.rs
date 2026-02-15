@@ -164,6 +164,8 @@ pub(super) fn format_task_str(task: &AssignedTask) -> String {
         AssignedTask::HaulToMixer(data) => format!("HaulToMixer ({:?})", data.phase),
         AssignedTask::HaulWaterToMixer(data) => format!("HaulWaterToMixer ({:?})", data.phase),
         AssignedTask::HaulWithWheelbarrow(data) => format!("HaulWheelbarrow ({:?})", data.phase),
+        AssignedTask::ReinforceFloorTile(data) => format!("ReinforceFloor ({:?})", data.phase),
+        AssignedTask::PourFloorTile(data) => format!("PourFloor ({:?})", data.phase),
     }
 }
 
