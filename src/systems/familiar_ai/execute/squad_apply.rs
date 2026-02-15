@@ -2,7 +2,7 @@ use crate::entities::familiar::{Familiar, FamiliarVoice};
 use crate::events::{ReleaseReason, SquadManagementOperation, SquadManagementRequest};
 use crate::relationships::CommandedBy;
 use crate::systems::familiar_ai::FamiliarSoulQuery;
-use crate::systems::soul_ai::helpers::gathering::ParticipatingIn;
+use crate::relationships::ParticipatingIn;
 use crate::systems::visual::speech::components::{
     BubbleEmotion, BubblePriority, FamiliarBubble, SpeechBubble,
 };
@@ -35,11 +35,10 @@ pub fn apply_squad_management_requests_system(
                 let soul_entity = *soul_entity;
                 commands.entity(soul_entity).insert(CommandedBy(fam_entity));
 
-                if let Ok((_, _, _, _, _, _, _, _, _, Some(p))) = q_souls.get(soul_entity) {
+                if let Ok((_, _, _, _, _, _, _, _, _, Some(_p))) = q_souls.get(soul_entity) {
                     commands.entity(soul_entity).remove::<ParticipatingIn>();
                     commands.trigger(crate::events::OnGatheringLeft {
                         entity: soul_entity,
-                        spot_entity: p.0,
                     });
                 }
 

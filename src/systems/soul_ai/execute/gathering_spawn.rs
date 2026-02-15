@@ -4,6 +4,7 @@ use crate::assets::GameAssets;
 use crate::constants::*;
 use crate::entities::damned_soul::{DamnedSoul, IdleBehavior, IdleState};
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
+use crate::relationships::ParticipatingIn;
 use crate::systems::soul_ai::helpers::gathering::*;
 use crate::systems::spatial::{GatheringSpotSpatialGrid, SpatialGrid, SpatialGridOps};
 
@@ -105,7 +106,6 @@ pub(crate) fn spawn_gathering_spot(
 ) -> Entity {
     let spot = GatheringSpot {
         center,
-        participants: 0, // Observerによって加算される
         max_capacity: GATHERING_MAX_CAPACITY,
         grace_timer: GATHERING_GRACE_PERIOD,
         grace_active: true,

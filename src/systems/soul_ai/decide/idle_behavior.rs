@@ -55,7 +55,7 @@ pub fn idle_behavior_decision_system(
     time: Res<Time>,
     mut request_writer: MessageWriter<IdleBehaviorRequest>,
     world_map: Res<WorldMap>,
-    q_spots: Query<(Entity, &GatheringSpot)>,
+    q_spots: Query<(Entity, &GatheringSpot, &crate::relationships::GatheringParticipants)>,
     mut query: IdleDecisionSoulQuery,
     spot_grid: Res<GatheringSpotSpatialGrid>,
 ) {
@@ -67,7 +67,7 @@ pub fn idle_behavior_decision_system(
         // 参加中の集会スポットの座標とEntityを取得、または最寄りのスポットを探す
         let (gathering_center, target_spot_entity): (Option<Vec2>, Option<Entity>) =
             if let Some(p) = participating_in {
-                let center = q_spots.get(p.0).ok().map(|(_, s)| s.center);
+                let center = q_spots.get(p.0).ok().map(|(_, s, _)| s.center);
                 (center, Some(p.0))
             } else {
                 // 最寄りのスポットを空間グリッドで効率的に探す
@@ -78,7 +78,7 @@ pub fn idle_behavior_decision_system(
                 let nearest = spot_entities
                     .iter()
                     .filter_map(|&e| q_spots.get(e).ok())
-                    .filter(|item| item.1.participants < item.1.max_capacity)
+                    .filter(|item| item.2.len() < item.1.max_capacity)
                     .min_by(|a, b| {
                         a.1.center
                             .distance_squared(pos)
@@ -86,7 +86,7 @@ pub fn idle_behavior_decision_system(
                             .unwrap()
                     });
                 match nearest {
-                    Some((e, s)) => (Some(s.center), Some(e)),
+                    Some((e, s, _)) => (Some(s.center), Some(e)),
                     None => (None, None),
                 }
             };

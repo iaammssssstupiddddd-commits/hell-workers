@@ -80,7 +80,7 @@ Soul 本体画像は、Idle 状態だけでなくイベントでも一時差し�
 
 - `OnExhausted` -> `soul_exhausted`（4.0秒, 優先度30）
 - `ConversationToneTriggered(Positive/Negative)` -> `soul_lough` / `soul_stress`（3.0秒 / 3.4秒, 優先度20）
-- `OnGatheringParticipated` + `GatheringSpot.object_type`:
+- `OnGatheringParticipated` + `GatheringParticipants.len()` (または `GatheringSpot.object_type`):
   - `Barrel` -> `soul_wine`（2.2秒, 優先度15）
   - `CardTable` -> `soul_trump`（2.2秒, 優先度15）
 - `ConversationCompleted(Positive/Negative)` -> `soul_lough` / `soul_stress`（1.4秒 / 1.8秒, 優先度10）
@@ -124,6 +124,7 @@ Bevy 0.18 の ECS Relationships を使用して、状態を管理しています
 - `AssignedTask`: 現在の作業内容。
 - `IdleState`: 現在の待機行動。
 - `CommandedBy(Entity)`: 指揮している使い魔への参照。
+- `ParticipatingIn(Entity)` / `GatheringParticipants`: 集会への参加状態（Soul → GatheringSpot）。
 - `WorkingOn(Entity)`: 取り組んでいるタスクへの参照。
 - `Holding(Entity)`: 現在持っているアイテム。
 - `Inventory`: アイテムの所持状態を管理する必須コンポーネント。

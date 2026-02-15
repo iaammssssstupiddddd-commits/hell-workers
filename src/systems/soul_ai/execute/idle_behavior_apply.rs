@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 
 use crate::events::{IdleBehaviorOperation, IdleBehaviorRequest};
-use crate::systems::soul_ai::helpers::gathering::ParticipatingIn;
+use crate::relationships::ParticipatingIn;
 
 /// アイドル行動の適用システム (Execute Phase)
 ///
@@ -23,11 +23,10 @@ pub fn idle_behavior_apply_system(
                     spot_entity: *spot_entity,
                 });
             }
-            IdleBehaviorOperation::LeaveGathering { spot_entity } => {
+            IdleBehaviorOperation::LeaveGathering { spot_entity: _ } => {
                 commands.entity(request.entity).remove::<ParticipatingIn>();
                 commands.trigger(crate::events::OnGatheringLeft {
                     entity: request.entity,
-                    spot_entity: *spot_entity,
                 });
             }
             IdleBehaviorOperation::ArriveAtGathering { spot_entity } => {
