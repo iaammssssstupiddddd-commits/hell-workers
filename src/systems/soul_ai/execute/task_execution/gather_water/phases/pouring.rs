@@ -51,6 +51,7 @@ pub fn handle(
             ));
         }
 
+        commands.entity(bucket_entity).remove::<crate::relationships::DeliveringTo>();
         drop_bucket_for_auto_haul(commands, ctx, bucket_entity, tank_entity, world_map);
     } else {
         *ctx.task = assigned_task(

@@ -153,7 +153,7 @@ fn compute_remaining_blueprint_wheelbarrow_amount(
     resource_type: ResourceType,
     task_entity: Entity,
     queries: &crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
-    shadow: &ReservationShadow,
+    _shadow: &ReservationShadow,
 ) -> u32 {
     let Ok((_, blueprint_comp, _)) = queries.storage.blueprints.get(blueprint) else {
         return 0;
@@ -172,7 +172,7 @@ fn compute_remaining_blueprint_wheelbarrow_amount(
         return 0;
     }
 
-    let current_workers = queries
+    let _current_workers = queries
         .designation
         .designations
         .get(task_entity)
@@ -180,16 +180,15 @@ fn compute_remaining_blueprint_wheelbarrow_amount(
         .and_then(|(_, _, _, _, _, workers_opt, _, _)| workers_opt.map(|workers| workers.len()))
         .unwrap_or(0);
 
-    // pending request の仮予約(1)を避けるため、実ワーカーがいる場合のみ cache を参照
-    let reserved_from_cache = if current_workers > 0 {
-        queries
-            .reservation
-            .resource_cache
-            .get_destination_reservation(blueprint)
-    } else {
-        0
-    };
-    let reserved_total = reserved_from_cache + shadow.destination_reserved(blueprint);
+    // Relationship を利用して搬入予約数を取得
+    let reserved_from_relationship = queries
+        .reservation
+        .incoming_deliveries_query
+        .get(blueprint)
+        .map(|inc| inc.len())
+        .unwrap_or(0);
+
+    let reserved_total = reserved_from_relationship;
 
     needed_material.saturating_sub(reserved_total as u32)
 }

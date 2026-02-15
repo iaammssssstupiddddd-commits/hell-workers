@@ -85,5 +85,8 @@ pub fn drop_bucket_with_cleanup(commands: &mut Commands, bucket_entity: Entity, 
         .remove::<crate::systems::jobs::TaskSlots>();
     commands
         .entity(bucket_entity)
+        .remove::<crate::relationships::DeliveringTo>();
+    commands
+        .entity(bucket_entity)
         .remove::<crate::systems::jobs::TargetMixer>();
 }

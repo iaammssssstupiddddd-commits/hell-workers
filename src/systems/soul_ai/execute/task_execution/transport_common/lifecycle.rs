@@ -22,9 +22,6 @@ pub fn collect_active_reservation_ops(
 
     match task {
         AssignedTask::Haul(data) => {
-            ops.push(ResourceReservationOp::ReserveDestination {
-                target: data.stockpile,
-            });
             if matches!(data.phase, HaulPhase::GoingToItem) {
                 ops.push(ResourceReservationOp::ReserveSource {
                     source: data.item,
@@ -33,7 +30,6 @@ pub fn collect_active_reservation_ops(
             }
         }
         AssignedTask::GatherWater(data) => {
-            ops.push(ResourceReservationOp::ReserveDestination { target: data.tank });
             if matches!(data.phase, GatherWaterPhase::GoingToBucket) {
                 ops.push(ResourceReservationOp::ReserveSource {
                     source: data.bucket,
@@ -79,9 +75,6 @@ pub fn collect_active_reservation_ops(
             }
         }
         AssignedTask::HaulToBlueprint(data) => {
-            ops.push(ResourceReservationOp::ReserveDestination {
-                target: data.blueprint,
-            });
             if matches!(data.phase, HaulToBpPhase::GoingToItem) {
                 ops.push(ResourceReservationOp::ReserveSource {
                     source: data.item,
@@ -141,9 +134,9 @@ pub fn collect_active_reservation_ops(
 
             for &item in &data.items {
                 match data.destination {
-                    WheelbarrowDestination::Stockpile(target)
-                    | WheelbarrowDestination::Blueprint(target) => {
-                        ops.push(ResourceReservationOp::ReserveDestination { target });
+                    WheelbarrowDestination::Stockpile(_)
+                    | WheelbarrowDestination::Blueprint(_) => {
+                        // DeliveringTo リレーションシップで管理するため、ここでは予約不要
                     }
                     WheelbarrowDestination::Mixer {
                         entity: target,
@@ -158,17 +151,9 @@ pub fn collect_active_reservation_ops(
                 }
             }
 
-            let reserved_by_items = data.items.len() as u32;
-            if data.destination_reserved > reserved_by_items {
-                let extra = data.destination_reserved - reserved_by_items;
-                if let WheelbarrowDestination::Stockpile(target)
-                | WheelbarrowDestination::Blueprint(target) = data.destination
-                {
-                    for _ in 0..extra {
-                        ops.push(ResourceReservationOp::ReserveDestination { target });
-                    }
-                }
-            }
+            // items が空でない場合、それぞれのアイテムが DeliveringTo リレーションシップを通じて予約を維持している。
+            // 砂の直接採取などの「アイテムがまだ存在しない」場合の予備予約ロジック(destination_reserved)は
+            // 現在の設計では DeliveringTo に統一されたため、ここでは items.len() 分の予約のみを考慮する。
 
             if matches!(
                 data.phase,
@@ -209,9 +194,6 @@ pub fn collect_release_reservation_ops(
 
 fn to_release_op(op: ResourceReservationOp) -> Option<ResourceReservationOp> {
     match op {
-        ResourceReservationOp::ReserveDestination { target } => {
-            Some(ResourceReservationOp::ReleaseDestination { target })
-        }
         ResourceReservationOp::ReserveMixerDestination {
             target,
             resource_type,
@@ -222,10 +204,8 @@ fn to_release_op(op: ResourceReservationOp) -> Option<ResourceReservationOp> {
         ResourceReservationOp::ReserveSource { source, amount } => {
             Some(ResourceReservationOp::ReleaseSource { source, amount })
         }
-        ResourceReservationOp::ReleaseDestination { .. }
-        | ResourceReservationOp::ReleaseMixerDestination { .. }
+        ResourceReservationOp::ReleaseMixerDestination { .. }
         | ResourceReservationOp::ReleaseSource { .. }
-        | ResourceReservationOp::RecordStoredDestination { .. }
         | ResourceReservationOp::RecordPickedSource { .. } => None,
     }
 }

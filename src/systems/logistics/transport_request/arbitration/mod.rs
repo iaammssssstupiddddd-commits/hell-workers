@@ -64,6 +64,8 @@ pub fn wheelbarrow_arbitration_system(
     )>,
     q_blueprints: Query<&Blueprint>,
     mut metrics: ResMut<TransportRequestMetrics>,
+    cache: Res<crate::systems::familiar_ai::perceive::resource_sync::SharedResourceCache>,
+    q_incoming: Query<&crate::relationships::IncomingDeliveries>,
 ) {
     let arbitration_started_at = Instant::now();
     let now = time.elapsed_secs_f64();
@@ -86,6 +88,8 @@ pub fn wheelbarrow_arbitration_system(
             &q_stockpiles,
             &q_blueprints,
             &available_wheelbarrows,
+            &cache,
+            &q_incoming,
             now,
         );
 
@@ -94,6 +98,9 @@ pub fn wheelbarrow_arbitration_system(
         &mut available_wheelbarrows,
         now,
         &mut commands,
+        &q_stockpiles,
+        &cache,
+        &q_incoming,
     );
 
     update_metrics(
@@ -209,6 +216,8 @@ fn collect_candidates(
     )>,
     q_blueprints: &Query<&Blueprint>,
     available_wheelbarrows: &[(Entity, Vec2)],
+    cache: &crate::systems::familiar_ai::perceive::resource_sync::SharedResourceCache,
+    q_incoming: &Query<&crate::relationships::IncomingDeliveries>,
     now: f64,
 ) -> (Vec<(BatchCandidate, f32)>, u32, u32, u32) {
     let mut candidates: Vec<(BatchCandidate, f32)> = Vec::new();
@@ -240,6 +249,8 @@ fn collect_candidates(
             now,
             q_belongs,
             q_stockpiles,
+            cache,
+            q_incoming,
         ) else {
             continue;
         };
@@ -335,6 +346,7 @@ fn collect_candidates(
                 items,
                 source_pos,
                 destination: eval.destination,
+                group_cells: req.stockpile_group.clone(),
                 is_small_batch,
             },
             score,

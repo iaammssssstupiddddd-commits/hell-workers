@@ -51,7 +51,8 @@ fn to_u32_saturating(value: usize) -> u32 {
 
 pub fn bucket_auto_haul_system(
     mut commands: Commands,
-    haul_cache: Res<SharedResourceCache>,
+    _haul_cache: Res<SharedResourceCache>,
+    q_incoming: Query<&crate::relationships::IncomingDeliveries>,
     q_familiars: Query<(Entity, &ActiveCommand, &TaskArea), With<Familiar>>,
     q_tanks: Query<(&Transform, &Stockpile), Without<BucketStorage>>,
     q_dropped_buckets: Query<
@@ -87,8 +88,9 @@ pub fn bucket_auto_haul_system(
         }
 
         let current = stored_opt.map(|stored| stored.len()).unwrap_or(0);
-        let reserved = haul_cache.get_destination_reservation(storage_entity);
-        let anticipated = current + reserved;
+        let incoming_deliveries = q_incoming.get(storage_entity).ok()
+            .map(|inc: &crate::relationships::IncomingDeliveries| inc.len()).unwrap_or(0);
+        let anticipated = current + incoming_deliveries;
         let free_slots = stockpile.capacity.saturating_sub(anticipated);
 
         let tank = storage_belongs.0;

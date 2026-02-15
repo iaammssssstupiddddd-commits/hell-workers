@@ -119,12 +119,6 @@ pub struct ResourceReservationRequest {
 /// リソース予約の操作
 #[derive(Debug, Clone)]
 pub enum ResourceReservationOp {
-    ReserveDestination {
-        target: Entity,
-    },
-    ReleaseDestination {
-        target: Entity,
-    },
     ReserveMixerDestination {
         target: Entity,
         resource_type: ResourceType,
@@ -140,9 +134,6 @@ pub enum ResourceReservationOp {
     ReleaseSource {
         source: Entity,
         amount: usize,
-    },
-    RecordStoredDestination {
-        target: Entity,
     },
     RecordPickedSource {
         source: Entity,

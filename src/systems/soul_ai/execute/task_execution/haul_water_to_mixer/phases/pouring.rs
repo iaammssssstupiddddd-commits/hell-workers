@@ -117,6 +117,7 @@ pub fn handle(
             );
 
             reservation::release_mixer_destination(ctx, mixer_entity, ResourceType::Water);
+            commands.entity(bucket_entity).remove::<crate::relationships::DeliveringTo>();
 
             // バケツを空に戻す
             commands.entity(bucket_entity).insert((

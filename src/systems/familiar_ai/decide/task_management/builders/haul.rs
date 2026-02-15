@@ -7,7 +7,6 @@ use crate::systems::soul_ai::execute::task_execution::types::{
 };
 use bevy::prelude::*;
 
-use super::submit_assignment;
 
 /// 指定のソースアイテムを使って Blueprint 運搬を割り当てる（request 方式の遅延解決用）
 pub fn issue_haul_to_blueprint_with_source(
@@ -17,7 +16,7 @@ pub fn issue_haul_to_blueprint_with_source(
     already_commanded: bool,
     ctx: &AssignTaskContext<'_>,
     queries: &mut crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
-    shadow: &mut ReservationShadow,
+    _shadow: &mut ReservationShadow,
 ) {
     let assigned_task =
         crate::systems::soul_ai::execute::task_execution::types::AssignedTask::HaulToBlueprint(
@@ -28,22 +27,22 @@ pub fn issue_haul_to_blueprint_with_source(
             },
         );
     let reservation_ops = vec![
-        ResourceReservationOp::ReserveDestination { target: blueprint },
         ResourceReservationOp::ReserveSource {
             source: source_item,
             amount: 1,
         },
     ];
-    submit_assignment(
-        ctx,
-        queries,
-        shadow,
-        WorkType::Haul,
+    
+    queries.assignment_writer.write(crate::events::TaskAssignmentRequest {
+        familiar_entity: ctx.fam_entity,
+        worker_entity: ctx.worker_entity,
+        task_entity: ctx.task_entity,
+        work_type: WorkType::Haul,
         task_pos,
         assigned_task,
         reservation_ops,
         already_commanded,
-    );
+    });
 }
 
 pub fn issue_haul_to_stockpile_with_source(
@@ -53,7 +52,7 @@ pub fn issue_haul_to_stockpile_with_source(
     already_commanded: bool,
     ctx: &AssignTaskContext<'_>,
     queries: &mut crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
-    shadow: &mut ReservationShadow,
+    _shadow: &mut ReservationShadow,
 ) {
     let assigned_task = crate::systems::soul_ai::execute::task_execution::types::AssignedTask::Haul(
         crate::systems::soul_ai::execute::task_execution::types::HaulData {
@@ -63,22 +62,22 @@ pub fn issue_haul_to_stockpile_with_source(
         },
     );
     let reservation_ops = vec![
-        ResourceReservationOp::ReserveDestination { target: stockpile },
         ResourceReservationOp::ReserveSource {
             source: source_item,
             amount: 1,
         },
     ];
-    submit_assignment(
-        ctx,
-        queries,
-        shadow,
-        WorkType::Haul,
+
+    queries.assignment_writer.write(crate::events::TaskAssignmentRequest {
+        familiar_entity: ctx.fam_entity,
+        worker_entity: ctx.worker_entity,
+        task_entity: ctx.task_entity,
+        work_type: WorkType::Haul,
         task_pos,
         assigned_task,
         reservation_ops,
         already_commanded,
-    );
+    });
 }
 
 pub fn issue_haul_to_mixer(
@@ -90,7 +89,7 @@ pub fn issue_haul_to_mixer(
     already_commanded: bool,
     ctx: &AssignTaskContext<'_>,
     queries: &mut crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
-    shadow: &mut ReservationShadow,
+    _shadow: &mut ReservationShadow,
 ) {
     let assigned_task = crate::systems::soul_ai::execute::task_execution::types::AssignedTask::HaulToMixer(
         crate::systems::soul_ai::execute::task_execution::types::HaulToMixerData {
@@ -110,16 +109,16 @@ pub fn issue_haul_to_mixer(
             resource_type: item_type,
         });
     }
-    submit_assignment(
-        ctx,
-        queries,
-        shadow,
-        WorkType::HaulToMixer,
+    queries.assignment_writer.write(crate::events::TaskAssignmentRequest {
+        familiar_entity: ctx.fam_entity,
+        worker_entity: ctx.worker_entity,
+        task_entity: ctx.task_entity,
+        work_type: WorkType::HaulToMixer,
         task_pos,
         assigned_task,
         reservation_ops,
         already_commanded,
-    );
+    });
 }
 
 pub fn issue_haul_with_wheelbarrow(
@@ -131,7 +130,7 @@ pub fn issue_haul_with_wheelbarrow(
     already_commanded: bool,
     ctx: &AssignTaskContext<'_>,
     queries: &mut crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
-    shadow: &mut ReservationShadow,
+    __shadow: &mut ReservationShadow,
 ) {
     let assigned_task =
         crate::systems::soul_ai::execute::task_execution::types::AssignedTask::HaulWithWheelbarrow(
@@ -139,7 +138,6 @@ pub fn issue_haul_with_wheelbarrow(
                 wheelbarrow,
                 source_pos,
                 destination,
-                destination_reserved: items.len() as u32,
                 collect_source: None,
                 collect_amount: 0,
                 collect_resource_type: None,
@@ -158,13 +156,9 @@ pub fn issue_haul_with_wheelbarrow(
     // 目的地をアイテム数分予約
     for &item in &items {
         match destination {
-            crate::systems::logistics::transport_request::WheelbarrowDestination::Stockpile(
-                target,
-            )
-            | crate::systems::logistics::transport_request::WheelbarrowDestination::Blueprint(
-                target,
-            ) => {
-                reservation_ops.push(ResourceReservationOp::ReserveDestination { target });
+            crate::systems::logistics::transport_request::WheelbarrowDestination::Stockpile(_)
+            | crate::systems::logistics::transport_request::WheelbarrowDestination::Blueprint(_) => {
+                // Relationship で管理するため ReserveDestination は不要
             }
             crate::systems::logistics::transport_request::WheelbarrowDestination::Mixer {
                 entity: target,
@@ -191,16 +185,16 @@ pub fn issue_haul_with_wheelbarrow(
         });
     }
 
-    submit_assignment(
-        ctx,
-        queries,
-        shadow,
-        WorkType::WheelbarrowHaul,
+    queries.assignment_writer.write(crate::events::TaskAssignmentRequest {
+        familiar_entity: ctx.fam_entity,
+        worker_entity: ctx.worker_entity,
+        task_entity: ctx.task_entity,
+        work_type: WorkType::WheelbarrowHaul,
         task_pos,
         assigned_task,
         reservation_ops,
         already_commanded,
-    );
+    });
 }
 
 /// 砂ソースから直接採取して Blueprint へ猫車搬入する。
@@ -214,7 +208,7 @@ pub fn issue_collect_sand_with_wheelbarrow_to_blueprint(
     already_commanded: bool,
     ctx: &AssignTaskContext<'_>,
     queries: &mut crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
-    shadow: &mut ReservationShadow,
+    _shadow: &mut ReservationShadow,
 ) {
     let haul_amount = amount.max(1);
     let assigned_task =
@@ -226,7 +220,6 @@ pub fn issue_collect_sand_with_wheelbarrow_to_blueprint(
                     crate::systems::logistics::transport_request::WheelbarrowDestination::Blueprint(
                         blueprint,
                     ),
-                destination_reserved: haul_amount,
                 collect_source: Some(source_entity),
                 collect_amount: haul_amount,
                 collect_resource_type: Some(ResourceType::Sand),
@@ -235,7 +228,7 @@ pub fn issue_collect_sand_with_wheelbarrow_to_blueprint(
             },
         );
 
-    let mut reservation_ops = vec![
+    let reservation_ops = vec![
         ResourceReservationOp::ReserveSource {
             source: wheelbarrow,
             amount: 1,
@@ -245,18 +238,16 @@ pub fn issue_collect_sand_with_wheelbarrow_to_blueprint(
             amount: 1,
         },
     ];
-    for _ in 0..haul_amount {
-        reservation_ops.push(ResourceReservationOp::ReserveDestination { target: blueprint });
-    }
+    // Relationship で管理するため ReserveDestination は不要
 
-    submit_assignment(
-        ctx,
-        queries,
-        shadow,
-        WorkType::WheelbarrowHaul,
+    queries.assignment_writer.write(crate::events::TaskAssignmentRequest {
+        familiar_entity: ctx.fam_entity,
+        worker_entity: ctx.worker_entity,
+        task_entity: ctx.task_entity,
+        work_type: WorkType::WheelbarrowHaul,
         task_pos,
         assigned_task,
         reservation_ops,
         already_commanded,
-    );
+    });
 }

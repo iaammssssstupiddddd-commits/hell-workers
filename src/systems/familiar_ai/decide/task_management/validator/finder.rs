@@ -44,7 +44,7 @@ fn find_best_bucket_storage_for_return(
     tank_entity: Entity,
     source_pos: Vec2,
     queries: &crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
-    shadow: &ReservationShadow,
+    _shadow: &ReservationShadow,
 ) -> Option<Entity> {
     queries
         .storage
@@ -79,11 +79,9 @@ fn find_best_bucket_storage_for_return(
             }
 
             let current = stored_opt.map(|stored| stored.len()).unwrap_or(0);
-            let reserved = queries
-                .reservation
-                .resource_cache
-                .get_destination_reservation(*stockpile_entity)
-                + shadow.destination_reserved(*stockpile_entity);
+            let incoming = queries.reservation.incoming_deliveries_query.get(*stockpile_entity).ok()
+                .map(|inc: &crate::relationships::IncomingDeliveries| inc.len()).unwrap_or(0);
+            let reserved = incoming;
             (current + reserved) < stockpile.capacity
         })
         .min_by(|(_, t1, _, _), (_, t2, _, _)| {

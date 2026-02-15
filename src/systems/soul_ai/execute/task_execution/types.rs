@@ -179,8 +179,6 @@ pub struct HaulWithWheelbarrowData {
     pub wheelbarrow: Entity,
     pub source_pos: Vec2,
     pub destination: WheelbarrowDestination,
-    /// 予約済みの搬入スロット数（items が後から確定する場合に使用）
-    pub destination_reserved: u32,
     /// 直接採取モードの採取元（通常運搬では None）
     pub collect_source: Option<Entity>,
     /// 直接採取モードの採取量（通常運搬では 0）

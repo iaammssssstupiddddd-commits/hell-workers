@@ -23,7 +23,7 @@ pub fn assign_haul_to_stockpile(
     shadow: &mut ReservationShadow,
 ) -> bool {
     let Some((stockpile, resource_type, item_owner, fixed_source)) =
-        resolve_haul_to_stockpile_inputs(ctx.task_entity, queries)
+        resolve_haul_to_stockpile_inputs(ctx.task_entity, queries, shadow)
     else {
         return false;
     };

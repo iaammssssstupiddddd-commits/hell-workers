@@ -204,6 +204,7 @@ pub fn handle_haul_to_blueprint_task(
 
                     // アイテムを消費
                     commands.entity(item_entity).despawn();
+                    // DeliveringTo is removed with despawn
                 }
             }
 
