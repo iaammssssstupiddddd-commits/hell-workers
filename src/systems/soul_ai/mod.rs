@@ -74,9 +74,11 @@ impl Plugin for SoulAiPlugin {
                     // タスク割り当て要求
                     decide::work::auto_refine::mud_mixer_auto_refine_system,
                     decide::work::auto_build::blueprint_auto_build_system,
-                    // アイドル行動の決定
+                    // アイドル行動の決定（先に実行）
                     decide::idle_behavior::idle_behavior_decision_system,
-                    decide::separation::gathering_separation_system,
+                    // 重なり回避（idle_behaviorの後に実行して上書きを防ぐ）
+                    decide::separation::gathering_separation_system
+                        .after(decide::idle_behavior::idle_behavior_decision_system),
                     decide::escaping::escaping_decision_system,
                     // 集会管理の決定
                     decide::gathering_mgmt::gathering_maintenance_decision,
