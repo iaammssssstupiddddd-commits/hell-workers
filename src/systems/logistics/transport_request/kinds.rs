@@ -4,6 +4,7 @@ use bevy::prelude::*;
 pub enum TransportRequestKind {
     DepositToStockpile,
     DeliverToBlueprint,
+    DeliverToFloorConstruction,
     DeliverToMixerSolid,
     DeliverWaterToMixer,
     GatherWaterToTank,

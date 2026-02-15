@@ -82,3 +82,7 @@ pub enum FloorTileState {
     /// Construction complete
     Complete,
 }
+
+/// Marker component linking a TransportRequest to a FloorConstructionSite
+#[derive(Component, Clone, Copy, Debug)]
+pub struct TargetFloorConstructionSite(pub Entity);

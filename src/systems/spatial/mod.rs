@@ -1,6 +1,7 @@
 pub mod blueprint;
 pub mod designation;
 pub mod familiar;
+pub mod floor_construction;
 pub mod gathering;
 pub mod grid;
 pub mod resource;
@@ -11,6 +12,9 @@ pub mod transport_request;
 pub use blueprint::{BlueprintSpatialGrid, update_blueprint_spatial_grid_system};
 pub use designation::{DesignationSpatialGrid, update_designation_spatial_grid_system};
 pub use familiar::{FamiliarSpatialGrid, update_familiar_spatial_grid_system};
+pub use floor_construction::{
+    FloorConstructionSpatialGrid, update_floor_construction_spatial_grid_system,
+};
 pub use gathering::{GatheringSpotSpatialGrid, update_gathering_spot_spatial_grid_system};
 pub use grid::{
     sync_grid_timed, tick_spatial_grid_sync_timer_system, SpatialGridOps, SpatialGridSyncTimer,
