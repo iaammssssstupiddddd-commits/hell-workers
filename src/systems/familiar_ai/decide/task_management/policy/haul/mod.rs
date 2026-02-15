@@ -223,7 +223,14 @@ fn try_direct_bone_collect_to_floor(
     };
 
     let remaining_needed = compute_remaining_floor_bones(site_entity, queries);
-    let amount = remaining_needed.max(1).min(crate::constants::WHEELBARROW_CAPACITY as u32);
+    if remaining_needed == 0 {
+        debug!(
+            "ASSIGN: Floor request {:?} already satisfied before direct collect assignment",
+            task_entity
+        );
+        return false;
+    }
+    let amount = remaining_needed.min(crate::constants::WHEELBARROW_CAPACITY as u32);
 
     issue_collect_bone_with_wheelbarrow_to_floor(
         wheelbarrow,
