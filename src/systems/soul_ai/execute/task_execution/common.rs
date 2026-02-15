@@ -231,8 +231,7 @@ pub fn pickup_item(
         .remove::<crate::systems::jobs::TaskSlots>()
         .remove::<crate::systems::jobs::Priority>()
         .remove::<ReservedForTask>()
-        .remove::<crate::relationships::StoredIn>()
-        .remove::<crate::systems::logistics::InStockpile>();
+        .remove::<crate::relationships::StoredIn>();
 }
 
 /// アイテムを地面に落とす

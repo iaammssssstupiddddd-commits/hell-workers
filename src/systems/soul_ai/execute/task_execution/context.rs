@@ -13,7 +13,7 @@ use crate::events::{ResourceReservationOp, ResourceReservationRequest, TaskAssig
 use crate::relationships::{ManagedBy, TaskWorkers};
 use crate::systems::familiar_ai::perceive::resource_sync::SharedResourceCache;
 use crate::systems::jobs::{Blueprint, Designation, Priority, StoredByMixer, TaskSlots};
-use crate::systems::logistics::{InStockpile, Stockpile};
+use crate::systems::logistics::Stockpile;
 use bevy::ecs::system::SystemParam;
 
 /// リソース予約・管理に必要な共通アクセス
@@ -51,7 +51,7 @@ pub struct DesignationAccess<'w, 's> {
             Option<&'static ManagedBy>,
             Option<&'static TaskSlots>,
             Option<&'static TaskWorkers>,
-            Option<&'static InStockpile>,
+            Option<&'static crate::relationships::StoredIn>,
             Option<&'static Priority>,
         ),
     >,
@@ -197,7 +197,7 @@ pub struct TaskAssignmentQueries<'w, 's> {
         (
             Entity,
             &'static ResourceItem,
-            &'static InStockpile,
+            &'static crate::relationships::StoredIn,
         ),
         (
             Without<Designation>,

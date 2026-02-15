@@ -199,7 +199,6 @@ pub fn handle_haul_task(
                             0.6,
                         ),
                         crate::relationships::StoredIn(stockpile),
-                        crate::systems::logistics::InStockpile(stockpile),
                     ));
                     commands.entity(item).remove::<crate::relationships::DeliveringTo>();
                     // タスク完了: ManagedTasks を肥大化させないため、管理者を解除する
