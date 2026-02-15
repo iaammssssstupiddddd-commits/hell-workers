@@ -257,3 +257,37 @@ impl PushingWheelbarrow {
         self.0.first().copied()
     }
 }
+// ============================================================
+// アイテム ⇔ 搬入先 予約関係
+// ============================================================
+
+/// アイテムが搬入先へ向かっていることを示す Relationship
+/// アイテム側に付与（アイテム → 宛先への参照）
+#[derive(Component, Reflect, Debug, Clone, Copy)]
+#[reflect(Component)]
+#[relationship(relationship_target = IncomingDeliveries)]
+pub struct DeliveringTo(pub Entity);
+
+impl Default for DeliveringTo {
+    fn default() -> Self {
+        Self(Entity::PLACEHOLDER)
+    }
+}
+
+/// 搬入先に向かっているアイテムの一覧
+/// 宛先側に自動的に付与・維持される RelationshipTarget
+#[derive(Component, Reflect, Debug, Default)]
+#[reflect(Component)]
+#[relationship_target(relationship = DeliveringTo)]
+pub struct IncomingDeliveries(Vec<Entity>);
+
+impl IncomingDeliveries {
+    /// 搬入予定のアイテム数を取得
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = &Entity> {
+        self.0.iter()
+    }
+}

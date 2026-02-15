@@ -12,15 +12,11 @@ use std::collections::HashMap;
 /// Thinkフェーズ内の予約増分を追跡する
 #[derive(Default)]
 pub struct ReservationShadow {
-    destination: HashMap<Entity, usize>,
     mixer_destination: HashMap<(Entity, crate::systems::logistics::ResourceType), usize>,
     source: HashMap<Entity, usize>,
 }
 
 impl ReservationShadow {
-    pub fn destination_reserved(&self, target: Entity) -> usize {
-        self.destination.get(&target).cloned().unwrap_or(0)
-    }
 
     pub fn mixer_reserved(
         &self,
@@ -40,9 +36,6 @@ impl ReservationShadow {
     pub fn apply_reserve_ops(&mut self, ops: &[crate::events::ResourceReservationOp]) {
         for op in ops {
             match *op {
-                crate::events::ResourceReservationOp::ReserveDestination { target } => {
-                    *self.destination.entry(target).or_insert(0) += 1;
-                }
                 crate::events::ResourceReservationOp::ReserveMixerDestination {
                     target,
                     resource_type,

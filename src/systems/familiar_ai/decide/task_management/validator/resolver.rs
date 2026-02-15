@@ -46,6 +46,7 @@ pub fn resolve_consolidation_inputs(
 pub fn resolve_haul_to_stockpile_inputs(
     task_entity: Entity,
     queries: &crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
+    _shadow: &crate::systems::familiar_ai::decide::task_management::ReservationShadow,
 ) -> Option<(Entity, ResourceType, Option<Entity>, Option<Entity>)> {
     let req = queries.transport_requests.get(task_entity).ok()?;
     if !matches!(req.kind, TransportRequestKind::DepositToStockpile) {
@@ -63,8 +64,14 @@ pub fn resolve_haul_to_stockpile_inputs(
     // グループ内の受け入れ可能な空きセルを探す
     let stockpile = if req.stockpile_group.is_empty() {
         let (_, _, stock, stored_opt) = queries.storage.stockpiles.get(req.anchor).ok()?;
-        let stored = stored_opt.map(|s| s.len()).unwrap_or(0);
-        let has_capacity = stored < stock.capacity;
+        let stored = stored_items_opt_to_count(stored_opt);
+        
+        // インフライト（リレーションによる既知の搬入予定）+ 影（当フレーム内での新規予約）
+        let incoming = queries.reservation.incoming_deliveries_query.get(req.anchor).ok()
+            .map(|inc: &crate::relationships::IncomingDeliveries| inc.len()).unwrap_or(0);
+        let effective_free = stock.capacity.saturating_sub(stored + incoming);
+
+        let has_capacity = effective_free > 0;
         let type_ok = stock.resource_type.is_none() || stock.resource_type == Some(resource_type);
         if has_capacity && type_ok {
             req.anchor
@@ -76,20 +83,30 @@ pub fn resolve_haul_to_stockpile_inputs(
             .iter()
             .filter_map(|&cell| {
                 let (_, _, stock, stored_opt) = queries.storage.stockpiles.get(cell).ok()?;
-                let stored = stored_opt.map(|s| s.len()).unwrap_or(0);
-                let has_capacity = stored < stock.capacity;
-                let type_ok = stock.resource_type.is_none() || stock.resource_type == Some(resource_type);
-                if has_capacity && type_ok {
-                    Some((cell, stock.capacity - stored))
+                let stored = stored_items_opt_to_count(stored_opt);
+                
+                let incoming = queries.reservation.incoming_deliveries_query.get(cell).ok()
+                .map(|inc: &crate::relationships::IncomingDeliveries| inc.len()).unwrap_or(0);
+                let effective_free = stock.capacity.saturating_sub(stored + incoming);
+
+                let type_ok =
+                    stock.resource_type.is_none() || stock.resource_type == Some(resource_type);
+                if effective_free > 0 && type_ok {
+                    Some((cell, effective_free))
                 } else {
                     None
                 }
             })
-            .max_by_key(|(_, free)| *free)
+            // 貪欲法: 空きが最小（＝もう少しで満杯）のセルを優先して埋める
+            .min_by_key(|(_, free)| *free)
             .map(|(cell, _)| cell)?
     };
 
     Some((stockpile, resource_type, item_owner, fixed_source))
+}
+
+fn stored_items_opt_to_count(opt: Option<&crate::relationships::StoredItems>) -> usize {
+    opt.map(|s| s.len()).unwrap_or(0)
 }
 
 /// Resolves (bucket, tank) for GatherWater request.
@@ -116,9 +133,10 @@ pub fn resolve_gather_water_inputs(
     let current_water = stored_opt.map(|s| s.len()).unwrap_or(0);
     let reserved_water = queries
         .reservation
-        .resource_cache
-        .get_destination_reservation(tank_entity)
-        + shadow.destination_reserved(tank_entity);
+        .incoming_deliveries_query
+        .get(tank_entity)
+        .map(|inc| inc.len())
+        .unwrap_or(0);
     if (current_water + reserved_water) >= tank_stock.capacity {
         return None;
     }

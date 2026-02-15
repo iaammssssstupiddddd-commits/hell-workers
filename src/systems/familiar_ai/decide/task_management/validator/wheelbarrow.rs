@@ -155,15 +155,16 @@ fn collect_free_items_for_stockpile(
 pub fn remaining_stockpile_capacity(
     stockpile: Entity,
     queries: &crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
-    shadow: &ReservationShadow,
+    _shadow: &ReservationShadow,
 ) -> usize {
     if let Ok((_, _, stock, stored)) = queries.storage.stockpiles.get(stockpile) {
         let current = stored.map(|s| s.len()).unwrap_or(0);
         let reserved = queries
             .reservation
-            .resource_cache
-            .get_destination_reservation(stockpile)
-            + shadow.destination_reserved(stockpile);
+            .incoming_deliveries_query
+            .get(stockpile)
+            .map(|inc| inc.len())
+            .unwrap_or(0);
         let used = current + reserved;
         if used >= stock.capacity {
             0

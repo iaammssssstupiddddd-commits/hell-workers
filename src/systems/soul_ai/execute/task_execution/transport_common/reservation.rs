@@ -7,10 +7,9 @@ use crate::systems::soul_ai::execute::task_execution::context::TaskExecutionCont
 use bevy::prelude::*;
 
 /// ストックパイル/ブループリントの目的地予約を解放
-pub fn release_destination(ctx: &mut TaskExecutionContext, target: Entity) {
-    ctx.queue_reservation(crate::events::ResourceReservationOp::ReleaseDestination {
-        target,
-    });
+pub fn release_destination(_ctx: &mut TaskExecutionContext, _target: Entity) {
+    // Relationship を利用するため、明示的な解放 Op は不要。
+    // Soul の AssignedTask が変更されるか、アイテムから DeliveringTo が消えれば自動で減る。
 }
 
 /// ソース（アイテム）の予約を解放
@@ -42,8 +41,7 @@ pub fn record_picked_source(ctx: &mut TaskExecutionContext, source: Entity, amou
 }
 
 /// 目的地への格納を記録（Delta Update用）
-pub fn record_stored_destination(ctx: &mut TaskExecutionContext, target: Entity) {
-    ctx.queue_reservation(crate::events::ResourceReservationOp::RecordStoredDestination {
-        target,
-    });
+pub fn record_stored_destination(_ctx: &mut TaskExecutionContext, _target: Entity) {
+    // DeliveringTo を利用するため、ここでは何もしない。
+    // 格納完了時にアイテムを despawn するか、リレーションシップを外せばよい。
 }

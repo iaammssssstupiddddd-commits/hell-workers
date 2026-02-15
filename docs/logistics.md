@@ -19,6 +19,12 @@ Hell-Workers の物流は、`TransportRequest` を中心にした自動発行 + 
   - Stockpile 側の逆参照
 - `InStockpile(Entity)`:
   - 「備蓄中」判定用マーカー
+- `DeliveringTo(Entity)`:
+  - アイテム -> 搬入先（Stockpile / Blueprint / Mixer 等）への予約を示す Relationship
+  - タスク割り当て時に自動挿入され、タスク完了・中断時に自動除去される
+- `IncomingDeliveries(Vec<Entity>)`:
+  - 搬入先側に Bevy が自動維持する RelationshipTarget
+  - `IncomingDeliveries.len()` で「搬入予約済みアイテム数」を取得できる
 
 ### 1.3 物流関連コンポーネント
 - `BelongsTo(Entity)`:
@@ -68,7 +74,7 @@ Hell-Workers の物流は、`TransportRequest` を中心にした自動発行 + 
   - `TransportRequest` は**各ファミリアのグループごとに別個に発行**されます（`anchor` = 代表セル, `issued_by` = ファミリア）。
   - **共有セルの扱い**: 複数の `TaskArea` が重複する場合、その領域内の Stockpile はそれぞれのファミリアのグループに含まれます。
     - 結果として、同一セルに対する搬入リクエストが複数ファミリアから並行して存在する可能性があります。
-    - **競合回避**: 実際の搬入（Assign時）には `SharedResourceCache` の `destination_reservations` を確認するため、同一セルへの重複予約は発生しません。
+    - **競合回避**: 実際の搬入（Assign時）には `IncomingDeliveries.len()` で搬入予約済み数を確認するため、同一セルへの容量超過は発生しません。
 - **需要計算**:
   - グループ全体の `total_capacity - total_stored - total_in_flight` で算出。
 - **収集対象範囲**:
@@ -266,21 +272,32 @@ WheelbarrowLease {
 
 ## 6. 予約と競合回避
 
-`SharedResourceCache` で以下を一元管理します。
+予約には **搬入先予約（Relationship）** と **ソース/ミキサー予約（SharedResourceCache）** の2種類があります。
 
-- `destination_reservations`（Stockpile/Tank など）
+### 6.1 搬入先予約（Relationship ベース）
+
+Stockpile / Blueprint / Tank などへの搬入予約は、Bevy の Relationship で管理します。
+
+- タスク割り当て時に、搬入対象アイテムに `DeliveringTo(destination)` を自動挿入（`apply_task_assignment_requests_system`）。
+- 搬入先エンティティには Bevy が `IncomingDeliveries` を自動維持。
+- **容量判定**: `現在量 (StoredItems.len()) + 搬入予約 (IncomingDeliveries.len()) < capacity` で空き容量を確認。
+- タスク完了・中断時にアイテムの `DeliveringTo` を除去すると、搬入先の `IncomingDeliveries` も自動更新される。
+- HashMap による再構築が不要なため、**常に最新の予約状態**が ECS から直接取得可能。
+
+### 6.2 ソース／ミキサー予約（SharedResourceCache）
+
+`SharedResourceCache` で以下を管理します。
+
 - `mixer_dest_reservations`（Mixer + ResourceType）
 - `source_reservations`（アイテムやタンク）
 
-### 6.1 再構築
+#### 再構築
 - `sync_reservations_system` が `AssignedTask` と未割り当て request（`Designation` + `TransportRequest`）から予約を再構築。
 - 同期間隔は `RESERVATION_SYNC_INTERVAL`（初回は即時）。
-- `ReturnBucket` request は `anchor = tank` のため、pending request 段階では destination 予約を直接積まず、
-  実際の返却先 `BucketStorage` が割り当て時に確定した時点で予約する。
 
-### 6.2 差分適用
+#### 差分適用
 - `ResourceReservationRequest` を `apply_reservation_requests_system` でフレーム内反映。
-- `RecordStoredDestination` / `RecordPickedSource` によりフレーム内の論理在庫差分も追跡。
+- `RecordPickedSource` によりフレーム内のソース論理在庫差分も追跡。
 
 ### 6.3 水搬送の排他
 - `HaulWaterToMixer` はタンクを source 予約して同時取水競合を抑制。
@@ -324,8 +341,9 @@ WheelbarrowLease {
 - demand 計算は `current + in_flight(+ reservation)` を使い、過剰発行を防ぐ。
 
 ### 9.3 予約の責務を統一
-- 予約は「割り当て時」に `ResourceReservationOp` で付与し、成功・失敗・中断の全経路で解放/記録する。
-- タスク実行で取得・格納が成功したら、`RecordPickedSource` / `RecordStoredDestination` を使う。
+- **搬入先予約**: タスク割り当て時に `DeliveringTo` が自動挿入される。手動で `ResourceReservationOp` を発行する必要はない。
+- **ソース予約**: 「割り当て時」に `ResourceReservationOp::ReserveSource` で付与し、成功・失敗・中断の全経路で解放する。
+- タスク実行でソース取得が成功したら `RecordPickedSource` を使う。
 - 共有ソース（例: tank 取水）は `ReserveSource` で排他を取る。
 
 ### 9.4 ソース選定の安全条件

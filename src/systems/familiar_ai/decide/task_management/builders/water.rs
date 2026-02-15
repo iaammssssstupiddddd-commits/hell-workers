@@ -5,7 +5,6 @@ use crate::systems::logistics::ResourceType;
 use crate::systems::soul_ai::execute::task_execution::types::GatherWaterPhase;
 use bevy::prelude::*;
 
-use super::submit_assignment;
 
 pub fn issue_gather_water(
     bucket: Entity,
@@ -14,7 +13,7 @@ pub fn issue_gather_water(
     already_commanded: bool,
     ctx: &AssignTaskContext<'_>,
     queries: &mut crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
-    shadow: &mut ReservationShadow,
+    _shadow: &mut ReservationShadow,
 ) {
     let assigned_task =
         crate::systems::soul_ai::execute::task_execution::types::AssignedTask::GatherWater(
@@ -25,22 +24,22 @@ pub fn issue_gather_water(
             },
         );
     let reservation_ops = vec![
-        ResourceReservationOp::ReserveDestination { target: tank },
         ResourceReservationOp::ReserveSource {
             source: bucket,
             amount: 1,
         },
     ];
-    submit_assignment(
-        ctx,
-        queries,
-        shadow,
-        WorkType::GatherWater,
+
+    queries.assignment_writer.write(crate::events::TaskAssignmentRequest {
+        familiar_entity: ctx.fam_entity,
+        worker_entity: ctx.worker_entity,
+        task_entity: ctx.task_entity,
+        work_type: WorkType::GatherWater,
         task_pos,
         assigned_task,
         reservation_ops,
         already_commanded,
-    );
+    });
 }
 
 pub fn issue_haul_water_to_mixer(
@@ -52,7 +51,7 @@ pub fn issue_haul_water_to_mixer(
     already_commanded: bool,
     ctx: &AssignTaskContext<'_>,
     queries: &mut crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
-    shadow: &mut ReservationShadow,
+    _shadow: &mut ReservationShadow,
 ) {
     let assigned_task = crate::systems::soul_ai::execute::task_execution::types::AssignedTask::HaulWaterToMixer(
         crate::systems::soul_ai::execute::task_execution::types::HaulWaterToMixerData {
@@ -80,14 +79,15 @@ pub fn issue_haul_water_to_mixer(
             resource_type: ResourceType::Water,
         });
     }
-    submit_assignment(
-        ctx,
-        queries,
-        shadow,
-        WorkType::HaulWaterToMixer,
+
+    queries.assignment_writer.write(crate::events::TaskAssignmentRequest {
+        familiar_entity: ctx.fam_entity,
+        worker_entity: ctx.worker_entity,
+        task_entity: ctx.task_entity,
+        work_type: WorkType::HaulWaterToMixer,
         task_pos,
         assigned_task,
         reservation_ops,
         already_commanded,
-    );
+    });
 }

@@ -104,6 +104,13 @@ impl WheelbarrowDestination {
             Self::Mixer { entity, .. } => entity,
         }
     }
+
+    pub fn stockpile_or_blueprint(self) -> Option<Entity> {
+        match self {
+            Self::Stockpile(entity) | Self::Blueprint(entity) => Some(entity),
+            Self::Mixer { .. } => None,
+        }
+    }
 }
 
 /// 猫車小バッチ許可制御のため、request が Pending になった時刻を保持
@@ -141,4 +148,3 @@ impl Default for TransportRequestState {
         Self::Pending
     }
 }
-
