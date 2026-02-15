@@ -70,9 +70,6 @@ pub fn drop_bucket_with_cleanup(commands: &mut Commands, bucket_entity: Entity, 
         .remove::<crate::relationships::StoredIn>();
     commands
         .entity(bucket_entity)
-        .remove::<crate::systems::logistics::InStockpile>();
-    commands
-        .entity(bucket_entity)
         .remove::<crate::systems::jobs::IssuedBy>();
     commands
         .entity(bucket_entity)

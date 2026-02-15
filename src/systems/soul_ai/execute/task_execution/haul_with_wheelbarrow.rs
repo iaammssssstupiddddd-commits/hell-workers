@@ -3,7 +3,7 @@
 use crate::constants::*;
 use crate::relationships::{LoadedIn, ParkedAt, PushedBy, WorkingOn};
 use crate::systems::logistics::transport_request::WheelbarrowDestination;
-use crate::systems::logistics::{InStockpile, Wheelbarrow};
+use crate::systems::logistics::Wheelbarrow;
 use crate::systems::soul_ai::execute::task_execution::common::*;
 use crate::systems::soul_ai::execute::task_execution::transport_common::{
     reservation, sand_collect,
@@ -248,7 +248,6 @@ fn handle_loading(
         commands
             .entity(*item_entity)
             .remove::<crate::relationships::StoredIn>();
-        commands.entity(*item_entity).remove::<InStockpile>();
         commands
             .entity(*item_entity)
             .remove::<crate::systems::jobs::Designation>();
@@ -451,7 +450,6 @@ fn handle_unloading(
                         Visibility::Visible,
                         Transform::from_xyz(stock_pos.x, stock_pos.y, Z_ITEM_PICKUP),
                         crate::relationships::StoredIn(dest_stockpile),
-                        InStockpile(dest_stockpile),
                     ));
                     commands.entity(*item_entity).remove::<LoadedIn>();
                     commands.entity(*item_entity).remove::<crate::relationships::DeliveringTo>();

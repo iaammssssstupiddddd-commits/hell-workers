@@ -6,7 +6,6 @@ use crate::events::TaskAssignmentRequest;
 use crate::relationships::{Commanding, ManagedBy, TaskWorkers};
 use crate::systems::command::TaskArea;
 use crate::systems::jobs::{Blueprint, Designation, Priority, TaskSlots, WorkType};
-use crate::systems::logistics::InStockpile;
 use crate::systems::soul_ai::execute::task_execution::types::{AssignedTask, BuildData, BuildPhase};
 use crate::systems::soul_ai::helpers::query_types::AutoBuildSoulQuery;
 use crate::systems::soul_ai::helpers::work as helpers;
@@ -25,7 +24,6 @@ pub fn blueprint_auto_build_system(
         Option<&ManagedBy>,
         Option<&TaskSlots>,
         Option<&TaskWorkers>,
-        Option<&InStockpile>,
         Option<&Priority>,
     )>,
     mut q_souls: AutoBuildSoulQuery,
@@ -62,7 +60,7 @@ pub fn blueprint_auto_build_system(
             }
 
             // Designationが存在し、ManagedByが付与されていないか確認
-            if let Ok((_, _, designation, managed_by_opt, _, _, _, _)) =
+            if let Ok((_, _, designation, managed_by_opt, _, _, _)) =
                 q_designations.get(bp_entity)
             {
                 if designation.work_type != WorkType::Build {

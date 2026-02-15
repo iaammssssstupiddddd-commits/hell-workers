@@ -84,7 +84,6 @@ fn setup_tank(
             ),
             crate::systems::logistics::BelongsTo(building_entity),
             crate::relationships::StoredIn(storage_entity),
-            crate::systems::logistics::InStockpile(storage_entity),
             TaskSlots::new(1),
             Sprite {
                 image: game_assets.bucket_empty.clone(),

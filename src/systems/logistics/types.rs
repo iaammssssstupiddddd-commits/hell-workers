@@ -77,13 +77,3 @@ pub struct PendingBelongsToBlueprint(pub Entity);
 #[derive(Component, Default, Reflect, Clone, Copy, Debug)]
 #[reflect(Component)]
 pub struct Inventory(pub Option<Entity>);
-
-/// アイテムがストックパイルに格納されていることを示すコンポーネント
-#[derive(Component, Reflect)]
-#[reflect(Component)]
-pub struct InStockpile(pub Entity);
-
-/// アイテムがソウルに要求されていることを示すコンポーネント
-#[derive(Component, Reflect)]
-#[reflect(Component)]
-pub struct ClaimedBy(pub Entity);

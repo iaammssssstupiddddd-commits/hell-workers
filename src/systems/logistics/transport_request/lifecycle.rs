@@ -6,7 +6,7 @@ use super::{
     ManualHaulPinnedSource, ManualTransportRequest, TransportRequest, TransportRequestFixedSource,
 };
 use crate::systems::jobs::Designation;
-use crate::systems::logistics::{InStockpile, ResourceItem};
+use crate::systems::logistics::ResourceItem;
 use bevy::prelude::*;
 
 /// アンカー（搬入先）が消失した request を close する
@@ -27,7 +27,7 @@ pub fn transport_request_anchor_cleanup_system(
     q_any: Query<Entity>,
     q_items: Query<Entity, With<ResourceItem>>,
     q_familiars: Query<Entity, With<crate::entities::familiar::Familiar>>,
-    q_in_stockpile: Query<(), With<InStockpile>>,
+    q_in_stockpile: Query<(), With<crate::relationships::StoredIn>>,
 ) {
     for (request_entity, req, demand_opt, workers_opt, manual_opt, fixed_source_opt) in
         q_requests.iter()
