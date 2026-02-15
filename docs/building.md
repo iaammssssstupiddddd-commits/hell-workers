@@ -197,11 +197,12 @@ flowchart TD
 ### 9.1 基本仕様
 
 - **配置方法**: ドラッグ&ドロップで矩形エリアを指定（最大 10×10 タイル）
-- **建設フェーズ**: 2段階の建設プロセス
+- **建設フェーズ**: 3段階の建設プロセス
   1. **Reinforcing Phase**: 骨（2個/タイル）を使って補強
-  2. **Pouring Phase**: 泥（1個/タイル）を注いで完成
+  2. **Pouring Phase**: 泥（1個/タイル）を注ぐ
+  3. **Curing Phase**: 打設後に一定時間養生（立ち入り禁止）
 - **資材コスト**: 骨 × 2 + Stasis Mud × 1 per tile
-- **通行性**: 建築中の `FloorTileBlueprint` は通行可能（障害物として扱わない）
+- **通行性**: 建築中の `FloorTileBlueprint` は通行可能（障害物として扱わない）。ただし `Curing` 中は立ち入り禁止（障害物扱い）
 - **キャンセル**: エリア全体を一括キャンセル（部分キャンセル不可）
 
 ### 9.2 エンティティ構造
@@ -236,9 +237,13 @@ flowchart TD
     H --> I[ワーカーが各タイルに泥を注ぐ]
     I --> J{全タイル注ぎ完了?}
     J -->|No| H
-    J -->|Yes| K[Completion]
-    K --> L[Floor Building 生成]
-    L --> M[Site と Tile を despawn]
+    J -->|Yes| K[Curing Phase]
+    K --> L[Soul退避 + 立ち入り禁止化]
+    L --> M{養生時間経過?}
+    M -->|No| K
+    M -->|Yes| N[Completion]
+    N --> O[Floor Building 生成]
+    O --> P[Site と Tile を despawn]
 ```
 
 ### 9.4 タイル状態 (FloorTileState)
@@ -307,10 +312,13 @@ flowchart TD
 - `floor_construction_completion_system` が実行
 - 条件: 全タイルが `Complete` 状態
 - 処理:
-  1. 各タイルに `Floor` Building をスパウン
-  2. 建築中タイルを完成床へ置換（床として通行可能）
-  3. FloorTileBlueprint エンティティを despawn
-  4. FloorConstructionSite エンティティを despawn
+  1. （初回）`Curing` フェーズへ移行
+  2. 対象タイルを障害物化し、範囲内の Soul を退避
+  3. 一定時間（`FLOOR_CURING_DURATION_SECS`）待機
+  4. 養生完了後、各タイルに `Floor` Building をスパウン
+  5. 建築中タイルを完成床へ置換（床として通行可能）
+  6. FloorTileBlueprint エンティティを despawn
+  7. FloorConstructionSite エンティティを despawn
 
 
 

@@ -20,7 +20,7 @@ pub fn floor_construction_phase_transition_system(
             .filter(|(_, tile)| tile.parent_site == site_entity)
             .all(|(_, tile)| matches!(tile.state, FloorTileState::ReinforcedComplete));
 
-        if all_reinforced && site.tiles_reinforced == site.tiles_total {
+        if all_reinforced && site.tiles_reinforced >= site.tiles_total {
             // Transition to Pouring phase
             site.phase = FloorConstructionPhase::Pouring;
 

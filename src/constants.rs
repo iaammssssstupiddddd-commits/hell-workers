@@ -221,6 +221,8 @@ pub const FLOOR_MUD_PER_TILE: u32 = 1;
 pub const FLOOR_REINFORCE_DURATION_SECS: f32 = 3.0;
 /// 打設フェーズの所要時間（秒）
 pub const FLOOR_POUR_DURATION_SECS: f32 = 2.0;
+/// 打設後の養生期間（秒）
+pub const FLOOR_CURING_DURATION_SECS: f32 = 5.0;
 /// 床建築関連タスクの優先度
 pub const FLOOR_CONSTRUCTION_PRIORITY: u32 = 10;
 

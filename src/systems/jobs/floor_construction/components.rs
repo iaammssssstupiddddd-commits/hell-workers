@@ -13,6 +13,8 @@ pub struct FloorConstructionSite {
     pub tiles_total: u32,
     pub tiles_reinforced: u32,
     pub tiles_poured: u32,
+    /// Remaining curing time in seconds (used while `phase == Curing`)
+    pub curing_remaining_secs: f32,
 }
 
 impl FloorConstructionSite {
@@ -25,6 +27,7 @@ impl FloorConstructionSite {
             tiles_total,
             tiles_reinforced: 0,
             tiles_poured: 0,
+            curing_remaining_secs: 0.0,
         }
     }
 }
@@ -36,6 +39,8 @@ pub enum FloorConstructionPhase {
     Reinforcing,
     /// Pouring mud as concrete
     Pouring,
+    /// Waiting for poured tiles to cure while area is blocked
+    Curing,
 }
 
 /// Individual floor tile blueprint - child entity

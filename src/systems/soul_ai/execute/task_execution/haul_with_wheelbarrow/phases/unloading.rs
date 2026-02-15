@@ -2,14 +2,42 @@
 
 use crate::constants::Z_ITEM_PICKUP;
 use crate::relationships::{LoadedIn, StoredIn};
-use crate::systems::logistics::transport_request::WheelbarrowDestination;
+use crate::systems::logistics::transport_request::{
+    TransportRequestKind, TransportRequestState, WheelbarrowDestination,
+};
 use crate::systems::soul_ai::execute::task_execution::{
+    common::clear_task_and_path,
     context::TaskExecutionContext,
-    transport_common::reservation,
+    transport_common::{reservation, wheelbarrow as wheelbarrow_common},
     types::{AssignedTask, HaulWithWheelbarrowData, HaulWithWheelbarrowPhase},
 };
 use super::super::cancel;
 use bevy::prelude::*;
+
+fn has_pending_wheelbarrow_task(ctx: &TaskExecutionContext) -> bool {
+    ctx.queries
+        .transport_request_status
+        .iter()
+        .any(|(request, demand, state, lease_opt, workers_opt)| {
+            let worker_count = workers_opt.map(|workers| workers.len()).unwrap_or(0);
+            if *state != TransportRequestState::Pending
+                || demand.remaining() == 0
+                || lease_opt.is_some()
+                || worker_count > 0
+            {
+                return false;
+            }
+
+            match request.kind {
+                TransportRequestKind::DepositToStockpile
+                | TransportRequestKind::DeliverToMixerSolid => true,
+                TransportRequestKind::DeliverToBlueprint => {
+                    request.resource_type.requires_wheelbarrow()
+                }
+                _ => false,
+            }
+        })
+}
 
 pub fn handle(
     ctx: &mut TaskExecutionContext,
@@ -199,6 +227,29 @@ pub fn handle(
         "WB_HAUL: Soul {:?} unloaded {} items",
         ctx.soul_entity, unloaded_count
     );
+
+    if has_pending_wheelbarrow_task(ctx) {
+        reservation::release_source(ctx, data.wheelbarrow, 1);
+        // unloading 内で despawn 済みの積載物へ追加入力しないよう、loaded cleanup はスキップする。
+        let parking_anchor = ctx
+            .queries
+            .designation
+            .belongs
+            .get(data.wheelbarrow)
+            .ok()
+            .map(|b| b.0);
+        wheelbarrow_common::park_wheelbarrow_entity(commands, data.wheelbarrow, parking_anchor, soul_pos);
+        ctx.inventory.0 = None;
+        commands
+            .entity(ctx.soul_entity)
+            .remove::<crate::relationships::WorkingOn>();
+        clear_task_and_path(ctx.task, ctx.path);
+        info!(
+            "WB_HAUL: Soul {:?} kept wheelbarrow {:?} for next assignment",
+            ctx.soul_entity, data.wheelbarrow
+        );
+        return;
+    }
 
     *ctx.task = AssignedTask::HaulWithWheelbarrow(HaulWithWheelbarrowData {
         phase: HaulWithWheelbarrowPhase::ReturningWheelbarrow,
