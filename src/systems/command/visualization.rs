@@ -29,6 +29,8 @@ pub fn designation_visual_system(
             WorkType::HaulWaterToMixer => Color::srgb(0.0, 0.8, 1.0), // Same as gather water
             WorkType::WheelbarrowHaul => Color::srgb(0.0, 0.0, 1.0), // Same as Haul
             WorkType::CollectBone => Color::srgb(0.9, 0.9, 0.8), // Bone white
+            WorkType::ReinforceFloorTile => Color::srgb(0.0, 0.5, 1.0), // Same as Build
+            WorkType::PourFloorTile => Color::srgb(0.0, 0.5, 1.0), // Same as Build
         };
 
         commands.spawn((

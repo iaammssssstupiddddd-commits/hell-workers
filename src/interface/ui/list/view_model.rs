@@ -37,6 +37,8 @@ fn task_visual(task: &AssignedTask) -> TaskVisual {
         AssignedTask::HaulToMixer { .. } => TaskVisual::HaulToBlueprint,
         AssignedTask::HaulWaterToMixer { .. } => TaskVisual::Water,
         AssignedTask::HaulWithWheelbarrow { .. } => TaskVisual::Haul,
+        AssignedTask::ReinforceFloorTile { .. } => TaskVisual::Build,
+        AssignedTask::PourFloorTile { .. } => TaskVisual::Build,
     }
 }
 

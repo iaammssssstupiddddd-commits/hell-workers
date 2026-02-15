@@ -103,7 +103,7 @@ pub fn on_task_assigned(
                         WorkType::Haul | WorkType::HaulToMixer | WorkType::WheelbarrowHaul => {
                             LatinPhrase::Portare
                         }
-                        WorkType::Build => LatinPhrase::Laborare,
+                        WorkType::Build | WorkType::ReinforceFloorTile | WorkType::PourFloorTile => LatinPhrase::Laborare,
                         WorkType::GatherWater => LatinPhrase::Haurire,
                         WorkType::CollectSand => LatinPhrase::Colligere,
                         WorkType::CollectBone => LatinPhrase::Colligere,

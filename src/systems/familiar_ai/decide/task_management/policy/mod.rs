@@ -38,5 +38,9 @@ pub fn assign_by_work_type(
         WorkType::HaulWaterToMixer => {
             water::assign_haul_water_to_mixer(task_pos, already_commanded, ctx, queries, shadow)
         }
+        WorkType::ReinforceFloorTile | WorkType::PourFloorTile => {
+            // TODO: Floor construction assignment (Phase 5)
+            false
+        }
     }
 }

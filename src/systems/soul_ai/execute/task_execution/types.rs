@@ -32,6 +32,10 @@ pub enum AssignedTask {
     HaulWaterToMixer(HaulWaterToMixerData),
     /// 手押し車で一括運搬
     HaulWithWheelbarrow(HaulWithWheelbarrowData),
+    /// 床タイルの骨補強
+    ReinforceFloorTile(ReinforceFloorTileData),
+    /// 床タイルへの泥注入
+    PourFloorTile(PourFloorTileData),
 }
 
 #[derive(Reflect, Clone, Debug, PartialEq)]
@@ -230,6 +234,42 @@ pub enum HaulWaterToMixerPhase {
     ReturningBucket,
 }
 
+/// Reinforce floor tile task data
+#[derive(Reflect, Clone, Debug, PartialEq, Eq)]
+pub struct ReinforceFloorTileData {
+    pub tile: Entity,
+    pub site: Entity,
+    pub phase: ReinforceFloorPhase,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Reflect, Default)]
+pub enum ReinforceFloorPhase {
+    #[default]
+    GoingToMaterialCenter,
+    PickingUpBones,
+    GoingToTile,
+    Reinforcing { progress: u8 },
+    Done,
+}
+
+/// Pour floor tile task data
+#[derive(Reflect, Clone, Debug, PartialEq, Eq)]
+pub struct PourFloorTileData {
+    pub tile: Entity,
+    pub site: Entity,
+    pub phase: PourFloorPhase,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Reflect, Default)]
+pub enum PourFloorPhase {
+    #[default]
+    GoingToMaterialCenter,
+    PickingUpMud,
+    GoingToTile,
+    Pouring { progress: u8 },
+    Done,
+}
+
 impl AssignedTask {
     /// タスクの作業タイプを取得
     pub fn work_type(&self) -> Option<WorkType> {
@@ -245,6 +285,8 @@ impl AssignedTask {
             AssignedTask::HaulToMixer(_) => Some(WorkType::Haul),
             AssignedTask::HaulWaterToMixer(_) => Some(WorkType::HaulWaterToMixer),
             AssignedTask::HaulWithWheelbarrow(_) => Some(WorkType::WheelbarrowHaul),
+            AssignedTask::ReinforceFloorTile(_) => Some(WorkType::ReinforceFloorTile),
+            AssignedTask::PourFloorTile(_) => Some(WorkType::PourFloorTile),
             AssignedTask::None => None,
         }
     }
@@ -263,6 +305,8 @@ impl AssignedTask {
             AssignedTask::HaulToMixer(data) => Some(data.item),
             AssignedTask::HaulWaterToMixer(data) => Some(data.bucket),
             AssignedTask::HaulWithWheelbarrow(data) => Some(data.wheelbarrow),
+            AssignedTask::ReinforceFloorTile(data) => Some(data.tile),
+            AssignedTask::PourFloorTile(data) => Some(data.tile),
             AssignedTask::None => None,
         }
     }

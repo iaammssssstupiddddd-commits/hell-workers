@@ -21,6 +21,7 @@ pub enum TaskMode {
     AssignTask(Option<Vec2>),        // 未アサインタスクを使い魔に割り当てるモード
     ZonePlacement(crate::systems::logistics::ZoneType, Option<Vec2>), // ゾーン（ストックパイル等）配置モード
     ZoneRemoval(crate::systems::logistics::ZoneType, Option<Vec2>),   // ゾーン解除モード
+    FloorPlace(Option<Vec2>),        // 床エリア配置モード (ドラッグ開始位置)
 }
 
 /// タスクエリア - 使い魔が担当するエリア

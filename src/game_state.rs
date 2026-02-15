@@ -16,6 +16,7 @@ pub enum PlayMode {
     BuildingPlace,   // 建物配置中
     ZonePlace,       // ゾーン配置中
     TaskDesignation, // タスク指定中（伐採/採掘/運搬など）
+    FloorPlace,      // 床エリア配置中
 }
 
 /// 建物配置モード時の詳細コンテキスト

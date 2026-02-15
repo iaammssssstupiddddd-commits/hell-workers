@@ -49,6 +49,19 @@ pub(super) fn set_build_mode(
     );
 }
 
+pub(super) fn set_floor_place_mode(
+    next_play_mode: &mut NextState<PlayMode>,
+    build_context: &mut BuildContext,
+    zone_context: &mut ZoneContext,
+    task_context: &mut TaskContext,
+) {
+    build_context.0 = None;
+    zone_context.0 = None;
+    task_context.0 = TaskMode::FloorPlace(None);
+    next_play_mode.set(PlayMode::FloorPlace);
+    info!("UI: Floor place mode set, PlayMode -> FloorPlace");
+}
+
 pub(super) fn set_zone_mode(
     kind: ZoneType,
     next_play_mode: &mut NextState<PlayMode>,
@@ -218,6 +231,11 @@ pub(super) fn build_mode_text(
                 }
             }
             _ => "Mode: Task".to_string(),
+        },
+        PlayMode::FloorPlace => match task_context.0 {
+            TaskMode::FloorPlace(None) => "Mode: Floor (Drag to place)".to_string(),
+            TaskMode::FloorPlace(Some(_)) => "Mode: Floor (Dragging...)".to_string(),
+            _ => "Mode: Floor".to_string(),
         },
     }
 }

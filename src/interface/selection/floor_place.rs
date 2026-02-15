@@ -1,0 +1,161 @@
+//! Floor construction drag-drop placement system
+
+use crate::constants::*;
+use crate::game_state::{PlayMode, TaskContext};
+use crate::interface::camera::MainCamera;
+use crate::interface::ui::UiInputState;
+use crate::systems::command::{TaskArea, TaskMode};
+use crate::systems::jobs::floor_construction::{FloorConstructionSite, FloorTileBlueprint};
+use crate::systems::jobs::TaskSlots;
+use crate::world::map::WorldMap;
+use bevy::prelude::*;
+use bevy::window::PrimaryWindow;
+
+const MAX_FLOOR_AREA_SIZE: i32 = 10;
+
+pub fn floor_placement_system(
+    buttons: Res<ButtonInput<MouseButton>>,
+    q_window: Query<&Window, With<PrimaryWindow>>,
+    q_camera: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
+    ui_input_state: Res<UiInputState>,
+    mut task_context: ResMut<TaskContext>,
+    mut next_play_mode: ResMut<NextState<PlayMode>>,
+    world_map: Res<WorldMap>,
+    mut commands: Commands,
+) {
+    if ui_input_state.pointer_over_ui {
+        return;
+    }
+
+    let TaskMode::FloorPlace(start_pos_opt) = task_context.0 else {
+        return;
+    };
+
+    let Some(world_pos) = world_cursor_pos(&q_window, &q_camera) else {
+        return;
+    };
+    let snapped_pos = WorldMap::snap_to_grid_edge(world_pos);
+
+    // Start drag
+    if buttons.just_pressed(MouseButton::Left) {
+        task_context.0 = TaskMode::FloorPlace(Some(snapped_pos));
+        return;
+    }
+
+    // Complete placement
+    if buttons.just_released(MouseButton::Left) {
+        if let Some(start_pos) = start_pos_opt {
+            let area = TaskArea::from_points(start_pos, snapped_pos);
+            apply_floor_placement(&mut commands, &world_map, &area);
+
+            // Reset mode (continue placing if shift held - TODO)
+            task_context.0 = TaskMode::FloorPlace(None);
+        }
+        return;
+    }
+
+    // Cancel (right click)
+    if buttons.just_pressed(MouseButton::Right) {
+        task_context.0 = TaskMode::None;
+        next_play_mode.set(PlayMode::Normal);
+    }
+}
+
+fn world_cursor_pos(
+    q_window: &Query<&Window, With<PrimaryWindow>>,
+    q_camera: &Query<(&Camera, &GlobalTransform), With<MainCamera>>,
+) -> Option<Vec2> {
+    let Ok((camera, camera_transform)) = q_camera.single() else {
+        return None;
+    };
+    let Ok(window) = q_window.single() else {
+        return None;
+    };
+    let cursor_pos: Vec2 = window.cursor_position()?;
+    camera
+        .viewport_to_world_2d(camera_transform, cursor_pos)
+        .ok()
+}
+
+fn apply_floor_placement(
+    commands: &mut Commands,
+    world_map: &WorldMap,
+    area: &TaskArea,
+) {
+    let min_grid = WorldMap::world_to_grid(area.min + Vec2::splat(0.1));
+    let max_grid = WorldMap::world_to_grid(area.max - Vec2::splat(0.1));
+
+    // Validate area size
+    let width = (max_grid.0 - min_grid.0 + 1).abs();
+    let height = (max_grid.1 - min_grid.1 + 1).abs();
+
+    if width > MAX_FLOOR_AREA_SIZE || height > MAX_FLOOR_AREA_SIZE {
+        warn!(
+            "Floor area too large: {}x{} (max {}x{})",
+            width, height, MAX_FLOOR_AREA_SIZE, MAX_FLOOR_AREA_SIZE
+        );
+        return;
+    }
+
+    // Collect valid tiles
+    let mut valid_tiles = Vec::new();
+    for gy in min_grid.1..=max_grid.1 {
+        for gx in min_grid.0..=max_grid.0 {
+            // Check if walkable and no existing buildings/stockpiles
+            if !world_map.is_walkable(gx, gy) {
+                continue;
+            }
+            if world_map.buildings.contains_key(&(gx, gy))
+                || world_map.stockpiles.contains_key(&(gx, gy))
+            {
+                continue;
+            }
+            valid_tiles.push((gx, gy));
+        }
+    }
+
+    if valid_tiles.is_empty() {
+        warn!("No valid tiles for floor placement in selected area");
+        return;
+    }
+
+    let tiles_total = valid_tiles.len() as u32;
+
+    // Create parent FloorConstructionSite entity
+    let site_entity = commands
+        .spawn((
+            FloorConstructionSite::new(area.clone(), tiles_total),
+            Transform::from_translation(area.center().extend(Z_MAP + 0.01)),
+            Visibility::default(),
+            Name::new("FloorConstructionSite"),
+        ))
+        .id();
+
+    info!(
+        "Created FloorConstructionSite {:?} with {} tiles",
+        site_entity, tiles_total
+    );
+
+    // Spawn FloorTileBlueprint children
+    for (gx, gy) in valid_tiles {
+        let world_pos = WorldMap::grid_to_world(gx, gy);
+
+        commands.spawn((
+            FloorTileBlueprint::new(site_entity, (gx, gy)),
+            TaskSlots::new(1), // One worker per tile
+            Sprite {
+                color: Color::srgba(0.5, 0.5, 0.8, 0.2), // Light blue overlay
+                custom_size: Some(Vec2::splat(TILE_SIZE)),
+                ..default()
+            },
+            Transform::from_translation(world_pos.extend(Z_MAP + 0.02)),
+            Visibility::default(),
+            Name::new(format!("FloorTile({},{})", gx, gy)),
+        ));
+    }
+
+    info!(
+        "Spawned {} floor tile blueprints for site {:?}",
+        tiles_total, site_entity
+    );
+}

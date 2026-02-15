@@ -27,10 +27,10 @@ fn spawn_architect_submenu(
     theme: &UiTheme,
     parent_entity: Entity,
 ) {
-    let items = [
+    let building_items = [
         ("Wall", BuildingType::Wall),
         ("Tank", BuildingType::Tank),
-        ("Floor", BuildingType::Floor),
+        ("Floor (Single)", BuildingType::Floor),
         ("MudMixer", BuildingType::MudMixer),
         ("SandPile", BuildingType::SandPile),
         ("BonePile", BuildingType::BonePile),
@@ -59,7 +59,8 @@ fn spawn_architect_submenu(
     commands.entity(parent_entity).add_child(submenu);
 
     commands.entity(submenu).with_children(|parent| {
-        for (label, kind) in items {
+        // Building items
+        for (label, kind) in building_items {
             parent
                 .spawn((
                     Button,
@@ -86,6 +87,33 @@ fn spawn_architect_submenu(
                     ));
                 });
         }
+
+        // Floor area placement button
+        parent
+            .spawn((
+                Button,
+                Node {
+                    width: Val::Percent(100.0),
+                    height: Val::Px(40.0),
+                    margin: UiRect::bottom(Val::Px(5.0)),
+                    justify_content: JustifyContent::Center,
+                    align_items: AlignItems::Center,
+                    ..default()
+                },
+                BackgroundColor(theme.colors.button_default),
+                MenuButton(MenuAction::SelectFloorPlace),
+            ))
+            .with_children(|button| {
+                button.spawn((
+                    Text::new("Floor (Drag)"),
+                    TextFont {
+                        font: game_assets.font_ui.clone(),
+                        font_size: theme.typography.font_size_title,
+                        ..default()
+                    },
+                    TextColor(theme.colors.text_primary),
+                ));
+            });
     });
 }
 

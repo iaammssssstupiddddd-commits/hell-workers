@@ -17,7 +17,7 @@ pub fn on_task_completed_motivation_bonus(
             | WorkType::GatherWater
             | WorkType::HaulWaterToMixer
             | WorkType::WheelbarrowHaul => MOTIVATION_BONUS_HAUL,
-            WorkType::Build | WorkType::Refine => MOTIVATION_BONUS_BUILD,
+            WorkType::Build | WorkType::Refine | WorkType::ReinforceFloorTile | WorkType::PourFloorTile => MOTIVATION_BONUS_BUILD,
         };
 
         if bonus > 0.0 {

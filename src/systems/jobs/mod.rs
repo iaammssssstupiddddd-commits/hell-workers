@@ -2,8 +2,10 @@ use crate::systems::logistics::ResourceType;
 use bevy::prelude::*;
 use std::collections::HashMap;
 mod building_completion;
+pub mod floor_construction;
 mod mud_mixer;
 pub use building_completion::building_completion_system;
+pub use floor_construction::*;
 pub use mud_mixer::*;
 
 // --- Events ---
@@ -162,6 +164,8 @@ pub enum WorkType {
     Refine,           // 精製
     HaulWaterToMixer, // Tankから水をミキサーへ運ぶ
     WheelbarrowHaul,  // 手押し車で一括運搬
+    ReinforceFloorTile, // 床タイルの骨補強
+    PourFloorTile,    // 床タイルへの泥注入
 }
 
 #[derive(Component)]

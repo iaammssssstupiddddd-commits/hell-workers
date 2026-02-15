@@ -126,6 +126,10 @@ pub(super) fn candidate_snapshot(
                 false
             }
         }
+        WorkType::ReinforceFloorTile | WorkType::PourFloorTile => {
+            // TODO: Floor tile validation (Phase 5)
+            false
+        }
     };
 
     if !is_valid {
