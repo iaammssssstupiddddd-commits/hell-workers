@@ -9,6 +9,9 @@ use crate::systems::command::{
     task_area_edit_history_shortcuts_system, task_area_selection_system, zone_placement_system,
     zone_removal_system,
 };
+use crate::systems::jobs::floor_construction::{
+    floor_construction_completion_system, floor_construction_phase_transition_system,
+};
 use crate::systems::obstacle::obstacle_cleanup_system;
 use crate::systems::logistics::transport_request::TransportRequestPlugin;
 use crate::systems::soul_ai::SoulAiPlugin;
@@ -47,6 +50,8 @@ impl Plugin for LogicPlugin {
                 tree_regrowth_system,
                 obstacle_cleanup_system,
                 blueprint_cancel_cleanup_system,
+                floor_construction_phase_transition_system,
+                floor_construction_completion_system,
             )
                 .chain()
                 .in_set(GameSystemSet::Logic),
