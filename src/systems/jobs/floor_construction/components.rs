@@ -86,3 +86,7 @@ pub enum FloorTileState {
 /// Marker component linking a TransportRequest to a FloorConstructionSite
 #[derive(Component, Clone, Copy, Debug)]
 pub struct TargetFloorConstructionSite(pub Entity);
+
+/// Marker component requesting cancellation of an entire floor construction site.
+#[derive(Component, Clone, Copy, Debug, Default)]
+pub struct FloorConstructionCancelRequested;

@@ -10,6 +10,7 @@ use crate::systems::logistics::ResourceType;
 use crate::systems::soul_ai::execute::task_execution::types::{
     AssignedTask, BuildPhase, CollectBonePhase, CollectSandPhase, GatherPhase, GatherWaterPhase, HaulPhase,
     HaulToBpPhase, HaulToMixerPhase, HaulWaterToMixerPhase, HaulWithWheelbarrowPhase, RefinePhase,
+    ReinforceFloorPhase, PourFloorPhase,
 };
 use bevy::prelude::*;
 
@@ -186,8 +187,21 @@ pub fn collect_active_reservation_ops(
                 }
             }
         }
-        AssignedTask::ReinforceFloorTile(_) | AssignedTask::PourFloorTile(_) => {
-            // TODO: Floor construction reservations (Phase 4 & 8)
+        AssignedTask::ReinforceFloorTile(data) => {
+            if !matches!(data.phase, ReinforceFloorPhase::Done) {
+                ops.push(ResourceReservationOp::ReserveSource {
+                    source: data.tile,
+                    amount: 1,
+                });
+            }
+        }
+        AssignedTask::PourFloorTile(data) => {
+            if !matches!(data.phase, PourFloorPhase::Done) {
+                ops.push(ResourceReservationOp::ReserveSource {
+                    source: data.tile,
+                    amount: 1,
+                });
+            }
         }
         AssignedTask::None => {}
     }

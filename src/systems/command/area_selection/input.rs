@@ -14,6 +14,9 @@ use crate::interface::ui::UiInputState;
 use crate::relationships::{StoredItems, TaskWorkers};
 use crate::systems::command::{AreaSelectionIndicator, TaskArea, TaskMode};
 use crate::systems::jobs::{Blueprint, Designation, Rock, Tree};
+use crate::systems::jobs::floor_construction::{
+    FloorConstructionCancelRequested, FloorTileBlueprint,
+};
 use crate::systems::logistics::transport_request::{
     ManualTransportRequest, TransportRequest, TransportRequestFixedSource,
 };
@@ -23,6 +26,7 @@ use crate::systems::logistics::{
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
+use std::collections::HashSet;
 
 fn should_exit_after_apply(keyboard: &ButtonInput<KeyCode>) -> bool {
     keyboard.pressed(KeyCode::ShiftLeft) || keyboard.pressed(KeyCode::ShiftRight)
@@ -93,22 +97,25 @@ pub fn task_area_selection_system(
     mut next_play_mode: ResMut<NextState<PlayMode>>,
     mut q_familiars: Query<(&mut ActiveCommand, &mut Destination), With<Familiar>>,
     q_familiar_areas: Query<&TaskArea, With<Familiar>>,
-    q_targets: Query<(
-        Entity,
-        &Transform,
-        Option<&Tree>,
-        Option<&Rock>,
-        Option<&ResourceItem>,
-        Option<&Designation>,
-        Option<&TaskWorkers>,
-        Option<&Blueprint>,
-        Option<&BelongsTo>,
-        Option<&TransportRequest>,
-        Option<&TransportRequestFixedSource>,
-        Option<&Stockpile>,
-        Option<&StoredItems>,
-        Option<&BucketStorage>,
-        Option<&ManualTransportRequest>,
+    mut q_target_sets: ParamSet<(
+        Query<(
+            Entity,
+            &Transform,
+            Option<&Tree>,
+            Option<&Rock>,
+            Option<&ResourceItem>,
+            Option<&Designation>,
+            Option<&TaskWorkers>,
+            Option<&Blueprint>,
+            Option<&BelongsTo>,
+            Option<&TransportRequest>,
+            Option<&TransportRequestFixedSource>,
+            Option<&Stockpile>,
+            Option<&StoredItems>,
+            Option<&BucketStorage>,
+            Option<&ManualTransportRequest>,
+        )>,
+        Query<(Entity, &Transform, &FloorTileBlueprint)>,
     )>,
     mut commands: Commands,
     keyboard: Res<ButtonInput<KeyCode>>,
@@ -296,13 +303,8 @@ pub fn task_area_selection_system(
         | TaskMode::DesignateHaul(Some(start_pos)) => {
             let mode = task_context.0;
             let area = TaskArea::from_points(start_pos, WorldMap::snap_to_grid_edge(world_pos));
-            apply_designation_in_area(
-                &mut commands,
-                mode,
-                &area,
-                selected.0,
-                &q_targets,
-            );
+            let q_targets = q_target_sets.p0();
+            apply_designation_in_area(&mut commands, mode, &area, selected.0, &q_targets);
             task_context.0 = reset_designation_mode(mode);
         }
         TaskMode::CancelDesignation(Some(start_pos)) => {
@@ -311,83 +313,131 @@ pub fn task_area_selection_system(
 
             if drag_distance < TILE_SIZE * 0.5 {
                 // クリックキャンセル: 最も近い Designation 持ちエンティティを個別キャンセル
-                let mut closest: Option<(
-                    Entity,
-                    f32,
-                    Option<&TaskWorkers>,
-                    bool,
-                    bool,
-                    Option<Entity>,
-                )> = None;
-                for (
-                    entity,
-                    transform,
-                    _,
-                    _,
-                    _,
-                    designation,
-                    task_workers,
-                    blueprint,
-                    _,
-                    transport_request,
-                    fixed_source,
-                    _,
-                    _,
-                    _,
-                    _,
-                ) in q_targets.iter()
+                let mut closest: Option<(Entity, f32)> = None;
                 {
-                    if designation.is_none() {
-                        continue;
-                    }
-                    let pos = transform.translation.truncate();
-                    let dist = pos.distance(start_pos);
-                    if dist < TILE_SIZE {
-                        if closest.is_none() || dist < closest.unwrap().1 {
-                            closest = Some((
-                                entity,
-                                dist,
-                                task_workers,
-                                blueprint.is_some(),
-                                transport_request.is_some(),
-                                fixed_source.map(|source| source.0),
-                            ));
+                    let q_targets = q_target_sets.p0();
+                    for (
+                        entity,
+                        transform,
+                        _,
+                        _,
+                        _,
+                        designation,
+                        _task_workers,
+                        _blueprint,
+                        _,
+                        _transport_request,
+                        _fixed_source,
+                        _,
+                        _,
+                        _,
+                        _,
+                    ) in q_targets.iter()
+                    {
+                        if designation.is_none() {
+                            continue;
+                        }
+                        let pos = transform.translation.truncate();
+                        let dist = pos.distance(start_pos);
+                        if dist < TILE_SIZE {
+                            if closest.is_none() || dist < closest.unwrap().1 {
+                                closest = Some((entity, dist));
+                            }
                         }
                     }
                 }
 
-                if let Some((
-                    target_entity,
-                    _,
-                    task_workers,
-                    is_blueprint,
-                    is_transport_request,
-                    fixed_source,
-                )) = closest
-                {
-                    cancel_single_designation(
-                        &mut commands,
-                        target_entity,
+                if let Some((target_entity, _)) = closest {
+                    let q_targets = q_target_sets.p0();
+                    if let Ok((
+                        _,
+                        _,
+                        _,
+                        _,
+                        _,
+                        _,
                         task_workers,
-                        is_blueprint,
-                        is_transport_request,
+                        blueprint,
+                        _,
+                        transport_request,
                         fixed_source,
-                    );
+                        _,
+                        _,
+                        _,
+                        _,
+                    )) = q_targets.get(target_entity)
+                    {
+                        cancel_single_designation(
+                            &mut commands,
+                            target_entity,
+                            task_workers,
+                            blueprint.is_some(),
+                            transport_request.is_some(),
+                            fixed_source.map(|source| source.0),
+                        );
+                        info!(
+                            "CANCEL: Click-cancelled designation on {:?}",
+                            target_entity
+                        );
+                    }
+                }
+
+                // 床建築はエリア単位でのみキャンセルできるため、クリック時は
+                // 近傍タイルから親サイトを解決してサイト全体キャンセルを要求する。
+                let mut closest_floor_site: Option<(Entity, f32)> = None;
+                let q_floor_tiles = q_target_sets.p1();
+                for (_, transform, tile) in q_floor_tiles.iter() {
+                    let dist = transform.translation.truncate().distance(start_pos);
+                    if dist > TILE_SIZE {
+                        continue;
+                    }
+                    match closest_floor_site {
+                        Some((_, best_dist)) if best_dist <= dist => {}
+                        _ => closest_floor_site = Some((tile.parent_site, dist)),
+                    }
+                }
+                if let Some((site_entity, _)) = closest_floor_site {
+                    commands
+                        .entity(site_entity)
+                        .insert(FloorConstructionCancelRequested);
                     info!(
-                        "CANCEL: Click-cancelled designation on {:?}",
-                        target_entity
+                        "FLOOR_CANCEL: Requested site cancellation via click {:?}",
+                        site_entity
                     );
                 }
             } else {
                 // エリアキャンセル
                 let area = TaskArea::from_points(start_pos, end_pos);
-                apply_designation_in_area(
-                    &mut commands,
-                    TaskMode::CancelDesignation(Some(start_pos)),
-                    &area,
-                    selected.0,
-                    &q_targets,
-                );
+                {
+                    let q_targets = q_target_sets.p0();
+                    apply_designation_in_area(
+                        &mut commands,
+                        TaskMode::CancelDesignation(Some(start_pos)),
+                        &area,
+                        selected.0,
+                        &q_targets,
+                    );
+                }
+
+                let mut requested_sites = HashSet::new();
+                let q_floor_tiles = q_target_sets.p1();
+                for (_, transform, tile) in q_floor_tiles.iter() {
+                    let pos = transform.translation.truncate();
+                    if area.contains(pos) {
+                        requested_sites.insert(tile.parent_site);
+                    }
+                }
+                for site_entity in requested_sites.iter().copied() {
+                    commands
+                        .entity(site_entity)
+                        .insert(FloorConstructionCancelRequested);
+                }
+                if !requested_sites.is_empty() {
+                    info!(
+                        "FLOOR_CANCEL: Requested {} site(s) cancellation via area drag",
+                        requested_sites.len()
+                    );
+                }
             }
 
             task_context.0 = TaskMode::CancelDesignation(None);

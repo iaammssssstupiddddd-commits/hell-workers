@@ -10,7 +10,8 @@ use crate::systems::command::{
     zone_removal_system,
 };
 use crate::systems::jobs::floor_construction::{
-    floor_construction_completion_system, floor_construction_phase_transition_system,
+    floor_construction_cancellation_system, floor_construction_completion_system,
+    floor_construction_phase_transition_system,
 };
 use crate::systems::obstacle::obstacle_cleanup_system;
 use crate::systems::logistics::transport_request::TransportRequestPlugin;
@@ -50,6 +51,7 @@ impl Plugin for LogicPlugin {
                 tree_regrowth_system,
                 obstacle_cleanup_system,
                 blueprint_cancel_cleanup_system,
+                floor_construction_cancellation_system,
                 floor_construction_phase_transition_system,
                 floor_construction_completion_system,
             )
