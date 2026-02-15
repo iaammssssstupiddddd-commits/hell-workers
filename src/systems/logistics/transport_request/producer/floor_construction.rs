@@ -331,9 +331,19 @@ pub fn floor_material_delivery_sync_system(
 /// to prepare tiles for worker assignment.
 pub fn floor_tile_designation_system(
     mut commands: Commands,
-    q_tiles: Query<(Entity, &Transform, &FloorTileBlueprint, Option<&Designation>)>,
+    mut q_tiles: Query<(
+        Entity,
+        &Transform,
+        &FloorTileBlueprint,
+        Option<&Designation>,
+        &mut Visibility,
+    )>,
 ) {
-    for (tile_entity, tile_transform, tile, designation_opt) in q_tiles.iter() {
+    for (tile_entity, tile_transform, tile, designation_opt, mut visibility) in q_tiles.iter_mut() {
+        if *visibility == Visibility::Hidden {
+            *visibility = Visibility::Visible;
+        }
+
         let desired_work_type = match tile.state {
             FloorTileState::ReinforcingReady => Some(WorkType::ReinforceFloorTile),
             FloorTileState::PouringReady => Some(WorkType::PourFloorTile),
@@ -349,7 +359,7 @@ pub fn floor_tile_designation_system(
                         tile_transform.translation.y,
                         tile_transform.translation.z,
                     ),
-                    Visibility::Hidden,
+                    Visibility::Visible,
                     Designation { work_type },
                     TaskSlots::new(1), // Only 1 worker per tile
                     Priority(FLOOR_CONSTRUCTION_PRIORITY),

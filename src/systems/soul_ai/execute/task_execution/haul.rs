@@ -79,12 +79,24 @@ pub fn handle_haul_task(
                         let stock_dest = WorldMap::grid_to_world(stock_grid.0, stock_grid.1);
                         ctx.path.waypoints.clear();
                         update_destination_if_needed(ctx.dest, stock_dest, ctx.path);
-                    } else if let Ok((site_transform, _, _)) =
-                        ctx.queries.storage.floor_sites.get(stockpile)
+                    } else if let Ok((_, site, _)) = ctx.queries.storage.floor_sites.get(stockpile)
                     {
-                        let site_pos = site_transform.translation.truncate();
-                        ctx.path.waypoints.clear();
-                        update_destination_if_needed(ctx.dest, site_pos, ctx.path);
+                        let reachable = update_destination_to_adjacent(
+                            ctx.dest,
+                            site.material_center,
+                            ctx.path,
+                            soul_pos,
+                            world_map,
+                            ctx.pf_context,
+                        );
+                        if !reachable {
+                            info!(
+                                "HAUL: Soul {:?} cannot reach floor site {:?}, canceling",
+                                ctx.soul_entity, stockpile
+                            );
+                            cancel::cancel_haul_to_stockpile(ctx, item, stockpile);
+                            return;
+                        }
                     }
 
                     *ctx.task = AssignedTask::Haul(
@@ -118,9 +130,8 @@ pub fn handle_haul_task(
                     );
                     ctx.path.waypoints.clear();
                 }
-            } else if let Ok((site_transform, _, _)) = ctx.queries.storage.floor_sites.get(stockpile)
-            {
-                let site_pos = site_transform.translation.truncate();
+            } else if let Ok((_, site, _)) = ctx.queries.storage.floor_sites.get(stockpile) {
+                let site_pos = site.material_center;
                 let reachable = update_destination_to_adjacent(
                     ctx.dest,
                     site_pos,
@@ -276,13 +287,13 @@ pub fn handle_haul_task(
                     );
                 }
             } else {
-                if let Ok((site_transform, _, _)) = ctx.queries.storage.floor_sites.get(stockpile) {
+                if let Ok((_, site, _)) = ctx.queries.storage.floor_sites.get(stockpile) {
                     // Floor construction transport: drop resource at site material center.
                     commands.entity(item).insert((
                         Visibility::Visible,
                         Transform::from_xyz(
-                            site_transform.translation.x,
-                            site_transform.translation.y,
+                            site.material_center.x,
+                            site.material_center.y,
                             Z_ITEM_PICKUP,
                         ),
                     ));

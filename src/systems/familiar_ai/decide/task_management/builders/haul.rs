@@ -306,3 +306,57 @@ pub fn issue_collect_bone_with_wheelbarrow_to_blueprint(
         already_commanded,
     });
 }
+
+/// 骨ソースから直接採取して FloorConstructionSite へ猫車搬入する。
+pub fn issue_collect_bone_with_wheelbarrow_to_floor(
+    wheelbarrow: Entity,
+    source_entity: Entity,
+    source_pos: Vec2,
+    site_entity: Entity,
+    amount: u32,
+    task_pos: Vec2,
+    already_commanded: bool,
+    ctx: &AssignTaskContext<'_>,
+    queries: &mut crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
+    _shadow: &mut ReservationShadow,
+) {
+    let haul_amount = amount.max(1);
+    let assigned_task =
+        crate::systems::soul_ai::execute::task_execution::types::AssignedTask::HaulWithWheelbarrow(
+            crate::systems::soul_ai::execute::task_execution::types::HaulWithWheelbarrowData {
+                wheelbarrow,
+                source_pos,
+                destination:
+                    crate::systems::logistics::transport_request::WheelbarrowDestination::Stockpile(
+                        site_entity,
+                    ),
+                collect_source: Some(source_entity),
+                collect_amount: haul_amount,
+                collect_resource_type: Some(ResourceType::Bone),
+                items: Vec::new(),
+                phase: HaulWithWheelbarrowPhase::GoingToParking,
+            },
+        );
+
+    let reservation_ops = vec![
+        ResourceReservationOp::ReserveSource {
+            source: wheelbarrow,
+            amount: 1,
+        },
+        ResourceReservationOp::ReserveSource {
+            source: source_entity,
+            amount: 1,
+        },
+    ];
+
+    queries.assignment_writer.write(crate::events::TaskAssignmentRequest {
+        familiar_entity: ctx.fam_entity,
+        worker_entity: ctx.worker_entity,
+        task_entity: ctx.task_entity,
+        work_type: WorkType::WheelbarrowHaul,
+        task_pos,
+        assigned_task,
+        reservation_ops,
+        already_commanded,
+    });
+}

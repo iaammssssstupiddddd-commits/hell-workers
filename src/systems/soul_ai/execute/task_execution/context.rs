@@ -182,6 +182,17 @@ pub struct TaskAssignmentQueries<'w, 's> {
         ),
         With<crate::systems::jobs::SandPile>,
     >,
+    pub bone_piles: Query<
+        'w,
+        's,
+        (
+            Entity,
+            &'static Transform,
+            Option<&'static Designation>,
+            Option<&'static TaskWorkers>,
+        ),
+        With<crate::systems::jobs::BonePile>,
+    >,
     pub task_state: Query<'w, 's, (Option<&'static Designation>, Option<&'static TaskWorkers>)>,
     pub transport_requests: Query<'w, 's, &'static crate::systems::logistics::transport_request::TransportRequest>,
     pub transport_demands:

@@ -11,7 +11,8 @@ use crate::systems::familiar_ai::decide::task_management::{AssignTaskContext, Re
 use bevy::prelude::*;
 
 use super::super::builders::{
-    issue_haul_to_mixer, issue_haul_to_stockpile_with_source, issue_haul_with_wheelbarrow,
+    issue_collect_bone_with_wheelbarrow_to_floor, issue_haul_to_mixer,
+    issue_haul_to_stockpile_with_source, issue_haul_with_wheelbarrow,
 };
 use super::super::validator::{
     find_bucket_return_assignment, resolve_haul_to_floor_construction_inputs,
@@ -156,26 +157,122 @@ fn assign_haul_to_floor_construction(
 
     // Floor construction requests deliver items onto the site material center.
     // Reuse Haul task path and let execution drop the item near the site anchor.
-    let Some((source_item, source_pos)) =
+    if let Some((source_item, source_pos)) =
         source_selector::find_nearest_blueprint_source_item(resource_type, site_pos, queries, shadow)
+    {
+        issue_haul_to_stockpile_with_source(
+            source_item,
+            site_entity,
+            source_pos,
+            already_commanded,
+            ctx,
+            queries,
+            shadow,
+        );
+        return true;
+    }
+
+    // Bone は地面アイテムが無いことが多いため、直接採取フォールバックを許可する。
+    if resource_type == crate::systems::logistics::ResourceType::Bone
+        && try_direct_bone_collect_to_floor(
+            site_entity,
+            ctx.task_entity,
+            site_pos,
+            already_commanded,
+            ctx,
+            queries,
+            shadow,
+        )
+    {
+        return true;
+    }
+
+    debug!(
+        "ASSIGN: Floor request {:?} has no available {:?} source",
+        ctx.task_entity, resource_type
+    );
+    false
+}
+
+fn try_direct_bone_collect_to_floor(
+    site_entity: Entity,
+    task_entity: Entity,
+    site_pos: Vec2,
+    already_commanded: bool,
+    ctx: &AssignTaskContext<'_>,
+    queries: &mut crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
+    shadow: &mut ReservationShadow,
+) -> bool {
+    let Some((source_entity, source_pos)) =
+        blueprint::find_collect_bone_source(site_pos, ctx.task_area_opt, queries, shadow)
     else {
         debug!(
-            "ASSIGN: Floor request {:?} has no available {:?} source",
-            ctx.task_entity, resource_type
+            "ASSIGN: Floor request {:?} has no available Bone collect source",
+            task_entity
         );
         return false;
     };
 
-    issue_haul_to_stockpile_with_source(
-        source_item,
+    let Some(wheelbarrow) = wheelbarrow::find_nearest_wheelbarrow(source_pos, queries, shadow)
+    else {
+        debug!(
+            "ASSIGN: Floor request {:?} has no available wheelbarrow for Bone collect",
+            task_entity
+        );
+        return false;
+    };
+
+    let remaining_needed = compute_remaining_floor_bones(site_entity, queries);
+    let amount = remaining_needed.max(1).min(crate::constants::WHEELBARROW_CAPACITY as u32);
+
+    issue_collect_bone_with_wheelbarrow_to_floor(
+        wheelbarrow,
+        source_entity,
+        source_pos,
         site_entity,
+        amount,
         source_pos,
         already_commanded,
         ctx,
         queries,
         shadow,
     );
+    info!(
+        "ASSIGN: Floor request {:?} assigned direct Bone collect via wheelbarrow {:?} from {:?} to site {:?} (amount {})",
+        task_entity,
+        wheelbarrow,
+        source_entity,
+        site_entity,
+        amount
+    );
     true
+}
+
+fn compute_remaining_floor_bones(
+    site_entity: Entity,
+    queries: &crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
+) -> u32 {
+    let mut needed = 0u32;
+
+    for tile in queries
+        .storage
+        .floor_tiles
+        .iter()
+        .filter(|tile| tile.parent_site == site_entity)
+    {
+        if tile.state == crate::systems::jobs::floor_construction::FloorTileState::WaitingBones {
+            needed += crate::constants::FLOOR_BONES_PER_TILE.saturating_sub(tile.bones_delivered);
+        }
+    }
+
+    let incoming = queries
+        .reservation
+        .incoming_deliveries_query
+        .get(site_entity)
+        .map(|inc| inc.len() as u32)
+        .unwrap_or(0);
+
+    needed.saturating_sub(incoming)
 }
 
 pub fn assign_haul(

@@ -10,6 +10,7 @@ pub use haul::{
     issue_collect_sand_with_wheelbarrow_to_blueprint, issue_haul_to_blueprint_with_source,
     issue_haul_to_mixer, issue_haul_to_stockpile_with_source, issue_haul_with_wheelbarrow,
     issue_collect_bone_with_wheelbarrow_to_blueprint,
+    issue_collect_bone_with_wheelbarrow_to_floor,
 };
 pub use water::{issue_gather_water, issue_haul_water_to_mixer};
 

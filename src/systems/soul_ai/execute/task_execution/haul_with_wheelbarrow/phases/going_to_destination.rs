@@ -22,24 +22,37 @@ pub fn handle(
 ) {
     let (reachable, arrived) = match data.destination {
         WheelbarrowDestination::Stockpile(stockpile_entity) => {
-            let Ok((_, stock_transform, _, _)) =
-                ctx.queries.storage.stockpiles.get(stockpile_entity)
-            else {
-                info!("WB_HAUL: Destination stockpile not found, canceling");
+            if let Ok((_, stock_transform, _, _)) = ctx.queries.storage.stockpiles.get(stockpile_entity)
+            {
+                let stock_pos = stock_transform.translation.truncate();
+                let reachable = update_destination_to_adjacent(
+                    ctx.dest,
+                    stock_pos,
+                    ctx.path,
+                    soul_pos,
+                    world_map,
+                    ctx.pf_context,
+                );
+                (reachable, is_near_target(soul_pos, stock_pos))
+            } else if let Ok((_, site, _)) = ctx.queries.storage.floor_sites.get(stockpile_entity) {
+                let site_pos = site.material_center;
+                let reachable = update_destination_to_adjacent(
+                    ctx.dest,
+                    site_pos,
+                    ctx.path,
+                    soul_pos,
+                    world_map,
+                    ctx.pf_context,
+                );
+                (
+                    reachable,
+                    is_near_target_or_dest(soul_pos, site_pos, ctx.dest.0),
+                )
+            } else {
+                info!("WB_HAUL: Destination stockpile/floor-site not found, canceling");
                 cancel::cancel_wheelbarrow_task(ctx, &data, commands);
                 return;
-            };
-
-            let stock_pos = stock_transform.translation.truncate();
-            let reachable = update_destination_to_adjacent(
-                ctx.dest,
-                stock_pos,
-                ctx.path,
-                soul_pos,
-                world_map,
-                ctx.pf_context,
-            );
-            (reachable, is_near_target(soul_pos, stock_pos))
+            }
         }
         WheelbarrowDestination::Blueprint(blueprint_entity) => {
             let Ok((_, blueprint, _)) = ctx.queries.storage.blueprints.get(blueprint_entity) else {
