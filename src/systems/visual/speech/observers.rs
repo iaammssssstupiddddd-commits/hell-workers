@@ -105,7 +105,8 @@ pub fn on_task_assigned(
                         }
                         WorkType::Build
                         | WorkType::ReinforceFloorTile
-                        | WorkType::PourFloorTile => LatinPhrase::Laborare,
+                        | WorkType::PourFloorTile
+                        | WorkType::CoatWall => LatinPhrase::Laborare,
                         WorkType::GatherWater => LatinPhrase::Haurire,
                         WorkType::CollectSand => LatinPhrase::Colligere,
                         WorkType::CollectBone => LatinPhrase::Colligere,

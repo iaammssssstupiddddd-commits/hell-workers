@@ -62,7 +62,7 @@ pub fn handle(
                 return;
             };
 
-            update_destination_to_blueprint(
+            let reachable = update_destination_to_blueprint(
                 ctx.dest,
                 &blueprint.occupied_grids,
                 ctx.path,
@@ -70,7 +70,7 @@ pub fn handle(
                 world_map,
                 ctx.pf_context,
             );
-            (true, is_near_blueprint(soul_pos, &blueprint.occupied_grids))
+            (reachable, is_near_blueprint(soul_pos, &blueprint.occupied_grids))
         }
         WheelbarrowDestination::Mixer { entity, .. } => {
             let Ok((mixer_transform, _, _)) = ctx.queries.storage.mixers.get(entity) else {

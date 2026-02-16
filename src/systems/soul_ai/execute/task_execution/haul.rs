@@ -2,6 +2,7 @@
 
 use crate::constants::Z_ITEM_PICKUP;
 use crate::relationships::WorkingOn;
+use crate::systems::jobs::BuildingType;
 use crate::systems::soul_ai::execute::task_execution::common::*;
 use crate::systems::soul_ai::execute::task_execution::transport_common::{cancel, reservation};
 use crate::systems::soul_ai::execute::task_execution::{
@@ -100,6 +101,35 @@ pub fn handle_haul_task(
                             cancel::cancel_haul_to_stockpile(ctx, item, stockpile);
                             return;
                         }
+                    } else if let Ok((wall_transform, building, provisional_opt)) =
+                        ctx.queries.storage.buildings.get_mut(stockpile)
+                    {
+                        let can_deliver_to_wall = building.kind == BuildingType::Wall
+                            && building.is_provisional
+                            && provisional_opt
+                                .as_ref()
+                                .is_some_and(|provisional| !provisional.mud_delivered);
+                        if can_deliver_to_wall {
+                            let reachable = update_destination_to_adjacent(
+                                ctx.dest,
+                                wall_transform.translation.truncate(),
+                                ctx.path,
+                                soul_pos,
+                                world_map,
+                                ctx.pf_context,
+                            );
+                            if !reachable {
+                                info!(
+                                    "HAUL: Soul {:?} cannot reach provisional wall {:?}, canceling",
+                                    ctx.soul_entity, stockpile
+                                );
+                                cancel::cancel_haul_to_stockpile(ctx, item, stockpile);
+                                return;
+                            }
+                        } else {
+                            cancel::cancel_haul_to_stockpile(ctx, item, stockpile);
+                            return;
+                        }
                     }
 
                     *ctx.task = AssignedTask::Haul(
@@ -153,6 +183,47 @@ pub fn handle_haul_task(
                 }
 
                 if is_near_target_or_dest(soul_pos, site_pos, ctx.dest.0) {
+                    *ctx.task = AssignedTask::Haul(
+                        crate::systems::soul_ai::execute::task_execution::types::HaulData {
+                            item,
+                            stockpile,
+                            phase: HaulPhase::Dropping,
+                        },
+                    );
+                    ctx.path.waypoints.clear();
+                }
+            } else if let Ok((wall_transform, building, provisional_opt)) =
+                ctx.queries.storage.buildings.get_mut(stockpile)
+            {
+                let can_deliver_to_wall = building.kind == BuildingType::Wall
+                    && building.is_provisional
+                    && provisional_opt
+                        .as_ref()
+                        .is_some_and(|provisional| !provisional.mud_delivered);
+                if !can_deliver_to_wall {
+                    cancel::cancel_haul_to_stockpile(ctx, item, stockpile);
+                    return;
+                }
+
+                let wall_pos = wall_transform.translation.truncate();
+                let reachable = update_destination_to_adjacent(
+                    ctx.dest,
+                    wall_pos,
+                    ctx.path,
+                    soul_pos,
+                    world_map,
+                    ctx.pf_context,
+                );
+                if !reachable {
+                    info!(
+                        "HAUL: Soul {:?} cannot reach provisional wall {:?}, canceling",
+                        ctx.soul_entity, stockpile
+                    );
+                    cancel::cancel_haul_to_stockpile(ctx, item, stockpile);
+                    return;
+                }
+
+                if is_near_target_or_dest(soul_pos, wall_pos, ctx.dest.0) {
                     *ctx.task = AssignedTask::Haul(
                         crate::systems::soul_ai::execute::task_execution::types::HaulData {
                             item,
@@ -319,6 +390,35 @@ pub fn handle_haul_task(
                     commands
                         .entity(item)
                         .remove::<crate::relationships::TaskWorkers>();
+                } else if let Ok((wall_transform, building, provisional_opt)) =
+                    ctx.queries.storage.buildings.get_mut(stockpile)
+                {
+                    let can_deliver_to_wall = building.kind == BuildingType::Wall
+                        && building.is_provisional
+                        && provisional_opt
+                            .as_ref()
+                            .is_some_and(|provisional| !provisional.mud_delivered);
+                    if can_deliver_to_wall {
+                        let wall_pos = wall_transform.translation.truncate();
+                        commands.entity(item).insert((
+                            Visibility::Visible,
+                            Transform::from_xyz(wall_pos.x, wall_pos.y, Z_ITEM_PICKUP),
+                        ));
+                        commands
+                            .entity(item)
+                            .remove::<crate::relationships::StoredIn>();
+                        commands
+                            .entity(item)
+                            .remove::<crate::relationships::DeliveringTo>();
+                        commands
+                            .entity(item)
+                            .remove::<crate::systems::jobs::IssuedBy>();
+                        commands
+                            .entity(item)
+                            .remove::<crate::relationships::TaskWorkers>();
+                    } else if ctx.inventory.0.is_some() {
+                        drop_item(commands, ctx.soul_entity, item, soul_pos);
+                    }
                 } else {
                     // 目的地消失
                     if ctx.inventory.0.is_some() {

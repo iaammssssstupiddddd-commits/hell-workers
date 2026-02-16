@@ -31,6 +31,7 @@ impl BuildingType {
         match self {
             BuildingType::Wall => {
                 materials.insert(ResourceType::Wood, 1);
+                materials.insert(ResourceType::StasisMud, 1);
             }
             BuildingType::Floor => {
                 // Drag方式で建設されるため、Blueprintベースの資材搬入は不要
@@ -60,6 +61,11 @@ impl BuildingType {
 pub struct Building {
     pub kind: BuildingType,
     pub is_provisional: bool,
+}
+
+#[derive(Component, Debug, Clone, Copy, Default)]
+pub struct ProvisionalWall {
+    pub mud_delivered: bool,
 }
 
 #[derive(Component)]
@@ -166,6 +172,7 @@ pub enum WorkType {
     WheelbarrowHaul,    // 手押し車で一括運搬
     ReinforceFloorTile, // 床タイルの骨補強
     PourFloorTile,      // 床タイルへの泥注入
+    CoatWall,           // 仮設壁への泥塗布
 }
 
 #[derive(Component)]

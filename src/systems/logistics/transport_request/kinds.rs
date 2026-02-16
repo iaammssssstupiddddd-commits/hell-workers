@@ -5,6 +5,7 @@ pub enum TransportRequestKind {
     DepositToStockpile,
     DeliverToBlueprint,
     DeliverToFloorConstruction,
+    DeliverToProvisionalWall,
     DeliverToMixerSolid,
     DeliverWaterToMixer,
     GatherWaterToTank,

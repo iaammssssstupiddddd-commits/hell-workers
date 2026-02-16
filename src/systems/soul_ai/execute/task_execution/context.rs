@@ -105,6 +105,15 @@ pub struct StorageAccess<'w, 's> {
     >,
     pub floor_tiles:
         Query<'w, 's, &'static crate::systems::jobs::floor_construction::FloorTileBlueprint>,
+    pub buildings: Query<
+        'w,
+        's,
+        (
+            &'static Transform,
+            &'static crate::systems::jobs::Building,
+            Option<&'static crate::systems::jobs::ProvisionalWall>,
+        ),
+    >,
 }
 
 /// 倉庫・設備・ブループリントへの変更可能アクセス
@@ -153,6 +162,15 @@ pub struct MutStorageAccess<'w, 's> {
     >,
     pub floor_tiles:
         Query<'w, 's, &'static mut crate::systems::jobs::floor_construction::FloorTileBlueprint>,
+    pub buildings: Query<
+        'w,
+        's,
+        (
+            &'static Transform,
+            &'static mut crate::systems::jobs::Building,
+            Option<&'static mut crate::systems::jobs::ProvisionalWall>,
+        ),
+    >,
 }
 
 /// タスク割り当てに必要なクエリ群（Familiar AI向け）

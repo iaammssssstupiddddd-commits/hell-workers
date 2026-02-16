@@ -61,6 +61,7 @@ Hell-Workers の物流は、`TransportRequest` を中心にした自動発行 + 
 | `DeliverToBlueprint` | `Haul` | `blueprint_auto_haul_system` | Blueprint | 割り当て時に必要資材を遅延解決 |
 | `DeliverToMixerSolid` | `HaulToMixer` | `mud_mixer_auto_haul_system` | Mixer | 割り当て時に Sand/Rock を遅延解決（Sand は原則猫車必須、近接ピックドロップ完結時は徒歩許可） |
 | `DeliverToFloorConstruction` | `Haul` | `floor_construction_auto_haul_system` | FloorConstructionSite | 割り当て時に Bone / StasisMud ソースを遅延解決（搬入先は `site.material_center`） |
+| `DeliverToProvisionalWall` | `Haul` | `provisional_wall_auto_haul_system` | Wall (Building) | 割り当て時に StasisMud ソースを遅延解決（搬入先は壁足元） |
 | `DeliverWaterToMixer` | `HaulWaterToMixer` | `mud_mixer_auto_haul_system` | Mixer | 割り当て時に tank + bucket を遅延解決 |
 | `GatherWaterToTank` | `GatherWater` | `tank_water_request_system` | Tank | 割り当て時に bucket を遅延解決 |
 | `ReturnBucket` | `Haul` | `bucket_auto_haul_system` | Tank | 割り当て時に dropped bucket と返却先 BucketStorage を同時遅延解決 |
@@ -157,6 +158,12 @@ Hell-Workers の物流は、`TransportRequest` を中心にした自動発行 + 
 - `Bone` は以下の優先順で解決される:
   1. 地面アイテムを通常 `Haul` で搬送
   2. 地面アイテムがない場合は `BonePile` / River からの猫車直採取へフォールバック
+
+### 4.9 仮設壁搬入 (`DeliverToProvisionalWall`)
+- `provisional_wall_auto_haul_system` が `BuildingType::Wall && is_provisional` の壁を走査し、`ProvisionalWall.mud_delivered == false` の壁に request を upsert。
+- request の anchor は壁エンティティで、割り当て時に `StasisMud` ソースを遅延解決する。
+- `provisional_wall_material_delivery_sync_system` が壁近傍へ落ちた `StasisMud` を消費して `mud_delivered = true` に更新する。
+- `provisional_wall_designation_system` が準備完了した壁へ `WorkType::CoatWall` を付与し、塗布タスクへ遷移させる。
 
 ## 5. 手押し車運搬
 

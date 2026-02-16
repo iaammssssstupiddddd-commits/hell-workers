@@ -36,6 +36,8 @@ pub enum AssignedTask {
     ReinforceFloorTile(ReinforceFloorTileData),
     /// 床タイルへの泥注入
     PourFloorTile(PourFloorTileData),
+    /// 仮設壁への泥塗布
+    CoatWall(CoatWallData),
 }
 
 #[derive(Reflect, Clone, Debug, PartialEq)]
@@ -274,6 +276,24 @@ pub enum PourFloorPhase {
     Done,
 }
 
+/// Coat provisional wall task data
+#[derive(Reflect, Clone, Debug, PartialEq, Eq)]
+pub struct CoatWallData {
+    pub wall: Entity,
+    pub phase: CoatWallPhase,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Reflect, Default)]
+pub enum CoatWallPhase {
+    #[default]
+    GoingToWall,
+    PickingUpMud,
+    Coating {
+        progress_bp: u16,
+    },
+    Done,
+}
+
 impl AssignedTask {
     /// タスクの作業タイプを取得
     pub fn work_type(&self) -> Option<WorkType> {
@@ -291,6 +311,7 @@ impl AssignedTask {
             AssignedTask::HaulWithWheelbarrow(_) => Some(WorkType::WheelbarrowHaul),
             AssignedTask::ReinforceFloorTile(_) => Some(WorkType::ReinforceFloorTile),
             AssignedTask::PourFloorTile(_) => Some(WorkType::PourFloorTile),
+            AssignedTask::CoatWall(_) => Some(WorkType::CoatWall),
             AssignedTask::None => None,
         }
     }
@@ -311,6 +332,7 @@ impl AssignedTask {
             AssignedTask::HaulWithWheelbarrow(data) => Some(data.wheelbarrow),
             AssignedTask::ReinforceFloorTile(data) => Some(data.tile),
             AssignedTask::PourFloorTile(data) => Some(data.tile),
+            AssignedTask::CoatWall(data) => Some(data.wall),
             AssignedTask::None => None,
         }
     }

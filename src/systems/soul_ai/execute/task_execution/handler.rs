@@ -12,8 +12,8 @@ use crate::world::map::WorldMap;
 use bevy::prelude::*;
 
 use super::types::{
-    AssignedTask, BuildData, CollectBoneData, CollectSandData, GatherData, GatherWaterData,
-    HaulData, HaulToBlueprintData, HaulWaterToMixerData, HaulWithWheelbarrowData,
+    AssignedTask, BuildData, CoatWallData, CollectBoneData, CollectSandData, GatherData,
+    GatherWaterData, HaulData, HaulToBlueprintData, HaulWaterToMixerData, HaulWithWheelbarrowData,
     PourFloorTileData, RefineData, ReinforceFloorTileData,
 };
 
@@ -279,6 +279,22 @@ impl TaskHandler<PourFloorTileData> for AssignedTask {
     }
 }
 
+impl TaskHandler<CoatWallData> for AssignedTask {
+    fn execute(
+        ctx: &mut TaskExecutionContext,
+        data: CoatWallData,
+        commands: &mut Commands,
+        _game_assets: &Res<GameAssets>,
+        time: &Res<Time>,
+        world_map: &Res<WorldMap>,
+        _breakdown_opt: Option<&StressBreakdown>,
+    ) {
+        super::coat_wall::handle_coat_wall_task(
+            ctx, data.wall, data.phase, commands, time, world_map,
+        );
+    }
+}
+
 /// Phase 4: タスクルーティングの共通ディスパッチ
 /// 標準ハンドラは TaskHandler 経由、HaulWithWheelbarrow は API 境界で特別扱い
 pub fn run_task_handler(
@@ -419,6 +435,17 @@ pub fn run_task_handler(
             );
         }
         AssignedTask::PourFloorTile(data) => {
+            AssignedTask::execute(
+                ctx,
+                data.clone(),
+                commands,
+                game_assets,
+                time,
+                world_map,
+                breakdown_opt,
+            );
+        }
+        AssignedTask::CoatWall(data) => {
             AssignedTask::execute(
                 ctx,
                 data.clone(),

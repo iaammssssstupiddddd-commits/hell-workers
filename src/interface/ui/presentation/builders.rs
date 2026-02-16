@@ -141,8 +141,13 @@ impl EntityInspectionQuery<'_, '_> {
     }
 
     pub(super) fn append_building_model(&self, entity: Entity, model: &mut InspectionAccumulator) {
-        let Ok((building, stockpile_opt, stored_items_opt, mixer_storage_opt)) =
-            self.q_buildings.get(entity)
+        let Ok((
+            building,
+            provisional_wall_opt,
+            stockpile_opt,
+            stored_items_opt,
+            mixer_storage_opt,
+        )) = self.q_buildings.get(entity)
         else {
             return;
         };
@@ -169,6 +174,19 @@ impl EntityInspectionQuery<'_, '_> {
             );
         }
         model.push_tooltip(building_info.clone());
+
+        if building.kind == crate::systems::jobs::BuildingType::Wall && building.is_provisional {
+            let wall_status = provisional_wall_opt
+                .map(|provisional| {
+                    if provisional.mud_delivered {
+                        "Wall Upgrade: Mud delivered (ready to coat)"
+                    } else {
+                        "Wall Upgrade: Waiting for StasisMud"
+                    }
+                })
+                .unwrap_or("Wall Upgrade: Pending");
+            model.push_tooltip(wall_status.to_string());
+        }
 
         if let Some(storage) = mixer_storage_opt {
             let water_count = match (stockpile_opt, stored_items_opt) {

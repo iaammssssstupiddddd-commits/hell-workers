@@ -127,6 +127,8 @@ pub fn update_destination_to_adjacent(
 }
 
 /// 設計図への到達パスを設定（予定地の中心を一意なターゲットとする）
+///
+/// 到達可能な経路（または既に到着済み）がある場合は `true` を返す。
 pub fn update_destination_to_blueprint(
     dest: &mut Destination,
     occupied_grids: &[(i32, i32)],
@@ -134,7 +136,7 @@ pub fn update_destination_to_blueprint(
     soul_pos: Vec2,
     world_map: &WorldMap,
     pf_context: &mut crate::world::pathfinding::PathfindingContext,
-) {
+) -> bool {
     let start_grid = WorldMap::world_to_grid(soul_pos);
 
     // 現在地がすでにゴール条件を満たしているかチェック
@@ -145,7 +147,7 @@ pub fn update_destination_to_blueprint(
             path.current_index = 0;
             dest.0 = soul_pos;
         }
-        return;
+        return true;
     }
 
     // 現在のパスが既に有効（ターゲットの隣接点に向かっている）なら再計算しない
@@ -159,7 +161,7 @@ pub fn update_destination_to_blueprint(
                     let dx = (last_grid.0 - gx).abs();
                     let dy = (last_grid.1 - gy).abs();
                     if dx <= 1 && dy <= 1 {
-                        return;
+                        return true;
                     }
                 }
             }
@@ -182,8 +184,11 @@ pub fn update_destination_to_blueprint(
                 .map(|&(x, y)| WorldMap::grid_to_world(x, y))
                 .collect();
             path.current_index = 0;
+            return true;
         }
     }
+
+    false
 }
 
 /// タスクとパスをクリア

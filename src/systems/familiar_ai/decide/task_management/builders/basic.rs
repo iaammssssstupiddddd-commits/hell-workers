@@ -2,7 +2,7 @@ use crate::events::ResourceReservationOp;
 use crate::systems::familiar_ai::decide::task_management::{AssignTaskContext, ReservationShadow};
 use crate::systems::jobs::WorkType;
 use crate::systems::soul_ai::execute::task_execution::types::{
-    BuildPhase, GatherPhase, PourFloorPhase, ReinforceFloorPhase,
+    BuildPhase, CoatWallPhase, GatherPhase, PourFloorPhase, ReinforceFloorPhase,
 };
 use bevy::prelude::*;
 
@@ -234,6 +234,36 @@ pub fn issue_pour_floor(
         queries,
         shadow,
         WorkType::PourFloorTile,
+        task_pos,
+        assigned_task,
+        reservation_ops,
+        already_commanded,
+    );
+}
+
+pub fn issue_coat_wall(
+    task_pos: Vec2,
+    already_commanded: bool,
+    ctx: &AssignTaskContext<'_>,
+    queries: &mut crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
+    shadow: &mut ReservationShadow,
+) {
+    let assigned_task =
+        crate::systems::soul_ai::execute::task_execution::types::AssignedTask::CoatWall(
+            crate::systems::soul_ai::execute::task_execution::types::CoatWallData {
+                wall: ctx.task_entity,
+                phase: CoatWallPhase::GoingToWall,
+            },
+        );
+    let reservation_ops = vec![ResourceReservationOp::ReserveSource {
+        source: ctx.task_entity,
+        amount: 1,
+    }];
+    submit_assignment(
+        ctx,
+        queries,
+        shadow,
+        WorkType::CoatWall,
         task_pos,
         assigned_task,
         reservation_ops,

@@ -21,7 +21,10 @@ impl Plugin for WallConnectionPlugin {
 fn wall_connections_system(
     game_assets: Res<GameAssets>,
     world_map: Res<WorldMap>,
-    q_new_buildings: Query<(Entity, &Transform, &Building), Added<Building>>,
+    q_new_buildings: Query<
+        (Entity, &Transform, &Building),
+        Or<(Added<Building>, Changed<Building>)>,
+    >,
     q_new_blueprints: Query<(Entity, &Transform, &Blueprint), Added<Blueprint>>,
     // 状態チェック用クエリ（Spriteを含まない）
     q_walls_check: Query<
@@ -62,6 +65,7 @@ fn wall_connections_system(
             if is_wall(gx, gy, &world_map, &q_walls_check) {
                 if let Ok(mut sprite) = q_sprites.get_mut(entity) {
                     update_wall_sprite(
+                        entity,
                         gx,
                         gy,
                         &mut sprite,
@@ -86,6 +90,7 @@ fn add_neighbors_to_update(x: i32, y: i32, targets: &mut HashSet<(i32, i32)>) {
 
 /// 単一の壁のスプライトを、周囲の状況に合わせて更新
 fn update_wall_sprite(
+    wall_entity: Entity,
     x: i32,
     y: i32,
     sprite: &mut Sprite,
@@ -143,6 +148,25 @@ fn update_wall_sprite(
     sprite.image = texture;
     sprite.flip_x = flip_x;
     sprite.flip_y = flip_y;
+    sprite.color = if is_provisional_wall(wall_entity, q_walls_check) {
+        Color::srgba(1.0, 0.75, 0.4, 0.85)
+    } else {
+        Color::WHITE
+    };
+}
+
+fn is_provisional_wall(
+    entity: Entity,
+    q_walls_check: &Query<
+        (Option<&Building>, Option<&Blueprint>),
+        Or<(With<Building>, With<Blueprint>)>,
+    >,
+) -> bool {
+    q_walls_check
+        .get(entity)
+        .ok()
+        .and_then(|(building_opt, _)| building_opt)
+        .is_some_and(|building| building.kind == BuildingType::Wall && building.is_provisional)
 }
 
 /// 座標(x, y)に「壁」または「壁の設計図」があるか確認

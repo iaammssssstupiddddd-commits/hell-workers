@@ -16,7 +16,8 @@ use super::super::builders::{
 };
 use super::super::validator::{
     find_bucket_return_assignment, resolve_haul_to_floor_construction_inputs,
-    resolve_haul_to_mixer_inputs, resolve_return_bucket_tank, resolve_return_wheelbarrow,
+    resolve_haul_to_mixer_inputs, resolve_haul_to_provisional_wall_inputs,
+    resolve_return_bucket_tank, resolve_return_wheelbarrow,
 };
 
 fn mixer_can_accept_item(
@@ -198,6 +199,62 @@ fn assign_haul_to_floor_construction(
     false
 }
 
+fn assign_haul_to_provisional_wall(
+    _task_pos: Vec2,
+    already_commanded: bool,
+    ctx: &AssignTaskContext<'_>,
+    queries: &mut crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
+    shadow: &mut ReservationShadow,
+) -> bool {
+    let Some((wall_entity, resource_type)) =
+        resolve_haul_to_provisional_wall_inputs(ctx.task_entity, queries)
+    else {
+        return false;
+    };
+
+    let Ok((wall_transform, building, provisional_opt)) =
+        queries.storage.buildings.get(wall_entity)
+    else {
+        debug!(
+            "ASSIGN: ProvisionalWall request {:?} wall {:?} not found",
+            ctx.task_entity, wall_entity
+        );
+        return false;
+    };
+
+    if building.kind != crate::systems::jobs::BuildingType::Wall
+        || !building.is_provisional
+        || provisional_opt.is_none_or(|provisional| provisional.mud_delivered)
+    {
+        return false;
+    }
+
+    let wall_pos = wall_transform.translation.truncate();
+    let Some((source_item, source_pos)) = source_selector::find_nearest_blueprint_source_item(
+        resource_type,
+        wall_pos,
+        queries,
+        shadow,
+    ) else {
+        debug!(
+            "ASSIGN: ProvisionalWall request {:?} has no available {:?} source",
+            ctx.task_entity, resource_type
+        );
+        return false;
+    };
+
+    issue_haul_to_stockpile_with_source(
+        source_item,
+        wall_entity,
+        source_pos,
+        already_commanded,
+        ctx,
+        queries,
+        shadow,
+    );
+    true
+}
+
 fn try_direct_bone_collect_to_floor(
     site_entity: Entity,
     task_entity: Entity,
@@ -328,6 +385,10 @@ pub fn assign_haul(
             queries,
             shadow,
         );
+        return true;
+    }
+
+    if assign_haul_to_provisional_wall(task_pos, already_commanded, ctx, queries, shadow) {
         return true;
     }
 

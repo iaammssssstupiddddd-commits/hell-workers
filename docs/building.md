@@ -12,6 +12,7 @@ Hell-Workers における建築システムの基礎実装について説明し�
 |:---|:---|
 | `Blueprint` | 建設中の建物。`kind`, `progress`, `required_materials`, `delivered_materials` フィールドを持つ |
 | `Building` | 完成した建物。`is_provisional` (仮設) フラグを持つ |
+| `ProvisionalWall` | 仮設壁のアップグレード状態（`mud_delivered`）を保持 |
 | `BuildingType` | 建物の種類（`Wall`, `Floor`, `Tank`, `MudMixer`, `SandPile`, `BonePile`） |
 
 ### Blueprint フィールド
@@ -28,7 +29,7 @@ Hell-Workers における建築システムの基礎実装について説明し�
 
 | BuildingType | 必要資材 |
 |:---|:---|
-| Wall | 木材 × 1 （※完全化には追加資材が必要な場合がある） |
+| Wall | 木材 × 1 + StasisMud × 1（建築開始は木材のみで可能） |
 | Floor | 石材 × 1 |
 | Tank | 木材 × 2 |
 | MudMixer | 木材 × 4 |
@@ -47,7 +48,8 @@ flowchart TD
     F -->|Yes| G[Building 完成 (本設)]
     F -->|No| H[Building 完成 (仮設)]
     H --> I[追加資材搬入]
-    I --> E
+    I --> J[CoatWall 作業]
+    J --> G
 ```
 
 ## 4. 仮設建築 (Provisional Building)
@@ -58,8 +60,10 @@ flowchart TD
 ### 仕組
 1.  **最低要件**: `Wall` は木材1つで建設開始・完了可能です。
 2.  **仮設フラグ**: `Building` コンポーネントの `is_provisional` が `true` になります。
-3.  **視覚表現**: 仮設状態の建物は、通常のテクスチャとは異なる見た目（例: `under_construction` 色のオーバーレイ、または別スプライト）になります。
-4.  **アップグレード**: 仮設完了後も詳細な資材（Stasis Mudなど）の搬入要求は継続され、資材が揃い次第、再度建設作業を行うことで「本設（完全な）」状態に移行します。
+3.  **資材搬入**: `TransportRequestKind::DeliverToProvisionalWall` が `StasisMud` 搬入を自動発行します。
+4.  **塗布タスク**: `ProvisionalWall.mud_delivered = true` になると、`WorkType::CoatWall` の指定が発行されます。
+5.  **視覚表現**: 仮設状態の壁は警告色オーバーレイで表示され、`CoatWall` 完了で通常見た目へ戻ります。
+6.  **本設化完了**: `CoatWall` 完了時に `Building.is_provisional = false` となり、`ProvisionalWall` が削除されます。
 
 `AssignedTask::Build` は以下の `BuildPhase` を持ちます：
 
@@ -178,7 +182,7 @@ flowchart TD
     - **運搬制約**: `Sand` 搬入は猫車運搬のみ（徒歩運搬なし）。
 
 - **Stasis Mud**: 高度な建築（完全な壁など）に必要な強化建材。
-    - **運搬制約**: `StasisMud` 搬送は猫車運搬のみ（Stockpile / Blueprint）。
+    - **運搬制約**: `StasisMud` の運搬ルールは [logistics.md](logistics.md) に準拠（原則猫車必須、近接ピックドロップ完結時は徒歩許可）。
 
 - **SandPile**:
     - 建物として配置された砂置き場は、砂タイルと同様に**無限の砂ソース**として扱われます。
@@ -357,6 +361,8 @@ flowchart TD
 - `src/plugins/visual.rs`: システム登録
 - `src/systems/visual/wall_connection.rs`: 壁の自動接続ロジック
 - `src/systems/soul_ai/execute/task_execution/build.rs`: `handle_build_task`（進捗更新）
+- `src/systems/logistics/transport_request/producer/provisional_wall.rs`: 仮設壁への泥搬送・指定発行
+- `src/systems/soul_ai/execute/task_execution/coat_wall.rs`: `CoatWall` 実行ロジック
 - `src/interface/selection/`: `blueprint_placement`（input, building_place, hit_test, state に分割）
 - `src/systems/visual/placement_ghost.rs`: 建築ゴースト表示システム
 - `src/assets.rs`: 各種アイコンアセット
