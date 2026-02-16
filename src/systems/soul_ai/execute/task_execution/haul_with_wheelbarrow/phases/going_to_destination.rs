@@ -1,15 +1,15 @@
 //! 目的地へ移動するフェーズ
 
+use super::super::cancel;
 use crate::systems::logistics::transport_request::WheelbarrowDestination;
 use crate::systems::soul_ai::execute::task_execution::{
     common::{
-        is_near_blueprint, is_near_target, is_near_target_or_dest,
-        update_destination_to_adjacent, update_destination_to_blueprint,
+        is_near_blueprint, is_near_target, is_near_target_or_dest, update_destination_to_adjacent,
+        update_destination_to_blueprint,
     },
     context::TaskExecutionContext,
     types::{AssignedTask, HaulWithWheelbarrowData, HaulWithWheelbarrowPhase},
 };
-use super::super::cancel;
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
 
@@ -22,7 +22,8 @@ pub fn handle(
 ) {
     let (reachable, arrived) = match data.destination {
         WheelbarrowDestination::Stockpile(stockpile_entity) => {
-            if let Ok((_, stock_transform, _, _)) = ctx.queries.storage.stockpiles.get(stockpile_entity)
+            if let Ok((_, stock_transform, _, _)) =
+                ctx.queries.storage.stockpiles.get(stockpile_entity)
             {
                 let stock_pos = stock_transform.translation.truncate();
                 let reachable = update_destination_to_adjacent(
@@ -69,10 +70,7 @@ pub fn handle(
                 world_map,
                 ctx.pf_context,
             );
-            (
-                true,
-                is_near_blueprint(soul_pos, &blueprint.occupied_grids),
-            )
+            (true, is_near_blueprint(soul_pos, &blueprint.occupied_grids))
         }
         WheelbarrowDestination::Mixer { entity, .. } => {
             let Ok((mixer_transform, _, _)) = ctx.queries.storage.mixers.get(entity) else {

@@ -2,7 +2,7 @@ use bevy::prelude::*;
 
 use crate::events::{GatheringManagementOp, GatheringManagementRequest};
 use crate::relationships::ParticipatingIn;
-use crate::systems::soul_ai::helpers::gathering::{GatheringSpot};
+use crate::systems::soul_ai::helpers::gathering::GatheringSpot;
 
 /// GatheringManagementRequest を適用する（Execute Phase）
 pub fn gathering_apply_system(
@@ -79,9 +79,7 @@ pub fn gathering_apply_system(
                 commands.entity(*soul).remove::<ParticipatingIn>();
 
                 if q_spots.get(spot_entity).is_ok() {
-                    commands.trigger(crate::events::OnGatheringLeft {
-                        entity: *soul,
-                    });
+                    commands.trigger(crate::events::OnGatheringLeft { entity: *soul });
                 }
             }
         }

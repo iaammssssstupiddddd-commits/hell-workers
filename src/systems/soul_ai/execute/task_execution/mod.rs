@@ -3,20 +3,20 @@
 //! 魂に割り当てられたタスクの実行ロジックを提供します。
 
 pub mod build;
-pub mod collect_sand;
 pub mod collect_bone;
+pub mod collect_sand;
 pub mod common;
 pub mod context;
 pub mod gather;
-pub mod handler;
 pub mod gather_water;
+pub mod handler;
 pub mod haul;
 pub mod haul_to_blueprint;
-pub mod haul_with_wheelbarrow;
 pub mod haul_to_mixer;
 pub mod haul_water_to_mixer;
-pub mod refine;
+pub mod haul_with_wheelbarrow;
 pub mod pour_floor;
+pub mod refine;
 pub mod reinforce_floor;
 pub mod transport_common;
 pub mod types;
@@ -132,20 +132,30 @@ pub fn apply_task_assignment_requests_system(
         // タスクの内容に応じて DeliveringTo リレーションシップを自動適用する
         match &request.assigned_task {
             AssignedTask::Haul(data) => {
-                commands.entity(data.item).insert(crate::relationships::DeliveringTo(data.stockpile));
+                commands
+                    .entity(data.item)
+                    .insert(crate::relationships::DeliveringTo(data.stockpile));
             }
             AssignedTask::HaulToBlueprint(data) => {
-                commands.entity(data.item).insert(crate::relationships::DeliveringTo(data.blueprint));
+                commands
+                    .entity(data.item)
+                    .insert(crate::relationships::DeliveringTo(data.blueprint));
             }
             AssignedTask::GatherWater(data) => {
-                commands.entity(data.bucket).insert(crate::relationships::DeliveringTo(data.tank));
+                commands
+                    .entity(data.bucket)
+                    .insert(crate::relationships::DeliveringTo(data.tank));
             }
             AssignedTask::HaulToMixer(data) => {
-                commands.entity(data.item).insert(crate::relationships::DeliveringTo(data.mixer));
+                commands
+                    .entity(data.item)
+                    .insert(crate::relationships::DeliveringTo(data.mixer));
             }
             AssignedTask::HaulWaterToMixer(data) => {
                 // バケツがミキサーに向かう
-                commands.entity(data.bucket).insert(crate::relationships::DeliveringTo(data.mixer));
+                commands
+                    .entity(data.bucket)
+                    .insert(crate::relationships::DeliveringTo(data.mixer));
             }
             AssignedTask::HaulWithWheelbarrow(data) => {
                 let dest_entity = match data.destination {
@@ -155,7 +165,9 @@ pub fn apply_task_assignment_requests_system(
                 };
                 // 積載済みアイテムも目的地に向かう
                 for &item in &data.items {
-                    commands.entity(item).insert(crate::relationships::DeliveringTo(dest_entity));
+                    commands
+                        .entity(item)
+                        .insert(crate::relationships::DeliveringTo(dest_entity));
                 }
             }
             _ => {}
@@ -180,10 +192,7 @@ pub fn task_execution_system(
     world_map: Res<WorldMap>,
     mut pf_context: Local<crate::world::pathfinding::PathfindingContext>,
     q_wheelbarrows: Query<
-        (
-            &Transform,
-            Option<&crate::relationships::ParkedAt>,
-        ),
+        (&Transform, Option<&crate::relationships::ParkedAt>),
         With<crate::systems::logistics::Wheelbarrow>,
     >,
 ) {

@@ -68,9 +68,7 @@ fn snap_panel_height_to_row_midpoint(
         return clamp_height(height, min_height, max_height);
     }
 
-    let desired_rows = ((height - anchor) / step)
-        .round()
-        .clamp(min_rows, max_rows);
+    let desired_rows = ((height - anchor) / step).round().clamp(min_rows, max_rows);
     let snapped = anchor + desired_rows * step;
     clamp_height(snapped, min_height, max_height)
 }
@@ -88,9 +86,7 @@ fn snap_panel_height_to_row_midpoint_floor(
         return clamp_height(height, min_height, max_height);
     }
 
-    let desired_rows = ((height - anchor) / step)
-        .floor()
-        .clamp(min_rows, max_rows);
+    let desired_rows = ((height - anchor) / step).floor().clamp(min_rows, max_rows);
     let snapped = anchor + desired_rows * step;
     clamp_height(snapped, min_height, max_height)
 }

@@ -2,7 +2,9 @@
 
 use crate::constants::*;
 use crate::systems::familiar_ai::decide::task_management::{AssignTaskContext, ReservationShadow};
-use crate::systems::logistics::transport_request::{can_complete_pick_drop_to_point, WheelbarrowDestination};
+use crate::systems::logistics::transport_request::{
+    WheelbarrowDestination, can_complete_pick_drop_to_point,
+};
 use bevy::prelude::*;
 
 use super::super::super::builders::{
@@ -59,7 +61,8 @@ pub fn assign_haul_to_stockpile(
                 );
                 return true;
             }
-            if let Some(wb_entity) = wheelbarrow::find_nearest_wheelbarrow(task_pos, queries, shadow)
+            if let Some(wb_entity) =
+                wheelbarrow::find_nearest_wheelbarrow(task_pos, queries, shadow)
             {
                 issue_haul_with_wheelbarrow(
                     wb_entity,
@@ -94,15 +97,13 @@ pub fn assign_haul_to_stockpile(
         && let Ok((_, stock_transform, _, _)) = queries.storage.stockpiles.get(stockpile)
     {
         let stock_pos = stock_transform.translation.truncate();
-        if let Some((source_item, source_pos)) =
-            source_selector::find_nearest_stockpile_source_item(
-                resource_type,
-                item_owner,
-                stock_pos,
-                queries,
-                shadow,
-            )
-        {
+        if let Some((source_item, source_pos)) = source_selector::find_nearest_stockpile_source_item(
+            resource_type,
+            item_owner,
+            stock_pos,
+            queries,
+            shadow,
+        ) {
             if can_complete_pick_drop_to_point(source_pos, stock_pos) {
                 issue_haul_to_stockpile_with_source(
                     source_item,

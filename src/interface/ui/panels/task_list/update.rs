@@ -4,8 +4,8 @@ use crate::interface::ui::components::{LeftPanelMode, TaskListBody};
 use crate::interface::ui::theme::UiTheme;
 use crate::relationships::TaskWorkers;
 use crate::systems::jobs::{Blueprint, BonePile, Designation, Priority, Rock, SandPile, Tree};
-use crate::systems::logistics::transport_request::TransportRequest;
 use crate::systems::logistics::ResourceItem;
+use crate::systems::logistics::transport_request::TransportRequest;
 use bevy::prelude::*;
 
 use super::render;

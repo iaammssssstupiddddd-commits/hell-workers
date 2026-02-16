@@ -145,7 +145,8 @@ fn assign_haul_to_floor_construction(
         return false;
     };
 
-    let site_pos = if let Ok((site_transform, _, _)) = queries.storage.floor_sites.get(site_entity) {
+    let site_pos = if let Ok((site_transform, _, _)) = queries.storage.floor_sites.get(site_entity)
+    {
         site_transform.translation.truncate()
     } else {
         debug!(
@@ -157,9 +158,12 @@ fn assign_haul_to_floor_construction(
 
     // Floor construction requests deliver items onto the site material center.
     // Reuse Haul task path and let execution drop the item near the site anchor.
-    if let Some((source_item, source_pos)) =
-        source_selector::find_nearest_blueprint_source_item(resource_type, site_pos, queries, shadow)
-    {
+    if let Some((source_item, source_pos)) = source_selector::find_nearest_blueprint_source_item(
+        resource_type,
+        site_pos,
+        queries,
+        shadow,
+    ) {
         issue_haul_to_stockpile_with_source(
             source_item,
             site_entity,
@@ -246,11 +250,7 @@ fn try_direct_bone_collect_to_floor(
     );
     info!(
         "ASSIGN: Floor request {:?} assigned direct Bone collect via wheelbarrow {:?} from {:?} to site {:?} (amount {})",
-        task_entity,
-        wheelbarrow,
-        source_entity,
-        site_entity,
-        amount
+        task_entity, wheelbarrow, source_entity, site_entity, amount
     );
     true
 }

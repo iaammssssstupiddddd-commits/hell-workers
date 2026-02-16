@@ -6,11 +6,13 @@ mod asset_catalog;
 mod perf_scenario;
 
 use asset_catalog::create_game_assets;
-use perf_scenario::{PerfScenarioApplied, setup_perf_scenario_runtime_if_enabled, setup_perf_scenario_if_enabled};
+use perf_scenario::{
+    PerfScenarioApplied, setup_perf_scenario_if_enabled, setup_perf_scenario_runtime_if_enabled,
+};
 
 use crate::assets::GameAssets;
 use crate::entities::damned_soul::{DamnedSoulSpawnEvent, spawn_damned_souls};
-use crate::entities::familiar::{FamiliarSpawnEvent};
+use crate::entities::familiar::FamiliarSpawnEvent;
 use crate::game_state::{BuildContext, CompanionPlacementState, TaskContext, ZoneContext};
 use crate::interface::camera::{MainCamera, PanCamera};
 use crate::interface::selection::{HoveredEntity, SelectedEntity};

@@ -78,13 +78,7 @@ pub fn handle_haul_water_to_mixer_task(
             );
         }
         HaulWaterToMixerPhase::ReturningBucket => {
-            returning_bucket::handle(
-                ctx,
-                bucket_entity,
-                tank_entity,
-                commands,
-                world_map,
-            );
+            returning_bucket::handle(ctx, bucket_entity, tank_entity, commands, world_map);
         }
     }
 }

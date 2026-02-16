@@ -1,7 +1,9 @@
 //! パス追従による移動
 
 use crate::constants::*;
-use crate::entities::damned_soul::{AnimationState, DamnedSoul, IdleBehavior, IdleState, Path, StressBreakdown};
+use crate::entities::damned_soul::{
+    AnimationState, DamnedSoul, IdleBehavior, IdleState, Path, StressBreakdown,
+};
 use crate::relationships::PushingWheelbarrow;
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
@@ -38,10 +40,18 @@ pub fn soul_movement(
             let distance = to_target.length();
 
             // デバッグ：集会中のsoulで特定位置付近の場合
-            if idle.behavior == IdleBehavior::Gathering && current_pos.x.abs() < 150.0 && current_pos.y.abs() < 250.0 {
+            if idle.behavior == IdleBehavior::Gathering
+                && current_pos.x.abs() < 150.0
+                && current_pos.y.abs() < 250.0
+            {
                 debug!(
                     "MOVEMENT: {:?} at {:?}, target: {:?}, dist: {:.1}, waypoints: {}/{}",
-                    _entity, current_pos, target, distance, path.current_index, path.waypoints.len()
+                    _entity,
+                    current_pos,
+                    target,
+                    distance,
+                    path.current_index,
+                    path.waypoints.len()
                 );
             }
 

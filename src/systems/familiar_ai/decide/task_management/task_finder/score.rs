@@ -1,6 +1,6 @@
 use crate::systems::jobs::{TargetBlueprint, WorkType};
-use crate::systems::logistics::transport_request::TransportRequestKind;
 use crate::systems::logistics::ResourceType;
+use crate::systems::logistics::transport_request::TransportRequestKind;
 use bevy::prelude::*;
 
 pub(super) fn score_candidate(
@@ -38,8 +38,13 @@ pub(super) fn score_candidate(
                         false
                     } else {
                         let current_count = stored.map(|s| s.len()).unwrap_or(0);
-                        let incoming = queries.reservation.incoming_deliveries_query.get(req.anchor).ok()
-                            .map(|inc| inc.len()).unwrap_or(0);
+                        let incoming = queries
+                            .reservation
+                            .incoming_deliveries_query
+                            .get(req.anchor)
+                            .ok()
+                            .map(|inc| inc.len())
+                            .unwrap_or(0);
                         (current_count + incoming) < stock.capacity
                     }
                 } else {
@@ -59,7 +64,11 @@ pub(super) fn score_candidate(
                     let is_my_tank = bucket_belongs.map(|b| b.0) == Some(s_entity);
                     if is_tank && is_my_tank {
                         let current_count = stored.map(|s| s.len()).unwrap_or(0);
-                        let incoming = queries.reservation.incoming_deliveries_query.get(s_entity).ok()
+                        let incoming = queries
+                            .reservation
+                            .incoming_deliveries_query
+                            .get(s_entity)
+                            .ok()
                             .map(|inc: &crate::relationships::IncomingDeliveries| inc.len())
                             .unwrap_or(0);
                         (current_count + incoming) < stock.capacity

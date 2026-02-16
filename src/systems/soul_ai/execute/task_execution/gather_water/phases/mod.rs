@@ -2,18 +2,23 @@
 
 mod filling;
 mod going_to_bucket;
-mod going_to_tank;
 mod going_to_river;
+mod going_to_tank;
 mod pouring;
 
 use crate::systems::soul_ai::execute::task_execution::context::TaskExecutionContext;
-use crate::systems::soul_ai::execute::task_execution::types::{AssignedTask, GatherWaterData, GatherWaterPhase};
+use crate::systems::soul_ai::execute::task_execution::types::{
+    AssignedTask, GatherWaterData, GatherWaterPhase,
+};
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
 
-
 pub fn assigned_task(bucket: Entity, tank: Entity, phase: GatherWaterPhase) -> AssignedTask {
-    AssignedTask::GatherWater(GatherWaterData { bucket, tank, phase })
+    AssignedTask::GatherWater(GatherWaterData {
+        bucket,
+        tank,
+        phase,
+    })
 }
 
 pub fn handle_gather_water_task(
@@ -40,7 +45,14 @@ pub fn handle_gather_water_task(
             );
         }
         GatherWaterPhase::GoingToRiver => {
-            going_to_river::handle(ctx, bucket_entity, tank_entity, commands, world_map, soul_pos);
+            going_to_river::handle(
+                ctx,
+                bucket_entity,
+                tank_entity,
+                commands,
+                world_map,
+                soul_pos,
+            );
         }
         GatherWaterPhase::Filling { progress } => {
             filling::handle(
@@ -56,7 +68,14 @@ pub fn handle_gather_water_task(
             );
         }
         GatherWaterPhase::GoingToTank => {
-            going_to_tank::handle(ctx, bucket_entity, tank_entity, commands, world_map, soul_pos);
+            going_to_tank::handle(
+                ctx,
+                bucket_entity,
+                tank_entity,
+                commands,
+                world_map,
+                soul_pos,
+            );
         }
         GatherWaterPhase::Pouring { progress } => {
             pouring::handle(

@@ -12,14 +12,15 @@ mod tooltip;
 pub(crate) use common::despawn_context_menus;
 
 pub use status_display::{
-    task_summary_ui_system, update_area_edit_preview_ui_system,
-    update_dream_pool_display_system, update_fps_display_system, update_mode_text_system,
-    update_speed_button_highlight_system,
+    task_summary_ui_system, update_area_edit_preview_ui_system, update_dream_pool_display_system,
+    update_fps_display_system, update_mode_text_system, update_speed_button_highlight_system,
 };
 pub(crate) use tooltip::hover_tooltip_system;
 
 use crate::entities::familiar::{Familiar, FamiliarOperation};
-use crate::game_state::{BuildContext, CompanionPlacementState, PlayMode, TaskContext, ZoneContext};
+use crate::game_state::{
+    BuildContext, CompanionPlacementState, PlayMode, TaskContext, ZoneContext,
+};
 use crate::interface::ui::components::*;
 use crate::interface::ui::theme::UiTheme;
 use crate::systems::command::{TaskArea, TaskMode};

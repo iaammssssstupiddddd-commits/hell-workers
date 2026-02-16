@@ -211,7 +211,8 @@ pub fn process_conversation_logic(
                         let emoji = emoji_set.choose(&mut rng).unwrap();
 
                         let emotion = if emoji_set == EMOJIS_FOOD {
-                            participant.positive_turns = participant.positive_turns.saturating_add(1);
+                            participant.positive_turns =
+                                participant.positive_turns.saturating_add(1);
                             ev_tone.write(ConversationToneTriggered {
                                 speaker: entity,
                                 tone: ConversationTone::Positive,
@@ -220,7 +221,8 @@ pub fn process_conversation_logic(
                         } else if emoji_set == EMOJIS_SLACKING {
                             BubbleEmotion::Slacking
                         } else if emoji_set == EMOJIS_COMPLAINING {
-                            participant.negative_turns = participant.negative_turns.saturating_add(1);
+                            participant.negative_turns =
+                                participant.negative_turns.saturating_add(1);
                             ev_tone.write(ConversationToneTriggered {
                                 speaker: entity,
                                 tone: ConversationTone::Negative,

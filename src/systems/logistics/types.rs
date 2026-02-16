@@ -27,12 +27,18 @@ impl ResourceType {
 
     /// 猫車運搬が必須の資源か
     pub fn requires_wheelbarrow(&self) -> bool {
-        matches!(self, ResourceType::Sand | ResourceType::StasisMud | ResourceType::Bone)
+        matches!(
+            self,
+            ResourceType::Sand | ResourceType::StasisMud | ResourceType::Bone
+        )
     }
 
     /// 汎用 Stockpile に格納できる資源か
     pub fn can_store_in_stockpile(&self) -> bool {
-        !matches!(self, ResourceType::Sand | ResourceType::Bone | ResourceType::StasisMud)
+        !matches!(
+            self,
+            ResourceType::Sand | ResourceType::Bone | ResourceType::StasisMud
+        )
     }
 }
 

@@ -325,4 +325,3 @@ pub fn spawn_info_panel_ui(
         info_panel_nodes.common = Some(common);
     });
 }
-

@@ -2,11 +2,11 @@ use bevy::prelude::*;
 use rand::Rng;
 
 use crate::constants::*;
+use crate::relationships::ParticipatingIn;
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
 use crate::systems::soul_ai::helpers::gathering::{GatheringSpot, GatheringUpdateTimer};
 use crate::systems::spatial::{SpatialGrid, SpatialGridOps};
 use crate::world::map::WorldMap;
-use crate::relationships::ParticipatingIn;
 
 /// 重なり回避の最小間隔
 const GATHERING_MIN_SEPARATION: f32 = TILE_SIZE * 1.2;
@@ -33,7 +33,6 @@ pub fn gathering_separation_system(
     if !update_timer.timer.just_finished() {
         return;
     }
-
 
     for (entity, transform, mut dest, mut path, task, participating_in_opt) in q_souls.iter_mut() {
         // タスク実行中は重なり回避しない
@@ -62,7 +61,6 @@ pub fn gathering_separation_system(
         let too_close_to_center = dist_from_center < TILE_SIZE * GATHERING_KEEP_DISTANCE_MIN;
 
         if too_close_to_center || has_overlap {
-
             let mut rng = rand::thread_rng();
             let mut found_valid_position = false;
 

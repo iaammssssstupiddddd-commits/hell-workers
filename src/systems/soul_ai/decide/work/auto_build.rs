@@ -6,7 +6,9 @@ use crate::events::TaskAssignmentRequest;
 use crate::relationships::{Commanding, ManagedBy, TaskWorkers};
 use crate::systems::command::TaskArea;
 use crate::systems::jobs::{Blueprint, Designation, Priority, TaskSlots, WorkType};
-use crate::systems::soul_ai::execute::task_execution::types::{AssignedTask, BuildData, BuildPhase};
+use crate::systems::soul_ai::execute::task_execution::types::{
+    AssignedTask, BuildData, BuildPhase,
+};
 use crate::systems::soul_ai::helpers::query_types::AutoBuildSoulQuery;
 use crate::systems::soul_ai::helpers::work as helpers;
 use crate::systems::spatial::BlueprintSpatialGrid;
@@ -60,8 +62,7 @@ pub fn blueprint_auto_build_system(
             }
 
             // Designationが存在し、ManagedByが付与されていないか確認
-            if let Ok((_, _, designation, managed_by_opt, _, _, _)) =
-                q_designations.get(bp_entity)
+            if let Ok((_, _, designation, managed_by_opt, _, _, _)) = q_designations.get(bp_entity)
             {
                 if designation.work_type != WorkType::Build {
                     continue;
@@ -94,12 +95,12 @@ pub fn blueprint_auto_build_system(
                     }
 
                     // 待機中・健康チェックをヘルパーに委譲
-                        if !helpers::is_soul_available_for_work(
-                            soul,
-                            &task,
-                            idle,
-                            q_breakdown.get(soul_entity).is_ok(),
-                            fatigue_threshold,
+                    if !helpers::is_soul_available_for_work(
+                        soul,
+                        &task,
+                        idle,
+                        q_breakdown.get(soul_entity).is_ok(),
+                        fatigue_threshold,
                     ) {
                         continue;
                     }

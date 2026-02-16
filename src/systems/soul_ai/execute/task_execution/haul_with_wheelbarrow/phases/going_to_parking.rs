@@ -1,12 +1,12 @@
 //! 駐車エリアへ移動するフェーズ
 
-use crate::systems::soul_ai::execute::task_execution::{
-    common::{is_near_target, update_destination_to_adjacent},
-    context::TaskExecutionContext,
-};
 use super::super::cancel;
 use crate::systems::soul_ai::execute::task_execution::types::{
     AssignedTask, HaulWithWheelbarrowData, HaulWithWheelbarrowPhase,
+};
+use crate::systems::soul_ai::execute::task_execution::{
+    common::{is_near_target, update_destination_to_adjacent},
+    context::TaskExecutionContext,
 };
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
@@ -16,7 +16,10 @@ pub fn handle(
     data: HaulWithWheelbarrowData,
     commands: &mut Commands,
     world_map: &Res<WorldMap>,
-    q_wheelbarrows: &Query<(&Transform, Option<&crate::relationships::ParkedAt>), With<crate::systems::logistics::Wheelbarrow>>,
+    q_wheelbarrows: &Query<
+        (&Transform, Option<&crate::relationships::ParkedAt>),
+        With<crate::systems::logistics::Wheelbarrow>,
+    >,
     soul_pos: Vec2,
 ) {
     let Ok((wb_transform, _)) = q_wheelbarrows.get(data.wheelbarrow) else {

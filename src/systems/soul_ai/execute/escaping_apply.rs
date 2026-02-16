@@ -22,9 +22,7 @@ pub fn escaping_apply_system(
             EscapeOperation::StartEscaping { leave_gathering } => {
                 if let Some(_spot_entity) = *leave_gathering {
                     commands.entity(entity).remove::<ParticipatingIn>();
-                    commands.trigger(crate::events::OnGatheringLeft {
-                        entity,
-                    });
+                    commands.trigger(crate::events::OnGatheringLeft { entity });
                 }
 
                 idle_state.behavior = IdleBehavior::Escaping;

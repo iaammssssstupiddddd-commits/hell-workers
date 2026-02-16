@@ -1,8 +1,8 @@
 //! WorkType のアイコン・ラベル・説明文言
 
 use crate::systems::jobs::{Blueprint, BonePile, BuildingType, Rock, SandPile, Tree, WorkType};
-use crate::systems::logistics::transport_request::{TransportRequest, TransportRequestKind};
 use crate::systems::logistics::ResourceItem;
+use crate::systems::logistics::transport_request::{TransportRequest, TransportRequestKind};
 use bevy::prelude::*;
 
 use crate::interface::ui::theme::UiTheme;
@@ -41,7 +41,10 @@ pub fn get_work_type_icon(
             (game_assets.icon_haul.clone(), theme.colors.water)
         }
         WorkType::CollectSand => (game_assets.icon_pick.clone(), theme.colors.gather_default),
-        WorkType::CollectBone => (game_assets.icon_bone_small.clone(), theme.colors.gather_default),
+        WorkType::CollectBone => (
+            game_assets.icon_bone_small.clone(),
+            theme.colors.gather_default,
+        ),
         WorkType::Refine => (game_assets.icon_hammer.clone(), theme.colors.build),
         WorkType::ReinforceFloorTile | WorkType::PourFloorTile => {
             (game_assets.icon_hammer.clone(), theme.colors.build)

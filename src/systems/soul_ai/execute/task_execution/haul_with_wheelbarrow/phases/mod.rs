@@ -21,7 +21,10 @@ pub fn handle_haul_with_wheelbarrow_task(
     data: HaulWithWheelbarrowData,
     commands: &mut Commands,
     world_map: &Res<WorldMap>,
-    q_wheelbarrows: &Query<(&Transform, Option<&crate::relationships::ParkedAt>), With<Wheelbarrow>>,
+    q_wheelbarrows: &Query<
+        (&Transform, Option<&crate::relationships::ParkedAt>),
+        With<Wheelbarrow>,
+    >,
 ) {
     let soul_pos = ctx.soul_pos();
 

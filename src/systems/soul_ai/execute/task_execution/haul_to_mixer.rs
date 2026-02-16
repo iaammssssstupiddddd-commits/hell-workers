@@ -148,7 +148,9 @@ pub fn handle_haul_to_mixer_task(
                         // DeliveringTo is removed with despawn
                     } else {
                         drop_item(commands, ctx.soul_entity, item_entity, soul_pos);
-                        commands.entity(item_entity).remove::<crate::relationships::DeliveringTo>();
+                        commands
+                            .entity(item_entity)
+                            .remove::<crate::relationships::DeliveringTo>();
                     }
                     ctx.inventory.0 = None;
                     clear_task_and_path(ctx.task, ctx.path);
@@ -173,7 +175,9 @@ pub fn handle_haul_to_mixer_task(
                     );
                     reservation::release_mixer_destination(ctx, mixer_entity, resource_type);
                     drop_item(commands, ctx.soul_entity, item_entity, soul_pos);
-                    commands.entity(item_entity).remove::<crate::relationships::DeliveringTo>();
+                    commands
+                        .entity(item_entity)
+                        .remove::<crate::relationships::DeliveringTo>();
                     ctx.inventory.0 = None;
                     clear_task_and_path(ctx.task, ctx.path);
                     return;
@@ -221,14 +225,18 @@ pub fn handle_haul_to_mixer_task(
                     // ストレージがいっぱいなら足元にドロップ
                     if let Some(item) = ctx.inventory.0 {
                         drop_item(commands, ctx.soul_entity, item, soul_pos);
-                        commands.entity(item).remove::<crate::relationships::DeliveringTo>();
+                        commands
+                            .entity(item)
+                            .remove::<crate::relationships::DeliveringTo>();
                         ctx.inventory.0 = None;
                     }
                 }
             } else {
                 if let Some(item) = ctx.inventory.0 {
                     drop_item(commands, ctx.soul_entity, item, soul_pos);
-                    commands.entity(item).remove::<crate::relationships::DeliveringTo>();
+                    commands
+                        .entity(item)
+                        .remove::<crate::relationships::DeliveringTo>();
                     ctx.inventory.0 = None;
                 }
             }

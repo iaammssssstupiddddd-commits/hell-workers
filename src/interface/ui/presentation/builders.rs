@@ -2,8 +2,8 @@ use super::{
     EntityInspectionQuery, InspectionAccumulator, SoulInspectionFields, format_escape_info,
     format_inventory_str, format_task_str,
 };
-use bevy::prelude::*;
 use crate::constants::MUD_MIXER_MUD_CAPACITY;
+use bevy::prelude::*;
 
 impl EntityInspectionQuery<'_, '_> {
     pub(super) fn build_soul_model(

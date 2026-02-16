@@ -9,12 +9,14 @@ use crate::constants::WHEELBARROW_CAPACITY;
 use crate::entities::familiar::{ActiveCommand, FamiliarCommand};
 use crate::relationships::TaskWorkers;
 use crate::systems::command::TaskArea;
-use crate::systems::jobs::{Blueprint, Designation, Priority, TaskSlots, TargetBlueprint, WorkType};
+use crate::systems::jobs::{
+    Blueprint, Designation, Priority, TargetBlueprint, TaskSlots, WorkType,
+};
+use crate::systems::logistics::ResourceType;
 use crate::systems::logistics::transport_request::{
     TransportDemand, TransportPolicy, TransportPriority, TransportRequest, TransportRequestKind,
     TransportRequestState,
 };
-use crate::systems::logistics::ResourceType;
 
 use crate::systems::spatial::BlueprintSpatialGrid;
 
@@ -53,9 +55,7 @@ pub fn blueprint_auto_haul_system(
 
     let active_familiars: Vec<(Entity, TaskArea)> = q_familiars
         .iter()
-        .filter(|(_, active_command, _)| {
-            !matches!(active_command.command, FamiliarCommand::Idle)
-        })
+        .filter(|(_, active_command, _)| !matches!(active_command.command, FamiliarCommand::Idle))
         .map(|(entity, _, area)| (entity, area.clone()))
         .collect();
 
@@ -89,7 +89,10 @@ pub fn blueprint_auto_haul_system(
         };
 
         for (resource_type, &required) in &blueprint.required_materials {
-            let delivered = *blueprint.delivered_materials.get(resource_type).unwrap_or(&0);
+            let delivered = *blueprint
+                .delivered_materials
+                .get(resource_type)
+                .unwrap_or(&0);
             let inflight_count = *in_flight.get(&(bp_entity, *resource_type)).unwrap_or(&0);
 
             if delivered + inflight_count as u32 >= required {

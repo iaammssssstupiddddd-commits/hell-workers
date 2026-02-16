@@ -2,7 +2,9 @@ use crate::systems::logistics::ResourceType;
 use crate::systems::soul_ai::execute::task_execution::common::clear_task_and_path;
 use crate::systems::soul_ai::execute::task_execution::context::TaskExecutionContext;
 use crate::systems::soul_ai::execute::task_execution::transport_common::{cancel, reservation};
-use crate::systems::soul_ai::execute::task_execution::types::{AssignedTask, HaulWaterToMixerPhase};
+use crate::systems::soul_ai::execute::task_execution::types::{
+    AssignedTask, HaulWaterToMixerPhase,
+};
 use bevy::prelude::*;
 
 pub(super) fn abort_and_drop_bucket(

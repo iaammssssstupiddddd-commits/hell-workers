@@ -2,7 +2,9 @@ use crate::systems::familiar_ai::decide::task_management::{AssignTaskContext, Re
 use crate::systems::jobs::WorkType;
 use bevy::prelude::*;
 
-use super::super::builders::{issue_build, issue_collect_bone, issue_collect_sand, issue_gather, issue_refine};
+use super::super::builders::{
+    issue_build, issue_collect_bone, issue_collect_sand, issue_gather, issue_refine,
+};
 use super::super::validator::can_reserve_source;
 
 pub(super) fn assign_gather(

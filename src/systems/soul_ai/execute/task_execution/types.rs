@@ -248,7 +248,9 @@ pub enum ReinforceFloorPhase {
     GoingToMaterialCenter,
     PickingUpBones,
     GoingToTile,
-    Reinforcing { progress_bp: u16 },
+    Reinforcing {
+        progress_bp: u16,
+    },
     Done,
 }
 
@@ -266,7 +268,9 @@ pub enum PourFloorPhase {
     GoingToMaterialCenter,
     PickingUpMud,
     GoingToTile,
-    Pouring { progress_bp: u16 },
+    Pouring {
+        progress_bp: u16,
+    },
     Done,
 }
 
@@ -349,13 +353,11 @@ impl AssignedTask {
             AssignedTask::HaulWaterToMixer(data) => {
                 !matches!(data.phase, HaulWaterToMixerPhase::GoingToBucket)
             }
-            AssignedTask::HaulWithWheelbarrow(data) => {
-                !matches!(
-                    data.phase,
-                    HaulWithWheelbarrowPhase::GoingToParking
-                        | HaulWithWheelbarrowPhase::PickingUpWheelbarrow
-                )
-            }
+            AssignedTask::HaulWithWheelbarrow(data) => !matches!(
+                data.phase,
+                HaulWithWheelbarrowPhase::GoingToParking
+                    | HaulWithWheelbarrowPhase::PickingUpWheelbarrow
+            ),
             _ => false,
         }
     }

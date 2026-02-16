@@ -337,10 +337,11 @@ pub(super) fn apply_designation_in_area(
                         .remove::<Priority>();
                 }
 
-                commands.entity(target_entity).insert(ManualHaulPinnedSource);
+                commands
+                    .entity(target_entity)
+                    .insert(ManualHaulPinnedSource);
 
-                let request_entity =
-                    find_manual_request_for_source(target_entity, q_targets);
+                let request_entity = find_manual_request_for_source(target_entity, q_targets);
                 let mut request_cmd = if let Some(existing) = request_entity {
                     commands.entity(existing)
                 } else {
@@ -426,7 +427,10 @@ pub fn blueprint_cancel_cleanup_system(
     mut commands: Commands,
     mut world_map: ResMut<crate::world::map::WorldMap>,
     mut removed: RemovedComponents<Blueprint>,
-    q_pending: Query<(Entity, &crate::systems::logistics::PendingBelongsToBlueprint)>,
+    q_pending: Query<(
+        Entity,
+        &crate::systems::logistics::PendingBelongsToBlueprint,
+    )>,
 ) {
     for removed_entity in removed.read() {
         // WorldMap.buildings からこの Blueprint が占有していたグリッドを除去

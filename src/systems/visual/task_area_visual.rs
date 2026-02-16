@@ -4,8 +4,8 @@ use crate::interface::selection::{HoveredEntity, SelectedEntity};
 use crate::systems::command::{TaskArea, TaskMode};
 use bevy::prelude::*;
 use bevy::render::render_resource::AsBindGroup;
-use bevy::sprite_render::Material2d;
 use bevy::shader::ShaderRef;
+use bevy::sprite_render::Material2d;
 
 /// タスクエリア用のカスタムマテリアル
 #[derive(Asset, TypePath, AsBindGroup, Debug, Clone)]
@@ -13,11 +13,11 @@ pub struct TaskAreaMaterial {
     #[uniform(0)]
     pub color: LinearRgba, // 16 bytes
     #[uniform(0)]
-    pub size: Vec2,        // 8 bytes (align 8)
+    pub size: Vec2, // 8 bytes (align 8)
     #[uniform(0)]
-    pub time: f32,         // 4 bytes
+    pub time: f32, // 4 bytes
     #[uniform(0)]
-    pub state: u32,        // 4 bytes
+    pub state: u32, // 4 bytes
 }
 
 impl Material2d for TaskAreaMaterial {

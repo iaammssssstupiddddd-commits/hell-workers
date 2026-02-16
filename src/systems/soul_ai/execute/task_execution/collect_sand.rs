@@ -57,7 +57,13 @@ pub fn handle_collect_sand_task(
                 }
 
                 if is_near_target(soul_pos, res_pos) {
-                    complete_collect_sand_now(ctx, target, res_transform.translation, commands, game_assets);
+                    complete_collect_sand_now(
+                        ctx,
+                        target,
+                        res_transform.translation,
+                        commands,
+                        game_assets,
+                    );
                     ctx.path.waypoints.clear();
                 }
             } else {
@@ -83,7 +89,13 @@ pub fn handle_collect_sand_task(
                     return;
                 }
 
-                complete_collect_sand_now(ctx, target, res_transform.translation, commands, game_assets);
+                complete_collect_sand_now(
+                    ctx,
+                    target,
+                    res_transform.translation,
+                    commands,
+                    game_assets,
+                );
             } else {
                 // SandPile が存在しない場合も Designation を削除
                 commands
@@ -136,12 +148,17 @@ fn complete_collect_sand_now(
                 custom_size: Some(Vec2::splat(TILE_SIZE * 0.5)),
                 ..default()
             },
-            Transform::from_translation(source_translation.truncate().extend(Z_ITEM_PICKUP) + offset),
+            Transform::from_translation(
+                source_translation.truncate().extend(Z_ITEM_PICKUP) + offset,
+            ),
             Name::new("Item (Sand)"),
         ));
     }
 
-    info!("TASK_EXEC: Soul {:?} collected sand instantly", ctx.soul_entity);
+    info!(
+        "TASK_EXEC: Soul {:?} collected sand instantly",
+        ctx.soul_entity
+    );
 
     *ctx.task = AssignedTask::CollectSand(
         crate::systems::soul_ai::execute::task_execution::types::CollectSandData {

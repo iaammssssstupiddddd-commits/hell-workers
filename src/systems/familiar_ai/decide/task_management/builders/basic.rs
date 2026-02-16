@@ -1,7 +1,9 @@
 use crate::events::ResourceReservationOp;
 use crate::systems::familiar_ai::decide::task_management::{AssignTaskContext, ReservationShadow};
 use crate::systems::jobs::WorkType;
-use crate::systems::soul_ai::execute::task_execution::types::{BuildPhase, GatherPhase, ReinforceFloorPhase, PourFloorPhase};
+use crate::systems::soul_ai::execute::task_execution::types::{
+    BuildPhase, GatherPhase, PourFloorPhase, ReinforceFloorPhase,
+};
 use bevy::prelude::*;
 
 use super::submit_assignment;
@@ -166,17 +168,21 @@ pub fn issue_reinforce_floor(
     let site_entity = if let Ok(tile) = queries.storage.floor_tiles.get(ctx.task_entity) {
         tile.parent_site
     } else {
-        error!("issue_reinforce_floor: Task entity {:?} is not a FloorTileBlueprint", ctx.task_entity);
+        error!(
+            "issue_reinforce_floor: Task entity {:?} is not a FloorTileBlueprint",
+            ctx.task_entity
+        );
         return;
     };
 
-    let assigned_task = crate::systems::soul_ai::execute::task_execution::types::AssignedTask::ReinforceFloorTile(
-        crate::systems::soul_ai::execute::task_execution::types::ReinforceFloorTileData {
-            tile: ctx.task_entity,
-            site: site_entity,
-            phase: ReinforceFloorPhase::GoingToMaterialCenter,
-        },
-    );
+    let assigned_task =
+        crate::systems::soul_ai::execute::task_execution::types::AssignedTask::ReinforceFloorTile(
+            crate::systems::soul_ai::execute::task_execution::types::ReinforceFloorTileData {
+                tile: ctx.task_entity,
+                site: site_entity,
+                phase: ReinforceFloorPhase::GoingToMaterialCenter,
+            },
+        );
     let reservation_ops = vec![ResourceReservationOp::ReserveSource {
         source: ctx.task_entity,
         amount: 1,
@@ -204,17 +210,21 @@ pub fn issue_pour_floor(
     let site_entity = if let Ok(tile) = queries.storage.floor_tiles.get(ctx.task_entity) {
         tile.parent_site
     } else {
-        error!("issue_pour_floor: Task entity {:?} is not a FloorTileBlueprint", ctx.task_entity);
+        error!(
+            "issue_pour_floor: Task entity {:?} is not a FloorTileBlueprint",
+            ctx.task_entity
+        );
         return;
     };
 
-    let assigned_task = crate::systems::soul_ai::execute::task_execution::types::AssignedTask::PourFloorTile(
-        crate::systems::soul_ai::execute::task_execution::types::PourFloorTileData {
-            tile: ctx.task_entity,
-            site: site_entity,
-            phase: PourFloorPhase::GoingToMaterialCenter,
-        },
-    );
+    let assigned_task =
+        crate::systems::soul_ai::execute::task_execution::types::AssignedTask::PourFloorTile(
+            crate::systems::soul_ai::execute::task_execution::types::PourFloorTileData {
+                tile: ctx.task_entity,
+                site: site_entity,
+                phase: PourFloorPhase::GoingToMaterialCenter,
+            },
+        );
     let reservation_ops = vec![ResourceReservationOp::ReserveSource {
         source: ctx.task_entity,
         amount: 1,

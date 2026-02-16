@@ -7,10 +7,10 @@ use crate::systems::soul_ai::execute::task_execution::types::GatherWaterPhase;
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
 
-use super::assigned_task;
 use super::super::guards;
 use super::super::helpers::{abort_task_with_item, abort_task_without_item};
 use super::super::routing;
+use super::assigned_task;
 
 pub fn handle(
     ctx: &mut TaskExecutionContext,

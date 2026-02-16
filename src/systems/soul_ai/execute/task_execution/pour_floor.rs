@@ -1,7 +1,7 @@
 //! Floor tile pouring task execution
 
-use crate::relationships::WorkingOn;
 use crate::constants::{FLOOR_MUD_PER_TILE, FLOOR_POUR_DURATION_SECS};
+use crate::relationships::WorkingOn;
 use crate::systems::jobs::floor_construction::FloorTileState;
 use crate::systems::soul_ai::execute::task_execution::{
     common::*,
@@ -25,11 +25,7 @@ pub fn handle_pour_floor_task(
     match phase {
         PourFloorPhase::GoingToMaterialCenter => {
             // Get site material center position
-            let Ok((site_transform, _site, _)) = ctx
-                .queries
-                .storage
-                .floor_sites
-                .get(site_entity)
+            let Ok((site_transform, _site, _)) = ctx.queries.storage.floor_sites.get(site_entity)
             else {
                 // Site disappeared
                 info!(
@@ -105,7 +101,8 @@ pub fn handle_pour_floor_task(
                 return;
             };
 
-            let tile_pos = WorldMap::grid_to_world(tile_blueprint.grid_pos.0, tile_blueprint.grid_pos.1);
+            let tile_pos =
+                WorldMap::grid_to_world(tile_blueprint.grid_pos.0, tile_blueprint.grid_pos.1);
 
             // Navigate to tile
             update_destination_to_adjacent(
@@ -161,8 +158,7 @@ pub fn handle_pour_floor_task(
 
             if new_progress_bp >= MAX_PROGRESS_BP {
                 // Update tile state
-                tile_blueprint.mud_delivered =
-                    tile_blueprint.mud_delivered.max(FLOOR_MUD_PER_TILE);
+                tile_blueprint.mud_delivered = tile_blueprint.mud_delivered.max(FLOOR_MUD_PER_TILE);
                 tile_blueprint.state = FloorTileState::Complete;
 
                 // Update site counter
@@ -199,7 +195,7 @@ pub fn handle_pour_floor_task(
 
         PourFloorPhase::Done => {
             // Release task slot (if needed, but usually handled by completion system)
-            // For floor tiles, workers are assigned to a tile. 
+            // For floor tiles, workers are assigned to a tile.
             // We should release the reservation here.
             ctx.queue_reservation(crate::events::ResourceReservationOp::ReleaseSource {
                 source: tile_entity,

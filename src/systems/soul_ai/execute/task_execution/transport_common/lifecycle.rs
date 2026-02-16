@@ -5,12 +5,12 @@
 //! - `collect_release_reservation_ops`: 中断時解放で使用
 
 use crate::events::ResourceReservationOp;
-use crate::systems::logistics::transport_request::WheelbarrowDestination;
 use crate::systems::logistics::ResourceType;
+use crate::systems::logistics::transport_request::WheelbarrowDestination;
 use crate::systems::soul_ai::execute::task_execution::types::{
-    AssignedTask, BuildPhase, CollectBonePhase, CollectSandPhase, GatherPhase, GatherWaterPhase, HaulPhase,
-    HaulToBpPhase, HaulToMixerPhase, HaulWaterToMixerPhase, HaulWithWheelbarrowPhase, RefinePhase,
-    ReinforceFloorPhase, PourFloorPhase,
+    AssignedTask, BuildPhase, CollectBonePhase, CollectSandPhase, GatherPhase, GatherWaterPhase,
+    HaulPhase, HaulToBpPhase, HaulToMixerPhase, HaulWaterToMixerPhase, HaulWithWheelbarrowPhase,
+    PourFloorPhase, RefinePhase, ReinforceFloorPhase,
 };
 use bevy::prelude::*;
 
@@ -146,8 +146,7 @@ pub fn collect_active_reservation_ops(
 
             for &item in &data.items {
                 match data.destination {
-                    WheelbarrowDestination::Stockpile(_)
-                    | WheelbarrowDestination::Blueprint(_) => {
+                    WheelbarrowDestination::Stockpile(_) | WheelbarrowDestination::Blueprint(_) => {
                         // DeliveringTo リレーションシップで管理するため、ここでは予約不要
                     }
                     WheelbarrowDestination::Mixer {

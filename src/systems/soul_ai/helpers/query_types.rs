@@ -1,9 +1,9 @@
 use crate::entities::damned_soul::{DamnedSoul, Destination, IdleState, Path, StressBreakdown};
 use crate::entities::familiar::Familiar;
+use crate::relationships::ParticipatingIn;
 use crate::relationships::{CommandedBy, WorkingOn};
 use crate::systems::logistics::Inventory;
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
-use crate::relationships::ParticipatingIn;
 use bevy::prelude::*;
 
 /// タスク割り当て要求の適用に使うソウルの標準クエリ型
@@ -131,4 +131,3 @@ pub type AutoBuildSoulQuery<'w, 's> = Query<
     ),
     Without<Familiar>,
 >;
-

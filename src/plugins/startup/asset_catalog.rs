@@ -7,10 +7,7 @@ use bevy::prelude::*;
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 
 /// AssetServer と Images から GameAssets を構築する
-pub fn create_game_assets(
-    asset_server: &AssetServer,
-    images: &mut Assets<Image>,
-) -> GameAssets {
+pub fn create_game_assets(asset_server: &AssetServer, images: &mut Assets<Image>) -> GameAssets {
     let aura_circle = create_circular_gradient_texture(images);
     let aura_ring = create_circular_outline_texture(images);
 
