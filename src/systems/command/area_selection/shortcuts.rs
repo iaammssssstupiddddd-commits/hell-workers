@@ -1,4 +1,4 @@
-use super::apply::apply_task_area_to_familiar;
+use super::apply::{apply_area_and_record_history, apply_task_area_to_familiar};
 use super::geometry::{area_from_center_and_size, hotkey_slot_index};
 use super::state::{AreaEditClipboard, AreaEditHistory, AreaEditPresets};
 use crate::entities::damned_soul::Destination;
@@ -50,8 +50,14 @@ pub fn task_area_edit_history_shortcuts_system(
         };
 
         let new_area = area_from_center_and_size(center, preset_size);
-        apply_task_area_to_familiar(selected, Some(&new_area), &mut commands, &mut q_familiars);
-        area_edit_history.push(selected, before, Some(new_area));
+        apply_area_and_record_history(
+            selected,
+            &new_area,
+            before.clone(),
+            &mut commands,
+            &mut q_familiars,
+            &mut area_edit_history,
+        );
         return;
     }
 
@@ -92,13 +98,14 @@ pub fn task_area_edit_history_shortcuts_system(
         };
 
         let before = q_task_areas.get(selected).ok().cloned();
-        apply_task_area_to_familiar(
+        apply_area_and_record_history(
             selected,
-            Some(&copied_area),
+            &copied_area,
+            before,
             &mut commands,
             &mut q_familiars,
+            &mut area_edit_history,
         );
-        area_edit_history.push(selected, before, Some(copied_area));
         return;
     }
 
@@ -124,7 +131,7 @@ pub fn task_area_edit_history_shortcuts_system(
         && let Some(entry) = area_edit_history.undo_stack.pop()
     {
         let familiar_entity = entry.familiar_entity;
-        apply_task_area_to_familiar(
+        super::apply::apply_task_area_to_familiar(
             familiar_entity,
             entry.before.as_ref(),
             &mut commands,

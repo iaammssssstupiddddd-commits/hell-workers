@@ -1,8 +1,9 @@
 use super::apply::{
-    apply_designation_in_area, apply_task_area_to_familiar, assign_unassigned_tasks_in_area,
-    cancel_single_designation,
+    apply_area_and_record_history, apply_designation_in_area, assign_unassigned_tasks_in_area,
 };
+use super::cancel::cancel_single_designation;
 use super::geometry::{apply_area_edit_drag, detect_area_edit_operation, world_cursor_pos};
+use super::queries::DesignationTargetQuery;
 use super::state::{AreaEditHistory, AreaEditSession, Drag};
 use crate::constants::TILE_SIZE;
 use crate::entities::damned_soul::Destination;
@@ -11,16 +12,11 @@ use crate::game_state::{PlayMode, TaskContext};
 use crate::interface::camera::MainCamera;
 use crate::interface::selection::SelectedEntity;
 use crate::interface::ui::UiInputState;
-use crate::relationships::{StoredItems, TaskWorkers};
 use crate::systems::command::{AreaSelectionIndicator, TaskArea, TaskMode};
 use crate::systems::jobs::floor_construction::{
     FloorConstructionCancelRequested, FloorTileBlueprint,
 };
-use crate::systems::jobs::{Blueprint, Designation, Rock, Tree};
-use crate::systems::logistics::transport_request::{
-    ManualTransportRequest, TransportRequest, TransportRequestFixedSource,
-};
-use crate::systems::logistics::{BelongsTo, BucketStorage, ResourceItem, Stockpile};
+use crate::systems::jobs::Designation;
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
@@ -92,23 +88,7 @@ pub fn task_area_selection_system(
     mut q_familiars: Query<(&mut ActiveCommand, &mut Destination), With<Familiar>>,
     q_familiar_areas: Query<&TaskArea, With<Familiar>>,
     mut q_target_sets: ParamSet<(
-        Query<(
-            Entity,
-            &Transform,
-            Option<&Tree>,
-            Option<&Rock>,
-            Option<&ResourceItem>,
-            Option<&Designation>,
-            Option<&TaskWorkers>,
-            Option<&Blueprint>,
-            Option<&BelongsTo>,
-            Option<&TransportRequest>,
-            Option<&TransportRequestFixedSource>,
-            Option<&Stockpile>,
-            Option<&StoredItems>,
-            Option<&BucketStorage>,
-            Option<&ManualTransportRequest>,
-        )>,
+        DesignationTargetQuery<'_, '_>,
         Query<(Entity, &Transform, &FloorTileBlueprint)>,
     )>,
     mut commands: Commands,
@@ -155,11 +135,13 @@ pub fn task_area_selection_system(
                 .unwrap_or_else(|| active_drag.original_area.clone());
 
             if applied_area != active_drag.original_area {
-                apply_task_area_to_familiar(
+                apply_area_and_record_history(
                     active_drag.familiar_entity,
-                    Some(&applied_area),
+                    &applied_area,
+                    Some(active_drag.original_area.clone()),
                     &mut commands,
                     &mut q_familiars,
+                    &mut area_edit_history,
                 );
 
                 assign_unassigned_tasks_in_area(
@@ -167,12 +149,6 @@ pub fn task_area_selection_system(
                     active_drag.familiar_entity,
                     &applied_area,
                     &q_unassigned,
-                );
-
-                area_edit_history.push(
-                    active_drag.familiar_entity,
-                    Some(active_drag.original_area.clone()),
-                    Some(applied_area),
                 );
             }
 
@@ -253,11 +229,13 @@ pub fn task_area_selection_system(
             if let Some(fam_entity) = selected.0 {
                 let before_area = q_familiar_areas.get(fam_entity).ok().cloned();
 
-                apply_task_area_to_familiar(
+                apply_area_and_record_history(
                     fam_entity,
-                    Some(&new_area),
+                    &new_area,
+                    before_area.clone(),
                     &mut commands,
                     &mut q_familiars,
+                    &mut area_edit_history,
                 );
 
                 assign_unassigned_tasks_in_area(
@@ -266,8 +244,6 @@ pub fn task_area_selection_system(
                     &new_area,
                     &q_unassigned,
                 );
-
-                area_edit_history.push(fam_entity, before_area, Some(new_area));
             }
 
             despawn_selection_indicators(&q_selection_indicator, &mut commands);

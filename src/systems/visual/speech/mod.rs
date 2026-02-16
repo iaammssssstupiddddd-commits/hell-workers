@@ -2,6 +2,7 @@ pub mod animation;
 pub mod components;
 pub mod conversation;
 pub mod cooldown;
+pub mod emitter;
 pub mod observers;
 pub mod periodic;
 pub mod phrases;
