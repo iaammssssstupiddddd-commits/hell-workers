@@ -65,7 +65,7 @@ Bevy 0.18 の **ECS Relationships** を活用し、休憩所の定員管理や�
 | **疲労 (Fatigue)** | 大幅に減少 |
 | **ストレス (Stress)** | 大幅に減少 |
 
-詳細な係数は `src/systems/soul_ai/update/vitals.rs` または関連するバイタル更新ロジックで定義されています。
+詳細な係数は `src/constants/ai.rs`（`REST_AREA_*`）および `src/systems/soul_ai/update/vitals.rs` 等のバイタル更新ロジックで定義されています。
 
 ## 6. 実装上の注意点
 
@@ -76,7 +76,7 @@ Bevy 0.18 の **ECS Relationships** を活用し、休憩所の定員管理や�
 ECS Relationships を使用しているため、ワーカーが削除（デスポーン）された場合や、休憩所が破壊された場合、予約や入所状態は Bevy のエンジンレベルで自動的にクリーンアップされます。これにより、定員（Capacity）の計算が狂う「ゴースト予約」の問題が防がれています。
 
 ## 7. 関連ファイル
-- `src/systems/soul_ai/decide/idle_behavior.rs`: 休憩の意思決定、予約、到着判定。
-- `src/systems/soul_ai/execute/idle_behavior.rs`: 休憩所への入退所処理、非表示化。
+- `src/systems/soul_ai/decide/idle_behavior/`: 休憩の意思決定、予約、到着判定。
+- `src/systems/soul_ai/execute/idle_behavior_apply.rs`: 休憩所への入退所処理、非表示化。
 - `src/relationships.rs`: `RestingIn`, `RestAreaOccupants` 等の Relationship 定義。
 - `src/systems/jobs/mod.rs`: `RestArea` コンポーネントの定義。

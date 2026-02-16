@@ -375,7 +375,7 @@ fn rest_behavior_apply_system(
 | `src/systems/soul_ai/scheduling.rs` | `FamiliarAiSystemSet`, `SoulAiSystemSet`の定義 |
 | `src/systems/soul_ai/mod.rs` | Soul AIのフェーズ登録、レイヤー間順序設定 |
 | `src/systems/familiar_ai/mod.rs` | Familiar AIのフェーズ登録 |
-| `src/systems/soul_ai/decide/idle_behavior.rs` | Decide側のRequest生成例 |
+| `src/systems/soul_ai/decide/idle_behavior/` | Decide側のRequest生成例 |
 | `src/systems/soul_ai/execute/idle_behavior_apply.rs` | Execute側のIdleBehavior適用例 |
 | `src/systems/soul_ai/execute/designation_apply.rs` | Execute側のDesignation適用例 |
 | `src/events.rs` | Request型の定義 |

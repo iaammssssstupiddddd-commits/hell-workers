@@ -71,9 +71,9 @@ Perceive → Update → Decide → Execute
 
 各フェーズ間には `ApplyDeferred` が配置され、変更が次のフェーズで確実に反映されます。
 
-## 定数管理 (`src/constants.rs`)
+## 定数管理 (`src/constants/`)
 
-ゲームバランスに関わる全てのマジックナンバーは `constants.rs` に集約されています。
+ゲームバランスに関わる全てのマジックナンバーは `src/constants/` にドメイン別に分割されて集約されています。
 
 | カテゴリ | 例 |
 |:--|:--|
