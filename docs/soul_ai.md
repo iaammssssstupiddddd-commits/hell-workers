@@ -41,6 +41,8 @@
 | **`Idle`** | 待機 | その場に留まる。 |
 | **`Gathering`** | 疲労 > 0.8 | 集会所に集まり、他のワーカーと談笑・休息する。 |
 | **`ExhaustedGathering`** | 疲労 > 0.9 | 強制的に集会所へ向かう（移動以外の全行動不可）。 |
+| **`GoingToRest`** | 休憩条件成立 | 休憩所へ移動中。集会の重なり検知をスキップし、目的地が上書きされない。 |
+| **`Resting`** | 休憩所に到着 | 休憩所内で休息中（非表示、疲労・ストレス回復）。 |
 | **`StressFrozen`** | ストレス 1.0 | ストレスによりその場で硬直する。 |
 | **`Escaping`** | 使い魔接近 + ストレス > 0.3 | 使い魔から逃走し、安全な集会スポットを探す。 |
 
@@ -73,7 +75,35 @@
 - 少し傾けた姿勢（走っている感じ）
 - 軽い点滅アニメーション
 
-### 2.2 イベント駆動スプライト差し替え
+### 2.2 休憩所システム (Rest Area)
+
+休憩所が建設されていると、条件を満たしたワーカーは休憩所で休息を取ります。
+
+**休憩開始条件（いずれか）:**
+- 怠惰 > `LAZINESS_THRESHOLD_MID`
+- 疲労 > `FATIGUE_IDLE_THRESHOLD * 0.5`
+- ストレス > `ESCAPE_STRESS_THRESHOLD`
+- 累計アイドル時間 > `IDLE_TIME_TO_GATHERING * 0.3`
+
+**状態遷移:**
+1. 条件成立 → `GoingToRest`（休憩所へ移動中）
+   - 通常の歩行スプライトで移動
+   - 集会の重なり検知（`gathering_separation_system`）をスキップ
+   - リクルート対象外
+2. 休憩所に到着 → `Resting`（休息中）
+   - ソウルは非表示になる
+   - 疲労・ストレスが回復する
+   - `REST_AREA_RESTING_DURATION` 経過後に退出
+
+**`GoingToRest` と `Resting` の分離理由:**
+集会に参加中のソウルが休憩所へ移動する際、`ParticipatingIn` の削除は Execute フェーズで処理されるため、同一フレームの Decide フェーズで走る `gathering_separation_system` がまだ `ParticipatingIn` を持つソウルの目的地を上書きしてしまう問題があった。`GoingToRest` 状態を導入し、この状態のソウルを重なり検知からスキップすることで解決。
+
+**関連コンポーネント:**
+- `RestingIn(Entity)`: 休憩所への入所状態
+- `RestAreaReservedFor(Entity)`: 休憩所の予約
+- `RestAreaCooldown`: 退出後のリクルート不可クールダウン
+
+### 2.3 イベント駆動スプライト差し替え
 
 Soul 本体画像は、Idle 状態だけでなくイベントでも一時差し替えされます。  
 実装は `ConversationExpression`（画像種別・優先度・残り秒）でロック制御されています。
@@ -125,6 +155,9 @@ Bevy 0.18 の ECS Relationships を使用して、状態を管理しています
 - `IdleState`: 現在の待機行動。
 - `CommandedBy(Entity)`: 指揮している使い魔への参照。
 - `ParticipatingIn(Entity)` / `GatheringParticipants`: 集会への参加状態（Soul → GatheringSpot）。
+- `RestingIn(Entity)` / `RestAreaOccupants`: 休憩所への入所状態（Soul → RestArea）。
+- `RestAreaReservedFor(Entity)` / `RestAreaReservations`: 休憩所の予約（Soul → RestArea）。
+- `RestAreaCooldown`: 休憩所退出後のリクルート不可クールダウン。
 - `WorkingOn(Entity)`: 取り組んでいるタスクへの参照。
 - `Holding(Entity)`: 現在持っているアイテム。
 - `Inventory`: アイテムの所持状態を管理する必須コンポーネント。

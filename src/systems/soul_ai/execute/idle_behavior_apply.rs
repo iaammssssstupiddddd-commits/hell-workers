@@ -168,7 +168,7 @@ pub fn idle_behavior_apply_system(
                 }
 
                 if let Ok(mut idle) = q_idle.get_mut(request.entity) {
-                    if idle.behavior == IdleBehavior::Resting {
+                    if matches!(idle.behavior, IdleBehavior::Resting | IdleBehavior::GoingToRest) {
                         idle.behavior = IdleBehavior::Wandering;
                     }
                     idle.idle_timer = 0.0;
