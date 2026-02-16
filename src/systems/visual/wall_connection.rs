@@ -107,48 +107,67 @@ fn update_wall_sprite(
     let left = is_wall(x - 1, y, world_map, q_walls_check);
     let right = is_wall(x + 1, y, world_map, q_walls_check);
 
-    let (texture, flip_x, flip_y) = match (up, down, left, right) {
-        // No connections
-        (false, false, false, false) => (game_assets.wall_isolated.clone(), false, false),
+    let is_provisional = is_provisional_wall(wall_entity, q_walls_check);
 
-        // Horizontal
-        (false, false, true, false) => (game_assets.wall_horizontal_left.clone(), false, false),
-        (false, false, false, true) => (game_assets.wall_horizontal_right.clone(), false, false),
-        (false, false, true, true) => (game_assets.wall_horizontal_both.clone(), false, false),
-
-        // Vertical
-        (true, false, false, false) => (game_assets.wall_vertical_top.clone(), false, false),
-        (false, true, false, false) => (game_assets.wall_vertical_bottom.clone(), false, false),
-        (true, true, false, false) => (game_assets.wall_vertical_both.clone(), false, false),
-
-        // Corners
-        // Top-Left (Up & Left)
-        (true, false, true, false) => (game_assets.wall_corner_top_left.clone(), false, false),
-        // Top-Right (Up & Right)
-        (true, false, false, true) => (game_assets.wall_corner_top_right.clone(), false, false),
-        // Bottom-Left (Down & Left)
-        (false, true, true, false) => (game_assets.wall_corner_bottom_left.clone(), false, false),
-        // Bottom-Right (Down & Right)
-        (false, true, false, true) => (game_assets.wall_corner_bottom_right.clone(), false, false),
-
-        // T-Junctions
-        // Up, Down, Left (No Right) -> T-Left
-        (true, true, true, false) => (game_assets.wall_t_left.clone(), false, false),
-        // Up, Down, Right (No Left) -> T-Right
-        (true, true, false, true) => (game_assets.wall_t_right.clone(), false, false),
-        // Left, Right, Up (No Down) -> T-Up
-        (true, false, true, true) => (game_assets.wall_t_up.clone(), false, false),
-        // Left, Right, Down (No Up) -> T-Down
-        (false, true, true, true) => (game_assets.wall_t_down.clone(), false, false),
-
-        // Cross
-        (true, true, true, true) => (game_assets.wall_cross.clone(), false, false),
+    let (texture, flip_x, flip_y) = if is_provisional {
+        // 仮設（木の壁）
+        match (up, down, left, right) {
+            (false, false, false, false) => (game_assets.wall_isolated.clone(), false, false),
+            (false, false, true, false) => (game_assets.wall_horizontal_left.clone(), false, false),
+            (false, false, false, true) => (game_assets.wall_horizontal_right.clone(), false, false),
+            (false, false, true, true) => (game_assets.wall_horizontal_both.clone(), false, false),
+            (true, false, false, false) => (game_assets.wall_vertical_top.clone(), false, false),
+            (false, true, false, false) => (game_assets.wall_vertical_bottom.clone(), false, false),
+            (true, true, false, false) => (game_assets.wall_vertical_both.clone(), false, false),
+            (true, false, true, false) => (game_assets.wall_corner_top_left.clone(), false, false),
+            (true, false, false, true) => (game_assets.wall_corner_top_right.clone(), false, false),
+            (false, true, true, false) => (game_assets.wall_corner_bottom_left.clone(), false, false),
+            (false, true, false, true) => (game_assets.wall_corner_bottom_right.clone(), false, false),
+            (true, true, true, false) => (game_assets.wall_t_left.clone(), false, false),
+            (true, true, false, true) => (game_assets.wall_t_right.clone(), false, false),
+            (true, false, true, true) => (game_assets.wall_t_up.clone(), false, false),
+            (false, true, true, true) => (game_assets.wall_t_down.clone(), false, false),
+            (true, true, true, true) => (game_assets.wall_cross.clone(), false, false),
+        }
+    } else {
+        // 本設（泥の壁）
+        match (up, down, left, right) {
+            (false, false, false, false) => (game_assets.mud_wall_isolated.clone(), false, false),
+            // Horizontal
+            (false, false, true, false) => (game_assets.mud_wall_end_right.clone(), false, false),
+            (false, false, false, true) => (game_assets.mud_wall_end_left.clone(), false, false),
+            (false, false, true, true) => (game_assets.mud_wall_horizontal.clone(), false, false),
+            // Vertical
+            (true, false, false, false) => (game_assets.mud_wall_end_bottom.clone(), false, false),
+            (false, true, false, false) => (game_assets.mud_wall_end_top.clone(), false, false),
+            (true, true, false, false) => (game_assets.mud_wall_vertical.clone(), false, false),
+            // Corners
+            (true, false, true, false) => (game_assets.mud_wall_corner_top_left.clone(), false, false),
+            (true, false, false, true) => (game_assets.mud_wall_corner_top_right.clone(), false, false),
+            (false, true, true, false) => (
+                game_assets.mud_wall_corner_bottom_left.clone(),
+                false,
+                false,
+            ),
+            (false, true, false, true) => (
+                game_assets.mud_wall_corner_bottom_right.clone(),
+                false,
+                false,
+            ),
+            // T-Junctions
+            (true, true, true, false) => (game_assets.mud_wall_t_left.clone(), false, false),
+            (true, true, false, true) => (game_assets.mud_wall_t_right.clone(), false, false),
+            (true, false, true, true) => (game_assets.mud_wall_t_up.clone(), false, false),
+            (false, true, true, true) => (game_assets.mud_wall_t_down.clone(), false, false),
+            // Cross
+            (true, true, true, true) => (game_assets.mud_wall_cross.clone(), false, false),
+        }
     };
 
     sprite.image = texture;
     sprite.flip_x = flip_x;
     sprite.flip_y = flip_y;
-    sprite.color = if is_provisional_wall(wall_entity, q_walls_check) {
+    sprite.color = if is_provisional {
         Color::srgba(1.0, 0.75, 0.4, 0.85)
     } else {
         Color::WHITE
