@@ -20,6 +20,24 @@ pub struct GameAssets {
     pub soul_trump: Handle<Image>,
     pub soul_stress: Handle<Image>,
     pub soul_stress_breakdown: Handle<Image>,
+    // Mud Wall Assets (Permanent)
+    pub mud_wall_isolated: Handle<Image>,
+    pub mud_wall_horizontal: Handle<Image>,
+    pub mud_wall_vertical: Handle<Image>,
+    pub mud_wall_corner_top_left: Handle<Image>,
+    pub mud_wall_corner_top_right: Handle<Image>,
+    pub mud_wall_corner_bottom_left: Handle<Image>,
+    pub mud_wall_corner_bottom_right: Handle<Image>,
+    pub mud_wall_t_up: Handle<Image>,
+    pub mud_wall_t_down: Handle<Image>,
+    pub mud_wall_t_left: Handle<Image>,
+    pub mud_wall_t_right: Handle<Image>,
+    pub mud_wall_cross: Handle<Image>,
+    pub mud_wall_end_top: Handle<Image>,
+    pub mud_wall_end_bottom: Handle<Image>,
+    pub mud_wall_end_left: Handle<Image>,
+    pub mud_wall_end_right: Handle<Image>,
+
     // Wall connections
     pub wall_isolated: Handle<Image>,
     pub wall_horizontal_left: Handle<Image>,
@@ -37,6 +55,7 @@ pub struct GameAssets {
     pub wall_t_left: Handle<Image>,
     pub wall_t_right: Handle<Image>,
     pub wall_cross: Handle<Image>,
+    pub mud_floor: Handle<Image>,
 
     // Base Resources
     pub wood: Handle<Image>,

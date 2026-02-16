@@ -12,7 +12,7 @@ pub(super) fn spawn_completed_building(
     let is_provisional = !bp.is_fully_complete();
     let (sprite_image, custom_size) = match bp.kind {
         BuildingType::Wall => (game_assets.wall_isolated.clone(), Vec2::splat(TILE_SIZE)),
-        BuildingType::Floor => (game_assets.stone.clone(), Vec2::splat(TILE_SIZE)),
+        BuildingType::Floor => (game_assets.mud_floor.clone(), Vec2::splat(TILE_SIZE)),
         BuildingType::Tank => (game_assets.tank_empty.clone(), Vec2::splat(TILE_SIZE * 2.0)),
         BuildingType::MudMixer => (game_assets.mud_mixer.clone(), Vec2::splat(TILE_SIZE * 2.0)),
         BuildingType::RestArea => (game_assets.rest_area.clone(), Vec2::splat(TILE_SIZE * 2.0)),

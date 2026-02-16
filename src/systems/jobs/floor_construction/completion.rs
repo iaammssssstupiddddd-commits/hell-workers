@@ -128,7 +128,7 @@ pub fn floor_construction_completion_system(
                     is_provisional: false,
                 },
                 Sprite {
-                    image: game_assets.stone.clone(),
+                    image: game_assets.mud_floor.clone(),
                     custom_size: Some(Vec2::splat(TILE_SIZE)),
                     ..default()
                 },
