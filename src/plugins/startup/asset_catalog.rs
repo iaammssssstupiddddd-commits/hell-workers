@@ -33,7 +33,32 @@ pub fn create_game_assets(asset_server: &AssetServer, images: &mut Assets<Image>
         soul_wine: asset_server.load("textures/character/soul_wine.png"),
         soul_trump: asset_server.load("textures/character/soul_trump.png"),
         soul_stress: asset_server.load("textures/character/soul_stress.png"),
+
         soul_stress_breakdown: asset_server.load("textures/character/soul_stressBreakdown.png"),
+        // Mud Wall Assets (Permanent)
+        mud_wall_isolated: asset_server.load("textures/buildings/mud_wall/mud_wall_isolated.png"),
+        mud_wall_horizontal: asset_server
+            .load("textures/buildings/mud_wall/mud_wall_horizontal.png"),
+        mud_wall_vertical: asset_server
+            .load("textures/buildings/mud_wall/mud_wall_vertical.png"),
+        mud_wall_corner_top_left: asset_server
+            .load("textures/buildings/mud_wall/mud_wall_corner_top-left.png"),
+        mud_wall_corner_top_right: asset_server
+            .load("textures/buildings/mud_wall/mud_wall_corner_top-right.png"),
+        mud_wall_corner_bottom_left: asset_server
+            .load("textures/buildings/mud_wall/mud_wall_corner_down-left.png"),
+        mud_wall_corner_bottom_right: asset_server
+            .load("textures/buildings/mud_wall/mud_wall_corner_down_right.png"),
+        mud_wall_t_up: asset_server.load("textures/buildings/mud_wall/mud_wall_T_up.png"),
+        mud_wall_t_down: asset_server.load("textures/buildings/mud_wall/mud_wall_T_down.png"),
+        mud_wall_t_left: asset_server.load("textures/buildings/mud_wall/mud_wall_T_left.png"),
+        mud_wall_t_right: asset_server.load("textures/buildings/mud_wall/mud_wall_T_right.png"),
+        mud_wall_cross: asset_server.load("textures/buildings/mud_wall/mud_wall_cross.png"),
+        mud_wall_end_top: asset_server.load("textures/buildings/mud_wall/mud_wall_top_end.png"),
+        mud_wall_end_bottom: asset_server.load("textures/buildings/mud_wall/mud_wall_down_end.png"),
+        mud_wall_end_left: asset_server.load("textures/buildings/mud_wall/mud_wall_left_end.png"),
+        mud_wall_end_right: asset_server.load("textures/buildings/mud_wall/mud_wall_right_end.png"),
+
         wall_isolated: asset_server.load("textures/buildings/wooden_wall/wall_isolated.png"),
         wall_horizontal_left: asset_server
             .load("textures/buildings/wooden_wall/wall_horizontal_left_side_connected.png"),
@@ -60,7 +85,8 @@ pub fn create_game_assets(asset_server: &AssetServer, images: &mut Assets<Image>
         wall_t_left: asset_server.load("textures/buildings/wooden_wall/wall_t_left.png"),
         wall_t_right: asset_server.load("textures/buildings/wooden_wall/wall_t_right.png"),
         wall_cross: asset_server.load("textures/buildings/wooden_wall/wall_cross.png"),
-        wood: asset_server.load("textures/dirt.png"),
+        mud_floor: asset_server.load("textures/terrain/mud_floor.png"),
+        wood: asset_server.load("textures/ui/wood_small.png"),
         tree: asset_server.load("textures/environment/tree/tree_1.png"),
         trees: vec![
             asset_server.load("textures/environment/tree/tree_1.png"),
@@ -106,7 +132,7 @@ pub fn create_game_assets(asset_server: &AssetServer, images: &mut Assets<Image>
         bone_pile: asset_server.load("textures/resources/bone_pile/bone_pile.png"),
         stasis_mud: asset_server.load("textures/resources/stasis_mud/stasis_mud.png"),
         mud_mixer: asset_server.load("textures/buildings/mud_mixer/mud mixer.png"),
-        rest_area: asset_server.load("textures/buildings/rest_area/rest_area.png"),
+        rest_area: asset_server.load("textures/buildings/rest_area/barrack.png"),
         mud_mixer_anim_1: asset_server.load("textures/buildings/mud_mixer/mud mixer anime 1.png"),
         mud_mixer_anim_2: asset_server.load("textures/buildings/mud_mixer/mud mixer anime 2.png"),
         mud_mixer_anim_3: asset_server.load("textures/buildings/mud_mixer/mud mixer anime 3.png"),

@@ -108,7 +108,6 @@ pub fn handle_gather_task(
                                 Sprite {
                                     image: game_assets.wood.clone(),
                                     custom_size: Some(Vec2::splat(TILE_SIZE * 0.5)),
-                                    color: Color::srgb(0.5, 0.35, 0.05),
                                     ..default()
                                 },
                                 Transform::from_translation(pos + offset),
