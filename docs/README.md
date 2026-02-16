@@ -8,6 +8,7 @@
 
 ## ゲームシステム (Core Systems)
 - [tasks.md](tasks.md): タスクの発行、割り当て、ECS Relationships による参照管理。
+- [rest_area_system.md](rest_area_system.md): 休憩所（Rest Area）の定員管理、予約、バイタル回復の仕組み。
 - [logistics.md](logistics.md): 資源の搬送、備蓄場所、オートホールの仕組み。
 - [building.md](building.md): 建築プロセス、設計図、必要な材料。
 - [dream.md](dream.md): Dreamシステム。睡眠中の夢による通貨獲得メカニクス。
