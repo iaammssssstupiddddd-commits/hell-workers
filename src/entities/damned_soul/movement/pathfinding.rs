@@ -110,6 +110,7 @@ pub fn pathfinding_system(
         let idle_can_move = match idle.behavior {
             IdleBehavior::Sitting | IdleBehavior::Sleeping => false,
             IdleBehavior::Resting => resting_in.is_none(),
+            IdleBehavior::GoingToRest => true,
             _ => true,
         };
 

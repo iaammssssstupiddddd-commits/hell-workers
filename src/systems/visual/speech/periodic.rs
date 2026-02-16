@@ -50,7 +50,7 @@ pub fn periodic_emotion_system(
             state.tick(dt);
             // アイドル時間も更新
             if under_command_opt.is_none()
-                && !matches!(idle.behavior, IdleBehavior::Gathering | IdleBehavior::Resting)
+                && !matches!(idle.behavior, IdleBehavior::Gathering | IdleBehavior::Resting | IdleBehavior::GoingToRest)
             {
                 state.idle_time += dt;
             } else {
@@ -64,7 +64,7 @@ pub fn periodic_emotion_system(
 
         // アイドル時間の更新
         if under_command_opt.is_none()
-            && !matches!(idle.behavior, IdleBehavior::Gathering | IdleBehavior::Resting)
+            && !matches!(idle.behavior, IdleBehavior::Gathering | IdleBehavior::Resting | IdleBehavior::GoingToRest)
         {
             state.idle_time += dt;
         } else {

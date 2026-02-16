@@ -21,7 +21,7 @@ pub fn is_soul_available_for_work(
     if !matches!(*task, AssignedTask::None) {
         return false;
     }
-    if idle.behavior == IdleBehavior::ExhaustedGathering || idle.behavior == IdleBehavior::Resting
+    if matches!(idle.behavior, IdleBehavior::ExhaustedGathering | IdleBehavior::Resting | IdleBehavior::GoingToRest)
     {
         return false;
     }

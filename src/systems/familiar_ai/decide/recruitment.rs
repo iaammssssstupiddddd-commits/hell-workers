@@ -60,6 +60,7 @@ impl RecruitmentManager {
                 && resting_ok
                 && cooldown_ok
                 && idle.behavior != IdleBehavior::Resting
+                && idle.behavior != IdleBehavior::GoingToRest
                 && idle.behavior != IdleBehavior::ExhaustedGathering
             {
                 Some((entity, transform.translation.truncate()))

@@ -102,7 +102,7 @@ impl SquadManager {
             {
                 // 疲労・崩壊チェック
                 let is_resting =
-                    matches!(idle.behavior, IdleBehavior::Gathering | IdleBehavior::Resting);
+                    matches!(idle.behavior, IdleBehavior::Gathering | IdleBehavior::Resting | IdleBehavior::GoingToRest);
                 if (!is_resting && soul.fatigue > fatigue_threshold)
                     || idle.behavior == IdleBehavior::ExhaustedGathering
                 {

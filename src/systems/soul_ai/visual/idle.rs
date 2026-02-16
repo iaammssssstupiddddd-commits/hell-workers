@@ -42,7 +42,7 @@ pub fn idle_visual_system(
                 transform.scale.y = 0.8;
                 sprite.color = Color::srgba(0.8, 0.8, 0.8, 1.0);
             }
-            IdleBehavior::Wandering => {
+            IdleBehavior::Wandering | IdleBehavior::GoingToRest => {
                 transform.rotation = Quat::IDENTITY;
                 sprite.color = Color::WHITE;
             }
@@ -141,7 +141,7 @@ pub fn idle_visual_system(
         if soul.motivation > 0.5
             && !matches!(
                 idle.behavior,
-                IdleBehavior::Gathering | IdleBehavior::ExhaustedGathering | IdleBehavior::Resting
+                IdleBehavior::Gathering | IdleBehavior::ExhaustedGathering | IdleBehavior::Resting | IdleBehavior::GoingToRest
             )
             && matches!(task, AssignedTask::None)
         {
