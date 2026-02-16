@@ -51,12 +51,7 @@ pub fn blueprint_placement(
 
     // companion 配置中は通常建築を抑止
     if let Some(active) = companion_state.0.clone() {
-        let dist = world_pos.distance(active.center);
-        if dist > active.radius {
-            info!(
-                "COMPANION: Placement out of range ({:.1} > {:.1})",
-                dist, active.radius
-            );
+        if world_pos.distance(active.center) > active.radius {
             return;
         }
 
@@ -86,7 +81,6 @@ pub fn blueprint_placement(
                     grid,
                 ) {
                     companion_state.0 = None;
-                    info!("COMPANION: Bucket storage placed for tank blueprint");
                 } else {
                     // 親Blueprintの確定に成功したが companion が置けない場合は巻き戻す
                     for &(gx, gy) in &parent_occupied_grids {
@@ -101,7 +95,6 @@ pub fn blueprint_placement(
                 let parent_occupied_grids =
                     occupied_grids_for_building(parent_type, active.parent_anchor);
                 if parent_occupied_grids.contains(&grid) {
-                    info!("COMPANION: SandPile cannot be placed on parent blueprint area");
                     return;
                 }
                 if place_building_blueprint(
@@ -123,7 +116,6 @@ pub fn blueprint_placement(
                     .is_some()
                     {
                         companion_state.0 = None;
-                        info!("COMPANION: SandPile and parent blueprint confirmed");
                     } else {
                         warn!("COMPANION: SandPile placed but failed to confirm parent blueprint");
                     }
@@ -146,7 +138,6 @@ pub fn blueprint_placement(
             CompanionPlacementKind::BucketStorage,
             spawn_pos,
         ));
-        info!("COMPANION: Tank placed, waiting for bucket storage placement");
     } else if building_type == BuildingType::MudMixer
         && !has_nearby_sandpile(&occupied_grids, &q_sand_piles, &q_blueprints, None)
     {
@@ -156,7 +147,6 @@ pub fn blueprint_placement(
             CompanionPlacementKind::SandPile,
             spawn_pos,
         ));
-        info!("COMPANION: MudMixer needs nearby SandPile, placement requested");
     } else {
         let _ = place_building_blueprint(
             &mut commands,
@@ -223,10 +213,6 @@ fn place_building_blueprint(
         world_map.buildings.insert(g, entity);
         world_map.add_obstacle(g.0, g.1);
     }
-    info!(
-        "BLUEPRINT: Placed {:?} at {:?}",
-        building_type, occupied_grids
-    );
 
     Some((entity, occupied_grids, spawn_pos))
 }

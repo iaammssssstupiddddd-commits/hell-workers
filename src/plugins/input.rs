@@ -44,6 +44,5 @@ pub fn debug_toggle_system(
 ) {
     if buttons.just_pressed(KeyCode::F12) {
         visible.0 = !visible.0;
-        info!("DEBUG: Visible = {}", visible.0);
     }
 }

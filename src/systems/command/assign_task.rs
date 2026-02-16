@@ -37,8 +37,6 @@ pub fn assign_task_system(
         return;
     }
 
-    info!("ASSIGN_TASK: Drag released, processing assignment...");
-
     let Ok((camera, camera_transform)) = q_camera.single() else {
         return;
     };
@@ -53,40 +51,27 @@ pub fn assign_task_system(
     };
 
     let Some(fam_entity) = selected.0 else {
-        info!("ASSIGN_TASK: No entity selected");
         task_context.0 = TaskMode::AssignTask(None);
         return;
     };
 
     let Ok((_, fam_transform)) = q_familiars.get(fam_entity) else {
-        info!(
-            "ASSIGN_TASK: Selected entity {:?} is not a familiar",
-            fam_entity
-        );
         task_context.0 = TaskMode::AssignTask(None);
         return;
     };
 
     let selection_area = TaskArea::from_points(start_pos, world_pos);
 
-    info!(
-        "ASSIGN_TASK: Searching in area ({:.1},{:.1}) to ({:.1},{:.1})",
-        selection_area.min.x, selection_area.min.y, selection_area.max.x, selection_area.max.y
-    );
-
     // パス検索の起点を「通行可能な地面」に補正する
     // 使い魔は空中を飛べるが、ワーカーは地面しか歩けないため。
     let Some(actual_start_grid) =
         world_map.get_nearest_walkable_grid(fam_transform.translation.truncate())
     else {
-        info!("ASSIGN_TASK: Familiar is in very deep obstacles, skipping assignment...");
         task_context.0 = TaskMode::AssignTask(None);
         return;
     };
 
-    let mut assigned_count = 0;
-
-    for (entity, transform, designation) in q_designations.iter() {
+    for (entity, transform, _) in q_designations.iter() {
         let pos = transform.translation.truncate();
         if !selection_area.contains_with_margin(pos, 0.1) {
             continue;
@@ -109,10 +94,6 @@ pub fn assign_task_system(
         };
 
         if !is_reachable {
-            info!(
-                "ASSIGN_TASK: Skipping task {:?} (unreachable from ground near Familiar)",
-                entity
-            );
             continue;
         }
 
@@ -120,21 +101,6 @@ pub fn assign_task_system(
             crate::relationships::ManagedBy(fam_entity),
             crate::systems::jobs::Priority(0),
         ));
-
-        assigned_count += 1;
-        info!(
-            "ASSIGN_TASK: Assigned {:?} ({:?}) to Familiar {:?}",
-            entity, designation.work_type, fam_entity
-        );
-    }
-
-    if assigned_count > 0 {
-        info!(
-            "ASSIGN_TASK: Assigned {} task(s) to Familiar {:?}",
-            assigned_count, fam_entity
-        );
-    } else {
-        info!("ASSIGN_TASK: No valid tasks found in selected area");
     }
 
     task_context.0 = TaskMode::AssignTask(None);

@@ -27,7 +27,6 @@ use crate::systems::time::GameTime;
 use crate::world::map::{WorldMap, spawn_map, terrain_border::spawn_terrain_borders};
 use bevy::prelude::*;
 use bevy::render::view::NoIndirectDrawing;
-use std::time::Instant;
 
 pub struct StartupPlugin;
 
@@ -55,7 +54,6 @@ impl Plugin for StartupPlugin {
             .add_systems(
                 PostStartup,
                 (
-                    log_post_startup_begin,
                     spawn_map_timed,
                     spawn_terrain_borders,
                     initial_resource_spawner_timed,
@@ -71,17 +69,8 @@ impl Plugin for StartupPlugin {
     }
 }
 
-fn log_post_startup_begin() {
-    info!("STARTUP_TIMING: PostStartup begin");
-}
-
 fn spawn_map_timed(commands: Commands, game_assets: Res<GameAssets>, world_map: ResMut<WorldMap>) {
-    let start = Instant::now();
     spawn_map(commands, game_assets, world_map);
-    info!(
-        "STARTUP_TIMING: spawn_map finished in {} ms",
-        start.elapsed().as_millis()
-    );
 }
 
 fn initial_resource_spawner_timed(
@@ -89,12 +78,7 @@ fn initial_resource_spawner_timed(
     game_assets: Res<GameAssets>,
     world_map: ResMut<WorldMap>,
 ) {
-    let start = Instant::now();
     initial_resource_spawner(commands, game_assets, world_map);
-    info!(
-        "STARTUP_TIMING: initial_resource_spawner finished in {} ms",
-        start.elapsed().as_millis()
-    );
 }
 
 /// Phase 5: camera/resources 初期化 + asset catalog 生成を呼び出す
@@ -103,8 +87,6 @@ fn setup(
     asset_server: Res<AssetServer>,
     mut images: ResMut<Assets<Image>>,
 ) {
-    let start = Instant::now();
-
     // camera/resources 初期化
     commands.spawn((
         Camera2d,
@@ -116,11 +98,6 @@ fn setup(
     // asset catalog 生成
     let game_assets = create_game_assets(&asset_server, &mut *images);
     commands.insert_resource(game_assets);
-
-    info!(
-        "STARTUP_TIMING: setup (camera + assets + resources) finished in {} ms",
-        start.elapsed().as_millis()
-    );
 }
 
 fn initialize_gizmo_config(mut config_store: ResMut<GizmoConfigStore>) {
@@ -137,41 +114,20 @@ fn populate_resource_spatial_grid(
         With<crate::systems::logistics::ResourceItem>,
     >,
 ) {
-    let start = Instant::now();
-    let mut registered_count = 0;
     for (entity, transform, visibility) in q_resources.iter() {
         let should_register = visibility
             .map(|v| *v != bevy::prelude::Visibility::Hidden)
             .unwrap_or(true);
         if should_register {
             resource_grid.insert(entity, transform.translation.truncate());
-            registered_count += 1;
         }
     }
-    info!(
-        "RESOURCE_GRID: Populated {} existing resources into grid",
-        registered_count
-    );
-    info!(
-        "STARTUP_TIMING: populate_resource_spatial_grid finished in {} ms",
-        start.elapsed().as_millis()
-    );
 }
 
 fn spawn_entities(spawn_events: MessageWriter<DamnedSoulSpawnEvent>, world_map: Res<WorldMap>) {
-    let start = Instant::now();
     spawn_damned_souls(spawn_events, world_map);
-    info!(
-        "STARTUP_TIMING: spawn_entities finished in {} ms",
-        start.elapsed().as_millis()
-    );
 }
 
 fn spawn_familiar_wrapper(spawn_events: MessageWriter<FamiliarSpawnEvent>) {
-    let start = Instant::now();
     crate::entities::familiar::spawn_familiar(spawn_events);
-    info!(
-        "STARTUP_TIMING: spawn_familiar_wrapper finished in {} ms",
-        start.elapsed().as_millis()
-    );
 }

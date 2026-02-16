@@ -197,14 +197,14 @@ pub const ESCAPE_BEHAVIOR_INTERVAL: f32 = 0.5;
 // ============================================================
 
 /// 初期 Soul スポーン数（`--spawn-souls` 未指定時）
-pub const SOUL_SPAWN_INITIAL: u32 = 5;
+pub const SOUL_SPAWN_INITIAL: u32 = 10;
 /// 定期スポーン判定間隔（秒）
 pub const SOUL_SPAWN_INTERVAL: f32 = 60.0;
 /// 1回の定期スポーン数（最小/最大）
 pub const SOUL_SPAWN_COUNT_MIN: u32 = 1;
 pub const SOUL_SPAWN_COUNT_MAX: u32 = 2;
 /// 休憩所なしの基本人口上限
-pub const SOUL_POPULATION_BASE_CAP: u32 = 5;
+pub const SOUL_POPULATION_BASE_CAP: u32 = 10;
 /// 休憩所1つあたりの人口上限増加
 pub const SOUL_POPULATION_PER_REST_AREA: u32 = 5;
 

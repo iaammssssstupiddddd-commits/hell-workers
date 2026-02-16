@@ -21,12 +21,11 @@ pub fn focus_camera_on_entity<F>(
 
 pub(super) fn select_entity_and_focus_camera(
     target: Entity,
-    label: &str,
+    _label: &str,
     selected_entity: &mut ResMut<crate::interface::selection::SelectedEntity>,
     q_camera: &mut Query<&mut Transform, With<crate::interface::camera::MainCamera>>,
     q_transforms: &Query<&GlobalTransform>,
 ) {
     selected_entity.0 = Some(target);
-    info!("LIST: Selected {} {:?}", label, target);
     focus_camera_on_entity(target, q_camera, q_transforms);
 }

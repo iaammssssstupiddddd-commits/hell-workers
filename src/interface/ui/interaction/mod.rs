@@ -107,17 +107,14 @@ pub fn ui_keyboard_shortcuts_system(
             build_context.0 = None;
             next_play_mode.set(PlayMode::Normal);
             *menu_state = MenuState::Hidden;
-            info!("STATE: Cancelled BuildingPlace -> Normal, Menu hidden");
         } else if *current_mode == PlayMode::ZonePlace {
             zone_context.0 = None;
             next_play_mode.set(PlayMode::Normal);
             *menu_state = MenuState::Hidden;
-            info!("STATE: Cancelled ZonePlace -> Normal, Menu hidden");
         } else if *current_mode == PlayMode::TaskDesignation {
             task_context.0 = TaskMode::None;
             next_play_mode.set(PlayMode::Normal);
             *menu_state = MenuState::Hidden;
-            info!("STATE: Cancelled TaskDesignation -> Normal, Menu hidden");
         }
     }
 }

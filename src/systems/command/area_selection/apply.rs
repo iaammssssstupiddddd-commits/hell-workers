@@ -376,10 +376,6 @@ pub(super) fn apply_designation_in_area(
                     TransportRequestFixedSource(target_entity),
                 ));
 
-                info!(
-                    "MANUAL_HAUL: Upserted request for source {:?} -> stockpile {:?}",
-                    target_entity, anchor_stockpile
-                );
                 continue;
             }
 
@@ -390,20 +386,12 @@ pub(super) fn apply_designation_in_area(
                     TaskSlots::new(1),
                     Priority(0),
                 ));
-                info!(
-                    "DESIGNATION: Created {:?} for {:?} (assigned to {:?})",
-                    wt, target_entity, issuer
-                );
             } else {
                 commands.entity(target_entity).insert((
                     Designation { work_type: wt },
                     TaskSlots::new(1),
                     Priority(0),
                 ));
-                info!(
-                    "DESIGNATION: Created {:?} for {:?} (unassigned)",
-                    wt, target_entity
-                );
             }
             continue;
         }
@@ -443,10 +431,6 @@ pub fn blueprint_cancel_cleanup_system(
         for (gx, gy) in grids_to_remove {
             world_map.buildings.remove(&(gx, gy));
             world_map.remove_obstacle(gx, gy);
-            info!(
-                "BLUEPRINT_CANCEL: Cleaned up building grid ({}, {}) for {:?}",
-                gx, gy, removed_entity
-            );
         }
 
         // PendingBelongsToBlueprint のコンパニオンエンティティを除去
@@ -454,10 +438,6 @@ pub fn blueprint_cancel_cleanup_system(
             if pending.0 == removed_entity {
                 // コンパニオンも Blueprint なので despawn すれば次フレームでこのシステムが再度クリーンアップ
                 commands.entity(companion_entity).try_despawn();
-                info!(
-                    "BLUEPRINT_CANCEL: Despawned companion {:?} for {:?}",
-                    companion_entity, removed_entity
-                );
             }
         }
     }
