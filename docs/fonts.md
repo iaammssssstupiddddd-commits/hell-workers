@@ -30,7 +30,7 @@ pub font_soul_emoji: Handle<Font>, // Soulセリフ（絵文字）
 
 ## フォントサイズ定数
 
-[constants.rs](src/constants.rs) で定義:
+[src/constants/](src/constants/) で定義（フォントサイズは `animation.rs` 等）:
 
 ```rust
 pub const FONT_SIZE_TITLE: f32 = 24.0;

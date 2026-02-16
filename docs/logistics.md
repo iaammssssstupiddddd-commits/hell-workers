@@ -352,6 +352,7 @@ Stockpile / Blueprint / Tank などへの搬入予約は、Bevy の Relationship
   - `task_management/policy/haul/`（blueprint, consolidation, stockpile, source_selector, lease_validation, wheelbarrow）: 運搬割り当ての責務分割
 - 実行ロジック:
   - `src/systems/soul_ai/execute/task_execution/`（haul, haul_to_mixer, haul_to_blueprint, haul_with_wheelbarrow, haul_water_to_mixer 等）
+  - `task_execution/handler/`（task_handler, impls, dispatch）: TaskHandler トレイトとディスパッチ
   - `task_execution/transport_common/`（reservation, cancel, lifecycle, wheelbarrow）: 予約解放・中断・予約寿命定義・手押し車駐車の共通API
 
 ## 9. システム追加時の実装ルール
