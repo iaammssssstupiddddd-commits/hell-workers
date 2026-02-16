@@ -38,6 +38,7 @@ impl Plugin for SoulAiPlugin {
         .init_resource::<helpers::gathering::GatheringUpdateTimer>()
         .init_resource::<perceive::escaping::EscapeDetectionTimer>()
         .init_resource::<perceive::escaping::EscapeBehaviorTimer>()
+        .init_resource::<decide::drifting::DriftingDecisionTimer>()
         .add_systems(
             Update,
             (
@@ -81,6 +82,8 @@ impl Plugin for SoulAiPlugin {
                     decide::separation::gathering_separation_system
                         .after(decide::idle_behavior::idle_behavior_decision_system),
                     decide::escaping::escaping_decision_system,
+                    decide::drifting::drifting_decision_system
+                        .after(decide::escaping::escaping_decision_system),
                     // 集会管理の決定
                     decide::gathering_mgmt::gathering_maintenance_decision,
                     decide::gathering_mgmt::gathering_merge_decision,
@@ -100,10 +103,15 @@ impl Plugin for SoulAiPlugin {
                     // タスク要求の適用
                     execute::task_execution::apply_task_assignment_requests_system
                         .before(execute::task_execution::task_execution_system),
+                    execute::drifting::drifting_behavior_system
+                        .after(execute::task_execution::apply_task_assignment_requests_system)
+                        .before(execute::task_execution::task_execution_system),
                     execute::task_execution::task_execution_system,
                     // アイドル行動の適用
                     execute::idle_behavior_apply::idle_behavior_apply_system,
                     execute::escaping_apply::escaping_apply_system,
+                    execute::drifting::despawn_at_edge_system
+                        .after(execute::drifting::drifting_behavior_system),
                     execute::gathering_apply::gathering_apply_system,
                     // クリーンアップ
                     execute::cleanup::cleanup_commanded_souls_system,

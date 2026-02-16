@@ -69,18 +69,42 @@ pub(super) fn candidate_snapshot(
     let is_managed_by_me = managed_tasks.contains(entity);
     let is_unassigned = issued_by.is_none();
     let is_issued_by_me = issued_by.map(|ib| ib.0) == Some(fam_entity);
+    let pos = transform.translation.truncate();
+    let current_workers = workers.map(|w| w.len()).unwrap_or(0);
+    let can_take_over_from_overlapping_owner = issued_by
+        .filter(|issuer| issuer.0 != fam_entity)
+        .is_some_and(|issuer| {
+            current_workers == 0
+                && task_area_opt.is_some_and(|my_area| {
+                    let Ok(owner_area) = queries.familiar_task_areas.get(issuer.0) else {
+                        return false;
+                    };
+                    if !my_area.contains(pos) || !owner_area.contains(pos) {
+                        return false;
+                    }
+                    let overlap_w =
+                        (my_area.max.x.min(owner_area.max.x) - my_area.min.x.max(owner_area.min.x))
+                            .max(0.0);
+                    let overlap_h =
+                        (my_area.max.y.min(owner_area.max.y) - my_area.min.y.max(owner_area.min.y))
+                            .max(0.0);
+                    overlap_w > f32::EPSILON && overlap_h > f32::EPSILON
+                })
+        });
 
-    if !is_managed_by_me && !is_unassigned && !is_issued_by_me {
+    if !is_managed_by_me
+        && !is_unassigned
+        && !is_issued_by_me
+        && !can_take_over_from_overlapping_owner
+    {
         return None;
     }
 
-    let current_workers = workers.map(|w| w.len()).unwrap_or(0);
     let max_slots = slots.map(|s| s.max).unwrap_or(1) as usize;
     if current_workers >= max_slots {
         return None;
     }
 
-    let pos = transform.translation.truncate();
     let is_mixer_task = queries.storage.target_mixers.get(entity).is_ok();
 
     if let Some(area) = task_area_opt {

@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use crate::entities::damned_soul::IdleBehavior;
+use crate::entities::damned_soul::{DriftingState, IdleBehavior};
 use crate::events::{EscapeOperation, EscapeRequest};
 use crate::relationships::ParticipatingIn;
 use crate::systems::soul_ai::helpers::query_types::EscapingBehaviorSoulQuery;
@@ -24,6 +24,8 @@ pub fn escaping_apply_system(
                     commands.entity(entity).remove::<ParticipatingIn>();
                     commands.trigger(crate::events::OnGatheringLeft { entity });
                 }
+
+                commands.entity(entity).remove::<DriftingState>();
 
                 idle_state.behavior = IdleBehavior::Escaping;
                 idle_state.idle_timer = 0.0;

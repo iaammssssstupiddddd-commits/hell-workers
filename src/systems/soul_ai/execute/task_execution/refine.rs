@@ -156,6 +156,7 @@ pub fn handle_refine_task(
                                 pos.truncate().extend(Z_ITEM_PICKUP) + offset,
                             ),
                             Name::new("Item (StasisMud)"),
+                            crate::systems::logistics::item_lifetime::ItemDespawnTimer::new(5.0),
                         ));
                     }
                     storage.mud += STASIS_MUD_OUTPUT;

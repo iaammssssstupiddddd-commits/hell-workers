@@ -44,8 +44,8 @@ impl RecruitmentManager {
                 Option<&CommandedBy>,
                 Option<&ParticipatingIn>,
             ) = q_souls.get(e).ok()?;
-            let recruit_threshold = fatigue_threshold - 0.2;
-            let fatigue_ok = soul.fatigue < recruit_threshold;
+            let recruit_threshold = fatigue_threshold;
+            let fatigue_ok = soul.fatigue <= recruit_threshold;
             let stress_ok = q_breakdown.get(entity).is_err();
             let resting_ok = q_resting.get(entity).is_err();
             let cooldown_ok = q_cooldown

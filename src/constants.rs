@@ -193,6 +193,42 @@ pub const ESCAPE_DETECTION_INTERVAL: f32 = 0.5;
 pub const ESCAPE_BEHAVIOR_INTERVAL: f32 = 0.5;
 
 // ============================================================
+// AI ロジック定数 - Soul 供給/脱走 (Population & Drift)
+// ============================================================
+
+/// 初期 Soul スポーン数（`--spawn-souls` 未指定時）
+pub const SOUL_SPAWN_INITIAL: u32 = 5;
+/// 定期スポーン判定間隔（秒）
+pub const SOUL_SPAWN_INTERVAL: f32 = 60.0;
+/// 1回の定期スポーン数（最小/最大）
+pub const SOUL_SPAWN_COUNT_MIN: u32 = 1;
+pub const SOUL_SPAWN_COUNT_MAX: u32 = 2;
+/// 休憩所なしの基本人口上限
+pub const SOUL_POPULATION_BASE_CAP: u32 = 5;
+/// 休憩所1つあたりの人口上限増加
+pub const SOUL_POPULATION_PER_REST_AREA: u32 = 5;
+
+/// 未管理状態で脱走判定を開始するまでの時間（秒）
+pub const SOUL_ESCAPE_UNMANAGED_TIME: f32 = 120.0;
+/// 脱走判定の実行間隔（秒）
+pub const SOUL_ESCAPE_CHECK_INTERVAL: f32 = 10.0;
+/// 脱走判定ごとの開始確率
+pub const SOUL_ESCAPE_CHANCE_PER_CHECK: f64 = 0.3;
+/// 連続脱走を抑えるグローバルクールダウン（秒）
+pub const SOUL_ESCAPE_GLOBAL_COOLDOWN: f32 = 30.0;
+
+/// 漂流中の「うろつき」フェーズ時間（秒）
+pub const DRIFT_WANDER_DURATION_MIN: f32 = 5.0;
+pub const DRIFT_WANDER_DURATION_MAX: f32 = 10.0;
+/// 漂流フェーズでマップ端へ進む距離（タイル）
+pub const DRIFT_MOVE_TILES_MIN: i32 = 3;
+pub const DRIFT_MOVE_TILES_MAX: i32 = 6;
+/// 漂流方向に対する横ブレ幅（タイル）
+pub const DRIFT_LATERAL_OFFSET_MAX: i32 = 2;
+/// マップ端到達とみなす余白（タイル）
+pub const SOUL_DESPAWN_EDGE_MARGIN_TILES: i32 = 2;
+
+// ============================================================
 // AI ロジック定数 - スケーラビリティ最適化
 // ============================================================
 

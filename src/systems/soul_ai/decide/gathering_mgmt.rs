@@ -179,6 +179,8 @@ pub fn gathering_recruitment_decision(
                     if dist_to_spot > ESCAPE_GATHERING_JOIN_RADIUS || !spot_is_safe_for_escape {
                         continue;
                     }
+                } else if idle.behavior == IdleBehavior::Drifting {
+                    continue;
                 } else if dist_to_spot > GATHERING_DETECTION_RADIUS {
                     continue;
                 }

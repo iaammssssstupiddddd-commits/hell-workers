@@ -15,7 +15,7 @@ pub(super) fn collect_idle_members(
             let (_, transform, soul, task, _, _, idle, _, _, _) = soul_data;
             if matches!(*task, AssignedTask::None)
                 && idle.behavior != IdleBehavior::ExhaustedGathering
-                && soul.fatigue < fatigue_threshold
+                && soul.fatigue <= fatigue_threshold
             {
                 idle_members.push((member_entity, transform.translation.truncate()));
             }

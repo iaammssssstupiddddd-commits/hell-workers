@@ -21,8 +21,14 @@ pub fn is_soul_available_for_work(
     if !matches!(*task, AssignedTask::None) {
         return false;
     }
-    if matches!(idle.behavior, IdleBehavior::ExhaustedGathering | IdleBehavior::Resting | IdleBehavior::GoingToRest)
-    {
+    if matches!(
+        idle.behavior,
+        IdleBehavior::ExhaustedGathering
+            | IdleBehavior::Resting
+            | IdleBehavior::GoingToRest
+            | IdleBehavior::Escaping
+            | IdleBehavior::Drifting
+    ) {
         return false;
     }
     if soul.fatigue >= fatigue_threshold {
