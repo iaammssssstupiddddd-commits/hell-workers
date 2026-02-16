@@ -6,15 +6,16 @@ use crate::systems::command::TaskArea;
 use crate::systems::familiar_ai::decide::task_management::{AssignTaskContext, ReservationShadow};
 use crate::systems::logistics::ResourceType;
 use crate::systems::logistics::transport_request::{
-    can_complete_pick_drop_to_blueprint, WheelbarrowDestination,
+    WheelbarrowDestination, can_complete_pick_drop_to_blueprint,
 };
 use crate::world::map::TerrainType;
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
 
 use super::super::super::builders::{
+    issue_collect_bone_with_wheelbarrow_to_blueprint,
     issue_collect_sand_with_wheelbarrow_to_blueprint, issue_haul_to_blueprint_with_source,
-    issue_haul_with_wheelbarrow, issue_collect_bone_with_wheelbarrow_to_blueprint,
+    issue_haul_with_wheelbarrow,
 };
 use super::super::super::validator::{resolve_haul_to_blueprint_inputs, source_not_reserved};
 use super::lease_validation;
@@ -264,9 +265,12 @@ fn assign_single_item_haul(
     queries: &mut crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
     shadow: &mut ReservationShadow,
 ) -> bool {
-    let Some((source_item, source_pos)) =
-        source_selector::find_nearest_blueprint_source_item(resource_type, task_pos, queries, shadow)
-    else {
+    let Some((source_item, source_pos)) = source_selector::find_nearest_blueprint_source_item(
+        resource_type,
+        task_pos,
+        queries,
+        shadow,
+    ) else {
         debug!(
             "ASSIGN: Blueprint request {:?} has no available {:?} source",
             ctx.task_entity, resource_type
@@ -405,7 +409,9 @@ fn find_collect_sand_source(
                 }
 
                 let tile_pos = WorldMap::grid_to_world(gx, gy);
-                if let Some(area) = area_filter && !area.contains(tile_pos) {
+                if let Some(area) = area_filter
+                    && !area.contains(tile_pos)
+                {
                     continue;
                 }
 
@@ -528,7 +534,7 @@ pub(super) fn find_collect_bone_source(
                 let Some(idx) = queries.world_map.pos_to_idx(gx, gy) else {
                     continue;
                 };
-                
+
                 // 川タイル (River) を対象とする
                 if queries.world_map.tiles[idx] != TerrainType::River {
                     continue;
@@ -551,7 +557,9 @@ pub(super) fn find_collect_bone_source(
                 }
 
                 let tile_pos = WorldMap::grid_to_world(gx, gy);
-                if let Some(area) = area_filter && !area.contains(tile_pos) {
+                if let Some(area) = area_filter
+                    && !area.contains(tile_pos)
+                {
                     continue;
                 }
 

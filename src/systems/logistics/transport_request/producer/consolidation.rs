@@ -63,8 +63,7 @@ pub fn stockpile_consolidation_producer_system(
         // セル情報を収集
         let mut cells: Vec<CellInfo> = Vec::new();
         for &cell in &group.cells {
-            let Ok((entity, _, stockpile, stored_opt, bucket_opt)) = q_stockpiles.get(cell)
-            else {
+            let Ok((entity, _, stockpile, stored_opt, bucket_opt)) = q_stockpiles.get(cell) else {
                 continue;
             };
             if bucket_opt.is_some() {
@@ -122,9 +121,10 @@ pub fn stockpile_consolidation_producer_system(
             let Some(r_idx) = receiver_idx else {
                 continue; // 全セル満杯
             };
-            
+
             let receiver = type_cells[r_idx].entity;
-            let donor_cells: Vec<Entity> = type_cells.iter()
+            let donor_cells: Vec<Entity> = type_cells
+                .iter()
                 .enumerate()
                 .filter(|(i, c)| *i != r_idx && c.stored > 0)
                 .map(|(_, c)| c.entity)
@@ -135,7 +135,9 @@ pub fn stockpile_consolidation_producer_system(
             }
 
             // 移動数 = レシーバーの空き容量（実際に移動可能な量）
-            let receiver_free = type_cells[r_idx].capacity.saturating_sub(type_cells[r_idx].stored);
+            let receiver_free = type_cells[r_idx]
+                .capacity
+                .saturating_sub(type_cells[r_idx].stored);
             let donor_total: usize = donor_cells
                 .iter()
                 .filter_map(|&e| type_cells.iter().find(|c| c.entity == e))
@@ -154,12 +156,7 @@ pub fn stockpile_consolidation_producer_system(
 
             desired_requests.insert(
                 (receiver, resource_type),
-                (
-                    group.owner_familiar,
-                    donor_cells,
-                    transfer_count,
-                    rep_pos,
-                ),
+                (group.owner_familiar, donor_cells, transfer_count, rep_pos),
             );
         }
     }
@@ -173,13 +170,8 @@ pub fn stockpile_consolidation_producer_system(
         let key = (req.anchor, req.resource_type);
         let workers = workers_opt.map(|w| w.len()).unwrap_or(0);
 
-        if !super::upsert::process_duplicate_key(
-            &mut commands,
-            req_entity,
-            workers,
-            &mut seen,
-            key,
-        ) {
+        if !super::upsert::process_duplicate_key(&mut commands, req_entity, workers, &mut seen, key)
+        {
             continue;
         }
 

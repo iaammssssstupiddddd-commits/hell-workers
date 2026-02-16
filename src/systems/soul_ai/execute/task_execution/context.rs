@@ -103,11 +103,8 @@ pub struct StorageAccess<'w, 's> {
             Option<&'static TaskWorkers>,
         ),
     >,
-    pub floor_tiles: Query<
-        'w,
-        's,
-        &'static crate::systems::jobs::floor_construction::FloorTileBlueprint,
-    >,
+    pub floor_tiles:
+        Query<'w, 's, &'static crate::systems::jobs::floor_construction::FloorTileBlueprint>,
 }
 
 /// 倉庫・設備・ブループリントへの変更可能アクセス
@@ -154,11 +151,8 @@ pub struct MutStorageAccess<'w, 's> {
             Option<&'static TaskWorkers>,
         ),
     >,
-    pub floor_tiles: Query<
-        'w,
-        's,
-        &'static mut crate::systems::jobs::floor_construction::FloorTileBlueprint,
-    >,
+    pub floor_tiles:
+        Query<'w, 's, &'static mut crate::systems::jobs::floor_construction::FloorTileBlueprint>,
 }
 
 /// タスク割り当てに必要なクエリ群（Familiar AI向け）
@@ -194,11 +188,15 @@ pub struct TaskAssignmentQueries<'w, 's> {
         With<crate::systems::jobs::BonePile>,
     >,
     pub task_state: Query<'w, 's, (Option<&'static Designation>, Option<&'static TaskWorkers>)>,
-    pub transport_requests: Query<'w, 's, &'static crate::systems::logistics::transport_request::TransportRequest>,
+    pub transport_requests:
+        Query<'w, 's, &'static crate::systems::logistics::transport_request::TransportRequest>,
     pub transport_demands:
         Query<'w, 's, &'static crate::systems::logistics::transport_request::TransportDemand>,
-    pub transport_request_fixed_sources:
-        Query<'w, 's, &'static crate::systems::logistics::transport_request::TransportRequestFixedSource>,
+    pub transport_request_fixed_sources: Query<
+        'w,
+        's,
+        &'static crate::systems::logistics::transport_request::TransportRequestFixedSource,
+    >,
     pub free_resource_items: Query<
         'w,
         's,
@@ -215,8 +213,7 @@ pub struct TaskAssignmentQueries<'w, 's> {
             Without<crate::systems::logistics::transport_request::ManualHaulPinnedSource>,
         ),
     >,
-    pub reserved_for_task:
-        Query<'w, 's, &'static crate::systems::logistics::ReservedForTask>,
+    pub reserved_for_task: Query<'w, 's, &'static crate::systems::logistics::ReservedForTask>,
     pub assignment_writer: MessageWriter<'w, TaskAssignmentRequest>,
     pub task_slots: Query<'w, 's, &'static crate::systems::jobs::TaskSlots>,
     pub wheelbarrows: Query<
@@ -229,7 +226,8 @@ pub struct TaskAssignmentQueries<'w, 's> {
             Without<crate::relationships::PushedBy>,
         ),
     >,
-    pub wheelbarrow_leases: Query<'w, 's, &'static crate::systems::logistics::transport_request::WheelbarrowLease>,
+    pub wheelbarrow_leases:
+        Query<'w, 's, &'static crate::systems::logistics::transport_request::WheelbarrowLease>,
     pub stored_items_query: Query<
         'w,
         's,
@@ -294,7 +292,11 @@ impl<'w, 's> TaskReservationAccess<'w, 's> for TaskQueries<'w, 's> {
     }
 
     fn belongs_to(&self, entity: Entity) -> Option<Entity> {
-        self.designation.belongs.get(entity).ok().map(|belongs| belongs.0)
+        self.designation
+            .belongs
+            .get(entity)
+            .ok()
+            .map(|belongs| belongs.0)
     }
 }
 
@@ -308,7 +310,11 @@ impl<'w, 's> TaskReservationAccess<'w, 's> for TaskAssignmentQueries<'w, 's> {
     }
 
     fn belongs_to(&self, entity: Entity) -> Option<Entity> {
-        self.designation.belongs.get(entity).ok().map(|belongs| belongs.0)
+        self.designation
+            .belongs
+            .get(entity)
+            .ok()
+            .map(|belongs| belongs.0)
     }
 }
 

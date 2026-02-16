@@ -135,7 +135,10 @@ pub fn idle_visual_system(
 
         // やる気が高い場合は視覚効果を上書きするが、集会中とタスク中は除外
         if soul.motivation > 0.5
-            && !matches!(idle.behavior, IdleBehavior::Gathering | IdleBehavior::ExhaustedGathering)
+            && !matches!(
+                idle.behavior,
+                IdleBehavior::Gathering | IdleBehavior::ExhaustedGathering
+            )
             && matches!(task, AssignedTask::None)
         {
             sprite.color = Color::srgb(1.0, 1.0, 0.8);

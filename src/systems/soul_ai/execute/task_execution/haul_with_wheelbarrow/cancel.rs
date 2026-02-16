@@ -28,7 +28,9 @@ pub fn cancel_wheelbarrow_task(
             commands
                 .entity(item_entity)
                 .remove::<crate::relationships::DeliveringTo>();
-            commands.entity(item_entity).remove::<crate::relationships::LoadedIn>();
+            commands
+                .entity(item_entity)
+                .remove::<crate::relationships::LoadedIn>();
         }
     }
     for &item_entity in &data.items {
@@ -59,7 +61,9 @@ pub fn cancel_wheelbarrow_task(
     release_all_reservations(ctx, data);
 
     ctx.inventory.0 = None;
-    commands.entity(ctx.soul_entity).remove::<crate::relationships::WorkingOn>();
+    commands
+        .entity(ctx.soul_entity)
+        .remove::<crate::relationships::WorkingOn>();
     clear_task_and_path(ctx.task, ctx.path);
 
     info!(

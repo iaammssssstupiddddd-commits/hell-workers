@@ -21,7 +21,6 @@ pub struct TargetMixer(pub Entity);
 #[reflect(Component)]
 pub struct StoredByMixer(pub Entity);
 
-
 impl MudMixerStorage {
     /// 指定されたリソースが満杯かチェック
     pub fn is_full(&self, resource: ResourceType) -> bool {
@@ -84,7 +83,8 @@ impl MudMixerStorage {
 
     /// 素材を消費して精製を開始する。成功した場合は Ok(())
     pub fn consume_materials_for_refining(&mut self, water_count: u32) -> Result<(), ()> {
-        if !self.has_materials_for_refining(water_count) || !self.has_output_capacity_for_refining() {
+        if !self.has_materials_for_refining(water_count) || !self.has_output_capacity_for_refining()
+        {
             return Err(());
         }
 

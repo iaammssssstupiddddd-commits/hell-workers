@@ -10,22 +10,14 @@ use bevy::prelude::*;
 use super::reservation;
 
 /// ストックパイル運搬の中断: 目的地＋ソース解放、タスククリア
-pub fn cancel_haul_to_stockpile(
-    ctx: &mut TaskExecutionContext,
-    item: Entity,
-    stockpile: Entity,
-) {
+pub fn cancel_haul_to_stockpile(ctx: &mut TaskExecutionContext, item: Entity, stockpile: Entity) {
     reservation::release_destination(ctx, stockpile);
     reservation::release_source(ctx, item, 1);
     clear_task_and_path(ctx.task, ctx.path);
 }
 
 /// Blueprint運搬の中断: 目的地＋ソース解放、タスククリア
-pub fn cancel_haul_to_blueprint(
-    ctx: &mut TaskExecutionContext,
-    item: Entity,
-    blueprint: Entity,
-) {
+pub fn cancel_haul_to_blueprint(ctx: &mut TaskExecutionContext, item: Entity, blueprint: Entity) {
     reservation::release_destination(ctx, blueprint);
     reservation::release_source(ctx, item, 1);
     clear_task_and_path(ctx.task, ctx.path);
@@ -59,11 +51,7 @@ pub fn drop_bucket_with_cleanup(commands: &mut Commands, bucket_entity: Entity, 
     let drop_pos = WorldMap::grid_to_world(drop_grid.0, drop_grid.1);
     commands.entity(bucket_entity).insert((
         Visibility::Visible,
-        Transform::from_xyz(
-            drop_pos.x,
-            drop_pos.y,
-            crate::constants::Z_ITEM_PICKUP,
-        ),
+        Transform::from_xyz(drop_pos.x, drop_pos.y, crate::constants::Z_ITEM_PICKUP),
     ));
     commands
         .entity(bucket_entity)

@@ -3,8 +3,8 @@ use bevy::prelude::*;
 use crate::assets::GameAssets;
 use crate::constants::*;
 use crate::entities::damned_soul::{DamnedSoul, IdleBehavior, IdleState};
-use crate::systems::soul_ai::execute::task_execution::AssignedTask;
 use crate::relationships::ParticipatingIn;
+use crate::systems::soul_ai::execute::task_execution::AssignedTask;
 use crate::systems::soul_ai::helpers::gathering::*;
 use crate::systems::spatial::{GatheringSpotSpatialGrid, SpatialGrid, SpatialGridOps};
 

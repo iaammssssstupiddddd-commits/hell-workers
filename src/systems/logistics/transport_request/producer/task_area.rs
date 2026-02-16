@@ -21,8 +21,8 @@ use crate::systems::logistics::{BelongsTo, BucketStorage, ResourceType, Stockpil
 use crate::systems::spatial::StockpileSpatialGrid;
 
 use super::stockpile_group::{
-    build_group_spatial_index, build_stockpile_groups, find_nearest_group_for_item_indexed,
-    StockpileGroup, StockpileGroupSpatialIndex,
+    StockpileGroup, StockpileGroupSpatialIndex, build_group_spatial_index, build_stockpile_groups,
+    find_nearest_group_for_item_indexed,
 };
 
 struct GroupEvalContext {
@@ -198,8 +198,10 @@ pub fn task_area_auto_haul_system(
         Option<&BelongsTo>,
         Option<&BucketStorage>,
     )>,
-    q_stockpile_requests:
-        Query<(Entity, &TransportRequest, Option<&TaskWorkers>), Without<ManualTransportRequest>>,
+    q_stockpile_requests: Query<
+        (Entity, &TransportRequest, Option<&TaskWorkers>),
+        Without<ManualTransportRequest>,
+    >,
     q_free_items: Query<
         (
             &Transform,
@@ -293,13 +295,8 @@ pub fn task_area_auto_haul_system(
         let key = (req.anchor, req.resource_type);
         let workers = workers_opt.map(|w| w.len()).unwrap_or(0);
 
-        if !super::upsert::process_duplicate_key(
-            &mut commands,
-            req_entity,
-            workers,
-            &mut seen,
-            key,
-        ) {
+        if !super::upsert::process_duplicate_key(&mut commands, req_entity, workers, &mut seen, key)
+        {
             continue;
         }
 

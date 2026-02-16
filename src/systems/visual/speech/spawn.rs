@@ -99,8 +99,12 @@ pub fn spawn_soul_bubble(
         .id();
 
     // 親が先に消えていても panic しないように try_insert を使う
-    commands.entity(bg_entity).try_insert(ChildOf(bubble_entity));
-    commands.entity(bubble_entity).try_insert(ChildOf(soul_entity));
+    commands
+        .entity(bg_entity)
+        .try_insert(ChildOf(bubble_entity));
+    commands
+        .entity(bubble_entity)
+        .try_insert(ChildOf(soul_entity));
 }
 
 /// Familiar用のラテン語フレーズ吹き出しをスポーンする
@@ -216,6 +220,10 @@ pub fn spawn_familiar_bubble(
         .id();
 
     // 親が先に消えていても panic しないように try_insert を使う
-    commands.entity(bg_entity).try_insert(ChildOf(bubble_entity));
-    commands.entity(bubble_entity).try_insert(ChildOf(fam_entity));
+    commands
+        .entity(bg_entity)
+        .try_insert(ChildOf(bubble_entity));
+    commands
+        .entity(bubble_entity)
+        .try_insert(ChildOf(fam_entity));
 }

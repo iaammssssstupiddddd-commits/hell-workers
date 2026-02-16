@@ -106,7 +106,8 @@ fn collect_free_items_for_stockpile(
         return None;
     }
 
-    let search_radius_sq = (crate::constants::TILE_SIZE * 10.0) * (crate::constants::TILE_SIZE * 10.0);
+    let search_radius_sq =
+        (crate::constants::TILE_SIZE * 10.0) * (crate::constants::TILE_SIZE * 10.0);
 
     let mut candidates: Vec<(Entity, f32)> = queries
         .free_resource_items

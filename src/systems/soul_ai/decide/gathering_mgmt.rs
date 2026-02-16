@@ -4,10 +4,10 @@ use crate::constants::{ESCAPE_GATHERING_JOIN_RADIUS, ESCAPE_SAFE_DISTANCE_MULTIP
 use crate::entities::damned_soul::{DamnedSoul, IdleBehavior, IdleState};
 use crate::entities::familiar::Familiar;
 use crate::events::GatheringManagementOp;
+use crate::relationships::{CommandedBy, GatheringParticipants, ParticipatingIn};
 use crate::systems::soul_ai::decide::SoulDecideOutput;
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
 use crate::systems::soul_ai::helpers::gathering::*;
-use crate::relationships::{CommandedBy, GatheringParticipants, ParticipatingIn};
 use crate::systems::spatial::{SpatialGrid, SpatialGridOps};
 
 fn is_gathering_spot_safe_from_familiars(
@@ -30,7 +30,12 @@ fn is_gathering_spot_safe_from_familiars(
 
 /// 人数不足で猶予切れの集会を Dissolve 要求に変換する
 pub fn gathering_maintenance_decision(
-    q_spots: Query<(Entity, &GatheringSpot, &GatheringParticipants, &GatheringVisuals)>,
+    q_spots: Query<(
+        Entity,
+        &GatheringSpot,
+        &GatheringParticipants,
+        &GatheringVisuals,
+    )>,
     update_timer: Res<GatheringUpdateTimer>,
     mut decide_output: SoulDecideOutput,
 ) {
@@ -59,7 +64,12 @@ pub fn gathering_maintenance_decision(
 /// 近接する集会の統合を Merge 要求に変換する
 pub fn gathering_merge_decision(
     time: Res<Time>,
-    q_spots: Query<(Entity, &GatheringSpot, &GatheringParticipants, &GatheringVisuals)>,
+    q_spots: Query<(
+        Entity,
+        &GatheringSpot,
+        &GatheringParticipants,
+        &GatheringVisuals,
+    )>,
     q_gathering_participants: Query<&GatheringParticipants>,
     update_timer: Res<GatheringUpdateTimer>,
     mut decide_output: SoulDecideOutput,
@@ -88,16 +98,15 @@ pub fn gathering_merge_decision(
             let merge_distance_b = calculate_merge_distance(gp_b.len(), elapsed_b);
 
             if distance < merge_distance_a.max(merge_distance_b) {
-                let (absorber, absorbed, absorbed_visuals) =
-                    if gp_a.len() > gp_b.len() {
-                        (*entity_a, *entity_b, visuals_b)
-                    } else if gp_b.len() > gp_a.len() {
-                        (*entity_b, *entity_a, visuals_a)
-                    } else if spot_a.created_at < spot_b.created_at {
-                        (*entity_a, *entity_b, visuals_b)
-                    } else {
-                        (*entity_b, *entity_a, visuals_a)
-                    };
+                let (absorber, absorbed, absorbed_visuals) = if gp_a.len() > gp_b.len() {
+                    (*entity_a, *entity_b, visuals_b)
+                } else if gp_b.len() > gp_a.len() {
+                    (*entity_b, *entity_a, visuals_a)
+                } else if spot_a.created_at < spot_b.created_at {
+                    (*entity_a, *entity_b, visuals_b)
+                } else {
+                    (*entity_b, *entity_a, visuals_a)
+                };
 
                 let participants_to_move = if let Ok(gp) = q_gathering_participants.get(absorbed) {
                     gp.iter().copied().collect()

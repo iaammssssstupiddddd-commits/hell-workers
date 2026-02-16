@@ -166,12 +166,7 @@ pub fn build_entity_list_view_model_system(
     if !unassigned_folded {
         for (soul_entity, soul, task, identity, under_command) in q_all_souls.iter() {
             if under_command.is_none() {
-                unassigned.push(build_soul_view_model(
-                    soul_entity,
-                    soul,
-                    task,
-                    identity,
-                ));
+                unassigned.push(build_soul_view_model(soul_entity, soul, task, identity));
             }
         }
     }

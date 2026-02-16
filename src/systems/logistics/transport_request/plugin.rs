@@ -1,18 +1,21 @@
-use super::{
-    transport_request_anchor_cleanup_system, wheelbarrow_arbitration_system,
-    TransportRequestMetrics, transport_request_metrics_system,
-};
 use super::producer::{
-    blueprint::blueprint_auto_haul_system, bucket::bucket_auto_haul_system,
+    blueprint::blueprint_auto_haul_system,
+    bucket::bucket_auto_haul_system,
     consolidation::stockpile_consolidation_producer_system,
     floor_construction::{
         floor_construction_auto_haul_system, floor_material_delivery_sync_system,
         floor_tile_designation_system,
     },
-    mixer::mud_mixer_auto_haul_system, tank_water_request::tank_water_request_system,
-    task_area::task_area_auto_haul_system, wheelbarrow::wheelbarrow_auto_haul_system,
+    mixer::mud_mixer_auto_haul_system,
+    tank_water_request::tank_water_request_system,
+    task_area::task_area_auto_haul_system,
+    wheelbarrow::wheelbarrow_auto_haul_system,
 };
 use super::state_machine::transport_request_state_sync_system;
+use super::{
+    TransportRequestMetrics, transport_request_anchor_cleanup_system,
+    transport_request_metrics_system, wheelbarrow_arbitration_system,
+};
 use crate::systems::GameSystemSet;
 use crate::systems::soul_ai::scheduling::{FamiliarAiSystemSet, SoulAiSystemSet};
 use bevy::prelude::*;
@@ -83,8 +86,7 @@ impl Plugin for TransportRequestPlugin {
                     tank_water_request_system,
                     task_area_auto_haul_system,
                     wheelbarrow_auto_haul_system,
-                    stockpile_consolidation_producer_system
-                        .after(task_area_auto_haul_system),
+                    stockpile_consolidation_producer_system.after(task_area_auto_haul_system),
                 )
                     .in_set(TransportRequestSet::Decide),
                 wheelbarrow_arbitration_system.in_set(TransportRequestSet::Arbitrate),
@@ -94,4 +96,3 @@ impl Plugin for TransportRequestPlugin {
         );
     }
 }
-

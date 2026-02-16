@@ -17,10 +17,12 @@ pub use floor_construction::{
 };
 pub use gathering::{GatheringSpotSpatialGrid, update_gathering_spot_spatial_grid_system};
 pub use grid::{
-    sync_grid_timed, tick_spatial_grid_sync_timer_system, SpatialGridOps, SpatialGridSyncTimer,
-    SyncGridClear,
+    SpatialGridOps, SpatialGridSyncTimer, SyncGridClear, sync_grid_timed,
+    tick_spatial_grid_sync_timer_system,
 };
 pub use resource::{ResourceSpatialGrid, update_resource_spatial_grid_system};
 pub use soul::{SpatialGrid, update_spatial_grid_system};
 pub use stockpile::{StockpileSpatialGrid, update_stockpile_spatial_grid_system};
-pub use transport_request::{TransportRequestSpatialGrid, update_transport_request_spatial_grid_system};
+pub use transport_request::{
+    TransportRequestSpatialGrid, update_transport_request_spatial_grid_system,
+};

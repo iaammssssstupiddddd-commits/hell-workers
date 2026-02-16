@@ -60,7 +60,9 @@ pub fn task_area_indicator_system(
 
             commands.spawn((
                 TaskAreaIndicator(fam_entity),
-                TaskAreaVisual { familiar: fam_entity },
+                TaskAreaVisual {
+                    familiar: fam_entity,
+                },
                 Mesh2d(meshes.add(Rectangle::default().mesh())),
                 MeshMaterial2d(materials.add(TaskAreaMaterial {
                     color,

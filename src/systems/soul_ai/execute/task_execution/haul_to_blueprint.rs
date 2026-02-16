@@ -49,9 +49,7 @@ pub fn handle_haul_to_blueprint_task(
 
     match phase {
         HaulToBpPhase::GoingToItem => {
-            if let Ok((item_transform, _, _, _, _, _, stored_in_opt)) =
-                q_targets.get(item_entity)
-            {
+            if let Ok((item_transform, _, _, _, _, _, stored_in_opt)) = q_targets.get(item_entity) {
                 let item_pos = item_transform.translation.truncate();
                 let stored_in_entity = stored_in_opt.map(|stored_in| stored_in.0);
                 update_destination_to_adjacent(
@@ -81,7 +79,10 @@ pub fn handle_haul_to_blueprint_task(
 
                     // もしアイテムが備蓄場所にあったなら、その備蓄場所の型管理を更新する
                     if let Some(stored_in) = stored_in_entity {
-                        update_stockpile_on_item_removal(stored_in, &mut ctx.queries.storage.stockpiles);
+                        update_stockpile_on_item_removal(
+                            stored_in,
+                            &mut ctx.queries.storage.stockpiles,
+                        );
                     }
 
                     // ブループリントへの目的地設定は、次のフレームの GoingToBlueprint フェーズで

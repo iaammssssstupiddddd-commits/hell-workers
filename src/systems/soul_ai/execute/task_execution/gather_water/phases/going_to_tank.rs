@@ -5,9 +5,9 @@ use crate::systems::soul_ai::execute::task_execution::types::GatherWaterPhase;
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
 
-use super::assigned_task;
 use super::super::guards;
 use super::super::helpers::{abort_task_without_item, drop_bucket_for_auto_haul};
+use super::assigned_task;
 
 pub fn handle(
     ctx: &mut TaskExecutionContext,
@@ -31,7 +31,13 @@ pub fn handle(
         return;
     }
 
-    if ctx.soul_transform.translation.truncate().distance(ctx.dest.0) < 60.0 {
+    if ctx
+        .soul_transform
+        .translation
+        .truncate()
+        .distance(ctx.dest.0)
+        < 60.0
+    {
         *ctx.task = assigned_task(
             bucket_entity,
             tank_entity,

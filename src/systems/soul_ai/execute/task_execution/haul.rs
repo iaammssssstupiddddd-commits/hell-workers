@@ -3,9 +3,7 @@
 use crate::constants::Z_ITEM_PICKUP;
 use crate::relationships::WorkingOn;
 use crate::systems::soul_ai::execute::task_execution::common::*;
-use crate::systems::soul_ai::execute::task_execution::transport_common::{
-    cancel, reservation,
-};
+use crate::systems::soul_ai::execute::task_execution::transport_common::{cancel, reservation};
 use crate::systems::soul_ai::execute::task_execution::{
     context::TaskExecutionContext,
     types::{AssignedTask, HaulPhase},
@@ -70,10 +68,15 @@ pub fn handle_haul_task(
                     release_mixer_mud_storage_for_item(ctx, item, commands);
 
                     if let Some(stored_in) = stored_in_entity {
-                        update_stockpile_on_item_removal(stored_in, &mut ctx.queries.storage.stockpiles);
+                        update_stockpile_on_item_removal(
+                            stored_in,
+                            &mut ctx.queries.storage.stockpiles,
+                        );
                     }
 
-                    if let Ok((_, stock_transform, _, _)) = ctx.queries.storage.stockpiles.get(stockpile) {
+                    if let Ok((_, stock_transform, _, _)) =
+                        ctx.queries.storage.stockpiles.get(stockpile)
+                    {
                         let stock_pos = stock_transform.translation.truncate();
                         let stock_grid = WorldMap::world_to_grid(stock_pos);
                         let stock_dest = WorldMap::grid_to_world(stock_grid.0, stock_grid.1);
@@ -218,10 +221,15 @@ pub fn handle_haul_task(
                     };
 
                     // IncomingDeliveries の長さ（＝このセルに向かっているアイテム数）を取得
-                    let incoming_count = ctx.queries.reservation.incoming_deliveries_query.get(stockpile).ok()
+                    let incoming_count = ctx
+                        .queries
+                        .reservation
+                        .incoming_deliveries_query
+                        .get(stockpile)
+                        .ok()
                         .map(|incoming: &crate::relationships::IncomingDeliveries| incoming.len())
                         .unwrap_or(0);
-                    
+
                     // すでに自分の分が IncomingDeliveries に含まれているため、
                     // (現在庫 + 搬入予定数) <= capacity で満杯チェック
                     let capacity_ok = (current_count + incoming_count) <= stockpile_comp.capacity;
@@ -248,7 +256,9 @@ pub fn handle_haul_task(
                         ),
                         crate::relationships::StoredIn(stockpile),
                     ));
-                    commands.entity(item).remove::<crate::relationships::DeliveringTo>();
+                    commands
+                        .entity(item)
+                        .remove::<crate::relationships::DeliveringTo>();
                     // タスク完了: ManagedTasks を肥大化させないため、管理者を解除する
                     commands
                         .entity(item)
@@ -297,8 +307,12 @@ pub fn handle_haul_task(
                             Z_ITEM_PICKUP,
                         ),
                     ));
-                    commands.entity(item).remove::<crate::relationships::StoredIn>();
-                    commands.entity(item).remove::<crate::relationships::DeliveringTo>();
+                    commands
+                        .entity(item)
+                        .remove::<crate::relationships::StoredIn>();
+                    commands
+                        .entity(item)
+                        .remove::<crate::relationships::DeliveringTo>();
                     commands
                         .entity(item)
                         .remove::<crate::systems::jobs::IssuedBy>();

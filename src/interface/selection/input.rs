@@ -67,9 +67,13 @@ pub fn handle_mouse_input(
                     return;
                 }
 
-                selected_entity.0 = selectable_worker_at_world_pos(world_pos, &q_souls, &q_familiars);
+                selected_entity.0 =
+                    selectable_worker_at_world_pos(world_pos, &q_souls, &q_familiars);
 
-                if selected_entity.0.is_some_and(|e| q_familiars.get(e).is_ok()) {
+                if selected_entity
+                    .0
+                    .is_some_and(|e| q_familiars.get(e).is_ok())
+                {
                     info!("SELECTED: Familiar");
                 } else if selected_entity.0.is_some() {
                     info!("SELECTED: DamnedSoul");

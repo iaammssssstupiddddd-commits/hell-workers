@@ -6,7 +6,9 @@ use crate::interface::ui::presentation::EntityInspectionModel;
 use crate::interface::ui::theme::UiTheme;
 use bevy::prelude::*;
 
-use super::widgets::{spawn_body_line, spawn_divider, spawn_header, spawn_icon_text_row, spawn_progress_bar};
+use super::widgets::{
+    spawn_body_line, spawn_divider, spawn_header, spawn_icon_text_row, spawn_progress_bar,
+};
 
 fn parse_percent_value(text: &str) -> Option<f32> {
     let raw = text

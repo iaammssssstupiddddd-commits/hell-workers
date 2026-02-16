@@ -54,9 +54,7 @@ pub fn mud_mixer_auto_haul_system(
 ) {
     let active_familiars: Vec<(Entity, TaskArea)> = q_familiars
         .iter()
-        .filter(|(_, active_command, _)| {
-            !matches!(active_command.command, FamiliarCommand::Idle)
-        })
+        .filter(|(_, active_command, _)| !matches!(active_command.command, FamiliarCommand::Idle))
         .map(|(entity, _, area)| (entity, area.clone()))
         .collect();
 
@@ -69,7 +67,9 @@ pub fn mud_mixer_auto_haul_system(
         active_mixers.insert(mixer_entity);
 
         let mixer_pos = mixer_transform.translation.truncate();
-        let Some((fam_entity, task_area)) = super::find_owner_familiar(mixer_pos, &active_familiars) else {
+        let Some((fam_entity, task_area)) =
+            super::find_owner_familiar(mixer_pos, &active_familiars)
+        else {
             continue;
         };
 
@@ -187,7 +187,8 @@ pub fn mud_mixer_auto_haul_system(
     // -----------------------------------------------------------------
     let mut seen_existing_keys = std::collections::HashSet::<(Entity, ResourceType)>::new();
 
-    for (request_entity, target_mixer, request, _designation_opt, workers_opt) in q_mixer_requests.iter()
+    for (request_entity, target_mixer, request, _designation_opt, workers_opt) in
+        q_mixer_requests.iter()
     {
         // 固体・水 request エンティティを対象
         let key = (target_mixer.0, request.resource_type);
@@ -206,9 +207,15 @@ pub fn mud_mixer_auto_haul_system(
 
         if let Some((issued_by, slots, mixer_pos)) = desired_requests.get(&key) {
             let (work_type, kind) = if is_water {
-                (WorkType::HaulWaterToMixer, TransportRequestKind::DeliverWaterToMixer)
+                (
+                    WorkType::HaulWaterToMixer,
+                    TransportRequestKind::DeliverWaterToMixer,
+                )
             } else {
-                (WorkType::HaulToMixer, TransportRequestKind::DeliverToMixerSolid)
+                (
+                    WorkType::HaulToMixer,
+                    TransportRequestKind::DeliverToMixerSolid,
+                )
             };
             commands.entity(request_entity).try_insert((
                 Transform::from_xyz(mixer_pos.x, mixer_pos.y, 0.0),

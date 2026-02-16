@@ -1,8 +1,7 @@
 //! 運搬タスクのソースアイテム探索
 
 use crate::systems::familiar_ai::decide::task_management::{
-    ReservationShadow,
-    validator::source_not_reserved,
+    ReservationShadow, validator::source_not_reserved,
 };
 use crate::systems::logistics::ResourceType;
 use bevy::prelude::*;
@@ -85,7 +84,12 @@ pub fn find_fixed_stockpile_source_item<'w, 's>(
         return None;
     }
 
-    let owner = queries.designation.belongs.get(source_item).ok().map(|b| b.0);
+    let owner = queries
+        .designation
+        .belongs
+        .get(source_item)
+        .ok()
+        .map(|b| b.0);
     if owner != item_owner {
         return None;
     }

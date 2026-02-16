@@ -1,5 +1,6 @@
 //! アイテムを手押し車に積み込むフェーズ
 
+use super::super::cancel;
 use crate::relationships::LoadedIn;
 use crate::systems::soul_ai::execute::task_execution::{
     common::{release_mixer_mud_storage_for_item, update_stockpile_on_item_removal},
@@ -7,10 +8,13 @@ use crate::systems::soul_ai::execute::task_execution::{
     transport_common::{reservation, sand_collect},
     types::{AssignedTask, HaulWithWheelbarrowData, HaulWithWheelbarrowPhase},
 };
-use super::super::cancel;
 use bevy::prelude::*;
 
-pub fn handle(ctx: &mut TaskExecutionContext, data: HaulWithWheelbarrowData, commands: &mut Commands) {
+pub fn handle(
+    ctx: &mut TaskExecutionContext,
+    data: HaulWithWheelbarrowData,
+    commands: &mut Commands,
+) {
     if let Some(source_entity) = data.collect_source {
         let collect_amount = data.collect_amount.max(1);
         let collected_items = match data.collect_resource_type {
@@ -35,7 +39,7 @@ pub fn handle(ctx: &mut TaskExecutionContext, data: HaulWithWheelbarrowData, com
                 // Sand の場合は `task_state` (Designation) を削除している。
                 // Bone (River) の場合、Designation は付いていないはず (find_collect_bone_source で除外)。
                 // したがって、Designation の削除も不要。
-                
+
                 sand_collect::spawn_loaded_bone_items(
                     commands,
                     data.wheelbarrow,
@@ -58,9 +62,11 @@ pub fn handle(ctx: &mut TaskExecutionContext, data: HaulWithWheelbarrowData, com
 
         let loaded_count = collected_items.len();
         for &item in &collected_items {
-            commands.entity(item).insert(crate::relationships::DeliveringTo(
-                data.destination.stockpile_or_blueprint().unwrap(),
-            ));
+            commands
+                .entity(item)
+                .insert(crate::relationships::DeliveringTo(
+                    data.destination.stockpile_or_blueprint().unwrap(),
+                ));
         }
         let mut next_data = data;
         next_data.items = collected_items;

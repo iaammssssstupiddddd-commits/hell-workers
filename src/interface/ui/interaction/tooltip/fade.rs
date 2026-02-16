@@ -1,6 +1,6 @@
 //! ツールチップのフェード制御
 
-use crate::interface::ui::components::{TooltipProgressBar, TooltipBody, TooltipHeader};
+use crate::interface::ui::components::{TooltipBody, TooltipHeader, TooltipProgressBar};
 use crate::interface::ui::theme::UiTheme;
 use bevy::math::TryStableInterpolate;
 use bevy::prelude::*;
@@ -39,8 +39,7 @@ pub(crate) fn apply_fade_effects(
 
     for mut text_color in q_tooltip_text.iter_mut() {
         let current = text_color.0.to_srgba();
-        let text_target =
-            Color::srgba(current.red, current.green, current.blue, fade_alpha);
+        let text_target = Color::srgba(current.red, current.green, current.blue, fade_alpha);
         text_color.0 = text_color
             .0
             .try_interpolate_stable(&text_target, fade_t)

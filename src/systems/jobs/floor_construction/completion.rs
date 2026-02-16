@@ -77,8 +77,10 @@ pub fn floor_construction_completion_system(
             site.phase = FloorConstructionPhase::Curing;
             site.curing_remaining_secs = FLOOR_CURING_DURATION_SECS.max(0.0);
 
-            let blocked_tiles: HashSet<(i32, i32)> =
-                site_tiles.iter().map(|(_, grid_pos, _)| *grid_pos).collect();
+            let blocked_tiles: HashSet<(i32, i32)> = site_tiles
+                .iter()
+                .map(|(_, grid_pos, _)| *grid_pos)
+                .collect();
 
             for (tile_entity, (gx, gy), _) in &site_tiles {
                 world_map.add_obstacle(*gx, *gy);
@@ -97,8 +99,10 @@ pub fn floor_construction_completion_system(
             continue;
         }
 
-        let blocked_tiles: HashSet<(i32, i32)> =
-            site_tiles.iter().map(|(_, grid_pos, _)| *grid_pos).collect();
+        let blocked_tiles: HashSet<(i32, i32)> = site_tiles
+            .iter()
+            .map(|(_, grid_pos, _)| *grid_pos)
+            .collect();
         let re_evacuated =
             evacuate_souls_from_blocked_tiles(&mut q_souls, &blocked_tiles, &world_map);
         if re_evacuated > 0 {

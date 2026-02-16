@@ -8,7 +8,12 @@ use crate::systems::soul_ai::helpers::gathering::*;
 /// 集会オーラのサイズと位置の更新システム
 pub fn gathering_visual_update_system(
     q_spots: Query<
-        (Entity, &GatheringSpot, &GatheringParticipants, &GatheringVisuals),
+        (
+            Entity,
+            &GatheringSpot,
+            &GatheringParticipants,
+            &GatheringVisuals,
+        ),
         Changed<GatheringSpot>,
     >,
     mut q_visuals: Query<

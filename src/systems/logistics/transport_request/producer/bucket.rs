@@ -88,8 +88,11 @@ pub fn bucket_auto_haul_system(
         }
 
         let current = stored_opt.map(|stored| stored.len()).unwrap_or(0);
-        let incoming_deliveries = q_incoming.get(storage_entity).ok()
-            .map(|inc: &crate::relationships::IncomingDeliveries| inc.len()).unwrap_or(0);
+        let incoming_deliveries = q_incoming
+            .get(storage_entity)
+            .ok()
+            .map(|inc: &crate::relationships::IncomingDeliveries| inc.len())
+            .unwrap_or(0);
         let anticipated = current + incoming_deliveries;
         let free_slots = stockpile.capacity.saturating_sub(anticipated);
 
@@ -219,20 +222,16 @@ pub fn bucket_auto_haul_system(
             ));
         } else if workers == 0 {
             super::upsert::disable_request(&mut commands, request_entity);
-            commands
-                .entity(request_entity)
-                .try_insert(TransportDemand {
-                    desired_slots: 0,
-                    inflight: 0,
-                });
+            commands.entity(request_entity).try_insert(TransportDemand {
+                desired_slots: 0,
+                inflight: 0,
+            });
         } else {
             super::upsert::disable_request(&mut commands, request_entity);
-            commands
-                .entity(request_entity)
-                .try_insert(TransportDemand {
-                    desired_slots: 0,
-                    inflight,
-                });
+            commands.entity(request_entity).try_insert(TransportDemand {
+                desired_slots: 0,
+                inflight,
+            });
         }
     }
 

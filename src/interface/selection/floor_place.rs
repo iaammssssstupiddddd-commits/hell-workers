@@ -5,6 +5,7 @@ use crate::constants::*;
 use crate::game_state::{PlayMode, TaskContext};
 use crate::interface::camera::MainCamera;
 use crate::interface::ui::UiInputState;
+use crate::systems::command::area_selection::wall_line_area;
 use crate::systems::command::{TaskArea, TaskMode};
 use crate::systems::jobs::floor_construction::{FloorConstructionSite, FloorTileBlueprint};
 use crate::systems::jobs::{Blueprint, Building, BuildingType, Designation, TaskSlots, WorkType};
@@ -54,9 +55,8 @@ pub fn floor_placement_system(
     // Complete placement
     if buttons.just_released(MouseButton::Left) {
         if let Some(start_pos) = start_pos_opt {
-            let area = TaskArea::from_points(start_pos, snapped_pos);
-
             if is_floor_mode {
+                let area = TaskArea::from_points(start_pos, snapped_pos);
                 let existing_floor_tile_grids: HashSet<(i32, i32)> = q_existing_floor_tiles
                     .iter()
                     .map(|tile| tile.grid_pos)
@@ -76,6 +76,7 @@ pub fn floor_placement_system(
                     &existing_floor_building_grids,
                 );
             } else {
+                let area = wall_line_area(start_pos, snapped_pos);
                 apply_wall_placement(&mut commands, &mut world_map, &game_assets, &area);
             }
 
@@ -222,7 +223,7 @@ fn apply_wall_placement(
         return;
     }
 
-    if width != 1 && height != 1 {
+    if width < 1 || height < 1 || (width != 1 && height != 1) {
         warn!("Wall placement must be 1 x n, got {}x{}", width, height);
         return;
     }

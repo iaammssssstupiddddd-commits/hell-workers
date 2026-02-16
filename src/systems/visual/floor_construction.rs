@@ -67,14 +67,24 @@ pub fn update_floor_tile_visuals_system(
             FloorTileState::ReinforcingReady => Color::srgba(0.65, 0.65, 0.90, 0.35),
             FloorTileState::Reinforcing { progress } => {
                 let t = progress_to_ratio(progress);
-                Color::srgba(0.60 + 0.18 * t, 0.58 + 0.14 * t, 0.52 + 0.10 * t, 0.35 + 0.25 * t)
+                Color::srgba(
+                    0.60 + 0.18 * t,
+                    0.58 + 0.14 * t,
+                    0.52 + 0.10 * t,
+                    0.35 + 0.25 * t,
+                )
             }
             FloorTileState::ReinforcedComplete => Color::srgba(0.78, 0.72, 0.60, 0.60),
             FloorTileState::WaitingMud => Color::srgba(0.55, 0.44, 0.34, 0.30),
             FloorTileState::PouringReady => Color::srgba(0.60, 0.48, 0.36, 0.45),
             FloorTileState::Pouring { progress } => {
                 let t = progress_to_ratio(progress);
-                Color::srgba(0.52 - 0.18 * t, 0.44 - 0.14 * t, 0.34 - 0.10 * t, 0.50 + 0.40 * t)
+                Color::srgba(
+                    0.52 - 0.18 * t,
+                    0.44 - 0.14 * t,
+                    0.34 - 0.10 * t,
+                    0.50 + 0.40 * t,
+                )
             }
             FloorTileState::Complete => Color::srgba(0.33, 0.33, 0.35, 0.95),
         };
@@ -133,10 +143,7 @@ pub fn sync_floor_tile_bone_visuals_system(
 /// Spawn/remove curing progress bars for floor construction sites.
 pub fn manage_floor_curing_progress_bars_system(
     mut commands: Commands,
-    q_sites: Query<
-        (Entity, &Transform, &FloorConstructionSite),
-        Without<FloorCuringProgressBar>,
-    >,
+    q_sites: Query<(Entity, &Transform, &FloorConstructionSite), Without<FloorCuringProgressBar>>,
     q_bars: Query<(Entity, &ChildOf), With<FloorCuringProgressBar>>,
 ) {
     let mut curing_sites = HashSet::new();

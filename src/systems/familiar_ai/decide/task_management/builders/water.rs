@@ -5,7 +5,6 @@ use crate::systems::logistics::ResourceType;
 use crate::systems::soul_ai::execute::task_execution::types::GatherWaterPhase;
 use bevy::prelude::*;
 
-
 pub fn issue_gather_water(
     bucket: Entity,
     tank: Entity,
@@ -23,23 +22,23 @@ pub fn issue_gather_water(
                 phase: GatherWaterPhase::GoingToBucket,
             },
         );
-    let reservation_ops = vec![
-        ResourceReservationOp::ReserveSource {
-            source: bucket,
-            amount: 1,
-        },
-    ];
+    let reservation_ops = vec![ResourceReservationOp::ReserveSource {
+        source: bucket,
+        amount: 1,
+    }];
 
-    queries.assignment_writer.write(crate::events::TaskAssignmentRequest {
-        familiar_entity: ctx.fam_entity,
-        worker_entity: ctx.worker_entity,
-        task_entity: ctx.task_entity,
-        work_type: WorkType::GatherWater,
-        task_pos,
-        assigned_task,
-        reservation_ops,
-        already_commanded,
-    });
+    queries
+        .assignment_writer
+        .write(crate::events::TaskAssignmentRequest {
+            familiar_entity: ctx.fam_entity,
+            worker_entity: ctx.worker_entity,
+            task_entity: ctx.task_entity,
+            work_type: WorkType::GatherWater,
+            task_pos,
+            assigned_task,
+            reservation_ops,
+            already_commanded,
+        });
 }
 
 pub fn issue_haul_water_to_mixer(
@@ -80,14 +79,16 @@ pub fn issue_haul_water_to_mixer(
         });
     }
 
-    queries.assignment_writer.write(crate::events::TaskAssignmentRequest {
-        familiar_entity: ctx.fam_entity,
-        worker_entity: ctx.worker_entity,
-        task_entity: ctx.task_entity,
-        work_type: WorkType::HaulWaterToMixer,
-        task_pos,
-        assigned_task,
-        reservation_ops,
-        already_commanded,
-    });
+    queries
+        .assignment_writer
+        .write(crate::events::TaskAssignmentRequest {
+            familiar_entity: ctx.fam_entity,
+            worker_entity: ctx.worker_entity,
+            task_entity: ctx.task_entity,
+            work_type: WorkType::HaulWaterToMixer,
+            task_pos,
+            assigned_task,
+            reservation_ops,
+            already_commanded,
+        });
 }

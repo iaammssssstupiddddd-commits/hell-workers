@@ -1,7 +1,7 @@
 use super::geometry::world_cursor_pos;
 use crate::game_state::TaskContext;
 use crate::interface::camera::MainCamera;
-use crate::systems::command::AreaSelectionIndicator;
+use crate::systems::command::{AreaSelectionIndicator, TaskArea, TaskMode};
 use crate::systems::visual::task_area_visual::TaskAreaMaterial;
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
@@ -28,12 +28,17 @@ pub fn area_selection_indicator_system(
     if let Some(start_pos) = drag_start
         && let Some(world_pos) = world_cursor_pos(&q_window, &q_camera)
     {
-        let end_pos: Vec2 = WorldMap::snap_to_grid_edge(world_pos);
-        let center: Vec2 = (start_pos + end_pos) / 2.0;
-        let size: Vec2 = (start_pos - end_pos).abs();
+        let end_pos = WorldMap::snap_to_grid_edge(world_pos);
+        let area = match task_context.0 {
+            TaskMode::WallPlace(_) => super::geometry::wall_line_area(start_pos, end_pos),
+            _ => TaskArea::from_points(start_pos, end_pos),
+        };
+        let center = area.center();
+        let size = area.size();
         let color = super::geometry::get_indicator_color(task_context.0);
 
-        if let Some((mut transform, material_handle, mut visibility)) = q_indicator.iter_mut().next()
+        if let Some((mut transform, material_handle, mut visibility)) =
+            q_indicator.iter_mut().next()
         {
             transform.translation = center.extend(0.6);
             transform.scale = size.extend(1.0);

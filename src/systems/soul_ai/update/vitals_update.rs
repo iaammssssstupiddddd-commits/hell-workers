@@ -42,8 +42,8 @@ pub fn fatigue_update_system(
             soul.fatigue = (soul.fatigue - dt * FATIGUE_RECOVERY_RATE_IDLE).max(0.0);
         }
 
-        let crossed_exhausted_threshold =
-            prev_fatigue <= FATIGUE_GATHERING_THRESHOLD && soul.fatigue > FATIGUE_GATHERING_THRESHOLD;
+        let crossed_exhausted_threshold = prev_fatigue <= FATIGUE_GATHERING_THRESHOLD
+            && soul.fatigue > FATIGUE_GATHERING_THRESHOLD;
 
         if crossed_exhausted_threshold && idle.behavior != IdleBehavior::ExhaustedGathering {
             commands.trigger(OnExhausted { entity });

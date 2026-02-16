@@ -86,7 +86,8 @@ pub fn animation_system(
             let sway = (anim.bob_timer * SOUL_FLOAT_SWAY_SPEED).sin();
 
             let speed_scale = if anim.is_moving { 1.3 } else { 1.0 };
-            let pulse_speed = (SOUL_FLOAT_PULSE_SPEED_BASE + (1.0 - soul.laziness) * 0.4) * speed_scale;
+            let pulse_speed =
+                (SOUL_FLOAT_PULSE_SPEED_BASE + (1.0 - soul.laziness) * 0.4) * speed_scale;
             let pulse = (anim.bob_timer * pulse_speed).sin();
             let pulse_amplitude = if anim.is_moving {
                 SOUL_FLOAT_PULSE_AMPLITUDE_MOVE

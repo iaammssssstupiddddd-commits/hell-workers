@@ -17,7 +17,6 @@ pub struct ReservationShadow {
 }
 
 impl ReservationShadow {
-
     pub fn mixer_reserved(
         &self,
         target: Entity,
@@ -102,12 +101,5 @@ pub fn assign_task_to_worker(
         return false;
     };
 
-    super::policy::assign_by_work_type(
-        work_type,
-        task_pos,
-        uc_opt.is_some(),
-        &ctx,
-        queries,
-        shadow,
-    )
+    super::policy::assign_by_work_type(work_type, task_pos, uc_opt.is_some(), &ctx, queries, shadow)
 }

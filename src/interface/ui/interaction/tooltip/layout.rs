@@ -87,11 +87,7 @@ pub(crate) fn resolve_toggle_span_x(
         found = true;
     }
 
-    if found {
-        Some((min_x, max_x))
-    } else {
-        None
-    }
+    if found { Some((min_x, max_x)) } else { None }
 }
 
 pub(crate) fn resolve_mode_text_span_x(
@@ -132,7 +128,10 @@ pub(crate) fn resolve_visible_submenu_spans_x(
 }
 
 fn sum_overlap_len(span: (f32, f32), blocked_spans: &[(f32, f32)]) -> f32 {
-    blocked_spans.iter().map(|blocked| overlap_len(span, *blocked)).sum()
+    blocked_spans
+        .iter()
+        .map(|blocked| overlap_len(span, *blocked))
+        .sum()
 }
 
 pub(crate) fn resolve_expanded_toggle_tooltip_position(

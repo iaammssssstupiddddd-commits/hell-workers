@@ -57,7 +57,13 @@ pub fn handle_collect_bone_task(
                 }
 
                 if is_near_target(soul_pos, res_pos) {
-                    complete_collect_bone_now(ctx, target, res_transform.translation, commands, game_assets);
+                    complete_collect_bone_now(
+                        ctx,
+                        target,
+                        res_transform.translation,
+                        commands,
+                        game_assets,
+                    );
                     ctx.path.waypoints.clear();
                 }
             } else {
@@ -83,7 +89,13 @@ pub fn handle_collect_bone_task(
                     return;
                 }
 
-                complete_collect_bone_now(ctx, target, res_transform.translation, commands, game_assets);
+                complete_collect_bone_now(
+                    ctx,
+                    target,
+                    res_transform.translation,
+                    commands,
+                    game_assets,
+                );
             } else {
                 // BonePile が存在しない場合も Designation を削除
                 commands
@@ -137,12 +149,17 @@ fn complete_collect_bone_now(
                 custom_size: Some(Vec2::splat(TILE_SIZE * 0.5)),
                 ..default()
             },
-            Transform::from_translation(source_translation.truncate().extend(Z_ITEM_PICKUP) + offset),
+            Transform::from_translation(
+                source_translation.truncate().extend(Z_ITEM_PICKUP) + offset,
+            ),
             Name::new("Item (Bone)"),
         ));
     }
 
-    info!("TASK_EXEC: Soul {:?} collected bone instantly", ctx.soul_entity);
+    info!(
+        "TASK_EXEC: Soul {:?} collected bone instantly",
+        ctx.soul_entity
+    );
 
     *ctx.task = AssignedTask::CollectBone(
         crate::systems::soul_ai::execute::task_execution::types::CollectBoneData {

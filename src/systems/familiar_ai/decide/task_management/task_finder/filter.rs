@@ -128,11 +128,7 @@ pub(super) fn candidate_snapshot(
         }
         WorkType::ReinforceFloorTile => {
             // Validate tile is in ReinforcingReady state
-            if let Ok(tile) = queries
-                .storage
-                .floor_tiles
-                .get(entity)
-            {
+            if let Ok(tile) = queries.storage.floor_tiles.get(entity) {
                 matches!(
                     tile.state,
                     crate::systems::jobs::floor_construction::FloorTileState::ReinforcingReady
@@ -143,11 +139,7 @@ pub(super) fn candidate_snapshot(
         }
         WorkType::PourFloorTile => {
             // Validate tile is in PouringReady state
-            if let Ok(tile) = queries
-                .storage
-                .floor_tiles
-                .get(entity)
-            {
+            if let Ok(tile) = queries.storage.floor_tiles.get(entity) {
                 matches!(
                     tile.state,
                     crate::systems::jobs::floor_construction::FloorTileState::PouringReady

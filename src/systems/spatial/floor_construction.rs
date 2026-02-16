@@ -1,4 +1,4 @@
-use super::grid::{sync_grid_timed, GridData, SpatialGridOps, SpatialGridSyncTimer, SyncGridClear};
+use super::grid::{GridData, SpatialGridOps, SpatialGridSyncTimer, SyncGridClear, sync_grid_timed};
 use crate::systems::jobs::floor_construction::FloorConstructionSite;
 use bevy::prelude::*;
 

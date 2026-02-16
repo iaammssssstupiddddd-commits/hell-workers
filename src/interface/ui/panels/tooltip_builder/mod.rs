@@ -26,7 +26,9 @@ pub fn rebuild_tooltip_content(
     commands
         .entity(tooltip_root)
         .with_children(|parent| match template {
-            TooltipTemplate::Soul => templates::build_soul_tooltip(parent, model, game_assets, theme),
+            TooltipTemplate::Soul => {
+                templates::build_soul_tooltip(parent, model, game_assets, theme)
+            }
             TooltipTemplate::Building => {
                 templates::build_building_tooltip(parent, model, game_assets, theme)
             }

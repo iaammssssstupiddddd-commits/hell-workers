@@ -5,10 +5,10 @@ use crate::entities::damned_soul::{DamnedSoul, IdleBehavior, IdleState};
 use crate::entities::familiar::Familiar;
 use crate::events::EscapeOperation;
 use crate::relationships::CommandedBy;
+use crate::relationships::ParticipatingIn;
 use crate::systems::soul_ai::decide::SoulDecideOutput;
 use crate::systems::soul_ai::decide::idle_behavior::GATHERING_ARRIVAL_RADIUS;
-use crate::relationships::ParticipatingIn;
-use crate::systems::soul_ai::helpers::gathering::{GatheringSpot};
+use crate::systems::soul_ai::helpers::gathering::GatheringSpot;
 use crate::systems::soul_ai::perceive::escaping::{
     EscapeBehaviorTimer, EscapeDetectionTimer, calculate_escape_destination,
     detect_nearest_familiar, detect_reachable_familiar_within_safe_distance,

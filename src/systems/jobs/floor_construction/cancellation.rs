@@ -1,8 +1,6 @@
 //! Floor construction cancellation system
 
-use super::components::{
-    FloorConstructionCancelRequested, TargetFloorConstructionSite,
-};
+use super::components::{FloorConstructionCancelRequested, TargetFloorConstructionSite};
 use crate::assets::GameAssets;
 use crate::constants::{TILE_SIZE, Z_ITEM_PICKUP};
 use crate::entities::damned_soul::{DamnedSoul, Path};
@@ -68,9 +66,11 @@ fn spawn_refund_items(
                 custom_size: Some(Vec2::splat(TILE_SIZE * 0.5)),
                 ..default()
             },
-            Transform::from_translation(
-                Vec3::new(center.x + offset_x, center.y + offset_y, Z_ITEM_PICKUP),
-            ),
+            Transform::from_translation(Vec3::new(
+                center.x + offset_x,
+                center.y + offset_y,
+                Z_ITEM_PICKUP,
+            )),
             Name::new(name),
         ));
     }
@@ -105,7 +105,8 @@ pub fn floor_construction_cancellation_system(
 ) {
     for site_entity in q_sites.iter() {
         let (site_material_center, site_tiles_total) = {
-            let Ok((_site_transform, site, _)) = reservation_queries.storage.floor_sites.get(site_entity)
+            let Ok((_site_transform, site, _)) =
+                reservation_queries.storage.floor_sites.get(site_entity)
             else {
                 continue;
             };
@@ -204,11 +205,7 @@ pub fn floor_construction_cancellation_system(
 
         info!(
             "FLOOR_CANCEL: Site {:?} cancelled (tiles: {}, workers: {}, refund bone: {}, refund mud: {})",
-            site_entity,
-            site_tiles_total,
-            released_workers,
-            refunded_bones,
-            refunded_mud
+            site_entity, site_tiles_total, released_workers, refunded_bones, refunded_mud
         );
     }
 }

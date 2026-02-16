@@ -39,6 +39,15 @@ pub(super) fn set_build_mode(
     zone_context: &mut ZoneContext,
     task_context: &mut TaskContext,
 ) {
+    if kind == BuildingType::Wall {
+        build_context.0 = None;
+        zone_context.0 = None;
+        task_context.0 = TaskMode::WallPlace(None);
+        next_play_mode.set(PlayMode::FloorPlace);
+        info!("UI: Wall place mode set, PlayMode -> FloorPlace");
+        return;
+    }
+
     zone_context.0 = None;
     task_context.0 = TaskMode::None;
     build_context.0 = Some(kind);
@@ -73,7 +82,10 @@ pub(super) fn set_zone_mode(
     zone_context.0 = Some(kind);
     task_context.0 = TaskMode::ZonePlacement(kind, None);
     next_play_mode.set(PlayMode::TaskDesignation);
-    info!("UI: Zone mode set to {:?}, PlayMode -> TaskDesignation", kind);
+    info!(
+        "UI: Zone mode set to {:?}, PlayMode -> TaskDesignation",
+        kind
+    );
 }
 
 pub(super) fn set_zone_removal_mode(
@@ -235,6 +247,8 @@ pub(super) fn build_mode_text(
         PlayMode::FloorPlace => match task_context.0 {
             TaskMode::FloorPlace(None) => "Mode: Floor (Drag to place)".to_string(),
             TaskMode::FloorPlace(Some(_)) => "Mode: Floor (Dragging...)".to_string(),
+            TaskMode::WallPlace(None) => "Mode: Wall (Drag to place 1xn)".to_string(),
+            TaskMode::WallPlace(Some(_)) => "Mode: Wall (Dragging 1xn...)".to_string(),
             _ => "Mode: Floor".to_string(),
         },
     }

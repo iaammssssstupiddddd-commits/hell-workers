@@ -3,8 +3,8 @@
 use crate::constants::*;
 use crate::systems::logistics::{ResourceItem, ResourceType};
 use crate::systems::soul_ai::execute::task_execution::common::*;
-use crate::systems::soul_ai::execute::task_execution::transport_common::reservation;
 use crate::systems::soul_ai::execute::task_execution::context::TaskExecutionContext;
+use crate::systems::soul_ai::execute::task_execution::transport_common::reservation;
 use crate::systems::soul_ai::execute::task_execution::types::{
     AssignedTask, HaulWaterToMixerData, HaulWaterToMixerPhase,
 };
@@ -88,18 +88,20 @@ pub fn handle(
     if let Ok(mixer_data) = ctx.queries.storage.mixers.get_mut(mixer_entity) {
         let (_, _storage, _) = mixer_data;
 
-        let (current_count, capacity) =
-            match ctx.queries.storage.stockpiles.get(mixer_entity) {
-                Ok((_, _, stockpile, Some(stored_items)))
-                    if stockpile.resource_type == Some(ResourceType::Water) =>
-                {
-                    (stored_items.len(), stockpile.capacity)
-                }
-                _ => (0, MUD_MIXER_CAPACITY as usize),
-            };
+        let (current_count, capacity) = match ctx.queries.storage.stockpiles.get(mixer_entity) {
+            Ok((_, _, stockpile, Some(stored_items)))
+                if stockpile.resource_type == Some(ResourceType::Water) =>
+            {
+                (stored_items.len(), stockpile.capacity)
+            }
+            _ => (0, MUD_MIXER_CAPACITY as usize),
+        };
 
         if current_count < capacity {
-            let amount = ctx.task.get_amount_if_haul_water().unwrap_or(BUCKET_CAPACITY);
+            let amount = ctx
+                .task
+                .get_amount_if_haul_water()
+                .unwrap_or(BUCKET_CAPACITY);
             let available = capacity.saturating_sub(current_count) as u32;
             let added = amount.min(available);
 
@@ -117,7 +119,9 @@ pub fn handle(
             );
 
             reservation::release_mixer_destination(ctx, mixer_entity, ResourceType::Water);
-            commands.entity(bucket_entity).remove::<crate::relationships::DeliveringTo>();
+            commands
+                .entity(bucket_entity)
+                .remove::<crate::relationships::DeliveringTo>();
 
             // バケツを空に戻す
             commands.entity(bucket_entity).insert((
@@ -131,9 +135,7 @@ pub fn handle(
 
             // バケツを戻しに行く
             let mut return_pos = None;
-            for (stock_entity, stock_transform, _, _) in
-                ctx.queries.storage.stockpiles.iter()
-            {
+            for (stock_entity, stock_transform, _, _) in ctx.queries.storage.stockpiles.iter() {
                 if let Ok(belongs) = ctx.queries.designation.belongs.get(stock_entity) {
                     if belongs.0 == tank_entity {
                         return_pos = Some(stock_transform.translation.truncate());

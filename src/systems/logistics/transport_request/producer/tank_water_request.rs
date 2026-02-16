@@ -26,15 +26,12 @@ pub fn tank_water_request_system(
 ) {
     let active_familiars: Vec<(Entity, TaskArea)> = q_familiars
         .iter()
-        .filter(|(_, active_command, _)| {
-            !matches!(active_command.command, FamiliarCommand::Idle)
-        })
+        .filter(|(_, active_command, _)| !matches!(active_command.command, FamiliarCommand::Idle))
         .map(|(entity, _, area)| (entity, area.clone()))
         .collect();
 
     // (tank_entity) -> (issued_by, needed_slots, tank_pos)
-    let mut desired_requests =
-        std::collections::HashMap::<Entity, (Entity, u32, Vec2)>::new();
+    let mut desired_requests = std::collections::HashMap::<Entity, (Entity, u32, Vec2)>::new();
 
     for (tank_entity, tank_transform, tank_stock, stored_opt) in q_tanks.iter() {
         // 水タンク以外はスキップ
@@ -48,18 +45,18 @@ pub fn tank_water_request_system(
         };
 
         let current_water = stored_opt.map(|s| s.len()).unwrap_or(0);
-        let incoming_water_tasks = q_incoming.get(tank_entity).ok()
-            .map(|inc: &crate::relationships::IncomingDeliveries| inc.len()).unwrap_or(0);
+        let incoming_water_tasks = q_incoming
+            .get(tank_entity)
+            .ok()
+            .map(|inc: &crate::relationships::IncomingDeliveries| inc.len())
+            .unwrap_or(0);
         let total_water = (current_water as u32) + (incoming_water_tasks as u32 * BUCKET_CAPACITY);
 
         if total_water < tank_stock.capacity as u32 {
             let needed_water = tank_stock.capacity as u32 - total_water;
             let needed_tasks = (needed_water + BUCKET_CAPACITY - 1) / BUCKET_CAPACITY;
-            
-            desired_requests.insert(
-                tank_entity,
-                (fam_entity, needed_tasks, tank_pos),
-            );
+
+            desired_requests.insert(tank_entity, (fam_entity, needed_tasks, tank_pos));
         }
     }
 

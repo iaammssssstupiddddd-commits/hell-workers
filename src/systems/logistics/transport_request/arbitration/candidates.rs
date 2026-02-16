@@ -7,11 +7,13 @@ use crate::constants::*;
 use crate::relationships::{StoredIn, StoredItems};
 use crate::systems::jobs::Blueprint;
 use crate::systems::logistics::transport_request::{
-    can_complete_pick_drop_to_blueprint, can_complete_pick_drop_to_point, ManualHaulPinnedSource,
-    ManualTransportRequest, TransportDemand, TransportRequest, TransportRequestKind,
-    TransportRequestState, WheelbarrowDestination, WheelbarrowLease, WheelbarrowPendingSince,
+    ManualHaulPinnedSource, ManualTransportRequest, TransportDemand, TransportRequest,
+    TransportRequestKind, TransportRequestState, WheelbarrowDestination, WheelbarrowLease,
+    WheelbarrowPendingSince, can_complete_pick_drop_to_blueprint, can_complete_pick_drop_to_point,
 };
-use crate::systems::logistics::{BelongsTo, ResourceItem, ResourceType, ReservedForTask, Stockpile};
+use crate::systems::logistics::{
+    BelongsTo, ReservedForTask, ResourceItem, ResourceType, Stockpile,
+};
 use bevy::prelude::*;
 
 use super::types::{FreeItemSnapshot, HeapEntry, ItemBucketKey, NearbyItem, RequestEvalContext};
@@ -124,7 +126,11 @@ pub fn build_request_eval_context(
                             continue;
                         }
                         let current = stored_opt.map(|stored| stored.len()).unwrap_or(0);
-                        let incoming = q_incoming.get(cell).ok().map(|inc: &crate::relationships::IncomingDeliveries| inc.len()).unwrap_or(0);
+                        let incoming = q_incoming
+                            .get(cell)
+                            .ok()
+                            .map(|inc: &crate::relationships::IncomingDeliveries| inc.len())
+                            .unwrap_or(0);
                         let anticipated = current + incoming;
                         let free = stock.capacity.saturating_sub(anticipated);
                         total_free += free;
@@ -142,7 +148,11 @@ pub fn build_request_eval_context(
                     return None;
                 }
                 let current = stored_opt.map(|stored| stored.len()).unwrap_or(0);
-                let incoming = q_incoming.get(req.anchor).ok().map(|inc: &crate::relationships::IncomingDeliveries| inc.len()).unwrap_or(0);
+                let incoming = q_incoming
+                    .get(req.anchor)
+                    .ok()
+                    .map(|inc: &crate::relationships::IncomingDeliveries| inc.len())
+                    .unwrap_or(0);
                 let anticipated = current + incoming;
                 (req.anchor, stock.capacity.saturating_sub(anticipated))
             } else {
@@ -176,12 +186,13 @@ pub fn build_request_eval_context(
 
     // Blueprint 向けの猫車必須リソースは1個でもリース対象
     // それ以外（Mixer・Stockpile）はバッチ最小数を要求
-    let hard_min =
-        if req.resource_type.requires_wheelbarrow() && req.kind == TransportRequestKind::DeliverToBlueprint {
-            1
-        } else {
-            WHEELBARROW_MIN_BATCH_SIZE
-        };
+    let hard_min = if req.resource_type.requires_wheelbarrow()
+        && req.kind == TransportRequestKind::DeliverToBlueprint
+    {
+        1
+    } else {
+        WHEELBARROW_MIN_BATCH_SIZE
+    };
     if max_items < hard_min {
         return None;
     }
@@ -264,11 +275,9 @@ pub fn is_pick_drop_possible(
         return false;
     }
     match eval.destination {
-        WheelbarrowDestination::Stockpile(_) | WheelbarrowDestination::Mixer { .. } => {
-            nearby_items
-                .iter()
-                .any(|candidate| can_complete_pick_drop_to_point(candidate.pos, eval.request_pos))
-        }
+        WheelbarrowDestination::Stockpile(_) | WheelbarrowDestination::Mixer { .. } => nearby_items
+            .iter()
+            .any(|candidate| can_complete_pick_drop_to_point(candidate.pos, eval.request_pos)),
         WheelbarrowDestination::Blueprint(blueprint_entity) => {
             q_blueprints.get(blueprint_entity).ok().is_some_and(|bp| {
                 nearby_items.iter().any(|candidate| {

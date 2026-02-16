@@ -6,9 +6,7 @@ use crate::constants::*;
 use crate::entities::damned_soul::{GatheringBehavior, IdleBehavior};
 use crate::events::{IdleBehaviorOperation, IdleBehaviorRequest};
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
-use crate::systems::soul_ai::helpers::gathering::{
-    GATHERING_LEAVE_RADIUS, GatheringSpot,
-};
+use crate::systems::soul_ai::helpers::gathering::{GATHERING_LEAVE_RADIUS, GatheringSpot};
 use crate::systems::soul_ai::helpers::query_types::IdleDecisionSoulQuery;
 use crate::systems::spatial::{GatheringSpotSpatialGrid, SpatialGridOps};
 use crate::world::map::WorldMap;
@@ -55,7 +53,11 @@ pub fn idle_behavior_decision_system(
     time: Res<Time>,
     mut request_writer: MessageWriter<IdleBehaviorRequest>,
     world_map: Res<WorldMap>,
-    q_spots: Query<(Entity, &GatheringSpot, &crate::relationships::GatheringParticipants)>,
+    q_spots: Query<(
+        Entity,
+        &GatheringSpot,
+        &crate::relationships::GatheringParticipants,
+    )>,
     mut query: IdleDecisionSoulQuery,
     spot_grid: Res<GatheringSpotSpatialGrid>,
     soul_grid: Res<crate::systems::spatial::SpatialGrid>,
@@ -280,9 +282,13 @@ pub fn idle_behavior_decision_system(
 
                         // 到着直後、または中心に近すぎる場合は離れた位置を設定
                         // ただし、既に移動中（waypointsがある）の場合はスキップ（separation_systemによる移動を妨げない）
-                        let is_moving = !path.waypoints.is_empty() && path.current_index < path.waypoints.len();
+                        let is_moving =
+                            !path.waypoints.is_empty() && path.current_index < path.waypoints.len();
 
-                        if !is_moving && (just_arrived || dist_from_center < TILE_SIZE * GATHERING_KEEP_DISTANCE_MIN) {
+                        if !is_moving
+                            && (just_arrived
+                                || dist_from_center < TILE_SIZE * GATHERING_KEEP_DISTANCE_MIN)
+                        {
                             let mut found = false;
                             const MIN_SEPARATION: f32 = TILE_SIZE * 1.2;
 
@@ -294,8 +300,10 @@ pub fn idle_behavior_decision_system(
                                 );
 
                                 // 他のSoulと重ならないかチェック
-                                let nearby_souls = soul_grid.get_nearby_in_radius(new_target, MIN_SEPARATION);
-                                let position_occupied = nearby_souls.iter().any(|&other| other != entity);
+                                let nearby_souls =
+                                    soul_grid.get_nearby_in_radius(new_target, MIN_SEPARATION);
+                                let position_occupied =
+                                    nearby_souls.iter().any(|&other| other != entity);
 
                                 if !position_occupied {
                                     let target_grid = WorldMap::world_to_grid(new_target);
@@ -312,11 +320,14 @@ pub fn idle_behavior_decision_system(
                                 // 見つからない場合は中心の反対方向に移動
                                 // ただしoverlapチェックを行う
                                 let away = (current_pos - center).normalize_or_zero();
-                                let fallback_target = center + away * TILE_SIZE * GATHERING_KEEP_DISTANCE_TARGET_MAX;
+                                let fallback_target =
+                                    center + away * TILE_SIZE * GATHERING_KEEP_DISTANCE_TARGET_MAX;
 
                                 // フォールバック位置でもoverlapをチェック
-                                let nearby_souls = soul_grid.get_nearby_in_radius(fallback_target, MIN_SEPARATION);
-                                let position_occupied = nearby_souls.iter().any(|&other| other != entity);
+                                let nearby_souls =
+                                    soul_grid.get_nearby_in_radius(fallback_target, MIN_SEPARATION);
+                                let position_occupied =
+                                    nearby_souls.iter().any(|&other| other != entity);
 
                                 if !position_occupied {
                                     let target_grid = WorldMap::world_to_grid(fallback_target);
@@ -353,8 +364,10 @@ pub fn idle_behavior_decision_system(
                                         }
 
                                         // 他のSoulと重ならないかチェック
-                                        let nearby_souls = soul_grid.get_nearby_in_radius(new_target, MIN_SEPARATION);
-                                        let position_occupied = nearby_souls.iter().any(|&other| other != entity);
+                                        let nearby_souls = soul_grid
+                                            .get_nearby_in_radius(new_target, MIN_SEPARATION);
+                                        let position_occupied =
+                                            nearby_souls.iter().any(|&other| other != entity);
 
                                         if !position_occupied {
                                             let target_grid = WorldMap::world_to_grid(new_target);
@@ -375,17 +388,27 @@ pub fn idle_behavior_decision_system(
 
                                         // フォールバック用の追加試行
                                         for _ in 0..5 {
-                                            let angle: f32 = rng.gen_range(0.0..std::f32::consts::TAU);
-                                            let dist = TILE_SIZE * GATHERING_KEEP_DISTANCE_TARGET_MAX;
-                                            let offset = Vec2::new(angle.cos() * dist, angle.sin() * dist);
+                                            let angle: f32 =
+                                                rng.gen_range(0.0..std::f32::consts::TAU);
+                                            let dist =
+                                                TILE_SIZE * GATHERING_KEEP_DISTANCE_TARGET_MAX;
+                                            let offset =
+                                                Vec2::new(angle.cos() * dist, angle.sin() * dist);
                                             let fallback_target = center + offset;
 
-                                            let nearby_souls = soul_grid.get_nearby_in_radius(fallback_target, MIN_SEPARATION);
-                                            let position_occupied = nearby_souls.iter().any(|&other| other != entity);
+                                            let nearby_souls = soul_grid.get_nearby_in_radius(
+                                                fallback_target,
+                                                MIN_SEPARATION,
+                                            );
+                                            let position_occupied =
+                                                nearby_souls.iter().any(|&other| other != entity);
 
                                             if !position_occupied {
-                                                let target_grid = WorldMap::world_to_grid(fallback_target);
-                                                if world_map.is_walkable(target_grid.0, target_grid.1) {
+                                                let target_grid =
+                                                    WorldMap::world_to_grid(fallback_target);
+                                                if world_map
+                                                    .is_walkable(target_grid.0, target_grid.1)
+                                                {
                                                     dest.0 = fallback_target;
                                                     path.waypoints.clear();
                                                     path.current_index = 0;
@@ -395,21 +418,25 @@ pub fn idle_behavior_decision_system(
                                             }
                                         }
                                         // 5回試してもダメなら目的地を変更しない（separation_systemに任せる）
-                                        if !fallback_found {
-                                        }
+                                        if !fallback_found {}
                                     }
                                 }
                             }
-                            GatheringBehavior::Sleeping | GatheringBehavior::Standing | GatheringBehavior::Dancing => {
+                            GatheringBehavior::Sleeping
+                            | GatheringBehavior::Standing
+                            | GatheringBehavior::Dancing => {
                                 // これらの状態では移動しないが、中心に近すぎる場合は離れる
                                 if dist_from_center < TILE_SIZE * GATHERING_KEEP_DISTANCE_MIN {
                                     let away = (current_pos - center).normalize_or_zero();
-                                    let target = center + away * TILE_SIZE * GATHERING_KEEP_DISTANCE_TARGET_MIN;
+                                    let target = center
+                                        + away * TILE_SIZE * GATHERING_KEEP_DISTANCE_TARGET_MIN;
 
                                     // 中心に近すぎる時の移動先もoverlapチェック
                                     const MIN_SEPARATION: f32 = TILE_SIZE * 1.2;
-                                    let nearby_souls = soul_grid.get_nearby_in_radius(target, MIN_SEPARATION);
-                                    let position_occupied = nearby_souls.iter().any(|&other| other != entity);
+                                    let nearby_souls =
+                                        soul_grid.get_nearby_in_radius(target, MIN_SEPARATION);
+                                    let position_occupied =
+                                        nearby_souls.iter().any(|&other| other != entity);
 
                                     if !position_occupied {
                                         let target_grid = WorldMap::world_to_grid(target);
@@ -423,8 +450,10 @@ pub fn idle_behavior_decision_system(
                                 } else {
                                     // 重なり回避移動中かチェック（separation_systemによる移動を妨げない）
                                     const MIN_SEPARATION: f32 = TILE_SIZE * 1.2;
-                                    let nearby_souls = soul_grid.get_nearby_in_radius(current_pos, MIN_SEPARATION);
-                                    let has_overlap = nearby_souls.iter().any(|&other| other != entity);
+                                    let nearby_souls =
+                                        soul_grid.get_nearby_in_radius(current_pos, MIN_SEPARATION);
+                                    let has_overlap =
+                                        nearby_souls.iter().any(|&other| other != entity);
                                     let dist_to_dest = (dest.0 - current_pos).length();
 
                                     // 重なりがある、または目的地まで遠い場合は、移動を継続（waypointsをクリアしない）

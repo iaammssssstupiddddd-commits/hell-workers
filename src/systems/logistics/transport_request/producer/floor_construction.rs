@@ -16,11 +16,11 @@ use crate::systems::jobs::floor_construction::{
     TargetFloorConstructionSite,
 };
 use crate::systems::jobs::{Designation, Priority, TaskSlots, WorkType};
+use crate::systems::logistics::ResourceType;
 use crate::systems::logistics::transport_request::{
     TransportDemand, TransportPolicy, TransportPriority, TransportRequest, TransportRequestKind,
     TransportRequestState,
 };
-use crate::systems::logistics::ResourceType;
 use crate::systems::spatial::FloorConstructionSpatialGrid;
 
 fn to_u32_saturating(value: usize) -> u32 {
@@ -32,7 +32,12 @@ pub fn floor_construction_auto_haul_system(
     mut commands: Commands,
     floor_grid: Res<FloorConstructionSpatialGrid>,
     q_familiars: Query<(Entity, &ActiveCommand, &TaskArea)>,
-    q_sites: Query<(Entity, &Transform, &FloorConstructionSite, Option<&TaskWorkers>)>,
+    q_sites: Query<(
+        Entity,
+        &Transform,
+        &FloorConstructionSite,
+        Option<&TaskWorkers>,
+    )>,
     q_tiles: Query<&FloorTileBlueprint>,
     q_floor_requests: Query<(
         Entity,
@@ -58,9 +63,7 @@ pub fn floor_construction_auto_haul_system(
     // Collect active familiars
     let active_familiars: Vec<(Entity, TaskArea)> = q_familiars
         .iter()
-        .filter(|(_, active_command, _)| {
-            !matches!(active_command.command, FamiliarCommand::Idle)
-        })
+        .filter(|(_, active_command, _)| !matches!(active_command.command, FamiliarCommand::Idle))
         .map(|(entity, _, area)| (entity, area.clone()))
         .collect();
 
@@ -86,7 +89,8 @@ pub fn floor_construction_auto_haul_system(
             continue;
         }
 
-        let Some((fam_entity, _task_area)) = super::find_owner_familiar(site_pos, &active_familiars)
+        let Some((fam_entity, _task_area)) =
+            super::find_owner_familiar(site_pos, &active_familiars)
         else {
             continue;
         };
@@ -247,15 +251,13 @@ pub fn floor_material_delivery_sync_system(
     mut commands: Commands,
     q_sites: Query<(Entity, &FloorConstructionSite)>,
     mut q_tiles: Query<&mut FloorTileBlueprint>,
-    q_resources: Query<
-        (
-            Entity,
-            &Transform,
-            &Visibility,
-            &crate::systems::logistics::ResourceItem,
-            Option<&crate::relationships::StoredIn>,
-        ),
-    >,
+    q_resources: Query<(
+        Entity,
+        &Transform,
+        &Visibility,
+        &crate::systems::logistics::ResourceItem,
+        Option<&crate::relationships::StoredIn>,
+    )>,
 ) {
     let pickup_radius = TILE_SIZE * 2.0;
     let pickup_radius_sq = pickup_radius * pickup_radius;
@@ -297,7 +299,10 @@ pub fn floor_material_delivery_sync_system(
         }
 
         let mut consumed = 0u32;
-        for mut tile in q_tiles.iter_mut().filter(|tile| tile.parent_site == site_entity) {
+        for mut tile in q_tiles
+            .iter_mut()
+            .filter(|tile| tile.parent_site == site_entity)
+        {
             if tile.state != waiting_state {
                 continue;
             }
@@ -350,14 +355,8 @@ pub fn floor_tile_designation_system(
         &mut Visibility,
     )>,
 ) {
-    for (
-        tile_entity,
-        tile_transform,
-        mut tile,
-        designation_opt,
-        workers_opt,
-        mut visibility,
-    ) in q_tiles.iter_mut()
+    for (tile_entity, tile_transform, mut tile, designation_opt, workers_opt, mut visibility) in
+        q_tiles.iter_mut()
     {
         if *visibility == Visibility::Hidden {
             *visibility = Visibility::Visible;

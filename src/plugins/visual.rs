@@ -12,11 +12,6 @@ use crate::systems::logistics::resource_count_display_system;
 use crate::systems::soul_ai::visual::gathering::{
     gathering_debug_visualization_system, gathering_visual_update_system,
 };
-use crate::systems::visual::fade::fade_out_system;
-use crate::systems::visual::floor_construction::{
-    manage_floor_curing_progress_bars_system, sync_floor_tile_bone_visuals_system,
-    update_floor_curing_progress_bars_system, update_floor_tile_visuals_system,
-};
 use crate::systems::soul_ai::visual::idle::idle_visual_system;
 use crate::systems::soul_ai::visual::vitals::familiar_hover_visualization_system;
 use crate::systems::visual::blueprint::{
@@ -29,6 +24,11 @@ use crate::systems::visual::blueprint::{
     update_material_counter_system,
     update_progress_bar_fill_system as bp_update_progress_bar_fill_system,
     update_worker_indicators_system,
+};
+use crate::systems::visual::fade::fade_out_system;
+use crate::systems::visual::floor_construction::{
+    manage_floor_curing_progress_bars_system, sync_floor_tile_bone_visuals_system,
+    update_floor_curing_progress_bars_system, update_floor_tile_visuals_system,
 };
 use crate::systems::visual::gather::{
     attach_resource_visual_system, cleanup_resource_visual_system, spawn_gather_indicators_system,
@@ -45,7 +45,9 @@ use crate::systems::visual::soul::{
 };
 use crate::systems::visual::speech::SpeechPlugin;
 use crate::systems::visual::tank::update_tank_visual_system;
-use crate::systems::visual::task_area_visual::{TaskAreaMaterial, update_task_area_material_system};
+use crate::systems::visual::task_area_visual::{
+    TaskAreaMaterial, update_task_area_material_system,
+};
 use crate::systems::visual::wall_connection::WallConnectionPlugin;
 
 use bevy::prelude::*;
@@ -85,14 +87,12 @@ impl Plugin for VisualPlugin {
                 soul_status_visual_system,
                 task_link_system,
                 building_completion_system,
-                area_selection_indicator_system.run_if(
-                    |play_mode: Res<State<PlayMode>>| {
-                        matches!(
-                            play_mode.get(),
-                            PlayMode::TaskDesignation | PlayMode::FloorPlace
-                        )
-                    },
-                ),
+                area_selection_indicator_system.run_if(|play_mode: Res<State<PlayMode>>| {
+                    matches!(
+                        play_mode.get(),
+                        PlayMode::TaskDesignation | PlayMode::FloorPlace
+                    )
+                }),
                 update_designation_indicator_system,
                 sync_designation_indicator_system,
                 resource_count_display_system,

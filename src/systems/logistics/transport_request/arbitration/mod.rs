@@ -24,8 +24,8 @@ use bevy::prelude::*;
 
 use super::metrics::TransportRequestMetrics;
 use candidates::{
-    build_free_item_buckets, build_request_eval_context, collect_top_k_nearest, is_pick_drop_possible,
-    score_candidate,
+    build_free_item_buckets, build_request_eval_context, collect_top_k_nearest,
+    is_pick_drop_possible, score_candidate,
 };
 use grants::grant_leases;
 use types::{BatchCandidate, ItemBucketKey};
@@ -48,7 +48,12 @@ pub fn wheelbarrow_arbitration_system(
         (With<Wheelbarrow>, With<ParkedAt>, Without<PushedBy>),
     >,
     q_free_items: Query<
-        (Entity, &Transform, &Visibility, &crate::systems::logistics::ResourceItem),
+        (
+            Entity,
+            &Transform,
+            &Visibility,
+            &crate::systems::logistics::ResourceItem,
+        ),
         (
             Without<crate::systems::jobs::Designation>,
             Without<crate::relationships::TaskWorkers>,
@@ -70,8 +75,13 @@ pub fn wheelbarrow_arbitration_system(
     let arbitration_started_at = Instant::now();
     let now = time.elapsed_secs_f64();
 
-    let used_wheelbarrows =
-        update_lease_state(&mut commands, &q_requests, &q_free_items, &q_wheelbarrows, now);
+    let used_wheelbarrows = update_lease_state(
+        &mut commands,
+        &q_requests,
+        &q_free_items,
+        &q_wheelbarrows,
+        now,
+    );
 
     let mut available_wheelbarrows: Vec<(Entity, Vec2)> = q_wheelbarrows
         .iter()
@@ -127,7 +137,12 @@ fn update_lease_state(
         Option<&ManualTransportRequest>,
     )>,
     q_free_items: &Query<
-        (Entity, &Transform, &Visibility, &crate::systems::logistics::ResourceItem),
+        (
+            Entity,
+            &Transform,
+            &Visibility,
+            &crate::systems::logistics::ResourceItem,
+        ),
         (
             Without<crate::systems::jobs::Designation>,
             Without<crate::relationships::TaskWorkers>,
@@ -181,7 +196,9 @@ fn update_lease_state(
                     .insert(WheelbarrowPendingSince(now));
             }
         } else if pending_since_opt.is_some() {
-            commands.entity(req_entity).remove::<WheelbarrowPendingSince>();
+            commands
+                .entity(req_entity)
+                .remove::<WheelbarrowPendingSince>();
         }
     }
 
@@ -200,7 +217,12 @@ fn collect_candidates(
         Option<&ManualTransportRequest>,
     )>,
     q_free_items: &Query<
-        (Entity, &Transform, &Visibility, &crate::systems::logistics::ResourceItem),
+        (
+            Entity,
+            &Transform,
+            &Visibility,
+            &crate::systems::logistics::ResourceItem,
+        ),
         (
             Without<crate::systems::jobs::Designation>,
             Without<crate::relationships::TaskWorkers>,
@@ -226,13 +248,18 @@ fn collect_candidates(
     let mut candidates_after_top_k = 0u32;
 
     if available_wheelbarrows.is_empty() {
-        return (candidates, eligible_requests, bucket_items_total, candidates_after_top_k);
+        return (
+            candidates,
+            eligible_requests,
+            bucket_items_total,
+            candidates_after_top_k,
+        );
     }
 
     let (free_items, by_resource, by_resource_owner_ground) =
         build_free_item_buckets(q_free_items, q_belongs, q_stored_in);
-    let search_radius_sq = (crate::constants::TILE_SIZE * 10.0)
-        * (crate::constants::TILE_SIZE * 10.0);
+    let search_radius_sq =
+        (crate::constants::TILE_SIZE * 10.0) * (crate::constants::TILE_SIZE * 10.0);
 
     for (req_entity, req, state, demand, transform, lease_opt, pending_since_opt, manual_opt) in
         q_requests.iter()
@@ -354,7 +381,12 @@ fn collect_candidates(
     }
 
     candidates.sort_by(|(_, s1), (_, s2)| s2.partial_cmp(s1).unwrap_or(Ordering::Equal));
-    (candidates, eligible_requests, bucket_items_total, candidates_after_top_k)
+    (
+        candidates,
+        eligible_requests,
+        bucket_items_total,
+        candidates_after_top_k,
+    )
 }
 
 fn update_metrics(
@@ -371,6 +403,5 @@ fn update_metrics(
     metrics.wheelbarrow_arb_eligible_requests = eligible_requests;
     metrics.wheelbarrow_arb_bucket_items_total = bucket_items_total;
     metrics.wheelbarrow_arb_candidates_after_topk = candidates_after_top_k;
-    metrics.wheelbarrow_arb_elapsed_ms =
-        arbitration_started_at.elapsed().as_secs_f32() * 1000.0;
+    metrics.wheelbarrow_arb_elapsed_ms = arbitration_started_at.elapsed().as_secs_f32() * 1000.0;
 }

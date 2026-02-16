@@ -13,16 +13,14 @@ use crate::interface::selection::SelectedEntity;
 use crate::interface::ui::UiInputState;
 use crate::relationships::{StoredItems, TaskWorkers};
 use crate::systems::command::{AreaSelectionIndicator, TaskArea, TaskMode};
-use crate::systems::jobs::{Blueprint, Designation, Rock, Tree};
 use crate::systems::jobs::floor_construction::{
     FloorConstructionCancelRequested, FloorTileBlueprint,
 };
+use crate::systems::jobs::{Blueprint, Designation, Rock, Tree};
 use crate::systems::logistics::transport_request::{
     ManualTransportRequest, TransportRequest, TransportRequestFixedSource,
 };
-use crate::systems::logistics::{
-    BelongsTo, BucketStorage, ResourceItem, Stockpile,
-};
+use crate::systems::logistics::{BelongsTo, BucketStorage, ResourceItem, Stockpile};
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
@@ -224,10 +222,18 @@ pub fn task_area_selection_system(
         }
 
         match task_context.0 {
-            TaskMode::AreaSelection(None) => task_context.0 = TaskMode::AreaSelection(Some(snapped_pos)),
-            TaskMode::DesignateChop(None) => task_context.0 = TaskMode::DesignateChop(Some(snapped_pos)),
-            TaskMode::DesignateMine(None) => task_context.0 = TaskMode::DesignateMine(Some(snapped_pos)),
-            TaskMode::DesignateHaul(None) => task_context.0 = TaskMode::DesignateHaul(Some(snapped_pos)),
+            TaskMode::AreaSelection(None) => {
+                task_context.0 = TaskMode::AreaSelection(Some(snapped_pos))
+            }
+            TaskMode::DesignateChop(None) => {
+                task_context.0 = TaskMode::DesignateChop(Some(snapped_pos))
+            }
+            TaskMode::DesignateMine(None) => {
+                task_context.0 = TaskMode::DesignateMine(Some(snapped_pos))
+            }
+            TaskMode::DesignateHaul(None) => {
+                task_context.0 = TaskMode::DesignateHaul(Some(snapped_pos))
+            }
             TaskMode::CancelDesignation(None) => {
                 task_context.0 = TaskMode::CancelDesignation(Some(snapped_pos))
             }
@@ -304,9 +310,7 @@ pub fn task_area_selection_system(
             let mode = task_context.0;
             let area = TaskArea::from_points(start_pos, WorldMap::snap_to_grid_edge(world_pos));
             let q_targets = q_target_sets.p0();
-            let issued_by = selected
-                .0
-                .filter(|entity| q_familiars.contains(*entity));
+            let issued_by = selected.0.filter(|entity| q_familiars.contains(*entity));
             apply_designation_in_area(&mut commands, mode, &area, issued_by, &q_targets);
             task_context.0 = reset_designation_mode(mode);
         }
@@ -378,10 +382,7 @@ pub fn task_area_selection_system(
                             transport_request.is_some(),
                             fixed_source.map(|source| source.0),
                         );
-                        info!(
-                            "CANCEL: Click-cancelled designation on {:?}",
-                            target_entity
-                        );
+                        info!("CANCEL: Click-cancelled designation on {:?}", target_entity);
                     }
                 }
 

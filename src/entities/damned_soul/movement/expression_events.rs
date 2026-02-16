@@ -1,7 +1,9 @@
 //! 会話イベント起点の表情オーバーレイ
 
 use crate::constants::*;
-use crate::entities::damned_soul::{ConversationExpression, ConversationExpressionKind, DamnedSoul};
+use crate::entities::damned_soul::{
+    ConversationExpression, ConversationExpressionKind, DamnedSoul,
+};
 use crate::events::{OnExhausted, OnGatheringParticipated};
 use crate::systems::soul_ai::helpers::gathering::{GatheringObjectType, GatheringSpot};
 use crate::systems::visual::speech::conversation::events::{

@@ -85,7 +85,7 @@ fn apply_zone_placement(
     for gy in min_grid.1..=max_grid.1 {
         for gx in min_grid.0..=max_grid.0 {
             let grid = (gx, gy);
-            
+
             // 既に存在するか、建築物がある場合はスキップ
             if world_map.stockpiles.contains_key(&grid) || world_map.buildings.contains_key(&grid) {
                 continue;
@@ -183,11 +183,7 @@ pub fn zone_removal_system(
     }
 }
 
-fn apply_zone_removal(
-    commands: &mut Commands,
-    world_map: &mut WorldMap,
-    area: &TaskArea,
-) {
+fn apply_zone_removal(commands: &mut Commands, world_map: &mut WorldMap, area: &TaskArea) {
     let (to_remove, fragments) = identify_removal_targets(world_map, area);
 
     // 削除実行
@@ -214,7 +210,11 @@ fn identify_removal_targets(
     // 本来は「影響を受ける連結成分」だけを探索すべきだが、
     // ここでは簡易的に全ストックパイルを対象とする (数千個レベルなら問題ないはず)
     for (&grid, _) in &world_map.stockpiles {
-        if grid.0 >= min_grid.0 && grid.0 <= max_grid.0 && grid.1 >= min_grid.1 && grid.1 <= max_grid.1 {
+        if grid.0 >= min_grid.0
+            && grid.0 <= max_grid.0
+            && grid.1 >= min_grid.1
+            && grid.1 <= max_grid.1
+        {
             direct_removal.push(grid);
         } else {
             remaining_candidates.insert(grid);

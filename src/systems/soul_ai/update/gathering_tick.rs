@@ -1,9 +1,9 @@
 use bevy::prelude::*;
 
+use crate::relationships::GatheringParticipants;
 use crate::systems::soul_ai::helpers::gathering::{
     GATHERING_GRACE_PERIOD, GATHERING_MIN_PARTICIPANTS, GatheringSpot, GatheringUpdateTimer,
 };
-use crate::relationships::GatheringParticipants;
 
 /// 集会猶予タイマーの減算のみを行う（Update Phase）
 pub fn gathering_grace_tick_system(

@@ -48,4 +48,3 @@ pub fn apply_designation_requests_system(
         }
     }
 }
-

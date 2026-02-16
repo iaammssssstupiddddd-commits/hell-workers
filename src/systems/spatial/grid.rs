@@ -46,11 +46,8 @@ pub trait SyncGridClear: SpatialGridOps {
 /// タイマー付きの空間グリッド同期（6つの update システムで共有）
 ///
 /// タイマーが満了したときのみ clear + insert を実行する。
-pub fn sync_grid_timed<G, I>(
-    sync_timer: &mut SpatialGridSyncTimer,
-    grid: &mut G,
-    entities: I,
-) where
+pub fn sync_grid_timed<G, I>(sync_timer: &mut SpatialGridSyncTimer, grid: &mut G, entities: I)
+where
     G: SyncGridClear,
     I: Iterator<Item = (Entity, Vec2)>,
 {

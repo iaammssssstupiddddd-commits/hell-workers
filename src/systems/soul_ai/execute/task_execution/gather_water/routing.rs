@@ -7,12 +7,12 @@ use crate::systems::soul_ai::execute::task_execution::types::{
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
 
-fn assigned_task(
-    bucket: Entity,
-    tank: Entity,
-    phase: GatherWaterPhase,
-) -> AssignedTask {
-    AssignedTask::GatherWater(GatherWaterData { bucket, tank, phase })
+fn assigned_task(bucket: Entity, tank: Entity, phase: GatherWaterPhase) -> AssignedTask {
+    AssignedTask::GatherWater(GatherWaterData {
+        bucket,
+        tank,
+        phase,
+    })
 }
 
 /// 川グリッドへの経路を設定する。成功時は Some(())、失敗時は None。

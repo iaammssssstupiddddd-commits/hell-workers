@@ -128,11 +128,11 @@ fn setup_wheelbarrow_parking(
     game_assets: &GameAssets,
 ) {
     let parking_capacity = 2usize;
-    commands.entity(building_entity).insert(
-        crate::systems::logistics::WheelbarrowParking {
+    commands
+        .entity(building_entity)
+        .insert(crate::systems::logistics::WheelbarrowParking {
             capacity: parking_capacity,
-        },
-    );
+        });
 
     let pos = transform.translation.truncate();
     for i in 0..parking_capacity {

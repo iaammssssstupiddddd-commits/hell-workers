@@ -41,13 +41,17 @@ pub fn grant_leases(
             for &cell in &candidate.group_cells {
                 if let Ok((stock, stored_opt)) = q_stockpiles.get(cell) {
                     let current = stored_opt.map(|s| s.len()).unwrap_or(0);
-                    
+
                     // インフライト（過去フレーム予約）
-                    let incoming = q_incoming.get(cell).ok().map(|inc: &crate::relationships::IncomingDeliveries| inc.len()).unwrap_or(0);
+                    let incoming = q_incoming
+                        .get(cell)
+                        .ok()
+                        .map(|inc: &crate::relationships::IncomingDeliveries| inc.len())
+                        .unwrap_or(0);
                     let anticipated = current + incoming;
                     // このフレームでのアセット済み数（多重割り当て防止）
                     let already_chosen = *chosen_cells.get(&cell).unwrap_or(&0);
-                    
+
                     let free = stock.capacity.saturating_sub(anticipated + already_chosen);
                     if free == 0 {
                         continue;

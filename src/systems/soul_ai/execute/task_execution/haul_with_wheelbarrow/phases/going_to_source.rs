@@ -1,12 +1,12 @@
 //! 積み込み元へ移動するフェーズ
 
+use super::super::cancel;
 use crate::systems::logistics::transport_request::WheelbarrowDestination;
 use crate::systems::soul_ai::execute::task_execution::{
     common::{is_near_target, update_destination_to_adjacent},
     context::TaskExecutionContext,
     types::{AssignedTask, HaulWithWheelbarrowData, HaulWithWheelbarrowPhase},
 };
-use super::super::cancel;
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
 
