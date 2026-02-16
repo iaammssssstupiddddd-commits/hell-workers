@@ -1,5 +1,6 @@
-use rand::Rng;
+use crate::systems::jobs::WorkType;
 use rand::seq::SliceRandom;
+use rand::Rng;
 
 /// Familiar が喋るラテン語のフレーズ
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -104,4 +105,23 @@ impl LatinPhrase {
 
     /// フレーズの種類数
     pub const COUNT: usize = 11;
+
+    /// WorkType に対応する LatinPhrase を返す
+    pub fn from_work_type(work_type: WorkType) -> Self {
+        match work_type {
+            WorkType::Chop => LatinPhrase::Caede,
+            WorkType::Mine => LatinPhrase::Fodere,
+            WorkType::Haul | WorkType::HaulToMixer | WorkType::WheelbarrowHaul => {
+                LatinPhrase::Portare
+            }
+            WorkType::Build
+            | WorkType::ReinforceFloorTile
+            | WorkType::PourFloorTile
+            | WorkType::CoatWall => LatinPhrase::Laborare,
+            WorkType::GatherWater => LatinPhrase::Haurire,
+            WorkType::CollectSand | WorkType::CollectBone => LatinPhrase::Colligere,
+            WorkType::Refine => LatinPhrase::Misce,
+            WorkType::HaulWaterToMixer => LatinPhrase::Haurire,
+        }
+    }
 }
