@@ -83,9 +83,9 @@ pub fn assign_task_to_worker(
         return false;
     }
 
-    if soul.fatigue >= ctx.fatigue_threshold {
+    if soul.fatigue > ctx.fatigue_threshold {
         debug!(
-            "ASSIGN: Worker {:?} is too fatigued ({:.2} >= {:.2})",
+            "ASSIGN: Worker {:?} is too fatigued ({:.2} > {:.2})",
             ctx.worker_entity, soul.fatigue, ctx.fatigue_threshold
         );
         return false;

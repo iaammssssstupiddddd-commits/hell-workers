@@ -91,9 +91,9 @@ pub fn scouting_logic(ctx: &mut FamiliarScoutingContext<'_, '_, '_>) -> bool {
             uc,
             participating,
         );
-        // リクルート閾値 = リリース閾値 - 0.2（余裕を持ってリクルート）
-        let recruit_threshold = ctx.fatigue_threshold - 0.2;
-        let fatigue_ok = soul.fatigue < recruit_threshold;
+        // リクルート閾値は委譲時と揃える（境界値も許容）
+        let recruit_threshold = ctx.fatigue_threshold;
+        let fatigue_ok = soul.fatigue <= recruit_threshold;
         let stress_ok = ctx.q_breakdown.get(ctx.target_soul).is_err();
 
         // 依然としてリクルート可能かチェック

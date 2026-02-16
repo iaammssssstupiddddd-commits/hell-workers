@@ -381,8 +381,8 @@ pub fn idle_behavior_decision_system(
             idle.behavior = IdleBehavior::Wandering;
         }
 
-        // 逃走中（Escaping）は escaping_decision_system に任せる
-        if idle.behavior == IdleBehavior::Escaping {
+        // 逃走中（Escaping/Drifting）は専用システムに任せる
+        if matches!(idle.behavior, IdleBehavior::Escaping | IdleBehavior::Drifting) {
             continue;
         }
 
@@ -554,6 +554,8 @@ pub fn idle_behavior_decision_system(
                     // 逃走中は短い間隔で再評価
                     2.0
                 }
+                IdleBehavior::Drifting => rng
+                    .gen_range(DRIFT_WANDER_DURATION_MIN..DRIFT_WANDER_DURATION_MAX),
             };
         }
 
@@ -806,6 +808,9 @@ pub fn idle_behavior_decision_system(
             IdleBehavior::Escaping => {
                 // 逃走中は escaping_decision_system で処理されるため、
                 // ここでは何もしない（continueされるはず）
+            }
+            IdleBehavior::Drifting => {
+                // 漂流中は drifting_behavior_system で処理される
             }
         }
     }

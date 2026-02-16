@@ -100,10 +100,8 @@ impl SquadManager {
             if let Ok((_entity, _transform, soul, _task, _dest, _path, idle, _inv, _cb, _pi)) =
                 q_souls.get(member_entity)
             {
-                // 疲労・崩壊チェック
-                let is_resting =
-                    matches!(idle.behavior, IdleBehavior::Gathering | IdleBehavior::Resting | IdleBehavior::GoingToRest);
-                if (!is_resting && soul.fatigue > fatigue_threshold)
+                // 疲労閾値を超えた部下は、休息中でもいったん解放して枠詰まりを防ぐ
+                if soul.fatigue > fatigue_threshold
                     || idle.behavior == IdleBehavior::ExhaustedGathering
                 {
                     debug!(

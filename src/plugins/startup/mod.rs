@@ -158,9 +158,9 @@ fn populate_resource_spatial_grid(
     );
 }
 
-fn spawn_entities(spawn_events: MessageWriter<DamnedSoulSpawnEvent>) {
+fn spawn_entities(spawn_events: MessageWriter<DamnedSoulSpawnEvent>, world_map: Res<WorldMap>) {
     let start = Instant::now();
-    spawn_damned_souls(spawn_events);
+    spawn_damned_souls(spawn_events, world_map);
     info!(
         "STARTUP_TIMING: spawn_entities finished in {} ms",
         start.elapsed().as_millis()

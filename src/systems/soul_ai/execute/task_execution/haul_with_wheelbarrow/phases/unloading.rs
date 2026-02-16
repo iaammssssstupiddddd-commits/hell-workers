@@ -194,6 +194,16 @@ pub fn handle(
                             Visibility::Visible,
                             Transform::from_xyz(soul_pos.x, soul_pos.y, Z_ITEM_PICKUP),
                         ));
+
+                        if matches!(
+                            Some(res_type),
+                            Some(crate::systems::logistics::ResourceType::Sand)
+                                | Some(crate::systems::logistics::ResourceType::StasisMud)
+                        ) {
+                            commands
+                                .entity(*item_entity)
+                                .insert(crate::systems::logistics::item_lifetime::ItemDespawnTimer::new(5.0));
+                        }
                     }
 
                     mixer_release_types.push(res_type);

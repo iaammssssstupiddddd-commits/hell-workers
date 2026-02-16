@@ -55,6 +55,11 @@ pub fn idle_visual_system(
                 let panic_pulse = (idle.total_idle_time * 8.0).sin() * 0.05 + 0.95;
                 transform.scale = Vec3::splat(panic_pulse);
             }
+            IdleBehavior::Drifting => {
+                transform.rotation = Quat::IDENTITY;
+                transform.scale = Vec3::ONE;
+                sprite.color = Color::srgba(0.9, 0.9, 1.0, 0.85);
+            }
             IdleBehavior::Gathering | IdleBehavior::ExhaustedGathering => {
                 let gathering_center = if let Some(p) = participating_in {
                     q_spots.get(p.0).ok().map(|s| s.center)
@@ -141,7 +146,11 @@ pub fn idle_visual_system(
         if soul.motivation > 0.5
             && !matches!(
                 idle.behavior,
-                IdleBehavior::Gathering | IdleBehavior::ExhaustedGathering | IdleBehavior::Resting | IdleBehavior::GoingToRest
+                IdleBehavior::Gathering
+                    | IdleBehavior::ExhaustedGathering
+                    | IdleBehavior::Resting
+                    | IdleBehavior::GoingToRest
+                    | IdleBehavior::Drifting
             )
             && matches!(task, AssignedTask::None)
         {

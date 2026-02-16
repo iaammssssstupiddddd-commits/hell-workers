@@ -159,6 +159,70 @@ fn assign_haul_to_floor_construction(
 
     // Floor construction requests deliver items onto the site material center.
     // Reuse Haul task path and let execution drop the item near the site anchor.
+    if resource_type == crate::systems::logistics::ResourceType::StasisMud {
+        let remaining_needed = compute_remaining_floor_mud(site_entity, queries);
+        if remaining_needed == 0 {
+            return false;
+        }
+
+        let max_items = remaining_needed.min(crate::constants::WHEELBARROW_CAPACITY as u32) as usize;
+        let mut item_sources = source_selector::collect_nearby_items_for_wheelbarrow(
+            resource_type,
+            site_pos,
+            max_items,
+            queries,
+            shadow,
+        );
+        if item_sources.is_empty() {
+            item_sources = source_selector::collect_items_for_wheelbarrow_unbounded(
+                resource_type,
+                site_pos,
+                max_items,
+                queries,
+                shadow,
+            );
+        }
+        if item_sources.is_empty() {
+            debug!(
+                "ASSIGN: Floor request {:?} has no available {:?} source",
+                ctx.task_entity, resource_type
+            );
+            return false;
+        }
+
+        let source_pos = item_sources
+            .iter()
+            .map(|(_, pos)| *pos)
+            .reduce(|a, b| a + b)
+            .unwrap()
+            / item_sources.len() as f32;
+
+        let Some(wheelbarrow) = wheelbarrow::find_nearest_wheelbarrow(source_pos, queries, shadow)
+        else {
+            debug!(
+                "ASSIGN: Floor request {:?} has no available wheelbarrow for {:?}",
+                ctx.task_entity, resource_type
+            );
+            return false;
+        };
+
+        let item_entities = item_sources.into_iter().map(|(entity, _)| entity).collect();
+        issue_haul_with_wheelbarrow(
+            wheelbarrow,
+            source_pos,
+            crate::systems::logistics::transport_request::WheelbarrowDestination::Stockpile(
+                site_entity,
+            ),
+            item_entities,
+            site_pos,
+            already_commanded,
+            ctx,
+            queries,
+            shadow,
+        );
+        return true;
+    }
+
     if let Some((source_item, source_pos)) = source_selector::find_nearest_blueprint_source_item(
         resource_type,
         site_pos,
@@ -243,6 +307,31 @@ fn assign_haul_to_provisional_wall(
         return false;
     };
 
+    if resource_type == crate::systems::logistics::ResourceType::StasisMud {
+        let Some(wheelbarrow) = wheelbarrow::find_nearest_wheelbarrow(source_pos, queries, shadow)
+        else {
+            debug!(
+                "ASSIGN: ProvisionalWall request {:?} has no available wheelbarrow for {:?}",
+                ctx.task_entity, resource_type
+            );
+            return false;
+        };
+        issue_haul_with_wheelbarrow(
+            wheelbarrow,
+            source_pos,
+            crate::systems::logistics::transport_request::WheelbarrowDestination::Stockpile(
+                wall_entity,
+            ),
+            vec![source_item],
+            wall_pos,
+            already_commanded,
+            ctx,
+            queries,
+            shadow,
+        );
+        return true;
+    }
+
     issue_haul_to_stockpile_with_source(
         source_item,
         wall_entity,
@@ -326,6 +415,33 @@ fn compute_remaining_floor_bones(
     {
         if tile.state == crate::systems::jobs::floor_construction::FloorTileState::WaitingBones {
             needed += crate::constants::FLOOR_BONES_PER_TILE.saturating_sub(tile.bones_delivered);
+        }
+    }
+
+    let incoming = queries
+        .reservation
+        .incoming_deliveries_query
+        .get(site_entity)
+        .map(|inc| inc.len() as u32)
+        .unwrap_or(0);
+
+    needed.saturating_sub(incoming)
+}
+
+fn compute_remaining_floor_mud(
+    site_entity: Entity,
+    queries: &crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
+) -> u32 {
+    let mut needed = 0u32;
+
+    for tile in queries
+        .storage
+        .floor_tiles
+        .iter()
+        .filter(|tile| tile.parent_site == site_entity)
+    {
+        if tile.state == crate::systems::jobs::floor_construction::FloorTileState::WaitingMud {
+            needed += crate::constants::FLOOR_MUD_PER_TILE.saturating_sub(tile.mud_delivered);
         }
     }
 

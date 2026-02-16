@@ -34,6 +34,7 @@ pub fn spawn_loaded_sand_items(
                 ),
                 crate::relationships::LoadedIn(wheelbarrow),
                 Name::new("Item (Sand, WheelbarrowCollect)"),
+                crate::systems::logistics::item_lifetime::ItemDespawnTimer::new(5.0),
             ))
             .id();
         spawned.push(entity);

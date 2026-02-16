@@ -157,6 +157,34 @@ pub enum IdleBehavior {
     Resting,            // 休憩所で休息中
     GoingToRest,        // 休憩所へ移動中
     Escaping,           // 使い魔から逃走中
+    Drifting,           // 未管理のまま漂流中（自然脱走）
+}
+
+/// 漂流状態の現在フェーズ
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Reflect, Default)]
+pub enum DriftPhase {
+    #[default]
+    Wandering,
+    Moving,
+}
+
+/// 漂流の最終目標となるマップ端
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Reflect)]
+pub enum DriftEdge {
+    North,
+    South,
+    East,
+    West,
+}
+
+/// 漂流（自然脱走）中の実行状態
+#[derive(Component, Debug, Clone, Copy, Reflect)]
+#[reflect(Component)]
+pub struct DriftingState {
+    pub target_edge: DriftEdge,
+    pub phase: DriftPhase,
+    pub phase_timer: f32,
+    pub phase_duration: f32,
 }
 
 /// 集会中のサブ行動
@@ -230,12 +258,19 @@ impl Plugin for DamnedSoulPlugin {
             .register_type::<IdleState>()
             .register_type::<StressBreakdown>()
             .register_type::<RestAreaCooldown>()
+            .register_type::<DriftingState>()
             .register_type::<DreamState>()
             .register_type::<DreamPool>()
             .init_resource::<DreamPool>()
+            .init_resource::<spawn::PopulationManager>()
             .add_systems(
                 Update,
                 (
+                    spawn::population_tracking_system.in_set(GameSystemSet::Logic),
+                    spawn::periodic_spawn_system
+                        .in_set(GameSystemSet::Logic)
+                        .after(spawn::population_tracking_system)
+                        .before(spawn::soul_spawning_system),
                     spawn::soul_spawning_system.in_set(GameSystemSet::Logic),
                     movement::soul_stuck_escape_system
                         .in_set(GameSystemSet::Actor)

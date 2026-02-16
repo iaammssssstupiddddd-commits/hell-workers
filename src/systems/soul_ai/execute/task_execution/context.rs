@@ -215,6 +215,12 @@ pub struct TaskAssignmentQueries<'w, 's> {
         's,
         &'static crate::systems::logistics::transport_request::TransportRequestFixedSource,
     >,
+    pub familiar_task_areas: Query<
+        'w,
+        's,
+        &'static crate::systems::command::TaskArea,
+        With<crate::entities::familiar::Familiar>,
+    >,
     pub free_resource_items: Query<
         'w,
         's,

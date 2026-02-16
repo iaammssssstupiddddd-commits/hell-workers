@@ -85,9 +85,12 @@ Bevy 0.18 の **ECS Relationships** 機能を使用し、エンティティ間�
     - **木 (Tree)**: `Wood` x 5 をドロップ。
     - **岩 (Rock)**: `Rock` x 10 をドロップ。**作業時間は木の約2倍**かかる重労働です。
     - **スタック**: 報酬は同一タイル内にドロップされ、アイテム個数としてまとめてカウント（スタック）されます。
-- **砂採取 (CollectSand)** / **骨採取 (CollectBone)**:
+    - **砂採取 (CollectSand)** / **骨採取 (CollectBone)**:
     - `SandPile`/`BonePile`、および砂/川（`TerrainType::Sand`/`River`）タイルは**無限ソース**として扱われます。
     - 採取は**即時完了**（待機プログレスなし）で、到達フレームでアイテムを生成して `Done` へ遷移します。
+    - **注意**: 生成された `Sand` は地面に放置されると **5秒で消滅** します（運搬タスク等で予約/積載されれば維持されます）。
+- **精製 (Refine)**: MudMixer で `StasisMud` を生成します。
+    - 生成された `StasisMud` は地面に放置されると **5秒で消滅** します。
 - **運搬 (Haul)**: 「拾う」「備蓄場所へ運ぶ」「置く」のフェーズを経る。
 - **壁塗布 (CoatWall)**: 仮設壁に泥が届くと実行可能。壁へ移動し、塗布完了で `Building.is_provisional = false` に更新される。
 - **猫車必須資源**: `Sand` / `StasisMud` は原則徒歩運搬不可。`HaulWithWheelbarrow` で搬送される。
