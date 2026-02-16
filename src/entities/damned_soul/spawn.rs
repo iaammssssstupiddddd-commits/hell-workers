@@ -3,10 +3,10 @@
 use super::*;
 use crate::assets::GameAssets;
 use crate::constants::*;
+use crate::entities::{spawn_args, spawn_position};
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
 use crate::world::map::{RIVER_X_MAX, RIVER_X_MIN, RIVER_Y_MIN, WorldMap};
 use rand::Rng;
-use std::env;
 
 /// Soul の人口管理状態
 #[derive(Resource)]
@@ -42,26 +42,12 @@ impl PopulationManager {
     }
 }
 
-fn parse_spawn_souls_from_args() -> Option<u32> {
-    let mut args = env::args().skip(1);
-    while let Some(arg) = args.next() {
-        if arg == "--spawn-souls" {
-            let value = args.next()?;
-            if let Ok(parsed) = value.parse::<u32>() {
-                return Some(parsed);
-            }
-        }
-    }
-    None
-}
-
 fn initial_spawn_count() -> u32 {
-    parse_spawn_souls_from_args().unwrap_or_else(|| {
-        env::var("HW_SPAWN_SOULS")
-            .ok()
-            .and_then(|v| v.parse::<u32>().ok())
-            .unwrap_or(SOUL_SPAWN_INITIAL)
-    })
+    spawn_args::parse_spawn_count_from_args_or_env(
+        "--spawn-souls",
+        "HW_SPAWN_SOULS",
+        SOUL_SPAWN_INITIAL,
+    )
 }
 
 fn pick_river_south_bank_spawn(world_map: &WorldMap, rng: &mut impl Rng) -> Option<Vec2> {
@@ -204,16 +190,7 @@ pub fn spawn_damned_soul_at(
     pos: Vec2,
 ) {
     let spawn_grid = WorldMap::world_to_grid(pos);
-    let mut actual_grid = spawn_grid;
-    'search: for dx in -5..=5 {
-        for dy in -5..=5 {
-            let test = (spawn_grid.0 + dx, spawn_grid.1 + dy);
-            if world_map.is_walkable(test.0, test.1) {
-                actual_grid = test;
-                break 'search;
-            }
-        }
-    }
+    let actual_grid = spawn_position::find_nearby_walkable_grid(spawn_grid, world_map, 5);
     let actual_pos = WorldMap::grid_to_world(actual_grid.0, actual_grid.1);
 
     let identity = SoulIdentity::random();
