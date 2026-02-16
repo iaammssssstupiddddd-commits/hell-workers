@@ -169,7 +169,7 @@ pub const REST_AREA_FATIGUE_RECOVERY_RATE: f32 = 0.08;
 /// 休憩所でのストレス回復レート（毎秒）
 pub const REST_AREA_STRESS_RECOVERY_RATE: f32 = 0.03;
 /// 休憩所での滞在時間（秒）
-pub const REST_AREA_RESTING_DURATION: f32 = 15.0;
+pub const REST_AREA_RESTING_DURATION: f32 = 180.0;
 
 // ============================================================
 // AI ロジック定数 - 逃走システム (Escape System)
