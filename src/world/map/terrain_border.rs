@@ -16,19 +16,19 @@ pub struct TerrainBorder;
 
 /// 4方向の隣接オフセット (dx, dy) と回転角度
 const EDGE_DIRS: [(i32, i32, f32); 4] = [
-    (0, 1, 0.0),          // 北: 0°
-    (1, 0, -PI / 2.0),    // 東: -90° (270°)
-    (0, -1, PI),          // 南: 180°
-    (-1, 0, PI / 2.0),    // 西: 90°
+    (0, 1, 0.0),       // 北: 0°
+    (1, 0, -PI / 2.0), // 東: -90° (270°)
+    (0, -1, PI),       // 南: 180°
+    (-1, 0, PI / 2.0), // 西: 90°
 ];
 
 /// 4角の隣接オフセット (dx, dy) と回転角度、
 /// および隣接する2辺のインデックス (EDGE_DIRS のインデックス)
 const CORNER_DIRS: [(i32, i32, f32, usize, usize); 4] = [
-    (1, 1, 0.0, 0, 1),          // 北東: 0°, 北辺(0)と東辺(1)
-    (1, -1, -PI / 2.0, 2, 1),   // 南東: -90°, 南辺(2)と東辺(1)
-    (-1, -1, PI, 2, 3),         // 南西: 180°, 南辺(2)と西辺(3)
-    (-1, 1, PI / 2.0, 0, 3),    // 北西: 90°, 北辺(0)と西辺(3)
+    (1, 1, 0.0, 0, 1),        // 北東: 0°, 北辺(0)と東辺(1)
+    (1, -1, -PI / 2.0, 2, 1), // 南東: -90°, 南辺(2)と東辺(1)
+    (-1, -1, PI, 2, 3),       // 南西: 180°, 南辺(2)と西辺(3)
+    (-1, 1, PI / 2.0, 0, 3),  // 北西: 90°, 北辺(0)と西辺(3)
 ];
 
 pub fn spawn_terrain_borders(
@@ -112,19 +112,15 @@ pub fn spawn_terrain_borders(
                     && edge_neighbor_priority[edge_b] > current_priority
                 {
                     // 2辺のうち高い方の地形テクスチャを使用
-                    let dominant_priority = edge_neighbor_priority[edge_a]
-                        .max(edge_neighbor_priority[edge_b]);
+                    let dominant_priority =
+                        edge_neighbor_priority[edge_a].max(edge_neighbor_priority[edge_b]);
                     let dominant_terrain = if edge_neighbor_priority[edge_a] == dominant_priority {
-                        let na = world_map.pos_to_idx(
-                            x + EDGE_DIRS[edge_a].0,
-                            y + EDGE_DIRS[edge_a].1,
-                        );
+                        let na =
+                            world_map.pos_to_idx(x + EDGE_DIRS[edge_a].0, y + EDGE_DIRS[edge_a].1);
                         na.map(|i| world_map.tiles[i])
                     } else {
-                        let nb = world_map.pos_to_idx(
-                            x + EDGE_DIRS[edge_b].0,
-                            y + EDGE_DIRS[edge_b].1,
-                        );
+                        let nb =
+                            world_map.pos_to_idx(x + EDGE_DIRS[edge_b].0, y + EDGE_DIRS[edge_b].1);
                         nb.map(|i| world_map.tiles[i])
                     };
                     if let Some(terrain) = dominant_terrain {
@@ -155,7 +151,11 @@ pub fn spawn_terrain_borders(
 fn border_textures(
     terrain: &TerrainType,
     assets: &GameAssets,
-) -> (Option<Handle<Image>>, Option<Handle<Image>>, Option<Handle<Image>>) {
+) -> (
+    Option<Handle<Image>>,
+    Option<Handle<Image>>,
+    Option<Handle<Image>>,
+) {
     match terrain {
         TerrainType::Grass => (
             Some(assets.grass_edge.clone()),

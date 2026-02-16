@@ -2,11 +2,11 @@ use crate::constants::TILE_SIZE;
 use crate::entities::damned_soul::{DamnedSoul, Destination, IdleState, Path, StressBreakdown};
 use crate::events::SquadManagementRequest;
 use crate::relationships::CommandedBy;
+use crate::relationships::ParticipatingIn;
 // use crate::events::OnSoulRecruited;
 use crate::systems::familiar_ai::FamiliarAiState;
 use crate::systems::familiar_ai::FamiliarSoulQuery;
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
-use crate::relationships::ParticipatingIn;
 use bevy::prelude::*;
 
 /// スカウト状態の判定/適用に必要なコンテキスト
@@ -155,7 +155,7 @@ pub fn scouting_logic(ctx: &mut FamiliarScoutingContext<'_, '_, '_>) -> bool {
 
                 return true;
             } else {
-                // まだ距離があるなら接近を継続 (ガードを 0.5 タイルに緩和して反応性を向上)
+                // まだ距離があるなら接近を継続
                 let is_path_finished = ctx.fam_path.current_index >= ctx.fam_path.waypoints.len();
                 let dest_lag_sq = ctx.fam_dest.0.distance_squared(target_pos);
                 let dist = dist_sq.sqrt();

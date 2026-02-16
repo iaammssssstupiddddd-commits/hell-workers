@@ -100,7 +100,10 @@ fn spawn_initial_wheelbarrow_parking(
         (base.0 + 1, base.1 + 1),
     ];
 
-    if occupied.iter().any(|(gx, gy)| !world_map.is_walkable(*gx, *gy)) {
+    if occupied
+        .iter()
+        .any(|(gx, gy)| !world_map.is_walkable(*gx, *gy))
+    {
         warn!(
             "INITIAL_SPAWN: skipped initial wheelbarrow parking at {:?} (not walkable)",
             base

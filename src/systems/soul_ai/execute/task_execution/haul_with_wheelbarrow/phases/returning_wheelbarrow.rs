@@ -1,12 +1,12 @@
 //! 手押し車を駐車エリアに返却するフェーズ
 
 use crate::systems::logistics::Wheelbarrow;
+use crate::systems::soul_ai::execute::task_execution::types::HaulWithWheelbarrowData;
 use crate::systems::soul_ai::execute::task_execution::{
     common::{is_near_target, update_destination_to_adjacent},
     context::TaskExecutionContext,
     transport_common::{reservation, wheelbarrow as wheelbarrow_common},
 };
-use crate::systems::soul_ai::execute::task_execution::types::HaulWithWheelbarrowData;
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
 
@@ -15,13 +15,18 @@ pub fn handle(
     data: HaulWithWheelbarrowData,
     commands: &mut Commands,
     world_map: &Res<WorldMap>,
-    q_wheelbarrows: &Query<(&Transform, Option<&crate::relationships::ParkedAt>), With<Wheelbarrow>>,
+    q_wheelbarrows: &Query<
+        (&Transform, Option<&crate::relationships::ParkedAt>),
+        With<Wheelbarrow>,
+    >,
     soul_pos: Vec2,
 ) {
     let Ok(_) = q_wheelbarrows.get(data.wheelbarrow) else {
         reservation::release_source(ctx, data.wheelbarrow, 1);
         ctx.inventory.0 = None;
-        commands.entity(ctx.soul_entity).remove::<crate::relationships::WorkingOn>();
+        commands
+            .entity(ctx.soul_entity)
+            .remove::<crate::relationships::WorkingOn>();
         crate::systems::soul_ai::execute::task_execution::common::clear_task_and_path(
             ctx.task, ctx.path,
         );

@@ -5,7 +5,7 @@ use crate::constants::*;
 use bevy::prelude::*;
 use std::collections::HashSet;
 
-use super::layout::{RIVER_X_MIN, RIVER_X_MAX, RIVER_Y_MIN, RIVER_Y_MAX, SAND_WIDTH};
+use super::layout::{RIVER_X_MAX, RIVER_X_MIN, RIVER_Y_MAX, RIVER_Y_MIN, SAND_WIDTH};
 use super::{TerrainType, Tile, WorldMap};
 
 /// 固定配置の川タイルを生成

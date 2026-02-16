@@ -1,7 +1,7 @@
 //! Floor tile reinforcement task execution
 
-use crate::relationships::WorkingOn;
 use crate::constants::{FLOOR_BONES_PER_TILE, FLOOR_REINFORCE_DURATION_SECS};
+use crate::relationships::WorkingOn;
 use crate::systems::jobs::floor_construction::FloorTileState;
 use crate::systems::soul_ai::execute::task_execution::{
     common::*,
@@ -25,11 +25,7 @@ pub fn handle_reinforce_floor_task(
     match phase {
         ReinforceFloorPhase::GoingToMaterialCenter => {
             // Get site material center position
-            let Ok((site_transform, _site, _)) = ctx
-                .queries
-                .storage
-                .floor_sites
-                .get(site_entity)
+            let Ok((site_transform, _site, _)) = ctx.queries.storage.floor_sites.get(site_entity)
             else {
                 // Site disappeared
                 info!(
@@ -109,7 +105,8 @@ pub fn handle_reinforce_floor_task(
                 return;
             };
 
-            let tile_pos = WorldMap::grid_to_world(tile_blueprint.grid_pos.0, tile_blueprint.grid_pos.1);
+            let tile_pos =
+                WorldMap::grid_to_world(tile_blueprint.grid_pos.0, tile_blueprint.grid_pos.1);
 
             // Navigate to tile
             update_destination_to_adjacent(

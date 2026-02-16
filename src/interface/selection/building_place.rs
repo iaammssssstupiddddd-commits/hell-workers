@@ -190,7 +190,9 @@ fn place_building_blueprint(
 
     let texture = match building_type {
         BuildingType::Wall => game_assets.wall_isolated.clone(),
-        BuildingType::Floor => unreachable!("Floor should be placed via Drag-and-drop area selection"),
+        BuildingType::Floor => {
+            unreachable!("Floor should be placed via Drag-and-drop area selection")
+        }
         BuildingType::Tank => game_assets.tank_empty.clone(),
         BuildingType::MudMixer => game_assets.mud_mixer.clone(),
         BuildingType::SandPile => game_assets.sand_pile.clone(),

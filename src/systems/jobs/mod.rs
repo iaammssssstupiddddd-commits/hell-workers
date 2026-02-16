@@ -154,18 +154,18 @@ impl Blueprint {
 pub enum WorkType {
     #[default]
     Chop, // 伐採
-    Mine,             // 採掘
-    Build,            // 建築
-    Haul,             // 運搬（Stockpile行き）
-    HaulToMixer,      // 固体原料（Sand/Rock）をミキサーへ運ぶ
-    GatherWater,      // 水汲み
-    CollectSand,      // 砂採取
-    CollectBone,      // 骨採取
-    Refine,           // 精製
-    HaulWaterToMixer, // Tankから水をミキサーへ運ぶ
-    WheelbarrowHaul,  // 手押し車で一括運搬
+    Mine,               // 採掘
+    Build,              // 建築
+    Haul,               // 運搬（Stockpile行き）
+    HaulToMixer,        // 固体原料（Sand/Rock）をミキサーへ運ぶ
+    GatherWater,        // 水汲み
+    CollectSand,        // 砂採取
+    CollectBone,        // 骨採取
+    Refine,             // 精製
+    HaulWaterToMixer,   // Tankから水をミキサーへ運ぶ
+    WheelbarrowHaul,    // 手押し車で一括運搬
     ReinforceFloorTile, // 床タイルの骨補強
-    PourFloorTile,    // 床タイルへの泥注入
+    PourFloorTile,      // 床タイルへの泥注入
 }
 
 #[derive(Component)]

@@ -29,6 +29,7 @@ pub fn get_drag_start(mode: TaskMode) -> Option<Vec2> {
         TaskMode::ZonePlacement(_, s) => s,
         TaskMode::ZoneRemoval(_, s) => s,
         TaskMode::FloorPlace(s) => s,
+        TaskMode::WallPlace(s) => s,
         _ => None,
     }
 }
@@ -38,9 +39,31 @@ pub fn get_indicator_color(mode: TaskMode) -> LinearRgba {
         TaskMode::AreaSelection(_) => LinearRgba::from(Color::srgba(1.0, 1.0, 1.0, 0.4)),
         TaskMode::CancelDesignation(_) => LinearRgba::from(Color::srgba(1.0, 0.2, 0.2, 0.5)),
         TaskMode::ZonePlacement(_, _) => LinearRgba::from(Color::srgba(1.0, 1.0, 1.0, 0.4)), // TaskAreaと同様に白/透明
-        TaskMode::ZoneRemoval(_, _) => LinearRgba::from(Color::srgba(1.0, 0.2, 0.2, 0.5)),   // 削除は赤
+        TaskMode::ZoneRemoval(_, _) => LinearRgba::from(Color::srgba(1.0, 0.2, 0.2, 0.5)), // 削除は赤
         TaskMode::FloorPlace(_) => LinearRgba::from(Color::srgba(1.0, 1.0, 1.0, 0.4)),
+        TaskMode::WallPlace(_) => LinearRgba::from(Color::srgba(1.0, 1.0, 1.0, 0.4)),
         _ => LinearRgba::from(Color::srgba(0.2, 1.0, 0.2, 0.5)),
+    }
+}
+
+pub fn wall_line_area(start_pos: Vec2, end_pos: Vec2) -> TaskArea {
+    let delta = end_pos - start_pos;
+    if delta.length_squared() <= f32::EPSILON {
+        return TaskArea::from_points(start_pos, start_pos + Vec2::splat(TILE_SIZE));
+    }
+
+    if delta.x.abs() >= delta.y.abs() {
+        let y_dir = if delta.y < 0.0 { -1.0 } else { 1.0 };
+        TaskArea::from_points(
+            start_pos,
+            Vec2::new(end_pos.x, start_pos.y + TILE_SIZE * y_dir),
+        )
+    } else {
+        let x_dir = if delta.x < 0.0 { -1.0 } else { 1.0 };
+        TaskArea::from_points(
+            start_pos,
+            Vec2::new(start_pos.x + TILE_SIZE * x_dir, end_pos.y),
+        )
     }
 }
 
@@ -217,10 +240,10 @@ pub fn overlap_summary_from_areas(
             continue;
         }
 
-        let overlap_w = (selected_area.max.x.min(area.max.x) - selected_area.min.x.max(area.min.x))
-            .max(0.0);
-        let overlap_h = (selected_area.max.y.min(area.max.y) - selected_area.min.y.max(area.min.y))
-            .max(0.0);
+        let overlap_w =
+            (selected_area.max.x.min(area.max.x) - selected_area.min.x.max(area.min.x)).max(0.0);
+        let overlap_h =
+            (selected_area.max.y.min(area.max.y) - selected_area.min.y.max(area.min.y)).max(0.0);
         let overlap_area = overlap_w * overlap_h;
         if overlap_area <= f32::EPSILON {
             continue;

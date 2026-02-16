@@ -5,9 +5,7 @@
 use crate::constants::Z_ITEM_PICKUP;
 use crate::relationships::{ParkedAt, PushedBy};
 use crate::systems::soul_ai::execute::task_execution::{
-    common::clear_task_and_path,
-    context::TaskExecutionContext,
-    types::HaulWithWheelbarrowData,
+    common::clear_task_and_path, context::TaskExecutionContext, types::HaulWithWheelbarrowData,
 };
 use crate::systems::visual::haul::WheelbarrowMovement;
 use bevy::prelude::*;
@@ -76,6 +74,8 @@ pub fn complete_wheelbarrow_task(
 
     park_wheelbarrow_entity(commands, data.wheelbarrow, parking_anchor, pos);
     ctx.inventory.0 = None;
-    commands.entity(ctx.soul_entity).remove::<crate::relationships::WorkingOn>();
+    commands
+        .entity(ctx.soul_entity)
+        .remove::<crate::relationships::WorkingOn>();
     clear_task_and_path(ctx.task, ctx.path);
 }

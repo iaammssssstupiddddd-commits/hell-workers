@@ -54,7 +54,12 @@ pub fn resolve_haul_to_stockpile_inputs(
     }
 
     let resource_type = req.resource_type;
-    let item_owner = queries.designation.belongs.get(req.anchor).ok().map(|b| b.0);
+    let item_owner = queries
+        .designation
+        .belongs
+        .get(req.anchor)
+        .ok()
+        .map(|b| b.0);
     let fixed_source = queries
         .transport_request_fixed_sources
         .get(task_entity)
@@ -65,10 +70,15 @@ pub fn resolve_haul_to_stockpile_inputs(
     let stockpile = if req.stockpile_group.is_empty() {
         let (_, _, stock, stored_opt) = queries.storage.stockpiles.get(req.anchor).ok()?;
         let stored = stored_items_opt_to_count(stored_opt);
-        
+
         // インフライト（リレーションによる既知の搬入予定）+ 影（当フレーム内での新規予約）
-        let incoming = queries.reservation.incoming_deliveries_query.get(req.anchor).ok()
-            .map(|inc: &crate::relationships::IncomingDeliveries| inc.len()).unwrap_or(0);
+        let incoming = queries
+            .reservation
+            .incoming_deliveries_query
+            .get(req.anchor)
+            .ok()
+            .map(|inc: &crate::relationships::IncomingDeliveries| inc.len())
+            .unwrap_or(0);
         let effective_free = stock.capacity.saturating_sub(stored + incoming);
 
         let has_capacity = effective_free > 0;
@@ -84,9 +94,14 @@ pub fn resolve_haul_to_stockpile_inputs(
             .filter_map(|&cell| {
                 let (_, _, stock, stored_opt) = queries.storage.stockpiles.get(cell).ok()?;
                 let stored = stored_items_opt_to_count(stored_opt);
-                
-                let incoming = queries.reservation.incoming_deliveries_query.get(cell).ok()
-                .map(|inc: &crate::relationships::IncomingDeliveries| inc.len()).unwrap_or(0);
+
+                let incoming = queries
+                    .reservation
+                    .incoming_deliveries_query
+                    .get(cell)
+                    .ok()
+                    .map(|inc: &crate::relationships::IncomingDeliveries| inc.len())
+                    .unwrap_or(0);
                 let effective_free = stock.capacity.saturating_sub(stored + incoming);
 
                 let type_ok =
@@ -123,8 +138,7 @@ pub fn resolve_gather_water_inputs(
     }
 
     let tank_entity = req.anchor;
-    let Ok((_, _, tank_stock, stored_opt)) = queries.storage.stockpiles.get(tank_entity)
-    else {
+    let Ok((_, _, tank_stock, stored_opt)) = queries.storage.stockpiles.get(tank_entity) else {
         return None;
     };
     if tank_stock.resource_type != Some(ResourceType::Water) {
@@ -141,8 +155,7 @@ pub fn resolve_gather_water_inputs(
         return None;
     }
 
-    let (bucket_entity, _) =
-        find_nearest_bucket_for_tank(tank_entity, task_pos, queries, shadow)?;
+    let (bucket_entity, _) = find_nearest_bucket_for_tank(tank_entity, task_pos, queries, shadow)?;
     Some((bucket_entity, tank_entity))
 }
 

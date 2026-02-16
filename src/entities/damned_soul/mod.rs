@@ -49,7 +49,7 @@ impl SoulIdentity {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Reflect, Default)]
 pub enum DreamQuality {
     #[default]
-    Awake,       // 起きている
+    Awake, // 起きている
     NightTerror, // 悪夢（高ストレス時）
     NormalDream, // 普通の夢
     VividDream,  // 鮮明な夢（低ストレス＋集会中）

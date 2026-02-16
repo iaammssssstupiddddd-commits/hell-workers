@@ -3,8 +3,8 @@ use crate::events::ResourceReservationOp;
 use crate::events::ResourceReservationRequest;
 use crate::relationships::TaskWorkers;
 use crate::systems::jobs::{Designation, WorkType};
-use crate::systems::logistics::transport_request::{TransportRequest, TransportRequestKind};
 use crate::systems::logistics::ResourceType;
+use crate::systems::logistics::transport_request::{TransportRequest, TransportRequestKind};
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
 use crate::systems::soul_ai::execute::task_execution::transport_common::lifecycle;
 use bevy::prelude::*;
@@ -232,11 +232,7 @@ pub fn sync_reservations_system(
 
     for task in q_souls.iter() {
         for op in lifecycle::collect_active_reservation_ops(task, |_, fallback| fallback) {
-            apply_active_reservation_op(
-                &mut mixer_dest_res,
-                &mut source_res,
-                op,
-            );
+            apply_active_reservation_op(&mut mixer_dest_res, &mut source_res, op);
         }
     }
 

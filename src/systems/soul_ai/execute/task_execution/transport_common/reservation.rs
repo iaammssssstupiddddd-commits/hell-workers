@@ -14,10 +14,7 @@ pub fn release_destination(_ctx: &mut TaskExecutionContext, _target: Entity) {
 
 /// ソース（アイテム）の予約を解放
 pub fn release_source(ctx: &mut TaskExecutionContext, source: Entity, amount: usize) {
-    ctx.queue_reservation(crate::events::ResourceReservationOp::ReleaseSource {
-        source,
-        amount,
-    });
+    ctx.queue_reservation(crate::events::ResourceReservationOp::ReleaseSource { source, amount });
 }
 
 /// ミキサー目的地の予約を解放
@@ -26,10 +23,12 @@ pub fn release_mixer_destination(
     target: Entity,
     resource_type: ResourceType,
 ) {
-    ctx.queue_reservation(crate::events::ResourceReservationOp::ReleaseMixerDestination {
-        target,
-        resource_type,
-    });
+    ctx.queue_reservation(
+        crate::events::ResourceReservationOp::ReleaseMixerDestination {
+            target,
+            resource_type,
+        },
+    );
 }
 
 /// ソース取得を記録（Delta Update用）

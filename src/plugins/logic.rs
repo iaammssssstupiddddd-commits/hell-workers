@@ -13,8 +13,8 @@ use crate::systems::jobs::floor_construction::{
     floor_construction_cancellation_system, floor_construction_completion_system,
     floor_construction_phase_transition_system,
 };
-use crate::systems::obstacle::obstacle_cleanup_system;
 use crate::systems::logistics::transport_request::TransportRequestPlugin;
+use crate::systems::obstacle::obstacle_cleanup_system;
 use crate::systems::soul_ai::SoulAiPlugin;
 use crate::world::regrowth::{RegrowthManager, tree_regrowth_system};
 use bevy::prelude::*;

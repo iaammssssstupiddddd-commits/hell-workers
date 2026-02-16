@@ -40,12 +40,12 @@ pub struct GameAssets {
 
     // Base Resources
     pub wood: Handle<Image>,
-    pub tree: Handle<Image>,        // Legacy support (tree_1)
-    pub trees: Vec<Handle<Image>>,  // Multiple tree variants
+    pub tree: Handle<Image>,             // Legacy support (tree_1)
+    pub trees: Vec<Handle<Image>>,       // Multiple tree variants
     pub tree_animes: Vec<Handle<Image>>, // Chopped tree variants
-    pub rock: Handle<Image>,        // 岩のスプライト
-    pub aura_circle: Handle<Image>, // 円形オーラテクスチャ
-    pub aura_ring: Handle<Image>,   // 強調用リングテクスチャ
+    pub rock: Handle<Image>,             // 岩のスプライト
+    pub aura_circle: Handle<Image>,      // 円形オーラテクスチャ
+    pub aura_ring: Handle<Image>,        // 強調用リングテクスチャ
     // Water related
     pub tank_empty: Handle<Image>,
     pub tank_partial: Handle<Image>,

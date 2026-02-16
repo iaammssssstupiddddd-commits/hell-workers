@@ -2,7 +2,6 @@
 //!
 //! 利用可能な手押し車を検知し、`BatchWheelbarrow` リクエストを発行します。
 
-use bevy::prelude::*;
 use crate::entities::familiar::{ActiveCommand, FamiliarCommand};
 use crate::relationships::{ParkedAt, PushedBy, TaskWorkers};
 use crate::systems::command::TaskArea;
@@ -12,6 +11,7 @@ use crate::systems::logistics::transport_request::{
     TransportRequestState,
 };
 use crate::systems::logistics::{ResourceType, Wheelbarrow};
+use bevy::prelude::*;
 
 const RETURN_REQUEST_PRIORITY: u32 = 0;
 const RETURN_DISTANCE_THRESHOLD_SQ: f32 =

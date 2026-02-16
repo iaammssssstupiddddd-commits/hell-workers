@@ -86,11 +86,7 @@ pub(super) fn handle_pressed_action(
             task_context,
         ),
         MenuAction::SelectTaskMode(mode) => {
-            ensure_familiar_selected(
-                selected_entity,
-                q_familiars_for_area,
-                "Task designation",
-            );
+            ensure_familiar_selected(selected_entity, q_familiars_for_area, "Task designation");
             super::mode::set_task_mode(
                 mode,
                 next_play_mode,
@@ -100,11 +96,7 @@ pub(super) fn handle_pressed_action(
             );
         }
         MenuAction::SelectAreaTask => {
-            ensure_familiar_selected(
-                selected_entity,
-                q_familiars_for_area,
-                "Area Edit",
-            );
+            ensure_familiar_selected(selected_entity, q_familiars_for_area, "Area Edit");
 
             super::mode::set_area_task_mode(
                 next_play_mode,

@@ -1,9 +1,11 @@
 //! タスクリストのスナップショット生成
 
 use crate::relationships::TaskWorkers;
-use crate::systems::jobs::{Blueprint, BonePile, Designation, Priority, Rock, SandPile, Tree, WorkType};
-use crate::systems::logistics::transport_request::TransportRequest;
+use crate::systems::jobs::{
+    Blueprint, BonePile, Designation, Priority, Rock, SandPile, Tree, WorkType,
+};
 use crate::systems::logistics::ResourceItem;
+use crate::systems::logistics::transport_request::TransportRequest;
 use bevy::prelude::*;
 use std::collections::BTreeMap;
 
@@ -77,7 +79,11 @@ pub fn build_task_list_snapshot(
             priority: priority.map_or(0, |p| p.0),
             worker_count: workers.map_or(0, |w| w.iter().count()),
         };
-        groups.entry(key).or_insert_with(|| (wt, Vec::new())).1.push(entry);
+        groups
+            .entry(key)
+            .or_insert_with(|| (wt, Vec::new()))
+            .1
+            .push(entry);
     }
 
     groups.into_values().collect()

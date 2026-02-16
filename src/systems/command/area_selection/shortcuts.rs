@@ -118,7 +118,12 @@ pub fn task_area_edit_history_shortcuts_system(
         };
 
         let before = q_task_areas.get(selected).ok().cloned();
-        apply_task_area_to_familiar(selected, Some(&copied_area), &mut commands, &mut q_familiars);
+        apply_task_area_to_familiar(
+            selected,
+            Some(&copied_area),
+            &mut commands,
+            &mut q_familiars,
+        );
         area_edit_history.push(selected, before, Some(copied_area));
         info!("AREA_EDIT: Pasted TaskArea to Familiar {:?}", selected);
         return;

@@ -1,5 +1,6 @@
 //! 荷下ろしフェーズ
 
+use super::super::cancel;
 use crate::constants::Z_ITEM_PICKUP;
 use crate::relationships::{LoadedIn, StoredIn};
 use crate::systems::logistics::transport_request::{
@@ -11,14 +12,11 @@ use crate::systems::soul_ai::execute::task_execution::{
     transport_common::{reservation, wheelbarrow as wheelbarrow_common},
     types::HaulWithWheelbarrowData,
 };
-use super::super::cancel;
 use bevy::prelude::*;
 
 fn has_pending_wheelbarrow_task(ctx: &TaskExecutionContext) -> bool {
-    ctx.queries
-        .transport_request_status
-        .iter()
-        .any(|(request, demand, state, lease_opt, workers_opt)| {
+    ctx.queries.transport_request_status.iter().any(
+        |(request, demand, state, lease_opt, workers_opt)| {
             let worker_count = workers_opt.map(|workers| workers.len()).unwrap_or(0);
             if *state != TransportRequestState::Pending
                 || demand.remaining() == 0
@@ -36,7 +34,8 @@ fn has_pending_wheelbarrow_task(ctx: &TaskExecutionContext) -> bool {
                 }
                 _ => false,
             }
-        })
+        },
+    )
 }
 
 pub fn handle(
@@ -64,11 +63,8 @@ pub fn handle(
 
     match data.destination {
         WheelbarrowDestination::Stockpile(dest_stockpile) => {
-            if let Ok((_, stock_transform, mut stockpile_comp, stored_items_opt)) = ctx
-                .queries
-                .storage
-                .stockpiles
-                .get_mut(dest_stockpile)
+            if let Ok((_, stock_transform, mut stockpile_comp, stored_items_opt)) =
+                ctx.queries.storage.stockpiles.get_mut(dest_stockpile)
             {
                 let stock_pos = stock_transform.translation;
                 let incoming_total = ctx
@@ -108,7 +104,9 @@ pub fn handle(
                         StoredIn(dest_stockpile),
                     ));
                     commands.entity(*item_entity).remove::<LoadedIn>();
-                    commands.entity(*item_entity).remove::<crate::relationships::DeliveringTo>();
+                    commands
+                        .entity(*item_entity)
+                        .remove::<crate::relationships::DeliveringTo>();
                     commands
                         .entity(*item_entity)
                         .remove::<crate::systems::jobs::IssuedBy>();
@@ -138,9 +136,7 @@ pub fn handle(
                     commands
                         .entity(*item_entity)
                         .remove::<crate::relationships::TaskWorkers>();
-                    commands
-                        .entity(*item_entity)
-                        .remove::<StoredIn>();
+                    commands.entity(*item_entity).remove::<StoredIn>();
                     destination_store_count += 1;
                     unloaded_count += 1;
                 }
@@ -237,7 +233,12 @@ pub fn handle(
         .get(data.wheelbarrow)
         .ok()
         .map(|b| b.0);
-    wheelbarrow_common::park_wheelbarrow_entity(commands, data.wheelbarrow, parking_anchor, soul_pos);
+    wheelbarrow_common::park_wheelbarrow_entity(
+        commands,
+        data.wheelbarrow,
+        parking_anchor,
+        soul_pos,
+    );
     ctx.inventory.0 = None;
     commands
         .entity(ctx.soul_entity)

@@ -7,7 +7,6 @@ use crate::systems::soul_ai::execute::task_execution::types::{
 };
 use bevy::prelude::*;
 
-
 /// 指定のソースアイテムを使って Blueprint 運搬を割り当てる（request 方式の遅延解決用）
 pub fn issue_haul_to_blueprint_with_source(
     source_item: Entity,
@@ -26,23 +25,23 @@ pub fn issue_haul_to_blueprint_with_source(
                 phase: HaulToBpPhase::GoingToItem,
             },
         );
-    let reservation_ops = vec![
-        ResourceReservationOp::ReserveSource {
-            source: source_item,
-            amount: 1,
-        },
-    ];
-    
-    queries.assignment_writer.write(crate::events::TaskAssignmentRequest {
-        familiar_entity: ctx.fam_entity,
-        worker_entity: ctx.worker_entity,
-        task_entity: ctx.task_entity,
-        work_type: WorkType::Haul,
-        task_pos,
-        assigned_task,
-        reservation_ops,
-        already_commanded,
-    });
+    let reservation_ops = vec![ResourceReservationOp::ReserveSource {
+        source: source_item,
+        amount: 1,
+    }];
+
+    queries
+        .assignment_writer
+        .write(crate::events::TaskAssignmentRequest {
+            familiar_entity: ctx.fam_entity,
+            worker_entity: ctx.worker_entity,
+            task_entity: ctx.task_entity,
+            work_type: WorkType::Haul,
+            task_pos,
+            assigned_task,
+            reservation_ops,
+            already_commanded,
+        });
 }
 
 pub fn issue_haul_to_stockpile_with_source(
@@ -61,23 +60,23 @@ pub fn issue_haul_to_stockpile_with_source(
             phase: HaulPhase::GoingToItem,
         },
     );
-    let reservation_ops = vec![
-        ResourceReservationOp::ReserveSource {
-            source: source_item,
-            amount: 1,
-        },
-    ];
+    let reservation_ops = vec![ResourceReservationOp::ReserveSource {
+        source: source_item,
+        amount: 1,
+    }];
 
-    queries.assignment_writer.write(crate::events::TaskAssignmentRequest {
-        familiar_entity: ctx.fam_entity,
-        worker_entity: ctx.worker_entity,
-        task_entity: ctx.task_entity,
-        work_type: WorkType::Haul,
-        task_pos,
-        assigned_task,
-        reservation_ops,
-        already_commanded,
-    });
+    queries
+        .assignment_writer
+        .write(crate::events::TaskAssignmentRequest {
+            familiar_entity: ctx.fam_entity,
+            worker_entity: ctx.worker_entity,
+            task_entity: ctx.task_entity,
+            work_type: WorkType::Haul,
+            task_pos,
+            assigned_task,
+            reservation_ops,
+            already_commanded,
+        });
 }
 
 pub fn issue_haul_to_mixer(
@@ -109,16 +108,18 @@ pub fn issue_haul_to_mixer(
             resource_type: item_type,
         });
     }
-    queries.assignment_writer.write(crate::events::TaskAssignmentRequest {
-        familiar_entity: ctx.fam_entity,
-        worker_entity: ctx.worker_entity,
-        task_entity: ctx.task_entity,
-        work_type: WorkType::HaulToMixer,
-        task_pos,
-        assigned_task,
-        reservation_ops,
-        already_commanded,
-    });
+    queries
+        .assignment_writer
+        .write(crate::events::TaskAssignmentRequest {
+            familiar_entity: ctx.fam_entity,
+            worker_entity: ctx.worker_entity,
+            task_entity: ctx.task_entity,
+            work_type: WorkType::HaulToMixer,
+            task_pos,
+            assigned_task,
+            reservation_ops,
+            already_commanded,
+        });
 }
 
 pub fn issue_haul_with_wheelbarrow(
@@ -185,16 +186,18 @@ pub fn issue_haul_with_wheelbarrow(
         });
     }
 
-    queries.assignment_writer.write(crate::events::TaskAssignmentRequest {
-        familiar_entity: ctx.fam_entity,
-        worker_entity: ctx.worker_entity,
-        task_entity: ctx.task_entity,
-        work_type: WorkType::WheelbarrowHaul,
-        task_pos,
-        assigned_task,
-        reservation_ops,
-        already_commanded,
-    });
+    queries
+        .assignment_writer
+        .write(crate::events::TaskAssignmentRequest {
+            familiar_entity: ctx.fam_entity,
+            worker_entity: ctx.worker_entity,
+            task_entity: ctx.task_entity,
+            work_type: WorkType::WheelbarrowHaul,
+            task_pos,
+            assigned_task,
+            reservation_ops,
+            already_commanded,
+        });
 }
 
 pub fn issue_return_wheelbarrow(
@@ -229,16 +232,18 @@ pub fn issue_return_wheelbarrow(
         amount: 1,
     }];
 
-    queries.assignment_writer.write(crate::events::TaskAssignmentRequest {
-        familiar_entity: ctx.fam_entity,
-        worker_entity: ctx.worker_entity,
-        task_entity: ctx.task_entity,
-        work_type: WorkType::WheelbarrowHaul,
-        task_pos,
-        assigned_task,
-        reservation_ops,
-        already_commanded,
-    });
+    queries
+        .assignment_writer
+        .write(crate::events::TaskAssignmentRequest {
+            familiar_entity: ctx.fam_entity,
+            worker_entity: ctx.worker_entity,
+            task_entity: ctx.task_entity,
+            work_type: WorkType::WheelbarrowHaul,
+            task_pos,
+            assigned_task,
+            reservation_ops,
+            already_commanded,
+        });
 }
 
 /// 砂ソースから直接採取して Blueprint へ猫車搬入する。
@@ -284,16 +289,18 @@ pub fn issue_collect_sand_with_wheelbarrow_to_blueprint(
     ];
     // Relationship で管理するため ReserveDestination は不要
 
-    queries.assignment_writer.write(crate::events::TaskAssignmentRequest {
-        familiar_entity: ctx.fam_entity,
-        worker_entity: ctx.worker_entity,
-        task_entity: ctx.task_entity,
-        work_type: WorkType::WheelbarrowHaul,
-        task_pos,
-        assigned_task,
-        reservation_ops,
-        already_commanded,
-    });
+    queries
+        .assignment_writer
+        .write(crate::events::TaskAssignmentRequest {
+            familiar_entity: ctx.fam_entity,
+            worker_entity: ctx.worker_entity,
+            task_entity: ctx.task_entity,
+            work_type: WorkType::WheelbarrowHaul,
+            task_pos,
+            assigned_task,
+            reservation_ops,
+            already_commanded,
+        });
 }
 
 /// 骨ソースから直接採取して Blueprint へ猫車搬入する。
@@ -339,16 +346,18 @@ pub fn issue_collect_bone_with_wheelbarrow_to_blueprint(
     ];
     // Relationship で管理するため ReserveDestination は不要
 
-    queries.assignment_writer.write(crate::events::TaskAssignmentRequest {
-        familiar_entity: ctx.fam_entity,
-        worker_entity: ctx.worker_entity,
-        task_entity: ctx.task_entity,
-        work_type: WorkType::WheelbarrowHaul,
-        task_pos,
-        assigned_task,
-        reservation_ops,
-        already_commanded,
-    });
+    queries
+        .assignment_writer
+        .write(crate::events::TaskAssignmentRequest {
+            familiar_entity: ctx.fam_entity,
+            worker_entity: ctx.worker_entity,
+            task_entity: ctx.task_entity,
+            work_type: WorkType::WheelbarrowHaul,
+            task_pos,
+            assigned_task,
+            reservation_ops,
+            already_commanded,
+        });
 }
 
 /// 骨ソースから直接採取して FloorConstructionSite へ猫車搬入する。
@@ -393,14 +402,16 @@ pub fn issue_collect_bone_with_wheelbarrow_to_floor(
         },
     ];
 
-    queries.assignment_writer.write(crate::events::TaskAssignmentRequest {
-        familiar_entity: ctx.fam_entity,
-        worker_entity: ctx.worker_entity,
-        task_entity: ctx.task_entity,
-        work_type: WorkType::WheelbarrowHaul,
-        task_pos,
-        assigned_task,
-        reservation_ops,
-        already_commanded,
-    });
+    queries
+        .assignment_writer
+        .write(crate::events::TaskAssignmentRequest {
+            familiar_entity: ctx.fam_entity,
+            worker_entity: ctx.worker_entity,
+            task_entity: ctx.task_entity,
+            work_type: WorkType::WheelbarrowHaul,
+            task_pos,
+            assigned_task,
+            reservation_ops,
+            already_commanded,
+        });
 }

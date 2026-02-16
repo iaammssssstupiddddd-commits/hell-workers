@@ -60,7 +60,9 @@ pub fn progress_bar_system(
 
                 // 親子関係を設定（Lifecycle管理のため）
                 commands.entity(bg_entity).try_insert(ChildOf(soul_entity));
-                commands.entity(fill_entity).try_insert(ChildOf(soul_entity));
+                commands
+                    .entity(fill_entity)
+                    .try_insert(ChildOf(soul_entity));
 
                 commands.entity(bg_entity).insert(SoulProgressBar);
                 commands.entity(fill_entity).insert(SoulProgressBar);

@@ -11,7 +11,6 @@ use crate::interface::ui::theme::UiTheme;
 use bevy::prelude::*;
 use bevy::ui_widgets::popover::Popover;
 
-
 pub(crate) use target::TooltipTarget;
 
 #[derive(Default)]
@@ -69,10 +68,14 @@ pub(crate) fn hover_tooltip_system(
         return;
     };
 
-    let hovered_button = ui_layout.q_ui_tooltip_buttons.iter().find(|(_, interaction, _, menu_button, _, _)| {
-        matches!(**interaction, Interaction::Hovered | Interaction::Pressed)
-            && !target::is_tooltip_suppressed_for_expanded_menu(*menu_button, *menu_state)
-    });
+    let hovered_button =
+        ui_layout
+            .q_ui_tooltip_buttons
+            .iter()
+            .find(|(_, interaction, _, menu_button, _, _)| {
+                matches!(**interaction, Interaction::Hovered | Interaction::Pressed)
+                    && !target::is_tooltip_suppressed_for_expanded_menu(*menu_button, *menu_state)
+            });
 
     let mut target = None;
     let mut template = TooltipTemplate::Generic;
@@ -119,12 +122,17 @@ pub(crate) fn hover_tooltip_system(
     let expanded_toggle_hover = matches!(target, Some(TooltipTarget::UiButton(_)))
         && !matches!(*menu_state, MenuState::Hidden)
         && hovered_menu_action.is_some_and(|a| {
-            matches!(a, MenuAction::ToggleArchitect | MenuAction::ToggleZones | MenuAction::ToggleOrders)
+            matches!(
+                a,
+                MenuAction::ToggleArchitect | MenuAction::ToggleZones | MenuAction::ToggleOrders
+            )
         });
     // ZIndex付きパネル内のボタン（速度ボタン等）はアンカーに留める（スタッキングコンテキスト回避）
-    let button_in_zindex_panel = matches!(target, Some(TooltipTarget::UiButton(e)) if ui_layout.q_speed_buttons.contains(e));
-    let attach_to_anchor =
-        !matches!(target, Some(TooltipTarget::UiButton(_))) || expanded_toggle_hover || button_in_zindex_panel;
+    let button_in_zindex_panel =
+        matches!(target, Some(TooltipTarget::UiButton(e)) if ui_layout.q_speed_buttons.contains(e));
+    let attach_to_anchor = !matches!(target, Some(TooltipTarget::UiButton(_)))
+        || expanded_toggle_hover
+        || button_in_zindex_panel;
     let attachment_changed = runtime.attach_to_anchor != attach_to_anchor;
 
     if target_changed || attachment_changed {
@@ -156,7 +164,8 @@ pub(crate) fn hover_tooltip_system(
 
     if expanded_toggle_hover {
         let tooltip_size = tooltip_computed.size() * tooltip_computed.inverse_scale_factor();
-        if let Some((button_x_span, button_y_span)) = hovered_button_x_span.zip(hovered_button_y_span)
+        if let Some((button_x_span, button_y_span)) =
+            hovered_button_x_span.zip(hovered_button_y_span)
         {
             let (x, y) = layout::resolve_expanded_toggle_tooltip_position(
                 button_x_span,

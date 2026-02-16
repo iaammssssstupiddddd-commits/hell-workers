@@ -6,8 +6,8 @@ use crate::game_state::TaskContext;
 use crate::interface::ui::components::*;
 use crate::interface::ui::theme::UiTheme;
 use crate::relationships::Commanding;
-use crate::systems::familiar_ai::FamiliarAiState;
 use crate::systems::command::TaskMode;
+use crate::systems::familiar_ai::FamiliarAiState;
 use bevy::input::mouse::{MouseScrollUnit, MouseWheel};
 use bevy::prelude::*;
 use bevy::ui::RelativeCursorPosition;
@@ -46,13 +46,11 @@ pub fn entity_list_interaction_system(
         ),
     >,
     mut q_familiar_ops: Query<&mut FamiliarOperation>,
-    q_familiar_meta: Query<
-        (
-            &crate::entities::familiar::Familiar,
-            &FamiliarAiState,
-            Option<&Commanding>,
-        ),
-    >,
+    q_familiar_meta: Query<(
+        &crate::entities::familiar::Familiar,
+        &FamiliarAiState,
+        Option<&Commanding>,
+    )>,
     node_index: Res<EntityListNodeIndex>,
     mut q_text: Query<&mut Text>,
     mut ev_max_soul_changed: MessageWriter<FamiliarOperationMaxSoulChangedEvent>,

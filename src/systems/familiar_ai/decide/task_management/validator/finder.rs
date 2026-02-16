@@ -79,8 +79,13 @@ fn find_best_bucket_storage_for_return(
             }
 
             let current = stored_opt.map(|stored| stored.len()).unwrap_or(0);
-            let incoming = queries.reservation.incoming_deliveries_query.get(*stockpile_entity).ok()
-                .map(|inc: &crate::relationships::IncomingDeliveries| inc.len()).unwrap_or(0);
+            let incoming = queries
+                .reservation
+                .incoming_deliveries_query
+                .get(*stockpile_entity)
+                .ok()
+                .map(|inc: &crate::relationships::IncomingDeliveries| inc.len())
+                .unwrap_or(0);
             let reserved = incoming;
             (current + reserved) < stockpile.capacity
         })

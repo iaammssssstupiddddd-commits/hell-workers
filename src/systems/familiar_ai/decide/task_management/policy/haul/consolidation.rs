@@ -20,9 +20,12 @@ pub fn assign_consolidation_to_stockpile(
         return false;
     };
 
-    let Some((source_item, source_pos)) =
-        source_selector::find_consolidation_source_item(resource_type, &donor_cells, queries, shadow)
-    else {
+    let Some((source_item, source_pos)) = source_selector::find_consolidation_source_item(
+        resource_type,
+        &donor_cells,
+        queries,
+        shadow,
+    ) else {
         debug!(
             "ASSIGN: Consolidation request {:?} has no available {:?} source in donor cells",
             ctx.task_entity, resource_type

@@ -5,7 +5,7 @@ use crate::interface::ui::components::{TooltipBody, TooltipHeader, TooltipProgre
 use crate::interface::ui::theme::UiTheme;
 use bevy::prelude::*;
 
-use super::text_wrap::{wrap_tooltip_text, TOOLTIP_WRAP_LIMIT_BODY, TOOLTIP_WRAP_LIMIT_ICON_ROW};
+use super::text_wrap::{TOOLTIP_WRAP_LIMIT_BODY, TOOLTIP_WRAP_LIMIT_ICON_ROW, wrap_tooltip_text};
 
 pub fn spawn_progress_bar(
     parent: &mut ChildSpawnerCommands,

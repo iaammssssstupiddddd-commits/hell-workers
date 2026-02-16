@@ -29,7 +29,8 @@ pub fn rebuild_task_list_ui(
     }
 
     for (work_type, entries) in snapshot {
-        let (header_icon, header_color) = presenter::get_work_type_icon(work_type, game_assets, theme);
+        let (header_icon, header_color) =
+            presenter::get_work_type_icon(work_type, game_assets, theme);
 
         parent
             .spawn(Node {
@@ -59,7 +60,11 @@ pub fn rebuild_task_list_ui(
                     },
                 ));
                 row.spawn((
-                    Text::new(format!("{} ({})", presenter::work_type_label(work_type), entries.len())),
+                    Text::new(format!(
+                        "{} ({})",
+                        presenter::work_type_label(work_type),
+                        entries.len()
+                    )),
                     TextFont {
                         font: game_assets.font_ui.clone(),
                         font_size: theme.typography.font_size_xs,
@@ -71,7 +76,8 @@ pub fn rebuild_task_list_ui(
             });
 
         for entry in entries {
-            let (item_icon, item_color) = presenter::get_work_type_icon(work_type, game_assets, theme);
+            let (item_icon, item_color) =
+                presenter::get_work_type_icon(work_type, game_assets, theme);
             let desc_color = if entry.priority >= 5 {
                 theme.colors.accent_ember
             } else {

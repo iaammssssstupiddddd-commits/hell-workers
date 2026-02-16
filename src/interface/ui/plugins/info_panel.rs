@@ -1,9 +1,9 @@
 use crate::interface::ui::components::LeftPanelMode;
+use crate::interface::ui::panels::task_list::TaskListState;
 use crate::interface::ui::panels::task_list::{
     left_panel_tab_system, left_panel_visibility_system, task_list_click_system,
     task_list_update_system, task_list_visual_feedback_system,
 };
-use crate::interface::ui::panels::task_list::TaskListState;
 use crate::interface::ui::{
     InfoPanelNodes, InfoPanelPinState, InfoPanelState, info_panel_system, menu_visibility_system,
     update_mode_text_system,
