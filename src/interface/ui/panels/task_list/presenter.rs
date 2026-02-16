@@ -72,6 +72,7 @@ pub fn generate_task_description(
                     BuildingType::Floor => "Construct Floor".to_string(),
                     BuildingType::Tank => "Construct Tank".to_string(),
                     BuildingType::MudMixer => "Construct Mixer".to_string(),
+                    BuildingType::RestArea => "Construct RestArea".to_string(),
                     BuildingType::SandPile => "Construct SandPile".to_string(),
                     BuildingType::BonePile => "Construct BonePile".to_string(),
                     BuildingType::WheelbarrowParking => "Construct Parking".to_string(),

@@ -20,6 +20,7 @@ pub(super) fn update_world_for_completed_building(
         BuildingType::Wall
             | BuildingType::Tank
             | BuildingType::MudMixer
+            | BuildingType::RestArea
             | BuildingType::SandPile
             | BuildingType::BonePile
             | BuildingType::WheelbarrowParking

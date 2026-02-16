@@ -31,6 +31,7 @@ fn spawn_architect_submenu(
         ("Wall", BuildingType::Wall),
         ("Tank", BuildingType::Tank),
         ("MudMixer", BuildingType::MudMixer),
+        ("RestArea", BuildingType::RestArea),
         ("SandPile", BuildingType::SandPile),
         ("BonePile", BuildingType::BonePile),
         ("WB Parking", BuildingType::WheelbarrowParking),

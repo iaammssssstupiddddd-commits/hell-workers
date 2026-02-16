@@ -82,6 +82,7 @@ pub struct GameAssets {
     pub bone_pile: Handle<Image>,
     pub stasis_mud: Handle<Image>,
     pub mud_mixer: Handle<Image>,
+    pub rest_area: Handle<Image>,
     pub mud_mixer_anim_1: Handle<Image>,
     pub mud_mixer_anim_2: Handle<Image>,
     pub mud_mixer_anim_3: Handle<Image>,
