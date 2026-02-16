@@ -1,158 +1,19 @@
 use super::geometry::in_selection_area;
+use super::queries::DesignationTargetQuery;
+use super::state::AreaEditHistory;
 use crate::entities::damned_soul::Destination;
 use crate::entities::familiar::{ActiveCommand, Familiar, FamiliarCommand};
-use crate::events::OnTaskAbandoned;
-use crate::relationships::{ManagedBy, StoredItems, TaskWorkers, WorkingOn};
+use crate::relationships::ManagedBy;
 use crate::systems::command::{TaskArea, TaskMode};
-use crate::systems::jobs::{Blueprint, Designation, Priority, Rock, TaskSlots, Tree, WorkType};
+use crate::systems::jobs::{Designation, Priority, TaskSlots, WorkType};
+use super::cancel::cancel_single_designation;
+use super::manual_haul::{find_manual_request_for_source, pick_manual_haul_stockpile_anchor};
 use crate::systems::logistics::transport_request::{
     ManualHaulPinnedSource, ManualTransportRequest, TransportDemand, TransportPolicy,
     TransportPriority, TransportRequest, TransportRequestFixedSource, TransportRequestKind,
     TransportRequestState,
 };
-use crate::systems::logistics::{BelongsTo, BucketStorage, ResourceItem, ResourceType, Stockpile};
 use bevy::prelude::*;
-
-fn pick_manual_haul_stockpile_anchor(
-    source_pos: Vec2,
-    resource_type: ResourceType,
-    item_owner: Option<Entity>,
-    q_targets: &Query<(
-        Entity,
-        &Transform,
-        Option<&Tree>,
-        Option<&Rock>,
-        Option<&ResourceItem>,
-        Option<&Designation>,
-        Option<&TaskWorkers>,
-        Option<&Blueprint>,
-        Option<&BelongsTo>,
-        Option<&TransportRequest>,
-        Option<&TransportRequestFixedSource>,
-        Option<&Stockpile>,
-        Option<&StoredItems>,
-        Option<&BucketStorage>,
-        Option<&ManualTransportRequest>,
-    )>,
-) -> Option<Entity> {
-    let is_bucket = matches!(
-        resource_type,
-        ResourceType::BucketEmpty | ResourceType::BucketWater
-    );
-
-    let mut best_with_capacity: Option<(Entity, f32)> = None;
-    let mut best_any_capacity: Option<(Entity, f32)> = None;
-
-    for (
-        stock_entity,
-        stock_transform,
-        _,
-        _,
-        _,
-        _,
-        _,
-        _,
-        stock_owner_opt,
-        _,
-        _,
-        stockpile_opt,
-        stored_opt,
-        bucket_opt,
-        _,
-    ) in q_targets.iter()
-    {
-        let Some(stockpile) = stockpile_opt else {
-            continue;
-        };
-        let stock_owner = stock_owner_opt.map(|belongs| belongs.0);
-        if stock_owner != item_owner {
-            continue;
-        }
-
-        let is_bucket_storage = bucket_opt.is_some();
-        if is_bucket_storage && !is_bucket {
-            continue;
-        }
-
-        let is_dedicated = stock_owner.is_some();
-        let type_match = if is_dedicated && is_bucket {
-            true
-        } else {
-            stockpile.resource_type.is_none() || stockpile.resource_type == Some(resource_type)
-        };
-        if !type_match {
-            continue;
-        }
-
-        let dist_sq = stock_transform
-            .translation
-            .truncate()
-            .distance_squared(source_pos);
-        match best_any_capacity {
-            Some((_, best_dist_sq)) if best_dist_sq <= dist_sq => {}
-            _ => best_any_capacity = Some((stock_entity, dist_sq)),
-        }
-
-        let current = stored_opt.map(|stored| stored.len()).unwrap_or(0);
-        if current >= stockpile.capacity {
-            continue;
-        }
-        match best_with_capacity {
-            Some((_, best_dist_sq)) if best_dist_sq <= dist_sq => {}
-            _ => best_with_capacity = Some((stock_entity, dist_sq)),
-        }
-    }
-
-    best_with_capacity
-        .or(best_any_capacity)
-        .map(|(entity, _)| entity)
-}
-
-fn find_manual_request_for_source(
-    source_entity: Entity,
-    q_targets: &Query<(
-        Entity,
-        &Transform,
-        Option<&Tree>,
-        Option<&Rock>,
-        Option<&ResourceItem>,
-        Option<&Designation>,
-        Option<&TaskWorkers>,
-        Option<&Blueprint>,
-        Option<&BelongsTo>,
-        Option<&TransportRequest>,
-        Option<&TransportRequestFixedSource>,
-        Option<&Stockpile>,
-        Option<&StoredItems>,
-        Option<&BucketStorage>,
-        Option<&ManualTransportRequest>,
-    )>,
-) -> Option<Entity> {
-    q_targets.iter().find_map(
-        |(
-            request_entity,
-            _,
-            _,
-            _,
-            _,
-            _,
-            _,
-            _,
-            _,
-            transport_request_opt,
-            fixed_source_opt,
-            _,
-            _,
-            _,
-            manual_opt,
-        )| {
-            (manual_opt.is_some()
-                && transport_request_opt.is_some()
-                && fixed_source_opt.map(|source| source.0) == Some(source_entity))
-            .then_some(request_entity)
-        },
-    )
-}
 
 pub(super) fn apply_task_area_to_familiar(
     familiar_entity: Entity,
@@ -197,45 +58,17 @@ pub(super) fn assign_unassigned_tasks_in_area(
     assigned_count
 }
 
-pub(super) fn cancel_single_designation(
+/// エリア適用 + 履歴記録。input.rs と shortcuts.rs で共有。
+pub(super) fn apply_area_and_record_history(
+    familiar_entity: Entity,
+    new_area: &TaskArea,
+    before: Option<TaskArea>,
     commands: &mut Commands,
-    target_entity: Entity,
-    task_workers: Option<&TaskWorkers>,
-    is_blueprint: bool,
-    is_transport_request: bool,
-    fixed_source: Option<Entity>,
+    q_familiars: &mut Query<(&mut ActiveCommand, &mut Destination), With<Familiar>>,
+    area_edit_history: &mut AreaEditHistory,
 ) {
-    fn trigger_task_abandoned_if_alive(commands: &mut Commands, soul: Entity) {
-        commands.queue(move |world: &mut World| {
-            if world.get_entity(soul).is_ok() {
-                world.trigger(OnTaskAbandoned { entity: soul });
-            }
-        });
-    }
-
-    // 作業者への通知
-    if let Some(workers) = task_workers {
-        for &soul in workers.iter() {
-            commands.entity(soul).try_remove::<WorkingOn>();
-            trigger_task_abandoned_if_alive(commands, soul);
-        }
-    }
-
-    if let Some(source_entity) = fixed_source {
-        commands
-            .entity(source_entity)
-            .try_remove::<ManualHaulPinnedSource>();
-    }
-
-    if is_blueprint || is_transport_request {
-        // Blueprint はエンティティごと despawn する
-        // WorldMap のクリーンアップは blueprint_cancel_cleanup_system が担当
-        commands.entity(target_entity).try_despawn();
-    } else {
-        commands
-            .entity(target_entity)
-            .try_remove::<(Designation, TaskSlots, ManagedBy)>();
-    }
+    apply_task_area_to_familiar(familiar_entity, Some(new_area), commands, q_familiars);
+    area_edit_history.push(familiar_entity, before, Some(new_area.clone()));
 }
 
 pub(super) fn apply_designation_in_area(
@@ -243,23 +76,7 @@ pub(super) fn apply_designation_in_area(
     mode: TaskMode,
     area: &TaskArea,
     issued_by: Option<Entity>,
-    q_targets: &Query<(
-        Entity,
-        &Transform,
-        Option<&Tree>,
-        Option<&Rock>,
-        Option<&ResourceItem>,
-        Option<&Designation>,
-        Option<&TaskWorkers>,
-        Option<&Blueprint>,
-        Option<&BelongsTo>,
-        Option<&TransportRequest>,
-        Option<&TransportRequestFixedSource>,
-        Option<&Stockpile>,
-        Option<&StoredItems>,
-        Option<&BucketStorage>,
-        Option<&ManualTransportRequest>,
-    )>,
+    q_targets: &DesignationTargetQuery,
 ) {
     let work_type = match mode {
         TaskMode::DesignateChop(_) => Some(WorkType::Chop),
@@ -396,7 +213,6 @@ pub(super) fn apply_designation_in_area(
             continue;
         }
 
-        // キャンセルモード: Designation持ちのみキャンセル
         if designation.is_some() {
             cancel_single_designation(
                 commands,
@@ -406,39 +222,6 @@ pub(super) fn apply_designation_in_area(
                 transport_request.is_some(),
                 fixed_source.map(|source| source.0),
             );
-        }
-    }
-}
-
-/// Blueprint が despawn された時に WorldMap と PendingBelongsToBlueprint を掃除する
-pub fn blueprint_cancel_cleanup_system(
-    mut commands: Commands,
-    mut world_map: ResMut<crate::world::map::WorldMap>,
-    mut removed: RemovedComponents<Blueprint>,
-    q_pending: Query<(
-        Entity,
-        &crate::systems::logistics::PendingBelongsToBlueprint,
-    )>,
-) {
-    for removed_entity in removed.read() {
-        // WorldMap.buildings からこの Blueprint が占有していたグリッドを除去
-        let grids_to_remove: Vec<(i32, i32)> = world_map
-            .buildings
-            .iter()
-            .filter(|&(_, entity)| *entity == removed_entity)
-            .map(|(&grid, _)| grid)
-            .collect();
-        for (gx, gy) in grids_to_remove {
-            world_map.buildings.remove(&(gx, gy));
-            world_map.remove_obstacle(gx, gy);
-        }
-
-        // PendingBelongsToBlueprint のコンパニオンエンティティを除去
-        for (companion_entity, pending) in q_pending.iter() {
-            if pending.0 == removed_entity {
-                // コンパニオンも Blueprint なので despawn すれば次フレームでこのシステムが再度クリーンアップ
-                commands.entity(companion_entity).try_despawn();
-            }
         }
     }
 }

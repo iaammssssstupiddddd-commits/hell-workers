@@ -1,7 +1,6 @@
-use super::components::{
-    BubbleEmotion, BubblePriority, FamiliarBubble, ReactionDelay, SpeechBubble,
-};
+use super::components::{BubbleEmotion, BubblePriority, FamiliarBubble, ReactionDelay, SpeechBubble};
 use super::cooldown::SpeechHistory;
+use super::emitter::{emit_familiar_with_history, emit_soul_with_history};
 use super::phrases::LatinPhrase;
 use super::spawn::*;
 use crate::assets::GameAssets;
@@ -13,7 +12,6 @@ use crate::events::{
     OnStressBreakdown, OnTaskAbandoned, OnTaskAssigned, OnTaskCompleted,
 };
 use crate::relationships::CommandedBy;
-use crate::systems::jobs::WorkType;
 use crate::systems::visual::speech::conversation::events::{
     ConversationTone, ConversationToneTriggered,
 };
@@ -61,78 +59,35 @@ pub fn on_task_assigned(
             }
         }
 
-        let can_speak = if let Some(history) = &soul_history_opt {
-            history.can_speak(BubblePriority::Low, current_time)
-        } else {
-            true
-        };
-
-        if can_speak {
-            spawn_soul_bubble(
-                &mut commands,
-                soul_entity,
-                "💪",
-                soul_pos,
-                &assets,
-                BubbleEmotion::Motivated,
-                BubblePriority::Low,
-            );
-            if let Some(mut history) = soul_history_opt {
-                history.record_speech(BubblePriority::Low, current_time);
-            } else {
-                commands.entity(soul_entity).insert(SpeechHistory {
-                    last_time: current_time,
-                    last_priority: BubblePriority::Low,
-                });
-            }
-        }
+        emit_soul_with_history(
+            &mut commands,
+            soul_entity,
+            "💪",
+            soul_pos,
+            &assets,
+            BubbleEmotion::Motivated,
+            BubblePriority::Low,
+            soul_history_opt,
+            current_time,
+        );
 
         if let Some(uc) = under_command {
             if let Ok((fam_transform, voice, fam_history_opt)) = q_familiars.get_mut(uc.0) {
-                let fam_can_speak = if let Some(history) = &fam_history_opt {
-                    history.can_speak(BubblePriority::Low, current_time)
-                } else {
-                    true
-                };
-
-                if fam_can_speak {
-                    let fam_pos = fam_transform.translation();
-                    let phrase = match event.work_type {
-                        WorkType::Chop => LatinPhrase::Caede,
-                        WorkType::Mine => LatinPhrase::Fodere,
-                        WorkType::Haul | WorkType::HaulToMixer | WorkType::WheelbarrowHaul => {
-                            LatinPhrase::Portare
-                        }
-                        WorkType::Build
-                        | WorkType::ReinforceFloorTile
-                        | WorkType::PourFloorTile
-                        | WorkType::CoatWall => LatinPhrase::Laborare,
-                        WorkType::GatherWater => LatinPhrase::Haurire,
-                        WorkType::CollectSand => LatinPhrase::Colligere,
-                        WorkType::CollectBone => LatinPhrase::Colligere,
-                        WorkType::Refine => LatinPhrase::Misce,
-                        WorkType::HaulWaterToMixer => LatinPhrase::Haurire,
-                    };
-                    spawn_familiar_bubble(
-                        &mut commands,
-                        uc.0,
-                        phrase,
-                        fam_pos,
-                        &assets,
-                        &q_bubbles,
-                        BubbleEmotion::Motivated,
-                        BubblePriority::Low,
-                        voice,
-                    );
-                    if let Some(mut history) = fam_history_opt {
-                        history.record_speech(BubblePriority::Low, current_time);
-                    } else {
-                        commands.entity(uc.0).insert(SpeechHistory {
-                            last_time: current_time,
-                            last_priority: BubblePriority::Low,
-                        });
-                    }
-                }
+                let fam_pos = fam_transform.translation();
+                let phrase = LatinPhrase::from_work_type(event.work_type);
+                emit_familiar_with_history(
+                    &mut commands,
+                    uc.0,
+                    phrase,
+                    fam_pos,
+                    &assets,
+                    &q_bubbles,
+                    BubbleEmotion::Motivated,
+                    BubblePriority::Low,
+                    voice,
+                    fam_history_opt,
+                    current_time,
+                );
             }
         }
     }
@@ -152,31 +107,17 @@ pub fn on_task_completed(
     let soul_entity = on.entity;
     let current_time = time.elapsed_secs();
     if let Ok((transform, history_opt)) = q_souls.get_mut(soul_entity) {
-        let can_speak = if let Some(history) = &history_opt {
-            history.can_speak(BubblePriority::Low, current_time)
-        } else {
-            true
-        };
-
-        if can_speak {
-            spawn_soul_bubble(
-                &mut commands,
-                soul_entity,
-                "😊",
-                transform.translation(),
-                &assets,
-                BubbleEmotion::Happy,
-                BubblePriority::Low,
-            );
-            if let Some(mut history) = history_opt {
-                history.record_speech(BubblePriority::Low, current_time);
-            } else {
-                commands.entity(soul_entity).insert(SpeechHistory {
-                    last_time: current_time,
-                    last_priority: BubblePriority::Low,
-                });
-            }
-        }
+        emit_soul_with_history(
+            &mut commands,
+            soul_entity,
+            "😊",
+            transform.translation(),
+            &assets,
+            BubbleEmotion::Happy,
+            BubblePriority::Low,
+            history_opt,
+            current_time,
+        );
     }
 }
 
@@ -201,40 +142,25 @@ pub fn on_soul_recruited(
     let soul_entity = on.entity;
     let current_time = time.elapsed_secs();
 
-    // リクルート時は必ずネガティブイベントを発火する
     tone_writer.write(ConversationToneTriggered {
         speaker: soul_entity,
         tone: ConversationTone::Negative,
     });
 
     if let Ok((transform, voice, history_opt)) = q_familiars.get_mut(fam_entity) {
-        let can_speak = if let Some(history) = &history_opt {
-            history.can_speak(BubblePriority::Normal, current_time)
-        } else {
-            true
-        };
-
-        if can_speak {
-            spawn_familiar_bubble(
-                &mut commands,
-                fam_entity,
-                LatinPhrase::Veni,
-                transform.translation(),
-                &assets,
-                &q_bubbles,
-                BubbleEmotion::Neutral,
-                BubblePriority::Normal,
-                voice,
-            );
-            if let Some(mut history) = history_opt {
-                history.record_speech(BubblePriority::Normal, current_time);
-            } else {
-                commands.entity(fam_entity).insert(SpeechHistory {
-                    last_time: current_time,
-                    last_priority: BubblePriority::Normal,
-                });
-            }
-        }
+        emit_familiar_with_history(
+            &mut commands,
+            fam_entity,
+            LatinPhrase::Veni,
+            transform.translation(),
+            &assets,
+            &q_bubbles,
+            BubbleEmotion::Neutral,
+            BubblePriority::Normal,
+            voice,
+            history_opt,
+            current_time,
+        );
     }
 
     commands.entity(soul_entity).insert(ReactionDelay {
@@ -258,31 +184,17 @@ pub fn on_exhausted(
     let soul_entity = on.entity;
     let current_time = time.elapsed_secs();
     if let Ok((transform, history_opt)) = q_souls.get_mut(soul_entity) {
-        let can_speak = if let Some(history) = &history_opt {
-            history.can_speak(BubblePriority::High, current_time)
-        } else {
-            true
-        };
-
-        if can_speak {
-            spawn_soul_bubble(
-                &mut commands,
-                soul_entity,
-                "😴",
-                transform.translation(),
-                &assets,
-                BubbleEmotion::Exhausted,
-                BubblePriority::High,
-            );
-            if let Some(mut history) = history_opt {
-                history.record_speech(BubblePriority::High, current_time);
-            } else {
-                commands.entity(soul_entity).insert(SpeechHistory {
-                    last_time: current_time,
-                    last_priority: BubblePriority::High,
-                });
-            }
-        }
+        emit_soul_with_history(
+            &mut commands,
+            soul_entity,
+            "😴",
+            transform.translation(),
+            &assets,
+            BubbleEmotion::Exhausted,
+            BubblePriority::High,
+            history_opt,
+            current_time,
+        );
     }
 }
 
@@ -300,31 +212,17 @@ pub fn on_stress_breakdown(
     let soul_entity = on.entity;
     let current_time = time.elapsed_secs();
     if let Ok((transform, history_opt)) = q_souls.get_mut(soul_entity) {
-        let can_speak = if let Some(history) = &history_opt {
-            history.can_speak(BubblePriority::Critical, current_time)
-        } else {
-            true
-        };
-
-        if can_speak {
-            spawn_soul_bubble(
-                &mut commands,
-                soul_entity,
-                "😰",
-                transform.translation(),
-                &assets,
-                BubbleEmotion::Stressed,
-                BubblePriority::Critical,
-            );
-            if let Some(mut history) = history_opt {
-                history.record_speech(BubblePriority::Critical, current_time);
-            } else {
-                commands.entity(soul_entity).insert(SpeechHistory {
-                    last_time: current_time,
-                    last_priority: BubblePriority::Critical,
-                });
-            }
-        }
+        emit_soul_with_history(
+            &mut commands,
+            soul_entity,
+            "😰",
+            transform.translation(),
+            &assets,
+            BubbleEmotion::Stressed,
+            BubblePriority::Critical,
+            history_opt,
+            current_time,
+        );
     }
 }
 
@@ -421,39 +319,25 @@ pub fn on_encouraged(
     let current_time = time.elapsed_secs();
 
     if let Ok((transform, voice, history_opt)) = q_familiars.get_mut(fam_entity) {
-        let can_speak = if let Some(history) = &history_opt {
-            history.can_speak(BubblePriority::Normal, current_time)
-        } else {
-            true
-        };
+        use rand::seq::SliceRandom;
+        let mut rng = rand::thread_rng();
+        let emoji = crate::constants::EMOJIS_ENCOURAGEMENT
+            .choose(&mut rng)
+            .unwrap_or(&"💪");
 
-        if can_speak {
-            use rand::seq::SliceRandom;
-            let mut rng = rand::thread_rng();
-            let emoji = crate::constants::EMOJIS_ENCOURAGEMENT
-                .choose(&mut rng)
-                .unwrap_or(&"💪");
-
-            spawn_familiar_bubble(
-                &mut commands,
-                fam_entity,
-                crate::systems::visual::speech::phrases::LatinPhrase::Custom(emoji.to_string()),
-                transform.translation(),
-                &assets,
-                &q_bubbles,
-                BubbleEmotion::Motivated,
-                BubblePriority::Normal,
-                voice,
-            );
-            if let Some(mut history) = history_opt {
-                history.record_speech(BubblePriority::Normal, current_time);
-            } else {
-                commands.entity(fam_entity).insert(SpeechHistory {
-                    last_time: current_time,
-                    last_priority: BubblePriority::Normal,
-                });
-            }
-        }
+        emit_familiar_with_history(
+            &mut commands,
+            fam_entity,
+            LatinPhrase::Custom(emoji.to_string()),
+            transform.translation(),
+            &assets,
+            &q_bubbles,
+            BubbleEmotion::Motivated,
+            BubblePriority::Normal,
+            voice,
+            history_opt,
+            current_time,
+        );
     }
 
     commands.entity(soul_entity).insert(ReactionDelay {
