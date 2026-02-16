@@ -101,7 +101,8 @@ impl SquadManager {
                 q_souls.get(member_entity)
             {
                 // 疲労・崩壊チェック
-                let is_resting = idle.behavior == IdleBehavior::Gathering;
+                let is_resting =
+                    matches!(idle.behavior, IdleBehavior::Gathering | IdleBehavior::Resting);
                 if (!is_resting && soul.fatigue > fatigue_threshold)
                     || idle.behavior == IdleBehavior::ExhaustedGathering
                 {

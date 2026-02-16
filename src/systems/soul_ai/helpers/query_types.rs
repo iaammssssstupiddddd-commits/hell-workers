@@ -1,6 +1,6 @@
 use crate::entities::damned_soul::{DamnedSoul, Destination, IdleState, Path, StressBreakdown};
 use crate::entities::familiar::Familiar;
-use crate::relationships::ParticipatingIn;
+use crate::relationships::{ParticipatingIn, RestAreaReservedFor, RestingIn};
 use crate::relationships::{CommandedBy, WorkingOn};
 use crate::systems::logistics::Inventory;
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
@@ -16,10 +16,11 @@ pub type TaskAssignmentSoulQuery<'w, 's> = Query<
         &'static mut AssignedTask,
         &'static mut Destination,
         &'static mut Path,
-        &'static IdleState,
+        &'static mut IdleState,
         Option<&'static mut Inventory>,
         Option<&'static CommandedBy>,
         Option<&'static crate::relationships::ParticipatingIn>,
+        Option<&'static RestingIn>,
     ),
     (With<DamnedSoul>, Without<Familiar>),
 >;
@@ -53,6 +54,8 @@ pub type IdleDecisionSoulQuery<'w, 's> = Query<
         &'static mut Path,
         &'static AssignedTask,
         Option<&'static ParticipatingIn>,
+        Option<&'static RestingIn>,
+        Option<&'static RestAreaReservedFor>,
     ),
     (Without<WorkingOn>, Without<CommandedBy>),
 >;

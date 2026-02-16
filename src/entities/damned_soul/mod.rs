@@ -107,6 +107,13 @@ pub struct StressBreakdown {
     pub is_frozen: bool,
 }
 
+/// 休憩所退出後のリクルート不可クールダウン
+#[derive(Component, Debug, Clone, Copy, Default, Reflect)]
+#[reflect(Component)]
+pub struct RestAreaCooldown {
+    pub remaining_secs: f32,
+}
+
 /// 怠惰状態のコンポーネント
 #[derive(Component, Reflect)]
 #[reflect(Component)]
@@ -147,6 +154,7 @@ pub enum IdleBehavior {
     Sleeping,           // 寝ている
     Gathering,          // 集会中
     ExhaustedGathering, // 疲労による集会移動中
+    Resting,            // 休憩所で休息中
     Escaping,           // 使い魔から逃走中
 }
 
@@ -220,6 +228,7 @@ impl Plugin for DamnedSoulPlugin {
             .register_type::<SoulUiLinks>()
             .register_type::<IdleState>()
             .register_type::<StressBreakdown>()
+            .register_type::<RestAreaCooldown>()
             .register_type::<DreamState>()
             .register_type::<DreamPool>()
             .init_resource::<DreamPool>()

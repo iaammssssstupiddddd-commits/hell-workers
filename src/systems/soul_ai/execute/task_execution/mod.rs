@@ -25,7 +25,7 @@ pub mod types;
 // 型の再エクスポート（外部からのアクセスを簡潔に）
 pub use types::AssignedTask;
 
-use crate::entities::damned_soul::IdleBehavior;
+use crate::entities::damned_soul::{IdleBehavior, RestAreaCooldown};
 use crate::events::{
     OnGatheringLeft, OnSoulRecruited, OnTaskAssigned, OnTaskCompleted, TaskAssignmentRequest,
 };
@@ -70,6 +70,7 @@ pub fn apply_task_assignment_requests_system(
     mut requests: MessageReader<TaskAssignmentRequest>,
     mut cache: ResMut<SharedResourceCache>,
     mut q_souls: TaskAssignmentSoulQuery,
+    mut q_visibility: Query<&mut Visibility, With<crate::entities::damned_soul::DamnedSoul>>,
 ) {
     for request in requests.read() {
         let Ok((
@@ -78,10 +79,11 @@ pub fn apply_task_assignment_requests_system(
             mut assigned_task,
             mut dest,
             mut path,
-            idle,
+            mut idle,
             _inventory_opt,
             under_command_opt,
             participating_opt,
+            resting_opt,
         )) = q_souls.get_mut(request.worker_entity)
         else {
             warn!(
@@ -105,6 +107,25 @@ pub fn apply_task_assignment_requests_system(
             commands.trigger(OnGatheringLeft {
                 entity: worker_entity,
             });
+        }
+        commands
+            .entity(worker_entity)
+            .remove::<crate::relationships::RestAreaReservedFor>();
+        if resting_opt.is_some() {
+            commands
+                .entity(worker_entity)
+                .remove::<crate::relationships::RestingIn>()
+                .insert(RestAreaCooldown {
+                    remaining_secs: crate::constants::REST_AREA_RECRUIT_COOLDOWN_SECS,
+                });
+            if let Ok(mut visibility) = q_visibility.get_mut(worker_entity) {
+                *visibility = Visibility::Visible;
+            }
+            if idle.behavior == IdleBehavior::Resting {
+                idle.behavior = IdleBehavior::Wandering;
+                idle.idle_timer = 0.0;
+                idle.total_idle_time = 0.0;
+            }
         }
 
         prepare_worker_for_task_apply(

@@ -49,7 +49,9 @@ pub fn periodic_emotion_system(
             // このフレームでは処理しないが、タイマーは更新する必要がある
             state.tick(dt);
             // アイドル時間も更新
-            if under_command_opt.is_none() && idle.behavior != IdleBehavior::Gathering {
+            if under_command_opt.is_none()
+                && !matches!(idle.behavior, IdleBehavior::Gathering | IdleBehavior::Resting)
+            {
                 state.idle_time += dt;
             } else {
                 state.idle_time = 0.0;
@@ -61,7 +63,9 @@ pub fn periodic_emotion_system(
         state.tick(dt);
 
         // アイドル時間の更新
-        if under_command_opt.is_none() && idle.behavior != IdleBehavior::Gathering {
+        if under_command_opt.is_none()
+            && !matches!(idle.behavior, IdleBehavior::Gathering | IdleBehavior::Resting)
+        {
             state.idle_time += dt;
         } else {
             state.idle_time = 0.0;

@@ -2,7 +2,7 @@ use super::{
     EntityInspectionQuery, InspectionAccumulator, SoulInspectionFields, format_escape_info,
     format_inventory_str, format_task_str,
 };
-use crate::constants::MUD_MIXER_MUD_CAPACITY;
+use crate::constants::{MUD_MIXER_MUD_CAPACITY, REST_AREA_DREAM_RATE};
 use bevy::prelude::*;
 
 impl EntityInspectionQuery<'_, '_> {
@@ -147,6 +147,8 @@ impl EntityInspectionQuery<'_, '_> {
             stockpile_opt,
             stored_items_opt,
             mixer_storage_opt,
+            rest_area_opt,
+            rest_area_occupants_opt,
         )) = self.q_buildings.get(entity)
         else {
             return;
@@ -203,6 +205,19 @@ impl EntityInspectionQuery<'_, '_> {
                 storage.sand, storage.rock, water_count, storage.mud, MUD_MIXER_MUD_CAPACITY
             );
             model.push_tooltip(storage_line.clone());
+        }
+
+        if let Some(rest_area) = rest_area_opt {
+            let resting_count = rest_area_occupants_opt
+                .map(crate::relationships::RestAreaOccupants::len)
+                .unwrap_or(0)
+                .min(rest_area.capacity);
+            let dream_rate = resting_count as f32 * REST_AREA_DREAM_RATE;
+            let line = format!(
+                "Resting: {}/{} | Dream: {:.2}/s",
+                resting_count, rest_area.capacity, dream_rate
+            );
+            model.push_tooltip(line);
         }
     }
 

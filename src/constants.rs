@@ -158,6 +158,18 @@ pub const IDLE_DURATION_SIT_MIN: f32 = 3.0;
 pub const IDLE_DURATION_SIT_MAX: f32 = 6.0;
 pub const IDLE_DURATION_WANDER_MIN: f32 = 2.0;
 pub const IDLE_DURATION_WANDER_MAX: f32 = 4.0;
+/// 休憩所の収容人数
+pub const REST_AREA_CAPACITY: usize = 5;
+/// 休憩所での Dream 供給レート（1人あたり毎秒）
+pub const REST_AREA_DREAM_RATE: f32 = 0.12;
+/// 休憩所退出後のリクルート不可クールダウン（秒）
+pub const REST_AREA_RECRUIT_COOLDOWN_SECS: f32 = 15.0;
+/// 休憩所での疲労回復レート（毎秒）
+pub const REST_AREA_FATIGUE_RECOVERY_RATE: f32 = 0.08;
+/// 休憩所でのストレス回復レート（毎秒）
+pub const REST_AREA_STRESS_RECOVERY_RATE: f32 = 0.03;
+/// 休憩所での滞在時間（秒）
+pub const REST_AREA_RESTING_DURATION: f32 = 15.0;
 
 // ============================================================
 // AI ロジック定数 - 逃走システム (Escape System)

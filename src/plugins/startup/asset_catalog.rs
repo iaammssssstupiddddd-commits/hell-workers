@@ -106,6 +106,7 @@ pub fn create_game_assets(asset_server: &AssetServer, images: &mut Assets<Image>
         bone_pile: asset_server.load("textures/resources/bone_pile/bone_pile.png"),
         stasis_mud: asset_server.load("textures/resources/stasis_mud/stasis_mud.png"),
         mud_mixer: asset_server.load("textures/buildings/mud_mixer/mud mixer.png"),
+        rest_area: asset_server.load("textures/buildings/rest_area/rest_area.png"),
         mud_mixer_anim_1: asset_server.load("textures/buildings/mud_mixer/mud mixer anime 1.png"),
         mud_mixer_anim_2: asset_server.load("textures/buildings/mud_mixer/mud mixer anime 2.png"),
         mud_mixer_anim_3: asset_server.load("textures/buildings/mud_mixer/mud mixer anime 3.png"),

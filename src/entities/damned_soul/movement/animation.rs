@@ -33,6 +33,7 @@ fn select_soul_image<'a>(
 
     match idle.behavior {
         IdleBehavior::Sleeping => &game_assets.soul_sleep,
+        IdleBehavior::Resting => &game_assets.soul_sleep,
         IdleBehavior::ExhaustedGathering => &game_assets.soul_exhausted,
         IdleBehavior::Escaping => &game_assets.soul,
         IdleBehavior::Gathering => match idle.gathering_behavior {
