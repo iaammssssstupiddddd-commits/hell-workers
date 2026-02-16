@@ -1,16 +1,32 @@
 //! Floor construction visual feedback
 
 use crate::assets::GameAssets;
-use crate::constants::{FLOOR_BONES_PER_TILE, TILE_SIZE};
-use crate::systems::jobs::floor_construction::{FloorTileBlueprint, FloorTileState};
+use crate::constants::{FLOOR_BONES_PER_TILE, FLOOR_CURING_DURATION_SECS, TILE_SIZE, Z_BAR_BG};
+use crate::systems::jobs::floor_construction::{
+    FloorConstructionPhase, FloorConstructionSite, FloorTileBlueprint, FloorTileState,
+};
+use crate::systems::utils::progress_bar::{
+    GenericProgressBar, ProgressBarBackground, ProgressBarConfig, ProgressBarFill,
+    spawn_progress_bar, sync_progress_bar_fill_position, sync_progress_bar_position,
+    update_progress_bar_fill,
+};
 use bevy::prelude::*;
+use std::collections::HashSet;
 
 const MAX_BONE_VISUAL_SLOTS: u8 = 2;
+const FLOOR_CURING_BAR_WIDTH: f32 = 40.0;
+const FLOOR_CURING_BAR_HEIGHT: f32 = 5.0;
+const FLOOR_CURING_BAR_Y_OFFSET: f32 = TILE_SIZE * 0.75;
+const FLOOR_CURING_BAR_BG_COLOR: Color = Color::srgba(0.1, 0.1, 0.1, 0.9);
+const FLOOR_CURING_BAR_FILL_COLOR: Color = Color::srgba(0.2, 0.9, 0.3, 1.0);
 
 #[derive(Component)]
 pub struct FloorTileBoneVisual {
     slot: u8,
 }
+
+#[derive(Component)]
+pub struct FloorCuringProgressBar;
 
 fn progress_to_ratio(progress: u8) -> f32 {
     (progress as f32 / 100.0).clamp(0.0, 1.0)
@@ -32,6 +48,13 @@ fn bone_visual_offset(slot: u8) -> Vec3 {
         1 => Vec3::new(TILE_SIZE * 0.18, TILE_SIZE * 0.10, 0.05),
         _ => Vec3::new(0.0, 0.0, 0.05),
     }
+}
+
+fn curing_progress_ratio(site: &FloorConstructionSite) -> f32 {
+    if FLOOR_CURING_DURATION_SECS <= f32::EPSILON {
+        return 1.0;
+    }
+    (1.0 - site.curing_remaining_secs / FLOOR_CURING_DURATION_SECS).clamp(0.0, 1.0)
 }
 
 /// Update floor tile sprite color based on construction state.
@@ -104,5 +127,121 @@ pub fn sync_floor_tile_bone_visuals_system(
                 ));
             });
         }
+    }
+}
+
+/// Spawn/remove curing progress bars for floor construction sites.
+pub fn manage_floor_curing_progress_bars_system(
+    mut commands: Commands,
+    q_sites: Query<
+        (Entity, &Transform, &FloorConstructionSite),
+        Without<FloorCuringProgressBar>,
+    >,
+    q_bars: Query<(Entity, &ChildOf), With<FloorCuringProgressBar>>,
+) {
+    let mut curing_sites = HashSet::new();
+    let mut bar_parents = HashSet::new();
+    for (_, child_of) in q_bars.iter() {
+        bar_parents.insert(child_of.parent());
+    }
+
+    for (site_entity, site_transform, site) in q_sites.iter() {
+        if site.phase != FloorConstructionPhase::Curing {
+            continue;
+        }
+
+        curing_sites.insert(site_entity);
+        if bar_parents.contains(&site_entity) {
+            continue;
+        }
+
+        let config = ProgressBarConfig {
+            width: FLOOR_CURING_BAR_WIDTH,
+            height: FLOOR_CURING_BAR_HEIGHT,
+            y_offset: FLOOR_CURING_BAR_Y_OFFSET,
+            bg_color: FLOOR_CURING_BAR_BG_COLOR,
+            fill_color: FLOOR_CURING_BAR_FILL_COLOR,
+            z_index: Z_BAR_BG,
+        };
+        let (bg_entity, fill_entity) =
+            spawn_progress_bar(&mut commands, site_entity, site_transform, config);
+
+        commands
+            .entity(bg_entity)
+            .insert((FloorCuringProgressBar, ChildOf(site_entity)));
+        commands
+            .entity(fill_entity)
+            .insert((FloorCuringProgressBar, ChildOf(site_entity)));
+    }
+
+    for (bar_entity, child_of) in q_bars.iter() {
+        if !curing_sites.contains(&child_of.parent()) {
+            commands.entity(bar_entity).try_despawn();
+        }
+    }
+}
+
+/// Update curing progress bar fill/position.
+pub fn update_floor_curing_progress_bars_system(
+    q_sites: Query<(&Transform, &FloorConstructionSite), Without<FloorCuringProgressBar>>,
+    q_generic_bars: Query<&GenericProgressBar>,
+    mut q_bg_bars: Query<
+        (Entity, &ChildOf, &mut Transform),
+        (
+            With<FloorCuringProgressBar>,
+            With<ProgressBarBackground>,
+            Without<FloorConstructionSite>,
+            Without<ProgressBarFill>,
+        ),
+    >,
+    mut q_fill_bars: Query<
+        (Entity, &ChildOf, &mut Sprite, &mut Transform),
+        (
+            With<FloorCuringProgressBar>,
+            With<ProgressBarFill>,
+            Without<FloorConstructionSite>,
+            Without<ProgressBarBackground>,
+        ),
+    >,
+) {
+    for (bg_entity, child_of, mut bg_transform) in q_bg_bars.iter_mut() {
+        let Ok((site_transform, site)) = q_sites.get(child_of.parent()) else {
+            continue;
+        };
+        if site.phase != FloorConstructionPhase::Curing {
+            continue;
+        }
+        let Ok(generic_bar) = q_generic_bars.get(bg_entity) else {
+            continue;
+        };
+        sync_progress_bar_position(site_transform, &generic_bar.config, &mut bg_transform);
+    }
+
+    for (fill_entity, child_of, mut sprite, mut fill_transform) in q_fill_bars.iter_mut() {
+        let Ok((site_transform, site)) = q_sites.get(child_of.parent()) else {
+            continue;
+        };
+        if site.phase != FloorConstructionPhase::Curing {
+            continue;
+        }
+        let Ok(generic_bar) = q_generic_bars.get(fill_entity) else {
+            continue;
+        };
+
+        let progress = curing_progress_ratio(site);
+        update_progress_bar_fill(
+            progress,
+            &generic_bar.config,
+            &mut sprite,
+            &mut fill_transform,
+            Some(FLOOR_CURING_BAR_FILL_COLOR),
+        );
+        let fill_width = sprite.custom_size.map(|s| s.x).unwrap_or(0.0);
+        sync_progress_bar_fill_position(
+            site_transform,
+            &generic_bar.config,
+            fill_width,
+            &mut fill_transform,
+        );
     }
 }

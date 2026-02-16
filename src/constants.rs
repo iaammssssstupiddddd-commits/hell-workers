@@ -239,6 +239,8 @@ pub const STASIS_MUD_OUTPUT: u32 = 5;
 pub const MUD_MIXER_CAPACITY: u32 = 5;
 /// MudMixer の mud 最大保存数
 pub const MUD_MIXER_MUD_CAPACITY: u32 = 10;
+/// MudMixer の精製タスク優先度（原料搬入より先に精製を開始する）
+pub const MUD_MIXER_REFINE_PRIORITY: u32 = 6;
 /// Wall の本設化に必要な StasisMud 数
 pub const _STASIS_MUD_REQUIREMENT: u32 = 1;
 

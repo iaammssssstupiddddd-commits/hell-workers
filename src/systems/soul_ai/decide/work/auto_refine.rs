@@ -4,6 +4,7 @@
 
 use bevy::prelude::*;
 
+use crate::constants::MUD_MIXER_REFINE_PRIORITY;
 use crate::entities::familiar::{ActiveCommand, FamiliarCommand};
 use crate::events::{DesignationOp, DesignationRequest};
 use crate::relationships::StoredItems;
@@ -88,7 +89,7 @@ pub fn mud_mixer_auto_refine_system(
                             work_type: WorkType::Refine,
                             issued_by: fam_entity,
                             task_slots: 1,
-                            priority: None,
+                            priority: Some(MUD_MIXER_REFINE_PRIORITY),
                             target_blueprint: None,
                             target_mixer: None,
                             reserved_for_task: false,
