@@ -7,6 +7,10 @@ use super::producer::{
         floor_tile_designation_system,
     },
     mixer::mud_mixer_auto_haul_system,
+    provisional_wall::{
+        provisional_wall_auto_haul_system, provisional_wall_designation_system,
+        provisional_wall_material_delivery_sync_system,
+    },
     tank_water_request::tank_water_request_system,
     task_area::task_area_auto_haul_system,
     wheelbarrow::wheelbarrow_auto_haul_system,
@@ -82,6 +86,11 @@ impl Plugin for TransportRequestPlugin {
                     floor_construction_auto_haul_system,
                     floor_material_delivery_sync_system.after(floor_construction_auto_haul_system),
                     floor_tile_designation_system.after(floor_material_delivery_sync_system),
+                    provisional_wall_auto_haul_system,
+                    provisional_wall_material_delivery_sync_system
+                        .after(provisional_wall_auto_haul_system),
+                    provisional_wall_designation_system
+                        .after(provisional_wall_material_delivery_sync_system),
                     mud_mixer_auto_haul_system,
                     tank_water_request_system,
                     task_area_auto_haul_system,

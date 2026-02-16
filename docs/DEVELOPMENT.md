@@ -51,7 +51,7 @@
 ### 7. TransportRequest の規約（M3〜M7 完了）
 運搬系は全て **Anchor Request パターン** に統一済み。request エンティティをアンカー位置（Blueprint/Mixer/Stockpile）に生成し、割り当て時にソースを遅延解決する。
 
-- **request 化済み**: `DepositToStockpile`, `DeliverToBlueprint`, `DeliverToMixerSolid`, `DeliverWaterToMixer`, `GatherWaterToTank`, `ReturnBucket`, `BatchWheelbarrow`
+- **request 化済み**: `DepositToStockpile`, `DeliverToBlueprint`, `DeliverToFloorConstruction`, `DeliverToProvisionalWall`, `DeliverToMixerSolid`, `DeliverWaterToMixer`, `GatherWaterToTank`, `ReturnBucket`, `ReturnWheelbarrow`, `BatchWheelbarrow`, `ConsolidateStockpile`
 - `task_finder` は `DesignationSpatialGrid` と `TransportRequestSpatialGrid` の両方から候補を収集。
 - 運搬系 WorkType（`Haul`, `HaulToMixer`, `GatherWater`, `HaulWaterToMixer`, `WheelbarrowHaul`）は request 付き候補のみを扱う。
 - request は需要 0 のとき `Designation` を外して休止、または despawn。

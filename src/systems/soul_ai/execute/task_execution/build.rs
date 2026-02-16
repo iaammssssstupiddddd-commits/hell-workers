@@ -44,7 +44,7 @@ pub fn handle_build_task(
                     return;
                 }
 
-                update_destination_to_blueprint(
+                let reachable = update_destination_to_blueprint(
                     ctx.dest,
                     &bp.occupied_grids,
                     ctx.path,
@@ -52,6 +52,19 @@ pub fn handle_build_task(
                     world_map,
                     ctx.pf_context,
                 );
+                if !reachable {
+                    info!(
+                        "BUILD: Soul {:?} cannot reach blueprint {:?}, canceling",
+                        ctx.soul_entity, blueprint_entity
+                    );
+                    ctx.queue_reservation(crate::events::ResourceReservationOp::ReleaseSource {
+                        source: blueprint_entity,
+                        amount: 1,
+                    });
+                    clear_task_and_path(ctx.task, ctx.path);
+                    commands.entity(ctx.soul_entity).remove::<WorkingOn>();
+                    return;
+                }
 
                 if is_near_blueprint(soul_pos, &bp.occupied_grids) {
                     *ctx.task = AssignedTask::Build(

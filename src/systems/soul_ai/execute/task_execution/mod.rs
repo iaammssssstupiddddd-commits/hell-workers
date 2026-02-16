@@ -3,6 +3,7 @@
 //! 魂に割り当てられたタスクの実行ロジックを提供します。
 
 pub mod build;
+pub mod coat_wall;
 pub mod collect_bone;
 pub mod collect_sand;
 pub mod common;

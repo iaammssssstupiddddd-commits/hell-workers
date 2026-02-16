@@ -70,6 +70,7 @@ impl TransportRequestKind {
             Self::DepositToStockpile => "DepositToStockpile",
             Self::DeliverToBlueprint => "DeliverToBlueprint",
             Self::DeliverToFloorConstruction => "DeliverToFloorConstruction",
+            Self::DeliverToProvisionalWall => "DeliverToProvisionalWall",
             Self::DeliverToMixerSolid => "DeliverToMixerSolid",
             Self::DeliverWaterToMixer => "DeliverWaterToMixer",
             Self::GatherWaterToTank => "GatherWaterToTank",

@@ -114,7 +114,7 @@ pub fn handle_haul_to_blueprint_task(
         }
         HaulToBpPhase::GoingToBlueprint => {
             if let Ok((_bp_transform, bp, _)) = q_blueprints.get(blueprint_entity) {
-                update_destination_to_blueprint(
+                let reachable = update_destination_to_blueprint(
                     ctx.dest,
                     &bp.occupied_grids,
                     ctx.path,
@@ -122,6 +122,14 @@ pub fn handle_haul_to_blueprint_task(
                     world_map,
                     ctx.pf_context,
                 );
+                if !reachable {
+                    info!(
+                        "HAUL_TO_BP: Cancelled for {:?} - Blueprint {:?} unreachable",
+                        ctx.soul_entity, blueprint_entity
+                    );
+                    cancel::cancel_haul_to_blueprint(ctx, item_entity, blueprint_entity);
+                    return;
+                }
 
                 if is_near_blueprint(soul_pos, &bp.occupied_grids) {
                     info!(

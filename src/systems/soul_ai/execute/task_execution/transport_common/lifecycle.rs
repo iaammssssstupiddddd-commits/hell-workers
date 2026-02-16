@@ -8,9 +8,9 @@ use crate::events::ResourceReservationOp;
 use crate::systems::logistics::ResourceType;
 use crate::systems::logistics::transport_request::WheelbarrowDestination;
 use crate::systems::soul_ai::execute::task_execution::types::{
-    AssignedTask, BuildPhase, CollectBonePhase, CollectSandPhase, GatherPhase, GatherWaterPhase,
-    HaulPhase, HaulToBpPhase, HaulToMixerPhase, HaulWaterToMixerPhase, HaulWithWheelbarrowPhase,
-    PourFloorPhase, RefinePhase, ReinforceFloorPhase,
+    AssignedTask, BuildPhase, CoatWallPhase, CollectBonePhase, CollectSandPhase, GatherPhase,
+    GatherWaterPhase, HaulPhase, HaulToBpPhase, HaulToMixerPhase, HaulWaterToMixerPhase,
+    HaulWithWheelbarrowPhase, PourFloorPhase, RefinePhase, ReinforceFloorPhase,
 };
 use bevy::prelude::*;
 
@@ -198,6 +198,14 @@ pub fn collect_active_reservation_ops(
             if !matches!(data.phase, PourFloorPhase::Done) {
                 ops.push(ResourceReservationOp::ReserveSource {
                     source: data.tile,
+                    amount: 1,
+                });
+            }
+        }
+        AssignedTask::CoatWall(data) => {
+            if !matches!(data.phase, CoatWallPhase::Done) {
+                ops.push(ResourceReservationOp::ReserveSource {
+                    source: data.wall,
                     amount: 1,
                 });
             }
