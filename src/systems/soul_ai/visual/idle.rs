@@ -33,6 +33,10 @@ pub fn idle_visual_system(
                     _ => Color::srgba(0.6, 0.6, 0.7, 1.0),
                 };
             }
+            IdleBehavior::Resting => {
+                transform.rotation = Quat::from_rotation_z(std::f32::consts::FRAC_PI_4);
+                sprite.color = Color::srgba(0.6, 0.6, 0.7, 1.0);
+            }
             IdleBehavior::Sitting => {
                 transform.rotation = Quat::IDENTITY;
                 transform.scale.y = 0.8;
@@ -137,7 +141,7 @@ pub fn idle_visual_system(
         if soul.motivation > 0.5
             && !matches!(
                 idle.behavior,
-                IdleBehavior::Gathering | IdleBehavior::ExhaustedGathering
+                IdleBehavior::Gathering | IdleBehavior::ExhaustedGathering | IdleBehavior::Resting
             )
             && matches!(task, AssignedTask::None)
         {

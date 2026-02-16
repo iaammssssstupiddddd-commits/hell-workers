@@ -288,6 +288,7 @@ pub fn soul_status_visual_system(
             // 待機中の場合、さらに詳細な状態を確認
             let is_sleeping = idle_state.map_or(false, |state| {
                 state.behavior == IdleBehavior::Sleeping
+                    || state.behavior == IdleBehavior::Resting
                     || (state.behavior == IdleBehavior::Gathering
                         && state.gathering_behavior == GatheringBehavior::Sleeping)
             });

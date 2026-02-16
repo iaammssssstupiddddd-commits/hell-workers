@@ -79,6 +79,8 @@ pub struct EntityInspectionQuery<'w, 's> {
             Option<&'static crate::systems::logistics::Stockpile>,
             Option<&'static crate::relationships::StoredItems>,
             Option<&'static crate::systems::jobs::MudMixerStorage>,
+            Option<&'static crate::systems::jobs::RestArea>,
+            Option<&'static crate::relationships::RestAreaOccupants>,
         ),
     >,
 }

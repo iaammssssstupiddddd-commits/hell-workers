@@ -19,6 +19,7 @@ pub enum BuildingType {
     Floor,
     Tank,
     MudMixer,
+    RestArea,
     SandPile,
     BonePile,
     WheelbarrowParking,
@@ -41,6 +42,9 @@ impl BuildingType {
             }
             BuildingType::MudMixer => {
                 materials.insert(ResourceType::Wood, 4);
+            }
+            BuildingType::RestArea => {
+                materials.insert(ResourceType::Wood, 5);
             }
             BuildingType::SandPile => {
                 materials.insert(ResourceType::Sand, 10);
@@ -73,6 +77,12 @@ pub struct SandPile;
 
 #[derive(Component)]
 pub struct BonePile;
+
+#[derive(Component, Reflect, Debug, Clone, Copy)]
+#[reflect(Component)]
+pub struct RestArea {
+    pub capacity: usize,
+}
 
 #[derive(Component)]
 pub struct TargetBlueprint(pub Entity);

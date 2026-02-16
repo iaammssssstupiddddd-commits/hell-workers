@@ -1,4 +1,4 @@
-use crate::entities::damned_soul::StressBreakdown;
+use crate::entities::damned_soul::{RestAreaCooldown, StressBreakdown};
 use crate::entities::familiar::FamiliarCommand;
 use crate::systems::familiar_ai::FamiliarAiState;
 use crate::systems::familiar_ai::decide::FamiliarDecideOutput;
@@ -19,6 +19,8 @@ pub struct FamiliarAiStateDecisionParams<'w, 's> {
     pub q_familiars: FamiliarStateQuery<'w, 's>,
     pub q_souls: FamiliarSoulQuery<'w, 's>,
     pub q_breakdown: Query<'w, 's, &'static StressBreakdown>,
+    pub q_resting: Query<'w, 's, (), With<crate::relationships::RestingIn>>,
+    pub q_rest_cooldown: Query<'w, 's, &'static RestAreaCooldown>,
     pub decide_output: FamiliarDecideOutput<'w>,
 }
 
@@ -29,6 +31,8 @@ pub fn familiar_ai_state_system(params: FamiliarAiStateDecisionParams) {
         mut q_familiars,
         mut q_souls,
         q_breakdown,
+        q_resting,
+        q_rest_cooldown,
         mut decide_output,
         ..
     } = params;
@@ -141,6 +145,8 @@ pub fn familiar_ai_state_system(params: FamiliarAiStateDecisionParams) {
                     spatial_grid: &spatial_grid,
                     q_souls: &mut q_souls,
                     q_breakdown: &q_breakdown,
+                    q_resting: &q_resting,
+                    q_cooldown: &q_rest_cooldown,
                     request_writer: &mut decide_output.squad_requests,
                 };
 

@@ -1,7 +1,8 @@
-use super::super::{Blueprint, BonePile, BuildingType, MudMixerStorage, SandPile, TaskSlots};
+use super::super::{Blueprint, BonePile, BuildingType, MudMixerStorage, RestArea, SandPile, TaskSlots};
 use crate::assets::GameAssets;
 use crate::constants::{
-    MUD_MIXER_CAPACITY, TILE_SIZE, WHEELBARROW_CAPACITY, Z_FLOATING_TEXT, Z_ITEM_PICKUP,
+    MUD_MIXER_CAPACITY, REST_AREA_CAPACITY, TILE_SIZE, WHEELBARROW_CAPACITY, Z_FLOATING_TEXT,
+    Z_ITEM_PICKUP,
 };
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
@@ -30,6 +31,10 @@ pub(super) fn apply_building_specific_post_process(
 
     if bp.kind == BuildingType::MudMixer {
         setup_mud_mixer(commands, building_entity);
+    }
+
+    if bp.kind == BuildingType::RestArea {
+        setup_rest_area(commands, building_entity);
     }
 
     if bp.kind == BuildingType::SandPile {
@@ -111,6 +116,12 @@ fn setup_mud_mixer(commands: &mut Commands, building_entity: Entity) {
             resource_type: Some(crate::systems::logistics::ResourceType::Water),
         },
     ));
+}
+
+fn setup_rest_area(commands: &mut Commands, building_entity: Entity) {
+    commands.entity(building_entity).insert(RestArea {
+        capacity: REST_AREA_CAPACITY,
+    });
 }
 
 fn setup_sand_pile(commands: &mut Commands, building_entity: Entity) {

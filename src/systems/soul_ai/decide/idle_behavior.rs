@@ -1,10 +1,13 @@
 use bevy::prelude::*;
 
 use rand::Rng;
+use std::collections::HashMap;
 
 use crate::constants::*;
 use crate::entities::damned_soul::{GatheringBehavior, IdleBehavior};
 use crate::events::{IdleBehaviorOperation, IdleBehaviorRequest};
+use crate::relationships::{RestAreaOccupants, RestAreaReservations};
+use crate::systems::jobs::RestArea;
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
 use crate::systems::soul_ai::helpers::gathering::{GATHERING_LEAVE_RADIUS, GatheringSpot};
 use crate::systems::soul_ai::helpers::query_types::IdleDecisionSoulQuery;
@@ -14,6 +17,7 @@ use crate::world::map::WorldMap;
 // ===== 集会関連の定数 =====
 /// 集会エリアに「到着した」とみなす半径
 pub(crate) const GATHERING_ARRIVAL_RADIUS: f32 = TILE_SIZE * GATHERING_ARRIVAL_RADIUS_BASE;
+pub(crate) const REST_AREA_ARRIVAL_RADIUS: f32 = TILE_SIZE;
 
 // ===== ヘルパー関数 =====
 /// ランダムな集会中のサブ行動を選択
@@ -41,6 +45,79 @@ fn random_position_around(center: Vec2, min_dist: f32, max_dist: f32) -> Vec2 {
     center + Vec2::new(angle.cos() * dist, angle.sin() * dist)
 }
 
+fn rest_area_has_capacity(
+    rest_area_entity: Entity,
+    rest_area: &RestArea,
+    occupants: Option<&RestAreaOccupants>,
+    reservations: Option<&RestAreaReservations>,
+    pending_reservations: &HashMap<Entity, usize>,
+) -> bool {
+    let occupant_count = occupants.map_or(0, crate::relationships::RestAreaOccupants::len);
+    let reserved_count = reservations.map_or(0, crate::relationships::RestAreaReservations::len);
+    let pending_count = pending_reservations
+        .get(&rest_area_entity)
+        .copied()
+        .unwrap_or(0);
+
+    occupant_count + reserved_count + pending_count < rest_area.capacity
+}
+
+fn find_nearest_available_rest_area(
+    pos: Vec2,
+    q_rest_areas: &Query<(
+        Entity,
+        &Transform,
+        &RestArea,
+        Option<&RestAreaOccupants>,
+        Option<&RestAreaReservations>,
+    )>,
+    pending_reservations: &HashMap<Entity, usize>,
+) -> Option<(Entity, Vec2)> {
+    q_rest_areas
+        .iter()
+        .filter(|(rest_area_entity, _, rest_area, occupants, reservations)| {
+            rest_area_has_capacity(
+                *rest_area_entity,
+                rest_area,
+                *occupants,
+                *reservations,
+                pending_reservations,
+            )
+        })
+        .min_by(|a, b| {
+            a.1.translation
+                .truncate()
+                .distance_squared(pos)
+                .partial_cmp(&b.1.translation.truncate().distance_squared(pos))
+                .unwrap()
+        })
+        .map(|(entity, transform, _, _, _)| (entity, transform.translation.truncate()))
+}
+
+fn rest_area_occupied_grids_from_center(center: Vec2) -> [(i32, i32); 4] {
+    let top_right = WorldMap::world_to_grid(center);
+    [
+        (top_right.0 - 1, top_right.1 - 1),
+        (top_right.0, top_right.1 - 1),
+        (top_right.0 - 1, top_right.1),
+        (top_right.0, top_right.1),
+    ]
+}
+
+fn has_arrived_at_rest_area(current_pos: Vec2, rest_area_center: Vec2) -> bool {
+    if current_pos.distance(rest_area_center) <= REST_AREA_ARRIVAL_RADIUS {
+        return true;
+    }
+    let current_grid = WorldMap::world_to_grid(current_pos);
+    rest_area_occupied_grids_from_center(rest_area_center)
+        .iter()
+        .any(|&(gx, gy)| {
+            let dx = (current_grid.0 - gx).abs();
+            let dy = (current_grid.1 - gy).abs();
+            dx <= 1 && dy <= 1 && !(dx == 0 && dy == 0)
+        })
+}
+
 /// アイドル行動の決定システム (Decide Phase)
 ///
 /// 怠惰行動のAIロジック。やる気が低い魂は怠惰な行動をする。
@@ -58,13 +135,32 @@ pub fn idle_behavior_decision_system(
         &GatheringSpot,
         &crate::relationships::GatheringParticipants,
     )>,
+    q_rest_areas: Query<(
+        Entity,
+        &Transform,
+        &RestArea,
+        Option<&RestAreaOccupants>,
+        Option<&RestAreaReservations>,
+    )>,
     mut query: IdleDecisionSoulQuery,
     spot_grid: Res<GatheringSpotSpatialGrid>,
     soul_grid: Res<crate::systems::spatial::SpatialGrid>,
 ) {
     let dt = time.delta_secs();
+    let mut pending_rest_reservations: HashMap<Entity, usize> = HashMap::new();
 
-    for (entity, transform, mut idle, mut dest, soul, mut path, task, participating_in) in
+    for (
+        entity,
+        transform,
+        mut idle,
+        mut dest,
+        soul,
+        mut path,
+        task,
+        participating_in,
+        resting_in,
+        rest_reserved_for,
+    ) in
         query.iter_mut()
     {
         // 参加中の集会スポットの座標とEntityを取得、または最寄りのスポットを探す
@@ -134,6 +230,18 @@ pub fn idle_behavior_decision_system(
                     operation: IdleBehaviorOperation::LeaveGathering { spot_entity: p.0 },
                 });
             }
+            if resting_in.is_some() {
+                request_writer.write(IdleBehaviorRequest {
+                    entity,
+                    operation: IdleBehaviorOperation::LeaveRestArea,
+                });
+            }
+            if rest_reserved_for.is_some() {
+                request_writer.write(IdleBehaviorRequest {
+                    entity,
+                    operation: IdleBehaviorOperation::ReleaseRestArea,
+                });
+            }
             if idle.behavior != IdleBehavior::Wandering {
                 idle.behavior = IdleBehavior::Wandering;
                 idle.idle_timer = 0.0;
@@ -144,9 +252,181 @@ pub fn idle_behavior_decision_system(
             continue;
         }
 
+        let reserved_rest_area = rest_reserved_for.map(|reserved| reserved.0);
+
+        if idle.behavior == IdleBehavior::Resting {
+            if resting_in.is_some() {
+                continue;
+            }
+
+            let current_pos = transform.translation.truncate();
+            let rest_area_target = reserved_rest_area
+                .and_then(|reserved_entity| {
+                    q_rest_areas
+                        .get(reserved_entity)
+                        .ok()
+                        .map(|(_, transform, _, _, _)| {
+                            (reserved_entity, transform.translation.truncate())
+                        })
+                })
+                .or_else(|| {
+                    find_nearest_available_rest_area(
+                        dest.0,
+                        &q_rest_areas,
+                        &pending_rest_reservations,
+                    )
+                })
+                .or_else(|| {
+                    find_nearest_available_rest_area(
+                        current_pos,
+                        &q_rest_areas,
+                        &pending_rest_reservations,
+                    )
+                });
+
+            if let Some((rest_area_entity, rest_area_pos)) = rest_area_target {
+                let just_reserved = if reserved_rest_area != Some(rest_area_entity) {
+                    request_writer.write(IdleBehaviorRequest {
+                        entity,
+                        operation: IdleBehaviorOperation::ReserveRestArea { rest_area_entity },
+                    });
+                    *pending_rest_reservations.entry(rest_area_entity).or_insert(0) += 1;
+                    true
+                } else {
+                    false
+                };
+
+                if has_arrived_at_rest_area(current_pos, rest_area_pos) {
+                    if let Some(p) = participating_in {
+                        request_writer.write(IdleBehaviorRequest {
+                            entity,
+                            operation: IdleBehaviorOperation::LeaveGathering { spot_entity: p.0 },
+                        });
+                    }
+                    idle.idle_timer = 0.0;
+                    idle.total_idle_time = 0.0;
+                    idle.behavior_duration = REST_AREA_RESTING_DURATION;
+                    path.waypoints.clear();
+                    path.current_index = 0;
+                    if !just_reserved {
+                        request_writer.write(IdleBehaviorRequest {
+                            entity,
+                            operation: IdleBehaviorOperation::EnterRestArea { rest_area_entity },
+                        });
+                    }
+                } else {
+                    let destination_changed = dest.0.distance_squared(rest_area_pos) > 1.0;
+                    let needs_new_path = destination_changed
+                        || path.waypoints.is_empty()
+                        || path.current_index >= path.waypoints.len();
+                    if needs_new_path {
+                        idle.idle_timer = 0.0;
+                        idle.behavior_duration = REST_AREA_RESTING_DURATION;
+                        dest.0 = rest_area_pos;
+                        path.waypoints.clear();
+                        path.current_index = 0;
+                    }
+                }
+                continue;
+            }
+
+            if reserved_rest_area.is_some() {
+                request_writer.write(IdleBehaviorRequest {
+                    entity,
+                    operation: IdleBehaviorOperation::ReleaseRestArea,
+                });
+            }
+            idle.behavior = IdleBehavior::Wandering;
+        }
+
         // 逃走中（Escaping）は escaping_decision_system に任せる
         if idle.behavior == IdleBehavior::Escaping {
             continue;
+        }
+
+        let wants_rest_area = soul.laziness > LAZINESS_THRESHOLD_MID
+            || soul.fatigue > FATIGUE_IDLE_THRESHOLD * 0.5
+            || soul.stress > ESCAPE_STRESS_THRESHOLD
+            || idle.total_idle_time > IDLE_TIME_TO_GATHERING * 0.3;
+        if wants_rest_area {
+            let current_pos = transform.translation.truncate();
+            let rest_area_target = reserved_rest_area
+                .and_then(|reserved_entity| {
+                    q_rest_areas
+                        .get(reserved_entity)
+                        .ok()
+                        .map(|(_, transform, _, _, _)| {
+                            (reserved_entity, transform.translation.truncate())
+                        })
+                })
+                .or_else(|| {
+                    find_nearest_available_rest_area(
+                        current_pos,
+                        &q_rest_areas,
+                        &pending_rest_reservations,
+                    )
+                });
+            if let Some((rest_area_entity, rest_area_pos)) = rest_area_target {
+                let just_reserved = if reserved_rest_area != Some(rest_area_entity) {
+                    request_writer.write(IdleBehaviorRequest {
+                        entity,
+                        operation: IdleBehaviorOperation::ReserveRestArea { rest_area_entity },
+                    });
+                    *pending_rest_reservations.entry(rest_area_entity).or_insert(0) += 1;
+                    true
+                } else {
+                    false
+                };
+
+                if has_arrived_at_rest_area(current_pos, rest_area_pos) {
+                    if let Some(p) = participating_in {
+                        request_writer.write(IdleBehaviorRequest {
+                            entity,
+                            operation: IdleBehaviorOperation::LeaveGathering { spot_entity: p.0 },
+                        });
+                    }
+                    idle.behavior = IdleBehavior::Resting;
+                    idle.idle_timer = 0.0;
+                    idle.total_idle_time = 0.0;
+                    idle.behavior_duration = REST_AREA_RESTING_DURATION;
+                    path.waypoints.clear();
+                    path.current_index = 0;
+                    if !just_reserved {
+                        request_writer.write(IdleBehaviorRequest {
+                            entity,
+                            operation: IdleBehaviorOperation::EnterRestArea { rest_area_entity },
+                        });
+                    }
+                    continue;
+                }
+
+                if let Some(p) = participating_in {
+                    request_writer.write(IdleBehaviorRequest {
+                        entity,
+                        operation: IdleBehaviorOperation::LeaveGathering { spot_entity: p.0 },
+                    });
+                }
+                let destination_changed = dest.0.distance_squared(rest_area_pos) > 1.0;
+                let needs_new_path =
+                    destination_changed
+                        || path.waypoints.is_empty()
+                        || path.current_index >= path.waypoints.len();
+
+                idle.behavior = IdleBehavior::Resting;
+                if needs_new_path {
+                    idle.idle_timer = 0.0;
+                    idle.behavior_duration = REST_AREA_RESTING_DURATION;
+                    dest.0 = rest_area_pos;
+                    path.waypoints.clear();
+                    path.current_index = 0;
+                }
+                continue;
+            }
+        } else if reserved_rest_area.is_some() {
+            request_writer.write(IdleBehaviorRequest {
+                entity,
+                operation: IdleBehaviorOperation::ReleaseRestArea,
+            });
         }
 
         idle.total_idle_time += dt;
@@ -220,6 +500,7 @@ pub fn idle_behavior_decision_system(
                 IdleBehavior::Gathering | IdleBehavior::ExhaustedGathering => {
                     rng.gen_range(IDLE_DURATION_WANDER_MIN..IDLE_DURATION_WANDER_MAX)
                 }
+                IdleBehavior::Resting => REST_AREA_RESTING_DURATION,
                 IdleBehavior::Escaping => {
                     // 逃走中は短い間隔で再評価
                     2.0
@@ -472,7 +753,7 @@ pub fn idle_behavior_decision_system(
                     idle.behavior = IdleBehavior::Wandering;
                 }
             }
-            IdleBehavior::Sitting | IdleBehavior::Sleeping => {}
+            IdleBehavior::Sitting | IdleBehavior::Sleeping | IdleBehavior::Resting => {}
             IdleBehavior::Escaping => {
                 // 逃走中は escaping_decision_system で処理されるため、
                 // ここでは何もしない（continueされるはず）

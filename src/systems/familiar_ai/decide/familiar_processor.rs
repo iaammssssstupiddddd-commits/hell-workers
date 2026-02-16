@@ -45,6 +45,9 @@ pub struct FamiliarRecruitmentContext<'a, 'w, 's> {
     pub spatial_grid: &'a SpatialGrid,
     pub q_souls: &'a mut FamiliarSoulQuery<'w, 's>,
     pub q_breakdown: &'a Query<'w, 's, &'static StressBreakdown>,
+    pub q_resting: &'a Query<'w, 's, (), With<crate::relationships::RestingIn>>,
+    pub q_cooldown:
+        &'a Query<'w, 's, &'static crate::entities::damned_soul::RestAreaCooldown>,
     pub request_writer: &'a mut MessageWriter<'w, SquadManagementRequest>,
 }
 
@@ -118,6 +121,8 @@ pub fn process_recruitment(ctx: &mut FamiliarRecruitmentContext<'_, '_, '_>) -> 
             ctx.spatial_grid,
             ctx.q_souls,
             ctx.q_breakdown,
+            ctx.q_resting,
+            ctx.q_cooldown,
             ctx.request_writer,
         ) {
             debug!(
@@ -135,6 +140,8 @@ pub fn process_recruitment(ctx: &mut FamiliarRecruitmentContext<'_, '_, '_>) -> 
                 ctx.spatial_grid,
                 &mut *ctx.q_souls,
                 ctx.q_breakdown,
+                ctx.q_resting,
+                ctx.q_cooldown,
             ) {
                 debug!(
                     "FAM_AI: {:?} scouting distant soul {:?}",

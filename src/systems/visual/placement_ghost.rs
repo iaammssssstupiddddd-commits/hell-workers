@@ -83,7 +83,10 @@ pub fn placement_ghost_system(
         vec![grid_pos, (grid_pos.0 + 1, grid_pos.1)]
     } else {
         match building_type {
-            BuildingType::Tank | BuildingType::MudMixer | BuildingType::WheelbarrowParking => {
+            BuildingType::Tank
+            | BuildingType::MudMixer
+            | BuildingType::RestArea
+            | BuildingType::WheelbarrowParking => {
                 vec![
                     grid_pos,
                     (grid_pos.0 + 1, grid_pos.1),
@@ -127,7 +130,10 @@ pub fn placement_ghost_system(
         base_pos + Vec2::new(TILE_SIZE * 0.5, 0.0)
     } else {
         match building_type {
-            BuildingType::Tank | BuildingType::MudMixer | BuildingType::WheelbarrowParking => {
+            BuildingType::Tank
+            | BuildingType::MudMixer
+            | BuildingType::RestArea
+            | BuildingType::WheelbarrowParking => {
                 let base_pos = WorldMap::grid_to_world(grid_pos.0, grid_pos.1);
                 base_pos + Vec2::new(TILE_SIZE * 0.5, TILE_SIZE * 0.5)
             }
@@ -147,6 +153,7 @@ pub fn placement_ghost_system(
             BuildingType::Floor => (game_assets.dirt.clone(), Vec2::splat(TILE_SIZE)),
             BuildingType::Tank => (game_assets.tank_empty.clone(), Vec2::splat(TILE_SIZE * 2.0)),
             BuildingType::MudMixer => (game_assets.mud_mixer.clone(), Vec2::splat(TILE_SIZE * 2.0)),
+            BuildingType::RestArea => (game_assets.rest_area.clone(), Vec2::splat(TILE_SIZE * 2.0)),
             BuildingType::SandPile => (game_assets.sand_pile.clone(), Vec2::splat(TILE_SIZE)),
             BuildingType::BonePile => (game_assets.bone_pile.clone(), Vec2::splat(TILE_SIZE)),
             BuildingType::WheelbarrowParking => (

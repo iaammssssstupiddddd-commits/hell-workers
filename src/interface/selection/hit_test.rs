@@ -68,7 +68,8 @@ pub(super) fn hovered_entity_at_world_pos(
         let radius = if let Some(building) = building_opt {
             match building.kind {
                 crate::systems::jobs::BuildingType::Tank
-                | crate::systems::jobs::BuildingType::MudMixer => TILE_SIZE, // 2x2なので半径を大きく
+                | crate::systems::jobs::BuildingType::MudMixer
+                | crate::systems::jobs::BuildingType::RestArea => TILE_SIZE, // 2x2なので半径を大きく
                 _ => TILE_SIZE / 2.0,
             }
         } else {

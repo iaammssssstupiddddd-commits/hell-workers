@@ -195,6 +195,7 @@ fn place_building_blueprint(
         }
         BuildingType::Tank => game_assets.tank_empty.clone(),
         BuildingType::MudMixer => game_assets.mud_mixer.clone(),
+        BuildingType::RestArea => game_assets.rest_area.clone(),
         BuildingType::SandPile => game_assets.sand_pile.clone(),
         BuildingType::BonePile => game_assets.bone_pile.clone(),
         BuildingType::WheelbarrowParking => game_assets.wheelbarrow_parking.clone(),
@@ -334,7 +335,10 @@ fn parent_building_type(parent_kind: CompanionParentKind) -> BuildingType {
 
 fn occupied_grids_for_building(building_type: BuildingType, grid: (i32, i32)) -> Vec<(i32, i32)> {
     match building_type {
-        BuildingType::Tank | BuildingType::MudMixer | BuildingType::WheelbarrowParking => vec![
+        BuildingType::Tank
+        | BuildingType::MudMixer
+        | BuildingType::RestArea
+        | BuildingType::WheelbarrowParking => vec![
             grid,
             (grid.0 + 1, grid.1),
             (grid.0, grid.1 + 1),
@@ -347,7 +351,10 @@ fn occupied_grids_for_building(building_type: BuildingType, grid: (i32, i32)) ->
 fn building_spawn_pos(building_type: BuildingType, grid: (i32, i32)) -> Vec2 {
     let base_pos = WorldMap::grid_to_world(grid.0, grid.1);
     match building_type {
-        BuildingType::Tank | BuildingType::MudMixer | BuildingType::WheelbarrowParking => {
+        BuildingType::Tank
+        | BuildingType::MudMixer
+        | BuildingType::RestArea
+        | BuildingType::WheelbarrowParking => {
             base_pos + Vec2::new(TILE_SIZE * 0.5, TILE_SIZE * 0.5)
         }
         _ => base_pos,
@@ -356,7 +363,10 @@ fn building_spawn_pos(building_type: BuildingType, grid: (i32, i32)) -> Vec2 {
 
 fn building_size(building_type: BuildingType) -> Vec2 {
     match building_type {
-        BuildingType::Tank | BuildingType::MudMixer | BuildingType::WheelbarrowParking => {
+        BuildingType::Tank
+        | BuildingType::MudMixer
+        | BuildingType::RestArea
+        | BuildingType::WheelbarrowParking => {
             Vec2::splat(TILE_SIZE * 2.0)
         }
         _ => Vec2::splat(TILE_SIZE),

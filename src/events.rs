@@ -174,6 +174,14 @@ pub enum IdleBehaviorOperation {
     LeaveGathering { spot_entity: Entity },
     /// 集会に到着（ExhaustedGathering -> Gathering）
     ArriveAtGathering { spot_entity: Entity },
+    /// 休憩所スロットを予約
+    ReserveRestArea { rest_area_entity: Entity },
+    /// 休憩所スロット予約を解除
+    ReleaseRestArea,
+    /// 休憩所に入る
+    EnterRestArea { rest_area_entity: Entity },
+    /// 休憩所から出る
+    LeaveRestArea,
 }
 
 // ============================================================

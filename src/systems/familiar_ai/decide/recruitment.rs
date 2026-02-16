@@ -4,11 +4,11 @@
 
 use crate::constants::TILE_SIZE;
 use crate::entities::damned_soul::{
-    DamnedSoul, Destination, IdleBehavior, IdleState, Path, StressBreakdown,
+    DamnedSoul, Destination, IdleBehavior, IdleState, Path, RestAreaCooldown, StressBreakdown,
 };
 use crate::relationships::CommandedBy;
 // use crate::events::OnSoulRecruited;
-use crate::relationships::ParticipatingIn;
+use crate::relationships::{ParticipatingIn, RestingIn};
 use crate::systems::familiar_ai::FamiliarSoulQuery;
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
 use crate::systems::spatial::{SpatialGrid, SpatialGridOps};
@@ -26,6 +26,8 @@ impl RecruitmentManager {
         spatial_grid: &SpatialGrid,
         q_souls: &mut FamiliarSoulQuery,
         q_breakdown: &Query<&StressBreakdown>,
+        q_resting: &Query<(), With<RestingIn>>,
+        q_cooldown: &Query<&RestAreaCooldown>,
         radius_opt: Option<f32>,
     ) -> Option<Entity> {
         // 候補をフィルタリングするヘルパークロージャ
@@ -45,11 +47,19 @@ impl RecruitmentManager {
             let recruit_threshold = fatigue_threshold - 0.2;
             let fatigue_ok = soul.fatigue < recruit_threshold;
             let stress_ok = q_breakdown.get(entity).is_err();
+            let resting_ok = q_resting.get(entity).is_err();
+            let cooldown_ok = q_cooldown
+                .get(entity)
+                .map(|cooldown| cooldown.remaining_secs <= 0.0)
+                .unwrap_or(true);
 
             if uc.is_none()
                 && matches!(*task, AssignedTask::None)
                 && fatigue_ok
                 && stress_ok
+                && resting_ok
+                && cooldown_ok
+                && idle.behavior != IdleBehavior::Resting
                 && idle.behavior != IdleBehavior::ExhaustedGathering
             {
                 Some((entity, transform.translation.truncate()))
@@ -109,6 +119,8 @@ impl RecruitmentManager {
         spatial_grid: &SpatialGrid,
         q_souls: &mut FamiliarSoulQuery,
         q_breakdown: &Query<&StressBreakdown>,
+        q_resting: &Query<(), With<RestingIn>>,
+        q_cooldown: &Query<&RestAreaCooldown>,
         request_writer: &mut MessageWriter<crate::events::SquadManagementRequest>,
     ) -> Option<Entity> {
         let recruit_entity = Self::find_best_recruit(
@@ -118,6 +130,8 @@ impl RecruitmentManager {
             spatial_grid,
             q_souls,
             q_breakdown,
+            q_resting,
+            q_cooldown,
             Some(command_radius),
         )?;
 
@@ -142,6 +156,8 @@ impl RecruitmentManager {
         spatial_grid: &SpatialGrid,
         q_souls: &mut FamiliarSoulQuery,
         q_breakdown: &Query<&StressBreakdown>,
+        q_resting: &Query<(), With<RestingIn>>,
+        q_cooldown: &Query<&RestAreaCooldown>,
     ) -> Option<Entity> {
         Self::find_best_recruit(
             fam_pos,
@@ -150,6 +166,8 @@ impl RecruitmentManager {
             spatial_grid,
             q_souls,
             q_breakdown,
+            q_resting,
+            q_cooldown,
             None, // 半径制限なし（段階的検索）
         )
     }

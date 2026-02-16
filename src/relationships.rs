@@ -327,3 +327,67 @@ impl GatheringParticipants {
         self.0.len()
     }
 }
+
+// ============================================================
+// ソウル ⇔ 休憩所 関係
+// ============================================================
+
+/// ソウルが休憩所に滞在していることを示す Relationship
+/// ソウル側に付与される（ソウル → 休憩所への参照）
+#[derive(Component, Reflect, Debug, Clone, Copy)]
+#[reflect(Component)]
+#[relationship(relationship_target = RestAreaOccupants)]
+pub struct RestingIn(pub Entity);
+
+impl Default for RestingIn {
+    fn default() -> Self {
+        Self(Entity::PLACEHOLDER)
+    }
+}
+
+/// 休憩所に滞在しているソウルの一覧
+/// 休憩所側に自動的に付与・維持される RelationshipTarget
+#[derive(Component, Reflect, Debug, Default)]
+#[reflect(Component)]
+#[relationship_target(relationship = RestingIn)]
+pub struct RestAreaOccupants(Vec<Entity>);
+
+impl RestAreaOccupants {
+    pub fn iter(&self) -> impl Iterator<Item = &Entity> {
+        self.0.iter()
+    }
+
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+}
+
+/// ソウルが休憩所スロットを予約していることを示す Relationship
+/// ソウル側に付与される（ソウル → 休憩所への参照）
+#[derive(Component, Reflect, Debug, Clone, Copy)]
+#[reflect(Component)]
+#[relationship(relationship_target = RestAreaReservations)]
+pub struct RestAreaReservedFor(pub Entity);
+
+impl Default for RestAreaReservedFor {
+    fn default() -> Self {
+        Self(Entity::PLACEHOLDER)
+    }
+}
+
+/// 休憩所の予約中ソウル一覧
+/// 休憩所側に自動的に付与・維持される RelationshipTarget
+#[derive(Component, Reflect, Debug, Default)]
+#[reflect(Component)]
+#[relationship_target(relationship = RestAreaReservedFor)]
+pub struct RestAreaReservations(Vec<Entity>);
+
+impl RestAreaReservations {
+    pub fn iter(&self) -> impl Iterator<Item = &Entity> {
+        self.0.iter()
+    }
+
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+}

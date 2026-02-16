@@ -44,13 +44,23 @@ pub fn pathfinding_system(
             &mut Path,
             &mut AssignedTask,
             &IdleState,
+            Option<&crate::relationships::RestingIn>,
             Option<&mut crate::systems::logistics::Inventory>,
         ),
         With<DamnedSoul>,
     >,
     mut queries: crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
 ) {
-    for (entity, transform, destination, mut path, mut task, idle, mut inventory_opt) in
+    for (
+        entity,
+        transform,
+        destination,
+        mut path,
+        mut task,
+        idle,
+        resting_in,
+        mut inventory_opt,
+    ) in
         query.iter_mut()
     {
         let current_pos = transform.translation.truncate();
@@ -66,7 +76,17 @@ pub fn pathfinding_system(
         // また、パス上に新たな障害物が追加されていないかも確認する。
         if path.current_index < path.waypoints.len() && !path.waypoints.is_empty() {
             if let Some(last) = path.waypoints.last() {
-                if last.distance_squared(destination.0) < 1.0 {
+                let goal_is_walkable = world_map.is_walkable(goal_grid.0, goal_grid.1);
+                let goal_reached_by_path = if goal_is_walkable {
+                    last.distance_squared(destination.0) < 1.0
+                } else {
+                    let last_grid = WorldMap::world_to_grid(*last);
+                    let dx = (last_grid.0 - goal_grid.0).abs();
+                    let dy = (last_grid.1 - goal_grid.1).abs();
+                    dx <= 1 && dy <= 1 && !(dx == 0 && dy == 0)
+                };
+
+                if goal_reached_by_path {
                     // パス上に障害物がないか確認（残りの経路部分のみ）
                     let path_blocked = path.waypoints[path.current_index..].iter().any(|wp| {
                         let grid = WorldMap::world_to_grid(*wp);
@@ -89,6 +109,7 @@ pub fn pathfinding_system(
         let has_task = !matches!(*task, AssignedTask::None);
         let idle_can_move = match idle.behavior {
             IdleBehavior::Sitting | IdleBehavior::Sleeping => false,
+            IdleBehavior::Resting => resting_in.is_none(),
             _ => true,
         };
 
