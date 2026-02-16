@@ -124,7 +124,7 @@ pub struct DreamPool {
 | :--- | :--- |
 | `src/entities/damned_soul/mod.rs` | `DreamQuality`, `DreamState`, `DreamPool` 定義 |
 | `src/entities/damned_soul/spawn.rs` | スポーン時の `DreamState` 初期化 |
-| `src/constants.rs` | Dream関連定数 |
+| `src/constants/dream.rs` | Dream関連定数 |
 | `src/systems/soul_ai/update/dream_update.rs` | Dream蓄積システム |
 | `src/systems/soul_ai/visual/idle.rs` | 夢の質に応じたビジュアル |
 | `src/interface/ui/setup/time_control.rs` | DreamPool UI表示のスポーン |

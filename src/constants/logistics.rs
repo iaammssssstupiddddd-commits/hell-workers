@@ -1,0 +1,41 @@
+//! 搬送・猫車・精製・床建築
+
+use super::world::TILE_SIZE;
+
+// ----- 作業 (Work) -----
+pub const GATHER_SPEED_BASE: f32 = 0.5;
+pub const GATHER_SPEED_ROCK_MULTIPLIER: f32 = 0.5;
+pub const WOOD_DROP_AMOUNT: u32 = 5;
+pub const ROCK_DROP_AMOUNT: u32 = 10;
+pub const BUCKET_CAPACITY: u32 = 5;
+
+// ----- 床建築 (Floor Construction) -----
+pub const FLOOR_MAX_AREA_SIZE: i32 = 10;
+pub const FLOOR_BONES_PER_TILE: u32 = 2;
+pub const FLOOR_MUD_PER_TILE: u32 = 1;
+pub const FLOOR_REINFORCE_DURATION_SECS: f32 = 3.0;
+pub const FLOOR_POUR_DURATION_SECS: f32 = 2.0;
+pub const FLOOR_CURING_DURATION_SECS: f32 = 5.0;
+pub const FLOOR_CONSTRUCTION_PRIORITY: u32 = 10;
+
+// ----- 精製 (Refining) -----
+pub const SAND_DROP_AMOUNT: u32 = 1;
+pub const BONE_DROP_AMOUNT: u32 = 1;
+pub const STASIS_MUD_OUTPUT: u32 = 5;
+pub const MUD_MIXER_CAPACITY: u32 = 5;
+pub const MUD_MIXER_MUD_CAPACITY: u32 = 10;
+pub const MUD_MIXER_REFINE_PRIORITY: u32 = 6;
+
+// ----- 猫車 (Wheelbarrow) -----
+pub const WHEELBARROW_CAPACITY: usize = 10;
+pub const WHEELBARROW_OFFSET: f32 = TILE_SIZE * 0.5;
+pub const WHEELBARROW_MIN_BATCH_SIZE: usize = 3;
+pub const WHEELBARROW_PREFERRED_MIN_BATCH_SIZE: usize = 3;
+pub const SINGLE_BATCH_WAIT_SECS: f64 = 5.0;
+pub const WHEELBARROW_LEASE_DURATION_SECS: f64 = 30.0;
+pub const WHEELBARROW_SCORE_BATCH_SIZE: f32 = 10.0;
+pub const WHEELBARROW_SCORE_PRIORITY: f32 = 5.0;
+pub const WHEELBARROW_SCORE_DISTANCE: f32 = 0.1;
+pub const WHEELBARROW_SCORE_SMALL_BATCH_PENALTY: f32 = 20.0;
+pub const WHEELBARROW_ARBITRATION_TOP_K: usize = 24;
+pub const WHEELBARROW_ACTIVE_SCALE: f32 = 1.8;
