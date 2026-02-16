@@ -394,7 +394,6 @@ mod tests {
         let path = find_path_to_boundary(&map, &mut ctx, (1, 1), &target);
         assert!(path.is_some(), "Path should be found");
         let path = path.unwrap();
-        println!("1x1 Path: {:?}", path);
 
         // 1マスのターゲットの場合、最後はターゲットの隣接マスで終わるべき
         let last = path.last().unwrap();

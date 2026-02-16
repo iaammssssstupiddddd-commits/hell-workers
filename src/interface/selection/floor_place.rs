@@ -174,11 +174,6 @@ fn apply_floor_placement(
         ))
         .id();
 
-    info!(
-        "Created FloorConstructionSite {:?} with {} tiles",
-        site_entity, tiles_total
-    );
-
     // Spawn FloorTileBlueprint children
     for (gx, gy) in valid_tiles {
         let world_pos = WorldMap::grid_to_world(gx, gy);
@@ -197,10 +192,6 @@ fn apply_floor_placement(
         ));
     }
 
-    info!(
-        "Spawned {} floor tile blueprints for site {:?}",
-        tiles_total, site_entity
-    );
 }
 
 fn apply_wall_placement(
@@ -249,8 +240,6 @@ fn apply_wall_placement(
     }
 
     let texture = game_assets.wall_isolated.clone();
-    let tiles_total = valid_tiles.len();
-
     for (gx, gy) in valid_tiles {
         let world_pos = WorldMap::grid_to_world(gx, gy);
         let wall_blueprint = commands
@@ -274,6 +263,4 @@ fn apply_wall_placement(
         world_map.buildings.insert((gx, gy), wall_blueprint);
         world_map.add_obstacle(gx, gy);
     }
-
-    info!("Spawned {} wall blueprints", tiles_total);
 }

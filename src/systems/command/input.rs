@@ -20,28 +20,21 @@ pub fn familiar_command_input_system(
 
     if keyboard.just_pressed(KeyCode::Digit1) || keyboard.just_pressed(KeyCode::KeyC) {
         task_context.0 = TaskMode::DesignateChop(None);
-        info!("TASK_MODE: 伐採対象を範囲指定（ドラッグ）またはクリックしてください");
     } else if keyboard.just_pressed(KeyCode::Digit2) || keyboard.just_pressed(KeyCode::KeyM) {
         task_context.0 = TaskMode::DesignateMine(None);
-        info!("TASK_MODE: 採掘対象を範囲指定（ドラッグ）またはクリックしてください");
     } else if keyboard.just_pressed(KeyCode::Digit3) || keyboard.just_pressed(KeyCode::KeyH) {
         task_context.0 = TaskMode::DesignateHaul(None);
-        info!("TASK_MODE: 運搬対象を範囲指定（ドラッグ）またはクリックしてください");
     } else if keyboard.just_pressed(KeyCode::Digit4) || keyboard.just_pressed(KeyCode::KeyB) {
         task_context.0 = TaskMode::SelectBuildTarget;
-        info!("TASK_MODE: 建築対象を選択してください（Blueprintをクリック）");
     } else if keyboard.just_pressed(KeyCode::Digit0) || keyboard.just_pressed(KeyCode::Delete) {
         task_context.0 = TaskMode::CancelDesignation(None);
-        info!("TASK_MODE: 指示をキャンセルする範囲を指定してください");
     } else if keyboard.just_pressed(KeyCode::Escape) {
         task_context.0 = TaskMode::None;
         if let Ok((mut active, area_opt)) = q_active_commands.get_mut(entity) {
             if matches!(active.command, FamiliarCommand::Idle) && area_opt.is_some() {
                 active.command = FamiliarCommand::Patrol;
-                info!("TASK_MODE: 待機解除 / 巡回再開");
             } else {
                 active.command = FamiliarCommand::Idle;
-                info!("TASK_MODE: キャンセル / 待機状態");
             }
         }
     }

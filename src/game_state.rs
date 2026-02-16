@@ -59,28 +59,3 @@ pub struct CompanionPlacement {
 /// companion 配置コンテキスト
 #[derive(Resource, Default)]
 pub struct CompanionPlacementState(pub Option<CompanionPlacement>);
-
-/// PlayMode切替時のログ出力（デバッグ用）
-pub fn log_enter_building_mode() {
-    info!("STATE: Entered BuildingPlace mode");
-}
-
-pub fn log_exit_building_mode() {
-    info!("STATE: Exited BuildingPlace mode");
-}
-
-pub fn log_enter_zone_mode() {
-    info!("STATE: Entered ZonePlace mode");
-}
-
-pub fn log_exit_zone_mode() {
-    info!("STATE: Exited ZonePlace mode");
-}
-
-pub fn log_enter_task_mode() {
-    info!("STATE: Entered TaskDesignation mode");
-}
-
-pub fn log_exit_task_mode() {
-    info!("STATE: Exited TaskDesignation mode");
-}

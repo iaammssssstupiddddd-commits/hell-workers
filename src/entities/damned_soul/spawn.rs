@@ -4,7 +4,7 @@ use super::*;
 use crate::assets::GameAssets;
 use crate::constants::*;
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
-use crate::world::map::{RIVER_X_MAX, RIVER_X_MIN, RIVER_Y_MAX, SAND_WIDTH, WorldMap};
+use crate::world::map::{RIVER_X_MAX, RIVER_X_MIN, RIVER_Y_MIN, WorldMap};
 use rand::Rng;
 use std::env;
 
@@ -65,8 +65,8 @@ fn initial_spawn_count() -> u32 {
 }
 
 fn pick_river_south_bank_spawn(world_map: &WorldMap, rng: &mut impl Rng) -> Option<Vec2> {
-    let south_y_min = RIVER_Y_MAX + 1;
-    let south_y_max = (south_y_min + SAND_WIDTH - 1).max(south_y_min);
+    let south_y_max = RIVER_Y_MIN - 1;
+    let south_y_min = 5; // マップ端の少し内側から開始
 
     for _ in 0..64 {
         let x = rng.gen_range(RIVER_X_MIN..=RIVER_X_MAX);
@@ -76,11 +76,15 @@ fn pick_river_south_bank_spawn(world_map: &WorldMap, rng: &mut impl Rng) -> Opti
         }
     }
 
-    let fallback_x = rng.gen_range(RIVER_X_MIN..=RIVER_X_MAX);
-    let fallback = WorldMap::grid_to_world(fallback_x, south_y_min);
-    world_map
-        .get_nearest_walkable_grid(fallback)
-        .map(|(gx, gy)| WorldMap::grid_to_world(gx, gy))
+    for _ in 0..256 {
+        let x = rng.gen_range(RIVER_X_MIN..=RIVER_X_MAX);
+        let y = rng.gen_range(south_y_min..=south_y_max);
+        if world_map.is_walkable(x, y) {
+            return Some(WorldMap::grid_to_world(x, y));
+        }
+    }
+
+    None
 }
 
 fn queue_river_spawn_events(
