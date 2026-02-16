@@ -223,6 +223,18 @@ pub fn resolve_haul_to_floor_construction_inputs(
     Some((req.anchor, req.resource_type))
 }
 
+pub fn resolve_haul_to_provisional_wall_inputs(
+    task_entity: Entity,
+    queries: &crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
+) -> Option<(Entity, ResourceType)> {
+    let req = queries.transport_requests.get(task_entity).ok()?;
+    if !matches!(req.kind, TransportRequestKind::DeliverToProvisionalWall) {
+        return None;
+    }
+
+    Some((req.anchor, req.resource_type))
+}
+
 pub fn resolve_haul_to_mixer_inputs(
     task_entity: Entity,
     queries: &crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,

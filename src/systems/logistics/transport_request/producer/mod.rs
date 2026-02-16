@@ -3,6 +3,7 @@ pub mod bucket;
 pub mod consolidation;
 pub mod floor_construction;
 pub mod mixer;
+pub mod provisional_wall;
 pub mod stockpile_group;
 pub mod tank_water_request;
 pub mod task_area;

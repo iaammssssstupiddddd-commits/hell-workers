@@ -1,4 +1,4 @@
-use super::super::{Blueprint, Building, BuildingType};
+use super::super::{Blueprint, Building, BuildingType, ProvisionalWall};
 use crate::assets::GameAssets;
 use crate::constants::TILE_SIZE;
 use bevy::prelude::*;
@@ -9,6 +9,7 @@ pub(super) fn spawn_completed_building(
     transform: &Transform,
     game_assets: &GameAssets,
 ) -> Entity {
+    let is_provisional = !bp.is_fully_complete();
     let (sprite_image, custom_size) = match bp.kind {
         BuildingType::Wall => (game_assets.wall_isolated.clone(), Vec2::splat(TILE_SIZE)),
         BuildingType::Floor => (game_assets.stone.clone(), Vec2::splat(TILE_SIZE)),
@@ -22,11 +23,11 @@ pub(super) fn spawn_completed_building(
         ),
     };
 
-    commands
+    let building_entity = commands
         .spawn((
             Building {
                 kind: bp.kind,
-                is_provisional: !bp.is_fully_complete(),
+                is_provisional,
             },
             Sprite {
                 image: sprite_image,
@@ -46,5 +47,13 @@ pub(super) fn spawn_completed_building(
                 },
             },
         ))
-        .id()
+        .id();
+
+    if bp.kind == BuildingType::Wall && is_provisional {
+        commands
+            .entity(building_entity)
+            .insert(ProvisionalWall::default());
+    }
+
+    building_entity
 }

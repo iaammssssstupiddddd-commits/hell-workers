@@ -208,6 +208,7 @@ pub fn sync_reservations_system(
             TransportRequestKind::DepositToStockpile
             | TransportRequestKind::DeliverToBlueprint
             | TransportRequestKind::DeliverToFloorConstruction
+            | TransportRequestKind::DeliverToProvisionalWall
             | TransportRequestKind::GatherWaterToTank
             | TransportRequestKind::ConsolidateStockpile => {
                 // DeliveringTo リレーションシップを使用するため、ここでは HashMap に積まない

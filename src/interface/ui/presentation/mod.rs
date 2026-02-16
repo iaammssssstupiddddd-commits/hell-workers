@@ -75,6 +75,7 @@ pub struct EntityInspectionQuery<'w, 's> {
         's,
         (
             &'static crate::systems::jobs::Building,
+            Option<&'static crate::systems::jobs::ProvisionalWall>,
             Option<&'static crate::systems::logistics::Stockpile>,
             Option<&'static crate::relationships::StoredItems>,
             Option<&'static crate::systems::jobs::MudMixerStorage>,
@@ -166,6 +167,7 @@ pub(super) fn format_task_str(task: &AssignedTask) -> String {
         AssignedTask::HaulWithWheelbarrow(data) => format!("HaulWheelbarrow ({:?})", data.phase),
         AssignedTask::ReinforceFloorTile(data) => format!("ReinforceFloor ({:?})", data.phase),
         AssignedTask::PourFloorTile(data) => format!("PourFloor ({:?})", data.phase),
+        AssignedTask::CoatWall(data) => format!("CoatWall ({:?})", data.phase),
     }
 }
 
