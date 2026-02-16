@@ -181,6 +181,10 @@ pub enum IdleBehaviorOperation {
     JoinGathering { spot_entity: Entity },
     LeaveGathering { spot_entity: Entity },
     ArriveAtGathering { spot_entity: Entity },
+    ReserveRestArea { rest_area_entity: Entity },
+    ReleaseRestArea,
+    EnterRestArea { rest_area_entity: Entity },
+    LeaveRestArea,
 }
 ```
 

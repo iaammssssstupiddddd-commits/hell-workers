@@ -104,6 +104,41 @@ fn rest_area_occupied_grids_from_center(center: Vec2) -> [(i32, i32); 4] {
     ]
 }
 
+fn nearest_walkable_adjacent_to_rest_area(
+    soul_pos: Vec2,
+    rest_area_center: Vec2,
+    world_map: &WorldMap,
+) -> Vec2 {
+    let occupied = rest_area_occupied_grids_from_center(rest_area_center);
+    let mut best_pos = rest_area_center; // fallback
+    let mut best_dist = f32::MAX;
+    let directions: [(i32, i32); 8] = [
+        (0, 1),
+        (0, -1),
+        (1, 0),
+        (-1, 0),
+        (1, 1),
+        (1, -1),
+        (-1, 1),
+        (-1, -1),
+    ];
+    for &(gx, gy) in &occupied {
+        for &(dx, dy) in &directions {
+            let (nx, ny) = (gx + dx, gy + dy);
+            if occupied.contains(&(nx, ny)) || !world_map.is_walkable(nx, ny) {
+                continue;
+            }
+            let pos = WorldMap::grid_to_world(nx, ny);
+            let dist = soul_pos.distance_squared(pos);
+            if dist < best_dist {
+                best_pos = pos;
+                best_dist = dist;
+            }
+        }
+    }
+    best_pos
+}
+
 fn has_arrived_at_rest_area(current_pos: Vec2, rest_area_center: Vec2) -> bool {
     if current_pos.distance(rest_area_center) <= REST_AREA_ARRIVAL_RADIUS {
         return true;
@@ -254,7 +289,7 @@ pub fn idle_behavior_decision_system(
 
         let reserved_rest_area = rest_reserved_for.map(|reserved| reserved.0);
 
-        if idle.behavior == IdleBehavior::Resting {
+        if matches!(idle.behavior, IdleBehavior::Resting | IdleBehavior::GoingToRest) {
             if resting_in.is_some() {
                 continue;
             }
@@ -313,16 +348,23 @@ pub fn idle_behavior_decision_system(
                             entity,
                             operation: IdleBehaviorOperation::EnterRestArea { rest_area_entity },
                         });
+                    } else {
+                        dest.0 = current_pos;
                     }
                 } else {
-                    let destination_changed = dest.0.distance_squared(rest_area_pos) > 1.0;
+                    let destination_changed =
+                        dest.0.distance_squared(rest_area_pos) > (TILE_SIZE * 2.5).powi(2);
                     let needs_new_path = destination_changed
                         || path.waypoints.is_empty()
                         || path.current_index >= path.waypoints.len();
                     if needs_new_path {
                         idle.idle_timer = 0.0;
                         idle.behavior_duration = REST_AREA_RESTING_DURATION;
-                        dest.0 = rest_area_pos;
+                        dest.0 = nearest_walkable_adjacent_to_rest_area(
+                            current_pos,
+                            rest_area_pos,
+                            &world_map,
+                        );
                         path.waypoints.clear();
                         path.current_index = 0;
                     }
@@ -396,6 +438,8 @@ pub fn idle_behavior_decision_system(
                             entity,
                             operation: IdleBehaviorOperation::EnterRestArea { rest_area_entity },
                         });
+                    } else {
+                        dest.0 = current_pos;
                     }
                     continue;
                 }
@@ -406,17 +450,22 @@ pub fn idle_behavior_decision_system(
                         operation: IdleBehaviorOperation::LeaveGathering { spot_entity: p.0 },
                     });
                 }
-                let destination_changed = dest.0.distance_squared(rest_area_pos) > 1.0;
+                let destination_changed =
+                    dest.0.distance_squared(rest_area_pos) > (TILE_SIZE * 2.5).powi(2);
                 let needs_new_path =
                     destination_changed
                         || path.waypoints.is_empty()
                         || path.current_index >= path.waypoints.len();
 
-                idle.behavior = IdleBehavior::Resting;
+                idle.behavior = IdleBehavior::GoingToRest;
                 if needs_new_path {
                     idle.idle_timer = 0.0;
                     idle.behavior_duration = REST_AREA_RESTING_DURATION;
-                    dest.0 = rest_area_pos;
+                    dest.0 = nearest_walkable_adjacent_to_rest_area(
+                        current_pos,
+                        rest_area_pos,
+                        &world_map,
+                    );
                     path.waypoints.clear();
                     path.current_index = 0;
                 }
@@ -500,7 +549,7 @@ pub fn idle_behavior_decision_system(
                 IdleBehavior::Gathering | IdleBehavior::ExhaustedGathering => {
                     rng.gen_range(IDLE_DURATION_WANDER_MIN..IDLE_DURATION_WANDER_MAX)
                 }
-                IdleBehavior::Resting => REST_AREA_RESTING_DURATION,
+                IdleBehavior::Resting | IdleBehavior::GoingToRest => REST_AREA_RESTING_DURATION,
                 IdleBehavior::Escaping => {
                     // 逃走中は短い間隔で再評価
                     2.0
@@ -753,7 +802,7 @@ pub fn idle_behavior_decision_system(
                     idle.behavior = IdleBehavior::Wandering;
                 }
             }
-            IdleBehavior::Sitting | IdleBehavior::Sleeping | IdleBehavior::Resting => {}
+            IdleBehavior::Sitting | IdleBehavior::Sleeping | IdleBehavior::Resting | IdleBehavior::GoingToRest => {}
             IdleBehavior::Escaping => {
                 // 逃走中は escaping_decision_system で処理されるため、
                 // ここでは何もしない（continueされるはず）

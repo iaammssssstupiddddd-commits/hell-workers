@@ -3,6 +3,7 @@ use rand::Rng;
 
 use crate::constants::*;
 use crate::relationships::ParticipatingIn;
+use crate::entities::damned_soul::{IdleBehavior, IdleState};
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
 use crate::systems::soul_ai::helpers::gathering::{GatheringSpot, GatheringUpdateTimer};
 use crate::systems::spatial::{SpatialGrid, SpatialGridOps};
@@ -25,6 +26,7 @@ pub fn gathering_separation_system(
             &mut crate::entities::damned_soul::Path,
             &AssignedTask,
             Option<&ParticipatingIn>,
+            &IdleState,
         ),
         With<crate::entities::damned_soul::DamnedSoul>,
     >,
@@ -34,9 +36,14 @@ pub fn gathering_separation_system(
         return;
     }
 
-    for (entity, transform, mut dest, mut path, task, participating_in_opt) in q_souls.iter_mut() {
+    for (entity, transform, mut dest, mut path, task, participating_in_opt, idle) in q_souls.iter_mut() {
         // タスク実行中は重なり回避しない
         if !matches!(task, AssignedTask::None) {
+            continue;
+        }
+
+        // 休憩所へ移動中は重なり回避しない
+        if idle.behavior == IdleBehavior::GoingToRest {
             continue;
         }
 

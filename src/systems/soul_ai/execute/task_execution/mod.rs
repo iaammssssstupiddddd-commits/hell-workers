@@ -121,7 +121,7 @@ pub fn apply_task_assignment_requests_system(
             if let Ok(mut visibility) = q_visibility.get_mut(worker_entity) {
                 *visibility = Visibility::Visible;
             }
-            if idle.behavior == IdleBehavior::Resting {
+            if matches!(idle.behavior, IdleBehavior::Resting | IdleBehavior::GoingToRest) {
                 idle.behavior = IdleBehavior::Wandering;
                 idle.idle_timer = 0.0;
                 idle.total_idle_time = 0.0;
