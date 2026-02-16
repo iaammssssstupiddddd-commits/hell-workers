@@ -45,7 +45,6 @@ fn debug_spawn_system(
         soul_spawn_events.write(DamnedSoulSpawnEvent {
             position: spawn_pos,
         });
-        info!("DEBUG_SPAWN: Soul at {:?}", spawn_pos);
     }
 
     if buttons.just_pressed(KeyCode::KeyO) {
@@ -53,6 +52,5 @@ fn debug_spawn_system(
             position: spawn_pos,
             familiar_type: FamiliarType::Imp,
         });
-        info!("DEBUG_SPAWN: Familiar at {:?}", spawn_pos);
     }
 }

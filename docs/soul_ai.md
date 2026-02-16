@@ -45,6 +45,7 @@
 | **`Resting`** | 休憩所に到着 | 休憩所内で休息中（非表示、疲労・ストレス回復）。 |
 | **`StressFrozen`** | ストレス 1.0 | ストレスによりその場で硬直する。 |
 | **`Escaping`** | 使い魔接近 + ストレス > 0.3 | 使い魔から逃走し、安全な集会スポットを探す。 |
+| **`Drifting`** | 未管理状態が長時間継続し、脱走判定に成功 | うろつきつつマップ端へ漂流し、端到達でデスポーン。 |
 
 ### 2.1 逃走システム (Escaping System)
 
@@ -75,14 +76,32 @@
 - 少し傾けた姿勢（走っている感じ）
 - 軽い点滅アニメーション
 
-### 2.2 休憩所システム (Rest Area)
+### 2.2 人口システム連動（Drifting）
+
+未管理状態が続く Soul は、`IdleBehavior::Drifting` へ遷移して自然脱走します。
+
+- 開始条件（概略）:
+  - `CommandedBy` なし
+  - `AssignedTask::None`
+  - `RestingIn` なし
+  - `IdleState.total_idle_time >= SOUL_ESCAPE_UNMANAGED_TIME`
+  - 判定タイマー/確率/グローバルクールダウンを満たす
+- 挙動:
+  - `DriftPhase::Wandering` と `DriftPhase::Moving` を繰り返し、最寄りのマップ端へ移動
+- 終了:
+  - 端近傍でデスポーン
+  - リクルートまたはタスク再割り当てで Drifting は解除
+
+詳細は **[population_system.md](population_system.md)** を参照してください。
+
+### 2.3 休憩所システム (Rest Area)
 
 休憩所が建設されていると、条件を満たしたワーカーは休憩所で休息を取り、疲労やストレスを回復します。
 詳細な仕様については、以下の専用ドキュメントを参照してください。
 
 - **[rest_area_system.md](rest_area_system.md)**
 
-### 2.3 イベント駆動スプライト差し替え
+### 2.4 イベント駆動スプライト差し替え
 
 Soul 本体画像は、Idle 状態だけでなくイベントでも一時差し替えされます。  
 実装は `ConversationExpression`（画像種別・優先度・残り秒）でロック制御されています。
@@ -112,8 +131,8 @@ Perceive → Update → Decide → Execute
 |:--|:--|:--|
 | **Perceive** | 環境情報の読み取り、変化の検出 | 現時点では拡張ポイント（逃走ヘルパー/タイマー資源の定義） |
 | **Update** | 時間経過による内部状態の変化 | バイタル更新、タイマー、集会スポットメンテナンス |
-| **Decide** | 次の行動の選択、要求の生成 | `idle_behavior_decision_system`, `escaping_decision_system`, `DesignationRequest`/`TaskAssignmentRequest` の生成 |
-| **Execute** | 決定された行動の実行 | `apply_designation_requests_system`, `apply_task_assignment_requests_system`, `idle_behavior_apply_system`, `escaping_apply_system`, `task_execution` |
+| **Decide** | 次の行動の選択、要求の生成 | `idle_behavior_decision_system`, `escaping_decision_system`, `drifting_decision_system`, `DesignationRequest`/`TaskAssignmentRequest` の生成 |
+| **Execute** | 決定された行動の実行 | `apply_designation_requests_system`, `apply_task_assignment_requests_system`, `drifting_behavior_system`, `despawn_at_edge_system`, `idle_behavior_apply_system`, `escaping_apply_system`, `task_execution` |
 
 **Message/Request パターン**: Decideフェーズで生成された `DesignationRequest`、`TaskAssignmentRequest`、`IdleBehaviorRequest` はExecuteフェーズで読み取られ、実際のコンポーネント更新が行われます。これにより堅牢なフェーズ間通信が実現されています。
 
@@ -132,6 +151,7 @@ Bevy 0.18 の ECS Relationships を使用して、状態を管理しています
 - `DamnedSoul`: 基本ステータス（fatigue, stress, motivation 等）を保持。
 - `AssignedTask`: 現在の作業内容。
 - `IdleState`: 現在の待機行動。
+- `DriftingState`: 漂流脱走中のフェーズ状態（目標端・フェーズ・タイマー）。
 - `CommandedBy(Entity)`: 指揮している使い魔への参照。
 - `ParticipatingIn(Entity)` / `GatheringParticipants`: 集会への参加状態（Soul → GatheringSpot）。
 - 休憩所関連 (`RestingIn`, `RestAreaOccupants` 等): 詳細は [rest_area_system.md](rest_area_system.md) を参照。

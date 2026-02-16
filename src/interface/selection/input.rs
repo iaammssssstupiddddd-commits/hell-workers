@@ -60,24 +60,11 @@ pub fn handle_mouse_input(
                     selected_entity.0 = Some(familiar_entity);
                     task_context.0 = TaskMode::AreaSelection(None);
                     next_play_mode.set(PlayMode::TaskDesignation);
-                    info!(
-                        "AREA_EDIT: Entered by task-area border click for Familiar {:?}",
-                        familiar_entity
-                    );
                     return;
                 }
 
                 selected_entity.0 =
                     selectable_worker_at_world_pos(world_pos, &q_souls, &q_familiars);
-
-                if selected_entity
-                    .0
-                    .is_some_and(|e| q_familiars.get(e).is_ok())
-                {
-                    info!("SELECTED: Familiar");
-                } else if selected_entity.0.is_some() {
-                    info!("SELECTED: DamnedSoul");
-                }
             }
 
             if buttons.just_pressed(MouseButton::Right) {
@@ -93,7 +80,6 @@ pub fn handle_mouse_input(
                     if q_familiars.get(selected).is_ok() {
                         if let Ok(mut dest) = q_dest.get_mut(selected) {
                             dest.0 = world_pos;
-                            info!("ORDER: Move to {:?}", world_pos);
                         }
                     }
                 }
@@ -140,9 +126,6 @@ pub fn update_hover_entity(
             let found = hovered_entity_at_world_pos(world_pos, &q_souls, &q_familiars, &q_targets);
 
             if found != hovered_entity.0 {
-                if let Some(e) = found {
-                    info!("HOVER: Found entity {:?}", e);
-                }
                 hovered_entity.0 = found;
             }
         }

@@ -68,10 +68,6 @@ fn try_start_direct_edit_drag(
         original_area: existing_area.clone(),
         drag_start: snapped_pos,
     });
-    info!(
-        "AREA_EDIT: Started direct {:?} for Familiar {:?}",
-        operation, fam_entity
-    );
 
     true
 }
@@ -166,18 +162,12 @@ pub fn task_area_selection_system(
                     &mut q_familiars,
                 );
 
-                let assigned_count = assign_unassigned_tasks_in_area(
+                assign_unassigned_tasks_in_area(
                     &mut commands,
                     active_drag.familiar_entity,
                     &applied_area,
                     &q_unassigned,
                 );
-                if assigned_count > 0 {
-                    info!(
-                        "AREA_EDIT: Also assigned {} unassigned task(s) to Familiar {:?}",
-                        assigned_count, active_drag.familiar_entity
-                    );
-                }
 
                 area_edit_history.push(
                     active_drag.familiar_entity,
@@ -190,10 +180,8 @@ pub fn task_area_selection_system(
             if should_exit_after_apply(&keyboard) {
                 task_context.0 = TaskMode::None;
                 next_play_mode.set(PlayMode::Normal);
-                info!("AREA_EDIT: Applied and exited Area Edit mode");
             } else {
                 task_context.0 = TaskMode::AreaSelection(None);
-                info!("AREA_EDIT: Applied and kept Area Edit mode");
             }
             return;
         }
@@ -257,7 +245,6 @@ pub fn task_area_selection_system(
             if start_pos.distance(end_pos) < 0.1 {
                 task_context.0 = TaskMode::None;
                 next_play_mode.set(PlayMode::Normal);
-                info!("AREA_ASSIGNMENT: No drag detected, exiting Area Edit mode");
                 despawn_selection_indicators(&q_selection_indicator, &mut commands);
                 return;
             }
@@ -272,23 +259,13 @@ pub fn task_area_selection_system(
                     &mut commands,
                     &mut q_familiars,
                 );
-                info!(
-                    "AREA_ASSIGNMENT: Familiar {:?} assigned to rectangular area",
-                    fam_entity
-                );
 
-                let assigned_count = assign_unassigned_tasks_in_area(
+                assign_unassigned_tasks_in_area(
                     &mut commands,
                     fam_entity,
                     &new_area,
                     &q_unassigned,
                 );
-                if assigned_count > 0 {
-                    info!(
-                        "AREA_ASSIGNMENT: Also assigned {} unassigned task(s) to Familiar {:?}",
-                        assigned_count, fam_entity
-                    );
-                }
 
                 area_edit_history.push(fam_entity, before_area, Some(new_area));
             }
@@ -298,10 +275,8 @@ pub fn task_area_selection_system(
             if should_exit_after_apply(&keyboard) {
                 task_context.0 = TaskMode::None;
                 next_play_mode.set(PlayMode::Normal);
-                info!("AREA_ASSIGNMENT: Applied and exited Area Edit mode");
             } else {
                 task_context.0 = TaskMode::AreaSelection(None);
-                info!("AREA_ASSIGNMENT: Applied and kept Area Edit mode");
             }
         }
         TaskMode::DesignateChop(Some(start_pos))
@@ -382,7 +357,6 @@ pub fn task_area_selection_system(
                             transport_request.is_some(),
                             fixed_source.map(|source| source.0),
                         );
-                        info!("CANCEL: Click-cancelled designation on {:?}", target_entity);
                     }
                 }
 
@@ -404,10 +378,6 @@ pub fn task_area_selection_system(
                     commands
                         .entity(site_entity)
                         .insert(FloorConstructionCancelRequested);
-                    info!(
-                        "FLOOR_CANCEL: Requested site cancellation via click {:?}",
-                        site_entity
-                    );
                 }
             } else {
                 // エリアキャンセル
@@ -435,12 +405,6 @@ pub fn task_area_selection_system(
                     commands
                         .entity(site_entity)
                         .insert(FloorConstructionCancelRequested);
-                }
-                if !requested_sites.is_empty() {
-                    info!(
-                        "FLOOR_CANCEL: Requested {} site(s) cancellation via area drag",
-                        requested_sites.len()
-                    );
                 }
             }
 

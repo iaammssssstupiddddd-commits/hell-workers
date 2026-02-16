@@ -16,10 +16,7 @@ use bevy::render::settings::{Backends, RenderCreation, WgpuSettings};
 use bevy::ui_widgets::popover::PopoverPlugin;
 use std::env;
 
-use game_state::{
-    PlayMode, log_enter_building_mode, log_enter_task_mode, log_enter_zone_mode,
-    log_exit_building_mode, log_exit_task_mode, log_exit_zone_mode,
-};
+use game_state::PlayMode;
 
 use crate::entities::damned_soul::DamnedSoul;
 use crate::entities::damned_soul::DamnedSoulPlugin;
@@ -75,12 +72,6 @@ fn main() {
         .init_resource::<FrameSpikeLogger>()
         // PlayMode State
         .init_state::<PlayMode>()
-        .add_systems(OnEnter(PlayMode::BuildingPlace), log_enter_building_mode)
-        .add_systems(OnExit(PlayMode::BuildingPlace), log_exit_building_mode)
-        .add_systems(OnEnter(PlayMode::ZonePlace), log_enter_zone_mode)
-        .add_systems(OnExit(PlayMode::ZonePlace), log_exit_zone_mode)
-        .add_systems(OnEnter(PlayMode::TaskDesignation), log_enter_task_mode)
-        .add_systems(OnExit(PlayMode::TaskDesignation), log_exit_task_mode)
         // Messages
         .add_plugins(MessagesPlugin)
         // Entity plugins

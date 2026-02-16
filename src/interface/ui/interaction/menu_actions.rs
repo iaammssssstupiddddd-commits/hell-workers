@@ -146,7 +146,7 @@ pub(super) fn handle_pressed_action(
 fn ensure_familiar_selected(
     selected_entity: &mut ResMut<crate::interface::selection::SelectedEntity>,
     q_familiars_for_area: &Query<(Entity, Option<&TaskArea>), With<Familiar>>,
-    mode_label: &str,
+    _mode_label: &str,
 ) {
     let selected_is_familiar = selected_entity
         .0
@@ -172,12 +172,6 @@ fn ensure_familiar_selected(
 
     if let Some(familiar_entity) = fallback {
         selected_entity.0 = Some(familiar_entity);
-        info!(
-            "UI: {} target auto-selected Familiar {:?}",
-            mode_label, familiar_entity
-        );
-    } else {
-        info!("UI: {} requested but no Familiar exists", mode_label);
     }
 }
 

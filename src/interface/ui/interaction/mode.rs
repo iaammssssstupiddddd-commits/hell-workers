@@ -44,7 +44,6 @@ pub(super) fn set_build_mode(
         zone_context.0 = None;
         task_context.0 = TaskMode::WallPlace(None);
         next_play_mode.set(PlayMode::FloorPlace);
-        info!("UI: Wall place mode set, PlayMode -> FloorPlace");
         return;
     }
 
@@ -52,10 +51,6 @@ pub(super) fn set_build_mode(
     task_context.0 = TaskMode::None;
     build_context.0 = Some(kind);
     next_play_mode.set(PlayMode::BuildingPlace);
-    info!(
-        "UI: Build mode set to {:?}, PlayMode -> BuildingPlace",
-        kind
-    );
 }
 
 pub(super) fn set_floor_place_mode(
@@ -68,7 +63,6 @@ pub(super) fn set_floor_place_mode(
     zone_context.0 = None;
     task_context.0 = TaskMode::FloorPlace(None);
     next_play_mode.set(PlayMode::FloorPlace);
-    info!("UI: Floor place mode set, PlayMode -> FloorPlace");
 }
 
 pub(super) fn set_zone_mode(
@@ -82,10 +76,6 @@ pub(super) fn set_zone_mode(
     zone_context.0 = Some(kind);
     task_context.0 = TaskMode::ZonePlacement(kind, None);
     next_play_mode.set(PlayMode::TaskDesignation);
-    info!(
-        "UI: Zone mode set to {:?}, PlayMode -> TaskDesignation",
-        kind
-    );
 }
 
 pub(super) fn set_zone_removal_mode(
@@ -99,10 +89,6 @@ pub(super) fn set_zone_removal_mode(
     zone_context.0 = Some(kind); // 削除モードでも一応セットしておく
     task_context.0 = TaskMode::ZoneRemoval(kind, None);
     next_play_mode.set(PlayMode::TaskDesignation);
-    info!(
-        "UI: Zone Removal mode set to {:?}, PlayMode -> TaskDesignation",
-        kind
-    );
 }
 
 pub(super) fn set_task_mode(
@@ -116,10 +102,6 @@ pub(super) fn set_task_mode(
     zone_context.0 = None;
     task_context.0 = mode;
     next_play_mode.set(PlayMode::TaskDesignation);
-    info!(
-        "UI: TaskMode set to {:?}, PlayMode -> TaskDesignation",
-        mode
-    );
 }
 
 pub(super) fn set_area_task_mode(
@@ -133,7 +115,6 @@ pub(super) fn set_area_task_mode(
     zone_context.0 = None;
     task_context.0 = mode;
     next_play_mode.set(PlayMode::TaskDesignation);
-    info!("UI: Area Edit mode entered (continuous), PlayMode -> TaskDesignation");
 }
 
 pub(super) fn build_mode_text(
