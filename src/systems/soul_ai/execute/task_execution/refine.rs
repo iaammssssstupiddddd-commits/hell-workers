@@ -151,6 +151,7 @@ pub fn handle_refine_task(
                                 custom_size: Some(Vec2::splat(TILE_SIZE * 0.5)),
                                 ..default()
                             },
+                            Visibility::Visible,
                             Transform::from_translation(
                                 pos.truncate().extend(Z_ITEM_PICKUP) + offset,
                             ),

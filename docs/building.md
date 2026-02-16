@@ -316,9 +316,11 @@ flowchart TD
   2. 対象タイルを障害物化し、範囲内の Soul を退避
   3. 一定時間（`FLOOR_CURING_DURATION_SECS`）待機
   4. 養生完了後、各タイルに `Floor` Building をスパウン
-  5. 建築中タイルを完成床へ置換（床として通行可能）
-  6. FloorTileBlueprint エンティティを despawn
-  7. FloorConstructionSite エンティティを despawn
+  5. 養生中は Site 中央に進捗バーを表示し、残り時間を可視化
+  6. 完成床生成時にバウンスアニメーションを再生
+  7. 建築中タイルを完成床へ置換（床として通行可能）
+  8. FloorTileBlueprint エンティティを despawn
+  9. FloorConstructionSite エンティティを despawn
 
 
 

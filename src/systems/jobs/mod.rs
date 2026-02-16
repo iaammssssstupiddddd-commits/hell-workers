@@ -33,7 +33,7 @@ impl BuildingType {
                 materials.insert(ResourceType::Wood, 1);
             }
             BuildingType::Floor => {
-                materials.insert(ResourceType::Rock, 1);
+                // Drag方式で建設されるため、Blueprintベースの資材搬入は不要
             }
             BuildingType::Tank => {
                 materials.insert(ResourceType::Wood, 2);

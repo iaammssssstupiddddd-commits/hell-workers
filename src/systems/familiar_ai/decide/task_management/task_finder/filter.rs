@@ -170,7 +170,10 @@ pub(super) fn candidate_snapshot(
         target_walkable,
         // request タスクは source/destination を遅延解決するため、
         // request 自体の座標への到達判定を事前に強制しない。
-        skip_reachability_check: is_transport_request,
+        // Refine は 2x2 建物中心座標をターゲットにするため、
+        // 事前判定での偽陰性を避けて実行側の到達判定に委ねる。
+        skip_reachability_check: is_transport_request
+            || matches!(designation.work_type, WorkType::Refine),
         work_type: designation.work_type,
         base_priority,
         in_stockpile_none,
