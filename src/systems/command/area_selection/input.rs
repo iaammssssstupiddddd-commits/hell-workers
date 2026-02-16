@@ -304,7 +304,10 @@ pub fn task_area_selection_system(
             let mode = task_context.0;
             let area = TaskArea::from_points(start_pos, WorldMap::snap_to_grid_edge(world_pos));
             let q_targets = q_target_sets.p0();
-            apply_designation_in_area(&mut commands, mode, &area, selected.0, &q_targets);
+            let issued_by = selected
+                .0
+                .filter(|entity| q_familiars.contains(*entity));
+            apply_designation_in_area(&mut commands, mode, &area, issued_by, &q_targets);
             task_context.0 = reset_designation_mode(mode);
         }
         TaskMode::CancelDesignation(Some(start_pos)) => {

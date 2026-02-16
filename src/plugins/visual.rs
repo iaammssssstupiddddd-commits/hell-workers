@@ -14,7 +14,8 @@ use crate::systems::soul_ai::visual::gathering::{
 };
 use crate::systems::visual::fade::fade_out_system;
 use crate::systems::visual::floor_construction::{
-    sync_floor_tile_bone_visuals_system, update_floor_tile_visuals_system,
+    manage_floor_curing_progress_bars_system, sync_floor_tile_bone_visuals_system,
+    update_floor_curing_progress_bars_system, update_floor_tile_visuals_system,
 };
 use crate::systems::soul_ai::visual::idle::idle_visual_system;
 use crate::systems::soul_ai::visual::vitals::familiar_hover_visualization_system;
@@ -185,6 +186,8 @@ impl Plugin for VisualPlugin {
                 update_familiar_range_indicator,
                 update_tank_visual_system,
                 update_mud_mixer_visual_system,
+                manage_floor_curing_progress_bars_system,
+                update_floor_curing_progress_bars_system,
                 update_floor_tile_visuals_system,
                 sync_floor_tile_bone_visuals_system,
                 familiar_hover_visualization_system,

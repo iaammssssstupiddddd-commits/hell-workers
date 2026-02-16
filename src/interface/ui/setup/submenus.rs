@@ -30,7 +30,6 @@ fn spawn_architect_submenu(
     let building_items = [
         ("Wall", BuildingType::Wall),
         ("Tank", BuildingType::Tank),
-        ("Floor (Single)", BuildingType::Floor),
         ("MudMixer", BuildingType::MudMixer),
         ("SandPile", BuildingType::SandPile),
         ("BonePile", BuildingType::BonePile),
@@ -105,7 +104,7 @@ fn spawn_architect_submenu(
             ))
             .with_children(|button| {
                 button.spawn((
-                    Text::new("Floor (Drag)"),
+                    Text::new("Floor"),
                     TextFont {
                         font: game_assets.font_ui.clone(),
                         font_size: theme.typography.font_size_title,

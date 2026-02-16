@@ -344,14 +344,44 @@ pub fn floor_tile_designation_system(
     mut q_tiles: Query<(
         Entity,
         &Transform,
-        &FloorTileBlueprint,
+        &mut FloorTileBlueprint,
         Option<&Designation>,
+        Option<&TaskWorkers>,
         &mut Visibility,
     )>,
 ) {
-    for (tile_entity, tile_transform, tile, designation_opt, mut visibility) in q_tiles.iter_mut() {
+    for (
+        tile_entity,
+        tile_transform,
+        mut tile,
+        designation_opt,
+        workers_opt,
+        mut visibility,
+    ) in q_tiles.iter_mut()
+    {
         if *visibility == Visibility::Hidden {
             *visibility = Visibility::Visible;
+        }
+
+        // If a worker abandoned an in-progress tile, return it to Ready so designation can be reissued.
+        if workers_opt.map(|w| w.len()).unwrap_or(0) == 0 {
+            match tile.state {
+                FloorTileState::Reinforcing { .. } => {
+                    tile.state = FloorTileState::ReinforcingReady;
+                    debug!(
+                        "FLOOR_DESIGNATION: reset abandoned reinforcing tile {:?} to ReinforcingReady",
+                        tile_entity
+                    );
+                }
+                FloorTileState::Pouring { .. } => {
+                    tile.state = FloorTileState::PouringReady;
+                    debug!(
+                        "FLOOR_DESIGNATION: reset abandoned pouring tile {:?} to PouringReady",
+                        tile_entity
+                    );
+                }
+                _ => {}
+            }
         }
 
         let desired_work_type = match tile.state {

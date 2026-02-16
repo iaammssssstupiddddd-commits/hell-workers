@@ -85,43 +85,26 @@ pub(super) fn handle_pressed_action(
             zone_context,
             task_context,
         ),
-        MenuAction::SelectTaskMode(mode) => super::mode::set_task_mode(
-            mode,
-            next_play_mode,
-            build_context,
-            zone_context,
-            task_context,
-        ),
+        MenuAction::SelectTaskMode(mode) => {
+            ensure_familiar_selected(
+                selected_entity,
+                q_familiars_for_area,
+                "Task designation",
+            );
+            super::mode::set_task_mode(
+                mode,
+                next_play_mode,
+                build_context,
+                zone_context,
+                task_context,
+            );
+        }
         MenuAction::SelectAreaTask => {
-            let selected_is_familiar = selected_entity
-                .0
-                .is_some_and(|entity| q_familiars_for_area.get(entity).is_ok());
-
-            if !selected_is_familiar {
-                // 1) TaskAreaを持っていないFamiliarを優先
-                // 2) 全員持っている場合は任意（Entity index最小）を選択
-                let mut familiars: Vec<(Entity, bool)> = q_familiars_for_area
-                    .iter()
-                    .map(|(entity, area_opt)| (entity, area_opt.is_some()))
-                    .collect();
-                familiars.sort_by_key(|(entity, _)| entity.index());
-
-                let fallback = familiars
-                    .iter()
-                    .find(|(_, has_area)| !*has_area)
-                    .map(|(entity, _)| *entity)
-                    .or_else(|| familiars.first().map(|(entity, _)| *entity));
-
-                if let Some(familiar_entity) = fallback {
-                    selected_entity.0 = Some(familiar_entity);
-                    info!(
-                        "UI: Area Edit target auto-selected Familiar {:?}",
-                        familiar_entity
-                    );
-                } else {
-                    info!("UI: Area Edit requested but no Familiar exists");
-                }
-            }
+            ensure_familiar_selected(
+                selected_entity,
+                q_familiars_for_area,
+                "Area Edit",
+            );
 
             super::mode::set_area_task_mode(
                 next_play_mode,
@@ -165,6 +148,44 @@ pub(super) fn handle_pressed_action(
                 time.set_relative_speed(4.0);
             }
         },
+    }
+}
+
+fn ensure_familiar_selected(
+    selected_entity: &mut ResMut<crate::interface::selection::SelectedEntity>,
+    q_familiars_for_area: &Query<(Entity, Option<&TaskArea>), With<Familiar>>,
+    mode_label: &str,
+) {
+    let selected_is_familiar = selected_entity
+        .0
+        .is_some_and(|entity| q_familiars_for_area.get(entity).is_ok());
+
+    if selected_is_familiar {
+        return;
+    }
+
+    // 1) TaskAreaを持っていないFamiliarを優先
+    // 2) 全員持っている場合は任意（Entity index最小）を選択
+    let mut familiars: Vec<(Entity, bool)> = q_familiars_for_area
+        .iter()
+        .map(|(entity, area_opt)| (entity, area_opt.is_some()))
+        .collect();
+    familiars.sort_by_key(|(entity, _)| entity.index());
+
+    let fallback = familiars
+        .iter()
+        .find(|(_, has_area)| !*has_area)
+        .map(|(entity, _)| *entity)
+        .or_else(|| familiars.first().map(|(entity, _)| *entity));
+
+    if let Some(familiar_entity) = fallback {
+        selected_entity.0 = Some(familiar_entity);
+        info!(
+            "UI: {} target auto-selected Familiar {:?}",
+            mode_label, familiar_entity
+        );
+    } else {
+        info!("UI: {} requested but no Familiar exists", mode_label);
     }
 }
 

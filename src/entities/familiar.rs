@@ -401,6 +401,7 @@ pub fn update_familiar_range_indicator(
 /// 使い魔の移動システム
 pub fn familiar_movement(
     time: Res<Time>,
+    world_map: Res<WorldMap>,
     mut query: Query<(&mut Transform, &mut Path, &mut FamiliarAnimation), With<Familiar>>,
 ) {
     for (mut transform, mut path, mut anim) in query.iter_mut() {
@@ -421,10 +422,29 @@ pub fn familiar_movement(
                 let move_dist = (speed * time.delta_secs()).min(distance);
                 let direction = to_target.normalize();
                 let velocity = direction * move_dist;
-                transform.translation += velocity.extend(0.0);
+                let next_pos = current_pos + velocity;
+                let mut moved = false;
 
-                anim.is_moving = true;
-                if move_dist > 0.0 {
+                if world_map.is_walkable_world(next_pos) {
+                    transform.translation.x = next_pos.x;
+                    transform.translation.y = next_pos.y;
+                    moved = true;
+                } else {
+                    let next_pos_x = current_pos + Vec2::new(velocity.x, 0.0);
+                    if world_map.is_walkable_world(next_pos_x) {
+                        transform.translation.x = next_pos_x.x;
+                        moved = true;
+                    } else {
+                        let next_pos_y = current_pos + Vec2::new(0.0, velocity.y);
+                        if world_map.is_walkable_world(next_pos_y) {
+                            transform.translation.y = next_pos_y.y;
+                            moved = true;
+                        }
+                    }
+                }
+
+                anim.is_moving = moved;
+                if moved && move_dist > 0.0 {
                     debug!(
                         "FAM_MOV: Moving towards waypoint. dist: {:.1}, move: {:.1}",
                         distance, move_dist
