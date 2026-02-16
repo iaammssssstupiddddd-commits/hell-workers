@@ -2,7 +2,13 @@
 
 mod blueprint;
 mod consolidation;
+mod demand;
+mod direct_collect;
+mod floor;
 mod lease_validation;
+mod mixer;
+mod provisional_wall;
+mod returns;
 mod source_selector;
 mod stockpile;
 mod wheelbarrow;
@@ -10,450 +16,7 @@ mod wheelbarrow;
 use crate::systems::familiar_ai::decide::task_management::{AssignTaskContext, ReservationShadow};
 use bevy::prelude::*;
 
-use super::super::builders::{
-    issue_collect_bone_with_wheelbarrow_to_floor, issue_haul_to_mixer,
-    issue_haul_to_stockpile_with_source, issue_haul_with_wheelbarrow, issue_return_wheelbarrow,
-};
-use super::super::validator::{
-    find_bucket_return_assignment, resolve_haul_to_floor_construction_inputs,
-    resolve_haul_to_mixer_inputs, resolve_haul_to_provisional_wall_inputs,
-    resolve_return_bucket_tank, resolve_return_wheelbarrow,
-};
-
-fn mixer_can_accept_item(
-    mixer_entity: Entity,
-    item_type: crate::systems::logistics::ResourceType,
-    mixer_already_reserved: bool,
-    queries: &crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
-    shadow: &ReservationShadow,
-) -> bool {
-    let Ok((_, storage, _)) = queries.storage.mixers.get(mixer_entity) else {
-        return false;
-    };
-    let reserved = queries
-        .reservation
-        .resource_cache
-        .get_mixer_destination_reservation(mixer_entity, item_type)
-        + shadow.mixer_reserved(mixer_entity, item_type);
-    let required = if mixer_already_reserved {
-        reserved as u32
-    } else {
-        (reserved + 1) as u32
-    };
-    storage.can_accept(item_type, required)
-}
-
-pub fn assign_haul_to_mixer(
-    task_pos: Vec2,
-    already_commanded: bool,
-    ctx: &AssignTaskContext<'_>,
-    queries: &mut crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
-    shadow: &mut ReservationShadow,
-) -> bool {
-    let Some((mixer_entity, item_type)) = resolve_haul_to_mixer_inputs(ctx.task_entity, queries)
-    else {
-        debug!(
-            "ASSIGN: HaulToMixer request {:?} has no resolver input",
-            ctx.task_entity
-        );
-        return false;
-    };
-
-    // --- 全固体リソース共通: リースがあれば猫車、なければ単品手運び ---
-
-    // 1. Arbitration がリースを付与していれば猫車で一括運搬
-    if let Ok(lease) = queries.wheelbarrow_leases.get(ctx.task_entity) {
-        if lease_validation::validate_lease(lease, queries, shadow, 1) {
-            issue_haul_with_wheelbarrow(
-                lease.wheelbarrow,
-                lease.source_pos,
-                lease.destination,
-                lease.items.clone(),
-                task_pos,
-                already_commanded,
-                ctx,
-                queries,
-                shadow,
-            );
-            return true;
-        }
-    }
-
-    // 2. リースなし → 単品手運び
-    assign_single_item_haul_to_mixer(
-        mixer_entity,
-        item_type,
-        task_pos,
-        already_commanded,
-        ctx,
-        queries,
-        shadow,
-    )
-}
-
-/// 単品運搬（Mixer向け）
-fn assign_single_item_haul_to_mixer(
-    mixer_entity: Entity,
-    item_type: crate::systems::logistics::ResourceType,
-    task_pos: Vec2,
-    already_commanded: bool,
-    ctx: &AssignTaskContext<'_>,
-    queries: &mut crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
-    shadow: &mut ReservationShadow,
-) -> bool {
-    let Some((source_item, source_pos)) =
-        source_selector::find_nearest_mixer_source_item(item_type, task_pos, queries, shadow)
-    else {
-        debug!(
-            "ASSIGN: HaulToMixer request {:?} has no available {:?} source",
-            ctx.task_entity, item_type
-        );
-        return false;
-    };
-
-    if !mixer_can_accept_item(mixer_entity, item_type, false, queries, shadow) {
-        debug!(
-            "ASSIGN: Mixer {:?} cannot accept item {:?} (Full or Reserved)",
-            mixer_entity, item_type
-        );
-        return false;
-    }
-
-    issue_haul_to_mixer(
-        source_item,
-        mixer_entity,
-        item_type,
-        false,
-        source_pos,
-        already_commanded,
-        ctx,
-        queries,
-        shadow,
-    );
-    true
-}
-
-fn assign_haul_to_floor_construction(
-    _task_pos: Vec2,
-    already_commanded: bool,
-    ctx: &AssignTaskContext<'_>,
-    queries: &mut crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
-    shadow: &mut ReservationShadow,
-) -> bool {
-    let Some((site_entity, resource_type)) =
-        resolve_haul_to_floor_construction_inputs(ctx.task_entity, queries)
-    else {
-        return false;
-    };
-
-    let site_pos = if let Ok((site_transform, _, _)) = queries.storage.floor_sites.get(site_entity)
-    {
-        site_transform.translation.truncate()
-    } else {
-        debug!(
-            "ASSIGN: Floor request {:?} site {:?} not found",
-            ctx.task_entity, site_entity
-        );
-        return false;
-    };
-
-    // Floor construction requests deliver items onto the site material center.
-    // Reuse Haul task path and let execution drop the item near the site anchor.
-    if resource_type == crate::systems::logistics::ResourceType::StasisMud {
-        let remaining_needed = compute_remaining_floor_mud(site_entity, queries);
-        if remaining_needed == 0 {
-            return false;
-        }
-
-        let max_items = remaining_needed.min(crate::constants::WHEELBARROW_CAPACITY as u32) as usize;
-        let mut item_sources = source_selector::collect_nearby_items_for_wheelbarrow(
-            resource_type,
-            site_pos,
-            max_items,
-            queries,
-            shadow,
-        );
-        if item_sources.is_empty() {
-            item_sources = source_selector::collect_items_for_wheelbarrow_unbounded(
-                resource_type,
-                site_pos,
-                max_items,
-                queries,
-                shadow,
-            );
-        }
-        if item_sources.is_empty() {
-            debug!(
-                "ASSIGN: Floor request {:?} has no available {:?} source",
-                ctx.task_entity, resource_type
-            );
-            return false;
-        }
-
-        let source_pos = item_sources
-            .iter()
-            .map(|(_, pos)| *pos)
-            .reduce(|a, b| a + b)
-            .unwrap()
-            / item_sources.len() as f32;
-
-        let Some(wheelbarrow) = wheelbarrow::find_nearest_wheelbarrow(source_pos, queries, shadow)
-        else {
-            debug!(
-                "ASSIGN: Floor request {:?} has no available wheelbarrow for {:?}",
-                ctx.task_entity, resource_type
-            );
-            return false;
-        };
-
-        let item_entities = item_sources.into_iter().map(|(entity, _)| entity).collect();
-        issue_haul_with_wheelbarrow(
-            wheelbarrow,
-            source_pos,
-            crate::systems::logistics::transport_request::WheelbarrowDestination::Stockpile(
-                site_entity,
-            ),
-            item_entities,
-            site_pos,
-            already_commanded,
-            ctx,
-            queries,
-            shadow,
-        );
-        return true;
-    }
-
-    if let Some((source_item, source_pos)) = source_selector::find_nearest_blueprint_source_item(
-        resource_type,
-        site_pos,
-        queries,
-        shadow,
-    ) {
-        issue_haul_to_stockpile_with_source(
-            source_item,
-            site_entity,
-            source_pos,
-            already_commanded,
-            ctx,
-            queries,
-            shadow,
-        );
-        return true;
-    }
-
-    // Bone は地面アイテムが無いことが多いため、直接採取フォールバックを許可する。
-    if resource_type == crate::systems::logistics::ResourceType::Bone
-        && try_direct_bone_collect_to_floor(
-            site_entity,
-            ctx.task_entity,
-            site_pos,
-            already_commanded,
-            ctx,
-            queries,
-            shadow,
-        )
-    {
-        return true;
-    }
-
-    debug!(
-        "ASSIGN: Floor request {:?} has no available {:?} source",
-        ctx.task_entity, resource_type
-    );
-    false
-}
-
-fn assign_haul_to_provisional_wall(
-    _task_pos: Vec2,
-    already_commanded: bool,
-    ctx: &AssignTaskContext<'_>,
-    queries: &mut crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
-    shadow: &mut ReservationShadow,
-) -> bool {
-    let Some((wall_entity, resource_type)) =
-        resolve_haul_to_provisional_wall_inputs(ctx.task_entity, queries)
-    else {
-        return false;
-    };
-
-    let Ok((wall_transform, building, provisional_opt)) =
-        queries.storage.buildings.get(wall_entity)
-    else {
-        debug!(
-            "ASSIGN: ProvisionalWall request {:?} wall {:?} not found",
-            ctx.task_entity, wall_entity
-        );
-        return false;
-    };
-
-    if building.kind != crate::systems::jobs::BuildingType::Wall
-        || !building.is_provisional
-        || provisional_opt.is_none_or(|provisional| provisional.mud_delivered)
-    {
-        return false;
-    }
-
-    let wall_pos = wall_transform.translation.truncate();
-    let Some((source_item, source_pos)) = source_selector::find_nearest_blueprint_source_item(
-        resource_type,
-        wall_pos,
-        queries,
-        shadow,
-    ) else {
-        debug!(
-            "ASSIGN: ProvisionalWall request {:?} has no available {:?} source",
-            ctx.task_entity, resource_type
-        );
-        return false;
-    };
-
-    if resource_type == crate::systems::logistics::ResourceType::StasisMud {
-        let Some(wheelbarrow) = wheelbarrow::find_nearest_wheelbarrow(source_pos, queries, shadow)
-        else {
-            debug!(
-                "ASSIGN: ProvisionalWall request {:?} has no available wheelbarrow for {:?}",
-                ctx.task_entity, resource_type
-            );
-            return false;
-        };
-        issue_haul_with_wheelbarrow(
-            wheelbarrow,
-            source_pos,
-            crate::systems::logistics::transport_request::WheelbarrowDestination::Stockpile(
-                wall_entity,
-            ),
-            vec![source_item],
-            wall_pos,
-            already_commanded,
-            ctx,
-            queries,
-            shadow,
-        );
-        return true;
-    }
-
-    issue_haul_to_stockpile_with_source(
-        source_item,
-        wall_entity,
-        source_pos,
-        already_commanded,
-        ctx,
-        queries,
-        shadow,
-    );
-    true
-}
-
-fn try_direct_bone_collect_to_floor(
-    site_entity: Entity,
-    task_entity: Entity,
-    site_pos: Vec2,
-    already_commanded: bool,
-    ctx: &AssignTaskContext<'_>,
-    queries: &mut crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
-    shadow: &mut ReservationShadow,
-) -> bool {
-    let Some((source_entity, source_pos)) =
-        blueprint::find_collect_bone_source(site_pos, ctx.task_area_opt, queries, shadow)
-    else {
-        debug!(
-            "ASSIGN: Floor request {:?} has no available Bone collect source",
-            task_entity
-        );
-        return false;
-    };
-
-    let Some(wheelbarrow) = wheelbarrow::find_nearest_wheelbarrow(source_pos, queries, shadow)
-    else {
-        debug!(
-            "ASSIGN: Floor request {:?} has no available wheelbarrow for Bone collect",
-            task_entity
-        );
-        return false;
-    };
-
-    let remaining_needed = compute_remaining_floor_bones(site_entity, queries);
-    if remaining_needed == 0 {
-        debug!(
-            "ASSIGN: Floor request {:?} already satisfied before direct collect assignment",
-            task_entity
-        );
-        return false;
-    }
-    let amount = remaining_needed.min(crate::constants::WHEELBARROW_CAPACITY as u32);
-
-    issue_collect_bone_with_wheelbarrow_to_floor(
-        wheelbarrow,
-        source_entity,
-        source_pos,
-        site_entity,
-        amount,
-        source_pos,
-        already_commanded,
-        ctx,
-        queries,
-        shadow,
-    );
-    info!(
-        "ASSIGN: Floor request {:?} assigned direct Bone collect via wheelbarrow {:?} from {:?} to site {:?} (amount {})",
-        task_entity, wheelbarrow, source_entity, site_entity, amount
-    );
-    true
-}
-
-fn compute_remaining_floor_bones(
-    site_entity: Entity,
-    queries: &crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
-) -> u32 {
-    let mut needed = 0u32;
-
-    for tile in queries
-        .storage
-        .floor_tiles
-        .iter()
-        .filter(|tile| tile.parent_site == site_entity)
-    {
-        if tile.state == crate::systems::jobs::floor_construction::FloorTileState::WaitingBones {
-            needed += crate::constants::FLOOR_BONES_PER_TILE.saturating_sub(tile.bones_delivered);
-        }
-    }
-
-    let incoming = queries
-        .reservation
-        .incoming_deliveries_query
-        .get(site_entity)
-        .map(|inc| inc.len() as u32)
-        .unwrap_or(0);
-
-    needed.saturating_sub(incoming)
-}
-
-fn compute_remaining_floor_mud(
-    site_entity: Entity,
-    queries: &crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
-) -> u32 {
-    let mut needed = 0u32;
-
-    for tile in queries
-        .storage
-        .floor_tiles
-        .iter()
-        .filter(|tile| tile.parent_site == site_entity)
-    {
-        if tile.state == crate::systems::jobs::floor_construction::FloorTileState::WaitingMud {
-            needed += crate::constants::FLOOR_MUD_PER_TILE.saturating_sub(tile.mud_delivered);
-        }
-    }
-
-    let incoming = queries
-        .reservation
-        .incoming_deliveries_query
-        .get(site_entity)
-        .map(|inc| inc.len() as u32)
-        .unwrap_or(0);
-
-    needed.saturating_sub(incoming)
-}
+pub use mixer::assign_haul_to_mixer;
 
 pub fn assign_haul(
     task_pos: Vec2,
@@ -466,49 +29,34 @@ pub fn assign_haul(
         return true;
     }
 
-    if let Some(tank) = resolve_return_bucket_tank(ctx.task_entity, queries) {
-        let Some((source_item, source_pos, destination_stockpile)) =
-            find_bucket_return_assignment(tank, task_pos, queries, shadow)
-        else {
-            debug!(
-                "ASSIGN: ReturnBucket request {:?} has no valid source/destination for tank {:?}",
-                ctx.task_entity, tank
-            );
-            return false;
-        };
-        issue_haul_to_stockpile_with_source(
-            source_item,
-            destination_stockpile,
-            source_pos,
-            already_commanded,
-            ctx,
-            queries,
-            shadow,
-        );
-        return true;
-    }
-
-    if let Some((wheelbarrow, parking_anchor, wheelbarrow_pos)) =
-        resolve_return_wheelbarrow(ctx.task_entity, queries)
+    if let Some(ok) = returns::assign_return_bucket(task_pos, already_commanded, ctx, queries, shadow)
     {
-        issue_return_wheelbarrow(
-            wheelbarrow,
-            parking_anchor,
-            wheelbarrow_pos,
-            task_pos,
-            already_commanded,
-            ctx,
-            queries,
-            shadow,
-        );
+        return ok;
+    }
+
+    if let Some(ok) =
+        returns::assign_return_wheelbarrow(task_pos, already_commanded, ctx, queries, shadow)
+    {
+        return ok;
+    }
+
+    if provisional_wall::assign_haul_to_provisional_wall(
+        task_pos,
+        already_commanded,
+        ctx,
+        queries,
+        shadow,
+    ) {
         return true;
     }
 
-    if assign_haul_to_provisional_wall(task_pos, already_commanded, ctx, queries, shadow) {
-        return true;
-    }
-
-    if assign_haul_to_floor_construction(task_pos, already_commanded, ctx, queries, shadow) {
+    if floor::assign_haul_to_floor_construction(
+        task_pos,
+        already_commanded,
+        ctx,
+        queries,
+        shadow,
+    ) {
         return true;
     }
 
