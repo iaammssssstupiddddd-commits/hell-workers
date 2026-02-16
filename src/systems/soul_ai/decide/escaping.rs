@@ -65,7 +65,10 @@ pub fn escaping_decision_system(
         for (entity, transform, soul, under_command, participating_in, idle_state) in
             q_detect.iter()
         {
-            if idle_state.behavior == IdleBehavior::Escaping {
+            if matches!(
+                idle_state.behavior,
+                IdleBehavior::Escaping | IdleBehavior::Drifting
+            ) {
                 continue;
             }
             if under_command.is_some() {

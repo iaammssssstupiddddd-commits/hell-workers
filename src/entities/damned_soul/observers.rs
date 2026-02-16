@@ -29,9 +29,26 @@ pub fn on_task_completed(on: On<OnTaskCompleted>, _q_souls: Query<&mut DamnedSou
     );
 }
 
-pub fn on_soul_recruited(on: On<OnSoulRecruited>, _q_souls: Query<&mut DamnedSoul>) {
+pub fn on_soul_recruited(
+    on: On<OnSoulRecruited>,
+    mut commands: Commands,
+    mut q_souls: Query<(&mut DamnedSoul, &mut IdleState, &mut Path)>,
+) {
     let soul_entity = on.entity;
     let event = on.event();
+    if let Ok((_soul, mut idle, mut path)) = q_souls.get_mut(soul_entity) {
+        idle.total_idle_time = 0.0;
+        if idle.behavior == IdleBehavior::Drifting {
+            idle.behavior = IdleBehavior::Wandering;
+            idle.idle_timer = 0.0;
+            idle.behavior_duration = 3.0;
+        }
+        path.waypoints.clear();
+        path.current_index = 0;
+        commands
+            .entity(soul_entity)
+            .remove::<crate::entities::damned_soul::DriftingState>();
+    }
     info!(
         "OBSERVER: Soul {:?} recruited by Familiar {:?}",
         soul_entity, event.familiar_entity

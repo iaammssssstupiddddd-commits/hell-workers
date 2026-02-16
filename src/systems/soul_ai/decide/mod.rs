@@ -4,6 +4,7 @@ use bevy::prelude::*;
 use crate::events::{EscapeRequest, GatheringManagementRequest};
 
 pub mod escaping;
+pub mod drifting;
 pub mod gathering_mgmt;
 pub mod idle_behavior;
 pub mod separation;

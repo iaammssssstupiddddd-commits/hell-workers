@@ -128,6 +128,16 @@ pub fn apply_task_assignment_requests_system(
             }
         }
 
+        if idle.behavior == IdleBehavior::Drifting {
+            idle.behavior = IdleBehavior::Wandering;
+            idle.idle_timer = 0.0;
+            idle.behavior_duration = 3.0;
+        }
+        idle.total_idle_time = 0.0;
+        commands
+            .entity(worker_entity)
+            .remove::<crate::entities::damned_soul::DriftingState>();
+
         prepare_worker_for_task_apply(
             &mut commands,
             worker_entity,

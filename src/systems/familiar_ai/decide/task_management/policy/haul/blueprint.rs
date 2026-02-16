@@ -61,7 +61,9 @@ pub fn assign_haul_to_blueprint(
     }
 
     // 1. Pick-drop チェック: リースがなく、最寄りアイテムが BP 隣接なら単品手運び
-    if queries.wheelbarrow_leases.get(ctx.task_entity).is_err() {
+    if queries.wheelbarrow_leases.get(ctx.task_entity).is_err()
+        && resource_type != ResourceType::StasisMud
+    {
         if try_pick_drop_to_blueprint(
             blueprint,
             resource_type,

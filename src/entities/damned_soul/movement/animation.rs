@@ -37,6 +37,7 @@ fn select_soul_image<'a>(
         IdleBehavior::GoingToRest => &game_assets.soul,
         IdleBehavior::ExhaustedGathering => &game_assets.soul_exhausted,
         IdleBehavior::Escaping => &game_assets.soul,
+        IdleBehavior::Drifting => &game_assets.soul,
         IdleBehavior::Gathering => match idle.gathering_behavior {
             GatheringBehavior::Sleeping => &game_assets.soul_sleep,
             GatheringBehavior::Wandering

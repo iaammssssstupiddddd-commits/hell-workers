@@ -34,7 +34,16 @@ Hell-Workers の物流は、`TransportRequest` を中心にした自動発行 + 
 - `ReservedForTask`:
   - タスクで予約済みのアイテム
 
-### 1.4 TransportRequest
+### 1.4 アイテムの寿命 (Item Lifetime)
+- 特定のアイテム（**StasisMud**, **Sand**）は、地面にドロップされた状態で放置されると **5秒後** に消滅します。
+- **消滅しない条件**:
+  - `ReservedForTask`: タスク用に予約されている
+  - `LoadedIn(Entity)`: 手押し車などに積載されている
+  - `StoredIn(Entity)`: Stockpile に格納されている
+  - `DeliveringTo(Entity)`: 搬送中（リレーションシップあり）
+- これにより、運搬されずに放置された余剰な中間素材が自動的にクリーンアップされます。
+
+### 1.5 TransportRequest
 - `TransportRequest { kind, anchor, resource_type, issued_by, priority }`
 - `TransportDemand { desired_slots, inflight }`
 - `TransportRequestState`:
