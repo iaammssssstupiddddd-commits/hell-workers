@@ -46,19 +46,13 @@ pub fn compute_remaining_floor_bones(
     site_entity: Entity,
     queries: &TaskAssignmentQueries<'_, '_>,
 ) -> u32 {
-    compute_remaining_with_incoming(
-        site_entity,
-        queries,
-        |tile| {
-            if tile.state
-                == crate::systems::jobs::floor_construction::FloorTileState::WaitingBones
-            {
-                crate::constants::FLOOR_BONES_PER_TILE.saturating_sub(tile.bones_delivered)
-            } else {
-                0
-            }
-        },
-    )
+    compute_remaining_with_incoming(site_entity, queries, |tile| {
+        if tile.state == crate::systems::jobs::floor_construction::FloorTileState::WaitingBones {
+            crate::constants::FLOOR_BONES_PER_TILE.saturating_sub(tile.bones_delivered)
+        } else {
+            0
+        }
+    })
 }
 
 /// 床建設サイトへの泥の残需要
@@ -66,19 +60,13 @@ pub fn compute_remaining_floor_mud(
     site_entity: Entity,
     queries: &TaskAssignmentQueries<'_, '_>,
 ) -> u32 {
-    compute_remaining_with_incoming(
-        site_entity,
-        queries,
-        |tile| {
-            if tile.state
-                == crate::systems::jobs::floor_construction::FloorTileState::WaitingMud
-            {
-                crate::constants::FLOOR_MUD_PER_TILE.saturating_sub(tile.mud_delivered)
-            } else {
-                0
-            }
-        },
-    )
+    compute_remaining_with_incoming(site_entity, queries, |tile| {
+        if tile.state == crate::systems::jobs::floor_construction::FloorTileState::WaitingMud {
+            crate::constants::FLOOR_MUD_PER_TILE.saturating_sub(tile.mud_delivered)
+        } else {
+            0
+        }
+    })
 }
 
 fn compute_remaining_with_incoming(

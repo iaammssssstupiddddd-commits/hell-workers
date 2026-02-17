@@ -3,6 +3,8 @@ mod floor;
 mod haul;
 mod water;
 
+pub(crate) use haul::take_source_selector_scan_snapshot;
+
 use crate::systems::familiar_ai::decide::task_management::{AssignTaskContext, ReservationShadow};
 use crate::systems::jobs::WorkType;
 use bevy::prelude::*;

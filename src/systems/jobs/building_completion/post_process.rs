@@ -1,4 +1,6 @@
-use super::super::{Blueprint, BonePile, BuildingType, MudMixerStorage, RestArea, SandPile, TaskSlots};
+use super::super::{
+    Blueprint, BonePile, BuildingType, MudMixerStorage, RestArea, SandPile, TaskSlots,
+};
 use crate::assets::GameAssets;
 use crate::constants::{
     MUD_MIXER_CAPACITY, REST_AREA_CAPACITY, TILE_SIZE, WHEELBARROW_CAPACITY, Z_FLOATING_TEXT,

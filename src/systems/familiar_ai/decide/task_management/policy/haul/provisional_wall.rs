@@ -4,10 +4,12 @@ use crate::systems::familiar_ai::decide::task_management::{AssignTaskContext, Re
 use crate::systems::logistics::ResourceType;
 use bevy::prelude::*;
 
+use super::super::super::builders::{
+    issue_haul_to_stockpile_with_source, issue_haul_with_wheelbarrow,
+};
+use super::super::super::validator::resolve_haul_to_provisional_wall_inputs;
 use super::source_selector;
 use super::wheelbarrow;
-use super::super::super::builders::{issue_haul_to_stockpile_with_source, issue_haul_with_wheelbarrow};
-use super::super::super::validator::resolve_haul_to_provisional_wall_inputs;
 
 pub fn assign_haul_to_provisional_wall(
     _task_pos: Vec2,

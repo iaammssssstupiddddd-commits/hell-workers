@@ -1,4 +1,6 @@
-use super::components::{BubbleEmotion, BubblePriority, FamiliarBubble, ReactionDelay, SpeechBubble};
+use super::components::{
+    BubbleEmotion, BubblePriority, FamiliarBubble, ReactionDelay, SpeechBubble,
+};
 use super::cooldown::SpeechHistory;
 use super::emitter::{emit_familiar_with_history, emit_soul_with_history};
 use super::phrases::LatinPhrase;

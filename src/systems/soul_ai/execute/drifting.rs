@@ -2,10 +2,8 @@ use bevy::prelude::*;
 use rand::Rng;
 
 use crate::constants::*;
-use crate::entities::damned_soul::{
-    DriftEdge, DriftPhase, DriftingState, IdleBehavior, IdleState,
-};
 use crate::entities::damned_soul::spawn::PopulationManager;
+use crate::entities::damned_soul::{DriftEdge, DriftPhase, DriftingState, IdleBehavior, IdleState};
 use crate::relationships::CommandedBy;
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
 use crate::world::map::WorldMap;
@@ -83,8 +81,16 @@ pub fn drifting_behavior_system(
     let dt = time.delta_secs();
     let mut rng = rand::thread_rng();
 
-    for (entity, transform, mut idle, mut destination, mut path, task, under_command, mut drifting) in
-        q_souls.iter_mut()
+    for (
+        entity,
+        transform,
+        mut idle,
+        mut destination,
+        mut path,
+        task,
+        under_command,
+        mut drifting,
+    ) in q_souls.iter_mut()
     {
         if idle.behavior != IdleBehavior::Drifting {
             commands.entity(entity).remove::<DriftingState>();
@@ -107,7 +113,8 @@ pub fn drifting_behavior_system(
 
         match drifting.phase {
             DriftPhase::Wandering => {
-                let path_done = path.waypoints.is_empty() || path.current_index >= path.waypoints.len();
+                let path_done =
+                    path.waypoints.is_empty() || path.current_index >= path.waypoints.len();
                 if path_done {
                     destination.0 = random_wander_target(current_grid, &world_map, &mut rng);
                     path.waypoints.clear();
@@ -125,7 +132,8 @@ pub fn drifting_behavior_system(
             }
             DriftPhase::Moving => {
                 let arrived = current_pos.distance(destination.0) <= TILE_SIZE * 0.75;
-                let path_done = path.waypoints.is_empty() || path.current_index >= path.waypoints.len();
+                let path_done =
+                    path.waypoints.is_empty() || path.current_index >= path.waypoints.len();
                 if arrived || (path_done && drifting.phase_timer > 1.0) {
                     drifting.phase = DriftPhase::Wandering;
                     drifting.phase_timer = 0.0;

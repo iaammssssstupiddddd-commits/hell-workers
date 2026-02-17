@@ -5,9 +5,7 @@ use rand::Rng;
 
 use crate::constants::*;
 use crate::systems::soul_ai::helpers::gathering_positions::{
-    find_position_fallback_away,
-    find_position_with_separation,
-    random_position_around,
+    find_position_fallback_away, find_position_with_separation, random_position_around,
 };
 use crate::systems::spatial::SpatialGridOps;
 use crate::world::map::WorldMap;
@@ -35,13 +33,7 @@ pub fn find_initial_gathering_position<G: SpatialGridOps>(
         20,
     )
     .or_else(|| {
-        find_position_fallback_away(
-            center,
-            current_pos,
-            exclude_entity,
-            soul_grid,
-            world_map,
-        )
+        find_position_fallback_away(center, current_pos, exclude_entity, soul_grid, world_map)
     })
 }
 
@@ -76,8 +68,8 @@ pub fn find_gathering_wandering_target<G: SpatialGridOps>(
     }
     for _ in 0..5 {
         let angle: f32 = rng.gen_range(0.0..std::f32::consts::TAU);
-        let fallback_target =
-            center + Vec2::new(angle.cos(), angle.sin()) * TILE_SIZE * GATHERING_KEEP_DISTANCE_TARGET_MAX;
+        let fallback_target = center
+            + Vec2::new(angle.cos(), angle.sin()) * TILE_SIZE * GATHERING_KEEP_DISTANCE_TARGET_MAX;
         let nearby = soul_grid.get_nearby_in_radius(fallback_target, MIN_SEPARATION);
         if nearby.iter().any(|&e| e != exclude_entity) {
             continue;
@@ -106,8 +98,7 @@ pub fn find_gathering_still_retreat_target<G: SpatialGridOps>(
         let angle: f32 = rng.gen_range(0.0..std::f32::consts::TAU);
         Vec2::new(angle.cos(), angle.sin())
     };
-    let target =
-        center + away * TILE_SIZE * GATHERING_KEEP_DISTANCE_TARGET_MIN;
+    let target = center + away * TILE_SIZE * GATHERING_KEEP_DISTANCE_TARGET_MIN;
 
     let nearby = soul_grid.get_nearby_in_radius(target, MIN_SEPARATION);
     if nearby.iter().any(|&e| e != exclude_entity) {

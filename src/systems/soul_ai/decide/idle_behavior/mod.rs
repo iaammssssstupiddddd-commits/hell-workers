@@ -23,10 +23,8 @@ use crate::systems::spatial::{GatheringSpotSpatialGrid, SpatialGridOps};
 use crate::world::map::WorldMap;
 
 pub use rest_area::{
-    find_nearest_available_rest_area,
-    has_arrived_at_rest_area,
-    nearest_walkable_adjacent_to_rest_area,
-    rest_area_has_capacity,
+    find_nearest_available_rest_area, has_arrived_at_rest_area,
+    nearest_walkable_adjacent_to_rest_area, rest_area_has_capacity,
 };
 
 /// 集会エリアに「到着した」とみなす半径（escaping.rs 等から使用）
@@ -108,8 +106,10 @@ pub fn idle_behavior_decision_system(
         let reserved_rest_area = rest_reserved_for.map(|reserved| reserved.0);
         let current_pos = transform.translation.truncate();
 
-        if matches!(idle.behavior, IdleBehavior::Resting | IdleBehavior::GoingToRest)
-            && resting_in.is_none()
+        if matches!(
+            idle.behavior,
+            IdleBehavior::Resting | IdleBehavior::GoingToRest
+        ) && resting_in.is_none()
         {
             let rest_area_target = resolve_rest_area_target(
                 reserved_rest_area,
@@ -125,7 +125,9 @@ pub fn idle_behavior_decision_system(
                         entity,
                         operation: IdleBehaviorOperation::ReserveRestArea { rest_area_entity },
                     });
-                    *pending_rest_reservations.entry(rest_area_entity).or_insert(0) += 1;
+                    *pending_rest_reservations
+                        .entry(rest_area_entity)
+                        .or_insert(0) += 1;
                     true
                 } else {
                     false
@@ -157,7 +159,10 @@ pub fn idle_behavior_decision_system(
             }
         }
 
-        if matches!(idle.behavior, IdleBehavior::Escaping | IdleBehavior::Drifting) {
+        if matches!(
+            idle.behavior,
+            IdleBehavior::Escaping | IdleBehavior::Drifting
+        ) {
             continue;
         }
 
@@ -181,7 +186,9 @@ pub fn idle_behavior_decision_system(
                         entity,
                         operation: IdleBehaviorOperation::ReserveRestArea { rest_area_entity },
                     });
-                    *pending_rest_reservations.entry(rest_area_entity).or_insert(0) += 1;
+                    *pending_rest_reservations
+                        .entry(rest_area_entity)
+                        .or_insert(0) += 1;
                     true
                 } else {
                     false
@@ -285,8 +292,7 @@ fn resolve_gathering_target(
         (center, Some(p.0))
     } else {
         let pos = transform.translation.truncate();
-        let spot_entities =
-            spot_grid.get_nearby_in_radius(pos, GATHERING_LEAVE_RADIUS * 2.0);
+        let spot_entities = spot_grid.get_nearby_in_radius(pos, GATHERING_LEAVE_RADIUS * 2.0);
         let nearest = spot_entities
             .iter()
             .filter_map(|&e| q_spots.get(e).ok())

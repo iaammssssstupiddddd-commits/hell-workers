@@ -1,4 +1,5 @@
 use crate::entities::familiar::FamiliarCommand;
+use crate::systems::familiar_ai::FamiliarDelegationPerfMetrics;
 use crate::systems::familiar_ai::FamiliarTaskDelegationTimer;
 use crate::systems::familiar_ai::decide::familiar_processor::{
     FamiliarDelegationContext, process_task_delegation_and_movement,
@@ -9,6 +10,7 @@ use crate::world::map::WorldMap;
 use crate::world::pathfinding::PathfindingContext;
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
+use std::time::Instant;
 
 /// 使い魔AIのタスク委譲に必要なSystemParam
 #[derive(SystemParam)]
@@ -23,10 +25,12 @@ pub struct FamiliarAiTaskDelegationParams<'w, 's> {
     pub transport_request_grid: Res<'w, TransportRequestSpatialGrid>,
     pub world_map: Res<'w, WorldMap>,
     pub pf_context: Local<'s, PathfindingContext>,
+    pub perf_metrics: ResMut<'w, FamiliarDelegationPerfMetrics>,
 }
 
 /// 使い魔AIのタスク委譲・移動システム（Decide Phase）
 pub fn familiar_task_delegation_system(params: FamiliarAiTaskDelegationParams) {
+    let started_at = Instant::now();
     let FamiliarAiTaskDelegationParams {
         time,
         mut delegation_timer,
@@ -37,6 +41,7 @@ pub fn familiar_task_delegation_system(params: FamiliarAiTaskDelegationParams) {
         transport_request_grid,
         world_map,
         mut pf_context,
+        mut perf_metrics,
         ..
     } = params;
 
@@ -46,6 +51,7 @@ pub fn familiar_task_delegation_system(params: FamiliarAiTaskDelegationParams) {
 
     let mut reservation_shadow =
         crate::systems::familiar_ai::decide::task_management::ReservationShadow::default();
+    let mut familiars_processed = 0u32;
 
     for (
         fam_entity,
@@ -63,6 +69,7 @@ pub fn familiar_task_delegation_system(params: FamiliarAiTaskDelegationParams) {
         if matches!(active_command.command, FamiliarCommand::Idle) {
             continue;
         }
+        familiars_processed += 1;
 
         let state_changed = ai_state.is_changed();
         let default_tasks = crate::relationships::ManagedTasks::default();
@@ -99,5 +106,45 @@ pub fn familiar_task_delegation_system(params: FamiliarAiTaskDelegationParams) {
             reservation_shadow: &mut reservation_shadow,
         };
         process_task_delegation_and_movement(&mut delegation_ctx);
+    }
+
+    let (source_selector_calls, source_selector_scanned_items) =
+        crate::systems::familiar_ai::decide::task_management::take_source_selector_scan_snapshot();
+
+    perf_metrics.latest_elapsed_ms = started_at.elapsed().as_secs_f32() * 1000.0;
+    perf_metrics.source_selector_calls = perf_metrics
+        .source_selector_calls
+        .saturating_add(source_selector_calls);
+    perf_metrics.source_selector_scanned_items = perf_metrics
+        .source_selector_scanned_items
+        .saturating_add(source_selector_scanned_items);
+    perf_metrics.familiars_processed = perf_metrics
+        .familiars_processed
+        .saturating_add(familiars_processed);
+    perf_metrics.log_interval_secs += time.delta_secs();
+
+    if perf_metrics.log_interval_secs >= 5.0 {
+        let perf_log_enabled = std::env::args().any(|arg| arg == "--perf-log-fps");
+        if perf_log_enabled {
+            info!(
+                "PERF_FAM: delegation_ms={:.3} familiars={} source_selector(calls={}, scanned_items={})",
+                perf_metrics.latest_elapsed_ms,
+                perf_metrics.familiars_processed,
+                perf_metrics.source_selector_calls,
+                perf_metrics.source_selector_scanned_items
+            );
+        } else {
+            debug!(
+                "FAM_PERF: delegation(ms={:.3}) familiars={} source_selector(calls={}, scanned_items={})",
+                perf_metrics.latest_elapsed_ms,
+                perf_metrics.familiars_processed,
+                perf_metrics.source_selector_calls,
+                perf_metrics.source_selector_scanned_items
+            );
+        }
+        perf_metrics.log_interval_secs = 0.0;
+        perf_metrics.source_selector_calls = 0;
+        perf_metrics.source_selector_scanned_items = 0;
+        perf_metrics.familiars_processed = 0;
     }
 }

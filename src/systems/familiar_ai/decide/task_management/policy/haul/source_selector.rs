@@ -5,9 +5,29 @@ use crate::systems::familiar_ai::decide::task_management::{
 };
 use crate::systems::logistics::ResourceType;
 use bevy::prelude::*;
+use std::sync::atomic::{AtomicU32, Ordering};
 
 type TaskQueries<'w, 's> =
     crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries<'w, 's>;
+
+static SOURCE_SELECTOR_CALLS: AtomicU32 = AtomicU32::new(0);
+static SOURCE_SELECTOR_SCANNED_ITEMS: AtomicU32 = AtomicU32::new(0);
+
+fn mark_source_selector_call() {
+    SOURCE_SELECTOR_CALLS.fetch_add(1, Ordering::Relaxed);
+}
+
+fn mark_scanned_item() {
+    SOURCE_SELECTOR_SCANNED_ITEMS.fetch_add(1, Ordering::Relaxed);
+}
+
+/// source_selector 系の走査カウンタを読み出し、内部カウンタをリセットする。
+pub(crate) fn take_source_selector_scan_snapshot() -> (u32, u32) {
+    (
+        SOURCE_SELECTOR_CALLS.swap(0, Ordering::Relaxed),
+        SOURCE_SELECTOR_SCANNED_ITEMS.swap(0, Ordering::Relaxed),
+    )
+}
 
 /// 共通: target_pos に最も近い未予約アイテムを検索（条件差分は extra_filter で指定）
 fn find_nearest_source_item<'w, 's>(
@@ -17,9 +37,11 @@ fn find_nearest_source_item<'w, 's>(
     shadow: &ReservationShadow,
     extra_filter: impl Fn(Entity) -> bool,
 ) -> Option<(Entity, Vec2)> {
+    mark_source_selector_call();
     queries
         .free_resource_items
         .iter()
+        .inspect(|_| mark_scanned_item())
         .filter(|(_, _, visibility, res_item)| {
             **visibility != Visibility::Hidden && res_item.0 == resource_type
         })
@@ -114,6 +136,7 @@ pub fn find_consolidation_source_item<'w, 's>(
     queries: &TaskQueries<'w, 's>,
     shadow: &ReservationShadow,
 ) -> Option<(Entity, Vec2)> {
+    mark_source_selector_call();
     // ドナーセルごとに格納数を取得してソート（最少格納優先）
     let mut donor_with_count: Vec<(Entity, usize)> = donor_cells
         .iter()
@@ -136,6 +159,7 @@ pub fn find_consolidation_source_item<'w, 's>(
         let found = queries
             .stored_items_query
             .iter()
+            .inspect(|_| mark_scanned_item())
             .filter(|(_, res, in_stockpile)| {
                 res.0 == resource_type && in_stockpile.0 == cell
             })
@@ -204,11 +228,13 @@ fn collect_items_for_wheelbarrow_in_radius(
     shadow: &ReservationShadow,
     search_radius: Option<f32>,
 ) -> Vec<(Entity, Vec2)> {
+    mark_source_selector_call();
     let search_radius_sq = search_radius.map(|r| r * r);
 
     let mut items: Vec<(Entity, Vec2, f32)> = queries
         .free_resource_items
         .iter()
+        .inspect(|_| mark_scanned_item())
         .filter(|(_, _, visibility, res_item)| {
             **visibility != Visibility::Hidden && res_item.0 == resource_type
         })

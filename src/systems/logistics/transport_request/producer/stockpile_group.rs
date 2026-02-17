@@ -30,10 +30,19 @@ pub struct StockpileGroup {
 pub struct StockpileGroupSpatialIndex {
     groups_by_owner: HashMap<Entity, Vec<usize>>,
     owner_task_areas: HashMap<Entity, TaskArea>,
+    owners_by_cell: HashMap<(i32, i32), Vec<Entity>>,
+    cell_size: f32,
 }
 
 /// 収集範囲: TaskArea外周からの距離（タイル単位）
 const TASK_AREA_PERIMETER_SEARCH_RADIUS_TILES: f32 = 10.0;
+
+fn pos_to_cell(pos: Vec2, cell_size: f32) -> (i32, i32) {
+    (
+        (pos.x / cell_size).floor() as i32,
+        (pos.y / cell_size).floor() as i32,
+    )
+}
 
 /// ファミリアごとにTaskArea内のStockpileセルをグループ化する
 ///
@@ -122,9 +131,21 @@ pub fn build_group_spatial_index(
 ) -> StockpileGroupSpatialIndex {
     let mut groups_by_owner: HashMap<Entity, Vec<usize>> = HashMap::new();
     let mut owner_task_areas: HashMap<Entity, TaskArea> = HashMap::new();
+    let mut owners_by_cell: HashMap<(i32, i32), Vec<Entity>> = HashMap::new();
+    let search_radius = TASK_AREA_PERIMETER_SEARCH_RADIUS_TILES * TILE_SIZE;
+    let cell_size = search_radius.max(TILE_SIZE * 2.0);
 
     for (familiar, area) in familiars_with_areas {
         owner_task_areas.insert(*familiar, area.clone());
+        let expanded_min = area.min - Vec2::splat(search_radius);
+        let expanded_max = area.max + Vec2::splat(search_radius);
+        let min_cell = pos_to_cell(expanded_min, cell_size);
+        let max_cell = pos_to_cell(expanded_max, cell_size);
+        for cy in min_cell.1..=max_cell.1 {
+            for cx in min_cell.0..=max_cell.0 {
+                owners_by_cell.entry((cx, cy)).or_default().push(*familiar);
+            }
+        }
     }
 
     for (group_idx, group) in groups.iter().enumerate() {
@@ -137,6 +158,8 @@ pub fn build_group_spatial_index(
     StockpileGroupSpatialIndex {
         groups_by_owner,
         owner_task_areas,
+        owners_by_cell,
+        cell_size,
     }
 }
 
@@ -167,16 +190,31 @@ pub fn find_nearest_group_for_item_indexed<'a>(
     let mut owners_containing_item = HashSet::new();
     let mut owner_perimeter_dist_sq = HashMap::new();
 
+    let item_cell = pos_to_cell(item_pos, index.cell_size);
+    let mut owner_candidates: Vec<Entity> = index
+        .owners_by_cell
+        .get(&item_cell)
+        .cloned()
+        .unwrap_or_default();
+    if owner_candidates.is_empty() {
+        owner_candidates.extend(index.owner_task_areas.keys().copied());
+    }
+    owner_candidates.sort_unstable();
+    owner_candidates.dedup();
+
     // 1) TaskArea 外周 + 10 タイル以内の owner 候補を収集
-    for (owner, area) in &index.owner_task_areas {
+    for owner in owner_candidates {
+        let Some(area) = index.owner_task_areas.get(&owner) else {
+            continue;
+        };
         if area.contains(item_pos) {
-            owners_containing_item.insert(*owner);
+            owners_containing_item.insert(owner);
         }
 
         let perimeter_dist_sq = distance_sq_to_task_area_perimeter(item_pos, area);
         if perimeter_dist_sq <= search_radius_sq {
-            owner_perimeter_dist_sq.insert(*owner, perimeter_dist_sq);
-            if let Some(owner_groups) = index.groups_by_owner.get(owner) {
+            owner_perimeter_dist_sq.insert(owner, perimeter_dist_sq);
+            if let Some(owner_groups) = index.groups_by_owner.get(&owner) {
                 candidate_group_indices.extend(owner_groups.iter().copied());
             }
         }
