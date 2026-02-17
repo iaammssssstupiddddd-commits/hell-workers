@@ -16,4 +16,5 @@ pub use task_assigner::ReservationShadow;
 pub use task_assigner::assign_task_to_worker;
 pub(crate) use task_assigner::{CachedSourceItem, SourceSelectorFrameCache};
 pub use task_finder::DelegationCandidate;
+pub use task_finder::ScoredDelegationCandidate;
 pub use task_finder::collect_scored_candidates;

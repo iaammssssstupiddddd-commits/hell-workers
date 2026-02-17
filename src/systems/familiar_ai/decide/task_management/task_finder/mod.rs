@@ -23,7 +23,14 @@ pub struct DelegationCandidate {
     pub skip_reachability_check: bool,
 }
 
-/// Familiar単位で委譲候補を収集し、優先度順に返す
+#[derive(Clone, Copy, Debug)]
+pub struct ScoredDelegationCandidate {
+    pub candidate: DelegationCandidate,
+    pub priority: i32,
+    pub dist_sq: f32,
+}
+
+/// Familiar単位で委譲候補を収集し、スコア情報付きで返す
 #[allow(clippy::too_many_arguments)]
 pub fn collect_scored_candidates(
     fam_entity: Entity,
@@ -35,7 +42,7 @@ pub fn collect_scored_candidates(
     managed_tasks: &ManagedTasks,
     q_target_blueprints: &Query<&TargetBlueprint>,
     world_map: &WorldMap,
-) -> Vec<DelegationCandidate> {
+) -> Vec<ScoredDelegationCandidate> {
     let candidates = collect_candidate_entities(
         task_area_opt,
         managed_tasks,
@@ -43,7 +50,7 @@ pub fn collect_scored_candidates(
         transport_request_grid,
     );
 
-    let mut valid_candidates: Vec<(DelegationCandidate, i32, f32)> = candidates
+    let valid_candidates: Vec<ScoredDelegationCandidate> = candidates
         .into_iter()
         .filter_map(|entity| {
             let snapshot = candidate_snapshot(
@@ -78,8 +85,8 @@ pub fn collect_scored_candidates(
                 );
             }
 
-            Some((
-                DelegationCandidate {
+            Some(ScoredDelegationCandidate {
+                candidate: DelegationCandidate {
                     entity,
                     target_grid: snapshot.target_grid,
                     target_walkable: snapshot.target_walkable,
@@ -87,21 +94,13 @@ pub fn collect_scored_candidates(
                 },
                 priority,
                 dist_sq,
-            ))
+            })
         })
         .collect();
-
-    valid_candidates.sort_by(|(_, p1, d1), (_, p2, d2)| match p2.cmp(p1) {
-        std::cmp::Ordering::Equal => d1.partial_cmp(d2).unwrap_or(std::cmp::Ordering::Equal),
-        other => other,
-    });
 
     if valid_candidates.is_empty() {
         debug!("TASK_FINDER: {:?} has no candidates", fam_entity);
     }
 
     valid_candidates
-        .into_iter()
-        .map(|(candidate, _, _)| candidate)
-        .collect()
 }

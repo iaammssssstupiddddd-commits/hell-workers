@@ -1,13 +1,14 @@
 use crate::relationships::ManagedTasks;
 use crate::systems::command::TaskArea;
 use crate::systems::familiar_ai::decide::task_management::{
-    AssignTaskContext, DelegationCandidate, ReservationShadow, assign_task_to_worker,
-    collect_scored_candidates,
+    AssignTaskContext, DelegationCandidate, ReservationShadow, ScoredDelegationCandidate,
+    assign_task_to_worker, collect_scored_candidates,
 };
 use crate::systems::spatial::{DesignationSpatialGrid, TransportRequestSpatialGrid};
 use crate::world::map::WorldMap;
 use crate::world::pathfinding::{self, PathfindingContext};
 use bevy::prelude::*;
+use std::cmp::Ordering;
 use std::collections::HashMap;
 
 use crate::systems::familiar_ai::FamiliarSoulQuery;
@@ -64,6 +65,47 @@ fn reachable_with_cache(
     let reachable = evaluate_reachability(worker_grid, candidate, world_map, pf_context);
     cache.insert(key, reachable);
     reachable
+}
+
+fn compare_scored_candidates(
+    a: &ScoredDelegationCandidate,
+    b: &ScoredDelegationCandidate,
+) -> Ordering {
+    match b.priority.cmp(&a.priority) {
+        Ordering::Equal => a.dist_sq.partial_cmp(&b.dist_sq).unwrap_or(Ordering::Equal),
+        other => other,
+    }
+}
+
+fn split_top_candidates(
+    mut candidates: Vec<ScoredDelegationCandidate>,
+    top_k: usize,
+) -> (Vec<DelegationCandidate>, Vec<ScoredDelegationCandidate>) {
+    if candidates.is_empty() {
+        return (Vec::new(), Vec::new());
+    }
+
+    if top_k == 0 || candidates.len() <= top_k {
+        candidates.sort_by(compare_scored_candidates);
+        let top = candidates
+            .into_iter()
+            .map(|entry| entry.candidate)
+            .collect();
+        return (top, Vec::new());
+    }
+
+    let nth = top_k - 1;
+    candidates.select_nth_unstable_by(nth, compare_scored_candidates);
+    let remaining = candidates.split_off(top_k);
+    candidates.sort_by(compare_scored_candidates);
+
+    (
+        candidates
+            .into_iter()
+            .map(|entry| entry.candidate)
+            .collect(),
+        remaining,
+    )
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -139,7 +181,7 @@ pub(super) fn try_assign_for_workers(
     pf_context: &mut PathfindingContext,
     reservation_shadow: &mut ReservationShadow,
 ) -> Option<Entity> {
-    let candidates = collect_scored_candidates(
+    let scored_candidates = collect_scored_candidates(
         fam_entity,
         fam_pos,
         task_area_opt,
@@ -150,11 +192,13 @@ pub(super) fn try_assign_for_workers(
         &queries.storage.target_blueprints,
         world_map,
     );
-    if candidates.is_empty() {
+    if scored_candidates.is_empty() {
         return None;
     }
 
-    let top_k = candidates.len().min(TASK_DELEGATION_TOP_K);
+    let top_k = scored_candidates.len().min(TASK_DELEGATION_TOP_K);
+    let (top_candidates, mut remaining_scored) = split_top_candidates(scored_candidates, top_k);
+    let mut fallback_candidates: Option<Vec<DelegationCandidate>> = None;
     let mut reachability_cache: HashMap<ReachabilityKey, bool> = HashMap::new();
 
     for (worker_entity, pos) in idle_members.iter().copied() {
@@ -165,7 +209,7 @@ pub(super) fn try_assign_for_workers(
         if let Some(task_entity) = try_assign_from_candidates(
             worker_entity,
             worker_grid,
-            &candidates[..top_k],
+            &top_candidates,
             fam_entity,
             fatigue_threshold,
             task_area_opt,
@@ -179,23 +223,35 @@ pub(super) fn try_assign_for_workers(
             return Some(task_entity);
         }
 
-        if top_k < candidates.len()
-            && let Some(task_entity) = try_assign_from_candidates(
-                worker_entity,
-                worker_grid,
-                &candidates[top_k..],
-                fam_entity,
-                fatigue_threshold,
-                task_area_opt,
-                queries,
-                q_souls,
-                world_map,
-                pf_context,
-                reservation_shadow,
-                &mut reachability_cache,
-            )
-        {
-            return Some(task_entity);
+        if !remaining_scored.is_empty() {
+            if fallback_candidates.is_none() {
+                remaining_scored.sort_by(compare_scored_candidates);
+                fallback_candidates = Some(
+                    remaining_scored
+                        .iter()
+                        .map(|entry| entry.candidate)
+                        .collect(),
+                );
+            }
+
+            if let Some(fallback) = fallback_candidates.as_deref()
+                && let Some(task_entity) = try_assign_from_candidates(
+                    worker_entity,
+                    worker_grid,
+                    fallback,
+                    fam_entity,
+                    fatigue_threshold,
+                    task_area_opt,
+                    queries,
+                    q_souls,
+                    world_map,
+                    pf_context,
+                    reservation_shadow,
+                    &mut reachability_cache,
+                )
+            {
+                return Some(task_entity);
+            }
         }
     }
 
