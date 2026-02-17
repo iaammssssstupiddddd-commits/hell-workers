@@ -140,6 +140,20 @@ pub(crate) fn detect_reachable_familiar_within_safe_distance(
                 continue;
             }
 
+            let skip_pathfinding_threshold =
+                safe_distance * ESCAPE_PATHFINDING_SKIP_THRESHOLD_RATIO;
+            if euclid < skip_pathfinding_threshold {
+                let threat = FamiliarThreat {
+                    entity: fam_entity,
+                    position: fam_pos,
+                    distance: euclid,
+                };
+                if best.map_or(true, |(_, best_dist)| euclid < best_dist) {
+                    best = Some((threat, euclid));
+                }
+                continue;
+            }
+
             let Some(path_dist) = path_distance_world(world_map, pf_context, soul_pos, fam_pos)
             else {
                 continue;
