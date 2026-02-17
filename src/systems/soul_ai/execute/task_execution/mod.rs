@@ -55,13 +55,13 @@ fn prepare_worker_for_task_apply(
             familiar_entity,
         });
     }
-    commands.entity(worker_entity).insert((
+    commands.entity(worker_entity).try_insert((
         crate::relationships::CommandedBy(familiar_entity),
         crate::relationships::WorkingOn(task_entity),
     ));
     commands
         .entity(task_entity)
-        .insert(crate::systems::jobs::IssuedBy(familiar_entity));
+        .try_insert(crate::systems::jobs::IssuedBy(familiar_entity));
 }
 
 /// Thinkで生成されたタスク割り当て要求を適用する
@@ -71,8 +71,17 @@ pub fn apply_task_assignment_requests_system(
     mut cache: ResMut<SharedResourceCache>,
     mut q_souls: TaskAssignmentSoulQuery,
     mut q_visibility: Query<&mut Visibility, With<crate::entities::damned_soul::DamnedSoul>>,
+    q_entities: Query<Entity>,
 ) {
     for request in requests.read() {
+        if q_entities.get(request.task_entity).is_err() {
+            debug!(
+                "ASSIGN_REQUEST: Task entity {:?} already gone, skipping",
+                request.task_entity
+            );
+            continue;
+        }
+
         let Ok((
             worker_entity,
             worker_transform,
@@ -103,18 +112,18 @@ pub fn apply_task_assignment_requests_system(
         if let Some(_p) = participating_opt {
             commands
                 .entity(worker_entity)
-                .remove::<crate::relationships::ParticipatingIn>();
+                .try_remove::<crate::relationships::ParticipatingIn>();
             commands.trigger(OnGatheringLeft {
                 entity: worker_entity,
             });
         }
         commands
             .entity(worker_entity)
-            .remove::<crate::relationships::RestAreaReservedFor>();
+            .try_remove::<crate::relationships::RestAreaReservedFor>();
         if resting_opt.is_some() {
             commands
                 .entity(worker_entity)
-                .remove::<crate::relationships::RestingIn>()
+                .try_remove::<crate::relationships::RestingIn>()
                 .insert(RestAreaCooldown {
                     remaining_secs: crate::constants::REST_AREA_RECRUIT_COOLDOWN_SECS,
                 });
@@ -139,7 +148,7 @@ pub fn apply_task_assignment_requests_system(
         idle.total_idle_time = 0.0;
         commands
             .entity(worker_entity)
-            .remove::<crate::entities::damned_soul::DriftingState>();
+            .try_remove::<crate::entities::damned_soul::DriftingState>();
 
         prepare_worker_for_task_apply(
             &mut commands,
@@ -169,28 +178,28 @@ pub fn apply_task_assignment_requests_system(
             AssignedTask::Haul(data) => {
                 commands
                     .entity(data.item)
-                    .insert(crate::relationships::DeliveringTo(data.stockpile));
+                    .try_insert(crate::relationships::DeliveringTo(data.stockpile));
             }
             AssignedTask::HaulToBlueprint(data) => {
                 commands
                     .entity(data.item)
-                    .insert(crate::relationships::DeliveringTo(data.blueprint));
+                    .try_insert(crate::relationships::DeliveringTo(data.blueprint));
             }
             AssignedTask::GatherWater(data) => {
                 commands
                     .entity(data.bucket)
-                    .insert(crate::relationships::DeliveringTo(data.tank));
+                    .try_insert(crate::relationships::DeliveringTo(data.tank));
             }
             AssignedTask::HaulToMixer(data) => {
                 commands
                     .entity(data.item)
-                    .insert(crate::relationships::DeliveringTo(data.mixer));
+                    .try_insert(crate::relationships::DeliveringTo(data.mixer));
             }
             AssignedTask::HaulWaterToMixer(data) => {
                 // バケツがミキサーに向かう
                 commands
                     .entity(data.bucket)
-                    .insert(crate::relationships::DeliveringTo(data.mixer));
+                    .try_insert(crate::relationships::DeliveringTo(data.mixer));
             }
             AssignedTask::HaulWithWheelbarrow(data) => {
                 let dest_entity = match data.destination {
@@ -202,7 +211,7 @@ pub fn apply_task_assignment_requests_system(
                 for &item in &data.items {
                     commands
                         .entity(item)
-                        .insert(crate::relationships::DeliveringTo(dest_entity));
+                        .try_insert(crate::relationships::DeliveringTo(dest_entity));
                 }
             }
             _ => {}
@@ -230,6 +239,7 @@ pub fn task_execution_system(
         (&Transform, Option<&crate::relationships::ParkedAt>),
         With<crate::systems::logistics::Wheelbarrow>,
     >,
+    q_entities: Query<Entity>,
 ) {
     for (
         soul_entity,
@@ -244,7 +254,8 @@ pub fn task_execution_system(
     {
         if let Some(expected_item) = task.expected_item() {
             let needs_item = task.requires_item_in_inventory();
-            let has_expected = inventory.0 == Some(expected_item);
+            let expected_item_alive = q_entities.get(expected_item).is_ok();
+            let has_expected = inventory.0 == Some(expected_item) && expected_item_alive;
             let has_mismatch = inventory.0.is_some() && !has_expected;
             let missing_required = needs_item && !has_expected;
 

@@ -62,7 +62,7 @@ pub fn spawn_carrying_item_system(
             ))
             .id();
 
-        commands.entity(worker_entity).insert(HasCarryingIndicator);
+        commands.entity(worker_entity).try_insert(HasCarryingIndicator);
 
         // icon_entity は後でドロップ
         let _ = icon_entity;
@@ -118,10 +118,10 @@ pub fn update_carrying_item_system(
                 "VISUAL: Despawning carrying icon for worker {:?}",
                 icon.worker
             );
-            commands.entity(icon_entity).despawn();
+            commands.entity(icon_entity).try_despawn();
             // HasCarryingIndicatorを削除
             if let Ok(mut entity_commands) = commands.get_entity(icon.worker) {
-                entity_commands.remove::<HasCarryingIndicator>();
+                entity_commands.try_remove::<HasCarryingIndicator>();
             }
         }
     }
