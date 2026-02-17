@@ -6,6 +6,7 @@ use crate::events::{
     FamiliarStateRequest, SquadManagementRequest,
 };
 
+pub mod auto_gather_for_blueprint;
 pub mod encouragement;
 pub mod familiar_processor;
 pub mod following;

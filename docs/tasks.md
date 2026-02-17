@@ -58,6 +58,9 @@ Bevy 0.18 の **ECS Relationships** 機能を使用し、エンティティ間�
     - `mud_mixer_auto_haul_system`: Mixer 位置に `DeliverToMixerSolid`（固体）および `DeliverWaterToMixer`（水）request を生成。
     - `tank_water_request_system`: タンクの空きに応じて `GatherWaterToTank` request を生成し、割り当て時にバケツを遅延解決。
     - request エンティティは Execute フェーズの `apply_designation_requests_system` で反映。ソース探索は割り当て時（`task_finder` → `assign_haul` 等）に遅延実行される。
+- **自動**（familiar 側の gather 指定）:
+    - `blueprint_auto_gather_system`: `DeliverToBlueprint` request（`issued_by`）を起点に不足量を判定し、`Tree` / `Rock` に `WorkType::Chop` / `WorkType::Mine` を自動指定する。
+    - 候補探索は `TaskArea` 基準の段階走査（内側 → 10 → 30 → 60 → 到達可能全域）で、近傍優先かつ過剰発行抑制付きで行う。
 
 
 ### 2. 割り当て (Assignment)
@@ -139,6 +142,11 @@ Bevy 0.18 の **ECS Relationships** 機能を使用し、エンティティ間�
 - 型の一致（木材/石材）と備蓄場所の容量（最大10個）を厳格にチェックします。
 - 同一フレーム内での過剰なタスク発行を抑えるため、予約済みの資源はスキップする。
 - 数千の指示が存在する状況でも、使い魔はエリア内の未アサインタスクを O(1) に近い速度で発見できます。
+
+### 6.1 Blueprint不足資材の自動Gather
+- `DeliverToBlueprint` request の不足（Wood / Rock）に応じて、`familiar_ai` が gather 用 `Designation` を自動発行します。
+- この指定は request エンティティではなく、`Tree` / `Rock` 実体へ直接付与されます（`AutoGatherForBlueprint` marker 付き）。
+- 需要解消後に未着手で残った自動指定は、システム側で自動回収されます。
 
 ## 7. 疲労とストレス (Vitals)
 
