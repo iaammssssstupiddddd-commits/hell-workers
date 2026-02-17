@@ -113,6 +113,16 @@ pub fn find_path(
     ];
 
     while let Some(current) = context.open_set.pop() {
+        // ヒープに残った古いエントリ（より悪いコスト）をスキップ
+        let recorded_g = context.g_scores[current.idx];
+        if recorded_g == i32::MAX {
+            continue;
+        }
+        let expected_f = recorded_g.saturating_add(heuristic(current.idx, goal_idx));
+        if current.f_cost > expected_f {
+            continue;
+        }
+
         if current.idx == goal_idx {
             // パスを再構築
             let mut path = vec![goal];
@@ -302,6 +312,16 @@ pub fn find_path_to_boundary(
     ];
 
     while let Some(current) = context.open_set.pop() {
+        // ヒープに残った古いエントリ（より悪いコスト）をスキップ
+        let recorded_g = context.g_scores[current.idx];
+        if recorded_g == i32::MAX {
+            continue;
+        }
+        let expected_f = recorded_g.saturating_add(heuristic(current.idx, goal_idx));
+        if current.f_cost > expected_f {
+            continue;
+        }
+
         let curr_pos = WorldMap::idx_to_pos(current.idx);
 
         // ターゲット領域のいずれかのマスに到達したなら、その手前でパスを生成して終了
