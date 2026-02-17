@@ -5,15 +5,29 @@
 use crate::entities::damned_soul::IdleBehavior;
 use crate::systems::command::TaskArea;
 use crate::systems::familiar_ai::FamiliarSoulQuery;
+use crate::systems::logistics::ResourceType;
 
 use bevy::prelude::*;
 use std::collections::HashMap;
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct CachedSourceItem {
+    pub entity: Entity,
+    pub pos: Vec2,
+}
+
+#[derive(Default)]
+pub(crate) struct SourceSelectorFrameCache {
+    pub by_resource: HashMap<ResourceType, Vec<CachedSourceItem>>,
+    pub by_resource_owner_ground: HashMap<(ResourceType, Option<Entity>), Vec<CachedSourceItem>>,
+}
 
 /// Thinkフェーズ内の予約増分を追跡する
 #[derive(Default)]
 pub struct ReservationShadow {
     mixer_destination: HashMap<(Entity, crate::systems::logistics::ResourceType), usize>,
     source: HashMap<Entity, usize>,
+    pub(crate) source_selector_cache: Option<SourceSelectorFrameCache>,
 }
 
 impl ReservationShadow {
