@@ -126,6 +126,10 @@ pub struct FamiliarDelegationPerfMetrics {
     pub latest_elapsed_ms: f32,
     /// source_selector 呼び出し回数（期間集計）
     pub source_selector_calls: u32,
+    /// source_selector のキャッシュ構築で走査したアイテム数（期間集計）
+    pub source_selector_cache_build_scanned_items: u32,
+    /// source_selector の候補探索で走査したアイテム数（期間集計）
+    pub source_selector_candidate_scanned_items: u32,
     /// source_selector が走査したアイテム数（期間集計）
     pub source_selector_scanned_items: u32,
     /// 委譲対象として処理した Familiar 数（期間集計）
@@ -138,6 +142,8 @@ impl Default for FamiliarDelegationPerfMetrics {
             log_interval_secs: 0.0,
             latest_elapsed_ms: 0.0,
             source_selector_calls: 0,
+            source_selector_cache_build_scanned_items: 0,
+            source_selector_candidate_scanned_items: 0,
             source_selector_scanned_items: 0,
             familiars_processed: 0,
         }

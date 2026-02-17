@@ -69,6 +69,28 @@ pub fn floor_construction_auto_haul_system(
         .map(|(entity, _, area)| (entity, area.clone()))
         .collect();
 
+    // Site ごとの不足材料をタイル1回走査で集計する。
+    let mut waiting_by_site = HashMap::<Entity, (u32, u32)>::new();
+    for tile in q_tiles.iter() {
+        match tile.state {
+            FloorTileState::WaitingBones => {
+                let needed = FLOOR_BONES_PER_TILE.saturating_sub(tile.bones_delivered);
+                if needed > 0 {
+                    let entry = waiting_by_site.entry(tile.parent_site).or_insert((0, 0));
+                    entry.0 = entry.0.saturating_add(needed);
+                }
+            }
+            FloorTileState::WaitingMud => {
+                let needed = FLOOR_MUD_PER_TILE.saturating_sub(tile.mud_delivered);
+                if needed > 0 {
+                    let entry = waiting_by_site.entry(tile.parent_site).or_insert((0, 0));
+                    entry.1 = entry.1.saturating_add(needed);
+                }
+            }
+            _ => {}
+        }
+    }
+
     // 2. Calculate material needs for each site
     let mut desired_requests =
         std::collections::HashMap::<(Entity, ResourceType), (Entity, u32, Vec2)>::new();
@@ -97,22 +119,10 @@ pub fn floor_construction_auto_haul_system(
             continue;
         };
 
-        // Count tiles in different states
-        let mut waiting_bones = 0u32;
-        let mut waiting_mud = 0u32;
-
-        for tile in q_tiles.iter().filter(|t| t.parent_site == site_entity) {
-            match tile.state {
-                FloorTileState::WaitingBones => {
-                    let needed = FLOOR_BONES_PER_TILE.saturating_sub(tile.bones_delivered);
-                    waiting_bones += needed;
-                }
-                FloorTileState::WaitingMud => {
-                    let needed = FLOOR_MUD_PER_TILE.saturating_sub(tile.mud_delivered);
-                    waiting_mud += needed;
-                }
-                _ => {}
-            }
+        let (waiting_bones, waiting_mud) =
+            waiting_by_site.get(&site_entity).copied().unwrap_or((0, 0));
+        if waiting_bones == 0 && waiting_mud == 0 {
+            continue;
         }
 
         // Create request for bones (Reinforcing phase)

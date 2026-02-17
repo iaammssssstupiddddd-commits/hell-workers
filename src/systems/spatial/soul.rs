@@ -27,10 +27,16 @@ impl SpatialGridOps for SpatialGrid {
 
 pub fn update_spatial_grid_system(
     mut grid: ResMut<SpatialGrid>,
-    query: Query<(Entity, &Transform), With<DamnedSoul>>,
+    query: Query<
+        (Entity, &Transform),
+        (
+            With<DamnedSoul>,
+            Or<(Added<DamnedSoul>, Changed<Transform>)>,
+        ),
+    >,
     mut removed: RemovedComponents<DamnedSoul>,
 ) {
-    // 移動したエンティティのみ更新（GridData::update側で最適化）
+    // 変更があったエンティティのみ更新
     for (entity, transform) in query.iter() {
         grid.update(entity, transform.translation.truncate());
     }

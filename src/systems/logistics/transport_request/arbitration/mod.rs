@@ -194,7 +194,7 @@ pub(crate) fn wheelbarrow_arbitration_system(
     let arbitration_started_at = Instant::now();
     let now = time.elapsed_secs_f64();
 
-    let used_wheelbarrows = update_lease_state(
+    let lease_state = update_lease_state(
         &mut commands,
         &q_requests,
         &q_free_items,
@@ -236,8 +236,13 @@ pub(crate) fn wheelbarrow_arbitration_system(
         || dirty.removed_incoming.read().next().is_some();
     let interval_due = !runtime.initialized
         || (now - runtime.last_full_eval_secs) >= WHEELBARROW_ARBITRATION_FALLBACK_INTERVAL_SECS;
-    let should_rebuild =
-        request_dirty || free_item_dirty || wheelbarrow_dirty || stockpile_dirty || interval_due;
+    let stale_lease_removed = !lease_state.cleared_requests.is_empty();
+    let should_rebuild = request_dirty
+        || free_item_dirty
+        || wheelbarrow_dirty
+        || stockpile_dirty
+        || interval_due
+        || stale_lease_removed;
 
     let mut leases_granted = 0u32;
     let mut eligible_requests = 0u32;
@@ -250,7 +255,7 @@ pub(crate) fn wheelbarrow_arbitration_system(
 
         let mut available_wheelbarrows: Vec<(Entity, Vec2)> = q_wheelbarrows
             .iter()
-            .filter(|(e, _)| !used_wheelbarrows.contains(e))
+            .filter(|(e, _)| !lease_state.used_wheelbarrows.contains(e))
             .map(|(e, t)| (e, t.translation.truncate()))
             .collect();
 
@@ -262,6 +267,7 @@ pub(crate) fn wheelbarrow_arbitration_system(
             &q_stockpiles,
             &q_blueprints,
             &available_wheelbarrows,
+            &lease_state.cleared_requests,
             &cache,
             &q_incoming,
             now,
@@ -283,13 +289,18 @@ pub(crate) fn wheelbarrow_arbitration_system(
 
     update_metrics(
         &mut metrics,
-        used_wheelbarrows.len() as u32 + leases_granted,
+        lease_state.used_wheelbarrows.len() as u32 + leases_granted,
         leases_granted,
         eligible_requests,
         bucket_items_total,
         candidates_after_top_k,
         arbitration_started_at,
     );
+}
+
+struct LeaseStateUpdate {
+    used_wheelbarrows: HashSet<Entity>,
+    cleared_requests: HashSet<Entity>,
 }
 
 fn update_lease_state(
@@ -323,8 +334,9 @@ fn update_lease_state(
         (With<Wheelbarrow>, With<ParkedAt>, Without<PushedBy>),
     >,
     now: f64,
-) -> HashSet<Entity> {
+) -> LeaseStateUpdate {
     let mut used_wheelbarrows = HashSet::new();
+    let mut cleared_requests = HashSet::new();
 
     for (req_entity, req, state, _demand, _transform, lease_opt, pending_since_opt, _) in
         q_requests.iter()
@@ -352,6 +364,7 @@ fn update_lease_state(
 
             if lease.lease_until < now || lease_stale {
                 commands.entity(req_entity).remove::<WheelbarrowLease>();
+                cleared_requests.insert(req_entity);
             } else {
                 used_wheelbarrows.insert(lease.wheelbarrow);
             }
@@ -370,7 +383,10 @@ fn update_lease_state(
         }
     }
 
-    used_wheelbarrows
+    LeaseStateUpdate {
+        used_wheelbarrows,
+        cleared_requests,
+    }
 }
 
 fn collect_candidates(
@@ -406,6 +422,7 @@ fn collect_candidates(
     )>,
     q_blueprints: &Query<&Blueprint>,
     available_wheelbarrows: &[(Entity, Vec2)],
+    stale_cleared_requests: &HashSet<Entity>,
     cache: &crate::systems::familiar_ai::perceive::resource_sync::SharedResourceCache,
     q_incoming: &Query<&crate::relationships::IncomingDeliveries>,
     now: f64,
@@ -434,13 +451,18 @@ fn collect_candidates(
     for (req_entity, req, state, demand, transform, lease_opt, pending_since_opt, manual_opt) in
         q_requests.iter()
     {
+        let effective_lease = if stale_cleared_requests.contains(&req_entity) {
+            None
+        } else {
+            lease_opt
+        };
         let Some(eval) = build_request_eval_context(
             req_entity,
             req,
             state,
             demand,
             transform,
-            lease_opt,
+            effective_lease,
             pending_since_opt,
             manual_opt,
             now,

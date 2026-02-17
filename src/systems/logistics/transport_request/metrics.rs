@@ -1,6 +1,6 @@
-//! TransportRequest のメトリクスとデバッグ観測
+//! TransportRequest のメトリクス集計
 //!
-//! M0: 計画の観測基盤。request 数・種別・状態の集計とデバッグログを提供する。
+//! M0: 計画の観測基盤。request 数・種別・状態の集計を提供する。
 //! Phase 0: 比較可能なメトリクス項目を固定し、ベースライン観測を整備。
 
 use super::{TransportRequest, TransportRequestKind, TransportRequestState};
@@ -16,8 +16,6 @@ pub struct TransportRequestMetrics {
     pub by_state: HashMap<TransportRequestState, u32>,
     /// 総 request 数
     pub total: u32,
-    /// 前回ログ出力からの経過秒数（デバッグ間隔制御用）
-    pub _log_interval: f32,
     /// 手押し車リースのアクティブ数
     pub wheelbarrow_leases_active: u32,
     /// このフレームで付与された手押し車リース数
@@ -64,115 +62,24 @@ impl TransportRequestMetrics {
     }
 }
 
-/// Phase 0: ベースライン比較用の固定メトリクス項目
-/// 変更前後の比較のために、以下の項目を固定して記録する:
-/// - total: 総 request 数
-/// - by_kind: 種別ごとの request 数
-/// - by_state: 状態ごとの request 数（Pending, Claimed, InFlight）
-/// - wheelbarrow_arb_elapsed_ms: 仲裁システム実行時間
-const LOG_INTERVAL: f32 = 5.0;
-
-impl TransportRequestKind {
-    fn as_str(&self) -> &'static str {
-        match self {
-            Self::DepositToStockpile => "DepositToStockpile",
-            Self::DeliverToBlueprint => "DeliverToBlueprint",
-            Self::DeliverToFloorConstruction => "DeliverToFloorConstruction",
-            Self::DeliverToProvisionalWall => "DeliverToProvisionalWall",
-            Self::DeliverToMixerSolid => "DeliverToMixerSolid",
-            Self::DeliverWaterToMixer => "DeliverWaterToMixer",
-            Self::GatherWaterToTank => "GatherWaterToTank",
-            Self::ReturnBucket => "ReturnBucket",
-            Self::ReturnWheelbarrow => "ReturnWheelbarrow",
-            Self::BatchWheelbarrow => "BatchWheelbarrow",
-            Self::ConsolidateStockpile => "ConsolidateStockpile",
-        }
-    }
-}
-
-/// Perceive フェーズ: メトリクスを再集計し、間隔ごとにデバッグログを出力
+/// Perceive フェーズ: メトリクスを再集計する
 pub fn transport_request_metrics_system(
-    time: Res<Time>,
     q_requests: Query<(Entity, &TransportRequest, Option<&TransportRequestState>)>,
     mut metrics: ResMut<TransportRequestMetrics>,
 ) {
-    let delta = time.delta_secs();
-    metrics._log_interval += delta;
-
     // 集計
     let mut by_kind = HashMap::new();
     let mut by_state = HashMap::new();
+    let mut total = 0u32;
 
-    for (entity, req, state_opt) in q_requests.iter() {
+    for (_, req, state_opt) in q_requests.iter() {
+        total = total.saturating_add(1);
         *by_kind.entry(req.kind).or_insert(0) += 1;
         let state = state_opt.copied().unwrap_or(TransportRequestState::Pending);
         *by_state.entry(state).or_insert(0) += 1;
-
-        // デバッグ: trace レベルで request id / anchor を出力（間隔制御下）
-        if metrics._log_interval >= 4.9 {
-            trace!(
-                "TransportRequest {:?} kind={} anchor={:?} issued_by={:?}",
-                entity,
-                req.kind.as_str(),
-                req.anchor,
-                req.issued_by
-            );
-        }
     }
 
-    let total = q_requests.iter().count() as u32;
     metrics.by_kind = by_kind;
     metrics.by_state = by_state;
     metrics.total = total;
-
-    // デバッグログ: 固定間隔で summary（ベースライン比較用）
-    if metrics._log_interval >= LOG_INTERVAL {
-        metrics._log_interval = 0.0;
-        if total > 0 {
-            let mut parts = Vec::new();
-            for (kind, count) in &metrics.by_kind {
-                parts.push(format!("{}={}", kind.as_str(), count));
-            }
-            let perf_log_enabled = std::env::args().any(|arg| arg == "--perf-log-fps");
-            if perf_log_enabled {
-                info!(
-                    "PERF_TR: total={} [{}] wb_leases={} wb_arb(eligible={}, bucket={}, topk={}, ms={:.3}) task_area(groups={}, scanned={}, matched={}, ms={:.3}) floor_sync(sites={}, resources={}, tiles={}, ms={:.3})",
-                    total,
-                    parts.join(", "),
-                    metrics.wheelbarrow_leases_active,
-                    metrics.wheelbarrow_arb_eligible_requests,
-                    metrics.wheelbarrow_arb_bucket_items_total,
-                    metrics.wheelbarrow_arb_candidates_after_topk,
-                    metrics.wheelbarrow_arb_elapsed_ms,
-                    metrics.task_area_groups,
-                    metrics.task_area_free_items_scanned,
-                    metrics.task_area_items_matched,
-                    metrics.task_area_elapsed_ms,
-                    metrics.floor_material_sync_sites_processed,
-                    metrics.floor_material_sync_resources_scanned,
-                    metrics.floor_material_sync_tiles_scanned,
-                    metrics.floor_material_sync_elapsed_ms,
-                );
-            } else {
-                debug!(
-                    "TransportRequest: total={} [{}] wb_leases={} wb_arb(eligible={}, bucket={}, topk={}, ms={:.3}) task_area(groups={}, scanned={}, matched={}, ms={:.3}) floor_sync(sites={}, resources={}, tiles={}, ms={:.3})",
-                    total,
-                    parts.join(", "),
-                    metrics.wheelbarrow_leases_active,
-                    metrics.wheelbarrow_arb_eligible_requests,
-                    metrics.wheelbarrow_arb_bucket_items_total,
-                    metrics.wheelbarrow_arb_candidates_after_topk,
-                    metrics.wheelbarrow_arb_elapsed_ms,
-                    metrics.task_area_groups,
-                    metrics.task_area_free_items_scanned,
-                    metrics.task_area_items_matched,
-                    metrics.task_area_elapsed_ms,
-                    metrics.floor_material_sync_sites_processed,
-                    metrics.floor_material_sync_resources_scanned,
-                    metrics.floor_material_sync_tiles_scanned,
-                    metrics.floor_material_sync_elapsed_ms,
-                );
-            }
-        }
-    }
 }

@@ -62,7 +62,9 @@ pub fn spawn_carrying_item_system(
             ))
             .id();
 
-        commands.entity(worker_entity).try_insert(HasCarryingIndicator);
+        commands
+            .entity(worker_entity)
+            .try_insert(HasCarryingIndicator);
 
         // icon_entity は後でドロップ
         let _ = icon_entity;

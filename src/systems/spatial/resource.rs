@@ -23,11 +23,24 @@ impl SpatialGridOps for ResourceSpatialGrid {
 
 pub fn update_resource_spatial_grid_system(
     mut grid: ResMut<ResourceSpatialGrid>,
-    query: Query<(Entity, &Transform, Option<&Visibility>), With<ResourceItem>>,
-    mut removed: RemovedComponents<ResourceItem>,
+    q_changed: Query<
+        (Entity, &Transform, Option<&Visibility>),
+        (
+            With<ResourceItem>,
+            Or<(
+                Added<ResourceItem>,
+                Added<Visibility>,
+                Changed<Transform>,
+                Changed<Visibility>,
+            )>,
+        ),
+    >,
+    q_resource_transform: Query<&Transform, With<ResourceItem>>,
+    mut removed_items: RemovedComponents<ResourceItem>,
+    mut removed_visibility: RemovedComponents<Visibility>,
 ) {
-    // 状態更新（移動・表示切替）
-    for (entity, transform, visibility) in query.iter() {
+    // 変更があったエンティティのみ更新（移動・表示切替）
+    for (entity, transform, visibility) in q_changed.iter() {
         let should_register = visibility.map(|v| *v != Visibility::Hidden).unwrap_or(true);
         if should_register {
             grid.update(entity, transform.translation.truncate());
@@ -37,8 +50,15 @@ pub fn update_resource_spatial_grid_system(
         }
     }
 
+    // Visibility コンポーネントが外れた場合は可視扱いで再登録する。
+    for entity in removed_visibility.read() {
+        if let Ok(transform) = q_resource_transform.get(entity) {
+            grid.update(entity, transform.translation.truncate());
+        }
+    }
+
     // 削除されたアイテムをグリッドから除去
-    for entity in removed.read() {
+    for entity in removed_items.read() {
         grid.remove(entity);
     }
 }

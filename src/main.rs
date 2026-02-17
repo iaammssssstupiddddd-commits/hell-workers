@@ -9,7 +9,6 @@ pub mod relationships;
 pub mod systems;
 pub mod world;
 
-use bevy::diagnostic::{DiagnosticsStore, FrameTimeDiagnosticsPlugin};
 use bevy::prelude::*;
 use bevy::render::RenderPlugin;
 use bevy::render::settings::{Backends, RenderCreation, WgpuSettings};
@@ -18,7 +17,6 @@ use std::env;
 
 use game_state::PlayMode;
 
-use crate::entities::damned_soul::DamnedSoul;
 use crate::entities::damned_soul::DamnedSoulPlugin;
 use crate::plugins::{
     InputPlugin, InterfacePlugin, LogicPlugin, MessagesPlugin, SpatialPlugin, StartupPlugin,
@@ -26,19 +24,10 @@ use crate::plugins::{
 };
 use crate::systems::GameSystemSet;
 use crate::systems::familiar_ai::FamiliarAiPlugin;
-use crate::systems::jobs::Designation;
-use crate::systems::logistics::ResourceItem;
-use crate::systems::soul_ai::helpers::gathering::GatheringSpot;
 
 /// ゲーム内のデバッグ情報の表示状態（独自実装用）
 #[derive(Resource, Default)]
 pub struct DebugVisible(pub bool);
-
-#[derive(Resource, Default)]
-struct FrameSpikeLogger {
-    last_spike_logged_time: f32,
-    last_fps_logged_time: f32,
-}
 
 fn main() {
     let backends = select_backends();
@@ -69,7 +58,6 @@ fn main() {
         )
         .add_plugins(PopoverPlugin)
         .init_resource::<DebugVisible>()
-        .init_resource::<FrameSpikeLogger>()
         // PlayMode State
         .init_state::<PlayMode>()
         // Messages
@@ -89,12 +77,6 @@ fn main() {
                 GameSystemSet::Interface,
             )
                 .chain(),
-        )
-        // Diagnostics plugins
-        .add_plugins(FrameTimeDiagnosticsPlugin::default())
-        .add_systems(
-            Update,
-            frame_spike_logger_system.in_set(GameSystemSet::Visual),
         )
         // Game plugins
         .add_plugins(StartupPlugin)
@@ -119,47 +101,4 @@ fn select_backends() -> Backends {
 
 fn is_wsl() -> bool {
     env::var("WSL_DISTRO_NAME").is_ok() || env::var("WSL_INTEROP").is_ok()
-}
-
-fn frame_spike_logger_system(
-    time: Res<Time>,
-    diagnostics: Res<DiagnosticsStore>,
-    mut logger: ResMut<FrameSpikeLogger>,
-    q_souls: Query<Entity, With<DamnedSoul>>,
-    q_spots: Query<Entity, With<GatheringSpot>>,
-    q_designations: Query<Entity, With<Designation>>,
-    q_resources: Query<Entity, With<ResourceItem>>,
-) {
-    let dt = time.delta_secs();
-    let now = time.elapsed_secs();
-
-    let should_log_fps = env::args().any(|arg| arg == "--perf-log-fps");
-    if should_log_fps && now - logger.last_fps_logged_time >= 1.0 {
-        logger.last_fps_logged_time = now;
-        if let Some(fps) = diagnostics
-            .get(&FrameTimeDiagnosticsPlugin::FPS)
-            .and_then(|d| d.smoothed())
-        {
-            info!(
-                "PERF_FPS: fps={:.1} souls={} spots={} designations={} resources={}",
-                fps,
-                q_souls.iter().count(),
-                q_spots.iter().count(),
-                q_designations.iter().count(),
-                q_resources.iter().count()
-            );
-        }
-    }
-
-    if dt >= 0.2 && now - logger.last_spike_logged_time >= 1.0 {
-        logger.last_spike_logged_time = now;
-        info!(
-            "PERF_SPIKE: dt={:.3}s souls={} spots={} designations={} resources={}",
-            dt,
-            q_souls.iter().count(),
-            q_spots.iter().count(),
-            q_designations.iter().count(),
-            q_resources.iter().count()
-        );
-    }
 }

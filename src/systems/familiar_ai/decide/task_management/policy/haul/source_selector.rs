@@ -11,21 +11,27 @@ type TaskQueries<'w, 's> =
     crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries<'w, 's>;
 
 static SOURCE_SELECTOR_CALLS: AtomicU32 = AtomicU32::new(0);
-static SOURCE_SELECTOR_SCANNED_ITEMS: AtomicU32 = AtomicU32::new(0);
+static SOURCE_SELECTOR_CACHE_BUILD_SCANNED_ITEMS: AtomicU32 = AtomicU32::new(0);
+static SOURCE_SELECTOR_CANDIDATE_SCANNED_ITEMS: AtomicU32 = AtomicU32::new(0);
 
 fn mark_source_selector_call() {
     SOURCE_SELECTOR_CALLS.fetch_add(1, Ordering::Relaxed);
 }
 
-fn mark_scanned_item() {
-    SOURCE_SELECTOR_SCANNED_ITEMS.fetch_add(1, Ordering::Relaxed);
+fn mark_cache_build_scanned_item() {
+    SOURCE_SELECTOR_CACHE_BUILD_SCANNED_ITEMS.fetch_add(1, Ordering::Relaxed);
+}
+
+fn mark_candidate_scanned_item() {
+    SOURCE_SELECTOR_CANDIDATE_SCANNED_ITEMS.fetch_add(1, Ordering::Relaxed);
 }
 
 /// source_selector 系の走査カウンタを読み出し、内部カウンタをリセットする。
-pub(crate) fn take_source_selector_scan_snapshot() -> (u32, u32) {
+pub(crate) fn take_source_selector_scan_snapshot() -> (u32, u32, u32) {
     (
         SOURCE_SELECTOR_CALLS.swap(0, Ordering::Relaxed),
-        SOURCE_SELECTOR_SCANNED_ITEMS.swap(0, Ordering::Relaxed),
+        SOURCE_SELECTOR_CACHE_BUILD_SCANNED_ITEMS.swap(0, Ordering::Relaxed),
+        SOURCE_SELECTOR_CANDIDATE_SCANNED_ITEMS.swap(0, Ordering::Relaxed),
     )
 }
 
@@ -38,7 +44,7 @@ fn ensure_frame_cache<'w, 's>(queries: &TaskQueries<'w, 's>, shadow: &mut Reserv
 
     // free_resource_items をフレーム内で一度だけ走査し、用途別に索引化する。
     for (entity, transform, visibility, resource_item) in queries.free_resource_items.iter() {
-        mark_scanned_item();
+        mark_cache_build_scanned_item();
         if *visibility == Visibility::Hidden {
             continue;
         }
@@ -108,7 +114,7 @@ fn find_nearest_source_item<'w, 's>(
 ) -> Option<(Entity, Vec2)> {
     sources
         .iter()
-        .inspect(|_| mark_scanned_item())
+        .inspect(|_| mark_candidate_scanned_item())
         .filter(|source| source_not_reserved(source.entity, queries, shadow))
         .filter(|source| extra_filter(source.entity))
         .min_by(|s1, s2| {
@@ -220,7 +226,7 @@ pub fn find_consolidation_source_item<'w, 's>(
         let found = queries
             .stored_items_query
             .iter()
-            .inspect(|_| mark_scanned_item())
+            .inspect(|_| mark_candidate_scanned_item())
             .filter(|(_, res, in_stockpile)| res.0 == resource_type && in_stockpile.0 == cell)
             .filter(|(entity, _, _)| {
                 crate::systems::familiar_ai::decide::task_management::validator::source_not_reserved(
@@ -294,7 +300,7 @@ fn collect_items_for_wheelbarrow_in_radius(
 
     let mut items: Vec<(Entity, Vec2, f32)> = sources
         .iter()
-        .inspect(|_| mark_scanned_item())
+        .inspect(|_| mark_candidate_scanned_item())
         .filter(|source| source_not_reserved(source.entity, queries, shadow))
         .filter_map(|source| {
             let dist_sq = source.pos.distance_squared(center_pos);

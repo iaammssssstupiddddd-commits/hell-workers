@@ -177,10 +177,40 @@ pub fn sync_reservations_system(
     mut sync_timer: ResMut<ReservationSyncTimer>,
     q_souls: Query<&AssignedTask>,
     q_pending_tasks: Query<(&Designation, Option<&TransportRequest>), Without<TaskWorkers>>,
+    q_pending_dirty: Query<
+        (),
+        (
+            With<Designation>,
+            Without<TaskWorkers>,
+            Or<(
+                Added<Designation>,
+                Changed<Designation>,
+                Added<TransportRequest>,
+                Changed<TransportRequest>,
+            )>,
+        ),
+    >,
+    q_task_workers_added: Query<(), (With<Designation>, Added<TaskWorkers>)>,
+    q_assigned_task_added: Query<(), Added<AssignedTask>>,
+    q_assigned_task_changed: Query<(), Changed<AssignedTask>>,
+    mut removed_designations: RemovedComponents<Designation>,
+    mut removed_transport_requests: RemovedComponents<TransportRequest>,
+    mut removed_task_workers: RemovedComponents<TaskWorkers>,
+    mut removed_assigned_tasks: RemovedComponents<AssignedTask>,
     mut cache: ResMut<SharedResourceCache>,
 ) {
     let timer_finished = sync_timer.timer.tick(time.delta()).just_finished();
-    if sync_timer.first_run_done && !timer_finished {
+    let interval_due = !sync_timer.first_run_done || timer_finished;
+    let pending_dirty = q_pending_dirty.iter().next().is_some()
+        || q_task_workers_added.iter().next().is_some()
+        || removed_designations.read().next().is_some()
+        || removed_transport_requests.read().next().is_some()
+        || removed_task_workers.read().next().is_some();
+    let active_dirty = q_assigned_task_added.iter().next().is_some()
+        || q_assigned_task_changed.iter().next().is_some()
+        || removed_assigned_tasks.read().next().is_some();
+
+    if sync_timer.first_run_done && !interval_due && !pending_dirty && !active_dirty {
         return;
     }
     sync_timer.first_run_done = true;

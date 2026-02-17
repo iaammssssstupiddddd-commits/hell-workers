@@ -108,13 +108,24 @@ pub fn familiar_task_delegation_system(params: FamiliarAiTaskDelegationParams) {
         process_task_delegation_and_movement(&mut delegation_ctx);
     }
 
-    let (source_selector_calls, source_selector_scanned_items) =
-        crate::systems::familiar_ai::decide::task_management::take_source_selector_scan_snapshot();
+    let (
+        source_selector_calls,
+        source_selector_cache_build_scanned_items,
+        source_selector_candidate_scanned_items,
+    ) = crate::systems::familiar_ai::decide::task_management::take_source_selector_scan_snapshot();
+    let source_selector_scanned_items = source_selector_cache_build_scanned_items
+        .saturating_add(source_selector_candidate_scanned_items);
 
     perf_metrics.latest_elapsed_ms = started_at.elapsed().as_secs_f32() * 1000.0;
     perf_metrics.source_selector_calls = perf_metrics
         .source_selector_calls
         .saturating_add(source_selector_calls);
+    perf_metrics.source_selector_cache_build_scanned_items = perf_metrics
+        .source_selector_cache_build_scanned_items
+        .saturating_add(source_selector_cache_build_scanned_items);
+    perf_metrics.source_selector_candidate_scanned_items = perf_metrics
+        .source_selector_candidate_scanned_items
+        .saturating_add(source_selector_candidate_scanned_items);
     perf_metrics.source_selector_scanned_items = perf_metrics
         .source_selector_scanned_items
         .saturating_add(source_selector_scanned_items);
@@ -123,27 +134,12 @@ pub fn familiar_task_delegation_system(params: FamiliarAiTaskDelegationParams) {
         .saturating_add(familiars_processed);
     perf_metrics.log_interval_secs += time.delta_secs();
 
+    // 実測ログ出力は廃止。集計カウンタのみ定期リセットする。
     if perf_metrics.log_interval_secs >= 5.0 {
-        let perf_log_enabled = std::env::args().any(|arg| arg == "--perf-log-fps");
-        if perf_log_enabled {
-            info!(
-                "PERF_FAM: delegation_ms={:.3} familiars={} source_selector(calls={}, scanned_items={})",
-                perf_metrics.latest_elapsed_ms,
-                perf_metrics.familiars_processed,
-                perf_metrics.source_selector_calls,
-                perf_metrics.source_selector_scanned_items
-            );
-        } else {
-            debug!(
-                "FAM_PERF: delegation(ms={:.3}) familiars={} source_selector(calls={}, scanned_items={})",
-                perf_metrics.latest_elapsed_ms,
-                perf_metrics.familiars_processed,
-                perf_metrics.source_selector_calls,
-                perf_metrics.source_selector_scanned_items
-            );
-        }
         perf_metrics.log_interval_secs = 0.0;
         perf_metrics.source_selector_calls = 0;
+        perf_metrics.source_selector_cache_build_scanned_items = 0;
+        perf_metrics.source_selector_candidate_scanned_items = 0;
         perf_metrics.source_selector_scanned_items = 0;
         perf_metrics.familiars_processed = 0;
     }
