@@ -4,10 +4,10 @@ use crate::systems::familiar_ai::decide::task_management::{AssignTaskContext, Re
 use crate::systems::logistics::ResourceType;
 use bevy::prelude::*;
 
-use super::lease_validation;
-use super::source_selector;
 use super::super::super::builders::{issue_haul_to_mixer, issue_haul_with_wheelbarrow};
 use super::super::super::validator::resolve_haul_to_mixer_inputs;
+use super::lease_validation;
+use super::source_selector;
 
 fn mixer_can_accept_item(
     mixer_entity: Entity,

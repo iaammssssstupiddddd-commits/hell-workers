@@ -19,9 +19,11 @@ use crate::systems::jobs::{Designation, Priority, TaskSlots, WorkType};
 use crate::systems::logistics::ResourceType;
 use crate::systems::logistics::transport_request::{
     TransportDemand, TransportPolicy, TransportPriority, TransportRequest, TransportRequestKind,
-    TransportRequestState,
+    TransportRequestMetrics, TransportRequestState,
 };
-use crate::systems::spatial::FloorConstructionSpatialGrid;
+use crate::systems::spatial::{FloorConstructionSpatialGrid, ResourceSpatialGrid, SpatialGridOps};
+use std::collections::HashMap;
+use std::time::Instant;
 
 fn to_u32_saturating(value: usize) -> u32 {
     u32::try_from(value).unwrap_or(u32::MAX)
@@ -250,7 +252,10 @@ pub fn floor_construction_auto_haul_system(
 pub fn floor_material_delivery_sync_system(
     mut commands: Commands,
     q_sites: Query<(Entity, &FloorConstructionSite)>,
-    mut q_tiles: Query<&mut FloorTileBlueprint>,
+    mut q_tiles: ParamSet<(
+        Query<(Entity, &FloorTileBlueprint)>,
+        Query<&mut FloorTileBlueprint>,
+    )>,
     q_resources: Query<(
         Entity,
         &Transform,
@@ -258,11 +263,30 @@ pub fn floor_material_delivery_sync_system(
         &crate::systems::logistics::ResourceItem,
         Option<&crate::relationships::StoredIn>,
     )>,
+    resource_grid: Res<ResourceSpatialGrid>,
+    mut metrics: ResMut<TransportRequestMetrics>,
 ) {
+    let started_at = Instant::now();
     let pickup_radius = TILE_SIZE * 2.0;
     let pickup_radius_sq = pickup_radius * pickup_radius;
+    let mut sites_processed = 0u32;
+    let mut resources_scanned = 0u32;
+    let mut tiles_scanned = 0u32;
+
+    let mut tiles_by_site = HashMap::<Entity, Vec<Entity>>::new();
+    {
+        let q_tiles_read = q_tiles.p0();
+        for (tile_entity, tile) in q_tiles_read.iter() {
+            tiles_scanned += 1;
+            tiles_by_site
+                .entry(tile.parent_site)
+                .or_default()
+                .push(tile_entity);
+        }
+    }
 
     for (site_entity, site) in q_sites.iter() {
+        sites_processed += 1;
         let (target_resource, required_amount, waiting_state, ready_state) = match site.phase {
             FloorConstructionPhase::Reinforcing => (
                 ResourceType::Bone,
@@ -279,55 +303,70 @@ pub fn floor_material_delivery_sync_system(
             FloorConstructionPhase::Curing => continue,
         };
 
-        let mut nearby_resources: Vec<Entity> = q_resources
-            .iter()
-            .filter(|(_, transform, visibility, resource_item, stored_in_opt)| {
-                *visibility != &Visibility::Hidden
-                    && stored_in_opt.is_none()
-                    && resource_item.0 == target_resource
-                    && transform
-                        .translation
-                        .truncate()
-                        .distance_squared(site.material_center)
-                        <= pickup_radius_sq
-            })
-            .map(|(entity, ..)| entity)
-            .collect();
+        let mut nearby_resources = Vec::new();
+        for entity in resource_grid.get_nearby_in_radius(site.material_center, pickup_radius) {
+            let Ok((_, transform, visibility, resource_item, stored_in_opt)) =
+                q_resources.get(entity)
+            else {
+                continue;
+            };
+            resources_scanned += 1;
+            if *visibility != Visibility::Hidden
+                && stored_in_opt.is_none()
+                && resource_item.0 == target_resource
+                && transform
+                    .translation
+                    .truncate()
+                    .distance_squared(site.material_center)
+                    <= pickup_radius_sq
+            {
+                nearby_resources.push(entity);
+            }
+        }
 
         if nearby_resources.is_empty() {
             continue;
         }
 
+        let Some(site_tiles) = tiles_by_site.get(&site_entity) else {
+            continue;
+        };
+
         let mut consumed = 0u32;
-        for mut tile in q_tiles
-            .iter_mut()
-            .filter(|tile| tile.parent_site == site_entity)
         {
-            if tile.state != waiting_state {
-                continue;
-            }
-
-            let delivered = match site.phase {
-                FloorConstructionPhase::Reinforcing => &mut tile.bones_delivered,
-                FloorConstructionPhase::Pouring => &mut tile.mud_delivered,
-                FloorConstructionPhase::Curing => unreachable!("curing phase should be skipped"),
-            };
-
-            while *delivered < required_amount {
-                let Some(resource_entity) = nearby_resources.pop() else {
-                    break;
+            let mut q_tiles_write = q_tiles.p1();
+            for tile_entity in site_tiles.iter().copied() {
+                let Ok(mut tile) = q_tiles_write.get_mut(tile_entity) else {
+                    continue;
                 };
-                commands.entity(resource_entity).try_despawn();
-                *delivered += 1;
-                consumed += 1;
-            }
+                if tile.state != waiting_state {
+                    continue;
+                }
 
-            if *delivered >= required_amount {
-                tile.state = ready_state;
-            }
+                let delivered = match site.phase {
+                    FloorConstructionPhase::Reinforcing => &mut tile.bones_delivered,
+                    FloorConstructionPhase::Pouring => &mut tile.mud_delivered,
+                    FloorConstructionPhase::Curing => {
+                        unreachable!("curing phase should be skipped")
+                    }
+                };
 
-            if nearby_resources.is_empty() {
-                break;
+                while *delivered < required_amount {
+                    let Some(resource_entity) = nearby_resources.pop() else {
+                        break;
+                    };
+                    commands.entity(resource_entity).try_despawn();
+                    *delivered += 1;
+                    consumed += 1;
+                }
+
+                if *delivered >= required_amount {
+                    tile.state = ready_state;
+                }
+
+                if nearby_resources.is_empty() {
+                    break;
+                }
             }
         }
 
@@ -338,6 +377,11 @@ pub fn floor_material_delivery_sync_system(
             );
         }
     }
+
+    metrics.floor_material_sync_sites_processed = sites_processed;
+    metrics.floor_material_sync_resources_scanned = resources_scanned;
+    metrics.floor_material_sync_tiles_scanned = tiles_scanned;
+    metrics.floor_material_sync_elapsed_ms = started_at.elapsed().as_secs_f32() * 1000.0;
 }
 
 /// System to assign Designation to FloorTileBlueprint based on their state

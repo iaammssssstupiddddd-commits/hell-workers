@@ -39,8 +39,7 @@ pub fn create_game_assets(asset_server: &AssetServer, images: &mut Assets<Image>
         mud_wall_isolated: asset_server.load("textures/buildings/mud_wall/mud_wall_isolated.png"),
         mud_wall_horizontal: asset_server
             .load("textures/buildings/mud_wall/mud_wall_horizontal.png"),
-        mud_wall_vertical: asset_server
-            .load("textures/buildings/mud_wall/mud_wall_vertical.png"),
+        mud_wall_vertical: asset_server.load("textures/buildings/mud_wall/mud_wall_vertical.png"),
         mud_wall_corner_top_left: asset_server
             .load("textures/buildings/mud_wall/mud_wall_corner_top-left.png"),
         mud_wall_corner_top_right: asset_server

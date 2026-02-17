@@ -51,16 +51,7 @@ pub fn pathfinding_system(
     >,
     mut queries: crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
 ) {
-    for (
-        entity,
-        transform,
-        destination,
-        mut path,
-        mut task,
-        idle,
-        resting_in,
-        mut inventory_opt,
-    ) in
+    for (entity, transform, destination, mut path, mut task, idle, resting_in, mut inventory_opt) in
         query.iter_mut()
     {
         let current_pos = transform.translation.truncate();

@@ -1,6 +1,6 @@
-use bevy::prelude::*;
 use crate::relationships::{DeliveringTo, LoadedIn, StoredIn};
 use crate::systems::logistics::types::{ReservedForTask, ResourceItem};
+use bevy::prelude::*;
 
 /// アイテムの寿命を管理するタイマーコンポーネント
 #[derive(Component, Reflect, Debug)]
@@ -18,14 +18,17 @@ impl ItemDespawnTimer {
 pub fn despawn_expired_items_system(
     mut commands: Commands,
     time: Res<Time>,
-    mut q_items: Query<(
-        Entity,
-        &mut ItemDespawnTimer,
-        Option<&ReservedForTask>,
-        Option<&LoadedIn>,
-        Option<&StoredIn>,
-        Option<&DeliveringTo>,
-    ), With<ResourceItem>>,
+    mut q_items: Query<
+        (
+            Entity,
+            &mut ItemDespawnTimer,
+            Option<&ReservedForTask>,
+            Option<&LoadedIn>,
+            Option<&StoredIn>,
+            Option<&DeliveringTo>,
+        ),
+        With<ResourceItem>,
+    >,
 ) {
     for (entity, mut timer, reserved, loaded, stored, delivering) in q_items.iter_mut() {
         // 以下のいずれかの状態であればタイマーを進めない（またはリセットも検討可能だが、一旦停止）

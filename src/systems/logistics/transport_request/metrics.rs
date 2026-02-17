@@ -38,6 +38,14 @@ pub struct TransportRequestMetrics {
     pub task_area_items_matched: u32,
     /// task area producer システムの実行時間（ms）
     pub task_area_elapsed_ms: f32,
+    /// floor material sync が処理した Site 数
+    pub floor_material_sync_sites_processed: u32,
+    /// floor material sync が走査した resource 数
+    pub floor_material_sync_resources_scanned: u32,
+    /// floor material sync が走査した tile 数
+    pub floor_material_sync_tiles_scanned: u32,
+    /// floor material sync システムの実行時間（ms）
+    pub floor_material_sync_elapsed_ms: f32,
 }
 
 impl TransportRequestMetrics {
@@ -125,20 +133,46 @@ pub fn transport_request_metrics_system(
             for (kind, count) in &metrics.by_kind {
                 parts.push(format!("{}={}", kind.as_str(), count));
             }
-            debug!(
-                "TransportRequest: total={} [{}] wb_leases={} wb_arb(eligible={}, bucket={}, topk={}, ms={:.3}) task_area(groups={}, scanned={}, matched={}, ms={:.3})",
-                total,
-                parts.join(", "),
-                metrics.wheelbarrow_leases_active,
-                metrics.wheelbarrow_arb_eligible_requests,
-                metrics.wheelbarrow_arb_bucket_items_total,
-                metrics.wheelbarrow_arb_candidates_after_topk,
-                metrics.wheelbarrow_arb_elapsed_ms,
-                metrics.task_area_groups,
-                metrics.task_area_free_items_scanned,
-                metrics.task_area_items_matched,
-                metrics.task_area_elapsed_ms,
-            );
+            let perf_log_enabled = std::env::args().any(|arg| arg == "--perf-log-fps");
+            if perf_log_enabled {
+                info!(
+                    "PERF_TR: total={} [{}] wb_leases={} wb_arb(eligible={}, bucket={}, topk={}, ms={:.3}) task_area(groups={}, scanned={}, matched={}, ms={:.3}) floor_sync(sites={}, resources={}, tiles={}, ms={:.3})",
+                    total,
+                    parts.join(", "),
+                    metrics.wheelbarrow_leases_active,
+                    metrics.wheelbarrow_arb_eligible_requests,
+                    metrics.wheelbarrow_arb_bucket_items_total,
+                    metrics.wheelbarrow_arb_candidates_after_topk,
+                    metrics.wheelbarrow_arb_elapsed_ms,
+                    metrics.task_area_groups,
+                    metrics.task_area_free_items_scanned,
+                    metrics.task_area_items_matched,
+                    metrics.task_area_elapsed_ms,
+                    metrics.floor_material_sync_sites_processed,
+                    metrics.floor_material_sync_resources_scanned,
+                    metrics.floor_material_sync_tiles_scanned,
+                    metrics.floor_material_sync_elapsed_ms,
+                );
+            } else {
+                debug!(
+                    "TransportRequest: total={} [{}] wb_leases={} wb_arb(eligible={}, bucket={}, topk={}, ms={:.3}) task_area(groups={}, scanned={}, matched={}, ms={:.3}) floor_sync(sites={}, resources={}, tiles={}, ms={:.3})",
+                    total,
+                    parts.join(", "),
+                    metrics.wheelbarrow_leases_active,
+                    metrics.wheelbarrow_arb_eligible_requests,
+                    metrics.wheelbarrow_arb_bucket_items_total,
+                    metrics.wheelbarrow_arb_candidates_after_topk,
+                    metrics.wheelbarrow_arb_elapsed_ms,
+                    metrics.task_area_groups,
+                    metrics.task_area_free_items_scanned,
+                    metrics.task_area_items_matched,
+                    metrics.task_area_elapsed_ms,
+                    metrics.floor_material_sync_sites_processed,
+                    metrics.floor_material_sync_resources_scanned,
+                    metrics.floor_material_sync_tiles_scanned,
+                    metrics.floor_material_sync_elapsed_ms,
+                );
+            }
         }
     }
 }

@@ -10,6 +10,7 @@ mod task_finder;
 mod validator;
 
 pub use delegation::TaskManager;
+pub(crate) use policy::take_source_selector_scan_snapshot;
 pub use task_assigner::AssignTaskContext;
 pub use task_assigner::ReservationShadow;
 pub use task_assigner::assign_task_to_worker;

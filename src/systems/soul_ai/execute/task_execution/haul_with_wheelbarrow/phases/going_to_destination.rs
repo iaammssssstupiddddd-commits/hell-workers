@@ -70,7 +70,10 @@ pub fn handle(
                 world_map,
                 ctx.pf_context,
             );
-            (reachable, is_near_blueprint(soul_pos, &blueprint.occupied_grids))
+            (
+                reachable,
+                is_near_blueprint(soul_pos, &blueprint.occupied_grids),
+            )
         }
         WheelbarrowDestination::Mixer { entity, .. } => {
             let Ok((mixer_transform, _, _)) = ctx.queries.storage.mixers.get(entity) else {

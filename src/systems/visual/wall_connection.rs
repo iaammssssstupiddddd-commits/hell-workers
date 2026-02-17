@@ -114,15 +114,21 @@ fn update_wall_sprite(
         match (up, down, left, right) {
             (false, false, false, false) => (game_assets.wall_isolated.clone(), false, false),
             (false, false, true, false) => (game_assets.wall_horizontal_left.clone(), false, false),
-            (false, false, false, true) => (game_assets.wall_horizontal_right.clone(), false, false),
+            (false, false, false, true) => {
+                (game_assets.wall_horizontal_right.clone(), false, false)
+            }
             (false, false, true, true) => (game_assets.wall_horizontal_both.clone(), false, false),
             (true, false, false, false) => (game_assets.wall_vertical_top.clone(), false, false),
             (false, true, false, false) => (game_assets.wall_vertical_bottom.clone(), false, false),
             (true, true, false, false) => (game_assets.wall_vertical_both.clone(), false, false),
             (true, false, true, false) => (game_assets.wall_corner_top_left.clone(), false, false),
             (true, false, false, true) => (game_assets.wall_corner_top_right.clone(), false, false),
-            (false, true, true, false) => (game_assets.wall_corner_bottom_left.clone(), false, false),
-            (false, true, false, true) => (game_assets.wall_corner_bottom_right.clone(), false, false),
+            (false, true, true, false) => {
+                (game_assets.wall_corner_bottom_left.clone(), false, false)
+            }
+            (false, true, false, true) => {
+                (game_assets.wall_corner_bottom_right.clone(), false, false)
+            }
             (true, true, true, false) => (game_assets.wall_t_left.clone(), false, false),
             (true, true, false, true) => (game_assets.wall_t_right.clone(), false, false),
             (true, false, true, true) => (game_assets.wall_t_up.clone(), false, false),
@@ -142,8 +148,12 @@ fn update_wall_sprite(
             (false, true, false, false) => (game_assets.mud_wall_end_top.clone(), false, false),
             (true, true, false, false) => (game_assets.mud_wall_vertical.clone(), false, false),
             // Corners
-            (true, false, true, false) => (game_assets.mud_wall_corner_top_left.clone(), false, false),
-            (true, false, false, true) => (game_assets.mud_wall_corner_top_right.clone(), false, false),
+            (true, false, true, false) => {
+                (game_assets.mud_wall_corner_top_left.clone(), false, false)
+            }
+            (true, false, false, true) => {
+                (game_assets.mud_wall_corner_top_right.clone(), false, false)
+            }
             (false, true, true, false) => (
                 game_assets.mud_wall_corner_bottom_left.clone(),
                 false,

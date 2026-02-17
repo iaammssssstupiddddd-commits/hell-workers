@@ -200,9 +200,11 @@ pub fn handle(
                             Some(crate::systems::logistics::ResourceType::Sand)
                                 | Some(crate::systems::logistics::ResourceType::StasisMud)
                         ) {
-                            commands
-                                .entity(*item_entity)
-                                .insert(crate::systems::logistics::item_lifetime::ItemDespawnTimer::new(5.0));
+                            commands.entity(*item_entity).insert(
+                                crate::systems::logistics::item_lifetime::ItemDespawnTimer::new(
+                                    5.0,
+                                ),
+                            );
                         }
                     }
 

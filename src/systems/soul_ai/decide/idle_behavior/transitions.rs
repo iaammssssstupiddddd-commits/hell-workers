@@ -26,12 +26,8 @@ pub fn random_gathering_duration() -> f32 {
 pub fn behavior_duration_for(behavior: IdleBehavior) -> f32 {
     let mut rng = rand::thread_rng();
     match behavior {
-        IdleBehavior::Sleeping => {
-            rng.gen_range(IDLE_DURATION_SLEEP_MIN..IDLE_DURATION_SLEEP_MAX)
-        }
-        IdleBehavior::Sitting => {
-            rng.gen_range(IDLE_DURATION_SIT_MIN..IDLE_DURATION_SIT_MAX)
-        }
+        IdleBehavior::Sleeping => rng.gen_range(IDLE_DURATION_SLEEP_MIN..IDLE_DURATION_SLEEP_MAX),
+        IdleBehavior::Sitting => rng.gen_range(IDLE_DURATION_SIT_MIN..IDLE_DURATION_SIT_MAX),
         IdleBehavior::Wandering => {
             rng.gen_range(IDLE_DURATION_WANDER_MIN..IDLE_DURATION_WANDER_MAX)
         }
@@ -40,16 +36,14 @@ pub fn behavior_duration_for(behavior: IdleBehavior) -> f32 {
         }
         IdleBehavior::Resting | IdleBehavior::GoingToRest => REST_AREA_RESTING_DURATION,
         IdleBehavior::Escaping => 2.0,
-        IdleBehavior::Drifting => rng.gen_range(DRIFT_WANDER_DURATION_MIN..DRIFT_WANDER_DURATION_MAX),
+        IdleBehavior::Drifting => {
+            rng.gen_range(DRIFT_WANDER_DURATION_MIN..DRIFT_WANDER_DURATION_MAX)
+        }
     }
 }
 
 /// 次の IdleBehavior を選択（laziness に基づく）
-pub fn select_next_behavior(
-    laziness: f32,
-    _fatigue: f32,
-    _total_idle_time: f32,
-) -> IdleBehavior {
+pub fn select_next_behavior(laziness: f32, _fatigue: f32, _total_idle_time: f32) -> IdleBehavior {
     let mut rng = rand::thread_rng();
     let roll: f32 = rng.gen_range(0.0..1.0);
 

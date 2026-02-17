@@ -10,7 +10,14 @@ use super::components::Familiar;
 pub fn familiar_animation_system(
     time: Res<Time>,
     game_assets: Res<crate::assets::GameAssets>,
-    mut query: Query<(&mut Sprite, &mut super::components::FamiliarAnimation, &mut Transform), With<Familiar>>,
+    mut query: Query<
+        (
+            &mut Sprite,
+            &mut super::components::FamiliarAnimation,
+            &mut Transform,
+        ),
+        With<Familiar>,
+    >,
 ) {
     for (mut sprite, mut anim, mut transform) in query.iter_mut() {
         if anim.hover_offset != 0.0 {

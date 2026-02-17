@@ -46,8 +46,7 @@ pub struct FamiliarRecruitmentContext<'a, 'w, 's> {
     pub q_souls: &'a mut FamiliarSoulQuery<'w, 's>,
     pub q_breakdown: &'a Query<'w, 's, &'static StressBreakdown>,
     pub q_resting: &'a Query<'w, 's, (), With<crate::relationships::RestingIn>>,
-    pub q_cooldown:
-        &'a Query<'w, 's, &'static crate::entities::damned_soul::RestAreaCooldown>,
+    pub q_cooldown: &'a Query<'w, 's, &'static crate::entities::damned_soul::RestAreaCooldown>,
     pub request_writer: &'a mut MessageWriter<'w, SquadManagementRequest>,
 }
 

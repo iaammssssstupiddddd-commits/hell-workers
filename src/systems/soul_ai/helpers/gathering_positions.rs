@@ -7,7 +7,11 @@ use crate::systems::spatial::SpatialGridOps;
 use crate::world::map::WorldMap;
 
 /// 中心周辺のランダムなリング上の位置を生成
-pub fn random_position_around(center: bevy::prelude::Vec2, min_dist: f32, max_dist: f32) -> bevy::prelude::Vec2 {
+pub fn random_position_around(
+    center: bevy::prelude::Vec2,
+    min_dist: f32,
+    max_dist: f32,
+) -> bevy::prelude::Vec2 {
     let mut rng = rand::thread_rng();
     let angle: f32 = rng.gen_range(0.0..std::f32::consts::TAU);
     let dist: f32 = rng.gen_range(min_dist..max_dist);

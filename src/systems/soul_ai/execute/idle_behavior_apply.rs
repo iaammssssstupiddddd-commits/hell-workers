@@ -77,8 +77,8 @@ pub fn idle_behavior_apply_system(
                     .map(|(rest_area, occupants, reservations)| {
                         let current =
                             occupants.map_or(0, crate::relationships::RestAreaOccupants::len);
-                        let reserved = reservations
-                            .map_or(0, crate::relationships::RestAreaReservations::len);
+                        let reserved =
+                            reservations.map_or(0, crate::relationships::RestAreaReservations::len);
                         let pending = pending_rest_reservations
                             .get(rest_area_entity)
                             .copied()
@@ -98,7 +98,9 @@ pub fn idle_behavior_apply_system(
                     .insert(RestAreaReservedFor(*rest_area_entity));
             }
             IdleBehaviorOperation::ReleaseRestArea => {
-                commands.entity(request.entity).remove::<RestAreaReservedFor>();
+                commands
+                    .entity(request.entity)
+                    .remove::<RestAreaReservedFor>();
             }
             IdleBehaviorOperation::EnterRestArea { rest_area_entity } => {
                 let has_reservation_for_target = q_rest_reserved
@@ -110,8 +112,8 @@ pub fn idle_behavior_apply_system(
                     .map(|(rest_area, occupants, reservations)| {
                         let current =
                             occupants.map_or(0, crate::relationships::RestAreaOccupants::len);
-                        let mut reserved = reservations
-                            .map_or(0, crate::relationships::RestAreaReservations::len);
+                        let mut reserved =
+                            reservations.map_or(0, crate::relationships::RestAreaReservations::len);
                         if has_reservation_for_target {
                             reserved = reserved.saturating_sub(1);
                         }
@@ -119,7 +121,10 @@ pub fn idle_behavior_apply_system(
                             .get(rest_area_entity)
                             .copied()
                             .unwrap_or(0);
-                        let pending = pending_rest_entries.get(rest_area_entity).copied().unwrap_or(0);
+                        let pending = pending_rest_entries
+                            .get(rest_area_entity)
+                            .copied()
+                            .unwrap_or(0);
                         current + reserved + pending_reservations + pending < rest_area.capacity
                     })
                     .unwrap_or(false);
@@ -168,7 +173,10 @@ pub fn idle_behavior_apply_system(
                 }
 
                 if let Ok(mut idle) = q_idle.get_mut(request.entity) {
-                    if matches!(idle.behavior, IdleBehavior::Resting | IdleBehavior::GoingToRest) {
+                    if matches!(
+                        idle.behavior,
+                        IdleBehavior::Resting | IdleBehavior::GoingToRest
+                    ) {
                         idle.behavior = IdleBehavior::Wandering;
                     }
                     idle.idle_timer = 0.0;

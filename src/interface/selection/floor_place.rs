@@ -191,7 +191,6 @@ fn apply_floor_placement(
             Name::new(format!("FloorTile({},{})", gx, gy)),
         ));
     }
-
 }
 
 fn apply_wall_placement(

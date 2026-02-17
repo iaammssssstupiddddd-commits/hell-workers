@@ -53,12 +53,10 @@ pub fn process_resting_or_going_to_rest(
         return true;
     }
 
-    let destination_changed =
-        dest.0.distance_squared(rest_area_pos) > (TILE_SIZE * 2.5).powi(2);
-    let needs_new_path =
-        destination_changed
-            || path.waypoints.is_empty()
-            || path.current_index >= path.waypoints.len();
+    let destination_changed = dest.0.distance_squared(rest_area_pos) > (TILE_SIZE * 2.5).powi(2);
+    let needs_new_path = destination_changed
+        || path.waypoints.is_empty()
+        || path.current_index >= path.waypoints.len();
     if needs_new_path {
         idle.idle_timer = 0.0;
         idle.behavior_duration = REST_AREA_RESTING_DURATION;
@@ -119,12 +117,10 @@ pub fn process_wants_rest_area(
             operation: IdleBehaviorOperation::LeaveGathering { spot_entity: p.0 },
         });
     }
-    let destination_changed =
-        dest.0.distance_squared(rest_area_pos) > (TILE_SIZE * 2.5).powi(2);
-    let needs_new_path =
-        destination_changed
-            || path.waypoints.is_empty()
-            || path.current_index >= path.waypoints.len();
+    let destination_changed = dest.0.distance_squared(rest_area_pos) > (TILE_SIZE * 2.5).powi(2);
+    let needs_new_path = destination_changed
+        || path.waypoints.is_empty()
+        || path.current_index >= path.waypoints.len();
 
     idle.behavior = IdleBehavior::GoingToRest;
     if needs_new_path {

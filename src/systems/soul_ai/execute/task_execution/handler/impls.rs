@@ -268,13 +268,7 @@ impl TaskHandler<PourFloorTileData> for AssignedTask {
         _breakdown_opt: Option<&StressBreakdown>,
     ) {
         crate::systems::soul_ai::execute::task_execution::pour_floor::handle_pour_floor_task(
-            ctx,
-            data.tile,
-            data.site,
-            data.phase,
-            commands,
-            time,
-            world_map,
+            ctx, data.tile, data.site, data.phase, commands, time, world_map,
         );
     }
 }
@@ -290,12 +284,7 @@ impl TaskHandler<CoatWallData> for AssignedTask {
         _breakdown_opt: Option<&StressBreakdown>,
     ) {
         crate::systems::soul_ai::execute::task_execution::coat_wall::handle_coat_wall_task(
-            ctx,
-            data.wall,
-            data.phase,
-            commands,
-            time,
-            world_map,
+            ctx, data.wall, data.phase, commands, time, world_map,
         );
     }
 }

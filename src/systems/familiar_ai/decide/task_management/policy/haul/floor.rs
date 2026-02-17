@@ -4,15 +4,15 @@ use crate::systems::familiar_ai::decide::task_management::{AssignTaskContext, Re
 use crate::systems::logistics::ResourceType;
 use bevy::prelude::*;
 
-use super::demand;
-use super::direct_collect;
-use super::source_selector;
-use super::wheelbarrow;
 use super::super::super::builders::{
     issue_collect_bone_with_wheelbarrow_to_floor, issue_haul_to_stockpile_with_source,
     issue_haul_with_wheelbarrow,
 };
 use super::super::super::validator::resolve_haul_to_floor_construction_inputs;
+use super::demand;
+use super::direct_collect;
+use super::source_selector;
+use super::wheelbarrow;
 
 pub fn assign_haul_to_floor_construction(
     _task_pos: Vec2,
@@ -44,7 +44,8 @@ pub fn assign_haul_to_floor_construction(
             return false;
         }
 
-        let max_items = remaining_needed.min(crate::constants::WHEELBARROW_CAPACITY as u32) as usize;
+        let max_items =
+            remaining_needed.min(crate::constants::WHEELBARROW_CAPACITY as u32) as usize;
         let mut item_sources = source_selector::collect_nearby_items_for_wheelbarrow(
             resource_type,
             site_pos,

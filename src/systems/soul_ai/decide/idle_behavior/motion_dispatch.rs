@@ -10,9 +10,9 @@ use crate::relationships::ParticipatingIn;
 use crate::systems::spatial::SpatialGridOps;
 use crate::world::map::WorldMap;
 
+use super::GATHERING_ARRIVAL_RADIUS;
 use super::gathering_motion;
 use super::transitions;
-use super::GATHERING_ARRIVAL_RADIUS;
 
 /// 現在の行動に応じて移動先を更新
 pub fn update_motion_destinations(
@@ -82,15 +82,13 @@ pub fn update_motion_destinations(
                         && (just_arrived
                             || dist_from_center < TILE_SIZE * GATHERING_KEEP_DISTANCE_MIN)
                     {
-                        if let Some(new_target) =
-                            gathering_motion::find_initial_gathering_position(
-                                center,
-                                current_pos,
-                                entity,
-                                soul_grid,
-                                world_map,
-                            )
-                        {
+                        if let Some(new_target) = gathering_motion::find_initial_gathering_position(
+                            center,
+                            current_pos,
+                            entity,
+                            soul_grid,
+                            world_map,
+                        ) {
                             dest.0 = new_target;
                             path.waypoints.clear();
                             path.current_index = 0;
@@ -138,8 +136,7 @@ pub fn update_motion_destinations(
                                 const MIN_SEPARATION: f32 = TILE_SIZE * 1.2;
                                 let nearby_souls =
                                     soul_grid.get_nearby_in_radius(current_pos, MIN_SEPARATION);
-                                let has_overlap =
-                                    nearby_souls.iter().any(|&other| other != entity);
+                                let has_overlap = nearby_souls.iter().any(|&other| other != entity);
                                 let dist_to_dest = (dest.0 - current_pos).length();
                                 if !has_overlap && dist_to_dest < TILE_SIZE * 0.5 {
                                     path.waypoints.clear();

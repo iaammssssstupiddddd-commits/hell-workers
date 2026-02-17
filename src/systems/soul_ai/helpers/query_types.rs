@@ -1,7 +1,7 @@
 use crate::entities::damned_soul::{DamnedSoul, Destination, IdleState, Path, StressBreakdown};
 use crate::entities::familiar::Familiar;
-use crate::relationships::{ParticipatingIn, RestAreaReservedFor, RestingIn};
 use crate::relationships::{CommandedBy, WorkingOn};
+use crate::relationships::{ParticipatingIn, RestAreaReservedFor, RestingIn};
 use crate::systems::logistics::Inventory;
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
 use bevy::prelude::*;

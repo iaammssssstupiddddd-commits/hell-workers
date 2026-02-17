@@ -13,10 +13,10 @@ use crate::interface::camera::MainCamera;
 use crate::interface::selection::SelectedEntity;
 use crate::interface::ui::UiInputState;
 use crate::systems::command::{AreaSelectionIndicator, TaskArea, TaskMode};
+use crate::systems::jobs::Designation;
 use crate::systems::jobs::floor_construction::{
     FloorConstructionCancelRequested, FloorTileBlueprint,
 };
-use crate::systems::jobs::Designation;
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;

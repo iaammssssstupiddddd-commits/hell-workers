@@ -82,12 +82,12 @@ pub(super) fn candidate_snapshot(
                     if !my_area.contains(pos) || !owner_area.contains(pos) {
                         return false;
                     }
-                    let overlap_w =
-                        (my_area.max.x.min(owner_area.max.x) - my_area.min.x.max(owner_area.min.x))
-                            .max(0.0);
-                    let overlap_h =
-                        (my_area.max.y.min(owner_area.max.y) - my_area.min.y.max(owner_area.min.y))
-                            .max(0.0);
+                    let overlap_w = (my_area.max.x.min(owner_area.max.x)
+                        - my_area.min.x.max(owner_area.min.x))
+                    .max(0.0);
+                    let overlap_h = (my_area.max.y.min(owner_area.max.y)
+                        - my_area.min.y.max(owner_area.min.y))
+                    .max(0.0);
                     overlap_w > f32::EPSILON && overlap_h > f32::EPSILON
                 })
         });
