@@ -86,6 +86,10 @@ flowchart TD
     - これにより、近くにストックパイルがある場合は、遠くの資源を無視して備蓄から効率的に運び出します。
 3.  **過剰運搬の防止**: 「配達済み + 運搬中 + 予約済み」の合計が必要数を超えないよう、厳密に管理されます。
 4.  **搬入**: Blueprint に到着すると `deliver_material()` で資材が搬入され、進捗が進みます。
+5.  **不足資材の自動採取（Wood / Rock）**:
+    - 地面に資材が無い場合は、`familiar_ai` の `blueprint_auto_gather_system` が `DeliverToBlueprint` request を需要起点に `Tree` / `Rock` へ `Chop` / `Mine` を自動発行します。
+    - 探索は `TaskArea` 内から外側へ段階的（10 / 30 / 60 タイル -> 到達可能全域）に拡大し、近い候補から決定されます。
+    - これにより、建築開始時に木や岩の手動指定を都度打たなくても、搬入チェーンを継続できます。
 
 ## 7. グリッド配置とエリア選択 (Grid Alignment & Area Selection)
 
@@ -334,7 +338,8 @@ flowchart TD
 - `src/systems/jobs/floor_construction/phase_transition.rs`: Phase 移行システム
 - `src/systems/jobs/floor_construction/completion.rs`: 完了処理
 - `src/systems/jobs/floor_construction/cancellation.rs`: サイト単位キャンセル・資材返却
-- `src/systems/logistics/transport_request/producer/floor_construction.rs`: 資材配送・Designation付与
+- `src/systems/logistics/transport_request/producer/floor_construction.rs`: 資材配送・搬入資材同期
+- `src/systems/logistics/transport_request/producer/floor_construction/designation.rs`: Floor tile への Designation 付与
 - `src/systems/soul_ai/execute/task_execution/reinforce_floor.rs`: 補強タスク実行
 - `src/systems/soul_ai/execute/task_execution/pour_floor.rs`: 打設タスク実行
 - `src/systems/soul_ai/execute/task_execution/haul.rs`: floor site への徒歩搬送

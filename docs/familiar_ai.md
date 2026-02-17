@@ -84,7 +84,7 @@
 |:--|:--|:--|
 | **Perceive** | 状態変化の検出、予約同期 | `detect_state_changes_system`, `sync_reservations_system`（0.2秒間隔, 初回即時） |
 | **Update** | 時間経過による内部状態更新 | 現時点では空（将来拡張ポイント） |
-| **Decide** | 状態遷移、タスク委譲 | `familiar_ai_state_system`, `familiar_task_delegation_system`（0.5秒間隔, 初回即時） |
+| **Decide** | 状態遷移、自動採取指定、タスク委譲 | `familiar_ai_state_system`, `blueprint_auto_gather_system`（1.0秒間隔, 初回即時）, `familiar_task_delegation_system`（0.5秒間隔, 初回即時） |
 | **Execute** | 状態変更の適用、副作用の実行 | `handle_max_soul_changed_system`, `familiar_state_apply_system`, `familiar_idle_visual_apply_system`, `apply_squad_management_requests_system`, `encouragement_apply_system` |
 
 ### 5.2. 主要モジュール
@@ -99,6 +99,10 @@
 - **設計メモ**: Familiar AI は「状態遷移」「分隊管理」「リクルート」で同じ判定ロジックを複数フェーズから再利用するため、`helpers/` が相対的に厚くなる設計です。副作用（`Commands`・イベント発火）は `execute/` に限定します。
 - **`decide/state_decision.rs`**: 状態遷移の意思決定システム
   - `familiar_ai_state_system`: 状態判定と Request 生成
+- **`decide/auto_gather_for_blueprint.rs`**: Blueprint 不足資材（Wood / Rock）に対する自動伐採・採掘指定
+  - `DeliverToBlueprint` request（`issued_by`）を需要起点に不足量を集計
+  - `TaskArea` を基準に段階探索（内側 -> 10 -> 30 -> 60 -> それ以遠）で `Tree` / `Rock` を選定
+  - `AutoGatherForBlueprint` marker 付きの Designation 発行と stale 回収を担当
 - **`decide/task_delegation.rs`**: タスク委譲の意思決定システム
   - `familiar_task_delegation_system`: タスク委譲・移動制御（0.5秒間隔, 初回即時）
 - **`decide/state_handlers/`**: 各状態のハンドラー
@@ -208,6 +212,12 @@
 ### 7.7. タスク委譲のタイマーゲート
 - **仕組み**: `familiar_task_delegation_system` は **0.5秒間隔（初回即時）** で実行されます。
 - **効果**: タスク候補ごとの到達可能性チェック（A*）の呼び出し頻度を抑制し、ピーク時のCPU負荷を削減します。
+
+### 7.8. Blueprint不足資材の自動Gather
+- **仕組み**: `blueprint_auto_gather_system` が **1.0秒間隔（初回即時）** で実行され、`DeliverToBlueprint` request から Wood / Rock 不足を検知します。
+- **探索順**: `TaskArea` 内 -> 外周 10 タイル -> 30 -> 60 -> 到達可能な全域の順で候補を走査し、近傍優先で決定します。
+- **負荷制御**: 各段階で経路判定件数に上限を設け、必要量が満たされた時点で探索を打ち切ります。
+- **整合性**: 既存の地面資材・手動指定・既発行AutoGatherを加味して過剰発行を抑制し、不要になった未着手AutoGatherは marker ベースで回収します。
 
 ## 8. ビジュアルとアニメーション (Visuals & Animation)
 

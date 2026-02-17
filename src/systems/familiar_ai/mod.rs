@@ -59,6 +59,7 @@ impl Plugin for FamiliarAiPlugin {
         .init_resource::<DesignationSpatialGrid>()
         .init_resource::<TransportRequestSpatialGrid>()
         .init_resource::<FamiliarTaskDelegationTimer>()
+        .init_resource::<decide::auto_gather_for_blueprint::BlueprintAutoGatherTimer>()
         .init_resource::<FamiliarDelegationPerfMetrics>()
         .add_systems(
             Update,
@@ -79,6 +80,7 @@ impl Plugin for FamiliarAiPlugin {
                 // === Decide Phase ===
                 ((
                     decide::state_decision::familiar_ai_state_system,
+                    decide::auto_gather_for_blueprint::blueprint_auto_gather_system,
                     ApplyDeferred,
                     decide::task_delegation::familiar_task_delegation_system,
                     decide::following::following_familiar_system,
