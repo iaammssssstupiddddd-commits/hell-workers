@@ -76,13 +76,12 @@ powershell -Command "[BitConverter]::ToString((Get-Content 'file_path' -Encoding
 
 ### 高負荷パフォーマンス計測（500 Soul / 30 Familiar）
 ```powershell
-cargo run -- --spawn-souls 500 --spawn-familiars 30 --perf-scenario --perf-log-fps
+cargo run -- --spawn-souls 500 --spawn-familiars 30 --perf-scenario
 ```
 
 - `--spawn-souls`: 初期 Soul 数を上書き（既定: 10）
 - `--spawn-familiars`: 初期 Familiar 数を上書き（既定: 2）
 - `--perf-scenario`: 収集シナリオを自動セットアップ（TaskArea / command / designation）
-- `--perf-log-fps`: `PERF_FPS` ログを1秒ごとに出力
 - 環境変数でも指定可: `HW_SPAWN_SOULS`, `HW_SPAWN_FAMILIARS`, `HW_PERF_SCENARIO=1`
 
 ## トラブルシューティング

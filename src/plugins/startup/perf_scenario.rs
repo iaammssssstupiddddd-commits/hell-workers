@@ -34,15 +34,12 @@ pub fn setup_perf_scenario_if_enabled(
         max: Vec2::new(1600.0, 1600.0),
     };
 
-    let mut familiar_count = 0usize;
     for (fam_entity, mut command, mut operation) in q_familiars.iter_mut() {
         command.command = FamiliarCommand::GatherResources;
         operation.max_controlled_soul = 20;
         commands.entity(fam_entity).insert(area.clone());
-        familiar_count += 1;
     }
 
-    let mut chop_designations = 0usize;
     for tree_entity in q_trees.iter() {
         commands.entity(tree_entity).insert((
             Designation {
@@ -51,10 +48,8 @@ pub fn setup_perf_scenario_if_enabled(
             TaskSlots::new(1),
             Priority(0),
         ));
-        chop_designations += 1;
     }
 
-    let mut mine_designations = 0usize;
     for rock_entity in q_rocks.iter() {
         commands.entity(rock_entity).insert((
             Designation {
@@ -63,13 +58,7 @@ pub fn setup_perf_scenario_if_enabled(
             TaskSlots::new(1),
             Priority(0),
         ));
-        mine_designations += 1;
     }
-
-    info!(
-        "PERF_SCENARIO: enabled familiars={} chop_designations={} mine_designations={}",
-        familiar_count, chop_designations, mine_designations
-    );
 }
 
 pub fn setup_perf_scenario_runtime_if_enabled(
@@ -91,17 +80,11 @@ pub fn setup_perf_scenario_runtime_if_enabled(
         min: Vec2::new(-1600.0, -1600.0),
         max: Vec2::new(1600.0, 1600.0),
     };
-    let mut familiar_count = 0usize;
     for (fam_entity, mut command, mut operation) in q_familiars.iter_mut() {
         command.command = FamiliarCommand::GatherResources;
         operation.max_controlled_soul = 20;
         commands.entity(fam_entity).insert(area.clone());
-        familiar_count += 1;
     }
 
     applied.0 = true;
-    info!(
-        "PERF_SCENARIO_RUNTIME: configured familiars={} max_controlled_soul=20",
-        familiar_count
-    );
 }
