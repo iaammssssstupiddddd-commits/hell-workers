@@ -26,7 +26,13 @@ pub fn find_collect_sand_source(
             return Some(best);
         }
     }
-    if let Some(best) = scan_terrain_tiles(target_pos, task_area_opt, TerrainType::Sand, queries, shadow) {
+    if let Some(best) = scan_terrain_tiles(
+        target_pos,
+        task_area_opt,
+        TerrainType::Sand,
+        queries,
+        shadow,
+    ) {
         return Some(best);
     }
     if task_area_opt.is_some() {
@@ -50,7 +56,13 @@ pub fn find_collect_bone_source(
             return Some(best);
         }
     }
-    if let Some(best) = scan_terrain_tiles(target_pos, task_area_opt, TerrainType::River, queries, shadow) {
+    if let Some(best) = scan_terrain_tiles(
+        target_pos,
+        task_area_opt,
+        TerrainType::River,
+        queries,
+        shadow,
+    ) {
         return Some(best);
     }
     if task_area_opt.is_some() {

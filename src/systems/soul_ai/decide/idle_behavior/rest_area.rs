@@ -41,15 +41,17 @@ pub fn find_nearest_available_rest_area(
 ) -> Option<(Entity, Vec2)> {
     q_rest_areas
         .iter()
-        .filter(|(rest_area_entity, _, rest_area, occupants, reservations)| {
-            rest_area_has_capacity(
-                *rest_area_entity,
-                rest_area,
-                *occupants,
-                *reservations,
-                pending_reservations,
-            )
-        })
+        .filter(
+            |(rest_area_entity, _, rest_area, occupants, reservations)| {
+                rest_area_has_capacity(
+                    *rest_area_entity,
+                    rest_area,
+                    *occupants,
+                    *reservations,
+                    pending_reservations,
+                )
+            },
+        )
         .min_by(|a, b| {
             a.1.translation
                 .truncate()

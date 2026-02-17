@@ -1,6 +1,6 @@
 use crate::systems::jobs::WorkType;
-use rand::seq::SliceRandom;
 use rand::Rng;
+use rand::seq::SliceRandom;
 
 /// Familiar が喋るラテン語のフレーズ
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

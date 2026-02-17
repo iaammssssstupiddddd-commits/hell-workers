@@ -2,10 +2,8 @@ use bevy::prelude::*;
 use rand::Rng;
 
 use crate::constants::*;
-use crate::entities::damned_soul::{
-    DriftEdge, DriftPhase, DriftingState, IdleBehavior, IdleState,
-};
 use crate::entities::damned_soul::spawn::PopulationManager;
+use crate::entities::damned_soul::{DriftEdge, DriftPhase, DriftingState, IdleBehavior, IdleState};
 use crate::relationships::{CommandedBy, ParticipatingIn, RestingIn};
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
 use crate::world::map::{RIVER_Y_MAX, RIVER_Y_MIN, WorldMap};
@@ -135,7 +133,10 @@ pub fn drifting_decision_system(
         commands.entity(entity).insert(drifting);
         population.start_escape_cooldown();
 
-        info!("SOUL_DRIFT: {:?} started drifting toward {:?}", entity, drifting.target_edge);
+        info!(
+            "SOUL_DRIFT: {:?} started drifting toward {:?}",
+            entity, drifting.target_edge
+        );
         break;
     }
 }

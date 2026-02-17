@@ -4,7 +4,9 @@ use crate::constants::{
     REST_AREA_DREAM_RATE, REST_AREA_FATIGUE_RECOVERY_RATE, REST_AREA_RESTING_DURATION,
     REST_AREA_STRESS_RECOVERY_RATE,
 };
-use crate::entities::damned_soul::{DamnedSoul, DreamPool, IdleBehavior, IdleState, RestAreaCooldown};
+use crate::entities::damned_soul::{
+    DamnedSoul, DreamPool, IdleBehavior, IdleState, RestAreaCooldown,
+};
 use crate::events::{IdleBehaviorOperation, IdleBehaviorRequest};
 use crate::relationships::{RestAreaOccupants, RestingIn};
 use crate::systems::jobs::RestArea;

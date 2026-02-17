@@ -6,8 +6,7 @@ use crate::relationships::ParticipatingIn;
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
 use crate::systems::soul_ai::helpers::gathering::{GatheringSpot, GatheringUpdateTimer};
 use crate::systems::soul_ai::helpers::gathering_positions::{
-    find_position_fallback_away,
-    find_position_with_separation,
+    find_position_fallback_away, find_position_with_separation,
 };
 use crate::systems::spatial::{SpatialGrid, SpatialGridOps};
 use crate::world::map::WorldMap;
@@ -79,13 +78,9 @@ pub fn gathering_separation_system(
                 dest.0 = new_pos;
                 path.waypoints.clear();
                 path.current_index = 0;
-            } else if let Some(new_pos) = find_position_fallback_away(
-                center,
-                current_pos,
-                entity,
-                &*soul_grid,
-                &world_map,
-            ) {
+            } else if let Some(new_pos) =
+                find_position_fallback_away(center, current_pos, entity, &*soul_grid, &world_map)
+            {
                 dest.0 = new_pos;
                 path.waypoints.clear();
                 path.current_index = 0;

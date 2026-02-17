@@ -27,46 +27,150 @@ pub fn run_task_handler(
 ) {
     match &*ctx.task {
         AssignedTask::Gather(data) => {
-            AssignedTask::execute(ctx, data.clone(), commands, game_assets, time, world_map, breakdown_opt);
+            AssignedTask::execute(
+                ctx,
+                data.clone(),
+                commands,
+                game_assets,
+                time,
+                world_map,
+                breakdown_opt,
+            );
         }
         AssignedTask::Haul(data) => {
-            AssignedTask::execute(ctx, data.clone(), commands, game_assets, time, world_map, breakdown_opt);
+            AssignedTask::execute(
+                ctx,
+                data.clone(),
+                commands,
+                game_assets,
+                time,
+                world_map,
+                breakdown_opt,
+            );
         }
         AssignedTask::Build(data) => {
-            AssignedTask::execute(ctx, data.clone(), commands, game_assets, time, world_map, breakdown_opt);
+            AssignedTask::execute(
+                ctx,
+                data.clone(),
+                commands,
+                game_assets,
+                time,
+                world_map,
+                breakdown_opt,
+            );
         }
         AssignedTask::HaulToBlueprint(data) => {
-            AssignedTask::execute(ctx, data.clone(), commands, game_assets, time, world_map, breakdown_opt);
+            AssignedTask::execute(
+                ctx,
+                data.clone(),
+                commands,
+                game_assets,
+                time,
+                world_map,
+                breakdown_opt,
+            );
         }
         AssignedTask::GatherWater(data) => {
-            AssignedTask::execute(ctx, data.clone(), commands, game_assets, time, world_map, breakdown_opt);
+            AssignedTask::execute(
+                ctx,
+                data.clone(),
+                commands,
+                game_assets,
+                time,
+                world_map,
+                breakdown_opt,
+            );
         }
         AssignedTask::CollectSand(data) => {
-            AssignedTask::execute(ctx, data.clone(), commands, game_assets, time, world_map, breakdown_opt);
+            AssignedTask::execute(
+                ctx,
+                data.clone(),
+                commands,
+                game_assets,
+                time,
+                world_map,
+                breakdown_opt,
+            );
         }
         AssignedTask::CollectBone(data) => {
-            AssignedTask::execute(ctx, data.clone(), commands, game_assets, time, world_map, breakdown_opt);
+            AssignedTask::execute(
+                ctx,
+                data.clone(),
+                commands,
+                game_assets,
+                time,
+                world_map,
+                breakdown_opt,
+            );
         }
         AssignedTask::Refine(data) => {
-            AssignedTask::execute(ctx, data.clone(), commands, game_assets, time, world_map, breakdown_opt);
+            AssignedTask::execute(
+                ctx,
+                data.clone(),
+                commands,
+                game_assets,
+                time,
+                world_map,
+                breakdown_opt,
+            );
         }
         AssignedTask::HaulToMixer(data) => {
-            AssignedTask::execute(ctx, data.clone(), commands, game_assets, time, world_map, breakdown_opt);
+            AssignedTask::execute(
+                ctx,
+                data.clone(),
+                commands,
+                game_assets,
+                time,
+                world_map,
+                breakdown_opt,
+            );
         }
         AssignedTask::HaulWaterToMixer(data) => {
-            AssignedTask::execute(ctx, data.clone(), commands, game_assets, time, world_map, breakdown_opt);
+            AssignedTask::execute(
+                ctx,
+                data.clone(),
+                commands,
+                game_assets,
+                time,
+                world_map,
+                breakdown_opt,
+            );
         }
         AssignedTask::HaulWithWheelbarrow(data) => {
             execute_haul_with_wheelbarrow(ctx, data.clone(), commands, world_map, q_wheelbarrows);
         }
         AssignedTask::ReinforceFloorTile(data) => {
-            AssignedTask::execute(ctx, data.clone(), commands, game_assets, time, world_map, breakdown_opt);
+            AssignedTask::execute(
+                ctx,
+                data.clone(),
+                commands,
+                game_assets,
+                time,
+                world_map,
+                breakdown_opt,
+            );
         }
         AssignedTask::PourFloorTile(data) => {
-            AssignedTask::execute(ctx, data.clone(), commands, game_assets, time, world_map, breakdown_opt);
+            AssignedTask::execute(
+                ctx,
+                data.clone(),
+                commands,
+                game_assets,
+                time,
+                world_map,
+                breakdown_opt,
+            );
         }
         AssignedTask::CoatWall(data) => {
-            AssignedTask::execute(ctx, data.clone(), commands, game_assets, time, world_map, breakdown_opt);
+            AssignedTask::execute(
+                ctx,
+                data.clone(),
+                commands,
+                game_assets,
+                time,
+                world_map,
+                breakdown_opt,
+            );
         }
         AssignedTask::None => {}
     }

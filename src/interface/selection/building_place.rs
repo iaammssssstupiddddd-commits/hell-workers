@@ -352,9 +352,7 @@ fn building_size(building_type: BuildingType) -> Vec2 {
         BuildingType::Tank
         | BuildingType::MudMixer
         | BuildingType::RestArea
-        | BuildingType::WheelbarrowParking => {
-            Vec2::splat(TILE_SIZE * 2.0)
-        }
+        | BuildingType::WheelbarrowParking => Vec2::splat(TILE_SIZE * 2.0),
         _ => Vec2::splat(TILE_SIZE),
     }
 }

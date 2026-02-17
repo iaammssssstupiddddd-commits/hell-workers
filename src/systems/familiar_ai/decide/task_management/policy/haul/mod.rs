@@ -17,6 +17,7 @@ use crate::systems::familiar_ai::decide::task_management::{AssignTaskContext, Re
 use bevy::prelude::*;
 
 pub use mixer::assign_haul_to_mixer;
+pub(crate) use source_selector::take_source_selector_scan_snapshot;
 
 pub fn assign_haul(
     task_pos: Vec2,
@@ -29,7 +30,8 @@ pub fn assign_haul(
         return true;
     }
 
-    if let Some(ok) = returns::assign_return_bucket(task_pos, already_commanded, ctx, queries, shadow)
+    if let Some(ok) =
+        returns::assign_return_bucket(task_pos, already_commanded, ctx, queries, shadow)
     {
         return ok;
     }
@@ -50,13 +52,7 @@ pub fn assign_haul(
         return true;
     }
 
-    if floor::assign_haul_to_floor_construction(
-        task_pos,
-        already_commanded,
-        ctx,
-        queries,
-        shadow,
-    ) {
+    if floor::assign_haul_to_floor_construction(task_pos, already_commanded, ctx, queries, shadow) {
         return true;
     }
 

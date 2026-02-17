@@ -7,7 +7,6 @@ use crate::events::{IdleBehaviorOperation, IdleBehaviorRequest};
 use crate::relationships::{ParticipatingIn, RestAreaReservedFor, RestingIn};
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
 
-
 /// タスク割り当て中の場合、集会・休憩を解除して継続する
 pub fn process_task_override(
     entity: Entity,
