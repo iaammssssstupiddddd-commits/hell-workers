@@ -49,8 +49,8 @@ pub fn handle_pour_floor_task(
                 ctx.pf_context,
             );
 
-            // Check if near material center
-            if soul_pos.distance(material_center) < 32.0 {
+            // Check if near material center (target or adjacent destination)
+            if is_near_target_or_dest(soul_pos, material_center, ctx.dest.0) {
                 *ctx.task = AssignedTask::PourFloorTile(PourFloorTileData {
                     tile: tile_entity,
                     site: site_entity,
@@ -114,8 +114,8 @@ pub fn handle_pour_floor_task(
                 ctx.pf_context,
             );
 
-            // Check if near tile
-            if soul_pos.distance(tile_pos) < 32.0 {
+            // Check if near tile (target or adjacent destination)
+            if is_near_target_or_dest(soul_pos, tile_pos, ctx.dest.0) {
                 *ctx.task = AssignedTask::PourFloorTile(PourFloorTileData {
                     tile: tile_entity,
                     site: site_entity,
