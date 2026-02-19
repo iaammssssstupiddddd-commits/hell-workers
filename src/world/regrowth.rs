@@ -178,6 +178,12 @@ pub fn tree_regrowth_system(
     world_map: Res<WorldMap>,
     q_trees: Query<&Transform, With<Tree>>,
 ) {
+    // 全体上限チェック
+    let total_tree_count = q_trees.iter().count() as u32;
+    if total_tree_count >= DREAM_TREE_GLOBAL_CAP {
+        return;
+    }
+
     // 日が変わったかチェック
     if game_time.day <= regrowth.last_regrowth_day {
         return;

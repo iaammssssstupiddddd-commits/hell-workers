@@ -154,7 +154,67 @@ Dream は `SoulAiSystemSet::Update` で以下 2 系統から加算されます�
 - 高ストレス睡眠は `NightTerror` になり、睡眠由来 Dream を得られない
 - 休憩/集会でのケアは Dream 生産効率に直結
 
-## 7. 主要定数
+## 9. Dream 消費：植林（DreamPlanting）
+
+Dream を消費してプレイヤーが指定した矩形範囲に木を植えるシステムです。
+
+### 9.1 操作フロー
+
+1. 下部バーの **「Dream」ボタン** を押してサブメニューを開く
+2. **「Plant Trees」ボタン** を選択 → `TaskMode::DreamPlanting` に移行
+3. マップ上をドラッグして植林エリアを指定
+4. ドラッグ解放でイベントが発行され、即時処理される
+
+### 9.2 植林ルール
+
+| 項目 | 値 | 説明 |
+| :--- | :--- | :--- |
+| スポーン率 | 0.25 本/タイル | 指定タイル数 × 0.25 を目安に生成 |
+| 最低面積 | 4 タイル（2×2） | これ未満はキャンセル（無消費） |
+| 1回あたり上限 | 20 本 | `DREAM_TREE_MAX_PER_CAST` |
+| 全体木上限 | 300 本 | `DREAM_TREE_GLOBAL_CAP`（自然再生と共有） |
+| コスト | 20 Dream/本 | `DREAM_TREE_COST_PER_TREE` |
+
+### 9.3 制約条件
+
+スポーン候補タイルは以下を**除外**します：
+
+- 歩行不可タイル（壁・岩など）
+- 建物が存在するタイル
+- アイテムが落ちているタイル
+
+最終生成本数は **スポーン率・候補数・1回上限・全体上限・Dream残高** の最小値で決まります。
+いずれかが 0 の場合は Dream を消費せずに終了します。
+
+### 9.4 資源再生との関係
+
+- `tree_regrowth_system`（自然再生）も同じ `DREAM_TREE_GLOBAL_CAP` を参照
+- 上限 300 本に達すると自然再生も Dream 植林も停止
+
+### 9.5 関連定数（`src/constants/dream.rs`）
+
+| 定数 | 値 |
+| :--- | :--- |
+| `DREAM_TREE_SPAWN_RATE_PER_TILE` | 0.25 |
+| `DREAM_TREE_COST_PER_TREE` | 20.0 |
+| `DREAM_TREE_MAX_PER_CAST` | 20 |
+| `DREAM_TREE_GLOBAL_CAP` | 300 |
+
+### 9.6 関連ファイル
+
+| ファイル | 内容 |
+| :--- | :--- |
+| `src/systems/dream_tree_planting.rs` | 植林コアロジック |
+| `src/systems/command/area_selection/state.rs` | `AreaEditSession.pending_dream_planting` フィールド |
+| `src/systems/command/area_selection/input.rs` | `DreamPlanting` モードのドラッグ入力処理 |
+| `src/interface/ui/components.rs` | `MenuState::Dream`, `MenuAction::{ToggleDream, SelectDreamPlanting}`, `DreamSubMenu` |
+| `src/interface/ui/setup/submenus.rs` | Dream サブメニューのスポーン |
+| `src/plugins/logic.rs` | `dream_tree_planting_system` 登録 |
+| `src/world/regrowth.rs` | グローバル木上限チェック追加 |
+
+---
+
+## 10. 主要定数
 
 | 定数 | 値 | 用途 |
 | :--- | :--- | :--- |
@@ -167,26 +227,30 @@ Dream は `SoulAiSystemSet::Update` で以下 2 系統から加算されます�
 | `DREAM_POPUP_THRESHOLD` | 0.08 | `+Dream` 表示の発生閾値 |
 | `DREAM_UI_PULSE_TRIGGER_DELTA` | 0.05 | UI パルス発火に必要な増加量 |
 | `DREAM_UI_PULSE_DURATION` | 0.35 | UI パルス時間（秒） |
+| `DREAM_TREE_SPAWN_RATE_PER_TILE` | 0.25 | 植林レート（本/タイル） |
+| `DREAM_TREE_COST_PER_TREE` | 20.0 | 植林コスト（Dream/本） |
+| `DREAM_TREE_MAX_PER_CAST` | 20 | 1 回あたりの最大植林本数 |
+| `DREAM_TREE_GLOBAL_CAP` | 300 | 全体の木の上限本数 |
 
-## 8. 関連ファイル
+## 11. 関連ファイル
 
 | ファイル | 内容 |
 | :--- | :--- |
 | `src/entities/damned_soul/mod.rs` | `DreamQuality`, `DreamState`, `DreamPool` 定義/初期化 |
 | `src/entities/damned_soul/spawn.rs` | Soul スポーン時の `DreamState::default()` |
-| `src/constants/dream.rs` | Dream 演出/UI パルス関連定数 |
+| `src/constants/dream.rs` | Dream 関連全定数 |
 | `src/constants/ai.rs` | `REST_AREA_DREAM_RATE` など AI 側定数 |
 | `src/systems/soul_ai/update/dream_update.rs` | 睡眠由来 Dream 蓄積 |
 | `src/systems/soul_ai/update/rest_area_update.rs` | 休憩所由来 Dream 蓄積 + 休憩更新 |
 | `src/systems/soul_ai/visual/idle.rs` | 夢の質に応じた Soul 色変化 |
 | `src/systems/visual/dream/particle.rs` | Dream 粒子生成/更新 |
 | `src/systems/visual/dream/popup.rs` | `+Dream` ポップアップ生成/更新 |
+| `src/systems/dream_tree_planting.rs` | Dream 植林コアロジック |
 | `src/interface/ui/setup/time_control.rs` | Dream テキストノード生成 |
 | `src/interface/ui/interaction/status_display.rs` | Dream 表示更新とパルス演出 |
 | `src/interface/ui/presentation/builders.rs` | RestArea ツールチップの Dream/s 表示 |
 
-## 9. 未実装（将来拡張）
+## 12. 未実装（将来拡張）
 
-- Dream 消費 UI（ボタン、メニュー）
-- Dream 消費効果（Soul 鼓舞、作業速度バフ、集団バフ等）
+- Soul 鼓舞・作業速度バフなど Dream 消費効果
 - Familiar からの明示的な睡眠命令

@@ -34,3 +34,9 @@ pub const DREAM_POPUP_OFFSET_Y: f32 = 18.0;
 pub const DREAM_UI_PULSE_DURATION: f32 = 0.35;
 pub const DREAM_UI_PULSE_TRIGGER_DELTA: f32 = 0.05;
 pub const DREAM_UI_PULSE_BRIGHTNESS: f32 = 0.8;
+
+// Dream Tree Planting
+pub const DREAM_TREE_SPAWN_RATE_PER_TILE: f32 = 0.25;
+pub const DREAM_TREE_COST_PER_TREE: f32 = 20.0;
+pub const DREAM_TREE_MAX_PER_CAST: u32 = 20;
+pub const DREAM_TREE_GLOBAL_CAP: u32 = 300;

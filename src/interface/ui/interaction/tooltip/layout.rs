@@ -30,6 +30,8 @@ pub(crate) struct TooltipUiLayoutQueryParam<'w, 's> {
         Query<'w, 's, (&'static ComputedNode, &'static UiGlobalTransform), With<ZonesSubMenu>>,
     pub q_orders_submenu:
         Query<'w, 's, (&'static ComputedNode, &'static UiGlobalTransform), With<OrdersSubMenu>>,
+    pub q_dream_submenu:
+        Query<'w, 's, (&'static ComputedNode, &'static UiGlobalTransform), With<DreamSubMenu>>,
 }
 
 pub(crate) fn compute_rect_x(computed: &ComputedNode, transform: &UiGlobalTransform) -> (f32, f32) {
@@ -53,7 +55,10 @@ fn overlap_len(a: (f32, f32), b: (f32, f32)) -> f32 {
 fn is_menu_toggle_action(action: MenuAction) -> bool {
     matches!(
         action,
-        MenuAction::ToggleArchitect | MenuAction::ToggleZones | MenuAction::ToggleOrders
+        MenuAction::ToggleArchitect
+            | MenuAction::ToggleZones
+            | MenuAction::ToggleOrders
+            | MenuAction::ToggleDream
     )
 }
 
@@ -118,6 +123,11 @@ pub(crate) fn resolve_visible_submenu_spans_x(
         }
         MenuState::Orders => {
             if let Ok((computed, transform)) = ui_layout.q_orders_submenu.single() {
+                spans.push(compute_rect_x(computed, transform));
+            }
+        }
+        MenuState::Dream => {
+            if let Ok((computed, transform)) = ui_layout.q_dream_submenu.single() {
                 spans.push(compute_rect_x(computed, transform));
             }
         }
