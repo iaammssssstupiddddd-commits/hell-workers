@@ -23,6 +23,7 @@ pub enum TaskMode {
     ZoneRemoval(crate::systems::logistics::ZoneType, Option<Vec2>),   // ゾーン解除モード
     FloorPlace(Option<Vec2>), // 床エリア配置モード (ドラッグ開始位置)
     WallPlace(Option<Vec2>),  // 壁ライン配置モード (ドラッグ開始位置)
+    DreamPlanting(Option<Vec2>), // Dream植林モード (ドラッグ開始位置)
 }
 
 /// タスクエリア - 使い魔が担当するエリア

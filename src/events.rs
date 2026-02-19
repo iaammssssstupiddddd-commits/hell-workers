@@ -305,3 +305,4 @@ pub enum ReleaseReason {
     /// 疲労またはストレスによる自動解放
     Fatigued,
 }
+

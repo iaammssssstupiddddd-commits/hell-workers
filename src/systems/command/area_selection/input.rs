@@ -206,6 +206,9 @@ pub fn task_area_selection_system(
                 task_context.0 = TaskMode::CancelDesignation(Some(snapped_pos))
             }
             TaskMode::AssignTask(None) => task_context.0 = TaskMode::AssignTask(Some(snapped_pos)),
+            TaskMode::DreamPlanting(None) => {
+                task_context.0 = TaskMode::DreamPlanting(Some(snapped_pos))
+            }
             _ => {}
         }
     }
@@ -421,6 +424,11 @@ pub fn task_area_selection_system(
             }
 
             task_context.0 = TaskMode::CancelDesignation(None);
+        }
+        TaskMode::DreamPlanting(Some(start_pos)) => {
+            let end_pos = WorldMap::snap_to_grid_edge(world_pos);
+            area_edit_session.pending_dream_planting = Some((start_pos, end_pos));
+            task_context.0 = TaskMode::DreamPlanting(None);
         }
         _ => {}
     }

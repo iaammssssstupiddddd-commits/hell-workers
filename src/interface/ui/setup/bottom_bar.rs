@@ -62,6 +62,7 @@ pub fn spawn_bottom_bar(
                 Some("Z"),
             ),
             ("Orders", "命令メニュー切替", MenuAction::ToggleOrders, None),
+            ("Dream", "Dreamメニュー切替 (D)", MenuAction::ToggleDream, Some("D")),
         ];
 
         for (label, tooltip, action, shortcut) in buttons {

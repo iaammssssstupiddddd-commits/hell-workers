@@ -65,6 +65,7 @@ pub enum MenuState {
     Architect,
     Zones,
     Orders,
+    Dream,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -72,6 +73,7 @@ pub enum MenuAction {
     ToggleArchitect,
     ToggleZones,
     ToggleOrders,
+    ToggleDream,
     InspectEntity(Entity),
     ClearInspectPin,
     SelectBuild(BuildingType),
@@ -80,6 +82,7 @@ pub enum MenuAction {
     RemoveZone(ZoneType), // ゾーン削除
     SelectTaskMode(crate::systems::command::TaskMode),
     SelectAreaTask,
+    SelectDreamPlanting,
     OpenOperationDialog,
     AdjustFatigueThreshold(f32),
     AdjustMaxControlledSoul(isize),
@@ -135,6 +138,9 @@ pub struct ZonesSubMenu;
 
 #[derive(Component)]
 pub struct OrdersSubMenu;
+
+#[derive(Component)]
+pub struct DreamSubMenu;
 
 #[derive(Component)]
 pub struct InfoPanel;

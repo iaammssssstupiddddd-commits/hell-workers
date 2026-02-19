@@ -58,6 +58,15 @@ pub(super) fn handle_pressed_action(
             task_context,
             true,
         ),
+        MenuAction::ToggleDream => super::mode::toggle_menu_and_reset_mode(
+            menu_state,
+            MenuState::Dream,
+            next_play_mode,
+            build_context,
+            zone_context,
+            task_context,
+            false,
+        ),
         MenuAction::SelectBuild(kind) => super::mode::set_build_mode(
             kind,
             next_play_mode,
@@ -99,6 +108,15 @@ pub(super) fn handle_pressed_action(
             ensure_familiar_selected(selected_entity, q_familiars_for_area, "Area Edit");
 
             super::mode::set_area_task_mode(
+                next_play_mode,
+                build_context,
+                zone_context,
+                task_context,
+            );
+        }
+        MenuAction::SelectDreamPlanting => {
+            super::mode::set_task_mode(
+                crate::systems::command::TaskMode::DreamPlanting(None),
                 next_play_mode,
                 build_context,
                 zone_context,
