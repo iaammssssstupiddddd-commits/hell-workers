@@ -30,6 +30,11 @@ pub fn process_resting_or_going_to_rest(
         return false;
     };
 
+    // RestingIn が無いのに Resting へ残っている不整合を補正する。
+    if idle.behavior == IdleBehavior::Resting {
+        idle.behavior = IdleBehavior::GoingToRest;
+    }
+
     if has_arrived_at_rest_area(current_pos, rest_area_pos) {
         if let Some(p) = participating_in {
             request_writer.write(IdleBehaviorRequest {
@@ -94,7 +99,8 @@ pub fn process_wants_rest_area(
                 operation: IdleBehaviorOperation::LeaveGathering { spot_entity: p.0 },
             });
         }
-        idle.behavior = IdleBehavior::Resting;
+        // EnterRestArea 成功前は GoingToRest を維持し、Resting は Execute 側で確定する。
+        idle.behavior = IdleBehavior::GoingToRest;
         idle.idle_timer = 0.0;
         idle.total_idle_time = 0.0;
         idle.behavior_duration = REST_AREA_RESTING_DURATION;

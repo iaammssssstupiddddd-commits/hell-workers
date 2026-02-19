@@ -1,7 +1,8 @@
 //! 時間操作 UI
 
 use crate::interface::ui::components::{
-    MenuAction, MenuButton, SpeedButtonMarker, UiInputBlocker, UiNodeRegistry, UiSlot, UiTooltip,
+    DreamPoolPulse, MenuAction, MenuButton, SpeedButtonMarker, UiInputBlocker, UiNodeRegistry,
+    UiSlot, UiTooltip,
 };
 use crate::interface::ui::theme::UiTheme;
 use crate::systems::time::{ClockText, TimeSpeed};
@@ -145,6 +146,7 @@ pub fn spawn_time_control(
                 },
                 TextColor(theme.colors.accent_soul_bright),
                 UiSlot::DreamPoolText,
+                DreamPoolPulse::default(),
             ))
             .id();
         ui_nodes.set_slot(UiSlot::DreamPoolText, dream_text_entity);
