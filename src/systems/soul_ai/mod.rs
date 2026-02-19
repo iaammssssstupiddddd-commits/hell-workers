@@ -62,6 +62,9 @@ impl Plugin for SoulAiPlugin {
                     update::vitals_update::fatigue_penalty_system,
                     update::vitals_influence::familiar_influence_unified_system,
                     update::rest_area_update::rest_area_update_system,
+                    update::state_sanity::ensure_rest_area_component_system,
+                    update::state_sanity::clear_stale_working_on_system,
+                    update::state_sanity::reconcile_rest_state_system,
                     // Dream蓄積
                     update::dream_update::dream_update_system,
                 )
@@ -81,7 +84,8 @@ impl Plugin for SoulAiPlugin {
                     // 重なり回避（idle_behaviorの後に実行して上書きを防ぐ）
                     decide::separation::gathering_separation_system
                         .after(decide::idle_behavior::idle_behavior_decision_system),
-                    decide::escaping::escaping_decision_system,
+                    decide::escaping::escaping_decision_system
+                        .after(decide::idle_behavior::idle_behavior_decision_system),
                     decide::drifting::drifting_decision_system
                         .after(decide::escaping::escaping_decision_system),
                     // 集会管理の決定

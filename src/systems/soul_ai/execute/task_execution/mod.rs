@@ -145,6 +145,13 @@ pub fn apply_task_assignment_requests_system(
             idle.idle_timer = 0.0;
             idle.behavior_duration = 3.0;
         }
+        if idle.behavior != IdleBehavior::Wandering {
+            // タスク開始フレームで idle 状態を正規化し、睡眠判定の取りこぼしを防ぐ。
+            idle.behavior = IdleBehavior::Wandering;
+            idle.idle_timer = 0.0;
+            idle.behavior_duration = 3.0;
+            idle.needs_separation = false;
+        }
         idle.total_idle_time = 0.0;
         commands
             .entity(worker_entity)

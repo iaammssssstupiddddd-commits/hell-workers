@@ -1,8 +1,9 @@
 use bevy::prelude::*;
 
+use crate::entities::damned_soul::DamnedSoul;
 use crate::entities::damned_soul::{DriftingState, IdleBehavior};
 use crate::events::{EscapeOperation, EscapeRequest};
-use crate::relationships::ParticipatingIn;
+use crate::relationships::{ParticipatingIn, RestAreaReservedFor, RestingIn};
 use crate::systems::soul_ai::helpers::query_types::EscapingBehaviorSoulQuery;
 
 /// EscapeRequest を適用する（Execute Phase）
@@ -10,6 +11,7 @@ pub fn escaping_apply_system(
     mut commands: Commands,
     mut request_reader: MessageReader<EscapeRequest>,
     mut q_souls: EscapingBehaviorSoulQuery,
+    mut q_visibility: Query<&mut Visibility, With<DamnedSoul>>,
 ) {
     for request in request_reader.read() {
         let Ok((entity, _transform, mut idle_state, mut destination, mut path, _under_command)) =
@@ -25,6 +27,12 @@ pub fn escaping_apply_system(
                     commands.trigger(crate::events::OnGatheringLeft { entity });
                 }
 
+                commands
+                    .entity(entity)
+                    .remove::<(RestingIn, RestAreaReservedFor)>();
+                if let Ok(mut visibility) = q_visibility.get_mut(entity) {
+                    *visibility = Visibility::Visible;
+                }
                 commands.entity(entity).remove::<DriftingState>();
 
                 idle_state.behavior = IdleBehavior::Escaping;
@@ -32,17 +40,35 @@ pub fn escaping_apply_system(
                 idle_state.behavior_duration = 5.0;
             }
             EscapeOperation::UpdateDestination { destination: next } => {
+                commands
+                    .entity(entity)
+                    .remove::<(RestingIn, RestAreaReservedFor)>();
+                if let Ok(mut visibility) = q_visibility.get_mut(entity) {
+                    *visibility = Visibility::Visible;
+                }
                 destination.0 = *next;
                 path.waypoints.clear();
                 path.current_index = 0;
             }
             EscapeOperation::ReachSafety => {
+                commands
+                    .entity(entity)
+                    .remove::<(RestingIn, RestAreaReservedFor)>();
+                if let Ok(mut visibility) = q_visibility.get_mut(entity) {
+                    *visibility = Visibility::Visible;
+                }
                 idle_state.behavior = IdleBehavior::Wandering;
                 idle_state.behavior_duration = 3.0;
                 path.waypoints.clear();
                 path.current_index = 0;
             }
             EscapeOperation::JoinSafeGathering => {
+                commands
+                    .entity(entity)
+                    .remove::<(RestingIn, RestAreaReservedFor)>();
+                if let Ok(mut visibility) = q_visibility.get_mut(entity) {
+                    *visibility = Visibility::Visible;
+                }
                 idle_state.behavior = IdleBehavior::Gathering;
                 idle_state.idle_timer = 0.0;
                 idle_state.behavior_duration = 3.0;

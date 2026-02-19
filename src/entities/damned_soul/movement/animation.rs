@@ -6,6 +6,7 @@ use crate::entities::damned_soul::{
     ConversationExpression, ConversationExpressionKind, DamnedSoul, GatheringBehavior,
     IdleBehavior, IdleState, StressBreakdown,
 };
+use crate::systems::soul_ai::execute::task_execution::AssignedTask;
 use bevy::prelude::*;
 
 fn select_soul_image<'a>(
@@ -13,6 +14,7 @@ fn select_soul_image<'a>(
     idle: &IdleState,
     breakdown_opt: Option<&StressBreakdown>,
     expression_opt: Option<&ConversationExpression>,
+    is_working_or_moving: bool,
 ) -> &'a Handle<Image> {
     if let Some(breakdown) = breakdown_opt {
         if breakdown.is_frozen {
@@ -31,16 +33,21 @@ fn select_soul_image<'a>(
         }
     }
 
+    let allow_sleep_visual = !is_working_or_moving;
+
     match idle.behavior {
-        IdleBehavior::Sleeping => &game_assets.soul_sleep,
-        IdleBehavior::Resting => &game_assets.soul_sleep,
+        IdleBehavior::Sleeping | IdleBehavior::Resting if allow_sleep_visual => {
+            &game_assets.soul_sleep
+        }
+        IdleBehavior::Sleeping | IdleBehavior::Resting => &game_assets.soul,
         IdleBehavior::GoingToRest => &game_assets.soul,
         IdleBehavior::ExhaustedGathering => &game_assets.soul_exhausted,
         IdleBehavior::Escaping => &game_assets.soul,
         IdleBehavior::Drifting => &game_assets.soul,
         IdleBehavior::Gathering => match idle.gathering_behavior {
-            GatheringBehavior::Sleeping => &game_assets.soul_sleep,
-            GatheringBehavior::Wandering
+            GatheringBehavior::Sleeping if allow_sleep_visual => &game_assets.soul_sleep,
+            GatheringBehavior::Sleeping
+            | GatheringBehavior::Wandering
             | GatheringBehavior::Standing
             | GatheringBehavior::Dancing => &game_assets.soul,
         },
@@ -58,16 +65,24 @@ pub fn animation_system(
         &mut crate::entities::damned_soul::AnimationState,
         &DamnedSoul,
         &IdleState,
+        &AssignedTask,
         Option<&StressBreakdown>,
         Option<&ConversationExpression>,
     )>,
 ) {
-    for (mut transform, mut sprite, mut anim, soul, idle, breakdown_opt, expression_opt) in
+    for (mut transform, mut sprite, mut anim, soul, idle, task, breakdown_opt, expression_opt) in
         query.iter_mut()
     {
         // 進行方向に応じて左右反転（facing_right は movement 側で更新）
         sprite.flip_x = anim.facing_right;
-        let desired_image = select_soul_image(&game_assets, idle, breakdown_opt, expression_opt);
+        let is_working_or_moving = !matches!(*task, AssignedTask::None) || anim.is_moving;
+        let desired_image = select_soul_image(
+            &game_assets,
+            idle,
+            breakdown_opt,
+            expression_opt,
+            is_working_or_moving,
+        );
         if sprite.image != *desired_image {
             sprite.image = desired_image.clone();
         }
