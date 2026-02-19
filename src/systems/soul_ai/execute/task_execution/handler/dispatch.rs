@@ -172,6 +172,17 @@ pub fn run_task_handler(
                 breakdown_opt,
             );
         }
+        AssignedTask::FrameWallTile(data) => {
+            AssignedTask::execute(
+                ctx,
+                data.clone(),
+                commands,
+                game_assets,
+                time,
+                world_map,
+                breakdown_opt,
+            );
+        }
         AssignedTask::None => {}
     }
 }

@@ -238,6 +238,7 @@ pub fn sync_reservations_system(
             TransportRequestKind::DepositToStockpile
             | TransportRequestKind::DeliverToBlueprint
             | TransportRequestKind::DeliverToFloorConstruction
+            | TransportRequestKind::DeliverToWallConstruction
             | TransportRequestKind::DeliverToProvisionalWall
             | TransportRequestKind::GatherWaterToTank
             | TransportRequestKind::ConsolidateStockpile => {

@@ -54,6 +54,7 @@ Bevy 0.18 の **ECS Relationships** 機能を使用し、エンティティ間�
     - `bucket_auto_haul_system`: タンク位置（`anchor = tank`）に `ReturnBucket` request を生成。返却件数は `TransportDemand.desired_slots` で管理し、割り当て時にドロップバケツと返却先 `BucketStorage` を同時遅延解決。
     - `blueprint_auto_haul_system`: 設計図位置に `DeliverToBlueprint` request を生成。
     - `floor_construction_auto_haul_system`: 床建築サイト位置に `DeliverToFloorConstruction` request を生成。
+    - `wall_construction_auto_haul_system`: 壁建築サイト位置に `DeliverToWallConstruction` request を生成（`Framing` は Wood、`Coating` は StasisMud）。
     - `provisional_wall_auto_haul_system`: 仮設壁（Wall）位置に `DeliverToProvisionalWall` request を生成。
     - `mud_mixer_auto_haul_system`: Mixer 位置に `DeliverToMixerSolid`（固体）および `DeliverWaterToMixer`（水）request を生成。
     - `tank_water_request_system`: タンクの空きに応じて `GatherWaterToTank` request を生成し、割り当て時にバケツを遅延解決。
@@ -95,7 +96,8 @@ Bevy 0.18 の **ECS Relationships** 機能を使用し、エンティティ間�
 - **精製 (Refine)**: MudMixer で `StasisMud` を生成します。
     - 生成された `StasisMud` は地面に放置されると **5秒で消滅** します。
 - **運搬 (Haul)**: 「拾う」「備蓄場所へ運ぶ」「置く」のフェーズを経る。
-- **壁塗布 (CoatWall)**: 仮設壁に泥が届くと実行可能。壁へ移動し、塗布完了で `Building.is_provisional = false` に更新される。
+- **壁フレーミング (FrameWallTile)**: 壁サイトの `material_center` で木材受領後、対象タイルをフレーミングし `FramedProvisional` へ遷移。
+- **壁塗布 (CoatWall)**: 壁サイトの `CoatingReady` タイルを塗布し、完了で対応 `Building.is_provisional = false` に更新される（legacy 仮設壁の塗布タスクも互換維持）。
 - **猫車必須資源**: `Sand` / `StasisMud` は原則徒歩運搬不可。`HaulWithWheelbarrow` で搬送される。
   - 例外: ピック→ドロップでその運搬1件を完了できる場合は徒歩運搬を許可。
   - 判定は「ソース隣接 3x3 の立ち位置から、実行時ドロップしきい値を満たせるか」で評価する。

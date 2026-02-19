@@ -12,6 +12,7 @@ use crate::systems::command::TaskArea;
 use crate::systems::jobs::{
     Building, BuildingType, Designation, Priority, ProvisionalWall, TaskSlots, WorkType,
 };
+use crate::systems::jobs::wall_construction::WallTileBlueprint;
 use crate::systems::logistics::ResourceType;
 use crate::systems::logistics::transport_request::{
     TransportDemand, TransportPolicy, TransportPriority, TransportRequest, TransportRequestKind,
@@ -35,7 +36,11 @@ pub fn provisional_wall_auto_haul_system(
         Option<&TaskWorkers>,
     )>,
     q_requests: Query<(Entity, &TransportRequest, Option<&TaskWorkers>)>,
+    q_wall_tiles: Query<&WallTileBlueprint>,
 ) {
+    let site_managed_walls: std::collections::HashSet<Entity> =
+        q_wall_tiles.iter().filter_map(|tile| tile.spawned_wall).collect();
+
     let mut in_flight = std::collections::HashMap::<Entity, usize>::new();
     for (_, req, workers_opt) in q_requests.iter() {
         if req.kind != TransportRequestKind::DeliverToProvisionalWall {
@@ -55,6 +60,9 @@ pub fn provisional_wall_auto_haul_system(
 
     let mut desired_requests = std::collections::HashMap::<Entity, (Entity, Vec2, u32)>::new();
     for (wall_entity, wall_transform, building, provisional, workers_opt) in q_walls.iter() {
+        if site_managed_walls.contains(&wall_entity) {
+            continue;
+        }
         if building.kind != BuildingType::Wall
             || !building.is_provisional
             || provisional.mud_delivered
@@ -176,10 +184,17 @@ pub fn provisional_wall_material_delivery_sync_system(
         &crate::systems::logistics::ResourceItem,
         Option<&crate::relationships::StoredIn>,
     )>,
+    q_wall_tiles: Query<&WallTileBlueprint>,
 ) {
+    let site_managed_walls: std::collections::HashSet<Entity> =
+        q_wall_tiles.iter().filter_map(|tile| tile.spawned_wall).collect();
+
     let pickup_radius_sq = (TILE_SIZE * 1.5) * (TILE_SIZE * 1.5);
 
     for (wall_entity, wall_transform, building, mut provisional) in q_walls.iter_mut() {
+        if site_managed_walls.contains(&wall_entity) {
+            continue;
+        }
         if building.kind != BuildingType::Wall
             || !building.is_provisional
             || provisional.mud_delivered
@@ -226,8 +241,15 @@ pub fn provisional_wall_designation_system(
         Option<&Designation>,
         Option<&TaskWorkers>,
     )>,
+    q_wall_tiles: Query<&WallTileBlueprint>,
 ) {
+    let site_managed_walls: std::collections::HashSet<Entity> =
+        q_wall_tiles.iter().filter_map(|tile| tile.spawned_wall).collect();
+
     for (wall_entity, building, provisional, designation_opt, workers_opt) in q_walls.iter() {
+        if site_managed_walls.contains(&wall_entity) {
+            continue;
+        }
         if building.kind != BuildingType::Wall {
             continue;
         }

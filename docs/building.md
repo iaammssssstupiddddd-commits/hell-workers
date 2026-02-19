@@ -13,6 +13,8 @@ Hell-Workers における建築システムの基礎実装について説明し�
 | `Blueprint` | 建設中の建物。`kind`, `progress`, `required_materials`, `delivered_materials` フィールドを持つ |
 | `Building` | 完成した建物。`is_provisional` (仮設) フラグを持つ |
 | `ProvisionalWall` | 仮設壁のアップグレード状態（`mud_delivered`）を保持 |
+| `WallConstructionSite` | 壁の建設サイト（`Framing -> Coating` フェーズ、`material_center`、進捗カウンタを保持） |
+| `WallTileBlueprint` | 壁1タイルの建設状態（`wood_delivered` / `mud_delivered` / `spawned_wall`）を保持 |
 | `BuildingType` | 建物の種類（`Wall`, `Floor`, `Tank`, `MudMixer`, `SandPile`, `BonePile`） |
 
 ### Blueprint フィールド
@@ -60,8 +62,8 @@ flowchart TD
 ### 仕組
 1.  **最低要件**: `Wall` は木材1つで建設開始・完了可能です。
 2.  **仮設フラグ**: `Building` コンポーネントの `is_provisional` が `true` になります。
-3.  **資材搬入**: `TransportRequestKind::DeliverToProvisionalWall` が `StasisMud` 搬入を自動発行します。
-4.  **塗布タスク**: `ProvisionalWall.mud_delivered = true` になると、`WorkType::CoatWall` の指定が発行されます。
+3.  **資材搬入**: 新仕様の壁サイトでは `TransportRequestKind::DeliverToWallConstruction` がフェーズに応じて `Wood` / `StasisMud` を自動搬入します（`DeliverToProvisionalWall` は legacy 壁のみ）。
+4.  **作業タスク**: `WorkType::FrameWallTile`（木材フレーミング）と `WorkType::CoatWall`（タイル塗布）で段階実行します。
 5.  **視覚表現**: 仮設状態の壁は警告色オーバーレイで表示され、`CoatWall` 完了で通常見た目へ戻ります。
 6.  **本設化完了**: `CoatWall` 完了時に `Building.is_provisional = false` となり、`ProvisionalWall` が削除されます。
 
@@ -351,6 +353,17 @@ flowchart TD
 - `src/systems/spatial/floor_construction.rs`: Spatial grid
 - `src/plugins/logic.rs`: システム登録
 
+### 9.11 壁建設フェーズ分割（Framing -> Coating, 養生なし）
+
+- 壁のドラッグ配置は `Blueprint` 直建てではなく `WallConstructionSite` + `WallTileBlueprint` を生成する。
+- フェーズは 2 段階のみ:
+  1. `Framing`: 木材搬入 (`WALL_WOOD_PER_TILE`) -> `FrameWallTile` 実行
+  2. `Coating`: 泥搬入 (`WALL_MUD_PER_TILE`) -> `CoatWall` 実行
+- `Framing` 完了タイルは即時に `Building { kind: Wall, is_provisional: true }` を生成し、通路分離・壁接続判定に参加する。
+- `Coating` 完了時に `Building.is_provisional = false` へ更新し、`ProvisionalWall` を除去する。
+- `Curing` 相当フェーズは持たず、全タイル `Complete` 到達で site / tile / request を即時 cleanup する。
+- キャンセルは site 単位で処理され、搬入済み `Wood` / `StasisMud` を返却し、関連 request / 作業割り当てを解除する。
+
 ## 10. 関連ファイル (Blueprint System)
 
 - `src/systems/jobs.rs`: `Blueprint`, `Building`, 建設完了ロジック
@@ -366,8 +379,11 @@ flowchart TD
 - `src/plugins/visual.rs`: システム登録
 - `src/systems/visual/wall_connection.rs`: 壁の自動接続ロジック
 - `src/systems/soul_ai/execute/task_execution/build.rs`: `handle_build_task`（進捗更新）
-- `src/systems/logistics/transport_request/producer/provisional_wall.rs`: 仮設壁への泥搬送・指定発行
-- `src/systems/soul_ai/execute/task_execution/coat_wall.rs`: `CoatWall` 実行ロジック
+- `src/systems/jobs/wall_construction/`: 壁建設 site/tile コンポーネント・遷移・完了・キャンセル
+- `src/systems/logistics/transport_request/producer/wall_construction.rs`: 壁サイト向け搬送 request / 搬入同期 / Designation
+- `src/systems/logistics/transport_request/producer/provisional_wall.rs`: legacy 仮設壁向け泥搬送（wall site 管理対象は除外）
+- `src/systems/soul_ai/execute/task_execution/frame_wall.rs`: `FrameWallTile` 実行ロジック
+- `src/systems/soul_ai/execute/task_execution/coat_wall.rs`: tile ベース `CoatWall`（legacy 壁互換を含む）
 - `src/interface/selection/`: `blueprint_placement`（input, building_place, hit_test, state に分割）
 - `src/systems/visual/placement_ghost.rs`: 建築ゴースト表示システム
 - `src/assets.rs`: 各種アイコンアセット

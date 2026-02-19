@@ -117,6 +117,7 @@ impl LatinPhrase {
             WorkType::Build
             | WorkType::ReinforceFloorTile
             | WorkType::PourFloorTile
+            | WorkType::FrameWallTile
             | WorkType::CoatWall => LatinPhrase::Laborare,
             WorkType::GatherWater => LatinPhrase::Haurire,
             WorkType::CollectSand | WorkType::CollectBone => LatinPhrase::Colligere,
