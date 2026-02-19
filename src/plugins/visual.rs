@@ -25,6 +25,10 @@ use crate::systems::visual::blueprint::{
     update_progress_bar_fill_system as bp_update_progress_bar_fill_system,
     update_worker_indicators_system,
 };
+use crate::systems::visual::dream::{
+    dream_particle_spawn_system, dream_particle_update_system, dream_popup_spawn_system,
+    dream_popup_update_system, ensure_dream_visual_state_system,
+};
 use crate::systems::visual::fade::fade_out_system;
 use crate::systems::visual::floor_construction::{
     manage_floor_curing_progress_bars_system, sync_floor_tile_bone_visuals_system,
@@ -172,6 +176,19 @@ impl Plugin for VisualPlugin {
                 update_carrying_item_system,
                 update_drop_popup_system,
                 wheelbarrow_follow_system,
+            )
+                .chain()
+                .in_set(GameSystemSet::Visual),
+        );
+
+        app.add_systems(
+            Update,
+            (
+                ensure_dream_visual_state_system,
+                dream_particle_spawn_system,
+                dream_popup_spawn_system,
+                dream_particle_update_system,
+                dream_popup_update_system,
             )
                 .chain()
                 .in_set(GameSystemSet::Visual),

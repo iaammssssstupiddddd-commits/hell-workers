@@ -67,7 +67,10 @@ pub fn escaping_decision_system(
         {
             if matches!(
                 idle_state.behavior,
-                IdleBehavior::Escaping | IdleBehavior::Drifting
+                IdleBehavior::Escaping
+                    | IdleBehavior::Drifting
+                    | IdleBehavior::Resting
+                    | IdleBehavior::GoingToRest
             ) {
                 continue;
             }

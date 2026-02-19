@@ -2,11 +2,55 @@
 
 use crate::constants::{MAX_PATHFINDS_PER_FRAME, PATHFINDING_RETRY_COOLDOWN_FRAMES};
 use crate::entities::damned_soul::{DamnedSoul, Destination, IdleBehavior, IdleState, Path};
+use crate::relationships::RestAreaReservedFor;
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
 use crate::systems::soul_ai::helpers::work::unassign_task;
 use crate::world::map::WorldMap;
 use crate::world::pathfinding::{self, PathfindingContext};
 use bevy::prelude::*;
+
+fn rest_area_occupied_grids_from_center(center: Vec2) -> [(i32, i32); 4] {
+    let top_right = WorldMap::world_to_grid(center);
+    [
+        (top_right.0 - 1, top_right.1 - 1),
+        (top_right.0, top_right.1 - 1),
+        (top_right.0 - 1, top_right.1),
+        (top_right.0, top_right.1),
+    ]
+}
+
+fn rest_area_adjacent_candidates(center: Vec2, current_pos: Vec2, world_map: &WorldMap) -> Vec<(i32, i32)> {
+    let occupied = rest_area_occupied_grids_from_center(center);
+    let directions: [(i32, i32); 8] = [
+        (0, 1),
+        (0, -1),
+        (1, 0),
+        (-1, 0),
+        (1, 1),
+        (1, -1),
+        (-1, 1),
+        (-1, -1),
+    ];
+
+    let mut candidates: Vec<(i32, i32)> = occupied
+        .iter()
+        .flat_map(|&(gx, gy)| directions.iter().map(move |&(dx, dy)| (gx + dx, gy + dy)))
+        .filter(|grid| !occupied.contains(grid))
+        .filter(|&(gx, gy)| world_map.is_walkable(gx, gy))
+        .collect();
+
+    candidates.sort_unstable();
+    candidates.dedup();
+    candidates.sort_by(|a, b| {
+        let a_pos = WorldMap::grid_to_world(a.0, a.1);
+        let b_pos = WorldMap::grid_to_world(b.0, b.1);
+        a_pos
+            .distance_squared(current_pos)
+            .partial_cmp(&b_pos.distance_squared(current_pos))
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    candidates
+}
 
 /// 障害物に埋まったソウルを最寄りの歩行可能タイルへ逃がす。
 /// 建築物の配置や障害物の追加で現在位置が通行不可になった場合に実行される。
@@ -46,33 +90,45 @@ pub fn pathfinding_system(
         (
             Entity,
             &Transform,
-            &Destination,
+            &mut Destination,
             &mut Path,
             &mut AssignedTask,
             &IdleState,
             Option<&crate::relationships::RestingIn>,
+            Option<&RestAreaReservedFor>,
             Option<&mut PathCooldown>,
             Option<&mut crate::systems::logistics::Inventory>,
         ),
         With<DamnedSoul>,
     >,
+    q_rest_areas: Query<&Transform, With<crate::systems::jobs::RestArea>>,
     mut queries: crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
 ) {
     let mut pathfind_count = 0usize;
+    // タスク探索の独占でアイドル移動（休憩所移動を含む）が飢餓しないよう、
+    // 毎フレームの探索枠を一部だけ非タスク用に確保する。
+    const RESERVED_IDLE_PATHFINDS_PER_FRAME: usize = 2;
 
     for prioritize_tasks in [true, false] {
-        if pathfind_count >= MAX_PATHFINDS_PER_FRAME {
-            break;
+        let phase_budget_limit = if prioritize_tasks {
+            MAX_PATHFINDS_PER_FRAME.saturating_sub(RESERVED_IDLE_PATHFINDS_PER_FRAME)
+        } else {
+            MAX_PATHFINDS_PER_FRAME
+        };
+
+        if pathfind_count >= phase_budget_limit {
+            continue;
         }
 
         for (
             entity,
             transform,
-            destination,
+            mut destination,
             mut path,
             mut task,
             idle,
             resting_in,
+            rest_reserved_for,
             mut cooldown_opt,
             mut inventory_opt,
         ) in query.iter_mut()
@@ -134,7 +190,7 @@ pub fn pathfinding_system(
                             });
 
                         if let Some(rel_idx) = blocked_relative {
-                            if rel_idx > 0 && pathfind_count < MAX_PATHFINDS_PER_FRAME {
+                            if rel_idx > 0 && pathfind_count < phase_budget_limit {
                                 let resume_wp = path.waypoints[path.current_index + rel_idx - 1];
                                 let resume_grid = WorldMap::world_to_grid(resume_wp);
                                 pathfind_count += 1;
@@ -212,7 +268,7 @@ pub fn pathfinding_system(
                 continue;
             }
 
-            if pathfind_count >= MAX_PATHFINDS_PER_FRAME {
+            if pathfind_count >= phase_budget_limit {
                 continue;
             }
 
@@ -257,6 +313,52 @@ pub fn pathfinding_system(
                 debug!("PATH: Soul {:?} found new path", entity);
             } else {
                 debug!("PATH: Soul {:?} failed to find path", entity);
+                let mut recovered_with_alternative = false;
+
+                if !has_task && idle.behavior == IdleBehavior::GoingToRest {
+                    if let Some(reserved) = rest_reserved_for {
+                        if let Ok(rest_transform) = q_rest_areas.get(reserved.0) {
+                            let rest_center = rest_transform.translation.truncate();
+                            let mut candidate_found = None;
+
+                            for candidate_grid in rest_area_adjacent_candidates(
+                                rest_center,
+                                current_pos,
+                                &world_map,
+                            )
+                            .into_iter()
+                            .filter(|grid| *grid != goal_grid)
+                            {
+                                if let Some(candidate_path) = pathfinding::find_path(
+                                    &*world_map,
+                                    &mut *pf_context,
+                                    start_grid,
+                                    candidate_grid,
+                                ) {
+                                    candidate_found = Some((candidate_grid, candidate_path));
+                                    break;
+                                }
+                            }
+
+                            if let Some((candidate_grid, candidate_path)) = candidate_found {
+                                destination.0 =
+                                    WorldMap::grid_to_world(candidate_grid.0, candidate_grid.1);
+                                path.waypoints = candidate_path
+                                    .iter()
+                                    .map(|&(x, y)| WorldMap::grid_to_world(x, y))
+                                    .collect();
+                                path.current_index = 0;
+                                commands.entity(entity).remove::<PathCooldown>();
+                                recovered_with_alternative = true;
+                            }
+                        }
+                    }
+                }
+
+                if recovered_with_alternative {
+                    continue;
+                }
+
                 // デバッグ：集会中のsoulで特定位置付近の場合
                 if matches!(idle.behavior, IdleBehavior::Gathering)
                     && current_pos.x.abs() < 150.0

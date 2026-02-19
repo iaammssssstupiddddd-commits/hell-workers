@@ -232,6 +232,7 @@ pub fn idle_behavior_decision_system(
 
         if idle.idle_timer >= idle.behavior_duration {
             idle.idle_timer = 0.0;
+            let previous_behavior = idle.behavior;
 
             if soul.fatigue > FATIGUE_GATHERING_THRESHOLD
                 || idle.total_idle_time > IDLE_TIME_TO_GATHERING
@@ -255,6 +256,15 @@ pub fn idle_behavior_decision_system(
                     soul.fatigue,
                     idle.total_idle_time,
                 );
+            }
+
+            if matches!(idle.behavior, IdleBehavior::Sitting | IdleBehavior::Sleeping)
+                && idle.behavior != previous_behavior
+            {
+                // 睡眠/座り込み遷移時に残パスで歩き続けるのを防ぐ。
+                path.waypoints.clear();
+                path.current_index = 0;
+                dest.0 = current_pos;
             }
 
             idle.behavior_duration = transitions::behavior_duration_for(idle.behavior);

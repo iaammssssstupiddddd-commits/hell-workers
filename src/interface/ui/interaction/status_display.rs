@@ -1,17 +1,21 @@
 use super::mode;
-use crate::constants::TILE_SIZE;
+use crate::constants::{
+    DREAM_UI_PULSE_BRIGHTNESS, DREAM_UI_PULSE_DURATION, DREAM_UI_PULSE_TRIGGER_DELTA, TILE_SIZE,
+};
 use crate::entities::familiar::Familiar;
 use crate::game_state::{
     BuildContext, CompanionPlacementState, PlayMode, TaskContext, ZoneContext,
 };
 use crate::interface::selection::SelectedEntity;
 use crate::interface::ui::components::*;
+use crate::interface::ui::theme::UiTheme;
 use crate::relationships::ManagedBy;
 use crate::systems::command::{
     AreaEditClipboard, AreaEditSession, TaskArea, count_positions_in_area,
     overlap_summary_from_areas,
 };
 use crate::systems::jobs::Designation;
+use bevy::math::TryStableInterpolate;
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use std::time::Duration;
@@ -304,17 +308,43 @@ pub fn update_speed_button_highlight_system(
 }
 
 pub fn update_dream_pool_display_system(
+    time: Res<Time>,
     dream_pool: Res<crate::entities::damned_soul::DreamPool>,
+    theme: Res<UiTheme>,
     ui_nodes: Res<UiNodeRegistry>,
-    mut q_text: Query<&mut Text>,
+    mut q_text: Query<(&mut Text, &mut TextColor, &mut DreamPoolPulse)>,
 ) {
-    if !dream_pool.is_changed() {
-        return;
-    }
     let Some(entity) = ui_nodes.get_slot(UiSlot::DreamPoolText) else {
         return;
     };
-    if let Ok(mut text) = q_text.get_mut(entity) {
-        text.0 = format!("Dream: {:.1}", dream_pool.points);
+    if let Ok((mut text, mut text_color, mut pulse)) = q_text.get_mut(entity) {
+        if dream_pool.is_changed() {
+            text.0 = format!("Dream: {:.1}", dream_pool.points);
+        }
+
+        pulse.timer = (pulse.timer - time.delta_secs()).max(0.0);
+
+        let delta = dream_pool.points - pulse.last_points;
+        if delta > 0.0 {
+            pulse.pending_gain += delta;
+            while pulse.pending_gain >= DREAM_UI_PULSE_TRIGGER_DELTA {
+                pulse.pending_gain -= DREAM_UI_PULSE_TRIGGER_DELTA;
+                pulse.timer = DREAM_UI_PULSE_DURATION;
+            }
+        }
+        pulse.last_points = dream_pool.points;
+
+        let base_color = theme.colors.accent_soul_bright;
+        if pulse.timer > 0.0 {
+            let progress = 1.0 - (pulse.timer / DREAM_UI_PULSE_DURATION).clamp(0.0, 1.0);
+            let pulse_alpha =
+                (progress * std::f32::consts::PI).sin().max(0.0) * DREAM_UI_PULSE_BRIGHTNESS;
+            let bright_color = Color::WHITE;
+            text_color.0 = base_color
+                .try_interpolate_stable(&bright_color, pulse_alpha)
+                .unwrap_or(bright_color);
+        } else {
+            text_color.0 = base_color;
+        }
     }
 }
