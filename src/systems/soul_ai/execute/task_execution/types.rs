@@ -36,7 +36,9 @@ pub enum AssignedTask {
     ReinforceFloorTile(ReinforceFloorTileData),
     /// 床タイルへの泥注入
     PourFloorTile(PourFloorTileData),
-    /// 仮設壁への泥塗布
+    /// 壁タイルの木材フレーミング
+    FrameWallTile(FrameWallTileData),
+    /// 壁タイルの泥塗布
     CoatWall(CoatWallData),
 }
 
@@ -276,9 +278,29 @@ pub enum PourFloorPhase {
     Done,
 }
 
-/// Coat provisional wall task data
+/// Frame wall tile task data
+#[derive(Reflect, Clone, Debug, PartialEq, Eq)]
+pub struct FrameWallTileData {
+    pub tile: Entity,
+    pub site: Entity,
+    pub phase: FrameWallPhase,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Reflect, Default)]
+pub enum FrameWallPhase {
+    #[default]
+    GoingToMaterialCenter,
+    PickingUpWood,
+    GoingToTile,
+    Framing { progress_bp: u16 },
+    Done,
+}
+
+/// Coat wall tile task data
 #[derive(Reflect, Clone, Debug, PartialEq, Eq)]
 pub struct CoatWallData {
+    pub tile: Entity,
+    pub site: Entity,
     pub wall: Entity,
     pub phase: CoatWallPhase,
 }
@@ -286,8 +308,9 @@ pub struct CoatWallData {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Reflect, Default)]
 pub enum CoatWallPhase {
     #[default]
-    GoingToWall,
+    GoingToMaterialCenter,
     PickingUpMud,
+    GoingToTile,
     Coating {
         progress_bp: u16,
     },
@@ -311,6 +334,7 @@ impl AssignedTask {
             AssignedTask::HaulWithWheelbarrow(_) => Some(WorkType::WheelbarrowHaul),
             AssignedTask::ReinforceFloorTile(_) => Some(WorkType::ReinforceFloorTile),
             AssignedTask::PourFloorTile(_) => Some(WorkType::PourFloorTile),
+            AssignedTask::FrameWallTile(_) => Some(WorkType::FrameWallTile),
             AssignedTask::CoatWall(_) => Some(WorkType::CoatWall),
             AssignedTask::None => None,
         }
@@ -332,7 +356,8 @@ impl AssignedTask {
             AssignedTask::HaulWithWheelbarrow(data) => Some(data.wheelbarrow),
             AssignedTask::ReinforceFloorTile(data) => Some(data.tile),
             AssignedTask::PourFloorTile(data) => Some(data.tile),
-            AssignedTask::CoatWall(data) => Some(data.wall),
+            AssignedTask::FrameWallTile(data) => Some(data.tile),
+            AssignedTask::CoatWall(data) => Some(data.tile),
             AssignedTask::None => None,
         }
     }

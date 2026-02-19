@@ -17,6 +17,9 @@ use crate::systems::jobs::Designation;
 use crate::systems::jobs::floor_construction::{
     FloorConstructionCancelRequested, FloorTileBlueprint,
 };
+use crate::systems::jobs::wall_construction::{
+    WallConstructionCancelRequested, WallTileBlueprint,
+};
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
@@ -90,6 +93,7 @@ pub fn task_area_selection_system(
     mut q_target_sets: ParamSet<(
         DesignationTargetQuery<'_, '_>,
         Query<(Entity, &Transform, &FloorTileBlueprint)>,
+        Query<(Entity, &Transform, &WallTileBlueprint)>,
     )>,
     mut commands: Commands,
     keyboard: Res<ButtonInput<KeyCode>>,
@@ -355,6 +359,24 @@ pub fn task_area_selection_system(
                         .entity(site_entity)
                         .insert(FloorConstructionCancelRequested);
                 }
+
+                let mut closest_wall_site: Option<(Entity, f32)> = None;
+                let q_wall_tiles = q_target_sets.p2();
+                for (_, transform, tile) in q_wall_tiles.iter() {
+                    let dist = transform.translation.truncate().distance(start_pos);
+                    if dist > TILE_SIZE {
+                        continue;
+                    }
+                    match closest_wall_site {
+                        Some((_, best_dist)) if best_dist <= dist => {}
+                        _ => closest_wall_site = Some((tile.parent_site, dist)),
+                    }
+                }
+                if let Some((site_entity, _)) = closest_wall_site {
+                    commands
+                        .entity(site_entity)
+                        .insert(WallConstructionCancelRequested);
+                }
             } else {
                 // エリアキャンセル
                 let area = TaskArea::from_points(start_pos, end_pos);
@@ -381,6 +403,20 @@ pub fn task_area_selection_system(
                     commands
                         .entity(site_entity)
                         .insert(FloorConstructionCancelRequested);
+                }
+
+                let mut requested_wall_sites = HashSet::new();
+                let q_wall_tiles = q_target_sets.p2();
+                for (_, transform, tile) in q_wall_tiles.iter() {
+                    let pos = transform.translation.truncate();
+                    if area.contains(pos) {
+                        requested_wall_sites.insert(tile.parent_site);
+                    }
+                }
+                for site_entity in requested_wall_sites.iter().copied() {
+                    commands
+                        .entity(site_entity)
+                        .insert(WallConstructionCancelRequested);
                 }
             }
 

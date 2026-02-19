@@ -9,7 +9,8 @@ use crate::entities::damned_soul::{
     DamnedSoul, GatheringBehavior, IdleBehavior, IdleState, SoulUiLinks,
 };
 use crate::systems::soul_ai::execute::task_execution::types::{
-    AssignedTask, CoatWallPhase, GatherPhase, HaulPhase, PourFloorPhase, ReinforceFloorPhase,
+    AssignedTask, CoatWallPhase, FrameWallPhase, GatherPhase, HaulPhase, PourFloorPhase,
+    ReinforceFloorPhase,
 };
 use crate::systems::utils::progress_bar::{
     GenericProgressBar, ProgressBarBackground, ProgressBarConfig, ProgressBarFill,
@@ -39,6 +40,9 @@ pub fn progress_bar_system(
             }
             AssignedTask::PourFloorTile(data) => {
                 matches!(data.phase, PourFloorPhase::Pouring { .. })
+            }
+            AssignedTask::FrameWallTile(data) => {
+                matches!(data.phase, FrameWallPhase::Framing { .. })
             }
             AssignedTask::CoatWall(data) => {
                 matches!(data.phase, CoatWallPhase::Coating { .. })
@@ -124,6 +128,13 @@ pub fn update_progress_bar_fill_system(
                     }
                     AssignedTask::PourFloorTile(data) => {
                         if let PourFloorPhase::Pouring { progress_bp } = data.phase {
+                            Some((progress_bp as f32 / 10_000.0).clamp(0.0, 1.0))
+                        } else {
+                            None
+                        }
+                    }
+                    AssignedTask::FrameWallTile(data) => {
+                        if let FrameWallPhase::Framing { progress_bp } = data.phase {
                             Some((progress_bp as f32 / 10_000.0).clamp(0.0, 1.0))
                         } else {
                             None
@@ -227,6 +238,7 @@ pub fn task_link_system(
             AssignedTask::Build(data) => Some(data.blueprint),
             AssignedTask::HaulToBlueprint(data) => Some(data.blueprint),
             AssignedTask::HaulWaterToMixer(data) => Some(data.bucket),
+            AssignedTask::FrameWallTile(data) => Some(data.tile),
             AssignedTask::CoatWall(data) => Some(data.wall),
             _ => None,
         };
@@ -246,6 +258,7 @@ pub fn task_link_system(
                     AssignedTask::Build(_) => Color::srgba(1.0, 1.0, 1.0, 0.5), // 白 (建築)
                     AssignedTask::HaulToBlueprint(_) => Color::srgba(1.0, 1.0, 0.5, 0.4), // 薄黄 (搬入)
                     AssignedTask::HaulWaterToMixer(_) => Color::srgb(0.0, 0.5, 1.0), // Same as GatherWater
+                    AssignedTask::FrameWallTile(_) => Color::srgba(1.0, 1.0, 1.0, 0.5), // 白 (建築)
                     AssignedTask::CoatWall(_) => Color::srgba(1.0, 1.0, 1.0, 0.5),   // 白 (建築)
                     _ => Color::srgba(1.0, 1.0, 1.0, 0.3),
                 };

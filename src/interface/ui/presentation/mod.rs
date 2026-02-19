@@ -169,6 +169,7 @@ pub(super) fn format_task_str(task: &AssignedTask) -> String {
         AssignedTask::HaulWithWheelbarrow(data) => format!("HaulWheelbarrow ({:?})", data.phase),
         AssignedTask::ReinforceFloorTile(data) => format!("ReinforceFloor ({:?})", data.phase),
         AssignedTask::PourFloorTile(data) => format!("PourFloor ({:?})", data.phase),
+        AssignedTask::FrameWallTile(data) => format!("FrameWall ({:?})", data.phase),
         AssignedTask::CoatWall(data) => format!("CoatWall ({:?})", data.phase),
     }
 }

@@ -51,7 +51,7 @@
 ### 7. TransportRequest の規約（M3〜M7 完了）
 運搬系は全て **Anchor Request パターン** に統一済み。request エンティティをアンカー位置（Blueprint/Mixer/Stockpile）に生成し、割り当て時にソースを遅延解決する。
 
-- **request 化済み**: `DepositToStockpile`, `DeliverToBlueprint`, `DeliverToFloorConstruction`, `DeliverToProvisionalWall`, `DeliverToMixerSolid`, `DeliverWaterToMixer`, `GatherWaterToTank`, `ReturnBucket`, `ReturnWheelbarrow`, `BatchWheelbarrow`, `ConsolidateStockpile`
+- **request 化済み**: `DepositToStockpile`, `DeliverToBlueprint`, `DeliverToFloorConstruction`, `DeliverToWallConstruction`, `DeliverToProvisionalWall`, `DeliverToMixerSolid`, `DeliverWaterToMixer`, `GatherWaterToTank`, `ReturnBucket`, `ReturnWheelbarrow`, `BatchWheelbarrow`, `ConsolidateStockpile`
 - `task_finder` は `DesignationSpatialGrid` と `TransportRequestSpatialGrid` の両方から候補を収集。
 - 運搬系 WorkType（`Haul`, `HaulToMixer`, `GatherWater`, `HaulWaterToMixer`, `WheelbarrowHaul`）は request 付き候補のみを扱う。
 - request は需要 0 のとき `Designation` を外して休止、または despawn。
@@ -93,3 +93,10 @@ Windows の PE 形式では、一つの DLL からエクスポートできるシ
 
 ### 2. File Lock エラー
 `cargo` コマンドが「Blocking waiting for file lock」で止まる場合は、別のターミナルや IDE、あるいはゲーム自体が `target/` ディレクトリを使用中（ロック中）です。それらを終了してから再度実行してください。
+
+### 3. Bevy ECS `error[B0001]`（Query 競合パニック）
+`cargo run` で `error[B0001]` が出る場合、同一システム内で Query のアクセス競合（例: `&mut T` と別 Query の `&T`）が発生しています。
+
+- 原因調査: `cargo run --features bevy/debug` で実行し、衝突した system/query 名を表示して特定する。
+- 修正方針: `Without<T>` で Query を排他的に分離するか、`ParamSet` に統合して同時借用を避ける。
+- 既存共通クエリ（`TaskQueries` など）がある箇所では、同種コンポーネントへの重複 Query を新設しない。

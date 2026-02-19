@@ -22,6 +22,7 @@ pub fn work_type_label(wt: &WorkType) -> &'static str {
         WorkType::CollectBone => "Bone",
         WorkType::ReinforceFloorTile => "Reinforce",
         WorkType::PourFloorTile => "Pour",
+        WorkType::FrameWallTile => "Frame",
         WorkType::CoatWall => "Coat",
     }
 }
@@ -47,7 +48,10 @@ pub fn get_work_type_icon(
             theme.colors.gather_default,
         ),
         WorkType::Refine => (game_assets.icon_hammer.clone(), theme.colors.build),
-        WorkType::ReinforceFloorTile | WorkType::PourFloorTile | WorkType::CoatWall => {
+        WorkType::ReinforceFloorTile
+        | WorkType::PourFloorTile
+        | WorkType::FrameWallTile
+        | WorkType::CoatWall => {
             (game_assets.icon_hammer.clone(), theme.colors.build)
         }
     }
@@ -99,6 +103,8 @@ pub fn generate_task_description(
             if let Some(req) = transport_req {
                 if req.kind == TransportRequestKind::DeliverToBlueprint {
                     format!("Haul {:?} to Build", req.resource_type)
+                } else if req.kind == TransportRequestKind::DeliverToWallConstruction {
+                    format!("Haul {:?} to Wall", req.resource_type)
                 } else if req.kind == TransportRequestKind::DeliverToProvisionalWall {
                     "Haul StasisMud to Wall".to_string()
                 } else {
@@ -137,6 +143,7 @@ pub fn generate_task_description(
         }
         WorkType::ReinforceFloorTile => "Reinforce Floor".to_string(),
         WorkType::PourFloorTile => "Pour Floor".to_string(),
+        WorkType::FrameWallTile => "Frame Wall".to_string(),
         WorkType::CoatWall => "Coat Wall".to_string(),
     }
 }

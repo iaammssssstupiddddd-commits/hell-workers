@@ -47,6 +47,9 @@ pub fn assign_by_work_type(
         WorkType::PourFloorTile => {
             floor::assign_pour_floor(task_pos, already_commanded, ctx, queries, shadow)
         }
+        WorkType::FrameWallTile => {
+            floor::assign_frame_wall(task_pos, already_commanded, ctx, queries, shadow)
+        }
         WorkType::CoatWall => {
             floor::assign_coat_wall(task_pos, already_commanded, ctx, queries, shadow)
         }

@@ -39,6 +39,7 @@ fn task_visual(task: &AssignedTask) -> TaskVisual {
         AssignedTask::HaulWithWheelbarrow { .. } => TaskVisual::Haul,
         AssignedTask::ReinforceFloorTile { .. } => TaskVisual::Build,
         AssignedTask::PourFloorTile { .. } => TaskVisual::Build,
+        AssignedTask::FrameWallTile { .. } => TaskVisual::Build,
         AssignedTask::CoatWall { .. } => TaskVisual::Build,
     }
 }

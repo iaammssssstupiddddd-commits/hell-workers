@@ -105,6 +105,17 @@ pub struct StorageAccess<'w, 's> {
     >,
     pub floor_tiles:
         Query<'w, 's, &'static crate::systems::jobs::floor_construction::FloorTileBlueprint>,
+    pub wall_sites: Query<
+        'w,
+        's,
+        (
+            &'static Transform,
+            &'static crate::systems::jobs::wall_construction::WallConstructionSite,
+            Option<&'static TaskWorkers>,
+        ),
+    >,
+    pub wall_tiles:
+        Query<'w, 's, &'static crate::systems::jobs::wall_construction::WallTileBlueprint>,
     pub buildings: Query<
         'w,
         's,
@@ -162,6 +173,17 @@ pub struct MutStorageAccess<'w, 's> {
     >,
     pub floor_tiles:
         Query<'w, 's, &'static mut crate::systems::jobs::floor_construction::FloorTileBlueprint>,
+    pub wall_sites: Query<
+        'w,
+        's,
+        (
+            &'static Transform,
+            &'static mut crate::systems::jobs::wall_construction::WallConstructionSite,
+            Option<&'static TaskWorkers>,
+        ),
+    >,
+    pub wall_tiles:
+        Query<'w, 's, &'static mut crate::systems::jobs::wall_construction::WallTileBlueprint>,
     pub buildings: Query<
         'w,
         's,

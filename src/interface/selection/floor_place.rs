@@ -1,6 +1,5 @@
 //! Floor construction drag-drop placement system
 
-use crate::assets::GameAssets;
 use crate::constants::*;
 use crate::game_state::{PlayMode, TaskContext};
 use crate::interface::camera::MainCamera;
@@ -8,7 +7,8 @@ use crate::interface::ui::UiInputState;
 use crate::systems::command::area_selection::wall_line_area;
 use crate::systems::command::{TaskArea, TaskMode};
 use crate::systems::jobs::floor_construction::{FloorConstructionSite, FloorTileBlueprint};
-use crate::systems::jobs::{Blueprint, Building, BuildingType, Designation, TaskSlots, WorkType};
+use crate::systems::jobs::wall_construction::{WallConstructionSite, WallTileBlueprint};
+use crate::systems::jobs::{Building, BuildingType, TaskSlots};
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
@@ -24,7 +24,6 @@ pub fn floor_placement_system(
     mut task_context: ResMut<TaskContext>,
     mut next_play_mode: ResMut<NextState<PlayMode>>,
     mut world_map: ResMut<WorldMap>,
-    game_assets: Res<GameAssets>,
     mut commands: Commands,
 ) {
     if ui_input_state.pointer_over_ui {
@@ -77,7 +76,7 @@ pub fn floor_placement_system(
                 );
             } else {
                 let area = wall_line_area(start_pos, snapped_pos);
-                apply_wall_placement(&mut commands, &mut world_map, &game_assets, &area);
+                apply_wall_placement(&mut commands, &mut world_map, &area);
             }
 
             // Reset mode (continue placing if shift held - TODO)
@@ -196,7 +195,6 @@ fn apply_floor_placement(
 fn apply_wall_placement(
     commands: &mut Commands,
     world_map: &mut WorldMap,
-    game_assets: &GameAssets,
     area: &TaskArea,
 ) {
     let min_grid = WorldMap::world_to_grid(area.min + Vec2::splat(0.1));
@@ -238,28 +236,33 @@ fn apply_wall_placement(
         return;
     }
 
-    let texture = game_assets.wall_isolated.clone();
+    let tiles_total = valid_tiles.len() as u32;
+    let site_entity = commands
+        .spawn((
+            WallConstructionSite::new(area.clone(), tiles_total),
+            Transform::from_translation(area.center().extend(Z_MAP + 0.01)),
+            Visibility::default(),
+            Name::new("WallConstructionSite"),
+        ))
+        .id();
+
     for (gx, gy) in valid_tiles {
         let world_pos = WorldMap::grid_to_world(gx, gy);
-        let wall_blueprint = commands
-            .spawn((
-                Blueprint::new(BuildingType::Wall, vec![(gx, gy)]),
-                Designation {
-                    work_type: WorkType::Build,
-                },
-                TaskSlots::new(1),
-                Sprite {
-                    image: texture.clone(),
-                    color: Color::srgba(1.0, 1.0, 1.0, 0.5),
-                    custom_size: Some(Vec2::splat(TILE_SIZE)),
-                    ..default()
-                },
-                Transform::from_xyz(world_pos.x, world_pos.y, Z_AURA),
-                Name::new(format!("Blueprint (Wall {},{})", gx, gy)),
-            ))
-            .id();
 
-        world_map.buildings.insert((gx, gy), wall_blueprint);
+        commands.spawn((
+            WallTileBlueprint::new(site_entity, (gx, gy)),
+            TaskSlots::new(1),
+            Sprite {
+                color: Color::srgba(0.8, 0.55, 0.3, 0.25),
+                custom_size: Some(Vec2::splat(TILE_SIZE)),
+                ..default()
+            },
+            Transform::from_translation(world_pos.extend(Z_MAP + 0.02)),
+            Visibility::default(),
+            Name::new(format!("WallTile({},{})", gx, gy)),
+        ));
+
+        world_map.buildings.insert((gx, gy), site_entity);
         world_map.add_obstacle(gx, gy);
     }
 }

@@ -11,6 +11,7 @@ mod provisional_wall;
 mod returns;
 mod source_selector;
 mod stockpile;
+mod wall;
 mod wheelbarrow;
 
 use crate::systems::familiar_ai::decide::task_management::{AssignTaskContext, ReservationShadow};
@@ -53,6 +54,10 @@ pub fn assign_haul(
     }
 
     if floor::assign_haul_to_floor_construction(task_pos, already_commanded, ctx, queries, shadow) {
+        return true;
+    }
+
+    if wall::assign_haul_to_wall_construction(task_pos, already_commanded, ctx, queries, shadow) {
         return true;
     }
 

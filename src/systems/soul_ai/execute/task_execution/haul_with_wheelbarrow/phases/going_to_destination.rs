@@ -49,8 +49,22 @@ pub fn handle(
                     reachable,
                     is_near_target_or_dest(soul_pos, site_pos, ctx.dest.0),
                 )
+            } else if let Ok((_, site, _)) = ctx.queries.storage.wall_sites.get(stockpile_entity) {
+                let site_pos = site.material_center;
+                let reachable = update_destination_to_adjacent(
+                    ctx.dest,
+                    site_pos,
+                    ctx.path,
+                    soul_pos,
+                    world_map,
+                    ctx.pf_context,
+                );
+                (
+                    reachable,
+                    is_near_target_or_dest(soul_pos, site_pos, ctx.dest.0),
+                )
             } else {
-                info!("WB_HAUL: Destination stockpile/floor-site not found, canceling");
+                info!("WB_HAUL: Destination stockpile/site not found, canceling");
                 cancel::cancel_wheelbarrow_task(ctx, &data, commands);
                 return;
             }

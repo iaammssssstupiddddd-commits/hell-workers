@@ -24,6 +24,14 @@ pub const FLOOR_POUR_DURATION_SECS: f32 = 2.0;
 pub const FLOOR_CURING_DURATION_SECS: f32 = 5.0;
 pub const FLOOR_CONSTRUCTION_PRIORITY: u32 = 10;
 
+// ----- 壁建築 (Wall Construction) -----
+pub const WALL_WOOD_PER_TILE: u32 = 1;
+pub const WALL_MUD_PER_TILE: u32 = 1;
+pub const WALL_FRAME_DURATION_SECS: f32 = 3.0;
+pub const WALL_COAT_DURATION_SECS: f32 = 2.0;
+pub const WALL_FRAME_PRIORITY: u32 = 10;
+pub const WALL_COAT_PRIORITY: u32 = 10;
+
 // ----- 精製 (Refining) -----
 pub const SAND_DROP_AMOUNT: u32 = 1;
 pub const BONE_DROP_AMOUNT: u32 = 1;

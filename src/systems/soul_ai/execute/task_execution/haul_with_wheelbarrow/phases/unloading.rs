@@ -28,6 +28,8 @@ fn has_pending_wheelbarrow_task(ctx: &TaskExecutionContext) -> bool {
 
             match request.kind {
                 TransportRequestKind::DepositToStockpile
+                | TransportRequestKind::DeliverToFloorConstruction
+                | TransportRequestKind::DeliverToWallConstruction
                 | TransportRequestKind::DeliverToMixerSolid => true,
                 TransportRequestKind::DeliverToBlueprint => {
                     request.resource_type.requires_wheelbarrow()
@@ -118,6 +120,29 @@ pub fn handle(
                     unloaded_count += 1;
                 }
             } else if let Ok((_, site, _)) = ctx.queries.storage.floor_sites.get(dest_stockpile) {
+                let site_pos = site.material_center;
+                for (index, (item_entity, _res_type_opt)) in item_types.iter().enumerate() {
+                    let offset = Vec2::new((index as f32) * 2.0, 0.0);
+                    let drop_pos = site_pos + offset;
+                    commands.entity(*item_entity).insert((
+                        Visibility::Visible,
+                        Transform::from_xyz(drop_pos.x, drop_pos.y, Z_ITEM_PICKUP),
+                    ));
+                    commands.entity(*item_entity).remove::<LoadedIn>();
+                    commands
+                        .entity(*item_entity)
+                        .remove::<crate::relationships::DeliveringTo>();
+                    commands
+                        .entity(*item_entity)
+                        .remove::<crate::systems::jobs::IssuedBy>();
+                    commands
+                        .entity(*item_entity)
+                        .remove::<crate::relationships::TaskWorkers>();
+                    commands.entity(*item_entity).remove::<StoredIn>();
+                    destination_store_count += 1;
+                    unloaded_count += 1;
+                }
+            } else if let Ok((_, site, _)) = ctx.queries.storage.wall_sites.get(dest_stockpile) {
                 let site_pos = site.material_center;
                 for (index, (item_entity, _res_type_opt)) in item_types.iter().enumerate() {
                     let offset = Vec2::new((index as f32) * 2.0, 0.0);

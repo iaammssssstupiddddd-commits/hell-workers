@@ -9,8 +9,8 @@ use bevy::prelude::*;
 use super::task_handler::TaskHandler;
 use crate::systems::soul_ai::execute::task_execution::types::{
     AssignedTask, BuildData, CoatWallData, CollectBoneData, CollectSandData, GatherData,
-    GatherWaterData, HaulData, HaulToBlueprintData, HaulToMixerData, HaulWaterToMixerData,
-    PourFloorTileData, RefineData, ReinforceFloorTileData,
+    FrameWallTileData, GatherWaterData, HaulData, HaulToBlueprintData, HaulToMixerData,
+    HaulWaterToMixerData, PourFloorTileData, RefineData, ReinforceFloorTileData,
 };
 
 impl TaskHandler<GatherData> for AssignedTask {
@@ -284,7 +284,23 @@ impl TaskHandler<CoatWallData> for AssignedTask {
         _breakdown_opt: Option<&StressBreakdown>,
     ) {
         crate::systems::soul_ai::execute::task_execution::coat_wall::handle_coat_wall_task(
-            ctx, data.wall, data.phase, commands, time, world_map,
+            ctx, data.tile, data.site, data.wall, data.phase, commands, time, world_map,
+        );
+    }
+}
+
+impl TaskHandler<FrameWallTileData> for AssignedTask {
+    fn execute(
+        ctx: &mut TaskExecutionContext,
+        data: FrameWallTileData,
+        commands: &mut Commands,
+        _game_assets: &Res<GameAssets>,
+        time: &Res<Time>,
+        world_map: &Res<WorldMap>,
+        _breakdown_opt: Option<&StressBreakdown>,
+    ) {
+        crate::systems::soul_ai::execute::task_execution::frame_wall::handle_frame_wall_task(
+            ctx, data.tile, data.site, data.phase, commands, time, world_map,
         );
     }
 }

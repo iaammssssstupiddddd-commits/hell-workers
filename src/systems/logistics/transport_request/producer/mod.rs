@@ -8,6 +8,7 @@ pub mod stockpile_group;
 pub mod tank_water_request;
 pub mod task_area;
 pub mod upsert;
+pub mod wall_construction;
 pub mod wheelbarrow;
 
 use crate::systems::command::TaskArea;

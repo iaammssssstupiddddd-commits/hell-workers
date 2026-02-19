@@ -10,6 +10,11 @@ use crate::world::map::WorldMap;
 
 use super::rest_area::{has_arrived_at_rest_area, nearest_walkable_adjacent_to_rest_area};
 
+fn has_reached_rest_entry(current_pos: Vec2, destination: Vec2, rest_area_center: Vec2) -> bool {
+    let near_destination = current_pos.distance_squared(destination) <= (TILE_SIZE * 0.75).powi(2);
+    near_destination && has_arrived_at_rest_area(current_pos, rest_area_center)
+}
+
 /// Resting|GoingToRest 状態の場合の休憩所フローを処理。
 /// rest_area_target は呼び出し元で事前に解決すること。
 /// 継続すべきなら true を返す
@@ -35,7 +40,7 @@ pub fn process_resting_or_going_to_rest(
         idle.behavior = IdleBehavior::GoingToRest;
     }
 
-    if has_arrived_at_rest_area(current_pos, rest_area_pos) {
+    if has_reached_rest_entry(current_pos, dest.0, rest_area_pos) {
         if let Some(p) = participating_in {
             request_writer.write(IdleBehaviorRequest {
                 entity,
@@ -58,9 +63,7 @@ pub fn process_resting_or_going_to_rest(
         return true;
     }
 
-    let destination_changed = dest.0.distance_squared(rest_area_pos) > (TILE_SIZE * 2.5).powi(2);
-    let needs_new_path = destination_changed
-        || path.waypoints.is_empty()
+    let needs_new_path = path.waypoints.is_empty()
         || path.current_index >= path.waypoints.len();
     if needs_new_path {
         idle.idle_timer = 0.0;
@@ -92,7 +95,7 @@ pub fn process_wants_rest_area(
         return false;
     };
 
-    if has_arrived_at_rest_area(current_pos, rest_area_pos) {
+    if has_reached_rest_entry(current_pos, dest.0, rest_area_pos) {
         if let Some(p) = participating_in {
             request_writer.write(IdleBehaviorRequest {
                 entity,
@@ -123,9 +126,7 @@ pub fn process_wants_rest_area(
             operation: IdleBehaviorOperation::LeaveGathering { spot_entity: p.0 },
         });
     }
-    let destination_changed = dest.0.distance_squared(rest_area_pos) > (TILE_SIZE * 2.5).powi(2);
-    let needs_new_path = destination_changed
-        || path.waypoints.is_empty()
+    let needs_new_path = path.waypoints.is_empty()
         || path.current_index >= path.waypoints.len();
 
     idle.behavior = IdleBehavior::GoingToRest;
