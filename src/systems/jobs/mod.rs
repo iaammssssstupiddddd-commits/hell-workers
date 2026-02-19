@@ -3,6 +3,7 @@ use bevy::prelude::*;
 use std::collections::HashMap;
 mod building_completion;
 pub mod floor_construction;
+pub mod wall_construction;
 mod mud_mixer;
 pub use building_completion::building_completion_system;
 pub use floor_construction::*;
@@ -182,6 +183,7 @@ pub enum WorkType {
     WheelbarrowHaul,    // 手押し車で一括運搬
     ReinforceFloorTile, // 床タイルの骨補強
     PourFloorTile,      // 床タイルへの泥注入
+    FrameWallTile,      // 壁タイルの木材フレーミング
     CoatWall,           // 仮設壁への泥塗布
 }
 

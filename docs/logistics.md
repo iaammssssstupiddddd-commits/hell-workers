@@ -70,6 +70,7 @@ Hell-Workers の物流は、`TransportRequest` を中心にした自動発行 + 
 | `DeliverToBlueprint` | `Haul` | `blueprint_auto_haul_system` | Blueprint | 割り当て時に必要資材を遅延解決 |
 | `DeliverToMixerSolid` | `HaulToMixer` | `mud_mixer_auto_haul_system` | Mixer | 割り当て時に Sand/Rock を遅延解決（Sand は原則猫車必須、近接ピックドロップ完結時は徒歩許可） |
 | `DeliverToFloorConstruction` | `Haul` | `floor_construction_auto_haul_system` | FloorConstructionSite | 割り当て時に Bone / StasisMud ソースを遅延解決（搬入先は `site.material_center`） |
+| `DeliverToWallConstruction` | `Haul` | `wall_construction_auto_haul_system` | WallConstructionSite | 割り当て時に Wood / StasisMud ソースを遅延解決（搬入先は `site.material_center`） |
 | `DeliverToProvisionalWall` | `Haul` | `provisional_wall_auto_haul_system` | Wall (Building) | 割り当て時に StasisMud ソースを遅延解決（搬入先は壁足元） |
 | `DeliverWaterToMixer` | `HaulWaterToMixer` | `mud_mixer_auto_haul_system` | Mixer | 割り当て時に tank + bucket を遅延解決 |
 | `GatherWaterToTank` | `GatherWater` | `tank_water_request_system` | Tank | 割り当て時に bucket を遅延解決 |
@@ -188,6 +189,14 @@ Hell-Workers の物流は、`TransportRequest` を中心にした自動発行 + 
 - request の anchor は壁エンティティで、割り当て時に `StasisMud` ソースを遅延解決する。
 - `provisional_wall_material_delivery_sync_system` が壁近傍へ落ちた `StasisMud` を消費して `mud_delivered = true` に更新する。
 - `provisional_wall_designation_system` が準備完了した壁へ `WorkType::CoatWall` を付与し、塗布タスクへ遷移させる。
+- 互換レイヤーとして残存しており、`WallConstructionSite` 配下で管理される壁タイル実体（`spawned_wall`）は対象から除外される。
+
+### 4.10 壁建築搬入 (`DeliverToWallConstruction`)
+- `wall_construction_auto_haul_system` が site ごとに不足資材を算出し request を upsert。
+- `Framing` フェーズでは `Wood`、`Coating` フェーズでは `StasisMud` を要求。
+- 搬入先は常に `WallConstructionSite.material_center`。
+- `wall_material_delivery_sync_system` が `material_center` 周辺の資材を消費し、各タイルの `wood_delivered` / `mud_delivered` を更新する。
+- `wall_tile_designation_system` が `FramingReady -> WorkType::FrameWallTile`、`CoatingReady -> WorkType::CoatWall` を付与する。
 
 ## 5. 手押し車運搬
 
@@ -208,6 +217,7 @@ Hell-Workers の物流は、`TransportRequest` を中心にした自動発行 + 
   - `DeliverToBlueprint`（`Sand` / `StasisMud`）
   - `DeliverToMixerSolid`（`Sand`）
   - `DeliverToFloorConstruction`（`StasisMud` / 直採取 `Bone`）
+  - `DeliverToWallConstruction`（`StasisMud`）
 - 猫車不足時は request は `Pending` のまま待機する。
 
 - `resolve_wheelbarrow_batch_for_stockpile` が以下を満たすと一括運搬を選択:

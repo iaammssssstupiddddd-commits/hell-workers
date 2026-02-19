@@ -31,6 +31,7 @@ pub fn designation_visual_system(
             WorkType::CollectBone => Color::srgb(0.9, 0.9, 0.8), // Bone white
             WorkType::ReinforceFloorTile => Color::srgb(0.0, 0.5, 1.0), // Same as Build
             WorkType::PourFloorTile => Color::srgb(0.0, 0.5, 1.0), // Same as Build
+            WorkType::FrameWallTile => Color::srgb(0.0, 0.5, 1.0), // Same as Build
             WorkType::CoatWall => Color::srgb(0.0, 0.5, 1.0),    // Same as Build
         };
 

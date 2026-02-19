@@ -3,8 +3,8 @@ mod haul;
 mod water;
 
 pub use basic::{
-    issue_build, issue_coat_wall, issue_collect_bone, issue_collect_sand, issue_gather,
-    issue_pour_floor, issue_refine, issue_reinforce_floor,
+    issue_build, issue_coat_wall, issue_collect_bone, issue_collect_sand, issue_frame_wall,
+    issue_gather, issue_pour_floor, issue_refine, issue_reinforce_floor,
 };
 pub use haul::{
     issue_collect_bone_with_wheelbarrow_to_blueprint, issue_collect_bone_with_wheelbarrow_to_floor,

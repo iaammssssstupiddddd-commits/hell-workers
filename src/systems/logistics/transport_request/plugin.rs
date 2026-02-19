@@ -13,6 +13,10 @@ use super::producer::{
     },
     tank_water_request::tank_water_request_system,
     task_area::task_area_auto_haul_system,
+    wall_construction::{
+        wall_construction_auto_haul_system, wall_material_delivery_sync_system,
+        wall_tile_designation_system,
+    },
     wheelbarrow::wheelbarrow_auto_haul_system,
 };
 use super::state_machine::transport_request_state_sync_system;
@@ -86,6 +90,9 @@ impl Plugin for TransportRequestPlugin {
                     floor_construction_auto_haul_system,
                     floor_material_delivery_sync_system.after(floor_construction_auto_haul_system),
                     floor_tile_designation_system.after(floor_material_delivery_sync_system),
+                    wall_construction_auto_haul_system,
+                    wall_material_delivery_sync_system.after(wall_construction_auto_haul_system),
+                    wall_tile_designation_system.after(wall_material_delivery_sync_system),
                     provisional_wall_auto_haul_system,
                     provisional_wall_material_delivery_sync_system
                         .after(provisional_wall_auto_haul_system),

@@ -69,6 +69,34 @@ pub fn compute_remaining_floor_mud(
     })
 }
 
+/// 壁建設サイトへの木材の残需要
+pub fn compute_remaining_wall_wood(
+    site_entity: Entity,
+    queries: &TaskAssignmentQueries<'_, '_>,
+) -> u32 {
+    compute_remaining_wall_with_incoming(site_entity, ResourceType::Wood, queries, |tile| {
+        if tile.state == crate::systems::jobs::wall_construction::WallTileState::WaitingWood {
+            crate::constants::WALL_WOOD_PER_TILE.saturating_sub(tile.wood_delivered)
+        } else {
+            0
+        }
+    })
+}
+
+/// 壁建設サイトへの泥の残需要
+pub fn compute_remaining_wall_mud(
+    site_entity: Entity,
+    queries: &TaskAssignmentQueries<'_, '_>,
+) -> u32 {
+    compute_remaining_wall_with_incoming(site_entity, ResourceType::StasisMud, queries, |tile| {
+        if tile.state == crate::systems::jobs::wall_construction::WallTileState::WaitingMud {
+            crate::constants::WALL_MUD_PER_TILE.saturating_sub(tile.mud_delivered)
+        } else {
+            0
+        }
+    })
+}
+
 fn compute_remaining_with_incoming(
     anchor_entity: Entity,
     queries: &TaskAssignmentQueries<'_, '_>,
@@ -90,6 +118,43 @@ fn compute_remaining_with_incoming(
         .incoming_deliveries_query
         .get(anchor_entity)
         .map(|inc| inc.len() as u32)
+        .unwrap_or(0);
+
+    needed.saturating_sub(incoming)
+}
+
+fn compute_remaining_wall_with_incoming(
+    anchor_entity: Entity,
+    resource_type: ResourceType,
+    queries: &TaskAssignmentQueries<'_, '_>,
+    needed_per_tile: impl Fn(&crate::systems::jobs::wall_construction::WallTileBlueprint) -> u32,
+) -> u32 {
+    let mut needed = 0u32;
+
+    for tile in queries
+        .storage
+        .wall_tiles
+        .iter()
+        .filter(|tile| tile.parent_site == anchor_entity)
+    {
+        needed += needed_per_tile(tile);
+    }
+
+    let incoming = queries
+        .reservation
+        .incoming_deliveries_query
+        .get(anchor_entity)
+        .map(|inc| {
+            inc.iter()
+                .filter(|&&item| {
+                    queries
+                        .reservation
+                        .resources
+                        .get(item)
+                        .is_ok_and(|resource_item| resource_item.0 == resource_type)
+                })
+                .count() as u32
+        })
         .unwrap_or(0);
 
     needed.saturating_sub(incoming)

@@ -2,7 +2,7 @@ use crate::events::ResourceReservationOp;
 use crate::systems::familiar_ai::decide::task_management::{AssignTaskContext, ReservationShadow};
 use crate::systems::jobs::WorkType;
 use crate::systems::soul_ai::execute::task_execution::types::{
-    BuildPhase, CoatWallPhase, GatherPhase, PourFloorPhase, ReinforceFloorPhase,
+    BuildPhase, CoatWallPhase, FrameWallPhase, GatherPhase, PourFloorPhase, ReinforceFloorPhase,
 };
 use bevy::prelude::*;
 
@@ -248,11 +248,44 @@ pub fn issue_coat_wall(
     queries: &mut crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
     shadow: &mut ReservationShadow,
 ) {
+    let (tile_entity, site_entity, wall_entity) =
+        if let Ok(tile) = queries.storage.wall_tiles.get(ctx.task_entity) {
+            let Some(wall_entity) = tile.spawned_wall else {
+                error!(
+                    "issue_coat_wall: Tile {:?} has no spawned wall",
+                    ctx.task_entity
+                );
+                return;
+            };
+            (ctx.task_entity, tile.parent_site, wall_entity)
+        } else if let Ok((_, building, provisional_opt)) = queries.storage.buildings.get(ctx.task_entity)
+        {
+            if building.kind != crate::systems::jobs::BuildingType::Wall
+                || !building.is_provisional
+                || provisional_opt.is_none_or(|provisional| !provisional.mud_delivered)
+            {
+                error!(
+                    "issue_coat_wall: Legacy wall {:?} is not ready",
+                    ctx.task_entity
+                );
+                return;
+            }
+            (ctx.task_entity, Entity::PLACEHOLDER, ctx.task_entity)
+        } else {
+            error!(
+                "issue_coat_wall: Task entity {:?} is not coatable",
+                ctx.task_entity
+            );
+            return;
+    };
+
     let assigned_task =
         crate::systems::soul_ai::execute::task_execution::types::AssignedTask::CoatWall(
             crate::systems::soul_ai::execute::task_execution::types::CoatWallData {
-                wall: ctx.task_entity,
-                phase: CoatWallPhase::GoingToWall,
+                tile: tile_entity,
+                site: site_entity,
+                wall: wall_entity,
+                phase: CoatWallPhase::GoingToMaterialCenter,
             },
         );
     let reservation_ops = vec![ResourceReservationOp::ReserveSource {
@@ -264,6 +297,47 @@ pub fn issue_coat_wall(
         queries,
         shadow,
         WorkType::CoatWall,
+        task_pos,
+        assigned_task,
+        reservation_ops,
+        already_commanded,
+    );
+}
+
+pub fn issue_frame_wall(
+    task_pos: Vec2,
+    already_commanded: bool,
+    ctx: &AssignTaskContext<'_>,
+    queries: &mut crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
+    shadow: &mut ReservationShadow,
+) {
+    let site_entity = if let Ok(tile) = queries.storage.wall_tiles.get(ctx.task_entity) {
+        tile.parent_site
+    } else {
+        error!(
+            "issue_frame_wall: Task entity {:?} is not a WallTileBlueprint",
+            ctx.task_entity
+        );
+        return;
+    };
+
+    let assigned_task =
+        crate::systems::soul_ai::execute::task_execution::types::AssignedTask::FrameWallTile(
+            crate::systems::soul_ai::execute::task_execution::types::FrameWallTileData {
+                tile: ctx.task_entity,
+                site: site_entity,
+                phase: FrameWallPhase::GoingToMaterialCenter,
+            },
+        );
+    let reservation_ops = vec![ResourceReservationOp::ReserveSource {
+        source: ctx.task_entity,
+        amount: 1,
+    }];
+    submit_assignment(
+        ctx,
+        queries,
+        shadow,
+        WorkType::FrameWallTile,
         task_pos,
         assigned_task,
         reservation_ops,

@@ -47,7 +47,7 @@ pub fn handle_haul_task(
                         "HAUL: Soul {:?} cannot reach item {:?}, canceling",
                         ctx.soul_entity, item
                     );
-                    cancel::cancel_haul_to_stockpile(ctx, item, stockpile);
+                    cancel::cancel_haul_to_stockpile(ctx, item, stockpile, commands);
                     return;
                 }
 
@@ -98,7 +98,25 @@ pub fn handle_haul_task(
                                 "HAUL: Soul {:?} cannot reach floor site {:?}, canceling",
                                 ctx.soul_entity, stockpile
                             );
-                            cancel::cancel_haul_to_stockpile(ctx, item, stockpile);
+                            cancel::cancel_haul_to_stockpile(ctx, item, stockpile, commands);
+                            return;
+                        }
+                    } else if let Ok((_, site, _)) = ctx.queries.storage.wall_sites.get(stockpile)
+                    {
+                        let reachable = update_destination_to_adjacent(
+                            ctx.dest,
+                            site.material_center,
+                            ctx.path,
+                            soul_pos,
+                            world_map,
+                            ctx.pf_context,
+                        );
+                        if !reachable {
+                            info!(
+                                "HAUL: Soul {:?} cannot reach wall site {:?}, canceling",
+                                ctx.soul_entity, stockpile
+                            );
+                            cancel::cancel_haul_to_stockpile(ctx, item, stockpile, commands);
                             return;
                         }
                     } else if let Ok((wall_transform, building, provisional_opt)) =
@@ -123,11 +141,11 @@ pub fn handle_haul_task(
                                     "HAUL: Soul {:?} cannot reach provisional wall {:?}, canceling",
                                     ctx.soul_entity, stockpile
                                 );
-                                cancel::cancel_haul_to_stockpile(ctx, item, stockpile);
+                                cancel::cancel_haul_to_stockpile(ctx, item, stockpile, commands);
                                 return;
                             }
                         } else {
-                            cancel::cancel_haul_to_stockpile(ctx, item, stockpile);
+                            cancel::cancel_haul_to_stockpile(ctx, item, stockpile, commands);
                             return;
                         }
                     }
@@ -143,7 +161,7 @@ pub fn handle_haul_task(
                     info!("HAUL: Soul {:?} picked up item {:?}", ctx.soul_entity, item);
                 }
             } else {
-                cancel::cancel_haul_to_stockpile(ctx, item, stockpile);
+                cancel::cancel_haul_to_stockpile(ctx, item, stockpile, commands);
             }
         }
         HaulPhase::GoingToStockpile => {
@@ -178,7 +196,36 @@ pub fn handle_haul_task(
                         "HAUL: Soul {:?} cannot reach floor site {:?}, canceling",
                         ctx.soul_entity, stockpile
                     );
-                    cancel::cancel_haul_to_stockpile(ctx, item, stockpile);
+                    cancel::cancel_haul_to_stockpile(ctx, item, stockpile, commands);
+                    return;
+                }
+
+                if is_near_target_or_dest(soul_pos, site_pos, ctx.dest.0) {
+                    *ctx.task = AssignedTask::Haul(
+                        crate::systems::soul_ai::execute::task_execution::types::HaulData {
+                            item,
+                            stockpile,
+                            phase: HaulPhase::Dropping,
+                        },
+                    );
+                    ctx.path.waypoints.clear();
+                }
+            } else if let Ok((_, site, _)) = ctx.queries.storage.wall_sites.get(stockpile) {
+                let site_pos = site.material_center;
+                let reachable = update_destination_to_adjacent(
+                    ctx.dest,
+                    site_pos,
+                    ctx.path,
+                    soul_pos,
+                    world_map,
+                    ctx.pf_context,
+                );
+                if !reachable {
+                    info!(
+                        "HAUL: Soul {:?} cannot reach wall site {:?}, canceling",
+                        ctx.soul_entity, stockpile
+                    );
+                    cancel::cancel_haul_to_stockpile(ctx, item, stockpile, commands);
                     return;
                 }
 
@@ -201,7 +248,7 @@ pub fn handle_haul_task(
                         .as_ref()
                         .is_some_and(|provisional| !provisional.mud_delivered);
                 if !can_deliver_to_wall {
-                    cancel::cancel_haul_to_stockpile(ctx, item, stockpile);
+                    cancel::cancel_haul_to_stockpile(ctx, item, stockpile, commands);
                     return;
                 }
 
@@ -219,7 +266,7 @@ pub fn handle_haul_task(
                         "HAUL: Soul {:?} cannot reach provisional wall {:?}, canceling",
                         ctx.soul_entity, stockpile
                     );
-                    cancel::cancel_haul_to_stockpile(ctx, item, stockpile);
+                    cancel::cancel_haul_to_stockpile(ctx, item, stockpile, commands);
                     return;
                 }
 
@@ -370,6 +417,27 @@ pub fn handle_haul_task(
             } else {
                 if let Ok((_, site, _)) = ctx.queries.storage.floor_sites.get(stockpile) {
                     // Floor construction transport: drop resource at site material center.
+                    commands.entity(item).insert((
+                        Visibility::Visible,
+                        Transform::from_xyz(
+                            site.material_center.x,
+                            site.material_center.y,
+                            Z_ITEM_PICKUP,
+                        ),
+                    ));
+                    commands
+                        .entity(item)
+                        .remove::<crate::relationships::StoredIn>();
+                    commands
+                        .entity(item)
+                        .remove::<crate::relationships::DeliveringTo>();
+                    commands
+                        .entity(item)
+                        .remove::<crate::systems::jobs::IssuedBy>();
+                    commands
+                        .entity(item)
+                        .remove::<crate::relationships::TaskWorkers>();
+                } else if let Ok((_, site, _)) = ctx.queries.storage.wall_sites.get(stockpile) {
                     commands.entity(item).insert((
                         Visibility::Visible,
                         Transform::from_xyz(

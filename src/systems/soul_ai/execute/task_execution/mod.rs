@@ -11,6 +11,7 @@ pub mod context;
 pub mod gather;
 pub mod gather_water;
 pub mod handler;
+pub mod frame_wall;
 pub mod haul;
 pub mod haul_to_blueprint;
 pub mod haul_to_mixer;
