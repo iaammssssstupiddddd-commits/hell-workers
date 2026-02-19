@@ -11,6 +11,7 @@ pub fn menu_visibility_system(
             With<ArchitectSubMenu>,
             Without<ZonesSubMenu>,
             Without<OrdersSubMenu>,
+            Without<DreamSubMenu>,
         ),
     >,
     mut q_zones: Query<
@@ -19,6 +20,7 @@ pub fn menu_visibility_system(
             With<ZonesSubMenu>,
             Without<ArchitectSubMenu>,
             Without<OrdersSubMenu>,
+            Without<DreamSubMenu>,
         ),
     >,
     mut q_orders: Query<
@@ -27,6 +29,16 @@ pub fn menu_visibility_system(
             With<OrdersSubMenu>,
             Without<ArchitectSubMenu>,
             Without<ZonesSubMenu>,
+            Without<DreamSubMenu>,
+        ),
+    >,
+    mut q_dream: Query<
+        &mut Node,
+        (
+            With<DreamSubMenu>,
+            Without<ArchitectSubMenu>,
+            Without<ZonesSubMenu>,
+            Without<OrdersSubMenu>,
         ),
     >,
 ) {
@@ -46,6 +58,13 @@ pub fn menu_visibility_system(
     }
     if let Ok(mut node) = q_orders.single_mut() {
         node.display = if matches!(*menu_state, MenuState::Orders) {
+            Display::Flex
+        } else {
+            Display::None
+        };
+    }
+    if let Ok(mut node) = q_dream.single_mut() {
+        node.display = if matches!(*menu_state, MenuState::Dream) {
             Display::Flex
         } else {
             Display::None

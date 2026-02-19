@@ -63,7 +63,11 @@ pub fn process_resting_or_going_to_rest(
         return true;
     }
 
-    let needs_new_path = path.waypoints.is_empty()
+    // dest.0 が休憩所の近傍を指していない場合は古いパス（ワンダリング等）とみなしリセット。
+    // ただしパスファインディングが設定した代替経路（休憩所隣接タイル）は保護する。
+    let dest_is_near_rest_area = has_arrived_at_rest_area(dest.0, rest_area_pos);
+    let needs_new_path = !dest_is_near_rest_area
+        || path.waypoints.is_empty()
         || path.current_index >= path.waypoints.len();
     if needs_new_path {
         idle.idle_timer = 0.0;
@@ -126,7 +130,11 @@ pub fn process_wants_rest_area(
             operation: IdleBehaviorOperation::LeaveGathering { spot_entity: p.0 },
         });
     }
-    let needs_new_path = path.waypoints.is_empty()
+
+    // dest.0 が休憩所の近傍を指していない場合は古いパスとみなしリセット。
+    let dest_is_near_rest_area = has_arrived_at_rest_area(dest.0, rest_area_pos);
+    let needs_new_path = !dest_is_near_rest_area
+        || path.waypoints.is_empty()
         || path.current_index >= path.waypoints.len();
 
     idle.behavior = IdleBehavior::GoingToRest;

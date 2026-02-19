@@ -18,6 +18,8 @@ pub(super) struct AreaEditDrag {
 #[derive(Resource, Default)]
 pub struct AreaEditSession {
     pub(super) active_drag: Option<AreaEditDrag>,
+    /// Dream植林の保留リクエスト（DreamPlantingモードでドラッグ確定時にセット）
+    pub pending_dream_planting: Option<(Vec2, Vec2)>,
 }
 
 impl AreaEditSession {

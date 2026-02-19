@@ -30,6 +30,7 @@ pub fn get_drag_start(mode: TaskMode) -> Option<Vec2> {
         TaskMode::ZoneRemoval(_, s) => s,
         TaskMode::FloorPlace(s) => s,
         TaskMode::WallPlace(s) => s,
+        TaskMode::DreamPlanting(s) => s,
         _ => None,
     }
 }
@@ -42,6 +43,7 @@ pub fn get_indicator_color(mode: TaskMode) -> LinearRgba {
         TaskMode::ZoneRemoval(_, _) => LinearRgba::from(Color::srgba(1.0, 0.2, 0.2, 0.5)), // 削除は赤
         TaskMode::FloorPlace(_) => LinearRgba::from(Color::srgba(1.0, 1.0, 1.0, 0.4)),
         TaskMode::WallPlace(_) => LinearRgba::from(Color::srgba(1.0, 1.0, 1.0, 0.4)),
+        TaskMode::DreamPlanting(_) => LinearRgba::from(Color::srgba(0.5, 0.5, 1.0, 0.5)), // Dream は青紫
         _ => LinearRgba::from(Color::srgba(0.2, 1.0, 0.2, 0.5)),
     }
 }

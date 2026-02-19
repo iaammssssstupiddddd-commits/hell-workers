@@ -1,7 +1,8 @@
 //! サブメニュー UI (Architect, Zones, Orders)
 
 use crate::interface::ui::components::{
-    ArchitectSubMenu, MenuAction, MenuButton, OrdersSubMenu, UiInputBlocker, ZonesSubMenu,
+    ArchitectSubMenu, DreamSubMenu, MenuAction, MenuButton, OrdersSubMenu, UiInputBlocker,
+    ZonesSubMenu,
 };
 use crate::interface::ui::theme::UiTheme;
 use crate::systems::jobs::BuildingType;
@@ -19,6 +20,7 @@ pub fn spawn_submenus(
     spawn_architect_submenu(commands, game_assets, theme, parent_entity);
     spawn_zones_submenu(commands, game_assets, theme, parent_entity);
     spawn_orders_submenu(commands, game_assets, theme, parent_entity);
+    spawn_dream_submenu(commands, game_assets, theme, parent_entity);
 }
 
 fn spawn_architect_submenu(
@@ -274,5 +276,61 @@ fn spawn_orders_submenu(
                     ));
                 });
         }
+    });
+}
+
+fn spawn_dream_submenu(
+    commands: &mut Commands,
+    game_assets: &Res<crate::assets::GameAssets>,
+    theme: &UiTheme,
+    parent_entity: Entity,
+) {
+    let submenu = commands
+        .spawn((
+            Node {
+                display: Display::None,
+                width: Val::Px(theme.sizes.submenu_width),
+                height: Val::Auto,
+                position_type: PositionType::Absolute,
+                left: Val::Px(theme.sizes.submenu_left_dream),
+                bottom: Val::Px(theme.spacing.bottom_bar_height),
+                flex_direction: FlexDirection::Column,
+                padding: UiRect::all(Val::Px(5.0)),
+                ..default()
+            },
+            BackgroundColor(theme.colors.submenu_bg),
+            bevy::ui::RelativeCursorPosition::default(),
+            UiInputBlocker,
+            DreamSubMenu,
+        ))
+        .id();
+    commands.entity(parent_entity).add_child(submenu);
+
+    commands.entity(submenu).with_children(|parent| {
+        parent
+            .spawn((
+                Button,
+                Node {
+                    width: Val::Percent(100.0),
+                    height: Val::Px(40.0),
+                    margin: UiRect::bottom(Val::Px(5.0)),
+                    justify_content: JustifyContent::Center,
+                    align_items: AlignItems::Center,
+                    ..default()
+                },
+                BackgroundColor(theme.colors.button_default),
+                MenuButton(MenuAction::SelectDreamPlanting),
+            ))
+            .with_children(|button| {
+                button.spawn((
+                    Text::new("Plant Trees"),
+                    TextFont {
+                        font: game_assets.font_ui.clone(),
+                        font_size: theme.typography.font_size_title,
+                        ..default()
+                    },
+                    TextColor(theme.colors.text_primary),
+                ));
+            });
     });
 }

@@ -21,6 +21,7 @@ use crate::systems::logistics::item_lifetime::despawn_expired_items_system;
 use crate::systems::logistics::transport_request::TransportRequestPlugin;
 use crate::systems::obstacle::obstacle_cleanup_system;
 use crate::systems::soul_ai::SoulAiPlugin;
+use crate::systems::dream_tree_planting::dream_tree_planting_system;
 use crate::world::regrowth::{RegrowthManager, tree_regrowth_system};
 use bevy::prelude::*;
 
@@ -64,6 +65,7 @@ impl Plugin for LogicPlugin {
                 wall_construction_phase_transition_system,
                 wall_construction_completion_system,
                 despawn_expired_items_system,
+                dream_tree_planting_system,
             )
                 .chain()
                 .in_set(GameSystemSet::Logic),
