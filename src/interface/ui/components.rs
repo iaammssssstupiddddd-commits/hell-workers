@@ -121,6 +121,7 @@ pub enum UiSlot {
     TooltipAnchor,
     FpsText,
     DreamPoolText,
+    DreamPoolIcon,
 }
 
 // ============================================================
@@ -212,9 +213,11 @@ pub struct UiInputBlocker;
 #[derive(Component, Default)]
 pub struct DreamPoolPulse {
     pub timer: f32,
+    pub loss_timer: f32,
     pub pending_gain: f32,
     pub last_points: f32,
 }
+
 
 #[derive(Component)]
 pub struct UiRoot;

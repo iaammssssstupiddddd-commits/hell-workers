@@ -139,15 +139,40 @@ pub fn rest_area_dream_particle_spawn_system(
     assets: Res<GameAssets>,
     mut q_rest_areas: Query<(
         Entity,
+        &Transform,
         &RestArea,
         Option<&RestAreaOccupants>,
         &mut DreamVisualState,
     )>,
+    q_camera: Query<(&Camera, &GlobalTransform), With<crate::interface::camera::MainCamera>>,
+    q_ui_root: Query<Entity, With<crate::interface::ui::components::UiRoot>>,
+    ui_nodes: Res<crate::interface::ui::components::UiNodeRegistry>,
+    q_ui_transform: Query<(&ComputedNode, &UiGlobalTransform)>,
 ) {
     let dt = time.delta_secs();
     let mut rng = rand::thread_rng();
 
-    for (rest_area_entity, rest_area, occupants_opt, mut visual_state) in q_rest_areas.iter_mut() {
+    let Some((camera, camera_transform)) = q_camera.iter().next() else {
+        return;
+    };
+    let Some(ui_root) = q_ui_root.iter().next() else {
+        return;
+    };
+
+    let viewport_size = camera
+        .logical_viewport_size()
+        .unwrap_or(Vec2::new(1920.0, 1080.0));
+
+    let mut target_pos = Vec2::new(viewport_size.x - 80.0, 40.0);
+
+    if let Some(entity) = ui_nodes.get_slot(crate::interface::ui::components::UiSlot::DreamPoolIcon) {
+        if let Ok((computed, transform)) = q_ui_transform.get(entity) {
+            let center = transform.translation * computed.inverse_scale_factor();
+            target_pos = center;
+        }
+    }
+
+    for (rest_area_entity, transform, rest_area, occupants_opt, mut visual_state) in q_rest_areas.iter_mut() {
         visual_state.particle_cooldown = (visual_state.particle_cooldown - dt).max(0.0);
 
         let occupant_count = occupants_opt
@@ -160,37 +185,25 @@ pub fn rest_area_dream_particle_spawn_system(
             continue;
         }
 
-        // 入居者数に応じたスケーリング係数（1名のときは1.0、増えると大きくなるが見た目の破綻を防ぐため最大を制限）
         let scale_factor = (occupant_count as f32).sqrt().clamp(1.0, 3.0);
-
-        // パーティクル密度の増加（間隔を短くする）
-        let base_interval = DREAM_PARTICLE_INTERVAL_VIVID; // 休憩所ボーナスとしてデフォルトでVivid相当の活発さとする
+        let base_interval = DREAM_PARTICLE_INTERVAL_VIVID;
         let current_interval = base_interval / scale_factor;
-
         let max_particles = (DREAM_PARTICLE_MAX_PER_SOUL as f32 * scale_factor) as u8;
 
         if visual_state.particle_cooldown > 0.0 || visual_state.active_particles >= max_particles {
             continue;
         }
 
-        // DreamQualityとしては（大量に集まっているイメージで）VividDreamとして視覚化する
         let particle_quality = DreamQuality::VividDream;
         let particle_lifetime = particle_lifetime_for_quality(particle_quality);
         let color = particle_color_for_quality(particle_quality);
 
-        // 人数が増えるほど高く速く飛ぶようにする
         let velocity_y = rng.gen_range(12.0..=18.0) * (1.0 + (scale_factor - 1.0) * 0.5);
         let velocity = Vec2::new(rng.gen_range(-5.0..=5.0) * scale_factor, velocity_y);
 
-        // スポーン範囲も建物のサイズや人数に合わせて広げる
-        let x_offset = rng.gen_range(-DREAM_PARTICLE_SPAWN_OFFSET..=DREAM_PARTICLE_SPAWN_OFFSET)
-            * scale_factor;
-        // 建物から湧き出るように少し高めからスタート
+        let x_offset = rng.gen_range(-DREAM_PARTICLE_SPAWN_OFFSET..=DREAM_PARTICLE_SPAWN_OFFSET) * scale_factor;
         let y_offset = DREAM_PARTICLE_SPAWN_OFFSET * 2.0 + rng.gen_range(0.0..=8.0);
-
-        // パーティクルのサイズもスケールさせる
-        let size = rng.gen_range(DREAM_PARTICLE_SIZE_MIN..=DREAM_PARTICLE_SIZE_MAX)
-            * (1.0 + (scale_factor - 1.0) * 0.5);
+        let size = rng.gen_range(DREAM_PARTICLE_SIZE_MIN..=DREAM_PARTICLE_SIZE_MAX) * (1.0 + (scale_factor - 1.0) * 0.5);
 
         commands.spawn((
             DreamParticle {
@@ -211,6 +224,19 @@ pub fn rest_area_dream_particle_spawn_system(
             ChildOf(rest_area_entity),
             Name::new("RestAreaDreamParticle"),
         ));
+
+        let world_pos = transform.translation + Vec3::new(x_offset, y_offset, 0.0);
+        if let Ok(start_pos) = camera.world_to_viewport(camera_transform, world_pos) {
+            super::ui_particle::spawn_ui_particle(
+                &mut commands,
+                start_pos,
+                target_pos,
+                viewport_size, // ADDED
+                1.5,
+                ui_root,
+                &assets,
+            );
+        }
 
         visual_state.active_particles = visual_state.active_particles.saturating_add(1);
         visual_state.particle_cooldown = current_interval;
