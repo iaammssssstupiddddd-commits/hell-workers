@@ -1,5 +1,6 @@
 use super::super::{
-    Blueprint, BonePile, BuildingType, MudMixerStorage, RestArea, SandPile, TaskSlots,
+    Blueprint, BonePile, BridgeMarker, BuildingType, MudMixerStorage, RestArea, SandPile,
+    TaskSlots,
 };
 use crate::assets::GameAssets;
 use crate::constants::{
@@ -49,6 +50,10 @@ pub(super) fn apply_building_specific_post_process(
 
     if bp.kind == BuildingType::WheelbarrowParking {
         setup_wheelbarrow_parking(commands, building_entity, transform, game_assets);
+    }
+
+    if bp.kind == BuildingType::Bridge {
+        commands.entity(building_entity).insert(BridgeMarker);
     }
 
     spawn_completion_text(commands, transform, game_assets);

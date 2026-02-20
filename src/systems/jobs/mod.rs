@@ -21,6 +21,7 @@ pub enum BuildingType {
     Tank,
     MudMixer,
     RestArea,
+    Bridge,
     SandPile,
     BonePile,
     WheelbarrowParking,
@@ -47,6 +48,9 @@ impl BuildingType {
             BuildingType::RestArea => {
                 materials.insert(ResourceType::Wood, 5);
             }
+            BuildingType::Bridge => {
+                // FlexibleMaterialRequirement で管理
+            }
             BuildingType::SandPile => {
                 materials.insert(ResourceType::Sand, 10);
             }
@@ -66,6 +70,30 @@ impl BuildingType {
 pub struct Building {
     pub kind: BuildingType,
     pub is_provisional: bool,
+}
+
+#[derive(Component)]
+pub struct BridgeMarker;
+
+#[derive(Debug, Clone)]
+pub struct FlexibleMaterialRequirement {
+    pub accepted_types: Vec<ResourceType>,
+    pub required_total: u32,
+    pub delivered_total: u32,
+}
+
+impl FlexibleMaterialRequirement {
+    pub fn is_complete(&self) -> bool {
+        self.delivered_total >= self.required_total
+    }
+
+    pub fn remaining(&self) -> u32 {
+        self.required_total.saturating_sub(self.delivered_total)
+    }
+
+    pub fn accepts(&self, resource_type: ResourceType) -> bool {
+        self.accepted_types.contains(&resource_type)
+    }
 }
 
 #[derive(Component, Debug, Clone, Copy, Default)]
@@ -111,6 +139,8 @@ pub struct Blueprint {
     pub required_materials: HashMap<ResourceType, u32>,
     /// 搬入済みの資材量
     pub delivered_materials: HashMap<ResourceType, u32>,
+    /// 代替可能資材（Wood/Rock など）の必要量
+    pub flexible_material_requirement: Option<FlexibleMaterialRequirement>,
     /// 占有するグリッド座標リスト
     pub occupied_grids: Vec<(i32, i32)>,
 }
@@ -123,6 +153,13 @@ impl Blueprint {
             progress: 0.0,
             required_materials: kind.required_materials(),
             delivered_materials: HashMap::new(),
+            flexible_material_requirement: (kind == BuildingType::Bridge).then_some(
+                FlexibleMaterialRequirement {
+                    accepted_types: vec![ResourceType::Wood, ResourceType::Rock],
+                    required_total: 6,
+                    delivered_total: 0,
+                },
+            ),
             occupied_grids,
         }
     }
@@ -142,6 +179,10 @@ impl Blueprint {
             return wood_delivered >= wood_required;
         }
 
+        if let Some(flexible) = &self.flexible_material_requirement {
+            return flexible.is_complete();
+        }
+
         for (resource_type, required) in &self.required_materials {
             let delivered = self.delivered_materials.get(resource_type).unwrap_or(&0);
             if delivered < required {
@@ -153,6 +194,10 @@ impl Blueprint {
 
     /// 本来の全資材が揃っているか（仮設ではなく完全な状態か）
     pub fn is_fully_complete(&self) -> bool {
+        if let Some(flexible) = &self.flexible_material_requirement {
+            return flexible.is_complete();
+        }
+
         for (resource_type, required) in &self.required_materials {
             let delivered = self.delivered_materials.get(resource_type).unwrap_or(&0);
             if delivered < required {
@@ -163,6 +208,21 @@ impl Blueprint {
     }
 
     pub fn deliver_material(&mut self, resource_type: ResourceType, amount: u32) {
+        let mut flexible_delivered = None;
+        if let Some(flexible) = self.flexible_material_requirement.as_mut()
+            && flexible.accepts(resource_type)
+        {
+            let delivered_now = amount.min(flexible.remaining());
+            flexible.delivered_total += delivered_now;
+            flexible_delivered = Some(delivered_now);
+        }
+        if let Some(delivered_now) = flexible_delivered {
+            if delivered_now > 0 {
+                *self.delivered_materials.entry(resource_type).or_insert(0) += delivered_now;
+            }
+            return;
+        }
+
         *self.delivered_materials.entry(resource_type).or_insert(0) += amount;
     }
 }

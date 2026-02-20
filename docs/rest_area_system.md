@@ -65,6 +65,13 @@ Bevy 0.18 の **ECS Relationships** を活用し、休憩所の定員管理や�
 | **疲労 (Fatigue)** | 大幅に減少 |
 | **ストレス (Stress)** | 大幅に減少 |
 
+### 休憩中の Dream 生成
+
+休憩所にワーカーが滞在している間、**ワーカーのストレスや夢の質（DreamQuality）に関わらず、独自の固定レートでグローバルな `DreamPool` にポイントが加算**されます。
+生成レートは「滞在人数（Occupants） × `REST_AREA_DREAM_RATE`」として計算されるため、人数が多いほど大量の Dream を生み出します。
+
+同時に、その恩恵を視覚的に表現するため、**休憩所自体から「滞在人数に応じた規模（大きさ・密度）」で Dream パーティクルが集中的に湧き出る**演出が行われます。これにより「休憩させるほど Dream が溜まる」というゲームメカニクスが強調されます。
+
 詳細な係数は `src/constants/ai.rs`（`REST_AREA_*`）および `src/systems/soul_ai/update/vitals.rs` 等のバイタル更新ロジックで定義されています。
 
 ## 6. 実装上の注意点
@@ -78,5 +85,7 @@ ECS Relationships を使用しているため、ワーカーが削除（デス�
 ## 7. 関連ファイル
 - `src/systems/soul_ai/decide/idle_behavior/`: 休憩の意思決定、予約、到着判定。
 - `src/systems/soul_ai/execute/idle_behavior_apply.rs`: 休憩所への入退所処理、非表示化。
+- `src/systems/soul_ai/update/rest_area_update.rs`: 休憩効果の適用、入居人数に基づく固定レートでのDream生成。
+- `src/systems/visual/dream/particle.rs`: 休憩所からのDreamパーティクルのスケーリングと生成。
 - `src/relationships.rs`: `RestingIn`, `RestAreaOccupants` 等の Relationship 定義。
 - `src/systems/jobs/mod.rs`: `RestArea` コンポーネントの定義。

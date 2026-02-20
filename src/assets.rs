@@ -102,6 +102,7 @@ pub struct GameAssets {
     pub stasis_mud: Handle<Image>,
     pub mud_mixer: Handle<Image>,
     pub rest_area: Handle<Image>,
+    pub bridge: Handle<Image>,
     pub mud_mixer_anim_1: Handle<Image>,
     pub mud_mixer_anim_2: Handle<Image>,
     pub mud_mixer_anim_3: Handle<Image>,

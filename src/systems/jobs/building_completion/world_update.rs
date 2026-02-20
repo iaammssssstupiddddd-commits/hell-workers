@@ -15,6 +15,14 @@ pub(super) fn update_world_for_completed_building(
         ),
     >,
 ) {
+    if bp.kind == BuildingType::Bridge {
+        for &(gx, gy) in &bp.occupied_grids {
+            world_map.bridged_tiles.insert((gx, gy));
+            world_map.buildings.insert((gx, gy), building_entity);
+        }
+        return;
+    }
+
     let is_obstacle = matches!(
         bp.kind,
         BuildingType::Wall

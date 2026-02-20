@@ -12,7 +12,7 @@ pub use spawn::{generate_fixed_river_tiles, spawn_map};
 
 use crate::constants::*;
 use bevy::prelude::*;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 #[derive(Component)]
 pub struct Tile;
@@ -58,6 +58,7 @@ pub struct WorldMap {
     pub tile_entities: Vec<Option<Entity>>,
     pub buildings: HashMap<(i32, i32), Entity>,
     pub stockpiles: HashMap<(i32, i32), Entity>,
+    pub bridged_tiles: HashSet<(i32, i32)>,
     pub obstacles: Vec<bool>,
 }
 
@@ -69,6 +70,7 @@ impl Default for WorldMap {
             tile_entities: vec![None; size],
             buildings: HashMap::new(),
             stockpiles: HashMap::new(),
+            bridged_tiles: HashSet::new(),
             obstacles: vec![false; size],
         }
     }
@@ -98,7 +100,17 @@ impl WorldMap {
         if self.obstacles[idx] {
             return false;
         }
+        if self.bridged_tiles.contains(&(x, y)) {
+            return true;
+        }
         self.tiles[idx].is_walkable()
+    }
+
+    pub fn is_river_tile(&self, x: i32, y: i32) -> bool {
+        let Some(idx) = self.pos_to_idx(x, y) else {
+            return false;
+        };
+        self.tiles[idx] == TerrainType::River
     }
 
     pub fn add_obstacle(&mut self, x: i32, y: i32) {

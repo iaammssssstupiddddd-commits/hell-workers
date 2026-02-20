@@ -70,6 +70,7 @@ pub(super) fn hovered_entity_at_world_pos(
                 crate::systems::jobs::BuildingType::Tank
                 | crate::systems::jobs::BuildingType::MudMixer
                 | crate::systems::jobs::BuildingType::RestArea => TILE_SIZE, // 2x2なので半径を大きく
+                crate::systems::jobs::BuildingType::Bridge => TILE_SIZE * 2.5, // 2x5 bridge
                 _ => TILE_SIZE / 2.0,
             }
         } else {
