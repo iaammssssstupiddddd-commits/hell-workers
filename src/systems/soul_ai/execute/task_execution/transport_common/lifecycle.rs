@@ -40,10 +40,21 @@ pub fn collect_active_reservation_ops(
             }
         }
         AssignedTask::HaulWaterToMixer(data) => {
-            ops.push(ResourceReservationOp::ReserveMixerDestination {
-                target: data.mixer,
-                resource_type: ResourceType::Water,
-            });
+            // 注水完了後（ReturningBucket）に予約を保持すると、
+            // 次の給水request発行が不必要に抑制されるため除外する。
+            if matches!(
+                data.phase,
+                HaulWaterToMixerPhase::GoingToBucket
+                    | HaulWaterToMixerPhase::GoingToTank
+                    | HaulWaterToMixerPhase::FillingFromTank
+                    | HaulWaterToMixerPhase::GoingToMixer
+                    | HaulWaterToMixerPhase::Pouring
+            ) {
+                ops.push(ResourceReservationOp::ReserveMixerDestination {
+                    target: data.mixer,
+                    resource_type: ResourceType::Water,
+                });
+            }
 
             if matches!(data.phase, HaulWaterToMixerPhase::GoingToBucket) {
                 ops.push(ResourceReservationOp::ReserveSource {

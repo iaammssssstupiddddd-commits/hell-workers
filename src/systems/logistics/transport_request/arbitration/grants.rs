@@ -47,8 +47,7 @@ pub fn grant_leases(
         let removed_by_dedup = candidate.items.len().saturating_sub(lease_items.len());
         stats.items_deduped = stats.items_deduped.saturating_add(removed_by_dedup as u32);
         if lease_items.len() < candidate.hard_min {
-            stats.candidates_dropped_by_dedup =
-                stats.candidates_dropped_by_dedup.saturating_add(1);
+            stats.candidates_dropped_by_dedup = stats.candidates_dropped_by_dedup.saturating_add(1);
             continue;
         }
 
@@ -115,8 +114,8 @@ pub fn grant_leases(
             break;
         };
         let (wb_entity, wb_pos) = available_wheelbarrows.remove(idx);
-        let destination_pos = destination_world_pos(final_destination, q_transforms)
-            .unwrap_or(candidate.source_pos);
+        let destination_pos =
+            destination_world_pos(final_destination, q_transforms).unwrap_or(candidate.source_pos);
         let lease_duration =
             compute_lease_duration_secs(wb_pos, candidate.source_pos, destination_pos);
         consumed_items.extend(lease_items.iter().copied());
@@ -166,7 +165,9 @@ fn compute_lease_duration_secs(wb_pos: Vec2, source_pos: Vec2, destination_pos: 
     let travel_speed = (SOUL_SPEED_BASE * SOUL_SPEED_WHEELBARROW_MULTIPLIER).max(1.0);
     let total_distance = wb_pos.distance(source_pos) + source_pos.distance(destination_pos);
     let travel_time = (total_distance / travel_speed) as f64;
-    (travel_time + travel_time * WHEELBARROW_LEASE_BUFFER_RATIO + WHEELBARROW_LEASE_MIN_DURATION_SECS)
+    (travel_time
+        + travel_time * WHEELBARROW_LEASE_BUFFER_RATIO
+        + WHEELBARROW_LEASE_MIN_DURATION_SECS)
         .clamp(
             WHEELBARROW_LEASE_MIN_DURATION_SECS,
             WHEELBARROW_LEASE_MAX_DURATION_SECS,

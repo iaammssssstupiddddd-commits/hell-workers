@@ -1,12 +1,12 @@
+use crate::constants::TILE_SIZE;
 use crate::relationships::ManagedTasks;
 use crate::systems::command::TaskArea;
+use crate::systems::familiar_ai::decide::task_delegation::ReachabilityCacheKey;
 use crate::systems::familiar_ai::decide::task_management::{
     AssignTaskContext, DelegationCandidate, ReservationShadow, ScoredDelegationCandidate,
     assign_task_to_worker, collect_scored_candidates,
 };
-use crate::systems::familiar_ai::decide::task_delegation::ReachabilityCacheKey;
 use crate::systems::spatial::{DesignationSpatialGrid, TransportRequestSpatialGrid};
-use crate::constants::TILE_SIZE;
 use crate::world::map::WorldMap;
 use crate::world::pathfinding::{self, PathfindingContext};
 use bevy::prelude::*;

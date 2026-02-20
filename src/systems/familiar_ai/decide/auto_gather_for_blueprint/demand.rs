@@ -15,8 +15,7 @@ pub(super) fn collect_raw_demand_by_owner(
     q_blueprints: &Query<&Blueprint>,
 ) -> HashMap<(Entity, ResourceType), u32> {
     let mut raw_demand_by_owner = HashMap::<(Entity, ResourceType), u32>::new();
-    let mut inflight_by_blueprint =
-        HashMap::<(Entity, Entity), HashMap<ResourceType, u32>>::new();
+    let mut inflight_by_blueprint = HashMap::<(Entity, Entity), HashMap<ResourceType, u32>>::new();
 
     for (req, target_bp, workers_opt) in q_bp_requests.iter() {
         if !matches!(req.kind, TransportRequestKind::DeliverToBlueprint) {
@@ -50,7 +49,10 @@ pub(super) fn collect_raw_demand_by_owner(
                 continue;
             }
 
-            let delivered = *blueprint.delivered_materials.get(&resource_type).unwrap_or(&0);
+            let delivered = *blueprint
+                .delivered_materials
+                .get(&resource_type)
+                .unwrap_or(&0);
             let inflight = *inflight_by_resource.get(&resource_type).unwrap_or(&0);
             let needed = required.saturating_sub(delivered.saturating_add(inflight));
             if needed == 0 {

@@ -40,16 +40,67 @@ fn has_pending_wheelbarrow_task(ctx: &TaskExecutionContext) -> bool {
     )
 }
 
+fn try_drop_item(
+    commands: &mut Commands,
+    item_entity: Entity,
+    drop_pos: Vec2,
+    store_in: Option<Entity>,
+) -> bool {
+    let Ok(mut item_commands) = commands.get_entity(item_entity) else {
+        return false;
+    };
+
+    if let Some(stockpile) = store_in {
+        item_commands.try_insert((
+            Visibility::Visible,
+            Transform::from_xyz(drop_pos.x, drop_pos.y, Z_ITEM_PICKUP),
+            StoredIn(stockpile),
+        ));
+    } else {
+        item_commands.try_insert((
+            Visibility::Visible,
+            Transform::from_xyz(drop_pos.x, drop_pos.y, Z_ITEM_PICKUP),
+        ));
+        item_commands.try_remove::<StoredIn>();
+    }
+    item_commands.try_remove::<LoadedIn>();
+    item_commands.try_remove::<crate::relationships::DeliveringTo>();
+    item_commands.try_remove::<crate::systems::jobs::IssuedBy>();
+    item_commands.try_remove::<crate::relationships::TaskWorkers>();
+    true
+}
+
+fn try_despawn_item(commands: &mut Commands, item_entity: Entity) -> bool {
+    let Ok(mut item_commands) = commands.get_entity(item_entity) else {
+        return false;
+    };
+    item_commands.try_despawn();
+    true
+}
+
 pub fn handle(
     ctx: &mut TaskExecutionContext,
     data: HaulWithWheelbarrowData,
     commands: &mut Commands,
     soul_pos: Vec2,
 ) {
+    let unique_items: std::collections::HashSet<Entity> = data.items.iter().copied().collect();
+    if unique_items.len() < data.items.len() {
+        warn!(
+            "WB_HAUL: duplicate items detected in unload list (total={}, unique={})",
+            data.items.len(),
+            unique_items.len()
+        );
+    }
+
+    let mut deduped_items = std::collections::HashSet::new();
     let item_types: Vec<(Entity, Option<crate::systems::logistics::ResourceType>)> = data
         .items
         .iter()
         .filter_map(|&item_entity| {
+            if !deduped_items.insert(item_entity) {
+                return None;
+            }
             let Ok((_, _, _, _, res_item_opt, _, _)) =
                 ctx.queries.designation.targets.get(item_entity)
             else {
@@ -68,7 +119,7 @@ pub fn handle(
             if let Ok((_, stock_transform, mut stockpile_comp, stored_items_opt)) =
                 ctx.queries.storage.stockpiles.get_mut(dest_stockpile)
             {
-                let stock_pos = stock_transform.translation;
+                let stock_pos = stock_transform.translation.truncate();
                 let incoming_total = ctx
                     .queries
                     .reservation
@@ -100,94 +151,42 @@ pub fn handle(
                         continue;
                     }
 
-                    commands.entity(*item_entity).insert((
-                        Visibility::Visible,
-                        Transform::from_xyz(stock_pos.x, stock_pos.y, Z_ITEM_PICKUP),
-                        StoredIn(dest_stockpile),
-                    ));
-                    commands.entity(*item_entity).remove::<LoadedIn>();
-                    commands
-                        .entity(*item_entity)
-                        .remove::<crate::relationships::DeliveringTo>();
-                    commands
-                        .entity(*item_entity)
-                        .remove::<crate::systems::jobs::IssuedBy>();
-                    commands
-                        .entity(*item_entity)
-                        .remove::<crate::relationships::TaskWorkers>();
-
-                    destination_store_count += 1;
-                    unloaded_count += 1;
+                    if try_drop_item(commands, *item_entity, stock_pos, Some(dest_stockpile)) {
+                        destination_store_count += 1;
+                        unloaded_count += 1;
+                    }
                 }
             } else if let Ok((_, site, _)) = ctx.queries.storage.floor_sites.get(dest_stockpile) {
                 let site_pos = site.material_center;
-                for (index, (item_entity, _res_type_opt)) in item_types.iter().enumerate() {
+                for (index, (item_entity, _)) in item_types.iter().enumerate() {
                     let offset = Vec2::new((index as f32) * 2.0, 0.0);
-                    let drop_pos = site_pos + offset;
-                    commands.entity(*item_entity).insert((
-                        Visibility::Visible,
-                        Transform::from_xyz(drop_pos.x, drop_pos.y, Z_ITEM_PICKUP),
-                    ));
-                    commands.entity(*item_entity).remove::<LoadedIn>();
-                    commands
-                        .entity(*item_entity)
-                        .remove::<crate::relationships::DeliveringTo>();
-                    commands
-                        .entity(*item_entity)
-                        .remove::<crate::systems::jobs::IssuedBy>();
-                    commands
-                        .entity(*item_entity)
-                        .remove::<crate::relationships::TaskWorkers>();
-                    commands.entity(*item_entity).remove::<StoredIn>();
-                    destination_store_count += 1;
-                    unloaded_count += 1;
+                    if try_drop_item(commands, *item_entity, site_pos + offset, None) {
+                        destination_store_count += 1;
+                        unloaded_count += 1;
+                    }
                 }
             } else if let Ok((_, site, _)) = ctx.queries.storage.wall_sites.get(dest_stockpile) {
                 let site_pos = site.material_center;
-                for (index, (item_entity, _res_type_opt)) in item_types.iter().enumerate() {
+                for (index, (item_entity, _)) in item_types.iter().enumerate() {
                     let offset = Vec2::new((index as f32) * 2.0, 0.0);
-                    let drop_pos = site_pos + offset;
-                    commands.entity(*item_entity).insert((
-                        Visibility::Visible,
-                        Transform::from_xyz(drop_pos.x, drop_pos.y, Z_ITEM_PICKUP),
-                    ));
-                    commands.entity(*item_entity).remove::<LoadedIn>();
-                    commands
-                        .entity(*item_entity)
-                        .remove::<crate::relationships::DeliveringTo>();
-                    commands
-                        .entity(*item_entity)
-                        .remove::<crate::systems::jobs::IssuedBy>();
-                    commands
-                        .entity(*item_entity)
-                        .remove::<crate::relationships::TaskWorkers>();
-                    commands.entity(*item_entity).remove::<StoredIn>();
-                    destination_store_count += 1;
-                    unloaded_count += 1;
-                }
-            } else if let Ok((wall_transform, building, _)) = ctx.queries.storage.buildings.get(dest_stockpile) {
-                if building.kind == crate::systems::jobs::BuildingType::Wall && building.is_provisional {
-                    let site_pos = wall_transform.translation.truncate();
-                    for (index, (item_entity, _res_type_opt)) in item_types.iter().enumerate() {
-                        let offset = Vec2::new((index as f32) * 2.0, 0.0);
-                        let drop_pos = site_pos + offset;
-                        commands.entity(*item_entity).insert((
-                            Visibility::Visible,
-                            Transform::from_xyz(drop_pos.x, drop_pos.y, Z_ITEM_PICKUP),
-                        ));
-                        commands.entity(*item_entity).remove::<LoadedIn>();
-                        commands
-                            .entity(*item_entity)
-                            .remove::<crate::relationships::DeliveringTo>();
-                        commands
-                            .entity(*item_entity)
-                            .remove::<crate::systems::jobs::IssuedBy>();
-                        commands
-                            .entity(*item_entity)
-                            .remove::<crate::relationships::TaskWorkers>();
-                        commands.entity(*item_entity).remove::<StoredIn>();
+                    if try_drop_item(commands, *item_entity, site_pos + offset, None) {
                         destination_store_count += 1;
                         unloaded_count += 1;
+                    }
+                }
+            } else if let Ok((wall_transform, building, _)) =
+                ctx.queries.storage.buildings.get(dest_stockpile)
+            {
+                if building.kind == crate::systems::jobs::BuildingType::Wall
+                    && building.is_provisional
+                {
+                    let site_pos = wall_transform.translation.truncate();
+                    for (index, (item_entity, _)) in item_types.iter().enumerate() {
+                        let offset = Vec2::new((index as f32) * 2.0, 0.0);
+                        if try_drop_item(commands, *item_entity, site_pos + offset, None) {
+                            destination_store_count += 1;
+                            unloaded_count += 1;
+                        }
                     }
                 } else {
                     cancel::cancel_wheelbarrow_task(ctx, &data, commands);
@@ -208,18 +207,17 @@ pub fn handle(
                     };
 
                     blueprint.deliver_material(*res_type, 1);
-                    commands.entity(*item_entity).despawn();
-                    destination_store_count += 1;
-                    unloaded_count += 1;
+                    if try_despawn_item(commands, *item_entity) {
+                        destination_store_count += 1;
+                        unloaded_count += 1;
+                    }
                 }
 
                 if blueprint.materials_complete() {
-                    commands
-                        .entity(blueprint_entity)
-                        .remove::<crate::relationships::ManagedBy>();
-                    commands
-                        .entity(blueprint_entity)
-                        .insert(crate::systems::jobs::Priority(10));
+                    if let Ok(mut blueprint_commands) = commands.get_entity(blueprint_entity) {
+                        blueprint_commands.try_remove::<crate::relationships::ManagedBy>();
+                        blueprint_commands.try_insert(crate::systems::jobs::Priority(10));
+                    }
                 }
             } else {
                 info!("WB_HAUL: Blueprint destroyed during unloading, dropping items");
@@ -236,14 +234,13 @@ pub fn handle(
                     let res_type = (*res_type_opt).unwrap_or(resource_type);
 
                     if storage.add_material(res_type).is_ok() {
-                        commands.entity(*item_entity).despawn();
-                        unloaded_count += 1;
-                    } else {
-                        commands.entity(*item_entity).remove::<LoadedIn>();
-                        commands
-                            .entity(*item_entity)
-                            .remove::<crate::relationships::DeliveringTo>();
-                        commands.entity(*item_entity).insert((
+                        if try_despawn_item(commands, *item_entity) {
+                            unloaded_count += 1;
+                        }
+                    } else if let Ok(mut item_commands) = commands.get_entity(*item_entity) {
+                        item_commands.try_remove::<LoadedIn>();
+                        item_commands.try_remove::<crate::relationships::DeliveringTo>();
+                        item_commands.try_insert((
                             Visibility::Visible,
                             Transform::from_xyz(soul_pos.x, soul_pos.y, Z_ITEM_PICKUP),
                         ));
@@ -253,7 +250,7 @@ pub fn handle(
                             Some(crate::systems::logistics::ResourceType::Sand)
                                 | Some(crate::systems::logistics::ResourceType::StasisMud)
                         ) {
-                            commands.entity(*item_entity).insert(
+                            item_commands.try_insert(
                                 crate::systems::logistics::item_lifetime::ItemDespawnTimer::new(
                                     5.0,
                                 ),
@@ -305,9 +302,9 @@ pub fn handle(
         soul_pos,
     );
     ctx.inventory.0 = None;
-    commands
-        .entity(ctx.soul_entity)
-        .remove::<crate::relationships::WorkingOn>();
+    if let Ok(mut soul_commands) = commands.get_entity(ctx.soul_entity) {
+        soul_commands.try_remove::<crate::relationships::WorkingOn>();
+    }
     clear_task_and_path(ctx.task, ctx.path);
 
     if has_pending_wheelbarrow_task(ctx) {

@@ -12,13 +12,11 @@ pub fn handle(
     data: HaulWithWheelbarrowData,
     commands: &mut Commands,
 ) {
-    commands.entity(data.wheelbarrow).remove::<ParkedAt>();
-    commands
-        .entity(data.wheelbarrow)
-        .insert(PushedBy(ctx.soul_entity));
-    commands
-        .entity(data.wheelbarrow)
-        .insert(Visibility::Visible);
+    if let Ok(mut wheelbarrow_commands) = commands.get_entity(data.wheelbarrow) {
+        wheelbarrow_commands.try_remove::<ParkedAt>();
+        wheelbarrow_commands.try_insert(PushedBy(ctx.soul_entity));
+        wheelbarrow_commands.try_insert(Visibility::Visible);
+    }
     ctx.inventory.0 = Some(data.wheelbarrow);
 
     info!(

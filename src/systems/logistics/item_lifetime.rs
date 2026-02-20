@@ -31,9 +31,16 @@ pub fn despawn_expired_items_system(
         With<ResourceItem>,
     >,
 ) {
-    for (entity, mut timer, reserved, loaded, stored, delivering, stored_by_mixer) in q_items.iter_mut() {
+    for (entity, mut timer, reserved, loaded, stored, delivering, stored_by_mixer) in
+        q_items.iter_mut()
+    {
         // 以下のいずれかの状態であればタイマーを進めない（またはリセットも検討可能だが、一旦停止）
-        if reserved.is_some() || loaded.is_some() || stored.is_some() || delivering.is_some() || stored_by_mixer.is_some() {
+        if reserved.is_some()
+            || loaded.is_some()
+            || stored.is_some()
+            || delivering.is_some()
+            || stored_by_mixer.is_some()
+        {
             continue;
         }
 
@@ -41,7 +48,7 @@ pub fn despawn_expired_items_system(
 
         if timer.0.just_finished() {
             info!("ITEM_LIFETIME: Despawning expired item {:?}", entity);
-            commands.entity(entity).despawn();
+            commands.entity(entity).try_despawn();
         }
     }
 }

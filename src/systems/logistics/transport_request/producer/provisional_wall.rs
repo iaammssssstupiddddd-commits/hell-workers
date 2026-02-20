@@ -9,10 +9,10 @@ use crate::constants::TILE_SIZE;
 use crate::entities::familiar::{ActiveCommand, FamiliarCommand};
 use crate::relationships::TaskWorkers;
 use crate::systems::command::TaskArea;
+use crate::systems::jobs::wall_construction::WallTileBlueprint;
 use crate::systems::jobs::{
     Building, BuildingType, Designation, Priority, ProvisionalWall, TaskSlots, WorkType,
 };
-use crate::systems::jobs::wall_construction::WallTileBlueprint;
 use crate::systems::logistics::ResourceType;
 use crate::systems::logistics::transport_request::{
     TransportDemand, TransportPolicy, TransportPriority, TransportRequest, TransportRequestKind,
@@ -38,8 +38,10 @@ pub fn provisional_wall_auto_haul_system(
     q_requests: Query<(Entity, &TransportRequest, Option<&TaskWorkers>)>,
     q_wall_tiles: Query<&WallTileBlueprint>,
 ) {
-    let site_managed_walls: std::collections::HashSet<Entity> =
-        q_wall_tiles.iter().filter_map(|tile| tile.spawned_wall).collect();
+    let site_managed_walls: std::collections::HashSet<Entity> = q_wall_tiles
+        .iter()
+        .filter_map(|tile| tile.spawned_wall)
+        .collect();
 
     let mut in_flight = std::collections::HashMap::<Entity, usize>::new();
     for (_, req, workers_opt) in q_requests.iter() {
@@ -107,7 +109,7 @@ pub fn provisional_wall_auto_haul_system(
 
         let inflight = to_u32_saturating(workers);
         if let Some((issued_by, wall_pos, slots)) = desired_requests.get(&key) {
-            commands.entity(request_entity).insert((
+            commands.entity(request_entity).try_insert((
                 Transform::from_xyz(wall_pos.x, wall_pos.y, 0.0),
                 Visibility::Hidden,
                 Designation {
@@ -135,7 +137,7 @@ pub fn provisional_wall_auto_haul_system(
         }
 
         super::upsert::disable_request(&mut commands, request_entity);
-        commands.entity(request_entity).insert(TransportDemand {
+        commands.entity(request_entity).try_insert(TransportDemand {
             desired_slots: 0,
             inflight,
         });
@@ -186,8 +188,10 @@ pub fn provisional_wall_material_delivery_sync_system(
     )>,
     q_wall_tiles: Query<&WallTileBlueprint>,
 ) {
-    let site_managed_walls: std::collections::HashSet<Entity> =
-        q_wall_tiles.iter().filter_map(|tile| tile.spawned_wall).collect();
+    let site_managed_walls: std::collections::HashSet<Entity> = q_wall_tiles
+        .iter()
+        .filter_map(|tile| tile.spawned_wall)
+        .collect();
 
     let pickup_radius_sq = (TILE_SIZE * 1.5) * (TILE_SIZE * 1.5);
 
@@ -243,8 +247,10 @@ pub fn provisional_wall_designation_system(
     )>,
     q_wall_tiles: Query<&WallTileBlueprint>,
 ) {
-    let site_managed_walls: std::collections::HashSet<Entity> =
-        q_wall_tiles.iter().filter_map(|tile| tile.spawned_wall).collect();
+    let site_managed_walls: std::collections::HashSet<Entity> = q_wall_tiles
+        .iter()
+        .filter_map(|tile| tile.spawned_wall)
+        .collect();
 
     for (wall_entity, building, provisional, designation_opt, workers_opt) in q_walls.iter() {
         if site_managed_walls.contains(&wall_entity) {

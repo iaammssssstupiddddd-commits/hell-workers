@@ -27,7 +27,8 @@ use crate::systems::visual::blueprint::{
 };
 use crate::systems::visual::dream::{
     dream_particle_spawn_system, dream_particle_update_system, dream_popup_spawn_system,
-    dream_popup_update_system, ensure_dream_visual_state_system, rest_area_dream_particle_spawn_system,
+    dream_popup_update_system, ensure_dream_visual_state_system,
+    rest_area_dream_particle_spawn_system,
 };
 use crate::systems::visual::fade::fade_out_system;
 use crate::systems::visual::floor_construction::{
@@ -52,11 +53,11 @@ use crate::systems::visual::tank::update_tank_visual_system;
 use crate::systems::visual::task_area_visual::{
     TaskAreaMaterial, update_task_area_material_system,
 };
+use crate::systems::visual::wall_connection::WallConnectionPlugin;
 use crate::systems::visual::wall_construction::{
     manage_wall_progress_bars_system, update_wall_progress_bars_system,
     update_wall_tile_visuals_system,
 };
-use crate::systems::visual::wall_connection::WallConnectionPlugin;
 
 use bevy::prelude::*;
 use bevy::sprite_render::Material2dPlugin;

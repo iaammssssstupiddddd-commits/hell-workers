@@ -24,9 +24,9 @@ pub fn handle(
     let Ok(_) = q_wheelbarrows.get(data.wheelbarrow) else {
         reservation::release_source(ctx, data.wheelbarrow, 1);
         ctx.inventory.0 = None;
-        commands
-            .entity(ctx.soul_entity)
-            .remove::<crate::relationships::WorkingOn>();
+        if let Ok(mut soul_commands) = commands.get_entity(ctx.soul_entity) {
+            soul_commands.try_remove::<crate::relationships::WorkingOn>();
+        }
         crate::systems::soul_ai::execute::task_execution::common::clear_task_and_path(
             ctx.task, ctx.path,
         );

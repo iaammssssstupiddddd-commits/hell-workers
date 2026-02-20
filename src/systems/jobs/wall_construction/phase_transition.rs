@@ -1,10 +1,10 @@
 //! Wall construction phase transition system
 
+use super::components::*;
 use crate::assets::GameAssets;
 use crate::constants::{TILE_SIZE, Z_MAP};
 use crate::systems::jobs::{Building, BuildingType, ProvisionalWall};
 use crate::world::map::WorldMap;
-use super::components::*;
 use bevy::prelude::*;
 
 /// Spawns provisional wall entities for framed tiles that do not have spawned walls yet.
@@ -60,7 +60,8 @@ pub fn wall_construction_phase_transition_system(
 
         for (_, tile) in q_tiles.iter().filter(|(_, t)| t.parent_site == site_entity) {
             total_tiles += 1;
-            if matches!(tile.state, WallTileState::FramedProvisional) && tile.spawned_wall.is_some() {
+            if matches!(tile.state, WallTileState::FramedProvisional) && tile.spawned_wall.is_some()
+            {
                 framed_tiles += 1;
             }
         }

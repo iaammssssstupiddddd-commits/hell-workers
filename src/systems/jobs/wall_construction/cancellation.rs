@@ -1,8 +1,6 @@
 //! Wall construction cancellation system
 
-use super::components::{
-    TargetWallConstructionSite, WallConstructionCancelRequested,
-};
+use super::components::{TargetWallConstructionSite, WallConstructionCancelRequested};
 use crate::assets::GameAssets;
 use crate::constants::{TILE_SIZE, Z_ITEM_PICKUP};
 use crate::entities::damned_soul::{DamnedSoul, Path};
@@ -93,7 +91,8 @@ pub fn wall_construction_cancellation_system(
 ) {
     for site_entity in q_sites.iter() {
         let (site_material_center, site_tiles_total) = {
-            let Ok((_site_transform, site, _)) = reservation_queries.storage.wall_sites.get(site_entity)
+            let Ok((_site_transform, site, _)) =
+                reservation_queries.storage.wall_sites.get(site_entity)
             else {
                 continue;
             };
@@ -143,8 +142,8 @@ pub fn wall_construction_cancellation_system(
             let matches_site_task = assigned_task
                 .get_target_entity()
                 .is_some_and(|target| related_targets.contains(&target));
-            let matches_working_on = working_on_opt
-                .is_some_and(|working_on| related_targets.contains(&working_on.0));
+            let matches_working_on =
+                working_on_opt.is_some_and(|working_on| related_targets.contains(&working_on.0));
 
             if !(matches_site_task || matches_working_on) {
                 continue;
@@ -208,11 +207,7 @@ pub fn wall_construction_cancellation_system(
 
         info!(
             "WALL_CANCEL: Site {:?} cancelled (tiles: {}, workers: {}, refund wood: {}, refund mud: {})",
-            site_entity,
-            site_tiles_total,
-            released_workers,
-            refunded_wood,
-            refunded_mud
+            site_entity, site_tiles_total, released_workers, refunded_wood, refunded_mud
         );
     }
 }
