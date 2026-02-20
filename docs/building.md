@@ -344,7 +344,7 @@ flowchart TD
 - `src/systems/logistics/transport_request/producer/floor_construction/designation.rs`: Floor tile への Designation 付与
 - `src/systems/soul_ai/execute/task_execution/reinforce_floor.rs`: 補強タスク実行
 - `src/systems/soul_ai/execute/task_execution/pour_floor.rs`: 打設タスク実行
-- `src/systems/soul_ai/execute/task_execution/haul.rs`: floor site への徒歩搬送
+- `src/systems/soul_ai/execute/task_execution/haul.rs`, `src/systems/soul_ai/execute/task_execution/haul/dropping.rs`: floor site への徒歩搬送
 - `src/systems/soul_ai/execute/task_execution/haul_with_wheelbarrow/`: floor site への猫車搬送
 - `src/systems/familiar_ai/decide/task_management/policy/floor.rs`: タスク割り当てポリシー
 - `src/systems/familiar_ai/decide/task_management/policy/haul/`: floor request の搬送元解決・割り当て

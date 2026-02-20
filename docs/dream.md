@@ -212,7 +212,8 @@ Dream を消費してプレイヤーが指定した矩形範囲に木を植え�
 | :--- | :--- |
 | `src/systems/dream_tree_planting.rs` | 植林コアロジック |
 | `src/systems/command/area_selection/state.rs` | `AreaEditSession.pending_dream_planting` フィールド |
-| `src/systems/command/area_selection/input.rs` | `DreamPlanting` モードのドラッグ入力処理 |
+| `src/systems/command/area_selection/input.rs` | `DreamPlanting` モードの入力分岐とドラッグ入力処理 |
+| `src/systems/command/area_selection/input/release.rs` | `DreamPlanting` モードのリリース確定処理 |
 | `src/interface/ui/components.rs` | `MenuState::Dream`, `MenuAction::{ToggleDream, SelectDreamPlanting}`, `DreamSubMenu` |
 | `src/interface/ui/setup/submenus.rs` | Dream サブメニューのスポーン |
 | `src/plugins/logic.rs` | `dream_tree_planting_system` 登録 |
