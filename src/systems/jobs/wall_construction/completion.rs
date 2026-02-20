@@ -35,10 +35,7 @@ pub fn wall_construction_completion_system(
         let all_complete = site_tiles
             .iter()
             .all(|(_, _, state, _)| *state == WallTileState::Complete);
-        if !all_complete
-            || site.phase != WallConstructionPhase::Coating
-            || site.tiles_coated < site.tiles_total
-        {
+        if !all_complete || site.phase != WallConstructionPhase::Coating {
             continue;
         }
 

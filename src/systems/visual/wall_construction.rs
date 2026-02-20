@@ -14,7 +14,7 @@ use std::collections::HashSet;
 
 const WALL_PROGRESS_BAR_WIDTH: f32 = 40.0;
 const WALL_PROGRESS_BAR_HEIGHT: f32 = 5.0;
-const WALL_PROGRESS_BAR_Y_OFFSET: f32 = TILE_SIZE * 0.75;
+const WALL_PROGRESS_BAR_Y_OFFSET: f32 = TILE_SIZE * 1.25;
 const WALL_PROGRESS_BAR_BG_COLOR: Color = Color::srgba(0.1, 0.1, 0.1, 0.9);
 
 #[derive(Component)]

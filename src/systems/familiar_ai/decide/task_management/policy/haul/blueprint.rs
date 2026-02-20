@@ -4,9 +4,7 @@ use crate::constants::WHEELBARROW_CAPACITY;
 use crate::systems::command::TaskArea;
 use crate::systems::familiar_ai::decide::task_management::{AssignTaskContext, ReservationShadow};
 use crate::systems::logistics::ResourceType;
-use crate::systems::logistics::transport_request::{
-    WheelbarrowDestination, can_complete_pick_drop_to_blueprint,
-};
+use crate::systems::logistics::transport_request::can_complete_pick_drop_to_blueprint;
 use bevy::prelude::*;
 
 use super::super::super::builders::{
@@ -83,48 +81,6 @@ pub fn assign_haul_to_blueprint(
                 lease.source_pos,
                 lease.destination,
                 lease_items,
-                task_pos,
-                already_commanded,
-                ctx,
-                queries,
-                shadow,
-            );
-            return true;
-        }
-    }
-
-    if let Some(wb_entity) = wheelbarrow::find_nearest_wheelbarrow(task_pos, queries, shadow) {
-        let max_items = remaining_needed.min(WHEELBARROW_CAPACITY as u32) as usize;
-        let mut items = source_selector::collect_nearby_items_for_wheelbarrow(
-            resource_type,
-            task_pos,
-            max_items,
-            queries,
-            shadow,
-        );
-        if items.is_empty() {
-            items = source_selector::collect_items_for_wheelbarrow_unbounded(
-                resource_type,
-                task_pos,
-                max_items,
-                queries,
-                shadow,
-            );
-        }
-        if !items.is_empty() {
-            let source_pos = items
-                .iter()
-                .map(|(_, pos)| *pos)
-                .reduce(|a, b| a + b)
-                .unwrap()
-                / items.len() as f32;
-            let item_entities: Vec<Entity> = items.iter().map(|(e, _)| *e).collect();
-
-            issue_haul_with_wheelbarrow(
-                wb_entity,
-                source_pos,
-                WheelbarrowDestination::Blueprint(blueprint),
-                item_entities,
                 task_pos,
                 already_commanded,
                 ctx,

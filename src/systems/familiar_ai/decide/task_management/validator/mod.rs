@@ -12,6 +12,4 @@ pub use resolver::{
     resolve_haul_to_wall_construction_inputs,
     resolve_haul_water_to_mixer_inputs, resolve_return_bucket_tank, resolve_return_wheelbarrow,
 };
-pub use wheelbarrow::{
-    compute_centroid, find_nearest_wheelbarrow, resolve_wheelbarrow_batch_for_stockpile,
-};
+pub use wheelbarrow::find_nearest_wheelbarrow;
