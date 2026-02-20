@@ -14,7 +14,7 @@ pub mod soul;
 pub mod speech;
 pub mod tank;
 pub mod task_area_visual;
-pub mod wall_construction;
 pub mod wall_connection;
+pub mod wall_construction;
 
 pub use task_area_visual::TaskAreaMaterial;

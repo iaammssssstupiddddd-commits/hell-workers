@@ -117,7 +117,9 @@ pub fn blueprint_auto_haul_system(
             let total_inflight: u32 = flexible
                 .accepted_types
                 .iter()
-                .map(|resource_type| *in_flight.get(&(bp_entity, *resource_type)).unwrap_or(&0) as u32)
+                .map(|resource_type| {
+                    *in_flight.get(&(bp_entity, *resource_type)).unwrap_or(&0) as u32
+                })
                 .sum();
             let remaining = flexible.remaining().saturating_sub(total_inflight);
             if remaining > 0 {
@@ -127,7 +129,10 @@ pub fn blueprint_auto_haul_system(
                     } else {
                         remaining.max(1)
                     };
-                    desired_requests.insert((bp_entity, resource_type), (fam_entity, desired_slots, bp_pos));
+                    desired_requests.insert(
+                        (bp_entity, resource_type),
+                        (fam_entity, desired_slots, bp_pos),
+                    );
                 }
             }
         }

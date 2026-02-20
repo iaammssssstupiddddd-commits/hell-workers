@@ -40,8 +40,11 @@ pub(super) fn build_auto_gather_targets(
             continue;
         };
 
-        let required_auto_yield =
-            demand.saturating_sub(stats.ground_items.saturating_add(stats.pending_non_auto_yield));
+        let required_auto_yield = demand.saturating_sub(
+            stats
+                .ground_items
+                .saturating_add(stats.pending_non_auto_yield),
+        );
         let auto_active_yield = stats.auto_active_count.saturating_mul(drop_amount);
         let required_idle_or_new_yield = required_auto_yield.saturating_sub(auto_active_yield);
 

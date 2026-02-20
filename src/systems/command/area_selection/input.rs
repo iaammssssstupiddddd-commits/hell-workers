@@ -17,9 +17,7 @@ use crate::systems::jobs::Designation;
 use crate::systems::jobs::floor_construction::{
     FloorConstructionCancelRequested, FloorTileBlueprint,
 };
-use crate::systems::jobs::wall_construction::{
-    WallConstructionCancelRequested, WallTileBlueprint,
-};
+use crate::systems::jobs::wall_construction::{WallConstructionCancelRequested, WallTileBlueprint};
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
@@ -188,15 +186,25 @@ fn handle_left_just_pressed_input(
     }
 
     match task_context.0 {
-        TaskMode::AreaSelection(None) => task_context.0 = TaskMode::AreaSelection(Some(snapped_pos)),
-        TaskMode::DesignateChop(None) => task_context.0 = TaskMode::DesignateChop(Some(snapped_pos)),
-        TaskMode::DesignateMine(None) => task_context.0 = TaskMode::DesignateMine(Some(snapped_pos)),
-        TaskMode::DesignateHaul(None) => task_context.0 = TaskMode::DesignateHaul(Some(snapped_pos)),
+        TaskMode::AreaSelection(None) => {
+            task_context.0 = TaskMode::AreaSelection(Some(snapped_pos))
+        }
+        TaskMode::DesignateChop(None) => {
+            task_context.0 = TaskMode::DesignateChop(Some(snapped_pos))
+        }
+        TaskMode::DesignateMine(None) => {
+            task_context.0 = TaskMode::DesignateMine(Some(snapped_pos))
+        }
+        TaskMode::DesignateHaul(None) => {
+            task_context.0 = TaskMode::DesignateHaul(Some(snapped_pos))
+        }
         TaskMode::CancelDesignation(None) => {
             task_context.0 = TaskMode::CancelDesignation(Some(snapped_pos))
         }
         TaskMode::AssignTask(None) => task_context.0 = TaskMode::AssignTask(Some(snapped_pos)),
-        TaskMode::DreamPlanting(None) => task_context.0 = TaskMode::DreamPlanting(Some(snapped_pos)),
+        TaskMode::DreamPlanting(None) => {
+            task_context.0 = TaskMode::DreamPlanting(Some(snapped_pos))
+        }
         _ => {}
     }
 

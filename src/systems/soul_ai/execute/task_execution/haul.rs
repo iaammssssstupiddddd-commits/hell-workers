@@ -127,8 +127,7 @@ pub fn handle_haul_task(
                             );
                             return;
                         }
-                    } else if let Ok((_, site, _)) = ctx.queries.storage.wall_sites.get(stockpile)
-                    {
+                    } else if let Ok((_, site, _)) = ctx.queries.storage.wall_sites.get(stockpile) {
                         let reachable = update_destination_to_adjacent(
                             ctx.dest,
                             site.material_center,
@@ -216,7 +215,13 @@ pub fn handle_haul_task(
                     ctx.pf_context,
                 );
                 if !reachable {
-                    cancel_haul_with_reason(ctx, item, stockpile, commands, "cannot reach floor site");
+                    cancel_haul_with_reason(
+                        ctx,
+                        item,
+                        stockpile,
+                        commands,
+                        "cannot reach floor site",
+                    );
                     return;
                 }
 
@@ -235,7 +240,13 @@ pub fn handle_haul_task(
                     ctx.pf_context,
                 );
                 if !reachable {
-                    cancel_haul_with_reason(ctx, item, stockpile, commands, "cannot reach wall site");
+                    cancel_haul_with_reason(
+                        ctx,
+                        item,
+                        stockpile,
+                        commands,
+                        "cannot reach wall site",
+                    );
                     return;
                 }
 

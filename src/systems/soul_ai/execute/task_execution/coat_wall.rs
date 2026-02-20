@@ -98,7 +98,10 @@ fn handle_legacy_coat_wall_task(
                 return;
             };
 
-            if building.kind != BuildingType::Wall || !building.is_provisional || provisional_opt.is_none() {
+            if building.kind != BuildingType::Wall
+                || !building.is_provisional
+                || provisional_opt.is_none()
+            {
                 cancel_coat_wall_task(ctx, wall_entity, commands, "legacy wall not provisional");
                 return;
             }
@@ -162,7 +165,8 @@ pub fn handle_coat_wall_task(
 
     match phase {
         CoatWallPhase::GoingToMaterialCenter => {
-            let Ok((site_transform, _site, _)) = ctx.queries.storage.wall_sites.get(site_entity) else {
+            let Ok((site_transform, _site, _)) = ctx.queries.storage.wall_sites.get(site_entity)
+            else {
                 cancel_coat_wall_task(ctx, tile_entity, commands, "site gone");
                 return;
             };
@@ -230,7 +234,8 @@ pub fn handle_coat_wall_task(
                 return;
             }
 
-            let tile_pos = WorldMap::grid_to_world(tile_blueprint.grid_pos.0, tile_blueprint.grid_pos.1);
+            let tile_pos =
+                WorldMap::grid_to_world(tile_blueprint.grid_pos.0, tile_blueprint.grid_pos.1);
             let reachable = update_destination_to_adjacent(
                 ctx.dest,
                 tile_pos,
@@ -272,7 +277,10 @@ pub fn handle_coat_wall_task(
                 return;
             };
 
-            if building.kind != BuildingType::Wall || !building.is_provisional || provisional_opt.is_none() {
+            if building.kind != BuildingType::Wall
+                || !building.is_provisional
+                || provisional_opt.is_none()
+            {
                 cancel_coat_wall_task(ctx, tile_entity, commands, "wall not provisional");
                 return;
             }

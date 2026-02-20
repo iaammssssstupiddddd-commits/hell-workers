@@ -18,14 +18,7 @@ pub fn wall_construction_completion_system(
         let site_tiles: Vec<(Entity, (i32, i32), WallTileState, Option<Entity>)> = q_tiles
             .iter()
             .filter(|(_, tile)| tile.parent_site == site_entity)
-            .map(|(tile_entity, tile)| {
-                (
-                    tile_entity,
-                    tile.grid_pos,
-                    tile.state,
-                    tile.spawned_wall,
-                )
-            })
+            .map(|(tile_entity, tile)| (tile_entity, tile.grid_pos, tile.state, tile.spawned_wall))
             .collect();
 
         if site_tiles.is_empty() {

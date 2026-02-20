@@ -81,14 +81,20 @@ fn process_dream_planting(
     let cap_remaining = DREAM_TREE_GLOBAL_CAP.saturating_sub(current_tree_count);
 
     if cap_remaining == 0 {
-        info!("DREAM_PLANT: GlobalCapReached ({} / {}). 消費なし。", current_tree_count, DREAM_TREE_GLOBAL_CAP);
+        info!(
+            "DREAM_PLANT: GlobalCapReached ({} / {}). 消費なし。",
+            current_tree_count, DREAM_TREE_GLOBAL_CAP
+        );
         return;
     }
 
     // Dream残高による上限
     let affordable = (dream_pool.points / DREAM_TREE_COST_PER_TREE).floor() as u32;
     if affordable == 0 {
-        info!("DREAM_PLANT: InsufficientDream ({:.1} points). 消費なし。", dream_pool.points);
+        info!(
+            "DREAM_PLANT: InsufficientDream ({:.1} points). 消費なし。",
+            dream_pool.points
+        );
         return;
     }
 
@@ -161,8 +167,6 @@ fn process_dream_planting(
 
     info!(
         "DREAM_PLANT: {}本生成、{:.1} Dream消費（残:{:.1}）",
-        final_spawn,
-        cost,
-        dream_pool.points
+        final_spawn, cost, dream_pool.points
     );
 }

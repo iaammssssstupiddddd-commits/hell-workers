@@ -62,11 +62,11 @@ pub fn handle(
 
         let loaded_count = collected_items.len();
         for &item in &collected_items {
-            commands
-                .entity(item)
-                .insert(crate::relationships::DeliveringTo(
+            if let Ok(mut item_commands) = commands.get_entity(item) {
+                item_commands.try_insert(crate::relationships::DeliveringTo(
                     data.destination.stockpile_or_blueprint().unwrap(),
                 ));
+            }
         }
         let mut next_data = data;
         next_data.items = collected_items;
@@ -83,11 +83,15 @@ pub fn handle(
         return;
     }
 
+    let mut deduped_items = std::collections::HashSet::new();
     // アイテム情報を先に収集（borrowing conflict 回避）
     let items_to_load: Vec<(Entity, Option<Entity>)> = data
         .items
         .iter()
         .filter_map(|&item_entity| {
+            if !deduped_items.insert(item_entity) {
+                return None;
+            }
             let Ok((_, _, _, _, _, _, stored_in_opt)) =
                 ctx.queries.designation.targets.get(item_entity)
             else {
@@ -106,45 +110,36 @@ pub fn handle(
         return;
     }
 
+    let mut loaded_entities = std::collections::HashSet::new();
     for (item_entity, stored_in_stockpile) in &items_to_load {
         release_mixer_mud_storage_for_item(ctx, *item_entity, commands);
-        commands
-            .entity(*item_entity)
-            .insert((Visibility::Hidden, LoadedIn(data.wheelbarrow)));
-        commands
-            .entity(*item_entity)
-            .remove::<crate::relationships::StoredIn>();
-        commands
-            .entity(*item_entity)
-            .remove::<crate::systems::jobs::Designation>();
-        commands
-            .entity(*item_entity)
-            .remove::<crate::systems::jobs::TaskSlots>();
-        commands
-            .entity(*item_entity)
-            .remove::<crate::systems::jobs::Priority>();
-        commands
-            .entity(*item_entity)
-            .remove::<crate::systems::logistics::ReservedForTask>();
+        let Ok(mut item_commands) = commands.get_entity(*item_entity) else {
+            continue;
+        };
+        item_commands.try_insert((Visibility::Hidden, LoadedIn(data.wheelbarrow)));
+        item_commands.try_remove::<crate::relationships::StoredIn>();
+        item_commands.try_remove::<crate::systems::jobs::Designation>();
+        item_commands.try_remove::<crate::systems::jobs::TaskSlots>();
+        item_commands.try_remove::<crate::systems::jobs::Priority>();
+        item_commands.try_remove::<crate::systems::logistics::ReservedForTask>();
 
         if let Some(stock_entity) = stored_in_stockpile {
             update_stockpile_on_item_removal(*stock_entity, &mut ctx.queries.storage.stockpiles);
         }
 
         reservation::record_picked_source(ctx, *item_entity, 1);
+        loaded_entities.insert(*item_entity);
     }
 
-    let loaded_count = items_to_load.len();
+    let loaded_count = loaded_entities.len();
     let total_count = data.items.len();
     if loaded_count < total_count {
-        let loaded_entities: std::collections::HashSet<Entity> =
-            items_to_load.iter().map(|(e, _)| *e).collect();
         for &item_entity in &data.items {
             if !loaded_entities.contains(&item_entity) {
                 reservation::release_source(ctx, item_entity, 1);
-                commands
-                    .entity(item_entity)
-                    .remove::<crate::relationships::DeliveringTo>();
+                if let Ok(mut item_commands) = commands.get_entity(item_entity) {
+                    item_commands.try_remove::<crate::relationships::DeliveringTo>();
+                }
             }
         }
         info!(

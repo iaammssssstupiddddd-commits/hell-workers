@@ -34,7 +34,9 @@ fn toggle_list_section(
             let mut any_toggled = false;
             for (unassigned_entity, has_folded) in unassigned_folded_query.iter() {
                 if has_folded {
-                    commands.entity(unassigned_entity).remove::<UnassignedFolded>();
+                    commands
+                        .entity(unassigned_entity)
+                        .remove::<UnassignedFolded>();
                 } else {
                     commands.entity(unassigned_entity).insert(UnassignedFolded);
                 }

@@ -15,7 +15,14 @@ pub(super) fn spawn_soul_list_item_entity(
     left_margin: f32,
     theme: &UiTheme,
 ) -> Entity {
-    soul_row::spawn_soul_list_item_entity(commands, parent_entity, soul_vm, game_assets, left_margin, theme)
+    soul_row::spawn_soul_list_item_entity(
+        commands,
+        parent_entity,
+        soul_vm,
+        game_assets,
+        left_margin,
+        theme,
+    )
 }
 
 pub(super) fn spawn_familiar_section(
@@ -25,7 +32,13 @@ pub(super) fn spawn_familiar_section(
     game_assets: &crate::assets::GameAssets,
     theme: &UiTheme,
 ) -> FamiliarSectionNodes {
-    familiar_section::spawn_familiar_section(commands, parent_container, familiar, game_assets, theme)
+    familiar_section::spawn_familiar_section(
+        commands,
+        parent_container,
+        familiar,
+        game_assets,
+        theme,
+    )
 }
 
 pub(super) fn spawn_empty_squad_hint_entity(

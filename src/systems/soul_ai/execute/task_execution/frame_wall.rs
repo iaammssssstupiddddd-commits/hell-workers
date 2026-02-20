@@ -24,7 +24,8 @@ pub fn handle_frame_wall_task(
 
     match phase {
         FrameWallPhase::GoingToMaterialCenter => {
-            let Ok((site_transform, _site, _)) = ctx.queries.storage.wall_sites.get(site_entity) else {
+            let Ok((site_transform, _site, _)) = ctx.queries.storage.wall_sites.get(site_entity)
+            else {
                 clear_task_and_path(ctx.task, ctx.path);
                 commands.entity(ctx.soul_entity).remove::<WorkingOn>();
                 return;
@@ -71,7 +72,8 @@ pub fn handle_frame_wall_task(
                 return;
             };
 
-            let tile_pos = WorldMap::grid_to_world(tile_blueprint.grid_pos.0, tile_blueprint.grid_pos.1);
+            let tile_pos =
+                WorldMap::grid_to_world(tile_blueprint.grid_pos.0, tile_blueprint.grid_pos.1);
             update_destination_to_adjacent(
                 ctx.dest,
                 tile_pos,
@@ -110,7 +112,8 @@ pub fn handle_frame_wall_task(
             };
 
             if new_progress_bp >= MAX_PROGRESS_BP {
-                tile_blueprint.wood_delivered = tile_blueprint.wood_delivered.max(WALL_WOOD_PER_TILE);
+                tile_blueprint.wood_delivered =
+                    tile_blueprint.wood_delivered.max(WALL_WOOD_PER_TILE);
                 tile_blueprint.state = WallTileState::FramedProvisional;
 
                 if let Ok((_, mut site, _)) = ctx.queries.storage.wall_sites.get_mut(site_entity) {

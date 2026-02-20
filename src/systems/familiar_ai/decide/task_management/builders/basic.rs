@@ -258,7 +258,8 @@ pub fn issue_coat_wall(
                 return;
             };
             (ctx.task_entity, tile.parent_site, wall_entity)
-        } else if let Ok((_, building, provisional_opt)) = queries.storage.buildings.get(ctx.task_entity)
+        } else if let Ok((_, building, provisional_opt)) =
+            queries.storage.buildings.get(ctx.task_entity)
         {
             if building.kind != crate::systems::jobs::BuildingType::Wall
                 || !building.is_provisional
@@ -277,7 +278,7 @@ pub fn issue_coat_wall(
                 ctx.task_entity
             );
             return;
-    };
+        };
 
     let assigned_task =
         crate::systems::soul_ai::execute::task_execution::types::AssignedTask::CoatWall(

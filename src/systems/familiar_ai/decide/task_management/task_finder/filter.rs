@@ -218,7 +218,8 @@ pub(super) fn candidate_snapshot(
                     tile.state,
                     crate::systems::jobs::wall_construction::WallTileState::CoatingReady
                 ) && tile.spawned_wall.is_some()
-            } else if let Ok((_, building, provisional_opt)) = queries.storage.buildings.get(entity) {
+            } else if let Ok((_, building, provisional_opt)) = queries.storage.buildings.get(entity)
+            {
                 building.kind == crate::systems::jobs::BuildingType::Wall
                     && building.is_provisional
                     && provisional_opt.is_some_and(|provisional| provisional.mud_delivered)

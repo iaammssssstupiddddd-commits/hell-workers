@@ -1,12 +1,8 @@
-use crate::constants::{
-    BLUEPRINT_AUTO_GATHER_INTERVAL_SECS,
-};
+use crate::constants::BLUEPRINT_AUTO_GATHER_INTERVAL_SECS;
 use crate::entities::familiar::{ActiveCommand, FamiliarCommand};
 use crate::relationships::{LoadedIn, ManagedBy, StoredIn, TaskWorkers};
 use crate::systems::command::TaskArea;
-use crate::systems::jobs::{
-    Blueprint, Designation, Rock, TargetBlueprint, Tree,
-};
+use crate::systems::jobs::{Blueprint, Designation, Rock, TargetBlueprint, Tree};
 use crate::systems::logistics::transport_request::TransportRequest;
 use crate::systems::logistics::{ReservedForTask, ResourceItem, ResourceType};
 use crate::world::map::WorldMap;

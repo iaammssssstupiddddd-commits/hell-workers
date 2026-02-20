@@ -8,8 +8,8 @@ use bevy::prelude::*;
 
 use super::task_handler::TaskHandler;
 use crate::systems::soul_ai::execute::task_execution::types::{
-    AssignedTask, BuildData, CoatWallData, CollectBoneData, CollectSandData, GatherData,
-    FrameWallTileData, GatherWaterData, HaulData, HaulToBlueprintData, HaulToMixerData,
+    AssignedTask, BuildData, CoatWallData, CollectBoneData, CollectSandData, FrameWallTileData,
+    GatherData, GatherWaterData, HaulData, HaulToBlueprintData, HaulToMixerData,
     HaulWaterToMixerData, PourFloorTileData, RefineData, ReinforceFloorTileData,
 };
 

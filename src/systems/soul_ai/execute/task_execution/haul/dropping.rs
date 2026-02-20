@@ -39,8 +39,8 @@ pub(super) fn handle_dropping_phase(
                 crate::systems::logistics::ResourceType::BucketEmpty
                     | crate::systems::logistics::ResourceType::BucketWater
             );
-            let type_match =
-                stockpile_comp.resource_type.is_none() || stockpile_comp.resource_type == Some(res_type);
+            let type_match = stockpile_comp.resource_type.is_none()
+                || stockpile_comp.resource_type == Some(res_type);
 
             let ownership_ok = if is_bucket_storage {
                 stock_belongs.is_some() && item_belongs.is_some() && belongs_match
@@ -122,9 +122,15 @@ pub(super) fn handle_dropping_phase(
     } else if let Ok((_, site, _)) = ctx.queries.storage.floor_sites.get(stockpile) {
         commands.entity(item).insert((
             Visibility::Visible,
-            Transform::from_xyz(site.material_center.x, site.material_center.y, Z_ITEM_PICKUP),
+            Transform::from_xyz(
+                site.material_center.x,
+                site.material_center.y,
+                Z_ITEM_PICKUP,
+            ),
         ));
-        commands.entity(item).remove::<crate::relationships::StoredIn>();
+        commands
+            .entity(item)
+            .remove::<crate::relationships::StoredIn>();
         commands
             .entity(item)
             .remove::<crate::relationships::DeliveringTo>();
@@ -137,9 +143,15 @@ pub(super) fn handle_dropping_phase(
     } else if let Ok((_, site, _)) = ctx.queries.storage.wall_sites.get(stockpile) {
         commands.entity(item).insert((
             Visibility::Visible,
-            Transform::from_xyz(site.material_center.x, site.material_center.y, Z_ITEM_PICKUP),
+            Transform::from_xyz(
+                site.material_center.x,
+                site.material_center.y,
+                Z_ITEM_PICKUP,
+            ),
         ));
-        commands.entity(item).remove::<crate::relationships::StoredIn>();
+        commands
+            .entity(item)
+            .remove::<crate::relationships::StoredIn>();
         commands
             .entity(item)
             .remove::<crate::relationships::DeliveringTo>();
@@ -163,7 +175,9 @@ pub(super) fn handle_dropping_phase(
                 Visibility::Visible,
                 Transform::from_xyz(wall_pos.x, wall_pos.y, Z_ITEM_PICKUP),
             ));
-            commands.entity(item).remove::<crate::relationships::StoredIn>();
+            commands
+                .entity(item)
+                .remove::<crate::relationships::StoredIn>();
             commands
                 .entity(item)
                 .remove::<crate::relationships::DeliveringTo>();

@@ -17,16 +17,15 @@ pub fn park_wheelbarrow_entity(
     parking_anchor: Option<Entity>,
     pos: Vec2,
 ) {
+    let Ok(mut wheelbarrow_commands) = commands.get_entity(wheelbarrow) else {
+        return;
+    };
     if let Some(anchor) = parking_anchor {
-        commands.entity(wheelbarrow).insert(ParkedAt(anchor));
+        wheelbarrow_commands.try_insert(ParkedAt(anchor));
     }
-    commands
-        .entity(wheelbarrow)
-        .remove::<(PushedBy, WheelbarrowMovement)>();
-    commands
-        .entity(wheelbarrow)
-        .remove::<crate::relationships::DeliveringTo>();
-    commands.entity(wheelbarrow).insert((
+    wheelbarrow_commands.try_remove::<(PushedBy, WheelbarrowMovement)>();
+    wheelbarrow_commands.try_remove::<crate::relationships::DeliveringTo>();
+    wheelbarrow_commands.try_insert((
         Visibility::Visible,
         Transform::from_xyz(pos.x, pos.y, Z_ITEM_PICKUP),
     ));
@@ -54,9 +53,9 @@ pub fn complete_wheelbarrow_task(
 
         for item_entity in still_loaded {
             if let Ok(mut item_commands) = commands.get_entity(item_entity) {
-                item_commands.remove::<crate::relationships::LoadedIn>();
-                item_commands.remove::<crate::relationships::DeliveringTo>();
-                item_commands.insert((
+                item_commands.try_remove::<crate::relationships::LoadedIn>();
+                item_commands.try_remove::<crate::relationships::DeliveringTo>();
+                item_commands.try_insert((
                     Visibility::Visible,
                     Transform::from_xyz(pos.x, pos.y, Z_ITEM_PICKUP),
                 ));
@@ -74,8 +73,8 @@ pub fn complete_wheelbarrow_task(
 
     park_wheelbarrow_entity(commands, data.wheelbarrow, parking_anchor, pos);
     ctx.inventory.0 = None;
-    commands
-        .entity(ctx.soul_entity)
-        .remove::<crate::relationships::WorkingOn>();
+    if let Ok(mut soul_commands) = commands.get_entity(ctx.soul_entity) {
+        soul_commands.try_remove::<crate::relationships::WorkingOn>();
+    }
     clear_task_and_path(ctx.task, ctx.path);
 }
