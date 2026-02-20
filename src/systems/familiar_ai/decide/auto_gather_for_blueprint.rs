@@ -2,8 +2,9 @@ use crate::constants::BLUEPRINT_AUTO_GATHER_INTERVAL_SECS;
 use crate::entities::familiar::{ActiveCommand, FamiliarCommand};
 use crate::relationships::{LoadedIn, ManagedBy, StoredIn, TaskWorkers};
 use crate::systems::command::TaskArea;
+use crate::systems::jobs::wall_construction::TargetWallConstructionSite;
 use crate::systems::jobs::{Blueprint, Designation, Rock, TargetBlueprint, Tree};
-use crate::systems::logistics::transport_request::TransportRequest;
+use crate::systems::logistics::transport_request::{TransportDemand, TransportRequest};
 use crate::systems::logistics::{ReservedForTask, ResourceItem, ResourceType};
 use crate::world::map::WorldMap;
 use crate::world::pathfinding::PathfindingContext;
@@ -51,6 +52,12 @@ pub fn blueprint_auto_gather_system(
     mut pf_context: Local<PathfindingContext>,
     q_familiars: Query<(Entity, &ActiveCommand, &TaskArea, &Transform)>,
     q_bp_requests: Query<(&TransportRequest, &TargetBlueprint, Option<&TaskWorkers>)>,
+    q_wall_requests: Query<(
+        &TransportRequest,
+        &TargetWallConstructionSite,
+        Option<&TaskWorkers>,
+        Option<&TransportDemand>,
+    )>,
     q_blueprints: Query<&Blueprint>,
     q_ground_items: Query<
         (&Transform, &Visibility, &ResourceItem),
@@ -111,8 +118,12 @@ pub fn blueprint_auto_gather_system(
         .collect();
     owner_areas.sort_by_key(|(entity, _)| entity.to_bits());
 
-    let raw_demand_by_owner =
-        collect_raw_demand_by_owner(&owner_infos, &q_bp_requests, &q_blueprints);
+    let raw_demand_by_owner = collect_raw_demand_by_owner(
+        &owner_infos,
+        &q_bp_requests,
+        &q_wall_requests,
+        &q_blueprints,
+    );
 
     let mut supply_state =
         collect_supply_state(&owner_infos, &owner_areas, &q_ground_items, &q_sources);
