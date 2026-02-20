@@ -15,7 +15,7 @@ pub fn update_drop_popup_system(
         popup.lifetime -= time.delta_secs();
 
         if popup.lifetime <= 0.0 {
-            commands.entity(entity).despawn();
+            commands.entity(entity).try_despawn();
             continue;
         }
 

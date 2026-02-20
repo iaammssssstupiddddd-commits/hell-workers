@@ -59,7 +59,7 @@ pub fn spawn_gather_indicators_system(
                     worker: worker_entity,
                 });
 
-                commands.entity(worker_entity).insert(HasGatherIndicator);
+                commands.entity(worker_entity).try_insert(HasGatherIndicator);
             }
         }
     }
@@ -101,10 +101,10 @@ pub fn update_gather_indicators_system(
                 "VISUAL: Despawning gather icon for worker {:?}",
                 gather_icon.worker
             );
-            commands.entity(icon_entity).despawn();
+            commands.entity(icon_entity).try_despawn();
             // HasGatherIndicatorを削除
             if let Ok(mut entity_commands) = commands.get_entity(gather_icon.worker) {
-                entity_commands.remove::<HasGatherIndicator>();
+                entity_commands.try_remove::<HasGatherIndicator>();
             }
         }
     }
