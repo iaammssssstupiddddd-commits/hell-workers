@@ -1,7 +1,9 @@
 mod components;
+mod gain_visual;
 mod particle;
-mod popup;
+mod ui_particle;
 
 pub use components::*;
+pub use gain_visual::*;
 pub use particle::*;
-pub use popup::*;
+pub use ui_particle::*;

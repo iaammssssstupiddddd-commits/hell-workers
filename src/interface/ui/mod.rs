@@ -10,6 +10,7 @@ pub mod plugins;
 pub mod presentation;
 pub mod setup;
 pub mod theme;
+pub mod vignette;
 
 // 公開API
 pub use components::*;

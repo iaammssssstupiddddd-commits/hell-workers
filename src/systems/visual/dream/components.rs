@@ -23,3 +23,15 @@ pub struct DreamVisualState {
 pub struct DreamGainPopup {
     pub floating_text: FloatingText,
 }
+
+#[derive(Component)]
+pub struct DreamGainUiParticle {
+    pub lifetime: f32,
+    pub max_lifetime: f32,
+    pub start_pos: Vec2,
+    pub target_pos: Vec2,
+    pub control_point_1: Vec2,
+    pub control_point_2: Vec2,
+    pub control_point_3: Vec2,
+}
+

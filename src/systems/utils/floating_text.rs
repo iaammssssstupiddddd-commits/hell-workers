@@ -96,3 +96,26 @@ pub fn update_floating_text(
 
     (false, new_position, alpha)
 }
+
+/// 単体で動作するFloatingText用のシステム
+pub fn update_all_floating_texts_system(
+    mut commands: Commands,
+    time: Res<Time>,
+    mut q_texts: Query<(Entity, &mut FloatingText, &mut Transform, &mut TextColor)>,
+) {
+    for (entity, mut text, mut transform, mut text_color) in q_texts.iter_mut() {
+        let current_pos = transform.translation;
+        let (despawn, new_pos, alpha) = update_floating_text(&time, &mut text, current_pos);
+
+        if despawn {
+            commands.entity(entity).try_despawn();
+            continue;
+        }
+
+        transform.translation = new_pos;
+        let mut color = text_color.0.to_srgba();
+        color.alpha = alpha;
+        text_color.0 = color.into();
+    }
+}
+

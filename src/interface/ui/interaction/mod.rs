@@ -14,6 +14,7 @@ pub(crate) use common::despawn_context_menus;
 pub use status_display::{
     task_summary_ui_system, update_area_edit_preview_ui_system, update_dream_pool_display_system,
     update_fps_display_system, update_mode_text_system, update_speed_button_highlight_system,
+    update_dream_loss_popup_ui_system,
 };
 pub(crate) use tooltip::hover_tooltip_system;
 

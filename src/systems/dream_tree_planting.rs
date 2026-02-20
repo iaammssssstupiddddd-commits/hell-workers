@@ -161,7 +161,6 @@ fn process_dream_planting(
         world_map.add_obstacle(gx, gy);
     }
 
-    // DreamPool 消費
     let cost = final_spawn as f32 * DREAM_TREE_COST_PER_TREE;
     dream_pool.points -= cost;
 
@@ -169,4 +168,23 @@ fn process_dream_planting(
         "DREAM_PLANT: {}本生成、{:.1} Dream消費（残:{:.1}）",
         final_spawn, cost, dream_pool.points
     );
+
+    // 消費エフェクト (-Dream) のポップアップ生成
+    let popup_pos = start.extend(Z_FLOATING_TEXT) + Vec3::new(0.0, 20.0, 0.0);
+    let config = crate::systems::utils::floating_text::FloatingTextConfig {
+        lifetime: 1.5,
+        velocity: Vec2::new(0.0, 30.0),
+        initial_color: Color::srgb(1.0, 0.3, 0.3), // 赤色でマイナスを表現
+        fade_out: true,
+    };
+    
+    crate::systems::utils::floating_text::spawn_floating_text(
+        commands,
+        format!("-{:.1} Dream", cost),
+        popup_pos,
+        config.clone(),
+        Some(16.0),
+        game_assets.font_ui.clone(),
+    );
+
 }

@@ -1,3 +1,7 @@
+//! Dream 獲得時のビジュアル表現（UIパーティクル・ポップアップテキスト）
+//!
+//! 今後 Dream 獲得表現を拡張する際はこのファイルを編集してください。
+
 use super::components::{DreamGainPopup, DreamVisualState};
 use crate::assets::GameAssets;
 use crate::constants::*;
@@ -18,6 +22,8 @@ fn dream_gain_rate(quality: DreamQuality) -> f32 {
     }
 }
 
+/// 睡眠中の Soul からポップアップテキストおよび UI パーティクルを生成するシステム。
+/// Dream 獲得量が `DREAM_POPUP_THRESHOLD` を超えるたびに発火する。
 pub fn dream_popup_spawn_system(
     mut commands: Commands,
     time: Res<Time>,
@@ -32,8 +38,32 @@ pub fn dream_popup_spawn_system(
         ),
         With<DamnedSoul>,
     >,
+    q_camera: Query<(&Camera, &GlobalTransform), With<crate::interface::camera::MainCamera>>,
+    q_ui_root: Query<Entity, With<crate::interface::ui::components::UiRoot>>,
+    ui_nodes: Res<crate::interface::ui::components::UiNodeRegistry>,
+    q_ui_transform: Query<(&ComputedNode, &UiGlobalTransform)>,
 ) {
     let dt = time.delta_secs();
+
+    let Some((camera, camera_transform)) = q_camera.iter().next() else {
+        return;
+    };
+    let Some(ui_root) = q_ui_root.iter().next() else {
+        return;
+    };
+
+    let viewport_size = camera
+        .logical_viewport_size()
+        .unwrap_or(Vec2::new(1920.0, 1080.0));
+
+    let mut target_pos = Vec2::new(viewport_size.x - 80.0, 40.0);
+
+    if let Some(entity) = ui_nodes.get_slot(crate::interface::ui::components::UiSlot::DreamPoolIcon) {
+        if let Ok((computed, transform)) = q_ui_transform.get(entity) {
+            let center = transform.translation * computed.inverse_scale_factor();
+            target_pos = center;
+        }
+    }
 
     for (transform, idle, dream, participating_in, mut visual_state) in q_souls.iter_mut() {
         let is_sleeping = idle.behavior == IdleBehavior::Sleeping
@@ -61,11 +91,13 @@ pub fn dream_popup_spawn_system(
                 fade_out: true,
             };
 
+            let popup_pos = transform.translation.truncate().extend(Z_FLOATING_TEXT)
+                + Vec3::new(0.0, DREAM_POPUP_OFFSET_Y, 0.0);
+
             let popup_entity = spawn_floating_text(
                 &mut commands,
                 "+Dream",
-                transform.translation.truncate().extend(Z_FLOATING_TEXT)
-                    + Vec3::new(0.0, DREAM_POPUP_OFFSET_Y, 0.0),
+                popup_pos,
                 config.clone(),
                 Some(DREAM_POPUP_FONT_SIZE),
                 assets.font_ui.clone(),
@@ -77,10 +109,24 @@ pub fn dream_popup_spawn_system(
                     config,
                 },
             });
+
+            // UIパーティクルの発生
+            if let Ok(start_pos) = camera.world_to_viewport(camera_transform, popup_pos) {
+                super::ui_particle::spawn_ui_particle(
+                    &mut commands,
+                    start_pos,
+                    target_pos,
+                    viewport_size,
+                    1.5,
+                    ui_root,
+                    &assets,
+                );
+            }
         }
     }
 }
 
+/// Dream 獲得ポップアップの表示更新（フェードアウト・移動）システム
 pub fn dream_popup_update_system(
     mut commands: Commands,
     time: Res<Time>,

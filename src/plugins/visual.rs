@@ -28,7 +28,7 @@ use crate::systems::visual::blueprint::{
 use crate::systems::visual::dream::{
     dream_particle_spawn_system, dream_particle_update_system, dream_popup_spawn_system,
     dream_popup_update_system, ensure_dream_visual_state_system,
-    rest_area_dream_particle_spawn_system,
+    rest_area_dream_particle_spawn_system, ui_particle_update_system,
 };
 use crate::systems::visual::fade::fade_out_system;
 use crate::systems::visual::floor_construction::{
@@ -54,6 +54,7 @@ use crate::systems::visual::task_area_visual::{
     TaskAreaMaterial, update_task_area_material_system,
 };
 use crate::systems::visual::wall_connection::WallConnectionPlugin;
+use crate::systems::utils::floating_text::update_all_floating_texts_system;
 use crate::systems::visual::wall_construction::{
     manage_wall_progress_bars_system, update_wall_progress_bars_system,
     update_wall_tile_visuals_system,
@@ -195,6 +196,8 @@ impl Plugin for VisualPlugin {
                 dream_popup_spawn_system,
                 dream_particle_update_system,
                 dream_popup_update_system,
+                ui_particle_update_system,
+                update_all_floating_texts_system,
             )
                 .chain()
                 .in_set(GameSystemSet::Visual),

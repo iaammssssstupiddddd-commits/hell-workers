@@ -234,4 +234,5 @@ fn setup_ui_internal(
     spawn_area_edit_preview(&mut commands, &game_assets, &theme, overlay_slot, ui_nodes);
     spawn_fps_display(&mut commands, &theme, top_right_slot, ui_nodes);
     dialogs::spawn_dialogs(&mut commands, &game_assets, &theme, overlay_slot, ui_nodes);
+    crate::interface::ui::vignette::spawn_vignette_ui(&mut commands, overlay_slot);
 }
