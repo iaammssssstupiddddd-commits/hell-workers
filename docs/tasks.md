@@ -65,7 +65,7 @@ Bevy 0.18 の **ECS Relationships** 機能を使用し、エンティティ間�
 
 
 ### 2. 割り当て (Assignment)
-- 使い魔 AI が自分のキュー、またはグローバルキューから最も近い有効なタスクを配下の魂に割り当てる。
+- 使い魔 AI が `DesignationSpatialGrid` / `TransportRequestSpatialGrid` / `ManagedTasks` から候補を一括収集し、配下のアイドル魂へ割り当てる。
 - **排他制御 (SharedResourceCache)**:
     - 割り当て時は `SharedResourceCache` を参照し、過剰割り当てを防ぎます。
     - **予約の再構築**: `sync_reservations_system` は以下の2つのソースから予約を **0.2秒間隔（初回即時）** で再構築します:
@@ -77,7 +77,15 @@ Bevy 0.18 の **ECS Relationships** 機能を使用し、エンティティ間�
 - **優先度 (Priority)**:
     - **High (10)**: 建築作業 (`WorkType::Build`)、建築資材の運搬（設計図への `Haul`）。これらは距離に関わらず最優先で割り当てられる。
     - **Low (0)**: 通常の資源採取、備蓄への運搬。
-    - 同じ優先度内では、使い魔からの距離が近いものが選ばれる。
+    - 実割り当て時は worker ごとに `priority 0.65 + worker距離 0.35` で再スコアされる。
+- **割り当て手順（worker-aware）**:
+    - worker を使い魔から近い順で処理。
+    - 候補を worker 距離で事前フィルタ（60タイル超は除外）。
+    - `Top-K (24)` を先に評価し、未割り当てなら残り候補をフォールバック評価。
+    - 1ティックで複数 worker を同時割り当て（重複割り当ては `assigned_tasks` で防止）。
+- **到達判定キャッシュ**:
+    - `(worker_grid, target_grid)` をキーに `ReachabilityFrameCache` を利用。
+    - キャッシュは Familiar委譲処理で共有され、5フレームごとにクリア。
 - 魂の `AssignedTask` コンポーネントにターゲット情報が書き込まれる。
 - **リクルート条件**: 使い魔は `command_radius`（影響範囲）内のワーカーのみリクルート可能。範囲外でも空きがあればスカウトに向かう（詳細は [familiar_ai.md](familiar_ai.md) 参照）。
 - **疲労チェック**: 各使い魔が設定した `fatigue_threshold` を超えるワーカーにはタスクを割り当てない。

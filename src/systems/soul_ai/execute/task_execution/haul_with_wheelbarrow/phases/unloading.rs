@@ -165,6 +165,34 @@ pub fn handle(
                     destination_store_count += 1;
                     unloaded_count += 1;
                 }
+            } else if let Ok((wall_transform, building, _)) = ctx.queries.storage.buildings.get(dest_stockpile) {
+                if building.kind == crate::systems::jobs::BuildingType::Wall && building.is_provisional {
+                    let site_pos = wall_transform.translation.truncate();
+                    for (index, (item_entity, _res_type_opt)) in item_types.iter().enumerate() {
+                        let offset = Vec2::new((index as f32) * 2.0, 0.0);
+                        let drop_pos = site_pos + offset;
+                        commands.entity(*item_entity).insert((
+                            Visibility::Visible,
+                            Transform::from_xyz(drop_pos.x, drop_pos.y, Z_ITEM_PICKUP),
+                        ));
+                        commands.entity(*item_entity).remove::<LoadedIn>();
+                        commands
+                            .entity(*item_entity)
+                            .remove::<crate::relationships::DeliveringTo>();
+                        commands
+                            .entity(*item_entity)
+                            .remove::<crate::systems::jobs::IssuedBy>();
+                        commands
+                            .entity(*item_entity)
+                            .remove::<crate::relationships::TaskWorkers>();
+                        commands.entity(*item_entity).remove::<StoredIn>();
+                        destination_store_count += 1;
+                        unloaded_count += 1;
+                    }
+                } else {
+                    cancel::cancel_wheelbarrow_task(ctx, &data, commands);
+                    return;
+                }
             } else {
                 cancel::cancel_wheelbarrow_task(ctx, &data, commands);
                 return;
