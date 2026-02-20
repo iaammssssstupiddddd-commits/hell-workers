@@ -4,7 +4,7 @@ use crate::game_state::{
 };
 use crate::interface::camera::MainCamera;
 use crate::systems::jobs::BuildingType;
-use crate::world::map::WorldMap;
+use crate::world::map::{RIVER_Y_MIN, WorldMap};
 use bevy::prelude::*;
 
 const TANK_NEARBY_BUCKET_STORAGE_TILES: i32 = 3;
@@ -83,6 +83,14 @@ pub fn placement_ghost_system(
         vec![grid_pos, (grid_pos.0 + 1, grid_pos.1)]
     } else {
         match building_type {
+            BuildingType::Bridge => (0..5)
+                .flat_map(|dy| {
+                    [
+                        (grid_pos.0, RIVER_Y_MIN + dy),
+                        (grid_pos.0 + 1, RIVER_Y_MIN + dy),
+                    ]
+                })
+                .collect(),
             BuildingType::Tank
             | BuildingType::MudMixer
             | BuildingType::RestArea
@@ -99,11 +107,19 @@ pub fn placement_ghost_system(
     };
 
     // 配置可能かチェック
-    let can_place_on_grid = occupied_grids.iter().all(|&g| {
-        !world_map.buildings.contains_key(&g)
-            && !world_map.stockpiles.contains_key(&g)
-            && world_map.is_walkable(g.0, g.1)
-    });
+    let can_place_on_grid = if building_type == BuildingType::Bridge {
+        occupied_grids.iter().all(|&g| {
+            !world_map.buildings.contains_key(&g)
+                && !world_map.stockpiles.contains_key(&g)
+                && world_map.is_river_tile(g.0, g.1)
+        })
+    } else {
+        occupied_grids.iter().all(|&g| {
+            !world_map.buildings.contains_key(&g)
+                && !world_map.stockpiles.contains_key(&g)
+                && world_map.is_walkable(g.0, g.1)
+        })
+    };
     let in_companion_range = companion_state
         .0
         .as_ref()
@@ -130,6 +146,10 @@ pub fn placement_ghost_system(
         base_pos + Vec2::new(TILE_SIZE * 0.5, 0.0)
     } else {
         match building_type {
+            BuildingType::Bridge => {
+                let base_pos = WorldMap::grid_to_world(grid_pos.0, RIVER_Y_MIN);
+                base_pos + Vec2::new(TILE_SIZE * 0.5, TILE_SIZE * 2.0)
+            }
             BuildingType::Tank
             | BuildingType::MudMixer
             | BuildingType::RestArea
@@ -154,6 +174,10 @@ pub fn placement_ghost_system(
             BuildingType::Tank => (game_assets.tank_empty.clone(), Vec2::splat(TILE_SIZE * 2.0)),
             BuildingType::MudMixer => (game_assets.mud_mixer.clone(), Vec2::splat(TILE_SIZE * 2.0)),
             BuildingType::RestArea => (game_assets.rest_area.clone(), Vec2::splat(TILE_SIZE * 2.0)),
+            BuildingType::Bridge => (
+                game_assets.bridge.clone(),
+                Vec2::new(TILE_SIZE * 2.0, TILE_SIZE * 5.0),
+            ),
             BuildingType::SandPile => (game_assets.sand_pile.clone(), Vec2::splat(TILE_SIZE)),
             BuildingType::BonePile => (game_assets.bone_pile.clone(), Vec2::splat(TILE_SIZE)),
             BuildingType::WheelbarrowParking => (

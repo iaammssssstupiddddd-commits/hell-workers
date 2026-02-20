@@ -110,6 +110,27 @@ pub fn blueprint_auto_haul_system(
                 (fam_entity, desired_slots, bp_pos),
             );
         }
+
+        if let Some(flexible) = &blueprint.flexible_material_requirement
+            && !flexible.is_complete()
+        {
+            let total_inflight: u32 = flexible
+                .accepted_types
+                .iter()
+                .map(|resource_type| *in_flight.get(&(bp_entity, *resource_type)).unwrap_or(&0) as u32)
+                .sum();
+            let remaining = flexible.remaining().saturating_sub(total_inflight);
+            if remaining > 0 {
+                for &resource_type in &flexible.accepted_types {
+                    let desired_slots = if resource_type.requires_wheelbarrow() {
+                        remaining.div_ceil(WHEELBARROW_CAPACITY as u32).max(1)
+                    } else {
+                        remaining.max(1)
+                    };
+                    desired_requests.insert((bp_entity, resource_type), (fam_entity, desired_slots, bp_pos));
+                }
+            }
+        }
     }
 
     // 3. request エンティティの upsert / cleanup（共通ヘルパー使用）

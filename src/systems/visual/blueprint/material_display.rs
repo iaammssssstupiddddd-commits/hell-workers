@@ -21,15 +21,7 @@ pub fn spawn_material_display_system(
         // 必要な資材ごとにアイコンとカウンターを生成
         let mut i = 0;
         for (resource_type, _) in &bp.required_materials {
-            let icon_image = match *resource_type {
-                ResourceType::Wood => game_assets.icon_wood_small.clone(),
-                ResourceType::Rock => game_assets.icon_rock_small.clone(),
-                ResourceType::Water => game_assets.icon_water_small.clone(),
-                ResourceType::Sand => game_assets.icon_sand_small.clone(),
-                ResourceType::Bone => game_assets.icon_bone_small.clone(),
-                ResourceType::StasisMud => game_assets.icon_stasis_mud_small.clone(),
-                _ => game_assets.icon_hammer.clone(),
-            };
+            let icon_image = material_icon_for(&game_assets, *resource_type);
 
             let offset = Vec3::new(
                 MATERIAL_ICON_X_OFFSET,
@@ -71,6 +63,53 @@ pub fn spawn_material_display_system(
 
             i += 1;
         }
+
+        if let Some(flexible) = &bp.flexible_material_requirement
+            && let Some(&proxy_resource_type) = flexible.accepted_types.first()
+        {
+            let icon_image = material_icon_for(&game_assets, proxy_resource_type);
+            let offset = Vec3::new(
+                MATERIAL_ICON_X_OFFSET,
+                MATERIAL_ICON_Y_OFFSET - (i as f32 * 14.0),
+                0.1,
+            );
+
+            commands.entity(bp_entity).with_children(|parent| {
+                parent.spawn((
+                    MaterialIcon {
+                        _resource_type: proxy_resource_type,
+                    },
+                    Sprite {
+                        image: icon_image,
+                        custom_size: Some(Vec2::splat(12.0)),
+                        ..default()
+                    },
+                    Transform::from_translation(offset),
+                    Name::new(format!(
+                        "MaterialIcon (Flexible {:?})",
+                        flexible.accepted_types
+                    )),
+                ));
+
+                parent.spawn((
+                    MaterialCounter {
+                        resource_type: proxy_resource_type,
+                    },
+                    Text2d::new("0/0"),
+                    TextFont {
+                        font_size: 10.0,
+                        ..default()
+                    },
+                    TextColor(Color::WHITE),
+                    TextLayout::new_with_justify(Justify::Left),
+                    Transform::from_translation(offset + COUNTER_TEXT_OFFSET),
+                    Name::new(format!(
+                        "MaterialCounter (Flexible {:?})",
+                        flexible.accepted_types
+                    )),
+                ));
+            });
+        }
     }
 }
 
@@ -81,6 +120,22 @@ pub fn update_material_counter_system(
 ) {
     for (counter, child_of, mut text) in q_counters.iter_mut() {
         if let Ok(bp) = q_blueprints.get(child_of.parent()) {
+            if let Some(flexible) = &bp.flexible_material_requirement
+                && flexible.accepts(counter.resource_type)
+            {
+                let accepted = flexible
+                    .accepted_types
+                    .iter()
+                    .map(|resource_type| format!("{:?}", resource_type))
+                    .collect::<Vec<_>>()
+                    .join("/");
+                text.0 = format!(
+                    "{} {}/{}",
+                    accepted, flexible.delivered_total, flexible.required_total
+                );
+                continue;
+            }
+
             let delivered = bp
                 .delivered_materials
                 .get(&counter.resource_type)
@@ -91,6 +146,18 @@ pub fn update_material_counter_system(
                 .unwrap_or(&0);
             text.0 = format!("{}/{}", delivered, required);
         }
+    }
+}
+
+fn material_icon_for(game_assets: &GameAssets, resource_type: ResourceType) -> Handle<Image> {
+    match resource_type {
+        ResourceType::Wood => game_assets.icon_wood_small.clone(),
+        ResourceType::Rock => game_assets.icon_rock_small.clone(),
+        ResourceType::Water => game_assets.icon_water_small.clone(),
+        ResourceType::Sand => game_assets.icon_sand_small.clone(),
+        ResourceType::Bone => game_assets.icon_bone_small.clone(),
+        ResourceType::StasisMud => game_assets.icon_stasis_mud_small.clone(),
+        _ => game_assets.icon_hammer.clone(),
     }
 }
 

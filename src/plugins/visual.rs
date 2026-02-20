@@ -27,7 +27,7 @@ use crate::systems::visual::blueprint::{
 };
 use crate::systems::visual::dream::{
     dream_particle_spawn_system, dream_particle_update_system, dream_popup_spawn_system,
-    dream_popup_update_system, ensure_dream_visual_state_system,
+    dream_popup_update_system, ensure_dream_visual_state_system, rest_area_dream_particle_spawn_system,
 };
 use crate::systems::visual::fade::fade_out_system;
 use crate::systems::visual::floor_construction::{
@@ -190,6 +190,7 @@ impl Plugin for VisualPlugin {
             (
                 ensure_dream_visual_state_system,
                 dream_particle_spawn_system,
+                rest_area_dream_particle_spawn_system,
                 dream_popup_spawn_system,
                 dream_particle_update_system,
                 dream_popup_update_system,
