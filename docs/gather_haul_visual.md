@@ -74,7 +74,9 @@ systems/visual/
 
 ### 運搬中アイテム
 
-`Holding` リレーションシップを持つワーカーの頭上に、運搬中のリソースタイプに応じたミニアイコンが表示されます。
+`Inventory` が参照する `ResourceItem` に応じて、ワーカー頭上にミニアイコンが表示されます。
+
+- **安全なクリーンアップ**: worker / icon の削除競合を避けるため、`commands.queue(|world| ...)` で apply 時点の生存確認を行ってから `HasCarryingIndicator` の付与/解除と icon の `despawn` を実行します。
 
 ### 手押し車の追従表示
 

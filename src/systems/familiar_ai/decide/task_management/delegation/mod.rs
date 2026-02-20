@@ -4,10 +4,12 @@ mod members;
 use crate::relationships::ManagedTasks;
 use crate::systems::command::TaskArea;
 use crate::systems::familiar_ai::decide::task_management::ReservationShadow;
+use crate::systems::familiar_ai::decide::task_delegation::ReachabilityCacheKey;
 use crate::systems::spatial::{DesignationSpatialGrid, TransportRequestSpatialGrid};
 use crate::world::map::WorldMap;
 use crate::world::pathfinding::PathfindingContext;
 use bevy::prelude::*;
+use std::collections::HashMap;
 
 use crate::systems::familiar_ai::FamiliarSoulQuery;
 
@@ -33,6 +35,7 @@ impl TaskManager {
         world_map: &WorldMap,
         pf_context: &mut PathfindingContext,
         reservation_shadow: &mut ReservationShadow,
+        reachability_cache: &mut HashMap<ReachabilityCacheKey, bool>,
     ) -> Option<Entity> {
         let idle_members = collect_idle_members(squad, fatigue_threshold, q_souls);
 
@@ -50,6 +53,7 @@ impl TaskManager {
             world_map,
             pf_context,
             reservation_shadow,
+            reachability_cache,
         )
     }
 }

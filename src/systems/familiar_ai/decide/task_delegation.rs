@@ -10,7 +10,18 @@ use crate::world::map::WorldMap;
 use crate::world::pathfinding::PathfindingContext;
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
+use std::collections::HashMap;
 use std::time::Instant;
+
+pub type ReachabilityCacheKey = ((i32, i32), (i32, i32));
+
+#[derive(Resource, Default)]
+pub struct ReachabilityFrameCache {
+    pub cache: HashMap<ReachabilityCacheKey, bool>,
+    pub age: u32,
+}
+
+const REACHABILITY_FRAME_CACHE_CLEAR_INTERVAL_FRAMES: u32 = 5;
 
 /// 使い魔AIのタスク委譲に必要なSystemParam
 #[derive(SystemParam)]
@@ -25,6 +36,7 @@ pub struct FamiliarAiTaskDelegationParams<'w, 's> {
     pub transport_request_grid: Res<'w, TransportRequestSpatialGrid>,
     pub world_map: Res<'w, WorldMap>,
     pub pf_context: Local<'s, PathfindingContext>,
+    pub reachability_frame_cache: ResMut<'w, ReachabilityFrameCache>,
     pub perf_metrics: ResMut<'w, FamiliarDelegationPerfMetrics>,
 }
 
@@ -41,9 +53,16 @@ pub fn familiar_task_delegation_system(params: FamiliarAiTaskDelegationParams) {
         transport_request_grid,
         world_map,
         mut pf_context,
+        mut reachability_frame_cache,
         mut perf_metrics,
         ..
     } = params;
+
+    reachability_frame_cache.age = reachability_frame_cache.age.saturating_add(1);
+    if reachability_frame_cache.age >= REACHABILITY_FRAME_CACHE_CLEAR_INTERVAL_FRAMES {
+        reachability_frame_cache.cache.clear();
+        reachability_frame_cache.age = 0;
+    }
 
     let timer_finished = delegation_timer.timer.tick(time.delta()).just_finished();
     let allow_task_delegation = !delegation_timer.first_run_done || timer_finished;
@@ -104,6 +123,7 @@ pub fn familiar_task_delegation_system(params: FamiliarAiTaskDelegationParams) {
             allow_task_delegation,
             state_changed,
             reservation_shadow: &mut reservation_shadow,
+            reachability_frame_cache: &mut reachability_frame_cache.cache,
         };
         process_task_delegation_and_movement(&mut delegation_ctx);
     }
