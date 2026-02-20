@@ -17,12 +17,54 @@ use bevy::prelude::*;
 /// リクルート管理ユーティリティ
 pub struct RecruitmentManager;
 
+const RECRUIT_MAX_SEARCH_RADIUS: f32 = TILE_SIZE * 160.0;
+const RECRUIT_GOOD_ENOUGH_SCORE: f32 = 0.72;
+const RECRUIT_WEIGHT_DISTANCE: f32 = 0.40;
+const RECRUIT_WEIGHT_FATIGUE: f32 = 0.30;
+const RECRUIT_WEIGHT_DIRECTION: f32 = 0.15;
+const RECRUIT_WEIGHT_MOTIVATION: f32 = 0.15;
+
+fn score_recruit(
+    soul_pos: Vec2,
+    fam_pos: Vec2,
+    task_area_center: Option<Vec2>,
+    fatigue: f32,
+    fatigue_threshold: f32,
+    motivation: f32,
+) -> f32 {
+    let max_dist_sq = RECRUIT_MAX_SEARCH_RADIUS * RECRUIT_MAX_SEARCH_RADIUS;
+    let dist_sq = soul_pos.distance_squared(fam_pos);
+    let dist_score = 1.0 - (dist_sq / max_dist_sq).min(1.0);
+
+    let fatigue_score = if fatigue_threshold > f32::EPSILON {
+        ((fatigue_threshold - fatigue).max(0.0) / fatigue_threshold).clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
+
+    let direction_score = if let Some(area_center) = task_area_center {
+        let fam_to_area = (area_center - fam_pos).normalize_or_zero();
+        let fam_to_soul = (soul_pos - fam_pos).normalize_or_zero();
+        ((fam_to_area.dot(fam_to_soul) + 1.0) * 0.5).clamp(0.0, 1.0)
+    } else {
+        0.5
+    };
+
+    let motivation_score = motivation.clamp(0.0, 1.0);
+
+    dist_score * RECRUIT_WEIGHT_DISTANCE
+        + fatigue_score * RECRUIT_WEIGHT_FATIGUE
+        + direction_score * RECRUIT_WEIGHT_DIRECTION
+        + motivation_score * RECRUIT_WEIGHT_MOTIVATION
+}
+
 impl RecruitmentManager {
     /// 条件に合う魂を検索する (リクルート用)
     pub fn find_best_recruit(
         fam_pos: Vec2,
         fatigue_threshold: f32,
         _min_fatigue: f32,
+        task_area_center: Option<Vec2>,
         spatial_grid: &SpatialGrid,
         q_souls: &mut FamiliarSoulQuery,
         q_breakdown: &Query<&StressBreakdown>,
@@ -31,7 +73,7 @@ impl RecruitmentManager {
         radius_opt: Option<f32>,
     ) -> Option<Entity> {
         // 候補をフィルタリングするヘルパークロージャ
-        let filter_candidate = |e: Entity| -> Option<(Entity, Vec2)> {
+        let filter_candidate = |e: Entity| -> Option<(Entity, Vec2, f32, f32)> {
             let (entity, transform, soul, task, _, _, idle, _, uc, _): (
                 Entity,
                 &Transform,
@@ -63,28 +105,44 @@ impl RecruitmentManager {
                 && idle.behavior != IdleBehavior::GoingToRest
                 && idle.behavior != IdleBehavior::ExhaustedGathering
             {
-                Some((entity, transform.translation.truncate()))
+                Some((
+                    entity,
+                    transform.translation.truncate(),
+                    soul.fatigue,
+                    soul.motivation,
+                ))
             } else {
                 None
             }
         };
 
-        // 候補リストから最も近いエンティティを選択するヘルパー
-        let find_nearest = |candidates: Vec<(Entity, Vec2)>| -> Option<Entity> {
-            candidates
-                .into_iter()
-                .min_by(|(_, p1), (_, p2)| {
-                    p1.distance_squared(fam_pos)
-                        .partial_cmp(&p2.distance_squared(fam_pos))
-                        .unwrap_or(std::cmp::Ordering::Equal)
-                })
-                .map(|(e, _)| e)
-        };
+        // 候補リストから最も高スコアのエンティティを選択するヘルパー
+        let find_best_scored =
+            |candidates: Vec<(Entity, Vec2, f32, f32)>| -> Option<(Entity, f32)> {
+                candidates
+                    .into_iter()
+                    .fold(None, |best, (entity, soul_pos, fatigue, motivation)| {
+                        let score = score_recruit(
+                            soul_pos,
+                            fam_pos,
+                            task_area_center,
+                            fatigue,
+                            fatigue_threshold,
+                            motivation,
+                        );
+                        match best {
+                            Some((best_entity, best_score)) if best_score >= score => {
+                                Some((best_entity, best_score))
+                            }
+                            _ => Some((entity, score)),
+                        }
+                    })
+            };
 
         if let Some(radius) = radius_opt {
             let nearby = spatial_grid.get_nearby_in_radius(fam_pos, radius);
             let candidates: Vec<_> = nearby.iter().filter_map(|&e| filter_candidate(e)).collect();
-            return find_nearest(candidates);
+            return find_best_scored(candidates).map(|(entity, _)| entity);
         }
 
         // radius_opt = None の場合: 段階的に検索半径を拡大
@@ -95,17 +153,29 @@ impl RecruitmentManager {
             TILE_SIZE * 160.0, // 5120px - 超遠方（マップ端対応）
         ];
 
+        let mut overall_best: Option<(Entity, f32)> = None;
+
         for &radius in &search_tiers {
             let radius: f32 = radius;
             let nearby = spatial_grid.get_nearby_in_radius(fam_pos, radius);
             let candidates: Vec<_> = nearby.iter().filter_map(|&e| filter_candidate(e)).collect();
 
-            if let Some(best) = find_nearest(candidates) {
-                return Some(best);
+            if let Some((entity, score)) = find_best_scored(candidates) {
+                let should_replace = match overall_best {
+                    Some((_, best_score)) => score > best_score,
+                    None => true,
+                };
+                if should_replace {
+                    overall_best = Some((entity, score));
+                }
+
+                if score >= RECRUIT_GOOD_ENOUGH_SCORE {
+                    return Some(entity);
+                }
             }
         }
 
-        None
+        overall_best.map(|(entity, _)| entity)
     }
 
     /// 即座にリクルートを試みる（近場の候補）
@@ -117,6 +187,7 @@ impl RecruitmentManager {
         fam_pos: Vec2,
         command_radius: f32,
         fatigue_threshold: f32,
+        task_area_center: Option<Vec2>,
         spatial_grid: &SpatialGrid,
         q_souls: &mut FamiliarSoulQuery,
         q_breakdown: &Query<&StressBreakdown>,
@@ -128,6 +199,7 @@ impl RecruitmentManager {
             fam_pos,
             fatigue_threshold,
             0.0,
+            task_area_center,
             spatial_grid,
             q_souls,
             q_breakdown,
@@ -154,6 +226,7 @@ impl RecruitmentManager {
     pub fn start_scouting(
         fam_pos: Vec2,
         fatigue_threshold: f32,
+        task_area_center: Option<Vec2>,
         spatial_grid: &SpatialGrid,
         q_souls: &mut FamiliarSoulQuery,
         q_breakdown: &Query<&StressBreakdown>,
@@ -164,6 +237,7 @@ impl RecruitmentManager {
             fam_pos,
             fatigue_threshold,
             0.0,
+            task_area_center,
             spatial_grid,
             q_souls,
             q_breakdown,

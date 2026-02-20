@@ -63,6 +63,26 @@ pub fn handle(
                     reachable,
                     is_near_target_or_dest(soul_pos, site_pos, ctx.dest.0),
                 )
+            } else if let Ok((wall_transform, building, _)) = ctx.queries.storage.buildings.get(stockpile_entity) {
+                if building.kind == crate::systems::jobs::BuildingType::Wall && building.is_provisional {
+                    let site_pos = wall_transform.translation.truncate();
+                    let reachable = update_destination_to_adjacent(
+                        ctx.dest,
+                        site_pos,
+                        ctx.path,
+                        soul_pos,
+                        world_map,
+                        ctx.pf_context,
+                    );
+                    (
+                        reachable,
+                        is_near_target_or_dest(soul_pos, site_pos, ctx.dest.0),
+                    )
+                } else {
+                    info!("WB_HAUL: Destination stockpile/site not found, canceling");
+                    cancel::cancel_wheelbarrow_task(ctx, &data, commands);
+                    return;
+                }
             } else {
                 info!("WB_HAUL: Destination stockpile/site not found, canceling");
                 cancel::cancel_wheelbarrow_task(ctx, &data, commands);

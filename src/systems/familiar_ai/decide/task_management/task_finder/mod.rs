@@ -27,6 +27,7 @@ pub struct DelegationCandidate {
 pub struct ScoredDelegationCandidate {
     pub candidate: DelegationCandidate,
     pub priority: i32,
+    pub pos: Vec2,
     pub dist_sq: f32,
 }
 
@@ -93,6 +94,7 @@ pub fn collect_scored_candidates(
                     skip_reachability_check: snapshot.skip_reachability_check,
                 },
                 priority,
+                pos: snapshot.pos,
                 dist_sq,
             })
         })

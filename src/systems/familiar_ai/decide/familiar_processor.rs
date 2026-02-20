@@ -9,9 +9,11 @@ use crate::relationships::{Commanding, ManagedTasks};
 use crate::systems::command::TaskArea;
 use crate::systems::familiar_ai::FamiliarSoulQuery;
 use crate::systems::familiar_ai::decide::task_management::ReservationShadow;
+use crate::systems::familiar_ai::decide::task_delegation::ReachabilityCacheKey;
 use crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries;
 use crate::systems::spatial::{DesignationSpatialGrid, SpatialGrid, TransportRequestSpatialGrid};
 use bevy::prelude::*;
+use std::collections::HashMap;
 
 use super::recruitment::RecruitmentManager;
 use super::squad::SquadManager;
@@ -42,6 +44,7 @@ pub struct FamiliarRecruitmentContext<'a, 'w, 's> {
     pub fam_path: &'a mut Path,
     pub squad_entities: &'a mut Vec<Entity>,
     pub max_workers: usize,
+    pub task_area_opt: Option<&'a TaskArea>,
     pub spatial_grid: &'a SpatialGrid,
     pub q_souls: &'a mut FamiliarSoulQuery<'w, 's>,
     pub q_breakdown: &'a Query<'w, 's, &'static StressBreakdown>,
@@ -71,6 +74,7 @@ pub struct FamiliarDelegationContext<'a, 'w, 's> {
     pub allow_task_delegation: bool,
     pub state_changed: bool,
     pub reservation_shadow: &'a mut ReservationShadow,
+    pub reachability_frame_cache: &'a mut HashMap<ReachabilityCacheKey, bool>,
 }
 
 /// 分隊管理を実行
@@ -108,6 +112,7 @@ pub fn process_recruitment(ctx: &mut FamiliarRecruitmentContext<'_, '_, '_>) -> 
     let fam_pos = ctx.fam_transform.translation.truncate();
     let command_radius = ctx.familiar.command_radius;
     let fatigue_threshold = ctx.familiar_op.fatigue_threshold;
+    let task_area_center = ctx.task_area_opt.map(TaskArea::center);
 
     // スカウト中以外で分隊に空きがあれば新規リクルートを試みる
     if ctx.squad_entities.len() < ctx.max_workers {
@@ -117,6 +122,7 @@ pub fn process_recruitment(ctx: &mut FamiliarRecruitmentContext<'_, '_, '_>) -> 
             fam_pos,
             command_radius,
             fatigue_threshold,
+            task_area_center,
             ctx.spatial_grid,
             ctx.q_souls,
             ctx.q_breakdown,
@@ -136,6 +142,7 @@ pub fn process_recruitment(ctx: &mut FamiliarRecruitmentContext<'_, '_, '_>) -> 
             if let Some(distant_recruit) = RecruitmentManager::start_scouting(
                 fam_pos,
                 fatigue_threshold,
+                task_area_center,
                 ctx.spatial_grid,
                 &mut *ctx.q_souls,
                 ctx.q_breakdown,
@@ -252,6 +259,7 @@ pub fn process_task_delegation_and_movement(ctx: &mut FamiliarDelegationContext<
             ctx.world_map,
             ctx.pf_context,
             ctx.reservation_shadow,
+            ctx.reachability_frame_cache,
         )
         .is_some()
     } else {

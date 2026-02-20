@@ -4,22 +4,22 @@ use crate::systems::familiar_ai::decide::task_management::{
     AssignTaskContext, DelegationCandidate, ReservationShadow, ScoredDelegationCandidate,
     assign_task_to_worker, collect_scored_candidates,
 };
+use crate::systems::familiar_ai::decide::task_delegation::ReachabilityCacheKey;
 use crate::systems::spatial::{DesignationSpatialGrid, TransportRequestSpatialGrid};
+use crate::constants::TILE_SIZE;
 use crate::world::map::WorldMap;
 use crate::world::pathfinding::{self, PathfindingContext};
 use bevy::prelude::*;
 use std::cmp::Ordering;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::systems::familiar_ai::FamiliarSoulQuery;
 
 const TASK_DELEGATION_TOP_K: usize = 24;
-
-#[derive(Clone, Copy, Eq, PartialEq, Hash)]
-struct ReachabilityKey {
-    worker_grid: (i32, i32),
-    target_grid: (i32, i32),
-}
+const MAX_ASSIGNMENT_DIST_SQ: f32 = (TILE_SIZE * 60.0) * (TILE_SIZE * 60.0);
+const WORKER_SCORE_MAX_DIST_SQ: f32 = (TILE_SIZE * 80.0) * (TILE_SIZE * 80.0);
+const WORKER_PRIORITY_WEIGHT: f32 = 0.65;
+const WORKER_DISTANCE_WEIGHT: f32 = 0.35;
 
 fn evaluate_reachability(
     worker_grid: (i32, i32),
@@ -52,12 +52,9 @@ fn reachable_with_cache(
     candidate: DelegationCandidate,
     world_map: &WorldMap,
     pf_context: &mut PathfindingContext,
-    cache: &mut HashMap<ReachabilityKey, bool>,
+    cache: &mut HashMap<ReachabilityCacheKey, bool>,
 ) -> bool {
-    let key = ReachabilityKey {
-        worker_grid,
-        target_grid: candidate.target_grid,
-    };
+    let key = (worker_grid, candidate.target_grid);
     if let Some(reachable) = cache.get(&key) {
         return *reachable;
     }
@@ -67,45 +64,27 @@ fn reachable_with_cache(
     reachable
 }
 
-fn compare_scored_candidates(
-    a: &ScoredDelegationCandidate,
-    b: &ScoredDelegationCandidate,
-) -> Ordering {
-    match b.priority.cmp(&a.priority) {
-        Ordering::Equal => a.dist_sq.partial_cmp(&b.dist_sq).unwrap_or(Ordering::Equal),
-        other => other,
-    }
+fn score_for_worker(candidate: &ScoredDelegationCandidate, worker_pos: Vec2) -> f32 {
+    let worker_dist_sq = worker_pos.distance_squared(candidate.pos);
+    let priority_norm = ((candidate.priority as f32 + 20.0) / 40.0).clamp(0.0, 1.0);
+    let dist_norm = 1.0 - (worker_dist_sq / WORKER_SCORE_MAX_DIST_SQ).min(1.0);
+    priority_norm * WORKER_PRIORITY_WEIGHT + dist_norm * WORKER_DISTANCE_WEIGHT
 }
 
-fn split_top_candidates(
-    mut candidates: Vec<ScoredDelegationCandidate>,
-    top_k: usize,
-) -> (Vec<DelegationCandidate>, Vec<ScoredDelegationCandidate>) {
-    if candidates.is_empty() {
-        return (Vec::new(), Vec::new());
-    }
+fn build_worker_candidates(
+    scored_candidates: &[ScoredDelegationCandidate],
+    worker_pos: Vec2,
+    assigned_tasks: &HashSet<Entity>,
+) -> Vec<DelegationCandidate> {
+    let mut ranked: Vec<(DelegationCandidate, f32)> = scored_candidates
+        .iter()
+        .filter(|entry| !assigned_tasks.contains(&entry.candidate.entity))
+        .filter(|entry| worker_pos.distance_squared(entry.pos) <= MAX_ASSIGNMENT_DIST_SQ)
+        .map(|entry| (entry.candidate, score_for_worker(entry, worker_pos)))
+        .collect();
 
-    if top_k == 0 || candidates.len() <= top_k {
-        candidates.sort_by(compare_scored_candidates);
-        let top = candidates
-            .into_iter()
-            .map(|entry| entry.candidate)
-            .collect();
-        return (top, Vec::new());
-    }
-
-    let nth = top_k - 1;
-    candidates.select_nth_unstable_by(nth, compare_scored_candidates);
-    let remaining = candidates.split_off(top_k);
-    candidates.sort_by(compare_scored_candidates);
-
-    (
-        candidates
-            .into_iter()
-            .map(|entry| entry.candidate)
-            .collect(),
-        remaining,
-    )
+    ranked.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(Ordering::Equal));
+    ranked.into_iter().map(|(candidate, _)| candidate).collect()
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -121,9 +100,14 @@ fn try_assign_from_candidates(
     world_map: &WorldMap,
     pf_context: &mut PathfindingContext,
     reservation_shadow: &mut ReservationShadow,
-    reachability_cache: &mut HashMap<ReachabilityKey, bool>,
+    assigned_tasks: &HashSet<Entity>,
+    reachability_cache: &mut HashMap<ReachabilityCacheKey, bool>,
 ) -> Option<Entity> {
     for candidate in candidates.iter().copied() {
+        if assigned_tasks.contains(&candidate.entity) {
+            continue;
+        }
+
         let Ok((_, _, _, _, slots, workers, _, _)) =
             queries.designation.designations.get(candidate.entity)
         else {
@@ -180,6 +164,7 @@ pub(super) fn try_assign_for_workers(
     world_map: &WorldMap,
     pf_context: &mut PathfindingContext,
     reservation_shadow: &mut ReservationShadow,
+    reachability_cache: &mut HashMap<ReachabilityCacheKey, bool>,
 ) -> Option<Entity> {
     let scored_candidates = collect_scored_candidates(
         fam_entity,
@@ -196,20 +181,35 @@ pub(super) fn try_assign_for_workers(
         return None;
     }
 
-    let top_k = scored_candidates.len().min(TASK_DELEGATION_TOP_K);
-    let (top_candidates, mut remaining_scored) = split_top_candidates(scored_candidates, top_k);
-    let mut fallback_candidates: Option<Vec<DelegationCandidate>> = None;
-    let mut reachability_cache: HashMap<ReachabilityKey, bool> = HashMap::new();
+    let mut sorted_workers = idle_members.to_vec();
+    sorted_workers.sort_by(|(_, a_pos), (_, b_pos)| {
+        a_pos
+            .distance_squared(fam_pos)
+            .partial_cmp(&b_pos.distance_squared(fam_pos))
+            .unwrap_or(Ordering::Equal)
+    });
 
-    for (worker_entity, pos) in idle_members.iter().copied() {
-        let Some(worker_grid) = world_map.get_nearest_walkable_grid(pos) else {
+    let mut first_assigned_task: Option<Entity> = None;
+    let mut assigned_tasks: HashSet<Entity> = HashSet::new();
+
+    for (worker_entity, worker_pos) in sorted_workers {
+        let Some(worker_grid) = world_map.get_nearest_walkable_grid(worker_pos) else {
             continue;
         };
+
+        let worker_candidates =
+            build_worker_candidates(&scored_candidates, worker_pos, &assigned_tasks);
+        if worker_candidates.is_empty() {
+            continue;
+        }
+
+        let top_k = worker_candidates.len().min(TASK_DELEGATION_TOP_K);
+        let (top_candidates, fallback_candidates) = worker_candidates.split_at(top_k);
 
         if let Some(task_entity) = try_assign_from_candidates(
             worker_entity,
             worker_grid,
-            &top_candidates,
+            top_candidates,
             fam_entity,
             fatigue_threshold,
             task_area_opt,
@@ -218,42 +218,37 @@ pub(super) fn try_assign_for_workers(
             world_map,
             pf_context,
             reservation_shadow,
-            &mut reachability_cache,
+            &assigned_tasks,
+            reachability_cache,
         ) {
-            return Some(task_entity);
+            assigned_tasks.insert(task_entity);
+            if first_assigned_task.is_none() {
+                first_assigned_task = Some(task_entity);
+            }
+            continue;
         }
 
-        if !remaining_scored.is_empty() {
-            if fallback_candidates.is_none() {
-                remaining_scored.sort_by(compare_scored_candidates);
-                fallback_candidates = Some(
-                    remaining_scored
-                        .iter()
-                        .map(|entry| entry.candidate)
-                        .collect(),
-                );
-            }
-
-            if let Some(fallback) = fallback_candidates.as_deref()
-                && let Some(task_entity) = try_assign_from_candidates(
-                    worker_entity,
-                    worker_grid,
-                    fallback,
-                    fam_entity,
-                    fatigue_threshold,
-                    task_area_opt,
-                    queries,
-                    q_souls,
-                    world_map,
-                    pf_context,
-                    reservation_shadow,
-                    &mut reachability_cache,
-                )
-            {
-                return Some(task_entity);
+        if let Some(task_entity) = try_assign_from_candidates(
+            worker_entity,
+            worker_grid,
+            fallback_candidates,
+            fam_entity,
+            fatigue_threshold,
+            task_area_opt,
+            queries,
+            q_souls,
+            world_map,
+            pf_context,
+            reservation_shadow,
+            &assigned_tasks,
+            reachability_cache,
+        ) {
+            assigned_tasks.insert(task_entity);
+            if first_assigned_task.is_none() {
+                first_assigned_task = Some(task_entity);
             }
         }
     }
 
-    None
+    first_assigned_task
 }

@@ -47,27 +47,24 @@ pub fn spawn_carrying_item_system(
 
         let icon_pos = transform.translation + Vec3::new(0.0, CARRIED_ITEM_Y_OFFSET, 0.5);
 
-        let icon_entity = commands
-            .spawn((
-                CarryingItemVisual {
-                    worker: worker_entity,
-                },
-                Sprite {
-                    image: icon_handle,
-                    custom_size: Some(Vec2::splat(CARRIED_ITEM_ICON_SIZE)),
-                    ..default()
-                },
-                Transform::from_translation(icon_pos),
-                Name::new("CarryingItemVisual"),
-            ))
-            .id();
+        commands.spawn((
+            CarryingItemVisual {
+                worker: worker_entity,
+            },
+            Sprite {
+                image: icon_handle,
+                custom_size: Some(Vec2::splat(CARRIED_ITEM_ICON_SIZE)),
+                ..default()
+            },
+            Transform::from_translation(icon_pos),
+            Name::new("CarryingItemVisual"),
+        ));
 
-        commands
-            .entity(worker_entity)
-            .try_insert(HasCarryingIndicator);
-
-        // icon_entity は後でドロップ
-        let _ = icon_entity;
+        commands.queue(move |world: &mut World| {
+            if let Ok(mut worker) = world.get_entity_mut(worker_entity) {
+                worker.insert(HasCarryingIndicator);
+            }
+        });
     }
 }
 
@@ -120,11 +117,15 @@ pub fn update_carrying_item_system(
                 "VISUAL: Despawning carrying icon for worker {:?}",
                 icon.worker
             );
-            commands.entity(icon_entity).try_despawn();
-            // HasCarryingIndicatorを削除
-            if let Ok(mut entity_commands) = commands.get_entity(icon.worker) {
-                entity_commands.try_remove::<HasCarryingIndicator>();
-            }
+            let worker_entity = icon.worker;
+            commands.queue(move |world: &mut World| {
+                if let Ok(icon_world) = world.get_entity_mut(icon_entity) {
+                    icon_world.despawn();
+                }
+                if let Ok(mut worker_world) = world.get_entity_mut(worker_entity) {
+                    worker_world.remove::<HasCarryingIndicator>();
+                }
+            });
         }
     }
 }

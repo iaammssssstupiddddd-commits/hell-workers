@@ -60,6 +60,7 @@ impl Plugin for FamiliarAiPlugin {
         .init_resource::<TransportRequestSpatialGrid>()
         .init_resource::<FamiliarTaskDelegationTimer>()
         .init_resource::<decide::auto_gather_for_blueprint::BlueprintAutoGatherTimer>()
+        .init_resource::<decide::task_delegation::ReachabilityFrameCache>()
         .init_resource::<FamiliarDelegationPerfMetrics>()
         .add_systems(
             Update,

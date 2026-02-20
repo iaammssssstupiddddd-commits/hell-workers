@@ -142,6 +142,7 @@ pub fn familiar_ai_state_system(params: FamiliarAiStateDecisionParams) {
                     fam_path: &mut fam_path,
                     squad_entities: &mut squad_entities,
                     max_workers,
+                    task_area_opt,
                     spatial_grid: &spatial_grid,
                     q_souls: &mut q_souls,
                     q_breakdown: &q_breakdown,
