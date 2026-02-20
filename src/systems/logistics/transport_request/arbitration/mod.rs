@@ -7,9 +7,10 @@
 mod candidates;
 mod collection;
 mod grants;
+mod lease_state;
+mod metrics_update;
 mod types;
 
-use std::collections::HashSet;
 use std::time::Instant;
 
 use crate::constants::*;
@@ -17,7 +18,7 @@ use crate::relationships::{IncomingDeliveries, ParkedAt, PushedBy, StoredIn, Sto
 use crate::systems::jobs::{Blueprint, Designation};
 use crate::systems::logistics::transport_request::{
     ManualHaulPinnedSource, ManualTransportRequest, TransportDemand, TransportRequest,
-    TransportRequestKind, TransportRequestState, WheelbarrowLease, WheelbarrowPendingSince,
+    TransportRequestState, WheelbarrowLease, WheelbarrowPendingSince,
 };
 use crate::systems::logistics::{BelongsTo, ReservedForTask, ResourceItem, Stockpile, Wheelbarrow};
 use bevy::ecs::system::SystemParam;
@@ -26,6 +27,8 @@ use bevy::prelude::*;
 use super::metrics::TransportRequestMetrics;
 use collection::collect_candidates;
 use grants::{GrantStats, grant_leases};
+use lease_state::update_lease_state;
+use metrics_update::update_metrics;
 
 #[derive(Default)]
 pub(crate) struct WheelbarrowArbitrationRuntime {
@@ -299,128 +302,4 @@ pub(crate) fn wheelbarrow_arbitration_system(
         grant_stats.lease_duration_total_secs,
         arbitration_started_at,
     );
-}
-
-struct LeaseStateUpdate {
-    used_wheelbarrows: HashSet<Entity>,
-    cleared_requests: HashSet<Entity>,
-}
-
-fn update_lease_state(
-    commands: &mut Commands,
-    q_requests: &Query<(
-        Entity,
-        &crate::systems::logistics::transport_request::TransportRequest,
-        &TransportRequestState,
-        &TransportDemand,
-        &Transform,
-        Option<&WheelbarrowLease>,
-        Option<&WheelbarrowPendingSince>,
-        Option<&ManualTransportRequest>,
-    )>,
-    q_free_items: &Query<
-        (
-            Entity,
-            &Transform,
-            &Visibility,
-            &crate::systems::logistics::ResourceItem,
-        ),
-        (
-            Without<crate::systems::jobs::Designation>,
-            Without<crate::relationships::TaskWorkers>,
-            Without<ReservedForTask>,
-            Without<ManualHaulPinnedSource>,
-        ),
-    >,
-    q_wheelbarrows: &Query<
-        (Entity, &Transform),
-        (With<Wheelbarrow>, With<ParkedAt>, Without<PushedBy>),
-    >,
-    now: f64,
-) -> LeaseStateUpdate {
-    let mut used_wheelbarrows = HashSet::new();
-    let mut cleared_requests = HashSet::new();
-
-    for (req_entity, req, state, _demand, _transform, lease_opt, pending_since_opt, _) in
-        q_requests.iter()
-    {
-        if let Some(lease) = lease_opt {
-            let min_valid_items = if req.resource_type.requires_wheelbarrow()
-                && req.kind == TransportRequestKind::DeliverToBlueprint
-            {
-                1
-            } else {
-                WHEELBARROW_MIN_BATCH_SIZE
-            };
-            let valid_item_count = lease
-                .items
-                .iter()
-                .filter(|item| {
-                    q_free_items
-                        .get(**item)
-                        .ok()
-                        .is_some_and(|(_, _, vis, _)| *vis != Visibility::Hidden)
-                })
-                .count();
-            let lease_stale = q_wheelbarrows.get(lease.wheelbarrow).is_err()
-                || valid_item_count < min_valid_items;
-
-            if lease.lease_until < now || lease_stale {
-                commands.entity(req_entity).remove::<WheelbarrowLease>();
-                cleared_requests.insert(req_entity);
-            } else {
-                used_wheelbarrows.insert(lease.wheelbarrow);
-            }
-        }
-
-        if *state == TransportRequestState::Pending {
-            if pending_since_opt.is_none() {
-                commands
-                    .entity(req_entity)
-                    .insert(WheelbarrowPendingSince(now));
-            }
-        } else if pending_since_opt.is_some() {
-            commands
-                .entity(req_entity)
-                .remove::<WheelbarrowPendingSince>();
-        }
-    }
-
-    LeaseStateUpdate {
-        used_wheelbarrows,
-        cleared_requests,
-    }
-}
-
-fn update_metrics(
-    metrics: &mut TransportRequestMetrics,
-    active_leases: u32,
-    leases_granted: u32,
-    eligible_requests: u32,
-    bucket_items_total: u32,
-    candidates_after_top_k: u32,
-    items_deduped: u32,
-    candidates_dropped_by_dedup: u32,
-    pending_secs_total: f64,
-    lease_duration_total_secs: f64,
-    arbitration_started_at: std::time::Instant,
-) {
-    metrics.wheelbarrow_leases_active = active_leases;
-    metrics.wheelbarrow_leases_granted_this_frame = leases_granted;
-    metrics.wheelbarrow_arb_eligible_requests = eligible_requests;
-    metrics.wheelbarrow_arb_bucket_items_total = bucket_items_total;
-    metrics.wheelbarrow_arb_candidates_after_topk = candidates_after_top_k;
-    metrics.wheelbarrow_arb_items_deduped = items_deduped;
-    metrics.wheelbarrow_arb_candidates_dropped_by_dedup = candidates_dropped_by_dedup;
-    metrics.wheelbarrow_arb_avg_pending_secs = if eligible_requests > 0 {
-        (pending_secs_total / eligible_requests as f64) as f32
-    } else {
-        0.0
-    };
-    metrics.wheelbarrow_arb_avg_lease_duration = if leases_granted > 0 {
-        (lease_duration_total_secs / leases_granted as f64) as f32
-    } else {
-        0.0
-    };
-    metrics.wheelbarrow_arb_elapsed_ms = arbitration_started_at.elapsed().as_secs_f32() * 1000.0;
 }

@@ -140,4 +140,4 @@ Perceive → Update → Decide → Execute
 |:--|:--|:--|:--|
 | `C/M/H/B`, `Digit1-4` | Familiarコマンド | Familiar選択時 | `systems/command/input.rs` |
 | `Ctrl+C/V/Z/Y` | エリア編集操作 | AreaSelection時 | `systems/command/area_selection/shortcuts.rs` |
-| `Tab/Shift+Tab` | Entity Listフォーカス移動 | 常時 | `list/interaction.rs` |
+| `Tab/Shift+Tab` | Entity Listフォーカス移動 | 常時 | `list/interaction/navigation.rs` |

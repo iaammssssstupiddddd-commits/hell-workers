@@ -4,7 +4,7 @@ use crate::systems::familiar_ai::decide::task_management::{AssignTaskContext, Re
 use crate::systems::logistics::ResourceType;
 use bevy::prelude::*;
 
-use super::super::super::builders::{issue_haul_to_mixer, issue_haul_with_wheelbarrow};
+use super::super::super::builders::issue_haul_to_mixer;
 use super::super::super::validator::resolve_haul_to_mixer_inputs;
 use super::lease_validation;
 use super::source_selector;
@@ -48,21 +48,18 @@ pub fn assign_haul_to_mixer(
         return false;
     };
 
-    if let Ok(lease) = queries.wheelbarrow_leases.get(ctx.task_entity) {
-        if lease_validation::validate_lease(lease, queries, shadow, 1) {
-            issue_haul_with_wheelbarrow(
-                lease.wheelbarrow,
-                lease.source_pos,
-                lease.destination,
-                lease.items.clone(),
-                task_pos,
-                already_commanded,
-                ctx,
-                queries,
-                shadow,
-            );
-            return true;
-        }
+    if lease_validation::try_issue_haul_from_lease(
+        ctx.task_entity,
+        task_pos,
+        already_commanded,
+        1,
+        usize::MAX,
+        |_| true,
+        ctx,
+        queries,
+        shadow,
+    ) {
+        return true;
     }
 
     assign_single_item_haul_to_mixer(

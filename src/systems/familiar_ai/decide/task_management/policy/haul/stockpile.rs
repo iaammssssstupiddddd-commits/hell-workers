@@ -61,6 +61,19 @@ pub fn assign_haul_to_stockpile(
                 );
                 return true;
             }
+            if lease_validation::try_issue_haul_from_lease(
+                ctx.task_entity,
+                task_pos,
+                already_commanded,
+                1,
+                1,
+                |item| item == source_item,
+                ctx,
+                queries,
+                shadow,
+            ) {
+                return true;
+            }
             if let Some(wb_entity) =
                 wheelbarrow::find_nearest_wheelbarrow(task_pos, queries, shadow)
             {
@@ -119,26 +132,23 @@ pub fn assign_haul_to_stockpile(
         }
     }
 
-    if let Ok(lease) = queries.wheelbarrow_leases.get(ctx.task_entity) {
-        let min_valid_items = if resource_type.requires_wheelbarrow() {
-            1
-        } else {
-            WHEELBARROW_MIN_BATCH_SIZE
-        };
-        if lease_validation::validate_lease(lease, queries, shadow, min_valid_items) {
-            issue_haul_with_wheelbarrow(
-                lease.wheelbarrow,
-                lease.source_pos,
-                lease.destination,
-                lease.items.clone(),
-                task_pos,
-                already_commanded,
-                ctx,
-                queries,
-                shadow,
-            );
-            return true;
-        }
+    let min_valid_items = if resource_type.requires_wheelbarrow() {
+        1
+    } else {
+        WHEELBARROW_MIN_BATCH_SIZE
+    };
+    if lease_validation::try_issue_haul_from_lease(
+        ctx.task_entity,
+        task_pos,
+        already_commanded,
+        min_valid_items,
+        usize::MAX,
+        |_| true,
+        ctx,
+        queries,
+        shadow,
+    ) {
+        return true;
     }
 
     if resource_type.requires_wheelbarrow() {

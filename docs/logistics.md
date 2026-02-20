@@ -379,7 +379,7 @@ Stockpile / Blueprint / Tank などへの搬入予約は、Bevy の Relationship
 - 割り当てロジック:
   - `src/systems/familiar_ai/decide/task_management/`（builders, policy, validator）
   - `task_management/policy/haul/`（blueprint, consolidation, stockpile, source_selector, lease_validation, wheelbarrow）: 運搬割り当ての責務分割
-  - `src/systems/familiar_ai/decide/auto_gather_for_blueprint.rs`（Blueprint不足時の Wood / Rock 自動Gather指定）
+  - `src/systems/familiar_ai/decide/auto_gather_for_blueprint.rs`, `auto_gather_for_blueprint/{demand,supply,planning,actions}.rs`（Blueprint不足時の Wood / Rock 自動Gather指定）
 - 実行ロジック:
   - `src/systems/soul_ai/execute/task_execution/`（haul, haul_to_mixer, haul_to_blueprint, haul_with_wheelbarrow, haul_water_to_mixer 等）
   - `task_execution/handler/`（task_handler, impls, dispatch）: TaskHandler トレイトとディスパッチ

@@ -1,16 +1,108 @@
-use super::DragState;
 use super::EntityListNodeIndex;
 use crate::entities::familiar::FamiliarOperation;
 use crate::events::FamiliarOperationMaxSoulChangedEvent;
-use crate::game_state::TaskContext;
 use crate::interface::ui::components::*;
 use crate::interface::ui::theme::UiTheme;
 use crate::relationships::Commanding;
-use crate::systems::command::TaskMode;
 use crate::systems::familiar_ai::FamiliarAiState;
-use bevy::input::mouse::{MouseScrollUnit, MouseWheel};
 use bevy::prelude::*;
-use bevy::ui::RelativeCursorPosition;
+
+mod navigation;
+mod visual;
+
+pub use navigation::{
+    entity_list_scroll_hint_visibility_system, entity_list_scroll_system,
+    entity_list_tab_focus_system, update_unassigned_arrow_icon_system,
+};
+pub use visual::{apply_row_highlight, entity_list_visual_feedback_system};
+
+fn toggle_list_section(
+    commands: &mut Commands,
+    section_type: EntityListSectionType,
+    q_folded: &Query<Has<SectionFolded>>,
+    unassigned_folded_query: &Query<(Entity, Has<UnassignedFolded>), With<UnassignedSoulSection>>,
+) {
+    match section_type {
+        EntityListSectionType::Familiar(entity) => {
+            if q_folded.get(entity).unwrap_or(false) {
+                commands.entity(entity).remove::<SectionFolded>();
+            } else {
+                commands.entity(entity).insert(SectionFolded);
+            }
+        }
+        EntityListSectionType::Unassigned => {
+            let mut any_toggled = false;
+            for (unassigned_entity, has_folded) in unassigned_folded_query.iter() {
+                if has_folded {
+                    commands.entity(unassigned_entity).remove::<UnassignedFolded>();
+                } else {
+                    commands.entity(unassigned_entity).insert(UnassignedFolded);
+                }
+                any_toggled = true;
+            }
+            if !any_toggled {
+                warn!("LIST: UnassignedSoulSection not found for toggling!");
+            }
+        }
+    }
+}
+
+fn focus_list_entity(
+    entity: Entity,
+    label: &'static str,
+    selected_entity: &mut ResMut<crate::interface::selection::SelectedEntity>,
+    q_camera: &mut Query<&mut Transform, With<crate::interface::camera::MainCamera>>,
+    q_transforms: &Query<&GlobalTransform>,
+) {
+    super::selection_focus::select_entity_and_focus_camera(
+        entity,
+        label,
+        selected_entity,
+        q_camera,
+        q_transforms,
+    );
+}
+
+fn handle_familiar_max_soul_adjustment(
+    button: FamiliarMaxSoulAdjustButton,
+    q_familiar_ops: &mut Query<&mut FamiliarOperation>,
+    q_familiar_meta: &Query<(
+        &crate::entities::familiar::Familiar,
+        &FamiliarAiState,
+        Option<&Commanding>,
+    )>,
+    node_index: &EntityListNodeIndex,
+    q_text: &mut Query<&mut Text>,
+    ev_max_soul_changed: &mut MessageWriter<FamiliarOperationMaxSoulChangedEvent>,
+) {
+    if let Ok(mut op) = q_familiar_ops.get_mut(button.familiar) {
+        let old_val = op.max_controlled_soul;
+        let new_val = (old_val as isize + button.delta).clamp(1, 8) as usize;
+        op.max_controlled_soul = new_val;
+
+        if let Some(nodes) = node_index.familiar_sections.get(&button.familiar)
+            && let Ok((familiar, ai_state, commanding_opt)) = q_familiar_meta.get(button.familiar)
+            && let Ok(mut text) = q_text.get_mut(nodes.header_text)
+        {
+            let squad_count = commanding_opt.map(|c| c.len()).unwrap_or(0);
+            text.0 = format!(
+                "{} ({}/{}) [{}]",
+                familiar.name,
+                squad_count,
+                new_val,
+                super::view_model::familiar_state_label(ai_state)
+            );
+        }
+
+        if old_val != new_val {
+            ev_max_soul_changed.write(FamiliarOperationMaxSoulChangedEvent {
+                familiar_entity: button.familiar,
+                old_value: old_val,
+                new_value: new_val,
+            });
+        }
+    }
+}
 
 /// エンティティリストのインタラクション
 pub fn entity_list_interaction_system(
@@ -65,31 +157,7 @@ pub fn entity_list_interaction_system(
         match *interaction {
             Interaction::Pressed => {
                 *color = BackgroundColor(theme.colors.section_toggle_pressed);
-                match toggle.0 {
-                    EntityListSectionType::Familiar(entity) => {
-                        if q_folded.get(entity).unwrap_or(false) {
-                            commands.entity(entity).remove::<SectionFolded>();
-                        } else {
-                            commands.entity(entity).insert(SectionFolded);
-                        }
-                    }
-                    EntityListSectionType::Unassigned => {
-                        let mut any_toggled = false;
-                        for (unassigned_entity, has_folded) in unassigned_folded_query.iter() {
-                            if has_folded {
-                                commands
-                                    .entity(unassigned_entity)
-                                    .remove::<UnassignedFolded>();
-                            } else {
-                                commands.entity(unassigned_entity).insert(UnassignedFolded);
-                            }
-                            any_toggled = true;
-                        }
-                        if !any_toggled {
-                            warn!("LIST: UnassignedSoulSection not found for toggling!");
-                        }
-                    }
-                }
+                toggle_list_section(&mut commands, toggle.0, &q_folded, &unassigned_folded_query);
             }
             Interaction::Hovered => {
                 *color = BackgroundColor(theme.colors.button_hover);
@@ -102,7 +170,7 @@ pub fn entity_list_interaction_system(
 
     for (interaction, item) in soul_list_interaction.iter_mut() {
         if *interaction == Interaction::Pressed {
-            super::selection_focus::select_entity_and_focus_camera(
+            focus_list_entity(
                 item.0,
                 "soul",
                 &mut selected_entity,
@@ -114,7 +182,7 @@ pub fn entity_list_interaction_system(
 
     for (interaction, item) in familiar_list_interaction.iter_mut() {
         if *interaction == Interaction::Pressed {
-            super::selection_focus::select_entity_and_focus_camera(
+            focus_list_entity(
                 item.0,
                 "familiar",
                 &mut selected_entity,
@@ -128,35 +196,14 @@ pub fn entity_list_interaction_system(
         match *interaction {
             Interaction::Pressed => {
                 *color = BackgroundColor(theme.colors.button_pressed);
-                if let Ok(mut op) = q_familiar_ops.get_mut(button.familiar) {
-                    let old_val = op.max_controlled_soul;
-                    let new_val = (old_val as isize + button.delta).clamp(1, 8) as usize;
-                    op.max_controlled_soul = new_val;
-
-                    // Optimistic update: reflect max soul change immediately on the row header.
-                    if let Some(nodes) = node_index.familiar_sections.get(&button.familiar)
-                        && let Ok((familiar, ai_state, commanding_opt)) =
-                            q_familiar_meta.get(button.familiar)
-                        && let Ok(mut text) = q_text.get_mut(nodes.header_text)
-                    {
-                        let squad_count = commanding_opt.map(|c| c.len()).unwrap_or(0);
-                        text.0 = format!(
-                            "{} ({}/{}) [{}]",
-                            familiar.name,
-                            squad_count,
-                            new_val,
-                            super::view_model::familiar_state_label(ai_state)
-                        );
-                    }
-
-                    if old_val != new_val {
-                        ev_max_soul_changed.write(FamiliarOperationMaxSoulChangedEvent {
-                            familiar_entity: button.familiar,
-                            old_value: old_val,
-                            new_value: new_val,
-                        });
-                    }
-                }
+                handle_familiar_max_soul_adjustment(
+                    *button,
+                    &mut q_familiar_ops,
+                    &q_familiar_meta,
+                    &node_index,
+                    &mut q_text,
+                    &mut ev_max_soul_changed,
+                );
             }
             Interaction::Hovered => {
                 *color = BackgroundColor(theme.colors.button_hover);
@@ -164,247 +211,6 @@ pub fn entity_list_interaction_system(
             Interaction::None => {
                 *color = BackgroundColor(theme.colors.button_default);
             }
-        }
-    }
-}
-
-pub fn entity_list_visual_feedback_system(
-    selected_entity: Res<crate::interface::selection::SelectedEntity>,
-    drag_state: Res<DragState>,
-    q_soul_changed: Query<(), Or<(Changed<Interaction>, Added<SoulListItem>)>>,
-    q_familiar_changed: Query<(), Or<(Changed<Interaction>, Added<FamiliarListItem>)>>,
-    mut q_souls: Query<
-        (
-            &Interaction,
-            &SoulListItem,
-            &mut Node,
-            &mut BackgroundColor,
-            &mut BorderColor,
-        ),
-        With<Button>,
-    >,
-    mut q_familiars: Query<
-        (
-            &Interaction,
-            &FamiliarListItem,
-            &mut Node,
-            &mut BackgroundColor,
-            &mut BorderColor,
-        ),
-        (With<Button>, Without<SoulListItem>),
-    >,
-    theme: Res<UiTheme>,
-) {
-    if !selected_entity.is_changed()
-        && !drag_state.is_changed()
-        && q_soul_changed.is_empty()
-        && q_familiar_changed.is_empty()
-    {
-        return;
-    }
-
-    for (interaction, item, mut node, mut bg, mut border_color) in q_souls.iter_mut() {
-        let is_selected = selected_entity.0 == Some(item.0);
-        apply_row_highlight(
-            &mut node,
-            &mut bg,
-            &mut border_color,
-            *interaction,
-            is_selected,
-            false,
-            false,
-            &theme,
-        );
-    }
-
-    for (interaction, item, mut node, mut bg, mut border_color) in q_familiars.iter_mut() {
-        let is_selected = selected_entity.0 == Some(item.0);
-        let is_drop_target = drag_state.is_dragging() && drag_state.drop_target() == Some(item.0);
-        apply_row_highlight(
-            &mut node,
-            &mut bg,
-            &mut border_color,
-            *interaction,
-            is_selected,
-            is_drop_target,
-            true,
-            &theme,
-        );
-    }
-}
-
-/// リスト行の選択・ホバー状態に応じたハイライト適用（タスクリスト等で再利用）
-pub fn apply_row_highlight(
-    node: &mut Node,
-    bg: &mut BackgroundColor,
-    border_color: &mut BorderColor,
-    interaction: Interaction,
-    is_selected: bool,
-    is_drop_target: bool,
-    is_familiar_row: bool,
-    theme: &UiTheme,
-) {
-    if is_drop_target {
-        bg.0 = theme.colors.list_item_selected_hover;
-        node.border.left = Val::Px(theme.sizes.list_selection_border_width);
-        *border_color = BorderColor::all(theme.colors.accent_soul_bright);
-        return;
-    }
-
-    let is_hovered = matches!(interaction, Interaction::Hovered | Interaction::Pressed);
-    bg.0 = if is_familiar_row {
-        match (is_selected, is_hovered) {
-            (true, true) => theme.colors.familiar_header_selected_hover,
-            (true, false) => theme.colors.familiar_header_selected,
-            (false, true) => theme.colors.familiar_header_hover,
-            (false, false) => theme.colors.familiar_button_bg,
-        }
-    } else {
-        match (is_selected, is_hovered) {
-            (true, true) => theme.colors.list_item_selected_hover,
-            (true, false) => theme.colors.list_item_selected,
-            (false, true) => theme.colors.list_item_hover,
-            (false, false) => theme.colors.list_item_default,
-        }
-    };
-
-    if is_selected {
-        node.border.left = Val::Px(theme.sizes.list_selection_border_width);
-        *border_color = BorderColor::all(theme.colors.list_selection_border);
-    } else {
-        node.border.left = Val::Px(0.0);
-        *border_color = BorderColor::all(Color::NONE);
-    }
-}
-
-pub fn entity_list_scroll_system(
-    mut mouse_wheel_events: MessageReader<MouseWheel>,
-    mut q_scroll_areas: Query<(&RelativeCursorPosition, &mut ScrollPosition, &UiScrollArea)>,
-    theme: Res<UiTheme>,
-) {
-    let Some((_, mut scroll_position, scroll_area)) = q_scroll_areas
-        .iter_mut()
-        .find(|(cursor, _, _)| cursor.cursor_over())
-    else {
-        return;
-    };
-
-    let mut delta_y = 0.0;
-    for event in mouse_wheel_events.read() {
-        let unit_scale = match event.unit {
-            MouseScrollUnit::Line => scroll_area.speed,
-            MouseScrollUnit::Pixel => 1.0,
-        };
-        delta_y += event.y * unit_scale;
-    }
-    if delta_y.abs() <= f32::EPSILON {
-        return;
-    }
-
-    let step = theme.sizes.soul_item_height.max(1.0);
-    // Wheel up should move list content down (toward earlier rows).
-    let target = (scroll_position.y - delta_y).max(0.0);
-    scroll_position.y = (target / step).round() * step;
-}
-
-pub fn entity_list_tab_focus_system(
-    keyboard: Res<ButtonInput<KeyCode>>,
-    task_context: Res<TaskContext>,
-    mut selected_entity: ResMut<crate::interface::selection::SelectedEntity>,
-    q_soul_items: Query<&SoulListItem>,
-    q_familiar_items: Query<&FamiliarListItem>,
-    mut q_camera: Query<&mut Transform, With<crate::interface::camera::MainCamera>>,
-    q_transforms: Query<&GlobalTransform>,
-) {
-    if !keyboard.just_pressed(KeyCode::Tab) {
-        return;
-    }
-
-    let in_area_task_mode = matches!(task_context.0, TaskMode::AreaSelection(_));
-
-    let mut candidates: Vec<Entity> = if in_area_task_mode {
-        q_familiar_items.iter().map(|item| item.0).collect()
-    } else {
-        q_familiar_items
-            .iter()
-            .map(|item| item.0)
-            .chain(q_soul_items.iter().map(|item| item.0))
-            .collect()
-    };
-    candidates.sort_by_key(|entity| entity.index());
-    candidates.dedup();
-
-    if candidates.is_empty() {
-        return;
-    }
-
-    let reverse = keyboard.pressed(KeyCode::ShiftLeft) || keyboard.pressed(KeyCode::ShiftRight);
-    let current_index = selected_entity
-        .0
-        .and_then(|selected| candidates.iter().position(|&entity| entity == selected));
-    let next_index = if reverse {
-        current_index
-            .map(|idx| idx.saturating_sub(1))
-            .unwrap_or(candidates.len().saturating_sub(1))
-    } else {
-        current_index
-            .map(|idx| (idx + 1) % candidates.len())
-            .unwrap_or(0)
-    };
-    let target = candidates[next_index];
-
-    super::selection_focus::select_entity_and_focus_camera(
-        target,
-        "tab-focus",
-        &mut selected_entity,
-        &mut q_camera,
-        &q_transforms,
-    );
-}
-
-pub fn entity_list_scroll_hint_visibility_system(
-    q_unassigned_section: Query<Has<UnassignedFolded>, With<UnassignedSoulSection>>,
-    q_unassigned_content: Query<&ComputedNode, With<UnassignedSoulContent>>,
-    mut q_hint_nodes: Query<&mut Node, With<EntityListScrollHint>>,
-) {
-    let unassigned_folded = q_unassigned_section.iter().next().unwrap_or(false);
-    let has_overflow = if unassigned_folded {
-        false
-    } else {
-        q_unassigned_content
-            .iter()
-            .next()
-            .is_some_and(|computed| computed.content_size().y > computed.size().y + 1.0)
-    };
-
-    let desired = if has_overflow {
-        Display::Flex
-    } else {
-        Display::None
-    };
-    for mut node in q_hint_nodes.iter_mut() {
-        if node.display != desired {
-            node.display = desired;
-        }
-    }
-}
-
-/// 未所属ソウルセクションの矢印アイコンを折りたたみ状態に応じて更新
-pub fn update_unassigned_arrow_icon_system(
-    game_assets: Res<crate::assets::GameAssets>,
-    unassigned_folded_query: Query<
-        Has<UnassignedFolded>,
-        (With<UnassignedSoulSection>, Changed<UnassignedFolded>),
-    >,
-    mut q_arrow: Query<&mut ImageNode, With<UnassignedSectionArrowIcon>>,
-) {
-    if let Some(is_folded) = unassigned_folded_query.iter().next() {
-        for mut icon in q_arrow.iter_mut() {
-            icon.image = if is_folded {
-                game_assets.icon_arrow_right.clone()
-            } else {
-                game_assets.icon_arrow_down.clone()
-            };
         }
     }
 }
