@@ -60,11 +60,7 @@ pub fn spawn_carrying_item_system(
             Name::new("CarryingItemVisual"),
         ));
 
-        commands.queue(move |world: &mut World| {
-            if let Ok(mut worker) = world.get_entity_mut(worker_entity) {
-                worker.insert(HasCarryingIndicator);
-            }
-        });
+        commands.entity(worker_entity).try_insert(HasCarryingIndicator);
     }
 }
 
@@ -117,15 +113,10 @@ pub fn update_carrying_item_system(
                 "VISUAL: Despawning carrying icon for worker {:?}",
                 icon.worker
             );
-            let worker_entity = icon.worker;
-            commands.queue(move |world: &mut World| {
-                if let Ok(icon_world) = world.get_entity_mut(icon_entity) {
-                    icon_world.despawn();
-                }
-                if let Ok(mut worker_world) = world.get_entity_mut(worker_entity) {
-                    worker_world.remove::<HasCarryingIndicator>();
-                }
-            });
+            commands.entity(icon_entity).try_despawn();
+            if let Ok(mut worker_commands) = commands.get_entity(icon.worker) {
+                worker_commands.try_remove::<HasCarryingIndicator>();
+            }
         }
     }
 }
