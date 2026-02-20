@@ -85,7 +85,9 @@ pub(super) fn update_lease_state(
                     .insert(WheelbarrowPendingSince(now));
             }
         } else if pending_since_opt.is_some() {
-            commands.entity(req_entity).remove::<WheelbarrowPendingSince>();
+            commands
+                .entity(req_entity)
+                .remove::<WheelbarrowPendingSince>();
         }
     }
 

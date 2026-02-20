@@ -292,7 +292,9 @@ pub enum FrameWallPhase {
     GoingToMaterialCenter,
     PickingUpWood,
     GoingToTile,
-    Framing { progress_bp: u16 },
+    Framing {
+        progress_bp: u16,
+    },
     Done,
 }
 

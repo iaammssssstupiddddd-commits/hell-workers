@@ -106,7 +106,8 @@ pub fn wall_construction_auto_haul_system(
             continue;
         };
 
-        let (waiting_wood, waiting_mud) = waiting_by_site.get(&site_entity).copied().unwrap_or((0, 0));
+        let (waiting_wood, waiting_mud) =
+            waiting_by_site.get(&site_entity).copied().unwrap_or((0, 0));
         if waiting_wood == 0 && waiting_mud == 0 {
             continue;
         }
@@ -124,18 +125,17 @@ pub fn wall_construction_auto_haul_system(
             let total_slots = waiting_mud.div_ceil(WHEELBARROW_CAPACITY as u32).max(1);
             desired_requests.insert(
                 (site_entity, resource_type),
-                (
-                    fam_entity,
-                    total_slots,
-                    site.material_center,
-                ),
+                (fam_entity, total_slots, site.material_center),
             );
         }
     }
 
     let mut seen_existing_keys = std::collections::HashSet::<(Entity, ResourceType)>::new();
     for (request_entity, target_site, request, workers_opt) in q_wall_requests.iter() {
-        if !matches!(request.kind, TransportRequestKind::DeliverToWallConstruction) {
+        if !matches!(
+            request.kind,
+            TransportRequestKind::DeliverToWallConstruction
+        ) {
             continue;
         }
 
@@ -153,7 +153,7 @@ pub fn wall_construction_auto_haul_system(
 
         let inflight = to_u32_saturating(workers);
         if let Some((issued_by, slots, site_pos)) = desired_requests.get(&key) {
-            commands.entity(request_entity).insert((
+            commands.entity(request_entity).try_insert((
                 Transform::from_xyz(site_pos.x, site_pos.y, 0.0),
                 Visibility::Hidden,
                 Designation {
@@ -181,7 +181,7 @@ pub fn wall_construction_auto_haul_system(
         }
 
         super::upsert::disable_request(&mut commands, request_entity);
-        commands.entity(request_entity).insert(TransportDemand {
+        commands.entity(request_entity).try_insert(TransportDemand {
             desired_slots: 0,
             inflight,
         });
@@ -268,7 +268,9 @@ pub fn wall_material_delivery_sync_system(
         };
 
         let mut nearby_resources = Vec::new();
-        for (resource_entity, transform, visibility, resource_item, stored_in_opt) in q_resources.iter() {
+        for (resource_entity, transform, visibility, resource_item, stored_in_opt) in
+            q_resources.iter()
+        {
             if *visibility != Visibility::Hidden
                 && stored_in_opt.is_none()
                 && resource_item.0 == target_resource
@@ -326,16 +328,14 @@ pub fn wall_material_delivery_sync_system(
 /// Assign/remove tile designations based on wall tile state.
 pub fn wall_tile_designation_system(
     mut commands: Commands,
-    mut q_tiles: Query<
-        (
-            Entity,
-            &Transform,
-            &mut WallTileBlueprint,
-            Option<&Designation>,
-            Option<&TaskWorkers>,
-            &mut Visibility,
-        ),
-    >,
+    mut q_tiles: Query<(
+        Entity,
+        &Transform,
+        &mut WallTileBlueprint,
+        Option<&Designation>,
+        Option<&TaskWorkers>,
+        &mut Visibility,
+    )>,
 ) {
     for (tile_entity, tile_transform, mut tile, designation_opt, workers_opt, mut visibility) in
         q_tiles.iter_mut()

@@ -51,9 +51,7 @@ pub fn get_work_type_icon(
         WorkType::ReinforceFloorTile
         | WorkType::PourFloorTile
         | WorkType::FrameWallTile
-        | WorkType::CoatWall => {
-            (game_assets.icon_hammer.clone(), theme.colors.build)
-        }
+        | WorkType::CoatWall => (game_assets.icon_hammer.clone(), theme.colors.build),
     }
 }
 

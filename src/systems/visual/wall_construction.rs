@@ -83,7 +83,10 @@ pub fn update_wall_tile_visuals_system(
 /// Spawn/remove phase progress bars for wall construction sites.
 pub fn manage_wall_progress_bars_system(
     mut commands: Commands,
-    q_sites: Query<(Entity, &Transform, &WallConstructionSite), Without<WallConstructionProgressBar>>,
+    q_sites: Query<
+        (Entity, &Transform, &WallConstructionSite),
+        Without<WallConstructionProgressBar>,
+    >,
     q_bars: Query<(Entity, &ChildOf), With<WallConstructionProgressBar>>,
 ) {
     let mut active_sites = HashSet::new();

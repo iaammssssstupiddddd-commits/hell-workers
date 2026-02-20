@@ -4,15 +4,11 @@ use bevy::prelude::*;
 
 /// 砂採取指定を消費済みに戻す。
 pub fn clear_collect_sand_designation(commands: &mut Commands, source_entity: Entity) {
-    commands
-        .entity(source_entity)
-        .remove::<crate::systems::jobs::Designation>();
-    commands
-        .entity(source_entity)
-        .remove::<crate::systems::jobs::TaskSlots>();
-    commands
-        .entity(source_entity)
-        .remove::<crate::systems::jobs::IssuedBy>();
+    if let Ok(mut source_commands) = commands.get_entity(source_entity) {
+        source_commands.try_remove::<crate::systems::jobs::Designation>();
+        source_commands.try_remove::<crate::systems::jobs::TaskSlots>();
+        source_commands.try_remove::<crate::systems::jobs::IssuedBy>();
+    }
 }
 
 /// 砂を指定量だけ生成し、猫車積載状態で返す。

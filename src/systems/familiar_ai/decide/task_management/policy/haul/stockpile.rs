@@ -10,9 +10,7 @@ use bevy::prelude::*;
 use super::super::super::builders::{
     issue_haul_to_stockpile_with_source, issue_haul_with_wheelbarrow,
 };
-use super::super::super::validator::{
-    resolve_haul_to_stockpile_inputs,
-};
+use super::super::super::validator::resolve_haul_to_stockpile_inputs;
 use super::lease_validation;
 use super::source_selector;
 use super::wheelbarrow;

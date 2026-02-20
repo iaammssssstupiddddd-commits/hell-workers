@@ -4,7 +4,9 @@ use crate::systems::familiar_ai::decide::task_management::{AssignTaskContext, Re
 use crate::systems::logistics::ResourceType;
 use bevy::prelude::*;
 
-use super::super::super::builders::{issue_haul_to_stockpile_with_source, issue_haul_with_wheelbarrow};
+use super::super::super::builders::{
+    issue_haul_to_stockpile_with_source, issue_haul_with_wheelbarrow,
+};
 use super::super::super::validator::resolve_haul_to_wall_construction_inputs;
 use super::demand;
 use super::source_selector;
@@ -98,14 +100,18 @@ pub fn assign_haul_to_wall_construction(
         return true;
     }
 
-    if resource_type == ResourceType::Wood && demand::compute_remaining_wall_wood(site_entity, queries) == 0
+    if resource_type == ResourceType::Wood
+        && demand::compute_remaining_wall_wood(site_entity, queries) == 0
     {
         return false;
     }
 
-    if let Some((source_item, source_pos)) =
-        source_selector::find_nearest_blueprint_source_item(resource_type, site_pos, queries, shadow)
-    {
+    if let Some((source_item, source_pos)) = source_selector::find_nearest_blueprint_source_item(
+        resource_type,
+        site_pos,
+        queries,
+        shadow,
+    ) {
         issue_haul_to_stockpile_with_source(
             source_item,
             site_entity,

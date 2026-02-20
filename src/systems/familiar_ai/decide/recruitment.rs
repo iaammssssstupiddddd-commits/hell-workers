@@ -119,9 +119,9 @@ impl RecruitmentManager {
         // 候補リストから最も高スコアのエンティティを選択するヘルパー
         let find_best_scored =
             |candidates: Vec<(Entity, Vec2, f32, f32)>| -> Option<(Entity, f32)> {
-                candidates
-                    .into_iter()
-                    .fold(None, |best, (entity, soul_pos, fatigue, motivation)| {
+                candidates.into_iter().fold(
+                    None,
+                    |best, (entity, soul_pos, fatigue, motivation)| {
                         let score = score_recruit(
                             soul_pos,
                             fam_pos,
@@ -136,7 +136,8 @@ impl RecruitmentManager {
                             }
                             _ => Some((entity, score)),
                         }
-                    })
+                    },
+                )
             };
 
         if let Some(radius) = radius_opt {

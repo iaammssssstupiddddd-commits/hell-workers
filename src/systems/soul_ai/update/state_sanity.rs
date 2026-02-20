@@ -55,7 +55,10 @@ pub fn reconcile_rest_state_system(
 
         if resting_in.is_none()
             && reserved_for.is_some()
-            && !matches!(idle.behavior, IdleBehavior::GoingToRest | IdleBehavior::Resting)
+            && !matches!(
+                idle.behavior,
+                IdleBehavior::GoingToRest | IdleBehavior::Resting
+            )
         {
             commands.entity(entity).remove::<RestAreaReservedFor>();
         }

@@ -9,6 +9,7 @@ use crate::systems::command::{
     task_area_edit_history_shortcuts_system, task_area_selection_system, zone_placement_system,
     zone_removal_system,
 };
+use crate::systems::dream_tree_planting::dream_tree_planting_system;
 use crate::systems::jobs::floor_construction::{
     floor_construction_cancellation_system, floor_construction_completion_system,
     floor_construction_phase_transition_system,
@@ -21,7 +22,6 @@ use crate::systems::logistics::item_lifetime::despawn_expired_items_system;
 use crate::systems::logistics::transport_request::TransportRequestPlugin;
 use crate::systems::obstacle::obstacle_cleanup_system;
 use crate::systems::soul_ai::SoulAiPlugin;
-use crate::systems::dream_tree_planting::dream_tree_planting_system;
 use crate::world::regrowth::{RegrowthManager, tree_regrowth_system};
 use bevy::prelude::*;
 

@@ -88,7 +88,8 @@ pub(super) fn assign_coat_wall(
             tile.state,
             crate::systems::jobs::wall_construction::WallTileState::CoatingReady
         ) && tile.spawned_wall.is_some()
-    } else if let Ok((_, building, provisional_opt)) = queries.storage.buildings.get(ctx.task_entity)
+    } else if let Ok((_, building, provisional_opt)) =
+        queries.storage.buildings.get(ctx.task_entity)
     {
         building.kind == crate::systems::jobs::BuildingType::Wall
             && building.is_provisional

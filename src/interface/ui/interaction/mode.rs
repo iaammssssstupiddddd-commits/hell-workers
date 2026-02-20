@@ -226,9 +226,7 @@ pub(super) fn build_mode_text(
             TaskMode::DreamPlanting(None) => {
                 "Mode: Dream Planting (Drag to select area)".to_string()
             }
-            TaskMode::DreamPlanting(Some(_)) => {
-                "Mode: Dream Planting (Dragging...)".to_string()
-            }
+            TaskMode::DreamPlanting(Some(_)) => "Mode: Dream Planting (Dragging...)".to_string(),
             _ => "Mode: Task".to_string(),
         },
         PlayMode::FloorPlace => match task_context.0 {

@@ -60,7 +60,9 @@ pub fn spawn_carrying_item_system(
             Name::new("CarryingItemVisual"),
         ));
 
-        commands.entity(worker_entity).try_insert(HasCarryingIndicator);
+        commands
+            .entity(worker_entity)
+            .try_insert(HasCarryingIndicator);
     }
 }
 

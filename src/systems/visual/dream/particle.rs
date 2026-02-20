@@ -47,7 +47,14 @@ fn particle_sway_for_quality(quality: DreamQuality) -> f32 {
 
 pub fn ensure_dream_visual_state_system(
     mut commands: Commands,
-    q_souls: Query<Entity, (With<DamnedSoul>, With<DreamState>, Without<DreamVisualState>)>,
+    q_souls: Query<
+        Entity,
+        (
+            With<DamnedSoul>,
+            With<DreamState>,
+            Without<DreamVisualState>,
+        ),
+    >,
     q_rest_areas: Query<Entity, (With<RestArea>, Without<DreamVisualState>)>,
 ) {
     for entity in q_souls.iter() {
@@ -182,8 +189,8 @@ pub fn rest_area_dream_particle_spawn_system(
         let y_offset = DREAM_PARTICLE_SPAWN_OFFSET * 2.0 + rng.gen_range(0.0..=8.0);
 
         // パーティクルのサイズもスケールさせる
-        let size =
-            rng.gen_range(DREAM_PARTICLE_SIZE_MIN..=DREAM_PARTICLE_SIZE_MAX) * (1.0 + (scale_factor - 1.0) * 0.5);
+        let size = rng.gen_range(DREAM_PARTICLE_SIZE_MIN..=DREAM_PARTICLE_SIZE_MAX)
+            * (1.0 + (scale_factor - 1.0) * 0.5);
 
         commands.spawn((
             DreamParticle {

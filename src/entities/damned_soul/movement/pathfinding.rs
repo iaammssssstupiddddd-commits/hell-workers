@@ -19,7 +19,11 @@ fn rest_area_occupied_grids_from_center(center: Vec2) -> [(i32, i32); 4] {
     ]
 }
 
-fn rest_area_adjacent_candidates(center: Vec2, current_pos: Vec2, world_map: &WorldMap) -> Vec<(i32, i32)> {
+fn rest_area_adjacent_candidates(
+    center: Vec2,
+    current_pos: Vec2,
+    world_map: &WorldMap,
+) -> Vec<(i32, i32)> {
     let occupied = rest_area_occupied_grids_from_center(center);
     let directions: [(i32, i32); 8] = [
         (0, 1),
@@ -182,9 +186,8 @@ pub fn pathfinding_system(
                     };
 
                     if goal_reached_by_path {
-                        let blocked_relative = path.waypoints[path.current_index..]
-                            .iter()
-                            .position(|wp| {
+                        let blocked_relative =
+                            path.waypoints[path.current_index..].iter().position(|wp| {
                                 let grid = WorldMap::world_to_grid(*wp);
                                 !world_map.is_walkable(grid.0, grid.1)
                             });
@@ -321,13 +324,10 @@ pub fn pathfinding_system(
                             let rest_center = rest_transform.translation.truncate();
                             let mut candidate_found = None;
 
-                            for candidate_grid in rest_area_adjacent_candidates(
-                                rest_center,
-                                current_pos,
-                                &world_map,
-                            )
-                            .into_iter()
-                            .filter(|grid| *grid != goal_grid)
+                            for candidate_grid in
+                                rest_area_adjacent_candidates(rest_center, current_pos, &world_map)
+                                    .into_iter()
+                                    .filter(|grid| *grid != goal_grid)
                             {
                                 if let Some(candidate_path) = pathfinding::find_path(
                                     &*world_map,

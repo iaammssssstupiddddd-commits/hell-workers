@@ -84,7 +84,8 @@ pub(super) fn collect_supply_state(
         let pos = transform.translation.truncate();
         let workers = workers_opt.map(|workers| workers.len()).unwrap_or(0);
 
-        let source_resource = source_resource_from_components(tree_opt.is_some(), rock_opt.is_some());
+        let source_resource =
+            source_resource_from_components(tree_opt.is_some(), rock_opt.is_some());
         let Some(resource_type) = source_resource else {
             if auto_opt.is_some() {
                 if designation_opt.is_none() {
@@ -109,7 +110,8 @@ pub(super) fn collect_supply_state(
 
             let owner = if let Some(marker) = auto_opt {
                 marker.owner
-            } else if let Some(managed_by) = managed_by_opt.filter(|m| owner_infos.contains_key(&m.0))
+            } else if let Some(managed_by) =
+                managed_by_opt.filter(|m| owner_infos.contains_key(&m.0))
             {
                 managed_by.0
             } else {

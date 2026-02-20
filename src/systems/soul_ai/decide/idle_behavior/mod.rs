@@ -258,8 +258,10 @@ pub fn idle_behavior_decision_system(
                 );
             }
 
-            if matches!(idle.behavior, IdleBehavior::Sitting | IdleBehavior::Sleeping)
-                && idle.behavior != previous_behavior
+            if matches!(
+                idle.behavior,
+                IdleBehavior::Sitting | IdleBehavior::Sleeping
+            ) && idle.behavior != previous_behavior
             {
                 // 睡眠/座り込み遷移時に残パスで歩き続けるのを防ぐ。
                 path.waypoints.clear();

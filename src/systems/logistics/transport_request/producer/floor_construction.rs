@@ -176,7 +176,7 @@ pub fn floor_construction_auto_haul_system(
         let inflight = to_u32_saturating(workers);
 
         if let Some((issued_by, slots, site_pos)) = desired_requests.get(&key) {
-            commands.entity(request_entity).insert((
+            commands.entity(request_entity).try_insert((
                 Transform::from_xyz(site_pos.x, site_pos.y, 0.0),
                 Visibility::Hidden,
                 Designation {
@@ -205,7 +205,7 @@ pub fn floor_construction_auto_haul_system(
 
         // Need is satisfied: stop new claims immediately, keep active workers intact.
         super::upsert::disable_request(&mut commands, request_entity);
-        commands.entity(request_entity).insert(TransportDemand {
+        commands.entity(request_entity).try_insert(TransportDemand {
             desired_slots: 0,
             inflight,
         });

@@ -194,11 +194,7 @@ fn apply_floor_placement(
     }
 }
 
-fn apply_wall_placement(
-    commands: &mut Commands,
-    world_map: &mut WorldMap,
-    area: &TaskArea,
-) {
+fn apply_wall_placement(commands: &mut Commands, world_map: &mut WorldMap, area: &TaskArea) {
     let min_grid = WorldMap::world_to_grid(area.min + Vec2::splat(0.1));
     let max_grid = WorldMap::world_to_grid(area.max - Vec2::splat(0.1));
 

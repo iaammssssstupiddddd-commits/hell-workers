@@ -21,22 +21,20 @@ pub fn cancel_wheelbarrow_task(
     // 積載済みアイテムを地面にドロップ
     if let Some(loaded_items) = ctx.queries.storage.loaded_items.get(data.wheelbarrow).ok() {
         for item_entity in loaded_items.iter() {
-            commands.entity(item_entity).insert((
-                Visibility::Visible,
-                Transform::from_xyz(soul_pos.x, soul_pos.y, Z_ITEM_PICKUP),
-            ));
-            commands
-                .entity(item_entity)
-                .remove::<crate::relationships::DeliveringTo>();
-            commands
-                .entity(item_entity)
-                .remove::<crate::relationships::LoadedIn>();
+            if let Ok(mut item_commands) = commands.get_entity(item_entity) {
+                item_commands.try_insert((
+                    Visibility::Visible,
+                    Transform::from_xyz(soul_pos.x, soul_pos.y, Z_ITEM_PICKUP),
+                ));
+                item_commands.try_remove::<crate::relationships::DeliveringTo>();
+                item_commands.try_remove::<crate::relationships::LoadedIn>();
+            }
         }
     }
     for &item_entity in &data.items {
-        commands
-            .entity(item_entity)
-            .remove::<crate::relationships::DeliveringTo>();
+        if let Ok(mut item_commands) = commands.get_entity(item_entity) {
+            item_commands.try_remove::<crate::relationships::DeliveringTo>();
+        }
     }
 
     // 手押し車を駐車状態に戻す
@@ -53,17 +51,17 @@ pub fn cancel_wheelbarrow_task(
         parking_anchor,
         soul_pos,
     );
-    commands
-        .entity(data.wheelbarrow)
-        .remove::<crate::relationships::DeliveringTo>();
+    if let Ok(mut wheelbarrow_commands) = commands.get_entity(data.wheelbarrow) {
+        wheelbarrow_commands.try_remove::<crate::relationships::DeliveringTo>();
+    }
 
     // 全予約を解放
     release_all_reservations(ctx, data);
 
     ctx.inventory.0 = None;
-    commands
-        .entity(ctx.soul_entity)
-        .remove::<crate::relationships::WorkingOn>();
+    if let Ok(mut soul_commands) = commands.get_entity(ctx.soul_entity) {
+        soul_commands.try_remove::<crate::relationships::WorkingOn>();
+    }
     clear_task_and_path(ctx.task, ctx.path);
 
     info!(

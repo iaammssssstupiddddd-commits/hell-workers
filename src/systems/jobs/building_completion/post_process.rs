@@ -1,6 +1,5 @@
 use super::super::{
-    Blueprint, BonePile, BridgeMarker, BuildingType, MudMixerStorage, RestArea, SandPile,
-    TaskSlots,
+    Blueprint, BonePile, BridgeMarker, BuildingType, MudMixerStorage, RestArea, SandPile, TaskSlots,
 };
 use crate::assets::GameAssets;
 use crate::constants::{

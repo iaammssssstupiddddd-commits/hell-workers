@@ -59,7 +59,9 @@ pub fn spawn_gather_indicators_system(
                     worker: worker_entity,
                 });
 
-                commands.entity(worker_entity).try_insert(HasGatherIndicator);
+                commands
+                    .entity(worker_entity)
+                    .try_insert(HasGatherIndicator);
             }
         }
     }
