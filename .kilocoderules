@@ -41,6 +41,15 @@ After any code change, ensure zero compilation errors:
 - Only request user debugging as last resort when cause cannot be identified
 - When debugging, first check implementation once cause is roughly estimated
 
+### 5. Bevy バージョンの厳守とドキュメント確認
+- 本プロジェクトは **Bevy 0.18** を使用している。
+- AIの学習データにある過去のバージョン（0.14以前など）のAPIを無自覚に使用しないこと。
+- 新しい機能やシステムを実装する（特に Window, UI, Query, Commands周りなど）際は、推測でコードを書く前に以下のいずれかを行うこと：
+  1. すでに正しく動いている他のプロジェクト内ソースコードの書き方を参考にする
+  2. Web検索ツール等で `https://docs.rs/bevy/0.18.0/bevy/` や関連ドキュメントを確認する
+  3. ローカルの `~/.cargo/registry/src/` にあるBevyのソースコード（関数のシグネチャ）を検索して直接確認する
+- 実装後は `cargo check` を実行し、APIの変更によるエラー（メソッドが存在しない等）がないか必ず確認すること。
+
 ---
 
 ## Task Execution System Conventions

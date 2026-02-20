@@ -42,6 +42,15 @@
 - Task system conventions: add new `AssignedTask` variants as struct variants and keep task queries aggregated in `TaskQueries` (see `src/systems/soul_ai/execute/task_execution/`).
 - Context hygiene: respect `.cursorignore` and `.geminiignore` by avoiding large build artifacts/logs (`target/`, `dist/`, `.trunk/`, `logs/`, `build_*.txt`, `*_output*.txt`) unless explicitly needed.
 
+### Bevy バージョンの厳守とドキュメント確認
+- 本プロジェクトは **Bevy 0.18** を使用している。
+- AIの学習データにある過去のバージョン（0.14以前など）のAPIを無自覚に使用しないこと。
+- 新しい機能やシステムを実装する（特に Window, UI, Query, Commands周りなど）際は、推測でコードを書く前に以下のいずれかを行うこと：
+  1. すでに正しく動いている他のプロジェクト内ソースコードの書き方を参考にする
+  2. Web検索ツール等で `https://docs.rs/bevy/0.18.0/bevy/` や関連ドキュメントを確認する
+  3. ローカルの `~/.cargo/registry/src/` にあるBevyのソースコード（関数のシグネチャ）を検索して直接確認する
+- 実装後は `cargo check` を実行し、APIの変更によるエラー（メソッドが存在しない等）がないか必ず確認すること。
+
 ## Assets & Configuration Tips
 - For generated icons or sprites, create with magenta background (`#FF00FF`) and convert via `scripts/convert_to_png.py`.
 - If Windows linking fails with too many symbols, disable `dynamic_linking` in `Cargo.toml` as documented in `docs/DEVELOPMENT.md`.
