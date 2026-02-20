@@ -117,8 +117,8 @@ pub(super) fn candidate_snapshot(
         return None;
     }
 
-    let target_grid = WorldMap::world_to_grid(pos);
-    let target_walkable = world_map.is_walkable(target_grid.0, target_grid.1);
+    let mut target_grid = WorldMap::world_to_grid(pos);
+    let mut target_walkable = world_map.is_walkable(target_grid.0, target_grid.1);
     let is_transport_request = queries.transport_requests.get(entity).is_ok();
     let requires_transport_request = matches!(
         designation.work_type,
@@ -145,7 +145,37 @@ pub(super) fn candidate_snapshot(
         | WorkType::WheelbarrowHaul => true,
         WorkType::Build => {
             if let Ok((_, bp, _)) = queries.storage.blueprints.get(entity) {
-                bp.materials_complete()
+                if !bp.materials_complete() {
+                    false
+                } else {
+                    if !target_walkable {
+                        let approach_grid = bp
+                            .occupied_grids
+                            .iter()
+                            .copied()
+                            .find(|&(gx, gy)| {
+                                [
+                                    (0, 1),
+                                    (0, -1),
+                                    (1, 0),
+                                    (-1, 0),
+                                    (1, 1),
+                                    (1, -1),
+                                    (-1, 1),
+                                    (-1, -1),
+                                ]
+                                .iter()
+                                .any(|&(dx, dy)| world_map.is_walkable(gx + dx, gy + dy))
+                            })
+                            .or_else(|| bp.occupied_grids.first().copied());
+
+                        if let Some(grid) = approach_grid {
+                            target_grid = grid;
+                            target_walkable = world_map.is_walkable(grid.0, grid.1);
+                        }
+                    }
+                    true
+                }
             } else {
                 false
             }

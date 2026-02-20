@@ -115,10 +115,16 @@ Dream は `SoulAiSystemSet::Update` で以下 2 系統から加算されます�
 
 ### 4.2 Dream 粒子 (`dream_particle_*`)
 
+#### 睡眠中の Soul からの発生
 - 睡眠中かつ `DreamQuality != Awake` の Soul に発生
 - 品質ごとに間隔・寿命・色・揺れ量が変化
 - Soul ごとの同時粒子数は `DREAM_PARTICLE_MAX_PER_SOUL` で制限
 - `NightTerror` でも粒子は発生（赤系）
+
+#### 休憩所 (RestArea) からの一括発生
+- 休憩中の Soul 個別の状態によらず、休憩所エンティティから一括でパーティクルが発生
+- パーティクルの大きさ、密度（生成間隔）、動きの激しさは**「現在何人休憩しているか（Occupants）」**に比例してスケールアップする
+- `VividDream` 品質（青色系）として描画され、活発に湧き出る視覚効果となる
 
 ### 4.3 `+Dream` ポップアップ (`dream_popup_*`)
 

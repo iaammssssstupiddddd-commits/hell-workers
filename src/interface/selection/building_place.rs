@@ -7,7 +7,7 @@ use crate::game_state::{
 use crate::interface::camera::MainCamera;
 use crate::interface::ui::UiInputState;
 use crate::systems::jobs::{Blueprint, BuildingType, SandPile};
-use crate::world::map::WorldMap;
+use crate::world::map::{RIVER_Y_MIN, WorldMap};
 use bevy::prelude::*;
 
 const COMPANION_PLACEMENT_RADIUS_TILES: f32 = 5.0;
@@ -169,11 +169,19 @@ fn place_building_blueprint(
     let spawn_pos = building_spawn_pos(building_type, grid);
     let custom_size = Some(building_size(building_type));
 
-    let can_place = occupied_grids.iter().all(|&g| {
-        !world_map.buildings.contains_key(&g)
-            && !world_map.stockpiles.contains_key(&g)
-            && world_map.is_walkable(g.0, g.1)
-    });
+    let can_place = if building_type == BuildingType::Bridge {
+        occupied_grids.iter().all(|&g| {
+            !world_map.buildings.contains_key(&g)
+                && !world_map.stockpiles.contains_key(&g)
+                && world_map.is_river_tile(g.0, g.1)
+        })
+    } else {
+        occupied_grids.iter().all(|&g| {
+            !world_map.buildings.contains_key(&g)
+                && !world_map.stockpiles.contains_key(&g)
+                && world_map.is_walkable(g.0, g.1)
+        })
+    };
     if !can_place {
         return None;
     }
@@ -186,6 +194,7 @@ fn place_building_blueprint(
         BuildingType::Tank => game_assets.tank_empty.clone(),
         BuildingType::MudMixer => game_assets.mud_mixer.clone(),
         BuildingType::RestArea => game_assets.rest_area.clone(),
+        BuildingType::Bridge => game_assets.bridge.clone(),
         BuildingType::SandPile => game_assets.sand_pile.clone(),
         BuildingType::BonePile => game_assets.bone_pile.clone(),
         BuildingType::WheelbarrowParking => game_assets.wheelbarrow_parking.clone(),
@@ -211,7 +220,9 @@ fn place_building_blueprint(
 
     for &g in &occupied_grids {
         world_map.buildings.insert(g, entity);
-        world_map.add_obstacle(g.0, g.1);
+        if building_type != BuildingType::Bridge {
+            world_map.add_obstacle(g.0, g.1);
+        }
     }
 
     Some((entity, occupied_grids, spawn_pos))
@@ -321,6 +332,9 @@ fn parent_building_type(parent_kind: CompanionParentKind) -> BuildingType {
 
 fn occupied_grids_for_building(building_type: BuildingType, grid: (i32, i32)) -> Vec<(i32, i32)> {
     match building_type {
+        BuildingType::Bridge => (0..5)
+            .flat_map(|dy| [(grid.0, RIVER_Y_MIN + dy), (grid.0 + 1, RIVER_Y_MIN + dy)])
+            .collect(),
         BuildingType::Tank
         | BuildingType::MudMixer
         | BuildingType::RestArea
@@ -337,6 +351,10 @@ fn occupied_grids_for_building(building_type: BuildingType, grid: (i32, i32)) ->
 fn building_spawn_pos(building_type: BuildingType, grid: (i32, i32)) -> Vec2 {
     let base_pos = WorldMap::grid_to_world(grid.0, grid.1);
     match building_type {
+        BuildingType::Bridge => {
+            let base = WorldMap::grid_to_world(grid.0, RIVER_Y_MIN);
+            base + Vec2::new(TILE_SIZE * 0.5, TILE_SIZE * 2.0)
+        }
         BuildingType::Tank
         | BuildingType::MudMixer
         | BuildingType::RestArea
@@ -349,6 +367,7 @@ fn building_spawn_pos(building_type: BuildingType, grid: (i32, i32)) -> Vec2 {
 
 fn building_size(building_type: BuildingType) -> Vec2 {
     match building_type {
+        BuildingType::Bridge => Vec2::new(TILE_SIZE * 2.0, TILE_SIZE * 5.0),
         BuildingType::Tank
         | BuildingType::MudMixer
         | BuildingType::RestArea

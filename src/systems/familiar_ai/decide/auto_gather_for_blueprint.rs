@@ -113,7 +113,8 @@ pub fn blueprint_auto_gather_system(
     owner_areas.sort_by_key(|(entity, _)| entity.to_bits());
 
     let mut raw_demand_by_owner = HashMap::<(Entity, ResourceType), u32>::new();
-    let mut demand_by_blueprint = HashMap::<(Entity, Entity, ResourceType), u32>::new();
+    let mut inflight_by_blueprint =
+        HashMap::<(Entity, Entity), HashMap<ResourceType, u32>>::new();
 
     for (req, target_bp, workers_opt) in q_bp_requests.iter() {
         if !matches!(req.kind, TransportRequestKind::DeliverToBlueprint) {
@@ -127,34 +128,71 @@ pub fn blueprint_auto_gather_system(
         }
 
         let inflight = workers_opt.map(|workers| workers.len() as u32).unwrap_or(0);
-        *demand_by_blueprint
-            .entry((req.issued_by, target_bp.0, req.resource_type))
+        *inflight_by_blueprint
+            .entry((req.issued_by, target_bp.0))
+            .or_default()
+            .entry(req.resource_type)
             .or_insert(0) += inflight;
     }
 
-    for ((owner, blueprint_entity, resource_type), inflight) in demand_by_blueprint {
+    for ((owner, blueprint_entity), inflight_by_resource) in inflight_by_blueprint {
         let Ok(blueprint) = q_blueprints.get(blueprint_entity) else {
             continue;
         };
-        let required = *blueprint
-            .required_materials
-            .get(&resource_type)
-            .unwrap_or(&0);
-        if required == 0 {
-            continue;
-        }
-        let delivered = *blueprint
-            .delivered_materials
-            .get(&resource_type)
-            .unwrap_or(&0);
-        let needed = required.saturating_sub(delivered.saturating_add(inflight));
-        if needed == 0 {
-            continue;
+
+        for (&resource_type, &required) in &blueprint.required_materials {
+            if !matches!(resource_type, ResourceType::Wood | ResourceType::Rock) {
+                continue;
+            }
+            if required == 0 {
+                continue;
+            }
+
+            let delivered = *blueprint
+                .delivered_materials
+                .get(&resource_type)
+                .unwrap_or(&0);
+            let inflight = *inflight_by_resource.get(&resource_type).unwrap_or(&0);
+            let needed = required.saturating_sub(delivered.saturating_add(inflight));
+            if needed == 0 {
+                continue;
+            }
+
+            *raw_demand_by_owner
+                .entry((owner, resource_type))
+                .or_insert(0) += needed;
         }
 
-        *raw_demand_by_owner
-            .entry((owner, resource_type))
-            .or_insert(0) += needed;
+        if let Some(flexible) = &blueprint.flexible_material_requirement {
+            if flexible.accepted_types.is_empty() {
+                continue;
+            }
+
+            let total_inflight_flexible: u32 = flexible
+                .accepted_types
+                .iter()
+                .map(|resource_type| {
+                    *inflight_by_resource
+                        .get(resource_type)
+                        .unwrap_or(&0)
+                })
+                .sum();
+            let needed = flexible
+                .remaining()
+                .saturating_sub(total_inflight_flexible);
+            if needed == 0 {
+                continue;
+            }
+
+            let preferred_resource = if flexible.accepted_types.contains(&ResourceType::Wood) {
+                ResourceType::Wood
+            } else {
+                flexible.accepted_types[0]
+            };
+            *raw_demand_by_owner
+                .entry((owner, preferred_resource))
+                .or_insert(0) += needed;
+        }
     }
 
     let mut supply_by_owner = HashMap::<(Entity, ResourceType), SupplyBucket>::new();
