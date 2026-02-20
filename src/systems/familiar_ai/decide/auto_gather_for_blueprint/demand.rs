@@ -3,15 +3,24 @@ use std::collections::HashMap;
 use bevy::prelude::*;
 
 use crate::relationships::TaskWorkers;
+use crate::systems::jobs::wall_construction::TargetWallConstructionSite;
 use crate::systems::jobs::{Blueprint, TargetBlueprint};
 use crate::systems::logistics::ResourceType;
-use crate::systems::logistics::transport_request::{TransportRequest, TransportRequestKind};
+use crate::systems::logistics::transport_request::{
+    TransportDemand, TransportRequest, TransportRequestKind,
+};
 
 use super::helpers::OwnerInfo;
 
 pub(super) fn collect_raw_demand_by_owner(
     owner_infos: &HashMap<Entity, OwnerInfo>,
     q_bp_requests: &Query<(&TransportRequest, &TargetBlueprint, Option<&TaskWorkers>)>,
+    q_wall_requests: &Query<(
+        &TransportRequest,
+        &TargetWallConstructionSite,
+        Option<&TaskWorkers>,
+        Option<&TransportDemand>,
+    )>,
     q_blueprints: &Query<&Blueprint>,
 ) -> HashMap<(Entity, ResourceType), u32> {
     let mut raw_demand_by_owner = HashMap::<(Entity, ResourceType), u32>::new();
@@ -88,6 +97,31 @@ pub(super) fn collect_raw_demand_by_owner(
                 .entry((owner, preferred_resource))
                 .or_insert(0) += needed;
         }
+    }
+
+    for (req, _target_site, workers_opt, demand_opt) in q_wall_requests.iter() {
+        if !matches!(req.kind, TransportRequestKind::DeliverToWallConstruction) {
+            continue;
+        }
+        if !matches!(req.resource_type, ResourceType::Wood) {
+            continue;
+        }
+        if !owner_infos.contains_key(&req.issued_by) {
+            continue;
+        }
+
+        let Some(demand) = demand_opt else {
+            continue;
+        };
+        let inflight = workers_opt.map(|workers| workers.len() as u32).unwrap_or(0);
+        let needed = demand.desired_slots.saturating_sub(inflight);
+        if needed == 0 {
+            continue;
+        }
+
+        *raw_demand_by_owner
+            .entry((req.issued_by, req.resource_type))
+            .or_insert(0) += needed;
     }
 
     raw_demand_by_owner

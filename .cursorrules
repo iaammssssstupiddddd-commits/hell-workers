@@ -7,6 +7,15 @@ Before starting any task, you MUST check the following documents to understand t
 2.  **Development Rules**: [docs/DEVELOPMENT.md](file:///f:/DevData/projects/hell-workers/docs/DEVELOPMENT.md)
 3.  **Documentation Index**: [docs/README.md](file:///f:/DevData/projects/hell-workers/docs/README.md)
 
+# AI Agent Instructions
+
+You are working on the "Hell Workers" project.
+Before starting any task, you MUST check the following documents to understand the context and rules:
+
+1.  **Project Overview**: [README.md](file:///f:/DevData/projects/hell-workers/README.md)
+2.  **Development Rules**: [docs/DEVELOPMENT.md](file:///f:/DevData/projects/hell-workers/docs/DEVELOPMENT.md)
+3.  **Documentation Index**: [docs/README.md](file:///f:/DevData/projects/hell-workers/docs/README.md)
+
 ## Key Technical Context
 - **Engine**: Bevy 0.18
 - **Critical Mechanism**: ECS Relationships are used for most entity connections.
@@ -14,3 +23,12 @@ Before starting any task, you MUST check the following documents to understand t
 - **Visuals**: Use the specific magenta-background workflow for new images.
 
 Refer to `docs/` for specific system details (AI, Tasks, Logistics, etc.).
+
+## Bevy バージョンの厳守とドキュメント確認
+- 本プロジェクトは **Bevy 0.18** を使用している。
+- AIの学習データにある過去のバージョン（0.14以前など）のAPIを無自覚に使用しないこと。
+- 新しい機能やシステムを実装する（特に Window, UI, Query, Commands周りなど）際は、推測でコードを書く前に以下のいずれかを行うこと：
+  1. すでに正しく動いている他のプロジェクト内ソースコードの書き方を参考にする
+  2. Web検索ツール等で `https://docs.rs/bevy/0.18.0/bevy/` や関連ドキュメントを確認する
+  3. ローカルの `~/.cargo/registry/src/` にあるBevyのソースコード（関数のシグネチャ）を検索して直接確認する
+- 実装後は `cargo check` を実行し、APIの変更によるエラー（メソッドが存在しない等）がないか必ず確認すること。
