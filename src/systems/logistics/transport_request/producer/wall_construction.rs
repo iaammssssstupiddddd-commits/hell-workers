@@ -113,33 +113,23 @@ pub fn wall_construction_auto_haul_system(
 
         if waiting_wood > 0 && matches!(site.phase, WallConstructionPhase::Framing) {
             let resource_type = ResourceType::Wood;
-            let inflight_count = *in_flight.get(&(site_entity, resource_type)).unwrap_or(&0);
-
-            if inflight_count < waiting_wood as usize {
-                let needed = waiting_wood.saturating_sub(inflight_count as u32);
-                desired_requests.insert(
-                    (site_entity, resource_type),
-                    (fam_entity, needed.max(1), site.material_center),
-                );
-            }
+            desired_requests.insert(
+                (site_entity, resource_type),
+                (fam_entity, waiting_wood.max(1), site.material_center),
+            );
         }
 
         if waiting_mud > 0 && matches!(site.phase, WallConstructionPhase::Coating) {
             let resource_type = ResourceType::StasisMud;
-            let inflight_workers = *in_flight.get(&(site_entity, resource_type)).unwrap_or(&0);
-            let inflight_items = inflight_workers as u32 * WHEELBARROW_CAPACITY as u32;
-
-            if inflight_items < waiting_mud {
-                let needed_items = waiting_mud.saturating_sub(inflight_items);
-                desired_requests.insert(
-                    (site_entity, resource_type),
-                    (
-                        fam_entity,
-                        needed_items.div_ceil(WHEELBARROW_CAPACITY as u32).max(1),
-                        site.material_center,
-                    ),
-                );
-            }
+            let total_slots = waiting_mud.div_ceil(WHEELBARROW_CAPACITY as u32).max(1);
+            desired_requests.insert(
+                (site_entity, resource_type),
+                (
+                    fam_entity,
+                    total_slots,
+                    site.material_center,
+                ),
+            );
         }
     }
 

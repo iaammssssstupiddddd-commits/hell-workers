@@ -99,7 +99,7 @@ pub fn blueprint_auto_haul_system(
                 continue;
             }
 
-            let needed = required.saturating_sub(delivered + inflight_count as u32);
+            let needed = required.saturating_sub(delivered);
             let desired_slots = if resource_type.requires_wheelbarrow() {
                 needed.div_ceil(WHEELBARROW_CAPACITY as u32).max(1)
             } else {

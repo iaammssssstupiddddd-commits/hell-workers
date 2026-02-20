@@ -131,34 +131,22 @@ pub fn floor_construction_auto_haul_system(
         // Create request for bones (Reinforcing phase)
         if waiting_bones > 0 && matches!(site.phase, FloorConstructionPhase::Reinforcing) {
             let resource_type = ResourceType::Bone;
-            let inflight_count = *in_flight.get(&(site_entity, resource_type)).unwrap_or(&0);
-
-            if inflight_count < waiting_bones as usize {
-                let needed = waiting_bones.saturating_sub(inflight_count as u32);
-                // Bones don't require wheelbarrow, so slots = needed items
-                let desired_slots = needed.max(1);
-                desired_requests.insert(
-                    (site_entity, resource_type),
-                    (fam_entity, desired_slots, site.material_center),
-                );
-            }
+            let desired_slots = waiting_bones.max(1);
+            desired_requests.insert(
+                (site_entity, resource_type),
+                (fam_entity, desired_slots, site.material_center),
+            );
         }
 
         // Create request for mud (Pouring phase)
         if waiting_mud > 0 && matches!(site.phase, FloorConstructionPhase::Pouring) {
             let resource_type = ResourceType::StasisMud;
-            let inflight_workers = *in_flight.get(&(site_entity, resource_type)).unwrap_or(&0);
-            let inflight_items = inflight_workers as u32 * WHEELBARROW_CAPACITY as u32;
-
-            if inflight_items < waiting_mud {
-                let needed_items = waiting_mud.saturating_sub(inflight_items);
-                // Mud requires wheelbarrow
-                let desired_slots = needed_items.div_ceil(WHEELBARROW_CAPACITY as u32).max(1);
-                desired_requests.insert(
-                    (site_entity, resource_type),
-                    (fam_entity, desired_slots, site.material_center),
-                );
-            }
+            // Mud requires wheelbarrow
+            let desired_slots = waiting_mud.div_ceil(WHEELBARROW_CAPACITY as u32).max(1);
+            desired_requests.insert(
+                (site_entity, resource_type),
+                (fam_entity, desired_slots, site.material_center),
+            );
         }
     }
 

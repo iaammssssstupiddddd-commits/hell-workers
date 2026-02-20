@@ -83,10 +83,10 @@ pub fn mud_mixer_auto_haul_system(
                 _ => 0,
             };
 
-            let inflight =
+            let _inflight =
                 haul_cache.get_mixer_destination_reservation(mixer_entity, resource_type);
 
-            let needed = MUD_MIXER_CAPACITY.saturating_sub(current + inflight as u32);
+            let needed = MUD_MIXER_CAPACITY.saturating_sub(current);
             if needed > 0 {
                 desired_requests.insert(
                     (mixer_entity, resource_type),
