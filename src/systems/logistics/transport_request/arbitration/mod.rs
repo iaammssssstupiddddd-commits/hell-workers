@@ -25,7 +25,7 @@ use bevy::prelude::*;
 
 use super::metrics::TransportRequestMetrics;
 use collection::collect_candidates;
-use grants::grant_leases;
+use grants::{GrantStats, grant_leases};
 
 #[derive(Default)]
 pub(crate) struct WheelbarrowArbitrationRuntime {
@@ -182,6 +182,7 @@ pub(crate) fn wheelbarrow_arbitration_system(
     q_stored_in: Query<&StoredIn>,
     q_stockpiles: Query<(&Stockpile, Option<&StoredItems>)>,
     q_blueprints: Query<&Blueprint>,
+    q_transforms: Query<&Transform>,
     mut dirty: WheelbarrowArbitrationDirtyParams,
     mut metrics: ResMut<TransportRequestMetrics>,
     cache: Res<crate::systems::familiar_ai::perceive::resource_sync::SharedResourceCache>,
@@ -240,10 +241,11 @@ pub(crate) fn wheelbarrow_arbitration_system(
         || interval_due
         || stale_lease_removed;
 
-    let mut leases_granted = 0u32;
+    let mut grant_stats = GrantStats::default();
     let mut eligible_requests = 0u32;
     let mut bucket_items_total = 0u32;
     let mut candidates_after_top_k = 0u32;
+    let mut pending_secs_total = 0.0f64;
 
     if should_rebuild {
         runtime.initialized = true;
@@ -255,7 +257,7 @@ pub(crate) fn wheelbarrow_arbitration_system(
             .map(|(e, t)| (e, t.translation.truncate()))
             .collect();
 
-        let (candidates, eligible, bucket_total, after_top_k) = collect_candidates(
+        let (candidates, eligible, bucket_total, after_top_k, pending_total) = collect_candidates(
             &q_requests,
             &q_free_items,
             &q_belongs,
@@ -272,24 +274,29 @@ pub(crate) fn wheelbarrow_arbitration_system(
         eligible_requests = eligible;
         bucket_items_total = bucket_total;
         candidates_after_top_k = after_top_k;
-        leases_granted = grant_leases(
+        pending_secs_total = pending_total;
+        grant_stats = grant_leases(
             &candidates,
             &mut available_wheelbarrows,
             now,
             &mut commands,
             &q_stockpiles,
-            &cache,
             &q_incoming,
+            &q_transforms,
         );
     }
 
     update_metrics(
         &mut metrics,
-        lease_state.used_wheelbarrows.len() as u32 + leases_granted,
-        leases_granted,
+        lease_state.used_wheelbarrows.len() as u32 + grant_stats.leases_granted,
+        grant_stats.leases_granted,
         eligible_requests,
         bucket_items_total,
         candidates_after_top_k,
+        grant_stats.items_deduped,
+        grant_stats.candidates_dropped_by_dedup,
+        pending_secs_total,
+        grant_stats.lease_duration_total_secs,
         arbitration_started_at,
     );
 }
@@ -392,6 +399,10 @@ fn update_metrics(
     eligible_requests: u32,
     bucket_items_total: u32,
     candidates_after_top_k: u32,
+    items_deduped: u32,
+    candidates_dropped_by_dedup: u32,
+    pending_secs_total: f64,
+    lease_duration_total_secs: f64,
     arbitration_started_at: std::time::Instant,
 ) {
     metrics.wheelbarrow_leases_active = active_leases;
@@ -399,5 +410,17 @@ fn update_metrics(
     metrics.wheelbarrow_arb_eligible_requests = eligible_requests;
     metrics.wheelbarrow_arb_bucket_items_total = bucket_items_total;
     metrics.wheelbarrow_arb_candidates_after_topk = candidates_after_top_k;
+    metrics.wheelbarrow_arb_items_deduped = items_deduped;
+    metrics.wheelbarrow_arb_candidates_dropped_by_dedup = candidates_dropped_by_dedup;
+    metrics.wheelbarrow_arb_avg_pending_secs = if eligible_requests > 0 {
+        (pending_secs_total / eligible_requests as f64) as f32
+    } else {
+        0.0
+    };
+    metrics.wheelbarrow_arb_avg_lease_duration = if leases_granted > 0 {
+        (lease_duration_total_secs / leases_granted as f64) as f32
+    } else {
+        0.0
+    };
     metrics.wheelbarrow_arb_elapsed_ms = arbitration_started_at.elapsed().as_secs_f32() * 1000.0;
 }

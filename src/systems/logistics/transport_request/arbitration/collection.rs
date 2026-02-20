@@ -51,7 +51,7 @@ pub(super) fn collect_candidates(
     cache: &SharedResourceCache,
     q_incoming: &Query<&IncomingDeliveries>,
     now: f64,
-) -> (Vec<(BatchCandidate, f32)>, u32, u32, u32) {
+) -> (Vec<(BatchCandidate, f32)>, u32, u32, u32, f64) {
     struct EligibleRequest {
         eval: RequestEvalContext,
         kind: TransportRequestKind,
@@ -62,6 +62,7 @@ pub(super) fn collect_candidates(
     let mut eligible_requests = 0u32;
     let mut bucket_items_total = 0u32;
     let mut candidates_after_top_k = 0u32;
+    let mut pending_secs_total = 0.0f64;
 
     if available_wheelbarrows.is_empty() {
         return (
@@ -69,6 +70,7 @@ pub(super) fn collect_candidates(
             eligible_requests,
             bucket_items_total,
             candidates_after_top_k,
+            pending_secs_total,
         );
     }
 
@@ -112,6 +114,7 @@ pub(super) fn collect_candidates(
             eligible_requests,
             bucket_items_total,
             candidates_after_top_k,
+            pending_secs_total,
         );
     }
 
@@ -121,6 +124,7 @@ pub(super) fn collect_candidates(
 
     for req in eligible {
         let eval = req.eval;
+        pending_secs_total += eval.pending_for;
         let bucket: &[usize] = match eval.bucket_key {
             ItemBucketKey::Resource(resource_type) => by_resource
                 .get(&resource_type)
@@ -202,7 +206,18 @@ pub(super) fn collect_candidates(
             selected_count as f32,
             eval.priority as f32,
             min_wb_distance,
+            eval.pending_for,
             is_small_batch,
+        );
+        debug!(
+            "WB Arbitration: candidate req {:?} score {:.2} (batch={}, priority={}, wb_dist={:.1}, pending_for={:.1}, small_batch={})",
+            eval.request_entity,
+            score,
+            selected_count,
+            eval.priority,
+            min_wb_distance,
+            eval.pending_for,
+            is_small_batch
         );
 
         candidates.push((
@@ -212,6 +227,8 @@ pub(super) fn collect_candidates(
                 source_pos,
                 destination: eval.destination,
                 group_cells: req.stockpile_group,
+                hard_min: eval.hard_min,
+                pending_for: eval.pending_for,
                 is_small_batch,
             },
             score,
@@ -224,5 +241,6 @@ pub(super) fn collect_candidates(
         eligible_requests,
         bucket_items_total,
         candidates_after_top_k,
+        pending_secs_total,
     )
 }

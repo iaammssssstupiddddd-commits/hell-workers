@@ -16,8 +16,7 @@ pub struct WallConstructionSite {
 }
 
 impl WallConstructionSite {
-    pub fn new(area_bounds: TaskArea, tiles_total: u32) -> Self {
-        let material_center = area_bounds.center();
+    pub fn new(area_bounds: TaskArea, material_center: Vec2, tiles_total: u32) -> Self {
         Self {
             phase: WallConstructionPhase::Framing,
             area_bounds,
