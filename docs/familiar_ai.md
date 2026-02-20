@@ -101,7 +101,7 @@
 - **設計メモ**: Familiar AI は「状態遷移」「分隊管理」「リクルート」で同じ判定ロジックを複数フェーズから再利用するため、`helpers/` が相対的に厚くなる設計です。副作用（`Commands`・イベント発火）は `execute/` に限定します。
 - **`decide/state_decision.rs`**: 状態遷移の意思決定システム
   - `familiar_ai_state_system`: 状態判定と Request 生成
-- **`decide/auto_gather_for_blueprint.rs`**: Blueprint 不足資材（Wood / Rock）に対する自動伐採・採掘指定
+- **`decide/auto_gather_for_blueprint.rs` + `decide/auto_gather_for_blueprint/{demand,supply,planning,actions}.rs`**: Blueprint 不足資材（Wood / Rock）に対する自動伐採・採掘指定
   - `DeliverToBlueprint` request（`issued_by`）を需要起点に不足量を集計
   - `TaskArea` を基準に段階探索（内側 -> 10 -> 30 -> 60 -> それ以遠）で `Tree` / `Rock` を選定
   - `AutoGatherForBlueprint` marker 付きの Designation 発行と stale 回収を担当

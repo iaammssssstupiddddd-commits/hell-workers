@@ -10,7 +10,6 @@ use bevy::prelude::*;
 use super::super::super::builders::{
     issue_collect_bone_with_wheelbarrow_to_blueprint,
     issue_collect_sand_with_wheelbarrow_to_blueprint, issue_haul_to_blueprint_with_source,
-    issue_haul_with_wheelbarrow,
 };
 use super::super::super::validator::resolve_haul_to_blueprint_inputs;
 use super::demand;
@@ -69,26 +68,19 @@ pub fn assign_haul_to_blueprint(
         }
     }
 
-    if let Ok(lease) = queries.wheelbarrow_leases.get(ctx.task_entity) {
-        if lease_validation::validate_lease(lease, queries, shadow, 1) {
-            let max_items = remaining_needed.min(WHEELBARROW_CAPACITY as u32) as usize;
-            let lease_items: Vec<Entity> = lease.items.iter().copied().take(max_items).collect();
-            if lease_items.is_empty() {
-                return false;
-            }
-            issue_haul_with_wheelbarrow(
-                lease.wheelbarrow,
-                lease.source_pos,
-                lease.destination,
-                lease_items,
-                task_pos,
-                already_commanded,
-                ctx,
-                queries,
-                shadow,
-            );
-            return true;
-        }
+    let max_items = remaining_needed.min(WHEELBARROW_CAPACITY as u32) as usize;
+    if lease_validation::try_issue_haul_from_lease(
+        ctx.task_entity,
+        task_pos,
+        already_commanded,
+        1,
+        max_items,
+        |_| true,
+        ctx,
+        queries,
+        shadow,
+    ) {
+        return true;
     }
 
     if resource_type == ResourceType::Sand
