@@ -47,7 +47,7 @@ Hell-Workers の物流は、`TransportRequest` を中心にした自動発行 + 
 - `TransportRequest { kind, anchor, resource_type, issued_by, priority }`
 - `TransportDemand { desired_slots, inflight }`
 - `TransportRequestState`:
-  - `Pending` / `Claimed` / `InFlight` / `CoolingDown` / `Completed`
+  - `Pending` / `Claimed`
 - request エンティティには通常 `Designation`, `ManagedBy`, `TaskSlots`, `Priority` も付与されます。
 
 ## 2. TransportRequest 基盤
@@ -220,15 +220,6 @@ Hell-Workers の物流は、`TransportRequest` を中心にした自動発行 + 
   - `DeliverToWallConstruction`（`StasisMud`）
 - 猫車不足時は request は `Pending` のまま待機する。
 
-- `resolve_wheelbarrow_batch_for_stockpile` が以下を満たすと一括運搬を選択:
-  - 利用可能な手押し車あり
-  - 同種アイテムが `WHEELBARROW_MIN_BATCH_SIZE` 以上
-  - 目的 Stockpile の残容量あり
-- 上限:
-  - `WHEELBARROW_CAPACITY`
-  - Stockpile 残容量
-- 対象アイテムは地面上のみ（`InStockpile` は除外）。
-
 ### 5.2 手押し車仲裁システム (Wheelbarrow Arbitration)
 
 複数の `DepositToStockpile` request が同時に手押し車を必要とする場合に、
@@ -254,7 +245,7 @@ WheelbarrowLease {
 1. **期限切れ lease の除去** — `lease_until < now` の lease を remove。
 2. **使用中 wheelbarrow の収集** — 有効な lease が付いている wheelbarrow を除外リストに追加。
 3. **eligible request の抽出** — 以下すべてを満たす request:
-   - `kind` が仲裁対象（`DepositToStockpile` / 猫車必須資源の `DeliverToBlueprint` / 猫車必須資源の `DeliverToMixerSolid`）
+   - `kind` が仲裁対象（`DepositToStockpile` / 猫車必須資源の `DeliverToBlueprint` / `DeliverToMixerSolid`）
    - `state == Pending`（ワーカー未割当）
    - lease なし
    - `resource_type.is_loadable()`
@@ -269,14 +260,18 @@ WheelbarrowLease {
    - `DepositToStockpile` では「型互換セルのみ」で残容量を計算
    - 猫車必須資源は、`Top-K` 候補に対してピックドロップ完結可能判定を行い、成立時は仲裁候補から除外
    - 最小バッチ条件: 猫車必須資源は `1`、それ以外は `WHEELBARROW_MIN_BATCH_SIZE`
-6. **スコア計算** — `score = batch_size * SCORE_BATCH_SIZE + priority * SCORE_PRIORITY - distance * SCORE_DISTANCE`
+6. **スコア計算** — `score = batch_size * SCORE_BATCH_SIZE + priority * SCORE_PRIORITY - distance * SCORE_DISTANCE + pending_bonus`
    - `distance` = 最近の wheelbarrow からアイテム重心までの距離
+   - `pending_bonus = min(pending_for, WHEELBARROW_SCORE_PENDING_TIME_MAX_SECS) * WHEELBARROW_SCORE_PENDING_TIME`
    - 小バッチ（1〜2個）には減点を適用
-7. **Greedy 割り当て** — スコア降順にソートし、各 request に最近の available wheelbarrow を割り当て。
+7. **候補間重複除去** — スコア順処理時に、先行候補で消費した item を後続候補から除外。
+   - 除外後の item 数が `hard_min` 未満になった候補はスキップ。
+8. **Greedy 割り当て** — スコア降順にソートし、各 request に最近の available wheelbarrow を割り当て。
    - 割り当て済みの wheelbarrow は available set から除去。
-8. **小バッチ抑制** — 猫車必須資源で `batch_size < WHEELBARROW_PREFERRED_MIN_BATCH_SIZE` の場合:
+9. **小バッチ抑制** — 猫車必須資源で `batch_size < WHEELBARROW_PREFERRED_MIN_BATCH_SIZE` の場合:
    - `pending_since` から `SINGLE_BATCH_WAIT_SECS` 経過前は候補から除外
    - 経過後にのみ割り当て可能
+10. **動的 lease 期間** — `wb -> source -> destination` の推定移動時間から期間を算出し、最小/最大値でクランプ。
 
 #### 5.2.3 定数
 
@@ -284,10 +279,14 @@ WheelbarrowLease {
 | :--- | :--- | :--- |
 | `WHEELBARROW_PREFERRED_MIN_BATCH_SIZE` | 3 | 猫車必須資源で優先する最小バッチ |
 | `SINGLE_BATCH_WAIT_SECS` | 5.0 | 1〜2個搬送を許可する待機時間 |
-| `WHEELBARROW_LEASE_DURATION_SECS` | 30.0 | lease 有効期間（秒） |
+| `WHEELBARROW_LEASE_MIN_DURATION_SECS` | 8.0 | lease 期間の下限（秒） |
+| `WHEELBARROW_LEASE_MAX_DURATION_SECS` | 45.0 | lease 期間の上限（秒） |
+| `WHEELBARROW_LEASE_BUFFER_RATIO` | 0.5 | 推定移動時間への余裕率 |
 | `WHEELBARROW_SCORE_BATCH_SIZE` | 10.0 | スコア: バッチサイズの重み |
 | `WHEELBARROW_SCORE_PRIORITY` | 5.0 | スコア: 優先度の重み |
 | `WHEELBARROW_SCORE_DISTANCE` | 0.1 | スコア: 距離のペナルティ重み |
+| `WHEELBARROW_SCORE_PENDING_TIME` | 2.0 | スコア: pending 経過時間の重み |
+| `WHEELBARROW_SCORE_PENDING_TIME_MAX_SECS` | 30.0 | pending ボーナス計算の上限秒数 |
 | `WHEELBARROW_SCORE_SMALL_BATCH_PENALTY` | 20.0 | 小バッチ減点 |
 | `WHEELBARROW_ARBITRATION_TOP_K` | 24 | request ごとに評価する近傍候補上限 |
 
@@ -298,13 +297,14 @@ WheelbarrowLease {
 1. **WheelbarrowLease あり** → lease の有効性を検証（wheelbarrow が parked か、items が未予約か）し、有効なら即採用。
 2. **猫車必須資源かつ lease なし** → 原則待機（徒歩フォールバックなし）。
    - ただし、ピックドロップ完結可能な request は徒歩運搬を優先。
-3. **猫車任意資源** → 既存の `resolve_wheelbarrow_batch_for_stockpile` または単品運搬へフォールバック。
+3. **Stockpile / Blueprint の猫車任意資源** → 仲裁外のアドホック猫車探索は行わず、単品運搬へフォールバック。
+   - `Sand` / `Bone` の Blueprint 直接採取経路は互換のため維持。
 
 #### 5.2.5 lease のライフサイクル
 
 - **付与**: 仲裁システム（Arbitrate フェーズ）が `WheelbarrowLease` を insert。
 - **消費**: `assign_haul` が lease を読み取り `HaulWithWheelbarrow` タスクを発行。割り当て後は request の state が Pending でなくなるため、次フレームの仲裁で自動的に対象外。
-- **期限切れ**: 仲裁システムが毎フレーム `lease_until < now` をチェックして remove。
+- **失効/無効化**: 仲裁システムが毎フレーム `lease_until < now`、手押し車消失、有効 item 数不足をチェックして remove。
 - **request close**: `transport_request_anchor_cleanup_system` が request を閉じる際に `WheelbarrowLease` も除去。
 
 #### 5.2.6 メトリクス
@@ -316,6 +316,10 @@ WheelbarrowLease {
 - `wheelbarrow_arb_eligible_requests` — 仲裁対象として評価した request 数
 - `wheelbarrow_arb_bucket_items_total` — request が参照したバケット候補数（Top-K 前）
 - `wheelbarrow_arb_candidates_after_topk` — Top-K 抽出後に残った候補数
+- `wheelbarrow_arb_items_deduped` — 候補間重複除去で取り除かれた item 数
+- `wheelbarrow_arb_candidates_dropped_by_dedup` — 重複除去後に `hard_min` 未満となりスキップされた候補数
+- `wheelbarrow_arb_avg_pending_secs` — 仲裁対象 request の平均 pending 秒
+- `wheelbarrow_arb_avg_lease_duration` — このフレームで付与した lease の平均期間（秒）
 - `wheelbarrow_arb_elapsed_ms` — 仲裁システム実行時間（ms）
 - `task_area_groups` — TaskArea producer が評価したグループ数
 - `task_area_free_items_scanned` — TaskArea producer が走査した free item 数

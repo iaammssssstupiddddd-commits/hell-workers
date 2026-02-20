@@ -18,8 +18,7 @@ pub struct FloorConstructionSite {
 }
 
 impl FloorConstructionSite {
-    pub fn new(area_bounds: TaskArea, tiles_total: u32) -> Self {
-        let material_center = area_bounds.center();
+    pub fn new(area_bounds: TaskArea, material_center: Vec2, tiles_total: u32) -> Self {
         Self {
             phase: FloorConstructionPhase::Reinforcing,
             area_bounds,

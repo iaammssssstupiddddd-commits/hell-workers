@@ -55,12 +55,22 @@ pub fn wall_construction_phase_transition_system(
             continue;
         }
 
-        let all_framed = q_tiles
-            .iter()
-            .filter(|(_, tile)| tile.parent_site == site_entity)
-            .all(|(_, tile)| matches!(tile.state, WallTileState::FramedProvisional));
+        let mut total_tiles = 0;
+        let mut framed_tiles = 0;
 
-        if all_framed && site.tiles_framed >= site.tiles_total {
+        for (_, tile) in q_tiles.iter().filter(|(_, t)| t.parent_site == site_entity) {
+            total_tiles += 1;
+            if matches!(tile.state, WallTileState::FramedProvisional) && tile.spawned_wall.is_some() {
+                framed_tiles += 1;
+            }
+        }
+
+        // もし残存タイルが0になってしまった場合は何もしない
+        if total_tiles == 0 {
+            continue;
+        }
+
+        if framed_tiles >= total_tiles {
             site.phase = WallConstructionPhase::Coating;
 
             for (tile_entity, mut tile) in q_tiles

@@ -11,7 +11,7 @@ use super::super::super::builders::{
     issue_haul_to_stockpile_with_source, issue_haul_with_wheelbarrow,
 };
 use super::super::super::validator::{
-    compute_centroid, resolve_haul_to_stockpile_inputs, resolve_wheelbarrow_batch_for_stockpile,
+    resolve_haul_to_stockpile_inputs,
 };
 use super::lease_validation;
 use super::source_selector;
@@ -143,29 +143,6 @@ pub fn assign_haul_to_stockpile(
 
     if resource_type.requires_wheelbarrow() {
         return false;
-    }
-
-    if let Some((wb_entity, items)) = resolve_wheelbarrow_batch_for_stockpile(
-        stockpile,
-        resource_type,
-        item_owner,
-        task_pos,
-        queries,
-        shadow,
-    ) {
-        let source_pos = compute_centroid(&items, queries);
-        issue_haul_with_wheelbarrow(
-            wb_entity,
-            source_pos,
-            WheelbarrowDestination::Stockpile(stockpile),
-            items,
-            task_pos,
-            already_commanded,
-            ctx,
-            queries,
-            shadow,
-        );
-        return true;
     }
 
     let Some((source_item, source_pos)) = source_selector::find_nearest_stockpile_source_item(

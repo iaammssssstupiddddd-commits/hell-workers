@@ -26,6 +26,14 @@ pub struct TransportRequestMetrics {
     pub wheelbarrow_arb_bucket_items_total: u32,
     /// 仲裁時に Top-K 抽出後に残った候補数
     pub wheelbarrow_arb_candidates_after_topk: u32,
+    /// 候補間重複除去で除外された item 数
+    pub wheelbarrow_arb_items_deduped: u32,
+    /// 重複除去で hard_min 未満となりスキップされた候補数
+    pub wheelbarrow_arb_candidates_dropped_by_dedup: u32,
+    /// 仲裁対象 request の平均 pending 時間（秒）
+    pub wheelbarrow_arb_avg_pending_secs: f32,
+    /// このフレームで付与した lease の平均期間（秒）
+    pub wheelbarrow_arb_avg_lease_duration: f32,
     /// 仲裁システムの実行時間（ms）
     pub wheelbarrow_arb_elapsed_ms: f32,
     /// task area producer が評価した Stockpile グループ数

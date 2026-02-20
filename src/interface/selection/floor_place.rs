@@ -162,12 +162,14 @@ fn apply_floor_placement(
     }
 
     let tiles_total = valid_tiles.len() as u32;
+    let center_grid = valid_tiles[valid_tiles.len() / 2];
+    let material_center = WorldMap::grid_to_world(center_grid.0, center_grid.1);
 
     // Create parent FloorConstructionSite entity
     let site_entity = commands
         .spawn((
-            FloorConstructionSite::new(area.clone(), tiles_total),
-            Transform::from_translation(area.center().extend(Z_MAP + 0.01)),
+            FloorConstructionSite::new(area.clone(), material_center, tiles_total),
+            Transform::from_translation(material_center.extend(Z_MAP + 0.01)),
             Visibility::default(),
             Name::new("FloorConstructionSite"),
         ))
@@ -237,10 +239,13 @@ fn apply_wall_placement(
     }
 
     let tiles_total = valid_tiles.len() as u32;
+    let center_grid = valid_tiles[valid_tiles.len() / 2];
+    let material_center = WorldMap::grid_to_world(center_grid.0, center_grid.1);
+
     let site_entity = commands
         .spawn((
-            WallConstructionSite::new(area.clone(), tiles_total),
-            Transform::from_translation(area.center().extend(Z_MAP + 0.01)),
+            WallConstructionSite::new(area.clone(), material_center, tiles_total),
+            Transform::from_translation(material_center.extend(Z_MAP + 0.01)),
             Visibility::default(),
             Name::new("WallConstructionSite"),
         ))

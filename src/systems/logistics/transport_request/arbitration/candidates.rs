@@ -292,11 +292,14 @@ pub fn score_candidate(
     batch_size: f32,
     priority: f32,
     wb_distance: f32,
+    pending_for: f64,
     is_small_batch: bool,
 ) -> f32 {
     let mut score = batch_size * WHEELBARROW_SCORE_BATCH_SIZE
         + priority * WHEELBARROW_SCORE_PRIORITY
         - wb_distance * WHEELBARROW_SCORE_DISTANCE;
+    let pending_bonus_secs = pending_for.min(WHEELBARROW_SCORE_PENDING_TIME_MAX_SECS);
+    score += pending_bonus_secs as f32 * WHEELBARROW_SCORE_PENDING_TIME;
 
     if is_small_batch {
         score -= WHEELBARROW_SCORE_SMALL_BATCH_PENALTY;
