@@ -43,31 +43,27 @@ Dream システムの視覚的フィードバック実装についてのドキ�
 - 睡眠中 Soul が `DREAM_POPUP_THRESHOLD` を超えるたびに:
   1. World 座標から `camera.world_to_viewport` で画面座標へ変換
   2. UI ルートノードの子として `DreamGainUiParticle` を生成
-  3. 4次ベジェ曲線（制御点 3つ）で右上の `DreamPoolIcon` へ向かって移動
+  3. **万有引力のような逆二乗則ベースの物理演算** によって、右上の `DreamPoolIcon` へ向かって吸い込まれる
 
-### 軌道アルゴリズム
+### 軌道・物理アルゴリズム (Physics V2)
 
-発生位置から最も近い画面端（上・右・下・左辺）を求め、その辺へ先に逃げ、辺に沿いながら目的地（`DreamPoolIcon`）まで到達する。
+以前のベジェ曲線による軌道計算から、純粋な物理・流体シミュレーションへと移行しました。
 
-| 制御点 | 役割 |
-| :--- | :--- |
-| `c1` | 発生地点から最寄りの辺へ向かう |
-| `c2` | 辺に貼り付いて目的地方向へ移動 |
-| `c3` | 辺沿いでアイコン直前まで進む |
+- **浮力と初速**: 発生直後は上方向の**浮力 (`DREAM_UI_BUOYANCY`)** とランダムな初速によって上へ飛びますが、浮力は発生から1.5秒で徐々に減衰してゼロになり、上辺に張り付くのを防ぎます。
+- **空気抵抗**: 常に **Drag (`DREAM_UI_DRAG`)** が時間係数で掛かっており、極端な加速を防いで泡らしいもっさりとした動きを作ります。
+- **引力（対数スケールと質量）**: 各泡は「**質量（Mass）**」を持っており、アイコンからの距離に対する対数関数カーブ（近接時に急加速するが上限がある）に従って引力 (`DREAM_UI_BASE_ATTRACTION`) が強まります。質量が大きい（合体して大きくなった）泡ほど優先的に強い力で吸い込まれます。
+- **渦 (Vortex)**: 直線的に引っ張るだけでなく、接線方向の**渦の力 (`DREAM_UI_VORTEX_STRENGTH`)** が働きます。Y軸が下向きのUI座標に合わせて内側にカーブする螺旋状の軌道を描き、UI経由で吸い込まれる流体的な軌道を描きます。
+- **ノイズ**: ランダムな角度への微細なノイズ力 (`DREAM_UI_NOISE_STRENGTH`) により、ふらふらとした揺らぎを表現しています。
+- **画面端ストッパー (Clamp & Damping)**: 泡が画面外へ吹き飛んだり通り過ぎたりしないよう、画面端へ到達した際は速度の飛び出し成分のみを強烈に減衰させ、枠内に留まるようにクランプされます。
+- **視覚的変化**:
+  - **サイズ縮小**: 発生時間の長さによらず、ターゲットに近づくにつれて対数関数的に収縮します。ベースサイズは質量（Mass）の平方根に比例して大きくなります。
+  - **Squash & Stretch**: 移動速度に応じて進行方向に伸び、垂直方向に縮みます。
+  - **色と透明度**: 生成直後のアルファ値フェードインを除き、アイコンに近づくほど白く発光するように色が変化します。
+  - **合体 (Merge)**: 泡同士が近づいた場合、バネ的な引力で互いに引き寄せ合って合体し、質量が増加します。
 
-**表示順**: `ZIndex(-1)` により UI パネル・テキストより背面を通る。
+**表示順**: UI文字やパネルよりも確実に手前に表示されるよう、パーティクルは `ZIndex(100)`、軌跡は `ZIndex(99)` に設定されています。
 
-実装: [`ui_particle.rs`](../src/systems/visual/dream/ui_particle.rs) の `calculate_control_points` 関数
-
-### パターン選択ロジック
-
-```
-dist_up   = start_pos.y
-dist_down = viewport_height - start_pos.y
-dist_left = start_pos.x
-dist_right = viewport_width - start_pos.x
-→ 最小の dist に対応する辺へのパターンを選択
-```
+実装: [`ui_particle.rs`](../src/systems/visual/dream/ui_particle.rs) 
 
 ## 4. `+Dream` ポップアップ (`dream_popup_*`)
 
@@ -106,7 +102,19 @@ dist_right = viewport_width - start_pos.x
 
 | 定数 | 値 | 用途 |
 | :--- | :--- | :--- |
-| `DREAM_PARTICLE_MAX_PER_SOUL` | 5 | Soul ごとの同時粒子上限 |
-| `DREAM_POPUP_THRESHOLD` | 0.08 | `+Dream` 表示の発生閾値 |
-| `DREAM_UI_PULSE_TRIGGER_DELTA` | 0.05 | UI パルス発火に必要な増加量 |
-| `DREAM_UI_PULSE_DURATION` | 0.35 | UI パルス時間（秒） |
+| `DREAM_PARTICLE_MAX_PER_SOUL` | 5 | Soul ごとの通常粒子上限 |
+| `DREAM_POPUP_THRESHOLD` | 0.08 | `+Dream` UI発生閾値 |
+| `DREAM_UI_PARTICLE_SIZE` | 10.0 | 吸い込まれる泡の基本サイズ |
+| `DREAM_UI_BUOYANCY` | 45.0 | 上方向への浮力（最大値。発生から1.5秒でゼロへ減衰） |
+| `DREAM_UI_BASE_ATTRACTION` | 25.0 | アイコンへの基本引力（距離の対数カーブと質量で増幅される） |
+| `DREAM_UI_VORTEX_STRENGTH` | 3.0 | 横向きにそれる渦巻き力の強さ |
+| `DREAM_UI_DRAG` | 0.88 | 空気抵抗（1.0未満。小さいほどすぐ減速してもっさりする） |
+| `DREAM_UI_NOISE_STRENGTH` | 60.0 | 揺らぎ・ふらつきの強さ |
+| `DREAM_UI_NOISE_INTERVAL` | 0.3 | ふらつきの方向が変わる間隔（秒） |
+| `DREAM_UI_BOUNDARY_MARGIN` | 30.0 | 画面端からの距離（これ以上近づくと斥力が働く） |
+| `DREAM_UI_BOUNDARY_PUSH` | 150.0 | 画面端の斥力の強さ |
+| `DREAM_UI_ARRIVAL_RADIUS` | 40.0 | アイコンに吸い込まれたと判定する距離半径 |
+| `DREAM_UI_TRAIL_INTERVAL` | 0.12 | 残像（TrailGhost）を生成する間隔（秒） |
+| `DREAM_UI_TRAIL_LIFETIME` | 0.15 | 残像が消えるまでの時間（秒） |
+| `DREAM_UI_PULSE_DURATION` | 0.35 | アイコンが脈打つ演出の時間 |
+| `DREAM_UI_MERGE_RADIUS` | 20.0 | 泡同士が吸い寄り合体する距離 |
