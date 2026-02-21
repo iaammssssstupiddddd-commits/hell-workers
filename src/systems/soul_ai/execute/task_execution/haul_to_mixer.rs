@@ -144,6 +144,7 @@ pub fn handle_haul_to_mixer_task(
                     );
                     reservation::release_mixer_destination(ctx, mixer_entity, resource_type);
                     if resource_type == ResourceType::Sand {
+                        commands.entity(ctx.soul_entity).remove::<crate::relationships::WorkingOn>();
                         commands.entity(item_entity).despawn();
                         // DeliveringTo is removed with despawn
                     } else {
@@ -214,6 +215,7 @@ pub fn handle_haul_to_mixer_task(
                 }
 
                 if delivered {
+                    commands.entity(ctx.soul_entity).remove::<crate::relationships::WorkingOn>();
                     commands.entity(item_entity).despawn();
                     // DeliveringTo is removed with despawn
                     ctx.inventory.0 = None;
