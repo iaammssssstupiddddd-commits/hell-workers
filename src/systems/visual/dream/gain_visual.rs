@@ -117,7 +117,6 @@ pub fn dream_popup_spawn_system(
                     start_pos,
                     target_pos,
                     viewport_size,
-                    DREAM_UI_PARTICLE_LIFETIME,
                     ui_root,
                     &assets,
                 );

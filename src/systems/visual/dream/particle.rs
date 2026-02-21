@@ -232,7 +232,6 @@ pub fn rest_area_dream_particle_spawn_system(
                 start_pos,
                 target_pos,
                 viewport_size, // ADDED
-                1.5,
                 ui_root,
                 &assets,
             );
