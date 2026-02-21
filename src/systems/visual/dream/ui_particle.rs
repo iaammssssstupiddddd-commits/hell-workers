@@ -4,27 +4,7 @@ use crate::constants::*;
 use crate::interface::ui::components::{UiNodeRegistry, UiRoot, UiSlot};
 use crate::interface::ui::theme::UiTheme;
 use bevy::prelude::*;
-
-/// 「漂い→吸引」2相イージング
-fn bubble_ease(t: f32) -> f32 {
-    if t < 0.7 {
-        let p = t / 0.7;
-        p * p * 0.2
-    } else {
-        let p = (t - 0.7) / 0.3;
-        0.2 + p * p * 0.8
-    }
-}
-
-/// 4次ベジェ曲線の位置計算
-fn bezier4(t: f32, p0: Vec2, p1: Vec2, p2: Vec2, p3: Vec2, p4: Vec2) -> Vec2 {
-    let u = 1.0 - t;
-    u.powi(4) * p0
-        + 4.0 * u.powi(3) * t * p1
-        + 6.0 * u.powi(2) * t.powi(2) * p2
-        + 4.0 * u * t.powi(3) * p3
-        + t.powi(4) * p4
-}
+use rand::Rng;
 
 pub fn ui_particle_update_system(
     mut commands: Commands,
@@ -38,15 +18,23 @@ pub fn ui_particle_update_system(
         &mut DreamGainUiParticle,
         &mut Node,
         &mut BackgroundColor,
+        &mut Transform,
     )>,
+    q_camera: Query<&Camera, With<crate::interface::camera::MainCamera>>,
 ) {
     let dt = time.delta_secs();
     let ui_root = q_ui_root.iter().next();
+    
+    let viewport_size = q_camera
+        .iter()
+        .next()
+        .and_then(|c| c.logical_viewport_size())
+        .unwrap_or(Vec2::new(1920., 1080.));
 
     // 合体ターゲットの位置を事前収集（借用衝突を回避）
     let target_positions: Vec<(Entity, Vec2)> = q_particles
         .iter()
-        .map(|(e, _, n, _)| {
+        .map(|(e, _, n, _, _)| {
             let pos = Vec2::new(
                 match n.left {
                     Val::Px(v) => v,
@@ -61,51 +49,42 @@ pub fn ui_particle_update_system(
         })
         .collect();
 
-    for (entity, mut particle, mut node, mut color) in q_particles.iter_mut() {
-        particle.lifetime -= dt;
-        if particle.lifetime <= 0.0 {
-            // 到着時: アイコンにパルスを通知
-            if particle.merging_into.is_none() {
-                if let Some(icon_entity) =
-                    ui_nodes.get_slot(UiSlot::DreamPoolIcon)
-                {
-                    if let Ok(mut absorb) = q_icon.get_mut(icon_entity) {
-                        absorb.pulse_count += 1;
-                    }
-                }
-            }
-            commands.entity(entity).try_despawn();
-            continue;
-        }
+    let mut rng = rand::thread_rng();
 
-        // 吸収中パーティクル（merge target に吸い寄せられている）
+    for (entity, mut particle, mut node, mut color, mut transform) in q_particles.iter_mut() {
+        particle.time_alive += dt;
+
+        let current_pos = Vec2::new(
+            match node.left {
+                Val::Px(v) => v,
+                _ => 0.0,
+            },
+            match node.top {
+                Val::Px(v) => v,
+                _ => 0.0,
+            },
+        );
+
         if let Some(target) = particle.merging_into {
             particle.merge_timer -= dt;
             let progress = 1.0 - (particle.merge_timer / DREAM_UI_MERGE_DURATION).clamp(0.0, 1.0);
 
-            // 事前収集した位置から target の現在位置を取得
             if let Some(&(_, target_pos)) = target_positions.iter().find(|(e, _)| *e == target) {
-                let current_left = match node.left {
-                    Val::Px(v) => v,
-                    _ => 0.0,
-                };
-                let current_top = match node.top {
-                    Val::Px(v) => v,
-                    _ => 0.0,
-                };
-                let current = Vec2::new(current_left, current_top);
-                let new_pos = current.lerp(target_pos, progress);
+                // Spring-like acceleration instead of lerp
+                let to_target = target_pos - current_pos;
+                let pull_force = to_target * 15.0; // merge attraction
+                particle.velocity += pull_force * dt;
+                particle.velocity *= DREAM_UI_DRAG;
+                let new_pos = current_pos + particle.velocity * dt;
+
                 node.left = Val::Px(new_pos.x);
                 node.top = Val::Px(new_pos.y);
 
-                // サイズ縮小
-                let base =
-                    DREAM_UI_PARTICLE_SIZE + particle.merge_count as f32 * DREAM_UI_MERGE_SIZE_BONUS;
+                let base = DREAM_UI_PARTICLE_SIZE * particle.mass.sqrt();
                 let size = base * (1.0 - progress);
                 node.width = Val::Px(size);
                 node.height = Val::Px(size);
 
-                // アルファフェード
                 color.0 = color.0.with_alpha(0.9 * (1.0 - progress));
             }
 
@@ -115,58 +94,123 @@ pub fn ui_particle_update_system(
             continue;
         }
 
-        // --- 通常移動パーティクル ---
-        let t = 1.0 - (particle.lifetime / particle.max_lifetime).clamp(0.0, 1.0);
-        let mapped_t = bubble_ease(t);
+        // 1. Buoyancy (発生直後のみ強く、時間経過で減衰して消える)
+        let buoyancy_ratio = (1.0 - (particle.time_alive / 1.5)).max(0.0);
+        let buoyancy = Vec2::new(0.0, -DREAM_UI_BUOYANCY * buoyancy_ratio);
 
-        // Bezier位置
-        let bezier_pos = bezier4(
-            mapped_t,
-            particle.start_pos,
-            particle.control_point_1,
-            particle.control_point_2,
-            particle.control_point_3,
-            particle.target_pos,
-        );
+        // 2. Attraction
+        let to_target = particle.target_pos - current_pos;
+        let distance = to_target.length().max(1.0);
+        
+        // 距離ベースのみの引力（対数スケールによるなだらかな急加速＋上限クランプ）
+        // 大きな泡（質量の大きい泡）ほど強い引力の影響を受ける
+        let dist_ratio = (500.0 / distance.max(10.0)).clamp(1.0, 50.0);
+        // 1.0 〜 約4.0前後の対数スケールに変換し、最大でも20倍程度の引力までにハードクランプする
+        let distance_factor = 1.0 + (dist_ratio.ln() * 3.0).clamp(0.0, 15.0);
+        let attraction_strength = DREAM_UI_BASE_ATTRACTION * distance_factor * particle.mass;
+        let mut attraction = to_target.normalize_or_zero() * attraction_strength;
 
-        // 位置揺らぎ（漂いフェーズで強く、吸引で減衰）
-        let drift_strength =
-            (1.0 - ((t - 0.5) / 0.3).clamp(0.0, 1.0)) * DREAM_UI_BUBBLE_DRIFT_STRENGTH;
-        let drift_x = (particle.phase * 2.0).sin() * drift_strength;
-        let drift_y = (particle.phase * 2.7 + 0.8).cos() * drift_strength;
-        let final_pos = bezier_pos + Vec2::new(drift_x, drift_y);
+        // 3. Vortex (接線方向の力)
+        // 引力に対する渦の比率。時間関係なく、アイコンに近づくほど直進（渦なし）になるようにする
+        let vortex_ratio = (distance / 400.0).clamp(0.05, 1.0);
+        // UIの座標系（Yが下方向）において、右上のターゲットへ向かう際に
+        // 右下に膨らまないように接線ベクトルの向きを反転 (y, -x)
+        let tangent = Vec2::new(to_target.y, -to_target.x).normalize_or_zero();
+        attraction += tangent * (attraction_strength * DREAM_UI_VORTEX_STRENGTH * vortex_ratio);
 
-        // 前フレーム位置を記録（trail用）
-        particle.prev_pos = Vec2::new(
-            match node.left {
-                Val::Px(v) => v,
-                _ => final_pos.x,
-            },
-            match node.top {
-                Val::Px(v) => v,
-                _ => final_pos.y,
-            },
-        );
+        // 4. Noise
+        particle.noise_timer -= dt;
+        if particle.noise_timer <= 0.0 {
+            let angle: f32 = rng.gen_range(0.0..std::f32::consts::TAU);
+            particle.noise_direction = Vec2::new(angle.cos(), angle.sin());
+            particle.noise_timer = DREAM_UI_NOISE_INTERVAL;
+        }
+        // 近づくほどノイズによるブレを減らす
+        let noise_ratio = (distance / 400.0).clamp(0.0, 1.0);
+        let noise = particle.noise_direction * DREAM_UI_NOISE_STRENGTH * noise_ratio;
 
+        // 5. Boundary Push (弱い斥力)
+        // 画面端に近づくにつれて中心に押し戻す弱い力を加える（跳ね返ってしまわない程度）
+        let mut boundary = Vec2::ZERO;
+        if current_pos.x < DREAM_UI_BOUNDARY_MARGIN {
+            let ratio = 1.0 - (current_pos.x / DREAM_UI_BOUNDARY_MARGIN).clamp(0.0, 1.0);
+            boundary.x += DREAM_UI_BOUNDARY_PUSH * ratio;
+        } else if current_pos.x > viewport_size.x - DREAM_UI_BOUNDARY_MARGIN {
+            let ratio = 1.0 - ((viewport_size.x - current_pos.x) / DREAM_UI_BOUNDARY_MARGIN).clamp(0.0, 1.0);
+            boundary.x -= DREAM_UI_BOUNDARY_PUSH * ratio;
+        }
+        if current_pos.y < DREAM_UI_BOUNDARY_MARGIN {
+            let ratio = 1.0 - (current_pos.y / DREAM_UI_BOUNDARY_MARGIN).clamp(0.0, 1.0);
+            boundary.y += DREAM_UI_BOUNDARY_PUSH * ratio;
+        } else if current_pos.y > viewport_size.y - DREAM_UI_BOUNDARY_MARGIN {
+            // Y軸上端（下端）の斥力も追加
+            let ratio = 1.0 - ((viewport_size.y - current_pos.y) / DREAM_UI_BOUNDARY_MARGIN).clamp(0.0, 1.0);
+            boundary.y -= DREAM_UI_BOUNDARY_PUSH * ratio;
+        }
+
+        // Apply Forces
+        let total_force = buoyancy + attraction + noise + boundary;
+        particle.velocity += total_force * dt;
+        
+        // フレームレート非依存のDrag (60fps基準)
+        // アイコンに非常に近い場合は、すり抜けを防ぐために急激なブレーキ（減衰）をかける
+        let mut drag = DREAM_UI_DRAG;
+        if distance < 50.0 {
+            drag = drag.min(0.6); // 強いブレーキ
+        }
+        let drag_factor = drag.powf(dt * 60.0);
+        particle.velocity *= drag_factor;
+        
+        let mut final_pos = current_pos + particle.velocity * dt;
+
+        // Size and Squash & Stretch
+        let base = DREAM_UI_PARTICLE_SIZE * particle.mass.sqrt();
+        let speed = particle.velocity.length();
+        let squash_stretch_ratio = (speed / 150.0).clamp(0.0, 1.5);
+        let length_scale = 1.0 + squash_stretch_ratio;
+        let width_scale = 1.0 / (1.0 + squash_stretch_ratio * 0.5);
+
+        // 6. Clamp & Damping (画面外へ出る速度を殺す・跳ね返りはしない)
+        if final_pos.x < 0.0 {
+            final_pos.x = 0.0;
+            particle.velocity.x *= 0.1; // 強烈な減衰力
+        } else if final_pos.x > viewport_size.x {
+            final_pos.x = viewport_size.x;
+            particle.velocity.x *= 0.1;
+        }
+        
+        if final_pos.y < 0.0 {
+            final_pos.y = 0.0;
+            particle.velocity.y *= 0.1;
+        } else if final_pos.y > viewport_size.y {
+            final_pos.y = viewport_size.y;
+            particle.velocity.y *= 0.1;
+        }
+
+        particle.prev_pos = final_pos;
         node.left = Val::Px(final_pos.x);
         node.top = Val::Px(final_pos.y);
 
-        // サイズ計算
-        let base =
-            DREAM_UI_PARTICLE_SIZE + particle.merge_count as f32 * DREAM_UI_MERGE_SIZE_BONUS;
-        let current_size = base * (1.0 - mapped_t * 0.7);
+        // 対数スケールによるサイズ縮小（近づくほど急激に小さくなる）
+        let start_dist = particle.start_pos.distance(particle.target_pos).max(1.0);
+        
+        let dist_ratio = (distance / start_dist.max(100.0)).clamp(0.01, 1.0);
+        // log10(dist_ratio * 9.0 + 1.0) で 1.0 -> 1.0, 0.0 -> 0.0 の対数カーブになる
+        let shrink = (dist_ratio * 9.0 + 1.0).log10().max(0.1);
+        
+        node.width = Val::Px(base * shrink * width_scale);
+        node.height = Val::Px(base * shrink * length_scale);
 
-        // Wobble（形状揺れ） - 漂い中強く、吸引で減衰
-        particle.phase += dt * 6.0;
-        let wobble_strength = 1.0 - ((t - 0.7) / 0.3).clamp(0.0, 1.0);
-        let wx = (particle.phase * 3.5).sin() * 1.5 * wobble_strength;
-        let wy = (particle.phase * 4.8 + 1.7).cos() * 1.5 * wobble_strength;
-        node.width = Val::Px(current_size + wx);
-        node.height = Val::Px(current_size + wy);
+        // Rotation
+        if speed > 1.0 {
+            let angle = particle.velocity.y.atan2(particle.velocity.x) - std::f32::consts::FRAC_PI_2;
+            transform.rotation = Quat::from_rotation_z(angle);
+        }
 
-        // 色変化: mapped_t > 0.6 でシアン→白方向
-        let base_color = if mapped_t > 0.6 {
-            let white_t = ((mapped_t - 0.6) / 0.4).clamp(0.0, 1.0);
+        // Color
+        // 近づく（dist_ratioが小さい）と白っぽく発光する
+        let base_color = if dist_ratio < 0.3 {
+            let white_t = 1.0 - (dist_ratio / 0.3);
             let r = 0.65 + white_t * 0.35;
             let g = 0.9 + white_t * 0.1;
             let b = 1.0;
@@ -175,21 +219,37 @@ pub fn ui_particle_update_system(
             Color::srgb(0.65, 0.9, 1.0)
         };
 
-        // フェード: 序盤0.1秒でフェードイン、以降alpha=0.9固定
-        let alpha = if t < 0.067 {
-            // 0.1s / 1.5s ≈ 0.067
-            (t / 0.067).clamp(0.0, 1.0) * 0.9
+        // 発生直後はフェードイン
+        let alpha = if particle.time_alive < 0.2 {
+            (particle.time_alive / 0.2).clamp(0.0, 1.0) * 0.9
         } else {
             0.9
         };
         color.0 = base_color.with_alpha(alpha);
 
-        // Trail生成（漂いフェーズ中心: t 0.1~0.75）
+        // Arrival Check
+        if distance < DREAM_UI_ARRIVAL_RADIUS {
+            if let Some(icon_entity) = ui_nodes.get_slot(UiSlot::DreamPoolIcon) {
+                if let Ok(mut absorb) = q_icon.get_mut(icon_entity) {
+                    absorb.pulse_count = absorb.pulse_count.saturating_add(1);
+                }
+            }
+            commands.entity(entity).try_despawn();
+            continue;
+        }
+
+        // Trail generating
         particle.trail_cooldown -= dt;
-        if particle.trail_cooldown <= 0.0 && t > 0.1 && t < 0.75 {
+        if particle.trail_cooldown <= 0.0 && dist_ratio > 0.15 {
             particle.trail_cooldown = DREAM_UI_TRAIL_INTERVAL;
-            let trail_size = current_size * DREAM_UI_TRAIL_SIZE_RATIO;
+            let trail_size = base * shrink * DREAM_UI_TRAIL_SIZE_RATIO;
             if let Some(root) = ui_root {
+                let mut trail_transform = Transform::from_translation(Vec3::ZERO);
+                if speed > 1.0 {
+                    let angle = particle.velocity.y.atan2(particle.velocity.x) - std::f32::consts::FRAC_PI_2;
+                    trail_transform.rotation = Quat::from_rotation_z(angle);
+                }
+                
                 let trail = commands
                     .spawn((
                         DreamTrailGhost {
@@ -200,15 +260,16 @@ pub fn ui_particle_update_system(
                             position_type: PositionType::Absolute,
                             left: Val::Px(final_pos.x),
                             top: Val::Px(final_pos.y),
-                            width: Val::Px(trail_size),
-                            height: Val::Px(trail_size),
+                            width: Val::Px(trail_size * width_scale),
+                            height: Val::Px(trail_size * length_scale),
                             ..default()
                         },
+                        trail_transform,
                         ImageNode::new(assets.dream_bubble.clone()),
                         BackgroundColor(
                             Color::srgb(0.65, 0.9, 1.0).with_alpha(DREAM_UI_TRAIL_ALPHA),
                         ),
-                        ZIndex(-2),
+                        ZIndex(99),
                         Name::new("DreamTrailGhost"),
                     ))
                     .id();
@@ -218,11 +279,9 @@ pub fn ui_particle_update_system(
     }
 }
 
-/// 合体判定システム
 pub fn ui_particle_merge_system(
     mut q_particles: Query<(Entity, &mut DreamGainUiParticle, &Node)>,
 ) {
-    // 全パーティクルの位置を収集
     let positions: Vec<(Entity, Vec2, f32, bool)> = q_particles
         .iter()
         .map(|(e, p, n)| {
@@ -236,20 +295,19 @@ pub fn ui_particle_merge_system(
                     _ => 0.0,
                 },
             );
-            let t = 1.0 - (p.lifetime / p.max_lifetime).clamp(0.0, 1.0);
+            let t = (p.time_alive / 3.5).clamp(0.0, 1.0);
             let merging = p.merging_into.is_some();
             (e, pos, t, merging)
         })
         .collect();
 
-    // ペアワイズ距離チェック（1フレーム1ペアのみ）
     let mut merge_pair: Option<(Entity, Entity)> = None;
     'outer: for i in 0..positions.len() {
         if positions[i].3 {
-            continue; // 既に吸収中
+            continue;
         }
         if positions[i].2 < 0.15 {
-            continue; // 初期フェーズ
+            continue;
         }
         for j in (i + 1)..positions.len() {
             if positions[j].3 {
@@ -260,11 +318,10 @@ pub fn ui_particle_merge_system(
             }
             let dist = positions[i].1.distance(positions[j].1);
             if dist < DREAM_UI_MERGE_RADIUS {
-                // tが小さい方（後方）を吸収対象に
                 if positions[i].2 < positions[j].2 {
-                    merge_pair = Some((positions[i].0, positions[j].0)); // i→jに吸収される
+                    merge_pair = Some((positions[i].0, positions[j].0));
                 } else {
-                    merge_pair = Some((positions[j].0, positions[i].0)); // j→iに吸収される
+                    merge_pair = Some((positions[j].0, positions[i].0));
                 }
                 break 'outer;
             }
@@ -272,27 +329,20 @@ pub fn ui_particle_merge_system(
     }
 
     if let Some((absorbed, absorber)) = merge_pair {
-        // 吸収者の merge_count を確認
-        if let Ok((_, absorber_p, _)) = q_particles.get(absorber) {
+        if let Ok([( _, mut absorbed_p, _), ( _, mut absorber_p, _)]) = q_particles.get_many_mut([absorbed, absorber]) {
             if absorber_p.merge_count >= DREAM_UI_MERGE_MAX_COUNT {
                 return;
             }
-        }
-
-        // absorbed: merging_into設定
-        if let Ok((_, mut absorbed_p, _)) = q_particles.get_mut(absorbed) {
+            
             absorbed_p.merging_into = Some(absorber);
             absorbed_p.merge_timer = DREAM_UI_MERGE_DURATION;
-        }
 
-        // absorber: merge_count加算
-        if let Ok((_, mut absorber_p, _)) = q_particles.get_mut(absorber) {
-            absorber_p.merge_count = (absorber_p.merge_count + 1).min(DREAM_UI_MERGE_MAX_COUNT);
+            absorber_p.merge_count += 1;
+            absorber_p.mass += absorbed_p.mass;
         }
     }
 }
 
-/// Trail ゴーストのフェードアウトシステム
 pub fn dream_trail_ghost_update_system(
     mut commands: Commands,
     time: Res<Time>,
@@ -310,14 +360,13 @@ pub fn dream_trail_ghost_update_system(
     }
 }
 
-/// DreamPoolIcon の吸収パルスシステム
 pub fn dream_icon_absorb_system(
     time: Res<Time>,
     theme: Res<UiTheme>,
-    mut q_icon: Query<(&mut Node, &mut BackgroundColor, &mut DreamIconAbsorb)>,
+    mut q_icon: Query<(&mut Node, &mut BackgroundColor, &mut DreamIconAbsorb, &mut Transform)>,
 ) {
     let dt = time.delta_secs();
-    for (mut node, mut color, mut absorb) in q_icon.iter_mut() {
+    for (mut node, mut color, mut absorb, mut transform) in q_icon.iter_mut() {
         if absorb.pulse_count > 0 {
             absorb.timer = DREAM_ICON_ABSORB_DURATION;
             absorb.pulse_count = 0;
@@ -334,6 +383,11 @@ pub fn dream_icon_absorb_system(
             node.width = Val::Px(size);
             node.height = Val::Px(size);
 
+            // 被弾揺れ（インパクト）
+            // 進行方向に逆らうように少し下へ押し込まれる演出
+            let impact_offset = (1.0 - progress) * sin_val * 4.0;
+            transform.translation.y = impact_offset;
+
             // 白フラッシュ
             let base = theme.colors.accent_soul_bright;
             let r = base.to_srgba().red + (1.0 - base.to_srgba().red) * sin_val * 0.5;
@@ -341,74 +395,43 @@ pub fn dream_icon_absorb_system(
             let b = base.to_srgba().blue + (1.0 - base.to_srgba().blue) * sin_val * 0.5;
             color.0 = Color::srgb(r, g, b);
         } else {
-            // 復帰
             node.width = Val::Px(DREAM_ICON_BASE_SIZE);
             node.height = Val::Px(DREAM_ICON_BASE_SIZE);
+            transform.translation.y = 0.0;
             color.0 = theme.colors.accent_soul_bright;
         }
     }
 }
 
-// パーティクル生成用のユーティリティ関数
 pub fn spawn_ui_particle(
     commands: &mut Commands,
     start_pos: Vec2,
     target_pos: Vec2,
-    viewport_size: Vec2,
-    lifetime: f32,
+    _viewport_size: Vec2, // removed usage
     ui_root: Entity,
     assets: &GameAssets,
 ) {
     let mut rng = rand::thread_rng();
 
-    let t_x = target_pos.x;
-    let t_y = target_pos.y;
-    let s_x = start_pos.x;
-    let s_y = start_pos.y;
-
-    let dist_up = s_y;
-    let dist_down = viewport_size.y - s_y;
-    let dist_left = s_x;
-    let dist_right = viewport_size.x - s_x;
-
-    let mut min_dist = dist_up;
-    let mut pattern = 0;
-
-    if dist_down < min_dist {
-        min_dist = dist_down;
-        pattern = 3;
-    }
-    if dist_left < min_dist {
-        min_dist = dist_left;
-        pattern = 2;
-    }
-    if dist_right < min_dist {
-        pattern = 1;
-    }
-
-    let _ = min_dist; // suppress unused warning
-
-    let (c1, c2, c3) =
-        calculate_control_points(pattern, s_x, s_y, t_x, t_y, viewport_size, &mut rng);
-
-    let phase: f32 = rand::random::<f32>() * std::f32::consts::TAU;
+    let angle: f32 = rng.gen_range(0.0..std::f32::consts::TAU);
+    let noise_dir = Vec2::new(angle.cos(), angle.sin());
 
     let particle = commands
         .spawn((
             DreamGainUiParticle {
-                lifetime,
-                max_lifetime: lifetime,
+                time_alive: 0.0,
                 start_pos,
                 target_pos,
-                control_point_1: c1,
-                control_point_2: c2,
-                control_point_3: c3,
-                phase,
+                velocity: Vec2::new(rng.gen_range(-15.0..15.0), rng.gen_range(-30.0..-10.0)),
+                phase: rng.gen_range(0.0..std::f32::consts::TAU),
+                noise_direction: noise_dir,
+                noise_timer: rng.gen_range(0.0..DREAM_UI_NOISE_INTERVAL),
                 merge_count: 0,
                 merging_into: None,
                 merge_timer: 0.0,
                 trail_cooldown: DREAM_UI_TRAIL_INTERVAL,
                 prev_pos: start_pos,
+                mass: rng.gen_range(0.8..1.2),
             },
             Node {
                 position_type: PositionType::Absolute,
@@ -418,78 +441,13 @@ pub fn spawn_ui_particle(
                 height: Val::Px(DREAM_UI_PARTICLE_SIZE),
                 ..default()
             },
+            Transform::default(),
             ImageNode::new(assets.dream_bubble.clone()),
-            BackgroundColor(Color::srgb(0.65, 0.9, 1.0).with_alpha(0.0)), // フェードインで開始
-            ZIndex(0),
+            BackgroundColor(Color::srgb(0.65, 0.9, 1.0).with_alpha(0.0)),
+            ZIndex(100),
             Name::new("DreamGainUiParticle"),
         ))
         .id();
 
     commands.entity(ui_root).add_child(particle);
-}
-
-// 制御点の計算ロジック（4次ベジェ曲線用）
-fn calculate_control_points(
-    pattern: i32,
-    s_x: f32,
-    s_y: f32,
-    t_x: f32,
-    t_y: f32,
-    viewport_size: Vec2,
-    rng: &mut impl rand::Rng,
-) -> (Vec2, Vec2, Vec2) {
-    match pattern {
-        0 => {
-            let c1_x = s_x - 30.0;
-            let c1_y = rng.gen_range(0.0..30.0);
-            let c2_x = s_x + (t_x - s_x) * 0.3;
-            let c2_y = 10.0;
-            let c3_x = t_x - 30.0;
-            let c3_y = 10.0;
-            (
-                Vec2::new(c1_x, c1_y),
-                Vec2::new(c2_x, c2_y),
-                Vec2::new(c3_x, c3_y),
-            )
-        }
-        1 => {
-            let c1_x = viewport_size.x - rng.gen_range(10.0..30.0);
-            let c1_y = s_y - 20.0;
-            let c2_x = viewport_size.x - 10.0;
-            let c2_y = s_y + (t_y - s_y) * 0.4;
-            let c3_x = viewport_size.x - 10.0;
-            let c3_y = t_y + 30.0;
-            (
-                Vec2::new(c1_x, c1_y),
-                Vec2::new(c2_x, c2_y),
-                Vec2::new(c3_x, c3_y),
-            )
-        }
-        2 => {
-            let c1_x = 20.0;
-            let c1_y = s_y - 40.0;
-            let c2_x = 20.0;
-            let c2_y = 20.0;
-            let c3_x = s_x + (t_x - s_x) * 0.6;
-            let c3_y = 20.0;
-            (
-                Vec2::new(c1_x, c1_y),
-                Vec2::new(c2_x, c2_y),
-                Vec2::new(c3_x, c3_y),
-            )
-        }
-        _ => {
-            let c1_x = s_x + 40.0;
-            let c1_y = viewport_size.y - 20.0;
-            let c2_x = viewport_size.x - 20.0;
-            let c2_y = viewport_size.y - 20.0;
-            let c3_x = viewport_size.x - 20.0;
-            let c3_y = s_y + (t_y - s_y) * 0.7;
-            (
-                Vec2::new(c1_x, c1_y),
-                Vec2::new(c2_x, c2_y),
-                Vec2::new(c3_x, c3_y),
-            )
-        }
-    }
 }
