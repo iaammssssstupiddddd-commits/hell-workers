@@ -46,7 +46,7 @@ Thumbs.db
 .idea/
 .cursor/
 *.iml
-assets/
+assets/fonts/
 scripts/convert_to_transparent.py
 docs/proposals/archive/
 docs/plans/archive/
