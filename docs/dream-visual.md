@@ -23,6 +23,11 @@ Dream システムの視覚的フィードバック実装についてのドキ�
 
 ## 2. Dream 粒子（World 空間）(`dream_particle_*`)
 
+### 描画方式
+
+`Mesh2d` + `DreamBubbleMaterial`（カスタム `Material2d`）によるシェーダー描画。
+シェーダー（`assets/shaders/dream_bubble.wgsl`）はソフトグロー・虹色屈折・スペキュラハイライト・リム発光・ノイズ変形を実装しており、質量（mass）に応じて変形の強さが変わる。
+
 ### 睡眠中の Soul からの発生
 
 - 睡眠中かつ `DreamQuality != Awake` の Soul に発生
@@ -40,6 +45,18 @@ Dream システムの視覚的フィードバック実装についてのドキ�
 ## 3. Dream 獲得 UI パーティクル（`dream_popup_spawn_system`）
 
 > 今後拡張予定のため [`gain_visual.rs`](../src/systems/visual/dream/gain_visual.rs) に独立モジュールとして配置しています。
+
+### 描画方式
+
+`MaterialNode<DreamBubbleUiMaterial>`（カスタム `UiMaterial`）によるシェーダー描画。
+シェーダー（`assets/shaders/dream_bubble_ui.wgsl`）はWorld空間用と同様のエフェクトに加え、質量に応じたバブルクラスター表現を持つ：
+- `mass < 3.0`: 1泡（ノイズ変形のみ）
+- `mass < 6.0`: 2泡クラスター
+- `mass >= 6.0`: 3泡クラスター（三角形配置）
+
+各サブ泡は独立した輪郭線（リム発光）を持つ。マテリアルの uniform（`color`, `alpha`, `time`, `mass`, `velocity_dir`）は毎フレーム物理演算の結果から更新される。
+
+### 生成条件
 
 - 睡眠中 Soul が一定間隔 (`DREAM_POPUP_INTERVAL`) ごとに獲得したDream量をチェックし、その蓄積が `DREAM_POPUP_THRESHOLD` を超えていた場合に:
   1. 到達しなかった蓄積値は次回の判定へ持ち越される
@@ -98,6 +115,9 @@ Dream システムの視覚的フィードバック実装についてのドキ�
 | `src/systems/visual/dream/gain_visual.rs` | **Dream 獲得 UI パーティクル・ポップアップ生成/更新（拡張予定）** |
 | `src/systems/visual/dream/particle.rs` | Dream 粒子（World 空間）生成/更新 |
 | `src/systems/visual/dream/ui_particle.rs` | UI パーティクル移動アニメーション・軌道計算 |
+| `src/systems/visual/dream/dream_bubble_material.rs` | `DreamBubbleMaterial`（World用 Material2d）・`DreamBubbleUiMaterial`（UI用 UiMaterial）定義 |
+| `assets/shaders/dream_bubble.wgsl` | World 空間用フラグメントシェーダー |
+| `assets/shaders/dream_bubble_ui.wgsl` | UI 空間用フラグメントシェーダー（バブルクラスター対応） |
 | `src/interface/ui/setup/time_control.rs` | Dream テキストノード生成 |
 | `src/interface/ui/interaction/status_display.rs` | Dream 表示更新とパルス演出 |
 | `src/interface/ui/presentation/builders.rs` | RestArea ツールチップの Dream/s 表示 |
