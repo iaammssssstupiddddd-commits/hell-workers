@@ -4,6 +4,7 @@ use crate::interface::ui::components::{
     DreamPoolPulse, MenuAction, MenuButton, SpeedButtonMarker, UiInputBlocker, UiNodeRegistry,
     UiSlot, UiTooltip,
 };
+use crate::systems::visual::dream::DreamIconAbsorb;
 use crate::interface::ui::theme::UiTheme;
 use crate::systems::time::{ClockText, TimeSpeed};
 use bevy::prelude::*;
@@ -168,6 +169,7 @@ pub fn spawn_time_control(
                     ImageNode::new(game_assets.glow_circle.clone()),
                     BackgroundColor(theme.colors.accent_soul_bright),
                     UiSlot::DreamPoolIcon,
+                    DreamIconAbsorb::default(),
                 ))
                 .id();
             ui_nodes.set_slot(UiSlot::DreamPoolIcon, icon_entity);

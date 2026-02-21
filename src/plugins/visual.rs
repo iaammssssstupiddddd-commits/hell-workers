@@ -26,9 +26,10 @@ use crate::systems::visual::blueprint::{
     update_worker_indicators_system,
 };
 use crate::systems::visual::dream::{
-    dream_particle_spawn_system, dream_particle_update_system, dream_popup_spawn_system,
-    dream_popup_update_system, ensure_dream_visual_state_system,
-    rest_area_dream_particle_spawn_system, ui_particle_update_system,
+    dream_icon_absorb_system, dream_particle_spawn_system, dream_particle_update_system,
+    dream_popup_spawn_system, dream_popup_update_system, dream_trail_ghost_update_system,
+    ensure_dream_visual_state_system, rest_area_dream_particle_spawn_system,
+    ui_particle_merge_system, ui_particle_update_system,
 };
 use crate::systems::visual::fade::fade_out_system;
 use crate::systems::visual::floor_construction::{
@@ -197,6 +198,9 @@ impl Plugin for VisualPlugin {
                 dream_particle_update_system,
                 dream_popup_update_system,
                 ui_particle_update_system,
+                ui_particle_merge_system,
+                dream_trail_ghost_update_system,
+                dream_icon_absorb_system,
                 update_all_floating_texts_system,
             )
                 .chain()

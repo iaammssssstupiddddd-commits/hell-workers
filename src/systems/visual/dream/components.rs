@@ -33,5 +33,23 @@ pub struct DreamGainUiParticle {
     pub control_point_1: Vec2,
     pub control_point_2: Vec2,
     pub control_point_3: Vec2,
+    pub phase: f32,
+    pub merge_count: u8,
+    pub merging_into: Option<Entity>,
+    pub merge_timer: f32,
+    pub trail_cooldown: f32,
+    pub prev_pos: Vec2,
+}
+
+#[derive(Component)]
+pub struct DreamTrailGhost {
+    pub lifetime: f32,
+    pub max_lifetime: f32,
+}
+
+#[derive(Component, Default)]
+pub struct DreamIconAbsorb {
+    pub timer: f32,
+    pub pulse_count: u8,
 }
 

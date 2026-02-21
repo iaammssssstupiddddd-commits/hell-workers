@@ -35,6 +35,30 @@ pub const DREAM_UI_PULSE_DURATION: f32 = 0.35;
 pub const DREAM_UI_PULSE_TRIGGER_DELTA: f32 = 0.05;
 pub const DREAM_UI_PULSE_BRIGHTNESS: f32 = 0.8;
 
+// UI Particle base
+pub const DREAM_UI_PARTICLE_SIZE: f32 = 10.0;
+pub const DREAM_UI_PARTICLE_LIFETIME: f32 = 1.5;
+
+// Merge
+pub const DREAM_UI_MERGE_RADIUS: f32 = 20.0;
+pub const DREAM_UI_MERGE_SIZE_BONUS: f32 = 2.0;
+pub const DREAM_UI_MERGE_MAX_COUNT: u8 = 4;
+pub const DREAM_UI_MERGE_DURATION: f32 = 0.15;
+
+// Trail
+pub const DREAM_UI_TRAIL_INTERVAL: f32 = 0.12;
+pub const DREAM_UI_TRAIL_LIFETIME: f32 = 0.15;
+pub const DREAM_UI_TRAIL_SIZE_RATIO: f32 = 0.5;
+pub const DREAM_UI_TRAIL_ALPHA: f32 = 0.2;
+
+// Icon absorb
+pub const DREAM_ICON_ABSORB_DURATION: f32 = 0.25;
+pub const DREAM_ICON_BASE_SIZE: f32 = 16.0;
+pub const DREAM_ICON_PULSE_SIZE: f32 = 20.0;
+
+// Bubble drift (漂い揺らぎ)
+pub const DREAM_UI_BUBBLE_DRIFT_STRENGTH: f32 = 3.0;
+
 // Dream Tree Planting
 pub const DREAM_TREE_SPAWN_RATE_PER_TILE: f32 = 0.25;
 pub const DREAM_TREE_COST_PER_TREE: f32 = 20.0;
