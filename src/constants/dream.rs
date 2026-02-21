@@ -37,20 +37,20 @@ pub const DREAM_UI_PULSE_TRIGGER_DELTA: f32 = 0.05;
 pub const DREAM_UI_PULSE_BRIGHTNESS: f32 = 0.8;
 
 // UI Particle base (Physics V2)
-pub const DREAM_UI_PARTICLE_SIZE: f32 = 14.14; // sqrt(200) instead of sqrt(400) for half area
+pub const DREAM_UI_PARTICLE_SIZE: f32 = 10.0; // sqrt(100) instead of sqrt(400) for half area
 pub const DREAM_UI_BUOYANCY: f32 = 110.0;
 pub const DREAM_UI_BASE_ATTRACTION: f32 = 50.0;
-pub const DREAM_UI_BASE_MASS_OFFSET: f32 = 1.0; // 質量にプラスする基本値 (最低限の移動とサイズを保証)
-pub const DREAM_UI_VORTEX_STRENGTH: f32 = 5.0; // Keep proportional ratio to attraction
-pub const DREAM_UI_DRAG: f32 = 0.85;           // Drag remains the same as acceleration increased
-pub const DREAM_UI_STRONG_DRAG: f32 = 0.6;     // アイコン近接時の強いブレーキ
+pub const DREAM_UI_BASE_MASS_OFFSET: f32 = 0.5; // 質量にプラスする基本値 (最低限の移動とサイズを保証)
+pub const DREAM_UI_VORTEX_STRENGTH: f32 = 7.0; // Keep proportional ratio to attraction
+pub const DREAM_UI_DRAG: f32 = 0.85; // Drag remains the same as acceleration increased
+pub const DREAM_UI_STRONG_DRAG: f32 = 0.6; // アイコン近接時の強いブレーキ
 pub const DREAM_UI_NOISE_STRENGTH: f32 = 120.0;
 pub const DREAM_UI_NOISE_INTERVAL: f32 = 0.3;
 pub const DREAM_UI_BOUNDARY_MARGIN: f32 = 30.0;
 pub const DREAM_UI_BOUNDARY_PUSH: f32 = 300.0;
 pub const DREAM_UI_BOUNDARY_DAMPING: f32 = 0.1; // 画面端到達時の速度減衰係数
-pub const DREAM_UI_MIN_SPEED: f32 = 40.0;       // スタック防止のための最低保証速度
-pub const DREAM_UI_FAILSAFE_MARGIN: f32 = 100.0;// 万一画面外へ飛んだ際のフェイルセーフ判定マージン
+pub const DREAM_UI_MIN_SPEED: f32 = 40.0; // スタック防止のための最低保証速度
+pub const DREAM_UI_FAILSAFE_MARGIN: f32 = 100.0; // 万一画面外へ飛んだ際のフェイルセーフ判定マージン
 pub const DREAM_UI_ARRIVAL_RADIUS: f32 = 40.0;
 
 // Size Dynamics

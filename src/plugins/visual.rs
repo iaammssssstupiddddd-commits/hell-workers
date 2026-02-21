@@ -51,6 +51,9 @@ use crate::systems::visual::soul::{
 };
 use crate::systems::visual::speech::SpeechPlugin;
 use crate::systems::visual::tank::update_tank_visual_system;
+use crate::systems::visual::dream::{
+    DreamBubbleMaterial, DreamBubbleUiMaterial,
+};
 use crate::systems::visual::task_area_visual::{
     TaskAreaMaterial, update_task_area_material_system,
 };
@@ -63,6 +66,7 @@ use crate::systems::visual::wall_construction::{
 
 use bevy::prelude::*;
 use bevy::sprite_render::Material2dPlugin;
+use bevy::ui_render::prelude::UiMaterialPlugin;
 
 pub struct VisualPlugin;
 
@@ -71,6 +75,8 @@ impl Plugin for VisualPlugin {
         app.add_plugins(SpeechPlugin);
         app.add_plugins(WallConnectionPlugin);
         app.add_plugins(Material2dPlugin::<TaskAreaMaterial>::default());
+        app.add_plugins(Material2dPlugin::<DreamBubbleMaterial>::default());
+        app.add_plugins(UiMaterialPlugin::<DreamBubbleUiMaterial>::default());
         // Blueprint visual systems (separate to avoid tuple limit)
         app.add_systems(
             Update,
