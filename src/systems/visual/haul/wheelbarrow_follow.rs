@@ -53,13 +53,15 @@ pub fn wheelbarrow_follow_system(
                 } else {
                     std::f32::consts::FRAC_PI_2
                 };
-                commands.entity(wb_entity).insert((
-                    WheelbarrowMovement {
-                        prev_pos: Some(soul_pos),
-                        current_angle: initial_angle,
-                    },
-                    Visibility::Visible,
-                ));
+                if let Ok(mut wb_commands) = commands.get_entity(wb_entity) {
+                    wb_commands.try_insert((
+                        WheelbarrowMovement {
+                            prev_pos: Some(soul_pos),
+                            current_angle: initial_angle,
+                        },
+                        Visibility::Visible,
+                    ));
+                }
                 // 初回フレームはfacing_rightベースで配置
                 let offset_x = if anim.facing_right {
                     WHEELBARROW_OFFSET

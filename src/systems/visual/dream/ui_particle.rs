@@ -1,15 +1,16 @@
 use super::components::{DreamGainUiParticle, DreamIconAbsorb, DreamTrailGhost};
-use crate::assets::GameAssets;
+use super::dream_bubble_material::DreamBubbleUiMaterial;
 use crate::constants::*;
 use crate::interface::ui::components::{UiNodeRegistry, UiRoot, UiSlot};
 use crate::interface::ui::theme::UiTheme;
 use bevy::prelude::*;
+use bevy::ui_render::prelude::MaterialNode;
 use rand::Rng;
 
 pub fn ui_particle_update_system(
     mut commands: Commands,
     time: Res<Time>,
-    assets: Res<GameAssets>,
+    mut materials: ResMut<Assets<DreamBubbleUiMaterial>>,
     ui_nodes: Res<UiNodeRegistry>,
     q_ui_root: Query<Entity, With<UiRoot>>,
     mut q_icon: Query<&mut DreamIconAbsorb>,
@@ -17,14 +18,15 @@ pub fn ui_particle_update_system(
         Entity,
         &mut DreamGainUiParticle,
         &mut Node,
-        &mut BackgroundColor,
+        &MaterialNode<DreamBubbleUiMaterial>,
         &mut Transform,
     )>,
     q_camera: Query<&Camera, With<crate::interface::camera::MainCamera>>,
 ) {
     let dt = time.delta_secs();
+    let elapsed = time.elapsed_secs();
     let ui_root = q_ui_root.iter().next();
-    
+
     let viewport_size = q_camera
         .iter()
         .next()
@@ -51,7 +53,7 @@ pub fn ui_particle_update_system(
 
     let mut rng = rand::thread_rng();
 
-    for (entity, mut particle, mut node, mut color, mut transform) in q_particles.iter_mut() {
+    for (entity, mut particle, mut node, mat_node, mut transform) in q_particles.iter_mut() {
         particle.time_alive += dt;
 
         let current_pos = Vec2::new(
@@ -83,7 +85,7 @@ pub fn ui_particle_update_system(
                 } else if new_pos.x > viewport_size.x {
                     particle.velocity.x *= DREAM_UI_BOUNDARY_DAMPING;
                 }
-                
+
                 if new_pos.y < 0.0 {
                     particle.velocity.y *= DREAM_UI_BOUNDARY_DAMPING;
                 } else if new_pos.y > viewport_size.y {
@@ -100,7 +102,11 @@ pub fn ui_particle_update_system(
                 node.width = Val::Px(size);
                 node.height = Val::Px(size);
 
-                color.0 = color.0.with_alpha(0.9 * (1.0 - progress));
+                if let Some(mat) = materials.get_mut(&mat_node.0) {
+                    mat.alpha = 0.9 * (1.0 - progress);
+                    mat.time = elapsed;
+                    mat.mass = particle.mass;
+                }
             }
 
             if particle.merge_timer <= 0.0 {
@@ -116,7 +122,7 @@ pub fn ui_particle_update_system(
         // 2. Attraction
         let to_target = particle.target_pos - current_pos;
         let distance = to_target.length().max(1.0);
-        
+
         // 距離ベースのみの引力（対数スケールによるなだらかな急加速＋上限クランプ）
         // 大きな泡（質量の大きい泡）ほど強い引力の影響を受ける
         let dist_ratio = (500.0 / distance.max(10.0)).clamp(1.0, 50.0);
@@ -169,7 +175,7 @@ pub fn ui_particle_update_system(
         // Apply Forces
         let total_force = buoyancy + attraction + noise + boundary;
         particle.velocity += total_force * dt;
-        
+
         // フレームレート非依存のDrag (60fps基準)
         // アイコンに非常に近い場合は、すり抜けを防ぐために急激なブレーキ（減衰）をかける
         let mut drag = DREAM_UI_DRAG;
@@ -189,7 +195,7 @@ pub fn ui_particle_update_system(
             let correction = to_target.normalize_or_zero() * (min_speed - speed_toward_target.max(0.0));
             particle.velocity += correction;
         }
-        
+
         let mut final_pos = current_pos + particle.velocity * dt;
 
         // Size and Squash & Stretch
@@ -208,7 +214,7 @@ pub fn ui_particle_update_system(
             final_pos.x = viewport_size.x;
             particle.velocity.x *= DREAM_UI_BOUNDARY_DAMPING;
         }
-        
+
         if final_pos.y < 0.0 {
             final_pos.y = 0.0;
             particle.velocity.y *= DREAM_UI_BOUNDARY_DAMPING;
@@ -225,7 +231,7 @@ pub fn ui_particle_update_system(
         } else if final_pos.x > viewport_size.x + DREAM_UI_FAILSAFE_MARGIN {
             final_pos.x = 0.0;
         }
-        
+
         if final_pos.y < -DREAM_UI_FAILSAFE_MARGIN {
             final_pos.y = viewport_size.y;
         } else if final_pos.y > viewport_size.y + DREAM_UI_FAILSAFE_MARGIN {
@@ -238,11 +244,11 @@ pub fn ui_particle_update_system(
 
         // 対数スケールによるサイズ縮小（近づくほど急激に小さくなる）
         let start_dist = particle.start_pos.distance(particle.target_pos).max(1.0);
-        
+
         let dist_ratio = (distance / start_dist.max(100.0)).clamp(0.01, 1.0);
         // log10(dist_ratio * 9.0 + 1.0) で 1.0 -> 1.0, 0.0 -> 0.0 の対数カーブになる
         let shrink = (dist_ratio * 9.0 + 1.0).log10().max(0.1);
-        
+
         node.width = Val::Px(base * shrink * width_scale);
         node.height = Val::Px(base * shrink * length_scale);
 
@@ -252,16 +258,15 @@ pub fn ui_particle_update_system(
             transform.rotation = Quat::from_rotation_z(angle);
         }
 
-        // Color
+        // Material uniform update
         // 近づく（dist_ratioが小さい）と白っぽく発光する
         let base_color = if dist_ratio < 0.3 {
             let white_t = 1.0 - (dist_ratio / 0.3);
             let r = 0.65 + white_t * 0.35;
             let g = 0.9 + white_t * 0.1;
-            let b = 1.0;
-            Color::srgb(r, g, b)
+            LinearRgba::new(r, g, 1.0, 1.0)
         } else {
-            Color::srgb(0.65, 0.9, 1.0)
+            LinearRgba::new(0.65, 0.9, 1.0, 1.0)
         };
 
         // 発生直後はフェードイン
@@ -270,7 +275,20 @@ pub fn ui_particle_update_system(
         } else {
             0.9
         };
-        color.0 = base_color.with_alpha(alpha);
+
+        let vel_dir = if speed > 1.0 {
+            particle.velocity / speed
+        } else {
+            Vec2::ZERO
+        };
+
+        if let Some(mat) = materials.get_mut(&mat_node.0) {
+            mat.color = base_color;
+            mat.alpha = alpha;
+            mat.time = elapsed;
+            mat.mass = particle.mass;
+            mat.velocity_dir = vel_dir;
+        }
 
         // Arrival Check
         if distance < DREAM_UI_ARRIVAL_RADIUS {
@@ -294,7 +312,7 @@ pub fn ui_particle_update_system(
                     let angle = particle.velocity.y.atan2(particle.velocity.x) - std::f32::consts::FRAC_PI_2;
                     trail_transform.rotation = Quat::from_rotation_z(angle);
                 }
-                
+
                 let trail = commands
                     .spawn((
                         DreamTrailGhost {
@@ -310,10 +328,13 @@ pub fn ui_particle_update_system(
                             ..default()
                         },
                         trail_transform,
-                        ImageNode::new(assets.dream_bubble.clone()),
-                        BackgroundColor(
-                            Color::srgb(0.65, 0.9, 1.0).with_alpha(DREAM_UI_TRAIL_ALPHA),
-                        ),
+                        MaterialNode(materials.add(DreamBubbleUiMaterial {
+                            color: LinearRgba::new(0.65, 0.9, 1.0, 1.0),
+                            time: elapsed,
+                            alpha: DREAM_UI_TRAIL_ALPHA,
+                            mass: 0.5,
+                            velocity_dir: vel_dir,
+                        })),
                         ZIndex(99),
                         Name::new("DreamTrailGhost"),
                     ))
@@ -379,7 +400,7 @@ pub fn ui_particle_merge_system(
             if absorber_p.merge_count >= DREAM_UI_MERGE_MAX_COUNT || absorber_p.mass > DREAM_UI_MERGE_MAX_MASS {
                 return;
             }
-            
+
             absorbed_p.merging_into = Some(absorber);
             absorbed_p.merge_timer = DREAM_UI_MERGE_DURATION;
 
@@ -392,17 +413,20 @@ pub fn ui_particle_merge_system(
 pub fn dream_trail_ghost_update_system(
     mut commands: Commands,
     time: Res<Time>,
-    mut q_ghosts: Query<(Entity, &mut DreamTrailGhost, &mut BackgroundColor)>,
+    mut materials: ResMut<Assets<DreamBubbleUiMaterial>>,
+    mut q_ghosts: Query<(Entity, &mut DreamTrailGhost, &MaterialNode<DreamBubbleUiMaterial>)>,
 ) {
     let dt = time.delta_secs();
-    for (entity, mut ghost, mut color) in q_ghosts.iter_mut() {
+    for (entity, mut ghost, mat_node) in q_ghosts.iter_mut() {
         ghost.lifetime -= dt;
         if ghost.lifetime <= 0.0 {
             commands.entity(entity).try_despawn();
             continue;
         }
         let alpha = (ghost.lifetime / ghost.max_lifetime) * DREAM_UI_TRAIL_ALPHA;
-        color.0 = color.0.with_alpha(alpha);
+        if let Some(mat) = materials.get_mut(&mat_node.0) {
+            mat.alpha = alpha;
+        }
     }
 }
 
@@ -454,7 +478,7 @@ pub fn spawn_ui_particle(
     start_pos: Vec2,
     target_pos: Vec2,
     ui_root: Entity,
-    assets: &GameAssets,
+    materials: &mut Assets<DreamBubbleUiMaterial>,
     mass: f32,
 ) {
     let mut rng = rand::thread_rng();
@@ -488,8 +512,13 @@ pub fn spawn_ui_particle(
                 ..default()
             },
             Transform::default(),
-            ImageNode::new(assets.dream_bubble.clone()),
-            BackgroundColor(Color::srgb(0.65, 0.9, 1.0).with_alpha(0.0)),
+            MaterialNode(materials.add(DreamBubbleUiMaterial {
+                color: LinearRgba::new(0.65, 0.9, 1.0, 1.0),
+                time: 0.0,
+                alpha: 0.0,
+                mass,
+                velocity_dir: Vec2::ZERO,
+            })),
             ZIndex(100),
             Name::new("DreamGainUiParticle"),
         ))

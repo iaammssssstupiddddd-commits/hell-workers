@@ -1,5 +1,5 @@
 use super::components::{DreamParticle, DreamVisualState};
-use crate::assets::GameAssets;
+use super::dream_bubble_material::{DreamBubbleMaterial, DreamBubbleUiMaterial};
 use crate::constants::*;
 use crate::entities::damned_soul::{
     DamnedSoul, DreamQuality, DreamState, GatheringBehavior, IdleBehavior, IdleState,
@@ -28,12 +28,12 @@ fn particle_lifetime_for_quality(quality: DreamQuality) -> f32 {
     }
 }
 
-fn particle_color_for_quality(quality: DreamQuality) -> Color {
+fn particle_color_for_quality(quality: DreamQuality) -> LinearRgba {
     match quality {
-        DreamQuality::VividDream => Color::srgb(0.55, 0.8, 1.0),
-        DreamQuality::NormalDream => Color::srgb(0.55, 0.65, 0.95),
-        DreamQuality::NightTerror => Color::srgb(0.95, 0.45, 0.55),
-        DreamQuality::Awake => Color::WHITE,
+        DreamQuality::VividDream => LinearRgba::new(0.55, 0.8, 1.0, 1.0),
+        DreamQuality::NormalDream => LinearRgba::new(0.55, 0.65, 0.95, 1.0),
+        DreamQuality::NightTerror => LinearRgba::new(0.95, 0.45, 0.55, 1.0),
+        DreamQuality::Awake => LinearRgba::WHITE,
     }
 }
 
@@ -68,7 +68,8 @@ pub fn ensure_dream_visual_state_system(
 pub fn dream_particle_spawn_system(
     mut commands: Commands,
     time: Res<Time>,
-    assets: Res<GameAssets>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<DreamBubbleMaterial>>,
     mut q_souls: Query<
         (
             Entity,
@@ -108,6 +109,14 @@ pub fn dream_particle_spawn_system(
         let y_offset = DREAM_PARTICLE_SPAWN_OFFSET + rng.gen_range(0.0..=4.0);
         let size = rng.gen_range(DREAM_PARTICLE_SIZE_MIN..=DREAM_PARTICLE_SIZE_MAX);
 
+        let mesh = meshes.add(Circle::new(0.5)); // 半径0.5の円（スケールでサイズ調整）
+        let material = materials.add(DreamBubbleMaterial {
+            color,
+            time: 0.0,
+            alpha: 0.85,
+            mass: 1.0,
+        });
+
         commands.spawn((
             DreamParticle {
                 owner: soul_entity,
@@ -117,13 +126,10 @@ pub fn dream_particle_spawn_system(
                 velocity,
                 phase: rng.gen_range(0.0..=std::f32::consts::TAU),
             },
-            Sprite {
-                image: assets.glow_circle.clone(),
-                custom_size: Some(Vec2::splat(size)),
-                color: color.with_alpha(0.85),
-                ..default()
-            },
-            Transform::from_xyz(x_offset, y_offset, Z_VISUAL_EFFECT - Z_CHARACTER),
+            Mesh2d(mesh),
+            MeshMaterial2d(material),
+            Transform::from_xyz(x_offset, y_offset, Z_VISUAL_EFFECT - Z_CHARACTER)
+                .with_scale(Vec3::splat(size)),
             ChildOf(soul_entity),
             Name::new("DreamParticle"),
         ));
@@ -136,7 +142,8 @@ pub fn dream_particle_spawn_system(
 pub fn rest_area_dream_particle_spawn_system(
     mut commands: Commands,
     time: Res<Time>,
-    assets: Res<GameAssets>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<DreamBubbleMaterial>>,
     mut q_rest_areas: Query<(
         Entity,
         &Transform,
@@ -148,6 +155,7 @@ pub fn rest_area_dream_particle_spawn_system(
     q_ui_root: Query<Entity, With<crate::interface::ui::components::UiRoot>>,
     ui_nodes: Res<crate::interface::ui::components::UiNodeRegistry>,
     q_ui_transform: Query<(&ComputedNode, &UiGlobalTransform)>,
+    mut ui_bubble_materials: ResMut<Assets<DreamBubbleUiMaterial>>,
 ) {
     let dt = time.delta_secs();
     let mut rng = rand::thread_rng();
@@ -207,6 +215,14 @@ pub fn rest_area_dream_particle_spawn_system(
         let y_offset = DREAM_PARTICLE_SPAWN_OFFSET * 2.0 + rng.gen_range(0.0..=8.0);
         let size = rng.gen_range(DREAM_PARTICLE_SIZE_MIN..=DREAM_PARTICLE_SIZE_MAX) * (1.0 + (scale_factor - 1.0) * 0.5);
 
+        let mesh = meshes.add(Circle::new(0.5));
+        let material = materials.add(DreamBubbleMaterial {
+            color,
+            time: 0.0,
+            alpha: 0.85,
+            mass: 1.0,
+        });
+
         commands.spawn((
             DreamParticle {
                 owner: rest_area_entity,
@@ -216,13 +232,10 @@ pub fn rest_area_dream_particle_spawn_system(
                 velocity,
                 phase: rng.gen_range(0.0..=std::f32::consts::TAU),
             },
-            Sprite {
-                image: assets.glow_circle.clone(),
-                custom_size: Some(Vec2::splat(size)),
-                color: color.with_alpha(0.85),
-                ..default()
-            },
-            Transform::from_xyz(x_offset, y_offset, Z_VISUAL_EFFECT - Z_CHARACTER),
+            Mesh2d(mesh),
+            MeshMaterial2d(material),
+            Transform::from_xyz(x_offset, y_offset, Z_VISUAL_EFFECT - Z_CHARACTER)
+                .with_scale(Vec3::splat(size)),
             ChildOf(rest_area_entity),
             Name::new("RestAreaDreamParticle"),
         ));
@@ -234,7 +247,7 @@ pub fn rest_area_dream_particle_spawn_system(
                 start_pos,
                 target_pos,
                 ui_root,
-                &assets,
+                &mut ui_bubble_materials,
                 0.5 * scale_factor,
             );
         }
@@ -247,12 +260,13 @@ pub fn rest_area_dream_particle_spawn_system(
 pub fn dream_particle_update_system(
     mut commands: Commands,
     time: Res<Time>,
-    mut q_particles: Query<(Entity, &mut DreamParticle, &mut Transform, &mut Sprite)>,
+    mut q_particles: Query<(Entity, &mut DreamParticle, &mut Transform, &MeshMaterial2d<DreamBubbleMaterial>)>,
+    mut materials: ResMut<Assets<DreamBubbleMaterial>>,
     mut q_visual_state: Query<&mut DreamVisualState>,
 ) {
     let dt = time.delta_secs();
 
-    for (entity, mut particle, mut transform, mut sprite) in q_particles.iter_mut() {
+    for (entity, mut particle, mut transform, material_handle) in q_particles.iter_mut() {
         particle.lifetime -= dt;
 
         if particle.lifetime <= 0.0 {
@@ -270,7 +284,11 @@ pub fn dream_particle_update_system(
         transform.translation.y += particle.velocity.y * dt;
 
         let life_ratio = (particle.lifetime / particle.max_lifetime).clamp(0.0, 1.0);
-        let base_color = particle_color_for_quality(particle.quality);
-        sprite.color = base_color.with_alpha(life_ratio * 0.85);
+
+        // マテリアルのtime・alphaを更新
+        if let Some(material) = materials.get_mut(&material_handle.0) {
+            material.time = time.elapsed_secs();
+            material.alpha = life_ratio * 0.85;
+        }
     }
 }

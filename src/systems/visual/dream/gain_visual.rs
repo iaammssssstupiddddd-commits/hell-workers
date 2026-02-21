@@ -3,6 +3,7 @@
 //! 今後 Dream 獲得表現を拡張する際はこのファイルを編集してください。
 
 use super::components::{DreamGainPopup, DreamVisualState};
+use super::dream_bubble_material::DreamBubbleUiMaterial;
 use crate::assets::GameAssets;
 use crate::constants::*;
 use crate::entities::damned_soul::{
@@ -28,6 +29,7 @@ pub fn dream_popup_spawn_system(
     mut commands: Commands,
     time: Res<Time>,
     assets: Res<GameAssets>,
+    mut ui_bubble_materials: ResMut<Assets<DreamBubbleUiMaterial>>,
     mut q_souls: Query<
         (
             &Transform,
@@ -110,7 +112,7 @@ pub fn dream_popup_spawn_system(
                         start_pos,
                         target_pos,
                         ui_root,
-                        &assets,
+                        &mut ui_bubble_materials,
                         amount,
                     );
                 }
@@ -163,7 +165,7 @@ pub fn dream_popup_spawn_system(
                         start_pos,
                         target_pos,
                         ui_root,
-                        &assets,
+                        &mut ui_bubble_materials,
                         amount,
                     );
                 }
