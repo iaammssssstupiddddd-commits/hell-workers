@@ -24,7 +24,8 @@ pub const DREAM_PARTICLE_SWAY_VIVID: f32 = 9.0;
 pub const DREAM_PARTICLE_SWAY_TERROR: f32 = 5.0;
 
 // Dream popup visual
-pub const DREAM_POPUP_THRESHOLD: f32 = 0.08;
+pub const DREAM_POPUP_INTERVAL: f32 = 0.5;
+pub const DREAM_POPUP_THRESHOLD: f32 = 0.5;
 pub const DREAM_POPUP_LIFETIME: f32 = 0.8;
 pub const DREAM_POPUP_VELOCITY_Y: f32 = 18.0;
 pub const DREAM_POPUP_FONT_SIZE: f32 = 11.0;
@@ -36,21 +37,32 @@ pub const DREAM_UI_PULSE_TRIGGER_DELTA: f32 = 0.05;
 pub const DREAM_UI_PULSE_BRIGHTNESS: f32 = 0.8;
 
 // UI Particle base (Physics V2)
-pub const DREAM_UI_PARTICLE_SIZE: f32 = 10.0;
-pub const DREAM_UI_BUOYANCY: f32 = 45.0;
-pub const DREAM_UI_BASE_ATTRACTION: f32 = 25.0;
-pub const DREAM_UI_VORTEX_STRENGTH: f32 = 3.0;
-pub const DREAM_UI_DRAG: f32 = 0.88;
-pub const DREAM_UI_NOISE_STRENGTH: f32 = 60.0;
+pub const DREAM_UI_PARTICLE_SIZE: f32 = 14.14; // sqrt(200) instead of sqrt(400) for half area
+pub const DREAM_UI_BUOYANCY: f32 = 110.0;
+pub const DREAM_UI_BASE_ATTRACTION: f32 = 50.0;
+pub const DREAM_UI_BASE_MASS_OFFSET: f32 = 1.0; // 質量にプラスする基本値 (最低限の移動とサイズを保証)
+pub const DREAM_UI_VORTEX_STRENGTH: f32 = 5.0; // Keep proportional ratio to attraction
+pub const DREAM_UI_DRAG: f32 = 0.85;           // Drag remains the same as acceleration increased
+pub const DREAM_UI_STRONG_DRAG: f32 = 0.6;     // アイコン近接時の強いブレーキ
+pub const DREAM_UI_NOISE_STRENGTH: f32 = 120.0;
 pub const DREAM_UI_NOISE_INTERVAL: f32 = 0.3;
 pub const DREAM_UI_BOUNDARY_MARGIN: f32 = 30.0;
-pub const DREAM_UI_BOUNDARY_PUSH: f32 = 150.0;
+pub const DREAM_UI_BOUNDARY_PUSH: f32 = 300.0;
+pub const DREAM_UI_BOUNDARY_DAMPING: f32 = 0.1; // 画面端到達時の速度減衰係数
+pub const DREAM_UI_MIN_SPEED: f32 = 40.0;       // スタック防止のための最低保証速度
+pub const DREAM_UI_FAILSAFE_MARGIN: f32 = 100.0;// 万一画面外へ飛んだ際のフェイルセーフ判定マージン
 pub const DREAM_UI_ARRIVAL_RADIUS: f32 = 40.0;
 
+// Size Dynamics
+pub const DREAM_UI_SQUASH_MAX_SPEED: f32 = 150.0;
+pub const DREAM_UI_SQUASH_MAX_RATIO: f32 = 1.5;
+
 // Merge
-pub const DREAM_UI_MERGE_RADIUS: f32 = 20.0;
-pub const DREAM_UI_MERGE_MAX_COUNT: u8 = 4;
-pub const DREAM_UI_MERGE_DURATION: f32 = 0.15;
+pub const DREAM_UI_MERGE_RADIUS: f32 = 30.0;
+pub const DREAM_UI_MERGE_MAX_COUNT: u8 = 8;
+pub const DREAM_UI_MERGE_MAX_MASS: f32 = 12.0;
+pub const DREAM_UI_MERGE_DURATION: f32 = 0.25;
+pub const DREAM_UI_MERGE_PULL_FORCE: f32 = 15.0; // 合体時に引き合うバネの力
 
 // Trail
 pub const DREAM_UI_TRAIL_INTERVAL: f32 = 0.12;
