@@ -72,15 +72,30 @@ pub fn ui_particle_update_system(
             if let Some(&(_, target_pos)) = target_positions.iter().find(|(e, _)| *e == target) {
                 // Spring-like acceleration instead of lerp
                 let to_target = target_pos - current_pos;
-                let pull_force = to_target * 15.0; // merge attraction
+                let pull_force = to_target * DREAM_UI_MERGE_PULL_FORCE; // merge attraction
                 particle.velocity += pull_force * dt;
                 particle.velocity *= DREAM_UI_DRAG;
                 let new_pos = current_pos + particle.velocity * dt;
 
-                node.left = Val::Px(new_pos.x);
-                node.top = Val::Px(new_pos.y);
+                // Apply boundary damping to merge moves as well
+                if new_pos.x < 0.0 {
+                    particle.velocity.x *= DREAM_UI_BOUNDARY_DAMPING;
+                } else if new_pos.x > viewport_size.x {
+                    particle.velocity.x *= DREAM_UI_BOUNDARY_DAMPING;
+                }
+                
+                if new_pos.y < 0.0 {
+                    particle.velocity.y *= DREAM_UI_BOUNDARY_DAMPING;
+                } else if new_pos.y > viewport_size.y {
+                    particle.velocity.y *= DREAM_UI_BOUNDARY_DAMPING;
+                }
 
-                let base = DREAM_UI_PARTICLE_SIZE * particle.mass.sqrt();
+                let clamped_pos = new_pos.clamp(Vec2::ZERO, viewport_size);
+                node.left = Val::Px(clamped_pos.x);
+                node.top = Val::Px(clamped_pos.y);
+
+                let effective_mass = particle.mass + DREAM_UI_BASE_MASS_OFFSET;
+                let base = DREAM_UI_PARTICLE_SIZE * effective_mass.sqrt();
                 let size = base * (1.0 - progress);
                 node.width = Val::Px(size);
                 node.height = Val::Px(size);
@@ -107,12 +122,15 @@ pub fn ui_particle_update_system(
         let dist_ratio = (500.0 / distance.max(10.0)).clamp(1.0, 50.0);
         // 1.0 〜 約4.0前後の対数スケールに変換し、最大でも20倍程度の引力までにハードクランプする
         let distance_factor = 1.0 + (dist_ratio.ln() * 3.0).clamp(0.0, 15.0);
-        let attraction_strength = DREAM_UI_BASE_ATTRACTION * distance_factor * particle.mass;
+        let effective_mass = particle.mass + DREAM_UI_BASE_MASS_OFFSET;
+        let attraction_strength = DREAM_UI_BASE_ATTRACTION * distance_factor * effective_mass;
         let mut attraction = to_target.normalize_or_zero() * attraction_strength;
 
         // 3. Vortex (接線方向の力)
-        // 引力に対する渦の比率。時間関係なく、アイコンに近づくほど直進（渦なし）になるようにする
-        let vortex_ratio = (distance / 400.0).clamp(0.05, 1.0);
+        // 引力に対する渦の比率。合体して大きく・速くなりすぎた泡が円周軌道に入ってしまうのを防ぐため、
+        // 近づくほど渦の力を急激に弱め、さらに「大きすぎる泡」ほど直進性を高める。
+        let size_dampening = 1.0 / effective_mass.sqrt().max(1.0);
+        let vortex_ratio = (distance / 400.0).clamp(0.0, 1.0) * size_dampening;
         // UIの座標系（Yが下方向）において、右上のターゲットへ向かう際に
         // 右下に膨らまないように接線ベクトルの向きを反転 (y, -x)
         let tangent = Vec2::new(to_target.y, -to_target.x).normalize_or_zero();
@@ -133,18 +151,18 @@ pub fn ui_particle_update_system(
         // 画面端に近づくにつれて中心に押し戻す弱い力を加える（跳ね返ってしまわない程度）
         let mut boundary = Vec2::ZERO;
         if current_pos.x < DREAM_UI_BOUNDARY_MARGIN {
-            let ratio = 1.0 - (current_pos.x / DREAM_UI_BOUNDARY_MARGIN).clamp(0.0, 1.0);
+            let ratio = 1.0 - (current_pos.x.max(0.0) / DREAM_UI_BOUNDARY_MARGIN).clamp(0.0, 1.0);
             boundary.x += DREAM_UI_BOUNDARY_PUSH * ratio;
         } else if current_pos.x > viewport_size.x - DREAM_UI_BOUNDARY_MARGIN {
-            let ratio = 1.0 - ((viewport_size.x - current_pos.x) / DREAM_UI_BOUNDARY_MARGIN).clamp(0.0, 1.0);
+            let ratio = 1.0 - ((viewport_size.x - current_pos.x).max(0.0) / DREAM_UI_BOUNDARY_MARGIN).clamp(0.0, 1.0);
             boundary.x -= DREAM_UI_BOUNDARY_PUSH * ratio;
         }
         if current_pos.y < DREAM_UI_BOUNDARY_MARGIN {
-            let ratio = 1.0 - (current_pos.y / DREAM_UI_BOUNDARY_MARGIN).clamp(0.0, 1.0);
+            let ratio = 1.0 - (current_pos.y.max(0.0) / DREAM_UI_BOUNDARY_MARGIN).clamp(0.0, 1.0);
             boundary.y += DREAM_UI_BOUNDARY_PUSH * ratio;
         } else if current_pos.y > viewport_size.y - DREAM_UI_BOUNDARY_MARGIN {
             // Y軸上端（下端）の斥力も追加
-            let ratio = 1.0 - ((viewport_size.y - current_pos.y) / DREAM_UI_BOUNDARY_MARGIN).clamp(0.0, 1.0);
+            let ratio = 1.0 - ((viewport_size.y - current_pos.y).max(0.0) / DREAM_UI_BOUNDARY_MARGIN).clamp(0.0, 1.0);
             boundary.y -= DREAM_UI_BOUNDARY_PUSH * ratio;
         }
 
@@ -156,35 +174,62 @@ pub fn ui_particle_update_system(
         // アイコンに非常に近い場合は、すり抜けを防ぐために急激なブレーキ（減衰）をかける
         let mut drag = DREAM_UI_DRAG;
         if distance < 50.0 {
-            drag = drag.min(0.6); // 強いブレーキ
+            drag = drag.min(DREAM_UI_STRONG_DRAG); // 強いブレーキ
         }
         let drag_factor = drag.powf(dt * 60.0);
         particle.velocity *= drag_factor;
+
+        // 5.5 Minimum velocity (Stuck prevention)
+        // 引力と壁の斥力や渦が釣り合って停止・極端な減速をするのを防ぐため、
+        // ターゲットへ向かう最低限の速度ベクトルを保証する
+        let min_speed = DREAM_UI_MIN_SPEED;
+        let speed_toward_target = particle.velocity.dot(to_target.normalize_or_zero());
+        if speed_toward_target < min_speed && distance > 20.0 {
+            // 足りない分の速度をターゲット方向に対して足す
+            let correction = to_target.normalize_or_zero() * (min_speed - speed_toward_target.max(0.0));
+            particle.velocity += correction;
+        }
         
         let mut final_pos = current_pos + particle.velocity * dt;
 
         // Size and Squash & Stretch
-        let base = DREAM_UI_PARTICLE_SIZE * particle.mass.sqrt();
+        let effective_mass = particle.mass + DREAM_UI_BASE_MASS_OFFSET;
+        let base = DREAM_UI_PARTICLE_SIZE * effective_mass.sqrt();
         let speed = particle.velocity.length();
-        let squash_stretch_ratio = (speed / 150.0).clamp(0.0, 1.5);
+        let squash_stretch_ratio = (speed / DREAM_UI_SQUASH_MAX_SPEED).clamp(0.0, DREAM_UI_SQUASH_MAX_RATIO);
         let length_scale = 1.0 + squash_stretch_ratio;
         let width_scale = 1.0 / (1.0 + squash_stretch_ratio * 0.5);
 
         // 6. Clamp & Damping (画面外へ出る速度を殺す・跳ね返りはしない)
         if final_pos.x < 0.0 {
             final_pos.x = 0.0;
-            particle.velocity.x *= 0.1; // 強烈な減衰力
+            particle.velocity.x *= DREAM_UI_BOUNDARY_DAMPING; // 強烈な減衰力
         } else if final_pos.x > viewport_size.x {
             final_pos.x = viewport_size.x;
-            particle.velocity.x *= 0.1;
+            particle.velocity.x *= DREAM_UI_BOUNDARY_DAMPING;
         }
         
         if final_pos.y < 0.0 {
             final_pos.y = 0.0;
-            particle.velocity.y *= 0.1;
+            particle.velocity.y *= DREAM_UI_BOUNDARY_DAMPING;
         } else if final_pos.y > viewport_size.y {
             final_pos.y = viewport_size.y;
-            particle.velocity.y *= 0.1;
+            particle.velocity.y *= DREAM_UI_BOUNDARY_DAMPING;
+        }
+
+        // 6.5 Failsafe Rescue (万が一クランプをすり抜けた場合の強制救済)
+        // 浮動小数点演算の誤差や極端な加速で画面外へ大きく吹っ飛んでしまった場合、
+        // 画面の反対側（異常値でない側）の境界線上へワープさせる
+        if final_pos.x < -DREAM_UI_FAILSAFE_MARGIN {
+            final_pos.x = viewport_size.x;
+        } else if final_pos.x > viewport_size.x + DREAM_UI_FAILSAFE_MARGIN {
+            final_pos.x = 0.0;
+        }
+        
+        if final_pos.y < -DREAM_UI_FAILSAFE_MARGIN {
+            final_pos.y = viewport_size.y;
+        } else if final_pos.y > viewport_size.y + DREAM_UI_FAILSAFE_MARGIN {
+            final_pos.y = 0.0;
         }
 
         particle.prev_pos = final_pos;
@@ -306,14 +351,14 @@ pub fn ui_particle_merge_system(
         if positions[i].3 {
             continue;
         }
-        if positions[i].2 < 0.15 {
+        if positions[i].2 < 0.05 {
             continue;
         }
         for j in (i + 1)..positions.len() {
             if positions[j].3 {
                 continue;
             }
-            if positions[j].2 < 0.15 {
+            if positions[j].2 < 0.05 {
                 continue;
             }
             let dist = positions[i].1.distance(positions[j].1);
@@ -330,7 +375,8 @@ pub fn ui_particle_merge_system(
 
     if let Some((absorbed, absorber)) = merge_pair {
         if let Ok([( _, mut absorbed_p, _), ( _, mut absorber_p, _)]) = q_particles.get_many_mut([absorbed, absorber]) {
-            if absorber_p.merge_count >= DREAM_UI_MERGE_MAX_COUNT {
+            // 合体回数だけでなく、質量そのものにも上限を設ける。巨大になりすぎて軌道が壊れるのを防ぐ
+            if absorber_p.merge_count >= DREAM_UI_MERGE_MAX_COUNT || absorber_p.mass > DREAM_UI_MERGE_MAX_MASS {
                 return;
             }
             
@@ -407,9 +453,9 @@ pub fn spawn_ui_particle(
     commands: &mut Commands,
     start_pos: Vec2,
     target_pos: Vec2,
-    _viewport_size: Vec2, // removed usage
     ui_root: Entity,
     assets: &GameAssets,
+    mass: f32,
 ) {
     let mut rng = rand::thread_rng();
 
@@ -422,7 +468,7 @@ pub fn spawn_ui_particle(
                 time_alive: 0.0,
                 start_pos,
                 target_pos,
-                velocity: Vec2::new(rng.gen_range(-15.0..15.0), rng.gen_range(-30.0..-10.0)),
+                velocity: Vec2::new(rng.gen_range(-40.0..40.0), rng.gen_range(-60.0..-15.0)),
                 phase: rng.gen_range(0.0..std::f32::consts::TAU),
                 noise_direction: noise_dir,
                 noise_timer: rng.gen_range(0.0..DREAM_UI_NOISE_INTERVAL),
@@ -431,7 +477,7 @@ pub fn spawn_ui_particle(
                 merge_timer: 0.0,
                 trail_cooldown: DREAM_UI_TRAIL_INTERVAL,
                 prev_pos: start_pos,
-                mass: rng.gen_range(0.8..1.2),
+                mass,
             },
             Node {
                 position_type: PositionType::Absolute,
