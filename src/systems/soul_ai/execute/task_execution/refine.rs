@@ -130,6 +130,7 @@ pub fn handle_refine_task(
                             }
                         },
                     ) {
+                        commands.entity(ctx.soul_entity).remove::<crate::relationships::WorkingOn>();
                         commands.entity(water_entity).despawn();
                     } else {
                         warn!(

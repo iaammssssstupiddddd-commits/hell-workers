@@ -211,15 +211,17 @@ pub fn handle_haul_to_blueprint_task(
                         }
                     }
 
+                    // ====== 修正点: 参照先の Item(task_entity)が despawn される前に WorkingOn 等を外す ======
+                    ctx.inventory.0 = None;
+                    commands.entity(ctx.soul_entity).remove::<WorkingOn>();
+                    clear_task_and_path(ctx.task, ctx.path);
+
                     // アイテムを消費
                     commands.entity(item_entity).despawn();
                     // DeliveringTo is removed with despawn
                 }
             }
 
-            ctx.inventory.0 = None;
-            commands.entity(ctx.soul_entity).remove::<WorkingOn>();
-            clear_task_and_path(ctx.task, ctx.path);
             ctx.soul.fatigue = (ctx.soul.fatigue + 0.05).min(1.0);
 
             reservation::release_destination(ctx, blueprint_entity);
