@@ -70,56 +70,103 @@ pub fn dream_popup_spawn_system(
             || (idle.behavior == IdleBehavior::Gathering
                 && idle.gathering_behavior == GatheringBehavior::Sleeping
                 && participating_in.is_some());
-        if !is_sleeping {
-            visual_state.popup_accumulated = 0.0;
-            continue;
-        }
-
         let gain_rate = dream_gain_rate(dream.quality);
-        if gain_rate <= 0.0 {
+
+        if !is_sleeping || gain_rate <= 0.0 {
+            // 状態が切り替わった（起きる等）場合、持っている蓄積を開放する
+            if visual_state.popup_accumulated > 0.0 {
+                let amount = visual_state.popup_accumulated;
+                visual_state.popup_accumulated = 0.0;
+
+                let config = FloatingTextConfig {
+                    lifetime: DREAM_POPUP_LIFETIME,
+                    velocity: Vec2::new(0.0, DREAM_POPUP_VELOCITY_Y),
+                    initial_color: Color::srgb(0.65, 0.9, 1.0),
+                    fade_out: true,
+                };
+
+                let popup_pos = transform.translation.truncate().extend(Z_FLOATING_TEXT)
+                    + Vec3::new(0.0, DREAM_POPUP_OFFSET_Y, 0.0);
+
+                let popup_entity = spawn_floating_text(
+                    &mut commands,
+                    &format!("+{:.1} Dream", amount),
+                    popup_pos,
+                    config.clone(),
+                    Some(DREAM_POPUP_FONT_SIZE),
+                    assets.font_ui.clone(),
+                );
+
+                commands.entity(popup_entity).insert(DreamGainPopup {
+                    floating_text: FloatingText {
+                        lifetime: config.lifetime,
+                        config,
+                    },
+                });
+
+                if let Ok(start_pos) = camera.world_to_viewport(camera_transform, popup_pos) {
+                    super::ui_particle::spawn_ui_particle(
+                        &mut commands,
+                        start_pos,
+                        target_pos,
+                        ui_root,
+                        &assets,
+                        amount,
+                    );
+                }
+            }
+
+            visual_state.popup_timer = 0.0;
             continue;
         }
 
         visual_state.popup_accumulated += gain_rate * dt;
-        while visual_state.popup_accumulated >= DREAM_POPUP_THRESHOLD {
-            visual_state.popup_accumulated -= DREAM_POPUP_THRESHOLD;
 
-            let config = FloatingTextConfig {
-                lifetime: DREAM_POPUP_LIFETIME,
-                velocity: Vec2::new(0.0, DREAM_POPUP_VELOCITY_Y),
-                initial_color: Color::srgb(0.65, 0.9, 1.0),
-                fade_out: true,
-            };
+        visual_state.popup_timer += dt;
+        if visual_state.popup_timer >= DREAM_POPUP_INTERVAL {
+            visual_state.popup_timer -= f32::max(DREAM_POPUP_INTERVAL, dt);
 
-            let popup_pos = transform.translation.truncate().extend(Z_FLOATING_TEXT)
-                + Vec3::new(0.0, DREAM_POPUP_OFFSET_Y, 0.0);
+            if visual_state.popup_accumulated >= DREAM_POPUP_THRESHOLD {
+                let amount = visual_state.popup_accumulated;
+                visual_state.popup_accumulated = 0.0;
 
-            let popup_entity = spawn_floating_text(
-                &mut commands,
-                "+Dream",
-                popup_pos,
-                config.clone(),
-                Some(DREAM_POPUP_FONT_SIZE),
-                assets.font_ui.clone(),
-            );
+                let config = FloatingTextConfig {
+                    lifetime: DREAM_POPUP_LIFETIME,
+                    velocity: Vec2::new(0.0, DREAM_POPUP_VELOCITY_Y),
+                    initial_color: Color::srgb(0.65, 0.9, 1.0),
+                    fade_out: true,
+                };
 
-            commands.entity(popup_entity).insert(DreamGainPopup {
-                floating_text: FloatingText {
-                    lifetime: config.lifetime,
-                    config,
-                },
-            });
+                let popup_pos = transform.translation.truncate().extend(Z_FLOATING_TEXT)
+                    + Vec3::new(0.0, DREAM_POPUP_OFFSET_Y, 0.0);
 
-            // UIパーティクルの発生
-            if let Ok(start_pos) = camera.world_to_viewport(camera_transform, popup_pos) {
-                super::ui_particle::spawn_ui_particle(
+                let popup_entity = spawn_floating_text(
                     &mut commands,
-                    start_pos,
-                    target_pos,
-                    viewport_size,
-                    ui_root,
-                    &assets,
+                    "+Dream",
+                    popup_pos,
+                    config.clone(),
+                    Some(DREAM_POPUP_FONT_SIZE),
+                    assets.font_ui.clone(),
                 );
+
+                commands.entity(popup_entity).insert(DreamGainPopup {
+                    floating_text: FloatingText {
+                        lifetime: config.lifetime,
+                        config,
+                    },
+                });
+
+                // UIパーティクルの発生
+                if let Ok(start_pos) = camera.world_to_viewport(camera_transform, popup_pos) {
+                    super::ui_particle::spawn_ui_particle(
+                        &mut commands,
+                        start_pos,
+                        target_pos,
+                        ui_root,
+                        &assets,
+                        amount,
+                    );
+                }
             }
         }
     }

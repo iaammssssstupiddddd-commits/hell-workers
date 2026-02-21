@@ -173,8 +173,6 @@ pub fn rest_area_dream_particle_spawn_system(
     }
 
     for (rest_area_entity, transform, rest_area, occupants_opt, mut visual_state) in q_rest_areas.iter_mut() {
-        visual_state.particle_cooldown = (visual_state.particle_cooldown - dt).max(0.0);
-
         let occupant_count = occupants_opt
             .map(|occ| occ.len())
             .unwrap_or(0)
@@ -186,11 +184,15 @@ pub fn rest_area_dream_particle_spawn_system(
         }
 
         let scale_factor = (occupant_count as f32).sqrt().clamp(1.0, 3.0);
-        let base_interval = DREAM_PARTICLE_INTERVAL_VIVID;
-        let current_interval = base_interval / scale_factor;
+        let current_interval = crate::constants::DREAM_POPUP_INTERVAL;
         let max_particles = (DREAM_PARTICLE_MAX_PER_SOUL as f32 * scale_factor) as u8;
 
-        if visual_state.particle_cooldown > 0.0 || visual_state.active_particles >= max_particles {
+        if visual_state.particle_cooldown > 0.0 {
+            visual_state.particle_cooldown = (visual_state.particle_cooldown - dt).max(0.0);
+            continue;
+        }
+
+        if visual_state.active_particles >= max_particles {
             continue;
         }
 
@@ -231,9 +233,9 @@ pub fn rest_area_dream_particle_spawn_system(
                 &mut commands,
                 start_pos,
                 target_pos,
-                viewport_size, // ADDED
                 ui_root,
                 &assets,
+                0.5 * scale_factor,
             );
         }
 
