@@ -116,6 +116,7 @@ pub fn create_game_assets(asset_server: &AssetServer, images: &mut Assets<Image>
         icon_arrow_down: asset_server.load("textures/ui/arrow_down.png"),
         icon_arrow_right: asset_server.load("textures/ui/arrow_right.png"),
         glow_circle: asset_server.load("textures/ui/glow_circle.png"),
+        dream_bubble: asset_server.load("textures/ui/dream_bubble.png"),
         bubble_9slice: asset_server.load("textures/ui/bubble_9slice.png"),
         icon_hammer: asset_server.load("textures/ui/hammer.png"),
         icon_wood_small: asset_server.load("textures/ui/wood_small.png"),
