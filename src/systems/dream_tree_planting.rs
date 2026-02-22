@@ -177,7 +177,7 @@ fn process_dream_planting(
         initial_color: Color::srgb(1.0, 0.3, 0.3), // 赤色でマイナスを表現
         fade_out: true,
     };
-    
+
     crate::systems::utils::floating_text::spawn_floating_text(
         commands,
         format!("-{:.1} Dream", cost),
@@ -186,5 +186,4 @@ fn process_dream_planting(
         Some(16.0),
         game_assets.font_ui.clone(),
     );
-
 }

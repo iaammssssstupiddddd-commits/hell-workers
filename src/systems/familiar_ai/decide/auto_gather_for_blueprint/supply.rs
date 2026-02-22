@@ -7,7 +7,7 @@ use crate::systems::command::TaskArea;
 use crate::systems::jobs::{Designation, Rock, Tree};
 use crate::systems::logistics::{ReservedForTask, ResourceItem, ResourceType};
 
-use super::AutoGatherForBlueprint;
+use super::AutoGatherDesignation;
 use super::helpers::{
     AutoIdleEntry, OwnerInfo, STAGE_COUNT, SourceCandidate, SupplyBucket,
     compare_source_candidates, drop_amount_for_resource, resolve_owner,
@@ -43,9 +43,9 @@ pub(super) fn collect_supply_state(
             Option<&Designation>,
             Option<&TaskWorkers>,
             Option<&ManagedBy>,
-            Option<&AutoGatherForBlueprint>,
+            Option<&AutoGatherDesignation>,
         ),
-        Or<(With<Tree>, With<Rock>, With<AutoGatherForBlueprint>)>,
+        Or<(With<Tree>, With<Rock>, With<AutoGatherDesignation>)>,
     >,
 ) -> SupplyState {
     let mut supply_by_owner = HashMap::<(Entity, ResourceType), SupplyBucket>::new();

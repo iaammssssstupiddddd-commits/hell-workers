@@ -39,7 +39,7 @@ impl Default for BlueprintAutoGatherTimer {
 }
 
 #[derive(Component, Debug, Clone, Copy)]
-pub struct AutoGatherForBlueprint {
+pub struct AutoGatherDesignation {
     pub owner: Entity,
     pub resource_type: ResourceType,
 }
@@ -55,6 +55,11 @@ pub fn blueprint_auto_gather_system(
     q_wall_requests: Query<(
         &TransportRequest,
         &TargetWallConstructionSite,
+        Option<&TaskWorkers>,
+        Option<&TransportDemand>,
+    )>,
+    q_mixer_solid_requests: Query<(
+        &TransportRequest,
         Option<&TaskWorkers>,
         Option<&TransportDemand>,
     )>,
@@ -78,9 +83,9 @@ pub fn blueprint_auto_gather_system(
             Option<&Designation>,
             Option<&TaskWorkers>,
             Option<&ManagedBy>,
-            Option<&AutoGatherForBlueprint>,
+            Option<&AutoGatherDesignation>,
         ),
-        Or<(With<Tree>, With<Rock>, With<AutoGatherForBlueprint>)>,
+        Or<(With<Tree>, With<Rock>, With<AutoGatherDesignation>)>,
     >,
 ) {
     let timer_finished = timer.timer.tick(time.delta()).just_finished();
@@ -122,6 +127,7 @@ pub fn blueprint_auto_gather_system(
         &owner_infos,
         &q_bp_requests,
         &q_wall_requests,
+        &q_mixer_solid_requests,
         &q_blueprints,
     );
 

@@ -118,4 +118,3 @@ pub fn update_all_floating_texts_system(
         text_color.0 = color.into();
     }
 }
-
