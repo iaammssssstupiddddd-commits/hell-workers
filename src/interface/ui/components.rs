@@ -230,6 +230,8 @@ pub enum UiMountSlot {
     Overlay,
     TopRight,
     TopLeft,
+    /// 夢の泡パーティクル専用レイヤー（パネルより先にスポーンされるため、常にパネルの後ろに描画される）
+    DreamBubbleLayer,
 }
 
 /// 速度ボタンに付与し、アクティブ状態のハイライトに使用

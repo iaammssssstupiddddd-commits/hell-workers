@@ -124,7 +124,7 @@ pub fn handle(
                 .remove::<crate::relationships::DeliveringTo>();
 
             // バケツを空に戻す
-            commands.entity(bucket_entity).insert((
+            commands.entity(bucket_entity).try_insert((
                 ResourceItem(ResourceType::BucketEmpty),
                 Sprite {
                     image: game_assets.bucket_empty.clone(),

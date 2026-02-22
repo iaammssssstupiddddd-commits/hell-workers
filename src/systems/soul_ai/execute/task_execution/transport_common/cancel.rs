@@ -21,7 +21,7 @@ pub fn cancel_haul_to_stockpile(
 
     if ctx.inventory.0 == Some(item) {
         let soul_pos = ctx.soul_pos();
-        commands.entity(item).insert((
+        commands.entity(item).try_insert((
             Visibility::Visible,
             Transform::from_xyz(soul_pos.x, soul_pos.y, crate::constants::Z_ITEM_PICKUP),
         ));
@@ -66,7 +66,7 @@ pub fn cancel_haul_to_mixer_before_pickup(
 pub fn drop_bucket_with_cleanup(commands: &mut Commands, bucket_entity: Entity, pos: Vec2) {
     let drop_grid = WorldMap::world_to_grid(pos);
     let drop_pos = WorldMap::grid_to_world(drop_grid.0, drop_grid.1);
-    commands.entity(bucket_entity).insert((
+    commands.entity(bucket_entity).try_insert((
         Visibility::Visible,
         Transform::from_xyz(drop_pos.x, drop_pos.y, crate::constants::Z_ITEM_PICKUP),
     ));

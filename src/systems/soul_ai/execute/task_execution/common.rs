@@ -223,7 +223,7 @@ pub fn pickup_item(
     inventory: &mut Inventory,
 ) {
     inventory.0 = Some(item_entity);
-    commands.entity(item_entity).insert(Visibility::Hidden);
+    commands.entity(item_entity).try_insert(Visibility::Hidden);
 
     // タスク指定・備蓄状態を削除
     //
@@ -243,7 +243,7 @@ pub fn pickup_item(
 pub fn drop_item(commands: &mut Commands, _soul_entity: Entity, item_entity: Entity, pos: Vec2) {
     commands
         .entity(item_entity)
-        .insert((Visibility::Visible, Transform::from_xyz(pos.x, pos.y, 0.6)));
+        .try_insert((Visibility::Visible, Transform::from_xyz(pos.x, pos.y, 0.6)));
 }
 
 /// ストックパイルからアイテムが取り出された際の更新処理

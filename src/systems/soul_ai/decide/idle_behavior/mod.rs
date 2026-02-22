@@ -189,7 +189,7 @@ pub fn idle_behavior_decision_system(
             );
 
             if let Some((rest_area_entity, rest_area_pos)) = rest_area_target {
-                if reserved_rest_area != Some(rest_area_entity) {
+                let just_reserved = if reserved_rest_area != Some(rest_area_entity) {
                     request_writer.write(IdleBehaviorRequest {
                         entity,
                         operation: IdleBehaviorOperation::ReserveRestArea { rest_area_entity },
@@ -197,7 +197,12 @@ pub fn idle_behavior_decision_system(
                     *pending_rest_reservations
                         .entry(rest_area_entity)
                         .or_insert(0) += 1;
-                } else if rest_decision::process_wants_rest_area(
+                    true
+                } else {
+                    false
+                };
+
+                if rest_decision::process_wants_rest_area(
                     entity,
                     Some((rest_area_entity, rest_area_pos)),
                     reserved_rest_area,
@@ -208,7 +213,7 @@ pub fn idle_behavior_decision_system(
                     &world_map,
                     &mut request_writer,
                     current_pos,
-                    false,
+                    just_reserved,
                 ) {
                     continue;
                 }

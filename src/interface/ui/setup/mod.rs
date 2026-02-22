@@ -86,7 +86,7 @@ fn spawn_area_edit_preview(
     ui_nodes.set_slot(UiSlot::AreaEditPreview, preview);
 }
 
-fn spawn_ui_root(commands: &mut Commands) -> (Entity, Entity, Entity, Entity, Entity, Entity) {
+fn spawn_ui_root(commands: &mut Commands) -> (Entity, Entity, Entity, Entity, Entity, Entity, Entity) {
     let ui_root = commands
         .spawn((
             Node {
@@ -98,6 +98,22 @@ fn spawn_ui_root(commands: &mut Commands) -> (Entity, Entity, Entity, Entity, En
                 ..default()
             },
             UiRoot,
+        ))
+        .id();
+
+    // 夢の泡専用レイヤー（最初の子 = パネル系より後ろに描画される）
+    let dream_bubble_layer = commands
+        .spawn((
+            Node {
+                width: Val::Percent(100.0),
+                height: Val::Percent(100.0),
+                position_type: PositionType::Absolute,
+                left: Val::Px(0.0),
+                top: Val::Px(0.0),
+                ..default()
+            },
+            UiMountSlot::DreamBubbleLayer,
+            Name::new("Dream Bubble Layer"),
         ))
         .id();
 
@@ -180,10 +196,11 @@ fn spawn_ui_root(commands: &mut Commands) -> (Entity, Entity, Entity, Entity, En
         ))
         .id();
 
+    // dream_bubble_layer を最初に追加することで、後続のパネル系より背後に描画される
     commands
         .entity(ui_root)
-        .add_children(&[left, right, bottom, top_right, top_left, overlay]);
-    (ui_root, left, right, bottom, overlay, top_right)
+        .add_children(&[dream_bubble_layer, left, right, bottom, top_right, top_left, overlay]);
+    (ui_root, left, right, bottom, overlay, top_right, dream_bubble_layer)
 }
 
 /// UI全体をセットアップ
@@ -210,7 +227,7 @@ fn setup_ui_internal(
     ui_nodes: &mut UiNodeRegistry,
     info_panel_nodes: &mut InfoPanelNodes,
 ) {
-    let (_, left_slot, right_slot, bottom_slot, overlay_slot, top_right_slot) =
+    let (_, left_slot, right_slot, bottom_slot, overlay_slot, top_right_slot, _dream_bubble_slot) =
         spawn_ui_root(&mut commands);
     bottom_bar::spawn_bottom_bar(&mut commands, &game_assets, &theme, bottom_slot, ui_nodes);
     submenus::spawn_submenus(&mut commands, &game_assets, &theme, bottom_slot);

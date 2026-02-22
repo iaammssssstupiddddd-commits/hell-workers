@@ -81,7 +81,7 @@ pub(super) fn handle_dropping_phase(
                 }
             }
 
-            commands.entity(item).insert((
+            commands.entity(item).try_insert((
                 Visibility::Visible,
                 Transform::from_xyz(
                     stock_transform.translation.x,
@@ -120,7 +120,7 @@ pub(super) fn handle_dropping_phase(
             );
         }
     } else if let Ok((_, site, _)) = ctx.queries.storage.floor_sites.get(stockpile) {
-        commands.entity(item).insert((
+        commands.entity(item).try_insert((
             Visibility::Visible,
             Transform::from_xyz(
                 site.material_center.x,
@@ -141,7 +141,7 @@ pub(super) fn handle_dropping_phase(
             .entity(item)
             .remove::<crate::relationships::TaskWorkers>();
     } else if let Ok((_, site, _)) = ctx.queries.storage.wall_sites.get(stockpile) {
-        commands.entity(item).insert((
+        commands.entity(item).try_insert((
             Visibility::Visible,
             Transform::from_xyz(
                 site.material_center.x,
@@ -171,7 +171,7 @@ pub(super) fn handle_dropping_phase(
                 .is_some_and(|provisional| !provisional.mud_delivered);
         if can_deliver_to_wall {
             let wall_pos = wall_transform.translation.truncate();
-            commands.entity(item).insert((
+            commands.entity(item).try_insert((
                 Visibility::Visible,
                 Transform::from_xyz(wall_pos.x, wall_pos.y, Z_ITEM_PICKUP),
             ));
