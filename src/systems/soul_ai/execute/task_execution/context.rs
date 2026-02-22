@@ -15,6 +15,7 @@ use crate::systems::familiar_ai::perceive::resource_sync::SharedResourceCache;
 use crate::systems::jobs::{Blueprint, Designation, Priority, StoredByMixer, TaskSlots};
 use crate::systems::logistics::Stockpile;
 use bevy::ecs::system::SystemParam;
+use std::ops::{Deref, DerefMut};
 
 /// リソース予約・管理に必要な共通アクセス
 #[derive(SystemParam)]
@@ -197,12 +198,7 @@ pub struct MutStorageAccess<'w, 's> {
 
 /// タスク割り当てに必要なクエリ群（Familiar AI向け）
 #[derive(SystemParam)]
-pub struct TaskAssignmentQueries<'w, 's> {
-    pub reservation: ReservationAccess<'w, 's>,
-    pub designation: DesignationAccess<'w, 's>,
-    pub storage: StorageAccess<'w, 's>,
-
-    // 固有フィールド
+pub struct TaskAssignmentReadAccess<'w, 's> {
     pub world_map: Res<'w, crate::world::map::WorldMap>,
     pub items: Query<'w, 's, (&'static ResourceItem, Option<&'static Designation>)>,
     pub sand_piles: Query<
@@ -260,7 +256,6 @@ pub struct TaskAssignmentQueries<'w, 's> {
         ),
     >,
     pub reserved_for_task: Query<'w, 's, &'static crate::systems::logistics::ReservedForTask>,
-    pub assignment_writer: MessageWriter<'w, TaskAssignmentRequest>,
     pub task_slots: Query<'w, 's, &'static crate::systems::jobs::TaskSlots>,
     pub wheelbarrows: Query<
         'w,
@@ -288,6 +283,30 @@ pub struct TaskAssignmentQueries<'w, 's> {
             Without<crate::systems::logistics::ReservedForTask>,
         ),
     >,
+}
+
+/// タスク割り当てに必要なクエリ群（Familiar AI向け）
+#[derive(SystemParam)]
+pub struct TaskAssignmentQueries<'w, 's> {
+    pub reservation: ReservationAccess<'w, 's>,
+    pub designation: DesignationAccess<'w, 's>,
+    pub storage: StorageAccess<'w, 's>,
+    pub assignment_writer: MessageWriter<'w, TaskAssignmentRequest>,
+    pub read: TaskAssignmentReadAccess<'w, 's>,
+}
+
+impl<'w, 's> Deref for TaskAssignmentQueries<'w, 's> {
+    type Target = TaskAssignmentReadAccess<'w, 's>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.read
+    }
+}
+
+impl<'w, 's> DerefMut for TaskAssignmentQueries<'w, 's> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.read
+    }
 }
 
 /// タスク実行に必要なクエリ群

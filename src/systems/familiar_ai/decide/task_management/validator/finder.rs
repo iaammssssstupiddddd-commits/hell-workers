@@ -9,7 +9,7 @@ use super::reservation::source_not_reserved;
 pub fn find_nearest_bucket_for_return(
     tank_entity: Entity,
     task_pos: Vec2,
-    queries: &crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
+    queries: &crate::systems::familiar_ai::decide::task_management::FamiliarTaskAssignmentQueries,
     shadow: &ReservationShadow,
 ) -> Option<(Entity, Vec2)> {
     queries
@@ -43,7 +43,7 @@ pub fn find_nearest_bucket_for_return(
 fn find_best_bucket_storage_for_return(
     tank_entity: Entity,
     source_pos: Vec2,
-    queries: &crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
+    queries: &crate::systems::familiar_ai::decide::task_management::FamiliarTaskAssignmentQueries,
     _shadow: &ReservationShadow,
 ) -> Option<Entity> {
     queries
@@ -100,7 +100,7 @@ fn find_best_bucket_storage_for_return(
 pub fn find_bucket_return_assignment(
     tank_entity: Entity,
     task_pos: Vec2,
-    queries: &crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
+    queries: &crate::systems::familiar_ai::decide::task_management::FamiliarTaskAssignmentQueries,
     shadow: &ReservationShadow,
 ) -> Option<(Entity, Vec2, Entity)> {
     let (source_item, source_pos) =
@@ -113,7 +113,7 @@ pub fn find_bucket_return_assignment(
 pub fn find_nearest_bucket_for_tank(
     tank_entity: Entity,
     task_pos: Vec2,
-    queries: &crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
+    queries: &crate::systems::familiar_ai::decide::task_management::FamiliarTaskAssignmentQueries,
     shadow: &ReservationShadow,
 ) -> Option<(Entity, Vec2)> {
     queries

@@ -8,7 +8,7 @@ use bevy::prelude::*;
 use std::sync::atomic::{AtomicU32, Ordering};
 
 type TaskQueries<'w, 's> =
-    crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries<'w, 's>;
+    crate::systems::familiar_ai::decide::task_management::FamiliarTaskAssignmentQueries<'w, 's>;
 
 static SOURCE_SELECTOR_CALLS: AtomicU32 = AtomicU32::new(0);
 static SOURCE_SELECTOR_CACHE_BUILD_SCANNED_ITEMS: AtomicU32 = AtomicU32::new(0);

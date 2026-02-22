@@ -22,7 +22,7 @@ pub fn assign_haul_to_blueprint(
     task_pos: Vec2,
     already_commanded: bool,
     ctx: &AssignTaskContext<'_>,
-    queries: &mut crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
+    queries: &mut crate::systems::familiar_ai::decide::task_management::FamiliarTaskAssignmentQueries,
     shadow: &mut ReservationShadow,
 ) -> bool {
     let Some((blueprint, resource_type)) =
@@ -123,7 +123,7 @@ fn try_pick_drop_to_blueprint(
     resource_type: ResourceType,
     already_commanded: bool,
     ctx: &AssignTaskContext<'_>,
-    queries: &mut crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
+    queries: &mut crate::systems::familiar_ai::decide::task_management::FamiliarTaskAssignmentQueries,
     shadow: &mut ReservationShadow,
 ) -> bool {
     let Ok((bp_transform, bp, _)) = queries.storage.blueprints.get(blueprint) else {
@@ -160,7 +160,7 @@ fn assign_single_item_haul(
     task_pos: Vec2,
     already_commanded: bool,
     ctx: &AssignTaskContext<'_>,
-    queries: &mut crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
+    queries: &mut crate::systems::familiar_ai::decide::task_management::FamiliarTaskAssignmentQueries,
     shadow: &mut ReservationShadow,
 ) -> bool {
     let Some((source_item, source_pos)) = source_selector::find_nearest_blueprint_source_item(
@@ -190,7 +190,7 @@ fn assign_single_item_haul(
 type FindSourceFn = fn(
     Vec2,
     Option<&TaskArea>,
-    &crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
+    &crate::systems::familiar_ai::decide::task_management::FamiliarTaskAssignmentQueries,
     &ReservationShadow,
 ) -> Option<(Entity, Vec2)>;
 
@@ -201,7 +201,7 @@ fn try_direct_collect_with_wheelbarrow_to_blueprint(
     task_pos: Vec2,
     already_commanded: bool,
     ctx: &AssignTaskContext<'_>,
-    queries: &mut crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
+    queries: &mut crate::systems::familiar_ai::decide::task_management::FamiliarTaskAssignmentQueries,
     shadow: &mut ReservationShadow,
     find_source: FindSourceFn,
     issue_fn: fn(
@@ -213,7 +213,7 @@ fn try_direct_collect_with_wheelbarrow_to_blueprint(
         Vec2,
         bool,
         &AssignTaskContext<'_>,
-        &mut crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
+        &mut crate::systems::familiar_ai::decide::task_management::FamiliarTaskAssignmentQueries,
         &mut ReservationShadow,
     ),
 ) -> bool {

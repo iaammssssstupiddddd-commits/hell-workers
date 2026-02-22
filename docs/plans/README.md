@@ -19,7 +19,7 @@
 
 | Document | Status | Notes |
 |---|---|---|
-| [refactor-roadmap-2026-02-22.md](refactor-roadmap-2026-02-22.md) | 提案 | 現行実装を前提にした全体リファクタ実行計画（Phase 0〜7）。 |
+| [refactor-roadmap-2026-02-22.md](refactor-roadmap-2026-02-22.md) | 実装済み | 現行実装を前提にした全体リファクタ実行計画（回帰テスト追加はスコープ外で Phase 1〜6 + 文書整備完了）。 |
 
 ## アーカイブ計画書一覧 (`docs/plans/archive`)
 

@@ -53,7 +53,7 @@ pub(super) fn candidate_snapshot(
     task_area_opt: Option<&TaskArea>,
     managed_tasks: &ManagedTasks,
     world_map: &WorldMap,
-    queries: &crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
+    queries: &crate::systems::familiar_ai::decide::task_management::FamiliarTaskAssignmentQueries,
 ) -> Option<CandidateSnapshot> {
     let (
         _entity,

@@ -5,7 +5,7 @@ use bevy::prelude::*;
 use crate::systems::logistics::ResourceType;
 
 type TaskAssignmentQueries<'w, 's> =
-    crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries<'w, 's>;
+    crate::systems::familiar_ai::decide::task_management::FamiliarTaskAssignmentQueries<'w, 's>;
 
 /// Blueprint への猫車向け資材の残需要（必要量 - 搬入予約）
 pub fn compute_remaining_blueprint_wheelbarrow_amount(
