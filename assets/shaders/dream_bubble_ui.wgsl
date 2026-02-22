@@ -2,6 +2,9 @@
 // ソフトグロー + 虹色屈折 + スペキュラハイライト + リム発光 + ノイズ変形 + バブルクラスター
 
 #import bevy_ui::ui_vertex_output UiVertexOutput
+#import bevy_render::view::View
+
+@group(0) @binding(0) var<uniform> view: View;
 
 struct DreamBubbleUiMaterial {
     color: vec4<f32>,       // offset 0:  ベース色 (16 bytes)
@@ -12,6 +15,11 @@ struct DreamBubbleUiMaterial {
 }
 
 @group(1) @binding(0) var<uniform> material: DreamBubbleUiMaterial;
+
+// 画面中央フェード定数
+const CENTER_FADE_START: f32 = 0.4;  // フェード開始距離（正規化）
+const CENTER_FADE_END: f32 = 1.0;    // フェード終了距離
+const CENTER_MIN_ALPHA: f32 = 0.4;  // 中央での最小alpha係数
 
 // 1つの円に対するグロー・リム・スペキュラを計算して返す
 fn bubble_at(p: vec2<f32>, center: vec2<f32>, r: f32, time: f32) -> vec4<f32> {
@@ -149,5 +157,14 @@ fn fragment(in: UiVertexOutput) -> @location(0) vec4<f32> {
         );
     }
 
-    return vec4<f32>(final_color.rgb, final_color.a * material.alpha);
+    // ---- 画面中央フェード ----
+    // in.position はフラグメントシェーダーでは frag coord (ピクセル座標)
+    // view.viewport は (x_origin, y_origin, width, height)
+    let screen_uv = (in.position.xy - view.viewport.xy) / view.viewport.zw; // 0..1
+    let screen_center_offset = abs(screen_uv - 0.5) * 2.0; // 0 (中央) .. 1 (端)
+    let screen_dist = length(screen_center_offset);
+    let center_t = clamp((screen_dist - CENTER_FADE_START) / (CENTER_FADE_END - CENTER_FADE_START), 0.0, 1.0);
+    let center_fade = CENTER_MIN_ALPHA + center_t * (1.0 - CENTER_MIN_ALPHA);
+
+    return vec4<f32>(final_color.rgb, final_color.a * material.alpha * center_fade);
 }

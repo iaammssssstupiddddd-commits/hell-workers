@@ -97,7 +97,7 @@ pub fn pathfinding_system(
             &mut Destination,
             &mut Path,
             &mut AssignedTask,
-            &IdleState,
+            &mut IdleState,
             Option<&crate::relationships::RestingIn>,
             Option<&RestAreaReservedFor>,
             Option<&mut PathCooldown>,
@@ -130,7 +130,7 @@ pub fn pathfinding_system(
             mut destination,
             mut path,
             mut task,
-            idle,
+            mut idle,
             resting_in,
             rest_reserved_for,
             mut cooldown_opt,
@@ -373,6 +373,16 @@ pub fn pathfinding_system(
                 commands.entity(entity).insert(PathCooldown {
                     remaining_frames: PATHFINDING_RETRY_COOLDOWN_FRAMES,
                 });
+
+                // 休憩所に到達不能な予約を握り続けると、容量が詰まって
+                // 他の非使役 Soul も休憩に向かえなくなるため解放する。
+                if !has_task && idle.behavior == IdleBehavior::GoingToRest {
+                    commands.entity(entity).remove::<RestAreaReservedFor>();
+                    idle.behavior = IdleBehavior::Wandering;
+                    idle.idle_timer = 0.0;
+                    idle.behavior_duration = 3.0;
+                    destination.0 = current_pos;
+                }
 
                 // タスク実行中なら放棄
                 if has_task {
