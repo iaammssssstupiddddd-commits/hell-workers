@@ -9,7 +9,7 @@ use crate::world::map::WorldMap;
 use bevy::prelude::*;
 
 type TaskAssignmentQueries<'w, 's> =
-    crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries<'w, 's>;
+    crate::systems::familiar_ai::decide::task_management::FamiliarTaskAssignmentQueries<'w, 's>;
 
 /// Sand 採取ソースを探索（pile 優先 → 砂地形タイル走査）
 pub fn find_collect_sand_source(

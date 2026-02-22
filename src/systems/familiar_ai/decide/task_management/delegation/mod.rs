@@ -28,7 +28,7 @@ impl TaskManager {
         squad: &[Entity],
         task_area_opt: Option<&TaskArea>,
         fatigue_threshold: f32,
-        queries: &mut crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
+        queries: &mut crate::systems::familiar_ai::decide::task_management::FamiliarTaskAssignmentQueries,
         q_souls: &mut FamiliarSoulQuery,
         designation_grid: &DesignationSpatialGrid,
         transport_request_grid: &TransportRequestSpatialGrid,

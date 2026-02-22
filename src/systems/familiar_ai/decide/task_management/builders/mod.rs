@@ -22,7 +22,7 @@ use bevy::prelude::*;
 
 pub fn submit_assignment(
     ctx: &AssignTaskContext<'_>,
-    queries: &mut crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
+    queries: &mut crate::systems::familiar_ai::decide::task_management::FamiliarTaskAssignmentQueries,
     shadow: &mut ReservationShadow,
     work_type: WorkType,
     task_pos: Vec2,

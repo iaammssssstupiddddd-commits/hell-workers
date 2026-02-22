@@ -57,6 +57,15 @@
 - request は需要 0 のとき `Designation` を外して休止、または despawn。
 - アンカー消失時は `transport_request_anchor_cleanup_system` で request を close。
 
+### 8. 割り当て・搬送・UIの実装境界
+
+- Familiar の割り当て発行は `src/systems/familiar_ai/decide/task_management/builders/mod.rs` の `submit_assignment(...)` を必ず経由する（`ReservationShadow` 反映を保証するため）。
+- `TaskAssignmentQueries` は `TaskAssignmentReadAccess` を内包する構成になっている。Familiar 側の型参照は `task_management::FamiliarTaskAssignmentQueries` を優先し、`soul_ai` 実装詳細への直接依存を増やさない。
+- `apply_task_assignment_requests_system` を拡張する場合は、既存の責務分離ヘルパー（受理判定 / idle正規化 / 予約反映 / DeliveringTo / イベント）へ追記し、単一関数へ責務を戻さない。
+- `pathfinding_system` の変更は補助関数（再利用判定・再探索・休憩フォールバック・失敗時処理）単位で行い、分岐をインラインで肥大化させない。
+- floor/wall の搬入同期変更は `src/systems/logistics/transport_request/producer/mod.rs` の共通ヘルパー（`group_tiles_by_site`, `consume_waiting_tile_resources`）を再利用して重複実装を避ける。
+- UI/Visual の更新は `src/interface/ui/interaction/status_display/` と `src/systems/visual/dream/ui_particle/` の責務分割単位で行い、再び単一巨大ファイルに戻さない。
+
 ## 便利なコマンド
 
 ### コンパイル確認

@@ -37,7 +37,7 @@ pub fn collect_scored_candidates(
     fam_entity: Entity,
     fam_pos: Vec2,
     task_area_opt: Option<&TaskArea>,
-    queries: &crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
+    queries: &crate::systems::familiar_ai::decide::task_management::FamiliarTaskAssignmentQueries,
     designation_grid: &DesignationSpatialGrid,
     transport_request_grid: &TransportRequestSpatialGrid,
     managed_tasks: &ManagedTasks,

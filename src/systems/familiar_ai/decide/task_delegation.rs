@@ -4,6 +4,7 @@ use crate::systems::familiar_ai::FamiliarTaskDelegationTimer;
 use crate::systems::familiar_ai::decide::familiar_processor::{
     FamiliarDelegationContext, process_task_delegation_and_movement,
 };
+use crate::systems::familiar_ai::decide::task_management::FamiliarTaskAssignmentQueries;
 use crate::systems::familiar_ai::helpers::query_types::{FamiliarSoulQuery, FamiliarTaskQuery};
 use crate::systems::spatial::{DesignationSpatialGrid, TransportRequestSpatialGrid};
 use crate::world::map::WorldMap;
@@ -30,8 +31,7 @@ pub struct FamiliarAiTaskDelegationParams<'w, 's> {
     pub delegation_timer: ResMut<'w, FamiliarTaskDelegationTimer>,
     pub q_familiars: FamiliarTaskQuery<'w, 's>,
     pub q_souls: FamiliarSoulQuery<'w, 's>,
-    pub task_queries:
-        crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries<'w, 's>,
+    pub task_queries: FamiliarTaskAssignmentQueries<'w, 's>,
     pub designation_grid: Res<'w, DesignationSpatialGrid>,
     pub transport_request_grid: Res<'w, TransportRequestSpatialGrid>,
     pub world_map: Res<'w, WorldMap>,

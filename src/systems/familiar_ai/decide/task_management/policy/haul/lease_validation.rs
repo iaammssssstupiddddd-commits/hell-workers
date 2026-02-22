@@ -13,7 +13,7 @@ use super::super::super::builders::issue_haul_with_wheelbarrow;
 /// - items のうち最低 `min_valid_items` 個が未予約の地面アイテムか
 pub fn validate_lease(
     lease: &WheelbarrowLease,
-    queries: &crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
+    queries: &crate::systems::familiar_ai::decide::task_management::FamiliarTaskAssignmentQueries,
     shadow: &ReservationShadow,
     min_valid_items: usize,
 ) -> bool {
@@ -42,7 +42,7 @@ pub fn try_issue_haul_from_lease<F>(
     max_items: usize,
     item_filter: F,
     ctx: &AssignTaskContext<'_>,
-    queries: &mut crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
+    queries: &mut crate::systems::familiar_ai::decide::task_management::FamiliarTaskAssignmentQueries,
     shadow: &mut ReservationShadow,
 ) -> bool
 where

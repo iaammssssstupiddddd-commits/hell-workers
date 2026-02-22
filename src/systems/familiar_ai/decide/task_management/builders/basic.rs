@@ -13,7 +13,7 @@ pub fn issue_gather(
     task_pos: Vec2,
     already_commanded: bool,
     ctx: &AssignTaskContext<'_>,
-    queries: &mut crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
+    queries: &mut crate::systems::familiar_ai::decide::task_management::FamiliarTaskAssignmentQueries,
     shadow: &mut ReservationShadow,
 ) {
     let assigned_task =
@@ -44,7 +44,7 @@ pub fn issue_build(
     task_pos: Vec2,
     already_commanded: bool,
     ctx: &AssignTaskContext<'_>,
-    queries: &mut crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
+    queries: &mut crate::systems::familiar_ai::decide::task_management::FamiliarTaskAssignmentQueries,
     shadow: &mut ReservationShadow,
 ) {
     let assigned_task =
@@ -74,7 +74,7 @@ pub fn issue_collect_sand(
     task_pos: Vec2,
     already_commanded: bool,
     ctx: &AssignTaskContext<'_>,
-    queries: &mut crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
+    queries: &mut crate::systems::familiar_ai::decide::task_management::FamiliarTaskAssignmentQueries,
     shadow: &mut ReservationShadow,
 ) {
     let assigned_task = crate::systems::soul_ai::execute::task_execution::types::AssignedTask::CollectSand(
@@ -103,7 +103,7 @@ pub fn issue_refine(
     task_pos: Vec2,
     already_commanded: bool,
     ctx: &AssignTaskContext<'_>,
-    queries: &mut crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
+    queries: &mut crate::systems::familiar_ai::decide::task_management::FamiliarTaskAssignmentQueries,
     shadow: &mut ReservationShadow,
 ) {
     let assigned_task = crate::systems::soul_ai::execute::task_execution::types::AssignedTask::Refine(
@@ -132,7 +132,7 @@ pub fn issue_collect_bone(
     task_pos: Vec2,
     already_commanded: bool,
     ctx: &AssignTaskContext<'_>,
-    queries: &mut crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
+    queries: &mut crate::systems::familiar_ai::decide::task_management::FamiliarTaskAssignmentQueries,
     shadow: &mut ReservationShadow,
 ) {
     let assigned_task = crate::systems::soul_ai::execute::task_execution::types::AssignedTask::CollectBone(
@@ -161,7 +161,7 @@ pub fn issue_reinforce_floor(
     task_pos: Vec2,
     already_commanded: bool,
     ctx: &AssignTaskContext<'_>,
-    queries: &mut crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
+    queries: &mut crate::systems::familiar_ai::decide::task_management::FamiliarTaskAssignmentQueries,
     shadow: &mut ReservationShadow,
 ) {
     // Get site entity from tile
@@ -203,7 +203,7 @@ pub fn issue_pour_floor(
     task_pos: Vec2,
     already_commanded: bool,
     ctx: &AssignTaskContext<'_>,
-    queries: &mut crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
+    queries: &mut crate::systems::familiar_ai::decide::task_management::FamiliarTaskAssignmentQueries,
     shadow: &mut ReservationShadow,
 ) {
     // Get site entity from tile
@@ -245,7 +245,7 @@ pub fn issue_coat_wall(
     task_pos: Vec2,
     already_commanded: bool,
     ctx: &AssignTaskContext<'_>,
-    queries: &mut crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
+    queries: &mut crate::systems::familiar_ai::decide::task_management::FamiliarTaskAssignmentQueries,
     shadow: &mut ReservationShadow,
 ) {
     let (tile_entity, site_entity, wall_entity) =
@@ -309,7 +309,7 @@ pub fn issue_frame_wall(
     task_pos: Vec2,
     already_commanded: bool,
     ctx: &AssignTaskContext<'_>,
-    queries: &mut crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
+    queries: &mut crate::systems::familiar_ai::decide::task_management::FamiliarTaskAssignmentQueries,
     shadow: &mut ReservationShadow,
 ) {
     let site_entity = if let Ok(tile) = queries.storage.wall_tiles.get(ctx.task_entity) {

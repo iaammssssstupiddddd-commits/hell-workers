@@ -71,6 +71,15 @@ Perceive → Update → Decide → Execute
 
 各フェーズ間には `ApplyDeferred` が配置され、変更が次のフェーズで確実に反映されます。
 
+## タスク割り当て・物流・UIの責務境界
+
+- Familiar 側の `TaskAssignmentRequest` 発行は `task_management::builders::submit_assignment(...)` を経由し、`ReservationShadow` による同一フレーム内の予約整合性を維持する。
+- `TaskAssignmentQueries` は `ReservationAccess` / `DesignationAccess` / `StorageAccess` と `TaskAssignmentReadAccess` に分割し、読み取り系と更新系の境界を明確化する。
+- `apply_task_assignment_requests_system` は「ワーカー受理判定」「idle正規化」「予約適用」「DeliveringTo付与」「イベント発火」の責務に分けて拡張する。
+- `pathfinding_system` は既存パス再利用・再探索・休憩所フォールバック・到達不能時クリーンアップの補助関数群で構成し、挙動差分を局所化する。
+- `transport_request::producer` の floor/wall 搬入同期は `producer/mod.rs` の共通ヘルパーを利用して重複実装を避ける。
+- UI/Visual の更新責務は `status_display/*` と `dream/ui_particle/*` に分離し、表示更新と演出更新を独立に保守する。
+
 ## 定数管理 (`src/constants/`)
 
 ゲームバランスに関わる全てのマジックナンバーは `src/constants/` にドメイン別に分割されて集約されています。
@@ -102,7 +111,7 @@ Perceive → Update → Decide → Execute
 - **ビジュアル/セリフ**: [gather_haul_visual.md](gather_haul_visual.md) / [speech_system.md](speech_system.md)
 - **AI挙動**: [soul_ai.md](soul_ai.md) / [familiar_ai.md](familiar_ai.md)
 
-## UIアーキテクチャ補足（2026-02 更新）
+## UIアーキテクチャ補足
 - ルート構造:
   - `UiRoot` 配下に `UiMountSlot`（`LeftPanel` / `RightPanel` / `Bottom` / `Overlay` / `TopRight`）を作成
   - 各UIはスロットにマウントしてレイアウト責務を分離

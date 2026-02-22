@@ -3,7 +3,7 @@ use bevy::prelude::*;
 
 pub fn can_reserve_source(
     task_entity: Entity,
-    queries: &crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
+    queries: &crate::systems::familiar_ai::decide::task_management::FamiliarTaskAssignmentQueries,
     shadow: &ReservationShadow,
 ) -> bool {
     let current_reserved = queries
@@ -23,7 +23,7 @@ pub fn can_reserve_source(
 
 pub fn source_not_reserved(
     task_entity: Entity,
-    queries: &crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
+    queries: &crate::systems::familiar_ai::decide::task_management::FamiliarTaskAssignmentQueries,
     shadow: &ReservationShadow,
 ) -> bool {
     queries

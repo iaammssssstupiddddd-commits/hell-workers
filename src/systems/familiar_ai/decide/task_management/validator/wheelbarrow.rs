@@ -8,7 +8,7 @@ use super::reservation::source_not_reserved;
 
 pub fn find_nearest_wheelbarrow(
     task_pos: Vec2,
-    queries: &crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
+    queries: &crate::systems::familiar_ai::decide::task_management::FamiliarTaskAssignmentQueries,
     shadow: &ReservationShadow,
 ) -> Option<Entity> {
     queries

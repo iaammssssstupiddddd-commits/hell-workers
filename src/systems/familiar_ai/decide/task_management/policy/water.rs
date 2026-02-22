@@ -10,7 +10,7 @@ pub(super) fn assign_gather_water(
     task_pos: Vec2,
     already_commanded: bool,
     ctx: &AssignTaskContext<'_>,
-    queries: &mut crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
+    queries: &mut crate::systems::familiar_ai::decide::task_management::FamiliarTaskAssignmentQueries,
     shadow: &mut ReservationShadow,
 ) -> bool {
     let Some((bucket_entity, tank_entity)) = resolve_gather_water_inputs(
@@ -47,7 +47,7 @@ pub(super) fn assign_haul_water_to_mixer(
     task_pos: Vec2,
     already_commanded: bool,
     ctx: &AssignTaskContext<'_>,
-    queries: &mut crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
+    queries: &mut crate::systems::familiar_ai::decide::task_management::FamiliarTaskAssignmentQueries,
     shadow: &mut ReservationShadow,
 ) -> bool {
     let Some((mixer_entity, tank_entity, bucket_entity)) = resolve_haul_water_to_mixer_inputs(

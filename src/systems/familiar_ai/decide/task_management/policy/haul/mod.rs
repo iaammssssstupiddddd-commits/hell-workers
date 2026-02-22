@@ -24,7 +24,7 @@ pub fn assign_haul(
     task_pos: Vec2,
     already_commanded: bool,
     ctx: &AssignTaskContext<'_>,
-    queries: &mut crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
+    queries: &mut crate::systems::familiar_ai::decide::task_management::FamiliarTaskAssignmentQueries,
     shadow: &mut ReservationShadow,
 ) -> bool {
     if blueprint::assign_haul_to_blueprint(task_pos, already_commanded, ctx, queries, shadow) {

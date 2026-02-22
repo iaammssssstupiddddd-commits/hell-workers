@@ -11,7 +11,7 @@ pub fn assign_consolidation_to_stockpile(
     _task_pos: Vec2,
     already_commanded: bool,
     ctx: &AssignTaskContext<'_>,
-    queries: &mut crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
+    queries: &mut crate::systems::familiar_ai::decide::task_management::FamiliarTaskAssignmentQueries,
     shadow: &mut ReservationShadow,
 ) -> bool {
     let Some((receiver, resource_type, donor_cells)) =
