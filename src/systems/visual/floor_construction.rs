@@ -157,6 +157,12 @@ pub fn manage_floor_curing_progress_bars_system(
             continue;
         }
 
+        // Logic側で同フレームに site が完了・despawn される直前のケースを除外する。
+        // ここで ChildOf を新規付与すると、適用時に親不在警告が出ることがある。
+        if site.curing_remaining_secs <= f32::EPSILON {
+            continue;
+        }
+
         curing_sites.insert(site_entity);
         if bar_parents.contains(&site_entity) {
             continue;

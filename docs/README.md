@@ -26,3 +26,4 @@
 - [architecture.md](architecture.md): 全体構造とシステムの依存関係。
 - [DEVELOPMENT.md](DEVELOPMENT.md): AIエージェントおよび開発者向けガイドライン。
 - [plans/README.md](plans/README.md): フェーズ分割した実装計画ドキュメント。
+- [proposals/README.md](proposals/README.md): 提案書一覧とテンプレート。

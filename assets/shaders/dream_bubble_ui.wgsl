@@ -1,7 +1,7 @@
 // Dream泡パーティクル用フラグメントシェーダー（UI空間 / UiMaterial用）
 // ソフトグロー + 虹色屈折 + スペキュラハイライト + リム発光 + ノイズ変形 + バブルクラスター
 
-#import bevy_ui::ui_vertex_output UiVertexOutput
+#import bevy_ui::ui_vertex_output::UiVertexOutput
 #import bevy_render::view::View
 
 @group(0) @binding(0) var<uniform> view: View;
