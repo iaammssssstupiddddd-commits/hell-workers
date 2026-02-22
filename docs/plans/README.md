@@ -1,6 +1,6 @@
 # Plans Index
 
-`docs/plans` の文書ステータス一覧（更新日: 2026-02-20）。
+`docs/plans` の文書ステータス一覧（更新日: 2026-02-22）。
 
 | Document | Status | Notes |
 |---|---|---|
@@ -21,3 +21,4 @@
 | `large-files-refactor-2026-02-16.md` | 提案 | 450行以上の9ファイルを対象に、分割方針と周辺共通化（haul/speech/area selection/spawn/constants）を整理。 |
 | `scaling-performance-bottlenecks-plan.md` | 提案 | `Soul 500 / Familiar 30` を基準に、P0〜P5 ボトルネックを段階導入で解消する実装計画。 |
 | `wall-construction-phase-split-plan-2026-02-19.md` | 提案 | 壁建設を床同等のフェーズ分割へ再編する計画（養生なし・仮設利用維持）。 |
+| `perf-top3-implementation-plan-2026-02-22.md` | 提案 | 直近レビューで特定した上位3件（壁材同期/Familiar委譲/Entity List UI）を優先順で最適化する計画。 |

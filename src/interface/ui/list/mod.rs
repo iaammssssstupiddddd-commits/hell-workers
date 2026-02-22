@@ -26,7 +26,7 @@ pub use resize::{
     EntityListResizeState, entity_list_resize_cursor_system, entity_list_resize_system,
 };
 pub use selection_focus::focus_camera_on_entity;
-pub use sync::sync_entity_list_from_view_model_system;
+pub use sync::{sync_entity_list_from_view_model_system, sync_entity_list_value_rows_system};
 pub(crate) use tree_ops::clear_children;
 pub use view_model::build_entity_list_view_model_system;
 

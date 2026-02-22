@@ -19,6 +19,21 @@ pub fn familiar_state_label(ai_state: &FamiliarAiState) -> &'static str {
     }
 }
 
+pub(super) fn familiar_label(
+    familiar: &Familiar,
+    op: &FamiliarOperation,
+    ai_state: &FamiliarAiState,
+    squad_count: usize,
+) -> String {
+    format!(
+        "{} ({}/{}) [{}]",
+        familiar.name,
+        squad_count,
+        op.max_controlled_soul,
+        familiar_state_label(ai_state)
+    )
+}
+
 fn task_visual(task: &AssignedTask) -> TaskVisual {
     match task {
         AssignedTask::None => TaskVisual::Idle,
@@ -54,7 +69,7 @@ fn stress_bucket(stress: f32) -> StressBucket {
     }
 }
 
-fn build_soul_view_model(
+pub(super) fn build_soul_view_model(
     soul_entity: Entity,
     soul: &DamnedSoul,
     task: &AssignedTask,
@@ -110,13 +125,7 @@ fn build_familiar_row_view_model(
 
     FamiliarRowViewModel {
         entity: fam_entity,
-        label: format!(
-            "{} ({}/{}) [{}]",
-            familiar.name,
-            squad_count,
-            op.max_controlled_soul,
-            familiar_state_label(ai_state)
-        ),
+        label: familiar_label(familiar, op, ai_state, squad_count),
         is_folded,
         show_empty,
         souls,

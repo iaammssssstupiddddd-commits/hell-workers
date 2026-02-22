@@ -13,6 +13,7 @@ use std::collections::HashMap;
 
 use crate::systems::familiar_ai::FamiliarSoulQuery;
 
+pub(crate) use assignment_loop::take_reachable_with_cache_calls;
 use assignment_loop::try_assign_for_workers;
 use members::collect_idle_members;
 

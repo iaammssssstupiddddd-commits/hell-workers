@@ -6,13 +6,13 @@ use crate::interface::selection::{
     cleanup_selection_references_system, clear_companion_state_outside_build_mode,
     update_hover_entity, update_selection_indicator,
 };
+use crate::interface::ui::vignette::update_vignette_system;
 use crate::interface::ui::{
     context_menu_system, menu_visibility_system, task_summary_ui_system, ui_interaction_system,
     ui_keyboard_shortcuts_system, update_area_edit_preview_ui_system,
-    update_dream_loss_popup_ui_system, update_dream_pool_display_system,
-    update_fps_display_system, update_mode_text_system, update_operation_dialog_system, update_speed_button_highlight_system,
+    update_dream_loss_popup_ui_system, update_dream_pool_display_system, update_fps_display_system,
+    update_mode_text_system, update_operation_dialog_system, update_speed_button_highlight_system,
 };
-use crate::interface::ui::vignette::update_vignette_system;
 use crate::systems::GameSystemSet;
 use crate::systems::time::game_time_system;
 use bevy::prelude::*;
@@ -51,7 +51,6 @@ impl Plugin for UiCorePlugin {
                 update_dream_pool_display_system,
                 update_dream_loss_popup_ui_system,
                 update_speed_button_highlight_system,
-                update_area_edit_preview_ui_system, // Added here
                 update_vignette_system, // Added here
             )
                 .in_set(GameSystemSet::Interface),
