@@ -55,6 +55,8 @@ pub struct GameAssets {
     pub wall_t_left: Handle<Image>,
     pub wall_t_right: Handle<Image>,
     pub wall_cross: Handle<Image>,
+    pub door_closed: Handle<Image>,
+    pub door_open: Handle<Image>,
     pub mud_floor: Handle<Image>,
 
     // Base Resources

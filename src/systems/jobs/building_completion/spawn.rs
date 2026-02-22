@@ -1,4 +1,4 @@
-use super::super::{Blueprint, Building, BuildingType, ProvisionalWall};
+use super::super::{Blueprint, Building, BuildingType, Door, DoorState, ProvisionalWall};
 use crate::assets::GameAssets;
 use crate::constants::TILE_SIZE;
 use bevy::prelude::*;
@@ -12,6 +12,7 @@ pub(super) fn spawn_completed_building(
     let is_provisional = !bp.is_fully_complete();
     let (sprite_image, custom_size) = match bp.kind {
         BuildingType::Wall => (game_assets.wall_isolated.clone(), Vec2::splat(TILE_SIZE)),
+        BuildingType::Door => (game_assets.door_closed.clone(), Vec2::splat(TILE_SIZE)),
         BuildingType::Floor => (game_assets.mud_floor.clone(), Vec2::splat(TILE_SIZE)),
         BuildingType::Tank => (game_assets.tank_empty.clone(), Vec2::splat(TILE_SIZE * 2.0)),
         BuildingType::MudMixer => (game_assets.mud_mixer.clone(), Vec2::splat(TILE_SIZE * 2.0)),
@@ -58,6 +59,12 @@ pub(super) fn spawn_completed_building(
         commands
             .entity(building_entity)
             .insert(ProvisionalWall::default());
+    }
+
+    if bp.kind == BuildingType::Door {
+        commands.entity(building_entity).insert(Door {
+            state: DoorState::Closed,
+        });
     }
 
     building_entity

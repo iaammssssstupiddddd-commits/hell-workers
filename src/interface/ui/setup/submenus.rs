@@ -31,6 +31,7 @@ fn spawn_architect_submenu(
 ) {
     let building_items = [
         ("Wall", BuildingType::Wall),
+        ("Door", BuildingType::Door),
         ("Tank", BuildingType::Tank),
         ("MudMixer", BuildingType::MudMixer),
         ("RestArea", BuildingType::RestArea),

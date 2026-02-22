@@ -35,6 +35,7 @@ pub fn context_menu_system(
             With<crate::systems::jobs::Blueprint>,
         )>,
     >,
+    q_doors: Query<&crate::systems::jobs::Door>,
     q_resources: Query<
         (),
         Or<(
@@ -182,6 +183,15 @@ pub fn context_menu_system(
                         &game_assets,
                         &theme,
                     );
+                    if let Ok(door) = q_doors.get(entity) {
+                        let (label, action) = if door.state == crate::systems::jobs::DoorState::Locked
+                        {
+                            ("Unlock Door", MenuAction::ToggleDoorLock(entity))
+                        } else {
+                            ("Lock Door", MenuAction::ToggleDoorLock(entity))
+                        };
+                        spawn_menu_item(menu, label, action, &game_assets, &theme);
+                    }
                 }
                 ContextTarget::Resource(entity) => {
                     spawn_menu_item(

@@ -84,6 +84,8 @@ pub fn create_game_assets(asset_server: &AssetServer, images: &mut Assets<Image>
         wall_t_left: asset_server.load("textures/buildings/wooden_wall/wall_t_left.png"),
         wall_t_right: asset_server.load("textures/buildings/wooden_wall/wall_t_right.png"),
         wall_cross: asset_server.load("textures/buildings/wooden_wall/wall_cross.png"),
+        door_closed: asset_server.load("textures/buildings/door/door_closed.png"),
+        door_open: asset_server.load("textures/buildings/door/door_open.png"),
         mud_floor: asset_server.load("textures/terrain/mud_floor.png"),
         wood: asset_server.load("textures/ui/wood_small.png"),
         tree: asset_server.load("textures/environment/tree/tree_1.png"),

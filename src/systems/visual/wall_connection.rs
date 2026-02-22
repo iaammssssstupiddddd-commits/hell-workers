@@ -36,18 +36,18 @@ fn wall_connections_system(
 ) {
     let mut update_targets = HashSet::new();
 
-    // 1. 新しく完成した壁があれば、その座標と周囲を更新対象に追加
+    // 1. 新しく完成した壁/扉があれば、その座標と周囲を更新対象に追加
     for (_entity, transform, building) in q_new_buildings.iter() {
-        if building.kind == BuildingType::Wall {
+        if matches!(building.kind, BuildingType::Wall | BuildingType::Door) {
             let (x, y) = WorldMap::world_to_grid(transform.translation.truncate());
             add_neighbors_to_update(x, y, &mut update_targets);
         }
     }
 
-    // 2. 新しく配置された設計図があれば、その座標と周囲を更新対象に追加
+    // 2. 新しく配置された壁/扉の設計図があれば、その座標と周囲を更新対象に追加
     for (_entity, _transform, blueprint) in q_new_blueprints.iter() {
         // Blueprint::kind を確認
-        if blueprint.kind == BuildingType::Wall {
+        if matches!(blueprint.kind, BuildingType::Wall | BuildingType::Door) {
             for &(gx, gy) in &blueprint.occupied_grids {
                 add_neighbors_to_update(gx, gy, &mut update_targets);
             }
@@ -63,6 +63,15 @@ fn wall_connections_system(
         // マップからその座標にあるエンティティを取得
         if let Some(&entity) = world_map.buildings.get(&(gx, gy)) {
             if is_wall(gx, gy, &world_map, &q_walls_check) {
+                let is_plain_wall = q_walls_check.get(entity).ok().is_some_and(
+                    |(building_opt, blueprint_opt)| {
+                        building_opt.is_some_and(|b| b.kind == BuildingType::Wall)
+                            || blueprint_opt.is_some_and(|bp| bp.kind == BuildingType::Wall)
+                    },
+                );
+                if !is_plain_wall {
+                    continue;
+                }
                 if let Ok(mut sprite) = q_sprites.get_mut(entity) {
                     update_wall_sprite(
                         entity,
@@ -211,10 +220,10 @@ fn is_wall(
     if let Some(&entity) = world_map.buildings.get(&(x, y)) {
         if let Ok((building_opt, blueprint_opt)) = q_walls_check.get(entity) {
             if let Some(b) = building_opt {
-                return b.kind == BuildingType::Wall;
+                return matches!(b.kind, BuildingType::Wall | BuildingType::Door);
             }
             if let Some(bp) = blueprint_opt {
-                return bp.kind == BuildingType::Wall;
+                return matches!(bp.kind, BuildingType::Wall | BuildingType::Door);
             }
         }
     }

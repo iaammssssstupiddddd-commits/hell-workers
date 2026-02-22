@@ -8,8 +8,8 @@ use crate::interface::selection::{
 };
 use crate::interface::ui::vignette::update_vignette_system;
 use crate::interface::ui::{
-    context_menu_system, menu_visibility_system, task_summary_ui_system, ui_interaction_system,
-    ui_keyboard_shortcuts_system, update_area_edit_preview_ui_system,
+    context_menu_system, door_lock_action_system, menu_visibility_system, task_summary_ui_system,
+    ui_interaction_system, ui_keyboard_shortcuts_system, update_area_edit_preview_ui_system,
     update_dream_loss_popup_ui_system, update_dream_pool_display_system, update_fps_display_system,
     update_mode_text_system, update_operation_dialog_system, update_speed_button_highlight_system,
 };
@@ -32,6 +32,7 @@ impl Plugin for UiCorePlugin {
                 floor_placement_system.run_if(in_state(PlayMode::FloorPlace)),
                 ui_keyboard_shortcuts_system,
                 ui_interaction_system,
+                door_lock_action_system,
                 menu_visibility_system,
                 update_mode_text_system,
                 update_area_edit_preview_ui_system,

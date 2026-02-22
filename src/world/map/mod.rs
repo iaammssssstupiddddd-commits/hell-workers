@@ -11,6 +11,7 @@ pub use layout::{
 pub use spawn::{generate_fixed_river_tiles, spawn_map};
 
 use crate::constants::*;
+use crate::systems::jobs::DoorState;
 use bevy::prelude::*;
 use std::collections::{HashMap, HashSet};
 
@@ -57,6 +58,8 @@ pub struct WorldMap {
     pub tiles: Vec<TerrainType>,
     pub tile_entities: Vec<Option<Entity>>,
     pub buildings: HashMap<(i32, i32), Entity>,
+    pub doors: HashMap<(i32, i32), Entity>,
+    pub door_states: HashMap<(i32, i32), DoorState>,
     pub stockpiles: HashMap<(i32, i32), Entity>,
     pub bridged_tiles: HashSet<(i32, i32)>,
     pub obstacles: Vec<bool>,
@@ -69,6 +72,8 @@ impl Default for WorldMap {
             tiles: vec![TerrainType::Grass; size],
             tile_entities: vec![None; size],
             buildings: HashMap::new(),
+            doors: HashMap::new(),
+            door_states: HashMap::new(),
             stockpiles: HashMap::new(),
             bridged_tiles: HashSet::new(),
             obstacles: vec![false; size],
@@ -97,6 +102,9 @@ impl WorldMap {
             Some(i) => i,
             None => return false,
         };
+        if let Some(state) = self.door_states.get(&(x, y)) {
+            return *state != DoorState::Locked;
+        }
         if self.obstacles[idx] {
             return false;
         }
@@ -122,6 +130,37 @@ impl WorldMap {
     pub fn remove_obstacle(&mut self, x: i32, y: i32) {
         if let Some(idx) = self.pos_to_idx(x, y) {
             self.obstacles[idx] = false;
+        }
+    }
+
+    pub fn add_door(&mut self, x: i32, y: i32, door_entity: Entity, state: DoorState) {
+        self.doors.insert((x, y), door_entity);
+        self.door_states.insert((x, y), state);
+    }
+
+    pub fn remove_door(&mut self, x: i32, y: i32) {
+        self.doors.remove(&(x, y));
+        self.door_states.remove(&(x, y));
+    }
+
+    pub fn set_door_state(&mut self, x: i32, y: i32, state: DoorState) {
+        if self.doors.contains_key(&(x, y)) {
+            self.door_states.insert((x, y), state);
+        }
+    }
+
+    pub fn door_entity(&self, x: i32, y: i32) -> Option<Entity> {
+        self.doors.get(&(x, y)).copied()
+    }
+
+    pub fn door_state(&self, x: i32, y: i32) -> Option<DoorState> {
+        self.door_states.get(&(x, y)).copied()
+    }
+
+    pub fn get_door_cost(&self, x: i32, y: i32) -> i32 {
+        match self.door_states.get(&(x, y)).copied() {
+            Some(DoorState::Closed) => DOOR_OPEN_COST,
+            _ => 0,
         }
     }
 
