@@ -21,7 +21,7 @@ use crate::systems::logistics::transport_request::{
     TransportDemand, TransportPolicy, TransportPriority, TransportRequest, TransportRequestKind,
     TransportRequestMetrics, TransportRequestState,
 };
-use crate::systems::spatial::{FloorConstructionSpatialGrid, ResourceSpatialGrid, SpatialGridOps};
+use crate::systems::spatial::{FloorConstructionSpatialGrid, ResourceSpatialGrid};
 use std::collections::HashMap;
 use std::time::Instant;
 
@@ -305,26 +305,15 @@ pub fn floor_material_delivery_sync_system(
             FloorConstructionPhase::Curing => continue,
         };
 
-        let mut nearby_resources = Vec::new();
-        for entity in resource_grid.get_nearby_in_radius(site.material_center, pickup_radius) {
-            let Ok((_, transform, visibility, resource_item, stored_in_opt)) =
-                q_resources.get(entity)
-            else {
-                continue;
-            };
-            resources_scanned += 1;
-            if *visibility != Visibility::Hidden
-                && stored_in_opt.is_none()
-                && resource_item.0 == target_resource
-                && transform
-                    .translation
-                    .truncate()
-                    .distance_squared(site.material_center)
-                    <= pickup_radius_sq
-            {
-                nearby_resources.push(entity);
-            }
-        }
+        let mut nearby_resources = super::collect_nearby_resource_entities(
+            site.material_center,
+            pickup_radius,
+            pickup_radius_sq,
+            target_resource,
+            &resource_grid,
+            &q_resources,
+            &mut resources_scanned,
+        );
 
         if nearby_resources.is_empty() {
             continue;

@@ -13,7 +13,10 @@ pub mod wheelbarrow;
 
 use crate::systems::command::TaskArea;
 use bevy::math::Vec2;
-use bevy::prelude::Entity;
+use bevy::prelude::{Entity, Query, Transform, Visibility};
+
+use crate::systems::logistics::{ResourceItem, ResourceType};
+use crate::systems::spatial::{ResourceSpatialGrid, SpatialGridOps};
 
 pub(crate) fn find_owner_familiar(
     pos: Vec2,
@@ -28,4 +31,37 @@ pub(crate) fn find_owner_familiar(
             d1.partial_cmp(&d2).unwrap_or(std::cmp::Ordering::Equal)
         })
         .map(|(entity, area)| (*entity, area))
+}
+
+pub(crate) fn collect_nearby_resource_entities(
+    center: Vec2,
+    pickup_radius: f32,
+    pickup_radius_sq: f32,
+    target_resource: ResourceType,
+    resource_grid: &ResourceSpatialGrid,
+    q_resources: &Query<(
+        Entity,
+        &Transform,
+        &Visibility,
+        &ResourceItem,
+        Option<&crate::relationships::StoredIn>,
+    )>,
+    resources_scanned: &mut u32,
+) -> Vec<Entity> {
+    let mut nearby_resources = Vec::new();
+    for entity in resource_grid.get_nearby_in_radius(center, pickup_radius) {
+        let Ok((_, transform, visibility, resource_item, stored_in_opt)) = q_resources.get(entity)
+        else {
+            continue;
+        };
+        *resources_scanned = resources_scanned.saturating_add(1);
+        if *visibility != Visibility::Hidden
+            && stored_in_opt.is_none()
+            && resource_item.0 == target_resource
+            && transform.translation.truncate().distance_squared(center) <= pickup_radius_sq
+        {
+            nearby_resources.push(entity);
+        }
+    }
+    nearby_resources
 }

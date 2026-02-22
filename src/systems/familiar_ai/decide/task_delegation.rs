@@ -135,6 +135,8 @@ pub fn familiar_task_delegation_system(params: FamiliarAiTaskDelegationParams) {
     ) = crate::systems::familiar_ai::decide::task_management::take_source_selector_scan_snapshot();
     let source_selector_scanned_items = source_selector_cache_build_scanned_items
         .saturating_add(source_selector_candidate_scanned_items);
+    let reachable_with_cache_calls =
+        crate::systems::familiar_ai::decide::task_management::take_reachable_with_cache_calls();
 
     perf_metrics.latest_elapsed_ms = started_at.elapsed().as_secs_f32() * 1000.0;
     perf_metrics.source_selector_calls = perf_metrics
@@ -149,6 +151,9 @@ pub fn familiar_task_delegation_system(params: FamiliarAiTaskDelegationParams) {
     perf_metrics.source_selector_scanned_items = perf_metrics
         .source_selector_scanned_items
         .saturating_add(source_selector_scanned_items);
+    perf_metrics.reachable_with_cache_calls = perf_metrics
+        .reachable_with_cache_calls
+        .saturating_add(reachable_with_cache_calls);
     perf_metrics.familiars_processed = perf_metrics
         .familiars_processed
         .saturating_add(familiars_processed);
@@ -161,6 +166,7 @@ pub fn familiar_task_delegation_system(params: FamiliarAiTaskDelegationParams) {
         perf_metrics.source_selector_cache_build_scanned_items = 0;
         perf_metrics.source_selector_candidate_scanned_items = 0;
         perf_metrics.source_selector_scanned_items = 0;
+        perf_metrics.reachable_with_cache_calls = 0;
         perf_metrics.familiars_processed = 0;
     }
 }

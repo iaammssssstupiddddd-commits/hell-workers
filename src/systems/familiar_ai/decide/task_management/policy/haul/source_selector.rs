@@ -76,6 +76,16 @@ fn ensure_frame_cache<'w, 's>(queries: &TaskQueries<'w, 's>, shadow: &mut Reserv
         }
     }
 
+    // stockpile 内アイテムの探索を高速化するため、(resource_type, cell) ごとに索引化する。
+    for (entity, resource_item, in_stockpile) in queries.stored_items_query.iter() {
+        mark_cache_build_scanned_item();
+        cache
+            .by_resource_stockpile
+            .entry((resource_item.0, in_stockpile.0))
+            .or_insert_with(Vec::new)
+            .push(entity);
+    }
+
     shadow.source_selector_cache = Some(cache);
 }
 
@@ -100,6 +110,19 @@ fn cached_ground_items_by_resource_owner(
         .source_selector_cache
         .as_ref()
         .and_then(|cache| cache.by_resource_owner_ground.get(&(resource_type, owner)))
+        .map(Vec::as_slice)
+        .unwrap_or(&[])
+}
+
+fn cached_stockpile_items_by_resource(
+    resource_type: ResourceType,
+    stockpile: Entity,
+    shadow: &ReservationShadow,
+) -> &[Entity] {
+    shadow
+        .source_selector_cache
+        .as_ref()
+        .and_then(|cache| cache.by_resource_stockpile.get(&(resource_type, stockpile)))
         .map(Vec::as_slice)
         .unwrap_or(&[])
 }
@@ -201,9 +224,10 @@ pub fn find_consolidation_source_item<'w, 's>(
     resource_type: ResourceType,
     donor_cells: &[Entity],
     queries: &TaskQueries<'w, 's>,
-    shadow: &ReservationShadow,
+    shadow: &mut ReservationShadow,
 ) -> Option<(Entity, Vec2)> {
     mark_source_selector_call();
+    ensure_frame_cache(queries, shadow);
     // ドナーセルごとに格納数を取得してソート（最少格納優先）
     let mut donor_with_count: Vec<(Entity, usize)> = donor_cells
         .iter()
@@ -223,19 +247,12 @@ pub fn find_consolidation_source_item<'w, 's>(
 
     // 最少格納セルから順にアイテムを探す
     for (cell, _) in donor_with_count {
-        let found = queries
-            .stored_items_query
+        let source_item = cached_stockpile_items_by_resource(resource_type, cell, shadow)
             .iter()
+            .copied()
             .inspect(|_| mark_candidate_scanned_item())
-            .filter(|(_, res, in_stockpile)| res.0 == resource_type && in_stockpile.0 == cell)
-            .filter(|(entity, _, _)| {
-                crate::systems::familiar_ai::decide::task_management::validator::source_not_reserved(
-                    *entity, queries, shadow,
-                )
-            })
-            .next();
-
-        if let Some((entity, _, _)) = found {
+            .find(|entity| source_not_reserved(*entity, queries, shadow));
+        if let Some(entity) = source_item {
             // アイテムの位置はセルの位置を使用
             let pos = queries
                 .storage
