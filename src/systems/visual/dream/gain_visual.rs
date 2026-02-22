@@ -60,7 +60,8 @@ pub fn dream_popup_spawn_system(
 
     let mut target_pos = Vec2::new(viewport_size.x - 80.0, 40.0);
 
-    if let Some(entity) = ui_nodes.get_slot(crate::interface::ui::components::UiSlot::DreamPoolIcon) {
+    if let Some(entity) = ui_nodes.get_slot(crate::interface::ui::components::UiSlot::DreamPoolIcon)
+    {
         if let Ok((computed, transform)) = q_ui_transform.get(entity) {
             let center = transform.translation * computed.inverse_scale_factor();
             target_pos = center;

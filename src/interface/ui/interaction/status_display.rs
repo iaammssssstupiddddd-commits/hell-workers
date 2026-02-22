@@ -363,28 +363,30 @@ pub fn update_dream_pool_display_system(
         } else if delta < -0.1 {
             // 消費時はアイコンから上に浮かび上がるテキストを発生させる
             if let Some(icon_entity) = ui_nodes.get_slot(UiSlot::DreamPoolIcon) {
-                let popup = commands.spawn((
-                    Node {
-                        position_type: PositionType::Absolute,
-                        left: Val::Px(-30.0),
-                        top: Val::Px(0.0),
-                        ..default()
-                    },
-                    Text::new(format!("{:.1}", delta)),
-                    TextFont {
-                        font: assets.font_ui.clone(),
-                        font_size: theme.typography.font_size_clock,
-                        ..default()
-                    },
-                    TextColor(theme.colors.task_high_warning),
-                    DreamLossPopupUi {
-                        lifetime: 1.5,
-                        max_lifetime: 1.5,
-                        start_y: 0.0,
-                    },
-                    GlobalZIndex(10050),
-                    Name::new("DreamLossPopup"),
-                )).id();
+                let popup = commands
+                    .spawn((
+                        Node {
+                            position_type: PositionType::Absolute,
+                            left: Val::Px(-30.0),
+                            top: Val::Px(0.0),
+                            ..default()
+                        },
+                        Text::new(format!("{:.1}", delta)),
+                        TextFont {
+                            font: assets.font_ui.clone(),
+                            font_size: theme.typography.font_size_clock,
+                            ..default()
+                        },
+                        TextColor(theme.colors.task_high_warning),
+                        DreamLossPopupUi {
+                            lifetime: 1.5,
+                            max_lifetime: 1.5,
+                            start_y: 0.0,
+                        },
+                        GlobalZIndex(10050),
+                        Name::new("DreamLossPopup"),
+                    ))
+                    .id();
                 commands.entity(icon_entity).add_child(popup);
             }
         }

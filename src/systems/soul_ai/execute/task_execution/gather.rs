@@ -174,11 +174,15 @@ pub fn handle_gather_task(
                             ctx.soul_entity,
                             crate::constants::ROCK_DROP_AMOUNT
                         );
-                        commands.entity(ctx.soul_entity).remove::<crate::relationships::WorkingOn>();
+                        commands
+                            .entity(ctx.soul_entity)
+                            .remove::<crate::relationships::WorkingOn>();
                         commands.entity(target).despawn();
                     } else {
                         // その他（デフォルト）は即Despawn
-                        commands.entity(ctx.soul_entity).remove::<crate::relationships::WorkingOn>();
+                        commands
+                            .entity(ctx.soul_entity)
+                            .remove::<crate::relationships::WorkingOn>();
                         commands.entity(target).despawn();
                     }
 

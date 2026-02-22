@@ -14,6 +14,7 @@ use crate::systems::soul_ai::visual::gathering::{
 };
 use crate::systems::soul_ai::visual::idle::idle_visual_system;
 use crate::systems::soul_ai::visual::vitals::familiar_hover_visualization_system;
+use crate::systems::utils::floating_text::update_all_floating_texts_system;
 use crate::systems::visual::blueprint::{
     attach_blueprint_visual_system, blueprint_pulse_animation_system,
     blueprint_scale_animation_system, building_bounce_animation_system,
@@ -25,6 +26,7 @@ use crate::systems::visual::blueprint::{
     update_progress_bar_fill_system as bp_update_progress_bar_fill_system,
     update_worker_indicators_system,
 };
+use crate::systems::visual::dream::{DreamBubbleMaterial, DreamBubbleUiMaterial};
 use crate::systems::visual::dream::{
     dream_icon_absorb_system, dream_particle_spawn_system, dream_particle_update_system,
     dream_popup_spawn_system, dream_popup_update_system, dream_trail_ghost_update_system,
@@ -51,14 +53,10 @@ use crate::systems::visual::soul::{
 };
 use crate::systems::visual::speech::SpeechPlugin;
 use crate::systems::visual::tank::update_tank_visual_system;
-use crate::systems::visual::dream::{
-    DreamBubbleMaterial, DreamBubbleUiMaterial,
-};
 use crate::systems::visual::task_area_visual::{
     TaskAreaMaterial, update_task_area_material_system,
 };
 use crate::systems::visual::wall_connection::WallConnectionPlugin;
-use crate::systems::utils::floating_text::update_all_floating_texts_system;
 use crate::systems::visual::wall_construction::{
     manage_wall_progress_bars_system, update_wall_progress_bars_system,
     update_wall_tile_visuals_system,

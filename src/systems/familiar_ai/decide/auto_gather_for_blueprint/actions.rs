@@ -11,7 +11,7 @@ use crate::systems::logistics::ResourceType;
 use crate::world::map::WorldMap;
 use crate::world::pathfinding::PathfindingContext;
 
-use super::AutoGatherForBlueprint;
+use super::AutoGatherDesignation;
 use super::helpers::{
     OwnerInfo, STAGE_COUNT, SourceCandidate, SupplyBucket, compare_auto_idle_for_cleanup,
     is_reachable, resource_rank, work_type_for_resource,
@@ -29,7 +29,7 @@ fn assign_auto_gather_designation(
         ManagedBy(owner),
         TaskSlots::new(1),
         Priority(BLUEPRINT_AUTO_GATHER_PRIORITY),
-        AutoGatherForBlueprint {
+        AutoGatherDesignation {
             owner,
             resource_type,
         },
@@ -42,7 +42,7 @@ fn clear_auto_gather_designation(commands: &mut Commands, source: Entity) {
         TaskSlots,
         Priority,
         ManagedBy,
-        AutoGatherForBlueprint,
+        AutoGatherDesignation,
     )>();
 }
 
@@ -122,7 +122,7 @@ pub(super) fn cleanup_auto_gather_markers(
     target_auto_idle_count: &HashMap<(Entity, ResourceType), u32>,
 ) {
     for entity in stale_marker_only {
-        commands.entity(entity).remove::<AutoGatherForBlueprint>();
+        commands.entity(entity).remove::<AutoGatherDesignation>();
     }
 
     for entity in invalid_auto_idle {
