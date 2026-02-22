@@ -46,6 +46,17 @@ fn site_phase_fill_color(phase: WallConstructionPhase) -> Color {
     }
 }
 
+fn should_show_site_progress(site: &WallConstructionSite) -> bool {
+    if site.tiles_total == 0 {
+        return false;
+    }
+
+    match site.phase {
+        WallConstructionPhase::Framing => site.tiles_framed < site.tiles_total,
+        WallConstructionPhase::Coating => site.tiles_coated < site.tiles_total,
+    }
+}
+
 /// Update wall tile sprite color based on construction state.
 pub fn update_wall_tile_visuals_system(
     mut q_tiles: Query<(&WallTileBlueprint, &mut Sprite), Changed<WallTileBlueprint>>,
@@ -96,6 +107,10 @@ pub fn manage_wall_progress_bars_system(
     }
 
     for (site_entity, site_transform, site) in q_sites.iter() {
+        if !should_show_site_progress(site) {
+            continue;
+        }
+
         active_sites.insert(site_entity);
         if bar_parents.contains(&site_entity) {
             continue;
