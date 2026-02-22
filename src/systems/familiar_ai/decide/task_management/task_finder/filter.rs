@@ -71,6 +71,18 @@ pub(super) fn candidate_snapshot(
     let is_issued_by_me = issued_by.map(|ib| ib.0) == Some(fam_entity);
     let pos = transform.translation.truncate();
     let current_workers = workers.map(|w| w.len()).unwrap_or(0);
+    let is_transport_request = queries.transport_requests.get(entity).is_ok();
+    let requires_transport_request = matches!(
+        designation.work_type,
+        WorkType::Haul
+            | WorkType::HaulToMixer
+            | WorkType::GatherWater
+            | WorkType::HaulWaterToMixer
+            | WorkType::WheelbarrowHaul
+    );
+    if requires_transport_request && !is_transport_request {
+        return None;
+    }
     let can_take_over_from_overlapping_owner = issued_by
         .filter(|issuer| issuer.0 != fam_entity)
         .is_some_and(|issuer| {
@@ -119,18 +131,6 @@ pub(super) fn candidate_snapshot(
 
     let mut target_grid = WorldMap::world_to_grid(pos);
     let mut target_walkable = world_map.is_walkable(target_grid.0, target_grid.1);
-    let is_transport_request = queries.transport_requests.get(entity).is_ok();
-    let requires_transport_request = matches!(
-        designation.work_type,
-        WorkType::Haul
-            | WorkType::HaulToMixer
-            | WorkType::GatherWater
-            | WorkType::HaulWaterToMixer
-            | WorkType::WheelbarrowHaul
-    );
-    if requires_transport_request && !is_transport_request {
-        return None;
-    }
 
     let is_valid = match designation.work_type {
         WorkType::Chop

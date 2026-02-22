@@ -10,6 +10,7 @@ mod task_finder;
 mod validator;
 
 pub use delegation::TaskManager;
+pub(crate) use delegation::take_reachable_with_cache_calls;
 pub(crate) use policy::take_source_selector_scan_snapshot;
 pub use task_assigner::AssignTaskContext;
 pub use task_assigner::ReservationShadow;

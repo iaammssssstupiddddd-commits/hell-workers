@@ -20,6 +20,7 @@ pub(crate) struct CachedSourceItem {
 pub(crate) struct SourceSelectorFrameCache {
     pub by_resource: HashMap<ResourceType, Vec<CachedSourceItem>>,
     pub by_resource_owner_ground: HashMap<(ResourceType, Option<Entity>), Vec<CachedSourceItem>>,
+    pub by_resource_stockpile: HashMap<(ResourceType, Entity), Vec<Entity>>,
 }
 
 /// Thinkフェーズ内の予約増分を追跡する

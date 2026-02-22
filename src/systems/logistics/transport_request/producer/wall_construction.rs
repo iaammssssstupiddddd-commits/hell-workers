@@ -19,9 +19,11 @@ use crate::systems::jobs::{Designation, Priority, TaskSlots, WorkType};
 use crate::systems::logistics::ResourceType;
 use crate::systems::logistics::transport_request::{
     TransportDemand, TransportPolicy, TransportPriority, TransportRequest, TransportRequestKind,
-    TransportRequestState,
+    TransportRequestMetrics, TransportRequestState,
 };
+use crate::systems::spatial::ResourceSpatialGrid;
 use std::collections::HashMap;
+use std::time::Instant;
 
 fn to_u32_saturating(value: usize) -> u32 {
     u32::try_from(value).unwrap_or(u32::MAX)
@@ -236,14 +238,21 @@ pub fn wall_material_delivery_sync_system(
         &crate::systems::logistics::ResourceItem,
         Option<&crate::relationships::StoredIn>,
     )>,
+    resource_grid: Res<ResourceSpatialGrid>,
+    mut metrics: ResMut<TransportRequestMetrics>,
 ) {
+    let started_at = Instant::now();
     let pickup_radius = TILE_SIZE * 2.0;
     let pickup_radius_sq = pickup_radius * pickup_radius;
+    let mut sites_processed = 0u32;
+    let mut resources_scanned = 0u32;
+    let mut tiles_scanned = 0u32;
 
     let mut tiles_by_site = HashMap::<Entity, Vec<Entity>>::new();
     {
         let q_tiles_read = q_tiles.p0();
         for (tile_entity, tile) in q_tiles_read.iter() {
+            tiles_scanned += 1;
             tiles_by_site
                 .entry(tile.parent_site)
                 .or_default()
@@ -252,6 +261,7 @@ pub fn wall_material_delivery_sync_system(
     }
 
     for (site_entity, site) in q_sites.iter() {
+        sites_processed += 1;
         let (target_resource, required_amount, waiting_state, ready_state) = match site.phase {
             WallConstructionPhase::Framing => (
                 ResourceType::Wood,
@@ -267,22 +277,15 @@ pub fn wall_material_delivery_sync_system(
             ),
         };
 
-        let mut nearby_resources = Vec::new();
-        for (resource_entity, transform, visibility, resource_item, stored_in_opt) in
-            q_resources.iter()
-        {
-            if *visibility != Visibility::Hidden
-                && stored_in_opt.is_none()
-                && resource_item.0 == target_resource
-                && transform
-                    .translation
-                    .truncate()
-                    .distance_squared(site.material_center)
-                    <= pickup_radius_sq
-            {
-                nearby_resources.push(resource_entity);
-            }
-        }
+        let mut nearby_resources = super::collect_nearby_resource_entities(
+            site.material_center,
+            pickup_radius,
+            pickup_radius_sq,
+            target_resource,
+            &resource_grid,
+            &q_resources,
+            &mut resources_scanned,
+        );
 
         if nearby_resources.is_empty() {
             continue;
@@ -323,6 +326,11 @@ pub fn wall_material_delivery_sync_system(
             }
         }
     }
+
+    metrics.wall_material_sync_sites_processed = sites_processed;
+    metrics.wall_material_sync_resources_scanned = resources_scanned;
+    metrics.wall_material_sync_tiles_scanned = tiles_scanned;
+    metrics.wall_material_sync_elapsed_ms = started_at.elapsed().as_secs_f32() * 1000.0;
 }
 
 /// Assign/remove tile designations based on wall tile state.

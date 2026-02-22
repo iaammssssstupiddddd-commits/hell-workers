@@ -52,6 +52,14 @@ pub struct TransportRequestMetrics {
     pub floor_material_sync_tiles_scanned: u32,
     /// floor material sync システムの実行時間（ms）
     pub floor_material_sync_elapsed_ms: f32,
+    /// wall material sync が処理した Site 数
+    pub wall_material_sync_sites_processed: u32,
+    /// wall material sync が走査した resource 数
+    pub wall_material_sync_resources_scanned: u32,
+    /// wall material sync が走査した tile 数
+    pub wall_material_sync_tiles_scanned: u32,
+    /// wall material sync システムの実行時間（ms）
+    pub wall_material_sync_elapsed_ms: f32,
 }
 
 impl TransportRequestMetrics {

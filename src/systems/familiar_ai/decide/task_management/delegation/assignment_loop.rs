@@ -12,6 +12,7 @@ use crate::world::pathfinding::{self, PathfindingContext};
 use bevy::prelude::*;
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
+use std::sync::atomic::{AtomicU32, Ordering as AtomicOrdering};
 
 use crate::systems::familiar_ai::FamiliarSoulQuery;
 
@@ -20,6 +21,12 @@ const MAX_ASSIGNMENT_DIST_SQ: f32 = (TILE_SIZE * 60.0) * (TILE_SIZE * 60.0);
 const WORKER_SCORE_MAX_DIST_SQ: f32 = (TILE_SIZE * 80.0) * (TILE_SIZE * 80.0);
 const WORKER_PRIORITY_WEIGHT: f32 = 0.65;
 const WORKER_DISTANCE_WEIGHT: f32 = 0.35;
+
+static REACHABLE_WITH_CACHE_CALLS: AtomicU32 = AtomicU32::new(0);
+
+pub(crate) fn take_reachable_with_cache_calls() -> u32 {
+    REACHABLE_WITH_CACHE_CALLS.swap(0, AtomicOrdering::Relaxed)
+}
 
 fn evaluate_reachability(
     worker_grid: (i32, i32),
@@ -54,6 +61,7 @@ fn reachable_with_cache(
     pf_context: &mut PathfindingContext,
     cache: &mut HashMap<ReachabilityCacheKey, bool>,
 ) -> bool {
+    REACHABLE_WITH_CACHE_CALLS.fetch_add(1, AtomicOrdering::Relaxed);
     let key = (worker_grid, candidate.target_grid);
     if let Some(reachable) = cache.get(&key) {
         return *reachable;
@@ -75,7 +83,7 @@ fn build_worker_candidates(
     scored_candidates: &[ScoredDelegationCandidate],
     worker_pos: Vec2,
     assigned_tasks: &HashSet<Entity>,
-) -> Vec<DelegationCandidate> {
+) -> (Vec<DelegationCandidate>, Vec<(DelegationCandidate, f32)>) {
     let mut ranked: Vec<(DelegationCandidate, f32)> = scored_candidates
         .iter()
         .filter(|entry| !assigned_tasks.contains(&entry.candidate.entity))
@@ -83,8 +91,33 @@ fn build_worker_candidates(
         .map(|entry| (entry.candidate, score_for_worker(entry, worker_pos)))
         .collect();
 
-    ranked.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(Ordering::Equal));
-    ranked.into_iter().map(|(candidate, _)| candidate).collect()
+    if ranked.is_empty() {
+        return (Vec::new(), Vec::new());
+    }
+
+    let top_k = ranked.len().min(TASK_DELEGATION_TOP_K);
+    if ranked.len() <= top_k {
+        ranked.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(Ordering::Equal));
+        return (
+            ranked.into_iter().map(|(candidate, _)| candidate).collect(),
+            Vec::new(),
+        );
+    }
+
+    ranked.select_nth_unstable_by(top_k, |a, b| {
+        b.1.partial_cmp(&a.1).unwrap_or(Ordering::Equal)
+    });
+    let mut top_ranked = ranked[..top_k].to_vec();
+    top_ranked.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(Ordering::Equal));
+    let fallback_ranked = ranked[top_k..].to_vec();
+
+    (
+        top_ranked
+            .into_iter()
+            .map(|(candidate, _)| candidate)
+            .collect(),
+        fallback_ranked,
+    )
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -197,19 +230,16 @@ pub(super) fn try_assign_for_workers(
             continue;
         };
 
-        let worker_candidates =
+        let (top_candidates, mut fallback_ranked) =
             build_worker_candidates(&scored_candidates, worker_pos, &assigned_tasks);
-        if worker_candidates.is_empty() {
+        if top_candidates.is_empty() && fallback_ranked.is_empty() {
             continue;
         }
-
-        let top_k = worker_candidates.len().min(TASK_DELEGATION_TOP_K);
-        let (top_candidates, fallback_candidates) = worker_candidates.split_at(top_k);
 
         if let Some(task_entity) = try_assign_from_candidates(
             worker_entity,
             worker_grid,
-            top_candidates,
+            &top_candidates,
             fam_entity,
             fatigue_threshold,
             task_area_opt,
@@ -228,10 +258,15 @@ pub(super) fn try_assign_for_workers(
             continue;
         }
 
+        fallback_ranked.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(Ordering::Equal));
+        let fallback_candidates: Vec<DelegationCandidate> = fallback_ranked
+            .into_iter()
+            .map(|(candidate, _)| candidate)
+            .collect();
         if let Some(task_entity) = try_assign_from_candidates(
             worker_entity,
             worker_grid,
-            fallback_candidates,
+            &fallback_candidates,
             fam_entity,
             fatigue_threshold,
             task_area_opt,
