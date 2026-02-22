@@ -48,7 +48,7 @@ pub fn handle(
         reservation::release_source(ctx, tank_entity, 1);
 
         // バケツを水入りに変更
-        commands.entity(bucket_entity).insert((
+        commands.entity(bucket_entity).try_insert((
             ResourceItem(ResourceType::BucketWater),
             Sprite {
                 image: game_assets.bucket_water.clone(),

@@ -36,7 +36,7 @@ pub fn handle(
     let new_progress = progress + time.delta_secs() * 0.5;
 
     if new_progress >= 1.0 {
-        commands.entity(bucket_entity).insert((
+        commands.entity(bucket_entity).try_insert((
             ResourceItem(ResourceType::BucketWater),
             Sprite {
                 image: game_assets.bucket_water.clone(),

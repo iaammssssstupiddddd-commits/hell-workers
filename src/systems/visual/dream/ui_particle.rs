@@ -1,7 +1,7 @@
 use super::components::{DreamGainUiParticle, DreamIconAbsorb, DreamTrailGhost};
 use super::dream_bubble_material::DreamBubbleUiMaterial;
 use crate::constants::*;
-use crate::interface::ui::components::{UiNodeRegistry, UiRoot, UiSlot};
+use crate::interface::ui::components::{UiMountSlot, UiNodeRegistry, UiSlot};
 use crate::interface::ui::theme::UiTheme;
 use bevy::prelude::*;
 use bevy::ui_render::prelude::MaterialNode;
@@ -12,7 +12,7 @@ pub fn ui_particle_update_system(
     time: Res<Time>,
     mut materials: ResMut<Assets<DreamBubbleUiMaterial>>,
     ui_nodes: Res<UiNodeRegistry>,
-    q_ui_root: Query<Entity, With<UiRoot>>,
+    q_ui_bubble_layer: Query<(Entity, &UiMountSlot)>,
     mut q_icon: Query<&mut DreamIconAbsorb>,
     mut q_particles: Query<(
         Entity,
@@ -25,7 +25,10 @@ pub fn ui_particle_update_system(
 ) {
     let dt = time.delta_secs();
     let elapsed = time.elapsed_secs();
-    let ui_root = q_ui_root.iter().next();
+    let ui_bubble_layer = q_ui_bubble_layer
+        .iter()
+        .find(|(_, slot)| matches!(slot, UiMountSlot::DreamBubbleLayer))
+        .map(|(e, _)| e);
 
     let viewport_size = q_camera
         .iter()
@@ -306,7 +309,7 @@ pub fn ui_particle_update_system(
         if particle.trail_cooldown <= 0.0 && dist_ratio > 0.15 {
             particle.trail_cooldown = DREAM_UI_TRAIL_INTERVAL;
             let trail_size = base * shrink * DREAM_UI_TRAIL_SIZE_RATIO;
-            if let Some(root) = ui_root {
+            if let Some(root) = ui_bubble_layer {
                 let mut trail_transform = Transform::from_translation(Vec3::ZERO);
                 if speed > 1.0 {
                     let angle = particle.velocity.y.atan2(particle.velocity.x) - std::f32::consts::FRAC_PI_2;
@@ -335,7 +338,7 @@ pub fn ui_particle_update_system(
                             mass: 0.5,
                             velocity_dir: vel_dir,
                         })),
-                        ZIndex(99),
+                        GlobalZIndex(-1),
                         Name::new("DreamTrailGhost"),
                     ))
                     .id();
@@ -519,7 +522,7 @@ pub fn spawn_ui_particle(
                 mass,
                 velocity_dir: Vec2::ZERO,
             })),
-            ZIndex(100),
+            GlobalZIndex(-1),
             Name::new("DreamGainUiParticle"),
         ))
         .id();
