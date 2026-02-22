@@ -96,7 +96,7 @@ pub fn unassign_task<'w, 's, Q: TaskReservationAccess<'w, 's>>(
         for &item_entity in &data.items {
             if let Ok(mut entity_commands) = commands.get_entity(item_entity) {
                 entity_commands.remove::<crate::relationships::LoadedIn>();
-                entity_commands.insert((
+                entity_commands.try_insert((
                     Visibility::Visible,
                     Transform::from_xyz(snapped_pos.x, snapped_pos.y, Z_ITEM_PICKUP),
                 ));
@@ -109,9 +109,9 @@ pub fn unassign_task<'w, 's, Q: TaskReservationAccess<'w, 's>>(
                 crate::systems::visual::haul::WheelbarrowMovement,
             )>();
             if let Some(parking_entity) = queries.belongs_to(data.wheelbarrow) {
-                wb_commands.insert(crate::relationships::ParkedAt(parking_entity));
+                wb_commands.try_insert(crate::relationships::ParkedAt(parking_entity));
             }
-            wb_commands.insert((
+            wb_commands.try_insert((
                 Visibility::Visible,
                 Transform::from_xyz(snapped_pos.x, snapped_pos.y, Z_ITEM_PICKUP),
             ));
@@ -130,7 +130,7 @@ pub fn unassign_task<'w, 's, Q: TaskReservationAccess<'w, 's>>(
                 // argument is Option<&mut Inventory>.
 
                 // クリーンな状態でドロップ（Designation なし）
-                commands.entity(item_entity).insert((
+                commands.entity(item_entity).try_insert((
                     Visibility::Visible,
                     Transform::from_xyz(snapped_pos.x, snapped_pos.y, Z_ITEM_PICKUP),
                 ));

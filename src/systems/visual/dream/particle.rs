@@ -152,7 +152,7 @@ pub fn rest_area_dream_particle_spawn_system(
         &mut DreamVisualState,
     )>,
     q_camera: Query<(&Camera, &GlobalTransform), With<crate::interface::camera::MainCamera>>,
-    q_ui_root: Query<Entity, With<crate::interface::ui::components::UiRoot>>,
+    q_ui_bubble_layer: Query<(Entity, &crate::interface::ui::components::UiMountSlot)>,
     ui_nodes: Res<crate::interface::ui::components::UiNodeRegistry>,
     q_ui_transform: Query<(&ComputedNode, &UiGlobalTransform)>,
     mut ui_bubble_materials: ResMut<Assets<DreamBubbleUiMaterial>>,
@@ -163,7 +163,16 @@ pub fn rest_area_dream_particle_spawn_system(
     let Some((camera, camera_transform)) = q_camera.iter().next() else {
         return;
     };
-    let Some(ui_root) = q_ui_root.iter().next() else {
+    let Some(dream_bubble_layer) = q_ui_bubble_layer
+        .iter()
+        .find(|(_, slot)| {
+            matches!(
+                slot,
+                crate::interface::ui::components::UiMountSlot::DreamBubbleLayer
+            )
+        })
+        .map(|(e, _)| e)
+    else {
         return;
     };
 
@@ -246,7 +255,7 @@ pub fn rest_area_dream_particle_spawn_system(
                 &mut commands,
                 start_pos,
                 target_pos,
-                ui_root,
+                dream_bubble_layer,
                 &mut ui_bubble_materials,
                 0.5 * scale_factor,
             );

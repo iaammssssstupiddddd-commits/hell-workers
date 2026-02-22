@@ -36,8 +36,8 @@ pub fn handle(
     if new_progress >= 1.0 {
         commands
             .entity(bucket_entity)
-            .insert(ResourceItem(ResourceType::BucketEmpty));
-        commands.entity(bucket_entity).insert(Sprite {
+            .try_insert(ResourceItem(ResourceType::BucketEmpty));
+        commands.entity(bucket_entity).try_insert(Sprite {
             image: game_assets.bucket_empty.clone(),
             custom_size: Some(Vec2::splat(TILE_SIZE * 0.6)),
             ..default()

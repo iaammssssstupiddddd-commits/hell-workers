@@ -27,7 +27,7 @@ pub fn attach_resource_visual_system(
     >,
 ) {
     for (entity, sprite) in q_resources.iter() {
-        commands.entity(entity).insert(ResourceVisual {
+        commands.entity(entity).try_insert(ResourceVisual {
             state: ResourceHighlightState::Designated,
             pulse_animation: Some(PulseAnimation {
                 timer: 0.0,
@@ -124,7 +124,7 @@ pub fn cleanup_resource_visual_system(
         if let Some(original_color) = visual.original_color {
             let mut sprite_copy = sprite.clone();
             sprite_copy.color = original_color;
-            commands.entity(entity).insert(sprite_copy);
+            commands.entity(entity).try_insert(sprite_copy);
         }
         commands.entity(entity).remove::<ResourceVisual>();
     }
