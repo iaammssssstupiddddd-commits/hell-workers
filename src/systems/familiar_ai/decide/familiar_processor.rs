@@ -9,8 +9,9 @@ use crate::relationships::{Commanding, ManagedTasks};
 use crate::systems::command::TaskArea;
 use crate::systems::familiar_ai::FamiliarSoulQuery;
 use crate::systems::familiar_ai::decide::task_delegation::ReachabilityCacheKey;
-use crate::systems::familiar_ai::decide::task_management::ReservationShadow;
-use crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries;
+use crate::systems::familiar_ai::decide::task_management::{
+    FamiliarTaskAssignmentQueries, ReservationShadow,
+};
 use crate::systems::spatial::{DesignationSpatialGrid, SpatialGrid, TransportRequestSpatialGrid};
 use bevy::prelude::*;
 use std::collections::HashMap;
@@ -64,7 +65,7 @@ pub struct FamiliarDelegationContext<'a, 'w, 's> {
     pub task_area_opt: Option<&'a TaskArea>,
     pub squad_entities: &'a [Entity],
     pub q_souls: &'a mut FamiliarSoulQuery<'w, 's>,
-    pub task_queries: &'a mut TaskAssignmentQueries<'w, 's>,
+    pub task_queries: &'a mut FamiliarTaskAssignmentQueries<'w, 's>,
     pub designation_grid: &'a DesignationSpatialGrid,
     pub transport_request_grid: &'a TransportRequestSpatialGrid,
     pub managed_tasks: &'a ManagedTasks,

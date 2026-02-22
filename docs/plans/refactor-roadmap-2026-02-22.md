@@ -3,6 +3,12 @@
 更新日: 2026-02-22  
 対象: `src/` 全体（特に `soul_ai` / `familiar_ai` / `logistics` / `interface/ui`）
 
+## 実装ステータス（2026-02-22）
+
+- 状態: 実装完了（回帰テスト追加はスコープ外）
+- 完了フェーズ: Phase 1〜6 + Phase 7（文書整備）
+- 最終検証: `cargo check`
+
 ## 1. 目的
 
 - 依存の密結合を解消し、変更影響範囲を局所化する。
@@ -111,11 +117,21 @@
 
 ### Phase 7: テスト/文書整備（1日）
 
-- 予約・割当の回帰テストを最小追加。
+- [スコープ外] 予約・割当の回帰テストを最小追加。
 - `docs/plans` 索引と実体の整合を整理。
 - 完了条件:
-- 追加テストが通る
+- [スコープ外] 追加テストが通る
 - ドキュメント参照が一貫
+
+## 5.1 実装反映サマリ（2026-02-22）
+
+- Phase 1: `builders/haul.rs` と `builders/water.rs` の発行を `submit_assignment(...)` に統一。
+- Phase 2: `TaskAssignmentQueries` を `TaskAssignmentReadAccess` を含む分離構造へ整理し、`familiar_ai::decide::task_management` 配下の参照を `FamiliarTaskAssignmentQueries` 経由へ集約。
+- Phase 3: `apply_task_assignment_requests_system` を責務別ヘルパー（ワーカー検証 / idle正規化 / 予約適用 / DeliveringTo付与 / イベント発火）へ分解。
+- Phase 4: `pathfinding_system` から再利用判定・再探索・休憩フォールバック・失敗クリーンアップを抽出。
+- Phase 5: floor/wall の producer 共通部を `producer/mod.rs` + `producer/upsert.rs` ヘルパーへ集約（タイル集約・搬入消費・upsert/cleanup/spawn）。
+- Phase 6: `status_display.rs` と `dream/ui_particle.rs` を責務別モジュールへ分割。
+- Phase 7: `docs/plans/README.md` の整合更新と最終ビルド確認を実施（回帰テスト追加はスコープ外）。
 
 ## 6. 検証コマンド
 
@@ -140,6 +156,6 @@ cargo run -- --spawn-souls 500 --spawn-familiars 30 --perf-scenario
 
 ## 8. 完了判定
 
-- Phase 1〜7 の完了条件をすべて満たす。
+- Phase 1〜6 と Phase 7（文書整備）の完了条件を満たす。
 - `cargo check` を最終通過している。
 - 主要フロー（割当/運搬/移動/UI）が既存仕様を満たしている。

@@ -18,16 +18,11 @@ use crate::systems::jobs::wall_construction::{
 use crate::systems::jobs::{Designation, Priority, TaskSlots, WorkType};
 use crate::systems::logistics::ResourceType;
 use crate::systems::logistics::transport_request::{
-    TransportDemand, TransportPolicy, TransportPriority, TransportRequest, TransportRequestKind,
-    TransportRequestMetrics, TransportRequestState,
+    TransportRequest, TransportRequestKind, TransportRequestMetrics,
 };
 use crate::systems::spatial::ResourceSpatialGrid;
 use std::collections::HashMap;
 use std::time::Instant;
-
-fn to_u32_saturating(value: usize) -> u32 {
-    u32::try_from(value).unwrap_or(u32::MAX)
-}
 
 fn request_priority(resource_type: ResourceType) -> u32 {
     match resource_type {
@@ -153,40 +148,24 @@ pub fn wall_construction_auto_haul_system(
             continue;
         }
 
-        let inflight = to_u32_saturating(workers);
+        let inflight = super::to_u32_saturating(workers);
         if let Some((issued_by, slots, site_pos)) = desired_requests.get(&key) {
-            commands.entity(request_entity).try_insert((
-                Transform::from_xyz(site_pos.x, site_pos.y, 0.0),
-                Visibility::Hidden,
-                Designation {
-                    work_type: WorkType::Haul,
-                },
-                crate::relationships::ManagedBy(*issued_by),
-                TaskSlots::new(*slots),
-                Priority(request_priority(key.1)),
+            super::upsert::upsert_transport_request(
+                &mut commands,
+                request_entity,
+                key,
+                *site_pos,
+                *issued_by,
+                *slots,
+                inflight,
+                request_priority(key.1),
                 TargetWallConstructionSite(key.0),
-                TransportRequest {
-                    kind: TransportRequestKind::DeliverToWallConstruction,
-                    anchor: key.0,
-                    resource_type: key.1,
-                    issued_by: *issued_by,
-                    priority: TransportPriority::Normal,
-                    stockpile_group: vec![],
-                },
-                TransportDemand {
-                    desired_slots: *slots,
-                    inflight,
-                },
-                TransportPolicy::default(),
-            ));
+                TransportRequestKind::DeliverToWallConstruction,
+            );
             continue;
         }
 
-        super::upsert::disable_request(&mut commands, request_entity);
-        commands.entity(request_entity).try_insert(TransportDemand {
-            desired_slots: 0,
-            inflight,
-        });
+        super::upsert::disable_request_with_demand(&mut commands, request_entity, inflight);
     }
 
     for (key, (issued_by, slots, site_pos)) in desired_requests {
@@ -194,32 +173,17 @@ pub fn wall_construction_auto_haul_system(
             continue;
         }
 
-        commands.spawn((
-            Name::new("TransportRequest::DeliverToWallConstruction"),
-            Transform::from_xyz(site_pos.x, site_pos.y, 0.0),
-            Visibility::Hidden,
-            Designation {
-                work_type: WorkType::Haul,
-            },
-            crate::relationships::ManagedBy(issued_by),
-            TaskSlots::new(slots),
-            Priority(request_priority(key.1)),
+        super::upsert::spawn_transport_request(
+            &mut commands,
+            "TransportRequest::DeliverToWallConstruction",
+            key,
+            site_pos,
+            issued_by,
+            slots,
+            request_priority(key.1),
             TargetWallConstructionSite(key.0),
-            TransportRequest {
-                kind: TransportRequestKind::DeliverToWallConstruction,
-                anchor: key.0,
-                resource_type: key.1,
-                issued_by,
-                priority: TransportPriority::Normal,
-                stockpile_group: vec![],
-            },
-            TransportDemand {
-                desired_slots: slots,
-                inflight: 0,
-            },
-            TransportRequestState::Pending,
-            TransportPolicy::default(),
-        ));
+            TransportRequestKind::DeliverToWallConstruction,
+        );
     }
 }
 
@@ -248,17 +212,10 @@ pub fn wall_material_delivery_sync_system(
     let mut resources_scanned = 0u32;
     let mut tiles_scanned = 0u32;
 
-    let mut tiles_by_site = HashMap::<Entity, Vec<Entity>>::new();
-    {
+    let tiles_by_site = {
         let q_tiles_read = q_tiles.p0();
-        for (tile_entity, tile) in q_tiles_read.iter() {
-            tiles_scanned += 1;
-            tiles_by_site
-                .entry(tile.parent_site)
-                .or_default()
-                .push(tile_entity);
-        }
-    }
+        super::group_tiles_by_site(&q_tiles_read, |tile| tile.parent_site, &mut tiles_scanned)
+    };
 
     for (site_entity, site) in q_sites.iter() {
         sites_processed += 1;
@@ -295,35 +252,23 @@ pub fn wall_material_delivery_sync_system(
             continue;
         };
 
-        let mut q_tiles_write = q_tiles.p1();
-        for tile_entity in site_tiles.iter().copied() {
-            let Ok(mut tile) = q_tiles_write.get_mut(tile_entity) else {
-                continue;
-            };
-            if tile.state != waiting_state {
-                continue;
-            }
-
-            let delivered = match site.phase {
-                WallConstructionPhase::Framing => &mut tile.wood_delivered,
-                WallConstructionPhase::Coating => &mut tile.mud_delivered,
-            };
-
-            while *delivered < required_amount {
-                let Some(resource_entity) = nearby_resources.pop() else {
-                    break;
-                };
-                commands.entity(resource_entity).try_despawn();
-                *delivered += 1;
-            }
-
-            if *delivered >= required_amount {
-                tile.state = ready_state;
-            }
-
-            if nearby_resources.is_empty() {
-                break;
-            }
+        {
+            let mut q_tiles_write = q_tiles.p1();
+            super::consume_waiting_tile_resources(
+                &mut commands,
+                site_tiles,
+                &mut q_tiles_write,
+                &mut nearby_resources,
+                required_amount,
+                |tile: &WallTileBlueprint| tile.state == waiting_state,
+                |tile: &mut WallTileBlueprint| match site.phase {
+                    WallConstructionPhase::Framing => &mut tile.wood_delivered,
+                    WallConstructionPhase::Coating => &mut tile.mud_delivered,
+                },
+                |tile: &mut WallTileBlueprint| {
+                    tile.state = ready_state;
+                },
+            );
         }
     }
 

@@ -86,6 +86,211 @@ pub struct PathCooldown {
     remaining_frames: u8,
 }
 
+fn try_reuse_existing_path(
+    commands: &mut Commands,
+    entity: Entity,
+    path: &mut Path,
+    destination: Vec2,
+    goal_grid: (i32, i32),
+    world_map: &WorldMap,
+    pf_context: &mut PathfindingContext,
+    pathfind_count: &mut usize,
+    phase_budget_limit: usize,
+) -> bool {
+    // すでに有効なパスがあり、目的地も変わっていないならスキップ
+    //
+    // ただし、移動側が衝突で waypoint をスキップして `current_index == waypoints.len()` になっている場合、
+    // パスが「残っている」扱いで再計算されず、結果的に停止してしまうことがある。
+    // そのため「まだパス追従中」の場合のみスキップする。
+    //
+    // また、パス上に新たな障害物が追加されていないかも確認する。
+    if path.current_index >= path.waypoints.len() || path.waypoints.is_empty() {
+        return false;
+    }
+
+    let Some(last) = path.waypoints.last() else {
+        return false;
+    };
+    let goal_is_walkable = world_map.is_walkable(goal_grid.0, goal_grid.1);
+    let goal_reached_by_path = if goal_is_walkable {
+        last.distance_squared(destination) < 1.0
+    } else {
+        let last_grid = WorldMap::world_to_grid(*last);
+        let dx = (last_grid.0 - goal_grid.0).abs();
+        let dy = (last_grid.1 - goal_grid.1).abs();
+        dx <= 1 && dy <= 1 && !(dx == 0 && dy == 0)
+    };
+
+    if !goal_reached_by_path {
+        return false;
+    }
+
+    let blocked_relative = path.waypoints[path.current_index..].iter().position(|wp| {
+        let grid = WorldMap::world_to_grid(*wp);
+        !world_map.is_walkable(grid.0, grid.1)
+    });
+
+    let Some(rel_idx) = blocked_relative else {
+        return true;
+    };
+
+    if rel_idx > 0 && *pathfind_count < phase_budget_limit {
+        let resume_wp = path.waypoints[path.current_index + rel_idx - 1];
+        let resume_grid = WorldMap::world_to_grid(resume_wp);
+        *pathfind_count += 1;
+
+        if let Some(partial_grid_path) = pathfinding::find_path(
+            world_map,
+            pf_context,
+            resume_grid,
+            goal_grid,
+        )
+        .or_else(|| pathfinding::find_path_to_adjacent(world_map, pf_context, resume_grid, goal_grid))
+        {
+            let mut partial_world_path: Vec<Vec2> = partial_grid_path
+                .iter()
+                .map(|&(x, y)| WorldMap::grid_to_world(x, y))
+                .collect();
+            if partial_grid_path.first().copied() == Some(resume_grid) && !partial_world_path.is_empty()
+            {
+                partial_world_path.remove(0);
+            }
+
+            let keep_len = path.current_index + rel_idx;
+            path.waypoints.truncate(keep_len);
+            path.waypoints.extend(partial_world_path);
+            commands.entity(entity).remove::<PathCooldown>();
+            debug!(
+                "PATH: Soul {:?} reused partial path after blockage",
+                entity
+            );
+            return true;
+        }
+    }
+
+    debug!(
+        "PATH: Soul {:?} path blocked by obstacle, recalculating",
+        entity
+    );
+    false
+}
+
+fn try_find_path_world_waypoints(
+    world_map: &WorldMap,
+    pf_context: &mut PathfindingContext,
+    start_grid: (i32, i32),
+    goal_grid: (i32, i32),
+    entity: Entity,
+) -> Option<Vec<Vec2>> {
+    pathfinding::find_path(world_map, pf_context, start_grid, goal_grid)
+        .or_else(|| {
+            // 通常のパスが見つからない場合、ターゲットの隣接マスへのパスを試みる
+            // これはターゲットが木や岩（非歩行可能）の上にある場合に有効
+            debug!(
+                "PATH: Soul {:?} failed find_path, trying find_path_to_adjacent",
+                entity
+            );
+            pathfinding::find_path_to_adjacent(world_map, pf_context, start_grid, goal_grid)
+        })
+        .map(|grid_path| {
+            grid_path
+                .iter()
+                .map(|&(x, y)| WorldMap::grid_to_world(x, y))
+                .collect()
+        })
+}
+
+fn try_rest_area_fallback_path(
+    commands: &mut Commands,
+    destination: &mut Destination,
+    path: &mut Path,
+    rest_reserved_for: Option<&RestAreaReservedFor>,
+    q_rest_areas: &Query<&Transform, With<crate::systems::jobs::RestArea>>,
+    current_pos: Vec2,
+    start_grid: (i32, i32),
+    goal_grid: (i32, i32),
+    world_map: &WorldMap,
+    pf_context: &mut PathfindingContext,
+    entity: Entity,
+) -> bool {
+    let Some(reserved) = rest_reserved_for else {
+        return false;
+    };
+    let Ok(rest_transform) = q_rest_areas.get(reserved.0) else {
+        return false;
+    };
+
+    let rest_center = rest_transform.translation.truncate();
+    for candidate_grid in rest_area_adjacent_candidates(rest_center, current_pos, world_map)
+        .into_iter()
+        .filter(|grid| *grid != goal_grid)
+    {
+        if let Some(candidate_path) =
+            pathfinding::find_path(world_map, pf_context, start_grid, candidate_grid)
+        {
+            destination.0 = WorldMap::grid_to_world(candidate_grid.0, candidate_grid.1);
+            path.waypoints = candidate_path
+                .iter()
+                .map(|&(x, y)| WorldMap::grid_to_world(x, y))
+                .collect();
+            path.current_index = 0;
+            commands.entity(entity).remove::<PathCooldown>();
+            return true;
+        }
+    }
+    false
+}
+
+fn cleanup_unreachable_destination(
+    commands: &mut Commands,
+    entity: Entity,
+    transform: &Transform,
+    current_pos: Vec2,
+    has_task: bool,
+    idle: &mut IdleState,
+    destination: &mut Destination,
+    task: &mut AssignedTask,
+    path: &mut Path,
+    inventory_opt: Option<&mut crate::systems::logistics::Inventory>,
+    queries: &mut crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
+    world_map: &WorldMap,
+) {
+    path.waypoints.clear();
+    commands.entity(entity).insert(PathCooldown {
+        remaining_frames: PATHFINDING_RETRY_COOLDOWN_FRAMES,
+    });
+
+    // 休憩所に到達不能な予約を握り続けると、容量が詰まって
+    // 他の非使役 Soul も休憩に向かえなくなるため解放する。
+    if !has_task && idle.behavior == IdleBehavior::GoingToRest {
+        commands.entity(entity).remove::<RestAreaReservedFor>();
+        idle.behavior = IdleBehavior::Wandering;
+        idle.idle_timer = 0.0;
+        idle.behavior_duration = 3.0;
+        destination.0 = current_pos;
+    }
+
+    // タスク実行中なら放棄
+    if has_task {
+        info!(
+            "PATH: Soul {:?} abandoning task due to unreachable destination",
+            entity
+        );
+        unassign_task(
+            commands,
+            entity,
+            transform.translation.truncate(),
+            task,
+            path,
+            inventory_opt,
+            None, // Dropped resource
+            queries,
+            world_map,
+            true,
+        );
+    }
+}
+
 pub fn pathfinding_system(
     mut commands: Commands,
     world_map: Res<WorldMap>,
@@ -166,83 +371,18 @@ pub fn pathfinding_system(
             let start_grid = WorldMap::world_to_grid(current_pos);
             let goal_grid = WorldMap::world_to_grid(destination.0);
 
-            // すでに有効なパスがあり、目的地も変わっていないならスキップ
-            //
-            // ただし、移動側が衝突で waypoint をスキップして `current_index == waypoints.len()` になっている場合、
-            // パスが「残っている」扱いで再計算されず、結果的に停止してしまうことがある。
-            // そのため「まだパス追従中」の場合のみスキップする。
-            //
-            // また、パス上に新たな障害物が追加されていないかも確認する。
-            if path.current_index < path.waypoints.len() && !path.waypoints.is_empty() {
-                if let Some(last) = path.waypoints.last() {
-                    let goal_is_walkable = world_map.is_walkable(goal_grid.0, goal_grid.1);
-                    let goal_reached_by_path = if goal_is_walkable {
-                        last.distance_squared(destination.0) < 1.0
-                    } else {
-                        let last_grid = WorldMap::world_to_grid(*last);
-                        let dx = (last_grid.0 - goal_grid.0).abs();
-                        let dy = (last_grid.1 - goal_grid.1).abs();
-                        dx <= 1 && dy <= 1 && !(dx == 0 && dy == 0)
-                    };
-
-                    if goal_reached_by_path {
-                        let blocked_relative =
-                            path.waypoints[path.current_index..].iter().position(|wp| {
-                                let grid = WorldMap::world_to_grid(*wp);
-                                !world_map.is_walkable(grid.0, grid.1)
-                            });
-
-                        if let Some(rel_idx) = blocked_relative {
-                            if rel_idx > 0 && pathfind_count < phase_budget_limit {
-                                let resume_wp = path.waypoints[path.current_index + rel_idx - 1];
-                                let resume_grid = WorldMap::world_to_grid(resume_wp);
-                                pathfind_count += 1;
-
-                                if let Some(partial_grid_path) = pathfinding::find_path(
-                                    &*world_map,
-                                    &mut *pf_context,
-                                    resume_grid,
-                                    goal_grid,
-                                )
-                                .or_else(|| {
-                                    pathfinding::find_path_to_adjacent(
-                                        &*world_map,
-                                        &mut *pf_context,
-                                        resume_grid,
-                                        goal_grid,
-                                    )
-                                }) {
-                                    let mut partial_world_path: Vec<Vec2> = partial_grid_path
-                                        .iter()
-                                        .map(|&(x, y)| WorldMap::grid_to_world(x, y))
-                                        .collect();
-                                    if partial_grid_path.first().copied() == Some(resume_grid)
-                                        && !partial_world_path.is_empty()
-                                    {
-                                        partial_world_path.remove(0);
-                                    }
-
-                                    let keep_len = path.current_index + rel_idx;
-                                    path.waypoints.truncate(keep_len);
-                                    path.waypoints.extend(partial_world_path);
-                                    commands.entity(entity).remove::<PathCooldown>();
-                                    debug!(
-                                        "PATH: Soul {:?} reused partial path after blockage",
-                                        entity
-                                    );
-                                    continue;
-                                }
-                            }
-
-                            debug!(
-                                "PATH: Soul {:?} path blocked by obstacle, recalculating",
-                                entity
-                            );
-                        } else {
-                            continue;
-                        }
-                    }
-                }
+            if try_reuse_existing_path(
+                &mut commands,
+                entity,
+                &mut path,
+                destination.0,
+                goal_grid,
+                &world_map,
+                &mut pf_context,
+                &mut pathfind_count,
+                phase_budget_limit,
+            ) {
+                continue;
             }
 
             // デバッグログ: どのソウルがパス探索を行うか
@@ -277,23 +417,13 @@ pub fn pathfinding_system(
 
             pathfind_count += 1;
 
-            if let Some(grid_path) =
-                pathfinding::find_path(&*world_map, &mut *pf_context, start_grid, goal_grid)
-                    .or_else(|| {
-                        // 通常のパスが見つからない場合、ターゲットの隣接マスへのパスを試みる
-                        // これはターゲットが木や岩（非歩行可能）の上にある場合に有効
-                        debug!(
-                            "PATH: Soul {:?} failed find_path, trying find_path_to_adjacent",
-                            entity
-                        );
-                        pathfinding::find_path_to_adjacent(
-                            &*world_map,
-                            &mut *pf_context,
-                            start_grid,
-                            goal_grid,
-                        )
-                    })
-            {
+            if let Some(world_path) = try_find_path_world_waypoints(
+                &world_map,
+                &mut pf_context,
+                start_grid,
+                goal_grid,
+                entity,
+            ) {
                 // デバッグ：集会中のsoulで特定位置付近の場合
                 if matches!(idle.behavior, IdleBehavior::Gathering)
                     && current_pos.x.abs() < 150.0
@@ -302,60 +432,33 @@ pub fn pathfinding_system(
                     info!(
                         "PATHFIND: {:?} found path - waypoints: {}, from {:?} to {:?}",
                         entity,
-                        grid_path.len(),
+                        world_path.len(),
                         start_grid,
                         goal_grid
                     );
                 }
-                path.waypoints = grid_path
-                    .iter()
-                    .map(|&(x, y)| WorldMap::grid_to_world(x, y))
-                    .collect();
+                path.waypoints = world_path;
                 path.current_index = 0;
                 commands.entity(entity).remove::<PathCooldown>();
                 debug!("PATH: Soul {:?} found new path", entity);
             } else {
                 debug!("PATH: Soul {:?} failed to find path", entity);
-                let mut recovered_with_alternative = false;
-
-                if !has_task && idle.behavior == IdleBehavior::GoingToRest {
-                    if let Some(reserved) = rest_reserved_for {
-                        if let Ok(rest_transform) = q_rest_areas.get(reserved.0) {
-                            let rest_center = rest_transform.translation.truncate();
-                            let mut candidate_found = None;
-
-                            for candidate_grid in
-                                rest_area_adjacent_candidates(rest_center, current_pos, &world_map)
-                                    .into_iter()
-                                    .filter(|grid| *grid != goal_grid)
-                            {
-                                if let Some(candidate_path) = pathfinding::find_path(
-                                    &*world_map,
-                                    &mut *pf_context,
-                                    start_grid,
-                                    candidate_grid,
-                                ) {
-                                    candidate_found = Some((candidate_grid, candidate_path));
-                                    break;
-                                }
-                            }
-
-                            if let Some((candidate_grid, candidate_path)) = candidate_found {
-                                destination.0 =
-                                    WorldMap::grid_to_world(candidate_grid.0, candidate_grid.1);
-                                path.waypoints = candidate_path
-                                    .iter()
-                                    .map(|&(x, y)| WorldMap::grid_to_world(x, y))
-                                    .collect();
-                                path.current_index = 0;
-                                commands.entity(entity).remove::<PathCooldown>();
-                                recovered_with_alternative = true;
-                            }
-                        }
-                    }
-                }
-
-                if recovered_with_alternative {
+                if !has_task
+                    && idle.behavior == IdleBehavior::GoingToRest
+                    && try_rest_area_fallback_path(
+                        &mut commands,
+                        &mut destination,
+                        &mut path,
+                        rest_reserved_for,
+                        &q_rest_areas,
+                        current_pos,
+                        start_grid,
+                        goal_grid,
+                        &world_map,
+                        &mut pf_context,
+                        entity,
+                    )
+                {
                     continue;
                 }
 
@@ -369,40 +472,20 @@ pub fn pathfinding_system(
                         entity, start_grid, goal_grid, destination.0
                     );
                 }
-                path.waypoints.clear();
-                commands.entity(entity).insert(PathCooldown {
-                    remaining_frames: PATHFINDING_RETRY_COOLDOWN_FRAMES,
-                });
-
-                // 休憩所に到達不能な予約を握り続けると、容量が詰まって
-                // 他の非使役 Soul も休憩に向かえなくなるため解放する。
-                if !has_task && idle.behavior == IdleBehavior::GoingToRest {
-                    commands.entity(entity).remove::<RestAreaReservedFor>();
-                    idle.behavior = IdleBehavior::Wandering;
-                    idle.idle_timer = 0.0;
-                    idle.behavior_duration = 3.0;
-                    destination.0 = current_pos;
-                }
-
-                // タスク実行中なら放棄
-                if has_task {
-                    info!(
-                        "PATH: Soul {:?} abandoning task due to unreachable destination",
-                        entity
-                    );
-                    unassign_task(
-                        &mut commands,
-                        entity,
-                        transform.translation.truncate(),
-                        &mut task,
-                        &mut path,
-                        inventory_opt.as_deref_mut(),
-                        None, // Dropped resource
-                        &mut queries,
-                        &*world_map,
-                        true,
-                    );
-                }
+                cleanup_unreachable_destination(
+                    &mut commands,
+                    entity,
+                    transform,
+                    current_pos,
+                    has_task,
+                    &mut idle,
+                    &mut destination,
+                    &mut task,
+                    &mut path,
+                    inventory_opt.as_deref_mut(),
+                    &mut queries,
+                    &world_map,
+                );
             }
         }
     }

@@ -12,7 +12,7 @@ use crate::systems::familiar_ai::decide::task_management::ReservationShadow;
 /// 返り値: (receiver_cell, resource_type, donor_cells)
 pub fn resolve_consolidation_inputs(
     task_entity: Entity,
-    queries: &crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
+    queries: &crate::systems::familiar_ai::decide::task_management::FamiliarTaskAssignmentQueries,
 ) -> Option<(Entity, ResourceType, Vec<Entity>)> {
     let req = queries.transport_requests.get(task_entity).ok()?;
     if req.kind != TransportRequestKind::ConsolidateStockpile {
@@ -45,7 +45,7 @@ pub fn resolve_consolidation_inputs(
 
 pub fn resolve_haul_to_stockpile_inputs(
     task_entity: Entity,
-    queries: &crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
+    queries: &crate::systems::familiar_ai::decide::task_management::FamiliarTaskAssignmentQueries,
     _shadow: &crate::systems::familiar_ai::decide::task_management::ReservationShadow,
 ) -> Option<(Entity, ResourceType, Option<Entity>, Option<Entity>)> {
     let req = queries.transport_requests.get(task_entity).ok()?;
@@ -129,7 +129,7 @@ pub fn resolve_gather_water_inputs(
     task_entity: Entity,
     task_pos: Vec2,
     _task_area_opt: Option<&TaskArea>,
-    queries: &crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
+    queries: &crate::systems::familiar_ai::decide::task_management::FamiliarTaskAssignmentQueries,
     shadow: &ReservationShadow,
 ) -> Option<(Entity, Entity)> {
     let req = queries.transport_requests.get(task_entity).ok()?;
@@ -162,7 +162,7 @@ pub fn resolve_gather_water_inputs(
 /// ReturnBucket request の tank anchor を解決する。
 pub fn resolve_return_bucket_tank(
     task_entity: Entity,
-    queries: &crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
+    queries: &crate::systems::familiar_ai::decide::task_management::FamiliarTaskAssignmentQueries,
 ) -> Option<Entity> {
     let req = queries.transport_requests.get(task_entity).ok()?;
     if req.kind != TransportRequestKind::ReturnBucket {
@@ -180,7 +180,7 @@ pub fn resolve_return_bucket_tank(
 /// 返り値: (wheelbarrow, parking_anchor, wheelbarrow_pos)
 pub fn resolve_return_wheelbarrow(
     task_entity: Entity,
-    queries: &crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
+    queries: &crate::systems::familiar_ai::decide::task_management::FamiliarTaskAssignmentQueries,
 ) -> Option<(Entity, Entity, Vec2)> {
     let req = queries.transport_requests.get(task_entity).ok()?;
     if req.kind != TransportRequestKind::ReturnWheelbarrow {
@@ -200,7 +200,7 @@ pub fn resolve_return_wheelbarrow(
 
 pub fn resolve_haul_to_blueprint_inputs(
     task_entity: Entity,
-    queries: &crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
+    queries: &crate::systems::familiar_ai::decide::task_management::FamiliarTaskAssignmentQueries,
 ) -> Option<(Entity, ResourceType)> {
     let req = queries.transport_requests.get(task_entity).ok()?;
     if !matches!(req.kind, TransportRequestKind::DeliverToBlueprint) {
@@ -213,7 +213,7 @@ pub fn resolve_haul_to_blueprint_inputs(
 
 pub fn resolve_haul_to_floor_construction_inputs(
     task_entity: Entity,
-    queries: &crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
+    queries: &crate::systems::familiar_ai::decide::task_management::FamiliarTaskAssignmentQueries,
 ) -> Option<(Entity, ResourceType)> {
     let req = queries.transport_requests.get(task_entity).ok()?;
     if !matches!(req.kind, TransportRequestKind::DeliverToFloorConstruction) {
@@ -225,7 +225,7 @@ pub fn resolve_haul_to_floor_construction_inputs(
 
 pub fn resolve_haul_to_wall_construction_inputs(
     task_entity: Entity,
-    queries: &crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
+    queries: &crate::systems::familiar_ai::decide::task_management::FamiliarTaskAssignmentQueries,
 ) -> Option<(Entity, ResourceType)> {
     let req = queries.transport_requests.get(task_entity).ok()?;
     if !matches!(req.kind, TransportRequestKind::DeliverToWallConstruction) {
@@ -237,7 +237,7 @@ pub fn resolve_haul_to_wall_construction_inputs(
 
 pub fn resolve_haul_to_provisional_wall_inputs(
     task_entity: Entity,
-    queries: &crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
+    queries: &crate::systems::familiar_ai::decide::task_management::FamiliarTaskAssignmentQueries,
 ) -> Option<(Entity, ResourceType)> {
     let req = queries.transport_requests.get(task_entity).ok()?;
     if !matches!(req.kind, TransportRequestKind::DeliverToProvisionalWall) {
@@ -249,7 +249,7 @@ pub fn resolve_haul_to_provisional_wall_inputs(
 
 pub fn resolve_haul_to_mixer_inputs(
     task_entity: Entity,
-    queries: &crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
+    queries: &crate::systems::familiar_ai::decide::task_management::FamiliarTaskAssignmentQueries,
 ) -> Option<(Entity, ResourceType)> {
     let req = queries.transport_requests.get(task_entity).ok()?;
     if !matches!(req.kind, TransportRequestKind::DeliverToMixerSolid) {
@@ -265,7 +265,7 @@ pub fn resolve_haul_water_to_mixer_inputs(
     task_entity: Entity,
     task_pos: Vec2,
     task_area_opt: Option<&TaskArea>,
-    queries: &crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
+    queries: &crate::systems::familiar_ai::decide::task_management::FamiliarTaskAssignmentQueries,
     shadow: &ReservationShadow,
 ) -> Option<(Entity, Entity, Entity)> {
     let req = queries.transport_requests.get(task_entity).ok()?;
@@ -283,7 +283,7 @@ fn find_tank_bucket_for_water_mixer(
     _mixer_entity: Entity,
     mixer_pos: Vec2,
     task_area_opt: Option<&TaskArea>,
-    queries: &crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
+    queries: &crate::systems::familiar_ai::decide::task_management::FamiliarTaskAssignmentQueries,
     shadow: &ReservationShadow,
 ) -> Option<(Entity, Entity)> {
     let mut tank_candidates: Vec<(Entity, f32)> = queries

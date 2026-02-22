@@ -13,10 +13,15 @@ pub mod wheelbarrow;
 
 use crate::systems::command::TaskArea;
 use bevy::math::Vec2;
-use bevy::prelude::{Entity, Query, Transform, Visibility};
+use bevy::prelude::{Commands, Entity, Query, Transform, Visibility};
+use std::collections::HashMap;
 
 use crate::systems::logistics::{ResourceItem, ResourceType};
 use crate::systems::spatial::{ResourceSpatialGrid, SpatialGridOps};
+
+pub(crate) fn to_u32_saturating(value: usize) -> u32 {
+    u32::try_from(value).unwrap_or(u32::MAX)
+}
 
 pub(crate) fn find_owner_familiar(
     pos: Vec2,
@@ -64,4 +69,64 @@ pub(crate) fn collect_nearby_resource_entities(
         }
     }
     nearby_resources
+}
+
+pub(crate) fn group_tiles_by_site<T: bevy::prelude::Component>(
+    q_tiles: &Query<(Entity, &T)>,
+    mut parent_site_of: impl FnMut(&T) -> Entity,
+    tiles_scanned: &mut u32,
+) -> HashMap<Entity, Vec<Entity>> {
+    let mut tiles_by_site = HashMap::<Entity, Vec<Entity>>::new();
+    for (tile_entity, tile) in q_tiles.iter() {
+        *tiles_scanned = tiles_scanned.saturating_add(1);
+        tiles_by_site
+            .entry(parent_site_of(tile))
+            .or_default()
+            .push(tile_entity);
+    }
+    tiles_by_site
+}
+
+pub(crate) fn consume_waiting_tile_resources<
+    T: bevy::prelude::Component<Mutability = bevy::ecs::component::Mutable>,
+>(
+    commands: &mut Commands,
+    site_tiles: &[Entity],
+    q_tiles: &mut Query<&mut T>,
+    nearby_resources: &mut Vec<Entity>,
+    required_amount: u32,
+    mut is_waiting: impl FnMut(&T) -> bool,
+    mut delivered_mut: impl FnMut(&mut T) -> &mut u32,
+    mut mark_ready: impl FnMut(&mut T),
+) -> u32 {
+    let mut consumed = 0u32;
+    for tile_entity in site_tiles.iter().copied() {
+        let Ok(mut tile) = q_tiles.get_mut(tile_entity) else {
+            continue;
+        };
+        if !is_waiting(&tile) {
+            continue;
+        }
+
+        let reached_required = {
+            let delivered = delivered_mut(&mut tile);
+            while *delivered < required_amount {
+                let Some(resource_entity) = nearby_resources.pop() else {
+                    break;
+                };
+                commands.entity(resource_entity).try_despawn();
+                *delivered += 1;
+                consumed += 1;
+            }
+            *delivered >= required_amount
+        };
+
+        if reached_required {
+            mark_ready(&mut tile);
+        }
+        if nearby_resources.is_empty() {
+            break;
+        }
+    }
+    consumed
 }
