@@ -1,4 +1,4 @@
-use super::super::{Blueprint, BuildingType, ObstaclePosition};
+use super::super::{Blueprint, BuildingType, DoorState, ObstaclePosition};
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
 
@@ -26,6 +26,7 @@ pub(super) fn update_world_for_completed_building(
     let is_obstacle = matches!(
         bp.kind,
         BuildingType::Wall
+            | BuildingType::Door
             | BuildingType::Tank
             | BuildingType::MudMixer
             | BuildingType::RestArea
@@ -47,6 +48,9 @@ pub(super) fn update_world_for_completed_building(
     for &(gx, gy) in &bp.occupied_grids {
         world_map.add_obstacle(gx, gy);
         world_map.buildings.insert((gx, gy), building_entity);
+        if bp.kind == BuildingType::Door {
+            world_map.add_door(gx, gy, building_entity, DoorState::Closed);
+        }
     }
 
     for &(gx, gy) in &bp.occupied_grids {

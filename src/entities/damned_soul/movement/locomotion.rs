@@ -5,13 +5,16 @@ use crate::entities::damned_soul::{
     AnimationState, DamnedSoul, IdleBehavior, IdleState, Path, StressBreakdown,
 };
 use crate::relationships::PushingWheelbarrow;
+use crate::systems::jobs::DoorState;
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
+use std::collections::HashMap;
 
 /// 移動システム
 pub fn soul_movement(
     time: Res<Time>,
     world_map: Res<WorldMap>,
+    mut door_waits: Local<HashMap<Entity, f32>>,
     mut query: Query<(
         Entity,
         &mut Transform,
@@ -23,7 +26,7 @@ pub fn soul_movement(
         Option<&PushingWheelbarrow>,
     )>,
 ) {
-    for (_entity, mut transform, mut path, mut anim, soul, idle, breakdown_opt, pushing_wb) in
+    for (entity, mut transform, mut path, mut anim, soul, idle, breakdown_opt, pushing_wb) in
         query.iter_mut()
     {
         if let Some(breakdown) = breakdown_opt {
@@ -35,6 +38,33 @@ pub fn soul_movement(
 
         if path.current_index < path.waypoints.len() {
             let target = path.waypoints[path.current_index];
+            let target_grid = WorldMap::world_to_grid(target);
+            if let Some(door_state) = world_map.door_state(target_grid.0, target_grid.1) {
+                match door_state {
+                    DoorState::Locked => {
+                        path.waypoints.clear();
+                        path.current_index = 0;
+                        door_waits.remove(&entity);
+                        anim.is_moving = false;
+                        continue;
+                    }
+                    DoorState::Closed => {
+                        let remaining = door_waits.entry(entity).or_insert(DOOR_OPEN_DURATION_SECS);
+                        if *remaining > 0.0 {
+                            *remaining -= time.delta_secs();
+                            anim.is_moving = false;
+                            continue;
+                        }
+                        door_waits.remove(&entity);
+                    }
+                    DoorState::Open => {
+                        door_waits.remove(&entity);
+                    }
+                }
+            } else {
+                door_waits.remove(&entity);
+            }
+
             let current_pos = transform.translation.truncate();
             let to_target = target - current_pos;
             let distance = to_target.length();
@@ -46,7 +76,7 @@ pub fn soul_movement(
             {
                 debug!(
                     "MOVEMENT: {:?} at {:?}, target: {:?}, dist: {:.1}, waypoints: {}/{}",
-                    _entity,
+                    entity,
                     current_pos,
                     target,
                     distance,
@@ -104,6 +134,7 @@ pub fn soul_movement(
                         // 衝突でスタックした場合、パスをクリアして再計算を要求
                         path.waypoints.clear();
                         path.current_index = 0;
+                        door_waits.remove(&entity);
                     }
                 }
 
@@ -116,6 +147,7 @@ pub fn soul_movement(
                 anim.is_moving = false;
             }
         } else {
+            door_waits.remove(&entity);
             anim.is_moving = false;
         }
     }

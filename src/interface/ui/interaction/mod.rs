@@ -24,6 +24,7 @@ use crate::game_state::{
 };
 use crate::interface::ui::components::*;
 use crate::interface::ui::theme::UiTheme;
+use crate::systems::jobs::{Door, DoorState, apply_door_state};
 use crate::systems::command::{TaskArea, TaskMode};
 use bevy::prelude::*;
 use bevy::ui::RelativeCursorPosition;
@@ -164,6 +165,42 @@ pub fn ui_interaction_system(
             &mut ev_max_soul_changed,
             &mut time,
         );
+    }
+}
+
+pub fn door_lock_action_system(
+    interaction_query: Query<
+        (&Interaction, &MenuButton),
+        (Changed<Interaction>, With<Button>),
+    >,
+    mut q_doors: Query<(&Transform, &mut Door, &mut Sprite)>,
+    mut world_map: ResMut<crate::world::map::WorldMap>,
+    game_assets: Res<crate::assets::GameAssets>,
+) {
+    for (interaction, menu_button) in interaction_query.iter() {
+        if *interaction != Interaction::Pressed {
+            continue;
+        }
+        let MenuAction::ToggleDoorLock(entity) = menu_button.0 else {
+            continue;
+        };
+        if let Ok((transform, mut door, mut sprite)) = q_doors.get_mut(entity) {
+            let door_grid =
+                crate::world::map::WorldMap::world_to_grid(transform.translation.truncate());
+            let next_state = if door.state == DoorState::Locked {
+                DoorState::Closed
+            } else {
+                DoorState::Locked
+            };
+            apply_door_state(
+                &mut door,
+                &mut sprite,
+                &mut world_map,
+                &game_assets,
+                door_grid,
+                next_state,
+            );
+        }
     }
 }
 

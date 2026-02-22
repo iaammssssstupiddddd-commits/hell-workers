@@ -176,7 +176,8 @@ pub fn find_path(
             } else {
                 MOVE_COST_STRAIGHT
             };
-            let tentative_g = current_g + move_cost;
+            let door_cost = world_map.get_door_cost(nx, ny);
+            let tentative_g = current_g + move_cost + door_cost;
 
             if tentative_g < context.g_scores[n_idx] {
                 // 初訪問時のみ記録（重複防止）
@@ -376,7 +377,12 @@ pub fn find_path_to_boundary(
             } else {
                 MOVE_COST_STRAIGHT
             };
-            let tentative_g = current_g + move_cost;
+            let door_cost = if is_in_target {
+                0
+            } else {
+                world_map.get_door_cost(nx, ny)
+            };
+            let tentative_g = current_g + move_cost + door_cost;
 
             if tentative_g < context.g_scores[n_idx] {
                 // 初訪問時のみ記録（重複防止）

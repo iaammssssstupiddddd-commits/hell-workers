@@ -71,6 +71,7 @@ pub fn generate_task_description(
             if let Some(bp) = blueprint {
                 match bp.kind {
                     BuildingType::Wall => "Construct Wall".to_string(),
+                    BuildingType::Door => "Construct Door".to_string(),
                     BuildingType::Floor => "Construct Floor".to_string(),
                     BuildingType::Tank => "Construct Tank".to_string(),
                     BuildingType::MudMixer => "Construct Mixer".to_string(),
