@@ -15,7 +15,7 @@ Hell-Workers における建築システムの基礎実装について説明し�
 | `ProvisionalWall` | 仮設壁のアップグレード状態（`mud_delivered`）を保持 |
 | `WallConstructionSite` | 壁の建設サイト（`Framing -> Coating` フェーズ、`material_center`、進捗カウンタを保持） |
 | `WallTileBlueprint` | 壁1タイルの建設状態（`wood_delivered` / `mud_delivered` / `spawned_wall`）を保持 |
-| `BuildingType` | 建物の種類（`Wall`, `Floor`, `Tank`, `MudMixer`, `SandPile`, `BonePile`） |
+| `BuildingType` | 建物の種類（`Wall`, `Door`, `Floor`, `Tank`, `MudMixer`, `SandPile`, `BonePile`） |
 
 ### Blueprint フィールド
 
@@ -32,6 +32,7 @@ Hell-Workers における建築システムの基礎実装について説明し�
 | BuildingType | 必要資材 |
 |:---|:---|
 | Wall | 木材 × 1 + StasisMud × 1（建築開始は木材のみで可能） |
+| Door | 木材 × 1 + Bone × 1 |
 | Floor | 石材 × 1 |
 | Tank | 木材 × 2 |
 | MudMixer | 木材 × 4 |
@@ -178,6 +179,15 @@ flowchart TD
 - **4方向接続**: 上下左右の隣接状況に応じてスプライトを切り替えます。
 - **バリエーション**: 直線、コーナー、T字、十字など全15種類（+孤立状態）。
 - **設計図連携**: 完成した壁だけでなく、建設中の壁（設計図）とも視覚的に接続します。
+- **扉連携**: `BuildingType::Door` も接続対象として扱われるため、`壁-扉-壁` の並びでも隣接壁が接続形状になります（扉自身は専用スプライト）。
+
+### 扉 (Door)
+
+- 扉は 1x1 の建物で、`Open / Closed / Locked` の状態を持ちます。
+- 配置条件: 左右が壁/扉、または上下が壁/扉のどちらかを満たす必要があります。
+- 閉扉は通行可能ですが追加コスト（開扉待機コスト）が発生し、ロック中は通行不可です。
+- 魂は扉タイルへ進入する前に短時間待機し、通過後は一定時間で自動的に閉じます。
+- コンテキストメニューからロック/アンロックを切り替えられます。
 
 ### MudMixer と Stasis Mud
 - **MudMixer**: 2x2 の生産施設。

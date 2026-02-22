@@ -66,6 +66,13 @@
 - floor/wall の搬入同期変更は `src/systems/logistics/transport_request/producer/mod.rs` の共通ヘルパー（`group_tiles_by_site`, `consume_waiting_tile_resources`）を再利用して重複実装を避ける。
 - UI/Visual の更新は `src/interface/ui/interaction/status_display/` と `src/systems/visual/dream/ui_particle/` の責務分割単位で行い、再び単一巨大ファイルに戻さない。
 
+### 9. docs 直下ドキュメントの記述ルール
+
+- `docs/*.md`（`plans/` と `proposals/` を除く）は、作業報告ではなく仕様・設計・運用ルールの説明を目的とする。
+- 「対応済み」「実装完了」「今回の変更」など、時点依存の進捗/報告表現は書かない。
+- 実施ログ・進捗・作業メモは PR 説明、Issue、または `docs/plans/` / `docs/proposals/` に記載する。
+- 挙動変更を伴う実装時は、関連する仕様文書と `docs/README.md` の参照関係を同時に更新する。
+
 ## 便利なコマンド
 
 ### コンパイル確認

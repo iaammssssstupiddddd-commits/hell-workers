@@ -83,6 +83,7 @@ pub enum MenuAction {
     SelectTaskMode(crate::systems::command::TaskMode),
     SelectAreaTask,
     SelectDreamPlanting,
+    ToggleDoorLock(Entity),
     OpenOperationDialog,
     AdjustFatigueThreshold(f32),
     AdjustMaxControlledSoul(isize),

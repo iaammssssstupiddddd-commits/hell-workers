@@ -14,6 +14,7 @@ use crate::systems::jobs::floor_construction::{
     floor_construction_cancellation_system, floor_construction_completion_system,
     floor_construction_phase_transition_system,
 };
+use crate::systems::jobs::door::{door_auto_close_system, door_auto_open_system};
 use crate::systems::jobs::wall_construction::{
     wall_construction_cancellation_system, wall_construction_completion_system,
     wall_construction_phase_transition_system, wall_framed_tile_spawn_system,
@@ -72,7 +73,12 @@ impl Plugin for LogicPlugin {
         )
         .add_systems(
             Update,
-            (familiar_movement).chain().in_set(GameSystemSet::Actor),
+            (
+                door_auto_open_system.before(crate::entities::damned_soul::movement::soul_movement),
+                familiar_movement,
+                door_auto_close_system.after(crate::entities::damned_soul::movement::soul_movement),
+            )
+                .in_set(GameSystemSet::Actor),
         );
     }
 }

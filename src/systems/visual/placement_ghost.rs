@@ -3,7 +3,7 @@ use crate::game_state::{
     BuildContext, CompanionParentKind, CompanionPlacementKind, CompanionPlacementState, PlayMode,
 };
 use crate::interface::camera::MainCamera;
-use crate::systems::jobs::BuildingType;
+use crate::systems::jobs::{Blueprint, Building, BuildingType};
 use crate::world::map::{RIVER_Y_MIN, WorldMap};
 use bevy::prelude::*;
 
@@ -29,6 +29,8 @@ pub fn placement_ghost_system(
     q_camera: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
     game_assets: Res<crate::assets::GameAssets>,
     world_map: Res<WorldMap>,
+    q_buildings: Query<&Building>,
+    q_blueprints: Query<&Blueprint>,
 ) {
     // 建築モード以外ならゴーストを削除して終了
     if *play_mode.get() != PlayMode::BuildingPlace {
@@ -113,6 +115,26 @@ pub fn placement_ghost_system(
                 && !world_map.stockpiles.contains_key(&g)
                 && world_map.is_river_tile(g.0, g.1)
         })
+    } else if building_type == BuildingType::Door {
+        let replaceable_wall = world_map
+            .buildings
+            .get(&grid_pos)
+            .copied()
+            .is_some_and(|entity| {
+                q_buildings
+                    .get(entity)
+                    .is_ok_and(|building| {
+                        building.kind == BuildingType::Wall && !building.is_provisional
+                    })
+            });
+        let base_tile_ok = if replaceable_wall {
+            !world_map.stockpiles.contains_key(&grid_pos)
+        } else {
+            !world_map.buildings.contains_key(&grid_pos)
+                && !world_map.stockpiles.contains_key(&grid_pos)
+                && world_map.is_walkable(grid_pos.0, grid_pos.1)
+        };
+        base_tile_ok && is_valid_door_placement(&world_map, &q_buildings, &q_blueprints, grid_pos)
     } else {
         occupied_grids.iter().all(|&g| {
             !world_map.buildings.contains_key(&g)
@@ -170,6 +192,7 @@ pub fn placement_ghost_system(
     } else {
         match building_type {
             BuildingType::Wall => (game_assets.wall_isolated.clone(), Vec2::splat(TILE_SIZE)),
+            BuildingType::Door => (game_assets.door_closed.clone(), Vec2::splat(TILE_SIZE)),
             BuildingType::Floor => (game_assets.mud_floor.clone(), Vec2::splat(TILE_SIZE)),
             BuildingType::Tank => (game_assets.tank_empty.clone(), Vec2::splat(TILE_SIZE * 2.0)),
             BuildingType::MudMixer => (game_assets.mud_mixer.clone(), Vec2::splat(TILE_SIZE * 2.0)),
@@ -288,4 +311,35 @@ fn occupied_grids_for_parent(
             (anchor.0 + 1, anchor.1 + 1),
         ],
     }
+}
+
+fn is_valid_door_placement(
+    world_map: &WorldMap,
+    q_buildings: &Query<&Building>,
+    q_blueprints: &Query<&Blueprint>,
+    grid: (i32, i32),
+) -> bool {
+    let left = is_wall_or_door(world_map, q_buildings, q_blueprints, (grid.0 - 1, grid.1));
+    let right = is_wall_or_door(world_map, q_buildings, q_blueprints, (grid.0 + 1, grid.1));
+    let up = is_wall_or_door(world_map, q_buildings, q_blueprints, (grid.0, grid.1 + 1));
+    let down = is_wall_or_door(world_map, q_buildings, q_blueprints, (grid.0, grid.1 - 1));
+    (left && right) || (up && down)
+}
+
+fn is_wall_or_door(
+    world_map: &WorldMap,
+    q_buildings: &Query<&Building>,
+    q_blueprints: &Query<&Blueprint>,
+    grid: (i32, i32),
+) -> bool {
+    let Some(&entity) = world_map.buildings.get(&grid) else {
+        return false;
+    };
+    if let Ok(building) = q_buildings.get(entity) {
+        return matches!(building.kind, BuildingType::Wall | BuildingType::Door);
+    }
+    if let Ok(blueprint) = q_blueprints.get(entity) {
+        return matches!(blueprint.kind, BuildingType::Wall | BuildingType::Door);
+    }
+    false
 }

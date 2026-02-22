@@ -123,6 +123,7 @@ pub(super) fn handle_pressed_action(
                 task_context,
             );
         }
+        MenuAction::ToggleDoorLock(_) => {}
         MenuAction::OpenOperationDialog => super::dialog::open_operation_dialog(q_dialog),
         MenuAction::CloseDialog => super::dialog::close_operation_dialog(q_dialog),
         MenuAction::AdjustFatigueThreshold(delta) => {

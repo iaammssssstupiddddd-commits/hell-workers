@@ -6,7 +6,7 @@ use crate::game_state::{
 };
 use crate::interface::camera::MainCamera;
 use crate::interface::ui::UiInputState;
-use crate::systems::jobs::{Blueprint, BuildingType, SandPile};
+use crate::systems::jobs::{Blueprint, Building, BuildingType, SandPile};
 use crate::world::map::{RIVER_Y_MIN, WorldMap};
 use bevy::prelude::*;
 
@@ -23,6 +23,8 @@ pub fn blueprint_placement(
     build_context: Res<BuildContext>,
     mut companion_state: ResMut<CompanionPlacementState>,
     q_blueprints: Query<(Entity, &Blueprint, &Transform)>,
+    q_blueprints_by_entity: Query<&Blueprint>,
+    q_buildings: Query<&Building>,
     q_sand_piles: Query<&Transform, With<SandPile>>,
     game_assets: Res<GameAssets>,
     mut commands: Commands,
@@ -67,6 +69,8 @@ pub fn blueprint_placement(
                     &game_assets,
                     parent_type,
                     active.parent_anchor,
+                    &q_buildings,
+                    &q_blueprints_by_entity,
                 ) else {
                     warn!(
                         "COMPANION: failed to confirm parent blueprint before bucket storage placement"
@@ -103,6 +107,8 @@ pub fn blueprint_placement(
                     &game_assets,
                     BuildingType::SandPile,
                     grid,
+                    &q_buildings,
+                    &q_blueprints_by_entity,
                 )
                 .is_some()
                 {
@@ -112,6 +118,8 @@ pub fn blueprint_placement(
                         &game_assets,
                         parent_type,
                         active.parent_anchor,
+                        &q_buildings,
+                        &q_blueprints_by_entity,
                     )
                     .is_some()
                     {
@@ -154,6 +162,8 @@ pub fn blueprint_placement(
             &game_assets,
             building_type,
             grid,
+            &q_buildings,
+            &q_blueprints_by_entity,
         );
     }
 }
@@ -164,10 +174,28 @@ fn place_building_blueprint(
     game_assets: &GameAssets,
     building_type: BuildingType,
     grid: (i32, i32),
+    q_buildings: &Query<&Building>,
+    q_blueprints_by_entity: &Query<&Blueprint>,
 ) -> Option<(Entity, Vec<(i32, i32)>, Vec2)> {
     let occupied_grids = occupied_grids_for_building(building_type, grid);
     let spawn_pos = building_spawn_pos(building_type, grid);
     let custom_size = Some(building_size(building_type));
+
+    let replace_wall_entity = if building_type == BuildingType::Door {
+        world_map
+            .buildings
+            .get(&grid)
+            .copied()
+            .filter(|entity| {
+                q_buildings
+                    .get(*entity)
+                    .is_ok_and(|building| {
+                        building.kind == BuildingType::Wall && !building.is_provisional
+                    })
+            })
+    } else {
+        None
+    };
 
     let can_place = if building_type == BuildingType::Bridge {
         occupied_grids.iter().all(|&g| {
@@ -175,6 +203,16 @@ fn place_building_blueprint(
                 && !world_map.stockpiles.contains_key(&g)
                 && world_map.is_river_tile(g.0, g.1)
         })
+    } else if building_type == BuildingType::Door {
+        let base_tile_ok = if replace_wall_entity.is_some() {
+            !world_map.stockpiles.contains_key(&grid)
+        } else {
+            !world_map.buildings.contains_key(&grid)
+                && !world_map.stockpiles.contains_key(&grid)
+                && world_map.is_walkable(grid.0, grid.1)
+        };
+        base_tile_ok
+            && is_valid_door_placement(world_map, q_buildings, q_blueprints_by_entity, grid)
     } else {
         occupied_grids.iter().all(|&g| {
             !world_map.buildings.contains_key(&g)
@@ -186,8 +224,15 @@ fn place_building_blueprint(
         return None;
     }
 
+    if let Some(entity) = replace_wall_entity {
+        world_map.buildings.remove(&grid);
+        world_map.remove_obstacle(grid.0, grid.1);
+        commands.entity(entity).despawn();
+    }
+
     let texture = match building_type {
         BuildingType::Wall => game_assets.wall_isolated.clone(),
+        BuildingType::Door => game_assets.door_closed.clone(),
         BuildingType::Floor => {
             unreachable!("Floor should be placed via Drag-and-drop area selection")
         }
@@ -378,4 +423,55 @@ fn building_size(building_type: BuildingType) -> Vec2 {
 
 fn grid_is_nearby(base: (i32, i32), target: (i32, i32), tiles: i32) -> bool {
     (target.0 - base.0).abs() <= tiles && (target.1 - base.1).abs() <= tiles
+}
+
+fn is_valid_door_placement(
+    world_map: &WorldMap,
+    q_buildings: &Query<&Building>,
+    q_blueprints_by_entity: &Query<&Blueprint>,
+    grid: (i32, i32),
+) -> bool {
+    let left = is_wall_or_door_at(
+        world_map,
+        q_buildings,
+        q_blueprints_by_entity,
+        (grid.0 - 1, grid.1),
+    );
+    let right = is_wall_or_door_at(
+        world_map,
+        q_buildings,
+        q_blueprints_by_entity,
+        (grid.0 + 1, grid.1),
+    );
+    let up = is_wall_or_door_at(
+        world_map,
+        q_buildings,
+        q_blueprints_by_entity,
+        (grid.0, grid.1 + 1),
+    );
+    let down = is_wall_or_door_at(
+        world_map,
+        q_buildings,
+        q_blueprints_by_entity,
+        (grid.0, grid.1 - 1),
+    );
+    (left && right) || (up && down)
+}
+
+fn is_wall_or_door_at(
+    world_map: &WorldMap,
+    q_buildings: &Query<&Building>,
+    q_blueprints_by_entity: &Query<&Blueprint>,
+    grid: (i32, i32),
+) -> bool {
+    let Some(&entity) = world_map.buildings.get(&grid) else {
+        return false;
+    };
+    if let Ok(building) = q_buildings.get(entity) {
+        return matches!(building.kind, BuildingType::Wall | BuildingType::Door);
+    }
+    if let Ok(blueprint) = q_blueprints_by_entity.get(entity) {
+        return matches!(blueprint.kind, BuildingType::Wall | BuildingType::Door);
+    }
+    false
 }

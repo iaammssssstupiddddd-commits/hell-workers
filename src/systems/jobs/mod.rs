@@ -2,10 +2,12 @@ use crate::systems::logistics::ResourceType;
 use bevy::prelude::*;
 use std::collections::HashMap;
 mod building_completion;
+pub mod door;
 pub mod floor_construction;
 mod mud_mixer;
 pub mod wall_construction;
 pub use building_completion::building_completion_system;
+pub use door::*;
 pub use floor_construction::*;
 pub use mud_mixer::*;
 
@@ -17,6 +19,7 @@ pub use mud_mixer::*;
 pub enum BuildingType {
     #[default]
     Wall,
+    Door,
     Floor,
     Tank,
     MudMixer,
@@ -35,6 +38,10 @@ impl BuildingType {
             BuildingType::Wall => {
                 materials.insert(ResourceType::Wood, 1);
                 materials.insert(ResourceType::StasisMud, 1);
+            }
+            BuildingType::Door => {
+                materials.insert(ResourceType::Wood, 1);
+                materials.insert(ResourceType::Bone, 1);
             }
             BuildingType::Floor => {
                 // Drag方式で建設されるため、Blueprintベースの資材搬入は不要

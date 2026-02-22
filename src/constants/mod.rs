@@ -5,6 +5,7 @@
 
 mod ai;
 mod animation;
+mod building;
 mod conversation;
 mod dream;
 mod logistics;
@@ -14,6 +15,7 @@ mod world;
 
 pub use ai::*;
 pub use animation::*;
+pub use building::*;
 pub use conversation::*;
 pub use dream::*;
 pub use logistics::*;
