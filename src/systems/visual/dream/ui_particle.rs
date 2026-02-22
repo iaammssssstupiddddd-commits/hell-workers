@@ -163,7 +163,9 @@ pub fn ui_particle_update_system(
             let ratio = 1.0 - (current_pos.x.max(0.0) / DREAM_UI_BOUNDARY_MARGIN).clamp(0.0, 1.0);
             boundary.x += DREAM_UI_BOUNDARY_PUSH * ratio;
         } else if current_pos.x > viewport_size.x - DREAM_UI_BOUNDARY_MARGIN {
-            let ratio = 1.0 - ((viewport_size.x - current_pos.x).max(0.0) / DREAM_UI_BOUNDARY_MARGIN).clamp(0.0, 1.0);
+            let ratio = 1.0
+                - ((viewport_size.x - current_pos.x).max(0.0) / DREAM_UI_BOUNDARY_MARGIN)
+                    .clamp(0.0, 1.0);
             boundary.x -= DREAM_UI_BOUNDARY_PUSH * ratio;
         }
         if current_pos.y < DREAM_UI_BOUNDARY_MARGIN {
@@ -171,7 +173,9 @@ pub fn ui_particle_update_system(
             boundary.y += DREAM_UI_BOUNDARY_PUSH * ratio;
         } else if current_pos.y > viewport_size.y - DREAM_UI_BOUNDARY_MARGIN {
             // Y軸上端（下端）の斥力も追加
-            let ratio = 1.0 - ((viewport_size.y - current_pos.y).max(0.0) / DREAM_UI_BOUNDARY_MARGIN).clamp(0.0, 1.0);
+            let ratio = 1.0
+                - ((viewport_size.y - current_pos.y).max(0.0) / DREAM_UI_BOUNDARY_MARGIN)
+                    .clamp(0.0, 1.0);
             boundary.y -= DREAM_UI_BOUNDARY_PUSH * ratio;
         }
 
@@ -195,7 +199,8 @@ pub fn ui_particle_update_system(
         let speed_toward_target = particle.velocity.dot(to_target.normalize_or_zero());
         if speed_toward_target < min_speed && distance > 20.0 {
             // 足りない分の速度をターゲット方向に対して足す
-            let correction = to_target.normalize_or_zero() * (min_speed - speed_toward_target.max(0.0));
+            let correction =
+                to_target.normalize_or_zero() * (min_speed - speed_toward_target.max(0.0));
             particle.velocity += correction;
         }
 
@@ -205,7 +210,8 @@ pub fn ui_particle_update_system(
         let effective_mass = particle.mass + DREAM_UI_BASE_MASS_OFFSET;
         let base = DREAM_UI_PARTICLE_SIZE * effective_mass.sqrt();
         let speed = particle.velocity.length();
-        let squash_stretch_ratio = (speed / DREAM_UI_SQUASH_MAX_SPEED).clamp(0.0, DREAM_UI_SQUASH_MAX_RATIO);
+        let squash_stretch_ratio =
+            (speed / DREAM_UI_SQUASH_MAX_SPEED).clamp(0.0, DREAM_UI_SQUASH_MAX_RATIO);
         let length_scale = 1.0 + squash_stretch_ratio;
         let width_scale = 1.0 / (1.0 + squash_stretch_ratio * 0.5);
 
@@ -257,7 +263,8 @@ pub fn ui_particle_update_system(
 
         // Rotation
         if speed > 1.0 {
-            let angle = particle.velocity.y.atan2(particle.velocity.x) - std::f32::consts::FRAC_PI_2;
+            let angle =
+                particle.velocity.y.atan2(particle.velocity.x) - std::f32::consts::FRAC_PI_2;
             transform.rotation = Quat::from_rotation_z(angle);
         }
 
@@ -312,7 +319,8 @@ pub fn ui_particle_update_system(
             if let Some(root) = ui_bubble_layer {
                 let mut trail_transform = Transform::from_translation(Vec3::ZERO);
                 if speed > 1.0 {
-                    let angle = particle.velocity.y.atan2(particle.velocity.x) - std::f32::consts::FRAC_PI_2;
+                    let angle = particle.velocity.y.atan2(particle.velocity.x)
+                        - std::f32::consts::FRAC_PI_2;
                     trail_transform.rotation = Quat::from_rotation_z(angle);
                 }
 
@@ -348,9 +356,7 @@ pub fn ui_particle_update_system(
     }
 }
 
-pub fn ui_particle_merge_system(
-    mut q_particles: Query<(Entity, &mut DreamGainUiParticle, &Node)>,
-) {
+pub fn ui_particle_merge_system(mut q_particles: Query<(Entity, &mut DreamGainUiParticle, &Node)>) {
     let positions: Vec<(Entity, Vec2, f32, bool)> = q_particles
         .iter()
         .map(|(e, p, n)| {
@@ -398,9 +404,13 @@ pub fn ui_particle_merge_system(
     }
 
     if let Some((absorbed, absorber)) = merge_pair {
-        if let Ok([( _, mut absorbed_p, _), ( _, mut absorber_p, _)]) = q_particles.get_many_mut([absorbed, absorber]) {
+        if let Ok([(_, mut absorbed_p, _), (_, mut absorber_p, _)]) =
+            q_particles.get_many_mut([absorbed, absorber])
+        {
             // 合体回数だけでなく、質量そのものにも上限を設ける。巨大になりすぎて軌道が壊れるのを防ぐ
-            if absorber_p.merge_count >= DREAM_UI_MERGE_MAX_COUNT || absorber_p.mass > DREAM_UI_MERGE_MAX_MASS {
+            if absorber_p.merge_count >= DREAM_UI_MERGE_MAX_COUNT
+                || absorber_p.mass > DREAM_UI_MERGE_MAX_MASS
+            {
                 return;
             }
 
@@ -417,7 +427,11 @@ pub fn dream_trail_ghost_update_system(
     mut commands: Commands,
     time: Res<Time>,
     mut materials: ResMut<Assets<DreamBubbleUiMaterial>>,
-    mut q_ghosts: Query<(Entity, &mut DreamTrailGhost, &MaterialNode<DreamBubbleUiMaterial>)>,
+    mut q_ghosts: Query<(
+        Entity,
+        &mut DreamTrailGhost,
+        &MaterialNode<DreamBubbleUiMaterial>,
+    )>,
 ) {
     let dt = time.delta_secs();
     for (entity, mut ghost, mat_node) in q_ghosts.iter_mut() {
@@ -436,7 +450,12 @@ pub fn dream_trail_ghost_update_system(
 pub fn dream_icon_absorb_system(
     time: Res<Time>,
     theme: Res<UiTheme>,
-    mut q_icon: Query<(&mut Node, &mut BackgroundColor, &mut DreamIconAbsorb, &mut Transform)>,
+    mut q_icon: Query<(
+        &mut Node,
+        &mut BackgroundColor,
+        &mut DreamIconAbsorb,
+        &mut Transform,
+    )>,
 ) {
     let dt = time.delta_secs();
     for (mut node, mut color, mut absorb, mut transform) in q_icon.iter_mut() {
@@ -451,8 +470,8 @@ pub fn dream_icon_absorb_system(
             let sin_val = (progress * std::f32::consts::PI).sin();
 
             // サイズパルス: 16→20→16
-            let size = DREAM_ICON_BASE_SIZE
-                + (DREAM_ICON_PULSE_SIZE - DREAM_ICON_BASE_SIZE) * sin_val;
+            let size =
+                DREAM_ICON_BASE_SIZE + (DREAM_ICON_PULSE_SIZE - DREAM_ICON_BASE_SIZE) * sin_val;
             node.width = Val::Px(size);
             node.height = Val::Px(size);
 

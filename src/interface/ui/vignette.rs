@@ -6,10 +6,7 @@ pub struct DreamVignette {
     pub timer: f32,
 }
 
-pub fn spawn_vignette_ui(
-    commands: &mut Commands,
-    overlay_parent: Entity,
-) {
+pub fn spawn_vignette_ui(commands: &mut Commands, overlay_parent: Entity) {
     let vignette = commands
         .spawn((
             Node {
@@ -45,7 +42,7 @@ pub fn update_vignette_system(
         if is_active_mode {
             node.display = Display::Flex;
             vignette.timer += time.delta_secs();
-            
+
             // アルファ値をさらに控えめに (0.02 ~ 0.05 程度)
             let alpha = 0.02 + (vignette.timer * 1.5).sin() * 0.03;
             let mut color = bg_color.0.to_srgba();

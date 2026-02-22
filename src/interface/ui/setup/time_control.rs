@@ -4,9 +4,9 @@ use crate::interface::ui::components::{
     DreamPoolPulse, MenuAction, MenuButton, SpeedButtonMarker, UiInputBlocker, UiNodeRegistry,
     UiSlot, UiTooltip,
 };
-use crate::systems::visual::dream::DreamIconAbsorb;
 use crate::interface::ui::theme::UiTheme;
 use crate::systems::time::{ClockText, TimeSpeed};
+use crate::systems::visual::dream::DreamIconAbsorb;
 use bevy::prelude::*;
 use bevy::ui::RelativeCursorPosition;
 
@@ -137,42 +137,43 @@ pub fn spawn_time_control(
         ui_nodes.set_slot(UiSlot::TaskSummaryText, task_text_entity);
 
         // ── Dream Pool ──
-        panel.spawn((Node {
-            flex_direction: FlexDirection::Row,
-            align_items: AlignItems::Center,
-            ..default()
-        },))
-        .with_children(|row| {
-            let dream_text_entity = row
-                .spawn((
-                    Text::new("Dream: 0"),
-                    TextFont {
-                        font: game_assets.font_ui.clone(),
-                        font_size: theme.typography.font_size_status,
-                        ..default()
-                    },
-                    TextColor(theme.colors.accent_soul_bright),
-                    UiSlot::DreamPoolText,
-                    DreamPoolPulse::default(),
-                ))
-                .id();
-            ui_nodes.set_slot(UiSlot::DreamPoolText, dream_text_entity);
+        panel
+            .spawn((Node {
+                flex_direction: FlexDirection::Row,
+                align_items: AlignItems::Center,
+                ..default()
+            },))
+            .with_children(|row| {
+                let dream_text_entity = row
+                    .spawn((
+                        Text::new("Dream: 0"),
+                        TextFont {
+                            font: game_assets.font_ui.clone(),
+                            font_size: theme.typography.font_size_status,
+                            ..default()
+                        },
+                        TextColor(theme.colors.accent_soul_bright),
+                        UiSlot::DreamPoolText,
+                        DreamPoolPulse::default(),
+                    ))
+                    .id();
+                ui_nodes.set_slot(UiSlot::DreamPoolText, dream_text_entity);
 
-            let icon_entity = row
-                .spawn((
-                    Node {
-                        width: Val::Px(16.0),
-                        height: Val::Px(16.0),
-                        margin: UiRect::left(Val::Px(6.0)),
-                        ..default()
-                    },
-                    ImageNode::new(game_assets.glow_circle.clone()),
-                    BackgroundColor(theme.colors.accent_soul_bright),
-                    UiSlot::DreamPoolIcon,
-                    DreamIconAbsorb::default(),
-                ))
-                .id();
-            ui_nodes.set_slot(UiSlot::DreamPoolIcon, icon_entity);
-        });
+                let icon_entity = row
+                    .spawn((
+                        Node {
+                            width: Val::Px(16.0),
+                            height: Val::Px(16.0),
+                            margin: UiRect::left(Val::Px(6.0)),
+                            ..default()
+                        },
+                        ImageNode::new(game_assets.glow_circle.clone()),
+                        BackgroundColor(theme.colors.accent_soul_bright),
+                        UiSlot::DreamPoolIcon,
+                        DreamIconAbsorb::default(),
+                    ))
+                    .id();
+                ui_nodes.set_slot(UiSlot::DreamPoolIcon, icon_entity);
+            });
     });
 }

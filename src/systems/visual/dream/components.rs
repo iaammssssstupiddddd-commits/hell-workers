@@ -53,4 +53,3 @@ pub struct DreamIconAbsorb {
     pub timer: f32,
     pub pulse_count: u8,
 }
-

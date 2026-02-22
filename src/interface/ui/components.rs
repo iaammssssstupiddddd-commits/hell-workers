@@ -218,7 +218,6 @@ pub struct DreamPoolPulse {
     pub last_points: f32,
 }
 
-
 #[derive(Component)]
 pub struct UiRoot;
 

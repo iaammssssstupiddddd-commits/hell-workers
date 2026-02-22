@@ -86,7 +86,9 @@ fn spawn_area_edit_preview(
     ui_nodes.set_slot(UiSlot::AreaEditPreview, preview);
 }
 
-fn spawn_ui_root(commands: &mut Commands) -> (Entity, Entity, Entity, Entity, Entity, Entity, Entity) {
+fn spawn_ui_root(
+    commands: &mut Commands,
+) -> (Entity, Entity, Entity, Entity, Entity, Entity, Entity) {
     let ui_root = commands
         .spawn((
             Node {
@@ -197,10 +199,24 @@ fn spawn_ui_root(commands: &mut Commands) -> (Entity, Entity, Entity, Entity, En
         .id();
 
     // dream_bubble_layer を最初に追加することで、後続のパネル系より背後に描画される
-    commands
-        .entity(ui_root)
-        .add_children(&[dream_bubble_layer, left, right, bottom, top_right, top_left, overlay]);
-    (ui_root, left, right, bottom, overlay, top_right, dream_bubble_layer)
+    commands.entity(ui_root).add_children(&[
+        dream_bubble_layer,
+        left,
+        right,
+        bottom,
+        top_right,
+        top_left,
+        overlay,
+    ]);
+    (
+        ui_root,
+        left,
+        right,
+        bottom,
+        overlay,
+        top_right,
+        dream_bubble_layer,
+    )
 }
 
 /// UI全体をセットアップ

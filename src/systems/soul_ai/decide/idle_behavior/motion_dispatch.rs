@@ -118,7 +118,11 @@ pub fn update_motion_destinations(
                         GatheringBehavior::Sleeping
                         | GatheringBehavior::Standing
                         | GatheringBehavior::Dancing => {
-                            if dist_from_center < TILE_SIZE * GATHERING_KEEP_DISTANCE_MIN {
+                            let path_complete = path.waypoints.is_empty()
+                                || path.current_index >= path.waypoints.len();
+                            if dist_from_center < TILE_SIZE * GATHERING_KEEP_DISTANCE_MIN
+                                && path_complete
+                            {
                                 if let Some(target) =
                                     gathering_motion::find_gathering_still_retreat_target(
                                         center,

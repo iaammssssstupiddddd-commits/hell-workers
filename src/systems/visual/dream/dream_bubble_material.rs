@@ -1,9 +1,9 @@
 use bevy::prelude::*;
 use bevy::render::render_resource::AsBindGroup;
+use bevy::render::render_resource::RenderPipelineDescriptor;
 use bevy::shader::ShaderRef;
 use bevy::sprite_render::Material2d;
 use bevy::ui_render::prelude::{UiMaterial, UiMaterialKey};
-use bevy::render::render_resource::RenderPipelineDescriptor;
 
 /// World 空間用 Dream 泡マテリアル（Mesh2d + Material2d）
 ///
@@ -58,9 +58,5 @@ impl UiMaterial for DreamBubbleUiMaterial {
         "shaders/dream_bubble_ui.wgsl".into()
     }
 
-    fn specialize(
-        _descriptor: &mut RenderPipelineDescriptor,
-        _key: UiMaterialKey<Self>,
-    ) {
-    }
+    fn specialize(_descriptor: &mut RenderPipelineDescriptor, _key: UiMaterialKey<Self>) {}
 }

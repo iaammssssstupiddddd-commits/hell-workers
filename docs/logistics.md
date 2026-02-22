@@ -111,8 +111,8 @@ Hell-Workers の物流は、`TransportRequest` を中心にした自動発行 + 
   - ソース（砂置き場/砂タイル）は消費しない（無限ソース）。
   - 過剰割り当て防止のため、割り当て時に「必要量 - 予約済み」を再計算して積載量を決定する。
 
-#### 4.2.1 Blueprint不足時の自動伐採/採掘（Wood / Rock）
-- `familiar_ai` の `blueprint_auto_gather_system` が、`DeliverToBlueprint` request（`issued_by`）を需要起点に不足量を検知する。
+#### 4.2.1 Blueprint / MudMixer不足時の自動伐採/採掘（Wood / Rock）
+- `familiar_ai` の `blueprint_auto_gather_system` が、`DeliverToBlueprint` request（Wood / Rock）と `DeliverToMixerSolid` request（Rock、`issued_by`）を需要起点に不足量を検知する。
 - 不足判定は owner/resource 単位で以下を差し引いて算出する:
   - 地面の未予約資材
   - 既存の手動 `Chop` / `Mine` 指定の期待ドロップ量
@@ -124,11 +124,12 @@ Hell-Workers の物流は、`TransportRequest` を中心にした自動発行 + 
   - Stage 3: 外周 `<= 60` タイル
   - Stage 4: それ以遠の到達可能全域
 - 各 Stage は近傍優先で処理し、必要量を満たした時点で終了。経路判定は Stage ごとの上限件数で制御する。
-- 自動付与対象には `AutoGatherForBlueprint { owner, resource_type }` marker を付け、不要になった未着手指定は marker ベースで回収する。
+- 自動付与対象には `AutoGatherDesignation { owner, resource_type }` marker を付け、不要になった未着手指定は marker ベースで回収する。
 
 ### 4.3 MudMixer 固体搬入 (`DeliverToMixerSolid`)
 - `Sand` / `Rock` の不足量を `SharedResourceCache` を含めて判定。
 - request は Mixer 位置に生成し、ソースは割り当て時に探索。
+- `Rock` 不足については 4.2.1 の自動Gather需要にも反映され、必要に応じて `Mine` 指定が追加発行される。
 
 ### 4.4 MudMixer 水搬入 (`DeliverWaterToMixer`)
 - 水不足時に request を発行。
@@ -379,7 +380,7 @@ Stockpile / Blueprint / Tank などへの搬入予約は、Bevy の Relationship
 - 割り当てロジック:
   - `src/systems/familiar_ai/decide/task_management/`（builders, policy, validator）
   - `task_management/policy/haul/`（blueprint, consolidation, stockpile, source_selector, lease_validation, wheelbarrow）: 運搬割り当ての責務分割
-  - `src/systems/familiar_ai/decide/auto_gather_for_blueprint.rs`, `auto_gather_for_blueprint/{demand,supply,planning,actions}.rs`（Blueprint不足時の Wood / Rock 自動Gather指定）
+  - `src/systems/familiar_ai/decide/auto_gather_for_blueprint.rs`, `auto_gather_for_blueprint/{demand,supply,planning,actions}.rs`（Blueprint / Mixer 需要起点の Wood / Rock 自動Gather指定）
 - 実行ロジック:
   - `src/systems/soul_ai/execute/task_execution/`（haul, haul_to_mixer, haul_to_blueprint, haul_with_wheelbarrow, haul_water_to_mixer 等）
   - `task_execution/handler/`（task_handler, impls, dispatch）: TaskHandler トレイトとディスパッチ
