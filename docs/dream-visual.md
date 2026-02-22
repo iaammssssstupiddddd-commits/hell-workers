@@ -56,6 +56,14 @@ Dream システムの視覚的フィードバック実装についてのドキ�
 
 各サブ泡は独立した輪郭線（リム発光）を持つ。マテリアルの uniform（`color`, `alpha`, `time`, `mass`, `velocity_dir`）は毎フレーム物理演算の結果から更新される。
 
+#### 画面中央フェード
+
+プレイヤーが画面中央で操作に集中しているとき、中央付近の泡が不透明だと視覚的に邪魔になるため、シェーダー内で画面位置に応じた透過制御を行う。`in.position`（frag coord）と `view.viewport` から画面上の正規化距離を計算し、中央ほど透明・端ほど不透明にする。
+
+- `CENTER_FADE_START = 0.4`: 中央40%以内は最小透明度
+- `CENTER_FADE_END = 1.0`: 端で完全不透明
+- `CENTER_MIN_ALPHA = 0.4`: 中央での最小alpha係数
+
 ### 生成条件
 
 - 睡眠中 Soul が一定間隔 (`DREAM_POPUP_INTERVAL`) ごとに獲得したDream量をチェックし、その蓄積が `DREAM_POPUP_THRESHOLD` を超えていた場合に:
