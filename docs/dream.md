@@ -119,7 +119,7 @@ Dream を消費してプレイヤーが指定した矩形範囲に木を植え�
 1. 下部バーの **「Dream」ボタン** を押してサブメニューを開く
 2. **「Plant Trees」ボタン** を選択 → `TaskMode::DreamPlanting` に移行
 3. マップ上をドラッグして植林エリアを指定
-4. ドラッグ解放でイベントが発行され、即時処理される
+4. ドラッグ解放でイベントが発行され、植林候補が確定する
 
 ### 6.2 植林ルール
 
@@ -155,6 +155,10 @@ Dream を消費してプレイヤーが指定した矩形範囲に木を植え�
 | `DREAM_TREE_COST_PER_TREE` | 20.0 |
 | `DREAM_TREE_MAX_PER_CAST` | 20 |
 | `DREAM_TREE_GLOBAL_CAP` | 300 |
+| `DREAM_TREE_MAGIC_CIRCLE_DURATION` | 0.20 |
+| `DREAM_TREE_GROWTH_DURATION` | 0.35 |
+| `DREAM_TREE_LIFE_SPARK_DURATION` | 0.28 |
+| `DREAM_TREE_LIFE_SPARK_COUNT` | 8 |
 
 ### 6.6 関連ファイル
 
@@ -167,7 +171,24 @@ Dream を消費してプレイヤーが指定した矩形範囲に木を植え�
 | `src/interface/ui/components.rs` | `MenuState::Dream`, `MenuAction::{ToggleDream, SelectDreamPlanting}`, `DreamSubMenu` |
 | `src/interface/ui/setup/submenus.rs` | Dream サブメニューのスポーン |
 | `src/plugins/logic.rs` | `dream_tree_planting_system` 登録 |
+| `src/plugins/visual.rs` | Plant Trees 演出システム登録 |
+| `src/systems/visual/plant_trees/systems.rs` | 魔法陣/成長/生命力スパークの更新 |
 | `src/world/regrowth.rs` | グローバル木上限チェック追加 |
+| `assets/textures/ui/plant_tree_magic_circle.png` | 植林予兆エフェクト（プレースホルダー） |
+| `assets/textures/ui/plant_tree_life_spark.png` | 生命力スパーク（プレースホルダー） |
+
+### 6.7 植林ビジュアル（3フェーズ）
+
+Dream 植林で生成された木は `PlantTreeVisualState` を持って開始し、`GameSystemSet::Visual` で次の順に演出されます。
+
+1. **魔法陣**：対象タイルに青白い円がフェードイン → 拡大 → フェードアウト
+2. **急成長**：木スプライトを縮小状態から等倍へ補間し、発光色から白へ遷移
+3. **生命力スパーク**：根元から短寿命の粒子を円状に放射して消滅
+
+補足:
+
+- 木の障害物状態は生成時点で `ObstaclePosition` と `world_map.add_obstacle` により即座に反映される
+- 地形タイル（Dirt/Grass/Sand/River）は書き換えない
 
 ---
 
@@ -198,11 +219,12 @@ Dream を消費してプレイヤーが指定した矩形範囲に木を植え�
 | `src/systems/soul_ai/update/dream_update.rs` | 睡眠由来 Dream 蓄積 |
 | `src/systems/soul_ai/update/rest_area_update.rs` | 休憩所由来 Dream 蓄積 + 休憩更新 |
 | `src/systems/dream_tree_planting.rs` | Dream 植林コアロジック |
+| `src/systems/visual/plant_trees/components.rs` | 植林演出状態コンポーネント |
+| `src/constants/render.rs` | 植林演出用の Z レイヤー定義 |
 | [dream-visual.md](dream-visual.md) | ビジュアルフィードバック全般 |
 
 ## 9. 未実装（将来拡張）
 
 - Soul 鼓舞・作業速度バフなど Dream 消費効果
 - Familiar からの明示的な睡眠命令
-
 

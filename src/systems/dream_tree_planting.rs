@@ -7,8 +7,9 @@ use crate::assets::GameAssets;
 use crate::constants::*;
 use crate::entities::damned_soul::DreamPool;
 use crate::systems::command::AreaEditSession;
-use crate::systems::jobs::{Tree, TreeVariant};
+use crate::systems::jobs::{ObstaclePosition, Tree, TreeVariant};
 use crate::systems::logistics::ResourceItem;
+use crate::systems::visual::plant_trees::PlantTreeVisualState;
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
 use rand::seq::SliceRandom;
@@ -151,6 +152,8 @@ fn process_dream_planting(
         commands.spawn((
             Tree,
             TreeVariant(variant_index),
+            ObstaclePosition(gx, gy),
+            PlantTreeVisualState::default(),
             Sprite {
                 image: game_assets.trees[variant_index].clone(),
                 custom_size: Some(Vec2::splat(TILE_SIZE * 1.5)),

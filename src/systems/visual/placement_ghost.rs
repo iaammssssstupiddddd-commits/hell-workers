@@ -121,11 +121,9 @@ pub fn placement_ghost_system(
             .get(&grid_pos)
             .copied()
             .is_some_and(|entity| {
-                q_buildings
-                    .get(entity)
-                    .is_ok_and(|building| {
-                        building.kind == BuildingType::Wall && !building.is_provisional
-                    })
+                q_buildings.get(entity).is_ok_and(|building| {
+                    building.kind == BuildingType::Wall && !building.is_provisional
+                })
             });
         let base_tile_ok = if replaceable_wall {
             !world_map.stockpiles.contains_key(&grid_pos)

@@ -14,6 +14,10 @@ pub const Z_ITEM: f32 = 0.1;
 pub const Z_AURA: f32 = 0.2;
 /// 障害物アイテム（木、岩など）のレイヤー
 pub const Z_ITEM_OBSTACLE: f32 = 0.5;
+/// Dream植林の魔法陣エフェクト（木の下）
+pub const Z_DREAM_TREE_MAGIC_CIRCLE: f32 = 0.45;
+/// Dream植林の生命力スパーク（木の上）
+pub const Z_DREAM_TREE_LIFE_SPARK: f32 = 0.55;
 /// 拾えるアイテム（伐採後の木材など）のレイヤー
 pub const Z_ITEM_PICKUP: f32 = 0.6;
 /// キャラクター（魂、使い魔）のレイヤー

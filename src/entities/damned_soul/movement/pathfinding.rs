@@ -139,19 +139,17 @@ fn try_reuse_existing_path(
         let resume_grid = WorldMap::world_to_grid(resume_wp);
         *pathfind_count += 1;
 
-        if let Some(partial_grid_path) = pathfinding::find_path(
-            world_map,
-            pf_context,
-            resume_grid,
-            goal_grid,
-        )
-        .or_else(|| pathfinding::find_path_to_adjacent(world_map, pf_context, resume_grid, goal_grid))
+        if let Some(partial_grid_path) =
+            pathfinding::find_path(world_map, pf_context, resume_grid, goal_grid).or_else(|| {
+                pathfinding::find_path_to_adjacent(world_map, pf_context, resume_grid, goal_grid)
+            })
         {
             let mut partial_world_path: Vec<Vec2> = partial_grid_path
                 .iter()
                 .map(|&(x, y)| WorldMap::grid_to_world(x, y))
                 .collect();
-            if partial_grid_path.first().copied() == Some(resume_grid) && !partial_world_path.is_empty()
+            if partial_grid_path.first().copied() == Some(resume_grid)
+                && !partial_world_path.is_empty()
             {
                 partial_world_path.remove(0);
             }
@@ -160,10 +158,7 @@ fn try_reuse_existing_path(
             path.waypoints.truncate(keep_len);
             path.waypoints.extend(partial_world_path);
             commands.entity(entity).remove::<PathCooldown>();
-            debug!(
-                "PATH: Soul {:?} reused partial path after blockage",
-                entity
-            );
+            debug!("PATH: Soul {:?} reused partial path after blockage", entity);
             return true;
         }
     }
