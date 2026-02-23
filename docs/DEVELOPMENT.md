@@ -73,6 +73,24 @@
 - 実施ログ・進捗・作業メモは PR 説明、Issue、または `docs/plans/` / `docs/proposals/` に記載する。
 - 挙動変更を伴う実装時は、関連する仕様文書と `docs/README.md` の参照関係を同時に更新する。
 
+### 10. MCP（rust-analyzer-mcp / docsrs-mcp）活用フロー
+
+- 目的:
+  - `rust-analyzer-mcp`: ローカルコードの型・参照・定義を正確に把握する。
+  - `docsrs-mcp`: 外部 crate API（特に Bevy 0.18）のシグネチャと仕様を一次情報で確認する。
+- 実装前:
+  - 変更対象シンボルは `rust-analyzer-mcp` で定義・参照・関連型を確認する。
+  - 外部 API を使う箇所は `docsrs-mcp` で対象バージョンの関数シグネチャを確認する。
+- 実装中:
+  - ローカル依存関係の追跡は `rust-analyzer-mcp` を優先する。
+  - API 仕様確認は `docsrs-mcp` を優先し、推測でメソッド名や引数を書かない。
+  - Bevy API は必ず 0.18 系のドキュメント/シグネチャで確認する。
+- 実装後:
+  - rust-analyzer 診断を確認し、`cargo check` を必ず実行する。
+  - MCP の結果と実コードが不一致の場合は、`~/.cargo/registry/src/` の実ソースを確認して整合を取る。
+- MCP が使えない場合の代替:
+  - `~/.cargo/registry/src/` のクレートソースと `docs.rs` の一次情報で確認する。
+
 ## 便利なコマンド
 
 ### コンパイル確認
