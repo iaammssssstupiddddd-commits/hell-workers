@@ -32,3 +32,10 @@ Refer to `docs/` for specific system details (AI, Tasks, Logistics, etc.).
   2. Web検索ツール等で `https://docs.rs/bevy/0.18.0/bevy/` や関連ドキュメントを確認する
   3. ローカルの `~/.cargo/registry/src/` にあるBevyのソースコード（関数のシグネチャ）を検索して直接確認する
 - 実装後は `cargo check` を実行し、APIの変更によるエラー（メソッドが存在しない等）がないか必ず確認すること。
+
+## MCP ツール運用フロー（rust-analyzer-mcp / docsrs-mcp）
+- ローカルコード解析（定義ジャンプ、参照、型確認）は `rust-analyzer-mcp` を優先する。
+- 外部 crate API の仕様確認は `docsrs-mcp` を優先し、推測で実装しない。
+- Bevy API は必ず 0.18 系の情報で確認する（`docsrs-mcp` / `~/.cargo/registry/src/`）。
+- 実装後は rust-analyzer 診断確認に加えて `cargo check` を実行する。
+- MCP が利用できない場合は、`~/.cargo/registry/src/` と `docs.rs` の一次情報を使って代替確認する。
