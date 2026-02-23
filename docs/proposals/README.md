@@ -18,8 +18,7 @@
 | Document | Notes |
 | --- | --- |
 | `08_visual_update_prompts.md` | ビジュアル更新プロンプト集 |
-| `dream_general_visuals.md` | Dream演出の全体ビジュアル提案 |
-| `plant_trees_visuals.md` | 植樹演出のビジュアル提案 |
+| `room_detection.md` | 壁・扉・床から閉領域（Room）を検出する提案 |
 | `soul_spawn_despawn_optimization.md` | Soul Spawn/Despawn 最適化提案 |
 | `speech_optimization.md` | スピーチシステム最適化提案 |
 

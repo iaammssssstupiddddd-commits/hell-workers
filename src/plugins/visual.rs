@@ -5,7 +5,8 @@ use crate::game_state::PlayMode;
 use crate::systems::GameSystemSet;
 use crate::systems::command::{
     area_edit_handles_visual_system, area_selection_indicator_system,
-    sync_designation_indicator_system, update_designation_indicator_system,
+    dream_tree_planting_preview_system, sync_designation_indicator_system,
+    update_designation_indicator_system,
 };
 use crate::systems::jobs::building_completion_system;
 use crate::systems::logistics::resource_count_display_system;
@@ -181,6 +182,11 @@ impl Plugin for VisualPlugin {
                         _ => false,
                     },
                 ),
+        );
+
+        app.add_systems(
+            Update,
+            dream_tree_planting_preview_system.in_set(GameSystemSet::Visual),
         );
 
         // Haul visual systems (Phase 3: 運搬ビジュアル)

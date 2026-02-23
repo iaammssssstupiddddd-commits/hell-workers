@@ -19,8 +19,7 @@
 
 | Document | Status | Notes |
 |---|---|---|
-| [plant-trees-visuals-plan-2026-02-22.md](plant-trees-visuals-plan-2026-02-22.md) | 実装済み | `Plant Trees` の3フェーズ演出（魔法陣→急成長→生命力波及）を実装し、アセットはプレースホルダーで接続済み。 |
-| [refactor-roadmap-2026-02-22.md](refactor-roadmap-2026-02-22.md) | 実装済み | 現行実装を前提にした全体リファクタ実行計画（回帰テスト追加はスコープ外で Phase 1〜6 + 文書整備完了）。 |
+| [room-detection-plan-2026-02-23.md](room-detection-plan-2026-02-23.md) | Draft | 壁・扉・床の閉領域をRoomとして検出し、オーバーレイ表示する実装計画。 |
 
 ## アーカイブ計画書一覧 (`docs/plans/archive`)
 
@@ -39,6 +38,8 @@
 | `large-files-refactor-2026-02-16.md` | アーカイブ | 大規模ファイル分割リファクタ計画。 |
 | `participating-in-relationship.md` | アーカイブ | Relationship参加設計に関する計画。 |
 | `perf-top3-implementation-plan-2026-02-22.md` | アーカイブ | 直近Perf上位3件の最適化計画。 |
+| `plant-trees-visuals-plan-2026-02-22.md` | アーカイブ | `Plant Trees` の3フェーズ演出およびドラッグ時プレビュー追加の実装計画。 |
+| `refactor-roadmap-2026-02-22.md` | アーカイブ | 現行実装を前提にした全体リファクタ実行計画（回帰テスト追加はスコープ外）。 |
 | `refactor-500plus-files-phase-plan-2026-02-14.md` | アーカイブ | 500行超ファイルの段階的リファクタ計画。 |
 | `refactor-implementation-order-2026-02-20.md` | アーカイブ | リファクタ実装順のガイド。 |
 | `refactor-phase-plan-2026-02.md` | アーカイブ | フェーズ分割リファクタ計画。 |

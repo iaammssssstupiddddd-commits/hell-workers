@@ -173,6 +173,7 @@ fn handle_left_just_pressed_input(
         return false;
     };
     let snapped_pos = WorldMap::snap_to_grid_edge(world_pos);
+    let snapped_center = WorldMap::snap_to_grid_center(world_pos);
 
     if try_start_direct_edit_drag(
         task_context.0,
@@ -203,7 +204,8 @@ fn handle_left_just_pressed_input(
         }
         TaskMode::AssignTask(None) => task_context.0 = TaskMode::AssignTask(Some(snapped_pos)),
         TaskMode::DreamPlanting(None) => {
-            task_context.0 = TaskMode::DreamPlanting(Some(snapped_pos))
+            area_edit_session.dream_planting_preview_seed = Some(rand::random::<u64>());
+            task_context.0 = TaskMode::DreamPlanting(Some(snapped_center))
         }
         _ => {}
     }
@@ -236,6 +238,10 @@ pub fn task_area_selection_system(
     mut area_edit_session: ResMut<AreaEditSession>,
     mut area_edit_history: ResMut<AreaEditHistory>,
 ) {
+    if !matches!(task_context.0, TaskMode::DreamPlanting(_)) {
+        area_edit_session.dream_planting_preview_seed = None;
+    }
+
     if ui_input_state.pointer_over_ui {
         return;
     }

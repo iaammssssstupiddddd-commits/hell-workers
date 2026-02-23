@@ -118,18 +118,20 @@ Dream を消費してプレイヤーが指定した矩形範囲に木を植え�
 
 1. 下部バーの **「Dream」ボタン** を押してサブメニューを開く
 2. **「Plant Trees」ボタン** を選択 → `TaskMode::DreamPlanting` に移行
-3. マップ上をドラッグして植林エリアを指定
-4. ドラッグ解放でイベントが発行され、植林候補が確定する
+3. マップ上でドラッグ開始（開始時にプレビュー用シードを固定）
+4. ドラッグ中は、実際に生成される候補位置を半透明ツリーでプレビュー表示
+5. ドラッグ解放でイベントが発行され、同じシード・同じ計画関数で植林候補を確定する
 
 ### 6.2 植林ルール
 
 | 項目 | 値 | 説明 |
 | :--- | :--- | :--- |
 | スポーン率 | 0.25 本/タイル | 指定タイル数 × 0.25 を目安に生成 |
-| 最低面積 | 4 タイル（2×2） | これ未満はキャンセル（無消費） |
+| 最低サイズ | 幅2かつ高さ2タイル以上 | 2×2 正方形以上を必須とする（例: 1×4 は不可） |
 | 1回あたり上限 | 20 本 | `DREAM_TREE_MAX_PER_CAST` |
 | 全体木上限 | 300 本 | `DREAM_TREE_GLOBAL_CAP`（自然再生と共有） |
 | コスト | 20 Dream/本 | `DREAM_TREE_COST_PER_TREE` |
+| プレビュー一致 | あり | プレビューと確定で同一の計画関数・シードを使用 |
 
 ### 6.3 制約条件
 
@@ -141,6 +143,7 @@ Dream を消費してプレイヤーが指定した矩形範囲に木を植え�
 
 最終生成本数は **スポーン率・候補数・1回上限・全体上限・Dream残高** の最小値で決まります。
 いずれかが 0 の場合は Dream を消費せずに終了します。
+また、最小サイズ制約は「面積」ではなく「幅・高さを個別判定」します。
 
 ### 6.4 資源再生との関係
 
@@ -165,9 +168,10 @@ Dream を消費してプレイヤーが指定した矩形範囲に木を植え�
 | ファイル | 内容 |
 | :--- | :--- |
 | `src/systems/dream_tree_planting.rs` | 植林コアロジック |
-| `src/systems/command/area_selection/state.rs` | `AreaEditSession.pending_dream_planting` フィールド |
+| `src/systems/command/area_selection/state.rs` | `pending_dream_planting` と `dream_planting_preview_seed` の保持 |
 | `src/systems/command/area_selection/input.rs` | `DreamPlanting` モードの入力分岐とドラッグ入力処理 |
 | `src/systems/command/area_selection/input/release.rs` | `DreamPlanting` モードのリリース確定処理 |
+| `src/systems/command/area_selection/indicator.rs` | 植林候補プレビュー描画（`DreamTreePreviewIndicator`） |
 | `src/interface/ui/components.rs` | `MenuState::Dream`, `MenuAction::{ToggleDream, SelectDreamPlanting}`, `DreamSubMenu` |
 | `src/interface/ui/setup/submenus.rs` | Dream サブメニューのスポーン |
 | `src/plugins/logic.rs` | `dream_tree_planting_system` 登録 |
@@ -189,6 +193,7 @@ Dream 植林で生成された木は `PlantTreeVisualState` を持って開始�
 
 - 木の障害物状態は生成時点で `ObstaclePosition` と `world_map.add_obstacle` により即座に反映される
 - 地形タイル（Dirt/Grass/Sand/River）は書き換えない
+- ドラッグ中は `DreamTreePreviewIndicator` を表示し、解放時に同じ計画結果で確定する
 
 ---
 
@@ -227,4 +232,3 @@ Dream 植林で生成された木は `PlantTreeVisualState` を持って開始�
 
 - Soul 鼓舞・作業速度バフなど Dream 消費効果
 - Familiar からの明示的な睡眠命令
-
