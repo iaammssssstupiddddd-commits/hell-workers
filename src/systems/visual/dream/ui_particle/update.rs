@@ -319,8 +319,8 @@ pub fn ui_particle_update_system(
             if let Some(root) = ui_bubble_layer {
                 let mut trail_transform = Transform::from_translation(Vec3::ZERO);
                 if speed > 1.0 {
-                    let angle =
-                        particle.velocity.y.atan2(particle.velocity.x) - std::f32::consts::FRAC_PI_2;
+                    let angle = particle.velocity.y.atan2(particle.velocity.x)
+                        - std::f32::consts::FRAC_PI_2;
                     trail_transform.rotation = Quat::from_rotation_z(angle);
                 }
 

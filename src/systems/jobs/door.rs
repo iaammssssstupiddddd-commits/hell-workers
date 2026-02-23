@@ -130,7 +130,13 @@ pub fn door_auto_close_system(
     game_assets: Res<GameAssets>,
     mut world_map: ResMut<WorldMap>,
     q_souls: Query<(&Transform, &Path), With<DamnedSoul>>,
-    mut q_doors: Query<(Entity, &Transform, &mut Door, &mut Sprite, Option<&mut DoorCloseTimer>)>,
+    mut q_doors: Query<(
+        Entity,
+        &Transform,
+        &mut Door,
+        &mut Sprite,
+        Option<&mut DoorCloseTimer>,
+    )>,
 ) {
     for (entity, transform, mut door, mut sprite, timer_opt) in q_doors.iter_mut() {
         if door.state != DoorState::Open {

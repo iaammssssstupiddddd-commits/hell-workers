@@ -182,17 +182,11 @@ fn place_building_blueprint(
     let custom_size = Some(building_size(building_type));
 
     let replace_wall_entity = if building_type == BuildingType::Door {
-        world_map
-            .buildings
-            .get(&grid)
-            .copied()
-            .filter(|entity| {
-                q_buildings
-                    .get(*entity)
-                    .is_ok_and(|building| {
-                        building.kind == BuildingType::Wall && !building.is_provisional
-                    })
+        world_map.buildings.get(&grid).copied().filter(|entity| {
+            q_buildings.get(*entity).is_ok_and(|building| {
+                building.kind == BuildingType::Wall && !building.is_provisional
             })
+        })
     } else {
         None
     };

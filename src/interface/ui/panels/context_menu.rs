@@ -184,12 +184,12 @@ pub fn context_menu_system(
                         &theme,
                     );
                     if let Ok(door) = q_doors.get(entity) {
-                        let (label, action) = if door.state == crate::systems::jobs::DoorState::Locked
-                        {
-                            ("Unlock Door", MenuAction::ToggleDoorLock(entity))
-                        } else {
-                            ("Lock Door", MenuAction::ToggleDoorLock(entity))
-                        };
+                        let (label, action) =
+                            if door.state == crate::systems::jobs::DoorState::Locked {
+                                ("Unlock Door", MenuAction::ToggleDoorLock(entity))
+                            } else {
+                                ("Lock Door", MenuAction::ToggleDoorLock(entity))
+                            };
                         spawn_menu_item(menu, label, action, &game_assets, &theme);
                     }
                 }

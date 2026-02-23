@@ -63,12 +63,14 @@ fn wall_connections_system(
         // マップからその座標にあるエンティティを取得
         if let Some(&entity) = world_map.buildings.get(&(gx, gy)) {
             if is_wall(gx, gy, &world_map, &q_walls_check) {
-                let is_plain_wall = q_walls_check.get(entity).ok().is_some_and(
-                    |(building_opt, blueprint_opt)| {
-                        building_opt.is_some_and(|b| b.kind == BuildingType::Wall)
-                            || blueprint_opt.is_some_and(|bp| bp.kind == BuildingType::Wall)
-                    },
-                );
+                let is_plain_wall =
+                    q_walls_check
+                        .get(entity)
+                        .ok()
+                        .is_some_and(|(building_opt, blueprint_opt)| {
+                            building_opt.is_some_and(|b| b.kind == BuildingType::Wall)
+                                || blueprint_opt.is_some_and(|bp| bp.kind == BuildingType::Wall)
+                        });
                 if !is_plain_wall {
                     continue;
                 }
