@@ -218,8 +218,12 @@ pub(super) fn handle_left_just_released_input(
             task_context.0 = TaskMode::CancelDesignation(None);
         }
         TaskMode::DreamPlanting(Some(start_pos)) => {
-            let end_pos = WorldMap::snap_to_grid_edge(world_pos);
-            area_edit_session.pending_dream_planting = Some((start_pos, end_pos));
+            let end_pos = WorldMap::snap_to_grid_center(world_pos);
+            let seed = area_edit_session
+                .dream_planting_preview_seed
+                .take()
+                .unwrap_or_else(rand::random::<u64>);
+            area_edit_session.pending_dream_planting = Some((start_pos, end_pos, seed));
             task_context.0 = TaskMode::DreamPlanting(None);
         }
         _ => {}
