@@ -24,8 +24,8 @@ use crate::game_state::{
 };
 use crate::interface::ui::components::*;
 use crate::interface::ui::theme::UiTheme;
-use crate::systems::jobs::{Door, DoorState, apply_door_state};
 use crate::systems::command::{TaskArea, TaskMode};
+use crate::systems::jobs::{Door, DoorState, apply_door_state};
 use bevy::prelude::*;
 use bevy::ui::RelativeCursorPosition;
 
@@ -169,10 +169,7 @@ pub fn ui_interaction_system(
 }
 
 pub fn door_lock_action_system(
-    interaction_query: Query<
-        (&Interaction, &MenuButton),
-        (Changed<Interaction>, With<Button>),
-    >,
+    interaction_query: Query<(&Interaction, &MenuButton), (Changed<Interaction>, With<Button>)>,
     mut q_doors: Query<(&Transform, &mut Door, &mut Sprite)>,
     mut world_map: ResMut<crate::world::map::WorldMap>,
     game_assets: Res<crate::assets::GameAssets>,

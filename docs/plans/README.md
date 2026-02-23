@@ -1,6 +1,6 @@
 # Plans Index
 
-`docs/plans` の文書ステータス一覧（更新日: 2026-02-22）。
+`docs/plans` の文書ステータス一覧（更新日: 2026-02-23）。
 
 ## 新規計画書の作り方
 
@@ -19,6 +19,7 @@
 
 | Document | Status | Notes |
 |---|---|---|
+| [plant-trees-visuals-plan-2026-02-22.md](plant-trees-visuals-plan-2026-02-22.md) | 実装済み | `Plant Trees` の3フェーズ演出（魔法陣→急成長→生命力波及）を実装し、アセットはプレースホルダーで接続済み。 |
 | [refactor-roadmap-2026-02-22.md](refactor-roadmap-2026-02-22.md) | 実装済み | 現行実装を前提にした全体リファクタ実行計画（回帰テスト追加はスコープ外で Phase 1〜6 + 文書整備完了）。 |
 
 ## アーカイブ計画書一覧 (`docs/plans/archive`)

@@ -10,6 +10,7 @@ pub mod gather;
 pub mod haul;
 pub mod mud_mixer;
 pub mod placement_ghost;
+pub mod plant_trees;
 pub mod soul;
 pub mod speech;
 pub mod tank;

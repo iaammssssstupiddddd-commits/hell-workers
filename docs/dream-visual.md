@@ -128,7 +128,18 @@ Dream システムの視覚的フィードバック実装についてのドキ�
 - Building 情報パネルでも RestArea の現在 Dream 生成レートを  
   `Resting: current/capacity | Dream: x.xx/s` で表示
 
-## 6. 関連ファイル
+## 6. Plant Trees 植林エフェクト（`plant_trees::*`）
+
+Dream 消費による植林は、ロジックで木を生成したあとに Visual 系で 3 フェーズ演出を再生します。
+
+- 木生成時に `PlantTreeVisualState` を付与し、演出開始時は縮小スケール＋発光色で初期化
+- フェーズ1: `PlantTreeMagicCircle` により予兆の魔法陣をフェードイン/拡大/フェードアウト
+- フェーズ2: 木スプライトを `scale: 0.05 -> 1.0` に補間し、青白い色から白へ遷移
+- フェーズ3: `PlantTreeLifeSpark` を根元から放射し、短寿命で減衰デスポーン
+- 木タイルの地形データは変更せず、障害物判定は `ObstaclePosition` で維持
+- `plant_tree_magic_circle.png` / `plant_tree_life_spark.png` は現時点ではプレースホルダー画像
+
+## 7. 関連ファイル
 
 | ファイル | 内容 |
 | :--- | :--- |
@@ -136,14 +147,20 @@ Dream システムの視覚的フィードバック実装についてのドキ�
 | `src/systems/visual/dream/gain_visual.rs` | **Dream 獲得 UI パーティクル・ポップアップ生成/更新（拡張予定）** |
 | `src/systems/visual/dream/particle.rs` | Dream 粒子（World 空間）生成/更新 |
 | `src/systems/visual/dream/ui_particle.rs` | UI パーティクル移動アニメーション・軌道計算 |
+| `src/systems/dream_tree_planting.rs` | Dream 植林ロジック（演出状態付き Tree 生成） |
+| `src/systems/visual/plant_trees/components.rs` | 植林演出コンポーネント |
+| `src/systems/visual/plant_trees/systems.rs` | 植林 3 フェーズ演出更新 |
+| `src/plugins/visual.rs` | Plant Trees 演出システム登録 |
 | `src/systems/visual/dream/dream_bubble_material.rs` | `DreamBubbleMaterial`（World用 Material2d）・`DreamBubbleUiMaterial`（UI用 UiMaterial）定義 |
 | `assets/shaders/dream_bubble.wgsl` | World 空間用フラグメントシェーダー |
 | `assets/shaders/dream_bubble_ui.wgsl` | UI 空間用フラグメントシェーダー（バブルクラスター対応） |
 | `src/interface/ui/setup/time_control.rs` | Dream テキストノード生成 |
 | `src/interface/ui/interaction/status_display.rs` | Dream 表示更新とパルス演出 |
 | `src/interface/ui/presentation/builders.rs` | RestArea ツールチップの Dream/s 表示 |
+| `assets/textures/ui/plant_tree_magic_circle.png` | 植林予兆エフェクト（プレースホルダー） |
+| `assets/textures/ui/plant_tree_life_spark.png` | 生命力スパーク（プレースホルダー） |
 
-## 7. 定数（ビジュアル関連）
+## 8. 定数（ビジュアル関連）
 
 | 定数 | 値 | 用途 |
 | :--- | :--- | :--- |
@@ -167,3 +184,8 @@ Dream システムの視覚的フィードバック実装についてのドキ�
 | `DREAM_UI_MERGE_RADIUS` | 40.0 | 泡同士が吸い寄り合体する距離 |
 | `DREAM_UI_MERGE_MAX_COUNT` | 8 | 1つの泡が合体できる回数の上限 |
 | `DREAM_UI_MERGE_DURATION` | 0.25 | 合体にかかる時間（秒） |
+| `DREAM_TREE_MAGIC_CIRCLE_DURATION` | 0.20 | 植林フェーズ1（魔法陣）の再生時間 |
+| `DREAM_TREE_GROWTH_DURATION` | 0.35 | 植林フェーズ2（急成長）の再生時間 |
+| `DREAM_TREE_LIFE_SPARK_DURATION` | 0.28 | 植林フェーズ3（スパーク）の寿命 |
+| `DREAM_TREE_MAGIC_CIRCLE_SCALE_START/END` | 0.45 / 1.35 | 魔法陣スプライトの拡大率 |
+| `DREAM_TREE_LIFE_SPARK_COUNT` | 8 | 木1本あたりのスパーク生成数 |

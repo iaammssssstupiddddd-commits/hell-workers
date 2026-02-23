@@ -85,7 +85,9 @@ pub struct GameAssets {
     pub icon_water_small: Handle<Image>,
     pub icon_arrow_down: Handle<Image>,
     pub icon_arrow_right: Handle<Image>,
-    pub glow_circle: Handle<Image>,   // グロー効果用
+    pub glow_circle: Handle<Image>, // グロー効果用
+    pub plant_tree_magic_circle: Handle<Image>,
+    pub plant_tree_life_spark: Handle<Image>,
     pub bubble_9slice: Handle<Image>, // 9-slice吹き出し画像
     // Building Visual Icons
     pub icon_hammer: Handle<Image>,

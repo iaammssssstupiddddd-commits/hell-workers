@@ -1,4 +1,7 @@
-use crate::constants::{DREAM_UI_MERGE_DURATION, DREAM_UI_MERGE_MAX_COUNT, DREAM_UI_MERGE_MAX_MASS, DREAM_UI_MERGE_RADIUS};
+use crate::constants::{
+    DREAM_UI_MERGE_DURATION, DREAM_UI_MERGE_MAX_COUNT, DREAM_UI_MERGE_MAX_MASS,
+    DREAM_UI_MERGE_RADIUS,
+};
 use bevy::prelude::*;
 
 use crate::systems::visual::dream::DreamGainUiParticle;

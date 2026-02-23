@@ -47,6 +47,10 @@ use crate::systems::visual::haul::{
     wheelbarrow_follow_system,
 };
 use crate::systems::visual::mud_mixer::update_mud_mixer_visual_system;
+use crate::systems::visual::plant_trees::{
+    setup_plant_tree_visual_state_system, update_plant_tree_growth_system,
+    update_plant_tree_life_spark_system, update_plant_tree_magic_circle_system,
+};
 use crate::systems::visual::soul::{
     progress_bar_system, soul_status_visual_system, sync_progress_bar_position_system,
     task_link_system, update_progress_bar_fill_system,
@@ -206,6 +210,18 @@ impl Plugin for VisualPlugin {
                 dream_trail_ghost_update_system,
                 dream_icon_absorb_system,
                 update_all_floating_texts_system,
+            )
+                .chain()
+                .in_set(GameSystemSet::Visual),
+        );
+
+        app.add_systems(
+            Update,
+            (
+                setup_plant_tree_visual_state_system,
+                update_plant_tree_magic_circle_system,
+                update_plant_tree_growth_system,
+                update_plant_tree_life_spark_system,
             )
                 .chain()
                 .in_set(GameSystemSet::Visual),

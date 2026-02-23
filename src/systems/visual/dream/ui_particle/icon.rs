@@ -1,6 +1,4 @@
-use crate::constants::{
-    DREAM_ICON_ABSORB_DURATION, DREAM_ICON_BASE_SIZE, DREAM_ICON_PULSE_SIZE,
-};
+use crate::constants::{DREAM_ICON_ABSORB_DURATION, DREAM_ICON_BASE_SIZE, DREAM_ICON_PULSE_SIZE};
 use crate::interface::ui::theme::UiTheme;
 use bevy::prelude::*;
 
@@ -29,7 +27,8 @@ pub fn dream_icon_absorb_system(
             let sin_val = (progress * std::f32::consts::PI).sin();
 
             // サイズパルス: 16→20→16
-            let size = DREAM_ICON_BASE_SIZE + (DREAM_ICON_PULSE_SIZE - DREAM_ICON_BASE_SIZE) * sin_val;
+            let size =
+                DREAM_ICON_BASE_SIZE + (DREAM_ICON_PULSE_SIZE - DREAM_ICON_BASE_SIZE) * sin_val;
             node.width = Val::Px(size);
             node.height = Val::Px(size);
 
