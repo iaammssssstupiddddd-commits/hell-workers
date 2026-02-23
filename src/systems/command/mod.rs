@@ -79,6 +79,9 @@ pub struct DesignationIndicator(pub Entity);
 #[derive(Component)]
 pub struct AreaSelectionIndicator;
 
+#[derive(Component)]
+pub struct DreamTreePreviewIndicator;
+
 #[derive(Component, Clone, Copy, Debug)]
 pub struct AreaEditHandleVisual {
     pub owner: Entity,
@@ -102,7 +105,7 @@ pub enum AreaEditHandleKind {
 pub use area_selection::{
     AreaEditClipboard, AreaEditHistory, AreaEditPresets, AreaEditSession,
     area_selection_indicator_system, blueprint_cancel_cleanup_system, count_positions_in_area,
-    overlap_summary_from_areas, task_area_edit_cursor_system,
+    dream_tree_planting_preview_system, overlap_summary_from_areas, task_area_edit_cursor_system,
     task_area_edit_history_shortcuts_system, task_area_selection_system,
 };
 pub use assign_task::assign_task_system;
