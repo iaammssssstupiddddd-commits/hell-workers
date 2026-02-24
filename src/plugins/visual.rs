@@ -10,6 +10,7 @@ use crate::systems::command::{
 };
 use crate::systems::jobs::building_completion_system;
 use crate::systems::logistics::resource_count_display_system;
+use crate::systems::room::sync_room_overlay_tiles_system;
 use crate::systems::soul_ai::visual::gathering::{
     gathering_debug_visualization_system, gathering_visual_update_system,
 };
@@ -80,6 +81,12 @@ impl Plugin for VisualPlugin {
         app.add_plugins(Material2dPlugin::<TaskAreaMaterial>::default());
         app.add_plugins(Material2dPlugin::<DreamBubbleMaterial>::default());
         app.add_plugins(UiMaterialPlugin::<DreamBubbleUiMaterial>::default());
+
+        app.add_systems(
+            Update,
+            sync_room_overlay_tiles_system.in_set(GameSystemSet::Visual),
+        );
+
         // Blueprint visual systems (separate to avoid tuple limit)
         app.add_systems(
             Update,
