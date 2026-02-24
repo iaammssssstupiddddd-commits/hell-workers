@@ -19,7 +19,7 @@
 
 | Document | Status | Notes |
 |---|---|---|
-| [room-detection-plan-2026-02-23.md](room-detection-plan-2026-02-23.md) | Draft | 壁・扉・床の閉領域をRoomとして検出し、オーバーレイ表示する実装計画。 |
+| [room-detection-plan-2026-02-23.md](room-detection-plan-2026-02-23.md) | Implemented | 壁・扉・床の閉領域をRoomとして検出し、オーバーレイ表示する実装計画。 |
 
 ## アーカイブ計画書一覧 (`docs/plans/archive`)
 

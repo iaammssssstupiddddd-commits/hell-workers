@@ -76,7 +76,19 @@ pub fn floor_placement_system(
                 );
             } else {
                 let area = wall_line_area(start_pos, snapped_pos);
-                apply_wall_placement(&mut commands, &mut world_map, &area);
+                let existing_floor_building_grids: HashSet<(i32, i32)> = q_floor_buildings
+                    .iter()
+                    .filter_map(|(building, transform)| {
+                        (building.kind == BuildingType::Floor)
+                            .then(|| WorldMap::world_to_grid(transform.translation.truncate()))
+                    })
+                    .collect();
+                apply_wall_placement(
+                    &mut commands,
+                    &mut world_map,
+                    &area,
+                    &existing_floor_building_grids,
+                );
             }
 
             // Reset mode (continue placing if shift held - TODO)
@@ -194,7 +206,12 @@ fn apply_floor_placement(
     }
 }
 
-fn apply_wall_placement(commands: &mut Commands, world_map: &mut WorldMap, area: &TaskArea) {
+fn apply_wall_placement(
+    commands: &mut Commands,
+    world_map: &mut WorldMap,
+    area: &TaskArea,
+    existing_floor_building_grids: &HashSet<(i32, i32)>,
+) {
     let min_grid = WorldMap::world_to_grid(area.min + Vec2::splat(0.1));
     let max_grid = WorldMap::world_to_grid(area.max - Vec2::splat(0.1));
 
@@ -223,6 +240,9 @@ fn apply_wall_placement(commands: &mut Commands, world_map: &mut WorldMap, area:
             if world_map.buildings.contains_key(&(gx, gy))
                 || world_map.stockpiles.contains_key(&(gx, gy))
             {
+                continue;
+            }
+            if !existing_floor_building_grids.contains(&(gx, gy)) {
                 continue;
             }
             valid_tiles.push((gx, gy));

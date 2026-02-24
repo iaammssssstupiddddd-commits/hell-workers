@@ -4,6 +4,7 @@ pub mod familiar_ai;
 pub mod jobs;
 pub mod logistics;
 pub mod obstacle;
+pub mod room;
 pub mod soul_ai;
 pub mod spatial;
 pub mod time;

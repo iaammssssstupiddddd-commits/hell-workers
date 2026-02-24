@@ -189,6 +189,22 @@ flowchart TD
 - 魂は扉タイルへ進入する前に短時間待機し、通過後は一定時間で自動的に閉じます。
 - コンテキストメニューからロック/アンロックを切り替えられます。
 
+### Room 検出 (Room Detection)
+
+壁・扉・床で囲まれた空間は、`Room` エンティティとして自動検出されます。
+
+- **成立条件**:
+  - 内部タイルがすべて完成 `BuildingType::Floor`
+  - 外周が完成 `BuildingType::Wall`（`is_provisional == false`）または `BuildingType::Door`
+  - 境界にドアが1つ以上存在
+  - タイル数が `ROOM_MAX_TILES`（400）以下
+- **検出方式**: 4近傍 Flood-fill
+- **再判定トリガー**:
+  - `Building` / `Door` の追加・変更
+  - `WorldMap.buildings` 差分（削除・置換）
+- **自己修復**: 2秒ごとの検証で不正な Room を破棄し、dirty 再検出に戻す
+- **可視化**: 成立 Room の床タイルに半透明オーバーレイを表示
+
 ### MudMixer と Stasis Mud
 - **MudMixer**: 2x2 の生産施設。
     - **建設**: 木材 × 4 で建設。
