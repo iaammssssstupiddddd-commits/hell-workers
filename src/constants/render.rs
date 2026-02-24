@@ -1,5 +1,7 @@
 //! Z軸レイヤー管理 (RenderLayers)
 
+use bevy::prelude::Color;
+
 /// 背景マップのレイヤー
 pub const Z_MAP: f32 = 0.0;
 /// 地形境界オーバーレイ: Sand（Riverの上）
@@ -8,6 +10,8 @@ pub const Z_MAP_SAND: f32 = 0.01;
 pub const Z_MAP_DIRT: f32 = 0.02;
 /// 地形境界オーバーレイ: Grass（最高優先度）
 pub const Z_MAP_GRASS: f32 = 0.03;
+/// Roomオーバーレイ（床より上、拾得アイテムより下）
+pub const Z_ROOM_OVERLAY: f32 = 0.08;
 /// 地面にあるアイテム（資材など）のベースレイヤー
 pub const Z_ITEM: f32 = 0.1;
 /// オーラや範囲表示のレイヤー（地面とキャラクターの間）
@@ -38,3 +42,6 @@ pub const Z_FLOATING_TEXT: f32 = 10.0;
 pub const Z_SPEECH_BUBBLE: f32 = 11.0;
 /// 吹き出し背景のZレイヤー
 pub const Z_SPEECH_BUBBLE_BG: f32 = 10.9;
+
+/// Room オーバーレイ色（半透明）
+pub const ROOM_OVERLAY_COLOR: Color = Color::srgba(0.2, 0.7, 1.0, 0.22);

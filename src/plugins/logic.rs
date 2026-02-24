@@ -22,6 +22,11 @@ use crate::systems::jobs::wall_construction::{
 use crate::systems::logistics::item_lifetime::despawn_expired_items_system;
 use crate::systems::logistics::transport_request::TransportRequestPlugin;
 use crate::systems::obstacle::obstacle_cleanup_system;
+use crate::systems::room::{
+    RoomDetectionState, RoomTileLookup, RoomValidationState, detect_rooms_system,
+    mark_room_dirty_from_building_changes_system, mark_room_dirty_from_world_map_diff_system,
+    validate_rooms_system,
+};
 use crate::systems::soul_ai::SoulAiPlugin;
 use crate::world::regrowth::{RegrowthManager, tree_regrowth_system};
 use bevy::prelude::*;
@@ -40,6 +45,9 @@ impl Plugin for LogicPlugin {
         app.init_resource::<AreaEditClipboard>();
         app.init_resource::<AreaEditPresets>();
         app.init_resource::<crate::entities::familiar::FamiliarColorAllocator>();
+        app.init_resource::<RoomDetectionState>();
+        app.init_resource::<RoomTileLookup>();
+        app.init_resource::<RoomValidationState>();
 
         app.add_systems(
             Update,
@@ -69,6 +77,18 @@ impl Plugin for LogicPlugin {
                 dream_tree_planting_system,
             )
                 .chain()
+                .in_set(GameSystemSet::Logic),
+        )
+        .add_systems(
+            Update,
+            (
+                mark_room_dirty_from_building_changes_system,
+                mark_room_dirty_from_world_map_diff_system,
+                validate_rooms_system,
+                detect_rooms_system,
+            )
+                .chain()
+                .after(dream_tree_planting_system)
                 .in_set(GameSystemSet::Logic),
         )
         .add_systems(
