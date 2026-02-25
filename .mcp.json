@@ -1,0 +1,19 @@
+{
+  "mcpServers": {
+    "rust-analyzer-mcp": {
+      "type": "stdio",
+      "command": "/usr/bin/python3",
+      "args": [
+        "/home/satotakumi/projects/hell-workers/scripts/rust_analyzer_mcp_stdio_adapter.py",
+        "/home/satotakumi/.cargo/bin/rust-analyzer-mcp"
+      ],
+      "env": {}
+    },
+    "docsrs-mcp": {
+      "type": "stdio",
+      "command": "/home/satotakumi/.cargo/bin/docsrs-mcp",
+      "args": [],
+      "env": {}
+    }
+  }
+}
