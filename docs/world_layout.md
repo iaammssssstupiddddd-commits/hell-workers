@@ -48,6 +48,23 @@
 ### 3. 初期資源
 - ゲーム開始時、中央の拠点付近に少量の木材アイテム (`ResourceItem(Wood)`) が配置されます。
 
+## 座標変換 (Coordinate System)
+
+| 関数 | 用途 |
+|:--|:--|
+| `WorldMap::world_to_grid(Vec2) -> (i32, i32)` | ワールド座標 → グリッド座標 |
+| `WorldMap::grid_to_world(i32, i32) -> Vec2` | グリッド座標 → ワールド座標 |
+| `WorldMap::pos_to_idx(i32, i32) -> Option<usize>` | グリッド → フラット配列インデックス |
+| `WorldMap::snap_to_grid_center(Vec2) -> Vec2` | タイル中心にスナップ |
+| `WorldMap::snap_to_grid_edge(Vec2) -> Vec2` | タイル境界線にスナップ（ゾーン配置等） |
+
+- **原点**: グリッド (0, 0) = マップ中心 = ワールド座標 (0.0, 0.0)
+- **タイル中心**: ワールド整数座標がタイル中心と一致（1px の狂いなし）
+- **フラット配列インデックス**: `y * MAP_WIDTH + x`（行優先）
+- **境界到達パス**: 2x2以上の建築物など占有領域への隣接パスは `find_path_to_boundary` を使用
+
+実装詳細: `src/world/map/mod.rs` の `WorldMap` メソッド群
+
 ## 物理衝突と通行制御
 
 - **通行不可オブジェクト**: 木、岩、川は物理的な障害物です。

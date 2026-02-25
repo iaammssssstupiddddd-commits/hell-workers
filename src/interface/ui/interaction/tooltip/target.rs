@@ -7,6 +7,7 @@ use bevy::prelude::*;
 pub(crate) enum TooltipTarget {
     UiButton(Entity),
     WorldEntity(Entity),
+    PlacementFailure,
 }
 
 pub(crate) fn is_tooltip_suppressed_for_expanded_menu(

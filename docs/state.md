@@ -13,18 +13,7 @@
 | `ZonePlace` | ゾーン配置中 | Zoneボタンクリック |
 | `TaskDesignation` | タスク指定中（伐採/採掘など） | Ordersメニュー選択 |
 
-## 状態遷移図
-
-```mermaid
-stateDiagram-v2
-    [*] --> Normal
-    Normal --> BuildingPlace: Buildボタン
-    Normal --> ZonePlace: Zoneボタン
-    Normal --> TaskDesignation: Ordersメニュー
-    BuildingPlace --> Normal: Escキー
-    ZonePlace --> Normal: Escキー
-    TaskDesignation --> Normal: Escキー
-```
+遷移: Normal ↔ BuildingPlace（Buildボタン/Esc）、Normal ↔ ZonePlace（Zoneボタン/Esc）、Normal ↔ TaskDesignation（Ordersメニュー/Esc）。
 
 ## コンテキストリソース
 
@@ -35,6 +24,28 @@ stateDiagram-v2
 | `BuildContext` | `Option<BuildingType>` | 配置する建物の種類 |
 | `ZoneContext` | `Option<ZoneType>` | 配置するゾーンの種類 |
 | `TaskContext` | `TaskMode` | タスクの詳細（伐採/採掘/運搬など） |
+
+## TaskMode バリアント一覧
+
+`src/systems/command/mod.rs`:
+
+| バリアント | 用途 | ドラッグ開始位置 |
+|:--|:--|:--|
+| `None` | 通常モード（デフォルト） | — |
+| `DesignateChop(Option<Vec2>)` | 伐採指示（矩形ドラッグ） | Some = ドラッグ中 |
+| `DesignateMine(Option<Vec2>)` | 採掘指示（矩形ドラッグ） | Some = ドラッグ中 |
+| `DesignateHaul(Option<Vec2>)` | 運搬指示（矩形ドラッグ） | Some = ドラッグ中 |
+| `CancelDesignation(Option<Vec2>)` | 指示キャンセル（矩形ドラッグ） | Some = ドラッグ中 |
+| `SelectBuildTarget` | 建築対象選択中 | — |
+| `AreaSelection(Option<Vec2>)` | TaskArea 編集モード | Some = 新規矩形ドラッグ中 |
+| `AssignTask(Option<Vec2>)` | 未割当タスクを Familiar に割り当て | Some = ドラッグ中 |
+| `ZonePlacement(ZoneType, Option<Vec2>)` | Stockpile/Zone 配置 | Some = ドラッグ中 |
+| `ZoneRemoval(ZoneType, Option<Vec2>)` | Zone 解除 | Some = ドラッグ中 |
+| `FloorPlace(Option<Vec2>)` | 床エリア配置 | Some = ドラッグ中 |
+| `WallPlace(Option<Vec2>)` | 壁ライン配置 | Some = ドラッグ中 |
+| `DreamPlanting(Option<Vec2>)` | Dream 植林モード | Some = ドラッグ中 |
+
+`Option<Vec2>` は `None` = 待機、`Some(pos)` = ドラッグ開始位置（進行中）を示す。
 
 ## TaskDesignation の補足（TaskArea 編集）
 
@@ -63,27 +74,7 @@ stateDiagram-v2
 
 ### run_if条件
 
-```rust
-// 例: BuildingPlaceモード時のみ実行
-.run_if(in_state(PlayMode::BuildingPlace))
-```
-
-### OnEnter / OnExit
-
-各モードの開始・終了時にログを出力。
-
-```rust
-.add_systems(OnEnter(PlayMode::BuildingPlace), log_enter_building_mode)
-.add_systems(OnExit(PlayMode::BuildingPlace), log_exit_building_mode)
-```
-
-## 旧リソースの削除状況
-
-| 旧リソース | 状態 |
-|------------|------|
-| `BuildMode` | ✅ 削除済み |
-| `ZoneMode` | ✅ 削除済み |
-| `TaskMode` (enum) | 📌 TaskContext内で使用中 |
+モード限定システムは `.run_if(in_state(PlayMode::BuildingPlace))` のようにステートでゲートする。`OnEnter` / `OnExit` でモード遷移時の初期化・クリーンアップを実装する。
 
 ## 関連ファイル
 

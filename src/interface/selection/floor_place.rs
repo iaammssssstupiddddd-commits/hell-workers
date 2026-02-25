@@ -3,7 +3,7 @@
 use crate::constants::*;
 use crate::game_state::{PlayMode, TaskContext};
 use crate::interface::camera::MainCamera;
-use crate::interface::ui::UiInputState;
+use crate::interface::ui::{PlacementFailureTooltip, UiInputState};
 use crate::systems::command::area_selection::wall_line_area;
 use crate::systems::command::{TaskArea, TaskMode};
 use crate::systems::jobs::floor_construction::{FloorConstructionSite, FloorTileBlueprint};
@@ -24,6 +24,7 @@ pub fn floor_placement_system(
     mut task_context: ResMut<TaskContext>,
     mut next_play_mode: ResMut<NextState<PlayMode>>,
     mut world_map: ResMut<WorldMap>,
+    mut placement_failure_tooltip: ResMut<PlacementFailureTooltip>,
     mut commands: Commands,
 ) {
     if ui_input_state.pointer_over_ui {
@@ -73,6 +74,7 @@ pub fn floor_placement_system(
                     &area,
                     &existing_floor_tile_grids,
                     &existing_floor_building_grids,
+                    &mut placement_failure_tooltip,
                 );
             } else {
                 let area = wall_line_area(start_pos, snapped_pos);
@@ -88,6 +90,7 @@ pub fn floor_placement_system(
                     &mut world_map,
                     &area,
                     &existing_floor_building_grids,
+                    &mut placement_failure_tooltip,
                 );
             }
 
@@ -130,6 +133,7 @@ fn apply_floor_placement(
     area: &TaskArea,
     existing_floor_tile_grids: &HashSet<(i32, i32)>,
     existing_floor_building_grids: &HashSet<(i32, i32)>,
+    placement_failure_tooltip: &mut PlacementFailureTooltip,
 ) {
     let min_grid = WorldMap::world_to_grid(area.min + Vec2::splat(0.1));
     let max_grid = WorldMap::world_to_grid(area.max - Vec2::splat(0.1));
@@ -139,6 +143,11 @@ fn apply_floor_placement(
     let height = (max_grid.1 - min_grid.1 + 1).abs();
 
     if width > FLOOR_MAX_AREA_SIZE || height > FLOOR_MAX_AREA_SIZE {
+        let reason = format!(
+            "Floor placement area is too large: {}x{} (max {}x{})",
+            width, height, FLOOR_MAX_AREA_SIZE, FLOOR_MAX_AREA_SIZE
+        );
+        placement_failure_tooltip.show(reason.clone());
         warn!(
             "Floor area too large: {}x{} (max {}x{})",
             width, height, FLOOR_MAX_AREA_SIZE, FLOOR_MAX_AREA_SIZE
@@ -148,20 +157,53 @@ fn apply_floor_placement(
 
     // Collect valid tiles
     let mut valid_tiles = Vec::new();
+    let mut first_reject_reason: Option<String> = None;
     for gy in min_grid.1..=max_grid.1 {
         for gx in min_grid.0..=max_grid.0 {
             // Check if walkable and no existing buildings/stockpiles
             if !world_map.is_walkable(gx, gy) {
+                if first_reject_reason.is_none() {
+                    first_reject_reason = Some(format!(
+                        "Tile ({},{}) is not walkable",
+                        gx, gy
+                    ));
+                }
                 continue;
             }
-            if world_map.buildings.contains_key(&(gx, gy))
-                || world_map.stockpiles.contains_key(&(gx, gy))
-            {
+            if world_map.buildings.contains_key(&(gx, gy)) {
+                if first_reject_reason.is_none() {
+                    first_reject_reason = Some(format!(
+                        "Tile ({},{}) is already occupied by a building",
+                        gx, gy
+                    ));
+                }
                 continue;
             }
-            if existing_floor_tile_grids.contains(&(gx, gy))
-                || existing_floor_building_grids.contains(&(gx, gy))
-            {
+            if world_map.stockpiles.contains_key(&(gx, gy)) {
+                if first_reject_reason.is_none() {
+                    first_reject_reason = Some(format!(
+                        "Tile ({},{}) is already occupied by a stockpile",
+                        gx, gy
+                    ));
+                }
+                continue;
+            }
+            if existing_floor_tile_grids.contains(&(gx, gy)) {
+                if first_reject_reason.is_none() {
+                    first_reject_reason = Some(format!(
+                        "Tile ({},{}) already has a floor blueprint",
+                        gx, gy
+                    ));
+                }
+                continue;
+            }
+            if existing_floor_building_grids.contains(&(gx, gy)) {
+                if first_reject_reason.is_none() {
+                    first_reject_reason = Some(format!(
+                        "Tile ({},{}) already has a completed floor",
+                        gx, gy
+                    ));
+                }
                 continue;
             }
             valid_tiles.push((gx, gy));
@@ -169,9 +211,14 @@ fn apply_floor_placement(
     }
 
     if valid_tiles.is_empty() {
-        warn!("No valid tiles for floor placement in selected area");
+        let reason = first_reject_reason
+            .unwrap_or_else(|| "No valid floor tile in selected area".to_string());
+        placement_failure_tooltip.show(reason.clone());
+        warn!("No valid tiles for floor placement in selected area: {}", reason);
         return;
     }
+
+    placement_failure_tooltip.clear();
 
     let tiles_total = valid_tiles.len() as u32;
     let center_grid = valid_tiles[valid_tiles.len() / 2];
@@ -211,6 +258,7 @@ fn apply_wall_placement(
     world_map: &mut WorldMap,
     area: &TaskArea,
     existing_floor_building_grids: &HashSet<(i32, i32)>,
+    placement_failure_tooltip: &mut PlacementFailureTooltip,
 ) {
     let min_grid = WorldMap::world_to_grid(area.min + Vec2::splat(0.1));
     let max_grid = WorldMap::world_to_grid(area.max - Vec2::splat(0.1));
@@ -219,30 +267,66 @@ fn apply_wall_placement(
     let height = (max_grid.1 - min_grid.1 + 1).abs();
 
     if width > FLOOR_MAX_AREA_SIZE || height > FLOOR_MAX_AREA_SIZE {
-        warn!(
-            "Wall area too large: {}x{} (max {}x{})",
+        let reason = format!(
+            "Wall placement area is too large: {}x{} (max {}x{})",
             width, height, FLOOR_MAX_AREA_SIZE, FLOOR_MAX_AREA_SIZE
+        );
+        placement_failure_tooltip.show(reason.clone());
+        warn!(
+            "Wall area too large: {}x{} (max {}x{}): {}",
+            width, height, FLOOR_MAX_AREA_SIZE, FLOOR_MAX_AREA_SIZE, reason
         );
         return;
     }
 
     if width < 1 || height < 1 || (width != 1 && height != 1) {
+        let reason = format!(
+            "Wall must be placed as a straight 1xn line (selected {}x{})",
+            width, height
+        );
+        placement_failure_tooltip.show(reason.clone());
         warn!("Wall placement must be 1 x n, got {}x{}", width, height);
         return;
     }
 
     let mut valid_tiles = Vec::new();
+    let mut first_reject_reason: Option<String> = None;
     for gy in min_grid.1..=max_grid.1 {
         for gx in min_grid.0..=max_grid.0 {
             if !world_map.is_walkable(gx, gy) {
+                if first_reject_reason.is_none() {
+                    first_reject_reason = Some(format!(
+                        "Tile ({},{}) is not walkable",
+                        gx, gy
+                    ));
+                }
                 continue;
             }
-            if world_map.buildings.contains_key(&(gx, gy))
-                || world_map.stockpiles.contains_key(&(gx, gy))
-            {
+            if world_map.buildings.contains_key(&(gx, gy)) {
+                if first_reject_reason.is_none() {
+                    first_reject_reason = Some(format!(
+                        "Tile ({},{}) is already occupied by a building",
+                        gx, gy
+                    ));
+                }
+                continue;
+            }
+            if world_map.stockpiles.contains_key(&(gx, gy)) {
+                if first_reject_reason.is_none() {
+                    first_reject_reason = Some(format!(
+                        "Tile ({},{}) is already occupied by a stockpile",
+                        gx, gy
+                    ));
+                }
                 continue;
             }
             if !existing_floor_building_grids.contains(&(gx, gy)) {
+                if first_reject_reason.is_none() {
+                    first_reject_reason = Some(format!(
+                        "Tile ({},{}) has no completed floor",
+                        gx, gy
+                    ));
+                }
                 continue;
             }
             valid_tiles.push((gx, gy));
@@ -250,9 +334,14 @@ fn apply_wall_placement(
     }
 
     if valid_tiles.is_empty() {
-        warn!("No valid tiles for wall placement in selected area");
+        let reason = first_reject_reason
+            .unwrap_or_else(|| "No valid wall tile in selected area".to_string());
+        placement_failure_tooltip.show(reason.clone());
+        warn!("No valid tiles for wall placement in selected area: {}", reason);
         return;
     }
+
+    placement_failure_tooltip.clear();
 
     let tiles_total = valid_tiles.len() as u32;
     let center_grid = valid_tiles[valid_tiles.len() / 2];

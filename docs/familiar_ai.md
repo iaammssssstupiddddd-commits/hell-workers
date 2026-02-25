@@ -80,73 +80,19 @@
 
 ### 5.1. 実行サイクル (Execution Cycle)
 
-使い魔AIも `AiSystemSet` の4フェーズに従って実行されます。
-
-| フェーズ | 責任 | 主なシステム |
-|:--|:--|:--|
-| **Perceive** | 状態変化の検出、予約同期 | `detect_state_changes_system`, `sync_reservations_system`（0.2秒間隔, 初回即時） |
-| **Update** | 時間経過による内部状態更新 | 現時点では空（将来拡張ポイント） |
-| **Decide** | 状態遷移、自動採取指定、タスク委譲 | `familiar_ai_state_system`, `blueprint_auto_gather_system`（1.0秒間隔, 初回即時）, `familiar_task_delegation_system`（0.5秒間隔, 初回即時） |
-| **Execute** | 状態変更の適用、副作用の実行 | `handle_max_soul_changed_system`, `familiar_state_apply_system`, `familiar_idle_visual_apply_system`, `apply_squad_management_requests_system`, `encouragement_apply_system` |
+4フェーズ（[ai-system-phases.md](ai-system-phases.md) 参照）。主要システム: Perceive=`detect_state_changes_system`/`sync_reservations_system`（0.2秒）, Decide=`familiar_ai_state_system`/`blueprint_auto_gather_system`（1.0秒）/`familiar_task_delegation_system`（0.5秒）, Execute=`familiar_state_apply_system`/`apply_squad_management_requests_system`等。
 
 ### 5.2. 主要モジュール
 
-- **`mod.rs`**: プラグイン配線とフェーズスケジューリング定義
-- **`decide/familiar_processor.rs`**: 使い魔の処理ロジックを複数の関数に分割
-  - `process_squad_management`: 分隊管理の意思決定（Request 発行）
-  - `process_recruitment`: リクルート処理の意思決定（Request 発行）
-  - `finalize_state_transitions`: 状態遷移の最終確定
-  - `process_task_delegation_and_movement`: タスク委譲と移動制御
-- **`helpers/query_types.rs`**: Familiar AI 共通クエリ型定義（フェーズ横断で利用）
-- **設計メモ**: Familiar AI は「状態遷移」「分隊管理」「リクルート」で同じ判定ロジックを複数フェーズから再利用するため、`helpers/` が相対的に厚くなる設計です。副作用（`Commands`・イベント発火）は `execute/` に限定します。
-- **`decide/state_decision.rs`**: 状態遷移の意思決定システム
-  - `familiar_ai_state_system`: 状態判定と Request 生成
-- **`decide/auto_gather_for_blueprint.rs` + `decide/auto_gather_for_blueprint/{demand,supply,planning,actions}.rs`**: Blueprint / Mixer の不足資材（Wood / Rock）に対する自動伐採・採掘指定
-  - `DeliverToBlueprint` および `DeliverToMixerSolid` request（`issued_by`）を需要起点に不足量を集計
-  - `TaskArea` を基準に段階探索（内側 -> 10 -> 30 -> 60 -> それ以遠）で `Tree` / `Rock` を選定
-  - `AutoGatherDesignation` marker 付きの Designation 発行と stale 回収を担当
-- **`decide/task_delegation.rs`**: タスク委譲の意思決定システム
-  - `familiar_task_delegation_system`: タスク委譲・移動制御（0.5秒間隔, 初回即時）
-- **`decide/state_handlers/`**: 各状態のハンドラー
-  - `idle.rs`: Idle 状態の処理
-  - `searching.rs`: SearchingTask 状態の処理
-  - `scouting.rs`: Scouting 状態の処理
-  - `supervising.rs`: Supervising 状態の処理
-- **`decide/squad.rs`**: 分隊管理（`SquadManager`）
-  - `build_squad`: 分隊の構築
-  - `validate_squad`: 分隊の検証
-  - `release_fatigued`: 疲労・崩壊したメンバーのリリース要求発行
-- **`decide/task_management/`**: タスク管理（`TaskManager`）
-  - `collect_scored_candidates`: Familiar単位でタスク候補を1回収集（候補位置 `pos` を保持）
-  - `try_assign_for_workers`（`delegation/assignment_loop.rs`）: アイドルワーカーごとの委譲ループ
-  - `assign_task_to_worker`: タスク割り当て
-  - `delegate_task`: タスク委譲
-    - Familiar単位で作成した候補プールを全ワーカーで共有し、候補再収集を避けます。
-    - ワーカーごとに候補を再スコア（`priority 0.65 + worker距離 0.35`）し、`MAX_ASSIGNMENT_DIST_SQ`（60タイル相当）で事前フィルタします。
-    - 候補は `Top-K` を先に評価し、未割り当て時のみ残り候補をフォールバック評価します。
-    - 1ティック内で複数ワーカーを処理し、`assigned_tasks` で同一タスクへの重複割り当てを防ぎます。
-- **`collect_scored_candidates`**: タスク検索
-    - **候補収集**: `DesignationSpatialGrid` + `TransportRequestSpatialGrid` + `ManagedTasks` を統合して候補を作成します。
-    - **静的フィルタ**: 管理権、TaskSlots、TaskArea、Build材料完了条件など worker非依存条件を先に適用します。
-    - **優先度付け**: `score_candidate` でスコア化し、使い魔からの距離でタイブレークします。
-- **到達判定（Worker-Centric）**:
-    - **Ground Projection**: 常にワーカー（地上ユニット）の可歩行グリッドを起点にします。
-    - **経路探索**: `find_path` / `find_path_to_adjacent`（8方向移動対応）で可到達性を判定します。
-- **assign_task_to_worker**: タスク割り当て要求の生成（`TaskAssignmentRequest` を発行し、実適用は Act で行う）
-- **`decide/recruitment.rs`**: リクルート管理（`RecruitmentManager`）
-  - `find_best_recruit`: リクルート候補の検索
-  - `try_immediate_recruit`: 即時リクルート要求発行
-  - `start_scouting`: スカウト開始・移動目標設定
-- **`perceive/state_detection.rs`**: 状態遷移の検知とイベント発火
-  - `detect_state_changes_system`: 状態変更の検知（`Changed<FamiliarAiState>` 使用）
-  - `detect_command_changes_system`: コマンド変更の検知（`Changed<ActiveCommand>` 使用）
-  - `determine_transition_reason`: 状態遷移理由の判定
-- **`perceive/resource_sync.rs`**: `SharedResourceCache` の再構築と予約反映
-- **`execute/state_log.rs`**: 状態遷移イベントのログ処理
-- **`execute/squad_apply.rs`**: `SquadManagementRequest` の適用（分隊管理の副作用実行）
-- **`execute/max_soul_apply.rs`**: 使役数上限変更イベントの適用（上限超過分の魂をリリース）
-- **`execute/idle_visual_apply.rs`**: Idle遷移時の吹き出し演出を適用
-- **`decide/encouragement.rs` / `execute/encouragement_apply.rs`**: 激励の決定と適用
+- **`decide/familiar_processor.rs`**: 分隊管理・リクルート・状態遷移・タスク委譲のロジック分割
+- **`decide/state_handlers/`**: `idle.rs` / `searching.rs` / `scouting.rs` / `supervising.rs`
+- **`decide/squad.rs`**: `SquadManager`（build/validate/release_fatigued）
+- **`decide/task_management/`**: `TaskManager` — `collect_scored_candidates`（Familiar単位1回収集）→ `try_assign_for_workers`（worker別再スコア `priority 0.65 + 距離 0.35`、Top-K 先行評価、60タイル外フィルタ）→ `assign_task_to_worker`（`TaskAssignmentRequest` 発行）
+- **`decide/auto_gather_for_blueprint/{demand,supply,planning,actions}.rs`**: Blueprint/Mixer不足資材の自動Gather指定（`AutoGatherDesignation` marker管理）
+- **`decide/recruitment.rs`**: `RecruitmentManager`（find_best_recruit / try_immediate_recruit / start_scouting）
+- **`perceive/`**: `state_detection.rs`（`Changed<FamiliarAiState>`検知）, `resource_sync.rs`（SharedResourceCache再構築）
+- **`execute/`**: `squad_apply.rs` / `max_soul_apply.rs` / `idle_visual_apply.rs` / `encouragement_apply.rs`
+- **設計メモ**: 副作用（`Commands`・イベント）は `execute/` に限定。`helpers/query_types.rs` がフェーズ横断クエリ型を集約。
 
 ### 5.2. 関連コンポーネント
 

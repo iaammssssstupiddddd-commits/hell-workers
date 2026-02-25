@@ -8,6 +8,7 @@ use crate::interface::ui::components::*;
 use crate::interface::ui::panels::tooltip_builder;
 use crate::interface::ui::presentation::{EntityInspectionModel, EntityInspectionQuery};
 use crate::interface::ui::theme::UiTheme;
+use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use bevy::ui_widgets::popover::Popover;
 
@@ -20,10 +21,25 @@ pub(crate) struct TooltipRuntimeState {
     pub attach_to_anchor: bool,
 }
 
+#[derive(SystemParam)]
+pub(crate) struct TooltipRenderQueries<'w, 's> {
+    q_children: Query<'w, 's, &'static Children>,
+    q_nodes: Query<'w, 's, &'static mut Node, Without<HoverTooltip>>,
+    q_tooltip_text:
+        Query<'w, 's, &'static mut TextColor, Or<(With<TooltipHeader>, With<TooltipBody>)>>,
+    q_tooltip_progress: Query<
+        'w,
+        's,
+        (&'static TooltipProgressBar, &'static mut BackgroundColor),
+        Without<HoverTooltip>,
+    >,
+}
+
 pub(crate) fn hover_tooltip_system(
     mut commands: Commands,
     time: Res<Time>,
     hovered: Res<crate::interface::selection::HoveredEntity>,
+    mut placement_failure_tooltip: ResMut<PlacementFailureTooltip>,
     menu_state: Res<MenuState>,
     ui_nodes: Res<UiNodeRegistry>,
     game_assets: Res<crate::assets::GameAssets>,
@@ -38,17 +54,13 @@ pub(crate) fn hover_tooltip_system(
         &mut Popover,
         &ComputedNode,
     )>,
-    q_children: Query<&Children>,
-    mut q_nodes: Query<&mut Node, Without<HoverTooltip>>,
-    mut q_tooltip_text: Query<&mut TextColor, Or<(With<TooltipHeader>, With<TooltipBody>)>>,
-    mut q_tooltip_progress: Query<
-        (&TooltipProgressBar, &mut BackgroundColor),
-        Without<HoverTooltip>,
-    >,
+    mut render_queries: TooltipRenderQueries,
     ui_layout: layout::TooltipUiLayoutQueryParam,
     inspection: EntityInspectionQuery,
     mut runtime: Local<TooltipRuntimeState>,
 ) {
+    placement_failure_tooltip.tick(time.delta_secs());
+
     let Ok(window) = q_window.single() else {
         return;
     };
@@ -102,6 +114,16 @@ pub(crate) fn hover_tooltip_system(
             tooltip_data.text,
             tooltip_data.shortcut.unwrap_or_default()
         );
+    } else if let Some(reason) = placement_failure_tooltip.message.as_ref() {
+        target = Some(TooltipTarget::PlacementFailure);
+        template = TooltipTemplate::Generic;
+        payload = format!("placement_failure:{reason}");
+        model = Some(EntityInspectionModel {
+            header: "Cannot Place".to_string(),
+            common_text: String::new(),
+            tooltip_lines: vec![reason.clone()],
+            soul: None,
+        });
     } else if let Some(entity) = hovered.0
         && let Some(built_model) = inspection.build_model(entity)
     {
@@ -152,7 +174,12 @@ pub(crate) fn hover_tooltip_system(
         }
         if target_changed {
             tooltip.template_type = template;
-            tooltip.delay_timer = Timer::from_seconds(0.3, TimerMode::Once);
+            let delay_secs = if matches!(target, Some(TooltipTarget::PlacementFailure)) {
+                0.05
+            } else {
+                0.3
+            };
+            tooltip.delay_timer = Timer::from_seconds(delay_secs, TimerMode::Once);
             tooltip.delay_timer.reset();
             tooltip.fade_alpha = 0.0;
         }
@@ -199,7 +226,7 @@ pub(crate) fn hover_tooltip_system(
         tooltip_builder::rebuild_tooltip_content(
             &mut commands,
             tooltip_entity,
-            &q_children,
+            &render_queries.q_children,
             &game_assets,
             &theme,
             template,
@@ -233,7 +260,7 @@ pub(crate) fn hover_tooltip_system(
         tooltip_node.display = Display::Flex;
     }
 
-    if let Ok(mut anchor_node) = q_nodes.get_mut(tooltip_anchor) {
+    if let Ok(mut anchor_node) = render_queries.q_nodes.get_mut(tooltip_anchor) {
         if expanded_toggle_hover {
             anchor_node.left = Val::Px(0.0);
             anchor_node.top = Val::Px(0.0);
@@ -246,8 +273,8 @@ pub(crate) fn hover_tooltip_system(
     fade::apply_fade_effects(
         &mut tooltip_bg,
         &mut tooltip_border,
-        &mut q_tooltip_text,
-        &mut q_tooltip_progress,
+        &mut render_queries.q_tooltip_text,
+        &mut render_queries.q_tooltip_progress,
         tooltip.fade_alpha,
         &theme,
         fade_t,
