@@ -123,20 +123,8 @@ Soul 本体画像は、Idle 状態だけでなくイベントでも一時差し�
 割り当てられた `AssignedTask` に基づき、**Global Cycle Framework (4フェーズ)** に従ってタスクを実行します。
 
 ### 3.0. 実行サイクル (Execution Cycle)
-すべてのAI処理は以下の順序で厳密にスケジュールされます (`AiSystemSet`)。
 
-```
-Perceive → Update → Decide → Execute
-```
-
-| フェーズ | 責任 | 主なシステム |
-|:--|:--|:--|
-| **Perceive** | 環境情報の読み取り、変化の検出 | 現時点では拡張ポイント（逃走ヘルパー/タイマー資源の定義） |
-| **Update** | 時間経過による内部状態の変化 | バイタル更新、タイマー、集会スポットメンテナンス |
-| **Decide** | 次の行動の選択、要求の生成 | `idle_behavior_decision_system`, `escaping_decision_system`, `drifting_decision_system`, `DesignationRequest`/`TaskAssignmentRequest` の生成 |
-| **Execute** | 決定された行動の実行 | `apply_designation_requests_system`, `apply_task_assignment_requests_system`, `drifting_behavior_system`, `despawn_at_edge_system`, `idle_behavior_apply_system`, `escaping_apply_system`, `task_execution` |
-
-**Message/Request パターン**: Decideフェーズで生成された `DesignationRequest`、`TaskAssignmentRequest`、`IdleBehaviorRequest` はExecuteフェーズで読み取られ、実際のコンポーネント更新が行われます。これにより堅牢なフェーズ間通信が実現されています。
+4フェーズ（Perceive → Update → Decide → Execute）で実行。詳細は [ai-system-phases.md](ai-system-phases.md) 参照。Soul AI の主要システム: Update=バイタル更新, Decide=`idle_behavior_decision_system`/`escaping_decision_system`/`drifting_decision_system`, Execute=`task_execution`等。
 
 ### 3.1. 採取 (Gather)
 - **対象**: 木、岩、建築物など。
@@ -146,20 +134,12 @@ Perceive → Update → Decide → Execute
 - **対象**: 資源アイテム、建築材料。
 - **プロセス**: アイテムへ移動 → 拾い上げる (`Holding`) → 備蓄場所へ移動 → 配置。
 
-## 4. 関連コンポーネントと Relationship
+## 4. 関連 Relationship
 
-Bevy 0.18 の ECS Relationships を使用して、状態を管理しています。
+タスク・アイテム系 Relationship（`CommandedBy` / `WorkingOn` / `Holding`）の書き込み元・削除元は **tasks.md §2.1** を参照。
 
-- `DamnedSoul`: 基本ステータス（fatigue, stress, motivation 等）を保持。
-- `AssignedTask`: 現在の作業内容。
-- `IdleState`: 現在の待機行動。
-- `DriftingState`: 漂流脱走中のフェーズ状態（目標端・フェーズ・タイマー）。
-- `CommandedBy(Entity)`: 指揮している使い魔への参照。
-- `ParticipatingIn(Entity)` / `GatheringParticipants`: 集会への参加状態（Soul → GatheringSpot）。
+- `ParticipatingIn(spot)` ← Soul / `GatheringParticipants` ← GatheringSpot: 集会参加状態。`idle_behavior_decision` が insert、集会終了・タスク割り当て時に remove。
 - 休憩所関連 (`RestingIn`, `RestAreaOccupants` 等): 詳細は [rest_area_system.md](rest_area_system.md) を参照。
-- `WorkingOn(Entity)`: 取り組んでいるタスクへの参照。
-- `Holding(Entity)`: 現在持っているアイテム。
-- `Inventory`: アイテムの所持状態を管理する必須コンポーネント。
 
 ## 5. 移動と制御 (Movement & Control)
 
@@ -188,11 +168,6 @@ Bevy 0.18 の ECS Relationships を使用して、状態を管理しています
 ### 5.4. インタラクション距離
 - ターゲットへの到達判定しきい値は `TILE_SIZE * 1.5` に設定されています。これにより、隣接マスからタスク（採掘、伐採、建築）を開始することが可能です。
 
-## 6. 関連システム
- 
-これらは `SoulAiPlugin` によって管理されています。
-- `src/systems/soul_ai/update/`: バイタル更新、影響計算、集会猶予タイマー更新。
-- `src/systems/soul_ai/decide/`: 待機行動・逃走・作業割り当て・集会管理の意思決定。
-- `src/systems/soul_ai/execute/`: Request 適用、タスク実行、クリーンアップ、集会スポット生成。
-- `src/systems/soul_ai/helpers/`: 集会型定義、クエリ型、作業共通ヘルパー。
-- `src/systems/soul_ai/visual/`: アイドル/集会/バイタルの視覚フィードバック。
+## 6. モジュール構成（SoulAiPlugin 配下）
+
+`update/`: バイタル更新・影響計算 / `decide/`: 待機行動・逃走・集会管理の意思決定 / `execute/`: タスク実行・Request 適用・集会スポット生成 / `helpers/`: 集会型定義・クエリ型・作業共通ヘルパー / `visual/`: アイドル/集会/バイタルの視覚フィードバック
