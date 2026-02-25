@@ -86,6 +86,9 @@ Hell-Workers における建築システムの基礎実装について説明し�
 - **視覚フィードバック**:
     - **緑色（半透明）**: 配置可能。
     - **赤色（半透明）**: 配置不可（障害物や他の建物と重複、または通行不可地形）。
+- **配置失敗理由ツールチップ**:
+    - 配置確定時に有効タイルが 0 の場合、`Cannot Place` ツールチップを表示し、配置できない代表理由を示します（約2秒）。
+    - 主な理由: `not walkable` / `occupied by a building` / `occupied by a stockpile` / `has no completed floor` / `area too large` / `must be 1xn line`
 - **サイズ対応**: 1x1（壁など）だけでなく、2x2（タンクなど）の建物も適切なオフセットで表示されます。
 
 ### Companion 配置（Tank / MudMixer）
@@ -310,6 +313,11 @@ FloorTileBlueprint (子エンティティ、タイルごと)
 ### 9.10 壁建設フェーズ分割（Framing -> Coating, 養生なし）
 
 - 壁のドラッグ配置は `Blueprint` 直建てではなく `WallConstructionSite` + `WallTileBlueprint` を生成する。
+- 壁配置は `TaskMode::WallPlace` で行い、選択領域は **1 x n の直線**（水平または垂直）に制限される。
+- 壁タイル候補は以下をすべて満たす必要がある:
+  - `world_map.is_walkable == true`
+  - `world_map.buildings` / `world_map.stockpiles` に未占有
+  - 該当グリッドに完成済み `BuildingType::Floor` が存在する
 - フェーズは 2 段階のみ:
   1. `Framing`: 木材搬入 (`WALL_WOOD_PER_TILE`) -> `FrameWallTile` 実行
   2. `Coating`: 泥搬入 (`WALL_MUD_PER_TILE`) -> `CoatWall` 実行
@@ -317,4 +325,4 @@ FloorTileBlueprint (子エンティティ、タイルごと)
 - `Coating` 完了時に `Building.is_provisional = false` へ更新し、`ProvisionalWall` を除去する。
 - `Curing` 相当フェーズは持たず、全タイル `Complete` 到達で site / tile / request を即時 cleanup する。
 - キャンセルは site 単位で処理され、搬入済み `Wood` / `StasisMud` を返却し、関連 request / 作業割り当てを解除する。
-
+- すべての候補が無効な場合は site を生成せず、`Cannot Place` ツールチップで最初に検出した無効理由を表示する。
