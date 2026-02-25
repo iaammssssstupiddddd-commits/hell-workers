@@ -12,27 +12,26 @@ Hell-Workers の物流は、`TransportRequest` を中心にした自動発行 + 
   - `resource_type = None`
 - `resource_type` は最初の格納で確定し、最後の1個が取り出されると `None` に戻ります。
 
-### 1.2 Relationship
-- `StoredIn(Entity)`:
-  - アイテム -> 格納先 Stockpile
-- `StoredItems(Vec<Entity>)`:
-  - Stockpile 側の逆参照
-- `InStockpile(Entity)`:
-  - 「備蓄中」判定用マーカー
-- `DeliveringTo(Entity)`:
-  - アイテム -> 搬入先（Stockpile / Blueprint / Mixer 等）への予約を示す Relationship
-  - タスク割り当て時に自動挿入され、タスク完了・中断時に自動除去される
-- `IncomingDeliveries(Vec<Entity>)`:
-  - 搬入先側に Bevy が自動維持する RelationshipTarget
-  - `IncomingDeliveries.len()` で「搬入予約済みアイテム数」を取得できる
+### 1.2 Relationship（Bevy 自動維持）
 
-### 1.3 物流関連コンポーネント
-- `BelongsTo(Entity)`:
-  - 所有関係（主にタンクとバケツ/バケツ置き場）
-- `BucketStorage`:
-  - バケツ返却先として扱う Stockpile マーカー
-- `ReservedForTask`:
-  - タスクで予約済みのアイテム
+Source 側のみ手動操作し、Target 側は Bevy が自動更新する（tasks.md §2.1 参照）。
+
+| Source（手動操作）| Target（Bevy自動）| 書き込み元 | 削除元 |
+|:---|:---|:---|:---|
+| `StoredIn(stockpile)` ← item | `StoredItems` ← stockpile | Haul dropping フェーズ（`InStockpile` と同時付与）| haul picking フェーズ（ConsolidateStockpile 含む）|
+| `InStockpile(stockpile)` ← item | — | Haul dropping フェーズ（`StoredIn` と同時付与）| `StoredIn` 削除時（同時除去）|
+| `DeliveringTo(dest)` ← item | `IncomingDeliveries` ← dest | `apply_task_assignment_requests`（Execute）| `unassign_task` / タスク完了（tasks.md §2.1）|
+
+**容量判定**: `StoredItems.len() + IncomingDeliveries.len() < capacity`（詳細 §6.1）
+
+### 1.3 物流関連コンポーネント（手動管理）
+
+| コンポーネント | 書き込み元 | 読み取り元 | 非自明な挙動 |
+|:---|:---|:---|:---|
+| `WheelbarrowLease` ← TransportRequest | 仲裁システム（Arbitrate）| `assign_haul*` | 毎フレーム: 期限切れ・車消失・item 不足で自動 remove。消費後 request state が Claimed になるため次フレームの仲裁から自動除外 |
+| `BelongsTo(owner)` | entity spawn 時 | producer / `assign_haul*` | タンク・バケツ・バケツ返却先の所有判定。`issued_by` と照合してソース選定を制御 |
+| `BucketStorage` | entity spawn 時 | `bucket_auto_haul_system` | バケツ返却先マーカー。`BelongsTo` 一致チェックと組み合わせて判定 |
+| `ReservedForTask` | （現状未付与・legacy）| ソース選定フィルタ | 付与されないが選定コードが参照するため、消滅防止コンポーネント（§1.4）としても機能 |
 
 ### 1.4 アイテムの寿命 (Item Lifetime)
 - 特定のアイテム（**StasisMud**, **Sand**）は、地面にドロップされた状態で放置されると **5秒後** に消滅します。
@@ -57,7 +56,7 @@ Hell-Workers の物流は、`TransportRequest` を中心にした自動発行 + 
 1. `Perceive`（メトリクス集計）
 2. `Decide`（各 producer が request を upsert）
 3. `Arbitrate`（手押し車仲裁 — 後述 §5.2）
-4. `Execute`（`TaskWorkers` に応じた state 同期）
+4. `Execute`（`TaskWorkers` に応じた state 同期）— `TaskWorkers.len() > 0` → `Claimed`、`== 0` → `Pending` に毎フレーム遷移
 5. `Maintain`（アンカー消失や不要 request の cleanup）
 
 `task_finder` は `DesignationSpatialGrid` と `TransportRequestSpatialGrid` の両方を探索して候補を集約します。
@@ -276,20 +275,7 @@ WheelbarrowLease {
 
 #### 5.2.3 定数
 
-| 定数 | 値 | 用途 |
-| :--- | :--- | :--- |
-| `WHEELBARROW_PREFERRED_MIN_BATCH_SIZE` | 3 | 猫車必須資源で優先する最小バッチ |
-| `SINGLE_BATCH_WAIT_SECS` | 5.0 | 1〜2個搬送を許可する待機時間 |
-| `WHEELBARROW_LEASE_MIN_DURATION_SECS` | 8.0 | lease 期間の下限（秒） |
-| `WHEELBARROW_LEASE_MAX_DURATION_SECS` | 45.0 | lease 期間の上限（秒） |
-| `WHEELBARROW_LEASE_BUFFER_RATIO` | 0.5 | 推定移動時間への余裕率 |
-| `WHEELBARROW_SCORE_BATCH_SIZE` | 10.0 | スコア: バッチサイズの重み |
-| `WHEELBARROW_SCORE_PRIORITY` | 5.0 | スコア: 優先度の重み |
-| `WHEELBARROW_SCORE_DISTANCE` | 0.1 | スコア: 距離のペナルティ重み |
-| `WHEELBARROW_SCORE_PENDING_TIME` | 2.0 | スコア: pending 経過時間の重み |
-| `WHEELBARROW_SCORE_PENDING_TIME_MAX_SECS` | 30.0 | pending ボーナス計算の上限秒数 |
-| `WHEELBARROW_SCORE_SMALL_BATCH_PENALTY` | 20.0 | 小バッチ減点 |
-| `WHEELBARROW_ARBITRATION_TOP_K` | 24 | request ごとに評価する近傍候補上限 |
+定数（12種）は `src/constants/` 参照。主要値: `WHEELBARROW_PREFERRED_MIN_BATCH_SIZE = 3`（小バッチ優先下限）/ `SINGLE_BATCH_WAIT_SECS = 5.0`（待機秒数）/ `WHEELBARROW_ARBITRATION_TOP_K = 24`（近傍候補上限）。
 
 #### 5.2.4 割り当て時の lease 優先
 
@@ -310,24 +296,7 @@ WheelbarrowLease {
 
 #### 5.2.6 メトリクス
 
-`TransportRequestMetrics` に以下が追加:
-
-- `wheelbarrow_leases_active` — アクティブな lease 数
-- `wheelbarrow_leases_granted_this_frame` — そのフレームで新規付与された lease 数
-- `wheelbarrow_arb_eligible_requests` — 仲裁対象として評価した request 数
-- `wheelbarrow_arb_bucket_items_total` — request が参照したバケット候補数（Top-K 前）
-- `wheelbarrow_arb_candidates_after_topk` — Top-K 抽出後に残った候補数
-- `wheelbarrow_arb_items_deduped` — 候補間重複除去で取り除かれた item 数
-- `wheelbarrow_arb_candidates_dropped_by_dedup` — 重複除去後に `hard_min` 未満となりスキップされた候補数
-- `wheelbarrow_arb_avg_pending_secs` — 仲裁対象 request の平均 pending 秒
-- `wheelbarrow_arb_avg_lease_duration` — このフレームで付与した lease の平均期間（秒）
-- `wheelbarrow_arb_elapsed_ms` — 仲裁システム実行時間（ms）
-- `task_area_groups` — TaskArea producer が評価したグループ数
-- `task_area_free_items_scanned` — TaskArea producer が走査した free item 数
-- `task_area_items_matched` — TaskArea producer で条件一致した item 数
-- `task_area_elapsed_ms` — TaskArea producer 実行時間（ms）
-
-5秒間隔のデバッグログに `wb_leases` / `wb_arb(...)` / `task_area(...)` として出力される。
+`TransportRequestMetrics` に `wheelbarrow_leases_active`, `wb_arb_*`（eligible/topk/dedup/pending/duration/elapsed）, `task_area_*`（groups/scanned/matched/elapsed）を追加。5秒間隔のデバッグログに出力。
 
 ## 6. 予約と競合回避
 
@@ -367,52 +336,33 @@ Stockpile / Blueprint / Tank などへの搬入予約は、Bevy の Relationship
 - アイテムを持ち出すと `StoredIn`/`InStockpile` が外れ、`StoredItems` は自動更新されます。
 - 取り出し後に Stockpile が空になると `resource_type` は `None` に戻ります。
 
-## 8. 関連実装
-
-- request producer:
-  - `src/systems/logistics/transport_request/producer/`
-- 手押し車仲裁:
-  - `src/systems/logistics/transport_request/arbitration/`（mod, collection, candidates, grants, types）
-- request plugin:
-  - `src/systems/logistics/transport_request/plugin.rs`
-- request lifecycle:
-  - `src/systems/logistics/transport_request/lifecycle.rs`
-- 割り当てロジック:
-  - `src/systems/familiar_ai/decide/task_management/`（builders, policy, validator）
-  - `task_management/policy/haul/`（blueprint, consolidation, stockpile, source_selector, lease_validation, wheelbarrow）: 運搬割り当ての責務分割
-  - `src/systems/familiar_ai/decide/auto_gather_for_blueprint.rs`, `auto_gather_for_blueprint/{demand,supply,planning,actions}.rs`（Blueprint / Mixer 需要起点の Wood / Rock 自動Gather指定）
-- 実行ロジック:
-  - `src/systems/soul_ai/execute/task_execution/`（haul, haul_to_mixer, haul_to_blueprint, haul_with_wheelbarrow, haul_water_to_mixer 等）
-  - `task_execution/handler/`（task_handler, impls, dispatch）: TaskHandler トレイトとディスパッチ
-  - `task_execution/transport_common/`（reservation, cancel, lifecycle, wheelbarrow）: 予約解放・中断・予約寿命定義・手押し車駐車の共通API
-
-## 9. システム追加時の実装ルール
+## 8. システム追加時の実装ルール
 
 物流系システムを追加する際は、以下を満たしてください。
 
-### 9.1 Request 発行方式の統一
+### 8.1 Request 発行方式の統一
 - 新しい自動物流は、原則として「anchor に紐づく `TransportRequest` エンティティ」を発行する。
 - アイテム実体への直接 `Designation` 連打は避け、ソースは割り当て時に遅延解決する。
 - request の `kind` / `work_type` / `anchor` / `resource_type` の組み合わせは必ず一貫させる。
 
-### 9.2 Producer の upsert/cleanup 規約
+### 8.2 Producer の upsert/cleanup 規約
 - 既存 request があれば再利用（upsert）し、不要時は以下で閉じる。
   - `TaskWorkers == 0` のときは `Designation` / `TaskSlots` / `Priority` を外す、または despawn。
 - 同一 key（anchor + resource_type など）の重複 request は許可しない。
 - demand 計算は `current + in_flight(+ reservation)` を使い、過剰発行を防ぐ。
 
-### 9.3 予約の責務を統一
+### 8.3 予約の責務を統一
 - **搬入先予約**: タスク割り当て時に `DeliveringTo` が自動挿入される。手動で `ResourceReservationOp` を発行する必要はない。
 - **ソース予約**: 「割り当て時」に `ResourceReservationOp::ReserveSource` で付与し、成功・失敗・中断の全経路で解放する。
 - タスク実行でソース取得が成功したら `RecordPickedSource` を使う。
 - 共有ソース（例: tank 取水）は `ReserveSource` で排他を取る。
 
-### 9.4 ソース選定の安全条件
+### 8.4 ソース選定の安全条件
 - `DepositToStockpile` のソースは地面アイテムのみを対象にする（`InStockpile` は除外）。
 - 所有物資がある場合は `BelongsTo` を一致させ、他 owner の資材を混在させない。
 - `Visibility::Hidden` / `ReservedForTask` / `TaskWorkers` 付きエンティティは候補から外す。
 
-### 9.5 追加時に必ず更新する箇所
+### 8.5 追加時に必ず更新する箇所
 - 新しい producer を `TransportRequestPlugin`（`Decide`）へ登録する。
 - 新しい `WorkType` / request 種別を導入した場合:
   - `task_finder/filter.rs`（有効タスク判定）
@@ -421,7 +371,7 @@ Stockpile / Blueprint / Tank などへの搬入予約は、Bevy の Relationship
   - 必要なら `task_finder/score.rs`（優先度）
   - `transport_request_anchor_cleanup_system` で cleanup 要件を満たすこと
 
-### 9.6 動作確認の最低ライン
+### 8.6 動作確認の最低ライン
 - `cargo check` を通す。
 - 少なくとも以下を確認する:
   - request が1フレームで増殖しない

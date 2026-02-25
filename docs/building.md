@@ -17,16 +17,6 @@ Hell-Workers における建築システムの基礎実装について説明し�
 | `WallTileBlueprint` | 壁1タイルの建設状態（`wood_delivered` / `mud_delivered` / `spawned_wall`）を保持 |
 | `BuildingType` | 建物の種類（`Wall`, `Door`, `Floor`, `Tank`, `MudMixer`, `SandPile`, `BonePile`） |
 
-### Blueprint フィールド
-
-| フィールド | 型 | 説明 |
-|:---|:---|:---|
-| `kind` | `BuildingType` | 建物の種類 |
-| `progress` | `f32` | 建築進捗 (0.0~1.0) |
-| `required_materials` | `HashMap<ResourceType, u32>` | 必要資材量 |
-| `delivered_materials` | `HashMap<ResourceType, u32>` | 搬入済み資材量 |
-| `is_provisional` | `bool` | 仮設状態かどうか（`Building` コンポーネントにも保持）|
-
 ### 資材要件
 
 | BuildingType | 必要資材 |
@@ -41,19 +31,7 @@ Hell-Workers における建築システムの基礎実装について説明し�
 
 ## 3. ワークフロー
 
-```mermaid
-flowchart TD
-    A[プレイヤー] -->|設計図配置| B[Blueprint + Designation]
-    B --> C{資材搬入済み?}
-    C -->|No| D[待機/資材運搬]
-    C -->|Yes| E[ソウルが建築作業]
-    E -->|progress >= 1.0| F{完全な資材が揃っている?}
-    F -->|Yes| G[Building 完成 (本設)]
-    F -->|No| H[Building 完成 (仮設)]
-    H --> I[追加資材搬入]
-    I --> J[CoatWall 作業]
-    J --> G
-```
+プレイヤーが Blueprint を配置 → 資材搬入完了 → ソウルが建築作業（約3秒）→ `progress >= 1.0` で完成。全資材が揃っていれば本設、未揃いなら仮設 `Building` として完成し、追加資材搬入後に `CoatWall` で本設化。
 
 ## 4. 仮設建築 (Provisional Building)
 
@@ -258,40 +236,11 @@ FloorTileBlueprint (子エンティティ、タイルごと)
 
 ### 9.3 フェーズフロー
 
-```mermaid
-flowchart TD
-    A[エリア作成] --> B[Reinforcing Phase]
-    B --> C[骨を material_center へ配送]
-    C --> D[ワーカーが各タイルを補強]
-    D --> E{全タイル補強完了?}
-    E -->|No| C
-    E -->|Yes| F[Phase Transition]
-    F --> G[Pouring Phase]
-    G --> H[泥を material_center へ配送]
-    H --> I[ワーカーが各タイルに泥を注ぐ]
-    I --> J{全タイル注ぎ完了?}
-    J -->|No| H
-    J -->|Yes| K[Curing Phase]
-    K --> L[Soul退避 + 立ち入り禁止化]
-    L --> M{養生時間経過?}
-    M -->|No| K
-    M -->|Yes| N[Completion]
-    N --> O[Floor Building 生成]
-    O --> P[Site と Tile を despawn]
-```
+エリア作成 → **Reinforcing**: 骨を `material_center` へ配送 → ワーカーが各タイル補強 → 全完了で **Pouring**: 泥を配送 → ワーカーが各タイル注ぎ → 全完了で **Curing**: Soul退避・立ち入り禁止 → 時間経過で **Completion**: Floor Building 生成・Site/Tile despawn。
 
 ### 9.4 タイル状態 (FloorTileState)
 
-| 状態 | 説明 |
-|:---|:---|
-| `WaitingBones` | 骨の配送待ち |
-| `ReinforcingReady` | 骨が届き、補強作業可能 |
-| `Reinforcing { progress }` | ワーカーが補強作業中 |
-| `ReinforcedComplete` | 補強完了、phase transition 待ち |
-| `WaitingMud` | 泥の配送待ち（Pouring phase 移行後） |
-| `PouringReady` | 泥が届き、注ぎ作業可能 |
-| `Pouring { progress }` | ワーカーが注ぎ作業中 |
-| `Complete` | 建設完了 |
+`WaitingBones` → `ReinforcingReady` → `Reinforcing { progress }` → `ReinforcedComplete` → `WaitingMud` → `PouringReady` → `Pouring { progress }` → `Complete`
 
 ### 9.5 資材配送システム
 
@@ -358,26 +307,7 @@ flowchart TD
 
 
 
-### 9.10 関連ファイル (Floor Construction)
-
-- `src/systems/jobs/floor_construction/components.rs`: コンポーネント定義
-- `src/systems/jobs/floor_construction/phase_transition.rs`: Phase 移行システム
-- `src/systems/jobs/floor_construction/completion.rs`: 完了処理
-- `src/systems/jobs/floor_construction/cancellation.rs`: サイト単位キャンセル・資材返却
-- `src/systems/logistics/transport_request/producer/floor_construction.rs`: 資材配送・搬入資材同期
-- `src/systems/logistics/transport_request/producer/floor_construction/designation.rs`: Floor tile への Designation 付与
-- `src/systems/soul_ai/execute/task_execution/reinforce_floor.rs`: 補強タスク実行
-- `src/systems/soul_ai/execute/task_execution/pour_floor.rs`: 打設タスク実行
-- `src/systems/soul_ai/execute/task_execution/haul.rs`, `src/systems/soul_ai/execute/task_execution/haul/dropping.rs`: floor site への徒歩搬送
-- `src/systems/soul_ai/execute/task_execution/haul_with_wheelbarrow/`: floor site への猫車搬送
-- `src/systems/familiar_ai/decide/task_management/policy/floor.rs`: タスク割り当てポリシー
-- `src/systems/familiar_ai/decide/task_management/policy/haul/`: floor request の搬送元解決・割り当て
-- `src/systems/visual/floor_construction.rs`: タイル色・配筋マーカーの可視化
-- `src/interface/selection/floor_place.rs`: ドラッグ配置と重複防止
-- `src/systems/spatial/floor_construction.rs`: Spatial grid
-- `src/plugins/logic.rs`: システム登録
-
-### 9.11 壁建設フェーズ分割（Framing -> Coating, 養生なし）
+### 9.10 壁建設フェーズ分割（Framing -> Coating, 養生なし）
 
 - 壁のドラッグ配置は `Blueprint` 直建てではなく `WallConstructionSite` + `WallTileBlueprint` を生成する。
 - フェーズは 2 段階のみ:
@@ -388,26 +318,3 @@ flowchart TD
 - `Curing` 相当フェーズは持たず、全タイル `Complete` 到達で site / tile / request を即時 cleanup する。
 - キャンセルは site 単位で処理され、搬入済み `Wood` / `StasisMud` を返却し、関連 request / 作業割り当てを解除する。
 
-## 10. 関連ファイル (Blueprint System)
-
-- `src/systems/jobs.rs`: `Blueprint`, `Building`, 建設完了ロジック
-- `src/systems/visual/blueprint/mod.rs`: ビジュアルフィードバック（統括モジュール）
-- `src/systems/visual/blueprint/components.rs`: コンポーネント定義
-- `src/systems/visual/blueprint/progress_bar.rs`: プログレスバー
-- `src/systems/visual/blueprint/material_display.rs`: 資材表示
-- `src/systems/visual/blueprint/effects.rs`: エフェクト
-- `src/systems/visual/blueprint/worker_indicator.rs`: ワーカーインジケータ
-- `src/systems/utils/progress_bar.rs`: 汎用プログレスバー実装
-- `src/systems/utils/animations.rs`: パルス・バウンスアニメーション実装
-- `src/systems/utils/floating_text.rs`: フローティングテキスト実装
-- `src/plugins/visual.rs`: システム登録
-- `src/systems/visual/wall_connection.rs`: 壁の自動接続ロジック
-- `src/systems/soul_ai/execute/task_execution/build.rs`: `handle_build_task`（進捗更新）
-- `src/systems/jobs/wall_construction/`: 壁建設 site/tile コンポーネント・遷移・完了・キャンセル
-- `src/systems/logistics/transport_request/producer/wall_construction.rs`: 壁サイト向け搬送 request / 搬入同期 / Designation
-- `src/systems/logistics/transport_request/producer/provisional_wall.rs`: legacy 仮設壁向け泥搬送（wall site 管理対象は除外）
-- `src/systems/soul_ai/execute/task_execution/frame_wall.rs`: `FrameWallTile` 実行ロジック
-- `src/systems/soul_ai/execute/task_execution/coat_wall.rs`: tile ベース `CoatWall`（legacy 壁互換を含む）
-- `src/interface/selection/`: `blueprint_placement`（input, building_place, hit_test, state に分割）
-- `src/systems/visual/placement_ghost.rs`: 建築ゴースト表示システム
-- `src/assets.rs`: 各種アイコンアセット

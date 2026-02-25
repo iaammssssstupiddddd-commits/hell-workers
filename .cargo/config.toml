@@ -1,17 +1,24 @@
-[target.x86_64-pc-windows-gnu]
-linker = "x86_64-w64-mingw32-gcc"
-runner = ["sh", "-c", "ASSETS_DIR=$(dirname \"$1\")/assets; mkdir -p \"$ASSETS_DIR\"; cp -ru assets/* \"$ASSETS_DIR/\" 2>/dev/null || true; \"$@\"", "--"]
+# [target.x86_64-pc-windows-gnu]
+# linker = "x86_64-w64-mingw32-gcc"
+# runner = ["sh", "-c", "ASSETS_DIR=$(dirname \"$1\")/assets; mkdir -p \"$ASSETS_DIR\"; cp -ru assets/* \"$ASSETS_DIR/\" 2>/dev/null || true; \"$@\"", "--"]
+# rustflags = [
+#     "-C", "link-arg=-fuse-ld=lld",
+#     "-C", "link-args=-static",
+#     "-C", "debuginfo=1",      # ファイル名と行番号のみ維持（サイズ削減）
+#     "-C", "strip=symbols"     # 不要なシンボル情報を削除
+# ]
+
+# Linux ネイティブ開発用の設定
+[target.x86_64-unknown-linux-gnu]
+linker = "clang"
 rustflags = [
-    "-C", "link-arg=-fuse-ld=lld",
-    "-C", "link-args=-static",
-    "-C", "debuginfo=1",      # ファイル名と行番号のみ維持（サイズ削減）
-    "-C", "strip=symbols"     # 不要なシンボル情報を削除
+    "-C", "link-arg=-fuse-ld=mold", # mold を使用（インストールが必要）
 ]
 
 [env]
-# Windows 起動時に wgpu が適切なバックエンドを選択するように Linux 固有設定は削除
+# Linux 環境での開発用
+ROCKSDB_LIB_DIR = "/usr/lib"
 
 [build]
-target = "x86_64-pc-windows-gnu"
-# target-dir = "/mnt/e/rust-target/hell-workers" # 以前の E ドライブ設定
-incremental = false # クロスコンパイル時のリンクエラー回避のため無効化
+# target = "x86_64-pc-windows-gnu" # クロスコンパイルを無効化（Linuxネイティブをデフォルトに）
+incremental = true # ネイティブビルドではインクリメンタルを有効化

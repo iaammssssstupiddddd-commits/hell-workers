@@ -80,6 +80,33 @@ Perceive → Update → Decide → Execute
 - `transport_request::producer` の floor/wall 搬入同期は `producer/mod.rs` の共通ヘルパーを利用して重複実装を避ける。
 - UI/Visual の更新責務は `status_display/*` と `dream/ui_particle/*` に分離し、表示更新と演出更新を独立に保守する。
 
+## ゲーム内時間 (GameTime)
+
+`src/systems/time.rs` — `GameTime`（Resource）:
+
+- フィールド: `seconds: f32`, `day: u32`, `hour: u32`, `minute: u32`
+- **時間倍率**: 1実時間秒 = 1ゲーム内分（60倍速）
+- `Time<Virtual>` を使用するためポーズ中は進まない
+- 時間経過イベントには `game_time.day` の変化を監視する（例: 木再生は1日1回）
+
+## 空間グリッド一覧 (Spatial Grids)
+
+`src/systems/spatial/` — 同期間隔: `SPATIAL_GRID_SYNC_INTERVAL`（0.15秒）、`SpatialGridSyncTimer` で管理。
+
+| グリッド | 用途 |
+|:--|:--|
+| `DesignationSpatialGrid` | 未割当タスク（伐採/採掘/運搬指定）の近傍検索 |
+| `TransportRequestSpatialGrid` | TransportRequest エンティティの近傍検索 |
+| `ResourceSpatialGrid` | 地面上の資源アイテムの近傍検索 |
+| `StockpileSpatialGrid` | Stockpile の近傍検索 |
+| `SoulSpatialGrid` | Soul 位置の近傍検索 |
+| `FamiliarSpatialGrid` | Familiar 位置の近傍検索 |
+| `BlueprintSpatialGrid` | Blueprint の近傍検索 |
+| `GatheringSpatialGrid` | 集会スポットの近傍検索 |
+| `FloorConstructionSpatialGrid` | 床建設サイトの近傍検索 |
+
+新しいグリッドを追加する場合は `SpatialGridOps` / `SyncGridClear` トレイトを実装し、`tick_spatial_grid_sync_timer_system` より後にシステムを登録する。
+
 ## 定数管理 (`src/constants/`)
 
 ゲームバランスに関わる全てのマジックナンバーは `src/constants/` にドメイン別に分割されて集約されています。

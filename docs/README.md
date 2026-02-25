@@ -23,7 +23,9 @@
 - [speech_system.md](speech_system.md): 吹き出しと Soul 画像イベントの仕様。
 
 ## 開発ガイド
-- [architecture.md](architecture.md): 全体構造とシステムの依存関係。
-- [DEVELOPMENT.md](DEVELOPMENT.md): AIエージェントおよび開発者向けガイドライン。
+- [architecture.md](architecture.md): 全体構造、システム依存関係、GameTime、空間グリッド一覧。
+- [world_layout.md](world_layout.md): マップ仕様、地形、**座標変換関数**（`world_to_grid` 等）。
+- [state.md](state.md): PlayMode、**TaskMode全バリアント一覧**（指定・ゾーン・建築モード等）。
+- [DEVELOPMENT.md](DEVELOPMENT.md): AIエージェントおよび開発者向けガイドライン（コーディング規約・MCP活用）。
 - [plans/README.md](plans/README.md): フェーズ分割した実装計画ドキュメント。
 - [proposals/README.md](proposals/README.md): 提案書一覧とテンプレート。

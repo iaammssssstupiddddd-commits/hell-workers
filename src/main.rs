@@ -13,6 +13,7 @@ use bevy::prelude::*;
 use bevy::render::RenderPlugin;
 use bevy::render::settings::{Backends, RenderCreation, WgpuSettings};
 use bevy::ui_widgets::popover::PopoverPlugin;
+use bevy::window::PresentMode;
 use std::env;
 
 use game_state::PlayMode;
@@ -31,6 +32,7 @@ pub struct DebugVisible(pub bool);
 
 fn main() {
     let backends = select_backends();
+    let present_mode = select_present_mode();
     App::new()
         .insert_resource(ClearColor(Color::srgb(0.1, 0.1, 0.1)))
         .add_plugins(
@@ -39,6 +41,7 @@ fn main() {
                     primary_window: Some(Window {
                         title: "Hell Workers".into(),
                         resolution: (1280, 720).into(),
+                        present_mode,
                         ..default()
                     }),
                     ..default()
@@ -92,13 +95,19 @@ fn select_backends() -> Backends {
     if env::var("WGPU_BACKEND").is_ok() {
         return Backends::PRIMARY;
     }
-    if is_wsl() {
-        Backends::GL
-    } else {
-        Backends::PRIMARY
-    }
+    Backends::VULKAN
 }
 
-fn is_wsl() -> bool {
-    env::var("WSL_DISTRO_NAME").is_ok() || env::var("WSL_INTEROP").is_ok()
+fn select_present_mode() -> PresentMode {
+    match env::var("HW_PRESENT_MODE") {
+        Ok(mode) => match mode.to_ascii_lowercase().as_str() {
+            "auto_no_vsync" | "novsync" | "off" => PresentMode::AutoNoVsync,
+            "fifo" | "vsync" | "on" => PresentMode::Fifo,
+            "auto_vsync" | "auto" => PresentMode::AutoVsync,
+            "mailbox" => PresentMode::Mailbox,
+            "immediate" => PresentMode::Immediate,
+            _ => PresentMode::AutoVsync,
+        },
+        Err(_) => PresentMode::AutoVsync,
+    }
 }

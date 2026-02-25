@@ -56,7 +56,7 @@
 ## 開発の始め方
 
 ### ビルドと実行
-```powershell
+```bash
 cargo run
 ```
 

@@ -1,224 +1,167 @@
 # タスクシステム (Task System)
 
-このドキュメントでは、Hell-Workers におけるタスク（仕事）の指定、割り当て、管理、および実行の仕組みについて解説します。
+プレイヤーまたはシステムが世界の実体（木・岩・アイテム等）に `WorkType` を指定し、適切な Soul が実行するまでを管理します。
 
-## 1. 概要
-タスクシステムは、プレイヤーまたはシステム（使い魔 AI）が世界中の実体（木、岩、アイテムなど）に対して「仕事（WorkType）」を指定し、それを適切な「魂（Damned Soul）」が実行するまでを管理します。
+## 1. 実行アーキテクチャ
 
-## 2. 実行アーキテクチャ (Global Cycle Framework)
+4フェーズ（Perceive → Update → Decide → Execute）で実行。詳細は [ai-system-phases.md](ai-system-phases.md) 参照。
 
-タスクシステムは、競合（Race Condition）と遅延を防ぐため、厳密に定義された **Sense-Think-Act サイクル** に従って実行されます。
+## 2. コンポーネント接続マップ
 
-| フェーズ | システムセット (`SoulAiSystemSet`) | 役割 |
-| :--- | :--- | :--- |
-| **Perceive** | `Perceive` | 環境情報の収集と **リソース予約の再構築** (`sync_reservations_system`)。`AssignedTask`（実行中タスク）と `Designation`（割り当て待ちタスク）の両方から `SharedResourceCache` を **0.2秒間隔（初回は即時）** で再構築します。 |
-| **Update** | `Update` | 時間経過による内部状態の変化（バイタル更新、タイマー等）。 |
-| **Decide** | `Decide` | 意思決定と要求生成（`DesignationRequest`, `TaskAssignmentRequest`）。`SharedResourceCache` を参照して候補を選定します。 |
-| **Execute** | `Execute` | 要求適用（`apply_designation_requests_system`, `apply_task_assignment_requests_system`）→ 実際の行動 (`task_execution`) → 予約更新の反映 (`apply_reservation_requests_system`)。 |
+ECS では「誰が書いて誰が読むか」が静的解析で追いにくい。以下に主要コンポーネントの接続を示す。
 
-## 3. 主要なコンポーネント
+### 2.1 Relationship コンポーネント（Bevy 自動維持）
 
-Bevy 0.18 の **ECS Relationships** 機能を使用し、エンティティ間の参照を双方向かつ型安全に管理しています。
+Bevy 0.18 の Relationship は **Source 側を操作すれば Target 側が自動更新** される。Target 側を手動で書かない。
 
-| コンポーネント | 役割 | 説明 |
-| :--- | :--- | :--- |
-| `Designation` | 基本 | エンティティが仕事の対象であることを示すフラグ。`WorkType` を持つ。 |
-| `TaskSlots` | 制限 | 1つのタスクに同時に取り組める最大人数を管理する（参加人数は `TaskWorkers` で自動集計される）。 |
-| **`ManagedBy(Entity)`** | **Relationship** | タスクから**使い魔**への参照。エイリアス: `IssuedBy`。 |
-| **`ManagedTasks(Vec)`** | **Target** | 使い魔側の**管理タスク一覧**。自動的に維持される。 |
-| **`WorkingOn(Entity)`** | **Relationship** | 魂から**タスク**への参照。 |
-| **`TaskWorkers(Vec)`** | **Target** | タスク側の**作業者一覧**。自動的に維持される。 |
-| **`Holding(Entity)`** | **Relationship** | 魂から**保持アイテム**への参照。 |
-| **`HeldBy(Vec)`** | **Target** | アイテム側の**保持者一覧**（通常は1人）。自動的に維持される。 |
-| **`StoredIn(Entity)`** | **Relationship** | アイテムから**備蓄場所**への参照。 |
-| **`StoredItems(Vec)`** | **Target** | 備蓄場所側の**格納アイテム一覧**。自動的に維持される。 |
-| `Inventory` | 必須 | 魂がアイテムを持つ能力を定義するコンポーネント。これがないとタスク実行システムは機能しない。 |
+| Source (手動操作) | Target (Bevy自動) | Source の書き込み元 | Source の削除元 |
+|:---|:---|:---|:---|
+| `WorkingOn(task)` ← Soul | `TaskWorkers` ← task | `apply_task_assignment_requests` (Execute) | `task_execution_system` 完了時 / `unassign_task` |
+| `ManagedBy(familiar)` ← task | `ManagedTasks` ← familiar | request producer / `apply_designation_requests` | task despawn 時 |
+| `Holding(item)` ← Soul | `HeldBy` ← item | `task_execution` の拾い上げフェーズ | Haul dropping フェーズ |
+| `StoredIn(stockpile)` ← item | `StoredItems` ← stockpile | Haul dropping フェーズ | 持ち出し時 (`unassign_task` / haul picking) |
+| `DeliveringTo(dest)` ← item | `IncomingDeliveries` ← dest | `apply_task_assignment_requests` (Execute) | タスク完了・`unassign_task` |
+| `CommandedBy(familiar)` ← Soul | `Commanding` ← familiar | `prepare_worker_for_task_apply` | `unassign_task` / OnExhausted / OnStressBreakdown |
 
-### Relationship のメリット
-- **自動クリーンアップ**: 使い魔やタスクのエンティティが削除された際、関連する Relationship コンポーネントも Bevy によって自動的にクリーンアップされます。
-- **効率的な逆引き**: 特定の使い魔が持つタスク一覧や、特定のタスクに取り組んでいる作業者一覧を、全エンティティをスキャンすることなく O(1) または O(人数) で取得できます。
+**エンティティ despawn 時**: そのエンティティの全 Relationship が Bevy によって自動除去され、Target 側も自動更新される（例: Soul が despawn すると `TaskWorkers` から自動削除）。
 
-## 3. タスクキュー (Task Queue)
+### 2.2 手動管理コンポーネント
 
-タスクは以下のいずれかのキューで管理されます：
+| コンポーネント | 書き込み元 | 読み取り元 | 非自明な挙動 |
+|:---|:---|:---|:---|
+| `Designation` | request producer (Decide) / `apply_designation_requests` (Execute) | `DesignationSpatialGrid`（0.15秒周期）| **削除 = タスク消滅**。`unassign_task` は削除しない（再試行を許可）|
+| `AssignedTask` | `apply_task_assignment_requests` (Execute) | `task_execution_system` (Execute) | `None` への遷移が `OnTaskCompleted` の発火条件 |
+| `TaskSlots` | request producer | `task_finder/filter` | `TaskWorkers.len()` と照合される（Target は自動） |
+| `ReservedForTask` | （未使用・legacy） | arbitration でフィルタに使用 | 現状は付与されない |
 
-- **`TaskQueue`**: 使い魔（IssuedBy）ごとに管理されるキュー。使い魔の配下の魂が優先的に処理する。
-- **`GlobalTaskQueue`**: `IssuedBy` がない「未指定」のタスクが入るキュー。
+### 2.3 SharedResourceCache（予約の調整点）
+
+`SharedResourceCache` は **2つのシステムが直接呼び合わずに調整する場所**。
+
+- **再構築**: `sync_reservations_system` が `AssignedTask` + `Designation`（Without\<TaskWorkers\>）から 0.2秒間隔で再構築
+- **フレーム内差分**: `ResourceReservationRequest` → `apply_reservation_requests_system` で即時反映
+- **DeliveringTo との関係**: `resource_sync` は `DeliveringTo` リレーションシップを参照するため、ここで HashMap に積まない（二重カウント防止）
+
+## 3. タスク発見性チェックリスト
+
+Familiar の `task_finder` がタスクを発見できる条件（**全て満たす必要がある**）:
+
+1. `Designation` コンポーネントがある
+2. `Transform` コンポーネントがある
+3. **`DesignationSpatialGrid` または `TransportRequestSpatialGrid` に登録されている**（0.15秒遅延あり）、または `ManagedTasks` に入っている
+4. ⚠️ **Haul系 WorkType** (`Haul` / `HaulToMixer` / `GatherWater` / `HaulWaterToMixer` / `WheelbarrowHaul`) は **`TransportRequest` コンポーネントが必須** — なければサイレントにフィルタされ、エラー・ログなし
+5. ownership チェック通過: ManagedTasks 内 / unassigned / issued_by 一致 / エリア重複の引き継ぎ
+6. `TaskWorkers.len() < TaskSlots.max`（デフォルト 1）
+7. Mixer タスク以外は Familiar の `TaskArea` 内、または ManagedTasks 内
+8. WorkType 別の状態チェック通過（Build: 資材完了済み / ReinforceFloorTile: `ReinforcingReady` / CoatWall: `is_provisional == true` 等）
+9. スコア計算が `Some(priority)` を返す（None = スコア計算不能で除外）
 
 ## 4. タスクのライフサイクル
 
-### 1. 指定 (Designation)
-- **手動**: プレイヤーが UI やドラッグ操作で指定。
-- **自動**（request エンティティ方式、M3〜M7 完了）:
-    - `task_area_auto_haul_system`: ファミリアの **TaskArea 内 Stockpile グループ** 単位で `DepositToStockpile` request を生成（anchor=代表セル）。割り当て時にソースおよび**具体的な格納先セル**を遅延解決。
-    - `bucket_auto_haul_system`: タンク位置（`anchor = tank`）に `ReturnBucket` request を生成。返却件数は `TransportDemand.desired_slots` で管理し、割り当て時にドロップバケツと返却先 `BucketStorage` を同時遅延解決。
-    - `blueprint_auto_haul_system`: 設計図位置に `DeliverToBlueprint` request を生成。
-    - `floor_construction_auto_haul_system`: 床建築サイト位置に `DeliverToFloorConstruction` request を生成。
-    - `wall_construction_auto_haul_system`: 壁建築サイト位置に `DeliverToWallConstruction` request を生成（`Framing` は Wood、`Coating` は StasisMud）。
-    - `provisional_wall_auto_haul_system`: 仮設壁（Wall）位置に `DeliverToProvisionalWall` request を生成。
-    - `mud_mixer_auto_haul_system`: Mixer 位置に `DeliverToMixerSolid`（固体）および `DeliverWaterToMixer`（水）request を生成。
-    - `tank_water_request_system`: タンクの空きに応じて `GatherWaterToTank` request を生成し、割り当て時にバケツを遅延解決。
-    - request エンティティは Execute フェーズの `apply_designation_requests_system` で反映。ソース探索は割り当て時（`task_finder` → `assign_haul` 等）に遅延実行される。
-- **自動**（familiar 側の gather 指定）:
-    - `blueprint_auto_gather_system`: `DeliverToBlueprint` request（Wood / Rock）と `DeliverToMixerSolid` request（Rock、`issued_by`）を起点に不足量を判定し、`Tree` / `Rock` に `WorkType::Chop` / `WorkType::Mine` を自動指定する。
-    - 候補探索は `TaskArea` 基準の段階走査（内側 → 10 → 30 → 60 → 到達可能全域）で、近傍優先かつ過剰発行抑制付きで行う。
+### 4.1 指定 (Designation)
 
+**手動**: プレイヤーが UI/ドラッグ操作で指定。
 
-### 2. 割り当て (Assignment)
-- 使い魔 AI が `DesignationSpatialGrid` / `TransportRequestSpatialGrid` / `ManagedTasks` から候補を一括収集し、配下のアイドル魂へ割り当てる。
-- **排他制御 (SharedResourceCache)**:
-    - 割り当て時は `SharedResourceCache` を参照し、過剰割り当てを防ぎます。
-    - **予約の再構築**: `sync_reservations_system` は以下の2つのソースから予約を **0.2秒間隔（初回即時）** で再構築します:
-        1. `AssignedTask` - 既にSoulに割り当てられているタスク
-        2. `Designation` + `TransportRequest` (Without<TaskWorkers>) - まだ割り当て待ちの request 候補
-    - これにより、自動発行システムが複数フレームにわたって過剰にタスクを発行することを防ぎます。
-    - なお、フレーム内の即時更新は `ResourceReservationRequest` -> `apply_reservation_requests_system` で反映されます。
-    - 決定したタスクは `TaskAssignmentRequest` と同時に予約更新要求がキューされ、Execute で反映されます。
-- **優先度 (Priority)**:
-    - **High (10)**: 建築作業 (`WorkType::Build`)、建築資材の運搬（設計図への `Haul`）。これらは距離に関わらず最優先で割り当てられる。
-    - **Low (0)**: 通常の資源採取、備蓄への運搬。
-    - 実割り当て時は worker ごとに `priority 0.65 + worker距離 0.35` で再スコアされる。
-- **割り当て手順（worker-aware）**:
-    - worker を使い魔から近い順で処理。
-    - 候補を worker 距離で事前フィルタ（60タイル超は除外）。
-    - `Top-K (24)` を先に評価し、未割り当てなら残り候補をフォールバック評価。
-    - 1ティックで複数 worker を同時割り当て（重複割り当ては `assigned_tasks` で防止）。
-- **到達判定キャッシュ**:
-    - `(worker_grid, target_grid)` をキーに `ReachabilityFrameCache` を利用。
-    - キャッシュは Familiar委譲処理で共有され、5フレームごとにクリア。
-- 魂の `AssignedTask` コンポーネントにターゲット情報が書き込まれる。
-- **リクルート条件**: 使い魔は `command_radius`（影響範囲）内のワーカーのみリクルート可能。範囲外でも空きがあればスカウトに向かう（詳細は [familiar_ai.md](familiar_ai.md) 参照）。
-- **疲労チェック**: 各使い魔が設定した `fatigue_threshold` を超えるワーカーにはタスクを割り当てない。
-- **監視モードへの遷移**: 部下が上限（`max_controlled_soul`）に達した時点で自動的に `Supervising` 状態へ移行する。
+**自動（request エンティティ方式）**: anchor 位置にエンティティを生成し、ソースは割り当て時に遅延解決:
+- `task_area_auto_haul_system` → `DepositToStockpile`（Stockpile グループ単位）
+- `blueprint_auto_haul_system` → `DeliverToBlueprint`
+- `floor/wall_construction_auto_haul_system` → `DeliverToFloor/WallConstruction`
+- `mud_mixer_auto_haul_system` → `DeliverToMixerSolid` / `DeliverWaterToMixer`
+- `tank_water_request_system` → `GatherWaterToTank`
+- `bucket_auto_haul_system` → `ReturnBucket`
+- `provisional_wall_auto_haul_system` → `DeliverToProvisionalWall`（legacy）
 
-### 3. 実行 (Execution)
-- 魂が移動し、ターゲットに対して作業を行う。
-- **採取 (Gather)**: 作業完了時に資源がドロップされます。
-    - **木 (Tree)**: `Wood` x 5 をドロップ。
-    - **岩 (Rock)**: `Rock` x 10 をドロップ。**作業時間は木の約2倍**かかる重労働です。
-    - **スタック**: 報酬は同一タイル内にドロップされ、アイテム個数としてまとめてカウント（スタック）されます。
-    - **砂採取 (CollectSand)** / **骨採取 (CollectBone)**:
-    - `SandPile`/`BonePile`、および砂/川（`TerrainType::Sand`/`River`）タイルは**無限ソース**として扱われます。
-    - 採取は**即時完了**（待機プログレスなし）で、到達フレームでアイテムを生成して `Done` へ遷移します。
-    - **注意**: 生成された `Sand` は地面に放置されると **5秒で消滅** します（運搬タスク等で予約/積載されれば維持されます）。
-- **精製 (Refine)**: MudMixer で `StasisMud` を生成します。
-    - 生成された `StasisMud` は地面に放置されると **5秒で消滅** します。
-- **運搬 (Haul)**: 「拾う」「備蓄場所へ運ぶ」「置く」のフェーズを経る。
-- **壁フレーミング (FrameWallTile)**: 壁サイトの `material_center` で木材受領後、対象タイルをフレーミングし `FramedProvisional` へ遷移。
-- **壁塗布 (CoatWall)**: 壁サイトの `CoatingReady` タイルを塗布し、完了で対応 `Building.is_provisional = false` に更新される（legacy 仮設壁の塗布タスクも互換維持）。
-- **猫車必須資源**: `Sand` / `StasisMud` は原則徒歩運搬不可。`HaulWithWheelbarrow` で搬送される。
-  - 例外: ピック→ドロップでその運搬1件を完了できる場合は徒歩運搬を許可。
-  - 判定は「ソース隣接 3x3 の立ち位置から、実行時ドロップしきい値を満たせるか」で評価する。
-  - Stockpile / Mixer: `distance(stand_pos, destination_pos) < TILE_SIZE * 1.8`
-  - Blueprint: `stand_pos` が `occupied_grids` 外、かつ `distance(stand_pos, occupied_tile) < TILE_SIZE * 1.5`
-- **手押し車運搬 (HaulWithWheelbarrow)**: 手押し車を使って複数アイテムをまとめて運搬する。以下の7フェーズを経る:
-    1. `GoingToParking` — 駐車エリアへ移動
-    2. `PickingUpWheelbarrow` — 手押し車を取得（`PushedBy` 設定）
-    3. `GoingToSource` — 積み込み元（地面/備蓄を含むアイテム群）へ移動
-    4. `Loading` — アイテムを手押し車に積む（`LoadedIn` 設定、`Visibility::Hidden`）
-       - Blueprint 向け `Sand` では直採取モードがあり、同一 Soul がこのフェーズで砂をその場生成して積載します（別の `CollectSand` タスクは使わない）。
-    5. `GoingToDestination` — 目的地へ移動（速度ペナルティ `SOUL_SPEED_WHEELBARROW_MULTIPLIER`）
-    6. `Unloading` — 搬送先（Stockpile / Blueprint / Mixer / FloorConstructionSite）に荷下ろし
-    7. `ReturningWheelbarrow` — 手押し車を駐車エリアに返却
-- **水運搬 (HaulWater)**: Tankから水を汲み、MudMixerへ運ぶ一連のプロセス。
-    - バケツ確保 -> Tankへ移動 -> 汲む -> Mixerへ移動 -> 注ぐ -> バケツ返却
+**自動（gather 指定）**: `blueprint_auto_gather_system` が Wood/Rock 不足を検知し、`Tree`/`Rock` に `Chop`/`Mine` を直付与（`AutoGatherDesignation` marker）。
 
+### 4.2 割り当て (Assignment)
 
-### 4. 完了・放棄 (Completion / Abandonment)
-- **完了**: 資源が消滅、または目的地に到達。`AssignedTask::None` に戻り、コンポーネントがクリーンアップされる。この際、`OnTaskCompleted` イベントが発行される。
-- **放棄（ストレス）**: ストレス崩壊（`OnStressBreakdown`）時に即座に中断。
-- **放棄（モチベーション）**: **やる気が 0.3 (30%) を下回った際**、自発的にタスクを放棄 (`OnTaskAbandoned`)。
-- **放棄（疲労）**: 疲労限界（`OnExhausted`）時に即座に中断し、集会所へ移動。
-- **解雇**: 使い魔からの指揮解除によって中断。
-- **割り当て通知**: タスクが割り当てられた際には `OnTaskAssigned` イベントが発行される。
+- `familiar_task_delegation_system`（0.5秒間隔）が候補収集 → worker 別再スコア（priority 0.65 + 距離 0.35）→ `TaskAssignmentRequest` 発行（Execute で適用）
+- 割り当て時に `DeliveringTo`・`WorkingOn`・`CommandedBy` を設定し、ソース（資材・バケツ等）を遅延解決
+- **排他制御**: `SharedResourceCache` を参照（§2.3 参照）
+- 60タイル超の候補は A* 前に除外。`ReachabilityFrameCache` で到達判定を5フレーム共有
 
-これらのイベントは Bevy 0.18 の **Observer** によって処理され、ログ出力や関連エンティティの状態更新が即座に行われます。
+### 4.3 実行 (Execution)
 
-## 5. 重要なメンテナンスロジック
+- **採取**: 木=Wood×5、岩=Rock×10ドロップ。Sand/BonePile/砂タイル/河川は無限ソース（即時完了）
+- **運搬 (Haul)**: GoingToSource → Picking → GoingToDestination → Dropping
+- **猫車運搬 (HaulWithWheelbarrow)**: GoingToParking → PickingUpWheelbarrow → GoingToSource → Loading → GoingToDestination → Unloading → ReturningWheelbarrow
+- **Sand / StasisMud**: 原則猫車必須。例外: ソース隣接 3x3 の立ち位置からドロップ閾値内なら徒歩可
+- **精製 (Refine)**: MudMixer で Sand+Water+Rock → StasisMud×5
+- **壁**: FrameWallTile（material_center で木材受領 → フレーミング）/ CoatWall（塗布 → `is_provisional = false`）
+- **⚠️ 消滅**: 地面に放置された Sand / StasisMud は **5秒で消滅**（ReservedForTask / LoadedIn / StoredIn / DeliveringTo いずれかあれば維持）
 
-### `unassign_task`
-タスクが中断された際、以下の処理を確実に行います：
-- **グリッド中心への吸着 (Grid Snapping)**: アイテムをドロップする際、タイルの中央（真の中心）に座標を補正する。
-- **タスク解除と予約解放**: `Designation` を削除するだけでなく、`SharedResourceCache` 上の予約も整合性を保つように管理される（基本的には `Sense` フェーズで自動リセットされるため、メモリリークは発生しない設計）。
+### 4.4 完了・放棄 (Completion / Abandonment)
 
-### 座標系 (Coordinate System)
-- マップ全体は **(MAP_WIDTH - 1) / 2.0 (50x50 なら 24.5)** を数学的中心として定義されている。
-- タイルの中心とワールド座標の整数値が一致するように設計されており、これにより 1px の狂いもない表示と判定を実現している。
+`AssignedTask` が `None` に戻った瞬間に `OnTaskCompleted` が発火する。放棄は全経路で `unassign_task` を経由する。
 
-## 6. オートホール (Auto-Haul)
-使い魔の `TaskArea`（担当エリア）内に **`Stockpile`（備蓄場所）** がある場合、その周辺の未指定資源を自動的に `Haul` タスクとして登録するシステム。
-詳細は [logistics.md](logistics.md) を参照してください。
-- 効率化のため空間グリッド（`ResourceSpatialGrid` および **`DesignationSpatialGrid`**）を利用して検索を行う。
-- 型の一致（木材/石材）と備蓄場所の容量（最大10個）を厳格にチェックします。
-- 同一フレーム内での過剰なタスク発行を抑えるため、予約済みの資源はスキップする。
-- 数千の指示が存在する状況でも、使い魔はエリア内の未アサインタスクを O(1) に近い速度で発見できます。
+**イベントチェーン**:
 
-### 6.1 需要起点の自動Gather（Wood / Rock）
-- `DeliverToBlueprint` request の不足（Wood / Rock）と、`DeliverToMixerSolid` request の不足（Rock）に応じて、`familiar_ai` が gather 用 `Designation` を自動発行します。
-- この指定は request エンティティではなく、`Tree` / `Rock` 実体へ直接付与されます（`AutoGatherDesignation` marker 付き）。
-- 需要解消後に未着手で残った自動指定は、システム側で自動回収されます。
+| イベント | 発火条件 | Observer の主な副作用 |
+|:---|:---|:---|
+| `OnTaskAssigned` | `apply_task_assignment_requests` が消費時 | 音声再生 / ログ |
+| `OnSoulRecruited` | 未指揮 Soul へのタスク割り当て時（`OnTaskAssigned` 内から条件付き） | 移動クリア / やる気+30% / ストレス+10% |
+| `OnTaskCompleted` | `AssignedTask` → `None` への変化 | **やる気ボーナス付与**（Chop/Mine+2%、Haul+1%、Build系+5%）/ 音声 |
+| `OnTaskAbandoned` | `unassign_task(emit=true)` から | 音声再生のみ（**cleanup は呼び出し元が完了済み**） |
+| `OnExhausted` | 疲労 > 0.9 の閾値超え | `unassign_task` + `CommandedBy` 削除 + `ExhaustedGathering` 設定 |
+| `OnStressBreakdown` | ストレス >= 1.0 | `unassign_task` + `StressBreakdown { frozen }` 付与 + `CommandedBy` 削除 |
 
-## 7. 疲労とストレス (Vitals)
+> `OnTaskAbandoned` は**通知専用**。cleanup は呼び出し元（`unassign_task`）が既に完了している。
 
-ワーカーの疲労、ストレス、やる気、およびそれらに基づく待機行動（休息、ブレイクダウン等）の詳細については、[soul_ai.md](soul_ai.md) を参照してください。
+## 5. unassign_task の契約
 
-## 8. TaskArea編集UI（高頻度運用向け）
+`src/systems/soul_ai/helpers/work.rs`
 
-`Orders -> Area` から `TaskMode::AreaSelection` に入ると、使い魔の担当エリア（`TaskArea`）を連続編集できます。
+**実行すること**:
+1. `emit_abandoned_event=true` なら `OnTaskAbandoned` を trigger（音声のみ）
+2. `SharedResourceCache` の予約を解放（`ResourceReservationOp::Release*` を発行）
+3. `HaulWithWheelbarrow` 中なら積載アイテムを可視化・座標復元、猫車を駐車に戻す
+4. 通常 Haul 中なら保持アイテムを地面にドロップ（Designation は **残す** → 再試行可能）
+5. `AssignedTask` を `None` にリセット
 
-### 入口と対象選択
-- `Orders -> Area` 選択時、現在選択が Familiar でない場合は以下の優先順で対象 Familiar を自動選択
-1. `TaskArea` をまだ持っていない Familiar
-2. 全員が `TaskArea` を持っている場合は任意の Familiar（実装上は Entity index 最小）
+**実行しないこと（呼び出し元の責務）**:
+- `WorkingOn` の削除 → `task_execution_system` が担当
+- `CommandedBy` の削除 → `OnExhausted` / `OnStressBreakdown` observer が担当
 
-### 編集フロー
-- 新規指定: 左ドラッグで矩形を指定
-- 直接編集: 既存 `TaskArea` の内部ドラッグで移動、辺/角ドラッグでリサイズ
-- グリッド整列: 既存 `WorldMap::snap_to_grid_edge` の仕様に準拠
+**呼び出し元と責務**:
 
-### モード遷移
-- デフォルト: 適用後も `TaskMode::AreaSelection(None)` を維持（連続編集）
-- `Shift + 左ボタンリリース`: 適用して通常モードへ復帰
-- `Esc`: `PlayMode::Normal` へ復帰
+| 呼び出し元 | emit_abandoned | 追加でやること |
+|:---|:---|:---|
+| `task_execution_system`（ターゲット不整合） | false | `WorkingOn` 削除 |
+| `on_exhausted` observer | true | `CommandedBy` 削除 |
+| `on_stress_breakdown` observer | true | `CommandedBy` 削除 + `StressBreakdown` 付与 |
+| player cancel（area_selection） | false | — |
 
-### ショートカット（Areaモード中）
-- `Tab` / `Shift + Tab`: Familiar のみ循環
-- `Ctrl + Z`: Undo
-- `Ctrl + Y` または `Ctrl + Shift + Z`: Redo
-- `Ctrl + C` / `Ctrl + V`: `TaskArea` のコピー / ペースト
-- `Ctrl + 1..3`: 現在エリアサイズをプリセット保存
-- `Alt + 1..3`: プリセットサイズを現在 Familiar に適用（中心維持）
+## 6. 削除追跡（RemovedComponents）
 
-### 補助表示
-- モードテキストとカーソル近傍プレビューに以下を表示
-1. エリアサイズ（タイル数）
-2. 現在のドラッグ状態（Move/Resize）
-3. 他 Familiar の `TaskArea` との重複数・最大重複率
-4. エリア内未割当タスク数（`Designation` かつ `Without<ManagedBy>`）
-5. クリップボード状態（`Clip:Ready/Empty`）
-- 高重複（最大重複率 50%以上）の場合、`WARN:HighOverlap` を表示
+Bevy 0.18 は削除イベントを持たないため、各システムが `RemovedComponents<T>` を polling する。
 
-## 9. タスクエリアの視覚表現 (Task Area Visuals)
+主な購読システム:
+- `resource_sync`: `Designation` / `TransportRequest` / `TaskWorkers` / `AssignedTask` の削除を検知してキャッシュ無効化
+- `arbitration`: `TransportRequest` / `WheelbarrowLease` 等の削除でリース cleanup
+- `spatial/*`: `DamnedSoul` / `ResourceItem` の削除でグリッドから除去
+- `obstacle`: `ObstaclePosition` の削除で WorldMap 更新
 
-タスクエリア（`TaskArea`）は、カスタム WGSL シェーダーを用いて描画され、状況に応じた動的な視覚フィードバックを提供します。
+**注意**: Soul が突然 despawn した場合、`OnTaskAbandoned` は発火せず、予約も自動解放されない。`resource_sync` の次回再構築（0.2秒以内）で整合性が回復する。
 
-### 階層とレイヤー
-タスクエリアの表示は以下の優先順位で描画されます：
-1. **境界線 (Border)**: 極細（1.0px）の実線または点線。
-2. **コーナーマーカー**: 四隅を強調する L 字型のインジケータ。
-3. **グラデーション (Vignette)**: 四隅から中心に向かって滑らかに広がる発光効果。
+## 7. オートホール・自動Gather
 
-### 状態別フィードバック
-エリアの状態に応じて、配色や透明度がリアルタイムに変化します：
-| 状態 | 表現 |
-|:---|:---|
-| **Idle** | 低透明度、固定の境界線。 |
-| **Hover** | 境界線が点線になり、視認性が向上。 |
-| **Selected** | 境界線が強調（実線）され、塗りの透明度が上昇。 |
-| **Editing** | 境界線が低周波でパルス（明滅）し、編集モードであることを強調。 |
+詳細は [logistics.md](logistics.md) 参照。
 
-### 配色の安定化
-複数の使い魔が存在する場合、各使い魔に固有の配色が割り当てられます（詳細は [familiar_ai.md](familiar_ai.md) 参照）。これにより、重なり合うエリアの所属を一目で判別可能です。
+### 7.1 需要起点の自動Gather（Wood / Rock）
+`blueprint_auto_gather_system` が `DeliverToBlueprint` / `DeliverToMixerSolid` request の不足を需要起点に、`Tree` / `Rock` へ `Chop` / `Mine` を直付与（`AutoGatherDesignation` marker 付き）。需要解消後に未着手指定は自動回収。
+
+## 8. TaskArea 編集 UI
+
+`Orders -> Area` で `TaskMode::AreaSelection` に入ると TaskArea 連続編集モード。
+
+- 新規: 左ドラッグ矩形 / 直接編集: 既存エリアの内部ドラッグ（移動）・辺/角ドラッグ（リサイズ）
+- `Shift+左リリース`: 適用して Normal 復帰 / `Esc`: Normal 復帰
+- `Ctrl+Z/Y`: Undo/Redo / `Ctrl+C/V`: コピー/ペースト / `Ctrl+1..3`: プリセット保存 / `Alt+1..3`: プリセット適用
+
+## 9. バイタル（疲労・ストレス・やる気）
+
+詳細は [soul_ai.md](soul_ai.md) 参照。
 
 ## 10. UI
-タスクリストの表示仕様については、[task_list_ui.md](task_list_ui.md) を参照してください。
+
+詳細は [task_list_ui.md](task_list_ui.md) 参照。

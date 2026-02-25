@@ -1,5 +1,6 @@
 use crate::interface::ui::{
-    SectionFolded, UiInputState, UiNodeRegistry, UiTheme, UnassignedFolded,
+    PlacementFailureTooltip, SectionFolded, UiInputState, UiNodeRegistry, UiTheme,
+    UnassignedFolded,
 };
 use crate::systems::GameSystemSet;
 use bevy::prelude::*;
@@ -11,6 +12,7 @@ impl Plugin for UiFoundationPlugin {
         app.register_type::<SectionFolded>();
         app.register_type::<UnassignedFolded>();
         app.init_resource::<UiInputState>();
+        app.init_resource::<PlacementFailureTooltip>();
         app.init_resource::<UiNodeRegistry>();
         app.init_resource::<UiTheme>();
         app.add_systems(

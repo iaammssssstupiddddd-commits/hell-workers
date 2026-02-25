@@ -68,10 +68,59 @@
 
 ### 9. docs 直下ドキュメントの記述ルール
 
+#### 9.1 基本方針
+
 - `docs/*.md`（`plans/` と `proposals/` を除く）は、作業報告ではなく仕様・設計・運用ルールの説明を目的とする。
 - 「対応済み」「実装完了」「今回の変更」など、時点依存の進捗/報告表現は書かない。
 - 実施ログ・進捗・作業メモは PR 説明、Issue、または `docs/plans/` / `docs/proposals/` に記載する。
 - 挙動変更を伴う実装時は、関連する仕様文書と `docs/README.md` の参照関係を同時に更新する。
+
+#### 9.2 更新トリガー（実装と同時に更新する）
+
+以下のいずれかが変わったとき、該当ドキュメントを必ず更新する:
+
+| 変更内容 | 更新対象 |
+|:---|:---|
+| 新しい Relationship/コンポーネントを追加 | 書き込み元・削除元・非自明な挙動を接続マップ表に追記 |
+| 既存コンポーネントの書き込み元/削除元が変わる | 接続マップ表の対応行を修正 |
+| task_finder フィルタ条件が変わる | `tasks.md §3` の発見性チェックリストを更新 |
+| `unassign_task` の契約が変わる | `tasks.md §5` を更新 |
+| Observer/イベントチェーンが変わる | `tasks.md §4.4` のイベント表を更新 |
+| 新規 WorkType / TransportRequest 種別を追加 | `tasks.md §4.3` と `logistics.md §3` を更新 |
+| サイレント失敗条件が追加/変更される | ⚠️ マーカー付きで記載（エラーなしでフィルタされる条件） |
+| TaskMode バリアントが変わる | `state.md` のバリアント一覧を更新 |
+| 空間グリッドを追加/削除 | `architecture.md` のグリッド一覧を更新 |
+
+#### 9.3 記述内容の優先順位（MCP-aware 原則）
+
+`rust-analyzer-mcp` / `docsrs-mcp` で取得可能な情報はドキュメントに書かない。**ドキュメントにしか書けない情報を優先する。**
+
+**書くべき内容（MCP では追いにくい ECS 疎結合）:**
+- Relationship の「書き込み元」「削除元」（どのシステムが insert/remove するか）
+- 複数システムにまたがる副作用と依存順序
+- 「何をしない」契約（呼び出し元の責務として残されているもの）
+- サイレント失敗トラップ（フィルタされてもエラー/ログが出ないケース）
+- 0.15秒グリッド同期遅延など、タイミング依存の挙動
+
+**書かないべき内容（MCP で参照可能）:**
+- struct のフィールド一覧（型・説明）
+- enum のバリアント一覧（自明な名前のもの）
+- `src/` ファイルパスの羅列
+- 定数の数値テーブル（`src/constants/` に集約済み）
+- Mermaid フローチャート（同等のテキスト表現で代替できる場合）
+
+#### 9.4 Relationship の記述形式
+
+ECS Relationship を追記する際は **tasks.md §2.1** と同じテーブル形式を使う:
+
+```markdown
+| Source（手動操作）| Target（Bevy自動）| 書き込み元 | 削除元 |
+|:---|:---|:---|:---|
+| `FooRelation(bar)` ← entity | `FooBars` ← bar | `apply_xxx_system`（Execute）| `unassign_task` / タスク完了 |
+```
+
+- Source 側のみ手動操作し、Target 側は Bevy が自動更新する旨を冒頭に明記する。
+- 複数システムが削除する場合は全て列挙する。
 
 ### 10. MCP（rust-analyzer-mcp / docsrs-mcp）活用フロー
 
@@ -94,22 +143,22 @@
 ## 便利なコマンド
 
 ### コンパイル確認
-```powershell
+```bash
 cargo check
 ```
 
 ### 画像変換
-```powershell
+```bash
 python scripts/convert_to_png.py "source_path" "assets/textures/dest.png"
 ```
 
 ### PNG署名確認
-```powershell
-powershell -Command "[BitConverter]::ToString((Get-Content 'file_path' -Encoding Byte -TotalCount 8))"
+```bash
+head -c 8 "file_path" | od -An -t x1
 ```
 
 ### 高負荷パフォーマンス計測（500 Soul / 30 Familiar）
-```powershell
+```bash
 cargo run -- --spawn-souls 500 --spawn-familiars 30 --perf-scenario
 ```
 

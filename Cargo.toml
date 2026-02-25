@@ -25,13 +25,15 @@ opt-level = 3
 lto = "thin"
 
 [profile.dev]
-opt-level = 1
-debug = true
+opt-level = 0
+debug = "line-tables-only"
+incremental = true
+codegen-units = 256
 
-# Optimize all dependencies even in dev mode
-# But exclude bevy when using dynamic linking to avoid symbol resolution issues
+# Keep a little optimization for dependencies in dev.
+# This is a build-speed-first setting (faster compile/link than opt-level=3).
 [profile.dev.package."*"]
-opt-level = 3
+opt-level = 1
 
 [profile.dev.package.bevy]
-opt-level = 1  # Lower optimization for bevy for faster linking
+opt-level = 1
