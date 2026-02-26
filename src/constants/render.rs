@@ -43,5 +43,7 @@ pub const Z_SPEECH_BUBBLE: f32 = 11.0;
 /// 吹き出し背景のZレイヤー
 pub const Z_SPEECH_BUBBLE_BG: f32 = 10.9;
 
-/// Room オーバーレイ色（半透明）
-pub const ROOM_OVERLAY_COLOR: Color = Color::srgba(0.2, 0.7, 1.0, 0.22);
+/// Room 境界線の色（壁の上に乗せるボーダーライン）
+pub const ROOM_BORDER_COLOR: Color = Color::srgba(0.2, 0.7, 1.0, 0.8);
+/// Room 境界線の太さ（ピクセル）
+pub const ROOM_BORDER_THICKNESS: f32 = 3.0;

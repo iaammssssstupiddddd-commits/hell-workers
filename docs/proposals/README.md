@@ -21,5 +21,6 @@
 | `room_detection.md` | 壁・扉・床から閉領域（Room）を検出する提案 |
 | `soul_spawn_despawn_optimization.md` | Soul Spawn/Despawn 最適化提案 |
 | `speech_optimization.md` | スピーチシステム最適化提案 |
+| `performance-bottlenecks-proposal-2026-02-26.md` | コード静的解析によるパフォーマンスボトルネック調査と改善提案（6 領域） |
 
 補足: 過去提案は `docs/proposals/archive/` を参照。
