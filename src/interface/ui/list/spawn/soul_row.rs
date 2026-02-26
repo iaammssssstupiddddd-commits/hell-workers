@@ -40,6 +40,14 @@ fn get_stress_color(bucket: StressBucket, theme: &UiTheme) -> Color {
     }
 }
 
+fn get_dream_color(dream_empty: bool, theme: &UiTheme) -> Color {
+    if dream_empty {
+        theme.colors.stress_medium
+    } else {
+        theme.colors.fatigue_text
+    }
+}
+
 fn stress_weight(bucket: StressBucket) -> FontWeight {
     match bucket {
         StressBucket::High => FontWeight::BOLD,
@@ -59,6 +67,7 @@ pub(super) fn spawn_soul_list_item(
     let (task_handle, task_color) =
         get_task_icon_and_color(soul_vm.task_visual, game_assets, theme);
     let stress_color = get_stress_color(soul_vm.stress_bucket, theme);
+    let dream_color = get_dream_color(soul_vm.dream_empty, theme);
 
     parent
         .spawn((
@@ -158,6 +167,20 @@ pub(super) fn spawn_soul_list_item(
                     ..default()
                 },
                 TextColor(stress_color),
+                Node {
+                    flex_shrink: 0.0,
+                    margin: UiRect::right(Val::Px(theme.spacing.margin_large)),
+                    ..default()
+                },
+            ));
+            // children[6]: dream text
+            item.spawn((
+                Text::new(soul_vm.dream_text.clone()),
+                TextFont {
+                    font_size: theme.typography.font_size_small,
+                    ..default()
+                },
+                TextColor(dream_color),
                 Node {
                     flex_shrink: 0.0,
                     margin: UiRect::right(Val::Px(theme.spacing.margin_large)),

@@ -72,12 +72,14 @@ pub fn familiar_influence_unified_system(
             best_influence = best_influence.max(influence);
         }
 
+        let dream_stress_factor = 1.0 + soul.dream * DREAM_STRESS_MULTIPLIER;
         if has_task {
-            soul.stress = (soul.stress + dt * STRESS_WORK_RATE).min(1.0);
+            soul.stress = (soul.stress + dt * STRESS_WORK_RATE * dream_stress_factor).min(1.0);
         } else if under_command.is_some() {
             // 待機中（使役下）ではストレス変化なし
         } else if is_influence_close {
-            soul.stress = (soul.stress + dt * ESCAPE_PROXIMITY_STRESS_RATE).min(1.0);
+            soul.stress =
+                (soul.stress + dt * ESCAPE_PROXIMITY_STRESS_RATE * dream_stress_factor).min(1.0);
         } else if is_gathering {
             soul.stress = (soul.stress - dt * STRESS_RECOVERY_RATE_GATHERING).max(0.0);
         } else {
@@ -85,7 +87,8 @@ pub fn familiar_influence_unified_system(
         }
 
         if has_task && best_influence > 0.0 {
-            let supervision_stress = best_influence * dt * SUPERVISION_STRESS_SCALE;
+            let supervision_stress =
+                best_influence * dt * SUPERVISION_STRESS_SCALE * dream_stress_factor;
             soul.stress = (soul.stress + supervision_stress).min(1.0);
         }
 

@@ -7,21 +7,13 @@ use super::dream_bubble_material::DreamBubbleUiMaterial;
 use crate::assets::GameAssets;
 use crate::constants::*;
 use crate::entities::damned_soul::{
-    DamnedSoul, DreamQuality, DreamState, GatheringBehavior, IdleBehavior, IdleState,
+    DamnedSoul, DreamState, GatheringBehavior, IdleBehavior, IdleState,
 };
 use crate::relationships::ParticipatingIn;
 use crate::systems::utils::floating_text::{
     FloatingText, FloatingTextConfig, spawn_floating_text, update_floating_text,
 };
 use bevy::prelude::*;
-
-fn dream_gain_rate(quality: DreamQuality) -> f32 {
-    match quality {
-        DreamQuality::VividDream => DREAM_RATE_VIVID,
-        DreamQuality::NormalDream => DREAM_RATE_NORMAL,
-        DreamQuality::NightTerror | DreamQuality::Awake => 0.0,
-    }
-}
 
 /// 睡眠中の Soul からポップアップテキストおよび UI パーティクルを生成するシステム。
 /// Dream 獲得量が `DREAM_POPUP_THRESHOLD` を超えるたびに発火する。
@@ -33,12 +25,12 @@ pub fn dream_popup_spawn_system(
     mut q_souls: Query<
         (
             &Transform,
+            &DamnedSoul,
             &IdleState,
             &DreamState,
             Option<&ParticipatingIn>,
             &mut DreamVisualState,
         ),
-        With<DamnedSoul>,
     >,
     q_camera: Query<(&Camera, &GlobalTransform), With<crate::interface::camera::MainCamera>>,
     q_ui_root: Query<Entity, With<crate::interface::ui::components::UiRoot>>,
@@ -68,14 +60,15 @@ pub fn dream_popup_spawn_system(
         }
     }
 
-    for (transform, idle, dream, participating_in, mut visual_state) in q_souls.iter_mut() {
+    for (transform, soul, idle, _dream, participating_in, mut visual_state) in q_souls.iter_mut() {
         let is_sleeping = idle.behavior == IdleBehavior::Sleeping
             || (idle.behavior == IdleBehavior::Gathering
                 && idle.gathering_behavior == GatheringBehavior::Sleeping
                 && participating_in.is_some());
-        let gain_rate = dream_gain_rate(dream.quality);
+        // 実際のdrain量に基づくレート（DreamQualityに依存しない）
+        let is_draining = is_sleeping && soul.dream > 0.0;
 
-        if !is_sleeping || gain_rate <= 0.0 {
+        if !is_draining {
             // 状態が切り替わった（起きる等）場合、持っている蓄積を開放する
             if visual_state.popup_accumulated > 0.0 {
                 let amount = visual_state.popup_accumulated;
@@ -123,7 +116,7 @@ pub fn dream_popup_spawn_system(
             continue;
         }
 
-        visual_state.popup_accumulated += gain_rate * dt;
+        visual_state.popup_accumulated += DREAM_DRAIN_RATE.min(soul.dream) * dt;
 
         visual_state.popup_timer += dt;
         if visual_state.popup_timer >= DREAM_POPUP_INTERVAL {

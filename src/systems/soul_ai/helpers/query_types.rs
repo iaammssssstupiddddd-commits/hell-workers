@@ -1,4 +1,6 @@
-use crate::entities::damned_soul::{DamnedSoul, Destination, IdleState, Path, StressBreakdown};
+use crate::entities::damned_soul::{
+    DamnedSoul, Destination, IdleState, Path, RestAreaCooldown, StressBreakdown,
+};
 use crate::entities::familiar::Familiar;
 use crate::relationships::{CommandedBy, WorkingOn};
 use crate::relationships::{ParticipatingIn, RestAreaReservedFor, RestingIn};
@@ -56,6 +58,7 @@ pub type IdleDecisionSoulQuery<'w, 's> = Query<
         Option<&'static ParticipatingIn>,
         Option<&'static RestingIn>,
         Option<&'static RestAreaReservedFor>,
+        Option<&'static RestAreaCooldown>,
     ),
     (Without<WorkingOn>, Without<CommandedBy>),
 >;

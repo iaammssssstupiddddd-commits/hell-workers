@@ -18,7 +18,7 @@ Bevy 0.18 の **ECS Relationships** を活用し、休憩所の定員管理や�
 ### ワーカー側 (Damned Soul)
 - **`RestingIn(Entity)`** (Relationship): 現在どの休憩所で休憩しているか。
 - **`RestAreaReservedFor(Entity)`** (Relationship): どの休憩所を予約して移動中か。
-- `RestAreaCooldown`: 休憩終了後、一定時間（リクルート不可など）の状態を管理するタイマー。
+- `RestAreaCooldown`: 休憩終了後のクールダウン。残り時間がある間は休憩所を予約・移動・入所しないためのガードとして使われる。
 
 ## 3. 休憩の発生条件
 
@@ -28,6 +28,10 @@ Bevy 0.18 の **ECS Relationships** を活用し、休憩所の定員管理や�
 2. **中程度の疲労 (Fatigue)**: `soul.fatigue > FATIGUE_IDLE_THRESHOLD * 0.5`
 3. **ストレス (Stress)**: `soul.stress > ESCAPE_STRESS_THRESHOLD`
 4. **長い待機時間**: 累積アイドル時間が `IDLE_TIME_TO_GATHERING * 0.3` を超過
+
+追加ガード:
+- `soul.dream > 0`（dream が枯渇している Soul は休憩へ向かわない）
+- `RestAreaCooldown.remaining_secs <= 0`（クールダウン中は休憩へ向かわない）
 
 ※ 条件を満たしても、最寄りの休憩所に空き（`capacity > 現在の利用者 + 予約者`）がない場合は休憩を行いません。
 
@@ -39,11 +43,13 @@ Bevy 0.18 の **ECS Relationships** を活用し、休憩所の定員管理や�
 条件を満たしたワーカーは、最も近い利用可能な休憩所を検索し、`RestAreaReservedFor` を付与して予約します。
 - この時点から、休憩所の `capacity` を 1 枠消費します。
 - 状態は `IdleBehavior::GoingToRest` に遷移します。
+- `RestAreaCooldown` が残っている場合、予約要求は破棄されます。
 
 ### 2. 移動 (GoingToRest)
 休憩所の入口（または隣接マス）へ移動します。
 - **移動の特徴**: 他のワーカーとの重なり回避（`gathering_separation_system`）をスキップし、効率的に目的地へ向かいます。
 - **割り込み防止**: 移動中は使い魔によるリクルートの対象外となります。
+- クールダウンが残っている場合は `GoingToRest` を解除し、`Wandering` に戻ります。
 
 ### 3. 休憩 (Resting)
 休憩所に到着すると、ワーカーは `RestingIn` 状態になります。
@@ -54,7 +60,9 @@ Bevy 0.18 の **ECS Relationships** を活用し、休憩所の定員管理や�
 ### 4. 退出とクールダウン (Exit & Cooldown)
 所定の時間が経過すると休憩所から退出します。
 - **位置の復帰**: 休憩所の中心から、歩行可能な隣接マスへ再配置されます。
-- **クールダウン**: 退出直後に再び休憩に入ったり、即座に過酷な労働に投入されたりするのを防ぐため、`RestAreaCooldown` が付与されます。
+- **クールダウン**: 退出時に `RestAreaCooldown`（`REST_AREA_RECRUIT_COOLDOWN_SECS` = 15 秒）が付与されます。
+  - 残り時間がある間、休憩所の**予約・移動開始・入所**を行いません。
+  - クールダウン終了後にのみ、再び休憩判定の対象になります。
 
 ## 5. 回復効果
 
@@ -65,14 +73,17 @@ Bevy 0.18 の **ECS Relationships** を活用し、休憩所の定員管理や�
 | **疲労 (Fatigue)** | 大幅に減少 |
 | **ストレス (Stress)** | 大幅に減少 |
 
-### 休憩中の Dream 生成
+### 休憩中の Dream 放出
 
-休憩所にワーカーが滞在している間、**ワーカーのストレスや夢の質（DreamQuality）に関わらず、独自の固定レートでグローバルな `DreamPool` にポイントが加算**されます。
-生成レートは「滞在人数（Occupants） × `REST_AREA_DREAM_RATE`」として計算されるため、人数が多いほど大量の Dream を生み出します。
+休憩中は、各 Soul の `DamnedSoul.dream` から `DreamPool.points` へ **per-soul drain** されます。
 
-同時に、その恩恵を視覚的に表現するため、**休憩所自体から「滞在人数に応じた規模（大きさ・密度）」で Dream パーティクルが集中的に湧き出る**演出が行われます。これにより「休憩させるほど Dream が溜まる」というゲームメカニクスが強調されます。
+- 放出レート: `DREAM_DRAIN_RATE_REST = 0.5/s`
+- 処理式: `drain = min(DREAM_DRAIN_RATE_REST * dt, soul.dream)`
+- `soul.dream <= 0.0` に達した Soul は即座に `LeaveRestArea` で退出
 
-詳細な係数は `src/constants/ai.rs`（`REST_AREA_*`）および `src/systems/soul_ai/update/vitals.rs` 等のバイタル更新ロジックで定義されています。
+補足:
+- 睡眠時の放出は `DREAM_DRAIN_RATE = 1.0/s`（休憩より速い）
+- 休憩所の Dream パーティクル演出は、引き続き滞在人数に応じてスケールします（視覚表現）
 
 ## 6. 実装上の注意点
 
@@ -84,8 +95,9 @@ ECS Relationships を使用しているため、ワーカーが削除（デス�
 
 ## 7. 関連ファイル
 - `src/systems/soul_ai/decide/idle_behavior/`: 休憩の意思決定、予約、到着判定。
-- `src/systems/soul_ai/execute/idle_behavior_apply.rs`: 休憩所への入退所処理、非表示化。
-- `src/systems/soul_ai/update/rest_area_update.rs`: 休憩効果の適用、入居人数に基づく固定レートでのDream生成。
+- `src/systems/soul_ai/execute/idle_behavior_apply.rs`: 休憩所への入退所処理、非表示化、クールダウン中の予約/入所拒否。
+- `src/systems/soul_ai/update/rest_area_update.rs`: 休憩効果の適用、per-soul dream 放出、退出判定。
+- `src/constants/dream.rs`: `DREAM_DRAIN_RATE`, `DREAM_DRAIN_RATE_REST` など Dream 放出定数。
 - `src/systems/visual/dream/particle.rs`: 休憩所からのDreamパーティクルのスケーリングと生成。
 - `src/relationships.rs`: `RestingIn`, `RestAreaOccupants` 等の Relationship 定義。
 - `src/systems/jobs/mod.rs`: `RestArea` コンポーネントの定義。

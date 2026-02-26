@@ -1,9 +1,5 @@
 //! Dream システム
 
-/// VividDream の蓄積レート (ポイント/秒)
-pub const DREAM_RATE_VIVID: f32 = 0.15;
-/// NormalDream の蓄積レート (ポイント/秒)
-pub const DREAM_RATE_NORMAL: f32 = 0.1;
 /// 悪夢判定のストレス閾値（これ以上で NightTerror）
 pub const DREAM_NIGHTMARE_STRESS_THRESHOLD: f32 = 0.7;
 /// VividDream 判定のストレス閾値（これ以下＋集会中で VividDream）
@@ -76,6 +72,16 @@ pub const DREAM_ICON_BASE_SIZE: f32 = 16.0;
 pub const DREAM_ICON_PULSE_SIZE: f32 = 20.0;
 
 // Bubble drift (漂い揺らぎ) removed in V2
+
+// Dream per-soul storage
+pub const DREAM_MAX: f32 = 100.0;
+pub const DREAM_ACCUMULATE_RATE_WORKING: f32 = 0.5;    // 労働中の蓄積レート (ポイント/秒)
+pub const DREAM_ACCUMULATE_RATE_IDLE: f32 = 0.1;       // アイドル中の蓄積レート (ポイント/秒)
+pub const DREAM_ACCUMULATE_RATE_GATHERING: f32 = 0.3;  // 集会中の蓄積レート (ポイント/秒)
+pub const DREAM_ACCUMULATE_RATE_ESCAPING: f32 = 0.5;   // 逃走中の蓄積レート (ポイント/秒)
+pub const DREAM_DRAIN_RATE: f32 = 1.0;                 // 睡眠中の放出レート (ポイント/秒)
+pub const DREAM_DRAIN_RATE_REST: f32 = 0.5;            // 休憩中の放出レート (ポイント/秒)
+pub const DREAM_STRESS_MULTIPLIER: f32 = 0.005;        // dream量によるストレス増加係数
 
 // Dream Tree Planting
 pub const DREAM_TREE_SPAWN_RATE_PER_TILE: f32 = 0.25;

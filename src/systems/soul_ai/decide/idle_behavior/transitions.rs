@@ -6,13 +6,22 @@ use crate::constants::*;
 use crate::entities::damned_soul::{GatheringBehavior, IdleBehavior};
 
 /// ランダムな集会中のサブ行動を選択
-pub fn random_gathering_behavior() -> GatheringBehavior {
+pub fn random_gathering_behavior(dream: f32) -> GatheringBehavior {
     let mut rng = rand::thread_rng();
-    match rng.gen_range(0..4) {
-        0 => GatheringBehavior::Wandering,
-        1 => GatheringBehavior::Sleeping,
-        2 => GatheringBehavior::Standing,
-        _ => GatheringBehavior::Dancing,
+    if dream > 0.0 {
+        match rng.gen_range(0..4) {
+            0 => GatheringBehavior::Wandering,
+            1 => GatheringBehavior::Sleeping,
+            2 => GatheringBehavior::Standing,
+            _ => GatheringBehavior::Dancing,
+        }
+    } else {
+        // dream=0: Sleeping除外、3択
+        match rng.gen_range(0..3) {
+            0 => GatheringBehavior::Wandering,
+            1 => GatheringBehavior::Standing,
+            _ => GatheringBehavior::Dancing,
+        }
     }
 }
 
@@ -42,23 +51,24 @@ pub fn behavior_duration_for(behavior: IdleBehavior) -> f32 {
     }
 }
 
-/// 次の IdleBehavior を選択（laziness に基づく）
-pub fn select_next_behavior(laziness: f32, _fatigue: f32, _total_idle_time: f32) -> IdleBehavior {
+/// 次の IdleBehavior を選択（laziness と dream に基づく）
+pub fn select_next_behavior(laziness: f32, _fatigue: f32, _total_idle_time: f32, dream: f32) -> IdleBehavior {
+    let can_sleep = dream > 0.0;
     let mut rng = rand::thread_rng();
     let roll: f32 = rng.gen_range(0.0..1.0);
 
     if laziness > LAZINESS_THRESHOLD_HIGH {
-        if roll < 0.6 {
+        if roll < 0.6 && can_sleep {
             IdleBehavior::Sleeping
-        } else if roll < 0.9 {
+        } else if roll < 0.6 || roll < 0.9 {
             IdleBehavior::Sitting
         } else {
             IdleBehavior::Wandering
         }
     } else if laziness > LAZINESS_THRESHOLD_MID {
-        if roll < 0.3 {
+        if roll < 0.3 && can_sleep {
             IdleBehavior::Sleeping
-        } else if roll < 0.6 {
+        } else if roll < 0.3 || roll < 0.6 {
             IdleBehavior::Sitting
         } else {
             IdleBehavior::Wandering

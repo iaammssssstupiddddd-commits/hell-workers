@@ -77,6 +77,7 @@ pub struct DamnedSoul {
     pub motivation: f32, // やる気 (0.0-1.0) - 高いほど働く
     pub fatigue: f32,    // 疲労 (0.0-1.0) - 高いほど疲れている
     pub stress: f32,     // ストレス (0.0-1.0) - 使い魔監視下で増加
+    pub dream: f32,      // 夢の貯蔵量 (0.0-100.0) - 労働中に蓄積、睡眠/休憩で放出
 }
 
 impl Default for DamnedSoul {
@@ -86,6 +87,7 @@ impl Default for DamnedSoul {
             motivation: 0.1, // デフォルトでやる気なし
             fatigue: 0.0,
             stress: 0.0, // デフォルトでストレスなし
+            dream: 0.0,
         }
     }
 }

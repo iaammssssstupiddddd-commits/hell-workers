@@ -51,12 +51,28 @@ pub fn mud_mixer_auto_haul_system(
         With<crate::systems::jobs::SandPile>,
     >,
     q_task_state: Query<(Option<&Designation>, Option<&TaskWorkers>)>,
+    q_requests_for_demand: Query<(&TransportRequest, Option<&TaskWorkers>, Option<&TransportDemand>)>,
 ) {
     let active_familiars: Vec<(Entity, TaskArea)> = q_familiars
         .iter()
         .filter(|(_, active_command, _)| !matches!(active_command.command, FamiliarCommand::Idle))
         .map(|(entity, _, area)| (entity, area.clone()))
         .collect();
+
+    let mut familiar_with_collect_sand_demand = std::collections::HashSet::<Entity>::new();
+    for (request, workers_opt, demand_opt) in q_requests_for_demand.iter() {
+        if !request_is_collect_sand_demand(request) {
+            continue;
+        }
+
+        let desired_slots = demand_opt.map(|d| d.desired_slots).unwrap_or(0);
+        let workers = workers_opt.map(|w| w.len() as u32).unwrap_or(0);
+        if desired_slots == 0 && workers == 0 {
+            continue;
+        }
+
+        familiar_with_collect_sand_demand.insert(request.issued_by);
+    }
 
     // (mixer, resource_type) -> (issued_by, desired_slots, mixer_pos)
     let mut desired_requests =
@@ -98,7 +114,8 @@ pub fn mud_mixer_auto_haul_system(
         // --- 砂採取タスクの自動発行 ---
         let sand_inflight =
             haul_cache.get_mixer_destination_reservation(mixer_entity, ResourceType::Sand);
-        if storage.sand + (sand_inflight as u32) < 2 {
+        let has_collect_sand_demand = familiar_with_collect_sand_demand.contains(&fam_entity);
+        if has_collect_sand_demand && storage.sand + (sand_inflight as u32) < 2 {
             let mut issued_collect_sand = false;
 
             for (sp_entity, sp_transform, sp_designation, sp_workers) in q_sand_piles.iter() {
@@ -296,6 +313,26 @@ pub fn mud_mixer_auto_haul_system(
             TransportPolicy::default(),
         ));
     }
+}
+
+fn request_is_collect_sand_demand(request: &TransportRequest) -> bool {
+    matches!(
+        (request.kind, request.resource_type),
+        (TransportRequestKind::DeliverToBlueprint, ResourceType::Sand)
+            | (TransportRequestKind::DeliverToBlueprint, ResourceType::StasisMud)
+            | (
+                TransportRequestKind::DeliverToFloorConstruction,
+                ResourceType::StasisMud
+            )
+            | (
+                TransportRequestKind::DeliverToWallConstruction,
+                ResourceType::StasisMud
+            )
+            | (
+                TransportRequestKind::DeliverToProvisionalWall,
+                ResourceType::StasisMud
+            )
+    )
 }
 
 fn find_available_sand_tile(

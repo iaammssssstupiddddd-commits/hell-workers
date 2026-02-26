@@ -19,6 +19,7 @@ fn entity_for_slot(
         UiSlot::StatMotivation => info_nodes.motivation,
         UiSlot::StatStress => info_nodes.stress,
         UiSlot::StatFatigue => info_nodes.fatigue,
+        UiSlot::StatDream => info_nodes.dream,
         UiSlot::TaskText => info_nodes.task,
         UiSlot::InventoryText => info_nodes.inventory,
         UiSlot::CommonText => info_nodes.common,
@@ -185,6 +186,13 @@ pub fn info_panel_system(
                 &info_nodes,
                 &ui_nodes,
                 &mut q_text,
+                UiSlot::StatDream,
+                &soul.dream,
+            );
+            set_text_slot(
+                &info_nodes,
+                &ui_nodes,
+                &mut q_text,
                 UiSlot::TaskText,
                 &soul.task,
             );
@@ -250,6 +258,7 @@ pub fn info_panel_system(
             );
             set_text_slot(&info_nodes, &ui_nodes, &mut q_text, UiSlot::StatStress, "");
             set_text_slot(&info_nodes, &ui_nodes, &mut q_text, UiSlot::StatFatigue, "");
+            set_text_slot(&info_nodes, &ui_nodes, &mut q_text, UiSlot::StatDream, "");
             set_text_slot(&info_nodes, &ui_nodes, &mut q_text, UiSlot::TaskText, "");
             set_text_slot(
                 &info_nodes,
