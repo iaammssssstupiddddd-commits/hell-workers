@@ -28,6 +28,7 @@ pub fn update_motion_destinations(
     world_map: &WorldMap,
     request_writer: &mut MessageWriter<IdleBehaviorRequest>,
     dt: f32,
+    dream: f32,
 ) {
     match idle.behavior {
         IdleBehavior::Wandering => {
@@ -52,7 +53,15 @@ pub fn update_motion_destinations(
                 idle.gathering_behavior_timer += dt;
                 if idle.gathering_behavior_timer >= idle.gathering_behavior_duration {
                     idle.gathering_behavior_timer = 0.0;
-                    idle.gathering_behavior = transitions::random_gathering_behavior();
+                    idle.gathering_behavior = transitions::random_gathering_behavior(dream);
+                    idle.gathering_behavior_duration = transitions::random_gathering_duration();
+                    idle.needs_separation = true;
+                }
+
+                // dream=0で集会中Sleeping → Sleeping以外に切り替え
+                if idle.gathering_behavior == GatheringBehavior::Sleeping && dream <= 0.0 {
+                    idle.gathering_behavior = transitions::random_gathering_behavior(dream);
+                    idle.gathering_behavior_timer = 0.0;
                     idle.gathering_behavior_duration = transitions::random_gathering_duration();
                     idle.needs_separation = true;
                 }

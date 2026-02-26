@@ -1,37 +1,25 @@
 use bevy::prelude::*;
 
 use crate::constants::{
-    REST_AREA_DREAM_RATE, REST_AREA_FATIGUE_RECOVERY_RATE, REST_AREA_RESTING_DURATION,
+    DREAM_DRAIN_RATE_REST, REST_AREA_FATIGUE_RECOVERY_RATE, REST_AREA_RESTING_DURATION,
     REST_AREA_STRESS_RECOVERY_RATE,
 };
 use crate::entities::damned_soul::{
     DamnedSoul, DreamPool, IdleBehavior, IdleState, RestAreaCooldown,
 };
 use crate::events::{IdleBehaviorOperation, IdleBehaviorRequest};
-use crate::relationships::{RestAreaOccupants, RestingIn};
-use crate::systems::jobs::RestArea;
+use crate::relationships::RestingIn;
 
-/// 休憩所の滞在効果を更新する（Dream生成、バイタル回復、自動退出、クールダウン）
+/// 休憩所の滞在効果を更新する（Dream放出、バイタル回復、自動退出、クールダウン）
 pub fn rest_area_update_system(
     time: Res<Time>,
     mut commands: Commands,
     mut dream_pool: ResMut<DreamPool>,
     mut request_writer: MessageWriter<IdleBehaviorRequest>,
-    q_rest_areas: Query<(&RestArea, Option<&RestAreaOccupants>)>,
     mut q_resting_souls: Query<(Entity, &mut DamnedSoul, &mut IdleState), With<RestingIn>>,
     mut q_cooldowns: Query<(Entity, &mut RestAreaCooldown)>,
 ) {
     let dt = time.delta_secs();
-
-    for (rest_area, occupants_opt) in q_rest_areas.iter() {
-        let occupant_count = occupants_opt
-            .map(crate::relationships::RestAreaOccupants::len)
-            .unwrap_or(0)
-            .min(rest_area.capacity);
-        if occupant_count > 0 {
-            dream_pool.points += occupant_count as f32 * REST_AREA_DREAM_RATE * dt;
-        }
-    }
 
     for (entity, mut soul, mut idle) in q_resting_souls.iter_mut() {
         if idle.behavior != IdleBehavior::Resting {
@@ -40,8 +28,21 @@ pub fn rest_area_update_system(
         soul.fatigue = (soul.fatigue - dt * REST_AREA_FATIGUE_RECOVERY_RATE).max(0.0);
         soul.stress = (soul.stress - dt * REST_AREA_STRESS_RECOVERY_RATE).max(0.0);
 
+        // per-soul dream放出
+        let drain = (DREAM_DRAIN_RATE_REST * dt).min(soul.dream);
+        if drain > 0.0 {
+            soul.dream -= drain;
+            dream_pool.points += drain;
+        }
+
         idle.idle_timer += dt;
         if idle.idle_timer >= REST_AREA_RESTING_DURATION {
+            request_writer.write(IdleBehaviorRequest {
+                entity,
+                operation: IdleBehaviorOperation::LeaveRestArea,
+            });
+        } else if soul.dream <= 0.0 {
+            // dream枯渇時は強制退出
             request_writer.write(IdleBehaviorRequest {
                 entity,
                 operation: IdleBehaviorOperation::LeaveRestArea,

@@ -82,6 +82,8 @@ pub(super) fn build_soul_view_model(
         fatigue_text: format!("{:.0}%", soul.fatigue * 100.0),
         stress_text: format!("{:.0}%", soul.stress * 100.0),
         stress_bucket: stress_bucket(soul.stress),
+        dream_text: format!("{:.0}", soul.dream),
+        dream_empty: soul.dream <= 0.0,
         task_visual: task_visual(task),
     }
 }

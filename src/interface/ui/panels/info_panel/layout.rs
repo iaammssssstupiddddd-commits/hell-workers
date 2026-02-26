@@ -265,6 +265,20 @@ pub fn spawn_info_panel_ui(
                     info_panel_nodes.fatigue = Some(fatigue);
                 });
 
+                let dream = col
+                    .spawn((
+                        Text::new(""),
+                        TextFont {
+                            font: game_assets.font_ui.clone(),
+                            font_size: theme.typography.font_size_small,
+                            ..default()
+                        },
+                        UiSlot::StatDream,
+                    ))
+                    .id();
+                ui_nodes.set_slot(UiSlot::StatDream, dream);
+                info_panel_nodes.dream = Some(dream);
+
                 spawn_info_section_divider(col, game_assets, theme, "Current Task");
 
                 col.spawn(Node {

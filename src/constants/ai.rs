@@ -68,7 +68,6 @@ pub const IDLE_DURATION_WANDER_MAX: f32 = 4.0;
 
 // ----- 休憩所 -----
 pub const REST_AREA_CAPACITY: usize = 5;
-pub const REST_AREA_DREAM_RATE: f32 = 0.12;
 pub const REST_AREA_RECRUIT_COOLDOWN_SECS: f32 = 15.0;
 pub const REST_AREA_FATIGUE_RECOVERY_RATE: f32 = 0.08;
 pub const REST_AREA_STRESS_RECOVERY_RATE: f32 = 0.03;
