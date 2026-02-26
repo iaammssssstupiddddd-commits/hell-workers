@@ -3,6 +3,7 @@ mod floor_place;
 mod hit_test;
 mod input;
 mod mode;
+mod placement_common;
 mod state;
 
 pub use building_place::blueprint_placement;
