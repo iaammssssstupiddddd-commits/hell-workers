@@ -44,44 +44,34 @@ pub fn handle_mouse_input(
         return;
     }
 
-    let Ok((camera, camera_transform)) = q_camera.single() else {
-        return;
-    };
-    let Ok(window) = q_window.single() else {
+    let Some(world_pos) = super::placement_common::world_cursor_pos(&q_window, &q_camera) else {
         return;
     };
 
-    if let Some(cursor_pos) = window.cursor_position() {
-        if let Ok(world_pos) = camera.viewport_to_world_2d(camera_transform, cursor_pos) {
-            if buttons.just_pressed(MouseButton::Left) {
-                if let Some(familiar_entity) =
-                    hovered_task_area_border_entity(world_pos, selected_entity.0, &q_task_areas)
-                {
-                    selected_entity.0 = Some(familiar_entity);
-                    task_context.0 = TaskMode::AreaSelection(None);
-                    next_play_mode.set(PlayMode::TaskDesignation);
-                    return;
-                }
+    if buttons.just_pressed(MouseButton::Left) {
+        if let Some(familiar_entity) =
+            hovered_task_area_border_entity(world_pos, selected_entity.0, &q_task_areas)
+        {
+            selected_entity.0 = Some(familiar_entity);
+            task_context.0 = TaskMode::AreaSelection(None);
+            next_play_mode.set(PlayMode::TaskDesignation);
+            return;
+        }
 
-                selected_entity.0 =
-                    selectable_worker_at_world_pos(world_pos, &q_souls, &q_familiars);
-            }
+        selected_entity.0 = selectable_worker_at_world_pos(world_pos, &q_souls, &q_familiars);
+    }
 
-            if buttons.just_pressed(MouseButton::Right) {
-                // 右クリック対象がエンティティ上なら、移動命令ではなくコンテキストメニューを優先する。
-                if hovered_entity_at_world_pos(world_pos, &q_souls, &q_familiars, &q_targets)
-                    .is_some()
-                {
-                    return;
-                }
+    if buttons.just_pressed(MouseButton::Right) {
+        // 右クリック対象がエンティティ上なら、移動命令ではなくコンテキストメニューを優先する。
+        if hovered_entity_at_world_pos(world_pos, &q_souls, &q_familiars, &q_targets).is_some() {
+            return;
+        }
 
-                if let Some(selected) = selected_entity.0 {
-                    // 使い魔の場合のみ移動指示を出す（Soulは直接指示不可）
-                    if q_familiars.get(selected).is_ok() {
-                        if let Ok(mut dest) = q_dest.get_mut(selected) {
-                            dest.0 = world_pos;
-                        }
-                    }
+        if let Some(selected) = selected_entity.0 {
+            // 使い魔の場合のみ移動指示を出す（Soulは直接指示不可）
+            if q_familiars.get(selected).is_ok() {
+                if let Ok(mut dest) = q_dest.get_mut(selected) {
+                    dest.0 = world_pos;
                 }
             }
         }
@@ -114,20 +104,12 @@ pub fn update_hover_entity(
         return;
     }
 
-    let Ok((camera, camera_transform)) = q_camera.single() else {
+    let Some(world_pos) = super::placement_common::world_cursor_pos(&q_window, &q_camera) else {
         return;
     };
-    let Ok(window) = q_window.single() else {
-        return;
-    };
+    let found = hovered_entity_at_world_pos(world_pos, &q_souls, &q_familiars, &q_targets);
 
-    if let Some(cursor_pos) = window.cursor_position() {
-        if let Ok(world_pos) = camera.viewport_to_world_2d(camera_transform, cursor_pos) {
-            let found = hovered_entity_at_world_pos(world_pos, &q_souls, &q_familiars, &q_targets);
-
-            if found != hovered_entity.0 {
-                hovered_entity.0 = found;
-            }
-        }
+    if found != hovered_entity.0 {
+        hovered_entity.0 = found;
     }
 }

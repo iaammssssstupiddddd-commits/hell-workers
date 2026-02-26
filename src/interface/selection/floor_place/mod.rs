@@ -1,23 +1,21 @@
 //! Floor and wall construction drag-drop placement system
 
 mod floor_apply;
+mod input;
 mod validation;
 mod wall_apply;
 
 use crate::game_state::{PlayMode, TaskContext};
 use crate::interface::camera::MainCamera;
 use crate::interface::ui::{PlacementFailureTooltip, UiInputState};
-use crate::systems::command::area_selection::wall_line_area;
-use crate::systems::command::{TaskArea, TaskMode};
+use crate::systems::command::TaskMode;
 use crate::systems::jobs::floor_construction::FloorTileBlueprint;
-use crate::systems::jobs::{Building, BuildingType};
+use crate::systems::jobs::Building;
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
-use std::collections::HashSet;
 
-use floor_apply::apply_floor_placement;
-use wall_apply::apply_wall_placement;
+use input::{handle_cancel, handle_drag_start, handle_release};
 
 pub fn floor_placement_system(
     buttons: Res<ButtonInput<MouseButton>>,
@@ -47,71 +45,24 @@ pub fn floor_placement_system(
     };
     let snapped_pos = WorldMap::snap_to_grid_edge(world_pos);
 
-    // Start drag
-    if buttons.just_pressed(MouseButton::Left) {
-        task_context.0 = if is_floor_mode {
-            TaskMode::FloorPlace(Some(snapped_pos))
-        } else {
-            TaskMode::WallPlace(Some(snapped_pos))
-        };
+    if handle_drag_start(&buttons, &mut task_context.0, is_floor_mode, snapped_pos) {
         return;
     }
 
-    // Complete placement
-    if buttons.just_released(MouseButton::Left) {
-        if let Some(start_pos) = start_pos_opt {
-            if is_floor_mode {
-                let area = TaskArea::from_points(start_pos, snapped_pos);
-                let existing_floor_tile_grids: HashSet<(i32, i32)> = q_existing_floor_tiles
-                    .iter()
-                    .map(|tile| tile.grid_pos)
-                    .collect();
-                let existing_floor_building_grids: HashSet<(i32, i32)> = q_floor_buildings
-                    .iter()
-                    .filter_map(|(building, transform)| {
-                        (building.kind == BuildingType::Floor)
-                            .then(|| WorldMap::world_to_grid(transform.translation.truncate()))
-                    })
-                    .collect();
-                apply_floor_placement(
-                    &mut commands,
-                    &world_map,
-                    &area,
-                    &existing_floor_tile_grids,
-                    &existing_floor_building_grids,
-                    &mut placement_failure_tooltip,
-                );
-            } else {
-                let area = wall_line_area(start_pos, snapped_pos);
-                let existing_floor_building_grids: HashSet<(i32, i32)> = q_floor_buildings
-                    .iter()
-                    .filter_map(|(building, transform)| {
-                        (building.kind == BuildingType::Floor)
-                            .then(|| WorldMap::world_to_grid(transform.translation.truncate()))
-                    })
-                    .collect();
-                apply_wall_placement(
-                    &mut commands,
-                    &mut world_map,
-                    &area,
-                    &existing_floor_building_grids,
-                    &mut placement_failure_tooltip,
-                );
-            }
-
-            // Reset mode (continue placing if shift held - TODO)
-            task_context.0 = if is_floor_mode {
-                TaskMode::FloorPlace(None)
-            } else {
-                TaskMode::WallPlace(None)
-            };
-        }
+    if handle_release(
+        &buttons,
+        start_pos_opt,
+        is_floor_mode,
+        snapped_pos,
+        &q_existing_floor_tiles,
+        &q_floor_buildings,
+        &mut commands,
+        &mut world_map,
+        &mut placement_failure_tooltip,
+        &mut task_context.0,
+    ) {
         return;
     }
 
-    // Cancel (right click)
-    if buttons.just_pressed(MouseButton::Right) {
-        task_context.0 = TaskMode::None;
-        next_play_mode.set(PlayMode::Normal);
-    }
+    let _ = handle_cancel(&buttons, &mut task_context.0, &mut next_play_mode);
 }
