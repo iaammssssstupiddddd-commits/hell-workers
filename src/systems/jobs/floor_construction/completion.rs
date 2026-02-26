@@ -149,6 +149,7 @@ pub fn floor_construction_completion_system(
 
             // Curing is complete: tile becomes walkable again.
             world_map.remove_obstacle(gx, gy);
+            world_map.buildings.remove(&(gx, gy));
 
             // Despawn tile blueprint
             commands.entity(tile_entity).despawn();

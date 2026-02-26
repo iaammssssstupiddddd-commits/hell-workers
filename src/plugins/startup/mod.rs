@@ -26,7 +26,6 @@ use crate::systems::spatial::{
 use crate::systems::time::GameTime;
 use crate::world::map::{WorldMap, spawn_map, terrain_border::spawn_terrain_borders};
 use bevy::prelude::*;
-use bevy::render::view::NoIndirectDrawing;
 
 pub struct StartupPlugin;
 
@@ -55,7 +54,7 @@ impl Plugin for StartupPlugin {
                 PostStartup,
                 (
                     spawn_map_timed,
-                    spawn_terrain_borders,
+                    spawn_terrain_borders_if_enabled,
                     initial_resource_spawner_timed,
                     spawn_entities,
                     spawn_familiar_wrapper,
@@ -88,12 +87,7 @@ fn setup(
     mut images: ResMut<Assets<Image>>,
 ) {
     // camera/resources 初期化
-    commands.spawn((
-        Camera2d,
-        MainCamera,
-        PanCamera::default(),
-        NoIndirectDrawing,
-    ));
+        commands.spawn((Camera2d, MainCamera, PanCamera::default()));
 
     // asset catalog 生成
     let game_assets = create_game_assets(&asset_server, &mut *images);
@@ -105,6 +99,25 @@ fn initialize_gizmo_config(mut config_store: ResMut<GizmoConfigStore>) {
         config.enabled = true;
         config.line.width = 1.0;
     }
+}
+
+fn spawn_terrain_borders_if_enabled(commands: Commands, game_assets: Res<GameAssets>, world_map: Res<WorldMap>) {
+    if skip_terrain_borders() {
+        info!("STARTUP: terrain borders spawn skipped");
+        return;
+    }
+
+    spawn_terrain_borders(commands, game_assets, world_map);
+}
+
+fn skip_terrain_borders() -> bool {
+    if std::env::var("HW_DISABLE_TERRAIN_BORDERS").is_ok_and(|v| {
+        matches!(v.as_str(), "1" | "true" | "TRUE" | "on" | "ON" | "yes" | "YES")
+    }) {
+        return true;
+    }
+
+    std::env::args().any(|arg| arg == "--disable-terrain-borders")
 }
 
 fn populate_resource_spatial_grid(

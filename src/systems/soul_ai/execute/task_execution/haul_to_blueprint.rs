@@ -109,7 +109,7 @@ pub fn handle_haul_to_blueprint_task(
                     "HAUL_TO_BP: Cancelled for {:?} - Item {:?} gone",
                     ctx.soul_entity, item_entity
                 );
-                cancel::cancel_haul_to_blueprint(ctx, item_entity, blueprint_entity);
+                cancel::cancel_haul_to_blueprint(ctx, item_entity, blueprint_entity, commands);
             }
         }
         HaulToBpPhase::GoingToBlueprint => {
@@ -127,7 +127,7 @@ pub fn handle_haul_to_blueprint_task(
                         "HAUL_TO_BP: Cancelled for {:?} - Blueprint {:?} unreachable",
                         ctx.soul_entity, blueprint_entity
                     );
-                    cancel::cancel_haul_to_blueprint(ctx, item_entity, blueprint_entity);
+                    cancel::cancel_haul_to_blueprint(ctx, item_entity, blueprint_entity, commands);
                     return;
                 }
 

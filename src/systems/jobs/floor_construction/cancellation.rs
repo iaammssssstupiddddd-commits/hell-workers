@@ -198,6 +198,7 @@ pub fn floor_construction_cancellation_system(
 
         for tile in site_tiles {
             world_map.remove_obstacle(tile.grid_pos.0, tile.grid_pos.1);
+            world_map.buildings.remove(&tile.grid_pos);
             commands.entity(tile.entity).try_despawn();
         }
 

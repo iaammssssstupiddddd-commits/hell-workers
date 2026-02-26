@@ -34,9 +34,27 @@ pub fn cancel_haul_to_stockpile(
 }
 
 /// Blueprint運搬の中断: 目的地＋ソース解放、タスククリア
-pub fn cancel_haul_to_blueprint(ctx: &mut TaskExecutionContext, item: Entity, blueprint: Entity) {
+pub fn cancel_haul_to_blueprint(
+    ctx: &mut TaskExecutionContext,
+    item: Entity,
+    blueprint: Entity,
+    commands: &mut Commands,
+) {
     reservation::release_destination(ctx, blueprint);
     reservation::release_source(ctx, item, 1);
+
+    if ctx.inventory.0 == Some(item) {
+        let soul_pos = ctx.soul_pos();
+        commands.entity(item).try_insert((
+            Visibility::Visible,
+            Transform::from_xyz(soul_pos.x, soul_pos.y, crate::constants::Z_ITEM_PICKUP),
+        ));
+        ctx.inventory.0 = None;
+    }
+
+    commands
+        .entity(item)
+        .remove::<crate::relationships::DeliveringTo>();
     clear_task_and_path(ctx.task, ctx.path);
 }
 

@@ -106,11 +106,18 @@ pub fn familiar_influence_unified_system(
             if breakdown_opt.is_none() {
                 commands.trigger(OnStressBreakdown { entity });
             }
-        } else if let Some(mut breakdown) = breakdown_opt {
+        }
+
+        if let Some(mut breakdown) = breakdown_opt {
             if soul.stress <= STRESS_RECOVERY_THRESHOLD {
                 commands.entity(entity).remove::<StressBreakdown>();
-            } else if soul.stress <= STRESS_FREEZE_RECOVERY_THRESHOLD && breakdown.is_frozen {
-                breakdown.is_frozen = false;
+            } else if breakdown.is_frozen {
+                breakdown.remaining_freeze_secs = (breakdown.remaining_freeze_secs - dt).max(0.0);
+                if breakdown.remaining_freeze_secs <= 0.0 {
+                    breakdown.is_frozen = false;
+                }
+            } else if breakdown.remaining_freeze_secs > 0.0 {
+                breakdown.remaining_freeze_secs = (breakdown.remaining_freeze_secs - dt).max(0.0);
             }
         }
     }

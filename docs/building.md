@@ -173,17 +173,12 @@ Hell-Workers における建築システムの基礎実装について説明し�
 ### Room 検出 (Room Detection)
 
 壁・扉・床で囲まれた空間は、`Room` エンティティとして自動検出されます。
+詳細仕様は **[room_detection.md](room_detection.md)** を参照してください。
 
-- **成立条件**:
-  - 内部タイルがすべて完成 `BuildingType::Floor`
-  - 外周が完成 `BuildingType::Wall`（`is_provisional == false`）または `BuildingType::Door`
-  - 境界にドアが1つ以上存在
-  - タイル数が `ROOM_MAX_TILES`（400）以下
-- **検出方式**: 4近傍 Flood-fill
-- **再判定トリガー**:
-  - `Building` / `Door` の追加・変更
-  - `WorldMap.buildings` 差分（削除・置換）
-- **自己修復**: 2秒ごとの検証で不正な Room を破棄し、dirty 再検出に戻す
+- **成立条件**: 内部タイルがすべて完成 `BuildingType::Floor` / 外周が完成壁または扉 / ドア 1 個以上 / `ROOM_MAX_TILES`（400）以下
+- **検出方式**: 4近傍 Flood-fill（0.5 秒クールダウン）
+- **再判定トリガー**: `Building` / `Door` の追加・変更 / `WorldMap.buildings` 差分
+- **自己修復**: 2 秒ごとの検証で不正 Room を破棄し dirty 再検出に戻す
 - **可視化**: 成立 Room の床タイルに半透明オーバーレイを表示
 
 ### MudMixer と Stasis Mud

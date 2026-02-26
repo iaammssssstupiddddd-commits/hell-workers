@@ -103,8 +103,10 @@ pub struct SoulUiLinks {
 #[derive(Component, Debug, Clone, Copy, Default, Reflect)]
 #[reflect(Component)]
 pub struct StressBreakdown {
-    /// 停止中（stress > 0.9）- 動けない
+    /// 停止中（初期 1 秒）- 動けない
     pub is_frozen: bool,
+    /// 1 秒間だけ停止してから解除される残り時間
+    pub remaining_freeze_secs: f32,
 }
 
 /// 休憩所退出後のリクルート不可クールダウン

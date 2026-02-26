@@ -35,7 +35,17 @@ pub fn compute_remaining_blueprint_wheelbarrow_amount(
         .reservation
         .incoming_deliveries_query
         .get(blueprint)
-        .map(|inc| inc.len())
+        .map(|inc| {
+            inc.iter()
+                .filter(|&&item| {
+                    queries
+                        .reservation
+                        .resources
+                        .get(item)
+                        .is_ok_and(|resource_item| resource_item.0 == resource_type)
+                })
+                .count()
+        })
         .unwrap_or(0);
 
     needed_material.saturating_sub(reserved_total as u32)
@@ -46,13 +56,19 @@ pub fn compute_remaining_floor_bones(
     site_entity: Entity,
     queries: &TaskAssignmentQueries<'_, '_>,
 ) -> u32 {
-    compute_remaining_with_incoming(site_entity, queries, |tile| {
-        if tile.state == crate::systems::jobs::floor_construction::FloorTileState::WaitingBones {
-            crate::constants::FLOOR_BONES_PER_TILE.saturating_sub(tile.bones_delivered)
-        } else {
-            0
-        }
-    })
+    compute_remaining_with_incoming(
+        site_entity,
+        ResourceType::Bone,
+        queries,
+        |tile| {
+            if tile.state == crate::systems::jobs::floor_construction::FloorTileState::WaitingBones
+            {
+                crate::constants::FLOOR_BONES_PER_TILE.saturating_sub(tile.bones_delivered)
+            } else {
+                0
+            }
+        },
+    )
 }
 
 /// 床建設サイトへの泥の残需要
@@ -60,13 +76,18 @@ pub fn compute_remaining_floor_mud(
     site_entity: Entity,
     queries: &TaskAssignmentQueries<'_, '_>,
 ) -> u32 {
-    compute_remaining_with_incoming(site_entity, queries, |tile| {
-        if tile.state == crate::systems::jobs::floor_construction::FloorTileState::WaitingMud {
-            crate::constants::FLOOR_MUD_PER_TILE.saturating_sub(tile.mud_delivered)
-        } else {
-            0
-        }
-    })
+    compute_remaining_with_incoming(
+        site_entity,
+        ResourceType::StasisMud,
+        queries,
+        |tile| {
+            if tile.state == crate::systems::jobs::floor_construction::FloorTileState::WaitingMud {
+                crate::constants::FLOOR_MUD_PER_TILE.saturating_sub(tile.mud_delivered)
+            } else {
+                0
+            }
+        },
+    )
 }
 
 /// 壁建設サイトへの木材の残需要
@@ -99,6 +120,7 @@ pub fn compute_remaining_wall_mud(
 
 fn compute_remaining_with_incoming(
     anchor_entity: Entity,
+    resource_type: ResourceType,
     queries: &TaskAssignmentQueries<'_, '_>,
     needed_per_tile: impl Fn(&crate::systems::jobs::floor_construction::FloorTileBlueprint) -> u32,
 ) -> u32 {
@@ -117,7 +139,17 @@ fn compute_remaining_with_incoming(
         .reservation
         .incoming_deliveries_query
         .get(anchor_entity)
-        .map(|inc| inc.len() as u32)
+        .map(|inc| {
+            inc.iter()
+                .filter(|&&item| {
+                    queries
+                        .reservation
+                        .resources
+                        .get(item)
+                        .is_ok_and(|resource_item| resource_item.0 == resource_type)
+                })
+                .count() as u32
+        })
         .unwrap_or(0);
 
     needed.saturating_sub(incoming)
