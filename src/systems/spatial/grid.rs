@@ -1,32 +1,5 @@
-use crate::constants::SPATIAL_GRID_SYNC_INTERVAL;
 use bevy::prelude::*;
 use std::collections::{HashMap, HashSet};
-
-/// 空間グリッド（Designation/Familiar等）の同期タイマー
-///
-/// 毎フレームのフル再構築を避け、0.15秒間隔で同期する。
-#[derive(Resource)]
-pub struct SpatialGridSyncTimer {
-    pub timer: Timer,
-    pub first_run_done: bool,
-}
-
-impl Default for SpatialGridSyncTimer {
-    fn default() -> Self {
-        Self {
-            timer: Timer::from_seconds(SPATIAL_GRID_SYNC_INTERVAL, TimerMode::Repeating),
-            first_run_done: false,
-        }
-    }
-}
-
-/// 空間グリッド同期タイマーを進める。6つの update システムより先に実行する。
-pub fn tick_spatial_grid_sync_timer_system(
-    time: Res<Time>,
-    mut sync_timer: ResMut<SpatialGridSyncTimer>,
-) {
-    sync_timer.timer.tick(time.delta());
-}
 
 /// 空間グリッドの共通操作を定義するトレイト
 pub trait SpatialGridOps {
@@ -35,29 +8,6 @@ pub trait SpatialGridOps {
     fn update(&mut self, entity: Entity, pos: Vec2);
     fn get_nearby_in_radius(&self, pos: Vec2, radius: f32) -> Vec<Entity>;
     fn get_nearby_in_radius_into(&self, pos: Vec2, radius: f32, out: &mut Vec<Entity>);
-}
-
-/// フル再構築（clear + insert）をサポートするグリッド向けトレイト
-pub trait SyncGridClear: SpatialGridOps {
-    fn clear_and_sync<I>(&mut self, entities: I)
-    where
-        I: Iterator<Item = (Entity, Vec2)>;
-}
-
-/// タイマー付きの空間グリッド同期（6つの update システムで共有）
-///
-/// タイマーが満了したときのみ clear + insert を実行する。
-pub fn sync_grid_timed<G, I>(sync_timer: &mut SpatialGridSyncTimer, grid: &mut G, entities: I)
-where
-    G: SyncGridClear,
-    I: Iterator<Item = (Entity, Vec2)>,
-{
-    let timer_finished = sync_timer.timer.just_finished();
-    if sync_timer.first_run_done && !timer_finished {
-        return;
-    }
-    sync_timer.first_run_done = true;
-    grid.clear_and_sync(entities);
 }
 
 /// 汎用的なグリッドデータ構造
