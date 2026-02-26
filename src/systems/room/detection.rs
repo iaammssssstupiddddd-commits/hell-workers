@@ -66,6 +66,7 @@ pub fn detect_rooms_system(
                     tile_count,
                 },
                 bounds,
+                Transform::default(),
                 Name::new(format!("Room #{}", index + 1)),
             ))
             .id();
@@ -90,8 +91,9 @@ pub(super) fn build_detection_input(
 
         match building.kind {
             BuildingType::Floor => {
-                // FloorConstruction 由来の床は WorldMap.buildings に入らないため、
-                // occupancy がないタイルのみ「有効な床」として扱う。
+                // 完成床タイルは world_map.buildings に登録されない。
+                // 床タイルのグリッドに別の建物（壁など）が存在する場合は
+                // floor_tiles から除外し、壁側で処理させる。
                 if !world_map.buildings.contains_key(&grid) {
                     input.floor_tiles.insert(grid);
                 }

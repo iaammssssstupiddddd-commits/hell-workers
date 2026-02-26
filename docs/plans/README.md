@@ -1,6 +1,6 @@
 # Plans Index
 
-`docs/plans` の文書ステータス一覧（更新日: 2026-02-23）。
+`docs/plans` の文書ステータス一覧（更新日: 2026-02-25）。
 
 ## 新規計画書の作り方
 
@@ -19,6 +19,7 @@
 
 | Document | Status | Notes |
 |---|---|---|
+| [selection-placement-refactor-plan-2026-02-25.md](selection-placement-refactor-plan-2026-02-25.md) | Draft | `interface/selection` の配置処理を責務分離するリファクタ計画。 |
 | [room-detection-plan-2026-02-23.md](room-detection-plan-2026-02-23.md) | Implemented | 壁・扉・床の閉領域をRoomとして検出し、オーバーレイ表示する実装計画。 |
 
 ## アーカイブ計画書一覧 (`docs/plans/archive`)
