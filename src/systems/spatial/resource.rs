@@ -19,6 +19,9 @@ impl SpatialGridOps for ResourceSpatialGrid {
     fn get_nearby_in_radius(&self, pos: Vec2, radius: f32) -> Vec<Entity> {
         self.0.get_nearby_in_radius(pos, radius)
     }
+    fn get_nearby_in_radius_into(&self, pos: Vec2, radius: f32, out: &mut Vec<Entity>) {
+        self.0.get_nearby_in_radius_into(pos, radius, out);
+    }
 }
 
 pub fn update_resource_spatial_grid_system(

@@ -1,4 +1,4 @@
-use super::grid::{GridData, SpatialGridOps, SpatialGridSyncTimer, SyncGridClear, sync_grid_timed};
+use super::grid::{GridData, SpatialGridOps};
 use crate::systems::jobs::Blueprint;
 use bevy::prelude::*;
 
@@ -45,28 +45,23 @@ impl SpatialGridOps for BlueprintSpatialGrid {
     fn get_nearby_in_radius(&self, pos: Vec2, radius: f32) -> Vec<Entity> {
         self.0.get_nearby_in_radius(pos, radius)
     }
-}
-
-impl SyncGridClear for BlueprintSpatialGrid {
-    fn clear_and_sync<I>(&mut self, entities: I)
-    where
-        I: Iterator<Item = (Entity, Vec2)>,
-    {
-        self.0.clear();
-        for (entity, pos) in entities {
-            self.0.insert(entity, pos);
-        }
+    fn get_nearby_in_radius_into(&self, pos: Vec2, radius: f32, out: &mut Vec<Entity>) {
+        self.0.get_nearby_in_radius_into(pos, radius, out);
     }
 }
 
 pub fn update_blueprint_spatial_grid_system(
-    mut sync_timer: ResMut<SpatialGridSyncTimer>,
     mut grid: ResMut<BlueprintSpatialGrid>,
-    query: Query<(Entity, &Transform), With<Blueprint>>,
+    query: Query<
+        (Entity, &Transform),
+        (With<Blueprint>, Or<(Added<Blueprint>, Changed<Transform>)>),
+    >,
+    mut removed: RemovedComponents<Blueprint>,
 ) {
-    sync_grid_timed(
-        &mut sync_timer,
-        &mut *grid,
-        query.iter().map(|(e, t)| (e, t.translation.truncate())),
-    );
+    for (entity, transform) in query.iter() {
+        grid.update(entity, transform.translation.truncate());
+    }
+    for entity in removed.read() {
+        grid.remove(entity);
+    }
 }
