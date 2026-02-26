@@ -40,16 +40,7 @@ pub fn blueprint_placement(
         return;
     }
 
-    let Ok((camera, camera_transform)) = q_camera.single() else {
-        return;
-    };
-    let Ok(window) = q_window.single() else {
-        return;
-    };
-    let Some(cursor_pos) = window.cursor_position() else {
-        return;
-    };
-    let Ok(world_pos) = camera.viewport_to_world_2d(camera_transform, cursor_pos) else {
+    let Some(world_pos) = super::placement_common::world_cursor_pos(&q_window, &q_camera) else {
         return;
     };
     let grid = WorldMap::world_to_grid(world_pos);
