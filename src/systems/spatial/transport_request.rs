@@ -1,4 +1,4 @@
-use super::grid::{GridData, SpatialGridOps, SpatialGridSyncTimer, SyncGridClear, sync_grid_timed};
+use super::grid::{GridData, SpatialGridOps};
 use crate::systems::logistics::transport_request::TransportRequest;
 use bevy::prelude::*;
 
@@ -49,30 +49,19 @@ impl SpatialGridOps for TransportRequestSpatialGrid {
     }
 }
 
-impl SyncGridClear for TransportRequestSpatialGrid {
-    fn clear_and_sync<I>(&mut self, entities: I)
-    where
-        I: Iterator<Item = (Entity, Vec2)>,
-    {
-        self.0.clear();
-        for (entity, pos) in entities {
-            self.0.insert(entity, pos);
-        }
-    }
-}
-
-/// TransportRequest + Transform を持つ全エンティティでグリッドを再構築する。
-/// Spatial が Logic より先に実行されるため、Added<> だと Soul 生成の request が
-/// 同一フレームで取り込まれず task_finder に見つからない問題を回避する。
-/// 0.15秒間隔で同期し、毎フレームの負荷を軽減する。
+/// 変更差分のみを反映する。スポーン直後は次フレームで取り込まれる。
 pub fn update_transport_request_spatial_grid_system(
-    mut sync_timer: ResMut<SpatialGridSyncTimer>,
     mut grid: ResMut<TransportRequestSpatialGrid>,
-    query: Query<(Entity, &Transform), With<TransportRequest>>,
+    query: Query<
+        (Entity, &Transform),
+        (With<TransportRequest>, Or<(Added<TransportRequest>, Changed<Transform>)>),
+    >,
+    mut removed: RemovedComponents<TransportRequest>,
 ) {
-    sync_grid_timed(
-        &mut sync_timer,
-        &mut *grid,
-        query.iter().map(|(e, t)| (e, t.translation.truncate())),
-    );
+    for (entity, transform) in query.iter() {
+        grid.update(entity, transform.translation.truncate());
+    }
+    for entity in removed.read() {
+        grid.remove(entity);
+    }
 }
