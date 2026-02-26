@@ -92,9 +92,13 @@ fn main() {
 }
 
 fn select_backends() -> Backends {
-    if env::var("WGPU_BACKEND").is_ok() {
-        return Backends::PRIMARY;
+    if let Ok(backends) = env::var("WGPU_BACKEND") {
+        let parsed = Backends::from_comma_list(&backends);
+        if !parsed.is_empty() {
+            return parsed;
+        }
     }
+
     Backends::VULKAN
 }
 

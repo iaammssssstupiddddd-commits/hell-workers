@@ -83,9 +83,10 @@ pub fn on_stress_breakdown(
     {
         info!("OBSERVER: Soul {:?} had a stress breakdown!", entity);
 
-        commands
-            .entity(entity)
-            .insert(StressBreakdown { is_frozen: true });
+        commands.entity(entity).insert(StressBreakdown {
+            is_frozen: true,
+            remaining_freeze_secs: STRESS_BREAKDOWN_FREEZE_SECS,
+        });
 
         if !matches!(*task, AssignedTask::None) {
             unassign_task(
