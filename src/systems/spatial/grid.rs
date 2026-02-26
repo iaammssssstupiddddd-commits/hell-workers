@@ -34,6 +34,7 @@ pub trait SpatialGridOps {
     fn remove(&mut self, entity: Entity);
     fn update(&mut self, entity: Entity, pos: Vec2);
     fn get_nearby_in_radius(&self, pos: Vec2, radius: f32) -> Vec<Entity>;
+    fn get_nearby_in_radius_into(&self, pos: Vec2, radius: f32, out: &mut Vec<Entity>);
 }
 
 /// フル再構築（clear + insert）をサポートするグリッド向けトレイト
@@ -97,6 +98,12 @@ impl GridData {
 
     pub fn get_nearby_in_radius(&self, pos: Vec2, radius: f32) -> Vec<Entity> {
         let mut results = Vec::new();
+        self.get_nearby_in_radius_into(pos, radius, &mut results);
+        results
+    }
+
+    pub fn get_nearby_in_radius_into(&self, pos: Vec2, radius: f32, out: &mut Vec<Entity>) {
+        out.clear();
         let cell_radius = (radius / self.cell_size).ceil() as i32;
         let center_cell = self.pos_to_cell(pos);
 
@@ -107,14 +114,13 @@ impl GridData {
                     for &entity in entities {
                         if let Some(&entity_pos) = self.positions.get(&entity) {
                             if pos.distance(entity_pos) <= radius {
-                                results.push(entity);
+                                out.push(entity);
                             }
                         }
                     }
                 }
             }
         }
-        results
     }
 
     pub fn remove(&mut self, entity: Entity) {

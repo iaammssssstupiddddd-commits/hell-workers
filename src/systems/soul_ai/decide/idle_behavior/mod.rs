@@ -42,6 +42,7 @@ pub fn idle_behavior_decision_system(
     time: Res<Time>,
     mut request_writer: MessageWriter<IdleBehaviorRequest>,
     world_map: Res<WorldMap>,
+    mut pending_rest_reservations: Local<HashMap<Entity, usize>>,
     q_spots: Query<(
         Entity,
         &GatheringSpot,
@@ -59,7 +60,7 @@ pub fn idle_behavior_decision_system(
     soul_grid: Res<crate::systems::spatial::SpatialGrid>,
 ) {
     let dt = time.delta_secs();
-    let mut pending_rest_reservations: HashMap<Entity, usize> = HashMap::new();
+    pending_rest_reservations.clear();
 
     for (
         entity,
