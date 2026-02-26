@@ -19,6 +19,7 @@ pub struct SoulInspectionFields {
     pub motivation: String,
     pub stress: String,
     pub fatigue: String,
+    pub dream: String,
     pub task: String,
     pub inventory: String,
     pub common: String,

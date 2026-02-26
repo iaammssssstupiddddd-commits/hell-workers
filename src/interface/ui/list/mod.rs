@@ -60,6 +60,8 @@ pub(super) struct SoulRowViewModel {
     pub(super) fatigue_text: String,
     pub(super) stress_text: String,
     pub(super) stress_bucket: StressBucket,
+    pub(super) dream_text: String,
+    pub(super) dream_empty: bool,
     pub(super) task_visual: TaskVisual,
 }
 

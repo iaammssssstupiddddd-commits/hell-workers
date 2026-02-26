@@ -2,7 +2,7 @@ use super::{
     EntityInspectionQuery, InspectionAccumulator, SoulInspectionFields, format_escape_info,
     format_inventory_str, format_task_str,
 };
-use crate::constants::{MUD_MIXER_MUD_CAPACITY, REST_AREA_DREAM_RATE};
+use crate::constants::{DREAM_DRAIN_RATE_REST, DREAM_MAX, MUD_MIXER_MUD_CAPACITY};
 use bevy::prelude::*;
 
 impl EntityInspectionQuery<'_, '_> {
@@ -23,6 +23,7 @@ impl EntityInspectionQuery<'_, '_> {
         let motivation = format!("Motivation: {:.0}%", soul.motivation * 100.0);
         let stress = format!("Stress: {:.0}%", soul.stress * 100.0);
         let fatigue = format!("Fatigue: {:.0}%", soul.fatigue * 100.0);
+        let dream = format!("Dream: {:.0}/{:.0}", soul.dream, DREAM_MAX);
         let task_str = format!("Task: {}", format_task_str(task));
         let inventory = format_inventory_str(inventory_opt, &self.q_items);
         let common = format_escape_info(
@@ -38,6 +39,7 @@ impl EntityInspectionQuery<'_, '_> {
         model.push_tooltip(format!("Soul: {}", name));
         model.push_tooltip(motivation.clone());
         model.push_tooltip(stress.clone());
+        model.push_tooltip(dream.clone());
         model.push_tooltip(task_str.clone());
         model.push_tooltip(inventory.clone());
         model.push_common(common.clone());
@@ -47,6 +49,7 @@ impl EntityInspectionQuery<'_, '_> {
             motivation,
             stress,
             fatigue,
+            dream,
             task: task_str,
             inventory,
             common,
@@ -212,7 +215,7 @@ impl EntityInspectionQuery<'_, '_> {
                 .map(crate::relationships::RestAreaOccupants::len)
                 .unwrap_or(0)
                 .min(rest_area.capacity);
-            let dream_rate = resting_count as f32 * REST_AREA_DREAM_RATE;
+            let dream_rate = resting_count as f32 * DREAM_DRAIN_RATE_REST;
             let line = format!(
                 "Resting: {}/{} | Dream: {:.2}/s",
                 resting_count, rest_area.capacity, dream_rate

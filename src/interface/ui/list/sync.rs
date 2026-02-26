@@ -31,6 +31,14 @@ fn stress_weight(bucket: StressBucket) -> FontWeight {
     }
 }
 
+fn dream_color(dream_empty: bool, theme: &UiTheme) -> Color {
+    if dream_empty {
+        theme.colors.stress_medium
+    } else {
+        theme.colors.fatigue_text
+    }
+}
+
 fn gender_icon_and_color(
     gender: Gender,
     game_assets: &crate::assets::GameAssets,
@@ -144,7 +152,7 @@ pub fn sync_entity_list_value_rows_system(
         let Ok((soul_entity, soul, task, identity)) = q_souls.get(soul_item.0) else {
             continue;
         };
-        if children.len() < 7 {
+        if children.len() < 8 {
             continue;
         }
 
@@ -153,8 +161,10 @@ pub fn sync_entity_list_value_rows_system(
         let name_node = children[1];
         let fatigue_text_node = children[3];
         let stress_text_node = children[5];
-        let task_icon_node = children[6];
+        let dream_text_node = children[6];
+        let task_icon_node = children[7];
         let stress_color = stress_color(soul_vm.stress_bucket, &theme);
+        let dream_color = dream_color(soul_vm.dream_empty, &theme);
 
         if let Ok(mut text) = q_text.get_mut(name_node) {
             text.0 = soul_vm.name;
@@ -173,6 +183,12 @@ pub fn sync_entity_list_value_rows_system(
         }
         if let Ok(mut font) = q_text_font.get_mut(stress_text_node) {
             font.weight = stress_weight(soul_vm.stress_bucket);
+        }
+        if let Ok(mut text) = q_text.get_mut(dream_text_node) {
+            text.0 = soul_vm.dream_text;
+        }
+        if let Ok(mut color) = q_text_color.get_mut(dream_text_node) {
+            color.0 = dream_color;
         }
 
         let (gender_icon, gender_color) =

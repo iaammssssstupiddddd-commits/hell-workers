@@ -21,6 +21,7 @@ pub fn idle_behavior_apply_system(
     mut q_path: Query<&mut Path>,
     mut q_visibility: Query<&mut Visibility, With<crate::entities::damned_soul::DamnedSoul>>,
     q_rest_reserved: Query<&RestAreaReservedFor>,
+    q_rest_cooldown: Query<&RestAreaCooldown>,
     q_participating: Query<(), With<ParticipatingIn>>,
     q_rest_areas: Query<(
         &RestArea,
@@ -72,6 +73,14 @@ pub fn idle_behavior_apply_system(
                 });
             }
             IdleBehaviorOperation::ReserveRestArea { rest_area_entity } => {
+                let cooldown_active = q_rest_cooldown
+                    .get(request.entity)
+                    .map(|cooldown| cooldown.remaining_secs > f32::EPSILON)
+                    .unwrap_or(false);
+                if cooldown_active {
+                    commands.entity(request.entity).remove::<RestAreaReservedFor>();
+                    continue;
+                }
                 let can_reserve = q_rest_areas
                     .get(*rest_area_entity)
                     .map(|(rest_area, occupants, reservations)| {
@@ -103,6 +112,14 @@ pub fn idle_behavior_apply_system(
                     .remove::<RestAreaReservedFor>();
             }
             IdleBehaviorOperation::EnterRestArea { rest_area_entity } => {
+                let cooldown_active = q_rest_cooldown
+                    .get(request.entity)
+                    .map(|cooldown| cooldown.remaining_secs > f32::EPSILON)
+                    .unwrap_or(false);
+                if cooldown_active {
+                    commands.entity(request.entity).remove::<RestAreaReservedFor>();
+                    continue;
+                }
                 let has_reservation_for_target = q_rest_reserved
                     .get(request.entity)
                     .map(|reserved| reserved.0 == *rest_area_entity)

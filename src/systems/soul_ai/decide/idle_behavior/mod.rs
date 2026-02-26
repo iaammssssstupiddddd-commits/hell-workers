@@ -72,6 +72,7 @@ pub fn idle_behavior_decision_system(
         participating_in,
         resting_in,
         rest_reserved_for,
+        rest_cooldown,
     ) in query.iter_mut()
     {
         let (gathering_center, target_spot_entity) =
@@ -105,11 +106,31 @@ pub fn idle_behavior_decision_system(
 
         let reserved_rest_area = rest_reserved_for.map(|reserved| reserved.0);
         let current_pos = transform.translation.truncate();
+        let rest_cooldown_active = rest_cooldown
+            .map(|cooldown| cooldown.remaining_secs > f32::EPSILON)
+            .unwrap_or(false);
+
+        if rest_cooldown_active && resting_in.is_none() {
+            if reserved_rest_area.is_some() {
+                request_writer.write(IdleBehaviorRequest {
+                    entity,
+                    operation: IdleBehaviorOperation::ReleaseRestArea,
+                });
+            }
+            if matches!(idle.behavior, IdleBehavior::Resting | IdleBehavior::GoingToRest) {
+                idle.behavior = IdleBehavior::Wandering;
+                idle.idle_timer = 0.0;
+                path.waypoints.clear();
+                path.current_index = 0;
+                dest.0 = current_pos;
+            }
+        }
 
         if matches!(
             idle.behavior,
             IdleBehavior::Resting | IdleBehavior::GoingToRest
         ) && resting_in.is_none()
+            && !rest_cooldown_active
         {
             // 予約が無い GoingToRest は不整合。停止しやすいため通常アイドルへ戻す。
             if reserved_rest_area.is_none() {
@@ -174,10 +195,12 @@ pub fn idle_behavior_decision_system(
             continue;
         }
 
-        let wants_rest_area = soul.laziness > LAZINESS_THRESHOLD_MID
-            || soul.fatigue > FATIGUE_IDLE_THRESHOLD * 0.5
-            || soul.stress > ESCAPE_STRESS_THRESHOLD
-            || idle.total_idle_time > IDLE_TIME_TO_GATHERING * 0.3;
+        let wants_rest_area = soul.dream > 0.0
+            && !rest_cooldown_active
+            && (soul.laziness > LAZINESS_THRESHOLD_MID
+                || soul.fatigue > FATIGUE_IDLE_THRESHOLD * 0.5
+                || soul.stress > ESCAPE_STRESS_THRESHOLD
+                || idle.total_idle_time > IDLE_TIME_TO_GATHERING * 0.3);
 
         if wants_rest_area {
             let rest_area_target = resolve_rest_area_target(
@@ -232,6 +255,16 @@ pub fn idle_behavior_decision_system(
 
         idle.total_idle_time += dt;
 
+        // dream=0で睡眠中なら強制起床
+        if soul.dream <= 0.0 && idle.behavior == IdleBehavior::Sleeping {
+            idle.behavior = IdleBehavior::Wandering;
+            idle.idle_timer = 0.0;
+            idle.behavior_duration = transitions::behavior_duration_for(IdleBehavior::Wandering);
+            path.waypoints.clear();
+            path.current_index = 0;
+            dest.0 = current_pos;
+        }
+
         if soul.motivation > MOTIVATION_THRESHOLD && soul.fatigue < FATIGUE_IDLE_THRESHOLD {
             continue;
         }
@@ -248,7 +281,7 @@ pub fn idle_behavior_decision_system(
                 if idle.behavior != IdleBehavior::Gathering
                     && idle.behavior != IdleBehavior::ExhaustedGathering
                 {
-                    idle.gathering_behavior = transitions::random_gathering_behavior();
+                    idle.gathering_behavior = transitions::random_gathering_behavior(soul.dream);
                     idle.gathering_behavior_timer = 0.0;
                     idle.gathering_behavior_duration = transitions::random_gathering_duration();
                     idle.needs_separation = true;
@@ -263,6 +296,7 @@ pub fn idle_behavior_decision_system(
                     soul.laziness,
                     soul.fatigue,
                     idle.total_idle_time,
+                    soul.dream,
                 );
             }
 
@@ -293,6 +327,7 @@ pub fn idle_behavior_decision_system(
             &world_map,
             &mut request_writer,
             dt,
+            soul.dream,
         );
     }
 }
