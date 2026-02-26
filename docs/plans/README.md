@@ -22,7 +22,7 @@
 | [selection-placement-refactor-plan-2026-02-25.md](selection-placement-refactor-plan-2026-02-25.md) | Completed | `interface/selection` の配置処理を責務分離するリファクタ計画。 |
 | [room-detection-plan-2026-02-23.md](room-detection-plan-2026-02-23.md) | Implemented | 壁・扉・床の閉領域をRoomとして検出し、オーバーレイ表示する実装計画。 |
 | [perf-phase1-quick-wins-2026-02-26.md](perf-phase1-quick-wins-2026-02-26.md) | Draft | パフォーマンス改善 Phase 1: idle HashMap→Local、get_nearby_into API、5グリッド Change Detection 化。 |
-| [perf-phase2-spatial-grid-change-detection-2026-02-26.md](perf-phase2-spatial-grid-change-detection-2026-02-26.md) | Draft | パフォーマンス改善 Phase 2: Designation/TransportRequest Change Detection 化 + sync 基盤削除。Phase 1 完了後に着手。 |
+| [perf-phase2-spatial-grid-change-detection-2026-02-26.md](perf-phase2-spatial-grid-change-detection-2026-02-26.md) | Done | パフォーマンス改善 Phase 2: Designation/TransportRequest Change Detection 化 + sync 基盤削除。 |
 | [perf-phase3-room-detection-and-ui-2026-02-26.md](perf-phase3-room-detection-and-ui-2026-02-26.md) | Draft | パフォーマンス改善 Phase 3: Room Detection HashMap clone 削除 + UI ViewModel dirty ゲート化。Phase 2 完了後に着手。 |
 | [perf-phase4-reachability-cache-lifetime-2026-02-26.md](perf-phase4-reachability-cache-lifetime-2026-02-26.md) | Draft | パフォーマンス改善 Phase 4: Reachability キャッシュを WorldMap 変更時のみクリア（他 Phase と独立して実施可）。 |
 

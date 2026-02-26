@@ -91,7 +91,8 @@ Perceive → Update → Decide → Execute
 
 ## 空間グリッド一覧 (Spatial Grids)
 
-`src/systems/spatial/` — 同期間隔: `SPATIAL_GRID_SYNC_INTERVAL`（0.15秒）、`SpatialGridSyncTimer` で管理。
+`src/systems/spatial/` — 全グリッドは `Added` / `Changed` / `RemovedComponents` の
+Change Detection で差分更新。
 
 | グリッド | 用途 |
 |:--|:--|
@@ -105,7 +106,8 @@ Perceive → Update → Decide → Execute
 | `GatheringSpatialGrid` | 集会スポットの近傍検索 |
 | `FloorConstructionSpatialGrid` | 床建設サイトの近傍検索 |
 
-新しいグリッドを追加する場合は `SpatialGridOps` / `SyncGridClear` トレイトを実装し、`tick_spatial_grid_sync_timer_system` より後にシステムを登録する。
+新しいグリッドを追加する場合は `SpatialGridOps` を実装し、追加検知（Added）、
+変更検知（Changed）、削除検知（RemovedComponents）を使うシステムとして登録する。
 
 ## 定数管理 (`src/constants/`)
 
