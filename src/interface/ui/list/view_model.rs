@@ -135,6 +135,7 @@ fn build_familiar_row_view_model(
 }
 
 pub fn build_entity_list_view_model_system(
+    dirty: Res<super::dirty::EntityListDirty>,
     mut view_model: ResMut<EntityListViewModel>,
     q_familiars: Query<(
         Entity,
@@ -156,6 +157,10 @@ pub fn build_entity_list_view_model_system(
     q_folded: Query<Has<SectionFolded>>,
     unassigned_folded_query: Query<Has<UnassignedFolded>, With<UnassignedSoulSection>>,
 ) {
+    if !dirty.needs_structure_sync() && !dirty.needs_value_sync_only() {
+        return;
+    }
+
     view_model.previous = std::mem::take(&mut view_model.current);
 
     let unassigned_folded = unassigned_folded_query.iter().next().unwrap_or(false);

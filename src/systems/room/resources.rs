@@ -7,7 +7,6 @@ use std::collections::{HashMap, HashSet};
 pub struct RoomDetectionState {
     pub dirty_tiles: HashSet<(i32, i32)>,
     pub cooldown: Timer,
-    pub previous_world_buildings: HashMap<(i32, i32), Entity>,
 }
 
 impl Default for RoomDetectionState {
@@ -15,7 +14,6 @@ impl Default for RoomDetectionState {
         Self {
             dirty_tiles: HashSet::new(),
             cooldown: Timer::from_seconds(ROOM_DETECTION_COOLDOWN_SECS, TimerMode::Repeating),
-            previous_world_buildings: HashMap::new(),
         }
     }
 }

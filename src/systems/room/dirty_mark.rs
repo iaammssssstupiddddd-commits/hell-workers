@@ -2,6 +2,7 @@ use super::resources::RoomDetectionState;
 use crate::systems::jobs::{Building, Door};
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
+use bevy::ecs::lifecycle::{Add, Remove};
 
 /// Marks dirty tiles from Building / Door changes.
 pub fn mark_room_dirty_from_building_changes_system(
@@ -32,38 +33,46 @@ pub fn mark_room_dirty_from_building_changes_system(
     }
 }
 
-/// Marks dirty tiles from WorldMap building occupancy diffs.
-pub fn mark_room_dirty_from_world_map_diff_system(
-    world_map: Res<WorldMap>,
+pub fn on_building_added(
+    on: On<Add, Building>,
+    q_transform: Query<&Transform>,
     mut detection_state: ResMut<RoomDetectionState>,
 ) {
-    if !world_map.is_changed() && !detection_state.previous_world_buildings.is_empty() {
-        return;
+    if let Ok(transform) = q_transform.get(on.entity) {
+        let grid = WorldMap::world_to_grid(transform.translation.truncate());
+        detection_state.mark_dirty(grid);
     }
+}
 
-    let current = &world_map.buildings;
-
-    if detection_state.previous_world_buildings.is_empty() {
-        detection_state.mark_dirty_many(current.keys().copied());
-        detection_state.previous_world_buildings = current.clone();
-        return;
+pub fn on_building_removed(
+    on: On<Remove, Building>,
+    q_transform: Query<&Transform>,
+    mut detection_state: ResMut<RoomDetectionState>,
+) {
+    if let Ok(transform) = q_transform.get(on.entity) {
+        let grid = WorldMap::world_to_grid(transform.translation.truncate());
+        detection_state.mark_dirty(grid);
     }
+}
 
-    let mut dirty_positions = Vec::new();
-
-    for (&grid, &previous_entity) in detection_state.previous_world_buildings.iter() {
-        match current.get(&grid).copied() {
-            Some(entity) if entity == previous_entity => {}
-            _ => dirty_positions.push(grid),
-        }
+pub fn on_door_added(
+    on: On<Add, Door>,
+    q_transform: Query<&Transform>,
+    mut detection_state: ResMut<RoomDetectionState>,
+) {
+    if let Ok(transform) = q_transform.get(on.entity) {
+        let grid = WorldMap::world_to_grid(transform.translation.truncate());
+        detection_state.mark_dirty(grid);
     }
+}
 
-    for (&grid, &entity) in current {
-        if detection_state.previous_world_buildings.get(&grid).copied() != Some(entity) {
-            dirty_positions.push(grid);
-        }
+pub fn on_door_removed(
+    on: On<Remove, Door>,
+    q_transform: Query<&Transform>,
+    mut detection_state: ResMut<RoomDetectionState>,
+) {
+    if let Ok(transform) = q_transform.get(on.entity) {
+        let grid = WorldMap::world_to_grid(transform.translation.truncate());
+        detection_state.mark_dirty(grid);
     }
-
-    detection_state.mark_dirty_many(dirty_positions);
-    detection_state.previous_world_buildings = current.clone();
 }

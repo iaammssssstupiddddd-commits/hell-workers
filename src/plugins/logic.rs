@@ -24,7 +24,8 @@ use crate::systems::logistics::transport_request::TransportRequestPlugin;
 use crate::systems::obstacle::obstacle_cleanup_system;
 use crate::systems::room::{
     RoomDetectionState, RoomTileLookup, RoomValidationState, detect_rooms_system,
-    mark_room_dirty_from_building_changes_system, mark_room_dirty_from_world_map_diff_system,
+    mark_room_dirty_from_building_changes_system, on_building_added, on_building_removed,
+    on_door_added, on_door_removed,
     validate_rooms_system,
 };
 use crate::systems::soul_ai::SoulAiPlugin;
@@ -83,7 +84,6 @@ impl Plugin for LogicPlugin {
             Update,
             (
                 mark_room_dirty_from_building_changes_system,
-                mark_room_dirty_from_world_map_diff_system,
                 validate_rooms_system,
                 detect_rooms_system,
             )
@@ -91,6 +91,10 @@ impl Plugin for LogicPlugin {
                 .after(dream_tree_planting_system)
                 .in_set(GameSystemSet::Logic),
         )
+        .add_observer(on_building_added)
+        .add_observer(on_building_removed)
+        .add_observer(on_door_added)
+        .add_observer(on_door_removed)
         .add_systems(
             Update,
             (

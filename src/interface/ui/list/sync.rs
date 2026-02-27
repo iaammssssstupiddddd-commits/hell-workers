@@ -71,7 +71,7 @@ pub fn sync_entity_list_from_view_model_system(
     mut commands: Commands,
     game_assets: Res<crate::assets::GameAssets>,
     theme: Res<UiTheme>,
-    view_model: Res<EntityListViewModel>,
+    mut view_model: ResMut<EntityListViewModel>,
     mut node_index: ResMut<EntityListNodeIndex>,
     mut dirty: ResMut<super::dirty::EntityListDirty>,
     q_fam_container: Query<Entity, With<FamiliarListContainer>>,
@@ -117,6 +117,8 @@ pub fn sync_entity_list_from_view_model_system(
         unassigned_content_entity,
         &q_children,
     );
+
+    view_model.previous = view_model.current.clone();
 }
 
 pub fn sync_entity_list_value_rows_system(

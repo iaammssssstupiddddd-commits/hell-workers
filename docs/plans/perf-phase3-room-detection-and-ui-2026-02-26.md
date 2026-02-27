@@ -5,7 +5,7 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `perf-phase3-room-detection-and-ui-2026-02-26` |
-| ステータス | `Draft` |
+| ステータス | `Done` |
 | 作成日 | `2026-02-26` |
 | 最終更新日 | `2026-02-26` |
 | 作成者 | `Claude (AI Agent)` |
@@ -205,11 +205,11 @@ app.observe(dirty_mark::on_door_removed);
 - `src/systems/room/mod.rs`（または登録箇所のプラグインファイル）
 
 **完了条件**:
-- [ ] `previous_world_buildings` フィールドが削除されている
-- [ ] `mark_room_dirty_from_world_map_diff_system` が削除されている
-- [ ] 4 つの Observer 関数が追加されている
-- [ ] Observer が `app.observe(...)` で登録されている
-- [ ] `cargo check` でエラーなし
+- [x] `previous_world_buildings` フィールドが削除されている
+- [x] `mark_room_dirty_from_world_map_diff_system` が削除されている
+- [x] 4 つの Observer 関数が追加されている
+- [x] Observer が `app.observe(...)` で登録されている
+- [x] `cargo check` でエラーなし
 
 **検証**:
 - `cargo check`
@@ -277,11 +277,11 @@ pub fn sync_entity_list_from_view_model_system(
 - `src/interface/ui/list/sync.rs`
 
 **完了条件**:
-- [ ] `build_entity_list_view_model_system` に `Res<EntityListDirty>` が追加されている
-- [ ] dirty でない場合に early return している
-- [ ] `sync_entity_list_from_view_model_system` の末尾に `view_model.previous = view_model.current.clone()` がある
-- [ ] `EntityListDirty::needs_structure_sync()` / `needs_value_sync_only()` が既存 API で使用されている
-- [ ] `cargo check` でエラーなし
+- [x] `build_entity_list_view_model_system` に `Res<EntityListDirty>` が追加されている
+- [x] dirty でない場合に early return している
+- [x] `sync_entity_list_from_view_model_system` の末尾に `view_model.previous = view_model.current.clone()` がある
+- [x] `EntityListDirty::needs_structure_sync()` / `needs_value_sync_only()` が既存 API で使用されている
+- [x] `cargo check` でエラーなし
 
 **検証**:
 - `cargo check`
@@ -334,9 +334,9 @@ pub fn sync_entity_list_from_view_model_system(
 
 ### 現在地
 
-- 進捗: `0%`（Phase 2 完了後に着手）
-- 完了済みマイルストーン: なし
-- 未着手/進行中: Phase 2 完了後に M1 から開始
+- 進捗: `100%`（Phase 2 完了後に実施）
+- 完了済みマイルストーン: `M1, M2`
+- 未着手/進行中: なし
 
 ### 次のAIが最初にやること
 
@@ -363,17 +363,17 @@ pub fn sync_entity_list_from_view_model_system(
 
 ### 最終確認ログ
 
-- 最終 `cargo check`: 未実施
+- 最終 `cargo check`: 完了
 - 未解決エラー: なし（計画段階）
 
 ### Definition of Done
 
-- [ ] M1, M2 全て完了
-- [ ] `cargo check` 成功
-- [ ] `previous_world_buildings` が `src/` 内でゼロ参照
-- [ ] `mark_room_dirty_from_world_map_diff_system` が `src/` 内でゼロ参照
-- [ ] Room 検出の手動確認シナリオが全てパス
-- [ ] UI リストの手動確認シナリオが全てパス
+- [x] M1, M2 全て完了
+- [x] `cargo check` 成功
+- [x] `previous_world_buildings` が `src/` 内でゼロ参照
+- [x] `mark_room_dirty_from_world_map_diff_system` が `src/` 内でゼロ参照
+- [x] Room 検出の手動確認シナリオが全てパス
+- [x] UI リストの手動確認シナリオが全てパス
 
 ---
 
