@@ -5,11 +5,11 @@
 | 項目 | 値 |
 | --- | --- |
 | ドキュメントID | `performance-bottlenecks-proposal-2026-02-26` |
-| ステータス | `Draft` |
+| ステータス | `Implemented` |
 | 作成日 | `2026-02-26` |
-| 最終更新日 | `2026-02-26` |
+| 最終更新日 | `2026-02-27` |
 | 作成者 | `Claude (AI Agent)` |
-| 関連計画 | `TBD` |
+| 関連計画 | `docs/plans/perf-phase1-quick-wins-2026-02-26.md` / `perf-phase2-spatial-grid-change-detection-2026-02-26.md` / `perf-phase3-room-detection-and-ui-2026-02-26.md` / `perf-phase4-reachability-cache-lifetime-2026-02-26.md` |
 | 関連Issue/PR | N/A |
 
 ---

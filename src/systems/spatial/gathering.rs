@@ -26,10 +26,9 @@ impl SpatialGridOps for GatheringSpotSpatialGrid {
 
 pub fn update_gathering_spot_spatial_grid_system(
     mut grid: ResMut<GatheringSpotSpatialGrid>,
-    query: Query<
-        (Entity, &GatheringSpot),
-        Or<(Added<GatheringSpot>, Changed<GatheringSpot>)>,
-    >,
+    // center はスポーン後に変化しないため Added のみで十分。
+    // Changed<GatheringSpot> は grace_timer 等の毎フレーム更新で過剰発火するため除外。
+    query: Query<(Entity, &GatheringSpot), Added<GatheringSpot>>,
     mut removed: RemovedComponents<GatheringSpot>,
 ) {
     for (entity, spot) in query.iter() {
