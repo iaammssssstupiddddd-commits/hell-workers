@@ -74,6 +74,21 @@ pub fn mud_mixer_auto_haul_system(
         familiar_with_collect_sand_demand.insert(request.issued_by);
     }
 
+    // Water request の inflight は「実際に割り当て済みの worker 数」で集計する。
+    // SharedResourceCache には pending request 由来の予約も含まれるため、
+    // ここで使うと request の issue/disable が振動しやすい。
+    let mut water_inflight_by_mixer = std::collections::HashMap::<Entity, u32>::new();
+    for (_, target_mixer, request, _, workers_opt) in q_mixer_requests.iter() {
+        if request.kind != TransportRequestKind::DeliverWaterToMixer {
+            continue;
+        }
+        let workers = workers_opt.map(|w| w.len() as u32).unwrap_or(0);
+        if workers == 0 {
+            continue;
+        }
+        *water_inflight_by_mixer.entry(target_mixer.0).or_insert(0) += workers;
+    }
+
     // (mixer, resource_type) -> (issued_by, desired_slots, mixer_pos)
     let mut desired_requests =
         std::collections::HashMap::<(Entity, ResourceType), (Entity, u32, Vec2)>::new();
@@ -171,8 +186,7 @@ pub fn mud_mixer_auto_haul_system(
         }
 
         // --- 水の自動リクエスト（従来方式） ---
-        let water_inflight_tasks =
-            haul_cache.get_mixer_destination_reservation(mixer_entity, ResourceType::Water);
+        let water_inflight_tasks = *water_inflight_by_mixer.get(&mixer_entity).unwrap_or(&0);
         let water_inflight = (water_inflight_tasks as u32) * BUCKET_CAPACITY;
 
         let (water_current, water_capacity) =

@@ -145,13 +145,16 @@ pub fn resolve_gather_water_inputs(
         return None;
     }
     let current_water = stored_opt.map(|s| s.len()).unwrap_or(0);
-    let reserved_water = queries
+    let incoming_buckets = queries
         .reservation
         .incoming_deliveries_query
         .get(tank_entity)
         .map(|inc| inc.len())
         .unwrap_or(0);
-    if (current_water + reserved_water) >= tank_stock.capacity {
+    let projected_water = current_water.saturating_add(
+        incoming_buckets.saturating_mul(BUCKET_CAPACITY as usize),
+    );
+    if projected_water >= tank_stock.capacity {
         return None;
     }
 
