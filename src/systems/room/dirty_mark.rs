@@ -5,21 +5,16 @@ use bevy::prelude::*;
 use bevy::ecs::lifecycle::{Add, Remove};
 
 /// Marks dirty tiles from Building / Door changes.
+/// Add/Remove は Observer (on_building_added 等) が担うため、ここでは Changed のみ処理する。
 pub fn mark_room_dirty_from_building_changes_system(
     mut detection_state: ResMut<RoomDetectionState>,
     q_changed_buildings: Query<
         &Transform,
-        (
-            With<Building>,
-            Or<(Added<Building>, Changed<Building>, Changed<Transform>)>,
-        ),
+        (With<Building>, Or<(Changed<Building>, Changed<Transform>)>),
     >,
     q_changed_doors: Query<
         &Transform,
-        (
-            With<Door>,
-            Or<(Added<Door>, Changed<Door>, Changed<Transform>)>,
-        ),
+        (With<Door>, Or<(Changed<Door>, Changed<Transform>)>),
     >,
 ) {
     for transform in q_changed_buildings.iter() {
