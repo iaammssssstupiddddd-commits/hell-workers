@@ -22,7 +22,7 @@ pub struct ReachabilityFrameCache {
     pub age: u32,
 }
 
-const REACHABILITY_FRAME_CACHE_CLEAR_INTERVAL_FRAMES: u32 = 5;
+const REACHABILITY_CACHE_SAFETY_CLEAR_INTERVAL_FRAMES: u32 = 60;
 
 /// 使い魔AIのタスク委譲に必要なSystemParam
 #[derive(SystemParam)]
@@ -58,10 +58,15 @@ pub fn familiar_task_delegation_system(params: FamiliarAiTaskDelegationParams) {
         ..
     } = params;
 
-    reachability_frame_cache.age = reachability_frame_cache.age.saturating_add(1);
-    if reachability_frame_cache.age >= REACHABILITY_FRAME_CACHE_CLEAR_INTERVAL_FRAMES {
+    if world_map.is_changed() {
         reachability_frame_cache.cache.clear();
         reachability_frame_cache.age = 0;
+    } else {
+        reachability_frame_cache.age = reachability_frame_cache.age.saturating_add(1);
+        if reachability_frame_cache.age >= REACHABILITY_CACHE_SAFETY_CLEAR_INTERVAL_FRAMES {
+            reachability_frame_cache.cache.clear();
+            reachability_frame_cache.age = 0;
+        }
     }
 
     let timer_finished = delegation_timer.timer.tick(time.delta()).just_finished();

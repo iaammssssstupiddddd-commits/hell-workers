@@ -24,7 +24,7 @@
 | [perf-phase1-quick-wins-2026-02-26.md](perf-phase1-quick-wins-2026-02-26.md) | Draft | パフォーマンス改善 Phase 1: idle HashMap→Local、get_nearby_into API、5グリッド Change Detection 化。 |
 | [perf-phase2-spatial-grid-change-detection-2026-02-26.md](perf-phase2-spatial-grid-change-detection-2026-02-26.md) | Done | パフォーマンス改善 Phase 2: Designation/TransportRequest Change Detection 化 + sync 基盤削除。 |
 | [perf-phase3-room-detection-and-ui-2026-02-26.md](perf-phase3-room-detection-and-ui-2026-02-26.md) | Done | パフォーマンス改善 Phase 3: Room Detection HashMap clone 削除 + UI ViewModel dirty ゲート化。Phase 2 完了後に完了。 |
-| [perf-phase4-reachability-cache-lifetime-2026-02-26.md](perf-phase4-reachability-cache-lifetime-2026-02-26.md) | Draft | パフォーマンス改善 Phase 4: Reachability キャッシュを WorldMap 変更時のみクリア（他 Phase と独立して実施可）。 |
+| [perf-phase4-reachability-cache-lifetime-2026-02-26.md](perf-phase4-reachability-cache-lifetime-2026-02-26.md) | Done | パフォーマンス改善 Phase 4: Reachability キャッシュを WorldMap 変更時のみクリア（他 Phase と独立して実施可）。 |
 
 ## アーカイブ計画書一覧 (`docs/plans/archive`)
 
