@@ -29,7 +29,7 @@ Bevy 0.18 の Relationship は **Source 側を操作すれば Target 側が自�
 
 | コンポーネント | 書き込み元 | 読み取り元 | 非自明な挙動 |
 |:---|:---|:---|:---|
-| `Designation` | request producer (Decide) / `apply_designation_requests` (Execute) | `DesignationSpatialGrid`（0.15秒周期）| **削除 = タスク消滅**。`unassign_task` は削除しない（再試行を許可）|
+| `Designation` | request producer (Decide) / `apply_designation_requests` (Execute) | `DesignationSpatialGrid`（Change Detection、次フレームで反映）| **削除 = タスク消滅**。`unassign_task` は削除しない（再試行を許可）|
 | `AssignedTask` | `apply_task_assignment_requests` (Execute) | `task_execution_system` (Execute) | `None` への遷移が `OnTaskCompleted` の発火条件 |
 | `TaskSlots` | request producer | `task_finder/filter` | `TaskWorkers.len()` と照合される（Target は自動） |
 | `ReservedForTask` | （未使用・legacy） | arbitration でフィルタに使用 | 現状は付与されない |
@@ -48,7 +48,7 @@ Familiar の `task_finder` がタスクを発見できる条件（**全て満た
 
 1. `Designation` コンポーネントがある
 2. `Transform` コンポーネントがある
-3. **`DesignationSpatialGrid` または `TransportRequestSpatialGrid` に登録されている**（0.15秒遅延あり）、または `ManagedTasks` に入っている
+3. **`DesignationSpatialGrid` または `TransportRequestSpatialGrid` に登録されている**（Change Detection、スポーン後の次フレームで反映）、または `ManagedTasks` に入っている
 4. ⚠️ **Haul系 WorkType** (`Haul` / `HaulToMixer` / `GatherWater` / `HaulWaterToMixer` / `WheelbarrowHaul`) は **`TransportRequest` コンポーネントが必須** — なければサイレントにフィルタされ、エラー・ログなし
 5. ownership チェック通過: ManagedTasks 内 / unassigned / issued_by 一致 / エリア重複の引き継ぎ
 6. `TaskWorkers.len() < TaskSlots.max`（デフォルト 1）
