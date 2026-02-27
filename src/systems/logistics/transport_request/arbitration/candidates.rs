@@ -93,6 +93,7 @@ pub fn build_request_eval_context(
     let eligible_kind = match req.kind {
         TransportRequestKind::DepositToStockpile => true,
         TransportRequestKind::DeliverToBlueprint => req.resource_type.requires_wheelbarrow(),
+        TransportRequestKind::DeliverToFloorConstruction => req.resource_type == ResourceType::StasisMud,
         // Mixer 固体はどのリソースでも猫車で一括運搬可能
         TransportRequestKind::DeliverToMixerSolid => true,
         _ => false,
@@ -169,6 +170,11 @@ pub fn build_request_eval_context(
             )
         }
         TransportRequestKind::DeliverToBlueprint => (
+            WheelbarrowDestination::Blueprint(req.anchor),
+            (demand.remaining() as usize).min(WHEELBARROW_CAPACITY),
+            ItemBucketKey::Resource(req.resource_type),
+        ),
+        TransportRequestKind::DeliverToFloorConstruction => (
             WheelbarrowDestination::Blueprint(req.anchor),
             (demand.remaining() as usize).min(WHEELBARROW_CAPACITY),
             ItemBucketKey::Resource(req.resource_type),

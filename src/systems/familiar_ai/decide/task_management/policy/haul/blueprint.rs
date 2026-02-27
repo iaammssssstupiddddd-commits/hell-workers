@@ -53,9 +53,7 @@ pub fn assign_haul_to_blueprint(
         return false;
     }
 
-    if queries.wheelbarrow_leases.get(ctx.task_entity).is_err()
-        && resource_type != ResourceType::StasisMud
-    {
+    if queries.wheelbarrow_leases.get(ctx.task_entity).is_err() {
         if try_pick_drop_to_blueprint(
             blueprint,
             resource_type,

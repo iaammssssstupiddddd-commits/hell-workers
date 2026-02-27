@@ -96,6 +96,7 @@ pub fn unassign_task<'w, 's, Q: TaskReservationAccess<'w, 's>>(
         for &item_entity in &data.items {
             if let Ok(mut entity_commands) = commands.get_entity(item_entity) {
                 entity_commands.remove::<crate::relationships::LoadedIn>();
+                entity_commands.remove::<crate::relationships::DeliveringTo>();
                 entity_commands.try_insert((
                     Visibility::Visible,
                     Transform::from_xyz(snapped_pos.x, snapped_pos.y, Z_ITEM_PICKUP),
