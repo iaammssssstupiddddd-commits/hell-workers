@@ -64,43 +64,61 @@ impl PathfindingContext {
     }
 }
 
-// A*パスファインディング
-pub fn find_path(
-    world_map: &WorldMap,
-    context: &mut PathfindingContext,
-    start: (i32, i32),
-    goal: (i32, i32),
-) -> Option<Vec<(i32, i32)>> {
-    let start_idx = world_map.pos_to_idx(start.0, start.1)?;
-    let goal_idx = world_map.pos_to_idx(goal.0, goal.1)?;
+fn path_cost_heuristic(idx: usize, goal_idx: usize) -> i32 {
+    let p1 = WorldMap::idx_to_pos(idx);
+    let p2 = WorldMap::idx_to_pos(goal_idx);
+    let dx = (p1.0 - p2.0).abs();
+    let dy = (p1.1 - p2.1).abs();
+    let min_d = dx.min(dy);
+    let max_d = dx.max(dy);
+    // Octile距離: 14 * min_d + 10 * (max_d - min_d)
+    MOVE_COST_DIAGONAL * min_d + MOVE_COST_STRAIGHT * (max_d - min_d)
+}
 
-    // 目的地（逆引きならソウル）が通行不能なら到達不能
-    // ただし、goal_can_be_obstacle が true の場合はチェックをスキップ
-    if !world_map.is_walkable(goal.0, goal.1) && !context.allow_goal_obstacle {
-        return None;
+fn build_path_from_came_from(
+    came_from: &[Option<usize>],
+    mut current_idx: usize,
+    start_idx: usize,
+) -> Vec<(i32, i32)> {
+    let mut path = vec![WorldMap::idx_to_pos(current_idx)];
+
+    while current_idx != start_idx {
+        let Some(prev_idx) = came_from[current_idx] else {
+            break;
+        };
+        current_idx = prev_idx;
+        path.push(WorldMap::idx_to_pos(current_idx));
     }
 
-    context.reset();
+    path.reverse();
+    path
+}
 
-    let heuristic = |idx: usize, g_idx: usize| -> i32 {
-        let p1 = WorldMap::idx_to_pos(idx);
-        let p2 = WorldMap::idx_to_pos(g_idx);
-        let dx = (p1.0 - p2.0).abs();
-        let dy = (p1.1 - p2.1).abs();
-        let min_d = dx.min(dy);
-        let max_d = dx.max(dy);
-        // Octile距離: 14 * min_d + 10 * (max_d - min_d)
-        MOVE_COST_DIAGONAL * min_d + MOVE_COST_STRAIGHT * (max_d - min_d)
-    };
+fn find_path_with_policy<FG, FM, FD, FE>(
+    world_map: &WorldMap,
+    context: &mut PathfindingContext,
+    start_idx: usize,
+    heuristic: impl Fn(usize) -> i32,
+    is_goal_reached: FG,
+    can_enter: FM,
+    can_cross_diagonal: FD,
+    move_penalty: FE,
+) -> Option<Vec<(i32, i32)>>
+where
+    FG: Fn((i32, i32)) -> bool,
+    FM: Fn((i32, i32), (i32, i32)) -> bool,
+    FD: Fn((i32, i32), (i32, i32)) -> bool,
+    FE: Fn(i32, i32, bool) -> i32,
+{
+    context.reset();
 
     context.visited.push(start_idx);
     context.g_scores[start_idx] = 0;
     context.open_set.push(PathNode {
         idx: start_idx,
-        f_cost: heuristic(start_idx, goal_idx),
+        f_cost: heuristic(start_idx),
     });
 
-    // 8方向に拡張
     let directions = [
         (0, 1),
         (0, -1),
@@ -118,30 +136,19 @@ pub fn find_path(
         if recorded_g == i32::MAX {
             continue;
         }
-        let expected_f = recorded_g.saturating_add(heuristic(current.idx, goal_idx));
+        let expected_f = recorded_g.saturating_add(heuristic(current.idx));
         if current.f_cost > expected_f {
             continue;
         }
 
-        if current.idx == goal_idx {
-            // パスを再構築
-            let mut path = vec![goal];
-            let mut curr = goal_idx;
-            while let Some(prev) = context.came_from[curr] {
-                path.push(WorldMap::idx_to_pos(prev));
-                curr = prev;
-                if curr == start_idx {
-                    break;
-                }
-            }
-            path.reverse();
-            // 経路の平滑化を適用せずにダイレクトなグリッドパスを返す
-            // return Some(smooth_path(world_map, path));
-            return Some(path);
-        }
-
         let curr_pos = WorldMap::idx_to_pos(current.idx);
-        let current_g = context.g_scores[current.idx];
+        if is_goal_reached(curr_pos) {
+            return Some(build_path_from_came_from(
+                &context.came_from,
+                current.idx,
+                start_idx,
+            ));
+        }
 
         for (dx, dy) in &directions {
             let nx = curr_pos.0 + dx;
@@ -152,35 +159,24 @@ pub fn find_path(
                 None => continue,
             };
 
-            // 隣接マスが通行不能ならスキップ（目的地は許可済み）
-            if !world_map.is_walkable(nx, ny) {
+            if !can_enter(curr_pos, (nx, ny)) {
                 continue;
             }
 
-            // 斜め移動の場合の追加チェック
             let is_diagonal = dx.abs() == 1 && dy.abs() == 1;
-            if is_diagonal {
-                // 角抜け防止: 斜め移動の際、隣接する2マスが通行不能なら通れない
-                // (x+dx, y) または (x, y+dy) のどちらかが通行不能な場合、通り抜けを制限する
-                // ここでは「両方が通行可能」であることを条件とする
-                if !world_map.is_walkable(curr_pos.0 + dx, curr_pos.1)
-                    || !world_map.is_walkable(curr_pos.0, curr_pos.1 + dy)
-                {
-                    continue;
-                }
+            if is_diagonal && !can_cross_diagonal(curr_pos, (nx, ny)) {
+                continue;
             }
 
-            // 移動コスト: 直線は10、斜めは14
             let move_cost = if is_diagonal {
                 MOVE_COST_DIAGONAL
             } else {
                 MOVE_COST_STRAIGHT
             };
-            let door_cost = world_map.get_door_cost(nx, ny);
-            let tentative_g = current_g + move_cost + door_cost;
+            let penalty = move_penalty(nx, ny, is_diagonal);
+            let tentative_g = recorded_g + move_cost + penalty;
 
             if tentative_g < context.g_scores[n_idx] {
-                // 初訪問時のみ記録（重複防止）
                 if context.g_scores[n_idx] == i32::MAX {
                     context.visited.push(n_idx);
                 }
@@ -188,13 +184,52 @@ pub fn find_path(
                 context.g_scores[n_idx] = tentative_g;
                 context.open_set.push(PathNode {
                     idx: n_idx,
-                    f_cost: tentative_g + heuristic(n_idx, goal_idx),
+                    f_cost: tentative_g + heuristic(n_idx),
                 });
             }
         }
     }
 
     None
+}
+
+// A*パスファインディング
+pub fn find_path(
+    world_map: &WorldMap,
+    context: &mut PathfindingContext,
+    start: (i32, i32),
+    goal: (i32, i32),
+) -> Option<Vec<(i32, i32)>> {
+    let start_idx = world_map.pos_to_idx(start.0, start.1)?;
+    let goal_idx = world_map.pos_to_idx(goal.0, goal.1)?;
+
+    // 目的地（逆引きならソウル）が通行不能なら到達不能
+    // ただし、goal_can_be_obstacle が true の場合はチェックをスキップ
+    if !world_map.is_walkable(goal.0, goal.1) && !context.allow_goal_obstacle {
+        return None;
+    }
+
+    let heuristic = |idx| path_cost_heuristic(idx, goal_idx);
+    find_path_with_policy(
+        world_map,
+        context,
+        start_idx,
+        heuristic,
+        move |pos| pos == goal,
+        |_from, to| world_map.is_walkable(to.0, to.1),
+        |from, to| {
+            let dx = to.0 - from.0;
+            let dy = to.1 - from.1;
+            let is_diagonal = dx.abs() == 1 && dy.abs() == 1;
+            if !is_diagonal {
+                return true;
+            }
+
+            world_map.is_walkable(from.0 + dx, from.1)
+                && world_map.is_walkable(from.0, from.1 + dy)
+        },
+        |x, y, _is_diagonal| world_map.get_door_cost(x, y),
+    )
 }
 
 /// ターゲットの隣接マスへのパスを検索（ターゲット自体には入らない）
@@ -280,126 +315,42 @@ pub fn find_path_to_boundary(
     let goal_grid = (center_x, center_y);
     let goal_idx = world_map.pos_to_idx(goal_grid.0, goal_grid.1)?;
 
-    context.reset();
     let start_idx = world_map.pos_to_idx(start.0, start.1)?;
-
-    // ヒューリスティック
-    let heuristic = |idx: usize, g_idx: usize| -> i32 {
-        let p1 = WorldMap::idx_to_pos(idx);
-        let p2 = WorldMap::idx_to_pos(g_idx);
-        let dx = (p1.0 - p2.0).abs();
-        let dy = (p1.1 - p2.1).abs();
-        let min_d = dx.min(dy);
-        let max_d = dx.max(dy);
-        MOVE_COST_DIAGONAL * min_d + MOVE_COST_STRAIGHT * (max_d - min_d)
-    };
-
-    context.visited.push(start_idx);
-    context.g_scores[start_idx] = 0;
-    context.open_set.push(PathNode {
-        idx: start_idx,
-        f_cost: heuristic(start_idx, goal_idx),
-    });
-
-    let directions = [
-        (0, 1),
-        (0, -1),
-        (1, 0),
-        (-1, 0),
-        (1, 1),
-        (1, -1),
-        (-1, 1),
-        (-1, -1),
-    ];
-
-    while let Some(current) = context.open_set.pop() {
-        // ヒープに残った古いエントリ（より悪いコスト）をスキップ
-        let recorded_g = context.g_scores[current.idx];
-        if recorded_g == i32::MAX {
-            continue;
-        }
-        let expected_f = recorded_g.saturating_add(heuristic(current.idx, goal_idx));
-        if current.f_cost > expected_f {
-            continue;
-        }
-
-        let curr_pos = WorldMap::idx_to_pos(current.idx);
-
-        // ターゲット領域のいずれかのマスに到達したなら、その手前でパスを生成して終了
-        if target_grids.contains(&curr_pos) {
-            let mut path = vec![curr_pos];
-            let mut c = current.idx;
-            while let Some(prev) = context.came_from[c] {
-                path.push(WorldMap::idx_to_pos(prev));
-                c = prev;
-            }
-            path.reverse();
-
-            // ターゲット内の最後のノードを削除（境界で停止）
-            path.pop();
-
-            if path.is_empty() {
-                return Some(vec![start]);
-            }
-            return Some(path);
-        }
-
-        let current_g = context.g_scores[current.idx];
-
-        for (dx, dy) in &directions {
-            let nx = curr_pos.0 + dx;
-            let ny = curr_pos.1 + dy;
-
-            let n_idx = match world_map.pos_to_idx(nx, ny) {
-                Some(idx) => idx,
-                None => continue,
-            };
-
-            // 歩行可能チェック: ターゲット内のマスは「透明」な障害物として扱い、許可する
-            let is_in_target = target_grids.contains(&(nx, ny));
-            if !world_map.is_walkable(nx, ny) && !is_in_target {
-                continue;
-            }
-
-            // 角抜けチェック
-            if dx.abs() == 1 && dy.abs() == 1 {
-                let s1 = world_map.is_walkable(curr_pos.0 + dx, curr_pos.1)
-                    || target_grids.contains(&(curr_pos.0 + dx, curr_pos.1));
-                let s2 = world_map.is_walkable(curr_pos.0, curr_pos.1 + dy)
-                    || target_grids.contains(&(curr_pos.0, curr_pos.1 + dy));
-                if !s1 || !s2 {
-                    continue;
-                }
-            }
-
-            let move_cost = if dx.abs() == 1 && dy.abs() == 1 {
-                MOVE_COST_DIAGONAL
-            } else {
-                MOVE_COST_STRAIGHT
-            };
-            let door_cost = if is_in_target {
+    let heuristic = |idx| path_cost_heuristic(idx, goal_idx);
+    let mut path = find_path_with_policy(
+        world_map,
+        context,
+        start_idx,
+        heuristic,
+        |pos| target_grids.contains(&pos),
+        |_, to| {
+            let is_in_target = target_grids.contains(&to);
+            is_in_target || world_map.is_walkable(to.0, to.1)
+        },
+        |from, to| {
+            let dx = to.0 - from.0;
+            let dy = to.1 - from.1;
+            (world_map.is_walkable(from.0 + dx, from.1)
+                || target_grids.contains(&(from.0 + dx, from.1)))
+                && (world_map.is_walkable(from.0, from.1 + dy)
+                    || target_grids.contains(&(from.0, from.1 + dy)))
+        },
+        |x, y, _is_diagonal| {
+            if target_grids.contains(&(x, y)) {
                 0
             } else {
-                world_map.get_door_cost(nx, ny)
-            };
-            let tentative_g = current_g + move_cost + door_cost;
-
-            if tentative_g < context.g_scores[n_idx] {
-                // 初訪問時のみ記録（重複防止）
-                if context.g_scores[n_idx] == i32::MAX {
-                    context.visited.push(n_idx);
-                }
-                context.came_from[n_idx] = Some(current.idx);
-                context.g_scores[n_idx] = tentative_g;
-                context.open_set.push(PathNode {
-                    idx: n_idx,
-                    f_cost: tentative_g + heuristic(n_idx, goal_idx),
-                });
+                world_map.get_door_cost(x, y)
             }
-        }
-    }
+        },
+    )?;
 
-    None
+    // ターゲット内へ到達したので「最後の1マス（目標領域）を落として境界で停止」する
+    path.pop();
+    if path.is_empty() {
+        Some(vec![start])
+    } else {
+        Some(path)
+    }
 }
 
 #[cfg(test)]
