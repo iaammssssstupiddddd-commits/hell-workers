@@ -2,8 +2,28 @@
 # Usage: .\scripts\analyze-target.ps1
 
 param(
-    [string]$TargetDir = "target"
+    [string]$TargetDir = ""
 )
+
+function Resolve-CargoTargetDir {
+    try {
+        $metadataJson = cargo metadata --no-deps --format-version 1 2>$null
+        if ($LASTEXITCODE -eq 0 -and $metadataJson) {
+            $metadata = $metadataJson | ConvertFrom-Json
+            if ($metadata.target_directory) {
+                return [string]$metadata.target_directory
+            }
+        }
+    } catch {
+        # Fallback below
+    }
+
+    return "target"
+}
+
+if ([string]::IsNullOrWhiteSpace($TargetDir)) {
+    $TargetDir = Resolve-CargoTargetDir
+}
 
 if (-not (Test-Path $TargetDir)) {
     Write-Host "Target directory does not exist: $TargetDir" -ForegroundColor Yellow
@@ -11,6 +31,7 @@ if (-not (Test-Path $TargetDir)) {
 }
 
 Write-Host "=== Target Directory Analysis ===" -ForegroundColor Cyan
+Write-Host "Target directory: $TargetDir" -ForegroundColor Gray
 Write-Host ""
 
 # Analyze top-level directories in target
@@ -66,4 +87,3 @@ Write-Host "`n=== Recommendations ===" -ForegroundColor Cyan
 Write-Host "1. incremental/ と deps/ はビルド速度に重要 → 保持推奨" -ForegroundColor Green
 Write-Host "2. build/ は再生成可能だが時間がかかる → 容量に余裕があるなら保持" -ForegroundColor Yellow
 Write-Host "3. x86_64-pc-windows-msvc/ はクロスコンパイル用 → 不要なら削除可能" -ForegroundColor Yellow
-

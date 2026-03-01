@@ -171,7 +171,7 @@ Change Detection で差分更新。
 | `3` | 高速 (x2) | |
 | `4` | 超高速 (x4) | |
 | `Escape` | BuildingPlace/ZonePlace/TaskDesignation キャンセル | PlayMode依存 |
-| `F12` | デバッグ表示トグル | `plugins/input.rs` |
+| `F12` | デバッグ表示トグル + Gizmo 切替 | `plugins/input.rs`。`GizmoConfigStore` の enabled も同期 |
 
 ### コンテキスト依存ショートカット（個別管理）
 
@@ -180,3 +180,5 @@ Change Detection で差分更新。
 | `C/M/H/B`, `Digit1-4` | Familiarコマンド | Familiar選択時 | `systems/command/input.rs` |
 | `Ctrl+C/V/Z/Y` | エリア編集操作 | AreaSelection時 | `systems/command/area_selection/shortcuts.rs` |
 | `Tab/Shift+Tab` | Entity Listフォーカス移動 | 常時 | `list/interaction/navigation.rs` |
+| `P` | DamnedSoul スポーン（カーソル位置） | **Debug 時のみ** | `plugins/interface.rs` |
+| `O` | Familiar スポーン（カーソル位置） | **Debug 時のみ** | `plugins/interface.rs` |

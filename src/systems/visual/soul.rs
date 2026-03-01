@@ -269,8 +269,6 @@ pub fn task_link_system(
                 // 目標地点にマーカー円を描画
                 let marker_color = color.with_alpha(0.6);
                 gizmos.circle_2d(end, 4.0, marker_color);
-
-                debug!("HAUL_GIZMO: Drawing line from {:?} to {:?}", start, end);
             }
         }
     }

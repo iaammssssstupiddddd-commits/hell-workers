@@ -4,10 +4,10 @@
 
 use bevy::prelude::*;
 
-use crate::constants::{BUCKET_CAPACITY, MUD_MIXER_CAPACITY};
+use crate::constants::{BUCKET_CAPACITY, MAP_HEIGHT, MAP_WIDTH, MUD_MIXER_CAPACITY};
 use crate::entities::familiar::{ActiveCommand, FamiliarCommand};
 use crate::events::{DesignationOp, DesignationRequest};
-use crate::relationships::TaskWorkers;
+use crate::relationships::{ManagedBy, TaskWorkers};
 use crate::systems::command::TaskArea;
 use crate::systems::familiar_ai::perceive::resource_sync::SharedResourceCache;
 use crate::systems::jobs::{
@@ -51,6 +51,7 @@ pub fn mud_mixer_auto_haul_system(
         With<crate::systems::jobs::SandPile>,
     >,
     q_task_state: Query<(Option<&Designation>, Option<&TaskWorkers>)>,
+    q_collect_sand_tasks: Query<(&Designation, &ManagedBy, Option<&TaskWorkers>)>,
     q_requests_for_demand: Query<(&TransportRequest, Option<&TaskWorkers>, Option<&TransportDemand>)>,
 ) {
     let active_familiars: Vec<(Entity, TaskArea)> = q_familiars
@@ -73,20 +74,38 @@ pub fn mud_mixer_auto_haul_system(
 
         familiar_with_collect_sand_demand.insert(request.issued_by);
     }
+    let mut familiar_with_collect_sand_task = std::collections::HashSet::<Entity>::new();
+    for (designation, managed_by, workers_opt) in q_collect_sand_tasks.iter() {
+        if designation.work_type != WorkType::CollectSand {
+            continue;
+        }
+        let workers = workers_opt.map(|w| w.len()).unwrap_or(0);
+        if workers == 0 {
+            familiar_with_collect_sand_task.insert(managed_by.0);
+        } else {
+            familiar_with_collect_sand_task.insert(managed_by.0);
+        }
+    }
 
-    // Water request の inflight は「実際に割り当て済みの worker 数」で集計する。
+    // request の inflight は「実際に割り当て済みの worker 数」で集計する。
     // SharedResourceCache には pending request 由来の予約も含まれるため、
     // ここで使うと request の issue/disable が振動しやすい。
     let mut water_inflight_by_mixer = std::collections::HashMap::<Entity, u32>::new();
+    let mut sand_inflight_by_mixer = std::collections::HashMap::<Entity, u32>::new();
     for (_, target_mixer, request, _, workers_opt) in q_mixer_requests.iter() {
-        if request.kind != TransportRequestKind::DeliverWaterToMixer {
-            continue;
-        }
         let workers = workers_opt.map(|w| w.len() as u32).unwrap_or(0);
         if workers == 0 {
             continue;
         }
-        *water_inflight_by_mixer.entry(target_mixer.0).or_insert(0) += workers;
+        match (request.kind, request.resource_type) {
+            (TransportRequestKind::DeliverWaterToMixer, _) => {
+                *water_inflight_by_mixer.entry(target_mixer.0).or_insert(0) += workers;
+            }
+            (TransportRequestKind::DeliverToMixerSolid, ResourceType::Sand) => {
+                *sand_inflight_by_mixer.entry(target_mixer.0).or_insert(0) += workers;
+            }
+            _ => {}
+        }
     }
 
     // (mixer, resource_type) -> (issued_by, desired_slots, mixer_pos)
@@ -127,46 +146,25 @@ pub fn mud_mixer_auto_haul_system(
         }
 
         // --- 砂採取タスクの自動発行 ---
-        let sand_inflight =
-            haul_cache.get_mixer_destination_reservation(mixer_entity, ResourceType::Sand);
+        let sand_inflight_tasks = *sand_inflight_by_mixer.get(&mixer_entity).unwrap_or(&0);
         let has_collect_sand_demand = familiar_with_collect_sand_demand.contains(&fam_entity);
-        if has_collect_sand_demand && storage.sand + (sand_inflight as u32) < 2 {
+        let has_collect_sand_task = familiar_with_collect_sand_task.contains(&fam_entity);
+        if has_collect_sand_demand && !has_collect_sand_task && storage.sand + sand_inflight_tasks < 2 {
             let mut issued_collect_sand = false;
 
-            for (sp_entity, sp_transform, sp_designation, sp_workers) in q_sand_piles.iter() {
-                if !task_area.contains(sp_transform.translation.truncate()) {
-                    continue;
-                }
-                if sp_designation.is_some() || sp_workers.map(|w| w.len()).unwrap_or(0) > 0 {
-                    continue;
-                }
+            for area_filter in [Some(task_area), None] {
+                for (sp_entity, sp_transform, sp_designation, sp_workers) in q_sand_piles.iter() {
+                    if area_filter
+                        .is_some_and(|area| !area.contains(sp_transform.translation.truncate()))
+                    {
+                        continue;
+                    }
+                    if sp_designation.is_some() || sp_workers.map(|w| w.len()).unwrap_or(0) > 0 {
+                        continue;
+                    }
 
-                designation_writer.write(DesignationRequest {
-                    entity: sp_entity,
-                    operation: DesignationOp::Issue {
-                        work_type: WorkType::CollectSand,
-                        issued_by: fam_entity,
-                        task_slots: 1,
-                        priority: Some(4),
-                        target_blueprint: None,
-                        target_mixer: None,
-                        reserved_for_task: false,
-                    },
-                });
-                info!(
-                    "AUTO_HAUL_MIXER: Issued CollectSand from SandPile {:?} for Mixer {:?}",
-                    sp_entity, mixer_entity
-                );
-                issued_collect_sand = true;
-                break;
-            }
-
-            if !issued_collect_sand {
-                if let Some(sand_tile_entity) =
-                    find_available_sand_tile(&world_map, &task_area, mixer_pos, &q_task_state)
-                {
                     designation_writer.write(DesignationRequest {
-                        entity: sand_tile_entity,
+                        entity: sp_entity,
                         operation: DesignationOp::Issue {
                             work_type: WorkType::CollectSand,
                             issued_by: fam_entity,
@@ -178,9 +176,40 @@ pub fn mud_mixer_auto_haul_system(
                         },
                     });
                     info!(
-                        "AUTO_HAUL_MIXER: Issued CollectSand from beach tile {:?} for Mixer {:?}",
-                        sand_tile_entity, mixer_entity
+                        "AUTO_HAUL_MIXER: Issued CollectSand from SandPile {:?} for Mixer {:?}",
+                        sp_entity, mixer_entity
                     );
+                    issued_collect_sand = true;
+                    break;
+                }
+                if issued_collect_sand {
+                    break;
+                }
+            }
+
+            if !issued_collect_sand {
+                for area_filter in [Some(task_area), None] {
+                    if let Some(sand_tile_entity) =
+                        find_available_sand_tile(&world_map, area_filter, mixer_pos, &q_task_state)
+                    {
+                        designation_writer.write(DesignationRequest {
+                            entity: sand_tile_entity,
+                            operation: DesignationOp::Issue {
+                                work_type: WorkType::CollectSand,
+                                issued_by: fam_entity,
+                                task_slots: 1,
+                                priority: Some(4),
+                                target_blueprint: None,
+                                target_mixer: None,
+                                reserved_for_task: false,
+                            },
+                        });
+                        info!(
+                            "AUTO_HAUL_MIXER: Issued CollectSand from beach tile {:?} for Mixer {:?}",
+                            sand_tile_entity, mixer_entity
+                        );
+                        break;
+                    }
                 }
             }
         }
@@ -332,7 +361,8 @@ pub fn mud_mixer_auto_haul_system(
 fn request_is_collect_sand_demand(request: &TransportRequest) -> bool {
     matches!(
         (request.kind, request.resource_type),
-        (TransportRequestKind::DeliverToBlueprint, ResourceType::Sand)
+        (TransportRequestKind::DeliverToMixerSolid, ResourceType::Sand)
+            | (TransportRequestKind::DeliverToBlueprint, ResourceType::Sand)
             | (TransportRequestKind::DeliverToBlueprint, ResourceType::StasisMud)
             | (
                 TransportRequestKind::DeliverToFloorConstruction,
@@ -351,17 +381,17 @@ fn request_is_collect_sand_demand(request: &TransportRequest) -> bool {
 
 fn find_available_sand_tile(
     world_map: &WorldMap,
-    task_area: &TaskArea,
+    task_area: Option<&TaskArea>,
     mixer_pos: Vec2,
     q_task_state: &Query<(Option<&Designation>, Option<&TaskWorkers>)>,
 ) -> Option<Entity> {
-    let (x0, y0) = WorldMap::world_to_grid(task_area.min);
-    let (x1, y1) = WorldMap::world_to_grid(task_area.max);
-
-    let min_x = x0.min(x1);
-    let max_x = x0.max(x1);
-    let min_y = y0.min(y1);
-    let max_y = y0.max(y1);
+    let (min_x, max_x, min_y, max_y) = if let Some(area) = task_area {
+        let (x0, y0) = WorldMap::world_to_grid(area.min);
+        let (x1, y1) = WorldMap::world_to_grid(area.max);
+        (x0.min(x1), x0.max(x1), y0.min(y1), y0.max(y1))
+    } else {
+        (0, MAP_WIDTH - 1, 0, MAP_HEIGHT - 1)
+    };
 
     let mut best: Option<(Entity, f32)> = None;
 
@@ -385,7 +415,7 @@ fn find_available_sand_tile(
             }
 
             let tile_pos = WorldMap::grid_to_world(gx, gy);
-            if !task_area.contains(tile_pos) {
+            if task_area.is_some_and(|area| !area.contains(tile_pos)) {
                 continue;
             }
 

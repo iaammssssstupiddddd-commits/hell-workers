@@ -4,10 +4,10 @@
 
 ## 必須参照ドキュメント
 指示やタスクの背景を理解するために、まず以下のファイルを確認すること：
-1.  **プロジェクト全体像**: [README.md](file:///f:/DevData\projects\hell-workers\README.md)
-2.  **開発ガイドライン**: [docs/DEVELOPMENT.md](file:///f:/DevData\projects\hell-workers\docs\DEVELOPMENT.md)
-3.  **ドキュメント目次**: [docs/README.md](file:///f:/DevData\projects\hell-workers\docs\README.md)
-4.  **アーキテクチャ詳細**: [docs/architecture.md](file:///f:/DevData\projects\hell-workers\docs\architecture.md)
+1.  **プロジェクト全体像**: [README.md](README.md)
+2.  **開発ガイドライン**: [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)
+3.  **ドキュメント目次**: [docs/README.md](docs/README.md)
+4.  **アーキテクチャ詳細**: [docs/architecture.md](docs/architecture.md)
 
 ## 技術的制約・ルール
 - **エンジン**: Bevy 0.18 を使用。

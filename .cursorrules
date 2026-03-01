@@ -3,18 +3,18 @@
 You are working on the "Hell Workers" project.
 Before starting any task, you MUST check the following documents to understand the context and rules:
 
-1.  **Project Overview**: [README.md](file:///f:/DevData/projects/hell-workers/README.md)
-2.  **Development Rules**: [docs/DEVELOPMENT.md](file:///f:/DevData/projects/hell-workers/docs/DEVELOPMENT.md)
-3.  **Documentation Index**: [docs/README.md](file:///f:/DevData/projects/hell-workers/docs/README.md)
+1.  **Project Overview**: [README.md](README.md)
+2.  **Development Rules**: [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)
+3.  **Documentation Index**: [docs/README.md](docs/README.md)
 
 # AI Agent Instructions
 
 You are working on the "Hell Workers" project.
 Before starting any task, you MUST check the following documents to understand the context and rules:
 
-1.  **Project Overview**: [README.md](file:///f:/DevData/projects/hell-workers/README.md)
-2.  **Development Rules**: [docs/DEVELOPMENT.md](file:///f:/DevData/projects/hell-workers/docs/DEVELOPMENT.md)
-3.  **Documentation Index**: [docs/README.md](file:///f:/DevData/projects/hell-workers/docs/README.md)
+1.  **Project Overview**: [README.md](README.md)
+2.  **Development Rules**: [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)
+3.  **Documentation Index**: [docs/README.md](docs/README.md)
 
 ## Key Technical Context
 - **Engine**: Bevy 0.18

@@ -1,6 +1,6 @@
 use crate::assets::GameAssets;
 use crate::game_state::{CompanionPlacementKind, CompanionPlacementState};
-use crate::systems::jobs::{Blueprint, Building, BuildingType};
+use crate::systems::jobs::{Blueprint, Building};
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
 
@@ -63,41 +63,6 @@ pub(super) fn handle_companion_flow(
                     world_map.remove_obstacle(gx, gy);
                 }
                 commands.entity(parent_blueprint).despawn();
-            }
-        }
-        CompanionPlacementKind::SandPile => {
-            let parent_type = parent_building_type(active.parent_kind);
-            let parent_occupied_grids =
-                occupied_grids_for_building(parent_type, active.parent_anchor);
-            if parent_occupied_grids.contains(&grid) {
-                return true;
-            }
-            if place_building_blueprint(
-                commands,
-                world_map,
-                game_assets,
-                BuildingType::SandPile,
-                grid,
-                q_buildings,
-                q_blueprints_by_entity,
-            )
-            .is_some()
-            {
-                if place_building_blueprint(
-                    commands,
-                    world_map,
-                    game_assets,
-                    parent_type,
-                    active.parent_anchor,
-                    q_buildings,
-                    q_blueprints_by_entity,
-                )
-                .is_some()
-                {
-                    companion_state.0 = None;
-                } else {
-                    warn!("COMPANION: SandPile placed but failed to confirm parent blueprint");
-                }
             }
         }
     }

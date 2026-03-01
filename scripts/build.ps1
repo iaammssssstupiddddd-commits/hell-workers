@@ -5,7 +5,8 @@ param(
     [switch]$Release,
     [switch]$Clean,
     [int]$KeepDays = 7,
-    [string]$LogDir = "logs"
+    [string]$LogDir = "logs",
+    [string]$TargetDir = "target"
 )
 
 # Create logs directory if it doesn't exist
@@ -31,16 +32,21 @@ $buildType = if ($Release) { "release" } else { "debug" }
 $errorLogFile = Join-Path $LogDir "build_error_${buildType}_$timestamp.log"
 $combinedLogFile = Join-Path $LogDir "build_combined_${buildType}_$timestamp.log"
 
-$buildArgs = if ($Release) { @("build", "--release") } else { @("build") }
+$buildArgs = if ($Release) {
+    @("build", "--release", "--target-dir", $TargetDir)
+} else {
+    @("build", "--target-dir", $TargetDir)
+}
 
 Write-Host "Running cargo build ($buildType)..." -ForegroundColor Cyan
 Write-Host "Error log: $errorLogFile" -ForegroundColor Gray
+Write-Host "Target dir: $TargetDir" -ForegroundColor Gray
 
 # Run cargo build and capture both stdout and stderr
 $process = Start-Process -FilePath "cargo" -ArgumentList $buildArgs -NoNewWindow -Wait -PassThru -RedirectStandardOutput $combinedLogFile -RedirectStandardError $errorLogFile
 
 # Automatic cleanup to prevent bloat
-& "$PSScriptRoot\post-build-cleanup.ps1" -MaxSizeGB 3 | Out-Null
+& "$PSScriptRoot\post-build-cleanup.ps1" -MaxSizeGB 3 -TargetDir $TargetDir | Out-Null
 
 # Read and display errors if they exist
 if (Test-Path $errorLogFile) {
@@ -71,4 +77,3 @@ if (Test-Path $combinedLogFile) {
 
 Write-Host "`nBuild completed successfully!" -ForegroundColor Green
 exit 0
-

@@ -97,7 +97,7 @@ fn setup(
 
 fn initialize_gizmo_config(mut config_store: ResMut<GizmoConfigStore>) {
     for (_, config, _) in config_store.iter_mut() {
-        config.enabled = true;
+        config.enabled = false;
         config.line.width = 1.0;
     }
 }

@@ -6,8 +6,28 @@ param(
     [int]$MaxSizeGB = 3,
     [int]$CleanupDays = 7,
     [switch]$AutoClean,
-    [string]$TargetDir = "target"
+    [string]$TargetDir = ""
 )
+
+function Resolve-CargoTargetDir {
+    try {
+        $metadataJson = cargo metadata --no-deps --format-version 1 2>$null
+        if ($LASTEXITCODE -eq 0 -and $metadataJson) {
+            $metadata = $metadataJson | ConvertFrom-Json
+            if ($metadata.target_directory) {
+                return [string]$metadata.target_directory
+            }
+        }
+    } catch {
+        # Fallback below
+    }
+
+    return "target"
+}
+
+if ([string]::IsNullOrWhiteSpace($TargetDir)) {
+    $TargetDir = Resolve-CargoTargetDir
+}
 
 $maxSizeBytes = $MaxSizeGB * 1GB
 
@@ -19,6 +39,7 @@ function Get-DirectorySize {
 }
 
 Write-Host "=== Target Directory Bloat Prevention ===" -ForegroundColor Cyan
+Write-Host "Target directory: $TargetDir" -ForegroundColor Gray
 
 # Check current size
 $currentSize = Get-DirectorySize -Path $TargetDir
