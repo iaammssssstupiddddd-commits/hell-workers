@@ -15,7 +15,22 @@ Hell-Workers における建築システムの基礎実装について説明し�
 | `ProvisionalWall` | 仮設壁のアップグレード状態（`mud_delivered`）を保持 |
 | `WallConstructionSite` | 壁の建設サイト（`Framing -> Coating` フェーズ、`material_center`、進捗カウンタを保持） |
 | `WallTileBlueprint` | 壁1タイルの建設状態（`wood_delivered` / `mud_delivered` / `spawned_wall`）を保持 |
-| `BuildingType` | 建物の種類（`Wall`, `Door`, `Floor`, `Tank`, `MudMixer`, `SandPile`, `BonePile`） |
+| `BuildingType` | 建物の種類（下表参照） |
+
+### BuildingType 一覧
+
+| BuildingType | カテゴリ | 概要 |
+|:---|:---|:---|
+| `Wall` | Structure | 壁（仮設→本設 2段階） |
+| `Floor` | Structure | 床（エリア指定型建設） |
+| `Bridge` | Structure | 橋（木材/岩 代替可） |
+| `Door` | Architecture | 扉（Open/Closed/Locked） |
+| `Tank` | Plant | 水タンク（2×1、BucketStorage companion必須） |
+| `MudMixer` | Plant | 泥ミキサー（2×2、SandPile companion必須） |
+| `WheelbarrowParking` | Temporary | 猫車置き場 |
+| `SandPile` | Temporary | 無限砂ソース |
+| `BonePile` | Temporary | 無限骨ソース |
+| `RestArea` | Temporary | 仮設休憩所 |
 
 ### 資材要件
 
@@ -23,11 +38,25 @@ Hell-Workers における建築システムの基礎実装について説明し�
 |:---|:---|
 | Wall | 木材 × 1 + StasisMud × 1（建築開始は木材のみで可能） |
 | Door | 木材 × 1 + Bone × 1 |
-| Floor | 石材 × 1 |
+| Floor | —（Drag方式、Blueprint資材搬入なし） |
+| Bridge | 木材または岩 合計 × 6（代替可） |
 | Tank | 木材 × 2 |
 | MudMixer | 木材 × 4 |
+| RestArea | 木材 × 5 |
+| WheelbarrowParking | 木材 × 2 |
 | SandPile | 砂 × 10 |
 | BonePile | 骨 × 10 |
+
+### BuildingCategory
+
+`BuildingType::category()` でカテゴリを取得できる（`src/systems/jobs/mod.rs`）。
+
+| カテゴリ | BuildingType |
+|:---|:---|
+| `Structure` | Wall, Floor, Bridge |
+| `Architecture` | Door |
+| `Plant` | Tank, MudMixer |
+| `Temporary` | WheelbarrowParking, SandPile, BonePile, RestArea |
 
 ## 3. ワークフロー
 

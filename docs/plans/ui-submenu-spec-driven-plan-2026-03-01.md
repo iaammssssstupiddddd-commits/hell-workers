@@ -116,7 +116,7 @@
   - `cargo check`
 - 手動確認シナリオ:
   - Architect/Zones/Orders/Dream の開閉。
-  - Architect カテゴリ切替と Back 遷移。
+  - Architect カテゴリ選択→建物列展開→再クリックでトグル閉じ。
   - Zone remove ボタンの色と動作。
 - パフォーマンス確認（必要時）:
   - 不要（UI 生成コードの保守性向上が主目的）。
@@ -133,19 +133,29 @@
 
 ### 現在地
 
-- 進捗: `0%`
-- 完了済みマイルストーン: なし
-- 未着手/進行中: M1〜M3 未着手
+- 進捗: `40%`（Architectカテゴリ構造は実装済み）
+- 完了済みマイルストーン: Architectカテゴリ2段階メニュー実装（本計画外で先行実装）
+- 未着手/進行中: M1〜M3（共通コンテナ抽出・spec化・ドキュメント同期）
+
+### Architect カテゴリ構造（実装済み）
+
+カテゴリ2段階メニューは既に実装済み（本計画の実施前に完了）:
+- `BuildingCategory` enum（`src/systems/jobs/mod.rs`）で Structure/Architecture/Plant/Temporary を定義
+- `ArchitectCategoryState(Option<BuildingCategory>)` Resource でカテゴリ選択状態を管理
+- `ArchitectCategoryListPanel` / `ArchitectBuildingPanel(BuildingCategory)` Component で表示制御
+- カテゴリ列（左）＋建物列（右展開）の横並び構成、再クリックでトグル閉じ
+- Back ボタンは廃止（カテゴリ再クリックでトグル）
 
 ### 次のAIが最初にやること
 
-1. 4サブメニューの共通 `Node` フィールドを抽出する。
-2. `SubmenuSpec` の最小定義を作り Zones/Orders から適用する。
-3. Architect はカテゴリ構造の差分を確認し、共通化範囲を限定する。
+1. Zones/Orders/Dream の共通 `Node` フィールドを `spawn_submenu_container` に抽出する。
+2. `SubmenuSpec` の最小定義を作り Zones/Orders/Dream から適用する。
+3. Architect は既存実装を維持しつつ、コンテナ生成部分のみ共通化する。
 
 ### ブロッカー/注意点
 
-- `menu_visibility_system` の Query 条件と marker コンポーネント付与は崩さない。
+- `menu_visibility_system` の Query 条件と marker コンポーネント付与は崩さない（特に6クエリの `Without<>` 制約が必要）。
+- Architectカテゴリ構造は変更しない（実装済み仕様として固定）。
 
 ### 参照必須ファイル
 

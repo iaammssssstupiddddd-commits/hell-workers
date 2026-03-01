@@ -65,6 +65,51 @@
 - Areaモード中の `Tab` / `Shift + Tab` は Familiar のみを循環対象にする
 - `Ctrl + Z / Y`（および `Ctrl + Shift + Z`）で TaskArea の Undo/Redo を行う
 
+## MenuState と Architect サブメニュー
+
+`MenuState` Resource がボトムバーの各サブメニューの開閉を管理する。
+
+| バリアント | サブメニュー |
+|:---|:---|
+| `Hidden` | 全サブメニュー非表示 |
+| `Architect` | 建築メニュー（2段階） |
+| `Zones` | ゾーンメニュー |
+| `Orders` | 命令メニュー |
+| `Dream` | Dreamメニュー |
+
+### Architect サブメニューの2段階構造
+
+Architect メニューはカテゴリ列（左）と建物列（右）の横並び2段構成。
+
+```
+[Architect サブメニュー] ← FlexDirection::Row
+  [カテゴリ列]          [建物列（選択時のみ表示）]
+  Structure  →         Wall / Floor / Bridge
+  Architecture →       Door
+  Plant        →       Tank / MudMixer
+  Temporary    →       RestArea / WB Parking / SandPile / BonePile
+```
+
+- カテゴリ列はArchitectメニューが開いている間、常時表示
+- カテゴリボタンをクリック → 右に建物列を展開
+- 同じカテゴリを再クリック → 建物列を折りたたむ（トグル）
+- 別メニューを開く / Escape → `ArchitectCategoryState` がリセットされ建物列は閉じる
+
+### ArchitectCategoryState
+
+`ArchitectCategoryState(Option<BuildingCategory>)` Resource が現在展開中のカテゴリを保持する。
+
+| 値 | 意味 |
+|:---|:---|
+| `None` | 建物列を非表示（カテゴリ未選択） |
+| `Some(Structure)` | Structure の建物列を表示 |
+| `Some(Architecture)` | Architecture の建物列を表示 |
+| `Some(Plant)` | Plant の建物列を表示 |
+| `Some(Temporary)` | Temporary の建物列を表示 |
+
+書き込み元: `arch_category_action_system`（`src/interface/ui/interaction/mod.rs`）
+リセット元: `menu_visibility_system`（Architect以外のMenuStateに遷移した時）
+
 ## 共通仕様
 
 ### Escキーによるキャンセル
