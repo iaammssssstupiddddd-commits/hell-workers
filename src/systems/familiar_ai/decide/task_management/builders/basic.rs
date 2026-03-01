@@ -1,4 +1,3 @@
-use crate::events::ResourceReservationOp;
 use crate::systems::familiar_ai::decide::task_management::{AssignTaskContext, ReservationShadow};
 use crate::systems::jobs::WorkType;
 use crate::systems::soul_ai::execute::task_execution::types::{
@@ -6,7 +5,7 @@ use crate::systems::soul_ai::execute::task_execution::types::{
 };
 use bevy::prelude::*;
 
-use super::submit_assignment;
+use super::{submit_assignment_with_spec, AssignmentSpec, build_source_reservation_ops};
 
 pub fn issue_gather(
     work_type: WorkType,
@@ -24,19 +23,18 @@ pub fn issue_gather(
                 phase: GatherPhase::GoingToResource,
             },
         );
-    let reservation_ops = vec![ResourceReservationOp::ReserveSource {
-        source: ctx.task_entity,
-        amount: 1,
-    }];
-    submit_assignment(
+    let reservation_ops = build_source_reservation_ops(&[ctx.task_entity]);
+    submit_assignment_with_spec(
         ctx,
         queries,
         shadow,
-        work_type,
-        task_pos,
-        assigned_task,
-        reservation_ops,
-        already_commanded,
+        AssignmentSpec {
+            work_type,
+            task_pos,
+            assigned_task,
+            reservation_ops,
+            already_commanded,
+        },
     );
 }
 
@@ -54,19 +52,18 @@ pub fn issue_build(
                 phase: BuildPhase::GoingToBlueprint,
             },
         );
-    let reservation_ops = vec![ResourceReservationOp::ReserveSource {
-        source: ctx.task_entity,
-        amount: 1,
-    }];
-    submit_assignment(
+    let reservation_ops = build_source_reservation_ops(&[ctx.task_entity]);
+    submit_assignment_with_spec(
         ctx,
         queries,
         shadow,
-        WorkType::Build,
-        task_pos,
-        assigned_task,
-        reservation_ops,
-        already_commanded,
+        AssignmentSpec {
+            work_type: WorkType::Build,
+            task_pos,
+            assigned_task,
+            reservation_ops,
+            already_commanded,
+        },
     );
 }
 
@@ -83,19 +80,18 @@ pub fn issue_collect_sand(
             phase: crate::systems::soul_ai::execute::task_execution::types::CollectSandPhase::GoingToSand,
         },
     );
-    let reservation_ops = vec![ResourceReservationOp::ReserveSource {
-        source: ctx.task_entity,
-        amount: 1,
-    }];
-    submit_assignment(
+    let reservation_ops = build_source_reservation_ops(&[ctx.task_entity]);
+    submit_assignment_with_spec(
         ctx,
         queries,
         shadow,
-        WorkType::CollectSand,
-        task_pos,
-        assigned_task,
-        reservation_ops,
-        already_commanded,
+        AssignmentSpec {
+            work_type: WorkType::CollectSand,
+            task_pos,
+            assigned_task,
+            reservation_ops,
+            already_commanded,
+        },
     );
 }
 
@@ -112,19 +108,18 @@ pub fn issue_refine(
             phase: crate::systems::soul_ai::execute::task_execution::types::RefinePhase::GoingToMixer,
         },
     );
-    let reservation_ops = vec![ResourceReservationOp::ReserveSource {
-        source: ctx.task_entity,
-        amount: 1,
-    }];
-    submit_assignment(
+    let reservation_ops = build_source_reservation_ops(&[ctx.task_entity]);
+    submit_assignment_with_spec(
         ctx,
         queries,
         shadow,
-        WorkType::Refine,
-        task_pos,
-        assigned_task,
-        reservation_ops,
-        already_commanded,
+        AssignmentSpec {
+            work_type: WorkType::Refine,
+            task_pos,
+            assigned_task,
+            reservation_ops,
+            already_commanded,
+        },
     );
 }
 
@@ -141,19 +136,18 @@ pub fn issue_collect_bone(
             phase: crate::systems::soul_ai::execute::task_execution::types::CollectBonePhase::GoingToBone,
         },
     );
-    let reservation_ops = vec![ResourceReservationOp::ReserveSource {
-        source: ctx.task_entity,
-        amount: 1,
-    }];
-    submit_assignment(
+    let reservation_ops = build_source_reservation_ops(&[ctx.task_entity]);
+    submit_assignment_with_spec(
         ctx,
         queries,
         shadow,
-        WorkType::CollectBone,
-        task_pos,
-        assigned_task,
-        reservation_ops,
-        already_commanded,
+        AssignmentSpec {
+            work_type: WorkType::CollectBone,
+            task_pos,
+            assigned_task,
+            reservation_ops,
+            already_commanded,
+        },
     );
 }
 
@@ -183,19 +177,18 @@ pub fn issue_reinforce_floor(
                 phase: ReinforceFloorPhase::GoingToMaterialCenter,
             },
         );
-    let reservation_ops = vec![ResourceReservationOp::ReserveSource {
-        source: ctx.task_entity,
-        amount: 1,
-    }];
-    submit_assignment(
+    let reservation_ops = build_source_reservation_ops(&[ctx.task_entity]);
+    submit_assignment_with_spec(
         ctx,
         queries,
         shadow,
-        WorkType::ReinforceFloorTile,
-        task_pos,
-        assigned_task,
-        reservation_ops,
-        already_commanded,
+        AssignmentSpec {
+            work_type: WorkType::ReinforceFloorTile,
+            task_pos,
+            assigned_task,
+            reservation_ops,
+            already_commanded,
+        },
     );
 }
 
@@ -225,19 +218,18 @@ pub fn issue_pour_floor(
                 phase: PourFloorPhase::GoingToMaterialCenter,
             },
         );
-    let reservation_ops = vec![ResourceReservationOp::ReserveSource {
-        source: ctx.task_entity,
-        amount: 1,
-    }];
-    submit_assignment(
+    let reservation_ops = build_source_reservation_ops(&[ctx.task_entity]);
+    submit_assignment_with_spec(
         ctx,
         queries,
         shadow,
-        WorkType::PourFloorTile,
-        task_pos,
-        assigned_task,
-        reservation_ops,
-        already_commanded,
+        AssignmentSpec {
+            work_type: WorkType::PourFloorTile,
+            task_pos,
+            assigned_task,
+            reservation_ops,
+            already_commanded,
+        },
     );
 }
 
@@ -289,19 +281,18 @@ pub fn issue_coat_wall(
                 phase: CoatWallPhase::GoingToMaterialCenter,
             },
         );
-    let reservation_ops = vec![ResourceReservationOp::ReserveSource {
-        source: ctx.task_entity,
-        amount: 1,
-    }];
-    submit_assignment(
+    let reservation_ops = build_source_reservation_ops(&[ctx.task_entity]);
+    submit_assignment_with_spec(
         ctx,
         queries,
         shadow,
-        WorkType::CoatWall,
-        task_pos,
-        assigned_task,
-        reservation_ops,
-        already_commanded,
+        AssignmentSpec {
+            work_type: WorkType::CoatWall,
+            task_pos,
+            assigned_task,
+            reservation_ops,
+            already_commanded,
+        },
     );
 }
 
@@ -330,18 +321,17 @@ pub fn issue_frame_wall(
                 phase: FrameWallPhase::GoingToMaterialCenter,
             },
         );
-    let reservation_ops = vec![ResourceReservationOp::ReserveSource {
-        source: ctx.task_entity,
-        amount: 1,
-    }];
-    submit_assignment(
+    let reservation_ops = build_source_reservation_ops(&[ctx.task_entity]);
+    submit_assignment_with_spec(
         ctx,
         queries,
         shadow,
-        WorkType::FrameWallTile,
-        task_pos,
-        assigned_task,
-        reservation_ops,
-        already_commanded,
+        AssignmentSpec {
+            work_type: WorkType::FrameWallTile,
+            task_pos,
+            assigned_task,
+            reservation_ops,
+            already_commanded,
+        },
     );
 }

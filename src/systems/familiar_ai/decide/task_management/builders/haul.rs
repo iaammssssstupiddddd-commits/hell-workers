@@ -1,4 +1,3 @@
-use crate::events::ResourceReservationOp;
 use crate::systems::familiar_ai::decide::task_management::{AssignTaskContext, ReservationShadow};
 use crate::systems::jobs::WorkType;
 use crate::systems::logistics::ResourceType;
@@ -7,7 +6,10 @@ use crate::systems::soul_ai::execute::task_execution::types::{
 };
 use bevy::prelude::*;
 
-use super::submit_assignment;
+use super::{
+    build_mixer_destination_reservation_ops, build_source_reservation_ops, build_wheelbarrow_reservation_ops,
+    submit_assignment_with_spec, AssignmentSpec,
+};
 
 /// 指定のソースアイテムを使って Blueprint 運搬を割り当てる（request 方式の遅延解決用）
 pub fn issue_haul_to_blueprint_with_source(
@@ -27,20 +29,18 @@ pub fn issue_haul_to_blueprint_with_source(
                 phase: HaulToBpPhase::GoingToItem,
             },
         );
-    let reservation_ops = vec![ResourceReservationOp::ReserveSource {
-        source: source_item,
-        amount: 1,
-    }];
-
-    submit_assignment(
+    let reservation_ops = build_source_reservation_ops(&[source_item]);
+    submit_assignment_with_spec(
         ctx,
         queries,
         shadow,
-        WorkType::Haul,
-        task_pos,
-        assigned_task,
-        reservation_ops,
-        already_commanded,
+        AssignmentSpec {
+            work_type: WorkType::Haul,
+            task_pos,
+            assigned_task,
+            reservation_ops,
+            already_commanded,
+        },
     );
 }
 
@@ -60,20 +60,18 @@ pub fn issue_haul_to_stockpile_with_source(
             phase: HaulPhase::GoingToItem,
         },
     );
-    let reservation_ops = vec![ResourceReservationOp::ReserveSource {
-        source: source_item,
-        amount: 1,
-    }];
-
-    submit_assignment(
+    let reservation_ops = build_source_reservation_ops(&[source_item]);
+    submit_assignment_with_spec(
         ctx,
         queries,
         shadow,
-        WorkType::Haul,
-        task_pos,
-        assigned_task,
-        reservation_ops,
-        already_commanded,
+        AssignmentSpec {
+            work_type: WorkType::Haul,
+            task_pos,
+            assigned_task,
+            reservation_ops,
+            already_commanded,
+        },
     );
 }
 
@@ -96,25 +94,23 @@ pub fn issue_haul_to_mixer(
             phase: crate::systems::soul_ai::execute::task_execution::types::HaulToMixerPhase::GoingToItem,
         },
     );
-    let mut reservation_ops = vec![ResourceReservationOp::ReserveSource {
-        source: source_item,
-        amount: 1,
-    }];
-    if !mixer_already_reserved {
-        reservation_ops.push(ResourceReservationOp::ReserveMixerDestination {
-            target: mixer,
-            resource_type: item_type,
-        });
-    }
-    submit_assignment(
+    let mut reservation_ops = build_source_reservation_ops(&[source_item]);
+    reservation_ops.extend(build_mixer_destination_reservation_ops(
+        mixer,
+        item_type,
+        mixer_already_reserved,
+    ));
+    submit_assignment_with_spec(
         ctx,
         queries,
         shadow,
-        WorkType::HaulToMixer,
-        task_pos,
-        assigned_task,
-        reservation_ops,
-        already_commanded,
+        AssignmentSpec {
+            work_type: WorkType::HaulToMixer,
+            task_pos,
+            assigned_task,
+            reservation_ops,
+            already_commanded,
+        },
     );
 }
 
@@ -143,54 +139,18 @@ pub fn issue_haul_with_wheelbarrow(
             },
         );
 
-    let mut reservation_ops = vec![
-        // 手押し車自体をソース予約して二重使用を防止
-        ResourceReservationOp::ReserveSource {
-            source: wheelbarrow,
-            amount: 1,
-        },
-    ];
-    // 目的地をアイテム数分予約
-    for &item in &items {
-        match destination {
-            crate::systems::logistics::transport_request::WheelbarrowDestination::Stockpile(_)
-            | crate::systems::logistics::transport_request::WheelbarrowDestination::Blueprint(_) => {
-                // Relationship で管理するため ReserveDestination は不要
-            }
-            crate::systems::logistics::transport_request::WheelbarrowDestination::Mixer {
-                entity: target,
-                resource_type,
-            } => {
-                let item_type = queries
-                    .items
-                    .get(item)
-                    .ok()
-                    .map(|(it, _)| it.0)
-                    .unwrap_or(resource_type);
-                reservation_ops.push(ResourceReservationOp::ReserveMixerDestination {
-                    target,
-                    resource_type: item_type,
-                });
-            }
-        }
-    }
-    // 全アイテムをソース予約
-    for &item in &items {
-        reservation_ops.push(ResourceReservationOp::ReserveSource {
-            source: item,
-            amount: 1,
-        });
-    }
-
-    submit_assignment(
+    let reservation_ops = build_wheelbarrow_reservation_ops(queries, wheelbarrow, &destination, &items, &items);
+    submit_assignment_with_spec(
         ctx,
         queries,
         shadow,
-        WorkType::WheelbarrowHaul,
-        task_pos,
-        assigned_task,
-        reservation_ops,
-        already_commanded,
+        AssignmentSpec {
+            work_type: WorkType::WheelbarrowHaul,
+            task_pos,
+            assigned_task,
+            reservation_ops,
+            already_commanded,
+        },
     );
 }
 
@@ -221,20 +181,18 @@ pub fn issue_return_wheelbarrow(
             },
         );
 
-    let reservation_ops = vec![ResourceReservationOp::ReserveSource {
-        source: wheelbarrow,
-        amount: 1,
-    }];
-
-    submit_assignment(
+    let reservation_ops = build_source_reservation_ops(&[wheelbarrow]);
+    submit_assignment_with_spec(
         ctx,
         queries,
         shadow,
-        WorkType::WheelbarrowHaul,
-        task_pos,
-        assigned_task,
-        reservation_ops,
-        already_commanded,
+        AssignmentSpec {
+            work_type: WorkType::WheelbarrowHaul,
+            task_pos,
+            assigned_task,
+            reservation_ops,
+            already_commanded,
+        },
     );
 }
 
@@ -269,27 +227,20 @@ pub fn issue_collect_sand_with_wheelbarrow_to_blueprint(
             },
         );
 
-    let reservation_ops = vec![
-        ResourceReservationOp::ReserveSource {
-            source: wheelbarrow,
-            amount: 1,
-        },
-        ResourceReservationOp::ReserveSource {
-            source: source_entity,
-            amount: 1,
-        },
-    ];
-    // Relationship で管理するため ReserveDestination は不要
-
-    submit_assignment(
+    let destination =
+        crate::systems::logistics::transport_request::WheelbarrowDestination::Blueprint(blueprint);
+    let reservation_ops = build_wheelbarrow_reservation_ops(queries, wheelbarrow, &destination, &[source_entity], &[]);
+    submit_assignment_with_spec(
         ctx,
         queries,
         shadow,
-        WorkType::WheelbarrowHaul,
-        task_pos,
-        assigned_task,
-        reservation_ops,
-        already_commanded,
+        AssignmentSpec {
+            work_type: WorkType::WheelbarrowHaul,
+            task_pos,
+            assigned_task,
+            reservation_ops,
+            already_commanded,
+        },
     );
 }
 
@@ -324,27 +275,20 @@ pub fn issue_collect_bone_with_wheelbarrow_to_blueprint(
             },
         );
 
-    let reservation_ops = vec![
-        ResourceReservationOp::ReserveSource {
-            source: wheelbarrow,
-            amount: 1,
-        },
-        ResourceReservationOp::ReserveSource {
-            source: source_entity,
-            amount: 1,
-        },
-    ];
-    // Relationship で管理するため ReserveDestination は不要
-
-    submit_assignment(
+    let destination =
+        crate::systems::logistics::transport_request::WheelbarrowDestination::Blueprint(blueprint);
+    let reservation_ops = build_wheelbarrow_reservation_ops(queries, wheelbarrow, &destination, &[source_entity], &[]);
+    submit_assignment_with_spec(
         ctx,
         queries,
         shadow,
-        WorkType::WheelbarrowHaul,
-        task_pos,
-        assigned_task,
-        reservation_ops,
-        already_commanded,
+        AssignmentSpec {
+            work_type: WorkType::WheelbarrowHaul,
+            task_pos,
+            assigned_task,
+            reservation_ops,
+            already_commanded,
+        },
     );
 }
 
@@ -379,25 +323,19 @@ pub fn issue_collect_bone_with_wheelbarrow_to_floor(
             },
         );
 
-    let reservation_ops = vec![
-        ResourceReservationOp::ReserveSource {
-            source: wheelbarrow,
-            amount: 1,
-        },
-        ResourceReservationOp::ReserveSource {
-            source: source_entity,
-            amount: 1,
-        },
-    ];
-
-    submit_assignment(
+    let destination =
+        crate::systems::logistics::transport_request::WheelbarrowDestination::Stockpile(site_entity);
+    let reservation_ops = build_wheelbarrow_reservation_ops(queries, wheelbarrow, &destination, &[source_entity], &[]);
+    submit_assignment_with_spec(
         ctx,
         queries,
         shadow,
-        WorkType::WheelbarrowHaul,
-        task_pos,
-        assigned_task,
-        reservation_ops,
-        already_commanded,
+        AssignmentSpec {
+            work_type: WorkType::WheelbarrowHaul,
+            task_pos,
+            assigned_task,
+            reservation_ops,
+            already_commanded,
+        },
     );
 }
