@@ -7,6 +7,7 @@ use crate::systems::logistics::{Stockpile, ZoneType};
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
+use std::collections::{HashSet, VecDeque};
 
 pub fn zone_placement_system(
     buttons: Res<ButtonInput<MouseButton>>,
@@ -130,6 +131,7 @@ pub fn zone_removal_system(
     mut world_map: ResMut<WorldMap>,
     mut commands: Commands,
     mut q_sprites: Query<&mut Sprite>,
+    mut preview_state: ResMut<ZoneRemovalPreviewState>,
 ) {
     if ui_input_state.pointer_over_ui {
         return;
@@ -147,13 +149,14 @@ pub fn zone_removal_system(
     // 開始
     if buttons.just_pressed(MouseButton::Left) {
         task_context.0 = TaskMode::ZoneRemoval(zone_type, Some(snapped_pos));
+        preview_state.clear();
         return;
     }
 
     // プレビュー更新 (ドラッグ中のみ)
     if let Some(start_pos) = start_pos_opt {
         let area = TaskArea::from_points(start_pos, snapped_pos);
-        update_removal_preview(&world_map, &area, &mut q_sprites);
+        update_removal_preview(&world_map, &area, &mut q_sprites, &mut preview_state);
     }
 
     // 確定
@@ -165,9 +168,7 @@ pub fn zone_removal_system(
             // Shift押下で継続、そうでなければ解除
             task_context.0 = TaskMode::ZoneRemoval(zone_type, None);
         }
-        // プレビュー解除 (全体を元の色に戻す簡易実装)
-        // FIXME: パフォーマンス最適化の余地あり
-        reset_stockpile_colors(&world_map, &mut q_sprites);
+        clear_removal_preview(&world_map, &mut q_sprites, &mut preview_state);
         return;
     }
 
@@ -175,11 +176,24 @@ pub fn zone_removal_system(
     if buttons.just_pressed(MouseButton::Right) {
         if start_pos_opt.is_some() {
             task_context.0 = TaskMode::ZoneRemoval(zone_type, None);
-            reset_stockpile_colors(&world_map, &mut q_sprites);
+            clear_removal_preview(&world_map, &mut q_sprites, &mut preview_state);
         } else {
             task_context.0 = TaskMode::None;
             next_play_mode.set(PlayMode::Normal);
         }
+    }
+}
+
+#[derive(Default, Resource)]
+pub struct ZoneRemovalPreviewState {
+    direct: HashSet<(i32, i32)>,
+    fragments: HashSet<(i32, i32)>,
+}
+
+impl ZoneRemovalPreviewState {
+    fn clear(&mut self) {
+        self.direct.clear();
+        self.fragments.clear();
     }
 }
 
@@ -203,7 +217,7 @@ fn identify_removal_targets(
     let max_grid = WorldMap::world_to_grid(area.max - Vec2::splat(0.1));
 
     let mut direct_removal = Vec::new();
-    let mut remaining_candidates = std::collections::HashSet::new();
+    let mut remaining_candidates = HashSet::new();
 
     // 1. 直接削除対象と、残存候補の洗い出し
     // 全てのストックパイルを確認するのは効率が悪いので、
@@ -226,7 +240,7 @@ fn identify_removal_targets(
     }
 
     // 2. 残存候補の連結成分分析 (Flood Fill)
-    let mut visited = std::collections::HashSet::new();
+    let mut visited = HashSet::new();
     let mut clusters: Vec<Vec<(i32, i32)>> = Vec::new();
 
     for &start_node in &remaining_candidates {
@@ -235,7 +249,7 @@ fn identify_removal_targets(
         }
 
         let mut cluster = Vec::new();
-        let mut queue = std::collections::VecDeque::new();
+        let mut queue = VecDeque::new();
         queue.push_back(start_node);
         visited.insert(start_node);
 
@@ -298,40 +312,72 @@ fn update_removal_preview(
     world_map: &WorldMap,
     area: &TaskArea,
     q_sprites: &mut Query<&mut Sprite>,
+    state: &mut ZoneRemovalPreviewState,
 ) {
     let (direct, fragments) = identify_removal_targets(world_map, area);
+    let next_direct: HashSet<(i32, i32)> = direct.into_iter().collect();
+    let next_fragments: HashSet<(i32, i32)> = fragments.into_iter().collect();
 
-    // 全てリセット
-    // (非効率だが確実)
-    for (&_grid, &entity) in &world_map.stockpiles {
+    let prev_direct = state.direct.clone();
+    let prev_fragments = state.fragments.clone();
+
+    for grid in prev_direct.difference(&next_direct) {
+        if !next_fragments.contains(grid) {
+            set_stockpile_color(world_map, q_sprites, grid, stockpile_default_color());
+        }
+    }
+
+    for grid in prev_fragments.difference(&next_fragments) {
+        if !next_direct.contains(grid) {
+            set_stockpile_color(world_map, q_sprites, grid, stockpile_default_color());
+        }
+    }
+
+    for grid in next_direct.difference(&state.direct) {
+        set_stockpile_color(world_map, q_sprites, grid, stockpile_removal_color());
+    }
+
+    for grid in next_fragments.difference(&state.fragments) {
+        set_stockpile_color(world_map, q_sprites, grid, stockpile_fragment_color());
+    }
+
+    state.direct = next_direct;
+    state.fragments = next_fragments;
+}
+
+fn clear_removal_preview(
+    world_map: &WorldMap,
+    q_sprites: &mut Query<&mut Sprite>,
+    state: &mut ZoneRemovalPreviewState,
+) {
+    for grid in state.direct.iter().chain(state.fragments.iter()) {
+        set_stockpile_color(world_map, q_sprites, grid, stockpile_default_color());
+    }
+
+    state.clear();
+}
+
+fn set_stockpile_color(
+    world_map: &WorldMap,
+    q_sprites: &mut Query<&mut Sprite>,
+    grid: &(i32, i32),
+    color: Color,
+) {
+    if let Some(&entity) = world_map.stockpiles.get(grid) {
         if let Ok(mut sprite) = q_sprites.get_mut(entity) {
-            sprite.color = Color::srgba(1.0, 1.0, 0.0, 0.2); // Default
-        }
-    }
-
-    // 直接削除: 赤
-    for grid in direct {
-        if let Some(&entity) = world_map.stockpiles.get(&grid) {
-            if let Ok(mut sprite) = q_sprites.get_mut(entity) {
-                sprite.color = Color::srgba(1.0, 0.2, 0.2, 0.4);
-            }
-        }
-    }
-
-    // フラグメント削除: オレンジ
-    for grid in fragments {
-        if let Some(&entity) = world_map.stockpiles.get(&grid) {
-            if let Ok(mut sprite) = q_sprites.get_mut(entity) {
-                sprite.color = Color::srgba(1.0, 0.6, 0.0, 0.4);
-            }
+            sprite.color = color;
         }
     }
 }
 
-fn reset_stockpile_colors(world_map: &WorldMap, q_sprites: &mut Query<&mut Sprite>) {
-    for (_, &entity) in &world_map.stockpiles {
-        if let Ok(mut sprite) = q_sprites.get_mut(entity) {
-            sprite.color = Color::srgba(1.0, 1.0, 0.0, 0.2);
-        }
-    }
+fn stockpile_default_color() -> Color {
+    Color::srgba(1.0, 1.0, 0.0, 0.2)
+}
+
+fn stockpile_removal_color() -> Color {
+    Color::srgba(1.0, 0.2, 0.2, 0.4)
+}
+
+fn stockpile_fragment_color() -> Color {
+    Color::srgba(1.0, 0.6, 0.0, 0.4)
 }

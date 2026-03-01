@@ -115,4 +115,4 @@ pub use indicators::{
 };
 pub use input::familiar_command_input_system;
 pub use visualization::{designation_visual_system, familiar_command_visual_system};
-pub use zone_placement::{zone_placement_system, zone_removal_system};
+pub use zone_placement::{zone_placement_system, zone_removal_system, ZoneRemovalPreviewState};
