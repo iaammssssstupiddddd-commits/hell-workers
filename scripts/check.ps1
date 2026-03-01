@@ -4,7 +4,8 @@
 param(
     [switch]$Clean,
     [int]$KeepDays = 7,
-    [string]$LogDir = "logs"
+    [string]$LogDir = "logs",
+    [string]$TargetDir = "target"
 )
 
 # Create logs directory if it doesn't exist
@@ -31,12 +32,14 @@ $combinedLogFile = Join-Path $LogDir "build_combined_$timestamp.log"
 
 Write-Host "Running cargo check..." -ForegroundColor Cyan
 Write-Host "Error log: $errorLogFile" -ForegroundColor Gray
+Write-Host "Target dir: $TargetDir" -ForegroundColor Gray
 
 # Run cargo check and capture both stdout and stderr
-$process = Start-Process -FilePath "cargo" -ArgumentList "check" -NoNewWindow -Wait -PassThru -RedirectStandardOutput $combinedLogFile -RedirectStandardError $errorLogFile
+$checkArgs = @("check", "--target-dir", $TargetDir)
+$process = Start-Process -FilePath "cargo" -ArgumentList $checkArgs -NoNewWindow -Wait -PassThru -RedirectStandardOutput $combinedLogFile -RedirectStandardError $errorLogFile
 
 # Automatic cleanup to prevent bloat
-& "$PSScriptRoot\post-build-cleanup.ps1" -MaxSizeGB 3 | Out-Null
+& "$PSScriptRoot\post-build-cleanup.ps1" -MaxSizeGB 3 -TargetDir $TargetDir | Out-Null
 
 # Read and display errors if they exist
 if (Test-Path $errorLogFile) {
@@ -67,4 +70,3 @@ if (Test-Path $combinedLogFile) {
 
 Write-Host "`nBuild check completed successfully!" -ForegroundColor Green
 exit 0
-

@@ -155,7 +155,7 @@
 
 ### 最終確認ログ
 
-- 最終 `cargo check`: `2026-03-01` / `pass` (`CARGO_TARGET_DIR=/tmp/hell-workers-target-check cargo check`)
+- 最終 `cargo check`: `2026-03-01` / `pass` (`cargo check`)
 - 未解決エラー: なし（計画作成時点）
 
 ### Definition of Done

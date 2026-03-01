@@ -112,7 +112,7 @@ impl Plugin for VisualPlugin {
                 update_progress_bar_fill_system,
                 sync_progress_bar_position_system,
                 soul_status_visual_system,
-                task_link_system,
+                task_link_system.run_if(|debug: Res<crate::DebugVisible>| debug.0),
                 building_completion_system,
                 area_selection_indicator_system.run_if(|play_mode: Res<State<PlayMode>>| {
                     matches!(

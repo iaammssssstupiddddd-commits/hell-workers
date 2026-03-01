@@ -7,7 +7,10 @@
         "/home/satotakumi/projects/hell-workers/scripts/rust_analyzer_mcp_stdio_adapter.py",
         "/home/satotakumi/.cargo/bin/rust-analyzer-mcp"
       ],
-      "env": {}
+      "env": {
+        "CARGO_HOME": "/home/satotakumi/.cargo",
+        "HOME": "/home/satotakumi"
+      }
     },
     "docsrs-mcp": {
       "type": "stdio",

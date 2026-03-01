@@ -14,7 +14,7 @@
 ## Tech Stack & Targets
 - Engine: Bevy 0.18 (see `Cargo.toml`).
 - Language: Rust 2024 edition.
-- Build target: use native `cargo run` by default; if you need a Windows GNU build, `cargo build --target x86_64-pc-windows-gnu` is referenced in `CLAUDE.md`.
+- Build target: use native `cargo run` by default.
 
 ## Build, Test, and Development Commands
 - `cargo run`: build and run the game locally.
@@ -48,7 +48,7 @@
 - 新しい機能やシステムを実装する（特に Window, UI, Query, Commands周りなど）際は、推測でコードを書く前に以下のいずれかを行うこと：
   1. すでに正しく動いている他のプロジェクト内ソースコードの書き方を参考にする
   2. Web検索ツール等で `https://docs.rs/bevy/0.18.0/bevy/` や関連ドキュメントを確認する
-  3. ローカルの `~/.cargo/registry/src/` にあるBevyのソースコード（関数のシグネチャ）を検索して直接確認する
+  3. ローカルの `/home/satotakumi/.cargo/registry/src/` にあるBevyのソースコード（関数のシグネチャ）を検索して直接確認する
 - 実装後は `cargo check` を実行し、APIの変更によるエラー（メソッドが存在しない等）がないか必ず確認すること。
 
 ### MCP ツール運用フロー（rust-analyzer-mcp / docsrs-mcp）

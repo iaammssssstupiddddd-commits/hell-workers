@@ -104,7 +104,8 @@ fn has_collect_sand_demand(
 
             matches!(
                 (request.kind, request.resource_type),
-                (TransportRequestKind::DeliverToBlueprint, ResourceType::Sand)
+                (TransportRequestKind::DeliverToMixerSolid, ResourceType::Sand)
+                    | (TransportRequestKind::DeliverToBlueprint, ResourceType::Sand)
                     | (TransportRequestKind::DeliverToBlueprint, ResourceType::StasisMud)
                     | (
                         TransportRequestKind::DeliverToFloorConstruction,

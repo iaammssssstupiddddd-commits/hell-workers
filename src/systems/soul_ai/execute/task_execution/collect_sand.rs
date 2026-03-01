@@ -3,7 +3,9 @@ use super::context::TaskExecutionContext;
 use super::types::{AssignedTask, CollectSandPhase};
 use crate::assets::GameAssets;
 use crate::constants::*;
+use crate::systems::jobs::WorkType;
 use crate::systems::logistics::{ResourceItem, ResourceType};
+use crate::systems::logistics::transport_request::TransportRequestKind;
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
 
@@ -61,6 +63,7 @@ pub fn handle_collect_sand_task(
                         ctx,
                         target,
                         res_transform.translation,
+                        collect_amount_for_target(ctx, target),
                         commands,
                         game_assets,
                     );
@@ -93,6 +96,7 @@ pub fn handle_collect_sand_task(
                     ctx,
                     target,
                     res_transform.translation,
+                    collect_amount_for_target(ctx, target),
                     commands,
                     game_assets,
                 );
@@ -135,11 +139,12 @@ fn complete_collect_sand_now(
     ctx: &mut TaskExecutionContext,
     target: Entity,
     source_translation: Vec3,
+    collect_amount: u32,
     commands: &mut Commands,
     game_assets: &Res<GameAssets>,
 ) {
     // Sand をドロップ（砂タイル/砂置き場とも無限ソースとして扱う）
-    for i in 0..SAND_DROP_AMOUNT {
+    for i in 0..collect_amount {
         let offset = Vec3::new((i as f32) * 4.0, 0.0, 0.0);
         commands.spawn((
             ResourceItem(ResourceType::Sand),
@@ -167,4 +172,43 @@ fn complete_collect_sand_now(
         },
     );
     ctx.soul.fatigue = (ctx.soul.fatigue + FATIGUE_GAIN_ON_COMPLETION).min(1.0);
+}
+
+fn collect_amount_for_target(ctx: &TaskExecutionContext, target: Entity) -> u32 {
+    let familiar = ctx
+        .queries
+        .designation
+        .designations
+        .iter()
+        .find_map(
+            |(entity, _, designation, managed_by_opt, _, _, _, _)| {
+                if entity == target && designation.work_type == WorkType::CollectSand {
+                    managed_by_opt.map(|managed_by| managed_by.0)
+                } else {
+                    None
+                }
+            },
+        );
+
+    let Some(familiar) = familiar else {
+        return SAND_DROP_AMOUNT.max(1);
+    };
+
+    let remaining_sand_demand = ctx
+        .queries
+        .transport_request_status
+        .iter()
+        .filter(|(request, _, _, _, _)| {
+            request.issued_by == familiar
+                && request.resource_type == ResourceType::Sand
+                && matches!(
+                    request.kind,
+                    TransportRequestKind::DeliverToMixerSolid
+                        | TransportRequestKind::DeliverToBlueprint
+                )
+        })
+        .map(|(_, demand, _, _, _)| demand.remaining())
+        .sum::<u32>();
+
+    remaining_sand_demand.max(SAND_DROP_AMOUNT).max(1)
 }

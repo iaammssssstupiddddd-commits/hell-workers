@@ -56,11 +56,7 @@ pub fn placement_ghost_system(
         return;
     }
     // バケツ置き場 companion のときは build_context が None でも表示する
-    let building_type = if companion_kind == Some(CompanionPlacementKind::SandPile) {
-        BuildingType::SandPile
-    } else {
-        building_type_opt.unwrap_or(BuildingType::Floor)
-    };
+    let building_type = building_type_opt.unwrap_or(BuildingType::Floor);
 
     let Ok((camera, camera_transform)) = q_camera.single() else {
         return;
@@ -245,19 +241,12 @@ pub fn placement_ghost_system(
     if let Some(companion) = companion_state.0.as_ref() {
         let partner_type = match companion.parent_kind {
             CompanionParentKind::Tank => BuildingType::Tank,
-            CompanionParentKind::MudMixer => BuildingType::MudMixer,
         };
         let partner_base =
             WorldMap::grid_to_world(companion.parent_anchor.0, companion.parent_anchor.1);
-        let partner_pos = match partner_type {
-            BuildingType::Tank | BuildingType::MudMixer => {
-                partner_base + Vec2::new(TILE_SIZE * 0.5, TILE_SIZE * 0.5)
-            }
-            _ => partner_base,
-        };
+        let partner_pos = partner_base + Vec2::new(TILE_SIZE * 0.5, TILE_SIZE * 0.5);
         let (partner_texture, partner_size) = match partner_type {
             BuildingType::Tank => (game_assets.tank_empty.clone(), Vec2::splat(TILE_SIZE * 2.0)),
-            BuildingType::MudMixer => (game_assets.mud_mixer.clone(), Vec2::splat(TILE_SIZE * 2.0)),
             _ => (game_assets.dirt.clone(), Vec2::splat(TILE_SIZE)),
         };
         let partner_color = Color::srgba(0.8, 0.9, 1.0, 0.35);
@@ -302,7 +291,7 @@ fn occupied_grids_for_parent(
     anchor: (i32, i32),
 ) -> [(i32, i32); 4] {
     match parent_kind {
-        CompanionParentKind::Tank | CompanionParentKind::MudMixer => [
+        CompanionParentKind::Tank => [
             anchor,
             (anchor.0 + 1, anchor.1),
             (anchor.0, anchor.1 + 1),

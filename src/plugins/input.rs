@@ -41,8 +41,12 @@ fn pan_camera_ui_guard_system(
 pub fn debug_toggle_system(
     buttons: Res<ButtonInput<KeyCode>>,
     mut visible: ResMut<crate::DebugVisible>,
+    mut config_store: ResMut<GizmoConfigStore>,
 ) {
     if buttons.just_pressed(KeyCode::F12) {
         visible.0 = !visible.0;
+        for (_, config, _) in config_store.iter_mut() {
+            config.enabled = visible.0;
+        }
     }
 }
