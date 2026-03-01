@@ -1,12 +1,13 @@
 //! サブメニュー UI (Architect, Zones, Orders)
 
 use crate::interface::ui::components::{
-    ArchitectSubMenu, DreamSubMenu, MenuAction, MenuButton, OrdersSubMenu, UiInputBlocker,
-    ZonesSubMenu,
+    ArchitectBuildingPanel, ArchitectCategoryListPanel, ArchitectSubMenu, DreamSubMenu, MenuAction,
+    MenuButton, OrdersSubMenu, UiInputBlocker, ZonesSubMenu,
 };
 use crate::interface::ui::theme::UiTheme;
-use crate::systems::jobs::BuildingType;
+use crate::systems::jobs::{BuildingCategory, BuildingType};
 use crate::systems::logistics::ZoneType;
+use bevy::ecs::hierarchy::ChildSpawnerCommands;
 use bevy::prelude::*;
 use bevy::ui::RelativeCursorPosition;
 
@@ -23,34 +24,109 @@ pub fn spawn_submenus(
     spawn_dream_submenu(commands, game_assets, theme, parent_entity);
 }
 
+fn spawn_menu_button(
+    parent: &mut ChildSpawnerCommands,
+    game_assets: &Res<crate::assets::GameAssets>,
+    theme: &UiTheme,
+    label: &str,
+    action: MenuAction,
+    bg_color: Color,
+) {
+    parent
+        .spawn((
+            Button,
+            Node {
+                width: Val::Percent(100.0),
+                height: Val::Px(40.0),
+                margin: UiRect::bottom(Val::Px(5.0)),
+                justify_content: JustifyContent::Center,
+                align_items: AlignItems::Center,
+                ..default()
+            },
+            BackgroundColor(bg_color),
+            MenuButton(action),
+        ))
+        .with_children(|button| {
+            button.spawn((
+                Text::new(label),
+                TextFont {
+                    font: game_assets.font_ui.clone(),
+                    font_size: theme.typography.font_size_title,
+                    ..default()
+                },
+                TextColor(theme.colors.text_primary),
+            ));
+        });
+}
+
+fn spawn_category_button(
+    parent: &mut ChildSpawnerCommands,
+    game_assets: &Res<crate::assets::GameAssets>,
+    theme: &UiTheme,
+    category: BuildingCategory,
+) {
+    spawn_menu_button(
+        parent,
+        game_assets,
+        theme,
+        category.label(),
+        MenuAction::SelectArchitectCategory(Some(category)),
+        theme.colors.button_default,
+    );
+}
+
+fn spawn_building_panel(
+    parent: &mut ChildSpawnerCommands,
+    game_assets: &Res<crate::assets::GameAssets>,
+    theme: &UiTheme,
+    category: BuildingCategory,
+    items: &[(&str, MenuAction)],
+) {
+    parent
+        .spawn((
+            Node {
+                display: Display::None,
+                width: Val::Px(theme.sizes.submenu_width),
+                height: Val::Auto,
+                flex_direction: FlexDirection::Column,
+                padding: UiRect::left(Val::Px(5.0)),
+                border: UiRect::left(Val::Px(1.0)),
+                ..default()
+            },
+            BorderColor::all(theme.colors.border_default),
+            ArchitectBuildingPanel(category),
+        ))
+        .with_children(|panel| {
+            for (label, action) in items {
+                spawn_menu_button(
+                    panel,
+                    game_assets,
+                    theme,
+                    label,
+                    action.clone(),
+                    theme.colors.button_default,
+                );
+            }
+        });
+}
+
 fn spawn_architect_submenu(
     commands: &mut Commands,
     game_assets: &Res<crate::assets::GameAssets>,
     theme: &UiTheme,
     parent_entity: Entity,
 ) {
-    let building_items = [
-        ("Wall", BuildingType::Wall),
-        ("Door", BuildingType::Door),
-        ("Tank", BuildingType::Tank),
-        ("MudMixer", BuildingType::MudMixer),
-        ("RestArea", BuildingType::RestArea),
-        ("Bridge", BuildingType::Bridge),
-        ("SandPile", BuildingType::SandPile),
-        ("BonePile", BuildingType::BonePile),
-        ("WB Parking", BuildingType::WheelbarrowParking),
-    ];
-
     let submenu = commands
         .spawn((
             Node {
                 display: Display::None,
-                width: Val::Px(theme.sizes.submenu_width),
+                width: Val::Auto,
                 height: Val::Auto,
                 position_type: PositionType::Absolute,
                 left: Val::Px(theme.sizes.submenu_left_architect),
                 bottom: Val::Px(theme.spacing.bottom_bar_height),
-                flex_direction: FlexDirection::Column,
+                flex_direction: FlexDirection::Row,
+                align_items: AlignItems::Start,
                 padding: UiRect::all(Val::Px(5.0)),
                 ..default()
             },
@@ -63,61 +139,75 @@ fn spawn_architect_submenu(
     commands.entity(parent_entity).add_child(submenu);
 
     commands.entity(submenu).with_children(|parent| {
-        // Building items
-        for (label, kind) in building_items {
-            parent
-                .spawn((
-                    Button,
-                    Node {
-                        width: Val::Percent(100.0),
-                        height: Val::Px(40.0),
-                        margin: UiRect::bottom(Val::Px(5.0)),
-                        justify_content: JustifyContent::Center,
-                        align_items: AlignItems::Center,
-                        ..default()
-                    },
-                    BackgroundColor(theme.colors.button_default),
-                    MenuButton(MenuAction::SelectBuild(kind)),
-                ))
-                .with_children(|button| {
-                    button.spawn((
-                        Text::new(label),
-                        TextFont {
-                            font: game_assets.font_ui.clone(),
-                            font_size: theme.typography.font_size_title,
-                            ..default()
-                        },
-                        TextColor(theme.colors.text_primary),
-                    ));
-                });
-        }
-
-        // Floor area placement button
+        // カテゴリ選択パネル（常時表示・左列）
         parent
             .spawn((
-                Button,
                 Node {
-                    width: Val::Percent(100.0),
-                    height: Val::Px(40.0),
-                    margin: UiRect::bottom(Val::Px(5.0)),
-                    justify_content: JustifyContent::Center,
-                    align_items: AlignItems::Center,
+                    display: Display::Flex,
+                    width: Val::Px(theme.sizes.submenu_width),
+                    height: Val::Auto,
+                    flex_direction: FlexDirection::Column,
                     ..default()
                 },
-                BackgroundColor(theme.colors.button_default),
-                MenuButton(MenuAction::SelectFloorPlace),
+                ArchitectCategoryListPanel,
             ))
-            .with_children(|button| {
-                button.spawn((
-                    Text::new("Floor"),
-                    TextFont {
-                        font: game_assets.font_ui.clone(),
-                        font_size: theme.typography.font_size_title,
-                        ..default()
-                    },
-                    TextColor(theme.colors.text_primary),
-                ));
+            .with_children(|cat_panel| {
+                spawn_category_button(cat_panel, game_assets, theme, BuildingCategory::Structure);
+                spawn_category_button(cat_panel, game_assets, theme, BuildingCategory::Architecture);
+                spawn_category_button(cat_panel, game_assets, theme, BuildingCategory::Plant);
+                spawn_category_button(cat_panel, game_assets, theme, BuildingCategory::Temporary);
             });
+
+        // Structure パネル
+        spawn_building_panel(
+            parent,
+            game_assets,
+            theme,
+            BuildingCategory::Structure,
+            &[
+                ("Wall", MenuAction::SelectBuild(BuildingType::Wall)),
+                ("Floor", MenuAction::SelectFloorPlace),
+                ("Bridge", MenuAction::SelectBuild(BuildingType::Bridge)),
+            ],
+        );
+
+        // Architecture パネル
+        spawn_building_panel(
+            parent,
+            game_assets,
+            theme,
+            BuildingCategory::Architecture,
+            &[("Door", MenuAction::SelectBuild(BuildingType::Door))],
+        );
+
+        // Plant パネル
+        spawn_building_panel(
+            parent,
+            game_assets,
+            theme,
+            BuildingCategory::Plant,
+            &[
+                ("Tank", MenuAction::SelectBuild(BuildingType::Tank)),
+                ("MudMixer", MenuAction::SelectBuild(BuildingType::MudMixer)),
+            ],
+        );
+
+        // Temporary パネル
+        spawn_building_panel(
+            parent,
+            game_assets,
+            theme,
+            BuildingCategory::Temporary,
+            &[
+                ("RestArea", MenuAction::SelectBuild(BuildingType::RestArea)),
+                (
+                    "WB Parking",
+                    MenuAction::SelectBuild(BuildingType::WheelbarrowParking),
+                ),
+                ("SandPile", MenuAction::SelectBuild(BuildingType::SandPile)),
+                ("BonePile", MenuAction::SelectBuild(BuildingType::BonePile)),
+            ],
+        );
     });
 }
 

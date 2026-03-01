@@ -137,6 +137,7 @@ pub(super) fn handle_pressed_action(
                 ev_max_soul_changed,
             );
         }
+        MenuAction::SelectArchitectCategory(_) => {}
         MenuAction::TogglePause => {
             if time.is_paused() {
                 time.unpause();

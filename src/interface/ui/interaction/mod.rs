@@ -168,6 +168,26 @@ pub fn ui_interaction_system(
     }
 }
 
+/// `SelectArchitectCategory` アクションを処理する専用システム
+pub fn arch_category_action_system(
+    interaction_query: Query<(&Interaction, &MenuButton), (Changed<Interaction>, With<Button>)>,
+    mut arch_category_state: ResMut<crate::interface::ui::components::ArchitectCategoryState>,
+) {
+    for (interaction, menu_button) in interaction_query.iter() {
+        if *interaction != Interaction::Pressed {
+            continue;
+        }
+        if let MenuAction::SelectArchitectCategory(category) = menu_button.0 {
+            // 同じカテゴリを再度押した場合はトグルして非表示にする
+            arch_category_state.0 = if arch_category_state.0 == category {
+                None
+            } else {
+                category
+            };
+        }
+    }
+}
+
 pub fn door_lock_action_system(
     interaction_query: Query<(&Interaction, &MenuButton), (Changed<Interaction>, With<Button>)>,
     mut q_doors: Query<(&Transform, &mut Door, &mut Sprite)>,
