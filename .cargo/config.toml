@@ -21,4 +21,5 @@ ROCKSDB_LIB_DIR = "/usr/lib"
 
 [build]
 # target = "x86_64-pc-windows-gnu" # クロスコンパイルを無効化（Linuxネイティブをデフォルトに）
+target-dir = ".tmp_target" # root所有のtarget/を回避して通常ユーザーでビルド
 incremental = true # ネイティブビルドではインクリメンタルを有効化

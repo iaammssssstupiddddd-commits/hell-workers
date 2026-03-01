@@ -7,7 +7,7 @@ use crate::systems::command::{
     AreaEditClipboard, AreaEditHistory, AreaEditPresets, AreaEditSession, assign_task_system,
     blueprint_cancel_cleanup_system, familiar_command_input_system,
     task_area_edit_history_shortcuts_system, task_area_selection_system, zone_placement_system,
-    zone_removal_system,
+    zone_removal_system, ZoneRemovalPreviewState,
 };
 use crate::systems::dream_tree_planting::dream_tree_planting_system;
 use crate::systems::jobs::door::{door_auto_close_system, door_auto_open_system};
@@ -45,6 +45,7 @@ impl Plugin for LogicPlugin {
         app.init_resource::<AreaEditHistory>();
         app.init_resource::<AreaEditClipboard>();
         app.init_resource::<AreaEditPresets>();
+        app.init_resource::<ZoneRemovalPreviewState>();
         app.init_resource::<crate::entities::familiar::FamiliarColorAllocator>();
         app.init_resource::<RoomDetectionState>();
         app.init_resource::<RoomTileLookup>();
