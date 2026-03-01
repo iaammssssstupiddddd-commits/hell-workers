@@ -183,3 +183,11 @@ Windows の PE 形式では、一つの DLL からエクスポートできるシ
 - 原因調査: `cargo run --features bevy/debug` で実行し、衝突した system/query 名を表示して特定する。
 - 修正方針: `Without<T>` で Query を排他的に分離するか、`ParamSet` に統合して同時借用を避ける。
 - 既存共通クエリ（`TaskQueries` など）がある箇所では、同種コンポーネントへの重複 Query を新設しない。
+
+### 4. Linux Wayland 初期化失敗（`NoCompositor`）
+`Failed to build event loop: ... WaylandError(Connection(NoCompositor))` が出る場合、無効な `WAYLAND_DISPLAY` を優先してしまっている可能性があります。
+
+- 実行時に `HW_WINDOW_BACKEND=x11` を指定すると、Wayland を無効化して X11 を強制できます。
+  - 例: `HW_WINDOW_BACKEND=x11 cargo run`
+- `HW_WINDOW_BACKEND=auto`（既定）では、Wayland ソケットへ接続できない場合に自動で X11 へフォールバックします。
+- Wayland を明示使用する場合は `HW_WINDOW_BACKEND=wayland` を指定してください。
