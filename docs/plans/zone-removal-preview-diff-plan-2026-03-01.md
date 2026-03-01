@@ -5,7 +5,7 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `zone-removal-preview-diff-plan-2026-03-01` |
-| ステータス | `Draft` |
+| ステータス | `Completed` |
 | 作成日 | `2026-03-01` |
 | 最終更新日 | `2026-03-01` |
 | 作成者 | `Codex` |
@@ -68,8 +68,8 @@
   - `src/systems/command/zone_placement.rs`
   - `src/plugins/*`（resource 初期化が必要な場合）
 - 完了条件:
-  - [ ] 前回対象集合を保持できる
-  - [ ] 全件リセットを回避できる土台がある
+  - [x] 前回対象集合を保持できる
+  - [x] 全件リセットを回避できる土台がある
 - 検証:
   - `cargo check`
 
@@ -81,8 +81,8 @@
 - 変更ファイル:
   - `src/systems/command/zone_placement.rs`
 - 完了条件:
-  - [ ] プレビュー更新が差分のみで完結
-  - [ ] 色表示が既存仕様と一致
+  - [x] プレビュー更新が差分のみで完結
+  - [x] 色表示が既存仕様と一致
 - 検証:
   - `cargo check`
 
@@ -95,8 +95,8 @@
   - `src/systems/command/zone_placement.rs`
   - `docs/logistics.md`（必要時）
 - 完了条件:
-  - [ ] 残留ハイライトが起きない
-  - [ ] `cargo check` 成功
+  - [x] 残留ハイライトが起きない
+  - [x] `cargo check` 成功
 - 検証:
   - `cargo check`
 
@@ -131,15 +131,15 @@
 
 ### 現在地
 
-- 進捗: `0%`
-- 完了済みマイルストーン: なし
-- 未着手/進行中: M1〜M3 未着手
+- 進捗: `100%`
+- 完了済みマイルストーン: `M1` / `M2` / `M3`
+- 未着手/進行中: なし
 
 ### 次のAIが最初にやること
 
-1. 現行 `update_removal_preview` の入出力を整理する。
-2. `ZoneRemovalPreviewState` を追加して前回集合を保持する。
-3. 差分更新へ置換し、確定/キャンセル時の reset を検証する。
+1. `identify_removal_targets` の返り値契約が変わる場合は差分適用ロジックを同時更新する。
+2. 新規色状態を増やす場合は `ZoneRemovalPreviewState` の保持集合を拡張する。
+3. 変更後に `cargo check` を実行する。
 
 ### ブロッカー/注意点
 
@@ -152,17 +152,18 @@
 
 ### 最終確認ログ
 
-- 最終 `cargo check`: `2026-03-01` / `pass`
+- 最終 `cargo check`: `2026-03-01` / `pass` (`cargo check --target-dir /tmp/hell-workers-target`)
 - 未解決エラー: なし（計画作成時点）
 
 ### Definition of Done
 
-- [ ] 目的に対応するマイルストーンが全て完了
-- [ ] 影響ドキュメントが更新済み
-- [ ] `cargo check` が成功
+- [x] 目的に対応するマイルストーンが全て完了
+- [x] 影響ドキュメントが更新済み
+- [x] `cargo check` が成功
 
 ## 10. 更新履歴
 
 | 日付 | 変更者 | 内容 |
 | --- | --- | --- |
 | `2026-03-01` | `Codex` | 初版作成 |
+| `2026-03-01` | `Codex` | 実装完了に合わせてステータス・進捗・DoDを更新 |

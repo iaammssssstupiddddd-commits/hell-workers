@@ -5,7 +5,7 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `ui-submenu-spec-driven-plan-2026-03-01` |
-| ステータス | `In Progress` |
+| ステータス | `Completed` |
 | 作成日 | `2026-03-01` |
 | 最終更新日 | `2026-03-01` |
 | 作成者 | `Codex` |
@@ -97,8 +97,8 @@
   - `docs/task_list_ui.md`（必要時）
   - `docs/DEVELOPMENT.md`（必要時）
 - 完了条件:
-  - [ ] 構造が読みやすく、責務境界が明確
-  - [ ] `cargo check` 成功
+  - [x] 構造が読みやすく、責務境界が明確
+  - [x] `cargo check` 成功
 - 検証:
   - `cargo check`
 
@@ -133,9 +133,9 @@
 
 ### 現在地
 
-- 進捗: `90%`（M1〜M2完了、M3は必要時にドキュメント同期）
-- 完了済みマイルストーン: Architectカテゴリ2段階メニュー実装（本計画外で先行実装）
-- 未着手/進行中: M1〜M3（共通コンテナ抽出・spec化・ドキュメント同期）
+- 進捗: `100%`
+- 完了済みマイルストーン: `M1` / `M2` / `M3`
+- 未着手/進行中: なし
 
 ### Architect カテゴリ構造（実装済み）
 
@@ -148,9 +148,9 @@
 
 ### 次のAIが最初にやること
 
-1. Zones/Orders/Dream の共通 `Node` フィールドを `spawn_submenu_container` に抽出する。
-2. `SubmenuSpec` の最小定義を作り Zones/Orders/Dream から適用する。
-3. Architect は既存実装を維持しつつ、コンテナ生成部分のみ共通化する。
+1. メニュー項目追加時は `*_menu_specs` と `architect_building_specs` のみを更新する。
+2. コンテナ共通スタイル変更時は `spawn_submenu_container` を単一更新点として使う。
+3. 変更後に `cargo check` を実行する。
 
 ### ブロッカー/注意点
 
@@ -166,17 +166,18 @@
 
 ### 最終確認ログ
 
-- 最終 `cargo check`: `実装完了後に再実行`
-- 未解決エラー: なし（実行後に確認予定）
+- 最終 `cargo check`: `2026-03-01` / `pass` (`cargo check --target-dir /tmp/hell-workers-target`)
+- 未解決エラー: なし
 
 ### Definition of Done
 
-- [ ] 目的に対応するマイルストーンが全て完了
-- [ ] 影響ドキュメントが更新済み
-- [ ] `cargo check` が成功
+- [x] 目的に対応するマイルストーンが全て完了
+- [x] 影響ドキュメントが更新済み
+- [x] `cargo check` が成功
 
 ## 10. 更新履歴
 
 | 日付 | 変更者 | 内容 |
 | --- | --- | --- |
 | `2026-03-01` | `Codex` | 初版作成 |
+| `2026-03-01` | `Codex` | 実装完了に合わせてステータス・進捗・DoDを更新 |
