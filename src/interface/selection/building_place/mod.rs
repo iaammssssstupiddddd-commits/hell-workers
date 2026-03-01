@@ -8,13 +8,13 @@ use crate::assets::GameAssets;
 use crate::game_state::{BuildContext, CompanionParentKind, CompanionPlacementKind, CompanionPlacementState};
 use crate::interface::camera::MainCamera;
 use crate::interface::ui::UiInputState;
-use crate::systems::jobs::{Blueprint, Building, BuildingType, SandPile};
+use crate::systems::jobs::{Blueprint, Building, BuildingType};
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
 
-use companion::{has_nearby_sandpile, make_companion_placement};
+use companion::make_companion_placement;
 use flow::handle_companion_flow;
-use geometry::{building_spawn_pos, occupied_grids_for_building};
+use geometry::building_spawn_pos;
 use placement::place_building_blueprint;
 
 pub fn blueprint_placement(
@@ -25,10 +25,8 @@ pub fn blueprint_placement(
     mut world_map: ResMut<WorldMap>,
     build_context: Res<BuildContext>,
     mut companion_state: ResMut<CompanionPlacementState>,
-    q_blueprints: Query<(Entity, &Blueprint, &Transform)>,
     q_blueprints_by_entity: Query<&Blueprint>,
     q_buildings: Query<&Building>,
-    q_sand_piles: Query<&Transform, With<SandPile>>,
     game_assets: Res<GameAssets>,
     mut commands: Commands,
 ) {
@@ -62,7 +60,6 @@ pub fn blueprint_placement(
     let Some(building_type) = build_context.0 else {
         return;
     };
-    let occupied_grids = occupied_grids_for_building(building_type, grid);
     let spawn_pos = building_spawn_pos(building_type, grid);
 
     if building_type == BuildingType::Tank {
@@ -70,15 +67,6 @@ pub fn blueprint_placement(
             CompanionParentKind::Tank,
             grid,
             CompanionPlacementKind::BucketStorage,
-            spawn_pos,
-        ));
-    } else if building_type == BuildingType::MudMixer
-        && !has_nearby_sandpile(&occupied_grids, &q_sand_piles, &q_blueprints, None)
-    {
-        companion_state.0 = Some(make_companion_placement(
-            CompanionParentKind::MudMixer,
-            grid,
-            CompanionPlacementKind::SandPile,
             spawn_pos,
         ));
     } else {

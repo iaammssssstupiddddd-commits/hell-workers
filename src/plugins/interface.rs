@@ -20,7 +20,12 @@ impl Plugin for InterfacePlugin {
             UiInfoPanelPlugin,
             UiEntityListPlugin,
         ))
-        .add_systems(Update, debug_spawn_system.in_set(GameSystemSet::Interface));
+        .add_systems(
+            Update,
+            debug_spawn_system
+                .run_if(|debug: Res<crate::DebugVisible>| debug.0)
+                .in_set(GameSystemSet::Interface),
+        );
     }
 }
 

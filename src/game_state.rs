@@ -35,14 +35,12 @@ pub struct TaskContext(pub TaskMode);
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Reflect)]
 pub enum CompanionPlacementKind {
     BucketStorage,
-    SandPile,
 }
 
 /// companion 配置の親建物種別
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Reflect)]
 pub enum CompanionParentKind {
     Tank,
-    MudMixer,
 }
 
 /// companion 配置中の状態

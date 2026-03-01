@@ -38,6 +38,16 @@
 
 ## 推奨される最適化手順
 
+### Linux / bash 環境での基本コマンド
+
+```bash
+./scripts/check.sh
+./scripts/build.sh
+./scripts/build.sh --release
+```
+
+- これらの `.sh` は既定で `target/` を使います（必要なら `--target-dir` で上書き可能）。
+
 ### 方法1: 安全な最適化（推奨）
 
 ```powershell

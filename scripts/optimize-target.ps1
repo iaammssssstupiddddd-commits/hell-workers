@@ -3,8 +3,28 @@
 
 param(
     [switch]$KeepCrossCompile,
-    [string]$TargetDir = "target"
+    [string]$TargetDir = ""
 )
+
+function Resolve-CargoTargetDir {
+    try {
+        $metadataJson = cargo metadata --no-deps --format-version 1 2>$null
+        if ($LASTEXITCODE -eq 0 -and $metadataJson) {
+            $metadata = $metadataJson | ConvertFrom-Json
+            if ($metadata.target_directory) {
+                return [string]$metadata.target_directory
+            }
+        }
+    } catch {
+        # Fallback below
+    }
+
+    return "target"
+}
+
+if ([string]::IsNullOrWhiteSpace($TargetDir)) {
+    $TargetDir = Resolve-CargoTargetDir
+}
 
 if (-not (Test-Path $TargetDir)) {
     Write-Host "Target directory does not exist: $TargetDir" -ForegroundColor Yellow
@@ -14,6 +34,7 @@ if (-not (Test-Path $TargetDir)) {
 # Calculate size before cleanup
 $sizeBefore = (Get-ChildItem -Path $TargetDir -Recurse -ErrorAction SilentlyContinue | Measure-Object -Property Length -Sum).Sum
 Write-Host "=== Target Directory Optimization ===" -ForegroundColor Cyan
+Write-Host "Target directory: $TargetDir" -ForegroundColor Gray
 Write-Host "Current size: $([math]::Round($sizeBefore/1GB, 2)) GB ($([math]::Round($sizeBefore/1MB, 2)) MB)" -ForegroundColor Yellow
 Write-Host ""
 
@@ -104,4 +125,3 @@ if ($savedTotal -gt 0) {
 Write-Host ""
 Write-Host "✓ 重要なビルドキャッシュ（deps/、最新のincremental/）は保持されています" -ForegroundColor Green
 Write-Host "✓ ビルド速度への影響は最小限です" -ForegroundColor Green
-

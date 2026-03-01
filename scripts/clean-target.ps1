@@ -12,6 +12,8 @@ if (-not (Test-Path $TargetDir)) {
     exit 0
 }
 
+Write-Host "Using target directory: $TargetDir" -ForegroundColor Gray
+
 # Calculate size before cleanup
 $sizeBefore = (Get-ChildItem -Path $TargetDir -Recurse -ErrorAction SilentlyContinue | Measure-Object -Property Length -Sum).Sum
 Write-Host "Current target directory size: $([math]::Round($sizeBefore/1GB, 2)) GB ($([math]::Round($sizeBefore/1MB, 2)) MB)" -ForegroundColor Cyan
@@ -28,7 +30,7 @@ if ($All) {
     }
 } elseif ($Deep) {
     Write-Host "`nRunning 'cargo clean' (deep cleanup)..." -ForegroundColor Yellow
-    cargo clean
+    cargo clean --target-dir $TargetDir
     Write-Host "Deep cleanup completed!" -ForegroundColor Green
 } else {
     Write-Host "`nCleaning up incremental build cache and old artifacts..." -ForegroundColor Yellow
