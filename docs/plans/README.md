@@ -1,6 +1,6 @@
 # Plans Index
 
-`docs/plans` の文書ステータス一覧（更新日: 2026-02-27）。
+`docs/plans` の文書ステータス一覧（更新日: 2026-03-01）。
 
 ## 新規計画書の作り方
 
@@ -19,6 +19,11 @@
 
 | Document | Status | Notes |
 |---|---|---|
+| [assignment-builder-unification-plan-2026-03-01.md](assignment-builder-unification-plan-2026-03-01.md) | Draft | `task_management/builders` の重複削減と割り当て生成経路の共通化計画。 |
+| [pathfinding-core-unification-plan-2026-03-01.md](pathfinding-core-unification-plan-2026-03-01.md) | Draft | `find_path` 系の探索核を共通化し、境界探索との重複を解消する計画。 |
+| [ui-menu-action-boundary-plan-2026-03-01.md](ui-menu-action-boundary-plan-2026-03-01.md) | Draft | `MenuAction` 処理の責務境界整理と no-op 分岐解消の計画。 |
+| [ui-submenu-spec-driven-plan-2026-03-01.md](ui-submenu-spec-driven-plan-2026-03-01.md) | Draft | サブメニュー生成を Spec 駆動へ移行し重複を削減する計画。 |
+| [zone-removal-preview-diff-plan-2026-03-01.md](zone-removal-preview-diff-plan-2026-03-01.md) | Draft | Zone removal preview の全件更新を差分更新へ置換する計画。 |
 | [selection-placement-refactor-plan-2026-02-25.md](selection-placement-refactor-plan-2026-02-25.md) | Completed | `interface/selection` の配置処理を責務分離するリファクタ計画。 |
 | [room-detection-plan-2026-02-23.md](room-detection-plan-2026-02-23.md) | Implemented | 壁・扉・床の閉領域をRoomとして検出し、オーバーレイ表示する実装計画。 |
 | [perf-phase1-quick-wins-2026-02-26.md](perf-phase1-quick-wins-2026-02-26.md) | Done | パフォーマンス改善 Phase 1: idle HashMap→Local、get_nearby_into API、5グリッド Change Detection 化。 |

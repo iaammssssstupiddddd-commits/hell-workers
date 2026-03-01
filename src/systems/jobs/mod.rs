@@ -30,7 +30,40 @@ pub enum BuildingType {
     WheelbarrowParking,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BuildingCategory {
+    Structure,
+    Architecture,
+    Plant,
+    Temporary,
+}
+
+impl BuildingCategory {
+    pub fn label(&self) -> &'static str {
+        match self {
+            Self::Structure => "Structure",
+            Self::Architecture => "Architecture",
+            Self::Plant => "Plant",
+            Self::Temporary => "Temporary",
+        }
+    }
+}
+
 impl BuildingType {
+    pub fn category(&self) -> BuildingCategory {
+        match self {
+            BuildingType::Wall | BuildingType::Floor | BuildingType::Bridge => {
+                BuildingCategory::Structure
+            }
+            BuildingType::Door => BuildingCategory::Architecture,
+            BuildingType::Tank | BuildingType::MudMixer => BuildingCategory::Plant,
+            BuildingType::SandPile
+            | BuildingType::BonePile
+            | BuildingType::WheelbarrowParking
+            | BuildingType::RestArea => BuildingCategory::Temporary,
+        }
+    }
+
     /// この建物タイプに必要な資材を返す
     pub fn required_materials(&self) -> HashMap<ResourceType, u32> {
         let mut materials = HashMap::new();

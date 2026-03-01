@@ -2,7 +2,7 @@
 //!
 //! UIの列挙型とコンポーネント構造体を定義します。
 
-use crate::systems::jobs::BuildingType;
+use crate::systems::jobs::{BuildingCategory, BuildingType};
 use crate::systems::logistics::ZoneType;
 use crate::systems::time::TimeSpeed;
 use bevy::prelude::*;
@@ -119,6 +119,7 @@ pub enum MenuAction {
     CloseDialog,
     SetTimeSpeed(TimeSpeed),
     TogglePause,
+    SelectArchitectCategory(Option<BuildingCategory>),
 }
 
 // ============================================================
@@ -162,8 +163,17 @@ pub enum UiSlot {
 #[derive(Component)]
 pub struct MenuButton(pub MenuAction);
 
+#[derive(Resource, Default)]
+pub struct ArchitectCategoryState(pub Option<BuildingCategory>);
+
 #[derive(Component)]
 pub struct ArchitectSubMenu;
+
+#[derive(Component)]
+pub struct ArchitectCategoryListPanel;
+
+#[derive(Component)]
+pub struct ArchitectBuildingPanel(pub BuildingCategory);
 
 #[derive(Component)]
 pub struct ZonesSubMenu;
