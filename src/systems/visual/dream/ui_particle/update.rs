@@ -99,8 +99,15 @@ pub fn ui_particle_update_system(
                 node.left = Val::Px(clamped_pos.x);
                 node.top = Val::Px(clamped_pos.y);
 
+                let mut cluster_scale = 1.0;
+                if particle.mass >= 6.0 {
+                    cluster_scale = 1.20; // 3泡: 各泡が少し小さくなるため補正
+                } else if particle.mass >= 3.0 {
+                    cluster_scale = 1.25; // 2泡: 左右の空きスペースを補正
+                }
+
                 let effective_mass = particle.mass + DREAM_UI_BASE_MASS_OFFSET;
-                let base = DREAM_UI_PARTICLE_SIZE * effective_mass.sqrt();
+                let base = DREAM_UI_PARTICLE_SIZE * effective_mass.sqrt() * cluster_scale;
                 let size = base * (1.0 - progress);
                 node.width = Val::Px(size);
                 node.height = Val::Px(size);
@@ -207,8 +214,15 @@ pub fn ui_particle_update_system(
         let mut final_pos = current_pos + particle.velocity * dt;
 
         // Size and Squash & Stretch
+        let mut cluster_scale = 1.0;
+        if particle.mass >= 6.0 {
+            cluster_scale = 1.20;
+        } else if particle.mass >= 3.0 {
+            cluster_scale = 1.25;
+        }
+
         let effective_mass = particle.mass + DREAM_UI_BASE_MASS_OFFSET;
-        let base = DREAM_UI_PARTICLE_SIZE * effective_mass.sqrt();
+        let base = DREAM_UI_PARTICLE_SIZE * effective_mass.sqrt() * cluster_scale;
         let speed = particle.velocity.length();
         let squash_stretch_ratio =
             (speed / DREAM_UI_SQUASH_MAX_SPEED).clamp(0.0, DREAM_UI_SQUASH_MAX_RATIO);

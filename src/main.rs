@@ -15,6 +15,10 @@ use bevy::render::settings::{Backends, RenderCreation, WgpuSettings};
 use bevy::ui_widgets::popover::PopoverPlugin;
 use bevy::window::PresentMode;
 use std::env;
+#[cfg(target_os = "linux")]
+use std::path::PathBuf;
+#[cfg(target_os = "linux")]
+use std::os::unix::net::UnixStream;
 
 use game_state::PlayMode;
 
@@ -31,6 +35,7 @@ use crate::systems::familiar_ai::FamiliarAiPlugin;
 pub struct DebugVisible(pub bool);
 
 fn main() {
+    configure_linux_window_backend();
     let backends = select_backends();
     let present_mode = select_present_mode();
     App::new()
@@ -89,6 +94,88 @@ fn main() {
         .add_plugins(VisualPlugin)
         .add_plugins(InterfacePlugin)
         .run();
+}
+
+#[cfg(target_os = "linux")]
+fn configure_linux_window_backend() {
+    let backend = env::var("HW_WINDOW_BACKEND")
+        .ok()
+        .map(|value| value.to_ascii_lowercase())
+        .unwrap_or_else(|| "auto".to_string());
+
+    match backend.as_str() {
+        "x11" => force_x11_backend("HW_WINDOW_BACKEND=x11"),
+        "wayland" => {}
+        "auto" => {
+            if should_fallback_to_x11() {
+                force_x11_backend("auto fallback (Wayland socket unavailable)");
+            }
+        }
+        _ => {
+            eprintln!(
+                "Unknown HW_WINDOW_BACKEND={backend}. Supported values: auto, x11, wayland."
+            );
+            if should_fallback_to_x11() {
+                force_x11_backend("auto fallback (Wayland socket unavailable)");
+            }
+        }
+    }
+}
+
+#[cfg(not(target_os = "linux"))]
+fn configure_linux_window_backend() {}
+
+#[cfg(target_os = "linux")]
+fn should_fallback_to_x11() -> bool {
+    let has_x11 = env::var("DISPLAY").map(|value| !value.is_empty()).unwrap_or(false);
+    if !has_x11 {
+        return false;
+    }
+
+    // Respect externally-provided Wayland file descriptors.
+    if env::var("WAYLAND_SOCKET")
+        .map(|value| !value.is_empty())
+        .unwrap_or(false)
+    {
+        return false;
+    }
+
+    let Some(wayland_display) = env::var("WAYLAND_DISPLAY")
+        .ok()
+        .filter(|value| !value.is_empty())
+    else {
+        return false;
+    };
+
+    let Some(socket_path) = resolve_wayland_socket_path(&wayland_display) else {
+        return true;
+    };
+
+    if !socket_path.exists() {
+        return true;
+    }
+
+    UnixStream::connect(socket_path).is_err()
+}
+
+#[cfg(target_os = "linux")]
+fn resolve_wayland_socket_path(wayland_display: &str) -> Option<PathBuf> {
+    let display_path = PathBuf::from(wayland_display);
+    if display_path.is_absolute() {
+        return Some(display_path);
+    }
+
+    env::var_os("XDG_RUNTIME_DIR").map(|runtime_dir| PathBuf::from(runtime_dir).join(display_path))
+}
+
+#[cfg(target_os = "linux")]
+fn force_x11_backend(reason: &str) {
+    // SAFETY: this runs at startup on the main thread before Bevy creates worker threads.
+    unsafe {
+        env::remove_var("WAYLAND_DISPLAY");
+        env::remove_var("WAYLAND_SOCKET");
+    }
+    eprintln!("Using X11 backend ({reason}).");
 }
 
 fn select_backends() -> Backends {
