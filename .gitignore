@@ -1,5 +1,6 @@
 # Rust
 /target
+/.tmp_target
 **/*.rs.bk
 Cargo.lock
 
