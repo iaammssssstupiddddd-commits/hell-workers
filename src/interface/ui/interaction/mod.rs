@@ -122,6 +122,11 @@ pub fn ui_keyboard_shortcuts_system(
 }
 
 /// UI ボタンの操作を管理する統合システム
+///
+/// ここでは `MenuAction` のうち汎用アクションのみを処理する。
+/// 専門アクションは別システムへ明示的に分離する：
+/// - `MenuAction::SelectArchitectCategory` => `arch_category_action_system`
+/// - `MenuAction::ToggleDoorLock` => `door_lock_action_system`
 pub fn ui_interaction_system(
     mut interaction_query: Query<
         (&Interaction, &MenuButton, &mut BackgroundColor),
@@ -169,6 +174,8 @@ pub fn ui_interaction_system(
 }
 
 /// `SelectArchitectCategory` アクションを処理する専用システム
+/// `SelectArchitectCategory` を専用で処理するシステム
+/// 2回押下時のトグル仕様をここで維持する。
 pub fn arch_category_action_system(
     interaction_query: Query<(&Interaction, &MenuButton), (Changed<Interaction>, With<Button>)>,
     mut arch_category_state: ResMut<crate::interface::ui::components::ArchitectCategoryState>,
@@ -188,6 +195,8 @@ pub fn arch_category_action_system(
     }
 }
 
+/// `ToggleDoorLock` を専用で処理するシステム
+/// ドアのロック状態と見た目を即時反映する。
 pub fn door_lock_action_system(
     interaction_query: Query<(&Interaction, &MenuButton), (Changed<Interaction>, With<Button>)>,
     mut q_doors: Query<(&Transform, &mut Door, &mut Sprite)>,

@@ -33,6 +33,8 @@ impl Plugin for UiCorePlugin {
                 floor_placement_system.run_if(in_state(PlayMode::FloorPlace)),
                 ui_keyboard_shortcuts_system,
                 ui_interaction_system,
+                // Changed<Interaction> を複数システムで読むため、順序固定の chain で実行し、
+                // 専用アクションの責務分離を維持する。
                 arch_category_action_system,
                 door_lock_action_system,
                 menu_visibility_system,

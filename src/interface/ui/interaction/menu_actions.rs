@@ -23,6 +23,13 @@ pub(super) fn handle_pressed_action(
     ev_max_soul_changed: &mut MessageWriter<FamiliarOperationMaxSoulChangedEvent>,
     time: &mut ResMut<Time<Virtual>>,
 ) {
+    // MenuAction は責務で分類して扱う。
+    // 汎用処理: `ui_interaction_system` の入口で一括処理する。
+    // 専用処理: 各専用システム (`arch_category_action_system` / `door_lock_action_system`) が担う。
+    if action.is_specialized() {
+        return;
+    }
+
     match action {
         MenuAction::InspectEntity(entity) => {
             selected_entity.0 = Some(entity);
@@ -123,7 +130,6 @@ pub(super) fn handle_pressed_action(
                 task_context,
             );
         }
-        MenuAction::ToggleDoorLock(_) => {}
         MenuAction::OpenOperationDialog => super::dialog::open_operation_dialog(q_dialog),
         MenuAction::CloseDialog => super::dialog::close_operation_dialog(q_dialog),
         MenuAction::AdjustFatigueThreshold(delta) => {
@@ -137,7 +143,6 @@ pub(super) fn handle_pressed_action(
                 ev_max_soul_changed,
             );
         }
-        MenuAction::SelectArchitectCategory(_) => {}
         MenuAction::TogglePause => {
             if time.is_paused() {
                 time.unpause();
@@ -160,6 +165,7 @@ pub(super) fn handle_pressed_action(
                 time.set_relative_speed(4.0);
             }
         },
+        _ => unreachable!("Unhandled MenuAction in generic action router; specialized actions must be delegated."),
     }
 }
 

@@ -5,7 +5,7 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `ui-menu-action-boundary-plan-2026-03-01` |
-| ステータス | `Draft` |
+| ステータス | `Completed` |
 | 作成日 | `2026-03-01` |
 | 最終更新日 | `2026-03-01` |
 | 作成者 | `Codex` |
@@ -68,8 +68,8 @@
   - `src/interface/ui/interaction/mod.rs`
   - `docs/entity_list_ui.md`（必要時）
 - 完了条件:
-  - [ ] Action 責務表がコードコメントまたは docs へ反映
-  - [ ] no-op の意図が読める状態
+- [x] Action 責務表がコードコメントまたは docs へ反映
+- [x] no-op の意図が読める状態
 - 検証:
   - `cargo check`
 
@@ -82,8 +82,8 @@
   - `src/interface/ui/interaction/mod.rs`
   - `src/interface/ui/interaction/menu_actions.rs`
 - 完了条件:
-  - [ ] `MenuAction` 追加時の実装ガイドが明確
-  - [ ] 既存挙動を維持
+- [x] `MenuAction` 追加時の実装ガイドが明確
+- [x] 既存挙動を維持
 - 検証:
   - `cargo check`
 
@@ -97,8 +97,8 @@
   - `docs/entity_list_ui.md`（必要時）
   - `src/interface/ui/interaction/*.rs`
 - 完了条件:
-  - [ ] 設計方針が文書と一致
-  - [ ] `cargo check` 成功
+- [x] 設計方針が文書と一致
+- [x] `cargo check` 成功
 - 検証:
   - `cargo check`
 
@@ -132,9 +132,9 @@
 
 ### 現在地
 
-- 進捗: `0%`
-- 完了済みマイルストーン: なし
-- 未着手/進行中: M1〜M3 未着手
+- 進捗: `100%`
+- 完了済みマイルストーン: `M1` / `M2` / `M3`
+- 未着手/進行中: なし
 
 ### 次のAIが最初にやること
 
@@ -155,7 +155,7 @@
 
 ### 最終確認ログ
 
-- 最終 `cargo check`: `2026-03-01` / `pass`
+- 最終 `cargo check`: `2026-03-01` / `pass` (`CARGO_TARGET_DIR=/tmp/hell-workers-target-check cargo check`)
 - 未解決エラー: なし（計画作成時点）
 
 ### Definition of Done

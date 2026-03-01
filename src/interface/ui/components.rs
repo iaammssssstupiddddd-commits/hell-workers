@@ -122,6 +122,15 @@ pub enum MenuAction {
     SelectArchitectCategory(Option<BuildingCategory>),
 }
 
+impl MenuAction {
+    pub const fn is_specialized(&self) -> bool {
+        matches!(
+            self,
+            Self::ToggleDoorLock(_) | Self::SelectArchitectCategory(_)
+        )
+    }
+}
+
 // ============================================================
 // UiSlot - 統一UIスロットコンポーネント
 // ============================================================
