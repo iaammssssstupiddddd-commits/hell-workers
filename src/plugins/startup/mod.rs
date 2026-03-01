@@ -16,7 +16,7 @@ use crate::entities::familiar::FamiliarSpawnEvent;
 use crate::game_state::{BuildContext, CompanionPlacementState, TaskContext, ZoneContext};
 use crate::interface::camera::{MainCamera, PanCamera};
 use crate::interface::selection::{HoveredEntity, SelectedEntity};
-use crate::interface::ui::{MenuState, setup_ui};
+use crate::interface::ui::{MenuState, components::ArchitectCategoryState, setup_ui};
 use crate::systems::logistics::{ResourceLabels, initial_resource_spawner};
 use crate::systems::spatial::{
     BlueprintSpatialGrid, FamiliarSpatialGrid, FloorConstructionSpatialGrid,
@@ -35,6 +35,7 @@ impl Plugin for StartupPlugin {
             .init_resource::<SelectedEntity>()
             .init_resource::<HoveredEntity>()
             .init_resource::<MenuState>()
+            .init_resource::<ArchitectCategoryState>()
             .init_resource::<BuildContext>()
             .init_resource::<ZoneContext>()
             .init_resource::<CompanionPlacementState>()
