@@ -5,7 +5,7 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `pathfinding-core-unification-plan-2026-03-01` |
-| ステータス | `Draft` |
+| ステータス | `Completed` |
 | 作成日 | `2026-03-01` |
 | 最終更新日 | `2026-03-01` |
 | 作成者 | `Codex` |
@@ -71,8 +71,8 @@
   - `src/world/pathfinding.rs`
   - `docs/architecture.md`（必要時）
 - 完了条件:
-  - [ ] `find_path` の挙動が維持される
-  - [ ] 共有コードが1箇所に集約される
+  - [x] `find_path` の挙動が維持される
+  - [x] 共有コードが1箇所に集約される
 - 検証:
   - `cargo check`
 
@@ -85,8 +85,8 @@
   - `src/world/pathfinding.rs`
   - `src/entities/damned_soul/movement/pathfinding.rs`（必要時）
 - 完了条件:
-  - [ ] 3関数が共通核で動作
-  - [ ] 既存テスト（`test_path_to_boundary_1x1_open`）が通る
+  - [x] 3関数が共通核で動作
+  - [x] 既存テスト（`test_path_to_boundary_1x1_open`）が通る
 - 検証:
   - `cargo check`
 
@@ -100,8 +100,8 @@
   - `docs/architecture.md`（必要時）
   - `docs/world_layout.md`（必要時）
 - 完了条件:
-  - [ ] 差分責務がコード上で明確
-  - [ ] `cargo check` 成功
+  - [x] 差分責務がコード上で明確
+  - [x] `cargo check` 成功
 - 検証:
   - `cargo check`
 
@@ -135,15 +135,15 @@
 
 ### 現在地
 
-- 進捗: `0%`
-- 完了済みマイルストーン: なし
-- 未着手/進行中: M1〜M3 未着手
+- 進捗: `100%`
+- 完了済みマイルストーン: `M1` / `M2` / `M3`
+- 未着手/進行中: なし
 
 ### 次のAIが最初にやること
 
-1. `find_path` と `find_path_to_boundary` の共通行を洗い出す。
-2. ポリシー差分（通行判定・ゴール判定）を関数に切り出す。
-3. M1 完了時点で `cargo check` を実行してから M2 へ進む。
+1. 仕様変更時は `find_path_with_policy` と既存呼び出し3関数の双方を確認する。
+2. 角抜け判定と penalty 付与のポリシー差分を先に明文化してから変更する。
+3. 変更後に `cargo check` を実行する。
 
 ### ブロッカー/注意点
 
@@ -157,17 +157,18 @@
 
 ### 最終確認ログ
 
-- 最終 `cargo check`: `2026-03-01` / `pass`
+- 最終 `cargo check`: `2026-03-01` / `pass` (`cargo check --target-dir /tmp/hell-workers-target`)
 - 未解決エラー: なし（計画作成時点）
 
 ### Definition of Done
 
-- [ ] 目的に対応するマイルストーンが全て完了
-- [ ] 影響ドキュメントが更新済み
-- [ ] `cargo check` が成功
+- [x] 目的に対応するマイルストーンが全て完了
+- [x] 影響ドキュメントが更新済み
+- [x] `cargo check` が成功
 
 ## 10. 更新履歴
 
 | 日付 | 変更者 | 内容 |
 | --- | --- | --- |
 | `2026-03-01` | `Codex` | 初版作成 |
+| `2026-03-01` | `Codex` | 実装完了に合わせてステータス・進捗・DoDを更新 |

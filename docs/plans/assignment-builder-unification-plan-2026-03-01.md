@@ -5,7 +5,7 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `assignment-builder-unification-plan-2026-03-01` |
-| ステータス | `Draft` |
+| ステータス | `Completed` |
 | 作成日 | `2026-03-01` |
 | 最終更新日 | `2026-03-01` |
 | 作成者 | `Codex` |
@@ -68,8 +68,8 @@
   - `src/systems/familiar_ai/decide/task_management/builders/*.rs`
   - `docs/tasks.md`（必要時）
 - 完了条件:
-  - [ ] 共通 API が追加される
-  - [ ] 既存呼び出し側の置換準備ができる
+  - [x] 共通 API が追加される
+  - [x] 既存呼び出し側の置換準備ができる
 - 検証:
   - `cargo check`
 
@@ -83,8 +83,8 @@
   - `src/systems/familiar_ai/decide/task_management/builders/haul.rs`
   - `src/systems/familiar_ai/decide/task_management/builders/water.rs`
 - 完了条件:
-  - [ ] 3ファイルで同型 boilerplate が削減される
-  - [ ] 予約オペレーション内容が既存と一致
+  - [x] 3ファイルで同型 boilerplate が削減される
+  - [x] 予約オペレーション内容が既存と一致
 - 検証:
   - `cargo check`
 
@@ -98,8 +98,8 @@
   - `docs/tasks.md`（必要時）
   - `docs/DEVELOPMENT.md`（必要時）
 - 完了条件:
-  - [ ] 共通化後の責務境界が文書化される
-  - [ ] `cargo check` が通る
+  - [x] 共通化後の責務境界が文書化される
+  - [x] `cargo check` が通る
 - 検証:
   - `cargo check`
 
@@ -133,15 +133,15 @@
 
 ### 現在地
 
-- 進捗: `0%`
-- 完了済みマイルストーン: なし
-- 未着手/進行中: M1〜M3 未着手
+- 進捗: `100%`
+- 完了済みマイルストーン: `M1` / `M2` / `M3`
+- 未着手/進行中: なし
 
 ### 次のAIが最初にやること
 
-1. 3ファイルの `issue_*` 関数ごとに `reservation_ops` パターンを一覧化する。
-2. `AssignmentSpec` の最小項目を定義して M1 を実装する。
-3. `basic` -> `water` -> `haul` の順に段階移行して `cargo check` を実行する。
+1. 必要に応じて `builders` へ新規 `issue_*` を追加する際、`AssignmentSpec` + 予約ヘルパーを再利用する。
+2. 新規タスク追加時は `WorkType` と `reservation_ops` の整合をレビューする。
+3. 変更後に `cargo check` を実行する。
 
 ### ブロッカー/注意点
 
@@ -157,17 +157,18 @@
 
 ### 最終確認ログ
 
-- 最終 `cargo check`: `2026-03-01` / `pass`
+- 最終 `cargo check`: `2026-03-01` / `pass` (`cargo check --target-dir /tmp/hell-workers-target`)
 - 未解決エラー: なし（計画作成時点）
 
 ### Definition of Done
 
-- [ ] 目的に対応するマイルストーンが全て完了
-- [ ] 影響ドキュメントが更新済み
-- [ ] `cargo check` が成功
+- [x] 目的に対応するマイルストーンが全て完了
+- [x] 影響ドキュメントが更新済み
+- [x] `cargo check` が成功
 
 ## 10. 更新履歴
 
 | 日付 | 変更者 | 内容 |
 | --- | --- | --- |
 | `2026-03-01` | `Codex` | 初版作成 |
+| `2026-03-01` | `Codex` | 実装完了に合わせてステータス・進捗・DoDを更新 |
