@@ -28,6 +28,7 @@ pub fn set_path_to_river(
         ctx.pf_context,
         WorldMap::world_to_grid(ctx.soul_transform.translation.truncate()),
         river_grid,
+        true,
     )?;
 
     *ctx.task = assigned_task(bucket_entity, tank_entity, GatherWaterPhase::GoingToRiver);

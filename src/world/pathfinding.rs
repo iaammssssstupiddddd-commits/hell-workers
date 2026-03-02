@@ -33,7 +33,6 @@ pub struct PathfindingContext {
     pub g_scores: Vec<i32>,
     pub came_from: Vec<Option<usize>>,
     pub open_set: BinaryHeap<PathNode>,
-    pub allow_goal_obstacle: bool,
     /// 訪問済みインデックスを追跡（reset時の最適化用）
     visited: Vec<usize>,
 }
@@ -45,7 +44,6 @@ impl Default for PathfindingContext {
             g_scores: vec![i32::MAX; size],
             came_from: vec![None; size],
             open_set: BinaryHeap::with_capacity(size / 4),
-            allow_goal_obstacle: false,
             visited: Vec::with_capacity(512),
         }
     }
@@ -60,8 +58,15 @@ impl PathfindingContext {
         }
         self.visited.clear();
         self.open_set.clear();
-        self.allow_goal_obstacle = false;
     }
+}
+
+#[derive(Clone, Copy)]
+pub enum PathGoalPolicy {
+    /// 目的地が歩行不能なら到達不能と扱う
+    RespectGoalWalkability,
+    /// 目的地が歩行不能でも到達候補として許可する
+    AllowBlockedGoal,
 }
 
 fn path_cost_heuristic(idx: usize, goal_idx: usize) -> i32 {
@@ -199,13 +204,14 @@ pub fn find_path(
     context: &mut PathfindingContext,
     start: (i32, i32),
     goal: (i32, i32),
+    goal_policy: PathGoalPolicy,
 ) -> Option<Vec<(i32, i32)>> {
     let start_idx = world_map.pos_to_idx(start.0, start.1)?;
     let goal_idx = world_map.pos_to_idx(goal.0, goal.1)?;
 
-    // 目的地（逆引きならソウル）が通行不能なら到達不能
-    // ただし、goal_can_be_obstacle が true の場合はチェックをスキップ
-    if !world_map.is_walkable(goal.0, goal.1) && !context.allow_goal_obstacle {
+    if matches!(goal_policy, PathGoalPolicy::RespectGoalWalkability)
+        && !world_map.is_walkable(goal.0, goal.1)
+    {
         return None;
     }
 
@@ -238,16 +244,21 @@ pub fn find_path_to_adjacent(
     context: &mut PathfindingContext,
     start: (i32, i32),
     target: (i32, i32),
+    allow_goal_blocked: bool,
 ) -> Option<Vec<(i32, i32)>> {
     // 逆引き検索を1回実行: ターゲット地点（岩など）から開始点（ソウル）に向かってパスを探す
-    // ターゲット地点自体が通行不能でも、最初の展開（隣接マスへの移動）で通行可能マスに移行する
-    // 開始点が通行不能な場合（アイテムの上にいるなど）は、allow_goal_obstacleを設定
-    let start_walkable = world_map.is_walkable(start.0, start.1);
-    if !start_walkable {
-        context.allow_goal_obstacle = true;
-    }
+    // find_path の開始点は target から start への逆探索になるため、start が目的地側相当。
+    // start が歩行不能の場合は、その状態を許容する必要がある。
+    // 呼び出し側の意図が strict でも、開始点が障害物に埋まるケースでは
+    // 旧実装と同様にゴール歩行性チェックを緩和して到達判定の後退を避ける。
+    let allow_goal_blocked = allow_goal_blocked || !world_map.is_walkable(start.0, start.1);
+    let policy = if allow_goal_blocked {
+        PathGoalPolicy::AllowBlockedGoal
+    } else {
+        PathGoalPolicy::RespectGoalWalkability
+    };
 
-    let mut path = find_path(world_map, context, target, start)?;
+    let mut path = find_path(world_map, context, target, start, policy)?;
 
     // 得られたパスは [target, neighbor, ..., start]
     // これを逆転させて [start, ..., neighbor, target] にし、target を削除すれば隣接マス到着パスになる

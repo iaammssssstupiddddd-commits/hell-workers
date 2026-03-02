@@ -35,12 +35,20 @@ fn evaluate_reachability(
     pf_context: &mut PathfindingContext,
 ) -> bool {
     if candidate.target_walkable {
-        pathfinding::find_path(world_map, pf_context, candidate.target_grid, worker_grid).is_some()
+        pathfinding::find_path(
+            world_map,
+            pf_context,
+            candidate.target_grid,
+            worker_grid,
+            pathfinding::PathGoalPolicy::RespectGoalWalkability,
+        )
+        .is_some()
             || pathfinding::find_path_to_adjacent(
                 world_map,
                 pf_context,
                 worker_grid,
                 candidate.target_grid,
+                true,
             )
             .is_some()
     } else {
@@ -49,6 +57,7 @@ fn evaluate_reachability(
             pf_context,
             worker_grid,
             candidate.target_grid,
+            true,
         )
         .is_some()
     }

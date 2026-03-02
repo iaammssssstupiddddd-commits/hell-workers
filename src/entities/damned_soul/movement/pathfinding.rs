@@ -140,9 +140,22 @@ fn try_reuse_existing_path(
         *pathfind_count += 1;
 
         if let Some(partial_grid_path) =
-            pathfinding::find_path(world_map, pf_context, resume_grid, goal_grid).or_else(|| {
-                pathfinding::find_path_to_adjacent(world_map, pf_context, resume_grid, goal_grid)
-            })
+            pathfinding::find_path(
+            world_map,
+            pf_context,
+            resume_grid,
+            goal_grid,
+            crate::world::pathfinding::PathGoalPolicy::RespectGoalWalkability,
+        )
+        .or_else(|| {
+            pathfinding::find_path_to_adjacent(
+                world_map,
+                pf_context,
+                resume_grid,
+                goal_grid,
+                true,
+            )
+        })
         {
             let mut partial_world_path: Vec<Vec2> = partial_grid_path
                 .iter()
@@ -177,7 +190,13 @@ fn try_find_path_world_waypoints(
     goal_grid: (i32, i32),
     entity: Entity,
 ) -> Option<Vec<Vec2>> {
-    pathfinding::find_path(world_map, pf_context, start_grid, goal_grid)
+    pathfinding::find_path(
+        world_map,
+        pf_context,
+        start_grid,
+        goal_grid,
+        crate::world::pathfinding::PathGoalPolicy::RespectGoalWalkability,
+    )
         .or_else(|| {
             // 通常のパスが見つからない場合、ターゲットの隣接マスへのパスを試みる
             // これはターゲットが木や岩（非歩行可能）の上にある場合に有効
@@ -185,7 +204,13 @@ fn try_find_path_world_waypoints(
                 "PATH: Soul {:?} failed find_path, trying find_path_to_adjacent",
                 entity
             );
-            pathfinding::find_path_to_adjacent(world_map, pf_context, start_grid, goal_grid)
+            pathfinding::find_path_to_adjacent(
+                world_map,
+                pf_context,
+                start_grid,
+                goal_grid,
+                true,
+            )
         })
         .map(|grid_path| {
             grid_path
@@ -221,7 +246,13 @@ fn try_rest_area_fallback_path(
         .filter(|grid| *grid != goal_grid)
     {
         if let Some(candidate_path) =
-            pathfinding::find_path(world_map, pf_context, start_grid, candidate_grid)
+            pathfinding::find_path(
+            world_map,
+            pf_context,
+            start_grid,
+            candidate_grid,
+            crate::world::pathfinding::PathGoalPolicy::RespectGoalWalkability,
+        )
         {
             destination.0 = WorldMap::grid_to_world(candidate_grid.0, candidate_grid.1);
             path.waypoints = candidate_path

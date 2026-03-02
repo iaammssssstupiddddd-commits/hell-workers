@@ -102,7 +102,13 @@ fn path_distance_world(
 ) -> Option<f32> {
     let start_grid = WorldMap::world_to_grid(start);
     let goal_grid = WorldMap::world_to_grid(goal);
-    let path = pathfinding::find_path(world_map, context, start_grid, goal_grid)?;
+    let path = pathfinding::find_path(
+        world_map,
+        context,
+        start_grid,
+        goal_grid,
+        pathfinding::PathGoalPolicy::RespectGoalWalkability,
+    )?;
     if path.len() < 2 {
         return Some(0.0);
     }
