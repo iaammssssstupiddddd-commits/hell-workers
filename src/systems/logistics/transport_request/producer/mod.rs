@@ -14,9 +14,10 @@ pub mod wheelbarrow;
 use crate::systems::command::TaskArea;
 use bevy::math::Vec2;
 use bevy::prelude::{Commands, Entity, Query, Transform, Visibility};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::systems::logistics::{ResourceItem, ResourceType};
+use crate::systems::logistics::transport_request::{TransportRequest, TransportRequestKind};
 use crate::systems::spatial::{ResourceSpatialGrid, SpatialGridOps};
 
 pub(crate) fn to_u32_saturating(value: usize) -> u32 {
@@ -129,4 +130,130 @@ pub(crate) fn consume_waiting_tile_resources<
         }
     }
     consumed
+}
+
+pub(crate) fn sync_construction_delivery<TTile: bevy::prelude::Component<Mutability = bevy::ecs::component::Mutable>>(
+    commands: &mut Commands,
+    site_entity: Entity,
+    site_pos: Vec2,
+    target_resource: ResourceType,
+    required_amount: u32,
+    pickup_radius: f32,
+    resource_grid: &crate::systems::spatial::ResourceSpatialGrid,
+    q_resources: &Query<
+        (
+            Entity,
+            &Transform,
+            &Visibility,
+            &crate::systems::logistics::ResourceItem,
+            Option<&crate::relationships::StoredIn>,
+        ),
+    >,
+    resources_scanned: &mut u32,
+    tiles_by_site: &HashMap<Entity, Vec<Entity>>,
+    q_tiles: &mut Query<&mut TTile>,
+    is_waiting: impl FnMut(&TTile) -> bool,
+    delivered_mut: impl FnMut(&mut TTile) -> &mut u32,
+    mark_ready: impl FnMut(&mut TTile),
+) -> u32 {
+    let pickup_radius_sq = pickup_radius * pickup_radius;
+    let mut nearby_resources = collect_nearby_resource_entities(
+        site_pos,
+        pickup_radius,
+        pickup_radius_sq,
+        target_resource,
+        resource_grid,
+        q_resources,
+        resources_scanned,
+    );
+
+    if nearby_resources.is_empty() {
+        return 0;
+    }
+
+    let Some(site_tiles) = tiles_by_site.get(&site_entity) else {
+        return 0;
+    };
+
+    consume_waiting_tile_resources(
+        commands,
+        site_tiles,
+        q_tiles,
+        &mut nearby_resources,
+        required_amount,
+        is_waiting,
+        delivered_mut,
+        mark_ready,
+    )
+}
+
+pub(crate) fn sync_construction_requests<TTarget: bevy::prelude::Component>(
+    commands: &mut Commands,
+    q_requests: &Query<(Entity, &TTarget, &TransportRequest, Option<&crate::relationships::TaskWorkers>)>,
+    desired_requests: &HashMap<(Entity, ResourceType), (Entity, u32, Vec2)>,
+    expected_kind: TransportRequestKind,
+    request_name: &'static str,
+    request_kind: TransportRequestKind,
+    target_entity: impl Fn(&TTarget) -> Entity,
+    build_target: impl Fn(Entity) -> TTarget,
+    priority_for: impl Fn(ResourceType) -> u32,
+) -> HashSet<(Entity, ResourceType)> {
+    let mut seen_existing_keys = HashSet::<(Entity, ResourceType)>::new();
+
+    for (request_entity, target, request, workers_opt) in q_requests.iter() {
+        if request.kind != expected_kind {
+            continue;
+        }
+
+        let key = (target_entity(target), request.resource_type);
+        let workers = workers_opt.map(|w| w.len()).unwrap_or(0);
+        if !upsert::process_duplicate_key(
+            commands,
+            request_entity,
+            workers,
+            &mut seen_existing_keys,
+            key,
+        ) {
+            continue;
+        }
+
+        let inflight = to_u32_saturating(workers);
+        if let Some((issued_by, slots, site_pos)) = desired_requests.get(&key) {
+            upsert::upsert_transport_request(
+                commands,
+                request_entity,
+                key,
+                *site_pos,
+                *issued_by,
+                *slots,
+                inflight,
+                priority_for(key.1),
+                build_target(key.0),
+                request_kind,
+            );
+            continue;
+        }
+
+        upsert::disable_request_with_demand(commands, request_entity, inflight);
+    }
+
+    for (key, (issued_by, slots, site_pos)) in desired_requests.iter() {
+        if seen_existing_keys.contains(key) {
+            continue;
+        }
+
+        upsert::spawn_transport_request(
+            commands,
+            request_name,
+            *key,
+            *site_pos,
+            *issued_by,
+            *slots,
+            priority_for(key.1),
+            build_target(key.0),
+            request_kind,
+        );
+    }
+
+    seen_existing_keys
 }

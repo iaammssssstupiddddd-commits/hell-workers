@@ -194,7 +194,14 @@ pub(super) fn is_reachable(
     pf_context: &mut PathfindingContext,
 ) -> bool {
     let target_grid = WorldMap::world_to_grid(target_pos);
-    pathfinding::find_path_to_adjacent(world_map, pf_context, start_grid, target_grid).is_some()
+    pathfinding::find_path_to_adjacent(
+        world_map,
+        pf_context,
+        start_grid,
+        target_grid,
+        true,
+    )
+    .is_some()
 }
 
 pub(super) fn div_ceil_u32(value: u32, divisor: u32) -> u32 {

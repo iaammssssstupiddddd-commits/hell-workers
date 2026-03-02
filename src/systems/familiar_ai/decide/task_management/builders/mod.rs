@@ -2,17 +2,9 @@ mod basic;
 mod haul;
 mod water;
 
-pub use basic::{
-    issue_build, issue_coat_wall, issue_collect_bone, issue_collect_sand, issue_frame_wall,
-    issue_gather, issue_pour_floor, issue_refine, issue_reinforce_floor,
-};
-pub use haul::{
-    issue_collect_bone_with_wheelbarrow_to_blueprint, issue_collect_bone_with_wheelbarrow_to_floor,
-    issue_collect_sand_with_wheelbarrow_to_blueprint, issue_haul_to_blueprint_with_source,
-    issue_haul_to_mixer, issue_haul_to_stockpile_with_source, issue_haul_with_wheelbarrow,
-    issue_return_wheelbarrow,
-};
-pub use water::{issue_gather_water, issue_haul_water_to_mixer};
+pub use basic::*;
+pub use haul::*;
+pub use water::*;
 
 use crate::events::{ResourceReservationOp, TaskAssignmentRequest};
 use crate::systems::familiar_ai::decide::task_management::{AssignTaskContext, ReservationShadow};
@@ -22,14 +14,6 @@ use crate::systems::soul_ai::execute::task_execution::types::AssignedTask;
 use crate::systems::logistics::ResourceType;
 use crate::systems::logistics::transport_request::WheelbarrowDestination;
 use bevy::prelude::*;
-
-pub struct AssignmentSpec {
-    pub work_type: WorkType,
-    pub task_pos: Vec2,
-    pub assigned_task: AssignedTask,
-    pub reservation_ops: Vec<ResourceReservationOp>,
-    pub already_commanded: bool,
-}
 
 pub fn submit_assignment(
     ctx: &AssignTaskContext<'_>,
@@ -54,21 +38,48 @@ pub fn submit_assignment(
     });
 }
 
-pub fn submit_assignment_with_spec(
+pub(crate) fn submit_assignment_with_reservation_ops(
     ctx: &AssignTaskContext<'_>,
     queries: &mut FamiliarTaskAssignmentQueries,
     shadow: &mut ReservationShadow,
-    spec: AssignmentSpec,
+    work_type: WorkType,
+    task_pos: Vec2,
+    assigned_task: AssignedTask,
+    reservation_ops: Vec<ResourceReservationOp>,
+    already_commanded: bool,
 ) {
     submit_assignment(
         ctx,
         queries,
         shadow,
-        spec.work_type,
-        spec.task_pos,
-        spec.assigned_task,
-        spec.reservation_ops,
-        spec.already_commanded,
+        work_type,
+        task_pos,
+        assigned_task,
+        reservation_ops,
+        already_commanded,
+    );
+}
+
+pub(crate) fn submit_assignment_with_source_entities(
+    ctx: &AssignTaskContext<'_>,
+    queries: &mut FamiliarTaskAssignmentQueries,
+    shadow: &mut ReservationShadow,
+    work_type: WorkType,
+    task_pos: Vec2,
+    assigned_task: AssignedTask,
+    source_entities: &[Entity],
+    already_commanded: bool,
+) {
+    let reservation_ops = build_source_reservation_ops(source_entities);
+    submit_assignment_with_reservation_ops(
+        ctx,
+        queries,
+        shadow,
+        work_type,
+        task_pos,
+        assigned_task,
+        reservation_ops,
+        already_commanded,
     );
 }
 

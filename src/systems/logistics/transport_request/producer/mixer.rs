@@ -75,16 +75,11 @@ pub fn mud_mixer_auto_haul_system(
         familiar_with_collect_sand_demand.insert(request.issued_by);
     }
     let mut familiar_with_collect_sand_task = std::collections::HashSet::<Entity>::new();
-    for (designation, managed_by, workers_opt) in q_collect_sand_tasks.iter() {
+    for (designation, managed_by, _workers_opt) in q_collect_sand_tasks.iter() {
         if designation.work_type != WorkType::CollectSand {
             continue;
         }
-        let workers = workers_opt.map(|w| w.len()).unwrap_or(0);
-        if workers == 0 {
-            familiar_with_collect_sand_task.insert(managed_by.0);
-        } else {
-            familiar_with_collect_sand_task.insert(managed_by.0);
-        }
+        familiar_with_collect_sand_task.insert(managed_by.0);
     }
 
     // request の inflight は「実際に割り当て済みの worker 数」で集計する。
@@ -242,41 +237,93 @@ pub fn mud_mixer_auto_haul_system(
         }
     }
 
-    // -----------------------------------------------------------------
-    // request エンティティを upsert / cleanup（共通ヘルパー使用）
-    // -----------------------------------------------------------------
     let mut seen_existing_keys = std::collections::HashSet::<(Entity, ResourceType)>::new();
+    upsert_mixer_requests_by_kind(
+        &mut commands,
+        &q_mixer_requests,
+        &desired_requests,
+        &active_mixers,
+        &mut seen_existing_keys,
+        TransportRequestKind::DeliverWaterToMixer,
+    );
+    upsert_mixer_requests_by_kind(
+        &mut commands,
+        &q_mixer_requests,
+        &desired_requests,
+        &active_mixers,
+        &mut seen_existing_keys,
+        TransportRequestKind::DeliverToMixerSolid,
+    );
 
-    for (request_entity, target_mixer, request, _designation_opt, workers_opt) in
-        q_mixer_requests.iter()
-    {
-        // 固体・水 request エンティティを対象
+    for (key, (issued_by, slots, mixer_pos)) in desired_requests {
+        if seen_existing_keys.contains(&key) {
+            continue;
+        }
+
+        let (work_type, kind, name) = mixer_request_profile(key.1);
+        commands.spawn((
+            Name::new(name),
+            Transform::from_xyz(mixer_pos.x, mixer_pos.y, 0.0),
+            Visibility::Hidden,
+            Designation { work_type },
+            crate::relationships::ManagedBy(issued_by),
+            TaskSlots::new(slots),
+            Priority(5),
+            TargetMixer(key.0),
+            TransportRequest {
+                kind,
+                anchor: key.0,
+                resource_type: key.1,
+                issued_by,
+                priority: TransportPriority::Normal,
+                stockpile_group: vec![],
+            },
+            TransportDemand {
+                desired_slots: slots,
+                inflight: 0,
+            },
+            TransportRequestState::Pending,
+            TransportPolicy::default(),
+        ));
+    }
+}
+
+fn upsert_mixer_requests_by_kind(
+    commands: &mut Commands,
+    q_mixer_requests: &Query<(
+        Entity,
+        &TargetMixer,
+        &TransportRequest,
+        Option<&Designation>,
+        Option<&TaskWorkers>,
+    )>,
+    desired_requests: &std::collections::HashMap<(Entity, ResourceType), (Entity, u32, Vec2)>,
+    active_mixers: &std::collections::HashSet<Entity>,
+    seen_existing_keys: &mut std::collections::HashSet<(Entity, ResourceType)>,
+    expected_kind: TransportRequestKind,
+) {
+    for (request_entity, target_mixer, request, _, workers_opt) in q_mixer_requests.iter() {
+        if request.kind != expected_kind {
+            continue;
+        }
         let key = (target_mixer.0, request.resource_type);
-        let is_water = request.kind == TransportRequestKind::DeliverWaterToMixer;
-        let workers = workers_opt.map(|w| w.len()).unwrap_or(0);
+        if !mixer_request_resource_matches(key.1, expected_kind) {
+            continue;
+        }
 
+        let workers = workers_opt.map(|w| w.len()).unwrap_or(0);
         if !super::upsert::process_duplicate_key(
-            &mut commands,
+            commands,
             request_entity,
             workers,
-            &mut seen_existing_keys,
+            seen_existing_keys,
             key,
         ) {
             continue;
         }
 
         if let Some((issued_by, slots, mixer_pos)) = desired_requests.get(&key) {
-            let (work_type, kind) = if is_water {
-                (
-                    WorkType::HaulWaterToMixer,
-                    TransportRequestKind::DeliverWaterToMixer,
-                )
-            } else {
-                (
-                    WorkType::HaulToMixer,
-                    TransportRequestKind::DeliverToMixerSolid,
-                )
-            };
+            let (work_type, kind, _) = mixer_request_profile(key.1);
             commands.entity(request_entity).try_insert((
                 Transform::from_xyz(mixer_pos.x, mixer_pos.y, 0.0),
                 Visibility::Hidden,
@@ -307,54 +354,35 @@ pub fn mud_mixer_auto_haul_system(
             if !active_mixers.contains(&target_mixer.0) {
                 commands.entity(request_entity).try_despawn();
             } else {
-                super::upsert::disable_request(&mut commands, request_entity);
+                super::upsert::disable_request(commands, request_entity);
             }
         }
     }
+}
 
-    for (key, (issued_by, slots, mixer_pos)) in desired_requests {
-        if seen_existing_keys.contains(&key) {
-            continue;
+fn mixer_request_profile(resource_type: ResourceType) -> (WorkType, TransportRequestKind, &'static str) {
+    if resource_type == ResourceType::Water {
+        (
+            WorkType::HaulWaterToMixer,
+            TransportRequestKind::DeliverWaterToMixer,
+            "TransportRequest::DeliverWaterToMixer",
+        )
+    } else {
+        (
+            WorkType::HaulToMixer,
+            TransportRequestKind::DeliverToMixerSolid,
+            "TransportRequest::DeliverToMixerSolid",
+        )
+    }
+}
+
+fn mixer_request_resource_matches(resource_type: ResourceType, kind: TransportRequestKind) -> bool {
+    match kind {
+        TransportRequestKind::DeliverWaterToMixer => resource_type == ResourceType::Water,
+        TransportRequestKind::DeliverToMixerSolid => {
+            matches!(resource_type, ResourceType::Sand | ResourceType::Rock)
         }
-
-        let (work_type, kind, name) = if key.1 == ResourceType::Water {
-            (
-                WorkType::HaulWaterToMixer,
-                TransportRequestKind::DeliverWaterToMixer,
-                "TransportRequest::DeliverWaterToMixer",
-            )
-        } else {
-            (
-                WorkType::HaulToMixer,
-                TransportRequestKind::DeliverToMixerSolid,
-                "TransportRequest::DeliverToMixerSolid",
-            )
-        };
-
-        commands.spawn((
-            Name::new(name),
-            Transform::from_xyz(mixer_pos.x, mixer_pos.y, 0.0),
-            Visibility::Hidden,
-            Designation { work_type },
-            crate::relationships::ManagedBy(issued_by),
-            TaskSlots::new(slots),
-            Priority(5),
-            TargetMixer(key.0),
-            TransportRequest {
-                kind,
-                anchor: key.0,
-                resource_type: key.1,
-                issued_by,
-                priority: TransportPriority::Normal,
-                stockpile_group: vec![],
-            },
-            TransportDemand {
-                desired_slots: slots,
-                inflight: 0,
-            },
-            TransportRequestState::Pending,
-            TransportPolicy::default(),
-        ));
+        _ => false,
     }
 }
 
