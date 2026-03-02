@@ -8,7 +8,7 @@ use bevy::prelude::*;
 
 use super::{
     build_mixer_destination_reservation_ops, build_source_reservation_ops, build_wheelbarrow_reservation_ops,
-    submit_assignment_with_spec, AssignmentSpec,
+    submit_assignment_with_reservation_ops, submit_assignment_with_source_entities,
 };
 
 /// 指定のソースアイテムを使って Blueprint 運搬を割り当てる（request 方式の遅延解決用）
@@ -29,18 +29,15 @@ pub fn issue_haul_to_blueprint_with_source(
                 phase: HaulToBpPhase::GoingToItem,
             },
         );
-    let reservation_ops = build_source_reservation_ops(&[source_item]);
-    submit_assignment_with_spec(
+    submit_assignment_with_source_entities(
         ctx,
         queries,
         shadow,
-        AssignmentSpec {
-            work_type: WorkType::Haul,
-            task_pos,
-            assigned_task,
-            reservation_ops,
-            already_commanded,
-        },
+        WorkType::Haul,
+        task_pos,
+        assigned_task,
+        &[source_item],
+        already_commanded,
     );
 }
 
@@ -60,18 +57,15 @@ pub fn issue_haul_to_stockpile_with_source(
             phase: HaulPhase::GoingToItem,
         },
     );
-    let reservation_ops = build_source_reservation_ops(&[source_item]);
-    submit_assignment_with_spec(
+    submit_assignment_with_source_entities(
         ctx,
         queries,
         shadow,
-        AssignmentSpec {
-            work_type: WorkType::Haul,
-            task_pos,
-            assigned_task,
-            reservation_ops,
-            already_commanded,
-        },
+        WorkType::Haul,
+        task_pos,
+        assigned_task,
+        &[source_item],
+        already_commanded,
     );
 }
 
@@ -100,17 +94,15 @@ pub fn issue_haul_to_mixer(
         item_type,
         mixer_already_reserved,
     ));
-    submit_assignment_with_spec(
+    submit_assignment_with_reservation_ops(
         ctx,
         queries,
         shadow,
-        AssignmentSpec {
-            work_type: WorkType::HaulToMixer,
-            task_pos,
-            assigned_task,
-            reservation_ops,
-            already_commanded,
-        },
+        WorkType::HaulToMixer,
+        task_pos,
+        assigned_task,
+        reservation_ops,
+        already_commanded,
     );
 }
 
@@ -139,18 +131,17 @@ pub fn issue_haul_with_wheelbarrow(
             },
         );
 
-    let reservation_ops = build_wheelbarrow_reservation_ops(queries, wheelbarrow, &destination, &items, &items);
-    submit_assignment_with_spec(
+    let reservation_ops =
+        build_wheelbarrow_reservation_ops(queries, wheelbarrow, &destination, &items, &items);
+    submit_assignment_with_reservation_ops(
         ctx,
         queries,
         shadow,
-        AssignmentSpec {
-            work_type: WorkType::WheelbarrowHaul,
-            task_pos,
-            assigned_task,
-            reservation_ops,
-            already_commanded,
-        },
+        WorkType::WheelbarrowHaul,
+        task_pos,
+        assigned_task,
+        reservation_ops,
+        already_commanded,
     );
 }
 
@@ -181,18 +172,15 @@ pub fn issue_return_wheelbarrow(
             },
         );
 
-    let reservation_ops = build_source_reservation_ops(&[wheelbarrow]);
-    submit_assignment_with_spec(
+    submit_assignment_with_source_entities(
         ctx,
         queries,
         shadow,
-        AssignmentSpec {
-            work_type: WorkType::WheelbarrowHaul,
-            task_pos,
-            assigned_task,
-            reservation_ops,
-            already_commanded,
-        },
+        WorkType::WheelbarrowHaul,
+        task_pos,
+        assigned_task,
+        &[wheelbarrow],
+        already_commanded,
     );
 }
 
@@ -229,18 +217,17 @@ pub fn issue_collect_sand_with_wheelbarrow_to_blueprint(
 
     let destination =
         crate::systems::logistics::transport_request::WheelbarrowDestination::Blueprint(blueprint);
-    let reservation_ops = build_wheelbarrow_reservation_ops(queries, wheelbarrow, &destination, &[source_entity], &[]);
-    submit_assignment_with_spec(
+    let reservation_ops =
+        build_wheelbarrow_reservation_ops(queries, wheelbarrow, &destination, &[source_entity], &[]);
+    submit_assignment_with_reservation_ops(
         ctx,
         queries,
         shadow,
-        AssignmentSpec {
-            work_type: WorkType::WheelbarrowHaul,
-            task_pos,
-            assigned_task,
-            reservation_ops,
-            already_commanded,
-        },
+        WorkType::WheelbarrowHaul,
+        task_pos,
+        assigned_task,
+        reservation_ops,
+        already_commanded,
     );
 }
 
@@ -277,18 +264,17 @@ pub fn issue_collect_bone_with_wheelbarrow_to_blueprint(
 
     let destination =
         crate::systems::logistics::transport_request::WheelbarrowDestination::Blueprint(blueprint);
-    let reservation_ops = build_wheelbarrow_reservation_ops(queries, wheelbarrow, &destination, &[source_entity], &[]);
-    submit_assignment_with_spec(
+    let reservation_ops =
+        build_wheelbarrow_reservation_ops(queries, wheelbarrow, &destination, &[source_entity], &[]);
+    submit_assignment_with_reservation_ops(
         ctx,
         queries,
         shadow,
-        AssignmentSpec {
-            work_type: WorkType::WheelbarrowHaul,
-            task_pos,
-            assigned_task,
-            reservation_ops,
-            already_commanded,
-        },
+        WorkType::WheelbarrowHaul,
+        task_pos,
+        assigned_task,
+        reservation_ops,
+        already_commanded,
     );
 }
 
@@ -325,17 +311,16 @@ pub fn issue_collect_bone_with_wheelbarrow_to_floor(
 
     let destination =
         crate::systems::logistics::transport_request::WheelbarrowDestination::Stockpile(site_entity);
-    let reservation_ops = build_wheelbarrow_reservation_ops(queries, wheelbarrow, &destination, &[source_entity], &[]);
-    submit_assignment_with_spec(
+    let reservation_ops =
+        build_wheelbarrow_reservation_ops(queries, wheelbarrow, &destination, &[source_entity], &[]);
+    submit_assignment_with_reservation_ops(
         ctx,
         queries,
         shadow,
-        AssignmentSpec {
-            work_type: WorkType::WheelbarrowHaul,
-            task_pos,
-            assigned_task,
-            reservation_ops,
-            already_commanded,
-        },
+        WorkType::WheelbarrowHaul,
+        task_pos,
+        assigned_task,
+        reservation_ops,
+        already_commanded,
     );
 }

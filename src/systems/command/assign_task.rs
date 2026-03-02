@@ -80,7 +80,13 @@ pub fn assign_task_system(
         // 地面周辺から到達可能かチェック（逆引き検索: タスクから地面へ）
         let target_grid = WorldMap::world_to_grid(pos);
         let is_reachable = if world_map.is_walkable(target_grid.0, target_grid.1) {
-            pathfinding::find_path(&world_map, &mut pf_context, target_grid, actual_start_grid)
+            pathfinding::find_path(
+                &world_map,
+                &mut pf_context,
+                target_grid,
+                actual_start_grid,
+                pathfinding::PathGoalPolicy::RespectGoalWalkability,
+            )
                 .is_some()
         } else {
             // pathfinding.rs 内部で neighbor -> actual_start_grid の逆引きが行われる
@@ -89,6 +95,7 @@ pub fn assign_task_system(
                 &mut pf_context,
                 actual_start_grid,
                 target_grid,
+                true,
             )
             .is_some()
         };

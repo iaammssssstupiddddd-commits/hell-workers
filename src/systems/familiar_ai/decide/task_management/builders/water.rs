@@ -4,7 +4,12 @@ use crate::systems::logistics::ResourceType;
 use crate::systems::soul_ai::execute::task_execution::types::GatherWaterPhase;
 use bevy::prelude::*;
 
-use super::{submit_assignment_with_spec, AssignmentSpec, build_source_reservation_ops, build_mixer_destination_reservation_ops};
+use super::{
+    build_mixer_destination_reservation_ops,
+    build_source_reservation_ops,
+    submit_assignment_with_reservation_ops,
+    submit_assignment_with_source_entities,
+};
 
 pub fn issue_gather_water(
     bucket: Entity,
@@ -23,18 +28,15 @@ pub fn issue_gather_water(
                 phase: GatherWaterPhase::GoingToBucket,
             },
         );
-    let reservation_ops = build_source_reservation_ops(&[bucket]);
-    submit_assignment_with_spec(
+    submit_assignment_with_source_entities(
         ctx,
         queries,
         shadow,
-        AssignmentSpec {
-            work_type: WorkType::GatherWater,
-            task_pos,
-            assigned_task,
-            reservation_ops,
-            already_commanded,
-        },
+        WorkType::GatherWater,
+        task_pos,
+        assigned_task,
+        &[bucket],
+        already_commanded,
     );
 }
 
@@ -64,16 +66,14 @@ pub fn issue_haul_water_to_mixer(
         ResourceType::Water,
         mixer_already_reserved,
     ));
-    submit_assignment_with_spec(
+    submit_assignment_with_reservation_ops(
         ctx,
         queries,
         shadow,
-        AssignmentSpec {
-            work_type: WorkType::HaulWaterToMixer,
-            task_pos,
-            assigned_task,
-            reservation_ops,
-            already_commanded,
-        },
+        WorkType::HaulWaterToMixer,
+        task_pos,
+        assigned_task,
+        reservation_ops,
+        already_commanded,
     );
 }

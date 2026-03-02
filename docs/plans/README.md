@@ -1,6 +1,6 @@
 # Plans Index
 
-`docs/plans` の文書ステータス一覧（更新日: 2026-03-01）。
+`docs/plans` の文書ステータス一覧（更新日: 2026-03-02）。
 
 ## 新規計画書の作り方
 
@@ -19,18 +19,19 @@
 
 | Document | Status | Notes |
 |---|---|---|
-| [assignment-builder-unification-plan-2026-03-01.md](assignment-builder-unification-plan-2026-03-01.md) | Completed | `task_management/builders` の重複削減と割り当て生成経路の共通化計画。 |
+| [refactor-top5-followups-plan-2026-03-02.md](refactor-top5-followups-plan-2026-03-02.md) | Completed | 直近レビューで抽出した5件（運搬共通化、UI粒子分割、builder重複削減、pathfinding明示化、冗長分岐除去）の統合実装計画。 |
 | [pathfinding-core-unification-plan-2026-03-01.md](pathfinding-core-unification-plan-2026-03-01.md) | Completed | `find_path` 系の探索核を共通化し、境界探索との重複を解消する計画。 |
-| [ui-menu-action-boundary-plan-2026-03-01.md](ui-menu-action-boundary-plan-2026-03-01.md) | Completed | `MenuAction` 処理の責務境界整理と no-op 分岐解消の計画。 |
-| [ui-submenu-spec-driven-plan-2026-03-01.md](ui-submenu-spec-driven-plan-2026-03-01.md) | Completed | サブメニュー生成を Spec 駆動へ移行し重複を削減する計画。 |
-| [zone-removal-preview-diff-plan-2026-03-01.md](zone-removal-preview-diff-plan-2026-03-01.md) | Completed | Zone removal preview の全件更新を差分更新へ置換する計画。 |
-| [selection-placement-refactor-plan-2026-02-25.md](selection-placement-refactor-plan-2026-02-25.md) | Completed | `interface/selection` の配置処理を責務分離するリファクタ計画。 |
-| [room-detection-plan-2026-02-23.md](room-detection-plan-2026-02-23.md) | Implemented | 壁・扉・床の閉領域をRoomとして検出し、オーバーレイ表示する実装計画。 |
 
 ## アーカイブ計画書一覧 (`docs/plans/archive`)
 
 | Document | Status | Notes |
 |---|---|---|
+| [archive/assignment-builder-unification-plan-2026-03-01.md](archive/assignment-builder-unification-plan-2026-03-01.md) | アーカイブ | `task_management/builders` の重複削減と割り当て生成経路の共通化計画。 |
+| [archive/ui-menu-action-boundary-plan-2026-03-01.md](archive/ui-menu-action-boundary-plan-2026-03-01.md) | アーカイブ | `MenuAction` 処理の責務境界整理と no-op 分岐解消の計画。 |
+| [archive/ui-submenu-spec-driven-plan-2026-03-01.md](archive/ui-submenu-spec-driven-plan-2026-03-01.md) | アーカイブ | サブメニュー生成を Spec 駆動へ移行し重複を削減する計画。 |
+| [archive/zone-removal-preview-diff-plan-2026-03-01.md](archive/zone-removal-preview-diff-plan-2026-03-01.md) | アーカイブ | Zone removal preview の全件更新を差分更新へ置換する計画。 |
+| [archive/selection-placement-refactor-plan-2026-02-25.md](archive/selection-placement-refactor-plan-2026-02-25.md) | アーカイブ | `interface/selection` の配置処理を責務分離するリファクタ計画。 |
+| [archive/room-detection-plan-2026-02-23.md](archive/room-detection-plan-2026-02-23.md) | アーカイブ | 壁・扉・床の閉領域をRoomとして検出し、オーバーレイ表示する実装計画。 |
 | `ai-phase-refactor-implementation-plan.md` | アーカイブ | AIフェーズリファクタ実装計画。 |
 | `ai-phase-refactor.md` | アーカイブ | AIフェーズリファクタの全体設計メモ。 |
 | `auto-gather-for-blueprint.md` | アーカイブ | Blueprint不足資材の自動伐採/採掘計画。 |
