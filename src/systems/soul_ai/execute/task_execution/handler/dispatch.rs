@@ -59,6 +59,17 @@ pub fn run_task_handler(
                 breakdown_opt,
             );
         }
+        AssignedTask::MovePlant(data) => {
+            AssignedTask::execute(
+                ctx,
+                data.clone(),
+                commands,
+                game_assets,
+                time,
+                world_map,
+                breakdown_opt,
+            );
+        }
         AssignedTask::HaulToBlueprint(data) => {
             AssignedTask::execute(
                 ctx,

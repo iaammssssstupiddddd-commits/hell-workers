@@ -120,13 +120,14 @@ pub enum MenuAction {
     SetTimeSpeed(TimeSpeed),
     TogglePause,
     SelectArchitectCategory(Option<BuildingCategory>),
+    MovePlantBuilding(Entity),
 }
 
 impl MenuAction {
     pub const fn is_specialized(&self) -> bool {
         matches!(
             self,
-            Self::ToggleDoorLock(_) | Self::SelectArchitectCategory(_)
+            Self::ToggleDoorLock(_) | Self::SelectArchitectCategory(_) | Self::MovePlantBuilding(_)
         )
     }
 }
@@ -171,6 +172,11 @@ pub enum UiSlot {
 
 #[derive(Component)]
 pub struct MenuButton(pub MenuAction);
+
+#[derive(Component)]
+pub struct HoverActionOverlay {
+    pub target: Option<Entity>,
+}
 
 #[derive(Resource, Default)]
 pub struct ArchitectCategoryState(pub Option<BuildingCategory>);

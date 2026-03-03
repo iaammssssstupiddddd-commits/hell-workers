@@ -224,6 +224,7 @@ pub struct TaskAssignmentReadAccess<'w, 's> {
         With<crate::systems::jobs::BonePile>,
     >,
     pub task_state: Query<'w, 's, (Option<&'static Designation>, Option<&'static TaskWorkers>)>,
+    pub move_plant_tasks: Query<'w, 's, &'static crate::systems::soul_ai::execute::task_execution::types::MovePlantTask>,
     pub transport_requests:
         Query<'w, 's, &'static crate::systems::logistics::transport_request::TransportRequest>,
     pub transport_demands:
@@ -309,6 +310,13 @@ impl<'w, 's> DerefMut for TaskAssignmentQueries<'w, 's> {
     }
 }
 
+/// タスク解除に必要な最小クエリ群
+#[derive(SystemParam)]
+pub struct TaskUnassignQueries<'w, 's> {
+    pub reservation: ReservationAccess<'w, 's>,
+    pub designation: DesignationAccess<'w, 's>,
+}
+
 /// タスク実行に必要なクエリ群
 #[derive(SystemParam)]
 pub struct TaskQueries<'w, 's> {
@@ -366,6 +374,24 @@ impl<'w, 's> TaskReservationAccess<'w, 's> for TaskQueries<'w, 's> {
 }
 
 impl<'w, 's> TaskReservationAccess<'w, 's> for TaskAssignmentQueries<'w, 's> {
+    fn reservation_writer(&mut self) -> &mut MessageWriter<'w, ResourceReservationRequest> {
+        &mut self.reservation.reservation_writer
+    }
+
+    fn resources(&self) -> &Query<'w, 's, &'static ResourceItem> {
+        &self.reservation.resources
+    }
+
+    fn belongs_to(&self, entity: Entity) -> Option<Entity> {
+        self.designation
+            .belongs
+            .get(entity)
+            .ok()
+            .map(|belongs| belongs.0)
+    }
+}
+
+impl<'w, 's> TaskReservationAccess<'w, 's> for TaskUnassignQueries<'w, 's> {
     fn reservation_writer(&mut self) -> &mut MessageWriter<'w, ResourceReservationRequest> {
         &mut self.reservation.reservation_writer
     }

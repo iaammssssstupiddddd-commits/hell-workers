@@ -115,6 +115,7 @@ impl LatinPhrase {
                 LatinPhrase::Portare
             }
             WorkType::Build
+            | WorkType::Move
             | WorkType::ReinforceFloorTile
             | WorkType::PourFloorTile
             | WorkType::FrameWallTile

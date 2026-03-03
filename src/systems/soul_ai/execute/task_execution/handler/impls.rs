@@ -10,7 +10,7 @@ use super::task_handler::TaskHandler;
 use crate::systems::soul_ai::execute::task_execution::types::{
     AssignedTask, BuildData, CoatWallData, CollectBoneData, CollectSandData, FrameWallTileData,
     GatherData, GatherWaterData, HaulData, HaulToBlueprintData, HaulToMixerData,
-    HaulWaterToMixerData, PourFloorTileData, RefineData, ReinforceFloorTileData,
+    HaulWaterToMixerData, MovePlantData, PourFloorTileData, RefineData, ReinforceFloorTileData,
 };
 
 impl TaskHandler<GatherData> for AssignedTask {
@@ -301,6 +301,22 @@ impl TaskHandler<FrameWallTileData> for AssignedTask {
     ) {
         crate::systems::soul_ai::execute::task_execution::frame_wall::handle_frame_wall_task(
             ctx, data.tile, data.site, data.phase, commands, time, world_map,
+        );
+    }
+}
+
+impl TaskHandler<MovePlantData> for AssignedTask {
+    fn execute(
+        ctx: &mut TaskExecutionContext,
+        data: MovePlantData,
+        commands: &mut Commands,
+        _game_assets: &Res<GameAssets>,
+        _time: &Res<Time>,
+        world_map: &Res<WorldMap>,
+        _breakdown_opt: Option<&StressBreakdown>,
+    ) {
+        crate::systems::soul_ai::execute::task_execution::move_plant::handle_move_plant_task(
+            ctx, data, commands, world_map,
         );
     }
 }

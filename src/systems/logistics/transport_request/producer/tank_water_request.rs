@@ -14,6 +14,7 @@ use crate::systems::logistics::transport_request::{
     TransportRequestState,
 };
 use crate::systems::logistics::{ResourceType, Stockpile};
+use crate::systems::soul_ai::execute::task_execution::move_plant::MovePlanned;
 
 /// タンクの貯蔵量を監視し、空きがあれば TransportRequest を発行するシステム
 pub fn tank_water_request_system(
@@ -23,6 +24,7 @@ pub fn tank_water_request_system(
     // タンク自体の在庫状況（Water を貯める Stockpile）
     q_tanks: Query<(Entity, &Transform, &Stockpile, Option<&StoredItems>)>,
     q_tank_requests: Query<(Entity, &TransportRequest, Option<&TaskWorkers>)>,
+    q_move_planned: Query<(), With<MovePlanned>>,
 ) {
     let active_familiars: Vec<(Entity, TaskArea)> = q_familiars
         .iter()
@@ -34,6 +36,9 @@ pub fn tank_water_request_system(
     let mut desired_requests = std::collections::HashMap::<Entity, (Entity, u32, Vec2)>::new();
 
     for (tank_entity, tank_transform, tank_stock, stored_opt) in q_tanks.iter() {
+        if q_move_planned.get(tank_entity).is_ok() {
+            continue;
+        }
         // 水タンク以外はスキップ
         if tank_stock.resource_type != Some(ResourceType::Water) {
             continue;

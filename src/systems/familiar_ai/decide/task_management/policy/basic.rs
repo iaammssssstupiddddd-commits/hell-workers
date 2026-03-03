@@ -5,7 +5,7 @@ use crate::systems::logistics::transport_request::TransportRequestKind;
 use bevy::prelude::*;
 
 use super::super::builders::{
-    issue_build, issue_collect_bone, issue_collect_sand, issue_gather, issue_refine,
+    issue_build, issue_collect_bone, issue_collect_sand, issue_gather, issue_move, issue_refine,
 };
 use super::super::validator::can_reserve_source;
 
@@ -45,6 +45,17 @@ pub(super) fn assign_build(
         return false;
     }
     issue_build(task_pos, already_commanded, ctx, queries, shadow);
+    true
+}
+
+pub(super) fn assign_move(
+    task_pos: Vec2,
+    already_commanded: bool,
+    ctx: &AssignTaskContext<'_>,
+    queries: &mut crate::systems::familiar_ai::decide::task_management::FamiliarTaskAssignmentQueries,
+    shadow: &mut ReservationShadow,
+) -> bool {
+    issue_move(task_pos, already_commanded, ctx, queries, shadow);
     true
 }
 

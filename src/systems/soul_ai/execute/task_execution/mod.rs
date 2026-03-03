@@ -17,6 +17,7 @@ pub mod haul_to_blueprint;
 pub mod haul_to_mixer;
 pub mod haul_water_to_mixer;
 pub mod haul_with_wheelbarrow;
+pub mod move_plant;
 pub mod pour_floor;
 pub mod refine;
 pub mod reinforce_floor;

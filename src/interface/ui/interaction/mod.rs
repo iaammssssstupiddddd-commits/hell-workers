@@ -5,6 +5,7 @@
 mod common;
 mod dialog;
 mod menu_actions;
+mod hover_action;
 mod mode;
 mod status_display;
 mod tooltip;
@@ -17,10 +18,12 @@ pub use status_display::{
     update_speed_button_highlight_system,
 };
 pub(crate) use tooltip::hover_tooltip_system;
+pub(crate) use hover_action::hover_action_button_system;
 
 use crate::entities::familiar::{Familiar, FamiliarOperation};
 use crate::game_state::{
-    BuildContext, CompanionPlacementState, PlayMode, TaskContext, ZoneContext,
+    BuildContext, CompanionPlacementState, MoveContext, MovePlacementState, PlayMode, TaskContext,
+    ZoneContext,
 };
 use crate::interface::ui::components::*;
 use crate::interface::ui::theme::UiTheme;
@@ -192,6 +195,31 @@ pub fn arch_category_action_system(
                 category
             };
         }
+    }
+}
+
+/// `MovePlantBuilding` を専用で処理するシステム
+/// Plantの移動先選択モードへ遷移する。
+pub fn move_plant_building_action_system(
+    interaction_query: Query<(&Interaction, &MenuButton), (Changed<Interaction>, With<Button>)>,
+    mut selected_entity: ResMut<crate::interface::selection::SelectedEntity>,
+    mut move_context: ResMut<MoveContext>,
+    mut move_placement_state: ResMut<MovePlacementState>,
+    mut companion_state: ResMut<CompanionPlacementState>,
+    mut next_play_mode: ResMut<NextState<PlayMode>>,
+) {
+    for (interaction, menu_button) in interaction_query.iter() {
+        if *interaction != Interaction::Pressed {
+            continue;
+        }
+        let MenuAction::MovePlantBuilding(entity) = menu_button.0 else {
+            continue;
+        };
+        selected_entity.0 = Some(entity);
+        move_context.0 = Some(entity);
+        move_placement_state.0 = None;
+        companion_state.0 = None;
+        next_play_mode.set(PlayMode::BuildingMove);
     }
 }
 

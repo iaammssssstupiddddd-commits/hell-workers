@@ -13,7 +13,10 @@ use perf_scenario::{
 use crate::assets::GameAssets;
 use crate::entities::damned_soul::{DamnedSoulSpawnEvent, spawn_damned_souls};
 use crate::entities::familiar::FamiliarSpawnEvent;
-use crate::game_state::{BuildContext, CompanionPlacementState, TaskContext, ZoneContext};
+use crate::game_state::{
+    BuildContext, CompanionPlacementState, MoveContext, MovePlacementState, TaskContext,
+    ZoneContext,
+};
 use crate::interface::camera::{MainCamera, PanCamera};
 use crate::interface::selection::{HoveredEntity, SelectedEntity};
 use crate::interface::ui::{MenuState, components::ArchitectCategoryState, setup_ui};
@@ -37,6 +40,8 @@ impl Plugin for StartupPlugin {
             .init_resource::<MenuState>()
             .init_resource::<ArchitectCategoryState>()
             .init_resource::<BuildContext>()
+            .init_resource::<MoveContext>()
+            .init_resource::<MovePlacementState>()
             .init_resource::<ZoneContext>()
             .init_resource::<CompanionPlacementState>()
             .init_resource::<ResourceLabels>()

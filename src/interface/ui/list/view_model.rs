@@ -44,6 +44,7 @@ fn task_visual(task: &AssignedTask) -> TaskVisual {
         },
         AssignedTask::Haul { .. } => TaskVisual::Haul,
         AssignedTask::Build { .. } => TaskVisual::Build,
+        AssignedTask::MovePlant { .. } => TaskVisual::Build,
         AssignedTask::HaulToBlueprint { .. } => TaskVisual::HaulToBlueprint,
         AssignedTask::GatherWater { .. } => TaskVisual::Water,
         AssignedTask::CollectSand { .. } => TaskVisual::GatherDefault,

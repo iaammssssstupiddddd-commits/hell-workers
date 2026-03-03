@@ -1,11 +1,12 @@
 use crate::systems::familiar_ai::decide::task_management::{AssignTaskContext, ReservationShadow};
 use crate::systems::jobs::WorkType;
 use crate::systems::soul_ai::execute::task_execution::types::{
-    BuildPhase, CoatWallPhase, FrameWallPhase, GatherPhase, PourFloorPhase, ReinforceFloorPhase,
+    AssignedTask, BuildPhase, CoatWallPhase, FrameWallPhase, GatherPhase, MovePlantPhase,
+    PourFloorPhase, ReinforceFloorPhase,
 };
 use bevy::prelude::*;
 
-use super::submit_assignment_with_source_entities;
+use super::{submit_assignment_with_reservation_ops, submit_assignment_with_source_entities};
 
 pub fn issue_gather(
     work_type: WorkType,
@@ -226,4 +227,37 @@ pub fn issue_frame_wall(
             },
         );
     submit_assignment_with_source_entities(ctx, queries, shadow, WorkType::FrameWallTile, task_pos, assigned_task, &[ctx.task_entity], already_commanded);
+}
+
+pub fn issue_move(
+    task_pos: Vec2,
+    already_commanded: bool,
+    ctx: &AssignTaskContext<'_>,
+    queries: &mut crate::systems::familiar_ai::decide::task_management::FamiliarTaskAssignmentQueries,
+    shadow: &mut ReservationShadow,
+) {
+    let Ok(task_template) = queries.move_plant_tasks.get(ctx.task_entity) else {
+        warn!("issue_move: Missing task template for {:?}", ctx.task_entity);
+        return;
+    };
+
+    let assigned_task = AssignedTask::MovePlant(crate::systems::soul_ai::execute::task_execution::types::MovePlantData {
+        task_entity: ctx.task_entity,
+        building: task_template.building,
+        destination_grid: task_template.destination_grid,
+        destination_pos: task_template.destination_pos,
+        companion_anchor: task_template.companion_anchor,
+        phase: MovePlantPhase::GoToBuilding,
+    });
+
+    submit_assignment_with_reservation_ops(
+        ctx,
+        queries,
+        shadow,
+        WorkType::Move,
+        task_pos,
+        assigned_task,
+        Vec::new(),
+        already_commanded,
+    );
 }
