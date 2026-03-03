@@ -3,6 +3,7 @@
 
 # ビルド成果物
 target/
+target-cl/
 dist/
 .trunk/
 

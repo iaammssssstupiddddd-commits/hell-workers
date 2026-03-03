@@ -17,6 +17,7 @@ use crate::systems::logistics::transport_request::{
 use crate::systems::logistics::{
     BelongsTo, BucketStorage, ReservedForTask, ResourceItem, ResourceType, Stockpile,
 };
+use crate::systems::soul_ai::execute::task_execution::move_plant::MovePlanned;
 
 #[derive(Clone, Copy)]
 struct DesiredBucketReturn {
@@ -73,6 +74,7 @@ pub fn bucket_auto_haul_system(
         With<BucketStorage>,
     >,
     q_bucket_requests: Query<(Entity, &TransportRequest, Option<&TaskWorkers>)>,
+    q_move_planned: Query<(), With<MovePlanned>>,
 ) {
     let active_familiars: Vec<(Entity, TaskArea)> = q_familiars
         .iter()
@@ -125,6 +127,9 @@ pub fn bucket_auto_haul_system(
 
     let mut desired_requests = std::collections::HashMap::<Entity, DesiredBucketReturn>::new();
     for (tank_entity, demand) in tank_demands.iter() {
+        if q_move_planned.get(*tank_entity).is_ok() {
+            continue;
+        }
         let Ok((tank_transform, tank_stockpile)) = q_tanks.get(*tank_entity) else {
             continue;
         };

@@ -13,6 +13,7 @@ use crate::systems::command::TaskArea;
 use crate::systems::jobs::{Designation, MudMixerStorage, WorkType};
 use crate::systems::logistics::{ResourceType, Stockpile};
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
+use crate::systems::soul_ai::execute::task_execution::move_plant::MovePlanned;
 
 /// MudMixer で精製タスクを自動発行するシステム
 pub fn mud_mixer_auto_refine_system(
@@ -26,6 +27,7 @@ pub fn mud_mixer_auto_refine_system(
         Option<&Designation>,
         Option<&Stockpile>,
         Option<&StoredItems>,
+        Option<&MovePlanned>,
     )>,
     q_souls: Query<&AssignedTask>,
 ) {
@@ -51,8 +53,12 @@ pub fn mud_mixer_auto_refine_system(
             designation_opt,
             stockpile_opt,
             stored_opt,
+            move_planned_opt,
         ) in q_mixers.iter()
         {
+            if move_planned_opt.is_some() {
+                continue;
+            }
             let mixer_pos = mixer_transform.translation.truncate();
             if !task_area.contains(mixer_pos) {
                 continue;

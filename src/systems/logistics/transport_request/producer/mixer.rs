@@ -18,6 +18,7 @@ use crate::systems::logistics::transport_request::{
     TransportRequestState,
 };
 use crate::systems::logistics::{ResourceType, Stockpile};
+use crate::systems::soul_ai::execute::task_execution::move_plant::MovePlanned;
 use crate::world::map::{TerrainType, WorldMap};
 
 /// MudMixer への自動資材運搬タスク生成システム
@@ -27,7 +28,15 @@ pub fn mud_mixer_auto_haul_system(
     haul_cache: Res<SharedResourceCache>,
     world_map: Res<WorldMap>,
     q_familiars: Query<(Entity, &ActiveCommand, &TaskArea)>,
-    q_mixers: Query<(Entity, &Transform, &MudMixerStorage, Option<&TaskWorkers>)>,
+    q_mixers: Query<
+        (
+            Entity,
+            &Transform,
+            &MudMixerStorage,
+            Option<&TaskWorkers>,
+            Option<&MovePlanned>,
+        ),
+    >,
     q_mixer_requests: Query<(
         Entity,
         &TargetMixer,
@@ -108,7 +117,10 @@ pub fn mud_mixer_auto_haul_system(
         std::collections::HashMap::<(Entity, ResourceType), (Entity, u32, Vec2)>::new();
     let mut active_mixers = std::collections::HashSet::<Entity>::new();
 
-    for (mixer_entity, mixer_transform, storage, _workers_opt) in q_mixers.iter() {
+    for (mixer_entity, mixer_transform, storage, _workers_opt, move_planned_opt) in q_mixers.iter() {
+        if move_planned_opt.is_some() {
+            continue;
+        }
         active_mixers.insert(mixer_entity);
 
         let mixer_pos = mixer_transform.translation.truncate();

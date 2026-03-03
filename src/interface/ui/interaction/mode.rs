@@ -236,5 +236,6 @@ pub(super) fn build_mode_text(
             TaskMode::WallPlace(Some(_)) => "Mode: Wall (Dragging 1xn...)".to_string(),
             _ => "Mode: Floor".to_string(),
         },
+        PlayMode::BuildingMove => "Mode: Move Building".to_string(),
     }
 }

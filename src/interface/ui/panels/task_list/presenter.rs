@@ -12,6 +12,7 @@ pub fn work_type_label(wt: &WorkType) -> &'static str {
         WorkType::Chop => "Chop",
         WorkType::Mine => "Mine",
         WorkType::Build => "Build",
+        WorkType::Move => "Move",
         WorkType::Haul => "Haul",
         WorkType::HaulToMixer => "Haul (Mixer)",
         WorkType::GatherWater => "Water",
@@ -36,6 +37,7 @@ pub fn get_work_type_icon(
         WorkType::Chop => (game_assets.icon_axe.clone(), theme.colors.chop),
         WorkType::Mine => (game_assets.icon_pick.clone(), theme.colors.mine),
         WorkType::Build => (game_assets.icon_hammer.clone(), theme.colors.build),
+        WorkType::Move => (game_assets.icon_hammer.clone(), theme.colors.build),
         WorkType::Haul | WorkType::HaulToMixer | WorkType::WheelbarrowHaul => {
             (game_assets.icon_haul.clone(), theme.colors.haul)
         }
@@ -85,6 +87,7 @@ pub fn generate_task_description(
                 format!("Construct {:?}", entity)
             }
         }
+        WorkType::Move => "Move Building".to_string(),
         WorkType::Mine => {
             if rock.is_some() {
                 "Mine Rock".to_string()

@@ -2,7 +2,10 @@
 //!
 //! InfoPanel と HoverTooltip を Startup 時に生成する。
 
-use crate::interface::ui::components::{HoverTooltip, InfoPanelNodes, UiNodeRegistry, UiSlot};
+use crate::interface::ui::components::{
+    HoverActionOverlay, HoverTooltip, InfoPanelNodes, MenuAction, MenuButton, UiNodeRegistry, UiSlot,
+    UiInputBlocker,
+};
 use crate::interface::ui::panels::spawn_info_panel_ui;
 use crate::interface::ui::theme::UiTheme;
 use bevy::prelude::*;
@@ -27,6 +30,51 @@ pub fn spawn_panels(
         info_panel_nodes,
     );
     spawn_hover_tooltip(commands, theme, overlay_parent, ui_nodes);
+    spawn_hover_action_overlay(commands, game_assets, theme, overlay_parent);
+}
+
+fn spawn_hover_action_overlay(
+    commands: &mut Commands,
+    game_assets: &Res<crate::assets::GameAssets>,
+    theme: &UiTheme,
+    parent_entity: Entity,
+) {
+    let hover_action_button = commands
+        .spawn((
+            Button,
+            Node {
+                position_type: PositionType::Absolute,
+                left: Val::Px(0.0),
+                top: Val::Px(0.0),
+                width: Val::Auto,
+                height: Val::Auto,
+                display: Display::None,
+                padding: UiRect::axes(Val::Px(8.0), Val::Px(4.0)),
+                border: UiRect::all(Val::Px(1.0)),
+                border_radius: BorderRadius::all(Val::Px(4.0)),
+                ..default()
+            },
+            HoverActionOverlay { target: None },
+            BackgroundColor(theme.colors.button_default),
+            BorderColor::all(theme.colors.border_default),
+            MenuButton(MenuAction::MovePlantBuilding(Entity::PLACEHOLDER)),
+            UiInputBlocker,
+            ZIndex(30),
+            Name::new("Hover Action Button"),
+        ))
+        .with_children(|parent| {
+            parent.spawn((
+                Text::new("Move"),
+                TextFont {
+                    font: game_assets.font_ui.clone(),
+                    font_size: theme.typography.font_size_base,
+                    ..default()
+                },
+                TextColor(theme.colors.text_primary_semantic),
+            ));
+        })
+        .id();
+    commands.entity(parent_entity).add_child(hover_action_button);
 }
 
 fn spawn_hover_tooltip(

@@ -18,6 +18,8 @@ pub enum AssignedTask {
     HaulToBlueprint(HaulToBlueprintData),
     /// 建築作業を行う
     Build(BuildData),
+    /// 建物を移動する
+    MovePlant(MovePlantData),
     /// 水汲みを行う
     GatherWater(GatherWaterData),
     /// 砂を採取する
@@ -307,6 +309,33 @@ pub struct CoatWallData {
     pub phase: CoatWallPhase,
 }
 
+#[derive(Reflect, Clone, Debug, PartialEq)]
+pub struct MovePlantData {
+    pub task_entity: Entity,
+    pub building: Entity,
+    pub destination_grid: (i32, i32),
+    pub destination_pos: Vec2,
+    pub companion_anchor: Option<(i32, i32)>,
+    pub phase: MovePlantPhase,
+}
+
+#[derive(Component, Reflect, Clone, Debug, PartialEq)]
+#[reflect(Component)]
+pub struct MovePlantTask {
+    pub building: Entity,
+    pub destination_grid: (i32, i32),
+    pub destination_pos: Vec2,
+    pub companion_anchor: Option<(i32, i32)>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Reflect, Default)]
+pub enum MovePlantPhase {
+    #[default]
+    GoToBuilding,
+    Moving,
+    Done,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Reflect, Default)]
 pub enum CoatWallPhase {
     #[default]
@@ -327,6 +356,7 @@ impl AssignedTask {
             AssignedTask::Haul(_) => Some(WorkType::Haul),
             AssignedTask::HaulToBlueprint(_) => Some(WorkType::Haul),
             AssignedTask::Build(_) => Some(WorkType::Build),
+            AssignedTask::MovePlant(_) => Some(WorkType::Move),
             AssignedTask::GatherWater(_) => Some(WorkType::GatherWater),
             AssignedTask::CollectSand(_) => Some(WorkType::CollectSand),
             AssignedTask::CollectBone(_) => Some(WorkType::CollectBone),
@@ -349,6 +379,7 @@ impl AssignedTask {
             AssignedTask::Haul(data) => Some(data.item),
             AssignedTask::HaulToBlueprint(data) => Some(data.item),
             AssignedTask::Build(data) => Some(data.blueprint),
+            AssignedTask::MovePlant(data) => Some(data.building),
             AssignedTask::GatherWater(data) => Some(data.bucket),
             AssignedTask::CollectSand(data) => Some(data.target),
             AssignedTask::CollectBone(data) => Some(data.target),

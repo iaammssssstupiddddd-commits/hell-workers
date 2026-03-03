@@ -24,7 +24,7 @@ After any code change, ensure zero compilation errors:
 3. Fix errors immediately before any other work
 4. Minimize warnings (remove unused imports/variables)
 
-**Completion criteria**: `CARGO_HOME=/home/satotakumi/.cargo cargo check` shows "Finished" with no errors.
+**Completion criteria**: `CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo check` shows "Finished" with no errors.
 **Never report completion with errors remaining.**
 
 ### 2. No Dead Code
@@ -47,7 +47,7 @@ After any code change, ensure zero compilation errors:
   1. すでに正しく動いている他のプロジェクト内ソースコードの書き方を参考にする
   2. Web検索ツール等で `https://docs.rs/bevy/0.18.0/bevy/` や関連ドキュメントを確認する
   3. ローカルの `~/.cargo/registry/src/` にあるBevyのソースコード（関数のシグネチャ）を検索して直接確認する
-- 実装後は `CARGO_HOME=/home/satotakumi/.cargo cargo check` を実行し、APIの変更によるエラー（メソッドが存在しない等）がないか必ず確認すること。
+- 実装後は `CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo check` を実行し、APIの変更によるエラー（メソッドが存在しない等）がないか必ず確認すること。
 
 ### 6. MCP ツール運用フロー（rust-analyzer-mcp / docsrs-mcp）
 - ローカルコード解析（定義ジャンプ、参照、型確認）は `rust-analyzer-mcp` を優先する。
@@ -78,11 +78,11 @@ When adding new tasks to `AssignedTask` enum:
 ## Workflows
 
 ### Error Fixing Workflow
-1. Run `CARGO_HOME=/home/satotakumi/.cargo cargo check`
+1. Run `CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo check`
 2. Identify the first error
 3. Read the relevant code
 4. Fix the error
-5. Re-run `CARGO_HOME=/home/satotakumi/.cargo cargo check`
+5. Re-run `CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo check`
 
 ### Image Generation Workflow
 1. **Generate**: Use `generate_image` with "solid pure magenta background (#FF00FF)"
@@ -142,7 +142,7 @@ Claude Code はルートユーザーとして実行されるため、`CARGO_HOME
 
 **全ての `cargo` コマンドは必ず以下のプレフィックスを付けること:**
 ```bash
-CARGO_HOME=/home/satotakumi/.cargo cargo check
+CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo check
 CARGO_HOME=/home/satotakumi/.cargo cargo build
 ```
 
@@ -150,7 +150,7 @@ CARGO_HOME=/home/satotakumi/.cargo cargo build
 
 ```bash
 # Check compilation (CARGO_HOME prefix required when running as root)
-CARGO_HOME=/home/satotakumi/.cargo cargo check
+CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo check
 
 # Convert image to transparent PNG
 python scripts/convert_to_png.py "source_path" "assets/textures/dest.png"

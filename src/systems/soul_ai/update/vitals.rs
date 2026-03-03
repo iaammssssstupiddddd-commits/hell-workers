@@ -20,6 +20,7 @@ pub fn on_task_completed_motivation_bonus(
             | WorkType::HaulWaterToMixer
             | WorkType::WheelbarrowHaul => MOTIVATION_BONUS_HAUL,
             WorkType::Build
+            | WorkType::Move
             | WorkType::Refine
             | WorkType::ReinforceFloorTile
             | WorkType::PourFloorTile

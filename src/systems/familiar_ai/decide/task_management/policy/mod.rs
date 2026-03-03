@@ -22,6 +22,7 @@ pub fn assign_by_work_type(
             basic::assign_gather(work_type, task_pos, already_commanded, ctx, queries, shadow)
         }
         WorkType::Build => basic::assign_build(task_pos, already_commanded, ctx, queries, shadow),
+        WorkType::Move => basic::assign_move(task_pos, already_commanded, ctx, queries, shadow),
         WorkType::CollectSand => {
             basic::assign_collect_sand(task_pos, already_commanded, ctx, queries, shadow)
         }
