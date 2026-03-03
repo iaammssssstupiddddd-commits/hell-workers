@@ -1,6 +1,8 @@
 use crate::game_state::PlayMode;
 use crate::interface::selection::SelectedEntity;
 use crate::interface::selection::blueprint_placement;
+use crate::interface::selection::building_move_preview_system;
+use crate::interface::selection::building_move_system;
 use crate::interface::selection::floor_placement_system;
 use crate::interface::selection::{
     cleanup_selection_references_system, clear_companion_state_outside_build_mode,
@@ -9,8 +11,8 @@ use crate::interface::selection::{
 use crate::interface::ui::vignette::update_vignette_system;
 use crate::interface::ui::{
     arch_category_action_system, context_menu_system, door_lock_action_system,
-    menu_visibility_system, task_summary_ui_system, ui_interaction_system,
-    ui_keyboard_shortcuts_system, update_area_edit_preview_ui_system,
+    hover_action_button_system, menu_visibility_system, move_plant_building_action_system, task_summary_ui_system,
+    ui_interaction_system, ui_keyboard_shortcuts_system, update_area_edit_preview_ui_system,
     update_dream_loss_popup_ui_system, update_dream_pool_display_system, update_fps_display_system,
     update_mode_text_system, update_operation_dialog_system, update_speed_button_highlight_system,
 };
@@ -29,14 +31,18 @@ impl Plugin for UiCorePlugin {
                 clear_companion_state_outside_build_mode,
                 cleanup_selection_references_system,
                 update_selection_indicator,
+                hover_action_button_system,
                 blueprint_placement.run_if(in_state(PlayMode::BuildingPlace)),
+                building_move_preview_system.run_if(in_state(PlayMode::BuildingMove)),
                 floor_placement_system.run_if(in_state(PlayMode::FloorPlace)),
+                building_move_system.run_if(in_state(PlayMode::BuildingMove)),
                 ui_keyboard_shortcuts_system,
                 ui_interaction_system,
                 // Changed<Interaction> を複数システムで読むため、順序固定の chain で実行し、
                 // 専用アクションの責務分離を維持する。
                 arch_category_action_system,
                 door_lock_action_system,
+                move_plant_building_action_system,
                 menu_visibility_system,
                 update_mode_text_system,
                 update_area_edit_preview_ui_system,
@@ -56,7 +62,7 @@ impl Plugin for UiCorePlugin {
                 update_dream_pool_display_system,
                 update_dream_loss_popup_ui_system,
                 update_speed_button_highlight_system,
-                update_vignette_system, // Added here
+                update_vignette_system,
             )
                 .in_set(GameSystemSet::Interface),
         );

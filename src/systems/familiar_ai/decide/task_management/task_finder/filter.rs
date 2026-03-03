@@ -135,6 +135,7 @@ pub(super) fn candidate_snapshot(
     let is_valid = match designation.work_type {
         WorkType::Chop
         | WorkType::Mine
+        | WorkType::Move
         | WorkType::Haul
         | WorkType::HaulToMixer
         | WorkType::GatherWater

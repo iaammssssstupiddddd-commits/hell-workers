@@ -10,10 +10,13 @@
 |--------|------|----------|
 | `Normal` | 通常操作（選択・移動） | デフォルト / Escキー |
 | `BuildingPlace` | 建物配置中 | Buildボタンクリック |
+| `BuildingMove` | Plant建物（Tank/MudMixer）移動先指定中 | Moveボタンクリック |
 | `ZonePlace` | ゾーン配置中 | Zoneボタンクリック |
 | `TaskDesignation` | タスク指定中（伐採/採掘など） | Ordersメニュー選択 |
+| `FloorPlace` | 床エリア配置中 | Floor操作開始 |
 
-遷移: Normal ↔ BuildingPlace（Buildボタン/Esc）、Normal ↔ ZonePlace（Zoneボタン/Esc）、Normal ↔ TaskDesignation（Ordersメニュー/Esc）。
+遷移: Normal ↔ BuildingPlace（Buildボタン/Esc）、Normal ↔ BuildingMove（Moveボタン/Esc/右クリック）、
+Normal ↔ ZonePlace（Zoneボタン/Esc）、Normal ↔ TaskDesignation（Ordersメニュー/Esc）。
 
 ## コンテキストリソース
 
@@ -22,6 +25,9 @@
 | リソース | 型 | 用途 |
 |----------|-----|------|
 | `BuildContext` | `Option<BuildingType>` | 配置する建物の種類 |
+| `MoveContext` | `Option<Entity>` | 移動対象の建物エンティティ |
+| `MovePlacementState` | `Option<PendingMovePlacement>` | BuildingMove中の移動先一次確定（Tank companion再指定待ち） |
+| `CompanionPlacementState` | `Option<CompanionPlacement>` | companion配置中の親アンカー・有効半径 |
 | `ZoneContext` | `Option<ZoneType>` | 配置するゾーンの種類 |
 | `TaskContext` | `TaskMode` | タスクの詳細（伐採/採掘/運搬など） |
 

@@ -17,11 +17,27 @@ pub enum PlayMode {
     ZonePlace,       // ゾーン配置中
     TaskDesignation, // タスク指定中（伐採/採掘/運搬など）
     FloorPlace,      // 床エリア配置中
+    BuildingMove,    // 建物移動モード
 }
 
 /// 建物配置モード時の詳細コンテキスト
 #[derive(Resource, Default)]
 pub struct BuildContext(pub Option<BuildingType>);
+
+/// 建物移動モード時の詳細コンテキスト
+#[derive(Resource, Default)]
+pub struct MoveContext(pub Option<Entity>);
+
+/// 建物移動モードでの移動先仮決定状態
+#[derive(Debug, Clone, Copy)]
+pub struct PendingMovePlacement {
+    pub building: Entity,
+    pub destination_grid: (i32, i32),
+}
+
+/// 建物移動モードで companion 指定を待っている状態
+#[derive(Resource, Default)]
+pub struct MovePlacementState(pub Option<PendingMovePlacement>);
 
 /// ゾーン配置モード時の詳細コンテキスト
 #[derive(Resource, Default)]

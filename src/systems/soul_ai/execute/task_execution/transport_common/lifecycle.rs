@@ -106,6 +106,7 @@ pub fn collect_active_reservation_ops(
                 });
             }
         }
+        AssignedTask::MovePlant(_) => {}
         AssignedTask::Gather(data) => {
             if matches!(
                 data.phase,

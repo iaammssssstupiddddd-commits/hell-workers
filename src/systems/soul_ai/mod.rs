@@ -111,6 +111,8 @@ impl Plugin for SoulAiPlugin {
                         .after(execute::task_execution::apply_task_assignment_requests_system)
                         .before(execute::task_execution::task_execution_system),
                     execute::task_execution::task_execution_system,
+                    execute::task_execution::move_plant::apply_pending_building_move_system
+                        .after(execute::task_execution::task_execution_system),
                     // アイドル行動の適用
                     execute::idle_behavior_apply::idle_behavior_apply_system,
                     execute::escaping_apply::escaping_apply_system,
