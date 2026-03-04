@@ -3,7 +3,6 @@ use std::collections::{HashMap, HashSet};
 use bevy::prelude::*;
 
 use crate::relationships::{LoadedIn, ManagedBy, StoredIn, TaskWorkers};
-use crate::systems::command::TaskArea;
 use crate::systems::jobs::{Designation, Rock, Tree};
 use crate::systems::logistics::{ReservedForTask, ResourceItem, ResourceType};
 
@@ -23,7 +22,6 @@ pub(super) struct SupplyState {
 
 pub(super) fn collect_supply_state(
     owner_infos: &HashMap<Entity, OwnerInfo>,
-    owner_areas: &[(Entity, TaskArea)],
     q_ground_items: &Query<
         (&Transform, &Visibility, &ResourceItem),
         (
@@ -63,7 +61,7 @@ pub(super) fn collect_supply_state(
         }
 
         let pos = transform.translation.truncate();
-        let Some(owner) = resolve_owner(pos, owner_areas) else {
+        let Some(owner) = resolve_owner(pos, owner_infos) else {
             continue;
         };
         let bucket = supply_by_owner.entry((owner, item.0)).or_default();
@@ -115,7 +113,7 @@ pub(super) fn collect_supply_state(
             {
                 managed_by.0
             } else {
-                let Some(resolved_owner) = resolve_owner(pos, owner_areas) else {
+                let Some(resolved_owner) = resolve_owner(pos, owner_infos) else {
                     continue;
                 };
                 resolved_owner
@@ -126,9 +124,9 @@ pub(super) fn collect_supply_state(
                 if workers > 0 {
                     bucket.auto_active_count = bucket.auto_active_count.saturating_add(1);
                 } else {
-                    let (stage, sort_dist_sq) = if let Some(owner_info) = owner_infos.get(&owner) {
+                        let (stage, sort_dist_sq) = if let Some(owner_info) = owner_infos.get(&owner) {
                         (
-                            stage_for_pos(pos, &owner_info.area),
+                            stage_for_pos(pos, owner_info),
                             pos.distance_squared(owner_info.center),
                         )
                     } else {
@@ -157,14 +155,14 @@ pub(super) fn collect_supply_state(
             continue;
         }
 
-        let Some(owner) = resolve_owner(pos, owner_areas) else {
+        let Some(owner) = resolve_owner(pos, owner_infos) else {
             continue;
         };
         let Some(owner_info) = owner_infos.get(&owner) else {
             continue;
         };
 
-        let stage = stage_for_pos(pos, &owner_info.area);
+        let stage = stage_for_pos(pos, owner_info);
         let sort_dist_sq = pos.distance_squared(owner_info.center);
 
         candidate_sources

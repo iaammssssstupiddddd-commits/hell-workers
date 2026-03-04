@@ -1,6 +1,7 @@
 use crate::assets::GameAssets;
 use crate::game_state::{CompanionPlacementKind, CompanionPlacementState};
 use crate::systems::jobs::{Blueprint, Building};
+use crate::systems::world::zones::{Site, Yard};
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
 
@@ -17,6 +18,8 @@ pub(super) fn handle_companion_flow(
     game_assets: &GameAssets,
     q_buildings: &Query<&Building>,
     q_blueprints_by_entity: &Query<&Blueprint>,
+    q_sites: &Query<&Site>,
+    q_yards: &Query<&Yard>,
     world_pos: Vec2,
     grid: (i32, i32),
 ) -> bool {
@@ -42,6 +45,8 @@ pub(super) fn handle_companion_flow(
                 active.parent_anchor,
                 q_buildings,
                 q_blueprints_by_entity,
+                q_sites,
+                q_yards,
             ) else {
                 warn!(
                     "COMPANION: failed to confirm parent blueprint before bucket storage placement"

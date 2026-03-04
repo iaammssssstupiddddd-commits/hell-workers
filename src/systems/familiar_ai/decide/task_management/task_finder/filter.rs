@@ -1,5 +1,6 @@
 use crate::relationships::ManagedTasks;
 use crate::systems::command::TaskArea;
+use crate::systems::world::zones::Yard;
 use crate::systems::jobs::WorkType;
 use crate::systems::spatial::{DesignationSpatialGrid, TransportRequestSpatialGrid};
 use crate::world::map::WorldMap;
@@ -22,6 +23,7 @@ pub(super) struct CandidateSnapshot {
 /// 「自分の TaskArea 内の request + 自分の ManagedRequests」を返す。
 pub(super) fn collect_candidate_entities(
     task_area_opt: Option<&TaskArea>,
+    yard_opt: Option<&Yard>,
     managed_tasks: &ManagedTasks,
     designation_grid: &DesignationSpatialGrid,
     transport_request_grid: &TransportRequestSpatialGrid,
@@ -36,6 +38,11 @@ pub(super) fn collect_candidate_entities(
             .get_in_area(area.min, area.max)
             .iter()
         {
+            seen.insert(e);
+        }
+    }
+    if let Some(yard) = yard_opt {
+        for &e in transport_request_grid.get_in_area(yard.min, yard.max).iter() {
             seen.insert(e);
         }
     }

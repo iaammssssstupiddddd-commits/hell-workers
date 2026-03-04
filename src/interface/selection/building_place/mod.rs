@@ -5,6 +5,7 @@ mod geometry;
 mod placement;
 
 use crate::assets::GameAssets;
+use crate::systems::world::zones::{Site, Yard};
 use crate::game_state::{BuildContext, CompanionParentKind, CompanionPlacementKind, CompanionPlacementState};
 use crate::interface::camera::MainCamera;
 use crate::interface::ui::UiInputState;
@@ -26,6 +27,8 @@ pub fn blueprint_placement(
     build_context: Res<BuildContext>,
     mut companion_state: ResMut<CompanionPlacementState>,
     q_blueprints_by_entity: Query<&Blueprint>,
+    q_sites: Query<&Site>,
+    q_yards: Query<&Yard>,
     q_buildings: Query<&Building>,
     game_assets: Res<GameAssets>,
     mut commands: Commands,
@@ -51,6 +54,8 @@ pub fn blueprint_placement(
         &game_assets,
         &q_buildings,
         &q_blueprints_by_entity,
+        &q_sites,
+        &q_yards,
         world_pos,
         grid,
     ) {
@@ -78,6 +83,8 @@ pub fn blueprint_placement(
             grid,
             &q_buildings,
             &q_blueprints_by_entity,
+            &q_sites,
+            &q_yards,
         );
     }
 }

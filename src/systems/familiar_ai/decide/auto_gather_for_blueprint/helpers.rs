@@ -1,22 +1,21 @@
-use crate::constants::{
-    BLUEPRINT_AUTO_GATHER_STAGE1_RADIUS_TILES, BLUEPRINT_AUTO_GATHER_STAGE2_RADIUS_TILES,
-    BLUEPRINT_AUTO_GATHER_STAGE3_RADIUS_TILES, ROCK_DROP_AMOUNT, TILE_SIZE, WOOD_DROP_AMOUNT,
-};
+use crate::constants::{ROCK_DROP_AMOUNT, WOOD_DROP_AMOUNT};
 use crate::systems::command::TaskArea;
 use crate::systems::jobs::WorkType;
 use crate::systems::logistics::ResourceType;
+use crate::systems::world::zones::Yard;
 use crate::world::map::WorldMap;
 use crate::world::pathfinding::{self, PathfindingContext};
 use bevy::prelude::*;
 use std::cmp::Ordering;
 
-pub(super) const STAGE_COUNT: usize = 5;
+pub(super) const STAGE_COUNT: usize = 3;
 
 #[derive(Clone)]
 pub(super) struct OwnerInfo {
     pub(super) area: TaskArea,
     pub(super) center: Vec2,
     pub(super) path_start: (i32, i32),
+    pub(super) yard: Option<Yard>,
 }
 
 #[derive(Default)]
@@ -80,70 +79,74 @@ pub(super) fn resource_rank(resource_type: ResourceType) -> u8 {
     }
 }
 
-pub(super) fn stage_for_pos(pos: Vec2, area: &TaskArea) -> usize {
-    if area.contains(pos) {
+pub(super) fn stage_for_pos(pos: Vec2, owner: &OwnerInfo) -> usize {
+    if owner.area.contains(pos) {
         return 0;
     }
-
-    let dist_sq = distance_sq_to_task_area_outside(pos, area);
-    let radius1 = BLUEPRINT_AUTO_GATHER_STAGE1_RADIUS_TILES * TILE_SIZE;
-    let radius2 = BLUEPRINT_AUTO_GATHER_STAGE2_RADIUS_TILES * TILE_SIZE;
-    let radius3 = BLUEPRINT_AUTO_GATHER_STAGE3_RADIUS_TILES * TILE_SIZE;
-
-    if dist_sq <= radius1 * radius1 {
-        1
-    } else if dist_sq <= radius2 * radius2 {
-        2
-    } else if dist_sq <= radius3 * radius3 {
-        3
-    } else {
-        4
+    if let Some(yard) = owner.yard.as_ref()
+        && yard.contains(pos)
+    {
+        return 1;
     }
+    2
 }
 
-pub(super) fn resolve_owner(pos: Vec2, owner_areas: &[(Entity, TaskArea)]) -> Option<Entity> {
-    if owner_areas.is_empty() {
+pub(super) fn resolve_owner(
+    pos: Vec2,
+    owner_infos: &std::collections::HashMap<Entity, OwnerInfo>,
+) -> Option<Entity> {
+    if owner_infos.is_empty() {
         return None;
     }
 
-    let mut containing = Vec::new();
-    for (owner, area) in owner_areas {
-        if area.contains(pos) {
-            containing.push((*owner, area));
+    let mut inside_yard = Vec::<(Entity, &OwnerInfo)>::new();
+    let mut inside_area = Vec::<(Entity, &OwnerInfo)>::new();
+
+    for (owner, owner_info) in owner_infos {
+        if owner_info.area.contains(pos) {
+            inside_area.push((*owner, owner_info));
+        }
+        if let Some(yard) = owner_info.yard.as_ref() {
+            if yard.contains(pos) {
+                inside_yard.push((*owner, owner_info));
+            }
         }
     }
 
-    let candidates: Vec<(Entity, &TaskArea)> = if containing.is_empty() {
-        owner_areas
-            .iter()
-            .map(|(owner, area)| (*owner, area))
-            .collect()
-    } else {
-        containing
-    };
-
-    candidates
-        .into_iter()
-        .min_by(|(owner_a, area_a), (owner_b, area_b)| {
-            let da = distance_sq_to_task_area_perimeter(pos, area_a);
-            let db = distance_sq_to_task_area_perimeter(pos, area_b);
-            da.partial_cmp(&db)
-                .unwrap_or(Ordering::Equal)
-                .then(owner_a.to_bits().cmp(&owner_b.to_bits()))
-        })
-        .map(|(owner, _)| owner)
-}
-
-fn distance_sq_to_task_area_outside(pos: Vec2, area: &TaskArea) -> f32 {
-    if area.contains(pos) {
-        return 0.0;
+    if !inside_area.is_empty() {
+        return inside_area
+            .into_iter()
+            .min_by(|(owner_a, info_a), (owner_b, info_b)| {
+                distance_sq_to_task_area_perimeter(pos, &info_a.area)
+                    .partial_cmp(&distance_sq_to_task_area_perimeter(pos, &info_b.area))
+                    .unwrap_or(std::cmp::Ordering::Equal)
+                    .then(owner_a.to_bits().cmp(&owner_b.to_bits()))
+            })
+            .map(|(owner, _)| owner);
     }
 
-    let clamped_x = pos.x.clamp(area.min.x, area.max.x);
-    let clamped_y = pos.y.clamp(area.min.y, area.max.y);
-    let dx = pos.x - clamped_x;
-    let dy = pos.y - clamped_y;
-    dx * dx + dy * dy
+    if !inside_yard.is_empty() {
+        return inside_yard
+            .into_iter()
+            .min_by(|(owner_a, info_a), (owner_b, info_b)| {
+                distance_sq_to_yard_perimeter(pos, info_a.yard.as_ref().unwrap())
+                    .partial_cmp(&distance_sq_to_yard_perimeter(pos, info_b.yard.as_ref().unwrap()))
+                    .unwrap_or(std::cmp::Ordering::Equal)
+                    .then(owner_a.to_bits().cmp(&owner_b.to_bits()))
+            })
+            .map(|(owner, _)| owner);
+    }
+
+    owner_infos
+        .iter()
+        .min_by(|(owner_a, info_a), (owner_b, info_b)| {
+            let da = distance_sq_to_task_area_perimeter(pos, &info_a.area);
+            let db = distance_sq_to_task_area_perimeter(pos, &info_b.area);
+            da.partial_cmp(&db)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then(owner_a.to_bits().cmp(&owner_b.to_bits()))
+        })
+        .map(|(owner, _)| *owner)
 }
 
 fn distance_sq_to_task_area_perimeter(pos: Vec2, area: &TaskArea) -> f32 {
@@ -163,6 +166,32 @@ fn distance_sq_to_task_area_perimeter(pos: Vec2, area: &TaskArea) -> f32 {
     } else {
         let clamped_x = pos.x.clamp(area.min.x, area.max.x);
         let clamped_y = pos.y.clamp(area.min.y, area.max.y);
+        let dx = pos.x - clamped_x;
+        let dy = pos.y - clamped_y;
+        dx * dx + dy * dy
+    }
+}
+
+fn distance_sq_to_yard_perimeter(
+    pos: Vec2,
+    yard: &Yard,
+) -> f32 {
+    let inside_x = pos.x >= yard.min.x && pos.x <= yard.max.x;
+    let inside_y = pos.y >= yard.min.y && pos.y <= yard.max.y;
+
+    if inside_x && inside_y {
+        let dist_to_left = pos.x - yard.min.x;
+        let dist_to_right = yard.max.x - pos.x;
+        let dist_to_bottom = pos.y - yard.min.y;
+        let dist_to_top = yard.max.y - pos.y;
+        let min_dist = dist_to_left
+            .min(dist_to_right)
+            .min(dist_to_bottom)
+            .min(dist_to_top);
+        min_dist * min_dist
+    } else {
+        let clamped_x = pos.x.clamp(yard.min.x, yard.max.x);
+        let clamped_y = pos.y.clamp(yard.min.y, yard.max.y);
         let dx = pos.x - clamped_x;
         let dy = pos.y - clamped_y;
         dx * dx + dy * dy

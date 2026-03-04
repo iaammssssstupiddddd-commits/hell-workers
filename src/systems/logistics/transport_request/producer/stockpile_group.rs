@@ -8,16 +8,16 @@ use std::collections::{HashMap, HashSet};
 
 use crate::constants::TILE_SIZE;
 use crate::relationships::StoredItems;
-use crate::systems::command::TaskArea;
 use crate::systems::logistics::{BucketStorage, Stockpile};
+use crate::systems::world::zones::Yard;
 use crate::systems::spatial::StockpileSpatialGrid;
 
 /// ファミリアのTaskArea内にあるStockpileのグループ
 pub struct StockpileGroup {
     /// グループ内の全セルエンティティ
     pub cells: Vec<Entity>,
-    /// リクエスト発行者のファミリア
-    pub owner_familiar: Entity,
+    /// リクエスト発行者のYard
+    pub owner_yard: Entity,
     /// 代表セル（anchor用、重心に最も近いセル）
     pub representative: Entity,
     /// グループ全体の合算キャパシティ
@@ -29,7 +29,7 @@ pub struct StockpileGroup {
 /// StockpileGroup の探索用空間インデックス
 pub struct StockpileGroupSpatialIndex {
     groups_by_owner: HashMap<Entity, Vec<usize>>,
-    owner_task_areas: HashMap<Entity, TaskArea>,
+    owner_yards: HashMap<Entity, Yard>,
     owners_by_cell: HashMap<(i32, i32), Vec<Entity>>,
     cell_size: f32,
 }
@@ -51,7 +51,7 @@ fn pos_to_cell(pos: Vec2, cell_size: f32) -> (i32, i32) {
 /// - BucketStorageは除外(bucket_auto_haul_systemが管理)
 pub fn build_stockpile_groups(
     stockpile_grid: &StockpileSpatialGrid,
-    active_familiars: &[(Entity, TaskArea)],
+    active_yards: &[(Entity, Yard)],
     q_stockpiles: &Query<(
         Entity,
         &Transform,
@@ -62,8 +62,8 @@ pub fn build_stockpile_groups(
 ) -> Vec<StockpileGroup> {
     let mut groups = Vec::new();
 
-    for (fam_entity, area) in active_familiars {
-        let stock_entities = stockpile_grid.get_in_area(area.min, area.max);
+    for (yard_entity, yard) in active_yards {
+        let stock_entities = stockpile_grid.get_in_area(yard.min, yard.max);
 
         let mut cells = Vec::new();
         let mut positions = Vec::new();
@@ -115,7 +115,7 @@ pub fn build_stockpile_groups(
         groups.push(StockpileGroup {
             representative: cells[representative_idx],
             cells,
-            owner_familiar: *fam_entity,
+            owner_yard: *yard_entity,
             total_capacity,
             total_stored,
         });
@@ -127,37 +127,37 @@ pub fn build_stockpile_groups(
 /// StockpileGroup を高速探索するための空間インデックスを構築する
 pub fn build_group_spatial_index(
     groups: &[StockpileGroup],
-    familiars_with_areas: &[(Entity, TaskArea)],
+    yards: &[(Entity, Yard)],
 ) -> StockpileGroupSpatialIndex {
     let mut groups_by_owner: HashMap<Entity, Vec<usize>> = HashMap::new();
-    let mut owner_task_areas: HashMap<Entity, TaskArea> = HashMap::new();
+    let mut owner_yards: HashMap<Entity, Yard> = HashMap::new();
     let mut owners_by_cell: HashMap<(i32, i32), Vec<Entity>> = HashMap::new();
     let search_radius = TASK_AREA_PERIMETER_SEARCH_RADIUS_TILES * TILE_SIZE;
     let cell_size = search_radius.max(TILE_SIZE * 2.0);
 
-    for (familiar, area) in familiars_with_areas {
-        owner_task_areas.insert(*familiar, area.clone());
-        let expanded_min = area.min - Vec2::splat(search_radius);
-        let expanded_max = area.max + Vec2::splat(search_radius);
+    for (yard_entity, yard) in yards {
+        owner_yards.insert(*yard_entity, yard.clone());
+        let expanded_min = yard.min - Vec2::splat(search_radius);
+        let expanded_max = yard.max + Vec2::splat(search_radius);
         let min_cell = pos_to_cell(expanded_min, cell_size);
         let max_cell = pos_to_cell(expanded_max, cell_size);
         for cy in min_cell.1..=max_cell.1 {
             for cx in min_cell.0..=max_cell.0 {
-                owners_by_cell.entry((cx, cy)).or_default().push(*familiar);
+                owners_by_cell.entry((cx, cy)).or_default().push(*yard_entity);
             }
         }
     }
 
     for (group_idx, group) in groups.iter().enumerate() {
         groups_by_owner
-            .entry(group.owner_familiar)
+            .entry(group.owner_yard)
             .or_default()
             .push(group_idx);
     }
 
     StockpileGroupSpatialIndex {
         groups_by_owner,
-        owner_task_areas,
+        owner_yards,
         owners_by_cell,
         cell_size,
     }
@@ -171,9 +171,9 @@ pub fn build_group_spatial_index(
 pub fn find_nearest_group_for_item<'a>(
     item_pos: Vec2,
     groups: &'a [StockpileGroup],
-    familiars_with_areas: &[(Entity, TaskArea)],
+    yards: &[(Entity, Yard)],
 ) -> Option<&'a StockpileGroup> {
-    let index = build_group_spatial_index(groups, familiars_with_areas);
+    let index = build_group_spatial_index(groups, yards);
     find_nearest_group_for_item_indexed(item_pos, groups, &index)
 }
 
@@ -197,21 +197,21 @@ pub fn find_nearest_group_for_item_indexed<'a>(
         .cloned()
         .unwrap_or_default();
     if owner_candidates.is_empty() {
-        owner_candidates.extend(index.owner_task_areas.keys().copied());
+        owner_candidates.extend(index.owner_yards.keys().copied());
     }
     owner_candidates.sort_unstable();
     owner_candidates.dedup();
 
     // 1) TaskArea 外周 + 10 タイル以内の owner 候補を収集
     for owner in owner_candidates {
-        let Some(area) = index.owner_task_areas.get(&owner) else {
+        let Some(yard) = index.owner_yards.get(&owner) else {
             continue;
         };
-        if area.contains(item_pos) {
+        if yard.contains(item_pos) {
             owners_containing_item.insert(owner);
         }
 
-        let perimeter_dist_sq = distance_sq_to_task_area_perimeter(item_pos, area);
+        let perimeter_dist_sq = distance_sq_to_yard_perimeter(item_pos, yard);
         if perimeter_dist_sq <= search_radius_sq {
             owner_perimeter_dist_sq.insert(owner, perimeter_dist_sq);
             if let Some(owner_groups) = index.groups_by_owner.get(&owner) {
@@ -224,12 +224,12 @@ pub fn find_nearest_group_for_item_indexed<'a>(
 
     for group_idx in candidate_group_indices {
         let group = &groups[group_idx];
-        let Some(&perimeter_dist_sq) = owner_perimeter_dist_sq.get(&group.owner_familiar) else {
+        let Some(&perimeter_dist_sq) = owner_perimeter_dist_sq.get(&group.owner_yard) else {
             continue;
         };
 
         // 外周+10領域（TaskArea外）では、他TaskAreaに含まれる位置を除外する
-        let in_owner_task_area = owners_containing_item.contains(&group.owner_familiar);
+        let in_owner_task_area = owners_containing_item.contains(&group.owner_yard);
         if !in_owner_task_area && !owners_containing_item.is_empty() {
             continue;
         }
@@ -241,7 +241,7 @@ pub fn find_nearest_group_for_item_indexed<'a>(
             Some((best_idx, best_dist)) => {
                 if dist < *best_dist
                     || (dist == *best_dist
-                        && group.owner_familiar < groups[*best_idx].owner_familiar)
+                        && group.owner_yard < groups[*best_idx].owner_yard)
                 {
                     best = Some((group_idx, dist));
                 }
@@ -252,23 +252,23 @@ pub fn find_nearest_group_for_item_indexed<'a>(
     best.map(|(idx, _)| &groups[idx])
 }
 
-fn distance_sq_to_task_area_perimeter(pos: Vec2, area: &TaskArea) -> f32 {
-    let inside_x = pos.x >= area.min.x && pos.x <= area.max.x;
-    let inside_y = pos.y >= area.min.y && pos.y <= area.max.y;
+fn distance_sq_to_yard_perimeter(pos: Vec2, yard: &Yard) -> f32 {
+    let inside_x = pos.x >= yard.min.x && pos.x <= yard.max.x;
+    let inside_y = pos.y >= yard.min.y && pos.y <= yard.max.y;
 
     if inside_x && inside_y {
-        let dist_to_left = pos.x - area.min.x;
-        let dist_to_right = area.max.x - pos.x;
-        let dist_to_bottom = pos.y - area.min.y;
-        let dist_to_top = area.max.y - pos.y;
+        let dist_to_left = pos.x - yard.min.x;
+        let dist_to_right = yard.max.x - pos.x;
+        let dist_to_bottom = pos.y - yard.min.y;
+        let dist_to_top = yard.max.y - pos.y;
         let min_dist = dist_to_left
             .min(dist_to_right)
             .min(dist_to_bottom)
             .min(dist_to_top);
         min_dist * min_dist
     } else {
-        let clamped_x = pos.x.clamp(area.min.x, area.max.x);
-        let clamped_y = pos.y.clamp(area.min.y, area.max.y);
+        let clamped_x = pos.x.clamp(yard.min.x, yard.max.x);
+        let clamped_y = pos.y.clamp(yard.min.y, yard.max.y);
         let dx = pos.x - clamped_x;
         let dy = pos.y - clamped_y;
         dx * dx + dy * dy

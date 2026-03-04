@@ -7,9 +7,7 @@ use bevy::prelude::*;
 use std::collections::{HashMap, HashSet};
 use std::time::Instant;
 
-use crate::entities::familiar::{ActiveCommand, FamiliarCommand};
 use crate::relationships::{StoredItems, TaskWorkers};
-use crate::systems::command::TaskArea;
 use crate::systems::jobs::{Designation, Priority, TaskSlots, WorkType};
 use crate::systems::logistics::transport_request::{
     ManualHaulPinnedSource, ManualTransportRequest, TransportDemand, TransportPolicy,
@@ -17,6 +15,7 @@ use crate::systems::logistics::transport_request::{
     TransportRequestState,
 };
 use crate::systems::logistics::{BelongsTo, BucketStorage, ResourceType, Stockpile};
+use crate::systems::world::zones::Yard;
 
 use crate::systems::spatial::StockpileSpatialGrid;
 
@@ -133,7 +132,7 @@ fn pick_representative_resource_type_per_group(
 
     let mut group_lookup = HashMap::<(Entity, Entity), usize>::new();
     for (idx, group) in groups.iter().enumerate() {
-        group_lookup.insert((group.representative, group.owner_familiar), idx);
+        group_lookup.insert((group.representative, group.owner_yard), idx);
     }
 
     for (transform, item_type, visibility, item_belongs) in q_free_items.iter() {
@@ -149,7 +148,7 @@ fn pick_representative_resource_type_per_group(
             continue;
         };
 
-        let Some(&group_idx) = group_lookup.get(&(group.representative, group.owner_familiar))
+        let Some(&group_idx) = group_lookup.get(&(group.representative, group.owner_yard))
         else {
             continue;
         };
@@ -182,7 +181,7 @@ fn pick_representative_resource_type_per_group(
 pub fn task_area_auto_haul_system(
     mut commands: Commands,
     stockpile_grid: Res<StockpileSpatialGrid>,
-    q_familiars: Query<(Entity, &ActiveCommand, &TaskArea)>,
+    q_yards: Query<(Entity, &Yard)>,
     q_stockpiles: Query<(
         Entity,
         &Transform,
@@ -235,15 +234,11 @@ pub fn task_area_auto_haul_system(
         }
     }
 
-    let active_familiars: Vec<(Entity, TaskArea)> = q_familiars
-        .iter()
-        .filter(|(_, ac, _)| !matches!(ac.command, FamiliarCommand::Idle))
-        .map(|(e, _, a)| (e, a.clone()))
-        .collect();
+    let active_yards: Vec<(Entity, Yard)> = q_yards.iter().map(|(e, a)| (e, a.clone())).collect();
 
     // グループ構築
-    let groups = build_stockpile_groups(&stockpile_grid, &active_familiars, &q_stockpiles);
-    let group_spatial_index = build_group_spatial_index(&groups, &active_familiars);
+    let groups = build_stockpile_groups(&stockpile_grid, &active_yards, &q_stockpiles);
+    let group_spatial_index = build_group_spatial_index(&groups, &active_yards);
     let group_contexts = build_group_eval_contexts(&groups, &q_stockpiles_detail);
     let (group_resource_types, free_items_scanned, items_matched) =
         pick_representative_resource_type_per_group(
@@ -278,7 +273,7 @@ pub fn task_area_auto_haul_system(
         desired_requests.insert(
             (context.representative, resource_type),
             (
-                group.owner_familiar,
+                group.owner_yard,
                 needed as u32,
                 context.rep_pos,
                 group.cells.clone(),

@@ -46,6 +46,14 @@ pub fn collect_scored_candidates(
 ) -> Vec<ScoredDelegationCandidate> {
     let candidates = collect_candidate_entities(
         task_area_opt,
+        task_area_opt.and_then(|area| {
+            let center = (area.min + area.max) * 0.5;
+            queries
+                .yards
+                .iter()
+                .find(|yard| yard.contains(center))
+                .map(|yard| yard as &crate::systems::world::zones::Yard)
+        }),
         managed_tasks,
         designation_grid,
         transport_request_grid,
