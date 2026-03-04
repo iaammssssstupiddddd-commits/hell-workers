@@ -13,6 +13,7 @@ use crate::systems::logistics::transport_request::{
     TransportPriority, TransportRequest, TransportRequestFixedSource, TransportRequestKind,
     TransportRequestState,
 };
+use crate::systems::world::zones::Site;
 use bevy::prelude::*;
 
 pub(super) fn apply_task_area_to_familiar(
@@ -66,9 +67,11 @@ pub(super) fn apply_area_and_record_history(
     commands: &mut Commands,
     q_familiars: &mut Query<(&mut ActiveCommand, &mut Destination), With<Familiar>>,
     area_edit_history: &mut AreaEditHistory,
+    q_sites: &Query<&Site>,
 ) {
-    apply_task_area_to_familiar(familiar_entity, Some(new_area), commands, q_familiars);
-    area_edit_history.push(familiar_entity, before, Some(new_area.clone()));
+    let clamped_area = super::geometry::clamp_area_to_site(new_area, q_sites);
+    apply_task_area_to_familiar(familiar_entity, Some(&clamped_area), commands, q_familiars);
+    area_edit_history.push(familiar_entity, before, Some(clamped_area));
 }
 
 pub(super) fn apply_designation_in_area(

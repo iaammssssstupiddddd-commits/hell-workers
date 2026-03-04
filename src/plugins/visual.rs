@@ -49,6 +49,7 @@ use crate::systems::visual::haul::{
     wheelbarrow_follow_system,
 };
 use crate::systems::visual::mud_mixer::update_mud_mixer_visual_system;
+use crate::systems::visual::site_yard_visual::sync_site_yard_boundaries_system;
 use crate::systems::visual::plant_trees::{
     setup_plant_tree_visual_state_system, update_plant_tree_growth_system,
     update_plant_tree_life_spark_system, update_plant_tree_magic_circle_system,
@@ -85,6 +86,10 @@ impl Plugin for VisualPlugin {
         app.add_systems(
             Update,
             sync_room_overlay_tiles_system.in_set(GameSystemSet::Visual),
+        );
+        app.add_systems(
+            Update,
+            sync_site_yard_boundaries_system.in_set(GameSystemSet::Visual),
         );
 
         // Blueprint visual systems (separate to avoid tuple limit)

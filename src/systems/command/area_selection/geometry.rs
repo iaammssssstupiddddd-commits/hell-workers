@@ -2,6 +2,7 @@ use super::state::{Drag, Operation};
 use crate::constants::TILE_SIZE;
 use crate::interface::camera::MainCamera;
 use crate::systems::command::{AreaEditHandleKind, TaskArea, TaskMode};
+use crate::systems::world::zones::Site;
 use bevy::prelude::*;
 use bevy::window::{CursorIcon, PrimaryWindow, SystemCursorIcon};
 
@@ -35,11 +36,17 @@ pub fn get_drag_start(mode: TaskMode) -> Option<Vec2> {
     }
 }
 
-pub fn get_indicator_color(mode: TaskMode) -> LinearRgba {
+pub fn get_indicator_color(mode: TaskMode, is_valid: bool) -> LinearRgba {
     match mode {
         TaskMode::AreaSelection(_) => LinearRgba::from(Color::srgba(1.0, 1.0, 1.0, 0.4)),
         TaskMode::CancelDesignation(_) => LinearRgba::from(Color::srgba(1.0, 0.2, 0.2, 0.5)),
-        TaskMode::ZonePlacement(_, _) => LinearRgba::from(Color::srgba(1.0, 1.0, 1.0, 0.4)), // TaskAreaと同様に白/透明
+        TaskMode::ZonePlacement(_, _) => {
+            if is_valid {
+                LinearRgba::from(Color::srgba(1.0, 1.0, 1.0, 0.4))
+            } else {
+                LinearRgba::from(Color::srgba(1.0, 0.2, 0.2, 0.5))
+            }
+        }
         TaskMode::ZoneRemoval(_, _) => LinearRgba::from(Color::srgba(1.0, 0.2, 0.2, 0.5)), // 削除は赤
         TaskMode::FloorPlace(_) => LinearRgba::from(Color::srgba(1.0, 1.0, 1.0, 0.4)),
         TaskMode::WallPlace(_) => LinearRgba::from(Color::srgba(1.0, 1.0, 1.0, 0.4)),
@@ -75,6 +82,20 @@ pub(super) fn area_from_center_and_size(center: Vec2, size: Vec2) -> TaskArea {
         min: center - half,
         max: center + half,
     }
+}
+
+pub(super) fn clamp_area_to_site(area: &TaskArea, q_sites: &Query<&Site>) -> TaskArea {
+    let Some(site) = q_sites.iter().find(|site| site.contains(area.center())) else {
+        return area.clone();
+    };
+
+    let min = Vec2::new(area.min.x.max(site.min.x), area.min.y.max(site.min.y));
+    let max = Vec2::new(area.max.x.min(site.max.x), area.max.y.min(site.max.y));
+    if min.x > max.x || min.y > max.y {
+        return area.clone();
+    }
+
+    TaskArea { min, max }
 }
 
 pub(super) fn world_cursor_pos(
