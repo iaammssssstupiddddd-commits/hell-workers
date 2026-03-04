@@ -4,6 +4,7 @@ use crate::relationships::{LoadedIn, ManagedBy, StoredIn, TaskWorkers};
 use crate::systems::command::TaskArea;
 use crate::systems::jobs::wall_construction::TargetWallConstructionSite;
 use crate::systems::jobs::{Blueprint, Designation, Rock, TargetBlueprint, Tree};
+use crate::systems::world::zones::Yard;
 use crate::systems::logistics::transport_request::{TransportDemand, TransportRequest};
 use crate::systems::logistics::{ReservedForTask, ResourceItem, ResourceType};
 use crate::world::map::WorldMap;
@@ -51,6 +52,7 @@ pub fn blueprint_auto_gather_system(
     world_map: Res<WorldMap>,
     mut pf_context: Local<PathfindingContext>,
     q_familiars: Query<(Entity, &ActiveCommand, &TaskArea, &Transform)>,
+    q_yards: Query<(Entity, &Yard)>,
     q_bp_requests: Query<(&TransportRequest, &TargetBlueprint, Option<&TaskWorkers>)>,
     q_wall_requests: Query<(
         &TransportRequest,
@@ -95,6 +97,7 @@ pub fn blueprint_auto_gather_system(
     timer.first_run_done = true;
 
     let mut owner_infos = HashMap::<Entity, OwnerInfo>::new();
+    let yards: Vec<(Entity, Yard)> = q_yards.iter().map(|(entity, yard)| (entity, yard.clone())).collect();
     for (fam_entity, active_command, area, transform) in q_familiars.iter() {
         if matches!(active_command.command, FamiliarCommand::Idle) {
             continue;
@@ -107,21 +110,21 @@ pub fn blueprint_auto_gather_system(
             continue;
         };
 
+        let owner_pos = area.center();
+        let owner_yard = yards
+            .iter()
+            .find(|(_, yard)| yard.contains(owner_pos))
+            .map(|(_, yard)| yard.clone());
         owner_infos.insert(
             fam_entity,
             OwnerInfo {
                 area: area.clone(),
                 center: area.center(),
                 path_start,
+                yard: owner_yard,
             },
         );
     }
-
-    let mut owner_areas: Vec<(Entity, TaskArea)> = owner_infos
-        .iter()
-        .map(|(entity, info)| (*entity, info.area.clone()))
-        .collect();
-    owner_areas.sort_by_key(|(entity, _)| entity.to_bits());
 
     let raw_demand_by_owner = collect_raw_demand_by_owner(
         &owner_infos,
@@ -131,8 +134,7 @@ pub fn blueprint_auto_gather_system(
         &q_blueprints,
     );
 
-    let mut supply_state =
-        collect_supply_state(&owner_infos, &owner_areas, &q_ground_items, &q_sources);
+    let mut supply_state = collect_supply_state(&owner_infos, &q_ground_items, &q_sources);
 
     let plan = build_auto_gather_targets(&raw_demand_by_owner, &supply_state.supply_by_owner);
 

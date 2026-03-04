@@ -1,6 +1,7 @@
 use crate::assets::GameAssets;
 use crate::constants::*;
 use crate::systems::jobs::{Blueprint, Building, BuildingType};
+use crate::systems::world::zones::{Site, Yard};
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
 
@@ -19,10 +20,16 @@ pub(super) fn place_building_blueprint(
     grid: (i32, i32),
     q_buildings: &Query<&Building>,
     q_blueprints_by_entity: &Query<&Blueprint>,
+    q_sites: &Query<&Site>,
+    q_yards: &Query<&Yard>,
 ) -> Option<(Entity, Vec<(i32, i32)>, Vec2)> {
     let occupied_grids = occupied_grids_for_building(building_type, grid);
     let spawn_pos = building_spawn_pos(building_type, grid);
     let custom_size = Some(building_size(building_type));
+
+    let active_site = q_sites.iter().find(|site| site.contains(spawn_pos));
+    let active_yard = q_yards.iter().find(|yard| yard.contains(spawn_pos));
+    let category = building_type.category();
 
     let replace_wall_entity = if building_type == BuildingType::Door {
         world_map.buildings.get(&grid).copied().filter(|entity| {
@@ -34,7 +41,7 @@ pub(super) fn place_building_blueprint(
         None
     };
 
-    let can_place = if building_type == BuildingType::Bridge {
+    let can_place_base = if building_type == BuildingType::Bridge {
         occupied_grids.iter().all(|&g| {
             !world_map.buildings.contains_key(&g)
                 && !world_map.stockpiles.contains_key(&g)
@@ -56,6 +63,14 @@ pub(super) fn place_building_blueprint(
                 && !world_map.stockpiles.contains_key(&g)
                 && world_map.is_walkable(g.0, g.1)
         })
+    };
+
+    let can_place = match category {
+        crate::systems::jobs::BuildingCategory::Structure => active_site.is_some() && can_place_base,
+        crate::systems::jobs::BuildingCategory::Plant | crate::systems::jobs::BuildingCategory::Temporary => {
+            active_yard.is_some() && can_place_base
+        }
+        _ => can_place_base,
     };
     if !can_place {
         return None;
