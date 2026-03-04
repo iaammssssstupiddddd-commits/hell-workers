@@ -4,6 +4,8 @@ use crate::interface::camera::MainCamera;
 use crate::interface::ui::UiInputState;
 use crate::systems::command::{TaskArea, TaskMode};
 use crate::systems::logistics::{Stockpile, ZoneType};
+use crate::systems::logistics::BelongsTo;
+use crate::systems::world::zones::Yard;
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
@@ -18,6 +20,7 @@ pub fn zone_placement_system(
     mut next_play_mode: ResMut<NextState<PlayMode>>,
     mut world_map: ResMut<WorldMap>,
     mut commands: Commands,
+    q_yards: Query<(Entity, &Yard)>,
 ) {
     if ui_input_state.pointer_over_ui {
         return;
@@ -42,7 +45,7 @@ pub fn zone_placement_system(
     if buttons.just_released(MouseButton::Left) {
         if let Some(start_pos) = start_pos_opt {
             let area = TaskArea::from_points(start_pos, snapped_pos);
-            apply_zone_placement(&mut commands, &mut world_map, zone_type, &area);
+            apply_zone_placement(&mut commands, &mut world_map, zone_type, &area, &q_yards);
 
             // Shift押下で継続、そうでなければ解除
             // FIXME: keyboard リソースが必要だが、一旦シンプルに解除
@@ -79,6 +82,7 @@ fn apply_zone_placement(
     world_map: &mut WorldMap,
     zone_type: ZoneType,
     area: &TaskArea,
+    q_yards: &Query<(Entity, &Yard)>,
 ) {
     let min_grid = WorldMap::world_to_grid(area.min + Vec2::splat(0.1));
     let max_grid = WorldMap::world_to_grid(area.max - Vec2::splat(0.1));
@@ -86,6 +90,10 @@ fn apply_zone_placement(
     for gy in min_grid.1..=max_grid.1 {
         for gx in min_grid.0..=max_grid.0 {
             let grid = (gx, gy);
+            let grid_pos = WorldMap::grid_to_world(gx, gy);
+            let Some(yard_entity) = pick_stockpile_owner_yard(grid_pos, q_yards) else {
+                continue;
+            };
 
             // 既に存在するか、建築物がある場合はスキップ
             if world_map.stockpiles.contains_key(&grid) || world_map.buildings.contains_key(&grid) {
@@ -96,7 +104,6 @@ fn apply_zone_placement(
                 continue;
             }
 
-            let pos = WorldMap::grid_to_world(gx, gy);
             match zone_type {
                 ZoneType::Stockpile => {
                     let entity = commands
@@ -105,12 +112,13 @@ fn apply_zone_placement(
                                 capacity: 10,
                                 resource_type: None,
                             },
+                            BelongsTo(yard_entity),
                             Sprite {
                                 color: Color::srgba(1.0, 1.0, 0.0, 0.2),
                                 custom_size: Some(Vec2::splat(TILE_SIZE)),
                                 ..default()
                             },
-                            Transform::from_xyz(pos.x, pos.y, Z_MAP + 0.01),
+                            Transform::from_xyz(grid_pos.x, grid_pos.y, Z_MAP + 0.01),
                             Name::new("Stockpile"),
                         ))
                         .id();
@@ -119,6 +127,20 @@ fn apply_zone_placement(
             }
         }
     }
+}
+
+fn pick_stockpile_owner_yard(
+    grid_pos: Vec2,
+    q_yards: &Query<(Entity, &Yard)>,
+) -> Option<Entity> {
+    if let Some((owner, _)) = q_yards
+        .iter()
+        .find(|(_, yard)| yard.contains(grid_pos))
+    {
+        return Some(owner);
+    }
+
+    q_yards.iter().next().map(|(owner, _)| owner)
 }
 
 pub fn zone_removal_system(

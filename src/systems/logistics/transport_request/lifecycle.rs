@@ -7,6 +7,7 @@ use super::{
 };
 use crate::systems::jobs::Designation;
 use crate::systems::logistics::ResourceItem;
+use crate::systems::world::zones::Yard;
 use bevy::prelude::*;
 
 /// アンカー（搬入先）が消失した request を close する
@@ -27,6 +28,7 @@ pub fn transport_request_anchor_cleanup_system(
     q_any: Query<Entity>,
     q_items: Query<Entity, With<ResourceItem>>,
     q_familiars: Query<Entity, With<crate::entities::familiar::Familiar>>,
+    q_yards: Query<Entity, With<Yard>>,
     q_in_stockpile: Query<(), With<crate::relationships::StoredIn>>,
 ) {
     for (request_entity, req, demand_opt, workers_opt, manual_opt, fixed_source_opt) in
@@ -47,8 +49,10 @@ pub fn transport_request_anchor_cleanup_system(
             }
         }
 
-        // 3. 発行者（Familiar）が消失した
-        if q_any.get(req.issued_by).is_err() || q_familiars.get(req.issued_by).is_err() {
+        // 3. 発行者（Familiar/Yard）が消失した
+        if q_any.get(req.issued_by).is_err()
+            || (q_familiars.get(req.issued_by).is_err() && q_yards.get(req.issued_by).is_err())
+        {
             should_close = true;
         }
 

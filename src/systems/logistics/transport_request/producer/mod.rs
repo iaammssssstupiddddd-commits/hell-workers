@@ -12,6 +12,7 @@ pub mod wall_construction;
 pub mod wheelbarrow;
 
 use crate::systems::command::TaskArea;
+use crate::systems::world::zones::Yard;
 use bevy::math::Vec2;
 use bevy::prelude::{Commands, Entity, Query, Transform, Visibility};
 use std::collections::{HashMap, HashSet};
@@ -37,6 +38,50 @@ pub(crate) fn find_owner_familiar(
             d1.partial_cmp(&d2).unwrap_or(std::cmp::Ordering::Equal)
         })
         .map(|(entity, area)| (*entity, area))
+}
+
+pub(crate) fn find_owner_yard(
+    pos: Vec2,
+    yards: &[(Entity, Yard)],
+) -> Option<(Entity, &Yard)> {
+    let mut candidates: Vec<&(Entity, Yard)> =
+        yards.iter().filter(|(_, yard)| yard.contains(pos)).collect();
+    if candidates.is_empty() {
+        return None;
+    }
+    candidates.sort_by(|(_, yard_a), (_, yard_b)| {
+        let da = (yard_a.min.distance_squared(pos) + yard_a.max.distance_squared(pos))
+            .partial_cmp(&(yard_b.min.distance_squared(pos) + yard_b.max.distance_squared(pos)))
+            .unwrap_or(std::cmp::Ordering::Equal);
+        da
+    });
+    candidates.first().map(|(entity, yard)| (*entity, yard))
+}
+
+pub(crate) fn find_owner_familiar_for_position<'a>(
+    pos: Vec2,
+    familiars: &'a [(Entity, TaskArea)],
+    yards: &'a [(Entity, Yard)],
+) -> Option<(Entity, &'a TaskArea)> {
+    if let Some((_yard_entity, yard)) = find_owner_yard(pos, yards) {
+        let yard_center = (yard.min + yard.max) * 0.5;
+        let candidates: Vec<_> = familiars
+            .iter()
+            .filter(|(_, area)| area.contains(yard_center))
+            .collect();
+        if !candidates.is_empty() {
+            return candidates
+                .into_iter()
+                .min_by(|(_, area_a), (_, area_b)| {
+                    let da = area_a.center().distance_squared(yard_center);
+                    let db = area_b.center().distance_squared(yard_center);
+                    da.partial_cmp(&db).unwrap_or(std::cmp::Ordering::Equal)
+                })
+                .map(|(entity, area)| (*entity, area));
+        }
+    }
+
+    find_owner_familiar(pos, familiars)
 }
 
 pub(crate) fn collect_nearby_resource_entities(

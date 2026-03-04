@@ -6,9 +6,7 @@
 use bevy::prelude::*;
 use std::collections::HashMap;
 
-use crate::entities::familiar::{ActiveCommand, FamiliarCommand};
 use crate::relationships::{StoredItems, TaskWorkers};
-use crate::systems::command::TaskArea;
 use crate::systems::jobs::{Designation, Priority, TaskSlots, WorkType};
 use crate::systems::logistics::transport_request::{
     ManualTransportRequest, TransportDemand, TransportPolicy, TransportPriority, TransportRequest,
@@ -16,6 +14,7 @@ use crate::systems::logistics::transport_request::{
 };
 use crate::systems::logistics::{BucketStorage, ResourceType, Stockpile};
 use crate::systems::spatial::StockpileSpatialGrid;
+use crate::systems::world::zones::Yard;
 
 use super::stockpile_group::build_stockpile_groups;
 
@@ -34,7 +33,7 @@ struct CellInfo {
 pub fn stockpile_consolidation_producer_system(
     mut commands: Commands,
     stockpile_grid: Res<StockpileSpatialGrid>,
-    q_familiars: Query<(Entity, &ActiveCommand, &TaskArea)>,
+    q_yards: Query<(Entity, &Yard)>,
     q_stockpiles: Query<(
         Entity,
         &Transform,
@@ -47,13 +46,9 @@ pub fn stockpile_consolidation_producer_system(
         Without<ManualTransportRequest>,
     >,
 ) {
-    let active_familiars: Vec<(Entity, TaskArea)> = q_familiars
-        .iter()
-        .filter(|(_, ac, _)| !matches!(ac.command, FamiliarCommand::Idle))
-        .map(|(e, _, a)| (e, a.clone()))
-        .collect();
+    let active_yards: Vec<(Entity, Yard)> = q_yards.iter().map(|(e, a)| (e, a.clone())).collect();
 
-    let groups = build_stockpile_groups(&stockpile_grid, &active_familiars, &q_stockpiles);
+    let groups = build_stockpile_groups(&stockpile_grid, &active_yards, &q_stockpiles);
 
     // 統合候補を算出
     let mut desired_requests =
@@ -156,7 +151,7 @@ pub fn stockpile_consolidation_producer_system(
 
             desired_requests.insert(
                 (receiver, resource_type),
-                (group.owner_familiar, donor_cells, transfer_count, rep_pos),
+                (group.owner_yard, donor_cells, transfer_count, rep_pos),
             );
         }
     }

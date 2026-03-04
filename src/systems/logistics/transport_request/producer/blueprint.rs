@@ -17,6 +17,7 @@ use crate::systems::logistics::transport_request::{
     TransportDemand, TransportPolicy, TransportPriority, TransportRequest, TransportRequestKind,
     TransportRequestState,
 };
+use crate::systems::world::zones::Yard;
 
 use crate::systems::spatial::BlueprintSpatialGrid;
 
@@ -28,6 +29,7 @@ pub fn blueprint_auto_haul_system(
     mut commands: Commands,
     blueprint_grid: Res<BlueprintSpatialGrid>,
     q_familiars: Query<(Entity, &ActiveCommand, &TaskArea)>,
+    q_yards: Query<(Entity, &Yard)>,
     q_blueprints: Query<(Entity, &Transform, &Blueprint, Option<&TaskWorkers>)>,
     q_bp_requests: Query<(
         Entity,
@@ -58,6 +60,7 @@ pub fn blueprint_auto_haul_system(
         .filter(|(_, active_command, _)| !matches!(active_command.command, FamiliarCommand::Idle))
         .map(|(entity, _, area)| (entity, area.clone()))
         .collect();
+    let active_yards: Vec<(Entity, Yard)> = q_yards.iter().map(|(entity, yard)| (entity, yard.clone())).collect();
 
     // 2. 各 Blueprint の不足分を計算し、desired_requests に格納
     let mut desired_requests =
@@ -83,7 +86,7 @@ pub fn blueprint_auto_haul_system(
             continue;
         }
 
-        let Some((fam_entity, _task_area)) = super::find_owner_familiar(bp_pos, &active_familiars)
+        let Some((fam_entity, _task_area)) = super::find_owner_familiar_for_position(bp_pos, &active_familiars, &active_yards)
         else {
             continue;
         };

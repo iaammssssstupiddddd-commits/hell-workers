@@ -200,6 +200,7 @@ pub struct MutStorageAccess<'w, 's> {
 #[derive(SystemParam)]
 pub struct TaskAssignmentReadAccess<'w, 's> {
     pub world_map: Res<'w, crate::world::map::WorldMap>,
+    pub yards: Query<'w, 's, &'static crate::systems::world::zones::Yard>,
     pub items: Query<'w, 's, (&'static ResourceItem, Option<&'static Designation>)>,
     pub sand_piles: Query<
         'w,
