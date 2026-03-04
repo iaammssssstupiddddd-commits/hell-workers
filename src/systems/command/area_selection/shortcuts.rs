@@ -6,6 +6,7 @@ use crate::entities::familiar::{ActiveCommand, Familiar};
 use crate::game_state::TaskContext;
 use crate::interface::selection::SelectedEntity;
 use crate::systems::command::{TaskArea, TaskMode};
+use crate::systems::world::zones::Site;
 use bevy::prelude::*;
 
 pub fn task_area_edit_history_shortcuts_system(
@@ -17,6 +18,7 @@ pub fn task_area_edit_history_shortcuts_system(
     mut area_edit_presets: ResMut<AreaEditPresets>,
     q_familiar_exists: Query<(), With<Familiar>>,
     q_task_areas: Query<&TaskArea, With<Familiar>>,
+    q_sites: Query<&Site>,
     mut q_familiars: Query<(&mut ActiveCommand, &mut Destination), With<Familiar>>,
     mut commands: Commands,
 ) {
@@ -57,6 +59,7 @@ pub fn task_area_edit_history_shortcuts_system(
             &mut commands,
             &mut q_familiars,
             &mut area_edit_history,
+            &q_sites,
         );
         return;
     }
@@ -105,6 +108,7 @@ pub fn task_area_edit_history_shortcuts_system(
             &mut commands,
             &mut q_familiars,
             &mut area_edit_history,
+            &q_sites,
         );
         return;
     }

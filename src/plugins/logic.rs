@@ -60,7 +60,7 @@ impl Plugin for LogicPlugin {
                         selected.0.is_some()
                     },
                 ),
-                task_area_selection_system.run_if(in_state(PlayMode::TaskDesignation)),
+                task_area_selection_system,
                 zone_placement_system.run_if(in_state(PlayMode::TaskDesignation)),
                 zone_removal_system.run_if(in_state(PlayMode::TaskDesignation)),
                 task_area_edit_history_shortcuts_system.run_if(in_state(PlayMode::TaskDesignation)),

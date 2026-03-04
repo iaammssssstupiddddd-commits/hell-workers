@@ -10,7 +10,9 @@ use crate::systems::command::{
 use crate::systems::dream_tree_planting::build_dream_tree_planting_plan;
 use crate::systems::jobs::Tree;
 use crate::systems::logistics::ResourceItem;
+use crate::systems::logistics::ZoneType;
 use crate::systems::visual::task_area_visual::TaskAreaMaterial;
+use crate::systems::world::zones::{Site, Yard};
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
@@ -30,6 +32,8 @@ pub fn area_selection_indicator_system(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<TaskAreaMaterial>>,
+    q_yards: Query<(Entity, &Yard)>,
+    q_sites: Query<&Site>,
 ) {
     let drag_start = super::geometry::get_drag_start(task_context.0);
 
@@ -61,9 +65,23 @@ pub fn area_selection_indicator_system(
                 TaskArea::from_points(start_pos, end_pos)
             }
         };
+        let is_area_valid = match task_context.0 {
+            TaskMode::ZonePlacement(ZoneType::Stockpile, _) => {
+                crate::systems::command::zone_placement::is_stockpile_area_within_yards(&area, &q_yards)
+            }
+            TaskMode::ZonePlacement(ZoneType::Yard, Some(start_pos)) => {
+                crate::systems::command::zone_placement::is_yard_expansion_area_valid(
+                    start_pos,
+                    &area,
+                    &q_sites,
+                    &q_yards,
+                )
+            }
+            _ => true,
+        };
         let center = area.center();
         let size = area.size();
-        let color = super::geometry::get_indicator_color(task_context.0);
+        let color = super::geometry::get_indicator_color(task_context.0, is_area_valid);
 
         if let Some((mut transform, material_handle, mut visibility)) =
             q_indicator.iter_mut().next()
