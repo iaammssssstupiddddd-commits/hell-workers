@@ -9,7 +9,7 @@
 | 作成日 | `2026-03-03` |
 | 最終更新日 | `2026-03-03` |
 | 作成者 | AI (Claude) + satotakumi |
-| 関連計画 | `TBD` |
+| 関連計画 | `docs/plans/site-yard-system.md` |
 | 関連Issue/PR | N/A |
 
 ## 1. 背景と問題

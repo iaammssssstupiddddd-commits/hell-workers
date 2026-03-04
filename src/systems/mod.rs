@@ -2,6 +2,7 @@ pub mod command;
 pub mod dream_tree_planting;
 pub mod familiar_ai;
 pub mod jobs;
+pub mod world;
 pub mod logistics;
 pub mod obstacle;
 pub mod room;

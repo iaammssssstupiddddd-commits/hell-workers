@@ -4,6 +4,7 @@ use crate::constants::*;
 use crate::relationships::{LoadedItems, ParkedAt};
 use crate::systems::jobs::{Building, BuildingType, ObstaclePosition, Rock, TaskSlots, Tree};
 use crate::systems::logistics::{BelongsTo, Wheelbarrow, WheelbarrowParking};
+use crate::systems::world::zones::{PairedSite, PairedYard, Site, Yard};
 use crate::world::map::{INITIAL_WOOD_POSITIONS, ROCK_POSITIONS, TREE_POSITIONS, WorldMap};
 use bevy::prelude::*;
 
@@ -75,6 +76,7 @@ pub fn initial_resource_spawner(
     }
 
     spawn_initial_wheelbarrow_parking(&mut commands, &game_assets, &mut world_map);
+    spawn_site_and_yard(&mut commands, &mut world_map);
 
     let rock_count = ROCK_POSITIONS.len();
     let obstacle_count = world_map.obstacles.iter().filter(|&&b| b).count();
@@ -83,6 +85,108 @@ pub fn initial_resource_spawner(
         TREE_POSITIONS.len(),
         rock_count,
         obstacle_count
+    );
+}
+
+fn spawn_site_and_yard(commands: &mut Commands, world_map: &mut WorldMap) {
+    let site_width = SITE_WIDTH_TILES as i32;
+    let site_height = SITE_HEIGHT_TILES as i32;
+    let yard_width = YARD_INITIAL_WIDTH_TILES as i32;
+    let yard_height = YARD_INITIAL_HEIGHT_TILES as i32;
+    if SITE_WIDTH_TILES < YARD_MIN_WIDTH_TILES || SITE_HEIGHT_TILES < YARD_MIN_HEIGHT_TILES {
+        warn!(
+            "INITIAL_SPAWN: site size {}x{} is smaller than yard minimum {}x{}",
+            SITE_WIDTH_TILES,
+            SITE_HEIGHT_TILES,
+            YARD_MIN_WIDTH_TILES,
+            YARD_MIN_HEIGHT_TILES
+        );
+        return;
+    }
+
+    if YARD_INITIAL_WIDTH_TILES < YARD_MIN_WIDTH_TILES
+        || YARD_INITIAL_HEIGHT_TILES < YARD_MIN_HEIGHT_TILES
+    {
+        warn!(
+            "INITIAL_SPAWN: initial yard size {}x{} is smaller than minimum {}x{}",
+            YARD_INITIAL_WIDTH_TILES,
+            YARD_INITIAL_HEIGHT_TILES,
+            YARD_MIN_WIDTH_TILES,
+            YARD_MIN_HEIGHT_TILES
+        );
+        return;
+    }
+
+    let site_min_x = (MAP_WIDTH - site_width) / 2;
+    let site_min_y = (MAP_HEIGHT - site_height) / 2;
+    let site_max_x = site_min_x + site_width - 1;
+    let site_max_y = site_min_y + site_height - 1;
+
+    if site_min_x < 0
+        || site_min_y < 0
+        || site_max_x >= MAP_WIDTH
+        || site_max_y >= MAP_HEIGHT
+    {
+        warn!(
+            "INITIAL_SPAWN: skipped Site spawn because configured size does not fit map ({:?}x{:?})",
+            SITE_WIDTH_TILES,
+            SITE_HEIGHT_TILES
+        );
+        return;
+    }
+
+    let yard_min_x = site_max_x + 1;
+    let yard_min_y = site_min_y;
+    let yard_max_x = yard_min_x + yard_width - 1;
+    let yard_max_y = yard_min_y + yard_height - 1;
+
+    if yard_max_x >= MAP_WIDTH || yard_max_y >= MAP_HEIGHT {
+        warn!(
+            "INITIAL_SPAWN: skipped Yard spawn because configured size does not fit map ({:?}x{:?})",
+            YARD_INITIAL_WIDTH_TILES,
+            YARD_INITIAL_HEIGHT_TILES
+        );
+        return;
+    }
+
+    if !(site_min_x..=site_max_x).all(|x| (site_min_y..=site_max_y).all(|y| world_map.is_walkable(x, y)))
+        || !(yard_min_x..=yard_max_x).all(|x| (yard_min_y..=yard_max_y).all(|y| world_map.is_walkable(x, y)))
+    {
+        warn!("INITIAL_SPAWN: skipped Site/Yard spawn due to non-walkable tile.");
+        return;
+    }
+
+    let site_min = WorldMap::grid_to_world(site_min_x, site_min_y);
+    let site_max = WorldMap::grid_to_world(site_max_x, site_max_y);
+    let yard_min = WorldMap::grid_to_world(yard_min_x, yard_min_y);
+    let yard_max = WorldMap::grid_to_world(yard_max_x, yard_max_y);
+
+    let site_entity = commands
+        .spawn((
+            Name::new("Initial Site"),
+            Site {
+                min: site_min,
+                max: site_max,
+            },
+        ))
+        .id();
+
+    let yard_entity = commands
+        .spawn((
+            Name::new("Initial Yard"),
+            Yard {
+                min: yard_min,
+                max: yard_max,
+            },
+            PairedSite(site_entity),
+        ))
+        .id();
+
+    commands.entity(site_entity).insert(PairedYard(yard_entity));
+
+    info!(
+        "INITIAL_SPAWN: spawned Site {:?}-{:?} and Yard {:?}-{:?}",
+        site_min, site_max, yard_min, yard_max
     );
 }
 
