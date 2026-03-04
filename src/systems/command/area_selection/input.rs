@@ -18,6 +18,7 @@ use crate::systems::jobs::floor_construction::{
     FloorConstructionCancelRequested, FloorTileBlueprint,
 };
 use crate::systems::jobs::wall_construction::{WallConstructionCancelRequested, WallTileBlueprint};
+use crate::systems::world::zones::Site;
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
@@ -90,6 +91,7 @@ fn handle_active_drag_input(
     task_context: &mut TaskContext,
     next_play_mode: &mut NextState<PlayMode>,
     q_familiars: &mut Query<(&mut ActiveCommand, &mut Destination), With<Familiar>>,
+    q_sites: &Query<&Site>,
     q_unassigned: &Query<
         (Entity, &Transform, &Designation),
         Without<crate::relationships::ManagedBy>,
@@ -106,7 +108,10 @@ fn handle_active_drag_input(
         && let Some(world_pos) = world_cursor_pos(q_window, q_camera)
     {
         let snapped_pos = WorldMap::snap_to_grid_edge(world_pos);
-        let updated_area = apply_area_edit_drag(&active_drag, snapped_pos);
+        let updated_area = super::geometry::clamp_area_to_site(
+            &apply_area_edit_drag(&active_drag, snapped_pos),
+            q_sites,
+        );
 
         commands
             .entity(active_drag.familiar_entity)
@@ -122,7 +127,12 @@ fn handle_active_drag_input(
     if buttons.just_released(MouseButton::Left) {
         let applied_area = world_cursor_pos(q_window, q_camera)
             .map(WorldMap::snap_to_grid_edge)
-            .map(|snapped| apply_area_edit_drag(&active_drag, snapped))
+            .map(|snapped| {
+                super::geometry::clamp_area_to_site(
+                    &apply_area_edit_drag(&active_drag, snapped),
+                    q_sites,
+                )
+            })
             .unwrap_or_else(|| active_drag.original_area.clone());
 
         if applied_area != active_drag.original_area {
@@ -133,6 +143,7 @@ fn handle_active_drag_input(
                 commands,
                 q_familiars,
                 area_edit_history,
+                q_sites,
             );
 
             assign_unassigned_tasks_in_area(
@@ -228,13 +239,13 @@ pub fn task_area_selection_system(
         Query<(Entity, &Transform, &FloorTileBlueprint)>,
         Query<(Entity, &Transform, &WallTileBlueprint)>,
     )>,
+    q_sites: Query<&Site>,
     mut commands: Commands,
     keyboard: Res<ButtonInput<KeyCode>>,
-    q_unassigned: Query<
-        (Entity, &Transform, &Designation),
-        Without<crate::relationships::ManagedBy>,
-    >,
-    q_selection_indicator: Query<Entity, With<AreaSelectionIndicator>>,
+    mut q_aux: ParamSet<(
+        Query<(Entity, &Transform, &Designation), Without<crate::relationships::ManagedBy>>,
+        Query<Entity, With<AreaSelectionIndicator>>,
+    )>,
     mut area_edit_session: ResMut<AreaEditSession>,
     mut area_edit_history: ResMut<AreaEditHistory>,
 ) {
@@ -259,7 +270,8 @@ pub fn task_area_selection_system(
         &mut task_context,
         &mut next_play_mode,
         &mut q_familiars,
-        &q_unassigned,
+        &q_sites,
+        &q_aux.p0(),
         &mut commands,
         &mut area_edit_session,
         &mut area_edit_history,
@@ -293,10 +305,10 @@ pub fn task_area_selection_system(
         selected.0,
         world_pos,
         &q_familiar_areas,
+        &q_sites,
         &mut q_familiars,
         &mut q_target_sets,
-        &q_unassigned,
-        &q_selection_indicator,
+        &mut q_aux,
         &keyboard,
         &mut next_play_mode,
         &mut commands,

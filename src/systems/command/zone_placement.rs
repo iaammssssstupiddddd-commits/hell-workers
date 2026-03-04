@@ -6,6 +6,7 @@ use crate::systems::command::{TaskArea, TaskMode};
 use crate::systems::logistics::{Stockpile, ZoneType};
 use crate::systems::logistics::BelongsTo;
 use crate::systems::world::zones::Yard;
+use crate::systems::world::zones::Site;
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
@@ -21,6 +22,7 @@ pub fn zone_placement_system(
     mut world_map: ResMut<WorldMap>,
     mut commands: Commands,
     q_yards: Query<(Entity, &Yard)>,
+    q_sites: Query<&Site>,
 ) {
     if ui_input_state.pointer_over_ui {
         return;
@@ -45,7 +47,21 @@ pub fn zone_placement_system(
     if buttons.just_released(MouseButton::Left) {
         if let Some(start_pos) = start_pos_opt {
             let area = TaskArea::from_points(start_pos, snapped_pos);
-            apply_zone_placement(&mut commands, &mut world_map, zone_type, &area, &q_yards);
+            if matches!(zone_type, ZoneType::Stockpile)
+                && !is_stockpile_area_within_yards(&area, &q_yards)
+            {
+                return;
+            }
+            if matches!(zone_type, ZoneType::Yard)
+                && !is_yard_expansion_area_valid(start_pos, &area, &q_sites, &q_yards)
+            {
+                return;
+            }
+            if matches!(zone_type, ZoneType::Yard) {
+                apply_yard_expansion(&mut commands, start_pos, &area, &q_sites, &q_yards);
+            } else {
+                apply_zone_placement(&mut commands, &mut world_map, zone_type, &area, &q_yards);
+            }
 
             // Shift押下で継続、そうでなければ解除
             // FIXME: keyboard リソースが必要だが、一旦シンプルに解除
@@ -124,9 +140,126 @@ fn apply_zone_placement(
                         .id();
                     world_map.stockpiles.insert(grid, entity);
                 }
+                ZoneType::Yard => {}
             }
         }
     }
+}
+
+fn apply_yard_expansion(
+    commands: &mut Commands,
+    start_pos: Vec2,
+    area: &TaskArea,
+    q_sites: &Query<&Site>,
+    q_yards: &Query<(Entity, &Yard)>,
+) {
+    let Some((yard_entity, source_yard)) = pick_yard_for_position(start_pos, q_yards) else {
+        return;
+    };
+    let expanded_area = expand_yard_area(&source_yard, area);
+    if !is_yard_expansion_area_valid(start_pos, area, q_sites, q_yards) {
+        return;
+    }
+    commands.entity(yard_entity).insert(Yard {
+        min: expanded_area.min,
+        max: expanded_area.max,
+    });
+}
+
+pub(crate) fn is_stockpile_area_within_yards(area: &TaskArea, q_yards: &Query<(Entity, &Yard)>) -> bool {
+    let min_grid = WorldMap::world_to_grid(area.min + Vec2::splat(0.1));
+    let max_grid = WorldMap::world_to_grid(area.max - Vec2::splat(0.1));
+
+    for gy in min_grid.1..=max_grid.1 {
+        for gx in min_grid.0..=max_grid.0 {
+            let grid_pos = WorldMap::grid_to_world(gx, gy);
+            if q_yards.iter().all(|(_, yard)| !yard.contains(grid_pos)) {
+                return false;
+            }
+        }
+    }
+    true
+}
+
+pub(crate) fn is_yard_expansion_area_valid(
+    start_pos: Vec2,
+    drag_area: &TaskArea,
+    q_sites: &Query<&Site>,
+    q_yards: &Query<(Entity, &Yard)>,
+) -> bool {
+    let Some((source_entity, source_yard)) = pick_yard_for_position(start_pos, q_yards) else {
+        return false;
+    };
+    let expanded_area = expand_yard_area(&source_yard, drag_area);
+    let expanded_tiles = area_tile_size(&expanded_area);
+
+    if expanded_tiles.0 < YARD_MIN_WIDTH_TILES as usize
+        || expanded_tiles.1 < YARD_MIN_HEIGHT_TILES as usize
+    {
+        return false;
+    }
+
+    if !q_sites.iter().any(|site| {
+        area_within_area(&expanded_area, site.min, site.max)
+    }) {
+        return false;
+    }
+
+    let overlaps_other_yard = q_yards.iter().any(|(entity, yard)| {
+        entity != source_entity && rectangles_overlap(&expanded_area, yard)
+    });
+    if overlaps_other_yard {
+        return false;
+    }
+
+    true
+}
+
+fn area_tile_size(area: &TaskArea) -> (usize, usize) {
+    let min_grid = WorldMap::world_to_grid(area.min + Vec2::splat(0.1));
+    let max_grid = WorldMap::world_to_grid(area.max - Vec2::splat(0.1));
+    let width = max_grid
+        .0
+        .saturating_sub(min_grid.0)
+        .saturating_add(1) as usize;
+    let height = max_grid
+        .1
+        .saturating_sub(min_grid.1)
+        .saturating_add(1) as usize;
+    (width, height)
+}
+
+fn pick_yard_for_position(
+    position: Vec2,
+    q_yards: &Query<(Entity, &Yard)>,
+) -> Option<(Entity, Yard)> {
+    q_yards
+        .iter()
+        .find(|(_, yard)| yard.contains(position))
+        .map(|(entity, yard)| (entity, yard.clone()))
+}
+
+fn area_within_area(area: &TaskArea, min: Vec2, max: Vec2) -> bool {
+    area.min.x >= min.x && area.max.x <= max.x && area.min.y >= min.y && area.max.y <= max.y
+}
+
+fn expand_yard_area(yard: &Yard, drag_area: &TaskArea) -> TaskArea {
+    let min = Vec2::new(
+        yard.min.x.min(drag_area.min.x),
+        yard.min.y.min(drag_area.min.y),
+    );
+    let max = Vec2::new(
+        yard.max.x.max(drag_area.max.x),
+        yard.max.y.max(drag_area.max.y),
+    );
+    TaskArea { min, max }
+}
+
+fn rectangles_overlap(area: &TaskArea, other_yard: &Yard) -> bool {
+    area.min.x <= other_yard.max.x
+        && area.max.x >= other_yard.min.x
+        && area.min.y <= other_yard.max.y
+        && area.max.y >= other_yard.min.y
 }
 
 fn pick_stockpile_owner_yard(
@@ -139,8 +272,7 @@ fn pick_stockpile_owner_yard(
     {
         return Some(owner);
     }
-
-    q_yards.iter().next().map(|(owner, _)| owner)
+    None
 }
 
 pub fn zone_removal_system(

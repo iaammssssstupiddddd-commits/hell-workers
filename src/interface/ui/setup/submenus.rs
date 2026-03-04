@@ -372,6 +372,11 @@ fn zones_menu_specs(theme: &UiTheme) -> Vec<MenuEntrySpec<'static>> {
             theme.colors.button_default,
         ),
         MenuEntrySpec::new(
+            "Yard を拡張",
+            MenuAction::SelectZone(ZoneType::Yard),
+            theme.colors.button_default,
+        ),
+        MenuEntrySpec::new(
             "Remove",
             MenuAction::RemoveZone(ZoneType::Stockpile),
             theme.colors.status_danger,

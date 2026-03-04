@@ -17,5 +17,6 @@ pub mod tank;
 pub mod task_area_visual;
 pub mod wall_connection;
 pub mod wall_construction;
+pub mod site_yard_visual;
 
 pub use task_area_visual::TaskAreaMaterial;

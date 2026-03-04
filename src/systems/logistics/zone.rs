@@ -4,6 +4,7 @@ use bevy::prelude::*;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Reflect)]
 pub enum ZoneType {
     Stockpile,
+    Yard,
 }
 
 #[derive(Component, Reflect)]

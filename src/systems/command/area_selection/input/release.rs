@@ -1,21 +1,22 @@
 use super::*;
+use crate::systems::world::zones::Site;
 
 pub(super) fn handle_left_just_released_input(
     task_context: &mut TaskContext,
     selected_entity: Option<Entity>,
     world_pos: Vec2,
     q_familiar_areas: &Query<&TaskArea, With<Familiar>>,
+    q_sites: &Query<&Site>,
     q_familiars: &mut Query<(&mut ActiveCommand, &mut Destination), With<Familiar>>,
     q_target_sets: &mut ParamSet<(
         DesignationTargetQuery<'_, '_>,
         Query<(Entity, &Transform, &FloorTileBlueprint)>,
         Query<(Entity, &Transform, &WallTileBlueprint)>,
     )>,
-    q_unassigned: &Query<
-        (Entity, &Transform, &Designation),
-        Without<crate::relationships::ManagedBy>,
-    >,
-    q_selection_indicator: &Query<Entity, With<AreaSelectionIndicator>>,
+    q_aux: &mut ParamSet<(
+        Query<(Entity, &Transform, &Designation), Without<crate::relationships::ManagedBy>>,
+        Query<Entity, With<AreaSelectionIndicator>>,
+    )>,
     keyboard: &ButtonInput<KeyCode>,
     next_play_mode: &mut NextState<PlayMode>,
     commands: &mut Commands,
@@ -29,7 +30,7 @@ pub(super) fn handle_left_just_released_input(
             if start_pos.distance(end_pos) < 0.1 {
                 task_context.0 = TaskMode::None;
                 next_play_mode.set(PlayMode::Normal);
-                despawn_selection_indicators(q_selection_indicator, commands);
+                despawn_selection_indicators(&q_aux.p1(), commands);
                 return;
             }
 
@@ -44,12 +45,13 @@ pub(super) fn handle_left_just_released_input(
                     commands,
                     q_familiars,
                     area_edit_history,
+                    q_sites,
                 );
 
-                assign_unassigned_tasks_in_area(commands, fam_entity, &new_area, q_unassigned);
+                assign_unassigned_tasks_in_area(commands, fam_entity, &new_area, &q_aux.p0());
             }
 
-            despawn_selection_indicators(q_selection_indicator, commands);
+            despawn_selection_indicators(&q_aux.p1(), commands);
 
             if should_exit_after_apply(keyboard) {
                 task_context.0 = TaskMode::None;
