@@ -11,6 +11,7 @@ use crate::constants::{
 use crate::entities::familiar::{ActiveCommand, FamiliarCommand};
 use crate::relationships::TaskWorkers;
 use crate::systems::command::TaskArea;
+use crate::systems::world::zones::Yard;
 use crate::systems::jobs::wall_construction::{
     TargetWallConstructionSite, WallConstructionPhase, WallConstructionSite, WallTileBlueprint,
     WallTileState,
@@ -36,6 +37,7 @@ fn request_priority(resource_type: ResourceType) -> u32 {
 pub fn wall_construction_auto_haul_system(
     mut commands: Commands,
     q_familiars: Query<(Entity, &ActiveCommand, &TaskArea)>,
+    q_yards: Query<(Entity, &Yard)>,
     q_sites: Query<(
         Entity,
         &Transform,
@@ -55,6 +57,8 @@ pub fn wall_construction_auto_haul_system(
         .filter(|(_, active_command, _)| !matches!(active_command.command, FamiliarCommand::Idle))
         .map(|(entity, _, area)| (entity, area.clone()))
         .collect();
+    let active_yards: Vec<(Entity, Yard)> = q_yards.iter().map(|(e, y)| (e, y.clone())).collect();
+    let all_owners = super::collect_all_area_owners(&active_familiars, &active_yards);
 
     let mut waiting_by_site = HashMap::<Entity, (u32, u32)>::new();
     for tile in q_tiles.iter() {
@@ -86,7 +90,7 @@ pub fn wall_construction_auto_haul_system(
         }
 
         let site_pos = site_transform.translation.truncate();
-        let Some((fam_entity, _)) = super::find_owner_familiar(site_pos, &active_familiars) else {
+        let Some((fam_entity, _)) = super::find_owner_familiar(site_pos, &all_owners) else {
             continue;
         };
 

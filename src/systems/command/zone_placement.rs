@@ -199,9 +199,10 @@ pub(crate) fn is_yard_expansion_area_valid(
         return false;
     }
 
-    if !q_sites.iter().any(|site| {
-        area_within_area(&expanded_area, site.min, site.max)
-    }) {
+    let overlaps_site = q_sites.iter().any(|site| {
+        rectangles_overlap_site(&expanded_area, site)
+    });
+    if overlaps_site {
         return false;
     }
 
@@ -239,8 +240,11 @@ fn pick_yard_for_position(
         .map(|(entity, yard)| (entity, yard.clone()))
 }
 
-fn area_within_area(area: &TaskArea, min: Vec2, max: Vec2) -> bool {
-    area.min.x >= min.x && area.max.x <= max.x && area.min.y >= min.y && area.max.y <= max.y
+fn rectangles_overlap_site(area: &TaskArea, site: &Site) -> bool {
+    area.min.x < site.max.x
+        && area.max.x > site.min.x
+        && area.min.y < site.max.y
+        && area.max.y > site.min.y
 }
 
 fn expand_yard_area(yard: &Yard, drag_area: &TaskArea) -> TaskArea {

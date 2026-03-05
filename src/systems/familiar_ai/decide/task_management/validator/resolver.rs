@@ -289,6 +289,13 @@ fn find_tank_bucket_for_water_mixer(
     queries: &crate::systems::familiar_ai::decide::task_management::FamiliarTaskAssignmentQueries,
     shadow: &ReservationShadow,
 ) -> Option<(Entity, Entity)> {
+    let yard_opt = task_area_opt
+        .and_then(|area| {
+            let center = area.center();
+            queries.yards.iter().find(|yard| yard.contains(center))
+        })
+        .or_else(|| queries.yards.iter().next());
+
     let mut tank_candidates: Vec<(Entity, f32)> = queries
         .storage
         .stockpiles
@@ -297,8 +304,11 @@ fn find_tank_bucket_for_water_mixer(
             if stock.resource_type != Some(ResourceType::Water) {
                 return false;
             }
-            if let Some(area) = task_area_opt {
-                if !area.contains(s_transform.translation.truncate()) {
+            let tank_pos = s_transform.translation.truncate();
+            let in_task_area = task_area_opt.is_some_and(|area| area.contains(tank_pos));
+            let in_yard = yard_opt.is_some_and(|yard| yard.contains(tank_pos));
+            if task_area_opt.is_some() || yard_opt.is_some() {
+                if !in_task_area && !in_yard {
                     return false;
                 }
             }

@@ -8,9 +8,11 @@ mod score;
 use crate::relationships::ManagedTasks;
 use crate::systems::command::TaskArea;
 use crate::systems::jobs::{TargetBlueprint, WorkType};
+use crate::systems::world::zones::Yard;
 use crate::systems::spatial::{DesignationSpatialGrid, TransportRequestSpatialGrid};
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
+use std::collections::HashSet;
 
 use filter::{candidate_snapshot, collect_candidate_entities};
 use score::score_candidate;
@@ -44,20 +46,25 @@ pub fn collect_scored_candidates(
     q_target_blueprints: &Query<&TargetBlueprint>,
     world_map: &WorldMap,
 ) -> Vec<ScoredDelegationCandidate> {
-    let candidates = collect_candidate_entities(
+    // 全ヤードを収集（ヤードは全使い魔共通エリアとして TaskArea と同等に扱う）
+    let all_yards: Vec<Yard> = queries.yards.iter().cloned().collect();
+
+    let mut candidates = collect_candidate_entities(
         task_area_opt,
-        task_area_opt.and_then(|area| {
-            let center = (area.min + area.max) * 0.5;
-            queries
-                .yards
-                .iter()
-                .find(|yard| yard.contains(center))
-                .map(|yard| yard as &crate::systems::world::zones::Yard)
-        }),
+        &all_yards,
         managed_tasks,
         designation_grid,
         transport_request_grid,
     );
+
+    // Build は Site/Yard/TaskArea の運用変更の影響を受けやすいため、
+    // 空間グリッド候補に載らなかった場合でも designation 全体から補完する。
+    let mut seen: HashSet<Entity> = candidates.iter().copied().collect();
+    for (entity, _, designation, _, _, _, _, _) in queries.designation.designations.iter() {
+        if designation.work_type == WorkType::Build && seen.insert(entity) {
+            candidates.push(entity);
+        }
+    }
 
     let valid_candidates: Vec<ScoredDelegationCandidate> = candidates
         .into_iter()
@@ -66,6 +73,7 @@ pub fn collect_scored_candidates(
                 fam_entity,
                 entity,
                 task_area_opt,
+                &all_yards,
                 managed_tasks,
                 world_map,
                 queries,

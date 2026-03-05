@@ -116,8 +116,8 @@ Source 側のみ手動操作し、Target 側は Bevy が自動更新する（tas
   - 地面の未予約資材
   - 既存の手動 `Chop` / `Mine` 指定の期待ドロップ量
   - 進行中の自動 Gather（AutoGather）の期待ドロップ量
-- 候補探索は `TaskArea` 依存の段階走査:
-  - Stage 0: `TaskArea` 内
+- 候補探索は owner（Familiar または Yard）の境界エリアを起点とする段階走査:
+  - Stage 0: `TaskArea`（または Yard 境界）内
   - Stage 1: 外周 `<= 10` タイル
   - Stage 2: 外周 `<= 30` タイル
   - Stage 3: 外周 `<= 60` タイル
@@ -361,6 +361,14 @@ Stockpile / Blueprint / Tank などへの搬入予約は、Bevy の Relationship
 - `DepositToStockpile` のソースは地面アイテムのみを対象にする（`InStockpile` は除外）。
 - 所有物資がある場合は `BelongsTo` を一致させ、他 owner の資材を混在させない。
 - `Visibility::Hidden` / `ReservedForTask` / `TaskWorkers` 付きエンティティは候補から外す。
+
+### 8.4.1 Yard エリアの扱い
+
+すべての transport request producer（`DepositToStockpile` / `ConsolidateStockpile` を除く）は、`collect_all_area_owners` ヘルパーで **Yard エンティティを TaskArea と同一コードパス** で処理します。
+
+- Yard の `min` / `max` を `TaskArea { min, max }` に変換して Familiar の TaskArea リストに統合。
+- `issued_by` に Yard エンティティが入った request は、タスクフィルターの `is_issued_by_yard = true` 判定により全 Familiar がアクセス可能になります。
+- `task_finder/filter.rs` は複数 Yard すべてをチェックします（`yards.iter().any(|yard| yard.contains(pos))`）。
 
 ### 8.5 追加時に必ず更新する箇所
 - 新しい producer を `TransportRequestPlugin`（`Decide`）へ登録する。

@@ -66,8 +66,11 @@ pub fn blueprint_auto_haul_system(
     let mut desired_requests =
         std::collections::HashMap::<(Entity, ResourceType), (Entity, u32, Vec2)>::new();
 
+    // Yard を TaskArea と同等に扱い、統合オーナーリストを作成
+    let all_owners = super::collect_all_area_owners(&active_familiars, &active_yards);
+
     let mut blueprints_to_process = std::collections::HashSet::new();
-    for (_, area) in &active_familiars {
+    for (_, area) in &all_owners {
         for &bp_entity in blueprint_grid.get_in_area(area.min, area.max).iter() {
             blueprints_to_process.insert(bp_entity);
         }
@@ -86,7 +89,7 @@ pub fn blueprint_auto_haul_system(
             continue;
         }
 
-        let Some((fam_entity, _task_area)) = super::find_owner_familiar_for_position(bp_pos, &active_familiars, &active_yards)
+        let Some((fam_entity, _task_area)) = super::find_owner_familiar_for_position(bp_pos, &all_owners, &active_yards)
         else {
             continue;
         };
