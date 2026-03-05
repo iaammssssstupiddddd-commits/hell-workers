@@ -118,7 +118,7 @@ pub fn blueprint_auto_gather_system(
         owner_infos.insert(
             fam_entity,
             OwnerInfo {
-                area: area.clone(),
+                area: area.bounds(),
                 center: area.center(),
                 path_start,
                 yard: owner_yard,
@@ -134,7 +134,7 @@ pub fn blueprint_auto_gather_system(
         owner_infos.insert(
             *yard_entity,
             OwnerInfo {
-                area: TaskArea { min: yard.min, max: yard.max },
+                area: yard.bounds(),
                 center: yard_center,
                 path_start,
                 yard: Some(yard.clone()),

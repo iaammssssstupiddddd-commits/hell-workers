@@ -9,7 +9,7 @@ use crate::constants::TILE_SIZE;
 use crate::entities::familiar::{ActiveCommand, FamiliarCommand};
 use crate::relationships::TaskWorkers;
 use crate::systems::command::TaskArea;
-use crate::systems::world::zones::Yard;
+use crate::systems::world::zones::{AreaBounds, Yard};
 use crate::systems::jobs::wall_construction::WallTileBlueprint;
 use crate::systems::jobs::{
     Building, BuildingType, Designation, Priority, ProvisionalWall, TaskSlots, WorkType,
@@ -56,10 +56,10 @@ pub fn provisional_wall_auto_haul_system(
         }
     }
 
-    let active_familiars: Vec<(Entity, TaskArea)> = q_familiars
+    let active_familiars: Vec<(Entity, AreaBounds)> = q_familiars
         .iter()
         .filter(|(_, active_command, _)| !matches!(active_command.command, FamiliarCommand::Idle))
-        .map(|(entity, _, area)| (entity, area.clone()))
+        .map(|(entity, _, area)| (entity, area.bounds()))
         .collect();
     let active_yards: Vec<(Entity, Yard)> = q_yards.iter().map(|(e, y)| (e, y.clone())).collect();
     let all_owners = super::collect_all_area_owners(&active_familiars, &active_yards);
@@ -81,7 +81,7 @@ pub fn provisional_wall_auto_haul_system(
         }
 
         let wall_pos = wall_transform.translation.truncate();
-        let Some((fam_entity, _)) = super::find_owner_familiar(wall_pos, &all_owners) else {
+        let Some((fam_entity, _)) = super::find_owner(wall_pos, &all_owners) else {
             continue;
         };
 

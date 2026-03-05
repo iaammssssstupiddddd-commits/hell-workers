@@ -11,6 +11,7 @@ use crate::constants::{
 use crate::entities::familiar::{ActiveCommand, FamiliarCommand};
 use crate::relationships::TaskWorkers;
 use crate::systems::command::TaskArea;
+use crate::systems::world::zones::AreaBounds;
 use crate::systems::jobs::floor_construction::{
     FloorConstructionPhase, FloorConstructionSite, FloorTileBlueprint, FloorTileState,
     TargetFloorConstructionSite,
@@ -46,10 +47,10 @@ pub fn floor_construction_auto_haul_system(
     )>,
 ) {
     // Collect active familiars
-    let active_familiars: Vec<(Entity, TaskArea)> = q_familiars
+    let active_familiars: Vec<(Entity, AreaBounds)> = q_familiars
         .iter()
         .filter(|(_, active_command, _)| !matches!(active_command.command, FamiliarCommand::Idle))
-        .map(|(entity, _, area)| (entity, area.clone()))
+        .map(|(entity, _, area)| (entity, area.bounds()))
         .collect();
 
     // Site ごとの不足材料をタイル1回走査で集計する。
@@ -96,8 +97,8 @@ pub fn floor_construction_auto_haul_system(
             continue;
         }
 
-        let Some((fam_entity, _task_area)) =
-            super::find_owner_familiar(site_pos, &active_familiars)
+        let Some((fam_entity, _)) =
+            super::find_owner(site_pos, &active_familiars)
         else {
             continue;
         };

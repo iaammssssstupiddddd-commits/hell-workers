@@ -1,8 +1,7 @@
 use crate::constants::{ROCK_DROP_AMOUNT, WOOD_DROP_AMOUNT};
-use crate::systems::command::TaskArea;
 use crate::systems::jobs::WorkType;
 use crate::systems::logistics::ResourceType;
-use crate::systems::world::zones::Yard;
+use crate::systems::world::zones::{AreaBounds, Yard};
 use crate::world::map::WorldMap;
 use crate::world::pathfinding::{self, PathfindingContext};
 use bevy::prelude::*;
@@ -12,7 +11,7 @@ pub(super) const STAGE_COUNT: usize = 3;
 
 #[derive(Clone)]
 pub(super) struct OwnerInfo {
-    pub(super) area: TaskArea,
+    pub(super) area: AreaBounds,
     pub(super) center: Vec2,
     pub(super) path_start: (i32, i32),
     pub(super) yard: Option<Yard>,
@@ -149,7 +148,7 @@ pub(super) fn resolve_owner(
         .map(|(owner, _)| *owner)
 }
 
-fn distance_sq_to_task_area_perimeter(pos: Vec2, area: &TaskArea) -> f32 {
+fn distance_sq_to_task_area_perimeter(pos: Vec2, area: &AreaBounds) -> f32 {
     let inside_x = pos.x >= area.min.x && pos.x <= area.max.x;
     let inside_y = pos.y >= area.min.y && pos.y <= area.max.y;
 
