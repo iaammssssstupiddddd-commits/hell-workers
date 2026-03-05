@@ -9,6 +9,7 @@ use crate::constants::WHEELBARROW_CAPACITY;
 use crate::entities::familiar::{ActiveCommand, FamiliarCommand};
 use crate::relationships::TaskWorkers;
 use crate::systems::command::TaskArea;
+use crate::systems::world::zones::AreaBounds;
 use crate::systems::jobs::{
     Blueprint, Designation, Priority, TargetBlueprint, TaskSlots, WorkType,
 };
@@ -55,10 +56,10 @@ pub fn blueprint_auto_haul_system(
         }
     }
 
-    let active_familiars: Vec<(Entity, TaskArea)> = q_familiars
+    let active_familiars: Vec<(Entity, AreaBounds)> = q_familiars
         .iter()
         .filter(|(_, active_command, _)| !matches!(active_command.command, FamiliarCommand::Idle))
-        .map(|(entity, _, area)| (entity, area.clone()))
+        .map(|(entity, _, area)| (entity, area.bounds()))
         .collect();
     let active_yards: Vec<(Entity, Yard)> = q_yards.iter().map(|(entity, yard)| (entity, yard.clone())).collect();
 
@@ -66,7 +67,7 @@ pub fn blueprint_auto_haul_system(
     let mut desired_requests =
         std::collections::HashMap::<(Entity, ResourceType), (Entity, u32, Vec2)>::new();
 
-    // Yard を TaskArea と同等に扱い、統合オーナーリストを作成
+    // 使い魔 TaskArea とヤード境界を統合オーナーリストにまとめる
     let all_owners = super::collect_all_area_owners(&active_familiars, &active_yards);
 
     let mut blueprints_to_process = std::collections::HashSet::new();
@@ -89,7 +90,7 @@ pub fn blueprint_auto_haul_system(
             continue;
         }
 
-        let Some((fam_entity, _task_area)) = super::find_owner_familiar_for_position(bp_pos, &all_owners, &active_yards)
+        let Some((fam_entity, _)) = super::find_owner_for_position(bp_pos, &all_owners, &active_yards)
         else {
             continue;
         };

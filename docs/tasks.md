@@ -52,7 +52,7 @@ Familiar の `task_finder` がタスクを発見できる条件（**全て満た
 4. ⚠️ **Haul系 WorkType** (`Haul` / `HaulToMixer` / `GatherWater` / `HaulWaterToMixer` / `WheelbarrowHaul`) は **`TransportRequest` コンポーネントが必須** — なければサイレントにフィルタされ、エラー・ログなし
 5. ownership チェック通過: ManagedTasks 内 / unassigned / issued_by 一致 / エリア重複の引き継ぎ
 6. `TaskWorkers.len() < TaskSlots.max`（デフォルト 1）
-7. Mixer タスク以外は Familiar の `TaskArea` 内、または ManagedTasks 内
+7. Mixer タスク以外は Familiar の `TaskArea` 内、Yard 内（全使い魔共通）、または ManagedTasks 内
 8. WorkType 別の状態チェック通過（Build: 資材完了済み / ReinforceFloorTile: `ReinforcingReady` / CoatWall: `is_provisional == true` 等）
 9. スコア計算が `Some(priority)` を返す（None = スコア計算不能で除外）
 

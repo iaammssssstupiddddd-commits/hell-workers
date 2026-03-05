@@ -2,10 +2,10 @@ use crate::constants::*;
 use crate::game_state::{PlayMode, TaskContext};
 use crate::interface::camera::MainCamera;
 use crate::interface::ui::UiInputState;
-use crate::systems::command::{TaskArea, TaskMode};
+use crate::systems::command::TaskMode;
 use crate::systems::logistics::{Stockpile, ZoneType};
 use crate::systems::logistics::BelongsTo;
-use crate::systems::world::zones::Yard;
+use crate::systems::world::zones::{AreaBounds, Yard};
 use crate::systems::world::zones::Site;
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
@@ -46,7 +46,7 @@ pub fn zone_placement_system(
     // 確定
     if buttons.just_released(MouseButton::Left) {
         if let Some(start_pos) = start_pos_opt {
-            let area = TaskArea::from_points(start_pos, snapped_pos);
+            let area = AreaBounds::from_points(start_pos, snapped_pos);
             if matches!(zone_type, ZoneType::Stockpile)
                 && !is_stockpile_area_within_yards(&area, &q_yards)
             {
@@ -97,7 +97,7 @@ fn apply_zone_placement(
     commands: &mut Commands,
     world_map: &mut WorldMap,
     zone_type: ZoneType,
-    area: &TaskArea,
+    area: &AreaBounds,
     q_yards: &Query<(Entity, &Yard)>,
 ) {
     let min_grid = WorldMap::world_to_grid(area.min + Vec2::splat(0.1));
@@ -149,7 +149,7 @@ fn apply_zone_placement(
 fn apply_yard_expansion(
     commands: &mut Commands,
     start_pos: Vec2,
-    area: &TaskArea,
+    area: &AreaBounds,
     q_sites: &Query<&Site>,
     q_yards: &Query<(Entity, &Yard)>,
 ) {
@@ -166,7 +166,7 @@ fn apply_yard_expansion(
     });
 }
 
-pub(crate) fn is_stockpile_area_within_yards(area: &TaskArea, q_yards: &Query<(Entity, &Yard)>) -> bool {
+pub(crate) fn is_stockpile_area_within_yards(area: &AreaBounds, q_yards: &Query<(Entity, &Yard)>) -> bool {
     let min_grid = WorldMap::world_to_grid(area.min + Vec2::splat(0.1));
     let max_grid = WorldMap::world_to_grid(area.max - Vec2::splat(0.1));
 
@@ -183,7 +183,7 @@ pub(crate) fn is_stockpile_area_within_yards(area: &TaskArea, q_yards: &Query<(E
 
 pub(crate) fn is_yard_expansion_area_valid(
     start_pos: Vec2,
-    drag_area: &TaskArea,
+    drag_area: &AreaBounds,
     q_sites: &Query<&Site>,
     q_yards: &Query<(Entity, &Yard)>,
 ) -> bool {
@@ -216,7 +216,7 @@ pub(crate) fn is_yard_expansion_area_valid(
     true
 }
 
-fn area_tile_size(area: &TaskArea) -> (usize, usize) {
+fn area_tile_size(area: &AreaBounds) -> (usize, usize) {
     let min_grid = WorldMap::world_to_grid(area.min + Vec2::splat(0.1));
     let max_grid = WorldMap::world_to_grid(area.max - Vec2::splat(0.1));
     let width = max_grid
@@ -240,14 +240,14 @@ fn pick_yard_for_position(
         .map(|(entity, yard)| (entity, yard.clone()))
 }
 
-fn rectangles_overlap_site(area: &TaskArea, site: &Site) -> bool {
+fn rectangles_overlap_site(area: &AreaBounds, site: &Site) -> bool {
     area.min.x < site.max.x
         && area.max.x > site.min.x
         && area.min.y < site.max.y
         && area.max.y > site.min.y
 }
 
-fn expand_yard_area(yard: &Yard, drag_area: &TaskArea) -> TaskArea {
+fn expand_yard_area(yard: &Yard, drag_area: &AreaBounds) -> AreaBounds {
     let min = Vec2::new(
         yard.min.x.min(drag_area.min.x),
         yard.min.y.min(drag_area.min.y),
@@ -256,10 +256,10 @@ fn expand_yard_area(yard: &Yard, drag_area: &TaskArea) -> TaskArea {
         yard.max.x.max(drag_area.max.x),
         yard.max.y.max(drag_area.max.y),
     );
-    TaskArea { min, max }
+    AreaBounds { min, max }
 }
 
-fn rectangles_overlap(area: &TaskArea, other_yard: &Yard) -> bool {
+fn rectangles_overlap(area: &AreaBounds, other_yard: &Yard) -> bool {
     area.min.x <= other_yard.max.x
         && area.max.x >= other_yard.min.x
         && area.min.y <= other_yard.max.y
@@ -313,14 +313,14 @@ pub fn zone_removal_system(
 
     // プレビュー更新 (ドラッグ中のみ)
     if let Some(start_pos) = start_pos_opt {
-        let area = TaskArea::from_points(start_pos, snapped_pos);
+        let area = AreaBounds::from_points(start_pos, snapped_pos);
         update_removal_preview(&world_map, &area, &mut q_sprites, &mut preview_state);
     }
 
     // 確定
     if buttons.just_released(MouseButton::Left) {
         if let Some(start_pos) = start_pos_opt {
-            let area = TaskArea::from_points(start_pos, snapped_pos);
+            let area = AreaBounds::from_points(start_pos, snapped_pos);
             apply_zone_removal(&mut commands, &mut world_map, &area);
 
             // Shift押下で継続、そうでなければ解除
@@ -355,7 +355,7 @@ impl ZoneRemovalPreviewState {
     }
 }
 
-fn apply_zone_removal(commands: &mut Commands, world_map: &mut WorldMap, area: &TaskArea) {
+fn apply_zone_removal(commands: &mut Commands, world_map: &mut WorldMap, area: &AreaBounds) {
     let (to_remove, fragments) = identify_removal_targets(world_map, area);
 
     // 削除実行
@@ -369,7 +369,7 @@ fn apply_zone_removal(commands: &mut Commands, world_map: &mut WorldMap, area: &
 /// 削除対象と、それによって発生する孤立フラグメントを特定する
 fn identify_removal_targets(
     world_map: &WorldMap,
-    area: &TaskArea,
+    area: &AreaBounds,
 ) -> (Vec<(i32, i32)>, Vec<(i32, i32)>) {
     let min_grid = WorldMap::world_to_grid(area.min + Vec2::splat(0.1));
     let max_grid = WorldMap::world_to_grid(area.max - Vec2::splat(0.1));
@@ -468,7 +468,7 @@ fn identify_removal_targets(
 
 fn update_removal_preview(
     world_map: &WorldMap,
-    area: &TaskArea,
+    area: &AreaBounds,
     q_sprites: &mut Query<&mut Sprite>,
     state: &mut ZoneRemovalPreviewState,
 ) {

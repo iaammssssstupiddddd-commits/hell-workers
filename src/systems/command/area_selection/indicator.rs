@@ -65,14 +65,15 @@ pub fn area_selection_indicator_system(
                 TaskArea::from_points(start_pos, end_pos)
             }
         };
+        let area_bounds = area.bounds();
         let is_area_valid = match task_context.0 {
             TaskMode::ZonePlacement(ZoneType::Stockpile, _) => {
-                crate::systems::command::zone_placement::is_stockpile_area_within_yards(&area, &q_yards)
+                crate::systems::command::zone_placement::is_stockpile_area_within_yards(&area_bounds, &q_yards)
             }
             TaskMode::ZonePlacement(ZoneType::Yard, Some(start_pos)) => {
                 crate::systems::command::zone_placement::is_yard_expansion_area_valid(
                     start_pos,
-                    &area,
+                    &area_bounds,
                     &q_sites,
                     &q_yards,
                 )

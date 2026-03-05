@@ -1,7 +1,6 @@
 use crate::constants::Z_SELECTION;
-use crate::systems::command::TaskArea;
 use crate::systems::visual::task_area_visual::TaskAreaMaterial;
-use crate::systems::world::zones::{Site, Yard};
+use crate::systems::world::zones::{AreaBounds, Site, Yard};
 use bevy::prelude::*;
 use bevy::sprite_render::MeshMaterial2d;
 
@@ -34,10 +33,7 @@ pub fn sync_site_yard_boundaries_system(
             &mut commands,
             &mut meshes,
             &mut materials,
-            &TaskArea {
-                min: site.min,
-                max: site.max,
-            },
+            &site.bounds(),
             SITE_BOUNDARY_COLOR,
         );
     }
@@ -47,10 +43,7 @@ pub fn sync_site_yard_boundaries_system(
             &mut commands,
             &mut meshes,
             &mut materials,
-            &TaskArea {
-                min: yard.min,
-                max: yard.max,
-            },
+            &yard.bounds(),
             YARD_BOUNDARY_COLOR,
         );
     }
@@ -60,7 +53,7 @@ fn spawn_boundary_visual(
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
     materials: &mut Assets<TaskAreaMaterial>,
-    area: &TaskArea,
+    area: &AreaBounds,
     color: LinearRgba,
 ) {
     let size = area.size();

@@ -79,19 +79,19 @@ Source 側のみ手動操作し、Target 側は Bevy が自動更新する（tas
 
 ## 4. 自動運搬の仕様
 
-### 4.1 TaskArea -> Stockpile (`DepositToStockpile`)
+### 4.1 Yard -> Stockpile (`DepositToStockpile`)
 - **グループ単位の発行**:
-  - **ファミリア (Active Familiars) 単位**で、それぞれの `TaskArea` 内にある Stockpile をひとつのグループとして構成します。
-  - `TransportRequest` は**各ファミリアのグループごとに別個に発行**されます（`anchor` = 代表セル, `issued_by` = ファミリア）。
-  - **共有セルの扱い**: 複数の `TaskArea` が重複する場合、その領域内の Stockpile はそれぞれのファミリアのグループに含まれます。
-    - 結果として、同一セルに対する搬入リクエストが複数ファミリアから並行して存在する可能性があります。
+  - **Yard 単位**で、Yard 境界内にある Stockpile をひとつのグループとして構成します。
+  - `TransportRequest` は**各 Yard のグループごとに別個に発行**されます（`anchor` = 代表セル, `issued_by` = Yard エンティティ）。
+  - **共有セルの扱い**: 複数の Yard が重複する場合、その領域内の Stockpile はそれぞれの Yard グループに含まれます。
+    - 結果として、同一セルに対する搬入リクエストが複数 Yard から並行して存在する可能性があります。
     - **競合回避**: 実際の搬入（Assign時）には `IncomingDeliveries.len()` で搬入予約済み数を確認するため、同一セルへの容量超過は発生しません。
 - **需要計算**:
   - グループ全体の `total_capacity - total_stored - total_in_flight` で算出。
 - **収集対象範囲**:
-  - **TaskArea 外周から 10 タイル以内**。
-  - ただし、TaskArea 外側の「外周+10」領域では、**他 TaskArea 内**の位置を除外します。
-  - 複数グループの範囲に入るアイテムは、最寄りグループ（TaskArea外周距離）に排他的に割り当てられます。
+  - **Yard 外周から 10 タイル以内**。
+  - ただし、Yard 外側の「外周+10」領域では、**他 Yard 内**の位置を除外します。
+  - 複数グループの範囲に入るアイテムは、最寄りグループ（Yard 外周距離）に排他的に割り当てられます。
 - **搬入・ソース選定**:
   - request の `resource_type` は、収集範囲内の近傍フリーアイテムから推定します。
   - producer 内部では、グループ受入可否（空き容量/固定型）を前計算し、`q_free_items` を **1回だけ走査**して代表型を決定します。
@@ -116,8 +116,8 @@ Source 側のみ手動操作し、Target 側は Bevy が自動更新する（tas
   - 地面の未予約資材
   - 既存の手動 `Chop` / `Mine` 指定の期待ドロップ量
   - 進行中の自動 Gather（AutoGather）の期待ドロップ量
-- 候補探索は owner（Familiar または Yard）の境界エリアを起点とする段階走査:
-  - Stage 0: `TaskArea`（または Yard 境界）内
+- 候補探索は owner の `AreaBounds`（Familiar の TaskArea または Yard 境界）を起点とする段階走査:
+  - Stage 0: owner の `AreaBounds` 内
   - Stage 1: 外周 `<= 10` タイル
   - Stage 2: 外周 `<= 30` タイル
   - Stage 3: 外周 `<= 60` タイル
@@ -362,11 +362,14 @@ Stockpile / Blueprint / Tank などへの搬入予約は、Bevy の Relationship
 - 所有物資がある場合は `BelongsTo` を一致させ、他 owner の資材を混在させない。
 - `Visibility::Hidden` / `ReservedForTask` / `TaskWorkers` 付きエンティティは候補から外す。
 
-### 8.4.1 Yard エリアの扱い
+### 8.4.1 AreaBounds によるオーナー解決
 
-すべての transport request producer（`DepositToStockpile` / `ConsolidateStockpile` を除く）は、`collect_all_area_owners` ヘルパーで **Yard エンティティを TaskArea と同一コードパス** で処理します。
+すべての transport request producer は `collect_all_area_owners` ヘルパーで **Familiar の TaskArea と Yard の境界を `AreaBounds`（共通矩形型）に統合** し、統一コードパスでオーナーを解決します。
 
-- Yard の `min` / `max` を `TaskArea { min, max }` に変換して Familiar の TaskArea リストに統合。
+- `AreaBounds`（`src/systems/world/zones.rs`）は `{ min: Vec2, max: Vec2 }` の plain struct で、`contains` / `center` / `size` 等の共通メソッドを持つ。Component ではない。
+- `TaskArea`、`Yard`、`Site` はそれぞれ `.bounds()` メソッドと `From` impl で `AreaBounds` に変換可能。
+- `collect_all_area_owners` は `Vec<(Entity, AreaBounds)>` を返し、Familiar TaskArea と Yard 境界を同列に扱う。
+- `find_owner` / `find_owner_for_position` は `AreaBounds` ベースで位置→オーナーを解決する。Yard 内の位置はその Yard 中心を含む TaskArea のオーナーを優先する。
 - `issued_by` に Yard エンティティが入った request は、タスクフィルターの `is_issued_by_yard = true` 判定により全 Familiar がアクセス可能になります。
 - `task_finder/filter.rs` は複数 Yard すべてをチェックします（`yards.iter().any(|yard| yard.contains(pos))`）。
 
