@@ -8,6 +8,7 @@ use bevy::prelude::*;
 use crate::entities::familiar::{ActiveCommand, FamiliarCommand};
 use crate::relationships::{StoredItems, TaskWorkers};
 use crate::systems::command::TaskArea;
+use crate::systems::world::zones::Yard;
 use crate::systems::jobs::{Designation, Priority, TaskSlots, WorkType};
 use crate::systems::logistics::transport_request::{
     TransportDemand, TransportPolicy, TransportPriority, TransportRequest, TransportRequestKind,
@@ -21,6 +22,7 @@ pub fn tank_water_request_system(
     mut commands: Commands,
     q_incoming: Query<&crate::relationships::IncomingDeliveries>,
     q_familiars: Query<(Entity, &ActiveCommand, &TaskArea)>,
+    q_yards: Query<(Entity, &Yard)>,
     // タンク自体の在庫状況（Water を貯める Stockpile）
     q_tanks: Query<(Entity, &Transform, &Stockpile, Option<&StoredItems>)>,
     q_tank_requests: Query<(Entity, &TransportRequest, Option<&TaskWorkers>)>,
@@ -31,6 +33,8 @@ pub fn tank_water_request_system(
         .filter(|(_, active_command, _)| !matches!(active_command.command, FamiliarCommand::Idle))
         .map(|(entity, _, area)| (entity, area.clone()))
         .collect();
+    let active_yards: Vec<(Entity, Yard)> = q_yards.iter().map(|(e, y)| (e, y.clone())).collect();
+    let all_owners = super::collect_all_area_owners(&active_familiars, &active_yards);
 
     // (tank_entity) -> (issued_by, needed_slots, tank_pos)
     let mut desired_requests = std::collections::HashMap::<Entity, (Entity, u32, Vec2)>::new();
@@ -45,7 +49,7 @@ pub fn tank_water_request_system(
         }
 
         let tank_pos = tank_transform.translation.truncate();
-        let Some((fam_entity, _)) = super::find_owner_familiar(tank_pos, &active_familiars) else {
+        let Some((fam_entity, _)) = super::find_owner_familiar(tank_pos, &all_owners) else {
             continue;
         };
 

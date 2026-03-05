@@ -8,6 +8,7 @@ use crate::systems::visual::speech::components::{
 };
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
+use std::collections::HashSet;
 
 /// 分隊管理要求を適用するシステム（Execute Phase）
 pub fn apply_squad_management_requests_system(
@@ -28,11 +29,17 @@ pub fn apply_squad_management_requests_system(
         With<Familiar>,
     >,
 ) {
+    let mut recruited_this_frame: HashSet<Entity> = HashSet::new();
+
     for request in request_reader.read() {
         let fam_entity = request.familiar_entity;
         match &request.operation {
             SquadManagementOperation::AddMember { soul_entity } => {
                 let soul_entity = *soul_entity;
+                // 同一フレーム内で複数 familiar が同じソウルを重複リクルートするのを防ぐ
+                if !recruited_this_frame.insert(soul_entity) {
+                    continue;
+                }
                 commands.entity(soul_entity).insert(CommandedBy(fam_entity));
 
                 if let Ok((_, _, _, _, _, _, _, _, _, Some(_p))) = q_souls.get(soul_entity) {

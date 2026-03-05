@@ -13,6 +13,7 @@ use crate::systems::familiar_ai::FamiliarSoulQuery;
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
 use crate::systems::spatial::{SpatialGrid, SpatialGridOps};
 use bevy::prelude::*;
+use std::collections::HashSet;
 
 /// リクルート管理ユーティリティ
 pub struct RecruitmentManager;
@@ -71,9 +72,13 @@ impl RecruitmentManager {
         q_resting: &Query<(), With<RestingIn>>,
         q_cooldown: &Query<&RestAreaCooldown>,
         radius_opt: Option<f32>,
+        excluded: &HashSet<Entity>,
     ) -> Option<Entity> {
         // 候補をフィルタリングするヘルパークロージャ
         let filter_candidate = |e: Entity| -> Option<(Entity, Vec2, f32, f32)> {
+            if excluded.contains(&e) {
+                return None;
+            }
             let (entity, transform, soul, task, _, _, idle, _, uc, _): (
                 Entity,
                 &Transform,
@@ -195,6 +200,7 @@ impl RecruitmentManager {
         q_resting: &Query<(), With<RestingIn>>,
         q_cooldown: &Query<&RestAreaCooldown>,
         request_writer: &mut MessageWriter<crate::events::SquadManagementRequest>,
+        excluded: &mut HashSet<Entity>,
     ) -> Option<Entity> {
         let recruit_entity = Self::find_best_recruit(
             fam_pos,
@@ -207,7 +213,11 @@ impl RecruitmentManager {
             q_resting,
             q_cooldown,
             Some(command_radius),
+            excluded,
         )?;
+
+        // 予約登録（同フレーム内の他 familiar が同じソウルを選ばないよう）
+        excluded.insert(recruit_entity);
 
         // リクルート実行要求
         request_writer.write(crate::events::SquadManagementRequest {
@@ -233,8 +243,9 @@ impl RecruitmentManager {
         q_breakdown: &Query<&StressBreakdown>,
         q_resting: &Query<(), With<RestingIn>>,
         q_cooldown: &Query<&RestAreaCooldown>,
+        excluded: &mut HashSet<Entity>,
     ) -> Option<Entity> {
-        Self::find_best_recruit(
+        let result = Self::find_best_recruit(
             fam_pos,
             fatigue_threshold,
             0.0,
@@ -245,6 +256,10 @@ impl RecruitmentManager {
             q_resting,
             q_cooldown,
             None, // 半径制限なし（段階的検索）
-        )
+            excluded,
+        )?;
+        // 予約登録（同フレーム内の他 familiar が同じソウルをスカウトしないよう）
+        excluded.insert(result);
+        Some(result)
     }
 }

@@ -154,7 +154,10 @@ fn pick_representative_resource_type_per_group(
         };
 
         let context = &contexts[group_idx];
-        if item_belongs.map(|b| b.0) != context.owner || !context.can_accept(item_type.0) {
+        let item_owner = item_belongs.map(|b| b.0);
+        let owner_compatible =
+            item_owner == context.owner || (item_owner.is_none() && context.owner.is_some());
+        if !owner_compatible || !context.can_accept(item_type.0) {
             continue;
         }
 

@@ -25,6 +25,21 @@ pub(crate) fn to_u32_saturating(value: usize) -> u32 {
     u32::try_from(value).unwrap_or(u32::MAX)
 }
 
+/// Yard を TaskArea と同等に扱うため、使い魔の TaskArea リストにヤードを統合する。
+///
+/// 各ヤードエンティティを「その境界を TaskArea とするオーナー」として追加することで、
+/// 全てのプロデューサーシステムが同一コードパスで処理できる。
+pub(crate) fn collect_all_area_owners(
+    familiars: &[(Entity, TaskArea)],
+    yards: &[(Entity, Yard)],
+) -> Vec<(Entity, TaskArea)> {
+    let mut all = familiars.to_vec();
+    for (yard_entity, yard) in yards {
+        all.push((*yard_entity, TaskArea { min: yard.min, max: yard.max }));
+    }
+    all
+}
+
 pub(crate) fn find_owner_familiar(
     pos: Vec2,
     familiars: &[(Entity, TaskArea)],

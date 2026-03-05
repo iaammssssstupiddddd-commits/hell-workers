@@ -40,10 +40,8 @@ pub(super) fn assign_build(
             return false;
         }
     }
-
-    if !can_reserve_source(ctx.task_entity, queries, shadow) {
-        return false;
-    }
+    // Build は TaskSlots / TaskWorkers で同時実行数を制御できるため、
+    // source reservation の一時不整合で停止しないよう予約ガードは使わない。
     issue_build(task_pos, already_commanded, ctx, queries, shadow);
     true
 }
@@ -89,8 +87,12 @@ fn has_collect_sand_demand(
         .designation
         .designations
         .iter()
-        .any(|(entity, _, designation, managed_by_opt, _, workers_opt, _, _)| {
-            if managed_by_opt.map(|managed_by| managed_by.0) != Some(fam_entity) {
+        .any(|(entity, transform, designation, managed_by_opt, _, workers_opt, _, _)| {
+            let task_pos = transform.translation.truncate();
+            // 全ヤードのいずれかにタスクが含まれていれば共有タスクとみなす
+            let in_any_yard = queries.yards.iter().any(|yard| yard.contains(task_pos));
+            let managed_by_me = managed_by_opt.map(|managed_by| managed_by.0) == Some(fam_entity);
+            if !managed_by_me && !in_any_yard {
                 return false;
             }
 

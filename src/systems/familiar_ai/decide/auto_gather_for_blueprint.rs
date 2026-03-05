@@ -126,6 +126,22 @@ pub fn blueprint_auto_gather_system(
         );
     }
 
+    for (yard_entity, yard) in &yards {
+        let yard_center = (yard.min + yard.max) / 2.0;
+        let Some(path_start) = world_map.get_nearest_walkable_grid(yard_center) else {
+            continue;
+        };
+        owner_infos.insert(
+            *yard_entity,
+            OwnerInfo {
+                area: TaskArea { min: yard.min, max: yard.max },
+                center: yard_center,
+                path_start,
+                yard: Some(yard.clone()),
+            },
+        );
+    }
+
     let raw_demand_by_owner = collect_raw_demand_by_owner(
         &owner_infos,
         &q_bp_requests,
