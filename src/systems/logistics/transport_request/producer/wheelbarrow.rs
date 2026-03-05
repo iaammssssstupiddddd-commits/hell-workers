@@ -5,6 +5,7 @@
 use crate::entities::familiar::{ActiveCommand, FamiliarCommand};
 use crate::relationships::{ParkedAt, PushedBy, TaskWorkers};
 use crate::systems::command::TaskArea;
+use crate::systems::world::zones::AreaBounds;
 use crate::systems::jobs::{Designation, Priority, TaskSlots, WorkType};
 use crate::systems::logistics::transport_request::{
     TransportDemand, TransportPolicy, TransportPriority, TransportRequest, TransportRequestKind,
@@ -38,10 +39,10 @@ pub fn wheelbarrow_auto_haul_system(
     q_transforms: Query<&Transform>,
     q_wb_requests: Query<(Entity, &TransportRequest, Option<&TaskWorkers>)>,
 ) {
-    let active_familiars: Vec<(Entity, TaskArea)> = q_familiars
+    let active_familiars: Vec<(Entity, AreaBounds)> = q_familiars
         .iter()
         .filter(|(_, ac, _)| !matches!(ac.command, FamiliarCommand::Idle))
-        .map(|(e, _, a)| (e, a.clone()))
+        .map(|(e, _, a)| (e, a.bounds()))
         .collect();
 
     // (wheelbarrow_entity) -> request payload
@@ -52,7 +53,7 @@ pub fn wheelbarrow_auto_haul_system(
 
     for (wb_entity, wb_transform, parked_at) in q_wheelbarrows.iter() {
         let wb_pos = wb_transform.translation.truncate();
-        let Some((fam_entity, _)) = super::find_owner_familiar(wb_pos, &active_familiars) else {
+        let Some((fam_entity, _)) = super::find_owner(wb_pos, &active_familiars) else {
             continue;
         };
 

@@ -1,5 +1,7 @@
 use bevy::prelude::*;
 
+use crate::systems::world::zones::AreaBounds;
+
 pub mod area_selection;
 pub mod assign_task;
 pub mod indicators;
@@ -66,6 +68,22 @@ impl TaskArea {
             && pos.y >= self.min.y + thickness
             && pos.y <= self.max.y - thickness;
         in_outer && !in_inner
+    }
+
+    pub fn bounds(&self) -> AreaBounds {
+        AreaBounds { min: self.min, max: self.max }
+    }
+}
+
+impl From<&TaskArea> for AreaBounds {
+    fn from(area: &TaskArea) -> Self {
+        AreaBounds { min: area.min, max: area.max }
+    }
+}
+
+impl From<AreaBounds> for TaskArea {
+    fn from(bounds: AreaBounds) -> Self {
+        TaskArea { min: bounds.min, max: bounds.max }
     }
 }
 

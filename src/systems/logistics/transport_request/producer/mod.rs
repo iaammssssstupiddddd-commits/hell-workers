@@ -11,8 +11,7 @@ pub mod upsert;
 pub mod wall_construction;
 pub mod wheelbarrow;
 
-use crate::systems::command::TaskArea;
-use crate::systems::world::zones::Yard;
+use crate::systems::world::zones::{AreaBounds, Yard};
 use bevy::math::Vec2;
 use bevy::prelude::{Commands, Entity, Query, Transform, Visibility};
 use std::collections::{HashMap, HashSet};
@@ -25,26 +24,24 @@ pub(crate) fn to_u32_saturating(value: usize) -> u32 {
     u32::try_from(value).unwrap_or(u32::MAX)
 }
 
-/// Yard を TaskArea と同等に扱うため、使い魔の TaskArea リストにヤードを統合する。
-///
-/// 各ヤードエンティティを「その境界を TaskArea とするオーナー」として追加することで、
-/// 全てのプロデューサーシステムが同一コードパスで処理できる。
+/// 使い魔の TaskArea とヤードの境界を AreaBounds として統合し、
+/// 全プロデューサーが同一コードパスでオーナー解決できるリストを返す。
 pub(crate) fn collect_all_area_owners(
-    familiars: &[(Entity, TaskArea)],
+    familiars: &[(Entity, AreaBounds)],
     yards: &[(Entity, Yard)],
-) -> Vec<(Entity, TaskArea)> {
+) -> Vec<(Entity, AreaBounds)> {
     let mut all = familiars.to_vec();
     for (yard_entity, yard) in yards {
-        all.push((*yard_entity, TaskArea { min: yard.min, max: yard.max }));
+        all.push((*yard_entity, yard.bounds()));
     }
     all
 }
 
-pub(crate) fn find_owner_familiar(
+pub(crate) fn find_owner(
     pos: Vec2,
-    familiars: &[(Entity, TaskArea)],
-) -> Option<(Entity, &TaskArea)> {
-    familiars
+    owners: &[(Entity, AreaBounds)],
+) -> Option<(Entity, &AreaBounds)> {
+    owners
         .iter()
         .filter(|(_, area)| area.contains(pos))
         .min_by(|(_, area1), (_, area2)| {
@@ -73,14 +70,17 @@ pub(crate) fn find_owner_yard(
     candidates.first().map(|(entity, yard)| (*entity, yard))
 }
 
-pub(crate) fn find_owner_familiar_for_position<'a>(
+/// 位置に対するオーナーを解決する。
+/// Yard 内の位置は、その Yard の中心を含む使い魔 TaskArea のオーナーを優先する。
+/// 該当しなければ、位置を直接含むオーナーにフォールバックする。
+pub(crate) fn find_owner_for_position<'a>(
     pos: Vec2,
-    familiars: &'a [(Entity, TaskArea)],
+    owners: &'a [(Entity, AreaBounds)],
     yards: &'a [(Entity, Yard)],
-) -> Option<(Entity, &'a TaskArea)> {
+) -> Option<(Entity, &'a AreaBounds)> {
     if let Some((_yard_entity, yard)) = find_owner_yard(pos, yards) {
         let yard_center = (yard.min + yard.max) * 0.5;
-        let candidates: Vec<_> = familiars
+        let candidates: Vec<_> = owners
             .iter()
             .filter(|(_, area)| area.contains(yard_center))
             .collect();
@@ -96,7 +96,7 @@ pub(crate) fn find_owner_familiar_for_position<'a>(
         }
     }
 
-    find_owner_familiar(pos, familiars)
+    find_owner(pos, owners)
 }
 
 pub(crate) fn collect_nearby_resource_entities(

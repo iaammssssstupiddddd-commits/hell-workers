@@ -8,7 +8,7 @@ use bevy::prelude::*;
 use crate::entities::familiar::{ActiveCommand, Familiar, FamiliarCommand};
 use crate::relationships::{StoredItems, TaskWorkers};
 use crate::systems::command::TaskArea;
-use crate::systems::world::zones::Yard;
+use crate::systems::world::zones::{AreaBounds, Yard};
 use crate::systems::familiar_ai::perceive::resource_sync::SharedResourceCache;
 use crate::systems::jobs::{Designation, Priority, TaskSlots, WorkType};
 use crate::systems::logistics::transport_request::{
@@ -78,10 +78,10 @@ pub fn bucket_auto_haul_system(
     q_bucket_requests: Query<(Entity, &TransportRequest, Option<&TaskWorkers>)>,
     q_move_planned: Query<(), With<MovePlanned>>,
 ) {
-    let active_familiars: Vec<(Entity, TaskArea)> = q_familiars
+    let active_familiars: Vec<(Entity, AreaBounds)> = q_familiars
         .iter()
         .filter(|(_, active_command, _)| !matches!(active_command.command, FamiliarCommand::Idle))
-        .map(|(entity, _, area)| (entity, area.clone()))
+        .map(|(entity, _, area)| (entity, area.bounds()))
         .collect();
     let active_yards: Vec<(Entity, Yard)> = q_yards.iter().map(|(e, y)| (e, y.clone())).collect();
     let all_owners = super::collect_all_area_owners(&active_familiars, &active_yards);
@@ -142,7 +142,7 @@ pub fn bucket_auto_haul_system(
         }
 
         let tank_pos = tank_transform.translation.truncate();
-        let Some((issued_by, _)) = super::find_owner_familiar(tank_pos, &all_owners) else {
+        let Some((issued_by, _)) = super::find_owner(tank_pos, &all_owners) else {
             continue;
         };
 

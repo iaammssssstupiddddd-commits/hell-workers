@@ -9,6 +9,7 @@ use crate::entities::familiar::{ActiveCommand, FamiliarCommand};
 use crate::events::{DesignationOp, DesignationRequest};
 use crate::relationships::{ManagedBy, TaskWorkers};
 use crate::systems::command::TaskArea;
+use crate::systems::world::zones::AreaBounds;
 use crate::systems::familiar_ai::perceive::resource_sync::SharedResourceCache;
 use crate::systems::jobs::{
     Designation, MudMixerStorage, Priority, TargetMixer, TaskSlots, WorkType,
@@ -65,10 +66,10 @@ pub fn mud_mixer_auto_haul_system(
     q_collect_sand_tasks: Query<(&Designation, &ManagedBy, Option<&TaskWorkers>)>,
     q_requests_for_demand: Query<(&TransportRequest, Option<&TaskWorkers>, Option<&TransportDemand>)>,
 ) {
-    let active_familiars: Vec<(Entity, TaskArea)> = q_familiars
+    let active_familiars: Vec<(Entity, AreaBounds)> = q_familiars
         .iter()
         .filter(|(_, active_command, _)| !matches!(active_command.command, FamiliarCommand::Idle))
-        .map(|(entity, _, area)| (entity, area.clone()))
+        .map(|(entity, _, area)| (entity, area.bounds()))
         .collect();
     let active_yards: Vec<(Entity, Yard)> = q_yards.iter().map(|(entity, yard)| (entity, yard.clone())).collect();
     let all_owners = super::collect_all_area_owners(&active_familiars, &active_yards);
@@ -128,7 +129,7 @@ pub fn mud_mixer_auto_haul_system(
         active_mixers.insert(mixer_entity);
 
         let mixer_pos = mixer_transform.translation.truncate();
-        let Some((fam_entity, task_area)) = super::find_owner_familiar_for_position(
+        let Some((fam_entity, owner_area)) = super::find_owner_for_position(
             mixer_pos,
             &all_owners,
             &active_yards,
@@ -197,7 +198,7 @@ pub fn mud_mixer_auto_haul_system(
                 }
             }
 
-            let area_filters: [Option<&crate::systems::command::TaskArea>; 2] = [Some(task_area), None];
+            let area_filters: [Option<&AreaBounds>; 2] = [Some(owner_area), None];
             for area_filter in area_filters {
                 for (sp_entity, sp_transform, sp_designation, sp_workers) in q_sand_piles.iter() {
                     if area_filter.is_some_and(|area| !area.contains(sp_transform.translation.truncate())) {
@@ -234,7 +235,7 @@ pub fn mud_mixer_auto_haul_system(
             if !issued_collect_sand {
                 if let Some(sand_tile_entity) = find_available_sand_tile(
                     &world_map,
-                    Some(task_area),
+                    Some(owner_area),
                     yard_area,
                     mixer_pos,
                     &q_task_state,
@@ -459,7 +460,7 @@ fn request_is_collect_sand_demand(request: &TransportRequest) -> bool {
 
 fn find_available_sand_tile(
     world_map: &WorldMap,
-    task_area: Option<&TaskArea>,
+    owner_area: Option<&AreaBounds>,
     yard_area: Option<&Yard>,
     mixer_pos: Vec2,
     q_task_state: &Query<(Option<&Designation>, Option<&TaskWorkers>)>,
@@ -468,7 +469,7 @@ fn find_available_sand_tile(
         let (x0, y0) = WorldMap::world_to_grid(yard.min);
         let (x1, y1) = WorldMap::world_to_grid(yard.max);
         (x0.min(x1), x0.max(x1), y0.min(y1), y0.max(y1))
-    } else if let Some(area) = task_area {
+    } else if let Some(area) = owner_area {
         let (x0, y0) = WorldMap::world_to_grid(area.min);
         let (x1, y1) = WorldMap::world_to_grid(area.max);
         (x0.min(x1), x0.max(x1), y0.min(y1), y0.max(y1))
@@ -498,7 +499,7 @@ fn find_available_sand_tile(
             }
 
             let tile_pos = WorldMap::grid_to_world(gx, gy);
-            if yard_area.is_none() && task_area.is_some_and(|area| !area.contains(tile_pos)) {
+            if yard_area.is_none() && owner_area.is_some_and(|area| !area.contains(tile_pos)) {
                 continue;
             }
 
