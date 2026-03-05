@@ -67,12 +67,39 @@ pub fn upsert_transport_request<TTarget: Component>(
     target: TTarget,
     kind: TransportRequestKind,
 ) {
+    upsert_transport_request_with_work_type(
+        commands,
+        request_entity,
+        key,
+        site_pos,
+        issued_by,
+        desired_slots,
+        inflight,
+        priority,
+        target,
+        kind,
+        WorkType::Haul,
+    );
+}
+
+#[inline]
+pub fn upsert_transport_request_with_work_type<TTarget: Component>(
+    commands: &mut Commands,
+    request_entity: Entity,
+    key: (Entity, ResourceType),
+    site_pos: Vec2,
+    issued_by: Entity,
+    desired_slots: u32,
+    inflight: u32,
+    priority: u32,
+    target: TTarget,
+    kind: TransportRequestKind,
+    work_type: WorkType,
+) {
     commands.entity(request_entity).try_insert((
         Transform::from_xyz(site_pos.x, site_pos.y, 0.0),
         Visibility::Hidden,
-        Designation {
-            work_type: WorkType::Haul,
-        },
+        Designation { work_type },
         crate::relationships::ManagedBy(issued_by),
         TaskSlots::new(desired_slots),
         Priority(priority),
@@ -106,13 +133,38 @@ pub fn spawn_transport_request<TTarget: Component>(
     target: TTarget,
     kind: TransportRequestKind,
 ) {
+    spawn_transport_request_with_work_type(
+        commands,
+        name,
+        key,
+        site_pos,
+        issued_by,
+        desired_slots,
+        priority,
+        target,
+        kind,
+        WorkType::Haul,
+    );
+}
+
+#[inline]
+pub fn spawn_transport_request_with_work_type<TTarget: Component>(
+    commands: &mut Commands,
+    name: &'static str,
+    key: (Entity, ResourceType),
+    site_pos: Vec2,
+    issued_by: Entity,
+    desired_slots: u32,
+    priority: u32,
+    target: TTarget,
+    kind: TransportRequestKind,
+    work_type: WorkType,
+) {
     commands.spawn((
         Name::new(name),
         Transform::from_xyz(site_pos.x, site_pos.y, 0.0),
         Visibility::Hidden,
-        Designation {
-            work_type: WorkType::Haul,
-        },
+        Designation { work_type },
         crate::relationships::ManagedBy(issued_by),
         TaskSlots::new(desired_slots),
         Priority(priority),

@@ -1,6 +1,6 @@
 # Plans Index
 
-`docs/plans` の文書ステータス一覧（更新日: 2026-03-02）。
+`docs/plans` の文書ステータス一覧（更新日: 2026-03-05）。
 
 ## 新規計画書の作り方
 
@@ -19,8 +19,12 @@
 
 | Document | Status | Notes |
 |---|---|---|
-| [refactor-top5-followups-plan-2026-03-02.md](refactor-top5-followups-plan-2026-03-02.md) | Completed | 直近レビューで抽出した5件（運搬共通化、UI粒子分割、builder重複削減、pathfinding明示化、冗長分岐除去）の統合実装計画。 |
-| [pathfinding-core-unification-plan-2026-03-01.md](pathfinding-core-unification-plan-2026-03-01.md) | Completed | `find_path` 系の探索核を共通化し、境界探索との重複を解消する計画。 |
+| [zone-placement-refactor-plan-2026-03-05.md](zone-placement-refactor-plan-2026-03-05.md) | Draft | Zone配置/削除/プレビュー/連結判定を責務分離する実装計画。 |
+| [mixer-producer-phase-separation-plan-2026-03-05.md](mixer-producer-phase-separation-plan-2026-03-05.md) | Draft | MudMixer producer の需要計算・採取補助・request upsert を段階分離する計画。 |
+| [pathfinding-executor-split-plan-2026-03-05.md](pathfinding-executor-split-plan-2026-03-05.md) | Draft | Soul pathfinding の実行器を予算管理/再利用/fallback/cleanup に分割する計画。 |
+| [taskexecution-systemparam-refactor-plan-2026-03-05.md](taskexecution-systemparam-refactor-plan-2026-03-05.md) | Draft | TaskExecution の SystemParam 群を責務別モジュールへ再編する計画。 |
+| [dream-ui-particle-update-refactor-plan-2026-03-05.md](dream-ui-particle-update-refactor-plan-2026-03-05.md) | Draft | Dream UI 粒子更新処理の物理/描画/到達判定分離計画。 |
+| [docs-index-automation-plan-2026-03-05.md](docs-index-automation-plan-2026-03-05.md) | Draft | `docs/plans` / `docs/proposals` 索引更新の自動化導入計画。 |
 
 ## アーカイブ計画書一覧 (`docs/plans/archive`)
 
