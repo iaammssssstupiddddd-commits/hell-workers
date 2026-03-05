@@ -18,7 +18,13 @@ pub fn sync_site_yard_boundaries_system(
     mut materials: ResMut<Assets<TaskAreaMaterial>>,
     q_sites: Query<&Site>,
     q_yards: Query<&Yard>,
+    q_sites_changed: Query<Entity, (With<Site>, Changed<Site>)>,
+    q_yards_changed: Query<Entity, (With<Yard>, Changed<Yard>)>,
 ) {
+    if q_sites_changed.is_empty() && q_yards_changed.is_empty() {
+        return;
+    }
+
     for visual in q_existing.iter() {
         commands.entity(visual).despawn();
     }
@@ -68,7 +74,8 @@ fn spawn_boundary_visual(
             time: 0.0,
             state: 0,
         })),
-        Transform::from_translation(center.extend(Z_SELECTION + 0.05)),
+        Transform::from_translation(center.extend(Z_SELECTION + 0.05))
+            .with_scale(size.extend(1.0)),
         Visibility::Visible,
         Name::new("SiteYardBoundary"),
     ));

@@ -6,6 +6,7 @@ use crate::entities::damned_soul::{Destination, IdleBehavior, Path};
 use crate::entities::familiar::{Familiar, FamiliarOperation};
 use crate::events::SquadManagementRequest;
 use crate::relationships::{Commanding, ManagedTasks};
+use std::collections::HashSet;
 use crate::systems::command::TaskArea;
 use crate::systems::familiar_ai::FamiliarSoulQuery;
 use crate::systems::familiar_ai::decide::task_delegation::ReachabilityCacheKey;
@@ -52,6 +53,8 @@ pub struct FamiliarRecruitmentContext<'a, 'w, 's> {
     pub q_resting: &'a Query<'w, 's, (), With<crate::relationships::RestingIn>>,
     pub q_cooldown: &'a Query<'w, 's, &'static crate::entities::damned_soul::RestAreaCooldown>,
     pub request_writer: &'a mut MessageWriter<'w, SquadManagementRequest>,
+    /// 同フレーム内でのリクルート予約セット（重複防止）
+    pub recruitment_reservations: &'a mut HashSet<Entity>,
 }
 
 /// タスク委譲と移動制御に必要なコンテキスト
@@ -130,6 +133,7 @@ pub fn process_recruitment(ctx: &mut FamiliarRecruitmentContext<'_, '_, '_>) -> 
             ctx.q_resting,
             ctx.q_cooldown,
             ctx.request_writer,
+            ctx.recruitment_reservations,
         ) {
             debug!(
                 "FAM_AI: {:?} recruiting nearby soul {:?}",
@@ -149,6 +153,7 @@ pub fn process_recruitment(ctx: &mut FamiliarRecruitmentContext<'_, '_, '_>) -> 
                 ctx.q_breakdown,
                 ctx.q_resting,
                 ctx.q_cooldown,
+                ctx.recruitment_reservations,
             ) {
                 debug!(
                     "FAM_AI: {:?} scouting distant soul {:?}",

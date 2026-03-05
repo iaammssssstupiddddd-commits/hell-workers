@@ -6,18 +6,16 @@ edition = "2024"
 [dependencies]
 bevy = { version = "0.18", default-features = false, features = [
     "2d",
-    "bevy_dev_tools",
     "experimental_bevy_ui_widgets",
     "pan_camera",
     "png",
     "jpeg",
     # Windows ネイティブ (x64) では wgpu が DX12/Vulkan を自動選択するため webgl2 は不要
 ] }
-noise = "0.9.0"
 rand = "0.8"
 
 [features]
-default = []
+default = ["dynamic_linking"]
 dynamic_linking = ["bevy/dynamic_linking"]
 
 [profile.release]

@@ -88,7 +88,7 @@ pub fn initial_resource_spawner(
     );
 }
 
-fn spawn_site_and_yard(commands: &mut Commands, world_map: &mut WorldMap) {
+fn spawn_site_and_yard(commands: &mut Commands, _world_map: &mut WorldMap) {
     let site_width = SITE_WIDTH_TILES as i32;
     let site_height = SITE_HEIGHT_TILES as i32;
     let yard_width = YARD_INITIAL_WIDTH_TILES as i32;
@@ -146,13 +146,6 @@ fn spawn_site_and_yard(commands: &mut Commands, world_map: &mut WorldMap) {
             YARD_INITIAL_WIDTH_TILES,
             YARD_INITIAL_HEIGHT_TILES
         );
-        return;
-    }
-
-    if !(site_min_x..=site_max_x).all(|x| (site_min_y..=site_max_y).all(|y| world_map.is_walkable(x, y)))
-        || !(yard_min_x..=yard_max_x).all(|x| (yard_min_y..=yard_max_y).all(|y| world_map.is_walkable(x, y)))
-    {
-        warn!("INITIAL_SPAWN: skipped Site/Yard spawn due to non-walkable tile.");
         return;
     }
 

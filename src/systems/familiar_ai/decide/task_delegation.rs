@@ -90,9 +90,7 @@ pub fn familiar_task_delegation_system(params: FamiliarAiTaskDelegationParams) {
         managed_tasks_opt,
     ) in q_familiars.iter_mut()
     {
-        if matches!(active_command.command, FamiliarCommand::Idle) {
-            continue;
-        }
+        let is_idle_command = matches!(active_command.command, FamiliarCommand::Idle);
         familiars_processed += 1;
 
         let state_changed = ai_state.is_changed();
@@ -125,7 +123,9 @@ pub fn familiar_task_delegation_system(params: FamiliarAiTaskDelegationParams) {
             world_map: &world_map,
             pf_context: &mut *pf_context,
             delta_secs: time.delta_secs(),
-            allow_task_delegation,
+            // Yard 共有タスクは TaskArea 非依存で拾える要件のため、
+            // Idle command でも委譲処理自体は実行する。
+            allow_task_delegation: allow_task_delegation || is_idle_command,
             state_changed,
             reservation_shadow: &mut reservation_shadow,
             reachability_frame_cache: &mut reachability_frame_cache.cache,

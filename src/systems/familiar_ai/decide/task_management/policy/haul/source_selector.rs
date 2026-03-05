@@ -169,8 +169,16 @@ pub fn find_nearest_stockpile_source_item<'w, 's>(
 ) -> Option<(Entity, Vec2)> {
     mark_source_selector_call();
     ensure_frame_cache(queries, shadow);
-    let sources = cached_ground_items_by_resource_owner(resource_type, item_owner, shadow);
-    find_nearest_source_item(sources, stock_pos, queries, shadow, |_| true)
+    let owned_sources = cached_ground_items_by_resource_owner(resource_type, item_owner, shadow);
+    let owned_match = find_nearest_source_item(owned_sources, stock_pos, queries, shadow, |_| true);
+    if owned_match.is_some() || item_owner.is_none() {
+        return owned_match;
+    }
+
+    // owner付きストックパイルでは、同ownerの地面資源がない場合に限り
+    // owner未設定資源をフォールバック候補として扱う。
+    let unowned_sources = cached_ground_items_by_resource_owner(resource_type, None, shadow);
+    find_nearest_source_item(unowned_sources, stock_pos, queries, shadow, |_| true)
 }
 
 pub fn find_fixed_stockpile_source_item<'w, 's>(
@@ -199,7 +207,9 @@ pub fn find_fixed_stockpile_source_item<'w, 's>(
         .get(source_item)
         .ok()
         .map(|b| b.0);
-    if owner != item_owner {
+    let owner_compatible =
+        owner == item_owner || (owner.is_none() && item_owner.is_some());
+    if !owner_compatible {
         return None;
     }
 

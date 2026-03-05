@@ -23,7 +23,7 @@ pub(super) struct CandidateSnapshot {
 /// 「自分の TaskArea 内の request + 自分の ManagedRequests」を返す。
 pub(super) fn collect_candidate_entities(
     task_area_opt: Option<&TaskArea>,
-    yard_opt: Option<&Yard>,
+    yards: &[Yard],
     managed_tasks: &ManagedTasks,
     designation_grid: &DesignationSpatialGrid,
     transport_request_grid: &TransportRequestSpatialGrid,
@@ -41,7 +41,11 @@ pub(super) fn collect_candidate_entities(
             seen.insert(e);
         }
     }
-    if let Some(yard) = yard_opt {
+    // 全ヤードのタスクを収集（ヤードは全使い魔共通エリア）
+    for yard in yards {
+        for &e in designation_grid.get_in_area(yard.min, yard.max).iter() {
+            seen.insert(e);
+        }
         for &e in transport_request_grid.get_in_area(yard.min, yard.max).iter() {
             seen.insert(e);
         }
@@ -58,6 +62,7 @@ pub(super) fn candidate_snapshot(
     fam_entity: Entity,
     entity: Entity,
     task_area_opt: Option<&TaskArea>,
+    yards: &[Yard],
     managed_tasks: &ManagedTasks,
     world_map: &WorldMap,
     queries: &crate::systems::familiar_ai::decide::task_management::FamiliarTaskAssignmentQueries,
@@ -76,7 +81,10 @@ pub(super) fn candidate_snapshot(
     let is_managed_by_me = managed_tasks.contains(entity);
     let is_unassigned = issued_by.is_none();
     let is_issued_by_me = issued_by.map(|ib| ib.0) == Some(fam_entity);
+    let is_issued_by_yard = issued_by.is_some_and(|issuer| queries.yards.get(issuer.0).is_ok());
     let pos = transform.translation.truncate();
+    // 全ヤードのいずれかにタスクが含まれているか（ヤードは全使い魔共通エリア）
+    let in_yard = yards.iter().any(|yard| yard.contains(pos));
     let current_workers = workers.map(|w| w.len()).unwrap_or(0);
     let is_transport_request = queries.transport_requests.get(entity).is_ok();
     let requires_transport_request = matches!(
@@ -114,6 +122,8 @@ pub(super) fn candidate_snapshot(
     if !is_managed_by_me
         && !is_unassigned
         && !is_issued_by_me
+        && !is_issued_by_yard
+        && !in_yard
         && !can_take_over_from_overlapping_owner
     {
         return None;
@@ -125,14 +135,15 @@ pub(super) fn candidate_snapshot(
     }
 
     let is_mixer_task = queries.storage.target_mixers.get(entity).is_ok();
+    let is_build_task = designation.work_type == WorkType::Build;
 
     if let Some(area) = task_area_opt {
         if !area.contains(pos) {
-            if !is_managed_by_me && !is_mixer_task {
+            if !is_managed_by_me && !is_mixer_task && !in_yard && !is_build_task {
                 return None;
             }
         }
-    } else if !is_managed_by_me && !is_mixer_task {
+    } else if !is_managed_by_me && !is_mixer_task && !in_yard && !is_build_task {
         return None;
     }
 
@@ -252,7 +263,7 @@ pub(super) fn candidate_snapshot(
         // Refine は 2x2 建物中心座標をターゲットにするため、
         // 事前判定での偽陰性を避けて実行側の到達判定に委ねる。
         skip_reachability_check: is_transport_request
-            || matches!(designation.work_type, WorkType::Refine),
+            || matches!(designation.work_type, WorkType::Refine | WorkType::Build),
         work_type: designation.work_type,
         base_priority,
         in_stockpile_none,

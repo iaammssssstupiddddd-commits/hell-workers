@@ -71,6 +71,7 @@ pub fn mud_mixer_auto_haul_system(
         .map(|(entity, _, area)| (entity, area.clone()))
         .collect();
     let active_yards: Vec<(Entity, Yard)> = q_yards.iter().map(|(entity, yard)| (entity, yard.clone())).collect();
+    let all_owners = super::collect_all_area_owners(&active_familiars, &active_yards);
 
     let mut familiar_with_collect_sand_demand = std::collections::HashSet::<Entity>::new();
     for (request, workers_opt, demand_opt) in q_requests_for_demand.iter() {
@@ -129,7 +130,7 @@ pub fn mud_mixer_auto_haul_system(
         let mixer_pos = mixer_transform.translation.truncate();
         let Some((fam_entity, task_area)) = super::find_owner_familiar_for_position(
             mixer_pos,
-            &active_familiars,
+            &all_owners,
             &active_yards,
         )
         else {

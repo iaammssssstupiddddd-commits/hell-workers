@@ -24,6 +24,7 @@ pub(super) fn handle_dropping_phase(
     {
         let current_count = stored_items_opt.map(|si| si.len()).unwrap_or(0);
         let is_bucket_storage = ctx.queries.storage.bucket_storages.get(stockpile).is_ok();
+        let stock_belongs = q_belongs.get(stockpile).ok().map(|b| b.0);
 
         let item_info = q_targets.get(item).ok().map(|(_, _, _, _, ri, _, _)| {
             let res_type = ri.map(|r| r.0);
@@ -31,8 +32,8 @@ pub(super) fn handle_dropping_phase(
             (res_type, belongs)
         });
         let can_drop = if let Some((Some(res_type), item_belongs)) = item_info {
-            let stock_belongs = q_belongs.get(stockpile).ok().map(|b| b.0);
             let belongs_match = item_belongs == stock_belongs;
+            let accepts_unowned_for_owned = item_belongs.is_none() && stock_belongs.is_some();
 
             let is_bucket_item = matches!(
                 res_type,
@@ -45,7 +46,7 @@ pub(super) fn handle_dropping_phase(
             let ownership_ok = if is_bucket_storage {
                 stock_belongs.is_some() && item_belongs.is_some() && belongs_match
             } else {
-                belongs_match
+                belongs_match || accepts_unowned_for_owned
             };
 
             let type_allowed = if is_bucket_storage {
@@ -79,6 +80,16 @@ pub(super) fn handle_dropping_phase(
                 if let Some((res_type, _)) = item_info {
                     stockpile_comp.resource_type = res_type;
                 }
+            }
+
+            if !is_bucket_storage
+                && q_belongs.get(item).is_err()
+                && let Some(owner) = stock_belongs
+            {
+                // owner未設定資源を owner 付きストックパイルに入れたときは ownership を確定する。
+                commands
+                    .entity(item)
+                    .try_insert(crate::systems::logistics::BelongsTo(owner));
             }
 
             commands.entity(item).try_insert((
