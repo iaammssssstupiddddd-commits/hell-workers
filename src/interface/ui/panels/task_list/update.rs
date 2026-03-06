@@ -9,7 +9,10 @@ use crate::systems::logistics::transport_request::TransportRequest;
 use bevy::prelude::*;
 
 use super::render;
-use super::view_model::{self, TaskListState};
+use super::{
+    TaskListDirty,
+    view_model::{self, TaskListState},
+};
 
 pub use super::interaction::{
     left_panel_tab_system, left_panel_visibility_system, task_list_click_system,
@@ -21,6 +24,7 @@ pub fn task_list_update_system(
     game_assets: Res<crate::assets::GameAssets>,
     theme: Res<UiTheme>,
     mode: Res<LeftPanelMode>,
+    mut dirty: ResMut<TaskListDirty>,
     mut state: ResMut<TaskListState>,
     designations: Query<(
         Entity,
@@ -43,12 +47,23 @@ pub fn task_list_update_system(
         return;
     }
 
-    let snapshot = view_model::build_task_list_snapshot(&designations);
+    if !dirty.list_dirty() {
+        return;
+    }
 
-    if snapshot == state.last_snapshot {
+    let snapshot = view_model::build_task_list_snapshot(&designations);
+    let (summary_total, summary_high) = view_model::build_task_summary(&designations);
+
+    if snapshot == state.last_snapshot
+        && summary_total == state.summary_total
+        && summary_high == state.summary_high
+    {
+        dirty.clear_list();
         return;
     }
     state.last_snapshot = snapshot.clone();
+    state.summary_total = summary_total;
+    state.summary_high = summary_high;
 
     let Ok(body_entity) = body_query.single() else {
         return;
@@ -63,4 +78,5 @@ pub fn task_list_update_system(
     commands.entity(body_entity).with_children(|parent| {
         render::rebuild_task_list_ui(parent, &snapshot, &game_assets, &theme);
     });
+    dirty.clear_list();
 }

@@ -6,6 +6,7 @@ use crate::game_state::{
 use crate::interface::selection::SelectedEntity;
 use crate::interface::ui::components::{UiNodeRegistry, UiSlot};
 use crate::interface::ui::interaction::mode;
+use crate::interface::ui::panels::task_list::{TaskListDirty, TaskListState};
 use crate::interface::ui::theme::UiTheme;
 use crate::relationships::ManagedBy;
 use crate::systems::command::{
@@ -114,20 +115,46 @@ pub fn update_mode_text_system(
 }
 
 pub fn task_summary_ui_system(
-    q_designations: Query<&Priority, With<Designation>>,
+    mut dirty: ResMut<TaskListDirty>,
+    mut state: ResMut<TaskListState>,
+    q_designations: Query<(
+        Entity,
+        &Transform,
+        &Designation,
+        Option<&Priority>,
+        Option<&crate::relationships::TaskWorkers>,
+        Option<&crate::systems::jobs::Blueprint>,
+        Option<&crate::systems::logistics::transport_request::TransportRequest>,
+        Option<&crate::systems::logistics::ResourceItem>,
+        Option<&crate::systems::jobs::Tree>,
+        Option<&crate::systems::jobs::Rock>,
+        Option<&crate::systems::jobs::SandPile>,
+        Option<&crate::systems::jobs::BonePile>,
+    )>,
     theme: Res<UiTheme>,
     ui_nodes: Res<UiNodeRegistry>,
     mut q_text: Query<(&mut Text, &mut TextColor)>,
 ) {
+    if dirty.summary_dirty() {
+        let (total, high) = crate::interface::ui::panels::task_list::build_task_summary(
+            &q_designations,
+        );
+        state.summary_total = total;
+        state.summary_high = high;
+        dirty.clear_summary();
+    }
+
+    if !theme.is_changed() && !state.is_changed() {
+        return;
+    }
+
     let Some(entity) = ui_nodes.get_slot(UiSlot::TaskSummaryText) else {
         return;
     };
     if let Ok((mut text, mut color)) = q_text.get_mut(entity) {
-        let total = q_designations.iter().count();
-        let high = q_designations.iter().filter(|p| p.0 > 0).count();
-        text.0 = format!("Tasks: {} ({} High)", total, high);
+        text.0 = format!("Tasks: {} ({} High)", state.summary_total, state.summary_high);
         // High task warning color
-        if high > 0 {
+        if state.summary_high > 0 {
             color.0 = theme.colors.task_high_warning;
         } else {
             color.0 = theme.colors.panel_accent_time_control;

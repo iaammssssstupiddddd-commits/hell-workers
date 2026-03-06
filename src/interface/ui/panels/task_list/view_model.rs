@@ -22,6 +22,8 @@ pub struct TaskEntry {
 #[derive(Resource, Default)]
 pub struct TaskListState {
     pub last_snapshot: Vec<(WorkType, Vec<TaskEntry>)>,
+    pub summary_total: usize,
+    pub summary_high: usize,
 }
 
 /// Designation クエリからスナップショットを構築
@@ -87,4 +89,33 @@ pub fn build_task_list_snapshot(
     }
 
     groups.into_values().collect()
+}
+
+pub fn build_task_summary(
+    designations: &Query<(
+        Entity,
+        &Transform,
+        &Designation,
+        Option<&Priority>,
+        Option<&TaskWorkers>,
+        Option<&Blueprint>,
+        Option<&TransportRequest>,
+        Option<&ResourceItem>,
+        Option<&Tree>,
+        Option<&Rock>,
+        Option<&SandPile>,
+        Option<&BonePile>,
+    )>,
+) -> (usize, usize) {
+    let mut total = 0usize;
+    let mut high = 0usize;
+
+    for (_, _, _, priority, _, _, _, _, _, _, _, _) in designations.iter() {
+        total += 1;
+        if priority.is_some_and(|p| p.0 > 0) {
+            high += 1;
+        }
+    }
+
+    (total, high)
 }
