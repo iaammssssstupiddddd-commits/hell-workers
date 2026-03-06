@@ -168,6 +168,17 @@ python scripts/convert_to_png.py "source_path" "assets/textures/dest.png"
 head -c 8 "file_path" | od -An -t x1
 ```
 
+### docs インデックス更新
+```bash
+python scripts/update_docs_index.py
+```
+
+- `docs/plans/README.md` と `docs/proposals/README.md` のインデックス表を自動再生成する。
+- 実在するファイルのみ列挙し、削除済みエントリは除去する。
+- 既存エントリの Notes（手書き補足）は保持する。
+- 新規ファイルはファイル内容から説明を自動抽出する。
+- 計画書・提案書を追加/移動/削除したらこのコマンドを実行する。
+
 ### 高負荷パフォーマンス計測（500 Soul / 30 Familiar）
 ```bash
 cargo run -- --spawn-souls 500 --spawn-familiars 30 --perf-scenario
