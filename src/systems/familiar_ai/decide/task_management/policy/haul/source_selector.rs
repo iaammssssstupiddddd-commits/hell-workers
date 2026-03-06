@@ -4,6 +4,7 @@ use crate::systems::familiar_ai::decide::task_management::{
     CachedSourceItem, ReservationShadow, SourceSelectorFrameCache, validator::source_not_reserved,
 };
 use crate::systems::logistics::ResourceType;
+use crate::systems::spatial::{ResourceSpatialGrid, SpatialGridOps};
 use bevy::prelude::*;
 use std::sync::atomic::{AtomicU32, Ordering};
 
@@ -42,40 +43,6 @@ fn ensure_frame_cache<'w, 's>(queries: &TaskQueries<'w, 's>, shadow: &mut Reserv
 
     let mut cache = SourceSelectorFrameCache::default();
 
-    // free_resource_items をフレーム内で一度だけ走査し、用途別に索引化する。
-    for (entity, transform, visibility, resource_item) in queries.free_resource_items.iter() {
-        mark_cache_build_scanned_item();
-        if *visibility == Visibility::Hidden {
-            continue;
-        }
-
-        let source = CachedSourceItem {
-            entity,
-            pos: transform.translation.truncate(),
-        };
-
-        cache
-            .by_resource
-            .entry(resource_item.0)
-            .or_insert_with(Vec::new)
-            .push(source);
-
-        let is_ground = queries
-            .designation
-            .targets
-            .get(entity)
-            .ok()
-            .is_some_and(|(_, _, _, _, _, _, stored_in_opt)| stored_in_opt.is_none());
-        if is_ground {
-            let owner = queries.designation.belongs.get(entity).ok().map(|b| b.0);
-            cache
-                .by_resource_owner_ground
-                .entry((resource_item.0, owner))
-                .or_insert_with(Vec::new)
-                .push(source);
-        }
-    }
-
     // stockpile 内アイテムの探索を高速化するため、(resource_type, cell) ごとに索引化する。
     for (entity, resource_item, in_stockpile) in queries.stored_items_query.iter() {
         mark_cache_build_scanned_item();
@@ -87,31 +54,6 @@ fn ensure_frame_cache<'w, 's>(queries: &TaskQueries<'w, 's>, shadow: &mut Reserv
     }
 
     shadow.source_selector_cache = Some(cache);
-}
-
-fn cached_items_by_resource(
-    resource_type: ResourceType,
-    shadow: &ReservationShadow,
-) -> &[CachedSourceItem] {
-    shadow
-        .source_selector_cache
-        .as_ref()
-        .and_then(|cache| cache.by_resource.get(&resource_type))
-        .map(Vec::as_slice)
-        .unwrap_or(&[])
-}
-
-fn cached_ground_items_by_resource_owner(
-    resource_type: ResourceType,
-    owner: Option<Entity>,
-    shadow: &ReservationShadow,
-) -> &[CachedSourceItem] {
-    shadow
-        .source_selector_cache
-        .as_ref()
-        .and_then(|cache| cache.by_resource_owner_ground.get(&(resource_type, owner)))
-        .map(Vec::as_slice)
-        .unwrap_or(&[])
 }
 
 fn cached_stockpile_items_by_resource(
@@ -148,16 +90,83 @@ fn find_nearest_source_item<'w, 's>(
         .map(|source| (source.entity, source.pos))
 }
 
+fn nearest_ground_source_with_grid<'w, 's>(
+    resource_type: ResourceType,
+    target_pos: Vec2,
+    queries: &TaskQueries<'w, 's>,
+    shadow: &ReservationShadow,
+    resource_grid: &ResourceSpatialGrid,
+    owner_filter: Option<Option<Entity>>,
+) -> Option<(Entity, Vec2)> {
+    let max_map_tiles = crate::constants::MAP_WIDTH.max(crate::constants::MAP_HEIGHT) as f32;
+    let search_radii = [
+        crate::constants::TILE_SIZE * 10.0,
+        crate::constants::TILE_SIZE * 20.0,
+        crate::constants::TILE_SIZE * 40.0,
+        crate::constants::TILE_SIZE * 80.0,
+        crate::constants::TILE_SIZE * max_map_tiles,
+    ];
+
+    for radius in search_radii {
+        let mut nearby_sources = Vec::new();
+        resource_grid.get_nearby_in_radius_into(target_pos, radius, &mut nearby_sources);
+        if nearby_sources.is_empty() {
+            continue;
+        }
+
+        let mut candidates = Vec::new();
+        for entity in nearby_sources {
+            mark_candidate_scanned_item();
+            let Ok((transform, _tree_opt, _tree_variant_opt, _rock_opt, resource_opt, _, stored_in_opt)) =
+                queries.designation.targets.get(entity)
+            else {
+                continue;
+            };
+            if stored_in_opt.is_some() {
+                continue;
+            }
+            if !resource_opt.is_some_and(|res| res.0 == resource_type) {
+                continue;
+            }
+            if !source_not_reserved(entity, queries, shadow) {
+                continue;
+            }
+            if let Some(expected_owner) = owner_filter {
+                let owner = queries.designation.belongs.get(entity).ok().map(|b| b.0);
+                let owner_compatible = match expected_owner {
+                    Some(owner_entity) => owner == Some(owner_entity),
+                    None => owner.is_none(),
+                };
+                if !owner_compatible {
+                    continue;
+                }
+            }
+
+            candidates.push(CachedSourceItem {
+                entity,
+                pos: transform.translation.truncate(),
+            });
+        }
+
+        if let Some(found) =
+            find_nearest_source_item(&candidates, target_pos, queries, shadow, |_| true)
+        {
+            return Some(found);
+        }
+    }
+
+    None
+}
+
 pub fn find_nearest_mixer_source_item<'w, 's>(
     item_type: ResourceType,
     mixer_pos: Vec2,
     queries: &TaskQueries<'w, 's>,
     shadow: &mut ReservationShadow,
+    resource_grid: &ResourceSpatialGrid,
 ) -> Option<(Entity, Vec2)> {
     mark_source_selector_call();
-    ensure_frame_cache(queries, shadow);
-    let sources = cached_items_by_resource(item_type, shadow);
-    find_nearest_source_item(sources, mixer_pos, queries, shadow, |_| true)
+    nearest_ground_source_with_grid(item_type, mixer_pos, queries, shadow, resource_grid, None)
 }
 
 pub fn find_nearest_stockpile_source_item<'w, 's>(
@@ -166,19 +175,31 @@ pub fn find_nearest_stockpile_source_item<'w, 's>(
     stock_pos: Vec2,
     queries: &TaskQueries<'w, 's>,
     shadow: &mut ReservationShadow,
+    resource_grid: &ResourceSpatialGrid,
 ) -> Option<(Entity, Vec2)> {
     mark_source_selector_call();
-    ensure_frame_cache(queries, shadow);
-    let owned_sources = cached_ground_items_by_resource_owner(resource_type, item_owner, shadow);
-    let owned_match = find_nearest_source_item(owned_sources, stock_pos, queries, shadow, |_| true);
+    let owned_match = nearest_ground_source_with_grid(
+        resource_type,
+        stock_pos,
+        queries,
+        shadow,
+        resource_grid,
+        Some(item_owner),
+    );
     if owned_match.is_some() || item_owner.is_none() {
         return owned_match;
     }
 
     // owner付きストックパイルでは、同ownerの地面資源がない場合に限り
     // owner未設定資源をフォールバック候補として扱う。
-    let unowned_sources = cached_ground_items_by_resource_owner(resource_type, None, shadow);
-    find_nearest_source_item(unowned_sources, stock_pos, queries, shadow, |_| true)
+    nearest_ground_source_with_grid(
+        resource_type,
+        stock_pos,
+        queries,
+        shadow,
+        resource_grid,
+        Some(None),
+    )
 }
 
 pub fn find_fixed_stockpile_source_item<'w, 's>(
@@ -221,11 +242,10 @@ pub fn find_nearest_blueprint_source_item<'w, 's>(
     bp_pos: Vec2,
     queries: &TaskQueries<'w, 's>,
     shadow: &mut ReservationShadow,
+    resource_grid: &ResourceSpatialGrid,
 ) -> Option<(Entity, Vec2)> {
     mark_source_selector_call();
-    ensure_frame_cache(queries, shadow);
-    let sources = cached_items_by_resource(resource_type, shadow);
-    find_nearest_source_item(sources, bp_pos, queries, shadow, |_| true)
+    nearest_ground_source_with_grid(resource_type, bp_pos, queries, shadow, resource_grid, None)
 }
 
 /// ドナーセルから未予約のアイテムを1つ検索する（統合用）。
@@ -284,6 +304,7 @@ pub fn collect_nearby_items_for_wheelbarrow(
     max_count: usize,
     queries: &TaskQueries<'_, '_>,
     shadow: &mut ReservationShadow,
+    resource_grid: &ResourceSpatialGrid,
 ) -> Vec<(Entity, Vec2)> {
     collect_items_for_wheelbarrow_in_radius(
         resource_type,
@@ -291,6 +312,7 @@ pub fn collect_nearby_items_for_wheelbarrow(
         max_count,
         queries,
         shadow,
+        resource_grid,
         Some(crate::constants::TILE_SIZE * 10.0),
     )
 }
@@ -301,6 +323,7 @@ pub fn collect_items_for_wheelbarrow_unbounded(
     max_count: usize,
     queries: &TaskQueries<'_, '_>,
     shadow: &mut ReservationShadow,
+    resource_grid: &ResourceSpatialGrid,
 ) -> Vec<(Entity, Vec2)> {
     collect_items_for_wheelbarrow_in_radius(
         resource_type,
@@ -308,6 +331,7 @@ pub fn collect_items_for_wheelbarrow_unbounded(
         max_count,
         queries,
         shadow,
+        resource_grid,
         None,
     )
 }
@@ -318,23 +342,43 @@ fn collect_items_for_wheelbarrow_in_radius(
     max_count: usize,
     queries: &TaskQueries<'_, '_>,
     shadow: &mut ReservationShadow,
+    resource_grid: &ResourceSpatialGrid,
     search_radius: Option<f32>,
 ) -> Vec<(Entity, Vec2)> {
     mark_source_selector_call();
-    let search_radius_sq = search_radius.map(|r| r * r);
-    ensure_frame_cache(queries, shadow);
-    let sources = cached_items_by_resource(resource_type, shadow);
+    let radius = search_radius.unwrap_or(
+        crate::constants::TILE_SIZE
+            * crate::constants::MAP_WIDTH.max(crate::constants::MAP_HEIGHT) as f32,
+    );
+    let search_radius_sq = radius * radius;
+    let mut nearby_entities = Vec::new();
+    resource_grid.get_nearby_in_radius_into(center_pos, radius, &mut nearby_entities);
 
-    let mut items: Vec<(Entity, Vec2, f32)> = sources
-        .iter()
+    let mut items: Vec<(Entity, Vec2, f32)> = nearby_entities
+        .into_iter()
         .inspect(|_| mark_candidate_scanned_item())
-        .filter(|source| source_not_reserved(source.entity, queries, shadow))
-        .filter_map(|source| {
-            let dist_sq = source.pos.distance_squared(center_pos);
-            if search_radius_sq.is_some_and(|radius_sq| dist_sq > radius_sq) {
+        .filter_map(|entity| {
+            let Ok((transform, _tree_opt, _tree_variant_opt, _rock_opt, resource_opt, _, stored_in_opt)) =
+                queries.designation.targets.get(entity)
+            else {
+                return None;
+            };
+            if stored_in_opt.is_some() {
                 return None;
             }
-            Some((source.entity, source.pos, dist_sq))
+            if !resource_opt.is_some_and(|res| res.0 == resource_type) {
+                return None;
+            }
+            if !source_not_reserved(entity, queries, shadow) {
+                return None;
+            }
+
+            let pos = transform.translation.truncate();
+            let dist_sq = pos.distance_squared(center_pos);
+            if dist_sq > search_radius_sq {
+                return None;
+            }
+            Some((entity, pos, dist_sq))
         })
         .collect();
 

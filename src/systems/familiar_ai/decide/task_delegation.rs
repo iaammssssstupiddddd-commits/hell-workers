@@ -6,7 +6,7 @@ use crate::systems::familiar_ai::decide::familiar_processor::{
 };
 use crate::systems::familiar_ai::decide::task_management::FamiliarTaskAssignmentQueries;
 use crate::systems::familiar_ai::helpers::query_types::{FamiliarSoulQuery, FamiliarTaskQuery};
-use crate::systems::spatial::{DesignationSpatialGrid, TransportRequestSpatialGrid};
+use crate::systems::spatial::{DesignationSpatialGrid, ResourceSpatialGrid, TransportRequestSpatialGrid};
 use crate::world::map::WorldMap;
 use crate::world::pathfinding::PathfindingContext;
 use bevy::ecs::system::SystemParam;
@@ -34,6 +34,7 @@ pub struct FamiliarAiTaskDelegationParams<'w, 's> {
     pub task_queries: FamiliarTaskAssignmentQueries<'w, 's>,
     pub designation_grid: Res<'w, DesignationSpatialGrid>,
     pub transport_request_grid: Res<'w, TransportRequestSpatialGrid>,
+    pub resource_grid: Res<'w, ResourceSpatialGrid>,
     pub world_map: Res<'w, WorldMap>,
     pub pf_context: Local<'s, PathfindingContext>,
     pub reachability_frame_cache: ResMut<'w, ReachabilityFrameCache>,
@@ -51,6 +52,7 @@ pub fn familiar_task_delegation_system(params: FamiliarAiTaskDelegationParams) {
         mut task_queries,
         designation_grid,
         transport_request_grid,
+        resource_grid,
         world_map,
         mut pf_context,
         mut reachability_frame_cache,
@@ -119,6 +121,7 @@ pub fn familiar_task_delegation_system(params: FamiliarAiTaskDelegationParams) {
             task_queries: &mut task_queries,
             designation_grid: &designation_grid,
             transport_request_grid: &transport_request_grid,
+            resource_grid: &resource_grid,
             managed_tasks,
             world_map: &world_map,
             pf_context: &mut *pf_context,

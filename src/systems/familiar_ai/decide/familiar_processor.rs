@@ -13,7 +13,9 @@ use crate::systems::familiar_ai::decide::task_delegation::ReachabilityCacheKey;
 use crate::systems::familiar_ai::decide::task_management::{
     FamiliarTaskAssignmentQueries, ReservationShadow,
 };
-use crate::systems::spatial::{DesignationSpatialGrid, SpatialGrid, TransportRequestSpatialGrid};
+use crate::systems::spatial::{
+    DesignationSpatialGrid, ResourceSpatialGrid, SpatialGrid, TransportRequestSpatialGrid,
+};
 use bevy::prelude::*;
 use std::collections::HashMap;
 
@@ -71,6 +73,7 @@ pub struct FamiliarDelegationContext<'a, 'w, 's> {
     pub task_queries: &'a mut FamiliarTaskAssignmentQueries<'w, 's>,
     pub designation_grid: &'a DesignationSpatialGrid,
     pub transport_request_grid: &'a TransportRequestSpatialGrid,
+    pub resource_grid: &'a ResourceSpatialGrid,
     pub managed_tasks: &'a ManagedTasks,
     pub world_map: &'a WorldMap,
     pub pf_context: &'a mut PathfindingContext,
@@ -262,6 +265,7 @@ pub fn process_task_delegation_and_movement(ctx: &mut FamiliarDelegationContext<
             ctx.designation_grid,
             ctx.transport_request_grid,
             ctx.managed_tasks,
+            ctx.resource_grid,
             ctx.world_map,
             ctx.pf_context,
             ctx.reservation_shadow,

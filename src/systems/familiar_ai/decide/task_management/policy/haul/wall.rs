@@ -49,6 +49,7 @@ pub fn assign_haul_to_wall_construction(
             max_items,
             queries,
             shadow,
+            ctx.resource_grid,
         );
         if item_sources.is_empty() {
             item_sources = source_selector::collect_items_for_wheelbarrow_unbounded(
@@ -57,6 +58,7 @@ pub fn assign_haul_to_wall_construction(
                 max_items,
                 queries,
                 shadow,
+                ctx.resource_grid,
             );
         }
         if item_sources.is_empty() {
@@ -111,6 +113,7 @@ pub fn assign_haul_to_wall_construction(
         site_pos,
         queries,
         shadow,
+        ctx.resource_grid,
     ) {
         issue_haul_to_stockpile_with_source(
             source_item,

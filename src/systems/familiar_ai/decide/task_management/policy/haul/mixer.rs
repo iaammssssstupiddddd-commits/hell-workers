@@ -83,7 +83,13 @@ fn assign_single_item_haul_to_mixer(
     shadow: &mut ReservationShadow,
 ) -> bool {
     let Some((source_item, source_pos)) =
-        source_selector::find_nearest_mixer_source_item(item_type, task_pos, queries, shadow)
+        source_selector::find_nearest_mixer_source_item(
+            item_type,
+            task_pos,
+            queries,
+            shadow,
+            ctx.resource_grid,
+        )
     else {
         debug!(
             "ASSIGN: HaulToMixer request {:?} has no available {:?} source",
