@@ -114,6 +114,7 @@ pub fn assign_haul_to_stockpile(
             stock_pos,
             queries,
             shadow,
+            ctx.resource_grid,
         ) {
             if can_complete_pick_drop_to_point(source_pos, stock_pos) {
                 issue_haul_to_stockpile_with_source(
@@ -159,6 +160,7 @@ pub fn assign_haul_to_stockpile(
         task_pos,
         queries,
         shadow,
+        ctx.resource_grid,
     ) else {
         debug!(
             "ASSIGN: Stockpile request {:?} has no available {:?} source",

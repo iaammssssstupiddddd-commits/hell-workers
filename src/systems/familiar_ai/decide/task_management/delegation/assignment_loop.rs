@@ -6,7 +6,7 @@ use crate::systems::familiar_ai::decide::task_management::{
     AssignTaskContext, DelegationCandidate, ReservationShadow, ScoredDelegationCandidate,
     assign_task_to_worker, collect_scored_candidates,
 };
-use crate::systems::spatial::{DesignationSpatialGrid, TransportRequestSpatialGrid};
+use crate::systems::spatial::{DesignationSpatialGrid, ResourceSpatialGrid, TransportRequestSpatialGrid};
 use crate::world::map::WorldMap;
 use crate::world::pathfinding::{self, PathfindingContext};
 use bevy::prelude::*;
@@ -139,6 +139,7 @@ fn try_assign_from_candidates(
     task_area_opt: Option<&TaskArea>,
     queries: &mut crate::systems::familiar_ai::decide::task_management::FamiliarTaskAssignmentQueries,
     q_souls: &mut FamiliarSoulQuery,
+    resource_grid: &ResourceSpatialGrid,
     world_map: &WorldMap,
     pf_context: &mut PathfindingContext,
     reservation_shadow: &mut ReservationShadow,
@@ -180,6 +181,7 @@ fn try_assign_from_candidates(
                 worker_entity,
                 fatigue_threshold,
                 task_area_opt,
+                resource_grid,
             },
             queries,
             q_souls,
@@ -203,6 +205,7 @@ pub(super) fn try_assign_for_workers(
     designation_grid: &DesignationSpatialGrid,
     transport_request_grid: &TransportRequestSpatialGrid,
     managed_tasks: &ManagedTasks,
+    resource_grid: &ResourceSpatialGrid,
     world_map: &WorldMap,
     pf_context: &mut PathfindingContext,
     reservation_shadow: &mut ReservationShadow,
@@ -254,6 +257,7 @@ pub(super) fn try_assign_for_workers(
             task_area_opt,
             queries,
             q_souls,
+            resource_grid,
             world_map,
             pf_context,
             reservation_shadow,
@@ -279,11 +283,12 @@ pub(super) fn try_assign_for_workers(
             fam_entity,
             fatigue_threshold,
             task_area_opt,
-            queries,
-            q_souls,
-            world_map,
-            pf_context,
-            reservation_shadow,
+                queries,
+                q_souls,
+                resource_grid,
+                world_map,
+                pf_context,
+                reservation_shadow,
             &assigned_tasks,
             reachability_cache,
         ) {

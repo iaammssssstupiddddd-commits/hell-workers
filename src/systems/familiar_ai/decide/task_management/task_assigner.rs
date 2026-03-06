@@ -18,8 +18,6 @@ pub(crate) struct CachedSourceItem {
 
 #[derive(Default)]
 pub(crate) struct SourceSelectorFrameCache {
-    pub by_resource: HashMap<ResourceType, Vec<CachedSourceItem>>,
-    pub by_resource_owner_ground: HashMap<(ResourceType, Option<Entity>), Vec<CachedSourceItem>>,
     pub by_resource_stockpile: HashMap<(ResourceType, Entity), Vec<Entity>>,
 }
 
@@ -74,6 +72,7 @@ pub struct AssignTaskContext<'a> {
     pub worker_entity: Entity,
     pub fatigue_threshold: f32,
     pub task_area_opt: Option<&'a TaskArea>,
+    pub resource_grid: &'a crate::systems::spatial::ResourceSpatialGrid,
 }
 
 /// ワーカーにタスクを割り当てる

@@ -47,6 +47,7 @@ pub fn assign_haul_to_provisional_wall(
         wall_pos,
         queries,
         shadow,
+        ctx.resource_grid,
     ) else {
         debug!(
             "ASSIGN: ProvisionalWall request {:?} has no available {:?} source",

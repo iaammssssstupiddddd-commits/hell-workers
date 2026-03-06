@@ -5,7 +5,7 @@ use crate::relationships::ManagedTasks;
 use crate::systems::command::TaskArea;
 use crate::systems::familiar_ai::decide::task_delegation::ReachabilityCacheKey;
 use crate::systems::familiar_ai::decide::task_management::ReservationShadow;
-use crate::systems::spatial::{DesignationSpatialGrid, TransportRequestSpatialGrid};
+use crate::systems::spatial::{DesignationSpatialGrid, ResourceSpatialGrid, TransportRequestSpatialGrid};
 use crate::world::map::WorldMap;
 use crate::world::pathfinding::PathfindingContext;
 use bevy::prelude::*;
@@ -33,6 +33,7 @@ impl TaskManager {
         designation_grid: &DesignationSpatialGrid,
         transport_request_grid: &TransportRequestSpatialGrid,
         managed_tasks: &ManagedTasks,
+        resource_grid: &ResourceSpatialGrid,
         world_map: &WorldMap,
         pf_context: &mut PathfindingContext,
         reservation_shadow: &mut ReservationShadow,
@@ -51,6 +52,7 @@ impl TaskManager {
             designation_grid,
             transport_request_grid,
             managed_tasks,
+            resource_grid,
             world_map,
             pf_context,
             reservation_shadow,
