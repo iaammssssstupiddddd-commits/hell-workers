@@ -1,5 +1,8 @@
 use crate::interface::ui::components::LeftPanelMode;
-use crate::interface::ui::panels::task_list::TaskListState;
+use crate::interface::ui::panels::task_list::{
+    TaskListDirty, TaskListState, detect_task_list_changed_components,
+    detect_task_list_removed_components,
+};
 use crate::interface::ui::panels::task_list::{
     left_panel_tab_system, left_panel_visibility_system, task_list_click_system,
     task_list_update_system, task_list_visual_feedback_system,
@@ -19,7 +22,15 @@ impl Plugin for UiInfoPanelPlugin {
         app.init_resource::<InfoPanelPinState>();
         app.init_resource::<InfoPanelNodes>();
         app.init_resource::<LeftPanelMode>();
+        app.init_resource::<TaskListDirty>();
         app.init_resource::<TaskListState>();
+        app.add_systems(
+            PreUpdate,
+            (
+                detect_task_list_changed_components,
+                detect_task_list_removed_components,
+            ),
+        );
         app.add_systems(
             Update,
             (

@@ -19,6 +19,7 @@
 
 | Document | Status | Notes |
 |---|---|---|
+| [perf-review-followups-plan-2026-03-06.md](perf-review-followups-plan-2026-03-06.md) | Draft | 静的レビューで抽出した UI 再集計、source selector、boundary pathfinding、resource count 表示の改善計画。 |
 | [docs-index-automation-plan-2026-03-05.md](docs-index-automation-plan-2026-03-05.md) | Draft | `docs/plans` / `docs/proposals` 索引更新の自動化導入計画。 |
 | [dream-ui-particle-update-refactor-plan-2026-03-05.md](dream-ui-particle-update-refactor-plan-2026-03-05.md) | Draft | Dream UI 粒子更新処理の物理/描画/到達判定分離計画。 |
 | [mixer-producer-phase-separation-plan-2026-03-05.md](mixer-producer-phase-separation-plan-2026-03-05.md) | Draft | MudMixer producer の需要計算・採取補助・request upsert を段階分離する計画。 |
@@ -76,4 +77,3 @@
 | [archive/wall-stasis-mud.md](archive/wall-stasis-mud.md) | アーカイブ | 壁材（stasis mud）関連計画。 |
 | [archive/wheelbarrow-arbitration-plan.md](archive/wheelbarrow-arbitration-plan.md) | アーカイブ | 猫車利用仲裁ロジックの実装計画。 |
 | [archive/zone-removal-preview-diff-plan-2026-03-01.md](archive/zone-removal-preview-diff-plan-2026-03-01.md) | アーカイブ | Zone removal preview の全件更新を差分更新へ置換する計画。 |
-
