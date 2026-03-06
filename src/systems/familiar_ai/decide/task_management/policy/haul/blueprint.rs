@@ -131,7 +131,13 @@ fn try_pick_drop_to_blueprint(
     let occupied_grids = bp.occupied_grids.clone();
 
     let Some((source_item, source_pos)) =
-        source_selector::find_nearest_blueprint_source_item(resource_type, bp_pos, queries, shadow)
+        source_selector::find_nearest_blueprint_source_item(
+            resource_type,
+            bp_pos,
+            queries,
+            shadow,
+            ctx.resource_grid,
+        )
     else {
         return false;
     };
@@ -166,6 +172,7 @@ fn assign_single_item_haul(
         task_pos,
         queries,
         shadow,
+        ctx.resource_grid,
     ) else {
         debug!(
             "ASSIGN: Blueprint request {:?} has no available {:?} source",
