@@ -70,6 +70,22 @@ def extract_description(path: Path) -> str:
 
 
 # ---------------------------------------------------------------------------
+# ファイル内容からのステータス抽出（plans 用）
+# ---------------------------------------------------------------------------
+
+def extract_plan_status(path: Path) -> str | None:
+    """計画書のメタ情報テーブルから `ステータス` を抽出する。"""
+    try:
+        text = path.read_text(encoding="utf-8")
+        m = re.search(r"^\|\s*ステータス\s*\|\s*`?([^`|]+)`?\s*\|", text, re.MULTILINE)
+        if m:
+            return m.group(1).strip()
+    except Exception:
+        pass
+    return None
+
+
+# ---------------------------------------------------------------------------
 # 既存テーブルの Notes 解析
 # ---------------------------------------------------------------------------
 
@@ -114,6 +130,47 @@ def parse_existing_notes(content: str, section_prefix: str) -> dict[str, str]:
     return result
 
 
+def parse_existing_plan_meta(
+    content: str, section_prefix: str
+) -> dict[str, tuple[str, str]]:
+    """README 内の plans テーブルから {ファイル名: (status, notes)} を返す。"""
+    result: dict[str, tuple[str, str]] = {}
+
+    sec_m = re.search(
+        r"^" + re.escape(section_prefix) + r"[^\n]*$", content, re.MULTILINE
+    )
+    if not sec_m:
+        return result
+
+    after_header = content[sec_m.end():]
+    next_m = re.search(r"^## ", after_header, re.MULTILINE)
+    block = after_header[: next_m.start()] if next_m else after_header
+
+    for line in block.splitlines():
+        line = line.strip()
+        if not line.startswith("|"):
+            continue
+        cells = [c.strip() for c in line.split("|")]
+        cells = [c for c in cells if c]
+        if not cells or cells[0].lower() == "document" or re.fullmatch(r"[-\s]+", cells[0]):
+            continue
+        if len(cells) < 3:
+            continue
+
+        doc_cell, status, notes = cells[0], cells[1], cells[2]
+        lm = re.search(r"\[([^\]]+)\]\(([^)]+)\)", doc_cell)
+        if lm:
+            fname = Path(lm.group(2)).name
+        else:
+            bm = re.search(r"`([^`]+)`", doc_cell)
+            fname = bm.group(1) if bm else doc_cell.strip()
+
+        if fname and fname != "Document":
+            result[fname] = (status, notes)
+
+    return result
+
+
 # ---------------------------------------------------------------------------
 # テーブル行の生成
 # ---------------------------------------------------------------------------
@@ -139,6 +196,20 @@ def build_rows_2col(
         rel = f"{rel_prefix}/{f.name}" if rel_prefix else f.name
         notes = existing.get(f.name) or extract_description(f)
         rows.append(f"| [{rel}]({rel}) | {notes} |")
+    return rows
+
+
+def build_plan_rows(
+    files: list[Path], rel_prefix: str, existing: dict[str, tuple[str, str]]
+) -> list[str]:
+    """plans 用3列テーブル（Document | Status | Notes）の行リストを生成する。"""
+    rows = []
+    for f in sorted(files, key=lambda x: x.name.lower()):
+        rel = f"{rel_prefix}/{f.name}" if rel_prefix else f.name
+        existing_status, existing_notes = existing.get(f.name, ("", ""))
+        status = extract_plan_status(f) or existing_status or "Draft"
+        notes = existing_notes or extract_description(f)
+        rows.append(f"| [{rel}]({rel}) | {status} | {notes} |")
     return rows
 
 
@@ -183,8 +254,8 @@ def update_plans_readme() -> None:
     current_files = [
         f for f in PLANS_DIR.glob("*.md") if f.name not in SKIP_FILES
     ]
-    existing_current = parse_existing_notes(content, "## 現行計画書")
-    current_rows = build_rows_3col(current_files, "", "Draft", existing_current)
+    existing_current = parse_existing_plan_meta(content, "## 現行計画書")
+    current_rows = build_plan_rows(current_files, "", existing_current)
 
     # アーカイブ計画書（docs/plans/archive/*.md）
     archive_dir = PLANS_DIR / "archive"
