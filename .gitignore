@@ -31,6 +31,7 @@ final_check*.log
 game_log.txt
 run_output.log
 build_errors.txt
+scripts/__pycache__
 
 # Logs directory
 /logs
