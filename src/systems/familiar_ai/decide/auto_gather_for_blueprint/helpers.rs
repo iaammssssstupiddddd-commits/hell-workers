@@ -1,4 +1,4 @@
-use crate::constants::{ROCK_DROP_AMOUNT, WOOD_DROP_AMOUNT};
+use hw_core::constants::{ROCK_DROP_AMOUNT, WOOD_DROP_AMOUNT};
 use crate::systems::jobs::WorkType;
 use crate::systems::logistics::ResourceType;
 use crate::systems::world::zones::{AreaBounds, Yard};

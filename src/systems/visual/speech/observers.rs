@@ -6,7 +6,7 @@ use super::emitter::{emit_familiar_with_history, emit_soul_with_history};
 use super::phrases::LatinPhrase;
 use super::spawn::*;
 use crate::assets::GameAssets;
-use crate::constants::COMMAND_REACTION_NEGATIVE_EVENT_CHANCE;
+use hw_core::constants::COMMAND_REACTION_NEGATIVE_EVENT_CHANCE;
 use crate::entities::damned_soul::DamnedSoul;
 use crate::entities::familiar::{Familiar, FamiliarVoice};
 use crate::events::{
@@ -323,7 +323,7 @@ pub fn on_encouraged(
     if let Ok((transform, voice, history_opt)) = q_familiars.get_mut(fam_entity) {
         use rand::seq::SliceRandom;
         let mut rng = rand::thread_rng();
-        let emoji = crate::constants::EMOJIS_ENCOURAGEMENT
+        let emoji = hw_core::constants::EMOJIS_ENCOURAGEMENT
             .choose(&mut rng)
             .unwrap_or(&"💪");
 

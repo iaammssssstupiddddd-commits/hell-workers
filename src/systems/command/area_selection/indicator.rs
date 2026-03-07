@@ -1,8 +1,8 @@
 use super::geometry::world_cursor_pos;
 use crate::assets::GameAssets;
-use crate::constants::{TILE_SIZE, Z_DREAM_TREE_PREVIEW};
+use hw_core::constants::{TILE_SIZE, Z_DREAM_TREE_PREVIEW};
 use crate::entities::damned_soul::DreamPool;
-use crate::game_state::TaskContext;
+use crate::app_contexts::TaskContext;
 use crate::interface::camera::MainCamera;
 use crate::systems::command::{
     AreaEditSession, AreaSelectionIndicator, DreamTreePreviewIndicator, TaskArea, TaskMode,

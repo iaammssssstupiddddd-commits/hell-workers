@@ -1,5 +1,5 @@
 //! MudMixer 関連の定義とロジック
-use crate::constants::{MUD_MIXER_CAPACITY, MUD_MIXER_MUD_CAPACITY, STASIS_MUD_OUTPUT};
+use hw_core::constants::{MUD_MIXER_CAPACITY, MUD_MIXER_MUD_CAPACITY, STASIS_MUD_OUTPUT};
 use crate::systems::logistics::ResourceType;
 use bevy::prelude::*;
 

@@ -2,7 +2,7 @@
 
 use bevy::prelude::*;
 
-use crate::constants::*;
+use hw_core::constants::*;
 use crate::entities::damned_soul::{Destination, IdleBehavior, IdleState, Path};
 use crate::events::{IdleBehaviorOperation, IdleBehaviorRequest};
 use crate::relationships::ParticipatingIn;

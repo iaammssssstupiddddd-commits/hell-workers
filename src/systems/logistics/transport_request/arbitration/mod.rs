@@ -13,7 +13,7 @@ mod types;
 
 use std::time::Instant;
 
-use crate::constants::*;
+use hw_core::constants::*;
 use crate::relationships::{IncomingDeliveries, ParkedAt, PushedBy, StoredIn, StoredItems};
 use crate::systems::jobs::{Blueprint, Designation};
 use crate::systems::logistics::transport_request::{

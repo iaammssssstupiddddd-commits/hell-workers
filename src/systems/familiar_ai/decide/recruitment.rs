@@ -2,7 +2,7 @@
 //!
 //! リクルートの検索・実行ロジックを提供します。
 
-use crate::constants::TILE_SIZE;
+use hw_core::constants::TILE_SIZE;
 use crate::entities::damned_soul::{
     DamnedSoul, Destination, IdleBehavior, IdleState, Path, RestAreaCooldown, StressBreakdown,
 };

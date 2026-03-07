@@ -1,4 +1,4 @@
-use crate::constants::{ROOM_DETECTION_COOLDOWN_SECS, ROOM_VALIDATION_INTERVAL_SECS};
+use hw_core::constants::{ROOM_DETECTION_COOLDOWN_SECS, ROOM_VALIDATION_INTERVAL_SECS};
 use bevy::prelude::*;
 use std::collections::{HashMap, HashSet};
 

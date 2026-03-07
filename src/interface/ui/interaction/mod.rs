@@ -21,10 +21,8 @@ pub(crate) use tooltip::hover_tooltip_system;
 pub(crate) use hover_action::hover_action_button_system;
 
 use crate::entities::familiar::{Familiar, FamiliarOperation};
-use crate::game_state::{
-    BuildContext, CompanionPlacementState, MoveContext, MovePlacementState, PlayMode, TaskContext,
-    ZoneContext,
-};
+use hw_core::game_state::{PlayMode};
+use crate::app_contexts::{BuildContext, CompanionPlacementState, MoveContext, MovePlacementState, TaskContext, ZoneContext};
 use crate::interface::ui::components::*;
 use crate::interface::ui::theme::UiTheme;
 use crate::systems::command::{TaskArea, TaskMode};

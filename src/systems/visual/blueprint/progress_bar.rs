@@ -1,6 +1,6 @@
 //! 設計図のプログレスバー関連システム
 
-use crate::constants::Z_BAR_BG;
+use hw_core::constants::Z_BAR_BG;
 use bevy::prelude::ChildOf;
 use bevy::prelude::*;
 

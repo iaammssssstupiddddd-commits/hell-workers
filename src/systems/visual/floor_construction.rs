@@ -1,7 +1,7 @@
 //! Floor construction visual feedback
 
 use crate::assets::GameAssets;
-use crate::constants::{FLOOR_BONES_PER_TILE, FLOOR_CURING_DURATION_SECS, TILE_SIZE, Z_BAR_BG};
+use hw_core::constants::{FLOOR_BONES_PER_TILE, FLOOR_CURING_DURATION_SECS, TILE_SIZE, Z_BAR_BG};
 use crate::systems::jobs::floor_construction::{
     FloorConstructionPhase, FloorConstructionSite, FloorTileBlueprint, FloorTileState,
 };

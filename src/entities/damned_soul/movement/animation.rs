@@ -1,7 +1,7 @@
 //! ソウルのアニメーション（スプライト選択・浮遊揺れ）
 
 use crate::assets::GameAssets;
-use crate::constants::*;
+use hw_core::constants::*;
 use crate::entities::damned_soul::{
     ConversationExpression, ConversationExpressionKind, DamnedSoul, GatheringBehavior,
     IdleBehavior, IdleState, StressBreakdown,

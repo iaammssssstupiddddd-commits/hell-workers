@@ -1,5 +1,5 @@
 use super::state::{Drag, Operation};
-use crate::constants::TILE_SIZE;
+use hw_core::constants::TILE_SIZE;
 use crate::interface::camera::MainCamera;
 use crate::systems::command::{AreaEditHandleKind, TaskArea, TaskMode};
 use crate::systems::world::zones::Site;

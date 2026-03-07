@@ -1,7 +1,7 @@
 use super::components::*;
 use super::phrases::LatinPhrase;
 use crate::assets::GameAssets;
-use crate::constants::*;
+use hw_core::constants::*;
 use crate::entities::familiar::FamiliarVoice;
 use bevy::prelude::ChildOf;
 use bevy::prelude::*;

@@ -2,7 +2,7 @@
 
 use super::components::{FloorConstructionCancelRequested, TargetFloorConstructionSite};
 use crate::assets::GameAssets;
-use crate::constants::{TILE_SIZE, Z_ITEM_PICKUP};
+use hw_core::constants::{TILE_SIZE, Z_ITEM_PICKUP};
 use crate::entities::damned_soul::{DamnedSoul, Path};
 use crate::relationships::WorkingOn;
 use crate::systems::logistics::{Inventory, ResourceItem, ResourceType};

@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 use bevy::prelude::*;
 
-use crate::constants::TILE_SIZE;
+use hw_core::constants::TILE_SIZE;
 use crate::relationships::{RestAreaOccupants, RestAreaReservations};
 use crate::systems::jobs::RestArea;
 use crate::world::map::WorldMap;

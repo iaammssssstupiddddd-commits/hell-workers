@@ -1,6 +1,6 @@
 //! Filling phase: バケツに水を詰める（川から汲む or タンクから取り出す）
 
-use crate::constants::{BUCKET_CAPACITY, TILE_SIZE};
+use hw_core::constants::{BUCKET_CAPACITY, TILE_SIZE};
 use crate::systems::logistics::{ResourceItem, ResourceType};
 use crate::systems::soul_ai::execute::task_execution::common::update_destination_to_adjacent;
 use crate::systems::soul_ai::execute::task_execution::context::TaskExecutionContext;

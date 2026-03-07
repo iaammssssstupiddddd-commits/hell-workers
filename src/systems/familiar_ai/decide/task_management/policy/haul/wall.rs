@@ -48,7 +48,7 @@ pub fn assign_haul_to_wall_construction(
 
     if resource_type == ResourceType::StasisMud {
         let max_items =
-            remaining_needed.min(crate::constants::WHEELBARROW_CAPACITY as u32) as usize;
+            remaining_needed.min(hw_core::constants::WHEELBARROW_CAPACITY as u32) as usize;
         let mut item_sources = source_selector::collect_nearby_items_for_wheelbarrow(
             resource_type,
             site_pos,

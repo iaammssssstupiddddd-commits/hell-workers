@@ -3,7 +3,7 @@
 use std::cmp::Ordering;
 use std::collections::{BinaryHeap, HashMap};
 
-use crate::constants::*;
+use hw_core::constants::*;
 use crate::relationships::{StoredIn, StoredItems};
 use crate::systems::jobs::Blueprint;
 use crate::systems::logistics::transport_request::{

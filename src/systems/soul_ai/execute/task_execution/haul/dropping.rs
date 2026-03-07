@@ -1,4 +1,4 @@
-use crate::constants::Z_ITEM_PICKUP;
+use hw_core::constants::Z_ITEM_PICKUP;
 use crate::relationships::WorkingOn;
 use crate::systems::jobs::BuildingType;
 use crate::systems::logistics::{
@@ -31,7 +31,7 @@ fn floor_site_can_accept(
     let nearby = count_nearby_ground_resources(
         ctx.queries.resource_items.iter(),
         site.material_center,
-        (crate::constants::TILE_SIZE * 2.0).powi(2),
+        (hw_core::constants::TILE_SIZE * 2.0).powi(2),
         resource_type,
         Some(exclude_item),
     );
@@ -56,7 +56,7 @@ fn wall_site_can_accept(
     let nearby = count_nearby_ground_resources(
         ctx.queries.resource_items.iter(),
         site.material_center,
-        (crate::constants::TILE_SIZE * 2.0).powi(2),
+        (hw_core::constants::TILE_SIZE * 2.0).powi(2),
         resource_type,
         Some(exclude_item),
     );
@@ -87,7 +87,7 @@ fn provisional_wall_can_accept(
     count_nearby_ground_resources(
         ctx.queries.resource_items.iter(),
         wall_pos,
-        (crate::constants::TILE_SIZE * 1.5).powi(2),
+        (hw_core::constants::TILE_SIZE * 1.5).powi(2),
         ResourceType::StasisMud,
         Some(exclude_item),
     ) == 0

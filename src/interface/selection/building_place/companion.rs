@@ -1,5 +1,5 @@
-use crate::constants::TILE_SIZE;
-use crate::game_state::{CompanionParentKind, CompanionPlacement, CompanionPlacementKind};
+use hw_core::constants::TILE_SIZE;
+use crate::app_contexts::{CompanionParentKind, CompanionPlacement, CompanionPlacementKind};
 use crate::systems::jobs::BuildingType;
 use bevy::prelude::*;
 

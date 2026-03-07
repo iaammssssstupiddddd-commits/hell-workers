@@ -2,7 +2,7 @@
 //!
 //! park/cancel/reset を共通化し、予約解放漏れを防ぐ。
 
-use crate::constants::Z_ITEM_PICKUP;
+use hw_core::constants::Z_ITEM_PICKUP;
 use crate::relationships::{ParkedAt, PushedBy};
 use crate::systems::soul_ai::execute::task_execution::{
     common::clear_task_and_path, context::TaskExecutionContext, types::HaulWithWheelbarrowData,

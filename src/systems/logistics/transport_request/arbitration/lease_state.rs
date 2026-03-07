@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use bevy::prelude::*;
 
-use crate::constants::WHEELBARROW_MIN_BATCH_SIZE;
+use hw_core::constants::WHEELBARROW_MIN_BATCH_SIZE;
 use crate::relationships::{ParkedAt, PushedBy};
 use crate::systems::logistics::Wheelbarrow;
 use crate::systems::logistics::transport_request::{

@@ -3,7 +3,7 @@
 use bevy::prelude::*;
 use rand::Rng;
 
-use crate::constants::*;
+use hw_core::constants::*;
 
 /// 使い魔の名前リスト（10候補）
 const FAMILIAR_NAMES: [&str; 10] = [

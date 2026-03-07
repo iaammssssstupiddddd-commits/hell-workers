@@ -1,6 +1,6 @@
 //! タスク実行の共通処理
 
-use crate::constants::*;
+use hw_core::constants::*;
 use crate::entities::damned_soul::{Destination, Path};
 use crate::systems::jobs::Designation;
 use crate::systems::logistics::{Inventory, ReservedForTask, Stockpile};

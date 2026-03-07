@@ -2,7 +2,7 @@
 
 use super::components::*;
 use crate::assets::GameAssets;
-use crate::constants::{FLOOR_CURING_DURATION_SECS, TILE_SIZE, Z_MAP};
+use hw_core::constants::{FLOOR_CURING_DURATION_SECS, TILE_SIZE, Z_MAP};
 use crate::entities::damned_soul::{DamnedSoul, Path};
 use crate::systems::jobs::{Building, BuildingType, ObstaclePosition};
 use crate::systems::utils::animations::{BounceAnimation, BounceAnimationConfig};

@@ -1,5 +1,5 @@
 use crate::assets::GameAssets;
-use crate::constants::*;
+use hw_core::constants::*;
 use crate::entities::damned_soul::{DamnedSoul, IdleBehavior, IdleState};
 use crate::relationships::CommandedBy;
 use crate::systems::visual::speech::components::{BubbleEmotion, BubblePriority, SoulEmotionState};

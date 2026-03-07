@@ -1,8 +1,9 @@
 mod assets;
-mod constants;
+use hw_core::constants;
 mod entities;
 mod events;
-pub mod game_state;
+pub mod app_contexts;
+use hw_core::game_state;
 pub mod interface;
 pub mod plugins;
 pub mod relationships;

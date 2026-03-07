@@ -1,4 +1,4 @@
-use crate::constants::*;
+use hw_core::constants::*;
 use crate::interface::ui::PlacementFailureTooltip;
 use crate::systems::jobs::wall_construction::{WallConstructionSite, WallTileBlueprint};
 use crate::systems::jobs::TaskSlots;

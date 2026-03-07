@@ -1,6 +1,6 @@
 use super::types::{ResourceItem, ResourceType};
 use crate::assets::GameAssets;
-use crate::constants::*;
+use hw_core::constants::*;
 use crate::relationships::{LoadedItems, ParkedAt};
 use crate::systems::jobs::{Building, BuildingType, ObstaclePosition, Rock, TaskSlots, Tree};
 use crate::systems::logistics::{BelongsTo, Wheelbarrow, WheelbarrowParking};

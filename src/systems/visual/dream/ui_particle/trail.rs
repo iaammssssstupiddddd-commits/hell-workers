@@ -1,4 +1,4 @@
-use crate::constants::DREAM_UI_TRAIL_ALPHA;
+use hw_core::constants::DREAM_UI_TRAIL_ALPHA;
 use bevy::prelude::*;
 use bevy::ui_render::prelude::MaterialNode;
 

@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use crate::constants::REST_AREA_CAPACITY;
+use hw_core::constants::REST_AREA_CAPACITY;
 use crate::entities::damned_soul::{IdleBehavior, IdleState};
 use crate::relationships::{RestAreaReservedFor, RestingIn, WorkingOn};
 use crate::systems::jobs::{Building, BuildingType, RestArea};

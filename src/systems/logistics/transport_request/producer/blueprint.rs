@@ -5,7 +5,7 @@
 
 use bevy::prelude::*;
 
-use crate::constants::WHEELBARROW_CAPACITY;
+use hw_core::constants::WHEELBARROW_CAPACITY;
 use crate::entities::familiar::{ActiveCommand, FamiliarCommand};
 use crate::relationships::TaskWorkers;
 use crate::systems::command::TaskArea;

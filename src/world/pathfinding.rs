@@ -1,4 +1,4 @@
-use crate::constants::{MAP_HEIGHT, MAP_WIDTH};
+use hw_core::constants::{MAP_HEIGHT, MAP_WIDTH};
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
 use std::cmp::Ordering;

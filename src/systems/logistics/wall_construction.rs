@@ -5,7 +5,7 @@ use bevy::prelude::*;
 use crate::systems::jobs::wall_construction::WallTileBlueprint;
 use crate::systems::logistics::ResourceType;
 
-use crate::constants::{WALL_MUD_PER_TILE, WALL_WOOD_PER_TILE};
+use hw_core::constants::{WALL_MUD_PER_TILE, WALL_WOOD_PER_TILE};
 
 /// Wall construction site の特定リソースに対する基礎需要（incoming控除前）を返す。
 ///
