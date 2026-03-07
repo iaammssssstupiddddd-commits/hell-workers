@@ -90,6 +90,7 @@ pub fn handle(
 
         if bucket_is_water {
             // 既に水入りなら直接ミキサーへ
+            reservation::release_source(ctx, tank_entity, 1);
             transition_to_mixer(
                 commands,
                 ctx,

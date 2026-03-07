@@ -3,6 +3,7 @@
 use super::super::cancel;
 use crate::constants::Z_ITEM_PICKUP;
 use crate::relationships::{LoadedIn, StoredIn};
+use crate::systems::logistics::ResourceType;
 use crate::systems::logistics::transport_request::{
     TransportRequestKind, TransportRequestState, WheelbarrowDestination,
 };
@@ -13,6 +14,7 @@ use crate::systems::soul_ai::execute::task_execution::{
     types::HaulWithWheelbarrowData,
 };
 use bevy::prelude::*;
+use std::collections::{HashMap, HashSet};
 
 fn has_pending_wheelbarrow_task(ctx: &TaskExecutionContext) -> bool {
     ctx.queries.transport_request_status.iter().any(
@@ -78,6 +80,189 @@ fn try_despawn_item(commands: &mut Commands, item_entity: Entity) -> bool {
     true
 }
 
+fn count_nearby_ground_resources(
+    ctx: &TaskExecutionContext,
+    center: Vec2,
+    radius_sq: f32,
+    resource_type: ResourceType,
+) -> usize {
+    ctx.queries
+        .resource_items
+        .iter()
+        .filter(|(_, transform, visibility, resource_item, stored_in_opt, loaded_in_opt)| {
+            **visibility != Visibility::Hidden
+                && loaded_in_opt.is_none()
+                && stored_in_opt.is_none()
+                && resource_item.0 == resource_type
+                && transform.translation.truncate().distance_squared(center) <= radius_sq
+        })
+        .count()
+}
+
+fn floor_site_remaining(
+    ctx: &TaskExecutionContext,
+    site_entity: Entity,
+    resource_type: ResourceType,
+) -> usize {
+    let Ok((_, site, _)) = ctx.queries.storage.floor_sites.get(site_entity) else {
+        return 0;
+    };
+
+    ctx.queries
+        .storage
+        .floor_tiles
+        .iter()
+        .filter(|tile| tile.parent_site == site_entity)
+        .map(|tile| match resource_type {
+            ResourceType::Bone
+                if tile.state
+                    == crate::systems::jobs::floor_construction::FloorTileState::WaitingBones =>
+            {
+                crate::constants::FLOOR_BONES_PER_TILE.saturating_sub(tile.bones_delivered) as usize
+            }
+            ResourceType::StasisMud
+                if tile.state
+                    == crate::systems::jobs::floor_construction::FloorTileState::WaitingMud =>
+            {
+                crate::constants::FLOOR_MUD_PER_TILE.saturating_sub(tile.mud_delivered) as usize
+            }
+            _ => 0,
+        })
+        .sum::<usize>()
+        .saturating_sub(count_nearby_ground_resources(
+            ctx,
+            site.material_center,
+            (crate::constants::TILE_SIZE * 2.0).powi(2),
+            resource_type,
+        ))
+}
+
+fn wall_site_remaining(
+    ctx: &TaskExecutionContext,
+    site_entity: Entity,
+    resource_type: ResourceType,
+) -> usize {
+    let Ok((_, site, _)) = ctx.queries.storage.wall_sites.get(site_entity) else {
+        return 0;
+    };
+
+    ctx.queries
+        .storage
+        .wall_tiles
+        .iter()
+        .filter(|tile| tile.parent_site == site_entity)
+        .map(|tile| match resource_type {
+            ResourceType::Wood
+                if tile.state == crate::systems::jobs::wall_construction::WallTileState::WaitingWood =>
+            {
+                crate::constants::WALL_WOOD_PER_TILE.saturating_sub(tile.wood_delivered) as usize
+            }
+            ResourceType::StasisMud
+                if tile.state == crate::systems::jobs::wall_construction::WallTileState::WaitingMud =>
+            {
+                crate::constants::WALL_MUD_PER_TILE.saturating_sub(tile.mud_delivered) as usize
+            }
+            _ => 0,
+        })
+        .sum::<usize>()
+        .saturating_sub(count_nearby_ground_resources(
+            ctx,
+            site.material_center,
+            (crate::constants::TILE_SIZE * 2.0).powi(2),
+            resource_type,
+        ))
+}
+
+fn provisional_wall_remaining(
+    ctx: &TaskExecutionContext,
+    wall_entity: Entity,
+    resource_type: ResourceType,
+) -> usize {
+    let Ok((wall_transform, building, provisional_opt)) = ctx.queries.storage.buildings.get(wall_entity) else {
+        return 0;
+    };
+    if resource_type != ResourceType::StasisMud
+        || building.kind != crate::systems::jobs::BuildingType::Wall
+        || !building.is_provisional
+        || provisional_opt.is_none_or(|provisional| provisional.mud_delivered)
+    {
+        return 0;
+    }
+
+    1usize.saturating_sub(count_nearby_ground_resources(
+        ctx,
+        wall_transform.translation.truncate(),
+        (crate::constants::TILE_SIZE * 1.5).powi(2),
+        ResourceType::StasisMud,
+    ))
+}
+
+fn finalize_unload_task(
+    ctx: &mut TaskExecutionContext,
+    data: &HaulWithWheelbarrowData,
+    commands: &mut Commands,
+    soul_pos: Vec2,
+) {
+    reservation::release_source(ctx, data.wheelbarrow, 1);
+    let parking_anchor = ctx
+        .queries
+        .designation
+        .belongs
+        .get(data.wheelbarrow)
+        .ok()
+        .map(|b| b.0);
+    wheelbarrow_common::park_wheelbarrow_entity(
+        commands,
+        data.wheelbarrow,
+        parking_anchor,
+        soul_pos,
+    );
+    ctx.inventory.0 = None;
+    if let Ok(mut soul_commands) = commands.get_entity(ctx.soul_entity) {
+        soul_commands.try_remove::<crate::relationships::WorkingOn>();
+    }
+    clear_task_and_path(ctx.task, ctx.path);
+}
+
+fn finish_partial_unload(
+    ctx: &mut TaskExecutionContext,
+    data: &HaulWithWheelbarrowData,
+    commands: &mut Commands,
+    soul_pos: Vec2,
+    delivered_items: &HashSet<Entity>,
+    destination_store_count: usize,
+    mixer_release_types: &[ResourceType],
+) {
+    for &item_entity in &data.items {
+        if delivered_items.contains(&item_entity) {
+            continue;
+        }
+        if let Ok(mut item_commands) = commands.get_entity(item_entity) {
+            item_commands.try_insert((
+                Visibility::Visible,
+                Transform::from_xyz(soul_pos.x, soul_pos.y, Z_ITEM_PICKUP),
+            ));
+            item_commands.try_remove::<LoadedIn>();
+            item_commands.try_remove::<crate::relationships::DeliveringTo>();
+        }
+    }
+
+    match data.destination {
+        WheelbarrowDestination::Stockpile(target) | WheelbarrowDestination::Blueprint(target) => {
+            for _ in 0..destination_store_count {
+                reservation::record_stored_destination(ctx, target);
+            }
+        }
+        WheelbarrowDestination::Mixer { entity: target, .. } => {
+            for &res_type in mixer_release_types {
+                reservation::release_mixer_destination(ctx, target, res_type);
+            }
+        }
+    }
+
+    finalize_unload_task(ctx, data, commands, soul_pos);
+}
+
 pub fn handle(
     ctx: &mut TaskExecutionContext,
     data: HaulWithWheelbarrowData,
@@ -113,6 +298,8 @@ pub fn handle(
     let mut unloaded_count = 0usize;
     let mut destination_store_count = 0usize;
     let mut mixer_release_types = Vec::new();
+    let mut reserved_by_resource = HashMap::<ResourceType, usize>::new();
+    let mut delivered_items = HashSet::<Entity>::new();
 
     match data.destination {
         WheelbarrowDestination::Stockpile(dest_stockpile) => {
@@ -152,24 +339,43 @@ pub fn handle(
                     }
 
                     if try_drop_item(commands, *item_entity, stock_pos, Some(dest_stockpile)) {
+                        delivered_items.insert(*item_entity);
                         destination_store_count += 1;
                         unloaded_count += 1;
                     }
                 }
             } else if let Ok((_, site, _)) = ctx.queries.storage.floor_sites.get(dest_stockpile) {
                 let site_pos = site.material_center;
-                for (index, (item_entity, _)) in item_types.iter().enumerate() {
+                for (index, (item_entity, res_type_opt)) in item_types.iter().enumerate() {
+                    let Some(resource_type) = res_type_opt else {
+                        continue;
+                    };
+                    let reserved = reserved_by_resource.get(resource_type).copied().unwrap_or(0);
+                    if reserved >= floor_site_remaining(ctx, dest_stockpile, *resource_type) {
+                        continue;
+                    }
                     let offset = Vec2::new((index as f32) * 2.0, 0.0);
                     if try_drop_item(commands, *item_entity, site_pos + offset, None) {
+                        delivered_items.insert(*item_entity);
+                        *reserved_by_resource.entry(*resource_type).or_insert(0) += 1;
                         destination_store_count += 1;
                         unloaded_count += 1;
                     }
                 }
             } else if let Ok((_, site, _)) = ctx.queries.storage.wall_sites.get(dest_stockpile) {
                 let site_pos = site.material_center;
-                for (index, (item_entity, _)) in item_types.iter().enumerate() {
+                for (index, (item_entity, res_type_opt)) in item_types.iter().enumerate() {
+                    let Some(resource_type) = res_type_opt else {
+                        continue;
+                    };
+                    let reserved = reserved_by_resource.get(resource_type).copied().unwrap_or(0);
+                    if reserved >= wall_site_remaining(ctx, dest_stockpile, *resource_type) {
+                        continue;
+                    }
                     let offset = Vec2::new((index as f32) * 2.0, 0.0);
                     if try_drop_item(commands, *item_entity, site_pos + offset, None) {
+                        delivered_items.insert(*item_entity);
+                        *reserved_by_resource.entry(*resource_type).or_insert(0) += 1;
                         destination_store_count += 1;
                         unloaded_count += 1;
                     }
@@ -181,9 +387,20 @@ pub fn handle(
                     && building.is_provisional
                 {
                     let site_pos = wall_transform.translation.truncate();
-                    for (index, (item_entity, _)) in item_types.iter().enumerate() {
+                    for (index, (item_entity, res_type_opt)) in item_types.iter().enumerate() {
+                        let Some(resource_type) = res_type_opt else {
+                            continue;
+                        };
+                        let reserved = reserved_by_resource.get(resource_type).copied().unwrap_or(0);
+                        if reserved
+                            >= provisional_wall_remaining(ctx, dest_stockpile, *resource_type)
+                        {
+                            continue;
+                        }
                         let offset = Vec2::new((index as f32) * 2.0, 0.0);
                         if try_drop_item(commands, *item_entity, site_pos + offset, None) {
+                            delivered_items.insert(*item_entity);
+                            *reserved_by_resource.entry(*resource_type).or_insert(0) += 1;
                             destination_store_count += 1;
                             unloaded_count += 1;
                         }
@@ -205,9 +422,13 @@ pub fn handle(
                     let Some(res_type) = res_type_opt else {
                         continue;
                     };
+                    if blueprint.remaining_material_amount(*res_type) == 0 {
+                        continue;
+                    }
 
                     blueprint.deliver_material(*res_type, 1);
                     if try_despawn_item(commands, *item_entity) {
+                        delivered_items.insert(*item_entity);
                         destination_store_count += 1;
                         unloaded_count += 1;
                     }
@@ -235,6 +456,7 @@ pub fn handle(
 
                     if storage.add_material(res_type).is_ok() {
                         if try_despawn_item(commands, *item_entity) {
+                            delivered_items.insert(*item_entity);
                             unloaded_count += 1;
                         }
                     } else if let Ok(mut item_commands) = commands.get_entity(*item_entity) {
@@ -268,6 +490,19 @@ pub fn handle(
         }
     }
 
+    if unloaded_count < item_types.len() {
+        finish_partial_unload(
+            ctx,
+            &data,
+            commands,
+            soul_pos,
+            &delivered_items,
+            destination_store_count,
+            &mixer_release_types,
+        );
+        return;
+    }
+
     match data.destination {
         WheelbarrowDestination::Stockpile(target) | WheelbarrowDestination::Blueprint(target) => {
             for _ in 0..destination_store_count {
@@ -286,26 +521,7 @@ pub fn handle(
         ctx.soul_entity, unloaded_count
     );
 
-    reservation::release_source(ctx, data.wheelbarrow, 1);
-    // unloading 内で despawn 済みの積載物へ追加入力しないよう、loaded cleanup はスキップする。
-    let parking_anchor = ctx
-        .queries
-        .designation
-        .belongs
-        .get(data.wheelbarrow)
-        .ok()
-        .map(|b| b.0);
-    wheelbarrow_common::park_wheelbarrow_entity(
-        commands,
-        data.wheelbarrow,
-        parking_anchor,
-        soul_pos,
-    );
-    ctx.inventory.0 = None;
-    if let Ok(mut soul_commands) = commands.get_entity(ctx.soul_entity) {
-        soul_commands.try_remove::<crate::relationships::WorkingOn>();
-    }
-    clear_task_and_path(ctx.task, ctx.path);
+    finalize_unload_task(ctx, &data, commands, soul_pos);
 
     if has_pending_wheelbarrow_task(ctx) {
         info!(

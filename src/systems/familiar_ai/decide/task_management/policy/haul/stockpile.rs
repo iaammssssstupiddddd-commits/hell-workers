@@ -11,6 +11,7 @@ use super::super::super::builders::{
     issue_haul_to_stockpile_with_source, issue_haul_with_wheelbarrow,
 };
 use super::super::super::validator::resolve_haul_to_stockpile_inputs;
+use super::demand;
 use super::lease_validation;
 use super::source_selector;
 use super::wheelbarrow;
@@ -27,6 +28,11 @@ pub fn assign_haul_to_stockpile(
     else {
         return false;
     };
+    let remaining_capacity =
+        demand::compute_remaining_stockpile_capacity(stockpile, resource_type, queries, shadow);
+    if remaining_capacity == 0 {
+        return false;
+    }
 
     if let Some(fixed_source_item) = fixed_source {
         let Some((source_item, source_pos)) = source_selector::find_fixed_stockpile_source_item(
@@ -131,6 +137,7 @@ pub fn assign_haul_to_stockpile(
         }
     }
 
+    let max_items = remaining_capacity.max(1) as usize;
     let min_valid_items = if resource_type.requires_wheelbarrow() {
         1
     } else {
@@ -141,7 +148,7 @@ pub fn assign_haul_to_stockpile(
         task_pos,
         already_commanded,
         min_valid_items,
-        usize::MAX,
+        max_items,
         |_| true,
         ctx,
         queries,

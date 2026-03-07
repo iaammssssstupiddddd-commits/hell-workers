@@ -63,7 +63,7 @@ pub fn collect_active_reservation_ops(
                 });
             }
 
-            if matches!(
+            if data.needs_tank_fill && matches!(
                 data.phase,
                 HaulWaterToMixerPhase::GoingToBucket
                     | HaulWaterToMixerPhase::GoingToTank

@@ -25,6 +25,8 @@ pub(crate) struct SourceSelectorFrameCache {
 #[derive(Default)]
 pub struct ReservationShadow {
     mixer_destination: HashMap<(Entity, crate::systems::logistics::ResourceType), usize>,
+    destination_total: HashMap<Entity, usize>,
+    destination_by_resource: HashMap<(Entity, crate::systems::logistics::ResourceType), usize>,
     source: HashMap<Entity, usize>,
     pub(crate) source_selector_cache: Option<SourceSelectorFrameCache>,
 }
@@ -43,6 +45,35 @@ impl ReservationShadow {
 
     pub fn source_reserved(&self, source: Entity) -> usize {
         self.source.get(&source).cloned().unwrap_or(0)
+    }
+
+    pub fn destination_reserved_total(&self, target: Entity) -> usize {
+        self.destination_total.get(&target).cloned().unwrap_or(0)
+    }
+
+    pub fn destination_reserved_resource(&self, target: Entity, resource_type: ResourceType) -> usize {
+        self.destination_by_resource
+            .get(&(target, resource_type))
+            .cloned()
+            .unwrap_or(0)
+    }
+
+    pub fn reserve_destination(
+        &mut self,
+        target: Entity,
+        resource_type: Option<ResourceType>,
+        amount: usize,
+    ) {
+        if amount == 0 {
+            return;
+        }
+        *self.destination_total.entry(target).or_insert(0) += amount;
+        if let Some(resource_type) = resource_type {
+            *self
+                .destination_by_resource
+                .entry((target, resource_type))
+                .or_insert(0) += amount;
+        }
     }
 
     pub fn apply_reserve_ops(&mut self, ops: &[crate::events::ResourceReservationOp]) {

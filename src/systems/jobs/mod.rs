@@ -247,6 +247,18 @@ impl Blueprint {
         true
     }
 
+    pub fn remaining_material_amount(&self, resource_type: ResourceType) -> u32 {
+        if let Some(flexible) = &self.flexible_material_requirement
+            && flexible.accepts(resource_type)
+        {
+            return flexible.remaining();
+        }
+
+        let required = *self.required_materials.get(&resource_type).unwrap_or(&0);
+        let delivered = *self.delivered_materials.get(&resource_type).unwrap_or(&0);
+        required.saturating_sub(delivered)
+    }
+
     pub fn deliver_material(&mut self, resource_type: ResourceType, amount: u32) {
         let mut flexible_delivered = None;
         if let Some(flexible) = self.flexible_material_requirement.as_mut()

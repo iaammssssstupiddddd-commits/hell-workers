@@ -150,6 +150,7 @@ pub fn handle(
                     tank: tank_entity,
                     mixer: mixer_entity,
                     amount: 0,
+                    needs_tank_fill: false,
                     phase: HaulWaterToMixerPhase::ReturningBucket,
                 });
                 update_destination_if_needed(ctx.dest, pos, ctx.path);
