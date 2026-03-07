@@ -83,50 +83,6 @@ pub enum BucketTransportPhase {
     ReturningBucket,
 }
 
-impl From<&GatherWaterData> for BucketTransportData {
-    fn from(data: &GatherWaterData) -> Self {
-        let phase = match data.phase {
-            GatherWaterPhase::GoingToBucket => BucketTransportPhase::GoingToBucket,
-            GatherWaterPhase::GoingToRiver => BucketTransportPhase::GoingToSource,
-            GatherWaterPhase::Filling { progress } => BucketTransportPhase::Filling { progress },
-            GatherWaterPhase::GoingToTank => BucketTransportPhase::GoingToDestination,
-            GatherWaterPhase::Pouring { progress } => BucketTransportPhase::Pouring { progress },
-        };
-
-        Self {
-            bucket: data.bucket,
-            source: BucketTransportSource::River,
-            destination: BucketTransportDestination::Tank(data.tank),
-            amount: 1,
-            phase,
-        }
-    }
-}
-
-impl From<&HaulWaterToMixerData> for BucketTransportData {
-    fn from(data: &HaulWaterToMixerData) -> Self {
-        let phase = match data.phase {
-            HaulWaterToMixerPhase::GoingToBucket => BucketTransportPhase::GoingToBucket,
-            HaulWaterToMixerPhase::GoingToTank => BucketTransportPhase::GoingToSource,
-            HaulWaterToMixerPhase::FillingFromTank => BucketTransportPhase::Filling { progress: 0.0 },
-            HaulWaterToMixerPhase::GoingToMixer => BucketTransportPhase::GoingToDestination,
-            HaulWaterToMixerPhase::Pouring => BucketTransportPhase::Pouring { progress: 0.0 },
-            HaulWaterToMixerPhase::ReturningBucket => BucketTransportPhase::ReturningBucket,
-        };
-
-        Self {
-            bucket: data.bucket,
-            source: BucketTransportSource::Tank {
-                tank: data.tank,
-                needs_fill: data.needs_tank_fill,
-            },
-            destination: BucketTransportDestination::Mixer(data.mixer),
-            amount: data.amount.max(1),
-            phase,
-        }
-    }
-}
-
 impl BucketTransportData {
     pub fn source_entity(&self) -> Entity {
         match self.source {
@@ -139,62 +95,6 @@ impl BucketTransportData {
         match self.destination {
             BucketTransportDestination::Tank(entity) => entity,
             BucketTransportDestination::Mixer(entity) => entity,
-        }
-    }
-
-    pub fn to_gather_water_data(&self) -> Option<GatherWaterData> {
-        match self.destination {
-            BucketTransportDestination::Tank(tank) => {
-                let phase = match self.phase {
-                    BucketTransportPhase::GoingToBucket => GatherWaterPhase::GoingToBucket,
-                    BucketTransportPhase::GoingToSource => GatherWaterPhase::GoingToRiver,
-                    BucketTransportPhase::Filling { progress } => GatherWaterPhase::Filling { progress },
-                    BucketTransportPhase::GoingToDestination => GatherWaterPhase::GoingToTank,
-                    BucketTransportPhase::Pouring { progress } => {
-                        GatherWaterPhase::Pouring { progress }
-                    }
-                    BucketTransportPhase::ReturningBucket => GatherWaterPhase::GoingToTank,
-                };
-
-                Some(GatherWaterData {
-                    bucket: self.bucket,
-                    tank,
-                    phase,
-                })
-            }
-            BucketTransportDestination::Mixer(_) => None,
-        }
-    }
-
-    pub fn to_haul_water_to_mixer_data(&self) -> Option<HaulWaterToMixerData> {
-        match self.source {
-            BucketTransportSource::Tank { tank, needs_fill } => match self.destination {
-                BucketTransportDestination::Mixer(mixer) => {
-                    let phase = match self.phase {
-                        BucketTransportPhase::GoingToBucket => HaulWaterToMixerPhase::GoingToBucket,
-                        BucketTransportPhase::GoingToSource => HaulWaterToMixerPhase::GoingToTank,
-                        BucketTransportPhase::Filling { .. } => {
-                            HaulWaterToMixerPhase::FillingFromTank
-                        }
-                        BucketTransportPhase::GoingToDestination => {
-                            HaulWaterToMixerPhase::GoingToMixer
-                        }
-                        BucketTransportPhase::Pouring { .. } => HaulWaterToMixerPhase::Pouring,
-                        BucketTransportPhase::ReturningBucket => HaulWaterToMixerPhase::ReturningBucket,
-                    };
-
-                    Some(HaulWaterToMixerData {
-                        bucket: self.bucket,
-                        tank,
-                        mixer,
-                        amount: self.amount,
-                        needs_tank_fill: needs_fill,
-                        phase,
-                    })
-                }
-                BucketTransportDestination::Tank(_) => None,
-            },
-            BucketTransportSource::River => None,
         }
     }
 
@@ -260,13 +160,6 @@ pub struct BuildData {
 }
 
 #[derive(Reflect, Clone, Debug, PartialEq)]
-pub struct GatherWaterData {
-    pub bucket: Entity,
-    pub tank: Entity,
-    pub phase: GatherWaterPhase,
-}
-
-#[derive(Reflect, Clone, Debug, PartialEq)]
 pub struct CollectSandData {
     pub target: Entity,
     pub phase: CollectSandPhase,
@@ -290,16 +183,6 @@ pub struct HaulToMixerData {
     pub mixer: Entity,
     pub resource_type: crate::systems::logistics::ResourceType,
     pub phase: HaulToMixerPhase,
-}
-
-#[derive(Reflect, Clone, Debug, PartialEq, Eq)]
-pub struct HaulWaterToMixerData {
-    pub bucket: Entity,
-    pub tank: Entity,
-    pub mixer: Entity,
-    pub amount: u32,
-    pub needs_tank_fill: bool,
-    pub phase: HaulWaterToMixerPhase,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Reflect, Default)]
@@ -336,20 +219,6 @@ pub enum HaulToBpPhase {
     GoingToItem,
     GoingToBlueprint,
     Delivering,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Reflect, Default)]
-pub enum GatherWaterPhase {
-    #[default]
-    GoingToBucket,
-    GoingToRiver,
-    Filling {
-        progress: f32,
-    },
-    GoingToTank,
-    Pouring {
-        progress: f32,
-    },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Reflect, Default)]
@@ -416,17 +285,6 @@ pub enum HaulWithWheelbarrowPhase {
     GoingToDestination,
     Unloading,
     ReturningWheelbarrow,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Reflect, Default)]
-pub enum HaulWaterToMixerPhase {
-    #[default]
-    GoingToBucket,
-    GoingToTank,
-    FillingFromTank,
-    GoingToMixer,
-    Pouring,
-    ReturningBucket,
 }
 
 /// Reinforce floor tile task data
