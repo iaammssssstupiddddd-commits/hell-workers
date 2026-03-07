@@ -357,13 +357,34 @@ fn cancel_tasks_and_requests_for_moved_building(
 }
 
 fn task_targets_building(task: &AssignedTask, building_entity: Entity) -> bool {
+    if let Some(data) = task.bucket_transport_data() {
+        if matches!(
+            data.source,
+            crate::systems::soul_ai::execute::task_execution::types::BucketTransportSource::Tank {
+                tank,
+                ..
+            } if tank == building_entity
+        ) {
+            return true;
+        }
+
+        match data.destination {
+            crate::systems::soul_ai::execute::task_execution::types::BucketTransportDestination::Tank(tank) => {
+                if tank == building_entity {
+                    return true;
+                }
+            }
+            crate::systems::soul_ai::execute::task_execution::types::BucketTransportDestination::Mixer(mixer) => {
+                if mixer == building_entity {
+                    return true;
+                }
+            }
+        }
+    }
+
     match task {
         AssignedTask::Refine(data) => data.mixer == building_entity,
-        AssignedTask::GatherWater(data) => data.tank == building_entity,
         AssignedTask::HaulToMixer(data) => data.mixer == building_entity,
-        AssignedTask::HaulWaterToMixer(data) => {
-            data.mixer == building_entity || data.tank == building_entity
-        }
         AssignedTask::MovePlant(data) => data.building == building_entity,
         _ => false,
     }

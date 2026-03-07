@@ -155,6 +155,10 @@ impl EntityInspectionQuery<'_, '_> {
 }
 
 pub(super) fn format_task_str(task: &AssignedTask) -> String {
+    if let Some(data) = task.bucket_transport_data() {
+        return format!("BucketTransport ({:?})", data.phase);
+    }
+
     match task {
         AssignedTask::None => "Idle".to_string(),
         AssignedTask::Gather(data) => format!("Gather ({:?})", data.phase),
@@ -162,17 +166,16 @@ pub(super) fn format_task_str(task: &AssignedTask) -> String {
         AssignedTask::HaulToBlueprint(data) => format!("HaulToBp ({:?})", data.phase),
         AssignedTask::Build(data) => format!("Build ({:?})", data.phase),
         AssignedTask::MovePlant(data) => format!("MovePlant ({:?})", data.phase),
-        AssignedTask::GatherWater(data) => format!("GatherWater ({:?})", data.phase),
         AssignedTask::CollectSand(data) => format!("CollectSand ({:?})", data.phase),
         AssignedTask::CollectBone(data) => format!("CollectBone ({:?})", data.phase),
         AssignedTask::Refine(data) => format!("Refine ({:?})", data.phase),
         AssignedTask::HaulToMixer(data) => format!("HaulToMixer ({:?})", data.phase),
-        AssignedTask::HaulWaterToMixer(data) => format!("HaulWaterToMixer ({:?})", data.phase),
         AssignedTask::HaulWithWheelbarrow(data) => format!("HaulWheelbarrow ({:?})", data.phase),
         AssignedTask::ReinforceFloorTile(data) => format!("ReinforceFloor ({:?})", data.phase),
         AssignedTask::PourFloorTile(data) => format!("PourFloor ({:?})", data.phase),
         AssignedTask::FrameWallTile(data) => format!("FrameWall ({:?})", data.phase),
         AssignedTask::CoatWall(data) => format!("CoatWall ({:?})", data.phase),
+        _ => "BucketTransport".to_string(),
     }
 }
 
