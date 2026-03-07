@@ -1,4 +1,4 @@
-//! 所持チェック・中断条件
+//! バケツ搬送共通ガード
 
 use crate::systems::logistics::tank_has_capacity_for_full_bucket;
 use crate::systems::soul_ai::execute::task_execution::context::TaskExecutionContext;
@@ -8,10 +8,7 @@ pub fn has_bucket_in_inventory(ctx: &TaskExecutionContext, bucket_entity: Entity
     ctx.inventory.0 == Some(bucket_entity)
 }
 
-pub fn tank_can_accept_full_bucket(
-    ctx: &mut TaskExecutionContext,
-    tank_entity: Entity,
-) -> bool {
+pub fn tank_can_accept_full_bucket(ctx: &mut TaskExecutionContext, tank_entity: Entity) -> bool {
     let q_stockpiles = &mut ctx.queries.storage.stockpiles;
     if let Ok((_, _, stock, Some(stored))) = q_stockpiles.get(tank_entity) {
         tank_has_capacity_for_full_bucket(stored.len(), stock.capacity)

@@ -21,7 +21,7 @@
 |---|---|---|
 | [destination-validation-unification-plan-2026-03-07.md](destination-validation-unification-plan-2026-03-07.md) | Draft | FloorConstruction / WallConstruction / ProvisionalWall の搬入先需要計算と実行時受入判定が、割り当て時・手運搬 dropping 時・猫車 unloading 時の 3 系統に分散し、同一ロジックを複数箇所で維持しているの計画。 |
 | [think-phase-iteration-optimization-plan-2026-03-07.md](think-phase-iteration-optimization-plan-2026-03-07.md) | Draft | Think / Decide フェーズで発生するサイト配下タイル全件走査と IncomingDeliveries の重複カウントを、逆引きインデックスとサイクル内スナップショットで削減する計画。 |
-| [transport-overdelivery-fix-plan-2026-03-07.md](transport-overdelivery-fix-plan-2026-03-07.md) | Draft | 設計図搬入と補充系 request の過剰搬入を、需要契約・割り当て・搬入実行の3段で修正する計画。 |
+| [water-transport-consolidation-plan-2026-03-07.md](water-transport-consolidation-plan-2026-03-07.md) | Draft | GatherWater / HaulWaterToMixer の実行ロジック・予約寿命・UI参照を共通化する段階的実装計画。 |
 
 ## アーカイブ計画書一覧 (`docs/plans/archive`)
 
@@ -73,6 +73,7 @@
 | [archive/soul-spawn-despawn.md](archive/soul-spawn-despawn.md) | アーカイブ | Soul Spawn/Despawn設計計画。 |
 | [archive/task-list-left-panel-toggle.md](archive/task-list-left-panel-toggle.md) | アーカイブ | タスクリスト左パネル操作改善計画。 |
 | [archive/taskexecution-systemparam-refactor-plan-2026-03-05.md](archive/taskexecution-systemparam-refactor-plan-2026-03-05.md) | アーカイブ | task_execution/context.rsの計画。 |
+| [archive/transport-overdelivery-fix-plan-2026-03-07.md](archive/transport-overdelivery-fix-plan-2026-03-07.md) | アーカイブ | 設計図搬入と補充系 request で、必要量を超える資材が搬送・消費・地面残留するの計画。 |
 | [archive/ui-menu-action-boundary-plan-2026-03-01.md](archive/ui-menu-action-boundary-plan-2026-03-01.md) | アーカイブ | `MenuAction` 処理の責務境界整理と no-op 分岐解消の計画。 |
 | [archive/ui-submenu-spec-driven-plan-2026-03-01.md](archive/ui-submenu-spec-driven-plan-2026-03-01.md) | アーカイブ | サブメニュー生成を Spec 駆動へ移行し重複を削減する計画。 |
 | [archive/wall-construction-phase-split-plan-2026-02-19.md](archive/wall-construction-phase-split-plan-2026-02-19.md) | アーカイブ | 壁建築フェーズ分割計画。 |

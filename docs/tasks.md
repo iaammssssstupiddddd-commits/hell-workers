@@ -87,6 +87,7 @@ Familiar の `task_finder` がタスクを発見できる条件（**全て満た
 - **運搬 (Haul)**: GoingToSource → Picking → GoingToDestination → Dropping
 - **猫車運搬 (HaulWithWheelbarrow)**: GoingToParking → PickingUpWheelbarrow → GoingToSource → Loading → GoingToDestination → Unloading → ReturningWheelbarrow
 - **Sand / StasisMud**: 原則猫車必須。例外: ソース隣接 3x3 の立ち位置からドロップ閾値内なら徒歩可
+- **水搬送 (BucketTransport)**: `AssignedTask::BucketTransport(BucketTransportData)` の単一バリアントで表現。`source`（`River` / `Tank`）と `destination`（`Tank` / `Mixer`）に応じて `bucket_transport/phases/` の共通フェーズハンドラで実行される。`WorkType` は River→Tank が `GatherWater`、Tank→Mixer が `HaulWaterToMixer` として返される。
 - **運搬先ガード**: Blueprint / construction / provisional wall / stockpile は Dropping / Unloading 直前に受入可能量を再確認し、到着時点で需要が消えた cargo を搬入先へ反映しない。
 - **精製 (Refine)**: MudMixer で Sand+Water+Rock → StasisMud×5
 - **壁**: FrameWallTile（material_center で木材受領 → フレーミング）/ CoatWall（塗布 → `is_provisional = false`）

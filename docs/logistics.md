@@ -72,8 +72,8 @@ Source 側のみ手動操作し、Target 側は Bevy が自動更新する（tas
 | `DeliverToFloorConstruction` | `Haul` | `floor_construction_auto_haul_system` | FloorConstructionSite | 割り当て時に Bone / StasisMud ソースを遅延解決（搬入先は `site.material_center`） |
 | `DeliverToWallConstruction` | `Haul` | `wall_construction_auto_haul_system` | WallConstructionSite | 割り当て時に Wood / StasisMud ソースを遅延解決（搬入先は `site.material_center`） |
 | `DeliverToProvisionalWall` | `Haul` | `provisional_wall_auto_haul_system` | Wall (Building) | 割り当て時に StasisMud ソースを遅延解決（搬入先は壁足元） |
-| `DeliverWaterToMixer` | `HaulWaterToMixer` | `mud_mixer_auto_haul_system` | Mixer | 割り当て時に tank + bucket を遅延解決 |
-| `GatherWaterToTank` | `GatherWater` | `tank_water_request_system` | Tank | 割り当て時に bucket を遅延解決 |
+| `DeliverWaterToMixer` | `BucketTransport` (source=Tank) | `mud_mixer_auto_haul_system` | Mixer | 割り当て時に tank + bucket を遅延解決 |
+| `GatherWaterToTank` | `BucketTransport` (source=River) | `tank_water_request_system` | Tank | 割り当て時に bucket を遅延解決 |
 | `ReturnBucket` | `Haul` | `bucket_auto_haul_system` | Tank | 割り当て時に dropped bucket と返却先 BucketStorage を同時遅延解決 |
 | `BatchWheelbarrow` | `WheelbarrowHaul` | `wheelbarrow_auto_haul_system` | Wheelbarrow | 現状の主運搬経路では未使用（将来拡張用） |
 | `ConsolidateStockpile` | `Haul` | `stockpile_consolidation_producer_system` | Stockpile（レシーバーセル） | 割り当て時にドナーセルの InStockpile アイテムを遅延解決 |
@@ -137,6 +137,7 @@ Source 側のみ手動操作し、Target 側は Bevy が自動更新する（tas
 ### 4.4 MudMixer 水搬入 (`DeliverWaterToMixer`)
 - 水不足時に request を発行。
 - 割り当て時に、エリア内の有効タンクと利用可能バケツを遅延解決して搬送。
+- 実行フェーズは内部的に `BucketTransport` の共通表現へ収束し、Tank→Mixer / River→Tank の流れを共通ハンドラで解釈する。
 
 ### 4.5 バケツ返却 (`ReturnBucket`)
 - 返却対象は「地面上のバケツ（`BucketEmpty` / `BucketWater`、`StoredIn` なし）」のみ。
@@ -176,7 +177,7 @@ Source 側のみ手動操作し、Target 側は Bevy が自動更新する（tas
 
 ### 4.7 Tank 自動補充 (`GatherWaterToTank`)
 - 水タンクの不足量を監視し、`BUCKET_CAPACITY` 単位で必要タスク数を算出して request 化。
-- 割り当て時に request anchor（tank）に紐づく利用可能バケツを選択して `GatherWater` を実行。
+- 割り当て時に request anchor（tank）に紐づく利用可能バケツを選択して `BucketTransport`（source=River, destination=Tank）を実行。
 - タンク容量（現在量 + 予約）を割り当て時にも再検証。
 
 ### 4.8 床建築搬入 (`DeliverToFloorConstruction`)
@@ -335,7 +336,11 @@ Stockpile / Blueprint / Tank などへの搬入予約は、Bevy の Relationship
 - `RecordPickedSource` によりフレーム内のソース論理在庫差分も追跡。
 
 ### 6.3 水搬送の排他
-- `HaulWaterToMixer` はタンクを source 予約して同時取水競合を抑制。
+- `BucketTransport`（`WorkType::GatherWater` / `WorkType::HaulWaterToMixer`）は、`AssignedTask::BucketTransport` の `source`/`destination`/`phase` の組み合わせに応じて
+  - バケツ source の確保
+  - 取水元 tank の確保
+  - ミキサー destination の確保
+  を制御し、フェーズ遷移に従って reservation を更新する。
 
 ## 7. 備蓄資材の取り出し
 
