@@ -20,7 +20,9 @@ use crate::game_state::{
 use crate::interface::camera::{MainCamera, PanCamera};
 use crate::interface::selection::{HoveredEntity, SelectedEntity};
 use crate::interface::ui::{MenuState, components::ArchitectCategoryState, setup_ui};
-use crate::systems::logistics::{ResourceLabels, initial_resource_spawner};
+use crate::systems::logistics::{
+    ResourceCountDisplayTimer, ResourceLabels, initial_resource_spawner,
+};
 use crate::systems::spatial::{
     BlueprintSpatialGrid, FamiliarSpatialGrid, FloorConstructionSpatialGrid,
     GatheringSpotSpatialGrid, ResourceSpatialGrid, SpatialGrid, SpatialGridOps,
@@ -45,6 +47,7 @@ impl Plugin for StartupPlugin {
             .init_resource::<ZoneContext>()
             .init_resource::<CompanionPlacementState>()
             .init_resource::<ResourceLabels>()
+            .init_resource::<ResourceCountDisplayTimer>()
             .init_resource::<GameTime>()
             .init_resource::<TaskContext>()
             .init_resource::<SpatialGrid>()

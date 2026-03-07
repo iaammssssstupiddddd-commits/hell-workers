@@ -2,7 +2,7 @@ use crate::constants::{MAP_HEIGHT, MAP_WIDTH};
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
 use std::cmp::Ordering;
-use std::collections::BinaryHeap;
+use std::collections::{BinaryHeap, HashSet};
 
 /// 直線移動のコスト
 pub const MOVE_COST_STRAIGHT: i32 = 10;
@@ -297,8 +297,10 @@ pub fn find_path_to_boundary(
         return None;
     }
 
+    let target_grid_set: HashSet<(i32, i32)> = target_grids.iter().copied().collect();
+
     // すでにターゲット内にいる場合は、外へ脱出するための最短マスを探す
-    if target_grids.contains(&start) {
+    if target_grid_set.contains(&start) {
         let directions = [
             (0, 1),
             (0, -1),
@@ -312,7 +314,7 @@ pub fn find_path_to_boundary(
         for (dx, dy) in directions {
             let nx = start.0 + dx;
             let ny = start.1 + dy;
-            if !target_grids.contains(&(nx, ny)) && world_map.is_walkable(nx, ny) {
+            if !target_grid_set.contains(&(nx, ny)) && world_map.is_walkable(nx, ny) {
                 return Some(vec![start, (nx, ny)]);
             }
         }
@@ -333,21 +335,21 @@ pub fn find_path_to_boundary(
         context,
         start_idx,
         heuristic,
-        |pos| target_grids.contains(&pos),
+        |pos| target_grid_set.contains(&pos),
         |_, to| {
-            let is_in_target = target_grids.contains(&to);
+            let is_in_target = target_grid_set.contains(&to);
             is_in_target || world_map.is_walkable(to.0, to.1)
         },
         |from, to| {
             let dx = to.0 - from.0;
             let dy = to.1 - from.1;
             (world_map.is_walkable(from.0 + dx, from.1)
-                || target_grids.contains(&(from.0 + dx, from.1)))
+                || target_grid_set.contains(&(from.0 + dx, from.1)))
                 && (world_map.is_walkable(from.0, from.1 + dy)
-                    || target_grids.contains(&(from.0, from.1 + dy)))
+                    || target_grid_set.contains(&(from.0, from.1 + dy)))
         },
         |x, y, _is_diagonal| {
-            if target_grids.contains(&(x, y)) {
+            if target_grid_set.contains(&(x, y)) {
                 0
             } else {
                 world_map.get_door_cost(x, y)

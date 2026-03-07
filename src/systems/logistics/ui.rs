@@ -7,16 +7,39 @@ use std::collections::HashMap;
 #[derive(Resource, Default)]
 pub struct ResourceLabels(pub HashMap<(i32, i32), Entity>);
 
+#[derive(Resource)]
+pub struct ResourceCountDisplayTimer {
+    timer: Timer,
+    first_run_done: bool,
+}
+
+impl Default for ResourceCountDisplayTimer {
+    fn default() -> Self {
+        Self {
+            timer: Timer::from_seconds(0.25, TimerMode::Repeating),
+            first_run_done: false,
+        }
+    }
+}
+
 #[derive(Component)]
 pub struct ResourceCountLabel;
 
 pub fn resource_count_display_system(
     mut commands: Commands,
+    time: Res<Time>,
+    mut refresh_timer: ResMut<ResourceCountDisplayTimer>,
     q_items: Query<(&Transform, &Visibility), With<ResourceItem>>,
     mut labels: ResMut<ResourceLabels>,
     mut q_text: Query<&mut Text2d, With<ResourceCountLabel>>,
     mut q_transform: Query<&mut Transform, (With<ResourceCountLabel>, Without<ResourceItem>)>,
 ) {
+    let timer_finished = refresh_timer.timer.tick(time.delta()).just_finished();
+    if refresh_timer.first_run_done && !timer_finished {
+        return;
+    }
+    refresh_timer.first_run_done = true;
+
     let mut grid_counts: HashMap<(i32, i32), usize> = HashMap::new();
 
     for (transform, visibility) in q_items.iter() {
