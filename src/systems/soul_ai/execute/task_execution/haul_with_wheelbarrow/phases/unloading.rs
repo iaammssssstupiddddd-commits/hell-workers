@@ -4,6 +4,10 @@ use super::super::cancel;
 use crate::constants::Z_ITEM_PICKUP;
 use crate::relationships::{LoadedIn, StoredIn};
 use crate::systems::logistics::ResourceType;
+use crate::systems::logistics::{
+    count_nearby_ground_resources as count_nearby_ground_items,
+    floor_site_tile_demand, provisional_wall_mud_demand, wall_site_tile_demand,
+};
 use crate::systems::logistics::transport_request::{
     TransportRequestKind, TransportRequestState, WheelbarrowDestination,
 };
@@ -80,25 +84,6 @@ fn try_despawn_item(commands: &mut Commands, item_entity: Entity) -> bool {
     true
 }
 
-fn count_nearby_ground_resources(
-    ctx: &TaskExecutionContext,
-    center: Vec2,
-    radius_sq: f32,
-    resource_type: ResourceType,
-) -> usize {
-    ctx.queries
-        .resource_items
-        .iter()
-        .filter(|(_, transform, visibility, resource_item, stored_in_opt, loaded_in_opt)| {
-            **visibility != Visibility::Hidden
-                && loaded_in_opt.is_none()
-                && stored_in_opt.is_none()
-                && resource_item.0 == resource_type
-                && transform.translation.truncate().distance_squared(center) <= radius_sq
-        })
-        .count()
-}
-
 fn floor_site_remaining(
     ctx: &TaskExecutionContext,
     site_entity: Entity,
@@ -108,33 +93,19 @@ fn floor_site_remaining(
         return 0;
     };
 
-    ctx.queries
-        .storage
-        .floor_tiles
-        .iter()
-        .filter(|tile| tile.parent_site == site_entity)
-        .map(|tile| match resource_type {
-            ResourceType::Bone
-                if tile.state
-                    == crate::systems::jobs::floor_construction::FloorTileState::WaitingBones =>
-            {
-                crate::constants::FLOOR_BONES_PER_TILE.saturating_sub(tile.bones_delivered) as usize
-            }
-            ResourceType::StasisMud
-                if tile.state
-                    == crate::systems::jobs::floor_construction::FloorTileState::WaitingMud =>
-            {
-                crate::constants::FLOOR_MUD_PER_TILE.saturating_sub(tile.mud_delivered) as usize
-            }
-            _ => 0,
-        })
-        .sum::<usize>()
-        .saturating_sub(count_nearby_ground_resources(
-            ctx,
-            site.material_center,
-            (crate::constants::TILE_SIZE * 2.0).powi(2),
-            resource_type,
-        ))
+    let needed = floor_site_tile_demand(
+        ctx.queries.storage.floor_tiles.iter(),
+        site_entity,
+        resource_type,
+    );
+    let nearby = count_nearby_ground_items(
+        ctx.queries.resource_items.iter(),
+        site.material_center,
+        (crate::constants::TILE_SIZE * 2.0).powi(2),
+        resource_type,
+        None,
+    );
+    needed.saturating_sub(nearby)
 }
 
 fn wall_site_remaining(
@@ -146,31 +117,19 @@ fn wall_site_remaining(
         return 0;
     };
 
-    ctx.queries
-        .storage
-        .wall_tiles
-        .iter()
-        .filter(|tile| tile.parent_site == site_entity)
-        .map(|tile| match resource_type {
-            ResourceType::Wood
-                if tile.state == crate::systems::jobs::wall_construction::WallTileState::WaitingWood =>
-            {
-                crate::constants::WALL_WOOD_PER_TILE.saturating_sub(tile.wood_delivered) as usize
-            }
-            ResourceType::StasisMud
-                if tile.state == crate::systems::jobs::wall_construction::WallTileState::WaitingMud =>
-            {
-                crate::constants::WALL_MUD_PER_TILE.saturating_sub(tile.mud_delivered) as usize
-            }
-            _ => 0,
-        })
-        .sum::<usize>()
-        .saturating_sub(count_nearby_ground_resources(
-            ctx,
-            site.material_center,
-            (crate::constants::TILE_SIZE * 2.0).powi(2),
-            resource_type,
-        ))
+    let needed = wall_site_tile_demand(
+        ctx.queries.storage.wall_tiles.iter(),
+        site_entity,
+        resource_type,
+    );
+    let nearby = count_nearby_ground_items(
+        ctx.queries.resource_items.iter(),
+        site.material_center,
+        (crate::constants::TILE_SIZE * 2.0).powi(2),
+        resource_type,
+        None,
+    );
+    needed.saturating_sub(nearby)
 }
 
 fn provisional_wall_remaining(
@@ -182,18 +141,17 @@ fn provisional_wall_remaining(
         return 0;
     };
     if resource_type != ResourceType::StasisMud
-        || building.kind != crate::systems::jobs::BuildingType::Wall
-        || !building.is_provisional
-        || provisional_opt.is_none_or(|provisional| provisional.mud_delivered)
+        || provisional_wall_mud_demand(&building, provisional_opt.as_deref()) == 0
     {
         return 0;
     }
 
-    1usize.saturating_sub(count_nearby_ground_resources(
-        ctx,
+    1usize.saturating_sub(count_nearby_ground_items(
+        ctx.queries.resource_items.iter(),
         wall_transform.translation.truncate(),
         (crate::constants::TILE_SIZE * 1.5).powi(2),
         ResourceType::StasisMud,
+        None,
     ))
 }
 

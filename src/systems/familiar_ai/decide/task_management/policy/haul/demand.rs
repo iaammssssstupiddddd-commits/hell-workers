@@ -4,6 +4,9 @@ use bevy::prelude::*;
 
 use crate::systems::familiar_ai::decide::task_management::ReservationShadow;
 use crate::systems::logistics::ResourceType;
+use crate::systems::logistics::{
+    floor_site_tile_demand, provisional_wall_mud_demand, wall_site_tile_demand,
+};
 
 type TaskAssignmentQueries<'w, 's> =
     crate::systems::familiar_ai::decide::task_management::FamiliarTaskAssignmentQueries<'w, 's>;
@@ -61,20 +64,9 @@ pub fn compute_remaining_floor_bones(
     queries: &TaskAssignmentQueries<'_, '_>,
     shadow: &ReservationShadow,
 ) -> u32 {
-    compute_remaining_with_incoming(
-        site_entity,
-        ResourceType::Bone,
-        queries,
-        shadow,
-        |tile| {
-            if tile.state == crate::systems::jobs::floor_construction::FloorTileState::WaitingBones
-            {
-                crate::constants::FLOOR_BONES_PER_TILE.saturating_sub(tile.bones_delivered)
-            } else {
-                0
-            }
-        },
-    )
+    let base_demand =
+        floor_site_tile_demand(queries.storage.floor_tiles.iter(), site_entity, ResourceType::Bone);
+    compute_remaining_from_incoming(site_entity, base_demand, ResourceType::Bone, queries, shadow)
 }
 
 /// 床建設サイトへの泥の残需要
@@ -83,19 +75,9 @@ pub fn compute_remaining_floor_mud(
     queries: &TaskAssignmentQueries<'_, '_>,
     shadow: &ReservationShadow,
 ) -> u32 {
-    compute_remaining_with_incoming(
-        site_entity,
-        ResourceType::StasisMud,
-        queries,
-        shadow,
-        |tile| {
-            if tile.state == crate::systems::jobs::floor_construction::FloorTileState::WaitingMud {
-                crate::constants::FLOOR_MUD_PER_TILE.saturating_sub(tile.mud_delivered)
-            } else {
-                0
-            }
-        },
-    )
+    let base_demand =
+        floor_site_tile_demand(queries.storage.floor_tiles.iter(), site_entity, ResourceType::StasisMud);
+    compute_remaining_from_incoming(site_entity, base_demand, ResourceType::StasisMud, queries, shadow)
 }
 
 /// 壁建設サイトへの木材の残需要
@@ -104,13 +86,9 @@ pub fn compute_remaining_wall_wood(
     queries: &TaskAssignmentQueries<'_, '_>,
     shadow: &ReservationShadow,
 ) -> u32 {
-    compute_remaining_wall_with_incoming(site_entity, ResourceType::Wood, queries, shadow, |tile| {
-        if tile.state == crate::systems::jobs::wall_construction::WallTileState::WaitingWood {
-            crate::constants::WALL_WOOD_PER_TILE.saturating_sub(tile.wood_delivered)
-        } else {
-            0
-        }
-    })
+    let base_demand =
+        wall_site_tile_demand(queries.storage.wall_tiles.iter(), site_entity, ResourceType::Wood);
+    compute_remaining_from_incoming(site_entity, base_demand, ResourceType::Wood, queries, shadow)
 }
 
 /// 壁建設サイトへの泥の残需要
@@ -119,19 +97,9 @@ pub fn compute_remaining_wall_mud(
     queries: &TaskAssignmentQueries<'_, '_>,
     shadow: &ReservationShadow,
 ) -> u32 {
-    compute_remaining_wall_with_incoming(
-        site_entity,
-        ResourceType::StasisMud,
-        queries,
-        shadow,
-        |tile| {
-            if tile.state == crate::systems::jobs::wall_construction::WallTileState::WaitingMud {
-                crate::constants::WALL_MUD_PER_TILE.saturating_sub(tile.mud_delivered)
-            } else {
-                0
-            }
-        },
-    )
+    let base_demand =
+        wall_site_tile_demand(queries.storage.wall_tiles.iter(), site_entity, ResourceType::StasisMud);
+    compute_remaining_from_incoming(site_entity, base_demand, ResourceType::StasisMud, queries, shadow)
 }
 
 pub fn compute_remaining_stockpile_capacity(
@@ -168,64 +136,21 @@ pub fn compute_remaining_provisional_wall_mud(
     let Ok((_, building, provisional_opt)) = queries.storage.buildings.get(wall_entity) else {
         return 0;
     };
-    if building.kind != crate::systems::jobs::BuildingType::Wall
-        || !building.is_provisional
-        || provisional_opt.is_none_or(|provisional| provisional.mud_delivered)
-    {
-        return 0;
-    }
-
-    let incoming = count_exact_incoming_deliveries(wall_entity, ResourceType::StasisMud, queries)
-        + shadow.destination_reserved_resource(wall_entity, ResourceType::StasisMud) as u32;
-    1u32.saturating_sub(incoming)
+    let base_demand = provisional_wall_mud_demand(&building, provisional_opt.as_deref()) as u32;
+    compute_remaining_from_incoming(wall_entity, base_demand as usize, ResourceType::StasisMud, queries, shadow)
 }
 
-fn compute_remaining_with_incoming(
+fn compute_remaining_from_incoming(
     anchor_entity: Entity,
+    base_demand: usize,
     resource_type: ResourceType,
     queries: &TaskAssignmentQueries<'_, '_>,
     shadow: &ReservationShadow,
-    needed_per_tile: impl Fn(&crate::systems::jobs::floor_construction::FloorTileBlueprint) -> u32,
 ) -> u32 {
-    let mut needed = 0u32;
-
-    for tile in queries
-        .storage
-        .floor_tiles
-        .iter()
-        .filter(|tile| tile.parent_site == anchor_entity)
-    {
-        needed += needed_per_tile(tile);
-    }
-
     let incoming = count_exact_incoming_deliveries(anchor_entity, resource_type, queries)
         + shadow.destination_reserved_resource(anchor_entity, resource_type) as u32;
 
-    needed.saturating_sub(incoming)
-}
-
-fn compute_remaining_wall_with_incoming(
-    anchor_entity: Entity,
-    resource_type: ResourceType,
-    queries: &TaskAssignmentQueries<'_, '_>,
-    shadow: &ReservationShadow,
-    needed_per_tile: impl Fn(&crate::systems::jobs::wall_construction::WallTileBlueprint) -> u32,
-) -> u32 {
-    let mut needed = 0u32;
-
-    for tile in queries
-        .storage
-        .wall_tiles
-        .iter()
-        .filter(|tile| tile.parent_site == anchor_entity)
-    {
-        needed += needed_per_tile(tile);
-    }
-
-    let incoming = count_exact_incoming_deliveries(anchor_entity, resource_type, queries)
-        + shadow.destination_reserved_resource(anchor_entity, resource_type) as u32;
-
-    needed.saturating_sub(incoming)
+    base_demand.saturating_sub(incoming as usize) as u32
 }
 
 fn count_exact_incoming_deliveries(
