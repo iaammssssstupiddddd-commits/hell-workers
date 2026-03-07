@@ -336,6 +336,12 @@ Stockpile / Blueprint / Tank などへの搬入予約は、Bevy の Relationship
 - アイテムを持ち出すと `StoredIn`/`InStockpile` が外れ、`StoredItems` は自動更新されます。
 - 取り出し後に Stockpile が空になると `resource_type` は `None` に戻ります。
 
+### 7.1 地面資材数ラベル
+
+- 同一グリッド上に可視状態の `ResourceItem` が複数ある場合、タイル右上寄りに個数ラベルを表示します。
+- 集計対象は `Visibility::Visible` または `Visibility::Inherited` のアイテムのみです。
+- ラベル同期は初回即時、その後は 0.25 秒間隔で行います。これにより表示更新の遅延を 1/4 秒以内に抑えつつ、毎フレーム全 `ResourceItem` を再集計しません。
+
 ## 8. システム追加時の実装ルール
 
 物流系システムを追加する際は、以下を満たしてください。

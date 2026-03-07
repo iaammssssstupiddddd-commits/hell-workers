@@ -1,6 +1,6 @@
 # タスクリストUI仕様
 
-最終更新: 2026-02-13
+最終更新: 2026-03-07
 
 ## 概要
 画面左側に表示される常駐パネルのモードの1つです（エンティティリストとタブ切替）。
@@ -57,14 +57,21 @@
 ### 選択ボーダー
 ピン留めされたエンティティに対応するアイテムに左 3px の `list_selection_border` 色ボーダーを表示します。
 
+## 更新タイミング
+
+- `LeftPanelMode::TaskList` 中でも、無変更フレームではスナップショット再生成と子 UI の再構築を行いません。
+- 再生成トリガーは、`Designation` とその表示内容に影響する関連コンポーネントの `Added` / `Changed` / `Removed`、および左パネルのタブ切替です。
+- 画面上部の task summary はタスクリストと同じ dirty source を共有し、前回集計結果を再利用します。
+
 ## 実装アーキテクチャ
 - `LeftPanelMode::TaskList` 時に表示
 - `src/interface/ui/panels/task_list/`：責務別に分割
-  - `view_model.rs` - スナップショット生成（`TaskListState`, `TaskEntry`）
+  - `view_model.rs` - スナップショット生成と summary 集計（`TaskListState`, `TaskEntry`）
   - `presenter.rs` - WorkType → icon / label / description
   - `render.rs` - UI 再構築
   - `interaction.rs` - クリック、タブ、可視、ハイライト（`task_list_visual_feedback_system` 等）
-  - `update.rs` - オーケストレーション、差分検知・再描画のトリガー
+  - `dirty.rs` - タスクリストと task summary の dirty source
+  - `update.rs` - dirty gate 付きオーケストレーション、必要時のみ再描画
 - `Designation` コンポーネントを持つエンティティをクエリし、関連コンポーネント（Blueprint, TransportRequest等）を参照して説明文を生成
 - `task_list_visual_feedback_system` が `Interaction` と `InfoPanelPinState` を監視し、`ui/list::apply_row_highlight` でホバー・選択ハイライトを適用
 
