@@ -134,7 +134,7 @@ pub fn provisional_wall_auto_haul_system(
                     desired_slots: *slots,
                     inflight,
                 },
-                TransportRequestState::Pending,
+                super::upsert::request_state_for_workers(workers),
                 TransportPolicy::default(),
             ));
             continue;

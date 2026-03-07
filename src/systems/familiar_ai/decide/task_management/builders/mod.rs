@@ -26,6 +26,7 @@ pub fn submit_assignment(
     already_commanded: bool,
 ) {
     shadow.apply_reserve_ops(&reservation_ops);
+    apply_destination_shadow(queries, shadow, &assigned_task);
     queries.assignment_writer.write(TaskAssignmentRequest {
         familiar_entity: ctx.fam_entity,
         worker_entity: ctx.worker_entity,
@@ -36,6 +37,57 @@ pub fn submit_assignment(
         reservation_ops,
         already_commanded,
     });
+}
+
+fn apply_destination_shadow(
+    queries: &crate::systems::familiar_ai::decide::task_management::FamiliarTaskAssignmentQueries,
+    shadow: &mut ReservationShadow,
+    assigned_task: &AssignedTask,
+) {
+    match assigned_task {
+        AssignedTask::Haul(data) => {
+            reserve_item_destination(queries, shadow, data.stockpile, data.item);
+        }
+        AssignedTask::HaulToBlueprint(data) => {
+            reserve_item_destination(queries, shadow, data.blueprint, data.item);
+        }
+        AssignedTask::HaulWithWheelbarrow(data) => {
+            let Some(target) = data.destination.stockpile_or_blueprint() else {
+                return;
+            };
+
+            for &item in &data.items {
+                reserve_item_destination(queries, shadow, target, item);
+            }
+
+            if data.items.is_empty() && let Some(resource_type) = data.collect_resource_type {
+                shadow.reserve_destination(target, Some(resource_type), data.collect_amount.max(1) as usize);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn reserve_item_destination(
+    queries: &crate::systems::familiar_ai::decide::task_management::FamiliarTaskAssignmentQueries,
+    shadow: &mut ReservationShadow,
+    target: Entity,
+    item: Entity,
+) {
+    let resource_type = queries
+        .items
+        .get(item)
+        .ok()
+        .map(|(item, _)| item.0)
+        .or_else(|| {
+            queries
+                .designation
+                .targets
+                .get(item)
+                .ok()
+                .and_then(|(_, _, _, _, resource_item_opt, _, _)| resource_item_opt.map(|resource_item| resource_item.0))
+        });
+    shadow.reserve_destination(target, resource_type, 1);
 }
 
 pub(crate) fn submit_assignment_with_reservation_ops(

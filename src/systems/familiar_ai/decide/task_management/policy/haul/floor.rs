@@ -38,12 +38,16 @@ pub fn assign_haul_to_floor_construction(
         return false;
     };
 
-    if resource_type == ResourceType::StasisMud {
-        let remaining_needed = demand::compute_remaining_floor_mud(site_entity, queries);
-        if remaining_needed == 0 {
-            return false;
-        }
+    let remaining_needed = match resource_type {
+        ResourceType::Bone => demand::compute_remaining_floor_bones(site_entity, queries, shadow),
+        ResourceType::StasisMud => demand::compute_remaining_floor_mud(site_entity, queries, shadow),
+        _ => 0,
+    };
+    if remaining_needed == 0 {
+        return false;
+    }
 
+    if resource_type == ResourceType::StasisMud {
         let max_items =
             remaining_needed.min(crate::constants::WHEELBARROW_CAPACITY as u32) as usize;
         let mut item_sources = source_selector::collect_nearby_items_for_wheelbarrow(
@@ -128,6 +132,7 @@ pub fn assign_haul_to_floor_construction(
         && try_direct_bone_collect_to_floor(
             site_entity,
             ctx.task_entity,
+            remaining_needed,
             site_pos,
             already_commanded,
             ctx,
@@ -148,6 +153,7 @@ pub fn assign_haul_to_floor_construction(
 fn try_direct_bone_collect_to_floor(
     site_entity: Entity,
     task_entity: Entity,
+    remaining_needed: u32,
     site_pos: Vec2,
     already_commanded: bool,
     ctx: &AssignTaskContext<'_>,
@@ -173,14 +179,6 @@ fn try_direct_bone_collect_to_floor(
         return false;
     };
 
-    let remaining_needed = demand::compute_remaining_floor_bones(site_entity, queries);
-    if remaining_needed == 0 {
-        debug!(
-            "ASSIGN: Floor request {:?} already satisfied before direct collect assignment",
-            task_entity
-        );
-        return false;
-    }
     let amount = remaining_needed.min(crate::constants::WHEELBARROW_CAPACITY as u32);
 
     issue_collect_bone_with_wheelbarrow_to_floor(

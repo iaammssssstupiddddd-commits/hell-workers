@@ -26,7 +26,7 @@ pub fn handle(
 
     // Tankから水を最大 BUCKET_CAPACITY 個取り出す
     let mut found_waters = Vec::new();
-    for (res_entity, res_item, stored_in) in ctx.queries.resource_items.iter() {
+    for (res_entity, _, _, res_item, stored_in, _) in ctx.queries.resource_items.iter() {
         if res_item.0 == ResourceType::Water {
             if let Some(stored) = stored_in {
                 if stored.0 == tank_entity {
@@ -67,8 +67,12 @@ pub fn handle(
                 tank: tank_entity,
                 mixer: mixer_entity,
                 amount: take_amount,
+                needs_tank_fill: true,
                 phase: HaulWaterToMixerPhase::GoingToMixer,
             });
+            commands
+                .entity(bucket_entity)
+                .try_insert(crate::relationships::DeliveringTo(mixer_entity));
             update_destination_to_adjacent(
                 ctx.dest,
                 mixer_pos,

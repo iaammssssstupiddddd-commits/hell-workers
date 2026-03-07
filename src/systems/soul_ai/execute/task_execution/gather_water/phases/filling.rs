@@ -58,6 +58,10 @@ pub fn handle(
             .is_none()
             {
                 abort_task_with_item(commands, ctx, world_map);
+            } else {
+                commands
+                    .entity(bucket_entity)
+                    .try_insert(crate::relationships::DeliveringTo(tank_entity));
             }
         } else {
             abort_task_with_item(commands, ctx, world_map);

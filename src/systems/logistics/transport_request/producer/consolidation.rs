@@ -171,6 +171,7 @@ pub fn stockpile_consolidation_producer_system(
         }
 
         if let Some((issued_by, donor_cells, transfer_count, pos)) = desired_requests.get(&key) {
+            let inflight = super::to_u32_saturating(workers);
             commands.entity(req_entity).try_insert((
                 Transform::from_xyz(pos.x, pos.y, 0.0),
                 Visibility::Hidden,
@@ -190,9 +191,9 @@ pub fn stockpile_consolidation_producer_system(
                 },
                 TransportDemand {
                     desired_slots: *transfer_count as u32,
-                    inflight: 0,
+                    inflight,
                 },
-                TransportRequestState::Pending,
+                super::upsert::request_state_for_workers(workers),
                 TransportPolicy::default(),
             ));
         } else if workers == 0 {

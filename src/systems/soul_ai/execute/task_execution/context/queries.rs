@@ -143,8 +143,11 @@ pub struct TaskQueries<'w, 's> {
         's,
         (
             Entity,
+            &'static Transform,
+            &'static Visibility,
             &'static crate::systems::logistics::ResourceItem,
             Option<&'static crate::relationships::StoredIn>,
+            Option<&'static crate::relationships::LoadedIn>,
         ),
     >,
     pub mixer_stored_mud: Query<'w, 's, &'static crate::systems::jobs::StoredByMixer>,

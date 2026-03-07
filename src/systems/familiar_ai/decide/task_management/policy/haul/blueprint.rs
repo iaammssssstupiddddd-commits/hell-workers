@@ -31,6 +31,12 @@ pub fn assign_haul_to_blueprint(
         return false;
     };
 
+    let remaining_needed =
+        demand::compute_remaining_blueprint_amount(blueprint, resource_type, queries, shadow);
+    if remaining_needed == 0 {
+        return false;
+    }
+
     if !resource_type.requires_wheelbarrow() {
         return assign_single_item_haul(
             blueprint,
@@ -48,10 +54,8 @@ pub fn assign_haul_to_blueprint(
         resource_type,
         ctx.task_entity,
         queries,
+        shadow,
     );
-    if remaining_needed == 0 {
-        return false;
-    }
 
     if queries.wheelbarrow_leases.get(ctx.task_entity).is_err() {
         if try_pick_drop_to_blueprint(

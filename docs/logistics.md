@@ -45,6 +45,7 @@ Source 側のみ手動操作し、Target 側は Bevy が自動更新する（tas
 ### 1.5 TransportRequest
 - `TransportRequest { kind, anchor, resource_type, issued_by, priority }`
 - `TransportDemand { desired_slots, inflight }`
+- `desired_slots` は「目的地がまだ受け入れ可能な総量」、`inflight` は既存 request に付いた `TaskWorkers` / lease 状態を producer が毎フレーム再反映した値として扱う。
 - `TransportRequestState`:
   - `Pending` / `Claimed`
 - request エンティティには通常 `Designation`, `ManagedBy`, `TaskSlots`, `Priority` も付与されます。
@@ -87,7 +88,8 @@ Source 側のみ手動操作し、Target 側は Bevy が自動更新する（tas
     - 結果として、同一セルに対する搬入リクエストが複数 Yard から並行して存在する可能性があります。
     - **競合回避**: 実際の搬入（Assign時）には `IncomingDeliveries.len()` で搬入予約済み数を確認するため、同一セルへの容量超過は発生しません。
 - **需要計算**:
-  - グループ全体の `total_capacity - total_stored - total_in_flight` で算出。
+  - グループ全体の `total_capacity - total_stored` を producer が request 化し、既存 request の `TransportDemand.inflight` に現在 worker 数を保持する。
+  - Familiar の割り当て時には `IncomingDeliveries` と当フレーム `ReservationShadow` を使って残容量を再計算し、満杯になったセルは新規割り当てしない。
 - **収集対象範囲**:
   - **Yard 外周から 10 タイル以内**。
   - ただし、Yard 外側の「外周+10」領域では、**他 Yard 内**の位置を除外します。
@@ -101,8 +103,10 @@ Source 側のみ手動操作し、Target 側は Bevy が自動更新する（tas
   - ソースは「地面アイテムのみ」（`InStockpile` 除外）で、同一 Stockpile での pick-drop ループを防止します。
 
 ### 4.2 Blueprint 搬入 (`DeliverToBlueprint`)
-- `required_materials - delivered_materials - in_flight` を不足分として request 化。
+- producer は `required_materials - delivered_materials` を demand として維持し、既存 request の `inflight` を別途保持する。
 - request は Blueprint 位置に生成し、ソースは割り当て時に探索。
+- Familiar 割り当て時には `delivered + IncomingDeliveries + ReservationShadow` を差し引いた残需要を再計算し、需要 0 の request は stale 扱いで割り当てない。
+- Soul / wheelbarrow の搬入直前にも Blueprint の残需要を再確認し、充足済みなら Blueprint への消費を行わずタスクを中断する。
 - `Sand` 搬入は、`CollectSand` の別タスクを経由せず **同一 Soul の `HaulWithWheelbarrow` 1タスク内で完結**する。
   - ソース探索順: `SandPile` 優先、見つからない場合は `TerrainType::Sand` タイル。
   - 範囲: まず TaskArea 内を探索し、見つからなければ全体探索にフォールバック。
@@ -180,6 +184,7 @@ Source 側のみ手動操作し、Target 側は Bevy が自動更新する（tas
 - Reinforcing フェーズでは `Bone`、Pouring フェーズでは `StasisMud` を要求。
 - 搬入先は常に `FloorConstructionSite.material_center`。
 - `floor_material_delivery_sync_system` が `material_center` 周辺の資材を消費し、各タイルの `bones_delivered` / `mud_delivered` を進める。
+- Familiar 割り当て時と wheelbarrow 荷下ろし時の両方で、待機中タイルの残数から `IncomingDeliveries` / 当フレーム予約分を差し引いた残需要を再確認する。
 - `Bone` は以下の優先順で解決される:
   1. 地面アイテムを通常 `Haul` で搬送
   2. 地面アイテムがない場合は `BonePile` / River からの猫車直採取へフォールバック
@@ -188,6 +193,7 @@ Source 側のみ手動操作し、Target 側は Bevy が自動更新する（tas
 - `provisional_wall_auto_haul_system` が `BuildingType::Wall && is_provisional` の壁を走査し、`ProvisionalWall.mud_delivered == false` の壁に request を upsert。
 - request の anchor は壁エンティティで、割り当て時に `StasisMud` ソースを遅延解決する。
 - `provisional_wall_material_delivery_sync_system` が壁近傍へ落ちた `StasisMud` を消費して `mud_delivered = true` に更新する。
+- 割り当て時と荷下ろし時の両方で「まだ泥未搬入か」を確認し、充足済み壁への重複搬入を防ぐ。
 - `provisional_wall_designation_system` が準備完了した壁へ `WorkType::CoatWall` を付与し、塗布タスクへ遷移させる。
 - 互換レイヤーとして残存しており、`WallConstructionSite` 配下で管理される壁タイル実体（`spawned_wall`）は対象から除外される。
 
@@ -196,6 +202,7 @@ Source 側のみ手動操作し、Target 側は Bevy が自動更新する（tas
 - `Framing` フェーズでは `Wood`、`Coating` フェーズでは `StasisMud` を要求。
 - 搬入先は常に `WallConstructionSite.material_center`。
 - `wall_material_delivery_sync_system` が `material_center` 周辺の資材を消費し、各タイルの `wood_delivered` / `mud_delivered` を更新する。
+- 割り当て時と wheelbarrow 荷下ろし時に、対象 phase の残需要を再確認して不要な資材を搬入先へ置かない。
 - `wall_tile_designation_system` が `FramingReady -> WorkType::FrameWallTile`、`CoatingReady -> WorkType::CoatWall` を付与する。
 
 ## 5. 手押し車運搬

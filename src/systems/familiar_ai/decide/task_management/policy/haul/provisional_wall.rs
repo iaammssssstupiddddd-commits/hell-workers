@@ -8,6 +8,7 @@ use super::super::super::builders::{
     issue_haul_to_stockpile_with_source, issue_haul_with_wheelbarrow,
 };
 use super::super::super::validator::resolve_haul_to_provisional_wall_inputs;
+use super::demand;
 use super::source_selector;
 use super::wheelbarrow;
 
@@ -38,6 +39,9 @@ pub fn assign_haul_to_provisional_wall(
         || !building.is_provisional
         || provisional_opt.is_none_or(|provisional| provisional.mud_delivered)
     {
+        return false;
+    }
+    if demand::compute_remaining_provisional_wall_mud(wall_entity, queries, shadow) == 0 {
         return false;
     }
 

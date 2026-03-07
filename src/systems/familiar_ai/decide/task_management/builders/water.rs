@@ -44,6 +44,7 @@ pub fn issue_haul_water_to_mixer(
     bucket: Entity,
     mixer: Entity,
     tank: Entity,
+    needs_tank_fill: bool,
     mixer_already_reserved: bool,
     task_pos: Vec2,
     already_commanded: bool,
@@ -57,10 +58,14 @@ pub fn issue_haul_water_to_mixer(
             tank,
             mixer,
             amount: 0,
+            needs_tank_fill,
             phase: crate::systems::soul_ai::execute::task_execution::types::HaulWaterToMixerPhase::GoingToBucket,
         },
     );
-    let mut reservation_ops = build_source_reservation_ops(&[bucket, tank]);
+    let mut reservation_ops = build_source_reservation_ops(&[bucket]);
+    if needs_tank_fill {
+        reservation_ops.extend(build_source_reservation_ops(&[tank]));
+    }
     reservation_ops.extend(build_mixer_destination_reservation_ops(
         mixer,
         ResourceType::Water,

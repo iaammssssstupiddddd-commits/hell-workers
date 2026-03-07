@@ -110,6 +110,7 @@ pub struct HaulWaterToMixerData {
     pub tank: Entity,
     pub mixer: Entity,
     pub amount: u32,
+    pub needs_tank_fill: bool,
     pub phase: HaulWaterToMixerPhase,
 }
 

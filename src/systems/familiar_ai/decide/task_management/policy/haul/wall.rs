@@ -35,12 +35,16 @@ pub fn assign_haul_to_wall_construction(
         return false;
     };
 
-    if resource_type == ResourceType::StasisMud {
-        let remaining_needed = demand::compute_remaining_wall_mud(site_entity, queries);
-        if remaining_needed == 0 {
-            return false;
-        }
+    let remaining_needed = match resource_type {
+        ResourceType::Wood => demand::compute_remaining_wall_wood(site_entity, queries, shadow),
+        ResourceType::StasisMud => demand::compute_remaining_wall_mud(site_entity, queries, shadow),
+        _ => 0,
+    };
+    if remaining_needed == 0 {
+        return false;
+    }
 
+    if resource_type == ResourceType::StasisMud {
         let max_items =
             remaining_needed.min(crate::constants::WHEELBARROW_CAPACITY as u32) as usize;
         let mut item_sources = source_selector::collect_nearby_items_for_wheelbarrow(
@@ -100,12 +104,6 @@ pub fn assign_haul_to_wall_construction(
             shadow,
         );
         return true;
-    }
-
-    if resource_type == ResourceType::Wood
-        && demand::compute_remaining_wall_wood(site_entity, queries) == 0
-    {
-        return false;
     }
 
     if let Some((source_item, source_pos)) = source_selector::find_nearest_blueprint_source_item(

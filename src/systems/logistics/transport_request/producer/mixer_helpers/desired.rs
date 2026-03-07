@@ -117,10 +117,14 @@ pub(crate) fn compute_mixer_desired_requests(
         } else {
             (0, MUD_MIXER_CAPACITY)
         };
-        let issue_threshold = water_capacity.saturating_sub(BUCKET_CAPACITY);
-
-        if water_current < water_capacity && water_current + water_inflight <= issue_threshold {
-            desired_requests.insert((mixer_entity, ResourceType::Water), (fam_entity, 1, mixer_pos));
+        let projected_water = water_current.saturating_add(water_inflight).min(water_capacity);
+        let missing_water = water_capacity.saturating_sub(projected_water);
+        if missing_water > 0 {
+            let desired_slots = missing_water.div_ceil(BUCKET_CAPACITY).max(1);
+            desired_requests.insert(
+                (mixer_entity, ResourceType::Water),
+                (fam_entity, desired_slots, mixer_pos),
+            );
         }
     }
 }
