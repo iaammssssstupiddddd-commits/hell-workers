@@ -1,7 +1,10 @@
 use crate::systems::familiar_ai::decide::task_management::{AssignTaskContext, ReservationShadow};
 use crate::systems::jobs::WorkType;
 use crate::systems::logistics::ResourceType;
-use crate::systems::soul_ai::execute::task_execution::types::GatherWaterPhase;
+use crate::systems::soul_ai::execute::task_execution::types::{
+    AssignedTask, BucketTransportData, BucketTransportDestination, BucketTransportPhase,
+    BucketTransportSource,
+};
 use bevy::prelude::*;
 
 use super::{
@@ -20,14 +23,13 @@ pub fn issue_gather_water(
     queries: &mut crate::systems::familiar_ai::decide::task_management::FamiliarTaskAssignmentQueries,
     shadow: &mut ReservationShadow,
 ) {
-    let assigned_task =
-        crate::systems::soul_ai::execute::task_execution::types::AssignedTask::GatherWater(
-            crate::systems::soul_ai::execute::task_execution::types::GatherWaterData {
-                bucket,
-                tank,
-                phase: GatherWaterPhase::GoingToBucket,
-            },
-        );
+    let assigned_task = AssignedTask::BucketTransport(BucketTransportData {
+        bucket,
+        source: BucketTransportSource::River,
+        destination: BucketTransportDestination::Tank(tank),
+        amount: 1,
+        phase: BucketTransportPhase::GoingToBucket,
+    });
     submit_assignment_with_source_entities(
         ctx,
         queries,
@@ -52,16 +54,16 @@ pub fn issue_haul_water_to_mixer(
     queries: &mut crate::systems::familiar_ai::decide::task_management::FamiliarTaskAssignmentQueries,
     shadow: &mut ReservationShadow,
 ) {
-    let assigned_task = crate::systems::soul_ai::execute::task_execution::types::AssignedTask::HaulWaterToMixer(
-        crate::systems::soul_ai::execute::task_execution::types::HaulWaterToMixerData {
-            bucket,
+    let assigned_task = AssignedTask::BucketTransport(BucketTransportData {
+        bucket,
+        source: BucketTransportSource::Tank {
             tank,
-            mixer,
-            amount: 0,
-            needs_tank_fill,
-            phase: crate::systems::soul_ai::execute::task_execution::types::HaulWaterToMixerPhase::GoingToBucket,
+            needs_fill: needs_tank_fill,
         },
-    );
+        destination: BucketTransportDestination::Mixer(mixer),
+        amount: 0,
+        phase: BucketTransportPhase::GoingToBucket,
+    });
     let mut reservation_ops = build_source_reservation_ops(&[bucket]);
     if needs_tank_fill {
         reservation_ops.extend(build_source_reservation_ops(&[tank]));

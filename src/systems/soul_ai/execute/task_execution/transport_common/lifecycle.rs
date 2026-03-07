@@ -9,8 +9,8 @@ use crate::systems::logistics::ResourceType;
 use crate::systems::logistics::transport_request::WheelbarrowDestination;
 use crate::systems::soul_ai::execute::task_execution::types::{
     AssignedTask, BuildPhase, CoatWallPhase, CollectBonePhase, CollectSandPhase, FrameWallPhase,
-    GatherPhase, GatherWaterPhase, HaulPhase, HaulToBpPhase, HaulToMixerPhase,
-    HaulWaterToMixerPhase, HaulWithWheelbarrowPhase, PourFloorPhase, RefinePhase,
+    GatherPhase, HaulPhase, HaulToBpPhase, HaulToMixerPhase, HaulWithWheelbarrowPhase,
+    PourFloorPhase, RefinePhase,
     ReinforceFloorPhase,
 };
 use bevy::prelude::*;
@@ -22,55 +22,36 @@ pub fn collect_active_reservation_ops(
 ) -> Vec<ResourceReservationOp> {
     let mut ops = Vec::new();
 
+    if let Some(transport_data) = task.bucket_transport_data() {
+        if transport_data.should_reserve_bucket_source() {
+            ops.push(ResourceReservationOp::ReserveSource {
+                source: transport_data.bucket,
+                amount: 1,
+            });
+        }
+
+        if transport_data.should_reserve_tank_source() {
+            if let Some(source) = transport_data.tank_source_entity() {
+                ops.push(ResourceReservationOp::ReserveSource {
+                    source,
+                    amount: 1,
+                });
+            }
+        }
+
+        if transport_data.should_reserve_mixer_destination() {
+            ops.push(ResourceReservationOp::ReserveMixerDestination {
+                target: transport_data.destination_entity(),
+                resource_type: ResourceType::Water,
+            });
+        }
+    }
+
     match task {
         AssignedTask::Haul(data) => {
             if matches!(data.phase, HaulPhase::GoingToItem) {
                 ops.push(ResourceReservationOp::ReserveSource {
                     source: data.item,
-                    amount: 1,
-                });
-            }
-        }
-        AssignedTask::GatherWater(data) => {
-            if matches!(data.phase, GatherWaterPhase::GoingToBucket) {
-                ops.push(ResourceReservationOp::ReserveSource {
-                    source: data.bucket,
-                    amount: 1,
-                });
-            }
-        }
-        AssignedTask::HaulWaterToMixer(data) => {
-            // 注水完了後（ReturningBucket）に予約を保持すると、
-            // 次の給水request発行が不必要に抑制されるため除外する。
-            if matches!(
-                data.phase,
-                HaulWaterToMixerPhase::GoingToBucket
-                    | HaulWaterToMixerPhase::GoingToTank
-                    | HaulWaterToMixerPhase::FillingFromTank
-                    | HaulWaterToMixerPhase::GoingToMixer
-                    | HaulWaterToMixerPhase::Pouring
-            ) {
-                ops.push(ResourceReservationOp::ReserveMixerDestination {
-                    target: data.mixer,
-                    resource_type: ResourceType::Water,
-                });
-            }
-
-            if matches!(data.phase, HaulWaterToMixerPhase::GoingToBucket) {
-                ops.push(ResourceReservationOp::ReserveSource {
-                    source: data.bucket,
-                    amount: 1,
-                });
-            }
-
-            if data.needs_tank_fill && matches!(
-                data.phase,
-                HaulWaterToMixerPhase::GoingToBucket
-                    | HaulWaterToMixerPhase::GoingToTank
-                    | HaulWaterToMixerPhase::FillingFromTank
-            ) {
-                ops.push(ResourceReservationOp::ReserveSource {
-                    source: data.tank,
                     amount: 1,
                 });
             }
@@ -232,6 +213,7 @@ pub fn collect_active_reservation_ops(
             }
         }
         AssignedTask::None => {}
+        _ => {}
     }
 
     ops

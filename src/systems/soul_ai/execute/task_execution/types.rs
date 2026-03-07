@@ -20,8 +20,8 @@ pub enum AssignedTask {
     Build(BuildData),
     /// 建物を移動する
     MovePlant(MovePlantData),
-    /// 水汲みを行う
-    GatherWater(GatherWaterData),
+    /// バケツ搬送（川→タンク or タンク→ミキサー）
+    BucketTransport(BucketTransportData),
     /// 砂を採取する
     CollectSand(CollectSandData),
     /// 骨を採取する
@@ -30,8 +30,6 @@ pub enum AssignedTask {
     Refine(RefineData),
     /// ミキサーへ資材を運搬する
     HaulToMixer(HaulToMixerData),
-    /// Tankの水をバケツでMudMixerへ運ぶ
-    HaulWaterToMixer(HaulWaterToMixerData),
     /// 手押し車で一括運搬
     HaulWithWheelbarrow(HaulWithWheelbarrowData),
     /// 床タイルの骨補強
@@ -42,6 +40,196 @@ pub enum AssignedTask {
     FrameWallTile(FrameWallTileData),
     /// 壁タイルの泥塗布
     CoatWall(CoatWallData),
+}
+
+#[derive(Reflect, Clone, Debug, PartialEq)]
+pub struct BucketTransportData {
+    pub bucket: Entity,
+    pub source: BucketTransportSource,
+    pub destination: BucketTransportDestination,
+    /// Mixer 側へ水を届ける量。現在の運搬では 1 バケツ前提でも、将来の可変量対応のため保持。
+    pub amount: u32,
+    pub phase: BucketTransportPhase,
+}
+
+#[derive(Reflect, Clone, Debug, PartialEq, Eq)]
+pub enum BucketTransportSource {
+    /// 河川から直接汲む
+    River,
+    /// タンクを経由して汲む。`needs_fill == true` の場合、タンクへの補充を優先する
+    Tank { tank: Entity, needs_fill: bool },
+}
+
+#[derive(Reflect, Clone, Debug, PartialEq, Eq)]
+pub enum BucketTransportDestination {
+    Tank(Entity),
+    Mixer(Entity),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Reflect, Default)]
+pub enum BucketTransportPhase {
+    #[default]
+    GoingToBucket,
+    /// source (河川 or タンク) へ移動中
+    GoingToSource,
+    Filling {
+        progress: f32,
+    },
+    /// destination (タンク or ミキサー) へ移動中
+    GoingToDestination,
+    Pouring {
+        progress: f32,
+    },
+    ReturningBucket,
+}
+
+impl From<&GatherWaterData> for BucketTransportData {
+    fn from(data: &GatherWaterData) -> Self {
+        let phase = match data.phase {
+            GatherWaterPhase::GoingToBucket => BucketTransportPhase::GoingToBucket,
+            GatherWaterPhase::GoingToRiver => BucketTransportPhase::GoingToSource,
+            GatherWaterPhase::Filling { progress } => BucketTransportPhase::Filling { progress },
+            GatherWaterPhase::GoingToTank => BucketTransportPhase::GoingToDestination,
+            GatherWaterPhase::Pouring { progress } => BucketTransportPhase::Pouring { progress },
+        };
+
+        Self {
+            bucket: data.bucket,
+            source: BucketTransportSource::River,
+            destination: BucketTransportDestination::Tank(data.tank),
+            amount: 1,
+            phase,
+        }
+    }
+}
+
+impl From<&HaulWaterToMixerData> for BucketTransportData {
+    fn from(data: &HaulWaterToMixerData) -> Self {
+        let phase = match data.phase {
+            HaulWaterToMixerPhase::GoingToBucket => BucketTransportPhase::GoingToBucket,
+            HaulWaterToMixerPhase::GoingToTank => BucketTransportPhase::GoingToSource,
+            HaulWaterToMixerPhase::FillingFromTank => BucketTransportPhase::Filling { progress: 0.0 },
+            HaulWaterToMixerPhase::GoingToMixer => BucketTransportPhase::GoingToDestination,
+            HaulWaterToMixerPhase::Pouring => BucketTransportPhase::Pouring { progress: 0.0 },
+            HaulWaterToMixerPhase::ReturningBucket => BucketTransportPhase::ReturningBucket,
+        };
+
+        Self {
+            bucket: data.bucket,
+            source: BucketTransportSource::Tank {
+                tank: data.tank,
+                needs_fill: data.needs_tank_fill,
+            },
+            destination: BucketTransportDestination::Mixer(data.mixer),
+            amount: data.amount.max(1),
+            phase,
+        }
+    }
+}
+
+impl BucketTransportData {
+    pub fn source_entity(&self) -> Entity {
+        match self.source {
+            BucketTransportSource::River => self.bucket,
+            BucketTransportSource::Tank { tank, .. } => tank,
+        }
+    }
+
+    pub fn destination_entity(&self) -> Entity {
+        match self.destination {
+            BucketTransportDestination::Tank(entity) => entity,
+            BucketTransportDestination::Mixer(entity) => entity,
+        }
+    }
+
+    pub fn to_gather_water_data(&self) -> Option<GatherWaterData> {
+        match self.destination {
+            BucketTransportDestination::Tank(tank) => {
+                let phase = match self.phase {
+                    BucketTransportPhase::GoingToBucket => GatherWaterPhase::GoingToBucket,
+                    BucketTransportPhase::GoingToSource => GatherWaterPhase::GoingToRiver,
+                    BucketTransportPhase::Filling { progress } => GatherWaterPhase::Filling { progress },
+                    BucketTransportPhase::GoingToDestination => GatherWaterPhase::GoingToTank,
+                    BucketTransportPhase::Pouring { progress } => {
+                        GatherWaterPhase::Pouring { progress }
+                    }
+                    BucketTransportPhase::ReturningBucket => GatherWaterPhase::GoingToTank,
+                };
+
+                Some(GatherWaterData {
+                    bucket: self.bucket,
+                    tank,
+                    phase,
+                })
+            }
+            BucketTransportDestination::Mixer(_) => None,
+        }
+    }
+
+    pub fn to_haul_water_to_mixer_data(&self) -> Option<HaulWaterToMixerData> {
+        match self.source {
+            BucketTransportSource::Tank { tank, needs_fill } => match self.destination {
+                BucketTransportDestination::Mixer(mixer) => {
+                    let phase = match self.phase {
+                        BucketTransportPhase::GoingToBucket => HaulWaterToMixerPhase::GoingToBucket,
+                        BucketTransportPhase::GoingToSource => HaulWaterToMixerPhase::GoingToTank,
+                        BucketTransportPhase::Filling { .. } => {
+                            HaulWaterToMixerPhase::FillingFromTank
+                        }
+                        BucketTransportPhase::GoingToDestination => {
+                            HaulWaterToMixerPhase::GoingToMixer
+                        }
+                        BucketTransportPhase::Pouring { .. } => HaulWaterToMixerPhase::Pouring,
+                        BucketTransportPhase::ReturningBucket => HaulWaterToMixerPhase::ReturningBucket,
+                    };
+
+                    Some(HaulWaterToMixerData {
+                        bucket: self.bucket,
+                        tank,
+                        mixer,
+                        amount: self.amount,
+                        needs_tank_fill: needs_fill,
+                        phase,
+                    })
+                }
+                BucketTransportDestination::Tank(_) => None,
+            },
+            BucketTransportSource::River => None,
+        }
+    }
+
+    /// バケツ source（バケツ自体）の予約保持有無を判定する。
+    pub fn should_reserve_bucket_source(&self) -> bool {
+        matches!(self.phase, BucketTransportPhase::GoingToBucket)
+    }
+
+    /// Tank source 予約保持有無を判定する（needs_fill=true 時のみ）。
+    /// Phase は旧実装の `GoingToBucket` / `GoingToTank` / `FillingFromTank` 相当。
+    pub fn should_reserve_tank_source(&self) -> bool {
+        match self.source {
+            BucketTransportSource::Tank { needs_fill: true, .. } => matches!(
+                self.phase,
+                BucketTransportPhase::GoingToBucket
+                    | BucketTransportPhase::GoingToSource
+                    | BucketTransportPhase::Filling { .. }
+            ),
+            BucketTransportSource::Tank { .. } | BucketTransportSource::River => false,
+        }
+    }
+
+    /// Mixer destination 予約保持有無を判定する。
+    pub fn should_reserve_mixer_destination(&self) -> bool {
+        matches!(self.destination, BucketTransportDestination::Mixer(_))
+            && !matches!(self.phase, BucketTransportPhase::ReturningBucket)
+    }
+
+    /// Tank source entity を直接参照するための補助 getter。
+    pub fn tank_source_entity(&self) -> Option<Entity> {
+        match self.source {
+            BucketTransportSource::Tank { tank, .. } => Some(tank),
+            BucketTransportSource::River => None,
+        }
+    }
 }
 
 #[derive(Reflect, Clone, Debug, PartialEq)]
@@ -350,6 +538,14 @@ pub enum CoatWallPhase {
 }
 
 impl AssignedTask {
+    /// Bucket transport データを直接取得する。
+    pub fn bucket_transport_data(&self) -> Option<BucketTransportData> {
+        match self {
+            AssignedTask::BucketTransport(data) => Some(data.clone()),
+            _ => None,
+        }
+    }
+
     /// タスクの作業タイプを取得
     pub fn work_type(&self) -> Option<WorkType> {
         match self {
@@ -358,12 +554,14 @@ impl AssignedTask {
             AssignedTask::HaulToBlueprint(_) => Some(WorkType::Haul),
             AssignedTask::Build(_) => Some(WorkType::Build),
             AssignedTask::MovePlant(_) => Some(WorkType::Move),
-            AssignedTask::GatherWater(_) => Some(WorkType::GatherWater),
+            AssignedTask::BucketTransport(data) => match data.source {
+                BucketTransportSource::River => Some(WorkType::GatherWater),
+                BucketTransportSource::Tank { .. } => Some(WorkType::HaulWaterToMixer),
+            },
             AssignedTask::CollectSand(_) => Some(WorkType::CollectSand),
             AssignedTask::CollectBone(_) => Some(WorkType::CollectBone),
             AssignedTask::Refine(_) => Some(WorkType::Refine),
             AssignedTask::HaulToMixer(_) => Some(WorkType::Haul),
-            AssignedTask::HaulWaterToMixer(_) => Some(WorkType::HaulWaterToMixer),
             AssignedTask::HaulWithWheelbarrow(_) => Some(WorkType::WheelbarrowHaul),
             AssignedTask::ReinforceFloorTile(_) => Some(WorkType::ReinforceFloorTile),
             AssignedTask::PourFloorTile(_) => Some(WorkType::PourFloorTile),
@@ -381,12 +579,11 @@ impl AssignedTask {
             AssignedTask::HaulToBlueprint(data) => Some(data.item),
             AssignedTask::Build(data) => Some(data.blueprint),
             AssignedTask::MovePlant(data) => Some(data.building),
-            AssignedTask::GatherWater(data) => Some(data.bucket),
+            AssignedTask::BucketTransport(data) => Some(data.bucket),
             AssignedTask::CollectSand(data) => Some(data.target),
             AssignedTask::CollectBone(data) => Some(data.target),
             AssignedTask::Refine(data) => Some(data.mixer),
             AssignedTask::HaulToMixer(data) => Some(data.item),
-            AssignedTask::HaulWaterToMixer(data) => Some(data.bucket),
             AssignedTask::HaulWithWheelbarrow(data) => Some(data.wheelbarrow),
             AssignedTask::ReinforceFloorTile(data) => Some(data.tile),
             AssignedTask::PourFloorTile(data) => Some(data.tile),
@@ -397,7 +594,7 @@ impl AssignedTask {
     }
 
     pub fn get_amount_if_haul_water(&self) -> Option<u32> {
-        if let AssignedTask::HaulWaterToMixer(data) = self {
+        if let AssignedTask::BucketTransport(data) = self {
             Some(data.amount)
         } else {
             None
@@ -410,8 +607,7 @@ impl AssignedTask {
             AssignedTask::Haul(data) => Some(data.item),
             AssignedTask::HaulToBlueprint(data) => Some(data.item),
             AssignedTask::HaulToMixer(data) => Some(data.item),
-            AssignedTask::GatherWater(data) => Some(data.bucket),
-            AssignedTask::HaulWaterToMixer(data) => Some(data.bucket),
+            AssignedTask::BucketTransport(data) => Some(data.bucket),
             AssignedTask::HaulWithWheelbarrow(data) => Some(data.wheelbarrow),
             _ => None,
         }
@@ -428,11 +624,8 @@ impl AssignedTask {
                 data.phase,
                 HaulToMixerPhase::GoingToMixer | HaulToMixerPhase::Delivering
             ),
-            AssignedTask::GatherWater(data) => {
-                !matches!(data.phase, GatherWaterPhase::GoingToBucket)
-            }
-            AssignedTask::HaulWaterToMixer(data) => {
-                !matches!(data.phase, HaulWaterToMixerPhase::GoingToBucket)
+            AssignedTask::BucketTransport(data) => {
+                !matches!(data.phase, BucketTransportPhase::GoingToBucket)
             }
             AssignedTask::HaulWithWheelbarrow(data) => !matches!(
                 data.phase,

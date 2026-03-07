@@ -9,8 +9,8 @@ use bevy::prelude::*;
 use super::task_handler::TaskHandler;
 use crate::systems::soul_ai::execute::task_execution::types::{
     AssignedTask, BuildData, CoatWallData, CollectBoneData, CollectSandData, FrameWallTileData,
-    GatherData, GatherWaterData, HaulData, HaulToBlueprintData, HaulToMixerData,
-    HaulWaterToMixerData, MovePlantData, PourFloorTileData, RefineData, ReinforceFloorTileData,
+    GatherData, HaulData, HaulToBlueprintData, HaulToMixerData,
+    MovePlantData, PourFloorTileData, RefineData, ReinforceFloorTileData,
 };
 
 impl TaskHandler<GatherData> for AssignedTask {
@@ -100,29 +100,6 @@ impl TaskHandler<HaulToBlueprintData> for AssignedTask {
     }
 }
 
-impl TaskHandler<GatherWaterData> for AssignedTask {
-    fn execute(
-        ctx: &mut TaskExecutionContext,
-        data: GatherWaterData,
-        commands: &mut Commands,
-        game_assets: &Res<GameAssets>,
-        time: &Res<Time>,
-        world_map: &Res<WorldMap>,
-        _breakdown_opt: Option<&StressBreakdown>,
-    ) {
-        crate::systems::soul_ai::execute::task_execution::gather_water::handle_gather_water_task(
-            ctx,
-            data.bucket,
-            data.tank,
-            data.phase,
-            commands,
-            game_assets,
-            time,
-            world_map,
-        );
-    }
-}
-
 impl TaskHandler<CollectSandData> for AssignedTask {
     fn execute(
         ctx: &mut TaskExecutionContext,
@@ -206,30 +183,6 @@ impl TaskHandler<HaulToMixerData> for AssignedTask {
             data.resource_type,
             data.phase,
             commands,
-            world_map,
-        );
-    }
-}
-
-impl TaskHandler<HaulWaterToMixerData> for AssignedTask {
-    fn execute(
-        ctx: &mut TaskExecutionContext,
-        data: HaulWaterToMixerData,
-        commands: &mut Commands,
-        game_assets: &Res<GameAssets>,
-        time: &Res<Time>,
-        world_map: &Res<WorldMap>,
-        _breakdown_opt: Option<&StressBreakdown>,
-    ) {
-        crate::systems::soul_ai::execute::task_execution::haul_water_to_mixer::handle_haul_water_to_mixer_task(
-            ctx,
-            data.bucket,
-            data.tank,
-            data.mixer,
-            data.phase,
-            commands,
-            game_assets,
-            time,
             world_map,
         );
     }

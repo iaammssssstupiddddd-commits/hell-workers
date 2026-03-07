@@ -9,7 +9,7 @@
 | 作成日 | `2026-03-07` |
 | 最終更新日 | `2026-03-07` |
 | 作成者 | `AI (Claude)` |
-| 関連計画 | `TBD` |
+| 関連計画 | `docs/plans/water-transport-consolidation-plan-2026-03-07.md` |
 | 関連Issue/PR | `N/A` |
 
 ## 1. 背景と問題

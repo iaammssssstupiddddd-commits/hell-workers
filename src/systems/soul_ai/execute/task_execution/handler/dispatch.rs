@@ -37,6 +37,16 @@ pub fn run_task_handler(
                 breakdown_opt,
             );
         }
+        AssignedTask::BucketTransport(data) => {
+            crate::systems::soul_ai::execute::task_execution::bucket_transport::handle_bucket_transport_task(
+                ctx,
+                data.clone(),
+                commands,
+                game_assets,
+                time,
+                world_map,
+            );
+        }
         AssignedTask::Haul(data) => {
             AssignedTask::execute(
                 ctx,
@@ -81,17 +91,6 @@ pub fn run_task_handler(
                 breakdown_opt,
             );
         }
-        AssignedTask::GatherWater(data) => {
-            AssignedTask::execute(
-                ctx,
-                data.clone(),
-                commands,
-                game_assets,
-                time,
-                world_map,
-                breakdown_opt,
-            );
-        }
         AssignedTask::CollectSand(data) => {
             AssignedTask::execute(
                 ctx,
@@ -126,17 +125,6 @@ pub fn run_task_handler(
             );
         }
         AssignedTask::HaulToMixer(data) => {
-            AssignedTask::execute(
-                ctx,
-                data.clone(),
-                commands,
-                game_assets,
-                time,
-                world_map,
-                breakdown_opt,
-            );
-        }
-        AssignedTask::HaulWaterToMixer(data) => {
             AssignedTask::execute(
                 ctx,
                 data.clone(),

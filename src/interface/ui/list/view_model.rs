@@ -35,6 +35,10 @@ pub(super) fn familiar_label(
 }
 
 fn task_visual(task: &AssignedTask) -> TaskVisual {
+    if task.bucket_transport_data().is_some() {
+        return TaskVisual::Water;
+    }
+
     match task {
         AssignedTask::None => TaskVisual::Idle,
         AssignedTask::Gather(data) => match data.work_type {
@@ -46,17 +50,16 @@ fn task_visual(task: &AssignedTask) -> TaskVisual {
         AssignedTask::Build { .. } => TaskVisual::Build,
         AssignedTask::MovePlant { .. } => TaskVisual::Build,
         AssignedTask::HaulToBlueprint { .. } => TaskVisual::HaulToBlueprint,
-        AssignedTask::GatherWater { .. } => TaskVisual::Water,
         AssignedTask::CollectSand { .. } => TaskVisual::GatherDefault,
         AssignedTask::CollectBone { .. } => TaskVisual::GatherDefault,
         AssignedTask::Refine { .. } => TaskVisual::Build,
         AssignedTask::HaulToMixer { .. } => TaskVisual::HaulToBlueprint,
-        AssignedTask::HaulWaterToMixer { .. } => TaskVisual::Water,
         AssignedTask::HaulWithWheelbarrow { .. } => TaskVisual::Haul,
         AssignedTask::ReinforceFloorTile { .. } => TaskVisual::Build,
         AssignedTask::PourFloorTile { .. } => TaskVisual::Build,
         AssignedTask::FrameWallTile { .. } => TaskVisual::Build,
         AssignedTask::CoatWall { .. } => TaskVisual::Build,
+        _ => TaskVisual::Water,
     }
 }
 

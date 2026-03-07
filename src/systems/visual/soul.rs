@@ -225,9 +225,9 @@ pub fn task_link_system(
 ) {
     for (soul_transform, task) in q_souls.iter() {
         let (soul_transform, task): (&GlobalTransform, &AssignedTask) = (soul_transform, task);
+        let bucket_transport = task.bucket_transport_data();
         let target_entity = match task {
             AssignedTask::Gather(data) => Some(data.target),
-            AssignedTask::GatherWater(data) => Some(data.bucket),
             AssignedTask::CollectSand(data) => Some(data.target),
             AssignedTask::Refine(data) => Some(data.mixer),
             AssignedTask::Haul(data) => match data.phase {
@@ -237,10 +237,13 @@ pub fn task_link_system(
             },
             AssignedTask::Build(data) => Some(data.blueprint),
             AssignedTask::HaulToBlueprint(data) => Some(data.blueprint),
-            AssignedTask::HaulWaterToMixer(data) => Some(data.bucket),
             AssignedTask::FrameWallTile(data) => Some(data.tile),
             AssignedTask::CoatWall(data) => Some(data.wall),
             _ => None,
+        };
+        let target_entity = match bucket_transport.as_ref() {
+            Some(data) => Some(data.bucket),
+            None => target_entity,
         };
 
         if let Some(target) = target_entity {
@@ -249,18 +252,20 @@ pub fn task_link_system(
                 let end: Vec2 = target_transform.translation().truncate();
 
                 // 線の色をタスクの種類で変える
-                let color = match task {
+                let color = if bucket_transport.is_some() {
+                    Color::srgb(0.0, 0.5, 1.0)
+                } else {
+                    match task {
                     AssignedTask::Gather(_) => Color::srgba(0.0, 1.0, 0.0, 0.4), // 緑 (採取)
-                    AssignedTask::GatherWater(_) => Color::srgb(0.0, 0.5, 1.0),
                     AssignedTask::CollectSand(_) => Color::srgb(1.0, 0.8, 0.0),
                     AssignedTask::Refine(_) => Color::srgb(0.5, 0.0, 1.0),
                     AssignedTask::Haul(_) => Color::srgba(1.0, 1.0, 0.0, 0.4), // 黄 (運搬)
                     AssignedTask::Build(_) => Color::srgba(1.0, 1.0, 1.0, 0.5), // 白 (建築)
                     AssignedTask::HaulToBlueprint(_) => Color::srgba(1.0, 1.0, 0.5, 0.4), // 薄黄 (搬入)
-                    AssignedTask::HaulWaterToMixer(_) => Color::srgb(0.0, 0.5, 1.0), // Same as GatherWater
                     AssignedTask::FrameWallTile(_) => Color::srgba(1.0, 1.0, 1.0, 0.5), // 白 (建築)
                     AssignedTask::CoatWall(_) => Color::srgba(1.0, 1.0, 1.0, 0.5),   // 白 (建築)
                     _ => Color::srgba(1.0, 1.0, 1.0, 0.3),
+                    }
                 };
 
                 // タスクリンク線を描画
