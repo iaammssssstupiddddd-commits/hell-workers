@@ -1,13 +1,21 @@
 mod initial_spawn;
 pub mod item_lifetime;
+mod floor_construction;
+mod ground_resources;
 pub mod transport_request;
 mod types;
 mod ui;
+mod wall_construction;
+mod provisional_wall;
 mod water;
 mod zone;
 
 pub use initial_spawn::*;
 pub use types::*;
 pub use ui::*;
+pub use floor_construction::*;
+pub use ground_resources::*;
+pub use wall_construction::*;
+pub use provisional_wall::*;
 pub use water::*;
 pub use zone::*;
