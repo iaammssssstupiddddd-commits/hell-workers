@@ -30,9 +30,11 @@ pub fn assign_haul_to_blueprint(
     else {
         return false;
     };
+    let demand_context =
+        demand::DemandReadContext::new(queries, shadow, ctx.tile_site_index, ctx.incoming_snapshot);
 
     let remaining_needed =
-        demand::compute_remaining_blueprint_amount(blueprint, resource_type, queries, shadow);
+        demand::compute_remaining_blueprint_amount(blueprint, resource_type, &demand_context);
     if remaining_needed == 0 {
         return false;
     }
@@ -52,9 +54,7 @@ pub fn assign_haul_to_blueprint(
     let remaining_needed = demand::compute_remaining_blueprint_wheelbarrow_amount(
         blueprint,
         resource_type,
-        ctx.task_entity,
-        queries,
-        shadow,
+        &demand_context,
     );
 
     if queries.wheelbarrow_leases.get(ctx.task_entity).is_err() {

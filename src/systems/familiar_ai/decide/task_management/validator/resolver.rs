@@ -75,7 +75,7 @@ pub fn resolve_haul_to_stockpile_inputs(
             .incoming_deliveries_query
             .get(req.anchor)
             .ok()
-            .map(|inc: &crate::relationships::IncomingDeliveries| inc.len())
+            .map(|(_, inc)| inc.len())
             .unwrap_or(0);
         let shadow_incoming = shadow.destination_reserved_total(req.anchor);
         let effective_free = stock
@@ -101,7 +101,7 @@ pub fn resolve_haul_to_stockpile_inputs(
                     .incoming_deliveries_query
                     .get(cell)
                     .ok()
-                    .map(|inc: &crate::relationships::IncomingDeliveries| inc.len())
+                .map(|(_, inc)| inc.len())
                     .unwrap_or(0);
                 let shadow_incoming = shadow.destination_reserved_total(cell);
                 let effective_free = stock
@@ -153,7 +153,7 @@ pub fn resolve_gather_water_inputs(
         .reservation
         .incoming_deliveries_query
         .get(tank_entity)
-        .map(|inc| inc.len())
+        .map(|(_, inc)| inc.len())
         .unwrap_or(0);
     if !tank_can_accept_new_bucket(current_water, incoming_buckets, tank_stock.capacity) {
         return None;

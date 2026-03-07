@@ -4,7 +4,10 @@ mod members;
 use crate::relationships::ManagedTasks;
 use crate::systems::command::TaskArea;
 use crate::systems::familiar_ai::decide::task_delegation::ReachabilityCacheKey;
-use crate::systems::familiar_ai::decide::task_management::ReservationShadow;
+use crate::systems::familiar_ai::decide::task_management::{
+    IncomingDeliverySnapshot, ReservationShadow,
+};
+use crate::systems::logistics::TileSiteIndex;
 use crate::systems::spatial::{DesignationSpatialGrid, ResourceSpatialGrid, TransportRequestSpatialGrid};
 use crate::world::map::WorldMap;
 use crate::world::pathfinding::PathfindingContext;
@@ -37,6 +40,8 @@ impl TaskManager {
         world_map: &WorldMap,
         pf_context: &mut PathfindingContext,
         reservation_shadow: &mut ReservationShadow,
+        tile_site_index: &TileSiteIndex,
+        incoming_snapshot: &IncomingDeliverySnapshot,
         reachability_cache: &mut HashMap<ReachabilityCacheKey, bool>,
     ) -> Option<Entity> {
         let idle_members = collect_idle_members(squad, fatigue_threshold, q_souls);
@@ -56,6 +61,8 @@ impl TaskManager {
             world_map,
             pf_context,
             reservation_shadow,
+            tile_site_index,
+            incoming_snapshot,
             reachability_cache,
         )
     }

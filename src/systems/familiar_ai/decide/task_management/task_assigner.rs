@@ -6,6 +6,7 @@ use crate::entities::damned_soul::IdleBehavior;
 use crate::systems::command::TaskArea;
 use crate::systems::familiar_ai::FamiliarSoulQuery;
 use crate::systems::logistics::ResourceType;
+use crate::systems::logistics::TileSiteIndex;
 
 use bevy::prelude::*;
 use std::collections::HashMap;
@@ -104,6 +105,8 @@ pub struct AssignTaskContext<'a> {
     pub fatigue_threshold: f32,
     pub task_area_opt: Option<&'a TaskArea>,
     pub resource_grid: &'a crate::systems::spatial::ResourceSpatialGrid,
+    pub tile_site_index: &'a TileSiteIndex,
+    pub incoming_snapshot: &'a crate::systems::familiar_ai::decide::task_management::IncomingDeliverySnapshot,
 }
 
 /// ワーカーにタスクを割り当てる

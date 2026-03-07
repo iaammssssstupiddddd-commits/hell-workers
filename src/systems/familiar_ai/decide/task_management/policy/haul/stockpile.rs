@@ -28,8 +28,10 @@ pub fn assign_haul_to_stockpile(
     else {
         return false;
     };
+    let demand_context =
+        demand::DemandReadContext::new(queries, shadow, ctx.tile_site_index, ctx.incoming_snapshot);
     let remaining_capacity =
-        demand::compute_remaining_stockpile_capacity(stockpile, resource_type, queries, shadow);
+        demand::compute_remaining_stockpile_capacity(stockpile, resource_type, &demand_context);
     if remaining_capacity == 0 {
         return false;
     }

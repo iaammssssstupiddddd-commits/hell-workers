@@ -8,12 +8,17 @@ use crate::systems::spatial::{
     update_spatial_grid_system, update_stockpile_spatial_grid_system,
     update_transport_request_spatial_grid_system,
 };
+use crate::systems::logistics::{
+    sync_floor_tile_site_index_system, sync_removed_floor_tile_site_index_system,
+    sync_removed_wall_tile_site_index_system, sync_wall_tile_site_index_system, TileSiteIndex,
+};
 use bevy::prelude::*;
 
 pub struct SpatialPlugin;
 
 impl Plugin for SpatialPlugin {
     fn build(&self, app: &mut App) {
+        app.init_resource::<TileSiteIndex>();
         app.add_systems(
             Update,
             (
@@ -24,6 +29,10 @@ impl Plugin for SpatialPlugin {
                 update_gathering_spot_spatial_grid_system,
                 update_blueprint_spatial_grid_system,
                 update_floor_construction_spatial_grid_system,
+                sync_floor_tile_site_index_system,
+                sync_removed_floor_tile_site_index_system,
+                sync_wall_tile_site_index_system,
+                sync_removed_wall_tile_site_index_system,
                 update_stockpile_spatial_grid_system,
                 update_transport_request_spatial_grid_system,
             )
