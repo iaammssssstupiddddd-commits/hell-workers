@@ -2,7 +2,7 @@
 
 use super::*;
 use crate::assets::GameAssets;
-use crate::constants::*;
+use hw_core::constants::*;
 use crate::entities::{spawn_args, spawn_position};
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
 use crate::world::map::{RIVER_X_MAX, RIVER_X_MIN, RIVER_Y_MIN, WorldMap};

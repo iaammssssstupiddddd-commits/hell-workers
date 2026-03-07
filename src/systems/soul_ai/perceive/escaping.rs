@@ -4,7 +4,7 @@
 
 use bevy::prelude::*;
 
-use crate::constants::*;
+use hw_core::constants::*;
 use crate::entities::familiar::Familiar;
 use crate::systems::soul_ai::helpers::gathering::GatheringSpot;
 use crate::systems::spatial::{FamiliarSpatialGrid, SpatialGridOps};

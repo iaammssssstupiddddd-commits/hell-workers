@@ -4,7 +4,7 @@
 //! 優先度: Grass(3) > Dirt(2) > Sand(1) > River(0)
 
 use crate::assets::GameAssets;
-use crate::constants::*;
+use hw_core::constants::*;
 use bevy::prelude::*;
 use std::f32::consts::PI;
 

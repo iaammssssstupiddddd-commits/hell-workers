@@ -6,7 +6,7 @@ mod placement;
 
 use crate::assets::GameAssets;
 use crate::systems::world::zones::{Site, Yard};
-use crate::game_state::{BuildContext, CompanionParentKind, CompanionPlacementKind, CompanionPlacementState};
+use crate::app_contexts::{BuildContext, CompanionParentKind, CompanionPlacementKind, CompanionPlacementState};
 use crate::interface::camera::MainCamera;
 use crate::interface::ui::UiInputState;
 use crate::systems::jobs::{Blueprint, Building, BuildingType};

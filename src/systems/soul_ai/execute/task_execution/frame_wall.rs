@@ -1,6 +1,6 @@
 //! Wall tile framing task execution
 
-use crate::constants::{WALL_FRAME_DURATION_SECS, WALL_WOOD_PER_TILE};
+use hw_core::constants::{WALL_FRAME_DURATION_SECS, WALL_WOOD_PER_TILE};
 use crate::relationships::WorkingOn;
 use crate::systems::jobs::wall_construction::WallTileState;
 use crate::systems::soul_ai::execute::task_execution::{

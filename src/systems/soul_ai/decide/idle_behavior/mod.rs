@@ -12,7 +12,7 @@ use std::collections::HashMap;
 
 use bevy::prelude::*;
 
-use crate::constants::*;
+use hw_core::constants::*;
 use crate::entities::damned_soul::IdleBehavior;
 use crate::events::{IdleBehaviorOperation, IdleBehaviorRequest};
 use crate::relationships::RestAreaReservations;

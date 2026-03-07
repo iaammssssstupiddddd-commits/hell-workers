@@ -1,4 +1,4 @@
-use crate::game_state::TaskContext;
+use crate::app_contexts::TaskContext;
 use crate::interface::ui::components::{
     EntityListScrollHint, FamiliarListItem, SoulListItem, UiScrollArea, UnassignedFolded,
     UnassignedSectionArrowIcon, UnassignedSoulContent, UnassignedSoulSection,

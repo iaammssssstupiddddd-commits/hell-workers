@@ -1,5 +1,5 @@
 use crate::assets::GameAssets;
-use crate::game_state::{CompanionPlacementKind, CompanionPlacementState};
+use crate::app_contexts::{CompanionPlacementKind, CompanionPlacementState};
 use crate::systems::jobs::{Blueprint, Building};
 use crate::systems::world::zones::{Site, Yard};
 use crate::world::map::WorldMap;

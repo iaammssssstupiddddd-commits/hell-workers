@@ -1,7 +1,7 @@
 use super::{DesignationIndicator, TaskMode};
-use crate::constants::TILE_SIZE;
+use hw_core::constants::TILE_SIZE;
 use crate::entities::familiar::{ActiveCommand, Familiar, FamiliarCommand};
-use crate::game_state::TaskContext;
+use crate::app_contexts::TaskContext;
 use crate::systems::jobs::{Designation, WorkType};
 use bevy::prelude::*;
 

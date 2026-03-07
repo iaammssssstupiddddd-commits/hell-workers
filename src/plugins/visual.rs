@@ -1,7 +1,7 @@
 //! ビジュアル関連のプラグイン
 
 use crate::entities::familiar::{familiar_animation_system, update_familiar_range_indicator};
-use crate::game_state::PlayMode;
+use hw_core::game_state::PlayMode;
 use crate::systems::GameSystemSet;
 use crate::systems::command::{
     area_edit_handles_visual_system, area_selection_indicator_system,
@@ -187,10 +187,10 @@ impl Plugin for VisualPlugin {
             )
                 .in_set(GameSystemSet::Visual)
                 .run_if(
-                    |state: Res<State<crate::game_state::PlayMode>>| match state.get() {
-                        crate::game_state::PlayMode::Normal
-                        | crate::game_state::PlayMode::BuildingPlace
-                        | crate::game_state::PlayMode::TaskDesignation => true,
+                    |state: Res<State<hw_core::game_state::PlayMode>>| match state.get() {
+                        hw_core::game_state::PlayMode::Normal
+                        | hw_core::game_state::PlayMode::BuildingPlace
+                        | hw_core::game_state::PlayMode::TaskDesignation => true,
                         _ => false,
                     },
                 ),

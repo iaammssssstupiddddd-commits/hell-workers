@@ -2,7 +2,8 @@ use bevy::prelude::*;
 
 use crate::entities::familiar::{Familiar, FamiliarOperation};
 use crate::events::FamiliarOperationMaxSoulChangedEvent;
-use crate::game_state::{BuildContext, PlayMode, TaskContext, ZoneContext};
+use hw_core::game_state::{PlayMode};
+use crate::app_contexts::{BuildContext, TaskContext, ZoneContext};
 use crate::interface::ui::InfoPanelPinState;
 use crate::interface::ui::components::{MenuAction, MenuState, OperationDialog};
 use crate::systems::command::TaskArea;

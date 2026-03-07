@@ -1,6 +1,6 @@
 //! Wall construction visual feedback
 
-use crate::constants::{TILE_SIZE, Z_BAR_BG};
+use hw_core::constants::{TILE_SIZE, Z_BAR_BG};
 use crate::systems::jobs::wall_construction::{
     WallConstructionPhase, WallConstructionSite, WallTileBlueprint, WallTileState,
 };

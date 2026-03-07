@@ -3,7 +3,7 @@ use super::geometry::{area_from_center_and_size, hotkey_slot_index};
 use super::state::{AreaEditClipboard, AreaEditHistory, AreaEditPresets};
 use crate::entities::damned_soul::Destination;
 use crate::entities::familiar::{ActiveCommand, Familiar};
-use crate::game_state::TaskContext;
+use crate::app_contexts::TaskContext;
 use crate::interface::selection::SelectedEntity;
 use crate::systems::command::{TaskArea, TaskMode};
 use crate::systems::world::zones::Site;

@@ -5,7 +5,7 @@ use bevy::prelude::*;
 use crate::systems::jobs::floor_construction::FloorTileBlueprint;
 use crate::systems::logistics::ResourceType;
 
-use crate::constants::{FLOOR_BONES_PER_TILE, FLOOR_MUD_PER_TILE};
+use hw_core::constants::{FLOOR_BONES_PER_TILE, FLOOR_MUD_PER_TILE};
 
 /// Floor construction site の特定リソースに対する基礎需要（incoming控除前）を返す。
 ///

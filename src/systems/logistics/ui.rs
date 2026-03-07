@@ -1,5 +1,5 @@
 use super::types::ResourceItem;
-use crate::constants::*;
+use hw_core::constants::*;
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
 use std::collections::HashMap;

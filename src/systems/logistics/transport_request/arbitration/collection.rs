@@ -3,7 +3,7 @@ use std::collections::HashSet;
 
 use bevy::prelude::*;
 
-use crate::constants::{
+use hw_core::constants::{
     SINGLE_BATCH_WAIT_SECS, TILE_SIZE, WHEELBARROW_ARBITRATION_TOP_K,
     WHEELBARROW_PREFERRED_MIN_BATCH_SIZE,
 };

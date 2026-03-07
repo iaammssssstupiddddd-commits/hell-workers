@@ -5,7 +5,7 @@
 
 use bevy::prelude::*;
 
-use crate::constants::TILE_SIZE;
+use hw_core::constants::TILE_SIZE;
 use crate::entities::familiar::{ActiveCommand, FamiliarCommand};
 use crate::relationships::TaskWorkers;
 use crate::systems::command::TaskArea;

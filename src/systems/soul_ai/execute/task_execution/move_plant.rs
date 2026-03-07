@@ -1,4 +1,4 @@
-use crate::constants::TILE_SIZE;
+use hw_core::constants::TILE_SIZE;
 use crate::relationships::WorkingOn;
 use crate::systems::jobs::{Building, BuildingType, Designation};
 use crate::systems::soul_ai::execute::task_execution::{

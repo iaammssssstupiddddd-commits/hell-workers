@@ -1,4 +1,4 @@
-use crate::constants::{
+use hw_core::constants::{
     DREAM_UI_MERGE_DURATION, DREAM_UI_MERGE_MAX_COUNT, DREAM_UI_MERGE_MAX_MASS,
     DREAM_UI_MERGE_RADIUS,
 };

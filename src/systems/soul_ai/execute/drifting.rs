@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use rand::Rng;
 
-use crate::constants::*;
+use hw_core::constants::*;
 use crate::entities::damned_soul::spawn::PopulationManager;
 use crate::entities::damned_soul::{DriftEdge, DriftPhase, DriftingState, IdleBehavior, IdleState};
 use crate::relationships::CommandedBy;

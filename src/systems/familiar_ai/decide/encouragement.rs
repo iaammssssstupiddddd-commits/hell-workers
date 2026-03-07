@@ -1,6 +1,6 @@
 //! 使い魔による激励システム（Decide）
 
-use crate::constants::*;
+use hw_core::constants::*;
 use crate::entities::damned_soul::DamnedSoul;
 use crate::entities::familiar::{ActiveCommand, Familiar, FamiliarCommand};
 use crate::systems::familiar_ai::FamiliarAiState;

@@ -1,7 +1,7 @@
 //! 収集タスクの実行処理
 
 use crate::assets::GameAssets;
-use crate::constants::*;
+use hw_core::constants::*;
 use crate::systems::jobs::{Designation, WorkType};
 use crate::systems::logistics::ResourceItem;
 use crate::systems::soul_ai::execute::task_execution::{
@@ -91,7 +91,7 @@ pub fn handle_gather_task(
 
                 // 進行度を更新（岩は2倍の時間がかかる）
                 let speed = if rock.is_some() {
-                    GATHER_SPEED_BASE * crate::constants::GATHER_SPEED_ROCK_MULTIPLIER
+                    GATHER_SPEED_BASE * hw_core::constants::GATHER_SPEED_ROCK_MULTIPLIER
                 } else {
                     GATHER_SPEED_BASE
                 };
@@ -100,7 +100,7 @@ pub fn handle_gather_task(
                 if progress >= 1.0 {
                     if tree.is_some() {
                         // 木1本 → Wood × WOOD_DROP_AMOUNT
-                        for i in 0..crate::constants::WOOD_DROP_AMOUNT {
+                        for i in 0..hw_core::constants::WOOD_DROP_AMOUNT {
                             // タイルサイズ 32 なので、中心から ±16 以内に収める。余裕を見て ±12
                             let offset = Vec3::new((i as f32 - 2.0) * 6.0, 0.0, 0.0);
                             commands.spawn((
@@ -116,7 +116,7 @@ pub fn handle_gather_task(
                         info!(
                             "TASK_EXEC: Soul {:?} chopped a tree (dropped {} wood)",
                             ctx.soul_entity,
-                            crate::constants::WOOD_DROP_AMOUNT
+                            hw_core::constants::WOOD_DROP_AMOUNT
                         );
 
                         // 障害物解除
@@ -152,7 +152,7 @@ pub fn handle_gather_task(
                             .insert(crate::systems::visual::fade::FadeOut { speed: 1.0 });
                     } else if rock.is_some() {
                         // 岩1つ → Rock × ROCK_DROP_AMOUNT
-                        for i in 0..crate::constants::ROCK_DROP_AMOUNT {
+                        for i in 0..hw_core::constants::ROCK_DROP_AMOUNT {
                             // タイルサイズ 32 なので、中心から ±16 以内に収める。余裕を見て ±12
                             let offset = Vec3::new(
                                 ((i % 5) as f32 - 2.0) * 6.0,
@@ -172,7 +172,7 @@ pub fn handle_gather_task(
                         info!(
                             "TASK_EXEC: Soul {:?} mined a rock (dropped {} rock)",
                             ctx.soul_entity,
-                            crate::constants::ROCK_DROP_AMOUNT
+                            hw_core::constants::ROCK_DROP_AMOUNT
                         );
                         commands
                             .entity(ctx.soul_entity)

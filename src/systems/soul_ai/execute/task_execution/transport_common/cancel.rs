@@ -23,7 +23,7 @@ pub fn cancel_haul_to_stockpile(
         let soul_pos = ctx.soul_pos();
         commands.entity(item).try_insert((
             Visibility::Visible,
-            Transform::from_xyz(soul_pos.x, soul_pos.y, crate::constants::Z_ITEM_PICKUP),
+            Transform::from_xyz(soul_pos.x, soul_pos.y, hw_core::constants::Z_ITEM_PICKUP),
         ));
         ctx.inventory.0 = None;
     }
@@ -47,7 +47,7 @@ pub fn cancel_haul_to_blueprint(
         let soul_pos = ctx.soul_pos();
         commands.entity(item).try_insert((
             Visibility::Visible,
-            Transform::from_xyz(soul_pos.x, soul_pos.y, crate::constants::Z_ITEM_PICKUP),
+            Transform::from_xyz(soul_pos.x, soul_pos.y, hw_core::constants::Z_ITEM_PICKUP),
         ));
         ctx.inventory.0 = None;
     }
@@ -86,7 +86,7 @@ pub fn drop_bucket_with_cleanup(commands: &mut Commands, bucket_entity: Entity, 
     let drop_pos = WorldMap::grid_to_world(drop_grid.0, drop_grid.1);
     commands.entity(bucket_entity).try_insert((
         Visibility::Visible,
-        Transform::from_xyz(drop_pos.x, drop_pos.y, crate::constants::Z_ITEM_PICKUP),
+        Transform::from_xyz(drop_pos.x, drop_pos.y, hw_core::constants::Z_ITEM_PICKUP),
     ));
     commands
         .entity(bucket_entity)

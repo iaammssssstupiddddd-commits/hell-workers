@@ -1,6 +1,6 @@
 //! 会話イベント起点の表情オーバーレイ
 
-use crate::constants::*;
+use hw_core::constants::*;
 use crate::entities::damned_soul::{
     ConversationExpression, ConversationExpressionKind, DamnedSoul,
 };

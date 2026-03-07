@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use crate::constants::*;
+use hw_core::constants::*;
 use crate::entities::damned_soul::{DamnedSoul, IdleBehavior, IdleState};
 use crate::events::OnExhausted;
 use crate::relationships::CommandedBy;

@@ -4,7 +4,7 @@
 
 use bevy::prelude::*;
 
-use crate::constants::MUD_MIXER_REFINE_PRIORITY;
+use hw_core::constants::MUD_MIXER_REFINE_PRIORITY;
 use crate::entities::familiar::{ActiveCommand, FamiliarCommand};
 use crate::events::{DesignationOp, DesignationRequest};
 use crate::relationships::StoredItems;

@@ -6,7 +6,7 @@
 use bevy::prelude::*;
 use std::collections::{HashMap, HashSet};
 
-use crate::constants::TILE_SIZE;
+use hw_core::constants::TILE_SIZE;
 use crate::relationships::StoredItems;
 use crate::systems::logistics::{BucketStorage, Stockpile};
 use crate::systems::world::zones::Yard;

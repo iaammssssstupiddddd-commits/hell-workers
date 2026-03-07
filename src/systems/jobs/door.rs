@@ -1,5 +1,5 @@
 use crate::assets::GameAssets;
-use crate::constants::DOOR_CLOSE_DELAY_SECS;
+use hw_core::constants::DOOR_CLOSE_DELAY_SECS;
 use crate::entities::damned_soul::{DamnedSoul, Path};
 use crate::world::map::WorldMap;
 use bevy::prelude::*;

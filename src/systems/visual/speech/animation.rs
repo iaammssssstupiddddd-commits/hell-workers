@@ -1,5 +1,5 @@
 use super::components::*;
-use crate::constants::*;
+use hw_core::constants::*;
 use bevy::prelude::*;
 
 /// 吹き出しのアニメーション処理

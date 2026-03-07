@@ -1,6 +1,6 @@
 //! 建築中のワーカーインジケータ（ハンマーアイコン）
 
-use crate::constants::*;
+use hw_core::constants::*;
 use bevy::prelude::ChildOf;
 use bevy::prelude::*;
 

@@ -2,7 +2,7 @@
 
 use bevy::prelude::*;
 
-use crate::constants::Z_AURA;
+use hw_core::constants::Z_AURA;
 
 use super::components::*;
 

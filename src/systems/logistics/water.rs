@@ -1,4 +1,4 @@
-use crate::constants::BUCKET_CAPACITY;
+use hw_core::constants::BUCKET_CAPACITY;
 
 pub fn projected_tank_water(current_water: usize, incoming_bucket_deliveries: usize) -> usize {
     current_water.saturating_add(

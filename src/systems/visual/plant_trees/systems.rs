@@ -2,7 +2,7 @@ use super::components::{
     PlantTreeLifeSpark, PlantTreeMagicCircle, PlantTreeVisualPhase, PlantTreeVisualState,
 };
 use crate::assets::GameAssets;
-use crate::constants::*;
+use hw_core::constants::*;
 use bevy::prelude::*;
 use rand::Rng;
 

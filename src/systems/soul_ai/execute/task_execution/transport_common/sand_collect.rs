@@ -1,4 +1,4 @@
-use crate::constants::Z_ITEM_PICKUP;
+use hw_core::constants::Z_ITEM_PICKUP;
 use crate::systems::logistics::{ResourceItem, ResourceType};
 use bevy::prelude::*;
 

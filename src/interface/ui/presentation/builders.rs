@@ -2,7 +2,7 @@ use super::{
     EntityInspectionQuery, InspectionAccumulator, SoulInspectionFields, format_escape_info,
     format_inventory_str, format_task_str,
 };
-use crate::constants::{DREAM_DRAIN_RATE_REST, DREAM_MAX, MUD_MIXER_MUD_CAPACITY};
+use hw_core::constants::{DREAM_DRAIN_RATE_REST, DREAM_MAX, MUD_MIXER_MUD_CAPACITY};
 use bevy::prelude::*;
 
 impl EntityInspectionQuery<'_, '_> {

@@ -4,7 +4,7 @@ use crate::systems::familiar_ai::FamiliarSoulQuery;
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
 use bevy::prelude::*;
 
-use crate::constants::TILE_SIZE;
+use hw_core::constants::TILE_SIZE;
 use crate::systems::command::TaskArea;
 
 /// 監視状態の判定/適用に必要なコンテキスト

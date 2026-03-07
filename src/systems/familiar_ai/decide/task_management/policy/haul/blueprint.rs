@@ -1,6 +1,6 @@
 //! Blueprint 向け運搬タスクの割り当て
 
-use crate::constants::WHEELBARROW_CAPACITY;
+use hw_core::constants::WHEELBARROW_CAPACITY;
 use crate::systems::command::TaskArea;
 use crate::systems::familiar_ai::decide::task_management::{AssignTaskContext, ReservationShadow};
 use crate::systems::logistics::ResourceType;

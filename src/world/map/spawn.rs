@@ -1,7 +1,7 @@
 //! マップスポーン
 
 use crate::assets::GameAssets;
-use crate::constants::*;
+use hw_core::constants::*;
 use bevy::prelude::*;
 use std::collections::HashSet;
 

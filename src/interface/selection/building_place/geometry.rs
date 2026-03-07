@@ -1,4 +1,4 @@
-use crate::constants::TILE_SIZE;
+use hw_core::constants::TILE_SIZE;
 use crate::systems::jobs::BuildingType;
 use crate::world::map::{RIVER_Y_MIN, WorldMap};
 use bevy::prelude::Vec2;

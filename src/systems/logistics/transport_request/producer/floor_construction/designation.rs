@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use crate::constants::FLOOR_CONSTRUCTION_PRIORITY;
+use hw_core::constants::FLOOR_CONSTRUCTION_PRIORITY;
 use crate::relationships::TaskWorkers;
 use crate::systems::jobs::floor_construction::{FloorTileBlueprint, FloorTileState};
 use crate::systems::jobs::{Designation, Priority, TaskSlots, WorkType};

@@ -3,7 +3,7 @@
 mod fallback;
 mod reuse;
 
-use crate::constants::MAX_PATHFINDS_PER_FRAME;
+use hw_core::constants::MAX_PATHFINDS_PER_FRAME;
 use crate::entities::damned_soul::{DamnedSoul, Destination, IdleBehavior, IdleState, Path};
 use crate::relationships::RestAreaReservedFor;
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;

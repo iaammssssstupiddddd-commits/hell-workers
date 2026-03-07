@@ -5,7 +5,7 @@
 use super::components::{DreamGainPopup, DreamVisualState};
 use super::dream_bubble_material::DreamBubbleUiMaterial;
 use crate::assets::GameAssets;
-use crate::constants::*;
+use hw_core::constants::*;
 use crate::entities::damned_soul::{
     DamnedSoul, DreamState, GatheringBehavior, IdleBehavior, IdleState,
 };

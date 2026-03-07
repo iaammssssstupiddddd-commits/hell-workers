@@ -1,5 +1,6 @@
-use crate::constants::TILE_SIZE;
-use crate::game_state::{CompanionPlacementKind, CompanionPlacementState, MoveContext, MovePlacementState, PlayMode};
+use hw_core::constants::TILE_SIZE;
+use hw_core::game_state::{PlayMode};
+use crate::app_contexts::{CompanionPlacementKind, CompanionPlacementState, MoveContext, MovePlacementState};
 use crate::interface::camera::MainCamera;
 use crate::systems::jobs::{Building, BuildingType};
 use crate::systems::visual::placement_ghost::{PlacementGhost, PlacementPartnerGhost};
@@ -125,11 +126,11 @@ pub fn building_move_preview_system(
     let (texture, size) = match building.kind {
         BuildingType::Tank => (
             game_assets.tank_empty.clone(),
-            Vec2::splat(crate::constants::TILE_SIZE * 2.0),
+            Vec2::splat(hw_core::constants::TILE_SIZE * 2.0),
         ),
         BuildingType::MudMixer => (
             game_assets.mud_mixer.clone(),
-            Vec2::splat(crate::constants::TILE_SIZE * 2.0),
+            Vec2::splat(hw_core::constants::TILE_SIZE * 2.0),
         ),
         _ => return,
     };
@@ -178,7 +179,7 @@ fn upsert_move_ghost(
 ) {
     if let Some((_, mut ghost_transform, mut sprite)) = q_ghost.iter_mut().next() {
         ghost_transform.translation =
-            Vec3::new(draw_pos.x, draw_pos.y, crate::constants::Z_SELECTION);
+            Vec3::new(draw_pos.x, draw_pos.y, hw_core::constants::Z_SELECTION);
         sprite.image = texture;
         sprite.custom_size = Some(size);
         sprite.color = color;
@@ -193,7 +194,7 @@ fn upsert_move_ghost(
             color,
             ..default()
         },
-        Transform::from_xyz(draw_pos.x, draw_pos.y, crate::constants::Z_SELECTION),
+        Transform::from_xyz(draw_pos.x, draw_pos.y, hw_core::constants::Z_SELECTION),
     ));
 }
 
@@ -210,7 +211,7 @@ fn upsert_partner_ghost(
 ) {
     if let Some((_, mut transform, mut sprite)) = q_partner_ghost.iter_mut().next() {
         transform.translation =
-            Vec3::new(draw_pos.x, draw_pos.y, crate::constants::Z_SELECTION - 0.001);
+            Vec3::new(draw_pos.x, draw_pos.y, hw_core::constants::Z_SELECTION - 0.001);
         sprite.image = texture;
         sprite.custom_size = Some(size);
         sprite.color = color;
@@ -228,7 +229,7 @@ fn upsert_partner_ghost(
         Transform::from_xyz(
             draw_pos.x,
             draw_pos.y,
-            crate::constants::Z_SELECTION - 0.001,
+            hw_core::constants::Z_SELECTION - 0.001,
         ),
     ));
 }

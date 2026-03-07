@@ -1,7 +1,7 @@
 //! ソウルのイベントオブザーバー（ハンドラ）
 
 use super::*;
-use crate::constants::*;
+use hw_core::constants::*;
 use crate::events::{
     OnExhausted, OnSoulRecruited, OnStressBreakdown, OnTaskAssigned, OnTaskCompleted,
 };

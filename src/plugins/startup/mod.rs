@@ -13,10 +13,7 @@ use perf_scenario::{
 use crate::assets::GameAssets;
 use crate::entities::damned_soul::{DamnedSoulSpawnEvent, spawn_damned_souls};
 use crate::entities::familiar::FamiliarSpawnEvent;
-use crate::game_state::{
-    BuildContext, CompanionPlacementState, MoveContext, MovePlacementState, TaskContext,
-    ZoneContext,
-};
+use crate::app_contexts::{BuildContext, CompanionPlacementState, MoveContext, MovePlacementState, TaskContext, ZoneContext};
 use crate::interface::camera::{MainCamera, PanCamera};
 use crate::interface::selection::{HoveredEntity, SelectedEntity};
 use crate::interface::ui::{MenuState, components::ArchitectCategoryState, setup_ui};

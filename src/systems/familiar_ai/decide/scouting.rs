@@ -1,4 +1,4 @@
-use crate::constants::TILE_SIZE;
+use hw_core::constants::TILE_SIZE;
 use crate::entities::damned_soul::{DamnedSoul, Destination, IdleState, Path, StressBreakdown};
 use crate::events::SquadManagementRequest;
 use crate::relationships::CommandedBy;

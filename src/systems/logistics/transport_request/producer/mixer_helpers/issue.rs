@@ -151,7 +151,7 @@ pub(crate) fn find_available_sand_tile(
         let (x1, y1) = WorldMap::world_to_grid(area.max);
         (x0.min(x1), x0.max(x1), y0.min(y1), y0.max(y1))
     } else {
-        (0, crate::constants::MAP_WIDTH - 1, 0, crate::constants::MAP_HEIGHT - 1)
+        (0, hw_core::constants::MAP_WIDTH - 1, 0, hw_core::constants::MAP_HEIGHT - 1)
     };
 
     let mut best: Option<(Entity, f32)> = None;

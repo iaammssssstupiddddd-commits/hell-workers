@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use bevy::prelude::*;
 
-use crate::constants::{BUCKET_CAPACITY, MUD_MIXER_CAPACITY};
+use hw_core::constants::{BUCKET_CAPACITY, MUD_MIXER_CAPACITY};
 use crate::systems::familiar_ai::perceive::resource_sync::SharedResourceCache;
 use crate::relationships::TaskWorkers;
 use crate::systems::jobs::MudMixerStorage;

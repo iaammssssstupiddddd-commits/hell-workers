@@ -97,7 +97,7 @@ fn normalize_worker_idle_state(
             .entity(worker_entity)
             .try_remove::<crate::relationships::RestingIn>()
             .insert(RestAreaCooldown {
-                remaining_secs: crate::constants::REST_AREA_RECRUIT_COOLDOWN_SECS,
+                remaining_secs: hw_core::constants::REST_AREA_RECRUIT_COOLDOWN_SECS,
             });
         if let Ok(mut visibility) = q_visibility.get_mut(worker_entity) {
             *visibility = Visibility::Visible;

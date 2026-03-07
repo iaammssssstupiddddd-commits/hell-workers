@@ -1,6 +1,6 @@
 use super::{TaskArea, TaskMode};
 use crate::entities::familiar::Familiar;
-use crate::game_state::TaskContext;
+use crate::app_contexts::TaskContext;
 use crate::interface::camera::MainCamera;
 use crate::interface::selection::SelectedEntity;
 use crate::interface::ui::UiInputState;

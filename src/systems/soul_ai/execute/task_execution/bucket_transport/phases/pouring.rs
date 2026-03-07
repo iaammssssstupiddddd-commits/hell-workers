@@ -1,6 +1,6 @@
 //! Pouring phase: バケツの水をデスティネーション（タンク or ミキサー）に注ぐ
 
-use crate::constants::{BUCKET_CAPACITY, MUD_MIXER_CAPACITY, TILE_SIZE};
+use hw_core::constants::{BUCKET_CAPACITY, MUD_MIXER_CAPACITY, TILE_SIZE};
 use crate::systems::logistics::{ResourceItem, ResourceType};
 use crate::systems::soul_ai::execute::task_execution::common::{
     clear_task_and_path, drop_item, update_destination_if_needed,

@@ -1,4 +1,4 @@
-use crate::constants::FAMILIAR_TASK_DELEGATION_INTERVAL;
+use hw_core::constants::FAMILIAR_TASK_DELEGATION_INTERVAL;
 use crate::systems::GameSystemSet;
 use crate::systems::soul_ai::scheduling::FamiliarAiSystemSet;
 use crate::systems::spatial::{DesignationSpatialGrid, TransportRequestSpatialGrid};

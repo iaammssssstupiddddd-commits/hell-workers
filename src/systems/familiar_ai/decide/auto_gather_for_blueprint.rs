@@ -1,4 +1,4 @@
-use crate::constants::BLUEPRINT_AUTO_GATHER_INTERVAL_SECS;
+use hw_core::constants::BLUEPRINT_AUTO_GATHER_INTERVAL_SECS;
 use crate::entities::familiar::{ActiveCommand, FamiliarCommand};
 use crate::relationships::{LoadedIn, ManagedBy, StoredIn, TaskWorkers};
 use crate::systems::command::TaskArea;

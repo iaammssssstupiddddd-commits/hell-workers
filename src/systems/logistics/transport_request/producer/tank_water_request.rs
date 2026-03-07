@@ -2,7 +2,7 @@
 //!
 //! Monitors tank storage levels and issues water gathering tasks when tanks are low.
 
-use crate::constants::BUCKET_CAPACITY;
+use hw_core::constants::BUCKET_CAPACITY;
 use bevy::prelude::*;
 
 use crate::entities::familiar::{ActiveCommand, FamiliarCommand};

@@ -1,7 +1,7 @@
 use super::components::*;
 use super::events::*;
 use crate::assets::GameAssets;
-use crate::constants::*;
+use hw_core::constants::*;
 use crate::entities::damned_soul::{DamnedSoul, IdleBehavior, IdleState};
 use crate::systems::spatial::grid::SpatialGridOps;
 use crate::systems::spatial::soul::SpatialGrid;

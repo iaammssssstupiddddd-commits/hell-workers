@@ -4,7 +4,7 @@ use bevy::prelude::*;
 use rand::Rng;
 
 use crate::assets::GameAssets;
-use crate::constants::*;
+use hw_core::constants::*;
 use crate::entities::damned_soul::{Destination, Path};
 use crate::entities::spawn_args;
 use crate::entities::spawn_position;
