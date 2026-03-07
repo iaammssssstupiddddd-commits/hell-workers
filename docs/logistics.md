@@ -402,3 +402,10 @@ Stockpile / Blueprint / Tank などへの搬入予約は、Bevy の Relationship
   - 同一ソースへの二重割り当てがない
   - 需要 0 時に request が休止/消滅する
   - anchor 消失時に request が cleanup される
+
+### 8.7 建設系搬入先の基礎需要は logistics 層へ統一
+
+- `floor_construction.rs` / `wall_construction.rs` / `provisional_wall.rs` / `ground_resources.rs` に、建設系搬入先の
+  **基礎需要計算**と**地面資材カウント**を集約する。
+- 割り当て時（`policy/haul/demand.rs`）は、`IncomingDeliveries` / `ReservationShadow` の控除を行う。
+- 実行時（`haul/dropping.rs` / `unloading.rs`）は、同一の基礎需要を参照したうえで「地面上で既に置かれた資材」を控除して受入可否を判定する。
