@@ -18,8 +18,11 @@
 | Document | Notes |
 | --- | --- |
 | [08_visual_update_prompts.md](08_visual_update_prompts.md) | ビジュアル更新プロンプト集 |
+| [destination-validation-unification-proposal-2026-03-07.md](destination-validation-unification-proposal-2026-03-07.md) | 搬入先バリデーション（Floor/Wall/ProvisionalWall）の一元化。3箇所の重複 ~250行を logistics/ 共通モジュールに集約 |
 | [soul_spawn_despawn_optimization.md](soul_spawn_despawn_optimization.md) | Soul Spawn/Despawn 最適化提案 |
 | [speech_optimization.md](speech_optimization.md) | スピーチシステム最適化提案 |
+| [think-phase-iteration-optimization-proposal-2026-03-07.md](think-phase-iteration-optimization-proposal-2026-03-07.md) | Think フェーズのタイル O(n) スキャン + IncomingDeliveries O(m) ルックアップの最適化 |
+| [water-transport-consolidation-proposal-2026-03-07.md](water-transport-consolidation-proposal-2026-03-07.md) | GatherWater / HaulWaterToMixer の統合（20ファイル → 10ファイル、~1000行削減） |
 
 ## アーカイブ提案書一覧 (`docs/proposals/archive`)
 
