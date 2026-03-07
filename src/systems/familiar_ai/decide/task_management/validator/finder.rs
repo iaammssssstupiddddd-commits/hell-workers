@@ -113,7 +113,7 @@ fn find_best_bucket_storage_for_return(
                 .incoming_deliveries_query
                 .get(*stockpile_entity)
                 .ok()
-                .map(|inc: &crate::relationships::IncomingDeliveries| inc.len())
+                .map(|(_, inc)| inc.len())
                 .unwrap_or(0);
             let reserved = incoming;
             (current + reserved) < stockpile.capacity

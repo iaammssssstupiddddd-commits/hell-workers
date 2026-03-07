@@ -2,10 +2,12 @@ use crate::constants::TILE_SIZE;
 use crate::relationships::ManagedTasks;
 use crate::systems::command::TaskArea;
 use crate::systems::familiar_ai::decide::task_delegation::ReachabilityCacheKey;
+use crate::systems::familiar_ai::decide::task_management::IncomingDeliverySnapshot;
 use crate::systems::familiar_ai::decide::task_management::{
     AssignTaskContext, DelegationCandidate, ReservationShadow, ScoredDelegationCandidate,
     assign_task_to_worker, collect_scored_candidates,
 };
+use crate::systems::logistics::TileSiteIndex;
 use crate::systems::spatial::{DesignationSpatialGrid, ResourceSpatialGrid, TransportRequestSpatialGrid};
 use crate::world::map::WorldMap;
 use crate::world::pathfinding::{self, PathfindingContext};
@@ -142,6 +144,8 @@ fn try_assign_from_candidates(
     resource_grid: &ResourceSpatialGrid,
     world_map: &WorldMap,
     pf_context: &mut PathfindingContext,
+    tile_site_index: &TileSiteIndex,
+    incoming_snapshot: &IncomingDeliverySnapshot,
     reservation_shadow: &mut ReservationShadow,
     assigned_tasks: &HashSet<Entity>,
     reachability_cache: &mut HashMap<ReachabilityCacheKey, bool>,
@@ -182,6 +186,8 @@ fn try_assign_from_candidates(
                 fatigue_threshold,
                 task_area_opt,
                 resource_grid,
+                tile_site_index,
+                incoming_snapshot,
             },
             queries,
             q_souls,
@@ -209,6 +215,8 @@ pub(super) fn try_assign_for_workers(
     world_map: &WorldMap,
     pf_context: &mut PathfindingContext,
     reservation_shadow: &mut ReservationShadow,
+    tile_site_index: &TileSiteIndex,
+    incoming_snapshot: &IncomingDeliverySnapshot,
     reachability_cache: &mut HashMap<ReachabilityCacheKey, bool>,
 ) -> Option<Entity> {
     let scored_candidates = collect_scored_candidates(
@@ -260,6 +268,8 @@ pub(super) fn try_assign_for_workers(
             resource_grid,
             world_map,
             pf_context,
+            tile_site_index,
+            incoming_snapshot,
             reservation_shadow,
             &assigned_tasks,
             reachability_cache,
@@ -288,6 +298,8 @@ pub(super) fn try_assign_for_workers(
                 resource_grid,
                 world_map,
                 pf_context,
+                tile_site_index,
+                incoming_snapshot,
                 reservation_shadow,
             &assigned_tasks,
             reachability_cache,

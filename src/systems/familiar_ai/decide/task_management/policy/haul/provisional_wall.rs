@@ -41,7 +41,9 @@ pub fn assign_haul_to_provisional_wall(
     {
         return false;
     }
-    if demand::compute_remaining_provisional_wall_mud(wall_entity, queries, shadow) == 0 {
+    let demand_context =
+        demand::DemandReadContext::new(queries, shadow, ctx.tile_site_index, ctx.incoming_snapshot);
+    if demand::compute_remaining_provisional_wall_mud(wall_entity, &demand_context) == 0 {
         return false;
     }
 

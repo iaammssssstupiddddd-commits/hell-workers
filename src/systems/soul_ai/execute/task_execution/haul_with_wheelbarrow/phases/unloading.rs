@@ -271,7 +271,7 @@ pub fn handle(
                     .incoming_deliveries_query
                     .get(dest_stockpile)
                     .ok()
-                    .map(|inc: &crate::relationships::IncomingDeliveries| inc.len())
+                    .map(|(_, inc)| inc.len())
                     .unwrap_or(0);
                 // `incoming_total` には自分が運んでいるアイテムも含まれるため、
                 // 他タスク分だけを容量判定に使う。
