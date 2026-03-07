@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use crate::constants::*;
+use hw_core::constants::*;
 use crate::entities::damned_soul::DamnedSoul;
 use crate::relationships::{GatheringParticipants, ParticipatingIn};
 use crate::systems::soul_ai::helpers::gathering::*;

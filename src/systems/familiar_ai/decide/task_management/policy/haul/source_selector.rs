@@ -98,13 +98,13 @@ fn nearest_ground_source_with_grid<'w, 's>(
     resource_grid: &ResourceSpatialGrid,
     owner_filter: Option<Option<Entity>>,
 ) -> Option<(Entity, Vec2)> {
-    let max_map_tiles = crate::constants::MAP_WIDTH.max(crate::constants::MAP_HEIGHT) as f32;
+    let max_map_tiles = hw_core::constants::MAP_WIDTH.max(hw_core::constants::MAP_HEIGHT) as f32;
     let search_radii = [
-        crate::constants::TILE_SIZE * 10.0,
-        crate::constants::TILE_SIZE * 20.0,
-        crate::constants::TILE_SIZE * 40.0,
-        crate::constants::TILE_SIZE * 80.0,
-        crate::constants::TILE_SIZE * max_map_tiles,
+        hw_core::constants::TILE_SIZE * 10.0,
+        hw_core::constants::TILE_SIZE * 20.0,
+        hw_core::constants::TILE_SIZE * 40.0,
+        hw_core::constants::TILE_SIZE * 80.0,
+        hw_core::constants::TILE_SIZE * max_map_tiles,
     ];
 
     for radius in search_radii {
@@ -313,7 +313,7 @@ pub fn collect_nearby_items_for_wheelbarrow(
         queries,
         shadow,
         resource_grid,
-        Some(crate::constants::TILE_SIZE * 10.0),
+        Some(hw_core::constants::TILE_SIZE * 10.0),
     )
 }
 
@@ -347,8 +347,8 @@ fn collect_items_for_wheelbarrow_in_radius(
 ) -> Vec<(Entity, Vec2)> {
     mark_source_selector_call();
     let radius = search_radius.unwrap_or(
-        crate::constants::TILE_SIZE
-            * crate::constants::MAP_WIDTH.max(crate::constants::MAP_HEIGHT) as f32,
+        hw_core::constants::TILE_SIZE
+            * hw_core::constants::MAP_WIDTH.max(hw_core::constants::MAP_HEIGHT) as f32,
     );
     let search_radius_sq = radius * radius;
     let mut nearby_entities = Vec::new();

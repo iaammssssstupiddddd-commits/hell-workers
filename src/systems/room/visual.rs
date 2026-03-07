@@ -1,5 +1,5 @@
 use super::components::{Room, RoomOverlayTile};
-use crate::constants::{ROOM_BORDER_COLOR, ROOM_BORDER_THICKNESS, TILE_SIZE, Z_ROOM_OVERLAY};
+use hw_core::constants::{ROOM_BORDER_COLOR, ROOM_BORDER_THICKNESS, TILE_SIZE, Z_ROOM_OVERLAY};
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
 use std::collections::HashSet;

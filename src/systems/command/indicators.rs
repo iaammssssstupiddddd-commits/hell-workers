@@ -2,9 +2,9 @@ use super::{
     AreaEditHandleKind, AreaEditHandleVisual, DesignationIndicator, TaskArea, TaskAreaIndicator,
     TaskMode,
 };
-use crate::constants::TILE_SIZE;
+use hw_core::constants::TILE_SIZE;
 use crate::entities::familiar::Familiar;
-use crate::game_state::TaskContext;
+use crate::app_contexts::TaskContext;
 use crate::interface::selection::SelectedEntity;
 use crate::systems::jobs::Designation;
 use crate::systems::visual::task_area_visual::{TaskAreaMaterial, TaskAreaVisual};

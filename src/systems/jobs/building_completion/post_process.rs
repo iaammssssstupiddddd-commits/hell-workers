@@ -2,7 +2,7 @@ use super::super::{
     Blueprint, BonePile, BridgeMarker, BuildingType, MudMixerStorage, RestArea, SandPile, TaskSlots,
 };
 use crate::assets::GameAssets;
-use crate::constants::{
+use hw_core::constants::{
     MUD_MIXER_CAPACITY, REST_AREA_CAPACITY, TILE_SIZE, WHEELBARROW_CAPACITY, Z_FLOATING_TEXT,
     Z_ITEM_PICKUP,
 };

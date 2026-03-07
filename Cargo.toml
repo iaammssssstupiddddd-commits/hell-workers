@@ -1,9 +1,11 @@
-[package]
-name = "bevy_app"
-version = "0.1.0"
-edition = "2024"
+[workspace]
+resolver = "2"
+members = [
+    ".",
+    "crates/*",
+]
 
-[dependencies]
+[workspace.dependencies]
 bevy = { version = "0.18", default-features = false, features = [
     "2d",
     "experimental_bevy_ui_widgets",
@@ -13,6 +15,16 @@ bevy = { version = "0.18", default-features = false, features = [
     # Windows ネイティブ (x64) では wgpu が DX12/Vulkan を自動選択するため webgl2 は不要
 ] }
 rand = "0.8"
+
+[package]
+name = "bevy_app"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+bevy = { workspace = true }
+rand = { workspace = true }
+hw_core = { path = "crates/hw_core" }
 
 [features]
 default = ["dynamic_linking"]

@@ -16,7 +16,7 @@ use bevy::prelude::*;
 
 const RETURN_REQUEST_PRIORITY: u32 = 0;
 const RETURN_DISTANCE_THRESHOLD_SQ: f32 =
-    (crate::constants::TILE_SIZE * 1.25) * (crate::constants::TILE_SIZE * 1.25);
+    (hw_core::constants::TILE_SIZE * 1.25) * (hw_core::constants::TILE_SIZE * 1.25);
 
 #[derive(Clone, Copy)]
 struct DesiredWheelbarrowRequest {

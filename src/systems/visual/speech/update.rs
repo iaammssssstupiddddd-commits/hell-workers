@@ -1,5 +1,5 @@
 use super::components::*;
-use crate::constants::*;
+use hw_core::constants::*;
 use bevy::prelude::*;
 
 /// 吹き出しの追従およびフェードアウト/削除システム

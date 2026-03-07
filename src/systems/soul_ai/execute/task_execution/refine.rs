@@ -1,7 +1,7 @@
 use super::common::*;
 use super::context::TaskExecutionContext;
 use super::types::{AssignedTask, RefinePhase};
-use crate::constants::*;
+use hw_core::constants::*;
 use crate::systems::jobs::StoredByMixer;
 use crate::systems::logistics::{ResourceItem, ResourceType};
 use crate::world::map::WorldMap;

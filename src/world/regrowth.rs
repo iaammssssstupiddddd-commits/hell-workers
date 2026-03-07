@@ -4,7 +4,7 @@
 //! 初期配置数を超えて再生することはない。
 
 use crate::assets::GameAssets;
-use crate::constants::*;
+use hw_core::constants::*;
 use crate::systems::jobs::Tree;
 use crate::systems::time::GameTime;
 use crate::world::map::WorldMap;

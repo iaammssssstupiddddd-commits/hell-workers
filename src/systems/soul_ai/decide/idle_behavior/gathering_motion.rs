@@ -3,7 +3,7 @@
 use bevy::prelude::*;
 use rand::Rng;
 
-use crate::constants::*;
+use hw_core::constants::*;
 use crate::systems::soul_ai::helpers::gathering_positions::{
     find_position_fallback_away, find_position_with_separation, random_position_around,
 };

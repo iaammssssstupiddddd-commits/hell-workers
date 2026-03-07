@@ -1,7 +1,6 @@
-use crate::constants::TILE_SIZE;
-use crate::game_state::{
-    BuildContext, CompanionParentKind, CompanionPlacementKind, CompanionPlacementState, PlayMode,
-};
+use hw_core::constants::TILE_SIZE;
+use hw_core::game_state::{PlayMode};
+use crate::app_contexts::{BuildContext, CompanionParentKind, CompanionPlacementKind, CompanionPlacementState};
 use crate::interface::camera::MainCamera;
 use crate::systems::jobs::{Blueprint, Building, BuildingType};
 use crate::world::map::{RIVER_Y_MIN, WorldMap};
@@ -213,7 +212,7 @@ pub fn placement_ghost_system(
 
     // ゴースト更新または生成
     if let Some((_, mut transform, mut sprite)) = q_ghost.iter_mut().next() {
-        transform.translation = draw_pos.extend(crate::constants::Z_SELECTION);
+        transform.translation = draw_pos.extend(hw_core::constants::Z_SELECTION);
         sprite.custom_size = Some(size);
         sprite.color = color;
         if sprite.image != texture {
@@ -233,7 +232,7 @@ pub fn placement_ghost_system(
                 custom_size: Some(size),
                 ..default()
             },
-            Transform::from_translation(draw_pos.extend(crate::constants::Z_SELECTION)),
+            Transform::from_translation(draw_pos.extend(hw_core::constants::Z_SELECTION)),
         ));
     }
 
@@ -252,7 +251,7 @@ pub fn placement_ghost_system(
         let partner_color = Color::srgba(0.8, 0.9, 1.0, 0.35);
 
         if let Some((_, mut transform, mut sprite)) = q_partner_ghost.iter_mut().next() {
-            transform.translation = partner_pos.extend(crate::constants::Z_SELECTION - 0.001);
+            transform.translation = partner_pos.extend(hw_core::constants::Z_SELECTION - 0.001);
             sprite.custom_size = Some(partner_size);
             sprite.color = partner_color;
             if sprite.image != partner_texture {
@@ -271,7 +270,7 @@ pub fn placement_ghost_system(
                     ..default()
                 },
                 Transform::from_translation(
-                    partner_pos.extend(crate::constants::Z_SELECTION - 0.001),
+                    partner_pos.extend(hw_core::constants::Z_SELECTION - 0.001),
                 ),
             ));
         }

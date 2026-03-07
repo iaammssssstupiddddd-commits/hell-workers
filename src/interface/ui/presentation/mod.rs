@@ -1,6 +1,6 @@
 mod builders;
 
-use crate::constants::ESCAPE_STRESS_THRESHOLD;
+use hw_core::constants::ESCAPE_STRESS_THRESHOLD;
 use crate::entities::damned_soul::{DamnedSoul, Gender, IdleBehavior, IdleState};
 use crate::entities::familiar::Familiar;
 use crate::interface::ui::components::TooltipTemplate;

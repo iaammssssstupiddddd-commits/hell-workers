@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use crate::constants::ENCOURAGEMENT_COOLDOWN;
+use hw_core::constants::ENCOURAGEMENT_COOLDOWN;
 use crate::events::{EncouragementRequest, OnEncouraged};
 use crate::systems::familiar_ai::decide::encouragement::EncouragementCooldown;
 

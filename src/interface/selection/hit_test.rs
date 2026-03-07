@@ -1,4 +1,4 @@
-use crate::constants::TILE_SIZE;
+use hw_core::constants::TILE_SIZE;
 use crate::entities::damned_soul::DamnedSoul;
 use crate::entities::familiar::Familiar;
 use crate::systems::command::TaskArea;

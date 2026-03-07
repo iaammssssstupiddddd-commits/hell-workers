@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use crate::constants::*;
+use hw_core::constants::*;
 
 // ============================================================
 // 定数

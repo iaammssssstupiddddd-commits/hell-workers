@@ -1,6 +1,6 @@
 //! ポップアップ・完成テキスト・バウンスアニメーション
 
-use crate::constants::*;
+use hw_core::constants::*;
 use bevy::prelude::*;
 
 use super::POPUP_LIFETIME;

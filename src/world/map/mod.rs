@@ -10,7 +10,7 @@ pub use layout::{
 };
 pub use spawn::{generate_fixed_river_tiles, spawn_map};
 
-use crate::constants::*;
+use hw_core::constants::*;
 use crate::systems::jobs::DoorState;
 use bevy::prelude::*;
 use std::collections::{HashMap, HashSet};

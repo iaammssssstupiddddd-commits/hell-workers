@@ -1,6 +1,6 @@
 //! Floor tile reinforcement task execution
 
-use crate::constants::{FLOOR_BONES_PER_TILE, FLOOR_REINFORCE_DURATION_SECS};
+use hw_core::constants::{FLOOR_BONES_PER_TILE, FLOOR_REINFORCE_DURATION_SECS};
 use crate::relationships::WorkingOn;
 use crate::systems::jobs::floor_construction::FloorTileState;
 use crate::systems::soul_ai::execute::task_execution::{

@@ -1,4 +1,4 @@
-use crate::constants::TILE_SIZE;
+use hw_core::constants::TILE_SIZE;
 use crate::relationships::ManagedTasks;
 use crate::systems::command::TaskArea;
 use crate::systems::familiar_ai::decide::task_delegation::ReachabilityCacheKey;

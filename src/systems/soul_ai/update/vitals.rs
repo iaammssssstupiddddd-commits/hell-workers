@@ -1,4 +1,4 @@
-use crate::constants::*;
+use hw_core::constants::*;
 use crate::entities::damned_soul::DamnedSoul;
 use crate::systems::jobs::WorkType;
 use bevy::prelude::*;

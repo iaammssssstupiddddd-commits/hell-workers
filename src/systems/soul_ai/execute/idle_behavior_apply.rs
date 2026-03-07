@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use crate::constants::{REST_AREA_RECRUIT_COOLDOWN_SECS, REST_AREA_RESTING_DURATION};
+use hw_core::constants::{REST_AREA_RECRUIT_COOLDOWN_SECS, REST_AREA_RESTING_DURATION};
 use crate::entities::damned_soul::{IdleBehavior, IdleState, Path, RestAreaCooldown};
 use crate::events::{IdleBehaviorOperation, IdleBehaviorRequest};
 use crate::relationships::{

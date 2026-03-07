@@ -4,7 +4,7 @@
 
 use bevy::prelude::*;
 
-use crate::constants::{
+use hw_core::constants::{
     FLOOR_BONES_PER_TILE, FLOOR_CONSTRUCTION_PRIORITY, FLOOR_MUD_PER_TILE, TILE_SIZE,
     WHEELBARROW_CAPACITY,
 };

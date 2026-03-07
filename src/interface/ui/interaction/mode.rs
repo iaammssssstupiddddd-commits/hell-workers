@@ -1,8 +1,7 @@
 use bevy::prelude::*;
 
-use crate::game_state::{
-    BuildContext, CompanionPlacementState, PlayMode, TaskContext, ZoneContext,
-};
+use hw_core::game_state::{PlayMode};
+use crate::app_contexts::{BuildContext, CompanionPlacementState, TaskContext, ZoneContext};
 use crate::interface::ui::components::MenuState;
 use crate::systems::command::TaskMode;
 use crate::systems::jobs::BuildingType;

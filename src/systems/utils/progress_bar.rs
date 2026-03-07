@@ -2,7 +2,7 @@
 //!
 //! 任意のエンティティにプログレスバーを表示するためのユーティリティ
 
-use crate::constants::*;
+use hw_core::constants::*;
 use bevy::prelude::*;
 
 /// プログレスバーの設定

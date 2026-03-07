@@ -3,7 +3,7 @@
 use std::cmp::Ordering;
 use std::collections::HashSet;
 
-use crate::constants::*;
+use hw_core::constants::*;
 use crate::systems::logistics::transport_request::{WheelbarrowDestination, WheelbarrowLease};
 use bevy::prelude::*;
 

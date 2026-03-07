@@ -1,6 +1,6 @@
 //! 入力関連のプラグイン
 
-use crate::game_state::PlayMode;
+use hw_core::game_state::PlayMode;
 use crate::interface::camera::{MainCamera, PanCamera, PanCameraPlugin};
 use crate::interface::selection::handle_mouse_input;
 use crate::interface::ui::UiInputState;

@@ -1,7 +1,7 @@
 //! 荷下ろしフェーズ
 
 use super::super::cancel;
-use crate::constants::Z_ITEM_PICKUP;
+use hw_core::constants::Z_ITEM_PICKUP;
 use crate::relationships::{LoadedIn, StoredIn};
 use crate::systems::logistics::ResourceType;
 use crate::systems::logistics::{
@@ -101,7 +101,7 @@ fn floor_site_remaining(
     let nearby = count_nearby_ground_items(
         ctx.queries.resource_items.iter(),
         site.material_center,
-        (crate::constants::TILE_SIZE * 2.0).powi(2),
+        (hw_core::constants::TILE_SIZE * 2.0).powi(2),
         resource_type,
         None,
     );
@@ -125,7 +125,7 @@ fn wall_site_remaining(
     let nearby = count_nearby_ground_items(
         ctx.queries.resource_items.iter(),
         site.material_center,
-        (crate::constants::TILE_SIZE * 2.0).powi(2),
+        (hw_core::constants::TILE_SIZE * 2.0).powi(2),
         resource_type,
         None,
     );
@@ -149,7 +149,7 @@ fn provisional_wall_remaining(
     1usize.saturating_sub(count_nearby_ground_items(
         ctx.queries.resource_items.iter(),
         wall_transform.translation.truncate(),
-        (crate::constants::TILE_SIZE * 1.5).powi(2),
+        (hw_core::constants::TILE_SIZE * 1.5).powi(2),
         ResourceType::StasisMud,
         None,
     ))

@@ -6,7 +6,7 @@
 use bevy::prelude::*;
 
 use crate::assets::GameAssets;
-use crate::constants::*;
+use hw_core::constants::*;
 use crate::entities::damned_soul::{AnimationState, DamnedSoul};
 use crate::relationships::{LoadedItems, PushedBy};
 use crate::systems::logistics::Wheelbarrow;

@@ -1,6 +1,6 @@
 //! パス追従による移動
 
-use crate::constants::*;
+use hw_core::constants::*;
 use crate::entities::damned_soul::{
     AnimationState, DamnedSoul, IdleBehavior, IdleState, Path, StressBreakdown,
 };

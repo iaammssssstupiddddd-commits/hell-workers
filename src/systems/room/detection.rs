@@ -1,6 +1,6 @@
 use super::components::{Room, RoomBounds};
 use super::resources::{RoomDetectionState, RoomTileLookup};
-use crate::constants::{MAP_HEIGHT, MAP_WIDTH, ROOM_MAX_TILES};
+use hw_core::constants::{MAP_HEIGHT, MAP_WIDTH, ROOM_MAX_TILES};
 use crate::systems::jobs::{Building, BuildingType};
 use crate::world::map::WorldMap;
 use bevy::prelude::*;

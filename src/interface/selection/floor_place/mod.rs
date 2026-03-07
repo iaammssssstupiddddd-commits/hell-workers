@@ -5,7 +5,8 @@ mod input;
 mod validation;
 mod wall_apply;
 
-use crate::game_state::{PlayMode, TaskContext};
+use hw_core::game_state::{PlayMode};
+use crate::app_contexts::{TaskContext};
 use crate::interface::camera::MainCamera;
 use crate::interface::ui::{PlacementFailureTooltip, UiInputState};
 use crate::systems::command::TaskMode;

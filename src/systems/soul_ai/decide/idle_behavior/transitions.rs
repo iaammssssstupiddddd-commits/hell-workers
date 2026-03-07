@@ -2,7 +2,7 @@
 
 use rand::Rng;
 
-use crate::constants::*;
+use hw_core::constants::*;
 use crate::entities::damned_soul::{GatheringBehavior, IdleBehavior};
 
 /// ランダムな集会中のサブ行動を選択

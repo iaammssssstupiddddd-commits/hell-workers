@@ -3,8 +3,8 @@
 //! DamnedSoul（亡者）のプログレスバー、ステータスアイコン、タスクリンク表示
 
 use crate::assets::GameAssets;
-use crate::constants::TILE_SIZE;
-use crate::constants::*;
+use hw_core::constants::TILE_SIZE;
+use hw_core::constants::*;
 use crate::entities::damned_soul::{
     DamnedSoul, GatheringBehavior, IdleBehavior, IdleState, SoulUiLinks,
 };

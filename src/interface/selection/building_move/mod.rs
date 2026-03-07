@@ -2,11 +2,9 @@ mod geometry;
 mod placement;
 mod preview;
 
-use crate::constants::TILE_SIZE;
-use crate::game_state::{
-    CompanionParentKind, CompanionPlacement, CompanionPlacementKind, CompanionPlacementState,
-    MoveContext, MovePlacementState, PendingMovePlacement, PlayMode,
-};
+use hw_core::constants::TILE_SIZE;
+use hw_core::game_state::{PlayMode};
+use crate::app_contexts::{CompanionParentKind, CompanionPlacement, CompanionPlacementKind, CompanionPlacementState, MoveContext, MovePlacementState, PendingMovePlacement};
 use crate::interface::camera::MainCamera;
 use crate::interface::ui::UiInputState;
 use crate::systems::jobs::{Building, BuildingType, Designation, Priority, TaskSlots, WorkType};

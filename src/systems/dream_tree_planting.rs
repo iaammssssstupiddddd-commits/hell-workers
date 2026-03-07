@@ -4,7 +4,7 @@
 //! ドラッグ確定時に `AreaEditSession.pending_dream_planting` がセットされ、本システムがそれを処理する。
 
 use crate::assets::GameAssets;
-use crate::constants::*;
+use hw_core::constants::*;
 use crate::entities::damned_soul::DreamPool;
 use crate::systems::command::AreaEditSession;
 use crate::systems::jobs::{ObstaclePosition, Tree, TreeVariant};

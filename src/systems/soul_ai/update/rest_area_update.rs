@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use crate::constants::{
+use hw_core::constants::{
     DREAM_DRAIN_RATE_REST, REST_AREA_FATIGUE_RECOVERY_RATE, REST_AREA_RESTING_DURATION,
     REST_AREA_STRESS_RECOVERY_RATE,
 };

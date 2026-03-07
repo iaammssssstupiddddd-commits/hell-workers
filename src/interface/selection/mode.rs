@@ -1,4 +1,5 @@
-use crate::game_state::{CompanionPlacementState, PlayMode};
+use hw_core::game_state::{PlayMode};
+use crate::app_contexts::{CompanionPlacementState};
 use bevy::prelude::*;
 
 pub fn clear_companion_state_outside_build_mode(

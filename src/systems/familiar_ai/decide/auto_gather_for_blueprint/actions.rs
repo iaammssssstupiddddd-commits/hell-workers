@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use bevy::prelude::*;
 
-use crate::constants::{
+use hw_core::constants::{
     BLUEPRINT_AUTO_GATHER_PATH_CHECK_LIMIT_PER_STAGE, BLUEPRINT_AUTO_GATHER_PRIORITY,
 };
 use crate::relationships::ManagedBy;

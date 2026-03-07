@@ -1,4 +1,4 @@
-use crate::game_state::PlayMode;
+use hw_core::game_state::PlayMode;
 use crate::interface::selection::SelectedEntity;
 use crate::interface::selection::blueprint_placement;
 use crate::interface::selection::building_move_preview_system;

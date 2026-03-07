@@ -2,7 +2,7 @@
 
 use super::components::*;
 use crate::assets::GameAssets;
-use crate::constants::{TILE_SIZE, Z_MAP};
+use hw_core::constants::{TILE_SIZE, Z_MAP};
 use crate::systems::jobs::{Building, BuildingType, ProvisionalWall};
 use crate::world::map::WorldMap;
 use bevy::prelude::*;

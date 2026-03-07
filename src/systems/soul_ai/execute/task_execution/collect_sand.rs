@@ -2,7 +2,7 @@ use super::common::*;
 use super::context::TaskExecutionContext;
 use super::types::{AssignedTask, CollectSandPhase};
 use crate::assets::GameAssets;
-use crate::constants::*;
+use hw_core::constants::*;
 use crate::systems::jobs::WorkType;
 use crate::systems::logistics::{ResourceItem, ResourceType};
 use crate::systems::logistics::transport_request::TransportRequestKind;

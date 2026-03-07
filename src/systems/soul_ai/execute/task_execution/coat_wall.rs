@@ -1,6 +1,6 @@
 //! Wall tile coating task execution
 
-use crate::constants::{FATIGUE_GAIN_ON_COMPLETION, WALL_COAT_DURATION_SECS, WALL_MUD_PER_TILE};
+use hw_core::constants::{FATIGUE_GAIN_ON_COMPLETION, WALL_COAT_DURATION_SECS, WALL_MUD_PER_TILE};
 use crate::relationships::WorkingOn;
 use crate::systems::jobs::BuildingType;
 use crate::systems::jobs::wall_construction::WallTileState;

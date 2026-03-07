@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 
 use crate::assets::GameAssets;
-use crate::constants::*;
+use hw_core::constants::*;
 use crate::entities::damned_soul::{DamnedSoul, IdleBehavior, IdleState};
 use crate::relationships::ParticipatingIn;
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;

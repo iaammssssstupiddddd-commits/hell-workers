@@ -1,6 +1,6 @@
 use super::components::{DreamParticle, DreamVisualState};
 use super::dream_bubble_material::{DreamBubbleMaterial, DreamBubbleUiMaterial};
-use crate::constants::*;
+use hw_core::constants::*;
 use crate::entities::damned_soul::{
     DamnedSoul, DreamQuality, DreamState, GatheringBehavior, IdleBehavior, IdleState,
 };
@@ -204,7 +204,7 @@ pub fn rest_area_dream_particle_spawn_system(
         }
 
         let scale_factor = (occupant_count as f32).sqrt().clamp(1.0, 3.0);
-        let current_interval = crate::constants::DREAM_POPUP_INTERVAL;
+        let current_interval = hw_core::constants::DREAM_POPUP_INTERVAL;
         let max_particles = (DREAM_PARTICLE_MAX_PER_SOUL as f32 * scale_factor) as u8;
 
         if visual_state.particle_cooldown > 0.0 {

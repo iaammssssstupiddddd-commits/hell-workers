@@ -3,7 +3,7 @@
 //! Phase 2: can_complete_pick_drop_to_point と can_complete_pick_drop_to_blueprint を
 //! 単一モジュールに集約。閾値を 1 箇所で管理する。
 
-use crate::constants::TILE_SIZE;
+use hw_core::constants::TILE_SIZE;
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
 

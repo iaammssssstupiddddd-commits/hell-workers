@@ -1,4 +1,4 @@
-use crate::constants::RESERVATION_SYNC_INTERVAL;
+use hw_core::constants::RESERVATION_SYNC_INTERVAL;
 use crate::events::ResourceReservationOp;
 use crate::events::ResourceReservationRequest;
 use crate::relationships::TaskWorkers;

@@ -1,4 +1,4 @@
-use crate::constants::{
+use hw_core::constants::{
     DREAM_UI_PULSE_BRIGHTNESS, DREAM_UI_PULSE_DURATION, DREAM_UI_PULSE_TRIGGER_DELTA,
 };
 use crate::interface::ui::components::{DreamPoolPulse, UiNodeRegistry, UiSlot};

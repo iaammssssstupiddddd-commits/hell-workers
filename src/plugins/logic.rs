@@ -1,7 +1,7 @@
 //! ゲームロジック関連のプラグイン
 
 use crate::entities::familiar::{familiar_movement, familiar_spawning_system};
-use crate::game_state::PlayMode;
+use hw_core::game_state::PlayMode;
 use crate::systems::GameSystemSet;
 use crate::systems::command::{
     AreaEditClipboard, AreaEditHistory, AreaEditPresets, AreaEditSession, assign_task_system,

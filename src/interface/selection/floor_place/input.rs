@@ -1,4 +1,4 @@
-use crate::game_state::PlayMode;
+use hw_core::game_state::PlayMode;
 use crate::interface::ui::PlacementFailureTooltip;
 use crate::systems::command::area_selection::wall_line_area;
 use crate::systems::command::{TaskArea, TaskMode};

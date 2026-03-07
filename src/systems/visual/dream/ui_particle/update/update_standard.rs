@@ -1,4 +1,4 @@
-use crate::constants::*;
+use hw_core::constants::*;
 use crate::interface::ui::components::{UiNodeRegistry, UiSlot};
 use bevy::prelude::*;
 use bevy::ui_render::prelude::MaterialNode;

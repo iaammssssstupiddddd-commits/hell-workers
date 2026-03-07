@@ -2,7 +2,7 @@
 
 use rand::Rng;
 
-use crate::constants::{GATHERING_KEEP_DISTANCE_TARGET_MAX, TILE_SIZE};
+use hw_core::constants::{GATHERING_KEEP_DISTANCE_TARGET_MAX, TILE_SIZE};
 use crate::systems::spatial::SpatialGridOps;
 use crate::world::map::WorldMap;
 
