@@ -59,9 +59,17 @@ pub fn collect_scored_candidates(
 
     // Build は Site/Yard/TaskArea の運用変更の影響を受けやすいため、
     // 空間グリッド候補に載らなかった場合でも designation 全体から補完する。
+    // CollectSand / CollectBone のうち Yard 管理で範囲外へフォールバックした指定も
+    // 同様にグリッド走査だけでは見えないため補完する。
     let mut seen: HashSet<Entity> = candidates.iter().copied().collect();
-    for (entity, _, designation, _, _, _, _, _) in queries.designation.designations.iter() {
-        if designation.work_type == WorkType::Build && seen.insert(entity) {
+    for (entity, _, designation, managed_by_opt, _, _, _, _) in queries.designation.designations.iter() {
+        let is_build = designation.work_type == WorkType::Build;
+        let is_remote_yard_collect = matches!(
+            designation.work_type,
+            WorkType::CollectSand | WorkType::CollectBone
+        ) && managed_by_opt.is_some_and(|managed_by| queries.yards.get(managed_by.0).is_ok());
+
+        if (is_build || is_remote_yard_collect) && seen.insert(entity) {
             candidates.push(entity);
         }
     }

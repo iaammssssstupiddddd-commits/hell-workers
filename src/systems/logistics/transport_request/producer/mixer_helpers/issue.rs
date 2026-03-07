@@ -99,13 +99,22 @@ pub(crate) fn issue_collect_sand_if_needed(
         return;
     }
 
-    if let Some(sand_tile_entity) = find_available_sand_tile(
-        world_map,
-        Some(&candidate.owner_area),
-        candidate.yard_area.as_ref(),
-        candidate.mixer_pos,
-        q_task_state,
-    ) {
+    let sand_tile_searches = [
+        (None, candidate.yard_area.as_ref()),
+        (Some(&candidate.owner_area), None),
+        (None, None),
+    ];
+    for (owner_area, yard_area) in sand_tile_searches {
+        let Some(sand_tile_entity) = find_available_sand_tile(
+            world_map,
+            owner_area,
+            yard_area,
+            candidate.mixer_pos,
+            q_task_state,
+        ) else {
+            continue;
+        };
+
         designation_writer.write(DesignationRequest {
             entity: sand_tile_entity,
             operation: DesignationOp::Issue {
@@ -122,6 +131,7 @@ pub(crate) fn issue_collect_sand_if_needed(
             "AUTO_HAUL_MIXER: Issued CollectSand from beach tile {:?} for Mixer {:?}",
             sand_tile_entity, candidate.mixer_entity
         );
+        break;
     }
 }
 

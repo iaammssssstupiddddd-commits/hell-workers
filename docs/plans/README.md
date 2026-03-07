@@ -19,6 +19,7 @@
 
 | Document | Status | Notes |
 |---|---|---|
+| [destination-validation-unification-plan-2026-03-07.md](destination-validation-unification-plan-2026-03-07.md) | Draft | FloorConstruction / WallConstruction / ProvisionalWall の搬入先需要計算と実行時受入判定が、割り当て時・手運搬 dropping 時・猫車 unloading 時の 3 系統に分散し、同一ロジックを複数箇所で維持しているの計画。 |
 | [transport-overdelivery-fix-plan-2026-03-07.md](transport-overdelivery-fix-plan-2026-03-07.md) | Draft | 設計図搬入と補充系 request の過剰搬入を、需要契約・割り当て・搬入実行の3段で修正する計画。 |
 
 ## アーカイブ計画書一覧 (`docs/plans/archive`)
