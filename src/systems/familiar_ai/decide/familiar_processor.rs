@@ -13,6 +13,8 @@ use crate::systems::familiar_ai::decide::task_delegation::ReachabilityCacheKey;
 use crate::systems::familiar_ai::decide::task_management::{
     FamiliarTaskAssignmentQueries, ReservationShadow,
 };
+use crate::systems::familiar_ai::decide::task_management::IncomingDeliverySnapshot;
+use crate::systems::logistics::TileSiteIndex;
 use crate::systems::spatial::{
     DesignationSpatialGrid, ResourceSpatialGrid, SpatialGrid, TransportRequestSpatialGrid,
 };
@@ -81,6 +83,8 @@ pub struct FamiliarDelegationContext<'a, 'w, 's> {
     pub allow_task_delegation: bool,
     pub state_changed: bool,
     pub reservation_shadow: &'a mut ReservationShadow,
+    pub tile_site_index: &'a TileSiteIndex,
+    pub incoming_snapshot: &'a IncomingDeliverySnapshot,
     pub reachability_frame_cache: &'a mut HashMap<ReachabilityCacheKey, bool>,
 }
 
@@ -269,6 +273,8 @@ pub fn process_task_delegation_and_movement(ctx: &mut FamiliarDelegationContext<
             ctx.world_map,
             ctx.pf_context,
             ctx.reservation_shadow,
+            ctx.tile_site_index,
+            ctx.incoming_snapshot,
             ctx.reachability_frame_cache,
         )
         .is_some()

@@ -33,3 +33,23 @@ pub fn wall_site_tile_demand<'a>(
         })
         .sum()
 }
+
+pub fn wall_site_tile_demand_from_index(
+    tile_entities: &[Entity],
+    q_wall_tiles: &Query<&WallTileBlueprint>,
+    resource_type: ResourceType,
+) -> usize {
+    tile_entities
+        .iter()
+        .filter_map(|tile_entity| q_wall_tiles.get(*tile_entity).ok())
+        .map(|tile| match resource_type {
+            ResourceType::Wood if tile.state == crate::systems::jobs::wall_construction::WallTileState::WaitingWood => {
+                WALL_WOOD_PER_TILE.saturating_sub(tile.wood_delivered) as usize
+            }
+            ResourceType::StasisMud if tile.state == crate::systems::jobs::wall_construction::WallTileState::WaitingMud => {
+                WALL_MUD_PER_TILE.saturating_sub(tile.mud_delivered) as usize
+            }
+            _ => 0,
+        })
+        .sum()
+}

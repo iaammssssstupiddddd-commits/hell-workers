@@ -155,7 +155,7 @@ pub(super) fn handle_dropping_phase(
                 .incoming_deliveries_query
                 .get(stockpile)
                 .ok()
-                .map(|incoming: &crate::relationships::IncomingDeliveries| incoming.len())
+            .map(|(_, incoming)| incoming.len())
                 .unwrap_or(0);
             let capacity_ok = (current_count + incoming_count) <= stockpile_comp.capacity;
 

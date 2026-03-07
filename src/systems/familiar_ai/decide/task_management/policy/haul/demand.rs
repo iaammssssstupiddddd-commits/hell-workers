@@ -2,36 +2,62 @@
 
 use bevy::prelude::*;
 
-use crate::systems::familiar_ai::decide::task_management::ReservationShadow;
+use crate::systems::familiar_ai::decide::task_management::{
+    IncomingDeliverySnapshot, ReservationShadow,
+};
 use crate::systems::logistics::ResourceType;
 use crate::systems::logistics::{
-    floor_site_tile_demand, provisional_wall_mud_demand, wall_site_tile_demand,
+    floor_site_tile_demand_from_index, provisional_wall_mud_demand,
+    wall_site_tile_demand_from_index, TileSiteIndex,
 };
 
 type TaskAssignmentQueries<'w, 's> =
     crate::systems::familiar_ai::decide::task_management::FamiliarTaskAssignmentQueries<'w, 's>;
 
+pub struct DemandReadContext<'a, 'w, 's> {
+    pub queries: &'a TaskAssignmentQueries<'w, 's>,
+    pub shadow: &'a ReservationShadow,
+    pub tile_site_index: &'a TileSiteIndex,
+    pub incoming_snapshot: &'a IncomingDeliverySnapshot,
+}
+
+#[allow(clippy::too_many_arguments)]
+impl<'a, 'w, 's> DemandReadContext<'a, 'w, 's> {
+    pub fn new(
+        queries: &'a TaskAssignmentQueries<'w, 's>,
+        shadow: &'a ReservationShadow,
+        tile_site_index: &'a TileSiteIndex,
+        incoming_snapshot: &'a IncomingDeliverySnapshot,
+    ) -> Self {
+        Self {
+            queries,
+            shadow,
+            tile_site_index,
+            incoming_snapshot,
+        }
+    }
+}
+
 pub fn compute_remaining_blueprint_amount(
     blueprint: Entity,
     resource_type: ResourceType,
-    queries: &TaskAssignmentQueries<'_, '_>,
-    shadow: &ReservationShadow,
+    context: &DemandReadContext<'_, '_, '_>,
 ) -> u32 {
-    let Ok((_, blueprint_comp, _)) = queries.storage.blueprints.get(blueprint) else {
+    let Ok((_, blueprint_comp, _)) = context.queries.storage.blueprints.get(blueprint) else {
         return 0;
     };
 
     if let Some(flexible) = &blueprint_comp.flexible_material_requirement
         && flexible.accepts(resource_type)
     {
-        let incoming = count_matching_incoming_deliveries(
+    let incoming = count_matching_incoming_deliveries(
             blueprint,
-            queries,
+            context,
             |incoming_resource_type| flexible.accepted_types.contains(&incoming_resource_type),
         ) + flexible
             .accepted_types
             .iter()
-            .map(|accepted_type| shadow.destination_reserved_resource(blueprint, *accepted_type) as u32)
+            .map(|accepted_type| context.shadow.destination_reserved_resource(blueprint, *accepted_type) as u32)
             .sum::<u32>();
 
         return flexible.remaining().saturating_sub(incoming);
@@ -42,8 +68,8 @@ pub fn compute_remaining_blueprint_amount(
         return 0;
     }
 
-    let incoming = count_exact_incoming_deliveries(blueprint, resource_type, queries)
-        + shadow.destination_reserved_resource(blueprint, resource_type) as u32;
+    let incoming = count_exact_incoming_deliveries(blueprint, resource_type, context)
+        + context.shadow.destination_reserved_resource(blueprint, resource_type) as u32;
     needed_material.saturating_sub(incoming)
 }
 
@@ -51,64 +77,97 @@ pub fn compute_remaining_blueprint_amount(
 pub fn compute_remaining_blueprint_wheelbarrow_amount(
     blueprint: Entity,
     resource_type: ResourceType,
-    _task_entity: Entity,
-    queries: &TaskAssignmentQueries<'_, '_>,
-    shadow: &ReservationShadow,
+    context: &DemandReadContext<'_, '_, '_>,
 ) -> u32 {
-    compute_remaining_blueprint_amount(blueprint, resource_type, queries, shadow)
+    compute_remaining_blueprint_amount(blueprint, resource_type, context)
 }
 
 /// 床建設サイトへの骨の残需要
 pub fn compute_remaining_floor_bones(
     site_entity: Entity,
-    queries: &TaskAssignmentQueries<'_, '_>,
-    shadow: &ReservationShadow,
+    context: &DemandReadContext<'_, '_, '_>,
 ) -> u32 {
-    let base_demand =
-        floor_site_tile_demand(queries.storage.floor_tiles.iter(), site_entity, ResourceType::Bone);
-    compute_remaining_from_incoming(site_entity, base_demand, ResourceType::Bone, queries, shadow)
+    let tile_entities = context
+        .tile_site_index
+        .floor_tiles_by_site
+        .get(&site_entity)
+        .map(|tiles| tiles.as_slice())
+        .unwrap_or(&[]);
+    let base_demand = floor_site_tile_demand_from_index(
+        tile_entities,
+        &context.queries.storage.floor_tiles,
+        ResourceType::Bone,
+    );
+    compute_remaining_from_incoming(site_entity, base_demand, ResourceType::Bone, context)
 }
 
 /// 床建設サイトへの泥の残需要
 pub fn compute_remaining_floor_mud(
     site_entity: Entity,
-    queries: &TaskAssignmentQueries<'_, '_>,
-    shadow: &ReservationShadow,
+    context: &DemandReadContext<'_, '_, '_>,
 ) -> u32 {
-    let base_demand =
-        floor_site_tile_demand(queries.storage.floor_tiles.iter(), site_entity, ResourceType::StasisMud);
-    compute_remaining_from_incoming(site_entity, base_demand, ResourceType::StasisMud, queries, shadow)
+    let tile_entities = context
+        .tile_site_index
+        .floor_tiles_by_site
+        .get(&site_entity)
+        .map(|tiles| tiles.as_slice())
+        .unwrap_or(&[]);
+    let base_demand = floor_site_tile_demand_from_index(
+        tile_entities,
+        &context.queries.storage.floor_tiles,
+        ResourceType::StasisMud,
+    );
+    compute_remaining_from_incoming(site_entity, base_demand, ResourceType::StasisMud, context)
 }
 
 /// 壁建設サイトへの木材の残需要
 pub fn compute_remaining_wall_wood(
     site_entity: Entity,
-    queries: &TaskAssignmentQueries<'_, '_>,
-    shadow: &ReservationShadow,
+    context: &DemandReadContext<'_, '_, '_>,
 ) -> u32 {
-    let base_demand =
-        wall_site_tile_demand(queries.storage.wall_tiles.iter(), site_entity, ResourceType::Wood);
-    compute_remaining_from_incoming(site_entity, base_demand, ResourceType::Wood, queries, shadow)
+    let tile_entities = context
+        .tile_site_index
+        .wall_tiles_by_site
+        .get(&site_entity)
+        .map(|tiles| tiles.as_slice())
+        .unwrap_or(&[]);
+    let base_demand = wall_site_tile_demand_from_index(
+        tile_entities,
+        &context.queries.storage.wall_tiles,
+        ResourceType::Wood,
+    );
+    compute_remaining_from_incoming(site_entity, base_demand, ResourceType::Wood, context)
 }
 
 /// 壁建設サイトへの泥の残需要
 pub fn compute_remaining_wall_mud(
     site_entity: Entity,
-    queries: &TaskAssignmentQueries<'_, '_>,
-    shadow: &ReservationShadow,
+    context: &DemandReadContext<'_, '_, '_>,
 ) -> u32 {
-    let base_demand =
-        wall_site_tile_demand(queries.storage.wall_tiles.iter(), site_entity, ResourceType::StasisMud);
-    compute_remaining_from_incoming(site_entity, base_demand, ResourceType::StasisMud, queries, shadow)
+    let tile_entities = context
+        .tile_site_index
+        .wall_tiles_by_site
+        .get(&site_entity)
+        .map(|tiles| tiles.as_slice())
+        .unwrap_or(&[]);
+    let base_demand = wall_site_tile_demand_from_index(
+        tile_entities,
+        &context.queries.storage.wall_tiles,
+        ResourceType::StasisMud,
+    );
+    compute_remaining_from_incoming(site_entity, base_demand, ResourceType::StasisMud, context)
 }
 
 pub fn compute_remaining_stockpile_capacity(
     stockpile_entity: Entity,
     resource_type: ResourceType,
-    queries: &TaskAssignmentQueries<'_, '_>,
-    shadow: &ReservationShadow,
+    context: &DemandReadContext<'_, '_, '_>,
 ) -> u32 {
-    let Ok((_, _, stockpile, stored_items_opt)) = queries.storage.stockpiles.get(stockpile_entity) else {
+    let Ok((_, _, stockpile, stored_items_opt)) = context
+        .queries
+        .storage
+        .stockpiles
+        .get(stockpile_entity) else {
         return 0;
     };
     if stockpile.resource_type.is_some() && stockpile.resource_type != Some(resource_type) {
@@ -116,13 +175,8 @@ pub fn compute_remaining_stockpile_capacity(
     }
 
     let stored = stored_items_opt.map(|items| items.len()).unwrap_or(0);
-    let incoming = queries
-        .reservation
-        .incoming_deliveries_query
-        .get(stockpile_entity)
-        .map(|incoming| incoming.len())
-        .unwrap_or(0);
-    let shadow_incoming = shadow.destination_reserved_total(stockpile_entity);
+    let incoming = context.incoming_snapshot.count_exact(stockpile_entity, resource_type) as usize;
+    let shadow_incoming = context.shadow.destination_reserved_total(stockpile_entity);
     stockpile
         .capacity
         .saturating_sub(stored + incoming + shadow_incoming) as u32
@@ -130,25 +184,23 @@ pub fn compute_remaining_stockpile_capacity(
 
 pub fn compute_remaining_provisional_wall_mud(
     wall_entity: Entity,
-    queries: &TaskAssignmentQueries<'_, '_>,
-    shadow: &ReservationShadow,
+    context: &DemandReadContext<'_, '_, '_>,
 ) -> u32 {
-    let Ok((_, building, provisional_opt)) = queries.storage.buildings.get(wall_entity) else {
+    let Ok((_, building, provisional_opt)) = context.queries.storage.buildings.get(wall_entity) else {
         return 0;
     };
     let base_demand = provisional_wall_mud_demand(&building, provisional_opt.as_deref()) as u32;
-    compute_remaining_from_incoming(wall_entity, base_demand as usize, ResourceType::StasisMud, queries, shadow)
+    compute_remaining_from_incoming(wall_entity, base_demand as usize, ResourceType::StasisMud, context)
 }
 
 fn compute_remaining_from_incoming(
     anchor_entity: Entity,
     base_demand: usize,
     resource_type: ResourceType,
-    queries: &TaskAssignmentQueries<'_, '_>,
-    shadow: &ReservationShadow,
+    context: &DemandReadContext<'_, '_, '_>,
 ) -> u32 {
-    let incoming = count_exact_incoming_deliveries(anchor_entity, resource_type, queries)
-        + shadow.destination_reserved_resource(anchor_entity, resource_type) as u32;
+    let incoming = count_exact_incoming_deliveries(anchor_entity, resource_type, context)
+        + context.shadow.destination_reserved_resource(anchor_entity, resource_type) as u32;
 
     base_demand.saturating_sub(incoming as usize) as u32
 }
@@ -156,33 +208,22 @@ fn compute_remaining_from_incoming(
 fn count_exact_incoming_deliveries(
     target: Entity,
     resource_type: ResourceType,
-    queries: &TaskAssignmentQueries<'_, '_>,
+    context: &DemandReadContext<'_, '_, '_>,
 ) -> u32 {
-    count_matching_incoming_deliveries(target, queries, |incoming_resource_type| {
+    count_matching_incoming_deliveries(target, context, |incoming_resource_type| {
         incoming_resource_type == resource_type
     })
 }
 
 fn count_matching_incoming_deliveries(
     target: Entity,
-    queries: &TaskAssignmentQueries<'_, '_>,
+    context: &DemandReadContext<'_, '_, '_>,
     mut predicate: impl FnMut(ResourceType) -> bool,
 ) -> u32 {
-    queries
-        .reservation
-        .incoming_deliveries_query
-        .get(target)
-        .map(|incoming| {
-            incoming
-                .iter()
-                .filter(|&&item| {
-                    queries
-                        .reservation
-                        .resources
-                        .get(item)
-                        .is_ok_and(|resource_item| predicate(resource_item.0))
-                })
-                .count() as u32
-        })
-        .unwrap_or(0)
+    context
+        .incoming_snapshot
+        .iter_counts(target)
+        .filter(|(resource_type, _)| predicate(*resource_type))
+        .map(|(_, count)| count)
+        .sum()
 }

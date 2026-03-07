@@ -34,10 +34,12 @@ pub fn assign_haul_to_wall_construction(
         );
         return false;
     };
+    let demand_context =
+        demand::DemandReadContext::new(queries, shadow, ctx.tile_site_index, ctx.incoming_snapshot);
 
     let remaining_needed = match resource_type {
-        ResourceType::Wood => demand::compute_remaining_wall_wood(site_entity, queries, shadow),
-        ResourceType::StasisMud => demand::compute_remaining_wall_mud(site_entity, queries, shadow),
+        ResourceType::Wood => demand::compute_remaining_wall_wood(site_entity, &demand_context),
+        ResourceType::StasisMud => demand::compute_remaining_wall_mud(site_entity, &demand_context),
         _ => 0,
     };
     if remaining_needed == 0 {

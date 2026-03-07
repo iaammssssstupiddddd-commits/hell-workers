@@ -43,7 +43,7 @@ pub(super) fn score_candidate(
                             .incoming_deliveries_query
                             .get(req.anchor)
                             .ok()
-                            .map(|inc| inc.len())
+                            .map(|(_, inc)| inc.len())
                             .unwrap_or(0);
                         tank_can_accept_new_bucket(current_count, incoming_buckets, stock.capacity)
                     }
@@ -69,7 +69,7 @@ pub(super) fn score_candidate(
                             .incoming_deliveries_query
                             .get(s_entity)
                             .ok()
-                            .map(|inc: &crate::relationships::IncomingDeliveries| inc.len())
+                            .map(|(_, inc)| inc.len())
                             .unwrap_or(0);
                         tank_can_accept_new_bucket(current_count, incoming_buckets, stock.capacity)
                     } else {

@@ -5,6 +5,7 @@ use crate::systems::familiar_ai::decide::familiar_processor::{
     FamiliarDelegationContext, process_task_delegation_and_movement,
 };
 use crate::systems::familiar_ai::decide::task_management::FamiliarTaskAssignmentQueries;
+use crate::systems::logistics::TileSiteIndex;
 use crate::systems::familiar_ai::helpers::query_types::{FamiliarSoulQuery, FamiliarTaskQuery};
 use crate::systems::spatial::{DesignationSpatialGrid, ResourceSpatialGrid, TransportRequestSpatialGrid};
 use crate::world::map::WorldMap;
@@ -35,6 +36,7 @@ pub struct FamiliarAiTaskDelegationParams<'w, 's> {
     pub designation_grid: Res<'w, DesignationSpatialGrid>,
     pub transport_request_grid: Res<'w, TransportRequestSpatialGrid>,
     pub resource_grid: Res<'w, ResourceSpatialGrid>,
+    pub tile_site_index: Res<'w, TileSiteIndex>,
     pub world_map: Res<'w, WorldMap>,
     pub pf_context: Local<'s, PathfindingContext>,
     pub reachability_frame_cache: ResMut<'w, ReachabilityFrameCache>,
@@ -53,6 +55,7 @@ pub fn familiar_task_delegation_system(params: FamiliarAiTaskDelegationParams) {
         designation_grid,
         transport_request_grid,
         resource_grid,
+        tile_site_index,
         world_map,
         mut pf_context,
         mut reachability_frame_cache,
@@ -77,6 +80,8 @@ pub fn familiar_task_delegation_system(params: FamiliarAiTaskDelegationParams) {
 
     let mut reservation_shadow =
         crate::systems::familiar_ai::decide::task_management::ReservationShadow::default();
+    let incoming_snapshot =
+        crate::systems::familiar_ai::decide::task_management::IncomingDeliverySnapshot::build(&task_queries);
     let mut familiars_processed = 0u32;
 
     for (
@@ -132,6 +137,8 @@ pub fn familiar_task_delegation_system(params: FamiliarAiTaskDelegationParams) {
             state_changed,
             reservation_shadow: &mut reservation_shadow,
             reachability_frame_cache: &mut reachability_frame_cache.cache,
+            tile_site_index: &tile_site_index,
+            incoming_snapshot: &incoming_snapshot,
         };
         process_task_delegation_and_movement(&mut delegation_ctx);
     }
