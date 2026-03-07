@@ -165,20 +165,9 @@ fn attach_delivering_to_relationship(commands: &mut Commands, assigned_task: &As
                 .entity(data.item)
                 .try_insert(crate::relationships::DeliveringTo(data.blueprint));
         }
-        AssignedTask::GatherWater(data) => {
-            commands
-                .entity(data.bucket)
-                .try_insert(crate::relationships::DeliveringTo(data.tank));
-        }
         AssignedTask::HaulToMixer(data) => {
             commands
                 .entity(data.item)
-                .try_insert(crate::relationships::DeliveringTo(data.mixer));
-        }
-        AssignedTask::HaulWaterToMixer(data) => {
-            // バケツがミキサーに向かう
-            commands
-                .entity(data.bucket)
                 .try_insert(crate::relationships::DeliveringTo(data.mixer));
         }
         AssignedTask::HaulWithWheelbarrow(data) => {

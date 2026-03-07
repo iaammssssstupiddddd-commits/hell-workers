@@ -263,12 +263,7 @@ pub fn task_area_auto_haul_system(
         let context = &group_contexts[idx];
 
         // グループ全体の需要計算
-        let inflight = *in_flight
-            .get(&(context.representative, resource_type))
-            .unwrap_or(&0);
-        let needed = context
-            .total_capacity
-            .saturating_sub(context.total_stored + inflight);
+        let needed = context.total_capacity.saturating_sub(context.total_stored);
         if needed == 0 {
             continue;
         }
@@ -299,6 +294,7 @@ pub fn task_area_auto_haul_system(
         }
 
         if let Some((issued_by, slots, pos, group_cells)) = desired_requests.get(&key) {
+            let inflight = super::to_u32_saturating(workers);
             commands.entity(req_entity).try_insert((
                 Transform::from_xyz(pos.x, pos.y, 0.0),
                 Visibility::Hidden,
@@ -318,9 +314,9 @@ pub fn task_area_auto_haul_system(
                 },
                 TransportDemand {
                     desired_slots: *slots,
-                    inflight: 0,
+                    inflight,
                 },
-                TransportRequestState::Pending,
+                super::upsert::request_state_for_workers(workers),
                 TransportPolicy::default(),
             ));
         } else if workers == 0 {

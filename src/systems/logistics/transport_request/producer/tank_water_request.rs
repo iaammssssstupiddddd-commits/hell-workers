@@ -14,7 +14,7 @@ use crate::systems::logistics::transport_request::{
     TransportDemand, TransportPolicy, TransportPriority, TransportRequest, TransportRequestKind,
     TransportRequestState,
 };
-use crate::systems::logistics::{ResourceType, Stockpile};
+use crate::systems::logistics::{ResourceType, Stockpile, tank_can_accept_new_bucket};
 use crate::systems::soul_ai::execute::task_execution::move_plant::MovePlanned;
 
 /// タンクの貯蔵量を監視し、空きがあれば TransportRequest を発行するシステム
@@ -61,11 +61,13 @@ pub fn tank_water_request_system(
             .unwrap_or(0);
         let total_water = (current_water as u32) + (incoming_water_tasks as u32 * BUCKET_CAPACITY);
 
-        if total_water < tank_stock.capacity as u32 {
+        if tank_can_accept_new_bucket(current_water, incoming_water_tasks, tank_stock.capacity) {
             let needed_water = tank_stock.capacity as u32 - total_water;
-            let needed_tasks = (needed_water + BUCKET_CAPACITY - 1) / BUCKET_CAPACITY;
+            let needed_tasks = needed_water / BUCKET_CAPACITY;
 
-            desired_requests.insert(tank_entity, (fam_entity, needed_tasks, tank_pos));
+            if needed_tasks > 0 {
+                desired_requests.insert(tank_entity, (fam_entity, needed_tasks, tank_pos));
+            }
         }
     }
 

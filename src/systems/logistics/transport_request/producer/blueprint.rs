@@ -128,13 +128,13 @@ pub fn blueprint_auto_haul_system(
                     *in_flight.get(&(bp_entity, *resource_type)).unwrap_or(&0) as u32
                 })
                 .sum();
-            let remaining = flexible.remaining().saturating_sub(total_inflight);
-            if remaining > 0 {
+            let total_needed = flexible.remaining();
+            if total_needed > total_inflight {
                 for &resource_type in &flexible.accepted_types {
                     let desired_slots = if resource_type.requires_wheelbarrow() {
-                        remaining.div_ceil(WHEELBARROW_CAPACITY as u32).max(1)
+                        total_needed.div_ceil(WHEELBARROW_CAPACITY as u32).max(1)
                     } else {
-                        remaining.max(1)
+                        total_needed.max(1)
                     };
                     desired_requests.insert(
                         (bp_entity, resource_type),
@@ -166,6 +166,7 @@ pub fn blueprint_auto_haul_system(
         }
 
         if let Some((issued_by, slots, bp_pos)) = desired_requests.get(&key) {
+            let inflight = super::to_u32_saturating(workers);
             commands.entity(request_entity).try_insert((
                 Transform::from_xyz(bp_pos.x, bp_pos.y, 0.0),
                 Visibility::Hidden,
@@ -186,9 +187,9 @@ pub fn blueprint_auto_haul_system(
                 },
                 TransportDemand {
                     desired_slots: *slots,
-                    inflight: 0,
+                    inflight,
                 },
-                TransportRequestState::Pending,
+                super::upsert::request_state_for_workers(workers),
                 TransportPolicy::default(),
             ));
             continue;

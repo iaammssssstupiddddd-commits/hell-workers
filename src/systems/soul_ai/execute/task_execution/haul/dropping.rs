@@ -1,12 +1,139 @@
 use crate::constants::Z_ITEM_PICKUP;
 use crate::relationships::WorkingOn;
 use crate::systems::jobs::BuildingType;
+use crate::systems::logistics::ResourceType;
 use crate::systems::soul_ai::execute::task_execution::common::{clear_task_and_path, drop_item};
 use crate::systems::soul_ai::execute::task_execution::context::TaskExecutionContext;
-use crate::systems::soul_ai::execute::task_execution::transport_common::reservation;
+use crate::systems::soul_ai::execute::task_execution::transport_common::{cancel, reservation};
 use crate::systems::soul_ai::helpers::work::unassign_task;
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
+
+fn count_nearby_ground_resources(
+    ctx: &TaskExecutionContext,
+    center: Vec2,
+    radius_sq: f32,
+    resource_type: ResourceType,
+    exclude_item: Entity,
+) -> usize {
+    ctx.queries
+        .resource_items
+        .iter()
+        .filter(|(entity, transform, visibility, resource_item, stored_in_opt, loaded_in_opt)| {
+            *entity != exclude_item
+                && **visibility != Visibility::Hidden
+                && loaded_in_opt.is_none()
+                && stored_in_opt.is_none()
+                && resource_item.0 == resource_type
+                && transform.translation.truncate().distance_squared(center) <= radius_sq
+        })
+        .count()
+}
+
+fn floor_site_can_accept(
+    ctx: &TaskExecutionContext,
+    site_entity: Entity,
+    resource_type: ResourceType,
+    exclude_item: Entity,
+) -> bool {
+    let Ok((_, site, _)) = ctx.queries.storage.floor_sites.get(site_entity) else {
+        return false;
+    };
+
+    let needed = ctx
+        .queries
+        .storage
+        .floor_tiles
+        .iter()
+        .filter(|tile| tile.parent_site == site_entity)
+        .map(|tile| match resource_type {
+            ResourceType::Bone
+                if tile.state
+                    == crate::systems::jobs::floor_construction::FloorTileState::WaitingBones =>
+            {
+                crate::constants::FLOOR_BONES_PER_TILE.saturating_sub(tile.bones_delivered) as usize
+            }
+            ResourceType::StasisMud
+                if tile.state
+                    == crate::systems::jobs::floor_construction::FloorTileState::WaitingMud =>
+            {
+                crate::constants::FLOOR_MUD_PER_TILE.saturating_sub(tile.mud_delivered) as usize
+            }
+            _ => 0,
+        })
+        .sum::<usize>();
+    let nearby = count_nearby_ground_resources(
+        ctx,
+        site.material_center,
+        (crate::constants::TILE_SIZE * 2.0).powi(2),
+        resource_type,
+        exclude_item,
+    );
+    needed > nearby
+}
+
+fn wall_site_can_accept(
+    ctx: &TaskExecutionContext,
+    site_entity: Entity,
+    resource_type: ResourceType,
+    exclude_item: Entity,
+) -> bool {
+    let Ok((_, site, _)) = ctx.queries.storage.wall_sites.get(site_entity) else {
+        return false;
+    };
+
+    let needed = ctx
+        .queries
+        .storage
+        .wall_tiles
+        .iter()
+        .filter(|tile| tile.parent_site == site_entity)
+        .map(|tile| match resource_type {
+            ResourceType::Wood
+                if tile.state == crate::systems::jobs::wall_construction::WallTileState::WaitingWood =>
+            {
+                crate::constants::WALL_WOOD_PER_TILE.saturating_sub(tile.wood_delivered) as usize
+            }
+            ResourceType::StasisMud
+                if tile.state == crate::systems::jobs::wall_construction::WallTileState::WaitingMud =>
+            {
+                crate::constants::WALL_MUD_PER_TILE.saturating_sub(tile.mud_delivered) as usize
+            }
+            _ => 0,
+        })
+        .sum::<usize>();
+    let nearby = count_nearby_ground_resources(
+        ctx,
+        site.material_center,
+        (crate::constants::TILE_SIZE * 2.0).powi(2),
+        resource_type,
+        exclude_item,
+    );
+    needed > nearby
+}
+
+fn provisional_wall_can_accept(
+    ctx: &TaskExecutionContext,
+    resource_type: Option<ResourceType>,
+    wall_entity: Entity,
+    building: &crate::systems::jobs::Building,
+    provisional_opt: Option<&crate::systems::jobs::ProvisionalWall>,
+    wall_pos: Vec2,
+    exclude_item: Entity,
+) -> bool {
+    resource_type == Some(ResourceType::StasisMud)
+        && building.kind == BuildingType::Wall
+        && building.is_provisional
+        && provisional_opt.is_some_and(|provisional| !provisional.mud_delivered)
+        && count_nearby_ground_resources(
+            ctx,
+            wall_pos,
+            (crate::constants::TILE_SIZE * 1.5).powi(2),
+            ResourceType::StasisMud,
+            exclude_item,
+        ) == 0
+        && wall_entity != Entity::PLACEHOLDER
+}
 
 pub(super) fn handle_dropping_phase(
     ctx: &mut TaskExecutionContext,
@@ -18,6 +145,10 @@ pub(super) fn handle_dropping_phase(
 ) {
     let q_targets = &ctx.queries.designation.targets;
     let q_belongs = &ctx.queries.designation.belongs;
+    let item_resource_type = q_targets
+        .get(item)
+        .ok()
+        .and_then(|(_, _, _, _, resource_item_opt, _, _)| resource_item_opt.map(|resource_item| resource_item.0));
 
     if let Ok((_, stock_transform, mut stockpile_comp, stored_items_opt)) =
         ctx.queries.storage.stockpiles.get_mut(stockpile)
@@ -131,6 +262,12 @@ pub(super) fn handle_dropping_phase(
             );
         }
     } else if let Ok((_, site, _)) = ctx.queries.storage.floor_sites.get(stockpile) {
+        if !item_resource_type
+            .is_some_and(|resource_type| floor_site_can_accept(ctx, stockpile, resource_type, item))
+        {
+            cancel::cancel_haul_to_stockpile(ctx, item, stockpile, commands);
+            return;
+        }
         commands.entity(item).try_insert((
             Visibility::Visible,
             Transform::from_xyz(
@@ -152,6 +289,12 @@ pub(super) fn handle_dropping_phase(
             .entity(item)
             .remove::<crate::relationships::TaskWorkers>();
     } else if let Ok((_, site, _)) = ctx.queries.storage.wall_sites.get(stockpile) {
+        if !item_resource_type
+            .is_some_and(|resource_type| wall_site_can_accept(ctx, stockpile, resource_type, item))
+        {
+            cancel::cancel_haul_to_stockpile(ctx, item, stockpile, commands);
+            return;
+        }
         commands.entity(item).try_insert((
             Visibility::Visible,
             Transform::from_xyz(
@@ -173,15 +316,19 @@ pub(super) fn handle_dropping_phase(
             .entity(item)
             .remove::<crate::relationships::TaskWorkers>();
     } else if let Ok((wall_transform, building, provisional_opt)) =
-        ctx.queries.storage.buildings.get_mut(stockpile)
+        ctx.queries.storage.buildings.get(stockpile)
     {
-        let can_deliver_to_wall = building.kind == BuildingType::Wall
-            && building.is_provisional
-            && provisional_opt
-                .as_ref()
-                .is_some_and(|provisional| !provisional.mud_delivered);
+        let wall_pos = wall_transform.translation.truncate();
+        let can_deliver_to_wall = provisional_wall_can_accept(
+            ctx,
+            item_resource_type,
+            stockpile,
+            &building,
+            provisional_opt.as_deref(),
+            wall_pos,
+            item,
+        );
         if can_deliver_to_wall {
-            let wall_pos = wall_transform.translation.truncate();
             commands.entity(item).try_insert((
                 Visibility::Visible,
                 Transform::from_xyz(wall_pos.x, wall_pos.y, Z_ITEM_PICKUP),
@@ -199,7 +346,8 @@ pub(super) fn handle_dropping_phase(
                 .entity(item)
                 .remove::<crate::relationships::TaskWorkers>();
         } else if ctx.inventory.0.is_some() {
-            drop_item(commands, ctx.soul_entity, item, soul_pos);
+            cancel::cancel_haul_to_stockpile(ctx, item, stockpile, commands);
+            return;
         }
     } else if ctx.inventory.0.is_some() {
         drop_item(commands, ctx.soul_entity, item, soul_pos);

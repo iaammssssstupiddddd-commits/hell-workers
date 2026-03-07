@@ -26,7 +26,7 @@ pub fn handle(
         return;
     }
 
-    if guards::is_tank_full(ctx, tank_entity) {
+    if !guards::tank_can_accept_full_bucket(ctx, tank_entity) {
         drop_bucket_for_auto_haul(commands, ctx, bucket_entity, tank_entity, world_map);
         return;
     }

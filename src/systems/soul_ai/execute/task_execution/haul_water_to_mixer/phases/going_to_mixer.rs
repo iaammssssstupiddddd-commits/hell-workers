@@ -113,6 +113,7 @@ pub fn handle(
                 tank: tank_entity,
                 mixer: mixer_entity,
                 amount,
+                needs_tank_fill: false,
                 phase: HaulWaterToMixerPhase::Pouring,
             });
             ctx.path.waypoints.clear();

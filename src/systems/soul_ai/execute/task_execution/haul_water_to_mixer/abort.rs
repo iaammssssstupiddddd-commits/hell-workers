@@ -19,7 +19,7 @@ pub(super) fn abort_and_drop_bucket(
     let should_release_tank_lock = matches!(
         ctx.task,
         AssignedTask::HaulWaterToMixer(data)
-            if matches!(
+            if data.needs_tank_fill && matches!(
                 data.phase,
                 HaulWaterToMixerPhase::GoingToBucket
                     | HaulWaterToMixerPhase::GoingToTank

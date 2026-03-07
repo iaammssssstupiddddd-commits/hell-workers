@@ -1,11 +1,9 @@
-use crate::constants::BUCKET_CAPACITY;
 use crate::systems::command::TaskArea;
-use crate::systems::logistics::ResourceType;
+use crate::systems::logistics::{ResourceType, tank_can_accept_new_bucket};
 use crate::systems::logistics::transport_request::TransportRequestKind;
 use bevy::prelude::*;
 
-use super::finder::find_nearest_bucket_for_tank;
-use super::reservation::source_not_reserved;
+use super::finder::{find_nearest_bucket_for_tank, find_nearest_water_bucket_for_tank};
 use crate::systems::familiar_ai::decide::task_management::ReservationShadow;
 
 /// ConsolidateStockpile request の入力を解決する。
@@ -46,7 +44,7 @@ pub fn resolve_consolidation_inputs(
 pub fn resolve_haul_to_stockpile_inputs(
     task_entity: Entity,
     queries: &crate::systems::familiar_ai::decide::task_management::FamiliarTaskAssignmentQueries,
-    _shadow: &crate::systems::familiar_ai::decide::task_management::ReservationShadow,
+    shadow: &crate::systems::familiar_ai::decide::task_management::ReservationShadow,
 ) -> Option<(Entity, ResourceType, Option<Entity>, Option<Entity>)> {
     let req = queries.transport_requests.get(task_entity).ok()?;
     if !matches!(req.kind, TransportRequestKind::DepositToStockpile) {
@@ -79,7 +77,10 @@ pub fn resolve_haul_to_stockpile_inputs(
             .ok()
             .map(|inc: &crate::relationships::IncomingDeliveries| inc.len())
             .unwrap_or(0);
-        let effective_free = stock.capacity.saturating_sub(stored + incoming);
+        let shadow_incoming = shadow.destination_reserved_total(req.anchor);
+        let effective_free = stock
+            .capacity
+            .saturating_sub(stored + incoming + shadow_incoming);
 
         let has_capacity = effective_free > 0;
         let type_ok = stock.resource_type.is_none() || stock.resource_type == Some(resource_type);
@@ -102,7 +103,10 @@ pub fn resolve_haul_to_stockpile_inputs(
                     .ok()
                     .map(|inc: &crate::relationships::IncomingDeliveries| inc.len())
                     .unwrap_or(0);
-                let effective_free = stock.capacity.saturating_sub(stored + incoming);
+                let shadow_incoming = shadow.destination_reserved_total(cell);
+                let effective_free = stock
+                    .capacity
+                    .saturating_sub(stored + incoming + shadow_incoming);
 
                 let type_ok =
                     stock.resource_type.is_none() || stock.resource_type == Some(resource_type);
@@ -151,10 +155,7 @@ pub fn resolve_gather_water_inputs(
         .get(tank_entity)
         .map(|inc| inc.len())
         .unwrap_or(0);
-    let projected_water = current_water.saturating_add(
-        incoming_buckets.saturating_mul(BUCKET_CAPACITY as usize),
-    );
-    if projected_water >= tank_stock.capacity {
+    if !tank_can_accept_new_bucket(current_water, incoming_buckets, tank_stock.capacity) {
         return None;
     }
 
@@ -312,8 +313,8 @@ fn find_tank_bucket_for_water_mixer(
                     return false;
                 }
             }
-            let water_count = stored.map(|s| s.len()).unwrap_or(0);
-            water_count >= BUCKET_CAPACITY as usize
+            let _water_count = stored.map(|s| s.len()).unwrap_or(0);
+            true
         })
         .map(|(e, t, _, _)| {
             let d = t.translation.truncate().distance_squared(mixer_pos);
@@ -323,25 +324,28 @@ fn find_tank_bucket_for_water_mixer(
     tank_candidates.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
 
     for (tank_entity, _) in tank_candidates {
-        let bucket_opt = queries
-            .free_resource_items
-            .iter()
-            .filter(|(_, _, vis, res)| {
-                *vis != Visibility::Hidden
-                    && matches!(res.0, ResourceType::BucketEmpty | ResourceType::BucketWater)
-            })
-            .filter(|(e, _, _, _)| {
-                queries.designation.belongs.get(*e).ok().map(|b| b.0) == Some(tank_entity)
-            })
-            .filter(|(e, _, _, _)| source_not_reserved(*e, queries, shadow))
-            .min_by(|(_, t1, _, _), (_, t2, _, _)| {
-                let d1 = t1.translation.truncate().distance_squared(mixer_pos);
-                let d2 = t2.translation.truncate().distance_squared(mixer_pos);
-                d1.partial_cmp(&d2).unwrap_or(std::cmp::Ordering::Equal)
-            })
-            .map(|(e, _, _, _)| e);
+        if let Some((bucket_entity, _)) =
+            find_nearest_water_bucket_for_tank(tank_entity, mixer_pos, queries, shadow)
+        {
+            return Some((tank_entity, bucket_entity));
+        }
 
-        if let Some(bucket_entity) = bucket_opt {
+        let has_stored_water = queries
+            .storage
+            .stockpiles
+            .get(tank_entity)
+            .ok()
+            .is_some_and(|(_, _, stock, stored)| {
+                stock.resource_type == Some(ResourceType::Water)
+                    && stored.map(|s| s.len()).unwrap_or(0) > 0
+            });
+        if !has_stored_water {
+            continue;
+        }
+
+        if let Some((bucket_entity, _)) =
+            find_nearest_bucket_for_tank(tank_entity, mixer_pos, queries, shadow)
+        {
             return Some((tank_entity, bucket_entity));
         }
     }

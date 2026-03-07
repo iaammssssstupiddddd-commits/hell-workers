@@ -175,6 +175,15 @@ pub fn handle_haul_to_blueprint_task(
                 if let Ok((_, _, _, _, Some(res_item), _, _)) = q_targets.get(item_entity) {
                     let resource_type = res_item.0;
 
+                    if bp.remaining_material_amount(resource_type) == 0 {
+                        info!(
+                            "HAUL_TO_BP: Cancelled delivery for {:?} - blueprint {:?} no longer needs {:?}",
+                            ctx.soul_entity, blueprint_entity, resource_type
+                        );
+                        cancel::cancel_haul_to_blueprint(ctx, item_entity, blueprint_entity, commands);
+                        return;
+                    }
+
                     // Blueprint に資材を搬入
                     bp.deliver_material(resource_type, 1);
                     info!(

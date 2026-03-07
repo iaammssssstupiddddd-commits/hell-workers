@@ -53,6 +53,15 @@ pub fn disable_request_with_demand(commands: &mut Commands, entity: Entity, infl
     });
 }
 
+#[inline]
+pub fn request_state_for_workers(workers: usize) -> TransportRequestState {
+    if workers == 0 {
+        TransportRequestState::Pending
+    } else {
+        TransportRequestState::Claimed
+    }
+}
+
 /// 既存 request entity を指定内容で upsert する。
 #[inline]
 pub fn upsert_transport_request<TTarget: Component>(

@@ -1,4 +1,5 @@
 use crate::systems::familiar_ai::decide::task_management::{AssignTaskContext, ReservationShadow};
+use crate::systems::logistics::ResourceType;
 use bevy::prelude::*;
 
 use super::super::builders::{issue_gather_water, issue_haul_water_to_mixer};
@@ -64,11 +65,25 @@ pub(super) fn assign_haul_water_to_mixer(
         return false;
     };
 
+    let bucket_is_full = queries
+        .items
+        .get(bucket_entity)
+        .ok()
+        .is_some_and(|(item, _)| item.0 == ResourceType::BucketWater)
+        || queries
+            .designation
+            .targets
+            .get(bucket_entity)
+            .ok()
+            .and_then(|(_, _, _, _, resource_item_opt, _, _)| resource_item_opt.map(|res| res.0))
+            .is_some_and(|resource_type| resource_type == ResourceType::BucketWater);
+
     if !source_not_reserved(bucket_entity, queries, shadow) {
         return false;
     }
-    // Tankからの取水競合を避けるため、1タンク1作業のロックを確認
-    if !source_not_reserved(tank_entity, queries, shadow) {
+    let needs_tank_fill = !bucket_is_full;
+    // Tankからの取水競合を避けるため、empty bucket 経路のみ tank lock を確認
+    if needs_tank_fill && !source_not_reserved(tank_entity, queries, shadow) {
         return false;
     }
     let mixer_already_reserved = queries.reserved_for_task.get(ctx.task_entity).is_ok();
@@ -77,6 +92,7 @@ pub(super) fn assign_haul_water_to_mixer(
         bucket_entity,
         mixer_entity,
         tank_entity,
+        needs_tank_fill,
         mixer_already_reserved,
         task_pos,
         already_commanded,

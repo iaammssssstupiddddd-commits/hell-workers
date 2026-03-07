@@ -78,6 +78,7 @@ Familiar の `task_finder` がタスクを発見できる条件（**全て満た
 - `familiar_task_delegation_system`（0.5秒間隔）が候補収集 → worker 別再スコア（priority 0.65 + 距離 0.35）→ `TaskAssignmentRequest` 発行（Execute で適用）
 - 割り当て時に `DeliveringTo`・`WorkingOn`・`CommandedBy` を設定し、ソース（資材・バケツ等）を遅延解決
 - **排他制御**: `SharedResourceCache` を参照（§2.3 参照）
+- **Haul 系の需要再検証**: `DeliverToBlueprint` / `DepositToStockpile` / `DeliverToFloorConstruction` / `DeliverToWallConstruction` / `DeliverToProvisionalWall` は、`IncomingDeliveries` に加えて Think フェーズ内の `ReservationShadow` も差し引いた残需要が 0 の場合、新規 `AssignedTask` を発行しない。
 - 60タイル超の候補は A* 前に除外。`ReachabilityFrameCache` で到達判定を5フレーム共有
 
 ### 4.3 実行 (Execution)
@@ -86,6 +87,7 @@ Familiar の `task_finder` がタスクを発見できる条件（**全て満た
 - **運搬 (Haul)**: GoingToSource → Picking → GoingToDestination → Dropping
 - **猫車運搬 (HaulWithWheelbarrow)**: GoingToParking → PickingUpWheelbarrow → GoingToSource → Loading → GoingToDestination → Unloading → ReturningWheelbarrow
 - **Sand / StasisMud**: 原則猫車必須。例外: ソース隣接 3x3 の立ち位置からドロップ閾値内なら徒歩可
+- **運搬先ガード**: Blueprint / construction / provisional wall / stockpile は Dropping / Unloading 直前に受入可能量を再確認し、到着時点で需要が消えた cargo を搬入先へ反映しない。
 - **精製 (Refine)**: MudMixer で Sand+Water+Rock → StasisMud×5
 - **壁**: FrameWallTile（material_center で木材受領 → フレーミング）/ CoatWall（塗布 → `is_provisional = false`）
 - **⚠️ 消滅**: 地面に放置された Sand / StasisMud は **5秒で消滅**（ReservedForTask / LoadedIn / StoredIn / DeliveringTo いずれかあれば維持）

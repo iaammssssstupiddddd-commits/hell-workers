@@ -1,6 +1,5 @@
-use crate::constants::BUCKET_CAPACITY;
 use crate::systems::jobs::{TargetBlueprint, WorkType};
-use crate::systems::logistics::ResourceType;
+use crate::systems::logistics::{ResourceType, tank_can_accept_new_bucket};
 use crate::systems::logistics::transport_request::TransportRequestKind;
 use bevy::prelude::*;
 
@@ -46,11 +45,7 @@ pub(super) fn score_candidate(
                             .ok()
                             .map(|inc| inc.len())
                             .unwrap_or(0);
-                        let incoming_water =
-                            incoming_buckets.saturating_mul(BUCKET_CAPACITY as usize);
-                        current_count
-                            .saturating_add(incoming_water)
-                            < stock.capacity
+                        tank_can_accept_new_bucket(current_count, incoming_buckets, stock.capacity)
                     }
                 } else {
                     false
@@ -76,11 +71,7 @@ pub(super) fn score_candidate(
                             .ok()
                             .map(|inc: &crate::relationships::IncomingDeliveries| inc.len())
                             .unwrap_or(0);
-                        let incoming_water =
-                            incoming_buckets.saturating_mul(BUCKET_CAPACITY as usize);
-                        current_count
-                            .saturating_add(incoming_water)
-                            < stock.capacity
+                        tank_can_accept_new_bucket(current_count, incoming_buckets, stock.capacity)
                     } else {
                         false
                     }

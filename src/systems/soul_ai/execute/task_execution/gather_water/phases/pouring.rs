@@ -34,6 +34,11 @@ pub fn handle(
     let new_progress = progress + time_delta * 1.0;
 
     if new_progress >= 1.0 {
+        if !guards::tank_can_accept_full_bucket(ctx, tank_entity) {
+            drop_bucket_for_auto_haul(commands, ctx, bucket_entity, tank_entity, world_map);
+            return;
+        }
+
         commands
             .entity(bucket_entity)
             .try_insert(ResourceItem(ResourceType::BucketEmpty));

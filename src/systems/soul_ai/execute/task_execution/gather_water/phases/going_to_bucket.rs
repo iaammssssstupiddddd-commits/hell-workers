@@ -22,6 +22,10 @@ pub fn handle(
     if guards::has_bucket_in_inventory(ctx, bucket_entity) {
         if routing::set_path_to_river(ctx, world_map, bucket_entity, tank_entity).is_none() {
             abort_task_with_item(commands, ctx, world_map);
+        } else {
+            commands
+                .entity(bucket_entity)
+                .remove::<crate::relationships::DeliveringTo>();
         }
         return;
     }
@@ -85,6 +89,9 @@ pub fn handle(
                 )
                 .is_some()
                 {
+                    commands
+                        .entity(bucket_entity)
+                        .try_insert(crate::relationships::DeliveringTo(tank_entity));
                     return;
                 }
             }
@@ -92,6 +99,10 @@ pub fn handle(
 
         if routing::set_path_to_river(ctx, world_map, bucket_entity, tank_entity).is_none() {
             abort_task_with_item(commands, ctx, world_map);
+        } else {
+            commands
+                .entity(bucket_entity)
+                .remove::<crate::relationships::DeliveringTo>();
         }
         return;
     }

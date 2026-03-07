@@ -120,7 +120,7 @@ pub fn handle_refine_task(
                     // 原料消費
                     let _ = storage.consume_materials_for_refining(water_count);
                     if let Some(water_entity) = ctx.queries.resource_items.iter().find_map(
-                        |(res_entity, res_item, stored_in)| {
+                        |(res_entity, _, _, res_item, stored_in, _)| {
                             if res_item.0 == ResourceType::Water
                                 && stored_in.map(|s| s.0) == Some(mixer_entity)
                             {

@@ -53,7 +53,7 @@ pub struct ManualHaulPinnedSource;
 pub struct TransportDemand {
     /// 必要なスロット数
     pub desired_slots: u32,
-    /// 現在運搬中のスロット数
+    /// 現在運搬中のスロット数。既存 request の TaskWorkers / lease 状態から毎フレーム再反映される。
     pub inflight: u32,
 }
 

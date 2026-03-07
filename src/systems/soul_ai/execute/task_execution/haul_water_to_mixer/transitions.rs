@@ -20,12 +20,16 @@ pub(super) fn transition_to_tank(
     if let Ok(tank_data) = ctx.queries.storage.stockpiles.get(tank_entity) {
         let (_, tank_transform, _, _) = tank_data;
         let tank_pos = tank_transform.translation.truncate();
+        commands
+            .entity(bucket_entity)
+            .remove::<crate::relationships::DeliveringTo>();
 
         *ctx.task = AssignedTask::HaulWaterToMixer(HaulWaterToMixerData {
             bucket: bucket_entity,
             tank: tank_entity,
             mixer: mixer_entity,
             amount: 0,
+            needs_tank_fill: true,
             phase: HaulWaterToMixerPhase::GoingToTank,
         });
         ctx.dest.0 = tank_pos;
@@ -56,12 +60,16 @@ pub(super) fn transition_to_mixer(
     if let Ok(mixer_data) = ctx.queries.storage.mixers.get(mixer_entity) {
         let (mixer_transform, _, _) = mixer_data;
         let mixer_pos = mixer_transform.translation.truncate();
+        commands
+            .entity(bucket_entity)
+            .try_insert(crate::relationships::DeliveringTo(mixer_entity));
 
         *ctx.task = AssignedTask::HaulWaterToMixer(HaulWaterToMixerData {
             bucket: bucket_entity,
             tank: tank_entity,
             mixer: mixer_entity,
             amount: BUCKET_CAPACITY, // 既に水入りなので満タンとみなす
+            needs_tank_fill: false,
             phase: HaulWaterToMixerPhase::GoingToMixer,
         });
         update_destination_to_adjacent(
