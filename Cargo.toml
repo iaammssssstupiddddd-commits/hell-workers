@@ -28,6 +28,7 @@ hw_core = { path = "crates/hw_core" }
 hw_jobs = { path = "crates/hw_jobs" }
 hw_logistics = { path = "crates/hw_logistics" }
 hw_world = { path = "crates/hw_world" }
+hw_ai = { path = "crates/hw_ai" }
 
 [features]
 default = ["dynamic_linking"]

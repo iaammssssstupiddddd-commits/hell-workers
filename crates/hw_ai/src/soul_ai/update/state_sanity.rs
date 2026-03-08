@@ -1,10 +1,10 @@
 use bevy::prelude::*;
 
+use hw_core::assigned_task::AssignedTask;
 use hw_core::constants::REST_AREA_CAPACITY;
-use crate::entities::damned_soul::{IdleBehavior, IdleState};
-use crate::relationships::{RestAreaReservedFor, RestingIn, WorkingOn};
-use crate::systems::jobs::{Building, BuildingType, RestArea};
-use crate::systems::soul_ai::execute::task_execution::AssignedTask;
+use hw_core::relationships::{RestAreaReservedFor, RestingIn, WorkingOn};
+use hw_core::soul::{DamnedSoul, IdleBehavior, IdleState};
+use hw_jobs::{Building, BuildingType, RestArea};
 
 /// AssignedTask が None なのに WorkingOn が残っている不整合を解消する。
 pub fn clear_stale_working_on_system(
@@ -41,7 +41,7 @@ pub fn reconcile_rest_state_system(
         Option<&RestingIn>,
         Option<&RestAreaReservedFor>,
     )>,
-    mut q_visibility: Query<&mut Visibility, With<crate::entities::damned_soul::DamnedSoul>>,
+    mut q_visibility: Query<&mut Visibility, With<DamnedSoul>>,
 ) {
     for (entity, mut idle, resting_in, reserved_for) in q_souls.iter_mut() {
         if idle.behavior == IdleBehavior::Resting && resting_in.is_none() {

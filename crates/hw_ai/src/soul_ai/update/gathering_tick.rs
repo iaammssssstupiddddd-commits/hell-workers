@@ -1,7 +1,8 @@
 use bevy::prelude::*;
 
-use crate::relationships::GatheringParticipants;
-use crate::systems::soul_ai::helpers::gathering::{
+use hw_core::relationships::GatheringParticipants;
+
+use crate::soul_ai::helpers::gathering::{
     GATHERING_GRACE_PERIOD, GATHERING_MIN_PARTICIPANTS, GatheringSpot, GatheringUpdateTimer,
 };
 

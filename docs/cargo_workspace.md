@@ -18,6 +18,7 @@ crates/hw_core
 crates/hw_world
 crates/hw_logistics
 crates/hw_jobs
+crates/hw_ai
 ```
 
 依存の向きは次を基本とします。
@@ -27,6 +28,7 @@ hw_core
   ├─ hw_world
   ├─ hw_logistics
   ├─ hw_jobs
+  ├─ hw_ai
   └─ bevy_app
 
 hw_world
@@ -37,6 +39,9 @@ hw_logistics
 
 hw_jobs
   └─ bevy_app
+
+hw_ai (hw_core + hw_jobs + hw_logistics + hw_world)
+  └─ bevy_app
 ```
 
 重要な原則:
@@ -44,6 +49,30 @@ hw_jobs
 - leaf crate から root crate (`bevy_app`) へ逆依存しない
 - `hw_components` のような雑多な共通箱は作らない
 - 型定義とその主要 `impl` は同じ crate に置く
+
+### `hw_ai`
+
+役割:
+
+- Root crate に依存しない AI コアロジック
+- Soul AI および Familiar AI の純粋なシステム実装
+- hw_core / hw_jobs / hw_logistics / hw_world を組み合わせた AI ドメインロジック
+
+代表例:
+
+- `SoulAiCorePlugin` — Soul AI の Update/Execute フェーズコアシステム
+- `FamiliarAiCorePlugin` — Familiar AI の Perceive フェーズコアシステム
+- `soul_ai::update::*` — 疲労・バイタル・夢・集会・休憩所の更新システム
+- `soul_ai::execute::designation_apply` — Designation 要求適用
+- `soul_ai::helpers::gathering` — 集会スポット型定義・ヘルパー
+- `familiar_ai::perceive::state_detection` — 使い魔 AI 状態遷移検知
+
+ここに置かないもの:
+
+- `GameAssets` 依存の sprite spawn
+- `WorldMap` / `SpatialGrid` を直接参照するシステム
+- UI システム
+- `Commands` で複雑な Entity 生成を行うもの
 
 ## 3. 各 crate の責務
 
@@ -245,6 +274,7 @@ cargo check -p hw_core
 cargo check -p hw_world
 cargo check -p hw_logistics
 cargo check -p hw_jobs
+cargo check -p hw_ai
 ```
 
 ## 9. やらないこと

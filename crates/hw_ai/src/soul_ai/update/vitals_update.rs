@@ -1,10 +1,10 @@
 use bevy::prelude::*;
 
+use hw_core::assigned_task::AssignedTask;
 use hw_core::constants::*;
-use crate::entities::damned_soul::{DamnedSoul, IdleBehavior, IdleState};
-use crate::events::OnExhausted;
-use crate::relationships::CommandedBy;
-use crate::systems::soul_ai::execute::task_execution::AssignedTask;
+use hw_core::events::OnExhausted;
+use hw_core::relationships::CommandedBy;
+use hw_core::soul::{DamnedSoul, IdleBehavior, IdleState};
 
 /// 疲労の増減を管理するシステム
 pub fn fatigue_update_system(

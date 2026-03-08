@@ -1,5 +1,4 @@
 pub mod cleanup;
-pub mod designation_apply;
 pub mod drifting;
 pub mod escaping_apply;
 pub mod gathering_apply;

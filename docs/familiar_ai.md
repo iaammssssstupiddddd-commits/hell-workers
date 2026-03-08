@@ -91,9 +91,10 @@
 - **`decide/task_management/`**: `TaskManager` — `collect_scored_candidates`（Familiar単位1回収集）→ `try_assign_for_workers`（worker別再スコア `priority 0.65 + 距離 0.35`、Top-K 先行評価、60タイル外フィルタ）→ `assign_task_to_worker`（`TaskAssignmentRequest` 発行）
 - **`decide/auto_gather_for_blueprint/{demand,supply,planning,actions}.rs`**: Blueprint/Mixer不足資材の自動Gather指定（`AutoGatherDesignation` marker管理）
 - **`decide/recruitment.rs`**: `RecruitmentManager`（find_best_recruit / try_immediate_recruit / start_scouting）
-- **`perceive/`**: `state_detection.rs`（`Changed<FamiliarAiState>`検知）, `resource_sync.rs`（SharedResourceCache再構築）
+- **`perceive/`**: `state_detection.rs`（`Changed<FamiliarAiState>`検知、**`hw_ai` に移動済み**）, `resource_sync.rs`（SharedResourceCache再構築、root 残留）
 - **`execute/`**: `squad_apply.rs` / `max_soul_apply.rs` / `idle_visual_apply.rs` / `encouragement_apply.rs`
 - **設計メモ**: 副作用（`Commands`・イベント）は `execute/` に限定。`helpers/query_types.rs` がフェーズ横断クエリ型を集約。
+- **hw_ai 分担**: `FamiliarAiPlugin` は `hw_ai::FamiliarAiCorePlugin` を内部で `add_plugins` し、`perceive/state_detection` のシステムを委譲している。`WorldMap`/SpatialGrid 依存のシステムは root 残留。詳細は `docs/plans/hw-ai-crate-plan-2026-03-08.md` §M6 参照。
 
 ### 5.2. 関連コンポーネント
 

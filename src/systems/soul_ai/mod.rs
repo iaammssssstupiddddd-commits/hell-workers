@@ -19,6 +19,9 @@ pub struct SoulAiPlugin;
 
 impl Plugin for SoulAiPlugin {
     fn build(&self, app: &mut App) {
+        // hw_ai の SoulAiCorePlugin でコアシステムを登録
+        app.add_plugins(hw_ai::SoulAiCorePlugin);
+
         // Soul AI は Familiar AI の後に実行される
         // FamiliarAiSystemSet::Execute → ApplyDeferred → SoulAiSystemSet::Perceive
         app.configure_sets(
@@ -34,8 +37,6 @@ impl Plugin for SoulAiPlugin {
                 .in_set(GameSystemSet::Logic),
         )
         .register_type::<execute::task_execution::AssignedTask>()
-        .register_type::<helpers::gathering::GatheringSpot>()
-        .init_resource::<helpers::gathering::GatheringUpdateTimer>()
         .init_resource::<perceive::escaping::EscapeDetectionTimer>()
         .init_resource::<perceive::escaping::EscapeBehaviorTimer>()
         .init_resource::<decide::drifting::DriftingDecisionTimer>()
@@ -52,22 +53,7 @@ impl Plugin for SoulAiPlugin {
                     .after(SoulAiSystemSet::Perceive)
                     .before(SoulAiSystemSet::Update),
                 // === Update Phase ===
-                // 時間経過による内部状態の変化
-                (
-                    // タイマー更新
-                    helpers::gathering::tick_gathering_timer_system,
-                    update::gathering_tick::gathering_grace_tick_system,
-                    // バイタル更新
-                    update::vitals_update::fatigue_update_system,
-                    update::vitals_update::fatigue_penalty_system,
-                    update::vitals_influence::familiar_influence_unified_system,
-                    update::rest_area_update::rest_area_update_system,
-                    update::state_sanity::ensure_rest_area_component_system,
-                    update::state_sanity::clear_stale_working_on_system,
-                    update::state_sanity::reconcile_rest_state_system,
-                    // Dream蓄積
-                    update::dream_update::dream_update_system,
-                )
+                update::vitals_influence::familiar_influence_unified_system
                     .in_set(SoulAiSystemSet::Update),
                 // Update → Decide 間の同期
                 bevy::ecs::schedule::ApplyDeferred
@@ -102,8 +88,6 @@ impl Plugin for SoulAiPlugin {
                 // === Execute Phase ===
                 // 決定された行動の実行
                 (
-                    // Designation要求の適用
-                    execute::designation_apply::apply_designation_requests_system,
                     // タスク要求の適用
                     execute::task_execution::apply_task_assignment_requests_system
                         .before(execute::task_execution::task_execution_system),
@@ -128,9 +112,7 @@ impl Plugin for SoulAiPlugin {
                 )
                     .in_set(SoulAiSystemSet::Execute),
             ),
-        )
-        .add_observer(update::vitals::on_task_completed_motivation_bonus)
-        .add_observer(update::vitals::on_encouraged_effect)
-        .add_observer(update::vitals::on_soul_recruited_effect);
+        );
     }
 }
+
