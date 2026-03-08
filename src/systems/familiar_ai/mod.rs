@@ -61,7 +61,6 @@ impl Plugin for FamiliarAiPlugin {
                     decide::auto_gather_for_blueprint::blueprint_auto_gather_system,
                     ApplyDeferred,
                     decide::task_delegation::familiar_task_delegation_system,
-                    decide::following::following_familiar_system,
                     decide::encouragement::encouragement_decision_system,
                 )
                     .chain(),)
