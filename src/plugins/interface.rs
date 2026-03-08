@@ -7,6 +7,7 @@ use crate::interface::ui::plugins::{
     UiCorePlugin, UiEntityListPlugin, UiFoundationPlugin, UiInfoPanelPlugin, UiTooltipPlugin,
 };
 use crate::systems::GameSystemSet;
+use hw_ui::HwUiPlugin;
 use bevy::prelude::*;
 
 pub struct InterfacePlugin;
@@ -14,6 +15,7 @@ pub struct InterfacePlugin;
 impl Plugin for InterfacePlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins((
+            HwUiPlugin,
             UiFoundationPlugin,
             UiCorePlugin,
             UiTooltipPlugin,

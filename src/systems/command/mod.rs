@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 
 use crate::systems::world::zones::AreaBounds;
+use crate::systems::logistics::ZoneType;
 
 pub mod area_selection;
 pub mod assign_task;
@@ -9,23 +10,20 @@ pub mod input;
 pub mod visualization;
 pub mod zone_placement;
 
-/// タスクモード - どのタスクを指定中か
-#[derive(Resource, Default, Debug, Clone, Copy, PartialEq)]
-pub enum TaskMode {
-    #[default]
-    None, // 通常モード
-    DesignateChop(Option<Vec2>),     // 伐採指示モード (ドラッグ開始位置)
-    DesignateMine(Option<Vec2>),     // 採掘指示モード (ドラッグ開始位置)
-    DesignateHaul(Option<Vec2>),     // 運搬指示モード (ドラッグ開始位置)
-    CancelDesignation(Option<Vec2>), // 指示キャンセルモード (ドラッグ開始位置)
-    SelectBuildTarget,               // 建築対象選択中
-    AreaSelection(Option<Vec2>),     // エリア選択モード (始点)
-    AssignTask(Option<Vec2>),        // 未アサインタスクを使い魔に割り当てるモード
-    ZonePlacement(crate::systems::logistics::ZoneType, Option<Vec2>), // ゾーン（ストックパイル等）配置モード
-    ZoneRemoval(crate::systems::logistics::ZoneType, Option<Vec2>),   // ゾーン解除モード
-    FloorPlace(Option<Vec2>),    // 床エリア配置モード (ドラッグ開始位置)
-    WallPlace(Option<Vec2>),     // 壁ライン配置モード (ドラッグ開始位置)
-    DreamPlanting(Option<Vec2>), // Dream植林モード (ドラッグ開始位置)
+pub use hw_core::game_state::{TaskMode, TaskModeZoneType};
+
+pub fn to_task_mode_zone_type(zone_type: ZoneType) -> TaskModeZoneType {
+    match zone_type {
+        ZoneType::Stockpile => TaskModeZoneType::Stockpile,
+        ZoneType::Yard => TaskModeZoneType::Yard,
+    }
+}
+
+pub fn to_logistics_zone_type(zone_type: TaskModeZoneType) -> ZoneType {
+    match zone_type {
+        TaskModeZoneType::Stockpile => ZoneType::Stockpile,
+        TaskModeZoneType::Yard => ZoneType::Yard,
+    }
 }
 
 /// タスクエリア - 使い魔が担当するエリア

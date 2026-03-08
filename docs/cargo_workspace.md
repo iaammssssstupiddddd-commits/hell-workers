@@ -20,6 +20,7 @@ crates/hw_logistics
 crates/hw_jobs
 crates/hw_ai
 crates/hw_spatial
+crates/hw_ui
 ```
 
 依存の向きは次を基本とします。
@@ -46,6 +47,12 @@ hw_spatial (hw_core + hw_world + hw_logistics + hw_jobs)
   └─ bevy_app
 
 hw_ai (hw_core + hw_jobs + hw_logistics + hw_world + hw_spatial)
+  └─ bevy_app
+
+hw_ui
+  ├─ hw_core
+  ├─ hw_jobs
+  ├─ hw_logistics
   └─ bevy_app
 ```
 

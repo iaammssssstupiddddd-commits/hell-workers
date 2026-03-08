@@ -27,6 +27,7 @@ rand = { workspace = true }
 hw_core = { path = "crates/hw_core" }
 hw_jobs = { path = "crates/hw_jobs" }
 hw_logistics = { path = "crates/hw_logistics" }
+hw_ui = { path = "crates/hw_ui" }
 hw_world = { path = "crates/hw_world" }
 hw_ai = { path = "crates/hw_ai" }
 hw_spatial = { path = "crates/hw_spatial" }

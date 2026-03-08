@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+pub use hw_core::game_state::TimeSpeed;
 
 #[derive(Resource, Default, Reflect)]
 #[reflect(Resource)]
@@ -7,14 +8,6 @@ pub struct GameTime {
     pub day: u32,
     pub hour: u32,
     pub minute: u32,
-}
-
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum TimeSpeed {
-    Paused,
-    Normal,
-    Fast,
-    Super,
 }
 
 #[derive(Component)]
