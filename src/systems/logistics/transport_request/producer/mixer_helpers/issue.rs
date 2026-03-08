@@ -161,11 +161,11 @@ pub(crate) fn find_available_sand_tile(
             let Some(idx) = world_map.pos_to_idx(gx, gy) else {
                 continue;
             };
-            if world_map.tiles[idx] != TerrainType::Sand {
+            if world_map.terrain_at_idx(idx) != Some(TerrainType::Sand) {
                 continue;
             }
 
-            let Some(tile_entity) = world_map.tile_entities[idx] else {
+            let Some(tile_entity) = world_map.tile_entity_at_idx(idx) else {
                 continue;
             };
             let Ok((designation, workers)) = q_task_state.get(tile_entity) else {

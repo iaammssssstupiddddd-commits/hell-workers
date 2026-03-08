@@ -143,11 +143,11 @@ fn scan_terrain_tiles(
             let Some(idx) = queries.world_map.pos_to_idx(gx, gy) else {
                 continue;
             };
-            if queries.world_map.tiles[idx] != terrain_type {
+            if queries.world_map.terrain_at_idx(idx) != Some(terrain_type) {
                 continue;
             }
 
-            let Some(tile_entity) = queries.world_map.tile_entities[idx] else {
+            let Some(tile_entity) = queries.world_map.tile_entity_at_idx(idx) else {
                 continue;
             };
             let Ok((designation_opt, workers_opt)) = queries.task_state.get(tile_entity) else {

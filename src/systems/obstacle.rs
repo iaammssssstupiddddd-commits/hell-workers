@@ -18,7 +18,7 @@ pub fn obstacle_cleanup_system(
     // 何かが削除されたか、あるいは内部データと不一致がある場合に処理
     let any_removed = removed.read().next().is_some();
     let current_obstacles_count = q_obstacles.iter().count();
-    let map_obstacles_count = world_map.obstacles.iter().filter(|&&b| b).count();
+    let map_obstacles_count = world_map.obstacle_count();
 
     if !any_removed && current_obstacles_count == map_obstacles_count {
         return;
@@ -43,12 +43,10 @@ pub fn obstacle_cleanup_system(
 
     // WorldMapから不要な障害物を削除
     let mut to_remove = Vec::new();
-    for idx in 0..world_map.obstacles.len() {
-        if world_map.obstacles[idx] {
-            let pos = WorldMap::idx_to_pos(idx);
-            if !current_obstacles.contains(&pos) && !world_map.has_building(pos) {
-                to_remove.push(pos);
-            }
+    for idx in world_map.obstacle_indices() {
+        let pos = WorldMap::idx_to_pos(idx);
+        if !current_obstacles.contains(&pos) && !world_map.has_building(pos) {
+            to_remove.push(pos);
         }
     }
 
@@ -56,11 +54,11 @@ pub fn obstacle_cleanup_system(
         world_map.remove_obstacle(x, y);
         // 岩があった場所をDirtに変更
         if let Some(idx) = world_map.pos_to_idx(x, y) {
-            world_map.tiles[idx] = crate::world::map::TerrainType::Dirt;
+            world_map.set_terrain_at_idx(idx, crate::world::map::TerrainType::Dirt);
 
             // 視覚的なタイルも更新
-            if let Some(Some(tile_entity)) = world_map.tile_entities.get(idx) {
-                if let Ok(mut sprite) = q_sprites.get_mut(*tile_entity) {
+            if let Some(tile_entity) = world_map.tile_entity_at_idx(idx) {
+                if let Ok(mut sprite) = q_sprites.get_mut(tile_entity) {
                     sprite.image = game_assets.dirt.clone();
                 }
             }

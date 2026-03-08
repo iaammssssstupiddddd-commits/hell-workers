@@ -85,7 +85,42 @@ impl WorldMap {
         let Some(idx) = self.pos_to_idx(x, y) else {
             return false;
         };
-        self.tiles[idx] == TerrainType::River
+        self.terrain_at_idx(idx) == Some(TerrainType::River)
+    }
+
+    pub fn terrain_at_idx(&self, idx: usize) -> Option<TerrainType> {
+        self.tiles.get(idx).copied()
+    }
+
+    pub fn terrain_tiles(&self) -> &[TerrainType] {
+        &self.tiles
+    }
+
+    pub fn set_terrain_at_idx(&mut self, idx: usize, terrain: TerrainType) {
+        if let Some(slot) = self.tiles.get_mut(idx) {
+            *slot = terrain;
+        }
+    }
+
+    pub fn tile_entity_at_idx(&self, idx: usize) -> Option<Entity> {
+        self.tile_entities.get(idx).and_then(|entity| *entity)
+    }
+
+    pub fn set_tile_entity_at_idx(&mut self, idx: usize, entity: Entity) {
+        if let Some(slot) = self.tile_entities.get_mut(idx) {
+            *slot = Some(entity);
+        }
+    }
+
+    pub fn obstacle_count(&self) -> usize {
+        self.obstacles.iter().filter(|&&blocked| blocked).count()
+    }
+
+    pub fn obstacle_indices(&self) -> impl Iterator<Item = usize> + '_ {
+        self.obstacles
+            .iter()
+            .enumerate()
+            .filter_map(|(idx, blocked)| blocked.then_some(idx))
     }
 
     pub fn add_obstacle(&mut self, x: i32, y: i32) {
