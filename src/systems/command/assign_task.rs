@@ -5,7 +5,7 @@ use crate::interface::camera::MainCamera;
 use crate::interface::selection::SelectedEntity;
 use crate::interface::ui::UiInputState;
 use crate::systems::jobs::Designation;
-use crate::world::map::WorldMap;
+use crate::world::map::{WorldMap, WorldMapRead};
 use crate::world::pathfinding::{self, PathfindingContext};
 use bevy::prelude::*;
 
@@ -22,7 +22,7 @@ pub fn assign_task_system(
         Without<crate::relationships::ManagedBy>,
     >,
     q_familiars: Query<(Entity, &Transform), With<Familiar>>,
-    world_map: Res<WorldMap>,
+    world_map: WorldMapRead,
     mut pf_context: Local<PathfindingContext>,
 ) {
     if ui_input_state.pointer_over_ui {

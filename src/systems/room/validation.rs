@@ -2,7 +2,7 @@ use super::components::Room;
 use super::detection::{build_detection_input, room_is_valid_against_input};
 use super::resources::{RoomDetectionState, RoomTileLookup, RoomValidationState};
 use crate::systems::jobs::Building;
-use crate::world::map::WorldMap;
+use crate::world::map::WorldMapRead;
 use bevy::prelude::*;
 use std::collections::HashMap;
 
@@ -15,14 +15,14 @@ pub fn validate_rooms_system(
     mut room_tile_lookup: ResMut<RoomTileLookup>,
     q_rooms: Query<(Entity, &Room)>,
     q_buildings: Query<(Entity, &Building, &Transform)>,
-    world_map: Res<WorldMap>,
+    world_map: WorldMapRead,
 ) {
     validation_state.timer.tick(time.delta());
     if !validation_state.timer.just_finished() {
         return;
     }
 
-    let input = build_detection_input(&q_buildings, &world_map);
+    let input = build_detection_input(&q_buildings, world_map.as_ref());
     let mut tile_to_room = HashMap::new();
 
     for (room_entity, room) in q_rooms.iter() {

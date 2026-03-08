@@ -9,14 +9,14 @@ use crate::systems::soul_ai::helpers::gathering_positions::{
     find_position_fallback_away, find_position_with_separation,
 };
 use crate::systems::spatial::{SpatialGrid, SpatialGridOps};
-use crate::world::map::WorldMap;
+use crate::world::map::WorldMapRead;
 
 /// 重なり回避の最小間隔
 const GATHERING_MIN_SEPARATION: f32 = TILE_SIZE * 1.2;
 
 /// 集会中のSoul同士の重なりを防ぐシステム（0.5秒間隔）
 pub fn gathering_separation_system(
-    world_map: Res<WorldMap>,
+    world_map: WorldMapRead,
     q_spots: Query<&GatheringSpot>,
     update_timer: Res<GatheringUpdateTimer>,
     soul_grid: Res<SpatialGrid>,
@@ -69,7 +69,7 @@ pub fn gathering_separation_system(
                 center,
                 entity,
                 &*soul_grid,
-                &world_map,
+                world_map.as_ref(),
                 min_dist,
                 max_dist,
                 GATHERING_MIN_SEPARATION,
@@ -79,7 +79,13 @@ pub fn gathering_separation_system(
                 path.waypoints.clear();
                 path.current_index = 0;
             } else if let Some(new_pos) =
-                find_position_fallback_away(center, current_pos, entity, &*soul_grid, &world_map)
+                find_position_fallback_away(
+                    center,
+                    current_pos,
+                    entity,
+                    &*soul_grid,
+                    world_map.as_ref(),
+                )
             {
                 dest.0 = new_pos;
                 path.waypoints.clear();

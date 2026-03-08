@@ -3,7 +3,7 @@ use hw_core::game_state::{PlayMode};
 use crate::app_contexts::{BuildContext, CompanionParentKind, CompanionPlacementKind, CompanionPlacementState};
 use crate::interface::camera::MainCamera;
 use crate::systems::jobs::{Blueprint, Building, BuildingType};
-use crate::world::map::{RIVER_Y_MIN, WorldMap};
+use crate::world::map::{RIVER_Y_MIN, WorldMap, WorldMapRead};
 use bevy::prelude::*;
 
 const TANK_NEARBY_BUCKET_STORAGE_TILES: i32 = 3;
@@ -27,7 +27,7 @@ pub fn placement_ghost_system(
     q_window: Query<&Window, With<bevy::window::PrimaryWindow>>,
     q_camera: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
     game_assets: Res<crate::assets::GameAssets>,
-    world_map: Res<WorldMap>,
+    world_map: WorldMapRead,
     q_buildings: Query<&Building>,
     q_blueprints: Query<&Blueprint>,
 ) {
@@ -125,7 +125,8 @@ pub fn placement_ghost_system(
                 && !world_map.has_stockpile(grid_pos)
                 && world_map.is_walkable(grid_pos.0, grid_pos.1)
         };
-        base_tile_ok && is_valid_door_placement(&world_map, &q_buildings, &q_blueprints, grid_pos)
+        base_tile_ok
+            && is_valid_door_placement(world_map.as_ref(), &q_buildings, &q_blueprints, grid_pos)
     } else {
         occupied_grids.iter().all(|&g| {
             !world_map.has_building(g)

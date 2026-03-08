@@ -13,7 +13,7 @@ use crate::systems::logistics::ResourceItem;
 use crate::systems::logistics::ZoneType;
 use crate::systems::visual::task_area_visual::TaskAreaMaterial;
 use crate::systems::world::zones::{Site, Yard};
-use crate::world::map::WorldMap;
+use crate::world::map::{WorldMap, WorldMapRead};
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 
@@ -132,7 +132,7 @@ pub fn dream_tree_planting_preview_system(
     area_edit_session: Res<AreaEditSession>,
     q_camera: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
     q_window: Query<&Window, With<PrimaryWindow>>,
-    world_map: Res<WorldMap>,
+    world_map: WorldMapRead,
     dream_pool: Res<DreamPool>,
     game_assets: Res<GameAssets>,
     q_trees: Query<&Transform, With<Tree>>,
