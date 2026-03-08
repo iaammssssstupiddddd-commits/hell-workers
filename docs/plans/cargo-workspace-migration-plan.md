@@ -37,7 +37,7 @@
   - `src/systems/logistics/`
 - `hw_world` は world 全体ではなく、固定レイアウト定数・川/砂生成ロジック・pathfinding アルゴリズム・`TerrainType` を保持している
   - 追加で、ベース地形タイル生成・terrain border 判定・regrowth zone 定義/候補選定ロジックも `hw_world` に保持している
-- `hw_core` には `events` のうち低結合な型群も移り始めている
+- `hw_core` には `events` のうち低結合な型群に加え、`WorkType` / `ResourceType` / `FamiliarAiState` も移り始めている
 - `hw_components` は、現 checkout には存在しない
 
 結論:
@@ -57,6 +57,14 @@
   - root の `src/relationships.rs` は互換維持のため re-export のみ保持
 - `events.rs` のうち、`WorkType` / `ResourceType` / `AssignedTask` / `FamiliarAiState` に依存しない型群を `hw_core::events` へ移動
   - root の `src/events.rs` は高結合な型と re-export のみ保持
+- `WorkType` を `hw_core::jobs` へ移動
+  - root の `src/systems/jobs/mod.rs` は re-export のみ保持
+- `ResourceType` を `hw_core::logistics` へ移動
+  - root の `src/systems/logistics/types.rs` は re-export のみ保持
+- `FamiliarAiState` を `hw_core::familiar` へ移動
+  - root の `src/systems/familiar_ai/mod.rs` は re-export のみ保持
+- `events.rs` のうち `WorkType` / `ResourceType` / `FamiliarAiState` 依存の型群も `hw_core::events` へ移動
+  - 現時点で root に残る主要な高結合イベントは `AssignedTask` 依存の `TaskAssignmentRequest`
 - `DoorState` を `hw_core::world` へ移動
   - `src/systems/jobs/door.rs` は re-export を保持
 - `hw_world` クレートの追加
@@ -85,7 +93,7 @@
 ### 未完了
 
 - `events.rs` の残存高結合型の整理
-  - `WorkType` / `ResourceType` / `AssignedTask` / `FamiliarAiState` 依存の分離方針確定
+  - 主に `AssignedTask` 依存の `TaskAssignmentRequest`
 - `WorldMap` 本体と app 側 shell (`spawn` / `terrain_border` / `regrowth`) の整理
 - `WorldMap` resource そのものへの広い依存の整理
   - 特に app-wide `Res<WorldMap>` / `ResMut<WorldMap>` の境界再設計
@@ -175,8 +183,8 @@ hw_logistics
 
 - 維持: `constants`, `game_state`
 - 維持: `relationships`
-- 部分移動済み: `events` の低結合型群
-- 保留: `events` の高結合型群（依存が広いため）
+- 移動済み: `events` の低結合型群、`WorkType`、`ResourceType`、`FamiliarAiState`
+- 保留: `AssignedTask` 依存の `events` / task execution 境界
 
 作業:
 

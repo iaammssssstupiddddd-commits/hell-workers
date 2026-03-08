@@ -10,32 +10,8 @@ pub mod helpers;
 pub mod perceive;
 pub mod update;
 
+pub use hw_core::familiar::FamiliarAiState;
 pub use helpers::query_types::FamiliarSoulQuery;
-
-/// 使い魔のAI状態
-#[derive(Component, Debug, Clone, PartialEq, Reflect)]
-#[reflect(Component)]
-pub enum FamiliarAiState {
-    /// 待機中
-    Idle,
-    /// タスク探索中
-    SearchingTask,
-    /// スカウト中
-    Scouting { target_soul: Entity },
-    /// 監視中
-    Supervising {
-        /// 現在固定しているターゲット
-        target: Option<Entity>,
-        /// 切り替え禁止タイマー
-        timer: f32,
-    },
-}
-
-impl Default for FamiliarAiState {
-    fn default() -> Self {
-        Self::Idle
-    }
-}
 
 pub struct FamiliarAiPlugin;
 
