@@ -174,7 +174,7 @@ use crate::systems::soul_ai::helpers::work::unassign_task;
 
 ```rust
 // crates/hw_ui/src/intents.rs
-#[derive(Event, Debug, Clone)]
+#[derive(Message, Copy, Clone, Debug)]
 pub enum UiIntent {
     // ゲームモード選択
     SelectTaskMode(hw_core::TaskMode),       // ← TaskMode は hw_core へ移動後
@@ -285,14 +285,14 @@ CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo check
 
 **変更内容**:
 1. `crates/hw_ui/src/intents.rs` を新設（「4.2 UiIntent 設計」の enum を実装）
-2. `crates/hw_ui/src/lib.rs` に `app.add_event::<UiIntent>()` を追加
+2. `crates/hw_ui/src/lib.rs` に `app.add_message::<UiIntent>()` を追加
 3. `src/interface/ui/interaction/intent_handler.rs` を新設
-   - `fn handle_ui_intent(mut events: EventReader<UiIntent>, mut task_ctx: ResMut<TaskContext>, ...)` を実装
+   - `fn handle_ui_intent(mut events: MessageReader<UiIntent>, mut task_ctx: ResMut<TaskContext>, ...)` を実装
    - `MenuAction` の各分岐を `UiIntent` の match 分岐として書き直す
-4. `src/plugins/interface.rs` に `intent_handler` を `GameSystemSet::Interface` で登録
+4. `src/interface/ui/plugins/core.rs` に `ui_interaction_system`, `handle_ui_intent` などを `GameSystemSet::Interface` で登録
 5. `src/interface/ui/components.rs` から `MenuAction` enum を削除し、`UiIntent` を `hw_ui` から re-import
 6. `src/interface/ui/interaction/menu_actions.rs` を `UiIntent` event 送信に書き換え
-7. `src/plugins/messages.rs` に `UiIntent` 登録（既に `add_event` は hw_ui 内で行うが、root 参照用の記録として）
+7. `src/plugins/messages.rs` から `UiIntent` の重複登録を除去し、`hw_ui` 側 `add_message` のみで管理
 
 **変更ファイル**:
 - `crates/hw_ui/src/intents.rs` （新規）
@@ -300,15 +300,15 @@ CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo check
 - `src/interface/ui/interaction/intent_handler.rs` （新規）
 - `src/interface/ui/interaction/menu_actions.rs`
 - `src/interface/ui/components.rs`
-- `src/plugins/interface.rs`
-- `src/plugins/messages.rs`
+- `src/interface/ui/plugins/core.rs`
+- `src/plugins/messages.rs`（重複登録の確認）
 
 **完了条件**:
-- [ ] `MenuAction` enum が削除されている（または `UiIntent` への型エイリアスのみ）
-- [ ] `hw_ui` 側の interaction が `UiIntent` event を発行するだけになっている
-- [ ] root handler が `UiIntent` を受け取り `TaskContext`/`BuildContext`/`ZoneContext`/`WorldMapWrite` を更新している
-- [ ] `CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo check` が通る
-- [ ] `cargo run` で UI 操作が動作する
+- [x] `MenuAction` enum が削除されている（または `UiIntent` への型エイリアスのみ）
+- [x] `hw_ui` 側の interaction が `UiIntent` event を発行する形へ更新
+- [x] root handler が `UiIntent` を受け取り `PlayMode`/`BuildContext`/`TaskContext`/`ZoneContext`/時間制御を更新している
+- [x] `CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo check` は、`bevy_app` 側の確認で通過
+- [ ] `cargo run` で UI 操作が全件再検証されている
 
 ---
 
@@ -508,7 +508,7 @@ CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo check
 | `Changed<Interaction>` 登録順変更で ボタン反応が壊れる | 高 | 既存の `.chain()` / `.after()` / `.before()` を全てコピーし、移動後の plugin 登録順を変えない。M6〜M7 完了後に全ボタン動作を手動確認する |
 | selection 系との暗黙依存（`SelectedEntity`, `HoveredEntity` 等）を `hw_ui` が直接触ってしまう | 中 | `SelectedEntity`, `HoveredEntity` は root で定義・管理し、`hw_ui` は `UiIntent::InspectEntity(entity)` 経由でのみ参照する |
 | `Entity` を含む `UiIntent` の対象が intent 処理時に despawn 済みになる | 中 | root handler で `query.get(entity).is_ok()` を確認し、invalid entity は no-op で処理する |
-| `hw_ui` の `add_event::<UiIntent>()` と root 側の重複 Event 登録 | 低 | `src/plugins/messages.rs` から `UiIntent` の登録を削除し、`hw_ui` 側の `add_event` に一本化する |
+| `hw_ui` の `add_message::<UiIntent>()` と root 側の重複 Message 登録 | 低 | `src/plugins/messages.rs` から `UiIntent` の登録を削除し、`hw_ui` 側の `add_message` に一本化する |
 
 ## 7. 検証計画
 
@@ -554,15 +554,17 @@ CARGO_HOME=/home/satotakumi/.cargo cargo build --timings
 
 ### 現在地
 
-- 進捗: `0%`（M1 未着手）
-- 完了済みマイルストーン: なし
-- 未着手: M1 〜 M8 すべて
+- 進捗: `25%`（M1〜M3 の主要実装を反映）
+- 完了済みマイルストーン: M1, M2, M3
+- 未着手: M4 〜 M8
 
 ### 次のAIが最初にやること
 
-1. **M1**: `crates/hw_ui/` 骨格を作成し `cargo check -p hw_ui` を通す
-2. **M2**: `TaskMode` / `TimeSpeed` の hw_core 移動 ― `src/systems/command.rs` と `src/systems/time.rs` を確認し、移動対象を特定する
-3. **M3**: `UiIntent` を `crates/hw_ui/src/intents.rs` に定義し、root handler を新設する
+1. **M4**: `src/interface/ui/setup/` を `crates/hw_ui/` へ移設
+2. **M5**: `interaction` のイベント送信側責務を `hw_ui` 側に収束（`root handler` との分離を確定）
+3. **M6**: `src/interface/ui/panels/` と `src/interface/ui/list/` の移設
+4. **M7**: `interaction` の残置と root handler の最終整理
+5. **M8**: docs 最終同期、shell 収束
 
 ### ブロッカー/注意点（コード調査済み）
 
@@ -588,7 +590,8 @@ CARGO_HOME=/home/satotakumi/.cargo cargo build --timings
 
 ### 最終確認ログ
 
-- 最終 `cargo check`: `2026-03-08` / `pass`（計画書作成時点）
+- 最終 `cargo check`: `2026-03-08` / `pass`
+  - `cargo check -p bevy_app@0.1.0`（`UiIntent` + `handle_ui_intent` 統合、`GameSystemSet::Interface` 再適用まで）
 - 未解決エラー: なし
 
 ### Definition of Done
@@ -606,3 +609,4 @@ CARGO_HOME=/home/satotakumi/.cargo cargo build --timings
 | --- | --- | --- |
 | `2026-03-08` | `AI` | 初版作成 |
 | `2026-03-08` | `AI` | コード調査に基づいてブラッシュアップ: MenuAction 全依存一覧、EntityInspectionQuery 全依存一覧、UiIntent 設計、M1〜M8 の具体的変更ファイル・検証コマンド・完了条件を追加 |
+| `2026-03-08` | `AI` | M1〜M3 実装結果を反映（`UiIntent` 実装 + `Message` 化、root handler 整備、`UiCorePlugin` の set 化） |

@@ -5,12 +5,14 @@
 mod common;
 mod dialog;
 mod menu_actions;
+mod intent_handler;
 mod hover_action;
 mod mode;
 mod status_display;
 mod tooltip;
 
 pub(crate) use common::despawn_context_menus;
+pub(crate) use intent_handler::handle_ui_intent;
 
 pub use status_display::{
     task_summary_ui_system, update_area_edit_preview_ui_system, update_dream_loss_popup_ui_system,
@@ -25,11 +27,12 @@ use hw_core::game_state::{PlayMode};
 use crate::app_contexts::{BuildContext, CompanionPlacementState, MoveContext, MovePlacementState, TaskContext, ZoneContext};
 use crate::interface::ui::components::*;
 use crate::interface::ui::theme::UiTheme;
-use crate::systems::command::{TaskArea, TaskMode};
+use crate::systems::command::TaskMode;
 use crate::systems::jobs::{Door, DoorState, apply_door_state};
 use crate::world::map::WorldMapWrite;
 use bevy::prelude::*;
 use bevy::ui::RelativeCursorPosition;
+use hw_ui::UiIntent;
 
 pub fn update_ui_input_state_system(
     mut ui_input_state: ResMut<UiInputState>,
@@ -134,21 +137,10 @@ pub fn ui_interaction_system(
         (&Interaction, &MenuButton, &mut BackgroundColor),
         (Changed<Interaction>, With<Button>),
     >,
-    mut menu_state: ResMut<MenuState>,
-    mut next_play_mode: ResMut<NextState<PlayMode>>,
-    mut build_context: ResMut<BuildContext>,
-    mut zone_context: ResMut<ZoneContext>,
-    mut task_context: ResMut<TaskContext>,
-    mut selected_entity: ResMut<crate::interface::selection::SelectedEntity>,
-    mut info_panel_pin: ResMut<crate::interface::ui::InfoPanelPinState>,
-    mut q_familiar_ops: Query<&mut FamiliarOperation>,
-    q_familiars_for_area: Query<(Entity, Option<&TaskArea>), With<Familiar>>,
-    mut q_dialog: Query<&mut Node, With<OperationDialog>>,
     q_context_menu: Query<Entity, With<ContextMenu>>,
     mut commands: Commands,
-    mut ev_max_soul_changed: MessageWriter<crate::events::FamiliarOperationMaxSoulChangedEvent>,
+    mut ui_intent_writer: MessageWriter<UiIntent>,
     theme: Res<UiTheme>,
-    mut time: ResMut<Time<Virtual>>,
 ) {
     for (interaction, menu_button, mut color) in interaction_query.iter_mut() {
         common::update_interaction_color(*interaction, &mut color, &theme);
@@ -157,21 +149,7 @@ pub fn ui_interaction_system(
         }
 
         common::despawn_context_menus(&mut commands, &q_context_menu);
-        menu_actions::handle_pressed_action(
-            menu_button.0,
-            &mut menu_state,
-            &mut next_play_mode,
-            &mut build_context,
-            &mut zone_context,
-            &mut task_context,
-            &mut selected_entity,
-            &mut info_panel_pin,
-            &mut q_familiar_ops,
-            &q_familiars_for_area,
-            &mut q_dialog,
-            &mut ev_max_soul_changed,
-            &mut time,
-        );
+        menu_actions::handle_pressed_action(menu_button.0, &mut ui_intent_writer);
     }
 }
 
