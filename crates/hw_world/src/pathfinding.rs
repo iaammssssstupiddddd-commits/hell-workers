@@ -262,6 +262,28 @@ pub fn find_path_to_adjacent(
     }
 }
 
+pub fn can_reach_target(
+    world_map: &impl PathWorld,
+    context: &mut PathfindingContext,
+    start: (i32, i32),
+    target: (i32, i32),
+    target_walkable: bool,
+) -> bool {
+    if target_walkable {
+        find_path(
+            world_map,
+            context,
+            target,
+            start,
+            PathGoalPolicy::RespectGoalWalkability,
+        )
+        .is_some()
+            || find_path_to_adjacent(world_map, context, start, target, true).is_some()
+    } else {
+        find_path_to_adjacent(world_map, context, start, target, true).is_some()
+    }
+}
+
 pub fn find_path_to_boundary(
     world_map: &impl PathWorld,
     context: &mut PathfindingContext,

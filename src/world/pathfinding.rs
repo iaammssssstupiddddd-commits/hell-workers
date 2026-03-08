@@ -54,3 +54,13 @@ pub fn find_path_to_boundary(
 ) -> Option<Vec<(i32, i32)>> {
     hw_world::pathfinding::find_path_to_boundary(world_map, context, start, target_grids)
 }
+
+pub fn can_reach_target(
+    world_map: &WorldMap,
+    context: &mut PathfindingContext,
+    start: (i32, i32),
+    target: (i32, i32),
+    target_walkable: bool,
+) -> bool {
+    hw_world::pathfinding::can_reach_target(world_map, context, start, target, target_walkable)
+}
