@@ -2,6 +2,7 @@ use bevy::prelude::*;
 
 use hw_core::system_sets::FamiliarAiSystemSet;
 
+pub mod decide;
 pub mod perceive;
 
 pub struct FamiliarAiCorePlugin;
@@ -15,6 +16,10 @@ impl Plugin for FamiliarAiCorePlugin {
                 perceive::state_detection::detect_command_changes_system,
             )
                 .in_set(FamiliarAiSystemSet::Perceive),
+        )
+        .add_systems(
+            Update,
+            decide::following::following_familiar_system.in_set(FamiliarAiSystemSet::Decide),
         );
     }
 }

@@ -28,7 +28,6 @@ use crate::plugins::{
     VisualPlugin,
 };
 use crate::systems::GameSystemSet;
-use crate::systems::familiar_ai::FamiliarAiPlugin;
 
 /// ゲーム内のデバッグ情報の表示状態（独自実装用）
 #[derive(Resource, Default)]
@@ -72,7 +71,6 @@ fn main() {
         .add_plugins(MessagesPlugin)
         // Entity plugins
         .add_plugins(DamnedSoulPlugin)
-        .add_plugins(FamiliarAiPlugin)
         // Configure system sets
         .configure_sets(
             Update,
