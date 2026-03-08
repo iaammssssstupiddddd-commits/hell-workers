@@ -19,7 +19,11 @@
 
 | Document | Status | Notes |
 |---|---|---|
-| [hw-ui-crate-plan-2026-03-08.md](hw-ui-crate-plan-2026-03-08.md) | Draft | src/interface/の計画。 |
+| [assigned-task-to-hw-jobs-plan-2026-03-08.md](assigned-task-to-hw-jobs-plan-2026-03-08.md) | Draft | AssignedTask を hw_core → hw_jobs へ移動する計画 |
+| [hw-ui-crate-plan-2026-03-08.md](hw-ui-crate-plan-2026-03-08.md) | InProgress | src/interface/の計画。 |
+| [hw-ui-review-fixes-plan-2026-03-08.md](hw-ui-review-fixes-plan-2026-03-08.md) | Done | hw_uiのレビュー指摘修正計画。 |
+| [logistics-to-hw-logistics-plan-2026-03-08.md](logistics-to-hw-logistics-plan-2026-03-08.md) | Draft | logistics 実行ロジックを hw_logistics へ移植する計画 |
+| [selection-separation-plan-2026-03-08.md](selection-separation-plan-2026-03-08.md) | Draft | `selection` の判定ロジックと副作用実行を分離する計画。 |
 
 ## アーカイブ計画書一覧 (`docs/plans/archive`)
 
@@ -95,4 +99,3 @@
 | [archive/workspace-construction-phase-extraction.md](archive/workspace-construction-phase-extraction.md) | アーカイブ | Floor/Wall 建設で使うフェーズ・状態型がの計画。 |
 | [archive/zone-placement-refactor-plan-2026-03-05.md](archive/zone-placement-refactor-plan-2026-03-05.md) | アーカイブ | zone_placement.rsの計画。 |
 | [archive/zone-removal-preview-diff-plan-2026-03-01.md](archive/zone-removal-preview-diff-plan-2026-03-01.md) | アーカイブ | Zone removal preview の全件更新を差分更新へ置換する計画。 |
-

@@ -45,16 +45,17 @@ fn register_ui_core_plugin_systems(app: &mut App) {
             crate::interface::ui::arch_category_action_system,
             crate::interface::ui::move_plant_building_action_system,
             crate::interface::ui::door_lock_action_system,
+            crate::interface::ui::menu_visibility_system,
+            crate::interface::ui::update_mode_text_system,
+            crate::interface::ui::update_area_edit_preview_ui_system,
         )
+            .chain()
             .in_set(GameSystemSet::Interface),
     )
     .add_systems(
         Update,
         (
             crate::interface::ui::context_menu_system,
-            crate::interface::ui::menu_visibility_system,
-            crate::interface::ui::update_mode_text_system,
-            crate::interface::ui::update_area_edit_preview_ui_system,
             crate::interface::ui::task_summary_ui_system,
             crate::interface::ui::update_operation_dialog_system.run_if(|selected: Res<SelectedEntity>| {
                 selected.0.is_some()
@@ -66,6 +67,8 @@ fn register_ui_core_plugin_systems(app: &mut App) {
             crate::interface::ui::update_speed_button_highlight_system,
             update_vignette_system,
         )
+            .chain()
+            .after(crate::interface::ui::update_area_edit_preview_ui_system)
             .in_set(GameSystemSet::Interface),
     );
 }

@@ -44,7 +44,7 @@ pub fn task_list_update_system(
     }
 
     commands.entity(body_entity).with_children(|parent| {
-        render::rebuild_task_list_ui(parent, &state.last_snapshot, &game_assets, &theme);
+        render::rebuild_task_list_ui(parent, &state.snapshot, &game_assets, &theme);
     });
     dirty.clear_list();
 }

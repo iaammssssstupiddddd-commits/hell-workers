@@ -1,6 +1,6 @@
 # 情報パネルUI仕様
 
-最終更新: 2026-02-07
+最終更新: 2026-03-08
 
 ## 概要
 画面右側に表示される常駐パネルです。  
@@ -46,8 +46,11 @@
 - `Query::get_mut(entity)` で対象ノードのみ更新
 - 表示データは `presentation` 層で構築
   - `build_entity_inspection_model` が `EntityInspectionModel` を生成
+  - `update_entity_inspection_view_model_system` が `EntityInspectionViewModel` resource を更新
   - パネル側は描画責務に限定
 - `InfoPanelState` で前回モデルを保持し、同一内容の再描画を抑制
+- `Update` では `update_entity_inspection_view_model_system` → `info_panel_system` の順に固定し、selection / pin / entity 消滅の反映が 1 フレーム遅れないようにします。
+- `info_panel_system` は `menu_visibility_system` の後、`update_mode_text_system` の前で実行されます。
 
 ## デザイン仕様（現行）
 - 幅: `260px`（`min 200 / max 400`）
@@ -57,6 +60,7 @@
 
 ## 関連ファイル（最終境界反映）
 
+- `src/interface/ui/plugins/info_panel.rs` - ViewModel producer / consumer の順序固定と plugin wiring
 - `crates/hw_ui/src/panels/menu.rs` - メニューステートの表示制御（menu_visibility）
 - `src/interface/ui/panels/info_panel/`（`include!` 系の wrapper） - root からの呼び出し窓口
 - `src/interface/ui/panels_legacy/info_panel/update.rs` - 選択/ピン留めベースの更新ロジック

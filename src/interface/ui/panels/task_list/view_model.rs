@@ -7,7 +7,6 @@ use crate::systems::jobs::{
 use crate::systems::logistics::ResourceItem;
 use crate::systems::logistics::transport_request::TransportRequest;
 use bevy::prelude::*;
-use crate::interface::ui::components::LeftPanelMode;
 use std::collections::BTreeMap;
 use super::dirty::TaskListDirty;
 
@@ -23,9 +22,10 @@ pub struct TaskEntry {
 
 #[derive(Resource, Default)]
 pub struct TaskListState {
-    pub last_snapshot: Vec<(WorkType, Vec<TaskEntry>)>,
+    pub snapshot: Vec<(WorkType, Vec<TaskEntry>)>,
     pub summary_total: usize,
     pub summary_high: usize,
+    initialized: bool,
 }
 
 /// Designation クエリからスナップショットを構築
@@ -123,7 +123,6 @@ pub fn build_task_summary(
 }
 
 pub fn update_task_list_state_system(
-    mode: Res<LeftPanelMode>,
     designations: Query<(
         Entity,
         &Transform,
@@ -141,22 +140,32 @@ pub fn update_task_list_state_system(
     mut dirty: ResMut<TaskListDirty>,
     mut state: ResMut<TaskListState>,
 ) {
-    if mode.is_changed() && *mode == LeftPanelMode::TaskList {
-        dirty.mark_list();
+    if state.initialized && !dirty.state_dirty() {
+        return;
     }
 
     let snapshot = build_task_list_snapshot(&designations);
     let (summary_total, summary_high) = build_task_summary(&designations);
+    let list_changed = !state.initialized || snapshot != state.snapshot;
+    let summary_changed = !state.initialized
+        || summary_total != state.summary_total
+        || summary_high != state.summary_high;
 
-    if snapshot == state.last_snapshot
-        && summary_total == state.summary_total
-        && summary_high == state.summary_high
-    {
-        return;
-    }
-
-    state.last_snapshot = snapshot;
+    state.snapshot = snapshot;
     state.summary_total = summary_total;
     state.summary_high = summary_high;
-    dirty.mark_all();
+    let was_initialized = state.initialized;
+    state.initialized = true;
+    dirty.clear_state();
+
+    if !was_initialized || list_changed {
+        dirty.mark_list();
+    } else {
+        dirty.clear_list();
+    }
+    if !was_initialized || summary_changed {
+        dirty.mark_summary();
+    } else {
+        dirty.clear_summary();
+    }
 }

@@ -9,7 +9,7 @@
 | 作成日 | `2026-03-08` |
 | 最終更新日 | `2026-03-08` |
 | 作成者 | `AI` |
-| 関連提案 | `docs/proposals/hw-ui-crate.md` |
+| 関連提案 | `docs/proposals/archive/hw-ui-crate.md` |
 | 関連Issue/PR | `N/A` |
 
 ## 1. 目的
@@ -484,7 +484,7 @@ CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo check
 3. `docs/cargo_workspace.md` に hw_ui の依存グラフを更新
 4. `docs/entity_list_ui.md`, `docs/info_panel_ui.md`, `docs/task_list_ui.md` の実装パス情報を更新
 5. `docs/README.md` の参照一覧を更新
-6. `docs/proposals/hw-ui-crate.md` に「本計画での決定事項」と「follow-up 課題（selection 分離）」を記録
+6. `docs/proposals/archive/hw-ui-crate.md` に「本計画での決定事項」と「follow-up 課題（selection 分離）」を記録
 
 **変更ファイル**:
 - `docs/architecture.md`
@@ -493,7 +493,7 @@ CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo check
 - `docs/info_panel_ui.md`
 - `docs/task_list_ui.md`
 - `docs/README.md`
-- `docs/proposals/hw-ui-crate.md`
+- `docs/proposals/archive/hw-ui-crate.md`
 
 **完了条件**:
 - [x] `hw_ui` と root shell の境界が docs に明記されている
@@ -582,7 +582,7 @@ CARGO_HOME=/home/satotakumi/.cargo cargo build --timings
 
 ### 参照必須ファイル（実装前に必ず読む）
 
-- `docs/proposals/hw-ui-crate.md` — 設計選択肢の原典
+- `docs/proposals/archive/hw-ui-crate.md` — 設計選択肢の原典
 - `docs/cargo_workspace.md` — 現在の crate 依存グラフ
 - `src/plugins/interface.rs` — plugin 登録順（変更禁止）
 - `src/interface/ui/components.rs` — MenuAction 全 variant

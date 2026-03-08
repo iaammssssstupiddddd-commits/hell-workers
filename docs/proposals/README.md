@@ -19,7 +19,7 @@
 | --- | --- |
 | [08_visual_update_prompts.md](08_visual_update_prompts.md) | ビジュアル更新プロンプト集 |
 | [architecture-improvements-2026.md](architecture-improvements-2026.md) | アーキテクチャ改善提案 (Architecture Improvement Proposals) |
-| [hw-ui-crate.md](hw-ui-crate.md) | 現状: `src/interface/`（94ファイル）が root crate に存在し、全479ファイルの **20%** を占める。UI はゲームロジックと同一コンパイル単位にあり、ロジック変更で UI が再コンパイルされる（逆も同様）の提案。 |
+| [selection-separation-2026-03-08.md](selection-separation-2026-03-08.md) | `selection` の依存分離提案。`WorldMap`/入力/副作用を抽象化し、UIとrootの移行経路を確立する follow-up 提案。 |
 | [soul_spawn_despawn_optimization.md](soul_spawn_despawn_optimization.md) | Soul Spawn/Despawn 最適化提案 |
 | [speech_optimization.md](speech_optimization.md) | スピーチシステム最適化提案 |
 
@@ -39,6 +39,7 @@
 | [archive/hw-ai-crate copy.md](archive/hw-ai-crate copy.md) | 現状: `src/systems/soul_ai/`（98ファイル）と `src/systems/familiar_ai/`（70ファイル）が root crate に存在し、全479ファイルの **35%** を占める。root crate 内のどのファイルを変更しても、AI コード含む全体が再コンパイル対象になるの提案。 |
 | [archive/hw-ai-crate-phase2-2026-03-08.md](archive/hw-ai-crate-phase2-2026-03-08.md) | Phase 1 時点ではの計画。 |
 | [archive/hw-ai-crate.md](archive/hw-ai-crate.md) | 現状: `src/systems/soul_ai/`（98ファイル）と `src/systems/familiar_ai/`（70ファイル）が root crate に存在し、全479ファイルの **35%** を占める。root crate 内のどのファイルを変更しても、AI コード含む全体が再コンパイル対象になるの提案。 |
+| [archive/hw-ui-crate.md](archive/hw-ui-crate.md) | 現状: `src/interface/`（94ファイル）が root crate に存在し、全479ファイルの **20%** を占める。UI はゲームロジックと同一コンパイル単位にあり、ロジック変更で UI が再コンパイルされる（逆も同様）の提案。 |
 | [archive/pathfinding-optimization.md](archive/pathfinding-optimization.md) | 経路探索システムの最適化提案 |
 | [archive/performance-bottlenecks-proposal-2026-02-26.md](archive/performance-bottlenecks-proposal-2026-02-26.md) | **現状**: Soul 数が増加するにつれてフレームレートが低下する傾向がある。Space/Spatial グリッドの同期、Room 検出、Soul AI の決定処理など複数の領域で毎フレーム・定期的な全件処理が行われているの提案。 |
 | [archive/plant_trees_visuals.md](archive/plant_trees_visuals.md) | Plant Trees機能 個別ビジュアルアップデート提案 |
