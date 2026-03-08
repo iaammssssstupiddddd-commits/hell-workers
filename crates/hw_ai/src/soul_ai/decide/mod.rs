@@ -1,6 +1,7 @@
 pub mod escaping;
-pub mod idle_behavior;
 pub mod gathering_mgmt;
+pub mod idle_behavior;
+pub mod separation;
 
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;

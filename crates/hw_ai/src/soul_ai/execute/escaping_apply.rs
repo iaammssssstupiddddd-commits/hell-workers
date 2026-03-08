@@ -1,0 +1,81 @@
+use bevy::prelude::*;
+
+use hw_core::events::{EscapeOperation, EscapeRequest, OnGatheringLeft};
+use hw_core::relationships::{ParticipatingIn, RestAreaReservedFor, RestingIn};
+use hw_core::soul::{DamnedSoul, DriftingState, IdleBehavior};
+
+use crate::soul_ai::helpers::query_types::EscapingBehaviorSoulQuery;
+
+/// EscapeRequest を適用する（Execute Phase）
+pub fn escaping_apply_system(
+    mut commands: Commands,
+    mut request_reader: MessageReader<EscapeRequest>,
+    mut q_souls: EscapingBehaviorSoulQuery,
+    mut q_visibility: Query<&mut Visibility, With<DamnedSoul>>,
+) {
+    for request in request_reader.read() {
+        let Ok((entity, _transform, mut idle_state, mut destination, mut path, _under_command)) =
+            q_souls.get_mut(request.entity)
+        else {
+            continue;
+        };
+
+        match &request.operation {
+            EscapeOperation::StartEscaping { leave_gathering } => {
+                if let Some(_spot_entity) = *leave_gathering {
+                    commands.entity(entity).remove::<ParticipatingIn>();
+                    commands.trigger(OnGatheringLeft { entity });
+                }
+
+                commands
+                    .entity(entity)
+                    .remove::<(RestingIn, RestAreaReservedFor)>();
+                if let Ok(mut visibility) = q_visibility.get_mut(entity) {
+                    *visibility = Visibility::Visible;
+                }
+                commands.entity(entity).remove::<DriftingState>();
+
+                idle_state.behavior = IdleBehavior::Escaping;
+                idle_state.idle_timer = 0.0;
+                idle_state.behavior_duration = 5.0;
+            }
+            EscapeOperation::UpdateDestination { destination: next } => {
+                commands
+                    .entity(entity)
+                    .remove::<(RestingIn, RestAreaReservedFor)>();
+                if let Ok(mut visibility) = q_visibility.get_mut(entity) {
+                    *visibility = Visibility::Visible;
+                }
+                destination.0 = *next;
+                path.waypoints.clear();
+                path.current_index = 0;
+            }
+            EscapeOperation::ReachSafety => {
+                commands
+                    .entity(entity)
+                    .remove::<(RestingIn, RestAreaReservedFor)>();
+                if let Ok(mut visibility) = q_visibility.get_mut(entity) {
+                    *visibility = Visibility::Visible;
+                }
+                idle_state.behavior = IdleBehavior::Wandering;
+                idle_state.behavior_duration = 3.0;
+                path.waypoints.clear();
+                path.current_index = 0;
+            }
+            EscapeOperation::JoinSafeGathering => {
+                commands
+                    .entity(entity)
+                    .remove::<(RestingIn, RestAreaReservedFor)>();
+                if let Ok(mut visibility) = q_visibility.get_mut(entity) {
+                    *visibility = Visibility::Visible;
+                }
+                idle_state.behavior = IdleBehavior::Gathering;
+                idle_state.idle_timer = 0.0;
+                idle_state.behavior_duration = 3.0;
+                idle_state.needs_separation = true;
+                path.waypoints.clear();
+                path.current_index = 0;
+            }
+        }
+    }
+}

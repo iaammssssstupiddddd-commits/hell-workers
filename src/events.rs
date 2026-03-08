@@ -1,5 +1,5 @@
 pub use hw_core::events::{
-    DesignationOp, DesignationRequest, EncouragementRequest, EscapeOperation, EscapeRequest,
+    DesignationOp, DesignationRequest, EncouragementRequest, EscapeRequest,
     FamiliarAiStateChangedEvent, FamiliarIdleVisualRequest,
     FamiliarOperationMaxSoulChangedEvent, FamiliarStateRequest, GatheringManagementRequest,
     IdleBehaviorOperation, IdleBehaviorRequest, OnEncouraged,
