@@ -180,8 +180,10 @@ pub(crate) fn handle_ui_intent(
                     time.set_relative_speed(4.0);
                 }
             },
-            UiIntent::ToggleDoorLock(_) | UiIntent::SelectArchitectCategory(_) | UiIntent::MovePlantBuilding(_) => {
-                // Specialized intents are handled by dedicated interaction systems.
+            UiIntent::ToggleDoorLock(_)
+            | UiIntent::SelectArchitectCategory(_)
+            | UiIntent::MovePlantBuilding(_) => {
+                // 専用システム側で扱うためここでは無視
             }
         }
     }
