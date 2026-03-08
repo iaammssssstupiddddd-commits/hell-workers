@@ -61,11 +61,12 @@ hw_ai (hw_core + hw_jobs + hw_logistics + hw_world)
 代表例:
 
 - `SoulAiCorePlugin` — Soul AI の Update/Execute フェーズコアシステム
-- `FamiliarAiCorePlugin` — Familiar AI の Perceive フェーズコアシステム
+- `FamiliarAiCorePlugin` — Familiar AI の Perceive/Decide フェーズコアシステム
 - `soul_ai::update::*` — 疲労・バイタル・夢・集会・休憩所の更新システム
 - `soul_ai::execute::designation_apply` — Designation 要求適用
 - `soul_ai::helpers::gathering` — 集会スポット型定義・ヘルパー
 - `familiar_ai::perceive::state_detection` — 使い魔 AI 状態遷移検知
+- `familiar_ai::decide::following` — 使い魔追尾システム（hw_core 型のみ依存）
 
 ここに置かないもの:
 

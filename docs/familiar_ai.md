@@ -94,7 +94,10 @@
 - **`perceive/`**: `state_detection.rs`（`Changed<FamiliarAiState>`検知、**`hw_ai` に移動済み**）, `resource_sync.rs`（SharedResourceCache再構築、root 残留）
 - **`execute/`**: `squad_apply.rs` / `max_soul_apply.rs` / `idle_visual_apply.rs` / `encouragement_apply.rs`
 - **設計メモ**: 副作用（`Commands`・イベント）は `execute/` に限定。`helpers/query_types.rs` がフェーズ横断クエリ型を集約。
-- **hw_ai 分担**: `FamiliarAiPlugin` は `hw_ai::FamiliarAiCorePlugin` を内部で `add_plugins` し、`perceive/state_detection` のシステムを委譲している。`WorldMap`/SpatialGrid 依存のシステムは root 残留。詳細は `docs/plans/hw-ai-crate-plan-2026-03-08.md` §M6 参照。
+- **hw_ai 分担**: `FamiliarAiPlugin` は `hw_ai::FamiliarAiCorePlugin` を内部で `add_plugins` し、以下のシステムを委譲している。`WorldMap`/SpatialGrid 依存のシステムは root 残留。
+  - `perceive/state_detection` — 状態遷移検知（`hw_ai` 移動済み）
+  - `decide/following` — 使い魔追尾（`hw_ai` 移動済み、hw_core 型のみ依存）
+- **プラグイン登録**: `FamiliarAiPlugin` は `src/plugins/logic.rs` の `LogicPlugin` 内で登録される（`SoulAiPlugin` と同所）。
 
 ### 5.2. 関連コンポーネント
 

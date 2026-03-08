@@ -29,6 +29,7 @@ use crate::systems::room::{
     validate_rooms_system,
 };
 use crate::systems::soul_ai::SoulAiPlugin;
+use crate::systems::familiar_ai::FamiliarAiPlugin;
 use crate::world::regrowth::{RegrowthManager, tree_regrowth_system};
 use bevy::prelude::*;
 
@@ -37,6 +38,7 @@ pub struct LogicPlugin;
 impl Plugin for LogicPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(SoulAiPlugin);
+        app.add_plugins(FamiliarAiPlugin);
         app.add_plugins(TransportRequestPlugin);
 
         // パスファインディング用の作業メモリを登録
