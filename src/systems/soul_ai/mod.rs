@@ -102,7 +102,6 @@ impl Plugin for SoulAiPlugin {
                     execute::escaping_apply::escaping_apply_system,
                     execute::drifting::despawn_at_edge_system
                         .after(execute::drifting::drifting_behavior_system),
-                    execute::gathering_apply::gathering_apply_system,
                     // クリーンアップ
                     execute::cleanup::cleanup_commanded_souls_system,
                     // タスク要求の適用

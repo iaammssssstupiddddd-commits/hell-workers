@@ -2,6 +2,7 @@ use bevy::prelude::*;
 
 use hw_core::system_sets::SoulAiSystemSet;
 
+pub mod decide;
 pub mod execute;
 pub mod helpers;
 pub mod update;
@@ -29,7 +30,10 @@ impl Plugin for SoulAiCorePlugin {
             )
             .add_systems(
                 Update,
-                execute::designation_apply::apply_designation_requests_system
+                (
+                    execute::designation_apply::apply_designation_requests_system,
+                    execute::gathering_apply::gathering_apply_system,
+                )
                     .in_set(SoulAiSystemSet::Execute),
             )
             .add_observer(update::vitals::on_task_completed_motivation_bonus)
