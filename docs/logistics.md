@@ -18,8 +18,7 @@ Source 側のみ手動操作し、Target 側は Bevy が自動更新する（tas
 
 | Source（手動操作）| Target（Bevy自動）| 書き込み元 | 削除元 |
 |:---|:---|:---|:---|
-| `StoredIn(stockpile)` ← item | `StoredItems` ← stockpile | Haul dropping フェーズ（`InStockpile` と同時付与）| haul picking フェーズ（ConsolidateStockpile 含む）|
-| `InStockpile(stockpile)` ← item | — | Haul dropping フェーズ（`StoredIn` と同時付与）| `StoredIn` 削除時（同時除去）|
+| `StoredIn(stockpile)` ← item | `StoredItems` ← stockpile | Haul dropping フェーズ | haul picking フェーズ（ConsolidateStockpile 含む）|
 | `DeliveringTo(dest)` ← item | `IncomingDeliveries` ← dest | `apply_task_assignment_requests`（Execute）| `unassign_task` / タスク完了（tasks.md §2.1）|
 
 **容量判定**: `StoredItems.len() + IncomingDeliveries.len() < capacity`（詳細 §6.1）
@@ -76,7 +75,7 @@ Source 側のみ手動操作し、Target 側は Bevy が自動更新する（tas
 | `GatherWaterToTank` | `BucketTransport` (source=River) | `tank_water_request_system` | Tank | 割り当て時に bucket を遅延解決 |
 | `ReturnBucket` | `Haul` | `bucket_auto_haul_system` | Tank | 割り当て時に dropped bucket と返却先 BucketStorage を同時遅延解決 |
 | `BatchWheelbarrow` | `WheelbarrowHaul` | `wheelbarrow_auto_haul_system` | Wheelbarrow | 現状の主運搬経路では未使用（将来拡張用） |
-| `ConsolidateStockpile` | `Haul` | `stockpile_consolidation_producer_system` | Stockpile（レシーバーセル） | 割り当て時にドナーセルの InStockpile アイテムを遅延解決 |
+| `ConsolidateStockpile` | `Haul` | `stockpile_consolidation_producer_system` | Stockpile（レシーバーセル） | 割り当て時にドナーセルの `StoredIn` アイテムを遅延解決 |
 
 ## 4. 自動運搬の仕様
 
@@ -100,7 +99,7 @@ Source 側のみ手動操作し、Target 側は Bevy が自動更新する（tas
   - ただし、グループ内に「空き容量あり」かつ「`resource_type = None` または対象型と一致」のセルが1つ以上ある型のみ候補になります。
   - 搬入対象は `ResourceType::is_loadable() == true` の資材のみ。
   - 割り当て時にグループ内の**型互換かつ空き容量があるセル**を動的に決定して搬入します。
-  - ソースは「地面アイテムのみ」（`InStockpile` 除外）で、同一 Stockpile での pick-drop ループを防止します。
+  - ソースは「地面アイテムのみ」（`StoredIn` 付きは除外）で、同一 Stockpile での pick-drop ループを防止します。
 
 ### 4.2 Blueprint 搬入 (`DeliverToBlueprint`)
 - producer は `required_materials - delivered_materials` を demand として維持し、既存 request の `inflight` を別途保持する。
@@ -172,8 +171,8 @@ Source 側のみ手動操作し、Target 側は Bevy が自動更新する（tas
   - `anchor` = Receiver セル, `stockpile_group` = Donor セル一覧 としてリクエストが発行されます。
 - **全セル満杯時の挙動**: グループ内のすべてのセルが満杯の場合は、統合の余地がないためリクエストは発行されません。
 - **ソース選定と実行**:
-  - 割り当て時に、Donor セルの `InStockpile` アイテムから未予約のものを選択します。
-  - 既存の `Haul` タスクロジックを再利用して実行されます。アイテムを持ち出すと `StoredIn`/`InStockpile` が外れ、Receiver に格納されると再付与されます。
+  - 割り当て時に、Donor セルの `StoredIn` アイテムから未予約のものを選択します。
+  - 既存の `Haul` タスクロジックを再利用して実行されます。アイテムを持ち出すと `StoredIn` が外れ、Receiver に格納されると再付与されます。
 
 ### 4.7 Tank 自動補充 (`GatherWaterToTank`)
 - 水タンクの不足量を監視し、`BUCKET_CAPACITY` 単位で必要タスク数を算出して request 化。
@@ -344,8 +343,8 @@ Stockpile / Blueprint / Tank などへの搬入予約は、Bevy の Relationship
 
 ## 7. 備蓄資材の取り出し
 
-- 建築/製造向けの搬送ソースには、条件を満たす `InStockpile` アイテムも利用されます。
-- アイテムを持ち出すと `StoredIn`/`InStockpile` が外れ、`StoredItems` は自動更新されます。
+- 建築/製造向けの搬送ソースには、条件を満たす `StoredIn` アイテムも利用されます。
+- アイテムを持ち出すと `StoredIn` が外れ、`StoredItems` は自動更新されます。
 - 取り出し後に Stockpile が空になると `resource_type` は `None` に戻ります。
 
 ### 7.1 地面資材数ラベル
@@ -376,7 +375,7 @@ Stockpile / Blueprint / Tank などへの搬入予約は、Bevy の Relationship
 - 共有ソース（例: tank 取水）は `ReserveSource` で排他を取る。
 
 ### 8.4 ソース選定の安全条件
-- `DepositToStockpile` のソースは地面アイテムのみを対象にする（`InStockpile` は除外）。
+- `DepositToStockpile` のソースは地面アイテムのみを対象にする（`StoredIn` 付きは除外）。
 - 所有物資がある場合は `BelongsTo` を一致させ、他 owner の資材を混在させない。
 - `Visibility::Hidden` / `ReservedForTask` / `TaskWorkers` 付きエンティティは候補から外す。
 
@@ -401,7 +400,7 @@ Stockpile / Blueprint / Tank などへの搬入予約は、Bevy の Relationship
   - `transport_request_anchor_cleanup_system` で cleanup 要件を満たすこと
 
 ### 8.6 動作確認の最低ライン
-- `cargo check` を通す。
+- `cargo check --workspace` を通す。
 - 少なくとも以下を確認する:
   - request が1フレームで増殖しない
   - 同一ソースへの二重割り当てがない
