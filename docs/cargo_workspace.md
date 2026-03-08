@@ -60,10 +60,14 @@ hw_ai (hw_core + hw_jobs + hw_logistics + hw_world)
 
 代表例:
 
-- `SoulAiCorePlugin` — Soul AI の Update/Execute フェーズコアシステム
+- `SoulAiCorePlugin` — Soul AI の Update/Execute/Decide ヘルパーフェーズコアシステム
 - `FamiliarAiCorePlugin` — Familiar AI の Perceive/Decide/Execute フェーズコアシステム
 - `soul_ai::update::*` — 疲労・バイタル・夢・集会・休憩所の更新システム
 - `soul_ai::execute::designation_apply` — Designation 要求適用
+- `soul_ai::execute::gathering_apply` — 集会管理要求適用（Merge / Dissolve / Recruit / Leave）
+- `soul_ai::decide::idle_behavior::transitions` — IdleBehavior 遷移判定ヘルパー（次の行動選択・持続時間計算）
+- `soul_ai::decide::idle_behavior::task_override` — タスク割り当て時の集会・休憩解除ヘルパー
+- `soul_ai::decide::idle_behavior::exhausted_gathering` — 疲労集会（ExhaustedGathering）状態処理ヘルパー
 - `soul_ai::helpers::gathering` — 集会スポット型定義・ヘルパー
 - `soul_ai::helpers::gathering_positions` — 集会周辺ランダム位置生成・overlap 回避（`PathWorld + SpatialGridOps` 経由）
 - `soul_ai::helpers::gathering_motion` — 集会中移動先選定（Wandering / Still retreat）
