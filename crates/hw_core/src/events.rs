@@ -1,4 +1,7 @@
 use bevy::prelude::*;
+use crate::familiar::FamiliarAiState;
+use crate::jobs::WorkType;
+use crate::logistics::ResourceType;
 
 /// 魂が使い魔に勧誘（使役開始）された
 #[derive(Message, EntityEvent)]
@@ -35,6 +38,22 @@ pub struct OnGatheringJoined {
 #[derive(Message, EntityEvent)]
 pub struct OnTaskAbandoned {
     pub entity: Entity,
+}
+
+/// 魂がタスクに割り当てられた
+#[derive(Message, EntityEvent)]
+pub struct OnTaskAssigned {
+    pub entity: Entity,
+    pub task_entity: Entity,
+    pub work_type: WorkType,
+}
+
+/// 魂がタスクを完了した
+#[derive(Message, EntityEvent)]
+pub struct OnTaskCompleted {
+    pub entity: Entity,
+    pub task_entity: Entity,
+    pub work_type: WorkType,
 }
 
 /// 使い魔の使役数上限が変更された
@@ -75,6 +94,15 @@ pub enum FamiliarAiStateTransitionReason {
     RecruitSuccess,
     ScoutingCancelled,
     Unknown,
+}
+
+/// 使い魔のAI状態が変更された
+#[derive(Message)]
+pub struct FamiliarAiStateChangedEvent {
+    pub familiar_entity: Entity,
+    pub from: FamiliarAiState,
+    pub to: FamiliarAiState,
+    pub reason: FamiliarAiStateTransitionReason,
 }
 
 /// アイドル行動の変更要求
@@ -141,6 +169,65 @@ pub enum GatheringManagementOp {
         soul: Entity,
         spot: Entity,
     },
+}
+
+/// リソース予約の更新要求
+#[derive(Message, Debug, Clone)]
+pub struct ResourceReservationRequest {
+    pub op: ResourceReservationOp,
+}
+
+/// リソース予約の操作
+#[derive(Debug, Clone)]
+pub enum ResourceReservationOp {
+    ReserveMixerDestination {
+        target: Entity,
+        resource_type: ResourceType,
+    },
+    ReleaseMixerDestination {
+        target: Entity,
+        resource_type: ResourceType,
+    },
+    ReserveSource {
+        source: Entity,
+        amount: usize,
+    },
+    ReleaseSource {
+        source: Entity,
+        amount: usize,
+    },
+    RecordPickedSource {
+        source: Entity,
+        amount: usize,
+    },
+}
+
+/// Designation の発行要求
+#[derive(Message, Debug, Clone)]
+pub struct DesignationRequest {
+    pub entity: Entity,
+    pub operation: DesignationOp,
+}
+
+/// Designation 発行の操作種別
+#[derive(Debug, Clone)]
+pub enum DesignationOp {
+    Issue {
+        work_type: WorkType,
+        issued_by: Entity,
+        task_slots: u32,
+        priority: Option<u32>,
+        target_blueprint: Option<Entity>,
+        target_mixer: Option<Entity>,
+        reserved_for_task: bool,
+    },
+}
+
+/// 使い魔のAI状態変更要求
+#[derive(Message, Debug, Clone)]
+pub struct FamiliarStateRequest {
+    pub familiar_entity: Entity,
+    pub new_state: FamiliarAiState,
 }
 
 /// 使い魔による激励要求
