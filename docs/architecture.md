@@ -52,12 +52,12 @@ graph TD
 5.  **Completion**: 資源が尽きると実体が消滅。`Observer` が検知し、`魂` のタスクを解除。
 
 ## システムセットの実行順序
-`src/main.rs` で定義されている `GameSystemSet` は以下の順序でチェーンされています：
+`GameSystemSet` は `hw_core::system_sets` で定義され、`src/main.rs` でチェーンされています：
 `Input` → `Spatial` → `Logic` → `Actor` → `Visual` → `Interface`
 
 ### Global Cycle Framework (Logic Phase)
 
-`Logic` フェーズ内では、**AI** の動作順序を厳密に制御するための4フェーズサブセット (`AiSystemSet`) が定義されています。
+`Logic` フェーズ内では、**AI** の動作順序を厳密に制御するための4フェーズサブセット（`FamiliarAiSystemSet` / `SoulAiSystemSet`、どちらも `hw_core::system_sets` で定義）が使われています。
 
 ```
 Perceive → Update → Decide → Execute
