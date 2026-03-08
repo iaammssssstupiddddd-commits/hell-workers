@@ -2749,6 +2749,7 @@ dependencies = [
 name = "hw_world"
 version = "0.1.0"
 dependencies = [
+ "bevy",
  "hw_core",
  "rand 0.8.5",
 ]
