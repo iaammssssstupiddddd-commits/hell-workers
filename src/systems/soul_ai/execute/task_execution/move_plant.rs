@@ -231,8 +231,7 @@ fn relocate_bucket_storages_for_tank(
             .copied()
             .unwrap_or((old_grid.0 + delta.0, old_grid.1 + delta.1));
 
-        world_map.clear_stockpile(*old_grid);
-        world_map.set_stockpile(new_grid, *stockpile_entity);
+        world_map.move_stockpile_tile(*stockpile_entity, *old_grid, new_grid);
 
         if let Ok((_, _, mut transform)) = q_stockpiles.get_mut(*stockpile_entity) {
             let pos = WorldMap::grid_to_world(new_grid.0, new_grid.1);

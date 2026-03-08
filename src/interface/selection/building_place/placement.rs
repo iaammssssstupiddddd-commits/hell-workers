@@ -174,7 +174,7 @@ pub(super) fn try_place_bucket_storage_companion(
                 Name::new("Pending Tank Bucket Storage"),
             ))
             .id();
-        world_map.set_stockpile((gx, gy), storage_entity);
+        world_map.register_stockpile_tile((gx, gy), storage_entity);
     }
     true
 }
