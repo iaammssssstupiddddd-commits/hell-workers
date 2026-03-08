@@ -235,7 +235,7 @@ fn spawn_initial_wheelbarrow_parking(
 
     for (gx, gy) in occupied {
         world_map.add_obstacle(gx, gy);
-        world_map.buildings.insert((gx, gy), building_entity);
+        world_map.set_building((gx, gy), building_entity);
     }
 
     let offsets = [Vec2::new(-8.0, -8.0), Vec2::new(8.0, 8.0)];

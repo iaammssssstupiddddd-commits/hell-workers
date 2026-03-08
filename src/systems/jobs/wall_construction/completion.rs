@@ -48,12 +48,10 @@ pub fn wall_construction_completion_system(
                 commands.entity(wall_entity).remove::<ProvisionalWall>();
             } else {
                 if world_map
-                    .buildings
-                    .get(&(gx, gy))
-                    .copied()
+                    .building_entity((gx, gy))
                     .is_some_and(|entity| entity == site_entity)
                 {
-                    world_map.buildings.remove(&(gx, gy));
+                    world_map.clear_building((gx, gy));
                 }
                 world_map.remove_obstacle(gx, gy);
             }

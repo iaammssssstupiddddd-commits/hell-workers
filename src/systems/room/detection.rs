@@ -94,7 +94,7 @@ pub(super) fn build_detection_input(
                 // 完成床タイルは world_map.buildings に登録されない。
                 // 床タイルのグリッドに別の建物（壁など）が存在する場合は
                 // floor_tiles から除外し、壁側で処理させる。
-                if !world_map.buildings.contains_key(&grid) {
+                if !world_map.has_building(grid) {
                     input.floor_tiles.insert(grid);
                 }
             }

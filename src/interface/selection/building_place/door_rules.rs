@@ -41,7 +41,7 @@ fn is_wall_or_door_at(
     q_blueprints_by_entity: &Query<&Blueprint>,
     grid: (i32, i32),
 ) -> bool {
-    let Some(&entity) = world_map.buildings.get(&grid) else {
+    let Some(entity) = world_map.building_entity(grid) else {
         return false;
     };
     if let Ok(building) = q_buildings.get(entity) {
