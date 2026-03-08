@@ -14,7 +14,7 @@ pub fn handle_refine_task(
     commands: &mut Commands,
     game_assets: &Res<crate::assets::GameAssets>,
     time: &Res<Time>,
-    world_map: &Res<WorldMap>,
+    world_map: &WorldMap,
 ) {
     let soul_pos = ctx.soul_pos();
 

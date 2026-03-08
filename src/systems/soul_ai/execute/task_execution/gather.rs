@@ -20,7 +20,7 @@ pub fn handle_gather_task(
     commands: &mut Commands,
     game_assets: &Res<GameAssets>,
     time: &Res<Time>,
-    world_map: &Res<WorldMap>,
+    world_map: &WorldMap,
 ) {
     let soul_pos = ctx.soul_pos();
     let q_targets = &ctx.queries.designation.targets;

@@ -14,7 +14,7 @@ pub fn handle(
     ctx: &mut TaskExecutionContext,
     data: HaulWithWheelbarrowData,
     commands: &mut Commands,
-    world_map: &Res<WorldMap>,
+    world_map: &WorldMap,
     q_wheelbarrows: &Query<
         (&Transform, Option<&crate::relationships::ParkedAt>),
         With<Wheelbarrow>,

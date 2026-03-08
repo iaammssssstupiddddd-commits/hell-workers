@@ -18,7 +18,7 @@ pub fn handle_reinforce_floor_task(
     phase: ReinforceFloorPhase,
     commands: &mut Commands,
     time: &Res<Time>,
-    world_map: &Res<WorldMap>,
+    world_map: &WorldMap,
 ) {
     let soul_pos = ctx.soul_pos();
 

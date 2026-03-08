@@ -14,7 +14,7 @@ pub fn handle(
     ctx: &mut TaskExecutionContext,
     data: HaulWithWheelbarrowData,
     commands: &mut Commands,
-    world_map: &Res<WorldMap>,
+    world_map: &WorldMap,
     soul_pos: Vec2,
 ) {
     let reachable = update_destination_to_adjacent(
