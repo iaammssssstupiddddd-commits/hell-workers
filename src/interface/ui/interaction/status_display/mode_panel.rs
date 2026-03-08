@@ -114,8 +114,8 @@ pub fn update_mode_text_system(
 }
 
 pub fn task_summary_ui_system(
-    mut dirty: ResMut<TaskListDirty>,
-    mut state: ResMut<TaskListState>,
+    dirty: Option<ResMut<TaskListDirty>>,
+    state: Option<ResMut<TaskListState>>,
     q_designations: Query<(
         Entity,
         &Transform,
@@ -134,6 +134,13 @@ pub fn task_summary_ui_system(
     ui_nodes: Res<UiNodeRegistry>,
     mut q_text: Query<(&mut Text, &mut TextColor)>,
 ) {
+    let Some(mut dirty) = dirty else {
+        return;
+    };
+    let Some(mut state) = state else {
+        return;
+    };
+
     if dirty.summary_dirty() {
         let (total, high) = crate::interface::ui::panels::task_list::build_task_summary(
             &q_designations,

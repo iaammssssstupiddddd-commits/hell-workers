@@ -26,13 +26,19 @@ pub struct FamiliarRowViewModel {
 pub struct SoulRowViewModel {
     pub entity: bevy::prelude::Entity,
     pub name: String,
-    pub gender: i8,
+    pub gender: SoulGender,
     pub fatigue_text: String,
     pub stress_text: String,
     pub stress_bucket: StressBucket,
     pub dream_text: String,
     pub dream_empty: bool,
     pub task_visual: TaskVisual,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum SoulGender {
+    Male,
+    Female,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
