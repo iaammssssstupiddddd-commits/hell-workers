@@ -101,8 +101,8 @@ pub fn area_edit_handles_visual_system(
         return;
     };
 
-    let min = area.min;
-    let max = area.max;
+    let min = area.min();
+    let max = area.max();
     let mid_x = (min.x + max.x) * 0.5;
     let mid_y = (min.y + max.y) * 0.5;
     let handle_size = (TILE_SIZE * 0.22).max(5.0);

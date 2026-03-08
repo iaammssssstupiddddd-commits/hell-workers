@@ -42,7 +42,7 @@ pub fn blueprint_auto_build_system(
         let mut already_requested_workers = std::collections::HashSet::new();
 
         // 最適化: タスクエリア内のブループリントのみを取得
-        let blueprints_in_area = blueprint_grid.get_in_area(task_area.min, task_area.max);
+        let blueprints_in_area = blueprint_grid.get_in_area(task_area.min(), task_area.max());
 
         for bp_entity in blueprints_in_area {
             // クエリで詳細データを取得
