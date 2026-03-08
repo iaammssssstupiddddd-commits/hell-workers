@@ -155,6 +155,9 @@ Perceive → Update → Decide → Execute
   - `hw_ui` 側は UI ノード生成・表示系システムの本体を担当し、`UiRoot`/`UiMountSlot`、`UiSlot` 予約、ステータス表示、リスト/パネル表示、interaction の可視系を集約する。
   - root 側 (`bevy_app`) は `UiIntent`/メッセージ受信、selection/配置状態変更、WorldMapWrite/TaskContext などゲーム状態を持つ adapter を担当する。
   - `UiRoot` と `UiNodeRegistry` の参照は `src/interface/ui/components.rs` を経由して root と `hw_ui` の API を接続（root は再エクスポートとして薄い shell）。
+- plugin 登録:
+  - `src/plugins/interface.rs` は thin shell として `plugins::register_ui_plugins(app)` を呼び、UI stack の登録本体は `src/interface/ui/plugins/mod.rs` に集約する。
+  - `register_ui_plugins` は `HwUiPlugin`、`UiFoundationPlugin`、root adapter plugin 群をまとめて登録する。
 - UIノード管理:
   - `UiNodeRegistry` は `UiSlot -> Entity` を保持し、ノード更新は `Query::get_mut(entity)` で差分反映。
 - 情報表示:
@@ -163,6 +166,9 @@ Perceive → Update → Decide → Execute
 - 入力判定:
   - `UiInputState.pointer_over_ui` を統一 guard として共有。
   - 選択/配置系（`selection`）と `PanCamera` ガードは root 側で維持。
+- UI 実行順序:
+  - `ui_keyboard_shortcuts_system -> ui_interaction_system -> handle_ui_intent -> specialized action -> menu_visibility_system -> update_mode_text_system -> update_area_edit_preview_ui_system` を同一 chain で固定する。
+  - `context_menu_system`、task summary、time/speed 表示、vignette などの後段更新は、この chain の後に実行する。
 - ルート残留（境界維持）:
   - `src/interface/ui/selection/`、`src/interface/ui/vignette.rs`、`src/interface/camera.rs`
   - `src/interface/ui/presentation/`（Model 構築）と `src/interface/ui/list/change_detection.rs`（`EntityListDirty` トリガ生成）

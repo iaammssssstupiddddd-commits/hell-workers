@@ -15,7 +15,7 @@ use crate::systems::command::{
     count_positions_in_area, overlap_summary_from_areas, AreaEditClipboard, AreaEditSession, TaskArea,
     TaskMode,
 };
-use crate::systems::jobs::{Designation, Priority};
+use crate::systems::jobs::Designation;
 
 pub fn update_mode_text_system(
     play_mode: Res<State<PlayMode>>,
@@ -119,21 +119,7 @@ pub fn update_mode_text_system(
 
 pub fn task_summary_ui_system(
     mut dirty: Option<ResMut<TaskListDirty>>,
-    mut state: Option<ResMut<TaskListState>>,
-    q_designations: Query<(
-        Entity,
-        &Transform,
-        &Designation,
-        Option<&Priority>,
-        Option<&crate::relationships::TaskWorkers>,
-        Option<&crate::systems::jobs::Blueprint>,
-        Option<&crate::systems::logistics::transport_request::TransportRequest>,
-        Option<&crate::systems::logistics::ResourceItem>,
-        Option<&crate::systems::jobs::Tree>,
-        Option<&crate::systems::jobs::Rock>,
-        Option<&crate::systems::jobs::SandPile>,
-        Option<&crate::systems::jobs::BonePile>,
-    )>,
+    state: Option<Res<TaskListState>>,
     theme: Res<crate::interface::ui::theme::UiTheme>,
     ui_nodes: Res<UiNodeRegistry>,
     q_text: Query<(&mut Text, &mut TextColor)>,
@@ -141,19 +127,16 @@ pub fn task_summary_ui_system(
     let Some(dirty) = dirty.as_mut() else {
         return;
     };
-    let Some(state) = state.as_mut() else {
+    let Some(state) = state.as_ref() else {
         return;
     };
 
-    if dirty.summary_dirty() {
-        let (total, high) = crate::interface::ui::panels::task_list::build_task_summary(&q_designations);
-        state.summary_total = total;
-        state.summary_high = high;
-        dirty.clear_summary();
+    if !theme.is_changed() && !dirty.summary_dirty() {
+        return;
     }
 
-    if !theme.is_changed() && !state.is_changed() {
-        return;
+    if dirty.summary_dirty() {
+        dirty.clear_summary();
     }
 
     hw_ui::interaction::status_display::task_summary_ui_system(
