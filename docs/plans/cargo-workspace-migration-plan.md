@@ -37,6 +37,7 @@
   - `src/systems/logistics/`
 - `hw_world` は world 全体ではなく、固定レイアウト定数・川/砂生成ロジック・pathfinding アルゴリズム・`TerrainType` を保持している
   - 追加で、ベース地形タイル生成・terrain border 判定・regrowth zone 定義/候補選定ロジックも `hw_world` に保持している
+- `hw_core` には `events` のうち低結合な型群も移り始めている
 - `hw_components` は、現 checkout には存在しない
 
 結論:
@@ -54,6 +55,8 @@
 - `constants/` と `game_state.rs` の `hw_core` への移動
 - `relationships.rs` の `hw_core` への移動
   - root の `src/relationships.rs` は互換維持のため re-export のみ保持
+- `events.rs` のうち、`WorkType` / `ResourceType` / `AssignedTask` / `FamiliarAiState` に依存しない型群を `hw_core::events` へ移動
+  - root の `src/events.rs` は高結合な型と re-export のみ保持
 - `DoorState` を `hw_core::world` へ移動
   - `src/systems/jobs/door.rs` は re-export を保持
 - `hw_world` クレートの追加
@@ -81,7 +84,8 @@
 
 ### 未完了
 
-- `events.rs` の `hw_core` または他クレートへの移動
+- `events.rs` の残存高結合型の整理
+  - `WorkType` / `ResourceType` / `AssignedTask` / `FamiliarAiState` 依存の分離方針確定
 - `WorldMap` 本体と app 側 shell (`spawn` / `terrain_border` / `regrowth`) の整理
 - `WorldMap` resource そのものへの広い依存の整理
   - 特に app-wide `Res<WorldMap>` / `ResMut<WorldMap>` の境界再設計
@@ -170,8 +174,9 @@ hw_logistics
 候補:
 
 - 維持: `constants`, `game_state`
-- 検討: `relationships`
-- 保留: `events`（依存が広いため）
+- 維持: `relationships`
+- 部分移動済み: `events` の低結合型群
+- 保留: `events` の高結合型群（依存が広いため）
 
 作業:
 

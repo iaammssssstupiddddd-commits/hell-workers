@@ -18,7 +18,7 @@ pub(crate) fn identify_removal_targets(
     // 全てのストックパイルを確認するのは効率が悪いので、
     // 本来は「影響を受ける連結成分」だけを探索すべきだが、
     // ここでは簡易的に全ストックパイルを対象とする (数千個レベルなら問題ないはず)
-    for (&grid, _) in &world_map.stockpiles {
+    for (&grid, _) in world_map.stockpile_entries() {
         if grid.0 >= min_grid.0
             && grid.0 <= max_grid.0
             && grid.1 >= min_grid.1
