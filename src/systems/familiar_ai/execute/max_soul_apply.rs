@@ -11,6 +11,7 @@ use crate::systems::soul_ai::helpers::work::unassign_task;
 use crate::systems::visual::speech::components::{
     BubbleEmotion, BubblePriority, FamiliarBubble, SpeechBubble,
 };
+use crate::world::map::WorldMapRead;
 use bevy::prelude::*;
 
 /// 使役数上限変更イベントを処理するシステム
@@ -41,7 +42,7 @@ pub fn handle_max_soul_changed_system(
     game_assets: Res<crate::assets::GameAssets>,
     q_bubbles: Query<(Entity, &SpeechBubble), With<FamiliarBubble>>,
     time: Res<Time>,
-    world_map: Res<crate::world::map::WorldMap>,
+    world_map: WorldMapRead,
     mut commands: Commands,
 ) {
     for event in ev_max_soul_changed.read() {
@@ -83,7 +84,7 @@ pub fn handle_max_soul_changed_system(
                                 inventory_opt.as_deref_mut(),
                                 None,
                                 &mut queries,
-                                &world_map,
+                                world_map.as_ref(),
                                 false, // emit_abandoned_event: 上限超過リリース時は個別のタスク中断セリフを出さない
                             );
                         }

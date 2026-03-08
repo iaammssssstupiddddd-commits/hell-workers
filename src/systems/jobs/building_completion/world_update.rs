@@ -17,8 +17,7 @@ pub(super) fn update_world_for_completed_building(
 ) {
     if bp.kind == BuildingType::Bridge {
         for &(gx, gy) in &bp.occupied_grids {
-            world_map.add_bridged_tile((gx, gy));
-            world_map.set_building((gx, gy), building_entity);
+            world_map.register_bridge_tile((gx, gy), building_entity);
         }
         return;
     }
@@ -46,10 +45,10 @@ pub(super) fn update_world_for_completed_building(
     });
 
     for &(gx, gy) in &bp.occupied_grids {
-        world_map.add_obstacle(gx, gy);
-        world_map.set_building((gx, gy), building_entity);
         if bp.kind == BuildingType::Door {
-            world_map.add_door(gx, gy, building_entity, DoorState::Closed);
+            world_map.register_door((gx, gy), building_entity, DoorState::Closed);
+        } else {
+            world_map.set_building_occupancy((gx, gy), building_entity);
         }
     }
 

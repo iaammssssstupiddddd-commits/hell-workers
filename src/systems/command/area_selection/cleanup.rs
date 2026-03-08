@@ -1,12 +1,13 @@
 //! Blueprint キャンセル時の WorldMap / PendingBelongsToBlueprint クリーンアップ
 
 use crate::systems::jobs::Blueprint;
+use crate::world::map::WorldMapWrite;
 use bevy::prelude::*;
 
 /// Blueprint が despawn された時に WorldMap と PendingBelongsToBlueprint を掃除する
 pub fn blueprint_cancel_cleanup_system(
     mut commands: Commands,
-    mut world_map: ResMut<crate::world::map::WorldMap>,
+    mut world_map: WorldMapWrite,
     mut removed: RemovedComponents<Blueprint>,
     q_pending: Query<(
         Entity,
@@ -20,8 +21,7 @@ pub fn blueprint_cancel_cleanup_system(
             .map(|(&grid, _)| grid)
             .collect();
         for (gx, gy) in grids_to_remove {
-            world_map.clear_building((gx, gy));
-            world_map.remove_obstacle(gx, gy);
+            world_map.clear_building_occupancy((gx, gy));
         }
 
         for (companion_entity, pending) in q_pending.iter() {

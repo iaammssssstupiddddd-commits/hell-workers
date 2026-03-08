@@ -77,8 +77,7 @@ pub(super) fn place_building_blueprint(
     }
 
     if let Some(entity) = replace_wall_entity {
-        world_map.clear_building(grid);
-        world_map.remove_obstacle(grid.0, grid.1);
+        world_map.clear_building_occupancy(grid);
         commands.entity(entity).despawn();
     }
 
@@ -116,9 +115,10 @@ pub(super) fn place_building_blueprint(
         .id();
 
     for &g in &occupied_grids {
-        world_map.set_building(g, entity);
-        if building_type != BuildingType::Bridge {
-            world_map.add_obstacle(g.0, g.1);
+        if building_type == BuildingType::Bridge {
+            world_map.set_building(g, entity);
+        } else {
+            world_map.set_building_occupancy(g, entity);
         }
     }
 

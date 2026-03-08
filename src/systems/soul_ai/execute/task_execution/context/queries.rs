@@ -7,11 +7,12 @@ use crate::events::{ResourceReservationRequest, TaskAssignmentRequest};
 use crate::systems::soul_ai::execute::task_execution::context::access::{
     DesignationAccess, MutStorageAccess, ReservationAccess, StorageAccess,
 };
+use crate::world::map::WorldMapRead;
 
 /// タスク割り当てに必要なクエリ群（Familiar AI向け）
 #[derive(SystemParam)]
 pub struct TaskAssignmentReadAccess<'w, 's> {
-    pub world_map: Res<'w, crate::world::map::WorldMap>,
+    pub world_map: WorldMapRead<'w>,
     pub yards: Query<'w, 's, &'static crate::systems::world::zones::Yard>,
     pub items: Query<'w, 's, (&'static crate::systems::logistics::ResourceItem, Option<&'static crate::systems::jobs::Designation>)>,
     pub sand_piles: Query<

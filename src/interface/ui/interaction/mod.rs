@@ -27,6 +27,7 @@ use crate::interface::ui::components::*;
 use crate::interface::ui::theme::UiTheme;
 use crate::systems::command::{TaskArea, TaskMode};
 use crate::systems::jobs::{Door, DoorState, apply_door_state};
+use crate::world::map::WorldMapWrite;
 use bevy::prelude::*;
 use bevy::ui::RelativeCursorPosition;
 
@@ -226,7 +227,7 @@ pub fn move_plant_building_action_system(
 pub fn door_lock_action_system(
     interaction_query: Query<(&Interaction, &MenuButton), (Changed<Interaction>, With<Button>)>,
     mut q_doors: Query<(&Transform, &mut Door, &mut Sprite)>,
-    mut world_map: ResMut<crate::world::map::WorldMap>,
+    mut world_map: WorldMapWrite,
     game_assets: Res<crate::assets::GameAssets>,
 ) {
     for (interaction, menu_button) in interaction_query.iter() {

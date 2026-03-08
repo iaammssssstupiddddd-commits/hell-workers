@@ -190,14 +190,13 @@ pub fn wall_construction_cancellation_system(
                 commands.entity(wall_entity).try_despawn();
             }
 
-            if world_map
-                .building_entity(tile.grid_pos)
-                .is_some_and(|entity| entity == site_entity || Some(entity) == tile.spawned_wall)
+            if let Some(entity) = world_map.building_entity(tile.grid_pos)
+                && (entity == site_entity || Some(entity) == tile.spawned_wall)
             {
-                world_map.clear_building(tile.grid_pos);
+                world_map.clear_building_occupancy(tile.grid_pos);
+            } else {
+                world_map.remove_obstacle(tile.grid_pos.0, tile.grid_pos.1);
             }
-
-            world_map.remove_obstacle(tile.grid_pos.0, tile.grid_pos.1);
             commands.entity(tile.entity).try_despawn();
         }
 

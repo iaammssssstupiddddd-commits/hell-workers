@@ -2,6 +2,7 @@ use bevy::prelude::*;
 
 use crate::entities::familiar::Familiar;
 use crate::relationships::CommandedBy;
+use crate::world::map::WorldMapRead;
 // use crate::systems::familiar_ai::perceive::resource_sync::SharedResourceCache; // Removed unused import
 
 use crate::systems::soul_ai::helpers::query_types::CleanupSoulQuery;
@@ -13,7 +14,7 @@ pub fn cleanup_commanded_souls_system(
     mut q_souls: CleanupSoulQuery,
     mut queries: crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
     q_familiars: Query<(), With<Familiar>>,
-    world_map: Res<crate::world::map::WorldMap>,
+    world_map: WorldMapRead,
 ) {
     for (soul_entity, transform, under_command, mut task, mut path, mut inventory_opt) in
         q_souls.iter_mut()
@@ -37,7 +38,7 @@ pub fn cleanup_commanded_souls_system(
             None,
             &mut queries,
             // haul_cache removed
-            &world_map,
+            world_map.as_ref(),
             false, // emit_abandoned_event: 解放時は個別のタスク中断セリフを出さない
         );
 

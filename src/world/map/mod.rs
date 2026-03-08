@@ -163,6 +163,29 @@ impl WorldMap {
         self.buildings.remove(&grid)
     }
 
+    pub fn set_building_occupancy(&mut self, grid: (i32, i32), entity: Entity) {
+        self.set_building(grid, entity);
+        self.add_obstacle(grid.0, grid.1);
+    }
+
+    pub fn clear_building_occupancy(&mut self, grid: (i32, i32)) -> Option<Entity> {
+        let entity = self.clear_building(grid);
+        self.remove_obstacle(grid.0, grid.1);
+        entity
+    }
+
+    pub fn clear_building_occupancy_if_owned(
+        &mut self,
+        grid: (i32, i32),
+        entity: Entity,
+    ) -> bool {
+        if self.building_entity(grid) != Some(entity) {
+            return false;
+        }
+        self.clear_building_occupancy(grid);
+        true
+    }
+
     pub fn building_entries(&self) -> impl Iterator<Item = (&(i32, i32), &Entity)> {
         self.buildings.iter()
     }
@@ -191,6 +214,11 @@ impl WorldMap {
         self.bridged_tiles.insert(grid);
     }
 
+    pub fn register_bridge_tile(&mut self, grid: (i32, i32), entity: Entity) {
+        self.add_bridged_tile(grid);
+        self.set_building(grid, entity);
+    }
+
     pub fn set_door_state(&mut self, x: i32, y: i32, state: DoorState) {
         if self.doors.contains_key(&(x, y)) {
             self.door_states.insert((x, y), state);
@@ -210,6 +238,19 @@ impl WorldMap {
             Some(DoorState::Closed) => DOOR_OPEN_COST,
             _ => 0,
         }
+    }
+
+    pub fn register_door(&mut self, grid: (i32, i32), entity: Entity, state: DoorState) {
+        self.set_building_occupancy(grid, entity);
+        self.add_door(grid.0, grid.1, entity, state);
+    }
+
+    pub fn sync_door_passability(&mut self, grid: (i32, i32), state: DoorState) {
+        match state {
+            DoorState::Open => self.remove_obstacle(grid.0, grid.1),
+            DoorState::Closed | DoorState::Locked => self.add_obstacle(grid.0, grid.1),
+        }
+        self.set_door_state(grid.0, grid.1, state);
     }
 
     pub fn world_to_grid(pos: Vec2) -> (i32, i32) {

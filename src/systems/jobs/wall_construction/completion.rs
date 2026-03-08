@@ -47,13 +47,9 @@ pub fn wall_construction_completion_system(
                 }
                 commands.entity(wall_entity).remove::<ProvisionalWall>();
             } else {
-                if world_map
-                    .building_entity((gx, gy))
-                    .is_some_and(|entity| entity == site_entity)
-                {
-                    world_map.clear_building((gx, gy));
+                if !world_map.clear_building_occupancy_if_owned((gx, gy), site_entity) {
+                    world_map.remove_obstacle(gx, gy);
                 }
-                world_map.remove_obstacle(gx, gy);
             }
 
             commands.entity(tile_entity).try_despawn();
