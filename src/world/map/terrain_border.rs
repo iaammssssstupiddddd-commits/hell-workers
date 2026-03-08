@@ -5,10 +5,10 @@
 
 use crate::assets::GameAssets;
 use hw_core::constants::*;
-use hw_world::{TerrainBorderKind, generate_terrain_border_specs};
+use hw_world::{TerrainBorderKind, generate_terrain_border_specs, grid_to_world};
 use bevy::prelude::*;
 
-use super::{TerrainType, WorldMap, WorldMapRead};
+use super::{TerrainType, WorldMapRead};
 
 /// 境界オーバーレイであることを示すマーカー
 #[derive(Component)]
@@ -23,7 +23,7 @@ pub fn spawn_terrain_borders(
         let Some(texture) = border_texture(spec.terrain, spec.kind, &game_assets) else {
             continue;
         };
-        let pos = WorldMap::grid_to_world(spec.grid.0, spec.grid.1);
+        let pos = grid_to_world(spec.grid.0, spec.grid.1);
 
         commands.spawn((
             TerrainBorder,
