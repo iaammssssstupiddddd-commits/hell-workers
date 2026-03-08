@@ -56,7 +56,7 @@ pub fn familiar_spawning_system(
         spawn_familiar_at(
             &mut commands,
             &game_assets,
-            &world_map,
+            world_map.as_ref(),
             event.position,
             event.familiar_type,
             color_index,
@@ -68,7 +68,7 @@ pub fn familiar_spawning_system(
 pub fn spawn_familiar_at(
     commands: &mut Commands,
     game_assets: &Res<GameAssets>,
-    world_map: &Res<WorldMap>,
+    world_map: &WorldMap,
     pos: Vec2,
     familiar_type: FamiliarType,
     color_index: u32,

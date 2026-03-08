@@ -18,7 +18,7 @@ pub fn run_task_handler(
     commands: &mut Commands,
     game_assets: &Res<crate::assets::GameAssets>,
     time: &Res<Time>,
-    world_map: &Res<WorldMap>,
+    world_map: &WorldMap,
     breakdown_opt: Option<&StressBreakdown>,
     q_wheelbarrows: &Query<
         (&Transform, Option<&crate::relationships::ParkedAt>),
@@ -191,7 +191,7 @@ pub fn execute_haul_with_wheelbarrow(
     ctx: &mut TaskExecutionContext,
     data: HaulWithWheelbarrowData,
     commands: &mut Commands,
-    world_map: &Res<WorldMap>,
+    world_map: &WorldMap,
     q_wheelbarrows: &Query<
         (&Transform, Option<&crate::relationships::ParkedAt>),
         With<Wheelbarrow>,

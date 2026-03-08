@@ -91,6 +91,8 @@
   - `buildings` / `stockpiles` は read/write ともに高頻度経路をメソッド経由へ移行済み
 - `WorldMap` に `tiles` / `tile_entities` / `obstacles` 用 accessor を追加
   - 現時点で `world_map.tiles` / `world_map.tile_entities` / `world_map.obstacles` の直接参照は `src/` から除去済み
+- `task_execution` / spawn helper の `WorldMap` 依存を `&Res<WorldMap>` から `&WorldMap` へ縮小
+  - `src/` の helper API では Bevy resource 型への依存を除去済み
 - root crate から `hw_core` の参照
 - root crate から `hw_world` の参照
 
@@ -98,7 +100,7 @@
 
 - `WorldMap` 本体と app 側 shell (`spawn` / `terrain_border` / `regrowth`) の整理
 - `WorldMap` resource そのものへの広い依存の整理
-  - 特に app-wide `Res<WorldMap>` / `ResMut<WorldMap>` の境界再設計
+  - helper 層ではなく system 境界に残っている `Res<WorldMap>` / `ResMut<WorldMap>` の再設計
 - `jobs` / `logistics` の切り出し
 - ビルド時間の before / after 計測
 

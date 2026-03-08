@@ -14,7 +14,7 @@ pub fn handle_collect_bone_task(
     commands: &mut Commands,
     game_assets: &Res<GameAssets>,
     _time: &Res<Time>,
-    world_map: &Res<WorldMap>,
+    world_map: &WorldMap,
 ) {
     let soul_pos = ctx.soul_pos();
     let q_targets = &ctx.queries.designation.targets;

@@ -20,7 +20,7 @@ impl TaskHandler<GatherData> for AssignedTask {
         commands: &mut Commands,
         game_assets: &Res<GameAssets>,
         time: &Res<Time>,
-        world_map: &Res<WorldMap>,
+        world_map: &WorldMap,
         _breakdown_opt: Option<&StressBreakdown>,
     ) {
         crate::systems::soul_ai::execute::task_execution::gather::handle_gather_task(
@@ -43,7 +43,7 @@ impl TaskHandler<HaulData> for AssignedTask {
         commands: &mut Commands,
         _game_assets: &Res<GameAssets>,
         _time: &Res<Time>,
-        world_map: &Res<WorldMap>,
+        world_map: &WorldMap,
         _breakdown_opt: Option<&StressBreakdown>,
     ) {
         crate::systems::soul_ai::execute::task_execution::haul::handle_haul_task(
@@ -64,7 +64,7 @@ impl TaskHandler<BuildData> for AssignedTask {
         commands: &mut Commands,
         _game_assets: &Res<GameAssets>,
         time: &Res<Time>,
-        world_map: &Res<WorldMap>,
+        world_map: &WorldMap,
         _breakdown_opt: Option<&StressBreakdown>,
     ) {
         crate::systems::soul_ai::execute::task_execution::build::handle_build_task(
@@ -85,7 +85,7 @@ impl TaskHandler<HaulToBlueprintData> for AssignedTask {
         commands: &mut Commands,
         _game_assets: &Res<GameAssets>,
         _time: &Res<Time>,
-        world_map: &Res<WorldMap>,
+        world_map: &WorldMap,
         breakdown_opt: Option<&StressBreakdown>,
     ) {
         crate::systems::soul_ai::execute::task_execution::haul_to_blueprint::handle_haul_to_blueprint_task(
@@ -107,7 +107,7 @@ impl TaskHandler<CollectSandData> for AssignedTask {
         commands: &mut Commands,
         game_assets: &Res<GameAssets>,
         time: &Res<Time>,
-        world_map: &Res<WorldMap>,
+        world_map: &WorldMap,
         _breakdown_opt: Option<&StressBreakdown>,
     ) {
         crate::systems::soul_ai::execute::task_execution::collect_sand::handle_collect_sand_task(
@@ -129,7 +129,7 @@ impl TaskHandler<CollectBoneData> for AssignedTask {
         commands: &mut Commands,
         game_assets: &Res<GameAssets>,
         time: &Res<Time>,
-        world_map: &Res<WorldMap>,
+        world_map: &WorldMap,
         _breakdown_opt: Option<&StressBreakdown>,
     ) {
         crate::systems::soul_ai::execute::task_execution::collect_bone::handle_collect_bone_task(
@@ -151,7 +151,7 @@ impl TaskHandler<RefineData> for AssignedTask {
         commands: &mut Commands,
         game_assets: &Res<GameAssets>,
         time: &Res<Time>,
-        world_map: &Res<WorldMap>,
+        world_map: &WorldMap,
         _breakdown_opt: Option<&StressBreakdown>,
     ) {
         crate::systems::soul_ai::execute::task_execution::refine::handle_refine_task(
@@ -173,7 +173,7 @@ impl TaskHandler<HaulToMixerData> for AssignedTask {
         commands: &mut Commands,
         _game_assets: &Res<GameAssets>,
         _time: &Res<Time>,
-        world_map: &Res<WorldMap>,
+        world_map: &WorldMap,
         _breakdown_opt: Option<&StressBreakdown>,
     ) {
         crate::systems::soul_ai::execute::task_execution::haul_to_mixer::handle_haul_to_mixer_task(
@@ -195,7 +195,7 @@ impl TaskHandler<ReinforceFloorTileData> for AssignedTask {
         commands: &mut Commands,
         _game_assets: &Res<GameAssets>,
         time: &Res<Time>,
-        world_map: &Res<WorldMap>,
+        world_map: &WorldMap,
         _breakdown_opt: Option<&StressBreakdown>,
     ) {
         crate::systems::soul_ai::execute::task_execution::reinforce_floor::handle_reinforce_floor_task(
@@ -217,7 +217,7 @@ impl TaskHandler<PourFloorTileData> for AssignedTask {
         commands: &mut Commands,
         _game_assets: &Res<GameAssets>,
         time: &Res<Time>,
-        world_map: &Res<WorldMap>,
+        world_map: &WorldMap,
         _breakdown_opt: Option<&StressBreakdown>,
     ) {
         crate::systems::soul_ai::execute::task_execution::pour_floor::handle_pour_floor_task(
@@ -233,7 +233,7 @@ impl TaskHandler<CoatWallData> for AssignedTask {
         commands: &mut Commands,
         _game_assets: &Res<GameAssets>,
         time: &Res<Time>,
-        world_map: &Res<WorldMap>,
+        world_map: &WorldMap,
         _breakdown_opt: Option<&StressBreakdown>,
     ) {
         crate::systems::soul_ai::execute::task_execution::coat_wall::handle_coat_wall_task(
@@ -249,7 +249,7 @@ impl TaskHandler<FrameWallTileData> for AssignedTask {
         commands: &mut Commands,
         _game_assets: &Res<GameAssets>,
         time: &Res<Time>,
-        world_map: &Res<WorldMap>,
+        world_map: &WorldMap,
         _breakdown_opt: Option<&StressBreakdown>,
     ) {
         crate::systems::soul_ai::execute::task_execution::frame_wall::handle_frame_wall_task(
@@ -265,7 +265,7 @@ impl TaskHandler<MovePlantData> for AssignedTask {
         commands: &mut Commands,
         _game_assets: &Res<GameAssets>,
         _time: &Res<Time>,
-        world_map: &Res<WorldMap>,
+        world_map: &WorldMap,
         _breakdown_opt: Option<&StressBreakdown>,
     ) {
         crate::systems::soul_ai::execute::task_execution::move_plant::handle_move_plant_task(

@@ -18,7 +18,7 @@ pub fn handle_bucket_transport_task(
     commands: &mut Commands,
     game_assets: &Res<crate::assets::GameAssets>,
     time: &Res<Time>,
-    world_map: &Res<WorldMap>,
+    world_map: &WorldMap,
 ) {
     match data.phase {
         BucketTransportPhase::GoingToBucket => {
@@ -41,4 +41,3 @@ pub fn handle_bucket_transport_task(
         }
     }
 }
-

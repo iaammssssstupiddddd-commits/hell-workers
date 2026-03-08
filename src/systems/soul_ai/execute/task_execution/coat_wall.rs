@@ -36,7 +36,7 @@ fn handle_legacy_coat_wall_task(
     phase: CoatWallPhase,
     commands: &mut Commands,
     time: &Res<Time>,
-    world_map: &Res<WorldMap>,
+    world_map: &WorldMap,
 ) {
     let soul_pos = ctx.soul_pos();
 
@@ -154,7 +154,7 @@ pub fn handle_coat_wall_task(
     phase: CoatWallPhase,
     commands: &mut Commands,
     time: &Res<Time>,
-    world_map: &Res<WorldMap>,
+    world_map: &WorldMap,
 ) {
     if site_entity == Entity::PLACEHOLDER {
         handle_legacy_coat_wall_task(ctx, wall_entity, phase, commands, time, world_map);

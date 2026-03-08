@@ -98,7 +98,7 @@ pub(super) fn handle_dropping_phase(
     item: Entity,
     stockpile: Entity,
     commands: &mut Commands,
-    world_map: &Res<WorldMap>,
+    world_map: &WorldMap,
     soul_pos: Vec2,
 ) {
     let q_targets = &ctx.queries.designation.targets;

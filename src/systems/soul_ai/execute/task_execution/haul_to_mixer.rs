@@ -13,7 +13,7 @@ pub fn handle_haul_to_mixer_task(
     resource_type: ResourceType,
     phase: HaulToMixerPhase,
     commands: &mut Commands,
-    world_map: &Res<WorldMap>,
+    world_map: &WorldMap,
 ) {
     let soul_pos = ctx.soul_pos();
 

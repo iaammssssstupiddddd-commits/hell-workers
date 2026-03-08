@@ -18,7 +18,7 @@ pub fn handle_frame_wall_task(
     phase: FrameWallPhase,
     commands: &mut Commands,
     time: &Res<Time>,
-    world_map: &Res<WorldMap>,
+    world_map: &WorldMap,
 ) {
     let soul_pos = ctx.soul_pos();
 
