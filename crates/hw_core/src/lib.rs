@@ -1,3 +1,4 @@
+pub mod assigned_task;
 pub mod constants;
 pub mod events;
 pub mod familiar;
