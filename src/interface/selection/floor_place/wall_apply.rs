@@ -15,8 +15,8 @@ pub(super) fn apply_wall_placement(
     existing_floor_building_grids: &HashSet<(i32, i32)>,
     placement_failure_tooltip: &mut PlacementFailureTooltip,
 ) {
-    let min_grid = WorldMap::world_to_grid(area.min + Vec2::splat(0.1));
-    let max_grid = WorldMap::world_to_grid(area.max - Vec2::splat(0.1));
+    let min_grid = WorldMap::world_to_grid(area.min() + Vec2::splat(0.1));
+    let max_grid = WorldMap::world_to_grid(area.max() - Vec2::splat(0.1));
 
     let width = (max_grid.0 - min_grid.0 + 1).abs();
     let height = (max_grid.1 - min_grid.1 + 1).abs();

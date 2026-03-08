@@ -125,8 +125,8 @@ fn scan_terrain_tiles(
     shadow: &ReservationShadow,
 ) -> Option<(Entity, Vec2)> {
     let (x0, y0, x1, y1) = if let Some(area) = area_filter {
-        let (ax0, ay0) = WorldMap::world_to_grid(area.min);
-        let (ax1, ay1) = WorldMap::world_to_grid(area.max);
+        let (ax0, ay0) = WorldMap::world_to_grid(area.min());
+        let (ax1, ay1) = WorldMap::world_to_grid(area.max());
         (ax0, ay0, ax1, ay1)
     } else {
         (0, 0, MAP_WIDTH - 1, MAP_HEIGHT - 1)

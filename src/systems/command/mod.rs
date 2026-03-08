@@ -31,59 +31,62 @@ pub enum TaskMode {
 /// タスクエリア - 使い魔が担当するエリア
 #[derive(Component, Clone, Debug, PartialEq)]
 pub struct TaskArea {
-    pub min: Vec2,
-    pub max: Vec2,
+    pub bounds: AreaBounds,
 }
 
 impl TaskArea {
     pub fn from_points(a: Vec2, b: Vec2) -> Self {
-        Self {
-            min: Vec2::new(a.x.min(b.x), a.y.min(b.y)),
-            max: Vec2::new(a.x.max(b.x), a.y.max(b.y)),
-        }
+        Self { bounds: AreaBounds::from_points(a, b) }
     }
+
     pub fn center(&self) -> Vec2 {
-        (self.min + self.max) / 2.0
+        self.bounds.center()
     }
+
     pub fn size(&self) -> Vec2 {
-        (self.max - self.min).abs()
+        self.bounds.size()
     }
+
     pub fn contains(&self, pos: Vec2) -> bool {
-        self.contains_with_margin(pos, 0.0)
+        self.bounds.contains(pos)
     }
+
     pub fn contains_with_margin(&self, pos: Vec2, margin: f32) -> bool {
-        let m = margin.abs();
-        pos.x >= self.min.x - m
-            && pos.x <= self.max.x + m
-            && pos.y >= self.min.y - m
-            && pos.y <= self.max.y + m
+        self.bounds.contains_with_margin(pos, margin)
     }
+
     pub fn contains_border(&self, pos: Vec2, thickness: f32) -> bool {
-        let in_outer = pos.x >= self.min.x - thickness
-            && pos.x <= self.max.x + thickness
-            && pos.y >= self.min.y - thickness
-            && pos.y <= self.max.y + thickness;
-        let in_inner = pos.x >= self.min.x + thickness
-            && pos.x <= self.max.x - thickness
-            && pos.y >= self.min.y + thickness
-            && pos.y <= self.max.y - thickness;
+        let in_outer = self.bounds.contains_with_margin(pos, thickness);
+        let inner = AreaBounds::new(
+            self.bounds.min + Vec2::splat(thickness),
+            self.bounds.max - Vec2::splat(thickness),
+        );
+        let in_inner = inner.contains(pos);
         in_outer && !in_inner
     }
 
     pub fn bounds(&self) -> AreaBounds {
-        AreaBounds { min: self.min, max: self.max }
+        self.bounds.clone()
+    }
+
+    pub fn min(&self) -> Vec2 {
+        self.bounds.min
+    }
+
+    pub fn max(&self) -> Vec2 {
+        self.bounds.max
     }
 }
 
 impl From<&TaskArea> for AreaBounds {
     fn from(area: &TaskArea) -> Self {
-        AreaBounds { min: area.min, max: area.max }
+        area.bounds.clone()
     }
 }
 
 impl From<AreaBounds> for TaskArea {
     fn from(bounds: AreaBounds) -> Self {
-        TaskArea { min: bounds.min, max: bounds.max }
+        TaskArea { bounds }
     }
 }
 
