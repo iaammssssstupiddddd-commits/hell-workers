@@ -318,8 +318,8 @@
 
 ### 現在地
 
-- 進捗: M2 ✅ / M3 ✅（部分） / M4 ✅ / M5 🟡 / M6 🟡 / M7 🟡
-- 完了済みマイルストーン: M2（共有型・SystemSet 抽出）、M4（hw_ai 骨格）
+- 進捗: M2 ✅ / M3 ✅（部分） / M4 ✅ / M5 ✅（部分） / M6 ✅（部分） / M7 ✅（部分）
+- 完了済みマイルストーン: M2（共有型・SystemSet 抽出）、M4（hw_ai 骨格）、M5（update/* + helpers/* 移動）、M6（perceive/state_detection + decide/following + execute/state_apply + execute/state_log + plugin 登録統一）、M7（docs 主要更新）
 - Phase 2 計画（`docs/plans/hw-ai-crate-phase2-2026-03-08.md`）は **完了済み**
   - M1: state_apply / state_log を hw_ai へ移動
   - M2/M3: gathering_positions / gathering_motion を hw_ai へ移動（PathWorld トレイト境界）
@@ -401,3 +401,4 @@
 | `2026-03-08` | `AI` | M2/M4 完了・M5/M6 移動済み一覧追加（コミット `536915d`） |
 | `2026-03-08` | `AI` | M6 following.rs 移動・FamiliarAiPlugin 登録一元化完了（コミット `5a7d246`） |
 | `2026-03-08` | `AI` | Phase 2 完了後に全体更新: M3 完了条件・M5/M6 移動済み一覧・M7 実施済み・AI引継ぎメモ刷新（コミット `52b0710`） |
+| `2026-03-08` | `AI` | 計画書ステータスを Complete に変更・M5/M6 ヘッダーを ✅ 完了（部分）に更新・進捗一覧を最終状態に同期 |
