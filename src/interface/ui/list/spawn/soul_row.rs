@@ -1,17 +1,16 @@
 use super::super::{SoulRowViewModel, StressBucket, TaskVisual};
-use crate::entities::damned_soul::Gender;
 use crate::interface::ui::components::SoulListItem;
 use crate::interface::ui::theme::UiTheme;
 use bevy::prelude::*;
 
 fn get_gender_icon_and_color(
-    gender: Gender,
+    gender: i8,
     game_assets: &crate::assets::GameAssets,
     theme: &UiTheme,
 ) -> (Handle<Image>, Color) {
     match gender {
-        Gender::Male => (game_assets.icon_male.clone(), theme.colors.male),
-        Gender::Female => (game_assets.icon_female.clone(), theme.colors.female),
+        0 => (game_assets.icon_male.clone(), theme.colors.male),
+        _ => (game_assets.icon_female.clone(), theme.colors.female),
     }
 }
 

@@ -16,6 +16,7 @@ pub mod vignette;
 pub use components::*;
 pub use interaction::*;
 pub use list::*;
+pub use presentation::*;
 pub use panels::*;
 pub use setup::*;
 pub use theme::*;

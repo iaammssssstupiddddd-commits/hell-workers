@@ -1,5 +1,5 @@
 use super::{EntityListSnapshot, EntityListViewModel, FamiliarRowViewModel, SoulRowViewModel};
-use crate::entities::damned_soul::{DamnedSoul, SoulIdentity};
+use crate::entities::damned_soul::{DamnedSoul, Gender, SoulIdentity};
 use crate::entities::familiar::{Familiar, FamiliarOperation};
 use crate::interface::ui::components::{SectionFolded, UnassignedFolded, UnassignedSoulSection};
 use crate::relationships::{CommandedBy, Commanding};
@@ -82,7 +82,10 @@ pub(super) fn build_soul_view_model(
     SoulRowViewModel {
         entity: soul_entity,
         name: identity.name.clone(),
-        gender: identity.gender,
+        gender: match identity.gender {
+            Gender::Male => 0,
+            Gender::Female => 1,
+        },
         fatigue_text: format!("{:.0}%", soul.fatigue * 100.0),
         stress_text: format!("{:.0}%", soul.stress * 100.0),
         stress_bucket: stress_bucket(soul.stress),

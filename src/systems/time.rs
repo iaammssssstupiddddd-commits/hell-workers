@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use hw_ui::components::ClockText;
 pub use hw_core::game_state::TimeSpeed;
 
 #[derive(Resource, Default, Reflect)]
@@ -9,9 +10,6 @@ pub struct GameTime {
     pub hour: u32,
     pub minute: u32,
 }
-
-#[derive(Component)]
-pub struct ClockText;
 
 pub fn game_time_system(
     time: Res<Time<Virtual>>,

@@ -1,19 +1,21 @@
 //! 時間操作 UI
 
-use crate::interface::ui::components::{
+use crate::components::{
     DreamPoolPulse, MenuAction, MenuButton, SpeedButtonMarker, UiInputBlocker, UiNodeRegistry,
     UiSlot, UiTooltip,
 };
-use crate::interface::ui::theme::UiTheme;
-use crate::systems::time::{ClockText, TimeSpeed};
-use crate::systems::visual::dream::DreamIconAbsorb;
+use crate::components::ClockText;
+use crate::components::DreamIconAbsorb;
+use crate::theme::UiTheme;
+use hw_core::game_state::TimeSpeed;
 use bevy::prelude::*;
 use bevy::ui::RelativeCursorPosition;
+use super::UiSetupAssets;
 
 /// 時間操作UIをスポーン
 pub fn spawn_time_control(
     commands: &mut Commands,
-    game_assets: &Res<crate::assets::GameAssets>,
+    game_assets: &dyn UiSetupAssets,
     theme: &UiTheme,
     parent_entity: Entity,
     ui_nodes: &mut UiNodeRegistry,
@@ -46,7 +48,7 @@ pub fn spawn_time_control(
         panel.spawn((
             Text::new("Day 1, 00:00"),
             TextFont {
-                font: game_assets.font_ui.clone(),
+                font: game_assets.font_ui().clone(),
                 font_size: theme.typography.font_size_clock,
                 ..default()
             },
@@ -97,7 +99,7 @@ pub fn spawn_time_control(
                             btn.spawn((
                                 Text::new(label),
                                 TextFont {
-                                    font: game_assets.font_ui.clone(),
+                                    font: game_assets.font_ui().clone(),
                                     font_size: theme.typography.font_size_title,
                                     ..default()
                                 },
@@ -122,7 +124,7 @@ pub fn spawn_time_control(
             .spawn((
                 Text::new("Tasks: 0 (0 High)"),
                 TextFont {
-                    font: game_assets.font_ui.clone(),
+                    font: game_assets.font_ui().clone(),
                     font_size: theme.typography.font_size_status,
                     ..default()
                 },
@@ -148,7 +150,7 @@ pub fn spawn_time_control(
                     .spawn((
                         Text::new("Dream: 0"),
                         TextFont {
-                            font: game_assets.font_ui.clone(),
+                            font: game_assets.font_ui().clone(),
                             font_size: theme.typography.font_size_status,
                             ..default()
                         },
@@ -167,7 +169,7 @@ pub fn spawn_time_control(
                             margin: UiRect::left(Val::Px(6.0)),
                             ..default()
                         },
-                        ImageNode::new(game_assets.glow_circle.clone()),
+                        ImageNode::new(game_assets.glow_circle().clone()),
                         BackgroundColor(theme.colors.accent_soul_bright),
                         UiSlot::DreamPoolIcon,
                         DreamIconAbsorb::default(),

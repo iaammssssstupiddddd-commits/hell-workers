@@ -2,40 +2,30 @@
 //!
 //! InfoPanel と HoverTooltip を Startup 時に生成する。
 
-use crate::interface::ui::components::{
-    HoverActionOverlay, HoverTooltip, InfoPanelNodes, MenuAction, MenuButton, UiNodeRegistry, UiSlot,
+use crate::components::{
+    HoverActionOverlay, HoverTooltip, MenuAction, MenuButton, UiNodeRegistry, UiSlot,
     UiInputBlocker,
 };
-use crate::interface::ui::panels::spawn_info_panel_ui;
-use crate::interface::ui::theme::UiTheme;
+use crate::theme::UiTheme;
 use bevy::prelude::*;
 use bevy::ui_widgets::popover::{Popover, PopoverAlign, PopoverPlacement, PopoverSide};
+use super::UiSetupAssets;
 
 /// パネルをスポーン
 pub fn spawn_panels(
     commands: &mut Commands,
-    game_assets: &Res<crate::assets::GameAssets>,
+    game_assets: &dyn UiSetupAssets,
     theme: &UiTheme,
-    info_panel_parent: Entity,
     overlay_parent: Entity,
     ui_nodes: &mut UiNodeRegistry,
-    info_panel_nodes: &mut InfoPanelNodes,
 ) {
-    spawn_info_panel_ui(
-        commands,
-        game_assets,
-        theme,
-        info_panel_parent,
-        ui_nodes,
-        info_panel_nodes,
-    );
     spawn_hover_tooltip(commands, theme, overlay_parent, ui_nodes);
     spawn_hover_action_overlay(commands, game_assets, theme, overlay_parent);
 }
 
 fn spawn_hover_action_overlay(
     commands: &mut Commands,
-    game_assets: &Res<crate::assets::GameAssets>,
+    game_assets: &dyn UiSetupAssets,
     theme: &UiTheme,
     parent_entity: Entity,
 ) {
@@ -66,7 +56,7 @@ fn spawn_hover_action_overlay(
             parent.spawn((
                 Text::new("Move"),
                 TextFont {
-                    font: game_assets.font_ui.clone(),
+                    font: game_assets.font_ui().clone(),
                     font_size: theme.typography.font_size_base,
                     ..default()
                 },

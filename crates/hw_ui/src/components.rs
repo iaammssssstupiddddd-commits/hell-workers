@@ -1,0 +1,357 @@
+//! UIコンポーネント定義
+//!
+//! UIの列挙型とコンポーネント構造体を定義します。
+
+use hw_jobs::BuildingCategory;
+use bevy::prelude::*;
+use std::collections::HashMap;
+use hw_core::game_state::TimeSpeed;
+
+// ============================================================
+// 左パネルモード
+// ============================================================
+
+#[derive(Resource, Default, PartialEq, Eq, Clone, Copy, Debug)]
+pub enum LeftPanelMode {
+    #[default]
+    EntityList,
+    TaskList,
+}
+
+// ============================================================
+// UI列挙型
+// ============================================================
+
+#[derive(Resource, Default)]
+pub struct UiInputState {
+    pub pointer_over_ui: bool,
+}
+
+#[derive(Resource, Default, Debug, Clone)]
+pub struct PlacementFailureTooltip {
+    pub message: Option<String>,
+    pub remaining_secs: f32,
+}
+
+impl PlacementFailureTooltip {
+    pub fn show(&mut self, message: impl Into<String>) {
+        self.message = Some(message.into());
+        self.remaining_secs = 2.0;
+    }
+
+    pub fn clear(&mut self) {
+        self.message = None;
+        self.remaining_secs = 0.0;
+    }
+
+    pub fn tick(&mut self, delta_secs: f32) {
+        if self.remaining_secs <= 0.0 {
+            return;
+        }
+        self.remaining_secs = (self.remaining_secs - delta_secs).max(0.0);
+        if self.remaining_secs <= f32::EPSILON {
+            self.clear();
+        }
+    }
+}
+
+#[derive(Resource, Default)]
+pub struct UiNodeRegistry {
+    pub slots: HashMap<UiSlot, Entity>,
+}
+
+impl UiNodeRegistry {
+    pub fn set_slot(&mut self, slot: UiSlot, entity: Entity) {
+        self.slots.insert(slot, entity);
+    }
+
+    pub fn get_slot(&self, slot: UiSlot) -> Option<Entity> {
+        self.slots.get(&slot).copied()
+    }
+}
+
+#[derive(Resource, Default)]
+pub struct InfoPanelNodes {
+    pub root: Option<Entity>,
+    pub stats_group: Option<Entity>,
+    pub unpin_button: Option<Entity>,
+    pub header: Option<Entity>,
+    pub gender_icon: Option<Entity>,
+    pub motivation: Option<Entity>,
+    pub stress: Option<Entity>,
+    pub fatigue: Option<Entity>,
+    pub dream: Option<Entity>,
+    pub task: Option<Entity>,
+    pub inventory: Option<Entity>,
+    pub common: Option<Entity>,
+}
+
+#[derive(Resource, Default, Debug, Clone, Copy)]
+pub enum MenuState {
+    #[default]
+    Hidden,
+    Architect,
+    Zones,
+    Orders,
+    Dream,
+}
+
+pub use crate::UiIntent as MenuAction;
+
+// ============================================================
+// UiSlot - 統一UIスロットコンポーネント
+// ============================================================
+
+#[derive(Component, Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub enum UiSlot {
+    InfoPanelRoot,
+    InfoPanelStatsGroup,
+    InfoPanelUnpinButton,
+    // Info Panel
+    Header,
+    GenderIcon,
+    StatMotivation,
+    StatStress,
+    StatFatigue,
+    StatDream,
+    TaskText,
+    InventoryText,
+    CommonText,
+    // Dialog
+    DialogFamiliarName,
+    DialogThresholdText,
+    DialogMaxSoulText,
+    // Bottom bar
+    ModeText,
+    // Other
+    TaskSummaryText,
+    AreaEditPreview,
+    TooltipAnchor,
+    FpsText,
+    DreamPoolText,
+    DreamPoolIcon,
+}
+
+// ============================================================
+// UIコンポーネント
+// ============================================================
+
+#[derive(Component)]
+pub struct MenuButton(pub MenuAction);
+
+#[derive(Component)]
+pub struct HoverActionOverlay {
+    pub target: Option<Entity>,
+}
+
+#[derive(Resource, Default)]
+pub struct ArchitectCategoryState(pub Option<BuildingCategory>);
+
+#[derive(Component)]
+pub struct ArchitectSubMenu;
+
+#[derive(Component)]
+pub struct ArchitectCategoryListPanel;
+
+#[derive(Component)]
+pub struct ArchitectBuildingPanel(pub BuildingCategory);
+
+#[derive(Component)]
+pub struct ZonesSubMenu;
+
+#[derive(Component)]
+pub struct OrdersSubMenu;
+
+#[derive(Component)]
+pub struct DreamSubMenu;
+
+#[derive(Component)]
+pub struct InfoPanel;
+
+#[derive(Component)]
+pub struct ContextMenu;
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum TooltipTemplate {
+    Soul,
+    Building,
+    Resource,
+    UiButton,
+    #[default]
+    Generic,
+}
+
+#[derive(Component)]
+pub struct HoverTooltip {
+    pub template_type: TooltipTemplate,
+    pub delay_timer: Timer,
+    pub fade_alpha: f32,
+}
+
+impl Default for HoverTooltip {
+    fn default() -> Self {
+        Self {
+            template_type: TooltipTemplate::Generic,
+            delay_timer: Timer::from_seconds(0.3, TimerMode::Once),
+            fade_alpha: 0.0,
+        }
+    }
+}
+
+#[derive(Component)]
+pub struct TooltipHeader;
+
+#[derive(Component)]
+pub struct TooltipBody;
+
+#[derive(Component)]
+pub struct TooltipProgressBar(pub f32);
+
+#[derive(Component)]
+pub struct UiTooltip {
+    pub text: &'static str,
+    pub shortcut: Option<&'static str>,
+}
+
+impl UiTooltip {
+    pub const fn new(text: &'static str) -> Self {
+        Self {
+            text,
+            shortcut: None,
+        }
+    }
+
+    pub const fn with_shortcut(text: &'static str, shortcut: &'static str) -> Self {
+        Self {
+            text,
+            shortcut: Some(shortcut),
+        }
+    }
+}
+
+#[derive(Component, Default)]
+pub struct UiInputBlocker;
+
+#[derive(Component, Default)]
+pub struct DreamPoolPulse {
+    pub timer: f32,
+    pub loss_timer: f32,
+    pub pending_gain: f32,
+    pub last_points: f32,
+}
+
+#[derive(Component)]
+pub struct ClockText;
+
+#[derive(Component, Default)]
+pub struct DreamIconAbsorb {
+    pub timer: f32,
+    pub pulse_count: u8,
+}
+
+#[derive(Component)]
+pub struct UiRoot;
+
+#[derive(Component, Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub enum UiMountSlot {
+    LeftPanel,
+    RightPanel,
+    Bottom,
+    Overlay,
+    TopRight,
+    TopLeft,
+    /// 夢の泡パーティクル専用レイヤー（パネルより先にスポーンされるため、常にパネルの後ろに描画される）
+    DreamBubbleLayer,
+}
+
+/// 速度ボタンに付与し、アクティブ状態のハイライトに使用
+#[derive(Component)]
+pub struct SpeedButtonMarker(pub TimeSpeed);
+
+#[derive(Component)]
+pub struct OperationDialog;
+
+// ============================================================
+// エンティティリスト UI コンポーネント
+// ============================================================
+
+#[derive(Component)]
+pub struct EntityListPanel;
+
+#[derive(Component)]
+pub struct EntityListBody;
+
+#[derive(Component)]
+pub struct EntityListScrollHint;
+
+#[derive(Component)]
+pub struct EntityListMinimizeButton;
+
+#[derive(Component)]
+pub struct EntityListMinimizeButtonLabel;
+
+/// ヘッダーのリストコンテナ
+#[derive(Component)]
+pub struct FamiliarListContainer;
+
+#[derive(Component)]
+pub struct SoulListItem(pub Entity);
+
+/// 使い魔リストアイテム（選択用）
+#[derive(Component)]
+pub struct FamiliarListItem(pub Entity);
+
+#[derive(Component, Clone, Copy)]
+pub struct FamiliarMaxSoulAdjustButton {
+    pub familiar: Entity,
+    pub delta: isize,
+}
+
+#[derive(Component)]
+pub struct UnassignedSoulSection;
+
+#[derive(Component)]
+pub struct UnassignedSoulContent;
+
+#[derive(Component)]
+pub struct UiScrollArea {
+    pub speed: f32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EntityListSectionType {
+    Familiar(Entity),
+    Unassigned,
+}
+
+/// セクションの折りたたみイベント等に使う識別
+#[derive(Component)]
+pub struct SectionToggle(pub EntityListSectionType);
+
+/// 未所属ソウルセクションの矢印アイコン（動的更新用）
+#[derive(Component)]
+pub struct UnassignedSectionArrowIcon;
+
+/// セクションが折りたたまれていることを示すコンポーネント
+#[derive(Component, Default, Debug, Reflect)]
+#[reflect(Component)]
+pub struct SectionFolded;
+
+/// 未所属セクションが折りたたまれていることを示すコンポーネント
+/// 未所属セクションのエンティティに付与される
+#[derive(Component, Default, Debug, Reflect)]
+#[reflect(Component)]
+pub struct UnassignedFolded;
+
+// ============================================================
+// タスクリストパネル UI コンポーネント
+// ============================================================
+
+#[derive(Component)]
+pub struct TaskListItem(pub Entity);
+
+#[derive(Component)]
+pub struct LeftPanelTabButton(pub LeftPanelMode);
+
+#[derive(Component)]
+pub struct TaskListBody;

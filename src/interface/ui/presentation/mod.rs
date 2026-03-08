@@ -1,7 +1,9 @@
 mod builders;
 
 use hw_core::constants::ESCAPE_STRESS_THRESHOLD;
-use crate::entities::damned_soul::{DamnedSoul, Gender, IdleBehavior, IdleState};
+use crate::interface::selection::SelectedEntity;
+use crate::interface::ui::panels::InfoPanelPinState;
+use crate::entities::damned_soul::{DamnedSoul, IdleBehavior, IdleState};
 use crate::entities::familiar::Familiar;
 use crate::interface::ui::components::TooltipTemplate;
 use crate::relationships::CommandedBy;
@@ -13,25 +15,11 @@ use crate::systems::spatial::FamiliarSpatialGrid;
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 
-#[derive(Clone, PartialEq)]
-pub struct SoulInspectionFields {
-    pub gender: Option<Gender>,
-    pub motivation: String,
-    pub stress: String,
-    pub fatigue: String,
-    pub dream: String,
-    pub task: String,
-    pub inventory: String,
-    pub common: String,
-}
-
-#[derive(Clone, PartialEq)]
-pub struct EntityInspectionModel {
-    pub header: String,
-    pub common_text: String,
-    pub tooltip_lines: Vec<String>,
-    pub soul: Option<SoulInspectionFields>,
-}
+pub use hw_ui::models::inspection::{
+    EntityInspectionModel,
+    EntityInspectionViewModel,
+    SoulInspectionFields,
+};
 
 #[derive(SystemParam)]
 pub struct EntityInspectionQuery<'w, 's> {
@@ -119,6 +107,25 @@ impl InspectionAccumulator {
             soul: self.soul_fields,
         })
     }
+}
+
+pub fn update_entity_inspection_view_model_system(
+    selected_entity: Res<SelectedEntity>,
+    mut pin_state: ResMut<InfoPanelPinState>,
+    inspection: EntityInspectionQuery,
+    mut view_model: ResMut<EntityInspectionViewModel>,
+) {
+    let mut inspected_entity = pin_state.entity.or(selected_entity.0);
+    let mut model = inspected_entity.and_then(|entity| inspection.build_model(entity));
+
+    if pin_state.entity.is_some() && model.is_none() {
+        pin_state.entity = None;
+        inspected_entity = selected_entity.0;
+        model = inspected_entity.and_then(|entity| inspection.build_model(entity));
+    }
+
+    let _ = inspected_entity;
+    view_model.model = model;
 }
 
 impl EntityInspectionQuery<'_, '_> {

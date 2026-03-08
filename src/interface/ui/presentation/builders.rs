@@ -2,6 +2,8 @@ use super::{
     EntityInspectionQuery, InspectionAccumulator, SoulInspectionFields, format_escape_info,
     format_inventory_str, format_task_str,
 };
+use crate::entities::damned_soul::Gender;
+use hw_ui::models::inspection::{InspectionSoulGender};
 use hw_core::constants::{DREAM_DRAIN_RATE_REST, DREAM_MAX, MUD_MIXER_MUD_CAPACITY};
 use bevy::prelude::*;
 
@@ -45,7 +47,10 @@ impl EntityInspectionQuery<'_, '_> {
         model.push_common(common.clone());
 
         model.soul_fields = Some(SoulInspectionFields {
-            gender: identity_opt.map(|identity| identity.gender),
+            gender: identity_opt.map(|identity| match identity.gender {
+                Gender::Male => InspectionSoulGender::Male,
+                Gender::Female => InspectionSoulGender::Female,
+            }),
             motivation,
             stress,
             fatigue,

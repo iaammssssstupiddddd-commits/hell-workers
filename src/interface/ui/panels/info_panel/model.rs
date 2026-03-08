@@ -1,5 +1,5 @@
-use crate::entities::damned_soul::Gender;
 use crate::interface::ui::presentation::EntityInspectionModel;
+use hw_ui::models::inspection::InspectionSoulGender;
 
 #[derive(Clone, PartialEq)]
 pub(super) enum InfoPanelViewModel {
@@ -10,7 +10,7 @@ pub(super) enum InfoPanelViewModel {
 #[derive(Clone, PartialEq)]
 pub(super) struct SoulInfoViewModel {
     pub(super) header: String,
-    pub(super) gender: Option<Gender>,
+    pub(super) gender: Option<InspectionSoulGender>,
     pub(super) motivation: String,
     pub(super) stress: String,
     pub(super) fatigue: String,

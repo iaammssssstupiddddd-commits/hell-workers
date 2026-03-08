@@ -3,10 +3,6 @@ use crate::interface::ui::components::MenuAction;
 use hw_ui::UiIntent;
 
 pub(super) fn handle_pressed_action(action: MenuAction, ui_intents: &mut MessageWriter<UiIntent>) {
-    if action.is_specialized() {
-        return;
-    }
-
     match action {
         MenuAction::InspectEntity(entity) => {
             ui_intents.write(UiIntent::InspectEntity(entity));
@@ -65,12 +61,14 @@ pub(super) fn handle_pressed_action(action: MenuAction, ui_intents: &mut Message
         MenuAction::TogglePause => {
             ui_intents.write(UiIntent::TogglePause);
         }
+        MenuAction::ToggleDoorLock(entity) => {
+            ui_intents.write(UiIntent::ToggleDoorLock(entity));
+        }
         MenuAction::SelectArchitectCategory(kind) => {
             ui_intents.write(UiIntent::SelectArchitectCategory(kind));
         }
         MenuAction::MovePlantBuilding(entity) => {
             ui_intents.write(UiIntent::MovePlantBuilding(entity));
         }
-        _ => unreachable!("Unhandled MenuAction in generic action router; specialized actions must be delegated."),
     }
 }

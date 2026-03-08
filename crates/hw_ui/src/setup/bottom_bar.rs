@@ -1,17 +1,18 @@
 //! ボトムバー UI
 
-use crate::interface::ui::components::{
+use crate::components::{
     MenuAction, MenuButton, UiInputBlocker, UiNodeRegistry, UiSlot, UiTooltip,
 };
-use crate::interface::ui::theme::UiTheme;
+use crate::theme::UiTheme;
 use bevy::prelude::*;
 use bevy::ui::RelativeCursorPosition;
 use bevy::ui::{BackgroundGradient, ColorStop, LinearGradient};
+use super::UiSetupAssets;
 
 /// ボトムバーをスポーン
 pub fn spawn_bottom_bar(
     commands: &mut Commands,
-    game_assets: &Res<crate::assets::GameAssets>,
+    game_assets: &dyn UiSetupAssets,
     theme: &UiTheme,
     parent_entity: Entity,
     ui_nodes: &mut UiNodeRegistry,
@@ -93,7 +94,7 @@ pub fn spawn_bottom_bar(
                     button.spawn((
                         Text::new(label),
                         TextFont {
-                            font: game_assets.font_ui.clone(),
+                            font: game_assets.font_ui().clone(),
                             font_size: theme.typography.font_size_base, // Semantic
                             weight: FontWeight::SEMIBOLD,               // Variation
                             ..default()
@@ -110,7 +111,7 @@ pub fn spawn_bottom_bar(
             .spawn((
                 Text::new("Mode: Normal"),
                 TextFont {
-                    font: game_assets.font_ui.clone(),
+                    font: game_assets.font_ui().clone(),
                     font_size: theme.typography.font_size_md, // Semantic
                     weight: FontWeight::BOLD,
                     ..default()
