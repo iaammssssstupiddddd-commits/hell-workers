@@ -1,7 +1,8 @@
-use bevy::prelude::*;
+use crate::assigned_task::AssignedTask;
 use crate::familiar::FamiliarAiState;
 use crate::jobs::WorkType;
 use crate::logistics::ResourceType;
+use bevy::prelude::*;
 
 /// 魂が使い魔に勧誘（使役開始）された
 #[derive(Message, EntityEvent)]
@@ -228,6 +229,18 @@ pub enum DesignationOp {
 pub struct FamiliarStateRequest {
     pub familiar_entity: Entity,
     pub new_state: FamiliarAiState,
+}
+
+#[derive(Message, Debug, Clone)]
+pub struct TaskAssignmentRequest {
+    pub familiar_entity: Entity,
+    pub worker_entity: Entity,
+    pub task_entity: Entity,
+    pub work_type: WorkType,
+    pub task_pos: Vec2,
+    pub assigned_task: AssignedTask,
+    pub reservation_ops: Vec<ResourceReservationOp>,
+    pub already_commanded: bool,
 }
 
 /// 使い魔による激励要求
