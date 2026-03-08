@@ -25,7 +25,7 @@
 - **方向**: マップを西から東へ**横断**します。
 - **シード**: 42 (固定)
 - **川幅**: 5タイル (`RIVER_WIDTH`)
-- **生成ロジック**: `src/world/river.rs` に実装。
+- **生成ロジック**: 純粋な生成処理は `crates/hw_world/src/river.rs` にあり、root 側の `src/world/river.rs` は互換 re-export 層です。
 
 ### 砂浜 (`Sand`)
 - 川のタイルから上下2タイル (`SAND_WIDTH`) の範囲に自動生成。
@@ -52,18 +52,20 @@
 
 | 関数 | 用途 |
 |:--|:--|
-| `WorldMap::world_to_grid(Vec2) -> (i32, i32)` | ワールド座標 → グリッド座標 |
-| `WorldMap::grid_to_world(i32, i32) -> Vec2` | グリッド座標 → ワールド座標 |
+| `hw_world::world_to_grid(Vec2) -> (i32, i32)` | ワールド座標 → グリッド座標 |
+| `hw_world::grid_to_world(i32, i32) -> Vec2` | グリッド座標 → ワールド座標 |
 | `WorldMap::pos_to_idx(i32, i32) -> Option<usize>` | グリッド → フラット配列インデックス |
-| `WorldMap::snap_to_grid_center(Vec2) -> Vec2` | タイル中心にスナップ |
-| `WorldMap::snap_to_grid_edge(Vec2) -> Vec2` | タイル境界線にスナップ（ゾーン配置等） |
+| `hw_world::snap_to_grid_center(Vec2) -> Vec2` | タイル中心にスナップ |
+| `hw_world::snap_to_grid_edge(Vec2) -> Vec2` | タイル境界線にスナップ（ゾーン配置等） |
 
 - **原点**: グリッド (0, 0) = マップ中心 = ワールド座標 (0.0, 0.0)
 - **タイル中心**: ワールド整数座標がタイル中心と一致（1px の狂いなし）
 - **フラット配列インデックス**: `y * MAP_WIDTH + x`（行優先）
 - **境界到達パス**: 2x2以上の建築物など占有領域への隣接パスは `find_path_to_boundary` を使用
 
-実装詳細: `src/world/map/mod.rs` の `WorldMap` メソッド群
+実装詳細:
+- 純粋な座標変換は `crates/hw_world/src/coords.rs`
+- root 側の `WorldMap::{world_to_grid, grid_to_world, snap_*}` は互換 wrapper
 
 ## 物理衝突と通行制御
 
@@ -80,6 +82,7 @@
 
 ## 関連ファイル
 - `src/world/map/`: マップデータ構造（mod）・レイアウト定数（layout）・生成システム（spawn）
-- [river.rs](src/world/river.rs): 川生成アルゴリズム
-- [regrowth.rs](src/world/regrowth.rs): 木の再生システム
-- [pathfinding.rs](src/world/pathfinding.rs): 通行制御を伴うパス検索
+- [`../crates/hw_world/src/river.rs`](../crates/hw_world/src/river.rs): 川生成アルゴリズム
+- [`../crates/hw_world/src/coords.rs`](../crates/hw_world/src/coords.rs): 座標変換
+- [`../src/world/regrowth.rs`](../src/world/regrowth.rs): 木の再生システムの app shell
+- [`../src/world/pathfinding.rs`](../src/world/pathfinding.rs): 通行制御を伴うパス検索の互換層

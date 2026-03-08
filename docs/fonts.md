@@ -59,5 +59,5 @@ pub const FONT_SIZE_BUBBLE_FAMILIAR: f32 = 12.0;
 | [time_control.rs](src/interface/ui/setup/time_control.rs) | 時計、速度ボタン、タスクサマリー |
 | [soul.rs](src/systems/visual/soul.rs) | ステータスアイコン |
 | [effects.rs](src/systems/visual/blueprint/effects.rs) | 搬入ポップアップ |
-| [jobs.rs](src/systems/jobs.rs) | 建物完成テキスト |
+| [building_completion/post_process.rs](../src/systems/jobs/building_completion/post_process.rs) | 建物完成テキスト |
 | [speech/update.rs](src/systems/visual/speech/update.rs) | 吹き出しシステム（Soul/Familiar） |

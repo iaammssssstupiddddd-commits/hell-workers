@@ -129,8 +129,8 @@ Change Detection で差分更新。
 
 | 方式 | 用途 | 定義場所 |
 |:--|:--|:--|
-| `Message` | グローバル通知（タスクキュー更新等） | `src/systems/jobs.rs` |
-| `Observer` | エンティティベースの即時反応 | `src/events.rs` |
+| `Message` | グローバル通知（タスクキュー更新等） | 主に `crates/hw_core/src/events.rs`（登録は `src/plugins/messages.rs`） |
+| `Observer` | エンティティベースの即時反応 | 主に `crates/hw_core/src/events.rs`（root 互換面は `src/events.rs`） |
 
 > [!TIP]
 > リソース (`ResMut`) を更新する必要がある場合は `Message` を使用してください。
