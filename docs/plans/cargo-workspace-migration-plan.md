@@ -14,157 +14,253 @@
 
 ## 1. 目的
 
-- **解決したい課題**: `src/` 以下にすべてのコードが固まっており、コンパイル単位が1つしかないためリルドが遅い。ドメイン境界も不明確。
-- **到達したい状態**: ドメインごとに独立した Cargo クレート（`hw_core`, `hw_components`, `hw_world`, ...）に分割し、変更差分のみ再コンパイルされるようにする。
-- **成功指標**: `cargo check --workspace` が通り、`cargo run` で起動できる。
+- **解決したい課題**: `bevy_app` が依然として巨大な単一アプリケーションクレートであり、局所変更でも再コンパイル範囲が広い。
+- **到達したい状態**: Cargo workspace を土台に、依存境界が明確な領域だけを段階的に別クレートへ切り出す。
+- **成功指標**:
+  - `cargo check --workspace` が常に通る
+  - `cargo run` で起動できる
+  - 切り出し前後で `cargo check` の所要時間を比較できる
 
-## 2. スコープ
+## 2. 再評価結果
+
+2026-03-08 時点で確認できた事実:
+
+- workspace 自体はすでに導入済み
+  - root `Cargo.toml` に `[workspace]` と `members = [".", "crates/*"]` がある
+- 追加クレートとして確認できるのは `crates/hw_core/` のみ
+- `cargo check --workspace` は成功している
+- root crate は依然として以下を保持している
+  - `src/events.rs`
+  - `src/relationships.rs`
+  - `src/world/`
+  - `src/systems/jobs/`
+  - `src/systems/logistics/`
+- 以前の計画書にあった `hw_components` / `hw_world` は、現 checkout には存在しない
+
+結論:
+
+- 「workspace 導入」は成立している
+- 「多クレート化」は `hw_core` の一部抽出に留まっている
+- 次に必要なのはエラー修正ではなく、**切り出し境界の再設計** である
+
+## 3. 現在の到達点
+
+### 完了済み
+
+- root を workspace root として運用する構成
+- `hw_core` クレートの追加
+- `constants/` と `game_state.rs` の `hw_core` への移動
+- `relationships.rs` の `hw_core` への移動
+  - root の `src/relationships.rs` は互換維持のため re-export のみ保持
+- root crate から `hw_core` の参照
+
+### 未完了
+
+- `events.rs` の `hw_core` または他クレートへの移動
+- `world` 系コードの切り出し
+- `jobs` / `logistics` の切り出し
+- ビルド時間の before / after 計測
+
+## 4. スコープ
 
 ### 対象（In Scope）
 
-- `Cargo.toml` の workspace 設定
-- `hw_core`, `hw_components`, `hw_world` のクレート分割（Phase 1-2）
-- `bevy_app`（`src/`）側の import パスの修正
+- workspace 構成を壊さずに維持すること
+- `hw_core` の責務を明確化すること
+- 依存境界が比較的明確な領域を小さく切り出すこと
+- 各段階でビルド時間を測定すること
 
 ### 非対象（Out of Scope）
 
-- `hw_visual`, `hw_ui`, `hw_systems`, `hw_ai` の分割（Phase 3-4、将来作業）
-- ゲームロジックの変更
+- 一度に広範囲を多クレート化すること
+- `hw_components` のような広すぎる共通クレートを先に作ること
+- バルクスクリプトで import を大量書き換えすること
+- ゲームロジックの仕様変更
 
-## 3. 現状とギャップ
+## 5. 設計原則
 
-- **Phase 1（`hw_core` 抽出）**: **完了・コミット済み**
-  - `crates/hw_core/`: `constants/`, `game_state.rs`, `events.rs`, `relationships.rs` などが移動済み
-  - `crates/hw_components/`: クレートは存在するが中身はほぼ空（スタブ状態）
-  - `crates/hw_world/`: クレートは存在するが、`bevy_app` 側との import 整合がまだ取れていない
-- **Phase 2（`hw_components`, `hw_world` の充実）**: **未完了・未コミット**
-  - セッション中に大量の import 修正を試みたが、バルクスクリプトによる壊れた編集が続いたため全変更を破棄した。
+1. **green を維持する**
+   - 各段階で `cargo check --workspace` を通した状態を保つ。
+2. **計測してから切る**
+   - 「何となく分ける」のではなく、変更頻度と依存関係を見て切り出す。
+3. **責務ごとに切る**
+   - `hw_components` のような雑多な箱を作らず、`world` `logistics` のように責務単位で分ける。
+4. **型と impl を同じクレートに置く**
+   - `E0116` を避けるため、型定義とその主要 `impl` は同じクレートに置く。
+5. **手動で進める**
+   - バルク置換スクリプトは使わず、ファイル単位で import と依存を直す。
 
-## 4. 実装方針（高レベル）
+## 6. 推奨依存グラフ
 
-**依存グラフ（下位から上位へ）:**
+現時点の推奨は以下。これは最終形ではなく、段階的切り出しの目安とする。
 
+```text
+hw_core
+  ├─ hw_world        (候補)
+  ├─ hw_logistics    (候補)
+  └─ bevy_app
+
+hw_world
+  └─ bevy_app
+
+hw_logistics
+  └─ bevy_app
 ```
-hw_core (Level 0)
-  └─ hw_components (Level 1)
-  └─ hw_world      (Level 1)
-        └─ bevy_app (root)
-```
 
-- 各 Phase は `cargo check` が通った状態でコミットすること。
-- バルクスクリプトによる機械的な import 書き換えは禁止。`cargo check` のエラーを1ファイルずつ手動修正すること。
+補足:
 
-## 5. マイルストーン
+- `hw_components` は現時点では作らない
+- `events` は依存先が広いため、早期移動対象にはしない
+- `relationships` は `hw_core` 候補だが、先に参照範囲を確認してから移す
 
-### M1: `hw_core` 抽出 ✅ 完了
+## 7. フェーズ計画
 
-- `crates/hw_core/` に以下を移動済み:
-  - `src/constants/` → `crates/hw_core/src/constants/`
-  - `src/game_state.rs` → `crates/hw_core/src/game_state.rs`
-  - `src/events.rs` → `crates/hw_core/src/events.rs`
-  - `src/relationships.rs` → `crates/hw_core/src/relationships.rs`
-- 完了条件:
-  - [x] `cargo check` が通る
-  - [x] コミット済み
+### P0: ベースライン固定
 
-### M2: `hw_components` の充実 🔲 未完了
+目的:
 
-`bevy_app` 側の `src/systems/` に散らばっているコンポーネントを `hw_components` に移す。
+- 現在の workspace 状態を正確に固定する
 
-移動対象（主要なもの）:
+作業:
 
-| 型 | 現在地 | 移動先 |
-| --- | --- | --- |
-| `ResourceType`, `ResourceItem`, `Stockpile` | `src/systems/logistics/types.rs` | `hw_components/src/logistics.rs` |
-| `BelongsTo`, `ReservedForTask`, `BucketStorage` | `src/systems/logistics/types.rs` | `hw_components/src/logistics.rs` |
-| `Wheelbarrow`, `WheelbarrowLease`, `WheelbarrowDestination`, `WheelbarrowPendingSince` | `src/systems/logistics/transport_request/components.rs` | `hw_components/src/logistics.rs` |
-| `TransportRequest`, `TransportRequestKind`, `TransportPriority`, `TransportDemand`, `TransportPolicy`, `TransportRequestState` | `src/systems/logistics/transport_request/components.rs` | `hw_components/src/logistics.rs` |
-| `Door`, `DoorState` | `src/systems/jobs/door.rs` の impl | `hw_components/src/jobs.rs` |
-| `Building`, `BuildingType`, `Blueprint`, `Designation`, `WorkType`, `TaskSlots` 等 | `src/systems/jobs/` | `hw_components/src/jobs.rs` |
+- `cargo check --workspace` を実行
+- 必要なら `cargo run` を実行して起動確認
+- `cargo check --workspace --timings` などで baseline を記録
+- `hw_core` から未使用 import や不要依存があれば整理
 
-**作業手順:**
-1. `hw_components/src/logistics.rs` に型定義とその `impl` ブロックを追加
-2. `bevy_app` 側ファイルで元の定義を削除し、`use hw_components::logistics::...` に置き換え
-3. ファイル単位で `cargo check` を確認しながら進める
+完了条件:
 
-- 完了条件:
-  - [ ] `cargo check --workspace` が通る
-  - [ ] コミット
+- `cargo check --workspace` が通る
+- baseline 計測結果を記録できる
 
-### M3: `hw_world` の充実 🔲 未完了
+### P1: `hw_core` の責務整理
 
-| 型 | 現在地 | 移動先 |
-| --- | --- | --- |
-| `WorldMap`, `TerrainType`, `Tile` | `src/world/` | `hw_world/src/map/` |
-| `RIVER_X_MIN` 等の定数 | `src/world/` | `hw_world/src/map/` |
-| `spawn_terrain_borders` 等のシステム | `src/systems/visual/` | `hw_world/src/map/` |
+目的:
 
-- 完了条件:
-  - [ ] `cargo check --workspace` が通る
-  - [ ] コミット
+- `hw_core` に置くべきものと置かないものを明確にする
 
-## 6. リスクと対策
+候補:
+
+- 維持: `constants`, `game_state`
+- 検討: `relationships`
+- 保留: `events`（依存が広いため）
+
+作業:
+
+- `relationships.rs` の参照元・依存先を棚卸し
+- `hw_core` に移しても逆依存が発生しないか確認
+- 移動する場合は root 側を `pub use` または import 修正で置き換える
+
+完了条件:
+
+- `hw_core` の責務が文書化されている
+- `cargo check --workspace` が通る
+
+### P2: `hw_world` 切り出し可否の判定
+
+目的:
+
+- world 系コードが独立クレートとして成立するか確認する
+
+主対象:
+
+- `src/world/`
+
+補助対象:
+
+- world 専用の定数、地形、地図生成、再成長、river など
+
+注意:
+
+- `spawn_terrain_borders` はすでに `src/world/map/terrain_border.rs` にあるため、古い計画書の前提を使わない
+- `assets` や render 寄りの依存が強い場合は、`hw_world` への全移動ではなく「純粋な world data / map logic」のみ先に切る
+
+完了条件:
+
+- `hw_world` を切り出すか、見送るかを判断できる
+- 切り出す場合は最小構成で `cargo check --workspace` が通る
+
+### P3: `hw_logistics` 切り出し可否の判定
+
+目的:
+
+- logistics 系コードを単一クレートに切り出せるか確認する
+
+主対象:
+
+- `src/systems/logistics/types.rs`
+- `src/systems/logistics/transport_request/`
+
+注意:
+
+- `jobs` と相互依存しやすいため、先に型依存を整理する
+- `ResourceType` のような基礎型は、必要であれば `hw_core` に残すか専用クレートを再検討する
+- `BuildingType -> ResourceType` のような依存を見ずに切り出しを始めない
+
+完了条件:
+
+- 依存の方向が整理されている
+- 切り出す場合は最小単位で `cargo check --workspace` が通る
+
+## 8. 実行順
+
+推奨順序:
+
+1. P0: baseline 固定
+2. P1: `hw_core` の責務整理
+3. P2: `hw_world` の可否判定と最小切り出し
+4. P3: `hw_logistics` の可否判定と最小切り出し
+
+やらない順序:
+
+- `jobs` / `logistics` / `AI` / `UI` を同時に分割する
+- `hw_components` を先に作って型をまとめて押し込む
+
+## 9. リスクと対策
 
 | リスク | 影響 | 対策 |
 | --- | --- | --- |
-| バルクスクリプトによる import の二重追加・構文破壊 | 高（実際に発生した） | スクリプト禁止。ファイル単位で手動修正 |
-| `E0116`（他クレートの型への impl） | 高 | `impl` ブロックは必ず型定義と同じクレートに置く |
-| 重複定義（同名型が bevy_app と hw_components の両方に存在） | 高 | 型定義を hw_components に一元化し、bevy_app 側は削除する |
+| 広すぎる共通クレートを作る | 高 | ドメイン単位で切る。`hw_components` は保留 |
+| 型と impl が別クレートに分かれる | 高 | 型定義と主要 `impl` を同じクレートに置く |
+| `jobs` と `logistics` の相互依存 | 高 | 先に依存棚卸しを行い、切り出し可否を判定する |
+| バルク置換で import が壊れる | 高 | 手動でファイル単位に修正する |
+| 分割したのにビルドが速くならない | 中 | 各段階で timings を記録して効果を測定する |
 
-## 7. 検証計画
+## 10. 検証計画
 
-- 必須: `cargo check --workspace`（各ファイル変更後に都度実行）
-- 最終: `cargo run` で起動確認
+- 毎段階必須:
+  - `cargo check --workspace`
+- 節目で実施:
+  - `cargo run`
+- 効果測定:
+  - `cargo check --workspace --timings`
+  - 必要なら追加で手動計測を記録
 
-## 8. ロールバック方針
+## 11. ロールバック方針
 
-- 未コミットの変更は `git restore . && git clean -fd` で破棄できる
-- 各マイルストーン = 1コミットの粒度で進めること
+- 各フェーズは小さなコミット単位で進める
+- 問題が出たら直前コミットへ戻せる状態を保つ
+- 無関係な未コミット変更を巻き込む破壊的な全消去コマンドは使わない
 
-## 9. AI引継ぎメモ（最重要）
+## 12. 次の担当者が最初にやること
 
-### 現在地
+1. `cargo check --workspace` を実行して baseline を再確認する
+2. `relationships.rs` を `hw_core` に寄せられるかだけを小さく検証する
+3. `src/world/` のうち純粋ロジックと Bevy 依存部分を分けて棚卸しする
+4. `jobs` と `logistics` の依存関係を整理し、`hw_logistics` が成立するかを判断する
 
-- 進捗: **Phase 1 完了 / Phase 2 未着手（0%）**
-- 完了済みマイルストーン: M1（`hw_core` 抽出）
-- 未着手/進行中: M2（`hw_components` 充実）、M3（`hw_world` 充実）
+## 13. Definition of Done
 
-### 次のAIが最初にやること
+- [ ] workspace 構成が維持されている
+- [ ] 切り出し対象ごとに `cargo check --workspace` が通っている
+- [ ] `cargo run` で起動できる
+- [ ] before / after のビルド時間比較が残っている
+- [ ] 次にどのドメインを切るべきかが文書で説明できる
 
-1. `cargo check 2>&1 | head -50` を実行して現在のエラー一覧を把握する
-2. エラーを**1ファイル単位**で修正する（バルクスクリプト禁止）
-3. `hw_components/src/logistics.rs` に型定義が不足していれば追加し、`bevy_app` 側の元定義を削除して import を修正する
-
-### ブロッカー/注意点
-
-- **バルク置換スクリプト（`fix_*.py` 等）は使わない**。編集のたびに構文エラーや重複 import が発生し、ループを招いた。
-- `E0116`（外部クレートへの impl）が出たら、必ず型定義側クレートに impl を移動させる。
-- `src/systems/logistics/types.rs` に `ResourceType`, `ResourceItem` 等がまだ残っている可能性がある。重複定義に注意。
-- `src/systems/logistics/transport_request/components.rs` に `WheelbarrowDestination`, `WheelbarrowLease` 等の定義がある。これを hw_components に移した後、元ファイルを `pub use hw_components::logistics::...` の re-export だけにする。
-
-### 参照必須ファイル
-
-- `docs/plans/cargo-workspace-migration-plan.md`（本ドキュメント）
-- `crates/hw_components/src/logistics.rs`
-- `crates/hw_components/src/jobs.rs`
-- `src/systems/logistics/types.rs`
-- `src/systems/logistics/transport_request/components.rs`
-- `src/systems/jobs/door.rs`
-
-### 最終確認ログ
-
-- 最終 `cargo check`: `2026-03-08` / **不明（変更破棄後の状態）**
-- 未解決エラー: Phase 2 未着手のため不明。`cargo check` で確認が必要。
-
-### Definition of Done
-
-- [ ] M2: `hw_components` 充実・`cargo check` 通過・コミット
-- [ ] M3: `hw_world` 充実・`cargo check` 通過・コミット
-- [ ] `cargo run` で起動確認
-
-## 10. 更新履歴
+## 14. 更新履歴
 
 | 日付 | 変更者 | 内容 |
 | --- | --- | --- |
-| `2026-03-07` | AI | Phase 1 実施（hw_core 抽出） |
-| `2026-03-08` | AI | Phase 2 試行・失敗・変更破棄。引き継ぎドキュメント作成 |
+| `2026-03-07` | AI | 初版作成 |
+| `2026-03-08` | AI | 現 checkout を基準に全面再評価。存在しないクレート前提の記述を削除し、段階的移行計画へ修正 |
+| `2026-03-08` | AI | `relationships.rs` を `hw_core` へ移設し、root 側は re-export 互換レイヤーへ変更 |
