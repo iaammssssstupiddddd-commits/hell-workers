@@ -212,9 +212,14 @@
   - `hw_ai::soul_ai::helpers::gathering_positions` (overlap 回避付き移動先探索。`PathWorld + SpatialGridOps` 引数)
   - `hw_ai::soul_ai::helpers::gathering_motion` (集会中移動先選定。`PathWorld + SpatialGridOps` 引数)
   - `hw_ai::soul_ai::execute::designation_apply` (`apply_designation_requests_system`)
+  - `hw_ai::soul_ai::execute::gathering_apply` (`gathering_apply_system`)
+  - `hw_ai::soul_ai::decide::idle_behavior::transitions` (遷移判定ヘルパー群)
+  - `hw_ai::soul_ai::decide::idle_behavior::task_override` (`process_task_override`)
+  - `hw_ai::soul_ai::decide::idle_behavior::exhausted_gathering` (`process_exhausted_gathering`)
 - 未移動（root に残存）:
-  - `decide/` (idle_behavior, escaping, drifting, gathering_mgmt, work/*) ← `WorldMap` / SpatialGrid 依存
-  - `execute/task_execution/`, `execute/cleanup`, `execute/drifting`, `execute/gathering_apply`, `execute/gathering_spawn`, `execute/idle_behavior_apply`, `execute/escaping_apply` ← `WorldMap` / `GameAssets` 依存
+  - `decide/idle_behavior/mod.rs` (idle_behavior_decision_system) ← `WorldMap` / SpatialGrid / `RestArea` 依存
+  - `decide/` (escaping, drifting, gathering_mgmt, work/*) ← `WorldMap` / SpatialGrid 依存
+  - `execute/task_execution/`, `execute/cleanup`, `execute/drifting`, `execute/gathering_spawn`, `execute/idle_behavior_apply`, `execute/escaping_apply` ← `WorldMap` / `GameAssets` / root query type 依存
   - `perceive/` ← `WorldMap` / SpatialGrid 依存
   - `visual/` ← `GameAssets` / Gizmo / shell 責務
 - 検証:
@@ -334,7 +339,11 @@
 - `helpers/gathering`: `GatheringSpot`, `GatheringUpdateTimer`, tick system
 - `helpers/gathering_positions`: overlap 回避付き位置探索（`<G: SpatialGridOps, W: PathWorld>` 引数）
 - `helpers/gathering_motion`: 集会中移動先選定（`<G: SpatialGridOps, W: PathWorld>` 引数）
-- `execute/designation_apply`: `apply_designation_requests_system`
+- `hw_ai::soul_ai::execute::designation_apply`: `apply_designation_requests_system`
+- `hw_ai::soul_ai::execute::gathering_apply`: `gathering_apply_system`
+- `hw_ai::soul_ai::decide::idle_behavior::transitions`: `random_gathering_behavior`, `random_gathering_duration`, `behavior_duration_for`, `select_next_behavior`
+- `hw_ai::soul_ai::decide::idle_behavior::task_override`: `process_task_override`
+- `hw_ai::soul_ai::decide::idle_behavior::exhausted_gathering`: `process_exhausted_gathering`
 - Observers: `on_task_completed_motivation_bonus`, `on_encouraged_effect`, `on_soul_recruited_effect`
 
 **FamiliarAiCorePlugin が登録するシステム:**
@@ -358,11 +367,11 @@
 
 ### 次のAIが最初にやること
 
-残存する M5/M6 の可能なスライスを探す場合:
-1. `src/systems/soul_ai/decide/idle_behavior/` の各ファイルを確認し、`WorldMap`/SpatialGrid を使わないものを hw_ai 候補に選定
-2. `src/systems/familiar_ai/decide/state_decision.rs` は `SpatialGrid` 依存あり → root 残留確定
-3. `execute/task_execution/common.rs` など WorldMap を `&impl PathWorld` に変換できる関数を探す
-4. M7 の `cargo check --workspace --timings` を計測し、Phase 1/2 の成果を記録する
+soul_ai/familiar_ai で残っている WorldMap/SpatialGrid/RestArea 非依存ファイルはほぼ移動済み。
+次に移動可能な候補を探す場合:
+1. `src/systems/soul_ai/execute/task_execution/common.rs` 等の PathWorld 化 (WorldMap を `&impl PathWorld` に変換可能な関数を探す)
+2. `src/systems/soul_ai/decide/idle_behavior/mod.rs` は `RestArea` (root jobs) + WorldMap 依存のため root 残留確定
+3. `src/systems/familiar_ai/decide/` の WorldMap/SpatialGrid 非依存スライスを確認する
 
 ### ブロッカー/注意点
 
@@ -383,7 +392,8 @@
 
 ### 最終確認ログ
 
-- 最終 `cargo check --workspace`: `2026-03-08 / pass` (0.18s キャッシュヒット = hw_ai 未変更時は root 再コンパイル不要を確認)
+- 最終 `cargo check --workspace`: pass（0.21s キャッシュヒット = hw_ai 未変更時は root 再コンパイル不要を確認）
+- hw_ai コード変更時のインクリメンタルビルド: `hw_ai` + `bevy_app` のみ再コンパイル = **1.81s**
 - 最終 `cargo check -p hw_ai`: pass
 - 未解決エラー: なし
 
@@ -403,4 +413,4 @@
 | `2026-03-08` | `AI` | M2/M4 完了・M5/M6 移動済み一覧追加（コミット `536915d`） |
 | `2026-03-08` | `AI` | M6 following.rs 移動・FamiliarAiPlugin 登録一元化完了（コミット `5a7d246`） |
 | `2026-03-08` | `AI` | Phase 2 完了後に全体更新: M3 完了条件・M5/M6 移動済み一覧・M7 実施済み・AI引継ぎメモ刷新（コミット `52b0710`） |
-| `2026-03-08` | `AI` | 全マイルストーン完了: M1/M5/M6 完了条件チェック・M7 timings 記録・Definition of Done 全項目 ✅（コミット `c8c41d2`+本コミット） |
+| `2026-03-08` | `AI` | gathering_apply + idle_behavior helpers (transitions/task_override/exhausted_gathering) を hw_ai へ移動（コミット `c0b7196`） |
