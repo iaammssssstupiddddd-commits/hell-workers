@@ -2,11 +2,10 @@
 //!
 //! UIの列挙型とコンポーネント構造体を定義します。
 
-use crate::systems::jobs::{BuildingCategory, BuildingType};
-use crate::systems::logistics::ZoneType;
-use crate::systems::time::TimeSpeed;
+use crate::systems::jobs::{BuildingCategory};
 use bevy::prelude::*;
 use std::collections::HashMap;
+use hw_core::game_state::TimeSpeed;
 
 // ============================================================
 // 左パネルモード
@@ -97,40 +96,7 @@ pub enum MenuState {
     Dream,
 }
 
-#[derive(Debug, Clone, Copy)]
-pub enum MenuAction {
-    ToggleArchitect,
-    ToggleZones,
-    ToggleOrders,
-    ToggleDream,
-    InspectEntity(Entity),
-    ClearInspectPin,
-    SelectBuild(BuildingType),
-    SelectFloorPlace, // Floor area placement
-    SelectZone(ZoneType),
-    RemoveZone(ZoneType), // ゾーン削除
-    SelectTaskMode(crate::systems::command::TaskMode),
-    SelectAreaTask,
-    SelectDreamPlanting,
-    ToggleDoorLock(Entity),
-    OpenOperationDialog,
-    AdjustFatigueThreshold(f32),
-    AdjustMaxControlledSoul(isize),
-    CloseDialog,
-    SetTimeSpeed(TimeSpeed),
-    TogglePause,
-    SelectArchitectCategory(Option<BuildingCategory>),
-    MovePlantBuilding(Entity),
-}
-
-impl MenuAction {
-    pub const fn is_specialized(&self) -> bool {
-        matches!(
-            self,
-            Self::ToggleDoorLock(_) | Self::SelectArchitectCategory(_) | Self::MovePlantBuilding(_)
-        )
-    }
-}
+pub use hw_ui::UiIntent as MenuAction;
 
 // ============================================================
 // UiSlot - 統一UIスロットコンポーネント
