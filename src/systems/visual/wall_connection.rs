@@ -61,7 +61,7 @@ fn wall_connections_system(
     // 3. 対象の座標にあるエンティティのスプライトを更新
     for (gx, gy) in update_targets {
         // マップからその座標にあるエンティティを取得
-        if let Some(&entity) = world_map.buildings.get(&(gx, gy)) {
+        if let Some(entity) = world_map.building_entity((gx, gy)) {
             if is_wall(gx, gy, &world_map, &q_walls_check) {
                 let is_plain_wall =
                     q_walls_check
@@ -219,7 +219,7 @@ fn is_wall(
         Or<(With<Building>, With<Blueprint>)>,
     >,
 ) -> bool {
-    if let Some(&entity) = world_map.buildings.get(&(x, y)) {
+    if let Some(entity) = world_map.building_entity((x, y)) {
         if let Ok((building_opt, blueprint_opt)) = q_walls_check.get(entity) {
             if let Some(b) = building_opt {
                 return matches!(b.kind, BuildingType::Wall | BuildingType::Door);

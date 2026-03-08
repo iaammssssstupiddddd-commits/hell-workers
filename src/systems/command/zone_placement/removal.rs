@@ -81,7 +81,7 @@ fn apply_zone_removal(commands: &mut Commands, world_map: &mut WorldMap, area: &
 
     // 削除実行
     for grid in to_remove.iter().chain(fragments.iter()) {
-        if let Some(entity) = world_map.stockpiles.remove(grid) {
+        if let Some(entity) = world_map.clear_stockpile(*grid) {
             commands.entity(entity).despawn();
         }
     }

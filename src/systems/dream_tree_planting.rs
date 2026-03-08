@@ -91,7 +91,7 @@ pub fn build_dream_tree_planting_plan(
             if !world_map.is_walkable(gx, gy) {
                 continue;
             }
-            if world_map.buildings.contains_key(&(gx, gy)) {
+            if world_map.has_building((gx, gy)) {
                 continue;
             }
             if blocked_by_item.contains(&(gx, gy)) {

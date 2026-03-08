@@ -142,15 +142,15 @@ pub fn apply_pending_building_move_system(
 ) {
     for (building_entity, pending, children_opt) in q_pending.iter() {
         for &(gx, gy) in &pending.old_occupied {
-            if world_map.buildings.get(&(gx, gy)) == Some(&building_entity) {
-                world_map.buildings.remove(&(gx, gy));
+            if world_map.building_entity((gx, gy)) == Some(building_entity) {
+                world_map.clear_building((gx, gy));
             }
             world_map.remove_obstacle(gx, gy);
         }
 
         for &(gx, gy) in &pending.new_occupied {
             world_map.add_obstacle(gx, gy);
-            world_map.buildings.insert((gx, gy), building_entity);
+            world_map.set_building((gx, gy), building_entity);
         }
 
         if let Some(children) = children_opt {
@@ -212,8 +212,7 @@ fn relocate_bucket_storages_for_tank(
         .filter_map(|(entity, belongs_to, _)| {
             (belongs_to.0 == building_entity).then_some(entity).and_then(|entity| {
                 world_map
-                    .stockpiles
-                    .iter()
+                    .stockpile_entries()
                     .find_map(|(grid, e)| (*e == entity).then_some((entity, *grid)))
             })
         })
@@ -234,8 +233,8 @@ fn relocate_bucket_storages_for_tank(
             .copied()
             .unwrap_or((old_grid.0 + delta.0, old_grid.1 + delta.1));
 
-        world_map.stockpiles.remove(old_grid);
-        world_map.stockpiles.insert(new_grid, *stockpile_entity);
+        world_map.clear_stockpile(*old_grid);
+        world_map.set_stockpile(new_grid, *stockpile_entity);
 
         if let Ok((_, _, mut transform)) = q_stockpiles.get_mut(*stockpile_entity) {
             let pos = WorldMap::grid_to_world(new_grid.0, new_grid.1);

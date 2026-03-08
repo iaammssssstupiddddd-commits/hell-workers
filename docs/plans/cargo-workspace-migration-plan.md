@@ -65,6 +65,8 @@
   - root の `src/world/pathfinding.rs` は `WorldMap` 実装と互換ラッパーのみ保持
 - `TerrainType` を `hw_world::terrain` へ移動
   - root の `src/world/map/mod.rs` は re-export を保持
+- `WorldMap` に `buildings` / `stockpiles` / `bridged_tiles` の操作メソッドを追加
+  - `buildings` / `stockpiles` は read/write ともに高頻度経路をメソッド経由へ移行済み
 - root crate から `hw_core` の参照
 - root crate から `hw_world` の参照
 
@@ -72,7 +74,8 @@
 
 - `events.rs` の `hw_core` または他クレートへの移動
 - `WorldMap` / `spawn` / `terrain_border` / `regrowth` など app 依存の強い world 系コードの切り出し
-- `WorldMap` の direct field mutation の整理
+- `WorldMap` の残存 direct field access の整理
+  - 特に `tiles` / `tile_entities` / `obstacles` と app-wide `Res<WorldMap>` 依存
 - `jobs` / `logistics` の切り出し
 - ビルド時間の before / after 計測
 
@@ -193,7 +196,8 @@ hw_logistics
 - 現時点で先に切り出した最小単位は `layout` / `river` / `pathfinding` / `TerrainType`
 - `pathfinding.rs` は `PathWorld` trait で切り出し済み
 - `DoorState` 依存は解消済み
-- 次の大きな壁は `WorldMap` 本体の direct field mutation と Bevy resource としての広い使用範囲
+- `buildings` / `stockpiles` は read/write ともに accessor 経由へ移行済み
+- 次の大きな壁は `tiles` / `tile_entities` / `obstacles` の直接アクセスと、Bevy resource としての広い使用範囲
 
 完了条件:
 
@@ -265,7 +269,7 @@ hw_logistics
 ## 12. 次の担当者が最初にやること
 
 1. `cargo check --workspace` を実行して baseline を再確認する
-2. `WorldMap` の公開フィールドをどこまでメソッド化するか設計する
+2. `WorldMap` の `tiles` / `tile_entities` / `obstacles` をどこまで accessor 化するか整理する
 3. `spawn` / `terrain_border` / `regrowth` を `hw_world` に入れない前提で責務を整理する
 4. `jobs` と `logistics` の依存関係を整理し、`hw_logistics` が成立するかを判断する
 
@@ -287,3 +291,5 @@ hw_logistics
 | `2026-03-08` | AI | `hw_world` を追加し、`layout` と `river` の純粋ロジックを移設 |
 | `2026-03-08` | AI | `pathfinding` を `hw_world` へ移設し、`PathWorld` trait と root 互換ラッパーを追加 |
 | `2026-03-08` | AI | `DoorState` を `hw_core` へ、`TerrainType` を `hw_world` へ移設 |
+| `2026-03-08` | AI | `WorldMap` の building/stockpile/bridge 操作メソッドを追加し、高頻度 write path を移行 |
+| `2026-03-08` | AI | `WorldMap` の building/stockpile 直接参照を accessor 化し、高頻度 read path も移行 |

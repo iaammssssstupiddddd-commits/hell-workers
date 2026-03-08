@@ -95,7 +95,7 @@ fn apply_zone_placement(
             };
 
             // 既に存在するか、建築物がある場合はスキップ
-            if world_map.stockpiles.contains_key(&grid) || world_map.buildings.contains_key(&grid) {
+            if world_map.has_stockpile(grid) || world_map.has_building(grid) {
                 continue;
             }
             // 通行不能な場所もスキップ
@@ -121,7 +121,7 @@ fn apply_zone_placement(
                             Name::new("Stockpile"),
                         ))
                         .id();
-                    world_map.stockpiles.insert(grid, entity);
+                    world_map.set_stockpile(grid, entity);
                 }
                 ZoneType::Yard => {}
             }

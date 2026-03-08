@@ -33,9 +33,9 @@ pub(super) fn can_place_tank_companion_for_move(
 
     companion_grids.iter().all(|&(gx, gy)| {
         world_map.pos_to_idx(gx, gy).is_some()
-            && (!world_map.buildings.contains_key(&(gx, gy))
+            && (!world_map.has_building((gx, gy))
                 || old_building_occupied.contains(&(gx, gy)))
-            && (world_map.stockpiles.get(&(gx, gy)).is_none()
+            && (world_map.stockpile_entity((gx, gy)).is_none()
                 || own_companion_grids.contains(&(gx, gy)))
             && (world_map.is_walkable(gx, gy)
                 || old_building_occupied.contains(&(gx, gy))
@@ -55,14 +55,13 @@ pub(super) fn can_place_moved_building(
         };
 
         let occupied_by_other_building = world_map
-            .buildings
-            .get(&(gx, gy))
-            .is_some_and(|entity| *entity != building_entity);
+            .building_entity((gx, gy))
+            .is_some_and(|entity| entity != building_entity);
         if occupied_by_other_building {
             return false;
         }
 
-        if world_map.stockpiles.contains_key(&(gx, gy)) {
+        if world_map.has_stockpile((gx, gy)) {
             return false;
         }
 
@@ -79,8 +78,7 @@ fn own_bucket_storage_grids(
     >,
 ) -> Vec<(i32, i32)> {
     world_map
-        .stockpiles
-        .iter()
+        .stockpile_entries()
         .filter_map(|(grid, stockpile_entity)| {
             q_bucket_storages
                 .get(*stockpile_entity)

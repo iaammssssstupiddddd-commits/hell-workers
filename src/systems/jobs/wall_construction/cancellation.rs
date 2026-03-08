@@ -191,12 +191,10 @@ pub fn wall_construction_cancellation_system(
             }
 
             if world_map
-                .buildings
-                .get(&tile.grid_pos)
-                .copied()
+                .building_entity(tile.grid_pos)
                 .is_some_and(|entity| entity == site_entity || Some(entity) == tile.spawned_wall)
             {
-                world_map.buildings.remove(&tile.grid_pos);
+                world_map.clear_building(tile.grid_pos);
             }
 
             world_map.remove_obstacle(tile.grid_pos.0, tile.grid_pos.1);

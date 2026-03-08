@@ -15,13 +15,12 @@ pub fn blueprint_cancel_cleanup_system(
 ) {
     for removed_entity in removed.read() {
         let grids_to_remove: Vec<(i32, i32)> = world_map
-            .buildings
-            .iter()
+            .building_entries()
             .filter(|&(_, entity)| *entity == removed_entity)
             .map(|(&grid, _)| grid)
             .collect();
         for (gx, gy) in grids_to_remove {
-            world_map.buildings.remove(&(gx, gy));
+            world_map.clear_building((gx, gy));
             world_map.remove_obstacle(gx, gy);
         }
 

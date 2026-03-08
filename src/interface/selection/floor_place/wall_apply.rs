@@ -97,7 +97,7 @@ pub(super) fn apply_wall_placement(
             Name::new(format!("WallTile({},{})", gx, gy)),
         ));
 
-        world_map.buildings.insert((gx, gy), site_entity);
+        world_map.set_building((gx, gy), site_entity);
         world_map.add_obstacle(gx, gy);
     }
 }

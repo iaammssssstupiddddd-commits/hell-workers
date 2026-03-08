@@ -32,7 +32,7 @@ pub(super) fn place_building_blueprint(
     let category = building_type.category();
 
     let replace_wall_entity = if building_type == BuildingType::Door {
-        world_map.buildings.get(&grid).copied().filter(|entity| {
+        world_map.building_entity(grid).filter(|entity| {
             q_buildings.get(*entity).is_ok_and(|building| {
                 building.kind == BuildingType::Wall && !building.is_provisional
             })
@@ -43,24 +43,24 @@ pub(super) fn place_building_blueprint(
 
     let can_place_base = if building_type == BuildingType::Bridge {
         occupied_grids.iter().all(|&g| {
-            !world_map.buildings.contains_key(&g)
-                && !world_map.stockpiles.contains_key(&g)
+            !world_map.has_building(g)
+                && !world_map.has_stockpile(g)
                 && world_map.is_river_tile(g.0, g.1)
         })
     } else if building_type == BuildingType::Door {
         let base_tile_ok = if replace_wall_entity.is_some() {
-            !world_map.stockpiles.contains_key(&grid)
+            !world_map.has_stockpile(grid)
         } else {
-            !world_map.buildings.contains_key(&grid)
-                && !world_map.stockpiles.contains_key(&grid)
+            !world_map.has_building(grid)
+                && !world_map.has_stockpile(grid)
                 && world_map.is_walkable(grid.0, grid.1)
         };
         base_tile_ok
             && is_valid_door_placement(world_map, q_buildings, q_blueprints_by_entity, grid)
     } else {
         occupied_grids.iter().all(|&g| {
-            !world_map.buildings.contains_key(&g)
-                && !world_map.stockpiles.contains_key(&g)
+            !world_map.has_building(g)
+                && !world_map.has_stockpile(g)
                 && world_map.is_walkable(g.0, g.1)
         })
     };
@@ -77,7 +77,7 @@ pub(super) fn place_building_blueprint(
     }
 
     if let Some(entity) = replace_wall_entity {
-        world_map.buildings.remove(&grid);
+        world_map.clear_building(grid);
         world_map.remove_obstacle(grid.0, grid.1);
         commands.entity(entity).despawn();
     }
@@ -116,7 +116,7 @@ pub(super) fn place_building_blueprint(
         .id();
 
     for &g in &occupied_grids {
-        world_map.buildings.insert(g, entity);
+        world_map.set_building(g, entity);
         if building_type != BuildingType::Bridge {
             world_map.add_obstacle(g.0, g.1);
         }
@@ -147,8 +147,8 @@ pub(super) fn try_place_bucket_storage_companion(
     }
 
     let can_place = storage_grids.iter().all(|&(gx, gy)| {
-        !world_map.buildings.contains_key(&(gx, gy))
-            && !world_map.stockpiles.contains_key(&(gx, gy))
+        !world_map.has_building((gx, gy))
+            && !world_map.has_stockpile((gx, gy))
             && world_map.is_walkable(gx, gy)
     });
     if !can_place {
@@ -174,7 +174,7 @@ pub(super) fn try_place_bucket_storage_companion(
                 Name::new("Pending Tank Bucket Storage"),
             ))
             .id();
-        world_map.stockpiles.insert((gx, gy), storage_entity);
+        world_map.set_stockpile((gx, gy), storage_entity);
     }
     true
 }
