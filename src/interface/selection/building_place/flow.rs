@@ -64,7 +64,7 @@ pub(super) fn handle_companion_flow(
             } else {
                 // 親Blueprintの確定に成功したが companion が置けない場合は巻き戻す
                 for &(gx, gy) in &parent_occupied_grids {
-                    world_map.buildings.remove(&(gx, gy));
+                    world_map.clear_building((gx, gy));
                     world_map.remove_obstacle(gx, gy);
                 }
                 commands.entity(parent_blueprint).despawn();

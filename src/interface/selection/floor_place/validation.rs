@@ -44,10 +44,10 @@ pub(super) fn validate_floor_tile(
     if !world_map.is_walkable(gx, gy) {
         return Some(TileRejectReason::NotWalkable);
     }
-    if world_map.buildings.contains_key(&(gx, gy)) {
+    if world_map.has_building((gx, gy)) {
         return Some(TileRejectReason::OccupiedByBuilding);
     }
-    if world_map.stockpiles.contains_key(&(gx, gy)) {
+    if world_map.has_stockpile((gx, gy)) {
         return Some(TileRejectReason::OccupiedByStockpile);
     }
     if existing_floor_tile_grids.contains(&(gx, gy)) {
@@ -69,10 +69,10 @@ pub(super) fn validate_wall_tile(
     if !world_map.is_walkable(gx, gy) {
         return Some(TileRejectReason::NotWalkable);
     }
-    if world_map.buildings.contains_key(&(gx, gy)) {
+    if world_map.has_building((gx, gy)) {
         return Some(TileRejectReason::OccupiedByBuilding);
     }
-    if world_map.stockpiles.contains_key(&(gx, gy)) {
+    if world_map.has_stockpile((gx, gy)) {
         return Some(TileRejectReason::OccupiedByStockpile);
     }
     if !existing_floor_building_grids.contains(&(gx, gy)) {

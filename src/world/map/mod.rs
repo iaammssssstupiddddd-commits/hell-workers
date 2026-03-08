@@ -110,6 +110,50 @@ impl WorldMap {
         self.door_states.remove(&(x, y));
     }
 
+    pub fn building_entity(&self, grid: (i32, i32)) -> Option<Entity> {
+        self.buildings.get(&grid).copied()
+    }
+
+    pub fn has_building(&self, grid: (i32, i32)) -> bool {
+        self.buildings.contains_key(&grid)
+    }
+
+    pub fn set_building(&mut self, grid: (i32, i32), entity: Entity) {
+        self.buildings.insert(grid, entity);
+    }
+
+    pub fn clear_building(&mut self, grid: (i32, i32)) -> Option<Entity> {
+        self.buildings.remove(&grid)
+    }
+
+    pub fn building_entries(&self) -> impl Iterator<Item = (&(i32, i32), &Entity)> {
+        self.buildings.iter()
+    }
+
+    pub fn stockpile_entity(&self, grid: (i32, i32)) -> Option<Entity> {
+        self.stockpiles.get(&grid).copied()
+    }
+
+    pub fn has_stockpile(&self, grid: (i32, i32)) -> bool {
+        self.stockpiles.contains_key(&grid)
+    }
+
+    pub fn set_stockpile(&mut self, grid: (i32, i32), entity: Entity) {
+        self.stockpiles.insert(grid, entity);
+    }
+
+    pub fn clear_stockpile(&mut self, grid: (i32, i32)) -> Option<Entity> {
+        self.stockpiles.remove(&grid)
+    }
+
+    pub fn stockpile_entries(&self) -> impl Iterator<Item = (&(i32, i32), &Entity)> {
+        self.stockpiles.iter()
+    }
+
+    pub fn add_bridged_tile(&mut self, grid: (i32, i32)) {
+        self.bridged_tiles.insert(grid);
+    }
+
     pub fn set_door_state(&mut self, x: i32, y: i32, state: DoorState) {
         if self.doors.contains_key(&(x, y)) {
             self.door_states.insert((x, y), state);

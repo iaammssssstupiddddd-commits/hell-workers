@@ -106,32 +106,30 @@ pub fn placement_ghost_system(
     // 配置可能かチェック
     let can_place_on_grid = if building_type == BuildingType::Bridge {
         occupied_grids.iter().all(|&g| {
-            !world_map.buildings.contains_key(&g)
-                && !world_map.stockpiles.contains_key(&g)
+            !world_map.has_building(g)
+                && !world_map.has_stockpile(g)
                 && world_map.is_river_tile(g.0, g.1)
         })
     } else if building_type == BuildingType::Door {
         let replaceable_wall = world_map
-            .buildings
-            .get(&grid_pos)
-            .copied()
+            .building_entity(grid_pos)
             .is_some_and(|entity| {
                 q_buildings.get(entity).is_ok_and(|building| {
                     building.kind == BuildingType::Wall && !building.is_provisional
                 })
             });
         let base_tile_ok = if replaceable_wall {
-            !world_map.stockpiles.contains_key(&grid_pos)
+            !world_map.has_stockpile(grid_pos)
         } else {
-            !world_map.buildings.contains_key(&grid_pos)
-                && !world_map.stockpiles.contains_key(&grid_pos)
+            !world_map.has_building(grid_pos)
+                && !world_map.has_stockpile(grid_pos)
                 && world_map.is_walkable(grid_pos.0, grid_pos.1)
         };
         base_tile_ok && is_valid_door_placement(&world_map, &q_buildings, &q_blueprints, grid_pos)
     } else {
         occupied_grids.iter().all(|&g| {
-            !world_map.buildings.contains_key(&g)
-                && !world_map.stockpiles.contains_key(&g)
+            !world_map.has_building(g)
+                && !world_map.has_stockpile(g)
                 && world_map.is_walkable(g.0, g.1)
         })
     };
@@ -318,7 +316,7 @@ fn is_wall_or_door(
     q_blueprints: &Query<&Blueprint>,
     grid: (i32, i32),
 ) -> bool {
-    let Some(&entity) = world_map.buildings.get(&grid) else {
+    let Some(entity) = world_map.building_entity(grid) else {
         return false;
     };
     if let Ok(building) = q_buildings.get(entity) {
