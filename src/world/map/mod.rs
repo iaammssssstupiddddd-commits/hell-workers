@@ -8,7 +8,8 @@ pub use layout::{
     INITIAL_WOOD_POSITIONS, RIVER_X_MAX, RIVER_X_MIN, RIVER_Y_MAX, RIVER_Y_MIN, ROCK_POSITIONS,
     SAND_WIDTH, TREE_POSITIONS,
 };
-pub use spawn::{generate_fixed_river_tiles, spawn_map};
+pub use hw_world::generate_fixed_river_tiles;
+pub use spawn::spawn_map;
 
 use hw_core::constants::*;
 use crate::systems::jobs::DoorState;

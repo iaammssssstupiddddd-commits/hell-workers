@@ -1,204 +1,25 @@
-use hw_core::constants::{MAP_HEIGHT, MAP_WIDTH};
 use crate::world::map::WorldMap;
-use bevy::prelude::*;
-use std::cmp::Ordering;
-use std::collections::{BinaryHeap, HashSet};
 
-/// 直線移動のコスト
-pub const MOVE_COST_STRAIGHT: i32 = 10;
-/// 斜め移動のコスト (10 * √2 ≈ 14.14)
-pub const MOVE_COST_DIAGONAL: i32 = 14;
+pub use hw_world::pathfinding::{PathGoalPolicy, PathNode, PathWorld, PathfindingContext};
 
-// A*のためのノード
-#[derive(Clone, Eq, PartialEq)]
-pub struct PathNode {
-    pub idx: usize,
-    pub f_cost: i32,
-}
+impl PathWorld for WorldMap {
+    fn pos_to_idx(&self, x: i32, y: i32) -> Option<usize> {
+        WorldMap::pos_to_idx(self, x, y)
+    }
 
-impl Ord for PathNode {
-    fn cmp(&self, other: &Self) -> Ordering {
-        other.f_cost.cmp(&self.f_cost) // 最小ヒープにするため逆順
+    fn idx_to_pos(&self, idx: usize) -> (i32, i32) {
+        WorldMap::idx_to_pos(idx)
+    }
+
+    fn is_walkable(&self, x: i32, y: i32) -> bool {
+        WorldMap::is_walkable(self, x, y)
+    }
+
+    fn get_door_cost(&self, x: i32, y: i32) -> i32 {
+        WorldMap::get_door_cost(self, x, y)
     }
 }
 
-impl PartialOrd for PathNode {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-/// 経路探索用の作業メモリを再利用するための構造体
-pub struct PathfindingContext {
-    pub g_scores: Vec<i32>,
-    pub came_from: Vec<Option<usize>>,
-    pub open_set: BinaryHeap<PathNode>,
-    /// 訪問済みインデックスを追跡（reset時の最適化用）
-    visited: Vec<usize>,
-}
-
-impl Default for PathfindingContext {
-    fn default() -> Self {
-        let size = (MAP_WIDTH * MAP_HEIGHT) as usize;
-        Self {
-            g_scores: vec![i32::MAX; size],
-            came_from: vec![None; size],
-            open_set: BinaryHeap::with_capacity(size / 4),
-            visited: Vec::with_capacity(512),
-        }
-    }
-}
-
-impl PathfindingContext {
-    fn reset(&mut self) {
-        // 訪問済みセルのみリセット（O(n) → O(k) 最適化）
-        for &idx in &self.visited {
-            self.g_scores[idx] = i32::MAX;
-            self.came_from[idx] = None;
-        }
-        self.visited.clear();
-        self.open_set.clear();
-    }
-}
-
-#[derive(Clone, Copy)]
-pub enum PathGoalPolicy {
-    /// 目的地が歩行不能なら到達不能と扱う
-    RespectGoalWalkability,
-    /// 目的地が歩行不能でも到達候補として許可する
-    AllowBlockedGoal,
-}
-
-fn path_cost_heuristic(idx: usize, goal_idx: usize) -> i32 {
-    let p1 = WorldMap::idx_to_pos(idx);
-    let p2 = WorldMap::idx_to_pos(goal_idx);
-    let dx = (p1.0 - p2.0).abs();
-    let dy = (p1.1 - p2.1).abs();
-    let min_d = dx.min(dy);
-    let max_d = dx.max(dy);
-    // Octile距離: 14 * min_d + 10 * (max_d - min_d)
-    MOVE_COST_DIAGONAL * min_d + MOVE_COST_STRAIGHT * (max_d - min_d)
-}
-
-fn build_path_from_came_from(
-    came_from: &[Option<usize>],
-    mut current_idx: usize,
-    start_idx: usize,
-) -> Vec<(i32, i32)> {
-    let mut path = vec![WorldMap::idx_to_pos(current_idx)];
-
-    while current_idx != start_idx {
-        let Some(prev_idx) = came_from[current_idx] else {
-            break;
-        };
-        current_idx = prev_idx;
-        path.push(WorldMap::idx_to_pos(current_idx));
-    }
-
-    path.reverse();
-    path
-}
-
-fn find_path_with_policy<FG, FM, FD, FE>(
-    world_map: &WorldMap,
-    context: &mut PathfindingContext,
-    start_idx: usize,
-    heuristic: impl Fn(usize) -> i32,
-    is_goal_reached: FG,
-    can_enter: FM,
-    can_cross_diagonal: FD,
-    move_penalty: FE,
-) -> Option<Vec<(i32, i32)>>
-where
-    FG: Fn((i32, i32)) -> bool,
-    FM: Fn((i32, i32), (i32, i32)) -> bool,
-    FD: Fn((i32, i32), (i32, i32)) -> bool,
-    FE: Fn(i32, i32, bool) -> i32,
-{
-    context.reset();
-
-    context.visited.push(start_idx);
-    context.g_scores[start_idx] = 0;
-    context.open_set.push(PathNode {
-        idx: start_idx,
-        f_cost: heuristic(start_idx),
-    });
-
-    let directions = [
-        (0, 1),
-        (0, -1),
-        (1, 0),
-        (-1, 0),
-        (1, 1),
-        (1, -1),
-        (-1, 1),
-        (-1, -1),
-    ];
-
-    while let Some(current) = context.open_set.pop() {
-        // ヒープに残った古いエントリ（より悪いコスト）をスキップ
-        let recorded_g = context.g_scores[current.idx];
-        if recorded_g == i32::MAX {
-            continue;
-        }
-        let expected_f = recorded_g.saturating_add(heuristic(current.idx));
-        if current.f_cost > expected_f {
-            continue;
-        }
-
-        let curr_pos = WorldMap::idx_to_pos(current.idx);
-        if is_goal_reached(curr_pos) {
-            return Some(build_path_from_came_from(
-                &context.came_from,
-                current.idx,
-                start_idx,
-            ));
-        }
-
-        for (dx, dy) in &directions {
-            let nx = curr_pos.0 + dx;
-            let ny = curr_pos.1 + dy;
-
-            let n_idx = match world_map.pos_to_idx(nx, ny) {
-                Some(idx) => idx,
-                None => continue,
-            };
-
-            if !can_enter(curr_pos, (nx, ny)) {
-                continue;
-            }
-
-            let is_diagonal = dx.abs() == 1 && dy.abs() == 1;
-            if is_diagonal && !can_cross_diagonal(curr_pos, (nx, ny)) {
-                continue;
-            }
-
-            let move_cost = if is_diagonal {
-                MOVE_COST_DIAGONAL
-            } else {
-                MOVE_COST_STRAIGHT
-            };
-            let penalty = move_penalty(nx, ny, is_diagonal);
-            let tentative_g = recorded_g + move_cost + penalty;
-
-            if tentative_g < context.g_scores[n_idx] {
-                if context.g_scores[n_idx] == i32::MAX {
-                    context.visited.push(n_idx);
-                }
-                context.came_from[n_idx] = Some(current.idx);
-                context.g_scores[n_idx] = tentative_g;
-                context.open_set.push(PathNode {
-                    idx: n_idx,
-                    f_cost: tentative_g + heuristic(n_idx),
-                });
-            }
-        }
-    }
-
-    None
-}
-
-// A*パスファインディング
 pub fn find_path(
     world_map: &WorldMap,
     context: &mut PathfindingContext,
@@ -206,39 +27,9 @@ pub fn find_path(
     goal: (i32, i32),
     goal_policy: PathGoalPolicy,
 ) -> Option<Vec<(i32, i32)>> {
-    let start_idx = world_map.pos_to_idx(start.0, start.1)?;
-    let goal_idx = world_map.pos_to_idx(goal.0, goal.1)?;
-
-    if matches!(goal_policy, PathGoalPolicy::RespectGoalWalkability)
-        && !world_map.is_walkable(goal.0, goal.1)
-    {
-        return None;
-    }
-
-    let heuristic = |idx| path_cost_heuristic(idx, goal_idx);
-    find_path_with_policy(
-        world_map,
-        context,
-        start_idx,
-        heuristic,
-        move |pos| pos == goal,
-        |_from, to| world_map.is_walkable(to.0, to.1),
-        |from, to| {
-            let dx = to.0 - from.0;
-            let dy = to.1 - from.1;
-            let is_diagonal = dx.abs() == 1 && dy.abs() == 1;
-            if !is_diagonal {
-                return true;
-            }
-
-            world_map.is_walkable(from.0 + dx, from.1)
-                && world_map.is_walkable(from.0, from.1 + dy)
-        },
-        |x, y, _is_diagonal| world_map.get_door_cost(x, y),
-    )
+    hw_world::pathfinding::find_path(world_map, context, start, goal, goal_policy)
 }
 
-/// ターゲットの隣接マスへのパスを検索（ターゲット自体には入らない）
 pub fn find_path_to_adjacent(
     world_map: &WorldMap,
     context: &mut PathfindingContext,
@@ -246,155 +37,20 @@ pub fn find_path_to_adjacent(
     target: (i32, i32),
     allow_goal_blocked: bool,
 ) -> Option<Vec<(i32, i32)>> {
-    // 逆引き検索を1回実行: ターゲット地点（岩など）から開始点（ソウル）に向かってパスを探す
-    // find_path の開始点は target から start への逆探索になるため、start が目的地側相当。
-    // start が歩行不能の場合は、その状態を許容する必要がある。
-    // 呼び出し側の意図が strict でも、開始点が障害物に埋まるケースでは
-    // 旧実装と同様にゴール歩行性チェックを緩和して到達判定の後退を避ける。
-    let allow_goal_blocked = allow_goal_blocked || !world_map.is_walkable(start.0, start.1);
-    let policy = if allow_goal_blocked {
-        PathGoalPolicy::AllowBlockedGoal
-    } else {
-        PathGoalPolicy::RespectGoalWalkability
-    };
-
-    let mut path = find_path(world_map, context, target, start, policy)?;
-
-    // 得られたパスは [target, neighbor, ..., start]
-    // これを逆転させて [start, ..., neighbor, target] にし、target を削除すれば隣接マス到着パスになる
-    path.reverse();
-    path.pop(); // ターゲット自体(岩の中心)を削除。これで隣接マスで止まる。
-
-    if path.is_empty() {
-        // すでにターゲットの隣にある場合、空の代わりに開始地点を返す（移動不要）
-        Some(vec![start])
-    } else {
-        Some(path)
-    }
+    hw_world::pathfinding::find_path_to_adjacent(
+        world_map,
+        context,
+        start,
+        target,
+        allow_goal_blocked,
+    )
 }
 
-/// ターゲット（複数の占有マス）へ向かい、その境界（隣接する歩行可能タイル）で停止するパスを探索
-/// ターゲット自体が障害物（非Walkable）であっても到達可能とする
-/// ターゲット（複数の占有マス）の中心へ向かうパスを計算し、
-/// 占有領域（障害物）に接触する直前の地点（境界）で停止するパスを返す。
-///
-/// アルゴリズム:
-/// 1. 占有領域を「高いコストで歩行可能」とみなして、開始地点から中心地点までのA*探索を行う。
-///    これにより、障害物を避けるのではなく、最短距離で障害物の「中」へ向かうパスが得られる。
-/// 2. 得られたパスを開始地点から順にスキャンする。
-/// 3. パス上の点が占有領域（target_grids）に含まれる最初の地点を見つける。
-/// 4. その地点の「一つ手前」を最終的なゴールとし、パスをそこで切り詰める。
-///
-/// これにより、2x2などの大きな建築物の「どの側面が最も近いか」を自動的に判別し、
-/// かつ中心座標がタイル境界にある場合でも適切に隣接タイルへのパスを生成できる。
 pub fn find_path_to_boundary(
     world_map: &WorldMap,
     context: &mut PathfindingContext,
     start: (i32, i32),
     target_grids: &[(i32, i32)],
 ) -> Option<Vec<(i32, i32)>> {
-    if target_grids.is_empty() {
-        return None;
-    }
-
-    let target_grid_set: HashSet<(i32, i32)> = target_grids.iter().copied().collect();
-
-    // すでにターゲット内にいる場合は、外へ脱出するための最短マスを探す
-    if target_grid_set.contains(&start) {
-        let directions = [
-            (0, 1),
-            (0, -1),
-            (1, 0),
-            (-1, 0),
-            (1, 1),
-            (1, -1),
-            (-1, 1),
-            (-1, -1),
-        ];
-        for (dx, dy) in directions {
-            let nx = start.0 + dx;
-            let ny = start.1 + dy;
-            if !target_grid_set.contains(&(nx, ny)) && world_map.is_walkable(nx, ny) {
-                return Some(vec![start, (nx, ny)]);
-            }
-        }
-    }
-
-    // 重心を計算して一意なターゲット地点（目標）とする
-    let sum_x: f32 = target_grids.iter().map(|g| g.0 as f32).sum();
-    let sum_y: f32 = target_grids.iter().map(|g| g.1 as f32).sum();
-    let center_x = (sum_x / target_grids.len() as f32).round() as i32;
-    let center_y = (sum_y / target_grids.len() as f32).round() as i32;
-    let goal_grid = (center_x, center_y);
-    let goal_idx = world_map.pos_to_idx(goal_grid.0, goal_grid.1)?;
-
-    let start_idx = world_map.pos_to_idx(start.0, start.1)?;
-    let heuristic = |idx| path_cost_heuristic(idx, goal_idx);
-    let mut path = find_path_with_policy(
-        world_map,
-        context,
-        start_idx,
-        heuristic,
-        |pos| target_grid_set.contains(&pos),
-        |_, to| {
-            let is_in_target = target_grid_set.contains(&to);
-            is_in_target || world_map.is_walkable(to.0, to.1)
-        },
-        |from, to| {
-            let dx = to.0 - from.0;
-            let dy = to.1 - from.1;
-            (world_map.is_walkable(from.0 + dx, from.1)
-                || target_grid_set.contains(&(from.0 + dx, from.1)))
-                && (world_map.is_walkable(from.0, from.1 + dy)
-                    || target_grid_set.contains(&(from.0, from.1 + dy)))
-        },
-        |x, y, _is_diagonal| {
-            if target_grid_set.contains(&(x, y)) {
-                0
-            } else {
-                world_map.get_door_cost(x, y)
-            }
-        },
-    )?;
-
-    // ターゲット内へ到達したので「最後の1マス（目標領域）を落として境界で停止」する
-    path.pop();
-    if path.is_empty() {
-        Some(vec![start])
-    } else {
-        Some(path)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::world::map::WorldMap;
-
-    fn create_test_map(_width: usize, _height: usize) -> WorldMap {
-        WorldMap::default()
-    }
-
-    #[test]
-    fn test_path_to_boundary_1x1_open() {
-        let map = create_test_map(10, 10);
-        let mut ctx = PathfindingContext::default();
-        let target = vec![(5, 5)];
-
-        let path = find_path_to_boundary(&map, &mut ctx, (1, 1), &target);
-        assert!(path.is_some(), "Path should be found");
-        let path = path.unwrap();
-
-        // 1マスのターゲットの場合、最後はターゲットの隣接マスで終わるべき
-        let last = path.last().unwrap();
-        let dx = (last.0 - 5).abs();
-        let dy = (last.1 - 5).abs();
-        // 中心(5,5)への隣接条件: dx<=1 && dy<=1
-        assert!(
-            dx <= 1 && dy <= 1,
-            "Last {:?} should be adjacent to (5,5)",
-            last
-        );
-        assert!(*last != (5, 5), "Last {:?} should not be target", last);
-    }
+    hw_world::pathfinding::find_path_to_boundary(world_map, context, start, target_grids)
 }
