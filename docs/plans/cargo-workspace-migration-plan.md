@@ -79,6 +79,7 @@
 - `src/world/pathfinding.rs` のアルゴリズムを `hw_world::pathfinding` へ移動
   - `WorldMap` 依存は `PathWorld` trait で抽象化
   - root の `src/world/pathfinding.rs` は `WorldMap` 実装と互換ラッパーのみ保持
+  - target 到達可否の共通判定 helper も `hw_world::pathfinding` へ集約
 - `TerrainType` を `hw_world::terrain` へ移動
   - root の `src/world/map/mod.rs` は re-export を保持
 - ベース地形タイル生成を `hw_world::mapgen` へ移動
