@@ -4,6 +4,7 @@ pub mod mapgen;
 pub mod pathfinding;
 pub mod regrowth;
 pub mod river;
+pub mod spawn;
 pub mod terrain;
 
 pub use borders::{TerrainBorderKind, TerrainBorderSpec, generate_terrain_border_specs};
@@ -18,4 +19,5 @@ pub use pathfinding::{
 };
 pub use regrowth::{ForestZone, default_forest_zones, find_regrowth_position};
 pub use river::{generate_fixed_river_tiles, generate_sand_tiles};
+pub use spawn::{find_nearby_walkable_grid, pick_random_walkable_grid_in_rect};
 pub use terrain::TerrainType;
