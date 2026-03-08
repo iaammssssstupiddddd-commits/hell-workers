@@ -1,5 +1,6 @@
 use crate::assets::GameAssets;
 use hw_core::constants::DOOR_CLOSE_DELAY_SECS;
+pub use hw_core::world::DoorState;
 use crate::entities::damned_soul::{DamnedSoul, Path};
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
@@ -16,13 +17,6 @@ impl Default for Door {
             state: DoorState::Closed,
         }
     }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Reflect)]
-pub enum DoorState {
-    Open,
-    Closed,
-    Locked,
 }
 
 impl Door {

@@ -35,7 +35,7 @@
   - `src/world/`
   - `src/systems/jobs/`
   - `src/systems/logistics/`
-- `hw_world` は world 全体ではなく、固定レイアウト定数・川/砂生成ロジック・pathfinding アルゴリズムを保持している
+- `hw_world` は world 全体ではなく、固定レイアウト定数・川/砂生成ロジック・pathfinding アルゴリズム・`TerrainType` を保持している
 - `hw_components` は、現 checkout には存在しない
 
 結論:
@@ -53,6 +53,8 @@
 - `constants/` と `game_state.rs` の `hw_core` への移動
 - `relationships.rs` の `hw_core` への移動
   - root の `src/relationships.rs` は互換維持のため re-export のみ保持
+- `DoorState` を `hw_core::world` へ移動
+  - `src/systems/jobs/door.rs` は re-export を保持
 - `hw_world` クレートの追加
 - `src/world/map/layout.rs` の fixed layout 定数を `hw_world::layout` へ移動
   - root の `src/world/map/layout.rs` は re-export のみ保持
@@ -61,6 +63,8 @@
 - `src/world/pathfinding.rs` のアルゴリズムを `hw_world::pathfinding` へ移動
   - `WorldMap` 依存は `PathWorld` trait で抽象化
   - root の `src/world/pathfinding.rs` は `WorldMap` 実装と互換ラッパーのみ保持
+- `TerrainType` を `hw_world::terrain` へ移動
+  - root の `src/world/map/mod.rs` は re-export を保持
 - root crate から `hw_core` の参照
 - root crate から `hw_world` の参照
 
@@ -68,6 +72,7 @@
 
 - `events.rs` の `hw_core` または他クレートへの移動
 - `WorldMap` / `spawn` / `terrain_border` / `regrowth` など app 依存の強い world 系コードの切り出し
+- `WorldMap` の direct field mutation の整理
 - `jobs` / `logistics` の切り出し
 - ビルド時間の before / after 計測
 
@@ -122,7 +127,7 @@ hw_logistics
 - `hw_components` は現時点では作らない
 - `events` は依存先が広いため、早期移動対象にはしない
 - `relationships` は `hw_core` へ移設済み
-- `hw_world` はまず `layout` / `river` / `pathfinding` を保持し、`WorldMap` 本体はまだ root に残す
+- `hw_world` はまず `layout` / `river` / `pathfinding` / `TerrainType` を保持し、`WorldMap` 本体はまだ root に残す
 
 ## 7. フェーズ計画
 
@@ -185,9 +190,10 @@ hw_logistics
 
 - `spawn_terrain_borders` はすでに `src/world/map/terrain_border.rs` にあるため、古い計画書の前提を使わない
 - `assets` や render 寄りの依存が強い場合は、`hw_world` への全移動ではなく「純粋な world data / map logic」のみ先に切る
-- 現時点で先に切り出した最小単位は `layout` / `river` / `pathfinding`
+- 現時点で先に切り出した最小単位は `layout` / `river` / `pathfinding` / `TerrainType`
 - `pathfinding.rs` は `PathWorld` trait で切り出し済み
-- 次の大きな壁は `WorldMap` 本体が `DoorState` と app-owned field mutation に強く結合している点
+- `DoorState` 依存は解消済み
+- 次の大きな壁は `WorldMap` 本体の direct field mutation と Bevy resource としての広い使用範囲
 
 完了条件:
 
@@ -259,7 +265,7 @@ hw_logistics
 ## 12. 次の担当者が最初にやること
 
 1. `cargo check --workspace` を実行して baseline を再確認する
-2. `src/world/map/mod.rs` の `DoorState` 依存をどう解消するか設計する
+2. `WorldMap` の公開フィールドをどこまでメソッド化するか設計する
 3. `spawn` / `terrain_border` / `regrowth` を `hw_world` に入れない前提で責務を整理する
 4. `jobs` と `logistics` の依存関係を整理し、`hw_logistics` が成立するかを判断する
 
@@ -280,3 +286,4 @@ hw_logistics
 | `2026-03-08` | AI | `relationships.rs` を `hw_core` へ移設し、root 側は re-export 互換レイヤーへ変更 |
 | `2026-03-08` | AI | `hw_world` を追加し、`layout` と `river` の純粋ロジックを移設 |
 | `2026-03-08` | AI | `pathfinding` を `hw_world` へ移設し、`PathWorld` trait と root 互換ラッパーを追加 |
+| `2026-03-08` | AI | `DoorState` を `hw_core` へ、`TerrainType` を `hw_world` へ移設 |
