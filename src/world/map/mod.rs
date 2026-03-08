@@ -1,9 +1,11 @@
 //! ワールドマップと座標変換API
 
+mod access;
 mod layout;
 mod spawn;
 pub mod terrain_border;
 
+pub use access::WorldMapRead;
 pub use layout::{
     INITIAL_WOOD_POSITIONS, RIVER_X_MAX, RIVER_X_MIN, RIVER_Y_MAX, RIVER_Y_MIN, ROCK_POSITIONS,
     SAND_WIDTH, TREE_POSITIONS,

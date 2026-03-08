@@ -96,6 +96,8 @@
   - 現時点で `world_map.tiles` / `world_map.tile_entities` / `world_map.obstacles` の直接参照は `src/` から除去済み
 - `task_execution` / spawn helper の `WorldMap` 依存を `&Res<WorldMap>` から `&WorldMap` へ縮小
   - `src/` の helper API では Bevy resource 型への依存を除去済み
+- `WorldMapRead` system param を追加し、一部の read-only system を raw `Res<WorldMap>` から移行
+  - `assign_task` / `drifting` / `movement` / `pathfinding` / `area_selection` / `placement_ghost` / `room validation` / `gathering separation`
 - root crate から `hw_core` の参照
 - root crate から `hw_world` の参照
 
@@ -104,6 +106,7 @@
 - `WorldMap` 本体と app 側 shell (`spawn` / `terrain_border` / `regrowth`) の整理
 - `WorldMap` resource そのものへの広い依存の整理
   - helper 層ではなく system 境界に残っている `Res<WorldMap>` / `ResMut<WorldMap>` の再設計
+  - read-only 側は `WorldMapRead` へ順次寄せ、write 側は用途別 API を検討する
 - `jobs` / `logistics` の切り出し
 - ビルド時間の before / after 計測
 
@@ -299,8 +302,8 @@ hw_logistics
 ## 12. 次の担当者が最初にやること
 
 1. `cargo check --workspace` を実行して baseline を再確認する
-2. `WorldMap` の `tiles` / `tile_entities` / `obstacles` をどこまで accessor 化するか整理する
-3. `spawn` / `terrain_border` / `regrowth` を `hw_world` に入れない前提で責務を整理する
+2. system 境界に残っている read-only の `Res<WorldMap>` を `WorldMapRead` へ寄せる
+3. write が必要な `ResMut<WorldMap>` を用途別 API に分けられるか整理する
 4. `jobs` と `logistics` の依存関係を整理し、`hw_logistics` が成立するかを判断する
 
 ## 13. Definition of Done
@@ -323,3 +326,4 @@ hw_logistics
 | `2026-03-08` | AI | `DoorState` を `hw_core` へ、`TerrainType` を `hw_world` へ移設 |
 | `2026-03-08` | AI | `WorldMap` の building/stockpile/bridge 操作メソッドを追加し、高頻度 write path を移行 |
 | `2026-03-08` | AI | `WorldMap` の building/stockpile 直接参照を accessor 化し、高頻度 read path も移行 |
+| `2026-03-08` | AI | `WorldMapRead` system param を追加し、read-only system 境界の `Res<WorldMap>` を一部置換 |
