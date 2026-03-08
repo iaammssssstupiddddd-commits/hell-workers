@@ -3,7 +3,7 @@ mod spawn;
 mod world_update;
 
 use crate::assets::GameAssets;
-use crate::world::map::WorldMap;
+use crate::world::map::WorldMapWrite;
 use bevy::prelude::*;
 
 use super::Blueprint;
@@ -11,7 +11,7 @@ use super::Blueprint;
 pub fn building_completion_system(
     mut commands: Commands,
     game_assets: Res<GameAssets>,
-    mut world_map: ResMut<WorldMap>,
+    mut world_map: WorldMapWrite,
     mut q_blueprints: Query<(Entity, &Blueprint, &Transform)>,
     q_pending_bucket_storage: Query<
         (

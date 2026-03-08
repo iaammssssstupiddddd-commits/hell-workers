@@ -6,7 +6,7 @@
 use crate::assets::GameAssets;
 use crate::systems::jobs::Tree;
 use crate::systems::time::GameTime;
-use crate::world::map::WorldMap;
+use crate::world::map::{WorldMap, WorldMapRead};
 use bevy::prelude::*;
 use hw_core::constants::*;
 use hw_world::{ForestZone, default_forest_zones, find_regrowth_position};
@@ -36,7 +36,7 @@ pub fn tree_regrowth_system(
     game_time: Res<GameTime>,
     mut regrowth: ResMut<RegrowthManager>,
     game_assets: Res<GameAssets>,
-    world_map: Res<WorldMap>,
+    world_map: WorldMapRead,
     q_trees: Query<&Transform, With<Tree>>,
 ) {
     // 全体上限チェック

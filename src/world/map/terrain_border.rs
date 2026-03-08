@@ -8,7 +8,7 @@ use hw_core::constants::*;
 use hw_world::{TerrainBorderKind, generate_terrain_border_specs};
 use bevy::prelude::*;
 
-use super::{TerrainType, WorldMap};
+use super::{TerrainType, WorldMap, WorldMapRead};
 
 /// 境界オーバーレイであることを示すマーカー
 #[derive(Component)]
@@ -17,7 +17,7 @@ pub struct TerrainBorder;
 pub fn spawn_terrain_borders(
     mut commands: Commands,
     game_assets: Res<GameAssets>,
-    world_map: Res<WorldMap>,
+    world_map: WorldMapRead,
 ) {
     for spec in generate_terrain_border_specs(world_map.terrain_tiles(), MAP_WIDTH, MAP_HEIGHT) {
         let Some(texture) = border_texture(spec.terrain, spec.kind, &game_assets) else {

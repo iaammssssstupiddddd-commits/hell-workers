@@ -7,7 +7,7 @@ use crate::systems::jobs::{Blueprint, Designation, Rock, TargetBlueprint, Tree};
 use crate::systems::world::zones::Yard;
 use crate::systems::logistics::transport_request::{TransportDemand, TransportRequest};
 use crate::systems::logistics::{ReservedForTask, ResourceItem, ResourceType};
-use crate::world::map::WorldMap;
+use crate::world::map::WorldMapRead;
 use crate::world::pathfinding::PathfindingContext;
 use bevy::prelude::*;
 use std::collections::HashMap;
@@ -49,7 +49,7 @@ pub fn blueprint_auto_gather_system(
     mut commands: Commands,
     time: Res<Time>,
     mut timer: ResMut<BlueprintAutoGatherTimer>,
-    world_map: Res<WorldMap>,
+    world_map: WorldMapRead,
     mut pf_context: Local<PathfindingContext>,
     q_familiars: Query<(Entity, &ActiveCommand, &TaskArea, &Transform)>,
     q_yards: Query<(Entity, &Yard)>,
@@ -159,7 +159,7 @@ pub fn blueprint_auto_gather_system(
         &plan.needed_new_auto_count,
         &owner_infos,
         &supply_state.candidate_sources,
-        &world_map,
+        world_map.as_ref(),
         &mut pf_context,
     );
 

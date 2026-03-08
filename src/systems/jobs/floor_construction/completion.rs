@@ -7,7 +7,7 @@ use crate::entities::damned_soul::{DamnedSoul, Path};
 use crate::systems::jobs::{Building, BuildingType, ObstaclePosition};
 use crate::systems::utils::animations::{BounceAnimation, BounceAnimationConfig};
 use crate::systems::visual::blueprint::{BOUNCE_DURATION, BuildingBounceEffect};
-use crate::world::map::WorldMap;
+use crate::world::map::{WorldMap, WorldMapWrite};
 use bevy::prelude::*;
 use std::collections::HashSet;
 
@@ -49,7 +49,7 @@ pub fn floor_construction_completion_system(
     q_tiles: Query<(Entity, &FloorTileBlueprint)>,
     mut q_souls: Query<(Entity, &mut Transform, &mut Path), With<DamnedSoul>>,
     game_assets: Res<GameAssets>,
-    mut world_map: ResMut<WorldMap>,
+    mut world_map: WorldMapWrite,
     mut commands: Commands,
 ) {
     for (site_entity, mut site) in q_sites.iter_mut() {

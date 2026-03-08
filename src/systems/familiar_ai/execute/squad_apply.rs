@@ -6,7 +6,7 @@ use crate::systems::familiar_ai::FamiliarSoulQuery;
 use crate::systems::visual::speech::components::{
     BubbleEmotion, BubblePriority, FamiliarBubble, SpeechBubble,
 };
-use crate::world::map::WorldMap;
+use crate::world::map::WorldMapRead;
 use bevy::prelude::*;
 use std::collections::HashSet;
 
@@ -16,7 +16,7 @@ pub fn apply_squad_management_requests_system(
     mut request_reader: MessageReader<SquadManagementRequest>,
     mut q_souls: FamiliarSoulQuery,
     mut queries: crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
-    world_map: Res<WorldMap>,
+    world_map: WorldMapRead,
     time: Res<Time>,
     game_assets: Res<crate::assets::GameAssets>,
     q_bubbles: Query<(Entity, &SpeechBubble), With<FamiliarBubble>>,
@@ -94,7 +94,7 @@ pub fn apply_squad_management_requests_system(
                         inventory_opt.as_deref_mut(),
                         dropped_res,
                         &mut queries,
-                        &world_map,
+                        world_map.as_ref(),
                         emit_abandoned,
                     );
 

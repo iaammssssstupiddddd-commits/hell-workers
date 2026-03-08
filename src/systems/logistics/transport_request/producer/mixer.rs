@@ -17,14 +17,14 @@ use crate::systems::logistics::transport_request::{TransportDemand, TransportReq
 use crate::systems::logistics::{ResourceType, Stockpile};
 use crate::systems::soul_ai::execute::task_execution::move_plant::MovePlanned;
 use crate::systems::world::zones::Yard;
-use crate::world::map::WorldMap;
+use crate::world::map::WorldMapRead;
 
 /// MudMixer への自動資材運搬タスク生成システム
 pub fn mud_mixer_auto_haul_system(
     mut commands: Commands,
     mut designation_writer: MessageWriter<DesignationRequest>,
     haul_cache: Res<SharedResourceCache>,
-    world_map: Res<WorldMap>,
+    world_map: WorldMapRead,
     q_familiars: Query<(Entity, &ActiveCommand, &TaskArea)>,
     q_yards: Query<(Entity, &Yard)>,
     q_mixers: Query<(
@@ -95,7 +95,7 @@ pub fn mud_mixer_auto_haul_system(
             candidate,
             &q_sand_piles,
             &q_task_state,
-            &world_map,
+            world_map.as_ref(),
         );
     }
 

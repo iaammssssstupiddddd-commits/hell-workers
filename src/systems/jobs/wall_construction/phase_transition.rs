@@ -4,14 +4,14 @@ use super::components::*;
 use crate::assets::GameAssets;
 use hw_core::constants::{TILE_SIZE, Z_MAP};
 use crate::systems::jobs::{Building, BuildingType, ProvisionalWall};
-use crate::world::map::WorldMap;
+use crate::world::map::{WorldMap, WorldMapWrite};
 use bevy::prelude::*;
 
 /// Spawns provisional wall entities for framed tiles that do not have spawned walls yet.
 pub fn wall_framed_tile_spawn_system(
     mut q_tiles: Query<&mut WallTileBlueprint>,
     game_assets: Res<GameAssets>,
-    mut world_map: ResMut<WorldMap>,
+    mut world_map: WorldMapWrite,
     mut commands: Commands,
 ) {
     for mut tile in q_tiles.iter_mut() {

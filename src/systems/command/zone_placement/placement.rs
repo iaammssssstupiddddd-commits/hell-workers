@@ -7,7 +7,7 @@ use crate::systems::command::TaskMode;
 use crate::systems::logistics::{BelongsTo, Stockpile, ZoneType};
 use crate::systems::world::zones::{AreaBounds, Yard};
 use crate::systems::world::zones::Site;
-use crate::world::map::WorldMap;
+use crate::world::map::{WorldMap, WorldMapWrite};
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 
@@ -18,7 +18,7 @@ pub fn zone_placement_system(
     ui_input_state: Res<UiInputState>,
     mut task_context: ResMut<TaskContext>,
     mut next_play_mode: ResMut<NextState<PlayMode>>,
-    mut world_map: ResMut<WorldMap>,
+    mut world_map: WorldMapWrite,
     mut commands: Commands,
     q_yards: Query<(Entity, &Yard)>,
     q_sites: Query<&Site>,

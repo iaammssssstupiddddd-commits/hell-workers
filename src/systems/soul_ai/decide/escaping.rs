@@ -15,7 +15,7 @@ use crate::systems::soul_ai::perceive::escaping::{
     find_safe_gathering_spot,
 };
 use crate::systems::spatial::FamiliarSpatialGrid;
-use crate::world::map::WorldMap;
+use crate::world::map::WorldMapRead;
 use crate::world::pathfinding::PathfindingContext;
 
 /// 逃走の判定と要求生成を行う（Decide Phase）
@@ -23,7 +23,7 @@ pub fn escaping_decision_system(
     time: Res<Time>,
     mut detection_timer: ResMut<EscapeDetectionTimer>,
     mut behavior_timer: ResMut<EscapeBehaviorTimer>,
-    world_map: Res<WorldMap>,
+    world_map: WorldMapRead,
     mut pf_context: Local<PathfindingContext>,
     familiar_grid: Res<FamiliarSpatialGrid>,
     q_familiars: Query<(&Transform, &Familiar)>,
@@ -123,7 +123,7 @@ pub fn escaping_decision_system(
                 soul_pos,
                 &familiar_grid,
                 &q_familiars,
-                &world_map,
+                world_map.as_ref(),
                 &mut pf_context,
             ) {
                 let safe_spot = find_safe_gathering_spot(
@@ -146,7 +146,7 @@ pub fn escaping_decision_system(
                 }
 
                 let destination =
-                    calculate_escape_destination(soul_pos, &threat, safe_spot, &world_map);
+                    calculate_escape_destination(soul_pos, &threat, safe_spot, world_map.as_ref());
 
                 decide_output
                     .escape_requests
