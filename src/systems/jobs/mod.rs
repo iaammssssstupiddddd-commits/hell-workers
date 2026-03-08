@@ -10,6 +10,7 @@ pub use building_completion::building_completion_system;
 pub use door::*;
 pub use floor_construction::*;
 pub use mud_mixer::*;
+pub use hw_core::jobs::WorkType;
 
 // --- Events ---
 
@@ -277,27 +278,6 @@ impl Blueprint {
 
         *self.delivered_materials.entry(resource_type).or_insert(0) += amount;
     }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Reflect, Default)]
-pub enum WorkType {
-    #[default]
-    Chop, // 伐採
-    Mine,               // 採掘
-    Build,              // 建築
-    Move,               // 移動（建物移動）
-    Haul,               // 運搬（Stockpile行き）
-    HaulToMixer,        // 固体原料（Sand/Rock）をミキサーへ運ぶ
-    GatherWater,        // 水汲み
-    CollectSand,        // 砂採取
-    CollectBone,        // 骨採取
-    Refine,             // 精製
-    HaulWaterToMixer,   // Tankから水をミキサーへ運ぶ
-    WheelbarrowHaul,    // 手押し車で一括運搬
-    ReinforceFloorTile, // 床タイルの骨補強
-    PourFloorTile,      // 床タイルへの泥注入
-    FrameWallTile,      // 壁タイルの木材フレーミング
-    CoatWall,           // 仮設壁への泥塗布
 }
 
 #[derive(Component)]

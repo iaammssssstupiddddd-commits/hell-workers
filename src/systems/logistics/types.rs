@@ -1,46 +1,5 @@
 use bevy::prelude::*;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Reflect)]
-pub enum ResourceType {
-    Wood,
-    Rock, // 旧Stone（岩採掘でのみ入手可能）
-    Water,
-    BucketEmpty,
-    BucketWater,
-    Sand,
-    Bone,
-    StasisMud,
-    Wheelbarrow,
-}
-
-impl ResourceType {
-    /// 手押し車に積載可能か
-    pub fn is_loadable(&self) -> bool {
-        match self {
-            ResourceType::Water => false,
-            ResourceType::BucketWater => false,
-            ResourceType::BucketEmpty => false,
-            ResourceType::Wheelbarrow => false,
-            _ => true, // Wood, Rock, Sand, Bone, StasisMud
-        }
-    }
-
-    /// 猫車運搬が必須の資源か
-    pub fn requires_wheelbarrow(&self) -> bool {
-        matches!(
-            self,
-            ResourceType::Sand | ResourceType::StasisMud | ResourceType::Bone
-        )
-    }
-
-    /// 汎用 Stockpile に格納できる資源か
-    pub fn can_store_in_stockpile(&self) -> bool {
-        !matches!(
-            self,
-            ResourceType::Sand | ResourceType::Bone | ResourceType::StasisMud
-        )
-    }
-}
+pub use hw_core::logistics::ResourceType;
 
 #[derive(Component, Reflect)]
 #[reflect(Component)]
