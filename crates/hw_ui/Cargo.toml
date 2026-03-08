@@ -1,0 +1,10 @@
+[package]
+name = "hw_ui"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+bevy = { workspace = true }
+hw_core = { path = "../hw_core" }
+hw_jobs = { path = "../hw_jobs" }
+hw_logistics = { path = "../hw_logistics" }

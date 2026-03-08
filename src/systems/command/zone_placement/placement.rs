@@ -4,7 +4,8 @@ use crate::app_contexts::{TaskContext};
 use crate::interface::camera::MainCamera;
 use crate::interface::ui::UiInputState;
 use crate::systems::command::TaskMode;
-use crate::systems::logistics::{BelongsTo, Stockpile, ZoneType};
+use crate::systems::command::TaskModeZoneType;
+use crate::systems::logistics::{BelongsTo, Stockpile};
 use crate::systems::world::zones::{AreaBounds, Yard};
 use crate::systems::world::zones::Site;
 use crate::world::map::{WorldMap, WorldMapWrite};
@@ -46,17 +47,17 @@ pub fn zone_placement_system(
     if buttons.just_released(MouseButton::Left) {
         if let Some(start_pos) = start_pos_opt {
             let area = AreaBounds::from_points(start_pos, snapped_pos);
-            if matches!(zone_type, ZoneType::Stockpile)
+            if matches!(zone_type, TaskModeZoneType::Stockpile)
                 && !is_stockpile_area_within_yards(&area, &q_yards)
             {
                 return;
             }
-            if matches!(zone_type, ZoneType::Yard)
+            if matches!(zone_type, TaskModeZoneType::Yard)
                 && !is_yard_expansion_area_valid(start_pos, &area, &q_sites, &q_yards)
             {
                 return;
             }
-            if matches!(zone_type, ZoneType::Yard) {
+            if matches!(zone_type, TaskModeZoneType::Yard) {
                 apply_yard_expansion(&mut commands, start_pos, &area, &q_sites, &q_yards);
             } else {
                 apply_zone_placement(&mut commands, &mut world_map, zone_type, &area, &q_yards);
@@ -79,7 +80,7 @@ pub fn zone_placement_system(
 fn apply_zone_placement(
     commands: &mut Commands,
     world_map: &mut WorldMap,
-    zone_type: ZoneType,
+    zone_type: TaskModeZoneType,
     area: &AreaBounds,
     q_yards: &Query<(Entity, &Yard)>,
 ) {
@@ -104,7 +105,7 @@ fn apply_zone_placement(
             }
 
             match zone_type {
-                ZoneType::Stockpile => {
+                TaskModeZoneType::Stockpile => {
                     let entity = commands
                         .spawn((
                             Stockpile {
@@ -123,7 +124,7 @@ fn apply_zone_placement(
                         .id();
                     world_map.register_stockpile_tile(grid, entity);
                 }
-                ZoneType::Yard => {}
+                TaskModeZoneType::Yard => {}
             }
         }
     }

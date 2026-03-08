@@ -17,3 +17,35 @@ pub enum PlayMode {
     BuildingMove,    // 建物移動モード
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TaskModeZoneType {
+    Stockpile,
+    Yard,
+}
+
+#[derive(Resource, Default, Debug, Clone, Copy, PartialEq)]
+pub enum TaskMode {
+    #[default]
+    None,
+    DesignateChop(Option<Vec2>),
+    DesignateMine(Option<Vec2>),
+    DesignateHaul(Option<Vec2>),
+    CancelDesignation(Option<Vec2>),
+    SelectBuildTarget,
+    AreaSelection(Option<Vec2>),
+    AssignTask(Option<Vec2>),
+    ZonePlacement(TaskModeZoneType, Option<Vec2>),
+    ZoneRemoval(TaskModeZoneType, Option<Vec2>),
+    FloorPlace(Option<Vec2>),
+    WallPlace(Option<Vec2>),
+    DreamPlanting(Option<Vec2>),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TimeSpeed {
+    Paused,
+    Normal,
+    Fast,
+    Super,
+}
+
