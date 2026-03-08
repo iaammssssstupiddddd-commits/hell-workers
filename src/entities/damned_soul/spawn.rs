@@ -5,7 +5,7 @@ use crate::assets::GameAssets;
 use hw_core::constants::*;
 use crate::entities::{spawn_args, spawn_position};
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
-use crate::world::map::{RIVER_X_MAX, RIVER_X_MIN, RIVER_Y_MIN, WorldMap};
+use crate::world::map::{RIVER_X_MAX, RIVER_X_MIN, RIVER_Y_MIN, WorldMap, WorldMapRead};
 use rand::Rng;
 
 /// Soul の人口管理状態
@@ -98,7 +98,7 @@ fn queue_river_spawn_events(
 /// 人間をスポーンする
 pub fn spawn_damned_souls(
     mut spawn_events: MessageWriter<DamnedSoulSpawnEvent>,
-    world_map: Res<WorldMap>,
+    world_map: WorldMapRead,
 ) {
     let spawn_count = initial_spawn_count();
     let spawned = queue_river_spawn_events(&mut spawn_events, &world_map, spawn_count);
@@ -125,7 +125,7 @@ pub fn population_tracking_system(
 /// 定期スポーン（人口上限と不足時ボーナスを考慮）
 pub fn periodic_spawn_system(
     time: Res<Time>,
-    world_map: Res<WorldMap>,
+    world_map: WorldMapRead,
     mut population: ResMut<PopulationManager>,
     mut spawn_events: MessageWriter<DamnedSoulSpawnEvent>,
 ) {
@@ -179,7 +179,7 @@ pub fn soul_spawning_system(
     mut commands: Commands,
     mut spawn_events: MessageReader<DamnedSoulSpawnEvent>,
     game_assets: Res<GameAssets>,
-    world_map: Res<WorldMap>,
+    world_map: WorldMapRead,
 ) {
     for event in spawn_events.read() {
         spawn_damned_soul_at(&mut commands, &game_assets, world_map.as_ref(), event.position);

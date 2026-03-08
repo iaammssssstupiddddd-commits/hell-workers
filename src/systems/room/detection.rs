@@ -2,7 +2,7 @@ use super::components::{Room, RoomBounds};
 use super::resources::{RoomDetectionState, RoomTileLookup};
 use hw_core::constants::{MAP_HEIGHT, MAP_WIDTH, ROOM_MAX_TILES};
 use crate::systems::jobs::{Building, BuildingType};
-use crate::world::map::WorldMap;
+use crate::world::map::{WorldMap, WorldMapRead};
 use bevy::prelude::*;
 use std::collections::{HashMap, HashSet, VecDeque};
 
@@ -26,7 +26,7 @@ struct RoomCandidate {
 pub fn detect_rooms_system(
     mut commands: Commands,
     time: Res<Time>,
-    world_map: Res<WorldMap>,
+    world_map: WorldMapRead,
     mut detection_state: ResMut<RoomDetectionState>,
     mut room_tile_lookup: ResMut<RoomTileLookup>,
     q_buildings: Query<(Entity, &Building, &Transform)>,
@@ -38,7 +38,7 @@ pub fn detect_rooms_system(
         return;
     }
 
-    let input = build_detection_input(&q_buildings, &world_map);
+    let input = build_detection_input(&q_buildings, world_map.as_ref());
     let detected_rooms = detect_rooms(&input);
 
     for room_entity in q_rooms.iter() {

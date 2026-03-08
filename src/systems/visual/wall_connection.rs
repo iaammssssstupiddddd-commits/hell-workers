@@ -1,6 +1,6 @@
 use crate::assets::GameAssets;
 use crate::systems::jobs::{Blueprint, Building, BuildingType};
-use crate::world::map::WorldMap;
+use crate::world::map::{WorldMap, WorldMapRead};
 use bevy::prelude::*;
 use std::collections::HashSet;
 
@@ -20,7 +20,7 @@ impl Plugin for WallConnectionPlugin {
 /// 自身と隣接する壁の見た目を更新する。
 fn wall_connections_system(
     game_assets: Res<GameAssets>,
-    world_map: Res<WorldMap>,
+    world_map: WorldMapRead,
     q_new_buildings: Query<
         (Entity, &Transform, &Building),
         Or<(Added<Building>, Changed<Building>)>,
@@ -62,7 +62,7 @@ fn wall_connections_system(
     for (gx, gy) in update_targets {
         // マップからその座標にあるエンティティを取得
         if let Some(entity) = world_map.building_entity((gx, gy)) {
-            if is_wall(gx, gy, &world_map, &q_walls_check) {
+            if is_wall(gx, gy, world_map.as_ref(), &q_walls_check) {
                 let is_plain_wall =
                     q_walls_check
                         .get(entity)
@@ -80,7 +80,7 @@ fn wall_connections_system(
                         gx,
                         gy,
                         &mut sprite,
-                        &world_map,
+                        world_map.as_ref(),
                         &q_walls_check,
                         &game_assets,
                     );

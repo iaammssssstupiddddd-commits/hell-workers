@@ -10,7 +10,7 @@ use crate::systems::command::AreaEditSession;
 use crate::systems::jobs::{ObstaclePosition, Tree, TreeVariant};
 use crate::systems::logistics::ResourceItem;
 use crate::systems::visual::plant_trees::PlantTreeVisualState;
-use crate::world::map::WorldMap;
+use crate::world::map::{WorldMap, WorldMapWrite};
 use bevy::prelude::*;
 use rand::rngs::StdRng;
 use rand::seq::SliceRandom;
@@ -130,7 +130,7 @@ pub fn build_dream_tree_planting_plan(
 pub fn dream_tree_planting_system(
     mut commands: Commands,
     mut area_edit_session: ResMut<AreaEditSession>,
-    mut world_map: ResMut<WorldMap>,
+    mut world_map: WorldMapWrite,
     mut dream_pool: ResMut<DreamPool>,
     game_assets: Res<GameAssets>,
     q_trees: Query<&Transform, With<Tree>>,
@@ -158,7 +158,7 @@ fn process_dream_planting(
     end: &Vec2,
     seed: u64,
     commands: &mut Commands,
-    world_map: &mut ResMut<WorldMap>,
+    world_map: &mut WorldMap,
     dream_pool: &mut ResMut<DreamPool>,
     game_assets: &Res<GameAssets>,
     q_trees: &Query<&Transform, With<Tree>>,
@@ -169,7 +169,7 @@ fn process_dream_planting(
         *start,
         *end,
         seed,
-        world_map.as_ref(),
+        world_map,
         dream_pool.points,
         current_tree_count,
         q_items,

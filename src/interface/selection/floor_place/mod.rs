@@ -12,7 +12,7 @@ use crate::interface::ui::{PlacementFailureTooltip, UiInputState};
 use crate::systems::command::TaskMode;
 use crate::systems::jobs::floor_construction::FloorTileBlueprint;
 use crate::systems::jobs::Building;
-use crate::world::map::WorldMap;
+use crate::world::map::{WorldMap, WorldMapWrite};
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 
@@ -27,7 +27,7 @@ pub fn floor_placement_system(
     q_floor_buildings: Query<(&Building, &Transform)>,
     mut task_context: ResMut<TaskContext>,
     mut next_play_mode: ResMut<NextState<PlayMode>>,
-    mut world_map: ResMut<WorldMap>,
+    mut world_map: WorldMapWrite,
     mut placement_failure_tooltip: ResMut<PlacementFailureTooltip>,
     mut commands: Commands,
 ) {

@@ -26,7 +26,9 @@ use crate::systems::spatial::{
     StockpileSpatialGrid,
 };
 use crate::systems::time::GameTime;
-use crate::world::map::{WorldMap, spawn_map, terrain_border::spawn_terrain_borders};
+use crate::world::map::{
+    WorldMap, WorldMapRead, WorldMapWrite, spawn_map, terrain_border::spawn_terrain_borders,
+};
 use bevy::prelude::*;
 
 pub struct StartupPlugin;
@@ -74,14 +76,14 @@ impl Plugin for StartupPlugin {
     }
 }
 
-fn spawn_map_timed(commands: Commands, game_assets: Res<GameAssets>, world_map: ResMut<WorldMap>) {
+fn spawn_map_timed(commands: Commands, game_assets: Res<GameAssets>, world_map: WorldMapWrite) {
     spawn_map(commands, game_assets, world_map);
 }
 
 fn initial_resource_spawner_timed(
     commands: Commands,
     game_assets: Res<GameAssets>,
-    world_map: ResMut<WorldMap>,
+    world_map: WorldMapWrite,
 ) {
     initial_resource_spawner(commands, game_assets, world_map);
 }
@@ -107,7 +109,11 @@ fn initialize_gizmo_config(mut config_store: ResMut<GizmoConfigStore>) {
     }
 }
 
-fn spawn_terrain_borders_if_enabled(commands: Commands, game_assets: Res<GameAssets>, world_map: Res<WorldMap>) {
+fn spawn_terrain_borders_if_enabled(
+    commands: Commands,
+    game_assets: Res<GameAssets>,
+    world_map: WorldMapRead,
+) {
     if skip_terrain_borders() {
         info!("STARTUP: terrain borders spawn skipped");
         return;
@@ -143,7 +149,7 @@ fn populate_resource_spatial_grid(
     }
 }
 
-fn spawn_entities(spawn_events: MessageWriter<DamnedSoulSpawnEvent>, world_map: Res<WorldMap>) {
+fn spawn_entities(spawn_events: MessageWriter<DamnedSoulSpawnEvent>, world_map: WorldMapRead) {
     spawn_damned_souls(spawn_events, world_map);
 }
 

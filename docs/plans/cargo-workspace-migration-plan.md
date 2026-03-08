@@ -98,6 +98,9 @@
   - `src/` の helper API では Bevy resource 型への依存を除去済み
 - `WorldMapRead` system param を追加し、一部の read-only system を raw `Res<WorldMap>` から移行
   - `assign_task` / `drifting` / `movement` / `pathfinding` / `area_selection` / `placement_ghost` / `room validation` / `gathering separation`
+- `WorldMapRead` の適用を `startup` / `spawn` / `observer` / `idle behavior` / `escaping` / `task execution` / `room detection` / `wall connection` / `regrowth` / `terrain border` / `building move preview` / `auto gather` / `mixer producer` まで拡大
+- `WorldMapWrite` system param を追加し、write 系 system の raw `ResMut<WorldMap>` を移行
+  - `src/` から raw `Res<WorldMap>` / `ResMut<WorldMap>` は除去済み
 - root crate から `hw_core` の参照
 - root crate から `hw_world` の参照
 
@@ -105,8 +108,8 @@
 
 - `WorldMap` 本体と app 側 shell (`spawn` / `terrain_border` / `regrowth`) の整理
 - `WorldMap` resource そのものへの広い依存の整理
-  - helper 層ではなく system 境界に残っている `Res<WorldMap>` / `ResMut<WorldMap>` の再設計
-  - read-only 側は `WorldMapRead` へ順次寄せ、write 側は用途別 API を検討する
+  - helper 層ではなく system 境界に残っていた `Res<WorldMap>` / `ResMut<WorldMap>` は `WorldMapRead` / `WorldMapWrite` へ移行済み
+  - 次は write 側を用途別 API に分け、単なる resource wrapper 以上の境界に進める
 - `jobs` / `logistics` の切り出し
 - ビルド時間の before / after 計測
 
@@ -230,7 +233,7 @@ hw_logistics
 - `DoorState` 依存は解消済み
 - `buildings` / `stockpiles` は read/write ともに accessor 経由へ移行済み
 - `tiles` / `tile_entities` / `obstacles` の直接アクセスも accessor 経由へ移行済み
-- 次の大きな壁は、`WorldMap` を Bevy resource として広く共有している構造と、`regrowth` のような app 寄り world system の境界
+- 次の大きな壁は、`WorldMapRead` / `WorldMapWrite` の wrapper 化で止まっている書き込み境界を、用途別 API に進めることと、`regrowth` のような app 寄り world system の境界
 
 完了条件:
 
@@ -302,8 +305,8 @@ hw_logistics
 ## 12. 次の担当者が最初にやること
 
 1. `cargo check --workspace` を実行して baseline を再確認する
-2. system 境界に残っている read-only の `Res<WorldMap>` を `WorldMapRead` へ寄せる
-3. write が必要な `ResMut<WorldMap>` を用途別 API に分けられるか整理する
+2. `WorldMapWrite` を使っている書き込み経路を `placement` / `construction` / `spawn` / `obstacle sync` などの用途別 API に分けられるか整理する
+3. `WorldMap` の更新責務を app shell 側と pure world logic 側でどこまで分離できるか整理する
 4. `jobs` と `logistics` の依存関係を整理し、`hw_logistics` が成立するかを判断する
 
 ## 13. Definition of Done
@@ -327,3 +330,4 @@ hw_logistics
 | `2026-03-08` | AI | `WorldMap` の building/stockpile/bridge 操作メソッドを追加し、高頻度 write path を移行 |
 | `2026-03-08` | AI | `WorldMap` の building/stockpile 直接参照を accessor 化し、高頻度 read path も移行 |
 | `2026-03-08` | AI | `WorldMapRead` system param を追加し、read-only system 境界の `Res<WorldMap>` を一部置換 |
+| `2026-03-08` | AI | `WorldMapRead` / `WorldMapWrite` を `src/` 全体へ展開し、raw `Res<WorldMap>` / `ResMut<WorldMap>` を除去 |

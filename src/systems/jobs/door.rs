@@ -2,7 +2,7 @@ use crate::assets::GameAssets;
 use hw_core::constants::DOOR_CLOSE_DELAY_SECS;
 pub use hw_core::world::DoorState;
 use crate::entities::damned_soul::{DamnedSoul, Path};
-use crate::world::map::WorldMap;
+use crate::world::map::{WorldMap, WorldMapWrite};
 use bevy::prelude::*;
 
 #[derive(Component, Debug, Clone, Copy, Reflect)]
@@ -91,7 +91,7 @@ fn any_soul_touching_or_adjacent(
 pub fn door_auto_open_system(
     mut commands: Commands,
     game_assets: Res<GameAssets>,
-    mut world_map: ResMut<WorldMap>,
+    mut world_map: WorldMapWrite,
     q_souls: Query<(&Transform, &Path), With<DamnedSoul>>,
     mut q_doors: Query<(Entity, &Transform, &mut Door, &mut Sprite)>,
 ) {
@@ -122,7 +122,7 @@ pub fn door_auto_close_system(
     mut commands: Commands,
     time: Res<Time>,
     game_assets: Res<GameAssets>,
-    mut world_map: ResMut<WorldMap>,
+    mut world_map: WorldMapWrite,
     q_souls: Query<(&Transform, &Path), With<DamnedSoul>>,
     mut q_doors: Query<(
         Entity,

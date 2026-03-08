@@ -7,7 +7,7 @@ use crate::systems::soul_ai::execute::task_execution::{
     context::TaskExecutionContext,
     types::{AssignedTask, MovePlantData, MovePlantPhase},
 };
-use crate::world::map::WorldMap;
+use crate::world::map::{WorldMap, WorldMapWrite};
 use bevy::prelude::*;
 
 #[derive(Component, Debug, Clone, Copy)]
@@ -121,7 +121,7 @@ fn cleanup_move_task(
 
 pub fn apply_pending_building_move_system(
     mut commands: Commands,
-    mut world_map: ResMut<WorldMap>,
+    mut world_map: WorldMapWrite,
     q_pending: Query<(Entity, &PendingBuildingMove, Option<&Children>), With<Building>>,
     mut q_obstacles: Query<&mut crate::systems::jobs::ObstaclePosition>,
     mut q_stockpiles: Query<
