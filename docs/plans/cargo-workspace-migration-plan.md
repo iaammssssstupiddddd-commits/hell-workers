@@ -36,7 +36,7 @@
   - `src/systems/jobs/`
   - `src/systems/logistics/`
 - `hw_world` は world 全体ではなく、固定レイアウト定数・川/砂生成ロジック・pathfinding アルゴリズム・`TerrainType` を保持している
-  - 追加で、ベース地形タイル生成・terrain border 判定・regrowth zone 定義/候補選定ロジックも `hw_world` に保持している
+  - 追加で、ベース地形タイル生成・terrain border 判定・regrowth zone 定義/候補選定・spawn grid 選定補助も `hw_world` に保持している
 - `hw_core` には `events` のうち低結合な型群に加え、`WorkType` / `ResourceType` / `FamiliarAiState` / `AssignedTask` も移っている
 - `hw_components` は、現 checkout には存在しない
 
@@ -87,6 +87,8 @@
   - root の `src/world/map/terrain_border.rs` は texture 解決と sprite spawn のみ保持
 - regrowth の zone 定義と候補位置選定を `hw_world::regrowth` へ移動
   - root の `src/world/regrowth.rs` は Bevy resource と sprite spawn のみ保持
+- spawn 用の近傍歩行可能マス探索と矩形内 walkable grid 選定を `hw_world::spawn` へ移動
+  - root の `src/entities/spawn_position.rs` は re-export のみ保持
 - `WorldMap` に `buildings` / `stockpiles` / `bridged_tiles` の操作メソッドを追加
   - `buildings` / `stockpiles` は read/write ともに高頻度経路をメソッド経由へ移行済み
 - `WorldMap` に `tiles` / `tile_entities` / `obstacles` 用 accessor を追加
@@ -155,7 +157,7 @@ hw_logistics
 - `hw_components` は現時点では作らない
 - `events` は依存先が広いため、早期移動対象にはしない
 - `relationships` は `hw_core` へ移設済み
-- `hw_world` はまず `layout` / `river` / `pathfinding` / `TerrainType` / `mapgen` / `borders` / `regrowth` を保持し、`WorldMap` 本体はまだ root に残す
+- `hw_world` はまず `layout` / `river` / `pathfinding` / `TerrainType` / `mapgen` / `borders` / `regrowth` / `spawn` を保持し、`WorldMap` 本体はまだ root に残す
 
 ## 7. フェーズ計画
 
