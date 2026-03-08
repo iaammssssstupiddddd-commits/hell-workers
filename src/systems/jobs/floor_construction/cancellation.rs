@@ -196,8 +196,10 @@ pub fn floor_construction_cancellation_system(
             commands.entity(request_entity).try_despawn();
         }
 
+        let cleared_grids: Vec<(i32, i32)> = site_tiles.iter().map(|tile| tile.grid_pos).collect();
+        world_map.clear_building_footprint(cleared_grids);
+
         for tile in site_tiles {
-            world_map.clear_building_occupancy(tile.grid_pos);
             commands.entity(tile.entity).try_despawn();
         }
 

@@ -1,17 +1,1 @@
-use bevy::prelude::*;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Reflect)]
-pub enum TransportRequestKind {
-    DepositToStockpile,
-    DeliverToBlueprint,
-    DeliverToFloorConstruction,
-    DeliverToWallConstruction,
-    DeliverToProvisionalWall,
-    DeliverToMixerSolid,
-    DeliverWaterToMixer,
-    GatherWaterToTank,
-    ReturnBucket,
-    ReturnWheelbarrow,
-    BatchWheelbarrow,
-    ConsolidateStockpile,
-}
+pub use hw_logistics::transport_request::kinds::*;
