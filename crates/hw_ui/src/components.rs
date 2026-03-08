@@ -241,6 +241,13 @@ pub struct DreamPoolPulse {
 }
 
 #[derive(Component)]
+pub struct DreamLossPopupUi {
+    pub lifetime: f32,
+    pub max_lifetime: f32,
+    pub start_y: f32,
+}
+
+#[derive(Component)]
 pub struct ClockText;
 
 #[derive(Component, Default)]

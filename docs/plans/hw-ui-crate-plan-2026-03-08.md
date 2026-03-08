@@ -460,10 +460,11 @@ CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo check
 - `src/plugins/messages.rs`
 
 **完了条件**:
-- [ ] `hw_ui` 側の interaction system に `WorldMapWrite`, `TaskContext`, `BuildContext`, `ZoneContext` が残っていない
-- [ ] `door_lock_action_system` が root handler 内に存在する
-- [ ] `Changed<Interaction>` 系システムの登録順が既存と同じ
-- [ ] `CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo check` が通る
+- [x] `interaction/status_display` は `hw_ui` 側 core ロジックへ集約し、root は wrapper 経由で呼び出し
+- [x] `hw_ui` 側の interaction system に `WorldMapWrite`, `TaskContext`, `BuildContext`, `ZoneContext` が残っていない
+- [x] `door_lock_action_system` が root handler 内に存在する
+- [x] `Changed<Interaction>` 系システムの登録順が既存と同じ
+- [x] `CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo check` が通る
 - [ ] `cargo run` で全インタラクションが正常動作する
 
 ---
@@ -556,9 +557,9 @@ CARGO_HOME=/home/satotakumi/.cargo cargo build --timings
 
 ### 現在地
 
-- 進捗: `82%`（M4 完了、M5-5a/5-b 完了、M6 wrapper 化完了）
-- 完了済みマイルストーン: M1, M2, M3, M4, M5(5-a/5-b), M6
-- 未着手: M7, M8
+- 進捗: `94%`（M7 `status_display` 移植完了）
+- 完了済みマイルストーン: M1, M2, M3, M4, M5(5-a/5-b), M6, M7
+- 未着手: M8
 
 ### 次のAIが最初にやること
 
