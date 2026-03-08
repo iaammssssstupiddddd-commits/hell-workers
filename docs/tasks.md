@@ -112,7 +112,8 @@ Familiar の `task_finder` がタスクを発見できる条件（**全て満た
 
 ## 5. unassign_task の契約
 
-`src/systems/soul_ai/helpers/work.rs`
+`src/systems/soul_ai/helpers/work.rs`（`unassign_task` の root shell）
+`helpers::is_soul_available_for_work` 実体は `hw_ai::soul_ai::helpers::work::is_soul_available_for_work`。
 
 **実行すること**:
 1. `emit_abandoned_event=true` なら `OnTaskAbandoned` を trigger（音声のみ）

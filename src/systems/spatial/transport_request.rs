@@ -1,48 +1,18 @@
-use super::grid::{GridData, SpatialGridOps};
-use crate::systems::logistics::transport_request::TransportRequest;
 use bevy::prelude::*;
+use crate::systems::logistics::transport_request::TransportRequest;
 
 /// TransportRequest 用の空間グリッド
-#[derive(Resource, Default)]
-pub struct TransportRequestSpatialGrid(pub GridData);
-
-impl TransportRequestSpatialGrid {
-    pub fn get_in_area(&self, min: Vec2, max: Vec2) -> Vec<Entity> {
-        self.0.get_in_area(min, max)
-    }
-}
-
-impl SpatialGridOps for TransportRequestSpatialGrid {
-    fn insert(&mut self, entity: Entity, pos: Vec2) {
-        self.0.insert(entity, pos);
-    }
-    fn remove(&mut self, entity: Entity) {
-        self.0.remove(entity);
-    }
-    fn update(&mut self, entity: Entity, pos: Vec2) {
-        self.0.update(entity, pos);
-    }
-    fn get_nearby_in_radius(&self, pos: Vec2, radius: f32) -> Vec<Entity> {
-        self.0.get_nearby_in_radius(pos, radius)
-    }
-    fn get_nearby_in_radius_into(&self, pos: Vec2, radius: f32, out: &mut Vec<Entity>) {
-        self.0.get_nearby_in_radius_into(pos, radius, out);
-    }
-}
+pub use hw_spatial::TransportRequestSpatialGrid;
+pub use hw_spatial::update_transport_request_spatial_grid_system as _update_transport_request_spatial_grid_system;
 
 /// 変更差分のみを反映する。スポーン直後は次フレームで取り込まれる。
 pub fn update_transport_request_spatial_grid_system(
-    mut grid: ResMut<TransportRequestSpatialGrid>,
+    grid: ResMut<TransportRequestSpatialGrid>,
     query: Query<
         (Entity, &Transform),
         (With<TransportRequest>, Or<(Added<TransportRequest>, Changed<Transform>)>),
     >,
-    mut removed: RemovedComponents<TransportRequest>,
+    removed: RemovedComponents<TransportRequest>,
 ) {
-    for (entity, transform) in query.iter() {
-        grid.update(entity, transform.translation.truncate());
-    }
-    for entity in removed.read() {
-        grid.remove(entity);
-    }
+    _update_transport_request_spatial_grid_system::<TransportRequest>(grid, query, removed);
 }
