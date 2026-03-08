@@ -170,7 +170,7 @@
 - 完了条件:
   - [x] `cargo check -p hw_ai` が通る最小骨格がある
   - [x] root app から `hw_ai` plugin を登録できる
-  - [ ] plugin 登録位置の分散が解消される方針が定まっている（`FamiliarAiPlugin`=main.rs / `SoulAiPlugin`=logic.rs で分散継続中）
+  - [x] plugin 登録位置の分散が解消されている（`FamiliarAiPlugin` / `SoulAiPlugin` ともに `src/plugins/logic.rs` に統一済み）
 - 検証:
   - `cargo check -p hw_ai`
   - `cargo check --workspace`
@@ -226,13 +226,14 @@
   - `src/plugins/logic.rs`
 - 完了条件:
   - [ ] Familiar AI core が `hw_ai` から提供される
-  - [ ] AI plugin 登録経路が 1 箇所に統一されている
+  - [x] AI plugin 登録経路が 1 箇所に統一されている（`FamiliarAiPlugin` / `SoulAiPlugin` ともに `src/plugins/logic.rs` で登録）
   - [ ] Soul/Familiar 間の依存が `hw_ai` crate 内で閉じている
 - 移動済み:
   - `hw_ai::familiar_ai::perceive::state_detection` (detect_state_changes_system, detect_command_changes_system)
+  - `hw_ai::familiar_ai::decide::following` (following_familiar_system)
 - 未移動（root に残存）:
   - `perceive/resource_sync` (SharedResourceCache, 予約同期)
-  - `decide/` (state_decision, task_delegation, auto_gather_for_blueprint, following, encouragement)
+  - `decide/` (state_decision, task_delegation, auto_gather_for_blueprint, encouragement)
   - `execute/` (state_apply, max_soul_apply, idle_visual_apply, squad_apply, encouragement_apply, state_log)
   - `helpers/` (query_types, task_management, source_selector)
   - `update/` (vitals_influence)
@@ -329,8 +330,13 @@ M6 の続き（Familiar AI core 残り）を進める場合:
 
 - **重要**: `src/systems/soul_ai/execute/task_execution/` と `src/systems/familiar_ai/perceive/resource_sync.rs` は相互依存が強く、片側だけ先に移すと壊れやすい → まとめて移動するか両方 root に残す
 - `src/systems/soul_ai/visual/` と speech 系 execute は shell 責務のため hw_ai へ入れない
-- `FamiliarAiPlugin` は `src/main.rs`、`SoulAiPlugin` は `src/plugins/logic.rs` で登録されており分散継続中（M6 完了条件の一つ）
+- Plugin 登録は `FamiliarAiPlugin` / `SoulAiPlugin` ともに `src/plugins/logic.rs` に統一済み ✅
 - `WorldMap` は root 残留方針なので、それに直接依存するシステムは hw_ai へ移動不可
+
+### 次フェーズ
+
+残存作業は `docs/plans/hw-ai-crate-phase2-2026-03-08.md` を参照。
+M1（state_apply / state_log の hw_ai 移動）が最初のアクション。
 
 ### 参照必須ファイル
 

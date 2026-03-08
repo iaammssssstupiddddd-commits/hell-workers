@@ -19,10 +19,8 @@
 
 | Document | Status | Notes |
 |---|---|---|
-| [cargo-workspace-migration-plan.md](cargo-workspace-migration-plan.md) | In Progress | Cargo Workspace 移行計画 |
-| [hw-ai-crate-plan-2026-03-08.md](hw-ai-crate-plan-2026-03-08.md) | Draft | Soul AI / Familiar AI を `hw_ai` crate の core と root shell に段階分離する実装計画。 |
-| [workspace-area-bounds-extraction.md](workspace-area-bounds-extraction.md) | Draft | AreaBoundsの計画。 |
-| [workspace-construction-phase-extraction.md](workspace-construction-phase-extraction.md) | Draft | Floor/Wall 建設のフェーズ・タイル状態を表す列挙型がの計画。 |
+| [hw-ai-crate-phase2-2026-03-08.md](hw-ai-crate-phase2-2026-03-08.md) | InProgress | `WorldMap` / SpatialGrid の root adapter 境界を固定し、`hw_ai` への後続移行単位を定める Phase 2 計画。 |
+| [hw-ai-crate-plan-2026-03-08.md](hw-ai-crate-plan-2026-03-08.md) | InProgress | Soul AI / Familiar AI を `hw_ai` crate の core と root shell に段階分離する実装計画。 |
 
 ## アーカイブ計画書一覧 (`docs/plans/archive`)
 
@@ -34,6 +32,7 @@
 | [archive/auto-gather-for-blueprint.md](archive/auto-gather-for-blueprint.md) | アーカイブ | Blueprint不足資材の自動伐採/採掘計画。 |
 | [archive/bridge-building.md](archive/bridge-building.md) | アーカイブ | 橋（Bridge）建築物の実装計画。 |
 | [archive/bucket-return-rebuild-plan.md](archive/bucket-return-rebuild-plan.md) | アーカイブ | バケツ返却仕様の再構築計画。 |
+| [archive/cargo-workspace-migration-plan.md](archive/cargo-workspace-migration-plan.md) | アーカイブ | Cargo Workspace 移行計画 |
 | [archive/destination-validation-unification-plan-2026-03-07.md](archive/destination-validation-unification-plan-2026-03-07.md) | アーカイブ | FloorConstruction / WallConstruction / ProvisionalWall の搬入先需要計算と実行時受入判定が、割り当て時・手運搬 dropping 時・猫車 unloading 時の 3 系統に分散し、同一ロジックを複数箇所で維持しているの計画。 |
 | [archive/docs-index-automation-plan-2026-03-05.md](archive/docs-index-automation-plan-2026-03-05.md) | アーカイブ | docs/plans/README.mdの計画。 |
 | [archive/door-implementation-2026-02-22.md](archive/door-implementation-2026-02-22.md) | アーカイブ | 壁で囲まれた空間への出入りを制御する手段がない。現状は壁に穴を開けるか、壁を完全に閉じるかの二択しかないの計画。 |
@@ -82,6 +81,7 @@
 | [archive/wall-construction-phase-split-plan-2026-02-19.md](archive/wall-construction-phase-split-plan-2026-02-19.md) | アーカイブ | 壁建築フェーズ分割計画。 |
 | [archive/wall-stasis-mud.md](archive/wall-stasis-mud.md) | アーカイブ | 壁材（stasis mud）関連計画。 |
 | [archive/wheelbarrow-arbitration-plan.md](archive/wheelbarrow-arbitration-plan.md) | アーカイブ | 猫車利用仲裁ロジックの実装計画。 |
+| [archive/workspace-area-bounds-extraction.md](archive/workspace-area-bounds-extraction.md) | アーカイブ | AreaBoundsの計画。 |
+| [archive/workspace-construction-phase-extraction.md](archive/workspace-construction-phase-extraction.md) | アーカイブ | Floor/Wall 建設で使うフェーズ・状態型がの計画。 |
 | [archive/zone-placement-refactor-plan-2026-03-05.md](archive/zone-placement-refactor-plan-2026-03-05.md) | アーカイブ | zone_placement.rsの計画。 |
 | [archive/zone-removal-preview-diff-plan-2026-03-01.md](archive/zone-removal-preview-diff-plan-2026-03-01.md) | アーカイブ | Zone removal preview の全件更新を差分更新へ置換する計画。 |
-

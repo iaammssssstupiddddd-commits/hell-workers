@@ -1,14 +1,7 @@
 use bevy::prelude::*;
 use std::collections::{HashMap, HashSet};
 
-/// 空間グリッドの共通操作を定義するトレイト
-pub trait SpatialGridOps {
-    fn insert(&mut self, entity: Entity, pos: Vec2);
-    fn remove(&mut self, entity: Entity);
-    fn update(&mut self, entity: Entity, pos: Vec2);
-    fn get_nearby_in_radius(&self, pos: Vec2, radius: f32) -> Vec<Entity>;
-    fn get_nearby_in_radius_into(&self, pos: Vec2, radius: f32, out: &mut Vec<Entity>);
-}
+pub use hw_world::SpatialGridOps;
 
 /// 汎用的なグリッドデータ構造
 #[derive(Clone)]
@@ -71,6 +64,30 @@ impl GridData {
                 }
             }
         }
+    }
+
+    /// 矩形範囲内のエンティティを返す（M4: 5つのグリッド間で共有する read-only API）
+    pub fn get_in_area(&self, min: Vec2, max: Vec2) -> Vec<Entity> {
+        let mut results = Vec::new();
+        let min_cell = self.pos_to_cell(min);
+        let max_cell = self.pos_to_cell(max);
+
+        for dy in min_cell.1..=max_cell.1 {
+            for dx in min_cell.0..=max_cell.0 {
+                let cell = (dx, dy);
+                if let Some(entities) = self.grid.get(&cell) {
+                    for &entity in entities {
+                        if let Some(&pos) = self.positions.get(&entity) {
+                            if pos.x >= min.x && pos.x <= max.x && pos.y >= min.y && pos.y <= max.y
+                            {
+                                results.push(entity);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        results
     }
 
     pub fn remove(&mut self, entity: Entity) {
