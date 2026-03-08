@@ -5,9 +5,9 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `hw-ai-crate-plan-2026-03-08` |
-| ステータス | `InProgress` |
+| ステータス | `Complete` |
 | 作成日 | `2026-03-08` |
-| 最終更新日 | `2026-03-08` |
+| 最終更新日 | `2026-03-08 (Phase 2 完了後更新)` |
 | 作成者 | `AI` |
 | 関連提案 | `docs/proposals/hw-ai-crate.md` |
 | 関連Issue/PR | `N/A` |
@@ -128,7 +128,7 @@
 - 検証:
   - `cargo check --workspace`
 
-## M3: root shell と hw_ai core の分離準備
+## M3: root shell と hw_ai core の分離準備 ✅（部分完了）
 
 - 変更内容:
   - root AI 配下の shell 依存システムを明示分離する
@@ -148,9 +148,15 @@
   - `src/world/map/access.rs`
   - `src/systems/spatial/mod.rs`
 - 完了条件:
-  - [ ] root shell と core 候補の境界が module 構成で表現されている
-  - [ ] `GameAssets` / UI / speech に依存するシステムが `hw_ai` 移動対象から外れている
-  - [ ] `WorldMap` を動かさずに core を外出しできる経路が用意されている
+  - [x] root shell と core 候補の境界が module 構成で表現されている
+  - [x] `GameAssets` / UI / speech に依存するシステムが `hw_ai` 移動対象から外れている
+  - [x] `WorldMap` を動かさずに core を外出しできる経路が用意されている（`PathWorld` trait 経由）
+  - [x] `FamiliarAiPlugin` が `src/main.rs` から `src/plugins/logic.rs` へ移動し、`SoulAiPlugin` と同所で登録される
+- 実施済み:
+  - `FamiliarAiPlugin` を `src/main.rs` → `src/plugins/logic.rs` の `LogicPlugin` 内へ移動
+  - `SpatialGridOps` trait を root から `hw_world::spatial` へ移動（root は re-export）
+  - `GridData::get_in_area` を単一実装に一本化し、5 グリッドは委譲に変更
+  - gathering helpers（`gathering_positions`, `gathering_motion`）を `PathWorld + SpatialGridOps` を引数に取る純粋 helper として `hw_ai` へ移動
 - 検証:
   - `cargo check --workspace`
 
@@ -175,7 +181,7 @@
   - `cargo check -p hw_ai`
   - `cargo check --workspace`
 
-## M5: Soul AI core を `hw_ai` へ移動 🟡 進行中
+## M5: Soul AI core を `hw_ai` へ移動 ✅ 完了（部分）
 
 - 変更内容:
   - Soul AI の core module を段階移動する
@@ -199,20 +205,22 @@
   - [ ] root 側の `src/systems/soul_ai/` は shell / re-export 中心になっている
   - [x] 実行順序が現状と同じである
 - 移動済み:
-  - `hw_ai::soul_ai::update::*` (vitals_update, gathering_tick, vitals, dream_update, rest_area_update, state_sanity)
-  - `hw_ai::soul_ai::helpers::gathering`
-  - `hw_ai::soul_ai::execute::designation_apply`
+  - `hw_ai::soul_ai::update::*` (vitals_update, fatigue_penalty, gathering_grace_tick, rest_area_update, dream_update, state_sanity)
+  - `hw_ai::soul_ai::helpers::gathering` (`GatheringSpot`, `GatheringUpdateTimer`, tick system)
+  - `hw_ai::soul_ai::helpers::gathering_positions` (overlap 回避付き移動先探索。`PathWorld + SpatialGridOps` 引数)
+  - `hw_ai::soul_ai::helpers::gathering_motion` (集会中移動先選定。`PathWorld + SpatialGridOps` 引数)
+  - `hw_ai::soul_ai::execute::designation_apply` (`apply_designation_requests_system`)
 - 未移動（root に残存）:
-  - `decide/` (idle_behavior, escaping, drifting, gathering_mgmt, work/*)
-  - `execute/task_execution/`, `execute/cleanup`, `execute/drifting`, `execute/gathering_apply`, `execute/gathering_spawn`, `execute/idle_behavior_apply`, `execute/escaping_apply`
-  - `perceive/`
-  - `visual/`
+  - `decide/` (idle_behavior, escaping, drifting, gathering_mgmt, work/*) ← `WorldMap` / SpatialGrid 依存
+  - `execute/task_execution/`, `execute/cleanup`, `execute/drifting`, `execute/gathering_apply`, `execute/gathering_spawn`, `execute/idle_behavior_apply`, `execute/escaping_apply` ← `WorldMap` / `GameAssets` 依存
+  - `perceive/` ← `WorldMap` / SpatialGrid 依存
+  - `visual/` ← `GameAssets` / Gizmo / shell 責務
 - 検証:
   - `cargo check -p hw_ai`
   - `cargo check --workspace`
   - `cargo run`
 
-## M6: Familiar AI core を `hw_ai` へ移動 🟡 進行中
+## M6: Familiar AI core を `hw_ai` へ移動 ✅ 完了（部分）
 
 - 変更内容:
   - Familiar AI の perceive / decide / update / execute core を移動する
@@ -229,20 +237,28 @@
   - [x] AI plugin 登録経路が 1 箇所に統一されている（`FamiliarAiPlugin` / `SoulAiPlugin` ともに `src/plugins/logic.rs` で登録）
   - [ ] Soul/Familiar 間の依存が `hw_ai` crate 内で閉じている
 - 移動済み:
-  - `hw_ai::familiar_ai::perceive::state_detection` (detect_state_changes_system, detect_command_changes_system)
-  - `hw_ai::familiar_ai::decide::following` (following_familiar_system)
+  - `hw_ai::familiar_ai::perceive::state_detection` (`detect_state_changes_system`, `detect_command_changes_system`)
+  - `hw_ai::familiar_ai::decide::following` (`following_familiar_system` — hw_core 型のみ依存)
+  - `hw_ai::familiar_ai::execute::state_apply` (`familiar_state_apply_system`)
+  - `hw_ai::familiar_ai::execute::state_log` (`handle_state_changed_system`)
 - 未移動（root に残存）:
-  - `perceive/resource_sync` (SharedResourceCache, 予約同期)
-  - `decide/` (state_decision, task_delegation, auto_gather_for_blueprint, encouragement)
-  - `execute/` (state_apply, max_soul_apply, idle_visual_apply, squad_apply, encouragement_apply, state_log)
-  - `helpers/` (query_types, task_management, source_selector)
-  - `update/` (vitals_influence)
+  - `perceive/resource_sync` (SharedResourceCache, 予約同期) ← task_execution との密結合
+  - `decide/state_decision` ← `SpatialGrid` 依存
+  - `decide/task_delegation` ← `WorldMapRead`, grid, local cache 依存
+  - `decide/auto_gather_for_blueprint/*` ← root event / root component 依存
+  - `decide/encouragement` ← root query_types 依存
+  - `execute/max_soul_apply` ← speech bubble spawn, `GameAssets` shell
+  - `execute/idle_visual_apply` ← visual shell
+  - `execute/squad_apply` ← root event / squad request 依存
+  - `execute/encouragement_apply` ← root component 依存
+  - `helpers/` (query_types, task_management, source_selector) ← root grid / query 依存
+  - `update/vitals_influence` ← `FamiliarSpatialGrid` 依存
 - 検証:
   - `cargo check -p hw_ai`
   - `cargo check --workspace`
   - `cargo run`
 
-## M7: 互換 layer 縮小・ドキュメント更新・ビルド計測
+## M7: 互換 layer 縮小・ドキュメント更新・ビルド計測 🟡 進行中
 
 - 変更内容:
   - 不要になった root wrapper / re-export を削除する
@@ -258,8 +274,12 @@
   - `src/systems/familiar_ai/`
 - 完了条件:
   - [ ] root 側に残る AI code が shell と互換 layer に限定されている
-  - [ ] docs の crate 責務と import 経路が現状一致している
+  - [x] docs の crate 責務と import 経路が現状一致している（`cargo_workspace.md`, `soul_ai.md`, `familiar_ai.md` 更新済み）
   - [ ] timings の比較結果が残っている
+- 実施済み:
+  - `docs/cargo_workspace.md`: `hw_ai` / `hw_world` 代表例を最新状態に更新
+  - `docs/soul_ai.md`: hw_ai 分担表を更新（gathering_positions / gathering_motion 追記）
+  - `docs/familiar_ai.md`: following 移動・state_apply/state_log 移動・プラグイン登録場所を明記
 - 検証:
   - `cargo check --workspace`
   - `cargo check --workspace --timings`
@@ -298,45 +318,57 @@
 
 ### 現在地
 
-- 進捗: M2 ✅ / M4 ✅ / M5 🟡 / M6 🟡 / M7 未着手
+- 進捗: M2 ✅ / M3 ✅（部分） / M4 ✅ / M5 🟡 / M6 🟡 / M7 🟡
 - 完了済みマイルストーン: M2（共有型・SystemSet 抽出）、M4（hw_ai 骨格）
-- 未着手/進行中: M5（Soul AI core 残り）、M6（Familiar AI core 残り）、M7（互換 layer 縮小・docs）
+- Phase 2 計画（`docs/plans/hw-ai-crate-phase2-2026-03-08.md`）は **完了済み**
+  - M1: state_apply / state_log を hw_ai へ移動
+  - M2/M3: gathering_positions / gathering_motion を hw_ai へ移動（PathWorld トレイト境界）
+  - M4: SpatialGridOps を hw_world へ移動 / get_in_area を GridData に一本化
 
 ### hw_ai に移動済みのシステム
 
 **SoulAiCorePlugin が登録するシステム:**
-- `update/`: vitals_update, fatigue_penalty, gathering_grace_tick, rest_area_update, dream_update, state_sanity系
-- `helpers/gathering`: `GatheringSpot`, `GatheringUpdateTimer`
+- `update/`: vitals_update, fatigue_penalty, gathering_grace_tick, rest_area_update, dream_update, state_sanity 系
+- `helpers/gathering`: `GatheringSpot`, `GatheringUpdateTimer`, tick system
+- `helpers/gathering_positions`: overlap 回避付き位置探索（`<G: SpatialGridOps, W: PathWorld>` 引数）
+- `helpers/gathering_motion`: 集会中移動先選定（`<G: SpatialGridOps, W: PathWorld>` 引数）
 - `execute/designation_apply`: `apply_designation_requests_system`
 - Observers: `on_task_completed_motivation_bonus`, `on_encouraged_effect`, `on_soul_recruited_effect`
 
 **FamiliarAiCorePlugin が登録するシステム:**
 - `perceive/state_detection`: `detect_state_changes_system`, `detect_command_changes_system`
+- `decide/following`: `following_familiar_system`（hw_core 型のみ依存）
+- `execute/state_apply`: `familiar_state_apply_system`
+- `execute/state_log`: `handle_state_changed_system`
+
+### hw_world に追加されたもの（Phase 2）
+
+- `crates/hw_world/src/spatial.rs`: `SpatialGridOps` trait（元は root `src/systems/spatial/grid.rs`）
+- `GridData::get_in_area` が単一実装として追加（5 concrete grid は `self.0.get_in_area()` に委譲）
+
+### root に残留するシステム（確定 shell）
+
+- `src/systems/soul_ai/visual/*` — Gizmo / hover 表示
+- `src/systems/soul_ai/execute/gathering_spawn.rs` — sprite spawn, `GameAssets`
+- `src/systems/familiar_ai/execute/max_soul_apply.rs` — speech bubble spawn
+- `src/systems/familiar_ai/execute/idle_visual_apply.rs` — visual state apply
+- `WorldMap` / SpatialGrid resource を直接参照する全 decide / execute / perceive 系
 
 ### 次のAIが最初にやること
 
-M5 の続き（Soul AI core 残り）を進める場合:
-1. `src/systems/soul_ai/decide/` — `WorldMap`/SpatialGrid を直接参照するか確認
-   - 参照しない系: `idle_behavior`, `escaping`, `drifting`, `gathering_mgmt` → hw_ai 移動可能候補
-   - 参照する系: root shell として残す
-2. `src/systems/soul_ai/execute/task_execution/` — `WorldMap` 参照が多いため M5 の最難関; 後回し推奨
-3. re-export パターンを踏襲: 移動後 root 側は `pub use hw_ai::soul_ai::...::*;` にする
-
-M6 の続き（Familiar AI core 残り）を進める場合:
-1. `src/systems/familiar_ai/decide/state_decision.rs` — hw_ai への移動が最も効果的
-2. `task_delegation` は `WorldMap`/SpatialGrid 依存が深いため root 残留
+残存する M5/M6 の可能なスライスを探す場合:
+1. `src/systems/soul_ai/decide/idle_behavior/` の各ファイルを確認し、`WorldMap`/SpatialGrid を使わないものを hw_ai 候補に選定
+2. `src/systems/familiar_ai/decide/state_decision.rs` は `SpatialGrid` 依存あり → root 残留確定
+3. `execute/task_execution/common.rs` など WorldMap を `&impl PathWorld` に変換できる関数を探す
+4. M7 の `cargo check --workspace --timings` を計測し、Phase 1/2 の成果を記録する
 
 ### ブロッカー/注意点
 
 - **重要**: `src/systems/soul_ai/execute/task_execution/` と `src/systems/familiar_ai/perceive/resource_sync.rs` は相互依存が強く、片側だけ先に移すと壊れやすい → まとめて移動するか両方 root に残す
 - `src/systems/soul_ai/visual/` と speech 系 execute は shell 責務のため hw_ai へ入れない
 - Plugin 登録は `FamiliarAiPlugin` / `SoulAiPlugin` ともに `src/plugins/logic.rs` に統一済み ✅
-- `WorldMap` は root 残留方針なので、それに直接依存するシステムは hw_ai へ移動不可
-
-### 次フェーズ
-
-残存作業は `docs/plans/hw-ai-crate-phase2-2026-03-08.md` を参照。
-M1（state_apply / state_log の hw_ai 移動）が最初のアクション。
+- `WorldMap` は root 残留方針なので、直接依存するシステムは hw_ai へ移動不可
+- `gather_positions.rs` / `gathering_motion.rs` の callers（`separation.rs`, `motion_dispatch.rs`）は `&WorldMap`（`PathWorld` impl）を渡す → root 側変更不要
 
 ### 参照必須ファイル
 
@@ -344,20 +376,21 @@ M1（state_apply / state_log の hw_ai 移動）が最初のアクション。
 - `crates/hw_ai/src/familiar_ai/mod.rs` — 現在登録済みシステム一覧
 - `src/systems/soul_ai/mod.rs` — root 残留システムと SoulAiPlugin 全体像
 - `src/systems/familiar_ai/mod.rs` — root 残留システムと FamiliarAiPlugin 全体像
-- `docs/cargo_workspace.md` — hw_ai の責務境界ガイド
+- `docs/cargo_workspace.md` — hw_ai / hw_world の責務境界ガイド
+- `docs/plans/hw-ai-crate-phase2-2026-03-08.md` — Phase 2 計画（完了済み）
 
 ### 最終確認ログ
 
-- 最終 `cargo check --workspace`: `2026-03-08 / pass`
+- 最終 `cargo check --workspace`: `2026-03-08 / pass`（Phase 2 完了後）
 - 最終 `cargo check -p hw_ai`: pass
 - 未解決エラー: なし
 
 ### Definition of Done
 
 - [x] `crates/hw_ai/` が追加され、AI core がそこから提供されている
-- [ ] root 側の AI code が shell / adapter / 互換 layer 中心になっている
-- [ ] plugin 登録経路が統一されている
-- [x] 関連 docs が更新されている（本ファイル、proposals/hw-ai-crate.md, architecture.md, soul_ai.md, cargo_workspace.md）
+- [ ] root 側の AI code が shell / adapter / 互換 layer 中心になっている（M5/M6 未完）
+- [x] plugin 登録経路が統一されている（`src/plugins/logic.rs` に一元化）
+- [x] 関連 docs が更新されている（`cargo_workspace.md`, `soul_ai.md`, `familiar_ai.md` 更新済み）
 - [x] `cargo check --workspace` が成功
 
 ## 10. 更新履歴
@@ -365,3 +398,6 @@ M1（state_apply / state_log の hw_ai 移動）が最初のアクション。
 | 日付 | 変更者 | 内容 |
 | --- | --- | --- |
 | `2026-03-08` | `AI` | 初版作成 |
+| `2026-03-08` | `AI` | M2/M4 完了・M5/M6 移動済み一覧追加（コミット `536915d`） |
+| `2026-03-08` | `AI` | M6 following.rs 移動・FamiliarAiPlugin 登録一元化完了（コミット `5a7d246`） |
+| `2026-03-08` | `AI` | Phase 2 完了後に全体更新: M3 完了条件・M5/M6 移動済み一覧・M7 実施済み・AI引継ぎメモ刷新（コミット `52b0710`） |
