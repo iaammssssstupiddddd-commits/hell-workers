@@ -12,7 +12,6 @@ pub use layout::{
     SAND_WIDTH, TREE_POSITIONS,
 };
 pub use hw_world::generate_fixed_river_tiles;
-pub use hw_world::{grid_to_world, snap_to_grid_center, snap_to_grid_edge, world_to_grid};
 pub use hw_world::TerrainType;
 pub use spawn::spawn_map;
 
