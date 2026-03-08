@@ -27,7 +27,7 @@
 
 - workspace 自体はすでに導入済み
   - root `Cargo.toml` に `[workspace]` と `members = [".", "crates/*"]` がある
-- 追加クレートとして確認できるのは `crates/hw_core/` のみ
+- 追加クレートとして `crates/hw_core/` と `crates/hw_world/` が存在する
 - `cargo check --workspace` は成功している
 - root crate は依然として以下を保持している
   - `src/events.rs`
@@ -35,12 +35,13 @@
   - `src/world/`
   - `src/systems/jobs/`
   - `src/systems/logistics/`
-- 以前の計画書にあった `hw_components` / `hw_world` は、現 checkout には存在しない
+- `hw_world` は world 全体ではなく、固定レイアウト定数・川/砂生成ロジック・pathfinding アルゴリズムを保持している
+- `hw_components` は、現 checkout には存在しない
 
 結論:
 
 - 「workspace 導入」は成立している
-- 「多クレート化」は `hw_core` の一部抽出に留まっている
+- 「多クレート化」は `hw_core` と `hw_world` の最小単位抽出まで進んでいる
 - 次に必要なのはエラー修正ではなく、**切り出し境界の再設計** である
 
 ## 3. 現在の到達点
@@ -52,12 +53,21 @@
 - `constants/` と `game_state.rs` の `hw_core` への移動
 - `relationships.rs` の `hw_core` への移動
   - root の `src/relationships.rs` は互換維持のため re-export のみ保持
+- `hw_world` クレートの追加
+- `src/world/map/layout.rs` の fixed layout 定数を `hw_world::layout` へ移動
+  - root の `src/world/map/layout.rs` は re-export のみ保持
+- `src/world/river.rs` の川・砂タイル生成ロジックを `hw_world::river` へ移動
+  - root の `src/world/river.rs` は re-export のみ保持
+- `src/world/pathfinding.rs` のアルゴリズムを `hw_world::pathfinding` へ移動
+  - `WorldMap` 依存は `PathWorld` trait で抽象化
+  - root の `src/world/pathfinding.rs` は `WorldMap` 実装と互換ラッパーのみ保持
 - root crate から `hw_core` の参照
+- root crate から `hw_world` の参照
 
 ### 未完了
 
 - `events.rs` の `hw_core` または他クレートへの移動
-- `world` 系コードの切り出し
+- `WorldMap` / `spawn` / `terrain_border` / `regrowth` など app 依存の強い world 系コードの切り出し
 - `jobs` / `logistics` の切り出し
 - ビルド時間の before / after 計測
 
@@ -111,7 +121,8 @@ hw_logistics
 
 - `hw_components` は現時点では作らない
 - `events` は依存先が広いため、早期移動対象にはしない
-- `relationships` は `hw_core` 候補だが、先に参照範囲を確認してから移す
+- `relationships` は `hw_core` へ移設済み
+- `hw_world` はまず `layout` / `river` / `pathfinding` を保持し、`WorldMap` 本体はまだ root に残す
 
 ## 7. フェーズ計画
 
@@ -174,6 +185,9 @@ hw_logistics
 
 - `spawn_terrain_borders` はすでに `src/world/map/terrain_border.rs` にあるため、古い計画書の前提を使わない
 - `assets` や render 寄りの依存が強い場合は、`hw_world` への全移動ではなく「純粋な world data / map logic」のみ先に切る
+- 現時点で先に切り出した最小単位は `layout` / `river` / `pathfinding`
+- `pathfinding.rs` は `PathWorld` trait で切り出し済み
+- 次の大きな壁は `WorldMap` 本体が `DoorState` と app-owned field mutation に強く結合している点
 
 完了条件:
 
@@ -245,8 +259,8 @@ hw_logistics
 ## 12. 次の担当者が最初にやること
 
 1. `cargo check --workspace` を実行して baseline を再確認する
-2. `relationships.rs` を `hw_core` に寄せられるかだけを小さく検証する
-3. `src/world/` のうち純粋ロジックと Bevy 依存部分を分けて棚卸しする
+2. `src/world/map/mod.rs` の `DoorState` 依存をどう解消するか設計する
+3. `spawn` / `terrain_border` / `regrowth` を `hw_world` に入れない前提で責務を整理する
 4. `jobs` と `logistics` の依存関係を整理し、`hw_logistics` が成立するかを判断する
 
 ## 13. Definition of Done
@@ -264,3 +278,5 @@ hw_logistics
 | `2026-03-07` | AI | 初版作成 |
 | `2026-03-08` | AI | 現 checkout を基準に全面再評価。存在しないクレート前提の記述を削除し、段階的移行計画へ修正 |
 | `2026-03-08` | AI | `relationships.rs` を `hw_core` へ移設し、root 側は re-export 互換レイヤーへ変更 |
+| `2026-03-08` | AI | `hw_world` を追加し、`layout` と `river` の純粋ロジックを移設 |
+| `2026-03-08` | AI | `pathfinding` を `hw_world` へ移設し、`PathWorld` trait と root 互換ラッパーを追加 |

@@ -25,6 +25,7 @@ edition = "2024"
 bevy = { workspace = true }
 rand = { workspace = true }
 hw_core = { path = "crates/hw_core" }
+hw_world = { path = "crates/hw_world" }
 
 [features]
 default = ["dynamic_linking"]
