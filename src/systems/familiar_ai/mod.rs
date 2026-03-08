@@ -17,6 +17,9 @@ pub struct FamiliarAiPlugin;
 
 impl Plugin for FamiliarAiPlugin {
     fn build(&self, app: &mut App) {
+        // hw_ai の FamiliarAiCorePlugin でコアシステムを登録
+        app.add_plugins(hw_ai::FamiliarAiCorePlugin);
+
         app.configure_sets(
             Update,
             (
@@ -43,8 +46,6 @@ impl Plugin for FamiliarAiPlugin {
             (
                 // === Perceive Phase ===
                 (
-                    perceive::state_detection::detect_state_changes_system,
-                    perceive::state_detection::detect_command_changes_system,
                     perceive::resource_sync::sync_reservations_system,
                 )
                     .in_set(FamiliarAiSystemSet::Perceive),

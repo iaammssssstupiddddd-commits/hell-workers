@@ -1,8 +1,9 @@
 use bevy::prelude::*;
 
-use crate::events::{DesignationOp, DesignationRequest};
-use crate::systems::jobs::{Designation, IssuedBy, Priority, TargetBlueprint, TaskSlots};
-use crate::systems::logistics::ReservedForTask;
+use hw_core::events::{DesignationOp, DesignationRequest};
+use hw_jobs::{Designation, IssuedBy, Priority, TargetBlueprint, TaskSlots};
+use hw_jobs::mud_mixer::TargetMixer;
+use hw_logistics::types::ReservedForTask;
 
 /// Decide フェーズで生成された Designation 要求を適用する
 pub fn apply_designation_requests_system(
@@ -38,7 +39,7 @@ pub fn apply_designation_requests_system(
                 }
 
                 if let Some(target) = target_mixer {
-                    entity.insert(crate::systems::jobs::TargetMixer(*target));
+                    entity.insert(TargetMixer(*target));
                 }
 
                 if *reserved_for_task {

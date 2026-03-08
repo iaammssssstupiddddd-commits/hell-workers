@@ -1,11 +1,13 @@
-use hw_core::constants::*;
-use crate::entities::damned_soul::DamnedSoul;
-use crate::systems::jobs::WorkType;
 use bevy::prelude::*;
+
+use hw_core::constants::*;
+use hw_core::events::{OnEncouraged, OnSoulRecruited, OnTaskCompleted};
+use hw_core::jobs::WorkType;
+use hw_core::soul::DamnedSoul;
 
 /// タスク完了時のモチベーションボーナス
 pub fn on_task_completed_motivation_bonus(
-    trigger: On<crate::events::OnTaskCompleted>,
+    trigger: On<OnTaskCompleted>,
     mut q_souls: Query<&mut DamnedSoul>,
 ) {
     let event = trigger.event();
@@ -36,7 +38,7 @@ pub fn on_task_completed_motivation_bonus(
 
 /// 激励イベントによる効果適用
 pub fn on_encouraged_effect(
-    trigger: On<crate::events::OnEncouraged>,
+    trigger: On<OnEncouraged>,
     mut q_souls: Query<&mut DamnedSoul>,
 ) {
     let event = trigger.event();
@@ -48,7 +50,7 @@ pub fn on_encouraged_effect(
 
 /// リクルート時のバイタル変化
 pub fn on_soul_recruited_effect(
-    trigger: On<crate::events::OnSoulRecruited>,
+    trigger: On<OnSoulRecruited>,
     mut q_souls: Query<&mut DamnedSoul>,
 ) {
     let event = trigger.event();

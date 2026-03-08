@@ -7,4 +7,6 @@ pub mod game_state;
 pub mod jobs;
 pub mod logistics;
 pub mod relationships;
+pub mod soul;
+pub mod system_sets;
 pub mod world;

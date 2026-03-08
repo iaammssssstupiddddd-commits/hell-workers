@@ -4,11 +4,9 @@ use hw_core::constants::{
     DREAM_DRAIN_RATE_REST, REST_AREA_FATIGUE_RECOVERY_RATE, REST_AREA_RESTING_DURATION,
     REST_AREA_STRESS_RECOVERY_RATE,
 };
-use crate::entities::damned_soul::{
-    DamnedSoul, DreamPool, IdleBehavior, IdleState, RestAreaCooldown,
-};
-use crate::events::{IdleBehaviorOperation, IdleBehaviorRequest};
-use crate::relationships::RestingIn;
+use hw_core::events::{IdleBehaviorOperation, IdleBehaviorRequest};
+use hw_core::relationships::RestingIn;
+use hw_core::soul::{DamnedSoul, DreamPool, IdleBehavior, IdleState, RestAreaCooldown};
 
 /// 休憩所の滞在効果を更新する（Dream放出、バイタル回復、自動退出、クールダウン）
 pub fn rest_area_update_system(
