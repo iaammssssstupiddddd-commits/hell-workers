@@ -31,11 +31,11 @@ pub(super) fn collect_candidate_entities(
     let mut seen = HashSet::new();
 
     if let Some(area) = task_area_opt {
-        for &e in designation_grid.get_in_area(area.min, area.max).iter() {
+        for &e in designation_grid.get_in_area(area.min(), area.max()).iter() {
             seen.insert(e);
         }
         for &e in transport_request_grid
-            .get_in_area(area.min, area.max)
+            .get_in_area(area.min(), area.max())
             .iter()
         {
             seen.insert(e);
@@ -109,11 +109,11 @@ pub(super) fn candidate_snapshot(
                     if !my_area.contains(pos) || !owner_area.contains(pos) {
                         return false;
                     }
-                    let overlap_w = (my_area.max.x.min(owner_area.max.x)
-                        - my_area.min.x.max(owner_area.min.x))
+                    let overlap_w = (my_area.max().x.min(owner_area.max().x)
+                        - my_area.min().x.max(owner_area.min().x))
                     .max(0.0);
-                    let overlap_h = (my_area.max.y.min(owner_area.max.y)
-                        - my_area.min.y.max(owner_area.min.y))
+                    let overlap_h = (my_area.max().y.min(owner_area.max().y)
+                        - my_area.min().y.max(owner_area.min().y))
                     .max(0.0);
                     overlap_w > f32::EPSILON && overlap_h > f32::EPSILON
                 })

@@ -55,10 +55,7 @@ pub fn area_selection_indicator_system(
                 let min_center = WorldMap::grid_to_world(gx_min, gy_min);
                 let max_center = WorldMap::grid_to_world(gx_max, gy_max);
                 let half = Vec2::splat(TILE_SIZE * 0.5);
-                TaskArea {
-                    min: min_center - half,
-                    max: max_center + half,
-                }
+                TaskArea::from_points(min_center - half, max_center + half)
             }
             _ => {
                 let end_pos = WorldMap::snap_to_grid_edge(world_pos);

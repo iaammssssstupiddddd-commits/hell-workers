@@ -78,10 +78,7 @@ pub fn wall_line_area(start_pos: Vec2, end_pos: Vec2) -> TaskArea {
 
 pub(super) fn area_from_center_and_size(center: Vec2, size: Vec2) -> TaskArea {
     let half = size.abs() * 0.5;
-    TaskArea {
-        min: center - half,
-        max: center + half,
-    }
+    TaskArea::from_points(center - half, center + half)
 }
 
 pub(super) fn clamp_area_to_site(area: &TaskArea, q_sites: &Query<&Site>) -> TaskArea {
@@ -89,13 +86,13 @@ pub(super) fn clamp_area_to_site(area: &TaskArea, q_sites: &Query<&Site>) -> Tas
         return area.clone();
     };
 
-    let min = Vec2::new(area.min.x.max(site.min.x), area.min.y.max(site.min.y));
-    let max = Vec2::new(area.max.x.min(site.max.x), area.max.y.min(site.max.y));
+    let min = Vec2::new(area.min().x.max(site.min.x), area.min().y.max(site.min.y));
+    let max = Vec2::new(area.max().x.min(site.max.x), area.max().y.min(site.max.y));
     if min.x > max.x || min.y > max.y {
         return area.clone();
     }
 
-    TaskArea { min, max }
+    TaskArea::from_points(min, max)
 }
 
 pub(super) fn world_cursor_pos(
@@ -116,8 +113,8 @@ pub(super) fn world_cursor_pos(
 
 pub(super) fn detect_area_edit_operation(area: &TaskArea, world_pos: Vec2) -> Option<Operation> {
     let threshold = TILE_SIZE * 0.55;
-    let min = area.min;
-    let max = area.max;
+    let min = area.min();
+    let max = area.max();
     let mid_x = (min.x + max.x) * 0.5;
     let mid_y = (min.y + max.y) * 0.5;
 
@@ -155,8 +152,8 @@ pub(super) fn detect_area_edit_operation(area: &TaskArea, world_pos: Vec2) -> Op
 
 pub(super) fn apply_area_edit_drag(active_drag: &Drag, current_snapped: Vec2) -> TaskArea {
     let min_size = TILE_SIZE.max(1.0);
-    let mut min = active_drag.original_area.min;
-    let mut max = active_drag.original_area.max;
+    let mut min = active_drag.original_area.min();
+    let mut max = active_drag.original_area.max();
 
     match active_drag.operation {
         Operation::Move => {
@@ -201,7 +198,7 @@ pub(super) fn apply_area_edit_drag(active_drag: &Drag, current_snapped: Vec2) ->
         },
     }
 
-    TaskArea { min, max }
+    TaskArea::from_points(min, max)
 }
 
 pub(super) fn cursor_icon_for_operation(operation: Operation, dragging: bool) -> CursorIcon {
@@ -264,9 +261,9 @@ pub fn overlap_summary_from_areas(
         }
 
         let overlap_w =
-            (selected_area.max.x.min(area.max.x) - selected_area.min.x.max(area.min.x)).max(0.0);
+            (selected_area.max().x.min(area.max().x) - selected_area.min().x.max(area.min().x)).max(0.0);
         let overlap_h =
-            (selected_area.max.y.min(area.max.y) - selected_area.min.y.max(area.min.y)).max(0.0);
+            (selected_area.max().y.min(area.max().y) - selected_area.min().y.max(area.min().y)).max(0.0);
         let overlap_area = overlap_w * overlap_h;
         if overlap_area <= f32::EPSILON {
             continue;

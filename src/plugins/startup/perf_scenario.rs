@@ -29,10 +29,7 @@ pub fn setup_perf_scenario_if_enabled(
         return;
     }
 
-    let area = TaskArea {
-        min: Vec2::new(-1600.0, -1600.0),
-        max: Vec2::new(1600.0, 1600.0),
-    };
+    let area = TaskArea::from_points(Vec2::new(-1600.0, -1600.0), Vec2::new(1600.0, 1600.0));
 
     for (fam_entity, mut command, mut operation) in q_familiars.iter_mut() {
         command.command = FamiliarCommand::GatherResources;
@@ -76,10 +73,7 @@ pub fn setup_perf_scenario_runtime_if_enabled(
         return;
     }
 
-    let area = TaskArea {
-        min: Vec2::new(-1600.0, -1600.0),
-        max: Vec2::new(1600.0, 1600.0),
-    };
+    let area = TaskArea::from_points(Vec2::new(-1600.0, -1600.0), Vec2::new(1600.0, 1600.0));
     for (fam_entity, mut command, mut operation) in q_familiars.iter_mut() {
         command.command = FamiliarCommand::GatherResources;
         operation.max_controlled_soul = 20;
