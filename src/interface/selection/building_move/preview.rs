@@ -4,7 +4,7 @@ use crate::app_contexts::{CompanionPlacementKind, CompanionPlacementState, MoveC
 use crate::interface::camera::MainCamera;
 use crate::systems::jobs::{Building, BuildingType};
 use crate::systems::visual::placement_ghost::{PlacementGhost, PlacementPartnerGhost};
-use crate::world::map::WorldMap;
+use crate::world::map::{WorldMap, WorldMapRead};
 use bevy::prelude::*;
 
 use super::geometry::{anchor_grid_for_kind, occupied_grids_for_kind, spawn_pos_for_kind};
@@ -18,7 +18,7 @@ pub fn building_move_preview_system(
     companion_state: Res<CompanionPlacementState>,
     q_window: Query<&Window, With<bevy::window::PrimaryWindow>>,
     q_camera: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
-    world_map: Res<WorldMap>,
+    world_map: WorldMapRead,
     game_assets: Res<crate::assets::GameAssets>,
     q_buildings: Query<
         (Entity, &Building, &Transform),

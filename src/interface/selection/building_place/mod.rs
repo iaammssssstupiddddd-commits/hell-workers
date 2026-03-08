@@ -10,7 +10,7 @@ use crate::app_contexts::{BuildContext, CompanionParentKind, CompanionPlacementK
 use crate::interface::camera::MainCamera;
 use crate::interface::ui::UiInputState;
 use crate::systems::jobs::{Blueprint, Building, BuildingType};
-use crate::world::map::WorldMap;
+use crate::world::map::{WorldMap, WorldMapWrite};
 use bevy::prelude::*;
 
 use companion::make_companion_placement;
@@ -23,7 +23,7 @@ pub fn blueprint_placement(
     q_window: Query<&Window, With<bevy::window::PrimaryWindow>>,
     q_camera: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
     ui_input_state: Res<UiInputState>,
-    mut world_map: ResMut<WorldMap>,
+    mut world_map: WorldMapWrite,
     build_context: Res<BuildContext>,
     mut companion_state: ResMut<CompanionPlacementState>,
     q_blueprints_by_entity: Query<&Blueprint>,

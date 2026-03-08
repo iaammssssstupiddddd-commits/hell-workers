@@ -4,7 +4,7 @@ use crate::interface::camera::MainCamera;
 use crate::interface::ui::UiInputState;
 use crate::systems::command::TaskMode;
 use crate::systems::world::zones::AreaBounds;
-use crate::world::map::WorldMap;
+use crate::world::map::{WorldMap, WorldMapWrite};
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 
@@ -20,7 +20,7 @@ pub fn zone_removal_system(
     ui_input_state: Res<UiInputState>,
     mut task_context: ResMut<TaskContext>,
     mut next_play_mode: ResMut<NextState<PlayMode>>,
-    mut world_map: ResMut<WorldMap>,
+    mut world_map: WorldMapWrite,
     mut commands: Commands,
     mut q_sprites: Query<&mut Sprite>,
     mut preview_state: ResMut<ZoneRemovalPreviewState>,

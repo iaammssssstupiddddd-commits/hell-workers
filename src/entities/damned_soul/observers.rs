@@ -8,7 +8,7 @@ use crate::events::{
 use crate::relationships::CommandedBy;
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
 use crate::systems::soul_ai::helpers::work::unassign_task;
-use crate::world::map::WorldMap;
+use crate::world::map::WorldMapRead;
 use rand::Rng;
 
 pub fn on_task_assigned(on: On<OnTaskAssigned>, _q_souls: Query<&mut DamnedSoul>) {
@@ -67,7 +67,7 @@ pub fn on_stress_breakdown(
         Option<&mut crate::systems::logistics::Inventory>,
         Option<&crate::relationships::CommandedBy>,
     )>,
-    world_map: Res<WorldMap>,
+    world_map: WorldMapRead,
     mut queries: crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
 ) {
     let soul_entity = on.entity;
@@ -98,7 +98,7 @@ pub fn on_stress_breakdown(
                 inventory_opt.as_deref_mut(),
                 None,
                 &mut queries,
-                &world_map,
+                world_map.as_ref(),
                 true,
             );
         }
@@ -123,7 +123,7 @@ pub fn on_exhausted(
         Option<&mut crate::systems::logistics::Inventory>,
         Option<&crate::relationships::CommandedBy>,
     )>,
-    world_map: Res<WorldMap>,
+    world_map: WorldMapRead,
     mut queries: crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
 ) {
     let soul_entity = on.entity;
@@ -157,7 +157,7 @@ pub fn on_exhausted(
                 inventory_opt.as_deref_mut(),
                 None,
                 &mut queries,
-                &world_map,
+                world_map.as_ref(),
                 true,
             );
         }

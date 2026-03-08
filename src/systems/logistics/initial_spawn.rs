@@ -5,7 +5,9 @@ use crate::relationships::{LoadedItems, ParkedAt};
 use crate::systems::jobs::{Building, BuildingType, ObstaclePosition, Rock, TaskSlots, Tree};
 use crate::systems::logistics::{BelongsTo, Wheelbarrow, WheelbarrowParking};
 use crate::systems::world::zones::{PairedSite, PairedYard, Site, Yard};
-use crate::world::map::{INITIAL_WOOD_POSITIONS, ROCK_POSITIONS, TREE_POSITIONS, WorldMap};
+use crate::world::map::{
+    INITIAL_WOOD_POSITIONS, ROCK_POSITIONS, TREE_POSITIONS, WorldMap, WorldMapWrite,
+};
 use bevy::prelude::*;
 
 const INITIAL_WHEELBARROW_PARKING_GRID: (i32, i32) = (58, 58);
@@ -14,7 +16,7 @@ const INITIAL_WHEELBARROW_PARKING_CAPACITY: usize = 2;
 pub fn initial_resource_spawner(
     mut commands: Commands,
     game_assets: Res<GameAssets>,
-    mut world_map: ResMut<WorldMap>,
+    mut world_map: WorldMapWrite,
 ) {
     // 木のスポーン（障害物として登録）
     for &(gx, gy) in TREE_POSITIONS {

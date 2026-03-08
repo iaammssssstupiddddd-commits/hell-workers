@@ -2,7 +2,7 @@
 
 use super::components::*;
 use crate::systems::jobs::{Building, BuildingType, ProvisionalWall};
-use crate::world::map::WorldMap;
+use crate::world::map::WorldMapWrite;
 use bevy::prelude::*;
 
 /// Handles wall construction completion (no curing phase)
@@ -11,7 +11,7 @@ pub fn wall_construction_completion_system(
     q_tiles: Query<(Entity, &WallTileBlueprint)>,
     q_requests: Query<(Entity, &TargetWallConstructionSite)>,
     mut q_buildings: Query<&mut Building>,
-    mut world_map: ResMut<WorldMap>,
+    mut world_map: WorldMapWrite,
     mut commands: Commands,
 ) {
     for (site_entity, site) in q_sites.iter_mut() {

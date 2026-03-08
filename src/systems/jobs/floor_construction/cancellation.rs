@@ -9,7 +9,7 @@ use crate::systems::logistics::{Inventory, ResourceItem, ResourceType};
 use crate::systems::soul_ai::execute::task_execution::context::TaskQueries;
 use crate::systems::soul_ai::execute::task_execution::types::AssignedTask;
 use crate::systems::soul_ai::helpers::work::unassign_task;
-use crate::world::map::WorldMap;
+use crate::world::map::WorldMapWrite;
 use bevy::prelude::*;
 use std::collections::HashSet;
 
@@ -100,7 +100,7 @@ pub fn floor_construction_cancellation_system(
         With<DamnedSoul>,
     >,
     mut reservation_queries: TaskQueries,
-    mut world_map: ResMut<WorldMap>,
+    mut world_map: WorldMapWrite,
     game_assets: Res<GameAssets>,
 ) {
     for site_entity in q_sites.iter() {

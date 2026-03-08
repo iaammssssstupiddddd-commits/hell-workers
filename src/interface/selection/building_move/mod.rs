@@ -13,7 +13,7 @@ use crate::systems::soul_ai::execute::task_execution::context::TaskUnassignQueri
 use crate::systems::soul_ai::execute::task_execution::move_plant::{MovePlantReservation, MovePlanned};
 use crate::systems::soul_ai::execute::task_execution::types::{AssignedTask, MovePlantTask};
 use crate::systems::soul_ai::helpers::work::unassign_task;
-use crate::world::map::WorldMap;
+use crate::world::map::{WorldMap, WorldMapWrite};
 use bevy::prelude::*;
 
 use geometry::{anchor_grid_for_kind, occupied_grids_for_kind, spawn_pos_for_kind};
@@ -27,7 +27,7 @@ pub fn building_move_system(
     q_window: Query<&Window, With<bevy::window::PrimaryWindow>>,
     q_camera: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
     ui_input_state: Res<UiInputState>,
-    mut world_map: ResMut<WorldMap>,
+    mut world_map: WorldMapWrite,
     mut move_context: ResMut<MoveContext>,
     mut move_placement_state: ResMut<MovePlacementState>,
     mut companion_state: ResMut<CompanionPlacementState>,

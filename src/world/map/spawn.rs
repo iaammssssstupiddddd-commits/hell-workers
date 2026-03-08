@@ -5,12 +5,12 @@ use hw_core::constants::*;
 use hw_world::generate_base_terrain_tiles;
 use bevy::prelude::*;
 
-use super::{TerrainType, Tile, WorldMap};
+use super::{TerrainType, Tile, WorldMap, WorldMapWrite};
 
 pub fn spawn_map(
     mut commands: Commands,
     game_assets: Res<GameAssets>,
-    mut world_map: ResMut<WorldMap>,
+    mut world_map: WorldMapWrite,
 ) {
     let terrain_tiles = generate_base_terrain_tiles(MAP_WIDTH, MAP_HEIGHT, super::SAND_WIDTH);
 

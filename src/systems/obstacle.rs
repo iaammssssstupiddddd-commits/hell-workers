@@ -4,12 +4,12 @@
 
 use crate::assets::GameAssets;
 use crate::systems::jobs::ObstaclePosition;
-use crate::world::map::WorldMap;
+use crate::world::map::{WorldMap, WorldMapWrite};
 use bevy::prelude::*;
 
 /// 障害物が削除された時にWorldMapを更新
 pub fn obstacle_cleanup_system(
-    mut world_map: ResMut<WorldMap>,
+    mut world_map: WorldMapWrite,
     game_assets: Res<GameAssets>,
     mut q_sprites: Query<&mut Sprite>,
     mut removed: RemovedComponents<ObstaclePosition>,

@@ -37,7 +37,7 @@ use crate::systems::soul_ai::helpers::query_types::{
     TaskAssignmentSoulQuery, TaskExecutionSoulQuery,
 };
 use crate::systems::soul_ai::helpers::work::unassign_task;
-use crate::world::map::WorldMap;
+use crate::world::map::WorldMapRead;
 use bevy::prelude::*;
 
 use context::TaskExecutionContext;
@@ -285,7 +285,7 @@ pub fn task_execution_system(
     game_assets: Res<crate::assets::GameAssets>,
     time: Res<Time>,
     // haul_cache is removed
-    world_map: Res<WorldMap>,
+    world_map: WorldMapRead,
     mut pf_context: Local<crate::world::pathfinding::PathfindingContext>,
     q_wheelbarrows: Query<
         (&Transform, Option<&crate::relationships::ParkedAt>),
@@ -322,7 +322,7 @@ pub fn task_execution_system(
                     None,
                     &mut queries,
                     // haul_cache removed
-                    &world_map,
+                    world_map.as_ref(),
                     true,
                 );
                 continue;

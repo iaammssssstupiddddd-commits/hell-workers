@@ -8,7 +8,7 @@ use hw_core::constants::*;
 use crate::entities::damned_soul::{Destination, Path};
 use crate::entities::spawn_args;
 use crate::entities::spawn_position;
-use crate::world::map::WorldMap;
+use crate::world::map::{WorldMap, WorldMapRead};
 
 use super::components::*;
 use super::voice::FamiliarVoice;
@@ -46,7 +46,7 @@ pub fn familiar_spawning_system(
     mut commands: Commands,
     mut spawn_events: MessageReader<FamiliarSpawnEvent>,
     game_assets: Res<GameAssets>,
-    world_map: Res<WorldMap>,
+    world_map: WorldMapRead,
     mut color_allocator: ResMut<FamiliarColorAllocator>,
 ) {
     for event in spawn_events.read() {

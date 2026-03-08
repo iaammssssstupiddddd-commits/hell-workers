@@ -20,7 +20,7 @@ use crate::systems::jobs::RestArea;
 use crate::systems::soul_ai::helpers::gathering::{GATHERING_LEAVE_RADIUS, GatheringSpot};
 use crate::systems::soul_ai::helpers::query_types::IdleDecisionSoulQuery;
 use crate::systems::spatial::{GatheringSpotSpatialGrid, SpatialGridOps};
-use crate::world::map::WorldMap;
+use crate::world::map::WorldMapRead;
 
 pub use rest_area::{
     find_nearest_available_rest_area, has_arrived_at_rest_area,
@@ -41,7 +41,7 @@ pub(crate) const GATHERING_ARRIVAL_RADIUS: f32 = TILE_SIZE * GATHERING_ARRIVAL_R
 pub fn idle_behavior_decision_system(
     time: Res<Time>,
     mut request_writer: MessageWriter<IdleBehaviorRequest>,
-    world_map: Res<WorldMap>,
+    world_map: WorldMapRead,
     mut pending_rest_reservations: Local<HashMap<Entity, usize>>,
     q_spots: Query<(
         Entity,
@@ -170,7 +170,7 @@ pub fn idle_behavior_decision_system(
                         &mut idle,
                         &mut dest,
                         &mut path,
-                        &world_map,
+                        world_map.as_ref(),
                         &mut request_writer,
                         current_pos,
                         just_reserved,
@@ -234,7 +234,7 @@ pub fn idle_behavior_decision_system(
                     &mut idle,
                     &mut dest,
                     &mut path,
-                    &world_map,
+                    world_map.as_ref(),
                     &mut request_writer,
                     current_pos,
                     just_reserved,
@@ -325,7 +325,7 @@ pub fn idle_behavior_decision_system(
             &mut dest,
             &mut path,
             &*soul_grid,
-            &world_map,
+            world_map.as_ref(),
             &mut request_writer,
             dt,
             soul.dream,
