@@ -1,44 +1,21 @@
-use hw_core::constants::*;
-use crate::entities::damned_soul::{DamnedSoul, IdleBehavior, IdleState, Path};
+//! Work helper shell.
+//!
+//! `is_soul_available_for_work` は純粋ヘルパー化され `hw_ai` に移設済み。
+//! ここでは `WorldMap` / `WheelbarrowMovement` / `Visibility` / `Transform` といった
+//! root 向け副作用を含む `unassign_task` だけを受け持つ。
+
+pub use hw_ai::soul_ai::helpers::work::is_soul_available_for_work;
+
 use crate::events::ResourceReservationRequest;
+use crate::entities::damned_soul::Path;
 use crate::relationships::WorkingOn;
-// use crate::systems::familiar_ai::perceive::resource_sync::SharedResourceCache; // Removed unused import
+use hw_core::constants::Z_ITEM_PICKUP;
 use crate::systems::logistics::{Inventory, ResourceType};
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
 use crate::systems::soul_ai::execute::task_execution::context::TaskReservationAccess;
 use crate::systems::soul_ai::execute::task_execution::transport_common::lifecycle;
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
-
-/// 魂が作業可能な状態（待機中かつ健康）であるかを確認する
-pub fn is_soul_available_for_work(
-    soul: &DamnedSoul,
-    task: &AssignedTask,
-    idle: &IdleState,
-    has_breakdown: bool,
-    fatigue_threshold: f32,
-) -> bool {
-    if !matches!(*task, AssignedTask::None) {
-        return false;
-    }
-    if matches!(
-        idle.behavior,
-        IdleBehavior::ExhaustedGathering
-            | IdleBehavior::Resting
-            | IdleBehavior::GoingToRest
-            | IdleBehavior::Escaping
-            | IdleBehavior::Drifting
-    ) {
-        return false;
-    }
-    if soul.fatigue >= fatigue_threshold {
-        return false;
-    }
-    if has_breakdown {
-        return false;
-    }
-    true
-}
 
 /// 魂からタスクの割り当てを解除し、スロットを解放する。
 ///

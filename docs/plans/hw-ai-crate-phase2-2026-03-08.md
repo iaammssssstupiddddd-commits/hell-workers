@@ -34,7 +34,7 @@
 ### 非対象（Out of Scope）
 
 - `WorldMap` resource 本体の `hw_world` への移動
-- `hw_spatial` のような新規 crate の追加
+- `hw_spatial` の実装自体ではなく、既存計画で決まった境界実装
 - `hw_core` に world/spatial 専用の抽象レイヤーを追加すること
 - UI / visual / speech / asset / sprite spawn 系 shell の `hw_ai` への移動
 - AI アルゴリズムの変更
@@ -62,7 +62,7 @@
   - `src/systems/soul_ai/` と `src/systems/familiar_ai/` では `WorldMap` 参照ファイルが 61 件、SpatialGrid 参照ファイルが 24 件ある
   - `crates/hw_ai/src/` 側には `WorldMap` / SpatialGrid 参照がまだ存在しない
 - 問題:
-  - 提案書 5.2 は `WorldMap を hw_world へ移動` と `hw_core に WorldAccess trait` の二択を残しており、workspace ガイドと衝突している
+  - 提案書 5.2 は `hw_spatial` 方針へ合わせて整理し直し、workspace ガイドと衝突しない記述へ更新済み
   - `GridData` / `SpatialGridOps` を `hw_core` に置く案は、crate 責務として world/spatial concern を core crate に持ち込む
   - 何を「移動不可」とみなすかの基準が曖昧で、後続の `hw_ai` 移行範囲が毎回再議論になる
 - 本計画で埋めるギャップ:
@@ -147,9 +147,9 @@
 | `WorldMap` の置き場所 | root に残す | `Entity` を持つ occupancy resource であり、`BuildingType` / `DoorState` を含む app shell 寄りの責務が強い |
 | `WorldMap` 抽象の置き場所 | `hw_world` に寄せる | 既に `PathWorld` が存在し、pathfinding/query consumer と同じ crate に trait を置ける |
 | `hw_core::WorldAccess` | 作らない | 抽象が広すぎて責務が曖昧になり、world concern を core crate に持ち込むため |
-| SpatialGrid resource 本体 | root に残す | `Res` / `RemovedComponents` / 各 domain component を読む update shell だから |
-| `GridData` / read trait の移動先 | 必要なら `hw_world` | spatial search は world concern であり、`hw_core` に置く理由が弱い |
-| 新規 `hw_spatial` crate | 作らない | 分離メリットよりも crate 境界の複雑化コストが大きい |
+| SpatialGrid resource 本体 | `hw_spatial` へ移設（7 種）／2種は root 残置 | `Res` / `RemovedComponents` / 各 domain component を読む update shell は root |
+| `GridData` / read trait の移動先 | `hw_spatial`（resource）または `hw_world`（trait） | spatial concern は world/spatial crate で責務を分離する |
+| 新規 `hw_spatial` crate | 採用（7 種 concrete grid を収容） | `GatheringSpotSpatialGrid` と `FloorConstructionSpatialGrid` は root 残置 |
 
 ### 4.2 後続実装の設計ルール
 
@@ -273,9 +273,9 @@
   - `src/systems/soul_ai/*`
   - `src/plugins/logic.rs`
 - 完了条件:
-  - [ ] `hw_ai` 側へ追加移動したシステムがある
-  - [ ] root 側の該当ファイルは shell / re-export / adapter に縮退している
-  - [ ] `WorldMap` / SpatialGrid 直参照が必要な shell と core の境界がコード上でも見える
+  - [x] `hw_ai` 側へ追加移動したシステムがある
+  - [x] root 側の該当ファイルは shell / re-export / adapter に縮退している
+  - [x] `WorldMap` / SpatialGrid 直参照が必要な shell と core の境界がコード上でも見える
 - 検証:
   - `cargo check -p hw_ai`
   - `cargo check --workspace`
@@ -316,9 +316,9 @@
 
 ### 現在地
 
-- 進捗: `10%`
-- 完了済みマイルストーン: なし
-- 未着手/進行中: `M1`
+- 進捗: `90%`
+- 完了済みマイルストーン: `M1`〜`M5`（`hw_ai` への移設と境界確定の一次フェーズ）
+- 未着手/進行中: `M6 以降の追加移設`
 
 ### 次のAIが最初にやること
 

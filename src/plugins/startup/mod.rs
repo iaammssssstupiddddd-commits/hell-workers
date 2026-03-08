@@ -17,14 +17,16 @@ use crate::app_contexts::{BuildContext, CompanionPlacementState, MoveContext, Mo
 use crate::interface::camera::{MainCamera, PanCamera};
 use crate::interface::selection::{HoveredEntity, SelectedEntity};
 use crate::interface::ui::{MenuState, components::ArchitectCategoryState, setup_ui};
+use crate::systems::logistics::ResourceItem;
 use crate::systems::logistics::{
     ResourceCountDisplayTimer, ResourceLabels, initial_resource_spawner,
 };
-use crate::systems::spatial::{
-    BlueprintSpatialGrid, FamiliarSpatialGrid, FloorConstructionSpatialGrid,
-    GatheringSpotSpatialGrid, ResourceSpatialGrid, SpatialGrid, SpatialGridOps,
+use crate::systems::spatial::{FloorConstructionSpatialGrid, GatheringSpotSpatialGrid};
+use hw_spatial::{
+    BlueprintSpatialGrid, FamiliarSpatialGrid, ResourceSpatialGrid, SpatialGrid,
     StockpileSpatialGrid,
 };
+use hw_spatial::SpatialGridOps;
 use crate::systems::time::GameTime;
 use crate::world::map::{
     WorldMap, WorldMapRead, WorldMapWrite, spawn_map, terrain_border::spawn_terrain_borders,
@@ -136,7 +138,7 @@ fn populate_resource_spatial_grid(
     mut resource_grid: ResMut<ResourceSpatialGrid>,
     q_resources: Query<
         (Entity, &Transform, Option<&Visibility>),
-        With<crate::systems::logistics::ResourceItem>,
+        With<ResourceItem>,
     >,
 ) {
     for (entity, transform, visibility) in q_resources.iter() {

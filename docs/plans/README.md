@@ -19,8 +19,9 @@
 
 | Document | Status | Notes |
 |---|---|---|
-| [hw-ai-crate-phase2-2026-03-08.md](hw-ai-crate-phase2-2026-03-08.md) | InProgress | `WorldMap` / SpatialGrid の root adapter 境界を固定し、`hw_ai` への後続移行単位を定める Phase 2 計画。 |
-| [hw-ai-crate-plan-2026-03-08.md](hw-ai-crate-plan-2026-03-08.md) | InProgress | Soul AI / Familiar AI を `hw_ai` crate の core と root shell に段階分離する実装計画。 |
+| [hw-ai-crate-phase2-2026-03-08.md](hw-ai-crate-phase2-2026-03-08.md) | Complete | `WorldMap` / SpatialGrid の root adapter 境界を固定し、`hw_ai` への後続移行単位を定める Phase 2 計画。 |
+| [hw-ai-crate-plan-2026-03-08.md](hw-ai-crate-plan-2026-03-08.md) | Complete | Soul AI / Familiar AI を `hw_ai` crate の core と root shell に段階分離する実装計画。 |
+| [hw-spatial-crate.md](hw-spatial-crate.md) | Completed | `WorldMap` と可搬な SpatialGrid を root から外し、`hw_ai` が直接依存できるようにする実装順を完了済み状態に更新。 |
 
 ## アーカイブ計画書一覧 (`docs/plans/archive`)
 
@@ -46,6 +47,8 @@
 | [archive/floor-construction.md](archive/floor-construction.md) | アーカイブ | 床建築システムの実装計画。 |
 | [archive/global-transport-request-plan.md](archive/global-transport-request-plan.md) | アーカイブ | 運搬系のグローバル request 化計画。 |
 | [archive/hover-action-button.md](archive/hover-action-button.md) | アーカイブ | Plant ホバーアクションボタン（プレースホルダー）実装計画 |
+| [archive/hw-ai-crate-phase2-2026-03-08.md](archive/hw-ai-crate-phase2-2026-03-08.md) | アーカイブ | Phase 1 時点ではの計画。 |
+| [archive/hw-ai-crate-plan-2026-03-08.md](archive/hw-ai-crate-plan-2026-03-08.md) | アーカイブ | src/systems/soul_ai/の計画。 |
 | [archive/large-files-refactor-2026-02-16.md](archive/large-files-refactor-2026-02-16.md) | アーカイブ | 大規模ファイル分割リファクタ計画。 |
 | [archive/mixer-producer-phase-separation-plan-2026-03-05.md](archive/mixer-producer-phase-separation-plan-2026-03-05.md) | アーカイブ | producer/mixer.rsの計画。 |
 | [archive/move-plant-building.md](archive/move-plant-building.md) | アーカイブ | Plant 建物移動タスク 実装計画（詳細版） |

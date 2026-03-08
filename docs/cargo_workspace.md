@@ -19,6 +19,7 @@ crates/hw_world
 crates/hw_logistics
 crates/hw_jobs
 crates/hw_ai
+crates/hw_spatial
 ```
 
 依存の向きは次を基本とします。
@@ -28,6 +29,7 @@ hw_core
   ├─ hw_world
   ├─ hw_logistics
   ├─ hw_jobs
+  ├─ hw_spatial
   ├─ hw_ai
   └─ bevy_app
 
@@ -40,7 +42,10 @@ hw_logistics
 hw_jobs
   └─ bevy_app
 
-hw_ai (hw_core + hw_jobs + hw_logistics + hw_world)
+hw_spatial (hw_core + hw_world + hw_logistics + hw_jobs)
+  └─ bevy_app
+
+hw_ai (hw_core + hw_jobs + hw_logistics + hw_world + hw_spatial)
   └─ bevy_app
 ```
 
@@ -71,6 +76,9 @@ hw_ai (hw_core + hw_jobs + hw_logistics + hw_world)
 - `soul_ai::helpers::gathering` — 集会スポット型定義・ヘルパー
 - `soul_ai::helpers::gathering_positions` — 集会周辺ランダム位置生成・overlap 回避（`PathWorld + SpatialGridOps` 経由）
 - `soul_ai::helpers::gathering_motion` — 集会中移動先選定（Wandering / Still retreat）
+- `soul_ai::helpers::work::is_soul_available_for_work` — 作業可否判定ヘルパー
+- `soul_ai::decide::escaping` / `soul_ai::perceive::escaping` — 逃走判断ロジック
+- `soul_ai::decide::gathering_mgmt` — 集会管理要求生成
 - `familiar_ai::perceive::state_detection` — 使い魔 AI 状態遷移検知
 - `familiar_ai::decide::following` — 使い魔追尾システム（hw_core 型のみ依存）
 - `familiar_ai::execute::state_apply` — `FamiliarStateRequest` 適用
@@ -80,9 +88,10 @@ hw_ai (hw_core + hw_jobs + hw_logistics + hw_world)
 
 - `GameAssets` 依存の sprite spawn
 - `WorldMap` resource / `WorldMapRead` SystemParam を直接参照するシステム
-- `SpatialGrid` resource を直接参照するシステム
+- `SpatialGrid` concrete resource を直接参照しない（`hw_spatial` / root wrapper を経由）
 - UI システム
 - `Commands` で複雑な Entity 生成を行うもの
+- `unassign_task`（`helpers/work.rs`）は `WheelbarrowMovement` / `Visibility` / `Transform` など root 依存が強いため core 化対象外
 
 ## 3. 各 crate の責務
 
@@ -135,14 +144,31 @@ hw_ai (hw_core + hw_jobs + hw_logistics + hw_world)
 - `world_to_grid`, `grid_to_world`
 - nearest walkable / river query
 - `PathWorld` trait — `is_walkable` など通行判定 API（`WorldMap` の impl は root）
-- `SpatialGridOps` trait — `get_nearby_in_radius` など空間グリッド read-only API（concrete resource は root）
+- `SpatialGridOps` trait — `get_nearby_in_radius` など空間グリッド read-only API（concrete resource の本体は `hw_spatial`）
 
 ここに置かないもの:
 
 - `Commands` を使う sprite spawn
 - `GameAssets` 依存の texture 選択
 - `WorldMap` resource そのもの
-- `SpatialGrid` resource 実体と update system
+- `SpatialGrid` resource 実体と update system（7 種 concrete）は `hw_spatial` が保持
+
+### `hw_spatial`
+
+役割:
+
+- SpatialGrid の concrete resource / update 系（7 種）
+- `GridData` と空間検索ヘルパの共通化
+- 2D 空間スナップショットの初期化時の query 補助
+
+ここに置くもの:
+
+- `SpatialGrid`, `FamiliarSpatialGrid`, `BlueprintSpatialGrid`, `DesignationSpatialGrid`, `ResourceSpatialGrid`, `StockpileSpatialGrid`, `TransportRequestSpatialGrid`
+
+ここに置かないもの:
+
+- `GatheringSpotSpatialGrid`, `FloorConstructionSpatialGrid`
+- root `WorldMap` shell、`WorldMapRead/Write`、startup/wiring
 
 ### `hw_logistics`
 
