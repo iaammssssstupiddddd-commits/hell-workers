@@ -20,7 +20,7 @@ pub fn initial_resource_spawner(
     for &(gx, gy) in TREE_POSITIONS {
         // 地形が通行可能な場合のみスポーン（障害物チェックなし）
         if let Some(idx) = world_map.pos_to_idx(gx, gy) {
-            if world_map.tiles[idx].is_walkable() {
+            if world_map.terrain_at_idx(idx).is_some_and(|terrain| terrain.is_walkable()) {
                 let pos = WorldMap::grid_to_world(gx, gy);
                 let variant_index = rand::random::<usize>() % game_assets.trees.len();
                 commands.spawn((
@@ -42,7 +42,7 @@ pub fn initial_resource_spawner(
     // 岩のスポーン（障害物として登録）
     for &(gx, gy) in ROCK_POSITIONS {
         if let Some(idx) = world_map.pos_to_idx(gx, gy) {
-            if world_map.tiles[idx].is_walkable() {
+            if world_map.terrain_at_idx(idx).is_some_and(|terrain| terrain.is_walkable()) {
                 let pos = WorldMap::grid_to_world(gx, gy);
                 commands.spawn((
                     Rock,
@@ -79,7 +79,7 @@ pub fn initial_resource_spawner(
     spawn_site_and_yard(&mut commands, &mut world_map);
 
     let rock_count = ROCK_POSITIONS.len();
-    let obstacle_count = world_map.obstacles.iter().filter(|&&b| b).count();
+    let obstacle_count = world_map.obstacle_count();
     info!(
         "SPAWNER: Fixed Trees ({}), Rocks ({}) spawned. WorldMap active obstacles: {}",
         TREE_POSITIONS.len(),

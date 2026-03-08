@@ -36,6 +36,7 @@
   - `src/systems/jobs/`
   - `src/systems/logistics/`
 - `hw_world` は world 全体ではなく、固定レイアウト定数・川/砂生成ロジック・pathfinding アルゴリズム・`TerrainType` を保持している
+  - 追加で、ベース地形タイル生成・terrain border 判定・regrowth zone 定義/候補選定ロジックも `hw_world` に保持している
 - `hw_components` は、現 checkout には存在しない
 
 結論:
@@ -65,17 +66,25 @@
   - root の `src/world/pathfinding.rs` は `WorldMap` 実装と互換ラッパーのみ保持
 - `TerrainType` を `hw_world::terrain` へ移動
   - root の `src/world/map/mod.rs` は re-export を保持
+- ベース地形タイル生成を `hw_world::mapgen` へ移動
+  - root の `src/world/map/spawn.rs` は Bevy sprite spawn と `WorldMap` 反映のみ保持
+- terrain border の隣接判定ロジックを `hw_world::borders` へ移動
+  - root の `src/world/map/terrain_border.rs` は texture 解決と sprite spawn のみ保持
+- regrowth の zone 定義と候補位置選定を `hw_world::regrowth` へ移動
+  - root の `src/world/regrowth.rs` は Bevy resource と sprite spawn のみ保持
 - `WorldMap` に `buildings` / `stockpiles` / `bridged_tiles` の操作メソッドを追加
   - `buildings` / `stockpiles` は read/write ともに高頻度経路をメソッド経由へ移行済み
+- `WorldMap` に `tiles` / `tile_entities` / `obstacles` 用 accessor を追加
+  - 現時点で `world_map.tiles` / `world_map.tile_entities` / `world_map.obstacles` の直接参照は `src/` から除去済み
 - root crate から `hw_core` の参照
 - root crate から `hw_world` の参照
 
 ### 未完了
 
 - `events.rs` の `hw_core` または他クレートへの移動
-- `WorldMap` / `spawn` / `terrain_border` / `regrowth` など app 依存の強い world 系コードの切り出し
-- `WorldMap` の残存 direct field access の整理
-  - 特に `tiles` / `tile_entities` / `obstacles` と app-wide `Res<WorldMap>` 依存
+- `WorldMap` 本体と app 側 shell (`spawn` / `terrain_border` / `regrowth`) の整理
+- `WorldMap` resource そのものへの広い依存の整理
+  - 特に app-wide `Res<WorldMap>` / `ResMut<WorldMap>` の境界再設計
 - `jobs` / `logistics` の切り出し
 - ビルド時間の before / after 計測
 
@@ -130,7 +139,7 @@ hw_logistics
 - `hw_components` は現時点では作らない
 - `events` は依存先が広いため、早期移動対象にはしない
 - `relationships` は `hw_core` へ移設済み
-- `hw_world` はまず `layout` / `river` / `pathfinding` / `TerrainType` を保持し、`WorldMap` 本体はまだ root に残す
+- `hw_world` はまず `layout` / `river` / `pathfinding` / `TerrainType` / `mapgen` / `borders` / `regrowth` を保持し、`WorldMap` 本体はまだ root に残す
 
 ## 7. フェーズ計画
 
@@ -197,7 +206,8 @@ hw_logistics
 - `pathfinding.rs` は `PathWorld` trait で切り出し済み
 - `DoorState` 依存は解消済み
 - `buildings` / `stockpiles` は read/write ともに accessor 経由へ移行済み
-- 次の大きな壁は `tiles` / `tile_entities` / `obstacles` の直接アクセスと、Bevy resource としての広い使用範囲
+- `tiles` / `tile_entities` / `obstacles` の直接アクセスも accessor 経由へ移行済み
+- 次の大きな壁は、`WorldMap` を Bevy resource として広く共有している構造と、`regrowth` のような app 寄り world system の境界
 
 完了条件:
 
