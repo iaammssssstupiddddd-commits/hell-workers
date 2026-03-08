@@ -6,6 +6,7 @@ pub mod pathfinding;
 pub mod query;
 pub mod regrowth;
 pub mod river;
+pub mod spatial;
 pub mod spawn;
 pub mod terrain;
 
@@ -23,5 +24,6 @@ pub use pathfinding::{
 pub use query::{find_nearest_river_grid, find_nearest_walkable_grid};
 pub use regrowth::{ForestZone, default_forest_zones, find_regrowth_position};
 pub use river::{generate_fixed_river_tiles, generate_sand_tiles};
+pub use spatial::SpatialGridOps;
 pub use spawn::{find_nearby_walkable_grid, pick_random_walkable_grid_in_rect};
 pub use terrain::TerrainType;

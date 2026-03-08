@@ -61,17 +61,22 @@ hw_ai (hw_core + hw_jobs + hw_logistics + hw_world)
 代表例:
 
 - `SoulAiCorePlugin` — Soul AI の Update/Execute フェーズコアシステム
-- `FamiliarAiCorePlugin` — Familiar AI の Perceive/Decide フェーズコアシステム
+- `FamiliarAiCorePlugin` — Familiar AI の Perceive/Decide/Execute フェーズコアシステム
 - `soul_ai::update::*` — 疲労・バイタル・夢・集会・休憩所の更新システム
 - `soul_ai::execute::designation_apply` — Designation 要求適用
 - `soul_ai::helpers::gathering` — 集会スポット型定義・ヘルパー
+- `soul_ai::helpers::gathering_positions` — 集会周辺ランダム位置生成・overlap 回避（`PathWorld + SpatialGridOps` 経由）
+- `soul_ai::helpers::gathering_motion` — 集会中移動先選定（Wandering / Still retreat）
 - `familiar_ai::perceive::state_detection` — 使い魔 AI 状態遷移検知
 - `familiar_ai::decide::following` — 使い魔追尾システム（hw_core 型のみ依存）
+- `familiar_ai::execute::state_apply` — `FamiliarStateRequest` 適用
+- `familiar_ai::execute::state_log` — 状態遷移ログ出力
 
 ここに置かないもの:
 
 - `GameAssets` 依存の sprite spawn
-- `WorldMap` / `SpatialGrid` を直接参照するシステム
+- `WorldMap` resource / `WorldMapRead` SystemParam を直接参照するシステム
+- `SpatialGrid` resource を直接参照するシステム
 - UI システム
 - `Commands` で複雑な Entity 生成を行うもの
 
@@ -117,6 +122,7 @@ hw_ai (hw_core + hw_jobs + hw_logistics + hw_world)
 
 - world の純粋ロジック
 - pathfinding, terrain, map helper, 座標変換
+- AI helper が使用する read-only 空間トレイト
 
 代表例:
 
@@ -124,12 +130,15 @@ hw_ai (hw_core + hw_jobs + hw_logistics + hw_world)
 - spawn grid helper
 - `world_to_grid`, `grid_to_world`
 - nearest walkable / river query
+- `PathWorld` trait — `is_walkable` など通行判定 API（`WorldMap` の impl は root）
+- `SpatialGridOps` trait — `get_nearby_in_radius` など空間グリッド read-only API（concrete resource は root）
 
 ここに置かないもの:
 
 - `Commands` を使う sprite spawn
 - `GameAssets` 依存の texture 選択
 - `WorldMap` resource そのもの
+- `SpatialGrid` resource 実体と update system
 
 ### `hw_logistics`
 
