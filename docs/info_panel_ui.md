@@ -55,9 +55,12 @@
 - 外枠: `panel_border_width` + `panel_corner_radius`
 - セクションディバイダー: `Status / Current Task / Inventory`
 
-## 関連ファイル
-- `src/interface/ui/panels/info_panel/` - パネル生成と差分更新
-- `src/interface/ui/presentation/` - `EntityInspectionModel` 構築
+## 関連ファイル（最終境界反映）
+
+- `crates/hw_ui/src/panels/menu.rs` - メニューステートの表示制御（menu_visibility）
+- `src/interface/ui/panels/info_panel/`（`include!` 系の wrapper） - root からの呼び出し窓口
+- `src/interface/ui/panels_legacy/info_panel/update.rs` - 選択/ピン留めベースの更新ロジック
+- `src/interface/ui/presentation/` - `EntityInspectionModel` / `ViewModel` 構築
 - `src/interface/ui/panels/context_menu.rs` - `Inspect (Pin)` メニュー
 - `src/interface/ui/interaction/menu_actions.rs` - `InspectEntity` / `ClearInspectPin`
-- `src/interface/ui/components.rs` - `UiSlot` / `InfoPanelPinState` 関連
+- `src/interface/ui/components.rs` - `UiSlot` / `InfoPanelPinState` / 再エクスポート
