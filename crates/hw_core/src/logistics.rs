@@ -38,3 +38,29 @@ impl ResourceType {
         )
     }
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Reflect)]
+pub enum WheelbarrowDestination {
+    Stockpile(Entity),
+    Blueprint(Entity),
+    Mixer {
+        entity: Entity,
+        resource_type: ResourceType,
+    },
+}
+
+impl WheelbarrowDestination {
+    pub fn entity(self) -> Entity {
+        match self {
+            Self::Stockpile(entity) | Self::Blueprint(entity) => entity,
+            Self::Mixer { entity, .. } => entity,
+        }
+    }
+
+    pub fn stockpile_or_blueprint(self) -> Option<Entity> {
+        match self {
+            Self::Stockpile(entity) | Self::Blueprint(entity) => Some(entity),
+            Self::Mixer { .. } => None,
+        }
+    }
+}
