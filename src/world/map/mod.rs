@@ -137,6 +137,23 @@ impl WorldMap {
         }
     }
 
+    pub fn add_grid_obstacle(&mut self, grid: (i32, i32)) {
+        self.add_obstacle(grid.0, grid.1);
+    }
+
+    pub fn remove_grid_obstacle(&mut self, grid: (i32, i32)) {
+        self.remove_obstacle(grid.0, grid.1);
+    }
+
+    pub fn add_grid_obstacles<I>(&mut self, grids: I)
+    where
+        I: IntoIterator<Item = (i32, i32)>,
+    {
+        for grid in grids {
+            self.add_grid_obstacle(grid);
+        }
+    }
+
     pub fn add_door(&mut self, x: i32, y: i32, door_entity: Entity, state: DoorState) {
         self.doors.insert((x, y), door_entity);
         self.door_states.insert((x, y), state);
@@ -204,6 +221,22 @@ impl WorldMap {
 
     pub fn clear_stockpile(&mut self, grid: (i32, i32)) -> Option<Entity> {
         self.stockpiles.remove(&grid)
+    }
+
+    pub fn register_stockpile_tile(&mut self, grid: (i32, i32), entity: Entity) {
+        self.set_stockpile(grid, entity);
+    }
+
+    pub fn move_stockpile_tile(
+        &mut self,
+        entity: Entity,
+        old_grid: (i32, i32),
+        new_grid: (i32, i32),
+    ) {
+        if self.stockpile_entity(old_grid) == Some(entity) {
+            self.clear_stockpile(old_grid);
+        }
+        self.set_stockpile(new_grid, entity);
     }
 
     pub fn stockpile_entries(&self) -> impl Iterator<Item = (&(i32, i32), &Entity)> {

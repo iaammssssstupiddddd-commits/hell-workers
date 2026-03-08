@@ -105,6 +105,10 @@
   - `set_building_occupancy` / `clear_building_occupancy` / `clear_building_occupancy_if_owned`
   - `register_bridge_tile` / `register_door` / `sync_door_passability`
   - placement / construction / completion / move 系の map 更新で再利用
+- `WorldMap` に batch / stockpile 更新 API を追加
+  - `add_grid_obstacle` / `remove_grid_obstacle` / `add_grid_obstacles`
+  - `register_stockpile_tile` / `move_stockpile_tile`
+  - obstacle sync / initial spawn / dream planting / zone placement / move 系で再利用
 - root crate から `hw_core` の参照
 - root crate から `hw_world` の参照
 
@@ -336,3 +340,4 @@ hw_logistics
 | `2026-03-08` | AI | `WorldMapRead` system param を追加し、read-only system 境界の `Res<WorldMap>` を一部置換 |
 | `2026-03-08` | AI | `WorldMapRead` / `WorldMapWrite` を `src/` 全体へ展開し、raw `Res<WorldMap>` / `ResMut<WorldMap>` を除去 |
 | `2026-03-08` | AI | `WorldMap` に occupancy 更新 API を追加し、placement / construction / move / door 更新へ適用 |
+| `2026-03-08` | AI | `WorldMap` に obstacle / stockpile の batch 更新 API を追加し、spawn / placement / move / cleanup へ適用 |

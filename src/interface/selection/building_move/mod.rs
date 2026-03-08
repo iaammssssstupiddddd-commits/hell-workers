@@ -267,9 +267,7 @@ fn finalize_move_request(
     let mut reserved_occupied = destination_occupied.clone();
     reserved_occupied.extend(companion_occupied.iter().copied());
     let task_entity = commands.spawn_empty().id();
-    for &(gx, gy) in &reserved_occupied {
-        world_map.add_obstacle(gx, gy);
-    }
+    world_map.add_grid_obstacles(reserved_occupied.iter().copied());
 
     commands.entity(task_entity).with_children(|parent| {
         for &(gx, gy) in &reserved_occupied {
