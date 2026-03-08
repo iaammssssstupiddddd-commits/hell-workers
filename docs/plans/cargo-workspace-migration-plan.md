@@ -27,7 +27,7 @@
 
 - workspace 自体はすでに導入済み
   - root `Cargo.toml` に `[workspace]` と `members = [".", "crates/*"]` がある
-- 追加クレートとして `crates/hw_core/` と `crates/hw_world/` と `crates/hw_logistics/` が存在する
+- 追加クレートとして `crates/hw_core/` と `crates/hw_world/` と `crates/hw_logistics/` と `crates/hw_jobs/` が存在する
 - `cargo check --workspace` は成功している
 - root crate は依然として以下を保持している
   - `src/events.rs`
@@ -39,6 +39,7 @@
   - 追加で、ベース地形タイル生成・terrain border 判定・regrowth zone 定義/候補選定・spawn grid 選定補助も `hw_world` に保持している
 - `hw_core` には `events` のうち低結合な型群に加え、`WorkType` / `ResourceType` / `FamiliarAiState` / `AssignedTask` も移っている
 - `hw_logistics` は base logistics component / helper / transport request model の最小単位を保持している
+- `hw_jobs` は base job model と mud mixer model の最小単位を保持している
 - `hw_components` は、現 checkout には存在しない
 
 結論:
@@ -147,7 +148,21 @@
   - root 側の `components.rs` / `kinds.rs` は re-export のみ保持
 - `TransportRequestMetrics` と `transport_request_state_sync_system` を `hw_logistics::transport_request` へ移動
   - root 側の `metrics.rs` / `state_machine.rs` は re-export のみ保持
+- `hw_jobs` クレートの追加
+- `src/systems/jobs/mod.rs` の base job model を `hw_jobs::model` へ移動
+  - `BuildingType` / `BuildingCategory` / `Building`
+  - `FlexibleMaterialRequirement` / `Blueprint`
+  - `ProvisionalWall` / `RestArea`
+  - `SandPile` / `BonePile` / `Tree` / `TreeVariant` / `Rock`
+  - `TargetBlueprint` / `ObstaclePosition`
+  - `Designation` / `Priority` / `TaskSlots`
+  - `IssuedBy` alias と `WorkType` の再公開も `hw_jobs::model` 側へ集約
+  - root の `src/systems/jobs/mod.rs` は app shell と re-export のみ保持
+- `src/systems/jobs/mud_mixer.rs` の model を `hw_jobs::mud_mixer` へ移動
+  - `MudMixerStorage` / `TargetMixer` / `StoredByMixer`
+  - root の `src/systems/jobs/mud_mixer.rs` は re-export のみ保持
 - root crate から `hw_world` の参照
+- root crate から `hw_jobs` の参照
 - root crate から `hw_logistics` の参照
 - build timing を記録
   - `2026-03-08`: `cargo check --workspace --timings` が `2.59s`
@@ -155,9 +170,6 @@
 
 ### 未完了
 
-- `jobs` クレート切り出しの要否判定
-  - `logistics` 側の shared model は `hw_logistics` へ移したが、producer / plugin / app shell は root に残している
-  - 次は `jobs` を別クレートにするか、root shell として維持するかを判断する
 - `WorldMap` 本体と app 側 shell (`spawn` / `terrain_border` / `regrowth`) の最終境界固定
   - 現時点で pure logic は `hw_world` へ寄せ終えており、残っているのは Bevy app shell と `WorldMap` resource 自体
 - build timing の比較表の完成
@@ -200,10 +212,14 @@
 ```text
 hw_core
   ├─ hw_world
+  ├─ hw_jobs
   ├─ hw_logistics
   └─ bevy_app
 
 hw_world
+  └─ bevy_app
+
+hw_jobs
   └─ bevy_app
 
 hw_logistics
@@ -216,6 +232,7 @@ hw_logistics
 - `events` は依存先が広いため、これ以上の分割は早期対象にしない
 - `relationships` は `hw_core` へ移設済み
 - `hw_world` はまず `layout` / `river` / `pathfinding` / `TerrainType` / `mapgen` / `borders` / `regrowth` / `spawn` を保持し、`WorldMap` 本体はまだ root に残す
+- `hw_jobs` はまず base job model と mud mixer model を保持し、door / building completion / floor construction / wall construction の app shell は root に残す
 - `hw_logistics` はまず base component / shared helper / transport request model / metrics / state sync を保持し、producer / plugin / lifecycle shell は root に残す
 
 ## 7. フェーズ計画
@@ -326,6 +343,7 @@ hw_logistics
 2. P1: `hw_core` の責務整理
 3. P2: `hw_world` の可否判定と最小切り出し
 4. P3: `hw_logistics` の可否判定と最小切り出し
+5. P4: `hw_jobs` の最小切り出し
 
 やらない順序:
 
@@ -361,8 +379,8 @@ hw_logistics
 ## 12. 次の担当者が最初にやること
 
 1. `cargo check --workspace` を実行して current green を再確認する
-2. `jobs` クレートを切る価値が本当にあるか、`BuildingType` / blueprint / construction 系の依存で棚卸しする
-3. `WorldMap` の更新責務を app shell 側と pure world logic 側でどこまで分離するか最終決定する
+2. `WorldMap` の更新責務を app shell 側と pure world logic 側でどこまで分離するか最終決定する
+3. floor / wall construction site を root shell のまま固定するか、追加で `hw_jobs` へ寄せる価値があるかだけ確認する
 4. historical baseline が必要なら timing 比較対象の commit を固定して再計測する
 
 ## 13. Definition of Done
@@ -394,3 +412,4 @@ hw_logistics
 | `2026-03-08` | AI | `WorldMap` に construction footprint batch API を追加し、wall / floor / move の world 更新を footprint 単位へ整理 |
 | `2026-03-08` | AI | `hw_logistics` を追加し、base logistics component / helper / transport request model / metrics / state sync を移設 |
 | `2026-03-08` | AI | `cargo check --workspace --timings` を実行し、post-migration timing report を記録 |
+| `2026-03-08` | AI | `hw_jobs` を追加し、base job model と mud mixer model を移設 |

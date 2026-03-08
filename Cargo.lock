@@ -411,6 +411,7 @@ version = "0.1.0"
 dependencies = [
  "bevy",
  "hw_core",
+ "hw_jobs",
  "hw_logistics",
  "hw_world",
  "rand 0.8.5",
@@ -2726,6 +2727,14 @@ name = "hw_core"
 version = "0.1.0"
 dependencies = [
  "bevy",
+]
+
+[[package]]
+name = "hw_jobs"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "hw_core",
 ]
 
 [[package]]
