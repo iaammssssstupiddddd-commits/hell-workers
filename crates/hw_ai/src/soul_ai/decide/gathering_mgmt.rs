@@ -10,7 +10,6 @@ use hw_core::soul::{DamnedSoul, IdleBehavior, IdleState};
 use crate::soul_ai::decide::SoulDecideOutput;
 use crate::soul_ai::helpers::gathering::*;
 use hw_spatial::SpatialGrid;
-use hw_spatial::SpatialGridOps;
 
 fn is_gathering_spot_safe_from_familiars(
     spot_pos: Vec2,
