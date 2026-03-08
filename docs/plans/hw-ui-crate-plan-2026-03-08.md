@@ -339,10 +339,10 @@ CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo check
 - `src/interface/ui/plugins/foundation.rs` （hw_ui を呼び出す wrapper に縮小）
 
 **完了条件**:
-- [ ] `UiSlot`, `UiNodeRegistry`, `MenuState` が `hw_ui` 由来になっている
-- [ ] `hw_ui` 側の setup に `use crate::systems::command::TaskMode` / `use crate::systems::time::TimeSpeed` が残っていない
-- [ ] `UiFoundationPlugin` 相当の機能が `hw_ui` から提供されている
-- [ ] `CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo check` が通る
+- [x] `UiSlot`, `UiNodeRegistry`, `MenuState` が `hw_ui` 由来になっている
+- [x] `hw_ui` 側の setup に `use crate::systems::command::TaskMode` / `use crate::systems::time::TimeSpeed` が残っていない
+- [x] `UiFoundationPlugin` 相当の機能が `hw_ui` から提供されている
+- [x] `CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo check` が通る
 
 ---
 
@@ -374,8 +374,8 @@ CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo check
 
 **完了条件**:
 - [ ] `hw_ui` 内の panels/list が `DamnedSoul`, `Familiar`, `Blueprint`, `AssignedTask`, `FamiliarSpatialGrid` を直接 query しない
-- [ ] root adapter が ViewModel resource を生成している
-- [ ] `EntityListDirty` が `hw_ui` 定義になっており、root が書き込み hw_ui が読む
+- [x] root adapter が ViewModel resource を生成している
+- [x] `EntityListDirty` が `hw_ui` 定義になっており、root が書き込み hw_ui が読む
 - [ ] 差分更新（structure_dirty / value_dirty）が維持されている
 - [ ] `CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo check` が通る
 - [ ] `cargo run` でリスト表示・Info Panel が正常に動作する
@@ -554,17 +554,16 @@ CARGO_HOME=/home/satotakumi/.cargo cargo build --timings
 
 ### 現在地
 
-- 進捗: `25%`（M1〜M3 の主要実装を反映）
-- 完了済みマイルストーン: M1, M2, M3
-- 未着手: M4 〜 M8
+- 進捗: `65%`（M4 完了、M5-5a 完了）
+- 完了済みマイルストーン: M1, M2, M3, M4, M5(5-a)
+- 未着手: M5-5b, M6 〜 M8
 
 ### 次のAIが最初にやること
 
-1. **M4**: `src/interface/ui/setup/` を `crates/hw_ui/` へ移設
-2. **M5**: `interaction` のイベント送信側責務を `hw_ui` 側に収束（`root handler` との分離を確定）
-3. **M6**: `src/interface/ui/panels/` と `src/interface/ui/list/` の移設
-4. **M7**: `interaction` の残置と root handler の最終整理
-5. **M8**: docs 最終同期、shell 収束
+1. **M5**: `Presentation Model` の root adapter 化を完了させる
+2. **M6**: `src/interface/ui/panels/` と `src/interface/ui/list/` の移設
+3. **M7**: `interaction` の残置と root handler の最終整理
+4. **M8**: docs 最終同期、shell 収束
 
 ### ブロッカー/注意点（コード調査済み）
 
@@ -610,3 +609,4 @@ CARGO_HOME=/home/satotakumi/.cargo cargo build --timings
 | `2026-03-08` | `AI` | 初版作成 |
 | `2026-03-08` | `AI` | コード調査に基づいてブラッシュアップ: MenuAction 全依存一覧、EntityInspectionQuery 全依存一覧、UiIntent 設計、M1〜M8 の具体的変更ファイル・検証コマンド・完了条件を追加 |
 | `2026-03-08` | `AI` | M1〜M3 実装結果を反映（`UiIntent` 実装 + `Message` 化、root handler 整備、`UiCorePlugin` の set 化） |
+| `2026-03-08` | `AI` | M4 を実装完了（setup の移設、`UiFoundationPlugin` の実装移管、`EntityListDirty` を hw_ui 定義へ移行） |

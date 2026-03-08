@@ -181,7 +181,7 @@ pub(crate) fn handle_ui_intent(
                 }
             },
             UiIntent::ToggleDoorLock(_) | UiIntent::SelectArchitectCategory(_) | UiIntent::MovePlantBuilding(_) => {
-                // These intents are handled by specialized interaction systems.
+                // Specialized intents are handled by dedicated interaction systems.
             }
         }
     }

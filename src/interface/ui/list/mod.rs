@@ -29,60 +29,7 @@ pub use selection_focus::focus_camera_on_entity;
 pub use sync::{sync_entity_list_from_view_model_system, sync_entity_list_value_rows_system};
 pub(crate) use tree_ops::clear_children;
 pub use view_model::build_entity_list_view_model_system;
-
-#[derive(Resource, Default, Clone, PartialEq)]
-pub struct EntityListViewModel {
-    pub(super) current: EntityListSnapshot,
-    pub(super) previous: EntityListSnapshot,
-}
-
-#[derive(Default, Clone, PartialEq)]
-pub(super) struct EntityListSnapshot {
-    pub(super) familiars: Vec<FamiliarRowViewModel>,
-    pub(super) unassigned: Vec<SoulRowViewModel>,
-    pub(super) unassigned_folded: bool,
-}
-
-#[derive(Clone, PartialEq)]
-pub(super) struct FamiliarRowViewModel {
-    pub(super) entity: Entity,
-    pub(super) label: String,
-    pub(super) is_folded: bool,
-    pub(super) show_empty: bool,
-    pub(super) souls: Vec<SoulRowViewModel>,
-}
-
-#[derive(Clone, PartialEq)]
-pub(super) struct SoulRowViewModel {
-    pub(super) entity: Entity,
-    pub(super) name: String,
-    pub(super) gender: crate::entities::damned_soul::Gender,
-    pub(super) fatigue_text: String,
-    pub(super) stress_text: String,
-    pub(super) stress_bucket: StressBucket,
-    pub(super) dream_text: String,
-    pub(super) dream_empty: bool,
-    pub(super) task_visual: TaskVisual,
-}
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub(super) enum StressBucket {
-    Low,
-    Medium,
-    High,
-}
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub(super) enum TaskVisual {
-    Idle,
-    Chop,
-    Mine,
-    GatherDefault,
-    Haul,
-    Build,
-    HaulToBlueprint,
-    Water,
-}
+pub use hw_ui::list::{EntityListSnapshot, EntityListViewModel, FamiliarRowViewModel, SoulRowViewModel, StressBucket, TaskVisual};
 
 #[derive(Resource, Default)]
 pub struct EntityListNodeIndex {

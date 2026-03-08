@@ -10,8 +10,8 @@ use crate::interface::selection::{
 };
 use crate::interface::ui::vignette::update_vignette_system;
 use crate::interface::ui::{
-    arch_category_action_system, context_menu_system, door_lock_action_system,
-    hover_action_button_system, menu_visibility_system, move_plant_building_action_system, task_summary_ui_system,
+    context_menu_system, hover_action_button_system, menu_visibility_system, task_summary_ui_system,
+    arch_category_action_system, door_lock_action_system, move_plant_building_action_system,
     ui_interaction_system, ui_keyboard_shortcuts_system, update_area_edit_preview_ui_system,
     update_dream_loss_popup_ui_system, update_dream_pool_display_system, update_fps_display_system,
     update_mode_text_system, update_operation_dialog_system, update_speed_button_highlight_system,
@@ -50,21 +50,15 @@ impl Plugin for UiCorePlugin {
                 door_lock_action_system,
                 move_plant_building_action_system,
             )
-                    .in_set(GameSystemSet::Interface),
-        )
-        .add_systems(
-            Update,
-            (
-                menu_visibility_system,
-                update_mode_text_system,
-                update_area_edit_preview_ui_system,
-            )
-                    .in_set(GameSystemSet::Interface),
+                .in_set(GameSystemSet::Interface),
         )
         .add_systems(
             Update,
             (
                 context_menu_system,
+                menu_visibility_system,
+                update_mode_text_system,
+                update_area_edit_preview_ui_system,
                 task_summary_ui_system,
                 update_operation_dialog_system
                     .run_if(|selected: Res<SelectedEntity>| selected.0.is_some()),
@@ -75,7 +69,7 @@ impl Plugin for UiCorePlugin {
                 update_speed_button_highlight_system,
                 update_vignette_system,
             )
-                    .in_set(GameSystemSet::Interface),
+                .in_set(GameSystemSet::Interface),
         );
     }
 }

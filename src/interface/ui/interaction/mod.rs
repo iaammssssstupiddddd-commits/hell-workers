@@ -28,10 +28,10 @@ use crate::app_contexts::{BuildContext, CompanionPlacementState, MoveContext, Mo
 use crate::interface::ui::components::*;
 use crate::interface::ui::theme::UiTheme;
 use crate::systems::command::TaskMode;
-use crate::systems::jobs::{Door, DoorState, apply_door_state};
-use crate::world::map::WorldMapWrite;
 use bevy::prelude::*;
 use bevy::ui::RelativeCursorPosition;
+use crate::systems::jobs::{Door, DoorState, apply_door_state};
+use crate::world::map::WorldMapWrite;
 use hw_ui::UiIntent;
 
 pub fn update_ui_input_state_system(
@@ -126,12 +126,7 @@ pub fn ui_keyboard_shortcuts_system(
     }
 }
 
-/// UI ボタンの操作を管理する統合システム
-///
-/// ここでは `MenuAction` のうち汎用アクションのみを処理する。
-/// 専門アクションは別システムへ明示的に分離する：
-/// - `MenuAction::SelectArchitectCategory` => `arch_category_action_system`
-/// - `MenuAction::ToggleDoorLock` => `door_lock_action_system`
+/// UI ボタンの操作を受け取り、`UiIntent` を発行する統合システム
 pub fn ui_interaction_system(
     mut interaction_query: Query<
         (&Interaction, &MenuButton, &mut BackgroundColor),

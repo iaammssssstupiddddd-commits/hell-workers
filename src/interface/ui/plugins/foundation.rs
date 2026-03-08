@@ -1,23 +1,16 @@
-use crate::interface::ui::{
-    PlacementFailureTooltip, SectionFolded, UiInputState, UiNodeRegistry, UiTheme,
-    UnassignedFolded,
-};
+use crate::interface::ui::update_ui_input_state_system;
 use crate::systems::GameSystemSet;
 use bevy::prelude::*;
+use hw_ui::plugins::foundation::UiFoundationPlugin as HwUiFoundationPlugin;
 
 pub struct UiFoundationPlugin;
 
 impl Plugin for UiFoundationPlugin {
     fn build(&self, app: &mut App) {
-        app.register_type::<SectionFolded>();
-        app.register_type::<UnassignedFolded>();
-        app.init_resource::<UiInputState>();
-        app.init_resource::<PlacementFailureTooltip>();
-        app.init_resource::<UiNodeRegistry>();
-        app.init_resource::<UiTheme>();
+        app.add_plugins(HwUiFoundationPlugin);
         app.add_systems(
             PreUpdate,
-            crate::interface::ui::update_ui_input_state_system.in_set(GameSystemSet::Interface),
+            update_ui_input_state_system.in_set(GameSystemSet::Interface),
         );
     }
 }
