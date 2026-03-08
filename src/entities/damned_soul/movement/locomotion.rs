@@ -6,14 +6,14 @@ use crate::entities::damned_soul::{
 };
 use crate::relationships::PushingWheelbarrow;
 use crate::systems::jobs::DoorState;
-use crate::world::map::WorldMap;
+use crate::world::map::{WorldMap, WorldMapRead};
 use bevy::prelude::*;
 use std::collections::HashMap;
 
 /// 移動システム
 pub fn soul_movement(
     time: Res<Time>,
-    world_map: Res<WorldMap>,
+    world_map: WorldMapRead,
     mut door_waits: Local<HashMap<Entity, f32>>,
     mut query: Query<(
         Entity,

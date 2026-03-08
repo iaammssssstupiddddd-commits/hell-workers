@@ -7,7 +7,7 @@ use hw_core::constants::MAX_PATHFINDS_PER_FRAME;
 use crate::entities::damned_soul::{DamnedSoul, Destination, IdleBehavior, IdleState, Path};
 use crate::relationships::RestAreaReservedFor;
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
-use crate::world::map::WorldMap;
+use crate::world::map::{WorldMap, WorldMapRead};
 use crate::world::pathfinding::PathfindingContext;
 use bevy::prelude::*;
 
@@ -25,7 +25,7 @@ fn phase_budget_limit(prioritize_tasks: bool) -> usize {
 /// 障害物に埋まったソウルを最寄りの歩行可能タイルへ逃がす。
 /// 建築物の配置や障害物の追加で現在位置が通行不可になった場合に実行される。
 pub fn soul_stuck_escape_system(
-    world_map: Res<WorldMap>,
+    world_map: WorldMapRead,
     mut query: Query<(&mut Transform, &mut Path), With<DamnedSoul>>,
 ) {
     for (mut transform, mut path) in query.iter_mut() {
@@ -203,7 +203,7 @@ fn process_worker_pathfinding(
 
 pub fn pathfinding_system(
     mut commands: Commands,
-    world_map: Res<WorldMap>,
+    world_map: WorldMapRead,
     mut pf_context: Local<PathfindingContext>,
     mut query: Query<
         (
@@ -283,7 +283,7 @@ pub fn pathfinding_system(
                 &mut idle,
                 rest_reserved_for,
                 inventory_opt.as_deref_mut(),
-                &world_map,
+                world_map.as_ref(),
                 &mut pf_context,
                 &q_rest_areas,
                 &mut queries,
