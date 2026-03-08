@@ -180,10 +180,16 @@ hw_ui/
 - 問題発生時の戻し方: Phase 単位で git revert
 - 推奨順序: **hw_ai の完了後** に hw_ui に着手
 
+## 10.5 実装反映メモ（本計画）
+
+- `hw_ui` 側に UI コアの表示・interaction を収束し、`bevy_app` は shell（plugin 登録）とゲーム状態更新 handler を持つ形を採用。
+- `selection` と `camera` / `vignette` は本実装では `bevy_app` 側に残留し、Phase 4 以降の follow-up 対象として明示。
+- `src/interface/ui/{setup,plugins,panels,list}` は wrapper/adapter 化を前提として残し、実体は `hw_ui` が担う。
+
 ## 11. 未解決事項（Open Questions）
 
 - [ ] ViewModel パターンの粒度: パネル単位か Entity 単位か
-- [ ] `selection/` の WorldMap 依存をどう解決するか（crate 移動 vs trait 抽象化 vs root 残留）
+- [x] `selection/` は `WorldMap` 依存が高いため、現時点は `bevy_app` に残留。follow-up で trait 抽象化または root-surface API の再設計を検討
 - [ ] hw_ui は hw_ai に依存すべきか（AI 状態の表示に必要）、それとも hw_core 経由で間接参照すべきか
 - [ ] `camera.rs` は hw_ui に含めるか root に残すか（PanCamera は Input セットに属する）
 - [ ] Visual システム（speech bubbles, dream particles）の一部が UI と密結合している箇所の扱い

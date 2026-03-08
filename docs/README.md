@@ -32,3 +32,4 @@
 - [plans/README.md](plans/README.md): フェーズ分割した実装計画ドキュメント。
 - [proposals/README.md](proposals/README.md): 提案書一覧とテンプレート。
 - `architecture.md` / `cargo_workspace.md` / `soul_ai.md`: crate 境界と `root shell` 方針（例: `work.rs` の `unassign_task` 分離）を同期済み。
+- `proposals/hw-ui-crate.md` + `plans/hw-ui-crate-plan-2026-03-08.md`: `hw_ui` 分離の境界と follow-up 方針（`selection`）を同期済み。

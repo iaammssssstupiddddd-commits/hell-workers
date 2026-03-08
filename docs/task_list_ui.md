@@ -79,3 +79,10 @@
 - **ホバー**: 背景色がハイライト
 - **クリック**: カメラをそのタスク（対象エンティティ）の位置へ移動し、InfoPanel にピン留め
 - **選択状態**: ピン留めされたエンティティに対応するアイテムに選択ボーダーと背景色が表示
+
+## 関連ファイル（最終境界反映）
+
+- `src/interface/ui/panels/task_list/mod.rs` - root wrapper（legacy 実装を利用）
+- `src/interface/ui/panels_legacy/task_list/` - `interaction`, `presenter`, `render`, `update` 実装の移行基盤
+- `src/interface/ui/list/change_detection.rs` - `TaskListDirty` 更新との連携
+- `crates/hw_ui/src/panels/menu.rs` - メニュー可視性・サブメニュー側の UI状態制御
