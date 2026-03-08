@@ -496,10 +496,13 @@ CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo check
 - `docs/proposals/hw-ui-crate.md`
 
 **完了条件**:
-- [ ] `hw_ui` と root shell の境界が docs に明記されている
-- [ ] selection 分離が follow-up として docs に記録されている
-- [ ] `docs/README.md` の参照が最新化されている
-- [ ] `CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo check` が通る
+- [x] `hw_ui` と root shell の境界が docs に明記されている
+- [x] selection 分離が follow-up として docs に記録されている
+- [x] `docs/README.md` の参照が最新化されている
+- [x] `CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo check` が通る
+
+**備考**:
+- `cargo run` による最終UI確認は、M8 範囲外だが次の確認ステップとして `M9`/次タスクで実施推奨。
 
 ## 6. リスクと対策
 
@@ -557,14 +560,14 @@ CARGO_HOME=/home/satotakumi/.cargo cargo build --timings
 
 ### 現在地
 
-- 進捗: `94%`（M7 `status_display` 移植完了）
-- 完了済みマイルストーン: M1, M2, M3, M4, M5(5-a/5-b), M6, M7
-- 未着手: M8
+- 進捗: `100%`（M8 docs/shell 同期完了）
+- 完了済みマイルストーン: M1, M2, M3, M4, M5(5-a/5-b), M6, M7, M8
+- 未着手: なし
 
 ### 次のAIが最初にやること
 
-1. **M7**: `interaction` の残置と root handler の最終整理
-2. **M8**: docs 最終同期、shell 収束
+1. **selection 分離の follow-up**（M8完了後）
+2. `src/interface/selection` の root 性を維持したまま `UiIntent` 経路の監査
 
 ### ブロッカー/注意点（コード調査済み）
 

@@ -151,18 +151,22 @@ Perceive → Update → Decide → Execute
 - **AI挙動**: [soul_ai.md](soul_ai.md) / [familiar_ai.md](familiar_ai.md)
 
 ## UIアーキテクチャ補足
-- ルート構造:
-  - `UiRoot` 配下に `UiMountSlot`（`LeftPanel` / `RightPanel` / `Bottom` / `Overlay` / `TopRight`）を作成
-  - 各UIはスロットにマウントしてレイアウト責務を分離
-- ノード参照:
-  - `UiNodeRegistry` で `UiSlot -> Entity` を保持
-  - テキスト/アイコン更新は `Query::get_mut(entity)` で直接更新
+- `hw_ui` と root shell の境界:
+  - `hw_ui` 側は UI ノード生成・表示系システムの本体を担当し、`UiRoot`/`UiMountSlot`、`UiSlot` 予約、ステータス表示、リスト/パネル表示、interaction の可視系を集約する。
+  - root 側 (`bevy_app`) は `UiIntent`/メッセージ受信、selection/配置状態変更、WorldMapWrite/TaskContext などゲーム状態を持つ adapter を担当する。
+  - `UiRoot` と `UiNodeRegistry` の参照は `src/interface/ui/components.rs` を経由して root と `hw_ui` の API を接続（root は再エクスポートとして薄い shell）。
+- UIノード管理:
+  - `UiNodeRegistry` は `UiSlot -> Entity` を保持し、ノード更新は `Query::get_mut(entity)` で差分反映。
 - 情報表示:
-  - `src/interface/ui/presentation/` が `EntityInspectionModel` を構築
-  - `InfoPanel` と `HoverTooltip` は同一モデルを利用して表示差異を抑制
+  - `src/interface/ui/presentation/` が `EntityInspectionModel`/`ViewModel` を root で構築。
+  - `InfoPanel` と `HoverTooltip` は同じモデルを参照して表示差分を抑える。
 - 入力判定:
-  - `UiInputState.pointer_over_ui` を単一の判定値として利用
-  - 選択/配置系と PanCamera ガードが同じ値を参照
+  - `UiInputState.pointer_over_ui` を統一 guard として共有。
+  - 選択/配置系（`selection`）と `PanCamera` ガードは root 側で維持。
+- ルート残留（境界維持）:
+  - `src/interface/ui/selection/`、`src/interface/ui/vignette.rs`、`src/interface/camera.rs`
+  - `src/interface/ui/presentation/`（Model 構築）と `src/interface/ui/list/change_detection.rs`（`EntityListDirty` トリガ生成）
+  - `src/interface/ui/interaction/mode.rs` / `intent_handler.rs`（状態変更ハンドラ）
 
 ## キーボードショートカット
 

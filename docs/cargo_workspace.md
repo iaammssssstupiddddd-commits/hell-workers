@@ -53,7 +53,6 @@ hw_ui
   ├─ hw_core
   ├─ hw_jobs
   ├─ hw_logistics
-  └─ bevy_app
 ```
 
 重要な原則:
@@ -61,6 +60,12 @@ hw_ui
 - leaf crate から root crate (`bevy_app`) へ逆依存しない
 - `hw_components` のような雑多な共通箱は作らない
 - 型定義とその主要 `impl` は同じ crate に置く
+
+境界ルール（最終整理反映）:
+
+- `hw_ui` は UI の構築・更新ロジックを集約し、`bevy_app` は shell/adapter とゲーム状態更新ハンドラを保持する。
+- `bevy_app` → `hw_ui` は依存方向を維持し、`hw_ui` から `bevy_app` へ依存しない。
+- `UiShell` 的な役割（Selection やカメラ・モード遷移）は `bevy_app` 側で管理し、`interface` では API 構造変更に耐える薄い再エクスポート層を残す。
 
 ### `hw_ai`
 

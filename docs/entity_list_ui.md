@@ -79,15 +79,18 @@
   使い魔ヘッダー表示（`現在/最大`）を即時更新する
 - 最終的な整合は通常の100ms差分同期と `FamiliarOperationMaxSoulChangedEvent` の処理で維持する
 
-## 主な関連ファイル
-- `src/interface/ui/setup/entity_list.rs` - パネル初期生成
-- `src/interface/ui/list/view_model.rs` - ビューモデル構築
-- `src/interface/ui/list/spawn.rs`, `src/interface/ui/list/spawn/{soul_row,familiar_section}.rs` - ソウル・使い魔セクションのUIノード生成
-- `src/interface/ui/list/sync.rs`, `src/interface/ui/list/sync/{familiar,unassigned}.rs` - 差分同期
-- `src/interface/ui/list/tree_ops.rs` - 子ノード削除（clear_children）
-- `src/interface/ui/list/selection_focus.rs` - 選択とカメラフォーカス
-- `src/interface/ui/list/interaction.rs`, `src/interface/ui/list/interaction/{navigation,visual}.rs` - 行操作/スクロール/ハイライト
-- `src/interface/ui/list/drag_drop.rs` - ドラッグ&ドロップ配属
-- `src/interface/ui/list/minimize.rs` - 最小化トグル
-- `src/interface/ui/list/resize.rs` - 縦リサイズとカーソル制御
-- `src/interface/ui/components.rs` - UIコンポーネント定義
+## 主な関連ファイル（最終境界反映）
+
+### root shell（adapter）
+- `src/interface/ui/list/mod.rs` - イベント受付、interaction/system 登録、`EntityListDirty` の橋渡し
+- `src/interface/ui/list/change_detection.rs` - 変更検知トリガ（root に残置）
+- `src/interface/ui/list_legacy/` - 互換のため残っている旧実装（今後整理対象）
+
+### `hw_ui` 側（分離済み）
+- `crates/hw_ui/src/list/models.rs` - ビューモデル型
+- `crates/hw_ui/src/list/dirty.rs` - dirty リソース定義
+- `crates/hw_ui/src/list/mod.rs` - `hw_ui` 対外エクスポート
+
+### 境界横断
+- `src/interface/ui/components.rs`, `src/interface/ui/theme.rs` は `hw_ui` API の再エクスポートシェルとして残す
+- `src/interface/ui/setup/entity_list.rs`（初期構築）は root shell 経由で呼び出される
