@@ -114,13 +114,7 @@ pub(super) fn place_building_blueprint(
         ))
         .id();
 
-    for &g in &occupied_grids {
-        if building_type == BuildingType::Bridge {
-            world_map.set_building(g, entity);
-        } else {
-            world_map.set_building_occupancy(g, entity);
-        }
-    }
+    world_map.reserve_building_footprint(building_type, entity, occupied_grids.iter().copied());
 
     Some((entity, occupied_grids, spawn_pos))
 }

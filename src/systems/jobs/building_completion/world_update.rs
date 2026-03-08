@@ -1,4 +1,4 @@
-use super::super::{Blueprint, BuildingType, DoorState, ObstaclePosition};
+use super::super::{Blueprint, BuildingType, ObstaclePosition};
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
 
@@ -15,17 +15,11 @@ pub(super) fn update_world_for_completed_building(
         ),
     >,
 ) {
-    if bp.kind == BuildingType::Bridge {
-        for &(gx, gy) in &bp.occupied_grids {
-            world_map.register_bridge_tile((gx, gy), building_entity);
-        }
-        return;
-    }
-
     let is_obstacle = matches!(
         bp.kind,
-        BuildingType::Wall
+        BuildingType::Bridge
             | BuildingType::Door
+            | BuildingType::Wall
             | BuildingType::Tank
             | BuildingType::MudMixer
             | BuildingType::RestArea
@@ -38,19 +32,19 @@ pub(super) fn update_world_for_completed_building(
         return;
     }
 
-    commands.entity(building_entity).with_children(|parent| {
-        for &(gx, gy) in &bp.occupied_grids {
-            parent.spawn((ObstaclePosition(gx, gy), Name::new("Building Obstacle")));
-        }
-    });
-
-    for &(gx, gy) in &bp.occupied_grids {
-        if bp.kind == BuildingType::Door {
-            world_map.register_door((gx, gy), building_entity, DoorState::Closed);
-        } else {
-            world_map.set_building_occupancy((gx, gy), building_entity);
-        }
+    if bp.kind != BuildingType::Bridge {
+        commands.entity(building_entity).with_children(|parent| {
+            for &(gx, gy) in &bp.occupied_grids {
+                parent.spawn((ObstaclePosition(gx, gy), Name::new("Building Obstacle")));
+            }
+        });
     }
+
+    world_map.register_completed_building_footprint(
+        bp.kind,
+        building_entity,
+        bp.occupied_grids.iter().copied(),
+    );
 
     for &(gx, gy) in &bp.occupied_grids {
         for (mut soul_transform, soul_entity) in q_souls.iter_mut() {

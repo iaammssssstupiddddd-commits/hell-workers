@@ -5,6 +5,7 @@ mod layout;
 mod spawn;
 pub mod terrain_border;
 
+use crate::systems::jobs::BuildingType;
 pub use access::{WorldMapRead, WorldMapWrite};
 pub use layout::{
     INITIAL_WOOD_POSITIONS, RIVER_X_MAX, RIVER_X_MIN, RIVER_Y_MAX, RIVER_Y_MIN, ROCK_POSITIONS,
@@ -154,6 +155,13 @@ impl WorldMap {
         }
     }
 
+    pub fn reserve_building_footprint_tiles<I>(&mut self, grids: I)
+    where
+        I: IntoIterator<Item = (i32, i32)>,
+    {
+        self.add_grid_obstacles(grids);
+    }
+
     pub fn add_door(&mut self, x: i32, y: i32, door_entity: Entity, state: DoorState) {
         self.doors.insert((x, y), door_entity);
         self.door_states.insert((x, y), state);
@@ -185,10 +193,28 @@ impl WorldMap {
         self.add_obstacle(grid.0, grid.1);
     }
 
+    pub fn set_building_occupancies<I>(&mut self, entity: Entity, grids: I)
+    where
+        I: IntoIterator<Item = (i32, i32)>,
+    {
+        for grid in grids {
+            self.set_building_occupancy(grid, entity);
+        }
+    }
+
     pub fn clear_building_occupancy(&mut self, grid: (i32, i32)) -> Option<Entity> {
         let entity = self.clear_building(grid);
         self.remove_obstacle(grid.0, grid.1);
         entity
+    }
+
+    pub fn clear_building_footprint<I>(&mut self, grids: I)
+    where
+        I: IntoIterator<Item = (i32, i32)>,
+    {
+        for grid in grids {
+            self.clear_building_occupancy(grid);
+        }
     }
 
     pub fn clear_building_occupancy_if_owned(
@@ -201,6 +227,56 @@ impl WorldMap {
         }
         self.clear_building_occupancy(grid);
         true
+    }
+
+    pub fn release_building_grid_if_owned(&mut self, grid: (i32, i32), entity: Entity) -> bool {
+        if self.clear_building_occupancy_if_owned(grid, entity) {
+            return true;
+        }
+        self.remove_grid_obstacle(grid);
+        false
+    }
+
+    pub fn release_building_grids_if_owned<I>(&mut self, entity: Entity, grids: I)
+    where
+        I: IntoIterator<Item = (i32, i32)>,
+    {
+        for grid in grids {
+            self.release_building_grid_if_owned(grid, entity);
+        }
+    }
+
+    pub fn release_building_footprint_if_owned<I>(&mut self, entity: Entity, grids: I)
+    where
+        I: IntoIterator<Item = (i32, i32)>,
+    {
+        self.release_building_grids_if_owned(entity, grids);
+    }
+
+    pub fn release_building_footprint_if_matches<I>(&mut self, entity: Entity, grids: I)
+    where
+        I: IntoIterator<Item = ((i32, i32), Option<Entity>)>,
+    {
+        for (grid, alternate) in grids {
+            self.release_building_grid_if_matches(grid, entity, alternate);
+        }
+    }
+
+    pub fn release_building_grid_if_matches(
+        &mut self,
+        grid: (i32, i32),
+        entity: Entity,
+        alternate: Option<Entity>,
+    ) -> bool {
+        if self
+            .building_entity(grid)
+            .is_some_and(|current| current == entity || Some(current) == alternate)
+        {
+            self.clear_building_occupancy(grid);
+            return true;
+        }
+        self.remove_grid_obstacle(grid);
+        false
     }
 
     pub fn building_entries(&self) -> impl Iterator<Item = (&(i32, i32), &Entity)> {
@@ -239,6 +315,27 @@ impl WorldMap {
         self.set_stockpile(new_grid, entity);
     }
 
+    pub fn clear_stockpile_tile_if_owned(
+        &mut self,
+        grid: (i32, i32),
+        entity: Entity,
+    ) -> bool {
+        if self.stockpile_entity(grid) != Some(entity) {
+            return false;
+        }
+        self.clear_stockpile(grid);
+        true
+    }
+
+    pub fn take_stockpile_tiles<I>(&mut self, grids: I) -> Vec<Entity>
+    where
+        I: IntoIterator<Item = (i32, i32)>,
+    {
+        grids.into_iter()
+            .filter_map(|grid| self.clear_stockpile(grid))
+            .collect()
+    }
+
     pub fn stockpile_entries(&self) -> impl Iterator<Item = (&(i32, i32), &Entity)> {
         self.stockpiles.iter()
     }
@@ -250,6 +347,47 @@ impl WorldMap {
     pub fn register_bridge_tile(&mut self, grid: (i32, i32), entity: Entity) {
         self.add_bridged_tile(grid);
         self.set_building(grid, entity);
+    }
+
+    pub fn reserve_building_footprint<I>(
+        &mut self,
+        building_type: BuildingType,
+        entity: Entity,
+        grids: I,
+    ) where
+        I: IntoIterator<Item = (i32, i32)>,
+    {
+        match building_type {
+            BuildingType::Bridge => {
+                for grid in grids {
+                    self.set_building(grid, entity);
+                }
+            }
+            _ => self.set_building_occupancies(entity, grids),
+        }
+    }
+
+    pub fn register_completed_building_footprint<I>(
+        &mut self,
+        building_type: BuildingType,
+        entity: Entity,
+        grids: I,
+    ) where
+        I: IntoIterator<Item = (i32, i32)>,
+    {
+        match building_type {
+            BuildingType::Bridge => {
+                for grid in grids {
+                    self.register_bridge_tile(grid, entity);
+                }
+            }
+            BuildingType::Door => {
+                for grid in grids {
+                    self.register_door(grid, entity, DoorState::Closed);
+                }
+            }
+            _ => self.set_building_occupancies(entity, grids),
+        }
     }
 
     pub fn set_door_state(&mut self, x: i32, y: i32, state: DoorState) {

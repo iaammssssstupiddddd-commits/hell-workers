@@ -185,17 +185,15 @@ pub fn wall_construction_cancellation_system(
             commands.entity(request_entity).try_despawn();
         }
 
+        let released_tiles: Vec<((i32, i32), Option<Entity>)> = site_tiles
+            .iter()
+            .map(|tile| (tile.grid_pos, tile.spawned_wall))
+            .collect();
+        world_map.release_building_footprint_if_matches(site_entity, released_tiles);
+
         for tile in site_tiles {
             if let Some(wall_entity) = tile.spawned_wall {
                 commands.entity(wall_entity).try_despawn();
-            }
-
-            if let Some(entity) = world_map.building_entity(tile.grid_pos)
-                && (entity == site_entity || Some(entity) == tile.spawned_wall)
-            {
-                world_map.clear_building_occupancy(tile.grid_pos);
-            } else {
-                world_map.remove_obstacle(tile.grid_pos.0, tile.grid_pos.1);
             }
             commands.entity(tile.entity).try_despawn();
         }
