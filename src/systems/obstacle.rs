@@ -51,7 +51,7 @@ pub fn obstacle_cleanup_system(
     }
 
     for (x, y) in to_remove {
-        world_map.remove_obstacle(x, y);
+        world_map.remove_grid_obstacle((x, y));
         // 岩があった場所をDirtに変更
         if let Some(idx) = world_map.pos_to_idx(x, y) {
             world_map.set_terrain_at_idx(idx, crate::world::map::TerrainType::Dirt);

@@ -83,7 +83,7 @@ pub fn floor_construction_completion_system(
                 .collect();
 
             for (tile_entity, (gx, gy), _) in &site_tiles {
-                world_map.add_obstacle(*gx, *gy);
+                world_map.add_grid_obstacle((*gx, *gy));
                 commands
                     .entity(*tile_entity)
                     .insert(ObstaclePosition(*gx, *gy));

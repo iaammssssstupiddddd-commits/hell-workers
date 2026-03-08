@@ -121,7 +121,7 @@ fn apply_zone_placement(
                             Name::new("Stockpile"),
                         ))
                         .id();
-                    world_map.set_stockpile(grid, entity);
+                    world_map.register_stockpile_tile(grid, entity);
                 }
                 ZoneType::Yard => {}
             }

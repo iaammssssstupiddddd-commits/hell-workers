@@ -225,7 +225,7 @@ fn process_dream_planting(
             },
             Transform::from_xyz(pos.x, pos.y, Z_ITEM_OBSTACLE),
         ));
-        world_map.add_obstacle(gx, gy);
+        world_map.add_grid_obstacle((gx, gy));
     }
 
     let cost = plan.cost();
