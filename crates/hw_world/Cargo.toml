@@ -5,3 +5,4 @@ edition = "2024"
 
 [dependencies]
 hw_core = { path = "../hw_core" }
+rand = { workspace = true }

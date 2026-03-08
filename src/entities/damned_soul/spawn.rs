@@ -54,23 +54,27 @@ fn pick_river_south_bank_spawn(world_map: &WorldMap, rng: &mut impl Rng) -> Opti
     let south_y_max = RIVER_Y_MIN - 1;
     let south_y_min = 5; // マップ端の少し内側から開始
 
-    for _ in 0..64 {
-        let x = rng.gen_range(RIVER_X_MIN..=RIVER_X_MAX);
-        let y = rng.gen_range(south_y_min..=south_y_max);
-        if world_map.is_walkable(x, y) {
-            return Some(WorldMap::grid_to_world(x, y));
-        }
-    }
-
-    for _ in 0..256 {
-        let x = rng.gen_range(RIVER_X_MIN..=RIVER_X_MAX);
-        let y = rng.gen_range(south_y_min..=south_y_max);
-        if world_map.is_walkable(x, y) {
-            return Some(WorldMap::grid_to_world(x, y));
-        }
-    }
-
-    None
+    hw_world::pick_random_walkable_grid_in_rect(
+        world_map,
+        RIVER_X_MIN,
+        RIVER_X_MAX,
+        south_y_min,
+        south_y_max,
+        64,
+        rng,
+    )
+    .or_else(|| {
+        hw_world::pick_random_walkable_grid_in_rect(
+            world_map,
+            RIVER_X_MIN,
+            RIVER_X_MAX,
+            south_y_min,
+            south_y_max,
+            256,
+            rng,
+        )
+    })
+    .map(|(x, y)| WorldMap::grid_to_world(x, y))
 }
 
 fn queue_river_spawn_events(
