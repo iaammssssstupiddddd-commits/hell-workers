@@ -6,10 +6,12 @@
 use crate::assets::GameAssets;
 use crate::systems::jobs::Tree;
 use crate::systems::time::GameTime;
-use crate::world::map::{WorldMap, WorldMapRead};
+use crate::world::map::WorldMapRead;
 use bevy::prelude::*;
 use hw_core::constants::*;
-use hw_world::{ForestZone, default_forest_zones, find_regrowth_position};
+use hw_world::{
+    ForestZone, default_forest_zones, find_regrowth_position, grid_to_world, world_to_grid,
+};
 
 /// 再生管理リソース
 #[derive(Resource)]
@@ -59,7 +61,7 @@ pub fn tree_regrowth_system(
         let mut occupied_positions = std::collections::HashSet::new();
 
         for tree_transform in q_trees.iter() {
-            let (gx, gy) = WorldMap::world_to_grid(tree_transform.translation.truncate());
+            let (gx, gy) = world_to_grid(tree_transform.translation.truncate());
             if zone.contains(gx, gy) {
                 current_count += 1;
                 occupied_positions.insert((gx, gy));
@@ -74,7 +76,7 @@ pub fn tree_regrowth_system(
                 continue;
             };
 
-            let pos = WorldMap::grid_to_world(px, py);
+            let pos = grid_to_world(px, py);
             let variant_index = rand::random::<usize>() % game_assets.trees.len();
             commands.spawn((
                 Tree,

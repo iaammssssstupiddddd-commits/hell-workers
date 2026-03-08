@@ -2,10 +2,10 @@
 
 use crate::assets::GameAssets;
 use hw_core::constants::*;
-use hw_world::generate_base_terrain_tiles;
+use hw_world::{generate_base_terrain_tiles, grid_to_world};
 use bevy::prelude::*;
 
-use super::{TerrainType, Tile, WorldMap, WorldMapWrite};
+use super::{TerrainType, Tile, WorldMapWrite};
 
 pub fn spawn_map(
     mut commands: Commands,
@@ -21,7 +21,7 @@ pub fn spawn_map(
             let texture = terrain_texture(terrain, &game_assets);
             world_map.set_terrain_at_idx(idx, terrain);
 
-            let pos = WorldMap::grid_to_world(x, y);
+            let pos = grid_to_world(x, y);
             let entity = commands
                 .spawn((
                     Tile,

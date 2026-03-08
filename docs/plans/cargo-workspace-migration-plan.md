@@ -37,6 +37,7 @@
   - `src/systems/logistics/`
 - `hw_world` は world 全体ではなく、固定レイアウト定数・川/砂生成ロジック・pathfinding アルゴリズム・`TerrainType` を保持している
   - 追加で、ベース地形タイル生成・terrain border 判定・regrowth zone 定義/候補選定・spawn grid 選定補助も `hw_world` に保持している
+  - 座標変換 (`world_to_grid` / `grid_to_world` / snap) と nearest query helper も `hw_world` に保持している
 - `hw_core` には `events` のうち低結合な型群に加え、`WorkType` / `ResourceType` / `FamiliarAiState` / `AssignedTask` も移っている
 - `hw_logistics` は base logistics component / helper / transport request model の最小単位を保持している
 - `hw_jobs` は base job model と mud mixer model の最小単位を保持している
@@ -126,6 +127,12 @@
   - `release_building_footprint_if_owned`
   - `release_building_footprint_if_matches`
   - wall / floor / move 系の construction shell で再利用
+- `WorldMap` の pure coordinate / nearest query helper を `hw_world` へ移動
+  - `world_to_grid` / `grid_to_world` / `snap_to_grid_center` / `snap_to_grid_edge`
+  - `find_nearest_walkable_grid` / `find_nearest_river_grid`
+  - `WorldMap` 側は互換 wrapper を残しつつ、責務を resource state と occupancy / terrain access に寄せた
+- `src/world/map/spawn.rs` / `src/world/map/terrain_border.rs` / `src/world/regrowth.rs` は `hw_world` の pure API を直接使う shell に整理
+  - `WorldMap` に残るのは Bevy resource と map state 更新責務
 - root crate から `hw_core` の参照
 - `hw_logistics` クレートの追加
 - `src/systems/logistics/types.rs` の基礎コンポーネントを `hw_logistics::types` へ移動
@@ -170,8 +177,6 @@
 
 ### 未完了
 
-- `WorldMap` 本体と app 側 shell (`spawn` / `terrain_border` / `regrowth`) の最終境界固定
-  - 現時点で pure logic は `hw_world` へ寄せ終えており、残っているのは Bevy app shell と `WorldMap` resource 自体
 - build timing の比較表の完成
   - post-migration timing は記録済み
   - historical baseline は未記録のため、比較対象をどう固定するかだけ残っている
@@ -231,7 +236,7 @@ hw_logistics
 - `hw_components` は現時点では作らない
 - `events` は依存先が広いため、これ以上の分割は早期対象にしない
 - `relationships` は `hw_core` へ移設済み
-- `hw_world` はまず `layout` / `river` / `pathfinding` / `TerrainType` / `mapgen` / `borders` / `regrowth` / `spawn` を保持し、`WorldMap` 本体はまだ root に残す
+- `hw_world` は `layout` / `river` / `pathfinding` / `TerrainType` / `mapgen` / `borders` / `regrowth` / `spawn` / `coords` / `query` を保持し、`WorldMap` 本体は root resource として残す
 - `hw_jobs` はまず base job model と mud mixer model を保持し、door / building completion / floor construction / wall construction の app shell は root に残す
 - `hw_logistics` はまず base component / shared helper / transport request model / metrics / state sync を保持し、producer / plugin / lifecycle shell は root に残す
 
@@ -266,7 +271,7 @@ hw_logistics
 - 維持: `constants`, `game_state`
 - 維持: `relationships`
 - 移動済み: `events` の低結合型群、`WorkType`、`ResourceType`、`FamiliarAiState`、`AssignedTask`
-- 保留: `WorldMap` / logistics / app shell 側の境界
+- 保留: historical timing 比較の固定方法
 
 作業:
 
@@ -302,7 +307,7 @@ hw_logistics
 - `DoorState` 依存は解消済み
 - `buildings` / `stockpiles` は read/write ともに accessor 経由へ移行済み
 - `tiles` / `tile_entities` / `obstacles` の直接アクセスも accessor 経由へ移行済み
-- 次の大きな壁は、`WorldMapRead` / `WorldMapWrite` の wrapper 化で止まっている書き込み境界を、用途別 API に進めることと、`regrowth` のような app 寄り world system の境界
+- `WorldMap` の pure helper は `hw_world` へ寄せ終えており、root 側に残るのは resource state と Bevy app shell
 
 完了条件:
 
@@ -379,8 +384,8 @@ hw_logistics
 ## 12. 次の担当者が最初にやること
 
 1. `cargo check --workspace` を実行して current green を再確認する
-2. `WorldMap` の更新責務を app shell 側と pure world logic 側でどこまで分離するか最終決定する
-3. floor / wall construction site を root shell のまま固定するか、追加で `hw_jobs` へ寄せる価値があるかだけ確認する
+2. floor / wall construction site を root shell のまま固定するか、追加で `hw_jobs` へ寄せる価値があるかだけ確認する
+3. `cargo run` による起動確認を取る
 4. historical baseline が必要なら timing 比較対象の commit を固定して再計測する
 
 ## 13. Definition of Done
@@ -410,6 +415,7 @@ hw_logistics
 | `2026-03-08` | AI | `WorldMap` に cleanup / batch release API を追加し、conditional な construction cleanup と zone removal を簡素化 |
 | `2026-03-08` | AI | `WorldMap` に building-type aware な footprint API を追加し、placement / completion / startup spawn の world 更新規約を集約 |
 | `2026-03-08` | AI | `WorldMap` に construction footprint batch API を追加し、wall / floor / move の world 更新を footprint 単位へ整理 |
+| `2026-03-08` | AI | `hw_world` に座標変換と nearest query helper を移し、world shell を pure API 直接利用へ整理 |
 | `2026-03-08` | AI | `hw_logistics` を追加し、base logistics component / helper / transport request model / metrics / state sync を移設 |
 | `2026-03-08` | AI | `cargo check --workspace --timings` を実行し、post-migration timing report を記録 |
 | `2026-03-08` | AI | `hw_jobs` を追加し、base job model と mud mixer model を移設 |
