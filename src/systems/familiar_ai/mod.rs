@@ -68,8 +68,6 @@ impl Plugin for FamiliarAiPlugin {
                 // === Execute Phase ===
                 (
                     execute::max_soul_apply::handle_max_soul_changed_system,
-                    execute::state_apply::familiar_state_apply_system,
-                    execute::state_log::handle_state_changed_system,
                     execute::idle_visual_apply::familiar_idle_visual_apply_system,
                     execute::squad_apply::apply_squad_management_requests_system,
                     execute::encouragement_apply::encouragement_apply_system,
