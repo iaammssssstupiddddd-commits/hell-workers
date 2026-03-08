@@ -79,10 +79,8 @@ pub fn zone_removal_system(
 fn apply_zone_removal(commands: &mut Commands, world_map: &mut WorldMap, area: &AreaBounds) {
     let (to_remove, fragments) = identify_removal_targets(world_map, area);
 
-    // 削除実行
-    for grid in to_remove.iter().chain(fragments.iter()) {
-        if let Some(entity) = world_map.clear_stockpile(*grid) {
-            commands.entity(entity).despawn();
-        }
+    let removed = world_map.take_stockpile_tiles(to_remove.into_iter().chain(fragments));
+    for entity in removed {
+        commands.entity(entity).despawn();
     }
 }

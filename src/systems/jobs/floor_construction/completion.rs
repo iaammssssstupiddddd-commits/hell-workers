@@ -83,11 +83,11 @@ pub fn floor_construction_completion_system(
                 .collect();
 
             for (tile_entity, (gx, gy), _) in &site_tiles {
-                world_map.add_grid_obstacle((*gx, *gy));
                 commands
                     .entity(*tile_entity)
                     .insert(ObstaclePosition(*gx, *gy));
             }
+            world_map.reserve_building_footprint_tiles(blocked_tiles.iter().copied());
 
             let evacuated =
                 evacuate_souls_from_blocked_tiles(&mut q_souls, &blocked_tiles, &world_map);
@@ -116,6 +116,9 @@ pub fn floor_construction_completion_system(
         if site.curing_remaining_secs > 0.0 {
             continue;
         }
+
+        let completed_grids: Vec<(i32, i32)> =
+            site_tiles.iter().map(|(_, grid, _)| *grid).collect();
 
         // For each tile: spawn Building entity with Floor type
         let mut tile_count = 0;
@@ -146,14 +149,13 @@ pub fn floor_construction_completion_system(
                 Visibility::default(),
                 Name::new("Building (Floor)"),
             ));
-
-            // Curing is complete: tile becomes walkable again.
-            world_map.clear_building_occupancy((gx, gy));
-
             // Despawn tile blueprint
             commands.entity(tile_entity).despawn();
             tile_count += 1;
         }
+
+        // Curing is complete: tile becomes walkable again.
+        world_map.clear_building_footprint(completed_grids);
 
         // Despawn site
         commands.entity(site_entity).despawn();

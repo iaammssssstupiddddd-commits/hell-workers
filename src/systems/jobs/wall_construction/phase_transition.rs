@@ -39,7 +39,11 @@ pub fn wall_framed_tile_spawn_system(
             .id();
 
         tile.spawned_wall = Some(wall_entity);
-        world_map.set_building_occupancy(tile.grid_pos, wall_entity);
+        world_map.reserve_building_footprint(
+            BuildingType::Wall,
+            wall_entity,
+            std::iter::once(tile.grid_pos),
+        );
     }
 }
 

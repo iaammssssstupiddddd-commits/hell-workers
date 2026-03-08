@@ -235,9 +235,11 @@ fn spawn_initial_wheelbarrow_parking(
         }
     });
 
-    for (gx, gy) in occupied {
-        world_map.set_building_occupancy((gx, gy), building_entity);
-    }
+    world_map.register_completed_building_footprint(
+        BuildingType::WheelbarrowParking,
+        building_entity,
+        occupied,
+    );
 
     let offsets = [Vec2::new(-8.0, -8.0), Vec2::new(8.0, 8.0)];
     for i in 0..INITIAL_WHEELBARROW_PARKING_CAPACITY {

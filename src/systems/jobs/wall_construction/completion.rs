@@ -38,6 +38,7 @@ pub fn wall_construction_completion_system(
             }
         }
 
+        let mut released_site_grids = Vec::new();
         for (tile_entity, (gx, gy), _, spawned_wall) in site_tiles {
             if let Some(wall_entity) = spawned_wall {
                 if let Ok(mut building) = q_buildings.get_mut(wall_entity)
@@ -47,13 +48,12 @@ pub fn wall_construction_completion_system(
                 }
                 commands.entity(wall_entity).remove::<ProvisionalWall>();
             } else {
-                if !world_map.clear_building_occupancy_if_owned((gx, gy), site_entity) {
-                    world_map.remove_obstacle(gx, gy);
-                }
+                released_site_grids.push((gx, gy));
             }
 
             commands.entity(tile_entity).try_despawn();
         }
+        world_map.release_building_footprint_if_owned(site_entity, released_site_grids);
 
         commands.entity(site_entity).try_despawn();
 
