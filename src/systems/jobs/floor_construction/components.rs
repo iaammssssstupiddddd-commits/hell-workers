@@ -1,6 +1,7 @@
 //! Floor construction system components
 
 use crate::systems::command::TaskArea;
+pub use hw_jobs::construction::{FloorConstructionPhase, FloorTileState};
 use bevy::prelude::*;
 
 /// Floor construction site - parent entity managing an area of floor tiles
@@ -31,17 +32,6 @@ impl FloorConstructionSite {
     }
 }
 
-/// Construction phase for the entire site
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Reflect)]
-pub enum FloorConstructionPhase {
-    /// Placing bones as reinforcement
-    Reinforcing,
-    /// Pouring mud as concrete
-    Pouring,
-    /// Waiting for poured tiles to cure while area is blocked
-    Curing,
-}
-
 /// Individual floor tile blueprint - child entity
 #[derive(Component, Clone, Debug)]
 pub struct FloorTileBlueprint {
@@ -64,27 +54,6 @@ impl FloorTileBlueprint {
             mud_delivered: 0,
         }
     }
-}
-
-/// State of individual floor tile
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Reflect)]
-pub enum FloorTileState {
-    /// Waiting for bones to be delivered
-    WaitingBones,
-    /// Bones delivered, ready for worker to reinforce
-    ReinforcingReady,
-    /// Worker is actively reinforcing
-    Reinforcing { progress: u8 },
-    /// Reinforcing complete, waiting for phase transition
-    ReinforcedComplete,
-    /// Waiting for mud to be delivered (after phase transition)
-    WaitingMud,
-    /// Mud delivered, ready for worker to pour
-    PouringReady,
-    /// Worker is actively pouring
-    Pouring { progress: u8 },
-    /// Construction complete
-    Complete,
 }
 
 /// Marker component linking a TransportRequest to a FloorConstructionSite
