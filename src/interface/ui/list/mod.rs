@@ -29,7 +29,15 @@ pub use selection_focus::focus_camera_on_entity;
 pub use sync::{sync_entity_list_from_view_model_system, sync_entity_list_value_rows_system};
 pub(crate) use tree_ops::clear_children;
 pub use view_model::build_entity_list_view_model_system;
-pub use hw_ui::list::{EntityListSnapshot, EntityListViewModel, FamiliarRowViewModel, SoulRowViewModel, StressBucket, TaskVisual};
+pub use hw_ui::list::{
+    EntityListSnapshot,
+    EntityListViewModel,
+    FamiliarRowViewModel,
+    SoulGender,
+    SoulRowViewModel,
+    StressBucket,
+    TaskVisual,
+};
 
 #[derive(Resource, Default)]
 pub struct EntityListNodeIndex {

@@ -1,4 +1,4 @@
-use super::{EntityListSnapshot, EntityListViewModel, FamiliarRowViewModel, SoulRowViewModel};
+use super::{EntityListSnapshot, EntityListViewModel, FamiliarRowViewModel, SoulGender, SoulRowViewModel};
 use crate::entities::damned_soul::{DamnedSoul, Gender, SoulIdentity};
 use crate::entities::familiar::{Familiar, FamiliarOperation};
 use crate::interface::ui::components::{SectionFolded, UnassignedFolded, UnassignedSoulSection};
@@ -83,8 +83,8 @@ pub(super) fn build_soul_view_model(
         entity: soul_entity,
         name: identity.name.clone(),
         gender: match identity.gender {
-            Gender::Male => 0,
-            Gender::Female => 1,
+            Gender::Male => SoulGender::Male,
+            Gender::Female => SoulGender::Female,
         },
         fatigue_text: format!("{:.0}%", soul.fatigue * 100.0),
         stress_text: format!("{:.0}%", soul.stress * 100.0),
@@ -95,6 +95,7 @@ pub(super) fn build_soul_view_model(
     }
 }
 
+#[allow(clippy::type_complexity)]
 fn build_familiar_row_view_model(
     fam_entity: Entity,
     familiar: &Familiar,
@@ -117,18 +118,16 @@ fn build_familiar_row_view_model(
     let mut souls = Vec::new();
     let mut show_empty = false;
 
-    if !is_folded {
-        if let Some(commanding) = commanding_opt {
-            if commanding.is_empty() {
-                show_empty = true;
-            } else {
-                for &soul_entity in commanding.iter() {
-                    if let Ok((_, soul, task, identity, _)) = q_all_souls.get(soul_entity) {
-                        souls.push(build_soul_view_model(soul_entity, soul, task, identity));
-                    }
+    if !is_folded && let Some(commanding) = commanding_opt {
+        if commanding.is_empty() {
+            show_empty = true;
+        } else {
+            for &soul_entity in commanding.iter() {
+                if let Ok((_, soul, task, identity, _)) = q_all_souls.get(soul_entity) {
+                    souls.push(build_soul_view_model(soul_entity, soul, task, identity));
                 }
-                souls.sort_by_key(|vm| vm.entity.index());
             }
+            souls.sort_by_key(|vm| vm.entity.index());
         }
     }
 
@@ -141,16 +140,19 @@ fn build_familiar_row_view_model(
     }
 }
 
+#[allow(clippy::type_complexity)]
 pub fn build_entity_list_view_model_system(
     dirty: Res<super::dirty::EntityListDirty>,
     mut view_model: ResMut<EntityListViewModel>,
-    q_familiars: Query<(
-        Entity,
-        &Familiar,
-        &FamiliarOperation,
-        &FamiliarAiState,
-        Option<&Commanding>,
-    )>,
+    q_familiars: Query<
+        (
+            Entity,
+            &Familiar,
+            &FamiliarOperation,
+            &FamiliarAiState,
+            Option<&Commanding>,
+        ),
+    >,
     q_all_souls: Query<
         (
             Entity,

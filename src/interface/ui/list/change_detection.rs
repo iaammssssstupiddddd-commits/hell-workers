@@ -7,6 +7,7 @@ use crate::systems::familiar_ai::FamiliarAiState;
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
 use bevy::prelude::*;
 
+#[allow(clippy::too_many_arguments)]
 pub fn detect_entity_list_changes(
     mut dirty: ResMut<EntityListDirty>,
     q_souls: Query<(), Changed<DamnedSoul>>,

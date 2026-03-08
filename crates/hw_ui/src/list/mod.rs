@@ -5,6 +5,7 @@ pub use models::{
     EntityListSnapshot,
     EntityListViewModel,
     FamiliarRowViewModel,
+    SoulGender,
     SoulRowViewModel,
     StressBucket,
     TaskVisual,

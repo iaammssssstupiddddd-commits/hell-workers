@@ -12,7 +12,6 @@ bevy = { version = "0.18", default-features = false, features = [
     "pan_camera",
     "png",
     "jpeg",
-    # Windows ネイティブ (x64) では wgpu が DX12/Vulkan を自動選択するため webgl2 は不要
 ] }
 rand = "0.8"
 
