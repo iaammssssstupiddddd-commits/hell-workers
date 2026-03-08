@@ -1,6 +1,7 @@
 //! プラグインモジュールのエントリポイント
 
 pub mod input;
+pub mod interface_debug;
 pub mod interface;
 pub mod logic;
 pub mod messages;

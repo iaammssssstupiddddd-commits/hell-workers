@@ -7,7 +7,9 @@ use crate::systems::jobs::{
 use crate::systems::logistics::ResourceItem;
 use crate::systems::logistics::transport_request::TransportRequest;
 use bevy::prelude::*;
+use crate::interface::ui::components::LeftPanelMode;
 use std::collections::BTreeMap;
+use super::dirty::TaskListDirty;
 
 use super::presenter;
 
@@ -118,4 +120,43 @@ pub fn build_task_summary(
     }
 
     (total, high)
+}
+
+pub fn update_task_list_state_system(
+    mode: Res<LeftPanelMode>,
+    designations: Query<(
+        Entity,
+        &Transform,
+        &Designation,
+        Option<&Priority>,
+        Option<&TaskWorkers>,
+        Option<&Blueprint>,
+        Option<&TransportRequest>,
+        Option<&ResourceItem>,
+        Option<&Tree>,
+        Option<&Rock>,
+        Option<&SandPile>,
+        Option<&BonePile>,
+    )>,
+    mut dirty: ResMut<TaskListDirty>,
+    mut state: ResMut<TaskListState>,
+) {
+    if mode.is_changed() && *mode == LeftPanelMode::TaskList {
+        dirty.mark_list();
+    }
+
+    let snapshot = build_task_list_snapshot(&designations);
+    let (summary_total, summary_high) = build_task_summary(&designations);
+
+    if snapshot == state.last_snapshot
+        && summary_total == state.summary_total
+        && summary_high == state.summary_high
+    {
+        return;
+    }
+
+    state.last_snapshot = snapshot;
+    state.summary_total = summary_total;
+    state.summary_high = summary_high;
+    dirty.mark_all();
 }
