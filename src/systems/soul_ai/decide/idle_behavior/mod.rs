@@ -1,7 +1,6 @@
 //! 怠惰行動の Decide Phase: 状態遷移・休憩・集会・移動先選定
 
 mod exhausted_gathering;
-mod gathering_motion;
 mod motion_dispatch;
 mod rest_area;
 mod rest_decision;
@@ -26,9 +25,6 @@ pub use rest_area::{
     find_nearest_available_rest_area, has_arrived_at_rest_area,
     nearest_walkable_adjacent_to_rest_area, rest_area_has_capacity,
 };
-
-/// 集会エリアに「到着した」とみなす半径（escaping.rs 等から使用）
-pub(crate) const GATHERING_ARRIVAL_RADIUS: f32 = TILE_SIZE * GATHERING_ARRIVAL_RADIUS_BASE;
 
 /// アイドル行動の決定システム (Decide Phase)
 ///

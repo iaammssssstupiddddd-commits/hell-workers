@@ -5,6 +5,7 @@ use hw_core::system_sets::SoulAiSystemSet;
 pub mod decide;
 pub mod execute;
 pub mod helpers;
+pub mod perceive;
 pub mod update;
 
 pub struct SoulAiCorePlugin;

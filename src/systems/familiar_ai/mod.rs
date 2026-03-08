@@ -1,8 +1,8 @@
 use hw_core::constants::FAMILIAR_TASK_DELEGATION_INTERVAL;
 use crate::systems::GameSystemSet;
 use crate::systems::soul_ai::scheduling::FamiliarAiSystemSet;
-use crate::systems::spatial::{DesignationSpatialGrid, TransportRequestSpatialGrid};
 use bevy::prelude::*;
+use hw_spatial::{DesignationSpatialGrid, TransportRequestSpatialGrid};
 
 pub mod decide;
 pub mod execute;

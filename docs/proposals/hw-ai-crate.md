@@ -33,7 +33,7 @@
 - AI アルゴリズムの変更・改善（構造変更のみ）
 - Soul AI と Familiar AI の完全統合（別モジュールとして維持）
 - `WorldMap` resource 本体の `hw_world` への移動
-- `hw_spatial` のような新規 crate 分割
+- `hw_spatial` の責務外領域（UI/asset/visual/Commands）の再設計
 - 全システムの crate 分離（AI のみが対象）
 
 ## 4. 提案内容（概要）
@@ -42,7 +42,7 @@
 - 主要な変更点:
   1. `crates/hw_ai/` crate を新設し、`hw_core`, `hw_jobs`, `hw_logistics`, `hw_world` に依存させる
   2. Shared Component / SystemSet は `hw_core` に寄せ、world/pathfinding/query の抽象は `hw_world` に寄せる
-  3. `WorldMap` / SpatialGrid resource は root に残し、root plugin が `hw_ai::SoulAiCorePlugin` / `hw_ai::FamiliarAiCorePlugin` を内包する wrapper として振る舞う
+  3. `WorldMap` は root 残留、`SpatialGrid` は `hw_spatial` の concrete 7 種へ移設し、`WorldMapRead/Write` と残留 2 grid を root が受ける構成にする
 - 期待される効果:
   - AI 以外のコード変更時に AI core の再コンパイルを減らせる
   - AI コードの変更が UI / visual / asset shell へ波及しにくくなる
@@ -61,14 +61,14 @@ AI システムが依存する外部型を分類すると以下の通り：
 | `hw_logistics` | `ResourceItem`, `TransportRequest`, `Stockpile` | **直接依存** |
 | `hw_world` | `pathfinding`, `coords`, `PathWorld` などの world helper | **直接依存** |
 | root: `WorldMap` | `Resource<WorldMap>`, `WorldMapRead`, `WorldMapWrite` | **root に残留**。必要な generic capability は `hw_world` の小さい trait / helper で受ける |
-| root: SpatialGrid 各種 | `Resource<*SpatialGrid>` | **resource 実体は root に残留**。共通 read API が必要なら `hw_world` か root helper に集約する |
+| root: SpatialGrid 各種 | `Resource<*SpatialGrid>` | **resource 実体は `hw_spatial` へ移設**（`GatheringSpotSpatialGrid` / `FloorConstructionSpatialGrid` は root 残留）。共通 read API は `SpatialGridOps` で集約 |
 | root: shell system | `GameAssets`, sprite spawn, speech, gizmo, UI state | **root に残留** |
 
 補足:
 
 - `WorldMap` は `Entity` を保持する occupancy resource であり、`BuildingType` / `DoorState` を使う更新 API を持つため、`hw_world` に移すより root shell として扱うほうが自然。
 - `hw_core` に `WorldAccess` のような omnibus trait は追加しない。world/spatial concern を shared core に混ぜると責務が曖昧になるため。
-- SpatialGrid の共通化が必要になっても、まず重複している `get_in_area` の read API から着手し、resource update shell までは外へ出さない。
+- SpatialGrid の共通化は concrete 7 grid を分離したうえで進め、まず重複している `get_in_area` の read API から着手する。update shell 自体は引き続き root を残す
 
 ### 5.2 段階的アプローチ
 
@@ -142,7 +142,7 @@ AI システムが依存する外部型を分類すると以下の通り：
 - 明示的に行わない変更:
   - `WorldMap` の `hw_world` への移動
   - `hw_core::WorldAccess` の導入
-  - `hw_spatial` crate の追加
+- `hw_ai` / `hw_spatial` の依存循環を避けるための過度な責務追加
 
 ## 6. 代替案と比較
 
@@ -151,7 +151,7 @@ AI システムが依存する外部型を分類すると以下の通り：
 | A: `WorldMap` を `hw_world` へ移動 | 不採用 | `Entity` を持つ occupancy resource であり、app shell 寄りの責務が強い |
 | B: `hw_core` に `WorldAccess` を定義 | 不採用 | 抽象が広すぎて責務が曖昧になり、world concern を core crate に持ち込む |
 | C: root shell + `hw_ai` core のハイブリッド分離 | 採用 | 既存の `PathWorld` / wrapper plugin 構造と整合し、段階移行しやすい |
-| D: `hw_spatial` crate を新設 | 不採用 | crate 境界の複雑化に対してリターンが小さい |
+| D: `hw_spatial` crate を新設 | 採用 | concrete SpatialGrid resource を分離し、`WorldMap` / shell 構造と競合しない責務境界を実現 |
 | E: AI をそのまま root に残す | 保留 | 短期は成立するが、ビルド時間と境界の不明瞭さを解消できない |
 
 ## 7. 影響範囲
@@ -175,7 +175,7 @@ AI システムが依存する外部型を分類すると以下の通り：
 | --- | --- | --- |
 | `WorldMap` / SpatialGrid に依存するファイル数が多い（61 / 24） | 高 | helper 単位で分解し、resource access を root wrapper に閉じ込めてから移動する |
 | broad trait を急いで作って API が肥大化する | 高 | trait は `hw_world` の consumer 近傍に小さく追加し、用途ごとに分ける |
-| `GridData` を `hw_core` に寄せて責務が崩れる | 中 | spatial concern は `hw_world` か root に留める |
+| `GridData` を `hw_core` に寄せて責務が崩れる | 中 | spatial concern は `hw_spatial`（resource）または `hw_world`（trait）へ寄せ、core に入れない |
 | UI / asset / speech shell が `hw_ai` に混入する | 中 | `GameAssets`, `Commands`, gizmo, speech bubble を使うものは root 残留ルールを固定する |
 | 段階移行中の wrapper が長期残存する | 中 | Phase ごとに移動済み / 未移動を記録し、不要な re-export を M7 で削除する |
 
@@ -211,7 +211,7 @@ AI システムが依存する外部型を分類すると以下の通り：
 
 ### 現在地
 
-- 進捗: `15%`（方針確定フェーズ完了）
+- 進捗: `85%`（方針確定＋実装初期移設フェーズ完了）
 - 直近で完了したこと:
   - `WorldMap` / SpatialGrid の concrete boundary policy を決定
   - proposal / plan の前提を整合させた
@@ -219,9 +219,9 @@ AI システムが依存する外部型を分類すると以下の通り：
 
 ### 次のAIが最初にやること
 
-1. `src/systems/soul_ai/` と `src/systems/familiar_ai/` から、pure helper 化しやすい `WorldMap` 依存箇所を 2 系統選ぶ
-2. root wrapper と `hw_ai` helper の責務分割をコードに落とす
-3. SpatialGrid の `get_in_area` 重複をどこへ集約するか決めて着手する
+1. 残存する shell の整理（`root wrapper` の最小化）を進める
+2. `familiar_ai` 側の `drifting` 系の残存依存を `hw_ai` 移設可否で分類する
+3. 次段階（M6以降）の移設候補を `M6` 以降計画に反映する
 
 ### ブロッカー / 注意点
 
@@ -242,9 +242,9 @@ AI システムが依存する外部型を分類すると以下の通り：
 
 ### 完了条件（Definition of Done）
 
-- [ ] 提案内容が review 可能な粒度で記述されている
-- [ ] `WorldMap` / SpatialGrid の方針が proposal / plan / workspace guide で一致している
-- [ ] 後続実装の最初の slice が `docs/plans/hw-ai-crate-phase2-2026-03-08.md` に従って着手可能である
+- [x] 提案内容が review 可能な粒度で記述されている
+- [x] `WorldMap` / SpatialGrid の方針が proposal / plan / workspace guide で一致している
+- [x] 後続実装の最初の slice が `docs/plans/hw-ai-crate-phase2-2026-03-08.md` に従って着手可能である
 
 ## 13. 更新履歴
 
@@ -252,3 +252,4 @@ AI システムが依存する外部型を分類すると以下の通り：
 | --- | --- | --- |
 | `2026-03-08` | `AI` | 初版作成 |
 | `2026-03-08` | `AI` | `WorldMap` / SpatialGrid を root shell / adapter 境界として扱う方針に更新 |
+| `2026-03-08` | `AI` | M2/M3/M5 実装状況を反映し、DoD と進捗値を更新 |

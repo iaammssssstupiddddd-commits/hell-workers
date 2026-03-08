@@ -414,6 +414,7 @@ dependencies = [
  "hw_core",
  "hw_jobs",
  "hw_logistics",
+ "hw_spatial",
  "hw_world",
  "rand 0.8.5",
 ]
@@ -2731,6 +2732,7 @@ dependencies = [
  "hw_core",
  "hw_jobs",
  "hw_logistics",
+ "hw_spatial",
  "hw_world",
  "rand 0.8.5",
 ]
@@ -2760,11 +2762,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "hw_spatial"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "hw_core",
+ "hw_jobs",
+ "hw_logistics",
+ "hw_world",
+]
+
+[[package]]
 name = "hw_world"
 version = "0.1.0"
 dependencies = [
  "bevy",
  "hw_core",
+ "hw_jobs",
  "rand 0.8.5",
 ]
 

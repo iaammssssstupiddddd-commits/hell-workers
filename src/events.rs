@@ -1,8 +1,8 @@
 pub use hw_core::events::{
     DesignationOp, DesignationRequest, EncouragementRequest, EscapeOperation, EscapeRequest,
     FamiliarAiStateChangedEvent, FamiliarIdleVisualRequest,
-    FamiliarOperationMaxSoulChangedEvent, FamiliarStateRequest, GatheringManagementOp,
-    GatheringManagementRequest, IdleBehaviorOperation, IdleBehaviorRequest, OnEncouraged,
+    FamiliarOperationMaxSoulChangedEvent, FamiliarStateRequest, GatheringManagementRequest,
+    IdleBehaviorOperation, IdleBehaviorRequest, OnEncouraged,
     OnExhausted, OnGatheringJoined, OnGatheringLeft, OnGatheringParticipated,
     OnReleasedFromService, OnSoulRecruited, OnStressBreakdown, OnTaskAbandoned,
     OnTaskAssigned, OnTaskCompleted, ReleaseReason, ResourceReservationOp,
