@@ -15,7 +15,7 @@ pub fn handle_build_task(
     phase: BuildPhase,
     commands: &mut Commands,
     time: &Res<Time>,
-    world_map: &Res<WorldMap>,
+    world_map: &WorldMap,
 ) {
     let soul_pos = ctx.soul_pos();
     let q_blueprints = &mut ctx.queries.storage.blueprints;

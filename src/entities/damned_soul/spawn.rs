@@ -178,7 +178,7 @@ pub fn soul_spawning_system(
     world_map: Res<WorldMap>,
 ) {
     for event in spawn_events.read() {
-        spawn_damned_soul_at(&mut commands, &game_assets, &world_map, event.position);
+        spawn_damned_soul_at(&mut commands, &game_assets, world_map.as_ref(), event.position);
     }
 }
 
@@ -186,7 +186,7 @@ pub fn soul_spawning_system(
 pub fn spawn_damned_soul_at(
     commands: &mut Commands,
     game_assets: &Res<GameAssets>,
-    world_map: &Res<WorldMap>,
+    world_map: &WorldMap,
     pos: Vec2,
 ) {
     let spawn_grid = WorldMap::world_to_grid(pos);

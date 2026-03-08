@@ -14,7 +14,7 @@ pub trait TaskHandler<T> {
         commands: &mut Commands,
         game_assets: &Res<GameAssets>,
         time: &Res<Time>,
-        world_map: &Res<WorldMap>,
+        world_map: &WorldMap,
         breakdown_opt: Option<&StressBreakdown>,
     );
 }

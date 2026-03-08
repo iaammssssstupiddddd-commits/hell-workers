@@ -31,7 +31,7 @@ pub fn handle_move_plant_task(
     ctx: &mut TaskExecutionContext,
     data: MovePlantData,
     commands: &mut Commands,
-    world_map: &Res<WorldMap>,
+    world_map: &WorldMap,
 ) {
     match data.phase {
         MovePlantPhase::GoToBuilding => {

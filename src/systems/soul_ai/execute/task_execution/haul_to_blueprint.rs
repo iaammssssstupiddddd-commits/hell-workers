@@ -19,7 +19,7 @@ pub fn handle_haul_to_blueprint_task(
     blueprint_entity: Entity,
     phase: HaulToBpPhase,
     commands: &mut Commands,
-    world_map: &Res<WorldMap>,
+    world_map: &WorldMap,
 ) {
     let q_targets = &ctx.queries.designation.targets;
     let q_designations = &ctx.queries.designation.designations;

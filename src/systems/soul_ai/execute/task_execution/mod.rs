@@ -352,7 +352,7 @@ pub fn task_execution_system(
             &mut commands,
             &game_assets,
             &time,
-            &world_map,
+            world_map.as_ref(),
             breakdown_opt.as_deref(),
             &q_wheelbarrows,
         );

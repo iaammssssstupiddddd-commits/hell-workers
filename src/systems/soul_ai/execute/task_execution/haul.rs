@@ -43,7 +43,7 @@ pub fn handle_haul_task(
     phase: HaulPhase,
     commands: &mut Commands,
     // haul_cache is now accessed via ctx.queries.resource_cache
-    world_map: &Res<WorldMap>,
+    world_map: &WorldMap,
 ) {
     let soul_pos = ctx.soul_pos();
     let q_targets = &ctx.queries.designation.targets;
