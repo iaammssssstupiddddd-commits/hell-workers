@@ -43,8 +43,8 @@ fn register_ui_core_plugin_systems(app: &mut App) {
             crate::interface::ui::ui_interaction_system,
             handle_ui_intent,
             crate::interface::ui::arch_category_action_system,
-            crate::interface::ui::door_lock_action_system,
             crate::interface::ui::move_plant_building_action_system,
+            crate::interface::ui::door_lock_action_system,
         )
             .in_set(GameSystemSet::Interface),
     )
