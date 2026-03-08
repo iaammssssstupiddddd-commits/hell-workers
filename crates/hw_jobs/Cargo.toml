@@ -1,0 +1,8 @@
+[package]
+name = "hw_jobs"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+bevy = { workspace = true }
+hw_core = { path = "../hw_core" }
