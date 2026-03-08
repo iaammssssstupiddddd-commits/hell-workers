@@ -3,7 +3,7 @@ use bevy::prelude::*;
 use hw_core::game_state::{PlayMode};
 use crate::app_contexts::{BuildContext, CompanionPlacementState, TaskContext, ZoneContext};
 use crate::interface::ui::components::MenuState;
-use crate::systems::command::TaskMode;
+use crate::systems::command::{TaskMode, to_task_mode_zone_type};
 use crate::systems::jobs::BuildingType;
 use crate::systems::logistics::ZoneType;
 
@@ -73,7 +73,7 @@ pub(super) fn set_zone_mode(
 ) {
     build_context.0 = None;
     zone_context.0 = Some(kind);
-    task_context.0 = TaskMode::ZonePlacement(kind, None);
+    task_context.0 = TaskMode::ZonePlacement(to_task_mode_zone_type(kind), None);
     next_play_mode.set(PlayMode::TaskDesignation);
 }
 
@@ -86,7 +86,7 @@ pub(super) fn set_zone_removal_mode(
 ) {
     build_context.0 = None;
     zone_context.0 = Some(kind); // 削除モードでも一応セットしておく
-    task_context.0 = TaskMode::ZoneRemoval(kind, None);
+    task_context.0 = TaskMode::ZoneRemoval(to_task_mode_zone_type(kind), None);
     next_play_mode.set(PlayMode::TaskDesignation);
 }
 
