@@ -1,8 +1,8 @@
 use super::model::{InfoPanelViewModel, to_view_model};
 use super::state::{InfoPanelPinState, InfoPanelState};
-use crate::entities::damned_soul::Gender;
 use crate::interface::ui::components::{InfoPanelNodes, UiNodeRegistry, UiSlot};
-use crate::interface::ui::presentation::EntityInspectionQuery;
+use crate::interface::ui::presentation::EntityInspectionViewModel;
+use hw_ui::models::inspection::{InspectionSoulGender};
 use bevy::prelude::*;
 
 fn entity_for_slot(
@@ -68,7 +68,7 @@ fn update_gender_icon(
     q_gender: &mut Query<&mut ImageNode>,
     q_node: &mut Query<&mut Node>,
     game_assets: &crate::assets::GameAssets,
-    gender: Option<Gender>,
+    gender: Option<InspectionSoulGender>,
 ) {
     let Some(entity) = entity_for_slot(info_nodes, ui_nodes, UiSlot::GenderIcon) else {
         return;
@@ -83,8 +83,8 @@ fn update_gender_icon(
                 Display::Flex,
             );
             icon.image = match gender {
-                Gender::Male => game_assets.icon_male.clone(),
-                Gender::Female => game_assets.icon_female.clone(),
+                InspectionSoulGender::Male => game_assets.icon_male.clone(),
+                InspectionSoulGender::Female => game_assets.icon_female.clone(),
             };
         } else {
             set_display_slot(
@@ -100,26 +100,17 @@ fn update_gender_icon(
 
 pub fn info_panel_system(
     game_assets: Res<crate::assets::GameAssets>,
-    selected: Res<crate::interface::selection::SelectedEntity>,
-    mut pin_state: ResMut<InfoPanelPinState>,
+    _selected: Res<crate::interface::selection::SelectedEntity>,
+    pin_state: ResMut<InfoPanelPinState>,
     info_nodes: Res<InfoPanelNodes>,
     ui_nodes: Res<UiNodeRegistry>,
     mut panel_state: ResMut<InfoPanelState>,
     mut q_text: Query<&mut Text>,
     mut q_node: Query<&mut Node>,
     mut q_gender: Query<&mut ImageNode>,
-    inspection: EntityInspectionQuery,
+    inspection_view_model: Res<EntityInspectionViewModel>,
 ) {
-    let mut inspected_entity = pin_state.entity.or(selected.0);
-    let mut next_model =
-        inspected_entity.and_then(|entity| inspection.build_model(entity).map(to_view_model));
-
-    if pin_state.entity.is_some() && next_model.is_none() {
-        pin_state.entity = None;
-        inspected_entity = selected.0;
-        next_model =
-            inspected_entity.and_then(|entity| inspection.build_model(entity).map(to_view_model));
-    }
+    let next_model = inspection_view_model.model.clone().map(to_view_model);
 
     let pinned = pin_state.entity.is_some();
     if panel_state.last == next_model && panel_state.last_pinned == pinned {

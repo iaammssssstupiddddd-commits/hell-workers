@@ -8,8 +8,8 @@ use crate::interface::ui::panels::task_list::{
     task_list_update_system, task_list_visual_feedback_system,
 };
 use crate::interface::ui::{
-    InfoPanelNodes, InfoPanelPinState, InfoPanelState, info_panel_system, menu_visibility_system,
-    update_mode_text_system,
+    InfoPanelNodes, InfoPanelPinState, InfoPanelState, info_panel_system,
+    menu_visibility_system, update_entity_inspection_view_model_system, update_mode_text_system,
 };
 use crate::systems::GameSystemSet;
 use bevy::prelude::*;
@@ -34,6 +34,7 @@ impl Plugin for UiInfoPanelPlugin {
         app.add_systems(
             Update,
             (
+                update_entity_inspection_view_model_system,
                 info_panel_system
                     .run_if(
                         |selected: Res<crate::interface::selection::SelectedEntity>,

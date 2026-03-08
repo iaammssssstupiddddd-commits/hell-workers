@@ -1,16 +1,17 @@
 //! ダイアログ UI
 
-use crate::interface::ui::components::{
+use crate::components::{
     MenuAction, MenuButton, OperationDialog, UiInputBlocker, UiNodeRegistry, UiSlot,
 };
-use crate::interface::ui::theme::UiTheme;
+use crate::theme::UiTheme;
 use bevy::prelude::*;
 use bevy::ui::RelativeCursorPosition;
+use super::UiSetupAssets;
 
 /// ダイアログをスポーン
 pub fn spawn_dialogs(
     commands: &mut Commands,
-    game_assets: &Res<crate::assets::GameAssets>,
+    game_assets: &dyn UiSetupAssets,
     theme: &UiTheme,
     parent_entity: Entity,
     ui_nodes: &mut UiNodeRegistry,
@@ -20,7 +21,7 @@ pub fn spawn_dialogs(
 
 fn spawn_operation_dialog(
     commands: &mut Commands,
-    game_assets: &Res<crate::assets::GameAssets>,
+    game_assets: &dyn UiSetupAssets,
     theme: &UiTheme,
     parent_entity: Entity,
     ui_nodes: &mut UiNodeRegistry,
@@ -66,7 +67,7 @@ fn spawn_operation_dialog(
                 header.spawn((
                     Text::new("Familiar Operation"),
                     TextFont {
-                        font: game_assets.font_ui.clone(),
+                        font: game_assets.font_ui().clone(),
                         font_size: theme.typography.font_size_xl,
                         ..default()
                     },
@@ -90,7 +91,7 @@ fn spawn_operation_dialog(
                         btn.spawn((
                             Text::new("X"),
                             TextFont {
-                                font: game_assets.font_ui.clone(),
+                                font: game_assets.font_ui().clone(),
                                 font_size: theme.typography.font_size_dialog_small,
                                 ..default()
                             },
@@ -104,7 +105,7 @@ fn spawn_operation_dialog(
             .spawn((
                 Text::new("Familiar Name"),
                 TextFont {
-                    font: game_assets.font_familiar.clone(),
+                    font: game_assets.font_familiar().clone(),
                     font_size: theme.typography.font_size_title,
                     ..default()
                 },
@@ -122,7 +123,7 @@ fn spawn_operation_dialog(
         parent.spawn((
             Text::new("Work Standards:"),
             TextFont {
-                font: game_assets.font_ui.clone(),
+                font: game_assets.font_ui().clone(),
                 font_size: theme.typography.font_size_dialog_small,
                 ..default()
             },
@@ -176,7 +177,7 @@ fn spawn_operation_dialog(
                     .spawn((
                         Text::new("1"),
                         TextFont {
-                            font: game_assets.font_ui.clone(),
+                            font: game_assets.font_ui().clone(),
                             font_size: theme.typography.font_size_title,
                             ..default()
                         },
@@ -219,7 +220,7 @@ fn spawn_operation_dialog(
         parent.spawn((
             Text::new("Max Controlled Souls:"),
             TextFont {
-                font: game_assets.font_ui.clone(),
+                font: game_assets.font_ui().clone(),
                 font_size: theme.typography.font_size_dialog_small,
                 ..default()
             },
@@ -263,7 +264,7 @@ fn spawn_operation_dialog(
                     btn.spawn((
                         Text::new("-"),
                         TextFont {
-                            font: game_assets.font_ui.clone(),
+                            font: game_assets.font_ui().clone(),
                             font_size: theme.typography.font_size_xl,
                             ..default()
                         },
@@ -304,7 +305,7 @@ fn spawn_operation_dialog(
                     btn.spawn((
                         Text::new("+"),
                         TextFont {
-                            font: game_assets.font_ui.clone(),
+                            font: game_assets.font_ui().clone(),
                             font_size: theme.typography.font_size_xl,
                             ..default()
                         },
@@ -317,7 +318,7 @@ fn spawn_operation_dialog(
         parent.spawn((
             Text::new("(Settings automatically synced)"),
             TextFont {
-                font: game_assets.font_ui.clone(),
+                font: game_assets.font_ui().clone(),
                 font_size: theme.typography.font_size_dialog_tiny,
                 ..default()
             },

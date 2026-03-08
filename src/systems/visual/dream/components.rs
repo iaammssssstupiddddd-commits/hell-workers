@@ -48,8 +48,4 @@ pub struct DreamTrailGhost {
     pub max_lifetime: f32,
 }
 
-#[derive(Component, Default)]
-pub struct DreamIconAbsorb {
-    pub timer: f32,
-    pub pulse_count: u8,
-}
+pub use hw_ui::components::DreamIconAbsorb;

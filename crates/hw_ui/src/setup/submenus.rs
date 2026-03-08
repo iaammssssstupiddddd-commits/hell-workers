@@ -1,21 +1,22 @@
 //! サブメニュー UI (Architect, Zones, Orders)
 
-use crate::interface::ui::components::{
+use crate::components::{
     ArchitectBuildingPanel, ArchitectCategoryListPanel, ArchitectSubMenu, DreamSubMenu, MenuAction,
     MenuButton, OrdersSubMenu, UiInputBlocker, ZonesSubMenu,
 };
-use crate::interface::ui::theme::UiTheme;
-use crate::systems::command::TaskMode;
-use crate::systems::jobs::{BuildingCategory, BuildingType};
-use crate::systems::logistics::ZoneType;
+use crate::theme::UiTheme;
+use hw_core::game_state::TaskMode;
+use hw_jobs::{BuildingCategory, BuildingType};
+use hw_logistics::zone::ZoneType;
 use bevy::ecs::hierarchy::ChildSpawnerCommands;
 use bevy::prelude::*;
 use bevy::ui::RelativeCursorPosition;
+use super::UiSetupAssets;
 
 /// サブメニューをスポーン
 pub fn spawn_submenus(
     commands: &mut Commands,
-    game_assets: &Res<crate::assets::GameAssets>,
+    game_assets: &dyn UiSetupAssets,
     theme: &UiTheme,
     parent_entity: Entity,
 ) {
@@ -81,7 +82,7 @@ fn spawn_submenu_container<T: Bundle>(
 
 fn spawn_menu_entries(
     parent: &mut ChildSpawnerCommands,
-    game_assets: &Res<crate::assets::GameAssets>,
+    game_assets: &dyn UiSetupAssets,
     theme: &UiTheme,
     entries: Vec<MenuEntrySpec<'static>>,
 ) {
@@ -99,7 +100,7 @@ fn spawn_menu_entries(
 
 fn spawn_menu_button(
     parent: &mut ChildSpawnerCommands,
-    game_assets: &Res<crate::assets::GameAssets>,
+    game_assets: &dyn UiSetupAssets,
     theme: &UiTheme,
     label: &str,
     action: MenuAction,
@@ -123,7 +124,7 @@ fn spawn_menu_button(
             button.spawn((
                 Text::new(label),
                 TextFont {
-                    font: game_assets.font_ui.clone(),
+                    font: game_assets.font_ui().clone(),
                     font_size: theme.typography.font_size_title,
                     ..default()
                 },
@@ -134,7 +135,7 @@ fn spawn_menu_button(
 
 fn spawn_category_button(
     parent: &mut ChildSpawnerCommands,
-    game_assets: &Res<crate::assets::GameAssets>,
+    game_assets: &dyn UiSetupAssets,
     theme: &UiTheme,
     category: BuildingCategory,
 ) {
@@ -150,7 +151,7 @@ fn spawn_category_button(
 
 fn spawn_building_panel(
     parent: &mut ChildSpawnerCommands,
-    game_assets: &Res<crate::assets::GameAssets>,
+    game_assets: &dyn UiSetupAssets,
     theme: &UiTheme,
     category: BuildingCategory,
     items: Vec<MenuEntrySpec<'static>>,
@@ -176,7 +177,7 @@ fn spawn_building_panel(
 
 fn spawn_architect_submenu(
     commands: &mut Commands,
-    game_assets: &Res<crate::assets::GameAssets>,
+    game_assets: &dyn UiSetupAssets,
     theme: &UiTheme,
     parent_entity: Entity,
 ) {
@@ -224,7 +225,7 @@ fn spawn_architect_submenu(
 
 fn spawn_zones_submenu(
     commands: &mut Commands,
-    game_assets: &Res<crate::assets::GameAssets>,
+    game_assets: &dyn UiSetupAssets,
     theme: &UiTheme,
     parent_entity: Entity,
 ) {
@@ -247,7 +248,7 @@ fn spawn_zones_submenu(
 
 fn spawn_orders_submenu(
     commands: &mut Commands,
-    game_assets: &Res<crate::assets::GameAssets>,
+    game_assets: &dyn UiSetupAssets,
     theme: &UiTheme,
     parent_entity: Entity,
 ) {
@@ -270,7 +271,7 @@ fn spawn_orders_submenu(
 
 fn spawn_dream_submenu(
     commands: &mut Commands,
-    game_assets: &Res<crate::assets::GameAssets>,
+    game_assets: &dyn UiSetupAssets,
     theme: &UiTheme,
     parent_entity: Entity,
 ) {
