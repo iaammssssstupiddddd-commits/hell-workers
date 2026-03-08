@@ -142,15 +142,13 @@ pub fn apply_pending_building_move_system(
 ) {
     for (building_entity, pending, children_opt) in q_pending.iter() {
         for &(gx, gy) in &pending.old_occupied {
-            if world_map.building_entity((gx, gy)) == Some(building_entity) {
-                world_map.clear_building((gx, gy));
+            if !world_map.clear_building_occupancy_if_owned((gx, gy), building_entity) {
+                world_map.remove_obstacle(gx, gy);
             }
-            world_map.remove_obstacle(gx, gy);
         }
 
         for &(gx, gy) in &pending.new_occupied {
-            world_map.add_obstacle(gx, gy);
-            world_map.set_building((gx, gy), building_entity);
+            world_map.set_building_occupancy((gx, gy), building_entity);
         }
 
         if let Some(children) = children_opt {

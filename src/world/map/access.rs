@@ -13,6 +13,10 @@ impl<'w> WorldMapRead<'w> {
     pub fn as_ref(&self) -> &WorldMap {
         self.world_map.as_ref()
     }
+
+    pub fn is_changed(&self) -> bool {
+        self.world_map.is_changed()
+    }
 }
 
 impl AsRef<WorldMap> for WorldMapRead<'_> {
@@ -42,6 +46,10 @@ impl<'w> WorldMapWrite<'w> {
 
     pub fn as_mut(&mut self) -> &mut WorldMap {
         self.world_map.as_mut()
+    }
+
+    pub fn is_changed(&self) -> bool {
+        self.world_map.is_changed()
     }
 }
 

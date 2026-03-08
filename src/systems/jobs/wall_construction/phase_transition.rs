@@ -39,8 +39,7 @@ pub fn wall_framed_tile_spawn_system(
             .id();
 
         tile.spawned_wall = Some(wall_entity);
-        world_map.set_building(tile.grid_pos, wall_entity);
-        world_map.add_obstacle(tile.grid_pos.0, tile.grid_pos.1);
+        world_map.set_building_occupancy(tile.grid_pos, wall_entity);
     }
 }
 

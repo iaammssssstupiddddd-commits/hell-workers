@@ -49,11 +49,7 @@ pub fn apply_door_state(
         game_assets.door_closed.clone()
     };
 
-    match next_state {
-        DoorState::Open => world_map.remove_obstacle(door_grid.0, door_grid.1),
-        DoorState::Closed | DoorState::Locked => world_map.add_obstacle(door_grid.0, door_grid.1),
-    }
-    world_map.set_door_state(door_grid.0, door_grid.1, next_state);
+    world_map.sync_door_passability(door_grid, next_state);
 }
 
 fn soul_nearby_and_heading_to_door(

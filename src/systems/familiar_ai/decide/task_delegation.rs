@@ -8,7 +8,7 @@ use crate::systems::familiar_ai::decide::task_management::FamiliarTaskAssignment
 use crate::systems::logistics::TileSiteIndex;
 use crate::systems::familiar_ai::helpers::query_types::{FamiliarSoulQuery, FamiliarTaskQuery};
 use crate::systems::spatial::{DesignationSpatialGrid, ResourceSpatialGrid, TransportRequestSpatialGrid};
-use crate::world::map::WorldMap;
+use crate::world::map::WorldMapRead;
 use crate::world::pathfinding::PathfindingContext;
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
@@ -37,7 +37,7 @@ pub struct FamiliarAiTaskDelegationParams<'w, 's> {
     pub transport_request_grid: Res<'w, TransportRequestSpatialGrid>,
     pub resource_grid: Res<'w, ResourceSpatialGrid>,
     pub tile_site_index: Res<'w, TileSiteIndex>,
-    pub world_map: Res<'w, WorldMap>,
+    pub world_map: WorldMapRead<'w>,
     pub pf_context: Local<'s, PathfindingContext>,
     pub reachability_frame_cache: ResMut<'w, ReachabilityFrameCache>,
     pub perf_metrics: ResMut<'w, FamiliarDelegationPerfMetrics>,
