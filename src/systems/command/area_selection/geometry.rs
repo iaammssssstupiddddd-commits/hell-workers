@@ -1,10 +1,10 @@
 use super::state::{Drag, Operation};
-use hw_core::constants::TILE_SIZE;
 use crate::interface::camera::MainCamera;
 use crate::systems::command::{AreaEditHandleKind, TaskArea, TaskMode};
 use crate::systems::world::zones::Site;
 use bevy::prelude::*;
 use bevy::window::{CursorIcon, PrimaryWindow, SystemCursorIcon};
+use hw_core::constants::TILE_SIZE;
 
 const AREA_CONTAINS_MARGIN: f32 = 0.1;
 
@@ -260,10 +260,12 @@ pub fn overlap_summary_from_areas(
             continue;
         }
 
-        let overlap_w =
-            (selected_area.max().x.min(area.max().x) - selected_area.min().x.max(area.min().x)).max(0.0);
-        let overlap_h =
-            (selected_area.max().y.min(area.max().y) - selected_area.min().y.max(area.min().y)).max(0.0);
+        let overlap_w = (selected_area.max().x.min(area.max().x)
+            - selected_area.min().x.max(area.min().x))
+        .max(0.0);
+        let overlap_h = (selected_area.max().y.min(area.max().y)
+            - selected_area.min().y.max(area.min().y))
+        .max(0.0);
         let overlap_area = overlap_w * overlap_h;
         if overlap_area <= f32::EPSILON {
             continue;

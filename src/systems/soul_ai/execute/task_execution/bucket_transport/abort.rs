@@ -20,9 +20,10 @@ pub fn abort_and_drop_bucket_mixer(
     pos: Vec2,
 ) {
     reservation::release_mixer_destination(ctx, mixer_entity, ResourceType::Water);
-    let should_release_tank_lock = ctx.task.bucket_transport_data().is_some_and(|task_data| {
-        task_data.should_reserve_tank_source()
-    });
+    let should_release_tank_lock = ctx
+        .task
+        .bucket_transport_data()
+        .is_some_and(|task_data| task_data.should_reserve_tank_source());
     if should_release_tank_lock {
         reservation::release_source(ctx, tank_entity, 1);
     }

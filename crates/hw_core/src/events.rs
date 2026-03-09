@@ -1,4 +1,3 @@
-use crate::assigned_task::AssignedTask;
 use crate::familiar::FamiliarAiState;
 use crate::jobs::WorkType;
 use crate::logistics::ResourceType;
@@ -231,18 +230,6 @@ pub struct FamiliarStateRequest {
     pub new_state: FamiliarAiState,
 }
 
-#[derive(Message, Debug, Clone)]
-pub struct TaskAssignmentRequest {
-    pub familiar_entity: Entity,
-    pub worker_entity: Entity,
-    pub task_entity: Entity,
-    pub work_type: WorkType,
-    pub task_pos: Vec2,
-    pub assigned_task: AssignedTask,
-    pub reservation_ops: Vec<ResourceReservationOp>,
-    pub already_commanded: bool,
-}
-
 /// 使い魔による激励要求
 #[derive(Message, Debug, Clone)]
 pub struct EncouragementRequest {
@@ -266,7 +253,9 @@ pub struct SquadManagementRequest {
 /// 分隊管理の操作種別
 #[derive(Debug, Clone)]
 pub enum SquadManagementOperation {
-    AddMember { soul_entity: Entity },
+    AddMember {
+        soul_entity: Entity,
+    },
     ReleaseMember {
         soul_entity: Entity,
         reason: ReleaseReason,

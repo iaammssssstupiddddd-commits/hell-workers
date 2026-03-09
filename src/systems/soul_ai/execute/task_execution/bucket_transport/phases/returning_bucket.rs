@@ -5,11 +5,7 @@ use crate::systems::soul_ai::execute::task_execution::context::TaskExecutionCont
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
 
-pub fn handle(
-    ctx: &mut TaskExecutionContext,
-    commands: &mut Commands,
-    world_map: &WorldMap,
-) {
+pub fn handle(ctx: &mut TaskExecutionContext, commands: &mut Commands, world_map: &WorldMap) {
     let soul_pos = ctx.soul_pos();
 
     if is_near_target(soul_pos, ctx.dest.0) {

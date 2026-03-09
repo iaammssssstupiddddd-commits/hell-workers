@@ -1,8 +1,8 @@
 //! 設計図のプログレスバー関連システム
 
-use hw_core::constants::Z_BAR_BG;
 use bevy::prelude::ChildOf;
 use bevy::prelude::*;
+use hw_core::constants::Z_BAR_BG;
 
 use super::components::ProgressBar;
 use super::{

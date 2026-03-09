@@ -1,12 +1,12 @@
-use crate::assets::GameAssets;
 use crate::app_contexts::{CompanionPlacementKind, CompanionPlacementState};
+use crate::assets::GameAssets;
 use crate::systems::jobs::{Blueprint, Building};
 use crate::systems::world::zones::{Site, Yard};
-use crate::world::map::WorldMap;
+use crate::world::map::{RIVER_Y_MIN, WorldMap};
 use bevy::prelude::*;
+use hw_ui::selection::building_occupied_grids;
 
 use super::companion::parent_building_type;
-use super::geometry::occupied_grids_for_building;
 use super::placement::{place_building_blueprint, try_place_bucket_storage_companion};
 
 /// Handles the companion placement flow when `companion_state` is active.
@@ -35,7 +35,7 @@ pub(super) fn handle_companion_flow(
         CompanionPlacementKind::BucketStorage => {
             let parent_type = parent_building_type(active.parent_kind);
             let parent_occupied_grids =
-                occupied_grids_for_building(parent_type, active.parent_anchor);
+                building_occupied_grids(parent_type, active.parent_anchor, RIVER_Y_MIN);
 
             let Some((parent_blueprint, _, _)) = place_building_blueprint(
                 commands,

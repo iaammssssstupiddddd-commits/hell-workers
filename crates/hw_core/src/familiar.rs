@@ -5,8 +5,8 @@ use crate::constants::{FATIGUE_THRESHOLD, TILE_SIZE};
 
 /// 使い魔の名前リスト
 const FAMILIAR_NAMES: [&str; 10] = [
-    "Skrix", "Grubble", "Snitch", "Grimkin", "Blotch",
-    "Scraps", "Nub", "Whimper", "Cringe", "Slunk",
+    "Skrix", "Grubble", "Snitch", "Grimkin", "Blotch", "Scraps", "Nub", "Whimper", "Cringe",
+    "Slunk",
 ];
 
 /// 使い魔のコンポーネント
@@ -93,10 +93,7 @@ pub enum FamiliarAiState {
     Idle,
     SearchingTask,
     Scouting { target_soul: Entity },
-    Supervising {
-        target: Option<Entity>,
-        timer: f32,
-    },
+    Supervising { target: Option<Entity>, timer: f32 },
 }
 
 impl Default for FamiliarAiState {

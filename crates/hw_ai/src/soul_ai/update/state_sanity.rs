@@ -1,9 +1,9 @@
 use bevy::prelude::*;
 
-use hw_core::assigned_task::AssignedTask;
 use hw_core::constants::REST_AREA_CAPACITY;
 use hw_core::relationships::{RestAreaReservedFor, RestingIn, WorkingOn};
 use hw_core::soul::{DamnedSoul, IdleBehavior, IdleState};
+use hw_jobs::AssignedTask;
 use hw_jobs::{Building, BuildingType, RestArea};
 
 /// AssignedTask が None なのに WorkingOn が残っている不整合を解消する。

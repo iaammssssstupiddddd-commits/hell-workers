@@ -9,8 +9,8 @@ use bevy::prelude::*;
 use super::task_handler::TaskHandler;
 use crate::systems::soul_ai::execute::task_execution::types::{
     AssignedTask, BuildData, CoatWallData, CollectBoneData, CollectSandData, FrameWallTileData,
-    GatherData, HaulData, HaulToBlueprintData, HaulToMixerData,
-    MovePlantData, PourFloorTileData, RefineData, ReinforceFloorTileData,
+    GatherData, HaulData, HaulToBlueprintData, HaulToMixerData, MovePlantData, PourFloorTileData,
+    RefineData, ReinforceFloorTileData,
 };
 
 impl TaskHandler<GatherData> for AssignedTask {

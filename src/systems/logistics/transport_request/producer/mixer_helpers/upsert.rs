@@ -2,9 +2,7 @@ use bevy::prelude::*;
 
 use crate::systems::jobs::{TargetMixer, WorkType};
 use crate::systems::logistics::ResourceType;
-use crate::systems::logistics::transport_request::{
-    TransportRequest, TransportRequestKind,
-};
+use crate::systems::logistics::transport_request::{TransportRequest, TransportRequestKind};
 
 pub(crate) fn upsert_mixer_requests(
     commands: &mut Commands,
@@ -60,21 +58,21 @@ pub(crate) fn upsert_mixer_requests(
 
 fn upsert_mixer_requests_by_kind(
     commands: &mut Commands,
-    q_mixer_requests: &Query<
-        (
-            Entity,
-            &TargetMixer,
-            &TransportRequest,
-            Option<&crate::systems::jobs::Designation>,
-            Option<&crate::relationships::TaskWorkers>,
-        ),
-    >,
+    q_mixer_requests: &Query<(
+        Entity,
+        &TargetMixer,
+        &TransportRequest,
+        Option<&crate::systems::jobs::Designation>,
+        Option<&crate::relationships::TaskWorkers>,
+    )>,
     desired_requests: &std::collections::HashMap<(Entity, ResourceType), (Entity, u32, Vec2)>,
     active_mixers: &std::collections::HashSet<Entity>,
     seen_existing_keys: &mut std::collections::HashSet<(Entity, ResourceType)>,
     expected_kind: TransportRequestKind,
 ) {
-    for (request_entity, target_mixer, request, _designation, workers_opt) in q_mixer_requests.iter() {
+    for (request_entity, target_mixer, request, _designation, workers_opt) in
+        q_mixer_requests.iter()
+    {
         if request.kind != expected_kind {
             continue;
         }
@@ -125,7 +123,9 @@ fn upsert_mixer_requests_by_kind(
     }
 }
 
-fn mixer_request_profile(resource_type: ResourceType) -> (WorkType, TransportRequestKind, &'static str) {
+fn mixer_request_profile(
+    resource_type: ResourceType,
+) -> (WorkType, TransportRequestKind, &'static str) {
     if resource_type == ResourceType::Water {
         (
             WorkType::HaulWaterToMixer,

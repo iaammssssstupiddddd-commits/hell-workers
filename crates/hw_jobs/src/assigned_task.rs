@@ -1,8 +1,8 @@
 //! タスク実行関連の型定義
 
-use crate::jobs::WorkType;
-use crate::logistics::{ResourceType, WheelbarrowDestination};
 use bevy::prelude::*;
+use hw_core::jobs::WorkType;
+use hw_core::logistics::{ResourceType, WheelbarrowDestination};
 
 #[derive(Component, Reflect, Clone, Debug, Default)]
 #[reflect(Component)]
@@ -52,9 +52,13 @@ pub enum BucketTransportPhase {
     #[default]
     GoingToBucket,
     GoingToSource,
-    Filling { progress: f32 },
+    Filling {
+        progress: f32,
+    },
     GoingToDestination,
-    Pouring { progress: f32 },
+    Pouring {
+        progress: f32,
+    },
     ReturningBucket,
 }
 
@@ -79,7 +83,9 @@ impl BucketTransportData {
 
     pub fn should_reserve_tank_source(&self) -> bool {
         match self.source {
-            BucketTransportSource::Tank { needs_fill: true, .. } => matches!(
+            BucketTransportSource::Tank {
+                needs_fill: true, ..
+            } => matches!(
                 self.phase,
                 BucketTransportPhase::GoingToBucket
                     | BucketTransportPhase::GoingToSource
@@ -167,7 +173,9 @@ pub enum HaulPhase {
 pub enum GatherPhase {
     #[default]
     GoingToResource,
-    Collecting { progress: f32 },
+    Collecting {
+        progress: f32,
+    },
     Done,
 }
 
@@ -175,7 +183,9 @@ pub enum GatherPhase {
 pub enum BuildPhase {
     #[default]
     GoingToBlueprint,
-    Building { progress: f32 },
+    Building {
+        progress: f32,
+    },
     Done,
 }
 
@@ -191,7 +201,9 @@ pub enum HaulToBpPhase {
 pub enum CollectSandPhase {
     #[default]
     GoingToSand,
-    Collecting { progress: f32 },
+    Collecting {
+        progress: f32,
+    },
     Done,
 }
 
@@ -199,7 +211,9 @@ pub enum CollectSandPhase {
 pub enum CollectBonePhase {
     #[default]
     GoingToBone,
-    Collecting { progress: f32 },
+    Collecting {
+        progress: f32,
+    },
     Done,
 }
 
@@ -207,7 +221,9 @@ pub enum CollectBonePhase {
 pub enum RefinePhase {
     #[default]
     GoingToMixer,
-    Refining { progress: f32 },
+    Refining {
+        progress: f32,
+    },
     Done,
 }
 
@@ -256,7 +272,9 @@ pub enum ReinforceFloorPhase {
     GoingToMaterialCenter,
     PickingUpBones,
     GoingToTile,
-    Reinforcing { progress_bp: u16 },
+    Reinforcing {
+        progress_bp: u16,
+    },
     Done,
 }
 
@@ -273,7 +291,9 @@ pub enum PourFloorPhase {
     GoingToMaterialCenter,
     PickingUpMud,
     GoingToTile,
-    Pouring { progress_bp: u16 },
+    Pouring {
+        progress_bp: u16,
+    },
     Done,
 }
 
@@ -290,7 +310,9 @@ pub enum FrameWallPhase {
     GoingToMaterialCenter,
     PickingUpWood,
     GoingToTile,
-    Framing { progress_bp: u16 },
+    Framing {
+        progress_bp: u16,
+    },
     Done,
 }
 
@@ -335,7 +357,9 @@ pub enum CoatWallPhase {
     GoingToMaterialCenter,
     PickingUpMud,
     GoingToTile,
-    Coating { progress_bp: u16 },
+    Coating {
+        progress_bp: u16,
+    },
     Done,
 }
 

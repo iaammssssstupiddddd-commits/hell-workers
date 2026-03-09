@@ -3,8 +3,8 @@ use std::collections::HashMap;
 use bevy::prelude::*;
 
 pub use hw_core::jobs::WorkType;
-pub use hw_core::relationships::ManagedBy as IssuedBy;
 use hw_core::logistics::ResourceType;
+pub use hw_core::relationships::ManagedBy as IssuedBy;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Reflect, Default)]
 pub enum BuildingType {

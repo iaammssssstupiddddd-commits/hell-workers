@@ -1,9 +1,9 @@
 //! モード表示 / エリア編集プレビュー / タスクサマリの中継レイヤー（hw_ui 側実装へ委譲）
 
-use hw_core::constants::TILE_SIZE;
-use hw_core::game_state::{PlayMode};
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
+use hw_core::constants::TILE_SIZE;
+use hw_core::game_state::PlayMode;
 
 use crate::app_contexts::{BuildContext, CompanionPlacementState, TaskContext, ZoneContext};
 use crate::interface::selection::SelectedEntity;
@@ -12,8 +12,8 @@ use crate::interface::ui::interaction::mode;
 use crate::interface::ui::panels::task_list::{TaskListDirty, TaskListState};
 use crate::relationships::ManagedBy;
 use crate::systems::command::{
-    count_positions_in_area, overlap_summary_from_areas, AreaEditClipboard, AreaEditSession, TaskArea,
-    TaskMode,
+    AreaEditClipboard, AreaEditSession, TaskArea, TaskMode, count_positions_in_area,
+    overlap_summary_from_areas,
 };
 use crate::systems::jobs::Designation;
 
@@ -32,10 +32,7 @@ pub fn update_mode_text_system(
     q_text: Query<&mut Text>,
     ui_nodes: Res<UiNodeRegistry>,
 ) {
-    let area_mode_active = matches!(
-        task_context.0,
-        TaskMode::AreaSelection(_)
-    );
+    let area_mode_active = matches!(task_context.0, TaskMode::AreaSelection(_));
     let selected_area_changed = selected_entity.0.is_some_and(|selected| {
         q_task_areas
             .iter()
@@ -163,31 +160,23 @@ pub fn update_area_edit_preview_ui_system(
     q_node: Query<&mut Node>,
     q_text: Query<&mut Text>,
 ) {
-    let mut payload = Some(
-            hw_ui::interaction::status_display::AreaEditPreviewPayload {
-            display: false,
-            text: String::new(),
-            left: 0.0,
-            top: 0.0,
-        },
-    );
+    let mut payload = Some(hw_ui::interaction::status_display::AreaEditPreviewPayload {
+        display: false,
+        text: String::new(),
+        left: 0.0,
+        top: 0.0,
+    });
 
     if !matches!(task_context.0, TaskMode::AreaSelection(_)) {
         hw_ui::interaction::status_display::update_area_edit_preview_ui_system(
-            payload,
-            ui_nodes,
-            q_node,
-            q_text,
+            payload, ui_nodes, q_node, q_text,
         );
         return;
     }
 
     let Some(selected) = selected_entity.0 else {
         hw_ui::interaction::status_display::update_area_edit_preview_ui_system(
-            payload,
-            ui_nodes,
-            q_node,
-            q_text,
+            payload, ui_nodes, q_node, q_text,
         );
         return;
     };
@@ -197,28 +186,19 @@ pub fn update_area_edit_preview_ui_system(
         .map(|(_, area)| area)
     else {
         hw_ui::interaction::status_display::update_area_edit_preview_ui_system(
-            payload,
-            ui_nodes,
-            q_node,
-            q_text,
+            payload, ui_nodes, q_node, q_text,
         );
         return;
     };
     let Ok(window) = q_window.single() else {
         hw_ui::interaction::status_display::update_area_edit_preview_ui_system(
-            payload,
-            ui_nodes,
-            q_node,
-            q_text,
+            payload, ui_nodes, q_node, q_text,
         );
         return;
     };
     let Some(cursor) = window.cursor_position() else {
         hw_ui::interaction::status_display::update_area_edit_preview_ui_system(
-            payload,
-            ui_nodes,
-            q_node,
-            q_text,
+            payload, ui_nodes, q_node, q_text,
         );
         return;
     };
@@ -240,7 +220,9 @@ pub fn update_area_edit_preview_ui_system(
     let overlap = overlap_summary_from_areas(
         selected,
         area,
-        q_task_areas.iter().map(|(entity, area)| (entity, (*area).clone())),
+        q_task_areas
+            .iter()
+            .map(|(entity, area)| (entity, (*area).clone())),
     );
     let overlap_text = if let Some((count, ratio)) = overlap {
         if count > 0 {
@@ -258,7 +240,9 @@ pub fn update_area_edit_preview_ui_system(
     };
     let tasks_in_area = count_positions_in_area(
         area,
-        q_unassigned_tasks.iter().map(|transform| transform.translation.truncate()),
+        q_unassigned_tasks
+            .iter()
+            .map(|transform| transform.translation.truncate()),
     );
     let warn_text = if overlap.is_some_and(|(count, ratio)| count > 0 && ratio >= 0.5) {
         " | WARN:HighOverlap"
@@ -266,28 +250,17 @@ pub fn update_area_edit_preview_ui_system(
         ""
     };
 
-    payload = Some(
-        hw_ui::interaction::status_display::AreaEditPreviewPayload {
-            display: true,
-            text: format!(
-                "Area {}x{}t | {} | {} | Tasks:{} | {}{}",
-                width_tiles,
-                height_tiles,
-                state,
-                overlap_text,
-                tasks_in_area,
-                clip_text,
-                warn_text,
-            ),
-            left: (cursor.x + 14.0).min(window.width() - 360.0).max(4.0),
-            top: (cursor.y + 18.0).min(window.height() - 34.0).max(4.0),
-        },
-    );
+    payload = Some(hw_ui::interaction::status_display::AreaEditPreviewPayload {
+        display: true,
+        text: format!(
+            "Area {}x{}t | {} | {} | Tasks:{} | {}{}",
+            width_tiles, height_tiles, state, overlap_text, tasks_in_area, clip_text, warn_text,
+        ),
+        left: (cursor.x + 14.0).min(window.width() - 360.0).max(4.0),
+        top: (cursor.y + 18.0).min(window.height() - 34.0).max(4.0),
+    });
 
     hw_ui::interaction::status_display::update_area_edit_preview_ui_system(
-        payload,
-        ui_nodes,
-        q_node,
-        q_text,
+        payload, ui_nodes, q_node, q_text,
     );
 }

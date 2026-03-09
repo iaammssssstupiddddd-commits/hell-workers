@@ -1,4 +1,3 @@
-use hw_core::game_state::PlayMode;
 use crate::interface::ui::PlacementFailureTooltip;
 use crate::systems::command::area_selection::wall_line_area;
 use crate::systems::command::{TaskArea, TaskMode};
@@ -6,6 +5,7 @@ use crate::systems::jobs::floor_construction::FloorTileBlueprint;
 use crate::systems::jobs::{Building, BuildingType};
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
+use hw_core::game_state::PlayMode;
 use std::collections::HashSet;
 
 use super::floor_apply::apply_floor_placement;
@@ -48,8 +48,10 @@ pub(super) fn handle_release(
     if let Some(start_pos) = start_pos_opt {
         if is_floor_mode {
             let area = TaskArea::from_points(start_pos, snapped_pos);
-            let existing_floor_tile_grids: HashSet<(i32, i32)> =
-                q_existing_floor_tiles.iter().map(|tile| tile.grid_pos).collect();
+            let existing_floor_tile_grids: HashSet<(i32, i32)> = q_existing_floor_tiles
+                .iter()
+                .map(|tile| tile.grid_pos)
+                .collect();
             let existing_floor_building_grids = existing_floor_building_grids(q_floor_buildings);
             apply_floor_placement(
                 commands,

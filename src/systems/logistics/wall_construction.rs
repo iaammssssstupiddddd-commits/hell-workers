@@ -21,11 +21,15 @@ pub fn wall_site_tile_demand<'a>(
     wall_tiles
         .filter(|tile| tile.parent_site == site_entity)
         .map(|tile| match resource_type {
-            ResourceType::Wood if tile.state == crate::systems::jobs::wall_construction::WallTileState::WaitingWood => {
+            ResourceType::Wood
+                if tile.state
+                    == crate::systems::jobs::wall_construction::WallTileState::WaitingWood =>
+            {
                 WALL_WOOD_PER_TILE.saturating_sub(tile.wood_delivered) as usize
             }
             ResourceType::StasisMud
-                if tile.state == crate::systems::jobs::wall_construction::WallTileState::WaitingMud =>
+                if tile.state
+                    == crate::systems::jobs::wall_construction::WallTileState::WaitingMud =>
             {
                 WALL_MUD_PER_TILE.saturating_sub(tile.mud_delivered) as usize
             }
@@ -43,10 +47,16 @@ pub fn wall_site_tile_demand_from_index(
         .iter()
         .filter_map(|tile_entity| q_wall_tiles.get(*tile_entity).ok())
         .map(|tile| match resource_type {
-            ResourceType::Wood if tile.state == crate::systems::jobs::wall_construction::WallTileState::WaitingWood => {
+            ResourceType::Wood
+                if tile.state
+                    == crate::systems::jobs::wall_construction::WallTileState::WaitingWood =>
+            {
                 WALL_WOOD_PER_TILE.saturating_sub(tile.wood_delivered) as usize
             }
-            ResourceType::StasisMud if tile.state == crate::systems::jobs::wall_construction::WallTileState::WaitingMud => {
+            ResourceType::StasisMud
+                if tile.state
+                    == crate::systems::jobs::wall_construction::WallTileState::WaitingMud =>
+            {
                 WALL_MUD_PER_TILE.saturating_sub(tile.mud_delivered) as usize
             }
             _ => 0,

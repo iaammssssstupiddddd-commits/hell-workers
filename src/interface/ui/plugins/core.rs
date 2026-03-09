@@ -1,4 +1,3 @@
-use hw_core::game_state::PlayMode;
 use crate::interface::selection::SelectedEntity;
 use crate::interface::selection::blueprint_placement;
 use crate::interface::selection::building_move_preview_system;
@@ -8,11 +7,12 @@ use crate::interface::selection::{
     cleanup_selection_references_system, clear_companion_state_outside_build_mode,
     update_hover_entity, update_selection_indicator,
 };
-use crate::interface::ui::vignette::update_vignette_system;
 use crate::interface::ui::interaction::handle_ui_intent;
+use crate::interface::ui::vignette::update_vignette_system;
 use crate::systems::GameSystemSet;
 use crate::systems::time::game_time_system;
 use bevy::prelude::*;
+use hw_core::game_state::PlayMode;
 
 pub type UiCorePlugin = hw_ui::plugins::core::UiCorePlugin;
 
@@ -57,9 +57,8 @@ fn register_ui_core_plugin_systems(app: &mut App) {
         (
             crate::interface::ui::context_menu_system,
             crate::interface::ui::task_summary_ui_system,
-            crate::interface::ui::update_operation_dialog_system.run_if(|selected: Res<SelectedEntity>| {
-                selected.0.is_some()
-            }),
+            crate::interface::ui::update_operation_dialog_system
+                .run_if(|selected: Res<SelectedEntity>| selected.0.is_some()),
             game_time_system,
             crate::interface::ui::update_fps_display_system,
             crate::interface::ui::update_dream_pool_display_system,

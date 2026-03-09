@@ -1,8 +1,8 @@
 use crate::camera::MainCamera;
 use crate::components::{HoverActionOverlay, MenuAction, MenuButton};
 use crate::selection::HoveredEntity;
-use hw_jobs::{Building, BuildingCategory};
 use bevy::prelude::*;
+use hw_jobs::{Building, BuildingCategory};
 
 const HOVER_ACTION_Y_OFFSET: f32 = 38.0;
 
@@ -58,7 +58,9 @@ pub fn hover_action_button_system(
         return;
     };
 
-    let Ok(overlay_pos) = camera.world_to_viewport(camera_transform, target_transform.translation()) else {
+    let Ok(overlay_pos) =
+        camera.world_to_viewport(camera_transform, target_transform.translation())
+    else {
         node.display = Display::None;
         return;
     };

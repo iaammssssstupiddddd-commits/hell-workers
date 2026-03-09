@@ -1,6 +1,5 @@
 //! 会話イベント起点の表情オーバーレイ
 
-use hw_core::constants::*;
 use crate::entities::damned_soul::{
     ConversationExpression, ConversationExpressionKind, DamnedSoul,
 };
@@ -10,6 +9,7 @@ use crate::systems::visual::speech::conversation::events::{
     ConversationCompleted, ConversationTone, ConversationToneTriggered,
 };
 use bevy::prelude::*;
+use hw_core::constants::*;
 
 const EXPRESSION_PRIORITY_CONVERSATION_TONE: u8 = 20;
 const EXPRESSION_PRIORITY_CONVERSATION_COMPLETED: u8 = 10;

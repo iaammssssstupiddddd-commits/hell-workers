@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 
-use crate::systems::world::zones::AreaBounds;
 use crate::systems::logistics::ZoneType;
+use crate::systems::world::zones::AreaBounds;
 
 pub mod area_selection;
 pub mod assign_task;
@@ -34,7 +34,9 @@ pub struct TaskArea {
 
 impl TaskArea {
     pub fn from_points(a: Vec2, b: Vec2) -> Self {
-        Self { bounds: AreaBounds::from_points(a, b) }
+        Self {
+            bounds: AreaBounds::from_points(a, b),
+        }
     }
 
     pub fn center(&self) -> Vec2 {
@@ -134,4 +136,4 @@ pub use indicators::{
 };
 pub use input::familiar_command_input_system;
 pub use visualization::{designation_visual_system, familiar_command_visual_system};
-pub use zone_placement::{zone_placement_system, zone_removal_system, ZoneRemovalPreviewState};
+pub use zone_placement::{ZoneRemovalPreviewState, zone_placement_system, zone_removal_system};

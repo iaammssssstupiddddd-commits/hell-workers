@@ -1,15 +1,11 @@
 use bevy::prelude::*;
 
-use crate::app_contexts::{
-    BuildContext, TaskContext, ZoneContext,
-};
+use crate::app_contexts::{BuildContext, TaskContext, ZoneContext};
 use crate::entities::familiar::{Familiar, FamiliarOperation};
 use crate::events::FamiliarOperationMaxSoulChangedEvent;
 use crate::interface::selection::SelectedEntity;
 use crate::interface::ui::InfoPanelPinState;
-use crate::interface::ui::components::{
-    MenuState, OperationDialog,
-};
+use crate::interface::ui::components::{MenuState, OperationDialog};
 use crate::systems::command::{TaskArea, TaskMode};
 use crate::systems::time::TimeSpeed;
 use hw_core::game_state::PlayMode;
@@ -119,7 +115,11 @@ pub(crate) fn handle_ui_intent(
                 );
             }
             UiIntent::SelectTaskMode(mode) => {
-                ensure_familiar_selected(&mut selected_entity, &q_familiars_for_area, "Task designation");
+                ensure_familiar_selected(
+                    &mut selected_entity,
+                    &q_familiars_for_area,
+                    "Task designation",
+                );
                 super::mode::set_task_mode(
                     mode,
                     &mut next_play_mode,
@@ -156,7 +156,12 @@ pub(crate) fn handle_ui_intent(
                 adjust_fatigue_threshold(selected_entity.0, &mut q_familiar_ops, delta);
             }
             UiIntent::AdjustMaxControlledSoul(delta) => {
-                adjust_max_controlled_soul(selected_entity.0, &mut q_familiar_ops, delta, &mut ev_max_soul_changed);
+                adjust_max_controlled_soul(
+                    selected_entity.0,
+                    &mut q_familiar_ops,
+                    delta,
+                    &mut ev_max_soul_changed,
+                );
             }
             UiIntent::TogglePause => {
                 if time.is_paused() {

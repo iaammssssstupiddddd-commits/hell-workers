@@ -4,9 +4,9 @@
 
 mod common;
 mod dialog;
-mod menu_actions;
-mod intent_handler;
 mod hover_action;
+mod intent_handler;
+mod menu_actions;
 mod mode;
 mod status_display;
 mod tooltip;
@@ -14,25 +14,28 @@ mod tooltip;
 pub(crate) use common::despawn_context_menus;
 pub(crate) use intent_handler::handle_ui_intent;
 
+pub(crate) use hover_action::hover_action_button_system;
 pub use status_display::{
     task_summary_ui_system, update_area_edit_preview_ui_system, update_dream_loss_popup_ui_system,
     update_dream_pool_display_system, update_fps_display_system, update_mode_text_system,
     update_speed_button_highlight_system,
 };
 pub(crate) use tooltip::hover_tooltip_system;
-pub(crate) use hover_action::hover_action_button_system;
 
+use crate::app_contexts::{
+    BuildContext, CompanionPlacementState, MoveContext, MovePlacementState, TaskContext,
+    ZoneContext,
+};
+use crate::assets::GameAssets;
 use crate::entities::familiar::{Familiar, FamiliarOperation};
-use hw_core::game_state::{PlayMode};
-use crate::app_contexts::{BuildContext, CompanionPlacementState, MoveContext, MovePlacementState, TaskContext, ZoneContext};
 use crate::interface::ui::components::*;
 use crate::interface::ui::theme::UiTheme;
 use crate::systems::command::TaskMode;
+use crate::systems::jobs::{Door, DoorState, apply_door_state};
+use crate::world::map::WorldMapWrite;
 use bevy::prelude::*;
 use bevy::ui::RelativeCursorPosition;
-use crate::assets::GameAssets;
-use crate::world::map::WorldMapWrite;
-use crate::systems::jobs::{Door, DoorState, apply_door_state};
+use hw_core::game_state::PlayMode;
 use hw_ui::UiIntent;
 
 pub fn update_ui_input_state_system(

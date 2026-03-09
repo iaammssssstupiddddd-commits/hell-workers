@@ -1,11 +1,11 @@
 //! Stockpile 向け運搬タスクの割り当て
 
-use hw_core::constants::*;
 use crate::systems::familiar_ai::decide::task_management::{AssignTaskContext, ReservationShadow};
 use crate::systems::logistics::transport_request::{
     WheelbarrowDestination, can_complete_pick_drop_to_point,
 };
 use bevy::prelude::*;
+use hw_core::constants::*;
 
 use super::super::super::builders::{
     issue_haul_to_stockpile_with_source, issue_haul_with_wheelbarrow,

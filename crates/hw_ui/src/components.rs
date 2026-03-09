@@ -2,10 +2,10 @@
 //!
 //! UIの列挙型とコンポーネント構造体を定義します。
 
-use hw_jobs::BuildingCategory;
 use bevy::prelude::*;
-use std::collections::HashMap;
 use hw_core::game_state::TimeSpeed;
+use hw_jobs::BuildingCategory;
+use std::collections::HashMap;
 
 // ============================================================
 // 左パネルモード

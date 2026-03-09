@@ -2,10 +2,10 @@ use super::common::*;
 use super::context::TaskExecutionContext;
 use super::types::{AssignedTask, CollectBonePhase};
 use crate::assets::GameAssets;
-use hw_core::constants::*;
 use crate::systems::logistics::{ResourceItem, ResourceType};
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
+use hw_core::constants::*;
 
 pub fn handle_collect_bone_task(
     ctx: &mut TaskExecutionContext,

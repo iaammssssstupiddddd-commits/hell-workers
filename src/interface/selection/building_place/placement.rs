@@ -1,14 +1,78 @@
 use crate::assets::GameAssets;
-use hw_core::constants::*;
 use crate::systems::jobs::{Blueprint, Building, BuildingType};
 use crate::systems::world::zones::{Site, Yard};
-use crate::world::map::WorldMap;
+use crate::world::map::{RIVER_Y_MIN, WorldMap};
 use bevy::prelude::*;
+use hw_core::constants::*;
+use hw_ui::selection::{
+    BuildingPlacementContext, TANK_NEARBY_BUCKET_STORAGE_TILES, WorldReadApi,
+    bucket_storage_geometry, building_geometry, validate_bucket_storage_placement,
+    validate_building_placement,
+};
 
-use super::door_rules::is_valid_door_placement;
-use super::geometry::{building_size, building_spawn_pos, occupied_grids_for_building};
+struct SimpleWorldRead<'a> {
+    world_map: &'a WorldMap,
+}
 
-const TANK_NEARBY_BUCKET_STORAGE_TILES: i32 = 3;
+impl WorldReadApi for SimpleWorldRead<'_> {
+    fn has_building(&self, grid: (i32, i32)) -> bool {
+        self.world_map.has_building(grid)
+    }
+
+    fn has_stockpile(&self, grid: (i32, i32)) -> bool {
+        self.world_map.has_stockpile(grid)
+    }
+
+    fn is_walkable(&self, gx: i32, gy: i32) -> bool {
+        self.world_map.is_walkable(gx, gy)
+    }
+
+    fn is_river_tile(&self, gx: i32, gy: i32) -> bool {
+        self.world_map.is_river_tile(gx, gy)
+    }
+
+    fn building_entity(&self, grid: (i32, i32)) -> Option<Entity> {
+        self.world_map.building_entity(grid)
+    }
+
+    fn stockpile_entity(&self, grid: (i32, i32)) -> Option<Entity> {
+        self.world_map.stockpile_entity(grid)
+    }
+
+    fn pos_to_idx(&self, gx: i32, gy: i32) -> Option<usize> {
+        self.world_map.pos_to_idx(gx, gy)
+    }
+}
+
+fn is_replaceable_wall_at(
+    world_map: &WorldMap,
+    q_buildings: &Query<&Building>,
+    grid: (i32, i32),
+) -> bool {
+    world_map.building_entity(grid).is_some_and(|entity| {
+        q_buildings
+            .get(entity)
+            .is_ok_and(|building| building.kind == BuildingType::Wall && !building.is_provisional)
+    })
+}
+
+fn is_wall_or_door_at(
+    world_map: &WorldMap,
+    q_buildings: &Query<&Building>,
+    q_blueprints_by_entity: &Query<&Blueprint>,
+    grid: (i32, i32),
+) -> bool {
+    let Some(entity) = world_map.building_entity(grid) else {
+        return false;
+    };
+    if let Ok(building) = q_buildings.get(entity) {
+        return matches!(building.kind, BuildingType::Wall | BuildingType::Door);
+    }
+    if let Ok(blueprint) = q_blueprints_by_entity.get(entity) {
+        return matches!(blueprint.kind, BuildingType::Wall | BuildingType::Door);
+    }
+    false
+}
 
 /// Attempts to spawn a Blueprint entity for the given building type at the given grid position.
 /// Returns `Some((entity, occupied_grids, spawn_pos))` on success, `None` if placement is blocked.
@@ -23,58 +87,30 @@ pub(super) fn place_building_blueprint(
     q_sites: &Query<&Site>,
     q_yards: &Query<&Yard>,
 ) -> Option<(Entity, Vec<(i32, i32)>, Vec2)> {
-    let occupied_grids = occupied_grids_for_building(building_type, grid);
-    let spawn_pos = building_spawn_pos(building_type, grid);
-    let custom_size = Some(building_size(building_type));
-
-    let active_site = q_sites.iter().find(|site| site.contains(spawn_pos));
-    let active_yard = q_yards.iter().find(|yard| yard.contains(spawn_pos));
-    let category = building_type.category();
-
-    let replace_wall_entity = if building_type == BuildingType::Door {
-        world_map.building_entity(grid).filter(|entity| {
-            q_buildings.get(*entity).is_ok_and(|building| {
-                building.kind == BuildingType::Wall && !building.is_provisional
-            })
-        })
-    } else {
-        None
-    };
-
-    let can_place_base = if building_type == BuildingType::Bridge {
-        occupied_grids.iter().all(|&g| {
-            !world_map.has_building(g)
-                && !world_map.has_stockpile(g)
-                && world_map.is_river_tile(g.0, g.1)
-        })
-    } else if building_type == BuildingType::Door {
-        let base_tile_ok = if replace_wall_entity.is_some() {
-            !world_map.has_stockpile(grid)
-        } else {
-            !world_map.has_building(grid)
-                && !world_map.has_stockpile(grid)
-                && world_map.is_walkable(grid.0, grid.1)
+    let geometry = building_geometry(building_type, grid, RIVER_Y_MIN);
+    let replace_wall_entity = {
+        let read_world = SimpleWorldRead { world_map };
+        let ctx = BuildingPlacementContext {
+            world: &read_world,
+            in_site: q_sites.iter().any(|site| site.contains(geometry.draw_pos)),
+            in_yard: q_yards.iter().any(|yard| yard.contains(geometry.draw_pos)),
+            is_wall_or_door_at: &|candidate| {
+                is_wall_or_door_at(world_map, q_buildings, q_blueprints_by_entity, candidate)
+            },
+            is_replaceable_wall_at: &|candidate| {
+                is_replaceable_wall_at(world_map, q_buildings, candidate)
+            },
         };
-        base_tile_ok
-            && is_valid_door_placement(world_map, q_buildings, q_blueprints_by_entity, grid)
-    } else {
-        occupied_grids.iter().all(|&g| {
-            !world_map.has_building(g)
-                && !world_map.has_stockpile(g)
-                && world_map.is_walkable(g.0, g.1)
-        })
-    };
-
-    let can_place = match category {
-        crate::systems::jobs::BuildingCategory::Structure => active_site.is_some() && can_place_base,
-        crate::systems::jobs::BuildingCategory::Plant | crate::systems::jobs::BuildingCategory::Temporary => {
-            active_yard.is_some() && can_place_base
+        let validation = validate_building_placement(&ctx, building_type, grid, &geometry);
+        if !validation.can_place {
+            return None;
         }
-        _ => can_place_base,
+
+        (building_type == BuildingType::Door)
+            .then(|| world_map.building_entity(grid))
+            .flatten()
+            .filter(|_| is_replaceable_wall_at(world_map, q_buildings, grid))
     };
-    if !can_place {
-        return None;
-    }
 
     if let Some(entity) = replace_wall_entity {
         world_map.clear_building_occupancy(grid);
@@ -98,7 +134,7 @@ pub(super) fn place_building_blueprint(
 
     let entity = commands
         .spawn((
-            Blueprint::new(building_type, occupied_grids.clone()),
+            Blueprint::new(building_type, geometry.occupied_grids.clone()),
             crate::systems::jobs::Designation {
                 work_type: crate::systems::jobs::WorkType::Build,
             },
@@ -106,17 +142,21 @@ pub(super) fn place_building_blueprint(
             Sprite {
                 image: texture,
                 color: Color::srgba(1.0, 1.0, 1.0, 0.5),
-                custom_size,
+                custom_size: Some(geometry.size),
                 ..default()
             },
-            Transform::from_xyz(spawn_pos.x, spawn_pos.y, Z_AURA),
+            Transform::from_xyz(geometry.draw_pos.x, geometry.draw_pos.y, Z_AURA),
             Name::new(format!("Blueprint ({:?})", building_type)),
         ))
         .id();
 
-    world_map.reserve_building_footprint(building_type, entity, occupied_grids.iter().copied());
+    world_map.reserve_building_footprint(
+        building_type,
+        entity,
+        geometry.occupied_grids.iter().copied(),
+    );
 
-    Some((entity, occupied_grids, spawn_pos))
+    Some((entity, geometry.occupied_grids, geometry.draw_pos))
 }
 
 /// Attempts to place the BucketStorage companion for a Tank blueprint.
@@ -128,28 +168,20 @@ pub(super) fn try_place_bucket_storage_companion(
     parent_occupied_grids: &[(i32, i32)],
     anchor_grid: (i32, i32),
 ) -> bool {
-    use super::geometry::grid_is_nearby;
-
-    let storage_grids = [anchor_grid, (anchor_grid.0 + 1, anchor_grid.1)];
-    let is_near_parent = storage_grids.iter().all(|&storage_grid| {
-        parent_occupied_grids.iter().any(|&parent_grid| {
-            grid_is_nearby(parent_grid, storage_grid, TANK_NEARBY_BUCKET_STORAGE_TILES)
-        })
-    });
-    if !is_near_parent {
+    let geometry = bucket_storage_geometry(anchor_grid);
+    let read_world = SimpleWorldRead { world_map };
+    let validation = validate_bucket_storage_placement(
+        &read_world,
+        &geometry,
+        parent_occupied_grids,
+        true,
+        TANK_NEARBY_BUCKET_STORAGE_TILES,
+    );
+    if !validation.can_place {
         return false;
     }
 
-    let can_place = storage_grids.iter().all(|&(gx, gy)| {
-        !world_map.has_building((gx, gy))
-            && !world_map.has_stockpile((gx, gy))
-            && world_map.is_walkable(gx, gy)
-    });
-    if !can_place {
-        return false;
-    }
-
-    for (gx, gy) in storage_grids {
+    for (gx, gy) in geometry.occupied_grids {
         let pos = WorldMap::grid_to_world(gx, gy);
         let storage_entity = commands
             .spawn((

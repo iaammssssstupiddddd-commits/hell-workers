@@ -1,8 +1,8 @@
 //! Floor construction system components
 
 use crate::systems::command::TaskArea;
-pub use hw_jobs::construction::{FloorConstructionPhase, FloorTileState};
 use bevy::prelude::*;
+pub use hw_jobs::construction::{FloorConstructionPhase, FloorTileState};
 
 /// Floor construction site - parent entity managing an area of floor tiles
 #[derive(Component, Clone, Debug)]

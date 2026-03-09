@@ -1,5 +1,4 @@
-use hw_core::game_state::{PlayMode};
-use crate::app_contexts::{TaskContext};
+use crate::app_contexts::TaskContext;
 use crate::interface::camera::MainCamera;
 use crate::interface::ui::UiInputState;
 use crate::systems::command::TaskMode;
@@ -7,6 +6,7 @@ use crate::systems::world::zones::AreaBounds;
 use crate::world::map::{WorldMap, WorldMapWrite};
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
+use hw_core::game_state::PlayMode;
 
 use super::connectivity::identify_removal_targets;
 use super::removal_preview::{

@@ -7,7 +7,7 @@ mod mixer_helpers;
 
 use bevy::prelude::*;
 
-use crate::entities::familiar::{ActiveCommand};
+use crate::entities::familiar::ActiveCommand;
 use crate::events::DesignationRequest;
 use crate::relationships::{ManagedBy, TaskWorkers};
 use crate::systems::command::TaskArea;
@@ -58,14 +58,21 @@ pub fn mud_mixer_auto_haul_system(
     >,
     q_task_state: Query<(Option<&Designation>, Option<&TaskWorkers>)>,
     q_collect_sand_tasks: Query<(&Designation, &ManagedBy, Option<&TaskWorkers>)>,
-    q_requests_for_demand: Query<(&TransportRequest, Option<&TaskWorkers>, Option<&TransportDemand>)>,
+    q_requests_for_demand: Query<(
+        &TransportRequest,
+        Option<&TaskWorkers>,
+        Option<&TransportDemand>,
+    )>,
 ) {
     let active_familiars = mixer_helpers::collect_active_familiars(&q_familiars);
     let active_yards = mixer_helpers::collect_active_yards(&q_yards);
     let all_owners = super::collect_all_area_owners(&active_familiars, &active_yards);
 
     let (collect_sand_demanders, collect_sand_tasking) =
-        mixer_helpers::collect_collect_sand_familiar_states(&q_requests_for_demand, &q_collect_sand_tasks);
+        mixer_helpers::collect_collect_sand_familiar_states(
+            &q_requests_for_demand,
+            &q_collect_sand_tasks,
+        );
     let (water_inflight_by_mixer, sand_inflight_by_mixer) =
         mixer_helpers::collect_inflight_mixer_requests(&q_mixer_requests);
 

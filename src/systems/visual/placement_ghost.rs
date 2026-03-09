@@ -1,18 +1,102 @@
-use hw_core::constants::TILE_SIZE;
-use hw_core::game_state::{PlayMode};
-use crate::app_contexts::{BuildContext, CompanionParentKind, CompanionPlacementKind, CompanionPlacementState};
+use crate::app_contexts::{
+    BuildContext, CompanionParentKind, CompanionPlacementKind, CompanionPlacementState,
+};
 use crate::interface::camera::MainCamera;
 use crate::systems::jobs::{Blueprint, Building, BuildingType};
+use crate::systems::world::zones::{Site, Yard};
 use crate::world::map::{RIVER_Y_MIN, WorldMap, WorldMapRead};
 use bevy::prelude::*;
-
-const TANK_NEARBY_BUCKET_STORAGE_TILES: i32 = 3;
+use hw_core::constants::TILE_SIZE;
+use hw_core::game_state::PlayMode;
+use hw_ui::selection::{
+    BuildingPlacementContext, TANK_NEARBY_BUCKET_STORAGE_TILES, WorldReadApi,
+    bucket_storage_geometry, building_geometry, building_occupied_grids, building_size,
+    building_spawn_pos, validate_bucket_storage_placement, validate_building_placement,
+};
 
 #[derive(Component)]
 pub struct PlacementGhost;
 
 #[derive(Component)]
 pub struct PlacementPartnerGhost;
+
+struct GhostPlacementWorld<'a> {
+    world_map: &'a WorldMap,
+}
+
+impl WorldReadApi for GhostPlacementWorld<'_> {
+    fn has_building(&self, grid: (i32, i32)) -> bool {
+        self.world_map.has_building(grid)
+    }
+
+    fn has_stockpile(&self, grid: (i32, i32)) -> bool {
+        self.world_map.has_stockpile(grid)
+    }
+
+    fn is_walkable(&self, gx: i32, gy: i32) -> bool {
+        self.world_map.is_walkable(gx, gy)
+    }
+
+    fn is_river_tile(&self, gx: i32, gy: i32) -> bool {
+        self.world_map.is_river_tile(gx, gy)
+    }
+
+    fn building_entity(&self, grid: (i32, i32)) -> Option<Entity> {
+        self.world_map.building_entity(grid)
+    }
+
+    fn stockpile_entity(&self, grid: (i32, i32)) -> Option<Entity> {
+        self.world_map.stockpile_entity(grid)
+    }
+
+    fn pos_to_idx(&self, gx: i32, gy: i32) -> Option<usize> {
+        self.world_map.pos_to_idx(gx, gy)
+    }
+}
+
+impl GhostPlacementWorld<'_> {
+    fn occupied_grids_for_parent(
+        &self,
+        parent_kind: CompanionParentKind,
+        anchor: (i32, i32),
+    ) -> Vec<(i32, i32)> {
+        match parent_kind {
+            CompanionParentKind::Tank => {
+                building_occupied_grids(BuildingType::Tank, anchor, RIVER_Y_MIN)
+            }
+        }
+    }
+}
+
+fn is_replaceable_wall_at(
+    world_map: &WorldMap,
+    q_buildings: &Query<&Building>,
+    grid: (i32, i32),
+) -> bool {
+    world_map.building_entity(grid).is_some_and(|entity| {
+        q_buildings
+            .get(entity)
+            .is_ok_and(|building| building.kind == BuildingType::Wall && !building.is_provisional)
+    })
+}
+
+fn is_wall_or_door_at(
+    world_map: &WorldMap,
+    q_buildings: &Query<&Building>,
+    q_blueprints: &Query<&Blueprint>,
+    grid: (i32, i32),
+) -> bool {
+    let Some(entity) = world_map.building_entity(grid) else {
+        return false;
+    };
+    if let Ok(building) = q_buildings.get(entity) {
+        return matches!(building.kind, BuildingType::Wall | BuildingType::Door);
+    }
+    if let Ok(blueprint) = q_blueprints.get(entity) {
+        return matches!(blueprint.kind, BuildingType::Wall | BuildingType::Door);
+    }
+    false
+}
 
 pub fn placement_ghost_system(
     mut commands: Commands,
@@ -30,6 +114,8 @@ pub fn placement_ghost_system(
     world_map: WorldMapRead,
     q_buildings: Query<&Building>,
     q_blueprints: Query<&Blueprint>,
+    q_sites: Query<&Site>,
+    q_yards: Query<&Yard>,
 ) {
     // 建築モード以外ならゴーストを削除して終了
     if *play_mode.get() != PlayMode::BuildingPlace {
@@ -72,141 +158,104 @@ pub fn placement_ghost_system(
         return;
     };
 
-    // 座標計算（ここ重要：配置ロジックと一致させる）
     let grid_pos = WorldMap::world_to_grid(world_pos);
-
-    // 占有グリッドの計算
-    let occupied_grids = if companion_kind == Some(CompanionPlacementKind::BucketStorage) {
-        vec![grid_pos, (grid_pos.0 + 1, grid_pos.1)]
-    } else {
-        match building_type {
-            BuildingType::Bridge => (0..5)
-                .flat_map(|dy| {
-                    [
-                        (grid_pos.0, RIVER_Y_MIN + dy),
-                        (grid_pos.0 + 1, RIVER_Y_MIN + dy),
-                    ]
-                })
-                .collect(),
-            BuildingType::Tank
-            | BuildingType::MudMixer
-            | BuildingType::RestArea
-            | BuildingType::WheelbarrowParking => {
-                vec![
-                    grid_pos,
-                    (grid_pos.0 + 1, grid_pos.1),
-                    (grid_pos.0, grid_pos.1 + 1),
-                    (grid_pos.0 + 1, grid_pos.1 + 1),
-                ]
-            }
-            _ => vec![grid_pos],
-        }
+    let read_world = GhostPlacementWorld {
+        world_map: world_map.as_ref(),
     };
 
-    // 配置可能かチェック
-    let can_place_on_grid = if building_type == BuildingType::Bridge {
-        occupied_grids.iter().all(|&g| {
-            !world_map.has_building(g)
-                && !world_map.has_stockpile(g)
-                && world_map.is_river_tile(g.0, g.1)
-        })
-    } else if building_type == BuildingType::Door {
-        let replaceable_wall = world_map
-            .building_entity(grid_pos)
-            .is_some_and(|entity| {
-                q_buildings.get(entity).is_ok_and(|building| {
-                    building.kind == BuildingType::Wall && !building.is_provisional
-                })
-            });
-        let base_tile_ok = if replaceable_wall {
-            !world_map.has_stockpile(grid_pos)
-        } else {
-            !world_map.has_building(grid_pos)
-                && !world_map.has_stockpile(grid_pos)
-                && world_map.is_walkable(grid_pos.0, grid_pos.1)
+    let geometry = if companion_kind == Some(CompanionPlacementKind::BucketStorage) {
+        bucket_storage_geometry(grid_pos)
+    } else {
+        building_geometry(building_type, grid_pos, RIVER_Y_MIN)
+    };
+
+    let validation = if companion_kind == Some(CompanionPlacementKind::BucketStorage) {
+        let Some(active) = companion_state.0.as_ref() else {
+            return;
         };
-        base_tile_ok
-            && is_valid_door_placement(world_map.as_ref(), &q_buildings, &q_blueprints, grid_pos)
-    } else {
-        occupied_grids.iter().all(|&g| {
-            !world_map.has_building(g)
-                && !world_map.has_stockpile(g)
-                && world_map.is_walkable(g.0, g.1)
-        })
-    };
-    let in_companion_range = companion_state
-        .0
-        .as_ref()
-        .map(|state| world_pos.distance(state.center) <= state.radius)
-        .unwrap_or(true);
-    let can_place_near_parent = companion_state.0.as_ref().is_none_or(|state| {
-        if state.kind != CompanionPlacementKind::BucketStorage {
-            return true;
+        let within_radius = companion_state
+            .0
+            .as_ref()
+            .map(|state| world_pos.distance(state.center) <= state.radius)
+            .unwrap_or(true);
+        let parent_type = match active.parent_kind {
+            CompanionParentKind::Tank => BuildingType::Tank,
+        };
+        let parent_geometry = building_geometry(parent_type, active.parent_anchor, RIVER_Y_MIN);
+        let parent_ctx = BuildingPlacementContext {
+            world: &read_world,
+            in_site: q_sites
+                .iter()
+                .any(|site| site.contains(parent_geometry.draw_pos)),
+            in_yard: q_yards
+                .iter()
+                .any(|yard| yard.contains(parent_geometry.draw_pos)),
+            is_wall_or_door_at: &|candidate| {
+                is_wall_or_door_at(world_map.as_ref(), &q_buildings, &q_blueprints, candidate)
+            },
+            is_replaceable_wall_at: &|candidate| {
+                is_replaceable_wall_at(world_map.as_ref(), &q_buildings, candidate)
+            },
+        };
+        let parent_validation = validate_building_placement(
+            &parent_ctx,
+            parent_type,
+            active.parent_anchor,
+            &parent_geometry,
+        );
+        if !parent_validation.can_place {
+            parent_validation
+        } else {
+            let parent_occupied_grids =
+                read_world.occupied_grids_for_parent(active.parent_kind, active.parent_anchor);
+            validate_bucket_storage_placement(
+                &read_world,
+                &geometry,
+                &parent_occupied_grids,
+                within_radius,
+                TANK_NEARBY_BUCKET_STORAGE_TILES,
+            )
         }
-        let parent_occupied_grids =
-            occupied_grids_for_parent(state.parent_kind, state.parent_anchor);
-        occupied_grids.iter().all(|&storage_grid| {
-            parent_occupied_grids.iter().any(|&parent_grid| {
-                grid_is_nearby(parent_grid, storage_grid, TANK_NEARBY_BUCKET_STORAGE_TILES)
-            })
-        })
-    });
-    let can_place = can_place_on_grid && in_companion_range && can_place_near_parent;
+    } else {
+        let ctx = BuildingPlacementContext {
+            world: &read_world,
+            in_site: q_sites.iter().any(|site| site.contains(geometry.draw_pos)),
+            in_yard: q_yards.iter().any(|yard| yard.contains(geometry.draw_pos)),
+            is_wall_or_door_at: &|candidate| {
+                is_wall_or_door_at(world_map.as_ref(), &q_buildings, &q_blueprints, candidate)
+            },
+            is_replaceable_wall_at: &|candidate| {
+                is_replaceable_wall_at(world_map.as_ref(), &q_buildings, candidate)
+            },
+        };
+        validate_building_placement(&ctx, building_type, grid_pos, &geometry)
+    };
+    let can_place = validation.can_place;
 
-    // 描画位置の計算
-    // 2x2の場合はグリッドの交差点（4セルの中心）になるように補正
-    let draw_pos = if companion_kind == Some(CompanionPlacementKind::BucketStorage) {
-        let base_pos = WorldMap::grid_to_world(grid_pos.0, grid_pos.1);
-        base_pos + Vec2::new(TILE_SIZE * 0.5, 0.0)
+    let draw_pos = geometry.draw_pos;
+    let size = geometry.size;
+    let texture = if companion_kind == Some(CompanionPlacementKind::BucketStorage) {
+        game_assets.bucket_empty.clone()
     } else {
         match building_type {
-            BuildingType::Bridge => {
-                let base_pos = WorldMap::grid_to_world(grid_pos.0, RIVER_Y_MIN);
-                base_pos + Vec2::new(TILE_SIZE * 0.5, TILE_SIZE * 2.0)
-            }
-            BuildingType::Tank
-            | BuildingType::MudMixer
-            | BuildingType::RestArea
-            | BuildingType::WheelbarrowParking => {
-                let base_pos = WorldMap::grid_to_world(grid_pos.0, grid_pos.1);
-                base_pos + Vec2::new(TILE_SIZE * 0.5, TILE_SIZE * 0.5)
-            }
-            _ => WorldMap::snap_to_grid_center(world_pos),
-        }
-    };
-
-    // 画像とサイズ
-    let (texture, size) = if companion_kind == Some(CompanionPlacementKind::BucketStorage) {
-        (
-            game_assets.bucket_empty.clone(),
-            Vec2::new(TILE_SIZE * 2.0, TILE_SIZE),
-        )
-    } else {
-        match building_type {
-            BuildingType::Wall => (game_assets.wall_isolated.clone(), Vec2::splat(TILE_SIZE)),
-            BuildingType::Door => (game_assets.door_closed.clone(), Vec2::splat(TILE_SIZE)),
-            BuildingType::Floor => (game_assets.mud_floor.clone(), Vec2::splat(TILE_SIZE)),
-            BuildingType::Tank => (game_assets.tank_empty.clone(), Vec2::splat(TILE_SIZE * 2.0)),
-            BuildingType::MudMixer => (game_assets.mud_mixer.clone(), Vec2::splat(TILE_SIZE * 2.0)),
-            BuildingType::RestArea => (game_assets.rest_area.clone(), Vec2::splat(TILE_SIZE * 2.0)),
-            BuildingType::Bridge => (
-                game_assets.bridge.clone(),
-                Vec2::new(TILE_SIZE * 2.0, TILE_SIZE * 5.0),
-            ),
-            BuildingType::SandPile => (game_assets.sand_pile.clone(), Vec2::splat(TILE_SIZE)),
-            BuildingType::BonePile => (game_assets.bone_pile.clone(), Vec2::splat(TILE_SIZE)),
-            BuildingType::WheelbarrowParking => (
-                game_assets.wheelbarrow_parking.clone(),
-                Vec2::splat(TILE_SIZE * 2.0),
-            ),
+            BuildingType::Wall => game_assets.wall_isolated.clone(),
+            BuildingType::Door => game_assets.door_closed.clone(),
+            BuildingType::Floor => game_assets.mud_floor.clone(),
+            BuildingType::Tank => game_assets.tank_empty.clone(),
+            BuildingType::MudMixer => game_assets.mud_mixer.clone(),
+            BuildingType::RestArea => game_assets.rest_area.clone(),
+            BuildingType::Bridge => game_assets.bridge.clone(),
+            BuildingType::SandPile => game_assets.sand_pile.clone(),
+            BuildingType::BonePile => game_assets.bone_pile.clone(),
+            BuildingType::WheelbarrowParking => game_assets.wheelbarrow_parking.clone(),
         }
     };
 
     // 色（半透明 + 緑/赤判定）
     let color = if can_place {
-        Color::srgba(0.5, 1.0, 0.5, 0.5) // 配置可能: 緑っぽく
+        Color::srgba(0.5, 1.0, 0.5, 0.5)
     } else {
-        Color::srgba(1.0, 0.2, 0.2, 0.5) // 配置不可: 赤っぽく
+        Color::srgba(1.0, 0.2, 0.2, 0.5)
     };
 
     // ゴースト更新または生成
@@ -218,7 +267,6 @@ pub fn placement_ghost_system(
             sprite.image = texture;
         }
     } else {
-        // 既存のゴーストが複数ある場合はバグなので全て消す
         for (entity, _, _) in q_ghost.iter() {
             commands.entity(entity).despawn();
         }
@@ -240,11 +288,12 @@ pub fn placement_ghost_system(
         let partner_type = match companion.parent_kind {
             CompanionParentKind::Tank => BuildingType::Tank,
         };
-        let partner_base =
-            WorldMap::grid_to_world(companion.parent_anchor.0, companion.parent_anchor.1);
-        let partner_pos = partner_base + Vec2::new(TILE_SIZE * 0.5, TILE_SIZE * 0.5);
+        let partner_pos = building_spawn_pos(partner_type, companion.parent_anchor, RIVER_Y_MIN);
         let (partner_texture, partner_size) = match partner_type {
-            BuildingType::Tank => (game_assets.tank_empty.clone(), Vec2::splat(TILE_SIZE * 2.0)),
+            BuildingType::Tank => (
+                game_assets.tank_empty.clone(),
+                building_size(BuildingType::Tank),
+            ),
             _ => (game_assets.dirt.clone(), Vec2::splat(TILE_SIZE)),
         };
         let partner_color = Color::srgba(0.8, 0.9, 1.0, 0.35);
@@ -278,53 +327,4 @@ pub fn placement_ghost_system(
             commands.entity(entity).despawn();
         }
     }
-}
-
-fn grid_is_nearby(base: (i32, i32), target: (i32, i32), tiles: i32) -> bool {
-    (target.0 - base.0).abs() <= tiles && (target.1 - base.1).abs() <= tiles
-}
-
-fn occupied_grids_for_parent(
-    parent_kind: CompanionParentKind,
-    anchor: (i32, i32),
-) -> [(i32, i32); 4] {
-    match parent_kind {
-        CompanionParentKind::Tank => [
-            anchor,
-            (anchor.0 + 1, anchor.1),
-            (anchor.0, anchor.1 + 1),
-            (anchor.0 + 1, anchor.1 + 1),
-        ],
-    }
-}
-
-fn is_valid_door_placement(
-    world_map: &WorldMap,
-    q_buildings: &Query<&Building>,
-    q_blueprints: &Query<&Blueprint>,
-    grid: (i32, i32),
-) -> bool {
-    let left = is_wall_or_door(world_map, q_buildings, q_blueprints, (grid.0 - 1, grid.1));
-    let right = is_wall_or_door(world_map, q_buildings, q_blueprints, (grid.0 + 1, grid.1));
-    let up = is_wall_or_door(world_map, q_buildings, q_blueprints, (grid.0, grid.1 + 1));
-    let down = is_wall_or_door(world_map, q_buildings, q_blueprints, (grid.0, grid.1 - 1));
-    (left && right) || (up && down)
-}
-
-fn is_wall_or_door(
-    world_map: &WorldMap,
-    q_buildings: &Query<&Building>,
-    q_blueprints: &Query<&Blueprint>,
-    grid: (i32, i32),
-) -> bool {
-    let Some(entity) = world_map.building_entity(grid) else {
-        return false;
-    };
-    if let Ok(building) = q_buildings.get(entity) {
-        return matches!(building.kind, BuildingType::Wall | BuildingType::Door);
-    }
-    if let Ok(blueprint) = q_blueprints.get(entity) {
-        return matches!(blueprint.kind, BuildingType::Wall | BuildingType::Door);
-    }
-    false
 }

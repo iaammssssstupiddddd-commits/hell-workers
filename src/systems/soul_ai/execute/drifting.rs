@@ -1,12 +1,12 @@
 use bevy::prelude::*;
 use rand::Rng;
 
-use hw_core::constants::*;
 use crate::entities::damned_soul::spawn::PopulationManager;
 use crate::entities::damned_soul::{DriftEdge, DriftPhase, DriftingState, IdleBehavior, IdleState};
 use crate::relationships::CommandedBy;
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
 use crate::world::map::{WorldMap, WorldMapRead};
+use hw_core::constants::*;
 
 fn is_near_map_edge(grid: (i32, i32)) -> bool {
     grid.0 <= SOUL_DESPAWN_EDGE_MARGIN_TILES
@@ -116,7 +116,8 @@ pub fn drifting_behavior_system(
                 let path_done =
                     path.waypoints.is_empty() || path.current_index >= path.waypoints.len();
                 if path_done {
-                    destination.0 = random_wander_target(current_grid, world_map.as_ref(), &mut rng);
+                    destination.0 =
+                        random_wander_target(current_grid, world_map.as_ref(), &mut rng);
                     path.waypoints.clear();
                     path.current_index = 0;
                 }
@@ -124,13 +125,12 @@ pub fn drifting_behavior_system(
                 if drifting.phase_timer >= drifting.phase_duration {
                     drifting.phase = DriftPhase::Moving;
                     drifting.phase_timer = 0.0;
-                    destination.0 =
-                        drift_move_target(
-                            current_grid,
-                            drifting.target_edge,
-                            world_map.as_ref(),
-                            &mut rng,
-                        );
+                    destination.0 = drift_move_target(
+                        current_grid,
+                        drifting.target_edge,
+                        world_map.as_ref(),
+                        &mut rng,
+                    );
                     path.waypoints.clear();
                     path.current_index = 0;
                 }
@@ -144,7 +144,8 @@ pub fn drifting_behavior_system(
                     drifting.phase_timer = 0.0;
                     drifting.phase_duration =
                         rng.gen_range(DRIFT_WANDER_DURATION_MIN..DRIFT_WANDER_DURATION_MAX);
-                    destination.0 = random_wander_target(current_grid, world_map.as_ref(), &mut rng);
+                    destination.0 =
+                        random_wander_target(current_grid, world_map.as_ref(), &mut rng);
                     path.waypoints.clear();
                     path.current_index = 0;
                 }

@@ -1,11 +1,11 @@
 use super::common::*;
 use super::context::TaskExecutionContext;
 use super::types::{AssignedTask, RefinePhase};
-use hw_core::constants::*;
 use crate::systems::jobs::StoredByMixer;
 use crate::systems::logistics::{ResourceItem, ResourceType};
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
+use hw_core::constants::*;
 
 pub fn handle_refine_task(
     ctx: &mut TaskExecutionContext,

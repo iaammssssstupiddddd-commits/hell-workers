@@ -1,7 +1,11 @@
 use crate::river::{generate_fixed_river_tiles, generate_sand_tiles};
 use crate::terrain::TerrainType;
 
-pub fn generate_base_terrain_tiles(map_width: i32, map_height: i32, sand_width: i32) -> Vec<TerrainType> {
+pub fn generate_base_terrain_tiles(
+    map_width: i32,
+    map_height: i32,
+    sand_width: i32,
+) -> Vec<TerrainType> {
     let river_tiles = generate_fixed_river_tiles();
     let sand_tiles = generate_sand_tiles(&river_tiles, map_height, sand_width);
     let mut tiles = vec![TerrainType::Grass; (map_width * map_height) as usize];

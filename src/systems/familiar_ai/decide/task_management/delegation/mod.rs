@@ -8,7 +8,9 @@ use crate::systems::familiar_ai::decide::task_management::{
     IncomingDeliverySnapshot, ReservationShadow,
 };
 use crate::systems::logistics::TileSiteIndex;
-use crate::systems::spatial::{DesignationSpatialGrid, ResourceSpatialGrid, TransportRequestSpatialGrid};
+use crate::systems::spatial::{
+    DesignationSpatialGrid, ResourceSpatialGrid, TransportRequestSpatialGrid,
+};
 use crate::world::map::WorldMap;
 use crate::world::pathfinding::PathfindingContext;
 use bevy::prelude::*;

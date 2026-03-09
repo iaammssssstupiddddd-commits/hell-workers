@@ -1,12 +1,12 @@
 use bevy::prelude::*;
 use rand::Rng;
 
-use hw_core::constants::*;
 use crate::entities::damned_soul::spawn::PopulationManager;
 use crate::entities::damned_soul::{DriftEdge, DriftPhase, DriftingState, IdleBehavior, IdleState};
 use crate::relationships::{CommandedBy, ParticipatingIn, RestingIn};
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
 use crate::world::map::{RIVER_Y_MAX, RIVER_Y_MIN, WorldMap};
+use hw_core::constants::*;
 
 #[derive(Resource)]
 pub struct DriftingDecisionTimer {

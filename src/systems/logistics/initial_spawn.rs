@@ -1,6 +1,5 @@
 use super::types::{ResourceItem, ResourceType};
 use crate::assets::GameAssets;
-use hw_core::constants::*;
 use crate::relationships::{LoadedItems, ParkedAt};
 use crate::systems::jobs::{Building, BuildingType, ObstaclePosition, Rock, TaskSlots, Tree};
 use crate::systems::logistics::{BelongsTo, Wheelbarrow, WheelbarrowParking};
@@ -9,6 +8,7 @@ use crate::world::map::{
     INITIAL_WOOD_POSITIONS, ROCK_POSITIONS, TREE_POSITIONS, WorldMap, WorldMapWrite,
 };
 use bevy::prelude::*;
+use hw_core::constants::*;
 
 const INITIAL_WHEELBARROW_PARKING_GRID: (i32, i32) = (58, 58);
 const INITIAL_WHEELBARROW_PARKING_CAPACITY: usize = 2;
@@ -22,7 +22,10 @@ pub fn initial_resource_spawner(
     for &(gx, gy) in TREE_POSITIONS {
         // 地形が通行可能な場合のみスポーン（障害物チェックなし）
         if let Some(idx) = world_map.pos_to_idx(gx, gy) {
-            if world_map.terrain_at_idx(idx).is_some_and(|terrain| terrain.is_walkable()) {
+            if world_map
+                .terrain_at_idx(idx)
+                .is_some_and(|terrain| terrain.is_walkable())
+            {
                 let pos = WorldMap::grid_to_world(gx, gy);
                 let variant_index = rand::random::<usize>() % game_assets.trees.len();
                 commands.spawn((
@@ -44,7 +47,10 @@ pub fn initial_resource_spawner(
     // 岩のスポーン（障害物として登録）
     for &(gx, gy) in ROCK_POSITIONS {
         if let Some(idx) = world_map.pos_to_idx(gx, gy) {
-            if world_map.terrain_at_idx(idx).is_some_and(|terrain| terrain.is_walkable()) {
+            if world_map
+                .terrain_at_idx(idx)
+                .is_some_and(|terrain| terrain.is_walkable())
+            {
                 let pos = WorldMap::grid_to_world(gx, gy);
                 commands.spawn((
                     Rock,
@@ -98,10 +104,7 @@ fn spawn_site_and_yard(commands: &mut Commands, _world_map: &mut WorldMap) {
     if SITE_WIDTH_TILES < YARD_MIN_WIDTH_TILES || SITE_HEIGHT_TILES < YARD_MIN_HEIGHT_TILES {
         warn!(
             "INITIAL_SPAWN: site size {}x{} is smaller than yard minimum {}x{}",
-            SITE_WIDTH_TILES,
-            SITE_HEIGHT_TILES,
-            YARD_MIN_WIDTH_TILES,
-            YARD_MIN_HEIGHT_TILES
+            SITE_WIDTH_TILES, SITE_HEIGHT_TILES, YARD_MIN_WIDTH_TILES, YARD_MIN_HEIGHT_TILES
         );
         return;
     }
@@ -124,15 +127,10 @@ fn spawn_site_and_yard(commands: &mut Commands, _world_map: &mut WorldMap) {
     let site_max_x = site_min_x + site_width - 1;
     let site_max_y = site_min_y + site_height - 1;
 
-    if site_min_x < 0
-        || site_min_y < 0
-        || site_max_x >= MAP_WIDTH
-        || site_max_y >= MAP_HEIGHT
-    {
+    if site_min_x < 0 || site_min_y < 0 || site_max_x >= MAP_WIDTH || site_max_y >= MAP_HEIGHT {
         warn!(
             "INITIAL_SPAWN: skipped Site spawn because configured size does not fit map ({:?}x{:?})",
-            SITE_WIDTH_TILES,
-            SITE_HEIGHT_TILES
+            SITE_WIDTH_TILES, SITE_HEIGHT_TILES
         );
         return;
     }
@@ -145,8 +143,7 @@ fn spawn_site_and_yard(commands: &mut Commands, _world_map: &mut WorldMap) {
     if yard_max_x >= MAP_WIDTH || yard_max_y >= MAP_HEIGHT {
         warn!(
             "INITIAL_SPAWN: skipped Yard spawn because configured size does not fit map ({:?}x{:?})",
-            YARD_INITIAL_WIDTH_TILES,
-            YARD_INITIAL_HEIGHT_TILES
+            YARD_INITIAL_WIDTH_TILES, YARD_INITIAL_HEIGHT_TILES
         );
         return;
     }

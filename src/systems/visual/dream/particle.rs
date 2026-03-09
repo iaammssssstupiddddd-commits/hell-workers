@@ -1,6 +1,5 @@
 use super::components::{DreamParticle, DreamVisualState};
 use super::dream_bubble_material::{DreamBubbleMaterial, DreamBubbleUiMaterial};
-use hw_core::constants::*;
 use crate::entities::damned_soul::{
     DamnedSoul, DreamQuality, DreamState, GatheringBehavior, IdleBehavior, IdleState,
 };
@@ -8,6 +7,7 @@ use crate::relationships::{ParticipatingIn, RestAreaOccupants};
 use crate::systems::jobs::RestArea;
 use bevy::prelude::ChildOf;
 use bevy::prelude::*;
+use hw_core::constants::*;
 use rand::Rng;
 
 fn particle_interval_for_quality(quality: DreamQuality) -> f32 {

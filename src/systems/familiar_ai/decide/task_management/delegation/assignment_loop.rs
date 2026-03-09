@@ -1,4 +1,3 @@
-use hw_core::constants::TILE_SIZE;
 use crate::relationships::ManagedTasks;
 use crate::systems::command::TaskArea;
 use crate::systems::familiar_ai::decide::task_delegation::ReachabilityCacheKey;
@@ -8,10 +7,13 @@ use crate::systems::familiar_ai::decide::task_management::{
     assign_task_to_worker, collect_scored_candidates,
 };
 use crate::systems::logistics::TileSiteIndex;
-use crate::systems::spatial::{DesignationSpatialGrid, ResourceSpatialGrid, TransportRequestSpatialGrid};
+use crate::systems::spatial::{
+    DesignationSpatialGrid, ResourceSpatialGrid, TransportRequestSpatialGrid,
+};
 use crate::world::map::WorldMap;
 use crate::world::pathfinding::{self, PathfindingContext};
 use bevy::prelude::*;
+use hw_core::constants::TILE_SIZE;
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicU32, Ordering as AtomicOrdering};
@@ -273,14 +275,14 @@ pub(super) fn try_assign_for_workers(
             fam_entity,
             fatigue_threshold,
             task_area_opt,
-                queries,
-                q_souls,
-                resource_grid,
-                world_map,
-                pf_context,
-                tile_site_index,
-                incoming_snapshot,
-                reservation_shadow,
+            queries,
+            q_souls,
+            resource_grid,
+            world_map,
+            pf_context,
+            tile_site_index,
+            incoming_snapshot,
+            reservation_shadow,
             &assigned_tasks,
             reachability_cache,
         ) {

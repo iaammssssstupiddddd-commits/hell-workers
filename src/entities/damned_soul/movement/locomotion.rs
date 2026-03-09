@@ -1,6 +1,5 @@
 //! パス追従による移動
 
-use hw_core::constants::*;
 use crate::entities::damned_soul::{
     AnimationState, DamnedSoul, IdleBehavior, IdleState, Path, StressBreakdown,
 };
@@ -8,6 +7,7 @@ use crate::relationships::PushingWheelbarrow;
 use crate::systems::jobs::DoorState;
 use crate::world::map::{WorldMap, WorldMapRead};
 use bevy::prelude::*;
+use hw_core::constants::*;
 use std::collections::HashMap;
 
 /// 移動システム

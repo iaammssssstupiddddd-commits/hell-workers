@@ -52,7 +52,11 @@ impl ReservationShadow {
         self.destination_total.get(&target).cloned().unwrap_or(0)
     }
 
-    pub fn destination_reserved_resource(&self, target: Entity, resource_type: ResourceType) -> usize {
+    pub fn destination_reserved_resource(
+        &self,
+        target: Entity,
+        resource_type: ResourceType,
+    ) -> usize {
         self.destination_by_resource
             .get(&(target, resource_type))
             .cloned()
@@ -106,7 +110,8 @@ pub struct AssignTaskContext<'a> {
     pub task_area_opt: Option<&'a TaskArea>,
     pub resource_grid: &'a crate::systems::spatial::ResourceSpatialGrid,
     pub tile_site_index: &'a TileSiteIndex,
-    pub incoming_snapshot: &'a crate::systems::familiar_ai::decide::task_management::IncomingDeliverySnapshot,
+    pub incoming_snapshot:
+        &'a crate::systems::familiar_ai::decide::task_management::IncomingDeliverySnapshot,
 }
 
 /// ワーカーにタスクを割り当てる

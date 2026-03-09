@@ -5,10 +5,12 @@
 
 use bevy::prelude::*;
 
-use hw_core::assigned_task::AssignedTask;
 use hw_core::constants::*;
 use hw_core::relationships::ParticipatingIn;
-use hw_core::soul::{DamnedSoul, DreamPool, DreamQuality, DreamState, GatheringBehavior, IdleBehavior, IdleState};
+use hw_core::soul::{
+    DamnedSoul, DreamPool, DreamQuality, DreamState, GatheringBehavior, IdleBehavior, IdleState,
+};
+use hw_jobs::AssignedTask;
 
 /// SoulのDream蓄積・放出を処理するシステム
 pub fn dream_update_system(

@@ -1,13 +1,13 @@
 //! ソウルのアニメーション（スプライト選択・浮遊揺れ）
 
 use crate::assets::GameAssets;
-use hw_core::constants::*;
 use crate::entities::damned_soul::{
     ConversationExpression, ConversationExpressionKind, DamnedSoul, GatheringBehavior,
     IdleBehavior, IdleState, StressBreakdown,
 };
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
 use bevy::prelude::*;
+use hw_core::constants::*;
 
 fn select_soul_image<'a>(
     game_assets: &'a GameAssets,

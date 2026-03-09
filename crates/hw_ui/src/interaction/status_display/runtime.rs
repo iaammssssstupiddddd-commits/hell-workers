@@ -1,7 +1,7 @@
 use crate::components::{SpeedButtonMarker, UiNodeRegistry, UiSlot};
 use crate::theme::UiTheme;
-use hw_core::game_state::TimeSpeed;
 use bevy::prelude::*;
+use hw_core::game_state::TimeSpeed;
 use std::time::Duration;
 
 #[derive(Default)]

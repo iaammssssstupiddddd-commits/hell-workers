@@ -5,11 +5,9 @@
 
 use bevy::prelude::*;
 
-use hw_core::constants::TILE_SIZE;
 use crate::entities::familiar::{ActiveCommand, FamiliarCommand};
 use crate::relationships::TaskWorkers;
 use crate::systems::command::TaskArea;
-use crate::systems::world::zones::{AreaBounds, Yard};
 use crate::systems::jobs::wall_construction::WallTileBlueprint;
 use crate::systems::jobs::{
     Building, BuildingType, Designation, Priority, ProvisionalWall, TaskSlots, WorkType,
@@ -19,6 +17,8 @@ use crate::systems::logistics::transport_request::{
     TransportDemand, TransportPolicy, TransportPriority, TransportRequest, TransportRequestKind,
     TransportRequestState,
 };
+use crate::systems::world::zones::{AreaBounds, Yard};
+use hw_core::constants::TILE_SIZE;
 
 const PROVISIONAL_WALL_PRIORITY: u32 = 5;
 

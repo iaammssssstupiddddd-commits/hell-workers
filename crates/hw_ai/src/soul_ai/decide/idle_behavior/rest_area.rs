@@ -7,8 +7,8 @@ use bevy::prelude::*;
 use hw_core::constants::TILE_SIZE;
 use hw_core::relationships::{RestAreaOccupants, RestAreaReservations};
 use hw_jobs::RestArea;
+use hw_world::WorldMap;
 use hw_world::coords::{grid_to_world, world_to_grid};
-use hw_world::{WorldMap};
 
 pub const REST_AREA_ARRIVAL_RADIUS: f32 = TILE_SIZE;
 

@@ -10,7 +10,12 @@ pub fn update_fps_display_system(
     ui_nodes: Res<UiNodeRegistry>,
     q_text: Query<&mut Text>,
 ) {
-    hw_ui::interaction::status_display::update_fps_display_system(time, fps_counter, ui_nodes, q_text);
+    hw_ui::interaction::status_display::update_fps_display_system(
+        time,
+        fps_counter,
+        ui_nodes,
+        q_text,
+    );
 }
 
 pub fn update_speed_button_highlight_system(
@@ -18,5 +23,7 @@ pub fn update_speed_button_highlight_system(
     theme: Res<UiTheme>,
     q_buttons: Query<(&SpeedButtonMarker, &mut BackgroundColor, &mut BorderColor)>,
 ) {
-    hw_ui::interaction::status_display::update_speed_button_highlight_system(time, theme, q_buttons);
+    hw_ui::interaction::status_display::update_speed_button_highlight_system(
+        time, theme, q_buttons,
+    );
 }

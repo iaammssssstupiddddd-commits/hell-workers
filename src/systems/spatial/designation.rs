@@ -1,5 +1,5 @@
-use bevy::prelude::*;
 use crate::systems::jobs::Designation;
+use bevy::prelude::*;
 
 /// タスク（Designation）用の空間グリッド
 pub use hw_spatial::DesignationSpatialGrid;
@@ -10,7 +10,10 @@ pub fn update_designation_spatial_grid_system(
     grid: ResMut<DesignationSpatialGrid>,
     query: Query<
         (Entity, &Transform),
-        (With<Designation>, Or<(Added<Designation>, Changed<Transform>)>),
+        (
+            With<Designation>,
+            Or<(Added<Designation>, Changed<Transform>)>,
+        ),
     >,
     removed: RemovedComponents<Designation>,
 ) {

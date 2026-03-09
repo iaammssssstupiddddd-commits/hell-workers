@@ -48,4 +48,3 @@ pub enum TimeSpeed {
     Fast,
     Super,
 }
-

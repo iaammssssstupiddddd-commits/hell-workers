@@ -1,7 +1,7 @@
-use hw_core::constants::FAMILIAR_TASK_DELEGATION_INTERVAL;
 use crate::systems::GameSystemSet;
 use crate::systems::soul_ai::scheduling::FamiliarAiSystemSet;
 use bevy::prelude::*;
+use hw_core::constants::FAMILIAR_TASK_DELEGATION_INTERVAL;
 use hw_spatial::{DesignationSpatialGrid, TransportRequestSpatialGrid};
 
 pub mod decide;
@@ -10,8 +10,8 @@ pub mod helpers;
 pub mod perceive;
 pub mod update;
 
-pub use hw_core::familiar::FamiliarAiState;
 pub use helpers::query_types::FamiliarSoulQuery;
+pub use hw_core::familiar::FamiliarAiState;
 
 pub struct FamiliarAiPlugin;
 
@@ -45,9 +45,7 @@ impl Plugin for FamiliarAiPlugin {
             Update,
             (
                 // === Perceive Phase ===
-                (
-                    perceive::resource_sync::sync_reservations_system,
-                )
+                (perceive::resource_sync::sync_reservations_system,)
                     .in_set(FamiliarAiSystemSet::Perceive),
                 ApplyDeferred
                     .after(FamiliarAiSystemSet::Perceive)

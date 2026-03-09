@@ -5,7 +5,7 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `assigned-task-to-hw-jobs-plan-2026-03-08` |
-| ステータス | `Draft` |
+| ステータス | `Completed` |
 | 作成日 | `2026-03-08` |
 | 最終更新日 | `2026-03-08` |
 | 作成者 | `AI (Claude)` |
@@ -252,9 +252,9 @@ use hw_jobs::AssignedTask;
 
 ### 現在地
 
-- 進捗: `0%`
-- 完了済みマイルストーン: なし
-- 未着手: M1〜M5
+- 進捗: `100%`
+- 完了済みマイルストーン: M1〜M5 全完了
+- 未着手: なし
 
 ### 次のAIが最初にやること
 
@@ -278,15 +278,15 @@ use hw_jobs::AssignedTask;
 
 ### 最終確認ログ
 
-- 最終 `cargo check`: `N/A`（未着手）
-- 未解決エラー: N/A
+- 最終 `cargo check`: 成功（2026-03-08）
+- 未解決エラー: なし
 
 ### Definition of Done
 
-- [ ] M1〜M5 完了
-- [ ] `hw_core::assigned_task` モジュールが存在しない
-- [ ] `hw_jobs` が `AssignedTask` と付随型を公開している
-- [ ] `cargo check` が成功
+- [x] M1〜M5 完了
+- [x] `hw_core::assigned_task` モジュールが存在しない
+- [x] `hw_jobs` が `AssignedTask` と付随型を公開している
+- [x] `cargo check` が成功
 
 ---
 

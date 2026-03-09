@@ -1,6 +1,5 @@
 //! Pouring phase: バケツの水をデスティネーション（タンク or ミキサー）に注ぐ
 
-use hw_core::constants::{BUCKET_CAPACITY, MUD_MIXER_CAPACITY, TILE_SIZE};
 use crate::systems::logistics::{ResourceItem, ResourceType};
 use crate::systems::soul_ai::execute::task_execution::common::{
     clear_task_and_path, drop_item, update_destination_if_needed,
@@ -13,6 +12,7 @@ use crate::systems::soul_ai::execute::task_execution::types::{
 };
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
+use hw_core::constants::{BUCKET_CAPACITY, MUD_MIXER_CAPACITY, TILE_SIZE};
 
 use super::super::{abort, helpers};
 
@@ -97,7 +97,12 @@ pub fn handle(
                 }
             } else {
                 abort::abort_and_drop_bucket_mixer(
-                    commands, ctx, data.bucket, tank, mixer_entity, soul_pos,
+                    commands,
+                    ctx,
+                    data.bucket,
+                    tank,
+                    mixer_entity,
+                    soul_pos,
                 );
                 return;
             }
@@ -179,7 +184,12 @@ pub fn handle(
             } else {
                 // Mixer が満杯
                 abort::abort_and_drop_bucket_mixer(
-                    commands, ctx, data.bucket, tank, mixer_entity, soul_pos,
+                    commands,
+                    ctx,
+                    data.bucket,
+                    tank,
+                    mixer_entity,
+                    soul_pos,
                 );
             }
         }
@@ -218,6 +228,13 @@ fn transition_to_tank_for_mixer(
             _ => return,
         };
         let soul_pos = ctx.soul_pos();
-        abort::abort_and_drop_bucket_mixer(commands, ctx, data.bucket, tank_entity, mixer, soul_pos);
+        abort::abort_and_drop_bucket_mixer(
+            commands,
+            ctx,
+            data.bucket,
+            tank_entity,
+            mixer,
+            soul_pos,
+        );
     }
 }

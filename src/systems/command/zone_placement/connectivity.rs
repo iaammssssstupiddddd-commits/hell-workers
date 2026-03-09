@@ -78,15 +78,13 @@ pub(crate) fn identify_removal_targets(
     let max_cluster_index = clusters
         .iter()
         .enumerate()
-        .max_by(|(_, a), (_, b)| {
-            match a.len().cmp(&b.len()) {
-                std::cmp::Ordering::Equal => {
-                    let min_a = a.iter().min().unwrap();
-                    let min_b = b.iter().min().unwrap();
-                    min_a.cmp(min_b)
-                }
-                other => other,
+        .max_by(|(_, a), (_, b)| match a.len().cmp(&b.len()) {
+            std::cmp::Ordering::Equal => {
+                let min_a = a.iter().min().unwrap();
+                let min_b = b.iter().min().unwrap();
+                min_a.cmp(min_b)
             }
+            other => other,
         })
         .map(|(i, _)| i)
         .unwrap();

@@ -2,13 +2,13 @@ use super::{
     AreaEditHandleKind, AreaEditHandleVisual, DesignationIndicator, TaskArea, TaskAreaIndicator,
     TaskMode,
 };
-use hw_core::constants::TILE_SIZE;
-use crate::entities::familiar::Familiar;
 use crate::app_contexts::TaskContext;
+use crate::entities::familiar::Familiar;
 use crate::interface::selection::SelectedEntity;
 use crate::systems::jobs::Designation;
 use crate::systems::visual::task_area_visual::{TaskAreaMaterial, TaskAreaVisual};
 use bevy::prelude::*;
+use hw_core::constants::TILE_SIZE;
 
 pub fn task_area_indicator_system(
     q_familiars: Query<(Entity, &Transform, &TaskArea, &Familiar), With<Familiar>>,

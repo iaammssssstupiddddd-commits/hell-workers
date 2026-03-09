@@ -1,6 +1,6 @@
 use crate::systems::command::TaskArea;
-use crate::systems::logistics::{ResourceType, tank_can_accept_new_bucket};
 use crate::systems::logistics::transport_request::TransportRequestKind;
+use crate::systems::logistics::{ResourceType, tank_can_accept_new_bucket};
 use bevy::prelude::*;
 
 use super::finder::{find_nearest_bucket_for_tank, find_nearest_water_bucket_for_tank};
@@ -101,7 +101,7 @@ pub fn resolve_haul_to_stockpile_inputs(
                     .incoming_deliveries_query
                     .get(cell)
                     .ok()
-                .map(|(_, inc)| inc.len())
+                    .map(|(_, inc)| inc.len())
                     .unwrap_or(0);
                 let shadow_incoming = shadow.destination_reserved_total(cell);
                 let effective_free = stock

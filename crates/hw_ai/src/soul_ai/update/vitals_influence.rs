@@ -5,9 +5,9 @@ use hw_core::events::OnStressBreakdown;
 use hw_core::familiar::{ActiveCommand, Familiar, FamiliarCommand};
 use hw_core::relationships::CommandedBy;
 use hw_core::soul::{DamnedSoul, IdleBehavior, IdleState, StressBreakdown};
+use hw_jobs::AssignedTask;
 use hw_spatial::FamiliarSpatialGrid;
 use hw_world::SpatialGridOps;
-use hw_core::assigned_task::AssignedTask;
 
 /// Familiar影響関連の更新を1パスで処理する統合システム
 pub fn familiar_influence_unified_system(

@@ -2,12 +2,12 @@ use super::common::*;
 use super::context::TaskExecutionContext;
 use super::types::{AssignedTask, CollectSandPhase};
 use crate::assets::GameAssets;
-use hw_core::constants::*;
 use crate::systems::jobs::WorkType;
-use crate::systems::logistics::{ResourceItem, ResourceType};
 use crate::systems::logistics::transport_request::TransportRequestKind;
+use crate::systems::logistics::{ResourceItem, ResourceType};
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
+use hw_core::constants::*;
 
 pub fn handle_collect_sand_task(
     ctx: &mut TaskExecutionContext,
@@ -175,20 +175,15 @@ fn complete_collect_sand_now(
 }
 
 fn collect_amount_for_target(ctx: &TaskExecutionContext, target: Entity) -> u32 {
-    let familiar = ctx
-        .queries
-        .designation
-        .designations
-        .iter()
-        .find_map(
-            |(entity, _, designation, managed_by_opt, _, _, _, _)| {
-                if entity == target && designation.work_type == WorkType::CollectSand {
-                    managed_by_opt.map(|managed_by| managed_by.0)
-                } else {
-                    None
-                }
-            },
-        );
+    let familiar = ctx.queries.designation.designations.iter().find_map(
+        |(entity, _, designation, managed_by_opt, _, _, _, _)| {
+            if entity == target && designation.work_type == WorkType::CollectSand {
+                managed_by_opt.map(|managed_by| managed_by.0)
+            } else {
+                None
+            }
+        },
+    );
 
     let Some(familiar) = familiar else {
         return SAND_DROP_AMOUNT.max(1);

@@ -1,4 +1,6 @@
-use super::{EntityListSnapshot, EntityListViewModel, FamiliarRowViewModel, SoulGender, SoulRowViewModel};
+use super::{
+    EntityListSnapshot, EntityListViewModel, FamiliarRowViewModel, SoulGender, SoulRowViewModel,
+};
 use crate::entities::damned_soul::{DamnedSoul, Gender, SoulIdentity};
 use crate::entities::familiar::{Familiar, FamiliarOperation};
 use crate::interface::ui::components::{SectionFolded, UnassignedFolded, UnassignedSoulSection};
@@ -144,15 +146,13 @@ fn build_familiar_row_view_model(
 pub fn build_entity_list_view_model_system(
     dirty: Res<super::dirty::EntityListDirty>,
     mut view_model: ResMut<EntityListViewModel>,
-    q_familiars: Query<
-        (
-            Entity,
-            &Familiar,
-            &FamiliarOperation,
-            &FamiliarAiState,
-            Option<&Commanding>,
-        ),
-    >,
+    q_familiars: Query<(
+        Entity,
+        &Familiar,
+        &FamiliarOperation,
+        &FamiliarAiState,
+        Option<&Commanding>,
+    )>,
     q_all_souls: Query<
         (
             Entity,

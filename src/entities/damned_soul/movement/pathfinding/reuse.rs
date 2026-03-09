@@ -62,8 +62,7 @@ pub(super) fn try_reuse_existing_path(
         let resume_grid = WorldMap::world_to_grid(resume_wp);
         *pathfind_count += 1;
 
-        if let Some(partial_grid_path) =
-            pathfinding::find_path(
+        if let Some(partial_grid_path) = pathfinding::find_path(
             world_map,
             pf_context,
             resume_grid,
@@ -71,15 +70,8 @@ pub(super) fn try_reuse_existing_path(
             crate::world::pathfinding::PathGoalPolicy::RespectGoalWalkability,
         )
         .or_else(|| {
-            pathfinding::find_path_to_adjacent(
-                world_map,
-                pf_context,
-                resume_grid,
-                goal_grid,
-                true,
-            )
-        })
-        {
+            pathfinding::find_path_to_adjacent(world_map, pf_context, resume_grid, goal_grid, true)
+        }) {
             let mut partial_world_path: Vec<Vec2> = partial_grid_path
                 .iter()
                 .map(|&(x, y)| WorldMap::grid_to_world(x, y))

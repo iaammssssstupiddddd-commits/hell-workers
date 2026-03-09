@@ -1,9 +1,9 @@
 use bevy::prelude::*;
 
-use hw_core::constants::*;
 use crate::entities::damned_soul::DamnedSoul;
 use crate::relationships::{GatheringParticipants, ParticipatingIn};
 use crate::systems::soul_ai::helpers::gathering::*;
+use hw_core::constants::*;
 
 /// 集会オーラのサイズと位置の更新システム
 pub fn gathering_visual_update_system(

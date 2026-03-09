@@ -3,8 +3,6 @@
 //! DamnedSoul（亡者）のプログレスバー、ステータスアイコン、タスクリンク表示
 
 use crate::assets::GameAssets;
-use hw_core::constants::TILE_SIZE;
-use hw_core::constants::*;
 use crate::entities::damned_soul::{
     DamnedSoul, GatheringBehavior, IdleBehavior, IdleState, SoulUiLinks,
 };
@@ -19,6 +17,8 @@ use crate::systems::utils::progress_bar::{
 };
 use bevy::prelude::ChildOf;
 use bevy::prelude::*;
+use hw_core::constants::TILE_SIZE;
+use hw_core::constants::*;
 
 /// ソウル用プログレスバーのラッパーコンポーネント
 #[derive(Component)]
@@ -256,15 +256,15 @@ pub fn task_link_system(
                     Color::srgb(0.0, 0.5, 1.0)
                 } else {
                     match task {
-                    AssignedTask::Gather(_) => Color::srgba(0.0, 1.0, 0.0, 0.4), // 緑 (採取)
-                    AssignedTask::CollectSand(_) => Color::srgb(1.0, 0.8, 0.0),
-                    AssignedTask::Refine(_) => Color::srgb(0.5, 0.0, 1.0),
-                    AssignedTask::Haul(_) => Color::srgba(1.0, 1.0, 0.0, 0.4), // 黄 (運搬)
-                    AssignedTask::Build(_) => Color::srgba(1.0, 1.0, 1.0, 0.5), // 白 (建築)
-                    AssignedTask::HaulToBlueprint(_) => Color::srgba(1.0, 1.0, 0.5, 0.4), // 薄黄 (搬入)
-                    AssignedTask::FrameWallTile(_) => Color::srgba(1.0, 1.0, 1.0, 0.5), // 白 (建築)
-                    AssignedTask::CoatWall(_) => Color::srgba(1.0, 1.0, 1.0, 0.5),   // 白 (建築)
-                    _ => Color::srgba(1.0, 1.0, 1.0, 0.3),
+                        AssignedTask::Gather(_) => Color::srgba(0.0, 1.0, 0.0, 0.4), // 緑 (採取)
+                        AssignedTask::CollectSand(_) => Color::srgb(1.0, 0.8, 0.0),
+                        AssignedTask::Refine(_) => Color::srgb(0.5, 0.0, 1.0),
+                        AssignedTask::Haul(_) => Color::srgba(1.0, 1.0, 0.0, 0.4), // 黄 (運搬)
+                        AssignedTask::Build(_) => Color::srgba(1.0, 1.0, 1.0, 0.5), // 白 (建築)
+                        AssignedTask::HaulToBlueprint(_) => Color::srgba(1.0, 1.0, 0.5, 0.4), // 薄黄 (搬入)
+                        AssignedTask::FrameWallTile(_) => Color::srgba(1.0, 1.0, 1.0, 0.5), // 白 (建築)
+                        AssignedTask::CoatWall(_) => Color::srgba(1.0, 1.0, 1.0, 0.5), // 白 (建築)
+                        _ => Color::srgba(1.0, 1.0, 1.0, 0.3),
                     }
                 };
 

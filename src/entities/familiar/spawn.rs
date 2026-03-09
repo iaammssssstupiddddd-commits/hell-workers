@@ -4,11 +4,11 @@ use bevy::prelude::*;
 use rand::Rng;
 
 use crate::assets::GameAssets;
-use hw_core::constants::*;
 use crate::entities::damned_soul::{Destination, Path};
 use crate::entities::spawn_args;
 use crate::entities::spawn_position;
 use crate::world::map::{WorldMap, WorldMapRead};
+use hw_core::constants::*;
 
 use super::components::*;
 use super::voice::FamiliarVoice;

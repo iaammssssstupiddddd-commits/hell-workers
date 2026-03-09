@@ -10,8 +10,7 @@ use crate::systems::logistics::transport_request::WheelbarrowDestination;
 use crate::systems::soul_ai::execute::task_execution::types::{
     AssignedTask, BuildPhase, CoatWallPhase, CollectBonePhase, CollectSandPhase, FrameWallPhase,
     GatherPhase, HaulPhase, HaulToBpPhase, HaulToMixerPhase, HaulWithWheelbarrowPhase,
-    PourFloorPhase, RefinePhase,
-    ReinforceFloorPhase,
+    PourFloorPhase, RefinePhase, ReinforceFloorPhase,
 };
 use bevy::prelude::*;
 
@@ -32,10 +31,7 @@ pub fn collect_active_reservation_ops(
 
         if transport_data.should_reserve_tank_source() {
             if let Some(source) = transport_data.tank_source_entity() {
-                ops.push(ResourceReservationOp::ReserveSource {
-                    source,
-                    amount: 1,
-                });
+                ops.push(ResourceReservationOp::ReserveSource { source, amount: 1 });
             }
         }
 

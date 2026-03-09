@@ -70,13 +70,14 @@ impl IncomingDeliverySnapshot {
             .unwrap_or(0)
     }
 
-    pub fn iter_counts(
-        &self,
-        target: Entity,
-    ) -> impl Iterator<Item = (ResourceType, u32)> + '_ {
+    pub fn iter_counts(&self, target: Entity) -> impl Iterator<Item = (ResourceType, u32)> + '_ {
         self.by_destination
             .get(&target)
             .into_iter()
-            .flat_map(|counts| counts.iter().map(|(&resource_type, &count)| (resource_type, count)))
+            .flat_map(|counts| {
+                counts
+                    .iter()
+                    .map(|(&resource_type, &count)| (resource_type, count))
+            })
     }
 }

@@ -1,9 +1,9 @@
 use bevy::prelude::*;
 
-use hw_core::assigned_task::AssignedTask;
 use hw_core::familiar::Familiar;
 use hw_core::relationships::CommandedBy;
 use hw_core::soul::{DamnedSoul, Destination, IdleBehavior, IdleState, Path};
+use hw_jobs::AssignedTask;
 
 /// 部下が使い魔を追尾するシステム
 pub fn following_familiar_system(

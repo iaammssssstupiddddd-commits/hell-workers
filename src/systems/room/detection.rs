@@ -1,9 +1,9 @@
 use super::components::{Room, RoomBounds};
 use super::resources::{RoomDetectionState, RoomTileLookup};
-use hw_core::constants::{MAP_HEIGHT, MAP_WIDTH, ROOM_MAX_TILES};
 use crate::systems::jobs::{Building, BuildingType};
 use crate::world::map::{WorldMap, WorldMapRead};
 use bevy::prelude::*;
+use hw_core::constants::{MAP_HEIGHT, MAP_WIDTH, ROOM_MAX_TILES};
 use std::collections::{HashMap, HashSet, VecDeque};
 
 const CARDINAL_OFFSETS: [(i32, i32); 4] = [(0, 1), (1, 0), (0, -1), (-1, 0)];

@@ -1,7 +1,7 @@
 use super::types::ResourceItem;
-use hw_core::constants::*;
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
+use hw_core::constants::*;
 use std::collections::HashMap;
 
 #[derive(Resource, Default)]

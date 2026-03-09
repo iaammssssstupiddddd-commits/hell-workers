@@ -1,6 +1,6 @@
-use hw_core::constants::DREAM_UI_TRAIL_ALPHA;
 use bevy::prelude::*;
 use bevy::ui_render::prelude::MaterialNode;
+use hw_core::constants::DREAM_UI_TRAIL_ALPHA;
 
 use crate::systems::visual::dream::{DreamBubbleUiMaterial, DreamTrailGhost};
 

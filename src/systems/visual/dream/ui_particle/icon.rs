@@ -1,6 +1,6 @@
-use hw_core::constants::{DREAM_ICON_ABSORB_DURATION, DREAM_ICON_BASE_SIZE, DREAM_ICON_PULSE_SIZE};
 use crate::interface::ui::theme::UiTheme;
 use bevy::prelude::*;
+use hw_core::constants::{DREAM_ICON_ABSORB_DURATION, DREAM_ICON_BASE_SIZE, DREAM_ICON_PULSE_SIZE};
 
 use crate::systems::visual::dream::DreamIconAbsorb;
 

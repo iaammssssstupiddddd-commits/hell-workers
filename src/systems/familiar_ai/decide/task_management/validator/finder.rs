@@ -9,7 +9,13 @@ fn bucket_belongs_to_tank(
     tank_entity: Entity,
     queries: &crate::systems::familiar_ai::decide::task_management::FamiliarTaskAssignmentQueries,
 ) -> bool {
-    queries.designation.belongs.get(bucket_entity).ok().map(|b| b.0) == Some(tank_entity)
+    queries
+        .designation
+        .belongs
+        .get(bucket_entity)
+        .ok()
+        .map(|b| b.0)
+        == Some(tank_entity)
 }
 
 fn find_nearest_bucket_for_tank_with_filter(

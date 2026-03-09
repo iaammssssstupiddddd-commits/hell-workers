@@ -89,14 +89,12 @@ pub fn escaping_decision_system(
                     "ESCAPE_DECIDE: {:?} detected threat {:?} dist {:.1}",
                     entity, threat.entity, threat.distance
                 );
-                decide_output
-                    .escape_requests
-                    .write(EscapeRequest {
-                        entity,
-                        operation: EscapeOperation::StartEscaping {
-                            leave_gathering: participating_in.map(|p| p.0),
-                        },
-                    });
+                decide_output.escape_requests.write(EscapeRequest {
+                    entity,
+                    operation: EscapeOperation::StartEscaping {
+                        leave_gathering: participating_in.map(|p| p.0),
+                    },
+                });
             }
         }
     }
@@ -108,12 +106,10 @@ pub fn escaping_decision_system(
             }
 
             if under_command.is_some() {
-                decide_output
-                    .escape_requests
-                    .write(EscapeRequest {
-                        entity,
-                        operation: EscapeOperation::ReachSafety,
-                    });
+                decide_output.escape_requests.write(EscapeRequest {
+                    entity,
+                    operation: EscapeOperation::ReachSafety,
+                });
                 continue;
             }
 
@@ -134,12 +130,10 @@ pub fn escaping_decision_system(
 
                 if let Some(spot_pos) = safe_spot {
                     if soul_pos.distance(spot_pos) <= GATHERING_ARRIVAL_RADIUS {
-                        decide_output
-                            .escape_requests
-                            .write(EscapeRequest {
-                                entity,
-                                operation: EscapeOperation::JoinSafeGathering,
-                            });
+                        decide_output.escape_requests.write(EscapeRequest {
+                            entity,
+                            operation: EscapeOperation::JoinSafeGathering,
+                        });
                         continue;
                     }
                 }
@@ -147,19 +141,15 @@ pub fn escaping_decision_system(
                 let destination =
                     calculate_escape_destination(soul_pos, &threat, safe_spot, world_map.as_ref());
 
-                decide_output
-                    .escape_requests
-                    .write(EscapeRequest {
-                        entity,
-                        operation: EscapeOperation::UpdateDestination { destination },
-                    });
+                decide_output.escape_requests.write(EscapeRequest {
+                    entity,
+                    operation: EscapeOperation::UpdateDestination { destination },
+                });
             } else {
-                decide_output
-                    .escape_requests
-                    .write(EscapeRequest {
-                        entity,
-                        operation: EscapeOperation::ReachSafety,
-                    });
+                decide_output.escape_requests.write(EscapeRequest {
+                    entity,
+                    operation: EscapeOperation::ReachSafety,
+                });
             }
         }
     }

@@ -2,7 +2,6 @@ use std::collections::HashSet;
 
 use bevy::prelude::*;
 
-use hw_core::constants::WHEELBARROW_MIN_BATCH_SIZE;
 use crate::relationships::{ParkedAt, PushedBy};
 use crate::systems::logistics::Wheelbarrow;
 use crate::systems::logistics::transport_request::{
@@ -10,6 +9,7 @@ use crate::systems::logistics::transport_request::{
     TransportRequestKind, TransportRequestState, WheelbarrowLease, WheelbarrowPendingSince,
 };
 use crate::systems::logistics::{ReservedForTask, ResourceItem};
+use hw_core::constants::WHEELBARROW_MIN_BATCH_SIZE;
 
 pub(super) struct LeaseStateUpdate {
     pub(super) used_wheelbarrows: HashSet<Entity>,

@@ -1,6 +1,5 @@
 //! 休憩所 fallback・到達不能 cleanup
 
-use hw_core::constants::PATHFINDING_RETRY_COOLDOWN_FRAMES;
 use crate::entities::damned_soul::{Destination, IdleBehavior, IdleState, Path};
 use crate::relationships::RestAreaReservedFor;
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
@@ -8,6 +7,7 @@ use crate::systems::soul_ai::helpers::work::unassign_task;
 use crate::world::map::WorldMap;
 use crate::world::pathfinding::{self, PathfindingContext};
 use bevy::prelude::*;
+use hw_core::constants::PATHFINDING_RETRY_COOLDOWN_FRAMES;
 
 use super::PathCooldown;
 

@@ -5,9 +5,11 @@ use crate::systems::familiar_ai::decide::familiar_processor::{
     FamiliarDelegationContext, process_task_delegation_and_movement,
 };
 use crate::systems::familiar_ai::decide::task_management::FamiliarTaskAssignmentQueries;
-use crate::systems::logistics::TileSiteIndex;
 use crate::systems::familiar_ai::helpers::query_types::{FamiliarSoulQuery, FamiliarTaskQuery};
-use crate::systems::spatial::{DesignationSpatialGrid, ResourceSpatialGrid, TransportRequestSpatialGrid};
+use crate::systems::logistics::TileSiteIndex;
+use crate::systems::spatial::{
+    DesignationSpatialGrid, ResourceSpatialGrid, TransportRequestSpatialGrid,
+};
 use crate::world::map::WorldMapRead;
 use crate::world::pathfinding::PathfindingContext;
 use bevy::ecs::system::SystemParam;
@@ -81,7 +83,9 @@ pub fn familiar_task_delegation_system(params: FamiliarAiTaskDelegationParams) {
     let mut reservation_shadow =
         crate::systems::familiar_ai::decide::task_management::ReservationShadow::default();
     let incoming_snapshot =
-        crate::systems::familiar_ai::decide::task_management::IncomingDeliverySnapshot::build(&task_queries);
+        crate::systems::familiar_ai::decide::task_management::IncomingDeliverySnapshot::build(
+            &task_queries,
+        );
     let mut familiars_processed = 0u32;
 
     for (

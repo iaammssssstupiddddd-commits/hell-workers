@@ -1,6 +1,5 @@
 //! Filling phase: バケツに水を詰める（川から汲む or タンクから取り出す）
 
-use hw_core::constants::{BUCKET_CAPACITY, TILE_SIZE};
 use crate::systems::logistics::{ResourceItem, ResourceType};
 use crate::systems::soul_ai::execute::task_execution::common::update_destination_to_adjacent;
 use crate::systems::soul_ai::execute::task_execution::context::TaskExecutionContext;
@@ -11,6 +10,7 @@ use crate::systems::soul_ai::execute::task_execution::types::{
 };
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
+use hw_core::constants::{BUCKET_CAPACITY, TILE_SIZE};
 
 use super::super::abort;
 
@@ -157,7 +157,12 @@ pub fn handle(
                     );
                 } else {
                     abort::abort_and_drop_bucket_mixer(
-                        commands, ctx, data.bucket, tank, mixer_entity, soul_pos,
+                        commands,
+                        ctx,
+                        data.bucket,
+                        tank,
+                        mixer_entity,
+                        soul_pos,
                     );
                 }
             } else {
@@ -170,7 +175,12 @@ pub fn handle(
                     }
                 };
                 abort::abort_and_drop_bucket_mixer(
-                    commands, ctx, data.bucket, tank, mixer, soul_pos,
+                    commands,
+                    ctx,
+                    data.bucket,
+                    tank,
+                    mixer,
+                    soul_pos,
                 );
             }
         }

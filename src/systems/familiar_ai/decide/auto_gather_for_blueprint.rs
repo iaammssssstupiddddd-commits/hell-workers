@@ -1,15 +1,15 @@
-use hw_core::constants::BLUEPRINT_AUTO_GATHER_INTERVAL_SECS;
 use crate::entities::familiar::{ActiveCommand, FamiliarCommand};
 use crate::relationships::{LoadedIn, ManagedBy, StoredIn, TaskWorkers};
 use crate::systems::command::TaskArea;
 use crate::systems::jobs::wall_construction::TargetWallConstructionSite;
 use crate::systems::jobs::{Blueprint, Designation, Rock, TargetBlueprint, Tree};
-use crate::systems::world::zones::Yard;
 use crate::systems::logistics::transport_request::{TransportDemand, TransportRequest};
 use crate::systems::logistics::{ReservedForTask, ResourceItem, ResourceType};
+use crate::systems::world::zones::Yard;
 use crate::world::map::WorldMapRead;
 use crate::world::pathfinding::PathfindingContext;
 use bevy::prelude::*;
+use hw_core::constants::BLUEPRINT_AUTO_GATHER_INTERVAL_SECS;
 use std::collections::HashMap;
 
 mod actions;
@@ -97,7 +97,10 @@ pub fn blueprint_auto_gather_system(
     timer.first_run_done = true;
 
     let mut owner_infos = HashMap::<Entity, OwnerInfo>::new();
-    let yards: Vec<(Entity, Yard)> = q_yards.iter().map(|(entity, yard)| (entity, yard.clone())).collect();
+    let yards: Vec<(Entity, Yard)> = q_yards
+        .iter()
+        .map(|(entity, yard)| (entity, yard.clone()))
+        .collect();
     for (fam_entity, active_command, area, transform) in q_familiars.iter() {
         if matches!(active_command.command, FamiliarCommand::Idle) {
             continue;

@@ -1,8 +1,8 @@
 use crate::relationships::ManagedTasks;
 use crate::systems::command::TaskArea;
-use crate::systems::world::zones::Yard;
 use crate::systems::jobs::WorkType;
 use crate::systems::spatial::{DesignationSpatialGrid, TransportRequestSpatialGrid};
+use crate::systems::world::zones::Yard;
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
 use std::collections::HashSet;
@@ -46,7 +46,10 @@ pub(super) fn collect_candidate_entities(
         for &e in designation_grid.get_in_area(yard.min, yard.max).iter() {
             seen.insert(e);
         }
-        for &e in transport_request_grid.get_in_area(yard.min, yard.max).iter() {
+        for &e in transport_request_grid
+            .get_in_area(yard.min, yard.max)
+            .iter()
+        {
             seen.insert(e);
         }
     }

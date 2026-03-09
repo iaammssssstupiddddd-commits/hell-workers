@@ -1,17 +1,17 @@
-#[path = "view_model.rs"]
-mod view_model;
 #[path = "dirty.rs"]
 mod dirty;
 #[path = "../../panels_legacy/task_list/interaction.rs"]
 mod interaction;
+#[path = "../../panels_legacy/task_list/layout.rs"]
+mod layout;
 #[path = "../../panels_legacy/task_list/presenter.rs"]
 mod presenter;
 #[path = "../../panels_legacy/task_list/render.rs"]
 mod render;
 #[path = "../../panels_legacy/task_list/update.rs"]
 mod update;
-#[path = "../../panels_legacy/task_list/layout.rs"]
-mod layout;
+#[path = "view_model.rs"]
+mod view_model;
 
 pub use dirty::{
     TaskListDirty, detect_task_list_changed_components, detect_task_list_removed_components,

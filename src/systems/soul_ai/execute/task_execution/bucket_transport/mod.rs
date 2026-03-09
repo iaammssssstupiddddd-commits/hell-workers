@@ -4,10 +4,10 @@ pub mod helpers;
 pub mod phases;
 pub mod routing;
 
+use crate::systems::soul_ai::execute::task_execution::context::TaskExecutionContext;
 use crate::systems::soul_ai::execute::task_execution::types::{
     BucketTransportData, BucketTransportPhase,
 };
-use crate::systems::soul_ai::execute::task_execution::context::TaskExecutionContext;
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
 

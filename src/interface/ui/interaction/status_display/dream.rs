@@ -12,11 +12,7 @@ pub fn update_dream_loss_popup_ui_system(
         &mut TextColor,
     )>,
 ) {
-    hw_ui::interaction::status_display::update_dream_loss_popup_ui_system(
-        commands,
-        time,
-        q_popups,
-    );
+    hw_ui::interaction::status_display::update_dream_loss_popup_ui_system(commands, time, q_popups);
 }
 
 pub fn update_dream_pool_display_system(

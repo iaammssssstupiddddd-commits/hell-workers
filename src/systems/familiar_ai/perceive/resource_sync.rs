@@ -1,4 +1,3 @@
-use hw_core::constants::RESERVATION_SYNC_INTERVAL;
 use crate::events::ResourceReservationOp;
 use crate::events::ResourceReservationRequest;
 use crate::relationships::TaskWorkers;
@@ -8,6 +7,7 @@ use crate::systems::logistics::transport_request::{TransportRequest, TransportRe
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
 use crate::systems::soul_ai::execute::task_execution::transport_common::lifecycle;
 use bevy::prelude::*;
+use hw_core::constants::RESERVATION_SYNC_INTERVAL;
 use std::collections::HashMap;
 
 #[derive(Resource)]

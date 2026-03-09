@@ -1,8 +1,8 @@
 use bevy::prelude::*;
 
-use hw_core::constants::ENCOURAGEMENT_COOLDOWN;
 use crate::events::{EncouragementRequest, OnEncouraged};
 use crate::systems::familiar_ai::decide::encouragement::EncouragementCooldown;
+use hw_core::constants::ENCOURAGEMENT_COOLDOWN;
 
 /// 激励要求を適用する（Execute Phase）
 pub fn encouragement_apply_system(

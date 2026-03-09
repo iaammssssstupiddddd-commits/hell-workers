@@ -3,6 +3,8 @@
 use bevy::prelude::*;
 use rand::Rng;
 
+use super::{GATHERING_ARRIVAL_RADIUS, transitions};
+use crate::soul_ai::helpers::gathering_motion;
 use hw_core::constants::*;
 use hw_core::events::{IdleBehaviorOperation, IdleBehaviorRequest};
 use hw_core::relationships::ParticipatingIn;
@@ -10,8 +12,6 @@ use hw_core::soul::{Destination, GatheringBehavior, IdleBehavior, IdleState, Pat
 use hw_world::coords::grid_to_world;
 use hw_world::coords::world_to_grid;
 use hw_world::{SpatialGridOps, WorldMap};
-use super::{transitions, GATHERING_ARRIVAL_RADIUS};
-use crate::soul_ai::helpers::gathering_motion;
 
 /// 現在の行動に応じて移動先を更新
 pub fn update_motion_destinations(
@@ -128,7 +128,9 @@ pub fn update_motion_destinations(
                         | GatheringBehavior::Dancing => {
                             let path_complete = path.waypoints.is_empty()
                                 || path.current_index >= path.waypoints.len();
-                            if dist_from_center < TILE_SIZE * GATHERING_KEEP_DISTANCE_MIN && path_complete {
+                            if dist_from_center < TILE_SIZE * GATHERING_KEEP_DISTANCE_MIN
+                                && path_complete
+                            {
                                 if let Some(target) =
                                     gathering_motion::find_gathering_still_retreat_target(
                                         center,
@@ -144,7 +146,8 @@ pub fn update_motion_destinations(
                                 }
                             } else {
                                 const MIN_SEPARATION: f32 = TILE_SIZE * 1.2;
-                                let nearby_souls = soul_grid.get_nearby_in_radius(current_pos, MIN_SEPARATION);
+                                let nearby_souls =
+                                    soul_grid.get_nearby_in_radius(current_pos, MIN_SEPARATION);
                                 let has_overlap = nearby_souls.iter().any(|&other| other != entity);
                                 let dist_to_dest = (dest.0 - current_pos).length();
                                 if !has_overlap && dist_to_dest < TILE_SIZE * 0.5 {

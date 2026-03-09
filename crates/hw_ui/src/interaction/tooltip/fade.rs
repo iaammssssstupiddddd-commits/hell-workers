@@ -1,6 +1,6 @@
 //! ツールチップのフェード制御
 
-use crate::components::{TooltipBody, TooltipHeader, TooltipProgressBar, HoverTooltip};
+use crate::components::{HoverTooltip, TooltipBody, TooltipHeader, TooltipProgressBar};
 use crate::theme::UiTheme;
 use bevy::math::TryStableInterpolate;
 use bevy::prelude::*;
