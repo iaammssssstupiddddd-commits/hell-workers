@@ -1,0 +1,120 @@
+# soul_ai — Soul（魂）AI 意思決定システム
+
+## 役割
+
+`DamnedSoul` エンティティの自律的な意思決定・行動を実装する。
+基本的な AI ロジックは `hw_ai::soul_ai` に定義されており、このディレクトリは**ゲーム固有の拡張**（タスク実行・ドリフト・集会スポーン等）を担う。
+
+## ディレクトリ構成
+
+| ディレクトリ | フェーズ | 内容 |
+|---|---|---|
+| `perceive/` | Perceive | 環境情報の読み取り（`hw_ai` から re-export） |
+| `update/` | Update | 時間経過によるバイタル・状態更新（`hw_ai` から re-export） |
+| `decide/` | Decide | 次行動の選択・リクエスト生成 |
+| `execute/` | Execute | 決定された行動の実行・ECS 変更 |
+| `helpers/` | 共通 | 共有ヘルパー（`hw_ai` から re-export） |
+| `visual/` | Visual | Soul 固有のビジュアル同期 |
+
+## decide/ ディレクトリ
+
+| ファイル/ディレクトリ | 内容 |
+|---|---|
+| `idle_behavior/` | アイドル状態機械（遷移・休憩決定・移動先選択） |
+| `work/` | タスク作業決定（`auto_build.rs`, `auto_refine.rs`） |
+| `drifting.rs` | 漂流（自然脱走）行動決定 |
+| `escaping.rs` | 脱走行動決定 |
+| `gathering_mgmt.rs` | 集会行動管理 |
+
+## execute/ ディレクトリ
+
+| ファイル/ディレクトリ | 内容 |
+|---|---|
+| `task_execution/` | タスク実行コア（下表参照） |
+| `drifting.rs` | 漂流実行 |
+| `gathering_apply.rs` | 集会場所への移動実行 |
+| `gathering_spawn.rs` | 集会スポットエンティティのスポーン |
+| `cleanup.rs` | タスク完了後のクリーンアップ |
+| `escaping_apply.rs` | `hw_ai` から re-export |
+| `idle_behavior_apply.rs` | `hw_ai` から re-export |
+
+## execute/task_execution/ ディレクトリ
+
+タスク実行のコアサブシステム。
+
+| ファイル/ディレクトリ | 内容 |
+|---|---|
+| `types.rs` | `AssignedTask` 実行バリアント定義 |
+| `context/` | `TaskExecutionContext`, `TaskQueries`, `TaskAssignmentQueries` |
+| `handler/` | タスク種別ごとのハンドラ |
+| `haul/` | 運搬（基本） |
+| `haul_with_wheelbarrow/` | 手押し車運搬 |
+| `bucket_transport/` | バケツ輸送 |
+| `transport_common/` | 輸送共通ロジック |
+| `build.rs` | 建設タスク |
+| `collect_sand.rs` | 砂採集 |
+| `collect_bone.rs` | 骨採集 |
+| `coat_wall.rs` | 壁コーティング |
+| `frame_wall.rs` | 壁フレーミング |
+| `gather.rs` | 採取 |
+| `haul.rs` | 運搬エントリポイント |
+| `haul_to_blueprint.rs` | ブループリントへの運搬 |
+| `haul_to_mixer.rs` | ミキサーへの運搬 |
+| `move_plant.rs` | 植物移植 |
+| `pour_floor.rs` | 床注入 |
+| `refine.rs` | 素材精製 |
+| `reinforce_floor.rs` | 床補強 |
+
+## 新しいタスクを追加する場合
+
+1. `types.rs` に struct variant を追加
+2. `context/queries.rs` の `TaskQueries` にクエリを追加
+3. `handler/` に対応するハンドラを実装
+4. `mod.rs` でハンドラを登録
+
+---
+
+## hw_ai との境界
+
+Soul AI は `hw_ai::soul_ai` と `src/systems/soul_ai` に分割されている。
+
+### hw_ai に置かれているもの（純粋ロジック）
+
+| モジュール | 内容 |
+|---|---|
+| `update/` | バイタル更新・状態整合・夢更新・集会タイマー |
+| `decide/separation.rs` | 分離行動（純粋空間計算） |
+| `execute/escaping_apply.rs` | 脱走移動実行 |
+| `execute/idle_behavior_apply.rs` | アイドル行動実行 |
+| `execute/designation_apply.rs` | 指定適用 |
+| `execute/gathering_apply.rs` | 集会移動実行 |
+| `helpers/work.rs` の `is_soul_available_for_work` | 純粋可否判定 |
+
+### src/ に置かれているもの（ゲーム固有・副作用あり）
+
+| モジュール | 理由 |
+|---|---|
+| `execute/task_execution/` (全23ファイル) | `WorldMap`・`Transform`・`Visibility`・ECS Relationship に依存 |
+| `execute/drifting.rs` | `Path` / `DriftingState` 書き換え + 境界経路探索 |
+| `execute/gathering_spawn.rs` | 集会スポットエンティティをスポーン |
+| `helpers/work.rs` の `unassign_task` | `WorldMap`・`Visibility`・`Transform` を変更 |
+| `decide/work/` | ゲーム固有のタスク自動開始判断 |
+
+### 典型的な拡張パターン
+
+```rust
+// src/systems/soul_ai/execute/mod.rs
+// hw_ai の純粋な Apply をそのまま公開
+pub mod escaping_apply {
+    pub use hw_ai::soul_ai::execute::escaping_apply::*;
+}
+// ゲーム固有のタスク実行は src/ に実装
+pub mod task_execution;  // 全て src/ 独自
+```
+
+```rust
+// src/systems/soul_ai/helpers/work.rs
+// 純粋関数は hw_ai から、副作用関数は src/ に
+pub use hw_ai::soul_ai::helpers::work::is_soul_available_for_work;
+pub fn unassign_task(..., world_map: &WorldMap) { ... }  // WorldMap 参照が必要
+```
