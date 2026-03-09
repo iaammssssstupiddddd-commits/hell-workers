@@ -10,10 +10,7 @@ use crate::world::map::{WorldMap, WorldMapWrite};
 use bevy::prelude::*;
 use hw_core::constants::TILE_SIZE;
 
-#[derive(Component, Debug, Clone, Copy)]
-pub struct MovePlanned {
-    pub task_entity: Entity,
-}
+pub use hw_jobs::MovePlanned;
 
 #[derive(Component, Debug, Clone)]
 pub struct PendingBuildingMove {

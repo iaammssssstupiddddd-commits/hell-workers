@@ -6,3 +6,7 @@ edition = "2024"
 [dependencies]
 bevy = { workspace = true }
 hw_core = { path = "../hw_core" }
+hw_world = { path = "../hw_world" }
+hw_jobs = { path = "../hw_jobs" }
+hw_spatial = { path = "../hw_spatial" }
+rand = { workspace = true }

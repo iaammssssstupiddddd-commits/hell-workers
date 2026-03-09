@@ -9,7 +9,7 @@ UI からの入力を受け取り、`Designation` や `TaskArea` コンポーネ
 
 | ファイル | 内容 |
 |---|---|
-| `mod.rs` | `TaskArea` コンポーネント定義・公開 API |
+| `mod.rs` | 公開 API（`TaskArea` は `hw_core::area` から re-export） |
 | `assign_task.rs` | `assign_task_system` — クリックによるタスク指定 |
 | `input.rs` | `familiar_command_input_system` — Familiar コマンド入力処理 |
 | `indicators.rs` | タスクエリア・指定インジケーターの同期 |
@@ -50,4 +50,5 @@ UI からの入力を受け取り、`Designation` や `TaskArea` コンポーネ
 TaskArea { bounds: AreaBounds }  // Familiar が管轄するエリア
 ```
 
+`TaskArea` は `hw_core::area` に定義され、`src/systems/command/mod.rs` で re-export されている。
 `TaskAreaIndicator` コンポーネントで視覚的インジケーターエンティティと紐付けられる。

@@ -5,9 +5,9 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `logistics-to-hw-logistics-plan-2026-03-08` |
-| ステータス | `In Progress (~40%)` |
+| ステータス | `In Progress (~70%)` |
 | 作成日 | `2026-03-08` |
-| 最終更新日 | `2026-03-09 (M1/M2/M3完了)` |
+| 最終更新日 | `2026-03-09 (M1〜M6完了)` |
 | 作成者 | `AI (Claude)` |
 
 ---
@@ -152,7 +152,7 @@ root 側が `pub use hw_logistics::XXX::*;` の 1 行シェルになっている
 
 ---
 
-### M4: MovePlanned → hw_jobs::model
+### M4: MovePlanned → hw_jobs::model ✅ **完了**
 
 **ブロッカー**: なし
 
@@ -163,11 +163,11 @@ root 側が `pub use hw_logistics::XXX::*;` の 1 行シェルになっている
 - `src/systems/soul_ai/execute/task_execution/move_plant.rs` → `pub use hw_jobs::MovePlanned;` に差し替え
 
 **完了条件**:
-- [ ] `cargo check` が通る
+- [x] `cargo check` が通る
 
 ---
 
-### M5: TaskArea → hw_core::area
+### M5: TaskArea → hw_core::area ✅ **完了**
 
 **ブロッカー**: なし（`AreaBounds` は hw_core::area に既存）
 
@@ -186,11 +186,11 @@ root 側が `pub use hw_logistics::XXX::*;` の 1 行シェルになっている
 M5 完了後、`FloorConstructionSite`（`area_bounds: TaskArea` フィールド）と `WallConstructionSite` を hw_jobs::construction に移動できる。これは logistics 移植の直接的な前提条件ではないが、producer/blueprint.rs・producer/floor_construction.rs 等を hw_logistics に移すために必要。
 
 **完了条件**:
-- [ ] `cargo check` が通る
+- [x] `cargo check` が通る
 
 ---
 
-### M6: hw_logistics の Cargo.toml に依存追加
+### M6: hw_logistics の Cargo.toml に依存追加 ✅ **完了**
 
 **ブロッカー**: なし
 
@@ -205,11 +205,7 @@ rand       = { workspace = true }       # 必要に応じて追加
 ```
 
 **完了条件**:
-- [ ] `cargo check` が通る
-
----
-
-### M7: logistics 実行ロジックの移植（本体）
+- [x] `cargo check` が通る
 
 **前提**: M1〜M6 完了
 
@@ -333,20 +329,20 @@ rand       = { workspace = true }       # 必要に応じて追加
 
 ### 現在地
 
-- 進捗: `~40%`
-- 完了済み: Phase 0（8ファイルシェル化）、AssignedTask 移植（別計画）、**M1・M2・M3**
-- 未着手: M4・M5・M6・M7・M8
+- 進捗: `~70%`
+- 完了済み: Phase 0（8ファイルシェル化）、AssignedTask 移植（別計画）、**M1〜M6**
+- 未着手: M7・M8
 
 ### 次のAIが最初にやること
 
 1. この計画書を読む
-2. **M4・M5・M6 は残りの独立マイルストーン**（任意の順で実施可能）
-3. 推奨開始順: **M4 → M5 → M6** → M7
+2. **M7 に着手**（M1〜M6 完了済み）
+3. M7 移植表の「解放タイミング」列を参照し、ファイルを 2〜3 件ずつ移植する
 
 ### ブロッカー/注意点
 
-- **M1〜M3 完了済み**。残り M4・M5・M6 はすべて独立。M7 の前に全て完了させること。
-- **M7 は M1〜M6 完了後に着手**。表の「解放タイミング」列を必ず参照。
+- **M1〜M6 すべて完了済み**。M7 に着手可能。
+- **M7 は表の「解放タイミング」列を必ず参照**。
 - `initial_spawn.rs` は**絶対に hw_logistics に移さない**（GameAssets 依存）。
 - `ui.rs` も**移さない**（UI 依存）。
 - `FloorTileBlueprint` と `FloorConstructionSite` は別型。`FloorTileBlueprint` は TaskArea 不要（M1）、`FloorConstructionSite` は TaskArea 必要（M5 後）。
@@ -358,14 +354,14 @@ rand       = { workspace = true }       # 必要に応じて追加
 - `crates/hw_logistics/src/lib.rs`（移動先の起点）
 - `src/systems/logistics/mod.rs`（全システム登録の起点）
 - `src/systems/logistics/transport_request/plugin.rs`（plugin 登録の詳細）
-- `src/systems/command/mod.rs`（TaskArea 定義）
-- `src/systems/world/zones.rs`（Yard/Site 定義）
+- `crates/hw_core/src/area.rs`（TaskArea 定義）
+- `crates/hw_world/src/zones.rs`（Yard/Site 定義）
 - `src/systems/jobs/floor_construction/components.rs`（FloorTileBlueprint）
 - `src/systems/familiar_ai/perceive/resource_sync.rs`（SharedResourceCache）
 
 ### 最終確認ログ
 
-- 最終 `cargo check`: ✅ 2026-03-09（M1/M2/M3 完了状態）
+- 最終 `cargo check`: ✅ 2026-03-09（M1〜M6 完了状態）
 - 未解決エラー: なし
 
 ### Definition of Done
@@ -383,4 +379,4 @@ rand       = { workspace = true }       # 必要に応じて追加
 | --- | --- | --- |
 | `2026-03-08` | `AI (Claude)` | 初版作成 |
 | `2026-03-09` | `AI (Claude)` | 現状に合わせて全面改訂。Phase 0 完了を反映。WorldMap/FloorTileBlueprint の依存関係を修正。M1〜M6 が独立並行可能であることを明記。FloorConstructionSpatialGrid ブロッカーを新規追加。 |
-| `2026-03-09` | `AI (Claude)` | M1・M2・M3 完了を反映。進捗 ~40% に更新。 |
+| `2026-03-09` | `AI (Claude)` | M1〜M6 完了を反映。進捗 ~70% に更新。参照ファイルを crate 側に修正。 |
