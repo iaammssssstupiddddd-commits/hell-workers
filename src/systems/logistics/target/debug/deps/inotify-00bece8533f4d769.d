@@ -1,0 +1,10 @@
+/home/satotakumi/projects/hell-workers/src/systems/logistics/target/debug/deps/inotify-00bece8533f4d769.d: /home/satotakumi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/inotify-0.11.0/src/lib.rs /home/satotakumi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/inotify-0.11.0/src/events.rs /home/satotakumi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/inotify-0.11.0/src/fd_guard.rs /home/satotakumi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/inotify-0.11.0/src/inotify.rs /home/satotakumi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/inotify-0.11.0/src/util.rs /home/satotakumi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/inotify-0.11.0/src/watches.rs
+
+/home/satotakumi/projects/hell-workers/src/systems/logistics/target/debug/deps/libinotify-00bece8533f4d769.rmeta: /home/satotakumi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/inotify-0.11.0/src/lib.rs /home/satotakumi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/inotify-0.11.0/src/events.rs /home/satotakumi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/inotify-0.11.0/src/fd_guard.rs /home/satotakumi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/inotify-0.11.0/src/inotify.rs /home/satotakumi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/inotify-0.11.0/src/util.rs /home/satotakumi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/inotify-0.11.0/src/watches.rs
+
+/home/satotakumi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/inotify-0.11.0/src/lib.rs:
+/home/satotakumi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/inotify-0.11.0/src/events.rs:
+/home/satotakumi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/inotify-0.11.0/src/fd_guard.rs:
+/home/satotakumi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/inotify-0.11.0/src/inotify.rs:
+/home/satotakumi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/inotify-0.11.0/src/util.rs:
+/home/satotakumi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/inotify-0.11.0/src/watches.rs:

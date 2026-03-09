@@ -20,7 +20,7 @@ use crate::systems::jobs::wall_construction::{
     wall_construction_phase_transition_system, wall_framed_tile_spawn_system,
 };
 use crate::systems::logistics::item_lifetime::despawn_expired_items_system;
-use crate::systems::logistics::transport_request::TransportRequestPlugin;
+use crate::systems::logistics::transport_request::{FloorWallTransportPlugin, TransportRequestPlugin};
 use crate::systems::obstacle::obstacle_cleanup_system;
 use crate::systems::room::{
     RoomDetectionState, RoomTileLookup, RoomValidationState, detect_rooms_system,
@@ -39,6 +39,7 @@ impl Plugin for LogicPlugin {
         app.add_plugins(SoulAiPlugin);
         app.add_plugins(FamiliarAiPlugin);
         app.add_plugins(TransportRequestPlugin);
+        app.add_plugins(FloorWallTransportPlugin);
 
         // パスファインディング用の作業メモリを登録
         app.init_resource::<RegrowthManager>();

@@ -1,0 +1,116 @@
+//! 使い魔の分隊管理モジュール
+//!
+//! 分隊の構築・検証・解放ロジックを提供します。
+
+use bevy::prelude::*;
+use hw_core::relationships::Commanding;
+use hw_core::soul::IdleBehavior;
+
+use super::query_types::SoulSquadQuery;
+
+/// 分隊管理ユーティリティ
+pub struct SquadManager;
+
+impl SquadManager {
+    /// Relationship から分隊を構築
+    pub fn build_squad(commanding: Option<&Commanding>) -> Vec<Entity> {
+        if let Some(c) = commanding {
+            c.iter().copied().collect()
+        } else {
+            Vec::new()
+        }
+    }
+
+    /// 分隊を検証し、無効なメンバーを除外
+    ///
+    /// # 引数
+    /// - `squad`: 検証する分隊メンバーのリスト
+    /// - `fam_entity`: 使い魔のエンティティ
+    /// - `q_souls`: 魂のクエリ
+    ///
+    /// # 戻り値
+    /// 有効なメンバーのリストと、無効なメンバーのリスト
+    pub fn validate_squad(
+        squad: Vec<Entity>,
+        fam_entity: Entity,
+        q_souls: &SoulSquadQuery,
+    ) -> (Vec<Entity>, Vec<Entity>) {
+        let mut valid_squad = Vec::new();
+        let mut invalid_members = Vec::new();
+
+        for &member_entity in &squad {
+            match q_souls.get(member_entity) {
+                Ok((_entity, _, _, uc)) => {
+                    // 整合性チェック: 相手が自分を主人だと思っていないなら無効
+                    if let Some(uc_comp) = uc {
+                        if uc_comp.0 != fam_entity {
+                            info!(
+                                "FAM_AI: {:?} squad member {:?} belongs to another master {:?}",
+                                fam_entity, member_entity, uc_comp.0
+                            );
+                            invalid_members.push(member_entity);
+                            continue;
+                        }
+                    } else {
+                        // Relationship の反映がコンポーネントより先に来る可能性があるため
+                        // 1フレーム待つ（警告のみ）
+                        debug!(
+                            "FAM_AI: {:?} squad member {:?} has no CommandedBy comp yet (waiting sync)",
+                            fam_entity, member_entity
+                        );
+                        // ここでは無効としない（次のフレームで再チェック）
+                    }
+
+                    valid_squad.push(member_entity);
+                }
+                Err(_) => {
+                    // エンティティが消失している
+                    invalid_members.push(member_entity);
+                }
+            }
+        }
+
+        (valid_squad, invalid_members)
+    }
+
+    /// 疲労・崩壊したメンバーをリリース
+    ///
+    /// # 引数
+    /// - `squad`: 分隊メンバーのリスト
+    /// - `fam_entity`: 使い魔のエンティティ
+    /// - `fatigue_threshold`: 疲労閾値
+    /// - `q_souls`: 魂のクエリ
+    /// - `request_writer`: 分隊管理要求の出力
+    ///
+    /// # 戻り値
+    /// リリースされたメンバーのリスト
+    pub fn release_fatigued(
+        squad: &[Entity],
+        fam_entity: Entity,
+        fatigue_threshold: f32,
+        q_souls: &SoulSquadQuery,
+    ) -> Vec<Entity> {
+        let mut released_entities = Vec::new();
+
+        for &member_entity in squad {
+            if let Ok((_entity, soul, idle, _cb)) = q_souls.get(member_entity) {
+                // 疲労閾値を超えた部下は、休息中でもいったん解放して枠詰まりを防ぐ
+                if soul.fatigue > fatigue_threshold
+                    || idle.behavior == IdleBehavior::ExhaustedGathering
+                {
+                    debug!(
+                        "FAM_AI: {:?} requesting release of soul {:?} (Fatigue/Exhausted)",
+                        fam_entity, member_entity
+                    );
+
+                    released_entities.push(member_entity);
+                }
+            } else {
+                // エンティティが消失している
+                released_entities.push(member_entity);
+            }
+        }
+
+        released_entities
+    }
+}

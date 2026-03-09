@@ -1,0 +1,4 @@
+interface:
+  display_name: "Hell Workers Docs"
+  short_description: "Sync hell-workers docs after code and crate changes"
+  default_prompt: "Use $hell-workers-update-docs to update all affected hell-workers documentation after this refactor."

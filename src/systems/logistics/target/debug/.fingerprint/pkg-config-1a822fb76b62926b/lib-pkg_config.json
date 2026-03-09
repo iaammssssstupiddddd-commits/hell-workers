@@ -1,0 +1,1 @@
+{"rustc":18276270781310494267,"features":"[]","declared_features":"[]","target":4588055084852603002,"profile":7107868029490778754,"path":6595123150330954439,"deps":[],"local":[{"CheckDepInfo":{"dep_info":"debug/.fingerprint/pkg-config-1a822fb76b62926b/dep-lib-pkg_config","checksum":false}}],"rustflags":["-C","link-arg=-fuse-ld=mold"],"config":8247474407144887393,"compile_kind":0}

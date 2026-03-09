@@ -1,17 +1,48 @@
-use crate::entities::damned_soul::{RestAreaCooldown, StressBreakdown};
+use crate::entities::damned_soul::{DamnedSoul, IdleState, RestAreaCooldown, StressBreakdown};
 use crate::entities::familiar::FamiliarCommand;
+use crate::events::{ReleaseReason, SquadManagementOperation, SquadManagementRequest};
+use crate::relationships::CommandedBy;
 use crate::systems::familiar_ai::FamiliarAiState;
 use crate::systems::familiar_ai::decide::FamiliarDecideOutput;
 use crate::systems::familiar_ai::decide::familiar_processor::{
-    FamiliarRecruitmentContext, FamiliarSquadContext, finalize_state_transitions,
+    FamiliarRecruitmentContext, FamiliarSquadContext, SquadManagementOutcome,
+    finalize_state_transitions,
     process_recruitment, process_squad_management,
 };
 use crate::systems::familiar_ai::helpers::query_types::{FamiliarSoulQuery, FamiliarStateQuery};
 use crate::systems::familiar_ai::perceive::state_detection::determine_transition_reason;
+use crate::systems::soul_ai::execute::task_execution::AssignedTask;
 use crate::systems::spatial::SpatialGrid;
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use std::collections::HashSet;
+
+fn write_add_member_request(
+    writer: &mut MessageWriter<'_, SquadManagementRequest>,
+    familiar_entity: Entity,
+    soul_entity: Entity,
+) {
+    writer.write(SquadManagementRequest {
+        familiar_entity,
+        operation: SquadManagementOperation::AddMember { soul_entity },
+    });
+}
+
+fn write_release_requests(
+    writer: &mut MessageWriter<'_, SquadManagementRequest>,
+    familiar_entity: Entity,
+    released_entities: &[Entity],
+) {
+    for &soul_entity in released_entities {
+        writer.write(SquadManagementRequest {
+            familiar_entity,
+            operation: SquadManagementOperation::ReleaseMember {
+                soul_entity,
+                reason: ReleaseReason::Fatigued,
+            },
+        });
+    }
+}
 
 /// 使い魔AIの状態決定に必要なSystemParam
 #[derive(SystemParam)]
@@ -53,8 +84,6 @@ pub fn familiar_ai_state_system(params: FamiliarAiStateDecisionParams) {
         mut fam_path,
         task_area_opt,
         commanding,
-        _voice_opt,
-        _history_opt,
     ) in q_familiars.iter_mut()
     {
         debug!(
@@ -83,23 +112,42 @@ pub fn familiar_ai_state_system(params: FamiliarAiStateDecisionParams) {
                     let mut squad_entities: Vec<Entity> = commanding
                         .map(|c| c.iter().copied().collect())
                         .unwrap_or_default();
-                    let mut scouting_ctx =
-                        crate::systems::familiar_ai::decide::scouting::FamiliarScoutingContext {
+                    let transition_result = {
+                        let mut q_scouting_lens = q_souls.transmute_lens_filtered::<
+                            (
+                                Entity,
+                                &Transform,
+                                &DamnedSoul,
+                                &AssignedTask,
+                                Option<&CommandedBy>,
+                            ),
+                            Without<crate::entities::familiar::Familiar>,
+                        >();
+                        let q_scouting = q_scouting_lens.query();
+                        let mut scouting_ctx =
+                            crate::systems::familiar_ai::decide::scouting::FamiliarScoutingContext {
+                                fam_entity,
+                                fam_pos,
+                                target_soul,
+                                fatigue_threshold: familiar_op.fatigue_threshold,
+                                max_workers,
+                                squad: &mut squad_entities,
+                                ai_state: &mut next_state,
+                                fam_dest: &mut fam_dest,
+                                fam_path: &mut fam_path,
+                                q_souls: &q_scouting,
+                                q_breakdown: &q_breakdown,
+                            };
+                        crate::systems::familiar_ai::decide::state_handlers::scouting::handle_scouting_state(&mut scouting_ctx)
+                    };
+                    if let Some(soul_entity) = transition_result.recruited_entity {
+                        write_add_member_request(
+                            &mut decide_output.squad_requests,
                             fam_entity,
-                            fam_pos,
-                            target_soul,
-                            fatigue_threshold: familiar_op.fatigue_threshold,
-                            max_workers,
-                            squad: &mut squad_entities,
-                            ai_state: &mut next_state,
-                            fam_dest: &mut fam_dest,
-                            fam_path: &mut fam_path,
-                            q_souls: &mut q_souls,
-                            q_breakdown: &q_breakdown,
-                            request_writer: &mut decide_output.squad_requests,
-                        };
-                    let transition_result = crate::systems::familiar_ai::decide::state_handlers::scouting::handle_scouting_state(&mut scouting_ctx);
-                    if transition_result.apply_to(&mut next_state) {
+                            soul_entity,
+                        );
+                    }
+                    if transition_result.transition.apply_to(&mut next_state) {
                         state_changed = true;
                     }
                 } else {
@@ -176,36 +224,69 @@ pub fn familiar_ai_state_system(params: FamiliarAiStateDecisionParams) {
         let fatigue_threshold = familiar_op.fatigue_threshold;
         let max_workers = familiar_op.max_controlled_soul;
 
-        let mut squad_ctx = FamiliarSquadContext {
-            fam_entity,
-            familiar_op,
-            commanding,
-            q_souls: &q_souls,
-            request_writer: &mut decide_output.squad_requests,
+        let SquadManagementOutcome {
+            mut squad_entities,
+            released_entities,
+        } = {
+            let mut q_squad_lens = q_souls.transmute_lens_filtered::<
+                (Entity, &DamnedSoul, &IdleState, Option<&CommandedBy>),
+                Without<crate::entities::familiar::Familiar>,
+            >();
+            let q_squad = q_squad_lens.query();
+            let mut squad_ctx = FamiliarSquadContext {
+                fam_entity,
+                familiar_op,
+                commanding,
+                q_souls: &q_squad,
+            };
+            process_squad_management(&mut squad_ctx)
         };
-        let mut squad_entities = process_squad_management(&mut squad_ctx);
+        write_release_requests(
+            &mut decide_output.squad_requests,
+            fam_entity,
+            &released_entities,
+        );
 
         match next_state.clone() {
             FamiliarAiState::Scouting { target_soul } => {
                 // スカウト中のターゲットを予約登録（他 familiar が横取りしないよう）
                 recruitment_reservations.insert(target_soul);
-                let mut scouting_ctx =
-                    crate::systems::familiar_ai::decide::scouting::FamiliarScoutingContext {
+                let transition_result = {
+                    let mut q_scouting_lens = q_souls.transmute_lens_filtered::<
+                        (
+                            Entity,
+                            &Transform,
+                            &DamnedSoul,
+                            &AssignedTask,
+                            Option<&CommandedBy>,
+                        ),
+                        Without<crate::entities::familiar::Familiar>,
+                    >();
+                    let q_scouting = q_scouting_lens.query();
+                    let mut scouting_ctx =
+                        crate::systems::familiar_ai::decide::scouting::FamiliarScoutingContext {
+                            fam_entity,
+                            fam_pos,
+                            target_soul,
+                            fatigue_threshold,
+                            max_workers,
+                            squad: &mut squad_entities,
+                            ai_state: &mut next_state,
+                            fam_dest: &mut fam_dest,
+                            fam_path: &mut fam_path,
+                            q_souls: &q_scouting,
+                            q_breakdown: &q_breakdown,
+                        };
+                    crate::systems::familiar_ai::decide::state_handlers::scouting::handle_scouting_state(&mut scouting_ctx)
+                };
+                if let Some(soul_entity) = transition_result.recruited_entity {
+                    write_add_member_request(
+                        &mut decide_output.squad_requests,
                         fam_entity,
-                        fam_pos,
-                        target_soul,
-                        fatigue_threshold,
-                        max_workers,
-                        squad: &mut squad_entities,
-                        ai_state: &mut next_state,
-                        fam_dest: &mut fam_dest,
-                        fam_path: &mut fam_path,
-                        q_souls: &mut q_souls,
-                        q_breakdown: &q_breakdown,
-                        request_writer: &mut decide_output.squad_requests,
-                    };
-                let transition_result = crate::systems::familiar_ai::decide::state_handlers::scouting::handle_scouting_state(&mut scouting_ctx);
-                state_changed = transition_result.apply_to(&mut next_state);
+                        soul_entity,
+                    );
+                }
+                state_changed = transition_result.transition.apply_to(&mut next_state);
             }
             _ => {
                 let mut recruitment_ctx = FamiliarRecruitmentContext {

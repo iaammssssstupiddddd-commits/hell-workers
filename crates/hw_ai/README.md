@@ -20,6 +20,12 @@ hw_ai/src/
 |---|---|---|
 | `perceive/state_detection.rs` | Perceive | Change Detection で状態変化を検出 |
 | `decide/following.rs` | Decide | Familiar のターゲット追跡移動 |
+| `decide/query_types.rs` | Decide | Familiar Decide 用の narrow query 定義 |
+| `decide/helpers.rs` | Decide | `finalize_state_transitions` / `process_squad_management` などの pure helper |
+| `decide/squad.rs` | Decide | 分隊検証・疲労メンバー解放判定 |
+| `decide/scouting.rs` | Decide | スカウト状態ロジックと `ScoutingOutcome` |
+| `decide/supervising.rs` | Decide | 監視状態ロジック |
+| `decide/state_handlers/` | Decide | Idle / Searching / Scouting / Supervising の状態ハンドラー |
 | `execute/state_apply.rs` | Execute | 状態遷移の適用 |
 | `execute/state_log.rs` | Execute | 状態変化イベントハンドリング |
 
@@ -85,7 +91,7 @@ Familiar の状態: `Idle / SearchingTask / Scouting / Supervising`
 
 ## 設計上の注意
 
-- **Decide** フェーズはリクエストメッセージを生成するのみ。ECS 状態の変更は **Execute** フェーズで行う。
+- **Decide** フェーズは pure outcome / request を生成するのみ。ECS 状態の変更は **Execute** フェーズで行い、app shell 側の request message 発行は root adapter が担当する。
 - `app.add_observer(...)` による一元登録を使い、スポーン時の `.observe(...)` による二重登録を避ける。
 
 ## 依存クレート
@@ -103,8 +109,9 @@ hw_ai は**ゲームエンティティ非依存の純粋 AI ロジック**のみ
 ### hw_ai に置かれているもの（純粋ロジック）
 
 - **Soul AI**: バイタル更新・集会タイマー・状態整合・脱走判断・アイドル行動・分離行動
-- **Familiar AI**: 状態変化検出・ターゲット追跡・状態遷移適用
+- **Familiar AI**: 状態変化検出・ターゲット追跡・状態機械・分隊管理・監視/スカウト判断
 - 純粋ヘルパー関数（`is_soul_available_for_work` 等）
+- root adapter が request message を発行できるよう、`ScoutingOutcome` / `SquadManagementOutcome` のような pure outcome を返す
 
 ### src/ に置かれているもの（ゲーム固有）
 
@@ -116,16 +123,18 @@ hw_ai は**ゲームエンティティ非依存の純粋 AI ロジック**のみ
 | `soul_ai/helpers/work.rs::unassign_task` | `WorldMap`・`Visibility` 操作あり |
 | `familiar_ai/decide/task_delegation.rs` | 空間グリッド・`WorldMap` を参照 |
 | `familiar_ai/decide/task_management/` | 全クエリがゲーム固有エンティティ |
+| `familiar_ai/decide/state_decision.rs` | concrete `SpatialGrid` と request message 出力の adapter を担当 |
 | `familiar_ai/perceive/resource_sync.rs` | `SharedResourceCache` リソースの更新 |
 
 ### 移設の判断基準
 
 ```
 以下のいずれかを参照・変更するか？
-  - DamnedSoul / Destination / Path（ルート定義型）
-  - WorldMap（Bevy リソース）
-  - Transform / Visibility（Bevy ビルトイン）
-  - ECS Relationship の生成・削除
+  - WorldMapRead/Write / PathfindingContext
+  - concrete SpatialGrid resource
+  - Commands / request message 出力 / app shell wiring
+  - speech / visual 専用型
+  - soul_ai::task_execution に密結合な full-fat query
     → YES: src/ に置く
     → NO:  hw_ai に置ける（テスト・再利用が容易）
 ```
