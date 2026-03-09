@@ -1,23 +1,20 @@
-mod floor_construction;
-mod ground_resources;
 mod initial_spawn;
-pub mod item_lifetime;
-mod provisional_wall;
-mod tile_index;
 pub mod transport_request;
-mod types;
 mod ui;
-mod wall_construction;
-mod water;
-mod zone;
 
-pub use floor_construction::*;
-pub use ground_resources::*;
+pub use hw_logistics::floor_construction::*;
+pub use hw_logistics::ground_resources::*;
+pub use hw_logistics::provisional_wall::*;
+pub use hw_logistics::tile_index::*;
+pub use hw_logistics::types::*;
+pub use hw_logistics::wall_construction::*;
+pub use hw_logistics::water::*;
+pub use hw_logistics::zone::*;
+
 pub use initial_spawn::*;
-pub use provisional_wall::*;
-pub use tile_index::*;
-pub use types::*;
 pub use ui::*;
-pub use wall_construction::*;
-pub use water::*;
-pub use zone::*;
+
+// item_lifetime は他モジュールからパス指定で参照されるため pub mod として公開
+pub mod item_lifetime {
+    pub use hw_logistics::item_lifetime::*;
+}

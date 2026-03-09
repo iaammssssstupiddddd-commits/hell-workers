@@ -1,4 +1,4 @@
-use super::types::{ResourceItem, ResourceType};
+use super::{ResourceItem, ResourceType};
 use crate::assets::GameAssets;
 use crate::relationships::{LoadedItems, ParkedAt};
 use crate::systems::jobs::{Building, BuildingType, ObstaclePosition, Rock, TaskSlots, Tree};

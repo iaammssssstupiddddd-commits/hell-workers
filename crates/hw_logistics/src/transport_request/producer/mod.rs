@@ -1,0 +1,317 @@
+pub mod blueprint;
+pub mod bucket;
+pub mod consolidation;
+pub mod mixer;
+pub mod mixer_helpers;
+pub mod provisional_wall;
+pub mod stockpile_group;
+pub mod tank_water_request;
+pub mod task_area;
+pub mod upsert;
+pub mod wheelbarrow;
+
+use hw_world::zones::{AreaBounds, Yard};
+use bevy::math::Vec2;
+use bevy::prelude::{Commands, Entity, Query, Transform, Visibility};
+use std::collections::HashMap;
+
+use crate::transport_request::{TransportRequest, TransportRequestKind};
+use crate::types::{ResourceItem, ResourceType};
+use hw_spatial::{ResourceSpatialGrid, SpatialGridOps};
+
+pub fn to_u32_saturating(value: usize) -> u32 {
+    u32::try_from(value).unwrap_or(u32::MAX)
+}
+
+pub fn collect_all_area_owners(
+    familiars: &[(Entity, AreaBounds)],
+    yards: &[(Entity, Yard)],
+) -> Vec<(Entity, AreaBounds)> {
+    let mut all = familiars.to_vec();
+    for (yard_entity, yard) in yards {
+        all.push((*yard_entity, yard.bounds()));
+    }
+    all
+}
+
+pub fn find_owner(
+    pos: Vec2,
+    owners: &[(Entity, AreaBounds)],
+) -> Option<(Entity, &AreaBounds)> {
+    owners
+        .iter()
+        .filter(|(_, area)| area.contains(pos))
+        .min_by(|(_, area1), (_, area2)| {
+            let d1 = area1.center().distance_squared(pos);
+            let d2 = area2.center().distance_squared(pos);
+            d1.partial_cmp(&d2).unwrap_or(std::cmp::Ordering::Equal)
+        })
+        .map(|(entity, area)| (*entity, area))
+}
+
+pub fn find_owner_yard(pos: Vec2, yards: &[(Entity, Yard)]) -> Option<(Entity, &Yard)> {
+    let mut candidates: Vec<&(Entity, Yard)> = yards
+        .iter()
+        .filter(|(_, yard)| yard.contains(pos))
+        .collect();
+    if candidates.is_empty() {
+        return None;
+    }
+    candidates.sort_by(|(_, yard_a), (_, yard_b)| {
+        let da = (yard_a.min.distance_squared(pos) + yard_a.max.distance_squared(pos))
+            .partial_cmp(&(yard_b.min.distance_squared(pos) + yard_b.max.distance_squared(pos)))
+            .unwrap_or(std::cmp::Ordering::Equal);
+        da
+    });
+    candidates.first().map(|(entity, yard)| (*entity, yard))
+}
+
+pub fn find_owner_for_position<'a>(
+    pos: Vec2,
+    owners: &'a [(Entity, AreaBounds)],
+    yards: &'a [(Entity, Yard)],
+) -> Option<(Entity, &'a AreaBounds)> {
+    if let Some((_yard_entity, yard)) = find_owner_yard(pos, yards) {
+        let yard_center = (yard.min + yard.max) * 0.5;
+        let candidates: Vec<_> = owners
+            .iter()
+            .filter(|(_, area)| area.contains(yard_center))
+            .collect();
+        if !candidates.is_empty() {
+            return candidates
+                .into_iter()
+                .min_by(|(_, area_a), (_, area_b)| {
+                    let da = area_a.center().distance_squared(yard_center);
+                    let db = area_b.center().distance_squared(yard_center);
+                    da.partial_cmp(&db).unwrap_or(std::cmp::Ordering::Equal)
+                })
+                .map(|(entity, area)| (*entity, area));
+        }
+    }
+
+    find_owner(pos, owners)
+}
+
+pub fn collect_nearby_resource_entities(
+    center: Vec2,
+    pickup_radius: f32,
+    pickup_radius_sq: f32,
+    target_resource: ResourceType,
+    resource_grid: &ResourceSpatialGrid,
+    q_resources: &Query<(
+        Entity,
+        &Transform,
+        &Visibility,
+        &ResourceItem,
+        Option<&hw_core::relationships::StoredIn>,
+    )>,
+    resources_scanned: &mut u32,
+) -> Vec<Entity> {
+    let mut nearby_resources = Vec::new();
+    for entity in resource_grid.get_nearby_in_radius(center, pickup_radius) {
+        let Ok((_, transform, visibility, resource_item, stored_in_opt)) = q_resources.get(entity)
+        else {
+            continue;
+        };
+        *resources_scanned = resources_scanned.saturating_add(1);
+        if *visibility != Visibility::Hidden
+            && stored_in_opt.is_none()
+            && resource_item.0 == target_resource
+            && transform.translation.truncate().distance_squared(center) <= pickup_radius_sq
+        {
+            nearby_resources.push(entity);
+        }
+    }
+    nearby_resources
+}
+
+pub fn group_tiles_by_site<T: bevy::prelude::Component>(
+    q_tiles: &Query<(Entity, &T)>,
+    mut parent_site_of: impl FnMut(&T) -> Entity,
+    tiles_scanned: &mut u32,
+) -> HashMap<Entity, Vec<Entity>> {
+    let mut tiles_by_site = HashMap::<Entity, Vec<Entity>>::new();
+    for (tile_entity, tile) in q_tiles.iter() {
+        *tiles_scanned = tiles_scanned.saturating_add(1);
+        tiles_by_site
+            .entry(parent_site_of(tile))
+            .or_default()
+            .push(tile_entity);
+    }
+    tiles_by_site
+}
+
+pub fn consume_waiting_tile_resources<
+    T: bevy::prelude::Component<Mutability = bevy::ecs::component::Mutable>,
+>(
+    commands: &mut Commands,
+    site_tiles: &[Entity],
+    q_tiles: &mut Query<&mut T>,
+    nearby_resources: &mut Vec<Entity>,
+    required_amount: u32,
+    mut is_waiting: impl FnMut(&T) -> bool,
+    mut delivered_mut: impl FnMut(&mut T) -> &mut u32,
+    mut mark_ready: impl FnMut(&mut T),
+) -> u32 {
+    let mut consumed = 0u32;
+    for tile_entity in site_tiles.iter().copied() {
+        let Ok(mut tile) = q_tiles.get_mut(tile_entity) else {
+            continue;
+        };
+        if !is_waiting(&tile) {
+            continue;
+        }
+
+        let reached_required = {
+            let delivered = delivered_mut(&mut tile);
+            while *delivered < required_amount {
+                let Some(resource_entity) = nearby_resources.pop() else {
+                    break;
+                };
+                commands.entity(resource_entity).try_despawn();
+                *delivered += 1;
+                consumed += 1;
+            }
+            *delivered >= required_amount
+        };
+
+        if reached_required {
+            mark_ready(&mut tile);
+        }
+        if nearby_resources.is_empty() {
+            break;
+        }
+    }
+    consumed
+}
+
+pub fn sync_construction_delivery<
+    TTile: bevy::prelude::Component<Mutability = bevy::ecs::component::Mutable>,
+>(
+    commands: &mut Commands,
+    site_entity: Entity,
+    site_pos: Vec2,
+    target_resource: ResourceType,
+    required_amount: u32,
+    pickup_radius: f32,
+    resource_grid: &ResourceSpatialGrid,
+    q_resources: &Query<(
+        Entity,
+        &Transform,
+        &Visibility,
+        &ResourceItem,
+        Option<&hw_core::relationships::StoredIn>,
+    )>,
+    resources_scanned: &mut u32,
+    tiles_by_site: &HashMap<Entity, Vec<Entity>>,
+    q_tiles: &mut Query<&mut TTile>,
+    is_waiting: impl FnMut(&TTile) -> bool,
+    delivered_mut: impl FnMut(&mut TTile) -> &mut u32,
+    mark_ready: impl FnMut(&mut TTile),
+) -> u32 {
+    let pickup_radius_sq = pickup_radius * pickup_radius;
+    let mut nearby_resources = collect_nearby_resource_entities(
+        site_pos,
+        pickup_radius,
+        pickup_radius_sq,
+        target_resource,
+        resource_grid,
+        q_resources,
+        resources_scanned,
+    );
+
+    if nearby_resources.is_empty() {
+        return 0;
+    }
+
+    let Some(site_tiles) = tiles_by_site.get(&site_entity) else {
+        return 0;
+    };
+
+    consume_waiting_tile_resources(
+        commands,
+        site_tiles,
+        q_tiles,
+        &mut nearby_resources,
+        required_amount,
+        is_waiting,
+        delivered_mut,
+        mark_ready,
+    )
+}
+
+pub fn sync_construction_requests<TTarget: bevy::prelude::Component>(
+    commands: &mut Commands,
+    q_requests: &Query<(
+        Entity,
+        &TTarget,
+        &TransportRequest,
+        Option<&hw_core::relationships::TaskWorkers>,
+    )>,
+    desired_requests: &HashMap<(Entity, ResourceType), (Entity, u32, Vec2)>,
+    expected_kind: TransportRequestKind,
+    request_name: &'static str,
+    request_kind: TransportRequestKind,
+    target_entity: impl Fn(&TTarget) -> Entity,
+    build_target: impl Fn(Entity) -> TTarget,
+    priority_for: impl Fn(ResourceType) -> u32,
+) -> std::collections::HashSet<(Entity, ResourceType)> {
+    let mut seen_existing_keys = std::collections::HashSet::<(Entity, ResourceType)>::new();
+
+    for (request_entity, target, request, workers_opt) in q_requests.iter() {
+        if request.kind != expected_kind {
+            continue;
+        }
+
+        let key = (target_entity(target), request.resource_type);
+        let workers = workers_opt.map(|w| w.len()).unwrap_or(0);
+        if !upsert::process_duplicate_key(
+            commands,
+            request_entity,
+            workers,
+            &mut seen_existing_keys,
+            key,
+        ) {
+            continue;
+        }
+
+        let inflight = to_u32_saturating(workers);
+        if let Some((issued_by, slots, site_pos)) = desired_requests.get(&key) {
+            upsert::upsert_transport_request(
+                commands,
+                request_entity,
+                key,
+                *site_pos,
+                *issued_by,
+                *slots,
+                inflight,
+                priority_for(key.1),
+                build_target(key.0),
+                request_kind,
+            );
+            continue;
+        }
+
+        upsert::disable_request_with_demand(commands, request_entity, inflight);
+    }
+
+    for (key, (issued_by, slots, site_pos)) in desired_requests.iter() {
+        if seen_existing_keys.contains(key) {
+            continue;
+        }
+
+        upsert::spawn_transport_request(
+            commands,
+            request_name,
+            *key,
+            *site_pos,
+            *issued_by,
+            *slots,
+            priority_for(key.1),
+            build_target(key.0),
+            request_kind,
+        );
+    }
+
+    seen_existing_keys
+}

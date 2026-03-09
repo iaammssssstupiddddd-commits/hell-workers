@@ -19,7 +19,7 @@
 
 | Document | Status | Notes |
 |---|---|---|
-| [logistics-to-hw-logistics-plan-2026-03-08.md](logistics-to-hw-logistics-plan-2026-03-08.md) | In Progress (~70%) | logistics 実行ロジックを hw_logistics へ移植する計画。M1〜M6 完了。残り M7/M8。 |
+| [familiar-ai-root-thinning-plan-2026-03-09.md](familiar-ai-root-thinning-plan-2026-03-09.md) | Draft | familiar_ai の純AIロジックを hw_ai / hw_logistics へ寄せて root を薄くする計画。 |
 
 ## アーカイブ計画書一覧 (`docs/plans/archive`)
 
@@ -27,6 +27,8 @@
 |---|---|---|
 | [archive/ai-phase-refactor-implementation-plan.md](archive/ai-phase-refactor-implementation-plan.md) | アーカイブ | AIフェーズリファクタ実装計画。 |
 | [archive/ai-phase-refactor.md](archive/ai-phase-refactor.md) | アーカイブ | AIフェーズリファクタの全体設計メモ。 |
+| [archive/assigned-task-to-hw-jobs-plan-2026-03-08.md](archive/assigned-task-to-hw-jobs-plan-2026-03-08.md) | アーカイブ | AssignedTask を hw_core → hw_jobs へ移動する計画 |
+| [archive/logistics-to-hw-logistics-plan-2026-03-08.md](archive/logistics-to-hw-logistics-plan-2026-03-08.md) | アーカイブ | logistics 実行ロジックを hw_logistics へ移植する計画。M1〜M8 完了。 |
 | [archive/assignment-builder-unification-plan-2026-03-01.md](archive/assignment-builder-unification-plan-2026-03-01.md) | アーカイブ | `task_management/builders` の重複削減と割り当て生成経路の共通化計画。 |
 | [archive/auto-gather-for-blueprint.md](archive/auto-gather-for-blueprint.md) | アーカイブ | Blueprint不足資材の自動伐採/採掘計画。 |
 | [archive/bridge-building.md](archive/bridge-building.md) | アーカイブ | 橋（Bridge）建築物の実装計画。 |
@@ -56,6 +58,7 @@
 | [archive/hw-spatial-crate copy 1.md](archive/hw-spatial-crate copy 1.md) | アーカイブ | WorldMapの計画。 |
 | [archive/hw-spatial-crate copy.md](archive/hw-spatial-crate copy.md) | アーカイブ | WorldMapの計画。 |
 | [archive/hw-spatial-crate.md](archive/hw-spatial-crate.md) | アーカイブ | WorldMapの計画。 |
+| [archive/hw-ui-crate-plan-2026-03-08.md](archive/hw-ui-crate-plan-2026-03-08.md) | アーカイブ | hw_ui crate 分離 実装計画 |
 | [archive/hw-ui-review-fixes-plan-2026-03-08.md](archive/hw-ui-review-fixes-plan-2026-03-08.md) | アーカイブ | hw_uiの計画。 |
 | [archive/large-files-refactor-2026-02-16.md](archive/large-files-refactor-2026-02-16.md) | アーカイブ | 大規模ファイル分割リファクタ計画。 |
 | [archive/mixer-producer-phase-separation-plan-2026-03-05.md](archive/mixer-producer-phase-separation-plan-2026-03-05.md) | アーカイブ | producer/mixer.rsの計画。 |
@@ -81,6 +84,7 @@
 | [archive/room-detection-plan-2026-02-23.md](archive/room-detection-plan-2026-02-23.md) | アーカイブ | 壁・扉・床の閉領域をRoomとして検出し、オーバーレイ表示する実装計画。 |
 | [archive/scaling-performance-bottlenecks-plan.md](archive/scaling-performance-bottlenecks-plan.md) | アーカイブ | スケール時ボトルネック最適化計画。 |
 | [archive/selection-placement-refactor-plan-2026-02-25.md](archive/selection-placement-refactor-plan-2026-02-25.md) | アーカイブ | `interface/selection` の配置処理を責務分離するリファクタ計画。 |
+| [archive/selection-separation-plan-2026-03-08.md](archive/selection-separation-plan-2026-03-08.md) | アーカイブ | -の計画。 |
 | [archive/site-yard-system.md](archive/site-yard-system.md) | アーカイブ | 実装計画: Site / Yard システム |
 | [archive/soul-spawn-despawn.md](archive/soul-spawn-despawn.md) | アーカイブ | Soul Spawn/Despawn設計計画。 |
 | [archive/task-list-left-panel-toggle.md](archive/task-list-left-panel-toggle.md) | アーカイブ | タスクリスト左パネル操作改善計画。 |
@@ -96,4 +100,3 @@
 | [archive/workspace-construction-phase-extraction.md](archive/workspace-construction-phase-extraction.md) | アーカイブ | Floor/Wall 建設で使うフェーズ・状態型がの計画。 |
 | [archive/zone-placement-refactor-plan-2026-03-05.md](archive/zone-placement-refactor-plan-2026-03-05.md) | アーカイブ | zone_placement.rsの計画。 |
 | [archive/zone-removal-preview-diff-plan-2026-03-01.md](archive/zone-removal-preview-diff-plan-2026-03-01.md) | アーカイブ | Zone removal preview の全件更新を差分更新へ置換する計画。 |
-

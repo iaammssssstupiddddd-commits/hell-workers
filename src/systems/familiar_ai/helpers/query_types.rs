@@ -1,16 +1,19 @@
 use crate::entities::damned_soul::{DamnedSoul, Destination, IdleState, Path};
-use crate::entities::familiar::{ActiveCommand, Familiar, FamiliarOperation, FamiliarVoice};
+use crate::entities::familiar::{ActiveCommand, Familiar, FamiliarOperation};
 use crate::relationships::ParticipatingIn;
 use crate::relationships::{CommandedBy, Commanding, ManagedTasks};
 use crate::systems::command::TaskArea;
 use crate::systems::familiar_ai::FamiliarAiState;
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
-use crate::systems::visual::speech::cooldown::SpeechHistory;
 use bevy::prelude::*;
+pub use hw_ai::familiar_ai::decide::query_types::{
+    SoulScoutingQuery, SoulSquadQuery, SoulSupervisingQuery,
+};
 
 /// 使い魔AIが扱うソウルの標準クエリ型
 ///
 /// タプルの不一致による型エラーを避けるため、単一の型に集約する。
+/// task_delegation / task_management / squad_apply など full-fat アクセスが必要な箇所で使用する。
 pub type FamiliarSoulQuery<'w, 's> = Query<
     'w,
     's,
@@ -29,7 +32,9 @@ pub type FamiliarSoulQuery<'w, 's> = Query<
     Without<crate::entities::familiar::Familiar>,
 >;
 
-/// 使い魔AI状態システム用クエリ型（FamiliarAiParams用）
+/// 使い魔AI状態システム用クエリ型（state_decision.rs 専用）
+///
+/// speech/UI 依存型（FamiliarVoice / SpeechHistory）を除外した純 AI 版。
 pub type FamiliarStateQuery<'w, 's> = Query<
     'w,
     's,
@@ -44,8 +49,6 @@ pub type FamiliarStateQuery<'w, 's> = Query<
         &'static mut Path,
         Option<&'static TaskArea>,
         Option<&'static Commanding>,
-        Option<&'static FamiliarVoice>,
-        Option<&'static mut SpeechHistory>,
     ),
 >;
 

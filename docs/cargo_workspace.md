@@ -93,6 +93,9 @@ hw_ui
 - `soul_ai::decide::gathering_mgmt` — 集会管理要求生成
 - `familiar_ai::perceive::state_detection` — 使い魔 AI 状態遷移検知
 - `familiar_ai::decide::following` — 使い魔追尾システム（hw_core 型のみ依存）
+- `familiar_ai::decide::query_types` — Familiar Decide 用の narrow query 定義
+- `familiar_ai::decide::helpers` — `finalize_state_transitions` / `process_squad_management` など pure helper
+- `familiar_ai::decide::squad` / `scouting` / `supervising` / `state_handlers` — 使い魔の状態機械・分隊管理の純ロジック
 - `familiar_ai::execute::state_apply` — `FamiliarStateRequest` 適用
 - `familiar_ai::execute::state_log` — 状態遷移ログ出力
 
@@ -101,6 +104,7 @@ hw_ui
 - `GameAssets` 依存の sprite spawn
 - `WorldMap` resource / `WorldMapRead` SystemParam を直接参照するシステム
 - `SpatialGrid` concrete resource を直接参照しない（`hw_spatial` / root wrapper を経由）
+- `MessageWriter` による app shell 側 request 発行や full-fat query から narrow view への変換
 - UI システム
 - `Commands` で複雑な Entity 生成を行うもの
 - `unassign_task`（`helpers/work.rs`）は `WheelbarrowMovement` / `Visibility` / `Transform` など root 依存が強いため core 化対象外
@@ -122,6 +126,7 @@ hw_ui
 - startup / visual / UI system
 - ECS resource と shell system
 - root 側の互換 re-export 層
+- concrete `SpatialGrid` / `WorldMapRead` / `MessageWriter` を受け取って `hw_ai` の pure logic に橋渡しする adapter
 
 ### `hw_core`
 
@@ -188,22 +193,26 @@ hw_ui
 役割:
 
 - 物流の共有 model / helper
-- transport request の共有状態
+- transport request の完全な実行ロジック（producer / arbitration / plugin）
+- GameAssets・UI に依存しない物流システムの集約
 
 代表例:
 
 - `ResourceItem`, `Wheelbarrow`, `Stockpile`
-- water helper
-- ground resource helper
-- `TransportRequest*`
-- transport metrics / state sync
+- water / ground resource helper
+- `TransportRequest*`, `TransportRequestPlugin`, `TransportRequestSet`
+- transport metrics / state sync / lifecycle cleanup
 - `SharedResourceCache`（タスク間リソース予約キャッシュ）
+- `TileSiteIndex`（タイル→サイト逆引き）
+- producer 全系（`blueprint`, `bucket`, `consolidation`, `mixer`, `task_area`, `wheelbarrow` 等）
+- 手押し車仲裁システム（`arbitration/`）
+- 建設系需要計算ヘルパー（`floor_construction`, `wall_construction`, `provisional_wall`）
 
 ここに置かないもの:
 
-- producer plugin
-- request lifecycle shell
-- app 固有の orchestration
+- `GameAssets` 依存の初期スポーン（`initial_spawn.rs` は root 残留）
+- UI ロジスティクス表示
+- `FloorConstructionSpatialGrid` を直接参照する producer（Optional M_extra 完了まで root 残留）
 
 ### `hw_jobs`
 
