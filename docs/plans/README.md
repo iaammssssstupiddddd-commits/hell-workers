@@ -20,6 +20,7 @@
 | Document | Status | Notes |
 |---|---|---|
 | [familiar-ai-root-thinning-plan-2026-03-09.md](familiar-ai-root-thinning-plan-2026-03-09.md) | Draft | familiar_ai の純AIロジックを hw_ai / hw_logistics へ寄せて root を薄くする計画。 |
+| [soul-ai-root-thinning-plan-2026-03-09.md](soul-ai-root-thinning-plan-2026-03-09.md) | Draft (コード調査済み) | soul_ai を段階的に crate へ寄せて root を薄くする計画 |
 
 ## アーカイブ計画書一覧 (`docs/plans/archive`)
 
@@ -28,7 +29,6 @@
 | [archive/ai-phase-refactor-implementation-plan.md](archive/ai-phase-refactor-implementation-plan.md) | アーカイブ | AIフェーズリファクタ実装計画。 |
 | [archive/ai-phase-refactor.md](archive/ai-phase-refactor.md) | アーカイブ | AIフェーズリファクタの全体設計メモ。 |
 | [archive/assigned-task-to-hw-jobs-plan-2026-03-08.md](archive/assigned-task-to-hw-jobs-plan-2026-03-08.md) | アーカイブ | AssignedTask を hw_core → hw_jobs へ移動する計画 |
-| [archive/logistics-to-hw-logistics-plan-2026-03-08.md](archive/logistics-to-hw-logistics-plan-2026-03-08.md) | アーカイブ | logistics 実行ロジックを hw_logistics へ移植する計画。M1〜M8 完了。 |
 | [archive/assignment-builder-unification-plan-2026-03-01.md](archive/assignment-builder-unification-plan-2026-03-01.md) | アーカイブ | `task_management/builders` の重複削減と割り当て生成経路の共通化計画。 |
 | [archive/auto-gather-for-blueprint.md](archive/auto-gather-for-blueprint.md) | アーカイブ | Blueprint不足資材の自動伐採/採掘計画。 |
 | [archive/bridge-building.md](archive/bridge-building.md) | アーカイブ | 橋（Bridge）建築物の実装計画。 |
@@ -61,6 +61,7 @@
 | [archive/hw-ui-crate-plan-2026-03-08.md](archive/hw-ui-crate-plan-2026-03-08.md) | アーカイブ | hw_ui crate 分離 実装計画 |
 | [archive/hw-ui-review-fixes-plan-2026-03-08.md](archive/hw-ui-review-fixes-plan-2026-03-08.md) | アーカイブ | hw_uiの計画。 |
 | [archive/large-files-refactor-2026-02-16.md](archive/large-files-refactor-2026-02-16.md) | アーカイブ | 大規模ファイル分割リファクタ計画。 |
+| [archive/logistics-to-hw-logistics-plan-2026-03-08.md](archive/logistics-to-hw-logistics-plan-2026-03-08.md) | アーカイブ | logistics 実行ロジックを hw_logistics へ移植する計画。M1〜M8 完了。 |
 | [archive/mixer-producer-phase-separation-plan-2026-03-05.md](archive/mixer-producer-phase-separation-plan-2026-03-05.md) | アーカイブ | producer/mixer.rsの計画。 |
 | [archive/move-plant-building.md](archive/move-plant-building.md) | アーカイブ | Plant 建物移動タスク 実装計画（詳細版） |
 | [archive/participating-in-relationship.md](archive/participating-in-relationship.md) | アーカイブ | Relationship参加設計に関する計画。 |
@@ -100,3 +101,4 @@
 | [archive/workspace-construction-phase-extraction.md](archive/workspace-construction-phase-extraction.md) | アーカイブ | Floor/Wall 建設で使うフェーズ・状態型がの計画。 |
 | [archive/zone-placement-refactor-plan-2026-03-05.md](archive/zone-placement-refactor-plan-2026-03-05.md) | アーカイブ | zone_placement.rsの計画。 |
 | [archive/zone-removal-preview-diff-plan-2026-03-01.md](archive/zone-removal-preview-diff-plan-2026-03-01.md) | アーカイブ | Zone removal preview の全件更新を差分更新へ置換する計画。 |
+

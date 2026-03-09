@@ -7,7 +7,8 @@ use crate::systems::familiar_ai::FamiliarAiState;
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
 use bevy::prelude::*;
 pub use hw_ai::familiar_ai::decide::query_types::{
-    SoulScoutingQuery, SoulSquadQuery, SoulSupervisingQuery,
+    SoulEncouragementQuery, SoulRecruitmentQuery, SoulScoutingQuery, SoulSquadQuery,
+    SoulSupervisingQuery,
 };
 
 /// 使い魔AIが扱うソウルの標準クエリ型

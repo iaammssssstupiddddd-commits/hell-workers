@@ -334,6 +334,7 @@ pub type SoulMovementQuery<'w, 's> = Query<(
      - 対象選定ロジック（スコアリング・フィルタリング部）を hw_ai へ
      - `SpatialGrid` 読み取りは root wrapper が担当
      - `EncouragementCooldown` コンポーネント: hw_core または hw_ai に移設し、`register_type` を hw_ai plugin に移動
+     - root 側は `Time` / `SpatialGrid` / `MessageWriter<EncouragementRequest>` を束ねる adapter に縮退
 
   3. **`decide/state_decision.rs`**:
      - M2 完了後は squad/scouting/supervision ロジックを hw_ai に委譲している状態になる
@@ -352,9 +353,9 @@ pub type SoulMovementQuery<'w, 's> = Query<(
   - `crates/hw_ai/src/familiar_ai/decide/encouragement.rs`（新規）
 
 - **完了条件**:
-  - [ ] `hw_ai` が concrete `SpatialGrid` resource を直接要求せずに recruitment / encouragement を扱える
-  - [ ] root 側の残留コードが候補抽出（`Res<SpatialGrid>` 取得）と adapter 呼び出しに限定される
-  - [ ] `EncouragementCooldown` 移設後に `register_type` が plugin 登録箇所で維持されている
+  - [x] `hw_ai` が concrete `SpatialGrid` resource を直接要求せずに recruitment / encouragement を扱える
+  - [x] root 側の残留コードが候補抽出（`Res<SpatialGrid>` 取得）と adapter 呼び出しに限定される
+  - [x] `EncouragementCooldown` 移設後に `register_type` が plugin 登録箇所で維持されている
 
 - **検証**:
   ```bash
@@ -381,8 +382,8 @@ pub type SoulMovementQuery<'w, 's> = Query<(
   - `crates/hw_ai/src/familiar_ai/decide/auto_gather_for_blueprint/*`（新規）
 
 - **完了条件**:
-  - [ ] root 側は `Commands` / pathfinding orchestration のみを持つ
-  - [ ] 需要供給計画ロジックが `hw_ai` に集約される
+  - [x] root 側は `Commands` / pathfinding orchestration のみを持つ
+  - [x] 需要供給計画ロジックが `hw_ai` に集約される
 
 - **検証**:
   ```bash
@@ -482,16 +483,15 @@ pub type SoulMovementQuery<'w, 's> = Query<(
 
 ### 現在地
 
-- 進捗: `M3 着手前`
-- 完了済みマイルストーン: M1（Query 型整理）、M2（pure familiar ロジック hw_ai へ移設）
-- 未着手/進行中: M3 から着手
+- 進捗: `M5 着手前`
+- 完了済みマイルストーン: M1（Query 型整理）、M2（pure familiar ロジック hw_ai へ移設）、M3（SpatialGrid 依存の判断を adapter + core に分割）、M4（auto gather の純計画層を hw_ai へ移す）
+- 未着手/進行中: M5 から着手
 
 ### 次の AI が最初にやること
 
-1. `decide/recruitment.rs` を `SpatialGridOps` ベースに分離し、score/pick ロジックを `hw_ai` へ移す
-2. `decide/encouragement.rs` の対象選定と cooldown 判断を pure core と root adapter に分割する
-3. `state_decision.rs` で recruitment adapter をさらに薄くし、`FamiliarDecideOutput` と concrete resource 取得に責務を限定する
-4. `crates/hw_ai/src/familiar_ai/mod.rs` の plugin 登録範囲を M3 時点の移設範囲に合わせて見直す
+1. `perceive/resource_sync.rs` の apply helpers を確認する
+2. `SharedResourceCache` 更新 helper を `hw_logistics` に移設する
+3. root の `resource_sync.rs` は reservation 再構築のみを持つよう縮退する
 
 ### ブロッカー/注意点
 
@@ -517,7 +517,7 @@ pub type SoulMovementQuery<'w, 's> = Query<(
 
 ### 最終確認ログ
 
-- 最終 `cargo check`: `2026-03-09 M2 完了時点で cargo check -p hw_ai / cargo check --workspace 実行済み。エラー・警告ゼロ`
+- 最終 `cargo check`: `2026-03-09 M3 完了時点で cargo check -p hw_ai / cargo check --workspace 実行済み。エラー・警告ゼロ`
 - 未解決エラー: `N/A`
 
 ### Definition of Done
