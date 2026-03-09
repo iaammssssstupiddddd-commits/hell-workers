@@ -3,16 +3,16 @@
 ## 役割
 
 ゲームワールドのゾーン（Site・Yard）管理を行うシステム群。
-地形生成・座標変換・経路探索は `hw_world` クレートに実装されており、このディレクトリは**ルートクレート固有のゾーン抽象**を担う。
+型定義は `hw_world::zones` に移動済みで、このディレクトリは**re-export シェル**のみを残している。
 
 ## ファイル一覧
 
 | ファイル | 内容 |
 |---|---|
 | `mod.rs` | `Site`, `Yard`, `PairedSite`, `PairedYard` の公開 |
-| `zones.rs` | `Site`・`Yard` コンポーネントと `PairedSite`/`PairedYard` Relationship 定義 |
+| `zones.rs` | `pub use hw_world::zones::*;` — 1行シェル |
 
-## 主要型
+## 主要型（`hw_world::zones` に定義）
 
 ```rust
 Site       // 採取・採掘等の作業サイトエンティティ

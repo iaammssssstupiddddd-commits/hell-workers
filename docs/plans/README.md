@@ -19,10 +19,7 @@
 
 | Document | Status | Notes |
 |---|---|---|
-| [assigned-task-to-hw-jobs-plan-2026-03-08.md](assigned-task-to-hw-jobs-plan-2026-03-08.md) | Completed | AssignedTask を hw_core → hw_jobs へ移動する計画 |
-| [hw-ui-crate-plan-2026-03-08.md](hw-ui-crate-plan-2026-03-08.md) | Completed | src/interface/の計画。 |
-| [logistics-to-hw-logistics-plan-2026-03-08.md](logistics-to-hw-logistics-plan-2026-03-08.md) | Draft | logistics 実行ロジックを hw_logistics へ移植する計画 |
-| [selection-separation-plan-2026-03-08.md](selection-separation-plan-2026-03-08.md) | Completed | `selection` の判定ロジックと副作用実行を分離する計画。 |
+| [logistics-to-hw-logistics-plan-2026-03-08.md](logistics-to-hw-logistics-plan-2026-03-08.md) | In Progress (~40%) | logistics 実行ロジックを hw_logistics へ移植する計画。M1/M2/M3 完了。残り M4/M5/M6 → M7/M8。 |
 
 ## アーカイブ計画書一覧 (`docs/plans/archive`)
 

@@ -10,7 +10,7 @@ Soul が実行するタスクの種類・進捗状態、および建物の建設
 | ファイル | 内容 |
 |---|---|
 | `assigned_task.rs` | `AssignedTask` enum — Soul に割り当てられたタスクと進捗 |
-| `construction.rs` | 床・壁の建設フェーズ状態機械 |
+| `construction.rs` | 床・壁の建設フェーズ状態機械、タイル Blueprint コンポーネント |
 | `model.rs` | `BuildingType` enum と必要素材マッピング |
 | `mud_mixer.rs` | 泥ミキサーのワークフロー状態 |
 | `events.rs` | タスク完了イベント等 |
@@ -60,7 +60,10 @@ hw_jobs は**型・状態機械定義のみ**を提供する。
 | `FloorConstructionPhase` / `WallConstructionPhase` 状態機械型 | `floor_construction_phase_transition_system` 等の実システム |
 | `BuildingType` と `required_materials()` | 建物完成後処理・ワールドマップ更新 |
 | `MudMixerInputSlot` / `MudMixerOutputSlot` 型 | 泥ミキサーのフロー制御システム |
-| 建設状態コンポーネント（`FloorTileState` 等） | コンポーネントの Bevy 登録・Observer 配線 |
+| 建設状態コンポーネント（`FloorTileState`, `WallTileState` 等） | コンポーネントの Bevy 登録・Observer 配線 |
+| `FloorTileBlueprint`, `WallTileBlueprint`（タイル Blueprint） | `FloorConstructionSite`, `WallConstructionSite`（`TaskArea` 依存のため root 残留） |
+| `TargetFloorConstructionSite`, `TargetWallConstructionSite` | — |
+| `FloorConstructionCancelRequested`, `WallConstructionCancelRequested` | — |
 
 新しいタスクバリアントを追加する場合:
 1. `assigned_task.rs` に struct variant を追加（hw_jobs）

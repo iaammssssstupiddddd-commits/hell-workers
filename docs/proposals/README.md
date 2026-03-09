@@ -19,7 +19,6 @@
 | --- | --- |
 | [08_visual_update_prompts.md](08_visual_update_prompts.md) | ビジュアル更新プロンプト集 |
 | [architecture-improvements-2026.md](architecture-improvements-2026.md) | アーキテクチャ改善提案 (Architecture Improvement Proposals) |
-| [selection-separation-2026-03-08.md](selection-separation-2026-03-08.md) | `selection` の依存分離提案。`WorldMap`/入力/副作用を抽象化し、UIとrootの移行経路を確立する follow-up 提案。 |
 | [soul_spawn_despawn_optimization.md](soul_spawn_despawn_optimization.md) | Soul Spawn/Despawn 最適化提案 |
 | [speech_optimization.md](speech_optimization.md) | スピーチシステム最適化提案 |
 
