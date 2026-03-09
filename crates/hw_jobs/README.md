@@ -11,7 +11,7 @@ Soul が実行するタスクの種類・進捗状態、および建物の建設
 |---|---|
 | `assigned_task.rs` | `AssignedTask` enum — Soul に割り当てられたタスクと進捗 |
 | `construction.rs` | 床・壁の建設フェーズ状態機械、タイル Blueprint コンポーネント |
-| `model.rs` | `BuildingType` enum と必要素材マッピング |
+| `model.rs` | `BuildingType` enum、必要素材マッピング、`MovePlanned` |
 | `mud_mixer.rs` | 泥ミキサーのワークフロー状態 |
 | `events.rs` | タスク完了イベント等 |
 

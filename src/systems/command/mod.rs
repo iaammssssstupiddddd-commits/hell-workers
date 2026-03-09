@@ -1,7 +1,6 @@
 use bevy::prelude::*;
 
 use crate::systems::logistics::ZoneType;
-use crate::systems::world::zones::AreaBounds;
 
 pub mod area_selection;
 pub mod assign_task;
@@ -10,6 +9,7 @@ pub mod input;
 pub mod visualization;
 pub mod zone_placement;
 
+pub use hw_core::area::TaskArea;
 pub use hw_core::game_state::{TaskMode, TaskModeZoneType};
 
 pub fn to_task_mode_zone_type(zone_type: ZoneType) -> TaskModeZoneType {
@@ -23,70 +23,6 @@ pub fn to_logistics_zone_type(zone_type: TaskModeZoneType) -> ZoneType {
     match zone_type {
         TaskModeZoneType::Stockpile => ZoneType::Stockpile,
         TaskModeZoneType::Yard => ZoneType::Yard,
-    }
-}
-
-/// タスクエリア - 使い魔が担当するエリア
-#[derive(Component, Clone, Debug, PartialEq)]
-pub struct TaskArea {
-    pub bounds: AreaBounds,
-}
-
-impl TaskArea {
-    pub fn from_points(a: Vec2, b: Vec2) -> Self {
-        Self {
-            bounds: AreaBounds::from_points(a, b),
-        }
-    }
-
-    pub fn center(&self) -> Vec2 {
-        self.bounds.center()
-    }
-
-    pub fn size(&self) -> Vec2 {
-        self.bounds.size()
-    }
-
-    pub fn contains(&self, pos: Vec2) -> bool {
-        self.bounds.contains(pos)
-    }
-
-    pub fn contains_with_margin(&self, pos: Vec2, margin: f32) -> bool {
-        self.bounds.contains_with_margin(pos, margin)
-    }
-
-    pub fn contains_border(&self, pos: Vec2, thickness: f32) -> bool {
-        let in_outer = self.bounds.contains_with_margin(pos, thickness);
-        let inner = AreaBounds::new(
-            self.bounds.min + Vec2::splat(thickness),
-            self.bounds.max - Vec2::splat(thickness),
-        );
-        let in_inner = inner.contains(pos);
-        in_outer && !in_inner
-    }
-
-    pub fn bounds(&self) -> AreaBounds {
-        self.bounds.clone()
-    }
-
-    pub fn min(&self) -> Vec2 {
-        self.bounds.min
-    }
-
-    pub fn max(&self) -> Vec2 {
-        self.bounds.max
-    }
-}
-
-impl From<&TaskArea> for AreaBounds {
-    fn from(area: &TaskArea) -> Self {
-        area.bounds.clone()
-    }
-}
-
-impl From<AreaBounds> for TaskArea {
-    fn from(bounds: AreaBounds) -> Self {
-        TaskArea { bounds }
     }
 }
 

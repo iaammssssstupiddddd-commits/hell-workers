@@ -254,6 +254,11 @@ impl Blueprint {
     }
 }
 
+#[derive(Component, Debug, Clone, Copy)]
+pub struct MovePlanned {
+    pub task_entity: Entity,
+}
+
 #[derive(Component)]
 pub struct Designation {
     pub work_type: WorkType,

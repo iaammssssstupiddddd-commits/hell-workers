@@ -19,7 +19,7 @@
 
 | Document | Status | Notes |
 |---|---|---|
-| [logistics-to-hw-logistics-plan-2026-03-08.md](logistics-to-hw-logistics-plan-2026-03-08.md) | In Progress (~40%) | logistics 実行ロジックを hw_logistics へ移植する計画。M1/M2/M3 完了。残り M4/M5/M6 → M7/M8。 |
+| [logistics-to-hw-logistics-plan-2026-03-08.md](logistics-to-hw-logistics-plan-2026-03-08.md) | In Progress (~70%) | logistics 実行ロジックを hw_logistics へ移植する計画。M1〜M6 完了。残り M7/M8。 |
 
 ## アーカイブ計画書一覧 (`docs/plans/archive`)
 

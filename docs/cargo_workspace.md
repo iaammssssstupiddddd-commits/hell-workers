@@ -139,6 +139,7 @@ hw_ui
 - `WorkType`
 - `ResourceType`
 - `DoorState`
+- `AreaBounds`, `TaskArea`（矩形エリア抽象型）
 
 ### `hw_world`
 
@@ -218,6 +219,7 @@ hw_ui
 - `MudMixerStorage`
 - `AssignedTask`（ワーカー実行中タスク状態 + 全フェーズ型）
 - `TaskAssignmentRequest`（`hw_jobs::events`）
+- `MovePlanned`（建物移動タスクの計画状態）
 - `FloorTileBlueprint`, `WallTileBlueprint`（タイル単位建設状態）
 - `FloorTileState`, `WallTileState`（建設フェーズ enum）
 - `TargetFloorConstructionSite`, `TargetWallConstructionSite`
