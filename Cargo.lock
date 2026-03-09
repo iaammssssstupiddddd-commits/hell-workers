@@ -2760,6 +2760,10 @@ version = "0.1.0"
 dependencies = [
  "bevy",
  "hw_core",
+ "hw_jobs",
+ "hw_spatial",
+ "hw_world",
+ "rand 0.8.5",
 ]
 
 [[package]]
@@ -2769,7 +2773,6 @@ dependencies = [
  "bevy",
  "hw_core",
  "hw_jobs",
- "hw_logistics",
  "hw_world",
 ]
 
