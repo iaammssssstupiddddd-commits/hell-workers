@@ -13,11 +13,8 @@ pub struct ReservationAccess<'w, 's> {
     pub resources: Query<'w, 's, &'static crate::systems::logistics::ResourceItem>,
     pub resource_cache: Res<'w, SharedResourceCache>,
     pub reservation_writer: MessageWriter<'w, ResourceReservationRequest>,
-    pub incoming_deliveries_query: Query<
-        'w,
-        's,
-        (Entity, &'static crate::relationships::IncomingDeliveries),
-    >,
+    pub incoming_deliveries_query:
+        Query<'w, 's, (Entity, &'static crate::relationships::IncomingDeliveries)>,
 }
 
 /// 指定・場所・属性確認に必要な共通アクセス

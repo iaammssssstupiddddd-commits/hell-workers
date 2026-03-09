@@ -1,11 +1,11 @@
+use crate::components::{DreamLossPopupUi, DreamPoolPulse, UiNodeRegistry, UiSlot};
+use crate::theme::UiTheme;
+use bevy::math::TryStableInterpolate;
+use bevy::prelude::*;
 use hw_core::constants::{
     DREAM_UI_PULSE_BRIGHTNESS, DREAM_UI_PULSE_DURATION, DREAM_UI_PULSE_TRIGGER_DELTA,
 };
-use crate::components::{DreamLossPopupUi, DreamPoolPulse, UiNodeRegistry, UiSlot};
-use crate::theme::UiTheme;
 use hw_core::soul::DreamPool;
-use bevy::math::TryStableInterpolate;
-use bevy::prelude::*;
 
 pub fn update_dream_loss_popup_ui_system(
     mut commands: Commands,
@@ -89,7 +89,8 @@ pub fn update_dream_pool_display_system(
         // プラスのパルス（白・発光）
         if pulse.timer > 0.0 {
             let progress = 1.0 - (pulse.timer / DREAM_UI_PULSE_DURATION).clamp(0.0, 1.0);
-            let pulse_alpha = (progress * std::f32::consts::PI).sin().max(0.0) * DREAM_UI_PULSE_BRIGHTNESS;
+            let pulse_alpha =
+                (progress * std::f32::consts::PI).sin().max(0.0) * DREAM_UI_PULSE_BRIGHTNESS;
             let bright_color = Color::WHITE;
             text_color.0 = base_color
                 .try_interpolate_stable(&bright_color, pulse_alpha)

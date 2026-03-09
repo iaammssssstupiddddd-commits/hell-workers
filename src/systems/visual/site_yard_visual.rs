@@ -1,8 +1,8 @@
-use hw_core::constants::Z_SELECTION;
 use crate::systems::visual::task_area_visual::TaskAreaMaterial;
 use crate::systems::world::zones::{AreaBounds, Site, Yard};
 use bevy::prelude::*;
 use bevy::sprite_render::MeshMaterial2d;
+use hw_core::constants::Z_SELECTION;
 
 #[derive(Component)]
 pub struct SiteYardBoundaryVisual;
@@ -67,8 +67,7 @@ fn spawn_boundary_visual(
             time: 0.0,
             state: 0,
         })),
-        Transform::from_translation(center.extend(Z_SELECTION + 0.05))
-            .with_scale(size.extend(1.0)),
+        Transform::from_translation(center.extend(Z_SELECTION + 0.05)).with_scale(size.extend(1.0)),
         Visibility::Visible,
         Name::new("SiteYardBoundary"),
     ));

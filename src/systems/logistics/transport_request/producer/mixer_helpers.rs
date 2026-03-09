@@ -10,9 +10,7 @@ mod types;
 mod upsert;
 
 pub(crate) use collect::{
-    collect_active_familiars,
-    collect_active_yards,
-    collect_collect_sand_familiar_states,
+    collect_active_familiars, collect_active_yards, collect_collect_sand_familiar_states,
     collect_inflight_mixer_requests,
 };
 pub(crate) use desired::compute_mixer_desired_requests;

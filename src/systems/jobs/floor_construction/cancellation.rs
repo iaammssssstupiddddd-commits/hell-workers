@@ -2,7 +2,6 @@
 
 use super::components::{FloorConstructionCancelRequested, TargetFloorConstructionSite};
 use crate::assets::GameAssets;
-use hw_core::constants::{TILE_SIZE, Z_ITEM_PICKUP};
 use crate::entities::damned_soul::{DamnedSoul, Path};
 use crate::relationships::WorkingOn;
 use crate::systems::logistics::{Inventory, ResourceItem, ResourceType};
@@ -11,6 +10,7 @@ use crate::systems::soul_ai::execute::task_execution::types::AssignedTask;
 use crate::systems::soul_ai::helpers::work::unassign_task;
 use crate::world::map::WorldMapWrite;
 use bevy::prelude::*;
+use hw_core::constants::{TILE_SIZE, Z_ITEM_PICKUP};
 use std::collections::HashSet;
 
 #[derive(Clone, Copy)]

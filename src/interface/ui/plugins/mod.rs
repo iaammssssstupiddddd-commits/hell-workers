@@ -4,10 +4,10 @@ mod foundation;
 mod info_panel;
 mod tooltip;
 use bevy::prelude::App;
-use hw_ui::HwUiPlugin;
 pub use core::ui_core_plugin;
 pub use entity_list::ui_entity_list_plugin;
 pub use foundation::UiFoundationPlugin;
+use hw_ui::HwUiPlugin;
 pub use info_panel::ui_info_panel_plugin;
 pub use tooltip::ui_tooltip_plugin;
 

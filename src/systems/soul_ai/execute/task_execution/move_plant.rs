@@ -1,14 +1,14 @@
-use hw_core::constants::TILE_SIZE;
 use crate::relationships::WorkingOn;
 use crate::systems::jobs::{Building, BuildingType, Designation};
 use crate::systems::soul_ai::execute::task_execution::{
-    common::{is_near_target_or_dest, update_destination_to_adjacent},
     common::clear_task_and_path,
+    common::{is_near_target_or_dest, update_destination_to_adjacent},
     context::TaskExecutionContext,
     types::{AssignedTask, MovePlantData, MovePlantPhase},
 };
 use crate::world::map::{WorldMap, WorldMapWrite};
 use bevy::prelude::*;
+use hw_core::constants::TILE_SIZE;
 
 #[derive(Component, Debug, Clone, Copy)]
 pub struct MovePlanned {
@@ -35,7 +35,8 @@ pub fn handle_move_plant_task(
 ) {
     match data.phase {
         MovePlantPhase::GoToBuilding => {
-            let Ok((building_transform, _, _)) = ctx.queries.storage.buildings.get(data.building) else {
+            let Ok((building_transform, _, _)) = ctx.queries.storage.buildings.get(data.building)
+            else {
                 cleanup_move_task(ctx, commands, data.task_entity, data.building);
                 return;
             };
@@ -69,12 +70,15 @@ pub fn handle_move_plant_task(
             }
         }
         MovePlantPhase::Moving => {
-            let Ok((building_transform, building, _)) = ctx.queries.storage.buildings.get(data.building) else {
+            let Ok((building_transform, building, _)) =
+                ctx.queries.storage.buildings.get(data.building)
+            else {
                 cleanup_move_task(ctx, commands, data.task_entity, data.building);
                 return;
             };
 
-            let old_anchor = anchor_grid_for_kind(building.kind, building_transform.translation.truncate());
+            let old_anchor =
+                anchor_grid_for_kind(building.kind, building_transform.translation.truncate());
             let new_anchor = data.destination_grid;
             let old_occupied = occupied_grids_for_kind(building.kind, old_anchor);
             let new_occupied = occupied_grids_for_kind(building.kind, new_anchor);
@@ -177,7 +181,9 @@ pub fn apply_pending_building_move_system(
             );
         }
 
-        commands.entity(building_entity).remove::<(PendingBuildingMove, MovePlanned)>();
+        commands
+            .entity(building_entity)
+            .remove::<(PendingBuildingMove, MovePlanned)>();
     }
 }
 
@@ -204,11 +210,13 @@ fn relocate_bucket_storages_for_tank(
     let mut stockpiles: Vec<(Entity, (i32, i32))> = q_stockpiles
         .iter()
         .filter_map(|(entity, belongs_to, _)| {
-            (belongs_to.0 == building_entity).then_some(entity).and_then(|entity| {
-                world_map
-                    .stockpile_entries()
-                    .find_map(|(grid, e)| (*e == entity).then_some((entity, *grid)))
-            })
+            (belongs_to.0 == building_entity)
+                .then_some(entity)
+                .and_then(|entity| {
+                    world_map
+                        .stockpile_entries()
+                        .find_map(|(grid, e)| (*e == entity).then_some((entity, *grid)))
+                })
         })
         .collect();
     stockpiles.sort_by_key(|(_, grid)| *grid);

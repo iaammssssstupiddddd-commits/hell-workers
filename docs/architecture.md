@@ -136,7 +136,7 @@ Perceive → Update → Decide → Execute
 
 | 方式 | 用途 | 定義場所 |
 |:--|:--|:--|
-| `Message` | グローバル通知（タスクキュー更新等） | 主に `crates/hw_core/src/events.rs`（登録は `src/plugins/messages.rs`） |
+| `Message` | グローバル通知（タスクキュー更新等） | 主に `crates/hw_core/src/events.rs`（`TaskAssignmentRequest` のみ `crates/hw_jobs/src/events.rs`）（登録は `src/plugins/messages.rs`） |
 | `Observer` | エンティティベースの即時反応 | 主に `crates/hw_core/src/events.rs`（root 互換面は `src/events.rs`） |
 
 > [!TIP]
@@ -170,9 +170,31 @@ Perceive → Update → Decide → Execute
   - `ui_keyboard_shortcuts_system -> ui_interaction_system -> handle_ui_intent -> specialized action -> menu_visibility_system -> update_mode_text_system -> update_area_edit_preview_ui_system` を同一 chain で固定する。
   - `context_menu_system`、task summary、time/speed 表示、vignette などの後段更新は、この chain の後に実行する。
 - ルート残留（境界維持）:
-  - `src/interface/ui/selection/`、`src/interface/ui/vignette.rs`、`src/interface/camera.rs`
+  - `src/interface/selection/`（adapter shell）、`src/interface/ui/vignette.rs`、`src/interface/camera.rs`
   - `src/interface/ui/presentation/`（Model 構築）と `src/interface/ui/list/change_detection.rs`（`EntityListDirty` トリガ生成）
   - `src/interface/ui/interaction/mode.rs` / `intent_handler.rs`（状態変更ハンドラ）
+
+## selection 境界補足
+
+`src/interface/selection/` と `hw_ui::selection` の責務分担（selection 分離完了時点）:
+
+| 区分 | 置き場所 | 内容 |
+| --- | --- | --- |
+| state resource | `hw_ui::selection` | `SelectedEntity`, `HoveredEntity`, `SelectionIndicator` |
+| shared 型・validation | `hw_ui::selection::placement` | `PlacementRejectReason`（`NotStraightLine` 含む）, `PlacementValidation`, `PlacementGeometry`, `WorldReadApi`, `BuildingPlacementContext` |
+| placement geometry API | `hw_ui::selection::placement` | `building_geometry`, `building_occupied_grids`, `building_spawn_pos`, `building_size`, `bucket_storage_geometry`, `validate_building_placement`, `validate_bucket_storage_placement` |
+| move geometry API | `hw_ui::selection::placement` | `move_anchor_grid`, `move_occupied_grids`, `move_spawn_pos`, `can_place_moved_building`, `validate_moved_bucket_storage_placement` |
+| floor / wall validation | `hw_ui::selection::placement` | `validate_area_size`, `validate_wall_area`, `validate_floor_tile`, `validate_wall_tile` |
+| selection intent | `hw_ui::selection::intent` | `SelectionIntent` |
+| root adapter | `src/interface/selection/*` | Query/Res から intent 生成、ECS 状態・WorldMap 変更の適用 |
+
+- `hw_ui::selection` は state resource と shared outcome 型・trait のみ。`Commands`/`WorldMapWrite`/`NextState<PlayMode>` は使わない。
+- `hw_ui::selection::placement` は building placement/move の geometry, validation 共通ロジックを保持する。`src/interface/selection/building_place/placement.rs`・`building_move/preview.rs`・`building_move/mod.rs`・`src/systems/visual/placement_ghost.rs` が共有する。
+- `building_move/geometry.rs` は hw_ui 移動に伴い削除済み。`building_move/placement.rs` は bucket storage 所有グリッド解決だけを持つ薄い adapter で、判定本体は `validate_moved_bucket_storage_placement` を使う。
+- floor/wall の tile reject reason と tile validation は `hw_ui::selection::placement` に共通化済み。root 側 `floor_place/validation.rs` は `WorldMap` を `WorldReadApi` へ適合させる adapter のみ。
+- `handle_mouse_input` の selection 判定は `SelectionIntent` を返す helper へ分離済み（`apply_selection_intent` が ECS 変更を適用）。
+- `building_move/mod.rs` の `finalize_move_request` / `cancel_tasks_and_requests_for_moved_building` は `TransportRequest`・`unassign_task` 依存が重く root adapter として残留する。
+
 
 ## キーボードショートカット
 

@@ -3,9 +3,9 @@ use super::{
     format_inventory_str, format_task_str,
 };
 use crate::entities::damned_soul::Gender;
-use hw_ui::models::inspection::{InspectionSoulGender};
-use hw_core::constants::{DREAM_DRAIN_RATE_REST, DREAM_MAX, MUD_MIXER_MUD_CAPACITY};
 use bevy::prelude::*;
+use hw_core::constants::{DREAM_DRAIN_RATE_REST, DREAM_MAX, MUD_MIXER_MUD_CAPACITY};
+use hw_ui::models::inspection::InspectionSoulGender;
 
 impl EntityInspectionQuery<'_, '_> {
     pub(super) fn build_soul_model(

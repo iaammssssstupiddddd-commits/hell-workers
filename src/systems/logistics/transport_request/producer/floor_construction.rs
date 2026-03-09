@@ -4,14 +4,9 @@
 
 use bevy::prelude::*;
 
-use hw_core::constants::{
-    FLOOR_BONES_PER_TILE, FLOOR_CONSTRUCTION_PRIORITY, FLOOR_MUD_PER_TILE, TILE_SIZE,
-    WHEELBARROW_CAPACITY,
-};
 use crate::entities::familiar::{ActiveCommand, FamiliarCommand};
 use crate::relationships::TaskWorkers;
 use crate::systems::command::TaskArea;
-use crate::systems::world::zones::AreaBounds;
 use crate::systems::jobs::floor_construction::{
     FloorConstructionPhase, FloorConstructionSite, FloorTileBlueprint, FloorTileState,
     TargetFloorConstructionSite,
@@ -21,6 +16,11 @@ use crate::systems::logistics::transport_request::{
     TransportRequest, TransportRequestKind, TransportRequestMetrics,
 };
 use crate::systems::spatial::{FloorConstructionSpatialGrid, ResourceSpatialGrid};
+use crate::systems::world::zones::AreaBounds;
+use hw_core::constants::{
+    FLOOR_BONES_PER_TILE, FLOOR_CONSTRUCTION_PRIORITY, FLOOR_MUD_PER_TILE, TILE_SIZE,
+    WHEELBARROW_CAPACITY,
+};
 use std::collections::HashMap;
 use std::time::Instant;
 
@@ -97,9 +97,7 @@ pub fn floor_construction_auto_haul_system(
             continue;
         }
 
-        let Some((fam_entity, _)) =
-            super::find_owner(site_pos, &active_familiars)
-        else {
+        let Some((fam_entity, _)) = super::find_owner(site_pos, &active_familiars) else {
             continue;
         };
 

@@ -6,7 +6,6 @@ use super::emitter::{emit_familiar_with_history, emit_soul_with_history};
 use super::phrases::LatinPhrase;
 use super::spawn::*;
 use crate::assets::GameAssets;
-use hw_core::constants::COMMAND_REACTION_NEGATIVE_EVENT_CHANCE;
 use crate::entities::damned_soul::DamnedSoul;
 use crate::entities::familiar::{Familiar, FamiliarVoice};
 use crate::events::{
@@ -18,6 +17,7 @@ use crate::systems::visual::speech::conversation::events::{
     ConversationTone, ConversationToneTriggered,
 };
 use bevy::prelude::*;
+use hw_core::constants::COMMAND_REACTION_NEGATIVE_EVENT_CHANCE;
 use rand::Rng;
 
 /// タスク開始時のオブザーバー

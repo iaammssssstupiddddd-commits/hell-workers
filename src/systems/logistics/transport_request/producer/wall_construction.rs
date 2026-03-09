@@ -4,14 +4,9 @@
 
 use bevy::prelude::*;
 
-use hw_core::constants::{
-    TILE_SIZE, WALL_COAT_PRIORITY, WALL_FRAME_PRIORITY, WALL_MUD_PER_TILE, WALL_WOOD_PER_TILE,
-    WHEELBARROW_CAPACITY,
-};
 use crate::entities::familiar::{ActiveCommand, FamiliarCommand};
 use crate::relationships::TaskWorkers;
 use crate::systems::command::TaskArea;
-use crate::systems::world::zones::{AreaBounds, Yard};
 use crate::systems::jobs::wall_construction::{
     TargetWallConstructionSite, WallConstructionPhase, WallConstructionSite, WallTileBlueprint,
     WallTileState,
@@ -22,6 +17,11 @@ use crate::systems::logistics::transport_request::{
     TransportRequest, TransportRequestKind, TransportRequestMetrics,
 };
 use crate::systems::spatial::ResourceSpatialGrid;
+use crate::systems::world::zones::{AreaBounds, Yard};
+use hw_core::constants::{
+    TILE_SIZE, WALL_COAT_PRIORITY, WALL_FRAME_PRIORITY, WALL_MUD_PER_TILE, WALL_WOOD_PER_TILE,
+    WHEELBARROW_CAPACITY,
+};
 use std::collections::HashMap;
 use std::time::Instant;
 

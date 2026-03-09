@@ -2,10 +2,10 @@ use bevy::prelude::*;
 
 use hw_core::constants::{ESCAPE_GATHERING_JOIN_RADIUS, ESCAPE_SAFE_DISTANCE_MULTIPLIER};
 use hw_core::events::{GatheringManagementOp, GatheringManagementRequest};
-use hw_core::relationships::{CommandedBy, GatheringParticipants, ParticipatingIn};
-use hw_core::assigned_task::AssignedTask;
 use hw_core::familiar::Familiar;
+use hw_core::relationships::{CommandedBy, GatheringParticipants, ParticipatingIn};
 use hw_core::soul::{DamnedSoul, IdleBehavior, IdleState};
+use hw_jobs::AssignedTask;
 
 use crate::soul_ai::decide::SoulDecideOutput;
 use crate::soul_ai::helpers::gathering::*;
@@ -158,7 +158,8 @@ pub fn gathering_recruitment_decision(
             continue;
         }
 
-        let spot_is_safe_for_escape = is_gathering_spot_safe_from_familiars(spot.center, &q_familiars);
+        let spot_is_safe_for_escape =
+            is_gathering_spot_safe_from_familiars(spot.center, &q_familiars);
         let search_radius = GATHERING_DETECTION_RADIUS.max(ESCAPE_GATHERING_JOIN_RADIUS);
         let nearby_souls = soul_grid.0.get_nearby_in_radius(spot.center, search_radius);
 

@@ -2,13 +2,12 @@
 //!
 //! Monitors tank storage levels and issues water gathering tasks when tanks are low.
 
-use hw_core::constants::BUCKET_CAPACITY;
 use bevy::prelude::*;
+use hw_core::constants::BUCKET_CAPACITY;
 
 use crate::entities::familiar::{ActiveCommand, FamiliarCommand};
 use crate::relationships::{StoredItems, TaskWorkers};
 use crate::systems::command::TaskArea;
-use crate::systems::world::zones::{AreaBounds, Yard};
 use crate::systems::jobs::{Designation, Priority, TaskSlots, WorkType};
 use crate::systems::logistics::transport_request::{
     TransportDemand, TransportPolicy, TransportPriority, TransportRequest, TransportRequestKind,
@@ -16,6 +15,7 @@ use crate::systems::logistics::transport_request::{
 };
 use crate::systems::logistics::{ResourceType, Stockpile, tank_can_accept_new_bucket};
 use crate::systems::soul_ai::execute::task_execution::move_plant::MovePlanned;
+use crate::systems::world::zones::{AreaBounds, Yard};
 
 /// タンクの貯蔵量を監視し、空きがあれば TransportRequest を発行するシステム
 pub fn tank_water_request_system(

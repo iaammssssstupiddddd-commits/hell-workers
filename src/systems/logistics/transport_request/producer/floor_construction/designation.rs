@@ -1,9 +1,9 @@
 use bevy::prelude::*;
 
-use hw_core::constants::FLOOR_CONSTRUCTION_PRIORITY;
 use crate::relationships::TaskWorkers;
 use crate::systems::jobs::floor_construction::{FloorTileBlueprint, FloorTileState};
 use crate::systems::jobs::{Designation, Priority, TaskSlots, WorkType};
+use hw_core::constants::FLOOR_CONSTRUCTION_PRIORITY;
 
 /// System to assign Designation to FloorTileBlueprint based on their state.
 ///

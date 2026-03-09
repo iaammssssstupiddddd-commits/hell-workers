@@ -1,7 +1,7 @@
 use super::geometry::{cursor_icon_for_operation, detect_area_edit_operation, world_cursor_pos};
 use super::state::AreaEditSession;
-use crate::entities::familiar::Familiar;
 use crate::app_contexts::TaskContext;
+use crate::entities::familiar::Familiar;
 use crate::interface::selection::SelectedEntity;
 use crate::interface::ui::UiInputState;
 use crate::systems::command::{TaskArea, TaskMode};

@@ -5,11 +5,9 @@
 
 use bevy::prelude::*;
 
-use hw_core::constants::WHEELBARROW_CAPACITY;
 use crate::entities::familiar::{ActiveCommand, FamiliarCommand};
 use crate::relationships::TaskWorkers;
 use crate::systems::command::TaskArea;
-use crate::systems::world::zones::AreaBounds;
 use crate::systems::jobs::{
     Blueprint, Designation, Priority, TargetBlueprint, TaskSlots, WorkType,
 };
@@ -18,7 +16,9 @@ use crate::systems::logistics::transport_request::{
     TransportDemand, TransportPolicy, TransportPriority, TransportRequest, TransportRequestKind,
     TransportRequestState,
 };
+use crate::systems::world::zones::AreaBounds;
 use crate::systems::world::zones::Yard;
+use hw_core::constants::WHEELBARROW_CAPACITY;
 
 use crate::systems::spatial::BlueprintSpatialGrid;
 
@@ -61,7 +61,10 @@ pub fn blueprint_auto_haul_system(
         .filter(|(_, active_command, _)| !matches!(active_command.command, FamiliarCommand::Idle))
         .map(|(entity, _, area)| (entity, area.bounds()))
         .collect();
-    let active_yards: Vec<(Entity, Yard)> = q_yards.iter().map(|(entity, yard)| (entity, yard.clone())).collect();
+    let active_yards: Vec<(Entity, Yard)> = q_yards
+        .iter()
+        .map(|(entity, yard)| (entity, yard.clone()))
+        .collect();
 
     // 2. 各 Blueprint の不足分を計算し、desired_requests に格納
     let mut desired_requests =
@@ -90,7 +93,8 @@ pub fn blueprint_auto_haul_system(
             continue;
         }
 
-        let Some((fam_entity, _)) = super::find_owner_for_position(bp_pos, &all_owners, &active_yards)
+        let Some((fam_entity, _)) =
+            super::find_owner_for_position(bp_pos, &all_owners, &active_yards)
         else {
             continue;
         };

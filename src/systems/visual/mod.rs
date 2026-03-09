@@ -11,12 +11,12 @@ pub mod haul;
 pub mod mud_mixer;
 pub mod placement_ghost;
 pub mod plant_trees;
+pub mod site_yard_visual;
 pub mod soul;
 pub mod speech;
 pub mod tank;
 pub mod task_area_visual;
 pub mod wall_connection;
 pub mod wall_construction;
-pub mod site_yard_visual;
 
 pub use task_area_visual::TaskAreaMaterial;

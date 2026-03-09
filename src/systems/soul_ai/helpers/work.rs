@@ -6,16 +6,16 @@
 
 pub use hw_ai::soul_ai::helpers::work::is_soul_available_for_work;
 
-use crate::events::ResourceReservationRequest;
 use crate::entities::damned_soul::Path;
+use crate::events::ResourceReservationRequest;
 use crate::relationships::WorkingOn;
-use hw_core::constants::Z_ITEM_PICKUP;
 use crate::systems::logistics::{Inventory, ResourceType};
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
 use crate::systems::soul_ai::execute::task_execution::context::TaskReservationAccess;
 use crate::systems::soul_ai::execute::task_execution::transport_common::lifecycle;
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
+use hw_core::constants::Z_ITEM_PICKUP;
 
 /// 魂からタスクの割り当てを解除し、スロットを解放する。
 ///

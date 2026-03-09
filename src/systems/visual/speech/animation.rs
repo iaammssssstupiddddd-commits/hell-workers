@@ -1,6 +1,6 @@
 use super::components::*;
-use hw_core::constants::*;
 use bevy::prelude::*;
+use hw_core::constants::*;
 
 /// 吹き出しのアニメーション処理
 pub fn animate_speech_bubbles(

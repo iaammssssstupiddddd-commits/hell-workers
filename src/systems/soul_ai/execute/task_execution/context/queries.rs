@@ -14,7 +14,14 @@ use crate::world::map::WorldMapRead;
 pub struct TaskAssignmentReadAccess<'w, 's> {
     pub world_map: WorldMapRead<'w>,
     pub yards: Query<'w, 's, &'static crate::systems::world::zones::Yard>,
-    pub items: Query<'w, 's, (&'static crate::systems::logistics::ResourceItem, Option<&'static crate::systems::jobs::Designation>)>,
+    pub items: Query<
+        'w,
+        's,
+        (
+            &'static crate::systems::logistics::ResourceItem,
+            Option<&'static crate::systems::jobs::Designation>,
+        ),
+    >,
     pub sand_piles: Query<
         'w,
         's,
@@ -37,8 +44,19 @@ pub struct TaskAssignmentReadAccess<'w, 's> {
         ),
         With<crate::systems::jobs::BonePile>,
     >,
-    pub task_state: Query<'w, 's, (Option<&'static crate::systems::jobs::Designation>, Option<&'static crate::relationships::TaskWorkers>)>,
-    pub move_plant_tasks: Query<'w, 's, &'static crate::systems::soul_ai::execute::task_execution::types::MovePlantTask>,
+    pub task_state: Query<
+        'w,
+        's,
+        (
+            Option<&'static crate::systems::jobs::Designation>,
+            Option<&'static crate::relationships::TaskWorkers>,
+        ),
+    >,
+    pub move_plant_tasks: Query<
+        'w,
+        's,
+        &'static crate::systems::soul_ai::execute::task_execution::types::MovePlantTask,
+    >,
     pub transport_requests:
         Query<'w, 's, &'static crate::systems::logistics::transport_request::TransportRequest>,
     pub transport_demands:
@@ -178,7 +196,9 @@ macro_rules! impl_task_reservation_access {
                 &mut self.reservation.reservation_writer
             }
 
-            fn resources(&self) -> &Query<'w, 's, &'static crate::systems::logistics::ResourceItem> {
+            fn resources(
+                &self,
+            ) -> &Query<'w, 's, &'static crate::systems::logistics::ResourceItem> {
                 &self.reservation.resources
             }
 

@@ -2,11 +2,11 @@
 //!
 //! リクルートの検索・実行ロジックを提供します。
 
-use hw_core::constants::TILE_SIZE;
 use crate::entities::damned_soul::{
     DamnedSoul, Destination, IdleBehavior, IdleState, Path, RestAreaCooldown, StressBreakdown,
 };
 use crate::relationships::CommandedBy;
+use hw_core::constants::TILE_SIZE;
 // use crate::events::OnSoulRecruited;
 use crate::relationships::{ParticipatingIn, RestingIn};
 use crate::systems::familiar_ai::FamiliarSoulQuery;

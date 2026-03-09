@@ -42,7 +42,9 @@ pub fn assign_haul_to_floor_construction(
 
     let remaining_needed = match resource_type {
         ResourceType::Bone => demand::compute_remaining_floor_bones(site_entity, &demand_context),
-        ResourceType::StasisMud => demand::compute_remaining_floor_mud(site_entity, &demand_context),
+        ResourceType::StasisMud => {
+            demand::compute_remaining_floor_mud(site_entity, &demand_context)
+        }
         _ => 0,
     };
     if remaining_needed == 0 {

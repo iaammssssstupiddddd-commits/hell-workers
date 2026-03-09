@@ -24,7 +24,16 @@ pub fn issue_gather(
                 phase: GatherPhase::GoingToResource,
             },
         );
-    submit_assignment_with_source_entities(ctx, queries, shadow, work_type, task_pos, assigned_task, &[ctx.task_entity], already_commanded);
+    submit_assignment_with_source_entities(
+        ctx,
+        queries,
+        shadow,
+        work_type,
+        task_pos,
+        assigned_task,
+        &[ctx.task_entity],
+        already_commanded,
+    );
 }
 
 pub fn issue_build(
@@ -41,7 +50,16 @@ pub fn issue_build(
                 phase: BuildPhase::GoingToBlueprint,
             },
         );
-    submit_assignment_with_source_entities(ctx, queries, shadow, WorkType::Build, task_pos, assigned_task, &[ctx.task_entity], already_commanded);
+    submit_assignment_with_source_entities(
+        ctx,
+        queries,
+        shadow,
+        WorkType::Build,
+        task_pos,
+        assigned_task,
+        &[ctx.task_entity],
+        already_commanded,
+    );
 }
 
 pub fn issue_collect_sand(
@@ -57,7 +75,16 @@ pub fn issue_collect_sand(
             phase: crate::systems::soul_ai::execute::task_execution::types::CollectSandPhase::GoingToSand,
         },
     );
-    submit_assignment_with_source_entities(ctx, queries, shadow, WorkType::CollectSand, task_pos, assigned_task, &[ctx.task_entity], already_commanded);
+    submit_assignment_with_source_entities(
+        ctx,
+        queries,
+        shadow,
+        WorkType::CollectSand,
+        task_pos,
+        assigned_task,
+        &[ctx.task_entity],
+        already_commanded,
+    );
 }
 
 pub fn issue_refine(
@@ -73,7 +100,16 @@ pub fn issue_refine(
             phase: crate::systems::soul_ai::execute::task_execution::types::RefinePhase::GoingToMixer,
         },
     );
-    submit_assignment_with_source_entities(ctx, queries, shadow, WorkType::Refine, task_pos, assigned_task, &[ctx.task_entity], already_commanded);
+    submit_assignment_with_source_entities(
+        ctx,
+        queries,
+        shadow,
+        WorkType::Refine,
+        task_pos,
+        assigned_task,
+        &[ctx.task_entity],
+        already_commanded,
+    );
 }
 
 pub fn issue_collect_bone(
@@ -89,7 +125,16 @@ pub fn issue_collect_bone(
             phase: crate::systems::soul_ai::execute::task_execution::types::CollectBonePhase::GoingToBone,
         },
     );
-    submit_assignment_with_source_entities(ctx, queries, shadow, WorkType::CollectBone, task_pos, assigned_task, &[ctx.task_entity], already_commanded);
+    submit_assignment_with_source_entities(
+        ctx,
+        queries,
+        shadow,
+        WorkType::CollectBone,
+        task_pos,
+        assigned_task,
+        &[ctx.task_entity],
+        already_commanded,
+    );
 }
 
 pub fn issue_reinforce_floor(
@@ -118,7 +163,16 @@ pub fn issue_reinforce_floor(
                 phase: ReinforceFloorPhase::GoingToMaterialCenter,
             },
         );
-    submit_assignment_with_source_entities(ctx, queries, shadow, WorkType::ReinforceFloorTile, task_pos, assigned_task, &[ctx.task_entity], already_commanded);
+    submit_assignment_with_source_entities(
+        ctx,
+        queries,
+        shadow,
+        WorkType::ReinforceFloorTile,
+        task_pos,
+        assigned_task,
+        &[ctx.task_entity],
+        already_commanded,
+    );
 }
 
 pub fn issue_pour_floor(
@@ -147,7 +201,16 @@ pub fn issue_pour_floor(
                 phase: PourFloorPhase::GoingToMaterialCenter,
             },
         );
-    submit_assignment_with_source_entities(ctx, queries, shadow, WorkType::PourFloorTile, task_pos, assigned_task, &[ctx.task_entity], already_commanded);
+    submit_assignment_with_source_entities(
+        ctx,
+        queries,
+        shadow,
+        WorkType::PourFloorTile,
+        task_pos,
+        assigned_task,
+        &[ctx.task_entity],
+        already_commanded,
+    );
 }
 
 pub fn issue_coat_wall(
@@ -198,7 +261,16 @@ pub fn issue_coat_wall(
                 phase: CoatWallPhase::GoingToMaterialCenter,
             },
         );
-    submit_assignment_with_source_entities(ctx, queries, shadow, WorkType::CoatWall, task_pos, assigned_task, &[ctx.task_entity], already_commanded);
+    submit_assignment_with_source_entities(
+        ctx,
+        queries,
+        shadow,
+        WorkType::CoatWall,
+        task_pos,
+        assigned_task,
+        &[ctx.task_entity],
+        already_commanded,
+    );
 }
 
 pub fn issue_frame_wall(
@@ -226,7 +298,16 @@ pub fn issue_frame_wall(
                 phase: FrameWallPhase::GoingToMaterialCenter,
             },
         );
-    submit_assignment_with_source_entities(ctx, queries, shadow, WorkType::FrameWallTile, task_pos, assigned_task, &[ctx.task_entity], already_commanded);
+    submit_assignment_with_source_entities(
+        ctx,
+        queries,
+        shadow,
+        WorkType::FrameWallTile,
+        task_pos,
+        assigned_task,
+        &[ctx.task_entity],
+        already_commanded,
+    );
 }
 
 pub fn issue_move(
@@ -237,18 +318,23 @@ pub fn issue_move(
     shadow: &mut ReservationShadow,
 ) {
     let Ok(task_template) = queries.move_plant_tasks.get(ctx.task_entity) else {
-        warn!("issue_move: Missing task template for {:?}", ctx.task_entity);
+        warn!(
+            "issue_move: Missing task template for {:?}",
+            ctx.task_entity
+        );
         return;
     };
 
-    let assigned_task = AssignedTask::MovePlant(crate::systems::soul_ai::execute::task_execution::types::MovePlantData {
-        task_entity: ctx.task_entity,
-        building: task_template.building,
-        destination_grid: task_template.destination_grid,
-        destination_pos: task_template.destination_pos,
-        companion_anchor: task_template.companion_anchor,
-        phase: MovePlantPhase::GoToBuilding,
-    });
+    let assigned_task = AssignedTask::MovePlant(
+        crate::systems::soul_ai::execute::task_execution::types::MovePlantData {
+            task_entity: ctx.task_entity,
+            building: task_template.building,
+            destination_grid: task_template.destination_grid,
+            destination_pos: task_template.destination_pos,
+            companion_anchor: task_template.companion_anchor,
+            phase: MovePlantPhase::GoToBuilding,
+        },
+    );
 
     submit_assignment_with_reservation_ops(
         ctx,

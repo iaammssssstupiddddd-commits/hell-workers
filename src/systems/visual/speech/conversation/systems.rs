@@ -1,13 +1,13 @@
 use super::components::*;
 use super::events::*;
 use crate::assets::GameAssets;
-use hw_core::constants::*;
 use crate::entities::damned_soul::{DamnedSoul, IdleBehavior, IdleState};
 use crate::systems::spatial::grid::SpatialGridOps;
 use crate::systems::spatial::soul::SpatialGrid;
 use crate::systems::visual::speech::components::{BubbleEmotion, BubblePriority};
 use crate::systems::visual::speech::spawn::spawn_soul_bubble;
 use bevy::prelude::*;
+use hw_core::constants::*;
 use rand::Rng;
 use rand::seq::SliceRandom;
 use std::collections::HashMap;

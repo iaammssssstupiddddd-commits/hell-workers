@@ -1,16 +1,16 @@
 //! 時間操作 UI
 
+use super::UiSetupAssets;
+use crate::components::ClockText;
+use crate::components::DreamIconAbsorb;
 use crate::components::{
     DreamPoolPulse, MenuAction, MenuButton, SpeedButtonMarker, UiInputBlocker, UiNodeRegistry,
     UiSlot, UiTooltip,
 };
-use crate::components::ClockText;
-use crate::components::DreamIconAbsorb;
 use crate::theme::UiTheme;
-use hw_core::game_state::TimeSpeed;
 use bevy::prelude::*;
 use bevy::ui::RelativeCursorPosition;
-use super::UiSetupAssets;
+use hw_core::game_state::TimeSpeed;
 
 /// 時間操作UIをスポーン
 pub fn spawn_time_control(

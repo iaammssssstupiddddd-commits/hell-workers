@@ -4,7 +4,6 @@
 //! ドラッグ確定時に `AreaEditSession.pending_dream_planting` がセットされ、本システムがそれを処理する。
 
 use crate::assets::GameAssets;
-use hw_core::constants::*;
 use crate::entities::damned_soul::DreamPool;
 use crate::systems::command::AreaEditSession;
 use crate::systems::jobs::{ObstaclePosition, Tree, TreeVariant};
@@ -12,9 +11,10 @@ use crate::systems::logistics::ResourceItem;
 use crate::systems::visual::plant_trees::PlantTreeVisualState;
 use crate::world::map::{WorldMap, WorldMapWrite};
 use bevy::prelude::*;
+use hw_core::constants::*;
+use rand::SeedableRng;
 use rand::rngs::StdRng;
 use rand::seq::SliceRandom;
-use rand::SeedableRng;
 
 #[derive(Debug, Clone)]
 pub struct DreamTreePlantingPlan {
@@ -178,10 +178,7 @@ fn process_dream_planting(
     if plan.width_tiles < plan.min_square_side || plan.height_tiles < plan.min_square_side {
         info!(
             "DREAM_PLANT: AreaTooSmall ({}x{} tiles, need >= {}x{}). 消費なし。",
-            plan.width_tiles,
-            plan.height_tiles,
-            plan.min_square_side,
-            plan.min_square_side
+            plan.width_tiles, plan.height_tiles, plan.min_square_side, plan.min_square_side
         );
         return;
     }

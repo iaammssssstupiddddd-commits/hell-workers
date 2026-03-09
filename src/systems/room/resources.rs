@@ -1,5 +1,5 @@
-use hw_core::constants::{ROOM_DETECTION_COOLDOWN_SECS, ROOM_VALIDATION_INTERVAL_SECS};
 use bevy::prelude::*;
+use hw_core::constants::{ROOM_DETECTION_COOLDOWN_SECS, ROOM_VALIDATION_INTERVAL_SECS};
 use std::collections::{HashMap, HashSet};
 
 /// Runtime state for room detection scheduling and dirty tracking.

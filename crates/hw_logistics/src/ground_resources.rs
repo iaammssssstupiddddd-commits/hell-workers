@@ -23,13 +23,15 @@ pub fn count_nearby_ground_resources<'a>(
 ) -> usize {
     let excluded = exclude_item.unwrap_or(Entity::PLACEHOLDER);
     resource_items
-        .filter(|(entity, transform, visibility, resource_item, stored_in_opt, loaded_in_opt)| {
-            *entity != excluded
-                && **visibility != Visibility::Hidden
-                && stored_in_opt.is_none()
-                && loaded_in_opt.is_none()
-                && resource_item.0 == resource_type
-                && transform.translation.truncate().distance_squared(center) <= radius_sq
-        })
+        .filter(
+            |(entity, transform, visibility, resource_item, stored_in_opt, loaded_in_opt)| {
+                *entity != excluded
+                    && **visibility != Visibility::Hidden
+                    && stored_in_opt.is_none()
+                    && loaded_in_opt.is_none()
+                    && resource_item.0 == resource_type
+                    && transform.translation.truncate().distance_squared(center) <= radius_sq
+            },
+        )
         .count()
 }

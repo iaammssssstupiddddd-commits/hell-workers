@@ -7,8 +7,9 @@ use crate::systems::soul_ai::execute::task_execution::types::{
 use bevy::prelude::*;
 
 use super::{
-    build_mixer_destination_reservation_ops, build_source_reservation_ops, build_wheelbarrow_reservation_ops,
-    submit_assignment_with_reservation_ops, submit_assignment_with_source_entities,
+    build_mixer_destination_reservation_ops, build_source_reservation_ops,
+    build_wheelbarrow_reservation_ops, submit_assignment_with_reservation_ops,
+    submit_assignment_with_source_entities,
 };
 
 /// 指定のソースアイテムを使って Blueprint 運搬を割り当てる（request 方式の遅延解決用）
@@ -217,8 +218,13 @@ pub fn issue_collect_sand_with_wheelbarrow_to_blueprint(
 
     let destination =
         crate::systems::logistics::transport_request::WheelbarrowDestination::Blueprint(blueprint);
-    let reservation_ops =
-        build_wheelbarrow_reservation_ops(queries, wheelbarrow, &destination, &[source_entity], &[]);
+    let reservation_ops = build_wheelbarrow_reservation_ops(
+        queries,
+        wheelbarrow,
+        &destination,
+        &[source_entity],
+        &[],
+    );
     submit_assignment_with_reservation_ops(
         ctx,
         queries,
@@ -264,8 +270,13 @@ pub fn issue_collect_bone_with_wheelbarrow_to_blueprint(
 
     let destination =
         crate::systems::logistics::transport_request::WheelbarrowDestination::Blueprint(blueprint);
-    let reservation_ops =
-        build_wheelbarrow_reservation_ops(queries, wheelbarrow, &destination, &[source_entity], &[]);
+    let reservation_ops = build_wheelbarrow_reservation_ops(
+        queries,
+        wheelbarrow,
+        &destination,
+        &[source_entity],
+        &[],
+    );
     submit_assignment_with_reservation_ops(
         ctx,
         queries,
@@ -310,9 +321,16 @@ pub fn issue_collect_bone_with_wheelbarrow_to_floor(
         );
 
     let destination =
-        crate::systems::logistics::transport_request::WheelbarrowDestination::Stockpile(site_entity);
-    let reservation_ops =
-        build_wheelbarrow_reservation_ops(queries, wheelbarrow, &destination, &[source_entity], &[]);
+        crate::systems::logistics::transport_request::WheelbarrowDestination::Stockpile(
+            site_entity,
+        );
+    let reservation_ops = build_wheelbarrow_reservation_ops(
+        queries,
+        wheelbarrow,
+        &destination,
+        &[source_entity],
+        &[],
+    );
     submit_assignment_with_reservation_ops(
         ctx,
         queries,

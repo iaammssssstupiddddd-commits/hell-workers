@@ -1,10 +1,10 @@
 use super::components::*;
 use super::phrases::LatinPhrase;
 use crate::assets::GameAssets;
-use hw_core::constants::*;
 use crate::entities::familiar::FamiliarVoice;
 use bevy::prelude::ChildOf;
 use bevy::prelude::*;
+use hw_core::constants::*;
 
 /// Soul用の絵文字吹き出しをスポーンする
 pub fn spawn_soul_bubble(

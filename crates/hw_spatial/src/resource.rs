@@ -64,4 +64,3 @@ pub fn update_resource_spatial_grid_system<T: Component>(
         grid.remove(entity);
     }
 }
-

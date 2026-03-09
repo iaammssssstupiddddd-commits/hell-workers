@@ -1,7 +1,7 @@
 pub mod borders;
-pub mod map;
 pub mod coords;
 pub mod layout;
+pub mod map;
 pub mod mapgen;
 pub mod pathfinding;
 pub mod query;
@@ -12,12 +12,14 @@ pub mod spawn;
 pub mod terrain;
 
 pub use borders::{TerrainBorderKind, TerrainBorderSpec, generate_terrain_border_specs};
-pub use coords::{grid_to_world, idx_to_pos, snap_to_grid_center, snap_to_grid_edge, world_to_grid};
-pub use map::WorldMap;
+pub use coords::{
+    grid_to_world, idx_to_pos, snap_to_grid_center, snap_to_grid_edge, world_to_grid,
+};
 pub use layout::{
     INITIAL_WOOD_POSITIONS, RIVER_X_MAX, RIVER_X_MIN, RIVER_Y_MAX, RIVER_Y_MIN, ROCK_POSITIONS,
     SAND_WIDTH, TREE_POSITIONS,
 };
+pub use map::WorldMap;
 pub use mapgen::generate_base_terrain_tiles;
 pub use pathfinding::{
     PathGoalPolicy, PathNode, PathWorld, PathfindingContext, can_reach_target, find_path,

@@ -1,6 +1,6 @@
 use super::{TaskArea, TaskMode};
-use crate::entities::familiar::{ActiveCommand, Familiar, FamiliarCommand};
 use crate::app_contexts::TaskContext;
+use crate::entities::familiar::{ActiveCommand, Familiar, FamiliarCommand};
 use crate::interface::selection::SelectedEntity;
 use bevy::prelude::*;
 

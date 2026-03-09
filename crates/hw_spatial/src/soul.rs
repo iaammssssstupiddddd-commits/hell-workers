@@ -29,13 +29,7 @@ impl SpatialGridOps for SpatialGrid {
 
 pub fn update_spatial_grid_system<T: Component>(
     mut grid: ResMut<SpatialGrid>,
-    query: Query<
-        (Entity, &Transform),
-        (
-            With<T>,
-            Or<(Added<T>, Changed<Transform>)>,
-        ),
-    >,
+    query: Query<(Entity, &Transform), (With<T>, Or<(Added<T>, Changed<Transform>)>)>,
     mut removed: RemovedComponents<T>,
 ) {
     for (entity, transform) in query.iter() {
@@ -46,4 +40,3 @@ pub fn update_spatial_grid_system<T: Component>(
         grid.remove(entity);
     }
 }
-

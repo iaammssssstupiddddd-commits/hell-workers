@@ -1,7 +1,7 @@
-use hw_core::constants::*;
 use crate::interface::ui::components::{UiMountSlot, UiNodeRegistry};
 use bevy::prelude::*;
 use bevy::ui_render::prelude::MaterialNode;
+use hw_core::constants::*;
 use rand::Rng;
 
 use super::super::components::{DreamGainUiParticle, DreamIconAbsorb};
@@ -121,8 +121,7 @@ fn update_merging_particle(
     materials: &mut ResMut<Assets<DreamBubbleUiMaterial>>,
 ) -> bool {
     particle.merge_timer -= dt;
-    let progress =
-        1.0 - (particle.merge_timer / DREAM_UI_MERGE_DURATION).clamp(0.0, 1.0);
+    let progress = 1.0 - (particle.merge_timer / DREAM_UI_MERGE_DURATION).clamp(0.0, 1.0);
 
     if let Some(target_entity) = particle.merging_into {
         if let Some((_, target_pos)) = target_positions.iter().find(|(e, _)| *e == target_entity) {

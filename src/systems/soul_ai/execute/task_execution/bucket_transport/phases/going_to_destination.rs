@@ -36,7 +36,10 @@ pub fn handle(
             if !guards::tank_can_accept_full_bucket(ctx, tank_entity) {
                 // タンクが満杯: バケツをドロップして auto haul に任せる
                 super::super::helpers::drop_bucket_for_auto_haul(
-                    commands, ctx, data.bucket, world_map,
+                    commands,
+                    ctx,
+                    data.bucket,
+                    world_map,
                 );
                 return;
             }
@@ -61,7 +64,15 @@ pub fn handle(
                             return;
                         }
                     };
-                    transition_to_tank_internal(commands, ctx, data.bucket, tank, mixer_entity, soul_pos, data);
+                    transition_to_tank_internal(
+                        commands,
+                        ctx,
+                        data.bucket,
+                        tank,
+                        mixer_entity,
+                        soul_pos,
+                        data,
+                    );
                     return;
                 }
             } else {
@@ -69,7 +80,14 @@ pub fn handle(
                     BucketTransportSource::Tank { tank, .. } => tank,
                     BucketTransportSource::River => data.bucket,
                 };
-                abort::abort_and_drop_bucket_mixer(commands, ctx, data.bucket, tank, mixer_entity, soul_pos);
+                abort::abort_and_drop_bucket_mixer(
+                    commands,
+                    ctx,
+                    data.bucket,
+                    tank,
+                    mixer_entity,
+                    soul_pos,
+                );
                 return;
             }
 
@@ -82,7 +100,15 @@ pub fn handle(
                         return;
                     }
                 };
-                transition_to_tank_internal(commands, ctx, data.bucket, tank, mixer_entity, soul_pos, data);
+                transition_to_tank_internal(
+                    commands,
+                    ctx,
+                    data.bucket,
+                    tank,
+                    mixer_entity,
+                    soul_pos,
+                    data,
+                );
                 return;
             }
 
@@ -105,7 +131,12 @@ pub fn handle(
                         BucketTransportSource::River => data.bucket,
                     };
                     abort::abort_and_drop_bucket_mixer(
-                        commands, ctx, data.bucket, tank, mixer_entity, soul_pos,
+                        commands,
+                        ctx,
+                        data.bucket,
+                        tank,
+                        mixer_entity,
+                        soul_pos,
                     );
                     return;
                 }
@@ -122,7 +153,14 @@ pub fn handle(
                     BucketTransportSource::Tank { tank, .. } => tank,
                     BucketTransportSource::River => data.bucket,
                 };
-                abort::abort_and_drop_bucket_mixer(commands, ctx, data.bucket, tank, mixer_entity, soul_pos);
+                abort::abort_and_drop_bucket_mixer(
+                    commands,
+                    ctx,
+                    data.bucket,
+                    tank,
+                    mixer_entity,
+                    soul_pos,
+                );
             }
         }
     }
@@ -159,6 +197,13 @@ fn transition_to_tank_internal(
             BucketTransportDestination::Mixer(m) => m,
             _ => return,
         };
-        abort::abort_and_drop_bucket_mixer(commands, ctx, bucket_entity, tank_entity, mixer, soul_pos);
+        abort::abort_and_drop_bucket_mixer(
+            commands,
+            ctx,
+            bucket_entity,
+            tank_entity,
+            mixer,
+            soul_pos,
+        );
     }
 }

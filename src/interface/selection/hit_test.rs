@@ -1,9 +1,9 @@
-use hw_core::constants::TILE_SIZE;
 use crate::entities::damned_soul::DamnedSoul;
 use crate::entities::familiar::Familiar;
 use crate::systems::command::TaskArea;
 use crate::systems::jobs::Building;
 use bevy::prelude::*;
+use hw_core::constants::TILE_SIZE;
 
 const TASK_AREA_BORDER_HIT_THICKNESS: f32 = 6.0;
 

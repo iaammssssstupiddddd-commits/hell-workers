@@ -1,9 +1,9 @@
 //! インターフェース関連のプラグイン
 
-use crate::systems::GameSystemSet;
 use crate::interface::ui::plugins;
-use bevy::prelude::*;
 use crate::plugins::interface_debug::debug_spawn_system;
+use crate::systems::GameSystemSet;
+use bevy::prelude::*;
 
 pub struct InterfacePlugin;
 

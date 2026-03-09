@@ -5,10 +5,7 @@ use crate::interface::ui::theme::UiTheme;
 use bevy::prelude::*;
 
 use super::render;
-use super::{
-    TaskListDirty,
-    view_model::{TaskListState},
-};
+use super::{TaskListDirty, view_model::TaskListState};
 
 pub use super::interaction::{
     left_panel_tab_system, left_panel_visibility_system, task_list_click_system,

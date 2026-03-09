@@ -70,9 +70,9 @@ pub fn tree_regrowth_system(
 
         // 初期数未満なら1本再生
         if current_count < zone.initial_count {
-            let Some((px, py)) =
-                find_regrowth_position(zone, &occupied_positions, |x, y| world_map.is_walkable(x, y))
-            else {
+            let Some((px, py)) = find_regrowth_position(zone, &occupied_positions, |x, y| {
+                world_map.is_walkable(x, y)
+            }) else {
                 continue;
             };
 

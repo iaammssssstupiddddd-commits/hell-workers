@@ -1,7 +1,7 @@
+pub mod app_contexts;
 mod assets;
 mod entities;
 mod events;
-pub mod app_contexts;
 use hw_core::game_state;
 pub mod interface;
 pub mod plugins;
@@ -16,9 +16,9 @@ use bevy::ui_widgets::popover::PopoverPlugin;
 use bevy::window::PresentMode;
 use std::env;
 #[cfg(target_os = "linux")]
-use std::path::PathBuf;
-#[cfg(target_os = "linux")]
 use std::os::unix::net::UnixStream;
+#[cfg(target_os = "linux")]
+use std::path::PathBuf;
 
 use game_state::PlayMode;
 
@@ -110,9 +110,7 @@ fn configure_linux_window_backend() {
             }
         }
         _ => {
-            eprintln!(
-                "Unknown HW_WINDOW_BACKEND={backend}. Supported values: auto, x11, wayland."
-            );
+            eprintln!("Unknown HW_WINDOW_BACKEND={backend}. Supported values: auto, x11, wayland.");
             if should_fallback_to_x11() {
                 force_x11_backend("auto fallback (Wayland socket unavailable)");
             }
@@ -125,7 +123,9 @@ fn configure_linux_window_backend() {}
 
 #[cfg(target_os = "linux")]
 fn should_fallback_to_x11() -> bool {
-    let has_x11 = env::var("DISPLAY").map(|value| !value.is_empty()).unwrap_or(false);
+    let has_x11 = env::var("DISPLAY")
+        .map(|value| !value.is_empty())
+        .unwrap_or(false);
     if !has_x11 {
         return false;
     }

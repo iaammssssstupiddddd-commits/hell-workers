@@ -2,10 +2,10 @@
 
 use super::components::*;
 use crate::assets::GameAssets;
-use hw_core::constants::{TILE_SIZE, Z_MAP};
 use crate::systems::jobs::{Building, BuildingType, ProvisionalWall};
 use crate::world::map::{WorldMap, WorldMapWrite};
 use bevy::prelude::*;
+use hw_core::constants::{TILE_SIZE, Z_MAP};
 
 /// Spawns provisional wall entities for framed tiles that do not have spawned walls yet.
 pub fn wall_framed_tile_spawn_system(

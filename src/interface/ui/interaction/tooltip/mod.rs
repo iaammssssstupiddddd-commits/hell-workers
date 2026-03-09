@@ -1,19 +1,16 @@
 //! tooltip interaction helpers migrated to hw_ui
 
 pub(crate) use hw_ui::interaction::tooltip::{
-    TooltipContentRenderer,
-    TooltipInspectionSource,
-    TooltipRuntimeState,
-    TooltipUiLayoutQueryParam,
+    TooltipContentRenderer, TooltipInspectionSource, TooltipRuntimeState, TooltipUiLayoutQueryParam,
 };
 
+use bevy::prelude::*;
+use bevy::ui_widgets::popover::Popover;
 use hw_ui::components::{
     HoverTooltip, MenuState, PlacementFailureTooltip, TooltipTemplate, UiNodeRegistry, UiTooltip,
 };
 use hw_ui::interaction::tooltip;
 use hw_ui::models::inspection::EntityInspectionModel;
-use bevy::prelude::*;
-use bevy::ui_widgets::popover::Popover;
 
 impl TooltipInspectionSource for crate::interface::ui::presentation::EntityInspectionQuery<'_, '_> {
     fn build_model(&self, entity: Entity) -> Option<EntityInspectionModel> {

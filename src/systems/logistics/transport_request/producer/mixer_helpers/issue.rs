@@ -1,9 +1,9 @@
 use bevy::prelude::*;
 
 use crate::events::{DesignationOp, DesignationRequest};
-use crate::world::map::{TerrainType, WorldMap};
 use crate::systems::jobs::{Designation, WorkType};
 use crate::systems::world::zones::{AreaBounds, Yard};
+use crate::world::map::{TerrainType, WorldMap};
 
 use super::types::MixerCollectSandCandidate;
 
@@ -19,7 +19,10 @@ pub(crate) fn issue_collect_sand_if_needed(
         ),
         With<crate::systems::jobs::SandPile>,
     >,
-    q_task_state: &Query<(Option<&Designation>, Option<&crate::relationships::TaskWorkers>)>,
+    q_task_state: &Query<(
+        Option<&Designation>,
+        Option<&crate::relationships::TaskWorkers>,
+    )>,
     world_map: &WorldMap,
 ) {
     if candidate.current_sand + candidate.sand_inflight >= 2 {
@@ -140,7 +143,10 @@ pub(crate) fn find_available_sand_tile(
     owner_area: Option<&AreaBounds>,
     yard_area: Option<&Yard>,
     mixer_pos: Vec2,
-    q_task_state: &Query<(Option<&Designation>, Option<&crate::relationships::TaskWorkers>)>,
+    q_task_state: &Query<(
+        Option<&Designation>,
+        Option<&crate::relationships::TaskWorkers>,
+    )>,
 ) -> Option<Entity> {
     let (min_x, max_x, min_y, max_y) = if let Some(yard) = yard_area {
         let (x0, y0) = WorldMap::world_to_grid(yard.min);
@@ -151,7 +157,12 @@ pub(crate) fn find_available_sand_tile(
         let (x1, y1) = WorldMap::world_to_grid(area.max);
         (x0.min(x1), x0.max(x1), y0.min(y1), y0.max(y1))
     } else {
-        (0, hw_core::constants::MAP_WIDTH - 1, 0, hw_core::constants::MAP_HEIGHT - 1)
+        (
+            0,
+            hw_core::constants::MAP_WIDTH - 1,
+            0,
+            hw_core::constants::MAP_HEIGHT - 1,
+        )
     };
 
     let mut best: Option<(Entity, f32)> = None;

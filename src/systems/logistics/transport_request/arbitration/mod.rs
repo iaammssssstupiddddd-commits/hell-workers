@@ -13,7 +13,6 @@ mod types;
 
 use std::time::Instant;
 
-use hw_core::constants::*;
 use crate::relationships::{IncomingDeliveries, ParkedAt, PushedBy, StoredIn, StoredItems};
 use crate::systems::jobs::{Blueprint, Designation};
 use crate::systems::logistics::transport_request::{
@@ -23,6 +22,7 @@ use crate::systems::logistics::transport_request::{
 use crate::systems::logistics::{BelongsTo, ReservedForTask, ResourceItem, Stockpile, Wheelbarrow};
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
+use hw_core::constants::*;
 
 use super::metrics::TransportRequestMetrics;
 use collection::collect_candidates;

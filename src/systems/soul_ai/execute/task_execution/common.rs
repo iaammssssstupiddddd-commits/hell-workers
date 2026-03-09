@@ -1,11 +1,11 @@
 //! タスク実行の共通処理
 
-use hw_core::constants::*;
 use crate::entities::damned_soul::{Destination, Path};
 use crate::systems::jobs::Designation;
 use crate::systems::logistics::{Inventory, ReservedForTask, Stockpile};
 use crate::systems::soul_ai::execute::task_execution::types::AssignedTask;
 use bevy::prelude::*;
+use hw_core::constants::*;
 
 use crate::world::map::WorldMap; // 追加
 
@@ -52,15 +52,13 @@ pub fn update_destination_to_adjacent(
     // ターゲット自体がWalkableなら、そのまま直接移動を試みる
     if world_map.is_walkable(target_grid.0, target_grid.1) {
         // 直接の経路があればそれを使用
-        if let Some(grid_path) =
-            crate::world::pathfinding::find_path(
-                world_map,
-                pf_context,
-                start_grid,
-                target_grid,
-                crate::world::pathfinding::PathGoalPolicy::RespectGoalWalkability,
-            )
-        {
+        if let Some(grid_path) = crate::world::pathfinding::find_path(
+            world_map,
+            pf_context,
+            start_grid,
+            target_grid,
+            crate::world::pathfinding::PathGoalPolicy::RespectGoalWalkability,
+        ) {
             if let Some(&last_grid) = grid_path.last() {
                 let dest_pos = WorldMap::grid_to_world(last_grid.0, last_grid.1);
                 // 必ず目的地を更新（近くても変更検知のため）
@@ -101,15 +99,13 @@ pub fn update_destination_to_adjacent(
         }
 
         // 開始点からこの隣接マスへの経路を探索
-        if let Some(grid_path) =
-            crate::world::pathfinding::find_path(
-                world_map,
-                pf_context,
-                start_grid,
-                (nx, ny),
-                crate::world::pathfinding::PathGoalPolicy::RespectGoalWalkability,
-            )
-        {
+        if let Some(grid_path) = crate::world::pathfinding::find_path(
+            world_map,
+            pf_context,
+            start_grid,
+            (nx, ny),
+            crate::world::pathfinding::PathGoalPolicy::RespectGoalWalkability,
+        ) {
             // 経路コストを計算（パスの長さで近似）
             let cost = grid_path.len() as i32;
             if cost < best_cost {

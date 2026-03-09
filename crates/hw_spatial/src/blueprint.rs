@@ -32,13 +32,7 @@ impl SpatialGridOps for BlueprintSpatialGrid {
 
 pub fn update_blueprint_spatial_grid_system<T: Component>(
     mut grid: ResMut<BlueprintSpatialGrid>,
-    query: Query<
-        (Entity, &Transform),
-        (
-            With<T>,
-            Or<(Added<T>, Changed<Transform>)>,
-        ),
-    >,
+    query: Query<(Entity, &Transform), (With<T>, Or<(Added<T>, Changed<Transform>)>)>,
     mut removed: RemovedComponents<T>,
 ) {
     for (entity, transform) in query.iter() {
@@ -48,4 +42,3 @@ pub fn update_blueprint_spatial_grid_system<T: Component>(
         grid.remove(entity);
     }
 }
-

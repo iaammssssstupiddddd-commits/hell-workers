@@ -1,7 +1,7 @@
 //! ポップアップ・完成テキスト・バウンスアニメーション
 
-use hw_core::constants::*;
 use bevy::prelude::*;
+use hw_core::constants::*;
 
 use super::POPUP_LIFETIME;
 use super::components::{BlueprintVisual, BuildingBounceEffect, CompletionText, DeliveryPopup};

@@ -1,12 +1,12 @@
 //! ダイアログ UI
 
+use super::UiSetupAssets;
 use crate::components::{
     MenuAction, MenuButton, OperationDialog, UiInputBlocker, UiNodeRegistry, UiSlot,
 };
 use crate::theme::UiTheme;
 use bevy::prelude::*;
 use bevy::ui::RelativeCursorPosition;
-use super::UiSetupAssets;
 
 /// ダイアログをスポーン
 pub fn spawn_dialogs(

@@ -5,13 +5,13 @@
 use crate::entities::familiar::{ActiveCommand, FamiliarCommand};
 use crate::relationships::{ParkedAt, PushedBy, TaskWorkers};
 use crate::systems::command::TaskArea;
-use crate::systems::world::zones::AreaBounds;
 use crate::systems::jobs::{Designation, Priority, TaskSlots, WorkType};
 use crate::systems::logistics::transport_request::{
     TransportDemand, TransportPolicy, TransportPriority, TransportRequest, TransportRequestKind,
     TransportRequestState,
 };
 use crate::systems::logistics::{ResourceType, Wheelbarrow};
+use crate::systems::world::zones::AreaBounds;
 use bevy::prelude::*;
 
 const RETURN_REQUEST_PRIORITY: u32 = 0;

@@ -21,11 +21,15 @@ pub fn floor_site_tile_demand<'a>(
     floor_tiles
         .filter(|tile| tile.parent_site == site_entity)
         .map(|tile| match resource_type {
-            ResourceType::Bone if tile.state == crate::systems::jobs::floor_construction::FloorTileState::WaitingBones => {
+            ResourceType::Bone
+                if tile.state
+                    == crate::systems::jobs::floor_construction::FloorTileState::WaitingBones =>
+            {
                 FLOOR_BONES_PER_TILE.saturating_sub(tile.bones_delivered) as usize
             }
             ResourceType::StasisMud
-                if tile.state == crate::systems::jobs::floor_construction::FloorTileState::WaitingMud =>
+                if tile.state
+                    == crate::systems::jobs::floor_construction::FloorTileState::WaitingMud =>
             {
                 FLOOR_MUD_PER_TILE.saturating_sub(tile.mud_delivered) as usize
             }
@@ -43,10 +47,16 @@ pub fn floor_site_tile_demand_from_index(
         .iter()
         .filter_map(|tile_entity| q_floor_tiles.get(*tile_entity).ok())
         .map(|tile| match resource_type {
-            ResourceType::Bone if tile.state == crate::systems::jobs::floor_construction::FloorTileState::WaitingBones => {
+            ResourceType::Bone
+                if tile.state
+                    == crate::systems::jobs::floor_construction::FloorTileState::WaitingBones =>
+            {
                 FLOOR_BONES_PER_TILE.saturating_sub(tile.bones_delivered) as usize
             }
-            ResourceType::StasisMud if tile.state == crate::systems::jobs::floor_construction::FloorTileState::WaitingMud => {
+            ResourceType::StasisMud
+                if tile.state
+                    == crate::systems::jobs::floor_construction::FloorTileState::WaitingMud =>
+            {
                 FLOOR_MUD_PER_TILE.saturating_sub(tile.mud_delivered) as usize
             }
             _ => 0,

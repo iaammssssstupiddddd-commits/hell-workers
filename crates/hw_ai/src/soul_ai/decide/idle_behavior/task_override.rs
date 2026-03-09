@@ -2,10 +2,10 @@
 
 use bevy::prelude::*;
 
-use hw_core::assigned_task::AssignedTask;
 use hw_core::events::{IdleBehaviorOperation, IdleBehaviorRequest};
 use hw_core::relationships::{ParticipatingIn, RestAreaReservedFor, RestingIn};
 use hw_core::soul::{IdleBehavior, IdleState};
+use hw_jobs::AssignedTask;
 
 /// タスク割り当て中の場合、集会・休憩を解除して継続する
 pub fn process_task_override(

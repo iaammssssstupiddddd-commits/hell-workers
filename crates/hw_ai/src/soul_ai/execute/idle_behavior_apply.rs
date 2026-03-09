@@ -81,7 +81,9 @@ pub fn idle_behavior_apply_system(
                     .map(|cooldown| cooldown.remaining_secs > f32::EPSILON)
                     .unwrap_or(false);
                 if cooldown_active {
-                    commands.entity(request.entity).remove::<RestAreaReservedFor>();
+                    commands
+                        .entity(request.entity)
+                        .remove::<RestAreaReservedFor>();
                     continue;
                 }
                 let can_reserve = q_rest_areas
@@ -118,7 +120,9 @@ pub fn idle_behavior_apply_system(
                     .map(|cooldown| cooldown.remaining_secs > f32::EPSILON)
                     .unwrap_or(false);
                 if cooldown_active {
-                    commands.entity(request.entity).remove::<RestAreaReservedFor>();
+                    commands
+                        .entity(request.entity)
+                        .remove::<RestAreaReservedFor>();
                     continue;
                 }
                 let has_reservation_for_target = q_rest_reserved

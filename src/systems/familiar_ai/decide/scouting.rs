@@ -1,8 +1,8 @@
-use hw_core::constants::TILE_SIZE;
 use crate::entities::damned_soul::{DamnedSoul, Destination, IdleState, Path, StressBreakdown};
 use crate::events::SquadManagementRequest;
 use crate::relationships::CommandedBy;
 use crate::relationships::ParticipatingIn;
+use hw_core::constants::TILE_SIZE;
 // use crate::events::OnSoulRecruited;
 use crate::systems::familiar_ai::FamiliarAiState;
 use crate::systems::familiar_ai::FamiliarSoulQuery;

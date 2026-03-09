@@ -82,15 +82,13 @@ fn assign_single_item_haul_to_mixer(
     queries: &mut crate::systems::familiar_ai::decide::task_management::FamiliarTaskAssignmentQueries,
     shadow: &mut ReservationShadow,
 ) -> bool {
-    let Some((source_item, source_pos)) =
-        source_selector::find_nearest_mixer_source_item(
-            item_type,
-            task_pos,
-            queries,
-            shadow,
-            ctx.resource_grid,
-        )
-    else {
+    let Some((source_item, source_pos)) = source_selector::find_nearest_mixer_source_item(
+        item_type,
+        task_pos,
+        queries,
+        shadow,
+        ctx.resource_grid,
+    ) else {
         debug!(
             "ASSIGN: HaulToMixer request {:?} has no available {:?} source",
             ctx.task_entity, item_type

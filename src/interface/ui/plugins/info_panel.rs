@@ -9,8 +9,7 @@ use crate::interface::ui::panels::task_list::{
 };
 use crate::interface::ui::{
     InfoPanelNodes, InfoPanelPinState, InfoPanelState, info_panel_system,
-    presentation::EntityInspectionViewModel,
-    update_entity_inspection_view_model_system,
+    presentation::EntityInspectionViewModel, update_entity_inspection_view_model_system,
 };
 use crate::systems::GameSystemSet;
 use bevy::prelude::*;
@@ -46,7 +45,7 @@ fn register_ui_info_panel_plugin_systems(app: &mut App) {
                 info_panel_system
                     .run_if(
                         |selected: Res<crate::interface::selection::SelectedEntity>,
-                            pin_state: Res<InfoPanelPinState>| {
+                         pin_state: Res<InfoPanelPinState>| {
                             selected.is_changed()
                                 || pin_state.is_changed()
                                 || selected.0.is_some()

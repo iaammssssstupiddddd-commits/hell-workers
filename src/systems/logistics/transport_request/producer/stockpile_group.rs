@@ -6,11 +6,11 @@
 use bevy::prelude::*;
 use std::collections::{HashMap, HashSet};
 
-use hw_core::constants::TILE_SIZE;
 use crate::relationships::StoredItems;
 use crate::systems::logistics::{BucketStorage, Stockpile};
-use crate::systems::world::zones::Yard;
 use crate::systems::spatial::StockpileSpatialGrid;
+use crate::systems::world::zones::Yard;
+use hw_core::constants::TILE_SIZE;
 
 /// ファミリアのTaskArea内にあるStockpileのグループ
 pub struct StockpileGroup {
@@ -143,7 +143,10 @@ pub fn build_group_spatial_index(
         let max_cell = pos_to_cell(expanded_max, cell_size);
         for cy in min_cell.1..=max_cell.1 {
             for cx in min_cell.0..=max_cell.0 {
-                owners_by_cell.entry((cx, cy)).or_default().push(*yard_entity);
+                owners_by_cell
+                    .entry((cx, cy))
+                    .or_default()
+                    .push(*yard_entity);
             }
         }
     }
@@ -240,8 +243,7 @@ pub fn find_nearest_group_for_item_indexed<'a>(
             None => best = Some((group_idx, dist)),
             Some((best_idx, best_dist)) => {
                 if dist < *best_dist
-                    || (dist == *best_dist
-                        && group.owner_yard < groups[*best_idx].owner_yard)
+                    || (dist == *best_dist && group.owner_yard < groups[*best_idx].owner_yard)
                 {
                     best = Some((group_idx, dist));
                 }

@@ -8,7 +8,6 @@ use bevy::prelude::*;
 use crate::entities::familiar::{ActiveCommand, Familiar, FamiliarCommand};
 use crate::relationships::{StoredItems, TaskWorkers};
 use crate::systems::command::TaskArea;
-use crate::systems::world::zones::{AreaBounds, Yard};
 use crate::systems::familiar_ai::perceive::resource_sync::SharedResourceCache;
 use crate::systems::jobs::{Designation, Priority, TaskSlots, WorkType};
 use crate::systems::logistics::transport_request::{
@@ -19,6 +18,7 @@ use crate::systems::logistics::{
     BelongsTo, BucketStorage, ReservedForTask, ResourceItem, ResourceType, Stockpile,
 };
 use crate::systems::soul_ai::execute::task_execution::move_plant::MovePlanned;
+use crate::systems::world::zones::{AreaBounds, Yard};
 
 #[derive(Clone, Copy)]
 struct DesiredBucketReturn {

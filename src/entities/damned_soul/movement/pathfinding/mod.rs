@@ -3,13 +3,13 @@
 mod fallback;
 mod reuse;
 
-use hw_core::constants::MAX_PATHFINDS_PER_FRAME;
 use crate::entities::damned_soul::{DamnedSoul, Destination, IdleBehavior, IdleState, Path};
 use crate::relationships::RestAreaReservedFor;
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
 use crate::world::map::{WorldMap, WorldMapRead};
 use crate::world::pathfinding::PathfindingContext;
 use bevy::prelude::*;
+use hw_core::constants::MAX_PATHFINDS_PER_FRAME;
 
 /// フェーズ予算上限を返す。
 /// task フェーズは idle 探索用スロットを確保するため上限を絞る。
@@ -125,13 +125,9 @@ fn process_worker_pathfinding(
     }
     *pathfind_count += 1;
 
-    if let Some(world_path) = reuse::try_find_path_world_waypoints(
-        world_map,
-        pf_context,
-        start_grid,
-        goal_grid,
-        entity,
-    ) {
+    if let Some(world_path) =
+        reuse::try_find_path_world_waypoints(world_map, pf_context, start_grid, goal_grid, entity)
+    {
         // デバッグ：集会中のsoulで特定位置付近の場合
         if matches!(idle.behavior, IdleBehavior::Gathering)
             && current_pos.x.abs() < 150.0

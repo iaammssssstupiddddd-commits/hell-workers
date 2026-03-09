@@ -230,8 +230,7 @@ pub fn find_path(
                 return true;
             }
 
-            world_map.is_walkable(from.0 + dx, from.1)
-                && world_map.is_walkable(from.0, from.1 + dy)
+            world_map.is_walkable(from.0 + dx, from.1) && world_map.is_walkable(from.0, from.1 + dy)
         },
         |x, y, _is_diagonal| world_map.get_door_cost(x, y),
     )

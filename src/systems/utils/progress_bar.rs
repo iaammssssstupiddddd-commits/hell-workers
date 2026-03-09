@@ -2,8 +2,8 @@
 //!
 //! 任意のエンティティにプログレスバーを表示するためのユーティリティ
 
-use hw_core::constants::*;
 use bevy::prelude::*;
+use hw_core::constants::*;
 
 /// プログレスバーの設定
 #[derive(Debug, Clone)]

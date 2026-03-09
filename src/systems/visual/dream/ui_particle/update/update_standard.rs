@@ -1,13 +1,13 @@
-use hw_core::constants::*;
 use crate::interface::ui::components::{UiNodeRegistry, UiSlot};
 use bevy::prelude::*;
 use bevy::ui_render::prelude::MaterialNode;
+use hw_core::constants::*;
 use rand::Rng;
 use rand::rngs::ThreadRng;
 
-use super::update_trail::spawn_trail_ghost;
 use super::super::super::components::{DreamGainUiParticle, DreamIconAbsorb};
 use super::super::super::dream_bubble_material::DreamBubbleUiMaterial;
+use super::update_trail::spawn_trail_ghost;
 
 pub(super) struct StandardParticleForces {
     to_target: Vec2,
@@ -44,24 +44,11 @@ pub(super) fn update_standard_particle(
 ) -> bool {
     let forces = compute_standard_particle_forces(dt, viewport_size, current_pos, particle, rng);
 
-    let motion = integrate_standard_particle_motion(
-        dt,
-        viewport_size,
-        current_pos,
-        &forces,
-        particle,
-        node,
-    );
+    let motion =
+        integrate_standard_particle_motion(dt, viewport_size, current_pos, &forces, particle, node);
 
     update_standard_particle_visual(
-        elapsed,
-        mat_node,
-        materials,
-        particle,
-        transform,
-        &motion,
-        node,
-        &forces,
+        elapsed, mat_node, materials, particle, transform, &motion, node, &forces,
     );
 
     if handle_standard_particle_arrival(forces.distance, ui_nodes, q_icon) {
@@ -233,7 +220,8 @@ fn integrate_standard_particle_motion(
     node.top = Val::Px(final_pos.y);
 
     let speed = particle.velocity.length();
-    let squash_stretch_ratio = (speed / DREAM_UI_SQUASH_MAX_SPEED).clamp(0.0, DREAM_UI_SQUASH_MAX_RATIO);
+    let squash_stretch_ratio =
+        (speed / DREAM_UI_SQUASH_MAX_SPEED).clamp(0.0, DREAM_UI_SQUASH_MAX_RATIO);
     let length_scale = 1.0 + squash_stretch_ratio;
     let width_scale = 1.0 / (1.0 + squash_stretch_ratio * 0.5);
 
@@ -269,9 +257,19 @@ fn update_standard_particle_visual(
     // 対数スケールによるサイズ縮小（近づくほど急激に小さくなる）
     let shrink = (motion.visual_distance_ratio * 9.0 + 1.0).log10().max(0.1);
 
-    node.width = Val::Px(DREAM_UI_PARTICLE_SIZE * forces.effective_mass.sqrt() * forces.cluster_scale * shrink * motion.width_scale);
+    node.width = Val::Px(
+        DREAM_UI_PARTICLE_SIZE
+            * forces.effective_mass.sqrt()
+            * forces.cluster_scale
+            * shrink
+            * motion.width_scale,
+    );
     node.height = Val::Px(
-        DREAM_UI_PARTICLE_SIZE * forces.effective_mass.sqrt() * forces.cluster_scale * shrink * motion.length_scale,
+        DREAM_UI_PARTICLE_SIZE
+            * forces.effective_mass.sqrt()
+            * forces.cluster_scale
+            * shrink
+            * motion.length_scale,
     );
 
     // Rotation
@@ -337,7 +335,9 @@ fn emit_standard_particle_trail(
     particle.trail_cooldown -= dt;
     if particle.trail_cooldown <= 0.0 && motion.visual_distance_ratio > 0.15 {
         particle.trail_cooldown = DREAM_UI_TRAIL_INTERVAL;
-        let trail_size = DREAM_UI_PARTICLE_SIZE * forces.effective_mass.sqrt() * forces.cluster_scale
+        let trail_size = DREAM_UI_PARTICLE_SIZE
+            * forces.effective_mass.sqrt()
+            * forces.cluster_scale
             * (motion.visual_distance_ratio * 9.0 + 1.0).log10().max(0.1)
             * DREAM_UI_TRAIL_SIZE_RATIO;
         if let Some(root) = ui_bubble_layer {

@@ -136,4 +136,3 @@ impl GridData {
         self.positions.clear();
     }
 }
-

@@ -5,7 +5,6 @@
 use super::components::{DreamGainPopup, DreamVisualState};
 use super::dream_bubble_material::DreamBubbleUiMaterial;
 use crate::assets::GameAssets;
-use hw_core::constants::*;
 use crate::entities::damned_soul::{
     DamnedSoul, DreamState, GatheringBehavior, IdleBehavior, IdleState,
 };
@@ -14,6 +13,7 @@ use crate::systems::utils::floating_text::{
     FloatingText, FloatingTextConfig, spawn_floating_text, update_floating_text,
 };
 use bevy::prelude::*;
+use hw_core::constants::*;
 
 /// 睡眠中の Soul からポップアップテキストおよび UI パーティクルを生成するシステム。
 /// Dream 獲得量が `DREAM_POPUP_THRESHOLD` を超えるたびに発火する。
@@ -22,16 +22,14 @@ pub fn dream_popup_spawn_system(
     time: Res<Time>,
     assets: Res<GameAssets>,
     mut ui_bubble_materials: ResMut<Assets<DreamBubbleUiMaterial>>,
-    mut q_souls: Query<
-        (
-            &Transform,
-            &DamnedSoul,
-            &IdleState,
-            &DreamState,
-            Option<&ParticipatingIn>,
-            &mut DreamVisualState,
-        ),
-    >,
+    mut q_souls: Query<(
+        &Transform,
+        &DamnedSoul,
+        &IdleState,
+        &DreamState,
+        Option<&ParticipatingIn>,
+        &mut DreamVisualState,
+    )>,
     q_camera: Query<(&Camera, &GlobalTransform), With<crate::interface::camera::MainCamera>>,
     q_ui_root: Query<Entity, With<crate::interface::ui::components::UiRoot>>,
     ui_nodes: Res<crate::interface::ui::components::UiNodeRegistry>,

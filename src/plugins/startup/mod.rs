@@ -10,10 +10,13 @@ use perf_scenario::{
     PerfScenarioApplied, setup_perf_scenario_if_enabled, setup_perf_scenario_runtime_if_enabled,
 };
 
+use crate::app_contexts::{
+    BuildContext, CompanionPlacementState, MoveContext, MovePlacementState, TaskContext,
+    ZoneContext,
+};
 use crate::assets::GameAssets;
 use crate::entities::damned_soul::{DamnedSoulSpawnEvent, spawn_damned_souls};
 use crate::entities::familiar::FamiliarSpawnEvent;
-use crate::app_contexts::{BuildContext, CompanionPlacementState, MoveContext, MovePlacementState, TaskContext, ZoneContext};
 use crate::interface::camera::{MainCamera, PanCamera};
 use crate::interface::selection::{HoveredEntity, SelectedEntity};
 use crate::interface::ui::{MenuState, components::ArchitectCategoryState, setup_ui};
@@ -22,16 +25,16 @@ use crate::systems::logistics::{
     ResourceCountDisplayTimer, ResourceLabels, initial_resource_spawner,
 };
 use crate::systems::spatial::{FloorConstructionSpatialGrid, GatheringSpotSpatialGrid};
-use hw_spatial::{
-    BlueprintSpatialGrid, FamiliarSpatialGrid, ResourceSpatialGrid, SpatialGrid,
-    StockpileSpatialGrid,
-};
-use hw_spatial::SpatialGridOps;
 use crate::systems::time::GameTime;
 use crate::world::map::{
     WorldMap, WorldMapRead, WorldMapWrite, spawn_map, terrain_border::spawn_terrain_borders,
 };
 use bevy::prelude::*;
+use hw_spatial::SpatialGridOps;
+use hw_spatial::{
+    BlueprintSpatialGrid, FamiliarSpatialGrid, ResourceSpatialGrid, SpatialGrid,
+    StockpileSpatialGrid,
+};
 
 pub struct StartupPlugin;
 
@@ -97,7 +100,7 @@ fn setup(
     mut images: ResMut<Assets<Image>>,
 ) {
     // camera/resources 初期化
-        commands.spawn((Camera2d, MainCamera, PanCamera::default()));
+    commands.spawn((Camera2d, MainCamera, PanCamera::default()));
 
     // asset catalog 生成
     let game_assets = create_game_assets(&asset_server, &mut *images);
@@ -126,7 +129,10 @@ fn spawn_terrain_borders_if_enabled(
 
 fn skip_terrain_borders() -> bool {
     if std::env::var("HW_DISABLE_TERRAIN_BORDERS").is_ok_and(|v| {
-        matches!(v.as_str(), "1" | "true" | "TRUE" | "on" | "ON" | "yes" | "YES")
+        matches!(
+            v.as_str(),
+            "1" | "true" | "TRUE" | "on" | "ON" | "yes" | "YES"
+        )
     }) {
         return true;
     }
@@ -136,10 +142,7 @@ fn skip_terrain_borders() -> bool {
 
 fn populate_resource_spatial_grid(
     mut resource_grid: ResMut<ResourceSpatialGrid>,
-    q_resources: Query<
-        (Entity, &Transform, Option<&Visibility>),
-        With<ResourceItem>,
-    >,
+    q_resources: Query<(Entity, &Transform, Option<&Visibility>), With<ResourceItem>>,
 ) {
     for (entity, transform, visibility) in q_resources.iter() {
         let should_register = visibility

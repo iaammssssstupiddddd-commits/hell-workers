@@ -75,13 +75,13 @@ pub const DREAM_ICON_PULSE_SIZE: f32 = 20.0;
 
 // Dream per-soul storage
 pub const DREAM_MAX: f32 = 100.0;
-pub const DREAM_ACCUMULATE_RATE_WORKING: f32 = 0.5;    // 労働中の蓄積レート (ポイント/秒)
-pub const DREAM_ACCUMULATE_RATE_IDLE: f32 = 0.1;       // アイドル中の蓄積レート (ポイント/秒)
-pub const DREAM_ACCUMULATE_RATE_GATHERING: f32 = 0.3;  // 集会中の蓄積レート (ポイント/秒)
-pub const DREAM_ACCUMULATE_RATE_ESCAPING: f32 = 0.5;   // 逃走中の蓄積レート (ポイント/秒)
-pub const DREAM_DRAIN_RATE: f32 = 1.0;                 // 睡眠中の放出レート (ポイント/秒)
-pub const DREAM_DRAIN_RATE_REST: f32 = 0.5;            // 休憩中の放出レート (ポイント/秒)
-pub const DREAM_STRESS_MULTIPLIER: f32 = 0.005;        // dream量によるストレス増加係数
+pub const DREAM_ACCUMULATE_RATE_WORKING: f32 = 0.5; // 労働中の蓄積レート (ポイント/秒)
+pub const DREAM_ACCUMULATE_RATE_IDLE: f32 = 0.1; // アイドル中の蓄積レート (ポイント/秒)
+pub const DREAM_ACCUMULATE_RATE_GATHERING: f32 = 0.3; // 集会中の蓄積レート (ポイント/秒)
+pub const DREAM_ACCUMULATE_RATE_ESCAPING: f32 = 0.5; // 逃走中の蓄積レート (ポイント/秒)
+pub const DREAM_DRAIN_RATE: f32 = 1.0; // 睡眠中の放出レート (ポイント/秒)
+pub const DREAM_DRAIN_RATE_REST: f32 = 0.5; // 休憩中の放出レート (ポイント/秒)
+pub const DREAM_STRESS_MULTIPLIER: f32 = 0.005; // dream量によるストレス増加係数
 
 // Dream Tree Planting
 pub const DREAM_TREE_SPAWN_RATE_PER_TILE: f32 = 0.25;
