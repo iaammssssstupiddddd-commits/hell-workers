@@ -5,9 +5,9 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `logistics-to-hw-logistics-plan-2026-03-08` |
-| ステータス | `In Progress (~15%)` |
+| ステータス | `In Progress (~40%)` |
 | 作成日 | `2026-03-08` |
-| 最終更新日 | `2026-03-09` |
+| 最終更新日 | `2026-03-09 (M1/M2/M3完了)` |
 | 作成者 | `AI (Claude)` |
 
 ---
@@ -105,62 +105,50 @@ root 側が `pub use hw_logistics::XXX::*;` の 1 行シェルになっている
 
 ## 5. マイルストーン
 
-### M1: FloorTileBlueprint, WallTileBlueprint → hw_jobs::construction
-
-**ブロッカー**: なし
+### M1: FloorTileBlueprint, WallTileBlueprint → hw_jobs::construction ✅ **完了**
 
 **変更内容**: `FloorTileBlueprint` 自体は `FloorTileState`（既に hw_jobs）と primitive 型にしか依存しない。`FloorConstructionSite`（`TaskArea` 依存）とは**別型**なので独立して移動できる。
 
-**移動元**:
-- `src/systems/jobs/floor_construction/components.rs` から `FloorTileBlueprint`, `TargetFloorConstructionSite`, `FloorConstructionCancelRequested` を抽出
-- `src/systems/jobs/wall_construction/components.rs` から `WallTileBlueprint`, `TargetWallConstructionSite`, `WallConstructionCancelRequested` を抽出
-
 **移動先**: `crates/hw_jobs/src/construction.rs`（既存ファイルに追記）
 
-**シェル化**:
-- `src/systems/jobs/floor_construction/components.rs` → `pub use hw_jobs::construction::{FloorTileBlueprint, ...};`
-- `src/systems/jobs/wall_construction/components.rs` → 同上
+**シェル**:
+- `src/systems/jobs/floor_construction/components.rs` → `pub use hw_jobs::construction::{FloorTileBlueprint, ...};`（`FloorConstructionSite` は root 残留）
+- `src/systems/jobs/wall_construction/components.rs` → 同上（`WallConstructionSite` は root 残留）
 
 **完了条件**:
-- [ ] `cargo check` が通る
+- [x] `cargo check` が通る
 
 ---
 
-### M2: Yard, Site, PairedYard, PairedSite → hw_world::zones
+### M2: Yard, Site, PairedYard, PairedSite → hw_world::zones ✅ **完了**
 
-**ブロッカー**: なし（`WorldMap::world_to_grid` は `hw_world::map::WorldMap` に既存）
-
-**変更内容**: `Yard::width_tiles()` / `height_tiles()` で使用する `WorldMap::world_to_grid` は hw_world 内の関数に切り替えて移動する（`hw_world::map::WorldMap::world_to_grid` または `hw_world::coords::world_to_grid` を使用）。
+**変更内容**: `Yard::width_tiles()` / `height_tiles()` は `hw_world::coords::world_to_grid` を使用して移動。
 
 **移動先**: `crates/hw_world/src/zones.rs`（新規作成）
 
 **変更ファイル**:
 - `crates/hw_world/src/zones.rs` (新規)
-- `crates/hw_world/src/lib.rs` (`pub mod zones; pub use zones::*;` 追加)
-- `src/systems/world/zones.rs` → `pub use hw_world::zones::*;` のシェルに置換
+- `crates/hw_world/src/lib.rs` (`pub mod zones; pub use zones::{...}` 追加済み)
+- `src/systems/world/zones.rs` → `pub use hw_world::zones::*;` の1行シェル
 
 **完了条件**:
-- [ ] `cargo check` が通る
+- [x] `cargo check` が通る
 
 ---
 
-### M3: SharedResourceCache → hw_logistics::resource_cache
+### M3: SharedResourceCache → hw_logistics::resource_cache ✅ **完了**
 
-**ブロッカー**: なし
-
-**移動元**: `src/systems/familiar_ai/perceive/resource_sync.rs` の `SharedResourceCache` struct と `impl` のみ（`sync_reservations_system` 等のシステム関数は root に残す）
+**移動元**: `src/systems/familiar_ai/perceive/resource_sync.rs` の `SharedResourceCache` struct と `impl`（`sync_reservations_system` 等のシステム関数は root に残留）
 
 **移動先**: `crates/hw_logistics/src/resource_cache.rs`（新規作成）
 
 **変更ファイル**:
 - `crates/hw_logistics/src/resource_cache.rs` (新規)
-- `crates/hw_logistics/src/lib.rs` (`pub mod resource_cache; pub use resource_cache::*;` 追加)
-- `src/systems/familiar_ai/perceive/resource_sync.rs` → `pub use hw_logistics::SharedResourceCache;` に差し替え
-
-**注意点**: `apply_reservation_op` 関数も SharedResourceCache の impl に含まれていれば一緒に移動する。`familiar_ai` は hw_logistics に依存済みなので依存追加は不要。
+- `crates/hw_logistics/src/lib.rs` (`pub mod resource_cache; pub use resource_cache::SharedResourceCache;` 追加済み)
+- `src/systems/familiar_ai/perceive/resource_sync.rs` → `pub use hw_logistics::SharedResourceCache;` で再エクスポート（`apply_reservation_op` は root 残留）
 
 **完了条件**:
-- [ ] `cargo check` が通る
+- [x] `cargo check` が通る
 
 ---
 
@@ -345,19 +333,19 @@ rand       = { workspace = true }       # 必要に応じて追加
 
 ### 現在地
 
-- 進捗: `~15%`
-- 完了済み: Phase 0（8ファイルシェル化）、AssignedTask 移植（別計画）
-- 未着手: M1〜M8
+- 進捗: `~40%`
+- 完了済み: Phase 0（8ファイルシェル化）、AssignedTask 移植（別計画）、**M1・M2・M3**
+- 未着手: M4・M5・M6・M7・M8
 
 ### 次のAIが最初にやること
 
 1. この計画書を読む
-2. M1〜M6 は独立しているので**任意の順で並行実施可能**
-3. 推奨開始順: **M1 → M2 → M4 → M3 → M5 → M6** → M7
+2. **M4・M5・M6 は残りの独立マイルストーン**（任意の順で実施可能）
+3. 推奨開始順: **M4 → M5 → M6** → M7
 
 ### ブロッカー/注意点
 
-- **M1〜M6 はすべて独立**。M7 の前に全て完了させること。
+- **M1〜M3 完了済み**。残り M4・M5・M6 はすべて独立。M7 の前に全て完了させること。
 - **M7 は M1〜M6 完了後に着手**。表の「解放タイミング」列を必ず参照。
 - `initial_spawn.rs` は**絶対に hw_logistics に移さない**（GameAssets 依存）。
 - `ui.rs` も**移さない**（UI 依存）。
@@ -377,7 +365,7 @@ rand       = { workspace = true }       # 必要に応じて追加
 
 ### 最終確認ログ
 
-- 最終 `cargo check`: ✅ 2026-03-09（Phase 0 完了状態）
+- 最終 `cargo check`: ✅ 2026-03-09（M1/M2/M3 完了状態）
 - 未解決エラー: なし
 
 ### Definition of Done
@@ -395,3 +383,4 @@ rand       = { workspace = true }       # 必要に応じて追加
 | --- | --- | --- |
 | `2026-03-08` | `AI (Claude)` | 初版作成 |
 | `2026-03-09` | `AI (Claude)` | 現状に合わせて全面改訂。Phase 0 完了を反映。WorldMap/FloorTileBlueprint の依存関係を修正。M1〜M6 が独立並行可能であることを明記。FloorConstructionSpatialGrid ブロッカーを新規追加。 |
+| `2026-03-09` | `AI (Claude)` | M1・M2・M3 完了を反映。進捗 ~40% に更新。 |

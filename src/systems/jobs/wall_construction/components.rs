@@ -2,7 +2,10 @@
 
 use crate::systems::command::TaskArea;
 use bevy::prelude::*;
-pub use hw_jobs::construction::{WallConstructionPhase, WallTileState};
+pub use hw_jobs::construction::{
+    TargetWallConstructionSite, WallConstructionCancelRequested, WallConstructionPhase,
+    WallTileBlueprint, WallTileState,
+};
 
 /// Wall construction site - parent entity managing a line of wall tiles
 #[derive(Component, Clone, Debug)]
@@ -28,38 +31,3 @@ impl WallConstructionSite {
         }
     }
 }
-
-/// Individual wall tile blueprint - child entity
-#[derive(Component, Clone, Debug)]
-pub struct WallTileBlueprint {
-    pub parent_site: Entity,
-    pub grid_pos: (i32, i32),
-    pub state: WallTileState,
-    /// Wood delivered (0-1)
-    pub wood_delivered: u32,
-    /// Mud delivered (0-1)
-    pub mud_delivered: u32,
-    /// Spawned provisional/permanent wall entity after framing
-    pub spawned_wall: Option<Entity>,
-}
-
-impl WallTileBlueprint {
-    pub fn new(parent_site: Entity, grid_pos: (i32, i32)) -> Self {
-        Self {
-            parent_site,
-            grid_pos,
-            state: WallTileState::WaitingWood,
-            wood_delivered: 0,
-            mud_delivered: 0,
-            spawned_wall: None,
-        }
-    }
-}
-
-/// Marker component linking a TransportRequest to a WallConstructionSite
-#[derive(Component, Clone, Copy, Debug)]
-pub struct TargetWallConstructionSite(pub Entity);
-
-/// Marker component requesting cancellation of an entire wall construction site.
-#[derive(Component, Clone, Copy, Debug, Default)]
-pub struct WallConstructionCancelRequested;
