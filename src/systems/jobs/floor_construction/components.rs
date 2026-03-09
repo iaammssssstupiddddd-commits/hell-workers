@@ -2,7 +2,10 @@
 
 use crate::systems::command::TaskArea;
 use bevy::prelude::*;
-pub use hw_jobs::construction::{FloorConstructionPhase, FloorTileState};
+pub use hw_jobs::construction::{
+    FloorConstructionCancelRequested, FloorConstructionPhase, FloorTileBlueprint, FloorTileState,
+    TargetFloorConstructionSite,
+};
 
 /// Floor construction site - parent entity managing an area of floor tiles
 #[derive(Component, Clone, Debug)]
@@ -31,35 +34,3 @@ impl FloorConstructionSite {
         }
     }
 }
-
-/// Individual floor tile blueprint - child entity
-#[derive(Component, Clone, Debug)]
-pub struct FloorTileBlueprint {
-    pub parent_site: Entity,
-    pub grid_pos: (i32, i32),
-    pub state: FloorTileState,
-    /// Bones delivered (0-2)
-    pub bones_delivered: u32,
-    /// Mud delivered (0-1)
-    pub mud_delivered: u32,
-}
-
-impl FloorTileBlueprint {
-    pub fn new(parent_site: Entity, grid_pos: (i32, i32)) -> Self {
-        Self {
-            parent_site,
-            grid_pos,
-            state: FloorTileState::WaitingBones,
-            bones_delivered: 0,
-            mud_delivered: 0,
-        }
-    }
-}
-
-/// Marker component linking a TransportRequest to a FloorConstructionSite
-#[derive(Component, Clone, Copy, Debug)]
-pub struct TargetFloorConstructionSite(pub Entity);
-
-/// Marker component requesting cancellation of an entire floor construction site.
-#[derive(Component, Clone, Copy, Debug, Default)]
-pub struct FloorConstructionCancelRequested;

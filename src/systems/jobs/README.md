@@ -25,7 +25,7 @@ ReinforceReady → Reinforcing → PouredReady → Poured
 | ファイル | 内容 |
 |---|---|
 | `mod.rs` | 公開 API |
-| `components.rs` | 床建設サイト固有コンポーネント |
+| `components.rs` | `FloorConstructionSite`（root 固有）+ `hw_jobs` からの re-export（`FloorTileBlueprint` 等） |
 | `phase_transition.rs` | フェーズ遷移システム |
 | `completion.rs` | 床完成処理 |
 | `cancellation.rs` | 床建設キャンセル |
@@ -39,7 +39,7 @@ Ready → Framed → ProvisionalReady → CoatedReady → Coated
 | ファイル | 内容 |
 |---|---|
 | `mod.rs` | 公開 API |
-| `components.rs` | 壁建設サイト固有コンポーネント |
+| `components.rs` | `WallConstructionSite`（root 固有）+ `hw_jobs` からの re-export（`WallTileBlueprint` 等） |
 | `phase_transition.rs` | フェーズ遷移システム |
 | `completion.rs` | 壁完成処理 |
 | `cancellation.rs` | 壁建設キャンセル |

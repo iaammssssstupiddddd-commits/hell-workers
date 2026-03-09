@@ -156,6 +156,7 @@ hw_ui
 - nearest walkable / river query
 - `PathWorld` trait — `is_walkable` など通行判定 API（`WorldMap` の impl は root）
 - `SpatialGridOps` trait — `get_nearby_in_radius` など空間グリッド read-only API（concrete resource の本体は `hw_spatial`）
+- `Yard`, `Site`, `PairedYard`, `PairedSite`（zone 系コンポーネント）
 
 ここに置かないもの:
 
@@ -195,6 +196,7 @@ hw_ui
 - ground resource helper
 - `TransportRequest*`
 - transport metrics / state sync
+- `SharedResourceCache`（タスク間リソース予約キャッシュ）
 
 ここに置かないもの:
 
@@ -216,9 +218,14 @@ hw_ui
 - `MudMixerStorage`
 - `AssignedTask`（ワーカー実行中タスク状態 + 全フェーズ型）
 - `TaskAssignmentRequest`（`hw_jobs::events`）
+- `FloorTileBlueprint`, `WallTileBlueprint`（タイル単位建設状態）
+- `FloorTileState`, `WallTileState`（建設フェーズ enum）
+- `TargetFloorConstructionSite`, `TargetWallConstructionSite`
+- `FloorConstructionCancelRequested`, `WallConstructionCancelRequested`
 
 ここに置かないもの:
 
+- `FloorConstructionSite` / `WallConstructionSite`（`TaskArea` 依存のためまだ root に残留）
 - floor / wall construction system
 - building completion shell
 - door system

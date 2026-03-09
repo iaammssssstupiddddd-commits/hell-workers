@@ -21,6 +21,7 @@
 | `query.rs` | 環境クエリ (`find_nearest_river_grid`, `find_nearest_walkable_grid`) |
 | `spatial.rs` | ワールド向け `SpatialGridOps` 実装 |
 | `spawn.rs` | スポーンヘルパー (`find_nearby_walkable_grid`, `pick_random_walkable_grid_in_rect`) |
+| `zones.rs` | `Yard`, `Site`, `PairedYard`, `PairedSite` — ゾーン系コンポーネント |
 
 ## 経路探索 (pathfinding.rs)
 
@@ -62,6 +63,7 @@ Bevy との統合（`SystemParam`・エンティティスポーン）は `src/wo
 | 座標変換関数 (`grid_to_world` 等) | 地形境界タイルへのコンポーネント付与 (`terrain_border.rs`) |
 | 地形生成関数 (`generate_base_terrain_tiles` 等) | — |
 | `tree_regrowth_system` などの純粋システム | — |
+| `Yard`, `Site`, `PairedYard`, `PairedSite` | — |
 
 **判断基準**: `Commands`・`Entity`・`Res<T>` など Bevy ECS API を使う必要があるなら src/ 側に置く。
 `WorldMap` の読み書きだけなら hw_world 内で完結できる。

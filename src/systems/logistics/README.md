@@ -68,6 +68,7 @@ Familiar `Update` と `Decide` の間、および Soul `Execute` の後に配置
 | `TransportRequest` (型定義) | 輸送要求の基本型 |
 | `TransportRequestKind` | 輸送種別 enum |
 | `item_lifetime` システム | アイテム消滅タイマー（純粋） |
+| `SharedResourceCache`（予約キャッシュ型） | `sync_reservations_system` 等（ゲーム固有クエリを持つ） |
 
 ### src/ に置かれているもの（ゲーム固有システム）
 

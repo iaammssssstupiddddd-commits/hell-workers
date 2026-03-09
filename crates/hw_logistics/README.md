@@ -14,6 +14,7 @@
 | `water.rs` | 水システムコンポーネント・ロジック |
 | `ground_resources.rs` | 地上アイテム（木・岩等）コンポーネント |
 | `item_lifetime.rs` | アイテム消滅タイマー（StasisMud/Sand は 5 秒後消滅） |
+| `resource_cache.rs` | `SharedResourceCache` — タスク間リソース予約キャッシュ |
 | `transport_request/` | 輸送要求エンティティ（下表参照） |
 
 ## transport_request/ ディレクトリ
@@ -67,6 +68,7 @@ hw_logistics は**型定義と純粋なアイテムライフサイクルのみ**
 | `TransportRequestKind` enum | 輸送要求プロデューサー全般 (`producer/`) |
 | `TransportRequest`, `TransportDemand` コンポーネント型 | 輸送要求の調停システム (`arbitration/`) |
 | `item_lifetime` タイマーシステム（純粋） | `TileSiteIndex`（WorldMap 座標系依存） |
+| `SharedResourceCache`（予約キャッシュ型） | `sync_reservations_system`（ゲーム固有クエリを持つ） |
 | `TransportRequestState` 状態遷移型 | ゾーン管理・水システム実装 |
 
 src/ 側では hw_logistics の型を透過的に re-export している:

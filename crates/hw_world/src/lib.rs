@@ -10,6 +10,7 @@ pub mod river;
 pub mod spatial;
 pub mod spawn;
 pub mod terrain;
+pub mod zones;
 
 pub use borders::{TerrainBorderKind, TerrainBorderSpec, generate_terrain_border_specs};
 pub use coords::{
@@ -31,3 +32,4 @@ pub use river::{generate_fixed_river_tiles, generate_sand_tiles};
 pub use spatial::SpatialGridOps;
 pub use spawn::{find_nearby_walkable_grid, pick_random_walkable_grid_in_rect};
 pub use terrain::TerrainType;
+pub use zones::{PairedSite, PairedYard, Site, Yard};
