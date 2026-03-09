@@ -3,8 +3,7 @@
 //! `familiar_ai_system` の処理を複数の関数に分割して管理します。
 
 use crate::entities::damned_soul::{Destination, IdleBehavior, Path};
-use crate::entities::familiar::{Familiar, FamiliarOperation};
-use crate::events::SquadManagementRequest;
+use crate::entities::familiar::FamiliarOperation;
 use crate::relationships::ManagedTasks;
 use crate::systems::command::TaskArea;
 use crate::systems::familiar_ai::FamiliarAiState;
@@ -17,45 +16,21 @@ use crate::systems::familiar_ai::decide::task_management::{
 use crate::systems::logistics::TileSiteIndex;
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
 use crate::systems::spatial::{
-    DesignationSpatialGrid, ResourceSpatialGrid, SpatialGrid, TransportRequestSpatialGrid,
+    DesignationSpatialGrid, ResourceSpatialGrid, TransportRequestSpatialGrid,
 };
 use bevy::prelude::*;
 use std::collections::HashMap;
-use std::collections::HashSet;
 
-use super::recruitment::RecruitmentManager;
 use super::state_handlers;
 use super::task_management::TaskManager;
-use crate::entities::damned_soul::StressBreakdown;
 use crate::world::map::WorldMap;
 use crate::world::pathfinding::PathfindingContext;
 
+pub use super::recruitment::{FamiliarRecruitmentContext, RecruitmentOutcome, process_recruitment};
 pub use hw_ai::familiar_ai::decide::helpers::{
     FamiliarSquadContext, SquadManagementOutcome, finalize_state_transitions,
     process_squad_management,
 };
-
-/// リクルート判定に必要なコンテキスト
-pub struct FamiliarRecruitmentContext<'a, 'w, 's> {
-    pub fam_entity: Entity,
-    pub fam_transform: &'a Transform,
-    pub familiar: &'a Familiar,
-    pub familiar_op: &'a FamiliarOperation,
-    pub ai_state: &'a mut FamiliarAiState,
-    pub fam_dest: &'a mut Destination,
-    pub fam_path: &'a mut Path,
-    pub squad_entities: &'a mut Vec<Entity>,
-    pub max_workers: usize,
-    pub task_area_opt: Option<&'a TaskArea>,
-    pub spatial_grid: &'a SpatialGrid,
-    pub q_souls: &'a mut FamiliarSoulQuery<'w, 's>,
-    pub q_breakdown: &'a Query<'w, 's, &'static StressBreakdown>,
-    pub q_resting: &'a Query<'w, 's, (), With<crate::relationships::RestingIn>>,
-    pub q_cooldown: &'a Query<'w, 's, &'static crate::entities::damned_soul::RestAreaCooldown>,
-    pub request_writer: &'a mut MessageWriter<'w, SquadManagementRequest>,
-    /// 同フレーム内でのリクルート予約セット（重複防止）
-    pub recruitment_reservations: &'a mut HashSet<Entity>,
-}
 
 /// タスク委譲と移動制御に必要なコンテキスト
 pub struct FamiliarDelegationContext<'a, 'w, 's> {
@@ -82,84 +57,6 @@ pub struct FamiliarDelegationContext<'a, 'w, 's> {
     pub tile_site_index: &'a TileSiteIndex,
     pub incoming_snapshot: &'a IncomingDeliverySnapshot,
     pub reachability_frame_cache: &'a mut HashMap<ReachabilityCacheKey, bool>,
-}
-
-/// リクルート処理を実行
-pub fn process_recruitment(ctx: &mut FamiliarRecruitmentContext<'_, '_, '_>) -> bool {
-    let fam_pos = ctx.fam_transform.translation.truncate();
-    let command_radius = ctx.familiar.command_radius;
-    let fatigue_threshold = ctx.familiar_op.fatigue_threshold;
-    let task_area_center = ctx.task_area_opt.map(TaskArea::center);
-
-    // スカウト中以外で分隊に空きがあれば新規リクルートを試みる
-    if ctx.squad_entities.len() < ctx.max_workers {
-        // 近場のリクルート検索 (即時勧誘)
-        if let Some(new_recruit) = RecruitmentManager::try_immediate_recruit(
-            ctx.fam_entity,
-            fam_pos,
-            command_radius,
-            fatigue_threshold,
-            task_area_center,
-            ctx.spatial_grid,
-            ctx.q_souls,
-            ctx.q_breakdown,
-            ctx.q_resting,
-            ctx.q_cooldown,
-            ctx.request_writer,
-            ctx.recruitment_reservations,
-        ) {
-            debug!(
-                "FAM_AI: {:?} recruiting nearby soul {:?}",
-                ctx.fam_entity, new_recruit
-            );
-            ctx.squad_entities.push(new_recruit);
-            return true;
-        }
-        // 遠方のリクルート検索 (Scouting開始)
-        else {
-            if let Some(distant_recruit) = RecruitmentManager::start_scouting(
-                fam_pos,
-                fatigue_threshold,
-                task_area_center,
-                ctx.spatial_grid,
-                &mut *ctx.q_souls,
-                ctx.q_breakdown,
-                ctx.q_resting,
-                ctx.q_cooldown,
-                ctx.recruitment_reservations,
-            ) {
-                debug!(
-                    "FAM_AI: {:?} scouting distant soul {:?}",
-                    ctx.fam_entity, distant_recruit
-                );
-                *ctx.ai_state = FamiliarAiState::Scouting {
-                    target_soul: distant_recruit,
-                };
-
-                // 即座に移動開始
-                if let Ok((_, target_transform, _, _, _, _, _, _, _, _)) =
-                    ctx.q_souls.get(distant_recruit)
-                {
-                    let target_pos = target_transform.translation.truncate();
-                    ctx.fam_dest.0 = target_pos;
-                    ctx.fam_path.waypoints = vec![target_pos];
-                    ctx.fam_path.current_index = 0;
-                }
-                return true;
-            } else {
-                // 何も見つからなければログに出す (デバッグ用)
-                debug!("FAM_AI: {:?} No recruitable souls found", ctx.fam_entity);
-            }
-        }
-    } else {
-        debug!(
-            "FAM_AI: {:?} Squad full ({}/{})",
-            ctx.fam_entity,
-            ctx.squad_entities.len(),
-            ctx.max_workers
-        );
-    }
-    false
 }
 
 /// タスク委譲と移動制御を実行

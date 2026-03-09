@@ -50,7 +50,8 @@ pub fn scouting_logic(ctx: &mut FamiliarScoutingContext<'_, '_, '_>) -> Scouting
     }
 
     // 変更があった場合は true を返す
-    if let Ok((_soul_entity, target_transform, soul, soul_task, uc)) = ctx.q_souls.get(ctx.target_soul)
+    if let Ok((_soul_entity, target_transform, soul, soul_task, uc)) =
+        ctx.q_souls.get(ctx.target_soul)
     {
         // リクルート閾値は委譲時と揃える（境界値も許容）
         let recruit_threshold = ctx.fatigue_threshold;

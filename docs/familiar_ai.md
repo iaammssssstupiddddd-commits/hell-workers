@@ -89,8 +89,11 @@
 - **`decide/state_handlers/`**: root の薄い re-export。実体は `hw_ai::familiar_ai::decide::state_handlers`
 - **`decide/squad.rs`**: root の薄い re-export。`SquadManager` 実体は `hw_ai` にある
 - **`decide/task_management/`**: `TaskManager` — `collect_scored_candidates`（Familiar単位1回収集）→ `try_assign_for_workers`（worker別再スコア `priority 0.65 + 距離 0.35`、Top-K 先行評価、60タイル外フィルタ）→ `assign_task_to_worker`（`TaskAssignmentRequest` 発行）
-- **`decide/auto_gather_for_blueprint/{demand,supply,planning,actions}.rs`**: Blueprint/Mixer不足資材の自動Gather指定（`AutoGatherDesignation` marker管理）
-- **`decide/recruitment.rs`**: `RecruitmentManager`（find_best_recruit / try_immediate_recruit / start_scouting）
+- **`decide/auto_gather_for_blueprint.rs`**: root 側 orchestration。`Commands` / pathfinding / entity query を束ねて pure planning を呼び出す
+- **`decide/auto_gather_for_blueprint/{demand,supply,planning}.rs`**: root の薄い re-export。需要供給計画本体は `hw_ai` にある
+- **`decide/auto_gather_for_blueprint/{helpers,actions}.rs`**: root helper / adapter。`is_reachable` と designation cleanup・付与を担当
+- **`decide/recruitment.rs`**: root の薄い re-export。`RecruitmentManager` 実体は `hw_ai` にある
+- **`decide/encouragement.rs`**: root adapter。対象選定本体は `hw_ai::familiar_ai::decide::encouragement` にある
 - **`decide/scouting.rs` / `decide/supervising.rs`**: root の薄い re-export。スカウト・監視ロジック本体は `hw_ai` にある
 - **`helpers/query_types.rs`**: root の full-fat query と、`hw_ai` 側 narrow query の re-export を集約
 - **`perceive/`**: `state_detection.rs`（`Changed<FamiliarAiState>`検知、**`hw_ai` に移動済み**）, `resource_sync.rs`（SharedResourceCache再構築、root 残留）
@@ -98,12 +101,13 @@
 - **設計メモ**:
   - ECS 実状態の変更は `execute/` が担当する
   - Decide フェーズの request message 発行は root adapter が担当し、`hw_ai` 側は `ScoutingOutcome` / `SquadManagementOutcome` のような pure outcome を返す
-  - root の `state_decision.rs` / `task_delegation.rs` は full-fat な soul query から read-only の狭い view を切り出して `hw_ai` ロジックへ渡す
+  - root の `state_decision.rs` / `task_delegation.rs` / `encouragement.rs` / `auto_gather_for_blueprint.rs` は concrete resource・pathfinding・message 出力を受け持ち、必要な view と context だけを `hw_ai` ロジックへ渡す
 - **hw_ai 分担**: `FamiliarAiPlugin` は `hw_ai::FamiliarAiCorePlugin` を内部で `add_plugins` し、以下のシステムを委譲している。`WorldMap`/SpatialGrid 依存のシステムは root 残留。
   - `perceive/state_detection` — 状態遷移検知（`hw_ai` 移動済み）
   - `decide/following` — 使い魔追尾（`hw_ai` 移動済み、hw_core 型のみ依存）
-  - `decide/query_types` / `decide/helpers` / `decide/squad` / `decide/scouting` / `decide/supervising` / `decide/state_handlers` — 使い魔状態機械の純ロジック
-  - root には `state_decision` / `task_delegation` / `recruitment` の adapter と `WorldMap` / concrete SpatialGrid 依存だけを残す
+  - `decide/query_types` / `decide/helpers` / `decide/recruitment` / `decide/encouragement` / `decide/squad` / `decide/scouting` / `decide/supervising` / `decide/state_handlers` — 使い魔状態機械の純ロジック
+  - `decide/auto_gather_for_blueprint/{planning,demand,supply,helpers}` — Blueprint auto gather の純計画層
+  - root には `state_decision` / `task_delegation` / `encouragement` / `auto_gather_for_blueprint` の adapter と `WorldMap` / concrete SpatialGrid / pathfinding 依存だけを残す
 - **プラグイン登録**: `FamiliarAiPlugin` は `src/plugins/logic.rs` の `LogicPlugin` 内で登録される（`SoulAiPlugin` と同所）。
 
 ### 5.2. 関連コンポーネント

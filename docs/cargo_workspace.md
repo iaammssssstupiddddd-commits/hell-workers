@@ -95,6 +95,9 @@ hw_ui
 - `familiar_ai::decide::following` — 使い魔追尾システム（hw_core 型のみ依存）
 - `familiar_ai::decide::query_types` — Familiar Decide 用の narrow query 定義
 - `familiar_ai::decide::helpers` — `finalize_state_transitions` / `process_squad_management` など pure helper
+- `familiar_ai::decide::recruitment` — `SpatialGridOps` ベースのリクルート選定・スカウト開始判定
+- `familiar_ai::decide::encouragement` — 激励対象選定と `EncouragementCooldown`
+- `familiar_ai::decide::auto_gather_for_blueprint::{planning,demand,supply,helpers}` — Blueprint auto gather の純計画層
 - `familiar_ai::decide::squad` / `scouting` / `supervising` / `state_handlers` — 使い魔の状態機械・分隊管理の純ロジック
 - `familiar_ai::execute::state_apply` — `FamiliarStateRequest` 適用
 - `familiar_ai::execute::state_log` — 状態遷移ログ出力
@@ -107,6 +110,7 @@ hw_ui
 - `MessageWriter` による app shell 側 request 発行や full-fat query から narrow view への変換
 - UI システム
 - `Commands` で複雑な Entity 生成を行うもの
+- pathfinding / blueprint entity query を伴う auto-gather orchestration
 - `unassign_task`（`helpers/work.rs`）は `WheelbarrowMovement` / `Visibility` / `Transform` など root 依存が強いため core 化対象外
 
 ## 3. 各 crate の責務
@@ -126,7 +130,7 @@ hw_ui
 - startup / visual / UI system
 - ECS resource と shell system
 - root 側の互換 re-export 層
-- concrete `SpatialGrid` / `WorldMapRead` / `MessageWriter` を受け取って `hw_ai` の pure logic に橋渡しする adapter
+- concrete `SpatialGrid` / `WorldMapRead` / `MessageWriter` / `Time` / pathfinding context を受け取って `hw_ai` の pure logic に橋渡しする adapter
 
 ### `hw_core`
 

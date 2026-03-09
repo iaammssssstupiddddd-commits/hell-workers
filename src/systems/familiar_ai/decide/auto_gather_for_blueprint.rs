@@ -4,7 +4,7 @@ use crate::systems::command::TaskArea;
 use crate::systems::jobs::wall_construction::TargetWallConstructionSite;
 use crate::systems::jobs::{Blueprint, Designation, Rock, TargetBlueprint, Tree};
 use crate::systems::logistics::transport_request::{TransportDemand, TransportRequest};
-use crate::systems::logistics::{ReservedForTask, ResourceItem, ResourceType};
+use crate::systems::logistics::{ReservedForTask, ResourceItem};
 use crate::systems::world::zones::Yard;
 use crate::world::map::WorldMapRead;
 use crate::world::pathfinding::PathfindingContext;
@@ -39,11 +39,7 @@ impl Default for BlueprintAutoGatherTimer {
     }
 }
 
-#[derive(Component, Debug, Clone, Copy)]
-pub struct AutoGatherDesignation {
-    pub owner: Entity,
-    pub resource_type: ResourceType,
-}
+pub use hw_ai::familiar_ai::decide::auto_gather_for_blueprint::AutoGatherDesignation;
 
 pub fn blueprint_auto_gather_system(
     mut commands: Commands,
