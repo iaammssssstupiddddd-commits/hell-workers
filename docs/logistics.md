@@ -383,7 +383,7 @@ Stockpile / Blueprint / Tank などへの搬入予約は、Bevy の Relationship
 
 すべての transport request producer は `collect_all_area_owners` ヘルパーで **Familiar の TaskArea と Yard の境界を `AreaBounds`（共通矩形型）に統合** し、統一コードパスでオーナーを解決します。
 
-- `AreaBounds`（`src/systems/world/zones.rs`）は `{ min: Vec2, max: Vec2 }` の plain struct で、`contains` / `center` / `size` 等の共通メソッドを持つ。Component ではない。
+- `AreaBounds`（`hw_core::area`）は `{ min: Vec2, max: Vec2 }` の plain struct で、`contains` / `center` / `size` 等の共通メソッドを持つ。Component ではない。
 - `TaskArea`、`Yard`、`Site` はそれぞれ `.bounds()` メソッドと `From` impl で `AreaBounds` に変換可能。
 - `collect_all_area_owners` は `Vec<(Entity, AreaBounds)>` を返し、Familiar TaskArea と Yard 境界を同列に扱う。
 - `find_owner` / `find_owner_for_position` は `AreaBounds` ベースで位置→オーナーを解決する。Yard 内の位置はその Yard 中心を含む TaskArea のオーナーを優先する。

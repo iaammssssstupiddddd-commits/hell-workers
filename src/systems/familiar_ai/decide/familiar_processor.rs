@@ -5,8 +5,9 @@
 use crate::entities::damned_soul::{Destination, IdleBehavior, Path};
 use crate::entities::familiar::{Familiar, FamiliarOperation};
 use crate::events::SquadManagementRequest;
-use crate::relationships::{Commanding, ManagedTasks};
+use crate::relationships::ManagedTasks;
 use crate::systems::command::TaskArea;
+use crate::systems::familiar_ai::FamiliarAiState;
 use crate::systems::familiar_ai::FamiliarSoulQuery;
 use crate::systems::familiar_ai::decide::task_delegation::ReachabilityCacheKey;
 use crate::systems::familiar_ai::decide::task_management::IncomingDeliverySnapshot;
@@ -14,6 +15,7 @@ use crate::systems::familiar_ai::decide::task_management::{
     FamiliarTaskAssignmentQueries, ReservationShadow,
 };
 use crate::systems::logistics::TileSiteIndex;
+use crate::systems::soul_ai::execute::task_execution::AssignedTask;
 use crate::systems::spatial::{
     DesignationSpatialGrid, ResourceSpatialGrid, SpatialGrid, TransportRequestSpatialGrid,
 };
@@ -22,22 +24,16 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 
 use super::recruitment::RecruitmentManager;
-use super::squad::SquadManager;
 use super::state_handlers;
 use super::task_management::TaskManager;
 use crate::entities::damned_soul::StressBreakdown;
-use crate::systems::familiar_ai::FamiliarAiState;
 use crate::world::map::WorldMap;
 use crate::world::pathfinding::PathfindingContext;
 
-/// 分隊管理に必要なコンテキスト
-pub struct FamiliarSquadContext<'a, 'w, 's> {
-    pub fam_entity: Entity,
-    pub familiar_op: &'a FamiliarOperation,
-    pub commanding: Option<&'a Commanding>,
-    pub q_souls: &'a FamiliarSoulQuery<'w, 's>,
-    pub request_writer: &'a mut MessageWriter<'w, SquadManagementRequest>,
-}
+pub use hw_ai::familiar_ai::decide::helpers::{
+    FamiliarSquadContext, SquadManagementOutcome, finalize_state_transitions,
+    process_squad_management,
+};
 
 /// リクルート判定に必要なコンテキスト
 pub struct FamiliarRecruitmentContext<'a, 'w, 's> {
@@ -86,36 +82,6 @@ pub struct FamiliarDelegationContext<'a, 'w, 's> {
     pub tile_site_index: &'a TileSiteIndex,
     pub incoming_snapshot: &'a IncomingDeliverySnapshot,
     pub reachability_frame_cache: &'a mut HashMap<ReachabilityCacheKey, bool>,
-}
-
-/// 分隊管理を実行
-pub fn process_squad_management(ctx: &mut FamiliarSquadContext<'_, '_, '_>) -> Vec<Entity> {
-    let initial_squad = SquadManager::build_squad(ctx.commanding);
-
-    // 分隊を検証（無効なメンバーを除外）
-    let (mut squad_entities, invalid_members) =
-        SquadManager::validate_squad(initial_squad, ctx.fam_entity, ctx.q_souls);
-
-    // 疲労・崩壊したメンバーをリリース要求
-    let released_entities = SquadManager::release_fatigued(
-        &squad_entities,
-        ctx.fam_entity,
-        ctx.familiar_op.fatigue_threshold,
-        ctx.q_souls,
-        ctx.request_writer,
-    );
-
-    // リリースされたメンバーを分隊から除外
-    if !released_entities.is_empty() {
-        squad_entities.retain(|e| !released_entities.contains(e));
-    }
-
-    // 無効なメンバーも分隊から除外
-    if !invalid_members.is_empty() {
-        squad_entities.retain(|e| !invalid_members.contains(e));
-    }
-
-    squad_entities
 }
 
 /// リクルート処理を実行
@@ -196,61 +162,6 @@ pub fn process_recruitment(ctx: &mut FamiliarRecruitmentContext<'_, '_, '_>) -> 
     false
 }
 
-/// 状態遷移の最終確定
-pub fn finalize_state_transitions(
-    ai_state: &mut FamiliarAiState,
-    squad_entities: &[Entity],
-    fam_entity: Entity,
-    max_workers: usize,
-) -> bool {
-    let mut state_changed = false;
-
-    // 分隊が空になった場合の処理
-    if squad_entities.is_empty() {
-        if !matches!(
-            *ai_state,
-            FamiliarAiState::SearchingTask
-                | FamiliarAiState::Idle
-                | FamiliarAiState::Scouting { .. }
-        ) {
-            let prev_state = ai_state.clone();
-            *ai_state = FamiliarAiState::SearchingTask;
-            state_changed = true;
-            info!(
-                "FAM_AI: {:?} squad is empty. Transitioning to SearchingTask from {:?}",
-                fam_entity, prev_state
-            );
-        }
-    } else {
-        // メンバーがいる場合
-        let is_squad_full = squad_entities.len() >= max_workers;
-
-        if !matches!(*ai_state, FamiliarAiState::Scouting { .. }) {
-            // 枠に空きがあるなら、監視を中断して探索へ戻れるようにする
-            if !is_squad_full && matches!(*ai_state, FamiliarAiState::Supervising { .. }) {
-                *ai_state = FamiliarAiState::SearchingTask;
-                state_changed = true;
-                info!(
-                    "FAM_AI: {:?} squad has open slots ({}/{}). Switching to SearchingTask",
-                    fam_entity,
-                    squad_entities.len(),
-                    max_workers
-                );
-            } else if is_squad_full && !matches!(*ai_state, FamiliarAiState::Supervising { .. }) {
-                // 枠がいっぱいで、かつ監視モード以外なら監視へ
-                *ai_state = FamiliarAiState::Supervising {
-                    target: None,
-                    timer: 0.0,
-                };
-                state_changed = true;
-                info!("FAM_AI: {:?} squad full. -> Supervising", fam_entity);
-            }
-        }
-    }
-
-    state_changed
-}
-
 /// タスク委譲と移動制御を実行
 pub fn process_task_delegation_and_movement(ctx: &mut FamiliarDelegationContext<'_, '_, '_>) {
     let fam_pos = ctx.fam_transform.translation.truncate();
@@ -282,7 +193,6 @@ pub fn process_task_delegation_and_movement(ctx: &mut FamiliarDelegationContext<
         false
     };
 
-    // 移動制御
     // state_changed があっても、Supervising/SearchingTask なら各ロジックを呼ぶ
     if !ctx.state_changed
         || matches!(
@@ -313,6 +223,11 @@ pub fn process_task_delegation_and_movement(ctx: &mut FamiliarDelegationContext<
 
         match *ctx.ai_state {
             FamiliarAiState::Supervising { .. } => {
+                let mut q_supervising_lens = ctx.q_souls.transmute_lens_filtered::<
+                    (Entity, &Transform, &AssignedTask),
+                    Without<crate::entities::familiar::Familiar>,
+                >();
+                let q_supervising = q_supervising_lens.query();
                 let mut supervising_ctx =
                     crate::systems::familiar_ai::decide::supervising::FamiliarSupervisingContext {
                         fam_entity: ctx.fam_entity,
@@ -323,7 +238,7 @@ pub fn process_task_delegation_and_movement(ctx: &mut FamiliarDelegationContext<
                         ai_state: ctx.ai_state,
                         fam_dest: ctx.fam_dest,
                         fam_path: ctx.fam_path,
-                        q_souls: ctx.q_souls,
+                        q_souls: &q_supervising,
                     };
                 state_handlers::supervising::handle_supervising_state(&mut supervising_ctx);
             }

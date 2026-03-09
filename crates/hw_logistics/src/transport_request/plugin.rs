@@ -1,0 +1,102 @@
+//! TransportRequest サブシステムの Plugin 定義
+//!
+//! floor_construction / wall_construction の producer は Optional M_extra が完了するまで
+//! root に残留するため、このプラグインには含まれない。
+
+use bevy::prelude::*;
+use hw_core::system_sets::{FamiliarAiSystemSet, GameSystemSet, SoulAiSystemSet};
+
+use super::{
+    TransportRequestMetrics, transport_request_anchor_cleanup_system,
+    transport_request_metrics_system, wheelbarrow_arbitration_system,
+};
+use super::state_machine::transport_request_state_sync_system;
+use super::producer::{
+    blueprint::blueprint_auto_haul_system,
+    bucket::bucket_auto_haul_system,
+    consolidation::stockpile_consolidation_producer_system,
+    mixer::mud_mixer_auto_haul_system,
+    provisional_wall::{
+        provisional_wall_auto_haul_system, provisional_wall_designation_system,
+        provisional_wall_material_delivery_sync_system,
+    },
+    tank_water_request::tank_water_request_system,
+    task_area::task_area_auto_haul_system,
+    wheelbarrow::wheelbarrow_auto_haul_system,
+};
+
+/// TransportRequest サブシステムの実行フェーズ
+#[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
+pub enum TransportRequestSet {
+    /// 需要観測
+    Perceive,
+    /// upsert/close 決定
+    Decide,
+    /// 手押し車仲裁（Decide → Execute 間）
+    Arbitrate,
+    /// Commands 適用
+    Execute,
+    /// timeout/retry/cleanup
+    Maintain,
+}
+
+pub struct TransportRequestPlugin;
+
+impl Plugin for TransportRequestPlugin {
+    fn build(&self, app: &mut App) {
+        app.init_resource::<TransportRequestMetrics>();
+
+        app.configure_sets(
+            Update,
+            (
+                TransportRequestSet::Perceive,
+                TransportRequestSet::Decide,
+                TransportRequestSet::Arbitrate,
+                TransportRequestSet::Execute,
+            )
+                .chain()
+                .after(FamiliarAiSystemSet::Update)
+                .before(FamiliarAiSystemSet::Decide)
+                .in_set(GameSystemSet::Logic),
+        );
+
+        app.configure_sets(
+            Update,
+            TransportRequestSet::Maintain
+                .after(SoulAiSystemSet::Execute)
+                .in_set(GameSystemSet::Logic),
+        );
+
+        app.add_systems(
+            Update,
+            ApplyDeferred
+                .after(TransportRequestSet::Execute)
+                .before(FamiliarAiSystemSet::Decide),
+        );
+
+        app.add_systems(
+            Update,
+            (
+                transport_request_metrics_system.in_set(TransportRequestSet::Perceive),
+                (
+                    blueprint_auto_haul_system,
+                    bucket_auto_haul_system,
+                    provisional_wall_auto_haul_system,
+                    provisional_wall_material_delivery_sync_system
+                        .after(provisional_wall_auto_haul_system),
+                    provisional_wall_designation_system
+                        .after(provisional_wall_material_delivery_sync_system),
+                    mud_mixer_auto_haul_system,
+                    tank_water_request_system,
+                    task_area_auto_haul_system,
+                    wheelbarrow_auto_haul_system,
+                    stockpile_consolidation_producer_system.after(task_area_auto_haul_system),
+                )
+                    .in_set(TransportRequestSet::Decide),
+                wheelbarrow_arbitration_system.in_set(TransportRequestSet::Arbitrate),
+                transport_request_state_sync_system.in_set(TransportRequestSet::Execute),
+                transport_request_anchor_cleanup_system.in_set(TransportRequestSet::Maintain),
+            ),
+        );
+    }
+}

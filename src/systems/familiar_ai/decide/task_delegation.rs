@@ -1,4 +1,6 @@
+use crate::entities::damned_soul::{DamnedSoul, IdleState};
 use crate::entities::familiar::FamiliarCommand;
+use crate::relationships::CommandedBy;
 use crate::systems::familiar_ai::FamiliarDelegationPerfMetrics;
 use crate::systems::familiar_ai::FamiliarTaskDelegationTimer;
 use crate::systems::familiar_ai::decide::familiar_processor::{
@@ -108,14 +110,20 @@ pub fn familiar_task_delegation_system(params: FamiliarAiTaskDelegationParams) {
         let default_tasks = crate::relationships::ManagedTasks::default();
         let managed_tasks = managed_tasks_opt.unwrap_or(&default_tasks);
 
-        let initial_squad =
-            crate::systems::familiar_ai::decide::squad::SquadManager::build_squad(commanding);
-        let (squad_entities, _invalid_members) =
+        let (squad_entities, _invalid_members) = {
+            let mut q_squad_lens = q_souls.transmute_lens_filtered::<
+                (Entity, &DamnedSoul, &IdleState, Option<&CommandedBy>),
+                Without<crate::entities::familiar::Familiar>,
+            >();
+            let q_squad = q_squad_lens.query();
+            let initial_squad =
+                crate::systems::familiar_ai::decide::squad::SquadManager::build_squad(commanding);
             crate::systems::familiar_ai::decide::squad::SquadManager::validate_squad(
                 initial_squad,
                 fam_entity,
-                &mut q_souls,
-            );
+                &q_squad,
+            )
+        };
 
         let mut delegation_ctx = FamiliarDelegationContext {
             fam_entity,

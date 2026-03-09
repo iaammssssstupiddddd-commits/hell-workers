@@ -45,6 +45,7 @@
 | [archive/recruit-and-task-assignment-algorithm.md](archive/recruit-and-task-assignment-algorithm.md) | リクルート及びタスクアサインの選定アルゴリズム改善提案 |
 | [archive/room_detection.md](archive/room_detection.md) | 現状: 壁・ドア・床は個別のエンティティとして管理されており、囲まれた空間を論理的に認識する仕組みがないの提案。 |
 | [archive/scaling_performance_bottlenecks.md](archive/scaling_performance_bottlenecks.md) | スケール時パフォーマンス・ボトルネック再評価（2026-02-17 更新） |
+| [archive/selection-separation-2026-03-08.md](archive/selection-separation-2026-03-08.md) | `hw_ui` 分離は進み、UI 本体は `hw_ui` に寄せられたが、`src/interface/selection/` は `selection` 系を root 側が全面担当しているの提案。 |
 | [archive/site-yard-system.md](archive/site-yard-system.md) | **現状**: Familiar ごとに 1 つの `TaskArea`（矩形）が全活動範囲を担っている。建築現場・設備・Stockpile すべてが同じ TaskArea 内に配置され、1 Familiar = 1 エリアの 1:1 対応の提案。 |
 | [archive/task_delegation_implementation_plan.md](archive/task_delegation_implementation_plan.md) | タスク移譲最適化 実装計画 |
 | [archive/think-phase-iteration-optimization-proposal-2026-03-07.md](archive/think-phase-iteration-optimization-proposal-2026-03-07.md) | タスク割り当て（Think/Decide フェーズ）で、2つの O(n) イテレーションがボトルネック候補として特定された:の提案。 |

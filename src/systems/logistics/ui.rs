@@ -1,4 +1,4 @@
-use super::types::ResourceItem;
+use super::ResourceItem;
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
 use hw_core::constants::*;

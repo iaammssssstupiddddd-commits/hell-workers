@@ -1,0 +1,15 @@
+//! Supervising 状態のハンドラー
+//!
+//! 配下の魂を監視し、仕事の進捗を管理している状態の処理を行います。
+
+use super::StateTransitionResult;
+use crate::familiar_ai::decide::supervising::FamiliarSupervisingContext;
+
+/// Supervising 状態のハンドラー
+pub fn handle_supervising_state(
+    ctx: &mut FamiliarSupervisingContext<'_, '_, '_>,
+) -> StateTransitionResult {
+    crate::familiar_ai::decide::supervising::supervising_logic(ctx);
+
+    StateTransitionResult::Stay
+}
