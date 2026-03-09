@@ -1,5 +1,5 @@
-use bevy::prelude::*;
 use crate::systems::logistics::Stockpile;
+use bevy::prelude::*;
 
 /// ストックパイル用の空間グリッド
 pub use hw_spatial::StockpileSpatialGrid;

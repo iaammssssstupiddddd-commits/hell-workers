@@ -1,11 +1,11 @@
 use bevy::prelude::*;
 
-use hw_core::constants::*;
 use crate::entities::damned_soul::{DreamQuality, GatheringBehavior, IdleBehavior};
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
 use crate::systems::soul_ai::helpers::gathering::{GATHERING_LEAVE_RADIUS, GatheringSpot};
 use crate::systems::soul_ai::helpers::query_types::IdleVisualSoulQuery;
 use crate::systems::spatial::{GatheringSpotSpatialGrid, SpatialGridOps};
+use hw_core::constants::*;
 
 /// 怠惰行動のビジュアルフィードバック
 pub fn idle_visual_system(

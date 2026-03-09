@@ -1,5 +1,6 @@
 //! タスクリストのスナップショット生成
 
+use super::dirty::TaskListDirty;
 use crate::relationships::TaskWorkers;
 use crate::systems::jobs::{
     Blueprint, BonePile, Designation, Priority, Rock, SandPile, Tree, WorkType,
@@ -8,7 +9,6 @@ use crate::systems::logistics::ResourceItem;
 use crate::systems::logistics::transport_request::TransportRequest;
 use bevy::prelude::*;
 use std::collections::BTreeMap;
-use super::dirty::TaskListDirty;
 
 use super::presenter;
 

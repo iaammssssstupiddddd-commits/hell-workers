@@ -136,7 +136,6 @@ hw_ui
 - `game_state`
 - `relationships`
 - `events`
-- `AssignedTask`
 - `WorkType`
 - `ResourceType`
 - `DoorState`
@@ -215,6 +214,8 @@ hw_ui
 - `BuildingType`, `Building`, `Blueprint`
 - `Designation`, `Priority`, `TaskSlots`
 - `MudMixerStorage`
+- `AssignedTask`（ワーカー実行中タスク状態 + 全フェーズ型）
+- `TaskAssignmentRequest`（`hw_jobs::events`）
 
 ここに置かないもの:
 

@@ -1,8 +1,7 @@
 use super::geometry::world_cursor_pos;
-use crate::assets::GameAssets;
-use hw_core::constants::{TILE_SIZE, Z_DREAM_TREE_PREVIEW};
-use crate::entities::damned_soul::DreamPool;
 use crate::app_contexts::TaskContext;
+use crate::assets::GameAssets;
+use crate::entities::damned_soul::DreamPool;
 use crate::interface::camera::MainCamera;
 use crate::systems::command::{
     AreaEditSession, AreaSelectionIndicator, DreamTreePreviewIndicator, TaskArea, TaskMode,
@@ -16,6 +15,7 @@ use crate::systems::world::zones::{Site, Yard};
 use crate::world::map::{WorldMap, WorldMapRead};
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
+use hw_core::constants::{TILE_SIZE, Z_DREAM_TREE_PREVIEW};
 
 pub fn area_selection_indicator_system(
     task_context: Res<TaskContext>,
@@ -65,7 +65,10 @@ pub fn area_selection_indicator_system(
         let area_bounds = area.bounds();
         let is_area_valid = match task_context.0 {
             TaskMode::ZonePlacement(TaskModeZoneType::Stockpile, _) => {
-                crate::systems::command::zone_placement::is_stockpile_area_within_yards(&area_bounds, &q_yards)
+                crate::systems::command::zone_placement::is_stockpile_area_within_yards(
+                    &area_bounds,
+                    &q_yards,
+                )
             }
             TaskMode::ZonePlacement(TaskModeZoneType::Yard, Some(start_pos)) => {
                 crate::systems::command::zone_placement::is_yard_expansion_area_valid(

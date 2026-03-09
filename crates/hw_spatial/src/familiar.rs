@@ -29,13 +29,7 @@ impl SpatialGridOps for FamiliarSpatialGrid {
 
 pub fn update_familiar_spatial_grid_system<T: Component>(
     mut grid: ResMut<FamiliarSpatialGrid>,
-    query: Query<
-        (Entity, &Transform),
-        (
-            With<T>,
-            Or<(Added<T>, Changed<Transform>)>,
-        ),
-    >,
+    query: Query<(Entity, &Transform), (With<T>, Or<(Added<T>, Changed<Transform>)>)>,
     mut removed: RemovedComponents<T>,
 ) {
     for (entity, transform) in query.iter() {
@@ -45,4 +39,3 @@ pub fn update_familiar_spatial_grid_system<T: Component>(
         grid.remove(entity);
     }
 }
-

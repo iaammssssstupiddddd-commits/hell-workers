@@ -1,15 +1,14 @@
 //! 荷下ろしフェーズ
 
 use super::super::cancel;
-use hw_core::constants::Z_ITEM_PICKUP;
 use crate::relationships::{LoadedIn, StoredIn};
 use crate::systems::logistics::ResourceType;
-use crate::systems::logistics::{
-    count_nearby_ground_resources as count_nearby_ground_items,
-    floor_site_tile_demand, provisional_wall_mud_demand, wall_site_tile_demand,
-};
 use crate::systems::logistics::transport_request::{
     TransportRequestKind, TransportRequestState, WheelbarrowDestination,
+};
+use crate::systems::logistics::{
+    count_nearby_ground_resources as count_nearby_ground_items, floor_site_tile_demand,
+    provisional_wall_mud_demand, wall_site_tile_demand,
 };
 use crate::systems::soul_ai::execute::task_execution::{
     common::clear_task_and_path,
@@ -18,6 +17,7 @@ use crate::systems::soul_ai::execute::task_execution::{
     types::HaulWithWheelbarrowData,
 };
 use bevy::prelude::*;
+use hw_core::constants::Z_ITEM_PICKUP;
 use std::collections::{HashMap, HashSet};
 
 fn has_pending_wheelbarrow_task(ctx: &TaskExecutionContext) -> bool {
@@ -137,7 +137,9 @@ fn provisional_wall_remaining(
     wall_entity: Entity,
     resource_type: ResourceType,
 ) -> usize {
-    let Ok((wall_transform, building, provisional_opt)) = ctx.queries.storage.buildings.get(wall_entity) else {
+    let Ok((wall_transform, building, provisional_opt)) =
+        ctx.queries.storage.buildings.get(wall_entity)
+    else {
         return 0;
     };
     if resource_type != ResourceType::StasisMud
@@ -308,7 +310,10 @@ pub fn handle(
                     let Some(resource_type) = res_type_opt else {
                         continue;
                     };
-                    let reserved = reserved_by_resource.get(resource_type).copied().unwrap_or(0);
+                    let reserved = reserved_by_resource
+                        .get(resource_type)
+                        .copied()
+                        .unwrap_or(0);
                     if reserved >= floor_site_remaining(ctx, dest_stockpile, *resource_type) {
                         continue;
                     }
@@ -326,7 +331,10 @@ pub fn handle(
                     let Some(resource_type) = res_type_opt else {
                         continue;
                     };
-                    let reserved = reserved_by_resource.get(resource_type).copied().unwrap_or(0);
+                    let reserved = reserved_by_resource
+                        .get(resource_type)
+                        .copied()
+                        .unwrap_or(0);
                     if reserved >= wall_site_remaining(ctx, dest_stockpile, *resource_type) {
                         continue;
                     }
@@ -349,7 +357,10 @@ pub fn handle(
                         let Some(resource_type) = res_type_opt else {
                             continue;
                         };
-                        let reserved = reserved_by_resource.get(resource_type).copied().unwrap_or(0);
+                        let reserved = reserved_by_resource
+                            .get(resource_type)
+                            .copied()
+                            .unwrap_or(0);
                         if reserved
                             >= provisional_wall_remaining(ctx, dest_stockpile, *resource_type)
                         {

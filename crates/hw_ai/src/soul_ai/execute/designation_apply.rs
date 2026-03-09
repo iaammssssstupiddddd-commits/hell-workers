@@ -1,8 +1,8 @@
 use bevy::prelude::*;
 
 use hw_core::events::{DesignationOp, DesignationRequest};
-use hw_jobs::{Designation, IssuedBy, Priority, TargetBlueprint, TaskSlots};
 use hw_jobs::mud_mixer::TargetMixer;
+use hw_jobs::{Designation, IssuedBy, Priority, TargetBlueprint, TaskSlots};
 use hw_logistics::types::ReservedForTask;
 
 /// Decide フェーズで生成された Designation 要求を適用する

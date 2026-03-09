@@ -1,9 +1,10 @@
-use hw_core::constants::*;
 use crate::interface::ui::PlacementFailureTooltip;
-use crate::systems::jobs::floor_construction::{FloorConstructionSite, FloorTileBlueprint};
 use crate::systems::jobs::TaskSlots;
+use crate::systems::jobs::floor_construction::{FloorConstructionSite, FloorTileBlueprint};
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
+use hw_core::constants::*;
+use hw_ui::selection::validate_area_size;
 use std::collections::HashSet;
 
 use super::validation::validate_floor_tile;
@@ -22,7 +23,7 @@ pub(super) fn apply_floor_placement(
     let width = (max_grid.0 - min_grid.0 + 1).abs();
     let height = (max_grid.1 - min_grid.1 + 1).abs();
 
-    if width > FLOOR_MAX_AREA_SIZE || height > FLOOR_MAX_AREA_SIZE {
+    if validate_area_size(width, height).is_some() {
         let reason = format!(
             "Floor placement area is too large: {}x{} (max {}x{})",
             width, height, FLOOR_MAX_AREA_SIZE, FLOOR_MAX_AREA_SIZE
@@ -59,7 +60,10 @@ pub(super) fn apply_floor_placement(
         let reason = first_reject_reason
             .unwrap_or_else(|| "No valid floor tile in selected area".to_string());
         placement_failure_tooltip.show(reason.clone());
-        warn!("No valid tiles for floor placement in selected area: {}", reason);
+        warn!(
+            "No valid tiles for floor placement in selected area: {}",
+            reason
+        );
         return;
     }
 

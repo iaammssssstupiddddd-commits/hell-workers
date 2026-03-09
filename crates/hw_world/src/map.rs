@@ -1,5 +1,8 @@
-use crate::{find_nearest_river_grid, find_nearest_walkable_grid, grid_to_world, idx_to_pos, snap_to_grid_center, snap_to_grid_edge, world_to_grid, TerrainType};
 use crate::pathfinding::PathWorld;
+use crate::{
+    TerrainType, find_nearest_river_grid, find_nearest_walkable_grid, grid_to_world, idx_to_pos,
+    snap_to_grid_center, snap_to_grid_edge, world_to_grid,
+};
 use bevy::prelude::*;
 use hw_core::constants::*;
 use hw_core::world::DoorState;
@@ -198,11 +201,7 @@ impl WorldMap {
         }
     }
 
-    pub fn clear_building_occupancy_if_owned(
-        &mut self,
-        grid: (i32, i32),
-        entity: Entity,
-    ) -> bool {
+    pub fn clear_building_occupancy_if_owned(&mut self, grid: (i32, i32), entity: Entity) -> bool {
         if self.building_entity(grid) != Some(entity) {
             return false;
         }
@@ -296,11 +295,7 @@ impl WorldMap {
         self.set_stockpile(new_grid, entity);
     }
 
-    pub fn clear_stockpile_tile_if_owned(
-        &mut self,
-        grid: (i32, i32),
-        entity: Entity,
-    ) -> bool {
+    pub fn clear_stockpile_tile_if_owned(&mut self, grid: (i32, i32), entity: Entity) -> bool {
         if self.stockpile_entity(grid) != Some(entity) {
             return false;
         }
@@ -312,7 +307,8 @@ impl WorldMap {
     where
         I: IntoIterator<Item = (i32, i32)>,
     {
-        grids.into_iter()
+        grids
+            .into_iter()
             .filter_map(|grid| self.clear_stockpile(grid))
             .collect()
     }
@@ -452,4 +448,3 @@ impl PathWorld for WorldMap {
         WorldMap::get_door_cost(self, x, y)
     }
 }
-

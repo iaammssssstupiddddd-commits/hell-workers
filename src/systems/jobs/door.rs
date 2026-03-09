@@ -1,9 +1,9 @@
 use crate::assets::GameAssets;
-use hw_core::constants::DOOR_CLOSE_DELAY_SECS;
-pub use hw_core::world::DoorState;
 use crate::entities::damned_soul::{DamnedSoul, Path};
 use crate::world::map::{WorldMap, WorldMapWrite};
 use bevy::prelude::*;
+use hw_core::constants::DOOR_CLOSE_DELAY_SECS;
+pub use hw_core::world::DoorState;
 
 #[derive(Component, Debug, Clone, Copy, Reflect)]
 #[reflect(Component)]

@@ -1,11 +1,10 @@
 mod builders;
 
-use hw_core::constants::ESCAPE_STRESS_THRESHOLD;
-use crate::interface::selection::SelectedEntity;
-use crate::interface::ui::panels::InfoPanelPinState;
 use crate::entities::damned_soul::{DamnedSoul, IdleBehavior, IdleState};
 use crate::entities::familiar::Familiar;
+use crate::interface::selection::SelectedEntity;
 use crate::interface::ui::components::TooltipTemplate;
+use crate::interface::ui::panels::InfoPanelPinState;
 use crate::relationships::CommandedBy;
 use crate::relationships::TaskWorkers;
 use crate::systems::jobs::Blueprint;
@@ -14,11 +13,10 @@ use crate::systems::soul_ai::perceive::escaping::is_escape_threat_close;
 use crate::systems::spatial::FamiliarSpatialGrid;
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
+use hw_core::constants::ESCAPE_STRESS_THRESHOLD;
 
 pub use hw_ui::models::inspection::{
-    EntityInspectionModel,
-    EntityInspectionViewModel,
-    SoulInspectionFields,
+    EntityInspectionModel, EntityInspectionViewModel, SoulInspectionFields,
 };
 
 #[derive(SystemParam)]

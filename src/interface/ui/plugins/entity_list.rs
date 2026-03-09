@@ -44,7 +44,10 @@ fn register_ui_entity_list_plugin_systems(app: &mut App) {
         )
             .in_set(GameSystemSet::Interface),
     )
-    .add_systems(Update, detect_entity_list_changes.in_set(GameSystemSet::Interface))
+    .add_systems(
+        Update,
+        detect_entity_list_changes.in_set(GameSystemSet::Interface),
+    )
     .add_systems(
         Update,
         (

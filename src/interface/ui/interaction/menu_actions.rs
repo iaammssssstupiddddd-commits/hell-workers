@@ -1,5 +1,5 @@
-use bevy::prelude::MessageWriter;
 use crate::interface::ui::components::MenuAction;
+use bevy::prelude::MessageWriter;
 use hw_ui::UiIntent;
 
 pub(super) fn handle_pressed_action(action: MenuAction, ui_intents: &mut MessageWriter<UiIntent>) {

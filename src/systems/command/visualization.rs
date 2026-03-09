@@ -1,9 +1,9 @@
 use super::{DesignationIndicator, TaskMode};
-use hw_core::constants::TILE_SIZE;
-use crate::entities::familiar::{ActiveCommand, Familiar, FamiliarCommand};
 use crate::app_contexts::TaskContext;
+use crate::entities::familiar::{ActiveCommand, Familiar, FamiliarCommand};
 use crate::systems::jobs::{Designation, WorkType};
 use bevy::prelude::*;
+use hw_core::constants::TILE_SIZE;
 
 pub fn designation_visual_system(
     mut commands: Commands,

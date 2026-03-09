@@ -1,16 +1,16 @@
-use hw_core::constants::*;
-use hw_core::game_state::{PlayMode};
-use crate::app_contexts::{TaskContext};
+use crate::app_contexts::TaskContext;
 use crate::interface::camera::MainCamera;
 use crate::interface::ui::UiInputState;
 use crate::systems::command::TaskMode;
 use crate::systems::command::TaskModeZoneType;
 use crate::systems::logistics::{BelongsTo, Stockpile};
-use crate::systems::world::zones::{AreaBounds, Yard};
 use crate::systems::world::zones::Site;
+use crate::systems::world::zones::{AreaBounds, Yard};
 use crate::world::map::{WorldMap, WorldMapWrite};
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
+use hw_core::constants::*;
+use hw_core::game_state::PlayMode;
 
 pub fn zone_placement_system(
     buttons: Res<ButtonInput<MouseButton>>,
@@ -150,7 +150,10 @@ fn apply_yard_expansion(
     });
 }
 
-pub(crate) fn is_stockpile_area_within_yards(area: &AreaBounds, q_yards: &Query<(Entity, &Yard)>) -> bool {
+pub(crate) fn is_stockpile_area_within_yards(
+    area: &AreaBounds,
+    q_yards: &Query<(Entity, &Yard)>,
+) -> bool {
     let min_grid = WorldMap::world_to_grid(area.min + Vec2::splat(0.1));
     let max_grid = WorldMap::world_to_grid(area.max - Vec2::splat(0.1));
 
@@ -183,16 +186,16 @@ pub(crate) fn is_yard_expansion_area_valid(
         return false;
     }
 
-    let overlaps_site = q_sites.iter().any(|site| {
-        rectangles_overlap_site(&expanded_area, site)
-    });
+    let overlaps_site = q_sites
+        .iter()
+        .any(|site| rectangles_overlap_site(&expanded_area, site));
     if overlaps_site {
         return false;
     }
 
-    let overlaps_other_yard = q_yards.iter().any(|(entity, yard)| {
-        entity != source_entity && rectangles_overlap(&expanded_area, yard)
-    });
+    let overlaps_other_yard = q_yards
+        .iter()
+        .any(|(entity, yard)| entity != source_entity && rectangles_overlap(&expanded_area, yard));
     if overlaps_other_yard {
         return false;
     }
@@ -203,14 +206,8 @@ pub(crate) fn is_yard_expansion_area_valid(
 fn area_tile_size(area: &AreaBounds) -> (usize, usize) {
     let min_grid = WorldMap::world_to_grid(area.min + Vec2::splat(0.1));
     let max_grid = WorldMap::world_to_grid(area.max - Vec2::splat(0.1));
-    let width = max_grid
-        .0
-        .saturating_sub(min_grid.0)
-        .saturating_add(1) as usize;
-    let height = max_grid
-        .1
-        .saturating_sub(min_grid.1)
-        .saturating_add(1) as usize;
+    let width = max_grid.0.saturating_sub(min_grid.0).saturating_add(1) as usize;
+    let height = max_grid.1.saturating_sub(min_grid.1).saturating_add(1) as usize;
     (width, height)
 }
 
@@ -250,14 +247,8 @@ fn rectangles_overlap(area: &AreaBounds, other_yard: &Yard) -> bool {
         && area.max.y >= other_yard.min.y
 }
 
-fn pick_stockpile_owner_yard(
-    grid_pos: Vec2,
-    q_yards: &Query<(Entity, &Yard)>,
-) -> Option<Entity> {
-    if let Some((owner, _)) = q_yards
-        .iter()
-        .find(|(_, yard)| yard.contains(grid_pos))
-    {
+fn pick_stockpile_owner_yard(grid_pos: Vec2, q_yards: &Query<(Entity, &Yard)>) -> Option<Entity> {
+    if let Some((owner, _)) = q_yards.iter().find(|(_, yard)| yard.contains(grid_pos)) {
         return Some(owner);
     }
     None

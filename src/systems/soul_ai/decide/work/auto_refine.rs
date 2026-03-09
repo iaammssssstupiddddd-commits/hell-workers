@@ -4,7 +4,6 @@
 
 use bevy::prelude::*;
 
-use hw_core::constants::MUD_MIXER_REFINE_PRIORITY;
 use crate::entities::familiar::{ActiveCommand, FamiliarCommand};
 use crate::events::{DesignationOp, DesignationRequest};
 use crate::relationships::StoredItems;
@@ -14,6 +13,7 @@ use crate::systems::jobs::{Designation, MudMixerStorage, WorkType};
 use crate::systems::logistics::{ResourceType, Stockpile};
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
 use crate::systems::soul_ai::execute::task_execution::move_plant::MovePlanned;
+use hw_core::constants::MUD_MIXER_REFINE_PRIORITY;
 
 /// MudMixer で精製タスクを自動発行するシステム
 pub fn mud_mixer_auto_refine_system(

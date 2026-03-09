@@ -1,7 +1,7 @@
 use super::super::{Blueprint, Building, BuildingType, Door, DoorState, ProvisionalWall};
 use crate::assets::GameAssets;
-use hw_core::constants::TILE_SIZE;
 use bevy::prelude::*;
+use hw_core::constants::TILE_SIZE;
 
 pub(super) fn spawn_completed_building(
     commands: &mut Commands,

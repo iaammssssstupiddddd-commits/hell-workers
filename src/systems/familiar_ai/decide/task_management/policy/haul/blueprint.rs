@@ -1,11 +1,11 @@
 //! Blueprint 向け運搬タスクの割り当て
 
-use hw_core::constants::WHEELBARROW_CAPACITY;
 use crate::systems::command::TaskArea;
 use crate::systems::familiar_ai::decide::task_management::{AssignTaskContext, ReservationShadow};
 use crate::systems::logistics::ResourceType;
 use crate::systems::logistics::transport_request::can_complete_pick_drop_to_blueprint;
 use bevy::prelude::*;
+use hw_core::constants::WHEELBARROW_CAPACITY;
 
 use super::super::super::builders::{
     issue_collect_bone_with_wheelbarrow_to_blueprint,
@@ -134,15 +134,13 @@ fn try_pick_drop_to_blueprint(
     let bp_pos = bp_transform.translation.truncate();
     let occupied_grids = bp.occupied_grids.clone();
 
-    let Some((source_item, source_pos)) =
-        source_selector::find_nearest_blueprint_source_item(
-            resource_type,
-            bp_pos,
-            queries,
-            shadow,
-            ctx.resource_grid,
-        )
-    else {
+    let Some((source_item, source_pos)) = source_selector::find_nearest_blueprint_source_item(
+        resource_type,
+        bp_pos,
+        queries,
+        shadow,
+        ctx.resource_grid,
+    ) else {
         return false;
     };
 

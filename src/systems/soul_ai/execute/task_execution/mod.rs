@@ -2,13 +2,13 @@
 //!
 //! 魂に割り当てられたタスクの実行ロジックを提供します。
 
+pub mod bucket_transport;
 pub mod build;
 pub mod coat_wall;
 pub mod collect_bone;
 pub mod collect_sand;
 pub mod common;
 pub mod context;
-pub mod bucket_transport;
 pub mod frame_wall;
 pub mod gather;
 pub mod handler;

@@ -83,11 +83,8 @@ fn has_collect_sand_demand(
     fam_entity: Entity,
     queries: &crate::systems::familiar_ai::decide::task_management::FamiliarTaskAssignmentQueries,
 ) -> bool {
-    queries
-        .designation
-        .designations
-        .iter()
-        .any(|(entity, transform, designation, managed_by_opt, _, workers_opt, _, _)| {
+    queries.designation.designations.iter().any(
+        |(entity, transform, designation, managed_by_opt, _, workers_opt, _, _)| {
             let task_pos = transform.translation.truncate();
             // 全ヤードのいずれかにタスクが含まれていれば共有タスクとみなす
             let in_any_yard = queries.yards.iter().any(|yard| yard.contains(task_pos));
@@ -110,16 +107,23 @@ fn has_collect_sand_demand(
                 .get(entity)
                 .map(|demand| demand.desired_slots)
                 .unwrap_or(0);
-            let workers = workers_opt.map(|task_workers| task_workers.len() as u32).unwrap_or(0);
+            let workers = workers_opt
+                .map(|task_workers| task_workers.len() as u32)
+                .unwrap_or(0);
             if desired_slots == 0 && workers == 0 {
                 return false;
             }
 
             matches!(
                 (request.kind, request.resource_type),
-                (TransportRequestKind::DeliverToMixerSolid, ResourceType::Sand)
-                    | (TransportRequestKind::DeliverToBlueprint, ResourceType::Sand)
-                    | (TransportRequestKind::DeliverToBlueprint, ResourceType::StasisMud)
+                (
+                    TransportRequestKind::DeliverToMixerSolid,
+                    ResourceType::Sand
+                ) | (TransportRequestKind::DeliverToBlueprint, ResourceType::Sand)
+                    | (
+                        TransportRequestKind::DeliverToBlueprint,
+                        ResourceType::StasisMud
+                    )
                     | (
                         TransportRequestKind::DeliverToFloorConstruction,
                         ResourceType::StasisMud
@@ -133,7 +137,8 @@ fn has_collect_sand_demand(
                         ResourceType::StasisMud
                     )
             )
-        })
+        },
+    )
 }
 
 pub(super) fn assign_refine(

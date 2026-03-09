@@ -6,20 +6,20 @@ use crate::entities::damned_soul::{Destination, IdleBehavior, Path};
 use crate::entities::familiar::{Familiar, FamiliarOperation};
 use crate::events::SquadManagementRequest;
 use crate::relationships::{Commanding, ManagedTasks};
-use std::collections::HashSet;
 use crate::systems::command::TaskArea;
 use crate::systems::familiar_ai::FamiliarSoulQuery;
 use crate::systems::familiar_ai::decide::task_delegation::ReachabilityCacheKey;
+use crate::systems::familiar_ai::decide::task_management::IncomingDeliverySnapshot;
 use crate::systems::familiar_ai::decide::task_management::{
     FamiliarTaskAssignmentQueries, ReservationShadow,
 };
-use crate::systems::familiar_ai::decide::task_management::IncomingDeliverySnapshot;
 use crate::systems::logistics::TileSiteIndex;
 use crate::systems::spatial::{
     DesignationSpatialGrid, ResourceSpatialGrid, SpatialGrid, TransportRequestSpatialGrid,
 };
 use bevy::prelude::*;
 use std::collections::HashMap;
+use std::collections::HashSet;
 
 use super::recruitment::RecruitmentManager;
 use super::squad::SquadManager;

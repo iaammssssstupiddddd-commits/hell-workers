@@ -37,10 +37,7 @@ pub fn on_task_completed_motivation_bonus(
 }
 
 /// 激励イベントによる効果適用
-pub fn on_encouraged_effect(
-    trigger: On<OnEncouraged>,
-    mut q_souls: Query<&mut DamnedSoul>,
-) {
+pub fn on_encouraged_effect(trigger: On<OnEncouraged>, mut q_souls: Query<&mut DamnedSoul>) {
     let event = trigger.event();
     if let Ok(mut soul) = q_souls.get_mut(event.soul_entity) {
         soul.motivation = (soul.motivation + ENCOURAGEMENT_MOTIVATION_BONUS).min(1.0);
@@ -49,10 +46,7 @@ pub fn on_encouraged_effect(
 }
 
 /// リクルート時のバイタル変化
-pub fn on_soul_recruited_effect(
-    trigger: On<OnSoulRecruited>,
-    mut q_souls: Query<&mut DamnedSoul>,
-) {
+pub fn on_soul_recruited_effect(trigger: On<OnSoulRecruited>, mut q_souls: Query<&mut DamnedSoul>) {
     let event = trigger.event();
     if let Ok(mut soul) = q_souls.get_mut(event.entity) {
         soul.motivation = (soul.motivation + RECRUIT_MOTIVATION_BONUS).min(1.0);

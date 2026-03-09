@@ -2,14 +2,14 @@ use std::collections::{HashMap, HashSet};
 
 use bevy::prelude::*;
 
-use hw_core::constants::{
-    BLUEPRINT_AUTO_GATHER_PATH_CHECK_LIMIT_PER_STAGE, BLUEPRINT_AUTO_GATHER_PRIORITY,
-};
 use crate::relationships::ManagedBy;
 use crate::systems::jobs::{Designation, Priority, TaskSlots};
 use crate::systems::logistics::ResourceType;
 use crate::world::map::WorldMap;
 use crate::world::pathfinding::PathfindingContext;
+use hw_core::constants::{
+    BLUEPRINT_AUTO_GATHER_PATH_CHECK_LIMIT_PER_STAGE, BLUEPRINT_AUTO_GATHER_PRIORITY,
+};
 
 use super::AutoGatherDesignation;
 use super::helpers::{

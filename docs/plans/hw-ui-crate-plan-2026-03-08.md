@@ -5,9 +5,9 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `hw-ui-crate-plan-2026-03-08` |
-| ステータス | `InProgress` |
+| ステータス | `Completed` |
 | 作成日 | `2026-03-08` |
-| 最終更新日 | `2026-03-08` |
+| 最終更新日 | `2026-03-09` |
 | 作成者 | `AI` |
 | 関連提案 | `docs/proposals/archive/hw-ui-crate.md` |
 | 関連Issue/PR | `N/A` |
@@ -566,8 +566,8 @@ CARGO_HOME=/home/satotakumi/.cargo cargo build --timings
 
 ### 次のAIが最初にやること
 
-1. **selection 分離の follow-up**（M8完了後）
-2. `src/interface/selection` の root 性を維持したまま `UiIntent` 経路の監査
+1. `src/interface/selection` の root 性を維持したまま、以後の UI 変更でも `UiIntent` / adapter 境界を崩していないか監査する
+2. 新規 UI 機能を追加する場合は `hw_ui` に置ける shared logic と root shell に残す副作用を先に切り分ける
 
 ### ブロッカー/注意点（コード調査済み）
 
@@ -593,18 +593,18 @@ CARGO_HOME=/home/satotakumi/.cargo cargo build --timings
 
 ### 最終確認ログ
 
-- 最終 `cargo check`: `2026-03-08` / `pass`
+- 最終 `cargo check`: `2026-03-09` / `pass`
   - `cargo check -p bevy_app@0.1.0`（`UiIntent` + `handle_ui_intent` 統合、`GameSystemSet::Interface` 再適用まで）
 - 未解決エラー: なし
 
 ### Definition of Done
 
-- [ ] `crates/hw_ui` が存在し、`CARGO_HOME=/home/satotakumi/.cargo cargo check -p hw_ui` が成功
-- [ ] `hw_ui` に `use crate::systems` / `use crate::entities` / `use crate::world` / `use crate::app_contexts` が一切含まれない
-- [ ] root `InterfacePlugin` が `HwUiPlugin` + root adapter/shell 登録のみの 30行以下になっている
-- [ ] `src/interface/ui/{plugins,setup,panels,list}` が `hw_ui` 側へ移動済み（`change_detection.rs` 除く）
-- [ ] docs が最終境界に同期されている
-- [ ] `CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo check` が成功
+- [x] `crates/hw_ui` が存在し、`CARGO_HOME=/home/satotakumi/.cargo cargo check -p hw_ui` が成功
+- [x] `hw_ui` に `use crate::systems` / `use crate::entities` / `use crate::world` / `use crate::app_contexts` が一切含まれない
+- [x] root `InterfacePlugin` が `HwUiPlugin` + root adapter/shell 登録のみの 30行以下になっている
+- [x] `src/interface/ui/{plugins,setup,panels,list}` が `hw_ui` 側へ移動済み（`change_detection.rs` 除く）
+- [x] docs が最終境界に同期されている
+- [x] `CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo check` が成功
 
 ## 10. 更新履歴
 
@@ -615,3 +615,4 @@ CARGO_HOME=/home/satotakumi/.cargo cargo build --timings
 | `2026-03-08` | `AI` | M1〜M3 実装結果を反映（`UiIntent` 実装 + `Message` 化、root handler 整備、`UiCorePlugin` の set 化） |
 | `2026-03-08` | `AI` | M4 を実装完了（setup の移設、`UiFoundationPlugin` の実装移管、`EntityListDirty` を hw_ui 定義へ移行） |
 | `2026-03-08` | `AI` | M6 の plugin エントリを hw_ui 側に集約、`interface` shell + wrapper を完結、check 成功 |
+| `2026-03-09` | `AI` | `selection` follow-up 完了を反映し、計画ステータスを `Completed` に更新 |

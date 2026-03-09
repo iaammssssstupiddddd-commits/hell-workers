@@ -1,11 +1,13 @@
 use bevy::prelude::*;
 
-use hw_core::assigned_task::AssignedTask;
 use hw_core::familiar::Familiar;
-use hw_core::relationships::{CommandedBy, ParticipatingIn, RestAreaReservedFor, RestingIn, WorkingOn};
+use hw_core::relationships::{
+    CommandedBy, ParticipatingIn, RestAreaReservedFor, RestingIn, WorkingOn,
+};
 use hw_core::soul::{
     DamnedSoul, Destination, DreamState, IdleState, Path, RestAreaCooldown, StressBreakdown,
 };
+use hw_jobs::AssignedTask;
 use hw_logistics::types::Inventory;
 
 /// タスク割り当て要求の適用に使うソウルの標準クエリ型

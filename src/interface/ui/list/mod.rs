@@ -16,6 +16,10 @@ mod tree_ops;
 mod view_model;
 
 pub use drag_drop::{DragState, entity_list_drag_drop_system};
+pub use hw_ui::list::{
+    EntityListSnapshot, EntityListViewModel, FamiliarRowViewModel, SoulGender, SoulRowViewModel,
+    StressBucket, TaskVisual,
+};
 pub use interaction::{
     apply_row_highlight, entity_list_interaction_system, entity_list_scroll_hint_visibility_system,
     entity_list_scroll_system, entity_list_tab_focus_system, entity_list_visual_feedback_system,
@@ -29,15 +33,6 @@ pub use selection_focus::focus_camera_on_entity;
 pub use sync::{sync_entity_list_from_view_model_system, sync_entity_list_value_rows_system};
 pub(crate) use tree_ops::clear_children;
 pub use view_model::build_entity_list_view_model_system;
-pub use hw_ui::list::{
-    EntityListSnapshot,
-    EntityListViewModel,
-    FamiliarRowViewModel,
-    SoulGender,
-    SoulRowViewModel,
-    StressBucket,
-    TaskVisual,
-};
 
 #[derive(Resource, Default)]
 pub struct EntityListNodeIndex {

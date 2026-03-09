@@ -11,7 +11,6 @@ use std::collections::HashMap;
 
 use bevy::prelude::*;
 
-use hw_core::constants::*;
 use crate::entities::damned_soul::IdleBehavior;
 use crate::events::{IdleBehaviorOperation, IdleBehaviorRequest};
 use crate::relationships::RestAreaReservations;
@@ -20,6 +19,7 @@ use crate::systems::soul_ai::helpers::gathering::{GATHERING_LEAVE_RADIUS, Gather
 use crate::systems::soul_ai::helpers::query_types::IdleDecisionSoulQuery;
 use crate::systems::spatial::{GatheringSpotSpatialGrid, SpatialGridOps};
 use crate::world::map::WorldMapRead;
+use hw_core::constants::*;
 
 pub use rest_area::{
     find_nearest_available_rest_area, has_arrived_at_rest_area,
@@ -114,7 +114,10 @@ pub fn idle_behavior_decision_system(
                     operation: IdleBehaviorOperation::ReleaseRestArea,
                 });
             }
-            if matches!(idle.behavior, IdleBehavior::Resting | IdleBehavior::GoingToRest) {
+            if matches!(
+                idle.behavior,
+                IdleBehavior::Resting | IdleBehavior::GoingToRest
+            ) {
                 idle.behavior = IdleBehavior::Wandering;
                 idle.idle_timer = 0.0;
                 path.waypoints.clear();

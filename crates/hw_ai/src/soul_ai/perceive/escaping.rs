@@ -9,7 +9,7 @@ use hw_core::familiar::Familiar;
 use hw_spatial::FamiliarSpatialGrid;
 use hw_world::SpatialGridOps;
 use hw_world::coords::{grid_to_world, world_to_grid};
-use hw_world::{find_path, PathGoalPolicy, PathfindingContext, WorldMap};
+use hw_world::{PathGoalPolicy, PathfindingContext, WorldMap, find_path};
 
 use crate::soul_ai::helpers::gathering::GatheringSpot;
 
@@ -149,7 +149,8 @@ pub fn detect_reachable_familiar_within_safe_distance(
                 continue;
             }
 
-            let skip_pathfinding_threshold = safe_distance * ESCAPE_PATHFINDING_SKIP_THRESHOLD_RATIO;
+            let skip_pathfinding_threshold =
+                safe_distance * ESCAPE_PATHFINDING_SKIP_THRESHOLD_RATIO;
             if euclid < skip_pathfinding_threshold {
                 let threat = FamiliarThreat {
                     entity: fam_entity,
@@ -162,7 +163,8 @@ pub fn detect_reachable_familiar_within_safe_distance(
                 continue;
             }
 
-            let Some(path_dist) = path_distance_world(world_map, pf_context, soul_pos, fam_pos) else {
+            let Some(path_dist) = path_distance_world(world_map, pf_context, soul_pos, fam_pos)
+            else {
                 continue;
             };
 

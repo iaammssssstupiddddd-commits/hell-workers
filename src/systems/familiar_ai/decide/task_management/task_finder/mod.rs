@@ -8,8 +8,8 @@ mod score;
 use crate::relationships::ManagedTasks;
 use crate::systems::command::TaskArea;
 use crate::systems::jobs::{TargetBlueprint, WorkType};
-use crate::systems::world::zones::Yard;
 use crate::systems::spatial::{DesignationSpatialGrid, TransportRequestSpatialGrid};
+use crate::systems::world::zones::Yard;
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
 use std::collections::HashSet;
@@ -62,12 +62,15 @@ pub fn collect_scored_candidates(
     // CollectSand / CollectBone のうち Yard 管理で範囲外へフォールバックした指定も
     // 同様にグリッド走査だけでは見えないため補完する。
     let mut seen: HashSet<Entity> = candidates.iter().copied().collect();
-    for (entity, _, designation, managed_by_opt, _, _, _, _) in queries.designation.designations.iter() {
+    for (entity, _, designation, managed_by_opt, _, _, _, _) in
+        queries.designation.designations.iter()
+    {
         let is_build = designation.work_type == WorkType::Build;
         let is_remote_yard_collect = matches!(
             designation.work_type,
             WorkType::CollectSand | WorkType::CollectBone
-        ) && managed_by_opt.is_some_and(|managed_by| queries.yards.get(managed_by.0).is_ok());
+        ) && managed_by_opt
+            .is_some_and(|managed_by| queries.yards.get(managed_by.0).is_ok());
 
         if (is_build || is_remote_yard_collect) && seen.insert(entity) {
             candidates.push(entity);

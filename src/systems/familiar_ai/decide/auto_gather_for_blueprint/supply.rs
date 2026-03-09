@@ -124,7 +124,7 @@ pub(super) fn collect_supply_state(
                 if workers > 0 {
                     bucket.auto_active_count = bucket.auto_active_count.saturating_add(1);
                 } else {
-                        let (stage, sort_dist_sq) = if let Some(owner_info) = owner_infos.get(&owner) {
+                    let (stage, sort_dist_sq) = if let Some(owner_info) = owner_infos.get(&owner) {
                         (
                             stage_for_pos(pos, owner_info),
                             pos.distance_squared(owner_info.center),

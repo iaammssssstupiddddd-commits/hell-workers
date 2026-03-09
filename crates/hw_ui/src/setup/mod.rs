@@ -9,9 +9,7 @@ mod panels;
 mod submenus;
 mod time_control;
 
-use crate::components::{
-    InfoPanelNodes, UiMountSlot, UiNodeRegistry, UiRoot, UiSlot,
-};
+use crate::components::{InfoPanelNodes, UiMountSlot, UiNodeRegistry, UiRoot, UiSlot};
 use crate::theme::UiTheme;
 use bevy::prelude::*;
 
@@ -234,15 +232,20 @@ pub fn setup_ui<F, G>(
     mut info_panel_nodes: ResMut<InfoPanelNodes>,
     spawn_root_panels: F,
     spawn_root_vignette: G,
-)
-where
+) where
     F: FnOnce(&mut Commands, Entity, Entity, &mut UiNodeRegistry, &mut InfoPanelNodes),
     G: FnOnce(&mut Commands, Entity),
 {
     let (_, left_slot, right_slot, bottom_slot, overlay_slot, top_right_slot, _dream_bubble_slot) =
         spawn_ui_root(&mut commands);
 
-    bottom_bar::spawn_bottom_bar(&mut commands, game_assets, theme, bottom_slot, &mut ui_nodes);
+    bottom_bar::spawn_bottom_bar(
+        &mut commands,
+        game_assets,
+        theme,
+        bottom_slot,
+        &mut ui_nodes,
+    );
     submenus::spawn_submenus(&mut commands, game_assets, theme, bottom_slot);
     panels::spawn_panels(
         &mut commands,
@@ -267,7 +270,19 @@ where
         &mut ui_nodes,
     );
     spawn_fps_display(&mut commands, theme, top_right_slot, &mut ui_nodes);
-    dialogs::spawn_dialogs(&mut commands, game_assets, theme, overlay_slot, &mut ui_nodes);
-    spawn_root_panels(&mut commands, right_slot, overlay_slot, &mut ui_nodes, &mut info_panel_nodes);
+    dialogs::spawn_dialogs(
+        &mut commands,
+        game_assets,
+        theme,
+        overlay_slot,
+        &mut ui_nodes,
+    );
+    spawn_root_panels(
+        &mut commands,
+        right_slot,
+        overlay_slot,
+        &mut ui_nodes,
+        &mut info_panel_nodes,
+    );
     spawn_root_vignette(&mut commands, overlay_slot);
 }

@@ -1,10 +1,8 @@
-use hw_core::constants::Z_ITEM_PICKUP;
 use crate::relationships::WorkingOn;
 use crate::systems::jobs::BuildingType;
 use crate::systems::logistics::{
-    count_nearby_ground_resources, floor_site_tile_demand, provisional_wall_mud_demand,
-    wall_site_tile_demand,
-    ResourceType,
+    ResourceType, count_nearby_ground_resources, floor_site_tile_demand,
+    provisional_wall_mud_demand, wall_site_tile_demand,
 };
 use crate::systems::soul_ai::execute::task_execution::common::{clear_task_and_path, drop_item};
 use crate::systems::soul_ai::execute::task_execution::context::TaskExecutionContext;
@@ -12,6 +10,7 @@ use crate::systems::soul_ai::execute::task_execution::transport_common::{cancel,
 use crate::systems::soul_ai::helpers::work::unassign_task;
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
+use hw_core::constants::Z_ITEM_PICKUP;
 
 fn floor_site_can_accept(
     ctx: &TaskExecutionContext,
@@ -103,10 +102,13 @@ pub(super) fn handle_dropping_phase(
 ) {
     let q_targets = &ctx.queries.designation.targets;
     let q_belongs = &ctx.queries.designation.belongs;
-    let item_resource_type = q_targets
-        .get(item)
-        .ok()
-        .and_then(|(_, _, _, _, resource_item_opt, _, _)| resource_item_opt.map(|resource_item| resource_item.0));
+    let item_resource_type =
+        q_targets
+            .get(item)
+            .ok()
+            .and_then(|(_, _, _, _, resource_item_opt, _, _)| {
+                resource_item_opt.map(|resource_item| resource_item.0)
+            });
 
     if let Ok((_, stock_transform, mut stockpile_comp, stored_items_opt)) =
         ctx.queries.storage.stockpiles.get_mut(stockpile)
@@ -155,7 +157,7 @@ pub(super) fn handle_dropping_phase(
                 .incoming_deliveries_query
                 .get(stockpile)
                 .ok()
-            .map(|(_, incoming)| incoming.len())
+                .map(|(_, incoming)| incoming.len())
                 .unwrap_or(0);
             let capacity_ok = (current_count + incoming_count) <= stockpile_comp.capacity;
 

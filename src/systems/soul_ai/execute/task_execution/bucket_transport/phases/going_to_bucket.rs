@@ -30,17 +30,29 @@ pub fn handle(
                 if let Ok(res_item) = ctx.queries.reservation.resources.get(bucket_entity) {
                     if res_item.0 == ResourceType::BucketWater {
                         // 水入りなら直接ミキサーへ
-                        let tank = match data.source { BucketTransportSource::Tank { tank, .. } => tank, _ => bucket_entity };
+                        let tank = match data.source {
+                            BucketTransportSource::Tank { tank, .. } => tank,
+                            _ => bucket_entity,
+                        };
                         reservation::release_source(ctx, tank, 1);
-                        routing::transition_to_destination(commands, ctx, data, soul_pos, world_map);
+                        routing::transition_to_destination(
+                            commands, ctx, data, soul_pos, world_map,
+                        );
                     } else {
                         // 空ならタンクへ
                         routing::transition_to_source(commands, ctx, data, soul_pos, world_map);
                     }
                 } else {
                     // バケツが見つからない場合は中断
-                    let tank = match data.source { BucketTransportSource::Tank { tank, .. } => tank, _ => bucket_entity };
-                    reservation::release_mixer_destination(ctx, mixer, crate::systems::logistics::ResourceType::Water);
+                    let tank = match data.source {
+                        BucketTransportSource::Tank { tank, .. } => tank,
+                        _ => bucket_entity,
+                    };
+                    reservation::release_mixer_destination(
+                        ctx,
+                        mixer,
+                        crate::systems::logistics::ResourceType::Water,
+                    );
                     let _ = tank;
                     common::clear_task_and_path(ctx.task, ctx.path);
                 }
@@ -157,7 +169,10 @@ pub fn handle(
                 }
                 BucketTransportDestination::Mixer(_) => {
                     // 水入りなら直接ミキサーへ
-                    let tank = match data.source { BucketTransportSource::Tank { tank, .. } => tank, _ => bucket_entity };
+                    let tank = match data.source {
+                        BucketTransportSource::Tank { tank, .. } => tank,
+                        _ => bucket_entity,
+                    };
                     reservation::release_source(ctx, tank, 1);
                     routing::transition_to_destination(commands, ctx, data, soul_pos, world_map);
                     return;

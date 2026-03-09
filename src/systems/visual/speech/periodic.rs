@@ -1,10 +1,10 @@
 use crate::assets::GameAssets;
-use hw_core::constants::*;
 use crate::entities::damned_soul::{DamnedSoul, IdleBehavior, IdleState};
 use crate::relationships::CommandedBy;
 use crate::systems::visual::speech::components::{BubbleEmotion, BubblePriority, SoulEmotionState};
 use crate::systems::visual::speech::spawn::spawn_soul_bubble;
 use bevy::prelude::*;
+use hw_core::constants::*;
 use rand::Rng;
 
 /// 分散実行用のフレームカウンタ

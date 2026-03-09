@@ -1,6 +1,6 @@
 # Plans Index
 
-`docs/plans` の文書ステータス一覧（更新日: 2026-03-08）。
+`docs/plans` の文書ステータス一覧（更新日: 2026-03-09）。
 
 ## 新規計画書の作り方
 
@@ -19,11 +19,10 @@
 
 | Document | Status | Notes |
 |---|---|---|
-| [assigned-task-to-hw-jobs-plan-2026-03-08.md](assigned-task-to-hw-jobs-plan-2026-03-08.md) | Draft | AssignedTask を hw_core → hw_jobs へ移動する計画 |
-| [hw-ui-crate-plan-2026-03-08.md](hw-ui-crate-plan-2026-03-08.md) | InProgress | src/interface/の計画。 |
-| [hw-ui-review-fixes-plan-2026-03-08.md](hw-ui-review-fixes-plan-2026-03-08.md) | Done | hw_uiのレビュー指摘修正計画。 |
+| [assigned-task-to-hw-jobs-plan-2026-03-08.md](assigned-task-to-hw-jobs-plan-2026-03-08.md) | Completed | AssignedTask を hw_core → hw_jobs へ移動する計画 |
+| [hw-ui-crate-plan-2026-03-08.md](hw-ui-crate-plan-2026-03-08.md) | Completed | src/interface/の計画。 |
 | [logistics-to-hw-logistics-plan-2026-03-08.md](logistics-to-hw-logistics-plan-2026-03-08.md) | Draft | logistics 実行ロジックを hw_logistics へ移植する計画 |
-| [selection-separation-plan-2026-03-08.md](selection-separation-plan-2026-03-08.md) | Draft | `selection` の判定ロジックと副作用実行を分離する計画。 |
+| [selection-separation-plan-2026-03-08.md](selection-separation-plan-2026-03-08.md) | Completed | `selection` の判定ロジックと副作用実行を分離する計画。 |
 
 ## アーカイブ計画書一覧 (`docs/plans/archive`)
 
@@ -60,6 +59,7 @@
 | [archive/hw-spatial-crate copy 1.md](archive/hw-spatial-crate copy 1.md) | アーカイブ | WorldMapの計画。 |
 | [archive/hw-spatial-crate copy.md](archive/hw-spatial-crate copy.md) | アーカイブ | WorldMapの計画。 |
 | [archive/hw-spatial-crate.md](archive/hw-spatial-crate.md) | アーカイブ | WorldMapの計画。 |
+| [archive/hw-ui-review-fixes-plan-2026-03-08.md](archive/hw-ui-review-fixes-plan-2026-03-08.md) | アーカイブ | hw_uiの計画。 |
 | [archive/large-files-refactor-2026-02-16.md](archive/large-files-refactor-2026-02-16.md) | アーカイブ | 大規模ファイル分割リファクタ計画。 |
 | [archive/mixer-producer-phase-separation-plan-2026-03-05.md](archive/mixer-producer-phase-separation-plan-2026-03-05.md) | アーカイブ | producer/mixer.rsの計画。 |
 | [archive/move-plant-building.md](archive/move-plant-building.md) | アーカイブ | Plant 建物移動タスク 実装計画（詳細版） |
@@ -99,3 +99,4 @@
 | [archive/workspace-construction-phase-extraction.md](archive/workspace-construction-phase-extraction.md) | アーカイブ | Floor/Wall 建設で使うフェーズ・状態型がの計画。 |
 | [archive/zone-placement-refactor-plan-2026-03-05.md](archive/zone-placement-refactor-plan-2026-03-05.md) | アーカイブ | zone_placement.rsの計画。 |
 | [archive/zone-removal-preview-diff-plan-2026-03-01.md](archive/zone-removal-preview-diff-plan-2026-03-01.md) | アーカイブ | Zone removal preview の全件更新を差分更新へ置換する計画。 |
+

@@ -1,5 +1,5 @@
-use hw_core::assigned_task::AssignedTask;
 use hw_core::soul::{DamnedSoul, IdleBehavior, IdleState};
+use hw_jobs::AssignedTask;
 
 /// 魂が作業可能な状態（待機中かつ健康）であるかを確認する
 pub fn is_soul_available_for_work(

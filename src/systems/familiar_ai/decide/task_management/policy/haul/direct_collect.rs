@@ -1,12 +1,12 @@
 //! 直接採取: Sand/Bone の pile 優先 → 地形タイル走査の共通ロジック
 
-use hw_core::constants::{MAP_HEIGHT, MAP_WIDTH};
 use crate::systems::command::TaskArea;
 use crate::systems::familiar_ai::decide::task_management::ReservationShadow;
 use crate::systems::familiar_ai::decide::task_management::validator::source_not_reserved;
 use crate::world::map::TerrainType;
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
+use hw_core::constants::{MAP_HEIGHT, MAP_WIDTH};
 
 type TaskAssignmentQueries<'w, 's> =
     crate::systems::familiar_ai::decide::task_management::FamiliarTaskAssignmentQueries<'w, 's>;

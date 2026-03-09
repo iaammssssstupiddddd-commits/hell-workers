@@ -1,9 +1,9 @@
 use bevy::prelude::*;
 
-use hw_core::assigned_task::AssignedTask;
 use hw_core::constants::*;
 use hw_core::relationships::ParticipatingIn;
 use hw_core::soul::{DamnedSoul, Destination, IdleBehavior, IdleState, Path};
+use hw_jobs::AssignedTask;
 use hw_spatial::{SpatialGrid, SpatialGridOps};
 use hw_world::WorldMap;
 

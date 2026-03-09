@@ -1,6 +1,6 @@
 use bevy::prelude::*;
-use hw_ui::components::ClockText;
 pub use hw_core::game_state::TimeSpeed;
+use hw_ui::components::ClockText;
 
 #[derive(Resource, Default, Reflect)]
 #[reflect(Resource)]

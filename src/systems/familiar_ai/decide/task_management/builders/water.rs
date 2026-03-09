@@ -8,10 +8,8 @@ use crate::systems::soul_ai::execute::task_execution::types::{
 use bevy::prelude::*;
 
 use super::{
-    build_mixer_destination_reservation_ops,
-    build_source_reservation_ops,
-    submit_assignment_with_reservation_ops,
-    submit_assignment_with_source_entities,
+    build_mixer_destination_reservation_ops, build_source_reservation_ops,
+    submit_assignment_with_reservation_ops, submit_assignment_with_source_entities,
 };
 
 pub fn issue_gather_water(

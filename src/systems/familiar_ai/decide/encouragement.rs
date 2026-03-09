@@ -1,12 +1,12 @@
 //! 使い魔による激励システム（Decide）
 
-use hw_core::constants::*;
 use crate::entities::damned_soul::DamnedSoul;
 use crate::entities::familiar::{ActiveCommand, Familiar, FamiliarCommand};
 use crate::systems::familiar_ai::FamiliarAiState;
 use crate::systems::familiar_ai::decide::FamiliarDecideOutput;
 use crate::systems::spatial::{SpatialGrid, SpatialGridOps};
 use bevy::prelude::*;
+use hw_core::constants::*;
 use rand::Rng;
 use rand::seq::SliceRandom;
 

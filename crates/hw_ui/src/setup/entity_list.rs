@@ -1,10 +1,10 @@
 //! 左パネル UI (Entity List / Task List のタブ切り替え)
 
+use super::UiSetupAssets;
 use crate::components::*;
 use crate::theme::UiTheme;
 use bevy::prelude::*;
 use bevy::ui::{BackgroundGradient, ColorStop, LinearGradient, RelativeCursorPosition};
-use super::UiSetupAssets;
 
 pub fn spawn_entity_list_panel(
     commands: &mut Commands,

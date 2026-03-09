@@ -148,8 +148,7 @@ fn pick_representative_resource_type_per_group(
             continue;
         };
 
-        let Some(&group_idx) = group_lookup.get(&(group.representative, group.owner_yard))
-        else {
+        let Some(&group_idx) = group_lookup.get(&(group.representative, group.owner_yard)) else {
             continue;
         };
 

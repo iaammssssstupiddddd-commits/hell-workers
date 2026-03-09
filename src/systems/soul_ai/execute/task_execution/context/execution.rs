@@ -1,6 +1,6 @@
 use crate::entities::damned_soul::{DamnedSoul, Destination, Path};
-use crate::events::ResourceReservationRequest;
 use crate::events::ResourceReservationOp;
+use crate::events::ResourceReservationRequest;
 use crate::systems::logistics::Inventory;
 use bevy::prelude::*;
 

@@ -3,10 +3,6 @@ use std::collections::HashSet;
 
 use bevy::prelude::*;
 
-use hw_core::constants::{
-    SINGLE_BATCH_WAIT_SECS, TILE_SIZE, WHEELBARROW_ARBITRATION_TOP_K,
-    WHEELBARROW_PREFERRED_MIN_BATCH_SIZE,
-};
 use crate::relationships::{IncomingDeliveries, StoredIn};
 use crate::systems::familiar_ai::perceive::resource_sync::SharedResourceCache;
 use crate::systems::jobs::{Blueprint, Designation};
@@ -15,6 +11,10 @@ use crate::systems::logistics::transport_request::{
     TransportRequestKind, TransportRequestState, WheelbarrowLease, WheelbarrowPendingSince,
 };
 use crate::systems::logistics::{BelongsTo, ReservedForTask, ResourceItem, Stockpile};
+use hw_core::constants::{
+    SINGLE_BATCH_WAIT_SECS, TILE_SIZE, WHEELBARROW_ARBITRATION_TOP_K,
+    WHEELBARROW_PREFERRED_MIN_BATCH_SIZE,
+};
 
 use super::candidates::{
     build_free_item_buckets, build_request_eval_context, collect_top_k_nearest,

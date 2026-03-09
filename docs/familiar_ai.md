@@ -109,7 +109,7 @@
 - `FamiliarAiState`: AI の現在の状態（Idle, SearchingTask, Scouting, Supervising）。
 - `Commanding` (Relationship): 配下の魂への参照リスト。**オプショナル**（分隊が空のとき削除される）。
 - `ManagedTasks` (Relationship Target): 管理下のタスクリスト。**オプショナル**（タスクがゼロのとき削除されるため、AI クエリでは `Option` として扱う）。
-- `AssignedTask`: 魂が現在実行中のタスク（採取・運搬・建築）を管理。`src/systems/soul_ai/execute/task_execution/types.rs` で定義。
+- `AssignedTask`: 魂が現在実行中のタスク（採取・運搬・建築）を管理。`hw_jobs::assigned_task` で定義（`src/systems/soul_ai/execute/task_execution/types.rs` 経由で re-export）。
 - `IdleState`: 待機中の振る舞いを管理。`src/entities/damned_soul/mod.rs` で定義。
 
 ## 6. 分隊が空になったときの挙動

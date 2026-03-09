@@ -1,16 +1,74 @@
+use crate::app_contexts::TaskContext;
 use crate::entities::damned_soul::{DamnedSoul, Destination};
 use crate::entities::familiar::Familiar;
-use hw_core::game_state::{PlayMode};
-use crate::app_contexts::{TaskContext};
 use crate::interface::camera::MainCamera;
 use crate::interface::ui::UiInputState;
 use crate::systems::command::{TaskArea, TaskMode};
 use bevy::prelude::*;
+use hw_core::game_state::PlayMode;
+use hw_ui::selection::SelectionIntent;
 
 use super::hit_test::{
     hovered_entity_at_world_pos, hovered_task_area_border_entity, selectable_worker_at_world_pos,
 };
 use super::state::{HoveredEntity, SelectedEntity};
+
+/// Determines the SelectionIntent for a left-click at `world_pos`.
+fn resolve_left_click_intent(
+    world_pos: Vec2,
+    current_selected: Option<Entity>,
+    q_souls: &Query<(Entity, &GlobalTransform), With<DamnedSoul>>,
+    q_familiars: &Query<(Entity, &GlobalTransform), With<Familiar>>,
+    q_task_areas: &Query<(Entity, &TaskArea), With<Familiar>>,
+) -> SelectionIntent {
+    if let Some(familiar) =
+        hovered_task_area_border_entity(world_pos, current_selected, q_task_areas)
+    {
+        return SelectionIntent::StartAreaSelection { familiar };
+    }
+
+    match selectable_worker_at_world_pos(world_pos, q_souls, q_familiars) {
+        Some(entity) => SelectionIntent::Select(entity),
+        None => SelectionIntent::ClearSelection,
+    }
+}
+
+/// Determines the SelectionIntent for a right-click at `world_pos`.
+fn resolve_right_click_intent(
+    world_pos: Vec2,
+    current_selected: Option<Entity>,
+    q_souls: &Query<(Entity, &GlobalTransform), With<DamnedSoul>>,
+    q_familiars: &Query<(Entity, &GlobalTransform), With<Familiar>>,
+    q_targets: &Query<
+        (
+            Entity,
+            &GlobalTransform,
+            Option<&crate::systems::jobs::Building>,
+        ),
+        Or<(
+            With<crate::systems::jobs::Tree>,
+            With<crate::systems::jobs::Rock>,
+            With<crate::systems::logistics::ResourceItem>,
+            With<crate::systems::jobs::Building>,
+        )>,
+    >,
+) -> SelectionIntent {
+    // 右クリック対象がエンティティ上なら移動命令ではなくコンテキストメニューを優先
+    if hovered_entity_at_world_pos(world_pos, q_souls, q_familiars, q_targets).is_some() {
+        return SelectionIntent::None;
+    }
+
+    if let Some(familiar) = current_selected
+        && q_familiars.get(familiar).is_ok()
+    {
+        return SelectionIntent::MoveFamiliar {
+            familiar,
+            destination: world_pos,
+        };
+    }
+
+    SelectionIntent::None
+}
 
 pub fn handle_mouse_input(
     buttons: Res<ButtonInput<MouseButton>>,
@@ -38,9 +96,6 @@ pub fn handle_mouse_input(
     mut task_context: ResMut<TaskContext>,
     mut q_dest: Query<&mut Destination>,
 ) {
-    // main.rsでrun_if(in_state(PlayMode::Normal))が設定されているため、
-    // TaskModeのチェックは不要
-
     if ui_input_state.pointer_over_ui {
         return;
     }
@@ -50,32 +105,69 @@ pub fn handle_mouse_input(
     };
 
     if buttons.just_pressed(MouseButton::Left) {
-        if let Some(familiar_entity) =
-            hovered_task_area_border_entity(world_pos, selected_entity.0, &q_task_areas)
-        {
-            selected_entity.0 = Some(familiar_entity);
-            task_context.0 = TaskMode::AreaSelection(None);
-            next_play_mode.set(PlayMode::TaskDesignation);
-            return;
-        }
-
-        selected_entity.0 = selectable_worker_at_world_pos(world_pos, &q_souls, &q_familiars);
+        let intent = resolve_left_click_intent(
+            world_pos,
+            selected_entity.0,
+            &q_souls,
+            &q_familiars,
+            &q_task_areas,
+        );
+        apply_selection_intent(
+            intent,
+            &mut selected_entity,
+            &mut next_play_mode,
+            &mut task_context,
+            &mut q_dest,
+        );
     }
 
     if buttons.just_pressed(MouseButton::Right) {
-        // 右クリック対象がエンティティ上なら、移動命令ではなくコンテキストメニューを優先する。
-        if hovered_entity_at_world_pos(world_pos, &q_souls, &q_familiars, &q_targets).is_some() {
-            return;
-        }
+        let intent = resolve_right_click_intent(
+            world_pos,
+            selected_entity.0,
+            &q_souls,
+            &q_familiars,
+            &q_targets,
+        );
+        apply_selection_intent(
+            intent,
+            &mut selected_entity,
+            &mut next_play_mode,
+            &mut task_context,
+            &mut q_dest,
+        );
+    }
+}
 
-        if let Some(selected) = selected_entity.0 {
-            // 使い魔の場合のみ移動指示を出す（Soulは直接指示不可）
-            if q_familiars.get(selected).is_ok() {
-                if let Ok(mut dest) = q_dest.get_mut(selected) {
-                    dest.0 = world_pos;
-                }
+/// Applies a `SelectionIntent` to ECS state. This is the root-side adapter.
+fn apply_selection_intent(
+    intent: SelectionIntent,
+    selected_entity: &mut SelectedEntity,
+    next_play_mode: &mut NextState<PlayMode>,
+    task_context: &mut TaskContext,
+    q_dest: &mut Query<&mut Destination>,
+) {
+    match intent {
+        SelectionIntent::Select(entity) => {
+            selected_entity.0 = Some(entity);
+        }
+        SelectionIntent::ClearSelection => {
+            selected_entity.0 = None;
+        }
+        SelectionIntent::StartAreaSelection { familiar } => {
+            selected_entity.0 = Some(familiar);
+            task_context.0 = TaskMode::AreaSelection(None);
+            next_play_mode.set(PlayMode::TaskDesignation);
+        }
+        SelectionIntent::MoveFamiliar {
+            familiar,
+            destination,
+        } => {
+            if let Ok(mut dest) = q_dest.get_mut(familiar) {
+                dest.0 = destination;
             }
         }
+        SelectionIntent::None => {}
     }
 }
 

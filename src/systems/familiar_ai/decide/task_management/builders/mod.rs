@@ -7,12 +7,12 @@ pub use haul::*;
 pub use water::*;
 
 use crate::events::{ResourceReservationOp, TaskAssignmentRequest};
-use crate::systems::familiar_ai::decide::task_management::{AssignTaskContext, ReservationShadow};
 use crate::systems::familiar_ai::decide::task_management::FamiliarTaskAssignmentQueries;
+use crate::systems::familiar_ai::decide::task_management::{AssignTaskContext, ReservationShadow};
 use crate::systems::jobs::WorkType;
-use crate::systems::soul_ai::execute::task_execution::types::AssignedTask;
 use crate::systems::logistics::ResourceType;
 use crate::systems::logistics::transport_request::WheelbarrowDestination;
+use crate::systems::soul_ai::execute::task_execution::types::AssignedTask;
 use bevy::prelude::*;
 
 pub fn submit_assignment(
@@ -60,8 +60,14 @@ fn apply_destination_shadow(
                 reserve_item_destination(queries, shadow, target, item);
             }
 
-            if data.items.is_empty() && let Some(resource_type) = data.collect_resource_type {
-                shadow.reserve_destination(target, Some(resource_type), data.collect_amount.max(1) as usize);
+            if data.items.is_empty()
+                && let Some(resource_type) = data.collect_resource_type
+            {
+                shadow.reserve_destination(
+                    target,
+                    Some(resource_type),
+                    data.collect_amount.max(1) as usize,
+                );
             }
         }
         _ => {}
@@ -80,12 +86,11 @@ fn reserve_item_destination(
         .ok()
         .map(|(item, _)| item.0)
         .or_else(|| {
-            queries
-                .designation
-                .targets
-                .get(item)
-                .ok()
-                .and_then(|(_, _, _, _, resource_item_opt, _, _)| resource_item_opt.map(|resource_item| resource_item.0))
+            queries.designation.targets.get(item).ok().and_then(
+                |(_, _, _, _, resource_item_opt, _, _)| {
+                    resource_item_opt.map(|resource_item| resource_item.0)
+                },
+            )
         });
     shadow.reserve_destination(target, resource_type, 1);
 }
@@ -139,10 +144,7 @@ pub fn build_source_reservation_ops(sources: &[Entity]) -> Vec<ResourceReservati
     sources
         .iter()
         .copied()
-        .map(|source| ResourceReservationOp::ReserveSource {
-            source,
-            amount: 1,
-        })
+        .map(|source| ResourceReservationOp::ReserveSource { source, amount: 1 })
         .collect()
 }
 
@@ -168,20 +170,22 @@ pub fn build_wheelbarrow_reservation_ops(
     reserved_sources: &[Entity],
     destination_items: &[Entity],
 ) -> Vec<ResourceReservationOp> {
-    let mut reservation_ops = Vec::with_capacity(1 + reserved_sources.len() + destination_items.len());
+    let mut reservation_ops =
+        Vec::with_capacity(1 + reserved_sources.len() + destination_items.len());
     reservation_ops.push(ResourceReservationOp::ReserveSource {
         source: wheelbarrow,
         amount: 1,
     });
 
     for &source in reserved_sources {
-        reservation_ops.push(ResourceReservationOp::ReserveSource {
-            source,
-            amount: 1,
-        });
+        reservation_ops.push(ResourceReservationOp::ReserveSource { source, amount: 1 });
     }
 
-    if let WheelbarrowDestination::Mixer { entity, resource_type } = destination {
+    if let WheelbarrowDestination::Mixer {
+        entity,
+        resource_type,
+    } = destination
+    {
         for &item in destination_items {
             let item_resource_type = queries
                 .items

@@ -3,13 +3,13 @@ use bevy::prelude::*;
 pub mod intents;
 pub use intents::UiIntent;
 pub mod components;
-pub mod theme;
-pub mod setup;
-pub mod plugins;
 pub mod interaction;
-pub mod panels;
 pub mod list;
 pub mod models;
+pub mod panels;
+pub mod plugins;
+pub mod setup;
+pub mod theme;
 
 pub struct HwUiPlugin;
 
@@ -18,5 +18,5 @@ impl Plugin for HwUiPlugin {
         app.add_message::<UiIntent>();
     }
 }
-pub mod selection;
 pub mod camera;
+pub mod selection;

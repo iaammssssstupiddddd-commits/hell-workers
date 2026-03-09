@@ -1,10 +1,10 @@
-use hw_core::constants::{ROCK_DROP_AMOUNT, WOOD_DROP_AMOUNT};
 use crate::systems::jobs::WorkType;
 use crate::systems::logistics::ResourceType;
 use crate::systems::world::zones::{AreaBounds, Yard};
 use crate::world::map::WorldMap;
 use crate::world::pathfinding::{self, PathfindingContext};
 use bevy::prelude::*;
+use hw_core::constants::{ROCK_DROP_AMOUNT, WOOD_DROP_AMOUNT};
 use std::cmp::Ordering;
 
 pub(super) const STAGE_COUNT: usize = 3;
@@ -129,7 +129,10 @@ pub(super) fn resolve_owner(
             .into_iter()
             .min_by(|(owner_a, info_a), (owner_b, info_b)| {
                 distance_sq_to_yard_perimeter(pos, info_a.yard.as_ref().unwrap())
-                    .partial_cmp(&distance_sq_to_yard_perimeter(pos, info_b.yard.as_ref().unwrap()))
+                    .partial_cmp(&distance_sq_to_yard_perimeter(
+                        pos,
+                        info_b.yard.as_ref().unwrap(),
+                    ))
                     .unwrap_or(std::cmp::Ordering::Equal)
                     .then(owner_a.to_bits().cmp(&owner_b.to_bits()))
             })
@@ -171,10 +174,7 @@ fn distance_sq_to_task_area_perimeter(pos: Vec2, area: &AreaBounds) -> f32 {
     }
 }
 
-fn distance_sq_to_yard_perimeter(
-    pos: Vec2,
-    yard: &Yard,
-) -> f32 {
+fn distance_sq_to_yard_perimeter(pos: Vec2, yard: &Yard) -> f32 {
     let inside_x = pos.x >= yard.min.x && pos.x <= yard.max.x;
     let inside_y = pos.y >= yard.min.y && pos.y <= yard.max.y;
 
@@ -222,14 +222,8 @@ pub(super) fn is_reachable(
     pf_context: &mut PathfindingContext,
 ) -> bool {
     let target_grid = WorldMap::world_to_grid(target_pos);
-    pathfinding::find_path_to_adjacent(
-        world_map,
-        pf_context,
-        start_grid,
-        target_grid,
-        true,
-    )
-    .is_some()
+    pathfinding::find_path_to_adjacent(world_map, pf_context, start_grid, target_grid, true)
+        .is_some()
 }
 
 pub(super) fn div_ceil_u32(value: u32, divisor: u32) -> u32 {

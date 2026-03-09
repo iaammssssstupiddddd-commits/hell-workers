@@ -3,7 +3,6 @@
 use std::cmp::Ordering;
 use std::collections::{BinaryHeap, HashMap};
 
-use hw_core::constants::*;
 use crate::relationships::{StoredIn, StoredItems};
 use crate::systems::jobs::Blueprint;
 use crate::systems::logistics::transport_request::{
@@ -15,6 +14,7 @@ use crate::systems::logistics::{
     BelongsTo, ReservedForTask, ResourceItem, ResourceType, Stockpile,
 };
 use bevy::prelude::*;
+use hw_core::constants::*;
 
 use super::types::{FreeItemSnapshot, HeapEntry, ItemBucketKey, NearbyItem, RequestEvalContext};
 
@@ -93,7 +93,9 @@ pub fn build_request_eval_context(
     let eligible_kind = match req.kind {
         TransportRequestKind::DepositToStockpile => true,
         TransportRequestKind::DeliverToBlueprint => req.resource_type.requires_wheelbarrow(),
-        TransportRequestKind::DeliverToFloorConstruction => req.resource_type == ResourceType::StasisMud,
+        TransportRequestKind::DeliverToFloorConstruction => {
+            req.resource_type == ResourceType::StasisMud
+        }
         // Mixer 固体はどのリソースでも猫車で一括運搬可能
         TransportRequestKind::DeliverToMixerSolid => true,
         _ => false,

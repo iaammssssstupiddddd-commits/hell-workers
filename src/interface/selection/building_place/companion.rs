@@ -1,7 +1,7 @@
-use hw_core::constants::TILE_SIZE;
 use crate::app_contexts::{CompanionParentKind, CompanionPlacement, CompanionPlacementKind};
 use crate::systems::jobs::BuildingType;
 use bevy::prelude::*;
+use hw_core::constants::TILE_SIZE;
 
 const COMPANION_PLACEMENT_RADIUS_TILES: f32 = 5.0;
 

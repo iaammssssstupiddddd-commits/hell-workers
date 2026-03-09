@@ -1,6 +1,6 @@
-use hw_core::constants::*;
 use bevy::prelude::*;
 use bevy::ui_render::prelude::MaterialNode;
+use hw_core::constants::*;
 
 use super::super::super::components::DreamTrailGhost;
 use super::super::super::dream_bubble_material::DreamBubbleUiMaterial;

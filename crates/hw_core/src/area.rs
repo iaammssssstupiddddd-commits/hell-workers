@@ -30,10 +30,7 @@ impl AreaBounds {
     }
 
     pub fn contains(&self, pos: Vec2) -> bool {
-        pos.x >= self.min.x
-            && pos.x <= self.max.x
-            && pos.y >= self.min.y
-            && pos.y <= self.max.y
+        pos.x >= self.min.x && pos.x <= self.max.x && pos.y >= self.min.y && pos.y <= self.max.y
     }
 
     pub fn contains_with_margin(&self, pos: Vec2, margin: f32) -> bool {

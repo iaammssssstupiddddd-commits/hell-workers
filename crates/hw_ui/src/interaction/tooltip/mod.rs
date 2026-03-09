@@ -5,8 +5,8 @@ mod layout;
 mod target;
 
 use crate::components::{
-    HoverTooltip, MenuAction, MenuState, TooltipBody, TooltipHeader, TooltipProgressBar, TooltipTemplate,
-    UiNodeRegistry, UiSlot, UiTooltip,
+    HoverTooltip, MenuAction, MenuState, TooltipBody, TooltipHeader, TooltipProgressBar,
+    TooltipTemplate, UiNodeRegistry, UiSlot, UiTooltip,
 };
 use crate::models::inspection::EntityInspectionModel;
 use crate::theme::UiTheme;
@@ -14,8 +14,8 @@ use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use bevy::ui_widgets::popover::Popover;
 
-pub use target::TooltipTarget;
 pub use layout::TooltipUiLayoutQueryParam;
+pub use target::TooltipTarget;
 
 #[derive(Default)]
 pub struct TooltipRuntimeState {
@@ -127,7 +127,8 @@ pub fn hover_tooltip_system<'w, 's, I, R>(
     let mut hovered_button_y_span = None;
     let mut payload = String::new();
 
-    if let Some((button_entity, _, tooltip_data, menu_button, computed, transform)) = hovered_button {
+    if let Some((button_entity, _, tooltip_data, menu_button, computed, transform)) = hovered_button
+    {
         target = Some(TooltipTarget::UiButton(button_entity));
         template = TooltipTemplate::UiButton;
         ui_tooltip = Some(UiTooltip {

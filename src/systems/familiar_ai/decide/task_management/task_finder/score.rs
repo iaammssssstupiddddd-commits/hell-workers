@@ -1,6 +1,6 @@
 use crate::systems::jobs::{TargetBlueprint, WorkType};
-use crate::systems::logistics::{ResourceType, tank_can_accept_new_bucket};
 use crate::systems::logistics::transport_request::TransportRequestKind;
+use crate::systems::logistics::{ResourceType, tank_can_accept_new_bucket};
 use bevy::prelude::*;
 
 pub(super) fn score_candidate(

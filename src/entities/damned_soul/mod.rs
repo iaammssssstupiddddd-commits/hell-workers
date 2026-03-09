@@ -10,8 +10,8 @@ use rand::Rng;
 
 // コアコンポーネントは hw_core::soul から再エクスポート
 pub use hw_core::soul::{
-    DamnedSoul, DreamPool, DreamQuality, DreamState, DriftEdge, DriftPhase, DriftingState,
-    Destination, GatheringBehavior, IdleBehavior, IdleState, Path, RestAreaCooldown,
+    DamnedSoul, Destination, DreamPool, DreamQuality, DreamState, DriftEdge, DriftPhase,
+    DriftingState, GatheringBehavior, IdleBehavior, IdleState, Path, RestAreaCooldown,
     StressBreakdown,
 };
 

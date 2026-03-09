@@ -1,5 +1,6 @@
 //! ボトムバー UI
 
+use super::UiSetupAssets;
 use crate::components::{
     MenuAction, MenuButton, UiInputBlocker, UiNodeRegistry, UiSlot, UiTooltip,
 };
@@ -7,7 +8,6 @@ use crate::theme::UiTheme;
 use bevy::prelude::*;
 use bevy::ui::RelativeCursorPosition;
 use bevy::ui::{BackgroundGradient, ColorStop, LinearGradient};
-use super::UiSetupAssets;
 
 /// ボトムバーをスポーン
 pub fn spawn_bottom_bar(

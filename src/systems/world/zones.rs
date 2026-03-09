@@ -19,13 +19,19 @@ impl Site {
     }
 
     pub fn bounds(&self) -> AreaBounds {
-        AreaBounds { min: self.min, max: self.max }
+        AreaBounds {
+            min: self.min,
+            max: self.max,
+        }
     }
 }
 
 impl From<&Site> for AreaBounds {
     fn from(site: &Site) -> Self {
-        AreaBounds { min: site.min, max: site.max }
+        AreaBounds {
+            min: site.min,
+            max: site.max,
+        }
     }
 }
 
@@ -44,7 +50,10 @@ impl Yard {
     }
 
     pub fn bounds(&self) -> AreaBounds {
-        AreaBounds { min: self.min, max: self.max }
+        AreaBounds {
+            min: self.min,
+            max: self.max,
+        }
     }
 
     pub fn width_tiles(&self) -> usize {
@@ -66,10 +75,12 @@ impl Yard {
 
 impl From<&Yard> for AreaBounds {
     fn from(yard: &Yard) -> Self {
-        AreaBounds { min: yard.min, max: yard.max }
+        AreaBounds {
+            min: yard.min,
+            max: yard.max,
+        }
     }
 }
-
 
 #[derive(Component, Clone, Debug)]
 pub struct PairedYard(pub Entity);

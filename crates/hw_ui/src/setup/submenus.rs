@@ -1,17 +1,17 @@
 //! サブメニュー UI (Architect, Zones, Orders)
 
+use super::UiSetupAssets;
 use crate::components::{
     ArchitectBuildingPanel, ArchitectCategoryListPanel, ArchitectSubMenu, DreamSubMenu, MenuAction,
     MenuButton, OrdersSubMenu, UiInputBlocker, ZonesSubMenu,
 };
 use crate::theme::UiTheme;
-use hw_core::game_state::TaskMode;
-use hw_jobs::{BuildingCategory, BuildingType};
-use hw_logistics::zone::ZoneType;
 use bevy::ecs::hierarchy::ChildSpawnerCommands;
 use bevy::prelude::*;
 use bevy::ui::RelativeCursorPosition;
-use super::UiSetupAssets;
+use hw_core::game_state::TaskMode;
+use hw_jobs::{BuildingCategory, BuildingType};
+use hw_logistics::zone::ZoneType;
 
 /// サブメニューをスポーン
 pub fn spawn_submenus(
@@ -407,7 +407,11 @@ fn orders_menu_specs(theme: &UiTheme) -> Vec<MenuEntrySpec<'static>> {
             MenuAction::SelectTaskMode(TaskMode::CancelDesignation(None)),
             theme.colors.button_default,
         ),
-        MenuEntrySpec::new("Area", MenuAction::SelectAreaTask, theme.colors.button_default),
+        MenuEntrySpec::new(
+            "Area",
+            MenuAction::SelectAreaTask,
+            theme.colors.button_default,
+        ),
     ]
 }
 

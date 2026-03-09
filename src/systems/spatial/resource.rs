@@ -1,5 +1,5 @@
-use bevy::prelude::*;
 use crate::systems::logistics::ResourceItem;
+use bevy::prelude::*;
 
 /// リソースアイテム用の空間グリッド
 pub use hw_spatial::ResourceSpatialGrid;

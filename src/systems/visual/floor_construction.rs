@@ -1,7 +1,6 @@
 //! Floor construction visual feedback
 
 use crate::assets::GameAssets;
-use hw_core::constants::{FLOOR_BONES_PER_TILE, FLOOR_CURING_DURATION_SECS, TILE_SIZE, Z_BAR_BG};
 use crate::systems::jobs::floor_construction::{
     FloorConstructionPhase, FloorConstructionSite, FloorTileBlueprint, FloorTileState,
 };
@@ -11,6 +10,7 @@ use crate::systems::utils::progress_bar::{
     update_progress_bar_fill,
 };
 use bevy::prelude::*;
+use hw_core::constants::{FLOOR_BONES_PER_TILE, FLOOR_CURING_DURATION_SECS, TILE_SIZE, Z_BAR_BG};
 use std::collections::HashSet;
 
 const MAX_BONE_VISUAL_SLOTS: u8 = 2;

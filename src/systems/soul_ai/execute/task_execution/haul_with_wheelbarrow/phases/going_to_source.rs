@@ -42,7 +42,7 @@ pub fn handle(
                     .incoming_deliveries_query
                     .get(stockpile)
                     .ok()
-                .map(|(_, inc)| inc.len())
+                    .map(|(_, inc)| inc.len())
                     .unwrap_or(0);
                 if (current_count + incoming) >= stock.capacity {
                     cancel::cancel_wheelbarrow_task(ctx, &data, commands);

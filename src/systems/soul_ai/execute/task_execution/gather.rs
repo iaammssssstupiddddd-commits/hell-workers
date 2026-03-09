@@ -1,7 +1,6 @@
 //! 収集タスクの実行処理
 
 use crate::assets::GameAssets;
-use hw_core::constants::*;
 use crate::systems::jobs::{Designation, WorkType};
 use crate::systems::logistics::ResourceItem;
 use crate::systems::soul_ai::execute::task_execution::{
@@ -11,6 +10,7 @@ use crate::systems::soul_ai::execute::task_execution::{
 };
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
+use hw_core::constants::*;
 
 pub fn handle_gather_task(
     ctx: &mut TaskExecutionContext,

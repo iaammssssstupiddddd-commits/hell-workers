@@ -48,10 +48,7 @@ pub fn sync_removed_floor_tile_site_index_system(
     mut tile_site_index: ResMut<TileSiteIndex>,
     mut q_removed: RemovedComponents<FloorTileBlueprint>,
 ) {
-    sync_removed_tiles(
-        &mut tile_site_index.floor_tiles_by_site,
-        q_removed.read(),
-    );
+    sync_removed_tiles(&mut tile_site_index.floor_tiles_by_site, q_removed.read());
 }
 
 pub fn sync_wall_tile_site_index_system(
@@ -73,9 +70,5 @@ pub fn sync_removed_wall_tile_site_index_system(
     mut tile_site_index: ResMut<TileSiteIndex>,
     mut q_removed: RemovedComponents<WallTileBlueprint>,
 ) {
-    sync_removed_tiles(
-        &mut tile_site_index.wall_tiles_by_site,
-        q_removed.read(),
-    );
+    sync_removed_tiles(&mut tile_site_index.wall_tiles_by_site, q_removed.read());
 }
-

@@ -1,21 +1,21 @@
 mod companion;
-mod door_rules;
 mod flow;
-mod geometry;
 mod placement;
 
+use crate::app_contexts::{
+    BuildContext, CompanionParentKind, CompanionPlacementKind, CompanionPlacementState,
+};
 use crate::assets::GameAssets;
-use crate::systems::world::zones::{Site, Yard};
-use crate::app_contexts::{BuildContext, CompanionParentKind, CompanionPlacementKind, CompanionPlacementState};
 use crate::interface::camera::MainCamera;
 use crate::interface::ui::UiInputState;
 use crate::systems::jobs::{Blueprint, Building, BuildingType};
-use crate::world::map::{WorldMap, WorldMapWrite};
+use crate::systems::world::zones::{Site, Yard};
+use crate::world::map::{RIVER_Y_MIN, WorldMap, WorldMapWrite};
 use bevy::prelude::*;
+use hw_ui::selection::building_spawn_pos;
 
 use companion::make_companion_placement;
 use flow::handle_companion_flow;
-use geometry::building_spawn_pos;
 use placement::place_building_blueprint;
 
 pub fn blueprint_placement(
@@ -65,7 +65,7 @@ pub fn blueprint_placement(
     let Some(building_type) = build_context.0 else {
         return;
     };
-    let spawn_pos = building_spawn_pos(building_type, grid);
+    let spawn_pos = building_spawn_pos(building_type, grid, RIVER_Y_MIN);
 
     if building_type == BuildingType::Tank {
         companion_state.0 = Some(make_companion_placement(

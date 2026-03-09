@@ -1,6 +1,5 @@
 //! Wall construction visual feedback
 
-use hw_core::constants::{TILE_SIZE, Z_BAR_BG};
 use crate::systems::jobs::wall_construction::{
     WallConstructionPhase, WallConstructionSite, WallTileBlueprint, WallTileState,
 };
@@ -10,6 +9,7 @@ use crate::systems::utils::progress_bar::{
     update_progress_bar_fill,
 };
 use bevy::prelude::*;
+use hw_core::constants::{TILE_SIZE, Z_BAR_BG};
 use std::collections::HashSet;
 
 const WALL_PROGRESS_BAR_WIDTH: f32 = 40.0;

@@ -16,8 +16,8 @@ use bevy::math::Vec2;
 use bevy::prelude::{Commands, Entity, Query, Transform, Visibility};
 use std::collections::{HashMap, HashSet};
 
-use crate::systems::logistics::{ResourceItem, ResourceType};
 use crate::systems::logistics::transport_request::{TransportRequest, TransportRequestKind};
+use crate::systems::logistics::{ResourceItem, ResourceType};
 use crate::systems::spatial::{ResourceSpatialGrid, SpatialGridOps};
 
 pub(crate) fn to_u32_saturating(value: usize) -> u32 {
@@ -52,12 +52,11 @@ pub(crate) fn find_owner(
         .map(|(entity, area)| (*entity, area))
 }
 
-pub(crate) fn find_owner_yard(
-    pos: Vec2,
-    yards: &[(Entity, Yard)],
-) -> Option<(Entity, &Yard)> {
-    let mut candidates: Vec<&(Entity, Yard)> =
-        yards.iter().filter(|(_, yard)| yard.contains(pos)).collect();
+pub(crate) fn find_owner_yard(pos: Vec2, yards: &[(Entity, Yard)]) -> Option<(Entity, &Yard)> {
+    let mut candidates: Vec<&(Entity, Yard)> = yards
+        .iter()
+        .filter(|(_, yard)| yard.contains(pos))
+        .collect();
     if candidates.is_empty() {
         return None;
     }
@@ -192,7 +191,9 @@ pub(crate) fn consume_waiting_tile_resources<
     consumed
 }
 
-pub(crate) fn sync_construction_delivery<TTile: bevy::prelude::Component<Mutability = bevy::ecs::component::Mutable>>(
+pub(crate) fn sync_construction_delivery<
+    TTile: bevy::prelude::Component<Mutability = bevy::ecs::component::Mutable>,
+>(
     commands: &mut Commands,
     site_entity: Entity,
     site_pos: Vec2,
@@ -200,15 +201,13 @@ pub(crate) fn sync_construction_delivery<TTile: bevy::prelude::Component<Mutabil
     required_amount: u32,
     pickup_radius: f32,
     resource_grid: &crate::systems::spatial::ResourceSpatialGrid,
-    q_resources: &Query<
-        (
-            Entity,
-            &Transform,
-            &Visibility,
-            &crate::systems::logistics::ResourceItem,
-            Option<&crate::relationships::StoredIn>,
-        ),
-    >,
+    q_resources: &Query<(
+        Entity,
+        &Transform,
+        &Visibility,
+        &crate::systems::logistics::ResourceItem,
+        Option<&crate::relationships::StoredIn>,
+    )>,
     resources_scanned: &mut u32,
     tiles_by_site: &HashMap<Entity, Vec<Entity>>,
     q_tiles: &mut Query<&mut TTile>,
@@ -249,7 +248,12 @@ pub(crate) fn sync_construction_delivery<TTile: bevy::prelude::Component<Mutabil
 
 pub(crate) fn sync_construction_requests<TTarget: bevy::prelude::Component>(
     commands: &mut Commands,
-    q_requests: &Query<(Entity, &TTarget, &TransportRequest, Option<&crate::relationships::TaskWorkers>)>,
+    q_requests: &Query<(
+        Entity,
+        &TTarget,
+        &TransportRequest,
+        Option<&crate::relationships::TaskWorkers>,
+    )>,
     desired_requests: &HashMap<(Entity, ResourceType), (Entity, u32, Vec2)>,
     expected_kind: TransportRequestKind,
     request_name: &'static str,

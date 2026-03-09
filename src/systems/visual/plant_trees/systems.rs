@@ -2,8 +2,8 @@ use super::components::{
     PlantTreeLifeSpark, PlantTreeMagicCircle, PlantTreeVisualPhase, PlantTreeVisualState,
 };
 use crate::assets::GameAssets;
-use hw_core::constants::*;
 use bevy::prelude::*;
+use hw_core::constants::*;
 use rand::Rng;
 
 fn lerp(from: f32, to: f32, t: f32) -> f32 {

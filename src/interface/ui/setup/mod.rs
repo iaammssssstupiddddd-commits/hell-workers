@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use hw_ui::setup::{setup_ui as hwui_setup_ui, UiSetupAssets};
+use hw_ui::setup::{UiSetupAssets, setup_ui as hwui_setup_ui};
 
 struct GameAssetsSetupAssets<'a>(&'a crate::assets::GameAssets);
 

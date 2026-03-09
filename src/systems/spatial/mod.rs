@@ -16,9 +16,7 @@ pub use floor_construction::{
     FloorConstructionSpatialGrid, update_floor_construction_spatial_grid_system,
 };
 pub use gathering::{GatheringSpotSpatialGrid, update_gathering_spot_spatial_grid_system};
-pub use grid::{
-    SpatialGridOps,
-};
+pub use grid::SpatialGridOps;
 pub use resource::{ResourceSpatialGrid, update_resource_spatial_grid_system};
 pub use soul::{SpatialGrid, update_spatial_grid_system};
 pub use stockpile::{StockpileSpatialGrid, update_stockpile_spatial_grid_system};

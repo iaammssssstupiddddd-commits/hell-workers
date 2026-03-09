@@ -1,12 +1,12 @@
 use bevy::prelude::*;
 
 use crate::assets::GameAssets;
-use hw_core::constants::*;
 use crate::entities::damned_soul::{DamnedSoul, IdleBehavior, IdleState};
 use crate::relationships::ParticipatingIn;
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
 use crate::systems::soul_ai::helpers::gathering::*;
 use crate::systems::spatial::{GatheringSpotSpatialGrid, SpatialGrid, SpatialGridOps};
+use hw_core::constants::*;
 
 /// 集会スポットの発生システム
 /// アイドル状態のSoulが一定時間経過すると新しい集会を発生させる

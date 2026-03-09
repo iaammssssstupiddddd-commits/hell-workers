@@ -7,8 +7,8 @@ use crate::systems::familiar_ai::decide::task_management::{
 };
 use crate::systems::logistics::ResourceType;
 use crate::systems::logistics::{
-    floor_site_tile_demand_from_index, provisional_wall_mud_demand,
-    wall_site_tile_demand_from_index, TileSiteIndex,
+    TileSiteIndex, floor_site_tile_demand_from_index, provisional_wall_mud_demand,
+    wall_site_tile_demand_from_index,
 };
 
 type TaskAssignmentQueries<'w, 's> =
@@ -50,15 +50,19 @@ pub fn compute_remaining_blueprint_amount(
     if let Some(flexible) = &blueprint_comp.flexible_material_requirement
         && flexible.accepts(resource_type)
     {
-    let incoming = count_matching_incoming_deliveries(
-            blueprint,
-            context,
-            |incoming_resource_type| flexible.accepted_types.contains(&incoming_resource_type),
-        ) + flexible
-            .accepted_types
-            .iter()
-            .map(|accepted_type| context.shadow.destination_reserved_resource(blueprint, *accepted_type) as u32)
-            .sum::<u32>();
+        let incoming =
+            count_matching_incoming_deliveries(blueprint, context, |incoming_resource_type| {
+                flexible.accepted_types.contains(&incoming_resource_type)
+            }) + flexible
+                .accepted_types
+                .iter()
+                .map(|accepted_type| {
+                    context
+                        .shadow
+                        .destination_reserved_resource(blueprint, *accepted_type)
+                        as u32
+                })
+                .sum::<u32>();
 
         return flexible.remaining().saturating_sub(incoming);
     }
@@ -69,7 +73,9 @@ pub fn compute_remaining_blueprint_amount(
     }
 
     let incoming = count_exact_incoming_deliveries(blueprint, resource_type, context)
-        + context.shadow.destination_reserved_resource(blueprint, resource_type) as u32;
+        + context
+            .shadow
+            .destination_reserved_resource(blueprint, resource_type) as u32;
     needed_material.saturating_sub(incoming)
 }
 
@@ -163,11 +169,9 @@ pub fn compute_remaining_stockpile_capacity(
     resource_type: ResourceType,
     context: &DemandReadContext<'_, '_, '_>,
 ) -> u32 {
-    let Ok((_, _, stockpile, stored_items_opt)) = context
-        .queries
-        .storage
-        .stockpiles
-        .get(stockpile_entity) else {
+    let Ok((_, _, stockpile, stored_items_opt)) =
+        context.queries.storage.stockpiles.get(stockpile_entity)
+    else {
         return 0;
     };
     if stockpile.resource_type.is_some() && stockpile.resource_type != Some(resource_type) {
@@ -175,7 +179,9 @@ pub fn compute_remaining_stockpile_capacity(
     }
 
     let stored = stored_items_opt.map(|items| items.len()).unwrap_or(0);
-    let incoming = context.incoming_snapshot.count_exact(stockpile_entity, resource_type) as usize;
+    let incoming = context
+        .incoming_snapshot
+        .count_exact(stockpile_entity, resource_type) as usize;
     let shadow_incoming = context.shadow.destination_reserved_total(stockpile_entity);
     stockpile
         .capacity
@@ -186,11 +192,17 @@ pub fn compute_remaining_provisional_wall_mud(
     wall_entity: Entity,
     context: &DemandReadContext<'_, '_, '_>,
 ) -> u32 {
-    let Ok((_, building, provisional_opt)) = context.queries.storage.buildings.get(wall_entity) else {
+    let Ok((_, building, provisional_opt)) = context.queries.storage.buildings.get(wall_entity)
+    else {
         return 0;
     };
     let base_demand = provisional_wall_mud_demand(&building, provisional_opt.as_deref()) as u32;
-    compute_remaining_from_incoming(wall_entity, base_demand as usize, ResourceType::StasisMud, context)
+    compute_remaining_from_incoming(
+        wall_entity,
+        base_demand as usize,
+        ResourceType::StasisMud,
+        context,
+    )
 }
 
 fn compute_remaining_from_incoming(
@@ -200,7 +212,9 @@ fn compute_remaining_from_incoming(
     context: &DemandReadContext<'_, '_, '_>,
 ) -> u32 {
     let incoming = count_exact_incoming_deliveries(anchor_entity, resource_type, context)
-        + context.shadow.destination_reserved_resource(anchor_entity, resource_type) as u32;
+        + context
+            .shadow
+            .destination_reserved_resource(anchor_entity, resource_type) as u32;
 
     base_demand.saturating_sub(incoming as usize) as u32
 }

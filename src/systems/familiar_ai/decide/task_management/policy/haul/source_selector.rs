@@ -117,8 +117,15 @@ fn nearest_ground_source_with_grid<'w, 's>(
         let mut candidates = Vec::new();
         for entity in nearby_sources {
             mark_candidate_scanned_item();
-            let Ok((transform, _tree_opt, _tree_variant_opt, _rock_opt, resource_opt, _, stored_in_opt)) =
-                queries.designation.targets.get(entity)
+            let Ok((
+                transform,
+                _tree_opt,
+                _tree_variant_opt,
+                _rock_opt,
+                resource_opt,
+                _,
+                stored_in_opt,
+            )) = queries.designation.targets.get(entity)
             else {
                 continue;
             };
@@ -228,8 +235,7 @@ pub fn find_fixed_stockpile_source_item<'w, 's>(
         .get(source_item)
         .ok()
         .map(|b| b.0);
-    let owner_compatible =
-        owner == item_owner || (owner.is_none() && item_owner.is_some());
+    let owner_compatible = owner == item_owner || (owner.is_none() && item_owner.is_some());
     if !owner_compatible {
         return None;
     }
@@ -358,8 +364,15 @@ fn collect_items_for_wheelbarrow_in_radius(
         .into_iter()
         .inspect(|_| mark_candidate_scanned_item())
         .filter_map(|entity| {
-            let Ok((transform, _tree_opt, _tree_variant_opt, _rock_opt, resource_opt, _, stored_in_opt)) =
-                queries.designation.targets.get(entity)
+            let Ok((
+                transform,
+                _tree_opt,
+                _tree_variant_opt,
+                _rock_opt,
+                resource_opt,
+                _,
+                stored_in_opt,
+            )) = queries.designation.targets.get(entity)
             else {
                 return None;
             };

@@ -1,8 +1,8 @@
 //! Wall construction system components
 
 use crate::systems::command::TaskArea;
-pub use hw_jobs::construction::{WallConstructionPhase, WallTileState};
 use bevy::prelude::*;
+pub use hw_jobs::construction::{WallConstructionPhase, WallTileState};
 
 /// Wall construction site - parent entity managing a line of wall tiles
 #[derive(Component, Clone, Debug)]

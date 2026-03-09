@@ -1,6 +1,6 @@
-pub mod foundation;
 pub mod core;
 pub mod entity_list;
+pub mod foundation;
 pub mod info_panel;
 pub mod tooltip;
 

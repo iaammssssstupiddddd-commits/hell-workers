@@ -1,24 +1,55 @@
-mod geometry;
-mod placement;
+pub(crate) mod placement;
 mod preview;
 
-use hw_core::constants::TILE_SIZE;
-use hw_core::game_state::{PlayMode};
-use crate::app_contexts::{CompanionParentKind, CompanionPlacement, CompanionPlacementKind, CompanionPlacementState, MoveContext, MovePlacementState, PendingMovePlacement};
+use crate::app_contexts::{
+    CompanionParentKind, CompanionPlacement, CompanionPlacementKind, CompanionPlacementState,
+    MoveContext, MovePlacementState, PendingMovePlacement,
+};
 use crate::interface::camera::MainCamera;
 use crate::interface::ui::UiInputState;
 use crate::systems::jobs::{Building, BuildingType, Designation, Priority, TaskSlots, WorkType};
 use crate::systems::logistics::transport_request::TransportRequest;
 use crate::systems::soul_ai::execute::task_execution::context::TaskUnassignQueries;
-use crate::systems::soul_ai::execute::task_execution::move_plant::{MovePlantReservation, MovePlanned};
+use crate::systems::soul_ai::execute::task_execution::move_plant::{
+    MovePlanned, MovePlantReservation,
+};
 use crate::systems::soul_ai::execute::task_execution::types::{AssignedTask, MovePlantTask};
 use crate::systems::soul_ai::helpers::work::unassign_task;
 use crate::world::map::{WorldMap, WorldMapWrite};
 use bevy::prelude::*;
+use hw_core::constants::TILE_SIZE;
+use hw_core::game_state::PlayMode;
 
-use geometry::{anchor_grid_for_kind, occupied_grids_for_kind, spawn_pos_for_kind};
-use placement::{can_place_moved_building, can_place_tank_companion_for_move};
+use hw_ui::selection::{
+    WorldReadApi, can_place_moved_building, move_anchor_grid, move_occupied_grids, move_spawn_pos,
+};
+use placement::validate_tank_companion_for_move;
 pub use preview::building_move_preview_system;
+
+struct MoveWorldRead<'a>(&'a WorldMap);
+impl WorldReadApi for MoveWorldRead<'_> {
+    fn has_building(&self, grid: (i32, i32)) -> bool {
+        self.0.has_building(grid)
+    }
+    fn has_stockpile(&self, grid: (i32, i32)) -> bool {
+        self.0.has_stockpile(grid)
+    }
+    fn is_walkable(&self, gx: i32, gy: i32) -> bool {
+        self.0.is_walkable(gx, gy)
+    }
+    fn is_river_tile(&self, gx: i32, gy: i32) -> bool {
+        self.0.is_river_tile(gx, gy)
+    }
+    fn building_entity(&self, grid: (i32, i32)) -> Option<Entity> {
+        self.0.building_entity(grid)
+    }
+    fn stockpile_entity(&self, grid: (i32, i32)) -> Option<Entity> {
+        self.0.stockpile_entity(grid)
+    }
+    fn pos_to_idx(&self, gx: i32, gy: i32) -> Option<usize> {
+        self.0.pos_to_idx(gx, gy)
+    }
+}
 
 const COMPANION_PLACEMENT_RADIUS_TILES: f32 = 5.0;
 
@@ -70,7 +101,9 @@ pub fn building_move_system(
         return;
     }
 
-    let Some(world_pos) = crate::interface::selection::placement_common::world_cursor_pos(&q_window, &q_camera) else {
+    let Some(world_pos) =
+        crate::interface::selection::placement_common::world_cursor_pos(&q_window, &q_camera)
+    else {
         return;
     };
     let destination_grid = WorldMap::world_to_grid(world_pos);
@@ -116,25 +149,27 @@ pub fn building_move_system(
             move_placement_state.0 = None;
             return;
         }
-        let old_anchor = anchor_grid_for_kind(building.kind, transform.translation.truncate());
-        let old_occupied = occupied_grids_for_kind(building.kind, old_anchor);
-        let destination_occupied = occupied_grids_for_kind(building.kind, pending.destination_grid);
+        let old_anchor = move_anchor_grid(building.kind, transform.translation.truncate());
+        let old_occupied = move_occupied_grids(building.kind, old_anchor);
+        let destination_occupied = move_occupied_grids(building.kind, pending.destination_grid);
         if !can_place_moved_building(
-            &world_map,
+            &MoveWorldRead(&world_map),
             target_entity,
             &old_occupied,
             &destination_occupied,
         ) {
             return;
         }
-        if !can_place_tank_companion_for_move(
+        if !validate_tank_companion_for_move(
             &world_map,
             target_entity,
             pending.destination_grid,
             destination_grid,
             &old_occupied,
             &q_bucket_storages,
-        ) {
+        )
+        .can_place
+        {
             return;
         }
 
@@ -161,12 +196,12 @@ pub fn building_move_system(
         return;
     }
 
-    let old_anchor = anchor_grid_for_kind(building.kind, transform.translation.truncate());
-    let old_occupied = occupied_grids_for_kind(building.kind, old_anchor);
-    let destination_occupied = occupied_grids_for_kind(building.kind, destination_grid);
+    let old_anchor = move_anchor_grid(building.kind, transform.translation.truncate());
+    let old_occupied = move_occupied_grids(building.kind, old_anchor);
+    let destination_occupied = move_occupied_grids(building.kind, destination_grid);
 
     if !can_place_moved_building(
-        &world_map,
+        &MoveWorldRead(&world_map),
         target_entity,
         &old_occupied,
         &destination_occupied,
@@ -175,7 +210,7 @@ pub fn building_move_system(
     }
 
     if building.kind == BuildingType::Tank {
-        let center = spawn_pos_for_kind(BuildingType::Tank, destination_grid);
+        let center = move_spawn_pos(BuildingType::Tank, destination_grid);
         move_placement_state.0 = Some(PendingMovePlacement {
             building: target_entity,
             destination_grid,
@@ -254,13 +289,13 @@ fn finalize_move_request(
         world_map,
     );
 
-    let destination_pos = spawn_pos_for_kind(building.kind, destination_grid);
+    let destination_pos = move_spawn_pos(building.kind, destination_grid);
     let (texture, size) = match building.kind {
         BuildingType::Tank => (game_assets.tank_empty.clone(), Vec2::splat(TILE_SIZE * 2.0)),
         BuildingType::MudMixer => (game_assets.mud_mixer.clone(), Vec2::splat(TILE_SIZE * 2.0)),
         _ => return,
     };
-    let destination_occupied = occupied_grids_for_kind(building.kind, destination_grid);
+    let destination_occupied = move_occupied_grids(building.kind, destination_grid);
     let companion_occupied = companion_anchor
         .map(|anchor| vec![anchor, (anchor.0 + 1, anchor.1)])
         .unwrap_or_default();
@@ -298,10 +333,16 @@ fn finalize_move_request(
             custom_size: Some(size),
             ..default()
         },
-        Transform::from_xyz(destination_pos.x, destination_pos.y, transform.translation.z),
+        Transform::from_xyz(
+            destination_pos.x,
+            destination_pos.y,
+            transform.translation.z,
+        ),
         Name::new("Move Plant Task"),
     ));
-    commands.entity(target_entity).insert(MovePlanned { task_entity });
+    commands
+        .entity(target_entity)
+        .insert(MovePlanned { task_entity });
 }
 
 fn cancel_tasks_and_requests_for_moved_building(

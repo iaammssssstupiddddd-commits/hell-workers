@@ -2,13 +2,13 @@ use std::collections::HashSet;
 
 use bevy::prelude::*;
 
-use hw_core::constants::{BUCKET_CAPACITY, MUD_MIXER_CAPACITY};
-use crate::systems::familiar_ai::perceive::resource_sync::SharedResourceCache;
 use crate::relationships::TaskWorkers;
+use crate::systems::familiar_ai::perceive::resource_sync::SharedResourceCache;
 use crate::systems::jobs::MudMixerStorage;
 use crate::systems::logistics::ResourceType;
-use crate::systems::world::zones::{AreaBounds, Yard};
 use crate::systems::soul_ai::execute::task_execution::move_plant::MovePlanned;
+use crate::systems::world::zones::{AreaBounds, Yard};
+use hw_core::constants::{BUCKET_CAPACITY, MUD_MIXER_CAPACITY};
 
 use super::types::MixerCollectSandCandidate;
 
@@ -37,13 +37,7 @@ pub(crate) fn compute_mixer_desired_requests(
     collect_sand_tasking: &HashSet<Entity>,
     collect_sand_candidates: &mut Vec<MixerCollectSandCandidate>,
 ) {
-    for (
-        mixer_entity,
-        mixer_transform,
-        storage,
-        _workers_opt,
-        move_planned_opt,
-    ) in q_mixers.iter()
+    for (mixer_entity, mixer_transform, storage, _workers_opt, move_planned_opt) in q_mixers.iter()
     {
         if move_planned_opt.is_some() {
             continue;
@@ -103,21 +97,22 @@ pub(crate) fn compute_mixer_desired_requests(
 
         let water_inflight_tasks = *water_inflight_by_mixer.get(&mixer_entity).unwrap_or(&0);
         let water_inflight = water_inflight_tasks * BUCKET_CAPACITY;
-        let (water_current, water_capacity) = if let Ok((_, _, stock, stored_opt)) =
-            q_stockpiles_detailed.get(mixer_entity)
-        {
-            if stock.resource_type == Some(ResourceType::Water) {
-                (
-                    stored_opt.map(|s| s.len()).unwrap_or(0) as u32,
-                    stock.capacity as u32,
-                )
+        let (water_current, water_capacity) =
+            if let Ok((_, _, stock, stored_opt)) = q_stockpiles_detailed.get(mixer_entity) {
+                if stock.resource_type == Some(ResourceType::Water) {
+                    (
+                        stored_opt.map(|s| s.len()).unwrap_or(0) as u32,
+                        stock.capacity as u32,
+                    )
+                } else {
+                    (0, MUD_MIXER_CAPACITY)
+                }
             } else {
                 (0, MUD_MIXER_CAPACITY)
-            }
-        } else {
-            (0, MUD_MIXER_CAPACITY)
-        };
-        let projected_water = water_current.saturating_add(water_inflight).min(water_capacity);
+            };
+        let projected_water = water_current
+            .saturating_add(water_inflight)
+            .min(water_capacity);
         let missing_water = water_capacity.saturating_sub(projected_water);
         if missing_water > 0 {
             let desired_slots = missing_water.div_ceil(BUCKET_CAPACITY).max(1);

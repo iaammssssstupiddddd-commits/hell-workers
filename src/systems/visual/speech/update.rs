@@ -1,6 +1,6 @@
 use super::components::*;
-use hw_core::constants::*;
 use bevy::prelude::*;
+use hw_core::constants::*;
 
 /// 吹き出しの追従およびフェードアウト/削除システム
 pub fn update_speech_bubbles(

@@ -14,5 +14,6 @@ pub use grid::{GridData, SpatialGridOps};
 pub use resource::{ResourceSpatialGrid, update_resource_spatial_grid_system};
 pub use soul::{SpatialGrid, update_spatial_grid_system};
 pub use stockpile::{StockpileSpatialGrid, update_stockpile_spatial_grid_system};
-pub use transport_request::{TransportRequestSpatialGrid, update_transport_request_spatial_grid_system};
-
+pub use transport_request::{
+    TransportRequestSpatialGrid, update_transport_request_spatial_grid_system,
+};

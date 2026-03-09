@@ -52,7 +52,12 @@ pub fn behavior_duration_for(behavior: IdleBehavior) -> f32 {
 }
 
 /// 次の IdleBehavior を選択（laziness と dream に基づく）
-pub fn select_next_behavior(laziness: f32, _fatigue: f32, _total_idle_time: f32, dream: f32) -> IdleBehavior {
+pub fn select_next_behavior(
+    laziness: f32,
+    _fatigue: f32,
+    _total_idle_time: f32,
+    dream: f32,
+) -> IdleBehavior {
     let can_sleep = dream > 0.0;
     let mut rng = rand::thread_rng();
     let roll: f32 = rng.gen_range(0.0..1.0);

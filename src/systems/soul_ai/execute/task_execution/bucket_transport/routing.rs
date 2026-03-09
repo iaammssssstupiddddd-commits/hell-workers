@@ -9,7 +9,11 @@ use crate::systems::soul_ai::execute::task_execution::types::{
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
 
-fn set_task_phase(ctx: &mut TaskExecutionContext, data: &BucketTransportData, new_phase: BucketTransportPhase) {
+fn set_task_phase(
+    ctx: &mut TaskExecutionContext,
+    data: &BucketTransportData,
+    new_phase: BucketTransportPhase,
+) {
     *ctx.task = AssignedTask::BucketTransport(BucketTransportData {
         phase: new_phase,
         ..data.clone()
@@ -154,7 +158,10 @@ pub fn transition_to_source(
                     commands,
                     ctx,
                     data.bucket,
-                    match data.source { BucketTransportSource::Tank { tank, .. } => tank, _ => data.bucket },
+                    match data.source {
+                        BucketTransportSource::Tank { tank, .. } => tank,
+                        _ => data.bucket,
+                    },
                     mixer,
                     soul_pos,
                 );

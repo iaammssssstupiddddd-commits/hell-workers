@@ -180,7 +180,12 @@ pub fn handle_haul_to_blueprint_task(
                             "HAUL_TO_BP: Cancelled delivery for {:?} - blueprint {:?} no longer needs {:?}",
                             ctx.soul_entity, blueprint_entity, resource_type
                         );
-                        cancel::cancel_haul_to_blueprint(ctx, item_entity, blueprint_entity, commands);
+                        cancel::cancel_haul_to_blueprint(
+                            ctx,
+                            item_entity,
+                            blueprint_entity,
+                            commands,
+                        );
                         return;
                     }
 

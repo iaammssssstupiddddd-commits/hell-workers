@@ -2,10 +2,10 @@
 
 use super::*;
 use crate::assets::GameAssets;
-use hw_core::constants::*;
 use crate::entities::{spawn_args, spawn_position};
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
 use crate::world::map::{RIVER_X_MAX, RIVER_X_MIN, RIVER_Y_MIN, WorldMap, WorldMapRead};
+use hw_core::constants::*;
 use rand::Rng;
 
 /// Soul の人口管理状態
@@ -182,7 +182,12 @@ pub fn soul_spawning_system(
     world_map: WorldMapRead,
 ) {
     for event in spawn_events.read() {
-        spawn_damned_soul_at(&mut commands, &game_assets, world_map.as_ref(), event.position);
+        spawn_damned_soul_at(
+            &mut commands,
+            &game_assets,
+            world_map.as_ref(),
+            event.position,
+        );
     }
 }
 

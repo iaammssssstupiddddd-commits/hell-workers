@@ -1,14 +1,43 @@
-use hw_core::constants::TILE_SIZE;
-use hw_core::game_state::{PlayMode};
-use crate::app_contexts::{CompanionPlacementKind, CompanionPlacementState, MoveContext, MovePlacementState};
+use crate::app_contexts::{
+    CompanionPlacementKind, CompanionPlacementState, MoveContext, MovePlacementState,
+};
 use crate::interface::camera::MainCamera;
 use crate::systems::jobs::{Building, BuildingType};
 use crate::systems::visual::placement_ghost::{PlacementGhost, PlacementPartnerGhost};
 use crate::world::map::{WorldMap, WorldMapRead};
 use bevy::prelude::*;
+use hw_core::constants::TILE_SIZE;
+use hw_core::game_state::PlayMode;
+use hw_ui::selection::{
+    WorldReadApi, can_place_moved_building, move_anchor_grid, move_occupied_grids, move_spawn_pos,
+};
 
-use super::geometry::{anchor_grid_for_kind, occupied_grids_for_kind, spawn_pos_for_kind};
-use super::placement::{can_place_moved_building, can_place_tank_companion_for_move};
+use super::placement::validate_tank_companion_for_move;
+
+struct PreviewWorldRead<'a>(&'a WorldMap);
+impl WorldReadApi for PreviewWorldRead<'_> {
+    fn has_building(&self, grid: (i32, i32)) -> bool {
+        self.0.has_building(grid)
+    }
+    fn has_stockpile(&self, grid: (i32, i32)) -> bool {
+        self.0.has_stockpile(grid)
+    }
+    fn is_walkable(&self, gx: i32, gy: i32) -> bool {
+        self.0.is_walkable(gx, gy)
+    }
+    fn is_river_tile(&self, gx: i32, gy: i32) -> bool {
+        self.0.is_river_tile(gx, gy)
+    }
+    fn building_entity(&self, grid: (i32, i32)) -> Option<Entity> {
+        self.0.building_entity(grid)
+    }
+    fn stockpile_entity(&self, grid: (i32, i32)) -> Option<Entity> {
+        self.0.stockpile_entity(grid)
+    }
+    fn pos_to_idx(&self, gx: i32, gy: i32) -> Option<usize> {
+        self.0.pos_to_idx(gx, gy)
+    }
+}
 
 pub fn building_move_preview_system(
     mut commands: Commands,
@@ -69,16 +98,23 @@ pub fn building_move_preview_system(
         if active_companion.kind == CompanionPlacementKind::BucketStorage
             && pending.building == target_entity
         {
-            let old_anchor = anchor_grid_for_kind(building.kind, transform.translation.truncate());
-            let old_occupied = occupied_grids_for_kind(building.kind, old_anchor);
-            let can_place = can_place_tank_companion_for_move(
+            let old_anchor = move_anchor_grid(building.kind, transform.translation.truncate());
+            let old_occupied = move_occupied_grids(building.kind, old_anchor);
+            let destination_occupied = move_occupied_grids(building.kind, pending.destination_grid);
+            let can_place = can_place_moved_building(
+                &PreviewWorldRead(world_map.as_ref()),
+                target_entity,
+                &old_occupied,
+                &destination_occupied,
+            ) && validate_tank_companion_for_move(
                 &world_map,
                 target_entity,
                 pending.destination_grid,
                 destination_grid,
                 &old_occupied,
                 &q_bucket_storages,
-            );
+            )
+            .can_place;
             let draw_base = WorldMap::grid_to_world(destination_grid.0, destination_grid.1);
             let draw_pos = draw_base + Vec2::new(TILE_SIZE * 0.5, 0.0);
             let color = if can_place {
@@ -96,7 +132,7 @@ pub fn building_move_preview_system(
                 color,
             );
 
-            let partner_pos = spawn_pos_for_kind(BuildingType::Tank, pending.destination_grid);
+            let partner_pos = move_spawn_pos(BuildingType::Tank, pending.destination_grid);
             let partner_color = Color::srgba(0.8, 0.9, 1.0, 0.35);
             upsert_partner_ghost(
                 &mut commands,
@@ -112,17 +148,17 @@ pub fn building_move_preview_system(
 
     despawn_partner_ghost(&mut commands, &q_partner_ghost);
 
-    let old_anchor = anchor_grid_for_kind(building.kind, transform.translation.truncate());
-    let old_occupied = occupied_grids_for_kind(building.kind, old_anchor);
-    let destination_occupied = occupied_grids_for_kind(building.kind, destination_grid);
+    let old_anchor = move_anchor_grid(building.kind, transform.translation.truncate());
+    let old_occupied = move_occupied_grids(building.kind, old_anchor);
+    let destination_occupied = move_occupied_grids(building.kind, destination_grid);
     let can_place = can_place_moved_building(
-        &world_map,
+        &PreviewWorldRead(world_map.as_ref()),
         target_entity,
         &old_occupied,
         &destination_occupied,
     );
 
-    let draw_pos = spawn_pos_for_kind(building.kind, destination_grid);
+    let draw_pos = move_spawn_pos(building.kind, destination_grid);
     let (texture, size) = match building.kind {
         BuildingType::Tank => (
             game_assets.tank_empty.clone(),
@@ -210,8 +246,11 @@ fn upsert_partner_ghost(
     color: Color,
 ) {
     if let Some((_, mut transform, mut sprite)) = q_partner_ghost.iter_mut().next() {
-        transform.translation =
-            Vec3::new(draw_pos.x, draw_pos.y, hw_core::constants::Z_SELECTION - 0.001);
+        transform.translation = Vec3::new(
+            draw_pos.x,
+            draw_pos.y,
+            hw_core::constants::Z_SELECTION - 0.001,
+        );
         sprite.image = texture;
         sprite.custom_size = Some(size);
         sprite.color = color;

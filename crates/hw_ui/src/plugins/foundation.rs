@@ -1,4 +1,6 @@
-use crate::components::{PlacementFailureTooltip, SectionFolded, UiInputState, UiNodeRegistry, UnassignedFolded};
+use crate::components::{
+    PlacementFailureTooltip, SectionFolded, UiInputState, UiNodeRegistry, UnassignedFolded,
+};
 use crate::theme::UiTheme;
 use bevy::prelude::*;
 

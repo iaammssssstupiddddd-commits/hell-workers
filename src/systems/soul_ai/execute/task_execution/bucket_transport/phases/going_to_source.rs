@@ -44,7 +44,10 @@ pub fn handle(
                 if !guards::tank_can_accept_full_bucket(ctx, tank_entity) {
                     // タンクが満杯: バケツをドロップして auto haul に任せる
                     super::super::helpers::drop_bucket_for_auto_haul(
-                        commands, ctx, data.bucket, world_map,
+                        commands,
+                        ctx,
+                        data.bucket,
+                        world_map,
                     );
                     return;
                 }
@@ -137,7 +140,10 @@ pub fn handle(
 
             if !guards::tank_can_accept_full_bucket(ctx, tank_entity) {
                 super::super::helpers::drop_bucket_for_auto_haul(
-                    commands, ctx, data.bucket, world_map,
+                    commands,
+                    ctx,
+                    data.bucket,
+                    world_map,
                 );
             }
         }

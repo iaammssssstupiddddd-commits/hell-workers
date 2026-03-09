@@ -31,13 +31,7 @@ impl SpatialGridOps for TransportRequestSpatialGrid {
 
 pub fn update_transport_request_spatial_grid_system<T: Component>(
     mut grid: ResMut<TransportRequestSpatialGrid>,
-    query: Query<
-        (Entity, &Transform),
-        (
-            With<T>,
-            Or<(Added<T>, Changed<Transform>)>,
-        ),
-    >,
+    query: Query<(Entity, &Transform), (With<T>, Or<(Added<T>, Changed<Transform>)>)>,
     mut removed: RemovedComponents<T>,
 ) {
     // 変更差分のみを反映する。スポーン直後は次フレームで取り込まれる。
@@ -48,4 +42,3 @@ pub fn update_transport_request_spatial_grid_system<T: Component>(
         grid.remove(entity);
     }
 }
-

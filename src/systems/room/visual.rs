@@ -1,7 +1,7 @@
 use super::components::{Room, RoomOverlayTile};
-use hw_core::constants::{ROOM_BORDER_COLOR, ROOM_BORDER_THICKNESS, TILE_SIZE, Z_ROOM_OVERLAY};
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
+use hw_core::constants::{ROOM_BORDER_COLOR, ROOM_BORDER_THICKNESS, TILE_SIZE, Z_ROOM_OVERLAY};
 use std::collections::HashSet;
 
 /// 壁タイル内端からの距離（壁タイルの中心に近い位置）
@@ -47,7 +47,9 @@ pub fn sync_room_overlay_tiles_system(
                         floor_pos.y + LINE_OFFSET,
                     );
                     parent.spawn((
-                        RoomOverlayTile { grid_pos: (fx, fy + 1) },
+                        RoomOverlayTile {
+                            grid_pos: (fx, fy + 1),
+                        },
                         Sprite {
                             color: ROOM_BORDER_COLOR,
                             custom_size: Some(Vec2::new(width, ROOM_BORDER_THICKNESS)),
@@ -69,7 +71,9 @@ pub fn sync_room_overlay_tiles_system(
                         floor_pos.y + (north_ext - south_ext) / 2.0,
                     );
                     parent.spawn((
-                        RoomOverlayTile { grid_pos: (fx + 1, fy) },
+                        RoomOverlayTile {
+                            grid_pos: (fx + 1, fy),
+                        },
                         Sprite {
                             color: ROOM_BORDER_COLOR,
                             custom_size: Some(Vec2::new(ROOM_BORDER_THICKNESS, height)),
@@ -91,7 +95,9 @@ pub fn sync_room_overlay_tiles_system(
                         floor_pos.y - LINE_OFFSET,
                     );
                     parent.spawn((
-                        RoomOverlayTile { grid_pos: (fx, fy - 1) },
+                        RoomOverlayTile {
+                            grid_pos: (fx, fy - 1),
+                        },
                         Sprite {
                             color: ROOM_BORDER_COLOR,
                             custom_size: Some(Vec2::new(width, ROOM_BORDER_THICKNESS)),
@@ -113,7 +119,9 @@ pub fn sync_room_overlay_tiles_system(
                         floor_pos.y + (north_ext - south_ext) / 2.0,
                     );
                     parent.spawn((
-                        RoomOverlayTile { grid_pos: (fx - 1, fy) },
+                        RoomOverlayTile {
+                            grid_pos: (fx - 1, fy),
+                        },
                         Sprite {
                             color: ROOM_BORDER_COLOR,
                             custom_size: Some(Vec2::new(ROOM_BORDER_THICKNESS, height)),
