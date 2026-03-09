@@ -22,6 +22,9 @@ hw_ai/src/
 | `decide/following.rs` | Decide | Familiar のターゲット追跡移動 |
 | `decide/query_types.rs` | Decide | Familiar Decide 用の narrow query 定義 |
 | `decide/helpers.rs` | Decide | `finalize_state_transitions` / `process_squad_management` などの pure helper |
+| `decide/recruitment.rs` | Decide | `SpatialGridOps` ベースのリクルート判定 |
+| `decide/encouragement.rs` | Decide | 激励対象選定と `EncouragementCooldown` |
+| `decide/auto_gather_for_blueprint/` | Decide | Blueprint auto gather の需要供給計画ヘルパ |
 | `decide/squad.rs` | Decide | 分隊検証・疲労メンバー解放判定 |
 | `decide/scouting.rs` | Decide | スカウト状態ロジックと `ScoutingOutcome` |
 | `decide/supervising.rs` | Decide | 監視状態ロジック |
@@ -109,7 +112,8 @@ hw_ai は**ゲームエンティティ非依存の純粋 AI ロジック**のみ
 ### hw_ai に置かれているもの（純粋ロジック）
 
 - **Soul AI**: バイタル更新・集会タイマー・状態整合・脱走判断・アイドル行動・分離行動
-- **Familiar AI**: 状態変化検出・ターゲット追跡・状態機械・分隊管理・監視/スカウト判断
+- **Familiar AI**: 状態変化検出・ターゲット追跡・状態機械・分隊管理・監視/スカウト判断・リクルート判定・激励対象選定
+- **Blueprint Auto Gather**: 需要供給集計・必要 designation 数の pure planning
 - 純粋ヘルパー関数（`is_soul_available_for_work` 等）
 - root adapter が request message を発行できるよう、`ScoutingOutcome` / `SquadManagementOutcome` のような pure outcome を返す
 
@@ -123,6 +127,8 @@ hw_ai は**ゲームエンティティ非依存の純粋 AI ロジック**のみ
 | `soul_ai/helpers/work.rs::unassign_task` | `WorldMap`・`Visibility` 操作あり |
 | `familiar_ai/decide/task_delegation.rs` | 空間グリッド・`WorldMap` を参照 |
 | `familiar_ai/decide/task_management/` | 全クエリがゲーム固有エンティティ |
+| `familiar_ai/decide/auto_gather_for_blueprint.rs` | `Commands` / pathfinding / Blueprint 直接 query に依存 |
+| `familiar_ai/decide/encouragement.rs` | `Time` / concrete `SpatialGrid` / request message 出力の adapter を担当 |
 | `familiar_ai/decide/state_decision.rs` | concrete `SpatialGrid` と request message 出力の adapter を担当 |
 | `familiar_ai/perceive/resource_sync.rs` | `SharedResourceCache` リソースの更新 |
 
@@ -132,7 +138,7 @@ hw_ai は**ゲームエンティティ非依存の純粋 AI ロジック**のみ
 以下のいずれかを参照・変更するか？
   - WorldMapRead/Write / PathfindingContext
   - concrete SpatialGrid resource
-  - Commands / request message 出力 / app shell wiring
+  - Commands / request message 出力 / Time / app shell wiring
   - speech / visual 専用型
   - soul_ai::task_execution に密結合な full-fat query
     → YES: src/ に置く

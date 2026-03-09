@@ -32,7 +32,6 @@ impl Plugin for FamiliarAiPlugin {
                 .in_set(GameSystemSet::Logic),
         )
         .register_type::<FamiliarAiState>()
-        .register_type::<decide::encouragement::EncouragementCooldown>()
         .init_resource::<perceive::resource_sync::SharedResourceCache>()
         .init_resource::<perceive::resource_sync::ReservationSyncTimer>()
         .init_resource::<DesignationSpatialGrid>()

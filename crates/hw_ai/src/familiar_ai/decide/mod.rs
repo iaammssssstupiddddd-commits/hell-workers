@@ -1,6 +1,9 @@
+pub mod auto_gather_for_blueprint;
+pub mod encouragement;
 pub mod following;
 pub mod helpers;
 pub mod query_types;
+pub mod recruitment;
 pub mod scouting;
 pub mod squad;
 pub mod state_handlers;
