@@ -5,11 +5,11 @@
 use bevy::prelude::*;
 
 use hw_core::area::TaskArea;
+use hw_core::constants::MUD_MIXER_REFINE_PRIORITY;
 use hw_core::events::{DesignationOp, DesignationRequest};
 use hw_core::familiar::{ActiveCommand, FamiliarCommand};
 use hw_core::logistics::ResourceType;
 use hw_core::relationships::{StoredItems, TaskWorkers};
-use hw_core::constants::MUD_MIXER_REFINE_PRIORITY;
 use hw_jobs::mud_mixer::MudMixerStorage;
 use hw_jobs::{AssignedTask, Designation, MovePlanned};
 use hw_logistics::zone::Stockpile;

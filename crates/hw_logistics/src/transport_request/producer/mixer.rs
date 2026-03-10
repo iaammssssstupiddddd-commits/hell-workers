@@ -8,8 +8,8 @@ use hw_core::area::TaskArea;
 use hw_core::events::DesignationRequest;
 use hw_core::familiar::ActiveCommand;
 use hw_core::relationships::{ManagedBy, TaskWorkers};
-use hw_jobs::mud_mixer::{MudMixerStorage, TargetMixer};
 use hw_jobs::Designation;
+use hw_jobs::mud_mixer::{MudMixerStorage, TargetMixer};
 use hw_world::WorldMap;
 use hw_world::zones::Yard;
 

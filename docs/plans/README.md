@@ -19,8 +19,8 @@
 
 | Document | Status | Notes |
 |---|---|---|
-| [familiar-ai-root-thinning-plan-2026-03-09.md](familiar-ai-root-thinning-plan-2026-03-09.md) | Completed | familiar_ai の純AIロジックを hw_ai / hw_logistics へ寄せて root を薄くする計画。 |
-| [soul-ai-root-thinning-plan-2026-03-09.md](soul-ai-root-thinning-plan-2026-03-09.md) | Draft (M2 完了) | soul_ai を段階的に crate へ寄せて root を薄くする計画 |
+| [hw-visual-crate-extraction.md](hw-visual-crate-extraction.md) | Draft | hw_visual クレート化 実装計画 |
+| [soul-ai-root-thinning-plan-2026-03-09.md](soul-ai-root-thinning-plan-2026-03-09.md) | Completed | soul_ai を段階的に crate へ寄せて root を薄くする計画 |
 
 ## アーカイブ計画書一覧 (`docs/plans/archive`)
 
@@ -44,6 +44,7 @@
 | [archive/dream-ui-particle-update-refactor-plan-2026-03-05.md](archive/dream-ui-particle-update-refactor-plan-2026-03-05.md) | アーカイブ | visual/dream/ui_particle/update.rsの計画。 |
 | [archive/dream-visual-update.md](archive/dream-visual-update.md) | アーカイブ | Dreamビジュアル更新計画。 |
 | [archive/dream_per_soul_storage.md](archive/dream_per_soul_storage.md) | アーカイブ | 現状: Dreamはグローバルプール(`DreamPool.points`)に直接加算される。soulの睡眠レートで`DreamPool`に即時反映され、soul個別のdream貯蔵量という概念がないの提案。 |
+| [archive/familiar-ai-root-thinning-plan-2026-03-09.md](archive/familiar-ai-root-thinning-plan-2026-03-09.md) | アーカイブ | familiar_ai を hw_ai へ寄せて root を薄くする計画 |
 | [archive/floor-construction.md](archive/floor-construction.md) | アーカイブ | 床建築システムの実装計画。 |
 | [archive/global-transport-request-plan.md](archive/global-transport-request-plan.md) | アーカイブ | 運搬系のグローバル request 化計画。 |
 | [archive/hover-action-button.md](archive/hover-action-button.md) | アーカイブ | Plant ホバーアクションボタン（プレースホルダー）実装計画 |

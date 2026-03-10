@@ -10,9 +10,9 @@ pub mod task_area;
 pub mod upsert;
 pub mod wheelbarrow;
 
-use hw_world::zones::{AreaBounds, Yard};
 use bevy::math::Vec2;
 use bevy::prelude::{Commands, Entity, Query, Transform, Visibility};
+use hw_world::zones::{AreaBounds, Yard};
 use std::collections::HashMap;
 
 use crate::transport_request::{TransportRequest, TransportRequestKind};
@@ -34,10 +34,7 @@ pub fn collect_all_area_owners(
     all
 }
 
-pub fn find_owner(
-    pos: Vec2,
-    owners: &[(Entity, AreaBounds)],
-) -> Option<(Entity, &AreaBounds)> {
+pub fn find_owner(pos: Vec2, owners: &[(Entity, AreaBounds)]) -> Option<(Entity, &AreaBounds)> {
     owners
         .iter()
         .filter(|(_, area)| area.contains(pos))

@@ -2,11 +2,11 @@ use std::collections::HashSet;
 
 use bevy::prelude::*;
 
-use hw_core::relationships::{StoredItems, TaskWorkers};
-use hw_jobs::mud_mixer::MudMixerStorage;
-use hw_jobs::MovePlanned;
-use hw_world::zones::{AreaBounds, Yard};
 use hw_core::constants::{BUCKET_CAPACITY, MUD_MIXER_CAPACITY};
+use hw_core::relationships::{StoredItems, TaskWorkers};
+use hw_jobs::MovePlanned;
+use hw_jobs::mud_mixer::MudMixerStorage;
+use hw_world::zones::{AreaBounds, Yard};
 
 use crate::resource_cache::SharedResourceCache;
 use crate::transport_request::producer::{find_owner_for_position, find_owner_yard};
@@ -28,12 +28,7 @@ pub(crate) fn compute_mixer_desired_requests(
     all_owners: &[(Entity, AreaBounds)],
     active_yards: &[(Entity, Yard)],
     haul_cache: &SharedResourceCache,
-    q_stockpiles_detailed: &Query<(
-        Entity,
-        &Transform,
-        &Stockpile,
-        Option<&StoredItems>,
-    )>,
+    q_stockpiles_detailed: &Query<(Entity, &Transform, &Stockpile, Option<&StoredItems>)>,
     water_inflight_by_mixer: &std::collections::HashMap<Entity, u32>,
     sand_inflight_by_mixer: &std::collections::HashMap<Entity, u32>,
     collect_sand_demanders: &HashSet<Entity>,

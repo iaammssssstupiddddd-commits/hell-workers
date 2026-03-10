@@ -6,11 +6,6 @@
 use bevy::prelude::*;
 use hw_core::system_sets::{FamiliarAiSystemSet, GameSystemSet, SoulAiSystemSet};
 
-use super::{
-    TransportRequestMetrics, transport_request_anchor_cleanup_system,
-    transport_request_metrics_system, wheelbarrow_arbitration_system,
-};
-use super::state_machine::transport_request_state_sync_system;
 use super::producer::{
     blueprint::blueprint_auto_haul_system,
     bucket::bucket_auto_haul_system,
@@ -23,6 +18,11 @@ use super::producer::{
     tank_water_request::tank_water_request_system,
     task_area::task_area_auto_haul_system,
     wheelbarrow::wheelbarrow_auto_haul_system,
+};
+use super::state_machine::transport_request_state_sync_system;
+use super::{
+    TransportRequestMetrics, transport_request_anchor_cleanup_system,
+    transport_request_metrics_system, wheelbarrow_arbitration_system,
 };
 
 /// TransportRequest サブシステムの実行フェーズ

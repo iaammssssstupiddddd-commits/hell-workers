@@ -5,7 +5,7 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `soul-ai-root-thinning-plan-2026-03-09` |
-| ステータス | `Draft (M2 完了)` |
+| ステータス | `Completed` |
 | 作成日 | `2026-03-09` |
 | 最終更新日 | `2026-03-10` |
 | 作成者 | `AI (Codex)` |
@@ -34,8 +34,8 @@
 - `decide/work/auto_build.rs` の `hw_ai` への移設
 - `GatheringSpot` 系 shared model の下位 crate への移設
 - `GatheringSpotSpatialGrid` の `hw_spatial` への移設
-- `idle_behavior_decision_system` を `hw_ai` へ移すための前提整理
-- `gathering_spawn` を pure logic と root adapter に分割する設計整理
+- `idle_behavior_decision_system` の `hw_ai` への移設
+- `gathering_spawn` の pure logic / root adapter 分離
 - `docs/cargo_workspace.md`, `docs/soul_ai.md`, `src/systems/soul_ai/README.md`, `crates/hw_ai/README.md`, `crates/hw_spatial/README.md` の同期
 
 ### 非対象（Out of Scope）
@@ -339,11 +339,11 @@ src/systems/soul_ai
   - `docs/cargo_workspace.md` ← `GatheringSpot` が `hw_core` に移ったことを反映
 
 - **完了条件**:
-  - [ ] `GatheringSpot` が `hw_core::gathering` に定義されている
-  - [ ] `hw_spatial` が `GatheringSpotSpatialGrid` を所有している
-  - [ ] `hw_ai → hw_spatial` の依存方向が維持されており、`hw_spatial → hw_ai` の逆依存がない
-  - [ ] root から `crate::systems::soul_ai::helpers::gathering::GatheringSpot` のパスで引き続きアクセスできる（re-export chain による）
-  - [ ] `cargo check -p hw_core` / `-p hw_spatial` / `-p hw_ai` が成功する
+  - [x] `GatheringSpot` が `hw_core::gathering` に定義されている
+  - [x] `hw_spatial` が `GatheringSpotSpatialGrid` を所有している
+  - [x] `hw_ai → hw_spatial` の依存方向が維持されており、`hw_spatial → hw_ai` の逆依存がない
+  - [x] root から `crate::systems::soul_ai::helpers::gathering::GatheringSpot` のパスで引き続きアクセスできる（re-export chain による）
+  - [x] `cargo check -p hw_core` / `-p hw_spatial` / `-p hw_ai` が成功する
 
 - **検証**:
   ```bash
@@ -383,9 +383,9 @@ src/systems/soul_ai
      - `game_assets.gathering_card_table.clone()`
      - `game_assets.gathering_campfire.clone()`
      - `game_assets.gathering_barrel.clone()`
-  2. `hw_core::events` に `GatheringSpawnRequest { pos: Vec2, object_type: GatheringObjectType, nearby_souls: usize }` を追加する
+  2. `hw_core::events` に `GatheringSpawnRequest { pos: Vec2, object_type: GatheringObjectType, initiator_entity: Entity, created_at: f32 }` を追加する
   3. hw_ai 側: `GatheringReadiness` の tick と「発生判定 + `GatheringSpawnRequest` の emit」だけを担うシステムを作成する
-  4. root 側: `GatheringSpawnRequest` を受け取り、`GameAssets` を使って aura + object sprite を spawn するアダプターを残す
+  4. root 側: `GatheringSpawnRequest` を受け取り、`GameAssets` を使って aura + object sprite を spawn するアダプターを残し、request 消費時に initiator の状態を再検証する
   5. `GatheringSpawnRequest` を `MessagesPlugin` に登録する
 
 - **変更ファイル**:
@@ -399,11 +399,12 @@ src/systems/soul_ai
   - `src/plugins/messages.rs` ← `GatheringSpawnRequest` 登録
 
 - **完了条件**:
-  - [ ] `idle_behavior_decision_system` の本体が `hw_ai` に移っている
-  - [ ] root `decide/idle_behavior/mod.rs` が re-export shell（1〜3 行）になっている
-  - [ ] `gathering_spawn_system` が pure 判定（hw_ai）と visual adapter（root）に分離されている
-  - [ ] root 側 `gathering_spawn.rs` に `GameAssets` 非依存の判定ロジックが残っていない
-  - [ ] `cargo check -p hw_ai` と `cargo check --workspace` が成功する
+  - [x] `idle_behavior_decision_system` の本体が `hw_ai` に移っている
+  - [x] root `decide/idle_behavior/mod.rs` が re-export shell（1〜3 行）になっている
+  - [x] `gathering_spawn_system` が pure 判定（hw_ai）と visual adapter（root）に分離されている
+  - [x] root 側 `gathering_spawn.rs` に `GameAssets` 非依存の判定ロジックが残っていない
+  - [x] root adapter が request 消費時に stale initiator を破棄する再検証を行っている
+  - [x] `cargo check -p hw_ai` と `cargo check --workspace` が成功する
 
 - **検証**:
   ```bash
@@ -434,9 +435,9 @@ src/systems/soul_ai
   - `crates/hw_spatial/README.md`
 
 - **完了条件**:
-  - [ ] ドキュメント記述と実コードの crate 境界が一致している
-  - [ ] `src/systems/soul_ai` に残るファイルが root-only 契約で説明できる
-  - [ ] 計画書のステータスを `Completed` か `Archived` に更新できる状態になっている
+  - [x] ドキュメント記述と実コードの crate 境界が一致している
+  - [x] `src/systems/soul_ai` に残るファイルが root-only 契約で説明できる
+  - [x] 計画書のステータスを `Completed` に更新している
 
 - **検証**:
   ```bash

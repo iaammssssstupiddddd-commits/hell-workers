@@ -89,7 +89,9 @@ pub fn bucket_auto_haul_system(
             continue;
         }
 
-        let current = stored_opt.map(|stored: &StoredItems| stored.len()).unwrap_or(0);
+        let current = stored_opt
+            .map(|stored: &StoredItems| stored.len())
+            .unwrap_or(0);
         let incoming_deliveries = q_incoming
             .get(storage_entity)
             .ok()

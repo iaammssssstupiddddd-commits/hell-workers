@@ -30,13 +30,13 @@ use crate::entities::damned_soul::{IdleBehavior, RestAreaCooldown};
 use crate::events::{
     OnGatheringLeft, OnSoulRecruited, OnTaskAssigned, OnTaskCompleted, TaskAssignmentRequest,
 };
-use hw_logistics::{SharedResourceCache, apply_reservation_op};
 use crate::systems::soul_ai::helpers::query_types::{
     TaskAssignmentSoulQuery, TaskExecutionSoulQuery,
 };
 use crate::systems::soul_ai::helpers::work::unassign_task;
 use crate::world::map::WorldMapRead;
 use bevy::prelude::*;
+use hw_logistics::{SharedResourceCache, apply_reservation_op};
 
 use context::TaskExecutionContext;
 use handler::run_task_handler;

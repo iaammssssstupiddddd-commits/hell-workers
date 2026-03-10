@@ -109,12 +109,7 @@ fn pick_representative_resource_type_per_group(
     spatial_index: &StockpileGroupSpatialIndex,
     contexts: &[GroupEvalContext],
     q_free_items: &Query<
-        (
-            &Transform,
-            &ResourceItem,
-            &Visibility,
-            Option<&BelongsTo>,
-        ),
+        (&Transform, &ResourceItem, &Visibility, Option<&BelongsTo>),
         (
             Without<Designation>,
             Without<TaskWorkers>,
@@ -201,12 +196,7 @@ pub fn task_area_auto_haul_system(
         Without<ManualTransportRequest>,
     >,
     q_free_items: Query<
-        (
-            &Transform,
-            &ResourceItem,
-            &Visibility,
-            Option<&BelongsTo>,
-        ),
+        (&Transform, &ResourceItem, &Visibility, Option<&BelongsTo>),
         (
             Without<Designation>,
             Without<TaskWorkers>,
