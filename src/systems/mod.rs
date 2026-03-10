@@ -8,7 +8,6 @@ pub mod room;
 pub mod soul_ai;
 pub mod spatial;
 pub mod time;
-pub mod utils;
 pub mod visual;
 pub mod world;
 

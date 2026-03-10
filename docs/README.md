@@ -32,7 +32,7 @@
 
 ## 開発ガイド
 - [architecture.md](architecture.md): 全体構造、システム依存関係、GameTime、空間グリッド一覧。
-- [cargo_workspace.md](cargo_workspace.md): Cargo workspace の crate 責務、依存方向、分割ルール。
+- [cargo_workspace.md](cargo_workspace.md): Cargo workspace の crate 責務、依存方向、分割ルール（hw_core / hw_world / hw_logistics / hw_jobs / hw_ai / hw_spatial / hw_ui / hw_visual）。
 - [world_layout.md](world_layout.md): マップ仕様、地形、**座標変換関数**（`world_to_grid` 等）。
 - [state.md](state.md): PlayMode、**TaskMode全バリアント一覧**（指定・ゾーン・建築モード等）。
 - [DEVELOPMENT.md](DEVELOPMENT.md): AIエージェントおよび開発者向けガイドライン（コーディング規約・MCP活用）。

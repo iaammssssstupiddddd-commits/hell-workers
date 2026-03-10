@@ -8,7 +8,7 @@ use crate::entities::damned_soul::DreamPool;
 use crate::systems::command::AreaEditSession;
 use crate::systems::jobs::{ObstaclePosition, Tree, TreeVariant};
 use crate::systems::logistics::ResourceItem;
-use crate::systems::visual::plant_trees::PlantTreeVisualState;
+use hw_visual::plant_trees::PlantTreeVisualState;
 use crate::world::map::{WorldMap, WorldMapWrite};
 use bevy::prelude::*;
 use hw_core::constants::*;
@@ -237,14 +237,14 @@ fn process_dream_planting(
 
     // 消費エフェクト (-Dream) のポップアップ生成
     let popup_pos = start.extend(Z_FLOATING_TEXT) + Vec3::new(0.0, 20.0, 0.0);
-    let config = crate::systems::utils::floating_text::FloatingTextConfig {
+    let config = hw_visual::floating_text::FloatingTextConfig {
         lifetime: 1.5,
         velocity: Vec2::new(0.0, 30.0),
         initial_color: Color::srgb(1.0, 0.3, 0.3), // 赤色でマイナスを表現
         fade_out: true,
     };
 
-    crate::systems::utils::floating_text::spawn_floating_text(
+    hw_visual::floating_text::spawn_floating_text(
         commands,
         format!("-{:.1} Dream", cost),
         popup_pos,

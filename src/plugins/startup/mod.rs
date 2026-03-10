@@ -4,6 +4,7 @@
 
 mod asset_catalog;
 mod perf_scenario;
+mod visual_handles;
 
 use asset_catalog::create_game_assets;
 use perf_scenario::{
@@ -66,6 +67,7 @@ impl Plugin for StartupPlugin {
             .add_systems(
                 PostStartup,
                 (
+                    visual_handles::init_visual_handles,
                     spawn_map_timed,
                     spawn_terrain_borders_if_enabled,
                     initial_resource_spawner_timed,

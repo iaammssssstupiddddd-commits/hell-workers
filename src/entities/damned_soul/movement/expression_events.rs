@@ -5,7 +5,7 @@ use crate::entities::damned_soul::{
 };
 use crate::events::{OnExhausted, OnGatheringParticipated};
 use crate::systems::soul_ai::helpers::gathering::{GatheringObjectType, GatheringSpot};
-use crate::systems::visual::speech::conversation::events::{
+use hw_visual::speech::conversation::events::{
     ConversationCompleted, ConversationTone, ConversationToneTriggered,
 };
 use bevy::prelude::*;
