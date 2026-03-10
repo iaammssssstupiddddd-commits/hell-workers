@@ -42,11 +42,11 @@ pub(super) fn spawn_completed_building(
             },
             *transform,
             Name::new(format!("Building ({:?})", bp.kind)),
-            crate::systems::visual::blueprint::BuildingBounceEffect {
-                bounce_animation: crate::systems::utils::animations::BounceAnimation {
+            hw_visual::blueprint::BuildingBounceEffect {
+                bounce_animation: hw_visual::animations::BounceAnimation {
                     timer: 0.0,
-                    config: crate::systems::utils::animations::BounceAnimationConfig {
-                        duration: crate::systems::visual::blueprint::BOUNCE_DURATION,
+                    config: hw_visual::animations::BounceAnimationConfig {
+                        duration: hw_visual::blueprint::BOUNCE_DURATION,
                         min_scale: 1.0,
                         max_scale: 1.2,
                     },

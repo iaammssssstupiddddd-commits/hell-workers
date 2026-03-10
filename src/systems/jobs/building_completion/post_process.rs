@@ -184,13 +184,13 @@ fn find_stockpile_grid(world_map: &WorldMap, stockpile_entity: Entity) -> Option
 }
 
 fn spawn_completion_text(commands: &mut Commands, transform: &Transform, game_assets: &GameAssets) {
-    let completion_config = crate::systems::utils::floating_text::FloatingTextConfig {
-        lifetime: crate::systems::visual::blueprint::COMPLETION_TEXT_LIFETIME,
+    let completion_config = hw_visual::floating_text::FloatingTextConfig {
+        lifetime: hw_visual::blueprint::COMPLETION_TEXT_LIFETIME,
         velocity: Vec2::new(0.0, 15.0),
         initial_color: Color::srgb(0.2, 1.0, 0.4),
         fade_out: true,
     };
-    let completion_entity = crate::systems::utils::floating_text::spawn_floating_text(
+    let completion_entity = hw_visual::floating_text::spawn_floating_text(
         commands,
         "Construction Complete!",
         transform.translation.truncate().extend(Z_FLOATING_TEXT) + Vec3::new(0.0, 20.0, 0.0),
@@ -199,8 +199,8 @@ fn spawn_completion_text(commands: &mut Commands, transform: &Transform, game_as
         game_assets.font_ui.clone(),
     );
     commands.entity(completion_entity).insert((
-        crate::systems::visual::blueprint::CompletionText {
-            floating_text: crate::systems::utils::floating_text::FloatingText {
+        hw_visual::blueprint::CompletionText {
+            floating_text: hw_visual::floating_text::FloatingText {
                 lifetime: completion_config.lifetime,
                 config: completion_config,
             },

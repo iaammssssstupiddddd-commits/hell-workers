@@ -38,9 +38,47 @@
 ## AI/Agent-Specific Instructions
 - Before starting work, skim `README.md`, `docs/DEVELOPMENT.md`, and `docs/README.md` for current rules and specs.
 - Keep `cargo check` green; do not report completion with Rust-analyzer errors.
-- Avoid dead code and `#[allow(dead_code)]` unless currently required.
+- Avoid dead code and `#[allow(dead_code)]` unless currently required. Do not leave implementations not documented in `docs/`.
 - Task system conventions: add new `AssignedTask` variants as struct variants and keep task queries aggregated in `TaskQueries` (see `src/systems/soul_ai/execute/task_execution/`).
 - Context hygiene: respect `.cursorignore` and `.geminiignore` by avoiding large build artifacts/logs (`target/`, `dist/`, `.trunk/`, `logs/`, `build_*.txt`, `*_output*.txt`) unless explicitly needed.
+
+### Task Lifecycle
+**On task start**: Review `docs/` to understand current specs and implementation status.
+**On task completion**: Update or create documentation in `docs/` as needed.
+
+### Planning Workflow
+
+#### When to Create a Plan
+Create an implementation plan in `docs/plans/` when:
+- The task involves significant optimization or refactoring
+- Multiple files or systems will be modified
+- The implementation approach requires analysis and evaluation
+- The user explicitly requests a plan
+
+#### Plan File Management
+- **Location**: `docs/plans/` (gitignored - working documents only)
+- **Naming**: Use descriptive kebab-case names (e.g., `blueprint-spatial-grid.md`, `taskarea-optimization.md`)
+- **Format**: Markdown with clear sections:
+  - Problem description
+  - Solution approach
+  - Expected performance impact
+  - Implementation steps
+  - Files to modify
+  - Verification methods
+
+#### Plan Lifecycle
+1. **Creation**: Write detailed plan before implementation
+2. **Implementation**: Follow plan steps, updating as needed
+3. **Completion**:
+   - If successful: Delete plan file or move to archive
+   - If relevant for future: Document in `docs/architecture.md` or system-specific docs
+   - Plans are temporary working documents, not permanent documentation
+
+#### Why Plans are Gitignored
+- Plans are AI working documents for organizing complex tasks
+- Completed features should be documented in permanent docs (`docs/*.md`)
+- Prevents clutter in version control
+- User can manually commit specific plans if needed
 
 ### Bevy バージョンの厳守とドキュメント確認
 - 本プロジェクトは **Bevy 0.18** を使用している。

@@ -149,7 +149,7 @@ pub fn handle_gather_task(
                         // フェードアウト開始
                         commands
                             .entity(target)
-                            .insert(crate::systems::visual::fade::FadeOut { speed: 1.0 });
+                            .insert(hw_visual::fade::FadeOut { speed: 1.0 });
                     } else if rock.is_some() {
                         // 岩1つ → Rock × ROCK_DROP_AMOUNT
                         for i in 0..hw_core::constants::ROCK_DROP_AMOUNT {

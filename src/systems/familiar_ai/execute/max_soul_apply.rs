@@ -8,7 +8,7 @@ use crate::events::FamiliarOperationMaxSoulChangedEvent;
 use crate::relationships::{CommandedBy, Commanding};
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
 use crate::systems::soul_ai::helpers::work::unassign_task;
-use crate::systems::visual::speech::components::{
+use hw_visual::speech::components::{
     BubbleEmotion, BubblePriority, FamiliarBubble, SpeechBubble,
 };
 use crate::world::map::WorldMapRead;
@@ -22,7 +22,7 @@ pub fn handle_max_soul_changed_system(
         (
             &Transform,
             &FamiliarVoice,
-            Option<&mut crate::systems::visual::speech::cooldown::SpeechHistory>,
+            Option<&mut hw_visual::speech::cooldown::SpeechHistory>,
         ),
         With<Familiar>,
     >,
@@ -34,7 +34,7 @@ pub fn handle_max_soul_changed_system(
             &mut AssignedTask,
             &mut Path,
             Option<&mut crate::systems::logistics::Inventory>,
-            Option<&mut crate::systems::visual::speech::cooldown::SpeechHistory>,
+            Option<&mut hw_visual::speech::cooldown::SpeechHistory>,
         ),
         (With<DamnedSoul>, Without<Familiar>),
     >,
@@ -110,10 +110,10 @@ pub fn handle_max_soul_changed_system(
                         };
 
                         if can_speak {
-                            crate::systems::visual::speech::spawn::spawn_familiar_bubble(
+                            hw_visual::speech::spawn::spawn_familiar_bubble(
                                 &mut commands,
                                 event.familiar_entity,
-                                crate::systems::visual::speech::phrases::LatinPhrase::Abi,
+                                hw_visual::speech::phrases::LatinPhrase::Abi,
                                 fam_transform.translation,
                                 &speech_handles,
                                 &q_bubbles,
@@ -125,7 +125,7 @@ pub fn handle_max_soul_changed_system(
                                 history.record_speech(BubblePriority::Normal, current_time);
                             } else {
                                 commands.entity(event.familiar_entity).insert(
-                                    crate::systems::visual::speech::cooldown::SpeechHistory {
+                                    hw_visual::speech::cooldown::SpeechHistory {
                                         last_time: current_time,
                                         last_priority: BubblePriority::Normal,
                                     },

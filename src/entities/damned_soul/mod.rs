@@ -12,7 +12,7 @@ use rand::Rng;
 pub use hw_core::soul::{
     AnimationState, DamnedSoul, Destination, DreamPool, DreamQuality, DreamState, DriftEdge,
     DriftPhase, DriftingState, GatheringBehavior, IdleBehavior, IdleState, Path, RestAreaCooldown,
-    StressBreakdown,
+    SoulUiLinks, StressBreakdown,
 };
 
 /// ソウルのスポーンイベント
@@ -50,14 +50,6 @@ impl SoulIdentity {
         };
         Self { name, gender }
     }
-}
-
-/// ソウルに紐づくUI参照
-#[derive(Component, Default, Reflect)]
-#[reflect(Component)]
-pub struct SoulUiLinks {
-    pub bar_entity: Option<Entity>,
-    pub icon_entity: Option<Entity>,
 }
 
 /// 会話イベント起点の一時的な表情オーバーレイ
@@ -114,7 +106,7 @@ impl Plugin for DamnedSoulPlugin {
                     movement::apply_conversation_expression_event_system
                         .in_set(GameSystemSet::Visual)
                         .after(
-                            crate::systems::visual::speech::conversation::systems::process_conversation_logic,
+                            hw_visual::speech::conversation::systems::process_conversation_logic,
                         ),
                     movement::update_conversation_expression_timer_system
                         .in_set(GameSystemSet::Visual),

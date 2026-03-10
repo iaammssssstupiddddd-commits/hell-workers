@@ -9,7 +9,7 @@ use crate::events::{
     OnGatheringParticipated, ResourceReservationRequest, SquadManagementRequest,
     TaskAssignmentRequest,
 };
-use crate::systems::visual::speech::conversation::events::{
+use hw_visual::speech::conversation::events::{
     ConversationCompleted, ConversationToneTriggered, RequestConversation,
 };
 
