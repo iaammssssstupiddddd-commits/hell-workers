@@ -157,3 +157,21 @@ pub struct DriftingState {
     pub phase_timer: f32,
     pub phase_duration: f32,
 }
+
+/// アニメーション状態
+#[derive(Component)]
+pub struct AnimationState {
+    pub is_moving: bool,
+    pub facing_right: bool,
+    pub bob_timer: f32,
+}
+
+impl Default for AnimationState {
+    fn default() -> Self {
+        Self {
+            is_moving: false,
+            facing_right: true,
+            bob_timer: 0.0,
+        }
+    }
+}
