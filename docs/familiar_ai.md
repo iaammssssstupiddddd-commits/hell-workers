@@ -96,17 +96,16 @@
 - **`decide/encouragement.rs`**: root adapter。対象選定本体は `hw_ai::familiar_ai::decide::encouragement` にある
 - **`decide/scouting.rs` / `decide/supervising.rs`**: root の薄い re-export。スカウト・監視ロジック本体は `hw_ai` にある
 - **`helpers/query_types.rs`**: root の full-fat query と、`hw_ai` 側 narrow query の re-export を集約
-- **`perceive/`**: `state_detection.rs`（`Changed<FamiliarAiState>`検知、**`hw_ai` に移動済み**）, `resource_sync.rs`（SharedResourceCache再構築、root 残留）
+- **`perceive/`**: `state_detection.rs`（`Changed<FamiliarAiState>`検知、**`hw_ai` に移動済み**）, `resource_sync.rs`（`SharedResourceCache` 再構築のみ、root 残留。`apply_reservation_op` / `apply_reservation_requests_system` は **`hw_logistics` に移設済み**）
 - **`execute/`**: `squad_apply.rs` / `max_soul_apply.rs` / `idle_visual_apply.rs` / `encouragement_apply.rs`
 - **設計メモ**:
   - ECS 実状態の変更は `execute/` が担当する
   - Decide フェーズの request message 発行は root adapter が担当し、`hw_ai` 側は `ScoutingOutcome` / `SquadManagementOutcome` のような pure outcome を返す
   - root の `state_decision.rs` / `task_delegation.rs` / `encouragement.rs` / `auto_gather_for_blueprint.rs` は concrete resource・pathfinding・message 出力を受け持ち、必要な view と context だけを `hw_ai` ロジックへ渡す
-- **hw_ai 分担**: `FamiliarAiPlugin` は `hw_ai::FamiliarAiCorePlugin` を内部で `add_plugins` し、以下のシステムを委譲している。`WorldMap`/SpatialGrid 依存のシステムは root 残留。
-  - `perceive/state_detection` — 状態遷移検知（`hw_ai` 移動済み）
-  - `decide/following` — 使い魔追尾（`hw_ai` 移動済み、hw_core 型のみ依存）
-  - `decide/query_types` / `decide/helpers` / `decide/recruitment` / `decide/encouragement` / `decide/squad` / `decide/scouting` / `decide/supervising` / `decide/state_handlers` — 使い魔状態機械の純ロジック
-  - `decide/auto_gather_for_blueprint/{planning,demand,supply,helpers}` — Blueprint auto gather の純計画層
+- **hw_ai 分担**: `FamiliarAiPlugin` は `hw_ai::FamiliarAiCorePlugin` を内部で `add_plugins` する。`WorldMap`/SpatialGrid 依存のシステムは root 残留。
+  - `FamiliarAiCorePlugin` が直接登録するのは `perceive/state_detection`、`decide/following`、`execute/state_apply`、`execute/state_log` と `EncouragementCooldown` の type registration
+  - root adapter が呼び出す pure logic は `decide/query_types` / `decide/helpers` / `decide/recruitment` / `decide/encouragement` / `decide/squad` / `decide/scouting` / `decide/supervising` / `decide/state_handlers`
+  - Blueprint auto gather の純計画層は `decide/auto_gather_for_blueprint/{planning,demand,supply,helpers}` に置き、root は orchestration だけを担う
   - root には `state_decision` / `task_delegation` / `encouragement` / `auto_gather_for_blueprint` の adapter と `WorldMap` / concrete SpatialGrid / pathfinding 依存だけを残す
 - **プラグイン登録**: `FamiliarAiPlugin` は `src/plugins/logic.rs` の `LogicPlugin` 内で登録される（`SoulAiPlugin` と同所）。
 
@@ -137,6 +136,7 @@
 ### 7.1. 共有リソースキャッシュ (SharedResourceCache)
 タスク間のリソース競合を O(1) で管理します。従来の `HaulReservationCache` を統合・拡張したものです。
 - **仕組み**: Perceiveフェーズで **0.2秒間隔（初回即時）** に再構築され、各フレームの更新は `ResourceReservationRequest` を通じて反映されます。
+- **境界**: `apply_reservation_op` / `apply_reservation_requests_system` の実装は `hw_logistics` にあるが、`SharedResourceCache` の `init_resource` と `ResourceReservationRequest` の `add_message` は app shell が担当します。
 - **機能**: 
   - **Destination Reservation**: 搬送先（ストックパイル、タンク、ミキサー）への予約。
   - **Source Reservation**: アイテム（拾う対象）の重複予約防止。

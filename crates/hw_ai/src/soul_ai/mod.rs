@@ -37,6 +37,14 @@ impl Plugin for SoulAiCorePlugin {
                 )
                     .in_set(SoulAiSystemSet::Execute),
             )
+            .add_systems(
+                Update,
+                (
+                    decide::work::auto_refine::mud_mixer_auto_refine_system,
+                    decide::work::auto_build::blueprint_auto_build_system,
+                )
+                    .in_set(SoulAiSystemSet::Decide),
+            )
             .add_observer(update::vitals::on_task_completed_motivation_bonus)
             .add_observer(update::vitals::on_encouraged_effect)
             .add_observer(update::vitals::on_soul_recruited_effect);

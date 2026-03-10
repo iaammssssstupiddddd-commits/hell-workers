@@ -62,9 +62,6 @@ impl Plugin for SoulAiPlugin {
                 // === Decide Phase ===
                 // 次の行動の選択、要求の生成
                 (
-                    // タスク割り当て要求
-                    decide::work::auto_refine::mud_mixer_auto_refine_system,
-                    decide::work::auto_build::blueprint_auto_build_system,
                     // アイドル行動の決定（先に実行）
                     decide::idle_behavior::idle_behavior_decision_system,
                     // 重なり回避（idle_behaviorの後に実行して上書きを防ぐ）
@@ -105,7 +102,7 @@ impl Plugin for SoulAiPlugin {
                     // クリーンアップ
                     execute::cleanup::cleanup_commanded_souls_system,
                     // タスク要求の適用
-                    crate::systems::familiar_ai::perceive::resource_sync::apply_reservation_requests_system,
+                    hw_logistics::apply_reservation_requests_system,
                     // エンティティ生成
                     execute::gathering_spawn::gathering_spawn_system,
                 )

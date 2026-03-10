@@ -331,7 +331,8 @@ Stockpile / Blueprint / Tank などへの搬入予約は、Bevy の Relationship
 - 同期間隔は `RESERVATION_SYNC_INTERVAL`（初回は即時）。
 
 #### 差分適用
-- `ResourceReservationRequest` を `apply_reservation_requests_system` でフレーム内反映。
+- `ResourceReservationRequest` を `hw_logistics::apply_reservation_requests_system` でフレーム内反映。
+- `apply_reservation_requests_system` と `apply_reservation_op` の実装は `hw_logistics` にあるが、`ResourceReservationRequest` の `add_message` と `SharedResourceCache` の `init_resource` は app shell が担当する。
 - `RecordPickedSource` によりフレーム内のソース論理在庫差分も追跡。
 
 ### 6.3 水搬送の排他
