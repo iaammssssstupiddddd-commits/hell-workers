@@ -1,6 +1,6 @@
 use crate::entities::familiar::{Familiar, FamiliarVoice};
 use crate::events::FamiliarIdleVisualRequest;
-use crate::systems::visual::speech::components::{
+use hw_visual::speech::components::{
     BubbleEmotion, BubblePriority, FamiliarBubble, SpeechBubble,
 };
 use bevy::prelude::*;
@@ -16,7 +16,7 @@ pub fn familiar_idle_visual_apply_system(
         (
             &Transform,
             Option<&FamiliarVoice>,
-            Option<&mut crate::systems::visual::speech::cooldown::SpeechHistory>,
+            Option<&mut hw_visual::speech::cooldown::SpeechHistory>,
         ),
         With<Familiar>,
     >,
@@ -39,10 +39,10 @@ pub fn familiar_idle_visual_apply_system(
             continue;
         }
 
-        crate::systems::visual::speech::spawn::spawn_familiar_bubble(
+        hw_visual::speech::spawn::spawn_familiar_bubble(
             &mut commands,
             request.familiar_entity,
-            crate::systems::visual::speech::phrases::LatinPhrase::Requiesce,
+            hw_visual::speech::phrases::LatinPhrase::Requiesce,
             fam_transform.translation,
             &speech_handles,
             &q_bubbles,
@@ -55,7 +55,7 @@ pub fn familiar_idle_visual_apply_system(
             history.record_speech(BubblePriority::Normal, current_time);
         } else {
             commands.entity(request.familiar_entity).insert(
-                crate::systems::visual::speech::cooldown::SpeechHistory {
+                hw_visual::speech::cooldown::SpeechHistory {
                     last_time: current_time,
                     last_priority: BubblePriority::Normal,
                 },

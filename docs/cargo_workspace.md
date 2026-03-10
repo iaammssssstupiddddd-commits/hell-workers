@@ -21,6 +21,7 @@ crates/hw_jobs
 crates/hw_ai
 crates/hw_spatial
 crates/hw_ui
+crates/hw_visual
 ```
 
 依存の向きは次を基本とします。
@@ -32,6 +33,7 @@ hw_core
   ├─ hw_jobs
   ├─ hw_spatial
   ├─ hw_ai
+  ├─ hw_visual
   └─ bevy_app
 
 hw_world
@@ -53,6 +55,9 @@ hw_ui
   ├─ hw_core
   ├─ hw_jobs
   ├─ hw_logistics
+
+hw_visual (hw_core + hw_jobs + hw_logistics + hw_spatial + hw_world + hw_ui)
+  └─ bevy_app
 ```
 
 重要な原則:
@@ -66,6 +71,59 @@ hw_ui
 - `hw_ui` は UI の構築・更新ロジックを集約し、`bevy_app` は shell/adapter とゲーム状態更新ハンドラを保持する。
 - `bevy_app` → `hw_ui` は依存方向を維持し、`hw_ui` から `bevy_app` へ依存しない。
 - `UiShell` 的な役割（Selection やカメラ・モード遷移）は `bevy_app` 側で管理し、`interface` では API 構造変更に耐える薄い再エクスポート層を残す。
+- `hw_visual` はビジュアルシステム全体を集約し、`GameAssets` には依存しない。アセットハンドルは `handles.rs` の 7 つの Resource（`WallVisualHandles` 等）で保持し、root の `init_visual_handles` startup システムが `GameAssets` から注入する。
+- `bevy_app` → `hw_visual` は依存方向を維持し、`hw_visual` から `bevy_app` へ依存しない。
+
+### `hw_visual`
+
+役割:
+
+- `src/systems/visual/` および `src/systems/utils/` から抽出したビジュアルシステム全体
+- `GameAssets` に依存しない独立ビジュアル crate
+- アセットハンドルは `handles.rs` の 7 Resource として保持し、startup 時に root から注入される
+
+代表例:
+
+- `HwVisualPlugin` — hw_visual の全システムを一括登録する Plugin
+- `handles::{WallVisualHandles, BuildingAnimHandles, WorkIconHandles, MaterialIconHandles, HaulItemHandles, SpeechHandles, PlantTreeHandles}` — ビジュアルハンドルリソース（GameAssets の代替）
+- `blueprint::*` — 設計図ビジュアル（アニメーション、プログレスバー、資材表示、完成エフェクト）
+- `dream::*` — Dream UI パーティクル、ドリームバブル、フローティングポップアップ（custom Material2d / UiMaterial）
+- `gather::*` — 採取リソースハイライト、ワーカーインジケータ
+- `haul::*` — 運搬アイテム表示、手押し車追従
+- `plant_trees::*` — 植樹ビジュアルエフェクト
+- `soul::*` — Soul プログレスバー、ステータスビジュアル、タスクリンク表示
+- `speech::*` — 吹き出し、ラテン語フレーズ、FamiliarVoice、SpeechPlugin
+- `mud_mixer::*`, `tank::*` — 建物アニメーション
+- `wall_connection::*` — 壁接続スプライト切替
+- `site_yard_visual::*` — サイト・ヤード境界描画
+- `fade::*`, `floating_text::*`, `animations::*`, `progress_bar::*`, `worker_icon::*` — 汎用ビジュアルユーティリティ
+- `task_area_visual::{TaskAreaMaterial, TaskAreaVisual}` — タスクエリアシェーダー型定義
+
+ここに置かないもの:
+
+- `GameAssets`（struct・ロード処理）— root 残留
+- `placement_ghost.rs`、`floor_construction.rs`、`wall_construction.rs`、`task_area_visual.rs`（システム関数）— `BuildContext` / `TaskContext` など app_contexts 依存のため root 残留
+- `DebugVisible` による条件付き system 登録 — root 側 `VisualPlugin` が担当
+
+root 側の責務（`src/systems/visual/` 残留ファイル）:
+
+| ファイル | 残留理由 |
+|:---|:---|
+| `floor_construction.rs` | `FloorConstructionSite` → `TaskArea` 依存（root 型） |
+| `wall_construction.rs` | `WallConstructionSite` → `TaskArea` 依存（root 型） |
+| `placement_ghost.rs` | `BuildContext`, `CompanionPlacementState` 依存（app_contexts） |
+| `task_area_visual.rs` | `update_task_area_material_system` が `TaskContext` 依存 |
+
+startup 注入パターン:
+
+```rust
+// src/plugins/startup/visual_handles.rs
+pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>) {
+    commands.insert_resource(WallVisualHandles { stone_isolated: game_assets.wall_isolated.clone(), ... });
+    // ... 7 Resource すべてを insert
+}
+// PostStartup チェーンの先頭で実行（GameAssets 挿入後）
+```
 
 ### `hw_ai`
 
@@ -362,6 +420,7 @@ cargo check -p hw_world
 cargo check -p hw_logistics
 cargo check -p hw_jobs
 cargo check -p hw_ai
+cargo check -p hw_visual
 ```
 
 ## 9. やらないこと

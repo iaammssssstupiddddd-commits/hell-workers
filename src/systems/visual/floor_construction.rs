@@ -1,10 +1,10 @@
 //! Floor construction visual feedback
 
-use crate::assets::GameAssets;
+use hw_visual::MaterialIconHandles;
 use crate::systems::jobs::floor_construction::{
     FloorConstructionPhase, FloorConstructionSite, FloorTileBlueprint, FloorTileState,
 };
-use crate::systems::utils::progress_bar::{
+use hw_visual::progress_bar::{
     GenericProgressBar, ProgressBarBackground, ProgressBarConfig, ProgressBarFill,
     spawn_progress_bar, sync_progress_bar_fill_position, sync_progress_bar_position,
     update_progress_bar_fill,
@@ -94,7 +94,7 @@ pub fn update_floor_tile_visuals_system(
 /// Sync per-tile bone marker sprites from `bones_delivered`.
 pub fn sync_floor_tile_bone_visuals_system(
     mut commands: Commands,
-    game_assets: Res<GameAssets>,
+    mat_handles: Res<MaterialIconHandles>,
     q_tiles: Query<(Entity, &FloorTileBlueprint, Option<&Children>)>,
     q_bone_visuals: Query<&FloorTileBoneVisual>,
 ) {
@@ -122,7 +122,7 @@ pub fn sync_floor_tile_bone_visuals_system(
                 continue;
             }
 
-            let icon = game_assets.icon_bone_small.clone();
+            let icon = mat_handles.bone_small.clone();
             commands.entity(tile_entity).with_children(|parent| {
                 parent.spawn((
                     FloorTileBoneVisual { slot },

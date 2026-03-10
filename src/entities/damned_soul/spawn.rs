@@ -229,8 +229,8 @@ pub fn spawn_damned_soul_at(
         Destination(actual_pos),
         Path::default(),
         AnimationState::default(),
-        crate::systems::visual::speech::components::SoulEmotionState::default(),
-        crate::systems::visual::speech::conversation::components::ConversationInitiator {
+        hw_visual::speech::components::SoulEmotionState::default(),
+        hw_visual::speech::conversation::components::ConversationInitiator {
             timer: Timer::from_seconds(CONVERSATION_CHECK_INTERVAL, TimerMode::Repeating),
         },
         crate::systems::logistics::Inventory::default(),

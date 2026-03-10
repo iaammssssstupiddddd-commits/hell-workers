@@ -3,7 +3,7 @@
 use crate::systems::jobs::wall_construction::{
     WallConstructionPhase, WallConstructionSite, WallTileBlueprint, WallTileState,
 };
-use crate::systems::utils::progress_bar::{
+use hw_visual::progress_bar::{
     GenericProgressBar, ProgressBarBackground, ProgressBarConfig, ProgressBarFill,
     spawn_progress_bar, sync_progress_bar_fill_position, sync_progress_bar_position,
     update_progress_bar_fill,

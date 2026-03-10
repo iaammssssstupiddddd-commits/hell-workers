@@ -6,7 +6,7 @@ use crate::relationships::{ParkedAt, PushedBy};
 use crate::systems::soul_ai::execute::task_execution::{
     common::clear_task_and_path, context::TaskExecutionContext, types::HaulWithWheelbarrowData,
 };
-use crate::systems::visual::haul::WheelbarrowMovement;
+use hw_visual::haul::WheelbarrowMovement;
 use bevy::prelude::*;
 use hw_core::constants::Z_ITEM_PICKUP;
 

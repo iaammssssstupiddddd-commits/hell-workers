@@ -175,3 +175,11 @@ impl Default for AnimationState {
         }
     }
 }
+
+/// ソウルに紐づくUI参照
+#[derive(Component, Default, Reflect)]
+#[reflect(Component)]
+pub struct SoulUiLinks {
+    pub bar_entity: Option<Entity>,
+    pub icon_entity: Option<Entity>,
+}

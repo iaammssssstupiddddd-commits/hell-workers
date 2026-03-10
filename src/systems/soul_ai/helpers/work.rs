@@ -84,7 +84,7 @@ pub fn unassign_task<'w, 's, Q: TaskReservationAccess<'w, 's>>(
         if let Ok(mut wb_commands) = commands.get_entity(data.wheelbarrow) {
             wb_commands.remove::<(
                 crate::relationships::PushedBy,
-                crate::systems::visual::haul::WheelbarrowMovement,
+                hw_visual::haul::WheelbarrowMovement,
             )>();
             if let Some(parking_entity) = queries.belongs_to(data.wheelbarrow) {
                 wb_commands.try_insert(crate::relationships::ParkedAt(parking_entity));

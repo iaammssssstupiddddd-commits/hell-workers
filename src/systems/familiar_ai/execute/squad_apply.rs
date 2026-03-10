@@ -3,7 +3,7 @@ use crate::events::{ReleaseReason, SquadManagementOperation, SquadManagementRequ
 use crate::relationships::CommandedBy;
 use crate::relationships::ParticipatingIn;
 use crate::systems::familiar_ai::FamiliarSoulQuery;
-use crate::systems::visual::speech::components::{
+use hw_visual::speech::components::{
     BubbleEmotion, BubblePriority, FamiliarBubble, SpeechBubble,
 };
 use crate::world::map::WorldMapRead;
@@ -24,7 +24,7 @@ pub fn apply_squad_management_requests_system(
         (
             &Transform,
             Option<&FamiliarVoice>,
-            Option<&mut crate::systems::visual::speech::cooldown::SpeechHistory>,
+            Option<&mut hw_visual::speech::cooldown::SpeechHistory>,
         ),
         With<Familiar>,
     >,
@@ -110,10 +110,10 @@ pub fn apply_squad_management_requests_system(
                             };
 
                             if can_speak {
-                                crate::systems::visual::speech::spawn::spawn_familiar_bubble(
+                                hw_visual::speech::spawn::spawn_familiar_bubble(
                                     &mut commands,
                                     fam_entity,
-                                    crate::systems::visual::speech::phrases::LatinPhrase::Abi,
+                                    hw_visual::speech::phrases::LatinPhrase::Abi,
                                     fam_transform.translation,
                                     &speech_handles,
                                     &q_bubbles,
@@ -125,7 +125,7 @@ pub fn apply_squad_management_requests_system(
                                     history.record_speech(BubblePriority::Normal, current_time);
                                 } else {
                                     commands.entity(fam_entity).insert(
-                                        crate::systems::visual::speech::cooldown::SpeechHistory {
+                                        hw_visual::speech::cooldown::SpeechHistory {
                                             last_time: current_time,
                                             last_priority: BubblePriority::Normal,
                                         },

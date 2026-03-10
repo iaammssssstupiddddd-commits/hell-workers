@@ -1,0 +1,146 @@
+//! 設計図のプログレスバー関連システム
+
+use bevy::prelude::ChildOf;
+use bevy::prelude::*;
+use hw_core::constants::Z_BAR_BG;
+
+use super::components::ProgressBar;
+use super::{
+    COLOR_PROGRESS_BG, COLOR_PROGRESS_BUILD, COLOR_PROGRESS_MATERIAL, PROGRESS_BAR_HEIGHT,
+    PROGRESS_BAR_WIDTH, PROGRESS_BAR_Y_OFFSET,
+};
+use crate::progress_bar::{
+    GenericProgressBar, ProgressBarBackground, ProgressBarConfig, ProgressBarFill,
+    spawn_progress_bar, sync_progress_bar_fill_position, sync_progress_bar_position,
+    update_progress_bar_fill,
+};
+use hw_jobs::Blueprint;
+
+pub fn spawn_progress_bar_system(
+    mut commands: Commands,
+    q_blueprints: Query<(Entity, &Transform), (With<Blueprint>, Without<ProgressBar>)>,
+    q_progress_bars: Query<&ChildOf, With<ProgressBar>>,
+) {
+    for (bp_entity, bp_transform) in q_blueprints.iter() {
+        let has_bar = q_progress_bars.iter().any(|c| c.parent() == bp_entity);
+        if has_bar {
+            continue;
+        }
+
+        let config = ProgressBarConfig {
+            width: PROGRESS_BAR_WIDTH,
+            height: PROGRESS_BAR_HEIGHT,
+            y_offset: PROGRESS_BAR_Y_OFFSET,
+            bg_color: COLOR_PROGRESS_BG,
+            fill_color: COLOR_PROGRESS_MATERIAL,
+            z_index: Z_BAR_BG,
+        };
+
+        let (bg_entity, fill_entity) =
+            spawn_progress_bar(&mut commands, bp_entity, bp_transform, config);
+
+        commands.entity(bg_entity).insert(ProgressBar);
+        commands.entity(fill_entity).insert(ProgressBar);
+
+        commands.entity(bg_entity).try_insert(ChildOf(bp_entity));
+        commands.entity(fill_entity).try_insert(ChildOf(bp_entity));
+    }
+}
+
+pub fn update_progress_bar_fill_system(
+    q_blueprints: Query<&Blueprint>,
+    q_generic_bars: Query<&GenericProgressBar>,
+    mut q_fills: Query<
+        (Entity, &ChildOf, &mut Sprite, &mut Transform),
+        (With<ProgressBar>, With<ProgressBarFill>),
+    >,
+) {
+    for (fill_entity, child_of, mut sprite, mut transform) in q_fills.iter_mut() {
+        if let Ok(bp) = q_blueprints.get(child_of.parent()) {
+            let total_required: u32 = bp.required_materials.values().sum();
+            let total_delivered: u32 = bp.delivered_materials.values().sum();
+
+            let material_ratio = if total_required > 0 {
+                (total_delivered as f32 / total_required as f32).min(1.0)
+            } else {
+                1.0
+            };
+
+            let combined_progress = material_ratio * 0.5 + bp.progress.min(1.0) * 0.5;
+
+            if let Ok(generic_bar) = q_generic_bars.get(fill_entity) {
+                let fill_color = if bp.progress > 0.0 {
+                    Some(COLOR_PROGRESS_BUILD)
+                } else {
+                    Some(COLOR_PROGRESS_MATERIAL)
+                };
+
+                update_progress_bar_fill(
+                    combined_progress,
+                    &generic_bar.config,
+                    &mut sprite,
+                    &mut transform,
+                    fill_color,
+                );
+            }
+        }
+    }
+}
+
+pub fn sync_progress_bar_position_system(
+    q_blueprints: Query<(Entity, &Transform), With<Blueprint>>,
+    q_generic_bars: Query<&GenericProgressBar>,
+    mut q_bg_bars: Query<
+        (Entity, &ChildOf, &mut Transform),
+        (
+            With<ProgressBar>,
+            With<ProgressBarBackground>,
+            Without<Blueprint>,
+            Without<ProgressBarFill>,
+        ),
+    >,
+    mut q_fill_bars: Query<
+        (Entity, &ChildOf, &mut Transform, &Sprite),
+        (
+            With<ProgressBar>,
+            With<ProgressBarFill>,
+            Without<Blueprint>,
+            Without<ProgressBarBackground>,
+        ),
+    >,
+) {
+    for (bg_entity, child_of, mut bar_transform) in q_bg_bars.iter_mut() {
+        if let Ok((_bp_entity, bp_transform)) = q_blueprints.get(child_of.parent()) {
+            if let Ok(generic_bar) = q_generic_bars.get(bg_entity) {
+                sync_progress_bar_position(bp_transform, &generic_bar.config, &mut bar_transform);
+            }
+        }
+    }
+
+    for (fill_entity, child_of, mut bar_transform, sprite) in q_fill_bars.iter_mut() {
+        if let Ok((_bp_entity, bp_transform)) = q_blueprints.get(child_of.parent()) {
+            if let Ok(generic_bar) = q_generic_bars.get(fill_entity) {
+                let fill_width = sprite.custom_size.map(|s| s.x).unwrap_or(0.0);
+                sync_progress_bar_fill_position(
+                    bp_transform,
+                    &generic_bar.config,
+                    fill_width,
+                    &mut bar_transform,
+                );
+            }
+        }
+    }
+}
+
+pub fn cleanup_progress_bars_system(
+    mut commands: Commands,
+    q_blueprints: Query<Entity, With<Blueprint>>,
+    q_bars: Query<(Entity, &ChildOf, &ProgressBar)>,
+) {
+    let bp_entities: std::collections::HashSet<Entity> = q_blueprints.iter().collect();
+    for (bar_entity, child_of, _) in q_bars.iter() {
+        if !bp_entities.contains(&child_of.parent()) {
+            commands.entity(bar_entity).try_despawn();
+        }
+    }
+}
