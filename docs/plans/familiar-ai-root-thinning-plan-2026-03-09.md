@@ -5,9 +5,9 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `familiar-ai-root-thinning-plan-2026-03-09` |
-| ステータス | `Draft` |
+| ステータス | `Completed` |
 | 作成日 | `2026-03-09` |
-| 最終更新日 | `2026-03-09` |
+| 最終更新日 | `2026-03-10` |
 | 作成者 | `AI (Codex)` |
 | 関連提案 | `N/A` |
 | 関連Issue/PR | `N/A` |
@@ -404,8 +404,8 @@ pub type SoulMovementQuery<'w, 's> = Query<(
   - `crates/hw_logistics/src/` 内の新規または既存 resource cache helper
 
 - **完了条件**:
-  - [ ] `SharedResourceCache` 更新 helper が `hw_logistics` に置かれる
-  - [ ] `resource_sync.rs` の root 残留部分が reservation 再構築に限定される
+  - [x] `SharedResourceCache` 更新 helper が `hw_logistics` に置かれる
+  - [x] `resource_sync.rs` の root 残留部分が reservation 再構築に限定される
 
 - **検証**:
   ```bash
@@ -431,8 +431,8 @@ pub type SoulMovementQuery<'w, 's> = Query<(
   - `crates/hw_ai/README.md`
 
 - **完了条件**:
-  - [ ] `src/systems/familiar_ai/` に残るファイルが root-only 契約を満たす
-  - [ ] `docs/cargo_workspace.md` の `hw_ai` 代表例に squad/supervising/scouting/recruitment が記載されている
+  - [x] `src/systems/familiar_ai/` に残るファイルが root-only 契約を満たす
+  - [x] `docs/cargo_workspace.md` の `hw_ai` 代表例に squad/supervising/scouting/recruitment が記載されている
 
 - **検証**:
   ```bash
@@ -483,15 +483,13 @@ pub type SoulMovementQuery<'w, 's> = Query<(
 
 ### 現在地
 
-- 進捗: `M5 着手前`
-- 完了済みマイルストーン: M1（Query 型整理）、M2（pure familiar ロジック hw_ai へ移設）、M3（SpatialGrid 依存の判断を adapter + core に分割）、M4（auto gather の純計画層を hw_ai へ移す）
-- 未着手/進行中: M5 から着手
+- 進捗: `M6 完了（全マイルストーン完了）`
+- 完了済みマイルストーン: M1（Query 型整理）、M2（pure familiar ロジック hw_ai へ移設）、M3（SpatialGrid 依存の判断を adapter + core に分割）、M4（auto gather の純計画層を hw_ai へ移す）、M5（SharedResourceCache apply helper を hw_logistics に移設）、M6（root shell 整理と docs 同期）
+- 未着手/進行中: なし（全マイルストーン完了）
 
 ### 次の AI が最初にやること
 
-1. `perceive/resource_sync.rs` の apply helpers を確認する
-2. `SharedResourceCache` 更新 helper を `hw_logistics` に移設する
-3. root の `resource_sync.rs` は reservation 再構築のみを持つよう縮退する
+なし。この計画のマイルストーンは完了。
 
 ### ブロッカー/注意点
 
@@ -517,16 +515,16 @@ pub type SoulMovementQuery<'w, 's> = Query<(
 
 ### 最終確認ログ
 
-- 最終 `cargo check`: `2026-03-09 M3 完了時点で cargo check -p hw_ai / cargo check --workspace 実行済み。エラー・警告ゼロ`
+- 最終 `cargo check`: `2026-03-10 M5/M6 完了時点で cargo check -p hw_logistics / cargo check --workspace 実行済み。エラー・警告ゼロ`
 - 未解決エラー: `N/A`
 
 ### Definition of Done
 
-- [ ] `familiar_ai` の純 AI ロジックが `hw_ai` へ移動済み
-- [ ] root 側に残るファイルが root-only 契約を満たす
-- [ ] `SharedResourceCache` 近傍 helper が `hw_logistics` に整理されている
-- [ ] 影響ドキュメントが更新済み
-- [ ] `CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo check --workspace` が成功
+- [x] `familiar_ai` の純 AI ロジックが `hw_ai` へ移動済み
+- [x] root 側に残るファイルが root-only 契約を満たす
+- [x] `SharedResourceCache` 近傍 helper が `hw_logistics` に整理されている
+- [x] 影響ドキュメントが更新済み
+- [x] `CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo check --workspace` が成功
 
 ---
 
@@ -536,3 +534,4 @@ pub type SoulMovementQuery<'w, 's> = Query<(
 | --- | --- | --- |
 | `2026-03-09` | `AI (Codex)` | 初版作成 |
 | `2026-03-09` | `AI (Copilot)` | コード調査結果を反映し具体化。型の hw_core 所在を確認、MessageWriter が Bevy 型であることを確認、FamiliarSoulQuery 分割方針・SpatialGridOps 活用方針・state_handlers 移設順序を追加 |
+| `2026-03-10` | `AI (Codex)` | 完了状態に合わせてステータスと M5/M6 の完了条件を更新 |

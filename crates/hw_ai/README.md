@@ -50,6 +50,8 @@ Familiar の状態: `Idle / SearchingTask / Scouting / Supervising`
 | `decide/separation.rs` | Decide | 過密回避 |
 | `decide/escaping.rs` | Decide | 脱走判断（0.5 秒毎） |
 | `decide/idle_behavior/` | Decide | アイドル状態機械（下表） |
+| `decide/work/auto_refine.rs` | Decide | MudMixer の自動精製指定発行 |
+| `decide/work/auto_build.rs` | Decide | 資材完了 Blueprint への自動割り当て |
 | `execute/designation_apply.rs` | Execute | 作業指定の適用 |
 | `execute/gathering_apply.rs` | Execute | 集会場所への移動実行 |
 | `execute/idle_behavior_apply.rs` | Execute | アイドル行動の実行 |
@@ -94,7 +96,7 @@ Familiar の状態: `Idle / SearchingTask / Scouting / Supervising`
 
 ## 設計上の注意
 
-- **Decide** フェーズは pure outcome / request を生成するのみ。ECS 状態の変更は **Execute** フェーズで行い、app shell 側の request message 発行は root adapter が担当する。
+- **Decide** フェーズは pure outcome または shared request を生成するのみ。ECS 状態の直接変更は **Execute** フェーズで行い、root-only context を要する adapter は `src/` 側に残す。
 - `app.add_observer(...)` による一元登録を使い、スポーン時の `.observe(...)` による二重登録を避ける。
 
 ## 依存クレート
@@ -116,6 +118,7 @@ hw_ai は**ゲームエンティティ非依存の純粋 AI ロジック**のみ
 - **Blueprint Auto Gather**: 需要供給集計・必要 designation 数の pure planning
 - 純粋ヘルパー関数（`is_soul_available_for_work` 等）
 - root adapter が request message を発行できるよう、`ScoutingOutcome` / `SquadManagementOutcome` のような pure outcome を返す
+- `soul_ai::decide::work::{auto_refine, auto_build}` のように、shared 型だけで閉じる request 生成システムは `hw_ai` 側に置ける
 
 ### src/ に置かれているもの（ゲーム固有）
 
@@ -130,7 +133,9 @@ hw_ai は**ゲームエンティティ非依存の純粋 AI ロジック**のみ
 | `familiar_ai/decide/auto_gather_for_blueprint.rs` | `Commands` / pathfinding / Blueprint 直接 query に依存 |
 | `familiar_ai/decide/encouragement.rs` | `Time` / concrete `SpatialGrid` / request message 出力の adapter を担当 |
 | `familiar_ai/decide/state_decision.rs` | concrete `SpatialGrid` と request message 出力の adapter を担当 |
-| `familiar_ai/perceive/resource_sync.rs` | `SharedResourceCache` リソースの更新 |
+| `familiar_ai/perceive/resource_sync.rs` | `SharedResourceCache` 予約再構築のみ（apply helper は `hw_logistics` に移設済み） |
+
+root 側の `src/systems/soul_ai/decide/work/*.rs` は互換 re-export shell のみで、実体は `hw_ai::soul_ai::decide::work::*` にある。
 
 ### 移設の判断基準
 
