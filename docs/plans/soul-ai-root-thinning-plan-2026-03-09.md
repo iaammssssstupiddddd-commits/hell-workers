@@ -5,11 +5,11 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `soul-ai-root-thinning-plan-2026-03-09` |
-| ステータス | `Draft (コード調査済み)` |
+| ステータス | `Draft (M2 完了)` |
 | 作成日 | `2026-03-09` |
-| 最終更新日 | `2026-03-09` |
+| 最終更新日 | `2026-03-10` |
 | 作成者 | `AI (Codex)` |
-| 更新者 | `AI (Copilot)` |
+| 更新者 | `AI (Codex)` |
 | 関連提案 | `N/A` |
 | 関連Issue/PR | `N/A` |
 
@@ -221,9 +221,9 @@ src/systems/soul_ai
   - `src/systems/soul_ai/README.md`
 
 - **完了条件**:
-  - [ ] stale file 4 件が削除されている
-  - [ ] `src/systems/soul_ai` に残す条件が README で明文化されている
-  - [ ] module tree から外れた `soul_ai` ファイルが残っていない
+  - [x] stale file 4 件が削除されている
+  - [x] `src/systems/soul_ai` に残す条件が README で明文化されている
+  - [x] module tree から外れた `soul_ai` ファイルが残っていない
 
 - **検証**:
   ```bash
@@ -284,11 +284,11 @@ src/systems/soul_ai
   - `src/systems/soul_ai/mod.rs` ← 重複 system 登録の削除
 
 - **完了条件**:
-  - [ ] `crates/hw_ai/src/soul_ai/decide/work/{auto_refine,auto_build}.rs` が存在する
-  - [ ] root 側 `decide/work/*.rs` が re-export shell（1〜3 行）に縮退している
-  - [ ] root `soul_ai/mod.rs` から `mud_mixer_auto_refine_system` / `blueprint_auto_build_system` の `add_systems` が消えている
-  - [ ] `cargo check -p hw_ai` が成功する
-  - [ ] `cargo check --workspace` が成功する
+  - [x] `crates/hw_ai/src/soul_ai/decide/work/{auto_refine,auto_build}.rs` が存在する
+  - [x] root 側 `decide/work/*.rs` が re-export shell（1〜3 行）に縮退している
+  - [x] root `soul_ai/mod.rs` から `mud_mixer_auto_refine_system` / `blueprint_auto_build_system` の `add_systems` が消えている
+  - [x] `cargo check -p hw_ai` が成功する
+  - [x] `cargo check --workspace` が成功する
 
 - **検証**:
   ```bash
@@ -493,8 +493,8 @@ src/systems/soul_ai
 
 ### 現在地
 
-- 進捗: `0%`（コード調査済み、実装未着手）
-- 完了済みマイルストーン: `なし`
+- 進捗: `M2 完了（M3 未着手）`
+- 完了済みマイルストーン: `M1`, `M2`
 - 調査で確認済みの重要事実:
   - `AssignedTask` と `MovePlanned` はすでに `hw_jobs` にある（root は re-export のみ）
   - `StressBreakdown` は `hw_core::soul` にある
@@ -504,9 +504,9 @@ src/systems/soul_ai
 
 ### 次のAIが最初にやること
 
-1. **M1（推奨 30 分）**: 4 ファイルを削除するだけ。`cargo check --workspace` が通ることを確認
-2. **M2（推奨 1〜2 時間）**: §3.5 の import 変換表を見ながら hw_ai に `decide/work/` を作成する。`cargo check -p hw_ai` が通ることを確認してから root shell 化・system 登録削除を行う
-3. **M3（推奨 2〜3 時間）**: `hw_core/src/gathering.rs` 新規作成 → hw_ai shell 化 → hw_spatial 追加 → root shell 化 の順に実施し、各 crate 単位で `cargo check` を通す
+1. **M3（推奨 2〜3 時間）**: `hw_core/src/gathering.rs` 新規作成 → hw_ai shell 化 → hw_spatial 追加 → root shell 化 の順に実施し、各 crate 単位で `cargo check` を通す
+2. **M4（推奨 2〜3 時間）**: `idle_behavior_decision_system` の `WorldMapRead` / `GatheringSpotSpatialGrid` 依存を整理し、pure logic と root adapter を分離する
+3. **M5（推奨 1 時間）**: `docs/cargo_workspace.md` / `docs/soul_ai.md` / `src/systems/soul_ai/README.md` を M3/M4 の実態に合わせて再同期する
 
 ### ブロッカー/注意点（調査確認済み）
 
@@ -537,7 +537,7 @@ src/systems/soul_ai
 
 ### 最終確認ログ
 
-- 最終 `cargo check`: `未実施（docs 作成のみ）`
+- 最終 `cargo check`: `2026-03-10 cargo check -p hw_ai / cargo check --workspace 実行済み`
 - 未解決エラー: `N/A`
 
 ### Definition of Done
@@ -552,4 +552,5 @@ src/systems/soul_ai
 | 日付 | 変更者 | 内容 |
 | --- | --- | --- |
 | `2026-03-09` | `AI (Codex)` | 初版作成 |
-| `2026-03-09` | `AI (Copilot)` | コード実調査に基づきブラッシュアップ。§3.2 stale file 確認済み記録、§3.5 依存型解決テーブル（auto_refine/auto_build の全 import → 実定義元）、M2 詳細手順（import 変換リスト・変更ファイル一覧）、M3 変更順序明示、M4 具体的分割手順・GatheringSpawnRequest 設計、リスク表更新、AI引継ぎメモ拡充 |
+| `2026-03-09` | `AI (Copilot)` | M1 実装完了（stale file 4 件削除・README.md root-only 契約追記）|
+| `2026-03-10` | `AI (Codex)` | M2 完了を反映。M1/M2 の完了条件、現在地、次アクション、検証ログを更新 |

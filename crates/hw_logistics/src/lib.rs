@@ -11,3 +11,4 @@ pub mod water;
 pub mod zone;
 
 pub use resource_cache::SharedResourceCache;
+pub use resource_cache::{apply_reservation_op, apply_reservation_requests_system};

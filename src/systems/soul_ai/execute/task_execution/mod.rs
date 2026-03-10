@@ -30,9 +30,7 @@ use crate::entities::damned_soul::{IdleBehavior, RestAreaCooldown};
 use crate::events::{
     OnGatheringLeft, OnSoulRecruited, OnTaskAssigned, OnTaskCompleted, TaskAssignmentRequest,
 };
-use crate::systems::familiar_ai::perceive::resource_sync::{
-    SharedResourceCache, apply_reservation_op,
-};
+use hw_logistics::{SharedResourceCache, apply_reservation_op};
 use crate::systems::soul_ai::helpers::query_types::{
     TaskAssignmentSoulQuery, TaskExecutionSoulQuery,
 };

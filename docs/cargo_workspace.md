@@ -89,6 +89,8 @@ hw_ui
 - `soul_ai::helpers::gathering_positions` — 集会周辺ランダム位置生成・overlap 回避（`PathWorld + SpatialGridOps` 経由）
 - `soul_ai::helpers::gathering_motion` — 集会中移動先選定（Wandering / Still retreat）
 - `soul_ai::helpers::work::is_soul_available_for_work` — 作業可否判定ヘルパー
+- `soul_ai::decide::work::auto_refine` — MudMixer の自動精製指定発行
+- `soul_ai::decide::work::auto_build` — 資材完了 Blueprint への自動割り当て
 - `soul_ai::decide::escaping` / `soul_ai::perceive::escaping` — 逃走判断ロジック
 - `soul_ai::decide::gathering_mgmt` — 集会管理要求生成
 - `familiar_ai::perceive::state_detection` — 使い魔 AI 状態遷移検知
@@ -107,7 +109,7 @@ hw_ui
 - `GameAssets` 依存の sprite spawn
 - `WorldMap` resource / `WorldMapRead` SystemParam を直接参照するシステム
 - `SpatialGrid` concrete resource を直接参照しない（`hw_spatial` / root wrapper を経由）
-- `MessageWriter` による app shell 側 request 発行や full-fat query から narrow view への変換
+- full-fat query から narrow view への変換や、root-only resource を伴う request 出力 adapter
 - UI システム
 - `Commands` で複雑な Entity 生成を行うもの
 - pathfinding / blueprint entity query を伴う auto-gather orchestration
@@ -207,10 +209,15 @@ hw_ui
 - `TransportRequest*`, `TransportRequestPlugin`, `TransportRequestSet`
 - transport metrics / state sync / lifecycle cleanup
 - `SharedResourceCache`（タスク間リソース予約キャッシュ）
+- `apply_reservation_op` / `apply_reservation_requests_system`（予約操作の反映 helper）
 - `TileSiteIndex`（タイル→サイト逆引き）
 - producer 全系（`blueprint`, `bucket`, `consolidation`, `mixer`, `task_area`, `wheelbarrow` 等）
 - 手押し車仲裁システム（`arbitration/`）
 - 建設系需要計算ヘルパー（`floor_construction`, `wall_construction`, `provisional_wall`）
+
+補足:
+
+- `apply_reservation_requests_system` の実装は `hw_logistics` にあるが、`ResourceReservationRequest` の `add_message` と `SharedResourceCache` の `init_resource` は root app shell が担当する
 
 ここに置かないもの:
 

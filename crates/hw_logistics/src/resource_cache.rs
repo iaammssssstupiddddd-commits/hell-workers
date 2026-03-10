@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use hw_core::events::{ResourceReservationOp, ResourceReservationRequest};
 use hw_core::logistics::ResourceType;
 use std::collections::HashMap;
 
@@ -102,5 +103,42 @@ impl SharedResourceCache {
     pub fn get_logical_stored_count(&self, target: Entity, current_from_query: usize) -> usize {
         let frame_added = self.frame_stored_count.get(&target).cloned().unwrap_or(0);
         current_from_query + frame_added
+    }
+}
+
+/// 予約操作をキャッシュに反映する
+pub fn apply_reservation_op(cache: &mut SharedResourceCache, op: &ResourceReservationOp) {
+    match *op {
+        ResourceReservationOp::ReserveMixerDestination {
+            target,
+            resource_type,
+        } => {
+            cache.reserve_mixer_destination(target, resource_type);
+        }
+        ResourceReservationOp::ReleaseMixerDestination {
+            target,
+            resource_type,
+        } => {
+            cache.release_mixer_destination(target, resource_type);
+        }
+        ResourceReservationOp::ReserveSource { source, amount } => {
+            cache.reserve_source(source, amount);
+        }
+        ResourceReservationOp::ReleaseSource { source, amount } => {
+            cache.release_source(source, amount);
+        }
+        ResourceReservationOp::RecordPickedSource { source, amount } => {
+            cache.record_picked_source(source, amount);
+        }
+    }
+}
+
+/// 予約更新リクエストを反映するシステム
+pub fn apply_reservation_requests_system(
+    mut cache: ResMut<SharedResourceCache>,
+    mut requests: MessageReader<ResourceReservationRequest>,
+) {
+    for request in requests.read() {
+        apply_reservation_op(&mut cache, &request.op);
     }
 }

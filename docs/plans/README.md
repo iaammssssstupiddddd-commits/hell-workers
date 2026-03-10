@@ -1,6 +1,6 @@
 # Plans Index
 
-`docs/plans` の文書ステータス一覧（更新日: 2026-03-09）。
+`docs/plans` の文書ステータス一覧（更新日: 2026-03-10）。
 
 ## 新規計画書の作り方
 
@@ -19,8 +19,8 @@
 
 | Document | Status | Notes |
 |---|---|---|
-| [familiar-ai-root-thinning-plan-2026-03-09.md](familiar-ai-root-thinning-plan-2026-03-09.md) | Draft | familiar_ai の純AIロジックを hw_ai / hw_logistics へ寄せて root を薄くする計画。 |
-| [soul-ai-root-thinning-plan-2026-03-09.md](soul-ai-root-thinning-plan-2026-03-09.md) | Draft (コード調査済み) | soul_ai を段階的に crate へ寄せて root を薄くする計画 |
+| [familiar-ai-root-thinning-plan-2026-03-09.md](familiar-ai-root-thinning-plan-2026-03-09.md) | Completed | familiar_ai の純AIロジックを hw_ai / hw_logistics へ寄せて root を薄くする計画。 |
+| [soul-ai-root-thinning-plan-2026-03-09.md](soul-ai-root-thinning-plan-2026-03-09.md) | Draft (M2 完了) | soul_ai を段階的に crate へ寄せて root を薄くする計画 |
 
 ## アーカイブ計画書一覧 (`docs/plans/archive`)
 
