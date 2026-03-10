@@ -54,6 +54,7 @@ Familiar の状態: `Idle / SearchingTask / Scouting / Supervising`
 | `decide/work/auto_build.rs` | Decide | 資材完了 Blueprint への自動割り当て |
 | `execute/designation_apply.rs` | Execute | 作業指定の適用 |
 | `execute/gathering_apply.rs` | Execute | 集会場所への移動実行 |
+| `execute/gathering_spawn.rs` | Execute | 集会発生判定と `GatheringSpawnRequest` 発行 |
 | `execute/idle_behavior_apply.rs` | Execute | アイドル行動の実行 |
 | `execute/escaping_apply.rs` | Execute | 脱走移動の実行 |
 
@@ -61,6 +62,7 @@ Familiar の状態: `Idle / SearchingTask / Scouting / Supervising`
 
 | ファイル | 内容 |
 |---|---|
+| `mod.rs` | `idle_behavior_decision_system` 本体 |
 | `transitions.rs` | アイドル状態遷移ロジック |
 | `task_override.rs` | アイドルをタスクで上書き |
 | `rest_decision.rs` | 休憩判断 |
@@ -72,7 +74,7 @@ Familiar の状態: `Idle / SearchingTask / Scouting / Supervising`
 
 | ファイル | 内容 |
 |---|---|
-| `gathering.rs` | 集会場所・タイマー管理 |
+| `gathering.rs` | `hw_core::gathering` の互換 re-export と timer helper |
 | `gathering_positions.rs` | 集会スポット探索 |
 | `gathering_motion.rs` | 集会中の移動 |
 | `work.rs` | 作業実行ヘルパー |
@@ -114,6 +116,7 @@ hw_ai は**ゲームエンティティ非依存の純粋 AI ロジック**のみ
 ### hw_ai に置かれているもの（純粋ロジック）
 
 - **Soul AI**: バイタル更新・集会タイマー・状態整合・脱走判断・アイドル行動・分離行動
+- **Soul AI Execute**: `gathering_spawn_logic_system` のような shared request 生成システム
 - **Familiar AI**: 状態変化検出・ターゲット追跡・状態機械・分隊管理・監視/スカウト判断・リクルート判定・激励対象選定
 - **Blueprint Auto Gather**: 需要供給集計・必要 designation 数の pure planning
 - 純粋ヘルパー関数（`is_soul_available_for_work` 等）
@@ -126,7 +129,7 @@ hw_ai は**ゲームエンティティ非依存の純粋 AI ロジック**のみ
 |---|---|
 | `soul_ai/execute/task_execution/` (23ファイル) | `WorldMap`・`Transform`・`Visibility`・ECS Relationship に依存 |
 | `soul_ai/execute/drifting.rs` | `Path` 書き換え + 境界経路探索 |
-| `soul_ai/execute/gathering_spawn.rs` | `GatheringSpot` エンティティをスポーン |
+| `soul_ai/execute/gathering_spawn.rs` | `GameAssets` を使う visual spawn と request 消費時の app 状態再検証を行う |
 | `soul_ai/helpers/work.rs::unassign_task` | `WorldMap`・`Visibility` 操作あり |
 | `familiar_ai/decide/task_delegation.rs` | 空間グリッド・`WorldMap` を参照 |
 | `familiar_ai/decide/task_management/` | 全クエリがゲーム固有エンティティ |
@@ -135,7 +138,7 @@ hw_ai は**ゲームエンティティ非依存の純粋 AI ロジック**のみ
 | `familiar_ai/decide/state_decision.rs` | concrete `SpatialGrid` と request message 出力の adapter を担当 |
 | `familiar_ai/perceive/resource_sync.rs` | `SharedResourceCache` 予約再構築のみ（apply helper は `hw_logistics` に移設済み） |
 
-root 側の `src/systems/soul_ai/decide/work/*.rs` は互換 re-export shell のみで、実体は `hw_ai::soul_ai::decide::work::*` にある。
+root 側の `src/systems/soul_ai/decide/work/*.rs` と `src/systems/soul_ai/decide/idle_behavior/mod.rs` は互換 re-export shell のみで、実体は `hw_ai::soul_ai::*` にある。
 
 ### 移設の判断基準
 

@@ -14,8 +14,8 @@ use crate::transport_request::{
     TransportRequestState,
 };
 use crate::types::ResourceType;
-use crate::zone::Stockpile;
 use crate::water::tank_can_accept_new_bucket;
+use crate::zone::Stockpile;
 
 pub fn tank_water_request_system(
     mut commands: Commands,

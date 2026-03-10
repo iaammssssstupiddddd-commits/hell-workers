@@ -20,11 +20,11 @@ use hw_core::relationships::{IncomingDeliveries, ParkedAt, PushedBy, StoredIn, S
 use hw_jobs::{Blueprint, Designation};
 
 use crate::resource_cache::SharedResourceCache;
+use crate::transport_request::metrics::TransportRequestMetrics;
 use crate::transport_request::{
     ManualHaulPinnedSource, ManualTransportRequest, TransportDemand, TransportRequest,
     TransportRequestState, WheelbarrowLease, WheelbarrowPendingSince,
 };
-use crate::transport_request::metrics::TransportRequestMetrics;
 use crate::types::{BelongsTo, ReservedForTask, ResourceItem, Wheelbarrow};
 use crate::zone::Stockpile;
 
@@ -171,12 +171,7 @@ pub fn wheelbarrow_arbitration_system(
         (With<Wheelbarrow>, With<ParkedAt>, Without<PushedBy>),
     >,
     q_free_items: Query<
-        (
-            Entity,
-            &Transform,
-            &Visibility,
-            &ResourceItem,
-        ),
+        (Entity, &Transform, &Visibility, &ResourceItem),
         (
             Without<Designation>,
             Without<hw_core::relationships::TaskWorkers>,

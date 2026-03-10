@@ -82,10 +82,12 @@ hw_ui
 - `soul_ai::update::*` — 疲労・バイタル・夢・集会・休憩所の更新システム
 - `soul_ai::execute::designation_apply` — Designation 要求適用
 - `soul_ai::execute::gathering_apply` — 集会管理要求適用（Merge / Dissolve / Recruit / Leave）
+- `soul_ai::execute::gathering_spawn` — 集会発生判定と `GatheringSpawnRequest` 発行
+- `soul_ai::decide::idle_behavior::idle_behavior_decision_system` — IdleBehavior 決定本体
 - `soul_ai::decide::idle_behavior::transitions` — IdleBehavior 遷移判定ヘルパー（次の行動選択・持続時間計算）
 - `soul_ai::decide::idle_behavior::task_override` — タスク割り当て時の集会・休憩解除ヘルパー
 - `soul_ai::decide::idle_behavior::exhausted_gathering` — 疲労集会（ExhaustedGathering）状態処理ヘルパー
-- `soul_ai::helpers::gathering` — 集会スポット型定義・ヘルパー
+- `soul_ai::helpers::gathering` — `hw_core::gathering` の互換 re-export と gathering timer helper
 - `soul_ai::helpers::gathering_positions` — 集会周辺ランダム位置生成・overlap 回避（`PathWorld + SpatialGridOps` 経由）
 - `soul_ai::helpers::gathering_motion` — 集会中移動先選定（Wandering / Still retreat）
 - `soul_ai::helpers::work::is_soul_available_for_work` — 作業可否判定ヘルパー
@@ -107,8 +109,7 @@ hw_ui
 ここに置かないもの:
 
 - `GameAssets` 依存の sprite spawn
-- `WorldMap` resource / `WorldMapRead` SystemParam を直接参照するシステム
-- `SpatialGrid` concrete resource を直接参照しない（`hw_spatial` / root wrapper を経由）
+- root 固有の `WorldMapRead/Write` SystemParam wrapper や pathfinding context を前提にした adapter
 - full-fat query から narrow view への変換や、root-only resource を伴う request 出力 adapter
 - UI システム
 - `Commands` で複雑な Entity 生成を行うもの
@@ -132,7 +133,9 @@ hw_ui
 - startup / visual / UI system
 - ECS resource と shell system
 - root 側の互換 re-export 層
-- concrete `SpatialGrid` / `WorldMapRead` / `MessageWriter` / `Time` / pathfinding context を受け取って `hw_ai` の pure logic に橋渡しする adapter
+- `GameAssets`・sprite spawn・root 固有 resource を伴う adapter
+- root 固有の `WorldMapRead/Write` wrapper、pathfinding context、full-fat query を扱う system
+- request 消費時に app 側状態を再検証して副作用を確定する adapter
 
 ### `hw_core`
 
@@ -145,6 +148,7 @@ hw_ui
 
 - `constants`
 - `game_state`
+- `gathering`
 - `relationships`
 - `events`
 - `WorkType`
@@ -164,6 +168,7 @@ hw_ui
 
 - terrain / river / mapgen / borders / regrowth
 - spawn grid helper
+- `WorldMap`
 - `world_to_grid`, `grid_to_world`
 - nearest walkable / river query
 - `PathWorld` trait — `is_walkable` など通行判定 API（`WorldMap` の impl は root）
@@ -174,24 +179,24 @@ hw_ui
 
 - `Commands` を使う sprite spawn
 - `GameAssets` 依存の texture 選択
-- `WorldMap` resource そのもの
-- `SpatialGrid` resource 実体と update system（7 種 concrete）は `hw_spatial` が保持
+- root 固有の `WorldMapRead/Write` SystemParam wrapper
+- `SpatialGrid` resource 実体と update system（8 種 concrete）は `hw_spatial` が保持
 
 ### `hw_spatial`
 
 役割:
 
-- SpatialGrid の concrete resource / update 系（7 種）
+- SpatialGrid の concrete resource / update 系（8 種）
 - `GridData` と空間検索ヘルパの共通化
 - 2D 空間スナップショットの初期化時の query 補助
 
 ここに置くもの:
 
-- `SpatialGrid`, `FamiliarSpatialGrid`, `BlueprintSpatialGrid`, `DesignationSpatialGrid`, `ResourceSpatialGrid`, `StockpileSpatialGrid`, `TransportRequestSpatialGrid`
+- `SpatialGrid`, `FamiliarSpatialGrid`, `BlueprintSpatialGrid`, `DesignationSpatialGrid`, `ResourceSpatialGrid`, `StockpileSpatialGrid`, `TransportRequestSpatialGrid`, `GatheringSpotSpatialGrid`
 
 ここに置かないもの:
 
-- `GatheringSpotSpatialGrid`, `FloorConstructionSpatialGrid`
+- `FloorConstructionSpatialGrid`
 - root `WorldMap` shell、`WorldMapRead/Write`、startup/wiring
 
 ### `hw_logistics`

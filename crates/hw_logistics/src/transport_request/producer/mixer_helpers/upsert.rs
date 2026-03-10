@@ -4,8 +4,8 @@ use hw_core::relationships::TaskWorkers;
 use hw_jobs::mud_mixer::TargetMixer;
 use hw_jobs::{Designation, WorkType};
 
-use crate::transport_request::{TransportRequest, TransportRequestKind};
 use crate::transport_request::producer::upsert;
+use crate::transport_request::{TransportRequest, TransportRequestKind};
 use crate::types::ResourceType;
 
 pub(crate) fn upsert_mixer_requests(

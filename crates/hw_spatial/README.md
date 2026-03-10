@@ -16,8 +16,9 @@
 | `SoulSpatialGrid` | `soul.rs` | Soul 位置検索（経路探索・分離行動用） |
 | `FamiliarSpatialGrid` | `familiar.rs` | Familiar 位置検索 |
 | `BlueprintSpatialGrid` | `blueprint.rs` | 建設ブループリント位置検索 |
+| `GatheringSpotSpatialGrid` | `gathering.rs` | 集会スポット位置検索 |
 
-※ `GatheringSpatialGrid`, `FloorConstructionSpatialGrid` はルートクレートで定義。
+※ `FloorConstructionSpatialGrid` のみルートクレートで定義。
 
 ## 主要型
 
@@ -50,14 +51,14 @@ trait SpatialGridOps {
 ## src/ との境界
 
 hw_spatial はグリッド型定義と**ほとんどのグリッド更新システム**を提供する。
-ゲーム固有の 2 グリッドのみ src/ 側で定義・更新される。
+ゲーム固有のグリッドは `FloorConstructionSpatialGrid` だけが src/ 側に残る。
 
 | hw_spatial に置くもの | src/systems/spatial/ に置くもの |
 |---|---|
-| `SoulSpatialGrid` とその更新システム | `GatheringSpatialGrid` とその更新（GatheringSpot はルート型） |
-| `FamiliarSpatialGrid` とその更新システム | `FloorConstructionSpatialGrid` とその更新（FloorSite はルート型） |
-| `DesignationSpatialGrid` / `ResourceSpatialGrid` 等 7 グリッド | — |
+| `SoulSpatialGrid` とその更新システム | `FloorConstructionSpatialGrid` とその更新（FloorSite はルート型） |
+| `FamiliarSpatialGrid` とその更新システム | — |
+| `DesignationSpatialGrid` / `ResourceSpatialGrid` / `GatheringSpotSpatialGrid` 等 8 グリッド | — |
 | `GridData<T>`, `SpatialGridOps` トレイト | — |
 
 **分割基準**: グリッドに格納するコンポーネント型が hw_* クレートで定義されているか、src/ で定義されているかによる。
-`GatheringSpot`・`FloorConstructionSite` はルートクレート固有の型のため、グリッドも src/ 側に定義する。
+`GatheringSpot` は `hw_core` に移ったため `GatheringSpotSpatialGrid` も `hw_spatial` が所有する。`FloorConstructionSite` は依然 root 固有の型のため、そのグリッドだけが src/ 側に残る。

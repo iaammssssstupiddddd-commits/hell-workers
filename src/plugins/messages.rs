@@ -5,8 +5,9 @@ use crate::entities::familiar::FamiliarSpawnEvent;
 use crate::events::{
     DesignationRequest, EncouragementRequest, EscapeRequest, FamiliarAiStateChangedEvent,
     FamiliarIdleVisualRequest, FamiliarOperationMaxSoulChangedEvent, FamiliarStateRequest,
-    GatheringManagementRequest, IdleBehaviorRequest, OnExhausted, OnGatheringParticipated,
-    ResourceReservationRequest, SquadManagementRequest, TaskAssignmentRequest,
+    GatheringManagementRequest, GatheringSpawnRequest, IdleBehaviorRequest, OnExhausted,
+    OnGatheringParticipated, ResourceReservationRequest, SquadManagementRequest,
+    TaskAssignmentRequest,
 };
 use crate::systems::visual::speech::conversation::events::{
     ConversationCompleted, ConversationToneTriggered, RequestConversation,
@@ -34,6 +35,7 @@ impl Plugin for MessagesPlugin {
             .add_message::<ConversationCompleted>()
             .add_message::<ConversationToneTriggered>()
             .add_message::<OnExhausted>()
-            .add_message::<OnGatheringParticipated>();
+            .add_message::<OnGatheringParticipated>()
+            .add_message::<GatheringSpawnRequest>();
     }
 }

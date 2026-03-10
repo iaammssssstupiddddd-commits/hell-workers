@@ -2,101 +2,76 @@ use bevy::prelude::*;
 
 use crate::assets::GameAssets;
 use crate::entities::damned_soul::{DamnedSoul, IdleBehavior, IdleState};
-use crate::relationships::ParticipatingIn;
+use crate::events::{GatheringSpawnRequest, OnGatheringParticipated};
+use crate::relationships::{CommandedBy, ParticipatingIn};
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
 use crate::systems::soul_ai::helpers::gathering::*;
-use crate::systems::spatial::{GatheringSpotSpatialGrid, SpatialGrid, SpatialGridOps};
 use hw_core::constants::*;
 
-/// 集会スポットの発生システム
-/// アイドル状態のSoulが一定時間経過すると新しい集会を発生させる
+/// 集会スポットの視覚アダプターシステム (Execute Phase)
+///
+/// `GatheringSpawnRequest` を受け取り、GameAssets を使って
+/// aura・中心オブジェクトのスプライトエンティティをスポーンする。
+/// 発生判定ロジックは hw_ai の `gathering_spawn_logic_system` が担う。
 pub fn gathering_spawn_system(
-    time: Res<Time>,
     mut commands: Commands,
     game_assets: Res<GameAssets>,
-    q_souls: Query<
-        (Entity, &Transform, &IdleState, &AssignedTask),
+    q_initiators: Query<
+        (&IdleState, &AssignedTask),
         (
             With<DamnedSoul>,
             Without<ParticipatingIn>,
-            Without<crate::relationships::CommandedBy>,
+            Without<CommandedBy>,
         ),
     >,
-    spot_grid: Res<GatheringSpotSpatialGrid>,
-    soul_grid: Res<SpatialGrid>,
-    mut q_readiness: Query<&mut GatheringReadiness>,
-    update_timer: Res<GatheringUpdateTimer>,
+    mut spawn_requests: MessageReader<GatheringSpawnRequest>,
 ) {
-    if !update_timer.timer.just_finished() {
-        return;
-    }
+    for request in spawn_requests.read() {
+        let Ok((idle, task)) = q_initiators.get(request.initiator_entity) else {
+            debug!(
+                "GATHERING: Drop stale spawn request for missing or unavailable initiator {:?}",
+                request.initiator_entity
+            );
+            continue;
+        };
 
-    let dt = update_timer.timer.duration().as_secs_f32();
-    let current_time = time.elapsed_secs();
-
-    for (entity, transform, idle, task) in q_souls.iter() {
-        // タスクなし & Idle/Wandering 状態のみ対象
         if !matches!(task, AssignedTask::None) {
+            debug!(
+                "GATHERING: Drop stale spawn request for busy initiator {:?}",
+                request.initiator_entity
+            );
             continue;
         }
+
         if !matches!(
             idle.behavior,
             IdleBehavior::Wandering | IdleBehavior::Sitting | IdleBehavior::Sleeping
         ) {
+            debug!(
+                "GATHERING: Drop stale spawn request for initiator {:?} in {:?}",
+                request.initiator_entity, idle.behavior
+            );
             continue;
         }
 
-        let pos = transform.translation.truncate();
-
-        // 既存の集会所が近くにあるか空間グリッドでチェック
-        let nearby_spots = spot_grid.get_nearby_in_radius(pos, GATHERING_DETECTION_RADIUS);
-        if !nearby_spots.is_empty() {
-            continue;
-        }
-
-        // 近傍のSoul数を空間グリッドでカウント
-        let nearby_soul_entities = soul_grid.get_nearby_in_radius(pos, GATHERING_DETECTION_RADIUS);
-        let nearby_souls = nearby_soul_entities.len().saturating_sub(1); // 自分を除く
-
-        // 発生時間を計算
-        let spawn_time = (GATHERING_SPAWN_BASE_TIME
-            - nearby_souls as f32 * GATHERING_SPAWN_TIME_REDUCTION_PER_SOUL)
-            .max(2.0);
-
-        // GatheringReadiness を更新または追加
-        if let Ok(mut readiness) = q_readiness.get_mut(entity) {
-            readiness.idle_time += dt;
-            if readiness.idle_time >= spawn_time {
-                // 集会発生!
-                let object_type = GatheringObjectType::random_weighted(nearby_souls + 1);
-                let spot_entity = spawn_gathering_spot(
-                    &mut commands,
-                    &game_assets,
-                    pos,
-                    object_type,
-                    current_time,
-                );
-                // 発起人を参加者として登録
-                commands.entity(entity).insert(ParticipatingIn(spot_entity));
-                commands.trigger(crate::events::OnGatheringParticipated {
-                    entity,
-                    spot_entity,
-                });
-                readiness.idle_time = 0.0;
-                debug!(
-                    "GATHERING: New spot spawned at {:?} with {:?}, initiator {:?}",
-                    pos, object_type, entity
-                );
-            }
-        } else {
-            commands
-                .entity(entity)
-                .insert(GatheringReadiness::default());
-        }
+        let spot_entity = spawn_gathering_spot(
+            &mut commands,
+            &game_assets,
+            request.pos,
+            request.object_type,
+            request.created_at,
+        );
+        commands
+            .entity(request.initiator_entity)
+            .insert(ParticipatingIn(spot_entity));
+        commands.trigger(OnGatheringParticipated {
+            entity: request.initiator_entity,
+            spot_entity,
+        });
     }
 }
 
-/// 集会スポットをスポーン
+/// 集会スポットをスポーン（GatheringSpot + visual entities）
 pub(crate) fn spawn_gathering_spot(
     commands: &mut Commands,
     game_assets: &Res<GameAssets>,
@@ -115,7 +90,6 @@ pub(crate) fn spawn_gathering_spot(
 
     let aura_size = calculate_aura_size(0);
 
-    // オーラエンティティ
     let aura_entity = commands
         .spawn((
             Sprite {
@@ -128,7 +102,6 @@ pub(crate) fn spawn_gathering_spot(
         ))
         .id();
 
-    // 中心オブジェクトエンティティ (もしあれば)
     let object_image = match object_type {
         GatheringObjectType::Nothing => None,
         GatheringObjectType::CardTable => Some(game_assets.gathering_card_table.clone()),

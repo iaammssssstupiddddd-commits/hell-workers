@@ -1,4 +1,5 @@
 use crate::familiar::FamiliarAiState;
+use crate::gathering::GatheringObjectType;
 use crate::jobs::WorkType;
 use crate::logistics::ResourceType;
 use bevy::prelude::*;
@@ -266,4 +267,13 @@ pub enum SquadManagementOperation {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ReleaseReason {
     Fatigued,
+}
+
+/// 集会スポット生成リクエスト (hw_ai → root visual adapter へのブリッジ)
+#[derive(Message, Debug, Clone)]
+pub struct GatheringSpawnRequest {
+    pub pos: Vec2,
+    pub object_type: GatheringObjectType,
+    pub initiator_entity: Entity,
+    pub created_at: f32,
 }
