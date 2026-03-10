@@ -34,6 +34,7 @@ impl Plugin for SoulAiCorePlugin {
                 (
                     execute::designation_apply::apply_designation_requests_system,
                     execute::gathering_apply::gathering_apply_system,
+                    execute::gathering_spawn::gathering_spawn_logic_system,
                 )
                     .in_set(SoulAiSystemSet::Execute),
             )
@@ -42,6 +43,7 @@ impl Plugin for SoulAiCorePlugin {
                 (
                     decide::work::auto_refine::mud_mixer_auto_refine_system,
                     decide::work::auto_build::blueprint_auto_build_system,
+                    decide::idle_behavior::idle_behavior_decision_system,
                 )
                     .in_set(SoulAiSystemSet::Decide),
             )

@@ -6,9 +6,7 @@ use hw_core::area::TaskArea;
 use hw_core::constants::WHEELBARROW_CAPACITY;
 use hw_core::familiar::{ActiveCommand, FamiliarCommand};
 use hw_core::relationships::{ManagedBy, TaskWorkers};
-use hw_jobs::{
-    Blueprint, Designation, Priority, TargetBlueprint, TaskSlots, WorkType,
-};
+use hw_jobs::{Blueprint, Designation, Priority, TargetBlueprint, TaskSlots, WorkType};
 use hw_spatial::BlueprintSpatialGrid;
 use hw_world::zones::{AreaBounds, Yard};
 

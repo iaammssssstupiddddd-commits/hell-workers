@@ -62,8 +62,6 @@ impl Plugin for SoulAiPlugin {
                 // === Decide Phase ===
                 // 次の行動の選択、要求の生成
                 (
-                    // アイドル行動の決定（先に実行）
-                    decide::idle_behavior::idle_behavior_decision_system,
                     // 重なり回避（idle_behaviorの後に実行して上書きを防ぐ）
                     decide::separation::gathering_separation_system
                         .after(decide::idle_behavior::idle_behavior_decision_system),
@@ -104,7 +102,9 @@ impl Plugin for SoulAiPlugin {
                     // タスク要求の適用
                     hw_logistics::apply_reservation_requests_system,
                     // エンティティ生成
-                    execute::gathering_spawn::gathering_spawn_system,
+                    execute::gathering_spawn::gathering_spawn_system.after(
+                        hw_ai::soul_ai::execute::gathering_spawn::gathering_spawn_logic_system,
+                    ),
                 )
                     .in_set(SoulAiSystemSet::Execute),
             ),

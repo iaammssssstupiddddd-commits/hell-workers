@@ -3,6 +3,7 @@
 use bevy::prelude::*;
 
 use hw_core::area::TaskArea;
+use hw_core::constants::TILE_SIZE;
 use hw_core::familiar::{ActiveCommand, FamiliarCommand};
 use hw_core::relationships::TaskWorkers;
 use hw_jobs::construction::WallTileBlueprint;
@@ -10,7 +11,6 @@ use hw_jobs::{
     Building, BuildingType, Designation, Priority, ProvisionalWall, TaskSlots, WorkType,
 };
 use hw_world::zones::{AreaBounds, Yard};
-use hw_core::constants::TILE_SIZE;
 
 use crate::transport_request::{
     TransportDemand, TransportPolicy, TransportPriority, TransportRequest, TransportRequestKind,

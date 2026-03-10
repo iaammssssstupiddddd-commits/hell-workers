@@ -1,10 +1,10 @@
 use bevy::prelude::*;
 
 use hw_core::area::TaskArea;
+use hw_core::familiar::{ActiveCommand, FamiliarCommand};
 use hw_core::jobs::WorkType;
 use hw_core::relationships::{Commanding, ManagedBy, TaskWorkers};
 use hw_core::soul::StressBreakdown;
-use hw_core::familiar::{ActiveCommand, FamiliarCommand};
 use hw_jobs::events::TaskAssignmentRequest;
 use hw_jobs::{AssignedTask, Blueprint, BuildData, BuildPhase, Designation, Priority, TaskSlots};
 use hw_spatial::BlueprintSpatialGrid;

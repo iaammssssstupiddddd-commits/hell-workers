@@ -20,7 +20,9 @@ use crate::systems::jobs::wall_construction::{
     wall_construction_phase_transition_system, wall_framed_tile_spawn_system,
 };
 use crate::systems::logistics::item_lifetime::despawn_expired_items_system;
-use crate::systems::logistics::transport_request::{FloorWallTransportPlugin, TransportRequestPlugin};
+use crate::systems::logistics::transport_request::{
+    FloorWallTransportPlugin, TransportRequestPlugin,
+};
 use crate::systems::obstacle::obstacle_cleanup_system;
 use crate::systems::room::{
     RoomDetectionState, RoomTileLookup, RoomValidationState, detect_rooms_system,
