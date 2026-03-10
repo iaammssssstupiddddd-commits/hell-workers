@@ -1,4 +1,1 @@
-pub mod animations;
-pub mod floating_text;
-pub mod progress_bar;
-pub mod worker_icon;
+pub use hw_visual::{animations, floating_text, progress_bar, worker_icon};

@@ -10,8 +10,8 @@ use rand::Rng;
 
 // コアコンポーネントは hw_core::soul から再エクスポート
 pub use hw_core::soul::{
-    DamnedSoul, Destination, DreamPool, DreamQuality, DreamState, DriftEdge, DriftPhase,
-    DriftingState, GatheringBehavior, IdleBehavior, IdleState, Path, RestAreaCooldown,
+    AnimationState, DamnedSoul, Destination, DreamPool, DreamQuality, DreamState, DriftEdge,
+    DriftPhase, DriftingState, GatheringBehavior, IdleBehavior, IdleState, Path, RestAreaCooldown,
     StressBreakdown,
 };
 
@@ -58,24 +58,6 @@ impl SoulIdentity {
 pub struct SoulUiLinks {
     pub bar_entity: Option<Entity>,
     pub icon_entity: Option<Entity>,
-}
-
-/// アニメーション状態
-#[derive(Component)]
-pub struct AnimationState {
-    pub is_moving: bool,
-    pub facing_right: bool,
-    pub bob_timer: f32,
-}
-
-impl Default for AnimationState {
-    fn default() -> Self {
-        Self {
-            is_moving: false,
-            facing_right: true,
-            bob_timer: 0.0,
-        }
-    }
 }
 
 /// 会話イベント起点の一時的な表情オーバーレイ
