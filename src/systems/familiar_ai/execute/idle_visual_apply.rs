@@ -11,7 +11,7 @@ pub fn familiar_idle_visual_apply_system(
     time: Res<Time>,
     mut request_reader: MessageReader<FamiliarIdleVisualRequest>,
     q_bubbles: Query<(Entity, &SpeechBubble), With<FamiliarBubble>>,
-    game_assets: Res<crate::assets::GameAssets>,
+    speech_handles: Res<hw_visual::SpeechHandles>,
     mut q_familiars: Query<
         (
             &Transform,
@@ -44,7 +44,7 @@ pub fn familiar_idle_visual_apply_system(
             request.familiar_entity,
             crate::systems::visual::speech::phrases::LatinPhrase::Requiesce,
             fam_transform.translation,
-            &game_assets,
+            &speech_handles,
             &q_bubbles,
             BubbleEmotion::Neutral,
             BubblePriority::Normal,

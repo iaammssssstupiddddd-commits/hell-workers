@@ -18,7 +18,7 @@ pub fn apply_squad_management_requests_system(
     mut queries: crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
     world_map: WorldMapRead,
     time: Res<Time>,
-    game_assets: Res<crate::assets::GameAssets>,
+    speech_handles: Res<hw_visual::SpeechHandles>,
     q_bubbles: Query<(Entity, &SpeechBubble), With<FamiliarBubble>>,
     mut q_familiars: Query<
         (
@@ -115,7 +115,7 @@ pub fn apply_squad_management_requests_system(
                                     fam_entity,
                                     crate::systems::visual::speech::phrases::LatinPhrase::Abi,
                                     fam_transform.translation,
-                                    &game_assets,
+                                    &speech_handles,
                                     &q_bubbles,
                                     BubbleEmotion::Neutral,
                                     BubblePriority::Normal,

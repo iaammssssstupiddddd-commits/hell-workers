@@ -1,3 +1,6 @@
+mod access;
+pub use access::{WorldMapRead, WorldMapWrite};
+
 use crate::pathfinding::PathWorld;
 use crate::{
     TerrainType, find_nearest_river_grid, find_nearest_walkable_grid, grid_to_world, idx_to_pos,
