@@ -3,8 +3,8 @@
 use crate::assets::GameAssets;
 use bevy::prelude::*;
 use hw_visual::{
-    BuildingAnimHandles, HaulItemHandles, MaterialIconHandles, PlantTreeHandles, SpeechHandles,
-    WallVisualHandles, WorkIconHandles,
+    BuildingAnimHandles, GatheringVisualHandles, HaulItemHandles, MaterialIconHandles,
+    PlantTreeHandles, SpeechHandles, WallVisualHandles, WorkIconHandles,
 };
 
 pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>) {
@@ -96,5 +96,12 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
     commands.insert_resource(PlantTreeHandles {
         magic_circle: game_assets.plant_tree_magic_circle.clone(),
         life_spark: game_assets.plant_tree_life_spark.clone(),
+    });
+
+    commands.insert_resource(GatheringVisualHandles {
+        aura_circle: game_assets.aura_circle.clone(),
+        card_table: game_assets.gathering_card_table.clone(),
+        campfire: game_assets.gathering_campfire.clone(),
+        barrel: game_assets.gathering_barrel.clone(),
     });
 }

@@ -10,8 +10,20 @@ impl UiAssets for GameAssets {
         &self.font_familiar
     }
 
+    fn font_soul_name(&self) -> &Handle<Font> {
+        &self.font_soul_name
+    }
+
     fn icon_arrow_down(&self) -> &Handle<Image> {
         &self.icon_arrow_down
+    }
+
+    fn icon_arrow_right(&self) -> &Handle<Image> {
+        &self.icon_arrow_right
+    }
+
+    fn icon_idle(&self) -> &Handle<Image> {
+        &self.icon_idle
     }
 
     fn glow_circle(&self) -> &Handle<Image> {

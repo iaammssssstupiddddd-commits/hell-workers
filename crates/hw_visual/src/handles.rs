@@ -107,3 +107,12 @@ pub struct PlantTreeHandles {
     pub magic_circle: Handle<Image>,
     pub life_spark: Handle<Image>,
 }
+
+/// 集会スポット visual（soul/gathering_spawn.rs）
+#[derive(Resource)]
+pub struct GatheringVisualHandles {
+    pub aura_circle: Handle<Image>,
+    pub card_table: Handle<Image>,
+    pub campfire: Handle<Image>,
+    pub barrel: Handle<Image>,
+}

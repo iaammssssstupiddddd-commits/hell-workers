@@ -43,10 +43,13 @@
 | `drag_state.rs` | `DragState` — ドラッグ中エンティティの状態型 |
 | `minimize.rs` | `EntityListMinimizeState` + 最小化トグルシステム |
 | `resize.rs` | `EntityListResizeState` + リサイズシステム |
+| `section_toggle.rs` | `entity_list_section_toggle_system` — セクション折りたたみの純UI操作 |
 | `selection_focus.rs` | `focus_camera_on_entity`, `select_entity_and_focus_camera` |
+| `spawn.rs` | Familiar セクション / Soul 行の UI ノード生成 helper |
+| `sync.rs` | Familiar / Unassigned Soul の差分同期 helper |
 | `tree_ops.rs` | `clear_children` — ツリー操作ユーティリティ |
 | `visual.rs` | `apply_row_highlight`, `entity_list_visual_feedback_system` |
-| `models.rs` | リスト向けデータモデル |
+| `models.rs` | リスト向けデータモデル、`EntityListNodeIndex`、`FamiliarSectionNodes` |
 
 ### panels/ ディレクトリ
 
@@ -90,6 +93,8 @@ UiRoot
 `setup/mod.rs` の `UiAssets` trait により、セットアップ関数がゲーム固有の `GameAssets` に直接依存しない設計になっている。
 ルートクレートで `GameAssets: UiAssets` を実装し、`&dyn UiAssets` として渡す。
 
+Entity List の `spawn` / `sync` helper もこの trait を利用し、`font_soul_name`、`icon_arrow_right`、`icon_idle` を含むフォント・アイコン供給を root adapter に委譲する。
+
 ```rust
 // ルートクレート側でのアダプタ実装例
 impl UiAssets for GameAssets {
@@ -108,6 +113,7 @@ impl UiAssets for GameAssets {
 | 理由 | 例 |
 |---|---|
 | ゲームエンティティ ECS クエリ | `DamnedSoul`, `Familiar` に触れるシステム |
+| ゲーム固有 ViewModel 構築 | `Familiar` / `AssignedTask` から `EntityListViewModel` を組み立てる処理 |
 | `Res<GameAssets>` を引数にするシステム | `task_list/update.rs` — Bevy は `Res<dyn Trait>` 不可 |
 | ゲーム状態遷移 (`PlayMode`) | ルートクレートの責務 |
 | `app_contexts` 型 | `TaskContext` 等 — ルートクレート定義 |
