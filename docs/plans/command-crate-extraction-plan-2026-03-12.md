@@ -511,18 +511,20 @@ cargo run -- --spawn-souls 500 --spawn-familiars 30 --perf-scenario --perf-log-f
 
 ### 現在地
 
-- 進捗: `0%`
-- 完了済みマイルストーン: なし
-- 未着手/進行中: M1〜M4 未着手
+- 進捗: `25%`
+- 完了済みマイルストーン: **M1**
+- 未着手/進行中: M2〜M4 未着手
 
 ### 次のAIが最初にやること
 
-1. `crates/hw_core/src/area.rs` を開き、末尾に M1 の5関数を貼り付ける。
-   - `TaskMode` は `use crate::game_state::TaskMode;` でアクセス可能。
-   - `TILE_SIZE` は `use crate::constants::TILE_SIZE;` でアクセス可能。
-2. `src/systems/command/area_selection/geometry.rs` から5関数の本体を削除し、`use hw_core::area::{...}` を追加。
-3. `CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo check --workspace` で M1 を確認。
-4. `crates/hw_world/src/zone_ops.rs` を新規作成し M2 に進む。
+1. `crates/hw_world/src/zone_ops.rs` を新規作成し M2 に進む。
+   - `identify_removal_targets` を `src/systems/command/zone_placement/connectivity.rs` からコピー
+   - `area_tile_size`, `rectangles_overlap_site`, `rectangles_overlap`, `expand_yard_area` を `placement.rs` からコピー
+2. `crates/hw_world/src/lib.rs` に `pub mod zone_ops;` と re-export を追加。
+3. `connectivity.rs` を削除し、`mod.rs` から `mod connectivity` を削除。
+4. `removal_preview.rs` の呼び出しを `hw_world::identify_removal_targets` に変更。
+5. `placement.rs` の4関数本体を削除し `use hw_world::...` に置換。
+6. `CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo check --workspace` で M2 を確認。
 
 ### ブロッカー/注意点
 
