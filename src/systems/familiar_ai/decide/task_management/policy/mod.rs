@@ -15,6 +15,7 @@ pub fn assign_by_work_type(
     already_commanded: bool,
     ctx: &AssignTaskContext<'_>,
     queries: &mut crate::systems::familiar_ai::decide::task_management::FamiliarTaskAssignmentQueries,
+    construction_sites: &crate::systems::soul_ai::execute::task_execution::context::ConstructionSiteAccess,
     shadow: &mut ReservationShadow,
 ) -> bool {
     match work_type {
@@ -31,7 +32,14 @@ pub fn assign_by_work_type(
         }
         WorkType::Refine => basic::assign_refine(task_pos, already_commanded, ctx, queries, shadow),
         WorkType::Haul | WorkType::WheelbarrowHaul => {
-            haul::assign_haul(task_pos, already_commanded, ctx, queries, shadow)
+            haul::assign_haul(
+                task_pos,
+                already_commanded,
+                ctx,
+                queries,
+                construction_sites,
+                shadow,
+            )
         }
         WorkType::HaulToMixer => {
             haul::assign_haul_to_mixer(task_pos, already_commanded, ctx, queries, shadow)

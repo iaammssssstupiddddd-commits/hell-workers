@@ -19,8 +19,8 @@
 
 | Document | Status | Notes |
 |---|---|---|
-| [familiar-ui-hw-ui-migration-plan-2026-03-11.md](familiar-ui-hw-ui-migration-plan-2026-03-11.md) | In Progress | familiar UI を `hw_ui` へ段階移設する計画。 |
-| [soul-ai-root-thinning-plan-2026-03-11.md](soul-ai-root-thinning-plan-2026-03-11.md) | Completed | src/systems/soul_aiの root thinning 計画。M1-M4 実装と M5 blocker 明文化まで完了。`task_execution` 全面移設は別計画。 |
+| [familiar-task-management-hw-ai-extraction-plan-2026-03-11.md](familiar-task-management-hw-ai-extraction-plan-2026-03-11.md) | Draft | src/systems/familiar_ai/decide/task_management/の計画。 |
+| [room-detection-hw-world-extraction-plan-2026-03-11.md](room-detection-hw-world-extraction-plan-2026-03-11.md) | Draft | src/systems/room/detection.rsの計画。 |
 
 ## アーカイブ計画書一覧 (`docs/plans/archive`)
 
@@ -45,6 +45,7 @@
 | [archive/dream-visual-update.md](archive/dream-visual-update.md) | アーカイブ | Dreamビジュアル更新計画。 |
 | [archive/dream_per_soul_storage.md](archive/dream_per_soul_storage.md) | アーカイブ | 現状: Dreamはグローバルプール(`DreamPool.points`)に直接加算される。soulの睡眠レートで`DreamPool`に即時反映され、soul個別のdream貯蔵量という概念がないの提案。 |
 | [archive/familiar-ai-root-thinning-plan-2026-03-09.md](archive/familiar-ai-root-thinning-plan-2026-03-09.md) | アーカイブ | familiar_ai を hw_ai へ寄せて root を薄くする計画 |
+| [archive/familiar-ui-hw-ui-migration-plan-2026-03-11.md](archive/familiar-ui-hw-ui-migration-plan-2026-03-11.md) | アーカイブ | -の計画。 |
 | [archive/floor-construction.md](archive/floor-construction.md) | アーカイブ | 床建築システムの実装計画。 |
 | [archive/global-transport-request-plan.md](archive/global-transport-request-plan.md) | アーカイブ | 運搬系のグローバル request 化計画。 |
 | [archive/hover-action-button.md](archive/hover-action-button.md) | アーカイブ | Plant ホバーアクションボタン（プレースホルダー）実装計画 |
@@ -95,6 +96,7 @@
 | [archive/site-yard-system.md](archive/site-yard-system.md) | アーカイブ | 実装計画: Site / Yard システム |
 | [archive/soul-ai-root-thinning-plan-2026-03-09.md](archive/soul-ai-root-thinning-plan-2026-03-09.md) | アーカイブ | soul_ai を段階的に crate へ寄せて root を薄くする計画 |
 | [archive/soul-ai-root-thinning-plan-2026-03-11 copy 1.md](archive/soul-ai-root-thinning-plan-2026-03-11 copy 1.md) | アーカイブ | src/systems/soul_aiの計画。 |
+| [archive/soul-ai-root-thinning-plan-2026-03-11 copy 2.md](archive/soul-ai-root-thinning-plan-2026-03-11 copy 2.md) | アーカイブ | src/systems/soul_aiの計画。 |
 | [archive/soul-ai-root-thinning-plan-2026-03-11 copy.md](archive/soul-ai-root-thinning-plan-2026-03-11 copy.md) | アーカイブ | src/systems/soul_aiの計画。 |
 | [archive/soul-ai-root-thinning-plan-2026-03-11.md](archive/soul-ai-root-thinning-plan-2026-03-11.md) | アーカイブ | src/systems/soul_aiの計画。 |
 | [archive/soul-spawn-despawn.md](archive/soul-spawn-despawn.md) | アーカイブ | Soul Spawn/Despawn設計計画。 |

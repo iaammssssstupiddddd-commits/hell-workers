@@ -9,6 +9,7 @@ use crate::systems::familiar_ai::decide::familiar_processor::{
 use crate::systems::familiar_ai::decide::task_management::FamiliarTaskAssignmentQueries;
 use crate::systems::familiar_ai::helpers::query_types::{FamiliarSoulQuery, FamiliarTaskQuery};
 use crate::systems::logistics::TileSiteIndex;
+use crate::systems::soul_ai::execute::task_execution::context::ConstructionSiteAccess;
 use crate::systems::spatial::{
     DesignationSpatialGrid, ResourceSpatialGrid, TransportRequestSpatialGrid,
 };
@@ -37,6 +38,7 @@ pub struct FamiliarAiTaskDelegationParams<'w, 's> {
     pub q_familiars: FamiliarTaskQuery<'w, 's>,
     pub q_souls: FamiliarSoulQuery<'w, 's>,
     pub task_queries: FamiliarTaskAssignmentQueries<'w, 's>,
+    pub construction_sites: ConstructionSiteAccess<'w, 's>,
     pub designation_grid: Res<'w, DesignationSpatialGrid>,
     pub transport_request_grid: Res<'w, TransportRequestSpatialGrid>,
     pub resource_grid: Res<'w, ResourceSpatialGrid>,
@@ -56,6 +58,7 @@ pub fn familiar_task_delegation_system(params: FamiliarAiTaskDelegationParams) {
         mut q_familiars,
         mut q_souls,
         mut task_queries,
+        construction_sites,
         designation_grid,
         transport_request_grid,
         resource_grid,
@@ -136,6 +139,7 @@ pub fn familiar_task_delegation_system(params: FamiliarAiTaskDelegationParams) {
             squad_entities: &squad_entities,
             q_souls: &mut q_souls,
             task_queries: &mut task_queries,
+            construction_sites: &construction_sites,
             designation_grid: &designation_grid,
             transport_request_grid: &transport_request_grid,
             resource_grid: &resource_grid,

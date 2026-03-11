@@ -1,9 +1,9 @@
 use super::components::Room;
-use super::detection::{build_detection_input, room_is_valid_against_input};
 use super::resources::{RoomDetectionState, RoomTileLookup, RoomValidationState};
 use crate::systems::jobs::Building;
 use crate::world::map::WorldMapRead;
 use bevy::prelude::*;
+use hw_world::room_detection::{RoomDetectionBuildingTile, build_detection_input, room_is_valid_against_input};
 use std::collections::HashMap;
 
 /// Periodically validates existing room entities and repairs stale state.
@@ -22,11 +22,24 @@ pub fn validate_rooms_system(
         return;
     }
 
-    let input = build_detection_input(&q_buildings, world_map.as_ref());
+    let tiles: Vec<RoomDetectionBuildingTile> = q_buildings
+        .iter()
+        .map(|(_entity, building, transform)| {
+            let grid = crate::world::map::WorldMap::world_to_grid(transform.translation.truncate());
+            RoomDetectionBuildingTile {
+                grid,
+                kind: building.kind,
+                is_provisional: building.is_provisional,
+                has_building_on_top: world_map.has_building(grid),
+            }
+        })
+        .collect();
+
+    let input = build_detection_input(&tiles);
     let mut tile_to_room = HashMap::new();
 
     for (room_entity, room) in q_rooms.iter() {
-        if room_is_valid_against_input(room, &input) {
+        if room_is_valid_against_input(&room.tiles, &input) {
             for &tile in &room.tiles {
                 tile_to_room.insert(tile, room_entity);
             }
