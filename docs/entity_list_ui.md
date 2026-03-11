@@ -85,12 +85,15 @@
 - `src/interface/ui/list/mod.rs` - イベント受付、interaction/system 登録
 - `src/interface/ui/list/change_detection.rs` - 変更検知トリガ（DamnedSoul/Familiar Changed 監視）
 - `src/interface/ui/list/view_model.rs` - ゲームエンティティ → ビューモデル変換
-- `src/interface/ui/list/spawn/`, `sync/` - ゲームエンティティ → UI ノード同期
+- `src/interface/ui/list/sync.rs` - `sync_entity_list_from_view_model_system` / `sync_entity_list_value_rows_system`（hw_ui sync helpers の thin shell）
 - `src/interface/ui/list/drag_drop.rs` - ドラッグ&ドロップシステム（`DragState` 型は hw_ui）
-- `src/interface/ui/list/interaction.rs`, `interaction/navigation.rs` - FamiliarOperation / TaskContext 依存
+- `src/interface/ui/list/interaction.rs`, `interaction/navigation.rs` - FamiliarOperation / TaskContext 依存（`entity_list_interaction_system`）
 
-### `hw_ui` 側（分離済み）
-- `crates/hw_ui/src/list/models.rs` - ビューモデル型
+### `hw_ui` 側（移設済み）
+- `crates/hw_ui/src/list/models.rs` - ビューモデル型・`EntityListNodeIndex`・`FamiliarSectionNodes`
+- `crates/hw_ui/src/list/spawn.rs` - `spawn_familiar_section`, `spawn_soul_list_item_entity` 等（`dyn UiAssets` 経由）
+- `crates/hw_ui/src/list/sync.rs` - `sync_familiar_sections`, `sync_unassigned_souls`（`dyn UiAssets` 経由）
+- `crates/hw_ui/src/list/section_toggle.rs` - `entity_list_section_toggle_system`（折りたたみ純UI操作）
 - `crates/hw_ui/src/list/dirty.rs` - `EntityListDirty` リソース定義
 - `crates/hw_ui/src/list/drag_state.rs` - `DragState` 型
 - `crates/hw_ui/src/list/minimize.rs` - `EntityListMinimizeState` + 最小化トグルシステム
@@ -99,6 +102,7 @@
 - `crates/hw_ui/src/list/tree_ops.rs` - `clear_children`
 - `crates/hw_ui/src/list/visual.rs` - `apply_row_highlight`, `entity_list_visual_feedback_system`
 - `crates/hw_ui/src/list/mod.rs` - `hw_ui` 対外エクスポート
+- `crates/hw_ui/src/setup/mod.rs` - `UiAssets` トレイト（`icon_arrow_right`, `icon_idle`, `font_soul_name` 含む）
 
 ### 境界横断
 - `src/interface/ui/components.rs`, `src/interface/ui/theme.rs` は `hw_ui` API の再エクスポートシェルとして残す

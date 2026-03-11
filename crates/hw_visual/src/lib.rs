@@ -18,8 +18,8 @@ pub mod wall_connection;
 pub mod worker_icon;
 
 pub use handles::{
-    BuildingAnimHandles, HaulItemHandles, MaterialIconHandles, PlantTreeHandles, SpeechHandles,
-    WallVisualHandles, WorkIconHandles,
+    BuildingAnimHandles, GatheringVisualHandles, HaulItemHandles, MaterialIconHandles,
+    PlantTreeHandles, SpeechHandles, WallVisualHandles, WorkIconHandles,
 };
 
 pub use task_area_visual::{TaskAreaMaterial, TaskAreaVisual};
@@ -185,4 +185,3 @@ impl Plugin for HwVisualPlugin {
         );
     }
 }
-

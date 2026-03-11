@@ -38,7 +38,6 @@
 
 - `src/systems/soul_ai/execute/task_execution/**` の全面移設（construction site 型 crate 化が先決）
 - `helpers/work.rs::unassign_task` の移設（`WorldMap` + `Visibility` + `WheelbarrowMovement` の多方面 blocker あり）
-- `execute/gathering_spawn.rs` の visual spawn 部分の除去
 - `PopulationManager` や `GameAssets` 自体の crate 移動
 - `FloorConstructionSite` / `WallConstructionSite` の今回中の crate 化
 
@@ -78,8 +77,6 @@
 | --- | --- | --- |
 | `helpers/work.rs::unassign_task` | `WorldMapWrite`（hw_world 実体だが書き込みあり）+ `Visibility` + `hw_visual::haul::WheelbarrowMovement` を複合変更 | 強い |
 | `task_execution/context/access.rs` | `StorageAccess` / `MutStorageAccess` が `FloorConstructionSite` / `WallConstructionSite` の Query を持つ。この 2 型は root-only | 強い |
-| `execute/gathering_spawn.rs` の entity spawn | `GameAssets` から直接スプライトを spawn する（handle resource 注入が未完） | 強い |
-
 ### 4.2 中程度の blocker
 
 | 対象 | 根拠（root-only 型） | 判定 | 対処案 |
@@ -87,11 +84,12 @@
 | `decide/drifting.rs` | `PopulationManager::can_start_escape()` の読み取り + `start_escape_cooldown()` の副作用 | 中 | 操作 2 点を event 化し本体から切り離す |
 | `execute/drifting.rs::despawn_at_edge_system` | `PopulationManager::total_escaped` のカウンタ更新 | 中 | `DriftingCompleted` event → root adapter で処理 |
 
-### 4.3 blocker 根拠が弱いもの（今回移設対象）
+### 4.3 blocker 根拠が弱いもの（今回移設対象 / 完了済み）
 
 | 対象 | 見かけの依存 | 実態 | 移設先 |
 | --- | --- | --- | --- |
 | `visual/idle.rs`, `visual/gathering.rs`, `visual/vitals.rs` | `crate::entities::damned_soul::*` など多数 | 全て hw_core / hw_ui / hw_spatial / hw_ai の再エクスポート | `hw_visual` |
+| `execute/gathering_spawn.rs` の visual spawn helper | `GameAssets` / sprite spawn | `GatheringVisualHandles` を startup で注入し、spawn 本体を `hw_visual::soul::gathering_spawn::spawn_gathering_spot` へ抽出済み | `hw_visual` |
 | `apply_task_assignment_requests_system` とその直下 helper 群 | `crate::events::*`, `crate::relationships::*` など | 全て hw_core / hw_jobs / hw_logistics / hw_ai の再エクスポート。root-only 型は不使用 | `hw_ai` |
 | `transport_common/lifecycle.rs` | `AssignedTask`, `ResourceReservationOp` | 完全な純粋関数（Bevy 依存なし）。全型が hw_jobs / hw_core 実体 | `hw_jobs` |
 

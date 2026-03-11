@@ -16,7 +16,10 @@ use bevy::prelude::*;
 pub trait UiAssets {
     fn font_ui(&self) -> &Handle<Font>;
     fn font_familiar(&self) -> &Handle<Font>;
+    fn font_soul_name(&self) -> &Handle<Font>;
     fn icon_arrow_down(&self) -> &Handle<Image>;
+    fn icon_arrow_right(&self) -> &Handle<Image>;
+    fn icon_idle(&self) -> &Handle<Image>;
     fn glow_circle(&self) -> &Handle<Image>;
     fn icon_stress(&self) -> &Handle<Image>;
     fn icon_fatigue(&self) -> &Handle<Image>;

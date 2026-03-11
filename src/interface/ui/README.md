@@ -57,20 +57,20 @@
 | ファイル/ディレクトリ | 内容 |
 |---|---|
 | `mod.rs` | 公開 API（hw_ui re-export + ゲーム固有） |
-| `spawn.rs` / `spawn/` | リストノードのスポーン |
-| `sync.rs` / `sync/` | リスト内容の同期 |
+| `sync.rs` | `sync_entity_list_from_view_model_system` / `sync_entity_list_value_rows_system`（`hw_ui::list::sync` の thin shell） |
 | `view_model.rs` | リストビューモデル（ゲーム固有クエリ） |
 | `change_detection.rs` | 変化検出 |
 | `dirty.rs` | ダーティフラグ（`hw_ui::list::EntityListDirty` re-export） |
 | `drag_drop.rs` | ドラッグ&ドロップ（`DragState` は hw_ui、システムはここ） |
-| `interaction.rs` / `interaction/` | リストアイテムのインタラクション（navigation はここ残留） |
+| `interaction.rs` / `interaction/` | リストアイテムのゲーム側インタラクション（SectionToggle は hw_ui 側へ移設済み。navigation はここ残留） |
 | `selection_focus.rs` | `hw_ui::list` re-export |
-| `tree_ops.rs` | `hw_ui::list::clear_children` re-export |
 
 ## ルート残留の理由
 
 | ファイル/システム | 残留理由 |
 |---|---|
+| `list/sync.rs` | `Res<GameAssets>` を受けて `hw_ui::list::sync::*` を呼ぶ thin shell |
+| `list/view_model.rs` | `Familiar` / `DamnedSoul` / `AssignedTask` / `FamiliarAiState` などゲーム固有 ECS Query に依存 |
 | `list/interaction/navigation.rs` | `Res<TaskContext>`（ルート定義型）に依存 |
 | `panels/task_list/update.rs` | `Res<GameAssets>` — Bevy は `Res<dyn Trait>` 不可 |
 | `panels/context_menu.rs` | `Familiar`/`DamnedSoul`/`Building` ECS クエリ |

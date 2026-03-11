@@ -1,63 +1,13 @@
 use bevy::prelude::*;
+use hw_ai::soul_ai::helpers::drifting::{drift_move_target, is_near_map_edge, random_wander_target};
 use hw_core::events::SoulEscaped;
 use rand::Rng;
 
-use crate::entities::damned_soul::{DriftEdge, DriftPhase, DriftingState, IdleBehavior, IdleState};
+use crate::entities::damned_soul::{DriftPhase, DriftingState, IdleBehavior, IdleState};
 use crate::relationships::CommandedBy;
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
 use crate::world::map::{WorldMap, WorldMapRead};
 use hw_core::constants::*;
-
-fn is_near_map_edge(grid: (i32, i32)) -> bool {
-    grid.0 <= SOUL_DESPAWN_EDGE_MARGIN_TILES
-        || grid.0 >= MAP_WIDTH - 1 - SOUL_DESPAWN_EDGE_MARGIN_TILES
-        || grid.1 <= SOUL_DESPAWN_EDGE_MARGIN_TILES
-        || grid.1 >= MAP_HEIGHT - 1 - SOUL_DESPAWN_EDGE_MARGIN_TILES
-}
-
-fn random_wander_target(grid: (i32, i32), world_map: &WorldMap, rng: &mut impl Rng) -> Vec2 {
-    for _ in 0..24 {
-        let dx = rng.gen_range(-4..=4);
-        let dy = rng.gen_range(-4..=4);
-        let target = (grid.0 + dx, grid.1 + dy);
-        if world_map.is_walkable(target.0, target.1) {
-            return WorldMap::grid_to_world(target.0, target.1);
-        }
-    }
-    WorldMap::grid_to_world(grid.0, grid.1)
-}
-
-fn drift_move_target(
-    current_grid: (i32, i32),
-    edge: DriftEdge,
-    world_map: &WorldMap,
-    rng: &mut impl Rng,
-) -> Vec2 {
-    let drift_tiles = rng.gen_range(DRIFT_MOVE_TILES_MIN..=DRIFT_MOVE_TILES_MAX);
-    let lateral = rng.gen_range(-DRIFT_LATERAL_OFFSET_MAX..=DRIFT_LATERAL_OFFSET_MAX);
-
-    let desired = match edge {
-        DriftEdge::North => (current_grid.0 + lateral, current_grid.1 - drift_tiles),
-        DriftEdge::South => (current_grid.0 + lateral, current_grid.1 + drift_tiles),
-        DriftEdge::East => (current_grid.0 + drift_tiles, current_grid.1 + lateral),
-        DriftEdge::West => (current_grid.0 - drift_tiles, current_grid.1 + lateral),
-    };
-
-    let clamped = (
-        desired.0.clamp(0, MAP_WIDTH - 1),
-        desired.1.clamp(0, MAP_HEIGHT - 1),
-    );
-
-    if world_map.is_walkable(clamped.0, clamped.1) {
-        return WorldMap::grid_to_world(clamped.0, clamped.1);
-    }
-
-    let desired_world = WorldMap::grid_to_world(clamped.0, clamped.1);
-    world_map
-        .get_nearest_walkable_grid(desired_world)
-        .map(|(gx, gy)| WorldMap::grid_to_world(gx, gy))
-        .unwrap_or_else(|| WorldMap::grid_to_world(current_grid.0, current_grid.1))
-}
 
 /// 漂流（Drifting）中の Soul 行動更新
 pub fn drifting_behavior_system(
