@@ -13,6 +13,9 @@
 | 関連Issue/PR | `N/A` |
 | 先行計画 | `docs/plans/archive/soul-ai-root-thinning-plan-2026-03-09.md` |
 
+> この `Completed` は本計画のスコープ完了を意味する。  
+> M1-M4 は実装、M5 は blocker の文書化であり、`task_execution` 全面移設や `unassign_task` crate 化の完了を意味しない。
+
 ## 1. 目的
 
 - 解決したい課題: `src/systems/soul_ai` には、すでに下位 crate へ寄せられる実装と、本当に root に残すべき adapter が混在している。前回計画では `root 依存` の判定が広すぎ、再エクスポート越しの依存まで blocker 扱いしていた。
@@ -386,44 +389,33 @@ CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo check
 
 ### 現在地
 
-- 進捗: `0%`
-- 完了済みマイルストーン: なし
+- 進捗: `100%`（本計画スコープ完了）
+- 完了済みマイルストーン: M1・M2・M3・M4・M5 すべて完了
 - 完了済み:
-  - `visual/*` は `hw_visual` へ移設済み
-  - assignment apply 層は `hw_ai` へ移設済み
-  - `lifecycle.rs` は `hw_jobs` へ移設済み
-  - drifting の `PopulationManager` 書き込みは root adapter に分離済み
+  - **M1**: `idle_visual_system`, `gathering_visual_update_system`, `gathering_debug_visualization_system`, `familiar_hover_visualization_system` を `hw_visual::soul::*` へ移設。root `visual/*.rs` は thin re-export。`HwVisualPlugin` で登録済み。
+  - **M2**: `apply_task_assignment_requests_system` と直下 helper 群を `hw_ai::soul_ai::execute::task_assignment_apply` へ移設。root `task_execution/mod.rs` は re-export のみ。`SoulAiCorePlugin` で登録済み。
+  - **M3**: `collect_active_reservation_ops` / `collect_release_reservation_ops` を `hw_jobs::lifecycle` へ移設。root `transport_common/lifecycle.rs` は thin re-export。
+  - **M4**: `drifting_decision_system` の `ResMut<PopulationManager>` を `Res<>` に格下げ、`DriftingEscapeStarted` イベント発行に変更。`despawn_at_edge_system` の `total_escaped` 書き込みを `SoulEscaped` イベント発行に変更。root adapter (`adapters.rs`) が両イベントを受信して `PopulationManager` を更新。
+  - **M5**: `docs/soul_ai.md` と `docs/cargo_workspace.md` に `FloorConstructionSite` / `WallConstructionSite` が blocker である理由と次計画の前提条件を明文化済み。
+  - **追加（計画外）**: `choose_drift_edge`, `is_near_map_edge`, `random_wander_target`, `drift_move_target` の 4 pure 関数を `hw_ai::soul_ai::helpers::drifting` へ抽出。root drifting 側は hw_ai の関数を呼び出すのみ。
 - 未完了（別計画へ委譲）:
-  - `task_execution` 深部は `FloorConstructionSite` / `WallConstructionSite` が blocker
+  - `task_execution` 深部は `FloorConstructionSite` / `WallConstructionSite` が blocker（別計画で construction site 型を hw_jobs に移設後に対応）
+  - `unassign_task` は `Commands`・root 型依存のため root 残留
 
-### 次のAIが最初にやること
+### 次計画で扱う課題
 
-1. `FloorConstructionSite` / `WallConstructionSite` の `TaskArea` 依存を外せるかを別計画で整理する。
-2. 両型を `hw_jobs` へ移設できる条件が揃ったら、`task_execution/context/access.rs` の import と `TaskQueries` の所有先を再検討する。
-3. `task_execution` 深部を `hw_ai` に移す場合でも、`unassign_task` は root shell のまま残すか別途依存分離してから扱う。
+1. `FloorConstructionSite` / `WallConstructionSite` を `hw_jobs` へ移設する（`TaskArea` 依存の除去が前提）。
+2. 移設後、`task_execution/context/access.rs` を hw_ai へ移設できるかを検討する。
+3. `unassign_task` の root 残留を別途依存分離するかを検討する。
 
 ### ブロッカー/注意点
 
-- `WorldMapRead`, `PathfindingContext` は root blocker ではない。これを理由に移設を止めない。
-- `PopulationManager` は本当に root 所有（`src/entities/damned_soul/spawn.rs`）。drifting 本体移設前に event 化（M4）を完了する。
 - `FloorConstructionSite` / `WallConstructionSite` は root 所有（`src/systems/jobs/*/components.rs`）。`task_execution/context/access.rs` を動かすには crate 化が必要で、それは別計画。
-- M1 着手前に `hw_visual/Cargo.toml` が `hw_ai` に依存しているかを確認すること（`IdleVisualSoulQuery` の扱い）。
-
-### 参照必須ファイル
-
-- `docs/cargo_workspace.md`
-- `docs/soul_ai.md`
-- `src/systems/soul_ai/execute/task_execution/mod.rs`（M2 の移設元）
-- `src/systems/soul_ai/execute/task_execution/context/access.rs`（M5 の blocker 確認）
-- `src/systems/soul_ai/helpers/work.rs`（M3 の呼び出し元）
-- `src/systems/soul_ai/visual/idle.rs`, `gathering.rs`, `vitals.rs`（M1 の移設元）
-- `crates/hw_ai/src/soul_ai/execute/mod.rs`（M2 の移設先 parent）
-- `crates/hw_visual/src/soul.rs`（M1 の移設先 parent）
-- `crates/hw_jobs/Cargo.toml`（M3 の依存グラフ確認）
+- `WorldMapRead`, `PathfindingContext` は root blocker ではない。これを理由に移設を止めない。
 
 ### 最終確認ログ
 
-- 最終 `cargo check`: `2026-03-11` / `pass`
+- 最終 `cargo check --workspace`: `2026-03-11` / `pass` / 警告ゼロ・エラーゼロ
 - 未解決エラー: なし
 
 ### Definition of Done
@@ -437,6 +429,7 @@ CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo check
 
 | 日付 | 変更者 | 内容 |
 | --- | --- | --- |
-| `2026-03-11` | `AI (Codex)` | M1-M5 完了を反映。ステータスを Completed へ更新し、Definition of Done・各マイルストーン完了条件・README/仕様書同期状況を更新 |
+| `2026-03-11` | `AI (Copilot)` | M1-M5 完了確認。AI引継ぎメモを 0%→100% に修正。drifting ヘルパー抽出（計画外）を記録 |
+| `2026-03-11` | `AI (Codex)` | 本計画スコープ完了を反映。M1-M4 実装 + M5 blocker 文書化までを Completed とし、全面移設は別計画である旨を明記 |
 | `2026-03-11` | `AI (Codex)` | 初版作成 |
 | `2026-03-10` | `AI (Copilot)` | コード実態調査に基づきブラッシュアップ。型所有者マップ・パス変換表・具体的変更ファイルリスト・event化の設計案を追加 |
