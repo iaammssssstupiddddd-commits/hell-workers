@@ -19,6 +19,7 @@ pub fn assign_haul_to_floor_construction(
     already_commanded: bool,
     ctx: &AssignTaskContext<'_>,
     queries: &mut crate::systems::familiar_ai::decide::task_management::FamiliarTaskAssignmentQueries,
+    construction_sites: &crate::systems::soul_ai::execute::task_execution::context::ConstructionSiteAccess,
     shadow: &mut ReservationShadow,
 ) -> bool {
     let Some((site_entity, resource_type)) =
@@ -27,7 +28,7 @@ pub fn assign_haul_to_floor_construction(
         return false;
     };
 
-    let site_pos = if let Ok((site_transform, _, _)) = queries.storage.floor_sites.get(site_entity)
+    let site_pos = if let Ok((site_transform, _, _)) = construction_sites.floor_sites.get(site_entity)
     {
         site_transform.translation.truncate()
     } else {
@@ -141,6 +142,7 @@ pub fn assign_haul_to_floor_construction(
             already_commanded,
             ctx,
             queries,
+            construction_sites,
             shadow,
         )
     {
@@ -162,6 +164,7 @@ fn try_direct_bone_collect_to_floor(
     already_commanded: bool,
     ctx: &AssignTaskContext<'_>,
     queries: &mut crate::systems::familiar_ai::decide::task_management::FamiliarTaskAssignmentQueries,
+    _construction_sites: &crate::systems::soul_ai::execute::task_execution::context::ConstructionSiteAccess,
     shadow: &mut ReservationShadow,
 ) -> bool {
     let Some((source_entity, source_pos)) =

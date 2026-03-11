@@ -118,6 +118,7 @@ pub struct AssignTaskContext<'a> {
 pub fn assign_task_to_worker(
     ctx: AssignTaskContext<'_>,
     queries: &mut crate::systems::familiar_ai::decide::task_management::FamiliarTaskAssignmentQueries,
+    construction_sites: &crate::systems::soul_ai::execute::task_execution::context::ConstructionSiteAccess,
     q_souls: &mut FamiliarSoulQuery,
     shadow: &mut ReservationShadow,
 ) -> bool {
@@ -154,5 +155,13 @@ pub fn assign_task_to_worker(
         return false;
     };
 
-    super::policy::assign_by_work_type(work_type, task_pos, uc_opt.is_some(), &ctx, queries, shadow)
+    super::policy::assign_by_work_type(
+        work_type,
+        task_pos,
+        uc_opt.is_some(),
+        &ctx,
+        queries,
+        construction_sites,
+        shadow,
+    )
 }

@@ -50,6 +50,80 @@ pub struct DesignationAccess<'w, 's> {
     pub belongs: Query<'w, 's, &'static crate::systems::logistics::BelongsTo>,
 }
 
+/// 倉庫・設備・ブループリントへの読み取り専用アクセス（Familiar AI向け・建設サイト除く）
+#[derive(SystemParam)]
+pub struct FamiliarStorageAccess<'w, 's> {
+    pub stockpiles: Query<
+        'w,
+        's,
+        (
+            Entity,
+            &'static Transform,
+            &'static Stockpile,
+            Option<&'static crate::relationships::StoredItems>,
+        ),
+    >,
+    pub loaded_in: Query<'w, 's, &'static crate::relationships::LoadedIn>,
+    pub loaded_items: Query<'w, 's, &'static crate::relationships::LoadedItems>,
+    pub bucket_storages: Query<'w, 's, (), With<crate::systems::logistics::BucketStorage>>,
+    pub blueprints: Query<
+        'w,
+        's,
+        (
+            &'static Transform,
+            &'static Blueprint,
+            Option<&'static Designation>,
+        ),
+    >,
+    pub target_blueprints: Query<'w, 's, &'static crate::systems::jobs::TargetBlueprint>,
+    pub mixers: Query<
+        'w,
+        's,
+        (
+            &'static Transform,
+            &'static crate::systems::jobs::MudMixerStorage,
+            Option<&'static TaskWorkers>,
+        ),
+    >,
+    pub target_mixers: Query<'w, 's, &'static crate::systems::jobs::TargetMixer>,
+    pub floor_tiles:
+        Query<'w, 's, &'static crate::systems::jobs::floor_construction::FloorTileBlueprint>,
+    pub wall_tiles:
+        Query<'w, 's, &'static crate::systems::jobs::wall_construction::WallTileBlueprint>,
+    pub buildings: Query<
+        'w,
+        's,
+        (
+            &'static Transform,
+            &'static crate::systems::jobs::Building,
+            Option<&'static crate::systems::jobs::ProvisionalWall>,
+        ),
+    >,
+}
+
+/// 建設サイトへの読み取り専用アクセス（root bridge 専用）
+#[derive(SystemParam)]
+pub struct ConstructionSiteAccess<'w, 's> {
+    pub floor_sites: Query<
+        'w,
+        's,
+        (
+            &'static Transform,
+            &'static crate::systems::jobs::floor_construction::FloorConstructionSite,
+            Option<&'static TaskWorkers>,
+        ),
+    >,
+    pub wall_sites: Query<
+        'w,
+        's,
+        (
+            &'static Transform,
+            &'static crate::systems::jobs::wall_construction::WallConstructionSite,
+            Option<&'static TaskWorkers>,
+        ),
+    >,
+}
+
 /// 倉庫・設備・ブループリントへの読み取り専用アクセス
 #[derive(SystemParam)]
 pub struct StorageAccess<'w, 's> {
