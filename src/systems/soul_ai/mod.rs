@@ -4,6 +4,7 @@
 
 use bevy::prelude::*;
 
+pub mod adapters;
 pub mod decide;
 pub mod execute;
 pub mod helpers;
@@ -21,6 +22,10 @@ impl Plugin for SoulAiPlugin {
     fn build(&self, app: &mut App) {
         // hw_ai の SoulAiCorePlugin でコアシステムを登録
         app.add_plugins(hw_ai::SoulAiCorePlugin);
+
+        // drifting 書き込み adapter (hw_ai → root PopulationManager ブリッジ)
+        app.add_observer(adapters::on_drifting_escape_started)
+            .add_observer(adapters::on_soul_escaped);
 
         // Soul AI は Familiar AI の後に実行される
         // FamiliarAiSystemSet::Execute → ApplyDeferred → SoulAiSystemSet::Perceive
@@ -83,13 +88,11 @@ impl Plugin for SoulAiPlugin {
                 // === Execute Phase ===
                 // 決定された行動の実行
                 (
-                    // タスク要求の適用
-                    execute::task_execution::apply_task_assignment_requests_system
-                        .before(execute::task_execution::task_execution_system),
                     execute::drifting::drifting_behavior_system
                         .after(execute::task_execution::apply_task_assignment_requests_system)
                         .before(execute::task_execution::task_execution_system),
-                    execute::task_execution::task_execution_system,
+                    execute::task_execution::task_execution_system
+                        .after(execute::task_execution::apply_task_assignment_requests_system),
                     execute::task_execution::move_plant::apply_pending_building_move_system
                         .after(execute::task_execution::task_execution_system),
                     // アイドル行動の適用

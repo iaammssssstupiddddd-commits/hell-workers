@@ -277,3 +277,16 @@ pub struct GatheringSpawnRequest {
     pub initiator_entity: Entity,
     pub created_at: f32,
 }
+
+/// 漂流脱走開始シグナル (decide/drifting → root adapter へのブリッジ)
+/// root adapter が `PopulationManager::start_escape_cooldown()` を呼び出す。
+#[derive(Event, Debug)]
+pub struct DriftingEscapeStarted;
+
+/// Soul がマップ端に到達して脱出したシグナル (execute/drifting → root adapter へのブリッジ)
+/// root adapter が `PopulationManager::total_escaped` をインクリメントする。
+#[derive(Event, Debug)]
+pub struct SoulEscaped {
+    pub entity: Entity,
+    pub grid: (i32, i32),
+}

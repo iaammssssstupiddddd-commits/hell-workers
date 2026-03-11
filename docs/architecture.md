@@ -80,6 +80,7 @@ Perceive → Update → Decide → Execute
 - `IncomingDeliverySnapshot` は Think 開始時に1回構築し、`DemandReadContext` 経由で `policy::haul::*` の残需要計算に再利用する。`IncomingDeliveries` や `ResourceType` の都度ルックアップを集約し、同一フレーム内のCPU負荷を低減する。
 - `TaskAssignmentQueries` は `ReservationAccess` / `DesignationAccess` / `StorageAccess` と `TaskAssignmentReadAccess` に分割し、読み取り系と更新系の境界を明確化する。
 - `apply_task_assignment_requests_system` は「ワーカー受理判定」「idle正規化」「予約適用」「DeliveringTo付与」「イベント発火」の責務に分けて拡張する。
+- `apply_task_assignment_requests_system` の登録責務は `hw_ai::SoulAiCorePlugin` が持つ。root 側の `SoulAiPlugin` は同 system を再登録せず、`task_execution_system` や `drifting_behavior_system` の ordering 参照にのみ使う。
 - Soul 側の集会発生は `hw_ai::soul_ai::execute::gathering_spawn::gathering_spawn_logic_system` が `GatheringSpawnRequest` を emit し、root `execute/gathering_spawn.rs` が `GameAssets` を使う visual spawn を担当する。adapter 側は request 消費時に initiator の task / relationship / idle 状態を再検証し、同一フレームで stale になった要求を破棄する。
 - `pathfinding_system` は既存パス再利用・再探索・休憩所フォールバック・到達不能時クリーンアップの補助関数群で構成し、挙動差分を局所化する。`world/pathfinding.rs` 側は `find_path_with_policy` を探索共通核として、通常探索・隣接探索・境界探索の差分をポリシー化する。`find_path` は `PathGoalPolicy` でゴール歩行性契約を明示し、`find_path_to_adjacent` は `allow_goal_blocked`（開始点が非歩行のケースを含む）で逆探索の許容条件を制御する。
 - `transport_request::producer` の floor/wall 搬入同期は `producer/mod.rs` の共通ヘルパー（`sync_construction_requests`, `sync_construction_delivery`）を利用して重複実装を避ける。全プロデューサーのオーナー解決は `AreaBounds`（`zones.rs` の共通矩形型）に統一し、`collect_all_area_owners` / `find_owner_for_position` で Familiar TaskArea と Yard 境界を同列に処理する。
@@ -153,28 +154,54 @@ Perceive → Update → Decide → Execute
 - **AI挙動**: [soul_ai.md](soul_ai.md) / [familiar_ai.md](familiar_ai.md)
 
 ## UIアーキテクチャ補足
-- `hw_ui` と root shell の境界:
-  - `hw_ui` 側は UI ノード生成・表示系システムの本体を担当し、`UiRoot`/`UiMountSlot`、`UiSlot` 予約、ステータス表示、リスト/パネル表示、interaction の可視系を集約する。
-  - root 側 (`bevy_app`) は `UiIntent`/メッセージ受信、selection/配置状態変更、WorldMapWrite/TaskContext などゲーム状態を持つ adapter を担当する。
-  - `UiRoot` と `UiNodeRegistry` の参照は `src/interface/ui/components.rs` を経由して root と `hw_ui` の API を接続（root は再エクスポートとして薄い shell）。
-- plugin 登録:
-  - `src/plugins/interface.rs` は thin shell として `plugins::register_ui_plugins(app)` を呼び、UI stack の登録本体は `src/interface/ui/plugins/mod.rs` に集約する。
-  - `register_ui_plugins` は `HwUiPlugin`、`UiFoundationPlugin`、root adapter plugin 群をまとめて登録する。
-- UIノード管理:
-  - `UiNodeRegistry` は `UiSlot -> Entity` を保持し、ノード更新は `Query::get_mut(entity)` で差分反映。
-- 情報表示:
-  - `src/interface/ui/presentation/` が `EntityInspectionModel`/`ViewModel` を root で構築。
-  - `InfoPanel` と `HoverTooltip` は同じモデルを参照して表示差分を抑える。
-- 入力判定:
-  - `UiInputState.pointer_over_ui` を統一 guard として共有。
-  - 選択/配置系（`selection`）と `PanCamera` ガードは root 側で維持。
-- UI 実行順序:
-  - `ui_keyboard_shortcuts_system -> ui_interaction_system -> handle_ui_intent -> specialized action -> menu_visibility_system -> update_mode_text_system -> update_area_edit_preview_ui_system` を同一 chain で固定する。
-  - `context_menu_system`、task summary、time/speed 表示、vignette などの後段更新は、この chain の後に実行する。
-- ルート残留（境界維持）:
-  - `src/interface/selection/`（adapter shell）、`src/interface/ui/vignette.rs`、`src/interface/camera.rs`
-  - `src/interface/ui/presentation/`（Model 構築）と `src/interface/ui/list/change_detection.rs`（`EntityListDirty` トリガ生成）
-  - `src/interface/ui/interaction/mode.rs` / `intent_handler.rs`（状態変更ハンドラ）
+
+### hw_ui と root の境界
+
+- `hw_ui` 側はUIノード生成・表示系システムの本体を集約する。具体的には `UiRoot`/`UiMountSlot`、`UiSlot` 予約、ステータス表示、tooltip_builder、info_panel、task_list の render/interaction、エンティティリストの汎用メカニクス（resize/minimize/visual）を保持する。
+- root 側 (`bevy_app`) は `UiIntent` メッセージ受信、PlayMode 遷移、ゲームエンティティ ECS Query、WorldMapWrite/TaskContext など**ゲーム状態を持つ adapter** を担当する。
+- `src/interface/ui/components.rs` と `src/interface/ui/theme.rs` は `pub use hw_ui::...` の薄い re-export 層。
+
+### アセット抽象化
+
+- `hw_ui::setup::UiAssets` トレイトがフォント・アイコンハンドルを抽象化する（`font_ui`, `font_familiar`, `icon_stress`, `icon_fatigue`, `icon_male`, `icon_female`, `icon_arrow_down`, `glow_circle`）。
+- `src/interface/ui/setup/mod.rs` が `GameAssets` → `&dyn UiAssets` のアダプタとして機能する。
+- `Res<GameAssets>` をシステム引数に取るシステム（task_list/update.rs 等）は Bevy の制約上 hw_ui に移動できないため root に残留する。
+
+### plugin 登録
+
+- `src/plugins/interface.rs` → `plugins::register_ui_plugins(app)` → `src/interface/ui/plugins/mod.rs` に UI stack 登録を集約する。
+- `register_ui_plugins` は `HwUiPlugin`、`UiFoundationPlugin`、root adapter plugin 群をまとめて登録する。
+
+### UIノード管理
+
+- `UiNodeRegistry` は `UiSlot -> Entity` を保持し、ノード更新は `Query::get_mut(entity)` で差分反映。
+
+### 情報表示
+
+- `src/interface/ui/presentation/` が `EntityInspectionModel`/`ViewModel` を root で構築（ゲームエンティティ 10+ 型の Query を集約）。
+- `InfoPanel` と `HoverTooltip` は同じモデルを参照して表示差分を抑える。
+
+### 入力判定
+
+- `UiInputState.pointer_over_ui` を統一 guard として共有。
+- 選択/配置系（`selection`）と `PanCamera` ガードは root 側で維持。
+
+### UI 実行順序
+
+`ui_keyboard_shortcuts_system → ui_interaction_system → handle_ui_intent → specialized action → menu_visibility_system → update_mode_text_system → update_area_edit_preview_ui_system` を同一 chain で固定する。`context_menu_system`、task summary、time/speed 表示、vignette などの後段更新は、この chain の後に実行する。
+
+### root 残留（境界維持）
+
+| ファイル | 理由 |
+|:---|:---|
+| `interaction/intent_handler.rs`, `mode.rs` | PlayMode 遷移、app_contexts 依存 |
+| `list/change_detection.rs` | ゲームコンポーネントの Changed 監視 |
+| `list/view_model.rs`, `spawn/`, `sync/` | ゲームエンティティ → UI ノード変換 |
+| `list/drag_drop.rs`, `list/interaction.rs`, `navigation.rs` | FamiliarOperation, TaskContext 等 |
+| `panels/context_menu.rs` | Familiar, DamnedSoul, Building, Door 分類 |
+| `panels/task_list/view_model.rs`, `presenter.rs`, `update.rs` | ゲームクエリ、`Res<GameAssets>` |
+| `presentation/` | EntityInspectionQuery（ゲームエンティティ集約）|
+| `vignette.rs` | TaskContext（DreamPlanting モード判定）|
 
 ## selection 境界補足
 

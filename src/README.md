@@ -54,6 +54,7 @@ Perceive → ApplyDeferred → Update → ApplyDeferred → Decide → ApplyDefe
 - 純粋な型定義・定数・アルゴリズム（Bevy エンティティへの依存なし）
 - ゲームエンティティ非依存のシステム関数（汎用 Query のみ）
 - 複数システムから共有されるコンポーネント型
+- UI の場合: ゲームエンティティクエリを持たないシステム、`Res<GameAssets>` を引数に取らないシステム
 
 ### src/ に置くもの
 - `DamnedSoul`, `Destination`, `Path`, `Familiar` など Root 定義エンティティへのアクセス
@@ -61,6 +62,7 @@ Perceive → ApplyDeferred → Update → ApplyDeferred → Decide → ApplyDefe
 - ECS Relationship を生成・削除する処理
 - タスク実行ハンドラ（ゲーム状態全体に依存）
 - `SystemParam` ラッパー（`WorldMapRead` 等）
+- `Res<GameAssets>` を引数に取るシステム（Bevy は `Res<dyn Trait>` 不可）
 
 ### 判断フロー
 

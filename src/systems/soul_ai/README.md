@@ -147,4 +147,4 @@ pub use hw_ai::soul_ai::helpers::work::is_soul_available_for_work;
 pub fn unassign_task(..., world_map: &WorldMap) { ... }  // WorldMap 参照が必要
 ```
 
-`decide/work/*.rs` と `decide/idle_behavior/mod.rs` は互換パス維持用の thin re-export で、実装本体と system 登録は `hw_ai::soul_ai::*` と `hw_ai::SoulAiCorePlugin` が担当する。
+`decide/work/*.rs` と `decide/idle_behavior/mod.rs` は互換パス維持用の thin re-export で、実装本体と system 登録は `hw_ai::soul_ai::*` と `hw_ai::SoulAiCorePlugin` が担当する。`execute/task_execution::apply_task_assignment_requests_system` も同様に root 側は re-export のみを持ち、system 登録は `hw_ai::SoulAiCorePlugin` に一本化する。`src/systems/soul_ai/mod.rs` はこの system を `.after(...)` / `.before(...)` の ordering 参照にのみ使う。

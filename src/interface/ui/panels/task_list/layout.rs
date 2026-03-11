@@ -1,1 +1,4 @@
-include!("../../panels_legacy/task_list/layout.rs");
+// タスクリストパネルのレイアウト構築
+//!
+//! タスクリストは左パネルに統合されたため、このモジュールは空です。
+//! レイアウトは src/interface/ui/setup/entity_list.rs で構築されます。

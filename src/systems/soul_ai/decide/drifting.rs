@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use hw_core::events::DriftingEscapeStarted;
 use rand::Rng;
 
 use crate::entities::damned_soul::spawn::PopulationManager;
@@ -49,7 +50,7 @@ pub fn drifting_decision_system(
     time: Res<Time>,
     mut commands: Commands,
     mut timer: ResMut<DriftingDecisionTimer>,
-    mut population: ResMut<PopulationManager>,
+    population: Res<PopulationManager>,
     mut q_souls: Query<
         (
             Entity,
@@ -131,7 +132,7 @@ pub fn drifting_decision_system(
         path.current_index = 0;
 
         commands.entity(entity).insert(drifting);
-        population.start_escape_cooldown();
+        commands.trigger(DriftingEscapeStarted);
 
         info!(
             "SOUL_DRIFT: {:?} started drifting toward {:?}",

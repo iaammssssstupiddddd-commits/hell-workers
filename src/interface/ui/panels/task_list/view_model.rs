@@ -12,13 +12,7 @@ use std::collections::BTreeMap;
 
 use super::presenter;
 
-#[derive(Clone, PartialEq)]
-pub struct TaskEntry {
-    pub entity: Entity,
-    pub description: String,
-    pub priority: u32,
-    pub worker_count: usize,
-}
+pub use hw_ui::panels::task_list::TaskEntry;
 
 #[derive(Resource, Default)]
 pub struct TaskListState {

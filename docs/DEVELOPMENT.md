@@ -93,6 +93,7 @@
 | TaskMode バリアントが変わる | `state.md` のバリアント一覧を更新 |
 | 空間グリッドを追加/削除 | `architecture.md` のグリッド一覧を更新 |
 | crate の責務や定義場所が変わる | `cargo_workspace.md` と関連仕様書の参照先を更新 |
+| 移設済み system の登録責務や ordering が変わる | `architecture.md` / `cargo_workspace.md` / 関連仕様書に「唯一の登録元」と ordering 契約を追記 |
 
 #### 9.3 記述内容の優先順位（MCP-aware 原則）
 

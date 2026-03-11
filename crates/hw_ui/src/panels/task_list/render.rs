@@ -1,25 +1,23 @@
-// タスクリストの UI 再構築
-
-use crate::interface::ui::components::TaskListItem;
-use crate::interface::ui::theme::UiTheme;
+use super::types::TaskEntry;
+use super::work_type_icon::{work_type_icon, work_type_label};
+use crate::components::TaskListItem;
+use crate::setup::UiAssets;
+use crate::theme::UiTheme;
 use bevy::prelude::*;
-
-use super::presenter;
-use super::view_model::TaskEntry;
-use crate::systems::jobs::WorkType;
+use hw_core::jobs::WorkType;
 
 /// タスクリストボディの子ノードを再構築
 pub fn rebuild_task_list_ui(
     parent: &mut ChildSpawnerCommands,
     snapshot: &[(WorkType, Vec<TaskEntry>)],
-    game_assets: &crate::assets::GameAssets,
+    game_assets: &dyn UiAssets,
     theme: &UiTheme,
 ) {
     if snapshot.is_empty() {
         parent.spawn((
             Text::new("No designations"),
             TextFont {
-                font: game_assets.font_ui.clone(),
+                font: game_assets.font_ui().clone(),
                 font_size: theme.typography.font_size_small,
                 ..default()
             },
@@ -29,8 +27,7 @@ pub fn rebuild_task_list_ui(
     }
 
     for (work_type, entries) in snapshot {
-        let (header_icon, header_color) =
-            presenter::get_work_type_icon(work_type, game_assets, theme);
+        let (header_icon, header_color) = work_type_icon(work_type, game_assets, theme);
 
         parent
             .spawn(Node {
@@ -62,11 +59,11 @@ pub fn rebuild_task_list_ui(
                 row.spawn((
                     Text::new(format!(
                         "{} ({})",
-                        presenter::work_type_label(work_type),
+                        work_type_label(work_type),
                         entries.len()
                     )),
                     TextFont {
-                        font: game_assets.font_ui.clone(),
+                        font: game_assets.font_ui().clone(),
                         font_size: theme.typography.font_size_xs,
                         weight: FontWeight::SEMIBOLD,
                         ..default()
@@ -76,8 +73,7 @@ pub fn rebuild_task_list_ui(
             });
 
         for entry in entries {
-            let (item_icon, item_color) =
-                presenter::get_work_type_icon(work_type, game_assets, theme);
+            let (item_icon, item_color) = work_type_icon(work_type, game_assets, theme);
             let desc_color = if entry.priority >= 5 {
                 theme.colors.accent_ember
             } else {
@@ -118,7 +114,7 @@ pub fn rebuild_task_list_ui(
                     btn.spawn((
                         Text::new(&entry.description),
                         TextFont {
-                            font: game_assets.font_ui.clone(),
+                            font: game_assets.font_ui().clone(),
                             font_size: theme.typography.font_size_item,
                             ..default()
                         },
@@ -132,7 +128,7 @@ pub fn rebuild_task_list_ui(
                         btn.spawn((
                             Text::new(format!("\u{00d7}{}", entry.worker_count)),
                             TextFont {
-                                font: game_assets.font_ui.clone(),
+                                font: game_assets.font_ui().clone(),
                                 font_size: theme.typography.font_size_small,
                                 ..default()
                             },

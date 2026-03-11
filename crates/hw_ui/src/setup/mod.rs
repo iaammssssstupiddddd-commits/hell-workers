@@ -22,6 +22,11 @@ pub trait UiAssets {
     fn icon_fatigue(&self) -> &Handle<Image>;
     fn icon_male(&self) -> &Handle<Image>;
     fn icon_female(&self) -> &Handle<Image>;
+    fn icon_axe(&self) -> &Handle<Image>;
+    fn icon_pick(&self) -> &Handle<Image>;
+    fn icon_hammer(&self) -> &Handle<Image>;
+    fn icon_haul(&self) -> &Handle<Image>;
+    fn icon_bone_small(&self) -> &Handle<Image>;
 }
 
 fn spawn_fps_display(

@@ -1,1 +1,1 @@
-include!("../../panels_legacy/info_panel/state.rs");
+pub use hw_ui::panels::info_panel::{InfoPanelPinState, InfoPanelState};
