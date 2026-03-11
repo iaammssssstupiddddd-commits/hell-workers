@@ -23,6 +23,7 @@ pub enum UiIntent {
     OpenOperationDialog,
     AdjustFatigueThreshold(f32),
     AdjustMaxControlledSoul(isize),
+    AdjustMaxControlledSoulFor(Entity, isize),
     CloseDialog,
     SetTimeSpeed(TimeSpeed),
     TogglePause,

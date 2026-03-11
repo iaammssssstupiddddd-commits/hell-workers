@@ -55,6 +55,9 @@ pub(super) fn handle_pressed_action(action: MenuAction, ui_intents: &mut Message
         MenuAction::AdjustMaxControlledSoul(delta) => {
             ui_intents.write(UiIntent::AdjustMaxControlledSoul(delta));
         }
+        MenuAction::AdjustMaxControlledSoulFor(entity, delta) => {
+            ui_intents.write(UiIntent::AdjustMaxControlledSoulFor(entity, delta));
+        }
         MenuAction::SetTimeSpeed(speed) => {
             ui_intents.write(UiIntent::SetTimeSpeed(speed));
         }

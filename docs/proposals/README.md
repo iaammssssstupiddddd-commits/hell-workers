@@ -19,6 +19,8 @@
 | --- | --- |
 | [08_visual_update_prompts.md](08_visual_update_prompts.md) | ビジュアル更新プロンプト集 |
 | [architecture-improvements-2026.md](architecture-improvements-2026.md) | アーキテクチャ改善提案 (Architecture Improvement Proposals) |
+| [familiar-task-management-hw-ai-extraction-proposal-2026-03-11.md](familiar-task-management-hw-ai-extraction-proposal-2026-03-11.md) | `src/systems/familiar_ai/decide/task_management/` には、候補収集、優先度評価、搬送元選定、予約影反映、`AssignedTask` 構築など、使い魔 AI の中核ロジックがまとまって残っているの提案。 |
+| [room-detection-hw-world-extraction-proposal-2026-03-11.md](room-detection-hw-world-extraction-proposal-2026-03-11.md) | `src/systems/room/detection.rs` には、部屋候補の flood fill、境界判定、妥当性判定、ECS entity の再生成が同居しているの提案。 |
 | [soul_spawn_despawn_optimization.md](soul_spawn_despawn_optimization.md) | Soul Spawn/Despawn 最適化提案 |
 | [speech_optimization.md](speech_optimization.md) | スピーチシステム最適化提案 |
 
