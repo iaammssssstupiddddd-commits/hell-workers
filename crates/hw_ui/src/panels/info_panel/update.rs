@@ -1,8 +1,9 @@
 use super::model::{InfoPanelViewModel, to_view_model};
 use super::state::{InfoPanelPinState, InfoPanelState};
-use crate::interface::ui::components::{InfoPanelNodes, UiNodeRegistry, UiSlot};
-use crate::interface::ui::presentation::EntityInspectionViewModel;
-use hw_ui::models::inspection::{InspectionSoulGender};
+use crate::components::{InfoPanelNodes, UiNodeRegistry, UiSlot};
+use crate::models::inspection::{EntityInspectionViewModel, InspectionSoulGender};
+use crate::selection::SelectedEntity;
+use crate::setup::UiAssets;
 use bevy::prelude::*;
 
 fn entity_for_slot(
@@ -62,12 +63,12 @@ fn set_display_slot(
     }
 }
 
-fn update_gender_icon(
+fn update_gender_icon<A: UiAssets>(
     info_nodes: &InfoPanelNodes,
     ui_nodes: &UiNodeRegistry,
     q_gender: &mut Query<&mut ImageNode>,
     q_node: &mut Query<&mut Node>,
-    game_assets: &crate::assets::GameAssets,
+    game_assets: &A,
     gender: Option<InspectionSoulGender>,
 ) {
     let Some(entity) = entity_for_slot(info_nodes, ui_nodes, UiSlot::GenderIcon) else {
@@ -83,8 +84,8 @@ fn update_gender_icon(
                 Display::Flex,
             );
             icon.image = match gender {
-                InspectionSoulGender::Male => game_assets.icon_male.clone(),
-                InspectionSoulGender::Female => game_assets.icon_female.clone(),
+                InspectionSoulGender::Male => game_assets.icon_male().clone(),
+                InspectionSoulGender::Female => game_assets.icon_female().clone(),
             };
         } else {
             set_display_slot(
@@ -98,9 +99,9 @@ fn update_gender_icon(
     }
 }
 
-pub fn info_panel_system(
-    game_assets: Res<crate::assets::GameAssets>,
-    _selected: Res<crate::interface::selection::SelectedEntity>,
+pub fn info_panel_system<A: UiAssets + Resource>(
+    game_assets: Res<A>,
+    _selected: Res<SelectedEntity>,
     pin_state: ResMut<InfoPanelPinState>,
     info_nodes: Res<InfoPanelNodes>,
     ui_nodes: Res<UiNodeRegistry>,
@@ -206,7 +207,7 @@ pub fn info_panel_system(
                 &ui_nodes,
                 &mut q_gender,
                 &mut q_node,
-                &game_assets,
+                &*game_assets,
                 soul.gender,
             );
         }
@@ -237,7 +238,7 @@ pub fn info_panel_system(
                 &ui_nodes,
                 &mut q_gender,
                 &mut q_node,
-                &game_assets,
+                &*game_assets,
                 None,
             );
             set_text_slot(
@@ -272,7 +273,7 @@ pub fn info_panel_system(
                 &ui_nodes,
                 &mut q_gender,
                 &mut q_node,
-                &game_assets,
+                &*game_assets,
                 None,
             );
         }

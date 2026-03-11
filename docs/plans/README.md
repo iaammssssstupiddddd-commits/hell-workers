@@ -1,6 +1,6 @@
 # Plans Index
 
-`docs/plans` の文書ステータス一覧（更新日: 2026-03-10）。
+`docs/plans` の文書ステータス一覧（更新日: 2026-03-11）。
 
 ## 新規計画書の作り方
 
@@ -19,8 +19,8 @@
 
 | Document | Status | Notes |
 |---|---|---|
-| [hw-visual-crate-extraction.md](hw-visual-crate-extraction.md) | Draft | hw_visual クレート化 実装計画 |
-| [soul-ai-root-thinning-plan-2026-03-09.md](soul-ai-root-thinning-plan-2026-03-09.md) | Completed | soul_ai を段階的に crate へ寄せて root を薄くする計画 |
+| [hw-ui-crate-extraction.md](hw-ui-crate-extraction.md) | Draft (rev2) | src/interface/ui/の計画。 |
+| [soul-ai-root-thinning-plan-2026-03-11.md](soul-ai-root-thinning-plan-2026-03-11.md) | Draft | src/systems/soul_aiの計画。 |
 
 ## アーカイブ計画書一覧 (`docs/plans/archive`)
 
@@ -61,6 +61,7 @@
 | [archive/hw-spatial-crate.md](archive/hw-spatial-crate.md) | アーカイブ | WorldMapの計画。 |
 | [archive/hw-ui-crate-plan-2026-03-08.md](archive/hw-ui-crate-plan-2026-03-08.md) | アーカイブ | hw_ui crate 分離 実装計画 |
 | [archive/hw-ui-review-fixes-plan-2026-03-08.md](archive/hw-ui-review-fixes-plan-2026-03-08.md) | アーカイブ | hw_uiの計画。 |
+| [archive/hw-visual-crate-extraction.md](archive/hw-visual-crate-extraction.md) | アーカイブ | hw_visual クレート化 実装計画 |
 | [archive/large-files-refactor-2026-02-16.md](archive/large-files-refactor-2026-02-16.md) | アーカイブ | 大規模ファイル分割リファクタ計画。 |
 | [archive/logistics-to-hw-logistics-plan-2026-03-08.md](archive/logistics-to-hw-logistics-plan-2026-03-08.md) | アーカイブ | logistics 実行ロジックを hw_logistics へ移植する計画。M1〜M8 完了。 |
 | [archive/mixer-producer-phase-separation-plan-2026-03-05.md](archive/mixer-producer-phase-separation-plan-2026-03-05.md) | アーカイブ | producer/mixer.rsの計画。 |
@@ -88,6 +89,7 @@
 | [archive/selection-placement-refactor-plan-2026-02-25.md](archive/selection-placement-refactor-plan-2026-02-25.md) | アーカイブ | `interface/selection` の配置処理を責務分離するリファクタ計画。 |
 | [archive/selection-separation-plan-2026-03-08.md](archive/selection-separation-plan-2026-03-08.md) | アーカイブ | -の計画。 |
 | [archive/site-yard-system.md](archive/site-yard-system.md) | アーカイブ | 実装計画: Site / Yard システム |
+| [archive/soul-ai-root-thinning-plan-2026-03-09.md](archive/soul-ai-root-thinning-plan-2026-03-09.md) | アーカイブ | soul_ai を段階的に crate へ寄せて root を薄くする計画 |
 | [archive/soul-spawn-despawn.md](archive/soul-spawn-despawn.md) | アーカイブ | Soul Spawn/Despawn設計計画。 |
 | [archive/task-list-left-panel-toggle.md](archive/task-list-left-panel-toggle.md) | アーカイブ | タスクリスト左パネル操作改善計画。 |
 | [archive/taskexecution-systemparam-refactor-plan-2026-03-05.md](archive/taskexecution-systemparam-refactor-plan-2026-03-05.md) | アーカイブ | task_execution/context.rsの計画。 |

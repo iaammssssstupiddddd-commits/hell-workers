@@ -2,7 +2,7 @@
 
 use bevy::prelude::*;
 
-pub(crate) fn clear_children(
+pub fn clear_children(
     commands: &mut Commands,
     q_children: &Query<&Children>,
     parent: Entity,

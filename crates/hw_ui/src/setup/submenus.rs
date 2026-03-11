@@ -1,6 +1,6 @@
 //! サブメニュー UI (Architect, Zones, Orders)
 
-use super::UiSetupAssets;
+use super::UiAssets;
 use crate::components::{
     ArchitectBuildingPanel, ArchitectCategoryListPanel, ArchitectSubMenu, DreamSubMenu, MenuAction,
     MenuButton, OrdersSubMenu, UiInputBlocker, ZonesSubMenu,
@@ -16,7 +16,7 @@ use hw_logistics::zone::ZoneType;
 /// サブメニューをスポーン
 pub fn spawn_submenus(
     commands: &mut Commands,
-    game_assets: &dyn UiSetupAssets,
+    game_assets: &dyn UiAssets,
     theme: &UiTheme,
     parent_entity: Entity,
 ) {
@@ -82,7 +82,7 @@ fn spawn_submenu_container<T: Bundle>(
 
 fn spawn_menu_entries(
     parent: &mut ChildSpawnerCommands,
-    game_assets: &dyn UiSetupAssets,
+    game_assets: &dyn UiAssets,
     theme: &UiTheme,
     entries: Vec<MenuEntrySpec<'static>>,
 ) {
@@ -100,7 +100,7 @@ fn spawn_menu_entries(
 
 fn spawn_menu_button(
     parent: &mut ChildSpawnerCommands,
-    game_assets: &dyn UiSetupAssets,
+    game_assets: &dyn UiAssets,
     theme: &UiTheme,
     label: &str,
     action: MenuAction,
@@ -135,7 +135,7 @@ fn spawn_menu_button(
 
 fn spawn_category_button(
     parent: &mut ChildSpawnerCommands,
-    game_assets: &dyn UiSetupAssets,
+    game_assets: &dyn UiAssets,
     theme: &UiTheme,
     category: BuildingCategory,
 ) {
@@ -151,7 +151,7 @@ fn spawn_category_button(
 
 fn spawn_building_panel(
     parent: &mut ChildSpawnerCommands,
-    game_assets: &dyn UiSetupAssets,
+    game_assets: &dyn UiAssets,
     theme: &UiTheme,
     category: BuildingCategory,
     items: Vec<MenuEntrySpec<'static>>,
@@ -177,7 +177,7 @@ fn spawn_building_panel(
 
 fn spawn_architect_submenu(
     commands: &mut Commands,
-    game_assets: &dyn UiSetupAssets,
+    game_assets: &dyn UiAssets,
     theme: &UiTheme,
     parent_entity: Entity,
 ) {
@@ -225,7 +225,7 @@ fn spawn_architect_submenu(
 
 fn spawn_zones_submenu(
     commands: &mut Commands,
-    game_assets: &dyn UiSetupAssets,
+    game_assets: &dyn UiAssets,
     theme: &UiTheme,
     parent_entity: Entity,
 ) {
@@ -248,7 +248,7 @@ fn spawn_zones_submenu(
 
 fn spawn_orders_submenu(
     commands: &mut Commands,
-    game_assets: &dyn UiSetupAssets,
+    game_assets: &dyn UiAssets,
     theme: &UiTheme,
     parent_entity: Entity,
 ) {
@@ -271,7 +271,7 @@ fn spawn_orders_submenu(
 
 fn spawn_dream_submenu(
     commands: &mut Commands,
-    game_assets: &dyn UiSetupAssets,
+    game_assets: &dyn UiAssets,
     theme: &UiTheme,
     parent_entity: Entity,
 ) {

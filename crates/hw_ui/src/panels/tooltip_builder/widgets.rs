@@ -1,8 +1,8 @@
 // ツールチップ用ウィジェット生成
 
-use crate::assets::GameAssets;
-use crate::interface::ui::components::{TooltipBody, TooltipHeader, TooltipProgressBar};
-use crate::interface::ui::theme::UiTheme;
+use crate::components::{TooltipBody, TooltipHeader, TooltipProgressBar};
+use crate::setup::UiAssets;
+use crate::theme::UiTheme;
 use bevy::prelude::*;
 
 use super::text_wrap::{TOOLTIP_WRAP_LIMIT_BODY, TOOLTIP_WRAP_LIMIT_ICON_ROW, wrap_tooltip_text};
@@ -12,7 +12,7 @@ pub fn spawn_progress_bar(
     label: &str,
     value: f32,
     color: Color,
-    game_assets: &GameAssets,
+    game_assets: &dyn UiAssets,
     theme: &UiTheme,
 ) {
     let clamped = value.clamp(0.0, 1.0);
@@ -27,7 +27,7 @@ pub fn spawn_progress_bar(
             bar_col.spawn((
                 Text::new(format!("{label}: {:.0}%", clamped * 100.0)),
                 TextFont {
-                    font: game_assets.font_ui.clone(),
+                    font: game_assets.font_ui().clone(),
                     font_size: theme.typography.font_size_xs,
                     ..default()
                 },
@@ -77,7 +77,7 @@ pub fn spawn_icon_text_row(
     parent: &mut ChildSpawnerCommands,
     icon: &str,
     text: &str,
-    game_assets: &GameAssets,
+    game_assets: &dyn UiAssets,
     theme: &UiTheme,
 ) {
     parent
@@ -93,7 +93,7 @@ pub fn spawn_icon_text_row(
             row.spawn((
                 Text::new(icon),
                 TextFont {
-                    font: game_assets.font_ui.clone(),
+                    font: game_assets.font_ui().clone(),
                     font_size: theme.typography.font_size_xs,
                     weight: FontWeight::SEMIBOLD,
                     ..default()
@@ -112,7 +112,7 @@ pub fn spawn_icon_text_row(
                     text_col.spawn((
                         Text::new(line),
                         TextFont {
-                            font: game_assets.font_ui.clone(),
+                            font: game_assets.font_ui().clone(),
                             font_size: theme.typography.font_size_sm,
                             ..default()
                         },
@@ -132,14 +132,14 @@ pub fn spawn_icon_text_row(
 pub fn spawn_header(
     parent: &mut ChildSpawnerCommands,
     text: &str,
-    game_assets: &GameAssets,
+    game_assets: &dyn UiAssets,
     theme: &UiTheme,
 ) {
     let display_text = wrap_tooltip_text(text, TOOLTIP_WRAP_LIMIT_BODY).join("\n");
     parent.spawn((
         Text::new(display_text),
         TextFont {
-            font: game_assets.font_ui.clone(),
+            font: game_assets.font_ui().clone(),
             font_size: theme.typography.font_size_md,
             weight: FontWeight::BOLD,
             ..default()
@@ -157,14 +157,14 @@ pub fn spawn_header(
 pub fn spawn_body_line(
     parent: &mut ChildSpawnerCommands,
     text: &str,
-    game_assets: &GameAssets,
+    game_assets: &dyn UiAssets,
     theme: &UiTheme,
 ) {
     for line in wrap_tooltip_text(text, TOOLTIP_WRAP_LIMIT_BODY) {
         parent.spawn((
             Text::new(line),
             TextFont {
-                font: game_assets.font_ui.clone(),
+                font: game_assets.font_ui().clone(),
                 font_size: theme.typography.font_size_sm,
                 ..default()
             },

@@ -13,11 +13,15 @@ use crate::components::{InfoPanelNodes, UiMountSlot, UiNodeRegistry, UiRoot, UiS
 use crate::theme::UiTheme;
 use bevy::prelude::*;
 
-pub trait UiSetupAssets {
+pub trait UiAssets {
     fn font_ui(&self) -> &Handle<Font>;
     fn font_familiar(&self) -> &Handle<Font>;
     fn icon_arrow_down(&self) -> &Handle<Image>;
     fn glow_circle(&self) -> &Handle<Image>;
+    fn icon_stress(&self) -> &Handle<Image>;
+    fn icon_fatigue(&self) -> &Handle<Image>;
+    fn icon_male(&self) -> &Handle<Image>;
+    fn icon_female(&self) -> &Handle<Image>;
 }
 
 fn spawn_fps_display(
@@ -56,7 +60,7 @@ fn spawn_fps_display(
 
 fn spawn_area_edit_preview(
     commands: &mut Commands,
-    game_assets: &dyn UiSetupAssets,
+    game_assets: &dyn UiAssets,
     theme: &UiTheme,
     parent: Entity,
     ui_nodes: &mut UiNodeRegistry,
@@ -226,7 +230,7 @@ fn spawn_ui_root(
 
 pub fn setup_ui<F, G>(
     mut commands: Commands,
-    game_assets: &dyn UiSetupAssets,
+    game_assets: &dyn UiAssets,
     theme: &UiTheme,
     mut ui_nodes: ResMut<UiNodeRegistry>,
     mut info_panel_nodes: ResMut<InfoPanelNodes>,

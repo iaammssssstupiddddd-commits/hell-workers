@@ -2,7 +2,7 @@
 //!
 //! InfoPanel と HoverTooltip を Startup 時に生成する。
 
-use super::UiSetupAssets;
+use super::UiAssets;
 use crate::components::{
     HoverActionOverlay, HoverTooltip, MenuAction, MenuButton, UiInputBlocker, UiNodeRegistry,
     UiSlot,
@@ -14,7 +14,7 @@ use bevy::ui_widgets::popover::{Popover, PopoverAlign, PopoverPlacement, Popover
 /// パネルをスポーン
 pub fn spawn_panels(
     commands: &mut Commands,
-    game_assets: &dyn UiSetupAssets,
+    game_assets: &dyn UiAssets,
     theme: &UiTheme,
     overlay_parent: Entity,
     ui_nodes: &mut UiNodeRegistry,
@@ -25,7 +25,7 @@ pub fn spawn_panels(
 
 fn spawn_hover_action_overlay(
     commands: &mut Commands,
-    game_assets: &dyn UiSetupAssets,
+    game_assets: &dyn UiAssets,
     theme: &UiTheme,
     parent_entity: Entity,
 ) {

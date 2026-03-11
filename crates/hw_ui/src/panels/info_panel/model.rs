@@ -1,5 +1,4 @@
-use crate::interface::ui::presentation::EntityInspectionModel;
-use hw_ui::models::inspection::InspectionSoulGender;
+use crate::models::inspection::{EntityInspectionModel, InspectionSoulGender};
 
 #[derive(Clone, PartialEq)]
 pub(super) enum InfoPanelViewModel {

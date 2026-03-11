@@ -1,6 +1,14 @@
 //! ソウル用ビジュアルシステム
 //!
-//! DamnedSoul（亡者）のプログレスバー、ステータスアイコン、タスクリンク表示
+//! サブモジュール:
+//! - `idle`: IdleBehavior ビジュアルフィードバック
+//! - `gathering`: 集会オーラ・デバッグ可視化
+//! - `vitals`: 使い魔ホバー線描画
+//! - プログレスバー、ステータスアイコン、タスクリンク表示
+
+pub mod gathering;
+pub mod idle;
+pub mod vitals;
 
 use crate::handles::SpeechHandles;
 use crate::progress_bar::*;

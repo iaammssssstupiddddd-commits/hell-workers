@@ -1,6 +1,6 @@
 //! 時間操作 UI
 
-use super::UiSetupAssets;
+use super::UiAssets;
 use crate::components::ClockText;
 use crate::components::DreamIconAbsorb;
 use crate::components::{
@@ -15,7 +15,7 @@ use hw_core::game_state::TimeSpeed;
 /// 時間操作UIをスポーン
 pub fn spawn_time_control(
     commands: &mut Commands,
-    game_assets: &dyn UiSetupAssets,
+    game_assets: &dyn UiAssets,
     theme: &UiTheme,
     parent_entity: Entity,
     ui_nodes: &mut UiNodeRegistry,
