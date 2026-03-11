@@ -59,10 +59,14 @@ pub enum AreaEditHandleKind {
 }
 
 // 公開API
+pub use hw_core::area::{
+    area_from_center_and_size, count_positions_in_area, get_drag_start, overlap_summary_from_areas,
+    wall_line_area,
+};
 pub use area_selection::{
     AreaEditClipboard, AreaEditHistory, AreaEditPresets, AreaEditSession,
-    area_selection_indicator_system, blueprint_cancel_cleanup_system, count_positions_in_area,
-    dream_tree_planting_preview_system, overlap_summary_from_areas, task_area_edit_cursor_system,
+    area_selection_indicator_system, blueprint_cancel_cleanup_system,
+    dream_tree_planting_preview_system, task_area_edit_cursor_system,
     task_area_edit_history_shortcuts_system, task_area_selection_system,
 };
 pub use assign_task::assign_task_system;

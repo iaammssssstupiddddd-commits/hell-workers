@@ -1,5 +1,8 @@
 use bevy::prelude::*;
 
+use crate::constants::TILE_SIZE;
+use crate::game_state::TaskMode;
+
 /// 矩形領域の共通データ型。
 /// Site / Yard / TaskArea が共有する「min-max 矩形」を型消去して扱うために使う。
 /// Component ではなく plain struct。
@@ -104,4 +107,102 @@ impl From<AreaBounds> for TaskArea {
     fn from(bounds: AreaBounds) -> Self {
         TaskArea { bounds }
     }
+}
+
+// ---------------------------------------------------------------------------
+// Pure helper functions (moved from src/systems/command/area_selection/geometry.rs)
+// ---------------------------------------------------------------------------
+
+/// `TaskMode` のドラッグ開始座標を取り出す。
+pub fn get_drag_start(mode: TaskMode) -> Option<Vec2> {
+    match mode {
+        TaskMode::AreaSelection(s) => s,
+        TaskMode::DesignateChop(s) => s,
+        TaskMode::DesignateMine(s) => s,
+        TaskMode::DesignateHaul(s) => s,
+        TaskMode::CancelDesignation(s) => s,
+        TaskMode::ZonePlacement(_, s) => s,
+        TaskMode::ZoneRemoval(_, s) => s,
+        TaskMode::FloorPlace(s) => s,
+        TaskMode::WallPlace(s) => s,
+        TaskMode::DreamPlanting(s) => s,
+        _ => None,
+    }
+}
+
+/// ドラッグ方向から壁ライン用 `TaskArea` を生成する。
+pub fn wall_line_area(start_pos: Vec2, end_pos: Vec2) -> TaskArea {
+    let delta = end_pos - start_pos;
+    if delta.length_squared() <= f32::EPSILON {
+        return TaskArea::from_points(start_pos, start_pos + Vec2::splat(TILE_SIZE));
+    }
+
+    if delta.x.abs() >= delta.y.abs() {
+        let y_dir = if delta.y < 0.0 { -1.0 } else { 1.0 };
+        TaskArea::from_points(
+            start_pos,
+            Vec2::new(end_pos.x, start_pos.y + TILE_SIZE * y_dir),
+        )
+    } else {
+        let x_dir = if delta.x < 0.0 { -1.0 } else { 1.0 };
+        TaskArea::from_points(
+            start_pos,
+            Vec2::new(start_pos.x + TILE_SIZE * x_dir, end_pos.y),
+        )
+    }
+}
+
+/// 中心座標とサイズから `TaskArea` を生成する。
+pub fn area_from_center_and_size(center: Vec2, size: Vec2) -> TaskArea {
+    let half = size.abs() * 0.5;
+    TaskArea::from_points(center - half, center + half)
+}
+
+/// エリア内に含まれる座標の数を数える。
+pub fn count_positions_in_area(area: &TaskArea, positions: impl Iterator<Item = Vec2>) -> usize {
+    const AREA_CONTAINS_MARGIN: f32 = 0.1;
+    positions
+        .filter(|&pos| area.contains_with_margin(pos, AREA_CONTAINS_MARGIN))
+        .count()
+}
+
+/// 選択エリアと他エリアの重複サマリーを返す。`(重複数, 最大重複率)` のタプル。
+pub fn overlap_summary_from_areas(
+    selected_entity: Entity,
+    selected_area: &TaskArea,
+    areas: impl Iterator<Item = (Entity, TaskArea)>,
+) -> Option<(usize, f32)> {
+    let selected_size = selected_area.size();
+    let selected_area_value = selected_size.x.abs() * selected_size.y.abs();
+    if selected_area_value <= f32::EPSILON {
+        return None;
+    }
+
+    let mut overlap_count = 0usize;
+    let mut max_ratio = 0.0f32;
+
+    for (entity, area) in areas {
+        if entity == selected_entity {
+            continue;
+        }
+
+        let overlap_w = (selected_area.max().x.min(area.max().x)
+            - selected_area.min().x.max(area.min().x))
+        .max(0.0);
+        let overlap_h = (selected_area.max().y.min(area.max().y)
+            - selected_area.min().y.max(area.min().y))
+        .max(0.0);
+        let overlap_area = overlap_w * overlap_h;
+        if overlap_area <= f32::EPSILON {
+            continue;
+        }
+
+        overlap_count += 1;
+        let ratio = (overlap_area / selected_area_value).clamp(0.0, 1.0);
+        if ratio > max_ratio {
+            max_ratio = ratio;
+        }
+    }
+
+    Some((overlap_count, max_ratio))
 }
