@@ -5,12 +5,6 @@ use crate::interface::ui::components::{
 use crate::interface::ui::theme::UiTheme;
 use bevy::prelude::*;
 
-mod familiar;
-mod unassigned;
-
-use familiar::sync_familiar_sections;
-use unassigned::sync_unassigned_souls;
-
 fn stress_color(bucket: StressBucket, theme: &UiTheme) -> Color {
     match bucket {
         StressBucket::Low => Color::WHITE,
@@ -105,9 +99,9 @@ pub fn sync_entity_list_from_view_model_system(
         return;
     };
 
-    sync_familiar_sections(
+    hw_ui::list::sync::sync_familiar_sections(
         &mut commands,
-        &game_assets,
+        game_assets.as_ref() as &dyn hw_ui::setup::UiAssets,
         &theme,
         &view_model,
         &mut node_index,
@@ -116,9 +110,9 @@ pub fn sync_entity_list_from_view_model_system(
         &mut q_text,
         &mut q_image,
     );
-    sync_unassigned_souls(
+    hw_ui::list::sync::sync_unassigned_souls(
         &mut commands,
-        &game_assets,
+        game_assets.as_ref() as &dyn hw_ui::setup::UiAssets,
         &theme,
         &view_model,
         &mut node_index,

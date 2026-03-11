@@ -7,6 +7,7 @@
 //! - プログレスバー、ステータスアイコン、タスクリンク表示
 
 pub mod gathering;
+pub mod gathering_spawn;
 pub mod idle;
 pub mod vitals;
 

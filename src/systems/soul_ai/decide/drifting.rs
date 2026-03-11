@@ -1,12 +1,13 @@
 use bevy::prelude::*;
 use hw_core::events::DriftingEscapeStarted;
+use hw_ai::soul_ai::helpers::drifting::choose_drift_edge;
 use rand::Rng;
 
 use crate::entities::damned_soul::spawn::PopulationManager;
-use crate::entities::damned_soul::{DriftEdge, DriftPhase, DriftingState, IdleBehavior, IdleState};
+use crate::entities::damned_soul::{DriftPhase, DriftingState, IdleBehavior, IdleState};
 use crate::relationships::{CommandedBy, ParticipatingIn, RestingIn};
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
-use crate::world::map::{RIVER_Y_MAX, RIVER_Y_MIN, WorldMap};
+use crate::world::map::WorldMap;
 use hw_core::constants::*;
 
 #[derive(Resource)]
@@ -20,29 +21,6 @@ impl Default for DriftingDecisionTimer {
             timer: Timer::from_seconds(SOUL_ESCAPE_CHECK_INTERVAL, TimerMode::Repeating),
         }
     }
-}
-
-fn choose_drift_edge(grid: (i32, i32)) -> DriftEdge {
-    let (x, y) = grid;
-
-    let mut candidates = vec![
-        (DriftEdge::North, y),
-        (DriftEdge::South, (MAP_HEIGHT - 1 - y).max(0)),
-        (DriftEdge::West, x),
-        (DriftEdge::East, (MAP_WIDTH - 1 - x).max(0)),
-    ];
-
-    if y < RIVER_Y_MIN {
-        candidates.retain(|(edge, _)| !matches!(edge, DriftEdge::South));
-    } else if y > RIVER_Y_MAX {
-        candidates.retain(|(edge, _)| !matches!(edge, DriftEdge::North));
-    }
-
-    candidates
-        .into_iter()
-        .min_by_key(|(_, dist)| *dist)
-        .map(|(edge, _)| edge)
-        .unwrap_or(DriftEdge::South)
 }
 
 /// 未管理状態の Soul を漂流（自然脱走）へ遷移させる

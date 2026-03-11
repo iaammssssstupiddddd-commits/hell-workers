@@ -1,15 +1,26 @@
-use super::super::{
+// エンティティリスト差分同期 helpers
+
+use super::models::{
     EntityListNodeIndex, EntityListViewModel, FamiliarRowViewModel, FamiliarSectionNodes,
     SoulRowViewModel,
 };
-use crate::interface::ui::theme::UiTheme;
+use super::spawn::{
+    spawn_empty_squad_hint_entity, spawn_familiar_section, spawn_soul_list_item_entity,
+};
+use super::tree_ops::clear_children;
+use crate::setup::UiAssets;
+use crate::theme::UiTheme;
 use bevy::prelude::*;
 use std::collections::{HashMap, HashSet};
+
+// ============================================================
+// Familiar sections
+// ============================================================
 
 #[allow(clippy::too_many_arguments)]
 fn sync_familiar_member_rows(
     commands: &mut Commands,
-    game_assets: &crate::assets::GameAssets,
+    assets: &dyn UiAssets,
     theme: &UiTheme,
     familiar: &FamiliarRowViewModel,
     previous: Option<&FamiliarRowViewModel>,
@@ -28,7 +39,7 @@ fn sync_familiar_member_rows(
                 .familiar_empty_rows
                 .contains_key(&familiar.entity)
         {
-            super::super::tree_ops::clear_children(commands, q_children, nodes.members_container);
+            clear_children(commands, q_children, nodes.members_container);
             member_rows.clear();
             node_index.familiar_empty_rows.remove(&familiar.entity);
         }
@@ -44,10 +55,10 @@ fn sync_familiar_member_rows(
         let empty_row = if let Some(row) = node_index.familiar_empty_rows.get(&familiar.entity) {
             *row
         } else {
-            let row = super::super::spawn::spawn_empty_squad_hint_entity(
+            let row = spawn_empty_squad_hint_entity(
                 commands,
                 nodes.members_container,
-                game_assets,
+                assets,
                 theme,
             );
             node_index.familiar_empty_rows.insert(familiar.entity, row);
@@ -91,22 +102,22 @@ fn sync_familiar_member_rows(
         if let Some(existing_row) = member_rows.get(&soul_vm.entity).copied() {
             if has_changed {
                 commands.entity(existing_row).despawn();
-                let row = super::super::spawn::spawn_soul_list_item_entity(
+                let row = spawn_soul_list_item_entity(
                     commands,
                     nodes.members_container,
                     soul_vm,
-                    game_assets,
+                    assets,
                     theme.sizes.squad_member_left_margin,
                     theme,
                 );
                 member_rows.insert(soul_vm.entity, row);
             }
         } else {
-            let row = super::super::spawn::spawn_soul_list_item_entity(
+            let row = spawn_soul_list_item_entity(
                 commands,
                 nodes.members_container,
                 soul_vm,
-                game_assets,
+                assets,
                 theme.sizes.squad_member_left_margin,
                 theme,
             );
@@ -121,7 +132,7 @@ fn sync_familiar_member_rows(
         .collect();
 
     if ordered_rows.is_empty() {
-        super::super::tree_ops::clear_children(commands, q_children, nodes.members_container);
+        clear_children(commands, q_children, nodes.members_container);
     } else {
         commands
             .entity(nodes.members_container)
@@ -130,9 +141,9 @@ fn sync_familiar_member_rows(
 }
 
 #[allow(clippy::too_many_arguments)]
-pub(super) fn sync_familiar_sections(
+pub fn sync_familiar_sections(
     commands: &mut Commands,
-    game_assets: &crate::assets::GameAssets,
+    assets: &dyn UiAssets,
     theme: &UiTheme,
     view_model: &EntityListViewModel,
     node_index: &mut EntityListNodeIndex,
@@ -167,11 +178,11 @@ pub(super) fn sync_familiar_sections(
             .familiar_sections
             .entry(familiar.entity)
             .or_insert_with(|| {
-                super::super::spawn::spawn_familiar_section(
+                spawn_familiar_section(
                     commands,
                     fam_container_entity,
                     familiar,
-                    game_assets,
+                    assets,
                     theme,
                 )
             });
@@ -201,9 +212,9 @@ pub(super) fn sync_familiar_sections(
             }
             if let Ok(mut icon) = q_image.get_mut(nodes.fold_icon) {
                 icon.image = if familiar.is_folded {
-                    game_assets.icon_arrow_right.clone()
+                    assets.icon_arrow_right().clone()
                 } else {
-                    game_assets.icon_arrow_down.clone()
+                    assets.icon_arrow_down().clone()
                 };
             }
             let members_changed = previous
@@ -216,7 +227,7 @@ pub(super) fn sync_familiar_sections(
             if members_changed {
                 sync_familiar_member_rows(
                     commands,
-                    game_assets,
+                    assets,
                     theme,
                     familiar,
                     previous,
@@ -245,7 +256,7 @@ pub(super) fn sync_familiar_sections(
             .map(|children| !children.is_empty())
             .unwrap_or(false)
         {
-            super::super::tree_ops::clear_children(commands, q_children, fam_container_entity);
+            clear_children(commands, q_children, fam_container_entity);
         }
     } else {
         let needs_reorder = q_children
@@ -263,5 +274,120 @@ pub(super) fn sync_familiar_sections(
                 .entity(fam_container_entity)
                 .replace_children(&ordered_sections);
         }
+    }
+}
+
+// ============================================================
+// Unassigned souls
+// ============================================================
+
+#[allow(clippy::too_many_arguments)]
+pub fn sync_unassigned_souls(
+    commands: &mut Commands,
+    assets: &dyn UiAssets,
+    theme: &UiTheme,
+    view_model: &EntityListViewModel,
+    node_index: &mut EntityListNodeIndex,
+    unassigned_content_entity: Entity,
+    q_children: &Query<&Children>,
+) {
+    if view_model.current.unassigned_folded != view_model.previous.unassigned_folded {
+        clear_children(commands, q_children, unassigned_content_entity);
+        node_index.unassigned_rows.clear();
+        if !view_model.current.unassigned_folded {
+            for soul_vm in &view_model.current.unassigned {
+                let row = spawn_soul_list_item_entity(
+                    commands,
+                    unassigned_content_entity,
+                    soul_vm,
+                    assets,
+                    0.0,
+                    theme,
+                );
+                node_index.unassigned_rows.insert(soul_vm.entity, row);
+            }
+        }
+        return;
+    }
+
+    if view_model.current.unassigned_folded {
+        return;
+    }
+
+    if view_model.current.unassigned == view_model.previous.unassigned {
+        return;
+    }
+
+    let current_by_entity: HashMap<Entity, &SoulRowViewModel> = view_model
+        .current
+        .unassigned
+        .iter()
+        .map(|vm| (vm.entity, vm))
+        .collect();
+    let previous_by_entity: HashMap<Entity, &SoulRowViewModel> = view_model
+        .previous
+        .unassigned
+        .iter()
+        .map(|vm| (vm.entity, vm))
+        .collect();
+
+    let stale_entities: Vec<Entity> = node_index
+        .unassigned_rows
+        .keys()
+        .copied()
+        .filter(|entity| !current_by_entity.contains_key(entity))
+        .collect();
+    for entity in stale_entities {
+        if let Some(row) = node_index.unassigned_rows.remove(&entity) {
+            commands.entity(row).despawn();
+        }
+    }
+
+    for soul_vm in &view_model.current.unassigned {
+        if let std::collections::hash_map::Entry::Vacant(e) =
+            node_index.unassigned_rows.entry(soul_vm.entity)
+        {
+            let row = spawn_soul_list_item_entity(
+                commands,
+                unassigned_content_entity,
+                soul_vm,
+                assets,
+                0.0,
+                theme,
+            );
+            e.insert(row);
+            continue;
+        }
+
+        let has_changed = previous_by_entity
+            .get(&soul_vm.entity)
+            .map(|prev| *prev != soul_vm)
+            .unwrap_or(true);
+        if has_changed {
+            if let Some(old_row) = node_index.unassigned_rows.remove(&soul_vm.entity) {
+                commands.entity(old_row).despawn();
+            }
+            let row = spawn_soul_list_item_entity(
+                commands,
+                unassigned_content_entity,
+                soul_vm,
+                assets,
+                0.0,
+                theme,
+            );
+            node_index.unassigned_rows.insert(soul_vm.entity, row);
+        }
+    }
+
+    let ordered_rows: Vec<Entity> = view_model
+        .current
+        .unassigned
+        .iter()
+        .filter_map(|vm| node_index.unassigned_rows.get(&vm.entity).copied())
+        .collect();
+    if !ordered_rows.is_empty() {
+        commands
+            .entity(unassigned_content_entity)
+            .replace_children(&ordered_rows);
     }
 }

@@ -87,7 +87,7 @@ hw_visual (hw_core + hw_jobs + hw_logistics + hw_spatial + hw_world + hw_ui)
 - `theme.rs` — `UiTheme` Resource（カラーパレット・フォントサイズ・スペーシング・サイズ定数）
 - `intents.rs` — `UiIntent` enum（プレイヤー UI 操作メッセージ）
 - `interaction/` — tooltip/dialog/hover_action/status_display システム群（FPS, speed, dream pool, area_edit_preview 等）
-- `list/` — EntityListDirty, EntityListViewModel, EntityListMinimizeState, EntityListResizeState, DragState, selection_focus, tree_ops, visual（apply_row_highlight, entity_list_visual_feedback_system）
+- `list/` — EntityListDirty, EntityListViewModel, EntityListNodeIndex, FamiliarSectionNodes, EntityListMinimizeState, EntityListResizeState, DragState, spawn（`spawn_familiar_section`, `spawn_soul_list_item_entity` 等）, sync（`sync_familiar_sections`, `sync_unassigned_souls`）, section_toggle（`entity_list_section_toggle_system`）, selection_focus, tree_ops, visual（apply_row_highlight, entity_list_visual_feedback_system）
 - `panels/tooltip_builder/` — text_wrap, widgets (spawn_progress_bar 等), templates（Soul/Building/Resource/UiButton/Generic ツールチップ）
 - `panels/info_panel/` — InfoPanelPinState, InfoPanelState, spawn_info_panel_ui, info_panel_system
 - `panels/task_list/` — TaskEntry, TaskListDirty, work_type_icon, render（rebuild_task_list_ui）, interaction システム群
@@ -114,9 +114,9 @@ root 側の `bevy_app` 残留（adapter 責務）:
 | `interaction/mode.rs` | PlayMode 遷移、TaskMode、BuildingType |
 | `list/change_detection.rs` | DamnedSoul, Familiar, AssignedTask の Changed 監視 |
 | `list/view_model.rs` | Familiar, DamnedSoul, FamiliarAiState からビューモデル構築 |
-| `list/spawn/`, `list/sync/` | ゲームエンティティ → UI ノード同期 |
+| `list/sync.rs` | `sync_entity_list_from_view_model_system` / `sync_entity_list_value_rows_system`（hw_ui helpers の thin shell） |
 | `list/drag_drop.rs` | SquadManagementRequest, SoulIdentity（DragState 型は hw_ui） |
-| `list/interaction.rs`, `list/interaction/navigation.rs` | FamiliarOperation, FamiliarAiState, TaskContext |
+| `list/interaction.rs`, `list/interaction/navigation.rs` | FamiliarOperation, FamiliarAiState, TaskContext（SectionToggle 操作は hw_ui の `entity_list_section_toggle_system` へ移設済み） |
 | `panels/context_menu.rs` | Familiar, DamnedSoul, Building, Door の分類 |
 | `panels/task_list/view_model.rs`, `presenter.rs`, `dirty.rs`（detect systems）| Designation, Blueprint, WorkType 等のゲームクエリ |
 | `panels/task_list/update.rs` | `Res<GameAssets>` をシステム引数に取るため hw_ui 移動不可 |
@@ -131,18 +131,20 @@ root 側の `bevy_app` 残留（adapter 責務）:
 
 - `src/systems/visual/` および `src/systems/utils/` から抽出したビジュアルシステム全体
 - `GameAssets` に依存しない独立ビジュアル crate
-- アセットハンドルは `handles.rs` の 7 Resource として保持し、startup 時に root から注入される
+- アセットハンドルは `handles.rs` の 8 Resource として保持し、startup 時に root から注入される
 
 代表例:
 
 - `HwVisualPlugin` — hw_visual の全システムを一括登録する Plugin
-- `handles::{WallVisualHandles, BuildingAnimHandles, WorkIconHandles, MaterialIconHandles, HaulItemHandles, SpeechHandles, PlantTreeHandles}` — ビジュアルハンドルリソース（GameAssets の代替）
+- `handles::{WallVisualHandles, BuildingAnimHandles, WorkIconHandles, MaterialIconHandles, HaulItemHandles, SpeechHandles, PlantTreeHandles, GatheringVisualHandles}` — ビジュアルハンドルリソース（GameAssets の代替）
+- `handles::GatheringVisualHandles` — 集会スポット visual 用ハンドルリソース（`aura_circle`, `card_table`, `campfire`, `barrel`）
 - `blueprint::*` — 設計図ビジュアル（アニメーション、プログレスバー、資材表示、完成エフェクト）
 - `dream::*` — Dream UI パーティクル、ドリームバブル、フローティングポップアップ（custom Material2d / UiMaterial）
 - `gather::*` — 採取リソースハイライト、ワーカーインジケータ
 - `haul::*` — 運搬アイテム表示、手押し車追従
 - `plant_trees::*` — 植樹ビジュアルエフェクト
 - `soul::*` — Soul プログレスバー、ステータスビジュアル、タスクリンク表示
+- `soul::gathering_spawn::spawn_gathering_spot` — 集会スポット ECS entity 生成（aura + object sprite）。`GatheringVisualHandles` 経由で `GameAssets` に依存しない
 - `speech::*` — 吹き出し、ラテン語フレーズ、FamiliarVoice、SpeechPlugin
 - `mud_mixer::*`, `tank::*` — 建物アニメーション
 - `wall_connection::*` — 壁接続スプライト切替
@@ -171,7 +173,7 @@ startup 注入パターン:
 // src/plugins/startup/visual_handles.rs
 pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>) {
     commands.insert_resource(WallVisualHandles { stone_isolated: game_assets.wall_isolated.clone(), ... });
-    // ... 7 Resource すべてを insert
+    // ... 8 Resource すべてを insert
 }
 // PostStartup チェーンの先頭で実行（GameAssets 挿入後）
 ```
@@ -205,6 +207,8 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 - `soul_ai::decide::work::auto_build` — 資材完了 Blueprint への自動割り当て
 - `soul_ai::decide::escaping` / `soul_ai::perceive::escaping` — 逃走判断ロジック
 - `soul_ai::decide::gathering_mgmt` — 集会管理要求生成
+- `soul_ai::helpers::drifting::{choose_drift_edge, is_near_map_edge, random_wander_target, drift_move_target}` — 純粋 drifting 計算（`Commands` / root resource 不要）
+- **（追加予定 M4）** `soul_ai::helpers::navigation::{is_near_target, is_near_target_or_dest, is_adjacent_grid, can_pickup_item, is_near_blueprint, update_destination_if_needed}` — 純粋距離・グリッド判定
 - `familiar_ai::perceive::state_detection` — 使い魔 AI 状態遷移検知
 - `familiar_ai::decide::following` — 使い魔追尾システム（hw_core 型のみ依存）
 - `familiar_ai::decide::query_types` — Familiar Decide 用の narrow query 定義
@@ -226,6 +230,7 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 - pathfinding / blueprint entity query を伴う auto-gather orchestration
 - `unassign_task`（`helpers/work.rs`）は `WheelbarrowMovement` / `Visibility` / `Transform` など root 依存が強いため core 化対象外
 - `task_execution/context/access.rs` — `FloorConstructionSite` / `WallConstructionSite` が root-only のため、これらが `hw_jobs` に移設されるまで root 残留（後述 **task_execution 全面移設 blocker** 参照）
+- `update_destination_to_adjacent` / `update_destination_to_blueprint` — `PathfindingContext` 自体は `hw_world` 所有だが、呼び出し側がまだ root の re-export path（`crate::world::pathfinding::*`）に結合しているため、その整理が済むまで hw_ai 移設対象外
 
 移設済み system の登録ルール:
 
