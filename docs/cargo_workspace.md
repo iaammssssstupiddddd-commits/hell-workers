@@ -278,6 +278,7 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 - `ResourceType`
 - `DoorState`
 - `AreaBounds`, `TaskArea`（矩形エリア抽象型）
+- `command` 系 pure helper の一部（`wall_line_area`, `count_positions_in_area`, `overlap_summary_from_areas`, `get_drag_start`）
 
 ### `hw_world`
 

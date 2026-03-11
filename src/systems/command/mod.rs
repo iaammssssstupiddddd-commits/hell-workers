@@ -60,8 +60,7 @@ pub enum AreaEditHandleKind {
 
 // 公開API
 pub use hw_core::area::{
-    area_from_center_and_size, count_positions_in_area, get_drag_start, overlap_summary_from_areas,
-    wall_line_area,
+    count_positions_in_area, overlap_summary_from_areas, wall_line_area,
 };
 pub use area_selection::{
     AreaEditClipboard, AreaEditHistory, AreaEditPresets, AreaEditSession,
