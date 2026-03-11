@@ -1,11 +1,7 @@
-use super::EntityListNodeIndex;
-use crate::entities::familiar::FamiliarOperation;
-use crate::events::FamiliarOperationMaxSoulChangedEvent;
 use crate::interface::ui::components::*;
 use crate::interface::ui::theme::UiTheme;
-use crate::relationships::Commanding;
-use crate::systems::familiar_ai::FamiliarAiState;
 use bevy::prelude::*;
+use hw_ui::UiIntent;
 
 mod navigation;
 mod visual;
@@ -31,48 +27,6 @@ fn focus_list_entity(
         q_camera,
         q_transforms,
     );
-}
-
-#[allow(clippy::type_complexity)]
-fn handle_familiar_max_soul_adjustment(
-    button: FamiliarMaxSoulAdjustButton,
-    q_familiar_ops: &mut Query<&mut FamiliarOperation>,
-    q_familiar_meta: &Query<(
-        &crate::entities::familiar::Familiar,
-        &FamiliarAiState,
-        Option<&Commanding>,
-    )>,
-    node_index: &EntityListNodeIndex,
-    q_text: &mut Query<&mut Text>,
-    ev_max_soul_changed: &mut MessageWriter<FamiliarOperationMaxSoulChangedEvent>,
-) {
-    if let Ok(mut op) = q_familiar_ops.get_mut(button.familiar) {
-        let old_val = op.max_controlled_soul;
-        let new_val = (old_val as isize + button.delta).clamp(1, 8) as usize;
-        op.max_controlled_soul = new_val;
-
-        if let Some(nodes) = node_index.familiar_sections.get(&button.familiar)
-            && let Ok((familiar, ai_state, commanding_opt)) = q_familiar_meta.get(button.familiar)
-            && let Ok(mut text) = q_text.get_mut(nodes.header_text)
-        {
-            let squad_count = commanding_opt.map(|c| c.len()).unwrap_or(0);
-            text.0 = format!(
-                "{} ({}/{}) [{}]",
-                familiar.name,
-                squad_count,
-                new_val,
-                super::view_model::familiar_state_label(ai_state)
-            );
-        }
-
-        if old_val != new_val {
-            ev_max_soul_changed.write(FamiliarOperationMaxSoulChangedEvent {
-                familiar_entity: button.familiar,
-                old_value: old_val,
-                new_value: new_val,
-            });
-        }
-    }
 }
 
 /// エンティティリストのゲーム側インタラクション
@@ -107,18 +61,10 @@ pub fn entity_list_interaction_system(
             Without<SectionToggle>,
         ),
     >,
-    mut q_familiar_ops: Query<&mut FamiliarOperation>,
-    q_familiar_meta: Query<(
-        &crate::entities::familiar::Familiar,
-        &FamiliarAiState,
-        Option<&Commanding>,
-    )>,
-    node_index: Res<EntityListNodeIndex>,
-    mut q_text: Query<&mut Text>,
-    mut ev_max_soul_changed: MessageWriter<FamiliarOperationMaxSoulChangedEvent>,
     mut selected_entity: ResMut<crate::interface::selection::SelectedEntity>,
     mut q_camera: Query<&mut Transform, With<crate::interface::camera::MainCamera>>,
     q_transforms: Query<&GlobalTransform>,
+    mut ui_intents: MessageWriter<UiIntent>,
     theme: Res<UiTheme>,
 ) {
     for (interaction, item) in soul_list_interaction.iter_mut() {
@@ -149,14 +95,10 @@ pub fn entity_list_interaction_system(
         match *interaction {
             Interaction::Pressed => {
                 *color = BackgroundColor(theme.colors.button_pressed);
-                handle_familiar_max_soul_adjustment(
-                    *button,
-                    &mut q_familiar_ops,
-                    &q_familiar_meta,
-                    &node_index,
-                    &mut q_text,
-                    &mut ev_max_soul_changed,
-                );
+                ui_intents.write(UiIntent::AdjustMaxControlledSoulFor(
+                    button.familiar,
+                    button.delta,
+                ));
             }
             Interaction::Hovered => {
                 *color = BackgroundColor(theme.colors.button_hover);
