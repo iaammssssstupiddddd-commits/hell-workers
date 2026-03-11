@@ -9,7 +9,7 @@ UI からの入力を受け取り、`Designation` や `TaskArea` コンポーネ
 
 | ファイル | 内容 |
 |---|---|
-| `mod.rs` | 公開 API（`TaskArea` は `hw_core::area` から re-export） |
+| `mod.rs` | 公開 API（`TaskArea` と一部 pure helper は `hw_core::area` から re-export） |
 | `assign_task.rs` | `assign_task_system` — クリックによるタスク指定 |
 | `input.rs` | `familiar_command_input_system` — Familiar コマンド入力処理 |
 | `indicators.rs` | タスクエリア・指定インジケーターの同期 |
@@ -25,7 +25,7 @@ UI からの入力を受け取り、`Designation` や `TaskArea` コンポーネ
 | `cancel.rs` | エリア選択のキャンセル |
 | `cleanup.rs` | エリア選択後のクリーンアップ |
 | `cursor.rs` | カーソル位置の追跡 |
-| `geometry.rs` | エリア形状計算 |
+| `geometry.rs` | エリア形状計算と root 側 UI/camera 依存 helper。pure helper の一部は `hw_core::area` に移設済み |
 | `input.rs` | エリア選択入力処理 |
 | `indicator.rs` | エリア選択ビジュアル |
 | `manual_haul.rs` | 手動運搬の指定 |
@@ -51,4 +51,5 @@ TaskArea { bounds: AreaBounds }  // Familiar が管轄するエリア
 ```
 
 `TaskArea` は `hw_core::area` に定義され、`src/systems/command/mod.rs` で re-export されている。
+`count_positions_in_area` / `overlap_summary_from_areas` / `wall_line_area` も `hw_core::area` 由来の pure helper を利用する。
 `TaskAreaIndicator` コンポーネントで視覚的インジケーターエンティティと紐付けられる。

@@ -6,8 +6,7 @@ use bevy::prelude::*;
 use bevy::window::{CursorIcon, PrimaryWindow, SystemCursorIcon};
 use hw_core::constants::TILE_SIZE;
 pub use hw_core::area::{
-    area_from_center_and_size, count_positions_in_area, get_drag_start, overlap_summary_from_areas,
-    wall_line_area,
+    count_positions_in_area, get_drag_start, overlap_summary_from_areas, wall_line_area,
 };
 
 const AREA_CONTAINS_MARGIN: f32 = 0.1;
@@ -22,6 +21,10 @@ pub(super) fn hotkey_slot_index(keyboard: &ButtonInput<KeyCode>) -> Option<usize
     } else {
         None
     }
+}
+
+pub(super) fn area_from_center_and_size(center: Vec2, size: Vec2) -> TaskArea {
+    hw_core::area::area_from_center_and_size(center, size)
 }
 
 pub fn get_indicator_color(mode: TaskMode, is_valid: bool) -> LinearRgba {
