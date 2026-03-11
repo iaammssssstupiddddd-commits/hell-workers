@@ -285,6 +285,7 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 
 - world の純粋ロジック
 - pathfinding, terrain, map helper, 座標変換
+- room detection core（入力分類、flood-fill、validator、`RoomBounds`）
 - AI helper が使用する read-only 空間トレイト
 
 代表例:
@@ -294,6 +295,7 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 - `WorldMap`
 - `world_to_grid`, `grid_to_world`
 - nearest walkable / river query
+- `room_detection::{build_detection_input, detect_rooms, room_is_valid_against_input}`
 - `PathWorld` trait — `is_walkable` など通行判定 API（`WorldMap` の impl は root）
 - `SpatialGridOps` trait — `get_nearby_in_radius` など空間グリッド read-only API（concrete resource の本体は `hw_spatial`）
 - `Yard`, `Site`, `PairedYard`, `PairedSite`（zone 系コンポーネント）
@@ -303,6 +305,7 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 - `Commands` を使う sprite spawn
 - `GameAssets` 依存の texture 選択
 - root 固有の `WorldMapRead/Write` SystemParam wrapper
+- `Room` entity の spawn/despawn、`RoomTileLookup` 更新、dirty scheduling
 - `SpatialGrid` resource 実体と update system（8 種 concrete）は `hw_spatial` が保持
 
 ### `hw_spatial`
@@ -447,6 +450,7 @@ wall_sites:  Query<(&mut WallConstructionSite, &TaskWorkers)>
 - Bevy system registration が主責務
 - `Commands` / asset / UI / plugin order に強く依存する
 - app shell としての意味が大きい
+- room detection では `RoomDetectionBuildingTile` 収集、`DetectedRoom` → `Room` 変換、`RoomTileLookup` 再構築を担当する
 
 ## 5. compatibility layer の扱い
 

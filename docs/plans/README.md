@@ -1,6 +1,6 @@
 # Plans Index
 
-`docs/plans` の文書ステータス一覧（更新日: 2026-03-11）。
+`docs/plans` の文書ステータス一覧（更新日: 2026-03-12）。
 
 ## 新規計画書の作り方
 
@@ -19,8 +19,8 @@
 
 | Document | Status | Notes |
 |---|---|---|
-| [familiar-task-management-hw-ai-extraction-plan-2026-03-11.md](familiar-task-management-hw-ai-extraction-plan-2026-03-11.md) | Draft | src/systems/familiar_ai/decide/task_management/の計画。 |
-| [room-detection-hw-world-extraction-plan-2026-03-11.md](room-detection-hw-world-extraction-plan-2026-03-11.md) | Draft | src/systems/room/detection.rsの計画。 |
+| [command-crate-extraction-plan-2026-03-12.md](command-crate-extraction-plan-2026-03-12.md) | Draft | `src/systems/command/` から crate 化できる pure helper / world 判定 / logistics selector を切り出す計画。 |
+| [familiar-task-management-hw-ai-extraction-plan-2026-03-11.md](familiar-task-management-hw-ai-extraction-plan-2026-03-11.md) | In Progress | src/systems/familiar_ai/decide/task_management/の計画。 |
 
 ## アーカイブ計画書一覧 (`docs/plans/archive`)
 
@@ -89,6 +89,7 @@
 | [archive/remove-instockpile-claimedby.md](archive/remove-instockpile-claimedby.md) | アーカイブ | `InStockpile`/`ClaimedBy` 削除統合計画。 |
 | [archive/request-unification-plan-2026-02-14.md](archive/request-unification-plan-2026-02-14.md) | アーカイブ | Request方式一本化計画。 |
 | [archive/rest-area-system.md](archive/rest-area-system.md) | アーカイブ | 休憩所（Rest Area）システム提案。 |
+| [archive/room-detection-hw-world-extraction-plan-2026-03-11.md](archive/room-detection-hw-world-extraction-plan-2026-03-11.md) | アーカイブ | src/systems/room/detection.rsの計画。 |
 | [archive/room-detection-plan-2026-02-23.md](archive/room-detection-plan-2026-02-23.md) | アーカイブ | 壁・扉・床の閉領域をRoomとして検出し、オーバーレイ表示する実装計画。 |
 | [archive/scaling-performance-bottlenecks-plan.md](archive/scaling-performance-bottlenecks-plan.md) | アーカイブ | スケール時ボトルネック最適化計画。 |
 | [archive/selection-placement-refactor-plan-2026-02-25.md](archive/selection-placement-refactor-plan-2026-02-25.md) | アーカイブ | `interface/selection` の配置処理を責務分離するリファクタ計画。 |
