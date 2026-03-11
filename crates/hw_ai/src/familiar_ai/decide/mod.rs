@@ -1,4 +1,5 @@
 pub mod auto_gather_for_blueprint;
+pub mod task_management;
 pub mod encouragement;
 pub mod following;
 pub mod helpers;

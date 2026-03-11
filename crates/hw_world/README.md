@@ -19,6 +19,7 @@
 | `regrowth.rs` | 森林再生システム (`ForestZone`, 周期的な木スポーン) |
 | `pathfinding.rs` | A* 経路探索（下記詳細参照） |
 | `query.rs` | 環境クエリ (`find_nearest_river_grid`, `find_nearest_walkable_grid`) |
+| `room_detection.rs` | Room 検出 core (`build_detection_input`, `detect_rooms`, `room_is_valid_against_input`, `RoomBounds`) |
 | `spatial.rs` | ワールド向け `SpatialGridOps` 実装 |
 | `spawn.rs` | スポーンヘルパー (`find_nearby_walkable_grid`, `pick_random_walkable_grid_in_rect`) |
 | `zones.rs` | `Yard`, `Site`, `PairedYard`, `PairedSite` — ゾーン系コンポーネント |
@@ -60,6 +61,7 @@ Bevy との統合（`SystemParam`・エンティティスポーン）は `src/wo
 |---|---|
 | `WorldMap` 型と全データ構造 | `WorldMapRead` / `WorldMapWrite` (`SystemParam` ラッパー) |
 | A* 経路探索関数群 | マップエンティティのスポーン (`spawn.rs`) |
+| Room 検出 core（入力分類、flood-fill、validator、`RoomBounds`） | `Room` entity の spawn/despawn、`RoomTileLookup` 更新、dirty tracking |
 | 座標変換関数 (`grid_to_world` 等) | 地形境界タイルへのコンポーネント付与 (`terrain_border.rs`) |
 | 地形生成関数 (`generate_base_terrain_tiles` 等) | — |
 | `tree_regrowth_system` などの純粋システム | — |

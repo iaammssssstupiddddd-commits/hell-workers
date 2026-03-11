@@ -7,6 +7,11 @@
 Room 検出システムは、完成した壁・扉・床で構成された密閉空間を `Room` エンティティとして自動認識します。
 検出された Room は半透明オーバーレイで視覚的にフィードバックされ、将来の Room 系ゲームプレイ機能（温度・モラル・部屋品質バフ等）の基盤データを提供します。
 
+実装境界は次の 2 層です。
+
+- `crates/hw_world::room_detection`: pure core。入力分類、flood-fill、妥当性判定、`RoomBounds` を保持する。
+- `src/systems/room/*`: app shell。ECS Query から入力を収集し、`Room` entity / `RoomTileLookup` / visual overlay / dirty scheduling を扱う。
+
 ## 2. Room の成立条件
 
 以下を **すべて** 満たす連続床タイルの集合が Room として認識されます。
@@ -34,15 +39,17 @@ Room 検出システムは、完成した壁・扉・床で構成された密閉
 
 | 型 | 説明 |
 |:---|:---|
-| `RoomDetectionState` | dirty タイルセット・クールダウンタイマー・前フレームの `WorldMap.buildings` スナップショット |
+| `RoomDetectionState` | dirty タイルセットとクールダウンタイマー |
 | `RoomTileLookup` | `(i32, i32)` グリッド座標 → `Entity`（Room エンティティ）の逆引きマップ |
 | `RoomValidationState` | 定期検証タイマー |
 
 ## 4. 検出アルゴリズム
 
-### 4.1 入力データの構築（`build_detection_input`）
+### 4.1 入力データの構築（root adapter → `build_detection_input`）
 
-`Building + Transform` クエリを全走査し、以下の 3 セットを構築します。
+root の `detect_rooms_system` / `validate_rooms_system` は `Building + Transform` クエリを全走査し、各建物を `RoomDetectionBuildingTile` に変換して `hw_world::room_detection::build_detection_input(...)` に渡します。
+
+core 側では以下の 3 セットを構築します。
 
 ```
 floor_tiles      : BuildingType::Floor かつ world_map.buildings に未登録のタイル
@@ -51,22 +58,21 @@ door_tiles       : BuildingType::Door
 ```
 
 > **なぜ `world_map.buildings` をチェックするか**:  
-> 完成 Floor タイルのグリッドに壁や別の建物が存在する場合（例: 壁を床の上に建てた位置）、その Floor エンティティは床として扱わず除外します。
-> 完成 Floor タイル自体は `world_map.buildings` に登録されないため、内部床タイルは通常このチェックを通過します。
+> root adapter は `world_map.has_building(grid)` の結果を `RoomDetectionBuildingTile.has_building_on_top` として渡します。完成 Floor タイルのグリッドに壁や別の建物が存在する場合（例: 壁を床の上に建てた位置）、その Floor エンティティは床として扱わず除外します。完成 Floor タイル自体は `world_map.buildings` に登録されないため、内部床タイルは通常このチェックを通過します。
 
 ### 4.2 Flood-fill による Room 候補の抽出
 
 1. 全 `floor_tiles` を未訪問セットとして初期化
 2. 未訪問セットからシードを 1 つ取り出し、4 近傍 BFS を実施
 3. 各タイルの近傍が「他の床 or 完成壁 or 扉 or マップ内」以外なら Room 不成立（`is_valid = false`）
-4. `is_valid == true` かつ `boundary_doors.len() > 0` の場合のみ `RoomCandidate` を生成
+4. `is_valid == true` かつ `boundary_doors.len() > 0` の場合のみ `DetectedRoom` を生成
 
 ### 4.3 Room エンティティの同期
 
 ```
 既存 Room エンティティをすべて despawn（Bevy 0.18: 子の RoomOverlayTile も自動 despawn）
 ↓
-新規 Room エンティティをスポーン（Transform::default() を必ず含める）
+`DetectedRoom` を `Room` component に変換して新規 Room エンティティをスポーン（Transform::default() を必ず含める）
 ↓
 RoomTileLookup を再構築
 ```
@@ -83,16 +89,16 @@ Room 再検出は「dirty タイルが存在する」かつ「クールダウン
 - `Added<Building>` / `Changed<Building>` / `Changed<Transform>` → 変化したタイル ± 1 近傍を dirty 化
 - `Added<Door>` / `Changed<Door>` / `Changed<Transform>` → 同上
 
-### トリガー（`mark_room_dirty_from_world_map_diff_system`）
+### トリガー（Observer: `on_building_*` / `on_door_*`）
 
-- `WorldMap.buildings` 差分（エンティティの追加・削除・置換）を前フレームスナップショットと比較し、変化したグリッドを dirty 化
-- 削除系の変化（壁破壊・サイト cancel）をここで補足する
+- `Add` / `Remove` Observer が Building / Door の追加・削除タイルを dirty 化する
+- 削除系の変化は `On<Remove, Building>` / `On<Remove, Door>` で補足する
 
 ## 6. 定期検証（`validate_rooms_system`）
 
 2 秒ごとに既存の `Room` エンティティを再評価します。
 
-- 現在の建物状態に対して `room_is_valid_against_input()` を実行
+- 現在の建物状態に対して `hw_world::room_detection::room_is_valid_against_input(&room.tiles, ...)` を実行
 - 不正な Room は despawn → dirty マーキング → 再検出へ戻す
 - 正常な Room の `RoomTileLookup` を再構築
 
@@ -109,9 +115,9 @@ Room 再検出は「dirty タイルが存在する」かつ「クールダウン
 ```
 GameSystemSet::Logic（Logic ループ内）
  └─ mark_room_dirty_from_building_changes_system
-     → mark_room_dirty_from_world_map_diff_system
-         → validate_rooms_system
-             → detect_rooms_system
+     → validate_rooms_system
+         → detect_rooms_system
+（Building / Door の Add / Remove は Observer が dirty 化）
 （room systems は dream_tree_planting_system の後に実行）
 
 GameSystemSet::Visual（Visual ループ内）
@@ -146,11 +152,12 @@ GameSystemSet::Visual（Visual ループ内）
 
 | ファイル | 役割 |
 |:---|:---|
-| `src/systems/room/detection.rs` | `build_detection_input`・Flood-fill・`detect_rooms_system` |
+| `crates/hw_world/src/room_detection.rs` | room detection core。`build_detection_input`・Flood-fill・validator・`RoomBounds` |
+| `src/systems/room/detection.rs` | root adapter。`RoomDetectionBuildingTile` 収集と `DetectedRoom` → `Room` apply |
 | `src/systems/room/dirty_mark.rs` | Building/Door 変化と WorldMap 差分からの dirty マーキング |
-| `src/systems/room/validation.rs` | 定期検証システム |
+| `src/systems/room/validation.rs` | 定期検証システム。既存 `Room` を hw_world validator に渡す thin adapter |
 | `src/systems/room/visual.rs` | `RoomOverlayTile` 同期システム |
-| `src/systems/room/components.rs` | `Room`, `RoomBounds`, `RoomOverlayTile` 定義 |
+| `src/systems/room/components.rs` | `Room`, `RoomOverlayTile` 定義と `RoomBounds` re-export |
 | `src/systems/room/resources.rs` | `RoomDetectionState`, `RoomTileLookup`, `RoomValidationState` 定義 |
 | `src/plugins/logic.rs` | Room 検出システムの登録 |
 | `src/plugins/visual.rs` | Room ビジュアルシステムの登録 |

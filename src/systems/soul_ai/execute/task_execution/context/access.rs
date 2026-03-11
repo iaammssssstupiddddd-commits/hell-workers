@@ -124,6 +124,24 @@ pub struct ConstructionSiteAccess<'w, 's> {
     >,
 }
 
+impl hw_ai::familiar_ai::decide::task_management::ConstructionSitePositions
+    for ConstructionSiteAccess<'_, '_>
+{
+    fn floor_site_pos(&self, site: Entity) -> Option<Vec2> {
+        self.floor_sites
+            .get(site)
+            .ok()
+            .map(|(t, _, _)| t.translation.truncate())
+    }
+
+    fn wall_site_pos(&self, site: Entity) -> Option<Vec2> {
+        self.wall_sites
+            .get(site)
+            .ok()
+            .map(|(t, _, _)| t.translation.truncate())
+    }
+}
+
 /// 倉庫・設備・ブループリントへの読み取り専用アクセス
 #[derive(SystemParam)]
 pub struct StorageAccess<'w, 's> {

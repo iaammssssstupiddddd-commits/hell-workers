@@ -93,6 +93,14 @@ Perceive → Update → Decide → Execute
 - `hw_jobs::construction` 側の tile state は「サイト/タイルごとの状態」を表現し、AssignedTask phase は「魂がそのタスク内でどの段階にいるか」を表現する。
 - 今回の抽出では型を統合せず、2 系統の enum は役割分離したまま保持し、境界を越えた参照だけを `pub use` レイヤーで標準化する。
 
+## Room Detection の境界
+
+- `crates/hw_world::room_detection` が room detection core の唯一の所有者であり、`RoomDetectionBuildingTile` からの入力分類、flood-fill、妥当性判定、`RoomBounds` を提供する。
+- root 側 `src/systems/room/detection.rs` は app shell として `Query<(Entity, &Building, &Transform)>` + `WorldMapRead` から tile descriptor を収集し、`DetectedRoom` を `Room` entity と `RoomTileLookup` へ反映する。
+- root 側 `src/systems/room/validation.rs` は既存 `Room` の `tiles` を `hw_world::room_detection::room_is_valid_against_input(...)` に渡す adapter に留める。
+- dirty tracking (`RoomDetectionState`) と visual overlay (`RoomOverlayTile`) は root 側責務であり、room detection core には含めない。
+- `Room` entity の spawn では `Transform::default()` を必ず付与する。これを外すと overlay child の transform 伝播が壊れる。
+
 ## ゲーム内時間 (GameTime)
 
 `src/systems/time.rs` — `GameTime`（Resource）:
