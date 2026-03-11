@@ -135,7 +135,7 @@ hw_ai は**ゲームエンティティ非依存の純粋 AI ロジック**のみ
 | `soul_ai/execute/gathering_spawn.rs` | `GameAssets` を使う visual spawn と request 消費時の app 状態再検証を行う |
 | `soul_ai/helpers/work.rs::unassign_task` | `WorldMap`・`Visibility` 操作あり |
 | `familiar_ai/decide/task_delegation.rs` | 空間グリッド・`WorldMap` を参照 |
-| `familiar_ai/decide/task_management/` | 全クエリがゲーム固有エンティティ |
+| `familiar_ai/decide/task_management/` | Familiar のタスク検索・割り当てコア。root 側は `WorldMap`/SpatialGrid orchestration と construction site bridge のみ保持 |
 | `familiar_ai/decide/auto_gather_for_blueprint.rs` | `Commands` / pathfinding / Blueprint 直接 query に依存 |
 | `familiar_ai/decide/encouragement.rs` | `Time` / concrete `SpatialGrid` / request message 出力の adapter を担当 |
 | `familiar_ai/decide/state_decision.rs` | concrete `SpatialGrid` と request message 出力の adapter を担当 |
