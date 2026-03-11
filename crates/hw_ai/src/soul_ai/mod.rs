@@ -35,6 +35,7 @@ impl Plugin for SoulAiCorePlugin {
                     execute::designation_apply::apply_designation_requests_system,
                     execute::gathering_apply::gathering_apply_system,
                     execute::gathering_spawn::gathering_spawn_logic_system,
+                    execute::task_assignment_apply::apply_task_assignment_requests_system,
                 )
                     .in_set(SoulAiSystemSet::Execute),
             )

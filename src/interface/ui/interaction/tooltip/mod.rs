@@ -42,7 +42,7 @@ impl TooltipContentRenderer for TooltipRenderer {
             commands,
             tooltip_root,
             q_children,
-            game_assets,
+            game_assets as &dyn hw_ui::setup::UiAssets,
             theme,
             template,
             model,

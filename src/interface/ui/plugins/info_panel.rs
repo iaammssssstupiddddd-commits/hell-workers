@@ -42,7 +42,7 @@ fn register_ui_info_panel_plugin_systems(app: &mut App) {
         (
             (
                 update_entity_inspection_view_model_system,
-                info_panel_system
+                info_panel_system::<crate::assets::GameAssets>
                     .run_if(
                         |selected: Res<crate::interface::selection::SelectedEntity>,
                          pin_state: Res<InfoPanelPinState>| {

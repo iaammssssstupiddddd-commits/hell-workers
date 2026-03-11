@@ -5,39 +5,7 @@ use crate::interface::ui::theme::UiTheme;
 use crate::relationships::CommandedBy;
 use bevy::prelude::*;
 use bevy::ui::FocusPolicy;
-
-const DRAG_HOLD_SECONDS: f32 = 0.2;
-
-#[derive(Resource)]
-pub struct DragState {
-    pending_soul: Option<Entity>,
-    hold_timer: Timer,
-    active_soul: Option<Entity>,
-    drop_target: Option<Entity>,
-    ghost_entity: Option<Entity>,
-}
-
-impl Default for DragState {
-    fn default() -> Self {
-        Self {
-            pending_soul: None,
-            hold_timer: Timer::from_seconds(DRAG_HOLD_SECONDS, TimerMode::Once),
-            active_soul: None,
-            drop_target: None,
-            ghost_entity: None,
-        }
-    }
-}
-
-impl DragState {
-    pub fn is_dragging(&self) -> bool {
-        self.active_soul.is_some()
-    }
-
-    pub fn drop_target(&self) -> Option<Entity> {
-        self.drop_target
-    }
-}
+pub use hw_ui::list::DragState;
 
 #[derive(Component)]
 struct DragGhost;
@@ -61,8 +29,7 @@ pub fn entity_list_drag_drop_system(
         && let Some(soul_entity) = hovered_soul_row(&q_soul_rows)
     {
         drag_state.pending_soul = Some(soul_entity);
-        drag_state.hold_timer = Timer::from_seconds(DRAG_HOLD_SECONDS, TimerMode::Once);
-        drag_state.hold_timer.reset();
+        drag_state.reset_hold_timer();
     }
 
     if drag_state.pending_soul.is_some() && !drag_state.is_dragging() {
@@ -194,6 +161,5 @@ fn reset_drag_state(commands: &mut Commands, drag_state: &mut DragState) {
     drag_state.pending_soul = None;
     drag_state.active_soul = None;
     drag_state.drop_target = None;
-    drag_state.hold_timer = Timer::from_seconds(DRAG_HOLD_SECONDS, TimerMode::Once);
-    drag_state.hold_timer.reset();
+    drag_state.reset_hold_timer();
 }

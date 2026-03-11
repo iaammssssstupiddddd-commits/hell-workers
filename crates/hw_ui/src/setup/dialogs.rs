@@ -1,6 +1,6 @@
 //! ダイアログ UI
 
-use super::UiSetupAssets;
+use super::UiAssets;
 use crate::components::{
     MenuAction, MenuButton, OperationDialog, UiInputBlocker, UiNodeRegistry, UiSlot,
 };
@@ -11,7 +11,7 @@ use bevy::ui::RelativeCursorPosition;
 /// ダイアログをスポーン
 pub fn spawn_dialogs(
     commands: &mut Commands,
-    game_assets: &dyn UiSetupAssets,
+    game_assets: &dyn UiAssets,
     theme: &UiTheme,
     parent_entity: Entity,
     ui_nodes: &mut UiNodeRegistry,
@@ -21,7 +21,7 @@ pub fn spawn_dialogs(
 
 fn spawn_operation_dialog(
     commands: &mut Commands,
-    game_assets: &dyn UiSetupAssets,
+    game_assets: &dyn UiAssets,
     theme: &UiTheme,
     parent_entity: Entity,
     ui_nodes: &mut UiNodeRegistry,

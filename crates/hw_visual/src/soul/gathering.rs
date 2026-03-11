@@ -1,0 +1,120 @@
+use bevy::prelude::*;
+
+use hw_core::constants::*;
+use hw_core::gathering::{GatheringSpot, GatheringVisuals, calculate_aura_size};
+use hw_core::relationships::{GatheringParticipants, ParticipatingIn};
+use hw_core::soul::DamnedSoul;
+use hw_ui::camera::MainCamera;
+use hw_ui::selection::HoveredEntity;
+
+/// 集会オーラのサイズと位置の更新システム
+pub fn gathering_visual_update_system(
+    q_spots: Query<
+        (
+            Entity,
+            &GatheringSpot,
+            &GatheringParticipants,
+            &GatheringVisuals,
+        ),
+        Changed<GatheringSpot>,
+    >,
+    mut q_visuals: Query<
+        (&mut Sprite, &mut Transform, &mut Visibility),
+        (Without<DamnedSoul>, Without<ParticipatingIn>),
+    >,
+) {
+    for (_spot_entity, spot, participants, visuals) in q_spots.iter() {
+        let target_size = calculate_aura_size(participants.len());
+        let target_pos = spot.center.extend(Z_AURA);
+        let target_obj_pos = spot.center.extend(Z_ITEM);
+
+        if let Ok((mut sprite, mut transform, mut visibility)) =
+            q_visuals.get_mut(visuals.aura_entity)
+        {
+            let target_size_vec = Some(Vec2::splat(target_size));
+            if sprite.custom_size != target_size_vec {
+                sprite.custom_size = target_size_vec;
+            }
+            if transform.translation != target_pos {
+                transform.translation = target_pos;
+            }
+            if *visibility != Visibility::Inherited {
+                *visibility = Visibility::Inherited;
+            }
+        }
+
+        if let Some(obj_entity) = visuals.object_entity {
+            if let Ok((_, mut transform, mut visibility)) = q_visuals.get_mut(obj_entity) {
+                if transform.translation != target_obj_pos {
+                    transform.translation = target_obj_pos;
+                }
+
+                let target_visibility = if participants.len() < 2 {
+                    Visibility::Hidden
+                } else {
+                    Visibility::Inherited
+                };
+
+                if *visibility != target_visibility {
+                    *visibility = target_visibility;
+                }
+            }
+        }
+    }
+}
+
+/// 集会スポットホバー時に参加者との間に紫の線を引くデバッグシステム
+pub fn gathering_debug_visualization_system(
+    q_window: Query<&Window, With<bevy::window::PrimaryWindow>>,
+    q_camera: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
+    hovered_entity: Res<HoveredEntity>,
+    q_spots: Query<(Entity, &GatheringSpot, &GatheringParticipants)>,
+    q_participants: Query<&GlobalTransform, With<DamnedSoul>>,
+    q_soul_participating: Query<&ParticipatingIn, With<DamnedSoul>>,
+    mut gizmos: Gizmos,
+) {
+    let Ok(window) = q_window.single() else {
+        return;
+    };
+    let Ok((camera, camera_transform)) = q_camera.single() else {
+        return;
+    };
+
+    let cursor_world_pos = window.cursor_position().and_then(|cursor_pos| {
+        camera
+            .viewport_to_world_2d(camera_transform, cursor_pos)
+            .ok()
+    });
+
+    let mut target_spots = std::collections::HashSet::new();
+
+    if let Some(world_pos) = cursor_world_pos {
+        for (entity, spot, _) in q_spots.iter() {
+            if spot.center.distance(world_pos) < TILE_SIZE {
+                target_spots.insert(entity);
+            }
+        }
+    }
+
+    if let Some(hovered) = hovered_entity.0 {
+        if let Ok(participating_in) = q_soul_participating.get(hovered) {
+            target_spots.insert(participating_in.0);
+        }
+    }
+
+    for spot_entity in target_spots {
+        if let Ok((_, spot, participants)) = q_spots.get(spot_entity) {
+            let center = spot.center;
+
+            for &soul_entity in participants.iter() {
+                if let Ok(soul_transform) = q_participants.get(soul_entity) {
+                    let soul_pos = soul_transform.translation().truncate();
+                    gizmos.line_2d(center, soul_pos, Color::srgba(0.8, 0.4, 1.0, 0.8));
+                    gizmos.circle_2d(soul_pos, 4.0, Color::srgba(0.8, 0.4, 1.0, 0.6));
+                }
+            }
+
+            gizmos.circle_2d(center, 16.0, Color::srgba(0.8, 0.4, 1.0, 1.0));
+        }
+    }
+}

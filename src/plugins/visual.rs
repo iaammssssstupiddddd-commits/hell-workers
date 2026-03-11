@@ -10,11 +10,6 @@ use crate::systems::command::{
 use crate::systems::jobs::building_completion_system;
 use crate::systems::logistics::resource_count_display_system;
 use crate::systems::room::sync_room_overlay_tiles_system;
-use crate::systems::soul_ai::visual::gathering::{
-    gathering_debug_visualization_system, gathering_visual_update_system,
-};
-use crate::systems::soul_ai::visual::idle::idle_visual_system;
-use crate::systems::soul_ai::visual::vitals::familiar_hover_visualization_system;
 use crate::systems::visual::floor_construction::{
     manage_floor_curing_progress_bars_system, sync_floor_tile_bone_visuals_system,
     update_floor_curing_progress_bars_system, update_floor_tile_visuals_system,
@@ -97,12 +92,8 @@ impl Plugin for VisualPlugin {
         app.add_systems(
             Update,
             (
-                idle_visual_system,
                 familiar_animation_system,
                 update_familiar_range_indicator,
-                familiar_hover_visualization_system,
-                gathering_visual_update_system,
-                gathering_debug_visualization_system,
             )
                 .chain()
                 .in_set(GameSystemSet::Visual),

@@ -1,6 +1,6 @@
 //! 左パネル UI (Entity List / Task List のタブ切り替え)
 
-use super::UiSetupAssets;
+use super::UiAssets;
 use crate::components::*;
 use crate::theme::UiTheme;
 use bevy::prelude::*;
@@ -8,7 +8,7 @@ use bevy::ui::{BackgroundGradient, ColorStop, LinearGradient, RelativeCursorPosi
 
 pub fn spawn_entity_list_panel(
     commands: &mut Commands,
-    game_assets: &dyn UiSetupAssets,
+    game_assets: &dyn UiAssets,
     theme: &UiTheme,
     parent_entity: Entity,
 ) {
@@ -223,7 +223,7 @@ pub fn spawn_entity_list_panel(
 
 fn spawn_left_panel_tab_bar(
     parent: &mut ChildSpawnerCommands,
-    game_assets: &dyn UiSetupAssets,
+    game_assets: &dyn UiAssets,
     theme: &UiTheme,
 ) {
     parent
@@ -254,7 +254,7 @@ fn spawn_left_panel_tab_bar(
 
 fn spawn_left_panel_tab_button(
     parent: &mut ChildSpawnerCommands,
-    game_assets: &dyn UiSetupAssets,
+    game_assets: &dyn UiAssets,
     theme: &UiTheme,
     label: &str,
     mode: LeftPanelMode,

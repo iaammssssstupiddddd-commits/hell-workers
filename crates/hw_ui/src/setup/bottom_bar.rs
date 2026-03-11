@@ -1,6 +1,6 @@
 //! ボトムバー UI
 
-use super::UiSetupAssets;
+use super::UiAssets;
 use crate::components::{
     MenuAction, MenuButton, UiInputBlocker, UiNodeRegistry, UiSlot, UiTooltip,
 };
@@ -12,7 +12,7 @@ use bevy::ui::{BackgroundGradient, ColorStop, LinearGradient};
 /// ボトムバーをスポーン
 pub fn spawn_bottom_bar(
     commands: &mut Commands,
-    game_assets: &dyn UiSetupAssets,
+    game_assets: &dyn UiAssets,
     theme: &UiTheme,
     parent_entity: Entity,
     ui_nodes: &mut UiNodeRegistry,

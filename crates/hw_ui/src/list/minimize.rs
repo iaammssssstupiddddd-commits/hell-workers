@@ -1,8 +1,8 @@
 use super::resize::{ENTITY_LIST_DEFAULT_HEIGHT, ENTITY_LIST_MIN_HEIGHT};
-use crate::interface::ui::components::{
+use crate::components::{
     EntityListBody, EntityListMinimizeButton, EntityListMinimizeButtonLabel, EntityListPanel,
 };
-use crate::interface::ui::theme::UiTheme;
+use crate::theme::UiTheme;
 use bevy::prelude::*;
 
 #[derive(Resource)]
