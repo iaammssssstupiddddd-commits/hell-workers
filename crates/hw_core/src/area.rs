@@ -152,7 +152,8 @@ pub fn wall_line_area(start_pos: Vec2, end_pos: Vec2) -> TaskArea {
     }
 }
 
-/// 中心座標とサイズから `TaskArea` を生成する。
+/// command/area_selection 内部で使う中心座標ベースの `TaskArea` 生成 helper。
+#[doc(hidden)]
 pub fn area_from_center_and_size(center: Vec2, size: Vec2) -> TaskArea {
     let half = size.abs() * 0.5;
     TaskArea::from_points(center - half, center + half)
