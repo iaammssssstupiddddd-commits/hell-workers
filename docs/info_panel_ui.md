@@ -60,11 +60,14 @@
 
 ## 関連ファイル（最終境界反映）
 
+### `hw_ui` 側（実装本体）
+- `crates/hw_ui/src/panels/info_panel/` - `InfoPanelState`, `InfoPanelPinState`, `spawn_info_panel_ui`, `info_panel_system`
+- `crates/hw_ui/src/panels/menu.rs` - `menu_visibility_system`
+
+### root shell（adapter）
+- `src/interface/ui/panels/info_panel/mod.rs` - `hw_ui::panels::info_panel` の re-export
 - `src/interface/ui/plugins/info_panel.rs` - ViewModel producer / consumer の順序固定と plugin wiring
-- `crates/hw_ui/src/panels/menu.rs` - メニューステートの表示制御（menu_visibility）
-- `src/interface/ui/panels/info_panel/`（`include!` 系の wrapper） - root からの呼び出し窓口
-- `src/interface/ui/panels_legacy/info_panel/update.rs` - 選択/ピン留めベースの更新ロジック
-- `src/interface/ui/presentation/` - `EntityInspectionModel` / `ViewModel` 構築
+- `src/interface/ui/presentation/` - `EntityInspectionModel` / `ViewModel` 構築（ゲームエンティティクエリ）
 - `src/interface/ui/panels/context_menu.rs` - `Inspect (Pin)` メニュー
 - `src/interface/ui/interaction/menu_actions.rs` - `InspectEntity` / `ClearInspectPin`
 - `src/interface/ui/components.rs` - `UiSlot` / `InfoPanelPinState` / 再エクスポート

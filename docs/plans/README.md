@@ -20,7 +20,7 @@
 | Document | Status | Notes |
 |---|---|---|
 | [hw-ui-crate-extraction.md](hw-ui-crate-extraction.md) | Draft (rev2) | src/interface/ui/の計画。 |
-| [soul-ai-root-thinning-plan-2026-03-11.md](soul-ai-root-thinning-plan-2026-03-11.md) | Draft | src/systems/soul_aiの計画。 |
+| [soul-ai-root-thinning-plan-2026-03-11.md](soul-ai-root-thinning-plan-2026-03-11.md) | Completed | src/systems/soul_aiの root thinning 計画。M1-M5 完了。 |
 
 ## アーカイブ計画書一覧 (`docs/plans/archive`)
 
@@ -104,4 +104,3 @@
 | [archive/workspace-construction-phase-extraction.md](archive/workspace-construction-phase-extraction.md) | アーカイブ | Floor/Wall 建設で使うフェーズ・状態型がの計画。 |
 | [archive/zone-placement-refactor-plan-2026-03-05.md](archive/zone-placement-refactor-plan-2026-03-05.md) | アーカイブ | zone_placement.rsの計画。 |
 | [archive/zone-removal-preview-diff-plan-2026-03-01.md](archive/zone-removal-preview-diff-plan-2026-03-01.md) | アーカイブ | Zone removal preview の全件更新を差分更新へ置換する計画。 |
-

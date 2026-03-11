@@ -82,13 +82,22 @@
 ## 主な関連ファイル（最終境界反映）
 
 ### root shell（adapter）
-- `src/interface/ui/list/mod.rs` - イベント受付、interaction/system 登録、`EntityListDirty` の橋渡し
-- `src/interface/ui/list/change_detection.rs` - 変更検知トリガ（root に残置）
-- `src/interface/ui/list_legacy/` - 互換のため残っている旧実装（今後整理対象）
+- `src/interface/ui/list/mod.rs` - イベント受付、interaction/system 登録
+- `src/interface/ui/list/change_detection.rs` - 変更検知トリガ（DamnedSoul/Familiar Changed 監視）
+- `src/interface/ui/list/view_model.rs` - ゲームエンティティ → ビューモデル変換
+- `src/interface/ui/list/spawn/`, `sync/` - ゲームエンティティ → UI ノード同期
+- `src/interface/ui/list/drag_drop.rs` - ドラッグ&ドロップシステム（`DragState` 型は hw_ui）
+- `src/interface/ui/list/interaction.rs`, `interaction/navigation.rs` - FamiliarOperation / TaskContext 依存
 
 ### `hw_ui` 側（分離済み）
 - `crates/hw_ui/src/list/models.rs` - ビューモデル型
-- `crates/hw_ui/src/list/dirty.rs` - dirty リソース定義
+- `crates/hw_ui/src/list/dirty.rs` - `EntityListDirty` リソース定義
+- `crates/hw_ui/src/list/drag_state.rs` - `DragState` 型
+- `crates/hw_ui/src/list/minimize.rs` - `EntityListMinimizeState` + 最小化トグルシステム
+- `crates/hw_ui/src/list/resize.rs` - `EntityListResizeState` + リサイズシステム
+- `crates/hw_ui/src/list/selection_focus.rs` - `focus_camera_on_entity`, `select_entity_and_focus_camera`
+- `crates/hw_ui/src/list/tree_ops.rs` - `clear_children`
+- `crates/hw_ui/src/list/visual.rs` - `apply_row_highlight`, `entity_list_visual_feedback_system`
 - `crates/hw_ui/src/list/mod.rs` - `hw_ui` 対外エクスポート
 
 ### 境界横断

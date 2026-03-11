@@ -71,6 +71,57 @@ hw_visual (hw_core + hw_jobs + hw_logistics + hw_spatial + hw_world + hw_ui)
 - `hw_ui` は UI の構築・更新ロジックを集約し、`bevy_app` は shell/adapter とゲーム状態更新ハンドラを保持する。
 - `bevy_app` → `hw_ui` は依存方向を維持し、`hw_ui` から `bevy_app` へ依存しない。
 - `UiShell` 的な役割（Selection やカメラ・モード遷移）は `bevy_app` 側で管理し、`interface` では API 構造変更に耐える薄い再エクスポート層を残す。
+
+### `hw_ui`
+
+役割:
+
+- UI ノード生成・更新ロジックおよびウィジェット/レイアウトの本体を集約
+- `UiAssets` トレイトを通じてアセット（フォント・アイコン）を抽象化
+- ゲームエンティティ（DamnedSoul, Familiar 等）への直接依存を持たない
+
+代表例（主要モジュール）:
+
+- `setup/` — `UiAssets` trait, `setup_ui` fn（UI ツリー構築。bottom_bar / submenus / panels / entity_list / time_control / dialogs）
+- `components.rs` — UiNodeRegistry, UiSlot, UiMountSlot, MenuState, MenuButton, FamiliarListItem, SoulListItem 等 50+ 型
+- `theme.rs` — `UiTheme` Resource（カラーパレット・フォントサイズ・スペーシング・サイズ定数）
+- `intents.rs` — `UiIntent` enum（プレイヤー UI 操作メッセージ）
+- `interaction/` — tooltip/dialog/hover_action/status_display システム群（FPS, speed, dream pool, area_edit_preview 等）
+- `list/` — EntityListDirty, EntityListViewModel, EntityListMinimizeState, EntityListResizeState, DragState, selection_focus, tree_ops, visual（apply_row_highlight, entity_list_visual_feedback_system）
+- `panels/tooltip_builder/` — text_wrap, widgets (spawn_progress_bar 等), templates（Soul/Building/Resource/UiButton/Generic ツールチップ）
+- `panels/info_panel/` — InfoPanelPinState, InfoPanelState, spawn_info_panel_ui, info_panel_system
+- `panels/task_list/` — TaskEntry, TaskListDirty, work_type_icon, render（rebuild_task_list_ui）, interaction システム群
+- `panels/menu.rs` — menu_visibility_system
+- `models/inspection/` — EntityInspectionModel, EntityInspectionViewModel, SoulInspectionFields
+- `selection/` — SelectedEntity, HoveredEntity, SelectionIndicator, placement validation API
+- `camera.rs` — MainCamera マーカー
+- `plugins/` — UiCorePlugin / UiEntityListPlugin / UiFoundationPlugin / UiInfoPanelPlugin / UiTooltipPlugin（fn ポインタ受け付けシェル）
+
+ここに置かないもの:
+
+- ゲームエンティティ（DamnedSoul, Familiar, Blueprint, Door 等）の ECS Query
+- `BuildContext`, `ZoneContext`, `TaskContext`（app_contexts）への依存
+- `GameAssets` の直接参照（`UiAssets` トレイト経由に抽象化する）
+- `Res<GameAssets>` をシステム引数に取るシステム関数（Bevy の `Res<T>` はトレイトオブジェクト不可）
+- PlayMode 遷移ロジック（`NextState<PlayMode>`）
+- WorldMap / WorldMapWrite への依存
+
+root 側の `bevy_app` 残留（adapter 責務）:
+
+| ファイル/モジュール | 残留理由 |
+|:---|:---|
+| `interaction/intent_handler.rs` | BuildContext, ZoneContext, FamiliarOperation 等 |
+| `interaction/mode.rs` | PlayMode 遷移、TaskMode、BuildingType |
+| `list/change_detection.rs` | DamnedSoul, Familiar, AssignedTask の Changed 監視 |
+| `list/view_model.rs` | Familiar, DamnedSoul, FamiliarAiState からビューモデル構築 |
+| `list/spawn/`, `list/sync/` | ゲームエンティティ → UI ノード同期 |
+| `list/drag_drop.rs` | SquadManagementRequest, SoulIdentity（DragState 型は hw_ui） |
+| `list/interaction.rs`, `list/interaction/navigation.rs` | FamiliarOperation, FamiliarAiState, TaskContext |
+| `panels/context_menu.rs` | Familiar, DamnedSoul, Building, Door の分類 |
+| `panels/task_list/view_model.rs`, `presenter.rs`, `dirty.rs`（detect systems）| Designation, Blueprint, WorkType 等のゲームクエリ |
+| `panels/task_list/update.rs` | `Res<GameAssets>` をシステム引数に取るため hw_ui 移動不可 |
+| `presentation/` | EntityInspectionQuery（ゲームエンティティ 10+ 型のクエリ集約）|
+| `vignette.rs` | TaskContext (DreamPlanting モード判定) |
 - `hw_visual` はビジュアルシステム全体を集約し、`GameAssets` には依存しない。アセットハンドルは `handles.rs` の 7 つの Resource（`WallVisualHandles` 等）で保持し、root の `init_visual_handles` startup システムが `GameAssets` から注入する。
 - `bevy_app` → `hw_visual` は依存方向を維持し、`hw_visual` から `bevy_app` へ依存しない。
 
@@ -141,6 +192,7 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 - `soul_ai::execute::designation_apply` — Designation 要求適用
 - `soul_ai::execute::gathering_apply` — 集会管理要求適用（Merge / Dissolve / Recruit / Leave）
 - `soul_ai::execute::gathering_spawn` — 集会発生判定と `GatheringSpawnRequest` 発行
+- `soul_ai::execute::task_assignment_apply` — `TaskAssignmentRequest` 適用。system 登録責務も `hw_ai::SoulAiCorePlugin` が持つ
 - `soul_ai::decide::idle_behavior::idle_behavior_decision_system` — IdleBehavior 決定本体
 - `soul_ai::decide::idle_behavior::transitions` — IdleBehavior 遷移判定ヘルパー（次の行動選択・持続時間計算）
 - `soul_ai::decide::idle_behavior::task_override` — タスク割り当て時の集会・休憩解除ヘルパー
@@ -173,6 +225,13 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 - `Commands` で複雑な Entity 生成を行うもの
 - pathfinding / blueprint entity query を伴う auto-gather orchestration
 - `unassign_task`（`helpers/work.rs`）は `WheelbarrowMovement` / `Visibility` / `Transform` など root 依存が強いため core 化対象外
+- `task_execution/context/access.rs` — `FloorConstructionSite` / `WallConstructionSite` が root-only のため、これらが `hw_jobs` に移設されるまで root 残留（後述 **task_execution 全面移設 blocker** 参照）
+
+移設済み system の登録ルール:
+
+- 実装本体を `hw_ai` / `hw_visual` / `hw_jobs` へ移した system は、原則として所有 crate の Plugin が唯一の登録者になる。
+- root 側の `pub use` / thin shell は互換パス維持と ordering 参照のために残してよいが、同じ system function を再登録してはいけない。
+- root shell は `.after(...)` / `.before(...)` で移設済み system に順序制約を付けるだけにとどめる。二重登録すると Bevy 0.18 の schedule 初期化で `SystemTypeSet` が曖昧になり panic する。
 
 ## 3. 各 crate の責務
 
@@ -311,9 +370,45 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 ここに置かないもの:
 
 - `FloorConstructionSite` / `WallConstructionSite`（`TaskArea` 依存のためまだ root に残留）
+  - これらが `hw_jobs` に移設されるまで、`task_execution/context/access.rs` も root に残る（**task_execution 全面移設 blocker**）
+  - 移設には `TaskArea` (root `app_contexts`) との結合を解消する必要がある
 - floor / wall construction system
 - building completion shell
 - door system
+
+## 3.x. task_execution 全面移設 blocker
+
+`src/systems/soul_ai/execute/task_execution/` を `hw_ai` に完全移設するには下記の条件が揃う必要がある。
+
+### blocker の実体
+
+`task_execution/context/access.rs` が `StorageAccess` / `MutStorageAccess` として以下の **root-only 型** の Query を保持している：
+
+```rust
+// StorageAccess
+floor_sites: Query<(&FloorConstructionSite, &TaskWorkers)>
+wall_sites:  Query<(&WallConstructionSite, &TaskWorkers)>
+
+// MutStorageAccess
+floor_sites: Query<(&mut FloorConstructionSite, &TaskWorkers)>
+wall_sites:  Query<(&mut WallConstructionSite, &TaskWorkers)>
+```
+
+| 型 | 定義場所 | 移設状態 |
+|:--|:--|:--|
+| `FloorConstructionSite` | `src/systems/jobs/floor_construction/components.rs` | root-only（`TaskArea` 依存のため未移設） |
+| `WallConstructionSite` | `src/systems/jobs/wall_construction/components.rs` | root-only（`TaskArea` 依存のため未移設） |
+
+### 次計画の前提条件
+
+`task_execution` を `hw_ai` に全面移設するには以下をすべて満たす必要がある：
+
+1. `FloorConstructionSite` / `WallConstructionSite` から `TaskArea`（root の `app_contexts` 依存）への依存を解消する
+2. 両型を `hw_jobs` に移設する
+3. `context/access.rs` の import を `crate::` → `hw_jobs::` に書き換えて `hw_ai` に移動する
+4. `task_execution_system` 本体（`handler.rs` / `context/mod.rs` 他）を `hw_ai` に移設する
+
+この作業が完了するまで、`src/systems/soul_ai/execute/task_execution/` は root に残置される。
 
 ## 4. どこに置くかの判断基準
 

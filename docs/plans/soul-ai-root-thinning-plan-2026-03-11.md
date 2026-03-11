@@ -5,10 +5,10 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `soul-ai-root-thinning-plan-2026-03-11` |
-| ステータス | `Draft` |
+| ステータス | `Completed` |
 | 作成日 | `2026-03-11` |
-| 最終更新日 | `2026-03-10` |
-| 作成者 | `AI (Copilot)` |
+| 最終更新日 | `2026-03-11` |
+| 作成者 | `AI (Copilot), AI (Codex)` |
 | 関連提案 | `N/A` |
 | 関連Issue/PR | `N/A` |
 | 先行計画 | `docs/plans/archive/soul-ai-root-thinning-plan-2026-03-09.md` |
@@ -172,10 +172,10 @@ gathering_debug_visualization_system    (chain の途中)
 ```
 
 **完了条件:**
-- [ ] root `visual/idle.rs`, `visual/gathering.rs`, `visual/vitals.rs` が削除または thin re-export になっている
-- [ ] `src/plugins/visual.rs` から上記 4 system の登録行が消えている
-- [ ] `crates/hw_visual/src/lib.rs` の Plugin build で上記 4 system が登録されている
-- [ ] `CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo check` が成功する
+- [x] root `visual/idle.rs`, `visual/gathering.rs`, `visual/vitals.rs` が削除または thin re-export になっている
+- [x] `src/plugins/visual.rs` から上記 4 system の登録行が消えている
+- [x] `crates/hw_visual/src/lib.rs` の Plugin build で上記 4 system が登録されている
+- [x] `cargo check --workspace` が成功する
 
 ---
 
@@ -216,9 +216,10 @@ gathering_debug_visualization_system    (chain の途中)
 - `src/plugins/logic.rs` (または該当 plugin) → root 側の登録行を削除
 
 **完了条件:**
-- [ ] root `task_execution/mod.rs` に `apply_task_assignment_requests_system` 本体が残っていない
-- [ ] `hw_ai::SoulAiCorePlugin` の Execute フェーズで登録されている
-- [ ] `CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo check` が成功する
+- [x] root `task_execution/mod.rs` に `apply_task_assignment_requests_system` 本体が残っていない
+- [x] `hw_ai::SoulAiCorePlugin` の Execute フェーズで登録されている
+- [x] root 側の二重登録が削除され、ordering 参照のみが残っている
+- [x] `cargo check --workspace` が成功する
 
 ---
 
@@ -253,9 +254,9 @@ gathering_debug_visualization_system    (chain の途中)
 - `src/systems/soul_ai/helpers/work.rs` → import パス変更
 
 **完了条件:**
-- [ ] `collect_active_reservation_ops` / `collect_release_reservation_ops` が root `soul_ai` 配下にない
-- [ ] `resource_sync.rs` と `helpers/work.rs` が同じ新パスを参照している
-- [ ] `CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo check` が成功する
+- [x] `collect_active_reservation_ops` / `collect_release_reservation_ops` が root `soul_ai` 配下にない
+- [x] `resource_sync.rs` と `helpers/work.rs` が同じ新パスを参照している
+- [x] `cargo check --workspace` が成功する
 
 ---
 
@@ -303,10 +304,10 @@ After:  Res<Time>, Commands, ResMut<DriftingDecisionTimer>, Res<PopulationManage
 - `src/plugins/...` (root adapter) → `on_drifting_escape_started` / `on_soul_escaped` observer/system を登録
 
 **完了条件:**
-- [ ] `drifting_decision_system` が `ResMut<PopulationManager>` を持たない（`Res<>` に格下げ）
-- [ ] `despawn_at_edge_system` が `ResMut<PopulationManager>` を持たない（event 発行に変更）
-- [ ] `PopulationManager` への書き込みは root adapter のみ
-- [ ] `CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo check` が成功する
+- [x] `drifting_decision_system` が `ResMut<PopulationManager>` を持たない（`Res<>` に格下げ）
+- [x] `despawn_at_edge_system` が `ResMut<PopulationManager>` を持たない（event 発行に変更）
+- [x] `PopulationManager` への書き込みは root adapter のみ
+- [x] `cargo check --workspace` が成功する
 
 ---
 
@@ -340,8 +341,8 @@ wall_sites:  Query<(&mut WallConstructionSite, &TaskWorkers)>
 - `docs/soul_ai.md` → `task_execution` 深部の移設不能理由と次計画の前提条件を記載
 
 **完了条件:**
-- [ ] `task_execution` を今すぐ移せない理由が docs に明文化されている
-- [ ] 次計画（construction site 型 crate 化）の前提条件が明確になっている
+- [x] `task_execution` を今すぐ移せない理由が docs に明文化されている
+- [x] 次計画（construction site 型 crate 化）の前提条件が明確になっている
 
 ---
 
@@ -389,17 +390,19 @@ CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo check
 
 - 進捗: `0%`
 - 完了済みマイルストーン: なし
-- 未着手/進行中:
-  - `visual/*` は hw_visual に移設可能（true root-only 依存なし）
-  - assignment apply 層は hw_ai に移設可能（全依存型が hw_* 実体）
-  - `lifecycle.rs` は hw_jobs または hw_ai に移設可能（純粋関数）
+- 完了済み:
+  - `visual/*` は `hw_visual` へ移設済み
+  - assignment apply 層は `hw_ai` へ移設済み
+  - `lifecycle.rs` は `hw_jobs` へ移設済み
+  - drifting の `PopulationManager` 書き込みは root adapter に分離済み
+- 未完了（別計画へ委譲）:
   - `task_execution` 深部は `FloorConstructionSite` / `WallConstructionSite` が blocker
 
 ### 次のAIが最初にやること
 
-1. **M1**: `src/systems/soul_ai/visual/` の 3 ファイルを `crates/hw_visual/src/soul/` 以下に移動し、import パスを「セクション7のM1 型パス変換表」に従って書き換える。
-2. **M2**: `src/systems/soul_ai/execute/task_execution/mod.rs` から `apply_task_assignment_requests_system` とその直下 helper 群を `crates/hw_ai/src/soul_ai/execute/task_assignment_apply.rs` に移動し、`SoulAiCorePlugin::build` に登録する。
-3. **M3**: `ResourceReservationOp` の実体 crate を確認した上で `lifecycle.rs` を `hw_jobs` または `hw_ai` へ移動し、2 つの呼び出し元（`resource_sync.rs` と `helpers/work.rs`）のパスを更新する。
+1. `FloorConstructionSite` / `WallConstructionSite` の `TaskArea` 依存を外せるかを別計画で整理する。
+2. 両型を `hw_jobs` へ移設できる条件が揃ったら、`task_execution/context/access.rs` の import と `TaskQueries` の所有先を再検討する。
+3. `task_execution` 深部を `hw_ai` に移す場合でも、`unassign_task` は root shell のまま残すか別途依存分離してから扱う。
 
 ### ブロッカー/注意点
 
@@ -427,13 +430,15 @@ CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo check
 
 ### Definition of Done
 
-- [ ] M1–M4 が完了している（M5 はドキュメント化のみ）
-- [ ] 境界ドキュメント（`docs/cargo_workspace.md`, `docs/soul_ai.md`）が現状に同期している
-- [ ] `CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo check` が成功
+- [x] M1–M4 が完了している（M5 はドキュメント化のみ）
+- [x] 境界ドキュメント（`docs/cargo_workspace.md`, `docs/soul_ai.md`）が現状に同期している
+- [x] crate README と root README が現状に同期している
+- [x] `cargo check --workspace` が成功
 
 ## 12. 更新履歴
 
 | 日付 | 変更者 | 内容 |
 | --- | --- | --- |
+| `2026-03-11` | `AI (Codex)` | M1-M5 完了を反映。ステータスを Completed へ更新し、Definition of Done・各マイルストーン完了条件・README/仕様書同期状況を更新 |
 | `2026-03-11` | `AI (Codex)` | 初版作成 |
 | `2026-03-10` | `AI (Copilot)` | コード実態調査に基づきブラッシュアップ。型所有者マップ・パス変換表・具体的変更ファイルリスト・event化の設計案を追加 |

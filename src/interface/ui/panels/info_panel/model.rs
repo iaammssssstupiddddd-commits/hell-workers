@@ -1,1 +1,2 @@
-include!("../../panels_legacy/info_panel/model.rs");
+// model is internal to hw_ui::panels::info_panel; no public re-export needed
+

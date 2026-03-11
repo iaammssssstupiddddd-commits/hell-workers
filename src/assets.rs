@@ -33,6 +33,26 @@ impl UiAssets for GameAssets {
     fn icon_female(&self) -> &Handle<Image> {
         &self.icon_female
     }
+
+    fn icon_axe(&self) -> &Handle<Image> {
+        &self.icon_axe
+    }
+
+    fn icon_pick(&self) -> &Handle<Image> {
+        &self.icon_pick
+    }
+
+    fn icon_hammer(&self) -> &Handle<Image> {
+        &self.icon_hammer
+    }
+
+    fn icon_haul(&self) -> &Handle<Image> {
+        &self.icon_haul
+    }
+
+    fn icon_bone_small(&self) -> &Handle<Image> {
+        &self.icon_bone_small
+    }
 }
 
 #[derive(Resource)]

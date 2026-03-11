@@ -89,8 +89,17 @@
 
 ## 関連ファイル（最終境界反映）
 
-- `src/interface/ui/panels/task_list/mod.rs` - root wrapper（legacy 実装を利用）
+### `hw_ui` 側（実装本体）
+- `crates/hw_ui/src/panels/task_list/types.rs` - `TaskEntry`, `TaskListDirty`
+- `crates/hw_ui/src/panels/task_list/render.rs` - `rebuild_task_list_ui`
+- `crates/hw_ui/src/panels/task_list/interaction.rs` - `task_list_click_system`, `task_list_visual_feedback_system`, `left_panel_tab_system`, `left_panel_visibility_system`
+- `crates/hw_ui/src/panels/task_list/work_type_icon.rs` - WorkType → アイコン/カラー/ラベル変換
+- `crates/hw_ui/src/panels/menu.rs` - `menu_visibility_system`
+
+### root shell（adapter）
+- `src/interface/ui/panels/task_list/mod.rs` - hw_ui re-export + ゲーム固有モジュール統合
+- `src/interface/ui/panels/task_list/view_model.rs` - スナップショット生成と summary 集計（ゲームエンティティクエリ）
+- `src/interface/ui/panels/task_list/dirty.rs` - dirty 検知システム（Designation 等の Changed 監視）
+- `src/interface/ui/panels/task_list/update.rs` - dirty gate 付きオーケストレーション（`Res<GameAssets>` 依存のため root 残留）
 - `src/interface/ui/plugins/info_panel.rs` - task list の dirty 検知 / state 更新 / 左パネル system 登録
 - `src/interface/ui/interaction/status_display/mode_panel.rs` - task summary の cached 描画
-- `src/interface/ui/panels_legacy/task_list/` - `interaction`, `presenter`, `render`, `update` 実装の移行基盤
-- `crates/hw_ui/src/panels/menu.rs` - メニュー可視性・サブメニュー側の UI状態制御

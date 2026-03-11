@@ -5,56 +5,7 @@ use crate::systems::logistics::ResourceItem;
 use crate::systems::logistics::transport_request::TransportRequest;
 use bevy::prelude::*;
 
-#[derive(Resource, Default)]
-pub struct TaskListDirty {
-    state_dirty: bool,
-    list_dirty: bool,
-    summary_dirty: bool,
-}
-
-impl TaskListDirty {
-    pub fn mark_all(&mut self) {
-        self.state_dirty = true;
-        self.list_dirty = true;
-        self.summary_dirty = true;
-    }
-
-    pub fn mark_state(&mut self) {
-        self.state_dirty = true;
-    }
-
-    pub fn mark_summary(&mut self) {
-        self.summary_dirty = true;
-    }
-
-    pub fn mark_list(&mut self) {
-        self.list_dirty = true;
-    }
-
-    pub fn clear_list(&mut self) {
-        self.list_dirty = false;
-    }
-
-    pub fn clear_state(&mut self) {
-        self.state_dirty = false;
-    }
-
-    pub fn clear_summary(&mut self) {
-        self.summary_dirty = false;
-    }
-
-    pub fn state_dirty(&self) -> bool {
-        self.state_dirty
-    }
-
-    pub fn list_dirty(&self) -> bool {
-        self.list_dirty
-    }
-
-    pub fn summary_dirty(&self) -> bool {
-        self.summary_dirty
-    }
-}
+pub use hw_ui::panels::task_list::TaskListDirty;
 
 pub fn detect_task_list_changed_components(
     mut dirty: ResMut<TaskListDirty>,
