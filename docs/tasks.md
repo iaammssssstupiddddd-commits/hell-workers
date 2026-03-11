@@ -75,8 +75,9 @@ Familiar の `task_finder` がタスクを発見できる条件（**全て満た
 
 ### 4.2 割り当て (Assignment)
 
-- `familiar_task_delegation_system`（0.5秒間隔）が候補収集 → worker 別再スコア（priority 0.65 + 距離 0.35）→ `TaskAssignmentRequest` 発行（Execute で適用）
+- `familiar_task_delegation_system`（0.5秒間隔）が root 側 orchestration を担当し、`hw_ai::familiar_ai::decide::task_management` の core に候補収集・worker 別再スコア（priority 0.65 + 距離 0.35）・assignment build を委譲して `TaskAssignmentRequest` を発行する（Execute で適用）
 - 割り当て時に `DeliveringTo`・`WorkingOn`・`CommandedBy` を設定し、ソース（資材・バケツ等）を遅延解決
+- `ConstructionSiteAccess` は root から注入され、floor / wall / provisional wall の construction site 座標解決だけを補助する
 - **排他制御**: `SharedResourceCache` を参照（§2.3 参照）
 - **Haul 系の需要再検証**: `DeliverToBlueprint` / `DepositToStockpile` / `DeliverToFloorConstruction` / `DeliverToWallConstruction` / `DeliverToProvisionalWall` は、`IncomingDeliveries` に加えて Think フェーズ内の `ReservationShadow` も差し引いた残需要が 0 の場合、新規 `AssignedTask` を発行しない。
 - 60タイル超の候補は A* 前に除外。`ReachabilityFrameCache` で到達判定を5フレーム共有

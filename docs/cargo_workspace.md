@@ -216,6 +216,7 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 - `familiar_ai::decide::helpers` — `finalize_state_transitions` / `process_squad_management` など pure helper
 - `familiar_ai::decide::recruitment` — `SpatialGridOps` ベースのリクルート選定・スカウト開始判定
 - `familiar_ai::decide::encouragement` — 激励対象選定と `EncouragementCooldown`
+- `familiar_ai::decide::task_management` — Familiar の task search / scoring / source selector / reservation shadow / assignment build の core
 - `familiar_ai::decide::auto_gather_for_blueprint::{planning,demand,supply,helpers}` — Blueprint auto gather の純計画層
 - `familiar_ai::decide::squad` / `scouting` / `supervising` / `state_handlers` — 使い魔の状態機械・分隊管理の純ロジック
 - `familiar_ai::execute::state_apply` — `FamiliarStateRequest` 適用
@@ -226,6 +227,7 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 - `GameAssets` 依存の sprite spawn
 - root 固有の `WorldMapRead/Write` SystemParam wrapper や pathfinding context を前提にした adapter
 - full-fat query から narrow view への変換や、root-only resource を伴う request 出力 adapter
+- `ConstructionSiteAccess` のように `FloorConstructionSite` / `WallConstructionSite` を直接 Query する root 専用 `SystemParam`
 - UI システム
 - `Commands` で複雑な Entity 生成を行うもの
 - pathfinding / blueprint entity query を伴う auto-gather orchestration
