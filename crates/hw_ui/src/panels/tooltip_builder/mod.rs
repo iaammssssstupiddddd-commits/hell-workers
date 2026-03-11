@@ -4,18 +4,20 @@ mod templates;
 mod text_wrap;
 mod widgets;
 
-use crate::assets::GameAssets;
-use crate::interface::ui::components::{TooltipTemplate, UiTooltip};
-use crate::interface::ui::list::clear_children;
-use crate::interface::ui::presentation::EntityInspectionModel;
-use crate::interface::ui::theme::UiTheme;
+use crate::components::{TooltipTemplate, UiTooltip};
+use crate::list::clear_children;
+use crate::models::inspection::EntityInspectionModel;
+use crate::setup::UiAssets;
+use crate::theme::UiTheme;
 use bevy::prelude::*;
+
+pub use text_wrap::{TOOLTIP_WRAP_LIMIT_BODY, TOOLTIP_WRAP_LIMIT_ICON_ROW, wrap_tooltip_text};
 
 pub fn rebuild_tooltip_content(
     commands: &mut Commands,
     tooltip_root: Entity,
     q_children: &Query<&Children>,
-    game_assets: &GameAssets,
+    game_assets: &dyn UiAssets,
     theme: &UiTheme,
     template: TooltipTemplate,
     model: Option<&EntityInspectionModel>,

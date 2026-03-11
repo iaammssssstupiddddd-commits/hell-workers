@@ -1,9 +1,9 @@
 // ツールチップテンプレート分岐
 
-use crate::assets::GameAssets;
-use crate::interface::ui::components::UiTooltip;
-use crate::interface::ui::presentation::EntityInspectionModel;
-use crate::interface::ui::theme::UiTheme;
+use crate::components::UiTooltip;
+use crate::models::inspection::EntityInspectionModel;
+use crate::setup::UiAssets;
+use crate::theme::UiTheme;
 use bevy::prelude::*;
 
 use super::widgets::{
@@ -24,7 +24,7 @@ fn parse_percent_value(text: &str) -> Option<f32> {
 pub fn build_soul_tooltip(
     parent: &mut ChildSpawnerCommands,
     model: Option<&EntityInspectionModel>,
-    game_assets: &GameAssets,
+    game_assets: &dyn UiAssets,
     theme: &UiTheme,
 ) {
     let Some(model) = model else {
@@ -90,7 +90,7 @@ pub fn build_soul_tooltip(
 pub fn build_building_tooltip(
     parent: &mut ChildSpawnerCommands,
     model: Option<&EntityInspectionModel>,
-    game_assets: &GameAssets,
+    game_assets: &dyn UiAssets,
     theme: &UiTheme,
 ) {
     let Some(model) = model else {
@@ -138,7 +138,7 @@ pub fn build_building_tooltip(
 pub fn build_resource_tooltip(
     parent: &mut ChildSpawnerCommands,
     model: Option<&EntityInspectionModel>,
-    game_assets: &GameAssets,
+    game_assets: &dyn UiAssets,
     theme: &UiTheme,
 ) {
     let Some(model) = model else {
@@ -174,7 +174,7 @@ pub fn build_resource_tooltip(
 pub fn build_ui_button_tooltip(
     parent: &mut ChildSpawnerCommands,
     tooltip: Option<&UiTooltip>,
-    game_assets: &GameAssets,
+    game_assets: &dyn UiAssets,
     theme: &UiTheme,
 ) {
     let Some(tooltip) = tooltip else {
@@ -200,7 +200,7 @@ pub fn build_generic_tooltip(
     parent: &mut ChildSpawnerCommands,
     model: Option<&EntityInspectionModel>,
     ui_tooltip: Option<&UiTooltip>,
-    game_assets: &GameAssets,
+    game_assets: &dyn UiAssets,
     theme: &UiTheme,
 ) {
     if let Some(model) = model {

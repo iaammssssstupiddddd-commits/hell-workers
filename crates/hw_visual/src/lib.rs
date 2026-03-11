@@ -82,6 +82,19 @@ impl Plugin for HwVisualPlugin {
                 .in_set(GameSystemSet::Visual),
         );
 
+        // Soul idle / gathering / vitals visual systems
+        app.add_systems(
+            Update,
+            (
+                soul::idle::idle_visual_system,
+                soul::vitals::familiar_hover_visualization_system,
+                soul::gathering::gathering_visual_update_system,
+                soul::gathering::gathering_debug_visualization_system,
+            )
+                .chain()
+                .in_set(GameSystemSet::Visual),
+        );
+
         // Blueprint detail systems
         app.add_systems(
             Update,

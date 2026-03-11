@@ -1,13 +1,14 @@
-use crate::interface::ui::components::{
+use crate::components::{
     InfoPanel, InfoPanelNodes, MenuAction, MenuButton, UiInputBlocker, UiNodeRegistry, UiSlot,
 };
-use crate::interface::ui::theme::UiTheme;
+use crate::setup::UiAssets;
+use crate::theme::UiTheme;
 use bevy::prelude::*;
 use bevy::ui::{BackgroundGradient, ColorStop, LinearGradient, RelativeCursorPosition};
 
 fn spawn_info_section_divider(
     parent: &mut ChildSpawnerCommands,
-    game_assets: &crate::assets::GameAssets,
+    game_assets: &dyn UiAssets,
     theme: &UiTheme,
     label: &str,
 ) {
@@ -36,7 +37,7 @@ fn spawn_info_section_divider(
             row.spawn((
                 Text::new(label),
                 TextFont {
-                    font: game_assets.font_ui.clone(),
+                    font: game_assets.font_ui().clone(),
                     font_size: theme.typography.font_size_xs,
                     weight: FontWeight::SEMIBOLD,
                     ..default()
@@ -56,7 +57,7 @@ fn spawn_info_section_divider(
 
 pub fn spawn_info_panel_ui(
     commands: &mut Commands,
-    game_assets: &Res<crate::assets::GameAssets>,
+    game_assets: &dyn UiAssets,
     theme: &UiTheme,
     parent_entity: Entity,
     ui_nodes: &mut UiNodeRegistry,
@@ -119,7 +120,7 @@ pub fn spawn_info_panel_ui(
                         .spawn((
                             Text::new(""),
                             TextFont {
-                                font: game_assets.font_ui.clone(),
+                                font: game_assets.font_ui().clone(),
                                 font_size: theme.typography.font_size_title,
                                 weight: FontWeight::BOLD,
                                 ..default()
@@ -167,7 +168,7 @@ pub fn spawn_info_panel_ui(
                         btn.spawn((
                             Text::new("Unpin"),
                             TextFont {
-                                font: game_assets.font_ui.clone(),
+                                font: game_assets.font_ui().clone(),
                                 font_size: theme.typography.font_size_xs,
                                 weight: FontWeight::SEMIBOLD,
                                 ..default()
@@ -195,7 +196,7 @@ pub fn spawn_info_panel_ui(
                     .spawn((
                         Text::new(""),
                         TextFont {
-                            font: game_assets.font_ui.clone(),
+                            font: game_assets.font_ui().clone(),
                             font_size: theme.typography.font_size_small,
                             ..default()
                         },
@@ -212,7 +213,7 @@ pub fn spawn_info_panel_ui(
                 })
                 .with_children(|row| {
                     row.spawn((
-                        ImageNode::new(game_assets.icon_stress.clone()),
+                        ImageNode::new(game_assets.icon_stress().clone()),
                         Node {
                             width: Val::Px(14.0),
                             height: Val::Px(14.0),
@@ -224,7 +225,7 @@ pub fn spawn_info_panel_ui(
                         .spawn((
                             Text::new(""),
                             TextFont {
-                                font: game_assets.font_ui.clone(),
+                                font: game_assets.font_ui().clone(),
                                 font_size: theme.typography.font_size_small,
                                 ..default()
                             },
@@ -242,7 +243,7 @@ pub fn spawn_info_panel_ui(
                 })
                 .with_children(|row| {
                     row.spawn((
-                        ImageNode::new(game_assets.icon_fatigue.clone()),
+                        ImageNode::new(game_assets.icon_fatigue().clone()),
                         Node {
                             width: Val::Px(14.0),
                             height: Val::Px(14.0),
@@ -254,7 +255,7 @@ pub fn spawn_info_panel_ui(
                         .spawn((
                             Text::new(""),
                             TextFont {
-                                font: game_assets.font_ui.clone(),
+                                font: game_assets.font_ui().clone(),
                                 font_size: theme.typography.font_size_small,
                                 ..default()
                             },
@@ -269,7 +270,7 @@ pub fn spawn_info_panel_ui(
                     .spawn((
                         Text::new(""),
                         TextFont {
-                            font: game_assets.font_ui.clone(),
+                            font: game_assets.font_ui().clone(),
                             font_size: theme.typography.font_size_small,
                             ..default()
                         },
@@ -292,7 +293,7 @@ pub fn spawn_info_panel_ui(
                         .spawn((
                             Text::new(""),
                             TextFont {
-                                font: game_assets.font_ui.clone(),
+                                font: game_assets.font_ui().clone(),
                                 font_size: theme.typography.font_size_small,
                                 ..default()
                             },
@@ -309,7 +310,7 @@ pub fn spawn_info_panel_ui(
                     .spawn((
                         Text::new(""),
                         TextFont {
-                            font: game_assets.font_ui.clone(),
+                            font: game_assets.font_ui().clone(),
                             font_size: theme.typography.font_size_small,
                             ..default()
                         },
@@ -327,7 +328,7 @@ pub fn spawn_info_panel_ui(
             .spawn((
                 Text::new(""),
                 TextFont {
-                    font: game_assets.font_ui.clone(),
+                    font: game_assets.font_ui().clone(),
                     font_size: theme.typography.font_size_item,
                     ..default()
                 },

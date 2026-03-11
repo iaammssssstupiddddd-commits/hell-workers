@@ -1,6 +1,6 @@
 use super::minimize::EntityListMinimizeState;
-use crate::interface::ui::components::EntityListPanel;
-use crate::interface::ui::theme::UiTheme;
+use crate::components::EntityListPanel;
+use crate::theme::UiTheme;
 use bevy::prelude::*;
 use bevy::window::{CursorIcon, PrimaryWindow, SystemCursorIcon};
 

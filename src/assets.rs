@@ -1,4 +1,39 @@
 use bevy::prelude::*;
+use hw_ui::setup::UiAssets;
+
+impl UiAssets for GameAssets {
+    fn font_ui(&self) -> &Handle<Font> {
+        &self.font_ui
+    }
+
+    fn font_familiar(&self) -> &Handle<Font> {
+        &self.font_familiar
+    }
+
+    fn icon_arrow_down(&self) -> &Handle<Image> {
+        &self.icon_arrow_down
+    }
+
+    fn glow_circle(&self) -> &Handle<Image> {
+        &self.glow_circle
+    }
+
+    fn icon_stress(&self) -> &Handle<Image> {
+        &self.icon_stress
+    }
+
+    fn icon_fatigue(&self) -> &Handle<Image> {
+        &self.icon_fatigue
+    }
+
+    fn icon_male(&self) -> &Handle<Image> {
+        &self.icon_male
+    }
+
+    fn icon_female(&self) -> &Handle<Image> {
+        &self.icon_female
+    }
+}
 
 #[derive(Resource)]
 pub struct GameAssets {
