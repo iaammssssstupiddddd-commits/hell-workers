@@ -390,27 +390,30 @@ CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo check
 ### 現在地
 
 - 進捗: `100%`（本計画スコープ完了）
-- 完了済みマイルストーン: M1・M2・M3・M4・M5 すべて完了
-- 完了済み:
+- 完了済み（コード実装）: **M1・M2・M3・M4**
+- 完了済み（文書化のみ）: **M5**（blocker 自体は未解消・次計画へ委譲）
+- コード実装済み:
   - **M1**: `idle_visual_system`, `gathering_visual_update_system`, `gathering_debug_visualization_system`, `familiar_hover_visualization_system` を `hw_visual::soul::*` へ移設。root `visual/*.rs` は thin re-export。`HwVisualPlugin` で登録済み。
   - **M2**: `apply_task_assignment_requests_system` と直下 helper 群を `hw_ai::soul_ai::execute::task_assignment_apply` へ移設。root `task_execution/mod.rs` は re-export のみ。`SoulAiCorePlugin` で登録済み。
   - **M3**: `collect_active_reservation_ops` / `collect_release_reservation_ops` を `hw_jobs::lifecycle` へ移設。root `transport_common/lifecycle.rs` は thin re-export。
   - **M4**: `drifting_decision_system` の `ResMut<PopulationManager>` を `Res<>` に格下げ、`DriftingEscapeStarted` イベント発行に変更。`despawn_at_edge_system` の `total_escaped` 書き込みを `SoulEscaped` イベント発行に変更。root adapter (`adapters.rs`) が両イベントを受信して `PopulationManager` を更新。
-  - **M5**: `docs/soul_ai.md` と `docs/cargo_workspace.md` に `FloorConstructionSite` / `WallConstructionSite` が blocker である理由と次計画の前提条件を明文化済み。
   - **追加（計画外）**: `choose_drift_edge`, `is_near_map_edge`, `random_wander_target`, `drift_move_target` の 4 pure 関数を `hw_ai::soul_ai::helpers::drifting` へ抽出。root drifting 側は hw_ai の関数を呼び出すのみ。
+- 文書化済み（コード変更なし）:
+  - **M5**: `docs/soul_ai.md` と `docs/cargo_workspace.md` に `FloorConstructionSite` / `WallConstructionSite` が blocker である理由と次計画の前提条件を明文化済み。**blocker 自体（`FloorConstructionSite`/`WallConstructionSite` の `TaskArea` 依存）は解消されていない。** `access.rs:89-110` は引き続き root-only 型を Query に保持しており、`task_execution` 深部は hw_ai へ移設不可のまま。
 - 未完了（別計画へ委譲）:
-  - `task_execution` 深部は `FloorConstructionSite` / `WallConstructionSite` が blocker（別計画で construction site 型を hw_jobs に移設後に対応）
+  - `FloorConstructionSite` / `WallConstructionSite` の `TaskArea` 依存解消（`src/systems/jobs/*/components.rs` が root 残留）
+  - `task_execution/context/access.rs` の hw_ai への移設（construction site 型 crate 化が前提）
   - `unassign_task` は `Commands`・root 型依存のため root 残留
 
 ### 次計画で扱う課題
 
-1. `FloorConstructionSite` / `WallConstructionSite` を `hw_jobs` へ移設する（`TaskArea` 依存の除去が前提）。
-2. 移設後、`task_execution/context/access.rs` を hw_ai へ移設できるかを検討する。
+1. `FloorConstructionSite` / `WallConstructionSite` から `TaskArea` 依存を除去し、`hw_jobs` へ移設する。
+2. construction site 型が hw_jobs に移ったら、`task_execution/context/access.rs` を hw_ai へ移設できるかを検討する。
 3. `unassign_task` の root 残留を別途依存分離するかを検討する。
 
 ### ブロッカー/注意点
 
-- `FloorConstructionSite` / `WallConstructionSite` は root 所有（`src/systems/jobs/*/components.rs`）。`task_execution/context/access.rs` を動かすには crate 化が必要で、それは別計画。
+- `FloorConstructionSite` / `WallConstructionSite` は root 所有（`src/systems/jobs/*/components.rs`）、`TaskArea` 依存あり。`task_execution/context/access.rs` を動かすには crate 化が必要で、それは別計画。
 - `WorldMapRead`, `PathfindingContext` は root blocker ではない。これを理由に移設を止めない。
 
 ### 最終確認ログ
@@ -420,16 +423,17 @@ CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo check
 
 ### Definition of Done
 
-- [x] M1–M4 が完了している（M5 はドキュメント化のみ）
+- [x] M1–M4 のコード実装が完了している
+- [x] M5 の blocker が `docs/soul_ai.md` と `docs/cargo_workspace.md` に明文化されている
+- [ ] M5 の blocker 自体（FloorConstructionSite/WallConstructionSite の TaskArea 依存）は **別計画** で対処する
 - [x] 境界ドキュメント（`docs/cargo_workspace.md`, `docs/soul_ai.md`）が現状に同期している
-- [x] crate README と root README が現状に同期している
 - [x] `cargo check --workspace` が成功
 
 ## 12. 更新履歴
 
 | 日付 | 変更者 | 内容 |
 | --- | --- | --- |
-| `2026-03-11` | `AI (Copilot)` | M1-M5 完了確認。AI引継ぎメモを 0%→100% に修正。drifting ヘルパー抽出（計画外）を記録 |
+| `2026-03-11` | `AI (Copilot)` | AI引継ぎメモを修正: M1-M4 実装完了・M5 文書化完了（blocker 未解消）を明確に分離。Definition of Done の M5 blocker 欄を未完了として明記 |
 | `2026-03-11` | `AI (Codex)` | 本計画スコープ完了を反映。M1-M4 実装 + M5 blocker 文書化までを Completed とし、全面移設は別計画である旨を明記 |
 | `2026-03-11` | `AI (Codex)` | 初版作成 |
 | `2026-03-10` | `AI (Copilot)` | コード実態調査に基づきブラッシュアップ。型所有者マップ・パス変換表・具体的変更ファイルリスト・event化の設計案を追加 |
