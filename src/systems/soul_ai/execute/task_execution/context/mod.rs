@@ -7,7 +7,8 @@ pub use access::{
     ReservationAccess, StorageAccess,
 };
 pub use execution::TaskExecutionContext;
+pub use hw_ai::familiar_ai::decide::task_management::FamiliarTaskAssignmentQueries;
 pub use queries::{
-    FamiliarTaskAssignmentQueries, TaskAssignmentQueries, TaskAssignmentReadAccess, TaskQueries,
-    TaskReservationAccess, TaskUnassignQueries,
+    TaskAssignmentQueries, TaskAssignmentReadAccess, TaskQueries, TaskReservationAccess,
+    TaskUnassignQueries,
 };
