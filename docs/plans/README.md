@@ -20,7 +20,6 @@
 | Document | Status | Notes |
 |---|---|---|
 | [command-crate-extraction-plan-2026-03-12.md](command-crate-extraction-plan-2026-03-12.md) | Draft | `src/systems/command/` から crate 化できる pure helper / world 判定 / logistics selector を切り出す計画。 |
-| [familiar-task-management-hw-ai-extraction-plan-2026-03-11.md](familiar-task-management-hw-ai-extraction-plan-2026-03-11.md) | In Progress | src/systems/familiar_ai/decide/task_management/の計画。 |
 
 ## アーカイブ計画書一覧 (`docs/plans/archive`)
 
@@ -45,6 +44,7 @@
 | [archive/dream-visual-update.md](archive/dream-visual-update.md) | アーカイブ | Dreamビジュアル更新計画。 |
 | [archive/dream_per_soul_storage.md](archive/dream_per_soul_storage.md) | アーカイブ | 現状: Dreamはグローバルプール(`DreamPool.points`)に直接加算される。soulの睡眠レートで`DreamPool`に即時反映され、soul個別のdream貯蔵量という概念がないの提案。 |
 | [archive/familiar-ai-root-thinning-plan-2026-03-09.md](archive/familiar-ai-root-thinning-plan-2026-03-09.md) | アーカイブ | familiar_ai を hw_ai へ寄せて root を薄くする計画 |
+| [archive/familiar-task-management-hw-ai-extraction-plan-2026-03-11.md](archive/familiar-task-management-hw-ai-extraction-plan-2026-03-11.md) | アーカイブ | Familiar Task Management `hw_ai` 抽出 実装計画 |
 | [archive/familiar-ui-hw-ui-migration-plan-2026-03-11.md](archive/familiar-ui-hw-ui-migration-plan-2026-03-11.md) | アーカイブ | -の計画。 |
 | [archive/floor-construction.md](archive/floor-construction.md) | アーカイブ | 床建築システムの実装計画。 |
 | [archive/global-transport-request-plan.md](archive/global-transport-request-plan.md) | アーカイブ | 運搬系のグローバル request 化計画。 |
@@ -114,4 +114,3 @@
 | [archive/workspace-construction-phase-extraction.md](archive/workspace-construction-phase-extraction.md) | アーカイブ | Floor/Wall 建設で使うフェーズ・状態型がの計画。 |
 | [archive/zone-placement-refactor-plan-2026-03-05.md](archive/zone-placement-refactor-plan-2026-03-05.md) | アーカイブ | zone_placement.rsの計画。 |
 | [archive/zone-removal-preview-diff-plan-2026-03-01.md](archive/zone-removal-preview-diff-plan-2026-03-01.md) | アーカイブ | Zone removal preview の全件更新を差分更新へ置換する計画。 |
-
