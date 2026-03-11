@@ -10,6 +10,7 @@ use crate::interface::ui::{
     entity_list_visual_feedback_system, sync_entity_list_from_view_model_system,
     sync_entity_list_value_rows_system, update_unassigned_arrow_icon_system,
 };
+use crate::interface::ui::interaction::handle_ui_intent;
 use crate::systems::GameSystemSet;
 use crate::systems::command::task_area_edit_cursor_system;
 use bevy::prelude::*;
@@ -31,7 +32,7 @@ fn register_ui_entity_list_plugin_systems(app: &mut App) {
         Update,
         (
             entity_list_section_toggle_system,
-            entity_list_interaction_system,
+            entity_list_interaction_system.before(handle_ui_intent),
             entity_list_drag_drop_system,
             entity_list_visual_feedback_system,
             entity_list_scroll_system,

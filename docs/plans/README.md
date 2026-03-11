@@ -19,9 +19,8 @@
 
 | Document | Status | Notes |
 |---|---|---|
-| [familiar-ui-hw-ui-migration-plan-2026-03-11.md](familiar-ui-hw-ui-migration-plan-2026-03-11.md) | Draft | familiar UI を `hw_ui` へ段階移設する計画。 |
-| [hw-ui-crate-extraction.md](hw-ui-crate-extraction.md) | Completed | src/interface/ui/の計画。 |
-| [soul-ai-root-thinning-plan-2026-03-11.md](soul-ai-root-thinning-plan-2026-03-11.md) | Completed | src/systems/soul_aiの root thinning 計画。M1-M5 完了。 |
+| [familiar-ui-hw-ui-migration-plan-2026-03-11.md](familiar-ui-hw-ui-migration-plan-2026-03-11.md) | In Progress | familiar UI を `hw_ui` へ段階移設する計画。 |
+| [soul-ai-root-thinning-plan-2026-03-11.md](soul-ai-root-thinning-plan-2026-03-11.md) | Completed | src/systems/soul_aiの root thinning 計画。M1-M4 実装と M5 blocker 明文化まで完了。`task_execution` 全面移設は別計画。 |
 
 ## アーカイブ計画書一覧 (`docs/plans/archive`)
 
@@ -60,6 +59,8 @@
 | [archive/hw-spatial-crate copy 1.md](archive/hw-spatial-crate copy 1.md) | アーカイブ | WorldMapの計画。 |
 | [archive/hw-spatial-crate copy.md](archive/hw-spatial-crate copy.md) | アーカイブ | WorldMapの計画。 |
 | [archive/hw-spatial-crate.md](archive/hw-spatial-crate.md) | アーカイブ | WorldMapの計画。 |
+| [archive/hw-ui-crate-extraction copy 1.md](archive/hw-ui-crate-extraction copy 1.md) | アーカイブ | src/interface/ui/の計画。 |
+| [archive/hw-ui-crate-extraction copy 2.md](archive/hw-ui-crate-extraction copy 2.md) | アーカイブ | src/interface/ui/の計画。 |
 | [archive/hw-ui-crate-extraction copy.md](archive/hw-ui-crate-extraction copy.md) | アーカイブ | src/interface/ui/の計画。 |
 | [archive/hw-ui-crate-extraction.md](archive/hw-ui-crate-extraction.md) | アーカイブ | src/interface/ui/の計画。 |
 | [archive/hw-ui-crate-plan-2026-03-08.md](archive/hw-ui-crate-plan-2026-03-08.md) | アーカイブ | hw_ui crate 分離 実装計画 |
@@ -93,6 +94,7 @@
 | [archive/selection-separation-plan-2026-03-08.md](archive/selection-separation-plan-2026-03-08.md) | アーカイブ | -の計画。 |
 | [archive/site-yard-system.md](archive/site-yard-system.md) | アーカイブ | 実装計画: Site / Yard システム |
 | [archive/soul-ai-root-thinning-plan-2026-03-09.md](archive/soul-ai-root-thinning-plan-2026-03-09.md) | アーカイブ | soul_ai を段階的に crate へ寄せて root を薄くする計画 |
+| [archive/soul-ai-root-thinning-plan-2026-03-11 copy 1.md](archive/soul-ai-root-thinning-plan-2026-03-11 copy 1.md) | アーカイブ | src/systems/soul_aiの計画。 |
 | [archive/soul-ai-root-thinning-plan-2026-03-11 copy.md](archive/soul-ai-root-thinning-plan-2026-03-11 copy.md) | アーカイブ | src/systems/soul_aiの計画。 |
 | [archive/soul-ai-root-thinning-plan-2026-03-11.md](archive/soul-ai-root-thinning-plan-2026-03-11.md) | アーカイブ | src/systems/soul_aiの計画。 |
 | [archive/soul-spawn-despawn.md](archive/soul-spawn-despawn.md) | アーカイブ | Soul Spawn/Despawn設計計画。 |
@@ -109,3 +111,4 @@
 | [archive/workspace-construction-phase-extraction.md](archive/workspace-construction-phase-extraction.md) | アーカイブ | Floor/Wall 建設で使うフェーズ・状態型がの計画。 |
 | [archive/zone-placement-refactor-plan-2026-03-05.md](archive/zone-placement-refactor-plan-2026-03-05.md) | アーカイブ | zone_placement.rsの計画。 |
 | [archive/zone-removal-preview-diff-plan-2026-03-01.md](archive/zone-removal-preview-diff-plan-2026-03-01.md) | アーカイブ | Zone removal preview の全件更新を差分更新へ置換する計画。 |
+

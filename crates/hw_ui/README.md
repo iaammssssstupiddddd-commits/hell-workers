@@ -10,7 +10,7 @@
 | ディレクトリ/ファイル | 内容 |
 |---|---|
 | `lib.rs` | `HwUiPlugin` — 全 UI プラグインの登録 |
-| `intents.rs` | `UiIntent` — ユーザー操作の意図メッセージ型 |
+| `intents.rs` | `UiIntent` — ユーザー操作の意図メッセージ型（Entity List 用の Familiar 指定 variant を含む） |
 | `theme.rs` | スタイリング・テーマ定数 |
 | `components.rs` | UI コンポーネントレジストリ・共有ユーティリティ |
 | `camera.rs` | UI / ワールドビューのカメラシステム |

@@ -4,8 +4,11 @@ use crate::app_contexts::{BuildContext, TaskContext, ZoneContext};
 use crate::entities::familiar::{Familiar, FamiliarOperation};
 use crate::events::FamiliarOperationMaxSoulChangedEvent;
 use crate::interface::selection::SelectedEntity;
+use crate::interface::ui::EntityListNodeIndex;
 use crate::interface::ui::InfoPanelPinState;
 use crate::interface::ui::components::{MenuState, OperationDialog};
+use crate::relationships::Commanding;
+use crate::systems::familiar_ai::FamiliarAiState;
 use crate::systems::command::{TaskArea, TaskMode};
 use crate::systems::time::TimeSpeed;
 use hw_core::game_state::PlayMode;
@@ -21,8 +24,11 @@ pub(crate) fn handle_ui_intent(
     mut selected_entity: ResMut<SelectedEntity>,
     mut info_panel_pin: ResMut<InfoPanelPinState>,
     mut q_familiar_ops: Query<&mut FamiliarOperation>,
+    q_familiar_meta: Query<(&Familiar, &FamiliarAiState, Option<&Commanding>)>,
     q_familiars_for_area: Query<(Entity, Option<&TaskArea>), With<Familiar>>,
     mut q_dialog: Query<&mut Node, With<OperationDialog>>,
+    node_index: Res<EntityListNodeIndex>,
+    mut q_text: Query<&mut Text>,
     mut ev_max_soul_changed: MessageWriter<FamiliarOperationMaxSoulChangedEvent>,
     mut time: ResMut<Time<Virtual>>,
 ) {
@@ -159,6 +165,20 @@ pub(crate) fn handle_ui_intent(
                 adjust_max_controlled_soul(
                     selected_entity.0,
                     &mut q_familiar_ops,
+                    &q_familiar_meta,
+                    &node_index,
+                    &mut q_text,
+                    delta,
+                    &mut ev_max_soul_changed,
+                );
+            }
+            UiIntent::AdjustMaxControlledSoulFor(familiar, delta) => {
+                adjust_max_controlled_soul(
+                    Some(familiar),
+                    &mut q_familiar_ops,
+                    &q_familiar_meta,
+                    &node_index,
+                    &mut q_text,
                     delta,
                     &mut ev_max_soul_changed,
                 );
@@ -240,6 +260,9 @@ fn adjust_fatigue_threshold(
 fn adjust_max_controlled_soul(
     selected: Option<Entity>,
     q_familiar_ops: &mut Query<&mut FamiliarOperation>,
+    q_familiar_meta: &Query<(&Familiar, &FamiliarAiState, Option<&Commanding>)>,
+    node_index: &EntityListNodeIndex,
+    q_text: &mut Query<&mut Text>,
     delta: isize,
     ev_max_soul_changed: &mut MessageWriter<FamiliarOperationMaxSoulChangedEvent>,
 ) {
@@ -247,14 +270,58 @@ fn adjust_max_controlled_soul(
         if let Ok(mut op) = q_familiar_ops.get_mut(selected) {
             let old_val = op.max_controlled_soul;
             let new_val = (old_val as isize + delta).clamp(1, 8) as usize;
-            op.max_controlled_soul = new_val;
-            if old_val != new_val {
-                ev_max_soul_changed.write(FamiliarOperationMaxSoulChangedEvent {
-                    familiar_entity: selected,
-                    old_value: old_val,
-                    new_value: new_val,
-                });
+            if old_val == new_val {
+                return;
             }
+            op.max_controlled_soul = new_val;
+            update_familiar_max_soul_header(
+                selected,
+                new_val,
+                q_familiar_meta,
+                node_index,
+                q_text,
+            );
+            ev_max_soul_changed.write(FamiliarOperationMaxSoulChangedEvent {
+                familiar_entity: selected,
+                old_value: old_val,
+                new_value: new_val,
+            });
         }
+    }
+}
+
+fn update_familiar_max_soul_header(
+    familiar_entity: Entity,
+    new_val: usize,
+    q_familiar_meta: &Query<(&Familiar, &FamiliarAiState, Option<&Commanding>)>,
+    node_index: &EntityListNodeIndex,
+    q_text: &mut Query<&mut Text>,
+) {
+    let Some(nodes) = node_index.familiar_sections.get(&familiar_entity) else {
+        return;
+    };
+    let Ok((familiar, ai_state, commanding_opt)) = q_familiar_meta.get(familiar_entity) else {
+        return;
+    };
+    let Ok(mut text) = q_text.get_mut(nodes.header_text) else {
+        return;
+    };
+
+    let squad_count = commanding_opt.map(|c| c.len()).unwrap_or(0);
+    text.0 = format!(
+        "{} ({}/{}) [{}]",
+        familiar.name,
+        squad_count,
+        new_val,
+        familiar_state_label(ai_state)
+    );
+}
+
+fn familiar_state_label(ai_state: &FamiliarAiState) -> &'static str {
+    match ai_state {
+        FamiliarAiState::Idle => "Idle",
+        FamiliarAiState::SearchingTask => "Searching",
+        FamiliarAiState::Scouting { .. } => "Scouting",
+        FamiliarAiState::Supervising { .. } => "Supervising",
     }
 }

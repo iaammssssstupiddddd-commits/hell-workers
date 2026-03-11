@@ -62,7 +62,7 @@
 | `change_detection.rs` | 変化検出 |
 | `dirty.rs` | ダーティフラグ（`hw_ui::list::EntityListDirty` re-export） |
 | `drag_drop.rs` | ドラッグ&ドロップ（`DragState` は hw_ui、システムはここ） |
-| `interaction.rs` / `interaction/` | リストアイテムのゲーム側インタラクション（SectionToggle は hw_ui 側へ移設済み。navigation はここ残留） |
+| `interaction.rs` / `interaction/` | リストアイテムのゲーム側インタラクション（SectionToggle は hw_ui 側へ移設済み。`+/-` は target 付き `UiIntent` を発行し、navigation はここ残留） |
 | `selection_focus.rs` | `hw_ui::list` re-export |
 
 ## ルート残留の理由
@@ -71,6 +71,7 @@
 |---|---|
 | `list/sync.rs` | `Res<GameAssets>` を受けて `hw_ui::list::sync::*` を呼ぶ thin shell |
 | `list/view_model.rs` | `Familiar` / `DamnedSoul` / `AssignedTask` / `FamiliarAiState` などゲーム固有 ECS Query に依存 |
+| `interaction/intent_handler.rs` | `UiIntent::AdjustMaxControlledSoul` / `AdjustMaxControlledSoulFor` を処理し、`FamiliarOperation` 更新と optimistic header update を一元化 |
 | `list/interaction/navigation.rs` | `Res<TaskContext>`（ルート定義型）に依存 |
 | `panels/task_list/update.rs` | `Res<GameAssets>` — Bevy は `Res<dyn Trait>` 不可 |
 | `panels/context_menu.rs` | `Familiar`/`DamnedSoul`/`Building` ECS クエリ |

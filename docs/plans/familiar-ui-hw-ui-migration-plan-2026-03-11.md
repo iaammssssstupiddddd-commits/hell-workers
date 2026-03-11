@@ -5,7 +5,7 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `familiar-ui-hw-ui-migration-plan-2026-03-11` |
-| ステータス | `Draft` |
+| ステータス | `In Progress` |
 | 作成日 | `2026-03-11` |
 | 最終更新日 | `2026-03-11` |
 | 作成者 | `Codex` |
@@ -85,8 +85,8 @@
   - `src/interface/ui/setup/mod.rs` または Entity List adapter 追加先
   - `docs/entity_list_ui.md`
 - 完了条件:
-  - [ ] `spawn/sync` helper が `GameAssets` 具象型ではなく trait 経由でアセットを参照できる
-  - [ ] `arrow_right`, `arrow_down`, gender/task icon, UI fonts の供給経路が一箇所にまとまる
+  - [x] `spawn/sync` helper が `GameAssets` 具象型ではなく trait 経由でアセットを参照できる
+  - [x] `arrow_right`, `arrow_down`, gender/task icon, UI fonts の供給経路が一箇所にまとまる
 - 検証:
   - `cargo check --workspace`
 
@@ -111,8 +111,8 @@
   - `docs/entity_list_ui.md`
   - `docs/cargo_workspace.md`
 - 完了条件:
-  - [ ] root 側 `spawn/` `sync/` 実装が削減され、主処理が `hw_ui` 側 helper 呼び出しになる
-  - [ ] `hw_ui` からゲーム型への逆依存が発生しない
+  - [x] root 側 `spawn/` `sync/` 実装が削減され、主処理が `hw_ui` 側 helper 呼び出しになる
+  - [x] `hw_ui` からゲーム型への逆依存が発生しない
   - [ ] Familiar セクションの追加/削除/折りたたみ/並べ替え/空分隊表示が従来通り動く
 - 検証:
   - `cargo check --workspace`
@@ -139,9 +139,9 @@
   - `docs/entity_list_ui.md`
   - `docs/cargo_workspace.md`
 - 完了条件:
-  - [ ] `interaction.rs` の UI-only 処理と game-side effect 処理が読み分けられる
-  - [ ] `FamiliarOperation` 変更経路が 1 つに整理される
-  - [ ] optimistic header update の仕様が維持される
+  - [x] `interaction.rs` の UI-only 処理と game-side effect 処理が読み分けられる
+  - [x] `FamiliarOperation` 変更経路が 1 つに整理される
+  - [x] optimistic header update の仕様が維持される
 - 検証:
   - `cargo check --workspace`
   - `cargo run`
@@ -183,23 +183,25 @@
 
 ### 現在地
 
-- 進捗: `0%`
+- 進捗: `75%`
 - 完了済みマイルストーン:
-  - なし
+  - M1: Entity List 用 asset abstraction 導入
+  - M2: Familiar/Soul の spawn/sync helper を `hw_ui::list` へ移設
+  - M3: interaction の責務分離
 - 未着手/進行中:
-  - 全マイルストーン未着手
+  - 手動 UI 検証のみ未完了
 
 ### 次のAIが最初にやること
 
 1. `docs/cargo_workspace.md` と `docs/entity_list_ui.md` の境界記述を再確認する。
-2. `src/interface/ui/list/spawn/` と `sync/` のうち、ゲーム型を触らない helper を洗い出す。
-3. `UiAssets` 拡張か `EntityListAssets` 新設かを先に決める。
+2. `cargo run` で Entity List の手動確認項目を消化する。
+3. 問題がなければ本計画を `Completed` または archive に移す。
 
 ### ブロッカー/注意点
 
 - `view_model.rs` は `Familiar` / `DamnedSoul` / `AssignedTask` 依存が強く、今回の移設対象ではない。
-- `interaction.rs` の `handle_familiar_max_soul_adjustment` は UI-only ではなく game-side effect あり。
-- `UiIntent::AdjustMaxControlledSoul(isize)` は target familiar を持たないため、リストボタンからの統一 message 化には不足する可能性がある。
+- `entity_list_section_toggle_system` は `hw_ui` へ移設済み。
+- `UiIntent::AdjustMaxControlledSoulFor(Entity, isize)` を追加し、list button と dialog の更新を `handle_ui_intent` に集約済み。
 
 ### 参照必須ファイル
 
@@ -207,17 +209,19 @@
 - `docs/entity_list_ui.md`
 - `src/interface/ui/README.md`
 - `src/interface/ui/list/view_model.rs`
-- `src/interface/ui/list/spawn/familiar_section.rs`
-- `src/interface/ui/list/sync/familiar.rs`
+- `src/interface/ui/list/sync.rs`
 - `src/interface/ui/list/interaction.rs`
 - `crates/hw_ui/src/list/models.rs`
+- `crates/hw_ui/src/list/spawn.rs`
+- `crates/hw_ui/src/list/sync.rs`
+- `crates/hw_ui/src/list/section_toggle.rs`
 - `crates/hw_ui/src/intents.rs`
 
 ### 最終確認ログ
 
-- 最終 `cargo check`: `2026-03-11` / `not run (plan only)`
+ - 最終 `cargo check`: `2026-03-11` / `pass`
 - 未解決エラー:
-  - 未確認
+  - なし（手動 UI 検証は未実施）
 
 ### Definition of Done
 
@@ -230,3 +234,5 @@
 | 日付 | 変更者 | 内容 |
 | --- | --- | --- |
 | `2026-03-11` | `Codex` | 初版作成 |
+| `2026-03-11` | `Codex` | M1/M2 完了、M3 一部着手に合わせてステータスと引継ぎメモを更新 |
+| `2026-03-11` | `Codex` | M3 実装完了。`UiIntent` 経由で max soul 更新経路と optimistic header update を一本化 |
