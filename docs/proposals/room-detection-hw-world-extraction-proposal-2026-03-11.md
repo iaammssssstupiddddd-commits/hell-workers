@@ -9,7 +9,7 @@
 | 作成日 | `2026-03-11` |
 | 最終更新日 | `2026-03-11` |
 | 作成者 | `Codex` |
-| 関連計画 | `TBD` |
+| 関連計画 | `docs/plans/room-detection-hw-world-extraction-plan-2026-03-11.md` |
 | 関連Issue/PR | `N/A` |
 
 ## 1. 背景と問題

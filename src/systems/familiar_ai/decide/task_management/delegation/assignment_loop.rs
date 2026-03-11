@@ -7,6 +7,7 @@ use crate::systems::familiar_ai::decide::task_management::{
     assign_task_to_worker, collect_scored_candidates,
 };
 use crate::systems::logistics::TileSiteIndex;
+use crate::systems::soul_ai::execute::task_execution::context::ConstructionSiteAccess;
 use crate::systems::spatial::{
     DesignationSpatialGrid, ResourceSpatialGrid, TransportRequestSpatialGrid,
 };
@@ -122,6 +123,7 @@ fn try_assign_from_candidates(
     fatigue_threshold: f32,
     task_area_opt: Option<&TaskArea>,
     queries: &mut crate::systems::familiar_ai::decide::task_management::FamiliarTaskAssignmentQueries,
+    construction_sites: &ConstructionSiteAccess,
     q_souls: &mut FamiliarSoulQuery,
     resource_grid: &ResourceSpatialGrid,
     world_map: &WorldMap,
@@ -172,6 +174,7 @@ fn try_assign_from_candidates(
                 incoming_snapshot,
             },
             queries,
+            construction_sites,
             q_souls,
             reservation_shadow,
         ) {
@@ -189,6 +192,7 @@ pub(super) fn try_assign_for_workers(
     task_area_opt: Option<&TaskArea>,
     fatigue_threshold: f32,
     queries: &mut crate::systems::familiar_ai::decide::task_management::FamiliarTaskAssignmentQueries,
+    construction_sites: &ConstructionSiteAccess,
     q_souls: &mut FamiliarSoulQuery,
     designation_grid: &DesignationSpatialGrid,
     transport_request_grid: &TransportRequestSpatialGrid,
@@ -246,6 +250,7 @@ pub(super) fn try_assign_for_workers(
             fatigue_threshold,
             task_area_opt,
             queries,
+            construction_sites,
             q_souls,
             resource_grid,
             world_map,
@@ -276,6 +281,7 @@ pub(super) fn try_assign_for_workers(
             fatigue_threshold,
             task_area_opt,
             queries,
+            construction_sites,
             q_souls,
             resource_grid,
             world_map,

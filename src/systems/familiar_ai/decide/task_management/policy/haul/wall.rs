@@ -17,6 +17,7 @@ pub fn assign_haul_to_wall_construction(
     already_commanded: bool,
     ctx: &AssignTaskContext<'_>,
     queries: &mut crate::systems::familiar_ai::decide::task_management::FamiliarTaskAssignmentQueries,
+    construction_sites: &crate::systems::soul_ai::execute::task_execution::context::ConstructionSiteAccess,
     shadow: &mut ReservationShadow,
 ) -> bool {
     let Some((site_entity, resource_type)) =
@@ -25,7 +26,7 @@ pub fn assign_haul_to_wall_construction(
         return false;
     };
 
-    let site_pos = if let Ok((site_transform, _, _)) = queries.storage.wall_sites.get(site_entity) {
+    let site_pos = if let Ok((site_transform, _, _)) = construction_sites.wall_sites.get(site_entity) {
         site_transform.translation.truncate()
     } else {
         debug!(

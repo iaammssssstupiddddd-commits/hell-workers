@@ -14,6 +14,7 @@ use crate::systems::familiar_ai::decide::task_management::{
     FamiliarTaskAssignmentQueries, ReservationShadow,
 };
 use crate::systems::logistics::TileSiteIndex;
+use crate::systems::soul_ai::execute::task_execution::context::ConstructionSiteAccess;
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
 use crate::systems::spatial::{
     DesignationSpatialGrid, ResourceSpatialGrid, TransportRequestSpatialGrid,
@@ -44,6 +45,7 @@ pub struct FamiliarDelegationContext<'a, 'w, 's> {
     pub squad_entities: &'a [Entity],
     pub q_souls: &'a mut FamiliarSoulQuery<'w, 's>,
     pub task_queries: &'a mut FamiliarTaskAssignmentQueries<'w, 's>,
+    pub construction_sites: &'a ConstructionSiteAccess<'w, 's>,
     pub designation_grid: &'a DesignationSpatialGrid,
     pub transport_request_grid: &'a TransportRequestSpatialGrid,
     pub resource_grid: &'a ResourceSpatialGrid,
@@ -73,6 +75,7 @@ pub fn process_task_delegation_and_movement(ctx: &mut FamiliarDelegationContext<
             ctx.task_area_opt,
             fatigue_threshold,
             ctx.task_queries,
+            ctx.construction_sites,
             ctx.q_souls,
             ctx.designation_grid,
             ctx.transport_request_grid,

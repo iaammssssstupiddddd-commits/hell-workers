@@ -18,8 +18,7 @@ pub(crate) use delegation::take_reachable_with_cache_calls;
 pub(crate) use policy::take_source_selector_scan_snapshot;
 pub use task_assigner::AssignTaskContext;
 pub use task_assigner::ReservationShadow;
-pub type FamiliarTaskAssignmentQueries<'w, 's> =
-    crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries<'w, 's>;
+pub use crate::systems::soul_ai::execute::task_execution::context::FamiliarTaskAssignmentQueries;
 pub use task_assigner::assign_task_to_worker;
 pub(crate) use task_assigner::{CachedSourceItem, SourceSelectorFrameCache};
 pub use task_finder::DelegationCandidate;

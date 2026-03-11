@@ -8,6 +8,7 @@ use crate::systems::familiar_ai::decide::task_management::{
     IncomingDeliverySnapshot, ReservationShadow,
 };
 use crate::systems::logistics::TileSiteIndex;
+use crate::systems::soul_ai::execute::task_execution::context::ConstructionSiteAccess;
 use crate::systems::spatial::{
     DesignationSpatialGrid, ResourceSpatialGrid, TransportRequestSpatialGrid,
 };
@@ -34,6 +35,7 @@ impl TaskManager {
         task_area_opt: Option<&TaskArea>,
         fatigue_threshold: f32,
         queries: &mut crate::systems::familiar_ai::decide::task_management::FamiliarTaskAssignmentQueries,
+        construction_sites: &ConstructionSiteAccess,
         q_souls: &mut FamiliarSoulQuery,
         designation_grid: &DesignationSpatialGrid,
         transport_request_grid: &TransportRequestSpatialGrid,
@@ -55,6 +57,7 @@ impl TaskManager {
             task_area_opt,
             fatigue_threshold,
             queries,
+            construction_sites,
             q_souls,
             designation_grid,
             transport_request_grid,

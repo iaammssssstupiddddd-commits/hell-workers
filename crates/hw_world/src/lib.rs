@@ -1,4 +1,5 @@
 pub mod borders;
+pub mod room_detection;
 pub mod coords;
 pub mod layout;
 pub mod map;
