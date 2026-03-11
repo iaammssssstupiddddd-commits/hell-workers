@@ -61,7 +61,7 @@
 
 - Familiar の割り当て発行は `src/systems/familiar_ai/decide/task_management/builders/mod.rs` の `submit_assignment_with_source_entities(...)` / `submit_assignment_with_reservation_ops(...)`（または下位の `submit_assignment(...)`）を必ず経由する（`ReservationShadow` 反映を保証するため）。
 - 予約オペレーション生成は `build_source_reservation_ops` / `build_mixer_destination_reservation_ops` / `build_wheelbarrow_reservation_ops` の共通ヘルパーを優先し、`issue_*` ごとの重複実装を増やさない。
-- `TaskAssignmentQueries` は `TaskAssignmentReadAccess` を内包する構成になっている。Familiar 側の型参照は `task_management::FamiliarTaskAssignmentQueries` を優先し、`soul_ai` 実装詳細への直接依存を増やさない。
+- `FamiliarTaskAssignmentQueries` は必要な Read Access を内包する構成になっている。Familiar 側の型参照は `task_management::FamiliarTaskAssignmentQueries` を優先し、`soul_ai` 実装詳細への直接依存を増やさない。
 - `apply_task_assignment_requests_system` を拡張する場合は、既存の責務分離ヘルパー（受理判定 / idle正規化 / 予約反映 / DeliveringTo / イベント）へ追記し、単一関数へ責務を戻さない。
 - `pathfinding_system` の変更は補助関数（再利用判定・再探索・休憩フォールバック・失敗時処理）単位で行い、分岐をインラインで肥大化させない。
 - floor/wall の搬入同期変更は `src/systems/logistics/transport_request/producer/mod.rs` の共通ヘルパー（`sync_construction_requests`, `sync_construction_delivery`。内部で `group_tiles_by_site`, `consume_waiting_tile_resources` を利用）を再利用して重複実装を避ける。
