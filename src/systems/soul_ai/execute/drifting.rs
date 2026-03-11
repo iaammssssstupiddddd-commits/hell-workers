@@ -1,7 +1,7 @@
 use bevy::prelude::*;
+use hw_core::events::SoulEscaped;
 use rand::Rng;
 
-use crate::entities::damned_soul::spawn::PopulationManager;
 use crate::entities::damned_soul::{DriftEdge, DriftPhase, DriftingState, IdleBehavior, IdleState};
 use crate::relationships::CommandedBy;
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
@@ -157,7 +157,6 @@ pub fn drifting_behavior_system(
 /// マップ端到達時に漂流中 Soul をデスポーン
 pub fn despawn_at_edge_system(
     mut commands: Commands,
-    mut population: ResMut<PopulationManager>,
     q_souls: Query<
         (Entity, &Transform, &IdleState),
         (
@@ -176,11 +175,7 @@ pub fn despawn_at_edge_system(
             continue;
         }
 
-        population.total_escaped += 1;
         commands.entity(entity).try_despawn();
-        info!(
-            "SOUL_DRIFT: {:?} despawned at edge {:?} (total_escaped={})",
-            entity, grid, population.total_escaped
-        );
+        commands.trigger(SoulEscaped { entity, grid });
     }
 }

@@ -55,6 +55,7 @@ Familiar の状態: `Idle / SearchingTask / Scouting / Supervising`
 | `execute/designation_apply.rs` | Execute | 作業指定の適用 |
 | `execute/gathering_apply.rs` | Execute | 集会場所への移動実行 |
 | `execute/gathering_spawn.rs` | Execute | 集会発生判定と `GatheringSpawnRequest` 発行 |
+| `execute/task_assignment_apply.rs` | Execute | `TaskAssignmentRequest` の適用、idle 正規化、予約反映、`DeliveringTo` 付与 |
 | `execute/idle_behavior_apply.rs` | Execute | アイドル行動の実行 |
 | `execute/escaping_apply.rs` | Execute | 脱走移動の実行 |
 
@@ -100,6 +101,7 @@ Familiar の状態: `Idle / SearchingTask / Scouting / Supervising`
 
 - **Decide** フェーズは pure outcome または shared request を生成するのみ。ECS 状態の直接変更は **Execute** フェーズで行い、root-only context を要する adapter は `src/` 側に残す。
 - `app.add_observer(...)` による一元登録を使い、スポーン時の `.observe(...)` による二重登録を避ける。
+- crate へ移設済みの system は、この crate の Plugin を唯一の登録元にする。root 側の thin re-export は互換パスと ordering 参照のためだけに残し、同じ system function を再登録しない。
 
 ## 依存クレート
 
@@ -117,6 +119,7 @@ hw_ai は**ゲームエンティティ非依存の純粋 AI ロジック**のみ
 
 - **Soul AI**: バイタル更新・集会タイマー・状態整合・脱走判断・アイドル行動・分離行動
 - **Soul AI Execute**: `gathering_spawn_logic_system` のような shared request 生成システム
+- **Soul AI Execute**: `task_assignment_apply` のような shared 型だけで閉じる apply system とその helper 群
 - **Familiar AI**: 状態変化検出・ターゲット追跡・状態機械・分隊管理・監視/スカウト判断・リクルート判定・激励対象選定
 - **Blueprint Auto Gather**: 需要供給集計・必要 designation 数の pure planning
 - 純粋ヘルパー関数（`is_soul_available_for_work` 等）
@@ -138,7 +141,7 @@ hw_ai は**ゲームエンティティ非依存の純粋 AI ロジック**のみ
 | `familiar_ai/decide/state_decision.rs` | concrete `SpatialGrid` と request message 出力の adapter を担当 |
 | `familiar_ai/perceive/resource_sync.rs` | `SharedResourceCache` 予約再構築のみ（apply helper は `hw_logistics` に移設済み） |
 
-root 側の `src/systems/soul_ai/decide/work/*.rs` と `src/systems/soul_ai/decide/idle_behavior/mod.rs` は互換 re-export shell のみで、実体は `hw_ai::soul_ai::*` にある。
+root 側の `src/systems/soul_ai/decide/work/*.rs` と `src/systems/soul_ai/decide/idle_behavior/mod.rs` は互換 re-export shell のみで、実体は `hw_ai::soul_ai::*` にある。`src/systems/soul_ai/execute/task_execution/mod.rs` の `apply_task_assignment_requests_system` も同様に re-export のみで、system 登録責務は `SoulAiCorePlugin` が持つ。
 
 ### 移設の判断基準
 

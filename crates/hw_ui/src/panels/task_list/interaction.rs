@@ -1,10 +1,12 @@
 // クリック、タブ、可視状態、ハイライト
 
-use crate::interface::ui::components::{
+use crate::camera::MainCamera;
+use crate::components::{
     EntityListBody, LeftPanelMode, LeftPanelTabButton, TaskListBody, TaskListItem,
 };
-use crate::interface::ui::panels::info_panel::InfoPanelPinState;
-use crate::interface::ui::theme::UiTheme;
+use crate::list::{apply_row_highlight, focus_camera_on_entity};
+use crate::panels::info_panel::InfoPanelPinState;
+use crate::theme::UiTheme;
 use bevy::prelude::*;
 
 pub fn task_list_visual_feedback_system(
@@ -28,7 +30,7 @@ pub fn task_list_visual_feedback_system(
 
     for (interaction, item, mut node, mut bg, mut border_color) in q_items.iter_mut() {
         let is_selected = pin_state.entity == Some(item.0);
-        crate::interface::ui::list::apply_row_highlight(
+        apply_row_highlight(
             &mut node,
             &mut bg,
             &mut border_color,
@@ -120,8 +122,8 @@ pub fn left_panel_visibility_system(
 pub fn task_list_click_system(
     mut pin_state: ResMut<InfoPanelPinState>,
     interactions: Query<(&Interaction, &TaskListItem), Changed<Interaction>>,
-    mut camera_query: Query<&mut Transform, With<crate::interface::camera::MainCamera>>,
-    target_transforms: Query<&GlobalTransform, Without<crate::interface::camera::MainCamera>>,
+    mut camera_query: Query<&mut Transform, With<MainCamera>>,
+    target_transforms: Query<&GlobalTransform, Without<MainCamera>>,
 ) {
     for (interaction, item) in &interactions {
         if *interaction != Interaction::Pressed {
@@ -129,11 +131,7 @@ pub fn task_list_click_system(
         }
 
         let target_entity = item.0;
-        crate::interface::ui::list::focus_camera_on_entity(
-            target_entity,
-            &mut camera_query,
-            &target_transforms,
-        );
+        focus_camera_on_entity(target_entity, &mut camera_query, &target_transforms);
         pin_state.entity = Some(target_entity);
     }
 }
