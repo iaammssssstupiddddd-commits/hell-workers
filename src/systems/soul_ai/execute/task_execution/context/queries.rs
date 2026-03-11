@@ -5,7 +5,7 @@ use bevy::prelude::*;
 
 use crate::events::{ResourceReservationRequest, TaskAssignmentRequest};
 use crate::systems::soul_ai::execute::task_execution::context::access::{
-    DesignationAccess, FamiliarStorageAccess, MutStorageAccess, ReservationAccess, StorageAccess,
+    DesignationAccess, MutStorageAccess, ReservationAccess, StorageAccess,
 };
 use crate::world::map::WorldMapRead;
 
@@ -216,33 +216,3 @@ macro_rules! impl_task_reservation_access {
 impl_task_reservation_access!(TaskQueries<'w, 's>);
 impl_task_reservation_access!(TaskAssignmentQueries<'w, 's>);
 impl_task_reservation_access!(TaskUnassignQueries<'w, 's>);
-
-/// タスク割り当てに必要なクエリ群（Familiar AI向け・独立型）
-///
-/// `TaskAssignmentQueries` の alias ではなく独立した `SystemParam` struct。
-/// `storage` フィールドは `FamiliarStorageAccess` を使い、construction site への
-/// 直接依存は root bridge 側の別引数へ切り出す。
-#[derive(SystemParam)]
-pub struct FamiliarTaskAssignmentQueries<'w, 's> {
-    pub reservation: ReservationAccess<'w, 's>,
-    pub designation: DesignationAccess<'w, 's>,
-    pub storage: FamiliarStorageAccess<'w, 's>,
-    pub assignment_writer: MessageWriter<'w, TaskAssignmentRequest>,
-    pub read: TaskAssignmentReadAccess<'w, 's>,
-}
-
-impl<'w, 's> Deref for FamiliarTaskAssignmentQueries<'w, 's> {
-    type Target = TaskAssignmentReadAccess<'w, 's>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.read
-    }
-}
-
-impl<'w, 's> DerefMut for FamiliarTaskAssignmentQueries<'w, 's> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.read
-    }
-}
-
-impl_task_reservation_access!(FamiliarTaskAssignmentQueries<'w, 's>);

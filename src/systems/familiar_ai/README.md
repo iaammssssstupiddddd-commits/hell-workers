@@ -20,7 +20,7 @@
 | ファイル/ディレクトリ | 内容 |
 |---|---|
 | `state_handlers/` | `hw_ai` 実装を公開する薄い re-export |
-| `task_management/` | タスク検索・割り当てコア（下表） |
+| `task_management/` | `hw_ai` 実装を公開する thin bridge |
 | `auto_gather_for_blueprint/` | root helper / thin re-export 群。`actions.rs` と `is_reachable` は root、純計画層は `hw_ai` |
 | `auto_gather_for_blueprint.rs` | `Commands` / pathfinding を持つ orchestration entrypoint |
 | `encouragement.rs` | `hw_ai` の対象選定を呼ぶ request 出力 adapter |
@@ -35,16 +35,7 @@
 
 ### task_management/ ディレクトリ
 
-タスク検索・割り当ての中核サブシステム。
-
-| ファイル/ディレクトリ | 内容 |
-|---|---|
-| `task_finder/` | タスク候補収集・スコアリング |
-| `builders/` | タスク割り当てリクエストのビルダー |
-| `delegation/` | `TaskManager` — タスク委譲の実行 |
-| `policy/` | タスク選択ポリシー（ソースセレクタ） |
-| `validator/` | 割り当て可能性のバリデーション |
-| `task_assigner.rs` | `assign_task_to_worker` — コア割り当て関数 |
+root 側の `task_management/` は [mod.rs](/home/satotakumi/projects/hell-workers/src/systems/familiar_ai/decide/task_management/mod.rs) だけを残す thin bridge で、実装本体は `hw_ai::familiar_ai::decide::task_management` にある。
 
 ## execute/ ディレクトリ
 
@@ -100,7 +91,7 @@ root adapter から呼ばれる pure logic / helper:
 |---|---|
 | `perceive/resource_sync.rs` | ゲーム固有リソース予約の同期。`sync_reservations_system` と `ReservationSyncTimer` を持ち、`SharedResourceCache` は `hw_logistics` から re-export |
 | `decide/task_delegation.rs` | タスク検索・割り当て（空間グリッド・`WorldMap` 参照） |
-| `decide/task_management/` | スコアリング・バリデーター・ポリシー（全クエリがゲーム固有） |
+| `decide/task_management/` | `hw_ai::familiar_ai::decide::task_management` への thin bridge。root 側は `task_delegation.rs` と `ConstructionSiteAccess` 実装だけを保持 |
 | `decide/auto_gather_for_blueprint.rs` | `Commands` / pathfinding / Blueprint 直接 query を束ねる orchestration |
 | `decide/auto_gather_for_blueprint/actions.rs` / `helpers.rs` | designation 更新と `is_reachable` を担当する root helper |
 | `decide/encouragement.rs` | `Time` / concrete `SpatialGrid` / request message 出力の adapter |
