@@ -1,4 +1,3 @@
-pub mod connectivity;
 pub mod placement;
 pub mod removal;
 pub mod removal_preview;

@@ -1,6 +1,7 @@
 pub mod floor_construction;
 pub mod ground_resources;
 pub mod item_lifetime;
+pub mod manual_haul_selector;
 pub mod provisional_wall;
 pub mod resource_cache;
 pub mod tile_index;

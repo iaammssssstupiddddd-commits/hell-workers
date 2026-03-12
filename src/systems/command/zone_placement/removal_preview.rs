@@ -1,9 +1,8 @@
 use crate::systems::world::zones::AreaBounds;
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
+use hw_world::identify_removal_targets;
 use std::collections::HashSet;
-
-use super::connectivity::identify_removal_targets;
 
 #[derive(Default, Resource)]
 pub struct ZoneRemovalPreviewState {
