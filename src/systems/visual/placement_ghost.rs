@@ -4,14 +4,14 @@ use crate::app_contexts::{
 use crate::interface::camera::MainCamera;
 use crate::systems::jobs::{Blueprint, Building, BuildingType};
 use crate::systems::world::zones::{Site, Yard};
-use crate::world::map::{RIVER_Y_MIN, WorldMap, WorldMapRead};
+use crate::world::map::{RIVER_Y_MIN, WorldMap, WorldMapRead, WorldMapRef};
 use bevy::prelude::*;
 use hw_core::constants::TILE_SIZE;
 use hw_core::game_state::PlayMode;
 use hw_ui::selection::{
-    BuildingPlacementContext, TANK_NEARBY_BUCKET_STORAGE_TILES, WorldReadApi,
-    bucket_storage_geometry, building_geometry, building_occupied_grids, building_size,
-    building_spawn_pos, validate_bucket_storage_placement, validate_building_placement,
+    BuildingPlacementContext, TANK_NEARBY_BUCKET_STORAGE_TILES, bucket_storage_geometry,
+    building_geometry, building_occupied_grids, building_size, building_spawn_pos,
+    validate_bucket_storage_placement, validate_building_placement,
 };
 
 #[derive(Component)]
@@ -19,54 +19,6 @@ pub struct PlacementGhost;
 
 #[derive(Component)]
 pub struct PlacementPartnerGhost;
-
-struct GhostPlacementWorld<'a> {
-    world_map: &'a WorldMap,
-}
-
-impl WorldReadApi for GhostPlacementWorld<'_> {
-    fn has_building(&self, grid: (i32, i32)) -> bool {
-        self.world_map.has_building(grid)
-    }
-
-    fn has_stockpile(&self, grid: (i32, i32)) -> bool {
-        self.world_map.has_stockpile(grid)
-    }
-
-    fn is_walkable(&self, gx: i32, gy: i32) -> bool {
-        self.world_map.is_walkable(gx, gy)
-    }
-
-    fn is_river_tile(&self, gx: i32, gy: i32) -> bool {
-        self.world_map.is_river_tile(gx, gy)
-    }
-
-    fn building_entity(&self, grid: (i32, i32)) -> Option<Entity> {
-        self.world_map.building_entity(grid)
-    }
-
-    fn stockpile_entity(&self, grid: (i32, i32)) -> Option<Entity> {
-        self.world_map.stockpile_entity(grid)
-    }
-
-    fn pos_to_idx(&self, gx: i32, gy: i32) -> Option<usize> {
-        self.world_map.pos_to_idx(gx, gy)
-    }
-}
-
-impl GhostPlacementWorld<'_> {
-    fn occupied_grids_for_parent(
-        &self,
-        parent_kind: CompanionParentKind,
-        anchor: (i32, i32),
-    ) -> Vec<(i32, i32)> {
-        match parent_kind {
-            CompanionParentKind::Tank => {
-                building_occupied_grids(BuildingType::Tank, anchor, RIVER_Y_MIN)
-            }
-        }
-    }
-}
 
 fn is_replaceable_wall_at(
     world_map: &WorldMap,
@@ -159,9 +111,7 @@ pub fn placement_ghost_system(
     };
 
     let grid_pos = WorldMap::world_to_grid(world_pos);
-    let read_world = GhostPlacementWorld {
-        world_map: world_map.as_ref(),
-    };
+    let read_world = WorldMapRef(world_map.as_ref());
 
     let geometry = if companion_kind == Some(CompanionPlacementKind::BucketStorage) {
         bucket_storage_geometry(grid_pos)
@@ -207,7 +157,7 @@ pub fn placement_ghost_system(
             parent_validation
         } else {
             let parent_occupied_grids =
-                read_world.occupied_grids_for_parent(active.parent_kind, active.parent_anchor);
+                building_occupied_grids(BuildingType::Tank, active.parent_anchor, RIVER_Y_MIN);
             validate_bucket_storage_placement(
                 &read_world,
                 &geometry,

@@ -4,40 +4,15 @@ use crate::app_contexts::{
 use crate::interface::camera::MainCamera;
 use crate::systems::jobs::{Building, BuildingType};
 use crate::systems::visual::placement_ghost::{PlacementGhost, PlacementPartnerGhost};
-use crate::world::map::{WorldMap, WorldMapRead};
+use crate::world::map::{WorldMap, WorldMapRead, WorldMapRef};
 use bevy::prelude::*;
 use hw_core::constants::TILE_SIZE;
 use hw_core::game_state::PlayMode;
 use hw_ui::selection::{
-    WorldReadApi, can_place_moved_building, move_anchor_grid, move_occupied_grids, move_spawn_pos,
+    can_place_moved_building, move_anchor_grid, move_occupied_grids, move_spawn_pos,
 };
 
 use super::placement::validate_tank_companion_for_move;
-
-struct PreviewWorldRead<'a>(&'a WorldMap);
-impl WorldReadApi for PreviewWorldRead<'_> {
-    fn has_building(&self, grid: (i32, i32)) -> bool {
-        self.0.has_building(grid)
-    }
-    fn has_stockpile(&self, grid: (i32, i32)) -> bool {
-        self.0.has_stockpile(grid)
-    }
-    fn is_walkable(&self, gx: i32, gy: i32) -> bool {
-        self.0.is_walkable(gx, gy)
-    }
-    fn is_river_tile(&self, gx: i32, gy: i32) -> bool {
-        self.0.is_river_tile(gx, gy)
-    }
-    fn building_entity(&self, grid: (i32, i32)) -> Option<Entity> {
-        self.0.building_entity(grid)
-    }
-    fn stockpile_entity(&self, grid: (i32, i32)) -> Option<Entity> {
-        self.0.stockpile_entity(grid)
-    }
-    fn pos_to_idx(&self, gx: i32, gy: i32) -> Option<usize> {
-        self.0.pos_to_idx(gx, gy)
-    }
-}
 
 pub fn building_move_preview_system(
     mut commands: Commands,
@@ -102,7 +77,7 @@ pub fn building_move_preview_system(
             let old_occupied = move_occupied_grids(building.kind, old_anchor);
             let destination_occupied = move_occupied_grids(building.kind, pending.destination_grid);
             let can_place = can_place_moved_building(
-                &PreviewWorldRead(world_map.as_ref()),
+                &WorldMapRef(world_map.as_ref()),
                 target_entity,
                 &old_occupied,
                 &destination_occupied,
@@ -152,7 +127,7 @@ pub fn building_move_preview_system(
     let old_occupied = move_occupied_grids(building.kind, old_anchor);
     let destination_occupied = move_occupied_grids(building.kind, destination_grid);
     let can_place = can_place_moved_building(
-        &PreviewWorldRead(world_map.as_ref()),
+        &WorldMapRef(world_map.as_ref()),
         target_entity,
         &old_occupied,
         &destination_occupied,

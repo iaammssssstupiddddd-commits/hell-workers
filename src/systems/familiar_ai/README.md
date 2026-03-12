@@ -29,7 +29,7 @@
 | `recruitment.rs` | `hw_ai` 実装を公開する薄い re-export |
 | `scouting.rs` | `hw_ai` 実装を公開する薄い re-export |
 | `squad.rs` | `hw_ai` 実装を公開する薄い re-export |
-| `state_decision.rs` | concrete `SpatialGrid` / request 出力を持つ状態遷移 adapter |
+| `state_decision.rs` | concrete `SpatialGrid` / `transmute_lens_filtered` / request 出力を持つ状態遷移 adapter。branch dispatch と pure result 型の実体は `hw_ai` |
 | `supervising.rs` | `hw_ai` 実装を公開する薄い re-export |
 | `task_delegation.rs` | タスク委譲エントリポイント |
 
@@ -76,6 +76,7 @@ root adapter から呼ばれる pure logic / helper:
 
 | モジュール | 内容 |
 |---|---|
+| `decide/state_decision` | `FamiliarDecisionPath` による branch dispatch と `FamiliarStateDecisionResult` のような pure result 型 |
 | `decide/query_types.rs` | Familiar Decide 用の narrow query 定義 |
 | `decide/helpers.rs` | `finalize_state_transitions` / `process_squad_management` |
 | `decide/recruitment.rs` | `SpatialGridOps` ベースのリクルート選定・スカウト開始判定 |
@@ -95,7 +96,7 @@ root adapter から呼ばれる pure logic / helper:
 | `decide/auto_gather_for_blueprint.rs` | `Commands` / pathfinding / Blueprint 直接 query を束ねる orchestration |
 | `decide/auto_gather_for_blueprint/actions.rs` / `helpers.rs` | designation 更新と `is_reachable` を担当する root helper |
 | `decide/encouragement.rs` | `Time` / concrete `SpatialGrid` / request message 出力の adapter |
-| `decide/state_decision.rs` | concrete `SpatialGrid` と request message 出力の adapter |
+| `decide/state_decision.rs` | concrete `SpatialGrid` / `transmute_lens_filtered` / request message 出力の adapter。branch dispatch と pure result 型の実体は `hw_ai` |
 | `execute/squad_apply.rs` | `ManagedBy` Relationship の生成・削除 |
 
 ### プラグイン構成の二層構造

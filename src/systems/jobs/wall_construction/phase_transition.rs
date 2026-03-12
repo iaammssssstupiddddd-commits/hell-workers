@@ -2,6 +2,7 @@
 
 use super::components::*;
 use crate::assets::GameAssets;
+use crate::systems::jobs::construction_shared::remove_tile_task_components;
 use crate::systems::jobs::{Building, BuildingType, ProvisionalWall};
 use crate::world::map::{WorldMap, WorldMapWrite};
 use bevy::prelude::*;
@@ -77,17 +78,15 @@ pub fn wall_construction_phase_transition_system(
         if framed_tiles >= total_tiles {
             site.phase = WallConstructionPhase::Coating;
 
-            for (tile_entity, mut tile) in q_tiles
+            let tile_entities: Vec<Entity> = q_tiles
                 .iter_mut()
                 .filter(|(_, tile)| tile.parent_site == site_entity)
-            {
-                tile.state = WallTileState::WaitingMud;
-                commands.entity(tile_entity).remove::<(
-                    crate::systems::jobs::Designation,
-                    crate::systems::jobs::TaskSlots,
-                    crate::systems::jobs::Priority,
-                )>();
-            }
+                .map(|(tile_entity, mut tile)| {
+                    tile.state = WallTileState::WaitingMud;
+                    tile_entity
+                })
+                .collect();
+            remove_tile_task_components(&mut commands, &tile_entities);
 
             info!(
                 "Wall site {:?} -> Coating phase (all {} tiles framed)",

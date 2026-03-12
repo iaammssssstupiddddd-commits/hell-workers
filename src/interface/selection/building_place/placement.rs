@@ -1,48 +1,13 @@
 use crate::assets::GameAssets;
 use crate::systems::jobs::{Blueprint, Building, BuildingType};
 use crate::systems::world::zones::{Site, Yard};
-use crate::world::map::{RIVER_Y_MIN, WorldMap};
+use crate::world::map::{RIVER_Y_MIN, WorldMap, WorldMapRef};
 use bevy::prelude::*;
 use hw_core::constants::*;
 use hw_ui::selection::{
-    BuildingPlacementContext, TANK_NEARBY_BUCKET_STORAGE_TILES, WorldReadApi,
-    bucket_storage_geometry, building_geometry, validate_bucket_storage_placement,
-    validate_building_placement,
+    BuildingPlacementContext, TANK_NEARBY_BUCKET_STORAGE_TILES, bucket_storage_geometry,
+    building_geometry, validate_bucket_storage_placement, validate_building_placement,
 };
-
-struct SimpleWorldRead<'a> {
-    world_map: &'a WorldMap,
-}
-
-impl WorldReadApi for SimpleWorldRead<'_> {
-    fn has_building(&self, grid: (i32, i32)) -> bool {
-        self.world_map.has_building(grid)
-    }
-
-    fn has_stockpile(&self, grid: (i32, i32)) -> bool {
-        self.world_map.has_stockpile(grid)
-    }
-
-    fn is_walkable(&self, gx: i32, gy: i32) -> bool {
-        self.world_map.is_walkable(gx, gy)
-    }
-
-    fn is_river_tile(&self, gx: i32, gy: i32) -> bool {
-        self.world_map.is_river_tile(gx, gy)
-    }
-
-    fn building_entity(&self, grid: (i32, i32)) -> Option<Entity> {
-        self.world_map.building_entity(grid)
-    }
-
-    fn stockpile_entity(&self, grid: (i32, i32)) -> Option<Entity> {
-        self.world_map.stockpile_entity(grid)
-    }
-
-    fn pos_to_idx(&self, gx: i32, gy: i32) -> Option<usize> {
-        self.world_map.pos_to_idx(gx, gy)
-    }
-}
 
 fn is_replaceable_wall_at(
     world_map: &WorldMap,
@@ -89,7 +54,7 @@ pub(super) fn place_building_blueprint(
 ) -> Option<(Entity, Vec<(i32, i32)>, Vec2)> {
     let geometry = building_geometry(building_type, grid, RIVER_Y_MIN);
     let replace_wall_entity = {
-        let read_world = SimpleWorldRead { world_map };
+        let read_world = WorldMapRef(world_map);
         let ctx = BuildingPlacementContext {
             world: &read_world,
             in_site: q_sites.iter().any(|site| site.contains(geometry.draw_pos)),
@@ -169,7 +134,7 @@ pub(super) fn try_place_bucket_storage_companion(
     anchor_grid: (i32, i32),
 ) -> bool {
     let geometry = bucket_storage_geometry(anchor_grid);
-    let read_world = SimpleWorldRead { world_map };
+    let read_world = WorldMapRef(world_map);
     let validation = validate_bucket_storage_placement(
         &read_world,
         &geometry,
