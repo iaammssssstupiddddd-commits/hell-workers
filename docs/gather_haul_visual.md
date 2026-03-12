@@ -110,8 +110,8 @@ systems/visual/
 
 ## 5. 関連ファイル
 
-- [visual/gather/mod.rs](src/systems/visual/gather/mod.rs)
-- [visual/haul/mod.rs](src/systems/visual/haul/mod.rs)
-- [visual/soul.rs](src/systems/visual/soul.rs)
-- [utils/worker_icon.rs](src/systems/utils/worker_icon.rs)
+- [visual/gather/mod.rs](../crates/hw_visual/src/gather/mod.rs)
+- [visual/haul/mod.rs](../crates/hw_visual/src/haul/mod.rs)
+- [visual/soul/mod.rs](../crates/hw_visual/src/soul/mod.rs)
+- [worker_icon.rs](../crates/hw_visual/src/worker_icon.rs)
 - [visual.rs](src/plugins/visual.rs)

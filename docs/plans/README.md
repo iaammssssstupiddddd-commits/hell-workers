@@ -19,7 +19,7 @@
 
 | Document | Status | Notes |
 |---|---|---|
-| [re-export-consolidation-plan-2026-03-12.md](re-export-consolidation-plan-2026-03-12.md) | Draft | `pub use` の多段中継と wildcard 再公開を削減し、正規 public path を整理する計画。 |
+| [familiar-state-decision-adapter-split-plan-2026-03-12.md](familiar-state-decision-adapter-split-plan-2026-03-12.md) | Draft | Familiar の `state_decision.rs` を pure outcome core と root message adapter に分離する計画。 |
 
 ## アーカイブ計画書一覧 (`docs/plans/archive`)
 
@@ -83,6 +83,7 @@
 | [archive/perf-review-followups-plan-2026-03-06.md](archive/perf-review-followups-plan-2026-03-06.md) | アーカイブ | スケール時に効きやすい全件走査・全UI再構築・線形の計画。 |
 | [archive/perf-top3-implementation-plan-2026-02-22.md](archive/perf-top3-implementation-plan-2026-02-22.md) | アーカイブ | 直近Perf上位3件の最適化計画。 |
 | [archive/plant-trees-visuals-plan-2026-02-22.md](archive/plant-trees-visuals-plan-2026-02-22.md) | アーカイブ | `Plant Trees` の3フェーズ演出およびドラッグ時プレビュー追加の実装計画。 |
+| [archive/re-export-consolidation-plan-2026-03-12.md](archive/re-export-consolidation-plan-2026-03-12.md) | アーカイブ | `pub use` の多段中継と wildcard 再公開を削減し、正規 public path を整理する計画。 |
 | [archive/refactor-500plus-files-phase-plan-2026-02-14.md](archive/refactor-500plus-files-phase-plan-2026-02-14.md) | アーカイブ | 500行超ファイルの段階的リファクタ計画。 |
 | [archive/refactor-implementation-order-2026-02-20.md](archive/refactor-implementation-order-2026-02-20.md) | アーカイブ | リファクタ実装順のガイド。 |
 | [archive/refactor-phase-plan-2026-02.md](archive/refactor-phase-plan-2026-02.md) | アーカイブ | フェーズ分割リファクタ計画。 |
@@ -119,4 +120,3 @@
 | [archive/workspace-construction-phase-extraction.md](archive/workspace-construction-phase-extraction.md) | アーカイブ | Floor/Wall 建設で使うフェーズ・状態型がの計画。 |
 | [archive/zone-placement-refactor-plan-2026-03-05.md](archive/zone-placement-refactor-plan-2026-03-05.md) | アーカイブ | zone_placement.rsの計画。 |
 | [archive/zone-removal-preview-diff-plan-2026-03-01.md](archive/zone-removal-preview-diff-plan-2026-03-01.md) | アーカイブ | Zone removal preview の全件更新を差分更新へ置換する計画。 |
-

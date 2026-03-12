@@ -50,14 +50,14 @@ pub const FONT_SIZE_BUBBLE_FAMILIAR: f32 = 12.0;
 
 | ファイル | 適用内容 |
 |:--|:--|
-| [entity_list.rs](src/interface/ui/setup/entity_list.rs) | タイトル、セクションヘッダー |
+| [entity_list.rs](../crates/hw_ui/src/setup/entity_list.rs) | タイトル、セクションヘッダー |
 | `src/interface/ui/list/` | ソウル名、使い魔名、空欄テキスト（view_model, spawn 等） |
-| [panels.rs](src/interface/ui/setup/panels.rs) | InfoPanel、HoverTooltip |
-| [dialogs.rs](src/interface/ui/setup/dialogs.rs) | 操作ダイアログ |
-| [bottom_bar.rs](src/interface/ui/setup/bottom_bar.rs) | メニューボタン、モード表示 |
-| [submenus.rs](src/interface/ui/setup/submenus.rs) | サブメニュー項目 |
-| [time_control.rs](src/interface/ui/setup/time_control.rs) | 時計、速度ボタン、タスクサマリー |
-| [soul.rs](src/systems/visual/soul.rs) | ステータスアイコン |
-| [effects.rs](src/systems/visual/blueprint/effects.rs) | 搬入ポップアップ |
+| [panels.rs](../crates/hw_ui/src/setup/panels.rs) | InfoPanel、HoverTooltip |
+| [dialogs.rs](../crates/hw_ui/src/setup/dialogs.rs) | 操作ダイアログ |
+| [bottom_bar.rs](../crates/hw_ui/src/setup/bottom_bar.rs) | メニューボタン、モード表示 |
+| [submenus.rs](../crates/hw_ui/src/setup/submenus.rs) | サブメニュー項目 |
+| [time_control.rs](../crates/hw_ui/src/setup/time_control.rs) | 時計、速度ボタン、タスクサマリー |
+| [soul/mod.rs](../crates/hw_visual/src/soul/mod.rs) | ステータスアイコン |
+| [effects.rs](../crates/hw_visual/src/blueprint/effects.rs) | 搬入ポップアップ |
 | [building_completion/post_process.rs](../src/systems/jobs/building_completion/post_process.rs) | 建物完成テキスト |
-| [speech/update.rs](src/systems/visual/speech/update.rs) | 吹き出しシステム（Soul/Familiar） |
+| [speech/update.rs](../crates/hw_visual/src/speech/update.rs) | 吹き出しシステム（Soul/Familiar） |
