@@ -132,12 +132,12 @@ root 側の `bevy_app` 残留（adapter 責務）:
 
 - `src/systems/visual/` および `src/systems/utils/` から抽出したビジュアルシステム全体
 - `GameAssets` に依存しない独立ビジュアル crate
-- アセットハンドルは `handles.rs` の 8 Resource として保持し、startup 時に root から注入される
+- アセットハンドルは `handles.rs` の 9 Resource として保持し、startup 時に root から注入される
 
 代表例:
 
 - `HwVisualPlugin` — hw_visual の全システムを一括登録する Plugin
-- `handles::{WallVisualHandles, BuildingAnimHandles, WorkIconHandles, MaterialIconHandles, HaulItemHandles, SpeechHandles, PlantTreeHandles, GatheringVisualHandles}` — ビジュアルハンドルリソース（GameAssets の代替）
+- `handles::{WallVisualHandles, BuildingAnimHandles, WorkIconHandles, MaterialIconHandles, HaulItemHandles, SpeechHandles, PlantTreeHandles, GatheringVisualHandles, SoulTaskHandles}` — ビジュアルハンドルリソース（GameAssets の代替）
 - `handles::GatheringVisualHandles` — 集会スポット visual 用ハンドルリソース（`aura_circle`, `card_table`, `campfire`, `barrel`）
 - `blueprint::*` — 設計図ビジュアル（アニメーション、プログレスバー、資材表示、完成エフェクト）
 - `dream::*` — Dream UI パーティクル、ドリームバブル、フローティングポップアップ（custom Material2d / UiMaterial）
@@ -163,8 +163,8 @@ root 側の責務（`src/systems/visual/` 残留ファイル）:
 
 | ファイル | 残留理由 |
 |:---|:---|
-| `floor_construction.rs` | `FloorConstructionSite` → `TaskArea` 依存（root 型） |
-| `wall_construction.rs` | `WallConstructionSite` → `TaskArea` 依存（root 型） |
+| `floor_construction.rs` | 建設タイル進捗バーと資材 visual の app shell |
+| `wall_construction.rs` | 建設タイル progress/資材 visual の app shell |
 | `placement_ghost.rs` | `BuildContext`, `CompanionPlacementState` 依存（app_contexts） |
 | `task_area_visual.rs` | `update_task_area_material_system` が `TaskContext` 依存 |
 
@@ -203,8 +203,9 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 - `soul_ai::helpers::gathering` — `hw_core::gathering` の互換 re-export と gathering timer helper
 - `soul_ai::helpers::gathering_positions` — 集会周辺ランダム位置生成・overlap 回避（`PathWorld + SpatialGridOps` 経由）
 - `soul_ai::helpers::gathering_motion` — 集会中移動先選定（Wandering / Still retreat）
-- `soul_ai::helpers::work::{is_soul_available_for_work, unassign_task}` — 作業可否判定・タスク解除ヘルパー
+- `soul_ai::helpers::work::is_soul_available_for_work` — 作業可否判定ヘルパー
 - `soul_ai::execute::task_execution::types::AssignedTask` — タスク実行バリアント定義
+- `soul_ai::execute::task_execution::context::{TaskExecutionContext, TaskQueries, TaskAssignmentQueries, ConstructionSiteAccess}` — タスク実行/割り当て用 context・SystemParam
 - `soul_ai::execute::task_execution::handler::{TaskHandler, run_task_handler, execute_haul_with_wheelbarrow}` — タスクハンドラトレイト・ディスパッチ
 - `soul_ai::execute::task_execution::{gather, build, coat_wall, collect_bone, collect_sand, frame_wall, haul, haul_to_blueprint, haul_to_mixer, move_plant, pour_floor, refine, reinforce_floor, common}` — 各タスク種別実装
 - `soul_ai::execute::task_execution::{haul_with_wheelbarrow, bucket_transport, transport_common}` — 輸送系タスク実装
@@ -232,12 +233,10 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 - `GameAssets` 依存の sprite spawn
 - root 固有の `WorldMapRead/Write` SystemParam wrapper や pathfinding context を前提にした adapter
 - full-fat query から narrow view への変換や、root-only resource を伴う request 出力 adapter
-- `ConstructionSiteAccess` のように `FloorConstructionSite` / `WallConstructionSite` を直接 Query する root 専用 `SystemParam`
 - UI システム
 - `Commands` で複雑な Entity 生成を行うもの
 - pathfinding / blueprint entity query を伴う auto-gather orchestration
-- `task_execution_system` 本体 — `WorldMapRead` / `TaskExecutionSoulQuery` など root 専用 SystemParam に依存するため root 残留。`task_execution/context/` も同様
-- `update_destination_to_adjacent` / `update_destination_to_blueprint` — `PathfindingContext` 自体は `hw_world` 所有だが、呼び出し側がまだ root の re-export path（`crate::world::pathfinding::*`）に結合しているため、その整理が済むまで hw_ai 移設対象外
+- `task_execution_system` 本体 — `TaskExecutionSoulQuery` / `WorldMapRead` / `unassign_task` / `OnTaskCompleted` を束ねる root wrapper として残留
 
 移設済み system の登録ルール:
 
@@ -381,6 +380,7 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 - `AssignedTask`（ワーカー実行中タスク状態 + 全フェーズ型）
 - `TaskAssignmentRequest`（`hw_jobs::events`）
 - `MovePlanned`（建物移動タスクの計画状態）
+- `FloorConstructionSite`, `WallConstructionSite`（親 site component）
 - `FloorTileBlueprint`, `WallTileBlueprint`（タイル単位建設状態）
 - `FloorTileState`, `WallTileState`（建設フェーズ enum）
 - `TargetFloorConstructionSite`, `TargetWallConstructionSite`
@@ -388,9 +388,6 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 
 ここに置かないもの:
 
-- `FloorConstructionSite` / `WallConstructionSite`（`TaskArea` 依存のためまだ root に残留）
-  - これらが `hw_jobs` に移設されるまで、`task_execution/context/access.rs` も root に残る（**task_execution 全面移設 blocker**）
-  - 移設には `TaskArea` (root `app_contexts`) との結合を解消する必要がある
 - floor / wall construction system
 - building completion shell
 - door system
