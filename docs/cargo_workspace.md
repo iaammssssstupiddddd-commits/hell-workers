@@ -362,7 +362,7 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 
 ここに置かないもの:
 
-- `GameAssets` 依存の初期スポーン（`initial_spawn.rs` は root 残留）
+- `GameAssets` 依存の初期スポーン（`src/systems/logistics/initial_spawn/` は root 残留。`mod.rs` が facade、`layout.rs` / `terrain_resources.rs` / `facilities.rs` / `report.rs` に責務分割）
 - UI ロジスティクス表示
 
 ### `hw_jobs`

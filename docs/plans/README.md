@@ -19,8 +19,8 @@
 
 | Document | Status | Notes |
 |---|---|---|
-| [familiar-state-decision-adapter-split-plan-2026-03-12.md](familiar-state-decision-adapter-split-plan-2026-03-12.md) | Draft | Familiar の `state_decision.rs` を pure outcome core と root message adapter に分離する計画。 |
-| [initial-resource-bootstrap-split-plan-2026-03-12.md](initial-resource-bootstrap-split-plan-2026-03-12.md) | Draft | src/systems/logistics/initial_spawn.rsの計画。 |
+| [familiar-state-decision-adapter-split-plan-2026-03-12.md](familiar-state-decision-adapter-split-plan-2026-03-12.md) | Done | Familiar の `state_decision.rs` を pure outcome core と root message adapter に分離する計画。 |
+| [hw-ai-boundary-cleanup-plan-2026-03-12.md](hw-ai-boundary-cleanup-plan-2026-03-12.md) | Draft | -の計画。 |
 
 ## アーカイブ計画書一覧 (`docs/plans/archive`)
 
@@ -70,6 +70,7 @@
 | [archive/hw-ui-crate-plan-2026-03-08.md](archive/hw-ui-crate-plan-2026-03-08.md) | アーカイブ | hw_ui crate 分離 実装計画 |
 | [archive/hw-ui-review-fixes-plan-2026-03-08.md](archive/hw-ui-review-fixes-plan-2026-03-08.md) | アーカイブ | hw_uiの計画。 |
 | [archive/hw-visual-crate-extraction.md](archive/hw-visual-crate-extraction.md) | アーカイブ | hw_visual クレート化 実装計画 |
+| [archive/initial-resource-bootstrap-split-plan-2026-03-12.md](archive/initial-resource-bootstrap-split-plan-2026-03-12.md) | アーカイブ | src/systems/logistics/initial_spawn.rsの計画。 |
 | [archive/large-files-refactor-2026-02-16.md](archive/large-files-refactor-2026-02-16.md) | アーカイブ | 大規模ファイル分割リファクタ計画。 |
 | [archive/logistics-to-hw-logistics-plan-2026-03-08.md](archive/logistics-to-hw-logistics-plan-2026-03-08.md) | アーカイブ | logistics 実行ロジックを hw_logistics へ移植する計画。M1〜M8 完了。 |
 | [archive/mixer-producer-phase-separation-plan-2026-03-05.md](archive/mixer-producer-phase-separation-plan-2026-03-05.md) | アーカイブ | producer/mixer.rsの計画。 |

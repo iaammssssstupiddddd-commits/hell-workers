@@ -414,3 +414,43 @@ Stockpile / Blueprint / Tank などへの搬入予約は、Bevy の Relationship
   **基礎需要計算**と**地面資材カウント**を集約する。
 - 割り当て時（`policy/haul/demand.rs`）は、`IncomingDeliveries` / `ReservationShadow` の控除を行う。
 - 実行時（`haul/dropping.rs` / `unloading.rs`）は、同一の基礎需要を参照したうえで「地面上で既に置かれた資材」を控除して受入可否を判定する。
+
+---
+
+## 9. 初期リソーススポーン（initial_spawn）
+
+`src/systems/logistics/initial_spawn/` は `StartupPlugin::PostStartup` チェーンの中で `initial_resource_spawner` 1 関数のみを公開する thin facade モジュールである。
+
+### 9.1 モジュール構成と責務境界
+
+| モジュール | 役割 | Bevy Commands 依存 |
+|---|---|---|
+| `mod.rs` | スポーン順序の orchestration のみ（~60行） | Res / Commands を受け取るが移譲する |
+| `layout.rs` | pure 計算（Site/Yard グリッド境界・Parking 占有マス） | **なし**（WorldMap 参照のみ） |
+| `terrain_resources.rs` | Tree / Rock / Wood の spawn と obstacle 登録 | あり |
+| `facilities.rs` | Site / Yard / WheelbarrowParking の spawn と footprint 登録 | あり |
+| `report.rs` | `InitialSpawnReport` によるログ集約 | なし |
+
+### 9.2 スポーン順序（固定）
+
+```
+spawn_trees / spawn_rocks   ← add_grid_obstacle を伴う
+spawn_initial_wood          ← obstacle 登録なし
+spawn_site_and_yard         ← layout 計算失敗時は warn & skip
+spawn_wheelbarrow_parking   ← layout 計算失敗時は warn & skip
+InitialSpawnReport::log()   ← 結果集計ログ
+```
+
+### 9.3 layout.rs の境界
+
+- `compute_site_yard_layout()`: マップ定数のみ参照する pure 関数。`Result<SiteYardLayout, SiteYardLayoutError>` を返す。
+- `compute_parking_layout(base, &WorldMap)`: `WorldMap::is_walkable` で 2x2 全マスの通行可能性を確認し、`Option<ParkingLayout>` を返す。
+- `SiteYardLayoutError` は `Display` を実装し、`warn!` メッセージに直接使用可能。
+
+### 9.4 追加・変更時の手順
+
+新しい初期エンティティを追加する場合:
+1. レイアウト計算がある場合は `layout.rs` に pure helper を追加する
+2. spawn 実装は種別に応じて `terrain_resources.rs` または `facilities.rs` に追加する
+3. `mod.rs` の facade 関数でスポーン順序（障害物 → アイテム → 施設）を守って呼び出す
+4. 結果を `InitialSpawnReport` に追加してログに反映する
