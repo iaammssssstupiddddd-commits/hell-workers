@@ -30,7 +30,15 @@ pub fn emit_soul_with_history(
         return false;
     }
 
-    spawn_soul_bubble(commands, soul_entity, emoji, pos, handles, emotion, priority);
+    spawn_soul_bubble(
+        commands,
+        soul_entity,
+        emoji,
+        pos,
+        handles,
+        emotion,
+        priority,
+    );
 
     if let Some(mut history) = history_opt {
         history.record_speech(priority, current_time);

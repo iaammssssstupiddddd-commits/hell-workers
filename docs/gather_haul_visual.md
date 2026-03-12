@@ -86,6 +86,8 @@ systems/visual/
 |:---|:---|
 | `WheelbarrowMovement` | 前フレーム位置と現在の回転角度を追跡 |
 
+`WheelbarrowMovement` の定義は `hw_core::visual` にあり、追従更新システム本体は `hw_visual::haul::wheelbarrow_follow_system` が所有します。
+
 - **回転**: フレーム間の移動差分（`atan2`）で全方向に対応（将来の経路平滑化にも対応可能）
 - **スプライト切替**: `LoadedItems` の有無で `wheelbarrow_empty` / `wheelbarrow_loaded` を差し替え
 - **スケール**: 運搬中は `WHEELBARROW_ACTIVE_SCALE` (1.8) で拡大表示し、歩行bobに同期した振動を適用

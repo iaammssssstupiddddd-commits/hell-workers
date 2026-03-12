@@ -100,11 +100,19 @@ fn update_wall_sprite(
     let (texture, flip_x, flip_y) = if is_provisional {
         match (up, down, left, right) {
             (false, false, false, false) => (wall_handles.stone_isolated.clone(), false, false),
-            (false, false, true, false) => (wall_handles.stone_horizontal_left.clone(), false, false),
-            (false, false, false, true) => (wall_handles.stone_horizontal_right.clone(), false, false),
-            (false, false, true, true) => (wall_handles.stone_horizontal_both.clone(), false, false),
+            (false, false, true, false) => {
+                (wall_handles.stone_horizontal_left.clone(), false, false)
+            }
+            (false, false, false, true) => {
+                (wall_handles.stone_horizontal_right.clone(), false, false)
+            }
+            (false, false, true, true) => {
+                (wall_handles.stone_horizontal_both.clone(), false, false)
+            }
             (true, false, false, false) => (wall_handles.stone_vertical_top.clone(), false, false),
-            (false, true, false, false) => (wall_handles.stone_vertical_bottom.clone(), false, false),
+            (false, true, false, false) => {
+                (wall_handles.stone_vertical_bottom.clone(), false, false)
+            }
             (true, true, false, false) => (wall_handles.stone_vertical_both.clone(), false, false),
             (true, false, true, false) => (wall_handles.stone_corner_tl.clone(), false, false),
             (true, false, false, true) => (wall_handles.stone_corner_tr.clone(), false, false),

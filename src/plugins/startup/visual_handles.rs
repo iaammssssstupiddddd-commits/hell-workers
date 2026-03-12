@@ -2,9 +2,10 @@
 
 use crate::assets::GameAssets;
 use bevy::prelude::*;
+use hw_core::visual::SoulTaskHandles;
 use hw_visual::{
     BuildingAnimHandles, GatheringVisualHandles, HaulItemHandles, MaterialIconHandles,
-    PlantTreeHandles, SoulTaskHandles, SpeechHandles, WallVisualHandles, WorkIconHandles,
+    PlantTreeHandles, SpeechHandles, WallVisualHandles, WorkIconHandles,
 };
 
 pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>) {

@@ -122,16 +122,16 @@ Familiar の `task_finder` がタスクを発見できる条件（**全て満た
 3. `HaulWithWheelbarrow` 中なら積載アイテムを可視化・座標復元、猫車を駐車に戻す
 4. 通常 Haul 中なら保持アイテムを地面にドロップ（Designation は **残す** → 再試行可能）
 5. `AssignedTask` を `None` にリセット
+6. `WorkingOn` を削除
 
 **実行しないこと（呼び出し元の責務）**:
-- `WorkingOn` の削除 → `task_execution_system` が担当
 - `CommandedBy` の削除 → `OnExhausted` / `OnStressBreakdown` observer が担当
 
 **呼び出し元と責務**:
 
 | 呼び出し元 | emit_abandoned | 追加でやること |
 |:---|:---|:---|
-| `task_execution_system`（ターゲット不整合） | false | `WorkingOn` 削除 |
+| `task_execution_system`（ターゲット不整合） | false | — |
 | `on_exhausted` observer | true | `CommandedBy` 削除 |
 | `on_stress_breakdown` observer | true | `CommandedBy` 削除 + `StressBreakdown` 付与 |
 | player cancel（area_selection） | false | — |

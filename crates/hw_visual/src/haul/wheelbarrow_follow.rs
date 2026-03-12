@@ -6,13 +6,8 @@ use crate::handles::HaulItemHandles;
 use hw_core::constants::*;
 use hw_core::relationships::{LoadedItems, PushedBy};
 use hw_core::soul::{AnimationState, DamnedSoul};
+use hw_core::visual::WheelbarrowMovement;
 use hw_logistics::types::Wheelbarrow;
-
-#[derive(Component, Default)]
-pub struct WheelbarrowMovement {
-    pub prev_pos: Option<Vec2>,
-    pub current_angle: f32,
-}
 
 pub fn wheelbarrow_follow_system(
     mut commands: Commands,

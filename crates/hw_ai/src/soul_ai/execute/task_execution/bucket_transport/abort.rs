@@ -1,14 +1,14 @@
 //! バケツ搬送共通 abort/cleanup ヘルパー
 
-use hw_logistics::ResourceType;
 use crate::soul_ai::execute::task_execution::common::clear_task_and_path;
 use crate::soul_ai::execute::task_execution::context::TaskExecutionContext;
 use crate::soul_ai::execute::task_execution::transport_common::{cancel, reservation};
 use crate::soul_ai::execute::task_execution::types::{
     BucketTransportData, BucketTransportDestination, BucketTransportSource,
 };
-use hw_world::WorldMap;
 use bevy::prelude::*;
+use hw_logistics::ResourceType;
+use hw_world::WorldMap;
 
 /// Mixer 搬送（Tank→Mixer経路）の中断: バケツドロップ + 予約解放 + タスククリア
 pub fn abort_and_drop_bucket_mixer(
@@ -45,7 +45,7 @@ pub fn drop_bucket_and_unassign(
     cancel::drop_bucket_with_cleanup(commands, bucket_entity, soul_pos);
 
     ctx.inventory.0 = None;
-    crate::soul_ai::helpers::work::unassign_task(
+    crate::soul_ai::helpers::work::cleanup_task_assignment(
         commands,
         ctx.soul_entity,
         soul_pos,
@@ -83,7 +83,7 @@ pub fn abort_without_bucket(
         }
         BucketTransportDestination::Tank(_) => {
             let soul_pos = ctx.soul_pos();
-            crate::soul_ai::helpers::work::unassign_task(
+            crate::soul_ai::helpers::work::cleanup_task_assignment(
                 commands,
                 ctx.soul_entity,
                 soul_pos,
@@ -126,7 +126,7 @@ pub fn abort_with_bucket(
         }
         BucketTransportDestination::Tank(_) => {
             let soul_pos = ctx.soul_pos();
-            crate::soul_ai::helpers::work::unassign_task(
+            crate::soul_ai::helpers::work::cleanup_task_assignment(
                 commands,
                 ctx.soul_entity,
                 soul_pos,

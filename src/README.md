@@ -51,33 +51,30 @@ Perceive → ApplyDeferred → Update → ApplyDeferred → Decide → ApplyDefe
 `crates/hw_*` と `src/` の分割ルールを以下に示す。
 
 ### hw_* クレートに置くもの
-- 純粋な型定義・定数・アルゴリズム（Bevy エンティティへの依存なし）
-- ゲームエンティティ非依存のシステム関数（汎用 Query のみ）
-- 複数システムから共有されるコンポーネント型
+- shared crate 型 (`hw_core` / `hw_jobs` / `hw_logistics` / `hw_world` / `hw_spatial`) と Bevy 汎用 API だけで閉じる型定義・定数・アルゴリズム
+- root-only resource / wrapper / relationship 契約の最終確定を持たないシステム関数
+- 複数システムから共有されるコンポーネント・resource・marker 型
 - UI の場合: ゲームエンティティクエリを持たないシステム、`Res<GameAssets>` を引数に取らないシステム
 
 ### src/ に置くもの
-- `DamnedSoul`, `Destination`, `Path`, `Familiar` など Root 定義エンティティへのアクセス
-- `WorldMap`・`Visibility`・`Transform` を変更するシステム
-- ECS Relationship を生成・削除する処理
-- タスク実行ハンドラ（ゲーム状態全体に依存）
-- `SystemParam` ラッパー（`WorldMapRead` 等）
+- `DamnedSoul`, `Destination`, `Path`, `Familiar`, `relationships.rs`, `events.rs` など root 所有型の契約を最終確定する処理
+- `WorldMapRead/Write`, `PopulationManager`, concrete `SpatialGrid`, `PathfindingContext` など root 固有 resource / wrapper を前提にする system
+- request 消費時に stale 再検証を行い、relationship/event/visual spawn を確定する adapter
 - `Res<GameAssets>` を引数に取るシステム（Bevy は `Res<dyn Trait>` 不可）
+- plugin wiring、互換 thin shell、root facade / wrapper system
 
 ### 判断フロー
 
 ```
-ゲームエンティティ (DamnedSoul / Destination / Path) に触れる?
+root-only resource / wrapper / 契約最終確定が必要か？
   YES → src/ に置く
 
-WorldMap を変更する、または Visibility / Transform を操作する?
+互換 import path のための thin shell / facade / wrapper を残す必要があるか？
   YES → src/ に置く
 
-ECS Relationship を生成・削除する?
-  YES → src/ に置く
-
-それ以外（純粋ロジック・型定義）?
-  → 対応する hw_* クレートに置く
+shared crate 型と Bevy 汎用 API だけで閉じるか？
+  YES → 対応する hw_* クレートに置く
+  NO  → src/ に置く
 ```
 
 ### re-export パターン
@@ -97,3 +94,10 @@ pub mod escaping_apply {
 pub use hw_ai::soul_ai::helpers::work::is_soul_available_for_work; // hw_ai から
 pub fn unassign_task(..., world_map: &WorldMap) { ... }            // src/ 独自
 ```
+
+### 用語
+
+- thin shell: `pub use` のみを持つ互換モジュール
+- root wrapper system: root-only query/resource/event を束ねて crate 実装を呼ぶ system
+- root facade/helper: 公開 API や互換 helper を root が所有し、低レベル実装へ委譲する層
+- root adapter: request 消費時の再検証や visual/UI/resource 依存を伴うゲーム側 system

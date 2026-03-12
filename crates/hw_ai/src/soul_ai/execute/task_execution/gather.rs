@@ -1,16 +1,16 @@
 //! 収集タスクの実行処理
 
-
-use hw_jobs::{Designation, WorkType};
-use hw_logistics::ResourceItem;
 use crate::soul_ai::execute::task_execution::{
     common::*,
     context::TaskExecutionContext,
     types::{AssignedTask, GatherPhase},
 };
-use hw_world::WorldMap;
 use bevy::prelude::*;
 use hw_core::constants::*;
+use hw_core::visual::{FadeOut, SoulTaskHandles};
+use hw_jobs::{Designation, WorkType};
+use hw_logistics::ResourceItem;
+use hw_world::WorldMap;
 
 pub fn handle_gather_task(
     ctx: &mut TaskExecutionContext,
@@ -18,7 +18,7 @@ pub fn handle_gather_task(
     work_type: &WorkType,
     phase: GatherPhase,
     commands: &mut Commands,
-    soul_handles: &hw_visual::SoulTaskHandles,
+    soul_handles: &SoulTaskHandles,
     time: &Res<Time>,
     world_map: &WorldMap,
 ) {
@@ -124,9 +124,7 @@ pub fn handle_gather_task(
                         commands
                             .entity(target)
                             .remove::<hw_jobs::ObstaclePosition>();
-                        commands
-                            .entity(target)
-                            .remove::<hw_jobs::Tree>(); // タスク対象から外す
+                        commands.entity(target).remove::<hw_jobs::Tree>(); // タスク対象から外す
                         commands.entity(target).remove::<Designation>(); // Designationも外す
 
                         // アニメーション画像に変更
@@ -147,9 +145,7 @@ pub fn handle_gather_task(
                         }
 
                         // フェードアウト開始
-                        commands
-                            .entity(target)
-                            .insert(hw_visual::fade::FadeOut { speed: 1.0 });
+                        commands.entity(target).insert(FadeOut { speed: 1.0 });
                     } else if rock.is_some() {
                         // 岩1つ → Rock × ROCK_DROP_AMOUNT
                         for i in 0..hw_core::constants::ROCK_DROP_AMOUNT {

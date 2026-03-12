@@ -1,9 +1,5 @@
 use bevy::prelude::*;
-
-#[derive(Component)]
-pub struct FadeOut {
-    pub speed: f32,
-}
+use hw_core::visual::FadeOut;
 
 pub fn fade_out_system(
     mut commands: Commands,

@@ -1,10 +1,10 @@
 //! 各 AssignedTask バリアントの TaskHandler 実装
 
-
-use hw_core::soul::StressBreakdown;
 use crate::soul_ai::execute::task_execution::context::TaskExecutionContext;
-use hw_world::WorldMap;
 use bevy::prelude::*;
+use hw_core::soul::StressBreakdown;
+use hw_core::visual::SoulTaskHandles;
+use hw_world::WorldMap;
 
 use super::task_handler::TaskHandler;
 use crate::soul_ai::execute::task_execution::types::{
@@ -18,7 +18,7 @@ impl TaskHandler<GatherData> for AssignedTask {
         ctx: &mut TaskExecutionContext,
         data: GatherData,
         commands: &mut Commands,
-        soul_handles: &hw_visual::SoulTaskHandles,
+        soul_handles: &SoulTaskHandles,
         time: &Res<Time>,
         world_map: &WorldMap,
         _breakdown_opt: Option<&StressBreakdown>,
@@ -41,7 +41,7 @@ impl TaskHandler<HaulData> for AssignedTask {
         ctx: &mut TaskExecutionContext,
         data: HaulData,
         commands: &mut Commands,
-        _soul_handles: &hw_visual::SoulTaskHandles,
+        _soul_handles: &SoulTaskHandles,
         _time: &Res<Time>,
         world_map: &WorldMap,
         _breakdown_opt: Option<&StressBreakdown>,
@@ -62,7 +62,7 @@ impl TaskHandler<BuildData> for AssignedTask {
         ctx: &mut TaskExecutionContext,
         data: BuildData,
         commands: &mut Commands,
-        _soul_handles: &hw_visual::SoulTaskHandles,
+        _soul_handles: &SoulTaskHandles,
         time: &Res<Time>,
         world_map: &WorldMap,
         _breakdown_opt: Option<&StressBreakdown>,
@@ -83,7 +83,7 @@ impl TaskHandler<HaulToBlueprintData> for AssignedTask {
         ctx: &mut TaskExecutionContext,
         data: HaulToBlueprintData,
         commands: &mut Commands,
-        _soul_handles: &hw_visual::SoulTaskHandles,
+        _soul_handles: &SoulTaskHandles,
         _time: &Res<Time>,
         world_map: &WorldMap,
         breakdown_opt: Option<&StressBreakdown>,
@@ -105,7 +105,7 @@ impl TaskHandler<CollectSandData> for AssignedTask {
         ctx: &mut TaskExecutionContext,
         data: CollectSandData,
         commands: &mut Commands,
-        soul_handles: &hw_visual::SoulTaskHandles,
+        soul_handles: &SoulTaskHandles,
         time: &Res<Time>,
         world_map: &WorldMap,
         _breakdown_opt: Option<&StressBreakdown>,
@@ -127,7 +127,7 @@ impl TaskHandler<CollectBoneData> for AssignedTask {
         ctx: &mut TaskExecutionContext,
         data: CollectBoneData,
         commands: &mut Commands,
-        soul_handles: &hw_visual::SoulTaskHandles,
+        soul_handles: &SoulTaskHandles,
         time: &Res<Time>,
         world_map: &WorldMap,
         _breakdown_opt: Option<&StressBreakdown>,
@@ -149,7 +149,7 @@ impl TaskHandler<RefineData> for AssignedTask {
         ctx: &mut TaskExecutionContext,
         data: RefineData,
         commands: &mut Commands,
-        soul_handles: &hw_visual::SoulTaskHandles,
+        soul_handles: &SoulTaskHandles,
         time: &Res<Time>,
         world_map: &WorldMap,
         _breakdown_opt: Option<&StressBreakdown>,
@@ -171,7 +171,7 @@ impl TaskHandler<HaulToMixerData> for AssignedTask {
         ctx: &mut TaskExecutionContext,
         data: HaulToMixerData,
         commands: &mut Commands,
-        _soul_handles: &hw_visual::SoulTaskHandles,
+        _soul_handles: &SoulTaskHandles,
         _time: &Res<Time>,
         world_map: &WorldMap,
         _breakdown_opt: Option<&StressBreakdown>,
@@ -193,19 +193,13 @@ impl TaskHandler<ReinforceFloorTileData> for AssignedTask {
         ctx: &mut TaskExecutionContext,
         data: ReinforceFloorTileData,
         commands: &mut Commands,
-        _soul_handles: &hw_visual::SoulTaskHandles,
+        _soul_handles: &SoulTaskHandles,
         time: &Res<Time>,
         world_map: &WorldMap,
         _breakdown_opt: Option<&StressBreakdown>,
     ) {
         crate::soul_ai::execute::task_execution::reinforce_floor::handle_reinforce_floor_task(
-            ctx,
-            data.tile,
-            data.site,
-            data.phase,
-            commands,
-            time,
-            world_map,
+            ctx, data.tile, data.site, data.phase, commands, time, world_map,
         );
     }
 }
@@ -215,7 +209,7 @@ impl TaskHandler<PourFloorTileData> for AssignedTask {
         ctx: &mut TaskExecutionContext,
         data: PourFloorTileData,
         commands: &mut Commands,
-        _soul_handles: &hw_visual::SoulTaskHandles,
+        _soul_handles: &SoulTaskHandles,
         time: &Res<Time>,
         world_map: &WorldMap,
         _breakdown_opt: Option<&StressBreakdown>,
@@ -231,7 +225,7 @@ impl TaskHandler<CoatWallData> for AssignedTask {
         ctx: &mut TaskExecutionContext,
         data: CoatWallData,
         commands: &mut Commands,
-        _soul_handles: &hw_visual::SoulTaskHandles,
+        _soul_handles: &SoulTaskHandles,
         time: &Res<Time>,
         world_map: &WorldMap,
         _breakdown_opt: Option<&StressBreakdown>,
@@ -247,7 +241,7 @@ impl TaskHandler<FrameWallTileData> for AssignedTask {
         ctx: &mut TaskExecutionContext,
         data: FrameWallTileData,
         commands: &mut Commands,
-        _soul_handles: &hw_visual::SoulTaskHandles,
+        _soul_handles: &SoulTaskHandles,
         time: &Res<Time>,
         world_map: &WorldMap,
         _breakdown_opt: Option<&StressBreakdown>,
@@ -263,7 +257,7 @@ impl TaskHandler<MovePlantData> for AssignedTask {
         ctx: &mut TaskExecutionContext,
         data: MovePlantData,
         commands: &mut Commands,
-        _soul_handles: &hw_visual::SoulTaskHandles,
+        _soul_handles: &SoulTaskHandles,
         _time: &Res<Time>,
         world_map: &WorldMap,
         _breakdown_opt: Option<&StressBreakdown>,

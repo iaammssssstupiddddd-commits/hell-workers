@@ -1,7 +1,7 @@
 //! 設計図への運搬タスクの実行処理
 
-use hw_core::soul::StressBreakdown;
 use hw_core::relationships::WorkingOn;
+use hw_core::soul::StressBreakdown;
 // use crate::systems::familiar_ai::perceive::resource_sync::SharedResourceCache; // Removed unused import
 use crate::soul_ai::execute::task_execution::{
     common::*,
@@ -9,8 +9,8 @@ use crate::soul_ai::execute::task_execution::{
     transport_common::{cancel, reservation},
     types::{AssignedTask, HaulToBpPhase},
 };
-use hw_world::WorldMap;
 use bevy::prelude::*;
+use hw_world::WorldMap;
 
 pub fn handle_haul_to_blueprint_task(
     ctx: &mut TaskExecutionContext,
@@ -32,7 +32,7 @@ pub fn handle_haul_to_blueprint_task(
             ctx.soul_entity
         );
         let soul_pos = ctx.soul_transform.translation.truncate();
-        crate::soul_ai::helpers::work::unassign_task(
+        crate::soul_ai::helpers::work::cleanup_task_assignment(
             commands,
             ctx.soul_entity,
             soul_pos,
@@ -155,7 +155,7 @@ pub fn handle_haul_to_blueprint_task(
                     .get(item_entity)
                     .ok()
                     .and_then(|(_, _, _, _, ri, _, _)| ri.map(|r| r.0));
-                crate::soul_ai::helpers::work::unassign_task(
+                crate::soul_ai::helpers::work::cleanup_task_assignment(
                     commands,
                     ctx.soul_entity,
                     soul_pos,

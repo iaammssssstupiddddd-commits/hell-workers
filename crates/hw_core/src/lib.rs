@@ -9,4 +9,5 @@ pub mod logistics;
 pub mod relationships;
 pub mod soul;
 pub mod system_sets;
+pub mod visual;
 pub mod world;

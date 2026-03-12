@@ -1,22 +1,21 @@
 //! AssignedTask ごとのディスパッチロジック
 
-use hw_core::soul::StressBreakdown;
-use hw_logistics::Wheelbarrow;
 use crate::soul_ai::execute::task_execution::context::TaskExecutionContext;
-use hw_world::WorldMap;
 use bevy::prelude::*;
+use hw_core::soul::StressBreakdown;
+use hw_core::visual::SoulTaskHandles;
+use hw_logistics::Wheelbarrow;
+use hw_world::WorldMap;
 
 use super::task_handler::TaskHandler;
-use crate::soul_ai::execute::task_execution::types::{
-    AssignedTask, HaulWithWheelbarrowData,
-};
+use crate::soul_ai::execute::task_execution::types::{AssignedTask, HaulWithWheelbarrowData};
 
 /// タスクタイプに応じて適切なハンドラにルーティングする。
 /// 標準ハンドラは TaskHandler 経由、HaulWithWheelbarrow は q_wheelbarrows を渡すため特別扱い。
 pub fn run_task_handler(
     ctx: &mut TaskExecutionContext,
     commands: &mut Commands,
-    soul_handles: &hw_visual::SoulTaskHandles,
+    soul_handles: &SoulTaskHandles,
     time: &Res<Time>,
     world_map: &WorldMap,
     breakdown_opt: Option<&StressBreakdown>,

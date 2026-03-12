@@ -1,16 +1,16 @@
+use crate::soul_ai::execute::task_execution::common::{clear_task_and_path, drop_item};
+use crate::soul_ai::execute::task_execution::context::TaskExecutionContext;
+use crate::soul_ai::execute::task_execution::transport_common::{cancel, reservation};
+use crate::soul_ai::helpers::work::cleanup_task_assignment;
+use bevy::prelude::*;
+use hw_core::constants::Z_ITEM_PICKUP;
 use hw_core::relationships::WorkingOn;
 use hw_jobs::BuildingType;
 use hw_logistics::{
     ResourceType, count_nearby_ground_resources, floor_site_tile_demand,
     provisional_wall_mud_demand, wall_site_tile_demand,
 };
-use crate::soul_ai::execute::task_execution::common::{clear_task_and_path, drop_item};
-use crate::soul_ai::execute::task_execution::context::TaskExecutionContext;
-use crate::soul_ai::execute::task_execution::transport_common::{cancel, reservation};
-use crate::soul_ai::helpers::work::unassign_task;
 use hw_world::WorldMap;
-use bevy::prelude::*;
-use hw_core::constants::Z_ITEM_PICKUP;
 
 fn floor_site_can_accept(
     ctx: &TaskExecutionContext,
@@ -128,8 +128,7 @@ pub(super) fn handle_dropping_phase(
 
             let is_bucket_item = matches!(
                 res_type,
-                hw_logistics::ResourceType::BucketEmpty
-                    | hw_logistics::ResourceType::BucketWater
+                hw_logistics::ResourceType::BucketEmpty | hw_logistics::ResourceType::BucketWater
             );
             let type_match = stockpile_comp.resource_type.is_none()
                 || stockpile_comp.resource_type == Some(res_type);
@@ -195,9 +194,7 @@ pub(super) fn handle_dropping_phase(
             commands
                 .entity(item)
                 .remove::<hw_core::relationships::DeliveringTo>();
-            commands
-                .entity(item)
-                .remove::<hw_jobs::IssuedBy>();
+            commands.entity(item).remove::<hw_jobs::IssuedBy>();
             commands
                 .entity(item)
                 .remove::<hw_core::relationships::TaskWorkers>();
@@ -208,7 +205,7 @@ pub(super) fn handle_dropping_phase(
                 ctx.soul_entity, current_count
             );
         } else {
-            unassign_task(
+            cleanup_task_assignment(
                 commands,
                 ctx.soul_entity,
                 soul_pos,
@@ -242,9 +239,7 @@ pub(super) fn handle_dropping_phase(
         commands
             .entity(item)
             .remove::<hw_core::relationships::DeliveringTo>();
-        commands
-            .entity(item)
-            .remove::<hw_jobs::IssuedBy>();
+        commands.entity(item).remove::<hw_jobs::IssuedBy>();
         commands
             .entity(item)
             .remove::<hw_core::relationships::TaskWorkers>();
@@ -269,9 +264,7 @@ pub(super) fn handle_dropping_phase(
         commands
             .entity(item)
             .remove::<hw_core::relationships::DeliveringTo>();
-        commands
-            .entity(item)
-            .remove::<hw_jobs::IssuedBy>();
+        commands.entity(item).remove::<hw_jobs::IssuedBy>();
         commands
             .entity(item)
             .remove::<hw_core::relationships::TaskWorkers>();
@@ -299,9 +292,7 @@ pub(super) fn handle_dropping_phase(
             commands
                 .entity(item)
                 .remove::<hw_core::relationships::DeliveringTo>();
-            commands
-                .entity(item)
-                .remove::<hw_jobs::IssuedBy>();
+            commands.entity(item).remove::<hw_jobs::IssuedBy>();
             commands
                 .entity(item)
                 .remove::<hw_core::relationships::TaskWorkers>();
