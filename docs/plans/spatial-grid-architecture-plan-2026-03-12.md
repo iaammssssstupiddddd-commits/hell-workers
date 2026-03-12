@@ -23,12 +23,13 @@
   - 障害物 Vec（`obstacles`）がビルド完了・削除のたびに全再構築される
 
 - **到達したい状態:**
-  - 「何がどのグリッドに存在するか」を**単一の空間レイヤー**で管理し、配管・設備追加時に `WorldMap` を改変不要にする
+  - 各システム（建築物・配管・配線など）が**独立したレイヤー**として空間データを持ち、同一セルに複数種別が共存できる
   - ECSのRelationship（本プロジェクトの標準手法）でエンティティとグリッド位置を接続し、二重保持を排除する
   - 配置バリデーションを差分ベースにして毎フレームの再計算を削減する
 
 - **成功指標:**
-  - `WorldMap` に新規建築物種別を追加する際、構造体の変更が不要になる
+  - 配管をフロアと同一セルに配置できる（レイヤーが独立しているため）
+  - 新システム追加時に `WorldMap` の既存フィールドを変更せず新フィールドの追加のみで済む
   - 障害物クエリがビルド変更後も全再構築なしに最新状態を返す
   - `cargo check` が通る
 
@@ -53,7 +54,9 @@ pub struct WorldMap {
 }
 ```
 
-**根本原因:** 「グリッドに何かが存在する」という概念が、種別ごとに別々のデータ構造として表現されている。
+**根本原因:** システム種別ごとに HashMap を追加し続けており、将来の配管・配線追加時も同じパターンを繰り返すことになる。
+ただし、この「種別ごとに独立したフィールドを持つ」構造自体は、**複数種別が同一セルに共存できる**という正しい性質を持っている。
+問題は HashMap のデータ構造であり、フィールドを独立させる設計方針は維持すべきである。
 
 ### 2-2. ECS とのデータ二重保持
 
@@ -91,41 +94,42 @@ Building完了/削除
 
 ## 3. 根本最適化の方針
 
-### 方針A: HashMap → 平坦 Vec への統一（短期・高効果）
+### 方針A: HashMap → 独立レイヤー Vec への変換（短期・高効果）
 
-`HashMap<(i32,i32), T>` を `Vec<Option<T>>` に置き換える。
+`HashMap<(i32,i32), T>` を種別ごとに独立した `Vec<Option<T>>` に置き換える。
 
-**理由:**
-- 100×100 = 10,000 セルは密なグリッド → HashMap のハッシュ計算コストが無駄
-- `Vec` はキャッシュコヒーレントで L1/L2 ヒット率が高い
-- インデックスは既存の `pos_to_idx(x, y)` が使える（既実装）
+**⚠️ OccupantKind による統合をしない理由:**
+単一の `Vec<Option<OccupantEntry>>` に統合すると、1セルに1種別しか保持できなくなる。
+配管はフロア建築物と同一セルに共存する必要があるため、**レイヤーは種別ごとに独立して並列に持つ**。
 
 ```rust
-// 変更後
+// 変更後: 種別ごとに独立した Vec（既存のフィールド分離を維持しつつ HashMap を Vec へ）
 pub struct WorldMap {
-    // 建築物・ドア・ストックパイルを1本の Vec に統合
-    pub occupants: Vec<Option<OccupantEntry>>,  // index = y*width + x
-    pub door_states: Vec<Option<DoorState>>,    // 同上
+    pub tiles:       Vec<TerrainType>,          // 既存（変更なし）
+    pub buildings:   Vec<Option<Entity>>,       // HashMap → Vec（変更）
+    pub door_states: Vec<Option<DoorState>>,    // HashMap → Vec（変更）
+    pub stockpiles:  Vec<Option<Entity>>,       // HashMap → Vec（変更）
     pub obstacles:   Vec<bool>,                 // 既存（変更なし）
-}
 
-pub struct OccupantEntry {
-    pub entity: Entity,
-    pub kind: OccupantKind,
-}
-
-pub enum OccupantKind {
-    Building,
-    Door,
-    Stockpile,
-    Bridge,
-    // 将来: Pipe, Equipment など追加のみ（WorldMap 構造体変更不要）
+    // 将来: フィールドを追加するだけ。既存フィールドは無変更
+    // pub pipes:  Vec<Option<Entity>>,   ← buildings と同一セル共存可
+    // pub wires:  Vec<Option<Entity>>,   ← pipes と同一セル共存可
 }
 ```
 
+同一セルに複数種別が共存できる:
+```
+grids[idx]:
+  buildings[idx]  = Some(floor_entity)   // フロアがある
+  pipes[idx]      = Some(pipe_entity)    // 同じセルに配管もある  ← OccupantKind方式では不可能
+  wires[idx]      = Some(wire_entity)    // さらに配線も共存可
+  obstacles[idx]  = false               // 歩行可能（配管・配線は歩行を妨げない）
+```
+
 **効果:**
-- グリッドに「何があるか」を1回のインデックスアクセスで取得
-- 将来の配管・設備は `OccupantKind` に追加するだけ
+- ハッシュ計算ゼロ、`y*width+x` の整数演算のみでルックアップ
+- 新システム追加 = 新フィールド追加のみ（既存フィールド・メソッドへの影響なし）
+- `is_walkable()` は `obstacles` Vec のみ参照するため、新レイヤー追加時も変更不要
 - `HashMap` のメモリオーバーヘッドが消える
 
 ---
@@ -217,55 +221,50 @@ struct PlacementValidationCache {
 
 配管は建築物と異なり以下の特徴を持つ:
 - グリッド1セルを占有（建築物は複数セル可）
+- **建築物（フロアなど）と同一セルに共存する** ← レイヤー独立方式でのみ実現可能
 - 隣接した配管同士が「接続」して流体ネットワークを形成
 - 流体の流れが方向性を持つ（入力端・出力端）
 
-### 設備の性質
+### 配管追加時の WorldMap 変更範囲
 
-設備（ポンプ、バルブ、タンクなど）:
-- 配管ネットワーク上のノード
-- 建築物と配管の中間的な存在（固定グリッド + 接続ポート）
-
-### 拡張設計（方針A/B の前提）
+方針A（独立レイヤー方式）採用後は:
 
 ```rust
-// OccupantKind への追加のみで WorldMap 構造体変更不要
-pub enum OccupantKind {
-    Building,
-    Door,
-    Stockpile,
-    Bridge,
-    Pipe { direction: PipeDirection },      // 新規
-    Equipment { kind: EquipmentKind },      // 新規
-}
+// WorldMap への変更はこの1行のみ
+pub pipes: Vec<Option<Entity>>,
 
-// 配管ネットワークは別途 Resource で管理
+// 既存の buildings・obstacles・is_walkable() は一切変更不要
+// 配管は歩行を妨げないため obstacles には影響しない
+```
+
+**配管固有のネットワーク情報**は別途 Resource で管理:
+```rust
 #[derive(Resource)]
 pub struct PipeNetwork {
-    // 隣接リストで流体グラフを表現
-    connections: HashMap<Entity, Vec<Entity>>,
-    // 方向B 採用時は GridCell Relationship で自動構築
+    // 隣接リストで流体グラフを表現（ECS Relationship でも可）
+    connections: HashMap<Entity, smallvec::SmallVec<[Entity; 4]>>,
 }
 ```
 
 **配管バリデーション（方針Cの延長）:**
-- 配管は常に1セルなのでフットプリント計算が不要
-- `OccupantKind` チェック1回で配置可否が決まる
-- 接続バリデーション（隣接する配管/設備の確認）も `occupants Vec` から O(1) × 4方向
+- `pipes[idx]` が `None` かどうかの1回チェックで配置可否が決まる
+- 接続バリデーション（隣接セルの `pipes[idx]` 参照）も O(1) × 4方向
+- `buildings[idx]` に値があっても配管は配置可能（共存が前提）
 
 ---
 
 ## 5. 段階的移行ロードマップ
 
-### フェーズA: HashMap → Vec 統合（最優先・単独実施可能）
+### フェーズA: HashMap → 独立レイヤー Vec への変換（最優先・単独実施可能）
+
+**変更方針:** アクセサメソッド（`has_building()`, `set_building()` 等）のシグネチャは変えず、
+内部実装のみ `HashMap` → `Vec` に置き換える。呼び出し側のコードは無変更。
 
 **変更ファイル:**
-- `crates/hw_world/src/map/mod.rs` — `WorldMap` 構造体の変更
-- `crates/hw_world/src/map/access.rs` — アクセサメソッドの更新
-- `src/systems/jobs/building_completion/world_update.rs` — 更新箇所の修正
-- `crates/hw_ui/src/selection/placement.rs` — バリデーション呼び出し修正
+- `crates/hw_world/src/map/mod.rs` — `WorldMap` 構造体のフィールド変更（HashMap → Vec）
+- `crates/hw_world/src/map/access.rs` — アクセサラッパーの内部実装更新
 
-**推定難易度:** 中（データ構造の変更だが、インターフェース互換を保てる）
+**推定難易度:** 低〜中（アクセサが整備されているため、呼び出し側の変更は原則不要）
 
 ---
 
@@ -322,9 +321,9 @@ pub struct PipeNetwork {
 
 | リスク | 影響 | 対策 |
 | --- | --- | --- |
-| `occupants Vec` への移行で既存の HashMap 参照が多数ある | コンパイルエラーが大量発生 | `has_building()` などのアクセサメソッドを維持して内部実装だけ変える |
+| HashMap → Vec 移行で `building_entries()` などのイテレータが変わる | コンパイルエラー | `Vec` のイテレータは `enumerate().filter_map(...)` で同等に書ける。呼び出し箇所を `grep` で事前確認する |
+| Vec の初期化サイズが MAP_WIDTH/MAP_HEIGHT 定数に依存 | サイズ変更時に再確認が必要 | `WorldMap::default()` の初期化コードに `MAP_WIDTH * MAP_HEIGHT` を明示し、サイズ定数を一元管理する（現状も同様） |
 | Relationship ベース移行でシステム実行順が変わる | 同期タイミングのバグ | フェーズD は既存の HashMap/Vec を残しつつ段階移行する |
-| 配管追加時に `OccupantKind` マッチが exhaustive でなくなる | コンパイルエラー | Rust のパターンマッチが網羅性を強制するため、追加漏れはコンパイル時に検出できる |
 
 ---
 
@@ -335,9 +334,9 @@ pub struct PipeNetwork {
 
 ### 次のAIが最初にやること
 
-1. `crates/hw_world/src/map/mod.rs` の `WorldMap` 構造体を読み、各 HashMap の利用箇所を `grep -r "world_map.buildings\|world_map.doors\|world_map.stockpiles" src/ crates/` で全列挙
-2. フェーズA の `OccupantEntry` 型と `occupants: Vec<Option<OccupantEntry>>` を定義し、`has_building()` 等のアクセサの内部実装だけを置き換える
-3. `cargo check` でコンパイルが通ることを確認してからフェーズB へ
+1. `building_entries()` や `stockpile_entries()` など Vec への変換で影響が出るイテレータメソッドの呼び出し箇所を `grep -r "building_entries\|stockpile_entries" src/ crates/` で確認する
+2. フェーズA: `WorldMap` の `buildings`, `door_states`, `stockpiles` フィールドを `Vec<Option<T>>` に変更し、アクセサメソッドの内部実装のみ書き換える（シグネチャは変えない）
+3. `cargo check` でコンパイルが通ることを確認してからフェーズB・C へ
 
 ### 参照必須ファイル
 
@@ -349,7 +348,8 @@ pub struct PipeNetwork {
 
 ### Definition of Done
 
-- [ ] `WorldMap` に新種別を追加する際に構造体変更が不要になる
+- [ ] 配管がフロア建築物と同一セルに共存して配置できる
+- [ ] 新システム追加時に既存フィールドへの変更なく新フィールド追加のみで済む
 - [ ] `obstacles` の再構築が差分ベースになる
 - [ ] `cargo check` が成功
 
@@ -360,3 +360,4 @@ pub struct PipeNetwork {
 | 日付 | 変更者 | 内容 |
 | --- | --- | --- |
 | `2026-03-12` | `Claude` | 初版作成 |
+| `2026-03-12` | `Claude` | OccupantKind統合方式を廃止し独立レイヤーVec方式に修正（配管の建築物との共存要件を反映） |
