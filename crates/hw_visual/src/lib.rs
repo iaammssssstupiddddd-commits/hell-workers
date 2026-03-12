@@ -2,6 +2,7 @@ pub mod animations;
 pub mod blueprint;
 pub mod dream;
 pub mod fade;
+pub mod floor_construction;
 pub mod floating_text;
 pub mod gather;
 pub mod handles;
@@ -16,6 +17,7 @@ pub mod speech;
 pub mod tank;
 pub mod task_area_visual;
 pub mod wall_connection;
+pub mod wall_construction;
 pub mod worker_icon;
 
 pub use selection_indicator::update_selection_indicator;
@@ -184,6 +186,22 @@ impl Plugin for HwVisualPlugin {
                 tank::update_tank_visual_system,
                 mud_mixer::update_mud_mixer_visual_system,
             )
+                .in_set(GameSystemSet::Visual),
+        );
+
+        // Floor / wall construction visual systems
+        app.add_systems(
+            Update,
+            (
+                floor_construction::manage_floor_curing_progress_bars_system,
+                floor_construction::update_floor_curing_progress_bars_system,
+                floor_construction::update_floor_tile_visuals_system,
+                floor_construction::sync_floor_tile_bone_visuals_system,
+                wall_construction::manage_wall_progress_bars_system,
+                wall_construction::update_wall_progress_bars_system,
+                wall_construction::update_wall_tile_visuals_system,
+            )
+                .chain()
                 .in_set(GameSystemSet::Visual),
         );
     }

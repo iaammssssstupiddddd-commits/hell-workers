@@ -18,8 +18,10 @@
 | `haul/` | 運搬 visual、手押し車追従 |
 | `dream/` | Dream bubble, particle, popup |
 | `plant_trees/` | 植樹演出 |
+| `floor_construction.rs` | 床建設の curing / bone / progress bar visual |
 | `selection_indicator.rs` | 選択エンティティ追従用の黄色インジケータ描画 |
 | `site_yard_visual.rs` | site / yard 境界表示 |
+| `wall_construction.rs` | 壁建設のタイル / progress bar visual |
 | `task_area_visual.rs` | `TaskAreaMaterial`, `TaskAreaVisual` 型定義 |
 
 ## soul/ の責務
@@ -53,5 +55,5 @@
 |---|---|
 | `GameAssets` 非依存の visual system 本体 | `GameAssets` のロードと handle resource 注入 |
 | observer ベースの演出表示 | `DebugVisible` や `PlayMode` による run condition |
-| Soul/Familiar/Blueprint/Haul の見た目更新 | `placement_ghost`, `floor_construction`, `wall_construction` など root-only app context 依存 visual |
+| Soul/Familiar/Blueprint/Haul/FloorConstruction/WallConstruction の見た目更新 | `placement_ghost` など root-only app context 依存 visual |
 | `TaskAreaMaterial`, `TaskAreaVisual` 型 | `update_task_area_material_system` のような root `TaskContext` 依存 system |

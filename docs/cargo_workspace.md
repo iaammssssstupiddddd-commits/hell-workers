@@ -151,21 +151,23 @@ root 側の `bevy_app` 残留（adapter 責務）:
 - `wall_connection::*` — 壁接続スプライト切替
 - `site_yard_visual::*` — サイト・ヤード境界描画
 - `fade::*`, `floating_text::*`, `animations::*`, `progress_bar::*`, `worker_icon::*` — 汎用ビジュアルユーティリティ
+- `floor_construction::*` — 床建設タイル進捗バー・資材 visual・骨 visual システム
+- `wall_construction::*` — 壁建設タイル progress / 資材 visual システム
 - `task_area_visual::{TaskAreaMaterial, TaskAreaVisual}` — タスクエリアシェーダー型定義
 - `selection_indicator::update_selection_indicator` — 選択エンティティを追従する黄色スプライト indicator（`SelectionIndicator` コンポーネントは `hw_ui::selection` が所有。実装は `hw_visual`、登録は同フレーム反映のため root `Interface` フェーズで行う）
 
 ここに置かないもの:
 
 - `GameAssets`（struct・ロード処理）— root 残留
-- `placement_ghost.rs`、`floor_construction.rs`、`wall_construction.rs`、`task_area_visual.rs`（システム関数）— `BuildContext` / `TaskContext` など app_contexts 依存のため root 残留
+- `placement_ghost.rs`、`task_area_visual.rs`（システム関数）— `BuildContext` / `TaskContext` など app_contexts 依存のため root 残留
 - `DebugVisible` による条件付き system 登録 — root 側 `VisualPlugin` が担当
 
 root 側の責務（`src/systems/visual/` 残留ファイル）:
 
 | ファイル | 残留理由 |
 |:---|:---|
-| `floor_construction.rs` | 建設タイル進捗バーと資材 visual の app shell |
-| `wall_construction.rs` | 建設タイル progress/資材 visual の app shell |
+| `floor_construction.rs` | `hw_visual::floor_construction` への re-export shell |
+| `wall_construction.rs` | `hw_visual::wall_construction` への re-export shell |
 | `placement_ghost.rs` | `BuildContext`, `CompanionPlacementState` 依存（app_contexts） |
 | `task_area_visual.rs` | `update_task_area_material_system` が `TaskContext` 依存 |
 
@@ -327,11 +329,10 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 
 ここに置くもの:
 
-- `SpatialGrid`, `FamiliarSpatialGrid`, `BlueprintSpatialGrid`, `DesignationSpatialGrid`, `ResourceSpatialGrid`, `StockpileSpatialGrid`, `TransportRequestSpatialGrid`, `GatheringSpotSpatialGrid`
+- `SpatialGrid`, `FamiliarSpatialGrid`, `BlueprintSpatialGrid`, `DesignationSpatialGrid`, `ResourceSpatialGrid`, `StockpileSpatialGrid`, `TransportRequestSpatialGrid`, `GatheringSpotSpatialGrid`, `FloorConstructionSpatialGrid`
 
 ここに置かないもの:
 
-- `FloorConstructionSpatialGrid`
 - root `WorldMap` shell、`WorldMapRead/Write`、startup/wiring
 
 ### `hw_logistics`
@@ -351,9 +352,7 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 - `SharedResourceCache`（タスク間リソース予約キャッシュ）
 - `apply_reservation_op` / `apply_reservation_requests_system`（予約操作の反映 helper）
 - `TileSiteIndex`（タイル→サイト逆引き）
-- producer 全系（`blueprint`, `bucket`, `consolidation`, `mixer`, `task_area`, `wheelbarrow` 等）
-- 手押し車仲裁システム（`arbitration/`）
-- 建設系需要計算ヘルパー（`floor_construction`, `wall_construction`, `provisional_wall`）
+- producer 全系（`blueprint`, `bucket`, `consolidation`, `mixer`, `task_area`, `wheelbarrow`, `floor_construction`, `wall_construction`, `provisional_wall` 等）
 - `manual_haul_selector::{select_stockpile_anchor, find_existing_request}` — 手動 haul 選定アルゴリズム（`DesignationTargetQuery` 非依存）
 
 補足:
@@ -364,7 +363,6 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 
 - `GameAssets` 依存の初期スポーン（`initial_spawn.rs` は root 残留）
 - UI ロジスティクス表示
-- `FloorConstructionSpatialGrid` を直接参照する producer（Optional M_extra 完了まで root 残留）
 
 ### `hw_jobs`
 

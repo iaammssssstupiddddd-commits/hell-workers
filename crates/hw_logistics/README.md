@@ -59,10 +59,12 @@
 | `mixer.rs` | `mud_mixer_auto_haul_system` |
 | `mixer_helpers/` | mixer 用サブヘルパー群 (`collect`, `desired`, `issue`, `types`, `upsert`) |
 | `provisional_wall.rs` | `provisional_wall_auto_haul_system`, `provisional_wall_designation_system` |
+| `floor_construction.rs` | `floor_construction_auto_haul_system`, `floor_material_delivery_sync_system`, `floor_tile_designation_system` |
 | `stockpile_group.rs` | `StockpileGroup` — Yard 単位ストックパイルグルーピング |
 | `tank_water_request.rs` | `tank_water_request_system` |
 | `task_area.rs` | `task_area_auto_haul_system` |
 | `upsert.rs` | request の upsert/cleanup 共通ヘルパー |
+| `wall_construction.rs` | `wall_construction_auto_haul_system`, `wall_material_delivery_sync_system`, `wall_tile_designation_system` |
 | `wheelbarrow.rs` | `wheelbarrow_auto_haul_system` |
 
 ## 依存クレート
@@ -82,7 +84,7 @@
 |---|---|
 | 輸送要求の全 producer システム | `initial_spawn.rs`（GameAssets 依存） |
 | 手押し車仲裁システム | `ui.rs`（UI ロジスティクス表示） |
-| `TransportRequestPlugin` + `TransportRequestSet` | `FloorWallTransportPlugin`（Optional M_extra 解消まで root 残留） |
-| 建設系需要計算ヘルパー | `floor_construction.rs` / `wall_construction.rs` producer（`FloorConstructionSpatialGrid` 依存） |
+| `TransportRequestPlugin` + `TransportRequestSet` | `transport_request/` の thin shell / re-export |
+| 建設系需要計算ヘルパー | 後方互換の import path を保つ root shell |
 | `TileSiteIndex` 型定義・更新システム | — |
 | `SharedResourceCache` | `sync_reservations_system`（ゲーム固有クエリ） |
