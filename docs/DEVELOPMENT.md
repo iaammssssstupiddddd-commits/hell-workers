@@ -59,7 +59,7 @@
 
 ### 8. 割り当て・搬送・UIの実装境界
 
-- Familiar の割り当て発行は `src/systems/familiar_ai/decide/task_management/builders/mod.rs` の `submit_assignment_with_source_entities(...)` / `submit_assignment_with_reservation_ops(...)`（または下位の `submit_assignment(...)`）を必ず経由する（`ReservationShadow` 反映を保証するため）。
+- Familiar の割り当て発行は `src/systems/familiar_ai/decide/task_management/mod.rs` の `submit_assignment_with_source_entities(...)` / `submit_assignment_with_reservation_ops(...)`（または下位の `submit_assignment(...)`）を必ず経由する（`ReservationShadow` 反映を保証するため）。
 - 予約オペレーション生成は `build_source_reservation_ops` / `build_mixer_destination_reservation_ops` / `build_wheelbarrow_reservation_ops` の共通ヘルパーを優先し、`issue_*` ごとの重複実装を増やさない。
 - `FamiliarTaskAssignmentQueries` は必要な Read Access を内包する構成になっている。Familiar 側の型参照は `task_management::FamiliarTaskAssignmentQueries` を優先し、`soul_ai` 実装詳細への直接依存を増やさない。
 - `apply_task_assignment_requests_system` を拡張する場合は、既存の責務分離ヘルパー（受理判定 / idle正規化 / 予約反映 / DeliveringTo / イベント）へ追記し、単一関数へ責務を戻さない。

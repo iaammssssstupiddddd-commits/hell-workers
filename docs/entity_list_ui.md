@@ -108,5 +108,5 @@
 - `crates/hw_ui/src/setup/mod.rs` - `UiAssets` トレイト（`icon_arrow_right`, `icon_idle`, `font_soul_name` 含む）
 
 ### 境界横断
-- `src/interface/ui/components.rs`, `src/interface/ui/theme.rs` は `hw_ui` API の再エクスポートシェルとして残す
-- `src/interface/ui/setup/entity_list.rs`（初期構築）は root shell 経由で呼び出される
+- `crates/hw_ui/src/components.rs`, `crates/hw_ui/src/theme.rs` は `hw_ui` API の再エクスポートシェルとして残す
+- `crates/hw_ui/src/setup/entity_list.rs`（初期構築）は root shell 経由で呼び出される
