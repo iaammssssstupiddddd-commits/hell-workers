@@ -88,18 +88,16 @@ impl Plugin for SoulAiPlugin {
                 // === Execute Phase ===
                 // 決定された行動の実行
                 (
-                    execute::drifting::drifting_behavior_system
-                        .after(execute::task_execution::apply_task_assignment_requests_system)
-                        .before(execute::task_execution::task_execution_system),
+                    // drifting_behavior_system と despawn_at_edge_system は
+                    // hw_ai::SoulAiCorePlugin で登録済み。ここでは ordering 参照のみ。
                     execute::task_execution::task_execution_system
-                        .after(execute::task_execution::apply_task_assignment_requests_system),
+                        .after(execute::task_execution::apply_task_assignment_requests_system)
+                        .after(execute::drifting::drifting_behavior_system),
                     execute::task_execution::move_plant::apply_pending_building_move_system
                         .after(execute::task_execution::task_execution_system),
                     // アイドル行動の適用
                     execute::idle_behavior_apply::idle_behavior_apply_system,
                     execute::escaping_apply::escaping_apply_system,
-                    execute::drifting::despawn_at_edge_system
-                        .after(execute::drifting::drifting_behavior_system),
                     // クリーンアップ
                     execute::cleanup::cleanup_commanded_souls_system,
                     // タスク要求の適用

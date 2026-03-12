@@ -1,9 +1,11 @@
 pub mod cleanup;
-pub mod drifting;
 pub mod gathering_apply;
 pub mod gathering_spawn;
 pub mod task_execution;
 
+pub mod drifting {
+    pub use hw_ai::soul_ai::execute::drifting::*;
+}
 pub mod escaping_apply {
     pub use hw_ai::soul_ai::execute::escaping_apply::*;
 }
