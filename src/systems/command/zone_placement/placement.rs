@@ -11,6 +11,7 @@ use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use hw_core::constants::*;
 use hw_core::game_state::PlayMode;
+use hw_world::{area_tile_size, expand_yard_area, rectangles_overlap, rectangles_overlap_site};
 
 pub fn zone_placement_system(
     buttons: Res<ButtonInput<MouseButton>>,
@@ -203,14 +204,6 @@ pub(crate) fn is_yard_expansion_area_valid(
     true
 }
 
-fn area_tile_size(area: &AreaBounds) -> (usize, usize) {
-    let min_grid = WorldMap::world_to_grid(area.min + Vec2::splat(0.1));
-    let max_grid = WorldMap::world_to_grid(area.max - Vec2::splat(0.1));
-    let width = max_grid.0.saturating_sub(min_grid.0).saturating_add(1) as usize;
-    let height = max_grid.1.saturating_sub(min_grid.1).saturating_add(1) as usize;
-    (width, height)
-}
-
 fn pick_yard_for_position(
     position: Vec2,
     q_yards: &Query<(Entity, &Yard)>,
@@ -219,32 +212,6 @@ fn pick_yard_for_position(
         .iter()
         .find(|(_, yard)| yard.contains(position))
         .map(|(entity, yard)| (entity, yard.clone()))
-}
-
-fn rectangles_overlap_site(area: &AreaBounds, site: &Site) -> bool {
-    area.min.x < site.max.x
-        && area.max.x > site.min.x
-        && area.min.y < site.max.y
-        && area.max.y > site.min.y
-}
-
-fn expand_yard_area(yard: &Yard, drag_area: &AreaBounds) -> AreaBounds {
-    let min = Vec2::new(
-        yard.min.x.min(drag_area.min.x),
-        yard.min.y.min(drag_area.min.y),
-    );
-    let max = Vec2::new(
-        yard.max.x.max(drag_area.max.x),
-        yard.max.y.max(drag_area.max.y),
-    );
-    AreaBounds { min, max }
-}
-
-fn rectangles_overlap(area: &AreaBounds, other_yard: &Yard) -> bool {
-    area.min.x <= other_yard.max.x
-        && area.max.x >= other_yard.min.x
-        && area.min.y <= other_yard.max.y
-        && area.max.y >= other_yard.min.y
 }
 
 fn pick_stockpile_owner_yard(grid_pos: Vec2, q_yards: &Query<(Entity, &Yard)>) -> Option<Entity> {
