@@ -1,7 +1,7 @@
 // タスクリストのオーケストレーション
 
-use crate::interface::ui::components::{LeftPanelMode, TaskListBody};
-use crate::interface::ui::theme::UiTheme;
+use hw_ui::components::{LeftPanelMode, TaskListBody};
+use hw_ui::theme::UiTheme;
 use bevy::prelude::*;
 
 use super::{TaskListDirty, view_model::TaskListState};

@@ -1,4 +1,4 @@
-use crate::interface::ui::components::LeftPanelMode;
+use hw_ui::components::LeftPanelMode;
 use crate::interface::ui::panels::task_list::{
     TaskListDirty, TaskListState, detect_task_list_changed_components,
     detect_task_list_removed_components, update_task_list_state_system,

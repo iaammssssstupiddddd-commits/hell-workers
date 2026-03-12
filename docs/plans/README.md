@@ -19,7 +19,7 @@
 
 | Document | Status | Notes |
 |---|---|---|
-| [task-execution-hw-ai-extraction-plan-2026-03-12.md](task-execution-hw-ai-extraction-plan-2026-03-12.md) | Completed | src/systems/soul_ai/execute/task_execution/の計画。 |
+| [architecture-safe-crate-extraction-plan-2026-03-12.md](architecture-safe-crate-extraction-plan-2026-03-12.md) | In Progress | workspace 方針では root crate を app shell に寄せるとしている一方、実コード上はすでに blocker が解消済みなのに root に残っている実装があるの計画。 |
 
 ## アーカイブ計画書一覧 (`docs/plans/archive`)
 
@@ -103,11 +103,13 @@
 | [archive/soul-ai-root-thinning-plan-2026-03-11 copy.md](archive/soul-ai-root-thinning-plan-2026-03-11 copy.md) | アーカイブ | src/systems/soul_aiの計画。 |
 | [archive/soul-ai-root-thinning-plan-2026-03-11.md](archive/soul-ai-root-thinning-plan-2026-03-11.md) | アーカイブ | src/systems/soul_aiの計画。 |
 | [archive/soul-spawn-despawn.md](archive/soul-spawn-despawn.md) | アーカイブ | Soul Spawn/Despawn設計計画。 |
+| [archive/task-execution-hw-ai-extraction-plan-2026-03-12.md](archive/task-execution-hw-ai-extraction-plan-2026-03-12.md) | アーカイブ | src/systems/soul_ai/execute/task_execution/の計画。 |
 | [archive/task-list-left-panel-toggle.md](archive/task-list-left-panel-toggle.md) | アーカイブ | タスクリスト左パネル操作改善計画。 |
 | [archive/taskexecution-systemparam-refactor-plan-2026-03-05.md](archive/taskexecution-systemparam-refactor-plan-2026-03-05.md) | アーカイブ | task_execution/context.rsの計画。 |
 | [archive/think-phase-iteration-optimization-plan-2026-03-07.md](archive/think-phase-iteration-optimization-plan-2026-03-07.md) | アーカイブ | -の計画。 |
 | [archive/transport-overdelivery-fix-plan-2026-03-07.md](archive/transport-overdelivery-fix-plan-2026-03-07.md) | アーカイブ | 設計図搬入と補充系 request で、必要量を超える資材が搬送・消費・地面残留するの計画。 |
 | [archive/ui-menu-action-boundary-plan-2026-03-01.md](archive/ui-menu-action-boundary-plan-2026-03-01.md) | アーカイブ | `MenuAction` 処理の責務境界整理と no-op 分岐解消の計画。 |
+| [archive/ui-selection-boundary-thinning-plan-2026-03-12.md](archive/ui-selection-boundary-thinning-plan-2026-03-12.md) | アーカイブ | UI / Selection Boundary Thinning Plan |
 | [archive/ui-submenu-spec-driven-plan-2026-03-01.md](archive/ui-submenu-spec-driven-plan-2026-03-01.md) | アーカイブ | サブメニュー生成を Spec 駆動へ移行し重複を削減する計画。 |
 | [archive/wall-construction-phase-split-plan-2026-02-19.md](archive/wall-construction-phase-split-plan-2026-02-19.md) | アーカイブ | 壁建築フェーズ分割計画。 |
 | [archive/wall-stasis-mud.md](archive/wall-stasis-mud.md) | アーカイブ | 壁材（stasis mud）関連計画。 |

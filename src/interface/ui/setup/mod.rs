@@ -4,9 +4,9 @@ use hw_ui::setup::setup_ui as hwui_setup_ui;
 pub fn setup_ui(
     commands: Commands,
     game_assets: Res<crate::assets::GameAssets>,
-    theme: Res<crate::interface::ui::theme::UiTheme>,
-    ui_nodes: ResMut<crate::interface::ui::components::UiNodeRegistry>,
-    info_panel_nodes: ResMut<crate::interface::ui::components::InfoPanelNodes>,
+    theme: Res<hw_ui::theme::UiTheme>,
+    ui_nodes: ResMut<hw_ui::components::UiNodeRegistry>,
+    info_panel_nodes: ResMut<hw_ui::components::InfoPanelNodes>,
 ) {
     let theme_ref = &theme;
 

@@ -217,7 +217,7 @@ Perceive → Update → Decide → Execute
 
 | 区分 | 置き場所 | 内容 |
 | --- | --- | --- |
-| state resource | `hw_ui::selection` | `SelectedEntity`, `HoveredEntity`, `SelectionIndicator` |
+| state resource | `hw_ui::selection` | `SelectedEntity`, `HoveredEntity`, `SelectionIndicator`, `cleanup_selection_references_system` |
 | shared 型・validation | `hw_ui::selection::placement` | `PlacementRejectReason`（`NotStraightLine` 含む）, `PlacementValidation`, `PlacementGeometry`, `WorldReadApi`, `BuildingPlacementContext` |
 | placement geometry API | `hw_ui::selection::placement` | `building_geometry`, `building_occupied_grids`, `building_spawn_pos`, `building_size`, `bucket_storage_geometry`, `validate_building_placement`, `validate_bucket_storage_placement` |
 | move geometry API | `hw_ui::selection::placement` | `move_anchor_grid`, `move_occupied_grids`, `move_spawn_pos`, `can_place_moved_building`, `validate_moved_bucket_storage_placement` |
@@ -226,6 +226,7 @@ Perceive → Update → Decide → Execute
 | root adapter | `src/interface/selection/*` | Query/Res から intent 生成、ECS 状態・WorldMap 変更の適用 |
 
 - `hw_ui::selection` は state resource と shared outcome 型・trait のみ。`Commands`/`WorldMapWrite`/`NextState<PlayMode>` は使わない。
+- `update_selection_indicator` の実装本体は `hw_visual` にあるが、選択更新と同フレームで反映するため root `Interface` フェーズで登録する。
 - `hw_ui::selection::placement` は building placement/move の geometry, validation 共通ロジックを保持する。`src/interface/selection/building_place/placement.rs`・`building_move/preview.rs`・`building_move/mod.rs`・`src/systems/visual/placement_ghost.rs` が共有する。
 - `building_move/geometry.rs` は hw_ui 移動に伴い削除済み。`building_move/placement.rs` は bucket storage 所有グリッド解決だけを持つ薄い adapter で、判定本体は `validate_moved_bucket_storage_placement` を使う。
 - floor/wall の tile reject reason と tile validation は `hw_ui::selection::placement` に共通化済み。root 側 `floor_place/validation.rs` は `WorldMap` を `WorldReadApi` へ適合させる adapter のみ。

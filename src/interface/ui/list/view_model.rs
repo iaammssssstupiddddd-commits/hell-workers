@@ -3,7 +3,7 @@ use super::{
 };
 use crate::entities::damned_soul::{DamnedSoul, Gender, SoulIdentity};
 use crate::entities::familiar::{Familiar, FamiliarOperation};
-use crate::interface::ui::components::{SectionFolded, UnassignedFolded, UnassignedSoulSection};
+use hw_ui::components::{SectionFolded, UnassignedFolded, UnassignedSoulSection};
 use crate::relationships::{CommandedBy, Commanding};
 use crate::systems::familiar_ai::FamiliarAiState;
 use crate::systems::jobs::WorkType;

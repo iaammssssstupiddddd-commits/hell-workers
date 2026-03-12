@@ -1,6 +1,6 @@
 //! ツールチップのターゲット判定
 
-use crate::interface::ui::components::MenuButton;
+use hw_ui::components::MenuButton;
 use bevy::prelude::*;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -12,12 +12,12 @@ pub(crate) enum TooltipTarget {
 
 pub(crate) fn is_tooltip_suppressed_for_expanded_menu(
     menu_button: Option<&MenuButton>,
-    menu_state: crate::interface::ui::components::MenuState,
+    menu_state: hw_ui::components::MenuState,
 ) -> bool {
     let Some(menu_button) = menu_button else {
         return false;
     };
-    use crate::interface::ui::components::{MenuAction, MenuState};
+    use hw_ui::components::{MenuAction, MenuState};
     matches!(
         (menu_state, menu_button.0),
         (MenuState::Architect, MenuAction::ToggleArchitect)
