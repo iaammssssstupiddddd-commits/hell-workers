@@ -1,7 +1,7 @@
 use super::common::*;
 use super::context::TaskExecutionContext;
 use super::types::{AssignedTask, CollectBonePhase};
-use crate::assets::GameAssets;
+
 use crate::systems::logistics::{ResourceItem, ResourceType};
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
@@ -12,7 +12,7 @@ pub fn handle_collect_bone_task(
     target: Entity,
     phase: CollectBonePhase,
     commands: &mut Commands,
-    game_assets: &Res<GameAssets>,
+    soul_handles: &hw_visual::SoulTaskHandles,
     _time: &Res<Time>,
     world_map: &WorldMap,
 ) {
@@ -62,7 +62,7 @@ pub fn handle_collect_bone_task(
                         target,
                         res_transform.translation,
                         commands,
-                        game_assets,
+                        soul_handles,
                     );
                     ctx.path.waypoints.clear();
                 }
@@ -94,7 +94,7 @@ pub fn handle_collect_bone_task(
                     target,
                     res_transform.translation,
                     commands,
-                    game_assets,
+                    soul_handles,
                 );
             } else {
                 // BonePile が存在しない場合も Designation を削除
@@ -137,7 +137,7 @@ fn complete_collect_bone_now(
     target: Entity,
     source_translation: Vec3,
     commands: &mut Commands,
-    game_assets: &Res<GameAssets>,
+    soul_handles: &hw_visual::SoulTaskHandles,
 ) {
     // Bone をドロップ
     for i in 0..BONE_DROP_AMOUNT {
@@ -145,7 +145,7 @@ fn complete_collect_bone_now(
         commands.spawn((
             ResourceItem(ResourceType::Bone),
             Sprite {
-                image: game_assets.icon_bone_small.clone(),
+                image: soul_handles.icon_bone_small.clone(),
                 custom_size: Some(Vec2::splat(TILE_SIZE * 0.5)),
                 ..default()
             },

@@ -19,7 +19,7 @@ pub fn handle(
     data: &BucketTransportData,
     progress: f32,
     commands: &mut Commands,
-    game_assets: &Res<crate::assets::GameAssets>,
+    soul_handles: &hw_visual::SoulTaskHandles,
     time: &Res<Time>,
     world_map: &WorldMap,
 ) {
@@ -51,7 +51,7 @@ pub fn handle(
                 commands.entity(data.bucket).try_insert((
                     ResourceItem(ResourceType::BucketWater),
                     Sprite {
-                        image: game_assets.bucket_water.clone(),
+                        image: soul_handles.bucket_water.clone(),
                         custom_size: Some(Vec2::splat(TILE_SIZE * 0.6)),
                         ..default()
                     },
@@ -117,7 +117,7 @@ pub fn handle(
                 commands.entity(data.bucket).try_insert((
                     ResourceItem(ResourceType::BucketWater),
                     Sprite {
-                        image: game_assets.bucket_water.clone(),
+                        image: soul_handles.bucket_water.clone(),
                         custom_size: Some(Vec2::splat(TILE_SIZE * 0.6)),
                         ..default()
                     },

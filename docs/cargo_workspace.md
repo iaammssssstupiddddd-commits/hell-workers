@@ -203,7 +203,11 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 - `soul_ai::helpers::gathering` — `hw_core::gathering` の互換 re-export と gathering timer helper
 - `soul_ai::helpers::gathering_positions` — 集会周辺ランダム位置生成・overlap 回避（`PathWorld + SpatialGridOps` 経由）
 - `soul_ai::helpers::gathering_motion` — 集会中移動先選定（Wandering / Still retreat）
-- `soul_ai::helpers::work::is_soul_available_for_work` — 作業可否判定ヘルパー
+- `soul_ai::helpers::work::{is_soul_available_for_work, unassign_task}` — 作業可否判定・タスク解除ヘルパー
+- `soul_ai::execute::task_execution::types::AssignedTask` — タスク実行バリアント定義
+- `soul_ai::execute::task_execution::handler::{TaskHandler, run_task_handler, execute_haul_with_wheelbarrow}` — タスクハンドラトレイト・ディスパッチ
+- `soul_ai::execute::task_execution::{gather, build, coat_wall, collect_bone, collect_sand, frame_wall, haul, haul_to_blueprint, haul_to_mixer, move_plant, pour_floor, refine, reinforce_floor, common}` — 各タスク種別実装
+- `soul_ai::execute::task_execution::{haul_with_wheelbarrow, bucket_transport, transport_common}` — 輸送系タスク実装
 - `soul_ai::decide::work::auto_refine` — MudMixer の自動精製指定発行
 - `soul_ai::decide::work::auto_build` — 資材完了 Blueprint への自動割り当て
 - `soul_ai::decide::escaping` / `soul_ai::perceive::escaping` — 逃走判断ロジック
@@ -232,8 +236,7 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 - UI システム
 - `Commands` で複雑な Entity 生成を行うもの
 - pathfinding / blueprint entity query を伴う auto-gather orchestration
-- `unassign_task`（`helpers/work.rs`）は `WheelbarrowMovement` / `Visibility` / `Transform` など root 依存が強いため core 化対象外
-- `task_execution/context/access.rs` — `FloorConstructionSite` / `WallConstructionSite` が root-only のため、これらが `hw_jobs` に移設されるまで root 残留（後述 **task_execution 全面移設 blocker** 参照）
+- `task_execution_system` 本体 — `WorldMapRead` / `TaskExecutionSoulQuery` など root 専用 SystemParam に依存するため root 残留。`task_execution/context/` も同様
 - `update_destination_to_adjacent` / `update_destination_to_blueprint` — `PathfindingContext` 自体は `hw_world` 所有だが、呼び出し側がまだ root の re-export path（`crate::world::pathfinding::*`）に結合しているため、その整理が済むまで hw_ai 移設対象外
 
 移設済み system の登録ルール:
@@ -391,40 +394,6 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 - floor / wall construction system
 - building completion shell
 - door system
-
-## 3.x. task_execution 全面移設 blocker
-
-`src/systems/soul_ai/execute/task_execution/` を `hw_ai` に完全移設するには下記の条件が揃う必要がある。
-
-### blocker の実体
-
-`task_execution/context/access.rs` が `StorageAccess` / `MutStorageAccess` として以下の **root-only 型** の Query を保持している：
-
-```rust
-// StorageAccess
-floor_sites: Query<(&FloorConstructionSite, &TaskWorkers)>
-wall_sites:  Query<(&WallConstructionSite, &TaskWorkers)>
-
-// MutStorageAccess
-floor_sites: Query<(&mut FloorConstructionSite, &TaskWorkers)>
-wall_sites:  Query<(&mut WallConstructionSite, &TaskWorkers)>
-```
-
-| 型 | 定義場所 | 移設状態 |
-|:--|:--|:--|
-| `FloorConstructionSite` | `src/systems/jobs/floor_construction/components.rs` | root-only（`TaskArea` 依存のため未移設） |
-| `WallConstructionSite` | `src/systems/jobs/wall_construction/components.rs` | root-only（`TaskArea` 依存のため未移設） |
-
-### 次計画の前提条件
-
-`task_execution` を `hw_ai` に全面移設するには以下をすべて満たす必要がある：
-
-1. `FloorConstructionSite` / `WallConstructionSite` から `TaskArea`（root の `app_contexts` 依存）への依存を解消する
-2. 両型を `hw_jobs` に移設する
-3. `context/access.rs` の import を `crate::` → `hw_jobs::` に書き換えて `hw_ai` に移動する
-4. `task_execution_system` 本体（`handler.rs` / `context/mod.rs` 他）を `hw_ai` に移設する
-
-この作業が完了するまで、`src/systems/soul_ai/execute/task_execution/` は root に残置される。
 
 ## 4. どこに置くかの判断基準
 

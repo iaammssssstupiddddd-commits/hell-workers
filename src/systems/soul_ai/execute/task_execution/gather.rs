@@ -1,6 +1,6 @@
 //! 収集タスクの実行処理
 
-use crate::assets::GameAssets;
+
 use crate::systems::jobs::{Designation, WorkType};
 use crate::systems::logistics::ResourceItem;
 use crate::systems::soul_ai::execute::task_execution::{
@@ -18,7 +18,7 @@ pub fn handle_gather_task(
     work_type: &WorkType,
     phase: GatherPhase,
     commands: &mut Commands,
-    game_assets: &Res<GameAssets>,
+    soul_handles: &hw_visual::SoulTaskHandles,
     time: &Res<Time>,
     world_map: &WorldMap,
 ) {
@@ -106,7 +106,7 @@ pub fn handle_gather_task(
                             commands.spawn((
                                 ResourceItem(crate::systems::logistics::ResourceType::Wood),
                                 Sprite {
-                                    image: game_assets.wood.clone(),
+                                    image: soul_handles.wood.clone(),
                                     custom_size: Some(Vec2::splat(TILE_SIZE * 0.5)),
                                     ..default()
                                 },
@@ -138,7 +138,7 @@ pub fn handle_gather_task(
                             0
                         };
 
-                        if let Some(anime_image) = game_assets.tree_animes.get(variant_index) {
+                        if let Some(anime_image) = soul_handles.tree_animes.get(variant_index) {
                             commands.entity(target).insert(Sprite {
                                 image: anime_image.clone(),
                                 custom_size: Some(Vec2::splat(TILE_SIZE * 1.5)),
@@ -162,7 +162,7 @@ pub fn handle_gather_task(
                             commands.spawn((
                                 ResourceItem(crate::systems::logistics::ResourceType::Rock),
                                 Sprite {
-                                    image: game_assets.rock.clone(),
+                                    image: soul_handles.rock.clone(),
                                     custom_size: Some(Vec2::splat(TILE_SIZE * 0.5)),
                                     ..default()
                                 },

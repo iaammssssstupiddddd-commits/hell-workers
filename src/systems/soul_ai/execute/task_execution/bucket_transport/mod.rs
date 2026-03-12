@@ -16,7 +16,7 @@ pub fn handle_bucket_transport_task(
     ctx: &mut TaskExecutionContext,
     data: BucketTransportData,
     commands: &mut Commands,
-    game_assets: &Res<crate::assets::GameAssets>,
+    soul_handles: &hw_visual::SoulTaskHandles,
     time: &Res<Time>,
     world_map: &WorldMap,
 ) {
@@ -28,13 +28,13 @@ pub fn handle_bucket_transport_task(
             phases::going_to_source::handle(ctx, &data, commands, world_map);
         }
         BucketTransportPhase::Filling { progress } => {
-            phases::filling::handle(ctx, &data, progress, commands, game_assets, time, world_map);
+            phases::filling::handle(ctx, &data, progress, commands, soul_handles, time, world_map);
         }
         BucketTransportPhase::GoingToDestination => {
             phases::going_to_destination::handle(ctx, &data, commands, world_map);
         }
         BucketTransportPhase::Pouring { progress } => {
-            phases::pouring::handle(ctx, &data, progress, commands, game_assets, world_map);
+            phases::pouring::handle(ctx, &data, progress, commands, soul_handles, world_map);
         }
         BucketTransportPhase::ReturningBucket => {
             phases::returning_bucket::handle(ctx, commands, world_map);

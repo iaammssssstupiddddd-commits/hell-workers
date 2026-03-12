@@ -1,6 +1,5 @@
 //! タスクハンドラのトレイト定義
 
-use crate::assets::GameAssets;
 use crate::entities::damned_soul::StressBreakdown;
 use crate::systems::soul_ai::execute::task_execution::context::TaskExecutionContext;
 use crate::world::map::WorldMap;
@@ -12,7 +11,7 @@ pub trait TaskHandler<T> {
         ctx: &mut TaskExecutionContext,
         data: T,
         commands: &mut Commands,
-        game_assets: &Res<GameAssets>,
+        soul_handles: &hw_visual::SoulTaskHandles,
         time: &Res<Time>,
         world_map: &WorldMap,
         breakdown_opt: Option<&StressBreakdown>,
