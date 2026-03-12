@@ -14,7 +14,7 @@ mod tooltip;
 pub(crate) use common::despawn_context_menus;
 pub(crate) use intent_handler::handle_ui_intent;
 
-pub(crate) use hover_action::hover_action_button_system;
+pub use hover_action::hover_action_button_system;
 pub use status_display::{
     task_summary_ui_system, update_area_edit_preview_ui_system, update_dream_loss_popup_ui_system,
     update_dream_pool_display_system, update_fps_display_system, update_mode_text_system,

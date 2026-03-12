@@ -1,5 +1,5 @@
 use crate::interface::ui::PlacementFailureTooltip;
-use crate::systems::command::area_selection::wall_line_area;
+use crate::systems::command::wall_line_area;
 use crate::systems::command::{TaskArea, TaskMode};
 use crate::systems::jobs::floor_construction::FloorTileBlueprint;
 use crate::systems::jobs::{Building, BuildingType};

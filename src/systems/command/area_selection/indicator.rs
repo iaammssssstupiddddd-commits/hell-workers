@@ -8,6 +8,7 @@ use crate::systems::command::{
     TaskModeZoneType,
 };
 use crate::systems::dream_tree_planting::build_dream_tree_planting_plan;
+use hw_core::area::{get_drag_start, wall_line_area};
 use crate::systems::jobs::Tree;
 use crate::systems::logistics::ResourceItem;
 use crate::systems::visual::task_area_visual::TaskAreaMaterial;
@@ -35,7 +36,7 @@ pub fn area_selection_indicator_system(
     q_yards: Query<(Entity, &Yard)>,
     q_sites: Query<&Site>,
 ) {
-    let drag_start = super::geometry::get_drag_start(task_context.0);
+    let drag_start = get_drag_start(task_context.0);
 
     if let Some(start_pos) = drag_start
         && let Some(world_pos) = world_cursor_pos(&q_window, &q_camera)
@@ -43,7 +44,7 @@ pub fn area_selection_indicator_system(
         let area = match task_context.0 {
             TaskMode::WallPlace(_) => {
                 let end_pos = WorldMap::snap_to_grid_edge(world_pos);
-                super::geometry::wall_line_area(start_pos, end_pos)
+                wall_line_area(start_pos, end_pos)
             }
             TaskMode::DreamPlanting(_) => {
                 let start_grid = WorldMap::world_to_grid(start_pos);

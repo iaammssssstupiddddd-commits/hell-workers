@@ -428,17 +428,39 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 
 分割後すぐに import path を全面変更しない場合、root 側に互換 re-export を置いてよいです。
 
-例:
+### facade として維持するモジュール
 
-- `src/systems/jobs/mod.rs` -> `pub use hw_jobs::model::*;`
-- `src/systems/logistics/types.rs` -> `pub use hw_logistics::types::*;`
-- `src/world/river.rs` -> `pub use hw_world::river::*;`
+以下のモジュールは app shell の正規入口として維持します。
+
+| モジュール | 用途 |
+| --- | --- |
+| `crate::plugins` | plugin 型の app-shell 入口 |
+| `crate::entities::damned_soul` | ECS 型・plugin・spawn API の入口 |
+| `crate::entities::familiar` | ECS 型・plugin・spawn API の入口 |
+| `crate::systems::spatial` | grid resource / update system の単一入口 |
+| `crate::systems::logistics::transport_request` | request domain の公開面 |
+| `crate::systems::command` | UI / input / mode 系の facade |
+| `crate::world::map` | world map 読み書きと座標 helper の入口 |
+
+### re-export の公開方針
+
+- **1 シンボルにつき正規 public path は 1 つ**。同一シンボルを複数経路から公開しない
+- facade に残す re-export は「複数の呼び出し側が共有する app shell 入口」に限定する
+- `pub use ...::*` (wildcard) は原則使用しない。必要なシンボルを明示列挙する
+- leaf module は型定義・実装・adapter を持つ場合だけ public re-export を残す
+
+例（明示列挙に変換済みの例）:
+
+- `src/systems/jobs/mod.rs` -> `pub use hw_jobs::model::{Blueprint, Building, ...};`
+- `src/systems/logistics/mod.rs` -> `pub use hw_logistics::types::{ResourceItem, BelongsTo, ...};`
+- `src/world/river.rs` -> `pub use hw_world::river::{generate_fixed_river_tiles, generate_sand_tiles};`
 
 ルール:
 
 - root wrapper は薄く保つ
 - wrapper に独自ロジックを足し始めたら責務を見直す
 - 参照がなくなった re-export は削除する
+- 新しい re-export を追加する場合は wildcard でなく明示列挙で書く
 
 ## 6. `WorldMap` の境界
 
