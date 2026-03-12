@@ -5,7 +5,7 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `task-execution-hw-ai-extraction-plan-2026-03-12` |
-| ステータス | `Draft` |
+| ステータス | `Completed` |
 | 作成日 | `2026-03-12` |
 | 最終更新日 | `2026-03-12` |
 | 作成者 | `Codex` |
@@ -476,3 +476,4 @@ CARGO_HOME=/home/satotakumi/.cargo cargo run
 | --- | --- | --- |
 | `2026-03-12` | `Codex` | 初版作成 |
 | `2026-03-12` | `Copilot` | コード調査に基づき全マイルストーンを具体化。型所在テーブル・import パス変換表・SoulTaskHandles フィールド一覧・変更ファイル一覧を追加 |
+| `2026-03-12` | `Codex` | 実装完了に伴い Completed へ更新。crate 境界ドキュメントを同期。 |
