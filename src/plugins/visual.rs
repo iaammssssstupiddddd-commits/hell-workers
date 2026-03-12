@@ -10,15 +10,7 @@ use crate::systems::command::{
 use crate::systems::jobs::building_completion_system;
 use crate::systems::logistics::resource_count_display_system;
 use crate::systems::room::sync_room_overlay_tiles_system;
-use crate::systems::visual::floor_construction::{
-    manage_floor_curing_progress_bars_system, sync_floor_tile_bone_visuals_system,
-    update_floor_curing_progress_bars_system, update_floor_tile_visuals_system,
-};
 use crate::systems::visual::task_area_visual::update_task_area_material_system;
-use crate::systems::visual::wall_construction::{
-    manage_wall_progress_bars_system, update_wall_progress_bars_system,
-    update_wall_tile_visuals_system,
-};
 use hw_core::game_state::PlayMode;
 use hw_visual::soul::task_link_system;
 use hw_visual::HwVisualPlugin;
@@ -99,21 +91,10 @@ impl Plugin for VisualPlugin {
                 .in_set(GameSystemSet::Visual),
         );
 
-        // Floor / wall construction + task area visual（root 残留型に依存）
+        // task area visual（root 残留型に依存）
         app.add_systems(
             Update,
-            (
-                manage_floor_curing_progress_bars_system,
-                update_floor_curing_progress_bars_system,
-                update_floor_tile_visuals_system,
-                sync_floor_tile_bone_visuals_system,
-                manage_wall_progress_bars_system,
-                update_wall_progress_bars_system,
-                update_wall_tile_visuals_system,
-                update_task_area_material_system,
-            )
-                .chain()
-                .in_set(GameSystemSet::Visual),
+            update_task_area_material_system.in_set(GameSystemSet::Visual),
         );
     }
 }

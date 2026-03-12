@@ -63,7 +63,7 @@ hw_jobs は**型・状態機械定義のみ**を提供する。
 | `MudMixerInputSlot` / `MudMixerOutputSlot` 型 | 泥ミキサーのフロー制御システム |
 | タスク予約ライフサイクル helper (`lifecycle.rs`) | 予約再構築を呼ぶゲーム側システム |
 | 建設状態コンポーネント（`FloorTileState`, `WallTileState` 等） | コンポーネントの Bevy 登録・Observer 配線 |
-| `FloorTileBlueprint`, `WallTileBlueprint`（タイル Blueprint） | `FloorConstructionSite`, `WallConstructionSite`（`TaskArea` 依存のため root 残留） |
+| `FloorTileBlueprint`, `WallTileBlueprint`, `FloorConstructionSite`, `WallConstructionSite` | これらを進行させる build / logistics / visual system |
 | `TargetFloorConstructionSite`, `TargetWallConstructionSite` | — |
 | `FloorConstructionCancelRequested`, `WallConstructionCancelRequested` | — |
 

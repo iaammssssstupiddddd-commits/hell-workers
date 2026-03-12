@@ -17,8 +17,7 @@
 | `FamiliarSpatialGrid` | `familiar.rs` | Familiar 位置検索 |
 | `BlueprintSpatialGrid` | `blueprint.rs` | 建設ブループリント位置検索 |
 | `GatheringSpotSpatialGrid` | `gathering.rs` | 集会スポット位置検索 |
-
-※ `FloorConstructionSpatialGrid` のみルートクレートで定義。
+| `FloorConstructionSpatialGrid` | `floor_construction.rs` | 床建設サイト位置検索 |
 
 ## 主要型
 
@@ -50,15 +49,11 @@ trait SpatialGridOps {
 
 ## src/ との境界
 
-hw_spatial はグリッド型定義と**ほとんどのグリッド更新システム**を提供する。
-ゲーム固有のグリッドは `FloorConstructionSpatialGrid` だけが src/ 側に残る。
+hw_spatial は grid resource 本体と汎用 update system を所有する。
+root `src/systems/spatial/` は root 側コンポーネント型をその generic system に束ねる adapter と、既存 import path を保つ re-export shell だけを持つ。
 
 | hw_spatial に置くもの | src/systems/spatial/ に置くもの |
 |---|---|
-| `SoulSpatialGrid` とその更新システム | `FloorConstructionSpatialGrid` とその更新（FloorSite はルート型） |
-| `FamiliarSpatialGrid` とその更新システム | — |
-| `DesignationSpatialGrid` / `ResourceSpatialGrid` / `GatheringSpotSpatialGrid` 等 8 グリッド | — |
-| `GridData<T>`, `SpatialGridOps` トレイト | — |
-
-**分割基準**: グリッドに格納するコンポーネント型が hw_* クレートで定義されているか、src/ で定義されているかによる。
-`GatheringSpot` は `hw_core` に移ったため `GatheringSpotSpatialGrid` も `hw_spatial` が所有する。`FloorConstructionSite` は依然 root 固有の型のため、そのグリッドだけが src/ 側に残る。
+| `SoulSpatialGrid` から `FloorConstructionSpatialGrid` まで全 grid resource | root 型に対する generic update system の binding wrapper |
+| 全 grid の update system 本体 | 互換 re-export パス |
+| `GridData<T>`, `SpatialGridOps` トレイト | `plugins/spatial.rs` から参照する薄い adapter |

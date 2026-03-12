@@ -1,37 +1,37 @@
-# spatial — 空間グリッド更新（ルートクレート拡張）
+# spatial — root adapter for `hw_spatial`
 
 ## 役割
 
-`hw_spatial` クレートに定義されたグリッド群のうち、**ルートクレート固有のグリッド**（GatheringSpot・FloorConstruction）の更新システムを実装する。
-`hw_spatial` で定義されたグリッドの更新は `plugins/spatial.rs` で直接登録される。
+空間グリッド本体は `hw_spatial` が所有する。
+このディレクトリは root crate 側のコンポーネント型を `hw_spatial` の汎用 update system に束ねる adapter と、既存 import path を維持する re-export shell を置く。
 
 ## ファイル一覧
 
 | ファイル | 内容 |
 |---|---|
-| `mod.rs` | `update_gathering_spot_spatial_grid_system`, `update_floor_construction_spatial_grid_system` の公開 |
-| `gathering.rs` | `GatheringSpatialGrid` の毎フレーム更新 |
-| `floor_construction.rs` | `FloorConstructionSpatialGrid` の毎フレーム更新 |
-| `blueprint.rs` | ブループリットグリッド補助 |
-| `designation.rs` | 指定グリッド補助 |
-| `familiar.rs` | Familiar グリッド補助 |
-| `resource.rs` | リソースグリッド補助 |
-| `soul.rs` | Soul グリッド補助 |
-| `stockpile.rs` | ストックパイルグリッド補助 |
-| `transport_request.rs` | 輸送要求グリッド補助 |
-| `grid.rs` | グリッド共通ユーティリティ |
+| `mod.rs` | root 互換パスとして各 grid / update system を再公開 |
+| `blueprint.rs` | root の `Blueprint` 型に対して `hw_spatial` の汎用 update system を束縛 |
+| `designation.rs` | root の `Designation` 型に対する adapter |
+| `familiar.rs` | root の `Familiar` 型に対する adapter |
+| `resource.rs` | root の `ResourceItem` 型に対する adapter |
+| `soul.rs` | root の `DamnedSoul` 型に対する adapter |
+| `stockpile.rs` | root の `Stockpile` 型に対する adapter |
+| `transport_request.rs` | root の `TransportRequest` 型に対する adapter |
+| `floor_construction.rs` | `hw_spatial::floor_construction` の thin shell |
+| `gathering.rs` | `hw_spatial::gathering` の thin shell |
+| `grid.rs` | `GridData` / `SpatialGridOps` の re-export |
 
 ## 全グリッド更新の登録場所
 
 | グリッド | 登録場所 |
 |---|---|
-| `SoulSpatialGrid` | `plugins/spatial.rs` (`hw_spatial` 提供) |
+| `SoulSpatialGrid` | `plugins/spatial.rs` (`hw_spatial` の汎用 system を root 型で束縛) |
 | `FamiliarSpatialGrid` | `plugins/spatial.rs` |
 | `ResourceSpatialGrid` | `plugins/spatial.rs` |
 | `DesignationSpatialGrid` | `plugins/spatial.rs` |
-| `GatheringSpatialGrid` | `plugins/spatial.rs` (このディレクトリ提供) |
+| `GatheringSpotSpatialGrid` | `plugins/spatial.rs` (`hw_spatial` 提供) |
 | `BlueprintSpatialGrid` | `plugins/spatial.rs` |
-| `FloorConstructionSpatialGrid` | `plugins/spatial.rs` (このディレクトリ提供) |
+| `FloorConstructionSpatialGrid` | `plugins/spatial.rs` (`hw_spatial` 提供) |
 | `StockpileSpatialGrid` | `plugins/spatial.rs` |
 | `TransportRequestSpatialGrid` | `plugins/spatial.rs` |
 
@@ -39,14 +39,16 @@
 
 ## hw_spatial との境界
 
-**分割基準**: グリッドに格納するコンポーネント型が hw_* クレートで定義されているかどうか。
+`hw_spatial` は grid resource 本体と汎用 update system を所有する。
+root `src/systems/spatial/` は、root 側で定義されたコンポーネント型をその汎用 system に渡す adapter と、後方互換の公開パスだけを持つ。
 
-| グリッド | 型の定義場所 | グリッドの定義場所 |
-|---|---|---|
-| `SoulSpatialGrid` 等 7 グリッド | `hw_core` / `hw_jobs` / `hw_logistics` | `hw_spatial` |
-| `GatheringSpatialGrid` | `src/` (`GatheringSpot` はルート型) | このディレクトリ |
-| `FloorConstructionSpatialGrid` | `src/` (`FloorConstructionSite` はルート型) | このディレクトリ |
+| 役割 | 所有先 |
+|---|---|
+| `GridData<T>`, `SpatialGridOps`, 全 grid resource | `hw_spatial` |
+| `FloorConstructionSpatialGrid`, `GatheringSpotSpatialGrid` の定義と update system | `hw_spatial` |
+| root 型 (`Blueprint`, `Designation`, `DamnedSoul` など) への generic binding | `src/systems/spatial/` |
+| 互換 re-export パス | `src/systems/spatial/` |
 
 新しいグリッドを追加する場合:
-- コンポーネント型が hw_* にある → `hw_spatial` に追加し `plugins/spatial.rs` で登録
-- コンポーネント型が src/ にある → このディレクトリに追加し `plugins/spatial.rs` で登録
+- grid resource 本体と update system は `hw_spatial` に追加する
+- root 固有コンポーネント型を generic system に束ねる必要がある場合だけ、このディレクトリに薄い adapter を追加する
