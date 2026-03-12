@@ -224,6 +224,7 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 - `familiar_ai::decide::query_types` — Familiar Decide 用の narrow query 定義
 - `familiar_ai::decide::helpers` — `finalize_state_transitions` / `process_squad_management` など pure helper
 - `familiar_ai::decide::recruitment` — `SpatialGridOps` ベースのリクルート選定・スカウト開始判定
+- `familiar_ai::decide::state_decision` — branch dispatch (`FamiliarDecisionPath`, `determine_decision_path`) と結果型 (`FamiliarStateDecisionResult`)。MessageWriter は持たない pure core。root の `state_decision.rs` adapter から呼ばれる
 - `familiar_ai::decide::encouragement` — 激励対象選定と `EncouragementCooldown`
 - `familiar_ai::decide::task_management` — Familiar の task search / scoring / source selector / reservation shadow / assignment build の core
 - `familiar_ai::decide::auto_gather_for_blueprint::{planning,demand,supply,helpers}` — Blueprint auto gather の純計画層

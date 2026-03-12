@@ -23,6 +23,7 @@ hw_ai/src/
 | `decide/query_types.rs` | Decide | Familiar Decide 用の narrow query 定義 |
 | `decide/helpers.rs` | Decide | `finalize_state_transitions` / `process_squad_management` などの pure helper |
 | `decide/recruitment.rs` | Decide | `SpatialGridOps` ベースのリクルート判定 |
+| `decide/state_decision.rs` | Decide | Familiar の state decision dispatch (`FamiliarDecisionPath`) と pure result 型 (`FamiliarStateDecisionResult`) |
 | `decide/encouragement.rs` | Decide | 激励対象選定と `EncouragementCooldown` |
 | `decide/auto_gather_for_blueprint/` | Decide | Blueprint auto gather の需要供給計画ヘルパ |
 | `decide/squad.rs` | Decide | 分隊検証・疲労メンバー解放判定 |
@@ -121,6 +122,7 @@ hw_ai は**ゲームエンティティ非依存の純粋 AI ロジック**のみ
 - **Soul AI Execute**: `gathering_spawn_logic_system` のような shared request 生成システム
 - **Soul AI Execute**: `task_assignment_apply` のような shared 型だけで閉じる apply system とその helper 群
 - **Familiar AI**: 状態変化検出・ターゲット追跡・状態機械・分隊管理・監視/スカウト判断・リクルート判定・激励対象選定
+- **Familiar AI State Decision Core**: `determine_decision_path` と `FamiliarStateDecisionResult` のような root adapter 向けの pure dispatch / outcome 集約
 - **Blueprint Auto Gather**: 需要供給集計・必要 designation 数の pure planning
 - 純粋ヘルパー関数（`is_soul_available_for_work` 等）
 - root adapter が request message を発行できるよう、`ScoutingOutcome` / `SquadManagementOutcome` のような pure outcome を返す
@@ -138,7 +140,7 @@ hw_ai は**ゲームエンティティ非依存の純粋 AI ロジック**のみ
 | `familiar_ai/decide/task_management/` | Familiar のタスク検索・割り当てコア。root 側は `WorldMap`/SpatialGrid orchestration と construction site bridge のみ保持 |
 | `familiar_ai/decide/auto_gather_for_blueprint.rs` | `Commands` / pathfinding / Blueprint 直接 query に依存 |
 | `familiar_ai/decide/encouragement.rs` | `Time` / concrete `SpatialGrid` / request message 出力の adapter を担当 |
-| `familiar_ai/decide/state_decision.rs` | concrete `SpatialGrid` と request message 出力の adapter を担当 |
+| `familiar_ai/decide/state_decision.rs` | concrete `SpatialGrid` / `transmute_lens_filtered` / request message 出力を持つ root adapter。`hw_ai` 側は dispatch と pure result 型のみを所有 |
 | `familiar_ai/perceive/resource_sync.rs` | `SharedResourceCache` 予約再構築のみ（apply helper は `hw_logistics` に移設済み） |
 
 root 側の `src/systems/soul_ai/decide/work/*.rs` と `src/systems/soul_ai/decide/idle_behavior/mod.rs` は互換 re-export shell のみで、実体は `hw_ai::soul_ai::*` にある。`src/systems/soul_ai/execute/task_execution/mod.rs` の `apply_task_assignment_requests_system` も同様に re-export のみで、system 登録責務は `SoulAiCorePlugin` が持つ。

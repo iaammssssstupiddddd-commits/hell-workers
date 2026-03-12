@@ -7,5 +7,6 @@ pub mod query_types;
 pub mod recruitment;
 pub mod scouting;
 pub mod squad;
+pub mod state_decision;
 pub mod state_handlers;
 pub mod supervising;

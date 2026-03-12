@@ -229,7 +229,7 @@ Perceive → Update → Decide → Execute
 - `update_selection_indicator` の実装本体は `hw_visual` にあるが、選択更新と同フレームで反映するため root `Interface` フェーズで登録する。
 - `hw_ui::selection::placement` は building placement/move の geometry, validation 共通ロジックを保持する。`src/interface/selection/building_place/placement.rs`・`building_move/preview.rs`・`building_move/mod.rs`・`src/systems/visual/placement_ghost.rs` が共有する。
 - `building_move/geometry.rs` は hw_ui 移動に伴い削除済み。`building_move/placement.rs` は bucket storage 所有グリッド解決だけを持つ薄い adapter で、判定本体は `validate_moved_bucket_storage_placement` を使う。
-- floor/wall の tile reject reason と tile validation は `hw_ui::selection::placement` に共通化済み。root 側 `floor_place/validation.rs` は `WorldMap` を `WorldReadApi` へ適合させる adapter のみ。
+- floor/wall の tile reject reason と tile validation は `hw_ui::selection::placement` に共通化済み。`WorldMap` → `WorldReadApi` の adapter は `src/world/map/mod.rs` の `WorldMapRef<'a>` 一箇所に集約済み（旧来の各ファイルのローカルラッパーは削除済み）。
 - `handle_mouse_input` の selection 判定は `SelectionIntent` を返す helper へ分離済み（`apply_selection_intent` が ECS 変更を適用）。
 - `building_move/mod.rs` の `finalize_move_request` / `cancel_tasks_and_requests_for_moved_building` は `TransportRequest`・`unassign_task` 依存が重く root adapter として残留する。
 
