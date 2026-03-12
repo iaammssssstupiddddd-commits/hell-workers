@@ -10,11 +10,11 @@
 
 | ディレクトリ/ファイル | 内容 |
 |---|---|
-| `mod.rs` | 全サブモジュールの公開 API（`hw_ui::components::*` / `hw_ui::theme::*` を直接 re-export） |
+| `mod.rs` | app shell 側の正規 UI facade。外部に必要なシンボルだけを明示 re-export |
 | `vignette.rs` | 画面周辺ヴィネットエフェクト |
 | `plugins/` | UI プラグイン登録 |
 | `setup/` | UI 要素の初期スポーン・`UiAssets` アダプタ実装 |
-| `panels/` | 情報パネル（ゲーム固有 + hw_ui re-export） |
+| `panels/` | 情報パネル facade / task_list / tooltip_builder |
 | `list/` | エンティティリスト（ゲーム固有実装 + hw_ui re-export） |
 | `presentation/` | UI ビルダー・プレゼンテーション層 |
 | `interaction/` | マウス・キーボード入力ハンドラ |
@@ -46,7 +46,7 @@
 |---|---|
 | `mod.rs` | 公開 API |
 | `context_menu.rs` | コンテキストメニュー（ゲーム固有: Familiar/Soul/Building 分岐） |
-| `info_panel/` | `hw_ui` re-export + ゲーム固有ビューモデル |
+| `mod.rs` 内の `hw_ui::panels::info_panel` re-export | `InfoPanelState`, `InfoPanelPinState`, `spawn_info_panel_ui`, `info_panel_system` を facade として公開 |
 | `task_list/` | `hw_ui` re-export + ゲーム固有 dirty/view_model/update |
 | `tooltip_builder/` | `hw_ui` re-export |
 
@@ -58,10 +58,16 @@
 | `sync.rs` | `sync_entity_list_from_view_model_system` / `sync_entity_list_value_rows_system`（`hw_ui::list::sync` の thin shell） |
 | `view_model.rs` | リストビューモデル（ゲーム固有クエリ） |
 | `change_detection.rs` | 変化検出 |
-| `dirty.rs` | ダーティフラグ（`hw_ui::list::EntityListDirty` re-export） |
+| `dirty.rs` | ダーティフラグ |
 | `drag_drop.rs` | ドラッグ&ドロップ（`DragState` は hw_ui、システムはここ） |
 | `interaction.rs` / `interaction/` | リストアイテムのゲーム側インタラクション（SectionToggle は hw_ui 側へ移設済み。`+/-` は target 付き `UiIntent` を発行し、navigation はここ残留） |
-| `selection_focus.rs` | `hw_ui::list` re-export |
+| `selection_focus.rs` | camera focus helper |
+
+## 公開方針
+
+- `crate::interface::ui` を root 側の正規入口とし、外部から使うシンボルだけを `mod.rs` で明示 re-export する
+- `hw_ui::components::*` / `hw_ui::theme::*` の wildcard 再公開は行わない
+- deep path の thin shell を減らし、`panels/mod.rs` や `list/mod.rs` の facade へ集約する
 
 ## ルート残留の理由
 

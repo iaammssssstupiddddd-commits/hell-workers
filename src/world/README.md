@@ -16,8 +16,6 @@
 | ファイル | 内容 |
 |---|---|
 | `mod.rs` | 公開 API |
-| `access.rs` | `WorldMap` リソースへのアクセスヘルパー |
-| `layout.rs` | マップレイアウト定数（re-export） |
 | `spawn.rs` | マップエンティティのスポーン処理 |
 | `terrain_border.rs` | 地形境界タイルの設定 |
 
@@ -33,7 +31,7 @@
 | 層 | 内容 |
 |---|---|
 | `hw_world` クレート | 純粋アルゴリズム（A*・地形生成・座標変換）と `WorldMap` 型 |
-| `src/world/map/` | Bevy 統合（`SystemParam` ラッパー・スポーン・タイル設定） |
+| `src/world/map/` | app shell facade と Bevy 統合（スポーン・タイル設定） |
 
 ### hw_world に置かれているもの
 
@@ -43,20 +41,16 @@
 - `generate_base_terrain_tiles`, `generate_fixed_river_tiles` などの地形生成
 - `find_nearest_walkable_grid` などの空間クエリ
 
-### src/ に置かれているもの（Bevy 統合層）
+### src/ に置かれているもの（app shell / Bevy 統合層）
 
 ```rust
-// src/world/map/access.rs
-// WorldMap を SystemParam として扱うラッパー
-#[derive(SystemParam)]
-pub struct WorldMapRead<'w> {
-    world_map: Res<'w, WorldMap>,
-}
+// src/world/map/mod.rs
+// root 側の正規 public path をまとめる facade
+pub use hw_world::{WorldMapRead, WorldMapWrite, TerrainType, generate_fixed_river_tiles};
 ```
 
 | ファイル | hw_world ではなく src/ にある理由 |
 |---|---|
-| `access.rs` | `WorldMapRead` / `WorldMapWrite` は Bevy `SystemParam` — エンジン固有 |
+| `mod.rs` | `WorldMapRead` / `WorldMapWrite` と layout 定数の root facade |
 | `spawn.rs` | `Commands` によるエンティティスポーンが必要 |
 | `terrain_border.rs` | タイルエンティティへのコンポーネント付与が必要 |
-| `layout.rs` | hw_world 定数の re-export のみ |

@@ -65,9 +65,10 @@
 - `crates/hw_ui/src/panels/menu.rs` - `menu_visibility_system`
 
 ### root shell（adapter）
-- `src/interface/ui/panels/info_panel/mod.rs` - `hw_ui::panels::info_panel` の re-export
+- `src/interface/ui/panels/mod.rs` - `hw_ui::panels::info_panel` の re-export と `context_menu_system` の公開
+- `src/interface/ui/mod.rs` - app shell 側の UI facade として `InfoPanelPinState` / `InfoPanelState` / `info_panel_system` を明示 re-export
 - `src/interface/ui/plugins/info_panel.rs` - ViewModel producer / consumer の順序固定と plugin wiring
 - `src/interface/ui/presentation/` - `EntityInspectionModel` / `ViewModel` 構築（ゲームエンティティクエリ）
 - `src/interface/ui/panels/context_menu.rs` - `Inspect (Pin)` メニュー
 - `src/interface/ui/interaction/menu_actions.rs` - `InspectEntity` / `ClearInspectPin`
-- `src/interface/ui/components.rs` - `UiSlot` / `InfoPanelPinState` / 再エクスポート
+- `src/interface/ui/setup/mod.rs` - `spawn_info_panel_ui` を `hw_ui` 実装へ委譲する setup adapter

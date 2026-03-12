@@ -167,7 +167,7 @@ Perceive → Update → Decide → Execute
 
 - `hw_ui` 側はUIノード生成・表示系システムの本体を集約する。具体的には `UiRoot`/`UiMountSlot`、`UiSlot` 予約、ステータス表示、tooltip_builder、info_panel、task_list の render/interaction、エンティティリストの汎用メカニクス（resize/minimize/visual）を保持する。
 - root 側 (`bevy_app`) は `UiIntent` メッセージ受信、PlayMode 遷移、ゲームエンティティ ECS Query、WorldMapWrite/TaskContext など**ゲーム状態を持つ adapter** を担当する。
-- `src/interface/ui/components.rs` と `src/interface/ui/theme.rs` は `pub use hw_ui::...` の薄い re-export 層。
+- `src/interface/ui/mod.rs` は app shell の正規入口として機能し、外部から使われるシンボルのみを明示的に re-export する（wildcard `*` は使用しない）。
 
 ### アセット抽象化
 
