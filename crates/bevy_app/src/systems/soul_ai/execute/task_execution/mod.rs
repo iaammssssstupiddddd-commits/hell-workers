@@ -14,7 +14,7 @@ pub mod types;
 pub use types::AssignedTask;
 
 // apply_task_assignment_requests_system は hw_ai に移設済み
-pub use hw_ai::soul_ai::execute::task_assignment_apply::apply_task_assignment_requests_system;
+pub use hw_soul_ai::soul_ai::execute::task_assignment_apply::apply_task_assignment_requests_system;
 
 use crate::events::OnTaskCompleted;
 use crate::systems::soul_ai::helpers::query_types::TaskExecutionSoulQuery;

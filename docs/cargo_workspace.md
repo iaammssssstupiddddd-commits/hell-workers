@@ -18,7 +18,9 @@ crates/hw_core
 crates/hw_world
 crates/hw_logistics
 crates/hw_jobs
-crates/hw_ai
+crates/hw_familiar_ai
+crates/hw_soul_ai
+crates/hw_ai          (互換 facade: hw_familiar_ai + hw_soul_ai を re-export)
 crates/hw_spatial
 crates/hw_ui
 crates/hw_visual
@@ -32,7 +34,9 @@ hw_core
   ├─ hw_logistics
   ├─ hw_jobs
   ├─ hw_spatial
-  ├─ hw_ai
+  ├─ hw_familiar_ai
+  ├─ hw_soul_ai
+  ├─ hw_ai           (hw_familiar_ai + hw_soul_ai)
   ├─ hw_visual
   └─ bevy_app
 
@@ -48,7 +52,15 @@ hw_jobs
 hw_spatial (hw_core + hw_world + hw_logistics + hw_jobs)
   └─ bevy_app
 
-hw_ai (hw_core + hw_jobs + hw_logistics + hw_world + hw_spatial)
+hw_familiar_ai (hw_core + hw_jobs + hw_logistics + hw_world + hw_spatial)
+  └─ hw_ai (facade)
+  └─ bevy_app
+
+hw_soul_ai (hw_core + hw_jobs + hw_logistics + hw_world + hw_spatial)
+  └─ hw_ai (facade)
+  └─ bevy_app
+
+hw_ai (hw_familiar_ai + hw_soul_ai) — 互換 facade
   └─ bevy_app
 
 hw_ui
@@ -123,7 +135,7 @@ root 側の `bevy_app` 残留（adapter 責務）:
 | `panels/task_list/update.rs` | `Res<GameAssets>` をシステム引数に取るため hw_ui 移動不可 |
 | `presentation/` | EntityInspectionQuery（ゲームエンティティ 10+ 型のクエリ集約）|
 | `vignette.rs` | TaskContext (DreamPlanting モード判定) |
-- `hw_visual` はビジュアルシステム全体を集約し、`GameAssets` には依存しない。アセットハンドルは `handles.rs` の 8 つの Resource（`WallVisualHandles` 等）で保持し、root の `init_visual_handles` startup システムが `GameAssets` から注入する。`SoulTaskHandles` と visual marker (`FadeOut`, `WheelbarrowMovement`) は `hw_core::visual` に置き、`hw_ai` / `hw_visual` の共有型として扱う。
+- `hw_visual` はビジュアルシステム全体を集約し、`GameAssets` には依存しない。アセットハンドルは `handles.rs` の 8 つの Resource（`WallVisualHandles` 等）で保持し、root の `init_visual_handles` startup システムが `GameAssets` から注入する。`SoulTaskHandles` と visual marker (`FadeOut`, `WheelbarrowMovement`) は `hw_core::visual` に置き、`hw_familiar_ai` / `hw_soul_ai` / `hw_visual` の共有型として扱う。
 - `bevy_app` → `hw_visual` は依存方向を維持し、`hw_visual` から `bevy_app` へ依存しない。
 
 ### `hw_visual`
@@ -138,7 +150,7 @@ root 側の `bevy_app` 残留（adapter 責務）:
 
 - `HwVisualPlugin` — hw_visual の全システムを一括登録する Plugin
 - `handles::{WallVisualHandles, BuildingAnimHandles, WorkIconHandles, MaterialIconHandles, HaulItemHandles, SpeechHandles, PlantTreeHandles, GatheringVisualHandles}` — ビジュアルハンドルリソース（GameAssets の代替）
-- `hw_core::visual::{SoulTaskHandles, FadeOut, WheelbarrowMovement}` — `hw_ai` と `hw_visual` が共有する visual resource / marker component
+- `hw_core::visual::{SoulTaskHandles, FadeOut, WheelbarrowMovement}` — `hw_familiar_ai` / `hw_soul_ai` と `hw_visual` が共有する visual resource / marker component
 - `handles::GatheringVisualHandles` — 集会スポット visual 用ハンドルリソース（`aura_circle`, `card_table`, `campfire`, `barrel`）
 - `blueprint::*` — 設計図ビジュアル（アニメーション、プログレスバー、資材表示、完成エフェクト）
 - `dream::*` — Dream UI パーティクル、ドリームバブル、フローティングポップアップ（custom Material2d / UiMaterial）
@@ -183,15 +195,17 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 // PostStartup チェーンの先頭で実行（GameAssets 挿入後）
 ```
 
-### `hw_ai`
+### `hw_familiar_ai` / `hw_soul_ai`
 
 役割:
 
 - Root crate に依存しない AI コアロジック
-- Soul AI および Familiar AI の純粋なシステム実装
+- `hw_familiar_ai`: Familiar AI の純粋なシステム実装（62 ファイル）
+- `hw_soul_ai`: Soul AI の純粋なシステム実装（94 ファイル）
 - hw_core / hw_jobs / hw_logistics / hw_world を組み合わせた AI ドメインロジック
+- `hw_ai` は互換 facade として `hw_familiar_ai` / `hw_soul_ai` を re-export するのみ
 
-代表例:
+代表例（`hw_soul_ai`）:
 
 - `SoulAiCorePlugin` — Soul AI の Update/Execute/Decide ヘルパーフェーズコアシステム
 - `FamiliarAiCorePlugin` — Familiar AI の Perceive/Decide/Execute フェーズコアシステム
@@ -199,7 +213,7 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 - `soul_ai::execute::designation_apply` — Designation 要求適用
 - `soul_ai::execute::gathering_apply` — 集会管理要求適用（Merge / Dissolve / Recruit / Leave）
 - `soul_ai::execute::gathering_spawn` — 集会発生判定と `GatheringSpawnRequest` 発行
-- `soul_ai::execute::task_assignment_apply` — `TaskAssignmentRequest` 適用。system 登録責務も `hw_ai::SoulAiCorePlugin` が持つ
+- `soul_ai::execute::task_assignment_apply` — `TaskAssignmentRequest` 適用。system 登録責務も `hw_soul_ai::SoulAiCorePlugin` が持つ
 - `soul_ai::decide::idle_behavior::idle_behavior_decision_system` — IdleBehavior 決定本体
 - `soul_ai::decide::idle_behavior::transitions` — IdleBehavior 遷移判定ヘルパー（次の行動選択・持続時間計算）
 - `soul_ai::decide::idle_behavior::task_override` — タスク割り当て時の集会・休憩解除ヘルパー
@@ -248,7 +262,7 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 
 移設済み system の登録ルール:
 
-- 実装本体を `hw_ai` / `hw_visual` / `hw_jobs` へ移した system は、原則として所有 crate の Plugin が唯一の登録者になる。
+- 実装本体を `hw_familiar_ai` / `hw_soul_ai` / `hw_visual` / `hw_jobs` へ移した system は、原則として所有 crate の Plugin が唯一の登録者になる。
 - root 側の `pub use` / thin shell は互換パス維持と ordering 参照のために残してよいが、同じ system function を再登録してはいけない。
 - root shell は `.after(...)` / `.before(...)` で移設済み system に順序制約を付けるだけにとどめる。二重登録すると Bevy 0.18 の schedule 初期化で `SystemTypeSet` が曖昧になり panic する。
 - 用語は次のように使い分ける:
@@ -527,6 +541,8 @@ cargo check -p hw_core
 cargo check -p hw_world
 cargo check -p hw_logistics
 cargo check -p hw_jobs
+cargo check -p hw_familiar_ai
+cargo check -p hw_soul_ai
 cargo check -p hw_ai
 cargo check -p hw_visual
 ```

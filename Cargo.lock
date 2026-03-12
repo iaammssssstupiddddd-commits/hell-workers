@@ -412,8 +412,10 @@ dependencies = [
  "bevy",
  "hw_ai",
  "hw_core",
+ "hw_familiar_ai",
  "hw_jobs",
  "hw_logistics",
+ "hw_soul_ai",
  "hw_spatial",
  "hw_ui",
  "hw_visual",
@@ -2730,13 +2732,8 @@ checksum = "dfa686283ad6dd069f105e5ab091b04c62850d3e4cf5d67debad1933f55023df"
 name = "hw_ai"
 version = "0.1.0"
 dependencies = [
- "bevy",
- "hw_core",
- "hw_jobs",
- "hw_logistics",
- "hw_spatial",
- "hw_world",
- "rand 0.8.5",
+ "hw_familiar_ai",
+ "hw_soul_ai",
 ]
 
 [[package]]
@@ -2744,6 +2741,19 @@ name = "hw_core"
 version = "0.1.0"
 dependencies = [
  "bevy",
+ "rand 0.8.5",
+]
+
+[[package]]
+name = "hw_familiar_ai"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "hw_core",
+ "hw_jobs",
+ "hw_logistics",
+ "hw_spatial",
+ "hw_world",
  "rand 0.8.5",
 ]
 
@@ -2762,6 +2772,19 @@ dependencies = [
  "bevy",
  "hw_core",
  "hw_jobs",
+ "hw_spatial",
+ "hw_world",
+ "rand 0.8.5",
+]
+
+[[package]]
+name = "hw_soul_ai"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "hw_core",
+ "hw_jobs",
+ "hw_logistics",
  "hw_spatial",
  "hw_world",
  "rand 0.8.5",

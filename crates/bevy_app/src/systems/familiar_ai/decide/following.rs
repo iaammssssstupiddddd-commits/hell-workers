@@ -1,1 +1,1 @@
-pub use hw_ai::familiar_ai::decide::following::*;
+pub use hw_familiar_ai::familiar_ai::decide::following::*;

@@ -9,7 +9,7 @@ use crate::systems::familiar_ai::helpers::query_types::SoulEncouragementQuery;
 use crate::systems::spatial::SpatialGrid;
 use bevy::prelude::*;
 
-pub use hw_ai::familiar_ai::decide::encouragement::{
+pub use hw_familiar_ai::familiar_ai::decide::encouragement::{
     EncouragementCooldown, FamiliarEncouragementContext, decide_encouragement_target,
 };
 

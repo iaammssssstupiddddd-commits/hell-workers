@@ -18,7 +18,7 @@ pub struct FamiliarAiPlugin;
 impl Plugin for FamiliarAiPlugin {
     fn build(&self, app: &mut App) {
         // hw_ai の FamiliarAiCorePlugin でコアシステムを登録
-        app.add_plugins(hw_ai::FamiliarAiCorePlugin);
+        app.add_plugins(hw_familiar_ai::FamiliarAiCorePlugin);
 
         app.configure_sets(
             Update,
