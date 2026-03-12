@@ -22,7 +22,7 @@ Familiar の task management を `hw_ai` へ移し、root を app shell と cons
 
 ## 2. 目的（Goals）
 
-- Familiar の task management core を `hw_ai::familiar_ai::decide::task_management` に揃える。
+- Familiar の task management core を `hw_familiar_ai::familiar_ai::decide::task_management` に揃える。
 - root 側には orchestration、plugin wiring、construction site bridge だけを残す。
 - `TaskAssignmentQueries` 依存のうち、真に root-only な部分を `ConstructionSiteAccess` に隔離する。
 

@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 use hw_core::events::DriftingEscapeStarted;
-use hw_ai::soul_ai::helpers::drifting::choose_drift_edge;
+use hw_soul_ai::soul_ai::helpers::drifting::choose_drift_edge;
 use rand::Rng;
 
 use crate::entities::damned_soul::spawn::PopulationManager;

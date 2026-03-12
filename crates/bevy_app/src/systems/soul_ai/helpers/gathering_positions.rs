@@ -1,1 +1,1 @@
-pub use hw_ai::soul_ai::helpers::gathering_positions::*;
+pub use hw_soul_ai::soul_ai::helpers::gathering_positions::*;

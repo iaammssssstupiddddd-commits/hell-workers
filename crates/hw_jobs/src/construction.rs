@@ -178,3 +178,12 @@ impl WallConstructionSite {
         }
     }
 }
+
+/// 建設サイトの位置を抽象化するブリッジトレイト
+///
+/// `hw_familiar_ai` / `hw_soul_ai` の双方から利用するため、AI crate に依存しない
+/// `hw_jobs::construction` が所有する。
+pub trait ConstructionSitePositions {
+    fn floor_site_pos(&self, site: Entity) -> Option<Vec2>;
+    fn wall_site_pos(&self, site: Entity) -> Option<Vec2>;
+}

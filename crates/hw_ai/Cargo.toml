@@ -4,10 +4,5 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-bevy = { workspace = true }
-rand = { workspace = true }
-hw_core = { path = "../hw_core" }
-hw_jobs = { path = "../hw_jobs" }
-hw_logistics = { path = "../hw_logistics" }
-hw_world = { path = "../hw_world" }
-hw_spatial = { path = "../hw_spatial" }
+hw_familiar_ai = { path = "../hw_familiar_ai" }
+hw_soul_ai     = { path = "../hw_soul_ai" }

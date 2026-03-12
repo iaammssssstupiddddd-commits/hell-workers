@@ -1,1 +1,1 @@
-pub use hw_ai::soul_ai::decide::escaping::escaping_decision_system;
+pub use hw_soul_ai::soul_ai::decide::escaping::escaping_decision_system;
