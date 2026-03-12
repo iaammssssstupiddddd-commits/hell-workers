@@ -1,11 +1,11 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-- `src/`: Rust source code
-- `src/entities/`: entity definitions (Soul, Familiar, buildings)
-- `src/systems/`: game logic systems (`familiar_ai/`, `soul_ai/`, `jobs/`, `visual/`)
-- `src/interface/`: UI components
-- `src/plugins/`: Bevy plugin wiring
+- `crates/bevy_app/src/`: Rust source code
+- `crates/bevy_app/src/entities/`: entity definitions (Soul, Familiar, buildings)
+- `crates/bevy_app/src/systems/`: game logic systems (`familiar_ai/`, `soul_ai/`, `jobs/`, `visual/`)
+- `crates/bevy_app/src/interface/`: UI components
+- `crates/bevy_app/src/plugins/`: Bevy plugin wiring
 - `assets/`: sprites, fonts, and other game resources
 - `docs/`: technical specs and developer docs (start with `docs/README.md`)
 - `proposals/`: feature/refactor proposals
@@ -24,7 +24,7 @@
 
 ## Coding Style & Naming Conventions
 - Follow Rust defaults: 4-space indentation and idiomatic naming (`snake_case` for functions/vars, `UpperCamelCase` for types, `SCREAMING_SNAKE_CASE` for constants).
-- Keep systems and components organized by feature area under `src/systems/` and `src/entities/`.
+- Keep systems and components organized by feature area under `crates/bevy_app/src/systems/` and `crates/bevy_app/src/entities/`.
 - Avoid dead code and `#[allow(dead_code)]` unless actively justified by current usage.
 
 ## Testing Guidelines
@@ -39,7 +39,7 @@
 - Before starting work, skim `README.md`, `docs/DEVELOPMENT.md`, and `docs/README.md` for current rules and specs.
 - Keep `cargo check` green; do not report completion with Rust-analyzer errors.
 - Avoid dead code and `#[allow(dead_code)]` unless currently required. Do not leave implementations not documented in `docs/`.
-- Task system conventions: add new `AssignedTask` variants as struct variants and keep task queries aggregated in `TaskQueries` (see `src/systems/soul_ai/execute/task_execution/`).
+- Task system conventions: add new `AssignedTask` variants as struct variants and keep task queries aggregated in `TaskQueries` (see `crates/bevy_app/src/systems/soul_ai/execute/task_execution/`).
 - Context hygiene: respect `.cursorignore` and `.geminiignore` by avoiding large build artifacts/logs (`target/`, `dist/`, `.trunk/`, `logs/`, `build_*.txt`, `*_output*.txt`) unless explicitly needed.
 
 ### Task Lifecycle

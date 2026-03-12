@@ -218,8 +218,8 @@ fn on_pipe_placed(
 - **変更内容:** `render.rs` に `Z_BUILDING_*` 定数群を追加。既存の建築物スポーン箇所の Z 値を新定数に置き換える
 - **変更ファイル:**
   - `crates/hw_core/src/constants/render.rs`
-  - `src/systems/jobs/building_completion/spawn.rs`
-  - `src/interface/selection/building_place/placement.rs`
+  - `crates/bevy_app/src/systems/jobs/building_completion/spawn.rs`
+  - `crates/bevy_app/src/interface/selection/building_place/placement.rs`
 - **完了条件:**
   - [ ] `Z_BUILDING_BASE`〜`Z_BUILDING_DECAL` が定数として定義されている
   - [ ] 既存建築物の Z 値が新定数を参照している
@@ -232,7 +232,7 @@ fn on_pipe_placed(
 - **変更内容:** `VisualLayer` コンポーネントと `VisualLayerKind` を新規クレート or `hw_visual` に追加。完成建築物のスポーン時に `VisualLayer` を持つ子エンティティを生成するよう変更
 - **変更ファイル:**
   - `crates/hw_visual/src/layer/mod.rs`（新規）
-  - `src/systems/jobs/building_completion/spawn.rs`
+  - `crates/bevy_app/src/systems/jobs/building_completion/spawn.rs`
 - **完了条件:**
   - [ ] `VisualLayer { kind: Floor, cell }` エンティティが建築完了時にスポーンされる
   - [ ] 既存の建築物の見た目が変わらない
@@ -247,7 +247,7 @@ fn on_pipe_placed(
 - **変更内容:** 配線配置時に `VisualLayerKind::Wire` エンティティをスポーンし、隣接配線を参照してスプライトを選択するシステムを追加
 - **変更ファイル:**
   - `crates/hw_visual/src/layer/wire_connection.rs`（新規、`wall_connection.rs` を参考）
-  - `src/systems/visual/wire_layer.rs`（新規）
+  - `crates/bevy_app/src/systems/visual/wire_layer.rs`（新規）
 - **完了条件:**
   - [ ] 配線が配置されると対応する `VisualLayer` がスポーンされる
   - [ ] 隣接する配線に応じてスプライトが切り替わる
@@ -260,7 +260,7 @@ fn on_pipe_placed(
 
 - **変更内容:** 照明設備配置時に `VisualLayerKind::Light` エンティティをスポーン
 - **変更ファイル:**
-  - `src/systems/visual/light_layer.rs`（新規）
+  - `crates/bevy_app/src/systems/visual/light_layer.rs`（新規）
   - `assets/textures/light_glow.png`（新規アセット）
 - **完了条件:**
   - [ ] 照明設置時に半透明の光エフェクトスプライトがスポーンされる
@@ -288,7 +288,7 @@ fn on_pipe_placed(
 ### 次のAIが最初にやること
 
 1. `crates/hw_core/src/constants/render.rs` を読み、既存 Z 定数との競合がないか確認してからフェーズA の定数を追加する
-2. `src/systems/jobs/building_completion/spawn.rs` を読み、現在の建築物スポーン時の Z 値を `Z_BUILDING_BASE` / `Z_BUILDING_STRUCT` に置き換える
+2. `crates/bevy_app/src/systems/jobs/building_completion/spawn.rs` を読み、現在の建築物スポーン時の Z 値を `Z_BUILDING_BASE` / `Z_BUILDING_STRUCT` に置き換える
 3. `cargo check` でエラーがないことを確認してからフェーズB へ
 
 ### ブロッカー/注意点
@@ -300,9 +300,9 @@ fn on_pipe_placed(
 ### 参照必須ファイル
 
 - `crates/hw_core/src/constants/render.rs` — Z 定数定義
-- `src/systems/jobs/building_completion/spawn.rs` — 建築物スポーン
+- `crates/bevy_app/src/systems/jobs/building_completion/spawn.rs` — 建築物スポーン
 - `crates/hw_visual/src/wall_connection.rs` — 配線接続ロジックの参考実装
-- `src/systems/visual/floor_construction.rs` — フロアビジュアル更新の参考
+- `crates/bevy_app/src/systems/visual/floor_construction.rs` — フロアビジュアル更新の参考
 - `crates/hw_jobs/src/model.rs` — Blueprint/Building コンポーネント
 
 ### Definition of Done

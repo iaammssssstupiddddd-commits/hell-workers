@@ -84,13 +84,13 @@
 ## 主な関連ファイル（最終境界反映）
 
 ### root shell（adapter）
-- `src/interface/ui/list/mod.rs` - イベント受付、interaction/system 登録
-- `src/interface/ui/list/change_detection.rs` - 変更検知トリガ（DamnedSoul/Familiar Changed 監視）
-- `src/interface/ui/list/view_model.rs` - ゲームエンティティ → ビューモデル変換
-- `src/interface/ui/list/sync.rs` - `sync_entity_list_from_view_model_system` / `sync_entity_list_value_rows_system`（hw_ui sync helpers の thin shell）
-- `src/interface/ui/list/drag_drop.rs` - ドラッグ&ドロップシステム（`DragState` 型は hw_ui）
-- `src/interface/ui/list/interaction.rs`, `interaction/navigation.rs` - 行クリック・Tab 巡回・target 付き `UiIntent` 発行（`FamiliarOperation` 直接更新は行わない）
-- `src/interface/ui/interaction/intent_handler.rs` - dialog/list button 共通の `FamiliarOperation` 更新、即時ヘッダー更新、`FamiliarOperationMaxSoulChangedEvent` 発行
+- `crates/bevy_app/src/interface/ui/list/mod.rs` - イベント受付、interaction/system 登録
+- `crates/bevy_app/src/interface/ui/list/change_detection.rs` - 変更検知トリガ（DamnedSoul/Familiar Changed 監視）
+- `crates/bevy_app/src/interface/ui/list/view_model.rs` - ゲームエンティティ → ビューモデル変換
+- `crates/bevy_app/src/interface/ui/list/sync.rs` - `sync_entity_list_from_view_model_system` / `sync_entity_list_value_rows_system`（hw_ui sync helpers の thin shell）
+- `crates/bevy_app/src/interface/ui/list/drag_drop.rs` - ドラッグ&ドロップシステム（`DragState` 型は hw_ui）
+- `crates/bevy_app/src/interface/ui/list/interaction.rs`, `interaction/navigation.rs` - 行クリック・Tab 巡回・target 付き `UiIntent` 発行（`FamiliarOperation` 直接更新は行わない）
+- `crates/bevy_app/src/interface/ui/interaction/intent_handler.rs` - dialog/list button 共通の `FamiliarOperation` 更新、即時ヘッダー更新、`FamiliarOperationMaxSoulChangedEvent` 発行
 
 ### `hw_ui` 側（移設済み）
 - `crates/hw_ui/src/list/models.rs` - ビューモデル型・`EntityListNodeIndex`・`FamiliarSectionNodes`

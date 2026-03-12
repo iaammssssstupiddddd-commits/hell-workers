@@ -39,9 +39,9 @@
 
 ### 対象（In Scope）
 
-- `src/world/map/spawn.rs` のベース地形描画を `TilemapChunk` に置き換える
+- `crates/bevy_app/src/world/map/spawn.rs` のベース地形描画を `TilemapChunk` に置き換える
 - `assets/textures/` への地形 tileset 画像追加
-- `src/assets.rs` と `src/plugins/startup/asset_catalog.rs` のアセット読み込み更新
+- `crates/bevy_app/src/assets.rs` と `crates/bevy_app/src/plugins/startup/asset_catalog.rs` のアセット読み込み更新
 - `world_map.tiles` 変更時に `TilemapChunkTileData` を更新する経路の追加
 - 既存の terrain task 依存を壊さないための最小限の logical anchor 維持
 
@@ -270,8 +270,8 @@ if let Ok(mut tile_data) = q_chunk_tile_data.get_mut(chunk_entity) {
 
 - **変更内容:** `GameAssets` に `tileset_terrain: Handle<Image>` を追加し、array texture としてロードする。`TilemapChunkPlugin` を App に登録する。
 - **変更ファイル:**
-  - `src/assets.rs`
-  - `src/plugins/startup/asset_catalog.rs`
+  - `crates/bevy_app/src/assets.rs`
+  - `crates/bevy_app/src/plugins/startup/asset_catalog.rs`
   - App プラグイン登録箇所（`main.rs` または plugin 一覧）
 - **完了条件:**
   - [ ] `load_with_settings` で `array_layout = Some(ImageArrayLayout::RowCount { rows: 4 })` が設定されている
@@ -284,16 +284,16 @@ if let Ok(mut tile_data) = q_chunk_tile_data.get_mut(chunk_entity) {
   - ベース地形描画を `TilemapChunk` に置き換える（§4.8 の spawn 例を参照）
   - Sand / River の logical anchor entity を生成する（anchor entity には `Tile` + `Transform` + タスク状態コンポーネント `Designation`, `WorkingOn` 相当が必要。`q_task_state.get(tile_entity)` が通ること）
   - `world_map.tile_entities` は sparse に更新する（Sand/River のみ `Some(entity)`）
-  - `src/systems/obstacle.rs` の岩除去処理を sprite 差し替えから `TilemapChunkTileData` 更新に変更する（**M3 と同時実施。M3 単独で完了にしないこと**）
+  - `crates/bevy_app/src/systems/obstacle.rs` の岩除去処理を sprite 差し替えから `TilemapChunkTileData` 更新に変更する（**M3 と同時実施。M3 単独で完了にしないこと**）
   - `TerrainType::priority()` を `tileset_index() -> u16` に改名し、既存の `priority()` 呼び出しを全て置き換える
   - `GameAssets` の `grass`, `dirt`, `sand`, `river` テクスチャハンドルを削除する（`tileset_terrain` に統合。dead code 禁止ルール）
 - **変更ファイル:**
-  - `src/world/map/spawn.rs`
-  - `src/world/map/mod.rs` または `crates/hw_world/src/map/mod.rs`（chunk entity 保持 / 補助 API）
-  - `src/systems/obstacle.rs`
+  - `crates/bevy_app/src/world/map/spawn.rs`
+  - `crates/bevy_app/src/world/map/mod.rs` または `crates/hw_world/src/map/mod.rs`（chunk entity 保持 / 補助 API）
+  - `crates/bevy_app/src/systems/obstacle.rs`
   - `crates/hw_world/src/terrain.rs`（`priority()` → `tileset_index()` 改名）
-  - `src/assets.rs`（個別テクスチャハンドル削除）
-  - `src/plugins/startup/asset_catalog.rs`（個別テクスチャロード削除）
+  - `crates/bevy_app/src/assets.rs`（個別テクスチャハンドル削除）
+  - `crates/bevy_app/src/plugins/startup/asset_catalog.rs`（個別テクスチャロード削除）
 - **完了条件:**
   - [ ] 基本地形描画 sprite のスポーンが削除されている
   - [ ] 1 個の `TilemapChunk` が `TilemapChunkTileData` と同時に生成される
@@ -396,14 +396,14 @@ if let Ok(mut tile_data) = q_chunk_tile_data.get_mut(chunk_entity) {
 
 ### 参照必須ファイル
 
-- `src/world/map/spawn.rs`
-- `src/world/map/mod.rs`
-- `src/systems/obstacle.rs`
-- `src/world/map/terrain_border.rs`
+- `crates/bevy_app/src/world/map/spawn.rs`
+- `crates/bevy_app/src/world/map/mod.rs`
+- `crates/bevy_app/src/systems/obstacle.rs`
+- `crates/bevy_app/src/world/map/terrain_border.rs`
 - `crates/hw_world/src/map/mod.rs`
 - `crates/hw_world/src/terrain.rs`
-- `src/assets.rs`
-- `src/plugins/startup/asset_catalog.rs`
+- `crates/bevy_app/src/assets.rs`
+- `crates/bevy_app/src/plugins/startup/asset_catalog.rs`
 
 ### Definition of Done
 

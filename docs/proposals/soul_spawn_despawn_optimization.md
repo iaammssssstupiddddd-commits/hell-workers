@@ -34,9 +34,9 @@
   - 現行どおり Drifting 判定へ移行。
 
 ### 変更候補ファイル
-- `src/systems/soul_ai/visual/idle.rs`
-- `src/systems/visual/speech/periodic.rs`
-- `src/constants/speech.rs`
+- `crates/bevy_app/src/systems/soul_ai/visual/idle.rs`
+- `crates/bevy_app/src/systems/visual/speech/periodic.rs`
+- `crates/bevy_app/src/constants/speech.rs`
 
 ### 実装メモ
 - 予兆判定は「未管理」の定義に揃える。
@@ -63,9 +63,9 @@
 - `PopulationManager.total_escaped` はフェード開始時に1回だけ加算。
 
 ### 変更候補ファイル
-- `src/systems/soul_ai/execute/drifting.rs`
-- `src/systems/visual/fade.rs`
-- `src/systems/soul_ai/mod.rs`（必要なら実行順調整）
+- `crates/bevy_app/src/systems/soul_ai/execute/drifting.rs`
+- `crates/bevy_app/src/systems/visual/fade.rs`
+- `crates/bevy_app/src/systems/soul_ai/mod.rs`（必要なら実行順調整）
 
 ### 実装メモ
 - 二重加算防止のため、フェード中マーカー（例: `DriftDespawning`）を追加する。
@@ -89,8 +89,8 @@
 - 初期スポーンも `total_spawned` に加算。
 
 ### 変更候補ファイル
-- `src/entities/damned_soul/spawn.rs`
-- `src/entities/damned_soul/mod.rs`（イベント型を拡張する場合）
+- `crates/bevy_app/src/entities/damned_soul/spawn.rs`
+- `crates/bevy_app/src/entities/damned_soul/mod.rs`（イベント型を拡張する場合）
 - `docs/population_system.md`（仕様同期）
 
 ### 実装メモ

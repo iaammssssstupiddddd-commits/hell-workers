@@ -8,7 +8,7 @@
 ## 提案1: Cargo Workspace によるマルチクレート化 (保守性・コンパイル速度)
 
 **現状の課題:**
-プロジェクト全体が巨大な単一のクレート (`bevy_app`) として構成されています。`src/` 配下に `systems`, `interface`, `logistics`, `entities` など膨大なモジュールが存在します。これにより、局所的なUIの変更でもプロジェクト全体の再コンパイル（リンク処理など）が発生し、開発イテレーションが低下する傾向にあります。
+プロジェクト全体が巨大な単一のクレート (`bevy_app`) として構成されています。`crates/bevy_app/src/` 配下に `systems`, `interface`, `logistics`, `entities` など膨大なモジュールが存在します。これにより、局所的なUIの変更でもプロジェクト全体の再コンパイル（リンク処理など）が発生し、開発イテレーションが低下する傾向にあります。
 
 **改善案:**
 Cargo Workspace を導入し、ドメインごとに別クレートに分割します。
@@ -22,7 +22,7 @@ hell-workers/
  │   ├─ hw_ai/        (Soul AI, Familiar AIのロジック)
  │   ├─ hw_ui/        (Interface, UI Nodeの管理)
  │   └─ hw_visual/    (Particle, Shaders)
- └─ src/ (main.rs と アプリケーションの組み上げ)
+ └─ crates/bevy_app/src/ (main.rs と アプリケーションの組み上げ)
 ```
 
 **メリット:**
