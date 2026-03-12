@@ -108,7 +108,7 @@
   - root adapter が呼び出す pure logic は `decide/state_decision` / `decide/query_types` / `decide/helpers` / `decide/recruitment` / `decide/encouragement` / `decide/squad` / `decide/scouting` / `decide/supervising` / `decide/state_handlers` / `decide/task_management`
   - Blueprint auto gather の純計画層は `decide/auto_gather_for_blueprint/{planning,demand,supply,helpers}` に置き、root は orchestration だけを担う
   - root には `state_decision` / `task_delegation` / `encouragement` / `auto_gather_for_blueprint` の adapter と `WorldMap` / concrete SpatialGrid / pathfinding 依存、`ConstructionSiteAccess` の trait 実装だけを残す
-- **プラグイン登録**: `FamiliarAiPlugin` は `src/plugins/logic.rs` の `LogicPlugin` 内で登録される（`SoulAiPlugin` と同所）。
+- **プラグイン登録**: `FamiliarAiPlugin` は `crates/bevy_app/src/plugins/logic.rs` の `LogicPlugin` 内で登録される（`SoulAiPlugin` と同所）。
 
 ### 5.2. 関連コンポーネント
 
@@ -119,8 +119,8 @@
 - `FamiliarAiState`: AI の現在の状態（Idle, SearchingTask, Scouting, Supervising）。
 - `Commanding` (Relationship): 配下の魂への参照リスト。**オプショナル**（分隊が空のとき削除される）。
 - `ManagedTasks` (Relationship Target): 管理下のタスクリスト。**オプショナル**（タスクがゼロのとき削除されるため、AI クエリでは `Option` として扱う）。
-- `AssignedTask`: 魂が現在実行中のタスク（採取・運搬・建築）を管理。`hw_jobs::assigned_task` で定義（`src/systems/soul_ai/execute/task_execution/types.rs` 経由で re-export）。
-- `IdleState`: 待機中の振る舞いを管理。`src/entities/damned_soul/mod.rs` で定義。
+- `AssignedTask`: 魂が現在実行中のタスク（採取・運搬・建築）を管理。`hw_jobs::assigned_task` で定義（`crates/bevy_app/src/systems/soul_ai/execute/task_execution/types.rs` 経由で re-export）。
+- `IdleState`: 待機中の振る舞いを管理。`crates/bevy_app/src/entities/damned_soul/mod.rs` で定義。
 
 ## 6. 分隊が空になったときの挙動
 

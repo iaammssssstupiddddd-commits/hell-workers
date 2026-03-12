@@ -116,4 +116,4 @@ systems/visual/
 - [visual/haul/mod.rs](../crates/hw_visual/src/haul/mod.rs)
 - [visual/soul/mod.rs](../crates/hw_visual/src/soul/mod.rs)
 - [worker_icon.rs](../crates/hw_visual/src/worker_icon.rs)
-- [visual.rs](src/plugins/visual.rs)
+- [visual.rs](crates/bevy_app/src/plugins/visual.rs)

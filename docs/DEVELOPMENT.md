@@ -30,7 +30,7 @@
 - 変換は `From/Into` に統一し、`as` の多用を避ける
   変換地点を明確にして、型ミスの原因位置を特定しやすくする。
 - `Messages<T>`/`Events<T>` は専用プラグインで集中初期化する
-  `src/plugins/messages.rs` などに集約し、`build()` 冒頭で `add_message::<T>()`/`add_event::<T>()` を登録する。
+  `crates/bevy_app/src/plugins/messages.rs` などに集約し、`build()` 冒頭で `add_message::<T>()`/`add_event::<T>()` を登録する。
 - 初期化漏れに備えて `Option<Messages<T>>` か `If<Messages<T>>` を検討する
   使わないフレームでもパニックしない形にしておく。
 
@@ -59,13 +59,13 @@
 
 ### 8. 割り当て・搬送・UIの実装境界
 
-- Familiar の割り当て発行は `src/systems/familiar_ai/decide/task_management/mod.rs` の `submit_assignment_with_source_entities(...)` / `submit_assignment_with_reservation_ops(...)`（または下位の `submit_assignment(...)`）を必ず経由する（`ReservationShadow` 反映を保証するため）。
+- Familiar の割り当て発行は `crates/bevy_app/src/systems/familiar_ai/decide/task_management/mod.rs` の `submit_assignment_with_source_entities(...)` / `submit_assignment_with_reservation_ops(...)`（または下位の `submit_assignment(...)`）を必ず経由する（`ReservationShadow` 反映を保証するため）。
 - 予約オペレーション生成は `build_source_reservation_ops` / `build_mixer_destination_reservation_ops` / `build_wheelbarrow_reservation_ops` の共通ヘルパーを優先し、`issue_*` ごとの重複実装を増やさない。
 - `FamiliarTaskAssignmentQueries` は必要な Read Access を内包する構成になっている。Familiar 側の型参照は `task_management::FamiliarTaskAssignmentQueries` を優先し、`soul_ai` 実装詳細への直接依存を増やさない。
 - `apply_task_assignment_requests_system` を拡張する場合は、既存の責務分離ヘルパー（受理判定 / idle正規化 / 予約反映 / DeliveringTo / イベント）へ追記し、単一関数へ責務を戻さない。
 - `pathfinding_system` の変更は補助関数（再利用判定・再探索・休憩フォールバック・失敗時処理）単位で行い、分岐をインラインで肥大化させない。
-- floor/wall の搬入同期変更は `src/systems/logistics/transport_request/producer/mod.rs` の共通ヘルパー（`sync_construction_requests`, `sync_construction_delivery`。内部で `group_tiles_by_site`, `consume_waiting_tile_resources` を利用）を再利用して重複実装を避ける。
-- UI/Visual の更新は `src/interface/ui/interaction/status_display/` と `src/systems/visual/dream/ui_particle/` の責務分割単位で行い、再び単一巨大ファイルに戻さない。
+- floor/wall の搬入同期変更は `crates/bevy_app/src/systems/logistics/transport_request/producer/mod.rs` の共通ヘルパー（`sync_construction_requests`, `sync_construction_delivery`。内部で `group_tiles_by_site`, `consume_waiting_tile_resources` を利用）を再利用して重複実装を避ける。
+- UI/Visual の更新は `crates/bevy_app/src/interface/ui/interaction/status_display/` と `crates/bevy_app/src/systems/visual/dream/ui_particle/` の責務分割単位で行い、再び単一巨大ファイルに戻さない。
 - UI の `MenuAction` は「汎用アクション（`ui_interaction_system`）」と「専用アクション（`arch_category_action_system` / `door_lock_action_system`）」に責務分離する。`Changed<Interaction>` を読む複数システムは順序固定（`chain`）を維持する。
 
 ### 9. docs 直下ドキュメントの記述ルール
@@ -109,8 +109,8 @@
 **書かないべき内容（MCP で参照可能）:**
 - struct のフィールド一覧（型・説明）
 - enum のバリアント一覧（自明な名前のもの）
-- `src/` ファイルパスの羅列
-- 定数の数値テーブル（`src/constants/` に集約済み）
+- `crates/bevy_app/src/` ファイルパスの羅列
+- 定数の数値テーブル（`crates/bevy_app/src/constants/` に集約済み）
 - Mermaid フローチャート（同等のテキスト表現で代替できる場合）
 
 #### 9.4 Relationship の記述形式
@@ -203,7 +203,7 @@ python scripts/update_docs_index.py
 
 ### 高負荷パフォーマンス計測（500 Soul / 30 Familiar）
 ```bash
-cargo run -- --spawn-souls 500 --spawn-familiars 30 --perf-scenario
+cargo run -p bevy_app -- --spawn-souls 500 --spawn-familiars 30 --perf-scenario
 ```
 
 - `--spawn-souls`: 初期 Soul 数を上書き（既定: 10）
@@ -224,7 +224,7 @@ Windows の PE 形式では、一つの DLL からエクスポートできるシ
 ### 3. Bevy ECS `error[B0001]`（Query 競合パニック）
 `cargo run` で `error[B0001]` が出る場合、同一システム内で Query のアクセス競合（例: `&mut T` と別 Query の `&T`）が発生しています。
 
-- 原因調査: `cargo run --features bevy/debug` で実行し、衝突した system/query 名を表示して特定する。
+- 原因調査: `cargo run -p bevy_app --features bevy/dynamic_linking` で実行し、衝突した system/query 名を表示して特定する。
 - 修正方針: `Without<T>` で Query を排他的に分離するか、`ParamSet` に統合して同時借用を避ける。
 - 既存共通クエリ（`TaskQueries` など）がある箇所では、同種コンポーネントへの重複 Query を新設しない。
 
@@ -232,6 +232,6 @@ Windows の PE 形式では、一つの DLL からエクスポートできるシ
 `Failed to build event loop: ... WaylandError(Connection(NoCompositor))` が出る場合、無効な `WAYLAND_DISPLAY` を優先してしまっている可能性があります。
 
 - 実行時に `HW_WINDOW_BACKEND=x11` を指定すると、Wayland を無効化して X11 を強制できます。
-  - 例: `HW_WINDOW_BACKEND=x11 cargo run`
+  - 例: `HW_WINDOW_BACKEND=x11 cargo run -p bevy_app`
 - `HW_WINDOW_BACKEND=auto`（既定）では、Wayland ソケットへ接続できない場合に自動で X11 へフォールバックします。
 - Wayland を明示使用する場合は `HW_WINDOW_BACKEND=wayland` を指定してください。

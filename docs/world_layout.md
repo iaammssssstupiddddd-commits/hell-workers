@@ -25,7 +25,7 @@
 - **方向**: マップを西から東へ**横断**します。
 - **シード**: 42 (固定)
 - **川幅**: 5タイル (`RIVER_WIDTH`)
-- **生成ロジック**: 純粋な生成処理は `crates/hw_world/src/river.rs` にあり、root 側の `src/world/river.rs` は互換 re-export 層です。
+- **生成ロジック**: 純粋な生成処理は `crates/hw_world/src/river.rs` にあり、root 側の `crates/bevy_app/src/world/river.rs` は互換 re-export 層です。
 
 ### 砂浜 (`Sand`)
 - 川のタイルから上下2タイル (`SAND_WIDTH`) の範囲に自動生成。
@@ -81,8 +81,8 @@
     - **境界到達 (Boundary Reaching)**: 2x2以上の建築物など、ターゲット領域に入り込まずにその境界（隣接マス）で停止する高度なパス探索ロジック（`find_path_to_boundary`）を実装しています。対象占有領域は集合 membership として扱い、開始地点が対象内にある場合は最寄りの外側歩行マスへの短い脱出パスを返します。通常時は目標領域へ入る最初の1歩手前で経路を切り詰めます。
 
 ## 関連ファイル
-- `src/world/map/`: マップデータ構造（mod）・レイアウト定数（layout）・生成システム（spawn）
+- `crates/bevy_app/src/world/map/`: マップデータ構造（mod）・レイアウト定数（layout）・生成システム（spawn）
 - [`../crates/hw_world/src/river.rs`](../crates/hw_world/src/river.rs): 川生成アルゴリズム
 - [`../crates/hw_world/src/coords.rs`](../crates/hw_world/src/coords.rs): 座標変換
-- [`../src/world/regrowth.rs`](../src/world/regrowth.rs): 木の再生システムの app shell
-- [`../src/world/pathfinding.rs`](../src/world/pathfinding.rs): 通行制御を伴うパス検索の互換層
+- [`../crates/bevy_app/src/world/regrowth.rs`](../crates/bevy_app/src/world/regrowth.rs): 木の再生システムの app shell
+- [`../crates/bevy_app/src/world/pathfinding.rs`](../crates/bevy_app/src/world/pathfinding.rs): 通行制御を伴うパス検索の互換層

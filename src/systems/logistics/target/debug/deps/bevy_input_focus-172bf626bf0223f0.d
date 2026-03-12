@@ -1,9 +1,0 @@
-/home/satotakumi/projects/hell-workers/src/systems/logistics/target/debug/deps/bevy_input_focus-172bf626bf0223f0.d: /home/satotakumi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bevy_input_focus-0.18.0/src/lib.rs /home/satotakumi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bevy_input_focus-0.18.0/src/directional_navigation.rs /home/satotakumi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bevy_input_focus-0.18.0/src/navigator.rs /home/satotakumi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bevy_input_focus-0.18.0/src/tab_navigation.rs /home/satotakumi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bevy_input_focus-0.18.0/src/autofocus.rs
-
-/home/satotakumi/projects/hell-workers/src/systems/logistics/target/debug/deps/libbevy_input_focus-172bf626bf0223f0.rmeta: /home/satotakumi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bevy_input_focus-0.18.0/src/lib.rs /home/satotakumi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bevy_input_focus-0.18.0/src/directional_navigation.rs /home/satotakumi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bevy_input_focus-0.18.0/src/navigator.rs /home/satotakumi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bevy_input_focus-0.18.0/src/tab_navigation.rs /home/satotakumi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bevy_input_focus-0.18.0/src/autofocus.rs
-
-/home/satotakumi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bevy_input_focus-0.18.0/src/lib.rs:
-/home/satotakumi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bevy_input_focus-0.18.0/src/directional_navigation.rs:
-/home/satotakumi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bevy_input_focus-0.18.0/src/navigator.rs:
-/home/satotakumi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bevy_input_focus-0.18.0/src/tab_navigation.rs:
-/home/satotakumi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bevy_input_focus-0.18.0/src/autofocus.rs:

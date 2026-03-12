@@ -70,15 +70,15 @@
 
 ## 実装アーキテクチャ
 - `LeftPanelMode::TaskList` 時に表示
-- `src/interface/ui/panels/task_list/`：責務別に分割
+- `crates/bevy_app/src/interface/ui/panels/task_list/`：責務別に分割
   - `view_model.rs` - スナップショット生成と summary 集計（`TaskListState`, `TaskEntry`）
   - `presenter.rs` - WorkType → icon / label / description
   - `render.rs` - UI 再構築
   - `interaction.rs` - クリック、タブ、可視、ハイライト（`task_list_visual_feedback_system` 等）
   - `dirty.rs` - タスクリストと task summary の dirty source
   - `update.rs` - dirty gate 付きオーケストレーション、必要時のみ再描画
-- `src/interface/ui/plugins/info_panel.rs` が `PreUpdate` の dirty 検知と state 更新、`Update` の左パネル表示更新を束ねます。
-- `src/interface/ui/interaction/status_display/mode_panel.rs` が cached summary を読み、task summary 表示だけを差分更新します。
+- `crates/bevy_app/src/interface/ui/plugins/info_panel.rs` が `PreUpdate` の dirty 検知と state 更新、`Update` の左パネル表示更新を束ねます。
+- `crates/bevy_app/src/interface/ui/interaction/status_display/mode_panel.rs` が cached summary を読み、task summary 表示だけを差分更新します。
 - `Designation` コンポーネントを持つエンティティをクエリし、関連コンポーネント（Blueprint, TransportRequest等）を参照して説明文を生成
 - `task_list_visual_feedback_system` が `Interaction` と `InfoPanelPinState` を監視し、`ui/list::apply_row_highlight` でホバー・選択ハイライトを適用
 
@@ -97,9 +97,9 @@
 - `crates/hw_ui/src/panels/menu.rs` - `menu_visibility_system`
 
 ### root shell（adapter）
-- `src/interface/ui/panels/task_list/mod.rs` - hw_ui re-export + ゲーム固有モジュール統合
-- `src/interface/ui/panels/task_list/view_model.rs` - スナップショット生成と summary 集計（ゲームエンティティクエリ）
-- `src/interface/ui/panels/task_list/dirty.rs` - dirty 検知システム（Designation 等の Changed 監視）
-- `src/interface/ui/panels/task_list/update.rs` - dirty gate 付きオーケストレーション（`Res<GameAssets>` 依存のため root 残留）
-- `src/interface/ui/plugins/info_panel.rs` - task list の dirty 検知 / state 更新 / 左パネル system 登録
-- `src/interface/ui/interaction/status_display/mode_panel.rs` - task summary の cached 描画
+- `crates/bevy_app/src/interface/ui/panels/task_list/mod.rs` - hw_ui re-export + ゲーム固有モジュール統合
+- `crates/bevy_app/src/interface/ui/panels/task_list/view_model.rs` - スナップショット生成と summary 集計（ゲームエンティティクエリ）
+- `crates/bevy_app/src/interface/ui/panels/task_list/dirty.rs` - dirty 検知システム（Designation 等の Changed 監視）
+- `crates/bevy_app/src/interface/ui/panels/task_list/update.rs` - dirty gate 付きオーケストレーション（`Res<GameAssets>` 依存のため root 残留）
+- `crates/bevy_app/src/interface/ui/plugins/info_panel.rs` - task list の dirty 検知 / state 更新 / 左パネル system 登録
+- `crates/bevy_app/src/interface/ui/interaction/status_display/mode_panel.rs` - task summary の cached 描画
