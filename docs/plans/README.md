@@ -19,7 +19,7 @@
 
 | Document | Status | Notes |
 |---|---|---|
-| [architecture-safe-crate-extraction-plan-2026-03-12.md](architecture-safe-crate-extraction-plan-2026-03-12.md) | In Progress | workspace 方針では root crate を app shell に寄せるとしている一方、実コード上はすでに blocker が解消済みなのに root に残っている実装があるの計画。 |
+| [re-export-consolidation-plan-2026-03-12.md](re-export-consolidation-plan-2026-03-12.md) | Draft | `pub use` の多段中継と wildcard 再公開を削減し、正規 public path を整理する計画。 |
 
 ## アーカイブ計画書一覧 (`docs/plans/archive`)
 
@@ -27,6 +27,7 @@
 |---|---|---|
 | [archive/ai-phase-refactor-implementation-plan.md](archive/ai-phase-refactor-implementation-plan.md) | アーカイブ | AIフェーズリファクタ実装計画。 |
 | [archive/ai-phase-refactor.md](archive/ai-phase-refactor.md) | アーカイブ | AIフェーズリファクタの全体設計メモ。 |
+| [archive/architecture-safe-crate-extraction-plan-2026-03-12.md](archive/architecture-safe-crate-extraction-plan-2026-03-12.md) | アーカイブ | アーキテクチャ維持前提の追加クレート化計画 |
 | [archive/assigned-task-to-hw-jobs-plan-2026-03-08.md](archive/assigned-task-to-hw-jobs-plan-2026-03-08.md) | アーカイブ | AssignedTask を hw_core → hw_jobs へ移動する計画 |
 | [archive/assignment-builder-unification-plan-2026-03-01.md](archive/assignment-builder-unification-plan-2026-03-01.md) | アーカイブ | `task_management/builders` の重複削減と割り当て生成経路の共通化計画。 |
 | [archive/auto-gather-for-blueprint.md](archive/auto-gather-for-blueprint.md) | アーカイブ | Blueprint不足資材の自動伐採/採掘計画。 |

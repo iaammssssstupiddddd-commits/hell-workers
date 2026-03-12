@@ -1,6 +1,7 @@
 pub mod blueprint;
 pub mod bucket;
 pub mod consolidation;
+pub mod floor_construction;
 pub mod mixer;
 pub mod mixer_helpers;
 pub mod provisional_wall;
@@ -8,6 +9,7 @@ pub mod stockpile_group;
 pub mod tank_water_request;
 pub mod task_area;
 pub mod upsert;
+pub mod wall_construction;
 pub mod wheelbarrow;
 
 use bevy::math::Vec2;

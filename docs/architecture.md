@@ -112,7 +112,7 @@ Perceive → Update → Decide → Execute
 
 ## 空間グリッド一覧 (Spatial Grids)
 
-`crates/hw_spatial` が concrete `SpatialGrid`（8種）を実体として保持し、`src/systems/spatial/` は `hw_spatial` 依存の薄い shell として `FloorConstructionSpatialGrid` だけを残す。
+`crates/hw_spatial` が concrete `SpatialGrid`（9種）を実体として保持し、`src/systems/spatial/` は `hw_spatial` への薄い re-export shell に縮退している。
 すべてのグリッドで `Added` / `Changed` / `RemovedComponents` の Change Detection に基づく差分更新を実装している。
 
 | グリッド | 用途 |
@@ -125,7 +125,7 @@ Perceive → Update → Decide → Execute
 | `FamiliarSpatialGrid` | Familiar 位置の近傍検索 |
 | `BlueprintSpatialGrid` | Blueprint の近傍検索 |
 | `GatheringSpotSpatialGrid` | 集会スポットの近傍検索 |
-| `FloorConstructionSpatialGrid` | 床建設サイトの近傍検索（root shell） |
+| `FloorConstructionSpatialGrid` | 床建設サイトの近傍検索 |
 
 新しいグリッドを追加する場合は `SpatialGridOps` を実装し、追加検知（Added）、
 変更検知（Changed）、削除検知（RemovedComponents）を使うシステムとして登録する。

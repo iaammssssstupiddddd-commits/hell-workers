@@ -1,9 +1,9 @@
 use bevy::prelude::*;
 
-use crate::relationships::TaskWorkers;
-use crate::systems::jobs::floor_construction::{FloorTileBlueprint, FloorTileState};
-use crate::systems::jobs::{Designation, Priority, TaskSlots, WorkType};
 use hw_core::constants::FLOOR_CONSTRUCTION_PRIORITY;
+use hw_core::relationships::TaskWorkers;
+use hw_jobs::construction::FloorTileBlueprint;
+use hw_jobs::{Designation, FloorTileState, Priority, TaskSlots, WorkType};
 
 /// System to assign Designation to FloorTileBlueprint based on their state.
 ///
@@ -65,7 +65,7 @@ pub fn floor_tile_designation_system(
                     ),
                     Visibility::Visible,
                     Designation { work_type },
-                    TaskSlots::new(1), // Only 1 worker per tile
+                    TaskSlots::new(1),
                     Priority(FLOOR_CONSTRUCTION_PRIORITY),
                 ));
             }
