@@ -302,6 +302,8 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 - `PathWorld` trait — `is_walkable` など通行判定 API（`WorldMap` の impl は root）
 - `SpatialGridOps` trait — `get_nearby_in_radius` など空間グリッド read-only API（concrete resource の本体は `hw_spatial`）
 - `Yard`, `Site`, `PairedYard`, `PairedSite`（zone 系コンポーネント）
+- `zone_ops::identify_removal_targets` — 削除対象タイル + 孤立フラグメント特定（Flood Fill）
+- `zone_ops::area_tile_size`, `rectangles_overlap_site`, `rectangles_overlap`, `expand_yard_area` — ゾーン geometry helper
 
 ここに置かないもの:
 
@@ -348,6 +350,7 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 - producer 全系（`blueprint`, `bucket`, `consolidation`, `mixer`, `task_area`, `wheelbarrow` 等）
 - 手押し車仲裁システム（`arbitration/`）
 - 建設系需要計算ヘルパー（`floor_construction`, `wall_construction`, `provisional_wall`）
+- `manual_haul_selector::{select_stockpile_anchor, find_existing_request}` — 手動 haul 選定アルゴリズム（`DesignationTargetQuery` 非依存）
 
 補足:
 
