@@ -21,3 +21,22 @@ pub struct HoveredEntity(pub Option<Entity>);
 
 #[derive(Component)]
 pub struct SelectionIndicator;
+
+/// Clears stale `SelectedEntity` / `HoveredEntity` references when the target entity is despawned.
+pub fn cleanup_selection_references_system(
+    mut selected_entity: ResMut<SelectedEntity>,
+    mut hovered_entity: ResMut<HoveredEntity>,
+    q_exists: Query<(), ()>,
+) {
+    if let Some(entity) = selected_entity.0
+        && q_exists.get(entity).is_err()
+    {
+        selected_entity.0 = None;
+    }
+
+    if let Some(entity) = hovered_entity.0
+        && q_exists.get(entity).is_err()
+    {
+        hovered_entity.0 = None;
+    }
+}

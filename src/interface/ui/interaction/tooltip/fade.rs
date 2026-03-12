@@ -1,7 +1,7 @@
 //! ツールチップのフェード制御
 
-use crate::interface::ui::components::{TooltipBody, TooltipHeader, TooltipProgressBar};
-use crate::interface::ui::theme::UiTheme;
+use hw_ui::components::{TooltipBody, TooltipHeader, TooltipProgressBar};
+use hw_ui::theme::UiTheme;
 use bevy::math::TryStableInterpolate;
 use bevy::prelude::*;
 
@@ -11,7 +11,7 @@ pub(crate) fn apply_fade_effects(
     q_tooltip_text: &mut Query<&mut TextColor, Or<(With<TooltipHeader>, With<TooltipBody>)>>,
     q_tooltip_progress: &mut Query<
         (&TooltipProgressBar, &mut BackgroundColor),
-        Without<crate::interface::ui::components::HoverTooltip>,
+        Without<hw_ui::components::HoverTooltip>,
     >,
     fade_alpha: f32,
     theme: &UiTheme,

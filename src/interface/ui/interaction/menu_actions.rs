@@ -1,4 +1,4 @@
-use crate::interface::ui::components::MenuAction;
+use hw_ui::components::MenuAction;
 use bevy::prelude::MessageWriter;
 use hw_ui::UiIntent;
 

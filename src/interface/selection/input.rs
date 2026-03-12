@@ -100,7 +100,7 @@ pub fn handle_mouse_input(
         return;
     }
 
-    let Some(world_pos) = super::placement_common::world_cursor_pos(&q_window, &q_camera) else {
+    let Some(world_pos) = hw_ui::camera::world_cursor_pos(&q_window, &q_camera) else {
         return;
     };
 
@@ -197,7 +197,7 @@ pub fn update_hover_entity(
         return;
     }
 
-    let Some(world_pos) = super::placement_common::world_cursor_pos(&q_window, &q_camera) else {
+    let Some(world_pos) = hw_ui::camera::world_cursor_pos(&q_window, &q_camera) else {
         return;
     };
     let found = hovered_entity_at_world_pos(world_pos, &q_souls, &q_familiars, &q_targets);

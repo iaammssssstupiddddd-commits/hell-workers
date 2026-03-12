@@ -20,7 +20,8 @@ use crate::entities::damned_soul::{DamnedSoulSpawnEvent, spawn_damned_souls};
 use crate::entities::familiar::FamiliarSpawnEvent;
 use crate::interface::camera::{MainCamera, PanCamera};
 use crate::interface::selection::{HoveredEntity, SelectedEntity};
-use crate::interface::ui::{MenuState, components::ArchitectCategoryState, setup_ui};
+use crate::interface::ui::{MenuState, setup_ui};
+use hw_ui::components::ArchitectCategoryState;
 use crate::systems::logistics::ResourceItem;
 use crate::systems::logistics::{
     ResourceCountDisplayTimer, ResourceLabels, initial_resource_spawner,

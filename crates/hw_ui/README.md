@@ -13,7 +13,7 @@
 | `intents.rs` | `UiIntent` — ユーザー操作の意図メッセージ型（Entity List 用の Familiar 指定 variant を含む） |
 | `theme.rs` | スタイリング・テーマ定数 |
 | `components.rs` | UI コンポーネントレジストリ・共有ユーティリティ |
-| `camera.rs` | UI / ワールドビューのカメラシステム |
+| `camera.rs` | `MainCamera` と `world_cursor_pos`（スクリーン座標→ワールド座標変換 utility） |
 | `setup/` | UI 要素の初期スポーン（下表） |
 | `plugins/` | UI システムの Bevy 登録（下表） |
 | `list/` | エンティティリスト共通ロジック（下表） |
@@ -78,6 +78,9 @@
 | `intent.rs` | `SelectionIntent` 型 |
 | `placement.rs` | 建設配置バリデーション・ジオメトリ計算 |
 
+`selection/` は `SelectedEntity` / `HoveredEntity` / `SelectionIndicator` の state resource と、
+despawn 後の参照掃除を行う `cleanup_selection_references_system` を持つ。
+
 ## UI スロット構造
 
 ```
@@ -117,6 +120,7 @@ impl UiAssets for GameAssets {
 | `Res<GameAssets>` を引数にするシステム | `task_list/update.rs` — Bevy は `Res<dyn Trait>` 不可 |
 | ゲーム状態遷移 (`PlayMode`) | ルートクレートの責務 |
 | `app_contexts` 型 | `TaskContext` 等 — ルートクレート定義 |
+| world-space 選択表示の描画 | `update_selection_indicator` — 実装は `hw_visual`、root `Interface` フェーズで登録 |
 
 ## 依存クレート
 

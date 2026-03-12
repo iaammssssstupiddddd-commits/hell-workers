@@ -6,7 +6,7 @@ use crate::events::FamiliarOperationMaxSoulChangedEvent;
 use crate::interface::selection::SelectedEntity;
 use crate::interface::ui::EntityListNodeIndex;
 use crate::interface::ui::InfoPanelPinState;
-use crate::interface::ui::components::{MenuState, OperationDialog};
+use hw_ui::components::{MenuState, OperationDialog};
 use crate::relationships::Commanding;
 use crate::systems::familiar_ai::FamiliarAiState;
 use crate::systems::command::{TaskArea, TaskMode};

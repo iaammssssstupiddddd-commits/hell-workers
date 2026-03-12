@@ -7,7 +7,7 @@ use hw_core::game_state::PlayMode;
 
 use crate::app_contexts::{BuildContext, CompanionPlacementState, TaskContext, ZoneContext};
 use crate::interface::selection::SelectedEntity;
-use crate::interface::ui::components::UiNodeRegistry;
+use hw_ui::components::UiNodeRegistry;
 use crate::interface::ui::interaction::mode;
 use crate::interface::ui::panels::task_list::{TaskListDirty, TaskListState};
 use crate::relationships::ManagedBy;
@@ -117,7 +117,7 @@ pub fn update_mode_text_system(
 pub fn task_summary_ui_system(
     mut dirty: Option<ResMut<TaskListDirty>>,
     state: Option<Res<TaskListState>>,
-    theme: Res<crate::interface::ui::theme::UiTheme>,
+    theme: Res<hw_ui::theme::UiTheme>,
     ui_nodes: Res<UiNodeRegistry>,
     q_text: Query<(&mut Text, &mut TextColor)>,
 ) {

@@ -20,8 +20,8 @@ pub fn update_dream_pool_display_system(
     time: Res<Time>,
     game_assets: Res<crate::assets::GameAssets>,
     dream_pool: Res<crate::entities::damned_soul::DreamPool>,
-    theme: Res<crate::interface::ui::theme::UiTheme>,
-    ui_nodes: Res<crate::interface::ui::components::UiNodeRegistry>,
+    theme: Res<hw_ui::theme::UiTheme>,
+    ui_nodes: Res<hw_ui::components::UiNodeRegistry>,
     q_text: Query<(
         &mut Text,
         &mut TextColor,

@@ -1,4 +1,8 @@
-//! Floor and wall construction drag-drop placement system
+//! Floor and wall construction drag-drop placement system (root shell)
+//!
+//! Root shell: `TaskContext` / `WorldMap` 占有更新 / `FloorTileBlueprint` spawn に依存。
+//! hw_ui / hw_jobs crate への移設には TaskContext / WorldMap の抽象化が必要であり、
+//! 現段階では意図的に root に残す。純バリデーション API は hw_ui::selection::placement を参照。
 
 mod floor_apply;
 mod input;
@@ -41,7 +45,7 @@ pub fn floor_placement_system(
         _ => return,
     };
 
-    let Some(world_pos) = super::placement_common::world_cursor_pos(&q_window, &q_camera) else {
+    let Some(world_pos) = hw_ui::camera::world_cursor_pos(&q_window, &q_camera) else {
         return;
     };
     let snapped_pos = WorldMap::snap_to_grid_edge(world_pos);

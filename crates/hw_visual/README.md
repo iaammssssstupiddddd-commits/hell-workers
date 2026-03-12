@@ -18,6 +18,7 @@
 | `haul/` | 運搬 visual、手押し車追従 |
 | `dream/` | Dream bubble, particle, popup |
 | `plant_trees/` | 植樹演出 |
+| `selection_indicator.rs` | 選択エンティティ追従用の黄色インジケータ描画 |
 | `site_yard_visual.rs` | site / yard 境界表示 |
 | `task_area_visual.rs` | `TaskAreaMaterial`, `TaskAreaVisual` 型定義 |
 
@@ -40,6 +41,7 @@
 - この crate に実装本体がある visual system は `HwVisualPlugin` を唯一の登録元にする。
 - root 側の `pub use` / thin shell は互換パス維持や run condition 付与のために残してよいが、同じ system function を再登録しない。
 - `DebugVisible` や `GameAssets` のような root-only resource を使う条件付け・startup 注入だけを root 側が担当する。
+- `update_selection_indicator` の実装はこの crate にあるが、同フレームで selection 更新を反映するため登録は root `Interface` フェーズで行う。
 
 ## 依存クレート
 

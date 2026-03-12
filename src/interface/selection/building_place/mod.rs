@@ -1,3 +1,8 @@
+//! Building placement system (root shell)
+//!
+//! Root shell: entity spawn + `WorldMap` occupancy update + `GameAssets` + `BuildContext` に依存。
+//! hw_ui / hw_jobs crate への移設には WorldMap / GameAssets の抽象化が必要であり、
+//! 現段階では意図的に root に残す。純バリデーション API は hw_ui::selection::placement を参照。
 mod companion;
 mod flow;
 mod placement;
@@ -41,7 +46,7 @@ pub fn blueprint_placement(
         return;
     }
 
-    let Some(world_pos) = super::placement_common::world_cursor_pos(&q_window, &q_camera) else {
+    let Some(world_pos) = hw_ui::camera::world_cursor_pos(&q_window, &q_camera) else {
         return;
     };
     let grid = WorldMap::world_to_grid(world_pos);

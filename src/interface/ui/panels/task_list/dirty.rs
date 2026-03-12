@@ -1,4 +1,4 @@
-use crate::interface::ui::components::LeftPanelMode;
+use hw_ui::components::LeftPanelMode;
 use crate::relationships::TaskWorkers;
 use crate::systems::jobs::{Blueprint, BonePile, Designation, Priority, Rock, SandPile, Tree};
 use crate::systems::logistics::ResourceItem;

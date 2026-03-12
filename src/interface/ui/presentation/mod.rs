@@ -3,7 +3,7 @@ mod builders;
 use crate::entities::damned_soul::{DamnedSoul, IdleBehavior, IdleState};
 use crate::entities::familiar::Familiar;
 use crate::interface::selection::SelectedEntity;
-use crate::interface::ui::components::TooltipTemplate;
+use hw_ui::components::TooltipTemplate;
 use crate::interface::ui::panels::InfoPanelPinState;
 use crate::relationships::CommandedBy;
 use crate::relationships::TaskWorkers;

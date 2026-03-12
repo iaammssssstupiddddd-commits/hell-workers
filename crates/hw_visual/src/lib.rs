@@ -9,6 +9,7 @@ pub mod haul;
 pub mod mud_mixer;
 pub mod plant_trees;
 pub mod progress_bar;
+pub mod selection_indicator;
 pub mod site_yard_visual;
 pub mod soul;
 pub mod speech;
@@ -16,6 +17,8 @@ pub mod tank;
 pub mod task_area_visual;
 pub mod wall_connection;
 pub mod worker_icon;
+
+pub use selection_indicator::update_selection_indicator;
 
 pub use handles::{
     BuildingAnimHandles, GatheringVisualHandles, HaulItemHandles, MaterialIconHandles,

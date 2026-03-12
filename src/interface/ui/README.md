@@ -10,9 +10,7 @@
 
 | ディレクトリ/ファイル | 内容 |
 |---|---|
-| `mod.rs` | 全サブモジュールの公開 API |
-| `components.rs` | UI コンポーネント共通定義（`hw_ui` からの re-export 含む） |
-| `theme.rs` | スタイリング定数（色・フォント・サイズ） |
+| `mod.rs` | 全サブモジュールの公開 API（`hw_ui::components::*` / `hw_ui::theme::*` を直接 re-export） |
 | `vignette.rs` | 画面周辺ヴィネットエフェクト |
 | `plugins/` | UI プラグイン登録 |
 | `setup/` | UI 要素の初期スポーン・`UiAssets` アダプタ実装 |

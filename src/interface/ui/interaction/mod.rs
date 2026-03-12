@@ -28,8 +28,8 @@ use crate::app_contexts::{
 };
 use crate::assets::GameAssets;
 use crate::entities::familiar::{Familiar, FamiliarOperation};
-use crate::interface::ui::components::*;
-use crate::interface::ui::theme::UiTheme;
+use hw_ui::components::*;
+use hw_ui::theme::UiTheme;
 use crate::systems::command::TaskMode;
 use crate::systems::jobs::{Door, DoorState, apply_door_state};
 use crate::world::map::WorldMapWrite;
@@ -157,7 +157,7 @@ pub fn ui_interaction_system(
 /// 2回押下時のトグル仕様をここで維持する。
 pub fn arch_category_action_system(
     interaction_query: Query<(&Interaction, &MenuButton), (Changed<Interaction>, With<Button>)>,
-    mut arch_category_state: ResMut<crate::interface::ui::components::ArchitectCategoryState>,
+    mut arch_category_state: ResMut<hw_ui::components::ArchitectCategoryState>,
 ) {
     for (interaction, menu_button) in interaction_query.iter() {
         if *interaction != Interaction::Pressed {

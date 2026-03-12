@@ -1,5 +1,5 @@
-use crate::interface::ui::components::*;
-use crate::interface::ui::theme::UiTheme;
+use hw_ui::components::*;
+use hw_ui::theme::UiTheme;
 use bevy::prelude::*;
 use hw_ui::UiIntent;
 
