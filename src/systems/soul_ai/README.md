@@ -40,37 +40,26 @@
 
 ## execute/task_execution/ ディレクトリ
 
-タスク実行のコアサブシステム。
+タスク実行のコアサブシステム。**ハンドラ実装本体は `hw_ai::soul_ai::execute::task_execution` に移設済み**。
+このディレクトリは後方互換の thin shell と、root 専用 SystemParam を必要とする `task_execution_system` を保持する。
 
 | ファイル/ディレクトリ | 内容 |
 |---|---|
-| `types.rs` | `AssignedTask` 実行バリアント定義 |
-| `context/` | `TaskExecutionContext`, `TaskQueries`, `TaskAssignmentQueries` |
-| `handler/` | タスク種別ごとのハンドラ |
-| `haul/` | 運搬（基本） |
-| `haul_with_wheelbarrow/` | 手押し車運搬 |
-| `bucket_transport/` | バケツ輸送 |
-| `transport_common/` | 輸送共通ロジック |
-| `build.rs` | 建設タスク |
-| `collect_sand.rs` | 砂採集 |
-| `collect_bone.rs` | 骨採集 |
-| `coat_wall.rs` | 壁コーティング |
-| `frame_wall.rs` | 壁フレーミング |
-| `gather.rs` | 採取 |
-| `haul.rs` | 運搬エントリポイント |
-| `haul_to_blueprint.rs` | ブループリントへの運搬 |
-| `haul_to_mixer.rs` | ミキサーへの運搬 |
-| `move_plant.rs` | 植物移植 |
-| `pour_floor.rs` | 床注入 |
-| `refine.rs` | 素材精製 |
-| `reinforce_floor.rs` | 床補強 |
+| `mod.rs` | `task_execution_system`（root 残留）+ re-exports |
+| `types.rs` | `hw_ai` への thin shell re-export |
+| `common.rs` | `hw_ai` への thin shell re-export |
+| `move_plant.rs` | `hw_ai` への thin shell re-export（`PendingBuildingMove`, `apply_pending_building_move_system`） |
+| `context/` | `TaskExecutionContext`, `TaskQueries`, `TaskAssignmentQueries`（root 専用 SystemParam、root 残留） |
+| `handler/` | `hw_ai` への thin shell re-export（`TaskHandler`, `run_task_handler`, `execute_haul_with_wheelbarrow`） |
+| `transport_common/` | `hw_ai` の実装を `crate::...` パスで公開する thin shell 群（`resource_sync.rs` 等の外部参照に対応） |
+| それ以外のハンドラファイル | `hw_ai::soul_ai::execute::task_execution::*` に実装本体が存在し、root ファイルはコンパイル対象外（orphaned） |
 
 ## 新しいタスクを追加する場合
 
-1. `types.rs` に struct variant を追加
-2. `context/queries.rs` の `TaskQueries` にクエリを追加
-3. `handler/` に対応するハンドラを実装
-4. `mod.rs` でハンドラを登録
+1. `crates/hw_ai/src/soul_ai/execute/task_execution/types.rs` に struct variant を追加
+2. `crates/hw_ai/src/soul_ai/execute/task_execution/context/queries.rs` の `TaskQueries` にクエリを追加
+3. `crates/hw_ai/src/soul_ai/execute/task_execution/handler/` に対応するハンドラを実装
+4. `crates/hw_ai/src/soul_ai/execute/task_execution/mod.rs` でモジュール宣言を追加
 
 ---
 

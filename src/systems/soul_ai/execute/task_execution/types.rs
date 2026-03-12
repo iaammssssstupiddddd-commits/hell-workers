@@ -1,3 +1,2 @@
-//! タスク実行関連の型定義
-
-pub use hw_jobs::assigned_task::*;
+//! AssignedTask 型定義 — 実装は hw_ai に移設済み
+pub use hw_ai::soul_ai::execute::task_execution::types::*;

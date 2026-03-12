@@ -1,8 +1,5 @@
-//! タスクハンドラのトレイトとディスパッチ
+//! タスクハンドラ — 実装は hw_ai に移設済み
 
-mod dispatch;
-mod impls;
-mod task_handler;
-
-pub use dispatch::{execute_haul_with_wheelbarrow, run_task_handler};
-pub use task_handler::TaskHandler;
+pub use hw_ai::soul_ai::execute::task_execution::handler::{
+    TaskHandler, dispatch::execute_haul_with_wheelbarrow, dispatch::run_task_handler,
+};

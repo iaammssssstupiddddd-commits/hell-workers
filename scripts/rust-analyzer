@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+zed_dir="${HOME}/.local/share/zed/languages/rust-analyzer"
+
+if [[ -d "${zed_dir}" ]]; then
+    latest=""
+    while IFS= read -r path; do
+        latest="${path}"
+    done < <(find "${zed_dir}" -maxdepth 1 -type f -name 'rust-analyzer-*' -perm -u+x | sort)
+
+    if [[ -n "${latest}" ]]; then
+        exec "${latest}" "$@"
+    fi
+fi
+
+fallback="${HOME}/.cargo/bin/rust-analyzer"
+if [[ -x "${fallback}" ]]; then
+    exec "${fallback}" "$@"
+fi
+
+echo "rust-analyzer wrapper: no executable candidate found" >&2
+exit 127
