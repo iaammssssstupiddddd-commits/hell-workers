@@ -19,7 +19,7 @@
 
 | Document | Status | Notes |
 |---|---|---|
-| [task-execution-hw-ai-extraction-plan-2026-03-12.md](task-execution-hw-ai-extraction-plan-2026-03-12.md) | Draft | src/systems/soul_ai/execute/task_execution/の計画。 |
+| [task-execution-hw-ai-extraction-plan-2026-03-12.md](task-execution-hw-ai-extraction-plan-2026-03-12.md) | Completed | src/systems/soul_ai/execute/task_execution/の計画。 |
 
 ## アーカイブ計画書一覧 (`docs/plans/archive`)
 
