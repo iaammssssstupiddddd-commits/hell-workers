@@ -28,15 +28,7 @@ use hw_logistics::types::{BelongsTo, BucketStorage, ReservedForTask, ResourceIte
 use hw_logistics::zone::Stockpile;
 use hw_world::WorldMapRead;
 
-/// 建設サイトの位置を抽象化するブリッジトレイト
-///
-/// root の `ConstructionSiteAccess` に依存せずに hw_ai 内で使用できるように
-/// 建設サイト位置の取得のみを提供する。
-pub trait ConstructionSitePositions {
-    fn floor_site_pos(&self, site: Entity) -> Option<Vec2>;
-    fn wall_site_pos(&self, site: Entity) -> Option<Vec2>;
-}
-
+pub use hw_jobs::construction::ConstructionSitePositions;
 /// リソース予約・管理に必要な共通アクセス
 #[derive(SystemParam)]
 pub struct ReservationAccess<'w, 's> {

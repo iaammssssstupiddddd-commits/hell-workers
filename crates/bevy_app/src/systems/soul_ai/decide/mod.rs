@@ -1,4 +1,4 @@
-pub use hw_ai::soul_ai::decide::SoulDecideOutput;
+pub use hw_soul_ai::soul_ai::decide::SoulDecideOutput;
 
 pub mod drifting;
 pub mod escaping;
@@ -7,5 +7,5 @@ pub mod idle_behavior;
 pub mod work;
 
 pub mod separation {
-    pub use hw_ai::soul_ai::decide::separation::*;
+    pub use hw_soul_ai::soul_ai::decide::separation::*;
 }

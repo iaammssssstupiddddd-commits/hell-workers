@@ -28,7 +28,7 @@ use crate::world::map::WorldMap;
 use crate::world::pathfinding::PathfindingContext;
 
 pub use super::recruitment::{FamiliarRecruitmentContext, RecruitmentOutcome, process_recruitment};
-pub use hw_ai::familiar_ai::decide::helpers::{
+pub use hw_familiar_ai::familiar_ai::decide::helpers::{
     FamiliarSquadContext, SquadManagementOutcome, finalize_state_transitions,
     process_squad_management,
 };

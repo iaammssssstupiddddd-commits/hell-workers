@@ -16,7 +16,7 @@ use crate::systems::soul_ai::execute::task_execution::AssignedTask;
 use crate::systems::spatial::SpatialGrid;
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
-use hw_ai::familiar_ai::decide::state_decision::{
+use hw_familiar_ai::familiar_ai::decide::state_decision::{
     FamiliarDecisionPath, FamiliarStateDecisionResult, determine_decision_path,
 };
 use std::collections::HashSet;

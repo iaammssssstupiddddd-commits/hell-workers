@@ -17,7 +17,7 @@ Familiar の task management を `hw_ai` へ集約し、root 側を orchestratio
 
 ## 1. 目的
 
-- Familiar の task search / scoring / source selector / reservation shadow / assignment build を `hw_ai::familiar_ai::decide::task_management` に集約する。
+- Familiar の task search / scoring / source selector / reservation shadow / assignment build を `hw_familiar_ai::familiar_ai::decide::task_management` に集約する。
 - root 側には `familiar_task_delegation_system` の orchestration、`WorldMap` / pathfinding / concrete spatial grid 依存、construction site bridge だけを残す。
 - `FamiliarTaskAssignmentQueries` を root の full query alias から切り離し、`hw_ai` 側所有の独立 query にする。
 

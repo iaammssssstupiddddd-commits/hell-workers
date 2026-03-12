@@ -39,7 +39,7 @@ impl Default for BlueprintAutoGatherTimer {
     }
 }
 
-pub use hw_ai::familiar_ai::decide::auto_gather_for_blueprint::AutoGatherDesignation;
+pub use hw_familiar_ai::familiar_ai::decide::auto_gather_for_blueprint::AutoGatherDesignation;
 
 pub fn blueprint_auto_gather_system(
     mut commands: Commands,

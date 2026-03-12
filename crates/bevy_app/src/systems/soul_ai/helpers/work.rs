@@ -8,7 +8,7 @@ use bevy::prelude::*;
 use crate::events::OnTaskAbandoned;
 use crate::systems::soul_ai::execute::task_execution::context::TaskReservationAccess;
 
-pub use hw_ai::soul_ai::helpers::work::is_soul_available_for_work;
+pub use hw_soul_ai::soul_ai::helpers::work::is_soul_available_for_work;
 
 pub fn unassign_task<'w, 's, Q: TaskReservationAccess<'w, 's>>(
     commands: &mut Commands,
@@ -33,7 +33,7 @@ pub fn unassign_task<'w, 's, Q: TaskReservationAccess<'w, 's>>(
         });
     }
 
-    hw_ai::soul_ai::helpers::work::cleanup_task_assignment(
+    hw_soul_ai::soul_ai::helpers::work::cleanup_task_assignment(
         commands,
         soul_entity,
         drop_pos,

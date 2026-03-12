@@ -4,6 +4,7 @@ use bevy::prelude::*;
 use hw_core::events::ResourceReservationRequest;
 use hw_core::relationships::{ManagedBy, TaskWorkers};
 use hw_jobs::{Blueprint, Designation, Priority, TaskSlots};
+use hw_jobs::construction::ConstructionSitePositions;
 use hw_logistics::SharedResourceCache;
 use hw_logistics::zone::Stockpile;
 
@@ -124,9 +125,7 @@ pub struct ConstructionSiteAccess<'w, 's> {
     >,
 }
 
-impl crate::familiar_ai::decide::task_management::context::ConstructionSitePositions
-    for ConstructionSiteAccess<'_, '_>
-{
+impl ConstructionSitePositions for ConstructionSiteAccess<'_, '_> {
     fn floor_site_pos(&self, site: Entity) -> Option<Vec2> {
         self.floor_sites
             .get(site)

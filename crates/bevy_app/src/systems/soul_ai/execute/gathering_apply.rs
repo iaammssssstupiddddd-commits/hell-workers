@@ -1,1 +1,1 @@
-pub use hw_ai::soul_ai::execute::gathering_apply::*;
+pub use hw_soul_ai::soul_ai::execute::gathering_apply::*;

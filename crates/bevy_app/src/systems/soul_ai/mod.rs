@@ -21,7 +21,7 @@ pub struct SoulAiPlugin;
 impl Plugin for SoulAiPlugin {
     fn build(&self, app: &mut App) {
         // hw_ai の SoulAiCorePlugin でコアシステムを登録
-        app.add_plugins(hw_ai::SoulAiCorePlugin);
+        app.add_plugins(hw_soul_ai::SoulAiCorePlugin);
 
         // drifting 書き込み adapter (hw_ai → root PopulationManager ブリッジ)
         app.add_observer(adapters::on_drifting_escape_started)
@@ -89,7 +89,7 @@ impl Plugin for SoulAiPlugin {
                 // 決定された行動の実行
                 (
                     // drifting_behavior_system と despawn_at_edge_system は
-                    // hw_ai::SoulAiCorePlugin で登録済み。ここでは ordering 参照のみ。
+                    // hw_soul_ai::SoulAiCorePlugin で登録済み。ここでは ordering 参照のみ。
                     execute::task_execution::task_execution_system
                         .after(execute::task_execution::apply_task_assignment_requests_system)
                         .after(execute::drifting::drifting_behavior_system),
@@ -104,7 +104,7 @@ impl Plugin for SoulAiPlugin {
                     hw_logistics::apply_reservation_requests_system,
                     // エンティティ生成
                     execute::gathering_spawn::gathering_spawn_system.after(
-                        hw_ai::soul_ai::execute::gathering_spawn::gathering_spawn_logic_system,
+                        hw_soul_ai::soul_ai::execute::gathering_spawn::gathering_spawn_logic_system,
                     ),
                 )
                     .in_set(SoulAiSystemSet::Execute),

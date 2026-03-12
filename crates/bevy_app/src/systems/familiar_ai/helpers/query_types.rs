@@ -6,7 +6,7 @@ use crate::systems::command::TaskArea;
 use crate::systems::familiar_ai::FamiliarAiState;
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
 use bevy::prelude::*;
-pub use hw_ai::familiar_ai::decide::query_types::{
+pub use hw_familiar_ai::familiar_ai::decide::query_types::{
     SoulEncouragementQuery, SoulRecruitmentQuery, SoulScoutingQuery, SoulSquadQuery,
     SoulSupervisingQuery,
 };
