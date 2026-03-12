@@ -113,14 +113,15 @@ Familiar の状態: `Idle / SearchingTask / Scouting / Supervising`
 
 ## src/ との境界
 
-hw_ai は**ゲームエンティティ非依存の純粋 AI ロジック**のみを提供する。
-ゲーム固有のタスク実行・エンティティ操作は `src/systems/` に実装する。
+`hw_ai` は **root-only 契約に依存しない shared AI / execute core** を提供する。
+`src/systems/` は root wrapper・root facade・root adapter を所有し、app 側でしか確定できない契約を持つ。
 
 ### hw_ai に置かれているもの（純粋ロジック）
 
 - **Soul AI**: バイタル更新・集会タイマー・状態整合・脱走判断・アイドル行動・分離行動
 - **Soul AI Execute**: `gathering_spawn_logic_system` のような shared request 生成システム
 - **Soul AI Execute**: `task_assignment_apply` のような shared 型だけで閉じる apply system とその helper 群
+- **Soul AI Execute**: `task_execution/*` の core 実装・handler・query/context・`cleanup_task_assignment`
 - **Familiar AI**: 状態変化検出・ターゲット追跡・状態機械・分隊管理・監視/スカウト判断・リクルート判定・激励対象選定
 - **Familiar AI State Decision Core**: `determine_decision_path` と `FamiliarStateDecisionResult` のような root adapter 向けの pure dispatch / outcome 集約
 - **Blueprint Auto Gather**: 需要供給集計・必要 designation 数の pure planning
@@ -128,14 +129,16 @@ hw_ai は**ゲームエンティティ非依存の純粋 AI ロジック**のみ
 - root adapter が request message を発行できるよう、`ScoutingOutcome` / `SquadManagementOutcome` のような pure outcome を返す
 - `soul_ai::decide::work::{auto_refine, auto_build}` のように、shared 型だけで閉じる request 生成システムは `hw_ai` 側に置ける
 
-### src/ に置かれているもの（ゲーム固有）
+### src/ に置かれているもの（root wrapper / facade / adapter）
 
 | モジュール | hw_ai ではなく src/ にある理由 |
 |---|---|
-| `soul_ai/execute/task_execution/` (23ファイル) | `WorldMap`・`Transform`・`Visibility`・ECS Relationship に依存 |
-| `soul_ai/execute/drifting.rs` | `Path` 書き換え + 境界経路探索 |
+| `soul_ai/execute/task_execution/mod.rs` | `TaskExecutionSoulQuery` / `WorldMapRead` / `OnTaskCompleted` / root `unassign_task` を束ねる root wrapper |
+| `soul_ai/execute/task_execution/{types,common,handler,move_plant}` | 互換 import path を維持する thin shell re-export |
+| `soul_ai/execute/task_execution/context/mod.rs` | context/query 型を束ねる root facade |
+| `soul_ai/execute/task_execution/transport_common/*` | root 側互換 helper と `hw_jobs::lifecycle` re-export |
 | `soul_ai/execute/gathering_spawn.rs` | `GameAssets` を使う visual spawn と request 消費時の app 状態再検証を行う |
-| `soul_ai/helpers/work.rs::unassign_task` | `WorldMap`・`Visibility` 操作あり |
+| `soul_ai/helpers/work.rs::unassign_task` | task解除の公開 facade。`OnTaskAbandoned` / `WorkingOn` を root 側で確定し、低レベル cleanup は `hw_ai::soul_ai::helpers::work::cleanup_task_assignment` へ委譲 |
 | `familiar_ai/decide/task_delegation.rs` | 空間グリッド・`WorldMap` を参照 |
 | `familiar_ai/decide/task_management/` | Familiar のタスク検索・割り当てコア。root 側は `WorldMap`/SpatialGrid orchestration と construction site bridge のみ保持 |
 | `familiar_ai/decide/auto_gather_for_blueprint.rs` | `Commands` / pathfinding / Blueprint 直接 query に依存 |
@@ -143,17 +146,31 @@ hw_ai は**ゲームエンティティ非依存の純粋 AI ロジック**のみ
 | `familiar_ai/decide/state_decision.rs` | concrete `SpatialGrid` / `transmute_lens_filtered` / request message 出力を持つ root adapter。`hw_ai` 側は dispatch と pure result 型のみを所有 |
 | `familiar_ai/perceive/resource_sync.rs` | `SharedResourceCache` 予約再構築のみ（apply helper は `hw_logistics` に移設済み） |
 
-root 側の `src/systems/soul_ai/decide/work/*.rs` と `src/systems/soul_ai/decide/idle_behavior/mod.rs` は互換 re-export shell のみで、実体は `hw_ai::soul_ai::*` にある。`src/systems/soul_ai/execute/task_execution/mod.rs` の `apply_task_assignment_requests_system` も同様に re-export のみで、system 登録責務は `SoulAiCorePlugin` が持つ。
+root 側の `src/systems/soul_ai/decide/work/*.rs` と `src/systems/soul_ai/decide/idle_behavior/mod.rs` は互換 re-export shell のみで、実体は `hw_ai::soul_ai::*` にある。`src/systems/soul_ai/execute/task_execution/mod.rs` の `apply_task_assignment_requests_system` も同様に re-export のみで、system 登録責務は `SoulAiCorePlugin` が持つ。`task_execution_system` だけが root wrapper system で、`unassign_task` は別の root facade として残る。
 
 ### 移設の判断基準
 
 ```
 以下のいずれかを参照・変更するか？
-  - WorldMapRead/Write / PathfindingContext
-  - concrete SpatialGrid resource
-  - Commands / request message 出力 / Time / app shell wiring
-  - speech / visual 専用型
-  - soul_ai::task_execution に密結合な full-fat query
+  - root-only resource / wrapper（WorldMapRead/Write, PathfindingContext, concrete SpatialGrid, GameAssets, PopulationManager）
+  - request 消費時の stale 再検証や relationship / event の最終確定
+  - 互換 import path のための thin shell / root facade / root wrapper
     → YES: src/ に置く
-    → NO:  hw_ai に置ける（テスト・再利用が容易）
+shared crate 型 + Bevy 汎用 API だけで閉じるか？
+    → YES: hw_ai に置ける（テスト・再利用が容易）
+    → NO:  src/ に置く
 ```
+
+### 共有型の置き場所
+
+- `SoulTaskHandles`, `FadeOut`, `WheelbarrowMovement` は `hw_core::visual` に配置する。
+- 理由:
+  - `hw_ai` と `hw_visual` の両方から参照される
+  - visual system が読むだけの shared resource / marker component であり、`hw_visual` 所有にすると `hw_ai -> hw_visual` 依存が復活する
+
+### 用語
+
+- thin shell: `pub use` のみを持つ互換モジュール
+- root wrapper system: root-only query/resource/event を束ねて crate 実装を呼ぶ system
+- root facade/helper: 公開 API や互換 helper を root が所有し、低レベル実装へ委譲する層
+- root adapter: request 消費時の再検証や visual/UI/resource 依存を伴うゲーム側 system

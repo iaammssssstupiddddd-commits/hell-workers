@@ -1,14 +1,14 @@
 //! GoingToBucket phase: バケツを拾いに行く / バケツ状態確認
 
-use hw_logistics::ResourceType;
 use crate::soul_ai::execute::task_execution::common;
 use crate::soul_ai::execute::task_execution::context::TaskExecutionContext;
 use crate::soul_ai::execute::task_execution::transport_common::reservation;
 use crate::soul_ai::execute::task_execution::types::{
     BucketTransportData, BucketTransportDestination, BucketTransportSource,
 };
-use hw_world::WorldMap;
 use bevy::prelude::*;
+use hw_logistics::ResourceType;
+use hw_world::WorldMap;
 
 use super::super::{abort, routing};
 

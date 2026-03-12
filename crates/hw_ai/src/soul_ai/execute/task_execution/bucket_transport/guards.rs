@@ -1,8 +1,8 @@
 //! バケツ搬送共通ガード
 
-use hw_logistics::tank_has_capacity_for_full_bucket;
 use crate::soul_ai::execute::task_execution::context::TaskExecutionContext;
 use bevy::prelude::*;
+use hw_logistics::tank_has_capacity_for_full_bucket;
 
 pub fn has_bucket_in_inventory(ctx: &TaskExecutionContext, bucket_entity: Entity) -> bool {
     ctx.inventory.0 == Some(bucket_entity)

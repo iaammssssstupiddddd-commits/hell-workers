@@ -6,9 +6,9 @@ use crate::relationships::{ParkedAt, PushedBy};
 use crate::systems::soul_ai::execute::task_execution::{
     common::clear_task_and_path, context::TaskExecutionContext, types::HaulWithWheelbarrowData,
 };
-use hw_visual::haul::WheelbarrowMovement;
 use bevy::prelude::*;
 use hw_core::constants::Z_ITEM_PICKUP;
+use hw_core::visual::WheelbarrowMovement;
 
 /// 手押し車を駐車状態に戻し、指定位置に配置
 pub fn park_wheelbarrow_entity(

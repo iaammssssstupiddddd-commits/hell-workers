@@ -2,17 +2,18 @@ use super::common::*;
 use super::context::TaskExecutionContext;
 use super::types::{AssignedTask, CollectBonePhase};
 
-use hw_logistics::{ResourceItem, ResourceType};
-use hw_world::WorldMap;
 use bevy::prelude::*;
 use hw_core::constants::*;
+use hw_core::visual::SoulTaskHandles;
+use hw_logistics::{ResourceItem, ResourceType};
+use hw_world::WorldMap;
 
 pub fn handle_collect_bone_task(
     ctx: &mut TaskExecutionContext,
     target: Entity,
     phase: CollectBonePhase,
     commands: &mut Commands,
-    soul_handles: &hw_visual::SoulTaskHandles,
+    soul_handles: &SoulTaskHandles,
     _time: &Res<Time>,
     world_map: &WorldMap,
 ) {
@@ -42,12 +43,8 @@ pub fn handle_collect_bone_task(
                         "COLLECT_BONE: Soul {:?} cannot reach BonePile {:?}, canceling",
                         ctx.soul_entity, target
                     );
-                    commands
-                        .entity(target)
-                        .remove::<hw_jobs::Designation>();
-                    commands
-                        .entity(target)
-                        .remove::<hw_jobs::TaskSlots>();
+                    commands.entity(target).remove::<hw_jobs::Designation>();
+                    commands.entity(target).remove::<hw_jobs::TaskSlots>();
                     ctx.queue_reservation(hw_core::events::ResourceReservationOp::ReleaseSource {
                         source: target,
                         amount: 1,
@@ -68,12 +65,8 @@ pub fn handle_collect_bone_task(
                 }
             } else {
                 // BonePile が存在しない場合も Designation を削除
-                commands
-                    .entity(target)
-                    .remove::<hw_jobs::Designation>();
-                commands
-                    .entity(target)
-                    .remove::<hw_jobs::TaskSlots>();
+                commands.entity(target).remove::<hw_jobs::Designation>();
+                commands.entity(target).remove::<hw_jobs::TaskSlots>();
                 ctx.queue_reservation(hw_core::events::ResourceReservationOp::ReleaseSource {
                     source: target,
                     amount: 1,
@@ -98,12 +91,8 @@ pub fn handle_collect_bone_task(
                 );
             } else {
                 // BonePile が存在しない場合も Designation を削除
-                commands
-                    .entity(target)
-                    .remove::<hw_jobs::Designation>();
-                commands
-                    .entity(target)
-                    .remove::<hw_jobs::TaskSlots>();
+                commands.entity(target).remove::<hw_jobs::Designation>();
+                commands.entity(target).remove::<hw_jobs::TaskSlots>();
                 ctx.queue_reservation(hw_core::events::ResourceReservationOp::ReleaseSource {
                     source: target,
                     amount: 1,
@@ -113,16 +102,10 @@ pub fn handle_collect_bone_task(
         }
         CollectBonePhase::Done => {
             // BonePile の Designation を削除（次回必要なときに再発行される）
-            commands
-                .entity(target)
-                .remove::<hw_jobs::Designation>();
+            commands.entity(target).remove::<hw_jobs::Designation>();
             // 骨の場合もTaskSlotsなどを削除するか？ Sandと同じ挙動にする
-            commands
-                .entity(target)
-                .remove::<hw_jobs::TaskSlots>();
-            commands
-                .entity(target)
-                .remove::<hw_jobs::IssuedBy>();
+            commands.entity(target).remove::<hw_jobs::TaskSlots>();
+            commands.entity(target).remove::<hw_jobs::IssuedBy>();
             ctx.queue_reservation(hw_core::events::ResourceReservationOp::ReleaseSource {
                 source: target,
                 amount: 1,
@@ -137,7 +120,7 @@ fn complete_collect_bone_now(
     target: Entity,
     source_translation: Vec3,
     commands: &mut Commands,
-    soul_handles: &hw_visual::SoulTaskHandles,
+    soul_handles: &SoulTaskHandles,
 ) {
     // Bone をドロップ
     for i in 0..BONE_DROP_AMOUNT {

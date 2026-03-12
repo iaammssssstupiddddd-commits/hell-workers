@@ -3,8 +3,8 @@
 use crate::handles::BuildingAnimHandles;
 use bevy::prelude::*;
 use hw_jobs::AssignedTask;
-use hw_jobs::mud_mixer::MudMixerStorage;
 use hw_jobs::RefinePhase;
+use hw_jobs::mud_mixer::MudMixerStorage;
 use std::collections::HashSet;
 
 const MUD_MIXER_ANIMATION_FPS: f32 = 6.0;

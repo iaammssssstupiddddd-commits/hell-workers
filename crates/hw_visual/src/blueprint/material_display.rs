@@ -12,7 +12,10 @@ use hw_jobs::Blueprint;
 pub fn spawn_material_display_system(
     mut commands: Commands,
     handles: Res<MaterialIconHandles>,
-    q_blueprints: Query<(Entity, &Blueprint), (With<Blueprint>, Added<super::components::BlueprintVisual>)>,
+    q_blueprints: Query<
+        (Entity, &Blueprint),
+        (With<Blueprint>, Added<super::components::BlueprintVisual>),
+    >,
 ) {
     for (bp_entity, bp) in q_blueprints.iter() {
         let mut i = 0;

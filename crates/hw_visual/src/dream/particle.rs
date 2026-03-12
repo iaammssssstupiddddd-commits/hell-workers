@@ -4,7 +4,9 @@ use bevy::prelude::ChildOf;
 use bevy::prelude::*;
 use hw_core::constants::*;
 use hw_core::relationships::{ParticipatingIn, RestAreaOccupants};
-use hw_core::soul::{DamnedSoul, DreamQuality, DreamState, GatheringBehavior, IdleBehavior, IdleState};
+use hw_core::soul::{
+    DamnedSoul, DreamQuality, DreamState, GatheringBehavior, IdleBehavior, IdleState,
+};
 use hw_jobs::RestArea;
 use hw_ui::camera::MainCamera;
 use hw_ui::components::{UiMountSlot, UiNodeRegistry};
