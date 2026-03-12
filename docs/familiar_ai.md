@@ -88,6 +88,7 @@
 - **`decide/familiar_processor.rs`**: root 側 adapter。`recruitment` / `task_delegation` と `hw_ai` helper の橋渡しを行う
 - **`decide/state_handlers/`**: root の薄い re-export。実体は `hw_ai::familiar_ai::decide::state_handlers`
 - **`decide/squad.rs`**: root の薄い re-export。`SquadManager` 実体は `hw_ai` にある
+- **`decide/state_decision.rs`**: root の thin adapter。`SystemParam` 取得・`transmute_lens_filtered`・`MessageWriter` 呼び出しを担う。branch dispatch（`FamiliarDecisionPath`）と結果型（`FamiliarStateDecisionResult`）の実体は `hw_ai::familiar_ai::decide::state_decision` にある。root が担う理由: `FamiliarSoulQuery`（`Inventory` 依存）の lens 構築と `FamiliarDecideOutput`（root `SystemParam`）への書き込みは root にしか置けないため
 - **`decide/task_management/`**: root 側は thin bridge。実体は `hw_ai::familiar_ai::decide::task_management` にあり、`TaskManager` が `collect_scored_candidates`（Familiar単位1回収集）→ `try_assign_for_workers`（worker別再スコア `priority 0.65 + 距離 0.35`、Top-K 先行評価、60タイル外フィルタ）→ `assign_task_to_worker`（`TaskAssignmentRequest` 発行）を担う。root は `familiar_task_delegation_system` で pathfinding・`WorldMap`・`ConstructionSiteAccess` を束ねて core を呼ぶ
 - **`decide/auto_gather_for_blueprint.rs`**: root 側 orchestration。`Commands` / pathfinding / entity query を束ねて pure planning を呼び出す
 - **`decide/auto_gather_for_blueprint/{demand,supply,planning}.rs`**: root の薄い re-export。需要供給計画本体は `hw_ai` にある
@@ -104,7 +105,7 @@
   - root の `state_decision.rs` / `task_delegation.rs` / `encouragement.rs` / `auto_gather_for_blueprint.rs` は concrete resource・pathfinding・message 出力を受け持ち、必要な view と context だけを `hw_ai` ロジックへ渡す
 - **hw_ai 分担**: `FamiliarAiPlugin` は `hw_ai::FamiliarAiCorePlugin` を内部で `add_plugins` する。`WorldMap`/SpatialGrid 依存のシステムは root 残留。
   - `FamiliarAiCorePlugin` が直接登録するのは `perceive/state_detection`、`decide/following`、`execute/state_apply`、`execute/state_log` と `EncouragementCooldown` の type registration
-  - root adapter が呼び出す pure logic は `decide/query_types` / `decide/helpers` / `decide/recruitment` / `decide/encouragement` / `decide/squad` / `decide/scouting` / `decide/supervising` / `decide/state_handlers` / `decide/task_management`
+  - root adapter が呼び出す pure logic は `decide/state_decision` / `decide/query_types` / `decide/helpers` / `decide/recruitment` / `decide/encouragement` / `decide/squad` / `decide/scouting` / `decide/supervising` / `decide/state_handlers` / `decide/task_management`
   - Blueprint auto gather の純計画層は `decide/auto_gather_for_blueprint/{planning,demand,supply,helpers}` に置き、root は orchestration だけを担う
   - root には `state_decision` / `task_delegation` / `encouragement` / `auto_gather_for_blueprint` の adapter と `WorldMap` / concrete SpatialGrid / pathfinding 依存、`ConstructionSiteAccess` の trait 実装だけを残す
 - **プラグイン登録**: `FamiliarAiPlugin` は `src/plugins/logic.rs` の `LogicPlugin` 内で登録される（`SoulAiPlugin` と同所）。

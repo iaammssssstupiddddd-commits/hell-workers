@@ -20,41 +20,16 @@ use crate::systems::soul_ai::execute::task_execution::move_plant::{
 };
 use crate::systems::soul_ai::execute::task_execution::types::{AssignedTask, MovePlantTask};
 use crate::systems::soul_ai::helpers::work::unassign_task;
-use crate::world::map::{WorldMap, WorldMapWrite};
+use crate::world::map::{WorldMap, WorldMapRef, WorldMapWrite};
 use bevy::prelude::*;
 use hw_core::constants::TILE_SIZE;
 use hw_core::game_state::PlayMode;
 
 use hw_ui::selection::{
-    WorldReadApi, can_place_moved_building, move_anchor_grid, move_occupied_grids, move_spawn_pos,
+    can_place_moved_building, move_anchor_grid, move_occupied_grids, move_spawn_pos,
 };
 use placement::validate_tank_companion_for_move;
 pub use preview::building_move_preview_system;
-
-struct MoveWorldRead<'a>(&'a WorldMap);
-impl WorldReadApi for MoveWorldRead<'_> {
-    fn has_building(&self, grid: (i32, i32)) -> bool {
-        self.0.has_building(grid)
-    }
-    fn has_stockpile(&self, grid: (i32, i32)) -> bool {
-        self.0.has_stockpile(grid)
-    }
-    fn is_walkable(&self, gx: i32, gy: i32) -> bool {
-        self.0.is_walkable(gx, gy)
-    }
-    fn is_river_tile(&self, gx: i32, gy: i32) -> bool {
-        self.0.is_river_tile(gx, gy)
-    }
-    fn building_entity(&self, grid: (i32, i32)) -> Option<Entity> {
-        self.0.building_entity(grid)
-    }
-    fn stockpile_entity(&self, grid: (i32, i32)) -> Option<Entity> {
-        self.0.stockpile_entity(grid)
-    }
-    fn pos_to_idx(&self, gx: i32, gy: i32) -> Option<usize> {
-        self.0.pos_to_idx(gx, gy)
-    }
-}
 
 const COMPANION_PLACEMENT_RADIUS_TILES: f32 = 5.0;
 
@@ -158,7 +133,7 @@ pub fn building_move_system(
         let old_occupied = move_occupied_grids(building.kind, old_anchor);
         let destination_occupied = move_occupied_grids(building.kind, pending.destination_grid);
         if !can_place_moved_building(
-            &MoveWorldRead(&world_map),
+            &WorldMapRef(&*world_map),
             target_entity,
             &old_occupied,
             &destination_occupied,
@@ -206,7 +181,7 @@ pub fn building_move_system(
     let destination_occupied = move_occupied_grids(building.kind, destination_grid);
 
     if !can_place_moved_building(
-        &MoveWorldRead(&world_map),
+        &WorldMapRef(&*world_map),
         target_entity,
         &old_occupied,
         &destination_occupied,

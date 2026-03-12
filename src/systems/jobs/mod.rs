@@ -1,4 +1,5 @@
 mod building_completion;
+pub mod construction_shared;
 pub mod door;
 pub mod floor_construction;
 mod mud_mixer;

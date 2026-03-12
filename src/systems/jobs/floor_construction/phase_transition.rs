@@ -1,6 +1,7 @@
 //! Floor construction phase transition system
 
 use super::components::*;
+use crate::systems::jobs::construction_shared::remove_tile_task_components;
 use bevy::prelude::*;
 
 /// Handles transition from Reinforcing to Pouring phase
@@ -24,21 +25,18 @@ pub fn floor_construction_phase_transition_system(
             // Transition to Pouring phase
             site.phase = FloorConstructionPhase::Pouring;
 
-            // Update all tile states to WaitingMud
-            for (tile_entity, mut tile) in q_tiles
+            // Update all tile states to WaitingMud and collect entities for component removal
+            let tile_entities: Vec<Entity> = q_tiles
                 .iter_mut()
                 .filter(|(_, t)| t.parent_site == site_entity)
-            {
-                tile.state = FloorTileState::WaitingMud;
+                .map(|(tile_entity, mut tile)| {
+                    tile.state = FloorTileState::WaitingMud;
+                    tile_entity
+                })
+                .collect();
 
-                // Remove any existing Designation (from reinforcing phase)
-                // This will be re-added by floor_tile_designation_system when mud is ready
-                commands.entity(tile_entity).remove::<(
-                    crate::systems::jobs::Designation,
-                    crate::systems::jobs::TaskSlots,
-                    crate::systems::jobs::Priority,
-                )>();
-            }
+            // Remove task components (re-added by floor_tile_designation_system when mud is ready)
+            remove_tile_task_components(&mut commands, &tile_entities);
 
             info!(
                 "Floor site {:?} → Pouring phase (all {} tiles reinforced)",
