@@ -1,8 +1,8 @@
 use super::{EntityListNodeIndex, EntityListViewModel, SoulGender, StressBucket, TaskVisual};
-use crate::interface::ui::components::{
+use hw_ui::components::{
     FamiliarListContainer, SoulListItem, UnassignedSoulContent,
 };
-use crate::interface::ui::theme::UiTheme;
+use hw_ui::theme::UiTheme;
 use bevy::prelude::*;
 
 fn stress_color(bucket: StressBucket, theme: &UiTheme) -> Color {

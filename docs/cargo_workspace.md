@@ -93,8 +93,8 @@ hw_visual (hw_core + hw_jobs + hw_logistics + hw_spatial + hw_world + hw_ui)
 - `panels/task_list/` — TaskEntry, TaskListDirty, work_type_icon, render（rebuild_task_list_ui）, interaction システム群
 - `panels/menu.rs` — menu_visibility_system
 - `models/inspection/` — EntityInspectionModel, EntityInspectionViewModel, SoulInspectionFields
-- `selection/` — SelectedEntity, HoveredEntity, SelectionIndicator, placement validation API
-- `camera.rs` — MainCamera マーカー
+- `selection/` — SelectedEntity, HoveredEntity, SelectionIndicator, SelectionIntent, cleanup_selection_references_system, placement validation API
+- `camera.rs` — MainCamera マーカー、`world_cursor_pos`（スクリーン座標→ワールド座標変換ユーティリティ）
 - `plugins/` — UiCorePlugin / UiEntityListPlugin / UiFoundationPlugin / UiInfoPanelPlugin / UiTooltipPlugin（fn ポインタ受け付けシェル）
 
 ここに置かないもの:
@@ -152,6 +152,7 @@ root 側の `bevy_app` 残留（adapter 責務）:
 - `site_yard_visual::*` — サイト・ヤード境界描画
 - `fade::*`, `floating_text::*`, `animations::*`, `progress_bar::*`, `worker_icon::*` — 汎用ビジュアルユーティリティ
 - `task_area_visual::{TaskAreaMaterial, TaskAreaVisual}` — タスクエリアシェーダー型定義
+- `selection_indicator::update_selection_indicator` — 選択エンティティを追従する黄色スプライト indicator（`SelectionIndicator` コンポーネントは `hw_ui::selection` が所有。実装は `hw_visual`、登録は同フレーム反映のため root `Interface` フェーズで行う）
 
 ここに置かないもの:
 

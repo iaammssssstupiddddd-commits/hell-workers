@@ -1,9 +1,9 @@
 use crate::app_contexts::TaskContext;
-use crate::interface::ui::components::{
+use hw_ui::components::{
     EntityListScrollHint, FamiliarListItem, SoulListItem, UiScrollArea, UnassignedFolded,
     UnassignedSectionArrowIcon, UnassignedSoulContent, UnassignedSoulSection,
 };
-use crate::interface::ui::theme::UiTheme;
+use hw_ui::theme::UiTheme;
 use crate::systems::command::TaskMode;
 use bevy::input::mouse::{MouseScrollUnit, MouseWheel};
 use bevy::prelude::*;

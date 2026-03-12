@@ -1,6 +1,6 @@
 //! ツールチップのレイアウト・Popover位置
 
-use crate::interface::ui::components::*;
+use hw_ui::components::*;
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use bevy::ui_widgets::popover::{Popover, PopoverAlign, PopoverPlacement, PopoverSide};

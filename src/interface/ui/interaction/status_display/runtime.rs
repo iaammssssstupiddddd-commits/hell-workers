@@ -1,7 +1,7 @@
 //! fps / speed button highlight の中継レイヤー（hw_ui 側実装へ委譲）
 
-use crate::interface::ui::components::{SpeedButtonMarker, UiNodeRegistry};
-use crate::interface::ui::theme::UiTheme;
+use hw_ui::components::{SpeedButtonMarker, UiNodeRegistry};
+use hw_ui::theme::UiTheme;
 use bevy::prelude::*;
 
 pub fn update_fps_display_system(
