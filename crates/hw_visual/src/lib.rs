@@ -19,7 +19,7 @@ pub mod worker_icon;
 
 pub use handles::{
     BuildingAnimHandles, GatheringVisualHandles, HaulItemHandles, MaterialIconHandles,
-    PlantTreeHandles, SpeechHandles, WallVisualHandles, WorkIconHandles,
+    PlantTreeHandles, SoulTaskHandles, SpeechHandles, WallVisualHandles, WorkIconHandles,
 };
 
 pub use task_area_visual::{TaskAreaMaterial, TaskAreaVisual};

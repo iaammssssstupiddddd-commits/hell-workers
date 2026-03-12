@@ -1,7 +1,7 @@
 use super::common::*;
 use super::context::TaskExecutionContext;
 use super::types::{AssignedTask, CollectSandPhase};
-use crate::assets::GameAssets;
+
 use crate::systems::jobs::WorkType;
 use crate::systems::logistics::transport_request::TransportRequestKind;
 use crate::systems::logistics::{ResourceItem, ResourceType};
@@ -14,7 +14,7 @@ pub fn handle_collect_sand_task(
     target: Entity,
     phase: CollectSandPhase,
     commands: &mut Commands,
-    game_assets: &Res<GameAssets>,
+    soul_handles: &hw_visual::SoulTaskHandles,
     _time: &Res<Time>,
     world_map: &WorldMap,
 ) {
@@ -65,7 +65,7 @@ pub fn handle_collect_sand_task(
                         res_transform.translation,
                         collect_amount_for_target(ctx, target),
                         commands,
-                        game_assets,
+                        soul_handles,
                     );
                     ctx.path.waypoints.clear();
                 }
@@ -98,7 +98,7 @@ pub fn handle_collect_sand_task(
                     res_transform.translation,
                     collect_amount_for_target(ctx, target),
                     commands,
-                    game_assets,
+                    soul_handles,
                 );
             } else {
                 // SandPile が存在しない場合も Designation を削除
@@ -141,7 +141,7 @@ fn complete_collect_sand_now(
     source_translation: Vec3,
     collect_amount: u32,
     commands: &mut Commands,
-    game_assets: &Res<GameAssets>,
+    soul_handles: &hw_visual::SoulTaskHandles,
 ) {
     // Sand をドロップ（砂タイル/砂置き場とも無限ソースとして扱う）
     for i in 0..collect_amount {
@@ -149,7 +149,7 @@ fn complete_collect_sand_now(
         commands.spawn((
             ResourceItem(ResourceType::Sand),
             Sprite {
-                image: game_assets.icon_sand_small.clone(),
+                image: soul_handles.icon_sand_small.clone(),
                 custom_size: Some(Vec2::splat(TILE_SIZE * 0.5)),
                 ..default()
             },

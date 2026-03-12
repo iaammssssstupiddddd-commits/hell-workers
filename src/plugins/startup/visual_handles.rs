@@ -4,7 +4,7 @@ use crate::assets::GameAssets;
 use bevy::prelude::*;
 use hw_visual::{
     BuildingAnimHandles, GatheringVisualHandles, HaulItemHandles, MaterialIconHandles,
-    PlantTreeHandles, SpeechHandles, WallVisualHandles, WorkIconHandles,
+    PlantTreeHandles, SoulTaskHandles, SpeechHandles, WallVisualHandles, WorkIconHandles,
 };
 
 pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>) {
@@ -103,5 +103,16 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
         card_table: game_assets.gathering_card_table.clone(),
         campfire: game_assets.gathering_campfire.clone(),
         barrel: game_assets.gathering_barrel.clone(),
+    });
+
+    commands.insert_resource(SoulTaskHandles {
+        wood: game_assets.wood.clone(),
+        tree_animes: game_assets.tree_animes.clone(),
+        rock: game_assets.rock.clone(),
+        icon_bone_small: game_assets.icon_bone_small.clone(),
+        icon_sand_small: game_assets.icon_sand_small.clone(),
+        icon_stasis_mud_small: game_assets.icon_stasis_mud_small.clone(),
+        bucket_water: game_assets.bucket_water.clone(),
+        bucket_empty: game_assets.bucket_empty.clone(),
     });
 }

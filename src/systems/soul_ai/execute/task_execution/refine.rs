@@ -12,7 +12,7 @@ pub fn handle_refine_task(
     mixer_entity: Entity,
     phase: RefinePhase,
     commands: &mut Commands,
-    game_assets: &Res<crate::assets::GameAssets>,
+    soul_handles: &hw_visual::SoulTaskHandles,
     time: &Res<Time>,
     world_map: &WorldMap,
 ) {
@@ -150,7 +150,7 @@ pub fn handle_refine_task(
                             ResourceItem(ResourceType::StasisMud),
                             StoredByMixer(mixer_entity),
                             Sprite {
-                                image: game_assets.icon_stasis_mud_small.clone(),
+                                image: soul_handles.icon_stasis_mud_small.clone(),
                                 custom_size: Some(Vec2::splat(TILE_SIZE * 0.5)),
                                 ..default()
                             },
