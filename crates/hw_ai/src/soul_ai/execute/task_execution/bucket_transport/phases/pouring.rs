@@ -1,6 +1,5 @@
 //! Pouring phase: バケツの水をデスティネーション（タンク or ミキサー）に注ぐ
 
-use hw_logistics::{ResourceItem, ResourceType};
 use crate::soul_ai::execute::task_execution::common::{
     clear_task_and_path, drop_item, update_destination_if_needed,
 };
@@ -10,9 +9,11 @@ use crate::soul_ai::execute::task_execution::types::{
     AssignedTask, BucketTransportData, BucketTransportDestination, BucketTransportPhase,
     BucketTransportSource,
 };
-use hw_world::WorldMap;
 use bevy::prelude::*;
 use hw_core::constants::{BUCKET_CAPACITY, MUD_MIXER_CAPACITY, TILE_SIZE};
+use hw_core::visual::SoulTaskHandles;
+use hw_logistics::{ResourceItem, ResourceType};
+use hw_world::WorldMap;
 
 use super::super::{abort, helpers};
 
@@ -21,7 +22,7 @@ pub fn handle(
     data: &BucketTransportData,
     progress: f32,
     commands: &mut Commands,
-    soul_handles: &hw_visual::SoulTaskHandles,
+    soul_handles: &SoulTaskHandles,
     world_map: &WorldMap,
 ) {
     let soul_pos = ctx.soul_pos();

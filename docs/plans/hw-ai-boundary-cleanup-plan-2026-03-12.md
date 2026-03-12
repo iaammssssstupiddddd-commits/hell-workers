@@ -8,7 +8,7 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `hw-ai-boundary-cleanup-plan-2026-03-12` |
-| ステータス | `Draft` |
+| ステータス | `M4 Done` |
 | 作成日 | `2026-03-12` |
 | 最終更新日 | `2026-03-12` |
 | 作成者 | `AI (Codex)` |
@@ -56,10 +56,28 @@
   - 逆に本当に pure に戻したいのか、現行方針で良いのか判断できない
   - docs を参照して作業したときに誤った配置判断をする
 
+### 2.3 M1 着手メモ（2026-03-12）
+
+`unassign_task` を root に戻す最小差分を先に試算したが、**M1 は単独では閉じない**ことが判明した。
+
+- `hw_ai` 内の execute 実装が既に `crate::soul_ai::helpers::work::unassign_task` を直接呼んでいる
+  - `crates/hw_ai/src/soul_ai/execute/task_execution/bucket_transport/helpers.rs`
+  - `crates/hw_ai/src/soul_ai/execute/task_execution/bucket_transport/abort.rs`
+  - `crates/hw_ai/src/soul_ai/execute/task_execution/haul_to_blueprint.rs`
+  - `crates/hw_ai/src/soul_ai/execute/task_execution/haul/dropping.rs`
+- そのため `src/systems/soul_ai/helpers/work.rs` に実装を戻すだけでは `hw_ai` 側 call site が宙に浮く
+- root → hw_ai の依存は許されるが、hw_ai → root 逆依存は作れないため、単純な owner move は不可
+
+結論:
+
+- M1 の「owner を root に戻す」は、実際には M2 の一部
+- 先に `hw_ai` 側の call site を `clear_task_and_path` / `drop_bucket_with_cleanup` / reservation release などの pure-ish helper に分解し、`unassign_task` 呼び出し境界を root adapter へ押し戻す必要がある
+- したがって実装順は当初想定どおり **M2 → M1** を維持する
+
 ## 3. Solution Approach
 
 本件は先に「境界方針」を固定してからコードを寄せるべきで、いきなり移設だけ進めると再度ずれる。
-そのため、以下の 2 案を比較し、**A を推奨**する。
+そのため、以下の 3 案を比較し、**A を推奨**する。
 
 ### 案A: `hw_ai` を pure core に戻す（推奨）
 
@@ -79,6 +97,9 @@
 - `task_execution` 周辺で引数設計や helper 分割が必要
 - visual feedback と cleanup を root 側へ戻す調整が発生する
 
+> **「pure」の定義**: ここでの pure は「`hw_visual` への crate 依存を持たない」を指す。
+> `Commands` / `Visibility` / `Transform` は Bevy 本体のため `hw_visual` を外す範囲に含まれれば許容する。
+
 ### 案B: 現行実装を正式仕様として追認する
 
 - `hw_ai` は「AI core + shared execute implementation」まで担当すると定義を変更する
@@ -96,10 +117,28 @@
 - 今後も root-only 副作用が `hw_ai` に流入しやすい
 - `hw_ai` が事実上「AI 名義の app 実装箱」になりやすい
 
+### 案C: `hw_ai` を `hw_ai_core` / `hw_ai_exec` に分割する
+
+- `hw_ai_core`: 純粋な状態判定・フェーズ遷移ロジックのみ（`hw_visual` 非依存）
+- `hw_ai_exec`: `Commands` / `hw_visual` を受け取る実行層（`hw_ai_core` に依存）
+- root crate は `hw_ai_exec` にだけ依存し、pure な判定には `hw_ai_core` を参照する
+
+利点:
+
+- 案A より境界が明確になり、再流入を構造的に防げる
+- `hw_ai_core` は `hw_visual` を import できないため違反がビルドエラーになる
+
+コスト:
+
+- crate 分割により workspace 構成と依存図の更新が必要
+- 案A より作業量が大きい
+- 現時点では `task_execution` の分離が先行条件になるため、実施は M2 完了後
+
 ### 推奨判断
 
 - 現行 docs 群が一貫して「root-only 副作用は root に残す」と説明しているため、まずは **案A** でコードを戻す方が筋が良い。
-- ただし `task_execution` の実体が大きく、短期で全部戻すのが重い場合は、M1 で最小不整合の `unassign_task` を先に戻し、M2 以降で handler / visual 依存を段階分離する。
+- `task_execution` の実体が大きく全部の戻しが重い場合は、M2（task_execution 仕分け）を先行させてから M1 で `unassign_task` を戻す。
+- 案Aが完了した後に境界違反の再流入が続く場合は案C（crate 分割）を検討する。
 
 ## 4. Expected Performance Impact
 
@@ -116,12 +155,20 @@
 
 - 変更内容:
   - `unassign_task` をどちらが所有するかを案Aで確定する
+  - ただしコード移動は M2 で `hw_ai` 側 call site を剥がした後に行う
   - `src/systems/soul_ai/helpers/work.rs` に実装本体を戻し、`hw_ai` 側は pure helper のみ残す
   - `src/README.md`, `src/systems/soul_ai/README.md`, `docs/soul_ai.md`, `docs/cargo_workspace.md`, `crates/hw_ai/README.md` の境界説明を現実に合わせて修正する
 - 完了条件:
   - `src/systems/soul_ai/helpers/work.rs` が re-export だけでなく root 実体を持つ
   - `crates/hw_ai/src/soul_ai/helpers/work.rs` から `unassign_task` が消える、または pure helper に分解される
+  - `WorkingOn` 削除の所有者が明確化される（`unassign_task` に残すか `task_execution_system` に委ねるかを決定し、`tasks.md §5` と実装が一致する）
   - `crates/hw_ai/Cargo.toml` の `hw_visual` 依存の要否が説明可能になる
+
+進捗メモ（2026-03-12）:
+
+- `src/systems/soul_ai/helpers/work.rs` に root-owned `unassign_task` facade を再導入済み
+- `crates/hw_ai/src/soul_ai/helpers/work.rs` の公開 API は `cleanup_task_assignment` に変更済み
+- `WorkingOn` 削除契約は root facade 側へ寄せ、`docs/tasks.md` を実装に合わせて更新済み
 
 ### M2: `task_execution` の visual/app 副作用を仕分ける
 
@@ -136,6 +183,12 @@
   - `task_execution` 周辺で root-only 依存のあるレイヤが module 単位で見える
   - `handler/task_handler.rs` の責務が docs 上で説明できる形になる
 
+進捗メモ（2026-03-12）:
+
+- `hw_ai` 内の `task_execution` call site から `unassign_task` 直接参照を除去済み
+- `bucket_transport::{helpers,abort}`, `haul_to_blueprint`, `haul::dropping` は `cleanup_task_assignment` を使う low-level cleanup 層として整理済み
+- `SoulTaskHandles`, `FadeOut`, `WheelbarrowMovement` を `hw_core::visual` へ移し、M3 の blocker を解消済み
+
 ### M3: `hw_ai` 依存グラフの再整理
 
 - 変更内容:
@@ -146,6 +199,12 @@
   - `docs/cargo_workspace.md` の依存関係記述が `Cargo.toml` と一致する
   - `hw_ai` README の「pure」表現が実コードと矛盾しない
 
+進捗メモ（2026-03-12）:
+
+- `crates/hw_ai/Cargo.toml` から `hw_visual` 依存を削除済み
+- `hw_ai` 側の `SoulTaskHandles` / `FadeOut` / `WheelbarrowMovement` 参照は `hw_core::visual` へ移行済み
+- `docs/cargo_workspace.md`, `docs/soul_ai.md`, `crates/hw_ai/README.md` を新しい依存グラフに同期済み
+
 ### M4: root shell / thin adapter の表現統一
 
 - 変更内容:
@@ -154,6 +213,11 @@
 - 完了条件:
   - README と docs の両方で同じ境界説明になっている
   - 新規作業者が docs だけ見て配置判断を誤らない
+
+進捗メモ（2026-03-12）:
+
+- `thin shell` / `root wrapper system` / `root facade/helper` / `root adapter` の用語を `src/systems/soul_ai/README.md`, `docs/soul_ai.md`, `docs/cargo_workspace.md`, `src/README.md`, `crates/hw_ai/README.md` で統一済み
+- `task_execution_system` だけが wrapper であり、`unassign_task` は facade、`transport_common/*` は helper、`execute/gathering_spawn.rs` は adapter であることを明文化済み
 
 ## 6. Files To Modify
 
@@ -199,10 +263,14 @@
 
 ## 9. Recommended Execution Order
 
-1. M1 で `unassign_task` の所有者を確定し、最小不整合を解消する
-2. M2 で `task_execution` の visual/app 依存を棚卸しし、分離方針を固める
-3. M3 で `hw_ai` の依存グラフを実コードどおりに整理する
-4. M4 で docs / README を同期し、境界説明を固定する
+**M2 → M1 → M3 → M4** の順を推奨する。
+
+理由: M1（`unassign_task` を root へ戻す）が完了しても、`TaskHandler::execute` が `hw_visual::SoulTaskHandles` を要求し続ける限り `hw_ai` の `hw_visual` 依存は外れない。M3 の達成には M2 が先行条件になるため、M1 を先にしても M3 が完了できず中途半端な状態になる。
+
+1. **M2** で `task_execution` の visual/app 依存を棚卸しし、分離方針を固める（`hw_visual` 依存の最後の blocker を特定）
+2. **M1** で `unassign_task` の所有者を確定し、`WorkingOn` 削除の契約違反も解消する
+3. **M3** で `hw_ai` の依存グラフを実コードどおりに整理する（M2 完了後なら `hw_visual` を外せるか判断可能）
+4. **M4** で docs / README を同期し、境界説明を固定する
 
 ## 10. Definition Of Done
 

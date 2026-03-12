@@ -2,8 +2,8 @@ pub mod animations;
 pub mod blueprint;
 pub mod dream;
 pub mod fade;
-pub mod floor_construction;
 pub mod floating_text;
+pub mod floor_construction;
 pub mod gather;
 pub mod handles;
 pub mod haul;
@@ -24,9 +24,10 @@ pub use selection_indicator::update_selection_indicator;
 
 pub use handles::{
     BuildingAnimHandles, GatheringVisualHandles, HaulItemHandles, MaterialIconHandles,
-    PlantTreeHandles, SoulTaskHandles, SpeechHandles, WallVisualHandles, WorkIconHandles,
+    PlantTreeHandles, SpeechHandles, WallVisualHandles, WorkIconHandles,
 };
 
+pub use hw_core::visual::SoulTaskHandles;
 pub use task_area_visual::{TaskAreaMaterial, TaskAreaVisual};
 
 use bevy::prelude::*;

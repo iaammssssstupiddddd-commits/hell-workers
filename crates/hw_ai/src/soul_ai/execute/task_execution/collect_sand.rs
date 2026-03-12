@@ -2,19 +2,20 @@ use super::common::*;
 use super::context::TaskExecutionContext;
 use super::types::{AssignedTask, CollectSandPhase};
 
+use bevy::prelude::*;
+use hw_core::constants::*;
+use hw_core::visual::SoulTaskHandles;
 use hw_jobs::WorkType;
 use hw_logistics::transport_request::TransportRequestKind;
 use hw_logistics::{ResourceItem, ResourceType};
 use hw_world::WorldMap;
-use bevy::prelude::*;
-use hw_core::constants::*;
 
 pub fn handle_collect_sand_task(
     ctx: &mut TaskExecutionContext,
     target: Entity,
     phase: CollectSandPhase,
     commands: &mut Commands,
-    soul_handles: &hw_visual::SoulTaskHandles,
+    soul_handles: &SoulTaskHandles,
     _time: &Res<Time>,
     world_map: &WorldMap,
 ) {
@@ -44,12 +45,8 @@ pub fn handle_collect_sand_task(
                         "COLLECT_SAND: Soul {:?} cannot reach SandPile {:?}, canceling",
                         ctx.soul_entity, target
                     );
-                    commands
-                        .entity(target)
-                        .remove::<hw_jobs::Designation>();
-                    commands
-                        .entity(target)
-                        .remove::<hw_jobs::TaskSlots>();
+                    commands.entity(target).remove::<hw_jobs::Designation>();
+                    commands.entity(target).remove::<hw_jobs::TaskSlots>();
                     ctx.queue_reservation(hw_core::events::ResourceReservationOp::ReleaseSource {
                         source: target,
                         amount: 1,
@@ -71,12 +68,8 @@ pub fn handle_collect_sand_task(
                 }
             } else {
                 // SandPile が存在しない場合も Designation を削除
-                commands
-                    .entity(target)
-                    .remove::<hw_jobs::Designation>();
-                commands
-                    .entity(target)
-                    .remove::<hw_jobs::TaskSlots>();
+                commands.entity(target).remove::<hw_jobs::Designation>();
+                commands.entity(target).remove::<hw_jobs::TaskSlots>();
                 ctx.queue_reservation(hw_core::events::ResourceReservationOp::ReleaseSource {
                     source: target,
                     amount: 1,
@@ -102,12 +95,8 @@ pub fn handle_collect_sand_task(
                 );
             } else {
                 // SandPile が存在しない場合も Designation を削除
-                commands
-                    .entity(target)
-                    .remove::<hw_jobs::Designation>();
-                commands
-                    .entity(target)
-                    .remove::<hw_jobs::TaskSlots>();
+                commands.entity(target).remove::<hw_jobs::Designation>();
+                commands.entity(target).remove::<hw_jobs::TaskSlots>();
                 ctx.queue_reservation(hw_core::events::ResourceReservationOp::ReleaseSource {
                     source: target,
                     amount: 1,
@@ -117,15 +106,9 @@ pub fn handle_collect_sand_task(
         }
         CollectSandPhase::Done => {
             // SandPile の Designation を削除（次回必要なときに再発行される）
-            commands
-                .entity(target)
-                .remove::<hw_jobs::Designation>();
-            commands
-                .entity(target)
-                .remove::<hw_jobs::TaskSlots>();
-            commands
-                .entity(target)
-                .remove::<hw_jobs::IssuedBy>();
+            commands.entity(target).remove::<hw_jobs::Designation>();
+            commands.entity(target).remove::<hw_jobs::TaskSlots>();
+            commands.entity(target).remove::<hw_jobs::IssuedBy>();
             ctx.queue_reservation(hw_core::events::ResourceReservationOp::ReleaseSource {
                 source: target,
                 amount: 1,
@@ -141,7 +124,7 @@ fn complete_collect_sand_now(
     source_translation: Vec3,
     collect_amount: u32,
     commands: &mut Commands,
-    soul_handles: &hw_visual::SoulTaskHandles,
+    soul_handles: &SoulTaskHandles,
 ) {
     // Sand をドロップ（砂タイル/砂置き場とも無限ソースとして扱う）
     for i in 0..collect_amount {

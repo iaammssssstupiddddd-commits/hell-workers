@@ -1,9 +1,11 @@
 use bevy::prelude::*;
 
 use hw_core::constants::*;
-use hw_core::gathering::{GatheringSpot, GATHERING_LEAVE_RADIUS};
+use hw_core::gathering::{GATHERING_LEAVE_RADIUS, GatheringSpot};
 use hw_core::relationships::ParticipatingIn;
-use hw_core::soul::{DamnedSoul, DreamQuality, DreamState, GatheringBehavior, IdleBehavior, IdleState};
+use hw_core::soul::{
+    DamnedSoul, DreamQuality, DreamState, GatheringBehavior, IdleBehavior, IdleState,
+};
 use hw_jobs::AssignedTask;
 use hw_spatial::{GatheringSpotSpatialGrid, SpatialGridOps};
 

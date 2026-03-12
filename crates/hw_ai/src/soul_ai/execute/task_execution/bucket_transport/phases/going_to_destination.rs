@@ -1,6 +1,5 @@
 //! GoingToDestination phase: 水入りバケツを持ってデスティネーション（タンク or ミキサー）へ向かう
 
-use hw_logistics::ResourceType;
 use crate::soul_ai::execute::task_execution::common::{
     is_near_target_or_dest, update_destination_to_adjacent,
 };
@@ -9,8 +8,9 @@ use crate::soul_ai::execute::task_execution::types::{
     AssignedTask, BucketTransportData, BucketTransportDestination, BucketTransportPhase,
     BucketTransportSource,
 };
-use hw_world::WorldMap;
 use bevy::prelude::*;
+use hw_logistics::ResourceType;
+use hw_world::WorldMap;
 
 use super::super::{abort, guards};
 

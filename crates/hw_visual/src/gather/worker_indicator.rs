@@ -8,7 +8,9 @@ use super::{
     GATHER_ICON_SIZE, GATHER_ICON_Y_OFFSET,
 };
 use crate::handles::WorkIconHandles;
-use crate::worker_icon::{WorkerIcon, WorkerIconConfig, spawn_worker_icon, update_worker_icon_position};
+use crate::worker_icon::{
+    WorkerIcon, WorkerIconConfig, spawn_worker_icon, update_worker_icon_position,
+};
 use hw_core::soul::DamnedSoul;
 use hw_jobs::{AssignedTask, GatherPhase, WorkType};
 

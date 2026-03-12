@@ -6,8 +6,8 @@ use crate::soul_ai::execute::task_execution::types::{
     AssignedTask, BucketTransportData, BucketTransportDestination, BucketTransportPhase,
     BucketTransportSource,
 };
-use hw_world::WorldMap;
 use bevy::prelude::*;
+use hw_world::WorldMap;
 
 fn set_task_phase(
     ctx: &mut TaskExecutionContext,

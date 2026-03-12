@@ -1,14 +1,14 @@
 //! GoingToSource phase: バケツを持ってソース（川 or タンク）へ向かう
 
-use hw_logistics::ResourceType;
 use crate::soul_ai::execute::task_execution::common::update_destination_to_adjacent;
 use crate::soul_ai::execute::task_execution::context::TaskExecutionContext;
 use crate::soul_ai::execute::task_execution::types::{
     AssignedTask, BucketTransportData, BucketTransportDestination, BucketTransportPhase,
     BucketTransportSource,
 };
-use hw_world::WorldMap;
 use bevy::prelude::*;
+use hw_logistics::ResourceType;
+use hw_world::WorldMap;
 
 use super::super::{abort, guards};
 

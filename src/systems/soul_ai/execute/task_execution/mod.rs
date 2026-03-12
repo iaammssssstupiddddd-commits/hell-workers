@@ -21,6 +21,7 @@ use crate::systems::soul_ai::helpers::query_types::TaskExecutionSoulQuery;
 use crate::systems::soul_ai::helpers::work::unassign_task;
 use crate::world::map::WorldMapRead;
 use bevy::prelude::*;
+use hw_core::visual::SoulTaskHandles;
 
 use context::TaskExecutionContext;
 use handler::run_task_handler;
@@ -29,7 +30,7 @@ pub fn task_execution_system(
     mut commands: Commands,
     mut q_souls: TaskExecutionSoulQuery,
     mut queries: context::TaskQueries,
-    soul_handles: Res<hw_visual::SoulTaskHandles>,
+    soul_handles: Res<SoulTaskHandles>,
     time: Res<Time>,
     world_map: WorldMapRead,
     mut pf_context: Local<crate::world::pathfinding::PathfindingContext>,

@@ -1,6 +1,5 @@
 //! Filling phase: バケツに水を詰める（川から汲む or タンクから取り出す）
 
-use hw_logistics::{ResourceItem, ResourceType};
 use crate::soul_ai::execute::task_execution::common::update_destination_to_adjacent;
 use crate::soul_ai::execute::task_execution::context::TaskExecutionContext;
 use crate::soul_ai::execute::task_execution::transport_common::reservation;
@@ -8,9 +7,11 @@ use crate::soul_ai::execute::task_execution::types::{
     AssignedTask, BucketTransportData, BucketTransportDestination, BucketTransportPhase,
     BucketTransportSource,
 };
-use hw_world::WorldMap;
 use bevy::prelude::*;
 use hw_core::constants::{BUCKET_CAPACITY, TILE_SIZE};
+use hw_core::visual::SoulTaskHandles;
+use hw_logistics::{ResourceItem, ResourceType};
+use hw_world::WorldMap;
 
 use super::super::abort;
 
@@ -19,7 +20,7 @@ pub fn handle(
     data: &BucketTransportData,
     progress: f32,
     commands: &mut Commands,
-    soul_handles: &hw_visual::SoulTaskHandles,
+    soul_handles: &SoulTaskHandles,
     time: &Res<Time>,
     world_map: &WorldMap,
 ) {

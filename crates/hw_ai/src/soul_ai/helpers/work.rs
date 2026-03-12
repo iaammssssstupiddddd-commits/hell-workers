@@ -1,13 +1,12 @@
+use bevy::prelude::*;
 use hw_core::constants::Z_ITEM_PICKUP;
 use hw_core::events::{OnTaskAbandoned, ResourceReservationRequest};
-use hw_core::relationships::{
-    DeliveringTo, LoadedIn, ParkedAt, PushedBy, StoredIn, TaskWorkers, WorkingOn,
-};
+use hw_core::relationships::{DeliveringTo, LoadedIn, ParkedAt, PushedBy, StoredIn, TaskWorkers};
 use hw_core::soul::{DamnedSoul, IdleBehavior, IdleState};
+use hw_core::visual::WheelbarrowMovement;
 use hw_jobs::{AssignedTask, Priority, TargetBlueprint};
 use hw_logistics::{Inventory, ResourceType};
 use hw_world::WorldMap;
-use bevy::prelude::*;
 
 use crate::soul_ai::execute::task_execution::context::TaskReservationAccess;
 use hw_jobs::lifecycle;
@@ -42,11 +41,12 @@ pub fn is_soul_available_for_work(
     true
 }
 
-/// 魂からタスクの割り当てを解除し、スロットを解放する。
+/// タスク解除時の低レベル cleanup を適用する。
 ///
-/// ソウル側のみを処理し、タスク側（Designation, IssuedBy）には触らない。
-/// 使い魔がスロットの空きを検知して別のソウルに再アサインする。
-pub fn unassign_task<'w, 's, Q: TaskReservationAccess<'w, 's>>(
+/// `AssignedTask` / インベントリ / 予約状態の cleanup を行うが、
+/// `WorkingOn` の削除は行わない。公開 API としての `unassign_task` は
+/// root crate 側の wrapper が所有する。
+pub fn cleanup_task_assignment<'w, 's, Q: TaskReservationAccess<'w, 's>>(
     commands: &mut Commands,
     soul_entity: Entity,
     drop_pos: Vec2,
@@ -102,7 +102,7 @@ pub fn unassign_task<'w, 's, Q: TaskReservationAccess<'w, 's>>(
             }
         }
         if let Ok(mut wb_commands) = commands.get_entity(data.wheelbarrow) {
-            wb_commands.remove::<(PushedBy, hw_visual::haul::WheelbarrowMovement)>();
+            wb_commands.remove::<(PushedBy, WheelbarrowMovement)>();
             if let Some(parking_entity) = queries.belongs_to(data.wheelbarrow) {
                 wb_commands.try_insert(ParkedAt(parking_entity));
             }
@@ -125,27 +125,15 @@ pub fn unassign_task<'w, 's, Q: TaskReservationAccess<'w, 's>>(
                 let _res_item = dropped_item_res
                     .or_else(|| queries.resources().get(item_entity).ok().map(|r| r.0));
 
-                commands
-                    .entity(item_entity)
-                    .remove::<TargetBlueprint>();
-                commands
-                    .entity(item_entity)
-                    .remove::<Priority>();
-                commands
-                    .entity(item_entity)
-                    .remove::<TaskWorkers>();
-                commands
-                    .entity(item_entity)
-                    .remove::<StoredIn>();
-                commands
-                    .entity(item_entity)
-                    .remove::<DeliveringTo>();
+                commands.entity(item_entity).remove::<TargetBlueprint>();
+                commands.entity(item_entity).remove::<Priority>();
+                commands.entity(item_entity).remove::<TaskWorkers>();
+                commands.entity(item_entity).remove::<StoredIn>();
+                commands.entity(item_entity).remove::<DeliveringTo>();
             }
         }
         inventory.0 = None;
     }
-
-    commands.entity(soul_entity).remove::<WorkingOn>();
 
     *task = AssignedTask::None;
     path.waypoints.clear();

@@ -2,8 +2,8 @@
 
 use crate::soul_ai::execute::task_execution::common::is_near_target;
 use crate::soul_ai::execute::task_execution::context::TaskExecutionContext;
-use hw_world::WorldMap;
 use bevy::prelude::*;
+use hw_world::WorldMap;
 
 pub fn handle(ctx: &mut TaskExecutionContext, commands: &mut Commands, world_map: &WorldMap) {
     let soul_pos = ctx.soul_pos();

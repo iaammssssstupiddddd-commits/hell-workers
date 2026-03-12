@@ -1,18 +1,19 @@
 use super::common::*;
 use super::context::TaskExecutionContext;
 use super::types::{AssignedTask, RefinePhase};
+use bevy::prelude::*;
+use hw_core::constants::*;
+use hw_core::visual::SoulTaskHandles;
 use hw_jobs::StoredByMixer;
 use hw_logistics::{ResourceItem, ResourceType};
 use hw_world::WorldMap;
-use bevy::prelude::*;
-use hw_core::constants::*;
 
 pub fn handle_refine_task(
     ctx: &mut TaskExecutionContext,
     mixer_entity: Entity,
     phase: RefinePhase,
     commands: &mut Commands,
-    soul_handles: &hw_visual::SoulTaskHandles,
+    soul_handles: &SoulTaskHandles,
     time: &Res<Time>,
     world_map: &WorldMap,
 ) {
@@ -43,9 +44,7 @@ pub fn handle_refine_task(
                     commands
                         .entity(mixer_entity)
                         .remove::<hw_jobs::Designation>();
-                    commands
-                        .entity(mixer_entity)
-                        .remove::<hw_jobs::TaskSlots>();
+                    commands.entity(mixer_entity).remove::<hw_jobs::TaskSlots>();
                     ctx.queue_reservation(hw_core::events::ResourceReservationOp::ReleaseSource {
                         source: mixer_entity,
                         amount: 1,
@@ -68,9 +67,7 @@ pub fn handle_refine_task(
                 commands
                     .entity(mixer_entity)
                     .remove::<hw_jobs::Designation>();
-                commands
-                    .entity(mixer_entity)
-                    .remove::<hw_jobs::TaskSlots>();
+                commands.entity(mixer_entity).remove::<hw_jobs::TaskSlots>();
                 ctx.queue_reservation(hw_core::events::ResourceReservationOp::ReleaseSource {
                     source: mixer_entity,
                     amount: 1,
@@ -102,9 +99,7 @@ pub fn handle_refine_task(
                     commands
                         .entity(mixer_entity)
                         .remove::<hw_jobs::Designation>();
-                    commands
-                        .entity(mixer_entity)
-                        .remove::<hw_jobs::TaskSlots>();
+                    commands.entity(mixer_entity).remove::<hw_jobs::TaskSlots>();
                     ctx.queue_reservation(hw_core::events::ResourceReservationOp::ReleaseSource {
                         source: mixer_entity,
                         amount: 1,
@@ -186,9 +181,7 @@ pub fn handle_refine_task(
                 commands
                     .entity(mixer_entity)
                     .remove::<hw_jobs::Designation>();
-                commands
-                    .entity(mixer_entity)
-                    .remove::<hw_jobs::TaskSlots>();
+                commands.entity(mixer_entity).remove::<hw_jobs::TaskSlots>();
                 ctx.queue_reservation(hw_core::events::ResourceReservationOp::ReleaseSource {
                     source: mixer_entity,
                     amount: 1,
@@ -201,12 +194,8 @@ pub fn handle_refine_task(
             commands
                 .entity(mixer_entity)
                 .remove::<hw_jobs::Designation>();
-            commands
-                .entity(mixer_entity)
-                .remove::<hw_jobs::TaskSlots>();
-            commands
-                .entity(mixer_entity)
-                .remove::<hw_jobs::IssuedBy>();
+            commands.entity(mixer_entity).remove::<hw_jobs::TaskSlots>();
+            commands.entity(mixer_entity).remove::<hw_jobs::IssuedBy>();
             ctx.queue_reservation(hw_core::events::ResourceReservationOp::ReleaseSource {
                 source: mixer_entity,
                 amount: 1,

@@ -123,7 +123,7 @@ root 側の `bevy_app` 残留（adapter 責務）:
 | `panels/task_list/update.rs` | `Res<GameAssets>` をシステム引数に取るため hw_ui 移動不可 |
 | `presentation/` | EntityInspectionQuery（ゲームエンティティ 10+ 型のクエリ集約）|
 | `vignette.rs` | TaskContext (DreamPlanting モード判定) |
-- `hw_visual` はビジュアルシステム全体を集約し、`GameAssets` には依存しない。アセットハンドルは `handles.rs` の 7 つの Resource（`WallVisualHandles` 等）で保持し、root の `init_visual_handles` startup システムが `GameAssets` から注入する。
+- `hw_visual` はビジュアルシステム全体を集約し、`GameAssets` には依存しない。アセットハンドルは `handles.rs` の 8 つの Resource（`WallVisualHandles` 等）で保持し、root の `init_visual_handles` startup システムが `GameAssets` から注入する。`SoulTaskHandles` と visual marker (`FadeOut`, `WheelbarrowMovement`) は `hw_core::visual` に置き、`hw_ai` / `hw_visual` の共有型として扱う。
 - `bevy_app` → `hw_visual` は依存方向を維持し、`hw_visual` から `bevy_app` へ依存しない。
 
 ### `hw_visual`
@@ -137,7 +137,8 @@ root 側の `bevy_app` 残留（adapter 責務）:
 代表例:
 
 - `HwVisualPlugin` — hw_visual の全システムを一括登録する Plugin
-- `handles::{WallVisualHandles, BuildingAnimHandles, WorkIconHandles, MaterialIconHandles, HaulItemHandles, SpeechHandles, PlantTreeHandles, GatheringVisualHandles, SoulTaskHandles}` — ビジュアルハンドルリソース（GameAssets の代替）
+- `handles::{WallVisualHandles, BuildingAnimHandles, WorkIconHandles, MaterialIconHandles, HaulItemHandles, SpeechHandles, PlantTreeHandles, GatheringVisualHandles}` — ビジュアルハンドルリソース（GameAssets の代替）
+- `hw_core::visual::{SoulTaskHandles, FadeOut, WheelbarrowMovement}` — `hw_ai` と `hw_visual` が共有する visual resource / marker component
 - `handles::GatheringVisualHandles` — 集会スポット visual 用ハンドルリソース（`aura_circle`, `card_table`, `campfire`, `barrel`）
 - `blueprint::*` — 設計図ビジュアル（アニメーション、プログレスバー、資材表示、完成エフェクト）
 - `dream::*` — Dream UI パーティクル、ドリームバブル、フローティングポップアップ（custom Material2d / UiMaterial）
@@ -240,13 +241,20 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 - UI システム
 - `Commands` で複雑な Entity 生成を行うもの
 - pathfinding / blueprint entity query を伴う auto-gather orchestration
-- `task_execution_system` 本体 — `TaskExecutionSoulQuery` / `WorldMapRead` / `unassign_task` / `OnTaskCompleted` を束ねる root wrapper として残留
+- `task_execution_system` 本体 — `TaskExecutionSoulQuery` / `WorldMapRead` / root `unassign_task` facade / `OnTaskCompleted` を束ねる root wrapper として残留
+- `helpers/work::unassign_task` — 公開 API と `WorkingOn` / `OnTaskAbandoned` 契約を root で確定する facade
+- `execute/task_execution/transport_common/*` — root 側互換 helper と `hw_jobs::lifecycle` re-export。wrapper ではなく helper 層として残留
+- `execute/task_execution/{types,common,handler,move_plant}` / `context/execution.rs` — 互換 import path のための thin shell
 
 移設済み system の登録ルール:
 
 - 実装本体を `hw_ai` / `hw_visual` / `hw_jobs` へ移した system は、原則として所有 crate の Plugin が唯一の登録者になる。
 - root 側の `pub use` / thin shell は互換パス維持と ordering 参照のために残してよいが、同じ system function を再登録してはいけない。
 - root shell は `.after(...)` / `.before(...)` で移設済み system に順序制約を付けるだけにとどめる。二重登録すると Bevy 0.18 の schedule 初期化で `SystemTypeSet` が曖昧になり panic する。
+- 用語は次のように使い分ける:
+  - thin shell: `pub use` のみを持つ互換モジュール
+  - root wrapper: root-only query/resource/event を束ねる system
+  - root facade/helper: root 側公開契約や互換 helper を持ち、低レベル実装へ委譲する層
 
 ## 3. 各 crate の責務
 
