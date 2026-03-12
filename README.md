@@ -39,7 +39,7 @@
 
 ## ディレクトリ構成
 
-- `src/`: Rust ソースコード
+- `crates/bevy_app/src/`: Rust ソースコード
     - `entities/`: 主要なエンティティ（Soul、Familiar、建物など）の定義
     - `systems/`: ゲームロジック
         - `familiar_ai/`: 使い魔の管理・指揮ロジック

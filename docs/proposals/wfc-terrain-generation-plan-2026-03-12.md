@@ -356,7 +356,7 @@ fn can_be_diagonal(t1, t2) -> bool {
 - `crates/hw_world/src/river.rs` — 川・砂生成
 - `crates/hw_world/src/layout.rs` — 固定定数
 - `crates/hw_world/src/borders.rs` — ボーダーアルゴリズム（変更しないが参照）
-- `src/world/map/spawn.rs` — Bevy統合層
+- `crates/bevy_app/src/world/map/spawn.rs` — Bevy統合層
 
 ### 最終確認ログ
 

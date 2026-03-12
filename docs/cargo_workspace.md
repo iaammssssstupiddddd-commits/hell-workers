@@ -130,7 +130,7 @@ root 側の `bevy_app` 残留（adapter 責務）:
 
 役割:
 
-- `src/systems/visual/` および `src/systems/utils/` から抽出したビジュアルシステム全体
+- `crates/bevy_app/src/systems/visual/` および `crates/bevy_app/src/systems/utils/` から抽出したビジュアルシステム全体
 - `GameAssets` に依存しない独立ビジュアル crate
 - アセットハンドルは `handles.rs` の 9 Resource として保持し、startup 時に root から注入される
 
@@ -163,7 +163,7 @@ root 側の `bevy_app` 残留（adapter 責務）:
 - `placement_ghost.rs`、`task_area_visual.rs`（システム関数）— `BuildContext` / `TaskContext` など app_contexts 依存のため root 残留
 - `DebugVisible` による条件付き system 登録 — root 側 `VisualPlugin` が担当
 
-root 側の責務（`src/systems/visual/` 残留ファイル）:
+root 側の責務（`crates/bevy_app/src/systems/visual/` 残留ファイル）:
 
 | ファイル | 残留理由 |
 |:---|:---|
@@ -175,7 +175,7 @@ root 側の責務（`src/systems/visual/` 残留ファイル）:
 startup 注入パターン:
 
 ```rust
-// src/plugins/startup/visual_handles.rs
+// crates/bevy_app/src/plugins/startup/visual_handles.rs
 pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>) {
     commands.insert_resource(WallVisualHandles { stone_isolated: game_assets.wall_isolated.clone(), ... });
     // ... 8 Resource すべてを insert
@@ -370,7 +370,7 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 
 ここに置かないもの:
 
-- `GameAssets` 依存の初期スポーン（`src/systems/logistics/initial_spawn/` は root 残留。`mod.rs` が facade、`layout.rs` / `terrain_resources.rs` / `facilities.rs` / `report.rs` に責務分割）
+- `GameAssets` 依存の初期スポーン（`crates/bevy_app/src/systems/logistics/initial_spawn/` は root 残留。`mod.rs` が facade、`layout.rs` / `terrain_resources.rs` / `facilities.rs` / `report.rs` に責務分割）
 - UI ロジスティクス表示
 
 ### `hw_jobs`
@@ -460,9 +460,9 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 
 例（明示列挙に変換済みの例）:
 
-- `src/systems/jobs/mod.rs` -> `pub use hw_jobs::model::{Blueprint, Building, ...};`
-- `src/systems/logistics/mod.rs` -> `pub use hw_logistics::types::{ResourceItem, BelongsTo, ...};`
-- `src/world/river.rs` -> `pub use hw_world::river::{generate_fixed_river_tiles, generate_sand_tiles};`
+- `crates/bevy_app/src/systems/jobs/mod.rs` -> `pub use hw_jobs::model::{Blueprint, Building, ...};`
+- `crates/bevy_app/src/systems/logistics/mod.rs` -> `pub use hw_logistics::types::{ResourceItem, BelongsTo, ...};`
+- `crates/bevy_app/src/world/river.rs` -> `pub use hw_world::river::{generate_fixed_river_tiles, generate_sand_tiles};`
 
 ルール:
 
@@ -489,7 +489,7 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 - nearest walkable / river helper
 - mapgen / border / regrowth の純粋ロジック
 
-`src/world/map/spawn.rs`, `src/world/map/terrain_border.rs`, `src/world/regrowth.rs` は app shell です。これらは `GameAssets`, `Commands`, `Resource` を扱い、純粋ロジックは `hw_world` から呼び出します。
+`crates/bevy_app/src/world/map/spawn.rs`, `crates/bevy_app/src/world/map/terrain_border.rs`, `crates/bevy_app/src/world/regrowth.rs` は app shell です。これらは `GameAssets`, `Commands`, `Resource` を扱い、純粋ロジックは `hw_world` から呼び出します。
 
 ## 7. crate を増やすときの手順
 

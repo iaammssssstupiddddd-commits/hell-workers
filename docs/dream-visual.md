@@ -147,13 +147,13 @@ Dream 消費による植林は、ロジックで木を生成したあとに Visu
 
 | ファイル | 内容 |
 | :--- | :--- |
-| `src/systems/soul_ai/visual/idle.rs` | 夢の質に応じた Soul 色変化 |
+| `crates/bevy_app/src/systems/soul_ai/visual/idle.rs` | 夢の質に応じた Soul 色変化 |
 | `crates/hw_visual/src/dream/gain_visual.rs` | **Dream 獲得 UI パーティクル・ポップアップ生成/更新（拡張予定）** |
 | `crates/hw_visual/src/dream/particle.rs` | Dream 粒子（World 空間）生成/更新 |
 | `crates/hw_visual/src/dream/ui_particle.rs` | UI パーティクル移動アニメーション・軌道計算 |
-| `src/systems/dream_tree_planting.rs` | Dream 植林ロジック（演出状態付き Tree 生成） |
-| `src/systems/command/area_selection/indicator.rs` | 植林プレビュー描画システム |
-| `src/systems/command/area_selection/state.rs` | プレビュー固定シード保持 |
+| `crates/bevy_app/src/systems/dream_tree_planting.rs` | Dream 植林ロジック（演出状態付き Tree 生成） |
+| `crates/bevy_app/src/systems/command/area_selection/indicator.rs` | 植林プレビュー描画システム |
+| `crates/bevy_app/src/systems/command/area_selection/state.rs` | プレビュー固定シード保持 |
 | `crates/hw_visual/src/plant_trees/components.rs` | 植林演出コンポーネント |
 | `crates/hw_visual/src/plant_trees/systems.rs` | 植林 3 フェーズ演出更新 |
 | `crates/hw_visual/src/lib.rs` | Plant Trees 演出システム登録 (`HwVisualPlugin`) |
@@ -161,8 +161,8 @@ Dream 消費による植林は、ロジックで木を生成したあとに Visu
 | `assets/shaders/dream_bubble.wgsl` | World 空間用フラグメントシェーダー |
 | `assets/shaders/dream_bubble_ui.wgsl` | UI 空間用フラグメントシェーダー（バブルクラスター対応） |
 | `crates/hw_ui/src/setup/time_control.rs` | Dream テキストノード生成 |
-| `src/interface/ui/interaction/status_display.rs` | Dream 表示更新とパルス演出 |
-| `src/interface/ui/presentation/builders.rs` | RestArea ツールチップの Dream/s 表示 |
+| `crates/bevy_app/src/interface/ui/interaction/status_display.rs` | Dream 表示更新とパルス演出 |
+| `crates/bevy_app/src/interface/ui/presentation/builders.rs` | RestArea ツールチップの Dream/s 表示 |
 | `assets/textures/ui/plant_tree_magic_circle.png` | 植林予兆エフェクト（プレースホルダー） |
 | `assets/textures/ui/plant_tree_life_spark.png` | 生命力スパーク（プレースホルダー） |
 

@@ -52,7 +52,7 @@ graph TD
 5.  **Completion**: 資源が尽きると実体が消滅。`Observer` が検知し、`魂` のタスクを解除。
 
 ## システムセットの実行順序
-`GameSystemSet` は `hw_core::system_sets` で定義され、`src/main.rs` でチェーンされています：
+`GameSystemSet` は `hw_core::system_sets` で定義され、`crates/bevy_app/src/main.rs` でチェーンされています：
 `Input` → `Spatial` → `Logic` → `Actor` → `Visual` → `Interface`
 
 ### Global Cycle Framework (Logic Phase)
@@ -96,14 +96,14 @@ Perceive → Update → Decide → Execute
 ## Room Detection の境界
 
 - `crates/hw_world::room_detection` が room detection core の唯一の所有者であり、`RoomDetectionBuildingTile` からの入力分類、flood-fill、妥当性判定、`RoomBounds` を提供する。
-- root 側 `src/systems/room/detection.rs` は app shell として `Query<(Entity, &Building, &Transform)>` + `WorldMapRead` から tile descriptor を収集し、`DetectedRoom` を `Room` entity と `RoomTileLookup` へ反映する。
-- root 側 `src/systems/room/validation.rs` は既存 `Room` の `tiles` を `hw_world::room_detection::room_is_valid_against_input(...)` に渡す adapter に留める。
+- root 側 `crates/bevy_app/src/systems/room/detection.rs` は app shell として `Query<(Entity, &Building, &Transform)>` + `WorldMapRead` から tile descriptor を収集し、`DetectedRoom` を `Room` entity と `RoomTileLookup` へ反映する。
+- root 側 `crates/bevy_app/src/systems/room/validation.rs` は既存 `Room` の `tiles` を `hw_world::room_detection::room_is_valid_against_input(...)` に渡す adapter に留める。
 - dirty tracking (`RoomDetectionState`) と visual overlay (`RoomOverlayTile`) は root 側責務であり、room detection core には含めない。
 - `Room` entity の spawn では `Transform::default()` を必ず付与する。これを外すと overlay child の transform 伝播が壊れる。
 
 ## ゲーム内時間 (GameTime)
 
-`src/systems/time.rs` — `GameTime`（Resource）:
+`crates/bevy_app/src/systems/time.rs` — `GameTime`（Resource）:
 
 - フィールド: `seconds: f32`, `day: u32`, `hour: u32`, `minute: u32`
 - **時間倍率**: 1実時間秒 = 1ゲーム内分（60倍速）
@@ -112,7 +112,7 @@ Perceive → Update → Decide → Execute
 
 ## 空間グリッド一覧 (Spatial Grids)
 
-`crates/hw_spatial` が concrete `SpatialGrid`（9種）を実体として保持し、`src/systems/spatial/` は `hw_spatial` への薄い re-export shell に縮退している。
+`crates/hw_spatial` が concrete `SpatialGrid`（9種）を実体として保持し、`crates/bevy_app/src/systems/spatial/` は `hw_spatial` への薄い re-export shell に縮退している。
 すべてのグリッドで `Added` / `Changed` / `RemovedComponents` の Change Detection に基づく差分更新を実装している。
 
 | グリッド | 用途 |
@@ -147,8 +147,8 @@ Perceive → Update → Decide → Execute
 
 | 方式 | 用途 | 定義場所 |
 |:--|:--|:--|
-| `Message` | グローバル通知（タスクキュー更新等） | 主に `crates/hw_core/src/events.rs`（`TaskAssignmentRequest` のみ `crates/hw_jobs/src/events.rs`）（登録は `src/plugins/messages.rs`） |
-| `Observer` | エンティティベースの即時反応 | 主に `crates/hw_core/src/events.rs`（root 互換面は `src/events.rs`） |
+| `Message` | グローバル通知（タスクキュー更新等） | 主に `crates/hw_core/src/events.rs`（`TaskAssignmentRequest` のみ `crates/hw_jobs/src/events.rs`）（登録は `crates/bevy_app/src/plugins/messages.rs`） |
+| `Observer` | エンティティベースの即時反応 | 主に `crates/hw_core/src/events.rs`（root 互換面は `crates/bevy_app/src/events.rs`） |
 
 > [!TIP]
 > リソース (`ResMut`) を更新する必要がある場合は `Message` を使用してください。
@@ -167,17 +167,17 @@ Perceive → Update → Decide → Execute
 
 - `hw_ui` 側はUIノード生成・表示系システムの本体を集約する。具体的には `UiRoot`/`UiMountSlot`、`UiSlot` 予約、ステータス表示、tooltip_builder、info_panel、task_list の render/interaction、エンティティリストの汎用メカニクス（resize/minimize/visual）を保持する。
 - root 側 (`bevy_app`) は `UiIntent` メッセージ受信、PlayMode 遷移、ゲームエンティティ ECS Query、WorldMapWrite/TaskContext など**ゲーム状態を持つ adapter** を担当する。
-- `src/interface/ui/mod.rs` は app shell の正規入口として機能し、外部から使われるシンボルのみを明示的に re-export する（wildcard `*` は使用しない）。
+- `crates/bevy_app/src/interface/ui/mod.rs` は app shell の正規入口として機能し、外部から使われるシンボルのみを明示的に re-export する（wildcard `*` は使用しない）。
 
 ### アセット抽象化
 
 - `hw_ui::setup::UiAssets` トレイトがフォント・アイコンハンドルを抽象化する（`font_ui`, `font_familiar`, `icon_stress`, `icon_fatigue`, `icon_male`, `icon_female`, `icon_arrow_down`, `glow_circle`）。
-- `src/interface/ui/setup/mod.rs` が `GameAssets` → `&dyn UiAssets` のアダプタとして機能する。
+- `crates/bevy_app/src/interface/ui/setup/mod.rs` が `GameAssets` → `&dyn UiAssets` のアダプタとして機能する。
 - `Res<GameAssets>` をシステム引数に取るシステム（task_list/update.rs 等）は Bevy の制約上 hw_ui に移動できないため root に残留する。
 
 ### plugin 登録
 
-- `src/plugins/interface.rs` → `plugins::register_ui_plugins(app)` → `src/interface/ui/plugins/mod.rs` に UI stack 登録を集約する。
+- `crates/bevy_app/src/plugins/interface.rs` → `plugins::register_ui_plugins(app)` → `crates/bevy_app/src/interface/ui/plugins/mod.rs` に UI stack 登録を集約する。
 - `register_ui_plugins` は `HwUiPlugin`、`UiFoundationPlugin`、root adapter plugin 群をまとめて登録する。
 
 ### UIノード管理
@@ -186,7 +186,7 @@ Perceive → Update → Decide → Execute
 
 ### 情報表示
 
-- `src/interface/ui/presentation/` が `EntityInspectionModel`/`ViewModel` を root で構築（ゲームエンティティ 10+ 型の Query を集約）。
+- `crates/bevy_app/src/interface/ui/presentation/` が `EntityInspectionModel`/`ViewModel` を root で構築（ゲームエンティティ 10+ 型の Query を集約）。
 - `InfoPanel` と `HoverTooltip` は同じモデルを参照して表示差分を抑える。
 
 ### 入力判定
@@ -213,7 +213,7 @@ Perceive → Update → Decide → Execute
 
 ## selection 境界補足
 
-`src/interface/selection/` と `hw_ui::selection` の責務分担（selection 分離完了時点）:
+`crates/bevy_app/src/interface/selection/` と `hw_ui::selection` の責務分担（selection 分離完了時点）:
 
 | 区分 | 置き場所 | 内容 |
 | --- | --- | --- |
@@ -223,13 +223,13 @@ Perceive → Update → Decide → Execute
 | move geometry API | `hw_ui::selection::placement` | `move_anchor_grid`, `move_occupied_grids`, `move_spawn_pos`, `can_place_moved_building`, `validate_moved_bucket_storage_placement` |
 | floor / wall validation | `hw_ui::selection::placement` | `validate_area_size`, `validate_wall_area`, `validate_floor_tile`, `validate_wall_tile` |
 | selection intent | `hw_ui::selection::intent` | `SelectionIntent` |
-| root adapter | `src/interface/selection/*` | Query/Res から intent 生成、ECS 状態・WorldMap 変更の適用 |
+| root adapter | `crates/bevy_app/src/interface/selection/*` | Query/Res から intent 生成、ECS 状態・WorldMap 変更の適用 |
 
 - `hw_ui::selection` は state resource と shared outcome 型・trait のみ。`Commands`/`WorldMapWrite`/`NextState<PlayMode>` は使わない。
 - `update_selection_indicator` の実装本体は `hw_visual` にあるが、選択更新と同フレームで反映するため root `Interface` フェーズで登録する。
-- `hw_ui::selection::placement` は building placement/move の geometry, validation 共通ロジックを保持する。`src/interface/selection/building_place/placement.rs`・`building_move/preview.rs`・`building_move/mod.rs`・`src/systems/visual/placement_ghost.rs` が共有する。
+- `hw_ui::selection::placement` は building placement/move の geometry, validation 共通ロジックを保持する。`crates/bevy_app/src/interface/selection/building_place/placement.rs`・`building_move/preview.rs`・`building_move/mod.rs`・`crates/bevy_app/src/systems/visual/placement_ghost.rs` が共有する。
 - `building_move/geometry.rs` は hw_ui 移動に伴い削除済み。`building_move/placement.rs` は bucket storage 所有グリッド解決だけを持つ薄い adapter で、判定本体は `validate_moved_bucket_storage_placement` を使う。
-- floor/wall の tile reject reason と tile validation は `hw_ui::selection::placement` に共通化済み。`WorldMap` → `WorldReadApi` の adapter は `src/world/map/mod.rs` の `WorldMapRef<'a>` 一箇所に集約済み（旧来の各ファイルのローカルラッパーは削除済み）。
+- floor/wall の tile reject reason と tile validation は `hw_ui::selection::placement` に共通化済み。`WorldMap` → `WorldReadApi` の adapter は `crates/bevy_app/src/world/map/mod.rs` の `WorldMapRef<'a>` 一箇所に集約済み（旧来の各ファイルのローカルラッパーは削除済み）。
 - `handle_mouse_input` の selection 判定は `SelectionIntent` を返す helper へ分離済み（`apply_selection_intent` が ECS 変更を適用）。
 - `building_move/mod.rs` の `finalize_move_request` / `cancel_tasks_and_requests_for_moved_building` は `TransportRequest`・`unassign_task` 依存が重く root adapter として残留する。
 
@@ -238,7 +238,7 @@ Perceive → Update → Decide → Execute
 
 ### グローバルショートカット（統一管理）
 
-`src/interface/ui/interaction/mod.rs` の `ui_keyboard_shortcuts_system` で一元管理:
+`crates/bevy_app/src/interface/ui/interaction/mod.rs` の `ui_keyboard_shortcuts_system` で一元管理:
 
 | キー | 機能 | 備考 |
 |:--|:--|:--|

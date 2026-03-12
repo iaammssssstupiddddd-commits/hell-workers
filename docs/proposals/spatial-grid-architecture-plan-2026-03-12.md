@@ -196,7 +196,7 @@ pub struct PipeNetwork {
 既存の `add_obstacle()` / `remove_obstacle()` の個別呼び出しに置き換える。
 
 **変更ファイル:**
-- `src/systems/jobs/building_completion/world_update.rs`
+- `crates/bevy_app/src/systems/jobs/building_completion/world_update.rs`
 
 **推定難易度:** 低
 
@@ -240,7 +240,7 @@ pub struct PipeNetwork {
 
 | リスク | 影響 | 対策 |
 | --- | --- | --- |
-| 障害物の全走査再構築を呼んでいる箇所が複数ある | 差分更新への移行漏れ | `grep -r "rebuild_obstacles\|obstacles.*iter\|obstacles.*fill" src/ crates/` で全箇所確認 |
+| 障害物の全走査再構築を呼んでいる箇所が複数ある | 差分更新への移行漏れ | `grep -r "rebuild_obstacles\|obstacles.*iter\|obstacles.*fill" crates/bevy_app/src/ crates/` で全箇所確認 |
 | Relationship ベース移行でシステム実行順が変わる | 同期タイミングのバグ | フェーズC は既存の HashMap を残しつつ段階移行する |
 | 配管追加時に is_walkable() の変更が必要になる | 配管が障害物扱いになる | 配管は `add_obstacle()` を呼ばない設計を守る |
 
@@ -253,7 +253,7 @@ pub struct PipeNetwork {
 
 ### 次のAIが最初にやること
 
-1. `grep -r "rebuild_obstacles\|obstacles\.fill\|obstacles\.iter_mut" src/ crates/` で障害物全走査箇所を確認
+1. `grep -r "rebuild_obstacles\|obstacles\.fill\|obstacles\.iter_mut" crates/bevy_app/src/ crates/` で障害物全走査箇所を確認
 2. フェーズA: `building_completion/world_update.rs` の全走査を `add_obstacle()` 個別呼び出しに置き換え
 3. `cargo check` 確認後、フェーズB へ
 
@@ -262,7 +262,7 @@ pub struct PipeNetwork {
 - `crates/hw_world/src/map/mod.rs` — WorldMap 構造体・`add_obstacle()`/`remove_obstacle()` 実装
 - `crates/hw_jobs/src/model.rs` — Blueprint/Building コンポーネント
 - `crates/hw_ui/src/selection/placement.rs` — バリデーションロジック
-- `src/systems/jobs/building_completion/world_update.rs` — WorldMap 同期
+- `crates/bevy_app/src/systems/jobs/building_completion/world_update.rs` — WorldMap 同期
 
 ### Definition of Done
 

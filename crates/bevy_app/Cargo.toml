@@ -1,0 +1,20 @@
+[package]
+name = "bevy_app"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+bevy = { workspace = true }
+rand = { workspace = true }
+hw_core = { path = "../hw_core" }
+hw_jobs = { path = "../hw_jobs" }
+hw_logistics = { path = "../hw_logistics" }
+hw_ui = { path = "../hw_ui" }
+hw_world = { path = "../hw_world" }
+hw_ai = { path = "../hw_ai" }
+hw_spatial = { path = "../hw_spatial" }
+hw_visual = { path = "../hw_visual" }
+
+[features]
+default = ["dynamic_linking"]
+dynamic_linking = ["bevy/dynamic_linking"]

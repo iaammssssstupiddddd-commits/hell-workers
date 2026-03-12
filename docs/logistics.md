@@ -282,7 +282,7 @@ WheelbarrowLease {
 
 #### 5.2.3 定数
 
-定数（12種）は `src/constants/` 参照。主要値: `WHEELBARROW_PREFERRED_MIN_BATCH_SIZE = 3`（小バッチ優先下限）/ `SINGLE_BATCH_WAIT_SECS = 5.0`（待機秒数）/ `WHEELBARROW_ARBITRATION_TOP_K = 24`（近傍候補上限）。
+定数（12種）は `crates/bevy_app/src/constants/` 参照。主要値: `WHEELBARROW_PREFERRED_MIN_BATCH_SIZE = 3`（小バッチ優先下限）/ `SINGLE_BATCH_WAIT_SECS = 5.0`（待機秒数）/ `WHEELBARROW_ARBITRATION_TOP_K = 24`（近傍候補上限）。
 
 #### 5.2.4 割り当て時の lease 優先
 
@@ -419,7 +419,7 @@ Stockpile / Blueprint / Tank などへの搬入予約は、Bevy の Relationship
 
 ## 9. 初期リソーススポーン（initial_spawn）
 
-`src/systems/logistics/initial_spawn/` は `StartupPlugin::PostStartup` チェーンの中で `initial_resource_spawner` 1 関数のみを公開する thin facade モジュールである。
+`crates/bevy_app/src/systems/logistics/initial_spawn/` は `StartupPlugin::PostStartup` チェーンの中で `initial_resource_spawner` 1 関数のみを公開する thin facade モジュールである。
 
 ### 9.1 モジュール構成と責務境界
 
