@@ -5,19 +5,15 @@ use crate::systems::jobs::Designation;
 use crate::systems::logistics::{Inventory, ReservedForTask, Stockpile};
 use crate::systems::soul_ai::execute::task_execution::types::AssignedTask;
 use bevy::prelude::*;
-use hw_core::constants::*;
 
-use crate::world::map::WorldMap; // 追加
+use crate::world::map::WorldMap;
 
-/// 目的地を更新（必要に応じて）
-///
-/// 目的地が2.0以上離れている場合にのみ更新します。
-pub fn update_destination_if_needed(dest: &mut Destination, target_pos: Vec2, path: &mut Path) {
-    if dest.0.distance_squared(target_pos) > 2.0 {
-        dest.0 = target_pos;
-        path.waypoints.clear();
-    }
-}
+// pure helper を hw_ai から re-export
+pub use hw_ai::soul_ai::helpers::navigation::{
+    can_pickup_item, is_adjacent_grid, is_near_blueprint, is_near_target, is_near_target_or_dest,
+    update_destination_if_needed,
+};
+
 
 /// インタラクション対象への隣接目的地を設定（岩などへの近接用）
 ///
@@ -297,31 +293,6 @@ pub fn release_mixer_mud_storage_for_item(
         .remove::<crate::systems::jobs::StoredByMixer>();
 }
 
-/// 距離チェック: 魂がターゲットに近づいたかどうか
-///
-/// 隣接マス（中心間距離32px）からでも確実に「近い」と判定されるように、
-/// タイルサイズの1.5倍（48px）を閾値に設定。
-pub fn is_near_target(soul_pos: Vec2, target_pos: Vec2) -> bool {
-    soul_pos.distance(target_pos) < TILE_SIZE * 1.8
-}
-
-/// ターゲットまたは現在の目的地への近接判定
-pub fn is_near_target_or_dest(soul_pos: Vec2, target_pos: Vec2, dest_pos: Vec2) -> bool {
-    is_near_target(soul_pos, target_pos) || is_near_target(soul_pos, dest_pos)
-}
-
-/// グリッド上で隣接しているか（斜め含む）
-pub fn is_adjacent_grid(soul_pos: Vec2, target_pos: Vec2) -> bool {
-    let sg = WorldMap::world_to_grid(soul_pos);
-    let tg = WorldMap::world_to_grid(target_pos);
-    (sg.0 - tg.0).abs() <= 1 && (sg.1 - tg.1).abs() <= 1
-}
-
-/// アイテムの拾い判定は隣接グリッドのみ許可する
-pub fn can_pickup_item(soul_pos: Vec2, item_pos: Vec2) -> bool {
-    is_adjacent_grid(soul_pos, item_pos)
-}
-
 /// 拾い判定が満たされない場合はタスクをクリアする
 pub fn try_pickup_item(
     commands: &mut Commands,
@@ -339,30 +310,4 @@ pub fn try_pickup_item(
     }
     pickup_item(commands, soul_entity, item_entity, inventory);
     true
-}
-
-/// 設計図への距離チェック: 魂が設計図の構成タイルのいずれかに近づいたかどうか
-///
-/// 修正: 建設作業を予定地の上で行わないようにするため、
-/// 1. ソウルの中心が予定地（occupied_grids）のいずれかに含まれている場合は false を返す。
-/// 2. その上で、予定地のいずれかのタイルに隣接（距離 1.5 TILE_SIZE 未満）している場合に true を返す。
-pub fn is_near_blueprint(soul_pos: Vec2, occupied_grids: &[(i32, i32)]) -> bool {
-    let soul_grid = WorldMap::world_to_grid(soul_pos);
-
-    // 予定地の上に立っていたらダメ
-    if occupied_grids.contains(&soul_grid) {
-        return false;
-    }
-
-    for &(gx, gy) in occupied_grids {
-        let grid_pos = WorldMap::grid_to_world(gx, gy);
-        let dist = soul_pos.distance(grid_pos);
-
-        // 隣接（1.5タイル分以内）していればOK
-        // 斜め方向の距離が約1.414なため、1.5必要。
-        if dist < TILE_SIZE * 1.5 {
-            return true;
-        }
-    }
-    false
 }

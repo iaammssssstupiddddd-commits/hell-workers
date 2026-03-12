@@ -102,6 +102,20 @@ pub struct FamiliarStorageAccess<'w, 's> {
 }
 
 /// 建設サイトへの読み取り専用アクセス（root bridge 専用）
+///
+/// # task_execution 全面移設 blocker
+///
+/// `StorageAccess` / `MutStorageAccess` の `floor_sites` / `wall_sites` フィールドが
+/// `FloorConstructionSite` / `WallConstructionSite`（root-only）を直接 Query しているため、
+/// これらの `SystemParam` ごと `hw_ai` へ移設できない。
+///
+/// **移設可能性の整理（2026-03-12 確認）:**
+/// - 両型が依存する `TaskArea` は `hw_core::area` 所有（root は re-export のみ）。
+/// - `FloorConstructionSite` / `WallConstructionSite` 自身の依存は
+///   `hw_core::area::TaskArea` + `hw_jobs::construction::*` + `bevy::Vec2` に限られる。
+/// - 技術的には `hw_jobs::construction` へ移設可能。
+/// - 移設時は `interface/`・`familiar_ai/`・`logistics/transport_request/` など
+///   広い箇所の import を `hw_jobs::` に更新する必要がある（次計画の対象）。
 #[derive(SystemParam)]
 pub struct ConstructionSiteAccess<'w, 's> {
     pub floor_sites: Query<
