@@ -140,7 +140,7 @@ GameSystemSet::Visual（Visual ループ内）
 
 `is_provisional == true` の壁は `solid_wall_tiles` に含まれません。Flood-fill 中にその位置を踏むと `is_valid = false` になり Room 不成立となります。
 
-## 10. 定数（`src/constants/building.rs`）
+## 10. 定数（`crates/hw_core/src/constants/building.rs`）
 
 | 定数 | 値 | 説明 |
 |:---|:---|:---|
@@ -161,4 +161,4 @@ GameSystemSet::Visual（Visual ループ内）
 | `src/systems/room/resources.rs` | `RoomDetectionState`, `RoomTileLookup`, `RoomValidationState` 定義 |
 | `src/plugins/logic.rs` | Room 検出システムの登録 |
 | `src/plugins/visual.rs` | Room ビジュアルシステムの登録 |
-| `src/constants/building.rs` | Room 関連定数 |
+| `crates/hw_core/src/constants/building.rs` | Room 関連定数 |

@@ -484,7 +484,7 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 
 ## 7. crate を増やすときの手順
 
-1. `crates/<name>/Cargo.toml` と `src/lib.rs` を作る
+1. `crates/<name>/Cargo.toml` と `crates/<name>/src/lib.rs` を作る
 2. root `Cargo.toml` に path dependency を追加する
 3. shared model / helper から移す
 4. root 側を re-export または import 修正でつなぐ
