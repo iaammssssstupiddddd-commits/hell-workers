@@ -19,7 +19,6 @@
 | --- | --- |
 | [08_visual_update_prompts.md](08_visual_update_prompts.md) | ビジュアル更新プロンプト集 |
 | [architecture-improvements-2026.md](architecture-improvements-2026.md) | アーキテクチャ改善提案 (Architecture Improvement Proposals) |
-| [room-detection-hw-world-extraction-proposal-2026-03-11.md](room-detection-hw-world-extraction-proposal-2026-03-11.md) | `src/systems/room/detection.rs` には、部屋候補の flood fill、境界判定、妥当性判定、ECS entity の再生成が同居しているの提案。 |
 | [soul_spawn_despawn_optimization.md](soul_spawn_despawn_optimization.md) | Soul Spawn/Despawn 最適化提案 |
 | [speech_optimization.md](speech_optimization.md) | スピーチシステム最適化提案 |
 
@@ -45,6 +44,7 @@
 | [archive/performance-bottlenecks-proposal-2026-02-26.md](archive/performance-bottlenecks-proposal-2026-02-26.md) | **現状**: Soul 数が増加するにつれてフレームレートが低下する傾向がある。Space/Spatial グリッドの同期、Room 検出、Soul AI の決定処理など複数の領域で毎フレーム・定期的な全件処理が行われているの提案。 |
 | [archive/plant_trees_visuals.md](archive/plant_trees_visuals.md) | Plant Trees機能 個別ビジュアルアップデート提案 |
 | [archive/recruit-and-task-assignment-algorithm.md](archive/recruit-and-task-assignment-algorithm.md) | リクルート及びタスクアサインの選定アルゴリズム改善提案 |
+| [archive/room-detection-hw-world-extraction-proposal-2026-03-11.md](archive/room-detection-hw-world-extraction-proposal-2026-03-11.md) | `src/systems/room/detection.rs` には、部屋候補の flood fill、境界判定、妥当性判定、ECS entity の再生成が同居しているの提案。 |
 | [archive/room_detection.md](archive/room_detection.md) | 現状: 壁・ドア・床は個別のエンティティとして管理されており、囲まれた空間を論理的に認識する仕組みがないの提案。 |
 | [archive/scaling_performance_bottlenecks.md](archive/scaling_performance_bottlenecks.md) | スケール時パフォーマンス・ボトルネック再評価（2026-02-17 更新） |
 | [archive/selection-separation-2026-03-08.md](archive/selection-separation-2026-03-08.md) | `hw_ui` 分離は進み、UI 本体は `hw_ui` に寄せられたが、`src/interface/selection/` は `selection` 系を root 側が全面担当しているの提案。 |

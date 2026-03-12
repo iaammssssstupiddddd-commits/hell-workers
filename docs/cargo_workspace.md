@@ -209,7 +209,8 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 - `soul_ai::decide::escaping` / `soul_ai::perceive::escaping` — 逃走判断ロジック
 - `soul_ai::decide::gathering_mgmt` — 集会管理要求生成
 - `soul_ai::helpers::drifting::{choose_drift_edge, is_near_map_edge, random_wander_target, drift_move_target}` — 純粋 drifting 計算（`Commands` / root resource 不要）
-- **（追加予定 M4）** `soul_ai::helpers::navigation::{is_near_target, is_near_target_or_dest, is_adjacent_grid, can_pickup_item, is_near_blueprint, update_destination_if_needed}` — 純粋距離・グリッド判定
+- `soul_ai::helpers::navigation::{is_near_target, is_near_target_or_dest, is_adjacent_grid, can_pickup_item, is_near_blueprint, update_destination_if_needed}` — 純粋距離・グリッド判定（`Commands` / root resource 不要）
+- `soul_ai::execute::drifting::{drifting_behavior_system, despawn_at_edge_system}` — 漂流実行（`PopulationManager` 非依存。system 登録責務は `SoulAiCorePlugin` が持つ）
 - `familiar_ai::perceive::state_detection` — 使い魔 AI 状態遷移検知
 - `familiar_ai::decide::following` — 使い魔追尾システム（hw_core 型のみ依存）
 - `familiar_ai::decide::query_types` — Familiar Decide 用の narrow query 定義

@@ -1,13 +1,18 @@
+//! 漂流（Drifting）実行システム
+//!
+//! `PopulationManager` など root 固有リソースに依存しない純粋な実行ロジック。
+//! Decide フェーズの判定（`decide/drifting.rs`）は root 側に残る。
+
 use bevy::prelude::*;
-use hw_ai::soul_ai::helpers::drifting::{drift_move_target, is_near_map_edge, random_wander_target};
+use hw_core::constants::TILE_SIZE;
 use hw_core::events::SoulEscaped;
+use hw_core::relationships::CommandedBy;
+use hw_core::soul::{DamnedSoul, DriftPhase, DriftingState, IdleBehavior, IdleState};
+use hw_jobs::AssignedTask;
+use hw_world::map::WorldMapRead;
 use rand::Rng;
 
-use crate::entities::damned_soul::{DriftPhase, DriftingState, IdleBehavior, IdleState};
-use crate::relationships::CommandedBy;
-use crate::systems::soul_ai::execute::task_execution::AssignedTask;
-use crate::world::map::{WorldMap, WorldMapRead};
-use hw_core::constants::*;
+use crate::soul_ai::helpers::drifting::{drift_move_target, is_near_map_edge, random_wander_target};
 
 /// 漂流（Drifting）中の Soul 行動更新
 pub fn drifting_behavior_system(
@@ -19,13 +24,13 @@ pub fn drifting_behavior_system(
             Entity,
             &Transform,
             &mut IdleState,
-            &mut crate::entities::damned_soul::Destination,
-            &mut crate::entities::damned_soul::Path,
+            &mut hw_core::soul::Destination,
+            &mut hw_core::soul::Path,
             &AssignedTask,
             Option<&CommandedBy>,
             &mut DriftingState,
         ),
-        With<crate::entities::damned_soul::DamnedSoul>,
+        With<DamnedSoul>,
     >,
 ) {
     let dt = time.delta_secs();
@@ -58,7 +63,7 @@ pub fn drifting_behavior_system(
         }
 
         let current_pos = transform.translation.truncate();
-        let current_grid = WorldMap::world_to_grid(current_pos);
+        let current_grid = hw_world::map::WorldMap::world_to_grid(current_pos);
         drifting.phase_timer += dt;
 
         match drifting.phase {
@@ -92,8 +97,10 @@ pub fn drifting_behavior_system(
                 if arrived || (path_done && drifting.phase_timer > 1.0) {
                     drifting.phase = DriftPhase::Wandering;
                     drifting.phase_timer = 0.0;
-                    drifting.phase_duration =
-                        rng.gen_range(DRIFT_WANDER_DURATION_MIN..DRIFT_WANDER_DURATION_MAX);
+                    drifting.phase_duration = rng.gen_range(
+                        hw_core::constants::DRIFT_WANDER_DURATION_MIN
+                            ..hw_core::constants::DRIFT_WANDER_DURATION_MAX,
+                    );
                     destination.0 =
                         random_wander_target(current_grid, world_map.as_ref(), &mut rng);
                     path.waypoints.clear();
@@ -109,10 +116,7 @@ pub fn despawn_at_edge_system(
     mut commands: Commands,
     q_souls: Query<
         (Entity, &Transform, &IdleState),
-        (
-            With<crate::entities::damned_soul::DamnedSoul>,
-            With<DriftingState>,
-        ),
+        (With<DamnedSoul>, With<DriftingState>),
     >,
 ) {
     for (entity, transform, idle) in q_souls.iter() {
@@ -120,7 +124,7 @@ pub fn despawn_at_edge_system(
             continue;
         }
 
-        let grid = WorldMap::world_to_grid(transform.translation.truncate());
+        let grid = hw_world::map::WorldMap::world_to_grid(transform.translation.truncate());
         if !is_near_map_edge(grid) {
             continue;
         }

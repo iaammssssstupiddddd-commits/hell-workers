@@ -2,5 +2,6 @@ pub mod drifting;
 pub mod gathering;
 pub mod gathering_motion;
 pub mod gathering_positions;
+pub mod navigation;
 pub mod query_types;
 pub mod work;

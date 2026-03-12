@@ -19,7 +19,7 @@
 
 | Document | Status | Notes |
 |---|---|---|
-| [command-crate-extraction-plan-2026-03-12.md](command-crate-extraction-plan-2026-03-12.md) | Draft | `src/systems/command/` から crate 化できる pure helper / world 判定 / logistics selector を切り出す計画。 |
+
 
 ## アーカイブ計画書一覧 (`docs/plans/archive`)
 
@@ -33,6 +33,7 @@
 | [archive/bridge-building.md](archive/bridge-building.md) | アーカイブ | 橋（Bridge）建築物の実装計画。 |
 | [archive/bucket-return-rebuild-plan.md](archive/bucket-return-rebuild-plan.md) | アーカイブ | バケツ返却仕様の再構築計画。 |
 | [archive/cargo-workspace-migration-plan.md](archive/cargo-workspace-migration-plan.md) | アーカイブ | Cargo Workspace 移行計画 |
+| [archive/command-crate-extraction-plan-2026-03-12.md](archive/command-crate-extraction-plan-2026-03-12.md) | アーカイブ | src/systems/command/の計画。 |
 | [archive/destination-validation-unification-plan-2026-03-07.md](archive/destination-validation-unification-plan-2026-03-07.md) | アーカイブ | FloorConstruction / WallConstruction / ProvisionalWall の搬入先需要計算と実行時受入判定が、割り当て時・手運搬 dropping 時・猫車 unloading 時の 3 系統に分散し、同一ロジックを複数箇所で維持しているの計画。 |
 | [archive/docs-index-automation-plan-2026-03-05.md](archive/docs-index-automation-plan-2026-03-05.md) | アーカイブ | docs/plans/README.mdの計画。 |
 | [archive/door-implementation-2026-02-22.md](archive/door-implementation-2026-02-22.md) | アーカイブ | 壁で囲まれた空間への出入りを制御する手段がない。現状は壁に穴を開けるか、壁を完全に閉じるかの二択しかないの計画。 |
@@ -95,6 +96,7 @@
 | [archive/selection-placement-refactor-plan-2026-02-25.md](archive/selection-placement-refactor-plan-2026-02-25.md) | アーカイブ | `interface/selection` の配置処理を責務分離するリファクタ計画。 |
 | [archive/selection-separation-plan-2026-03-08.md](archive/selection-separation-plan-2026-03-08.md) | アーカイブ | -の計画。 |
 | [archive/site-yard-system.md](archive/site-yard-system.md) | アーカイブ | 実装計画: Site / Yard システム |
+| [archive/soul-ai-crate-extraction-plan-2026-03-12.md](archive/soul-ai-crate-extraction-plan-2026-03-12.md) | アーカイブ | src/systems/soul_ai/の計画。 |
 | [archive/soul-ai-root-thinning-plan-2026-03-09.md](archive/soul-ai-root-thinning-plan-2026-03-09.md) | アーカイブ | soul_ai を段階的に crate へ寄せて root を薄くする計画 |
 | [archive/soul-ai-root-thinning-plan-2026-03-11 copy 1.md](archive/soul-ai-root-thinning-plan-2026-03-11 copy 1.md) | アーカイブ | src/systems/soul_aiの計画。 |
 | [archive/soul-ai-root-thinning-plan-2026-03-11 copy 2.md](archive/soul-ai-root-thinning-plan-2026-03-11 copy 2.md) | アーカイブ | src/systems/soul_aiの計画。 |
@@ -114,3 +116,4 @@
 | [archive/workspace-construction-phase-extraction.md](archive/workspace-construction-phase-extraction.md) | アーカイブ | Floor/Wall 建設で使うフェーズ・状態型がの計画。 |
 | [archive/zone-placement-refactor-plan-2026-03-05.md](archive/zone-placement-refactor-plan-2026-03-05.md) | アーカイブ | zone_placement.rsの計画。 |
 | [archive/zone-removal-preview-diff-plan-2026-03-01.md](archive/zone-removal-preview-diff-plan-2026-03-01.md) | アーカイブ | Zone removal preview の全件更新を差分更新へ置換する計画。 |
+

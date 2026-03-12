@@ -1,7 +1,7 @@
 # Population System
 
 Soul の流入（スポーン）と流出（漂流デスポーン）を管理するシステムです。  
-関連実装は主に `src/entities/damned_soul/spawn.rs` と `src/systems/soul_ai/decide/drifting.rs` / `src/systems/soul_ai/execute/drifting.rs` にあります。
+関連実装は主に `src/entities/damned_soul/spawn.rs`、`src/systems/soul_ai/decide/drifting.rs`、および `src/systems/soul_ai/execute/mod.rs` 経由で公開される `hw_ai::soul_ai::execute::drifting` にあります。
 
 ## 1. スポーン
 
