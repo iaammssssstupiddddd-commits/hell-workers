@@ -10,6 +10,7 @@ pub use construction::{
     ConstructionSiteAccess, ConstructionSitePositions, FloorConstructionSite, FloorTileState,
     WallConstructionSite, WallTileState,
 };
+pub use events::BuildingCompletedEvent;
 pub use model::*;
 pub use mud_mixer::StoredByMixer;
 pub use mud_mixer::TargetMixer;

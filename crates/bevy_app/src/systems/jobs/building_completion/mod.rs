@@ -1,6 +1,5 @@
 mod post_process;
 mod spawn;
-mod world_update;
 
 use crate::assets::GameAssets;
 use crate::world::map::WorldMapWrite;
@@ -19,13 +18,6 @@ pub fn building_completion_system(
             &crate::systems::logistics::PendingBelongsToBlueprint,
         ),
         With<crate::systems::logistics::BucketStorage>,
-    >,
-    mut q_souls: Query<
-        (&mut Transform, Entity),
-        (
-            With<crate::entities::damned_soul::DamnedSoul>,
-            Without<super::Blueprint>,
-        ),
     >,
 ) {
     for (entity, bp, transform) in q_blueprints.iter_mut() {
@@ -57,13 +49,12 @@ pub fn building_completion_system(
             }
         }
 
-        world_update::update_world_for_completed_building(
-            &mut commands,
+        // WorldMap 更新と ObstaclePosition 配置を hw_jobs の Observer に委譲
+        commands.trigger(hw_jobs::BuildingCompletedEvent {
             building_entity,
-            bp,
-            &mut world_map,
-            &mut q_souls,
-        );
+            kind: bp.kind,
+            occupied_grids: bp.occupied_grids.clone(),
+        });
 
         post_process::apply_building_specific_post_process(
             &mut commands,
