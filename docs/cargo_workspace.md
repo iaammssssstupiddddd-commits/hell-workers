@@ -1,6 +1,7 @@
 # Cargo Workspace Guide
 
 本プロジェクトの Cargo workspace 構成と、コードをどの crate に置くべきかの判断基準をまとめたガイドです。
+なお、クレート間の依存関係と副作用（ECS）の取り扱いに関する厳密なアーキテクチャ規則については **[`docs/crate-boundaries.md`](crate-boundaries.md)** を参照してください。
 
 ## 1. 目的
 

@@ -4,7 +4,7 @@
 
 ## 開発サイクル
 
-1.  **Planning**: 変更対象を `bevy_app` / `hw_core` / `hw_world` / `hw_logistics` / `hw_jobs` のどこに置くべきか先に決める。crate 境界に影響する変更は `docs/cargo_workspace.md` と関連仕様書の更新範囲も同時に決める。
+1.  **Planning**: 変更対象をどのクレートに置くべきか、**[クレート境界とコアロジック分離の原則 (crate-boundaries.md)](crate-boundaries.md)** に従って先に決める。crate 境界に影響する変更は `docs/cargo_workspace.md` と関連仕様書の更新範囲も同時に決める。
 2.  **Execution**: 責務に合う crate で実装し、root 側は app shell と薄い互換層に保つ。作業中は必要に応じて個別 crate を確認し、完了前には `cargo check --workspace` を必ず通す。
 3.  **Verification**: 挙動変更がある場合は `cargo run` で確認する。成果報告は固定ファイルではなく PR / Issue / 会話上で行い、仕様変更は対応する `docs/*.md` に反映する。
 

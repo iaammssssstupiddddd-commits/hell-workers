@@ -19,7 +19,7 @@
 
 | Document | Status | Notes |
 |---|---|---|
-| [familiar-ai-root-slim-plan.md](familiar-ai-root-slim-plan.md) | Implementation Ready | bevy_app/familiar_ai ルート薄型化計画（adapter 維持版） |
+
 
 ## アーカイブ計画書一覧 (`docs/plans/archive`)
 
@@ -45,6 +45,7 @@
 | [archive/dream-ui-particle-update-refactor-plan-2026-03-05.md](archive/dream-ui-particle-update-refactor-plan-2026-03-05.md) | アーカイブ | visual/dream/ui_particle/update.rsの計画。 |
 | [archive/dream-visual-update.md](archive/dream-visual-update.md) | アーカイブ | Dreamビジュアル更新計画。 |
 | [archive/dream_per_soul_storage.md](archive/dream_per_soul_storage.md) | アーカイブ | 現状: Dreamはグローバルプール(`DreamPool.points`)に直接加算される。soulの睡眠レートで`DreamPool`に即時反映され、soul個別のdream貯蔵量という概念がないの提案。 |
+| [archive/familiar-ai-root-slim-plan-2026-03-13.md](archive/familiar-ai-root-slim-plan-2026-03-13.md) | アーカイブ | bevy_app/familiar_ai ルート薄型化計画（adapter 維持版） |
 | [archive/familiar-ai-root-thinning-plan-2026-03-09.md](archive/familiar-ai-root-thinning-plan-2026-03-09.md) | アーカイブ | familiar_ai を hw_ai へ寄せて root を薄くする計画 |
 | [archive/familiar-state-decision-adapter-split-plan-2026-03-12.md](archive/familiar-state-decision-adapter-split-plan-2026-03-12.md) | アーカイブ | src/systems/familiar_ai/decide/state_decision.rsの計画。 |
 | [archive/familiar-task-management-hw-ai-extraction-plan-2026-03-11.md](archive/familiar-task-management-hw-ai-extraction-plan-2026-03-11.md) | アーカイブ | Familiar Task Management `hw_ai` 抽出 実装計画 |
@@ -93,6 +94,7 @@
 | [archive/refactor-roadmap-2026-02-22.md](archive/refactor-roadmap-2026-02-22.md) | アーカイブ | 現行実装を前提にした全体リファクタ実行計画（回帰テスト追加はスコープ外）。 |
 | [archive/refactor-top5-followups-plan-2026-03-02.md](archive/refactor-top5-followups-plan-2026-03-02.md) | アーカイブ | 直近レビューで抽出した5件（運搬request重複、UI粒子更新肥大、assignment builder重複、pathfinding隠れ状態、冗長分岐）を段階的に解消するの計画。 |
 | [archive/remove-instockpile-claimedby.md](archive/remove-instockpile-claimedby.md) | アーカイブ | `InStockpile`/`ClaimedBy` 削除統合計画。 |
+| [archive/remove-reexport-indirections-plan.md](archive/remove-reexport-indirections-plan.md) | アーカイブ | bevy_appの計画。 |
 | [archive/request-unification-plan-2026-02-14.md](archive/request-unification-plan-2026-02-14.md) | アーカイブ | Request方式一本化計画。 |
 | [archive/rest-area-system.md](archive/rest-area-system.md) | アーカイブ | 休憩所（Rest Area）システム提案。 |
 | [archive/room-detection-hw-world-extraction-plan-2026-03-11.md](archive/room-detection-hw-world-extraction-plan-2026-03-11.md) | アーカイブ | src/systems/room/detection.rsの計画。 |
