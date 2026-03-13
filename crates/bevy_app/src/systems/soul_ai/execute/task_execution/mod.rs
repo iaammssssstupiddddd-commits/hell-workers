@@ -4,12 +4,26 @@
 //! WorldMapRead/unassign_task に依存するシステム関数を保持する。
 
 // 後方互換のための型/モジュール re-export
-pub mod common;
+pub mod common {
+    //! 共通ユーティリティ — 実装は hw_ai に移設済み
+    pub use hw_soul_ai::soul_ai::execute::task_execution::common::*;
+}
 pub mod context;
-pub mod handler;
-pub mod move_plant;
+pub mod handler {
+    //! タスクハンドラ — 実装は hw_ai に移設済み
+    pub use hw_soul_ai::soul_ai::execute::task_execution::handler::{
+        TaskHandler, dispatch::execute_haul_with_wheelbarrow, dispatch::run_task_handler,
+    };
+}
+pub mod move_plant {
+    //! Plant 移動タスク — 実装は hw_ai に移設済み
+    pub use hw_soul_ai::soul_ai::execute::task_execution::move_plant::*;
+}
 pub mod transport_common;
-pub mod types;
+pub mod types {
+    //! AssignedTask 型定義 — 実装は hw_ai に移設済み
+    pub use hw_soul_ai::soul_ai::execute::task_execution::types::*;
+}
 
 pub use types::AssignedTask;
 

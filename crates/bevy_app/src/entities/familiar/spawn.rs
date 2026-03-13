@@ -11,7 +11,7 @@ use crate::world::map::{WorldMap, WorldMapRead};
 use hw_core::constants::*;
 
 use super::components::*;
-use super::voice::FamiliarVoice;
+use hw_visual::speech::FamiliarVoice;
 
 /// 使い魔のスポーンイベント
 #[derive(Message)]

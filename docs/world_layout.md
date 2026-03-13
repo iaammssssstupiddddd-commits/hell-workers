@@ -25,7 +25,7 @@
 - **方向**: マップを西から東へ**横断**します。
 - **シード**: 42 (固定)
 - **川幅**: 5タイル (`RIVER_WIDTH`)
-- **生成ロジック**: 純粋な生成処理は `crates/hw_world/src/river.rs` にあり、root 側の `crates/bevy_app/src/world/river.rs` は互換 re-export 層です。
+- **生成ロジック**: 純粋な生成処理は `crates/hw_world/src/river.rs` にあり、`crates/bevy_app/src/world/mod.rs` の inline module `pub mod river { pub use hw_world::river::...; }` として re-export されています。
 
 ### 砂浜 (`Sand`)
 - 川のタイルから上下2タイル (`SAND_WIDTH`) の範囲に自動生成。
@@ -85,4 +85,4 @@
 - [`../crates/hw_world/src/river.rs`](../crates/hw_world/src/river.rs): 川生成アルゴリズム
 - [`../crates/hw_world/src/coords.rs`](../crates/hw_world/src/coords.rs): 座標変換
 - [`../crates/bevy_app/src/world/regrowth.rs`](../crates/bevy_app/src/world/regrowth.rs): 木の再生システムの app shell
-- [`../crates/bevy_app/src/world/pathfinding.rs`](../crates/bevy_app/src/world/pathfinding.rs): 通行制御を伴うパス検索の互換層
+- `crates/bevy_app/src/world/mod.rs` (inline `pub mod pathfinding`): 通行制御を伴うパス検索の互換層（`hw_world::pathfinding` への re-export）

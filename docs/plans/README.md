@@ -1,6 +1,6 @@
 # Plans Index
 
-`docs/plans` の文書ステータス一覧（更新日: 2026-03-12）。
+`docs/plans` の文書ステータス一覧（更新日: 2026-03-13）。
 
 ## 新規計画書の作り方
 
@@ -19,8 +19,7 @@
 
 | Document | Status | Notes |
 |---|---|---|
-| [familiar-state-decision-adapter-split-plan-2026-03-12.md](familiar-state-decision-adapter-split-plan-2026-03-12.md) | Done | Familiar の `state_decision.rs` を pure outcome core と root message adapter に分離する計画。 |
-| [hw-ai-boundary-cleanup-plan-2026-03-12.md](hw-ai-boundary-cleanup-plan-2026-03-12.md) | Draft | -の計画。 |
+| [familiar-ai-root-slim-plan.md](familiar-ai-root-slim-plan.md) | Implementation Ready | bevy_app/familiar_ai ルート薄型化計画（adapter 維持版） |
 
 ## アーカイブ計画書一覧 (`docs/plans/archive`)
 
@@ -47,11 +46,13 @@
 | [archive/dream-visual-update.md](archive/dream-visual-update.md) | アーカイブ | Dreamビジュアル更新計画。 |
 | [archive/dream_per_soul_storage.md](archive/dream_per_soul_storage.md) | アーカイブ | 現状: Dreamはグローバルプール(`DreamPool.points`)に直接加算される。soulの睡眠レートで`DreamPool`に即時反映され、soul個別のdream貯蔵量という概念がないの提案。 |
 | [archive/familiar-ai-root-thinning-plan-2026-03-09.md](archive/familiar-ai-root-thinning-plan-2026-03-09.md) | アーカイブ | familiar_ai を hw_ai へ寄せて root を薄くする計画 |
+| [archive/familiar-state-decision-adapter-split-plan-2026-03-12.md](archive/familiar-state-decision-adapter-split-plan-2026-03-12.md) | アーカイブ | src/systems/familiar_ai/decide/state_decision.rsの計画。 |
 | [archive/familiar-task-management-hw-ai-extraction-plan-2026-03-11.md](archive/familiar-task-management-hw-ai-extraction-plan-2026-03-11.md) | アーカイブ | Familiar Task Management `hw_ai` 抽出 実装計画 |
 | [archive/familiar-ui-hw-ui-migration-plan-2026-03-11.md](archive/familiar-ui-hw-ui-migration-plan-2026-03-11.md) | アーカイブ | -の計画。 |
 | [archive/floor-construction.md](archive/floor-construction.md) | アーカイブ | 床建築システムの実装計画。 |
 | [archive/global-transport-request-plan.md](archive/global-transport-request-plan.md) | アーカイブ | 運搬系のグローバル request 化計画。 |
 | [archive/hover-action-button.md](archive/hover-action-button.md) | アーカイブ | Plant ホバーアクションボタン（プレースホルダー）実装計画 |
+| [archive/hw-ai-boundary-cleanup-plan-2026-03-12.md](archive/hw-ai-boundary-cleanup-plan-2026-03-12.md) | アーカイブ | -の計画。 |
 | [archive/hw-ai-crate-phase2-2026-03-08 copy 1.md](archive/hw-ai-crate-phase2-2026-03-08 copy 1.md) | アーカイブ | Phase 1 時点ではの計画。 |
 | [archive/hw-ai-crate-phase2-2026-03-08 copy 2.md](archive/hw-ai-crate-phase2-2026-03-08 copy 2.md) | アーカイブ | Phase 1 時点ではの計画。 |
 | [archive/hw-ai-crate-phase2-2026-03-08 copy.md](archive/hw-ai-crate-phase2-2026-03-08 copy.md) | アーカイブ | Phase 1 時点ではの計画。 |

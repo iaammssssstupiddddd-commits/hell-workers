@@ -39,11 +39,11 @@
 | [archive/dream_general_visuals.md](archive/dream_general_visuals.md) | Dreamシステム全体 ビジュアルアップデート提案 |
 | [archive/dream_tree_planting_proposal.md](archive/dream_tree_planting_proposal.md) | Dream を使った植林システム提案 |
 | [archive/familiar-task-management-hw-ai-extraction-proposal-2026-03-11.md](archive/familiar-task-management-hw-ai-extraction-proposal-2026-03-11.md) | `src/systems/familiar_ai/decide/task_management/` には、候補収集、優先度評価、搬送元選定、予約影反映、`AssignedTask` 構築など、使い魔 AI の中核ロジックがまとまっていたの提案。 |
-| [archive/hw-ai-familiar-soul-split-proposal-2026-03-13.md](archive/hw-ai-familiar-soul-split-proposal-2026-03-13.md) | `hw_ai` を `hw_familiar_ai` と `hw_soul_ai` に分割する提案。**実装済み**。 |
 | [archive/high_priority_performance_plan.md](archive/high_priority_performance_plan.md) | `try_assign_for_workers` でワーカーごとに候補収集と評価を実行しているの提案。 |
 | [archive/hw-ai-crate copy.md](archive/hw-ai-crate copy.md) | 現状: `src/systems/soul_ai/`（98ファイル）と `src/systems/familiar_ai/`（70ファイル）が root crate に存在し、全479ファイルの **35%** を占める。root crate 内のどのファイルを変更しても、AI コード含む全体が再コンパイル対象になるの提案。 |
 | [archive/hw-ai-crate-phase2-2026-03-08.md](archive/hw-ai-crate-phase2-2026-03-08.md) | Phase 1 時点ではの計画。 |
 | [archive/hw-ai-crate.md](archive/hw-ai-crate.md) | 現状: `src/systems/soul_ai/`（98ファイル）と `src/systems/familiar_ai/`（70ファイル）が root crate に存在し、全479ファイルの **35%** を占める。root crate 内のどのファイルを変更しても、AI コード含む全体が再コンパイル対象になるの提案。 |
+| [archive/hw-ai-familiar-soul-split-proposal-2026-03-13.md](archive/hw-ai-familiar-soul-split-proposal-2026-03-13.md) | `hw_ai` を `hw_familiar_ai` と `hw_soul_ai` に分割する提案。**実装済み**。 |
 | [archive/hw-ui-crate.md](archive/hw-ui-crate.md) | 現状: `src/interface/`（94ファイル）が root crate に存在し、全479ファイルの **20%** を占める。UI はゲームロジックと同一コンパイル単位にあり、ロジック変更で UI が再コンパイルされる（逆も同様）の提案。 |
 | [archive/pathfinding-optimization.md](archive/pathfinding-optimization.md) | 経路探索システムの最適化提案 |
 | [archive/performance-bottlenecks-proposal-2026-02-26.md](archive/performance-bottlenecks-proposal-2026-02-26.md) | **現状**: Soul 数が増加するにつれてフレームレートが低下する傾向がある。Space/Spatial グリッドの同期、Room 検出、Soul AI の決定処理など複数の領域で毎フレーム・定期的な全件処理が行われているの提案。 |

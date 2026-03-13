@@ -81,7 +81,7 @@ pub fn entity_list_tab_focus_system(
             .unwrap_or(0)
     };
 
-    super::super::selection_focus::select_entity_and_focus_camera(
+    hw_ui::list::select_entity_and_focus_camera(
         candidates[next_index],
         "tab-focus",
         &mut selected_entity,

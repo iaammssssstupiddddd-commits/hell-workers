@@ -4,7 +4,9 @@ use bevy::prelude::*;
 use hw_ui::UiIntent;
 
 mod navigation;
-mod visual;
+mod visual {
+    pub use hw_ui::list::{apply_row_highlight, entity_list_visual_feedback_system};
+}
 
 pub use hw_ui::list::entity_list_section_toggle_system;
 pub use navigation::{
@@ -20,7 +22,7 @@ fn focus_list_entity(
     q_camera: &mut Query<&mut Transform, With<crate::interface::camera::MainCamera>>,
     q_transforms: &Query<&GlobalTransform>,
 ) {
-    super::selection_focus::select_entity_and_focus_camera(
+    hw_ui::list::select_entity_and_focus_camera(
         entity,
         label,
         selected_entity,

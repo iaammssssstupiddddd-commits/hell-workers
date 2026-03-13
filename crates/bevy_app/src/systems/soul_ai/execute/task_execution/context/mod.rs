@@ -1,4 +1,6 @@
-pub mod execution;
+pub mod execution {
+    pub use hw_soul_ai::soul_ai::execute::task_execution::context::TaskExecutionContext;
+}
 
 pub use execution::TaskExecutionContext;
 pub use hw_familiar_ai::familiar_ai::decide::task_management::FamiliarTaskAssignmentQueries;

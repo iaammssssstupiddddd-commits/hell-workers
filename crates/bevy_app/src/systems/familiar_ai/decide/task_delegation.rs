@@ -1,3 +1,10 @@
+//! root wrapper / orchestration: WorldMap / concrete SpatialGrid / PathfindingContext /
+//! ConstructionSiteAccess / timer / perf metrics を束ねるタスク委譲システム。
+//!
+//! pure task search / scoring / source selection の core は
+//! hw_familiar_ai::familiar_ai::decide::task_management::TaskManager へ委譲する。
+//! WorldMapRead / SpatialGrid / pathfinding 依存はこのファイルから外せないため root に残留。
+
 use crate::entities::damned_soul::{DamnedSoul, IdleState};
 use crate::entities::familiar::FamiliarCommand;
 use crate::relationships::CommandedBy;

@@ -1,6 +1,8 @@
-//! 使い魔AIの処理ロジック
+//! root adapter: FamiliarDelegationContext は WorldMap / PathfindingContext /
+//! transmute_lens_filtered を直接保持するため root に残留。
 //!
-//! `familiar_ai_system` の処理を複数の関数に分割して管理します。
+//! squad / recruitment の pure helper は hw_familiar_ai 側に定義済みで先頭の `pub use` から re-export する。
+//! 追加の関数抽出余地はない（root 依存を外せる純 helper がないため）。
 
 use crate::entities::damned_soul::{Destination, IdleBehavior, Path};
 use crate::entities::familiar::FamiliarOperation;

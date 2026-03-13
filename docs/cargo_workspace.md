@@ -254,11 +254,15 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 - full-fat query から narrow view への変換や、root-only resource を伴う request 出力 adapter
 - UI システム
 - `Commands` で複雑な Entity 生成を行うもの
-- pathfinding / blueprint entity query を伴う auto-gather orchestration
+- pathfinding / blueprint entity query を伴う auto-gather orchestration（`blueprint_auto_gather_system` は root に残留）
 - `task_execution_system` 本体 — `TaskExecutionSoulQuery` / `WorldMapRead` / root `unassign_task` facade / `OnTaskCompleted` を束ねる root wrapper として残留
 - `helpers/work::unassign_task` — 公開 API と `WorkingOn` / `OnTaskAbandoned` 契約を root で確定する facade
 - `execute/task_execution/transport_common/*` — root 側互換 helper と `hw_jobs::lifecycle` re-export。wrapper ではなく helper 層として残留
 - `execute/task_execution/{types,common,handler,move_plant}` / `context/execution.rs` — 互換 import path のための thin shell
+- `familiar_ai/decide/task_delegation.rs` — root wrapper / orchestration。`WorldMapRead` / concrete SpatialGrid / `PathfindingContext` / `ConstructionSiteAccess` / timer / perf metrics を束ねる
+- `familiar_ai/decide/familiar_processor.rs` — root adapter。`FamiliarDelegationContext` が `WorldMap` / `PathfindingContext` / `transmute_lens_filtered` を直接保持するため root に残留
+- `familiar_ai/helpers/query_types.rs` — root full-fat query bridge。`FamiliarSoulQuery` / `FamiliarStateQuery` / `FamiliarTaskQuery` の 3型（narrow query は hw_familiar_ai 側に定義済みで re-export）
+- `familiar_ai/perceive/resource_sync.rs` — root perceive system。`SharedResourceCache` の再構築と実ワールドとの同期は root の責務
 
 移設済み system の登録ルール:
 

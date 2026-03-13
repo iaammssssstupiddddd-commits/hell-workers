@@ -1,3 +1,9 @@
+//! root helper: is_reachable は WorldMap + PathfindingContext 依存のため root に残留。
+//!
+//! pure helper（OwnerInfo, SourceCandidate, resource_rank, compare_auto_idle_for_cleanup 等）は
+//! hw_familiar_ai::familiar_ai::decide::auto_gather_for_blueprint::helpers に実装済みで re-export 済み。
+//! 追加の pure helper 抽出余地はない。
+
 pub(super) use hw_familiar_ai::familiar_ai::decide::auto_gather_for_blueprint::helpers::{
     OwnerInfo, STAGE_COUNT, SourceCandidate, SupplyBucket, compare_auto_idle_for_cleanup,
     resource_rank, work_type_for_resource,
