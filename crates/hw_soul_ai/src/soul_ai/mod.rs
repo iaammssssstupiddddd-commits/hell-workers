@@ -1,10 +1,12 @@
 use bevy::prelude::*;
 
-use hw_core::system_sets::SoulAiSystemSet;
+use hw_core::system_sets::{GameSystemSet, SoulAiSystemSet};
 
+pub mod building_completed;
 pub mod decide;
 pub mod execute;
 pub mod helpers;
+pub mod pathfinding;
 pub mod perceive;
 pub mod update;
 
@@ -54,6 +56,16 @@ impl Plugin for SoulAiCorePlugin {
             )
             .add_observer(update::vitals::on_task_completed_motivation_bonus)
             .add_observer(update::vitals::on_encouraged_effect)
-            .add_observer(update::vitals::on_soul_recruited_effect);
+            .add_observer(update::vitals::on_soul_recruited_effect)
+            .add_observer(building_completed::on_building_completed)
+            .add_systems(
+                Update,
+                (
+                    pathfinding::soul_stuck_escape_system
+                        .in_set(GameSystemSet::Actor)
+                        .before(pathfinding::pathfinding_system),
+                    pathfinding::pathfinding_system.in_set(GameSystemSet::Actor),
+                ),
+            );
     }
 }
