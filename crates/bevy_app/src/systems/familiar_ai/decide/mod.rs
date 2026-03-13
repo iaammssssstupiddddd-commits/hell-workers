@@ -1,10 +1,4 @@
-use bevy::ecs::system::SystemParam;
-use bevy::prelude::*;
-
-use crate::events::{
-    EncouragementRequest, FamiliarAiStateChangedEvent, FamiliarIdleVisualRequest,
-    FamiliarStateRequest, SquadManagementRequest,
-};
+pub use hw_familiar_ai::familiar_ai::decide::FamiliarDecideOutput;
 
 pub mod auto_gather_for_blueprint;
 pub mod encouragement;
@@ -20,7 +14,6 @@ pub mod scouting {
 pub mod squad {
     pub use hw_familiar_ai::familiar_ai::decide::squad::SquadManager;
 }
-pub mod state_decision;
 pub mod state_handlers {
     pub use hw_familiar_ai::familiar_ai::decide::state_handlers::{
         StateTransitionResult, idle, scouting, searching, supervising,
@@ -41,14 +34,4 @@ pub mod task_management {
 
 pub mod following {
     pub use hw_familiar_ai::familiar_ai::decide::following::*;
-}
-
-/// Familiar Decide フェーズの共通出力チャネル
-#[derive(SystemParam)]
-pub struct FamiliarDecideOutput<'w> {
-    pub state_changed_events: MessageWriter<'w, FamiliarAiStateChangedEvent>,
-    pub state_requests: MessageWriter<'w, FamiliarStateRequest>,
-    pub squad_requests: MessageWriter<'w, SquadManagementRequest>,
-    pub encouragement_requests: MessageWriter<'w, EncouragementRequest>,
-    pub idle_visual_requests: MessageWriter<'w, FamiliarIdleVisualRequest>,
 }
