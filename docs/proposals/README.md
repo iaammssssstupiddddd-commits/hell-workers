@@ -20,7 +20,6 @@
 | [08_visual_update_prompts.md](08_visual_update_prompts.md) | ビジュアル更新プロンプト集 |
 | [architecture-improvements-2026.md](architecture-improvements-2026.md) | アーキテクチャ改善提案 (Architecture Improvement Proposals) |
 | [building-visual-layer-plan-2026-03-12.md](building-visual-layer-plan-2026-03-12.md) | **の計画。 |
-| [crate-boundaries-refactor-plan.md](crate-boundaries-refactor-plan.md) | クレート境界とコアロジック分離のリファクタリング提案 |
 | [soul_spawn_despawn_optimization.md](soul_spawn_despawn_optimization.md) | Soul Spawn/Despawn 最適化提案 |
 | [spatial-grid-architecture-plan-2026-03-12.md](spatial-grid-architecture-plan-2026-03-12.md) | **の計画。 |
 | [speech_optimization.md](speech_optimization.md) | スピーチシステム最適化提案 |
