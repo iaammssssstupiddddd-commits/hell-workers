@@ -4,7 +4,6 @@ use bevy::prelude::*;
 use hw_core::events::ResourceReservationRequest;
 use hw_core::relationships::{ManagedBy, TaskWorkers};
 use hw_jobs::{Blueprint, Designation, Priority, TaskSlots};
-use hw_jobs::construction::ConstructionSitePositions;
 use hw_logistics::SharedResourceCache;
 use hw_logistics::zone::Stockpile;
 
@@ -102,44 +101,8 @@ pub struct FamiliarStorageAccess<'w, 's> {
     >,
 }
 
-/// 建設サイトへの読み取り専用アクセス
-#[derive(SystemParam)]
-pub struct ConstructionSiteAccess<'w, 's> {
-    pub floor_sites: Query<
-        'w,
-        's,
-        (
-            &'static Transform,
-            &'static hw_jobs::construction::FloorConstructionSite,
-            Option<&'static TaskWorkers>,
-        ),
-    >,
-    pub wall_sites: Query<
-        'w,
-        's,
-        (
-            &'static Transform,
-            &'static hw_jobs::construction::WallConstructionSite,
-            Option<&'static TaskWorkers>,
-        ),
-    >,
-}
-
-impl ConstructionSitePositions for ConstructionSiteAccess<'_, '_> {
-    fn floor_site_pos(&self, site: Entity) -> Option<Vec2> {
-        self.floor_sites
-            .get(site)
-            .ok()
-            .map(|(t, _, _)| t.translation.truncate())
-    }
-
-    fn wall_site_pos(&self, site: Entity) -> Option<Vec2> {
-        self.wall_sites
-            .get(site)
-            .ok()
-            .map(|(t, _, _)| t.translation.truncate())
-    }
-}
+/// 建設サイトへの読み取り専用アクセス（実装は `hw_jobs::ConstructionSiteAccess`）
+pub use hw_jobs::ConstructionSiteAccess;
 
 /// 倉庫・設備・ブループリントへの読み取り専用アクセス
 #[derive(SystemParam)]
