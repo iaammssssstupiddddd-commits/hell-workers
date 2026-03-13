@@ -10,7 +10,10 @@ pub struct FamiliarAiCorePlugin;
 
 impl Plugin for FamiliarAiCorePlugin {
     fn build(&self, app: &mut App) {
-        app.register_type::<decide::encouragement::EncouragementCooldown>()
+        app.init_resource::<decide::resources::FamiliarTaskDelegationTimer>()
+            .init_resource::<decide::resources::ReachabilityFrameCache>()
+            .init_resource::<decide::resources::FamiliarDelegationPerfMetrics>()
+            .register_type::<decide::encouragement::EncouragementCooldown>()
             .add_systems(
                 Update,
                 (
@@ -21,10 +24,17 @@ impl Plugin for FamiliarAiCorePlugin {
             )
             .add_systems(
                 Update,
+                decide::following::following_familiar_system
+                    .in_set(FamiliarAiSystemSet::Decide),
+            )
+            .add_systems(
+                Update,
                 (
-                    decide::following::following_familiar_system,
                     decide::state_decision::familiar_ai_state_system,
+                    ApplyDeferred,
+                    decide::task_delegation::familiar_task_delegation_system,
                 )
+                    .chain()
                     .in_set(FamiliarAiSystemSet::Decide),
             )
             .add_systems(

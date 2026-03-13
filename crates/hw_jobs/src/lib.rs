@@ -7,8 +7,8 @@ pub mod mud_mixer;
 
 pub use assigned_task::*;
 pub use construction::{
-    ConstructionSitePositions, FloorConstructionSite, FloorTileState, WallConstructionSite,
-    WallTileState,
+    ConstructionSiteAccess, ConstructionSitePositions, FloorConstructionSite, FloorTileState,
+    WallConstructionSite, WallTileState,
 };
 pub use model::*;
 pub use mud_mixer::StoredByMixer;

@@ -85,23 +85,23 @@
 
 ### 5.2. 主要モジュール
 
-**root adapter / orchestration（意図的な残留）**
+**root orchestration（意図的な残留）**
 
 | ファイル | 区分 | root 残留理由 |
 |:---|:---|:---|
-| `decide/familiar_processor.rs` | root adapter | `FamiliarDelegationContext` が `WorldMap` / `PathfindingContext` / `transmute_lens_filtered` を直接保持。先頭の `pub use` は hw_familiar_ai へ委譲済み（追加抽出余地なし） |
-| `decide/state_decision.rs` | root adapter | `FamiliarSoulQuery`（`Inventory` 依存）の lens 構築と `FamiliarDecideOutput`（root `SystemParam`）への書き込みは root にしか置けない |
-| `decide/task_delegation.rs` | root wrapper / orchestration | `WorldMapRead` / concrete SpatialGrid / `PathfindingContext` / `ConstructionSiteAccess` / timer / perf metrics を束ねる。pure core は hw_familiar_ai の `TaskManager` へ委譲 |
 | `decide/auto_gather_for_blueprint.rs` | root orchestration | `Commands` / pathfinding / entity query / designation 付与・cleanup を担う。pure 計画層は hw_familiar_ai へ委譲 |
 | `decide/auto_gather_for_blueprint/actions.rs` | root helper | designation marker 付与・回収など world 反映責務を持つ |
 | `decide/auto_gather_for_blueprint/helpers.rs` | root helper | `is_reachable` は `WorldMap` + `PathfindingContext` 依存。pure helper（`OwnerInfo`, `resource_rank` 等）は hw_familiar_ai 側に抽出済みで re-export 済み |
-| `helpers/query_types.rs` | root full-fat query bridge | narrow query 5型は hw_familiar_ai 側に定義済みで re-export。root 側は `FamiliarSoulQuery` / `FamiliarStateQuery` / `FamiliarTaskQuery` の 3型のみ（root 固有の `DamnedSoul` / `AssignedTask` / `Inventory` を束ねる full-fat query） |
 | `perceive/resource_sync.rs` | root perceive system | `SharedResourceCache` 再構築・`AssignedTask`/`Designation`/`TransportRequest`/relationship の実ワールド再構築は root の責務。`apply_reservation_op` / `apply_reservation_requests_system` は **`hw_logistics` に移設済み** |
 
-**thin re-export（pure core は hw_familiar_ai に実装済み）**
+**thin re-export（実装は hw_familiar_ai に移設済み）**
 
 | ファイル | 内容 |
 |:---|:---|
+| `decide/state_decision.rs` | `familiar_ai_state_system` 実体は `hw_familiar_ai::decide::state_decision` に移設済み。登録も `FamiliarAiCorePlugin` に移設済み |
+| `decide/task_delegation.rs` | `familiar_task_delegation_system` / `ReachabilityFrameCache` / `ReachabilityCacheKey` の実体は `hw_familiar_ai::decide::task_delegation` / `resources` に移設済み。登録も `FamiliarAiCorePlugin` に移設済み |
+| `decide/familiar_processor.rs` | `FamiliarDelegationContext` / `process_task_delegation_and_movement` 実体は `hw_familiar_ai::decide::delegation_context` に移設済み |
+| `helpers/query_types.rs` | `FamiliarStateQuery` / `FamiliarSoulQuery` / `FamiliarTaskQuery` および narrow 5型すべて `hw_familiar_ai::decide::query_types` への re-export |
 | `decide/state_handlers/` | `hw_familiar_ai::familiar_ai::decide::state_handlers` への thin re-export |
 | `decide/squad.rs` | `SquadManager` 実体は `hw_familiar_ai` にある |
 | `decide/recruitment.rs` | `RecruitmentManager` 実体は `hw_familiar_ai` にある |
@@ -123,10 +123,14 @@
 
 **hw_familiar_ai 分担**: `FamiliarAiPlugin` は `hw_familiar_ai::FamiliarAiCorePlugin` を内部で `add_plugins` する。`WorldMap`/SpatialGrid 依存のシステムは root 残留。
 
-- `FamiliarAiCorePlugin` が直接登録するのは `perceive/state_detection`、`decide/following`、`execute/state_apply`、`execute/state_log` と `EncouragementCooldown` の type registration
-- root adapter が呼び出す pure logic は `decide/state_decision` / `decide/query_types` / `decide/helpers` / `decide/recruitment` / `decide/encouragement` / `decide/squad` / `decide/scouting` / `decide/supervising` / `decide/state_handlers` / `decide/task_management`
+- `FamiliarAiCorePlugin` が直接登録するもの：
+  - **Resources**: `FamiliarTaskDelegationTimer` / `FamiliarDelegationPerfMetrics` / `ReachabilityFrameCache`
+  - **Perceive**: `detect_state_changes_system` / `detect_command_changes_system`
+  - **Decide**: `following_familiar_system`（独立）、`state_decision → ApplyDeferred → task_delegation`（chain）
+  - **Execute**: `familiar_state_apply_system` / `handle_state_changed_system`、`EncouragementCooldown` の type registration
+- root に残るのは `auto_gather_for_blueprint`（Commands 依存）/ `encouragement`（system 関数のみ）/ `perceive/resource_sync`（ECS 実状態の再構築）と SpatialGrid の `init_resource`・`configure_sets` の配線のみ
+- `ConstructionSiteAccess` は **`hw_jobs::construction`** に移設済み（`hw_soul_ai` ではない）
 - Blueprint auto gather の純計画層は `decide/auto_gather_for_blueprint/{planning,demand,supply,helpers}` に置き、root は orchestration だけを担う
-- root には `state_decision` / `task_delegation` / `familiar_processor` / `encouragement` / `auto_gather_for_blueprint` の adapter/wrapper と `WorldMap` / concrete SpatialGrid / pathfinding 依存、`ConstructionSiteAccess` の trait 実装だけを残す
 
 **プラグイン登録**: `FamiliarAiPlugin` は `crates/bevy_app/src/plugins/logic.rs` の `LogicPlugin` 内で登録される（`SoulAiPlugin` と同所）。
 

@@ -6,16 +6,19 @@ use hw_core::events::{
 };
 
 pub mod auto_gather_for_blueprint;
+pub mod delegation_context;
 pub mod encouragement;
 pub mod following;
 pub mod helpers;
 pub mod query_types;
 pub mod recruitment;
+pub mod resources;
 pub mod scouting;
 pub mod squad;
 pub mod state_decision;
 pub mod state_handlers;
 pub mod supervising;
+pub mod task_delegation;
 pub mod task_management;
 
 /// Familiar Decide フェーズの共通出力チャネル
