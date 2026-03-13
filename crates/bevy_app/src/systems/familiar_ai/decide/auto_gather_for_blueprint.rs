@@ -1,3 +1,8 @@
+//! root orchestration: Commands / pathfinding / entity query / designation 付与・cleanup を担う。
+//!
+//! 純計画層（demand / planning / supply / pure helpers）は hw_familiar_ai::familiar_ai::decide::auto_gather_for_blueprint へ委譲する。
+//! Commands / WorldMap / PathfindingContext 依存はこのファイルから外せないため root に残留。
+
 use crate::entities::familiar::{ActiveCommand, FamiliarCommand};
 use crate::relationships::{LoadedIn, ManagedBy, StoredIn, TaskWorkers};
 use crate::systems::command::TaskArea;

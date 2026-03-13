@@ -2,19 +2,16 @@
 //!
 //! ツールチップ、モードテキスト、タスクサマリー、およびボタン操作を管理します。
 
-mod common;
-mod dialog;
-mod hover_action;
 mod intent_handler;
 mod menu_actions;
 mod mode;
 mod status_display;
 mod tooltip;
 
-pub(crate) use common::despawn_context_menus;
+pub(crate) use hw_ui::interaction::common::despawn_context_menus;
 pub(crate) use intent_handler::handle_ui_intent;
 
-pub use hover_action::hover_action_button_system;
+pub use hw_ui::interaction::hover_action::hover_action_button_system;
 pub use status_display::{
     task_summary_ui_system, update_area_edit_preview_ui_system, update_dream_loss_popup_ui_system,
     update_dream_pool_display_system, update_fps_display_system, update_mode_text_system,
@@ -29,6 +26,8 @@ use crate::app_contexts::{
 use crate::assets::GameAssets;
 use crate::entities::familiar::{Familiar, FamiliarOperation};
 use hw_ui::components::*;
+use hw_ui::interaction::common::update_interaction_color;
+use hw_ui::interaction::dialog::close_operation_dialog;
 use hw_ui::theme::UiTheme;
 use crate::systems::command::TaskMode;
 use crate::systems::jobs::{Door, DoorState, apply_door_state};
@@ -142,12 +141,12 @@ pub fn ui_interaction_system(
     theme: Res<UiTheme>,
 ) {
     for (interaction, menu_button, mut color) in interaction_query.iter_mut() {
-        common::update_interaction_color(*interaction, &mut color, &theme);
+        update_interaction_color(*interaction, &mut color, &theme);
         if *interaction != Interaction::Pressed {
             continue;
         }
 
-        common::despawn_context_menus(&mut commands, &q_context_menu);
+        despawn_context_menus(&mut commands, &q_context_menu);
         menu_actions::handle_pressed_action(menu_button.0, &mut ui_intent_writer);
     }
 }
@@ -266,9 +265,9 @@ pub fn update_operation_dialog_system(
                 }
             }
         } else {
-            dialog::close_operation_dialog(&mut q_dialog);
+            close_operation_dialog(&mut q_dialog);
         }
     } else {
-        dialog::close_operation_dialog(&mut q_dialog);
+        close_operation_dialog(&mut q_dialog);
     }
 }

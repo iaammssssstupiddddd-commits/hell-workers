@@ -2,7 +2,6 @@ mod building_completion;
 pub mod construction_shared;
 pub mod door;
 pub mod floor_construction;
-mod mud_mixer;
 pub mod wall_construction;
 
 pub use building_completion::building_completion_system;
@@ -13,4 +12,4 @@ pub use hw_jobs::model::{
     ProvisionalWall, RestArea, Rock, SandPile, TargetBlueprint, TaskSlots, Tree, TreeVariant,
     WorkType,
 };
-pub use mud_mixer::{MudMixerStorage, StoredByMixer, TargetMixer};
+pub use hw_jobs::mud_mixer::{MudMixerStorage, StoredByMixer, TargetMixer};
