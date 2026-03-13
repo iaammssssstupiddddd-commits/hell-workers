@@ -54,13 +54,13 @@ impl Plugin for FamiliarAiPlugin {
                     .before(FamiliarAiSystemSet::Decide),
                 // === Decide Phase ===
                 ((
-                    decide::state_decision::familiar_ai_state_system,
                     decide::auto_gather_for_blueprint::blueprint_auto_gather_system,
                     ApplyDeferred,
                     decide::task_delegation::familiar_task_delegation_system,
                     decide::encouragement::encouragement_decision_system,
                 )
-                    .chain(),)
+                    .chain()
+                    .after(hw_familiar_ai::familiar_ai::decide::state_decision::familiar_ai_state_system),)
                     .in_set(FamiliarAiSystemSet::Decide),
                 // === Execute Phase ===
                 (
