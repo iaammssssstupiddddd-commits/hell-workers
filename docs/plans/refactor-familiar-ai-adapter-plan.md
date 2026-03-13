@@ -72,7 +72,7 @@ hw_world     = { path = "../hw_world" }     # ✅ WorldMap, PathfindingContext
 hw_spatial   = { path = "../hw_spatial" }   # ✅ SpatialGrid, DesignationSpatialGrid
 ```
 
-M1（state_decision）は Cargo.toml 変更不要。M2 で `ConstructionSiteAccess` の扱いを決定後に判断。
+M1（state_decision）は Cargo.toml 変更不要。M2 で `ConstructionSiteAccess` を `hw_jobs` に移動する。
 
 ## 3. スコープ
 
@@ -81,11 +81,11 @@ M1（state_decision）は Cargo.toml 変更不要。M2 で `ConstructionSiteAcce
 1. `familiar_ai_state_system` を `hw_familiar_ai::FamiliarAiCorePlugin` で登録する
 2. `familiar_task_delegation_system` を `hw_familiar_ai::FamiliarAiCorePlugin` で登録する
 3. それに必要な型（`FamiliarStateQuery`/`FamiliarSoulQuery`/`FamiliarTaskQuery`/`FamiliarDecideOutput`/`FamiliarTaskDelegationTimer`/`FamiliarDelegationPerfMetrics`/`FamiliarDelegationContext`）を `hw_familiar_ai` へ移動する
+4. **【M2前提】** `ConstructionSiteAccess` を `hw_soul_ai` から `hw_jobs` へ移動する（案Bの採用）
 
 ### 非対象（Out of Scope）
 
 - Soul AI の登録移譲（別計画で実施）
-- `ConstructionSiteAccess` を `hw_jobs` へ移動するリファクタ（M2 の事前タスクとして別 PR にする選択肢あり）
 - `GameSystemSet` / `FamiliarAiSystemSet` の定義変更
 
 ## 4. 実装方針
@@ -97,6 +97,7 @@ M1（state_decision）は Cargo.toml 変更不要。M2 で `ConstructionSiteAcce
 ## 5. マイルストーン
 
 ### M1: `familiar_ai_state_system` の移譲
+
 
 #### M1-1: `FamiliarStateQuery` / `FamiliarSoulQuery` の移動
 
@@ -161,10 +162,18 @@ M1（state_decision）は Cargo.toml 変更不要。M2 で `ConstructionSiteAcce
 
 ### M2: `familiar_task_delegation_system` の移譲
 
-> **前提判断**: `ConstructionSiteAccess` の扱いを事前に決定すること。
-> - **案A**: `hw_familiar_ai/Cargo.toml` に `hw_soul_ai = { path = "../hw_soul_ai" }` を追加（簡単・密結合）
-> - **案B**: `ConstructionSiteAccess` を `hw_jobs` へ移動してから着手（推奨・クリーン）
-> - 案Bは本マイルストーンの前提タスクとして別PRで実施する。
+> **前提判断**: `ConstructionSiteAccess` の扱いについて、**案B（`hw_jobs` への移動）** を採用する。
+> M2 に着手する最初のステップとして、これを実施する。
+
+#### M2-0: `ConstructionSiteAccess` の `hw_jobs` への移動 (前提タスク)
+
+- **変更ファイル（移動元）**: `crates/hw_soul_ai/src/soul_ai/execute/task_execution/context/access.rs`
+- **変更ファイル（移動先）**: `crates/hw_jobs/src/construction.rs`
+- **作業内容**:
+  1. `ConstructionSiteAccess` 構造体と、その `ConstructionSitePositions` 実装を `hw_jobs/src/construction.rs` へ移動する。
+  2. `hw_jobs/src/lib.rs` で `pub use` する。
+  3. `bevy_app` および `hw_soul_ai` に残る `use` パスを `hw_jobs::construction::ConstructionSiteAccess` へ修正する。
+- **完了条件**: `cargo check --workspace` が通る。
 
 #### M2-1: リソース型の移動（`FamiliarTaskDelegationTimer` / `FamiliarDelegationPerfMetrics`）
 
