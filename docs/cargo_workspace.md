@@ -215,6 +215,8 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 - `soul_ai::execute::gathering_apply` — 集会管理要求適用（Merge / Dissolve / Recruit / Leave）
 - `soul_ai::execute::gathering_spawn` — 集会発生判定と `GatheringSpawnRequest` 発行
 - `soul_ai::execute::task_assignment_apply` — `TaskAssignmentRequest` 適用。system 登録責務も `hw_soul_ai::SoulAiCorePlugin` が持つ
+- `soul_ai::pathfinding` — `pathfinding_system`（パス再利用・再探索・フォールバック）と `soul_stuck_escape_system`。`GameSystemSet::Actor` で登録。`hw_world::pathfinding` の探索関数を呼び出す
+- `soul_ai::building_completed::on_building_completed` — `BuildingCompletedEvent` Observer。WorldMap 更新・ObstaclePosition spawn・Soul 押し出しを担当。`SoulAiCorePlugin` が `app.add_observer()` で登録
 - `soul_ai::decide::idle_behavior::idle_behavior_decision_system` — IdleBehavior 決定本体
 - `soul_ai::decide::idle_behavior::transitions` — IdleBehavior 遷移判定ヘルパー（次の行動選択・持続時間計算）
 - `soul_ai::decide::idle_behavior::task_override` — タスク割り当て時の集会・休憩解除ヘルパー

@@ -98,7 +98,9 @@ impl Plugin for DamnedSoulPlugin {
                         .after(spawn::population_tracking_system)
                         .before(spawn::soul_spawning_system),
                     spawn::soul_spawning_system.in_set(GameSystemSet::Logic),
-                    movement::soul_movement.in_set(GameSystemSet::Actor),
+                    movement::soul_movement
+                        .in_set(GameSystemSet::Actor)
+                        .after(hw_soul_ai::soul_ai::pathfinding::pathfinding_system),
                     movement::apply_conversation_expression_event_system
                         .in_set(GameSystemSet::Visual)
                         .after(
