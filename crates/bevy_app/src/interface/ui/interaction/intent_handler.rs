@@ -153,10 +153,10 @@ pub(crate) fn handle_ui_intent(
                 );
             }
             UiIntent::OpenOperationDialog => {
-                super::dialog::open_operation_dialog(&mut q_dialog);
+                hw_ui::interaction::dialog::open_operation_dialog(&mut q_dialog);
             }
             UiIntent::CloseDialog => {
-                super::dialog::close_operation_dialog(&mut q_dialog);
+                hw_ui::interaction::dialog::close_operation_dialog(&mut q_dialog);
             }
             UiIntent::AdjustFatigueThreshold(delta) => {
                 adjust_fatigue_threshold(selected_entity.0, &mut q_familiar_ops, delta);

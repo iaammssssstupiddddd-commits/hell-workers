@@ -3,7 +3,8 @@
 ## 役割
 
 `Familiar` エンティティの自律的な監督・タスク委譲・スカウト・リクルートを実装する。
-基本的な AI ロジックの一部は `hw_ai::familiar_ai` に定義されており、このディレクトリは**ゲーム固有のロジック**を担う。
+基本的な AI ロジックの一部は `hw_familiar_ai::familiar_ai` に定義されており、このディレクトリは
+**root adapter / wrapper / orchestration / visual apply** を担う。
 
 ## ディレクトリ構成
 
@@ -19,23 +20,26 @@
 
 | ファイル/ディレクトリ | 内容 |
 |---|---|
-| `state_handlers/` | `hw_ai` 実装を公開する薄い re-export |
-| `task_management/` | `hw_ai` 実装を公開する thin bridge |
-| `auto_gather_for_blueprint/` | root helper / thin re-export 群。`actions.rs` と `is_reachable` は root、純計画層は `hw_ai` |
+| `state_handlers/` | `hw_familiar_ai` 実装を公開する薄い re-export |
+| `task_management/` | `hw_familiar_ai` 実装を公開する thin bridge |
+| `auto_gather_for_blueprint/` | root helper / thin re-export 群。`actions.rs` と `is_reachable` は root、純計画層は `hw_familiar_ai` |
 | `auto_gather_for_blueprint.rs` | `Commands` / pathfinding を持つ orchestration entrypoint |
-| `encouragement.rs` | `hw_ai` の対象選定を呼ぶ request 出力 adapter |
-| `familiar_processor.rs` | recruitment / task_delegation と `hw_ai` helper の橋渡し |
-| `following.rs` | ターゲット追跡移動 |
-| `recruitment.rs` | `hw_ai` 実装を公開する薄い re-export |
-| `scouting.rs` | `hw_ai` 実装を公開する薄い re-export |
-| `squad.rs` | `hw_ai` 実装を公開する薄い re-export |
-| `state_decision.rs` | concrete `SpatialGrid` / `transmute_lens_filtered` / request 出力を持つ状態遷移 adapter。branch dispatch と pure result 型の実体は `hw_ai` |
-| `supervising.rs` | `hw_ai` 実装を公開する薄い re-export |
-| `task_delegation.rs` | タスク委譲エントリポイント |
+| `encouragement.rs` | `hw_familiar_ai` の対象選定を呼ぶ request 出力 adapter |
+| `familiar_processor.rs` | recruitment / task_delegation と `hw_familiar_ai` helper の橋渡しを行う root adapter |
+| `following` | `mod.rs` inline module から `hw_familiar_ai` 実装を公開する薄い re-export |
+| `recruitment` | `mod.rs` inline module から `hw_familiar_ai` 実装を公開する薄い re-export |
+| `scouting` | `mod.rs` inline module から `hw_familiar_ai` 実装を公開する薄い re-export |
+| `squad` | `mod.rs` inline module から `hw_familiar_ai` 実装を公開する薄い re-export |
+| `state_decision.rs` | concrete `SpatialGrid` / `transmute_lens_filtered` / request 出力を持つ状態遷移 adapter。branch dispatch と pure result 型の実体は `hw_familiar_ai` |
+| `supervising` | `mod.rs` inline module から `hw_familiar_ai` 実装を公開する薄い re-export |
+| `task_delegation.rs` | `WorldMapRead` / concrete SpatialGrid / pathfinding を束ねる root wrapper |
 
 ### task_management/ ディレクトリ
 
-root 側の `task_management/` は [mod.rs](/home/satotakumi/projects/hell-workers/src/systems/familiar_ai/decide/task_management/mod.rs) だけを残す thin bridge で、実装本体は `hw_ai::familiar_ai::decide::task_management` にある。
+root 側の `task_management/` は
+[mod.rs](/home/satotakumi/projects/hell-workers/crates/bevy_app/src/systems/familiar_ai/decide/mod.rs)
+の inline module として thin bridge を残し、実装本体は
+`hw_familiar_ai::familiar_ai::decide::task_management` にある。
 
 ## execute/ ディレクトリ
 
@@ -45,8 +49,8 @@ root 側の `task_management/` は [mod.rs](/home/satotakumi/projects/hell-worke
 | `idle_visual_apply.rs` | アイドルビジュアル状態の適用 |
 | `max_soul_apply.rs` | 最大Soul数制限の適用 |
 | `squad_apply.rs` | 配下管理の適用 |
-| `state_apply.rs` | 状態遷移の適用 |
-| `state_log.rs` | 状態変化イベントのログ |
+| `state_apply` | `mod.rs` inline module から `hw_familiar_ai` 実装を公開する薄い re-export |
+| `state_log` | `mod.rs` inline module から `hw_familiar_ai` 実装を公開する薄い re-export |
 
 ## Familiar の状態
 
@@ -56,13 +60,13 @@ root 側の `task_management/` は [mod.rs](/home/satotakumi/projects/hell-worke
 
 ---
 
-## hw_ai との境界
+## hw_familiar_ai との境界
 
-Familiar AI は `hw_ai::familiar_ai` と `src/systems/familiar_ai` に分割されている。
+Familiar AI は `hw_familiar_ai::familiar_ai` と `src/systems/familiar_ai` に分割されている。
 
-### hw_ai に置かれているもの（純粋ロジック）
+### hw_familiar_ai に置かれているもの（純粋ロジック）
 
-`hw_ai::FamiliarAiCorePlugin` が直接登録・管理するコアエントリ:
+`hw_familiar_ai::FamiliarAiCorePlugin` が直接登録・管理するコアエントリ:
 
 | モジュール | 内容 |
 |---|---|
@@ -84,19 +88,21 @@ root adapter から呼ばれる pure logic / helper:
 | `decide/squad.rs` / `scouting.rs` / `supervising.rs` | 分隊管理・スカウト・監視の純ロジック |
 | `decide/state_handlers/` | 状態別ハンドラー |
 
-### src/ に置かれているもの（ゲーム固有）
+### src/ に置かれているもの（root shell / ゲーム固有）
 
 `src/systems/familiar_ai` が追加するシステム群:
 
 | モジュール | 理由 |
 |---|---|
 | `perceive/resource_sync.rs` | ゲーム固有リソース予約の同期。`sync_reservations_system` と `ReservationSyncTimer` を持ち、`SharedResourceCache` は `hw_logistics` から re-export |
-| `decide/task_delegation.rs` | タスク検索・割り当て（空間グリッド・`WorldMap` 参照） |
-| `decide/task_management/` | `hw_ai::familiar_ai::decide::task_management` への thin bridge。root 側は `task_delegation.rs` と `ConstructionSiteAccess` 実装だけを保持 |
+| `decide/task_delegation.rs` | タスク検索・割り当て wrapper。`WorldMapRead` / concrete SpatialGrid / `PathfindingContext` / `ConstructionSiteAccess` / perf metrics を束ねる |
+| `decide/task_management` | `hw_familiar_ai::familiar_ai::decide::task_management` への thin bridge。root 側は inline module で互換 path を維持 |
+| `decide/familiar_processor.rs` | `FamiliarDelegationContext` が `WorldMap` / `PathfindingContext` / `transmute_lens_filtered` を直接扱う root adapter |
 | `decide/auto_gather_for_blueprint.rs` | `Commands` / pathfinding / Blueprint 直接 query を束ねる orchestration |
 | `decide/auto_gather_for_blueprint/actions.rs` / `helpers.rs` | designation 更新と `is_reachable` を担当する root helper |
 | `decide/encouragement.rs` | `Time` / concrete `SpatialGrid` / request message 出力の adapter |
-| `decide/state_decision.rs` | concrete `SpatialGrid` / `transmute_lens_filtered` / request message 出力の adapter。branch dispatch と pure result 型の実体は `hw_ai` |
+| `decide/state_decision.rs` | concrete `SpatialGrid` / `transmute_lens_filtered` / request message 出力の adapter。branch dispatch と pure result 型の実体は `hw_familiar_ai` |
+| `helpers/query_types.rs` | `FamiliarSoulQuery` / `FamiliarStateQuery` / `FamiliarTaskQuery` を集約する root full-fat query bridge |
 | `execute/squad_apply.rs` | `ManagedBy` Relationship の生成・削除 |
 
 ### プラグイン構成の二層構造
@@ -105,8 +111,8 @@ root adapter から呼ばれる pure logic / helper:
 // src/systems/familiar_ai/mod.rs
 impl Plugin for FamiliarAiPlugin {
     fn build(&self, app: &mut App) {
-        // hw_ai のコアシステムを登録
-        app.add_plugins(hw_ai::FamiliarAiCorePlugin);
+        // hw_familiar_ai のコアシステムを登録
+        app.add_plugins(hw_familiar_ai::FamiliarAiCorePlugin);
         // src/ 固有のシステムを追加登録
         app.add_systems(Update, (
             perceive::resource_sync::sync_reservations_system, // src/ 固有
@@ -118,3 +124,9 @@ impl Plugin for FamiliarAiPlugin {
 ```
 
 `ResourceReservationRequest` の message 登録は `MessagesPlugin`、`SharedResourceCache` の `init_resource` は `FamiliarAiPlugin` が担当する。`hw_logistics::apply_reservation_requests_system` はその app shell 初期化を前提に動作する。
+
+## 設計メモ
+
+- root 側は「thin shell 以上の意味を持つ adapter / wrapper / orchestration」だけを保持する
+- `hw_familiar_ai` 側には shared crate 型と Bevy 汎用 API だけで閉じる pure core を置く
+- `WorldMapRead` / concrete `SpatialGrid` / `PathfindingContext` / root `MessageWriter` / designation cleanup の最終適用を要求するものは root に残す

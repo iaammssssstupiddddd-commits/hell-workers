@@ -1,6 +1,11 @@
 pub mod cancellation;
 pub mod completion;
-pub mod components;
+pub mod components {
+    pub use hw_jobs::construction::{
+        FloorConstructionCancelRequested, FloorConstructionPhase, FloorConstructionSite,
+        FloorTileBlueprint, FloorTileState, TargetFloorConstructionSite,
+    };
+}
 pub mod phase_transition;
 
 pub use cancellation::*;

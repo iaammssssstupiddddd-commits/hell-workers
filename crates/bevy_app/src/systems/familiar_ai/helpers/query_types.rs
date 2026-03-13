@@ -1,3 +1,13 @@
+//! root full-fat query bridge。
+//!
+//! narrow query 5型（SoulSquadQuery / SoulSupervisingQuery / SoulScoutingQuery /
+//! SoulRecruitmentQuery / SoulEncouragementQuery）は
+//! hw_familiar_ai::familiar_ai::decide::query_types に定義済みで `pub use` から re-export する。
+//!
+//! root 側には FamiliarSoulQuery / FamiliarStateQuery / FamiliarTaskQuery の 3型のみを定義する。
+//! これらは root 固有の型（DamnedSoul / AssignedTask / Inventory / ManagedTasks 等）を束ねる
+//! full-fat query であり、hw_familiar_ai 側には置けない。
+
 use crate::entities::damned_soul::{DamnedSoul, Destination, IdleState, Path};
 use crate::entities::familiar::{ActiveCommand, Familiar, FamiliarOperation};
 use crate::relationships::ParticipatingIn;

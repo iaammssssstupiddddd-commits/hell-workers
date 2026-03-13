@@ -9,9 +9,10 @@ pub mod decide;
 pub mod execute;
 pub mod helpers;
 pub mod perceive;
-pub mod scheduling;
+pub mod scheduling {
+    pub use hw_core::system_sets::{FamiliarAiSystemSet, SoulAiSystemSet};
+}
 pub mod update;
-pub mod visual;
 
 use crate::systems::GameSystemSet;
 use scheduling::{FamiliarAiSystemSet, SoulAiSystemSet};

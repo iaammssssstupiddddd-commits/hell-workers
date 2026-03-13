@@ -4,7 +4,12 @@ mod floor_place;
 mod hit_test;
 mod input;
 mod mode;
-mod state;
+mod state {
+    pub use hw_ui::selection::{
+        HoveredEntity, SelectedEntity, SelectionIndicator, cleanup_selection_references_system,
+    };
+    pub use hw_visual::update_selection_indicator;
+}
 
 pub use building_move::{building_move_preview_system, building_move_system};
 pub use building_place::blueprint_placement;

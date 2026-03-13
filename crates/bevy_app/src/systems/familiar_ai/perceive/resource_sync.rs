@@ -1,3 +1,9 @@
+//! root perceive system: SharedResourceCache の再構築は root の責務として残留。
+//!
+//! apply_reservation_op / apply_reservation_requests_system は hw_logistics に移設済み。
+//! AssignedTask / Designation / TransportRequest / relationship の実ワールド再構築を担うため、
+//! hw_familiar_ai 側には置けない。
+
 use crate::relationships::TaskWorkers;
 use crate::systems::jobs::{Designation, WorkType};
 use crate::systems::logistics::ResourceType;

@@ -5,9 +5,20 @@
 //! hw_visual クレートに移行済みのサブシステムは hw_visual::* を直接参照すること。
 //! root 残留ファイルは app_contexts / root 専有型への依存によるもの。
 
-pub mod floor_construction;
+pub mod floor_construction {
+    pub use hw_visual::floor_construction::{
+        FloorCuringProgressBar, FloorTileBoneVisual, manage_floor_curing_progress_bars_system,
+        sync_floor_tile_bone_visuals_system, update_floor_curing_progress_bars_system,
+        update_floor_tile_visuals_system,
+    };
+}
 pub mod placement_ghost;
 pub mod task_area_visual;
-pub mod wall_construction;
+pub mod wall_construction {
+    pub use hw_visual::wall_construction::{
+        WallConstructionProgressBar, manage_wall_progress_bars_system,
+        update_wall_progress_bars_system, update_wall_tile_visuals_system,
+    };
+}
 
 pub use task_area_visual::TaskAreaMaterial;

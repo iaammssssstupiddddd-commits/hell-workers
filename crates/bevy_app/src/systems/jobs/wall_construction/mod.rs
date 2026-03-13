@@ -1,6 +1,11 @@
 pub mod cancellation;
 pub mod completion;
-pub mod components;
+pub mod components {
+    pub use hw_jobs::construction::{
+        TargetWallConstructionSite, WallConstructionCancelRequested, WallConstructionPhase,
+        WallConstructionSite, WallTileBlueprint, WallTileState,
+    };
+}
 pub mod phase_transition;
 
 pub use cancellation::*;

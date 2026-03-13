@@ -1,10 +1,11 @@
 //! エンティティリストの動的更新システム
 
 pub(crate) mod change_detection;
-pub(crate) mod dirty;
+pub(crate) mod dirty {
+    pub use hw_ui::list::dirty::EntityListDirty;
+}
 mod drag_drop;
 mod interaction;
-mod selection_focus;
 mod sync;
 mod view_model;
 
@@ -17,7 +18,7 @@ pub use hw_ui::list::{EntityListMinimizeState, entity_list_minimize_toggle_syste
 pub use hw_ui::list::{
     EntityListResizeState, entity_list_resize_cursor_system, entity_list_resize_system,
 };
-pub use selection_focus::focus_camera_on_entity;
+pub use hw_ui::list::focus_camera_on_entity;
 pub use interaction::{
     apply_row_highlight, entity_list_interaction_system, entity_list_scroll_hint_visibility_system,
     entity_list_scroll_system, entity_list_section_toggle_system, entity_list_tab_focus_system,
