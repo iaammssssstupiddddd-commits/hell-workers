@@ -95,7 +95,7 @@ fn handle_active_drag_input(
     q_sites: &Query<&Site>,
     q_unassigned: &Query<
         (Entity, &Transform, &Designation),
-        Without<crate::relationships::ManagedBy>,
+        Without<hw_core::relationships::ManagedBy>,
     >,
     commands: &mut Commands,
     area_edit_session: &mut AreaEditSession,
@@ -244,7 +244,7 @@ pub fn task_area_selection_system(
     mut commands: Commands,
     keyboard: Res<ButtonInput<KeyCode>>,
     mut q_aux: ParamSet<(
-        Query<(Entity, &Transform, &Designation), Without<crate::relationships::ManagedBy>>,
+        Query<(Entity, &Transform, &Designation), Without<hw_core::relationships::ManagedBy>>,
         Query<Entity, With<AreaSelectionIndicator>>,
     )>,
     mut area_edit_session: ResMut<AreaEditSession>,

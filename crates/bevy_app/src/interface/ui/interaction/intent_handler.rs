@@ -7,7 +7,7 @@ use crate::interface::selection::SelectedEntity;
 use crate::interface::ui::EntityListNodeIndex;
 use crate::interface::ui::InfoPanelPinState;
 use hw_ui::components::{MenuState, OperationDialog};
-use crate::relationships::Commanding;
+use hw_core::relationships::Commanding;
 use crate::systems::familiar_ai::FamiliarAiState;
 use crate::systems::command::{TaskArea, TaskMode};
 use crate::systems::time::TimeSpeed;

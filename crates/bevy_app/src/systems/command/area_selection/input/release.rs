@@ -14,7 +14,7 @@ pub(super) fn handle_left_just_released_input(
         Query<(Entity, &Transform, &WallTileBlueprint)>,
     )>,
     q_aux: &mut ParamSet<(
-        Query<(Entity, &Transform, &Designation), Without<crate::relationships::ManagedBy>>,
+        Query<(Entity, &Transform, &Designation), Without<hw_core::relationships::ManagedBy>>,
         Query<Entity, With<AreaSelectionIndicator>>,
     )>,
     keyboard: &ButtonInput<KeyCode>,

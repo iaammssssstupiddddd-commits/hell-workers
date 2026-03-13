@@ -346,7 +346,7 @@ fn cancel_tasks_and_requests_for_moved_building(
         Designation,
         TaskSlots,
         Priority,
-        crate::relationships::ManagedBy,
+        hw_core::relationships::ManagedBy,
     )>();
 
     for (request_entity, request) in q_transport_requests.iter() {

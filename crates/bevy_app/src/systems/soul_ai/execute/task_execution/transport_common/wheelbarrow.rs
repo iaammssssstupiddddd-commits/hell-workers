@@ -2,7 +2,7 @@
 //!
 //! park/cancel/reset を共通化し、予約解放漏れを防ぐ。
 
-use crate::relationships::{ParkedAt, PushedBy};
+use hw_core::relationships::{ParkedAt, PushedBy};
 use crate::systems::soul_ai::execute::task_execution::{
     common::clear_task_and_path, context::TaskExecutionContext, types::HaulWithWheelbarrowData,
 };
@@ -24,7 +24,7 @@ pub fn park_wheelbarrow_entity(
         wheelbarrow_commands.try_insert(ParkedAt(anchor));
     }
     wheelbarrow_commands.try_remove::<(PushedBy, WheelbarrowMovement)>();
-    wheelbarrow_commands.try_remove::<crate::relationships::DeliveringTo>();
+    wheelbarrow_commands.try_remove::<hw_core::relationships::DeliveringTo>();
     wheelbarrow_commands.try_insert((
         Visibility::Visible,
         Transform::from_xyz(pos.x, pos.y, Z_ITEM_PICKUP),
@@ -53,8 +53,8 @@ pub fn complete_wheelbarrow_task(
 
         for item_entity in still_loaded {
             if let Ok(mut item_commands) = commands.get_entity(item_entity) {
-                item_commands.try_remove::<crate::relationships::LoadedIn>();
-                item_commands.try_remove::<crate::relationships::DeliveringTo>();
+                item_commands.try_remove::<hw_core::relationships::LoadedIn>();
+                item_commands.try_remove::<hw_core::relationships::DeliveringTo>();
                 item_commands.try_insert((
                     Visibility::Visible,
                     Transform::from_xyz(pos.x, pos.y, Z_ITEM_PICKUP),
@@ -74,7 +74,7 @@ pub fn complete_wheelbarrow_task(
     park_wheelbarrow_entity(commands, data.wheelbarrow, parking_anchor, pos);
     ctx.inventory.0 = None;
     if let Ok(mut soul_commands) = commands.get_entity(ctx.soul_entity) {
-        soul_commands.try_remove::<crate::relationships::WorkingOn>();
+        soul_commands.try_remove::<hw_core::relationships::WorkingOn>();
     }
     clear_task_and_path(ctx.task, ctx.path);
 }

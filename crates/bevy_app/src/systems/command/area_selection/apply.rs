@@ -5,7 +5,7 @@ use super::queries::DesignationTargetQuery;
 use super::state::AreaEditHistory;
 use crate::entities::damned_soul::Destination;
 use crate::entities::familiar::{ActiveCommand, Familiar, FamiliarCommand};
-use crate::relationships::ManagedBy;
+use hw_core::relationships::ManagedBy;
 use crate::systems::command::{TaskArea, TaskMode};
 use crate::systems::jobs::{Designation, Priority, TaskSlots, WorkType};
 use crate::systems::logistics::transport_request::{

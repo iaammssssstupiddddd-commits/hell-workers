@@ -1,7 +1,7 @@
 use crate::entities::familiar::{Familiar, FamiliarVoice};
 use crate::events::{ReleaseReason, SquadManagementOperation, SquadManagementRequest};
-use crate::relationships::CommandedBy;
-use crate::relationships::ParticipatingIn;
+use hw_core::relationships::CommandedBy;
+use hw_core::relationships::ParticipatingIn;
 use crate::systems::familiar_ai::FamiliarSoulQuery;
 use hw_visual::speech::components::{
     BubbleEmotion, BubblePriority, FamiliarBubble, SpeechBubble,

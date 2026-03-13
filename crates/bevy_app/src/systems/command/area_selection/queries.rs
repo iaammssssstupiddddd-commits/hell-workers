@@ -1,6 +1,6 @@
 //! エリア選択で使う Query 型の共通定義
 
-use crate::relationships::{StoredItems, TaskWorkers};
+use hw_core::relationships::{StoredItems, TaskWorkers};
 use crate::systems::jobs::{Blueprint, Designation, Rock, Tree};
 use crate::systems::logistics::transport_request::{
     ManualTransportRequest, TransportRequest, TransportRequestFixedSource,

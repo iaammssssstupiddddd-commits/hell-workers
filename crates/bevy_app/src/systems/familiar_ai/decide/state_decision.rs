@@ -3,7 +3,7 @@ use crate::events::{
     FamiliarAiStateChangedEvent, FamiliarIdleVisualRequest, FamiliarStateRequest, ReleaseReason,
     SquadManagementOperation, SquadManagementRequest,
 };
-use crate::relationships::CommandedBy;
+use hw_core::relationships::CommandedBy;
 use crate::systems::familiar_ai::FamiliarAiState;
 use crate::systems::familiar_ai::decide::FamiliarDecideOutput;
 use crate::systems::familiar_ai::decide::familiar_processor::{
@@ -102,7 +102,7 @@ pub struct FamiliarAiStateDecisionParams<'w, 's> {
     pub q_familiars: FamiliarStateQuery<'w, 's>,
     pub q_souls: FamiliarSoulQuery<'w, 's>,
     pub q_breakdown: Query<'w, 's, &'static StressBreakdown>,
-    pub q_resting: Query<'w, 's, (), With<crate::relationships::RestingIn>>,
+    pub q_resting: Query<'w, 's, (), With<hw_core::relationships::RestingIn>>,
     pub q_rest_cooldown: Query<'w, 's, &'static RestAreaCooldown>,
     pub decide_output: FamiliarDecideOutput<'w>,
 }

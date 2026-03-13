@@ -18,7 +18,8 @@ use crate::app_contexts::{
 use crate::assets::GameAssets;
 use crate::entities::damned_soul::{DamnedSoulSpawnEvent, spawn_damned_souls};
 use crate::entities::familiar::FamiliarSpawnEvent;
-use crate::interface::camera::{MainCamera, PanCamera};
+use bevy::camera_controller::pan_camera::PanCamera;
+use crate::interface::camera::MainCamera;
 use crate::interface::selection::{HoveredEntity, SelectedEntity};
 use crate::interface::ui::{MenuState, setup_ui};
 use hw_ui::components::ArchitectCategoryState;

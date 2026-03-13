@@ -160,7 +160,7 @@ pub fn sync_designation_indicator_system(
         (
             &Transform,
             &Visibility,
-            Option<&crate::relationships::StoredIn>,
+            Option<&hw_core::relationships::StoredIn>,
         ),
         Without<DesignationIndicator>,
     >,

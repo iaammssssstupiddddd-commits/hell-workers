@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 
 use crate::entities::familiar::Familiar;
-use crate::relationships::CommandedBy;
+use hw_core::relationships::CommandedBy;
 use crate::world::map::WorldMapRead;
 // use crate::systems::familiar_ai::perceive::resource_sync::SharedResourceCache; // Removed unused import
 

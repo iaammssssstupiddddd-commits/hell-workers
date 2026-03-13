@@ -1,5 +1,5 @@
 use hw_ui::components::LeftPanelMode;
-use crate::relationships::TaskWorkers;
+use hw_core::relationships::TaskWorkers;
 use crate::systems::jobs::{Blueprint, BonePile, Designation, Priority, Rock, SandPile, Tree};
 use crate::systems::logistics::ResourceItem;
 use crate::systems::logistics::transport_request::TransportRequest;

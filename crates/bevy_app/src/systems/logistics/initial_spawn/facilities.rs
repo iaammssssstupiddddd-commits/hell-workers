@@ -1,5 +1,5 @@
 use crate::assets::GameAssets;
-use crate::relationships::{LoadedItems, ParkedAt};
+use hw_core::relationships::{LoadedItems, ParkedAt};
 use crate::systems::jobs::{Building, BuildingType, ObstaclePosition, TaskSlots};
 use crate::systems::logistics::{BelongsTo, ResourceItem, ResourceType, Wheelbarrow, WheelbarrowParking};
 use crate::systems::world::zones::{PairedSite, PairedYard, Site, Yard};

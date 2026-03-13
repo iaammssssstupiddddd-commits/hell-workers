@@ -5,7 +5,7 @@
 use crate::entities::damned_soul::{DamnedSoul, Path};
 use crate::entities::familiar::{Familiar, FamiliarVoice};
 use crate::events::FamiliarOperationMaxSoulChangedEvent;
-use crate::relationships::{CommandedBy, Commanding};
+use hw_core::relationships::{CommandedBy, Commanding};
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
 use crate::systems::soul_ai::helpers::work::unassign_task;
 use hw_visual::speech::components::{
