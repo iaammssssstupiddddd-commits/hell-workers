@@ -1,7 +1,7 @@
 //! タスクリストのスナップショット生成
 
 use super::dirty::TaskListDirty;
-use crate::relationships::TaskWorkers;
+use hw_core::relationships::TaskWorkers;
 use crate::systems::jobs::{
     Blueprint, BonePile, Designation, Priority, Rock, SandPile, Tree, WorkType,
 };

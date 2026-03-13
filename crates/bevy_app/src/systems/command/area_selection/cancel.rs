@@ -1,7 +1,7 @@
 //! cancel_single_designation と補助処理
 
 use crate::events::OnTaskAbandoned;
-use crate::relationships::{ManagedBy, TaskWorkers, WorkingOn};
+use hw_core::relationships::{ManagedBy, TaskWorkers, WorkingOn};
 use crate::systems::jobs::{Designation, TaskSlots};
 use crate::systems::logistics::transport_request::ManualHaulPinnedSource;
 use bevy::prelude::*;

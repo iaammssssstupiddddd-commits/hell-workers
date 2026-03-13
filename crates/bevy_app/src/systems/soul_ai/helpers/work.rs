@@ -48,5 +48,5 @@ pub fn unassign_task<'w, 's, Q: TaskReservationAccess<'w, 's>>(
 
     commands
         .entity(soul_entity)
-        .remove::<crate::relationships::WorkingOn>();
+        .remove::<hw_core::relationships::WorkingOn>();
 }

@@ -90,8 +90,8 @@ pub fn spawn_familiar_at(
             crate::systems::familiar_ai::FamiliarAiState::default(),
             crate::systems::familiar_ai::perceive::state_detection::FamiliarAiStateHistory::default(
             ),
-            crate::relationships::Commanding::default(),
-            crate::relationships::ManagedTasks::default(),
+            hw_core::relationships::Commanding::default(),
+            hw_core::relationships::ManagedTasks::default(),
             Destination(actual_pos),
             Path::default(),
             FamiliarAnimation::default(),

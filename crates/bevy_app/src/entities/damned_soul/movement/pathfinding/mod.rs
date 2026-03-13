@@ -4,7 +4,7 @@ mod fallback;
 mod reuse;
 
 use crate::entities::damned_soul::{DamnedSoul, Destination, IdleBehavior, IdleState, Path};
-use crate::relationships::RestAreaReservedFor;
+use hw_core::relationships::RestAreaReservedFor;
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
 use crate::world::map::{WorldMap, WorldMapRead};
 use crate::world::pathfinding::PathfindingContext;
@@ -209,7 +209,7 @@ pub fn pathfinding_system(
             &mut Path,
             &mut AssignedTask,
             &mut IdleState,
-            Option<&crate::relationships::RestingIn>,
+            Option<&hw_core::relationships::RestingIn>,
             Option<&RestAreaReservedFor>,
             Option<&mut PathCooldown>,
             Option<&mut crate::systems::logistics::Inventory>,

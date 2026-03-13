@@ -7,7 +7,7 @@
 
 use crate::entities::damned_soul::{DamnedSoul, IdleState};
 use crate::entities::familiar::FamiliarCommand;
-use crate::relationships::CommandedBy;
+use hw_core::relationships::CommandedBy;
 use crate::systems::familiar_ai::FamiliarDelegationPerfMetrics;
 use crate::systems::familiar_ai::FamiliarTaskDelegationTimer;
 use crate::systems::familiar_ai::decide::familiar_processor::{
@@ -117,7 +117,7 @@ pub fn familiar_task_delegation_system(params: FamiliarAiTaskDelegationParams) {
         familiars_processed += 1;
 
         let state_changed = ai_state.is_changed();
-        let default_tasks = crate::relationships::ManagedTasks::default();
+        let default_tasks = hw_core::relationships::ManagedTasks::default();
         let managed_tasks = managed_tasks_opt.unwrap_or(&default_tasks);
 
         let (squad_entities, _invalid_members) = {

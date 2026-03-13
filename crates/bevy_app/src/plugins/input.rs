@@ -1,6 +1,7 @@
 //! 入力関連のプラグイン
 
-use crate::interface::camera::{MainCamera, PanCamera, PanCameraPlugin};
+use bevy::camera_controller::pan_camera::{PanCamera, PanCameraPlugin};
+use crate::interface::camera::MainCamera;
 use crate::interface::selection::handle_mouse_input;
 use crate::interface::ui::UiInputState;
 use crate::systems::GameSystemSet;

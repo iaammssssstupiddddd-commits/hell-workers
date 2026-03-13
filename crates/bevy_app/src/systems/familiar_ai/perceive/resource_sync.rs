@@ -4,7 +4,7 @@
 //! AssignedTask / Designation / TransportRequest / relationship の実ワールド再構築を担うため、
 //! hw_familiar_ai 側には置けない。
 
-use crate::relationships::TaskWorkers;
+use hw_core::relationships::TaskWorkers;
 use crate::systems::jobs::{Designation, WorkType};
 use crate::systems::logistics::ResourceType;
 use crate::systems::logistics::transport_request::{TransportRequest, TransportRequestKind};

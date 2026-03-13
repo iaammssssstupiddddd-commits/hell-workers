@@ -28,7 +28,7 @@ pub fn spawn_loaded_sand_items(
                 Transform::from_translation(
                     Vec3::new(source_pos.x, source_pos.y, Z_ITEM_PICKUP) + offset,
                 ),
-                crate::relationships::LoadedIn(wheelbarrow),
+                hw_core::relationships::LoadedIn(wheelbarrow),
                 Name::new("Item (Sand, WheelbarrowCollect)"),
                 crate::systems::logistics::item_lifetime::ItemDespawnTimer::new(5.0),
             ))
@@ -55,7 +55,7 @@ pub fn spawn_loaded_bone_items(
                 Transform::from_translation(
                     Vec3::new(source_pos.x, source_pos.y, Z_ITEM_PICKUP) + offset,
                 ),
-                crate::relationships::LoadedIn(wheelbarrow),
+                hw_core::relationships::LoadedIn(wheelbarrow),
                 Name::new("Item (Bone, WheelbarrowCollect)"),
             ))
             .id();

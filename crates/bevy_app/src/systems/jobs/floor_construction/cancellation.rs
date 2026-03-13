@@ -3,7 +3,7 @@
 use super::components::{FloorConstructionCancelRequested, TargetFloorConstructionSite};
 use crate::assets::GameAssets;
 use crate::entities::damned_soul::{DamnedSoul, Path};
-use crate::relationships::WorkingOn;
+use hw_core::relationships::WorkingOn;
 use crate::systems::jobs::construction_shared::spawn_refund_items;
 use crate::systems::logistics::{Inventory, ResourceType};
 use crate::systems::soul_ai::execute::task_execution::context::TaskQueries;

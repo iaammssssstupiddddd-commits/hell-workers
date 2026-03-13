@@ -4,7 +4,7 @@ use super::{
 use crate::entities::damned_soul::{DamnedSoul, Gender, SoulIdentity};
 use crate::entities::familiar::{Familiar, FamiliarOperation};
 use hw_ui::components::{SectionFolded, UnassignedFolded, UnassignedSoulSection};
-use crate::relationships::{CommandedBy, Commanding};
+use hw_core::relationships::{CommandedBy, Commanding};
 use crate::systems::familiar_ai::FamiliarAiState;
 use crate::systems::jobs::WorkType;
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
