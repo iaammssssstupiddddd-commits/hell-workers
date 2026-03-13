@@ -217,7 +217,7 @@ impl EntityInspectionQuery<'_, '_> {
 
         if let Some(rest_area) = rest_area_opt {
             let resting_count = rest_area_occupants_opt
-                .map(crate::relationships::RestAreaOccupants::len)
+                .map(hw_core::relationships::RestAreaOccupants::len)
                 .unwrap_or(0)
                 .min(rest_area.capacity);
             let dream_rate = resting_count as f32 * DREAM_DRAIN_RATE_REST;

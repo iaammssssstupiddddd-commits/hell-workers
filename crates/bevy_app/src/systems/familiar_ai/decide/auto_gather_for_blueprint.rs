@@ -4,7 +4,7 @@
 //! Commands / WorldMap / PathfindingContext 依存はこのファイルから外せないため root に残留。
 
 use crate::entities::familiar::{ActiveCommand, FamiliarCommand};
-use crate::relationships::{LoadedIn, ManagedBy, StoredIn, TaskWorkers};
+use hw_core::relationships::{LoadedIn, ManagedBy, StoredIn, TaskWorkers};
 use crate::systems::command::TaskArea;
 use crate::systems::jobs::wall_construction::TargetWallConstructionSite;
 use crate::systems::jobs::{Blueprint, Designation, Rock, TargetBlueprint, Tree};

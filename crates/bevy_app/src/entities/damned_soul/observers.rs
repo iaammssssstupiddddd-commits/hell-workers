@@ -4,7 +4,7 @@ use super::*;
 use crate::events::{
     OnExhausted, OnSoulRecruited, OnStressBreakdown, OnTaskAssigned, OnTaskCompleted,
 };
-use crate::relationships::CommandedBy;
+use hw_core::relationships::CommandedBy;
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
 use crate::systems::soul_ai::helpers::work::unassign_task;
 use crate::world::map::WorldMapRead;
@@ -65,7 +65,7 @@ pub fn on_stress_breakdown(
         &mut AssignedTask,
         &mut Path,
         Option<&mut crate::systems::logistics::Inventory>,
-        Option<&crate::relationships::CommandedBy>,
+        Option<&hw_core::relationships::CommandedBy>,
     )>,
     world_map: WorldMapRead,
     mut queries: crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
@@ -121,7 +121,7 @@ pub fn on_exhausted(
         &mut Path,
         &mut Destination,
         Option<&mut crate::systems::logistics::Inventory>,
-        Option<&crate::relationships::CommandedBy>,
+        Option<&hw_core::relationships::CommandedBy>,
     )>,
     world_map: WorldMapRead,
     mut queries: crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,

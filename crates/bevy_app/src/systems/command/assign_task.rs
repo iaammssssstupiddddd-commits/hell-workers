@@ -19,7 +19,7 @@ pub fn assign_task_system(
     mut commands: Commands,
     q_designations: Query<
         (Entity, &Transform, &Designation),
-        Without<crate::relationships::ManagedBy>,
+        Without<hw_core::relationships::ManagedBy>,
     >,
     q_familiars: Query<(Entity, &Transform), With<Familiar>>,
     world_map: WorldMapRead,
@@ -92,7 +92,7 @@ pub fn assign_task_system(
         }
 
         commands.entity(entity).insert((
-            crate::relationships::ManagedBy(fam_entity),
+            hw_core::relationships::ManagedBy(fam_entity),
             crate::systems::jobs::Priority(0),
         ));
     }

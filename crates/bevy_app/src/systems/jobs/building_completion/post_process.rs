@@ -98,7 +98,7 @@ fn setup_tank(
                 crate::systems::logistics::ResourceType::BucketEmpty,
             ),
             crate::systems::logistics::BelongsTo(building_entity),
-            crate::relationships::StoredIn(storage_entity),
+            hw_core::relationships::StoredIn(storage_entity),
             TaskSlots::new(1),
             Sprite {
                 image: game_assets.bucket_empty.clone(),
@@ -161,8 +161,8 @@ fn setup_wheelbarrow_parking(
                 capacity: WHEELBARROW_CAPACITY,
             },
             crate::systems::logistics::BelongsTo(building_entity),
-            crate::relationships::ParkedAt(building_entity),
-            crate::relationships::LoadedItems::default(),
+            hw_core::relationships::ParkedAt(building_entity),
+            hw_core::relationships::LoadedItems::default(),
             TaskSlots::new(1),
             Sprite {
                 image: game_assets.wheelbarrow_empty.clone(),

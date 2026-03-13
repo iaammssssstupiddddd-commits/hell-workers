@@ -49,7 +49,7 @@ pub fn task_execution_system(
     world_map: WorldMapRead,
     mut pf_context: Local<crate::world::pathfinding::PathfindingContext>,
     q_wheelbarrows: Query<
-        (&Transform, Option<&crate::relationships::ParkedAt>),
+        (&Transform, Option<&hw_core::relationships::ParkedAt>),
         With<crate::systems::logistics::Wheelbarrow>,
     >,
     q_entities: Query<Entity>,
@@ -125,7 +125,7 @@ pub fn task_execution_system(
 
                 commands
                     .entity(soul_entity)
-                    .remove::<crate::relationships::WorkingOn>();
+                    .remove::<hw_core::relationships::WorkingOn>();
 
                 info!(
                     "EVENT: OnTaskCompleted triggered for Soul {:?}",

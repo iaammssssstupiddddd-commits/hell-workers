@@ -6,7 +6,7 @@
 
 use crate::entities::damned_soul::{Destination, IdleBehavior, Path};
 use crate::entities::familiar::FamiliarOperation;
-use crate::relationships::ManagedTasks;
+use hw_core::relationships::ManagedTasks;
 use crate::systems::command::TaskArea;
 use crate::systems::familiar_ai::FamiliarAiState;
 use crate::systems::familiar_ai::FamiliarSoulQuery;

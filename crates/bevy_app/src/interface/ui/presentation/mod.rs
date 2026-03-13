@@ -5,8 +5,8 @@ use crate::entities::familiar::Familiar;
 use crate::interface::selection::SelectedEntity;
 use hw_ui::components::TooltipTemplate;
 use crate::interface::ui::panels::InfoPanelPinState;
-use crate::relationships::CommandedBy;
-use crate::relationships::TaskWorkers;
+use hw_core::relationships::CommandedBy;
+use hw_core::relationships::TaskWorkers;
 use crate::systems::jobs::Blueprint;
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
 use crate::systems::soul_ai::perceive::escaping::is_escape_threat_close;
@@ -64,10 +64,10 @@ pub struct EntityInspectionQuery<'w, 's> {
             &'static crate::systems::jobs::Building,
             Option<&'static crate::systems::jobs::ProvisionalWall>,
             Option<&'static crate::systems::logistics::Stockpile>,
-            Option<&'static crate::relationships::StoredItems>,
+            Option<&'static hw_core::relationships::StoredItems>,
             Option<&'static crate::systems::jobs::MudMixerStorage>,
             Option<&'static crate::systems::jobs::RestArea>,
-            Option<&'static crate::relationships::RestAreaOccupants>,
+            Option<&'static hw_core::relationships::RestAreaOccupants>,
         ),
     >,
 }

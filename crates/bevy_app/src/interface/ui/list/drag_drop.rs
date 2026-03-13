@@ -2,7 +2,7 @@ use crate::entities::damned_soul::{DamnedSoul, SoulIdentity};
 use crate::events::{SquadManagementOperation, SquadManagementRequest};
 use hw_ui::components::{FamiliarListItem, SoulListItem, UiNodeRegistry, UiSlot};
 use hw_ui::theme::UiTheme;
-use crate::relationships::CommandedBy;
+use hw_core::relationships::CommandedBy;
 use bevy::prelude::*;
 use bevy::ui::FocusPolicy;
 pub use hw_ui::list::DragState;

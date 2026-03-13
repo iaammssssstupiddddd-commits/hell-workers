@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use bevy::prelude::*;
 
-use crate::relationships::ManagedBy;
+use hw_core::relationships::ManagedBy;
 use crate::systems::jobs::{Designation, Priority, TaskSlots};
 use crate::systems::logistics::ResourceType;
 use crate::world::map::WorldMap;

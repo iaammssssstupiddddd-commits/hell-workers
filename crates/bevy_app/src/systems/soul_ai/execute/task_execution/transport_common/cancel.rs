@@ -29,7 +29,7 @@ pub fn cancel_haul_to_stockpile(
     }
     commands
         .entity(item)
-        .remove::<crate::relationships::DeliveringTo>();
+        .remove::<hw_core::relationships::DeliveringTo>();
     clear_task_and_path(ctx.task, ctx.path);
 }
 
@@ -54,7 +54,7 @@ pub fn cancel_haul_to_blueprint(
 
     commands
         .entity(item)
-        .remove::<crate::relationships::DeliveringTo>();
+        .remove::<hw_core::relationships::DeliveringTo>();
     clear_task_and_path(ctx.task, ctx.path);
 }
 
@@ -90,13 +90,13 @@ pub fn drop_bucket_with_cleanup(commands: &mut Commands, bucket_entity: Entity, 
     ));
     commands
         .entity(bucket_entity)
-        .remove::<crate::relationships::StoredIn>();
+        .remove::<hw_core::relationships::StoredIn>();
     commands
         .entity(bucket_entity)
         .remove::<crate::systems::jobs::IssuedBy>();
     commands
         .entity(bucket_entity)
-        .remove::<crate::relationships::TaskWorkers>();
+        .remove::<hw_core::relationships::TaskWorkers>();
     commands
         .entity(bucket_entity)
         .remove::<crate::systems::jobs::Designation>();
@@ -105,7 +105,7 @@ pub fn drop_bucket_with_cleanup(commands: &mut Commands, bucket_entity: Entity, 
         .remove::<crate::systems::jobs::TaskSlots>();
     commands
         .entity(bucket_entity)
-        .remove::<crate::relationships::DeliveringTo>();
+        .remove::<hw_core::relationships::DeliveringTo>();
     commands
         .entity(bucket_entity)
         .remove::<crate::systems::jobs::TargetMixer>();

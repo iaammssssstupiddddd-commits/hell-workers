@@ -2,7 +2,7 @@ use bevy::prelude::*;
 
 use crate::entities::damned_soul::{DamnedSoul, IdleBehavior, IdleState};
 use crate::events::{GatheringSpawnRequest, OnGatheringParticipated};
-use crate::relationships::{CommandedBy, ParticipatingIn};
+use hw_core::relationships::{CommandedBy, ParticipatingIn};
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
 use hw_visual::{soul::gathering_spawn::spawn_gathering_spot, GatheringVisualHandles};
 

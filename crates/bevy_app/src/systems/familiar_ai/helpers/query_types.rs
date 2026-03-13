@@ -10,8 +10,8 @@
 
 use crate::entities::damned_soul::{DamnedSoul, Destination, IdleState, Path};
 use crate::entities::familiar::{ActiveCommand, Familiar, FamiliarOperation};
-use crate::relationships::ParticipatingIn;
-use crate::relationships::{CommandedBy, Commanding, ManagedTasks};
+use hw_core::relationships::ParticipatingIn;
+use hw_core::relationships::{CommandedBy, Commanding, ManagedTasks};
 use crate::systems::command::TaskArea;
 use crate::systems::familiar_ai::FamiliarAiState;
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;

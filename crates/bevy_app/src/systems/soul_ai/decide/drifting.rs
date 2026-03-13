@@ -5,7 +5,7 @@ use rand::Rng;
 
 use crate::entities::damned_soul::spawn::PopulationManager;
 use crate::entities::damned_soul::{DriftPhase, DriftingState, IdleBehavior, IdleState};
-use crate::relationships::{CommandedBy, ParticipatingIn, RestingIn};
+use hw_core::relationships::{CommandedBy, ParticipatingIn, RestingIn};
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
 use crate::world::map::WorldMap;
 use hw_core::constants::*;

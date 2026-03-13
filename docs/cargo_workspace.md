@@ -82,7 +82,7 @@ hw_visual (hw_core + hw_jobs + hw_logistics + hw_spatial + hw_world + hw_ui)
 
 - `hw_ui` は UI の構築・更新ロジックを集約し、`bevy_app` は shell/adapter とゲーム状態更新ハンドラを保持する。
 - `bevy_app` → `hw_ui` は依存方向を維持し、`hw_ui` から `bevy_app` へ依存しない。
-- `UiShell` 的な役割（Selection やカメラ・モード遷移）は `bevy_app` 側で管理し、`interface` では API 構造変更に耐える薄い再エクスポート層を残す。
+- `UiShell` 的な役割（Selection やカメラ・モード遷移）は `bevy_app` 側で管理する。`interface::camera` は `hw_ui::camera::MainCamera` のみを再エクスポートする（`PanCamera` / `PanCameraPlugin` 等 Bevy ネイティブ型の再エクスポートは除去済み。使用箇所で `bevy::camera_controller::pan_camera` から直接 import する）。
 
 ### `hw_ui`
 

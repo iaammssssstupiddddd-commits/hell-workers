@@ -5,9 +5,6 @@ mod events;
 use hw_core::game_state;
 pub mod interface;
 pub mod plugins;
-pub mod relationships {
-    pub use hw_core::relationships::*;
-}
 pub mod systems;
 pub mod world;
 

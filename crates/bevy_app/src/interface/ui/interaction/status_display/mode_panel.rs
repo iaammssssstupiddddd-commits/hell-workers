@@ -10,7 +10,7 @@ use crate::interface::selection::SelectedEntity;
 use hw_ui::components::UiNodeRegistry;
 use crate::interface::ui::interaction::mode;
 use crate::interface::ui::panels::task_list::{TaskListDirty, TaskListState};
-use crate::relationships::ManagedBy;
+use hw_core::relationships::ManagedBy;
 use crate::systems::command::{
     AreaEditClipboard, AreaEditSession, TaskArea, TaskMode, count_positions_in_area,
     overlap_summary_from_areas,
