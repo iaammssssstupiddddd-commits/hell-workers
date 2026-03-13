@@ -1,5 +1,7 @@
+use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use hw_core::area::TaskArea;
+use hw_core::relationships::TaskWorkers;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Reflect)]
 pub enum FloorConstructionPhase {
@@ -186,4 +188,43 @@ impl WallConstructionSite {
 pub trait ConstructionSitePositions {
     fn floor_site_pos(&self, site: Entity) -> Option<Vec2>;
     fn wall_site_pos(&self, site: Entity) -> Option<Vec2>;
+}
+
+/// 建設サイトへの読み取り専用アクセス
+#[derive(SystemParam)]
+pub struct ConstructionSiteAccess<'w, 's> {
+    pub floor_sites: Query<
+        'w,
+        's,
+        (
+            &'static Transform,
+            &'static FloorConstructionSite,
+            Option<&'static TaskWorkers>,
+        ),
+    >,
+    pub wall_sites: Query<
+        'w,
+        's,
+        (
+            &'static Transform,
+            &'static WallConstructionSite,
+            Option<&'static TaskWorkers>,
+        ),
+    >,
+}
+
+impl ConstructionSitePositions for ConstructionSiteAccess<'_, '_> {
+    fn floor_site_pos(&self, site: Entity) -> Option<Vec2> {
+        self.floor_sites
+            .get(site)
+            .ok()
+            .map(|(t, _, _)| t.translation.truncate())
+    }
+
+    fn wall_site_pos(&self, site: Entity) -> Option<Vec2> {
+        self.wall_sites
+            .get(site)
+            .ok()
+            .map(|(t, _, _)| t.translation.truncate())
+    }
 }
