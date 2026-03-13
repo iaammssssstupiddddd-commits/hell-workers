@@ -243,20 +243,18 @@ M1（state_decision）は Cargo.toml 変更不要。M2 で `ConstructionSiteAcce
 
 ### 現在地
 
-- 進捗: `0%`（コード調査済み・着手前）
-- 完了済みマイルストーン: なし
-- 未着手/進行中: M1-1
+- 進捗: `33%`
+- 完了済みマイルストーン: M1
+- 未着手/進行中: M2（前提タスク待ち）
 
 ### 次のAIが最初にやること
 
-1. **M1-1 着手**: `crates/bevy_app/src/systems/familiar_ai/helpers/query_types.rs` を開き、`FamiliarStateQuery` と `FamiliarSoulQuery` の定義を `crates/hw_familiar_ai/src/familiar_ai/decide/query_types.rs` 末尾にコピーする。
-2. hw_familiar_ai 側で `use hw_core::...`/`use hw_jobs::...`/`use hw_logistics::...` に import 修正。
-3. bevy_app 側 query_types に `pub use hw_familiar_ai::...::{FamiliarStateQuery, FamiliarSoulQuery};` を追加して `cargo check` を通す。
-4. 問題なければ M1-2（FamiliarDecideOutput）へ進む。
+1. M2 に着手する前に、**前提タスクである「`ConstructionSiteAccess` の `hw_jobs` への移動」を先に行う**こと。
+2. その後、M2-1（リソース型の移動）に着手する。
 
 ### ブロッカー/注意点
 
-- **`ConstructionSiteAccess`（M2 前提）**: M2 着手前に案A/案Bを選択・実施すること。案B（`hw_jobs` 移動）を推奨。
+- **`ConstructionSiteAccess`（M2 前提）**: M2 着手前に案B（`hw_jobs` 移動）を必ず実施すること。
 - **`MessageWriter` の import**: `hw_familiar_ai` では既に `task_management/context.rs` で `MessageWriter` を使用しているので import 解決方法はそちらを参照。
 - **chain 順序**: 実際の順序は `state_decision → auto_gather_for_blueprint → ApplyDeferred → task_delegation → encouragement`。plugin をまたぐため `.chain()` で一括管理できない。M1-3 で `blueprint_auto_gather_system.after(familiar_ai_state_system)` を設定し、M2-3 で `FamiliarAiCorePlugin` 側の chain に `task_delegation` を追加することで順序を維持する（M1-3/M2-3 の手順コメントを参照）。
 
