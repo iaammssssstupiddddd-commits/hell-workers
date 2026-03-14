@@ -1,4 +1,4 @@
-# 建築物・配管・設備配置の空間グリッド根本最適化
+# 建築物・配管・設備配置の空間グリッド根本最適化 (対案: 1D Array Architecture)
 
 ## メタ情報
 
@@ -17,266 +17,171 @@
 ## 1. 目的
 
 - **解決したい課題:**
-  - 建築物の格納がECS（`Blueprint.occupied_grids`）と `WorldMap`（`buildings` HashMap）に二重化しており、同期漏れが潜在的なバグ源になっている
-  - 配置バリデーションがマウス移動のたびに全占有グリッドを再チェックしており、将来建築物が増えると問題になる
-  - 障害物 Vec（`obstacles`）がビルド完了・削除のたびに全走査で再計算されている
-  - 配管・配線など新システム追加時に、同一セルへの共存配置が現状の構造では設計しにくい
+  - 空間データ（`buildings`, `obstacles` など）が `HashMap<(i32, i32), Entity>` や動的な `Vec` で管理されており、ハッシュ計算のオーバーヘッドやメモリ断片化によるキャッシュミスがパフォーマンスのボトルネックになっている。
+  - 建築物の格納がECS（`Blueprint.occupied_grids`）と `WorldMap`（`buildings`）に二重化している。
+  - 配置バリデーションがマウス移動のたびに重い処理（ハッシュルックアップ等）を走らせている。
+  - 障害物 `obstacles` が全走査で再計算されており、無駄な負荷がかかっている。
+  - 新システム（配管・配線）追加時に共存配置がしにくい。
 
 - **到達したい状態:**
-  - ECSのRelationship（本プロジェクトの標準手法）でエンティティとグリッド位置を接続し、二重保持を排除する
-  - 配置バリデーションを差分ベースにして毎フレームの再計算を削減する
-  - 障害物を変化セルのみ差分更新する
-  - 新システム（配管・配線）は既存フィールドと独立したフィールドとして追加し、同一セル共存を実現する
+  - `WorldMap` の空間データを `HashMap` から **フラットな1次元配列 (1D Array/Vec)** に完全移行し、真の `O(1)` ルックアップを実現する。
+  - バリデーションはキャッシュを持たず、ナノ秒レベルの配列直読みによって毎フレーム計算をゼロコスト化する。
+  - 空間インデックスの正本（Single Source of Truth）を `WorldMap` の 1D Array に集約し、ECSエンティティとの不要な二重管理（GridCell Entity等）を避ける。
+  - 障害物を変化セルのみ差分更新する。
+  - 新システム（配管・配線）は独立した 1D Array として追加し、同一セル共存を実現する。
 
 - **成功指標:**
-  - `Blueprint.occupied_grids` と `WorldMap.buildings` の二重保持が解消される
-  - 障害物クエリがビルド変更後も全走査なしに最新状態を返す
-  - 配管をフロアと同一セルに配置できる
-  - `cargo check` が通る
+  - `WorldMap.buildings` 等が `Vec<Option<Entity>>` や `Vec<bool>` に移行されている。
+  - マウス移動時のバリデーション負荷が計測不能なレベルまで低下する。
+  - 障害物クエリが差分更新により高速化する。
+  - `cargo check` が通る。
 
 ---
 
 ## 2. 現状の問題構造
 
-### 2-1. ECS とのデータ二重保持
+### 2-1. HashMap による空間ルックアップの限界
+現在 `WorldMap.buildings: HashMap<(i32,i32), Entity>` が使われていると推測されるが、マップサイズが固定である場合、HashMapの使用はハッシュ計算とメモリの非連続性によりパフォーマンス上のペナルティが大きい。
 
-```
-グリッド占有情報が2箇所に存在する:
+### 2-2. バリデーションの重さとキャッシュの罠
+マウス移動のたびに `HashMap` を複数回引くため負荷が高く、以前の提案では「キャッシュ機構」を導入しようとしていた。しかしキャッシュは無効化（Dirtyフラグ）の管理が複雑になりバグの温床となる。
 
-  Blueprint.occupied_grids: Vec<(i32,i32)>     ← ECS コンポーネント
-  WorldMap.buildings: HashMap<(i32,i32),Entity> ← リソース
-
-  → ビルド完了時に両方を更新しなければならない
-  → 削除時に片方を忘れると障害物データが腐る
-```
-
-### 2-2. バリデーションの毎フレーム全走査
-
-```
-マウス移動
-  → occupied_grids の全セルをループ
-    → has_building() × n
-    → has_stockpile() × n
-    → is_walkable() × n
-  → 壁/フロア (最大10×10=100セル) では100回ループ
-  → 建築物が密集しても、静止中も、毎フレーム再計算
-```
-
-### 2-3. 障害物 Vec の全走査再計算
-
-```
-Building完了/削除
-  → obstacles Vec を最初から全セル走査して再計算
-  → O(MAP_WIDTH * MAP_HEIGHT) = O(10,000) が毎回発生
-  → 実際には変化するのはフットプリントの数セルのみ
-```
-
-### 2-4. 新システム追加時の共存問題
-
-現状の `buildings: HashMap<(i32,i32), Entity>` は1セルに1エンティティしか保持できない。
-配管をフロアと同一セルに置く設計にするには、独立したフィールドとして並列に持つ必要がある。
-
-```rust
-// 現状: 配管を追加しようとすると buildings と競合する
-world_map.buildings.get(&(x, y))  // → Some(floor_entity) で埋まっている
-// 配管を別フィールドで持てば競合しない
-world_map.pipes.get(&(x, y))      // → 独立して参照可能
-```
+### 2-3. ECS GridCell Entity 構想の矛盾
+以前の提案（フェーズC）では「GridCell Entityを作り、Relationshipを結ぶ」としていたが、これは `tilemap-chunk-migration-plan` による「基本地形エンティティの削減（10,000→1）」と真っ向から矛盾し、再び大量の目に見えないエンティティをスポーンすることになってしまう。
 
 ---
 
-## 3. 最適化の方針
+## 3. 最適化の方針 (対案)
 
-### 方針A: ECS Relationship によるグリッド占有の一元化（中期・構造改善）
+### 方針A: 1次元配列(1D Vec)による真の O(1) 空間インデックス化と HashMap の廃止 (最重要)
 
-本プロジェクトはすでに ECS Relationship を主要なエンティティ接続手段として採用している。
-グリッド占有もこれで表現することで、`Blueprint.occupied_grids` の Vec を廃止できる。
+空間のマス（セル）をEntityにするのではなく、**空間インデックスはECSから切り離してResource(`WorldMap`)の1D Arrayに任せきる**。
 
+```rust
+// 改善案 (crates/hw_world/src/map/mod.rs 相当)
+pub struct WorldMap {
+    pub width: i32,
+    pub height: i32,
+    // (x, y) へのアクセスは index = (y * width + x) で一発 O(1)
+    pub buildings: Vec<Option<Entity>>,
+    pub pipes: Vec<Option<Entity>>,
+    pub is_walkable: Vec<bool>, // obstaclesの代わりとして高速アクセス可能に
+}
+
+impl WorldMap {
+    #[inline]
+    pub fn get_index(&self, x: i32, y: i32) -> usize {
+        (y * self.width + x) as usize
+    }
+}
 ```
-現状:
-  Building Entity ──── Blueprint.occupied_grids: Vec<(i32,i32)>
-  WorldMap.buildings: HashMap<(i32,i32), Entity>  ← 二重保持
 
-提案後:
-  Building Entity ──[Occupies]──→ GridCell Entity × n
-  WorldMap はグリッド→エンティティの索引としてのみ機能
-```
-
-**効果:**
-- `Blueprint.occupied_grids` の Vec が不要になり二重保持が解消
-- 建築物削除時に Relationship を Despawn するだけで WorldMap も自動同期（Observer で実現）
-- ECS の変更検知（`Added<Occupies>`, `RemovedComponents<Occupies>`）でシステムが反応できる
+**効果:** 
+- ハッシュ計算が消滅しルックアップが真の O(1) になる。
+- 配列がメモリ上で連続しているためCPUキャッシュヒット率が劇的に向上する。
 
 ---
 
-### 方針B: 差分ベース配置バリデーション（短期・UX改善）
+### 方針B: 1D Vec 参照による超高速バリデーション (キャッシュ機構の廃止)
 
-```
-現状: マウス移動 → 毎フレーム全セル再バリデーション
-
-提案:
-  前フレームの配置位置 == 今フレーム? → キャッシュ結果を返す（再計算なし）
-  近傍の建築物が変化した?（Changed<Building> で検知） → キャッシュ無効化 → 再計算
-```
-
-**実装:**
+バリデーションキャッシュ用の構造体（`PlacementValidationCache`）を廃止し、**配列の直読みによる力技（だが最速）の毎フレーム計算**を行う。
 
 ```rust
-#[derive(Resource)]
-struct PlacementValidationCache {
-    last_anchor: Option<(i32, i32)>,
-    last_kind: Option<BuildingKind>,
-    result: PlacementResult,
-    dirty: bool,
+// マウス移動時のバリデーションループ
+let mut can_build = true;
+for offset in blueprint.footprint() {
+    let index = world_map.get_index(anchor_x + offset.x, anchor_y + offset.y);
+    if world_map.buildings[index].is_some() || !world_map.is_buildable_terrain[index] {
+        can_build = false;
+        break;
+    }
 }
 ```
 
 **効果:**
-- マウス静止中は計算ゼロ
-- 建築物が密集してもコストが増加しない
+- キャッシュ無効化バグの懸念がなくなり、コードが極めてシンプルになる。
+- 1D Arrayのルックアップはナノ秒単位のため、毎フレーム計算しても全く負荷にならない。
 
 ---
 
 ### 方針C: 障害物の差分更新（短期・確実な改善）
 
-```
+これは以前の提案を維持。
 現状: Building完了 → obstacles Vec 全走査 O(10,000)
-
-提案: 変化したグリッドのみ更新 O(フットプリント面積)
-```
+提案: 変化したグリッド（配列の該当インデックス）のみフラグを更新（O(フットプリント面積)）。
 
 **実装:**
-
 ```rust
-// 既存の add_obstacle() / remove_obstacle() を呼ぶだけで済む（すでに実装済み）
-// 問題は「全再構築」を呼んでいる箇所をこれらに置き換えること
-
-// building_completion/world_update.rs で:
 for &grid in &bp.occupied_grids {
-    world_map.add_obstacle(grid.0, grid.1);  // 全再構築の代わり
+    let idx = world_map.get_index(grid.0, grid.1);
+    world_map.is_walkable[idx] = false; // add_obstacle() の代替
 }
 ```
-
-**効果:**
-- ビルド完了/削除コストが O(10,000) → O(フットプリント面積) に削減
 
 ---
 
-### 方針D: 新システムの独立フィールドとして追加（将来・設計ガイドライン）
+### 方針D: 新システムの独立配列として追加（将来・設計ガイドライン）
 
-配管・配線など新システムを追加する際のガイドライン:
-
-```rust
-// 既存フィールドとは独立したフィールドを追加する（同一セル共存のため）
-// データ構造は既存パターン（HashMap）に合わせる
-pub pipes: HashMap<(i32, i32), Entity>,   // buildings と独立 → 同一セル共存可
-pub wires: HashMap<(i32, i32), Entity>,   // pipes と独立   → 同一セル共存可
-```
-
-歩行可否への影響:
-- 配管・配線は歩行を妨げない → `obstacles` は変更不要
-- 歩行を妨げる設備（大型機器など）→ `add_obstacle()` を呼ぶだけ
-
-配管ネットワーク固有の情報は別途 Resource で管理:
+配管・配線などは、同一の1D Arrayサイズで別のフィールドとして定義する。
 
 ```rust
-#[derive(Resource)]
-pub struct PipeNetwork {
-    connections: HashMap<Entity, Vec<Entity>>,
-}
+pub pipes: Vec<Option<Entity>>,   // buildings と独立 → 同一セル共存可
+pub wires: Vec<Option<Entity>>,   // pipes と独立   → 同一セル共存可
 ```
 
 ---
 
 ## 4. 段階的移行ロードマップ
 
-### フェーズA: 障害物の差分更新（最優先・低リスク）
+### フェーズA: 障害物の差分更新と is_walkable 配列化（最優先・低リスク）
+- **変更方針:** `obstacles` や `rebuild_obstacles()` を廃止し、`is_walkable: Vec<bool>` に移行。建築完了/削除時は該当インデックスの bool だけ反転させる。
+- **変更ファイル:**
+  - `crates/hw_world/src/map/mod.rs`
+  - `crates/bevy_app/src/systems/jobs/building_completion/world_update.rs`
 
-**変更方針:** `rebuild_obstacles()` 相当の全走査呼び出しを、
-既存の `add_obstacle()` / `remove_obstacle()` の個別呼び出しに置き換える。
+### フェーズB: WorldMap.buildings の HashMap から 1D Vec への移行
+- **変更内容:** `buildings: HashMap<(i32,i32), Entity>` を `buildings: Vec<Option<Entity>>` に変更。
+- **変更ファイル:**
+  - `crates/hw_world/src/map/mod.rs`
+  - 各種参照箇所
 
-**変更ファイル:**
-- `crates/bevy_app/src/systems/jobs/building_completion/world_update.rs`
-
-**推定難易度:** 低
-
----
-
-### フェーズB: 配置バリデーションキャッシュ
-
-**変更ファイル:**
-- `crates/hw_ui/src/selection/placement.rs`
-- `crates/hw_ui/src/selection/mod.rs`（キャッシュ Resource 追加）
-
-**推定難易度:** 低
-
----
-
-### フェーズC: ECS Relationship による占有一元化
-
-**変更ファイル:**
-- `crates/hw_jobs/src/model.rs` — `Blueprint.occupied_grids` の廃止
-- `crates/hw_world/src/map/mod.rs` — WorldMap 同期を Observer に移行
-- 関連する全システム
-
-**推定難易度:** 高（全建築物システムへの影響大）
+### フェーズC: バリデーションの直接参照化（キャッシュ不要化）
+- **変更内容:** `PlacementValidationCache` のような仕組みを取り入れず、毎フレーム `WorldMap` の Vec を引く形にリファクタ。
+- **変更ファイル:**
+  - `crates/hw_ui/src/selection/placement.rs` 等
 
 ---
 
 ## 5. 依存関係まとめ
-
 ```
-フェーズA: 障害物差分更新      ← 独立実施可・今すぐ効果あり
-フェーズB: バリデーションキャッシュ ← 独立実施可・今すぐ効果あり
+フェーズA: is_walkable の導入と差分更新  ← 今すぐ可能
      ↓
-フェーズC: ECS Relationship 統一 ← A/B 完了後に推奨
+フェーズB: HashMap 廃止 (1D Array化)     ← A の後推奨
      ↓
-方針D: 配管・配線の追加         ← C 完了後が理想、C 前でも追加自体は可能
+フェーズC: 超高速バリデーション         ← B 完了後に自然と達成される
+     ↓
+方針D: 配管・配線の追加                 ← B 以降ならいつでも可能
 ```
 
 ---
 
 ## 6. リスクと対策
-
 | リスク | 影響 | 対策 |
 | --- | --- | --- |
-| 障害物の全走査再構築を呼んでいる箇所が複数ある | 差分更新への移行漏れ | `grep -r "rebuild_obstacles\|obstacles.*iter\|obstacles.*fill" crates/bevy_app/src/ crates/` で全箇所確認 |
-| Relationship ベース移行でシステム実行順が変わる | 同期タイミングのバグ | フェーズC は既存の HashMap を残しつつ段階移行する |
-| 配管追加時に is_walkable() の変更が必要になる | 配管が障害物扱いになる | 配管は `add_obstacle()` を呼ばない設計を守る |
+| 大量の `HashMap` 依存コードがある場合のリファクタ量 | 移行時のコンパイルエラー多数 | `Map` のアクセサメソッド（`get_building(x,y)`等）を先に作り、内部実装だけをVecに差し替えることで影響を最小化 |
+| マップサイズ可変への対応 | Vecサイズ再確保の手間 | 本プロジェクトは固定サイズ前提のため問題なし |
 
 ---
 
 ## 7. AI引継ぎメモ（最重要）
 
-### 現在地
-- 進捗: `0%`（調査・提案のみ、実装未着手）
-
 ### 次のAIが最初にやること
-
-1. `grep -r "rebuild_obstacles\|obstacles\.fill\|obstacles\.iter_mut" crates/bevy_app/src/ crates/` で障害物全走査箇所を確認
-2. フェーズA: `building_completion/world_update.rs` の全走査を `add_obstacle()` 個別呼び出しに置き換え
-3. `cargo check` 確認後、フェーズB へ
-
-### 参照必須ファイル
-
-- `crates/hw_world/src/map/mod.rs` — WorldMap 構造体・`add_obstacle()`/`remove_obstacle()` 実装
-- `crates/hw_jobs/src/model.rs` — Blueprint/Building コンポーネント
-- `crates/hw_ui/src/selection/placement.rs` — バリデーションロジック
-- `crates/bevy_app/src/systems/jobs/building_completion/world_update.rs` — WorldMap 同期
+1. `crates/hw_world/src/map/mod.rs` において、`WorldMap` の `buildings` や `obstacles` の現在の定義を確認する。
+2. それらを `Vec<Option<Entity>>` や `Vec<bool>` で置き換える PR / 実装に着手する。
+3. `crates/bevy_app/src/systems/jobs/building_completion/world_update.rs` などの `obstacles` 全再構築箇所を差分更新に修正する。
 
 ### Definition of Done
-
-- [ ] `Blueprint.occupied_grids` と `WorldMap.buildings` の二重保持が解消（フェーズC）
-- [ ] `obstacles` の更新が差分ベースになる（フェーズA）
-- [ ] マウス静止中の配置バリデーション計算がゼロになる（フェーズB）
-- [ ] `cargo check` が成功
-
----
-
-## 8. 更新履歴
-
-| 日付 | 変更者 | 内容 |
-| --- | --- | --- |
-| `2026-03-12` | `Claude` | 初版作成 |
-| `2026-03-12` | `Claude` | OccupantKind統合方式を廃止し独立レイヤーVec方式に修正 |
-| `2026-03-12` | `Claude` | HashMap→Vec変換を削除。根拠のない変換を排除し、実効性のある3方針に絞り込み |
+- [ ] `WorldMap` から `HashMap` による空間管理が排除され、1D Array に移行している。
+- [ ] 毎フレームの配置バリデーションがキャッシュなしで軽量に動作している。
+- [ ] 障害物の全再計算処理が消滅し、差分更新になっている。
+- [ ] `cargo check` が成功する。
