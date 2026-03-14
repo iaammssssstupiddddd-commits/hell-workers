@@ -40,3 +40,18 @@ pub fn update_spatial_grid_system<T: Component>(
         grid.remove(entity);
     }
 }
+
+/// `DamnedSoul` 専用のグリッド更新システム（bevy_app への re-export 用）。
+pub fn update_damned_soul_spatial_grid_system(
+    grid: ResMut<SpatialGrid>,
+    query: Query<
+        (Entity, &Transform),
+        (
+            With<hw_core::soul::DamnedSoul>,
+            Or<(Added<hw_core::soul::DamnedSoul>, Changed<Transform>)>,
+        ),
+    >,
+    removed: RemovedComponents<hw_core::soul::DamnedSoul>,
+) {
+    update_spatial_grid_system::<hw_core::soul::DamnedSoul>(grid, query, removed);
+}

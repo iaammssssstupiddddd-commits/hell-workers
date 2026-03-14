@@ -12,31 +12,10 @@ use hw_visual::plant_trees::PlantTreeVisualState;
 use crate::world::map::{WorldMap, WorldMapWrite};
 use bevy::prelude::*;
 use hw_core::constants::*;
+pub use hw_world::DreamTreePlantingPlan;
 use rand::SeedableRng;
 use rand::rngs::StdRng;
 use rand::seq::SliceRandom;
-
-#[derive(Debug, Clone)]
-pub struct DreamTreePlantingPlan {
-    pub width_tiles: u32,
-    pub height_tiles: u32,
-    pub min_square_side: u32,
-    pub planned_spawn: u32,
-    pub cap_remaining: u32,
-    pub affordable: u32,
-    pub candidate_count: u32,
-    pub selected_tiles: Vec<(i32, i32)>,
-}
-
-impl DreamTreePlantingPlan {
-    pub fn final_spawn(&self) -> u32 {
-        self.selected_tiles.len() as u32
-    }
-
-    pub fn cost(&self) -> f32 {
-        self.final_spawn() as f32 * DREAM_TREE_COST_PER_TREE
-    }
-}
 
 pub fn build_dream_tree_planting_plan(
     start: Vec2,

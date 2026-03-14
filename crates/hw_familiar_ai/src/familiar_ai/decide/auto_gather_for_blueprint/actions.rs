@@ -1,15 +1,17 @@
+//! Auto gather designation の割り当て・クリーンアップアクション。
+
 use std::collections::{HashMap, HashSet};
 
 use bevy::prelude::*;
-
-use hw_core::relationships::ManagedBy;
-use crate::systems::jobs::{Designation, Priority, TaskSlots};
-use crate::systems::logistics::ResourceType;
-use crate::world::map::WorldMap;
-use crate::world::pathfinding::PathfindingContext;
 use hw_core::constants::{
     BLUEPRINT_AUTO_GATHER_PATH_CHECK_LIMIT_PER_STAGE, BLUEPRINT_AUTO_GATHER_PRIORITY,
 };
+use hw_core::jobs::WorkType;
+use hw_core::logistics::ResourceType;
+use hw_core::relationships::ManagedBy;
+use hw_jobs::model::{Designation, Priority, TaskSlots};
+use hw_world::WorldMap;
+use hw_world::pathfinding::PathfindingContext;
 
 use super::AutoGatherDesignation;
 use super::helpers::{
@@ -22,7 +24,7 @@ fn assign_auto_gather_designation(
     source: Entity,
     owner: Entity,
     resource_type: ResourceType,
-    work_type: crate::systems::jobs::WorkType,
+    work_type: WorkType,
 ) {
     commands.entity(source).insert((
         Designation { work_type },
@@ -46,7 +48,7 @@ fn clear_auto_gather_designation(commands: &mut Commands, source: Entity) {
     )>();
 }
 
-pub(super) fn assign_needed_auto_designations(
+pub fn assign_needed_auto_designations(
     commands: &mut Commands,
     needed_new_auto_count: &HashMap<(Entity, ResourceType), u32>,
     owner_infos: &HashMap<Entity, OwnerInfo>,
@@ -114,7 +116,7 @@ pub(super) fn assign_needed_auto_designations(
     }
 }
 
-pub(super) fn cleanup_auto_gather_markers(
+pub fn cleanup_auto_gather_markers(
     commands: &mut Commands,
     stale_marker_only: HashSet<Entity>,
     invalid_auto_idle: HashSet<Entity>,

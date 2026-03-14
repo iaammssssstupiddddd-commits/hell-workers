@@ -96,20 +96,22 @@ Perceive → Update → Decide → Execute
 
 ## Room Detection の境界
 
-- `crates/hw_world::room_detection` が room detection core の唯一の所有者であり、`RoomDetectionBuildingTile` からの入力分類、flood-fill、妥当性判定、`RoomBounds` を提供する。
+- `crates/hw_world::room_detection` が room detection core の唯一の所有者であり、`RoomDetectionBuildingTile` からの入力分類、flood-fill、妥当性判定、`RoomBounds` を提供する。**加えて ECS 型（`Room`, `RoomOverlayTile`, `RoomTileLookup`, `RoomDetectionState`, `RoomValidationState`）も `hw_world::room_detection` が所有する**。
 - root 側 `crates/bevy_app/src/systems/room/detection.rs` は app shell として `Query<(Entity, &Building, &Transform)>` + `WorldMapRead` から tile descriptor を収集し、`DetectedRoom` を `Room` entity と `RoomTileLookup` へ反映する。
 - root 側 `crates/bevy_app/src/systems/room/validation.rs` は既存 `Room` の `tiles` を `hw_world::room_detection::room_is_valid_against_input(...)` に渡す adapter に留める。
-- dirty tracking (`RoomDetectionState`) と visual overlay (`RoomOverlayTile`) は root 側責務であり、room detection core には含めない。
+- `bevy_app/src/systems/room/components.rs` と `resources.rs` は `hw_world` からの re-export のみ。型の所有権は `hw_world` にある。
 - `Room` entity の spawn では `Transform::default()` を必ず付与する。これを外すと overlay child の transform 伝播が壊れる。
 
 ## ゲーム内時間 (GameTime)
 
-`crates/bevy_app/src/systems/time.rs` — `GameTime`（Resource）:
+`crates/hw_core/src/time.rs` — `GameTime`（Resource）:
 
 - フィールド: `seconds: f32`, `day: u32`, `hour: u32`, `minute: u32`
 - **時間倍率**: 1実時間秒 = 1ゲーム内分（60倍速）
 - `Time<Virtual>` を使用するためポーズ中は進まない
 - 時間経過イベントには `game_time.day` の変化を監視する（例: 木再生は1日1回）
+- `game_time_system`（時刻計算 + ClockText 更新）は `bevy_app/src/systems/time.rs` に残留。`ClockText`（`hw_ui` 型）への依存があるため Leaf に移動不可。
+- `bevy_app/src/systems/time.rs` は `pub use hw_core::GameTime;` で re-export する。
 
 ## 空間グリッド一覧 (Spatial Grids)
 

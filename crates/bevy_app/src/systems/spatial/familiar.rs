@@ -1,14 +1,7 @@
-use crate::entities::familiar::Familiar;
-use bevy::prelude::*;
+//! Familiar 空間グリッド更新 facade — 実装は hw_spatial に移設済み。
 
-/// 使い魔用の空間グリッド - モチベーション計算の高速化用
-pub use hw_spatial::FamiliarSpatialGrid;
-pub use hw_spatial::update_familiar_spatial_grid_system as _update_familiar_spatial_grid_system;
-
-pub fn update_familiar_spatial_grid_system(
-    grid: ResMut<FamiliarSpatialGrid>,
-    query: Query<(Entity, &Transform), (With<Familiar>, Or<(Added<Familiar>, Changed<Transform>)>)>,
-    removed: RemovedComponents<Familiar>,
-) {
-    _update_familiar_spatial_grid_system::<Familiar>(grid, query, removed);
-}
+pub use hw_spatial::{
+    FamiliarSpatialGrid,
+    update_familiar_entity_spatial_grid_system as update_familiar_spatial_grid_system,
+    update_familiar_spatial_grid_system as _update_familiar_spatial_grid_system,
+};

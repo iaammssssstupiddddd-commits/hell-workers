@@ -11,6 +11,7 @@ pub mod river;
 pub mod spatial;
 pub mod spawn;
 pub mod terrain;
+pub mod tree_planting;
 pub mod zone_ops;
 pub mod zones;
 
@@ -23,6 +24,11 @@ pub use layout::{
     SAND_WIDTH, TREE_POSITIONS,
 };
 pub use map::{WorldMap, WorldMapRead, WorldMapWrite};
+pub use room_detection::{
+    DetectedRoom, Room, RoomBounds, RoomDetectionBuildingTile, RoomDetectionInput,
+    RoomDetectionState, RoomOverlayTile, RoomTileLookup, RoomValidationState,
+    build_detection_input, detect_rooms, room_is_valid_against_input,
+};
 pub use mapgen::generate_base_terrain_tiles;
 pub use pathfinding::{
     PathGoalPolicy, PathNode, PathWorld, PathfindingContext, can_reach_target, find_path,
@@ -39,3 +45,4 @@ pub use zone_ops::{
     rectangles_overlap_site,
 };
 pub use zones::{PairedSite, PairedYard, Site, Yard};
+pub use tree_planting::DreamTreePlantingPlan;

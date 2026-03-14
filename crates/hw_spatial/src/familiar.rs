@@ -39,3 +39,18 @@ pub fn update_familiar_spatial_grid_system<T: Component>(
         grid.remove(entity);
     }
 }
+
+/// `Familiar` 専用のグリッド更新システム（bevy_app への re-export 用）。
+pub fn update_familiar_entity_spatial_grid_system(
+    grid: ResMut<FamiliarSpatialGrid>,
+    query: Query<
+        (Entity, &Transform),
+        (
+            With<hw_core::familiar::Familiar>,
+            Or<(Added<hw_core::familiar::Familiar>, Changed<Transform>)>,
+        ),
+    >,
+    removed: RemovedComponents<hw_core::familiar::Familiar>,
+) {
+    update_familiar_spatial_grid_system::<hw_core::familiar::Familiar>(grid, query, removed);
+}

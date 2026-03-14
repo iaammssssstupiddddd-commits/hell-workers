@@ -219,3 +219,15 @@ pub fn div_ceil_u32(value: u32, divisor: u32) -> u32 {
         (value + divisor - 1) / divisor
     }
 }
+
+/// パス到達可能性チェック（WorldMap + PathfindingContext 依存）
+pub fn is_reachable(
+    start_grid: (i32, i32),
+    target_pos: Vec2,
+    world_map: &hw_world::WorldMap,
+    pf_context: &mut hw_world::pathfinding::PathfindingContext,
+) -> bool {
+    let target_grid = hw_world::WorldMap::world_to_grid(target_pos);
+    hw_world::pathfinding::find_path_to_adjacent(world_map, pf_context, start_grid, target_grid, true)
+        .is_some()
+}

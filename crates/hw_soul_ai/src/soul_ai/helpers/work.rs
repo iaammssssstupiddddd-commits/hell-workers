@@ -138,3 +138,37 @@ pub fn cleanup_task_assignment<'w, 's, Q: TaskReservationAccess<'w, 's>>(
     *task = AssignedTask::None;
     path.waypoints.clear();
 }
+
+/// タスク解除の公開 API。
+///
+/// 内部で `cleanup_task_assignment` を呼び出し、加えて
+/// `OnTaskAbandoned` イベントの発行と `WorkingOn` コンポーネントの削除を行う。
+pub fn unassign_task<'w, 's, Q: TaskReservationAccess<'w, 's>>(
+    commands: &mut Commands,
+    soul_entity: Entity,
+    drop_pos: Vec2,
+    task: &mut AssignedTask,
+    path: &mut hw_core::soul::Path,
+    inventory: Option<&mut hw_logistics::Inventory>,
+    dropped_item_res: Option<hw_logistics::ResourceType>,
+    queries: &mut Q,
+    world_map: &WorldMap,
+    emit_abandoned_event: bool,
+) {
+    cleanup_task_assignment(
+        commands,
+        soul_entity,
+        drop_pos,
+        task,
+        path,
+        inventory,
+        dropped_item_res,
+        queries,
+        world_map,
+        emit_abandoned_event,
+    );
+
+    commands
+        .entity(soul_entity)
+        .remove::<hw_core::relationships::WorkingOn>();
+}

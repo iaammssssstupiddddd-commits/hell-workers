@@ -7,7 +7,8 @@ pub mod resources;
 pub mod validation;
 pub mod visual;
 
-pub use components::{Room, RoomBounds, RoomOverlayTile};
+pub use components::{Room, RoomOverlayTile};
+pub use hw_world::RoomBounds;
 pub use detection::detect_rooms_system;
 pub use dirty_mark::{
     mark_room_dirty_from_building_changes_system, on_building_added, on_building_removed,

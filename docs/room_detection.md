@@ -9,8 +9,8 @@ Room 検出システムは、完成した壁・扉・床で構成された密閉
 
 実装境界は次の 2 層です。
 
-- `crates/hw_world::room_detection`: pure core。入力分類、flood-fill、妥当性判定、`RoomBounds` を保持する。
-- `crates/bevy_app/src/systems/room/*`: app shell。ECS Query から入力を収集し、`Room` entity / `RoomTileLookup` / visual overlay / dirty scheduling を扱う。
+- `crates/hw_world::room_detection`: pure core かつ ECS 型の所有者。入力分類、flood-fill、妥当性判定、`RoomBounds`、**`Room`/`RoomOverlayTile`（Component）**、**`RoomTileLookup`/`RoomDetectionState`/`RoomValidationState`（Resource）** を保持する。
+- `crates/bevy_app/src/systems/room/*`: app shell。ECS Query から入力を収集し、`Room` entity のスポーン/削除、`RoomTileLookup` の更新、visual overlay の生成、dirty scheduling を扱う。各ファイル（`components.rs`, `resources.rs`）は `hw_world` からの re-export のみ。
 
 ## 2. Room の成立条件
 
@@ -29,19 +29,19 @@ Room 検出システムは、完成した壁・扉・床で構成された密閉
 
 ### コンポーネント
 
-| 型 | 説明 |
-|:---|:---|
-| `Room` | 検出された Room エンティティ。`tiles`, `wall_tiles`, `door_tiles`, `bounds`, `tile_count` を保持 |
-| `RoomBounds` | Room の最小/最大グリッド座標（min_x, min_y, max_x, max_y） |
-| `RoomOverlayTile` | 各床タイルに対応する半透明オーバーレイスプライト。`Room` エンティティの子として生成 |
+| 型 | 定義クレート | 説明 |
+|:---|:---|:---|
+| `Room` | `hw_world` | 検出された Room エンティティ。`tiles`, `wall_tiles`, `door_tiles`, `bounds`, `tile_count` を保持 |
+| `RoomBounds` | `hw_world` | Room の最小/最大グリッド座標（min_x, min_y, max_x, max_y） |
+| `RoomOverlayTile` | `hw_world` | 各床タイルに対応する半透明オーバーレイスプライト。`Room` エンティティの子として生成 |
 
 ### リソース
 
-| 型 | 説明 |
-|:---|:---|
-| `RoomDetectionState` | dirty タイルセットとクールダウンタイマー |
-| `RoomTileLookup` | `(i32, i32)` グリッド座標 → `Entity`（Room エンティティ）の逆引きマップ |
-| `RoomValidationState` | 定期検証タイマー |
+| 型 | 定義クレート | 説明 |
+|:---|:---|:---|
+| `RoomDetectionState` | `hw_world` | dirty タイルセットとクールダウンタイマー |
+| `RoomTileLookup` | `hw_world` | `(i32, i32)` グリッド座標 → `Entity`（Room エンティティ）の逆引きマップ |
+| `RoomValidationState` | `hw_world` | 定期検証タイマー |
 
 ## 4. 検出アルゴリズム
 

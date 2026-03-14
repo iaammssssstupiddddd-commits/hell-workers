@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 use hw_core::logistics::ResourceType;
 
+pub mod actions;
 pub mod demand;
 pub mod helpers;
 pub mod planning;

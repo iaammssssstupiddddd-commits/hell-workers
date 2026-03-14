@@ -109,6 +109,7 @@ hw_visual (hw_core + hw_jobs + hw_logistics + hw_spatial + hw_world + hw_ui)
 - `selection/` — SelectedEntity, HoveredEntity, SelectionIndicator, SelectionIntent, cleanup_selection_references_system, placement validation API
 - `camera.rs` — MainCamera マーカー、`world_cursor_pos`（スクリーン座標→ワールド座標変換ユーティリティ）
 - `plugins/` — UiCorePlugin / UiEntityListPlugin / UiFoundationPlugin / UiInfoPanelPlugin / UiTooltipPlugin（fn ポインタ受け付けシェル）
+- **`area_edit/`** — エリア選択・編集状態の純粋データ型（`AreaEditHandleKind`, `AreaEditOperation`, `AreaEditDrag`, `AreaEditSession`, `AreaEditHistory`, `AreaEditHistoryEntry`, `AreaEditClipboard`, `AreaEditPresets`）。`bevy_app/command/area_selection/state.rs` は re-export のみ。`AreaEditHandleKind` は `bevy_app/command/mod.rs` からも re-export
 
 ここに置かないもの:
 
@@ -317,6 +318,7 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 - `DoorState`
 - `AreaBounds`, `TaskArea`（矩形エリア抽象型）
 - `command` 系 pure helper の一部（`wall_line_area`, `count_positions_in_area`, `overlap_summary_from_areas`, `get_drag_start`）
+- `GameTime`（`time.rs`）— ゲーム内時間 Resource。`game_time_system` は `ClockText` 依存のため bevy_app に残留し、`pub use hw_core::GameTime;` で re-export
 
 ### `hw_world`
 
@@ -340,13 +342,15 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 - `Yard`, `Site`, `PairedYard`, `PairedSite`（zone 系コンポーネント）
 - `zone_ops::identify_removal_targets` — 削除対象タイル + 孤立フラグメント特定（Flood Fill）
 - `zone_ops::area_tile_size`, `rectangles_overlap_site`, `rectangles_overlap`, `expand_yard_area` — ゾーン geometry helper
+- **`Room`, `RoomOverlayTile`（Component）** — Room ECS 型。`bevy_app/room/components.rs` は re-export のみ
+- **`RoomTileLookup`, `RoomDetectionState`, `RoomValidationState`（Resource）** — Room 管理リソース。`bevy_app/room/resources.rs` は re-export のみ
+- **`DreamTreePlantingPlan`（`tree_planting.rs`）** — Dream 植林計画の純粋データ構造。ビルダー関数（`build_dream_tree_planting_plan`）は `GameAssets`/`DreamPool` 依存のため bevy_app に残留
 
 ここに置かないもの:
 
 - `Commands` を使う sprite spawn
 - `GameAssets` 依存の texture 選択
 - root 固有の `WorldMapRead/Write` SystemParam wrapper
-- `Room` entity の spawn/despawn、`RoomTileLookup` 更新、dirty scheduling
 - `SpatialGrid` resource 実体と update system（8 種 concrete）は `hw_spatial` が保持
 
 ### `hw_spatial`

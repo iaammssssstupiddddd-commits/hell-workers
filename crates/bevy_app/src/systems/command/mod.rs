@@ -45,18 +45,7 @@ pub struct AreaEditHandleVisual {
     pub kind: AreaEditHandleKind,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum AreaEditHandleKind {
-    TopLeft,
-    Top,
-    TopRight,
-    Right,
-    BottomRight,
-    Bottom,
-    BottomLeft,
-    Left,
-    Center,
-}
+pub use hw_ui::area_edit::AreaEditHandleKind;
 
 // ---------------------------------------------------------------------------
 // crate 所有 helper の re-export（ECS 非依存 pure function）

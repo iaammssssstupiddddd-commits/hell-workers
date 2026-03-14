@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 
+pub mod area_edit;
 pub mod intents;
 pub use intents::UiIntent;
 pub mod components;

@@ -6,6 +6,7 @@ use hw_core::events::{
 };
 
 pub mod auto_gather_for_blueprint;
+pub mod blueprint_auto_gather;
 pub mod delegation_context;
 pub mod encouragement;
 pub mod following;
