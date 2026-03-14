@@ -1,6 +1,6 @@
 # Plans Index
 
-`docs/plans` の文書ステータス一覧（更新日: 2026-03-13）。
+`docs/plans` の文書ステータス一覧（更新日: 2026-03-14）。
 
 ## 新規計画書の作り方
 
@@ -19,9 +19,7 @@
 
 | Document | Status | Notes |
 |---|---|---|
-| [refactor-familiar-ai-adapter-plan.md](refactor-familiar-ai-adapter-plan.md) | Draft | Familiar AI のオーケストレーター分離・Plugin 移行計画 |
-| [refactor-soul-jobs-systems-plan.md](refactor-soul-jobs-systems-plan.md) | Draft | Soul / Jobs システムのクレート境界リファクタリング計画 |
-| [refactor-types-migration-plan.md](refactor-types-migration-plan.md) | Draft | 型・ドメインモデルのクレート境界リファクタリング計画 |
+| [refactor-types-migration-plan.md](refactor-types-migration-plan.md) | Done | 型・ドメインモデルのクレート境界リファクタリング計画 |
 
 ## アーカイブ計画書一覧 (`docs/plans/archive`)
 

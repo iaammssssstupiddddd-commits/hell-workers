@@ -18,6 +18,7 @@
 | Document | Notes |
 | --- | --- |
 | [08_visual_update_prompts.md](08_visual_update_prompts.md) | ビジュアル更新プロンプト集 |
+| [3d-rendering-rtt-proposal-2026-03-14.md](3d-rendering-rtt-proposal-2026-03-14.md) | 建築物は2Dスプライトの静的組み合わせで描画（壁は16+バリアントのテクスチャ切替）の提案。 |
 | [architecture-improvements-2026.md](architecture-improvements-2026.md) | アーキテクチャ改善提案 (Architecture Improvement Proposals) |
 | [building-visual-layer-plan-2026-03-12.md](building-visual-layer-plan-2026-03-12.md) | **の計画。 |
 | [soul_spawn_despawn_optimization.md](soul_spawn_despawn_optimization.md) | Soul Spawn/Despawn 最適化提案 |
