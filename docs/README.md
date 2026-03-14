@@ -30,6 +30,10 @@
 ## 世界観・アセット
 - [world_lore.md](world_lore.md): 世界観設定書。アセットデザインのための世界観・視覚指針（アートスタイル含む）。
 
+## 不変条件 & イベント（AI 必読）
+- [invariants.md](invariants.md): **ゲーム不変条件**。コード変更前に必ず確認すること（Soul/Familiar/タスク/Logistics 各不変条件）。
+- [events.md](events.md): **イベントカタログ**。全イベントの Producer / Consumer / Timing 一覧。イベント追加時は必ず更新。
+
 ## 開発ガイド
 - [architecture.md](architecture.md): 全体構造、システム依存関係、GameTime、空間グリッド一覧。
 - [cargo_workspace.md](cargo_workspace.md): Cargo workspace の crate 責務、依存方向、分割ルール（hw_core / hw_world / hw_logistics / hw_jobs / hw_familiar_ai / hw_soul_ai / hw_ai / hw_spatial / hw_ui / hw_visual）。
