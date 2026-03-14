@@ -66,6 +66,7 @@ pub struct WorldMap {
     pub buildings: Vec<Option<Entity>>,
     pub pipes: Vec<Option<Entity>>,
     pub is_walkable: Vec<bool>, // obstaclesの代わりとして高速アクセス可能に
+    pub is_buildable_terrain: Vec<bool>, // 地形が建築可能かどうかのフラグ
 }
 
 impl WorldMap {
