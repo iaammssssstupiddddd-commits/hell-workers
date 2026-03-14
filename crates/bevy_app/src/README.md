@@ -90,9 +90,9 @@ pub mod escaping_apply {
     pub use hw_ai::soul_ai::execute::escaping_apply::*;
 }
 
-// パターン C: 拡張（純粋関数を re-export し、副作用関数を追加）
-pub use hw_ai::soul_ai::helpers::work::is_soul_available_for_work; // hw_ai から
-pub fn unassign_task(..., world_map: &WorldMap) { ... }            // src/ 独自
+// パターン C: 拡張（leaf の request emitter を使い、root 側で再検証と visual spawn を追加）
+pub use hw_soul_ai::soul_ai::execute::gathering_spawn::gathering_spawn_logic_system;
+pub fn gathering_spawn_system(...) { ... } // src/ 独自
 ```
 
 ### 用語

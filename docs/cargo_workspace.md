@@ -249,11 +249,11 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 - `familiar_ai::decide::query_types` — Familiar Decide 用の narrow query 定義
 - `familiar_ai::decide::helpers` — `finalize_state_transitions` / `process_squad_management` など pure helper
 - `familiar_ai::decide::recruitment` — `SpatialGridOps` ベースのリクルート選定・スカウト開始判定
-- `familiar_ai::decide::state_decision` — branch dispatch (`FamiliarDecisionPath`, `determine_decision_path`) と結果型 (`FamiliarStateDecisionResult`)。MessageWriter は持たない pure core。root の `state_decision.rs` adapter から呼ばれる
+- `familiar_ai::decide::state_decision` — branch dispatch (`FamiliarDecisionPath`, `determine_decision_path`) と結果型 (`FamiliarStateDecisionResult`)、message emission を含む Decide system 本体。system 登録責務は `FamiliarAiCorePlugin`
 - `familiar_ai::decide::encouragement` — 激励対象選定・`EncouragementCooldown` + `encouragement_decision_system`（MessageWriter 使用）
 - `familiar_ai::decide::task_management` — Familiar の task search / scoring / source selector / reservation shadow / assignment build の core
 - `familiar_ai::decide::auto_gather_for_blueprint::{planning,demand,supply,helpers,actions}` — Blueprint auto gather の純計画層（`is_reachable` を含む）
-- `familiar_ai::decide::blueprint_auto_gather::{BlueprintAutoGatherTimer, blueprint_auto_gather_system}` — auto-gather オーケストレーター（`WorldMapRead` / `PathfindingContext` / Bevy Query 依存を含む）
+- `familiar_ai::decide::blueprint_auto_gather::{BlueprintAutoGatherTimer, blueprint_auto_gather_system}` — auto-gather オーケストレーター（`WorldMapRead` / `PathfindingContext` / Bevy Query 依存を含む）。system 登録責務は `FamiliarAiCorePlugin`
 - `familiar_ai::decide::squad` / `scouting` / `supervising` / `state_handlers` — 使い魔の状態機械・分隊管理の純ロジック
 - `familiar_ai::execute::state_apply` — `FamiliarStateRequest` 適用
 - `familiar_ai::execute::state_log` — 状態遷移ログ出力
@@ -264,14 +264,11 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 ここに置かないもの:
 
 - `GameAssets` 依存の sprite spawn
-- `hw_world::WorldMapRead/Write` や pathfinding context、root-only resource を束ねる adapter
-- full-fat query から narrow view への変換や、root-only resource を伴う request 出力 adapter
+- `GameAssets`、UI 状態、`bevy_app` 固有 resource を必要とする adapter
 - UI システム
 - `Commands` で複雑な Entity 生成を行うもの
 - `execute/task_execution/{types,common,handler,move_plant}` / `context/execution.rs` — 互換 import path のための thin shell（bevy_app 側に残留）
-- `familiar_ai/decide/task_delegation.rs` — root wrapper / orchestration。`WorldMapRead` / concrete SpatialGrid / `PathfindingContext` / `ConstructionSiteAccess` / timer / perf metrics を束ねる
-- `familiar_ai/decide/familiar_processor.rs` — root adapter。`FamiliarDelegationContext` が `WorldMap` / `PathfindingContext` / `transmute_lens_filtered` を直接保持するため root に残留
-- `familiar_ai/helpers/query_types.rs` — root full-fat query bridge。`FamiliarSoulQuery` / `FamiliarStateQuery` / `FamiliarTaskQuery` の 3型（narrow query は hw_familiar_ai 側に定義済みで re-export）
+- `familiar_ai/decide/task_delegation.rs` / `familiar_ai/decide/familiar_processor.rs` / `familiar_ai/helpers/query_types.rs` — 互換 import path の thin shell。実体は `hw_familiar_ai` 側にある
 - `familiar_ai/perceive/resource_sync.rs` — root perceive system。`SharedResourceCache` の再構築と実ワールドとの同期は root の責務
 
 移設済み system の登録ルール:

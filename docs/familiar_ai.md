@@ -85,29 +85,27 @@
 
 ### 5.2. 主要モジュール
 
-**root orchestration（意図的な残留）**
+**root 残留（意図的な残留）**
 
 | ファイル | 区分 | root 残留理由 |
 |:---|:---|:---|
-| `decide/auto_gather_for_blueprint.rs` | root orchestration | `Commands` / pathfinding / entity query / designation 付与・cleanup を担う。pure 計画層は hw_familiar_ai へ委譲 |
-| `decide/auto_gather_for_blueprint/actions.rs` | root helper | designation marker 付与・回収など world 反映責務を持つ |
-| `decide/auto_gather_for_blueprint/helpers.rs` | root helper | `is_reachable` は `WorldMap` + `PathfindingContext` 依存。pure helper（`OwnerInfo`, `resource_rank` 等）は hw_familiar_ai 側に抽出済みで re-export 済み |
 | `perceive/resource_sync.rs` | root perceive system | `SharedResourceCache` 再構築・`AssignedTask`/`Designation`/`TransportRequest`/relationship の実ワールド再構築は root の責務。`apply_reservation_op` / `apply_reservation_requests_system` は **`hw_logistics` に移設済み** |
+| `execute/idle_visual_apply.rs` | root visual adapter | `GameAssets` 依存のため `hw_familiar_ai` には置けない |
+| `mod.rs` | root wiring | `configure_sets`、SpatialGrid の `init_resource`、`FamiliarAiCorePlugin` の追加を担当 |
 
 **thin re-export（実装は hw_familiar_ai に移設済み）**
 
 | ファイル | 内容 |
 |:---|:---|
-| `decide/state_decision.rs` | `familiar_ai_state_system` 実体は `hw_familiar_ai::decide::state_decision` に移設済み。登録も `FamiliarAiCorePlugin` に移設済み |
+| `decide/auto_gather_for_blueprint.rs` | `BlueprintAutoGatherTimer` / `blueprint_auto_gather_system` は `hw_familiar_ai::decide::blueprint_auto_gather` への re-export |
 | `decide/task_delegation.rs` | `familiar_task_delegation_system` / `ReachabilityFrameCache` / `ReachabilityCacheKey` の実体は `hw_familiar_ai::decide::task_delegation` / `resources` に移設済み。登録も `FamiliarAiCorePlugin` に移設済み |
 | `decide/familiar_processor.rs` | `FamiliarDelegationContext` / `process_task_delegation_and_movement` 実体は `hw_familiar_ai::decide::delegation_context` に移設済み |
 | `helpers/query_types.rs` | `FamiliarStateQuery` / `FamiliarSoulQuery` / `FamiliarTaskQuery` および narrow 5型すべて `hw_familiar_ai::decide::query_types` への re-export |
 | `decide/state_handlers/` | `hw_familiar_ai::familiar_ai::decide::state_handlers` への thin re-export |
 | `decide/squad.rs` | `SquadManager` 実体は `hw_familiar_ai` にある |
 | `decide/recruitment.rs` | `RecruitmentManager` 実体は `hw_familiar_ai` にある |
-| `decide/encouragement.rs` | 対象選定本体は hw_familiar_ai にある。root adapter は system 関数のみ追加 |
+| `decide/encouragement.rs` | `EncouragementCooldown` / `encouragement_decision_system` / helper 群は `hw_familiar_ai::decide::encouragement` への re-export |
 | `decide/scouting.rs` / `decide/supervising.rs` | スカウト・監視ロジック本体は hw_familiar_ai にある |
-| `decide/auto_gather_for_blueprint/{demand,supply,planning}.rs` | 各 1 行 re-export。需要供給計画本体は hw_familiar_ai にある |
 | `perceive/state_detection.rs` | `Changed<FamiliarAiState>` 検知実体は **hw_familiar_ai に移設済み** |
 | `decide/task_management/` | thin bridge。実体は `hw_familiar_ai::familiar_ai::decide::task_management` にある |
 
@@ -123,19 +121,19 @@
 **設計メモ**
 
 - ECS 実状態の変更は `execute/` が担当する
-- Decide フェーズの request message 発行は root adapter が担当し、`hw_familiar_ai` 側は `ScoutingOutcome` / `SquadManagementOutcome` のような pure outcome を返す
-- root の `state_decision.rs` / `task_delegation.rs` / `encouragement.rs` / `auto_gather_for_blueprint.rs` は concrete resource・pathfinding・message 出力を受け持ち、必要な view と context だけを `hw_familiar_ai` ロジックへ渡す
+- Decide フェーズの message 出力と world/grid/pathfinding を使うオーケストレーションは `hw_familiar_ai` に移り、root 側は互換 path 維持用の thin shell と wiring にとどめる
+- root に残すのは `GameAssets` 依存 visual と `SharedResourceCache` 再構築のような app shell 固有処理だけに限定する
 
-**hw_familiar_ai 分担**: `FamiliarAiPlugin` は `hw_familiar_ai::FamiliarAiCorePlugin` を内部で `add_plugins` する。`WorldMap`/SpatialGrid 依存のシステムは root 残留。
+**hw_familiar_ai 分担**: `FamiliarAiPlugin` は `hw_familiar_ai::FamiliarAiCorePlugin` を内部で `add_plugins` する。`WorldMapRead` / SpatialGrid / `PathfindingContext` / `MessageWriter` を使う Familiar Decide 系 system も `hw_familiar_ai` 側で所有する。
 
 - `FamiliarAiCorePlugin` が直接登録するもの：
   - **Resources**: `FamiliarTaskDelegationTimer` / `FamiliarDelegationPerfMetrics` / `ReachabilityFrameCache`
   - **Perceive**: `detect_state_changes_system` / `detect_command_changes_system`
-  - **Decide**: `following_familiar_system`（独立）、`state_decision → ApplyDeferred → task_delegation`（chain）
+  - **Decide**: `following_familiar_system`（独立）、`state_decision → ApplyDeferred → task_delegation`（chain）、`blueprint_auto_gather_system`
   - **Execute**: `familiar_state_apply_system` / `handle_state_changed_system` / `max_soul_logic_system` / `squad_logic_system`、`EncouragementCooldown` の type registration
-- root に残るのは `auto_gather_for_blueprint`（Commands 依存）/ `encouragement`（system 関数のみ）/ `perceive/resource_sync`（ECS 実状態の再構築）と SpatialGrid の `init_resource`・`configure_sets` の配線のみ
+- root に残るのは `perceive/resource_sync`（ECS 実状態の再構築）、`execute/idle_visual_apply.rs`（`GameAssets` 依存 visual）、SpatialGrid の `init_resource`・`configure_sets` の配線、互換 import path の thin shell のみ
 - `ConstructionSiteAccess` は **`hw_jobs::construction`** に移設済み（`hw_soul_ai` ではない）
-- Blueprint auto gather の純計画層は `decide/auto_gather_for_blueprint/{planning,demand,supply,helpers}` に置き、root は orchestration だけを担う
+- Blueprint auto gather の純計画層は `decide/auto_gather_for_blueprint/{planning,demand,supply,helpers}` に置き、orchestration 本体は `hw_familiar_ai::decide::blueprint_auto_gather` が担う
 
 **プラグイン登録**: `FamiliarAiPlugin` は `crates/bevy_app/src/plugins/logic.rs` の `LogicPlugin` 内で登録される（`SoulAiPlugin` と同所）。
 
