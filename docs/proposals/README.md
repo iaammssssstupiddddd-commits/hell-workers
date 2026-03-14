@@ -25,6 +25,7 @@
 | [speech_optimization.md](speech_optimization.md) | スピーチシステム最適化提案 |
 | [tilemap-chunk-migration-plan-2026-03-12.md](tilemap-chunk-migration-plan-2026-03-12.md) | **の計画。 |
 | [wfc-terrain-generation-plan-2026-03-12.md](wfc-terrain-generation-plan-2026-03-12.md) | **の計画。 |
+| [3d-rendering-rtt-proposal-2026-03-14.md](3d-rendering-rtt-proposal-2026-03-14.md) | 3Dレンダリング（Render-to-Texture）導入提案: ハイブリッドRtTによる建築物3D化・矢視・テレインシェーダーブレンド |
 
 ## アーカイブ提案書一覧 (`docs/proposals/archive`)
 
