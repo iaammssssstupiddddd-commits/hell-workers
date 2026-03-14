@@ -1,5 +1,6 @@
 pub mod borders;
 pub mod room_detection;
+pub mod room_systems;
 pub mod coords;
 pub mod layout;
 pub mod map;
@@ -30,6 +31,7 @@ pub use room_detection::{
     build_detection_input, detect_rooms, room_is_valid_against_input,
 };
 pub use mapgen::generate_base_terrain_tiles;
+pub use room_systems::{detect_rooms_system, validate_rooms_system};
 pub use pathfinding::{
     PathGoalPolicy, PathNode, PathWorld, PathfindingContext, can_reach_target, find_path,
     find_path_to_adjacent, find_path_to_boundary,

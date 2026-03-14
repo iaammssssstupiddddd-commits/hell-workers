@@ -1,8 +1,7 @@
 //! Room detection core: pure input construction, flood-fill, and validation.
 //!
-//! This module contains no ECS system logic. Root systems are responsible for
-//! collecting [`RoomDetectionBuildingTile`]s from queries and applying the
-//! resulting [`DetectedRoom`]s back to ECS state.
+//! This module contains no ECS system logic.
+//! ECS system logic (query adapter layer) is in [`crate::room_systems`].
 
 use bevy::prelude::*;
 use hw_core::constants::{MAP_HEIGHT, MAP_WIDTH, ROOM_MAX_TILES};

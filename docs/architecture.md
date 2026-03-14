@@ -97,8 +97,8 @@ Perceive → Update → Decide → Execute
 ## Room Detection の境界
 
 - `crates/hw_world::room_detection` が room detection core の唯一の所有者であり、`RoomDetectionBuildingTile` からの入力分類、flood-fill、妥当性判定、`RoomBounds` を提供する。**加えて ECS 型（`Room`, `RoomOverlayTile`, `RoomTileLookup`, `RoomDetectionState`, `RoomValidationState`）も `hw_world::room_detection` が所有する**。
-- root 側 `crates/bevy_app/src/systems/room/detection.rs` は app shell として `Query<(Entity, &Building, &Transform)>` + `WorldMapRead` から tile descriptor を収集し、`DetectedRoom` を `Room` entity と `RoomTileLookup` へ反映する。
-- root 側 `crates/bevy_app/src/systems/room/validation.rs` は既存 `Room` の `tiles` を `hw_world::room_detection::room_is_valid_against_input(...)` に渡す adapter に留める。
+- `crates/hw_world/src/room_systems.rs` が ECS adapter 層を担う（`detect_rooms_system` / `validate_rooms_system`）。`Building + Transform` クエリから `RoomDetectionBuildingTile` を収集し、`DetectedRoom` を `Room` entity と `RoomTileLookup` へ反映する。
+- `crates/bevy_app/src/systems/room/detection.rs` と `validation.rs` は `hw_world` への re-export shell のみ。登録は `bevy_app/plugins/logic.rs` が維持する。
 - `bevy_app/src/systems/room/components.rs` と `resources.rs` は `hw_world` からの re-export のみ。型の所有権は `hw_world` にある。
 - `Room` entity の spawn では `Transform::default()` を必ず付与する。これを外すと overlay child の transform 伝播が壊れる。
 

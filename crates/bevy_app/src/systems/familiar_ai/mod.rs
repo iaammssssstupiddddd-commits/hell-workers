@@ -66,6 +66,7 @@ impl Plugin for FamiliarAiPlugin {
                     execute::max_soul_apply::max_soul_visual_system,
                     execute::idle_visual_apply::familiar_idle_visual_apply_system,
                     execute::squad_apply::apply_squad_management_requests_system,
+                    execute::squad_apply::squad_visual_system,
                     execute::encouragement_apply::encouragement_apply_system,
                     execute::encouragement_apply::cleanup_encouragement_cooldowns_system,
                 )

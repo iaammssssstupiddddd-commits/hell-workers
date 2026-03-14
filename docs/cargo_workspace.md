@@ -53,7 +53,7 @@ hw_jobs
 hw_spatial (hw_core + hw_world + hw_logistics + hw_jobs)
   └─ bevy_app
 
-hw_familiar_ai (hw_core + hw_jobs + hw_logistics + hw_world + hw_spatial)
+hw_familiar_ai (hw_core + hw_jobs + hw_logistics + hw_world + hw_spatial + hw_soul_ai)
   └─ hw_ai (facade)
   └─ bevy_app
 
@@ -162,6 +162,8 @@ root 側の `bevy_app` 残留（adapter 責務）:
 - `soul::*` — Soul プログレスバー、ステータスビジュアル、タスクリンク表示
 - `soul::gathering_spawn::spawn_gathering_spot` — 集会スポット ECS entity 生成（aura + object sprite）。`GatheringVisualHandles` 経由で `GameAssets` に依存しない
 - `speech::*` — 吹き出し、ラテン語フレーズ、FamiliarVoice、SpeechPlugin
+- `speech::max_soul_visual::max_soul_visual_system` — 使役数上限減少時の "Abi" セリフバブル（ロジックは `hw_familiar_ai::max_soul_logic_system` が担当）
+- `speech::squad_visual::squad_visual_system` — Fatigued リリース時の "Abi" セリフバブル（ロジックは `hw_familiar_ai::squad_logic_system` が担当）
 - `mud_mixer::*`, `tank::*` — 建物アニメーション
 - `wall_connection::*` — 壁接続スプライト切替
 - `site_yard_visual::*` — サイト・ヤード境界描画
@@ -255,6 +257,8 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 - `familiar_ai::execute::state_apply` — `FamiliarStateRequest` 適用
 - `familiar_ai::execute::state_log` — 状態遷移ログ出力
 - `familiar_ai::execute::encouragement_apply` — `EncouragementRequest` 適用と cooldown クリーンアップ
+- `familiar_ai::execute::max_soul_logic::max_soul_logic_system` — 使役数上限減少時に超過 Soul のタスク解除・`CommandedBy` 削除（ビジュアルは `hw_visual::max_soul_visual_system` が担当）
+- `familiar_ai::execute::squad_logic::squad_logic_system` — `SquadManagementRequest` の AddMember/ReleaseMember ECS 操作（Fatigued セリフは `hw_visual::squad_visual_system` が担当）
 
 ここに置かないもの:
 
@@ -346,6 +350,7 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 - **`Room`, `RoomOverlayTile`（Component）** — Room ECS 型。`bevy_app/room/components.rs` は re-export のみ
 - **`RoomTileLookup`, `RoomDetectionState`, `RoomValidationState`（Resource）** — Room 管理リソース。`bevy_app/room/resources.rs` は re-export のみ
 - **`DreamTreePlantingPlan`（`tree_planting.rs`）** — Dream 植林計画の純粋データ構造。ビルダー関数（`build_dream_tree_planting_plan`）は `GameAssets`/`DreamPool` 依存のため bevy_app に残留
+- **`room_systems::{detect_rooms_system, validate_rooms_system}`** — Room ECS adapter 層。`Building + Transform` クエリから `RoomDetectionBuildingTile` を収集し `DetectedRoom` を `Room` entity に反映する。`bevy_app/room/detection.rs`・`validation.rs` は re-export shell のみ
 
 ここに置かないもの:
 
@@ -457,7 +462,6 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 - Bevy system registration が主責務
 - `Commands` / asset / UI / plugin order に強く依存する
 - app shell としての意味が大きい
-- room detection では `RoomDetectionBuildingTile` 収集、`DetectedRoom` → `Room` 変換、`RoomTileLookup` 再構築を担当する
 
 ## 5. compatibility layer の扱い
 

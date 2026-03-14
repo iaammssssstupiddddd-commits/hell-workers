@@ -11,7 +11,6 @@ pub use components::{
     ActiveCommand, Familiar, FamiliarColorAllocator, FamiliarCommand, FamiliarOperation,
     FamiliarType,
 };
-pub use hw_visual::speech::FamiliarVoice;
 pub use movement::familiar_movement;
 pub use range_indicator::update_familiar_range_indicator;
 pub use spawn::{FamiliarSpawnEvent, familiar_spawning_system, spawn_familiar};

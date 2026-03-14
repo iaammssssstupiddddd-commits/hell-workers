@@ -113,7 +113,12 @@
 
 **execute（visual / relationship apply）**
 
-`squad_apply.rs` / `max_soul_apply.rs` / `idle_visual_apply.rs` / `encouragement_apply.rs`
+| ファイル（bevy_app） | 内容 |
+|:---|:---|
+| `execute/squad_apply.rs` | `hw_familiar_ai::squad_logic_system`（ECS 操作）+ `hw_visual::squad_visual_system`（Fatigued セリフ）への re-export shell |
+| `execute/max_soul_apply.rs` | `hw_familiar_ai::max_soul_logic_system`（Soul リリース）+ `hw_visual::max_soul_visual_system`（"Abi" セリフ）への re-export shell |
+| `execute/idle_visual_apply.rs` | root 残留（`GameAssets` 依存） |
+| `execute/encouragement_apply.rs` | `hw_familiar_ai` への re-export shell |
 
 **設計メモ**
 
@@ -127,7 +132,7 @@
   - **Resources**: `FamiliarTaskDelegationTimer` / `FamiliarDelegationPerfMetrics` / `ReachabilityFrameCache`
   - **Perceive**: `detect_state_changes_system` / `detect_command_changes_system`
   - **Decide**: `following_familiar_system`（独立）、`state_decision → ApplyDeferred → task_delegation`（chain）
-  - **Execute**: `familiar_state_apply_system` / `handle_state_changed_system`、`EncouragementCooldown` の type registration
+  - **Execute**: `familiar_state_apply_system` / `handle_state_changed_system` / `max_soul_logic_system` / `squad_logic_system`、`EncouragementCooldown` の type registration
 - root に残るのは `auto_gather_for_blueprint`（Commands 依存）/ `encouragement`（system 関数のみ）/ `perceive/resource_sync`（ECS 実状態の再構築）と SpatialGrid の `init_resource`・`configure_sets` の配線のみ
 - `ConstructionSiteAccess` は **`hw_jobs::construction`** に移設済み（`hw_soul_ai` ではない）
 - Blueprint auto gather の純計画層は `decide/auto_gather_for_blueprint/{planning,demand,supply,helpers}` に置き、root は orchestration だけを担う
