@@ -58,7 +58,7 @@ Perceive → ApplyDeferred → Update → ApplyDeferred → Decide → ApplyDefe
 
 ### src/ に置くもの
 - `DamnedSoul`, `Destination`, `Path`, `Familiar`, `relationships.rs`, `events.rs` など root 所有型の契約を最終確定する処理
-- `WorldMapRead/Write`, `PopulationManager`, concrete `SpatialGrid`, `PathfindingContext` など root 固有 resource / wrapper を前提にする system
+- `PopulationManager`, concrete `SpatialGrid`, `PathfindingContext`、および `hw_world::WorldMapRead/Write` を使った root adapter system
 - request 消費時に stale 再検証を行い、relationship/event/visual spawn を確定する adapter
 - `Res<GameAssets>` を引数に取るシステム（Bevy は `Res<dyn Trait>` 不可）
 - plugin wiring、互換 thin shell、root facade / wrapper system

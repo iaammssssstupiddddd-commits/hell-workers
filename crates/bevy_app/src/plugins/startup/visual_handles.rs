@@ -3,10 +3,12 @@
 use crate::assets::GameAssets;
 use bevy::prelude::*;
 use hw_core::visual::SoulTaskHandles;
+use hw_logistics::ResourceItemVisualHandles;
 use hw_visual::{
     BuildingAnimHandles, GatheringVisualHandles, HaulItemHandles, MaterialIconHandles,
     PlantTreeHandles, SpeechHandles, WallVisualHandles, WorkIconHandles,
 };
+use hw_world::{DoorVisualHandles, TerrainVisualHandles};
 
 pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>) {
     commands.insert_resource(WallVisualHandles {
@@ -115,5 +117,20 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
         icon_stasis_mud_small: game_assets.icon_stasis_mud_small.clone(),
         bucket_water: game_assets.bucket_water.clone(),
         bucket_empty: game_assets.bucket_empty.clone(),
+    });
+
+    commands.insert_resource(TerrainVisualHandles {
+        dirt: game_assets.dirt.clone(),
+    });
+
+    commands.insert_resource(DoorVisualHandles {
+        door_open: game_assets.door_open.clone(),
+        door_closed: game_assets.door_closed.clone(),
+    });
+
+    commands.insert_resource(ResourceItemVisualHandles {
+        icon_bone_small: game_assets.icon_bone_small.clone(),
+        icon_wood_small: game_assets.icon_wood_small.clone(),
+        icon_stasis_mud_small: game_assets.icon_stasis_mud_small.clone(),
     });
 }

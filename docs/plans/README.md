@@ -19,6 +19,9 @@
 
 | Document | Status | Notes |
 |---|---|---|
+| [multi-tool-ai-rules-plan.md](multi-tool-ai-rules-plan.md) | In Progress | マルチツール AI ルール体系の構築 |
+| [phase12-leftover-migration.md](phase12-leftover-migration.md) | Draft | `GameAssets` 等の Root 固有型に依存しないのに bevy_app に残る system を leaf crate へ移設する計画。 |
+| [phase3-gameassets-abstraction.md](phase3-gameassets-abstraction.md) | Done | `GameAssets` の一部フィールドだけに依存する system を専用 handle Resource 抽象化で leaf crate へ移設する計画。 |
 | [refactor-types-migration-plan.md](refactor-types-migration-plan.md) | Done | 型・ドメインモデルのクレート境界リファクタリング計画 |
 
 ## アーカイブ計画書一覧 (`docs/plans/archive`)
@@ -93,6 +96,7 @@
 | [archive/refactor-phase-plan-2026-02.md](archive/refactor-phase-plan-2026-02.md) | アーカイブ | フェーズ分割リファクタ計画。 |
 | [archive/refactor-roadmap-2026-02-22.md](archive/refactor-roadmap-2026-02-22.md) | アーカイブ | 現行実装を前提にした全体リファクタ実行計画（回帰テスト追加はスコープ外）。 |
 | [archive/refactor-top5-followups-plan-2026-03-02.md](archive/refactor-top5-followups-plan-2026-03-02.md) | アーカイブ | 直近レビューで抽出した5件（運搬request重複、UI粒子更新肥大、assignment builder重複、pathfinding隠れ状態、冗長分岐）を段階的に解消するの計画。 |
+| [archive/refactor-types-migration-plan.md](archive/refactor-types-migration-plan.md) | アーカイブ | 型・ドメインモデルのクレート境界リファクタリング計画 |
 | [archive/remove-instockpile-claimedby.md](archive/remove-instockpile-claimedby.md) | アーカイブ | `InStockpile`/`ClaimedBy` 削除統合計画。 |
 | [archive/remove-reexport-indirections-plan.md](archive/remove-reexport-indirections-plan.md) | アーカイブ | bevy_appの計画。 |
 | [archive/request-unification-plan-2026-02-14.md](archive/request-unification-plan-2026-02-14.md) | アーカイブ | Request方式一本化計画。 |
@@ -125,4 +129,3 @@
 | [archive/workspace-construction-phase-extraction.md](archive/workspace-construction-phase-extraction.md) | アーカイブ | Floor/Wall 建設で使うフェーズ・状態型がの計画。 |
 | [archive/zone-placement-refactor-plan-2026-03-05.md](archive/zone-placement-refactor-plan-2026-03-05.md) | アーカイブ | zone_placement.rsの計画。 |
 | [archive/zone-removal-preview-diff-plan-2026-03-01.md](archive/zone-removal-preview-diff-plan-2026-03-01.md) | アーカイブ | Zone removal preview の全件更新を差分更新へ置換する計画。 |
-

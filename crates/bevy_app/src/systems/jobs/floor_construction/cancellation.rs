@@ -1,10 +1,9 @@
 //! Floor construction cancellation system
 
 use super::components::{FloorConstructionCancelRequested, TargetFloorConstructionSite};
-use crate::assets::GameAssets;
 use crate::entities::damned_soul::{DamnedSoul, Path};
 use hw_core::relationships::WorkingOn;
-use crate::systems::jobs::construction_shared::spawn_refund_items;
+use crate::systems::jobs::construction_shared::{spawn_refund_items, ResourceItemVisualHandles};
 use crate::systems::logistics::{Inventory, ResourceType};
 use crate::systems::soul_ai::execute::task_execution::context::TaskQueries;
 use crate::systems::soul_ai::execute::task_execution::types::AssignedTask;
@@ -54,7 +53,7 @@ pub fn floor_construction_cancellation_system(
     >,
     mut reservation_queries: TaskQueries,
     mut world_map: WorldMapWrite,
-    game_assets: Res<GameAssets>,
+    resource_item_handles: Res<ResourceItemVisualHandles>,
 ) {
     for site_entity in q_sites.iter() {
         let (site_material_center, site_tiles_total) = {
@@ -132,14 +131,14 @@ pub fn floor_construction_cancellation_system(
         let refunded_mud: u32 = site_tiles.iter().map(|tile| tile.mud_delivered).sum();
         spawn_refund_items(
             &mut commands,
-            &game_assets,
+            &resource_item_handles,
             site_material_center,
             ResourceType::Bone,
             refunded_bones,
         );
         spawn_refund_items(
             &mut commands,
-            &game_assets,
+            &resource_item_handles,
             site_material_center,
             ResourceType::StasisMud,
             refunded_mud,

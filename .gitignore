@@ -51,10 +51,9 @@ Thumbs.db
 *~
 
 # IDE
-.vscode/
 .idea/
-.cursor/
 *.iml
 scripts/convert_to_transparent.py
 docs/proposals/archive/
 docs/plans/archive/
+docs/**/rejected

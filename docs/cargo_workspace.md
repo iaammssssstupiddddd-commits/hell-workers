@@ -137,7 +137,7 @@ root 側の `bevy_app` 残留（adapter 責務）:
 | `panels/task_list/update.rs` | `Res<GameAssets>` をシステム引数に取るため hw_ui 移動不可 |
 | `presentation/` | EntityInspectionQuery（ゲームエンティティ 10+ 型のクエリ集約）|
 | `vignette.rs` | TaskContext (DreamPlanting モード判定) |
-- `hw_visual` はビジュアルシステム全体を集約し、`GameAssets` には依存しない。アセットハンドルは `handles.rs` の 8 つの Resource（`WallVisualHandles` 等）で保持し、root の `init_visual_handles` startup システムが `GameAssets` から注入する。`SoulTaskHandles` と visual marker (`FadeOut`, `WheelbarrowMovement`) は `hw_core::visual` に置き、`hw_familiar_ai` / `hw_soul_ai` / `hw_visual` の共有型として扱う。
+- `hw_visual` はビジュアルシステム全体を集約し、`GameAssets` には依存しない。`hw_visual::handles` の 8 Resource（`WallVisualHandles` 等）は root の `init_visual_handles` startup システムが `GameAssets` から注入する。`SoulTaskHandles` は `hw_core::visual`、`TerrainVisualHandles` / `DoorVisualHandles` は `hw_world`、`ResourceItemVisualHandles` は `hw_logistics` が所有し、同じ startup 注入パターンを共有する。visual marker (`FadeOut`, `WheelbarrowMovement`) は `hw_core::visual` に置き、`hw_familiar_ai` / `hw_soul_ai` / `hw_visual` の共有型として扱う。
 - `bevy_app` → `hw_visual` は依存方向を維持し、`hw_visual` から `bevy_app` へ依存しない。
 
 ### `hw_visual`
@@ -146,7 +146,7 @@ root 側の `bevy_app` 残留（adapter 責務）:
 
 - `crates/bevy_app/src/systems/visual/` および `crates/bevy_app/src/systems/utils/` から抽出したビジュアルシステム全体
 - `GameAssets` に依存しない独立ビジュアル crate
-- アセットハンドルは `handles.rs` の 9 Resource として保持し、startup 時に root から注入される
+- アセットハンドルは `handles.rs` の 8 Resource として保持し、startup 時に root から注入される
 
 代表例:
 
@@ -194,7 +194,8 @@ startup 注入パターン:
 // crates/bevy_app/src/plugins/startup/visual_handles.rs
 pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>) {
     commands.insert_resource(WallVisualHandles { stone_isolated: game_assets.wall_isolated.clone(), ... });
-    // ... 8 Resource すべてを insert
+    commands.insert_resource(BuildingAnimHandles { mud_mixer_idle: game_assets.mud_mixer.clone(), ... });
+    // ... hw_visual / hw_core::visual / hw_world / hw_logistics の各 handle Resource を insert
 }
 // PostStartup チェーンの先頭で実行（GameAssets 挿入後）
 ```
@@ -263,7 +264,7 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 ここに置かないもの:
 
 - `GameAssets` 依存の sprite spawn
-- root 固有の `WorldMapRead/Write` SystemParam wrapper や pathfinding context を前提にした adapter
+- `hw_world::WorldMapRead/Write` や pathfinding context、root-only resource を束ねる adapter
 - full-fat query から narrow view への変換や、root-only resource を伴う request 出力 adapter
 - UI システム
 - `Commands` で複雑な Entity 生成を行うもの
@@ -301,7 +302,7 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 - ECS resource と shell system
 - root 側の互換 re-export 層
 - `GameAssets`・sprite spawn・root 固有 resource を伴う adapter
-- root 固有の `WorldMapRead/Write` wrapper、pathfinding context、full-fat query を扱う system
+- `hw_world::WorldMapRead/Write`、pathfinding context、full-fat query を扱う root adapter system
 - request 消費時に app 側状態を再検証して副作用を確定する adapter
 
 ### `hw_core`
@@ -339,14 +340,17 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 - terrain / river / mapgen / borders / regrowth
 - spawn grid helper
 - `WorldMap`
+- `WorldMapRead`, `WorldMapWrite` — `WorldMap` access を system 境界で統一する `SystemParam`
 - `world_to_grid`, `grid_to_world`
 - nearest walkable / river query
 - `room_detection::{build_detection_input, detect_rooms, room_is_valid_against_input}`
-- `PathWorld` trait — `is_walkable` など通行判定 API（`WorldMap` の impl は root）
+- `PathWorld` trait — `is_walkable` など通行判定 API（`WorldMap` の impl も `hw_world` が所有）
 - `SpatialGridOps` trait — `get_nearby_in_radius` など空間グリッド read-only API（concrete resource の本体は `hw_spatial`）
 - `Yard`, `Site`, `PairedYard`, `PairedSite`（zone 系コンポーネント）
 - `zone_ops::identify_removal_targets` — 削除対象タイル + 孤立フラグメント特定（Flood Fill）
 - `zone_ops::area_tile_size`, `rectangles_overlap_site`, `rectangles_overlap`, `expand_yard_area` — ゾーン geometry helper
+- `terrain_visual::{TerrainVisualHandles, obstacle_cleanup_system}` — 地形スプライト更新を伴う障害物 cleanup。`GameAssets` は root から専用 Resource で注入する
+- `door_systems::{DoorVisualHandles, apply_door_state, door_auto_open_system, door_auto_close_system}` — ドア通行状態とスプライト更新を扱う world 系 system。`GameAssets` は root から専用 Resource で注入する
 - **`Room`, `RoomOverlayTile`（Component）** — Room ECS 型。`bevy_app/room/components.rs` は re-export のみ
 - **`RoomTileLookup`, `RoomDetectionState`, `RoomValidationState`（Resource）** — Room 管理リソース。`bevy_app/room/resources.rs` は re-export のみ
 - **`DreamTreePlantingPlan`（`tree_planting.rs`）** — Dream 植林計画の純粋データ構造。ビルダー関数（`build_dream_tree_planting_plan`）は `GameAssets`/`DreamPool` 依存のため bevy_app に残留
@@ -354,9 +358,9 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 
 ここに置かないもの:
 
-- `Commands` を使う sprite spawn
-- `GameAssets` 依存の texture 選択
-- root 固有の `WorldMapRead/Write` SystemParam wrapper
+- root 固有アセットを前提にした初期 sprite spawn
+- `GameAssets` への直接依存
+- root 側の startup / plugin wiring / entity spawn facade
 - `SpatialGrid` resource 実体と update system（8 種 concrete）は `hw_spatial` が保持
 
 ### `hw_spatial`
@@ -392,6 +396,7 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 - `SharedResourceCache`（タスク間リソース予約キャッシュ）
 - `apply_reservation_op` / `apply_reservation_requests_system`（予約操作の反映 helper）
 - `TileSiteIndex`（タイル→サイト逆引き）
+- `construction_helpers::{ResourceItemVisualHandles, spawn_refund_items}` — `GameAssets` 依存を root 注入 Resource に抽象化した建設キャンセル共通 helper
 - producer 全系（`blueprint`, `bucket`, `consolidation`, `mixer`, `task_area`, `wheelbarrow`, `floor_construction`, `wall_construction`, `provisional_wall` 等）
 - `manual_haul_selector::{select_stockpile_anchor, find_existing_request}` — 手動 haul 選定アルゴリズム（`DesignationTargetQuery` 非依存）
 
@@ -419,11 +424,13 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 - `AssignedTask`（ワーカー実行中タスク状態 + 全フェーズ型）
 - `TaskAssignmentRequest`（`hw_jobs::events`）
 - `MovePlanned`（建物移動タスクの計画状態）
+- `Door`, `DoorCloseTimer`
 - `FloorConstructionSite`, `WallConstructionSite`（親 site component）
 - `FloorTileBlueprint`, `WallTileBlueprint`（タイル単位建設状態）
 - `FloorTileState`, `WallTileState`（建設フェーズ enum）
 - `TargetFloorConstructionSite`, `TargetWallConstructionSite`
 - `FloorConstructionCancelRequested`, `WallConstructionCancelRequested`
+- `remove_tile_task_components`（designation 系コンポーネントの一括 remove helper）
 
 ここに置かないもの:
 
@@ -443,7 +450,8 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 
 - world/map/pathfinding の純粋ロジック
 - `WorldMap` を trait や引数で抽象化できる
-- `Commands` や asset に依存しない
+- root 固有の `GameAssets` を直接参照しない world 系 system
+- `GameAssets` の一部フィールドだけが必要な場合は、`TerrainVisualHandles` / `DoorVisualHandles` のような専用 Resource を leaf crate 側で定義し、root の startup system が注入する
 
 ### `hw_logistics` に置く
 
@@ -503,13 +511,14 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 
 ## 6. `WorldMap` の境界
 
-`WorldMap` は root crate に残す resource です。
+`WorldMap` の**型定義と `WorldMapRead/Write` の `SystemParam` wrapper は `hw_world` が所有**する。  
+root (`bevy_app`) は app shell として `init_resource::<WorldMap>()`、startup/wiring、互換 facade を担当する。
 
 `WorldMap` の責務:
 
 - terrain / tile entity / building / stockpile / obstacle の状態保持
 - occupancy / footprint / door / stockpile の更新 API
-- Bevy resource としての公開面
+- Bevy resource としての公開面（型は `hw_world`、初期化と app 配線は root）
 
 `hw_world` 側へ寄せる責務:
 
@@ -518,8 +527,11 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 - terrain 判定
 - nearest walkable / river helper
 - mapgen / border / regrowth の純粋ロジック
+- `WorldMapRead` / `WorldMapWrite` の `SystemParam`
+- `obstacle_cleanup_system` のような WorldMap 同期 +地形スプライト更新 system（`TerrainVisualHandles` 注入）
+- door 自動開閉のような world state 更新 system（`DoorVisualHandles` 注入）
 
-`crates/bevy_app/src/world/map/spawn.rs`, `crates/bevy_app/src/world/map/terrain_border.rs`, `crates/bevy_app/src/world/regrowth.rs` は app shell です。これらは `GameAssets`, `Commands`, `Resource` を扱い、純粋ロジックは `hw_world` から呼び出します。
+`crates/bevy_app/src/world/map/spawn.rs`, `crates/bevy_app/src/world/map/terrain_border.rs`, `crates/bevy_app/src/world/regrowth.rs` は app shell です。これらは `GameAssets`, `Commands`, `Resource` を扱い、純粋ロジックと `WorldMap` access wrapper は `hw_world` から呼び出します。
 
 ## 7. crate を増やすときの手順
 

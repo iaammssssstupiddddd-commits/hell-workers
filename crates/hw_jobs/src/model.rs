@@ -5,6 +5,8 @@ use bevy::prelude::*;
 pub use hw_core::jobs::WorkType;
 use hw_core::logistics::ResourceType;
 pub use hw_core::relationships::ManagedBy as IssuedBy;
+pub use hw_core::world::DoorState;
+use hw_core::constants::DOOR_CLOSE_DELAY_SECS;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Reflect, Default)]
 pub enum BuildingType {
@@ -277,5 +279,53 @@ pub struct TaskSlots {
 impl TaskSlots {
     pub fn new(max: u32) -> Self {
         Self { max }
+    }
+}
+
+#[derive(Component, Debug, Clone, Copy, Reflect)]
+#[reflect(Component)]
+pub struct Door {
+    pub state: DoorState,
+}
+
+impl Default for Door {
+    fn default() -> Self {
+        Self {
+            state: DoorState::Closed,
+        }
+    }
+}
+
+impl Door {
+    pub fn is_passable(&self) -> bool {
+        self.state != DoorState::Locked
+    }
+
+    pub fn is_open(&self) -> bool {
+        self.state == DoorState::Open
+    }
+}
+
+#[derive(Component)]
+pub struct DoorCloseTimer {
+    pub timer: Timer,
+}
+
+impl DoorCloseTimer {
+    pub fn new() -> Self {
+        Self {
+            timer: Timer::from_seconds(DOOR_CLOSE_DELAY_SECS, TimerMode::Once),
+        }
+    }
+}
+
+/// [`Designation`]・[`TaskSlots`]・[`Priority`] をタイルエンティティから一括削除する。
+///
+/// フェーズ遷移の終端で designation システムが再付与する前にコンポーネントをクリアする。
+pub fn remove_tile_task_components(commands: &mut Commands, tile_entities: &[Entity]) {
+    for &entity in tile_entities {
+        commands
+            .entity(entity)
+            .remove::<(Designation, TaskSlots, Priority)>();
     }
 }

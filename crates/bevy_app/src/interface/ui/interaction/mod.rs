@@ -23,7 +23,6 @@ use crate::app_contexts::{
     BuildContext, CompanionPlacementState, MoveContext, MovePlacementState, TaskContext,
     ZoneContext,
 };
-use crate::assets::GameAssets;
 use crate::entities::familiar::{Familiar, FamiliarOperation};
 use hw_ui::components::*;
 use hw_ui::interaction::common::update_interaction_color;
@@ -36,6 +35,7 @@ use bevy::prelude::*;
 use bevy::ui::RelativeCursorPosition;
 use hw_core::game_state::PlayMode;
 use hw_ui::UiIntent;
+use hw_world::DoorVisualHandles;
 
 pub fn update_ui_input_state_system(
     mut ui_input_state: ResMut<UiInputState>,
@@ -204,7 +204,7 @@ pub fn door_lock_action_system(
     interaction_query: Query<(&Interaction, &MenuButton), (Changed<Interaction>, With<Button>)>,
     mut q_doors: Query<(&Transform, &mut Door, &mut Sprite)>,
     mut world_map: WorldMapWrite,
-    game_assets: Res<GameAssets>,
+    door_visual_handles: Res<DoorVisualHandles>,
 ) {
     for (interaction, menu_button) in interaction_query.iter() {
         if *interaction != Interaction::Pressed {
@@ -225,7 +225,7 @@ pub fn door_lock_action_system(
                 &mut door,
                 &mut sprite,
                 &mut world_map,
-                &game_assets,
+                &door_visual_handles,
                 door_grid,
                 next_state,
             );

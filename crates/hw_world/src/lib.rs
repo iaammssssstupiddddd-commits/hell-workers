@@ -1,4 +1,5 @@
 pub mod borders;
+pub mod door_systems;
 pub mod room_detection;
 pub mod room_systems;
 pub mod coords;
@@ -12,6 +13,7 @@ pub mod river;
 pub mod spatial;
 pub mod spawn;
 pub mod terrain;
+pub mod terrain_visual;
 pub mod tree_planting;
 pub mod zone_ops;
 pub mod zones;
@@ -42,6 +44,10 @@ pub use river::{generate_fixed_river_tiles, generate_sand_tiles};
 pub use spatial::SpatialGridOps;
 pub use spawn::{find_nearby_walkable_grid, pick_random_walkable_grid_in_rect};
 pub use terrain::TerrainType;
+pub use terrain_visual::{TerrainVisualHandles, obstacle_cleanup_system};
+pub use door_systems::{
+    DoorVisualHandles, apply_door_state, door_auto_open_system, door_auto_close_system,
+};
 pub use zone_ops::{
     area_tile_size, expand_yard_area, identify_removal_targets, rectangles_overlap,
     rectangles_overlap_site,

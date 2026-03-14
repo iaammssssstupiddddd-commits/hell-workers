@@ -11,7 +11,7 @@ Soul が実行するタスクの種類・進捗状態、および建物の建設
 |---|---|
 | `assigned_task.rs` | `AssignedTask` enum — Soul に割り当てられたタスクと進捗 |
 | `construction.rs` | 床・壁の建設フェーズ状態機械、タイル Blueprint コンポーネント |
-| `model.rs` | `BuildingType` enum、必要素材マッピング、`MovePlanned` |
+| `model.rs` | `BuildingType`、`MovePlanned`、`Door` / `DoorCloseTimer`、`remove_tile_task_components` |
 | `mud_mixer.rs` | 泥ミキサーのワークフロー状態 |
 | `events.rs` | タスク完了イベント等 |
 | `lifecycle.rs` | タスク予約ライフサイクル helper (`collect_active_reservation_ops`, `collect_release_reservation_ops`) |
@@ -60,8 +60,10 @@ hw_jobs は**型・状態機械定義のみ**を提供する。
 | `AssignedTask` enum（バリアント定義） | タスクハンドラ（`gather.rs`, `build.rs` 等） |
 | `FloorConstructionPhase` / `WallConstructionPhase` 状態機械型 | `floor_construction_phase_transition_system` 等の実システム |
 | `BuildingType` と `required_materials()` | 建物完成後処理・ワールドマップ更新 |
+| `Door`, `DoorCloseTimer` | ドア自動開閉 system (`hw_world`) と UI からの状態変更適用 |
 | `MudMixerInputSlot` / `MudMixerOutputSlot` 型 | 泥ミキサーのフロー制御システム |
 | タスク予約ライフサイクル helper (`lifecycle.rs`) | 予約再構築を呼ぶゲーム側システム |
+| `remove_tile_task_components` | 建設フェーズ遷移の apply system |
 | 建設状態コンポーネント（`FloorTileState`, `WallTileState` 等） | コンポーネントの Bevy 登録・Observer 配線 |
 | `FloorTileBlueprint`, `WallTileBlueprint`, `FloorConstructionSite`, `WallConstructionSite` | これらを進行させる build / logistics / visual system |
 | `TargetFloorConstructionSite`, `TargetWallConstructionSite` | — |

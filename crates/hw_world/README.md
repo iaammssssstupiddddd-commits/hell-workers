@@ -3,7 +3,7 @@
 ## 役割
 
 ゲームワールドの地形生成・管理、座標変換ユーティリティ、A* 経路探索を提供するクレート。
-ワールドデータの読み取り（クエリ）と経路計算のみを行い、**エンティティのスポーンは行わない**。
+`WorldMap` 本体、`WorldMapRead` / `WorldMapWrite` の `SystemParam`、room detection の ECS 型、world 系の軽量 system を所有する。
 
 ## 主要モジュール
 
@@ -20,9 +20,13 @@
 | `pathfinding.rs` | A* 経路探索（下記詳細参照） |
 | `query.rs` | 環境クエリ (`find_nearest_river_grid`, `find_nearest_walkable_grid`) |
 | `room_detection.rs` | Room 検出 core (`build_detection_input`, `detect_rooms`, `room_is_valid_against_input`, `RoomBounds`) |
+| `room_systems.rs` | `detect_rooms_system`, `validate_rooms_system` |
+| `door_systems.rs` | ドア自動開閉、`DoorVisualHandles`, `apply_door_state` |
+| `terrain_visual.rs` | 障害物 cleanup、`TerrainVisualHandles` |
 | `spatial.rs` | ワールド向け `SpatialGridOps` 実装 |
 | `spawn.rs` | スポーンヘルパー (`find_nearby_walkable_grid`, `pick_random_walkable_grid_in_rect`) |
 | `zones.rs` | `Yard`, `Site`, `PairedYard`, `PairedSite` — ゾーン系コンポーネント |
+| `map/access.rs` | `WorldMapRead`, `WorldMapWrite` (`SystemParam`) |
 
 ## 経路探索 (pathfinding.rs)
 
@@ -54,21 +58,22 @@ can_reach_target(map, from, to)                   // 到達可能性チェック
 
 ## src/ との境界
 
-hw_world は**純粋なワールドアルゴリズム**を提供する。
-Bevy との統合（`SystemParam`・エンティティスポーン）は `src/world/` に実装する。
+hw_world はワールドの**所有型・SystemParam・world系ロジック**を提供する。
+root 側は `GameAssets` 依存の startup / spawn / plugin wiring を担当する。
 
 | hw_world に置くもの | src/world/ に置くもの |
 |---|---|
-| `WorldMap` 型と全データ構造 | `WorldMapRead` / `WorldMapWrite` (`SystemParam` ラッパー) |
+| `WorldMap` 型と全データ構造 | `WorldMap` の `init_resource`、startup/wiring |
+| `WorldMapRead` / `WorldMapWrite` (`SystemParam`) | root facade からの re-export |
 | A* 経路探索関数群 | マップエンティティのスポーン (`spawn.rs`) |
-| Room 検出 core（入力分類、flood-fill、validator、`RoomBounds`） | `Room` entity の spawn/despawn、`RoomTileLookup` 更新、dirty tracking |
+| Room 検出 core + `Room` / `RoomOverlayTile` / `RoomTileLookup` / `RoomDetectionState` / `RoomValidationState` | overlay sync、dirty mark observer の root wiring |
 | 座標変換関数 (`grid_to_world` 等) | 地形境界タイルへのコンポーネント付与 (`terrain_border.rs`) |
 | 地形生成関数 (`generate_base_terrain_tiles` 等) | — |
-| `tree_regrowth_system` などの純粋システム | — |
+| `obstacle_cleanup_system` / `door_auto_open_system` / `door_auto_close_system` | `GameAssets` から専用 handle Resource を注入する startup |
 | `Yard`, `Site`, `PairedYard`, `PairedSite` | — |
 
-**判断基準**: `Commands`・`Entity`・`Res<T>` など Bevy ECS API を使う必要があるなら src/ 側に置く。
-`WorldMap` の読み書きだけなら hw_world 内で完結できる。
+**判断基準**: root 固有の `GameAssets` / UI / plugin wiring が必要なら `src/` に残す。
+shared crate 型と `WorldMap` access だけで閉じるなら hw_world に置く。
 
 `WorldMapRead` / `WorldMapWrite` はシステム引数として使用する:
 ```rust

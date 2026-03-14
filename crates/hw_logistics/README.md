@@ -19,6 +19,7 @@
 | `wall_construction.rs` | 壁建設サイトへの需要計算・資材消費ヘルパー |
 | `tile_index.rs` | `TileSiteIndex` — タイル座標 → サイトエンティティ高速逆引き |
 | `resource_cache.rs` | `SharedResourceCache` — タスク間リソース予約キャッシュ |
+| `construction_helpers.rs` | `ResourceItemVisualHandles`, `spawn_refund_items` — 建設キャンセル返却 helper |
 | `transport_request/` | 輸送要求の完全なライフサイクル（下表参照） |
 
 ## transport_request/ ディレクトリ
@@ -86,5 +87,6 @@
 | 手押し車仲裁システム | `ui.rs`（UI ロジスティクス表示） |
 | `TransportRequestPlugin` + `TransportRequestSet` | `transport_request/` の thin shell / re-export |
 | 建設系需要計算ヘルパー | 後方互換の import path を保つ root shell |
+| `ResourceItemVisualHandles` と `spawn_refund_items` | `GameAssets` から handle Resource を注入する startup |
 | `TileSiteIndex` 型定義・更新システム | — |
 | `SharedResourceCache` | `sync_reservations_system`（ゲーム固有クエリ） |

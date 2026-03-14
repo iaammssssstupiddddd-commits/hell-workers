@@ -10,7 +10,8 @@
 | ファイル/ディレクトリ | 内容 |
 |---|---|
 | `mod.rs` | `building_completion_system` 等の公開 API |
-| `door.rs` | `door_auto_open_system`, `door_auto_close_system` |
+| `door.rs` | `hw_jobs` / `hw_world` のドア型・system を再公開する shell |
+| `construction_shared.rs` | `hw_jobs::remove_tile_task_components` と `hw_logistics::{ResourceItemVisualHandles, spawn_refund_items}` を再公開する shell |
 | `mud_mixer.rs` | 泥ミキサーワークフロー管理 |
 | `floor_construction/` | 床建設フェーズシステム（下表） |
 | `wall_construction/` | 壁建設フェーズシステム（下表） |
