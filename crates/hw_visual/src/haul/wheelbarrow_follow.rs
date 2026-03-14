@@ -7,7 +7,7 @@ use hw_core::constants::*;
 use hw_core::relationships::{LoadedItems, PushedBy};
 use hw_core::soul::{AnimationState, DamnedSoul};
 use hw_core::visual::WheelbarrowMovement;
-use hw_logistics::types::Wheelbarrow;
+use hw_core::visual_mirror::logistics::WheelbarrowMarker;
 
 pub fn wheelbarrow_follow_system(
     mut commands: Commands,
@@ -21,7 +21,7 @@ pub fn wheelbarrow_follow_system(
             Option<&LoadedItems>,
             Option<&mut WheelbarrowMovement>,
         ),
-        (With<Wheelbarrow>, Without<DamnedSoul>),
+        (With<WheelbarrowMarker>, Without<DamnedSoul>),
     >,
     handles: Res<HaulItemHandles>,
 ) {

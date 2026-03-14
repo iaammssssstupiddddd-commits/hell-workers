@@ -12,6 +12,7 @@ pub mod soul;
 pub mod system_sets;
 pub mod time;
 pub mod visual;
+pub mod visual_mirror;
 pub mod world;
 
 pub use time::GameTime;

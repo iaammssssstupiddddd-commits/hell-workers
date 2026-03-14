@@ -10,17 +10,17 @@ use crate::floating_text::{
     FloatingText, FloatingTextConfig, spawn_floating_text, update_floating_text,
 };
 use crate::handles::MaterialIconHandles;
-use hw_jobs::Blueprint;
+use hw_core::visual_mirror::construction::BlueprintVisualState;
 
 pub fn material_delivery_vfx_system(
     mut commands: Commands,
-    mut q_visuals: Query<(Entity, &mut BlueprintVisual, &Blueprint, &Transform)>,
+    mut q_visuals: Query<(Entity, &mut BlueprintVisual, &BlueprintVisualState, &Transform)>,
     material_icon_handles: Res<MaterialIconHandles>,
 ) {
-    for (_, mut visual, bp, transform) in q_visuals.iter_mut() {
-        for (resource_type, &current_count) in &bp.delivered_materials {
-            let last_count = visual.last_delivered.get(resource_type).unwrap_or(&0);
-            if current_count > *last_count {
+    for (_, mut visual, state, transform) in q_visuals.iter_mut() {
+        for (resource_type, current_count, _) in &state.material_counts {
+            let last_count = visual.last_delivered.get(resource_type).copied().unwrap_or(0);
+            if *current_count > last_count {
                 let config = FloatingTextConfig {
                     lifetime: POPUP_LIFETIME,
                     velocity: Vec2::new(0.0, 20.0),
@@ -45,7 +45,7 @@ pub fn material_delivery_vfx_system(
                     },
                 });
             }
-            visual.last_delivered.insert(*resource_type, current_count);
+            visual.last_delivered.insert(*resource_type, *current_count);
         }
     }
 }

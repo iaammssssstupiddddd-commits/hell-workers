@@ -18,10 +18,7 @@ use bevy::prelude::*;
 use hw_core::constants::TILE_SIZE;
 use hw_core::constants::*;
 use hw_core::soul::{DamnedSoul, GatheringBehavior, IdleBehavior, IdleState, SoulUiLinks};
-use hw_jobs::{
-    AssignedTask, CoatWallPhase, FrameWallPhase, GatherPhase, HaulPhase, PourFloorPhase,
-    ReinforceFloorPhase,
-};
+use hw_core::visual_mirror::task::{SoulTaskPhaseVisual, SoulTaskVisualState};
 
 /// ソウル用プログレスバーのラッパーコンポーネント
 #[derive(Component)]
@@ -33,25 +30,10 @@ pub struct StatusIcon;
 pub fn progress_bar_system(
     mut commands: Commands,
     q_soul_bars: Query<(Entity, &ChildOf), With<SoulProgressBar>>,
-    mut q_souls: Query<(Entity, &AssignedTask, &Transform, &mut SoulUiLinks), With<DamnedSoul>>,
+    mut q_souls: Query<(Entity, &SoulTaskVisualState, &Transform, &mut SoulUiLinks), With<DamnedSoul>>,
 ) {
-    for (soul_entity, task, transform, mut ui_links) in q_souls.iter_mut() {
-        let needs_bar = match task {
-            AssignedTask::Gather(data) => matches!(data.phase, GatherPhase::Collecting { .. }),
-            AssignedTask::ReinforceFloorTile(data) => {
-                matches!(data.phase, ReinforceFloorPhase::Reinforcing { .. })
-            }
-            AssignedTask::PourFloorTile(data) => {
-                matches!(data.phase, PourFloorPhase::Pouring { .. })
-            }
-            AssignedTask::FrameWallTile(data) => {
-                matches!(data.phase, FrameWallPhase::Framing { .. })
-            }
-            AssignedTask::CoatWall(data) => {
-                matches!(data.phase, CoatWallPhase::Coating { .. })
-            }
-            _ => false,
-        };
+    for (soul_entity, task_vs, transform, mut ui_links) in q_souls.iter_mut() {
+        let needs_bar = task_vs.progress.is_some();
 
         if needs_bar {
             if ui_links.bar_entity.is_none() {
@@ -99,54 +81,15 @@ pub fn progress_bar_system(
 }
 
 pub fn update_progress_bar_fill_system(
-    q_souls: Query<&AssignedTask, With<DamnedSoul>>,
+    q_souls: Query<&SoulTaskVisualState, With<DamnedSoul>>,
     q_generic_bars: Query<&GenericProgressBar>,
     q_soul_bars: Query<&ChildOf, With<SoulProgressBar>>,
     mut q_fills: Query<(Entity, &mut Sprite, &mut Transform), With<ProgressBarFill>>,
 ) {
     for (fill_entity, mut sprite, mut transform) in q_fills.iter_mut() {
         if let Ok(child_of) = q_soul_bars.get(fill_entity) {
-            if let Ok(task) = q_souls.get(child_of.parent()) {
-                let progress = match task {
-                    AssignedTask::Gather(data) => {
-                        if let GatherPhase::Collecting { progress } = data.phase {
-                            Some(progress)
-                        } else {
-                            None
-                        }
-                    }
-                    AssignedTask::ReinforceFloorTile(data) => {
-                        if let ReinforceFloorPhase::Reinforcing { progress_bp } = data.phase {
-                            Some((progress_bp as f32 / 10_000.0).clamp(0.0, 1.0))
-                        } else {
-                            None
-                        }
-                    }
-                    AssignedTask::PourFloorTile(data) => {
-                        if let PourFloorPhase::Pouring { progress_bp } = data.phase {
-                            Some((progress_bp as f32 / 10_000.0).clamp(0.0, 1.0))
-                        } else {
-                            None
-                        }
-                    }
-                    AssignedTask::FrameWallTile(data) => {
-                        if let FrameWallPhase::Framing { progress_bp } = data.phase {
-                            Some((progress_bp as f32 / 10_000.0).clamp(0.0, 1.0))
-                        } else {
-                            None
-                        }
-                    }
-                    AssignedTask::CoatWall(data) => {
-                        if let CoatWallPhase::Coating { progress_bp } = data.phase {
-                            Some((progress_bp as f32 / 10_000.0).clamp(0.0, 1.0))
-                        } else {
-                            None
-                        }
-                    }
-                    _ => None,
-                };
-
-                if let Some(progress) = progress {
+            if let Ok(task_vs) = q_souls.get(child_of.parent()) {
+                if let Some(progress) = task_vs.progress {
                     if let Ok(generic_bar) = q_generic_bars.get(fill_entity) {
                         update_progress_bar_fill(
                             progress,
@@ -164,14 +107,14 @@ pub fn update_progress_bar_fill_system(
 
 /// バーを親エンティティに追従させるシステム
 pub fn sync_progress_bar_position_system(
-    q_parents: Query<&Transform, (With<AssignedTask>, Without<SoulProgressBar>)>,
+    q_parents: Query<&Transform, (With<SoulTaskVisualState>, Without<SoulProgressBar>)>,
     q_generic_bars: Query<&GenericProgressBar>,
     mut q_bg_bars: Query<
         (Entity, &ChildOf, &mut Transform),
         (
             With<SoulProgressBar>,
             With<ProgressBarBackground>,
-            Without<AssignedTask>,
+            Without<SoulTaskVisualState>,
             Without<ProgressBarFill>,
         ),
     >,
@@ -180,7 +123,7 @@ pub fn sync_progress_bar_position_system(
         (
             With<SoulProgressBar>,
             With<ProgressBarFill>,
-            Without<AssignedTask>,
+            Without<SoulTaskVisualState>,
             Without<ProgressBarBackground>,
         ),
     >,
@@ -213,50 +156,33 @@ pub fn sync_progress_bar_position_system(
 }
 
 pub fn task_link_system(
-    q_souls: Query<(&GlobalTransform, &AssignedTask), With<DamnedSoul>>,
+    q_souls: Query<(&GlobalTransform, &SoulTaskVisualState), With<DamnedSoul>>,
     q_targets: Query<&GlobalTransform>,
     mut gizmos: Gizmos,
 ) {
-    for (soul_transform, task) in q_souls.iter() {
-        let (soul_transform, task): (&GlobalTransform, &AssignedTask) = (soul_transform, task);
-        let bucket_transport = task.bucket_transport_data();
-        let target_entity = match task {
-            AssignedTask::Gather(data) => Some(data.target),
-            AssignedTask::CollectSand(data) => Some(data.target),
-            AssignedTask::Refine(data) => Some(data.mixer),
-            AssignedTask::Haul(data) => match data.phase {
-                HaulPhase::GoingToItem => Some(data.item),
-                HaulPhase::GoingToStockpile => Some(data.stockpile),
-                _ => None,
-            },
-            AssignedTask::Build(data) => Some(data.blueprint),
-            AssignedTask::HaulToBlueprint(data) => Some(data.blueprint),
-            AssignedTask::FrameWallTile(data) => Some(data.tile),
-            AssignedTask::CoatWall(data) => Some(data.wall),
-            _ => None,
-        };
-        let target_entity = match bucket_transport.as_ref() {
-            Some(data) => Some(data.bucket),
-            None => target_entity,
-        };
+    for (soul_transform, task_vs) in q_souls.iter() {
+        let target_entity = task_vs.bucket_link.or(task_vs.link_target);
 
         if let Some(target) = target_entity {
             if let Ok(target_transform) = q_targets.get(target) {
                 let start: Vec2 = soul_transform.translation().truncate();
                 let end: Vec2 = target_transform.translation().truncate();
 
-                let color = if bucket_transport.is_some() {
+                let color = if task_vs.bucket_link.is_some() {
                     Color::srgb(0.0, 0.5, 1.0)
                 } else {
-                    match task {
-                        AssignedTask::Gather(_) => Color::srgba(0.0, 1.0, 0.0, 0.4),
-                        AssignedTask::CollectSand(_) => Color::srgb(1.0, 0.8, 0.0),
-                        AssignedTask::Refine(_) => Color::srgb(0.5, 0.0, 1.0),
-                        AssignedTask::Haul(_) => Color::srgba(1.0, 1.0, 0.0, 0.4),
-                        AssignedTask::Build(_) => Color::srgba(1.0, 1.0, 1.0, 0.5),
-                        AssignedTask::HaulToBlueprint(_) => Color::srgba(1.0, 1.0, 0.5, 0.4),
-                        AssignedTask::FrameWallTile(_) => Color::srgba(1.0, 1.0, 1.0, 0.5),
-                        AssignedTask::CoatWall(_) => Color::srgba(1.0, 1.0, 1.0, 0.5),
+                    match task_vs.phase {
+                        SoulTaskPhaseVisual::GatherChop | SoulTaskPhaseVisual::GatherMine => {
+                            Color::srgba(0.0, 1.0, 0.0, 0.4)
+                        }
+                        SoulTaskPhaseVisual::CollectSand => Color::srgb(1.0, 0.8, 0.0),
+                        SoulTaskPhaseVisual::Refine => Color::srgb(0.5, 0.0, 1.0),
+                        SoulTaskPhaseVisual::Haul => Color::srgba(1.0, 1.0, 0.0, 0.4),
+                        SoulTaskPhaseVisual::Build => Color::srgba(1.0, 1.0, 1.0, 0.5),
+                        SoulTaskPhaseVisual::HaulToBlueprint => Color::srgba(1.0, 1.0, 0.5, 0.4),
+                        SoulTaskPhaseVisual::FrameWall | SoulTaskPhaseVisual::CoatWall => {
+                            Color::srgba(1.0, 1.0, 1.0, 0.5)
+                        }
                         _ => Color::srgba(1.0, 1.0, 1.0, 0.3),
                     }
                 };
@@ -278,7 +204,7 @@ pub fn soul_status_visual_system(
             &Transform,
             &DamnedSoul,
             &mut SoulUiLinks,
-            &AssignedTask,
+            &SoulTaskVisualState,
             Option<&IdleState>,
         ),
         With<DamnedSoul>,
@@ -286,12 +212,12 @@ pub fn soul_status_visual_system(
     mut q_text: Query<&mut Text2d, With<StatusIcon>>,
     speech_handles: Res<SpeechHandles>,
 ) {
-    for (soul_entity, _transform, soul, mut ui_links, task, idle_state) in q_souls.iter_mut() {
+    for (soul_entity, _transform, soul, mut ui_links, task_vs, idle_state) in q_souls.iter_mut() {
         let status = if soul.fatigue > 0.8 {
             Some(("!", Color::srgb(1.0, 0.0, 0.0)))
         } else if soul.motivation < 0.2 {
             Some(("?", Color::srgb(0.5, 0.5, 1.0)))
-        } else if matches!(task, AssignedTask::None) {
+        } else if task_vs.phase == SoulTaskPhaseVisual::None {
             let is_sleeping = idle_state.map_or(false, |state| {
                 state.behavior == IdleBehavior::Sleeping
                     || state.behavior == IdleBehavior::Resting

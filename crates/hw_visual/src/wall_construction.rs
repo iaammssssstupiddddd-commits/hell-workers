@@ -2,8 +2,9 @@
 
 use bevy::prelude::*;
 use hw_core::constants::{TILE_SIZE, Z_BAR_BG};
-use hw_jobs::construction::{WallConstructionPhase, WallTileBlueprint};
-use hw_jobs::{WallConstructionSite, WallTileState};
+use hw_core::visual_mirror::construction::{
+    WallSiteVisualState, WallTileStateMirror, WallTileVisualMirror,
+};
 use std::collections::HashSet;
 
 use crate::progress_bar::{
@@ -24,48 +25,47 @@ fn progress_to_ratio(progress: u8) -> f32 {
     (progress as f32 / 100.0).clamp(0.0, 1.0)
 }
 
-fn site_phase_progress(site: &WallConstructionSite) -> f32 {
+fn site_phase_progress(site: &WallSiteVisualState) -> f32 {
     if site.tiles_total == 0 {
         return 1.0;
     }
 
-    match site.phase {
-        WallConstructionPhase::Framing => {
-            (site.tiles_framed as f32 / site.tiles_total as f32).clamp(0.0, 1.0)
-        }
-        WallConstructionPhase::Coating => {
-            (site.tiles_coated as f32 / site.tiles_total as f32).clamp(0.0, 1.0)
-        }
+    if site.phase_is_framing {
+        (site.tiles_framed as f32 / site.tiles_total as f32).clamp(0.0, 1.0)
+    } else {
+        (site.tiles_coated as f32 / site.tiles_total as f32).clamp(0.0, 1.0)
     }
 }
 
-fn site_phase_fill_color(phase: WallConstructionPhase) -> Color {
-    match phase {
-        WallConstructionPhase::Framing => Color::srgba(0.88, 0.66, 0.34, 1.0),
-        WallConstructionPhase::Coating => Color::srgba(0.58, 0.47, 0.36, 1.0),
+fn site_phase_fill_color(phase_is_framing: bool) -> Color {
+    if phase_is_framing {
+        Color::srgba(0.88, 0.66, 0.34, 1.0)
+    } else {
+        Color::srgba(0.58, 0.47, 0.36, 1.0)
     }
 }
 
-fn should_show_site_progress(site: &WallConstructionSite) -> bool {
+fn should_show_site_progress(site: &WallSiteVisualState) -> bool {
     if site.tiles_total == 0 {
         return false;
     }
 
-    match site.phase {
-        WallConstructionPhase::Framing => site.tiles_framed < site.tiles_total,
-        WallConstructionPhase::Coating => site.tiles_coated < site.tiles_total,
+    if site.phase_is_framing {
+        site.tiles_framed < site.tiles_total
+    } else {
+        site.tiles_coated < site.tiles_total
     }
 }
 
 /// Update wall tile sprite color based on construction state.
 pub fn update_wall_tile_visuals_system(
-    mut q_tiles: Query<(&WallTileBlueprint, &mut Sprite), Changed<WallTileBlueprint>>,
+    mut q_tiles: Query<(&WallTileVisualMirror, &mut Sprite), Changed<WallTileVisualMirror>>,
 ) {
-    for (tile, mut sprite) in q_tiles.iter_mut() {
-        sprite.color = match tile.state {
-            WallTileState::WaitingWood => Color::srgba(0.78, 0.56, 0.32, 0.25),
-            WallTileState::FramingReady => Color::srgba(0.90, 0.68, 0.36, 0.40),
-            WallTileState::Framing { progress } => {
+    for (mirror, mut sprite) in q_tiles.iter_mut() {
+        sprite.color = match mirror.state {
+            WallTileStateMirror::WaitingWood => Color::srgba(0.78, 0.56, 0.32, 0.25),
+            WallTileStateMirror::FramingReady => Color::srgba(0.90, 0.68, 0.36, 0.40),
+            WallTileStateMirror::Framing { progress } => {
                 let t = progress_to_ratio(progress);
                 Color::srgba(
                     0.86 - 0.20 * t,
@@ -74,10 +74,10 @@ pub fn update_wall_tile_visuals_system(
                     0.40 + 0.35 * t,
                 )
             }
-            WallTileState::FramedProvisional => Color::srgba(0.58, 0.42, 0.30, 0.70),
-            WallTileState::WaitingMud => Color::srgba(0.55, 0.44, 0.34, 0.30),
-            WallTileState::CoatingReady => Color::srgba(0.62, 0.50, 0.37, 0.45),
-            WallTileState::Coating { progress } => {
+            WallTileStateMirror::FramedProvisional => Color::srgba(0.58, 0.42, 0.30, 0.70),
+            WallTileStateMirror::WaitingMud => Color::srgba(0.55, 0.44, 0.34, 0.30),
+            WallTileStateMirror::CoatingReady => Color::srgba(0.62, 0.50, 0.37, 0.45),
+            WallTileStateMirror::Coating { progress } => {
                 let t = progress_to_ratio(progress);
                 Color::srgba(
                     0.56 - 0.22 * t,
@@ -86,7 +86,7 @@ pub fn update_wall_tile_visuals_system(
                     0.50 + 0.42 * t,
                 )
             }
-            WallTileState::Complete => Color::srgba(0.35, 0.35, 0.38, 0.95),
+            WallTileStateMirror::Complete => Color::srgba(0.35, 0.35, 0.38, 0.95),
         };
     }
 }
@@ -95,7 +95,7 @@ pub fn update_wall_tile_visuals_system(
 pub fn manage_wall_progress_bars_system(
     mut commands: Commands,
     q_sites: Query<
-        (Entity, &Transform, &WallConstructionSite),
+        (Entity, &Transform, &WallSiteVisualState),
         Without<WallConstructionProgressBar>,
     >,
     q_bars: Query<(Entity, &ChildOf), With<WallConstructionProgressBar>>,
@@ -121,7 +121,7 @@ pub fn manage_wall_progress_bars_system(
             height: WALL_PROGRESS_BAR_HEIGHT,
             y_offset: WALL_PROGRESS_BAR_Y_OFFSET,
             bg_color: WALL_PROGRESS_BAR_BG_COLOR,
-            fill_color: site_phase_fill_color(site.phase),
+            fill_color: site_phase_fill_color(site.phase_is_framing),
             z_index: Z_BAR_BG,
         };
         let (bg_entity, fill_entity) =
@@ -144,14 +144,14 @@ pub fn manage_wall_progress_bars_system(
 
 /// Update wall phase progress bar fill/position.
 pub fn update_wall_progress_bars_system(
-    q_sites: Query<(&Transform, &WallConstructionSite), Without<WallConstructionProgressBar>>,
+    q_sites: Query<(&Transform, &WallSiteVisualState), Without<WallConstructionProgressBar>>,
     q_generic_bars: Query<&GenericProgressBar>,
     mut q_bg_bars: Query<
         (Entity, &ChildOf, &mut Transform),
         (
             With<WallConstructionProgressBar>,
             With<ProgressBarBackground>,
-            Without<WallConstructionSite>,
+            Without<WallSiteVisualState>,
             Without<ProgressBarFill>,
         ),
     >,
@@ -160,7 +160,7 @@ pub fn update_wall_progress_bars_system(
         (
             With<WallConstructionProgressBar>,
             With<ProgressBarFill>,
-            Without<WallConstructionSite>,
+            Without<WallSiteVisualState>,
             Without<ProgressBarBackground>,
         ),
     >,
@@ -188,7 +188,7 @@ pub fn update_wall_progress_bars_system(
             &generic_bar.config,
             &mut sprite,
             &mut fill_transform,
-            Some(site_phase_fill_color(site.phase)),
+            Some(site_phase_fill_color(site.phase_is_framing)),
         );
         let fill_width = sprite.custom_size.map(|s| s.x).unwrap_or(0.0);
         sync_progress_bar_fill_position(

@@ -21,6 +21,7 @@ use crate::systems::jobs::wall_construction::{
 };
 use crate::systems::logistics::item_lifetime::despawn_expired_items_system;
 use crate::systems::logistics::transport_request::TransportRequestPlugin;
+use hw_logistics::visual_sync::{on_wheelbarrow_added, sync_inventory_item_visual_system};
 use crate::systems::obstacle::obstacle_cleanup_system;
 use crate::systems::room::{
     RoomDetectionState, RoomTileLookup, RoomValidationState, detect_rooms_system,
@@ -31,6 +32,11 @@ use crate::systems::soul_ai::SoulAiPlugin;
 use crate::world::regrowth::{RegrowthManager, tree_regrowth_system};
 use bevy::prelude::*;
 use hw_core::game_state::PlayMode;
+use hw_jobs::visual_sync::{
+    on_designation_added, on_designation_removed, on_rest_area_added, sync_blueprint_visual_system,
+    sync_floor_site_visual_system, sync_floor_tile_visual_system, sync_soul_task_visual_system,
+    sync_wall_site_visual_system, sync_wall_tile_visual_system,
+};
 
 pub struct LogicPlugin;
 
@@ -85,6 +91,19 @@ impl Plugin for LogicPlugin {
         .add_systems(
             Update,
             (
+                sync_inventory_item_visual_system,
+                sync_soul_task_visual_system,
+                sync_blueprint_visual_system,
+                sync_floor_tile_visual_system,
+                sync_wall_tile_visual_system,
+                sync_floor_site_visual_system,
+                sync_wall_site_visual_system,
+            )
+                .in_set(GameSystemSet::Logic),
+        )
+        .add_systems(
+            Update,
+            (
                 mark_room_dirty_from_building_changes_system,
                 validate_rooms_system,
                 detect_rooms_system,
@@ -97,6 +116,10 @@ impl Plugin for LogicPlugin {
         .add_observer(on_building_removed)
         .add_observer(on_door_added)
         .add_observer(on_door_removed)
+        .add_observer(on_designation_added)
+        .add_observer(on_designation_removed)
+        .add_observer(on_rest_area_added)
+        .add_observer(on_wheelbarrow_added)
         .add_systems(
             Update,
             (

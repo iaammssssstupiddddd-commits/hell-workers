@@ -7,27 +7,23 @@ use super::{CARRIED_ITEM_ICON_SIZE, CARRIED_ITEM_Y_OFFSET};
 use crate::handles::{HaulItemHandles, MaterialIconHandles, WorkIconHandles};
 use hw_core::logistics::ResourceType;
 use hw_core::soul::DamnedSoul;
-use hw_logistics::types::{Inventory, ResourceItem};
+use hw_core::visual_mirror::logistics::InventoryItemVisual;
 
 pub fn spawn_carrying_item_system(
     mut commands: Commands,
     mat_handles: Res<MaterialIconHandles>,
     haul_handles: Res<HaulItemHandles>,
     q_workers: Query<
-        (Entity, &Transform, &Inventory),
+        (Entity, &Transform, &InventoryItemVisual),
         (With<DamnedSoul>, Without<HasCarryingIndicator>),
     >,
-    q_items: Query<&ResourceItem>,
 ) {
-    for (worker_entity, transform, inventory) in q_workers.iter() {
-        let Some(item_entity) = inventory.0 else {
-            continue;
-        };
-        let Ok(item) = q_items.get(item_entity) else {
+    for (worker_entity, transform, inv_visual) in q_workers.iter() {
+        let Some(resource_type) = inv_visual.resource_type else {
             continue;
         };
 
-        let icon_handle = match item.0 {
+        let icon_handle = match resource_type {
             ResourceType::Wood => mat_handles.wood_small.clone(),
             ResourceType::Rock => mat_handles.rock_small.clone(),
             ResourceType::Water => mat_handles.water_small.clone(),
@@ -41,7 +37,7 @@ pub fn spawn_carrying_item_system(
 
         info!(
             "VISUAL: Spawning carrying icon for worker {:?} ({:?})",
-            worker_entity, item.0
+            worker_entity, resource_type
         );
 
         let icon_pos = transform.translation + Vec3::new(0.0, CARRIED_ITEM_Y_OFFSET, 0.5);
@@ -70,8 +66,7 @@ pub fn update_carrying_item_system(
     mat_handles: Res<MaterialIconHandles>,
     haul_handles: Res<HaulItemHandles>,
     work_handles: Res<WorkIconHandles>,
-    q_workers: Query<(Entity, &Transform, &Inventory), With<DamnedSoul>>,
-    q_items: Query<&ResourceItem>,
+    q_workers: Query<(Entity, &Transform, &InventoryItemVisual), With<DamnedSoul>>,
     mut q_icons: Query<
         (Entity, &CarryingItemVisual, &mut Transform, &mut Sprite),
         Without<DamnedSoul>,
@@ -80,28 +75,26 @@ pub fn update_carrying_item_system(
     for (icon_entity, icon, mut icon_transform, mut icon_sprite) in q_icons.iter_mut() {
         let mut should_despawn = true;
 
-        if let Ok((_, worker_transform, inventory)) = q_workers.get(icon.worker) {
-            if let Some(item_entity) = inventory.0 {
+        if let Ok((_, worker_transform, inv_visual)) = q_workers.get(icon.worker) {
+            if let Some(resource_type) = inv_visual.resource_type {
                 should_despawn = false;
 
                 icon_transform.translation =
                     worker_transform.translation + Vec3::new(0.0, CARRIED_ITEM_Y_OFFSET, 0.5);
 
-                if let Ok(item) = q_items.get(item_entity) {
-                    let new_icon_handle = match item.0 {
-                        ResourceType::Wood => mat_handles.wood_small.clone(),
-                        ResourceType::Rock => mat_handles.rock_small.clone(),
-                        ResourceType::Water => mat_handles.water_small.clone(),
-                        ResourceType::BucketEmpty => haul_handles.bucket_empty.clone(),
-                        ResourceType::BucketWater => haul_handles.bucket_water.clone(),
-                        ResourceType::Sand => haul_handles.sand_pile.clone(),
-                        ResourceType::Bone => mat_handles.bone_small.clone(),
-                        ResourceType::StasisMud => haul_handles.stasis_mud.clone(),
-                        ResourceType::Wheelbarrow => work_handles.wheelbarrow_small.clone(),
-                    };
-                    if icon_sprite.image != new_icon_handle {
-                        icon_sprite.image = new_icon_handle;
-                    }
+                let new_icon_handle = match resource_type {
+                    ResourceType::Wood => mat_handles.wood_small.clone(),
+                    ResourceType::Rock => mat_handles.rock_small.clone(),
+                    ResourceType::Water => mat_handles.water_small.clone(),
+                    ResourceType::BucketEmpty => haul_handles.bucket_empty.clone(),
+                    ResourceType::BucketWater => haul_handles.bucket_water.clone(),
+                    ResourceType::Sand => haul_handles.sand_pile.clone(),
+                    ResourceType::Bone => mat_handles.bone_small.clone(),
+                    ResourceType::StasisMud => haul_handles.stasis_mud.clone(),
+                    ResourceType::Wheelbarrow => work_handles.wheelbarrow_small.clone(),
+                };
+                if icon_sprite.image != new_icon_handle {
+                    icon_sprite.image = new_icon_handle;
                 }
             }
         }

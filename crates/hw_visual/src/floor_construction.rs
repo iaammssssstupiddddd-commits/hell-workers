@@ -2,8 +2,9 @@
 
 use bevy::prelude::*;
 use hw_core::constants::{FLOOR_BONES_PER_TILE, FLOOR_CURING_DURATION_SECS, TILE_SIZE, Z_BAR_BG};
-use hw_jobs::construction::{FloorConstructionPhase, FloorTileBlueprint};
-use hw_jobs::{FloorConstructionSite, FloorTileState};
+use hw_core::visual_mirror::construction::{
+    FloorConstructionPhaseMirror, FloorSiteVisualState, FloorTileStateMirror, FloorTileVisualMirror,
+};
 use std::collections::HashSet;
 
 use crate::handles::MaterialIconHandles;
@@ -32,12 +33,13 @@ fn progress_to_ratio(progress: u8) -> f32 {
     (progress as f32 / 100.0).clamp(0.0, 1.0)
 }
 
-fn desired_bone_visual_count(tile: &FloorTileBlueprint) -> u8 {
-    if matches!(tile.state, FloorTileState::Complete) {
+fn desired_bone_visual_count(mirror: &FloorTileVisualMirror) -> u8 {
+    if matches!(mirror.state, FloorTileStateMirror::Complete) {
         return 0;
     }
 
-    tile.bones_delivered
+    mirror
+        .bones_delivered
         .min(FLOOR_BONES_PER_TILE)
         .min(MAX_BONE_VISUAL_SLOTS as u32) as u8
 }
@@ -50,7 +52,7 @@ fn bone_visual_offset(slot: u8) -> Vec3 {
     }
 }
 
-fn curing_progress_ratio(site: &FloorConstructionSite) -> f32 {
+fn curing_progress_ratio(site: &FloorSiteVisualState) -> f32 {
     if FLOOR_CURING_DURATION_SECS <= f32::EPSILON {
         return 1.0;
     }
@@ -59,13 +61,13 @@ fn curing_progress_ratio(site: &FloorConstructionSite) -> f32 {
 
 /// Update floor tile sprite color based on construction state.
 pub fn update_floor_tile_visuals_system(
-    mut q_tiles: Query<(&FloorTileBlueprint, &mut Sprite), Changed<FloorTileBlueprint>>,
+    mut q_tiles: Query<(&FloorTileVisualMirror, &mut Sprite), Changed<FloorTileVisualMirror>>,
 ) {
-    for (tile, mut sprite) in q_tiles.iter_mut() {
-        sprite.color = match tile.state {
-            FloorTileState::WaitingBones => Color::srgba(0.50, 0.50, 0.80, 0.20),
-            FloorTileState::ReinforcingReady => Color::srgba(0.65, 0.65, 0.90, 0.35),
-            FloorTileState::Reinforcing { progress } => {
+    for (mirror, mut sprite) in q_tiles.iter_mut() {
+        sprite.color = match mirror.state {
+            FloorTileStateMirror::WaitingBones => Color::srgba(0.50, 0.50, 0.80, 0.20),
+            FloorTileStateMirror::ReinforcingReady => Color::srgba(0.65, 0.65, 0.90, 0.35),
+            FloorTileStateMirror::Reinforcing { progress } => {
                 let t = progress_to_ratio(progress);
                 Color::srgba(
                     0.60 + 0.18 * t,
@@ -74,10 +76,10 @@ pub fn update_floor_tile_visuals_system(
                     0.35 + 0.25 * t,
                 )
             }
-            FloorTileState::ReinforcedComplete => Color::srgba(0.78, 0.72, 0.60, 0.60),
-            FloorTileState::WaitingMud => Color::srgba(0.55, 0.44, 0.34, 0.30),
-            FloorTileState::PouringReady => Color::srgba(0.60, 0.48, 0.36, 0.45),
-            FloorTileState::Pouring { progress } => {
+            FloorTileStateMirror::ReinforcedComplete => Color::srgba(0.78, 0.72, 0.60, 0.60),
+            FloorTileStateMirror::WaitingMud => Color::srgba(0.55, 0.44, 0.34, 0.30),
+            FloorTileStateMirror::PouringReady => Color::srgba(0.60, 0.48, 0.36, 0.45),
+            FloorTileStateMirror::Pouring { progress } => {
                 let t = progress_to_ratio(progress);
                 Color::srgba(
                     0.52 - 0.18 * t,
@@ -86,7 +88,7 @@ pub fn update_floor_tile_visuals_system(
                     0.50 + 0.40 * t,
                 )
             }
-            FloorTileState::Complete => Color::srgba(0.33, 0.33, 0.35, 0.95),
+            FloorTileStateMirror::Complete => Color::srgba(0.33, 0.33, 0.35, 0.95),
         };
     }
 }
@@ -95,11 +97,11 @@ pub fn update_floor_tile_visuals_system(
 pub fn sync_floor_tile_bone_visuals_system(
     mut commands: Commands,
     mat_handles: Res<MaterialIconHandles>,
-    q_tiles: Query<(Entity, &FloorTileBlueprint, Option<&Children>)>,
+    q_tiles: Query<(Entity, &FloorTileVisualMirror, Option<&Children>)>,
     q_bone_visuals: Query<&FloorTileBoneVisual>,
 ) {
-    for (tile_entity, tile, children_opt) in q_tiles.iter() {
-        let desired_count = desired_bone_visual_count(tile);
+    for (tile_entity, mirror, children_opt) in q_tiles.iter() {
+        let desired_count = desired_bone_visual_count(mirror);
         let mut has_slot = [false; MAX_BONE_VISUAL_SLOTS as usize];
 
         if let Some(children) = children_opt {
@@ -143,7 +145,7 @@ pub fn sync_floor_tile_bone_visuals_system(
 /// Spawn/remove curing progress bars for floor construction sites.
 pub fn manage_floor_curing_progress_bars_system(
     mut commands: Commands,
-    q_sites: Query<(Entity, &Transform, &FloorConstructionSite), Without<FloorCuringProgressBar>>,
+    q_sites: Query<(Entity, &Transform, &FloorSiteVisualState), Without<FloorCuringProgressBar>>,
     q_bars: Query<(Entity, &ChildOf), With<FloorCuringProgressBar>>,
 ) {
     let mut curing_sites = HashSet::new();
@@ -153,11 +155,10 @@ pub fn manage_floor_curing_progress_bars_system(
     }
 
     for (site_entity, site_transform, site) in q_sites.iter() {
-        if site.phase != FloorConstructionPhase::Curing {
+        if site.phase != FloorConstructionPhaseMirror::Curing {
             continue;
         }
 
-        // Logic 側で同フレームに site が完了・despawn される直前のケースを除外する。
         if site.curing_remaining_secs <= f32::EPSILON {
             continue;
         }
@@ -195,14 +196,14 @@ pub fn manage_floor_curing_progress_bars_system(
 
 /// Update curing progress bar fill/position.
 pub fn update_floor_curing_progress_bars_system(
-    q_sites: Query<(&Transform, &FloorConstructionSite), Without<FloorCuringProgressBar>>,
+    q_sites: Query<(&Transform, &FloorSiteVisualState), Without<FloorCuringProgressBar>>,
     q_generic_bars: Query<&GenericProgressBar>,
     mut q_bg_bars: Query<
         (Entity, &ChildOf, &mut Transform),
         (
             With<FloorCuringProgressBar>,
             With<ProgressBarBackground>,
-            Without<FloorConstructionSite>,
+            Without<FloorSiteVisualState>,
             Without<ProgressBarFill>,
         ),
     >,
@@ -211,7 +212,7 @@ pub fn update_floor_curing_progress_bars_system(
         (
             With<FloorCuringProgressBar>,
             With<ProgressBarFill>,
-            Without<FloorConstructionSite>,
+            Without<FloorSiteVisualState>,
             Without<ProgressBarBackground>,
         ),
     >,
@@ -220,7 +221,7 @@ pub fn update_floor_curing_progress_bars_system(
         let Ok((site_transform, site)) = q_sites.get(child_of.parent()) else {
             continue;
         };
-        if site.phase != FloorConstructionPhase::Curing {
+        if site.phase != FloorConstructionPhaseMirror::Curing {
             continue;
         }
         let Ok(generic_bar) = q_generic_bars.get(bg_entity) else {
@@ -233,7 +234,7 @@ pub fn update_floor_curing_progress_bars_system(
         let Ok((site_transform, site)) = q_sites.get(child_of.parent()) else {
             continue;
         };
-        if site.phase != FloorConstructionPhase::Curing {
+        if site.phase != FloorConstructionPhaseMirror::Curing {
             continue;
         }
         let Ok(generic_bar) = q_generic_bars.get(fill_entity) else {

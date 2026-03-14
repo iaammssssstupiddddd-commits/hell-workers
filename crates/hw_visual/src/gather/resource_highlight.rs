@@ -5,7 +5,7 @@ use bevy::prelude::*;
 use super::components::{ResourceHighlightState, ResourceVisual};
 use crate::animations::{PulseAnimation, PulseAnimationConfig, update_pulse_animation};
 use hw_core::relationships::TaskWorkers;
-use hw_jobs::{Designation, Rock, Tree};
+use hw_core::visual_mirror::gather::GatherHighlightMarker;
 
 pub const COLOR_DESIGNATED_TINT: Color = Color::srgba(0.6, 0.8, 1.0, 1.0);
 pub const COLOR_WORKING_TINT: Color = Color::srgba(0.8, 0.9, 1.0, 1.0);
@@ -15,8 +15,7 @@ pub fn attach_resource_visual_system(
     q_resources: Query<
         (Entity, &Sprite),
         (
-            With<Designation>,
-            Or<(With<Tree>, With<Rock>)>,
+            With<GatherHighlightMarker>,
             Without<ResourceVisual>,
         ),
     >,
@@ -44,11 +43,11 @@ pub fn update_resource_visual_system(
         Entity,
         &mut ResourceVisual,
         &mut Sprite,
-        Option<&Designation>,
+        Option<&GatherHighlightMarker>,
     )>,
 ) {
-    for (entity, mut visual, mut sprite, designation) in q_resources.iter_mut() {
-        if designation.is_none() {
+    for (entity, mut visual, mut sprite, highlight) in q_resources.iter_mut() {
+        if highlight.is_none() {
             if visual.state != ResourceHighlightState::Normal {
                 visual.state = ResourceHighlightState::Normal;
                 if let Some(original_color) = visual.original_color {
@@ -100,7 +99,7 @@ pub fn update_resource_visual_system(
 
 pub fn cleanup_resource_visual_system(
     mut commands: Commands,
-    q_resources: Query<(Entity, &ResourceVisual, &Sprite), Without<Designation>>,
+    q_resources: Query<(Entity, &ResourceVisual, &Sprite), Without<GatherHighlightMarker>>,
 ) {
     for (entity, visual, sprite) in q_resources.iter() {
         if let Some(original_color) = visual.original_color {

@@ -4,6 +4,7 @@ use crate::systems::jobs::floor_construction::{FloorConstructionSite, FloorTileB
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
 use hw_core::constants::*;
+use hw_core::visual_mirror::construction::{FloorSiteVisualState, FloorTileVisualMirror};
 use hw_ui::selection::validate_area_size;
 use std::collections::HashSet;
 
@@ -76,6 +77,7 @@ pub(super) fn apply_floor_placement(
     let site_entity = commands
         .spawn((
             FloorConstructionSite::new(area.clone(), material_center, tiles_total),
+            FloorSiteVisualState::default(),
             Transform::from_translation(material_center.extend(Z_MAP + 0.01)),
             Visibility::default(),
             Name::new("FloorConstructionSite"),
@@ -87,6 +89,7 @@ pub(super) fn apply_floor_placement(
 
         commands.spawn((
             FloorTileBlueprint::new(site_entity, (gx, gy)),
+            FloorTileVisualMirror::default(),
             TaskSlots::new(1),
             Sprite {
                 color: Color::srgba(0.5, 0.5, 0.8, 0.2),

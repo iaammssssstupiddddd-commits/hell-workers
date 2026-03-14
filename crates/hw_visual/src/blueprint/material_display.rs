@@ -7,19 +7,19 @@ use super::components::{MaterialCounter, MaterialIcon};
 use super::{COUNTER_TEXT_OFFSET, MATERIAL_ICON_X_OFFSET, MATERIAL_ICON_Y_OFFSET};
 use crate::handles::MaterialIconHandles;
 use hw_core::logistics::ResourceType;
-use hw_jobs::Blueprint;
+use hw_core::visual_mirror::construction::BlueprintVisualState;
 
 pub fn spawn_material_display_system(
     mut commands: Commands,
     handles: Res<MaterialIconHandles>,
     q_blueprints: Query<
-        (Entity, &Blueprint),
-        (With<Blueprint>, Added<super::components::BlueprintVisual>),
+        (Entity, &BlueprintVisualState),
+        Added<super::components::BlueprintVisual>,
     >,
 ) {
-    for (bp_entity, bp) in q_blueprints.iter() {
+    for (bp_entity, state) in q_blueprints.iter() {
         let mut i = 0;
-        for (resource_type, _) in &bp.required_materials {
+        for (resource_type, _, _) in &state.material_counts {
             let icon_image = material_icon_for(&handles, *resource_type);
 
             let offset = Vec3::new(
@@ -61,8 +61,8 @@ pub fn spawn_material_display_system(
             i += 1;
         }
 
-        if let Some(flexible) = &bp.flexible_material_requirement
-            && let Some(&proxy_resource_type) = flexible.accepted_types.first()
+        if let Some((accepted_types, _, _)) = &state.flexible_material
+            && let Some(&proxy_resource_type) = accepted_types.first()
         {
             let icon_image = material_icon_for(&handles, proxy_resource_type);
             let offset = Vec3::new(
@@ -84,7 +84,7 @@ pub fn spawn_material_display_system(
                     Transform::from_translation(offset),
                     Name::new(format!(
                         "MaterialIcon (Flexible {:?})",
-                        flexible.accepted_types
+                        accepted_types
                     )),
                 ));
 
@@ -102,7 +102,7 @@ pub fn spawn_material_display_system(
                     Transform::from_translation(offset + COUNTER_TEXT_OFFSET),
                     Name::new(format!(
                         "MaterialCounter (Flexible {:?})",
-                        flexible.accepted_types
+                        accepted_types
                     )),
                 ));
             });
@@ -111,35 +111,31 @@ pub fn spawn_material_display_system(
 }
 
 pub fn update_material_counter_system(
-    q_blueprints: Query<&Blueprint>,
+    q_blueprints: Query<&BlueprintVisualState>,
     mut q_counters: Query<(&MaterialCounter, &ChildOf, &mut Text2d)>,
 ) {
     for (counter, child_of, mut text) in q_counters.iter_mut() {
-        if let Ok(bp) = q_blueprints.get(child_of.parent()) {
-            if let Some(flexible) = &bp.flexible_material_requirement
-                && flexible.accepts(counter.resource_type)
-            {
-                let accepted = flexible
-                    .accepted_types
+        let Ok(state) = q_blueprints.get(child_of.parent()) else {
+            continue;
+        };
+
+        if let Some((accepted_types, delivered, required)) = &state.flexible_material {
+            if accepted_types.contains(&counter.resource_type) {
+                let accepted = accepted_types
                     .iter()
                     .map(|resource_type| format!("{:?}", resource_type))
                     .collect::<Vec<_>>()
                     .join("/");
-                text.0 = format!(
-                    "{} {}/{}",
-                    accepted, flexible.delivered_total, flexible.required_total
-                );
+                text.0 = format!("{} {}/{}", accepted, delivered, required);
                 continue;
             }
+        }
 
-            let delivered = bp
-                .delivered_materials
-                .get(&counter.resource_type)
-                .unwrap_or(&0);
-            let required = bp
-                .required_materials
-                .get(&counter.resource_type)
-                .unwrap_or(&0);
+        if let Some((_, delivered, required)) = state
+            .material_counts
+            .iter()
+            .find(|(rt, _, _)| *rt == counter.resource_type)
+        {
             text.0 = format!("{}/{}", delivered, required);
         }
     }
@@ -159,7 +155,7 @@ fn material_icon_for(handles: &MaterialIconHandles, resource_type: ResourceType)
 
 pub fn cleanup_material_display_system(
     mut commands: Commands,
-    q_blueprints: Query<Entity, With<Blueprint>>,
+    q_blueprints: Query<Entity, With<BlueprintVisualState>>,
     q_icons: Query<(Entity, &ChildOf, &MaterialIcon)>,
     q_counters: Query<(Entity, &ChildOf, &MaterialCounter)>,
 ) {

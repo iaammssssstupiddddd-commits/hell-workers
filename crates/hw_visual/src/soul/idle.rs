@@ -6,7 +6,7 @@ use hw_core::relationships::ParticipatingIn;
 use hw_core::soul::{
     DamnedSoul, DreamQuality, DreamState, GatheringBehavior, IdleBehavior, IdleState,
 };
-use hw_jobs::AssignedTask;
+use hw_core::visual_mirror::task::{SoulTaskPhaseVisual, SoulTaskVisualState};
 use hw_spatial::{GatheringSpotSpatialGrid, SpatialGridOps};
 
 type IdleVisualSoulQuery<'w, 's> = Query<
@@ -17,7 +17,7 @@ type IdleVisualSoulQuery<'w, 's> = Query<
         &'static mut Sprite,
         &'static IdleState,
         &'static DamnedSoul,
-        &'static AssignedTask,
+        &'static SoulTaskVisualState,
         Option<&'static ParticipatingIn>,
         &'static DreamState,
     ),
@@ -31,8 +31,8 @@ pub fn idle_visual_system(
 ) {
     const GATHERING_ARRIVAL_RADIUS: f32 = TILE_SIZE * GATHERING_ARRIVAL_RADIUS_BASE;
 
-    for (mut transform, mut sprite, idle, soul, task, participating_in, dream) in query.iter_mut() {
-        if !matches!(task, AssignedTask::None) {
+    for (mut transform, mut sprite, idle, soul, task_vs, participating_in, dream) in query.iter_mut() {
+        if task_vs.phase != SoulTaskPhaseVisual::None {
             transform.rotation = Quat::IDENTITY;
             transform.scale = Vec3::ONE;
             sprite.color = Color::WHITE;
@@ -157,7 +157,7 @@ pub fn idle_visual_system(
                     | IdleBehavior::GoingToRest
                     | IdleBehavior::Drifting
             )
-            && matches!(task, AssignedTask::None)
+            && task_vs.phase == SoulTaskPhaseVisual::None
         {
             sprite.color = Color::srgb(1.0, 1.0, 0.8);
             transform.rotation = Quat::IDENTITY;

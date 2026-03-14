@@ -14,11 +14,11 @@ use crate::progress_bar::{
     spawn_progress_bar, sync_progress_bar_fill_position, sync_progress_bar_position,
     update_progress_bar_fill,
 };
-use hw_jobs::Blueprint;
+use hw_core::visual_mirror::construction::BlueprintVisualState;
 
 pub fn spawn_progress_bar_system(
     mut commands: Commands,
-    q_blueprints: Query<(Entity, &Transform), (With<Blueprint>, Without<ProgressBar>)>,
+    q_blueprints: Query<(Entity, &Transform), (With<BlueprintVisualState>, Without<ProgressBar>)>,
     q_progress_bars: Query<&ChildOf, With<ProgressBar>>,
 ) {
     for (bp_entity, bp_transform) in q_blueprints.iter() {
@@ -48,7 +48,7 @@ pub fn spawn_progress_bar_system(
 }
 
 pub fn update_progress_bar_fill_system(
-    q_blueprints: Query<&Blueprint>,
+    q_blueprints: Query<&BlueprintVisualState>,
     q_generic_bars: Query<&GenericProgressBar>,
     mut q_fills: Query<
         (Entity, &ChildOf, &mut Sprite, &mut Transform),
@@ -56,46 +56,50 @@ pub fn update_progress_bar_fill_system(
     >,
 ) {
     for (fill_entity, child_of, mut sprite, mut transform) in q_fills.iter_mut() {
-        if let Ok(bp) = q_blueprints.get(child_of.parent()) {
-            let total_required: u32 = bp.required_materials.values().sum();
-            let total_delivered: u32 = bp.delivered_materials.values().sum();
+        let Ok(state) = q_blueprints.get(child_of.parent()) else {
+            continue;
+        };
 
-            let material_ratio = if total_required > 0 {
-                (total_delivered as f32 / total_required as f32).min(1.0)
+        let total_required: u32 = state.material_counts.iter().map(|(_, _, r)| r).sum::<u32>()
+            + state.flexible_material.as_ref().map(|(_, _, r)| *r).unwrap_or(0);
+        let total_delivered: u32 = state.material_counts.iter().map(|(_, d, _)| d).sum::<u32>()
+            + state.flexible_material.as_ref().map(|(_, d, _)| *d).unwrap_or(0);
+
+        let material_ratio = if total_required > 0 {
+            (total_delivered as f32 / total_required as f32).min(1.0)
+        } else {
+            1.0
+        };
+
+        let combined_progress = material_ratio * 0.5 + state.progress.min(1.0) * 0.5;
+
+        if let Ok(generic_bar) = q_generic_bars.get(fill_entity) {
+            let fill_color = if state.progress > 0.0 {
+                Some(COLOR_PROGRESS_BUILD)
             } else {
-                1.0
+                Some(COLOR_PROGRESS_MATERIAL)
             };
 
-            let combined_progress = material_ratio * 0.5 + bp.progress.min(1.0) * 0.5;
-
-            if let Ok(generic_bar) = q_generic_bars.get(fill_entity) {
-                let fill_color = if bp.progress > 0.0 {
-                    Some(COLOR_PROGRESS_BUILD)
-                } else {
-                    Some(COLOR_PROGRESS_MATERIAL)
-                };
-
-                update_progress_bar_fill(
-                    combined_progress,
-                    &generic_bar.config,
-                    &mut sprite,
-                    &mut transform,
-                    fill_color,
-                );
-            }
+            update_progress_bar_fill(
+                combined_progress,
+                &generic_bar.config,
+                &mut sprite,
+                &mut transform,
+                fill_color,
+            );
         }
     }
 }
 
 pub fn sync_progress_bar_position_system(
-    q_blueprints: Query<(Entity, &Transform), With<Blueprint>>,
+    q_blueprints: Query<(Entity, &Transform), With<BlueprintVisualState>>,
     q_generic_bars: Query<&GenericProgressBar>,
     mut q_bg_bars: Query<
         (Entity, &ChildOf, &mut Transform),
         (
             With<ProgressBar>,
             With<ProgressBarBackground>,
-            Without<Blueprint>,
+            Without<BlueprintVisualState>,
             Without<ProgressBarFill>,
         ),
     >,
@@ -104,7 +108,7 @@ pub fn sync_progress_bar_position_system(
         (
             With<ProgressBar>,
             With<ProgressBarFill>,
-            Without<Blueprint>,
+            Without<BlueprintVisualState>,
             Without<ProgressBarBackground>,
         ),
     >,
@@ -134,7 +138,7 @@ pub fn sync_progress_bar_position_system(
 
 pub fn cleanup_progress_bars_system(
     mut commands: Commands,
-    q_blueprints: Query<Entity, With<Blueprint>>,
+    q_blueprints: Query<Entity, With<BlueprintVisualState>>,
     q_bars: Query<(Entity, &ChildOf, &ProgressBar)>,
 ) {
     let bp_entities: std::collections::HashSet<Entity> = q_blueprints.iter().collect();

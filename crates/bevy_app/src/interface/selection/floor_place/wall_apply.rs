@@ -4,6 +4,7 @@ use crate::systems::jobs::wall_construction::{WallConstructionSite, WallTileBlue
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
 use hw_core::constants::*;
+use hw_core::visual_mirror::construction::{WallSiteVisualState, WallTileVisualMirror};
 use hw_ui::selection::validate_wall_area;
 use std::collections::HashSet;
 
@@ -75,6 +76,7 @@ pub(super) fn apply_wall_placement(
     let site_entity = commands
         .spawn((
             WallConstructionSite::new(area.clone(), material_center, tiles_total),
+            WallSiteVisualState::default(),
             Transform::from_translation(material_center.extend(Z_MAP + 0.01)),
             Visibility::default(),
             Name::new("WallConstructionSite"),
@@ -86,6 +88,7 @@ pub(super) fn apply_wall_placement(
 
         commands.spawn((
             WallTileBlueprint::new(site_entity, (gx, gy)),
+            WallTileVisualMirror::default(),
             TaskSlots::new(1),
             Sprite {
                 color: Color::srgba(0.8, 0.55, 0.3, 0.25),

@@ -25,20 +25,22 @@
 *hw_jobs 由来:*
 | 型 | 使用ファイル群 | 目的 |
 |---|---|---|
-| `AssignedTask` | `gather/worker_indicator.rs`, `blueprint/worker_indicator.rs`, `mud_mixer.rs`, `soul/idle.rs` | タスクフェーズ（Build/Gather/Refine）に応じたビジュアル切替 |
-| `Blueprint` | `blueprint/effects.rs`, `material_display.rs`, `progress_bar.rs` | 資材進捗・必要素材量の表示 |
-| `FloorConstructionSite`, `WallConstructionSite` | `floor_construction.rs`, `wall_construction.rs` | タイル別の施工フェーズ・完成度の描画 |
-| `GatherPhase`, `BuildPhase`, `RefinePhase` | 上記 worker_indicator 系 | フェーズ enum のパターンマッチ |
+| `AssignedTask` | `soul/mod.rs`, `gather/worker_indicator.rs`, `blueprint/worker_indicator.rs`, `mud_mixer.rs`, `soul/idle.rs` | プログレスバー表示判定・進捗値取得・タスクリンク線描画・ステータスアイコン |
+| `GatherPhase`, `BuildPhase`, `RefinePhase`, `HaulPhase`, `CoatWallPhase`, `FrameWallPhase`, `PourFloorPhase`, `ReinforceFloorPhase` | `soul/mod.rs`, worker_indicator 系 | フェーズ enum のパターンマッチ、進捗値（`progress_bp`）の取得 |
 | `WorkType` | `gather/worker_indicator.rs` | 斧 / ツルハシアイコン切替 |
+| `Blueprint` | `blueprint/effects.rs`, `material_display.rs`, `progress_bar.rs`, `wall_connection.rs` | 資材進捗・必要素材量の表示 |
+| `FloorConstructionSite`, `WallConstructionSite`, `FloorTileBlueprint`, `WallTileBlueprint` | `floor_construction.rs`, `wall_construction.rs` | タイル別の施工フェーズ・完成度の描画 |
+| `FloorConstructionPhase`, `WallConstructionPhase`, `FloorTileState`, `WallTileState` | `floor_construction.rs`, `wall_construction.rs` | タイル状態のフェーズ判定 |
 | `Designation`, `Tree`, `Rock` | `gather/resource_highlight.rs` | 採取対象マーカーコンポーネントのフィルタ |
-| `Building`, `BuildingType`, `MudMixerStorage` | `tank.rs`, `wall_connection.rs`, `mud_mixer.rs` | 建物種別・スロット残量の表示 |
+| `RestArea` | `dream/particle.rs` | 休息エリアのパーティクル表示 |
+| `Building`, `BuildingType`, `MudMixerStorage` | `tank.rs`, `wall_connection.rs`, `mud_mixer.rs` | 建物種別・スロット残量の表示（※本提案スコープ外）|
 
 *hw_logistics 由来:*
 | 型 | 使用ファイル群 | 目的 |
 |---|---|---|
 | `Inventory`, `ResourceItem` | `haul/carrying_item.rs` | 運搬中アイテムのアイコン表示 |
 | `Wheelbarrow` | `haul/wheelbarrow_follow.rs` | 手押し車エンティティのフィルタリング |
-| `Stockpile` | `tank.rs` | 備蓄量表示 |
+| `Stockpile` | `tank.rs` | 備蓄量表示（※本提案スコープ外）|
 
 **問題:**
 - `hw_visual` が `hw_jobs` / `hw_logistics` のドメイン型に直接依存しているため、ビジネスロジック変更時にビジュアル層の再コンパイルが連鎖する。
@@ -59,9 +61,10 @@
 
 ## 3. 非目的（Non-Goals）
 
-- `hw_jobs` / `hw_logistics` 内部の実装変更（イベント発行の追加のみ行う）。
+- `hw_jobs` / `hw_logistics` のビジネスロジックの変更（ビジュアル同期用システム/Observer の追加のみ行う）。
 - ECS ポーリングから完全なイベント駆動への移行（段階的に行う）。
 - `hw_ui` や `bevy_app` 側の依存整理（スコープ外）。
+- `Building`, `BuildingType`, `MudMixerStorage`, `Stockpile` の分離（別途提案予定）。
 
 ---
 
@@ -86,48 +89,67 @@
 
 移行コストの観点から使用箇所を 3 グループに分ける。
 
-#### グループ A（低コスト：マーカーコンポーネントの hw_core 移動）
+#### グループ A（低コスト：採取・移動マーカーのミラー化）
 
-対象: `Designation`, `Tree`, `Rock`, `Wheelbarrow`
+対象: `Designation`, `Tree`, `Rock`, `Wheelbarrow`, `RestArea`
 
-これらはデータを持たない（または最小限の）マーカーコンポーネントであり、`hw_core` に移動するだけで解決する。既存の `hw_jobs` / `hw_logistics` でも `hw_core` から re-export すれば既存コードへの影響を最小化できる。
+**`Designation`/`Tree`/`Rock` を hw_core に移動しない理由:**
+`Designation` は `hw_jobs` 内で `TaskSlots`/`Priority` と一体で操作されており（`model.rs:329`）、採取ロジックに強く結びついている。`crate-boundaries.md §2` パターン B に該当するドメイン特化型であるため、hw_core に移動するとドメイン境界が崩れる。
 
-```
-hw_core::jobs::Designation       (旧: hw_jobs::Designation)
-hw_core::jobs::Tree              (旧: hw_jobs::Tree)
-hw_core::jobs::Rock              (旧: hw_jobs::Rock)
-hw_core::logistics::Wheelbarrow  (旧: hw_logistics::Wheelbarrow)
-```
+**採用アプローチ：ビジュアル専用マーカーコンポーネント（hw_core 定義）を hw_jobs 側で同期**
 
-#### グループ B（中コスト：タスクフェーズ表示のイベント化）
-
-対象: `AssignedTask`, `GatherPhase`, `BuildPhase`, `RefinePhase`, `WorkType`
-
-ビジュアルシステムが「タスクのフェーズ」を毎フレームポーリングしている箇所を、タスク割り当て・フェーズ変化時のイベントに置き換える。
-
-**hw_core に追加するイベント:**
 ```rust
-/// hw_core::events に追加
-#[derive(Event)]
-pub struct OnTaskPhaseChanged {
-    pub soul: Entity,
-    pub phase: VisualTaskPhase,
+// hw_core に追加
+#[derive(Component)]
+pub struct GatherHighlightMarker;  // hw_visual が highlight 判定に使用
+
+#[derive(Component)]
+pub struct RestAreaMarker;         // hw_visual が dream particle に使用
+```
+
+`hw_jobs` の Designation 付与・削除 Observer がそれぞれ `GatherHighlightMarker` の attach/detach を行う。`hw_visual` は `Designation`/`Tree`/`Rock` を直接参照せず `GatherHighlightMarker` のみを Query する。
+
+**`Wheelbarrow` の扱い:**
+`Wheelbarrow` は hw_logistics 固有のゲームプレイ型であり hw_core への移動は不適切。`WheelbarrowMarker` を hw_core に定義し hw_logistics 側で同期するミラーパターンを採用する。
+
+#### グループ B（中コスト：タスクフェーズ表示のミラーコンポーネント化）
+
+対象: `AssignedTask` および全フェーズ enum（`GatherPhase`, `BuildPhase`, `RefinePhase`, `HaulPhase`, `CoatWallPhase`, `FrameWallPhase`, `PourFloorPhase`, `ReinforceFloorPhase`）, `WorkType`
+
+**イベント駆動を採用しない理由:**
+`soul/mod.rs` の `task_link_system` と `update_progress_bar_fill_system` は `AssignedTask` のネスト構造から**エンティティ参照**（target, mixer, blueprint, bucket 等）と**進捗値**（`progress_bp`）を毎フレーム直接読み取っている。これを個々のイベントで表現しようとすると、`VisualTaskPhase` が実質 `AssignedTask` の複製になる。
+
+**採用アプローチ：`SoulTaskVisualState` ミラーコンポーネント（グループ C と同じパターン）**
+
+```rust
+// hw_core に追加
+#[derive(Component, Default)]
+pub struct SoulTaskVisualState {
+    /// タスクリンク線の描画先（None = 線を引かない）
+    pub link_target: Option<Entity>,
+    /// バケツ搬送中のリンク先（None の場合 link_target を使用）
+    pub bucket_link: Option<Entity>,
+    /// プログレスバー表示用（None = バーを非表示）
+    pub progress: Option<f32>,
+    /// ワーカーアイコン種別
+    pub worker_icon: VisualWorkerIcon,
+    /// アイドル判定（ステータスアイコン表示に使用）
+    pub is_idle: bool,
 }
 
-/// ビジュアル層が必要とするフェーズ情報のみを持つ軽量 enum
-#[derive(Clone, PartialEq, Eq)]
-pub enum VisualTaskPhase {
-    Idle,
-    GatherAxe,
-    GatherPickaxe,
+#[derive(Default, Clone, PartialEq)]
+pub enum VisualWorkerIcon {
+    #[default]
+    None,
+    Axe,
+    Pickaxe,
     Build,
-    Refine { frame_index: u8 },
+    Haul,
+    Refine { mixer: Entity },
 }
 ```
 
-`hw_jobs` 側では `AssignedTask` が変化したタイミング（既存の assign / unassign Observer）で `OnTaskPhaseChanged` を発行する。
-
-`hw_visual` 側では `OnTaskPhaseChanged` を購読し、`VisualPhaseCache` コンポーネントとして Soul エンティティに書き込む。Worker indicator 系のシステムはこのキャッシュを読む。
+`hw_jobs` 側では `AssignedTask` が変化したタイミング（`Changed<AssignedTask>`）で `SoulTaskVisualState` を同期するシステムを追加する。`hw_visual` の各システムはこのミラーコンポーネントのみを Query し、`AssignedTask` を直接参照しない。
 
 #### グループ C（高コスト：建設・資材進捗の表示）
 
@@ -156,7 +178,7 @@ pub struct ConstructionTileVisualState {
 pub enum ConstructionPhaseVisual { Planning, Framing, Coating, Complete }
 ```
 
-`hw_jobs` 側では `Blueprint` / `FloorConstructionSite` が変化したタイミングでミラーコンポーネントを同エンティティに同期するシステムを追加する。`hw_visual` はミラーコンポーネントのみを Query する。
+`hw_jobs` 側では `Changed<Blueprint>` / `Changed<FloorConstructionSite>` を使い、変化があったタイミングのみミラーコンポーネントを同期するシステムを追加する（毎フレーム全件同期しない）。`hw_visual` はミラーコンポーネントのみを Query する。
 
 **`hw_logistics` の `Inventory` / `Stockpile`** も同様に `CarryingItemVisual` / `StockpileVisual` ミラーコンポーネントを `hw_core` に定義し、`hw_logistics` 側で同期する。
 
@@ -165,26 +187,27 @@ pub enum ConstructionPhaseVisual { Planning, Framing, Coating, Complete }
 ### 5.2 変更対象（想定）
 
 **hw_core:**
-- `crates/hw_core/src/events.rs` に `OnTaskPhaseChanged` 追加
-- `crates/hw_core/src/` に `construction_visual.rs` 新設（BlueprintVisualState 等）
-- `crates/hw_core/src/logistics_visual.rs` 新設（CarryingItemVisual 等）
-- `crates/hw_core/src/lib.rs` に新モジュール公開
+- `crates/hw_core/src/visual_mirror/` サブモジュール新設
+  - `gather.rs`：`GatherHighlightMarker`, `RestAreaMarker`, `WheelbarrowMarker`
+  - `task.rs`：`SoulTaskVisualState`, `VisualWorkerIcon`
+  - `construction.rs`：`BlueprintVisualState`, `ConstructionTileVisualState`, `ConstructionPhaseVisual`
+  - `logistics.rs`：`CarryingItemVisual`
+- `crates/hw_core/src/lib.rs` に `pub mod visual_mirror` 追加
 
 **hw_jobs:**
-- `Designation`, `Tree`, `Rock` を `hw_core` へ移動し re-export
-- assign/unassign Observer に `OnTaskPhaseChanged` 発行を追加
-- `Blueprint` 変化時に `BlueprintVisualState` を同期するシステム追加
-- `FloorConstructionSite` / `WallConstructionSite` 変化時にミラー同期システム追加
+- `Designation` 付与・削除 Observer に `GatherHighlightMarker` の attach/detach を追加
+- `RestArea` spawn/despawn Observer に `RestAreaMarker` の同期を追加
+- `Changed<AssignedTask>` で `SoulTaskVisualState` を同期するシステム追加（`visual_sync` モジュール）
+- `Changed<Blueprint>` で `BlueprintVisualState` を同期するシステム追加
+- `Changed<FloorConstructionSite>` / `Changed<WallConstructionSite>` で `ConstructionTileVisualState` を同期するシステム追加
 
 **hw_logistics:**
-- `Wheelbarrow` を `hw_core` へ移動し re-export
-- `Inventory` 変化時に `CarryingItemVisual` を同期するシステム追加
-- `Stockpile` 変化時に `StockpileVisual` を同期するシステム追加
+- `Wheelbarrow` spawn/despawn Observer に `WheelbarrowMarker` の同期を追加
+- `Changed<Inventory>` で `CarryingItemVisual` を同期するシステム追加
 
 **hw_visual:**
-- `use hw_jobs::*` / `use hw_logistics::*` を `use hw_core::*` へ置き換え
-- グループ B の worker_indicator 系システムを `VisualPhaseCache` ベースに書き換え
-- グループ C の blueprint / construction 系システムをミラーコンポーネントベースに書き換え
+- `use hw_jobs::*` / `use hw_logistics::*` を `use hw_core::visual_mirror::*` へ置き換え
+- 各システムのクエリをミラーコンポーネントベースに書き換え
 - `Cargo.toml` から `hw_jobs` / `hw_logistics` 依存を削除
 
 ---
@@ -193,14 +216,14 @@ pub enum ConstructionPhaseVisual { Planning, Framing, Coating, Complete }
 
 | 種別 | 対象 | 内容 |
 |---|---|---|
-| 追加 | `hw_core::events::OnTaskPhaseChanged` | タスクフェーズ変化イベント |
-| 追加 | `hw_core::VisualTaskPhase` | ビジュアル用フェーズ enum |
-| 追加 | `hw_core::BlueprintVisualState` | Blueprint ミラーコンポーネント |
-| 追加 | `hw_core::ConstructionTileVisualState` | 建設タイル ミラーコンポーネント |
-| 追加 | `hw_core::CarryingItemVisual` | 運搬アイテム ミラーコンポーネント |
-| 追加 | `hw_core::StockpileVisual` | 備蓄 ミラーコンポーネント |
-| 移動 | `hw_jobs::Designation`, `Tree`, `Rock` | `hw_core` へ移動・hw_jobs から re-export |
-| 移動 | `hw_logistics::Wheelbarrow` | `hw_core` へ移動・hw_logistics から re-export |
+| 追加 | `hw_core::visual_mirror::GatherHighlightMarker` | 採取対象ハイライト用マーカー |
+| 追加 | `hw_core::visual_mirror::RestAreaMarker` | 休息エリアパーティクル用マーカー |
+| 追加 | `hw_core::visual_mirror::WheelbarrowMarker` | 手押し車フィルタ用マーカー |
+| 追加 | `hw_core::visual_mirror::SoulTaskVisualState` | AssignedTask ミラーコンポーネント |
+| 追加 | `hw_core::visual_mirror::VisualWorkerIcon` | ワーカーアイコン種別 enum |
+| 追加 | `hw_core::visual_mirror::BlueprintVisualState` | Blueprint ミラーコンポーネント |
+| 追加 | `hw_core::visual_mirror::ConstructionTileVisualState` | 建設タイル ミラーコンポーネント |
+| 追加 | `hw_core::visual_mirror::CarryingItemVisual` | 運搬アイテム ミラーコンポーネント |
 | 削除 | `hw_visual/Cargo.toml` の `hw_jobs`, `hw_logistics` | 依存削除（移行完了後） |
 
 ---
@@ -209,8 +232,9 @@ pub enum ConstructionPhaseVisual { Planning, Framing, Coating, Complete }
 
 | 案 | 採否 | 理由 |
 |---|---|---|
-| **本提案（Mirror Component + イベント）** | 採用 | 毎フレーム更新が必要な進捗系にはキャッシュが適切。実装量は多いが hw_visual の完全分離を達成できる |
-| **全面イベント駆動（差分通知のみ）** | 不採用 | Blueprint の資材カウントなど多項目の差分管理が複雑化する。over-engineering のリスクが高い |
+| **本提案（Mirror Component で全グループ統一）** | 採用 | `soul/mod.rs` のようなネスト構造の深い参照も一貫したパターンで扱える。毎フレーム更新の進捗系にも適切 |
+| **イベント駆動（グループ B をイベント化）** | 不採用 | `task_link_system` が AssignedTask から多数のエンティティ参照を取得しており、イベントが AssignedTask の複製になる |
+| **グループ A でマーカー型を hw_core に移動** | 不採用 | `Designation`/`Tree`/`Rock`/`Wheelbarrow` は hw_jobs/hw_logistics ドメインの型（§2 パターン B）。hw_core に移動するとドメイン境界が崩れる |
 | **hw_visual を「プレゼンテーション層」として現状維持** | 不採用 | `hw_ui` とは違い hw_visual に特例扱いの明文化がなく、今後の踏み台になる |
 | **hw_core に hw_jobs / hw_logistics の基盤型をすべて移動** | 不採用 | hw_core が肥大化し、単なるダンプ先になるリスクがある |
 
@@ -255,9 +279,9 @@ pub enum ConstructionPhaseVisual { Planning, Framing, Coating, Complete }
 
 | フェーズ | 内容 | 目安工数 |
 |---|---|---|
-| Phase 1 | グループ A：マーカーコンポーネントを `hw_core` に移動・re-export | 小 |
-| Phase 2 | グループ B：タスクフェーズを `OnTaskPhaseChanged` イベント + `VisualPhaseCache` に切替 | 中 |
-| Phase 3 | グループ C：Blueprint / Construction / Inventory をミラーコンポーネントに切替 | 大 |
+| Phase 1 | グループ A：`hw_core::visual_mirror` に `GatherHighlightMarker`/`RestAreaMarker`/`WheelbarrowMarker` 追加、hw_jobs/hw_logistics 側で同期 Observer 追加、hw_visual 側クエリ書き換え | 小 |
+| Phase 2 | グループ B：`SoulTaskVisualState` ミラーコンポーネント追加、hw_jobs 側で `Changed<AssignedTask>` 同期システム追加、hw_visual 側の全 AssignedTask クエリを書き換え | 中 |
+| Phase 3 | グループ C：Blueprint / Construction / Inventory ミラーコンポーネント追加、同期システム追加、hw_visual 側クエリ書き換え | 大 |
 | 完了 | `hw_visual/Cargo.toml` から `hw_jobs` / `hw_logistics` 削除 | 小 |
 
 **ロールバック:** 各フェーズが独立したコミットであるため、失敗したフェーズだけ revert 可能。
@@ -267,8 +291,8 @@ pub enum ConstructionPhaseVisual { Planning, Framing, Coating, Complete }
 ## 11. 未解決事項（Open Questions）
 
 - [ ] `hw_core::visual_mirror` を将来独立 crate に切り出す価値があるか？（後回しで問題ない）
-- [ ] `Building` / `BuildingType` / `MudMixerStorage`（`tank.rs`, `wall_connection.rs`）のミラー化は Phase 3 に含めるか、別提案とするか？
-- [ ] `hw_logistics::Stockpile` の可視化は現在どの程度使われているか（`tank.rs` の精査が必要）？
+- [ ] `Building` / `BuildingType` / `MudMixerStorage` / `Stockpile` のミラー化は別提案として立てるか、本提案の Phase 4 として追加するか？
+- [ ] `SoulTaskVisualState` の `link_target`/`bucket_link` フィールドはデバッグ用 Gizmos のためのものだが、リリースビルドで無効化する仕組みが必要か？
 
 ---
 
@@ -281,22 +305,24 @@ pub enum ConstructionPhaseVisual { Planning, Framing, Coating, Complete }
 
 ### 次の AI が最初にやること
 
-1. `crates/hw_visual/src/gather/resource_highlight.rs`, `haul/carrying_item.rs`, `blueprint/progress_bar.rs` を読んで具体的な Query シグネチャを把握する
-2. `crates/hw_core/src/` の構造を確認し、新モジュールの配置場所を決める
-3. Phase 1 から着手：`Designation`, `Tree`, `Rock`, `Wheelbarrow` を `hw_core` に移動
+1. `crates/hw_core/src/` の構造を確認し、`visual_mirror` モジュールの配置場所を決める
+2. `crates/hw_jobs/src/` で `Designation` の付与・削除 Observer を特定する（Phase 1 の同期点）
+3. Phase 1 から着手：`hw_core::visual_mirror` に `GatherHighlightMarker` を追加し、hw_jobs Observer で同期
 
 ### ブロッカー / 注意点
 
-- `hw_jobs` では `Designation` / `Tree` / `Rock` を内部でも使っている可能性があるため、移動後に `hw_jobs/Cargo.toml` に `hw_core` 依存が既に存在するか確認する
-- ミラーコンポーネントは `hw_visual` が Plugin 内で spawn しないこと（hw_jobs/hw_logistics 側が attach する）
+- `Designation`/`Tree`/`Rock`/`Wheelbarrow` は hw_jobs/hw_logistics から**移動しない**（ミラーマーカーを hw_core に追加する）
+- `SoulTaskVisualState` の同期システムは `Changed<AssignedTask>` で動かすこと（毎フレーム全件同期しない）
+- ミラーコンポーネントは hw_visual が spawn しないこと（hw_jobs/hw_logistics 側が attach/sync する）
+- `task_link_system` の `bucket_link` は `AssignedTask::bucket_transport_data()` から取得しており、`SoulTaskVisualState` に `bucket_link: Option<Entity>` フィールドが必要
 
 ### 参照必須ファイル
 
 - `docs/crate-boundaries.md`（境界ルール全文）
 - `crates/hw_visual/CLAUDE.md`（Visual クレート固有ルール）
+- `crates/hw_visual/src/soul/mod.rs`（AssignedTask 参照が最も複雑）
 - `crates/hw_visual/src/gather/resource_highlight.rs`
 - `crates/hw_visual/src/blueprint/progress_bar.rs`
-- `crates/hw_visual/src/haul/carrying_item.rs`
 - `crates/hw_core/src/` 全体
 
 ### 完了条件（Definition of Done）
@@ -313,3 +339,4 @@ pub enum ConstructionPhaseVisual { Planning, Framing, Coating, Complete }
 | 日付 | 変更者 | 内容 |
 |---|---|---|
 | `2026-03-14` | Claude | 初版作成 |
+| `2026-03-15` | Claude | レビュー指摘を反映：グループA設計変更（hw_core移動→ミラーパターン）、グループB設計変更（イベント→SoulTaskVisualState）、VisualTaskPhase修正、型テーブル漏れ追加、§3矛盾修正 |

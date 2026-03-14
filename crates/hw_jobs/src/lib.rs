@@ -4,6 +4,7 @@ pub mod events;
 pub mod lifecycle;
 pub mod model;
 pub mod mud_mixer;
+pub mod visual_sync;
 
 pub use assigned_task::*;
 pub use construction::{

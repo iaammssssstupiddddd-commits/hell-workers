@@ -4,6 +4,7 @@ use crate::systems::world::zones::{Site, Yard};
 use crate::world::map::{RIVER_Y_MIN, WorldMap, WorldMapRef};
 use bevy::prelude::*;
 use hw_core::constants::*;
+use hw_core::visual_mirror::construction::BlueprintVisualState;
 use hw_ui::selection::{
     BuildingPlacementContext, TANK_NEARBY_BUCKET_STORAGE_TILES, bucket_storage_geometry,
     building_geometry, validate_bucket_storage_placement, validate_building_placement,
@@ -100,6 +101,7 @@ pub(super) fn place_building_blueprint(
     let entity = commands
         .spawn((
             Blueprint::new(building_type, geometry.occupied_grids.clone()),
+            BlueprintVisualState::default(),
             crate::systems::jobs::Designation {
                 work_type: crate::systems::jobs::WorkType::Build,
             },

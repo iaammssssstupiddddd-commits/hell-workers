@@ -7,7 +7,7 @@ use hw_core::relationships::{ParticipatingIn, RestAreaOccupants};
 use hw_core::soul::{
     DamnedSoul, DreamQuality, DreamState, GatheringBehavior, IdleBehavior, IdleState,
 };
-use hw_jobs::RestArea;
+use hw_core::visual_mirror::gather::RestAreaVisual;
 use hw_ui::camera::MainCamera;
 use hw_ui::components::{UiMountSlot, UiNodeRegistry};
 use rand::Rng;
@@ -57,7 +57,7 @@ pub fn ensure_dream_visual_state_system(
             Without<DreamVisualState>,
         ),
     >,
-    q_rest_areas: Query<Entity, (With<RestArea>, Without<DreamVisualState>)>,
+    q_rest_areas: Query<Entity, (With<RestAreaVisual>, Without<DreamVisualState>)>,
 ) {
     for entity in q_souls.iter() {
         commands.entity(entity).insert(DreamVisualState::default());
@@ -149,7 +149,7 @@ pub fn rest_area_dream_particle_spawn_system(
     mut q_rest_areas: Query<(
         Entity,
         &Transform,
-        &RestArea,
+        &RestAreaVisual,
         Option<&RestAreaOccupants>,
         &mut DreamVisualState,
     )>,
@@ -186,13 +186,13 @@ pub fn rest_area_dream_particle_spawn_system(
         }
     }
 
-    for (rest_area_entity, transform, rest_area, occupants_opt, mut visual_state) in
+    for (rest_area_entity, transform, rest_area_visual, occupants_opt, mut visual_state) in
         q_rest_areas.iter_mut()
     {
         let occupant_count = occupants_opt
             .map(|occ| occ.len())
             .unwrap_or(0)
-            .min(rest_area.capacity);
+            .min(rest_area_visual.capacity);
 
         if occupant_count == 0 {
             visual_state.particle_cooldown = 0.0;

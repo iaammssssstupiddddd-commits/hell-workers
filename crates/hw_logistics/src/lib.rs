@@ -8,6 +8,7 @@ pub mod resource_cache;
 pub mod tile_index;
 pub mod transport_request;
 pub mod types;
+pub mod visual_sync;
 pub mod wall_construction;
 pub mod water;
 pub mod zone;
