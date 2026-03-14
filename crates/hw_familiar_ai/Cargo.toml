@@ -9,5 +9,6 @@ rand         = { workspace = true }
 hw_core      = { path = "../hw_core" }
 hw_jobs      = { path = "../hw_jobs" }
 hw_logistics = { path = "../hw_logistics" }
+hw_soul_ai   = { path = "../hw_soul_ai" }
 hw_world     = { path = "../hw_world" }
 hw_spatial   = { path = "../hw_spatial" }

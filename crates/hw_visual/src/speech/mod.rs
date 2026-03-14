@@ -3,6 +3,8 @@ pub mod components;
 pub mod conversation;
 pub mod cooldown;
 pub mod emitter;
+pub mod idle_visual;
+pub mod max_soul_visual;
 pub mod observers;
 pub mod periodic;
 pub mod phrases;
@@ -11,6 +13,8 @@ pub mod typewriter;
 pub mod update;
 pub mod voice;
 
+pub use idle_visual::familiar_idle_visual_apply_system;
+pub use max_soul_visual::max_soul_visual_system;
 pub use voice::FamiliarVoice;
 
 use bevy::prelude::*;

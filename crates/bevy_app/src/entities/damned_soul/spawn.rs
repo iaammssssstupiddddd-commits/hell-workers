@@ -8,39 +8,7 @@ use crate::world::map::{RIVER_X_MAX, RIVER_X_MIN, RIVER_Y_MIN, WorldMap, WorldMa
 use hw_core::constants::*;
 use rand::Rng;
 
-/// Soul の人口管理状態
-#[derive(Resource)]
-pub struct PopulationManager {
-    pub current_count: u32,
-    pub population_cap: u32,
-    pub total_spawned: u32,
-    pub total_escaped: u32,
-    pub escape_cooldown_remaining: f32,
-    spawn_timer: Timer,
-}
-
-impl Default for PopulationManager {
-    fn default() -> Self {
-        Self {
-            current_count: 0,
-            population_cap: SOUL_POPULATION_BASE_CAP,
-            total_spawned: 0,
-            total_escaped: 0,
-            escape_cooldown_remaining: 0.0,
-            spawn_timer: Timer::from_seconds(SOUL_SPAWN_INTERVAL, TimerMode::Repeating),
-        }
-    }
-}
-
-impl PopulationManager {
-    pub fn can_start_escape(&self) -> bool {
-        self.escape_cooldown_remaining <= f32::EPSILON
-    }
-
-    pub fn start_escape_cooldown(&mut self) {
-        self.escape_cooldown_remaining = SOUL_ESCAPE_GLOBAL_COOLDOWN;
-    }
-}
+pub use hw_core::population::PopulationManager;
 
 fn initial_spawn_count() -> u32 {
     spawn_args::parse_spawn_count_from_args_or_env(

@@ -21,6 +21,8 @@ pub mod wall_construction;
 pub mod worker_icon;
 
 pub use selection_indicator::update_selection_indicator;
+pub use speech::familiar_idle_visual_apply_system;
+pub use speech::max_soul_visual_system;
 
 pub use handles::{
     BuildingAnimHandles, GatheringVisualHandles, HaulItemHandles, MaterialIconHandles,

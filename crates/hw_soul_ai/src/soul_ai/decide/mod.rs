@@ -1,3 +1,4 @@
+pub mod drifting;
 pub mod escaping;
 pub mod gathering_mgmt;
 pub mod idle_behavior;
