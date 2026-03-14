@@ -202,8 +202,8 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 役割:
 
 - Root crate に依存しない AI コアロジック
-- `hw_familiar_ai`: Familiar AI の純粋なシステム実装（62 ファイル）
-- `hw_soul_ai`: Soul AI の純粋なシステム実装（94 ファイル）
+- `hw_familiar_ai`: Familiar AI の純粋なシステム実装（69 ファイル）
+- `hw_soul_ai`: Soul AI の純粋なシステム実装（101 ファイル）
 - hw_core / hw_jobs / hw_logistics / hw_world を組み合わせた AI ドメインロジック
 - `hw_ai` は互換 facade として `hw_familiar_ai` / `hw_soul_ai` を re-export するのみ
 
@@ -225,7 +225,7 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 - `soul_ai::helpers::gathering` — `hw_core::gathering` の互換 re-export と gathering timer helper
 - `soul_ai::helpers::gathering_positions` — 集会周辺ランダム位置生成・overlap 回避（`PathWorld + SpatialGridOps` 経由）
 - `soul_ai::helpers::gathering_motion` — 集会中移動先選定（Wandering / Still retreat）
-- `soul_ai::helpers::work::is_soul_available_for_work` — 作業可否判定ヘルパー
+- `soul_ai::helpers::work::{is_soul_available_for_work, unassign_task, cleanup_task_assignment}` — 作業可否判定・タスク解除・後片付けヘルパー
 - `soul_ai::execute::task_execution::types::AssignedTask` — タスク実行バリアント定義
 - `soul_ai::execute::task_execution::context::{TaskExecutionContext, TaskQueries, TaskAssignmentQueries, ConstructionSiteAccess}` — タスク実行/割り当て用 context・SystemParam
 - `soul_ai::execute::task_execution::handler::{TaskHandler, run_task_handler, execute_haul_with_wheelbarrow}` — タスクハンドラトレイト・ディスパッチ
@@ -237,19 +237,24 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 - `soul_ai::decide::gathering_mgmt` — 集会管理要求生成
 - `soul_ai::helpers::drifting::{choose_drift_edge, is_near_map_edge, random_wander_target, drift_move_target}` — 純粋 drifting 計算（`Commands` / root resource 不要）
 - `soul_ai::helpers::navigation::{is_near_target, is_near_target_or_dest, is_adjacent_grid, can_pickup_item, is_near_blueprint, update_destination_if_needed}` — 純粋距離・グリッド判定（`Commands` / root resource 不要）
-- `soul_ai::execute::drifting::{drifting_behavior_system, despawn_at_edge_system}` — 漂流実行（`PopulationManager` 非依存。system 登録責務は `SoulAiCorePlugin` が持つ）
+- `soul_ai::execute::cleanup::cleanup_commanded_souls_system` — 使い魔消滅後の被使役 Soul 解放
+- `soul_ai::execute::task_execution_system::task_execution_system` — Soul タスク実行ループ本体（`WorldMapRead` / `unassign_task` / `OnTaskCompleted` を束ねる）
+- `soul_ai::execute::task_execution::transport_common::{cancel,reservation,sand_collect,wheelbarrow}` — 輸送系 cancel/reservation/collect/wheelbarrow 共通処理
+
 - `familiar_ai::perceive::state_detection` — 使い魔 AI 状態遷移検知
 - `familiar_ai::decide::following` — 使い魔追尾システム（hw_core 型のみ依存）
 - `familiar_ai::decide::query_types` — Familiar Decide 用の narrow query 定義
 - `familiar_ai::decide::helpers` — `finalize_state_transitions` / `process_squad_management` など pure helper
 - `familiar_ai::decide::recruitment` — `SpatialGridOps` ベースのリクルート選定・スカウト開始判定
 - `familiar_ai::decide::state_decision` — branch dispatch (`FamiliarDecisionPath`, `determine_decision_path`) と結果型 (`FamiliarStateDecisionResult`)。MessageWriter は持たない pure core。root の `state_decision.rs` adapter から呼ばれる
-- `familiar_ai::decide::encouragement` — 激励対象選定と `EncouragementCooldown`
+- `familiar_ai::decide::encouragement` — 激励対象選定・`EncouragementCooldown` + `encouragement_decision_system`（MessageWriter 使用）
 - `familiar_ai::decide::task_management` — Familiar の task search / scoring / source selector / reservation shadow / assignment build の core
-- `familiar_ai::decide::auto_gather_for_blueprint::{planning,demand,supply,helpers}` — Blueprint auto gather の純計画層
+- `familiar_ai::decide::auto_gather_for_blueprint::{planning,demand,supply,helpers,actions}` — Blueprint auto gather の純計画層（`is_reachable` を含む）
+- `familiar_ai::decide::blueprint_auto_gather::{BlueprintAutoGatherTimer, blueprint_auto_gather_system}` — auto-gather オーケストレーター（`WorldMapRead` / `PathfindingContext` / Bevy Query 依存を含む）
 - `familiar_ai::decide::squad` / `scouting` / `supervising` / `state_handlers` — 使い魔の状態機械・分隊管理の純ロジック
 - `familiar_ai::execute::state_apply` — `FamiliarStateRequest` 適用
 - `familiar_ai::execute::state_log` — 状態遷移ログ出力
+- `familiar_ai::execute::encouragement_apply` — `EncouragementRequest` 適用と cooldown クリーンアップ
 
 ここに置かないもの:
 
@@ -258,11 +263,7 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 - full-fat query から narrow view への変換や、root-only resource を伴う request 出力 adapter
 - UI システム
 - `Commands` で複雑な Entity 生成を行うもの
-- pathfinding / blueprint entity query を伴う auto-gather orchestration（`blueprint_auto_gather_system` は root に残留）
-- `task_execution_system` 本体 — `TaskExecutionSoulQuery` / `WorldMapRead` / root `unassign_task` facade / `OnTaskCompleted` を束ねる root wrapper として残留
-- `helpers/work::unassign_task` — 公開 API と `WorkingOn` / `OnTaskAbandoned` 契約を root で確定する facade
-- `execute/task_execution/transport_common/*` — root 側互換 helper と `hw_jobs::lifecycle` re-export。wrapper ではなく helper 層として残留
-- `execute/task_execution/{types,common,handler,move_plant}` / `context/execution.rs` — 互換 import path のための thin shell
+- `execute/task_execution/{types,common,handler,move_plant}` / `context/execution.rs` — 互換 import path のための thin shell（bevy_app 側に残留）
 - `familiar_ai/decide/task_delegation.rs` — root wrapper / orchestration。`WorldMapRead` / concrete SpatialGrid / `PathfindingContext` / `ConstructionSiteAccess` / timer / perf metrics を束ねる
 - `familiar_ai/decide/familiar_processor.rs` — root adapter。`FamiliarDelegationContext` が `WorldMap` / `PathfindingContext` / `transmute_lens_filtered` を直接保持するため root に残留
 - `familiar_ai/helpers/query_types.rs` — root full-fat query bridge。`FamiliarSoulQuery` / `FamiliarStateQuery` / `FamiliarTaskQuery` の 3型（narrow query は hw_familiar_ai 側に定義済みで re-export）
