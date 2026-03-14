@@ -19,12 +19,13 @@ Cargo.lock
 
 # Logs and error files
 *.log
-# Allow important text files but ignore log/error files
 *.txt
 !README*.txt
 !LICENSE*.txt
 !CHANGELOG*.txt
 !NOTES*.txt
+!Cargo.toml
+!Trunk.toml
 build_error*.txt
 build_error*.log
 check_out.txt
@@ -38,6 +39,10 @@ scripts/__pycache__
 # Logs directory
 /logs
 
+# Assets (Keep only WGSL)
+/assets/**
+!/assets/**/*.wgsl
+
 # OS files
 .DS_Store
 Thumbs.db
@@ -50,7 +55,6 @@ Thumbs.db
 .idea/
 .cursor/
 *.iml
-assets/fonts/
 scripts/convert_to_transparent.py
 docs/proposals/archive/
 docs/plans/archive/
