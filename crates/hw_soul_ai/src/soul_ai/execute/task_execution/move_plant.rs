@@ -1,14 +1,14 @@
-use hw_core::relationships::WorkingOn;
-use hw_jobs::{Building, BuildingType, Designation};
 use crate::soul_ai::execute::task_execution::{
     common::clear_task_and_path,
     common::{is_near_target_or_dest, update_destination_to_adjacent},
     context::TaskExecutionContext,
     types::{AssignedTask, MovePlantData, MovePlantPhase},
 };
-use hw_world::{WorldMap, WorldMapWrite};
 use bevy::prelude::*;
 use hw_core::constants::TILE_SIZE;
+use hw_core::relationships::WorkingOn;
+use hw_jobs::{Building, BuildingType, Designation};
+use hw_world::{WorldMap, WorldMapWrite};
 
 pub use hw_jobs::MovePlanned;
 
@@ -126,19 +126,12 @@ pub fn apply_pending_building_move_system(
     q_pending: Query<(Entity, &PendingBuildingMove, Option<&Children>), With<Building>>,
     mut q_obstacles: Query<&mut hw_jobs::ObstaclePosition>,
     mut q_stockpiles: Query<
-        (
-            Entity,
-            &hw_logistics::BelongsTo,
-            &mut Transform,
-        ),
+        (Entity, &hw_logistics::BelongsTo, &mut Transform),
         With<hw_logistics::BucketStorage>,
     >,
     mut q_attached_entities: Query<
         (&hw_logistics::BelongsTo, &mut Transform),
-        (
-            Without<hw_logistics::BucketStorage>,
-            Without<Building>,
-        ),
+        (Without<hw_logistics::BucketStorage>, Without<Building>),
     >,
 ) {
     for (building_entity, pending, children_opt) in q_pending.iter() {
@@ -196,11 +189,7 @@ fn relocate_bucket_storages_for_tank(
     delta: (i32, i32),
     world_map: &mut WorldMap,
     q_stockpiles: &mut Query<
-        (
-            Entity,
-            &hw_logistics::BelongsTo,
-            &mut Transform,
-        ),
+        (Entity, &hw_logistics::BelongsTo, &mut Transform),
         With<hw_logistics::BucketStorage>,
     >,
 ) {
@@ -247,10 +236,7 @@ fn relocate_attached_entities_for_building(
     delta: (i32, i32),
     q_attached_entities: &mut Query<
         (&hw_logistics::BelongsTo, &mut Transform),
-        (
-            Without<hw_logistics::BucketStorage>,
-            Without<Building>,
-        ),
+        (Without<hw_logistics::BucketStorage>, Without<Building>),
     >,
 ) {
     let offset = Vec2::new(delta.0 as f32 * TILE_SIZE, delta.1 as f32 * TILE_SIZE);

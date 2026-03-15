@@ -1,9 +1,9 @@
 use bevy::prelude::*;
 use hw_core::area::TaskArea;
 use hw_core::relationships::ManagedTasks;
+use hw_jobs::BuildingType;
 use hw_jobs::WorkType;
 use hw_jobs::construction::{FloorTileState, WallTileState};
-use hw_jobs::BuildingType;
 use hw_spatial::{DesignationSpatialGrid, TransportRequestSpatialGrid};
 use hw_world::{WorldMap, Yard};
 use std::collections::HashSet;
@@ -233,8 +233,7 @@ pub(super) fn candidate_snapshot(
         WorkType::CoatWall => {
             if let Ok(tile) = queries.storage.wall_tiles.get(entity) {
                 matches!(tile.state, WallTileState::CoatingReady) && tile.spawned_wall.is_some()
-            } else if let Ok((_, building, provisional_opt)) =
-                queries.storage.buildings.get(entity)
+            } else if let Ok((_, building, provisional_opt)) = queries.storage.buildings.get(entity)
             {
                 building.kind == BuildingType::Wall
                     && building.is_provisional

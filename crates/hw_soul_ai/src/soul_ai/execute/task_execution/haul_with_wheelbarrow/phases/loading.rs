@@ -1,7 +1,6 @@
 //! アイテムを手押し車に積み込むフェーズ
 
 use super::super::cancel;
-use hw_core::relationships::LoadedIn;
 use crate::soul_ai::execute::task_execution::{
     common::{release_mixer_mud_storage_for_item, update_stockpile_on_item_removal},
     context::TaskExecutionContext,
@@ -9,6 +8,7 @@ use crate::soul_ai::execute::task_execution::{
     types::{AssignedTask, HaulWithWheelbarrowData, HaulWithWheelbarrowPhase},
 };
 use bevy::prelude::*;
+use hw_core::relationships::LoadedIn;
 
 pub fn handle(
     ctx: &mut TaskExecutionContext,

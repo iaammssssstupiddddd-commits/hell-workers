@@ -1,9 +1,9 @@
-use hw_ui::components::LeftPanelMode;
-use hw_core::relationships::TaskWorkers;
 use crate::systems::jobs::{Blueprint, BonePile, Designation, Priority, Rock, SandPile, Tree};
 use crate::systems::logistics::ResourceItem;
 use crate::systems::logistics::transport_request::TransportRequest;
 use bevy::prelude::*;
+use hw_core::relationships::TaskWorkers;
+use hw_ui::components::LeftPanelMode;
 
 pub use hw_ui::panels::task_list::TaskListDirty;
 

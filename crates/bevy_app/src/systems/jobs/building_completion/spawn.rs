@@ -1,7 +1,10 @@
 use super::super::{Blueprint, Building, BuildingType, Door, DoorState, ProvisionalWall};
 use crate::assets::GameAssets;
 use bevy::prelude::*;
-use hw_core::constants::TILE_SIZE;
+use hw_core::constants::{
+    TILE_SIZE, Z_BUILDING_FLOOR, Z_BUILDING_STRUCT,
+};
+use hw_visual::layer::VisualLayerKind;
 
 pub(super) fn spawn_completed_building(
     commands: &mut Commands,
@@ -10,6 +13,7 @@ pub(super) fn spawn_completed_building(
     game_assets: &GameAssets,
 ) -> Entity {
     let is_provisional = !bp.is_fully_complete();
+
     let (sprite_image, custom_size) = match bp.kind {
         BuildingType::Wall => (game_assets.wall_isolated.clone(), Vec2::splat(TILE_SIZE)),
         BuildingType::Door => (game_assets.door_closed.clone(), Vec2::splat(TILE_SIZE)),
@@ -29,18 +33,23 @@ pub(super) fn spawn_completed_building(
         ),
     };
 
+    let (z, layer_kind) = match bp.kind {
+        BuildingType::Floor | BuildingType::SandPile | BuildingType::BonePile => {
+            (Z_BUILDING_FLOOR, VisualLayerKind::Floor)
+        }
+        _ => (Z_BUILDING_STRUCT, VisualLayerKind::Struct),
+    };
+
+    let parent_transform =
+        Transform::from_xyz(transform.translation.x, transform.translation.y, z);
+
     let building_entity = commands
         .spawn((
             Building {
                 kind: bp.kind,
                 is_provisional,
             },
-            Sprite {
-                image: sprite_image,
-                custom_size: Some(custom_size),
-                ..default()
-            },
-            *transform,
+            parent_transform,
             Name::new(format!("Building ({:?})", bp.kind)),
             hw_visual::blueprint::BuildingBounceEffect {
                 bounce_animation: hw_visual::animations::BounceAnimation {
@@ -53,6 +62,18 @@ pub(super) fn spawn_completed_building(
                 },
             },
         ))
+        .with_children(|parent| {
+            parent.spawn((
+                layer_kind,
+                Sprite {
+                    image: sprite_image,
+                    custom_size: Some(custom_size),
+                    ..default()
+                },
+                Transform::default(),
+                Name::new(format!("VisualLayer ({:?})", layer_kind)),
+            ));
+        })
         .id();
 
     if bp.kind == BuildingType::Wall && is_provisional {

@@ -4,8 +4,10 @@
 
 mod context_menu;
 pub mod task_list;
+pub use hw_ui::panels::info_panel::{
+    InfoPanelPinState, InfoPanelState, info_panel_system, spawn_info_panel_ui,
+};
 pub use hw_ui::panels::menu_visibility_system;
-pub use hw_ui::panels::info_panel::{InfoPanelPinState, InfoPanelState, info_panel_system, spawn_info_panel_ui};
 
 pub use context_menu::context_menu_system;
 

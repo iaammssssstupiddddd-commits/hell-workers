@@ -39,3 +39,4 @@ AI 意思決定ロジックは `systems/soul_ai/`・`systems/familiar_ai/`（お
 - コンポーネント定義: `hw_core`（`DamnedSoul`, `Familiar`）
 - AI 状態: `hw_ai` / `systems/soul_ai/` / `systems/familiar_ai/`
 - ビジュアル: `systems/visual/`
+- スポーン位置補正: `hw_world::find_nearby_walkable_grid` を各 spawn 実装から直接利用する。`entities/mod.rs` に中継用 wrapper は置かない

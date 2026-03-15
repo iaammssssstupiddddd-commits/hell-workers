@@ -2,11 +2,7 @@
 
 use bevy::prelude::*;
 
-pub fn clear_children(
-    commands: &mut Commands,
-    q_children: &Query<&Children>,
-    parent: Entity,
-) {
+pub fn clear_children(commands: &mut Commands, q_children: &Query<&Children>, parent: Entity) {
     if let Ok(children) = q_children.get(parent) {
         for child in children.iter() {
             despawn_with_children(commands, q_children, child);

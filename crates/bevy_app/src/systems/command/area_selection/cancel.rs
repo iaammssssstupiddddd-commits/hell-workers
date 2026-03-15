@@ -1,10 +1,10 @@
 //! cancel_single_designation と補助処理
 
 use crate::events::OnTaskAbandoned;
-use hw_core::relationships::{ManagedBy, TaskWorkers, WorkingOn};
 use crate::systems::jobs::{Designation, TaskSlots};
 use crate::systems::logistics::transport_request::ManualHaulPinnedSource;
 use bevy::prelude::*;
+use hw_core::relationships::{ManagedBy, TaskWorkers, WorkingOn};
 
 /// Designation/Blueprint/TransportRequest を 1 件キャンセル
 pub fn cancel_single_designation(

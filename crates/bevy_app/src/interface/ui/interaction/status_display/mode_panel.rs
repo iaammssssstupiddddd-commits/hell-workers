@@ -7,15 +7,15 @@ use hw_core::game_state::PlayMode;
 
 use crate::app_contexts::{BuildContext, CompanionPlacementState, TaskContext, ZoneContext};
 use crate::interface::selection::SelectedEntity;
-use hw_ui::components::UiNodeRegistry;
 use crate::interface::ui::interaction::mode;
 use crate::interface::ui::panels::task_list::{TaskListDirty, TaskListState};
-use hw_core::relationships::ManagedBy;
 use crate::systems::command::{
     AreaEditClipboard, AreaEditSession, TaskArea, TaskMode, count_positions_in_area,
     overlap_summary_from_areas,
 };
 use crate::systems::jobs::Designation;
+use hw_core::relationships::ManagedBy;
+use hw_ui::components::UiNodeRegistry;
 
 pub fn update_mode_text_system(
     play_mode: Res<State<PlayMode>>,

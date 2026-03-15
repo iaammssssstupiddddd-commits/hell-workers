@@ -14,12 +14,21 @@ use hw_core::visual_mirror::construction::BlueprintVisualState;
 
 pub fn material_delivery_vfx_system(
     mut commands: Commands,
-    mut q_visuals: Query<(Entity, &mut BlueprintVisual, &BlueprintVisualState, &Transform)>,
+    mut q_visuals: Query<(
+        Entity,
+        &mut BlueprintVisual,
+        &BlueprintVisualState,
+        &Transform,
+    )>,
     material_icon_handles: Res<MaterialIconHandles>,
 ) {
     for (_, mut visual, state, transform) in q_visuals.iter_mut() {
         for (resource_type, current_count, _) in &state.material_counts {
-            let last_count = visual.last_delivered.get(resource_type).copied().unwrap_or(0);
+            let last_count = visual
+                .last_delivered
+                .get(resource_type)
+                .copied()
+                .unwrap_or(0);
             if *current_count > last_count {
                 let config = FloatingTextConfig {
                     lifetime: POPUP_LIFETIME,

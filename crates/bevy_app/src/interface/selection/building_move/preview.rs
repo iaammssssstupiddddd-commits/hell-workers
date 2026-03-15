@@ -1,13 +1,13 @@
 use crate::app_contexts::{
     CompanionPlacementKind, CompanionPlacementState, MoveContext, MovePlacementState,
 };
-use crate::interface::camera::MainCamera;
 use crate::systems::jobs::{Building, BuildingType};
 use crate::systems::visual::placement_ghost::{PlacementGhost, PlacementPartnerGhost};
 use crate::world::map::{WorldMap, WorldMapRead, WorldMapRef};
 use bevy::prelude::*;
 use hw_core::constants::TILE_SIZE;
 use hw_core::game_state::PlayMode;
+use hw_ui::camera::MainCamera;
 use hw_ui::selection::{
     can_place_moved_building, move_anchor_grid, move_occupied_grids, move_spawn_pos,
 };

@@ -1,6 +1,7 @@
 //! MudMixer の精製中アニメーション制御
 
 use crate::handles::BuildingAnimHandles;
+use crate::layer::VisualLayerKind;
 use bevy::prelude::*;
 use hw_jobs::AssignedTask;
 use hw_jobs::RefinePhase;
@@ -14,7 +15,9 @@ pub fn update_mud_mixer_visual_system(
     handles: Res<BuildingAnimHandles>,
     time: Res<Time>,
     q_souls: Query<&AssignedTask>,
-    mut q_mixers: Query<(Entity, &mut Sprite), With<MudMixerStorage>>,
+    q_mixers: Query<Entity, With<MudMixerStorage>>,
+    q_children: Query<&Children>,
+    mut q_visual_layers: Query<(&VisualLayerKind, &mut Sprite)>,
 ) {
     let refining_mixers: HashSet<Entity> = q_souls
         .iter()
@@ -34,11 +37,20 @@ pub fn update_mud_mixer_visual_system(
     ];
     let frame_idx = ((time.elapsed_secs() * MUD_MIXER_ANIMATION_FPS) as usize) % frames.len();
 
-    for (mixer_entity, mut sprite) in q_mixers.iter_mut() {
-        if refining_mixers.contains(&mixer_entity) {
-            sprite.image = frames[frame_idx].clone();
-        } else {
-            sprite.image = handles.mud_mixer_idle.clone();
+    for mixer_entity in q_mixers.iter() {
+        if let Ok(children) = q_children.get(mixer_entity) {
+            for child in children.iter() {
+                if let Ok((kind, mut sprite)) = q_visual_layers.get_mut(child) {
+                    if *kind == VisualLayerKind::Struct {
+                        sprite.image = if refining_mixers.contains(&mixer_entity) {
+                            frames[frame_idx].clone()
+                        } else {
+                            handles.mud_mixer_idle.clone()
+                        };
+                        break;
+                    }
+                }
+            }
         }
     }
 }

@@ -1,11 +1,11 @@
 use crate::app_contexts::TaskContext;
 use crate::entities::damned_soul::{DamnedSoul, Destination};
 use crate::entities::familiar::Familiar;
-use crate::interface::camera::MainCamera;
 use crate::interface::ui::UiInputState;
 use crate::systems::command::{TaskArea, TaskMode};
 use bevy::prelude::*;
 use hw_core::game_state::PlayMode;
+use hw_ui::camera::MainCamera;
 use hw_ui::selection::SelectionIntent;
 
 use super::hit_test::{

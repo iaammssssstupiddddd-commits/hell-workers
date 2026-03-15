@@ -1,16 +1,18 @@
 use bevy::prelude::*;
 use hw_core::logistics::{ResourceType, WheelbarrowDestination};
-use hw_jobs::{
-    AssignedTask, HaulData, HaulPhase, HaulToBlueprintData, HaulToBpPhase,
-    HaulWithWheelbarrowData, HaulWithWheelbarrowPhase,
-};
 use hw_jobs::WorkType;
+use hw_jobs::{
+    AssignedTask, HaulData, HaulPhase, HaulToBlueprintData, HaulToBpPhase, HaulWithWheelbarrowData,
+    HaulWithWheelbarrowPhase,
+};
 
-use crate::familiar_ai::decide::task_management::{AssignTaskContext, FamiliarTaskAssignmentQueries, ReservationShadow};
 use super::{
     build_mixer_destination_reservation_ops, build_source_reservation_ops,
     build_wheelbarrow_reservation_ops, submit_assignment_with_reservation_ops,
     submit_assignment_with_source_entities,
+};
+use crate::familiar_ai::decide::task_management::{
+    AssignTaskContext, FamiliarTaskAssignmentQueries, ReservationShadow,
 };
 
 pub fn issue_haul_to_blueprint_with_source(

@@ -1,11 +1,11 @@
 use super::dirty::EntityListDirty;
 use crate::entities::damned_soul::{DamnedSoul, SoulIdentity};
 use crate::entities::familiar::{Familiar, FamiliarOperation};
-use hw_ui::components::{SectionFolded, UnassignedFolded};
-use hw_core::relationships::{CommandedBy, Commanding};
 use crate::systems::familiar_ai::FamiliarAiState;
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
 use bevy::prelude::*;
+use hw_core::relationships::{CommandedBy, Commanding};
+use hw_ui::components::{SectionFolded, UnassignedFolded};
 
 #[allow(clippy::too_many_arguments)]
 pub fn detect_entity_list_changes(

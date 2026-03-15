@@ -24,8 +24,7 @@ impl Plugin for FamiliarAiCorePlugin {
             )
             .add_systems(
                 Update,
-                decide::following::following_familiar_system
-                    .in_set(FamiliarAiSystemSet::Decide),
+                decide::following::following_familiar_system.in_set(FamiliarAiSystemSet::Decide),
             )
             .add_systems(
                 Update,

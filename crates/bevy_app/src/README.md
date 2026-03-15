@@ -95,6 +95,10 @@ pub use hw_soul_ai::soul_ai::execute::gathering_spawn::gathering_spawn_logic_sys
 pub fn gathering_spawn_system(...) { ... } // src/ 独自
 ```
 
+補足:
+- 呼び出し側が少数で、定義元を直接 import しても root shell の責務が増えない場合は、`plugins/mod.rs` や `interface::camera` のような pass-through re-export を増やさず直接 import を選ぶ。
+- thin shell を残すのは「共有される app shell 入口」または「root 側で ordering / adapter の意味がある path」に限定する。
+
 ### 用語
 
 - thin shell: `pub use` のみを持つ互換モジュール

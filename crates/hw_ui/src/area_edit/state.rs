@@ -80,8 +80,7 @@ impl AreaEditHistory {
         before: Option<TaskArea>,
         after: Option<TaskArea>,
     ) {
-        if before.as_ref().map(|a| (a.min(), a.max()))
-            == after.as_ref().map(|a| (a.min(), a.max()))
+        if before.as_ref().map(|a| (a.min(), a.max())) == after.as_ref().map(|a| (a.min(), a.max()))
         {
             return;
         }

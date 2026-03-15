@@ -2,12 +2,13 @@
 
 use super::*;
 use crate::assets::GameAssets;
-use crate::entities::{spawn_args, spawn_position};
+use crate::entities::spawn_args;
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
 use crate::world::map::{RIVER_X_MAX, RIVER_X_MIN, RIVER_Y_MIN, WorldMap, WorldMapRead};
 use hw_core::constants::*;
 use hw_core::visual_mirror::logistics::InventoryItemVisual;
 use hw_core::visual_mirror::task::SoulTaskVisualState;
+use hw_world::find_nearby_walkable_grid;
 use rand::Rng;
 
 pub use hw_core::population::PopulationManager;
@@ -169,7 +170,7 @@ pub fn spawn_damned_soul_at(
     pos: Vec2,
 ) {
     let spawn_grid = WorldMap::world_to_grid(pos);
-    let actual_grid = spawn_position::find_nearby_walkable_grid(spawn_grid, world_map, 5);
+    let actual_grid = find_nearby_walkable_grid(spawn_grid, world_map, 5);
     let actual_pos = WorldMap::grid_to_world(actual_grid.0, actual_grid.1);
 
     let identity = SoulIdentity::random();
@@ -188,7 +189,11 @@ pub fn spawn_damned_soul_at(
         Name::new(format!("Soul: {}", soul_name)),
         identity,
         IdleState::default(),
-        (AssignedTask::default(), InventoryItemVisual::default(), SoulTaskVisualState::default()),
+        (
+            AssignedTask::default(),
+            InventoryItemVisual::default(),
+            SoulTaskVisualState::default(),
+        ),
         Sprite {
             image: game_assets.soul.clone(),
             custom_size: Some(Vec2::splat(TILE_SIZE * 0.8)),

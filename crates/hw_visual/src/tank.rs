@@ -1,6 +1,7 @@
 //! タンクの視覚的表示システム
 
 use crate::handles::BuildingAnimHandles;
+use crate::layer::VisualLayerKind;
 use bevy::prelude::*;
 use hw_core::relationships::StoredItems;
 use hw_jobs::{Building, BuildingType};
@@ -9,9 +10,11 @@ use hw_logistics::zone::Stockpile;
 /// タンクの状態に応じて画像を更新するシステム
 pub fn update_tank_visual_system(
     handles: Res<BuildingAnimHandles>,
-    mut q_tanks: Query<(&Building, &Stockpile, Option<&StoredItems>, &mut Sprite), With<Building>>,
+    q_tanks: Query<(Entity, &Building, &Stockpile, Option<&StoredItems>)>,
+    q_children: Query<&Children>,
+    mut q_visual_layers: Query<(&VisualLayerKind, &mut Sprite)>,
 ) {
-    for (building, stockpile, stored_items_opt, mut sprite) in q_tanks.iter_mut() {
+    for (entity, building, stockpile, stored_items_opt) in q_tanks.iter() {
         if building.kind != BuildingType::Tank {
             continue;
         }
@@ -26,6 +29,15 @@ pub fn update_tank_visual_system(
             handles.tank_partial.clone()
         };
 
-        sprite.image = image_handle;
+        if let Ok(children) = q_children.get(entity) {
+            for child in children.iter() {
+                if let Ok((kind, mut sprite)) = q_visual_layers.get_mut(child) {
+                    if *kind == VisualLayerKind::Struct {
+                        sprite.image = image_handle;
+                        break;
+                    }
+                }
+            }
+        }
     }
 }

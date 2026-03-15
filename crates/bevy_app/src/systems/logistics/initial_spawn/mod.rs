@@ -38,20 +38,20 @@ pub fn initial_resource_spawner(
         }
     };
 
-    let parking_spawned =
-        match compute_parking_layout(INITIAL_WHEELBARROW_PARKING_GRID, &world_map) {
-            Some(layout) => {
-                spawn_wheelbarrow_parking(&mut commands, &game_assets, &mut world_map, &layout);
-                true
-            }
-            None => {
-                warn!(
-                    "INITIAL_SPAWN: skipped initial wheelbarrow parking at {:?} (not walkable)",
-                    INITIAL_WHEELBARROW_PARKING_GRID
-                );
-                false
-            }
-        };
+    let parking_spawned = match compute_parking_layout(INITIAL_WHEELBARROW_PARKING_GRID, &world_map)
+    {
+        Some(layout) => {
+            spawn_wheelbarrow_parking(&mut commands, &game_assets, &mut world_map, &layout);
+            true
+        }
+        None => {
+            warn!(
+                "INITIAL_SPAWN: skipped initial wheelbarrow parking at {:?} (not walkable)",
+                INITIAL_WHEELBARROW_PARKING_GRID
+            );
+            false
+        }
+    };
 
     InitialSpawnReport {
         trees_spawned: trees,

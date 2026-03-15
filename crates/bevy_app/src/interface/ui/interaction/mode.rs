@@ -1,11 +1,11 @@
 use bevy::prelude::*;
 
 use crate::app_contexts::{BuildContext, CompanionPlacementState, TaskContext, ZoneContext};
-use hw_ui::components::MenuState;
 use crate::systems::command::{TaskMode, to_task_mode_zone_type};
 use crate::systems::jobs::BuildingType;
 use crate::systems::logistics::ZoneType;
 use hw_core::game_state::PlayMode;
+use hw_ui::components::MenuState;
 
 pub(super) fn toggle_menu_and_reset_mode(
     menu_state: &mut MenuState,

@@ -1,9 +1,11 @@
 use bevy::prelude::*;
 use hw_logistics::transport_request::WheelbarrowLease;
 
-use crate::familiar_ai::decide::task_management::{AssignTaskContext, FamiliarTaskAssignmentQueries, ReservationShadow};
-use crate::familiar_ai::decide::task_management::validator::source_not_reserved;
 use super::super::super::builders::issue_haul_with_wheelbarrow;
+use crate::familiar_ai::decide::task_management::validator::source_not_reserved;
+use crate::familiar_ai::decide::task_management::{
+    AssignTaskContext, FamiliarTaskAssignmentQueries, ReservationShadow,
+};
 
 pub fn validate_lease(
     lease: &WheelbarrowLease,

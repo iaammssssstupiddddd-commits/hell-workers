@@ -7,6 +7,7 @@ use crate::interface::ui::UiInputState;
 use crate::systems::command::{TaskArea, TaskMode};
 use bevy::prelude::*;
 use bevy::window::{CursorIcon, PrimaryWindow, SystemCursorIcon};
+use hw_ui::camera::MainCamera;
 
 pub fn task_area_edit_cursor_system(
     task_context: Res<TaskContext>,
@@ -16,7 +17,7 @@ pub fn task_area_edit_cursor_system(
     q_task_areas: Query<&TaskArea, With<Familiar>>,
     q_window_entity: Query<Entity, With<PrimaryWindow>>,
     q_window: Query<&Window, With<PrimaryWindow>>,
-    q_camera: Query<(&Camera, &GlobalTransform), With<crate::interface::camera::MainCamera>>,
+    q_camera: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
     mut q_cursor: Query<&mut CursorIcon, With<PrimaryWindow>>,
     mut commands: Commands,
 ) {

@@ -8,7 +8,6 @@ use super::state::{AreaEditHistory, AreaEditSession, Drag};
 use crate::app_contexts::TaskContext;
 use crate::entities::damned_soul::Destination;
 use crate::entities::familiar::{ActiveCommand, Familiar, FamiliarCommand};
-use crate::interface::camera::MainCamera;
 use crate::interface::selection::SelectedEntity;
 use crate::interface::ui::UiInputState;
 use crate::systems::command::{AreaSelectionIndicator, TaskArea, TaskMode};
@@ -23,6 +22,7 @@ use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use hw_core::constants::TILE_SIZE;
 use hw_core::game_state::PlayMode;
+use hw_ui::camera::MainCamera;
 use std::collections::HashSet;
 
 mod release;

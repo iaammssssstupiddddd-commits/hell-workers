@@ -1,13 +1,13 @@
 //! 建築タスクの実行処理
 
-use hw_core::relationships::WorkingOn;
 use crate::soul_ai::execute::task_execution::{
     common::*,
     context::TaskExecutionContext,
     types::{AssignedTask, BuildPhase},
 };
-use hw_world::WorldMap;
 use bevy::prelude::*;
+use hw_core::relationships::WorkingOn;
+use hw_world::WorldMap;
 
 pub fn handle_build_task(
     ctx: &mut TaskExecutionContext,

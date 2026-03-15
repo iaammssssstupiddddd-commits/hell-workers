@@ -1,15 +1,15 @@
 //! Floor tile reinforcement task execution
 
-use hw_core::relationships::WorkingOn;
-use hw_jobs::FloorTileState;
 use crate::soul_ai::execute::task_execution::{
     common::*,
     context::TaskExecutionContext,
     types::{AssignedTask, ReinforceFloorPhase},
 };
-use hw_world::WorldMap;
 use bevy::prelude::*;
 use hw_core::constants::{FLOOR_BONES_PER_TILE, FLOOR_REINFORCE_DURATION_SECS};
+use hw_core::relationships::WorkingOn;
+use hw_jobs::FloorTileState;
+use hw_world::WorldMap;
 
 pub fn handle_reinforce_floor_task(
     ctx: &mut TaskExecutionContext,

@@ -1,9 +1,7 @@
 use super::{EntityListNodeIndex, EntityListViewModel, SoulGender, StressBucket, TaskVisual};
-use hw_ui::components::{
-    FamiliarListContainer, SoulListItem, UnassignedSoulContent,
-};
-use hw_ui::theme::UiTheme;
 use bevy::prelude::*;
+use hw_ui::components::{FamiliarListContainer, SoulListItem, UnassignedSoulContent};
+use hw_ui::theme::UiTheme;
 
 fn stress_color(bucket: StressBucket, theme: &UiTheme) -> Color {
     match bucket {
@@ -65,7 +63,10 @@ fn lookup_soul_view_model(
             return Some(found);
         }
     }
-    vm.current.unassigned.iter().find(|soul| soul.entity == entity)
+    vm.current
+        .unassigned
+        .iter()
+        .find(|soul| soul.entity == entity)
 }
 
 #[allow(clippy::too_many_arguments)]

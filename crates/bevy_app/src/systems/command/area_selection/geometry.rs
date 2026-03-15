@@ -1,10 +1,10 @@
 use super::state::{Drag, Operation};
-use crate::interface::camera::MainCamera;
 use crate::systems::command::{AreaEditHandleKind, TaskArea, TaskMode};
 use crate::systems::world::zones::Site;
 use bevy::prelude::*;
 use bevy::window::{CursorIcon, PrimaryWindow, SystemCursorIcon};
 use hw_core::constants::TILE_SIZE;
+use hw_ui::camera::MainCamera;
 
 const AREA_CONTAINS_MARGIN: f32 = 0.1;
 

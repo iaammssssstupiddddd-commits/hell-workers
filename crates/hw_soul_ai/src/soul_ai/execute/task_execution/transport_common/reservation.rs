@@ -2,9 +2,9 @@
 //!
 //! Release* / Record* の発火を共通API化し、失敗経路での解放漏れを防ぐ。
 
-use hw_logistics::ResourceType;
 use crate::soul_ai::execute::task_execution::context::TaskExecutionContext;
 use bevy::prelude::*;
+use hw_logistics::ResourceType;
 
 /// ストックパイル/ブループリントの目的地予約を解放
 pub fn release_destination(_ctx: &mut TaskExecutionContext, _target: Entity) {

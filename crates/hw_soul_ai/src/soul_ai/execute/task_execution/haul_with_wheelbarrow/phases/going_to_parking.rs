@@ -8,8 +8,8 @@ use crate::soul_ai::execute::task_execution::{
     common::{is_near_target, update_destination_to_adjacent},
     context::TaskExecutionContext,
 };
-use hw_world::WorldMap;
 use bevy::prelude::*;
+use hw_world::WorldMap;
 
 pub fn handle(
     ctx: &mut TaskExecutionContext,

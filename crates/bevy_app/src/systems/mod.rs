@@ -3,7 +3,6 @@ pub mod dream_tree_planting;
 pub mod familiar_ai;
 pub mod jobs;
 pub mod logistics;
-pub mod obstacle;
 pub mod room;
 pub mod soul_ai;
 pub mod spatial;

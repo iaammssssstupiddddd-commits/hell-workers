@@ -5,11 +5,11 @@ use crate::entities::damned_soul::{
 };
 use crate::events::{OnExhausted, OnGatheringParticipated};
 use crate::systems::soul_ai::helpers::gathering::{GatheringObjectType, GatheringSpot};
+use bevy::prelude::*;
+use hw_core::constants::*;
 use hw_visual::speech::conversation::events::{
     ConversationCompleted, ConversationTone, ConversationToneTriggered,
 };
-use bevy::prelude::*;
-use hw_core::constants::*;
 
 const EXPRESSION_PRIORITY_CONVERSATION_TONE: u8 = 20;
 const EXPRESSION_PRIORITY_CONVERSATION_COMPLETED: u8 = 10;

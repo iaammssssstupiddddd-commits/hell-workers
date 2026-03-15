@@ -43,7 +43,11 @@ pub fn calculate_blueprint_state(state: &BlueprintVisualState) -> BlueprintState
         BlueprintState::ReadyToBuild
     } else {
         let total_delivered: u32 = state.material_counts.iter().map(|(_, d, _)| d).sum();
-        let flex_delivered = state.flexible_material.as_ref().map(|(_, d, _)| *d).unwrap_or(0);
+        let flex_delivered = state
+            .flexible_material
+            .as_ref()
+            .map(|(_, d, _)| *d)
+            .unwrap_or(0);
         if total_delivered + flex_delivered > 0 {
             BlueprintState::Preparing
         } else {
@@ -64,9 +68,17 @@ fn materials_complete(state: &BlueprintVisualState) -> bool {
 
 pub fn calculate_blueprint_visual_props(state: &BlueprintVisualState) -> (Color, f32) {
     let total_required: u32 = state.material_counts.iter().map(|(_, _, r)| r).sum::<u32>()
-        + state.flexible_material.as_ref().map(|(_, _, r)| *r).unwrap_or(0);
+        + state
+            .flexible_material
+            .as_ref()
+            .map(|(_, _, r)| *r)
+            .unwrap_or(0);
     let total_delivered: u32 = state.material_counts.iter().map(|(_, d, _)| d).sum::<u32>()
-        + state.flexible_material.as_ref().map(|(_, d, _)| *d).unwrap_or(0);
+        + state
+            .flexible_material
+            .as_ref()
+            .map(|(_, d, _)| *d)
+            .unwrap_or(0);
 
     let material_ratio = if total_required > 0 {
         (total_delivered as f32 / total_required as f32).min(1.0)

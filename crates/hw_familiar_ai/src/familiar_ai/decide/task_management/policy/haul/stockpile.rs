@@ -3,7 +3,6 @@ use hw_core::constants::*;
 use hw_core::logistics::WheelbarrowDestination;
 use hw_logistics::transport_request::can_complete_pick_drop_to_point;
 
-use crate::familiar_ai::decide::task_management::{AssignTaskContext, FamiliarTaskAssignmentQueries, ReservationShadow};
 use super::super::super::builders::{
     issue_haul_to_stockpile_with_source, issue_haul_with_wheelbarrow,
 };
@@ -12,6 +11,9 @@ use super::demand;
 use super::lease_validation;
 use super::source_selector;
 use super::wheelbarrow;
+use crate::familiar_ai::decide::task_management::{
+    AssignTaskContext, FamiliarTaskAssignmentQueries, ReservationShadow,
+};
 
 pub fn assign_haul_to_stockpile(
     task_pos: Vec2,

@@ -4,8 +4,8 @@
 
 use crate::soul_ai::execute::task_execution::common::clear_task_and_path;
 use crate::soul_ai::execute::task_execution::context::TaskExecutionContext;
-use hw_world::WorldMap;
 use bevy::prelude::*;
+use hw_world::WorldMap;
 
 use super::reservation;
 
@@ -91,9 +91,7 @@ pub fn drop_bucket_with_cleanup(commands: &mut Commands, bucket_entity: Entity, 
     commands
         .entity(bucket_entity)
         .remove::<hw_core::relationships::StoredIn>();
-    commands
-        .entity(bucket_entity)
-        .remove::<hw_jobs::IssuedBy>();
+    commands.entity(bucket_entity).remove::<hw_jobs::IssuedBy>();
     commands
         .entity(bucket_entity)
         .remove::<hw_core::relationships::TaskWorkers>();

@@ -1,9 +1,9 @@
 //! テレイン系ビジュアルアセットハンドルと障害物クリーンアップシステム。
 
-use bevy::prelude::*;
-use hw_jobs::ObstaclePosition;
 use crate::map::{WorldMap, WorldMapWrite};
 use crate::terrain::TerrainType;
+use bevy::prelude::*;
+use hw_jobs::ObstaclePosition;
 
 /// bevy_app から注入されるテレイン系ビジュアルアセットハンドル。
 #[derive(Resource)]

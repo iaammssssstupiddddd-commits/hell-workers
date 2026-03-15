@@ -61,9 +61,17 @@ pub fn update_progress_bar_fill_system(
         };
 
         let total_required: u32 = state.material_counts.iter().map(|(_, _, r)| r).sum::<u32>()
-            + state.flexible_material.as_ref().map(|(_, _, r)| *r).unwrap_or(0);
+            + state
+                .flexible_material
+                .as_ref()
+                .map(|(_, _, r)| *r)
+                .unwrap_or(0);
         let total_delivered: u32 = state.material_counts.iter().map(|(_, d, _)| d).sum::<u32>()
-            + state.flexible_material.as_ref().map(|(_, d, _)| *d).unwrap_or(0);
+            + state
+                .flexible_material
+                .as_ref()
+                .map(|(_, d, _)| *d)
+                .unwrap_or(0);
 
         let material_ratio = if total_required > 0 {
             (total_delivered as f32 / total_required as f32).min(1.0)

@@ -1,14 +1,14 @@
 //! 手押し車を駐車エリアに返却するフェーズ
 
-use hw_logistics::Wheelbarrow;
 use crate::soul_ai::execute::task_execution::types::HaulWithWheelbarrowData;
 use crate::soul_ai::execute::task_execution::{
     common::{is_near_target, update_destination_to_adjacent},
     context::TaskExecutionContext,
     transport_common::{reservation, wheelbarrow as wheelbarrow_common},
 };
-use hw_world::WorldMap;
 use bevy::prelude::*;
+use hw_logistics::Wheelbarrow;
+use hw_world::WorldMap;
 
 pub fn handle(
     ctx: &mut TaskExecutionContext,
@@ -27,9 +27,7 @@ pub fn handle(
         if let Ok(mut soul_commands) = commands.get_entity(ctx.soul_entity) {
             soul_commands.try_remove::<hw_core::relationships::WorkingOn>();
         }
-        crate::soul_ai::execute::task_execution::common::clear_task_and_path(
-            ctx.task, ctx.path,
-        );
+        crate::soul_ai::execute::task_execution::common::clear_task_and_path(ctx.task, ctx.path);
         return;
     };
 

@@ -12,10 +12,7 @@ use hw_core::visual_mirror::construction::BlueprintVisualState;
 pub fn spawn_material_display_system(
     mut commands: Commands,
     handles: Res<MaterialIconHandles>,
-    q_blueprints: Query<
-        (Entity, &BlueprintVisualState),
-        Added<super::components::BlueprintVisual>,
-    >,
+    q_blueprints: Query<(Entity, &BlueprintVisualState), Added<super::components::BlueprintVisual>>,
 ) {
     for (bp_entity, state) in q_blueprints.iter() {
         let mut i = 0;
@@ -82,10 +79,7 @@ pub fn spawn_material_display_system(
                         ..default()
                     },
                     Transform::from_translation(offset),
-                    Name::new(format!(
-                        "MaterialIcon (Flexible {:?})",
-                        accepted_types
-                    )),
+                    Name::new(format!("MaterialIcon (Flexible {:?})", accepted_types)),
                 ));
 
                 parent.spawn((
@@ -100,10 +94,7 @@ pub fn spawn_material_display_system(
                     TextColor(Color::WHITE),
                     TextLayout::new_with_justify(Justify::Left),
                     Transform::from_translation(offset + COUNTER_TEXT_OFFSET),
-                    Name::new(format!(
-                        "MaterialCounter (Flexible {:?})",
-                        accepted_types
-                    )),
+                    Name::new(format!("MaterialCounter (Flexible {:?})", accepted_types)),
                 ));
             });
         }

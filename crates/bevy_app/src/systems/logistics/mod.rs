@@ -24,7 +24,9 @@ pub use hw_logistics::water::{
 pub use hw_logistics::zone::{Stockpile, ZoneType};
 
 pub use initial_spawn::initial_resource_spawner;
-pub use ui::{ResourceCountDisplayTimer, ResourceCountLabel, ResourceLabels, resource_count_display_system};
+pub use ui::{
+    ResourceCountDisplayTimer, ResourceCountLabel, ResourceLabels, resource_count_display_system,
+};
 
 // item_lifetime は他モジュールからパス指定で参照されるため pub mod として公開
 pub mod item_lifetime {

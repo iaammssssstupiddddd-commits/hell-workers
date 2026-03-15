@@ -1,7 +1,9 @@
 use bevy::prelude::*;
 
-use crate::familiar_ai::decide::task_management::{FamiliarTaskAssignmentQueries, ReservationShadow};
 use super::reservation::source_not_reserved;
+use crate::familiar_ai::decide::task_management::{
+    FamiliarTaskAssignmentQueries, ReservationShadow,
+};
 
 pub fn find_nearest_wheelbarrow(
     task_pos: Vec2,

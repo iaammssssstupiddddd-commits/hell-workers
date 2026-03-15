@@ -1,11 +1,11 @@
 use crate::entities::damned_soul::{DamnedSoul, SoulIdentity};
 use crate::events::{SquadManagementOperation, SquadManagementRequest};
-use hw_ui::components::{FamiliarListItem, SoulListItem, UiNodeRegistry, UiSlot};
-use hw_ui::theme::UiTheme;
-use hw_core::relationships::CommandedBy;
 use bevy::prelude::*;
 use bevy::ui::FocusPolicy;
+use hw_core::relationships::CommandedBy;
+use hw_ui::components::{FamiliarListItem, SoulListItem, UiNodeRegistry, UiSlot};
 pub use hw_ui::list::DragState;
+use hw_ui::theme::UiTheme;
 
 #[derive(Component)]
 struct DragGhost;

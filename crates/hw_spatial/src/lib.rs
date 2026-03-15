@@ -11,7 +11,10 @@ pub mod transport_request;
 
 pub use blueprint::{BlueprintSpatialGrid, update_blueprint_spatial_grid_system};
 pub use designation::{DesignationSpatialGrid, update_designation_spatial_grid_system};
-pub use familiar::{FamiliarSpatialGrid, update_familiar_entity_spatial_grid_system, update_familiar_spatial_grid_system};
+pub use familiar::{
+    FamiliarSpatialGrid, update_familiar_entity_spatial_grid_system,
+    update_familiar_spatial_grid_system,
+};
 pub use floor_construction::{
     FloorConstructionSpatialGrid, update_floor_construction_spatial_grid_system,
 };

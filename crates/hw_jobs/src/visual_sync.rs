@@ -17,29 +17,19 @@ pub fn on_designation_added(
     q: Query<(), Or<(With<Tree>, With<Rock>)>>,
 ) {
     if q.contains(on.entity) {
-        commands
-            .entity(on.entity)
-            .try_insert(GatherHighlightMarker);
+        commands.entity(on.entity).try_insert(GatherHighlightMarker);
     }
 }
 
 pub fn on_designation_removed(on: On<Remove, Designation>, mut commands: Commands) {
-    commands
-        .entity(on.entity)
-        .remove::<GatherHighlightMarker>();
+    commands.entity(on.entity).remove::<GatherHighlightMarker>();
 }
 
-pub fn on_rest_area_added(
-    on: On<Add, RestArea>,
-    mut commands: Commands,
-    q: Query<&RestArea>,
-) {
+pub fn on_rest_area_added(on: On<Add, RestArea>, mut commands: Commands, q: Query<&RestArea>) {
     if let Ok(rest_area) = q.get(on.entity) {
-        commands
-            .entity(on.entity)
-            .try_insert(RestAreaVisual {
-                capacity: rest_area.capacity,
-            });
+        commands.entity(on.entity).try_insert(RestAreaVisual {
+            capacity: rest_area.capacity,
+        });
     }
 }
 
@@ -73,19 +63,25 @@ pub fn sync_soul_task_visual_system(
                 };
                 (SoulTaskPhaseVisual::Haul, None, target, None)
             }
-            AssignedTask::HaulToBlueprint(d) => {
-                (SoulTaskPhaseVisual::HaulToBlueprint, None, Some(d.blueprint), None)
-            }
-            AssignedTask::Build(d) => {
-                (SoulTaskPhaseVisual::Build, None, Some(d.blueprint), None)
-            }
+            AssignedTask::HaulToBlueprint(d) => (
+                SoulTaskPhaseVisual::HaulToBlueprint,
+                None,
+                Some(d.blueprint),
+                None,
+            ),
+            AssignedTask::Build(d) => (SoulTaskPhaseVisual::Build, None, Some(d.blueprint), None),
             AssignedTask::ReinforceFloorTile(d) => {
                 let progress = if let ReinforceFloorPhase::Reinforcing { progress_bp } = d.phase {
                     Some((progress_bp as f32 / 10_000.0).clamp(0.0, 1.0))
                 } else {
                     None
                 };
-                (SoulTaskPhaseVisual::ReinforceFloor, progress, Some(d.tile), None)
+                (
+                    SoulTaskPhaseVisual::ReinforceFloor,
+                    progress,
+                    Some(d.tile),
+                    None,
+                )
             }
             AssignedTask::PourFloorTile(d) => {
                 let progress = if let PourFloorPhase::Pouring { progress_bp } = d.phase {
@@ -111,9 +107,7 @@ pub fn sync_soul_task_visual_system(
                 };
                 (SoulTaskPhaseVisual::CoatWall, progress, Some(d.tile), None)
             }
-            AssignedTask::Refine(d) => {
-                (SoulTaskPhaseVisual::Refine, None, Some(d.mixer), None)
-            }
+            AssignedTask::Refine(d) => (SoulTaskPhaseVisual::Refine, None, Some(d.mixer), None),
             AssignedTask::CollectSand(d) => {
                 (SoulTaskPhaseVisual::CollectSand, None, Some(d.target), None)
             }
@@ -127,9 +121,12 @@ pub fn sync_soul_task_visual_system(
             AssignedTask::HaulWithWheelbarrow(_) => {
                 (SoulTaskPhaseVisual::HaulWithWheelbarrow, None, None, None)
             }
-            AssignedTask::BucketTransport(d) => {
-                (SoulTaskPhaseVisual::BucketTransport, None, None, Some(d.bucket))
-            }
+            AssignedTask::BucketTransport(d) => (
+                SoulTaskPhaseVisual::BucketTransport,
+                None,
+                None,
+                Some(d.bucket),
+            ),
         };
 
         state.phase = phase;
@@ -140,9 +137,8 @@ pub fn sync_soul_task_visual_system(
 }
 
 use hw_core::visual_mirror::construction::{
-    BlueprintVisualState, FloorConstructionPhaseMirror, FloorSiteVisualState,
-    FloorTileStateMirror, FloorTileVisualMirror, WallSiteVisualState, WallTileStateMirror,
-    WallTileVisualMirror,
+    BlueprintVisualState, FloorConstructionPhaseMirror, FloorSiteVisualState, FloorTileStateMirror,
+    FloorTileVisualMirror, WallSiteVisualState, WallTileStateMirror, WallTileVisualMirror,
 };
 
 use crate::construction::{
@@ -162,10 +158,20 @@ pub fn sync_blueprint_visual_system(
         state.material_counts = bp
             .required_materials
             .iter()
-            .map(|(rt, req)| (*rt, bp.delivered_materials.get(rt).copied().unwrap_or(0), *req))
+            .map(|(rt, req)| {
+                (
+                    *rt,
+                    bp.delivered_materials.get(rt).copied().unwrap_or(0),
+                    *req,
+                )
+            })
             .collect();
         state.flexible_material = bp.flexible_material_requirement.as_ref().map(|f| {
-            (f.accepted_types.clone(), f.delivered_total, f.required_total)
+            (
+                f.accepted_types.clone(),
+                f.delivered_total,
+                f.required_total,
+            )
         });
         state.is_wall_or_door = matches!(bp.kind, BuildingType::Wall | BuildingType::Door);
         state.is_plain_wall = matches!(bp.kind, BuildingType::Wall);

@@ -10,7 +10,6 @@ use crate::app_contexts::{
     CompanionParentKind, CompanionPlacement, CompanionPlacementKind, CompanionPlacementState,
     MoveContext, MovePlacementState, PendingMovePlacement,
 };
-use crate::interface::camera::MainCamera;
 use crate::interface::ui::UiInputState;
 use crate::systems::jobs::{Building, BuildingType, Designation, Priority, TaskSlots, WorkType};
 use crate::systems::logistics::transport_request::TransportRequest;
@@ -24,6 +23,7 @@ use crate::world::map::{WorldMap, WorldMapRef, WorldMapWrite};
 use bevy::prelude::*;
 use hw_core::constants::TILE_SIZE;
 use hw_core::game_state::PlayMode;
+use hw_ui::camera::MainCamera;
 
 use hw_ui::selection::{
     can_place_moved_building, move_anchor_grid, move_occupied_grids, move_spawn_pos,
@@ -81,9 +81,7 @@ pub fn building_move_system(
         return;
     }
 
-    let Some(world_pos) =
-        hw_ui::camera::world_cursor_pos(&q_window, &q_camera)
-    else {
+    let Some(world_pos) = hw_ui::camera::world_cursor_pos(&q_window, &q_camera) else {
         return;
     };
     let destination_grid = WorldMap::world_to_grid(world_pos);

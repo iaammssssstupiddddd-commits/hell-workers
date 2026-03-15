@@ -26,19 +26,15 @@ fn prepare_worker_for_task_apply(
             familiar_entity,
         });
     }
-    commands.entity(worker_entity).try_insert((
-        CommandedBy(familiar_entity),
-        WorkingOn(task_entity),
-    ));
+    commands
+        .entity(worker_entity)
+        .try_insert((CommandedBy(familiar_entity), WorkingOn(task_entity)));
     commands
         .entity(task_entity)
         .try_insert(IssuedBy(familiar_entity));
 }
 
-fn worker_can_receive_assignment(
-    assigned_task: &AssignedTask,
-    idle: &IdleState,
-) -> bool {
+fn worker_can_receive_assignment(assigned_task: &AssignedTask, idle: &IdleState) -> bool {
     matches!(*assigned_task, AssignedTask::None)
         && idle.behavior != IdleBehavior::ExhaustedGathering
 }
@@ -95,9 +91,7 @@ fn normalize_worker_idle_state(
         idle.needs_separation = false;
     }
     idle.total_idle_time = 0.0;
-    commands
-        .entity(worker_entity)
-        .try_remove::<DriftingState>();
+    commands.entity(worker_entity).try_remove::<DriftingState>();
 }
 
 fn apply_assignment_state(
@@ -145,9 +139,7 @@ fn attach_delivering_to_relationship(commands: &mut Commands, assigned_task: &As
                 WheelbarrowDestination::Mixer { entity, .. } => entity,
             };
             for &item in &data.items {
-                commands
-                    .entity(item)
-                    .try_insert(DeliveringTo(dest_entity));
+                commands.entity(item).try_insert(DeliveringTo(dest_entity));
             }
         }
         _ => {}

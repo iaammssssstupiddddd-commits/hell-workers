@@ -1,7 +1,7 @@
 use crate::entities::damned_soul::DamnedSoulSpawnEvent;
 use crate::entities::familiar::{FamiliarSpawnEvent, FamiliarType};
-use crate::interface::camera::MainCamera;
 use bevy::prelude::*;
+use hw_ui::camera::MainCamera;
 
 pub fn debug_spawn_system(
     buttons: Res<ButtonInput<KeyCode>>,

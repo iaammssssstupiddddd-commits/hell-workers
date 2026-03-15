@@ -1,10 +1,10 @@
 //! タスク実行の共通処理
 
+use crate::soul_ai::execute::task_execution::types::AssignedTask;
+use bevy::prelude::*;
 use hw_core::soul::{Destination, Path};
 use hw_jobs::Designation;
 use hw_logistics::{Inventory, ReservedForTask, Stockpile};
-use crate::soul_ai::execute::task_execution::types::AssignedTask;
-use bevy::prelude::*;
 
 use hw_world::WorldMap;
 
@@ -13,7 +13,6 @@ pub use crate::soul_ai::helpers::navigation::{
     can_pickup_item, is_adjacent_grid, is_near_blueprint, is_near_target, is_near_target_or_dest,
     update_destination_if_needed,
 };
-
 
 /// インタラクション対象への隣接目的地を設定（岩などへの近接用）
 ///
@@ -173,12 +172,9 @@ pub fn update_destination_to_blueprint(
     }
 
     // ターゲットの中心地点を軸に「境界」までのパスを計算
-    if let Some(grid_path) = hw_world::find_path_to_boundary(
-        world_map,
-        pf_context,
-        start_grid,
-        occupied_grids,
-    ) {
+    if let Some(grid_path) =
+        hw_world::find_path_to_boundary(world_map, pf_context, start_grid, occupied_grids)
+    {
         if let Some(last_grid) = grid_path.last() {
             let last_pos = WorldMap::grid_to_world(last_grid.0, last_grid.1);
             update_destination_if_needed(dest, last_pos, path);

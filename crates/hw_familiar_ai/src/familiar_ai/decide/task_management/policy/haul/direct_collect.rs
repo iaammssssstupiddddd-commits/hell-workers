@@ -3,10 +3,10 @@ use hw_core::area::TaskArea;
 use hw_core::constants::{MAP_HEIGHT, MAP_WIDTH};
 use hw_world::{TerrainType, WorldMap};
 
+use crate::familiar_ai::decide::task_management::validator::source_not_reserved;
 use crate::familiar_ai::decide::task_management::{
     FamiliarTaskAssignmentQueries, ReservationShadow,
 };
-use crate::familiar_ai::decide::task_management::validator::source_not_reserved;
 
 type TaskAssignmentQueries<'w, 's> = FamiliarTaskAssignmentQueries<'w, 's>;
 

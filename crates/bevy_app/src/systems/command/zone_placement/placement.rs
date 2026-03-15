@@ -1,5 +1,4 @@
 use crate::app_contexts::TaskContext;
-use crate::interface::camera::MainCamera;
 use crate::interface::ui::UiInputState;
 use crate::systems::command::TaskMode;
 use crate::systems::command::TaskModeZoneType;
@@ -11,6 +10,7 @@ use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use hw_core::constants::*;
 use hw_core::game_state::PlayMode;
+use hw_ui::camera::MainCamera;
 use hw_world::{area_tile_size, expand_yard_area, rectangles_overlap, rectangles_overlap_site};
 
 pub fn zone_placement_system(

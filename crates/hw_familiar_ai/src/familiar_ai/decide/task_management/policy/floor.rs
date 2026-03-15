@@ -1,12 +1,14 @@
 use bevy::prelude::*;
-use hw_jobs::construction::{FloorTileState, WallTileState};
 use hw_jobs::BuildingType;
+use hw_jobs::construction::{FloorTileState, WallTileState};
 
-use crate::familiar_ai::decide::task_management::{AssignTaskContext, FamiliarTaskAssignmentQueries, ReservationShadow};
 use super::super::builders::{
     issue_coat_wall, issue_frame_wall, issue_pour_floor, issue_reinforce_floor,
 };
 use super::super::validator::can_reserve_source;
+use crate::familiar_ai::decide::task_management::{
+    AssignTaskContext, FamiliarTaskAssignmentQueries, ReservationShadow,
+};
 
 pub(super) fn assign_reinforce_floor(
     task_pos: Vec2,

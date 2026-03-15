@@ -55,12 +55,8 @@ fn sync_familiar_member_rows(
         let empty_row = if let Some(row) = node_index.familiar_empty_rows.get(&familiar.entity) {
             *row
         } else {
-            let row = spawn_empty_squad_hint_entity(
-                commands,
-                nodes.members_container,
-                assets,
-                theme,
-            );
+            let row =
+                spawn_empty_squad_hint_entity(commands, nodes.members_container, assets, theme);
             node_index.familiar_empty_rows.insert(familiar.entity, row);
             row
         };
@@ -178,13 +174,7 @@ pub fn sync_familiar_sections(
             .familiar_sections
             .entry(familiar.entity)
             .or_insert_with(|| {
-                spawn_familiar_section(
-                    commands,
-                    fam_container_entity,
-                    familiar,
-                    assets,
-                    theme,
-                )
+                spawn_familiar_section(commands, fam_container_entity, familiar, assets, theme)
             });
         node_index
             .familiar_member_rows
@@ -226,14 +216,7 @@ pub fn sync_familiar_sections(
                 .unwrap_or(true);
             if members_changed {
                 sync_familiar_member_rows(
-                    commands,
-                    assets,
-                    theme,
-                    familiar,
-                    previous,
-                    node_index,
-                    nodes,
-                    q_children,
+                    commands, assets, theme, familiar, previous, node_index, nodes, q_children,
                 );
             }
         }

@@ -540,7 +540,11 @@ mod tests {
         });
         let input = build_detection_input(&tiles);
         let rooms = detect_rooms(&input);
-        assert_eq!(rooms.len(), 0, "room touching map boundary must not be valid");
+        assert_eq!(
+            rooms.len(),
+            0,
+            "room touching map boundary must not be valid"
+        );
     }
 
     #[test]

@@ -10,7 +10,6 @@ mod validation;
 mod wall_apply;
 
 use crate::app_contexts::TaskContext;
-use crate::interface::camera::MainCamera;
 use crate::interface::ui::{PlacementFailureTooltip, UiInputState};
 use crate::systems::command::TaskMode;
 use crate::systems::jobs::Building;
@@ -19,6 +18,7 @@ use crate::world::map::{WorldMap, WorldMapWrite};
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use hw_core::game_state::PlayMode;
+use hw_ui::camera::MainCamera;
 
 use input::{handle_cancel, handle_drag_start, handle_release};
 

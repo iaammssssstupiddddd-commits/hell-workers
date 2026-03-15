@@ -4,11 +4,11 @@ use super::*;
 use crate::events::{
     OnExhausted, OnSoulRecruited, OnStressBreakdown, OnTaskAssigned, OnTaskCompleted,
 };
-use hw_core::relationships::CommandedBy;
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
 use crate::systems::soul_ai::helpers::work::unassign_task;
 use crate::world::map::WorldMapRead;
 use hw_core::constants::*;
+use hw_core::relationships::CommandedBy;
 use rand::Rng;
 
 pub fn on_task_assigned(on: On<OnTaskAssigned>, _q_souls: Query<&mut DamnedSoul>) {

@@ -1,11 +1,13 @@
 use bevy::prelude::*;
 use hw_core::logistics::ResourceType;
 
-use crate::familiar_ai::decide::task_management::{AssignTaskContext, FamiliarTaskAssignmentQueries, ReservationShadow};
 use super::super::super::builders::issue_haul_to_mixer;
 use super::super::super::validator::resolve_haul_to_mixer_inputs;
 use super::lease_validation;
 use super::source_selector;
+use crate::familiar_ai::decide::task_management::{
+    AssignTaskContext, FamiliarTaskAssignmentQueries, ReservationShadow,
+};
 
 fn mixer_can_accept_item(
     mixer_entity: Entity,

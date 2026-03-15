@@ -12,8 +12,8 @@ use hw_world::SpatialGridOps;
 use rand::Rng;
 use rand::seq::SliceRandom;
 
-use super::query_types::SoulEncouragementQuery;
 use super::FamiliarDecideOutput;
+use super::query_types::SoulEncouragementQuery;
 
 /// 激励のクールダウン管理コンポーネント
 #[derive(Component, Debug, Reflect)]

@@ -4,8 +4,7 @@ use super::queries::DesignationTargetQuery;
 use crate::systems::logistics::ResourceType;
 use bevy::prelude::*;
 use hw_logistics::manual_haul_selector::{
-    ExistingHaulRequestView, StockpileCandidateView, find_existing_request,
-    select_stockpile_anchor,
+    ExistingHaulRequestView, StockpileCandidateView, find_existing_request, select_stockpile_anchor,
 };
 
 pub(super) fn pick_manual_haul_stockpile_anchor(

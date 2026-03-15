@@ -1,9 +1,11 @@
 use bevy::prelude::*;
 
-use crate::familiar_ai::decide::task_management::{AssignTaskContext, FamiliarTaskAssignmentQueries, ReservationShadow};
 use super::super::super::builders::issue_haul_to_stockpile_with_source;
 use super::super::super::validator::resolve_consolidation_inputs;
 use super::source_selector;
+use crate::familiar_ai::decide::task_management::{
+    AssignTaskContext, FamiliarTaskAssignmentQueries, ReservationShadow,
+};
 
 pub fn assign_consolidation_to_stockpile(
     _task_pos: Vec2,

@@ -2,13 +2,11 @@ use super::geometry::world_cursor_pos;
 use crate::app_contexts::TaskContext;
 use crate::assets::GameAssets;
 use crate::entities::damned_soul::DreamPool;
-use crate::interface::camera::MainCamera;
 use crate::systems::command::{
     AreaEditSession, AreaSelectionIndicator, DreamTreePreviewIndicator, TaskArea, TaskMode,
     TaskModeZoneType,
 };
 use crate::systems::dream_tree_planting::build_dream_tree_planting_plan;
-use hw_core::area::{get_drag_start, wall_line_area};
 use crate::systems::jobs::Tree;
 use crate::systems::logistics::ResourceItem;
 use crate::systems::visual::task_area_visual::TaskAreaMaterial;
@@ -16,7 +14,9 @@ use crate::systems::world::zones::{Site, Yard};
 use crate::world::map::{WorldMap, WorldMapRead};
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
+use hw_core::area::{get_drag_start, wall_line_area};
 use hw_core::constants::{TILE_SIZE, Z_DREAM_TREE_PREVIEW};
+use hw_ui::camera::MainCamera;
 
 pub fn area_selection_indicator_system(
     task_context: Res<TaskContext>,

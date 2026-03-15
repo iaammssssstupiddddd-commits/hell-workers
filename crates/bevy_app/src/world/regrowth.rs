@@ -5,9 +5,9 @@
 
 use crate::assets::GameAssets;
 use crate::systems::jobs::Tree;
-use crate::systems::time::GameTime;
 use crate::world::map::WorldMapRead;
 use bevy::prelude::*;
+use hw_core::GameTime;
 use hw_core::constants::*;
 use hw_world::{
     ForestZone, default_forest_zones, find_regrowth_position, grid_to_world, world_to_grid,

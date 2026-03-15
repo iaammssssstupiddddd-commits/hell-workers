@@ -83,7 +83,7 @@ hw_visual (hw_core + hw_jobs + hw_logistics + hw_spatial + hw_world + hw_ui)
 
 - `hw_ui` は UI の構築・更新ロジックを集約し、`bevy_app` は shell/adapter とゲーム状態更新ハンドラを保持する。
 - `bevy_app` → `hw_ui` は依存方向を維持し、`hw_ui` から `bevy_app` へ依存しない。
-- `UiShell` 的な役割（Selection やカメラ・モード遷移）は `bevy_app` 側で管理する。`interface::camera` は `hw_ui::camera::MainCamera` のみを再エクスポートする（`PanCamera` / `PanCameraPlugin` 等 Bevy ネイティブ型の再エクスポートは除去済み。使用箇所で `bevy::camera_controller::pan_camera` から直接 import する）。
+- `UiShell` 的な役割（Selection やカメラ・モード遷移）は `bevy_app` 側で管理する。`MainCamera` / `world_cursor_pos` の所有権は `hw_ui::camera` にあり、使用箇所はそこから直接 import する。`bevy_app` 側に 1 段噛ませるだけの `interface::camera` wrapper は置かない。
 
 ### `hw_ui`
 
@@ -321,7 +321,7 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 - `DoorState`
 - `AreaBounds`, `TaskArea`（矩形エリア抽象型）
 - `command` 系 pure helper の一部（`wall_line_area`, `count_positions_in_area`, `overlap_summary_from_areas`, `get_drag_start`）
-- `GameTime`（`time.rs`）— ゲーム内時間 Resource。`game_time_system` は `ClockText` 依存のため bevy_app に残留し、`pub use hw_core::GameTime;` で re-export
+- `GameTime`（`hw_core::time`）— ゲーム内時間 Resource。`game_time_system` は `ClockText` 依存のため bevy_app に残留するが、型自体は `hw_core::GameTime` を直接使う。1 段だけの pass-through re-export は置かない
 
 ### `hw_world`
 
@@ -505,6 +505,7 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 - wrapper に独自ロジックを足し始めたら責務を見直す
 - 参照がなくなった re-export は削除する
 - 新しい re-export を追加する場合は wildcard でなく明示列挙で書く
+- 呼び出し側が局所的で、定義元をそのまま import しても境界が明確な場合は re-export を増やさず直接 import を選ぶ
 
 ## 6. `WorldMap` の境界
 

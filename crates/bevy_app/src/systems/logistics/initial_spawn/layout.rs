@@ -116,7 +116,10 @@ pub fn compute_parking_layout(base: (i32, i32), world_map: &WorldMap) -> Option<
         (base.0 + 1, base.1 + 1),
     ];
 
-    if occupied.iter().any(|(gx, gy)| !world_map.is_walkable(*gx, *gy)) {
+    if occupied
+        .iter()
+        .any(|(gx, gy)| !world_map.is_walkable(*gx, *gy))
+    {
         return None;
     }
 

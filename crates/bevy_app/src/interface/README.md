@@ -28,7 +28,7 @@
 | `floor_place/` | 床・壁の一括配置（`floor_placement_system`, `wall_apply.rs`, `validation.rs`） |
 
 補足:
-`world_cursor_pos` は `hw_ui::camera` が所有し、`selection` 配下の root shell から利用する。
+`MainCamera` と `world_cursor_pos` は `hw_ui::camera` が所有する。`bevy_app` 側は `interface::camera` のような再公開層を持たず、selection / command / visual から直接 import する。
 
 ## ui/ ディレクトリ
 

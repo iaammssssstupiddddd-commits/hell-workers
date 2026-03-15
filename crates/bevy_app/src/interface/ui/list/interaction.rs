@@ -1,7 +1,8 @@
-use hw_ui::components::*;
-use hw_ui::theme::UiTheme;
 use bevy::prelude::*;
 use hw_ui::UiIntent;
+use hw_ui::camera::MainCamera;
+use hw_ui::components::*;
+use hw_ui::theme::UiTheme;
 
 mod navigation;
 mod visual {
@@ -19,7 +20,7 @@ fn focus_list_entity(
     entity: Entity,
     label: &'static str,
     selected_entity: &mut ResMut<crate::interface::selection::SelectedEntity>,
-    q_camera: &mut Query<&mut Transform, With<crate::interface::camera::MainCamera>>,
+    q_camera: &mut Query<&mut Transform, With<MainCamera>>,
     q_transforms: &Query<&GlobalTransform>,
 ) {
     hw_ui::list::select_entity_and_focus_camera(
@@ -64,7 +65,7 @@ pub fn entity_list_interaction_system(
         ),
     >,
     mut selected_entity: ResMut<crate::interface::selection::SelectedEntity>,
-    mut q_camera: Query<&mut Transform, With<crate::interface::camera::MainCamera>>,
+    mut q_camera: Query<&mut Transform, With<MainCamera>>,
     q_transforms: Query<&GlobalTransform>,
     mut ui_intents: MessageWriter<UiIntent>,
     theme: Res<UiTheme>,

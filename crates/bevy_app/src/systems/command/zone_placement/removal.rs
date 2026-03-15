@@ -1,5 +1,4 @@
 use crate::app_contexts::TaskContext;
-use crate::interface::camera::MainCamera;
 use crate::interface::ui::UiInputState;
 use crate::systems::command::TaskMode;
 use crate::systems::world::zones::AreaBounds;
@@ -7,6 +6,7 @@ use crate::world::map::{WorldMap, WorldMapWrite};
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use hw_core::game_state::PlayMode;
+use hw_ui::camera::MainCamera;
 use hw_world::identify_removal_targets;
 
 use super::removal_preview::{
@@ -79,9 +79,8 @@ pub fn zone_removal_system(
 fn apply_zone_removal(commands: &mut Commands, world_map: &mut WorldMap, area: &AreaBounds) {
     let (to_remove, fragments) = identify_removal_targets(world_map, area);
 
-    let removed = world_map.take_stockpile_tiles(
-        to_remove.into_iter().chain(fragments.into_iter()),
-    );
+    let removed =
+        world_map.take_stockpile_tiles(to_remove.into_iter().chain(fragments.into_iter()));
     for entity in removed {
         commands.entity(entity).despawn();
     }

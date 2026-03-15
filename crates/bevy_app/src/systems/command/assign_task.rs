@@ -1,13 +1,13 @@
 use super::{TaskArea, TaskMode};
 use crate::app_contexts::TaskContext;
 use crate::entities::familiar::Familiar;
-use crate::interface::camera::MainCamera;
 use crate::interface::selection::SelectedEntity;
 use crate::interface::ui::UiInputState;
 use crate::systems::jobs::Designation;
 use crate::world::map::{WorldMap, WorldMapRead};
 use crate::world::pathfinding::{self, PathfindingContext};
 use bevy::prelude::*;
+use hw_ui::camera::MainCamera;
 
 pub fn assign_task_system(
     buttons: Res<ButtonInput<MouseButton>>,

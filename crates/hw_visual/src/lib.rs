@@ -7,6 +7,7 @@ pub mod floor_construction;
 pub mod gather;
 pub mod handles;
 pub mod haul;
+pub mod layer;
 pub mod mud_mixer;
 pub mod plant_trees;
 pub mod progress_bar;

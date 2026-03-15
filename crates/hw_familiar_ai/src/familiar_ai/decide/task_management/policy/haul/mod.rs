@@ -14,8 +14,10 @@ mod wheelbarrow;
 
 use bevy::prelude::*;
 
-use crate::familiar_ai::decide::task_management::{AssignTaskContext, FamiliarTaskAssignmentQueries, ReservationShadow};
 use crate::familiar_ai::decide::task_management::context::ConstructionSitePositions;
+use crate::familiar_ai::decide::task_management::{
+    AssignTaskContext, FamiliarTaskAssignmentQueries, ReservationShadow,
+};
 
 pub use mixer::assign_haul_to_mixer;
 pub use source_selector::take_source_selector_scan_snapshot;

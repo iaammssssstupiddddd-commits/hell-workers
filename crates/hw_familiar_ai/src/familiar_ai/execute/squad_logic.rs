@@ -4,8 +4,8 @@ use std::collections::HashSet;
 
 use bevy::prelude::*;
 use hw_core::events::{
-    OnGatheringLeft, OnReleasedFromService, OnSoulRecruited,
-    SquadManagementOperation, SquadManagementRequest,
+    OnGatheringLeft, OnReleasedFromService, OnSoulRecruited, SquadManagementOperation,
+    SquadManagementRequest,
 };
 use hw_core::relationships::{CommandedBy, ParticipatingIn};
 use hw_soul_ai::soul_ai::execute::task_execution::TaskAssignmentQueries;
@@ -38,7 +38,9 @@ pub fn squad_logic_system(
 
                 if let Ok((_, _, _, _, _, _, _, _, _, Some(_p))) = q_souls.get(soul_entity) {
                     commands.entity(soul_entity).remove::<ParticipatingIn>();
-                    commands.trigger(OnGatheringLeft { entity: soul_entity });
+                    commands.trigger(OnGatheringLeft {
+                        entity: soul_entity,
+                    });
                 }
 
                 commands.trigger(OnSoulRecruited {
@@ -46,7 +48,10 @@ pub fn squad_logic_system(
                     familiar_entity: fam_entity,
                 });
             }
-            SquadManagementOperation::ReleaseMember { soul_entity, reason } => {
+            SquadManagementOperation::ReleaseMember {
+                soul_entity,
+                reason,
+            } => {
                 let soul_entity = *soul_entity;
                 if let Ok((
                     entity,
@@ -92,7 +97,9 @@ pub fn squad_logic_system(
                 }
 
                 commands.entity(soul_entity).remove::<CommandedBy>();
-                commands.trigger(OnReleasedFromService { entity: soul_entity });
+                commands.trigger(OnReleasedFromService {
+                    entity: soul_entity,
+                });
             }
         }
     }

@@ -3,8 +3,10 @@
 //! スポーン・脱走クールダウンの状態を保持する。
 //! `bevy_app` 側の spawn システムが更新し、AI 意思決定システムが参照する。
 
+use crate::constants::{
+    SOUL_ESCAPE_GLOBAL_COOLDOWN, SOUL_POPULATION_BASE_CAP, SOUL_SPAWN_INTERVAL,
+};
 use bevy::prelude::*;
-use crate::constants::{SOUL_POPULATION_BASE_CAP, SOUL_ESCAPE_GLOBAL_COOLDOWN, SOUL_SPAWN_INTERVAL};
 
 /// Soul の人口管理状態
 #[derive(Resource)]

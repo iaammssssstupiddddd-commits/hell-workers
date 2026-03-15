@@ -11,12 +11,12 @@ use crate::app_contexts::{
     BuildContext, CompanionParentKind, CompanionPlacementKind, CompanionPlacementState,
 };
 use crate::assets::GameAssets;
-use crate::interface::camera::MainCamera;
 use crate::interface::ui::UiInputState;
 use crate::systems::jobs::{Blueprint, Building, BuildingType};
 use crate::systems::world::zones::{Site, Yard};
 use crate::world::map::{RIVER_Y_MIN, WorldMap, WorldMapWrite};
 use bevy::prelude::*;
+use hw_ui::camera::MainCamera;
 use hw_ui::selection::building_spawn_pos;
 
 use companion::make_companion_placement;

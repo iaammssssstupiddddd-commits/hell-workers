@@ -1,10 +1,10 @@
 //! ドアの自動開閉システムとビジュアルアセットハンドル。
 
+use crate::map::{WorldMap, WorldMapWrite};
 use bevy::prelude::*;
 use hw_core::soul::{DamnedSoul, Path};
 use hw_core::world::DoorState;
 use hw_jobs::{Door, DoorCloseTimer};
-use crate::map::{WorldMap, WorldMapWrite};
 
 /// bevy_app から注入されるドア系ビジュアルアセットハンドル。
 #[derive(Resource)]

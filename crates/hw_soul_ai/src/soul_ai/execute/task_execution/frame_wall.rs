@@ -1,15 +1,15 @@
 //! Wall tile framing task execution
 
-use hw_core::relationships::WorkingOn;
-use hw_jobs::WallTileState;
 use crate::soul_ai::execute::task_execution::{
     common::*,
     context::TaskExecutionContext,
     types::{AssignedTask, FrameWallPhase, FrameWallTileData},
 };
-use hw_world::WorldMap;
 use bevy::prelude::*;
 use hw_core::constants::{WALL_FRAME_DURATION_SECS, WALL_WOOD_PER_TILE};
+use hw_core::relationships::WorkingOn;
+use hw_jobs::WallTileState;
+use hw_world::WorldMap;
 
 pub fn handle_frame_wall_task(
     ctx: &mut TaskExecutionContext,

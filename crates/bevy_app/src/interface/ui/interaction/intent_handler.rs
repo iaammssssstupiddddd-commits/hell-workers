@@ -6,13 +6,12 @@ use crate::events::FamiliarOperationMaxSoulChangedEvent;
 use crate::interface::selection::SelectedEntity;
 use crate::interface::ui::EntityListNodeIndex;
 use crate::interface::ui::InfoPanelPinState;
-use hw_ui::components::{MenuState, OperationDialog};
-use hw_core::relationships::Commanding;
-use crate::systems::familiar_ai::FamiliarAiState;
 use crate::systems::command::{TaskArea, TaskMode};
-use crate::systems::time::TimeSpeed;
-use hw_core::game_state::PlayMode;
+use crate::systems::familiar_ai::FamiliarAiState;
+use hw_core::game_state::{PlayMode, TimeSpeed};
+use hw_core::relationships::Commanding;
 use hw_ui::UiIntent;
+use hw_ui::components::{MenuState, OperationDialog};
 
 pub(crate) fn handle_ui_intent(
     mut ui_intents: MessageReader<UiIntent>,
@@ -274,13 +273,7 @@ fn adjust_max_controlled_soul(
                 return;
             }
             op.max_controlled_soul = new_val;
-            update_familiar_max_soul_header(
-                selected,
-                new_val,
-                q_familiar_meta,
-                node_index,
-                q_text,
-            );
+            update_familiar_max_soul_header(selected, new_val, q_familiar_meta, node_index, q_text);
             ev_max_soul_changed.write(FamiliarOperationMaxSoulChangedEvent {
                 familiar_entity: selected,
                 old_value: old_val,

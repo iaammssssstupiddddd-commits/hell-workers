@@ -31,7 +31,9 @@ pub fn idle_visual_system(
 ) {
     const GATHERING_ARRIVAL_RADIUS: f32 = TILE_SIZE * GATHERING_ARRIVAL_RADIUS_BASE;
 
-    for (mut transform, mut sprite, idle, soul, task_vs, participating_in, dream) in query.iter_mut() {
+    for (mut transform, mut sprite, idle, soul, task_vs, participating_in, dream) in
+        query.iter_mut()
+    {
         if task_vs.phase != SoulTaskPhaseVisual::None {
             transform.rotation = Quat::IDENTITY;
             transform.scale = Vec3::ONE;

@@ -111,7 +111,7 @@ Perceive → Update → Decide → Execute
 - `Time<Virtual>` を使用するためポーズ中は進まない
 - 時間経過イベントには `game_time.day` の変化を監視する（例: 木再生は1日1回）
 - `game_time_system`（時刻計算 + ClockText 更新）は `bevy_app/src/systems/time.rs` に残留。`ClockText`（`hw_ui` 型）への依存があるため Leaf に移動不可。
-- `bevy_app/src/systems/time.rs` は `pub use hw_core::GameTime;` で re-export する。
+- `GameTime` の正規 public path は `hw_core::GameTime`。`bevy_app/src/systems/time.rs` は system 実装のみを持ち、型の pass-through re-export は持たない。
 
 ## 空間グリッド一覧 (Spatial Grids)
 
@@ -139,7 +139,7 @@ Perceive → Update → Decide → Execute
 
 | カテゴリ | 例 |
 |:--|:--|
-| Z軸レイヤー | `Z_MAP`, `Z_CHARACTER`, `Z_FLOATING_TEXT` |
+| Z軸レイヤー | `Z_MAP`, `Z_BUILDING_FLOOR`(0.05), `Z_BUILDING_STRUCT`(0.12), `Z_CHARACTER`, `Z_FLOATING_TEXT` |
 | AI閾値 | `FATIGUE_GATHERING_THRESHOLD`, `MOTIVATION_THRESHOLD` |
 | バイタル増減率 | `FATIGUE_WORK_RATE`, `STRESS_RECOVERY_RATE_GATHERING` |
 | 移動・アニメーション | `SOUL_SPEED_BASE`, `ANIM_BOB_SPEED` |

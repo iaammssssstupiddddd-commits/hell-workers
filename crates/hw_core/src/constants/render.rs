@@ -14,6 +14,14 @@ pub const Z_MAP_GRASS: f32 = 0.03;
 pub const Z_ROOM_OVERLAY: f32 = 0.08;
 /// 地面にあるアイテム（資材など）のベースレイヤー
 pub const Z_ITEM: f32 = 0.1;
+/// 建築物: 床・地面面（Z_ITEM より下）
+pub const Z_BUILDING_FLOOR: f32 = 0.05;
+/// 建築物: 壁・構造体（Z_ITEM より上、Z_AURA より下）
+pub const Z_BUILDING_STRUCT: f32 = 0.12;
+/// 建築物: 装飾レイヤー（Z_BUILDING_STRUCT の上）
+pub const Z_BUILDING_DECO: f32 = 0.15;
+/// 建築物: 照明・エフェクトレイヤー（Z_AURA より下）
+pub const Z_BUILDING_LIGHT: f32 = 0.18;
 /// オーラや範囲表示のレイヤー（地面とキャラクターの間）
 pub const Z_AURA: f32 = 0.2;
 /// 障害物アイテム（木、岩など）のレイヤー

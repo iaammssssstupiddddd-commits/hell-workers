@@ -12,13 +12,7 @@ pub const COLOR_WORKING_TINT: Color = Color::srgba(0.8, 0.9, 1.0, 1.0);
 
 pub fn attach_resource_visual_system(
     mut commands: Commands,
-    q_resources: Query<
-        (Entity, &Sprite),
-        (
-            With<GatherHighlightMarker>,
-            Without<ResourceVisual>,
-        ),
-    >,
+    q_resources: Query<(Entity, &Sprite), (With<GatherHighlightMarker>, Without<ResourceVisual>)>,
 ) {
     for (entity, sprite) in q_resources.iter() {
         commands.entity(entity).try_insert(ResourceVisual {

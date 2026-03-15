@@ -54,26 +54,14 @@ pub struct TaskAssignmentReadAccess<'w, 's> {
             Option<&'static TaskWorkers>,
         ),
     >,
-    pub move_plant_tasks: Query<
-        'w,
-        's,
-        &'static hw_jobs::MovePlantTask,
-    >,
+    pub move_plant_tasks: Query<'w, 's, &'static hw_jobs::MovePlantTask>,
     pub transport_requests:
         Query<'w, 's, &'static hw_logistics::transport_request::TransportRequest>,
-    pub transport_demands:
-        Query<'w, 's, &'static hw_logistics::transport_request::TransportDemand>,
-    pub transport_request_fixed_sources: Query<
-        'w,
-        's,
-        &'static hw_logistics::transport_request::TransportRequestFixedSource,
-    >,
-    pub familiar_task_areas: Query<
-        'w,
-        's,
-        &'static hw_core::area::TaskArea,
-        With<hw_core::familiar::Familiar>,
-    >,
+    pub transport_demands: Query<'w, 's, &'static hw_logistics::transport_request::TransportDemand>,
+    pub transport_request_fixed_sources:
+        Query<'w, 's, &'static hw_logistics::transport_request::TransportRequestFixedSource>,
+    pub familiar_task_areas:
+        Query<'w, 's, &'static hw_core::area::TaskArea, With<hw_core::familiar::Familiar>>,
     pub free_resource_items: Query<
         'w,
         's,
@@ -96,11 +84,7 @@ pub struct TaskAssignmentReadAccess<'w, 's> {
         'w,
         's,
         (Entity, &'static Transform),
-        (
-            With<Wheelbarrow>,
-            With<ParkedAt>,
-            Without<PushedBy>,
-        ),
+        (With<Wheelbarrow>, With<ParkedAt>, Without<PushedBy>),
     >,
     pub wheelbarrow_leases:
         Query<'w, 's, &'static hw_logistics::transport_request::WheelbarrowLease>,
@@ -198,9 +182,7 @@ macro_rules! impl_task_reservation_access {
                 &mut self.reservation.reservation_writer
             }
 
-            fn resources(
-                &self,
-            ) -> &Query<'w, 's, &'static hw_logistics::types::ResourceItem> {
+            fn resources(&self) -> &Query<'w, 's, &'static hw_logistics::types::ResourceItem> {
                 &self.reservation.resources
             }
 

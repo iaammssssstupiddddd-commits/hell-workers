@@ -1,7 +1,6 @@
 use bevy::prelude::*;
 use hw_core::logistics::{ResourceType, WheelbarrowDestination};
 
-use crate::familiar_ai::decide::task_management::{AssignTaskContext, FamiliarTaskAssignmentQueries, ReservationShadow};
 use super::super::super::builders::{
     issue_haul_to_stockpile_with_source, issue_haul_with_wheelbarrow,
 };
@@ -10,6 +9,9 @@ use super::demand;
 use super::source_selector;
 use super::wheelbarrow;
 use crate::familiar_ai::decide::task_management::context::ConstructionSitePositions;
+use crate::familiar_ai::decide::task_management::{
+    AssignTaskContext, FamiliarTaskAssignmentQueries, ReservationShadow,
+};
 
 pub fn assign_haul_to_wall_construction(
     _task_pos: Vec2,

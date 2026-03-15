@@ -5,7 +5,6 @@ use super::queries::DesignationTargetQuery;
 use super::state::AreaEditHistory;
 use crate::entities::damned_soul::Destination;
 use crate::entities::familiar::{ActiveCommand, Familiar, FamiliarCommand};
-use hw_core::relationships::ManagedBy;
 use crate::systems::command::{TaskArea, TaskMode};
 use crate::systems::jobs::{Designation, Priority, TaskSlots, WorkType};
 use crate::systems::logistics::transport_request::{
@@ -15,6 +14,7 @@ use crate::systems::logistics::transport_request::{
 };
 use crate::systems::world::zones::Site;
 use bevy::prelude::*;
+use hw_core::relationships::ManagedBy;
 
 pub(super) fn apply_task_area_to_familiar(
     familiar_entity: Entity,

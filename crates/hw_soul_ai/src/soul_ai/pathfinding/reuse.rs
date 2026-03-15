@@ -1,8 +1,8 @@
 //! パス再利用・新規探索ヘルパー
 
-use hw_core::soul::Path;
-use hw_world::{find_path, find_path_to_adjacent, PathGoalPolicy, PathfindingContext, WorldMap};
 use bevy::prelude::*;
+use hw_core::soul::Path;
+use hw_world::{PathGoalPolicy, PathfindingContext, WorldMap, find_path, find_path_to_adjacent};
 
 use super::PathCooldown;
 
@@ -68,9 +68,8 @@ pub(super) fn try_reuse_existing_path(
             goal_grid,
             PathGoalPolicy::RespectGoalWalkability,
         )
-        .or_else(|| {
-            find_path_to_adjacent(world_map, pf_context, resume_grid, goal_grid, true)
-        }) {
+        .or_else(|| find_path_to_adjacent(world_map, pf_context, resume_grid, goal_grid, true))
+        {
             let mut partial_world_path: Vec<Vec2> = partial_grid_path
                 .iter()
                 .map(|&(x, y)| WorldMap::grid_to_world(x, y))

@@ -9,7 +9,9 @@ pub mod recruitment {
     };
 }
 pub mod scouting {
-    pub use hw_familiar_ai::familiar_ai::decide::scouting::{FamiliarScoutingContext, scouting_logic};
+    pub use hw_familiar_ai::familiar_ai::decide::scouting::{
+        FamiliarScoutingContext, scouting_logic,
+    };
 }
 pub mod squad {
     pub use hw_familiar_ai::familiar_ai::decide::squad::SquadManager;

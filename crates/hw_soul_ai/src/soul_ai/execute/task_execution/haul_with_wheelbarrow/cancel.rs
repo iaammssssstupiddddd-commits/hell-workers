@@ -1,6 +1,5 @@
 //! 手押し車タスクのキャンセル・予約解放
 
-use hw_logistics::transport_request::WheelbarrowDestination;
 use crate::soul_ai::execute::task_execution::{
     common::clear_task_and_path,
     context::TaskExecutionContext,
@@ -9,6 +8,7 @@ use crate::soul_ai::execute::task_execution::{
 };
 use bevy::prelude::*;
 use hw_core::constants::Z_ITEM_PICKUP;
+use hw_logistics::transport_request::WheelbarrowDestination;
 
 /// 手押し車タスクのキャンセル処理（全フェーズ共通）
 /// 積載済みアイテムを地面にドロップし、猫車を駐車に戻し、全予約を解放する。

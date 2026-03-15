@@ -1,10 +1,10 @@
 pub use hw_visual::task_area_visual::{TaskAreaMaterial, TaskAreaVisual};
 
-use bevy::prelude::*;
 use crate::app_contexts::TaskContext;
-use crate::interface::camera::MainCamera;
 use crate::interface::selection::{HoveredEntity, SelectedEntity};
 use crate::systems::command::{TaskArea, TaskMode};
+use bevy::prelude::*;
+use hw_ui::camera::MainCamera;
 
 pub fn update_task_area_material_system(
     time: Res<Time>,

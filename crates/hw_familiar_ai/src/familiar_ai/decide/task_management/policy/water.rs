@@ -1,10 +1,12 @@
 use bevy::prelude::*;
 use hw_core::logistics::ResourceType;
 
-use crate::familiar_ai::decide::task_management::{AssignTaskContext, FamiliarTaskAssignmentQueries, ReservationShadow};
 use super::super::builders::{issue_gather_water, issue_haul_water_to_mixer};
 use super::super::validator::{
     resolve_gather_water_inputs, resolve_haul_water_to_mixer_inputs, source_not_reserved,
+};
+use crate::familiar_ai::decide::task_management::{
+    AssignTaskContext, FamiliarTaskAssignmentQueries, ReservationShadow,
 };
 
 pub(super) fn assign_gather_water(

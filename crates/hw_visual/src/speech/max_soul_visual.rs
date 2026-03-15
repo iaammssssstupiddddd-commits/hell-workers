@@ -15,11 +15,7 @@ use crate::handles::SpeechHandles;
 pub fn max_soul_visual_system(
     mut ev_max_soul_changed: MessageReader<FamiliarOperationMaxSoulChangedEvent>,
     mut q_familiars: Query<
-        (
-            &Transform,
-            &FamiliarVoice,
-            Option<&mut SpeechHistory>,
-        ),
+        (&Transform, &FamiliarVoice, Option<&mut SpeechHistory>),
         With<Familiar>,
     >,
     speech_handles: Res<SpeechHandles>,
@@ -64,10 +60,12 @@ pub fn max_soul_visual_system(
         if let Some(mut history) = history_opt {
             history.record_speech(BubblePriority::Normal, current_time);
         } else {
-            commands.entity(event.familiar_entity).insert(SpeechHistory {
-                last_time: current_time,
-                last_priority: BubblePriority::Normal,
-            });
+            commands
+                .entity(event.familiar_entity)
+                .insert(SpeechHistory {
+                    last_time: current_time,
+                    last_priority: BubblePriority::Normal,
+                });
         }
     }
 }

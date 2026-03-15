@@ -1,15 +1,16 @@
 use bevy::prelude::*;
-use hw_jobs::{
-    AssignedTask, BuildData, BuildPhase, CoatWallData, CoatWallPhase, CollectBoneData,
-    CollectBonePhase, CollectSandData, CollectSandPhase, FrameWallPhase, FrameWallTileData,
-    GatherData, GatherPhase, MovePlantData, MovePlantPhase, PourFloorPhase, PourFloorTileData,
-    RefineData, RefinePhase, ReinforceFloorPhase, ReinforceFloorTileData,
-    BuildingType,
-};
 use hw_jobs::WorkType;
+use hw_jobs::{
+    AssignedTask, BuildData, BuildPhase, BuildingType, CoatWallData, CoatWallPhase,
+    CollectBoneData, CollectBonePhase, CollectSandData, CollectSandPhase, FrameWallPhase,
+    FrameWallTileData, GatherData, GatherPhase, MovePlantData, MovePlantPhase, PourFloorPhase,
+    PourFloorTileData, RefineData, RefinePhase, ReinforceFloorPhase, ReinforceFloorTileData,
+};
 
-use crate::familiar_ai::decide::task_management::{AssignTaskContext, FamiliarTaskAssignmentQueries, ReservationShadow};
 use super::{submit_assignment_with_reservation_ops, submit_assignment_with_source_entities};
+use crate::familiar_ai::decide::task_management::{
+    AssignTaskContext, FamiliarTaskAssignmentQueries, ReservationShadow,
+};
 
 pub fn issue_gather(
     work_type: WorkType,

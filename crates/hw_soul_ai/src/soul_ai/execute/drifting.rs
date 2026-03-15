@@ -12,7 +12,9 @@ use hw_jobs::AssignedTask;
 use hw_world::map::WorldMapRead;
 use rand::Rng;
 
-use crate::soul_ai::helpers::drifting::{drift_move_target, is_near_map_edge, random_wander_target};
+use crate::soul_ai::helpers::drifting::{
+    drift_move_target, is_near_map_edge, random_wander_target,
+};
 
 /// 漂流（Drifting）中の Soul 行動更新
 pub fn drifting_behavior_system(
@@ -114,10 +116,7 @@ pub fn drifting_behavior_system(
 /// マップ端到達時に漂流中 Soul をデスポーン
 pub fn despawn_at_edge_system(
     mut commands: Commands,
-    q_souls: Query<
-        (Entity, &Transform, &IdleState),
-        (With<DamnedSoul>, With<DriftingState>),
-    >,
+    q_souls: Query<(Entity, &Transform, &IdleState), (With<DamnedSoul>, With<DriftingState>)>,
 ) {
     for (entity, transform, idle) in q_souls.iter() {
         if idle.behavior != IdleBehavior::Drifting {

@@ -4,9 +4,8 @@ pub mod logistics;
 pub mod task;
 
 pub use construction::{
-    BlueprintVisualState, FloorConstructionPhaseMirror, FloorSiteVisualState,
-    FloorTileStateMirror, FloorTileVisualMirror, WallSiteVisualState, WallTileStateMirror,
-    WallTileVisualMirror,
+    BlueprintVisualState, FloorConstructionPhaseMirror, FloorSiteVisualState, FloorTileStateMirror,
+    FloorTileVisualMirror, WallSiteVisualState, WallTileStateMirror, WallTileVisualMirror,
 };
 pub use gather::{GatherHighlightMarker, RestAreaVisual};
 pub use logistics::{InventoryItemVisual, WheelbarrowMarker};

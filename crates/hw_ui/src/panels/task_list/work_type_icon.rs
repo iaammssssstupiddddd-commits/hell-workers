@@ -41,7 +41,10 @@ pub fn work_type_icon(
             (assets.icon_haul().clone(), theme.colors.water)
         }
         WorkType::CollectSand => (assets.icon_pick().clone(), theme.colors.gather_default),
-        WorkType::CollectBone => (assets.icon_bone_small().clone(), theme.colors.gather_default),
+        WorkType::CollectBone => (
+            assets.icon_bone_small().clone(),
+            theme.colors.gather_default,
+        ),
         WorkType::Refine => (assets.icon_hammer().clone(), theme.colors.build),
         WorkType::ReinforceFloorTile
         | WorkType::PourFloorTile

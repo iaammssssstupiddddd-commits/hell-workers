@@ -1,10 +1,9 @@
 use bevy::prelude::*;
 use hw_core::area::TaskArea;
-use hw_core::logistics::ResourceType;
 use hw_core::constants::WHEELBARROW_CAPACITY;
+use hw_core::logistics::ResourceType;
 use hw_logistics::transport_request::can_complete_pick_drop_to_blueprint;
 
-use crate::familiar_ai::decide::task_management::{AssignTaskContext, FamiliarTaskAssignmentQueries, ReservationShadow};
 use super::super::super::builders::{
     issue_collect_bone_with_wheelbarrow_to_blueprint,
     issue_collect_sand_with_wheelbarrow_to_blueprint, issue_haul_to_blueprint_with_source,
@@ -15,6 +14,9 @@ use super::direct_collect;
 use super::lease_validation;
 use super::source_selector;
 use super::wheelbarrow;
+use crate::familiar_ai::decide::task_management::{
+    AssignTaskContext, FamiliarTaskAssignmentQueries, ReservationShadow,
+};
 
 pub fn assign_haul_to_blueprint(
     task_pos: Vec2,

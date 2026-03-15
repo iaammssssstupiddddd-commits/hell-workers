@@ -10,8 +10,8 @@ pub mod task_assigner;
 pub mod task_finder;
 pub mod validator;
 
-use hw_core::logistics::ResourceType;
 use bevy::prelude::*;
+use hw_core::logistics::ResourceType;
 use std::collections::HashMap;
 
 pub use context::{
@@ -37,9 +37,7 @@ pub struct IncomingDeliverySnapshot {
 }
 
 impl IncomingDeliverySnapshot {
-    pub fn build<'w, 's>(
-        queries: &FamiliarTaskAssignmentQueries<'w, 's>,
-    ) -> Self {
+    pub fn build<'w, 's>(queries: &FamiliarTaskAssignmentQueries<'w, 's>) -> Self {
         let mut snapshot = Self {
             by_destination: HashMap::new(),
         };

@@ -46,7 +46,11 @@ pub fn on_building_completed(
         });
     }
 
-    world_map.register_completed_building_footprint(kind, building_entity, occupied_grids.iter().copied());
+    world_map.register_completed_building_footprint(
+        kind,
+        building_entity,
+        occupied_grids.iter().copied(),
+    );
 
     for &(gx, gy) in occupied_grids {
         for (mut soul_transform, soul_entity) in q_souls.iter_mut() {

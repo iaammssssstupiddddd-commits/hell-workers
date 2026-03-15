@@ -1,8 +1,10 @@
 use bevy::prelude::*;
 use hw_core::logistics::ResourceType;
 
-use crate::familiar_ai::decide::task_management::{FamiliarTaskAssignmentQueries, ReservationShadow};
 use super::reservation::source_not_reserved;
+use crate::familiar_ai::decide::task_management::{
+    FamiliarTaskAssignmentQueries, ReservationShadow,
+};
 
 fn bucket_belongs_to_tank(
     bucket_entity: Entity,

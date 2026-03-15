@@ -1,14 +1,14 @@
 //! 運搬タスクの実行処理（ストックパイルへ）
 
-use hw_jobs::BuildingType;
 use crate::soul_ai::execute::task_execution::common::*;
 use crate::soul_ai::execute::task_execution::transport_common::{cancel, reservation};
 use crate::soul_ai::execute::task_execution::{
     context::TaskExecutionContext,
     types::{AssignedTask, HaulData, HaulPhase},
 };
-use hw_world::WorldMap;
 use bevy::prelude::*;
+use hw_jobs::BuildingType;
+use hw_world::WorldMap;
 
 mod dropping;
 

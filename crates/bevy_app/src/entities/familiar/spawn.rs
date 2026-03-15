@@ -6,9 +6,9 @@ use rand::Rng;
 use crate::assets::GameAssets;
 use crate::entities::damned_soul::{Destination, Path};
 use crate::entities::spawn_args;
-use crate::entities::spawn_position;
 use crate::world::map::{WorldMap, WorldMapRead};
 use hw_core::constants::*;
+use hw_world::find_nearby_walkable_grid;
 
 use super::components::*;
 use hw_visual::speech::FamiliarVoice;
@@ -74,7 +74,7 @@ pub fn spawn_familiar_at(
     color_index: u32,
 ) {
     let spawn_grid = WorldMap::world_to_grid(pos);
-    let actual_grid = spawn_position::find_nearby_walkable_grid(spawn_grid, world_map, 3);
+    let actual_grid = find_nearby_walkable_grid(spawn_grid, world_map, 3);
     let actual_pos = WorldMap::grid_to_world(actual_grid.0, actual_grid.1);
 
     let familiar = Familiar::new(familiar_type, color_index);

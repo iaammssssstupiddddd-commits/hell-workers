@@ -24,10 +24,6 @@ use crate::app_contexts::{
     ZoneContext,
 };
 use crate::entities::familiar::{Familiar, FamiliarOperation};
-use hw_ui::components::*;
-use hw_ui::interaction::common::update_interaction_color;
-use hw_ui::interaction::dialog::close_operation_dialog;
-use hw_ui::theme::UiTheme;
 use crate::systems::command::TaskMode;
 use crate::systems::jobs::{Door, DoorState, apply_door_state};
 use crate::world::map::WorldMapWrite;
@@ -35,6 +31,10 @@ use bevy::prelude::*;
 use bevy::ui::RelativeCursorPosition;
 use hw_core::game_state::PlayMode;
 use hw_ui::UiIntent;
+use hw_ui::components::*;
+use hw_ui::interaction::common::update_interaction_color;
+use hw_ui::interaction::dialog::close_operation_dialog;
+use hw_ui::theme::UiTheme;
 use hw_world::DoorVisualHandles;
 
 pub fn update_ui_input_state_system(

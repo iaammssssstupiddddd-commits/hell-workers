@@ -12,8 +12,8 @@ use crate::systems::logistics::resource_count_display_system;
 use crate::systems::room::sync_room_overlay_tiles_system;
 use crate::systems::visual::task_area_visual::update_task_area_material_system;
 use hw_core::game_state::PlayMode;
-use hw_visual::soul::task_link_system;
 use hw_visual::HwVisualPlugin;
+use hw_visual::soul::task_link_system;
 
 use bevy::prelude::*;
 
@@ -41,9 +41,9 @@ impl Plugin for VisualPlugin {
                 .in_set(GameSystemSet::Visual)
                 .run_if(
                     |state: Res<State<hw_core::game_state::PlayMode>>| match state.get() {
-                        PlayMode::Normal
-                        | PlayMode::BuildingPlace
-                        | PlayMode::TaskDesignation => true,
+                        PlayMode::Normal | PlayMode::BuildingPlace | PlayMode::TaskDesignation => {
+                            true
+                        }
                         _ => false,
                     },
                 ),
@@ -83,10 +83,7 @@ impl Plugin for VisualPlugin {
 
         app.add_systems(
             Update,
-            (
-                familiar_animation_system,
-                update_familiar_range_indicator,
-            )
+            (familiar_animation_system, update_familiar_range_indicator)
                 .chain()
                 .in_set(GameSystemSet::Visual),
         );
@@ -98,4 +95,3 @@ impl Plugin for VisualPlugin {
         );
     }
 }
-

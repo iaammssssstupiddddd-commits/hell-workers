@@ -33,11 +33,15 @@ pub enum FloorTileStateMirror {
     #[default]
     WaitingBones,
     ReinforcingReady,
-    Reinforcing { progress: u8 },
+    Reinforcing {
+        progress: u8,
+    },
     ReinforcedComplete,
     WaitingMud,
     PouringReady,
-    Pouring { progress: u8 },
+    Pouring {
+        progress: u8,
+    },
     Complete,
 }
 
@@ -80,11 +84,15 @@ pub enum WallTileStateMirror {
     #[default]
     WaitingWood,
     FramingReady,
-    Framing { progress: u8 },
+    Framing {
+        progress: u8,
+    },
     FramedProvisional,
     WaitingMud,
     CoatingReady,
-    Coating { progress: u8 },
+    Coating {
+        progress: u8,
+    },
     Complete,
 }
 

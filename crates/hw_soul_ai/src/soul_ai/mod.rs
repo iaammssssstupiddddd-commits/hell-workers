@@ -38,8 +38,9 @@ impl Plugin for SoulAiCorePlugin {
                     execute::gathering_apply::gathering_apply_system,
                     execute::gathering_spawn::gathering_spawn_logic_system,
                     execute::task_assignment_apply::apply_task_assignment_requests_system,
-                    execute::drifting::drifting_behavior_system
-                        .after(execute::task_assignment_apply::apply_task_assignment_requests_system),
+                    execute::drifting::drifting_behavior_system.after(
+                        execute::task_assignment_apply::apply_task_assignment_requests_system,
+                    ),
                     execute::drifting::despawn_at_edge_system
                         .after(execute::drifting::drifting_behavior_system),
                 )

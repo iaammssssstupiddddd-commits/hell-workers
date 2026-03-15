@@ -6,13 +6,13 @@
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use hw_core::familiar::{Familiar, FamiliarCommand};
+use hw_core::relationships::CommandedBy;
 use hw_core::soul::{DamnedSoul, IdleState};
 use hw_jobs::ConstructionSiteAccess;
 use hw_logistics::tile_index::TileSiteIndex;
 use hw_spatial::{DesignationSpatialGrid, ResourceSpatialGrid, TransportRequestSpatialGrid};
 use hw_world::WorldMapRead;
 use hw_world::pathfinding::PathfindingContext;
-use hw_core::relationships::CommandedBy;
 use std::time::Instant;
 
 use crate::familiar_ai::decide::delegation_context::{
@@ -84,9 +84,7 @@ pub fn familiar_task_delegation_system(params: FamiliarAiTaskDelegationParams) {
     let mut reservation_shadow =
         crate::familiar_ai::decide::task_management::ReservationShadow::default();
     let incoming_snapshot =
-        crate::familiar_ai::decide::task_management::IncomingDeliverySnapshot::build(
-            &task_queries,
-        );
+        crate::familiar_ai::decide::task_management::IncomingDeliverySnapshot::build(&task_queries);
     let mut familiars_processed = 0u32;
 
     for (

@@ -10,7 +10,7 @@ use hw_core::constants::{
 };
 use hw_core::familiar::{ActiveCommand, FamiliarCommand};
 use hw_core::relationships::TaskWorkers;
-use hw_jobs::construction::{WallConstructionPhase, WallTileBlueprint, TargetWallConstructionSite};
+use hw_jobs::construction::{TargetWallConstructionSite, WallConstructionPhase, WallTileBlueprint};
 use hw_jobs::{Designation, Priority, TaskSlots, WallConstructionSite, WallTileState, WorkType};
 use hw_spatial::ResourceSpatialGrid;
 use hw_world::zones::Yard;

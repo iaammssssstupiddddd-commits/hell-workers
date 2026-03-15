@@ -21,8 +21,6 @@ use crate::systems::jobs::wall_construction::{
 };
 use crate::systems::logistics::item_lifetime::despawn_expired_items_system;
 use crate::systems::logistics::transport_request::TransportRequestPlugin;
-use hw_logistics::visual_sync::{on_wheelbarrow_added, sync_inventory_item_visual_system};
-use crate::systems::obstacle::obstacle_cleanup_system;
 use crate::systems::room::{
     RoomDetectionState, RoomTileLookup, RoomValidationState, detect_rooms_system,
     mark_room_dirty_from_building_changes_system, on_building_added, on_building_removed,
@@ -37,6 +35,8 @@ use hw_jobs::visual_sync::{
     sync_floor_site_visual_system, sync_floor_tile_visual_system, sync_soul_task_visual_system,
     sync_wall_site_visual_system, sync_wall_tile_visual_system,
 };
+use hw_logistics::visual_sync::{on_wheelbarrow_added, sync_inventory_item_visual_system};
+use hw_world::obstacle_cleanup_system;
 
 pub struct LogicPlugin;
 

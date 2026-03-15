@@ -8,13 +8,13 @@ mod picking_up_wheelbarrow;
 mod returning_wheelbarrow;
 mod unloading;
 
-use hw_logistics::Wheelbarrow;
 use crate::soul_ai::execute::task_execution::{
     context::TaskExecutionContext,
     types::{HaulWithWheelbarrowData, HaulWithWheelbarrowPhase},
 };
-use hw_world::WorldMap;
 use bevy::prelude::*;
+use hw_logistics::Wheelbarrow;
+use hw_world::WorldMap;
 
 pub fn handle_haul_with_wheelbarrow_task(
     ctx: &mut TaskExecutionContext,

@@ -17,10 +17,7 @@ pub fn on_drifting_escape_started(
 }
 
 /// `SoulEscaped` を受信して脱出カウンタを更新する
-pub fn on_soul_escaped(
-    trigger: On<SoulEscaped>,
-    mut population: ResMut<PopulationManager>,
-) {
+pub fn on_soul_escaped(trigger: On<SoulEscaped>, mut population: ResMut<PopulationManager>) {
     population.total_escaped += 1;
     info!(
         "SOUL_DRIFT: {:?} despawned at edge {:?} (total_escaped={})",

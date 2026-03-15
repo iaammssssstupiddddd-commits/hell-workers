@@ -22,12 +22,7 @@ pub fn entity_list_section_toggle_system(
         match *interaction {
             Interaction::Pressed => {
                 *color = BackgroundColor(theme.colors.section_toggle_pressed);
-                toggle_list_section(
-                    &mut commands,
-                    toggle.0,
-                    &q_folded,
-                    &unassigned_folded_query,
-                );
+                toggle_list_section(&mut commands, toggle.0, &q_folded, &unassigned_folded_query);
             }
             Interaction::Hovered => {
                 *color = BackgroundColor(theme.colors.button_hover);

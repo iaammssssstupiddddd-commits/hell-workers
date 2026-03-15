@@ -1,4 +1,5 @@
 use crate::handles::WallVisualHandles;
+use crate::layer::VisualLayerKind;
 use bevy::prelude::*;
 use hw_core::visual_mirror::construction::BlueprintVisualState;
 use hw_jobs::{Building, BuildingType};
@@ -13,12 +14,18 @@ pub fn wall_connections_system(
         (Entity, &Transform, &Building),
         Or<(Added<Building>, Changed<Building>)>,
     >,
-    q_new_blueprints: Query<(Entity, &Transform, &BlueprintVisualState), Added<BlueprintVisualState>>,
+    q_new_blueprints: Query<
+        (Entity, &Transform, &BlueprintVisualState),
+        Added<BlueprintVisualState>,
+    >,
     q_walls_check: Query<
         (Option<&Building>, Option<&BlueprintVisualState>),
         Or<(With<Building>, With<BlueprintVisualState>)>,
     >,
-    mut q_sprites: Query<&mut Sprite>,
+    q_children: Query<&Children>,
+    mut q_visual_layers: Query<(&VisualLayerKind, &mut Sprite)>,
+    // Blueprint エンティティは Sprite を直接持つ（子構造ではない）
+    mut q_blueprint_sprites: Query<&mut Sprite, Without<VisualLayerKind>>,
 ) {
     let mut update_targets = HashSet::new();
 
@@ -55,16 +62,41 @@ pub fn wall_connections_system(
                 if !is_plain_wall {
                     continue;
                 }
-                if let Ok(mut sprite) = q_sprites.get_mut(entity) {
-                    update_wall_sprite(
-                        entity,
-                        gx,
-                        gy,
-                        &mut sprite,
-                        world_map.as_ref(),
-                        &q_walls_check,
-                        &wall_handles,
-                    );
+
+                // 完成した Building は Sprite を VisualLayerKind::Struct 子エンティティに持つ
+                let mut updated = false;
+                if let Ok(children) = q_children.get(entity) {
+                    for child in children.iter() {
+                        if let Ok((kind, mut sprite)) = q_visual_layers.get_mut(child) {
+                            if *kind == VisualLayerKind::Struct {
+                                update_wall_sprite(
+                                    entity,
+                                    gx,
+                                    gy,
+                                    &mut sprite,
+                                    world_map.as_ref(),
+                                    &q_walls_check,
+                                    &wall_handles,
+                                );
+                                updated = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+                // Blueprint エンティティは Sprite を直接持つ
+                if !updated {
+                    if let Ok(mut sprite) = q_blueprint_sprites.get_mut(entity) {
+                        update_wall_sprite(
+                            entity,
+                            gx,
+                            gy,
+                            &mut sprite,
+                            world_map.as_ref(),
+                            &q_walls_check,
+                            &wall_handles,
+                        );
+                    }
                 }
             }
         }

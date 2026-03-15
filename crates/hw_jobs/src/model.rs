@@ -2,11 +2,11 @@ use std::collections::HashMap;
 
 use bevy::prelude::*;
 
+use hw_core::constants::DOOR_CLOSE_DELAY_SECS;
 pub use hw_core::jobs::WorkType;
 use hw_core::logistics::ResourceType;
 pub use hw_core::relationships::ManagedBy as IssuedBy;
 pub use hw_core::world::DoorState;
-use hw_core::constants::DOOR_CLOSE_DELAY_SECS;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Reflect, Default)]
 pub enum BuildingType {

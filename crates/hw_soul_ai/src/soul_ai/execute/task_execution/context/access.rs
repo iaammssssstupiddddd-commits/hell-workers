@@ -86,10 +86,8 @@ pub struct FamiliarStorageAccess<'w, 's> {
         ),
     >,
     pub target_mixers: Query<'w, 's, &'static hw_jobs::mud_mixer::TargetMixer>,
-    pub floor_tiles:
-        Query<'w, 's, &'static hw_jobs::construction::FloorTileBlueprint>,
-    pub wall_tiles:
-        Query<'w, 's, &'static hw_jobs::construction::WallTileBlueprint>,
+    pub floor_tiles: Query<'w, 's, &'static hw_jobs::construction::FloorTileBlueprint>,
+    pub wall_tiles: Query<'w, 's, &'static hw_jobs::construction::WallTileBlueprint>,
     pub buildings: Query<
         'w,
         's,
@@ -149,8 +147,7 @@ pub struct StorageAccess<'w, 's> {
             Option<&'static TaskWorkers>,
         ),
     >,
-    pub floor_tiles:
-        Query<'w, 's, &'static hw_jobs::construction::FloorTileBlueprint>,
+    pub floor_tiles: Query<'w, 's, &'static hw_jobs::construction::FloorTileBlueprint>,
     pub wall_sites: Query<
         'w,
         's,
@@ -160,8 +157,7 @@ pub struct StorageAccess<'w, 's> {
             Option<&'static TaskWorkers>,
         ),
     >,
-    pub wall_tiles:
-        Query<'w, 's, &'static hw_jobs::construction::WallTileBlueprint>,
+    pub wall_tiles: Query<'w, 's, &'static hw_jobs::construction::WallTileBlueprint>,
     pub buildings: Query<
         'w,
         's,
@@ -217,8 +213,7 @@ pub struct MutStorageAccess<'w, 's> {
             Option<&'static TaskWorkers>,
         ),
     >,
-    pub floor_tiles:
-        Query<'w, 's, &'static mut hw_jobs::construction::FloorTileBlueprint>,
+    pub floor_tiles: Query<'w, 's, &'static mut hw_jobs::construction::FloorTileBlueprint>,
     pub wall_sites: Query<
         'w,
         's,
@@ -228,8 +223,7 @@ pub struct MutStorageAccess<'w, 's> {
             Option<&'static TaskWorkers>,
         ),
     >,
-    pub wall_tiles:
-        Query<'w, 's, &'static mut hw_jobs::construction::WallTileBlueprint>,
+    pub wall_tiles: Query<'w, 's, &'static mut hw_jobs::construction::WallTileBlueprint>,
     pub buildings: Query<
         'w,
         's,

@@ -20,13 +20,13 @@ use std::os::unix::net::UnixStream;
 use std::path::PathBuf;
 
 use game_state::PlayMode;
+use hw_core::system_sets::GameSystemSet;
 
 use crate::entities::damned_soul::DamnedSoulPlugin;
 use crate::plugins::{
-    InputPlugin, InterfacePlugin, LogicPlugin, MessagesPlugin, SpatialPlugin, StartupPlugin,
-    VisualPlugin,
+    input::InputPlugin, interface::InterfacePlugin, logic::LogicPlugin, messages::MessagesPlugin,
+    spatial::SpatialPlugin, startup::StartupPlugin, visual::VisualPlugin,
 };
-use crate::systems::GameSystemSet;
 
 /// ゲーム内のデバッグ情報の表示状態（独自実装用）
 #[derive(Resource, Default)]

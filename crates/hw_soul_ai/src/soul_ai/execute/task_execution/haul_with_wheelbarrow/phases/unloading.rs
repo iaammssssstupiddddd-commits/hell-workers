@@ -1,6 +1,14 @@
 //! 荷下ろしフェーズ
 
 use super::super::cancel;
+use crate::soul_ai::execute::task_execution::{
+    common::clear_task_and_path,
+    context::TaskExecutionContext,
+    transport_common::{reservation, wheelbarrow as wheelbarrow_common},
+    types::HaulWithWheelbarrowData,
+};
+use bevy::prelude::*;
+use hw_core::constants::Z_ITEM_PICKUP;
 use hw_core::relationships::{LoadedIn, StoredIn};
 use hw_logistics::ResourceType;
 use hw_logistics::transport_request::{
@@ -10,14 +18,6 @@ use hw_logistics::{
     count_nearby_ground_resources as count_nearby_ground_items, floor_site_tile_demand,
     provisional_wall_mud_demand, wall_site_tile_demand,
 };
-use crate::soul_ai::execute::task_execution::{
-    common::clear_task_and_path,
-    context::TaskExecutionContext,
-    transport_common::{reservation, wheelbarrow as wheelbarrow_common},
-    types::HaulWithWheelbarrowData,
-};
-use bevy::prelude::*;
-use hw_core::constants::Z_ITEM_PICKUP;
 use std::collections::{HashMap, HashSet};
 
 fn has_pending_wheelbarrow_task(ctx: &TaskExecutionContext) -> bool {
@@ -349,9 +349,7 @@ pub fn handle(
             } else if let Ok((wall_transform, building, _)) =
                 ctx.queries.storage.buildings.get(dest_stockpile)
             {
-                if building.kind == hw_jobs::BuildingType::Wall
-                    && building.is_provisional
-                {
+                if building.kind == hw_jobs::BuildingType::Wall && building.is_provisional {
                     let site_pos = wall_transform.translation.truncate();
                     for (index, (item_entity, res_type_opt)) in item_types.iter().enumerate() {
                         let Some(resource_type) = res_type_opt else {
@@ -442,9 +440,7 @@ pub fn handle(
                                 | Some(hw_logistics::ResourceType::StasisMud)
                         ) {
                             item_commands.try_insert(
-                                hw_logistics::item_lifetime::ItemDespawnTimer::new(
-                                    5.0,
-                                ),
+                                hw_logistics::item_lifetime::ItemDespawnTimer::new(5.0),
                             );
                         }
                     }

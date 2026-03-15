@@ -3,10 +3,10 @@ use hw_core::logistics::ResourceType;
 use hw_spatial::{ResourceSpatialGrid, SpatialGridOps};
 use std::sync::atomic::{AtomicU32, Ordering};
 
+use crate::familiar_ai::decide::task_management::validator::source_not_reserved;
 use crate::familiar_ai::decide::task_management::{
     CachedSourceItem, FamiliarTaskAssignmentQueries, ReservationShadow, SourceSelectorFrameCache,
 };
-use crate::familiar_ai::decide::task_management::validator::source_not_reserved;
 
 type TaskQueries<'w, 's> = FamiliarTaskAssignmentQueries<'w, 's>;
 

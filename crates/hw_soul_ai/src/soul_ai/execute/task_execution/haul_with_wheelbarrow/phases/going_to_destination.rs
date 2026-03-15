@@ -1,7 +1,6 @@
 //! 目的地へ移動するフェーズ
 
 use super::super::cancel;
-use hw_logistics::transport_request::WheelbarrowDestination;
 use crate::soul_ai::execute::task_execution::{
     common::{
         is_near_blueprint, is_near_target, is_near_target_or_dest, update_destination_to_adjacent,
@@ -10,8 +9,9 @@ use crate::soul_ai::execute::task_execution::{
     context::TaskExecutionContext,
     types::{AssignedTask, HaulWithWheelbarrowData, HaulWithWheelbarrowPhase},
 };
-use hw_world::WorldMap;
 use bevy::prelude::*;
+use hw_logistics::transport_request::WheelbarrowDestination;
+use hw_world::WorldMap;
 
 pub fn handle(
     ctx: &mut TaskExecutionContext,
@@ -66,9 +66,7 @@ pub fn handle(
             } else if let Ok((wall_transform, building, _)) =
                 ctx.queries.storage.buildings.get(stockpile_entity)
             {
-                if building.kind == hw_jobs::BuildingType::Wall
-                    && building.is_provisional
-                {
+                if building.kind == hw_jobs::BuildingType::Wall && building.is_provisional {
                     let site_pos = wall_transform.translation.truncate();
                     let reachable = update_destination_to_adjacent(
                         ctx.dest,

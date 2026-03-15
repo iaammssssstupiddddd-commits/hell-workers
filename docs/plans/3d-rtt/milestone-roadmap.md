@@ -65,7 +65,7 @@
   4. 建築物ルートの `Sprite` を直接更新している既存システム（例: `hw_visual::wall_connection`, `hw_visual::tank`）を VisualLayer 子エンティティ参照へ追従させる
 - **完了条件**: 既存の見た目が変わらない、建築物ルートから `Sprite` を外しても既存 visual system が破綻しない、`cargo check` 通過
 - **3D化への価値**: Phase 2で `VisualLayer` 子エンティティに `RenderLayers::layer(1)` を追加するだけで3D側へ移行できる
-- **ステータス**: [ ] 未着手
+- **ステータス**: [x] 完了（2026-03-15）
 
 ---
 

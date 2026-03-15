@@ -30,7 +30,10 @@ pub struct StatusIcon;
 pub fn progress_bar_system(
     mut commands: Commands,
     q_soul_bars: Query<(Entity, &ChildOf), With<SoulProgressBar>>,
-    mut q_souls: Query<(Entity, &SoulTaskVisualState, &Transform, &mut SoulUiLinks), With<DamnedSoul>>,
+    mut q_souls: Query<
+        (Entity, &SoulTaskVisualState, &Transform, &mut SoulUiLinks),
+        With<DamnedSoul>,
+    >,
 ) {
     for (soul_entity, task_vs, transform, mut ui_links) in q_souls.iter_mut() {
         let needs_bar = task_vs.progress.is_some();

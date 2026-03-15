@@ -1,12 +1,12 @@
 //! 入力関連のプラグイン
 
-use bevy::camera_controller::pan_camera::{PanCamera, PanCameraPlugin};
-use crate::interface::camera::MainCamera;
 use crate::interface::selection::handle_mouse_input;
 use crate::interface::ui::UiInputState;
 use crate::systems::GameSystemSet;
+use bevy::camera_controller::pan_camera::{PanCamera, PanCameraPlugin};
 use bevy::prelude::*;
 use hw_core::game_state::PlayMode;
+use hw_ui::camera::MainCamera;
 
 pub struct InputPlugin;
 

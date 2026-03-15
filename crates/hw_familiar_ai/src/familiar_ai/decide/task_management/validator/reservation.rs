@@ -1,6 +1,8 @@
 use bevy::prelude::*;
 
-use crate::familiar_ai::decide::task_management::{FamiliarTaskAssignmentQueries, ReservationShadow};
+use crate::familiar_ai::decide::task_management::{
+    FamiliarTaskAssignmentQueries, ReservationShadow,
+};
 
 pub fn can_reserve_source(
     task_entity: Entity,

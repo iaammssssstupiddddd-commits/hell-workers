@@ -228,6 +228,12 @@ pub fn is_reachable(
     pf_context: &mut hw_world::pathfinding::PathfindingContext,
 ) -> bool {
     let target_grid = hw_world::WorldMap::world_to_grid(target_pos);
-    hw_world::pathfinding::find_path_to_adjacent(world_map, pf_context, start_grid, target_grid, true)
-        .is_some()
+    hw_world::pathfinding::find_path_to_adjacent(
+        world_map,
+        pf_context,
+        start_grid,
+        target_grid,
+        true,
+    )
+    .is_some()
 }

@@ -4,8 +4,8 @@
 //! root adapter が Query から `StockpileCandidateView` / `ExistingHaulRequestView` を
 //! 組み立ててからここに渡す。
 
-use bevy::prelude::Entity;
 use bevy::math::Vec2;
+use bevy::prelude::Entity;
 
 use crate::types::ResourceType;
 

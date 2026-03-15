@@ -301,8 +301,7 @@ pub fn spawn_soul_list_item(
     theme: &UiTheme,
 ) -> Entity {
     let (gender_handle, gender_color) = get_gender_icon_and_color(soul_vm.gender, assets, theme);
-    let (task_handle, task_color) =
-        get_task_icon_and_color(soul_vm.task_visual, assets, theme);
+    let (task_handle, task_color) = get_task_icon_and_color(soul_vm.task_visual, assets, theme);
     let stress_color = get_stress_color(soul_vm.stress_bucket, theme);
     let dream_color = get_dream_color(soul_vm.dream_empty, theme);
 

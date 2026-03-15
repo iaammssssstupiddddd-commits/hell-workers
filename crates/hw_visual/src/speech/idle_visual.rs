@@ -60,10 +60,12 @@ pub fn familiar_idle_visual_apply_system(
         if let Some(history) = history_opt.as_mut() {
             history.record_speech(BubblePriority::Normal, current_time);
         } else {
-            commands.entity(request.familiar_entity).insert(SpeechHistory {
-                last_time: current_time,
-                last_priority: BubblePriority::Normal,
-            });
+            commands
+                .entity(request.familiar_entity)
+                .insert(SpeechHistory {
+                    last_time: current_time,
+                    last_priority: BubblePriority::Normal,
+                });
         }
     }
 }

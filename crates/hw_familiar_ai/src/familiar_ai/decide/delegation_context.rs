@@ -4,7 +4,7 @@
 //! hw_familiar_ai から直接参照できる。
 
 use bevy::prelude::*;
-use hw_core::familiar::{FamiliarAiState, FamiliarOperation, Familiar};
+use hw_core::familiar::{Familiar, FamiliarAiState, FamiliarOperation};
 use hw_core::relationships::ManagedTasks;
 use hw_core::soul::{Destination, IdleBehavior, Path};
 use hw_jobs::AssignedTask;
@@ -17,15 +17,17 @@ use std::collections::HashMap;
 
 use super::query_types::FamiliarSoulQuery;
 use super::resources::ReachabilityCacheKey;
-use super::task_management::{FamiliarTaskAssignmentQueries, IncomingDeliverySnapshot, ReservationShadow};
 use super::task_management::TaskManager;
+use super::task_management::{
+    FamiliarTaskAssignmentQueries, IncomingDeliverySnapshot, ReservationShadow,
+};
 use super::{state_handlers, supervising};
 
-pub use super::recruitment::{FamiliarRecruitmentContext, RecruitmentOutcome, process_recruitment};
 pub use super::helpers::{
     FamiliarSquadContext, SquadManagementOutcome, finalize_state_transitions,
     process_squad_management,
 };
+pub use super::recruitment::{FamiliarRecruitmentContext, RecruitmentOutcome, process_recruitment};
 
 /// タスク委譲と移動制御に必要なコンテキスト
 pub struct FamiliarDelegationContext<'a, 'w, 's> {

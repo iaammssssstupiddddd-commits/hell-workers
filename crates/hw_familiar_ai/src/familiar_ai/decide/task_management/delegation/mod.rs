@@ -10,13 +10,13 @@ use hw_world::WorldMap;
 use hw_world::pathfinding::PathfindingContext;
 use std::collections::HashMap;
 
+use crate::familiar_ai::decide::task_management::context::ConstructionSitePositions;
 use crate::familiar_ai::decide::task_management::{
     FamiliarSoulQuery, FamiliarTaskAssignmentQueries, IncomingDeliverySnapshot, ReservationShadow,
 };
-use crate::familiar_ai::decide::task_management::context::ConstructionSitePositions;
 
-pub use assignment_loop::{ReachabilityCacheKey, take_reachable_with_cache_calls};
 use assignment_loop::try_assign_for_workers;
+pub use assignment_loop::{ReachabilityCacheKey, take_reachable_with_cache_calls};
 use members::collect_idle_members;
 
 pub struct TaskManager;

@@ -3,11 +3,13 @@ use hw_core::logistics::ResourceType;
 use hw_jobs::WorkType;
 use hw_logistics::transport_request::TransportRequestKind;
 
-use crate::familiar_ai::decide::task_management::{AssignTaskContext, FamiliarTaskAssignmentQueries, ReservationShadow};
 use super::super::builders::{
     issue_build, issue_collect_bone, issue_collect_sand, issue_gather, issue_move, issue_refine,
 };
 use super::super::validator::can_reserve_source;
+use crate::familiar_ai::decide::task_management::{
+    AssignTaskContext, FamiliarTaskAssignmentQueries, ReservationShadow,
+};
 
 pub(super) fn assign_gather(
     work_type: WorkType,
@@ -77,10 +79,7 @@ pub(super) fn assign_collect_sand(
     true
 }
 
-fn has_collect_sand_demand(
-    fam_entity: Entity,
-    queries: &FamiliarTaskAssignmentQueries,
-) -> bool {
+fn has_collect_sand_demand(fam_entity: Entity, queries: &FamiliarTaskAssignmentQueries) -> bool {
     queries.designation.designations.iter().any(
         |(entity, transform, designation, managed_by_opt, _, workers_opt, _, _)| {
             let task_pos = transform.translation.truncate();

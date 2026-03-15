@@ -10,7 +10,9 @@ use hw_core::constants::{
 };
 use hw_core::familiar::{ActiveCommand, FamiliarCommand};
 use hw_core::relationships::TaskWorkers;
-use hw_jobs::construction::{FloorConstructionPhase, FloorTileBlueprint, TargetFloorConstructionSite};
+use hw_jobs::construction::{
+    FloorConstructionPhase, FloorTileBlueprint, TargetFloorConstructionSite,
+};
 use hw_jobs::{FloorConstructionSite, FloorTileState};
 use hw_spatial::{FloorConstructionSpatialGrid, ResourceSpatialGrid};
 use hw_world::zones::AreaBounds;

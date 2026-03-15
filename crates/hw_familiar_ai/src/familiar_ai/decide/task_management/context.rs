@@ -13,12 +13,12 @@ use hw_core::relationships::{
     IncomingDeliveries, LoadedIn, LoadedItems, ManagedBy, ParkedAt, PushedBy, StoredIn,
     StoredItems, TaskWorkers,
 };
-use hw_jobs::{
-    Blueprint, BonePile, Building, Designation, Priority, ProvisionalWall, SandPile, TargetBlueprint,
-    TaskSlots, Tree,
-};
 use hw_jobs::construction::{FloorTileBlueprint, WallTileBlueprint};
 use hw_jobs::mud_mixer::{MudMixerStorage, TargetMixer};
+use hw_jobs::{
+    Blueprint, BonePile, Building, Designation, Priority, ProvisionalWall, SandPile,
+    TargetBlueprint, TaskSlots, Tree,
+};
 use hw_logistics::SharedResourceCache;
 use hw_logistics::transport_request::{
     ManualHaulPinnedSource, TransportDemand, TransportRequest, TransportRequestFixedSource,
@@ -125,14 +125,7 @@ pub struct FamiliarStorageAccess<'w, 's> {
 pub struct TaskAssignmentReadAccess<'w, 's> {
     pub world_map: WorldMapRead<'w>,
     pub yards: Query<'w, 's, &'static hw_world::Yard>,
-    pub items: Query<
-        'w,
-        's,
-        (
-            &'static ResourceItem,
-            Option<&'static Designation>,
-        ),
-    >,
+    pub items: Query<'w, 's, (&'static ResourceItem, Option<&'static Designation>)>,
     pub sand_piles: Query<
         'w,
         's,
@@ -155,24 +148,13 @@ pub struct TaskAssignmentReadAccess<'w, 's> {
         ),
         With<BonePile>,
     >,
-    pub task_state: Query<
-        'w,
-        's,
-        (
-            Option<&'static Designation>,
-            Option<&'static TaskWorkers>,
-        ),
-    >,
+    pub task_state: Query<'w, 's, (Option<&'static Designation>, Option<&'static TaskWorkers>)>,
     pub move_plant_tasks: Query<'w, 's, &'static hw_jobs::MovePlantTask>,
     pub transport_requests: Query<'w, 's, &'static TransportRequest>,
     pub transport_demands: Query<'w, 's, &'static TransportDemand>,
     pub transport_request_fixed_sources: Query<'w, 's, &'static TransportRequestFixedSource>,
-    pub familiar_task_areas: Query<
-        'w,
-        's,
-        &'static hw_core::area::TaskArea,
-        With<hw_core::familiar::Familiar>,
-    >,
+    pub familiar_task_areas:
+        Query<'w, 's, &'static hw_core::area::TaskArea, With<hw_core::familiar::Familiar>>,
     pub free_resource_items: Query<
         'w,
         's,
@@ -195,21 +177,13 @@ pub struct TaskAssignmentReadAccess<'w, 's> {
         'w,
         's,
         (Entity, &'static Transform),
-        (
-            With<Wheelbarrow>,
-            With<ParkedAt>,
-            Without<PushedBy>,
-        ),
+        (With<Wheelbarrow>, With<ParkedAt>, Without<PushedBy>),
     >,
     pub wheelbarrow_leases: Query<'w, 's, &'static WheelbarrowLease>,
     pub stored_items_query: Query<
         'w,
         's,
-        (
-            Entity,
-            &'static ResourceItem,
-            &'static StoredIn,
-        ),
+        (Entity, &'static ResourceItem, &'static StoredIn),
         (
             Without<Designation>,
             Without<TaskWorkers>,

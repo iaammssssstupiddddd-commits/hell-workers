@@ -1,13 +1,13 @@
 use crate::app_contexts::{
     BuildContext, CompanionParentKind, CompanionPlacementKind, CompanionPlacementState,
 };
-use crate::interface::camera::MainCamera;
 use crate::systems::jobs::{Blueprint, Building, BuildingType};
 use crate::systems::world::zones::{Site, Yard};
 use crate::world::map::{RIVER_Y_MIN, WorldMap, WorldMapRead, WorldMapRef};
 use bevy::prelude::*;
 use hw_core::constants::TILE_SIZE;
 use hw_core::game_state::PlayMode;
+use hw_ui::camera::MainCamera;
 use hw_ui::selection::{
     BuildingPlacementContext, TANK_NEARBY_BUCKET_STORAGE_TILES, bucket_storage_geometry,
     building_geometry, building_occupied_grids, building_size, building_spawn_pos,

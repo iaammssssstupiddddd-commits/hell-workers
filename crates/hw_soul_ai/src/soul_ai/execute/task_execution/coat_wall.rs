@@ -1,16 +1,16 @@
 //! Wall tile coating task execution
 
-use hw_core::relationships::WorkingOn;
-use hw_jobs::BuildingType;
-use hw_jobs::WallTileState;
 use crate::soul_ai::execute::task_execution::{
     common::*,
     context::TaskExecutionContext,
     types::{AssignedTask, CoatWallData, CoatWallPhase},
 };
-use hw_world::WorldMap;
 use bevy::prelude::*;
 use hw_core::constants::{FATIGUE_GAIN_ON_COMPLETION, WALL_COAT_DURATION_SECS, WALL_MUD_PER_TILE};
+use hw_core::relationships::WorkingOn;
+use hw_jobs::BuildingType;
+use hw_jobs::WallTileState;
+use hw_world::WorldMap;
 
 fn cancel_coat_wall_task(
     ctx: &mut TaskExecutionContext,

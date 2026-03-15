@@ -1,6 +1,6 @@
-use hw_ui::components::MenuAction;
 use bevy::prelude::MessageWriter;
 use hw_ui::UiIntent;
+use hw_ui::components::MenuAction;
 
 pub(super) fn handle_pressed_action(action: MenuAction, ui_intents: &mut MessageWriter<UiIntent>) {
     match action {

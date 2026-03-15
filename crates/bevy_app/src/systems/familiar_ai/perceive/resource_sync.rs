@@ -4,7 +4,6 @@
 //! AssignedTask / Designation / TransportRequest / relationship の実ワールド再構築を担うため、
 //! hw_familiar_ai 側には置けない。
 
-use hw_core::relationships::TaskWorkers;
 use crate::systems::jobs::{Designation, WorkType};
 use crate::systems::logistics::ResourceType;
 use crate::systems::logistics::transport_request::{TransportRequest, TransportRequestKind};
@@ -13,6 +12,7 @@ use crate::systems::soul_ai::execute::task_execution::transport_common::lifecycl
 use bevy::prelude::*;
 use hw_core::constants::RESERVATION_SYNC_INTERVAL;
 use hw_core::events::ResourceReservationOp;
+use hw_core::relationships::TaskWorkers;
 use std::collections::HashMap;
 
 pub use hw_logistics::SharedResourceCache;

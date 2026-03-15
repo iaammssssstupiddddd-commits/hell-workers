@@ -1,6 +1,5 @@
 use bevy::prelude::*;
-pub use hw_core::game_state::TimeSpeed;
-pub use hw_core::GameTime;
+use hw_core::GameTime;
 use hw_ui::components::ClockText;
 
 pub fn game_time_system(

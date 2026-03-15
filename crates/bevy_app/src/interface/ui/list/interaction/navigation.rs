@@ -1,13 +1,14 @@
 use crate::app_contexts::TaskContext;
+use crate::systems::command::TaskMode;
+use bevy::input::mouse::{MouseScrollUnit, MouseWheel};
+use bevy::prelude::*;
+use bevy::ui::RelativeCursorPosition;
+use hw_ui::camera::MainCamera;
 use hw_ui::components::{
     EntityListScrollHint, FamiliarListItem, SoulListItem, UiScrollArea, UnassignedFolded,
     UnassignedSectionArrowIcon, UnassignedSoulContent, UnassignedSoulSection,
 };
 use hw_ui::theme::UiTheme;
-use crate::systems::command::TaskMode;
-use bevy::input::mouse::{MouseScrollUnit, MouseWheel};
-use bevy::prelude::*;
-use bevy::ui::RelativeCursorPosition;
 
 pub fn entity_list_scroll_system(
     mut mouse_wheel_events: MessageReader<MouseWheel>,
@@ -44,7 +45,7 @@ pub fn entity_list_tab_focus_system(
     mut selected_entity: ResMut<crate::interface::selection::SelectedEntity>,
     q_soul_items: Query<&SoulListItem>,
     q_familiar_items: Query<&FamiliarListItem>,
-    mut q_camera: Query<&mut Transform, With<crate::interface::camera::MainCamera>>,
+    mut q_camera: Query<&mut Transform, With<MainCamera>>,
     q_transforms: Query<&GlobalTransform>,
 ) {
     if !keyboard.just_pressed(KeyCode::Tab) {

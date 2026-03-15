@@ -2,7 +2,6 @@ use bevy::prelude::*;
 use hw_core::logistics::{ResourceType, WheelbarrowDestination};
 use hw_jobs::BuildingType;
 
-use crate::familiar_ai::decide::task_management::{AssignTaskContext, FamiliarTaskAssignmentQueries, ReservationShadow};
 use super::super::super::builders::{
     issue_haul_to_stockpile_with_source, issue_haul_with_wheelbarrow,
 };
@@ -10,6 +9,9 @@ use super::super::super::validator::resolve_haul_to_provisional_wall_inputs;
 use super::demand;
 use super::source_selector;
 use super::wheelbarrow;
+use crate::familiar_ai::decide::task_management::{
+    AssignTaskContext, FamiliarTaskAssignmentQueries, ReservationShadow,
+};
 
 pub fn assign_haul_to_provisional_wall(
     _task_pos: Vec2,

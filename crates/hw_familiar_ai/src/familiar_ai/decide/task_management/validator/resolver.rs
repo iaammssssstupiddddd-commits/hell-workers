@@ -4,8 +4,10 @@ use hw_core::logistics::ResourceType;
 use hw_logistics::transport_request::TransportRequestKind;
 use hw_logistics::water::tank_can_accept_new_bucket;
 
-use crate::familiar_ai::decide::task_management::{FamiliarTaskAssignmentQueries, ReservationShadow};
 use super::finder::{find_nearest_bucket_for_tank, find_nearest_water_bucket_for_tank};
+use crate::familiar_ai::decide::task_management::{
+    FamiliarTaskAssignmentQueries, ReservationShadow,
+};
 
 pub fn resolve_consolidation_inputs(
     task_entity: Entity,
@@ -118,9 +120,7 @@ pub fn resolve_haul_to_stockpile_inputs(
     Some((stockpile, resource_type, item_owner, fixed_source))
 }
 
-fn stored_items_opt_to_count(
-    opt: Option<&hw_core::relationships::StoredItems>,
-) -> usize {
+fn stored_items_opt_to_count(opt: Option<&hw_core::relationships::StoredItems>) -> usize {
     opt.map(|s| s.len()).unwrap_or(0)
 }
 

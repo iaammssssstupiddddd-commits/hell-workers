@@ -12,7 +12,9 @@ use hw_core::logistics::{ResourceType, WheelbarrowDestination};
 use hw_jobs::events::TaskAssignmentRequest;
 use hw_jobs::{AssignedTask, WorkType};
 
-use crate::familiar_ai::decide::task_management::{AssignTaskContext, FamiliarTaskAssignmentQueries, ReservationShadow};
+use crate::familiar_ai::decide::task_management::{
+    AssignTaskContext, FamiliarTaskAssignmentQueries, ReservationShadow,
+};
 
 pub fn submit_assignment(
     ctx: &AssignTaskContext<'_>,

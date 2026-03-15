@@ -2,9 +2,9 @@ pub mod placement;
 pub mod removal;
 pub mod removal_preview;
 
-use crate::interface::camera::MainCamera;
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
+use hw_ui::camera::MainCamera;
 
 fn world_cursor_pos(
     q_window: &Query<&Window, With<PrimaryWindow>>,

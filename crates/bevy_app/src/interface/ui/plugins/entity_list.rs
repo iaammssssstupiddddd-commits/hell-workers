@@ -1,3 +1,4 @@
+use crate::interface::ui::interaction::handle_ui_intent;
 use crate::interface::ui::list::change_detection::detect_entity_list_changes;
 use crate::interface::ui::list::dirty::EntityListDirty;
 use crate::interface::ui::{
@@ -10,7 +11,6 @@ use crate::interface::ui::{
     entity_list_visual_feedback_system, sync_entity_list_from_view_model_system,
     sync_entity_list_value_rows_system, update_unassigned_arrow_icon_system,
 };
-use crate::interface::ui::interaction::handle_ui_intent;
 use crate::systems::GameSystemSet;
 use crate::systems::command::task_area_edit_cursor_system;
 use bevy::prelude::*;

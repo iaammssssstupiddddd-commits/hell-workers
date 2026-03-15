@@ -10,12 +10,12 @@ use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicU32, Ordering as AtomicOrdering};
 
+use crate::familiar_ai::decide::task_management::context::ConstructionSitePositions;
 use crate::familiar_ai::decide::task_management::{
     AssignTaskContext, DelegationCandidate, FamiliarSoulQuery, FamiliarTaskAssignmentQueries,
     IncomingDeliverySnapshot, ReservationShadow, ScoredDelegationCandidate, assign_task_to_worker,
     collect_scored_candidates,
 };
-use crate::familiar_ai::decide::task_management::context::ConstructionSitePositions;
 
 pub type ReachabilityCacheKey = ((i32, i32), (i32, i32));
 

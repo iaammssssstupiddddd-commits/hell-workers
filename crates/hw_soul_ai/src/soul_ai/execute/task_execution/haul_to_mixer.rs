@@ -2,9 +2,9 @@ use super::common::*;
 use super::context::TaskExecutionContext;
 use super::transport_common::{cancel, reservation};
 use super::types::{AssignedTask, HaulToMixerPhase};
+use bevy::prelude::*;
 use hw_logistics::ResourceType;
 use hw_world::WorldMap;
-use bevy::prelude::*;
 
 pub fn handle_haul_to_mixer_task(
     ctx: &mut TaskExecutionContext,

@@ -12,15 +12,24 @@ use std::collections::HashSet;
 
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
-use hw_core::events::{FamiliarAiStateChangedEvent, FamiliarIdleVisualRequest, FamiliarStateRequest, ReleaseReason, SquadManagementOperation, SquadManagementRequest};
+use hw_core::events::{
+    FamiliarAiStateChangedEvent, FamiliarIdleVisualRequest, FamiliarStateRequest, ReleaseReason,
+    SquadManagementOperation, SquadManagementRequest,
+};
 use hw_core::familiar::{FamiliarAiState, FamiliarCommand};
 use hw_core::relationships::CommandedBy;
 use hw_core::soul::{RestAreaCooldown, StressBreakdown};
 use hw_spatial::SpatialGrid;
 
-use super::{FamiliarDecideOutput, query_types::{FamiliarSoulQuery, FamiliarStateQuery}};
+use super::{
+    FamiliarDecideOutput,
+    query_types::{FamiliarSoulQuery, FamiliarStateQuery},
+};
 use crate::familiar_ai::decide::{
-    helpers::{FamiliarSquadContext, SquadManagementOutcome, finalize_state_transitions, process_squad_management},
+    helpers::{
+        FamiliarSquadContext, SquadManagementOutcome, finalize_state_transitions,
+        process_squad_management,
+    },
     recruitment::{FamiliarRecruitmentContext, RecruitmentOutcome, process_recruitment},
     scouting::FamiliarScoutingContext,
     state_handlers,
@@ -223,12 +232,10 @@ fn emit_state_decision_messages(
             });
     }
     if result.state_changed {
-        decide_output
-            .state_requests
-            .write(FamiliarStateRequest {
-                familiar_entity: fam_entity,
-                new_state: next_state.clone(),
-            });
+        decide_output.state_requests.write(FamiliarStateRequest {
+            familiar_entity: fam_entity,
+            new_state: next_state.clone(),
+        });
         decide_output
             .state_changed_events
             .write(FamiliarAiStateChangedEvent {
@@ -316,7 +323,8 @@ pub fn familiar_ai_state_system(params: FamiliarAiStateDecisionParams) {
                         &hw_core::soul::DamnedSoul,
                         &AssignedTask,
                         Option<&CommandedBy>,
-                    ), Without<hw_core::familiar::Familiar>>();
+                    ), Without<hw_core::familiar::Familiar>>(
+                    );
                     let q = q_lens.query();
                     let mut ctx = FamiliarScoutingContext {
                         fam_entity,
@@ -351,7 +359,8 @@ pub fn familiar_ai_state_system(params: FamiliarAiStateDecisionParams) {
                         &AssignedTask,
                         &hw_core::soul::IdleState,
                         Option<&CommandedBy>,
-                    ), Without<hw_core::familiar::Familiar>>();
+                    ), Without<hw_core::familiar::Familiar>>(
+                    );
                     let q = q_lens.query();
                     let mut ctx = FamiliarRecruitmentContext {
                         fam_entity,
@@ -386,14 +395,13 @@ pub fn familiar_ai_state_system(params: FamiliarAiStateDecisionParams) {
 
             FamiliarDecisionPath::IdleSquadFull => {
                 // 分隊十分: Idle 停止ロジック
-                let transition =
-                    state_handlers::idle::handle_idle_state(
-                        active_command,
-                        &next_state,
-                        fam_transform.translation.truncate(),
-                        &mut fam_dest,
-                        &mut fam_path,
-                    );
+                let transition = state_handlers::idle::handle_idle_state(
+                    active_command,
+                    &next_state,
+                    fam_transform.translation.truncate(),
+                    &mut fam_dest,
+                    &mut fam_path,
+                );
                 let applied = transition.apply_to(&mut next_state);
                 FamiliarStateDecisionResult::from_idle_squad_full(applied)
             }
@@ -406,10 +414,13 @@ pub fn familiar_ai_state_system(params: FamiliarAiStateDecisionParams) {
                     mut squad_entities,
                     released_entities,
                 } = {
-                    let mut q_lens = q_souls.transmute_lens_filtered::<
-                        (Entity, &hw_core::soul::DamnedSoul, &hw_core::soul::IdleState, Option<&CommandedBy>),
-                        Without<hw_core::familiar::Familiar>,
-                    >();
+                    let mut q_lens = q_souls.transmute_lens_filtered::<(
+                        Entity,
+                        &hw_core::soul::DamnedSoul,
+                        &hw_core::soul::IdleState,
+                        Option<&CommandedBy>,
+                    ), Without<hw_core::familiar::Familiar>>(
+                    );
                     let q = q_lens.query();
                     let mut ctx = FamiliarSquadContext {
                         fam_entity,
@@ -429,7 +440,8 @@ pub fn familiar_ai_state_system(params: FamiliarAiStateDecisionParams) {
                         &hw_core::soul::DamnedSoul,
                         &AssignedTask,
                         Option<&CommandedBy>,
-                    ), Without<hw_core::familiar::Familiar>>();
+                    ), Without<hw_core::familiar::Familiar>>(
+                    );
                     let q = q_lens.query();
                     let mut ctx = FamiliarScoutingContext {
                         fam_entity,
@@ -448,8 +460,12 @@ pub fn familiar_ai_state_system(params: FamiliarAiStateDecisionParams) {
                 };
                 let recruited = transition_result.recruited_entity;
                 let scout_changed = transition_result.transition.apply_to(&mut next_state);
-                let finalized =
-                    finalize_state_transitions(&mut next_state, &squad_entities, fam_entity, max_workers);
+                let finalized = finalize_state_transitions(
+                    &mut next_state,
+                    &squad_entities,
+                    fam_entity,
+                    max_workers,
+                );
                 FamiliarStateDecisionResult::from_non_idle(
                     released_entities,
                     recruited,
@@ -465,10 +481,13 @@ pub fn familiar_ai_state_system(params: FamiliarAiStateDecisionParams) {
                     mut squad_entities,
                     released_entities,
                 } = {
-                    let mut q_lens = q_souls.transmute_lens_filtered::<
-                        (Entity, &hw_core::soul::DamnedSoul, &hw_core::soul::IdleState, Option<&CommandedBy>),
-                        Without<hw_core::familiar::Familiar>,
-                    >();
+                    let mut q_lens = q_souls.transmute_lens_filtered::<(
+                        Entity,
+                        &hw_core::soul::DamnedSoul,
+                        &hw_core::soul::IdleState,
+                        Option<&CommandedBy>,
+                    ), Without<hw_core::familiar::Familiar>>(
+                    );
                     let q = q_lens.query();
                     let mut ctx = FamiliarSquadContext {
                         fam_entity,
@@ -487,7 +506,8 @@ pub fn familiar_ai_state_system(params: FamiliarAiStateDecisionParams) {
                         &AssignedTask,
                         &hw_core::soul::IdleState,
                         Option<&CommandedBy>,
-                    ), Without<hw_core::familiar::Familiar>>();
+                    ), Without<hw_core::familiar::Familiar>>(
+                    );
                     let q = q_lens.query();
                     let mut ctx = FamiliarRecruitmentContext {
                         fam_entity,
@@ -514,8 +534,12 @@ pub fn familiar_ai_state_system(params: FamiliarAiStateDecisionParams) {
                     RecruitmentOutcome::ScoutingStarted => (None, true),
                     RecruitmentOutcome::NoRecruit => (None, false),
                 };
-                let finalized =
-                    finalize_state_transitions(&mut next_state, &squad_entities, fam_entity, max_workers);
+                let finalized = finalize_state_transitions(
+                    &mut next_state,
+                    &squad_entities,
+                    fam_entity,
+                    max_workers,
+                );
                 FamiliarStateDecisionResult::from_non_idle(
                     released_entities,
                     recruited,

@@ -3,11 +3,11 @@
 mod fallback;
 mod reuse;
 
-use hw_core::soul::{DamnedSoul, Destination, IdleBehavior, IdleState, Path};
-use hw_core::relationships::RestAreaReservedFor;
-use hw_world::{WorldMap, WorldMapRead, PathfindingContext};
 use bevy::prelude::*;
 use hw_core::constants::MAX_PATHFINDS_PER_FRAME;
+use hw_core::relationships::RestAreaReservedFor;
+use hw_core::soul::{DamnedSoul, Destination, IdleBehavior, IdleState, Path};
+use hw_world::{PathfindingContext, WorldMap, WorldMapRead};
 
 use crate::soul_ai::execute::task_execution::AssignedTask;
 
