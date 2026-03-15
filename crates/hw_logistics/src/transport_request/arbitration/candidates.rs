@@ -193,7 +193,11 @@ pub fn build_request_eval_context(
     };
 
     let hard_min = if req.resource_type.requires_wheelbarrow()
-        && req.kind == TransportRequestKind::DeliverToBlueprint
+        && matches!(
+            req.kind,
+            TransportRequestKind::DeliverToBlueprint
+                | TransportRequestKind::DeliverToMixerSolid
+        )
     {
         1
     } else {

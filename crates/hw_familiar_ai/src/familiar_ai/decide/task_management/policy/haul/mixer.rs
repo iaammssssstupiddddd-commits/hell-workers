@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 use hw_core::logistics::ResourceType;
+use hw_logistics::transport_request::can_complete_pick_drop_to_point;
 
 use super::super::super::builders::issue_haul_to_mixer;
 use super::super::super::validator::resolve_haul_to_mixer_inputs;
@@ -95,6 +96,15 @@ fn assign_single_item_haul_to_mixer(
         );
         return false;
     };
+
+    // 猫車必須リソース（Sand など）は pick-drop 完結距離外なら待機してリースを待つ
+    if item_type.requires_wheelbarrow() && !can_complete_pick_drop_to_point(source_pos, task_pos) {
+        debug!(
+            "ASSIGN: HaulToMixer request {:?} {:?} requires wheelbarrow but no lease available; waiting",
+            ctx.task_entity, item_type
+        );
+        return false;
+    }
 
     if !mixer_can_accept_item(mixer_entity, item_type, false, queries, shadow) {
         debug!(
