@@ -74,7 +74,7 @@ Source 側のみ手動操作し、Target 側は Bevy が自動更新する（tas
 | `DeliverWaterToMixer` | `BucketTransport` (source=Tank) | `mud_mixer_auto_haul_system` | Mixer | 割り当て時に tank + bucket を遅延解決 |
 | `GatherWaterToTank` | `BucketTransport` (source=River) | `tank_water_request_system` | Tank | 割り当て時に bucket を遅延解決 |
 | `ReturnBucket` | `Haul` | `bucket_auto_haul_system` | Tank | 割り当て時に dropped bucket と返却先 BucketStorage を同時遅延解決 |
-| `BatchWheelbarrow` | `WheelbarrowHaul` | `wheelbarrow_auto_haul_system` | Wheelbarrow | 現状の主運搬経路では未使用（将来拡張用） |
+| `BatchWheelbarrow` | `WheelbarrowHaul` | `wheelbarrow_auto_haul_system` | Wheelbarrow | producer による生成停止済み。ファミリア AI も処理しないため実質無効。enum 値のみ残存 |
 | `ConsolidateStockpile` | `Haul` | `stockpile_consolidation_producer_system` | Stockpile（レシーバーセル） | 割り当て時にドナーセルの `StoredIn` アイテムを遅延解決 |
 
 ## 4. 自動運搬の仕様
@@ -132,6 +132,7 @@ Source 側のみ手動操作し、Target 側は Bevy が自動更新する（tas
 - `Sand` / `Rock` の不足量を `SharedResourceCache` を含めて判定。
 - request は Mixer 位置に生成し、ソースは割り当て時に探索。
 - `Rock` 不足については 4.2.1 の自動Gather需要にも反映され、必要に応じて `Mine` 指定が追加発行される。
+- `Sand` を猫車直採取（`collect_source`）で搬入する場合、`Loading` フェーズでアイテムをその場生成するため搬入先への `DeliveringTo` は挿入されない（Mixer 宛の予約は `ReserveMixerDestination` op で別途管理）。
 
 ### 4.4 MudMixer 水搬入 (`DeliverWaterToMixer`)
 - 水不足時に request を発行。

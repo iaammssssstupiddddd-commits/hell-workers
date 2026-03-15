@@ -490,12 +490,12 @@ pub fn handle(
 
     if has_pending_wheelbarrow_task(ctx) {
         info!(
-            "WB_HAUL: Soul {:?} kept wheelbarrow {:?} for next assignment",
+            "WB_HAUL: Soul {:?} parked wheelbarrow {:?} at delivery site; pending tasks may reuse it",
             ctx.soul_entity, data.wheelbarrow
         );
     } else {
         info!(
-            "WB_HAUL: Soul {:?} parked wheelbarrow {:?} and waits low-priority return",
+            "WB_HAUL: Soul {:?} parked wheelbarrow {:?}; awaiting low-priority return task",
             ctx.soul_entity, data.wheelbarrow
         );
     }

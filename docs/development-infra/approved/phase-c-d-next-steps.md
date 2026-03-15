@@ -129,14 +129,16 @@ nvidia-smi
 # Docker の場合（NVIDIA Container Toolkit 導入済み前提）
 docker pull camenduru/tostui-trellis2
 
-# 実行例（GPU 渡し・ポート・ボリューム）。TostUI の Web UI はポート 3000。
-docker run --gpus all -it -p 3000:3000 \
+# 実行例（GPU 渡し・ポート・ボリューム）。TostUI は 3000、MinIO（出力 GLB）は 9000。
+# -p 9000:9000 を付けないとローカルから http://localhost:9000/tost/output/xxx.glb でアクセスできない。
+docker run --gpus all -it -p 3000:3000 -p 9000:9000 \
   -v $(pwd)/outputs:/output \
   -e PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True" \
   camenduru/tostui-trellis2
 ```
 
-- ローカルから UI にアクセスするには、SSH で `-L 3000:localhost:3000` を付けるか、`~/.ssh/config` に `LocalForward 3000 localhost:3000` を追加する。
+- ローカルから UI にアクセスするには、SSH で `-L 3000:localhost:3000 -L 9000:localhost:9000` を付けるか、`~/.ssh/config` に両方の LocalForward を追加する。
+- **出力 GLB の場所**: TostUI は MinIO（ポート 9000）に保存する。コンテナを **-p 9000:9000** で起動していれば、SSH で 9000 をフォワードした状態でブラウザから `http://localhost:9000/tost/output/xxx.glb` で開ける。ポート公開していない場合は、コンテナ内で `mc cp local/tost/output/xxx.glb /output/` でマウント先にコピーしてから scp する。
 - Podman の場合は `--gpus all` の代わりに `--device nvidia.com/gpu=all` など、環境に合わせて [NVIDIA Container Toolkit 相当](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/) の設定を行う。
 - ボリュームは必要に応じて `:z`（共有）または `:Z`（専用）を付与（[Phase B](implementation-checklist.md#phase-b-podman--selinux)）。
 - **バッチ再開**: 出力 GLB が既にある場合はスキップするロジックをパイプラインに組み込む（[実装チェックリスト Phase D2](implementation-checklist.md#phase-d-trellis-2-推論パイプライン)）。
@@ -183,3 +185,7 @@ L4 はまだ使わず、**trellis-dev（e2-medium）** のまま:
 3. VM 内で **NVIDIA ドライバ** を入れ、**TRELLIS 2** のコンテナまたは環境を用意して推論まで検証（Step 3〜4）。
 
 L4 の作成でクォータエラーが出る場合は、GCP コンソールの「IAM と管理」→「クォータ」で「NVIDIA L4 GPU」の割り当てを確認してください。
+
+---
+
+**日常運用（VM は作業時のみ起動）**: セットアップ済みの場合は [trellis-l4-daily-runbook.md](./trellis-l4-daily-runbook.md) に「起動 → SSH → コンテナ起動 → 生成 → 出力取得 → 停止」の手順をまとめています。

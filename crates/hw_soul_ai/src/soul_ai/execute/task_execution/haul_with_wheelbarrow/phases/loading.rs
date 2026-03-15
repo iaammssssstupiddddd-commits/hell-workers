@@ -31,15 +31,7 @@ pub fn handle(
                 )
             }
             Some(hw_logistics::ResourceType::Bone) => {
-                // 川タイルなどは Designation がない場合もあるが、とりあえずチェックなしで進めるか
-                // あるいは find_collect_bone_source で Designation がないことを確認しているはず
-                // ここではソースエンティティの存在チェックぐらいはすべきか？
-                // しかし TileEntity は常に存在するはず
-                // Bone の場合、sand_collect::clear_collect_sand_designation は呼ばなくて良い？
-                // Sand の場合は `task_state` (Designation) を削除している。
-                // Bone (River) の場合、Designation は付いていないはず (find_collect_bone_source で除外)。
-                // したがって、Designation の削除も不要。
-
+                // Bone (河川タイル) は Designation を持たないため source の存在チェックは不要。
                 sand_collect::spawn_loaded_bone_items(
                     commands,
                     data.wheelbarrow,
@@ -57,15 +49,16 @@ pub fn handle(
             return;
         }
 
-        sand_collect::clear_collect_sand_designation(commands, source_entity);
+        sand_collect::clear_collect_source_designation(commands, source_entity);
         reservation::release_source(ctx, source_entity, 1);
 
         let loaded_count = collected_items.len();
-        for &item in &collected_items {
-            if let Ok(mut item_commands) = commands.get_entity(item) {
-                item_commands.try_insert(hw_core::relationships::DeliveringTo(
-                    data.destination.stockpile_or_blueprint().unwrap(),
-                ));
+        if let Some(dest_entity) = data.destination.stockpile_or_blueprint() {
+            for &item in &collected_items {
+                if let Ok(mut item_commands) = commands.get_entity(item) {
+                    item_commands
+                        .try_insert(hw_core::relationships::DeliveringTo(dest_entity));
+                }
             }
         }
         let mut next_data = data;
@@ -77,7 +70,7 @@ pub fn handle(
         *ctx.task = AssignedTask::HaulWithWheelbarrow(next_data);
 
         info!(
-            "WB_HAUL: Soul {:?} collected {} sand directly into wheelbarrow",
+            "WB_HAUL: Soul {:?} collected {} items into wheelbarrow",
             ctx.soul_entity, loaded_count
         );
         return;

@@ -2,8 +2,9 @@ use bevy::prelude::*;
 use hw_core::constants::Z_ITEM_PICKUP;
 use hw_logistics::{ResourceItem, ResourceType};
 
-/// 砂採取指定を消費済みに戻す。
-pub fn clear_collect_sand_designation(commands: &mut Commands, source_entity: Entity) {
+/// 採取ソースの Designation コンポーネントを削除する。
+/// Sand ソースは Designation を持つが、Bone（河川タイル）など持たないソースにも安全に呼べる。
+pub fn clear_collect_source_designation(commands: &mut Commands, source_entity: Entity) {
     if let Ok(mut source_commands) = commands.get_entity(source_entity) {
         source_commands.try_remove::<hw_jobs::Designation>();
         source_commands.try_remove::<hw_jobs::TaskSlots>();
