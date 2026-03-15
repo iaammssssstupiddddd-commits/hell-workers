@@ -106,7 +106,7 @@ Source 側のみ手動操作し、Target 側は Bevy が自動更新する（tas
 - request は Blueprint 位置に生成し、ソースは割り当て時に探索。
 - Familiar 割り当て時には `delivered + IncomingDeliveries + ReservationShadow` を差し引いた残需要を再計算し、需要 0 の request は stale 扱いで割り当てない。
 - Soul / wheelbarrow の搬入直前にも Blueprint の残需要を再確認し、充足済みなら Blueprint への消費を行わずタスクを中断する。
-- `Sand` 搬入は、`CollectSand` の別タスクを経由せず **同一 Soul の `HaulWithWheelbarrow` 1タスク内で完結**する。
+- `Sand` 搬入は `collect_source` パスを使用し、**同一 Soul の `HaulWithWheelbarrow` 1タスク内で完結**する（`CollectSand` 別タスクは経由しない）。MudMixer への Sand 搬入も同じ設計。
   - ソース探索順: `SandPile` 優先、見つからない場合は `TerrainType::Sand` タイル。
   - 範囲: まず TaskArea 内を探索し、見つからなければ全体探索にフォールバック。
   - 積込: `Loading` フェーズで砂アイテムをその場生成し、1回で `min(不足量, WHEELBARROW_CAPACITY)` を猫車に積載。
@@ -132,7 +132,13 @@ Source 側のみ手動操作し、Target 側は Bevy が自動更新する（tas
 - `Sand` / `Rock` の不足量を `SharedResourceCache` を含めて判定。
 - request は Mixer 位置に生成し、ソースは割り当て時に探索。
 - `Rock` 不足については 4.2.1 の自動Gather需要にも反映され、必要に応じて `Mine` 指定が追加発行される。
-- `Sand` を猫車直採取（`collect_source`）で搬入する場合、`Loading` フェーズでアイテムをその場生成するため搬入先への `DeliveringTo` は挿入されない（Mixer 宛の予約は `ReserveMixerDestination` op で別途管理）。
+- `Sand` 搬入は **Blueprint Sand と同じ `collect_source` パスで完結**する（旧 `CollectSand` 指示経路は廃止）。
+  - Familiar AI の `try_direct_collect_with_wheelbarrow_to_mixer` が空きミキサー容量・砂源・猫車を確認してタスク発行。
+  - ソース探索順: `SandPile` 優先、見つからない場合は `TerrainType::Sand` タイル。
+  - 積込: `Loading` フェーズで砂アイテムを砂源位置に直接生成し、`min(不足量, WHEELBARROW_CAPACITY)` 分を猫車に一括積載。
+  - ソース（砂置き場/砂タイル）は消費しない（無限ソース）。
+  - `Loading` フェーズで生成するため搬入先への `DeliveringTo` は挿入されない（Mixer 宛の予約は `ReserveMixerDestination` op で別途管理）。
+  - 需要計算: `needed = MUD_MIXER_CAPACITY - current - inflight`。`inflight` には `DeliverToMixerSolid+Sand` に割り当て済みの worker 数を使用し、過剰タスク発行を防止する。
 
 ### 4.4 MudMixer 水搬入 (`DeliverWaterToMixer`)
 - 水不足時に request を発行。
