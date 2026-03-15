@@ -65,7 +65,7 @@
 - `TaskListDirty` は `state_dirty` / `list_dirty` / `summary_dirty` の 3 つの責務に分かれます。
 - `state_dirty` は snapshot と summary の再計算要求、`list_dirty` は左パネル本文の再描画要求、`summary_dirty` は画面上部 summary の更新要求です。
 - `TaskListState.snapshot` は最新観測済みデータを保持し、未描画の `pending` snapshot は持ちません。
-- 左パネルを `TaskList` に切り替えたフレームは `list_dirty` のみを立てて既存 snapshot を再描画し、task data が変わったときだけ `state_dirty` を使って再集計します。
+- 左パネルを `TaskList` に切り替えたフレームは `mark_all()` で `state_dirty` / `list_dirty` を両方立て、最新スナップショットで再描画します（タスクデータが変わっていない場合も含む）。
 - 画面上部の task summary は `TaskListState.summary_total` / `summary_high` を参照し、タスクリストと同じ dirty source を共有します。
 
 ## 実装アーキテクチャ

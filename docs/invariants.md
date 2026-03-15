@@ -112,6 +112,21 @@ UI システムはシミュレーション状態（Soul のバイタル、タス
 `Input → Spatial → Logic → Actor → Visual → Interface` の順序は固定。
 Visual / Interface フェーズから Logic フェーズのリソースに書き込んではならない。
 
+### I-U3: RemovedComponents は毎フレーム全リーダーを消費すること
+`RemovedComponents<T>` は Bevy の `EventReader` で実装されており、イベントは**2フレーム**で期限切れになる。
+複数の `RemovedComponents` リーダーを `||` 短絡評価で並べると、
+最初の条件が成立した時点で残りのリーダーが消費されず、イベントが期限切れで消失する。
+
+```rust
+// NG: 短絡評価で後続リーダーが消費されないことがある
+let changed = removed_a.read().next().is_some() || removed_b.read().next().is_some();
+
+// OK: |= で全リーダーを必ず消費する
+let mut changed = false;
+changed |= removed_a.read().next().is_some();
+changed |= removed_b.read().next().is_some();
+```
+
 ---
 
 ## 6. ECS アーキテクチャの不変条件

@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use hw_core::constants::Z_ITEM_PICKUP;
 use hw_core::events::{OnTaskAbandoned, ResourceReservationRequest};
-use hw_core::relationships::{DeliveringTo, LoadedIn, ParkedAt, PushedBy, StoredIn, TaskWorkers};
+use hw_core::relationships::{DeliveringTo, LoadedIn, ParkedAt, PushedBy, StoredIn};
 use hw_core::soul::{DamnedSoul, IdleBehavior, IdleState};
 use hw_core::visual::WheelbarrowMovement;
 use hw_jobs::{AssignedTask, Priority, TargetBlueprint};
@@ -127,7 +127,8 @@ pub fn cleanup_task_assignment<'w, 's, Q: TaskReservationAccess<'w, 's>>(
 
                 commands.entity(item_entity).remove::<TargetBlueprint>();
                 commands.entity(item_entity).remove::<Priority>();
-                commands.entity(item_entity).remove::<TaskWorkers>();
+                // TaskWorkers は RelationshipTarget のため手動で remove してはいけない。
+                // WorkingOn を外すと Bevy の関係システムが自動的に管理する。
                 commands.entity(item_entity).remove::<StoredIn>();
                 commands.entity(item_entity).remove::<DeliveringTo>();
             }

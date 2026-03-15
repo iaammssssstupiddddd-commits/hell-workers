@@ -37,7 +37,8 @@ pub fn detect_task_list_changed_components(
     if task_data_changed {
         dirty.mark_all();
     } else if mode.is_changed() && *mode == LeftPanelMode::TaskList {
-        dirty.mark_list();
+        // パネル表示切替時はスナップショットも再構築する
+        dirty.mark_all();
     }
 }
 
@@ -54,16 +55,20 @@ pub fn detect_task_list_removed_components(
     mut removed_sand_piles: RemovedComponents<SandPile>,
     mut removed_bone_piles: RemovedComponents<BonePile>,
 ) {
-    let removed_any = removed_designations.read().next().is_some()
-        || removed_priority.read().next().is_some()
-        || removed_task_workers.read().next().is_some()
-        || removed_blueprints.read().next().is_some()
-        || removed_transport_requests.read().next().is_some()
-        || removed_resource_items.read().next().is_some()
-        || removed_trees.read().next().is_some()
-        || removed_rocks.read().next().is_some()
-        || removed_sand_piles.read().next().is_some()
-        || removed_bone_piles.read().next().is_some();
+    // 全リーダーを毎フレーム必ず消費する（|| 短絡評価を避ける）。
+    // Bevy のイベントは 2 フレームで期限切れになるため、
+    // 短絡評価で消費されないと変更が永久に見落とされる可能性がある。
+    let mut removed_any = false;
+    removed_any |= removed_designations.read().next().is_some();
+    removed_any |= removed_priority.read().next().is_some();
+    removed_any |= removed_task_workers.read().next().is_some();
+    removed_any |= removed_blueprints.read().next().is_some();
+    removed_any |= removed_transport_requests.read().next().is_some();
+    removed_any |= removed_resource_items.read().next().is_some();
+    removed_any |= removed_trees.read().next().is_some();
+    removed_any |= removed_rocks.read().next().is_some();
+    removed_any |= removed_sand_piles.read().next().is_some();
+    removed_any |= removed_bone_piles.read().next().is_some();
 
     if removed_any {
         dirty.mark_all();

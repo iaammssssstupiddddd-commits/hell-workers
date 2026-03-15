@@ -129,13 +129,14 @@ nvidia-smi
 # Docker の場合（NVIDIA Container Toolkit 導入済み前提）
 docker pull camenduru/tostui-trellis2
 
-# 実行例（GPU 渡し・ポート・ボリューム）
-docker run --gpus all -it -p 8501:8501 \
+# 実行例（GPU 渡し・ポート・ボリューム）。TostUI の Web UI はポート 3000。
+docker run --gpus all -it -p 3000:3000 \
   -v $(pwd)/outputs:/output \
   -e PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True" \
   camenduru/tostui-trellis2
 ```
 
+- ローカルから UI にアクセスするには、SSH で `-L 3000:localhost:3000` を付けるか、`~/.ssh/config` に `LocalForward 3000 localhost:3000` を追加する。
 - Podman の場合は `--gpus all` の代わりに `--device nvidia.com/gpu=all` など、環境に合わせて [NVIDIA Container Toolkit 相当](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/) の設定を行う。
 - ボリュームは必要に応じて `:z`（共有）または `:Z`（専用）を付与（[Phase B](implementation-checklist.md#phase-b-podman--selinux)）。
 - **バッチ再開**: 出力 GLB が既にある場合はスキップするロジックをパイプラインに組み込む（[実装チェックリスト Phase D2](implementation-checklist.md#phase-d-trellis-2-推論パイプライン)）。
