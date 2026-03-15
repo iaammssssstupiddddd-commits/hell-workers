@@ -1,8 +1,0 @@
-[package]
-name = "hw_ai"
-version = "0.1.0"
-edition = "2024"
-
-[dependencies]
-hw_familiar_ai = { path = "../hw_familiar_ai" }
-hw_soul_ai     = { path = "../hw_soul_ai" }

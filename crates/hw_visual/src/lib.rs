@@ -31,7 +31,6 @@ pub use handles::{
     PlantTreeHandles, SpeechHandles, WallVisualHandles, WorkIconHandles,
 };
 
-pub use hw_core::visual::SoulTaskHandles;
 pub use task_area_visual::{TaskAreaMaterial, TaskAreaVisual};
 
 use bevy::prelude::*;

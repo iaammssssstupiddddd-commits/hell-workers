@@ -21,7 +21,6 @@ crates/hw_logistics
 crates/hw_jobs
 crates/hw_familiar_ai
 crates/hw_soul_ai
-crates/hw_ai          (互換 facade: hw_familiar_ai + hw_soul_ai を re-export)
 crates/hw_spatial
 crates/hw_ui
 crates/hw_visual
@@ -37,7 +36,6 @@ hw_core
   ├─ hw_spatial
   ├─ hw_familiar_ai
   ├─ hw_soul_ai
-  ├─ hw_ai           (hw_familiar_ai + hw_soul_ai)
   ├─ hw_visual
   └─ bevy_app
 
@@ -54,14 +52,9 @@ hw_spatial (hw_core + hw_world + hw_logistics + hw_jobs)
   └─ bevy_app
 
 hw_familiar_ai (hw_core + hw_jobs + hw_logistics + hw_world + hw_spatial + hw_soul_ai)
-  └─ hw_ai (facade)
   └─ bevy_app
 
 hw_soul_ai (hw_core + hw_jobs + hw_logistics + hw_world + hw_spatial)
-  └─ hw_ai (facade)
-  └─ bevy_app
-
-hw_ai (hw_familiar_ai + hw_soul_ai) — 互換 facade
   └─ bevy_app
 
 hw_ui
@@ -208,8 +201,6 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 - `hw_familiar_ai`: Familiar AI の純粋なシステム実装（69 ファイル）
 - `hw_soul_ai`: Soul AI の純粋なシステム実装（101 ファイル）
 - hw_core / hw_jobs / hw_logistics / hw_world を組み合わせた AI ドメインロジック
-- `hw_ai` は互換 facade として `hw_familiar_ai` / `hw_soul_ai` を re-export するのみ
-
 代表例（`hw_soul_ai`）:
 
 - `SoulAiCorePlugin` — Soul AI の Update/Execute/Decide ヘルパーフェーズコアシステム
@@ -569,7 +560,6 @@ cargo check -p hw_logistics
 cargo check -p hw_jobs
 cargo check -p hw_familiar_ai
 cargo check -p hw_soul_ai
-cargo check -p hw_ai
 cargo check -p hw_visual
 ```
 

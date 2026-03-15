@@ -96,6 +96,7 @@
   - `RenderTarget::Image(ImageRenderTarget { handle, scale_factor: 1.0 })` を使用する
   - `ImageRenderTarget` は `bevy::render::camera` に定義されている
   - `Handle<Image>` 生成時、`usage` に `TextureUsages::RENDER_ATTACHMENT` を含める必要がある
+  - Camera2d には明示的に `RenderLayers::layer(LAYER_2D)` を付与すること（デフォルト Layer 0 だが意図を明確にする）
 
 - **完了条件**: オフスクリーンテクスチャへのレンダリングが確認できる（内容は問わない）
 - **ステータス**: [ ] 未着手
@@ -110,9 +111,9 @@
   - パン: `Camera2d.Transform.translation.xy` → Camera3d の XZ 軸にマッピング
   - ズーム: `PanCamera` が更新する `transform.scale` を Camera3d に反映する
 - **Bevy 0.18 API 実装ガイド**:
-  - `PanCamera` (0.18) は内部の `zoom_factor` を元に `transform.scale` を直接更新する
+  - `PanCamera` (0.18) は `zoom_factor` を `transform.scale = Vec3::splat(zoom_factor)` で直接反映する（`bevy_camera_controller-0.18.0/src/pan_camera.rs:236` で確認済み）
   - Camera3d 同期時は `transform.translation` (XZ面) と `transform.scale` (一様スケーリング) を同期させれば、正射影としての見た目が一致する
-  - `OrthographicProjection.scale` を操作する場合は、両カメラで同じ値を共有するように注意する
+  - `OrthographicProjection.scale` は `PanCamera` が更新しないため、Camera3d 側も `transform.scale` ベースで合わせること
 
 - **完了条件**: パン・ズーム操作時に既存の2Dビューが壊れない
 - **ステータス**: [ ] 未着手
@@ -125,7 +126,7 @@
 
 - **やること**:
   - MS-1Bで生成したテクスチャをフルスクリーン Sprite として Camera2d の適切なZ位置に配置
-  - Camera3d の `clear_color` を `ClearColorConfig::Custom(Color::NONE)` に設定する
+  - Camera3d の `clear_color` を `ClearColorConfig::Custom(Color::srgba(0., 0., 0., 0.))` に設定する（Bevy 0.18 に `Color::NONE` は存在しない）
   - テスト用3Dオブジェクト（Bevy組込みの立方体等）を Layer 1 に配置して合成確認
 
 - **完了条件（継続可否ゲート）**:
@@ -284,9 +285,10 @@
 MS-Pre-A ────────────────────────────────────────────── (成立済み)
 MS-Pre-B ─────────────────────────────────┐
                                           │
-MS-1A → MS-1B → MS-1C → MS-1D ──────────┤──→ MS-Elev
-                                          │
-                                    MS-2A─┘→ MS-2B → MS-2C → MS-2D
+MS-1A → MS-1B → MS-1C → MS-1D ──────────┤──→ MS-Elev (第1段階: インフラ確認)
+                                          │        ↑
+                                    MS-2A─┘────────┘→ MS-2B → MS-2C → MS-2D
+                                    (MS-2A完了で MS-Elev 最終完了)
                                                                   │
                                               MS-3A → MS-3B ──────┤
                                                    └→ MS-3C → MS-3D┘

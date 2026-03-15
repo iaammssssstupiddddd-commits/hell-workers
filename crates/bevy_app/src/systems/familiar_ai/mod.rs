@@ -11,9 +11,6 @@ pub mod update;
 
 pub use helpers::query_types::FamiliarSoulQuery;
 pub use hw_core::familiar::FamiliarAiState;
-pub use hw_familiar_ai::familiar_ai::decide::resources::{
-    FamiliarDelegationPerfMetrics, FamiliarTaskDelegationTimer,
-};
 
 pub struct FamiliarAiPlugin;
 

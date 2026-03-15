@@ -11,7 +11,6 @@ hw_jobs = { path = "../hw_jobs" }
 hw_logistics = { path = "../hw_logistics" }
 hw_ui = { path = "../hw_ui" }
 hw_world = { path = "../hw_world" }
-hw_ai            = { path = "../hw_ai" }
 hw_familiar_ai   = { path = "../hw_familiar_ai" }
 hw_soul_ai       = { path = "../hw_soul_ai" }
 hw_spatial = { path = "../hw_spatial" }
