@@ -1,11 +1,13 @@
 use bevy::prelude::*;
+use hw_core::constants::{MUD_MIXER_CAPACITY, WHEELBARROW_CAPACITY};
 use hw_core::logistics::ResourceType;
 use hw_logistics::transport_request::can_complete_pick_drop_to_point;
 
-use super::super::super::builders::issue_haul_to_mixer;
+use super::super::super::builders::{
+    issue_collect_sand_with_wheelbarrow_to_mixer, issue_haul_to_mixer,
+};
 use super::super::super::validator::resolve_haul_to_mixer_inputs;
-use super::lease_validation;
-use super::source_selector;
+use super::{direct_collect, lease_validation, source_selector, wheelbarrow};
 use crate::familiar_ai::decide::task_management::{
     AssignTaskContext, FamiliarTaskAssignmentQueries, ReservationShadow,
 };
@@ -60,6 +62,20 @@ pub fn assign_haul_to_mixer(
         queries,
         shadow,
     ) {
+        return true;
+    }
+
+    // Sand: use collect_source path (fill wheelbarrow at source, like buckets for water)
+    if item_type == ResourceType::Sand
+        && try_direct_collect_with_wheelbarrow_to_mixer(
+            mixer_entity,
+            task_pos,
+            already_commanded,
+            ctx,
+            queries,
+            shadow,
+        )
+    {
         return true;
     }
 
@@ -120,6 +136,54 @@ fn assign_single_item_haul_to_mixer(
         item_type,
         false,
         source_pos,
+        already_commanded,
+        ctx,
+        queries,
+        shadow,
+    );
+    true
+}
+
+fn try_direct_collect_with_wheelbarrow_to_mixer(
+    mixer_entity: Entity,
+    task_pos: Vec2,
+    already_commanded: bool,
+    ctx: &AssignTaskContext<'_>,
+    queries: &mut FamiliarTaskAssignmentQueries,
+    shadow: &mut ReservationShadow,
+) -> bool {
+    let Ok((_, storage, _)) = queries.storage.mixers.get(mixer_entity) else {
+        return false;
+    };
+    let reserved = queries
+        .reservation
+        .resource_cache
+        .get_mixer_destination_reservation(mixer_entity, ResourceType::Sand)
+        + shadow.mixer_reserved(mixer_entity, ResourceType::Sand);
+    let available =
+        MUD_MIXER_CAPACITY.saturating_sub(storage.sand + reserved as u32);
+    if available == 0 {
+        return false;
+    }
+    let amount = available.min(WHEELBARROW_CAPACITY as u32);
+
+    let Some((source_entity, source_pos)) =
+        direct_collect::find_collect_sand_source(task_pos, ctx.task_area_opt, queries, shadow)
+    else {
+        return false;
+    };
+
+    let Some(wb_entity) = wheelbarrow::find_nearest_wheelbarrow(source_pos, queries, shadow) else {
+        return false;
+    };
+
+    issue_collect_sand_with_wheelbarrow_to_mixer(
+        wb_entity,
+        source_entity,
+        source_pos,
+        mixer_entity,
+        amount,
+        task_pos,
         already_commanded,
         ctx,
         queries,

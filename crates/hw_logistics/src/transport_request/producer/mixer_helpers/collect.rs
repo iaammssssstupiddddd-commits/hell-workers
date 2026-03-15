@@ -1,15 +1,15 @@
-use std::collections::HashSet;
+use std::collections::HashMap;
 
 use bevy::prelude::*;
 
 use hw_core::area::TaskArea;
 use hw_core::familiar::{ActiveCommand, FamiliarCommand};
-use hw_core::relationships::{ManagedBy, TaskWorkers};
+use hw_core::relationships::TaskWorkers;
 use hw_jobs::mud_mixer::TargetMixer;
-use hw_jobs::{Designation, WorkType};
+use hw_jobs::Designation;
 use hw_world::zones::{AreaBounds, Yard};
 
-use crate::transport_request::{TransportDemand, TransportRequest, TransportRequestKind};
+use crate::transport_request::{TransportRequest, TransportRequestKind};
 use crate::types::ResourceType;
 
 pub(crate) fn collect_active_familiars(
@@ -29,43 +29,6 @@ pub(crate) fn collect_active_yards(q_yards: &Query<(Entity, &Yard)>) -> Vec<(Ent
         .collect()
 }
 
-pub(crate) fn collect_collect_sand_familiar_states(
-    q_requests_for_demand: &Query<(
-        &TransportRequest,
-        Option<&TaskWorkers>,
-        Option<&TransportDemand>,
-    )>,
-    q_collect_sand_tasks: &Query<(&Designation, &ManagedBy, Option<&TaskWorkers>)>,
-) -> (HashSet<Entity>, HashSet<Entity>) {
-    let mut familiar_with_collect_sand_demand = HashSet::<Entity>::new();
-    for (request, workers_opt, demand_opt) in q_requests_for_demand.iter() {
-        if !request_is_collect_sand_demand(request) {
-            continue;
-        }
-
-        let desired_slots = demand_opt.map(|d| d.desired_slots).unwrap_or(0);
-        let workers = workers_opt.map(|w| w.len() as u32).unwrap_or(0);
-        if desired_slots == 0 && workers == 0 {
-            continue;
-        }
-
-        familiar_with_collect_sand_demand.insert(request.issued_by);
-    }
-
-    let mut familiar_with_collect_sand_task = HashSet::<Entity>::new();
-    for (designation, managed_by, _workers_opt) in q_collect_sand_tasks.iter() {
-        if designation.work_type != WorkType::CollectSand {
-            continue;
-        }
-        familiar_with_collect_sand_task.insert(managed_by.0);
-    }
-
-    (
-        familiar_with_collect_sand_demand,
-        familiar_with_collect_sand_task,
-    )
-}
-
 pub(crate) fn collect_inflight_mixer_requests(
     q_mixer_requests: &Query<(
         Entity,
@@ -75,11 +38,11 @@ pub(crate) fn collect_inflight_mixer_requests(
         Option<&TaskWorkers>,
     )>,
 ) -> (
-    std::collections::HashMap<Entity, u32>,
-    std::collections::HashMap<Entity, u32>,
+    HashMap<Entity, u32>,
+    HashMap<Entity, u32>,
 ) {
-    let mut water_inflight_by_mixer = std::collections::HashMap::<Entity, u32>::new();
-    let mut sand_inflight_by_mixer = std::collections::HashMap::<Entity, u32>::new();
+    let mut water_inflight_by_mixer = HashMap::<Entity, u32>::new();
+    let mut sand_inflight_by_mixer = HashMap::<Entity, u32>::new();
 
     for (_, target_mixer, request, _, workers_opt) in q_mixer_requests.iter() {
         let workers = workers_opt.map(|w| w.len() as u32).unwrap_or(0);
@@ -99,30 +62,4 @@ pub(crate) fn collect_inflight_mixer_requests(
     }
 
     (water_inflight_by_mixer, sand_inflight_by_mixer)
-}
-
-fn request_is_collect_sand_demand(request: &TransportRequest) -> bool {
-    matches!(
-        (request.kind, request.resource_type),
-        (
-            TransportRequestKind::DeliverToMixerSolid,
-            ResourceType::Sand
-        ) | (TransportRequestKind::DeliverToBlueprint, ResourceType::Sand)
-            | (
-                TransportRequestKind::DeliverToBlueprint,
-                ResourceType::StasisMud
-            )
-            | (
-                TransportRequestKind::DeliverToFloorConstruction,
-                ResourceType::StasisMud
-            )
-            | (
-                TransportRequestKind::DeliverToWallConstruction,
-                ResourceType::StasisMud
-            )
-            | (
-                TransportRequestKind::DeliverToProvisionalWall,
-                ResourceType::StasisMud
-            )
-    )
 }
