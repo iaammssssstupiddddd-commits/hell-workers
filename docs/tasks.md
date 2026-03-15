@@ -71,6 +71,9 @@ Familiar の `task_finder` がタスクを発見できる条件（**全て満た
 - `bucket_auto_haul_system` → `ReturnBucket`
 - `provisional_wall_auto_haul_system` → `DeliverToProvisionalWall`（legacy）
 
+**自動（Designation 直発行）**: `DesignationRequest` で Designation を対象エンティティに直接付与する方式:
+- `mud_mixer_auto_refine_system` → `Refine`（材料が揃った MudMixer に発行。`collect_all_area_owners` により Familiar の TaskArea と Yard を統合し、使い魔が Idle でも Yard 内ミキサーへ精製タスクを発行できる）
+
 **自動（gather 指定）**: `blueprint_auto_gather_system` が Wood/Rock 不足を検知し、`Tree`/`Rock` に `Chop`/`Mine` を直付与（`AutoGatherDesignation` marker）。
 
 ### 4.2 割り当て (Assignment)
@@ -90,7 +93,7 @@ Familiar の `task_finder` がタスクを発見できる条件（**全て満た
 - **Sand / StasisMud**: 原則猫車必須。例外: ソース隣接 3x3 の立ち位置からドロップ閾値内なら徒歩可
 - **水搬送 (BucketTransport)**: `AssignedTask::BucketTransport(BucketTransportData)` の単一バリアントで表現。`source`（`River` / `Tank`）と `destination`（`Tank` / `Mixer`）に応じて `bucket_transport/phases/` の共通フェーズハンドラで実行される。`WorkType` は River→Tank が `GatherWater`、Tank→Mixer が `HaulWaterToMixer` として返される。
 - **運搬先ガード**: Blueprint / construction / provisional wall / stockpile は Dropping / Unloading 直前に受入可能量を再確認し、到着時点で需要が消えた cargo を搬入先へ反映しない。
-- **精製 (Refine)**: MudMixer で Sand+Water+Rock → StasisMud×5
+- **精製 (Refine)**: MudMixer で Sand+Water+Rock → StasisMud×5。`mud_mixer_auto_refine_system` が `has_materials_for_refining` を確認し、`collect_all_area_owners`（Familiar TaskArea + Yard 統合）で `issued_by` を決定して `DesignationRequest` を発行する。使い魔が Idle でも Yard 経由でタスクが発行される。
 - **壁**: FrameWallTile（material_center で木材受領 → フレーミング）/ CoatWall（塗布 → `is_provisional = false`）
 - **⚠️ 消滅**: 地面に放置された Sand / StasisMud は **5秒で消滅**（ReservedForTask / LoadedIn / StoredIn / DeliveringTo いずれかあれば維持）
 

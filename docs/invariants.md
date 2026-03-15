@@ -87,6 +87,18 @@ StasisMud と Sand は地面にドロップされた状態で **5秒後に消滅
 Stockpile の容量判定は `StoredItems.len() + IncomingDeliveries.len() < capacity` で行う。
 `StoredItems.len() < capacity` だけで判定してはならない（配送中分が無視される）。
 
+### I-L4: タンク・ミキサー内の水アイテムには Transform が必須
+`pouring.rs` でタンクまたはミキサー内にスポーンする水アイテムには必ず `Transform::default()` を付与すること。
+`filling.rs` および `refine.rs` の `resource_items` クエリは `&Transform` を要求しており、Transform がなければ
+ストア済みの水が一切検出されず、搬入→中断のループが発生する（アイテムは `Visibility::Hidden` のため
+Transform があっても描画・空間グリッドには影響しない）。
+
+### I-L5: BucketTransportData.amount は GoingToDestination 移行前に確定させること
+GoingToBucket フェーズで `routing::transition_to_destination` を呼び出す時点では、
+`BucketTransportData.amount` が実際に運搬するバケツ容量（`BUCKET_CAPACITY`）に設定済みでなければならない。
+`amount == 0` のまま GoingToDestination に遷移すると、`going_to_destination.rs` が空バケツと判断して
+タンクへの再充填ループを引き起こす。
+
 ---
 
 ## 5. UI / Visual の不変条件

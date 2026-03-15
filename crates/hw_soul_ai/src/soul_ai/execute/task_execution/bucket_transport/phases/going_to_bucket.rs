@@ -4,9 +4,10 @@ use crate::soul_ai::execute::task_execution::common;
 use crate::soul_ai::execute::task_execution::context::TaskExecutionContext;
 use crate::soul_ai::execute::task_execution::transport_common::reservation;
 use crate::soul_ai::execute::task_execution::types::{
-    BucketTransportData, BucketTransportDestination, BucketTransportSource,
+    AssignedTask, BucketTransportData, BucketTransportDestination, BucketTransportSource,
 };
 use bevy::prelude::*;
+use hw_core::constants::BUCKET_CAPACITY;
 use hw_logistics::ResourceType;
 use hw_world::WorldMap;
 
@@ -38,6 +39,13 @@ pub fn handle(
                         routing::transition_to_destination(
                             commands, ctx, data, soul_pos, world_map,
                         );
+                        // Filling フェーズをスキップしたため amount が 0 のまま。
+                        // GoingToDestination/Pouring フェーズが正しく動作するよう補正する。
+                        if let AssignedTask::BucketTransport(ref mut d) = *ctx.task {
+                            if d.amount == 0 {
+                                d.amount = BUCKET_CAPACITY;
+                            }
+                        }
                     } else {
                         // 空ならタンクへ
                         routing::transition_to_source(commands, ctx, data, soul_pos, world_map);
@@ -175,6 +183,13 @@ pub fn handle(
                     };
                     reservation::release_source(ctx, tank, 1);
                     routing::transition_to_destination(commands, ctx, data, soul_pos, world_map);
+                    // Filling フェーズをスキップしたため amount が 0 のまま。
+                    // GoingToDestination/Pouring フェーズが正しく動作するよう補正する。
+                    if let AssignedTask::BucketTransport(ref mut d) = *ctx.task {
+                        if d.amount == 0 {
+                            d.amount = BUCKET_CAPACITY;
+                        }
+                    }
                     return;
                 }
             }

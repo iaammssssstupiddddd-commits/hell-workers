@@ -20,6 +20,7 @@ Host gcp-trellis
 - **YOUR_PROJECT_ID**: GCP プロジェクト ID
 - **YOUR_GCP_OS_LOGIN_USER**: 例 `satotakumi@gmail.com`（OS Login のユーザー名）
 - **LocalForward**: Gradio をローカル `http://localhost:8080` で見る場合のみ。不要なら行ごと削除してよい。
+- **Cursor/VS Code から接続する場合**: GUI 起動時は PATH に gcloud が入らないことがある。そのときは `ProxyCommand` の `gcloud` を絶対パス（例: `/home/あなたのユーザー名/google-cloud-sdk/bin/gcloud`）に置き換える。
 
 接続例:
 

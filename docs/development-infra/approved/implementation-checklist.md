@@ -126,8 +126,7 @@
 
 ## 次のアクション
 
-- **まず試す**: A1 → A2 → A3 で Fedora から IAP SSH と VS Code 接続まで完了させる。
-- **次**: C1 で L4 Spot を 1 台立ち上げ、D1 まで（TRELLIS 2 コンテナ + VRAM 最適化）を検証。
+- **Phase A 完了後**: [phase-c-d-next-steps.md](./phase-c-d-next-steps.md) に従い、L4 Spot VM の作成 → SSH config 追加 → TRELLIS 2 環境構築（Phase C〜D）を進める。
 - **その後**: E1〜E3 の Blender スクリプトと F の gltf-validator をパイプラインに組み込む。
 
 設定テンプレートは [config-templates.md](./config-templates.md) を参照。

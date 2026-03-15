@@ -60,6 +60,7 @@ pub fn handle(
                         ResourceItem(ResourceType::Water),
                         hw_core::relationships::StoredIn(tank_entity),
                         Visibility::Hidden,
+                        Transform::default(),
                     ));
                 }
 
@@ -137,6 +138,7 @@ pub fn handle(
                         ResourceItem(ResourceType::Water),
                         hw_core::relationships::StoredIn(mixer_entity),
                         Visibility::Hidden,
+                        Transform::default(),
                     ));
                 }
 

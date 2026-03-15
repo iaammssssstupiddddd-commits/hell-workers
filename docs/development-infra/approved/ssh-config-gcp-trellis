@@ -1,0 +1,6 @@
+Host gcp-trellis
+  HostName trellis-dev
+  User satotakumi
+  IdentityFile ~/.ssh/google_compute_engine
+  ProxyCommand /home/satotakumi/google-cloud-sdk/bin/gcloud compute start-iap-tunnel trellis-dev 22 --listen-on-stdin --zone=us-central1-a --project=hell-workers
+  LocalForward 8080 localhost:7860
