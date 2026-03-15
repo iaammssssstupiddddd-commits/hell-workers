@@ -7,7 +7,7 @@ use hw_spatial::{DesignationSpatialGrid, ResourceSpatialGrid, TransportRequestSp
 use hw_world::WorldMap;
 use hw_world::pathfinding::{self, PathfindingContext};
 use std::cmp::Ordering;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicU32, Ordering as AtomicOrdering};
 
 use crate::familiar_ai::decide::task_management::context::ConstructionSitePositions;
@@ -74,11 +74,29 @@ fn score_for_worker(candidate: &ScoredDelegationCandidate, worker_pos: Vec2) -> 
 fn build_worker_candidates(
     scored_candidates: &[ScoredDelegationCandidate],
     worker_pos: Vec2,
-    assigned_tasks: &HashSet<Entity>,
+    task_virtual_workers: &HashMap<Entity, usize>,
+    queries: &FamiliarTaskAssignmentQueries,
 ) -> (Vec<DelegationCandidate>, Vec<(DelegationCandidate, f32)>) {
     let mut ranked: Vec<(DelegationCandidate, f32)> = scored_candidates
         .iter()
-        .filter(|entry| !assigned_tasks.contains(&entry.candidate.entity))
+        .filter(|entry| {
+            let virtual_count = task_virtual_workers
+                .get(&entry.candidate.entity)
+                .copied()
+                .unwrap_or(0);
+            if virtual_count == 0 {
+                return true;
+            }
+            // virtual割り当てがある場合、ECSのmax_slotsと比較して残スロットを確認
+            let Ok((_, _, _, _, slots, workers, _, _)) =
+                queries.designation.designations.get(entry.candidate.entity)
+            else {
+                return false;
+            };
+            let current_workers = workers.map(|w| w.len()).unwrap_or(0);
+            let max_slots = slots.map(|s| s.max).unwrap_or(1) as usize;
+            current_workers + virtual_count < max_slots
+        })
         .filter(|entry| worker_pos.distance_squared(entry.pos) <= MAX_ASSIGNMENT_DIST_SQ)
         .map(|entry| (entry.candidate, score_for_worker(entry, worker_pos)))
         .collect();
@@ -129,14 +147,10 @@ fn try_assign_from_candidates(
     tile_site_index: &TileSiteIndex,
     incoming_snapshot: &IncomingDeliverySnapshot,
     reservation_shadow: &mut ReservationShadow,
-    assigned_tasks: &HashSet<Entity>,
+    task_virtual_workers: &HashMap<Entity, usize>,
     reachability_cache: &mut HashMap<ReachabilityCacheKey, bool>,
 ) -> Option<Entity> {
     for candidate in candidates.iter().copied() {
-        if assigned_tasks.contains(&candidate.entity) {
-            continue;
-        }
-
         let Ok((_, _, _, _, slots, workers, _, _)) =
             queries.designation.designations.get(candidate.entity)
         else {
@@ -144,7 +158,11 @@ fn try_assign_from_candidates(
         };
         let current_workers = workers.map(|w| w.len()).unwrap_or(0);
         let max_slots = slots.map(|s| s.max).unwrap_or(1) as usize;
-        if current_workers >= max_slots {
+        let virtual_workers = task_virtual_workers
+            .get(&candidate.entity)
+            .copied()
+            .unwrap_or(0);
+        if current_workers + virtual_workers >= max_slots {
             continue;
         }
 
@@ -228,7 +246,7 @@ pub(super) fn try_assign_for_workers(
     });
 
     let mut first_assigned_task: Option<Entity> = None;
-    let mut assigned_tasks: HashSet<Entity> = HashSet::new();
+    let mut task_virtual_workers: HashMap<Entity, usize> = HashMap::new();
 
     for (worker_entity, worker_pos) in sorted_workers {
         let Some(worker_grid) = world_map.get_nearest_walkable_grid(worker_pos) else {
@@ -236,7 +254,7 @@ pub(super) fn try_assign_for_workers(
         };
 
         let (top_candidates, mut fallback_ranked) =
-            build_worker_candidates(&scored_candidates, worker_pos, &assigned_tasks);
+            build_worker_candidates(&scored_candidates, worker_pos, &task_virtual_workers, queries);
         if top_candidates.is_empty() && fallback_ranked.is_empty() {
             continue;
         }
@@ -257,10 +275,10 @@ pub(super) fn try_assign_for_workers(
             tile_site_index,
             incoming_snapshot,
             reservation_shadow,
-            &assigned_tasks,
+            &task_virtual_workers,
             reachability_cache,
         ) {
-            assigned_tasks.insert(task_entity);
+            *task_virtual_workers.entry(task_entity).or_insert(0) += 1;
             if first_assigned_task.is_none() {
                 first_assigned_task = Some(task_entity);
             }
@@ -288,10 +306,10 @@ pub(super) fn try_assign_for_workers(
             tile_site_index,
             incoming_snapshot,
             reservation_shadow,
-            &assigned_tasks,
+            &task_virtual_workers,
             reachability_cache,
         ) {
-            assigned_tasks.insert(task_entity);
+            *task_virtual_workers.entry(task_entity).or_insert(0) += 1;
             if first_assigned_task.is_none() {
                 first_assigned_task = Some(task_entity);
             }
