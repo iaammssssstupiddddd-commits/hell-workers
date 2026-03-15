@@ -5,7 +5,7 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `phase1-rtt-infrastructure-plan-2026-03-15` |
-| ステータス | `Draft` |
+| ステータス | `Completed` |
 | 作成日 | `2026-03-15` |
 | 最終更新日 | `2026-03-15` |
 | 作成者 | Gemini CLI |
@@ -64,7 +64,7 @@
   - `Cargo.toml`
   - `crates/bevy_app/Cargo.toml`
 - **完了条件**:
-  - [ ] フィーチャー追加後、`cargo check` がコンパイルエラーゼロで通過する。
+  - [x] フィーチャー追加後、`cargo check` がコンパイルエラーゼロで通過する。
 - **検証**:
   - `CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo check`
 
@@ -79,9 +79,9 @@
   - `crates/bevy_app/src/assets.rs` (あるいは新規テクスチャ管理モジュール)
   - `crates/bevy_app/src/plugins/startup/mod.rs`
 - **完了条件**:
-  - [ ] レイヤー定数が定義されている。
-  - [ ] Camera3dが `RenderLayers::layer(LAYER_3D)` でセットアップされている。
-  - [ ] オフスクリーン画像がアセットシステムに登録されている。
+  - [x] レイヤー定数が定義されている。
+  - [x] Camera3dが `RenderLayers::layer(LAYER_3D)` でセットアップされている。
+  - [x] オフスクリーン画像がアセットシステムに登録されている。
 - **検証**:
   - `cargo check` の通過。
 
@@ -95,8 +95,8 @@
   - `crates/bevy_app/src/systems/visual/camera_sync.rs` (新規作成または既存システムに追加)
   - `crates/bevy_app/src/systems/visual/mod.rs` (システム登録)
 - **完了条件**:
-  - [ ] システムが正しく登録・実行されている。
-  - [ ] 同期処理によってコンパイルエラーが発生しない。
+  - [x] システムが正しく登録・実行されている。
+  - [x] 同期処理によってコンパイルエラーが発生しない。
 - **検証**:
   - `cargo check`。可能であればゲームを起動し、既存の2D操作に悪影響がないか確認。
 
@@ -109,9 +109,9 @@
 - **変更ファイル**:
   - `crates/bevy_app/src/plugins/startup/mod.rs` (あるいは専用のデバッグ・初期化コード)
 - **完了条件（継続可否ゲート）**:
-  - [ ] テスト立方体が画面上に正しく表示され、2Dのパン・ズーム操作に追従する。
-  - [ ] テレインや既存要素が透過して見え、表示が破綻していない。
-  - [ ] フルRtT計画の継続可否（パフォーマンス・品質評価）を判断可能な状態になる。
+  - [x] テスト立方体が画面上に正しく表示され、2Dのパン・ズーム操作に追従する。
+  - [x] テレインや既存要素が透過して見え、表示が破綻していない。
+  - [x] フルRtT計画の継続可否（パフォーマンス・品質評価）を判断可能な状態になる。
 - **検証**:
   - ゲームを起動し、目視による描画・同期の正確性を確認。
 
@@ -141,38 +141,40 @@
 
 ### 現在地
 
-- 進捗: `0%`
-- 完了済みマイルストーン: なし
-- 未着手/進行中: M1〜M4
+- 進捗: `100%`
+- 完了済みマイルストーン: M1, M2, M3, M4
+- 未着手/進行中: なし
 
-### 次のAIが最初にやること
+### 実装で判明した注意点（Phase 2 への引継ぎ）
 
-1. `Cargo.toml` の `bevy` 依存に `"3d"` フィーチャーを追加し、`cargo check` を通す (M1)。
-2. M2以降のレイヤー定義とオフスクリーンテクスチャの準備へ進む。
-
-### ブロッカー/注意点
-
-- ロジック層（`hw_core` 等）への変更は最小限（`LAYER`定数追加程度）に留め、既存のゲーム挙動に影響を与えないこと。
+- **`RenderLayers` のパス**: `bevy::camera::visibility::RenderLayers`（`bevy::prelude` には含まれない）
+- **`RenderTarget` のパス**: `bevy::camera::RenderTarget`（同上）
+- **Camera3d の向き**: `looking_at(Vec3::ZERO, Vec3::NEG_Z)` が必須。`Vec3::Z` にすると画面右が World -X に反転する
+- **座標マッピング**: `cam3d.translation.x = cam2d.translation.x`、`cam3d.translation.z = -cam2d.translation.y`（符号反転に注意）
+- **合成スプライト**: Camera2d の**子エンティティ**として spawn することでパン・ズームに自動追従する
+- **テストシーン**: `crates/bevy_app/src/plugins/startup/rtt_test_scene.rs` は Phase 2 開始前に削除すること
 
 ### 参照必須ファイル
 
 - `docs/plans/3d-rtt/milestone-roadmap.md`
 - `crates/bevy_app/src/plugins/startup/mod.rs`
 - `crates/hw_core/src/constants/render.rs`
+- `crates/bevy_app/src/systems/visual/camera_sync.rs`
 
 ### 最終確認ログ
 
-- 最終 `cargo check`: N/A
-- 未解決エラー: N/A
+- 最終 `cargo check`: 警告ゼロ・エラーゼロ（2026-03-15）
+- 未解決エラー: なし
 
 ### Definition of Done
 
-- [ ] 目的に対応するマイルストーンが全て完了
-- [ ] 影響ドキュメントが更新済み
-- [ ] `cargo check` が成功
+- [x] 目的に対応するマイルストーンが全て完了
+- [x] 影響ドキュメントが更新済み
+- [x] `cargo check` が成功
 
 ## 10. 更新履歴
 
 | 日付 | 変更者 | 内容 |
 | --- | --- | --- |
 | `2026-03-15` | Gemini CLI | 初版作成 |
+| `2026-03-15` | Claude | M1〜M4 実装完了、注意点・完了条件を更新 |

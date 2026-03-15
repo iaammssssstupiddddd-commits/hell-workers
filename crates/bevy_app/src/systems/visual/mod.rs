@@ -12,6 +12,7 @@ pub mod floor_construction {
         update_floor_tile_visuals_system,
     };
 }
+pub mod camera_sync;
 pub mod placement_ghost;
 pub mod task_area_visual;
 pub mod wall_construction {

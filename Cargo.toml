@@ -7,6 +7,7 @@ members = [
 [workspace.dependencies]
 bevy = { version = "0.18", default-features = false, features = [
     "2d",
+    "3d",
     "experimental_bevy_ui_widgets",
     "pan_camera",
     "png",

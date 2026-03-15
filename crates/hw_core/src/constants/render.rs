@@ -1,6 +1,11 @@
-//! Z軸レイヤー管理 (RenderLayers)
+//! Z軸レイヤー管理 (RenderLayers) および描画レイヤー定数
 
 use bevy::prelude::Color;
+
+/// Camera2d が使用する RenderLayer インデックス（デフォルトレイヤー）
+pub const LAYER_2D: usize = 0;
+/// Camera3d（RtT オフスクリーン）が使用する RenderLayer インデックス
+pub const LAYER_3D: usize = 1;
 
 /// 背景マップのレイヤー
 pub const Z_MAP: f32 = 0.0;

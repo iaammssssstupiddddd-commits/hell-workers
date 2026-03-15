@@ -10,6 +10,7 @@ use crate::systems::command::{
 use crate::systems::jobs::building_completion_system;
 use crate::systems::logistics::resource_count_display_system;
 use crate::systems::room::sync_room_overlay_tiles_system;
+use crate::systems::visual::camera_sync::sync_camera3d_system;
 use crate::systems::visual::task_area_visual::update_task_area_material_system;
 use hw_core::game_state::PlayMode;
 use hw_visual::HwVisualPlugin;
@@ -22,6 +23,11 @@ pub struct VisualPlugin;
 impl Plugin for VisualPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(HwVisualPlugin);
+
+        app.add_systems(
+            Update,
+            sync_camera3d_system.in_set(GameSystemSet::Visual),
+        );
 
         app.add_systems(
             Update,

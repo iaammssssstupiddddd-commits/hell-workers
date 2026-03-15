@@ -2,7 +2,7 @@
 
 作成日: 2026-03-15
 最終更新: 2026-03-15
-ステータス: 策定中
+ステータス: Phase 1 完了・Phase 2 未着手
 
 ---
 
@@ -79,7 +79,7 @@
 - **精査済み事項**:
   - Bevy 0.18 において `"3d"` フィーチャーは `bevy_pbr`, `bevy_core_pipeline`, `bevy_render` を包含しており、RtT に必要な 3D パイプラインがすべて有効化される
 - **完了条件**: コンパイルエラーゼロ
-- **ステータス**: [ ] 未着手
+- **ステータス**: [x] 完了（2026-03-15）
 
 ---
 
@@ -92,14 +92,15 @@
   - `crates/hw_core/src/constants/render.rs` に `LAYER_2D = 0`, `LAYER_3D = 1` 定数追加
   - オフスクリーンテクスチャ（`Handle<Image>`）を `assets.rs` で管理
 
-- **Bevy 0.18 API 実装ガイド**:
-  - `RenderTarget::Image(ImageRenderTarget { handle, scale_factor: 1.0 })` を使用する
-  - `ImageRenderTarget` は `bevy::render::camera` に定義されている
-  - `Handle<Image>` 生成時、`usage` に `TextureUsages::RENDER_ATTACHMENT` を含める必要がある
-  - Camera2d には明示的に `RenderLayers::layer(LAYER_2D)` を付与すること（デフォルト Layer 0 だが意図を明確にする）
+- **Bevy 0.18 API 実装ガイド（実装済み確認）**:
+  - `RenderTarget::Image(handle.into())` で `Handle<Image>` → `ImageRenderTarget` への変換が可能（`From` 実装あり）
+  - `RenderTarget` は `bevy::camera::RenderTarget`、`RenderLayers` は `bevy::camera::visibility::RenderLayers`（どちらも prelude 外）
+  - `Image::new_target_texture(w, h, format, view_format)` を使うと `TextureUsages` を手動設定不要
+  - Camera3d の向きは `looking_at(Vec3::ZERO, Vec3::NEG_Z)` が必須（`Vec3::Z` にすると画面右が World -X に反転する）
+  - Camera2d の子エンティティとして合成スプライトを spawn することでパン・ズームに自動追従させられる
 
 - **完了条件**: オフスクリーンテクスチャへのレンダリングが確認できる（内容は問わない）
-- **ステータス**: [ ] 未着手
+- **ステータス**: [x] 完了（2026-03-15）
 
 ---
 
@@ -110,13 +111,14 @@
 - **やること**: 毎フレーム Camera2d の Transform/OrthographicProjection を Camera3d に同期するシステムを追加
   - パン: `Camera2d.Transform.translation.xy` → Camera3d の XZ 軸にマッピング
   - ズーム: `PanCamera` が更新する `transform.scale` を Camera3d に反映する
-- **Bevy 0.18 API 実装ガイド**:
+- **Bevy 0.18 API 実装ガイド（実装済み確認）**:
   - `PanCamera` (0.18) は `zoom_factor` を `transform.scale = Vec3::splat(zoom_factor)` で直接反映する（`bevy_camera_controller-0.18.0/src/pan_camera.rs:236` で確認済み）
-  - Camera3d 同期時は `transform.translation` (XZ面) と `transform.scale` (一様スケーリング) を同期させれば、正射影としての見た目が一致する
+  - Camera3d 同期式: `cam3d.translation.x = cam2d.translation.x`、`cam3d.translation.z = -cam2d.translation.y`（符号反転必須）、`cam3d.scale = cam2d.scale`
+  - Y符号反転の理由: Camera3d up=NEG_Z のため、画面上方向が World -Z。2D の +Y が 3D の -Z に対応する
   - `OrthographicProjection.scale` は `PanCamera` が更新しないため、Camera3d 側も `transform.scale` ベースで合わせること
 
 - **完了条件**: パン・ズーム操作時に既存の2Dビューが壊れない
-- **ステータス**: [ ] 未着手
+- **ステータス**: [x] 完了（2026-03-15）
 
 ---
 
@@ -133,7 +135,7 @@
   - テスト立方体がトップダウンビューで正しい位置に表示される
   - 建築物のない部分はテレインが透過して見える
   - ⚠️ **フルRtT継続可否判断**: MS-1D 完了時点でパフォーマンス・合成品質・実装コストを評価し、Phase 2 以降の継続可否を明示的に判断する。問題が解消見込みのない場合はここで中止する
-- **ステータス**: [ ] 未着手
+- **ステータス**: [x] 完了（2026-03-15）
 
 ---
 

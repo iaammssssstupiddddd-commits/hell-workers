@@ -140,9 +140,52 @@ Perceive → Update → Decide → Execute
 | カテゴリ | 例 |
 |:--|:--|
 | Z軸レイヤー | `Z_MAP`, `Z_BUILDING_FLOOR`(0.05), `Z_BUILDING_STRUCT`(0.12), `Z_CHARACTER`, `Z_FLOATING_TEXT` |
+| RenderLayer | `LAYER_2D`(0), `LAYER_3D`(1) |
 | AI閾値 | `FATIGUE_GATHERING_THRESHOLD`, `MOTIVATION_THRESHOLD` |
 | バイタル増減率 | `FATIGUE_WORK_RATE`, `STRESS_RECOVERY_RATE_GATHERING` |
 | 移動・アニメーション | `SOUL_SPEED_BASE`, `ANIM_BOB_SPEED` |
+
+## RtT（Render-to-Texture）インフラ
+
+`docs/plans/3d-rtt/` で管理される段階的な 3D 化計画の Phase 1 として実装済み。
+
+### デュアルカメラ構成
+
+| カメラ | マーカー | レイヤー | レンダー先 | 用途 |
+|:--|:--|:--|:--|:--|
+| `Camera2d` | `MainCamera` | `LAYER_2D`(0) | スクリーン | 既存2Dゲーム描画・UI |
+| `Camera3d` | `Camera3dRtt` | `LAYER_3D`(1) | オフスクリーンテクスチャ (RtT) | 3Dシーンのオフスクリーン描画 |
+
+Camera3d は `Camera { order: -1 }` でCamera2d より先に描画される。
+
+### RtT テクスチャ管理
+
+`RttTextures`（Resource、`crates/bevy_app/src/plugins/startup/rtt_setup.rs`）が `Handle<Image>` を保持する。テクスチャは `Image::new_target_texture(1280, 720, Rgba8Unorm, Some(Rgba8UnormSrgb))` で生成。
+
+### Camera2d ↔ Camera3d 同期
+
+`sync_camera3d_system`（`systems/visual/camera_sync.rs`、`GameSystemSet::Visual` で毎フレーム実行）：
+
+| 2D（PanCamera 管理） | 3D（同期先） | 備考 |
+|:--|:--|:--|
+| `translation.x` | `translation.x` | 同軸 |
+| `translation.y` | `translation.z` × **-1** | Camera3d up=NEG_Z のため符号反転 |
+| `transform.scale` | `transform.scale` | ズーム同期 |
+| `translation.y`（固定） | `translation.y = 100.0` | 俯瞰高度（変更不可） |
+
+### Camera3d の向き
+
+`Transform::from_translation(Vec3::Y * 100.0).looking_at(Vec3::ZERO, Vec3::NEG_Z)`
+
+- up=`NEG_Z`（= `Vec3::Z` では画面右が World -X に反転するため不可）
+- 画面右 = World +X、画面上 = World -Z
+- `OrthographicProjection::default_3d()`（near=0, far=1000, ScalingMode::WindowSize）
+
+### 合成スプライト（M4テスト用）
+
+`rtt_test_scene::spawn_rtt_composite_sprite` で Camera2d の**子エンティティ**として生成。子エンティティ化によりパン・ズームに自動追従する（ズーム時はスプライトのワールドスケールが Camera2d スケールを継承するためビューポートを常にカバー）。
+
+> ⚠️ `crates/bevy_app/src/plugins/startup/rtt_test_scene.rs` は Phase 2 開始前に削除する。
 
 ## イベントシステム
 

@@ -4,7 +4,11 @@
 
 mod asset_catalog;
 mod perf_scenario;
+mod rtt_setup;
+mod rtt_test_scene;
 mod visual_handles;
+
+pub use rtt_setup::{Camera3dRtt, RttTextures};
 
 use asset_catalog::create_game_assets;
 use perf_scenario::{
@@ -28,9 +32,12 @@ use crate::systems::spatial::{FloorConstructionSpatialGrid, GatheringSpotSpatial
 use crate::world::map::{
     WorldMap, WorldMapRead, WorldMapWrite, spawn_map, terrain_border::spawn_terrain_borders,
 };
+use bevy::camera::{RenderTarget, visibility::RenderLayers};
 use bevy::camera_controller::pan_camera::PanCamera;
 use bevy::prelude::*;
+use bevy::render::render_resource::TextureFormat;
 use hw_core::GameTime;
+use hw_core::constants::{LAYER_2D, LAYER_3D};
 use hw_spatial::SpatialGridOps;
 use hw_spatial::{
     BlueprintSpatialGrid, FamiliarSpatialGrid, ResourceSpatialGrid, SpatialGrid,
@@ -78,6 +85,8 @@ impl Plugin for StartupPlugin {
                     setup_perf_scenario_if_enabled,
                     setup_ui,
                     populate_resource_spatial_grid,
+                    rtt_test_scene::spawn_rtt_composite_sprite,
+                    rtt_test_scene::spawn_test_cube_3d,
                 )
                     .chain(),
             )
@@ -103,10 +112,37 @@ fn setup(
     asset_server: Res<AssetServer>,
     mut images: ResMut<Assets<Image>>,
 ) {
-    // camera/resources 初期化
-    commands.spawn((Camera2d, MainCamera, PanCamera::default()));
+    // --- RtT オフスクリーンテクスチャ生成 ---
+    let rtt_image = Image::new_target_texture(1280, 720, TextureFormat::Rgba8Unorm, Some(TextureFormat::Rgba8UnormSrgb));
+    let rtt_handle = images.add(rtt_image);
+    commands.insert_resource(RttTextures { texture_3d: rtt_handle.clone() });
 
-    // asset catalog 生成
+    // --- Camera2d（既存: メイン描画・スクリーン出力） ---
+    commands.spawn((
+        Camera2d,
+        MainCamera,
+        PanCamera::default(),
+        RenderLayers::layer(LAYER_2D),
+    ));
+
+    // --- Camera3d（RtT: オフスクリーン3D描画）---
+    // Y=100 に配置し、XZ平面を俯瞰。screen-up = World +Z（2D Y と対応）。
+    commands.spawn((
+        Camera3d::default(),
+        Camera {
+            order: -1,
+            clear_color: ClearColorConfig::Custom(Color::srgba(0.0, 0.0, 0.0, 0.0)),
+            ..default()
+        },
+        Projection::Orthographic(OrthographicProjection::default_3d()),
+        Transform::from_translation(Vec3::new(0.0, 100.0, 0.0))
+            .looking_at(Vec3::ZERO, Vec3::NEG_Z),
+        RenderTarget::Image(rtt_handle.into()),
+        RenderLayers::layer(LAYER_3D),
+        Camera3dRtt,
+    ));
+
+    // --- asset catalog 生成 ---
     let game_assets = create_game_assets(&asset_server, &mut *images);
     commands.insert_resource(game_assets);
 }
