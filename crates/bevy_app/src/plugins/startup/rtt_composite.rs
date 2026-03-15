@@ -12,6 +12,10 @@ use bevy::camera::visibility::RenderLayers;
 use bevy::prelude::*;
 use hw_core::constants::LAYER_OVERLAY;
 
+/// RtT composite sprite のマーカーコンポーネント。3D表示切り替えで可視性を制御する。
+#[derive(Component)]
+pub struct RttCompositeSprite;
+
 /// RtT テクスチャをワールド原点に固定したスプライトとして合成表示する。
 pub fn spawn_rtt_composite_sprite(
     mut commands: Commands,
@@ -21,5 +25,6 @@ pub fn spawn_rtt_composite_sprite(
         Sprite::from_image(rtt.texture_3d.clone()),
         Transform::from_xyz(0.0, 0.0, 20.0),
         RenderLayers::layer(LAYER_OVERLAY),
+        RttCompositeSprite,
     ));
 }

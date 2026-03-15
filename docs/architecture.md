@@ -196,6 +196,20 @@ Perceive → Update → Decide → Execute
 - `RenderLayers::layer(LAYER_OVERLAY)` を付与し、OverlayCamera（固定位置）が描画する。
 - Camera2d の子エンティティではないため、MainCamera のパン・ズームの影響を受けない。
 - 3D コンテンツのパン・ズーム追従は Camera3d の Transform を `sync_camera3d_system` が毎フレーム更新することで実現する。
+- `RttCompositeSprite` マーカーコンポーネントが付与されており、`apply_render3d_visibility_system` が `Visibility` を制御する。
+
+### 3D 表示トグル（開発機能）
+
+`Render3dVisible` Resource（`main.rs`）が 3D 表示の有効・無効を管理する。
+
+| 操作 | 方法 |
+|:---|:---|
+| F3 キー | `render3d_toggle_system`（`plugins/input.rs`）が `Render3dVisible.0` を反転 |
+| Dev ボタン | TopLeft パネルの「3D ON / 3D OFF」ボタン（`interface/ui/dev_panel.rs`）|
+
+`apply_render3d_visibility_system`（`plugins/visual.rs`、`GameSystemSet::Visual`）が `Render3dVisible` 変更を検知し、
+`Camera3dRtt.is_active` と `RttCompositeSprite` の `Visibility` を同期する。
+両方を制御することで「カメラ無効化 → 前フレームのテクスチャが残る」問題を防ぐ。
 
 ## イベントシステム
 
@@ -235,6 +249,14 @@ Perceive → Update → Decide → Execute
 
 - `crates/bevy_app/src/plugins/interface.rs` → `plugins::register_ui_plugins(app)` → `crates/bevy_app/src/interface/ui/plugins/mod.rs` に UI stack 登録を集約する。
 - `register_ui_plugins` は `HwUiPlugin`、`UiFoundationPlugin`、root adapter plugin 群をまとめて登録する。
+
+### 開発用 Dev パネル
+
+`interface/ui/dev_panel.rs` が `UiMountSlot::TopLeft` に開発専用 UI をスポーンする（`PostStartup` チェーン末尾の `spawn_dev_panel_system`）。
+
+| ウィジェット | 機能 | 対応キー |
+|:---|:---|:---|
+| 「3D ON / 3D OFF」ボタン | 3D 表示（`Render3dVisible`）トグル | F3 |
 
 ### UIノード管理
 
@@ -307,6 +329,7 @@ Perceive → Update → Decide → Execute
 | `4` | 超高速 (x4) | |
 | `Escape` | BuildingPlace/ZonePlace/TaskDesignation キャンセル | PlayMode依存 |
 | `F12` | デバッグ表示トグル + Gizmo 切替 | `plugins/input.rs`。`GizmoConfigStore` の enabled も同期 |
+| `F3` | 3D 表示トグル | `plugins/input.rs`。`Render3dVisible` を反転し、Camera3dRtt と RttCompositeSprite を制御（**Dev 専用**） |
 
 ### コンテキスト依存ショートカット（個別管理）
 

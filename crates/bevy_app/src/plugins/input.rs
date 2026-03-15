@@ -22,6 +22,7 @@ impl Plugin for InputPlugin {
             (
                 handle_mouse_input.run_if(in_state(PlayMode::Normal)),
                 debug_toggle_system,
+                render3d_toggle_system,
             )
                 .in_set(GameSystemSet::Input),
         );
@@ -35,6 +36,16 @@ fn pan_camera_ui_guard_system(
 ) {
     if let Ok(mut pan_camera) = q_camera.single_mut() {
         pan_camera.enabled = !ui_input_state.pointer_over_ui;
+    }
+}
+
+/// F3キーで 3D表示をトグル
+fn render3d_toggle_system(
+    buttons: Res<ButtonInput<KeyCode>>,
+    mut render3d: ResMut<crate::Render3dVisible>,
+) {
+    if buttons.just_pressed(KeyCode::F3) {
+        render3d.0 = !render3d.0;
     }
 }
 

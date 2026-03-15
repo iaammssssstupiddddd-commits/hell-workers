@@ -30,6 +30,22 @@ pub(super) fn spawn_completed_building(
     // Phase 2: 全 BuildingType が 3D ビジュアルを使用する（Bridge は除外）
     let use_3d = !matches!(bp.kind, BuildingType::Bridge);
 
+    // 2D スプライト初期画像の選択（wall_connection システムが後から上書きする）
+    let (sprite_image_2d, custom_size_2d) = match bp.kind {
+        BuildingType::Wall => (game_assets.mud_wall_isolated.clone(), Vec2::splat(TILE_SIZE)),
+        BuildingType::Door => (game_assets.door_closed.clone(), Vec2::splat(TILE_SIZE)),
+        BuildingType::Floor => (game_assets.mud_floor.clone(), Vec2::splat(TILE_SIZE)),
+        BuildingType::Tank => (game_assets.tank_empty.clone(), Vec2::splat(TILE_SIZE * 2.0)),
+        BuildingType::MudMixer => (game_assets.mud_mixer.clone(), Vec2::splat(TILE_SIZE * 2.0)),
+        BuildingType::RestArea => (game_assets.rest_area.clone(), Vec2::splat(TILE_SIZE * 2.0)),
+        BuildingType::SandPile => (game_assets.sand_pile.clone(), Vec2::splat(TILE_SIZE)),
+        BuildingType::BonePile => (game_assets.bone_pile.clone(), Vec2::splat(TILE_SIZE)),
+        BuildingType::WheelbarrowParking => {
+            (game_assets.wheelbarrow_parking.clone(), Vec2::splat(TILE_SIZE * 2.0))
+        }
+        BuildingType::Bridge => unreachable!("Bridge uses use_3d = false path"),
+    };
+
     let building_entity = if use_3d {
         commands
             .spawn((
@@ -50,6 +66,18 @@ pub(super) fn spawn_completed_building(
                     },
                 },
             ))
+            .with_children(|parent| {
+                parent.spawn((
+                    layer_kind,
+                    Sprite {
+                        image: sprite_image_2d,
+                        custom_size: Some(custom_size_2d),
+                        ..default()
+                    },
+                    Transform::default(),
+                    Name::new(format!("VisualLayer ({:?})", layer_kind)),
+                ));
+            })
             .id()
     } else {
         let (sprite_image, custom_size) = match bp.kind {

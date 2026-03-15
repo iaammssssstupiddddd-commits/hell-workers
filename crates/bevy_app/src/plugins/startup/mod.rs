@@ -8,6 +8,7 @@ mod rtt_composite;
 mod rtt_setup;
 mod visual_handles;
 
+pub use rtt_composite::RttCompositeSprite;
 pub use rtt_setup::{Camera3dRtt, RttTextures};
 pub use visual_handles::Building3dHandles;
 
@@ -85,6 +86,7 @@ impl Plugin for StartupPlugin {
                     spawn_familiar_wrapper,
                     setup_perf_scenario_if_enabled,
                     setup_ui,
+                    crate::interface::ui::dev_panel::spawn_dev_panel_system,
                     populate_resource_spatial_grid,
                     rtt_composite::spawn_rtt_composite_sprite,
                 )

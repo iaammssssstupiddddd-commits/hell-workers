@@ -32,6 +32,16 @@ use crate::plugins::{
 #[derive(Resource, Default)]
 pub struct DebugVisible(pub bool);
 
+/// 3D表示（RtT レンダリング）の有効/無効状態
+#[derive(Resource)]
+pub struct Render3dVisible(pub bool);
+
+impl Default for Render3dVisible {
+    fn default() -> Self {
+        Self(true)
+    }
+}
+
 fn main() {
     configure_linux_window_backend();
     let backends = select_backends();
@@ -64,6 +74,7 @@ fn main() {
         )
         .add_plugins(PopoverPlugin)
         .init_resource::<DebugVisible>()
+        .init_resource::<Render3dVisible>()
         // PlayMode State
         .init_state::<PlayMode>()
         // Messages

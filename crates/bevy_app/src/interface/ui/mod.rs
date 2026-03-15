@@ -2,6 +2,7 @@
 //!
 //! UIセットアップ、パネル、インタラクションを統合管理します。
 
+pub mod dev_panel;
 pub mod interaction;
 pub mod list;
 pub mod panels;

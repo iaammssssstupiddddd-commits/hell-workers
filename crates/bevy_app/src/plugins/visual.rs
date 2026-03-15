@@ -23,6 +23,7 @@ use crate::systems::visual::elevation_view::{
 };
 use crate::systems::visual::task_area_visual::update_task_area_material_system;
 use hw_core::game_state::PlayMode;
+use crate::plugins::startup::{Camera3dRtt, RttCompositeSprite};
 use hw_visual::HwVisualPlugin;
 use hw_visual::soul::task_link_system;
 
@@ -139,5 +140,32 @@ impl Plugin for VisualPlugin {
             Update,
             elevation_view_input_system.in_set(GameSystemSet::Input),
         );
+
+        // Render3dVisible の変更を Camera3dRtt と RttCompositeSprite に反映
+        app.add_systems(
+            Update,
+            apply_render3d_visibility_system.in_set(GameSystemSet::Visual),
+        );
+    }
+}
+
+/// Render3dVisible の変更を Camera3dRtt と RttCompositeSprite の可視性に反映する
+fn apply_render3d_visibility_system(
+    render3d: Res<crate::Render3dVisible>,
+    mut q_camera: Query<&mut Camera, With<Camera3dRtt>>,
+    mut q_sprite: Query<&mut Visibility, With<RttCompositeSprite>>,
+) {
+    if !render3d.is_changed() {
+        return;
+    }
+    if let Ok(mut camera) = q_camera.single_mut() {
+        camera.is_active = render3d.0;
+    }
+    if let Ok(mut visibility) = q_sprite.single_mut() {
+        *visibility = if render3d.0 {
+            Visibility::Visible
+        } else {
+            Visibility::Hidden
+        };
     }
 }

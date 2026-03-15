@@ -2,6 +2,8 @@
 
 VM は**作業時のみ起動**する前提。初回セットアップが済んでいる場合の、再現しやすいフローです。
 
+> **ライセンス注意**: 公式 `camenduru/tostui-trellis2` イメージは、商用利用に制限のあるライブラリ（Gaussian Rasterization, FlexiCubes 等）を含みます。商用リリース時は [trellis-license-notes.md](./trellis-license-notes.md) を参照し、商用可能な fork に切り替えてください。PoC・研究目的では公式イメージをそのまま利用できます。
+
 ---
 
 ## 前提（初回のみ済ませておくこと）
