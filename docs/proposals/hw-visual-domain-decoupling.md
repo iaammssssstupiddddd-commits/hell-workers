@@ -5,9 +5,9 @@
 | 項目 | 値 |
 | --- | --- |
 | ドキュメントID | `hw-visual-domain-decoupling-2026-03-14` |
-| ステータス | `Draft` |
+| ステータス | `Completed`（残存: `mud_mixer.rs`/`tank.rs`/`wall_connection.rs` は別提案） |
 | 作成日 | `2026-03-14` |
-| 最終更新日 | `2026-03-14` |
+| 最終更新日 | `2026-03-15` |
 | 作成者 | Claude |
 | 関連計画 | `docs/plans/hw-visual-domain-decoupling.md`（実装時に作成） |
 | 関連Issue/PR | N/A |

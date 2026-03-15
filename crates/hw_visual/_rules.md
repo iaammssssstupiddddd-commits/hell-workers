@@ -30,20 +30,25 @@
 
 ```
 # 許可
-hw_core      ✓
-hw_jobs      ✓
-hw_logistics ✓
+hw_core      ✓  (visual_mirror::* を通じてドメイン状態を受け取る)
 hw_spatial   ✓
 hw_world     ✓
 hw_ui        ✓  (UI 型の参照)
 bevy         ✓
 rand         ✓
 
+# 残存依存（Out of Scope ファイルのみ・別提案で解消予定）
+hw_jobs      △  (mud_mixer.rs / tank.rs / wall_connection.rs の Building 系のみ)
+hw_logistics △  (tank.rs の Stockpile のみ)
+
 # 禁止
 bevy_app       ✗
 hw_soul_ai     ✗  (AI ロジック型は hw_core events 経由で受け取る)
 hw_familiar_ai ✗
 ```
+
+新規コードで `hw_jobs` / `hw_logistics` を直接インポートしてはならない。
+ドメイン状態の参照は必ず `hw_core::visual_mirror::*` を通じて行うこと。
 
 ## ⚠️ Bevy 0.18 API 注意事項
 
