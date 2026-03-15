@@ -6,6 +6,8 @@ use bevy::prelude::Color;
 pub const LAYER_2D: usize = 0;
 /// Camera3d（RtT オフスクリーン）が使用する RenderLayer インデックス
 pub const LAYER_3D: usize = 1;
+/// RtT composite sprite 専用のオーバーレイレイヤー（矢視モード中も常時表示）
+pub const LAYER_OVERLAY: usize = 2;
 
 /// 背景マップのレイヤー
 pub const Z_MAP: f32 = 0.0;

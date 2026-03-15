@@ -140,7 +140,7 @@ Perceive → Update → Decide → Execute
 | カテゴリ | 例 |
 |:--|:--|
 | Z軸レイヤー | `Z_MAP`, `Z_BUILDING_FLOOR`(0.05), `Z_BUILDING_STRUCT`(0.12), `Z_CHARACTER`, `Z_FLOATING_TEXT` |
-| RenderLayer | `LAYER_2D`(0), `LAYER_3D`(1) |
+| RenderLayer | `LAYER_2D`(0), `LAYER_3D`(1), `LAYER_OVERLAY`(2) |
 | AI閾値 | `FATIGUE_GATHERING_THRESHOLD`, `MOTIVATION_THRESHOLD` |
 | バイタル増減率 | `FATIGUE_WORK_RATE`, `STRESS_RECOVERY_RATE_GATHERING` |
 | 移動・アニメーション | `SOUL_SPEED_BASE`, `ANIM_BOB_SPEED` |
@@ -149,14 +149,16 @@ Perceive → Update → Decide → Execute
 
 `docs/plans/3d-rtt/` で管理される段階的な 3D 化計画の Phase 1 として実装済み。
 
-### デュアルカメラ構成
+### トリプルカメラ構成
 
-| カメラ | マーカー | レイヤー | レンダー先 | 用途 |
-|:--|:--|:--|:--|:--|
-| `Camera2d` | `MainCamera` | `LAYER_2D`(0) | スクリーン | 既存2Dゲーム描画・UI |
-| `Camera3d` | `Camera3dRtt` | `LAYER_3D`(1) | オフスクリーンテクスチャ (RtT) | 3Dシーンのオフスクリーン描画 |
+| カメラ | マーカー | レイヤー | `order` | レンダー先 | 用途 |
+|:--|:--|:--|:--|:--|:--|
+| `Camera2d` | `MainCamera` | `LAYER_2D`(0) | 0 | スクリーン | 既存2Dゲーム描画・UI。矢視モード時は `is_active=false` |
+| `Camera2d` | OverlayCamera（マーカーなし） | `LAYER_OVERLAY`(2) | 1 | スクリーン | RtT composite sprite 専用。常時アクティブ |
+| `Camera3d` | `Camera3dRtt` | `LAYER_3D`(1) | -1 | オフスクリーンテクスチャ (RtT) | 3Dシーンのオフスクリーン描画 |
 
-Camera3d は `Camera { order: -1 }` でCamera2d より先に描画される。
+- Camera3d は `order: -1` で最初に描画され、結果をオフスクリーンテクスチャに書き込む。
+- OverlayCamera は MainCamera が無効化される矢視モード時も composite sprite を描画し続ける。
 
 ### RtT テクスチャ管理
 
@@ -166,12 +168,18 @@ Camera3d は `Camera { order: -1 }` でCamera2d より先に描画される。
 
 `sync_camera3d_system`（`systems/visual/camera_sync.rs`、`GameSystemSet::Visual` で毎フレーム実行）：
 
-| 2D（PanCamera 管理） | 3D（同期先） | 備考 |
-|:--|:--|:--|
-| `translation.x` | `translation.x` | 同軸 |
-| `translation.y` | `translation.z` × **-1** | Camera3d up=NEG_Z のため符号反転 |
-| `transform.scale` | `transform.scale` | ズーム同期 |
-| `translation.y`（固定） | `translation.y = 100.0` | 俯瞰高度（変更不可） |
+全モードで `scale` と XZ を同期（パン・ズーム追従）。方向ごとに XZ オフセットを適用:
+
+| `ElevationDirection` | `cam3d.x` | `cam3d.z` | `cam3d.y` |
+|:--|:--|:--|:--|
+| `TopDown` | `cam2d.x` | `-cam2d.y` | `100.0`（固定） |
+| `North` | `cam2d.x` | `-cam2d.y + ELEVATION_DISTANCE` | elevation_view が設定した値を維持 |
+| `South` | `cam2d.x` | `-cam2d.y - ELEVATION_DISTANCE` | 〃 |
+| `East` | `cam2d.x + ELEVATION_DISTANCE` | `-cam2d.y` | 〃 |
+| `West` | `cam2d.x - ELEVATION_DISTANCE` | `-cam2d.y` | 〃 |
+
+- `ELEVATION_DISTANCE = 800`（`pub const`、`elevation_view.rs` で定義）
+- 矢視時の回転・Y 高度は `elevation_view_input_system`（V キー押下時）が設定し、`sync_camera3d_system` は上書きしない。
 
 ### Camera3d の向き
 
@@ -181,11 +189,13 @@ Camera3d は `Camera { order: -1 }` でCamera2d より先に描画される。
 - 画面右 = World +X、画面上 = World -Z
 - `OrthographicProjection::default_3d()`（near=0, far=1000, ScalingMode::WindowSize）
 
-### 合成スプライト（M4テスト用）
+### 合成スプライト（RtT composite sprite）
 
-`rtt_test_scene::spawn_rtt_composite_sprite` で Camera2d の**子エンティティ**として生成。子エンティティ化によりパン・ズームに自動追従する（ズーム時はスプライトのワールドスケールが Camera2d スケールを継承するためビューポートを常にカバー）。
+`plugins/startup/rtt_composite.rs` の `spawn_rtt_composite_sprite` がワールド原点 `(0, 0, 20)` に固定スポーン。
 
-> ⚠️ `crates/bevy_app/src/plugins/startup/rtt_test_scene.rs` は Phase 2 開始前に削除する。
+- `RenderLayers::layer(LAYER_OVERLAY)` を付与し、OverlayCamera（固定位置）が描画する。
+- Camera2d の子エンティティではないため、MainCamera のパン・ズームの影響を受けない。
+- 3D コンテンツのパン・ズーム追従は Camera3d の Transform を `sync_camera3d_system` が毎フレーム更新することで実現する。
 
 ## イベントシステム
 

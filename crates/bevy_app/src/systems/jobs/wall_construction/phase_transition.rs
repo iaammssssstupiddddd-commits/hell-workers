@@ -1,17 +1,18 @@
 //! Wall construction phase transition system
 
 use super::components::*;
-use crate::assets::GameAssets;
+use crate::plugins::startup::Building3dHandles;
 use crate::systems::jobs::construction_shared::remove_tile_task_components;
 use crate::systems::jobs::{Building, BuildingType, ProvisionalWall};
 use crate::world::map::{WorldMap, WorldMapWrite};
 use bevy::prelude::*;
 use hw_core::constants::{TILE_SIZE, Z_MAP};
+use hw_visual::visual3d::Building3dVisual;
 
 /// Spawns provisional wall entities for framed tiles that do not have spawned walls yet.
 pub fn wall_framed_tile_spawn_system(
     mut q_tiles: Query<&mut WallTileBlueprint>,
-    game_assets: Res<GameAssets>,
+    handles_3d: Res<Building3dHandles>,
     mut world_map: WorldMapWrite,
     mut commands: Commands,
 ) {
@@ -28,16 +29,21 @@ pub fn wall_framed_tile_spawn_system(
                     is_provisional: true,
                 },
                 ProvisionalWall::default(),
-                Sprite {
-                    image: game_assets.wall_isolated.clone(),
-                    custom_size: Some(Vec2::splat(TILE_SIZE)),
-                    ..default()
-                },
                 Transform::from_translation(world_pos.extend(Z_MAP + 0.01)),
                 Visibility::default(),
                 Name::new("Building (Wall, Provisional)"),
             ))
             .id();
+
+        // 3D ビジュアルエンティティを独立 spawn（仮設壁は警告色マテリアル）
+        commands.spawn((
+            Mesh3d(handles_3d.wall_mesh.clone()),
+            MeshMaterial3d(handles_3d.wall_provisional_material.clone()),
+            Transform::from_xyz(world_pos.x, TILE_SIZE / 2.0, -world_pos.y),
+            handles_3d.render_layers.clone(),
+            Building3dVisual { owner: wall_entity },
+            Name::new("Building3dVisual (Wall, Provisional)"),
+        ));
 
         tile.spawned_wall = Some(wall_entity);
         world_map.reserve_building_footprint(

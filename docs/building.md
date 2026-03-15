@@ -222,6 +222,18 @@ Building エンティティ（親）
 
 **visual system から Sprite を参照する方法**: `wall_connection`, `tank`, `mud_mixer` などは `Children` + `VisualLayerKind::Struct` の組み合わせで子エンティティから `Sprite` を取得する。親の `Building` エンティティが `Sprite` を直接持つと仮定しないこと。
 
+### Building3dVisual スポーン
+
+`Building3dVisual { owner: Entity }` は Building エンティティとは独立した3Dビジュアルプロキシで、XZ 平面上に独立スポーンする（Building の子エンティティではない）。
+
+| スポーン箇所 | タイミング |
+|:---|:---|
+| `wall_framed_tile_spawn_system`（`wall_construction/phase_transition.rs`） | Framing 完了時に仮設壁 `Building` 生成と同時にスポーン（`wall_provisional_material`）|
+| `floor_construction_completion_system`（`floor_construction/completion.rs`） | 養生完了後の Floor Building 生成と同時にスポーン（`floor_mesh`/`floor_material`）|
+| `spawn_completed_building`（`building_completion/spawn.rs`） | Blueprint 完成時の Building 生成と同時にスポーン |
+
+`Building3dVisual` の cleanup は `systems/visual/building3d_cleanup.rs` が担当する。
+
 ---
 
 ### 壁の自動接続 (Wall Connections)

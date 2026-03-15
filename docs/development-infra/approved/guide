@@ -1,0 +1,15 @@
+# GCP L4 TRELLIS 活用 — クイックガイド
+
+## どこから始めるか
+
+1. **全体像**: [FedoraローカルからGCP L4 TRELLIS活用.md](./FedoraローカルからGCP%20L4%20TRELLIS活用.md) を一読する。
+2. **実行順**: [implementation-checklist.md](./implementation-checklist.md) の Phase A から順にチェックを進める。
+3. **コピペ用設定**: [config-templates.md](./config-templates.md) の SSH config・環境変数・Podman 例を使う。
+
+## 推奨フロー
+
+- **まず**: Fedora に gcloud を入れ、IAP で GCP の VM に SSH できるようにする（Phase A）。
+- **次**: L4 Spot を 1 台立て、TRELLIS 2 コンテナと VRAM 設定（Phase C〜D）まで動かす。
+- **その後**: Headless Blender で Unlit・ポスタライズ・原点正規化（Phase E）と gltf-validator（Phase F）を組み込む。
+
+不明点は本ガイドの元ドキュメントの該当セクションと引用文献を参照。

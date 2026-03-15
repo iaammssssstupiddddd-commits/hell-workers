@@ -6,7 +6,11 @@
 
 use crate::plugins::startup::Camera3dRtt;
 use bevy::prelude::*;
+use hw_core::constants::TILE_SIZE;
 use hw_ui::camera::MainCamera;
+
+/// 矢視カメラがシーンを外側から見るための距離（world units）
+pub const ELEVATION_DISTANCE: f32 = 800.0;
 
 /// 矢視方向
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -34,41 +38,31 @@ impl ElevationDirection {
         self == Self::TopDown
     }
 
-    /// この方向の Camera3d ローカル Transform を返す。
+    /// この方向の Camera3d 回転クォータニオンを返す（水平視点）。
     ///
-    /// Camera3d は world origin 相対の向きを設定する。
-    /// 平行移動は camera_sync.rs が毎フレーム上書きするため、
-    /// ここでは回転のみ確定させる。
+    /// looking_at の起点・終点を同じ Y 高度にすることで完全水平な側面視を実現する。
     pub fn camera_rotation(self) -> Quat {
         match self {
             // TopDown: up=NEG_Z で XZ 平面を俯瞰
             Self::TopDown => Transform::from_translation(Vec3::new(0.0, 100.0, 0.0))
                 .looking_at(Vec3::ZERO, Vec3::NEG_Z)
                 .rotation,
-            // North: Y=50 に浮かせ、-Z 方向（south→north）を見る
-            Self::North => Transform::from_translation(Vec3::new(0.0, 50.0, 300.0))
-                .looking_at(Vec3::new(0.0, 0.0, 0.0), Vec3::Y)
+            // North: +Z 側から -Z 方向を水平に見る
+            Self::North => Transform::from_xyz(0.0, 0.0, 1.0)
+                .looking_at(Vec3::ZERO, Vec3::Y)
                 .rotation,
-            // East: -X 方向（west→east）を見る
-            Self::East => Transform::from_translation(Vec3::new(-300.0, 50.0, 0.0))
-                .looking_at(Vec3::new(0.0, 0.0, 0.0), Vec3::Y)
+            // South: -Z 側から +Z 方向を水平に見る
+            Self::South => Transform::from_xyz(0.0, 0.0, -1.0)
+                .looking_at(Vec3::ZERO, Vec3::Y)
                 .rotation,
-            // South: +Z 方向（north→south）を見る
-            Self::South => Transform::from_translation(Vec3::new(0.0, 50.0, -300.0))
-                .looking_at(Vec3::new(0.0, 0.0, 0.0), Vec3::Y)
+            // East: +X 側から -X 方向を水平に見る
+            Self::East => Transform::from_xyz(1.0, 0.0, 0.0)
+                .looking_at(Vec3::ZERO, Vec3::Y)
                 .rotation,
-            // West: +X 方向（east→west）を見る
-            Self::West => Transform::from_translation(Vec3::new(300.0, 50.0, 0.0))
-                .looking_at(Vec3::new(0.0, 0.0, 0.0), Vec3::Y)
+            // West: -X 側から +X 方向を水平に見る
+            Self::West => Transform::from_xyz(-1.0, 0.0, 0.0)
+                .looking_at(Vec3::ZERO, Vec3::Y)
                 .rotation,
-        }
-    }
-
-    /// 矢視モード時の Camera3d の Y 高度
-    pub fn camera_y(self) -> f32 {
-        match self {
-            Self::TopDown => 100.0,
-            _ => 50.0,
         }
     }
 }
@@ -84,7 +78,7 @@ pub fn elevation_view_input_system(
     keys: Res<ButtonInput<KeyCode>>,
     mut state: ResMut<ElevationViewState>,
     mut q_cam3d: Query<&mut Transform, With<Camera3dRtt>>,
-    q_cam2d: Query<&Transform, (With<MainCamera>, Without<Camera3dRtt>)>,
+    mut q_cam2d: Query<(&Transform, &mut Camera), (With<MainCamera>, Without<Camera3dRtt>)>,
 ) {
     if !keys.just_pressed(KeyCode::KeyV) {
         return;
@@ -96,14 +90,17 @@ pub fn elevation_view_input_system(
         return;
     };
 
-    // 回転プリセットを即時適用
+    // 回転プリセットを即時適用（XZ 位置は sync_camera3d_system が毎フレーム追従）
     cam3d.rotation = state.direction.camera_rotation();
-    cam3d.translation.y = state.direction.camera_y();
+    // Y は矢視中は壁の中心高度に固定（TopDown 時は sync_camera3d_system が 100.0 に戻す）
+    if !state.direction.is_top_down() {
+        cam3d.translation.y = TILE_SIZE / 2.0;
+    }
 
-    // 2D カメラの現在位置に合わせて XZ を初期化
-    if let Ok(cam2d) = q_cam2d.single() {
-        cam3d.translation.x = cam2d.translation.x;
-        cam3d.translation.z = -cam2d.translation.y;
+    if let Ok((_, mut cam2d_camera)) = q_cam2d.single_mut() {
+        // 矢視モード時は MainCamera を無効化して 2D スプライトを非表示にする
+        // RtT composite sprite は LAYER_OVERLAY の overlay camera が描画し続ける
+        cam2d_camera.is_active = state.direction.is_top_down();
     }
 
     info!(

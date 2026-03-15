@@ -38,7 +38,7 @@ use bevy::camera_controller::pan_camera::PanCamera;
 use bevy::prelude::*;
 use bevy::render::render_resource::TextureFormat;
 use hw_core::GameTime;
-use hw_core::constants::{LAYER_2D, LAYER_3D};
+use hw_core::constants::{LAYER_2D, LAYER_3D, LAYER_OVERLAY};
 use hw_spatial::SpatialGridOps;
 use hw_spatial::{
     BlueprintSpatialGrid, FamiliarSpatialGrid, ResourceSpatialGrid, SpatialGrid,
@@ -123,6 +123,18 @@ fn setup(
         MainCamera,
         PanCamera::default(),
         RenderLayers::layer(LAYER_2D),
+    ));
+
+    // --- Overlay Camera（常時アクティブ: RtT composite sprite 専用）---
+    // 矢視モードで MainCamera を無効化しても composite sprite を表示し続ける。
+    // order=1: MainCamera(order=0) の後に描画することで上書き合成する。
+    commands.spawn((
+        Camera2d,
+        Camera {
+            order: 1,
+            ..default()
+        },
+        RenderLayers::layer(LAYER_OVERLAY),
     ));
 
     // --- Camera3d（RtT: オフスクリーン3D描画）---

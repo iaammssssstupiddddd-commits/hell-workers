@@ -1,14 +1,15 @@
 //! Floor construction completion system
 
 use super::components::*;
-use crate::assets::GameAssets;
 use crate::entities::damned_soul::{DamnedSoul, Path};
+use crate::plugins::startup::Building3dHandles;
 use crate::systems::jobs::{Building, BuildingType, ObstaclePosition};
 use crate::world::map::{WorldMap, WorldMapWrite};
 use bevy::prelude::*;
-use hw_core::constants::{FLOOR_CURING_DURATION_SECS, TILE_SIZE, Z_MAP};
+use hw_core::constants::{FLOOR_CURING_DURATION_SECS, Z_MAP};
 use hw_visual::animations::{BounceAnimation, BounceAnimationConfig};
 use hw_visual::blueprint::{BOUNCE_DURATION, BuildingBounceEffect};
+use hw_visual::visual3d::Building3dVisual;
 use std::collections::HashSet;
 
 fn evacuate_souls_from_blocked_tiles(
@@ -48,7 +49,7 @@ pub fn floor_construction_completion_system(
     mut q_sites: Query<(Entity, &mut FloorConstructionSite)>,
     q_tiles: Query<(Entity, &FloorTileBlueprint)>,
     mut q_souls: Query<(Entity, &mut Transform, &mut Path), With<DamnedSoul>>,
-    game_assets: Res<GameAssets>,
+    handles_3d: Res<Building3dHandles>,
     mut world_map: WorldMapWrite,
     mut commands: Commands,
 ) {
@@ -125,15 +126,10 @@ pub fn floor_construction_completion_system(
         for (tile_entity, (gx, gy), _) in site_tiles {
             let world_pos = WorldMap::grid_to_world(gx, gy);
 
-            commands.spawn((
+            let building_entity = commands.spawn((
                 Building {
                     kind: BuildingType::Floor,
                     is_provisional: false,
-                },
-                Sprite {
-                    image: game_assets.mud_floor.clone(),
-                    custom_size: Some(Vec2::splat(TILE_SIZE)),
-                    ..default()
                 },
                 BuildingBounceEffect {
                     bounce_animation: BounceAnimation {
@@ -148,7 +144,18 @@ pub fn floor_construction_completion_system(
                 Transform::from_translation(world_pos.extend(Z_MAP + 0.01)),
                 Visibility::default(),
                 Name::new("Building (Floor)"),
+            )).id();
+
+            // 3D ビジュアルエンティティを独立 spawn（Floor は y=0 の地面レベル）
+            commands.spawn((
+                Mesh3d(handles_3d.floor_mesh.clone()),
+                MeshMaterial3d(handles_3d.floor_material.clone()),
+                Transform::from_xyz(world_pos.x, 0.0, -world_pos.y),
+                handles_3d.render_layers.clone(),
+                Building3dVisual { owner: building_entity },
+                Name::new("Building3dVisual (Floor)"),
             ));
+
             // Despawn tile blueprint
             commands.entity(tile_entity).despawn();
             tile_count += 1;
