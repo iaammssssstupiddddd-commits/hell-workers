@@ -17,6 +17,7 @@ pub mod soul;
 pub mod speech;
 pub mod tank;
 pub mod task_area_visual;
+pub mod visual3d;
 pub mod wall_connection;
 pub mod wall_construction;
 pub mod worker_icon;
@@ -30,6 +31,8 @@ pub use handles::{
     BuildingAnimHandles, GatheringVisualHandles, HaulItemHandles, MaterialIconHandles,
     PlantTreeHandles, SpeechHandles, WallVisualHandles, WorkIconHandles,
 };
+
+pub use visual3d::{Building3dVisual, FamiliarProxy3d, SoulProxy3d};
 
 pub use task_area_visual::{TaskAreaMaterial, TaskAreaVisual};
 

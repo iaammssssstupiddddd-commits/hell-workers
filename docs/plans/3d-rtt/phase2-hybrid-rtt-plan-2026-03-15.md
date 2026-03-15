@@ -92,6 +92,19 @@
 
 ## 4. 実装方針（高レベル）
 
+### 4.0 プリミティブは仮実装（Phase 3 で GLB 差し替え前提）
+
+**本 Phase 2 の3Dオブジェクトはすべて技術検証用のプレースホルダーである。**
+
+```
+Phase 2（現在）  Cuboid / Plane3d = Zバッファ・矢視・RtT パイプラインの検証用
+Phase 3（将来）  AI生成 GLB / カスタムメッシュ = 実際のゲームアセット
+```
+
+- `Building3dHandles` の `Handle<Mesh>` / `Handle<StandardMaterial>` は Phase 3 で GLB に差し替える前提で設計すること
+- 完成Building向けに削除する壁接続コードは `q_children.get` ブロック（完成Building パス）のみ。`is_wall()` / `add_neighbors_to_update()` は Blueprint パスを通じて保持される（Phase 3 でも再利用可能）
+- 各 MS の完了条件における「正しく表示される」は「プリミティブとして正しく」を意味する
+
 ### 4.1 2D ↔ 3D 座標変換（Phase 1 確認済み）
 
 Camera3d のセットアップ（`rtt_setup.rs`）および `camera_sync.rs` で確認済みのマッピング:
@@ -167,17 +180,18 @@ Cuboid を各壁グリッドに1つ配置することで、隣接するキュー
 ```rust
 #[derive(Resource)]
 pub struct Building3dHandles {
-    pub wall_mesh:           Handle<Mesh>,
-    pub wall_material:       Handle<StandardMaterial>,
-    pub floor_mesh:          Handle<Mesh>,
-    pub floor_material:      Handle<StandardMaterial>,
-    pub door_mesh:           Handle<Mesh>,
-    pub door_material:       Handle<StandardMaterial>,
-    pub equipment_mesh:      Handle<Mesh>,  // Tank・MudMixer（2×2グリッド）
-    pub equipment_material:  Handle<StandardMaterial>,
-    pub soul_mesh:           Handle<Mesh>,
-    pub familiar_mesh:       Handle<Mesh>,
-    pub character_material:  Handle<StandardMaterial>,
+    pub wall_mesh:                  Handle<Mesh>,
+    pub wall_material:              Handle<StandardMaterial>,
+    pub wall_provisional_material:  Handle<StandardMaterial>,  // 仮設壁用警告色
+    pub floor_mesh:                 Handle<Mesh>,
+    pub floor_material:             Handle<StandardMaterial>,
+    pub door_mesh:                  Handle<Mesh>,
+    pub door_material:              Handle<StandardMaterial>,
+    pub equipment_mesh:             Handle<Mesh>,  // Tank・MudMixer（2×2グリッド）
+    pub equipment_material:         Handle<StandardMaterial>,
+    pub soul_mesh:                  Handle<Mesh>,
+    pub familiar_mesh:              Handle<Mesh>,
+    pub character_material:         Handle<StandardMaterial>,
 }
 ```
 
@@ -187,22 +201,29 @@ pub struct Building3dHandles {
 
 ---
 
-### Pre-2: rtt_test_scene 削除
+### Pre-2: rtt_test_scene 削除 + 合成スプライト恒久化
 
 > **依存**: なし（Phase 2 開始前の前提クリーンアップ）
 
+⚠️ **重要**: `rtt_test_scene.rs` を単純に削除すると Phase 2 全体を通じて RtT が Camera2d に映らなくなる。**削除前に合成スプライトを恒久的なシステムに移行すること。**
+
 - **やること**:
-  1. `crates/bevy_app/src/plugins/startup/rtt_test_scene.rs` を**ファイルごと削除**
-  2. `crates/bevy_app/src/plugins/startup/mod.rs`:
-     - `mod rtt_test_scene;` 行を削除
-     - `PostStartup` から `rtt_test_scene::spawn_rtt_composite_sprite` を削除
-     - `PostStartup` から `rtt_test_scene::spawn_test_cube_3d` を削除
+  1. **合成スプライト恒久化**（削除前に必ず実施）
+     - `crates/bevy_app/src/plugins/startup/rtt_composite.rs`（新規）を作成
+     - `spawn_rtt_composite_sprite` の実装を `rtt_test_scene.rs` から移植（Sprite を Camera2d 子エンティティとして Z=20.0 にspawn する）
+     - `startup/mod.rs` の `PostStartup` で `rtt_composite::spawn_rtt_composite_sprite` を呼ぶよう変更
+     - ⚠️ 合成スプライトの Z 値（現在 Z=20.0）は `Z_ITEM（0.10）` より大きいため、RtT テクスチャが2D アイテムより手前に表示される。MS-2C で Z 値の妥当性を確認すること
+  2. **テスト立方体・`rtt_test_scene.rs` の削除**
+     - `rtt_composite.rs` で合成スプライトが正常に動作することを確認後
+     - `crates/bevy_app/src/plugins/startup/rtt_test_scene.rs` をファイルごと削除
+     - `startup/mod.rs` から `mod rtt_test_scene;` と `spawn_test_cube_3d` の呼び出しを削除
 
 - **変更ファイル**:
+  - 新規: `crates/bevy_app/src/plugins/startup/rtt_composite.rs`
   - `crates/bevy_app/src/plugins/startup/rtt_test_scene.rs`（削除）
-  - `crates/bevy_app/src/plugins/startup/mod.rs`（3箇所削除）
+  - `crates/bevy_app/src/plugins/startup/mod.rs`（合成スプライト呼び出し元変更 + テスト立方体削除）
 
-- **完了条件**: `cargo check` 通過、テスト立方体・合成スプライトが画面から消える
+- **完了条件**: `cargo check` 通過、テスト立方体が画面から消え、RtT 合成スプライトは引き続き描画される
 - **ステータス**: [ ] 未着手
 
 ---
@@ -232,10 +253,32 @@ pub struct Building3dHandles {
   - `spawn_completed_building` 関数に `Building3dHandles` を引数追加
   - `BuildingType::Wall` の場合のみ: `Building3dVisual` コンポーネントを持つ独立3Dエンティティを spawn
   - 位置: `Transform::from_xyz(world_pos.x, TILE_SIZE / 2.0, -world_pos.y)`
+  - ⚠️ **2D Sprite の非表示**: `BuildingType::Wall` では `VisualLayerKind::Struct` 子エンティティの spawn をスキップするか `Visibility::Hidden` を設定する。しないと 2D スプライトと3D Cuboid が二重表示される
+  - ⚠️ **仮設壁の扱い（決定済み）**: `building.is_provisional` が `true` の場合は警告色マテリアル（`srgba(1.0, 0.75, 0.4, 0.85)` 相当）の Cuboid を spawn する。仮設→本設（`CoatWall` 完了）の遷移時にマテリアルを差し替えるシステム（`Changed<Building>` を監視）を別途追加すること
+
+  ```rust
+  // spawn.rs（修正案）
+  match bp.kind {
+      BuildingType::Wall => {
+          // 3D Cuboid で代替するため VisualLayerKind::Struct 子エンティティは生成しない
+          let material = if bp.is_provisional {
+              handles.wall_provisional_material.clone()  // 警告色
+          } else {
+              handles.wall_material.clone()
+          };
+          commands.spawn((Building3dVisual { owner: building_entity },
+              Mesh3d(handles.wall_mesh.clone()), MeshMaterial3d(material),
+              Transform::from_xyz(world_x, TILE_SIZE / 2.0, -world_y),
+              RenderLayers::layer(LAYER_3D)));
+      }
+      _ => { /* 既存の子エンティティ spawn */ }
+  }
+  ```
 
   **M2A-3: wall_connection.rs の完成Building向けロジック削除**
-  - `q_children: Query<&Children>` と `q_visual_layers: Query<(&VisualLayerKind, &mut Sprite)>` 経由で Sprite を更新している完成Building向けブロックを削除
-  - Blueprint（`q_blueprint_sprites`）向けのスプライト更新は**そのまま残す**
+  - 削除対象: `q_children.get(entity)` ブロック（完成Building パス, lines 68-86）のみ
+  - `q_blueprint_sprites`（`Without<VisualLayerKind>`）経由の Blueprint パスは**そのまま残す**
+  - `is_wall()` / `add_neighbors_to_update()` / `update_wall_sprite()` は Blueprint パスを通じて保持される（Phase 3 でも再利用可能）
   - `WallVisualHandles` は Blueprint 用に引き続き必要なため削除しない
 
   **M2A-4: Wall3D クリーンアップシステムの追加**
@@ -244,16 +287,20 @@ pub struct Building3dHandles {
   - ⚠️ クリーンアップシステムは必ず **`bevy_app`** に置くこと。`hw_visual/src/CLAUDE.md` のcrate境界ルールにより、新規コードで `hw_jobs::Building` を直接インポートすることは禁止されている。`Building3dVisual` コンポーネント定義自体は `hw_visual/src/visual3d.rs` で可（`Entity` のみ持つため）。
 
 - **変更ファイル**:
-  - `crates/bevy_app/src/plugins/startup/visual_handles.rs`（Building3dHandles 追加）
+  - `crates/bevy_app/src/plugins/startup/visual_handles.rs`（Building3dHandles 追加・`wall_provisional_material` フィールド含む）
   - `crates/bevy_app/src/plugins/startup/mod.rs`（init_resource 追加）
-  - `crates/bevy_app/src/systems/jobs/building_completion/spawn.rs`（Wall3D spawn 追加）
+  - `crates/bevy_app/src/systems/jobs/building_completion/spawn.rs`（Wall3D spawn + 2D Sprite スキップ追加）
+  - `crates/bevy_app/src/systems/jobs/building_completion/mod.rs`（`building_completion_system` に `Res<Building3dHandles>` 追加）
   - `crates/hw_visual/src/wall_connection.rs`（完成Building向けスプライト更新ブロック削除）
   - `crates/bevy_app/src/systems/visual/` （クリーンアップシステム追加・登録）※ `hw_visual` には置かない
   - 新規: `Building3dVisual` コンポーネント定義ファイル（`hw_visual/src/visual3d.rs` 等）
+  - 新規: 仮設→本設遷移時のマテリアル差し替えシステム（`bevy_app/src/systems/visual/` 配下）
 
 - **完了条件**:
-  - [ ] トップダウン視点で壁の見た目が正しく表示される
+  - [ ] トップダウン視点でプリミティブとして壁の見た目が正しく表示される（Cuboid が隣接壁と接触して表示される）
   - [ ] 完成Building向け壁バリアントのスプライト切替ロジックが削除されている（`WallVisualHandles` のバリアントテクスチャ選択ロジックが Building 向けに呼ばれていない）
+  - [ ] 壁 2D Sprite と 3D Cuboid の二重表示が発生していない
+  - [ ] 仮設壁は警告色 Cuboid で表示され、CoatWall 完了後に通常色に切り替わる
   - [ ] Blueprint の壁プレビューは引き続き正常に動作する
   - [ ] `cargo check` 通過
 - **ステータス**: [ ] 未着手
@@ -270,8 +317,16 @@ pub struct Building3dHandles {
   - `hw_visual/src/visual3d.rs`（M2A で作成済み）に追加
 
   **M2B-2: Building3dHandles にキャラクター用メッシュ追加**
-  - Soul プロキシ: `Cuboid::new(TILE_SIZE * 0.6, TILE_SIZE * 0.8, TILE_SIZE * 0.6)` 相当の仮メッシュ
-  - Familiar プロキシ: Soul より一回り大きい仮メッシュ
+  - Soul プロキシ: 以下のコメントを付けた仮メッシュ（Phase 3 で GLB に差し替え対象）
+
+  ```rust
+  // 仮サイズ（Phase 3 で GLB に差し替え対象）
+  // Soul のスプライトサイズ（約 0.6 タイル）に合わせた Zバッファ検証用プレースホルダー
+  // 係数 0.6/0.8 は Zバッファ確認用の概算値であり、アートスタイルの確定値ではない
+  soul_mesh: meshes.add(Cuboid::new(TILE_SIZE * 0.6, TILE_SIZE * 0.8, TILE_SIZE * 0.6)),
+  ```
+
+  - Familiar プロキシ: Soul より一回り大きい仮メッシュ（同様のコメントを付けること）
   - `character_material`: `StandardMaterial { base_color: Color::srgb(0.9, 0.9, 0.9), unlit: true, .. }`
 
   **M2B-3: Soul spawn 時に SoulProxy3d エンティティを同時 spawn**
@@ -337,6 +392,21 @@ pub struct Building3dHandles {
   | Soul と Familiar が同一グリッドに重なる | 高さ別に正しく前後が決まる（Zバッファ） |
   | 壁とアイテム（Resource）が重なる | アイテムが壁の上に正しく描画される（アイテムは2Dのまま） |
 
+- **RtT 合成スプライトの Z 値確認**（Pre-2 完了後に必ず確認）:
+
+  ```
+  Camera2d（LAYER_2D）で描画される重ね順
+    ├─ RtT 合成スプライト（3D 壁・キャラクターを含む）← 現在 Z=20.0（rtt_composite.rs で要確認）
+    ├─ 地形タイル（2D Sprite）
+    ├─ ResourceItem スプライト（Z_ITEM = 0.10）
+    └─ UI など
+  ```
+
+  - 合成スプライトの Z 値 > `Z_ITEM（0.10）` の場合: 3D 壁が2Dアイテムより手前に表示される
+  - 合成スプライトの Z 値 < `Z_ITEM（0.10）` の場合: 3D 壁がアイテムに隠れる
+  - **ハードウェア Zバッファでは解決されない**（3D 壁と 2D アイテムの前後関係は Camera2d 上の Z 値で決まる）
+  - MS-2C 開始時に `rtt_composite.rs` の Z 値を確認し、`Z_ITEM` との整合を検証シナリオに追記すること
+
 - **問題発生時の対応**:
   - 3D側（壁・プロキシ）間の深度問題 → 3D y 軸高さを調整
   - 3D（RtT合成）と2D（アイテム等）の合成上の問題 → RtT合成スプライトの Z 値や `alpha_mode` を調整
@@ -352,16 +422,18 @@ pub struct Building3dHandles {
 
 - **やること**: Building3dHandles に各種メッシュ・マテリアルを追加し、`spawn_completed_building` を BuildingType ごとに拡張する。
 
+  ※ 全エントリは **仮実装（Phase 3 で GLB に差し替え対象）**
+
   | BuildingType | 使用3Dプリミティブ | サイズ | 備考 |
   | --- | --- | --- | --- |
-  | `Floor` | `Plane3d` (水平面) | TILE_SIZE × TILE_SIZE | y=0（地面レベル）に配置 |
-  | `Door` | `Cuboid` | TILE_SIZE × TILE_SIZE × TILE_SIZE | 壁と同じサイズ（開閉アニメーション準備のため親子構造化を検討）⚠️ MS-2A 完了〜MS-2D 実装前は2D Sprite のまま残存する（許容済み） |
-  | `Tank` | `Cuboid` | TILE_SIZE×2 × TILE_SIZE×1.5 × TILE_SIZE×2 | 2×2 グリッド仮モデル |
-  | `MudMixer` | `Cuboid` | TILE_SIZE×2 × TILE_SIZE×1.5 × TILE_SIZE×2 | 2×2 グリッド仮モデル |
-  | `RestArea` | `Plane3d` | TILE_SIZE×2 × TILE_SIZE×2 | 床扱い（仮） |
-  | `Bridge` | `Plane3d` | TILE_SIZE×2 × TILE_SIZE×5 | 床扱い（仮） |
-  | `SandPile`、`BonePile` | `Plane3d` | TILE_SIZE × TILE_SIZE | 地面堆積物扱い（仮） |
-  | `WheelbarrowParking` | `Plane3d` | TILE_SIZE × TILE_SIZE | 床扱い（仮） |
+  | `Floor` | `Plane3d` (水平面) | TILE_SIZE × TILE_SIZE | y=0（地面レベル）に配置。仮・Phase 3 で GLB 差し替え対象（厚みのある床メッシュに変更時はZファイティング再調整が必要） |
+  | `Door` | `Cuboid` | TILE_SIZE × TILE_SIZE × TILE_SIZE | 壁と同じサイズ。仮モデル。⚠️ MS-2A 完了〜MS-2D 実装前は2D Sprite のまま残存する（許容済み） |
+  | `Tank` | `Cuboid` | TILE_SIZE×2 × TILE_SIZE×1.5 × TILE_SIZE×2 | 2×2 グリッド仮モデル。Phase 3 で GLB 差し替え対象 |
+  | `MudMixer` | `Cuboid` | TILE_SIZE×2 × TILE_SIZE×1.5 × TILE_SIZE×2 | 2×2 グリッド仮モデル。Phase 3 で GLB 差し替え対象 |
+  | `RestArea` | `Plane3d` | TILE_SIZE×2 × TILE_SIZE×2 | 床扱い。仮・Phase 3 で GLB 差し替え対象 |
+  | `Bridge` | `Plane3d` | TILE_SIZE×2 × TILE_SIZE×5 | 床扱い。仮・Phase 3 で GLB 差し替え対象 |
+  | `SandPile`、`BonePile` | `Plane3d` | TILE_SIZE × TILE_SIZE | 地面堆積物扱い。仮・Phase 3 で GLB 差し替え対象 |
+  | `WheelbarrowParking` | `Plane3d` | TILE_SIZE × TILE_SIZE | 床扱い。仮・Phase 3 で GLB 差し替え対象 |
 
 - **Tank・MudMixer の state-dependent ビジュアル対応**:
   - 現在 `hw_visual/src/tank.rs` と `hw_visual/src/mud_mixer.rs` が `VisualLayerKind::Struct` 子エンティティの Sprite を更新している
@@ -406,7 +478,29 @@ pub struct Building3dHandles {
   ```
 
   **M-Elev-2: Camera3d Transform 切替システム**
-  - ⚠️ `systems/visual/camera_sync.rs` の `sync_camera3d_system` は毎フレーム Camera3d 位置を Camera2d に追従させる。矢視モード中にこのシステムが動くと Camera3d の向きが上書きされる。`ElevationViewState != TopDown` のとき `sync_camera3d_system` をスキップする条件分岐を追加すること。
+  - ⚠️ `systems/visual/camera_sync.rs` の `sync_camera3d_system` は毎フレーム Camera3d 位置を Camera2d に追従させる。矢視モード中にこのシステムが**全スキップ**すると Camera2d のパン操作が Camera3d に反映されなくなりパンが無効化される。
+  - **正しい修正**: `ElevationViewState != TopDown` のとき、平行移動のみ同期して回転・角度は同期しない
+
+  ```rust
+  // camera_sync.rs（修正案）
+  fn sync_camera3d_system(...) {
+      match elevation_state {
+          ElevationViewState::TopDown => {
+              // 現行の全同期（位置 + スケール）
+              cam3d.translation.x = cam2d.translation.x;
+              cam3d.translation.z = -cam2d.translation.y;
+              cam3d.scale = cam2d.scale;
+          }
+          _ => {
+              // 矢視中: XZ平面の平行移動のみ同期。向きは矢視プリセットが管理
+              cam3d.translation.x = cam2d.translation.x;
+              cam3d.scale = cam2d.scale;
+              // cam3d.translation.y / rotation は同期しない
+          }
+      }
+  }
+  ```
+
   - `ElevationViewState` が変わったとき `Camera3dRtt` の Transform を4プリセットに切替:
 
   ```
@@ -570,3 +664,4 @@ proxy_tf.translation = Vec3::new(pos_2d.x, TILE_SIZE * 0.4, -pos_2d.y);
 | 日付 | 変更者 | 内容 |
 | --- | --- | --- |
 | `2026-03-15` | Claude Sonnet 4.6 | 初版作成。コードベース調査（phase1引継ぎメモ・Pre-B実装・各エンティティspawn確認）に基づき策定。 |
+| `2026-03-15` | Claude Sonnet 4.6 | レビュー（phase2-implementation-review.md）反映。Pre-2 合成スプライト恒久化追加、M2A-2 Wall 2D Sprite 非表示・仮設壁方針B追加、M2A-3 削除範囲明確化、M2A 変更ファイルリストに mod.rs 追加、MS-2C Z値確認追加、MS-2D 全BuildingType 仮注記追加、MS-Elev M-Elev-2 sync 修正（全スキップ→平行移動のみ）、Building3dHandles に wall_provisional_material 追加、§4.0 仮実装原則追加。 |

@@ -22,8 +22,6 @@ pub fn wall_connections_system(
         (Option<&Building>, Option<&BlueprintVisualState>),
         Or<(With<Building>, With<BlueprintVisualState>)>,
     >,
-    q_children: Query<&Children>,
-    mut q_visual_layers: Query<(&VisualLayerKind, &mut Sprite)>,
     // Blueprint エンティティは Sprite を直接持つ（子構造ではない）
     mut q_blueprint_sprites: Query<&mut Sprite, Without<VisualLayerKind>>,
 ) {
@@ -63,40 +61,17 @@ pub fn wall_connections_system(
                     continue;
                 }
 
-                // 完成した Building は Sprite を VisualLayerKind::Struct 子エンティティに持つ
-                let mut updated = false;
-                if let Ok(children) = q_children.get(entity) {
-                    for child in children.iter() {
-                        if let Ok((kind, mut sprite)) = q_visual_layers.get_mut(child) {
-                            if *kind == VisualLayerKind::Struct {
-                                update_wall_sprite(
-                                    entity,
-                                    gx,
-                                    gy,
-                                    &mut sprite,
-                                    world_map.as_ref(),
-                                    &q_walls_check,
-                                    &wall_handles,
-                                );
-                                updated = true;
-                                break;
-                            }
-                        }
-                    }
-                }
                 // Blueprint エンティティは Sprite を直接持つ
-                if !updated {
-                    if let Ok(mut sprite) = q_blueprint_sprites.get_mut(entity) {
-                        update_wall_sprite(
-                            entity,
-                            gx,
-                            gy,
-                            &mut sprite,
-                            world_map.as_ref(),
-                            &q_walls_check,
-                            &wall_handles,
-                        );
-                    }
+                if let Ok(mut sprite) = q_blueprint_sprites.get_mut(entity) {
+                    update_wall_sprite(
+                        entity,
+                        gx,
+                        gy,
+                        &mut sprite,
+                        world_map.as_ref(),
+                        &q_walls_check,
+                        &wall_handles,
+                    );
                 }
             }
         }

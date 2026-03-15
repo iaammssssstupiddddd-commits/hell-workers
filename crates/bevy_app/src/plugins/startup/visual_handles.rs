@@ -1,7 +1,9 @@
 //! GameAssets から hw_visual のハンドルリソースを初期化するシステム
 
 use crate::assets::GameAssets;
+use bevy::camera::visibility::RenderLayers;
 use bevy::prelude::*;
+use hw_core::constants::{LAYER_3D, TILE_SIZE};
 use hw_core::visual::SoulTaskHandles;
 use hw_logistics::ResourceItemVisualHandles;
 use hw_visual::{
@@ -10,7 +12,40 @@ use hw_visual::{
 };
 use hw_world::{DoorVisualHandles, TerrainVisualHandles};
 
-pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>) {
+/// 3D レンダリング用メッシュ・マテリアルハンドルリソース
+///
+/// Phase 2 プレースホルダープリミティブ（Cuboid/Plane3d）を保持する。
+/// Phase 3 で GLB に置き換え予定。
+#[derive(Resource)]
+pub struct Building3dHandles {
+    // --- 壁 ---
+    pub wall_mesh: Handle<Mesh>,
+    pub wall_material: Handle<StandardMaterial>,
+    pub wall_provisional_material: Handle<StandardMaterial>,
+    // --- 床 ---
+    pub floor_mesh: Handle<Mesh>,
+    pub floor_material: Handle<StandardMaterial>,
+    // --- ドア ---
+    pub door_mesh: Handle<Mesh>,
+    pub door_material: Handle<StandardMaterial>,
+    // --- 設備 (Tank / MudMixer / RestArea / WheelbarrowParking / SandPile / BonePile) ---
+    pub equipment_1x1_mesh: Handle<Mesh>,
+    pub equipment_2x2_mesh: Handle<Mesh>,
+    pub equipment_material: Handle<StandardMaterial>,
+    // --- キャラクター ---
+    pub soul_mesh: Handle<Mesh>,
+    pub familiar_mesh: Handle<Mesh>,
+    pub character_material: Handle<StandardMaterial>,
+    /// 全3Dエンティティに付与する RenderLayers
+    pub render_layers: RenderLayers,
+}
+
+pub fn init_visual_handles(
+    mut commands: Commands,
+    game_assets: Res<GameAssets>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
     commands.insert_resource(WallVisualHandles {
         stone_isolated: game_assets.wall_isolated.clone(),
         stone_horizontal_left: game_assets.wall_horizontal_left.clone(),
@@ -132,5 +167,65 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
         icon_bone_small: game_assets.icon_bone_small.clone(),
         icon_wood_small: game_assets.icon_wood_small.clone(),
         icon_stasis_mud_small: game_assets.icon_stasis_mud_small.clone(),
+    });
+
+    // --- 3D レンダリング用ハンドル（Phase 2 プレースホルダー）---
+    let wall_mesh = meshes.add(Cuboid::new(TILE_SIZE, TILE_SIZE, TILE_SIZE));
+    let floor_mesh = meshes.add(Plane3d::default().mesh().size(TILE_SIZE, TILE_SIZE));
+    let door_mesh = meshes.add(Cuboid::new(TILE_SIZE, TILE_SIZE * 0.5, TILE_SIZE));
+    let equipment_1x1_mesh = meshes.add(Cuboid::new(TILE_SIZE, TILE_SIZE * 0.6, TILE_SIZE));
+    let equipment_2x2_mesh =
+        meshes.add(Cuboid::new(TILE_SIZE * 2.0, TILE_SIZE * 0.8, TILE_SIZE * 2.0));
+    let soul_mesh = meshes.add(Cuboid::new(TILE_SIZE * 0.8, TILE_SIZE * 0.8, TILE_SIZE * 0.8));
+    let familiar_mesh =
+        meshes.add(Cuboid::new(TILE_SIZE * 0.9, TILE_SIZE * 0.9, TILE_SIZE * 0.9));
+
+    let wall_material = materials.add(StandardMaterial {
+        base_color: Color::srgb(0.55, 0.55, 0.55),
+        unlit: true,
+        ..default()
+    });
+    let wall_provisional_material = materials.add(StandardMaterial {
+        base_color: Color::srgba(1.0, 0.75, 0.4, 0.85),
+        unlit: true,
+        alpha_mode: AlphaMode::Blend,
+        ..default()
+    });
+    let floor_material = materials.add(StandardMaterial {
+        base_color: Color::srgb(0.4, 0.3, 0.2),
+        unlit: true,
+        ..default()
+    });
+    let door_material = materials.add(StandardMaterial {
+        base_color: Color::srgb(0.6, 0.45, 0.2),
+        unlit: true,
+        ..default()
+    });
+    let equipment_material = materials.add(StandardMaterial {
+        base_color: Color::srgb(0.3, 0.5, 0.6),
+        unlit: true,
+        ..default()
+    });
+    let character_material = materials.add(StandardMaterial {
+        base_color: Color::srgb(0.9, 0.7, 0.4),
+        unlit: true,
+        ..default()
+    });
+
+    commands.insert_resource(Building3dHandles {
+        wall_mesh,
+        wall_material,
+        wall_provisional_material,
+        floor_mesh,
+        floor_material,
+        door_mesh,
+        door_material,
+        equipment_1x1_mesh,
+        equipment_2x2_mesh,
+        equipment_material,
+        soul_mesh,
+        familiar_mesh,
+        character_material,
+        render_layers: RenderLayers::layer(LAYER_3D),
     });
 }

@@ -2,6 +2,7 @@ mod post_process;
 mod spawn;
 
 use crate::assets::GameAssets;
+use crate::plugins::startup::Building3dHandles;
 use crate::world::map::WorldMapWrite;
 use bevy::prelude::*;
 
@@ -10,6 +11,7 @@ use super::Blueprint;
 pub fn building_completion_system(
     mut commands: Commands,
     game_assets: Res<GameAssets>,
+    handles_3d: Res<Building3dHandles>,
     mut world_map: WorldMapWrite,
     mut q_blueprints: Query<(Entity, &Blueprint, &Transform)>,
     q_pending_bucket_storage: Query<
@@ -31,8 +33,13 @@ pub fn building_completion_system(
         );
         commands.entity(entity).despawn();
 
-        let building_entity =
-            spawn::spawn_completed_building(&mut commands, bp, transform, &game_assets);
+        let building_entity = spawn::spawn_completed_building(
+            &mut commands,
+            bp,
+            transform,
+            &game_assets,
+            &handles_3d,
+        );
 
         let mut promoted_bucket_storage = Vec::new();
         if bp.kind == super::BuildingType::Tank {

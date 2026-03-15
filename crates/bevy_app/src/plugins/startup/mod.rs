@@ -4,11 +4,12 @@
 
 mod asset_catalog;
 mod perf_scenario;
+mod rtt_composite;
 mod rtt_setup;
-mod rtt_test_scene;
 mod visual_handles;
 
 pub use rtt_setup::{Camera3dRtt, RttTextures};
+pub use visual_handles::Building3dHandles;
 
 use asset_catalog::create_game_assets;
 use perf_scenario::{
@@ -85,8 +86,7 @@ impl Plugin for StartupPlugin {
                     setup_perf_scenario_if_enabled,
                     setup_ui,
                     populate_resource_spatial_grid,
-                    rtt_test_scene::spawn_rtt_composite_sprite,
-                    rtt_test_scene::spawn_test_cube_3d,
+                    rtt_composite::spawn_rtt_composite_sprite,
                 )
                     .chain(),
             )

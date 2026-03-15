@@ -46,6 +46,7 @@ pub fn familiar_spawning_system(
     mut commands: Commands,
     mut spawn_events: MessageReader<FamiliarSpawnEvent>,
     game_assets: Res<GameAssets>,
+    handles_3d: Res<crate::plugins::startup::Building3dHandles>,
     world_map: WorldMapRead,
     mut color_allocator: ResMut<FamiliarColorAllocator>,
 ) {
@@ -56,6 +57,7 @@ pub fn familiar_spawning_system(
         spawn_familiar_at(
             &mut commands,
             &game_assets,
+            &handles_3d,
             world_map.as_ref(),
             event.position,
             event.familiar_type,
@@ -68,6 +70,7 @@ pub fn familiar_spawning_system(
 pub fn spawn_familiar_at(
     commands: &mut Commands,
     game_assets: &Res<GameAssets>,
+    handles_3d: &crate::plugins::startup::Building3dHandles,
     world_map: &WorldMap,
     pos: Vec2,
     familiar_type: FamiliarType,
@@ -105,6 +108,16 @@ pub fn spawn_familiar_at(
             Transform::from_xyz(actual_pos.x, actual_pos.y, Z_CHARACTER + 0.5),
         ))
         .id();
+
+    // 3D プロキシ（Phase 2 プレースホルダー）
+    commands.spawn((
+        Mesh3d(handles_3d.familiar_mesh.clone()),
+        MeshMaterial3d(handles_3d.character_material.clone()),
+        Transform::from_xyz(actual_pos.x, TILE_SIZE * 0.45, -actual_pos.y),
+        handles_3d.render_layers.clone(),
+        hw_visual::visual3d::FamiliarProxy3d { owner: fam_entity },
+        Name::new(format!("FamiliarProxy3d: {}", familiar_name)),
+    ));
 
     commands.spawn((
         FamiliarRangeIndicator(fam_entity),

@@ -10,7 +10,17 @@ use crate::systems::command::{
 use crate::systems::jobs::building_completion_system;
 use crate::systems::logistics::resource_count_display_system;
 use crate::systems::room::sync_room_overlay_tiles_system;
+use crate::systems::visual::building3d_cleanup::{
+    cleanup_building_3d_visuals_system, sync_provisional_wall_material_system,
+};
 use crate::systems::visual::camera_sync::sync_camera3d_system;
+use crate::systems::visual::character_proxy_3d::{
+    cleanup_familiar_proxy_3d_system, cleanup_soul_proxy_3d_system,
+    sync_familiar_proxy_3d_system, sync_soul_proxy_3d_system,
+};
+use crate::systems::visual::elevation_view::{
+    ElevationViewState, elevation_view_input_system,
+};
 use crate::systems::visual::task_area_visual::update_task_area_material_system;
 use hw_core::game_state::PlayMode;
 use hw_visual::HwVisualPlugin;
@@ -23,6 +33,8 @@ pub struct VisualPlugin;
 impl Plugin for VisualPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(HwVisualPlugin);
+
+        app.init_resource::<ElevationViewState>();
 
         app.add_systems(
             Update,
@@ -98,6 +110,34 @@ impl Plugin for VisualPlugin {
         app.add_systems(
             Update,
             update_task_area_material_system.in_set(GameSystemSet::Visual),
+        );
+
+        // Building3dVisual クリーンアップ・マテリアル遷移
+        app.add_systems(
+            Update,
+            (
+                cleanup_building_3d_visuals_system,
+                sync_provisional_wall_material_system,
+            )
+                .in_set(GameSystemSet::Visual),
+        );
+
+        // キャラクター3Dプロキシ同期・クリーンアップ
+        app.add_systems(
+            Update,
+            (
+                sync_soul_proxy_3d_system,
+                sync_familiar_proxy_3d_system,
+                cleanup_soul_proxy_3d_system,
+                cleanup_familiar_proxy_3d_system,
+            )
+                .in_set(GameSystemSet::Visual),
+        );
+
+        // 矢視モード入力
+        app.add_systems(
+            Update,
+            elevation_view_input_system.in_set(GameSystemSet::Input),
         );
     }
 }

@@ -2,7 +2,7 @@
 
 作成日: 2026-03-15
 最終更新: 2026-03-15
-ステータス: Phase 1 完了・Phase 2 未着手
+ステータス: Phase 2 完了（MS-2C 目視検証待ち）
 
 ---
 
@@ -151,18 +151,25 @@
   - 16+バリアントのスプライト切替ロジックを廃止し、3Dモデルの動的配置で代替
 
 - **完了条件**: トップダウンで壁の見た目が正しい、`cargo check` 通過、**旧スプライト切替ロジック（16+バリアント）が削除されている**
-- **ステータス**: [ ] 未着手
+- **ステータス**: [x] 完了（2026-03-15）
+  - `Building3dHandles` リソースを `visual_handles.rs` で初期化（wall/floor/door/equipment/character メッシュ）
+  - `hw_visual/src/visual3d.rs` に `Building3dVisual` / `SoulProxy3d` / `FamiliarProxy3d` コンポーネント追加
+  - `building_completion/spawn.rs`: Wall など全BuildingType（Bridge除く）を独立3Dエンティティとして spawn
+  - `wall_connection.rs` の完成Building向け子エンティティ Sprite 更新ブロック削除（Blueprint向けは保持）
+  - `building3d_cleanup.rs`: Building削除時クリーンアップ + 仮設→本設マテリアル遷移システム
 
 ---
 
-### MS-2B: Zソート問題の検証
+### MS-2B: Zソート問題の検証 / キャラクタープロキシ
 
 - **依存**: MS-2A
 - **やること**:
   - Soul / Familiar を最小3Dプロキシで RtT レイヤーへ移す
   - 少なくとも「壁の背後を歩くキャラクター」「壁際で作業するキャラクター」の2ケースを再現する
 - **完了条件**: キャラクターを含む重なりがハードウェアZバッファで自然に解決される。2D側の `Z_CHARACTER` 調整で帳尻を合わせる必要がない
-- **ステータス**: [ ] 未着手
+- **ステータス**: [x] 完了（2026-03-15）
+  - `SoulProxy3d` / `FamiliarProxy3d` コンポーネント定義、soul/familiar spawn に3Dプロキシ追加
+  - `character_proxy_3d.rs`: 毎フレーム2D Transform → 3D XZ 同期、削除時クリーンアップ
 
 ---
 
@@ -171,7 +178,7 @@
 - **依存**: MS-2B
 - **やること**: 壁・アイテム・キャラクターが重なる状況を再現し、Phase 2 の対象範囲で Zソート破綻がないか検証する
 - **完了条件**: Phase 2 の対象物では Z値管理コードを追加せずに前後関係が正しく描画される
-- **ステータス**: [ ] 未着手
+- **ステータス**: [ ] 目視検証待ち（実装は完了）
 
 ---
 
@@ -183,7 +190,20 @@
   - `Door` → Cuboid + 開閉アニメーション準備
   - `Tank` / `MudMixer` → Cuboid 仮モデル
 - **完了条件**: Phase 2 終了時点で「地形以外の主要インゲーム要素をRtTへ移す前提」が成立している
-- **ステータス**: [ ] 未着手
+- **ステータス**: [x] 完了（2026-03-15）
+  - Floor/Door/SandPile/BonePile/WheelbarrowParking/Tank/MudMixer/RestArea すべて3D化（Cuboid/Plane3dプレースホルダー）
+  - Bridge のみ2Dスプライト維持（Phase 3 対象）
+
+---
+
+### MS-Elev: 矢視モード（4方向切替）
+
+- **依存**: MS-2A
+- **やること**: V キーで TopDown / 北 / 東 / 南 / 西 をサイクル切替
+- **完了条件**: 矢視中にカメラが正しい方向を向き、パンが追従する
+- **ステータス**: [x] 完了（2026-03-15）
+  - `ElevationViewState` リソース + `elevation_view.rs`（Vキー入力 + Camera3d プリセット切替）
+  - `camera_sync.rs` 修正: 矢視中は XZ 平行移動のみ同期、回転・Y 高度は保持
 
 ---
 

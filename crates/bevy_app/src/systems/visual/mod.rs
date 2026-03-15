@@ -5,6 +5,10 @@
 //! hw_visual クレートに移行済みのサブシステムは hw_visual::* を直接参照すること。
 //! root 残留ファイルは app_contexts / root 専有型への依存によるもの。
 
+pub mod building3d_cleanup;
+pub mod camera_sync;
+pub mod character_proxy_3d;
+pub mod elevation_view;
 pub mod floor_construction {
     pub use hw_visual::floor_construction::{
         FloorCuringProgressBar, FloorTileBoneVisual, manage_floor_curing_progress_bars_system,
@@ -12,7 +16,6 @@ pub mod floor_construction {
         update_floor_tile_visuals_system,
     };
 }
-pub mod camera_sync;
 pub mod placement_ghost;
 pub mod task_area_visual;
 pub mod wall_construction {
