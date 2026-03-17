@@ -1,8 +1,8 @@
 use crate::handles::WallVisualHandles;
 use crate::layer::VisualLayerKind;
 use bevy::prelude::*;
+use hw_core::visual_mirror::building::{BuildingTypeVisual, BuildingVisualState};
 use hw_core::visual_mirror::construction::BlueprintVisualState;
-use hw_jobs::{Building, BuildingType};
 use hw_world::{WorldMap, WorldMapRead};
 use std::collections::HashSet;
 
@@ -11,16 +11,16 @@ pub fn wall_connections_system(
     wall_handles: Res<WallVisualHandles>,
     world_map: WorldMapRead,
     q_new_buildings: Query<
-        (Entity, &Transform, &Building),
-        Or<(Added<Building>, Changed<Building>)>,
+        (Entity, &Transform, &BuildingVisualState),
+        Or<(Added<BuildingVisualState>, Changed<BuildingVisualState>)>,
     >,
     q_new_blueprints: Query<
         (Entity, &Transform, &BlueprintVisualState),
         Added<BlueprintVisualState>,
     >,
     q_walls_check: Query<
-        (Option<&Building>, Option<&BlueprintVisualState>),
-        Or<(With<Building>, With<BlueprintVisualState>)>,
+        (Option<&BuildingVisualState>, Option<&BlueprintVisualState>),
+        Or<(With<BuildingVisualState>, With<BlueprintVisualState>)>,
     >,
     q_children: Query<&Children>,
     mut q_visual_layers: Query<(&VisualLayerKind, &mut Sprite)>,
@@ -29,8 +29,11 @@ pub fn wall_connections_system(
 ) {
     let mut update_targets = HashSet::new();
 
-    for (_entity, transform, building) in q_new_buildings.iter() {
-        if matches!(building.kind, BuildingType::Wall | BuildingType::Door) {
+    for (_entity, transform, building_visual) in q_new_buildings.iter() {
+        if matches!(
+            building_visual.kind,
+            BuildingTypeVisual::Wall | BuildingTypeVisual::Door
+        ) {
             let (x, y) = WorldMap::world_to_grid(transform.translation.truncate());
             add_neighbors_to_update(x, y, &mut update_targets);
         }
@@ -55,8 +58,9 @@ pub fn wall_connections_system(
                     q_walls_check
                         .get(entity)
                         .ok()
-                        .is_some_and(|(building_opt, blueprint_opt)| {
-                            building_opt.is_some_and(|b| b.kind == BuildingType::Wall)
+                        .is_some_and(|(building_visual_opt, blueprint_opt)| {
+                            building_visual_opt
+                                .is_some_and(|v| v.kind == BuildingTypeVisual::Wall)
                                 || blueprint_opt.is_some_and(|s| s.is_plain_wall)
                         });
                 if !is_plain_wall {
@@ -118,8 +122,8 @@ fn update_wall_sprite(
     sprite: &mut Sprite,
     world_map: &WorldMap,
     q_walls_check: &Query<
-        (Option<&Building>, Option<&BlueprintVisualState>),
-        Or<(With<Building>, With<BlueprintVisualState>)>,
+        (Option<&BuildingVisualState>, Option<&BlueprintVisualState>),
+        Or<(With<BuildingVisualState>, With<BlueprintVisualState>)>,
     >,
     wall_handles: &WallVisualHandles,
 ) {
@@ -191,15 +195,15 @@ fn update_wall_sprite(
 fn is_provisional_wall(
     entity: Entity,
     q_walls_check: &Query<
-        (Option<&Building>, Option<&BlueprintVisualState>),
-        Or<(With<Building>, With<BlueprintVisualState>)>,
+        (Option<&BuildingVisualState>, Option<&BlueprintVisualState>),
+        Or<(With<BuildingVisualState>, With<BlueprintVisualState>)>,
     >,
 ) -> bool {
     q_walls_check
         .get(entity)
         .ok()
-        .and_then(|(building_opt, _)| building_opt)
-        .is_some_and(|building| building.kind == BuildingType::Wall && building.is_provisional)
+        .and_then(|(visual_opt, _)| visual_opt)
+        .is_some_and(|v| v.kind == BuildingTypeVisual::Wall && v.is_provisional)
 }
 
 fn is_wall(
@@ -207,14 +211,14 @@ fn is_wall(
     y: i32,
     world_map: &WorldMap,
     q_walls_check: &Query<
-        (Option<&Building>, Option<&BlueprintVisualState>),
-        Or<(With<Building>, With<BlueprintVisualState>)>,
+        (Option<&BuildingVisualState>, Option<&BlueprintVisualState>),
+        Or<(With<BuildingVisualState>, With<BlueprintVisualState>)>,
     >,
 ) -> bool {
     if let Some(entity) = world_map.building_entity((x, y)) {
-        if let Ok((building_opt, blueprint_opt)) = q_walls_check.get(entity) {
-            if let Some(b) = building_opt {
-                return matches!(b.kind, BuildingType::Wall | BuildingType::Door);
+        if let Ok((building_visual_opt, blueprint_opt)) = q_walls_check.get(entity) {
+            if let Some(v) = building_visual_opt {
+                return matches!(v.kind, BuildingTypeVisual::Wall | BuildingTypeVisual::Door);
             }
             if let Some(s) = blueprint_opt {
                 return s.is_wall_or_door;

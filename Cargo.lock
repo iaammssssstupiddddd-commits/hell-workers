@@ -2893,8 +2893,6 @@ version = "0.1.0"
 dependencies = [
  "bevy",
  "hw_core",
- "hw_jobs",
- "hw_logistics",
  "hw_spatial",
  "hw_ui",
  "hw_world",

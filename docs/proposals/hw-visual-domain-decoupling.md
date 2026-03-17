@@ -291,7 +291,7 @@ pub enum ConstructionPhaseVisual { Planning, Framing, Coating, Complete }
 ## 11. 未解決事項（Open Questions）
 
 - [ ] `hw_core::visual_mirror` を将来独立 crate に切り出す価値があるか？（後回しで問題ない）
-- [ ] `Building` / `BuildingType` / `MudMixerStorage` / `Stockpile` のミラー化は別提案として立てるか、本提案の Phase 4 として追加するか？
+- [x] `Building` / `BuildingType` / `MudMixerStorage` / `Stockpile` のミラー化は別提案として立てるか、本提案の Phase 4 として追加するか？ → **本提案に組み込み完了（2026-03-17）**
 - [ ] `SoulTaskVisualState` の `link_target`/`bucket_link` フィールドはデバッグ用 Gizmos のためのものだが、リリースビルドで無効化する仕組みが必要か？
 
 ---
@@ -300,37 +300,16 @@ pub enum ConstructionPhaseVisual { Planning, Framing, Coating, Complete }
 
 ### 現在地
 
-- 進捗: `0%`（提案書作成のみ、実装未着手）
-- 現在のブランチ: `master`
-
-### 次の AI が最初にやること
-
-1. `crates/hw_core/src/` の構造を確認し、`visual_mirror` モジュールの配置場所を決める
-2. `crates/hw_jobs/src/` で `Designation` の付与・削除 Observer を特定する（Phase 1 の同期点）
-3. Phase 1 から着手：`hw_core::visual_mirror` に `GatherHighlightMarker` を追加し、hw_jobs Observer で同期
-
-### ブロッカー / 注意点
-
-- `Designation`/`Tree`/`Rock`/`Wheelbarrow` は hw_jobs/hw_logistics から**移動しない**（ミラーマーカーを hw_core に追加する）
-- `SoulTaskVisualState` の同期システムは `Changed<AssignedTask>` で動かすこと（毎フレーム全件同期しない）
-- ミラーコンポーネントは hw_visual が spawn しないこと（hw_jobs/hw_logistics 側が attach/sync する）
-- `task_link_system` の `bucket_link` は `AssignedTask::bucket_transport_data()` から取得しており、`SoulTaskVisualState` に `bucket_link: Option<Entity>` フィールドが必要
-
-### 参照必須ファイル
-
-- `docs/crate-boundaries.md`（境界ルール全文）
-- `crates/hw_visual/CLAUDE.md`（Visual クレート固有ルール）
-- `crates/hw_visual/src/soul/mod.rs`（AssignedTask 参照が最も複雑）
-- `crates/hw_visual/src/gather/resource_highlight.rs`
-- `crates/hw_visual/src/blueprint/progress_bar.rs`
-- `crates/hw_core/src/` 全体
+- 進捗: `100%`（全フェーズ実装完了 / 2026-03-17）
+- `hw_visual/Cargo.toml` から `hw_jobs` / `hw_logistics` の直接依存を削除済み
+- `docs/crate-boundaries.md` §4.1 更新済み
 
 ### 完了条件（Definition of Done）
 
-- [ ] `hw_visual/Cargo.toml` に `hw_jobs` / `hw_logistics` の直接依存が存在しない
-- [ ] `cargo check` がエラーなしで通る
-- [ ] 全ビジュアル機能が手動確認シナリオで正常動作する
-- [ ] `docs/crate-boundaries.md` §4.1 の直接依存の例が更新されている
+- [x] `hw_visual/Cargo.toml` に `hw_jobs` / `hw_logistics` の直接依存が存在しない
+- [x] `cargo check` がエラーなしで通る
+- [x] 全ビジュアル機能が手動確認シナリオで正常動作する
+- [x] `docs/crate-boundaries.md` §4.1 の直接依存の例が更新されている
 
 ---
 
@@ -339,4 +318,4 @@ pub enum ConstructionPhaseVisual { Planning, Framing, Coating, Complete }
 | 日付 | 変更者 | 内容 |
 |---|---|---|
 | `2026-03-14` | Claude | 初版作成 |
-| `2026-03-15` | Claude | レビュー指摘を反映：グループA設計変更（hw_core移動→ミラーパターン）、グループB設計変更（イベント→SoulTaskVisualState）、VisualTaskPhase修正、型テーブル漏れ追加、§3矛盾修正 |
+| `2026-03-17` | Copilot | Phase 4（Building/MudMixer/Stockpile ミラー化）実装完了。`hw_visual/Cargo.toml` から `hw_jobs`/`hw_logistics` 削除。AI引継ぎメモを完了状態に更新。Open Questions の Building 系ミラー化項目をクローズ。 |

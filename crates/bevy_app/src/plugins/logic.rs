@@ -31,11 +31,16 @@ use crate::world::regrowth::{RegrowthManager, tree_regrowth_system};
 use bevy::prelude::*;
 use hw_core::game_state::PlayMode;
 use hw_jobs::visual_sync::{
-    on_designation_added, on_designation_removed, on_rest_area_added, sync_blueprint_visual_system,
-    sync_floor_site_visual_system, sync_floor_tile_visual_system, sync_soul_task_visual_system,
-    sync_wall_site_visual_system, sync_wall_tile_visual_system,
+    on_building_added_sync_visual, on_designation_added, on_designation_removed,
+    on_mud_mixer_storage_added, on_rest_area_added, sync_blueprint_visual_system,
+    sync_building_visual_system, sync_floor_site_visual_system, sync_floor_tile_visual_system,
+    sync_mud_mixer_active_system, sync_soul_task_visual_system, sync_wall_site_visual_system,
+    sync_wall_tile_visual_system,
 };
-use hw_logistics::visual_sync::{on_wheelbarrow_added, sync_inventory_item_visual_system};
+use hw_logistics::visual_sync::{
+    on_stockpile_added_sync_visual, on_wheelbarrow_added, sync_inventory_item_visual_system,
+    sync_stockpile_visual_system,
+};
 use hw_world::obstacle_cleanup_system;
 
 pub struct LogicPlugin;
@@ -98,6 +103,9 @@ impl Plugin for LogicPlugin {
                 sync_wall_tile_visual_system,
                 sync_floor_site_visual_system,
                 sync_wall_site_visual_system,
+                sync_building_visual_system,
+                sync_stockpile_visual_system,
+                sync_mud_mixer_active_system,
             )
                 .in_set(GameSystemSet::Logic),
         )
@@ -120,6 +128,9 @@ impl Plugin for LogicPlugin {
         .add_observer(on_designation_removed)
         .add_observer(on_rest_area_added)
         .add_observer(on_wheelbarrow_added)
+        .add_observer(on_building_added_sync_visual)
+        .add_observer(on_mud_mixer_storage_added)
+        .add_observer(on_stockpile_added_sync_visual)
         .add_systems(
             Update,
             (

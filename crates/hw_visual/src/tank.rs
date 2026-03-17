@@ -4,18 +4,18 @@ use crate::handles::BuildingAnimHandles;
 use crate::layer::VisualLayerKind;
 use bevy::prelude::*;
 use hw_core::relationships::StoredItems;
-use hw_jobs::{Building, BuildingType};
-use hw_logistics::zone::Stockpile;
+use hw_core::visual_mirror::building::{BuildingTypeVisual, BuildingVisualState};
+use hw_core::visual_mirror::StockpileVisualState;
 
 /// タンクの状態に応じて画像を更新するシステム
 pub fn update_tank_visual_system(
     handles: Res<BuildingAnimHandles>,
-    q_tanks: Query<(Entity, &Building, &Stockpile, Option<&StoredItems>)>,
+    q_tanks: Query<(Entity, &BuildingVisualState, &StockpileVisualState, Option<&StoredItems>)>,
     q_children: Query<&Children>,
     mut q_visual_layers: Query<(&VisualLayerKind, &mut Sprite)>,
 ) {
-    for (entity, building, stockpile, stored_items_opt) in q_tanks.iter() {
-        if building.kind != BuildingType::Tank {
+    for (entity, building_visual, stockpile_visual, stored_items_opt) in q_tanks.iter() {
+        if building_visual.kind != BuildingTypeVisual::Tank {
             continue;
         }
 
@@ -23,7 +23,7 @@ pub fn update_tank_visual_system(
 
         let image_handle = if current_count == 0 {
             handles.tank_empty.clone()
-        } else if current_count >= stockpile.capacity {
+        } else if current_count >= stockpile_visual.capacity {
             handles.tank_full.clone()
         } else {
             handles.tank_partial.clone()

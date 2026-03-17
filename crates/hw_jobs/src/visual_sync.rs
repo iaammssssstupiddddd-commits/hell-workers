@@ -252,3 +252,81 @@ pub fn sync_wall_site_visual_system(
         state.tiles_coated = site.tiles_coated;
     }
 }
+
+// ── Building Visual Sync ──────────────────────────────────────────────────────
+
+use hw_core::visual_mirror::building::{BuildingTypeVisual, BuildingVisualState, MudMixerVisualState};
+use crate::assigned_task::RefinePhase;
+use crate::mud_mixer::MudMixerStorage;
+
+fn building_type_to_visual(kind: BuildingType) -> BuildingTypeVisual {
+    match kind {
+        BuildingType::Wall               => BuildingTypeVisual::Wall,
+        BuildingType::Door               => BuildingTypeVisual::Door,
+        BuildingType::Floor              => BuildingTypeVisual::Floor,
+        BuildingType::Tank               => BuildingTypeVisual::Tank,
+        BuildingType::MudMixer           => BuildingTypeVisual::MudMixer,
+        BuildingType::RestArea           => BuildingTypeVisual::RestArea,
+        BuildingType::Bridge             => BuildingTypeVisual::Bridge,
+        BuildingType::SandPile           => BuildingTypeVisual::SandPile,
+        BuildingType::BonePile           => BuildingTypeVisual::BonePile,
+        BuildingType::WheelbarrowParking => BuildingTypeVisual::WheelbarrowParking,
+    }
+}
+
+use crate::model::Building;
+
+/// Inserts `BuildingVisualState` when a `Building` component is added.
+pub fn on_building_added_sync_visual(
+    on: On<Add, Building>,
+    mut commands: Commands,
+    q: Query<&Building>,
+) {
+    if let Ok(building) = q.get(on.entity) {
+        commands.entity(on.entity).try_insert(BuildingVisualState {
+            kind: building_type_to_visual(building.kind),
+            is_provisional: building.is_provisional,
+        });
+    }
+}
+
+/// Updates `BuildingVisualState` whenever `Building` changes.
+pub fn sync_building_visual_system(
+    mut q: Query<(&Building, &mut BuildingVisualState), Changed<Building>>,
+) {
+    for (building, mut state) in q.iter_mut() {
+        state.kind = building_type_to_visual(building.kind);
+        state.is_provisional = building.is_provisional;
+    }
+}
+
+/// Inserts `MudMixerVisualState` when a `MudMixerStorage` component is added.
+pub fn on_mud_mixer_storage_added(on: On<Add, MudMixerStorage>, mut commands: Commands) {
+    commands.entity(on.entity).try_insert(MudMixerVisualState::default());
+}
+
+/// Scans all Soul `AssignedTask`s and updates each Mixer's `MudMixerVisualState`.
+/// Full scan is necessary because the active state depends on other entities' state.
+pub fn sync_mud_mixer_active_system(
+    q_tasks: Query<&AssignedTask>,
+    mut q_mixers: Query<(Entity, &mut MudMixerVisualState)>,
+) {
+    let refining_mixers: std::collections::HashSet<Entity> = q_tasks
+        .iter()
+        .filter_map(|task| match task {
+            AssignedTask::Refine(data)
+                if matches!(data.phase, RefinePhase::Refining { .. }) =>
+            {
+                Some(data.mixer)
+            }
+            _ => None,
+        })
+        .collect();
+
+    for (entity, mut state) in q_mixers.iter_mut() {
+        let active = refining_mixers.contains(&entity);
+        if state.is_active != active {
+            state.is_active = active;
+        }
+    }
+}

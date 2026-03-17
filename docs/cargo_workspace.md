@@ -62,7 +62,7 @@ hw_ui
   ├─ hw_jobs
   ├─ hw_logistics
 
-hw_visual (hw_core + hw_jobs + hw_logistics + hw_spatial + hw_world + hw_ui)
+hw_visual (hw_core + hw_spatial + hw_world + hw_ui)
   └─ bevy_app
 ```
 

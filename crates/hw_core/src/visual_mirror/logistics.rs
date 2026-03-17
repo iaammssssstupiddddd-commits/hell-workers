@@ -18,3 +18,11 @@ pub struct InventoryItemVisual {
     /// `None` = carrying nothing.
     pub resource_type: Option<ResourceType>,
 }
+
+/// Mirror of `hw_logistics::Stockpile` capacity for `hw_visual`.
+/// Inserted by `on_stockpile_added_sync_visual` (Observer) and updated by
+/// `sync_stockpile_visual_system` (Changed<Stockpile>) in `hw_logistics`.
+#[derive(Component, Default)]
+pub struct StockpileVisualState {
+    pub capacity: usize,
+}
