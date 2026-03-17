@@ -52,7 +52,7 @@ hw_jobs
 hw_spatial (hw_core + hw_world + hw_jobs)
   └─ bevy_app
 
-hw_familiar_ai (hw_core + hw_jobs + hw_logistics + hw_world + hw_spatial + hw_soul_ai)
+hw_familiar_ai (hw_core + hw_jobs + hw_logistics + hw_world + hw_spatial)
   └─ bevy_app
 
 hw_soul_ai (hw_core + hw_jobs + hw_logistics + hw_world + hw_spatial)

@@ -132,6 +132,7 @@
   - **Perceive**: `detect_state_changes_system` / `detect_command_changes_system`
   - **Decide**: `following_familiar_system`（独立）、`state_decision → ApplyDeferred → task_delegation`（chain）、`blueprint_auto_gather → ApplyDeferred → encouragement_decision`（chain、`familiar_ai_state_system` の後）
   - **Execute**: `familiar_state_apply_system` / `handle_state_changed_system` / `max_soul_logic_system` / `squad_logic_system` / `encouragement_apply_system` / `cleanup_encouragement_cooldowns_system`
+- `hw_familiar_ai` は `hw_soul_ai` に依存しない。分隊解放・使役数超過リリース時のタスク解除は `SoulTaskUnassignRequest`（`hw_core::events`）イベントを `MessageWriter` で送信し、`hw_soul_ai` 側の `handle_soul_task_unassign_system`（`SoulAiSystemSet::Perceive`）が処理する。
 - root に残るのは `perceive/resource_sync`（ECS 実状態の再構築）、`configure_sets` の配線、互換 import path の thin shell のみ
 - `ConstructionSiteAccess` は **`hw_jobs::construction`** に移設済み（`hw_soul_ai` ではない）
 - Blueprint auto gather の純計画層は `decide/auto_gather_for_blueprint/{planning,demand,supply,helpers}` に置き、orchestration 本体は `hw_familiar_ai::decide::blueprint_auto_gather` が担う

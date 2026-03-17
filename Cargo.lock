@@ -2828,7 +2828,6 @@ dependencies = [
  "hw_core",
  "hw_jobs",
  "hw_logistics",
- "hw_soul_ai",
  "hw_spatial",
  "hw_world",
  "rand 0.8.5",

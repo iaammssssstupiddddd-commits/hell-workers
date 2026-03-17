@@ -290,3 +290,13 @@ pub struct SoulEscaped {
     pub entity: Entity,
     pub grid: (i32, i32),
 }
+
+/// 魂のタスク解除要求（Familiar AI → Soul AI Pub/Sub ブリッジ）
+///
+/// `hw_familiar_ai` が送信し、`hw_soul_ai` の Perceive フェーズで処理される。
+#[derive(Message, Debug, Clone)]
+pub struct SoulTaskUnassignRequest {
+    pub soul_entity: Entity,
+    /// `true` の場合、`OnTaskAbandoned` イベントを発行する
+    pub emit_abandoned: bool,
+}

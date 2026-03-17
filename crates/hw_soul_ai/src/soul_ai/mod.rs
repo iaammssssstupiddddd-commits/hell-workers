@@ -22,6 +22,11 @@ impl Plugin for SoulAiCorePlugin {
             .register_type::<execute::task_execution::types::AssignedTask>()
             .add_systems(
                 Update,
+                execute::task_unassign_apply::handle_soul_task_unassign_system
+                    .in_set(SoulAiSystemSet::Perceive),
+            )
+            .add_systems(
+                Update,
                 (
                     helpers::gathering::tick_gathering_timer_system,
                     update::gathering_tick::gathering_grace_tick_system,
