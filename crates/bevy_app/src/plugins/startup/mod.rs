@@ -37,7 +37,6 @@ use crate::world::map::{
 use bevy::camera::{RenderTarget, visibility::RenderLayers};
 use bevy::camera_controller::pan_camera::PanCamera;
 use bevy::prelude::*;
-use bevy::render::render_resource::TextureFormat;
 use hw_core::GameTime;
 use hw_core::constants::{LAYER_2D, LAYER_3D, LAYER_OVERLAY};
 use hw_spatial::SpatialGridOps;
@@ -92,7 +91,10 @@ impl Plugin for StartupPlugin {
                 )
                     .chain(),
             )
-            .add_systems(Update, setup_perf_scenario_runtime_if_enabled);
+            .add_systems(Update, (
+                setup_perf_scenario_runtime_if_enabled,
+                rtt_composite::sync_rtt_composite_sprite,
+            ));
     }
 }
 
@@ -115,8 +117,7 @@ fn setup(
     mut images: ResMut<Assets<Image>>,
 ) {
     // --- RtT オフスクリーンテクスチャ生成 ---
-    let rtt_image = Image::new_target_texture(1280, 720, TextureFormat::Rgba8Unorm, Some(TextureFormat::Rgba8UnormSrgb));
-    let rtt_handle = images.add(rtt_image);
+    let rtt_handle = rtt_setup::create_rtt_texture(1280, 720, &mut images);
     commands.insert_resource(RttTextures { texture_3d: rtt_handle.clone() });
 
     // --- Camera2d（既存: メイン描画・スクリーン出力） ---

@@ -43,17 +43,22 @@ Perceive → Update → Decide → Execute
   1. `hw_soul_ai::SoulAiCorePlugin` のインストール
   2. `SoulAiSystemSet` の `configure_sets`（ordering のみ）
   3. root adapter Observer（`adapters.rs` の Observer）の `add_observer`
-- leaf 側 `SoulAiCorePlugin` が登録済みのシステムはここで再登録しない
+  4. `gathering_spawn_system`（Execute フェーズ、`GameAssets` 依存のため bevy_app 残留）
+  5. フェーズ間 `ApplyDeferred` の登録
+- leaf 側 `SoulAiCorePlugin` / `hw_logistics::LogisticsPlugin` が登録済みのシステムはここで再登録しない
+- `apply_reservation_requests_system` は `hw_logistics::LogisticsPlugin` が登録する（`bevy_app/plugins/logic.rs` 参照）
 
-## 既存の re-export ファイル
+## re-export facade ファイル（残存）
 
-以下は `hw_soul_ai` への移設完了済み：
+以下のファイルは `hw_soul_ai` への移設完了済みの facade。実装はすべて leaf crate 側にある（これらのファイルの編集は原則不要）：
 
 - `execute/cleanup.rs` → `pub use hw_soul_ai::...`
 - `execute/task_execution/mod.rs` → `pub use hw_soul_ai::...`
 - `execute/task_execution/transport_common/*.rs` → `pub use hw_soul_ai::...`
 - `helpers/work.rs` → `pub use hw_soul_ai::...`
 - `decide/drifting.rs` → `pub use hw_soul_ai::...`
+
+これら facade 群の削除は別タスクとして管理する。
 
 ## docs 更新対象（変更時に必ず更新するドキュメント）
 

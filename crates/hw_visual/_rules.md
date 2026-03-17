@@ -59,7 +59,11 @@ hw_familiar_ai ✗
 ## plugin / system 登録責務
 
 - **`SpeechPlugin`** がスピーチ系システムの唯一の登録者
-- `familiar_idle_visual_apply_system` / `max_soul_visual_system` は `bevy_app` 側の `FamiliarAiPlugin` が ordering 込みで登録する（`hw_visual` では登録しない）
+- **`HwVisualPlugin`** が以下を `FamiliarAiSystemSet::Execute` に登録する：
+  - `speech::max_soul_visual_system`
+  - `speech::idle_visual::familiar_idle_visual_apply_system`
+  - `speech::squad_visual::squad_visual_system`
+  - ※ これらは Logic フェーズ（`FamiliarAiSystemSet::Execute`）に属する。他の Visual フェーズシステムとは混在するが機能的に正しい。
 
 ## docs 更新対象（変更時に必ず更新するドキュメント）
 

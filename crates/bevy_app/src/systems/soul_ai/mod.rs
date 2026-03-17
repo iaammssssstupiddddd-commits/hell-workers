@@ -42,15 +42,10 @@ impl Plugin for SoulAiPlugin {
                 .after(FamiliarAiSystemSet::Execute)
                 .in_set(GameSystemSet::Logic),
         )
-        .register_type::<execute::task_execution::AssignedTask>()
-        .init_resource::<perceive::escaping::EscapeDetectionTimer>()
-        .init_resource::<perceive::escaping::EscapeBehaviorTimer>()
-        .init_resource::<decide::drifting::DriftingDecisionTimer>()
         .add_systems(
             Update,
             (
                 // === Familiar → Soul 間の同期 ===
-                // Familiar AI の決定を Soul AI に反映
                 bevy::ecs::schedule::ApplyDeferred
                     .after(FamiliarAiSystemSet::Execute)
                     .before(SoulAiSystemSet::Perceive),
@@ -58,56 +53,20 @@ impl Plugin for SoulAiPlugin {
                 bevy::ecs::schedule::ApplyDeferred
                     .after(SoulAiSystemSet::Perceive)
                     .before(SoulAiSystemSet::Update),
-                // === Update Phase ===
-                update::vitals_influence::familiar_influence_unified_system
-                    .in_set(SoulAiSystemSet::Update),
                 // Update → Decide 間の同期
                 bevy::ecs::schedule::ApplyDeferred
                     .after(SoulAiSystemSet::Update)
                     .before(SoulAiSystemSet::Decide),
-                // === Decide Phase ===
-                // 次の行動の選択、要求の生成
-                (
-                    // 重なり回避（idle_behaviorの後に実行して上書きを防ぐ）
-                    decide::separation::gathering_separation_system
-                        .after(decide::idle_behavior::idle_behavior_decision_system),
-                    decide::escaping::escaping_decision_system
-                        .after(decide::idle_behavior::idle_behavior_decision_system),
-                    decide::drifting::drifting_decision_system
-                        .after(decide::escaping::escaping_decision_system),
-                    // 集会管理の決定
-                    decide::gathering_mgmt::gathering_maintenance_decision,
-                    decide::gathering_mgmt::gathering_merge_decision,
-                    decide::gathering_mgmt::gathering_recruitment_decision,
-                    decide::gathering_mgmt::gathering_leave_decision,
-                )
-                    .in_set(SoulAiSystemSet::Decide),
                 // Decide → Execute 間の同期
                 bevy::ecs::schedule::ApplyDeferred
                     .after(SoulAiSystemSet::Decide)
                     .before(SoulAiSystemSet::Execute),
                 // === Execute Phase ===
-                // 決定された行動の実行
-                (
-                    // drifting_behavior_system と despawn_at_edge_system は
-                    // hw_soul_ai::SoulAiCorePlugin で登録済み。ここでは ordering 参照のみ。
-                    execute::task_execution::task_execution_system
-                        .after(execute::task_execution::apply_task_assignment_requests_system)
-                        .after(execute::drifting::drifting_behavior_system),
-                    execute::task_execution::move_plant::apply_pending_building_move_system
-                        .after(execute::task_execution::task_execution_system),
-                    // アイドル行動の適用
-                    execute::idle_behavior_apply::idle_behavior_apply_system,
-                    execute::escaping_apply::escaping_apply_system,
-                    // クリーンアップ
-                    execute::cleanup::cleanup_commanded_souls_system,
-                    // タスク要求の適用
-                    hw_logistics::apply_reservation_requests_system,
-                    // エンティティ生成
-                    execute::gathering_spawn::gathering_spawn_system.after(
+                // エンティティ生成（GameAssets 依存のため bevy_app に残留）
+                execute::gathering_spawn::gathering_spawn_system
+                    .after(
                         hw_soul_ai::soul_ai::execute::gathering_spawn::gathering_spawn_logic_system,
-                    ),
-                )
+                    )
                     .in_set(SoulAiSystemSet::Execute),
             ),
         );

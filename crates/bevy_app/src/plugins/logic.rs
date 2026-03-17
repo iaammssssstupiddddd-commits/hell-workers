@@ -50,6 +50,7 @@ impl Plugin for LogicPlugin {
         app.add_plugins(SoulAiPlugin);
         app.add_plugins(FamiliarAiPlugin);
         app.add_plugins(TransportRequestPlugin);
+        app.add_plugins(hw_logistics::LogisticsPlugin);
 
         // パスファインディング用の作業メモリを登録
         app.init_resource::<RegrowthManager>();

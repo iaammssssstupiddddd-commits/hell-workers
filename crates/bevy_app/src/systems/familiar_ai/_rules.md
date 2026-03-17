@@ -41,19 +41,22 @@ Perceive → (ApplyDeferred) → Update → (ApplyDeferred) → Decide → Execu
 - `FamiliarAiPlugin` が担う：
   1. `hw_familiar_ai::FamiliarAiCorePlugin` のインストール
   2. `FamiliarAiSystemSet` の `configure_sets`（ordering のみ）
-  3. root-only resource の `init_resource`
-  4. root adapter system（`GameAssets` を引数に取るもの等）の `add_systems`
-- leaf 側 `FamiliarAiCorePlugin` が登録済みのシステムはここで再登録しない
+  3. root-only resource の `init_resource`（`SharedResourceCache`, `ReservationSyncTimer`）
+  4. `sync_reservations_system`（Perceive フェーズ）および ApplyDeferred の登録
+- leaf 側 `FamiliarAiCorePlugin` / `HwVisualPlugin` が登録済みのシステムはここで再登録しない
 
-## 既存の re-export ファイル
+## re-export facade ファイル（残存）
 
-以下は `hw_familiar_ai` への移設完了済み（このファイルを変更する際は実装を `hw_familiar_ai` 側に書く）：
+以下のファイルは `hw_familiar_ai` / `hw_visual` への移設完了済みの facade。実装はすべて leaf crate 側にある（これらのファイルの編集は原則不要）：
 
 - `decide/encouragement.rs` → `pub use hw_familiar_ai::...`
 - `decide/auto_gather_for_blueprint.rs` → `pub use hw_familiar_ai::...`
 - `execute/encouragement_apply.rs` → `pub use hw_familiar_ai::...`
 - `execute/idle_visual_apply.rs` → `pub use hw_visual::familiar_idle_visual_apply_system`
-- `execute/max_soul_apply.rs` → logic: `hw_familiar_ai`, visual: `hw_visual`
+- `execute/max_soul_apply.rs` → logic: `hw_familiar_ai::max_soul_logic_system`, visual: `hw_visual::max_soul_visual_system`
+- `execute/squad_apply.rs` → logic: `hw_familiar_ai::squad_logic_system`, visual: `hw_visual::squad_visual_system`
+
+これら facade 群の削除は別タスクとして管理する。
 
 ## docs 更新対象（変更時に必ず更新するドキュメント）
 

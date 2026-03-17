@@ -39,7 +39,7 @@ pub use task_area_visual::{TaskAreaMaterial, TaskAreaVisual};
 use bevy::prelude::*;
 use bevy::sprite_render::Material2dPlugin;
 use bevy::ui_render::prelude::UiMaterialPlugin;
-use hw_core::system_sets::GameSystemSet;
+use hw_core::system_sets::{FamiliarAiSystemSet, GameSystemSet};
 
 pub struct HwVisualPlugin;
 
@@ -210,6 +210,16 @@ impl Plugin for HwVisualPlugin {
             )
                 .chain()
                 .in_set(GameSystemSet::Visual),
+        );
+
+        app.add_systems(
+            Update,
+            (
+                speech::max_soul_visual_system,
+                speech::idle_visual::familiar_idle_visual_apply_system,
+                speech::squad_visual::squad_visual_system,
+            )
+                .in_set(FamiliarAiSystemSet::Execute),
         );
     }
 }

@@ -10,7 +10,7 @@ pub mod world;
 
 use bevy::prelude::*;
 use bevy::render::RenderPlugin;
-use bevy::render::settings::{Backends, RenderCreation, WgpuSettings};
+use bevy::render::settings::{Backends, RenderCreation, WgpuFeatures, WgpuSettings};
 use bevy::ui_widgets::popover::PopoverPlugin;
 use bevy::window::PresentMode;
 use std::env;
@@ -67,6 +67,7 @@ fn main() {
                 .set(RenderPlugin {
                     render_creation: RenderCreation::Automatic(WgpuSettings {
                         backends: Some(backends), // WSL は GL を優先
+                        features: WgpuFeatures::CLIP_DISTANCES,
                         ..default()
                     }),
                     ..default()

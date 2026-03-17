@@ -57,6 +57,8 @@ pub const Z_FLOATING_TEXT: f32 = 10.0;
 pub const Z_SPEECH_BUBBLE: f32 = 11.0;
 /// 吹き出し背景のZレイヤー
 pub const Z_SPEECH_BUBBLE_BG: f32 = 10.9;
+/// RtT composite sprite の Z レイヤー（Overlay Camera で合成表示）
+pub const Z_RTT_COMPOSITE: f32 = 20.0;
 
 /// Room 境界線の色（壁の上に乗せるボーダーライン）
 pub const ROOM_BORDER_COLOR: Color = Color::srgba(0.2, 0.7, 1.0, 0.8);

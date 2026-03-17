@@ -90,8 +90,8 @@
 | ファイル | 区分 | root 残留理由 |
 |:---|:---|:---|
 | `perceive/resource_sync.rs` | root perceive system | `SharedResourceCache` 再構築・`AssignedTask`/`Designation`/`TransportRequest`/relationship の実ワールド再構築は root の責務。`apply_reservation_op` / `apply_reservation_requests_system` は **`hw_logistics` に移設済み** |
-| `execute/idle_visual_apply.rs` | root visual adapter | `GameAssets` 依存のため `hw_familiar_ai` には置けない |
-| `mod.rs` | root wiring | `configure_sets`、SpatialGrid の `init_resource`、`FamiliarAiCorePlugin` の追加を担当 |
+| `execute/idle_visual_apply.rs` | thin re-export shell | `hw_visual::speech::idle_visual::familiar_idle_visual_apply_system` への re-export。登録は `hw_visual::HwVisualPlugin` |
+| `mod.rs` | root wiring | `configure_sets`・`FamiliarAiCorePlugin` の追加を担当（SpatialGrid の `init_resource` は `SpatialPlugin` に移設済み） |
 
 **thin re-export（実装は hw_familiar_ai に移設済み）**
 
@@ -127,11 +127,12 @@
 **hw_familiar_ai 分担**: `FamiliarAiPlugin` は `hw_familiar_ai::FamiliarAiCorePlugin` を内部で `add_plugins` する。`WorldMapRead` / SpatialGrid / `PathfindingContext` / `MessageWriter` を使う Familiar Decide 系 system も `hw_familiar_ai` 側で所有する。
 
 - `FamiliarAiCorePlugin` が直接登録するもの：
-  - **Resources**: `FamiliarTaskDelegationTimer` / `FamiliarDelegationPerfMetrics` / `ReachabilityFrameCache`
+  - **Resources**: `FamiliarTaskDelegationTimer` / `FamiliarDelegationPerfMetrics` / `ReachabilityFrameCache` / `BlueprintAutoGatherTimer`
+  - **RegisterType**: `FamiliarAiState` / `EncouragementCooldown`
   - **Perceive**: `detect_state_changes_system` / `detect_command_changes_system`
-  - **Decide**: `following_familiar_system`（独立）、`state_decision → ApplyDeferred → task_delegation`（chain）、`blueprint_auto_gather_system`
-  - **Execute**: `familiar_state_apply_system` / `handle_state_changed_system` / `max_soul_logic_system` / `squad_logic_system`、`EncouragementCooldown` の type registration
-- root に残るのは `perceive/resource_sync`（ECS 実状態の再構築）、`execute/idle_visual_apply.rs`（`GameAssets` 依存 visual）、SpatialGrid の `init_resource`・`configure_sets` の配線、互換 import path の thin shell のみ
+  - **Decide**: `following_familiar_system`（独立）、`state_decision → ApplyDeferred → task_delegation`（chain）、`blueprint_auto_gather → ApplyDeferred → encouragement_decision`（chain、`familiar_ai_state_system` の後）
+  - **Execute**: `familiar_state_apply_system` / `handle_state_changed_system` / `max_soul_logic_system` / `squad_logic_system` / `encouragement_apply_system` / `cleanup_encouragement_cooldowns_system`
+- root に残るのは `perceive/resource_sync`（ECS 実状態の再構築）、`configure_sets` の配線、互換 import path の thin shell のみ
 - `ConstructionSiteAccess` は **`hw_jobs::construction`** に移設済み（`hw_soul_ai` ではない）
 - Blueprint auto gather の純計画層は `decide/auto_gather_for_blueprint/{planning,demand,supply,helpers}` に置き、orchestration 本体は `hw_familiar_ai::decide::blueprint_auto_gather` が担う
 

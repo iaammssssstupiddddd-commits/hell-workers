@@ -10,10 +10,10 @@ use crate::systems::spatial::{
 };
 use bevy::prelude::*;
 use hw_spatial::{
-    update_blueprint_spatial_grid_system, update_designation_spatial_grid_system,
-    update_familiar_spatial_grid_system, update_resource_spatial_grid_system,
-    update_spatial_grid_system, update_stockpile_spatial_grid_system,
-    update_transport_request_spatial_grid_system,
+    DesignationSpatialGrid, TransportRequestSpatialGrid, update_blueprint_spatial_grid_system,
+    update_designation_spatial_grid_system, update_familiar_spatial_grid_system,
+    update_resource_spatial_grid_system, update_spatial_grid_system,
+    update_stockpile_spatial_grid_system, update_transport_request_spatial_grid_system,
 };
 
 pub struct SpatialPlugin;
@@ -21,6 +21,8 @@ pub struct SpatialPlugin;
 impl Plugin for SpatialPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<TileSiteIndex>();
+        app.init_resource::<DesignationSpatialGrid>();
+        app.init_resource::<TransportRequestSpatialGrid>();
         app.add_systems(
             Update,
             (

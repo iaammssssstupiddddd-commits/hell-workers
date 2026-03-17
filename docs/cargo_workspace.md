@@ -36,19 +36,20 @@ hw_core
   ├─ hw_spatial
   ├─ hw_familiar_ai
   ├─ hw_soul_ai
+  ├─ hw_ui
   ├─ hw_visual
   └─ bevy_app
 
-hw_world
+hw_world (hw_core + hw_jobs)
   └─ bevy_app
 
-hw_logistics
+hw_logistics (hw_core + hw_world + hw_jobs + hw_spatial)
   └─ bevy_app
 
 hw_jobs
   └─ bevy_app
 
-hw_spatial (hw_core + hw_world + hw_logistics + hw_jobs)
+hw_spatial (hw_core + hw_world + hw_jobs)
   └─ bevy_app
 
 hw_familiar_ai (hw_core + hw_jobs + hw_logistics + hw_world + hw_spatial + hw_soul_ai)
@@ -57,10 +58,8 @@ hw_familiar_ai (hw_core + hw_jobs + hw_logistics + hw_world + hw_spatial + hw_so
 hw_soul_ai (hw_core + hw_jobs + hw_logistics + hw_world + hw_spatial)
   └─ bevy_app
 
-hw_ui
-  ├─ hw_core
-  ├─ hw_jobs
-  ├─ hw_logistics
+hw_ui (hw_core + hw_jobs + hw_logistics)
+  └─ bevy_app
 
 hw_visual (hw_core + hw_spatial + hw_world + hw_ui)
   └─ bevy_app
@@ -383,6 +382,7 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 - transport metrics / state sync / lifecycle cleanup
 - `SharedResourceCache`（タスク間リソース予約キャッシュ）
 - `apply_reservation_op` / `apply_reservation_requests_system`（予約操作の反映 helper）
+- **`LogisticsPlugin`**：`apply_reservation_requests_system` を `SoulAiSystemSet::Execute` に登録する Plugin（`src/plugin.rs`）
 - `TileSiteIndex`（タイル→サイト逆引き）
 - `construction_helpers::{ResourceItemVisualHandles, spawn_refund_items}` — `GameAssets` 依存を root 注入 Resource に抽象化した建設キャンセル共通 helper
 - producer 全系（`blueprint`, `bucket`, `consolidation`, `mixer`, `task_area`, `wheelbarrow`, `floor_construction`, `wall_construction`, `provisional_wall` 等）
@@ -390,7 +390,7 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 
 補足:
 
-- `apply_reservation_requests_system` の実装は `hw_logistics` にあるが、`ResourceReservationRequest` の `add_message` と `SharedResourceCache` の `init_resource` は root app shell が担当する
+- `apply_reservation_requests_system` は `hw_logistics::LogisticsPlugin` が `SoulAiSystemSet::Execute` に登録する。`ResourceReservationRequest` の `add_message` と `SharedResourceCache` の `init_resource` は root app shell が担当する。
 
 ここに置かないもの:
 

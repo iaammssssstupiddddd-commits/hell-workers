@@ -44,9 +44,9 @@ hw_visual    ✗
 
 ## plugin / system 登録責務
 
-- transport request / arbitration 系システムの登録はこのクレートの Plugin が担う
-- `apply_reservation_requests_system`：`ResourceReservationRequest` 処理の唯一の登録元
-- `bevy_app` は ordering 参照のみ
+- **`LogisticsPlugin`**（`crates/hw_logistics/src/plugin.rs`）：`apply_reservation_requests_system` を `SoulAiSystemSet::Execute` に登録する唯一の登録元。`bevy_app/plugins/logic.rs` から `add_plugins(hw_logistics::LogisticsPlugin)` で組み込まれる。
+- **`TransportRequestPlugin`**：transport request / arbitration 系システムの登録を担う（`transport_request/plugin.rs`）。`bevy_app` から `add_plugins(hw_logistics::transport_request::TransportRequestPlugin)` で組み込まれる。
+- `bevy_app` はこれらのシステムを直接 `add_systems` しない。
 
 ## ⚠️ 既知のサイレント失敗トラップ（最重要）
 

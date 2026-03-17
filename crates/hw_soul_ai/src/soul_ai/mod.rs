@@ -15,7 +15,11 @@ pub struct SoulAiCorePlugin;
 impl Plugin for SoulAiCorePlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<helpers::gathering::GatheringUpdateTimer>()
+            .init_resource::<perceive::escaping::EscapeDetectionTimer>()
+            .init_resource::<perceive::escaping::EscapeBehaviorTimer>()
+            .init_resource::<decide::drifting::DriftingDecisionTimer>()
             .register_type::<helpers::gathering::GatheringSpot>()
+            .register_type::<execute::task_execution::types::AssignedTask>()
             .add_systems(
                 Update,
                 (
@@ -28,6 +32,7 @@ impl Plugin for SoulAiCorePlugin {
                     update::state_sanity::clear_stale_working_on_system,
                     update::state_sanity::reconcile_rest_state_system,
                     update::dream_update::dream_update_system,
+                    update::vitals_influence::familiar_influence_unified_system,
                 )
                     .in_set(SoulAiSystemSet::Update),
             )
@@ -43,6 +48,14 @@ impl Plugin for SoulAiCorePlugin {
                     ),
                     execute::drifting::despawn_at_edge_system
                         .after(execute::drifting::drifting_behavior_system),
+                    execute::task_execution_system::task_execution_system
+                        .after(execute::task_assignment_apply::apply_task_assignment_requests_system)
+                        .after(execute::drifting::drifting_behavior_system),
+                    execute::task_execution::move_plant::apply_pending_building_move_system
+                        .after(execute::task_execution_system::task_execution_system),
+                    execute::idle_behavior_apply::idle_behavior_apply_system,
+                    execute::escaping_apply::escaping_apply_system,
+                    execute::cleanup::cleanup_commanded_souls_system,
                 )
                     .in_set(SoulAiSystemSet::Execute),
             )
@@ -52,6 +65,16 @@ impl Plugin for SoulAiCorePlugin {
                     decide::work::auto_refine::mud_mixer_auto_refine_system,
                     decide::work::auto_build::blueprint_auto_build_system,
                     decide::idle_behavior::idle_behavior_decision_system,
+                    decide::separation::gathering_separation_system
+                        .after(decide::idle_behavior::idle_behavior_decision_system),
+                    decide::escaping::escaping_decision_system
+                        .after(decide::idle_behavior::idle_behavior_decision_system),
+                    decide::drifting::drifting_decision_system
+                        .after(decide::escaping::escaping_decision_system),
+                    decide::gathering_mgmt::gathering_maintenance_decision,
+                    decide::gathering_mgmt::gathering_merge_decision,
+                    decide::gathering_mgmt::gathering_recruitment_decision,
+                    decide::gathering_mgmt::gathering_leave_decision,
                 )
                     .in_set(SoulAiSystemSet::Decide),
             )

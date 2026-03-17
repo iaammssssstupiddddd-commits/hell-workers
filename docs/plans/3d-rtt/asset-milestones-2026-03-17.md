@@ -151,10 +151,10 @@ MS-P3-Pre-C（Camera角度確定）
 - `wall_height > 0.0` で施工進捗クリップ有効
 
 **完了条件**:
-- [ ] `assets/shaders/section_material.wgsl` が存在する
-- [ ] 提案書 §3.4 の完全版 WGSL と一致している
+- [x] `assets/shaders/section_material.wgsl` が存在する
+- [x] 提案書 §3.4 の完全版 WGSL と一致している
 
-**ステータス**: [ ] 未着手
+**ステータス**: [x] 完了
 
 ---
 
