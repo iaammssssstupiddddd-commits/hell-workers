@@ -9,7 +9,8 @@ pub mod visual_sync;
 pub use assigned_task::*;
 pub use construction::{
     ConstructionSiteAccess, ConstructionSitePositions, FloorConstructionSite, FloorTileState,
-    WallConstructionSite, WallTileState,
+    WallConstructionSite, WallTileState, floor_construction_phase_transition_system,
+    wall_construction_phase_transition_system,
 };
 pub use events::BuildingCompletedEvent;
 pub use model::*;

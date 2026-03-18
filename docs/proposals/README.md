@@ -18,8 +18,8 @@
 | Document | Notes |
 | --- | --- |
 | [08_visual_update_prompts.md](08_visual_update_prompts.md) | ビジュアル更新プロンプト集 |
-| [agent-md-for-branches.md](agent-md-for-branches.md) | AI開発エージェント最適化 提案書 |
 | [architecture-improvements-2026.md](architecture-improvements-2026.md) | アーキテクチャ改善提案 (Architecture Improvement Proposals) |
+| [hw-visual-domain-decoupling.md](hw-visual-domain-decoupling.md) | `hw_visual` は `hw_jobs` と `hw_logistics` を `Cargo.toml` で直接依存しているの提案。 |
 | [soul_spawn_despawn_optimization.md](soul_spawn_despawn_optimization.md) | Soul Spawn/Despawn 最適化提案 |
 | [speech_optimization.md](speech_optimization.md) | スピーチシステム最適化提案 |
 
@@ -30,6 +30,7 @@
 | [archive/01-event-driven-ui.md](archive/01-event-driven-ui.md) | 提案01: ポーリング廃止 — イベント駆動UIアーキテクチャへの全面移行 |
 | [archive/05-unified-interaction-layer.md](archive/05-unified-interaction-layer.md) | 提案05: インタラクション層の統一 — 全UI操作を単一の入力パイプラインに集約 |
 | [archive/09-large-file-refactor.md](archive/09-large-file-refactor.md) | 提案09: 500行超ファイルの段階的リファクタリング計画 |
+| [archive/agent-md-for-branches.md](archive/agent-md-for-branches.md) | AI開発エージェント最適化 提案書 |
 | [archive/ai-scalability-optimization.md](archive/ai-scalability-optimization.md) | AIシステム スケーラビリティ最適化提案 (Scale: Familiar 30, Soul 500) |
 | [archive/bevy_018_features.md](archive/bevy_018_features.md) | Bevy 0.18 新機能導入提案 |
 | [archive/destination-validation-unification-proposal-2026-03-07.md](archive/destination-validation-unification-proposal-2026-03-07.md) | 現状: 搬入先（FloorSite, WallSite, ProvisionalWall 等）の受入可能量チェックが **3箇所に独立実装** されている:の提案。 |

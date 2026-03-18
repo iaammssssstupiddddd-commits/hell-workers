@@ -93,6 +93,7 @@ Perceive → Update → Decide → Execute
 ## 建設タスク型の責務分離
 
 - `FloorConstructionPhase` / `WallConstructionPhase` / `FloorTileState` / `WallTileState` は `hw_jobs` の `construction` モジュールへ集約されたデータ型として扱う。
+- `floor_construction_phase_transition_system` / `wall_construction_phase_transition_system` も `hw_jobs::construction` に移設済み。`bevy_app/floor_construction/phase_transition.rs`・`wall_construction/phase_transition.rs` は re-export shell のみ。`wall_framed_tile_spawn_system` は `Building3dHandles`（root 固有）依存のため `bevy_app` に残留。
 - `AssignedTask` 側の worker オペレーション型（`ReinforceFloorPhase`, `PourFloorPhase`, `FrameWallPhase`, `CoatWallPhase`）は、現時点では「実行者視点の進捗」を表す独立型として維持する。
 - `hw_jobs::construction` 側の tile state は「サイト/タイルごとの状態」を表現し、AssignedTask phase は「魂がそのタスク内でどの段階にいるか」を表現する。
 - 今回の抽出では型を統合せず、2 系統の enum は役割分離したまま保持し、境界を越えた参照だけを `pub use` レイヤーで標準化する。
@@ -100,8 +101,8 @@ Perceive → Update → Decide → Execute
 ## Room Detection の境界
 
 - `crates/hw_world::room_detection` が room detection core の唯一の所有者であり、`RoomDetectionBuildingTile` からの入力分類、flood-fill、妥当性判定、`RoomBounds` を提供する。**加えて ECS 型（`Room`, `RoomOverlayTile`, `RoomTileLookup`, `RoomDetectionState`, `RoomValidationState`）も `hw_world::room_detection` が所有する**。
-- `crates/hw_world/src/room_systems.rs` が ECS adapter 層を担う（`detect_rooms_system` / `validate_rooms_system`）。`Building + Transform` クエリから `RoomDetectionBuildingTile` を収集し、`DetectedRoom` を `Room` entity と `RoomTileLookup` へ反映する。
-- `crates/bevy_app/src/systems/room/detection.rs` と `validation.rs` は `hw_world` への re-export shell のみ。登録は `bevy_app/plugins/logic.rs` が維持する。
+- `crates/hw_world/src/room_systems.rs` が ECS adapter 層をすべて担う（`detect_rooms_system` / `validate_rooms_system` / `mark_room_dirty_from_building_changes_system` / `on_building_added` / `on_building_removed` / `on_door_added` / `on_door_removed` / `sync_room_overlay_tiles_system`）。
+- `crates/bevy_app/src/systems/room/detection.rs`・`validation.rs`・`dirty_mark.rs`・`visual.rs` はすべて `hw_world` への re-export shell のみ。登録は `bevy_app/plugins/logic.rs`・`visual.rs` が維持する。
 - `bevy_app/src/systems/room/components.rs` と `resources.rs` は `hw_world` からの re-export のみ。型の所有権は `hw_world` にある。
 - `Room` entity の spawn では `Transform::default()` を必ず付与する。これを外すと overlay child の transform 伝播が壊れる。
 

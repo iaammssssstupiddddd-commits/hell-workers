@@ -341,7 +341,7 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 - **`Room`, `RoomOverlayTile`（Component）** — Room ECS 型。`bevy_app/room/components.rs` は re-export のみ
 - **`RoomTileLookup`, `RoomDetectionState`, `RoomValidationState`（Resource）** — Room 管理リソース。`bevy_app/room/resources.rs` は re-export のみ
 - **`DreamTreePlantingPlan`（`tree_planting.rs`）** — Dream 植林計画の純粋データ構造。ビルダー関数（`build_dream_tree_planting_plan`）は `GameAssets`/`DreamPool` 依存のため bevy_app に残留
-- **`room_systems::{detect_rooms_system, validate_rooms_system}`** — Room ECS adapter 層。`Building + Transform` クエリから `RoomDetectionBuildingTile` を収集し `DetectedRoom` を `Room` entity に反映する。`bevy_app/room/detection.rs`・`validation.rs` は re-export shell のみ
+- **`room_systems::{detect_rooms_system, validate_rooms_system, mark_room_dirty_from_building_changes_system, on_building_added, on_building_removed, on_door_added, on_door_removed, sync_room_overlay_tiles_system}`** — Room ECS adapter 層（検出・検証・dirty マーキング・オーバーレイ同期をすべて所有）。`bevy_app/room/detection.rs`・`validation.rs`・`dirty_mark.rs`・`visual.rs` は re-export shell のみ
 
 ここに置かないもの:
 

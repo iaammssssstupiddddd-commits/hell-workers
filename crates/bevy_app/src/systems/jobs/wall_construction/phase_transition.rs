@@ -1,8 +1,12 @@
-//! Wall construction phase transition system
+//! Wall construction phase transition systems.
+//!
+//! - `wall_framed_tile_spawn_system`: `Building3dHandles` (bevy_app-only) に依存するため bevy_app に残留。
+//! - `wall_construction_phase_transition_system`: root-only 依存なし。hw_jobs へ移設済み。
+
+pub use hw_jobs::wall_construction_phase_transition_system;
 
 use super::components::*;
 use crate::plugins::startup::Building3dHandles;
-use crate::systems::jobs::construction_shared::remove_tile_task_components;
 use crate::systems::jobs::{Building, BuildingType, ProvisionalWall};
 use crate::world::map::{WorldMap, WorldMapWrite};
 use bevy::prelude::*;
@@ -35,7 +39,6 @@ pub fn wall_framed_tile_spawn_system(
             ))
             .id();
 
-        // 3D ビジュアルエンティティを独立 spawn（仮設壁は警告色マテリアル）
         commands.spawn((
             Mesh3d(handles_3d.wall_mesh.clone()),
             MeshMaterial3d(handles_3d.wall_provisional_material.clone()),
@@ -51,53 +54,5 @@ pub fn wall_framed_tile_spawn_system(
             wall_entity,
             std::iter::once(tile.grid_pos),
         );
-    }
-}
-
-/// Handles transition from Framing to Coating phase
-pub fn wall_construction_phase_transition_system(
-    mut q_sites: Query<(Entity, &mut WallConstructionSite)>,
-    mut q_tiles: Query<(Entity, &mut WallTileBlueprint)>,
-    mut commands: Commands,
-) {
-    for (site_entity, mut site) in q_sites.iter_mut() {
-        if site.phase != WallConstructionPhase::Framing {
-            continue;
-        }
-
-        let mut total_tiles = 0;
-        let mut framed_tiles = 0;
-
-        for (_, tile) in q_tiles.iter().filter(|(_, t)| t.parent_site == site_entity) {
-            total_tiles += 1;
-            if matches!(tile.state, WallTileState::FramedProvisional) && tile.spawned_wall.is_some()
-            {
-                framed_tiles += 1;
-            }
-        }
-
-        // もし残存タイルが0になってしまった場合は何もしない
-        if total_tiles == 0 {
-            continue;
-        }
-
-        if framed_tiles >= total_tiles {
-            site.phase = WallConstructionPhase::Coating;
-
-            let tile_entities: Vec<Entity> = q_tiles
-                .iter_mut()
-                .filter(|(_, tile)| tile.parent_site == site_entity)
-                .map(|(tile_entity, mut tile)| {
-                    tile.state = WallTileState::WaitingMud;
-                    tile_entity
-                })
-                .collect();
-            remove_tile_task_components(&mut commands, &tile_entities);
-
-            info!(
-                "Wall site {:?} -> Coating phase (all {} tiles framed)",
-                site_entity, site.tiles_total
-            );
-        }
     }
 }

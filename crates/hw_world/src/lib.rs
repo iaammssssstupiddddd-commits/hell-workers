@@ -43,7 +43,11 @@ pub use room_detection::{
     RoomDetectionState, RoomOverlayTile, RoomTileLookup, RoomValidationState,
     build_detection_input, detect_rooms, room_is_valid_against_input,
 };
-pub use room_systems::{detect_rooms_system, validate_rooms_system};
+pub use room_systems::{
+    detect_rooms_system, mark_room_dirty_from_building_changes_system, on_building_added,
+    on_building_removed, on_door_added, on_door_removed, sync_room_overlay_tiles_system,
+    validate_rooms_system,
+};
 pub use spatial::SpatialGridOps;
 pub use spawn::{find_nearby_walkable_grid, pick_random_walkable_grid_in_rect};
 pub use terrain::TerrainType;

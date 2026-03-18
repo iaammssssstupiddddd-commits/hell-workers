@@ -10,8 +10,8 @@ Room 検出システムは、完成した壁・扉・床で構成された密閉
 実装境界は次の 2 層です。
 
 - `crates/hw_world::room_detection`: pure core かつ ECS 型の所有者。入力分類、flood-fill、妥当性判定、`RoomBounds`、**`Room`/`RoomOverlayTile`（Component）**、**`RoomTileLookup`/`RoomDetectionState`/`RoomValidationState`（Resource）** を保持する。
-- `crates/hw_world::room_systems`: ECS adapter 層。`detect_rooms_system` / `validate_rooms_system` を実装し、`Building + Transform` クエリから tile descriptor を収集して `Room` entity のスポーン/削除・`RoomTileLookup` 更新を行う。
-- `crates/bevy_app/src/systems/room/*`: `detection.rs`・`validation.rs` は `hw_world` への re-export shell のみ。`visual.rs` / `dirty_mark.rs` は引き続き app shell として機能。`components.rs`・`resources.rs` は `hw_world` からの re-export のみ。
+- `crates/hw_world::room_systems`: ECS adapter 層。`detect_rooms_system` / `validate_rooms_system` / `mark_room_dirty_from_building_changes_system` / `on_building_added` / `on_building_removed` / `on_door_added` / `on_door_removed` / `sync_room_overlay_tiles_system` の実装本体をすべて所有する。`Building + Transform` クエリから tile descriptor を収集して `Room` entity のスポーン/削除・`RoomTileLookup` 更新、dirty マーキング、オーバーレイ同期を行う。
+- `crates/bevy_app/src/systems/room/*`: `detection.rs`・`validation.rs`・`dirty_mark.rs`・`visual.rs` はすべて `hw_world` への re-export shell のみ。`components.rs`・`resources.rs` は `hw_world` からの re-export のみ。
 
 ## 2. Room の成立条件
 
@@ -154,11 +154,11 @@ GameSystemSet::Visual（Visual ループ内）
 | ファイル | 役割 |
 |:---|:---|
 | `crates/hw_world/src/room_detection.rs` | room detection core。`build_detection_input`・Flood-fill・validator・`RoomBounds` |
-| `crates/hw_world/src/room_systems.rs` | ECS adapter 層。`detect_rooms_system` / `validate_rooms_system` の実装本体 |
+| `crates/hw_world/src/room_systems.rs` | ECS adapter 層。`detect_rooms_system` / `validate_rooms_system` / `mark_room_dirty_from_building_changes_system` / dirty mark Observer 群 / `sync_room_overlay_tiles_system` の実装本体 |
 | `crates/bevy_app/src/systems/room/detection.rs` | `hw_world::detect_rooms_system` への re-export shell |
-| `crates/bevy_app/src/systems/room/dirty_mark.rs` | Building/Door 変化と WorldMap 差分からの dirty マーキング |
+| `crates/bevy_app/src/systems/room/dirty_mark.rs` | `hw_world::room_systems` の dirty mark 関数群への re-export shell |
 | `crates/bevy_app/src/systems/room/validation.rs` | `hw_world::validate_rooms_system` への re-export shell |
-| `crates/bevy_app/src/systems/room/visual.rs` | `RoomOverlayTile` 同期システム |
+| `crates/bevy_app/src/systems/room/visual.rs` | `hw_world::room_systems::sync_room_overlay_tiles_system` への re-export shell |
 | `crates/bevy_app/src/systems/room/components.rs` | `Room`, `RoomOverlayTile` 定義と `RoomBounds` re-export |
 | `crates/bevy_app/src/systems/room/resources.rs` | `RoomDetectionState`, `RoomTileLookup`, `RoomValidationState` 定義 |
 | `crates/bevy_app/src/plugins/logic.rs` | Room 検出システムの登録 |

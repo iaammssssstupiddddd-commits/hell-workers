@@ -1,6 +1,6 @@
 # Plans Index
 
-`docs/plans` の文書ステータス一覧（更新日: 2026-03-14）。
+`docs/plans` の文書ステータス一覧（更新日: 2026-03-18）。
 
 ## 新規計画書の作り方
 
@@ -19,10 +19,7 @@
 
 | Document | Status | Notes |
 |---|---|---|
-| [multi-tool-ai-rules-plan.md](multi-tool-ai-rules-plan.md) | In Progress | マルチツール AI ルール体系の構築 |
-| [phase12-leftover-migration.md](phase12-leftover-migration.md) | Draft | `GameAssets` 等の Root 固有型に依存しないのに bevy_app に残る system を leaf crate へ移設する計画。 |
-| [phase3-gameassets-abstraction.md](phase3-gameassets-abstraction.md) | Done | `GameAssets` の一部フィールドだけに依存する system を専用 handle Resource 抽象化で leaf crate へ移設する計画。 |
-| [refactor-types-migration-plan.md](refactor-types-migration-plan.md) | Done | 型・ドメインモデルのクレート境界リファクタリング計画 |
+| [crate-boundary-alignment-plan-2026-03-18.md](crate-boundary-alignment-plan-2026-03-18.md) | Draft | docs/crate-boundaries.mdの計画。 |
 
 ## アーカイブ計画書一覧 (`docs/plans/archive`)
 
@@ -75,11 +72,13 @@
 | [archive/hw-ui-crate-plan-2026-03-08.md](archive/hw-ui-crate-plan-2026-03-08.md) | アーカイブ | hw_ui crate 分離 実装計画 |
 | [archive/hw-ui-review-fixes-plan-2026-03-08.md](archive/hw-ui-review-fixes-plan-2026-03-08.md) | アーカイブ | hw_uiの計画。 |
 | [archive/hw-visual-crate-extraction.md](archive/hw-visual-crate-extraction.md) | アーカイブ | hw_visual クレート化 実装計画 |
+| [archive/hw-visual-domain-decoupling.md](archive/hw-visual-domain-decoupling.md) | アーカイブ | hw_visual ドメイン分離：ミラーコンポーネント実装計画 |
 | [archive/initial-resource-bootstrap-split-plan-2026-03-12.md](archive/initial-resource-bootstrap-split-plan-2026-03-12.md) | アーカイブ | src/systems/logistics/initial_spawn.rsの計画。 |
 | [archive/large-files-refactor-2026-02-16.md](archive/large-files-refactor-2026-02-16.md) | アーカイブ | 大規模ファイル分割リファクタ計画。 |
 | [archive/logistics-to-hw-logistics-plan-2026-03-08.md](archive/logistics-to-hw-logistics-plan-2026-03-08.md) | アーカイブ | logistics 実行ロジックを hw_logistics へ移植する計画。M1〜M8 完了。 |
 | [archive/mixer-producer-phase-separation-plan-2026-03-05.md](archive/mixer-producer-phase-separation-plan-2026-03-05.md) | アーカイブ | producer/mixer.rsの計画。 |
 | [archive/move-plant-building.md](archive/move-plant-building.md) | アーカイブ | Plant 建物移動タスク 実装計画（詳細版） |
+| [archive/multi-tool-ai-rules-plan.md](archive/multi-tool-ai-rules-plan.md) | アーカイブ | マルチツール AI ルール体系の構築 |
 | [archive/participating-in-relationship.md](archive/participating-in-relationship.md) | アーカイブ | Relationship参加設計に関する計画。 |
 | [archive/pathfinding-core-unification-plan-2026-03-01.md](archive/pathfinding-core-unification-plan-2026-03-01.md) | アーカイブ | find_pathの計画。 |
 | [archive/pathfinding-executor-split-plan-2026-03-05.md](archive/pathfinding-executor-split-plan-2026-03-05.md) | アーカイブ | entities/damned_soul/movement/pathfinding.rsの計画。 |
@@ -89,6 +88,8 @@
 | [archive/perf-phase4-reachability-cache-lifetime-2026-02-26.md](archive/perf-phase4-reachability-cache-lifetime-2026-02-26.md) | アーカイブ | パフォーマンス改善 Phase 4: Reachability キャッシュを WorldMap 変更時のみクリア。 |
 | [archive/perf-review-followups-plan-2026-03-06.md](archive/perf-review-followups-plan-2026-03-06.md) | アーカイブ | スケール時に効きやすい全件走査・全UI再構築・線形の計画。 |
 | [archive/perf-top3-implementation-plan-2026-02-22.md](archive/perf-top3-implementation-plan-2026-02-22.md) | アーカイブ | 直近Perf上位3件の最適化計画。 |
+| [archive/phase12-leftover-migration.md](archive/phase12-leftover-migration.md) | アーカイブ | フェーズ 3 調査の過程で、`GameAssets` 等の Root 固有型に依存せず、の提案。 |
+| [archive/phase3-gameassets-abstraction.md](archive/phase3-gameassets-abstraction.md) | アーカイブ | `bevy_app` に残存するシステムのうち、`GameAssets`（Root 固有リソース）の **一部フィールド** のみに依存するものをの提案。 |
 | [archive/plant-trees-visuals-plan-2026-02-22.md](archive/plant-trees-visuals-plan-2026-02-22.md) | アーカイブ | `Plant Trees` の3フェーズ演出およびドラッグ時プレビュー追加の実装計画。 |
 | [archive/re-export-consolidation-plan-2026-03-12.md](archive/re-export-consolidation-plan-2026-03-12.md) | アーカイブ | `pub use` の多段中継と wildcard 再公開を削減し、正規 public path を整理する計画。 |
 | [archive/refactor-500plus-files-phase-plan-2026-02-14.md](archive/refactor-500plus-files-phase-plan-2026-02-14.md) | アーカイブ | 500行超ファイルの段階的リファクタ計画。 |
@@ -96,6 +97,7 @@
 | [archive/refactor-phase-plan-2026-02.md](archive/refactor-phase-plan-2026-02.md) | アーカイブ | フェーズ分割リファクタ計画。 |
 | [archive/refactor-roadmap-2026-02-22.md](archive/refactor-roadmap-2026-02-22.md) | アーカイブ | 現行実装を前提にした全体リファクタ実行計画（回帰テスト追加はスコープ外）。 |
 | [archive/refactor-top5-followups-plan-2026-03-02.md](archive/refactor-top5-followups-plan-2026-03-02.md) | アーカイブ | 直近レビューで抽出した5件（運搬request重複、UI粒子更新肥大、assignment builder重複、pathfinding隠れ状態、冗長分岐）を段階的に解消するの計画。 |
+| [archive/refactor-types-migration-plan copy.md](archive/refactor-types-migration-plan copy.md) | アーカイブ | 型・ドメインモデルのクレート境界リファクタリング計画 |
 | [archive/refactor-types-migration-plan.md](archive/refactor-types-migration-plan.md) | アーカイブ | 型・ドメインモデルのクレート境界リファクタリング計画 |
 | [archive/remove-instockpile-claimedby.md](archive/remove-instockpile-claimedby.md) | アーカイブ | `InStockpile`/`ClaimedBy` 削除統合計画。 |
 | [archive/remove-reexport-indirections-plan.md](archive/remove-reexport-indirections-plan.md) | アーカイブ | bevy_appの計画。 |
@@ -129,3 +131,4 @@
 | [archive/workspace-construction-phase-extraction.md](archive/workspace-construction-phase-extraction.md) | アーカイブ | Floor/Wall 建設で使うフェーズ・状態型がの計画。 |
 | [archive/zone-placement-refactor-plan-2026-03-05.md](archive/zone-placement-refactor-plan-2026-03-05.md) | アーカイブ | zone_placement.rsの計画。 |
 | [archive/zone-removal-preview-diff-plan-2026-03-01.md](archive/zone-removal-preview-diff-plan-2026-03-01.md) | アーカイブ | Zone removal preview の全件更新を差分更新へ置換する計画。 |
+

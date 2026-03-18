@@ -3,6 +3,8 @@ use bevy::prelude::*;
 use hw_core::area::TaskArea;
 use hw_core::relationships::TaskWorkers;
 
+use crate::model::remove_tile_task_components;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Reflect)]
 pub enum FloorConstructionPhase {
     /// Placing bones as reinforcement
@@ -226,5 +228,94 @@ impl ConstructionSitePositions for ConstructionSiteAccess<'_, '_> {
             .get(site)
             .ok()
             .map(|(t, _, _)| t.translation.truncate())
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Phase transition systems — pure ECS logic, no bevy_app-only dependencies
+// ---------------------------------------------------------------------------
+
+/// Handles transition from Reinforcing to Pouring phase
+pub fn floor_construction_phase_transition_system(
+    mut q_sites: Query<(Entity, &mut FloorConstructionSite)>,
+    mut q_tiles: Query<(Entity, &mut FloorTileBlueprint)>,
+    mut commands: Commands,
+) {
+    for (site_entity, mut site) in q_sites.iter_mut() {
+        if site.phase != FloorConstructionPhase::Reinforcing {
+            continue;
+        }
+
+        let all_reinforced = q_tiles
+            .iter()
+            .filter(|(_, tile)| tile.parent_site == site_entity)
+            .all(|(_, tile)| matches!(tile.state, FloorTileState::ReinforcedComplete));
+
+        if all_reinforced {
+            site.phase = FloorConstructionPhase::Pouring;
+
+            let tile_entities: Vec<Entity> = q_tiles
+                .iter_mut()
+                .filter(|(_, t)| t.parent_site == site_entity)
+                .map(|(tile_entity, mut tile)| {
+                    tile.state = FloorTileState::WaitingMud;
+                    tile_entity
+                })
+                .collect();
+
+            remove_tile_task_components(&mut commands, &tile_entities);
+
+            info!(
+                "Floor site {:?} → Pouring phase (all {} tiles reinforced)",
+                site_entity, site.tiles_total
+            );
+        }
+    }
+}
+
+/// Handles transition from Framing to Coating phase
+pub fn wall_construction_phase_transition_system(
+    mut q_sites: Query<(Entity, &mut WallConstructionSite)>,
+    mut q_tiles: Query<(Entity, &mut WallTileBlueprint)>,
+    mut commands: Commands,
+) {
+    for (site_entity, mut site) in q_sites.iter_mut() {
+        if site.phase != WallConstructionPhase::Framing {
+            continue;
+        }
+
+        let mut total_tiles = 0;
+        let mut framed_tiles = 0;
+
+        for (_, tile) in q_tiles.iter().filter(|(_, t)| t.parent_site == site_entity) {
+            total_tiles += 1;
+            if matches!(tile.state, WallTileState::FramedProvisional) && tile.spawned_wall.is_some()
+            {
+                framed_tiles += 1;
+            }
+        }
+
+        if total_tiles == 0 {
+            continue;
+        }
+
+        if framed_tiles >= total_tiles {
+            site.phase = WallConstructionPhase::Coating;
+
+            let tile_entities: Vec<Entity> = q_tiles
+                .iter_mut()
+                .filter(|(_, tile)| tile.parent_site == site_entity)
+                .map(|(tile_entity, mut tile)| {
+                    tile.state = WallTileState::WaitingMud;
+                    tile_entity
+                })
+                .collect();
+            remove_tile_task_components(&mut commands, &tile_entities);
+
+            info!(
+                "Wall site {:?} -> Coating phase (all {} tiles framed)",
+                site_entity, site.tiles_total
+            );
+        }
     }
 }
