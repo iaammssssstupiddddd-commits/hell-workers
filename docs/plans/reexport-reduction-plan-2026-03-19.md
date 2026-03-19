@@ -5,7 +5,7 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `reexport-reduction-plan-2026-03-19` |
-| ステータス | `Draft` |
+| ステータス | `Completed` |
 | 作成日 | `2026-03-19` |
 | 最終更新日 | `2026-03-19` |
 | 作成者 | `AI (Copilot)` |
@@ -164,41 +164,40 @@
 
 ### 現在地
 
-- 進捗: `0%`
-- 完了済みマイルストーン: なし
-- 未着手/進行中: M1（未使用シェル削除）から開始
+- 進捗: `100%`（全フェーズ完了）
+- 完了済みマイルストーン: M1, M2, M3, M4
+- 未着手/進行中: なし
 
-### 次のAIが最初にやること
+### 実装結果サマリー
 
-1. このファイルを読む
-2. `grep -rn "pub mod.*{" crates/bevy_app/src/systems/ --include="*.rs" | grep "pub use hw_"` でシェル一覧を再確認
-3. M1 の変更ファイルリストに沿って削除作業を開始し、`cargo check` で確認
+| フェーズ | 内容 | 結果 |
+| --- | --- | --- |
+| M1 | bevy_app の17個ゼロ呼び出し元シェルモジュール削除 + `producer/` ディレクトリ削除 | ✅ |
+| M2 | 使用中シェル（gathering, lifecycle）の呼び出し元を hw_* 直接参照に移行し削除 | ✅ |
+| M3 | `systems/world/mod.rs` の二重 re-export (`pub use zones::{...}`) 削除 | ✅ |
+| M4 | `hw_jobs/lib.rs`, `hw_soul_ai/types.rs`, `hw_soul_ai/helpers/gathering.rs`, `hw_visual` 5モジュールのワイルドカード→明示化 | ✅ |
 
-### ブロッカー/注意点
+### 実装の注意点（今後の参考）
 
-- `crates/bevy_app/src/systems/logistics/target/` に不要なビルドアーティファクトが存在（`grep` 時にバイナリマッチが出る）。検索時は `| grep -v target` を必ず付けること。
-- `hw_visual/*/mod.rs` のワイルドカード明示化（M4）は、先に各 sub-module の公開シンボルを `grep -n "^pub " <file>` で確認すること。
-
-### 参照必須ファイル
-
-- `docs/crate-boundaries.md` — bevy_app thin shell の設計方針
-- `crates/bevy_app/src/systems/soul_ai/execute/mod.rs`
-- `crates/bevy_app/src/systems/familiar_ai/decide/mod.rs`
+- `hw_logistics/types.rs` の `pub use hw_core::logistics::ResourceType` は「重複」に見えるが、hw_logistics 内の13ファイルが `crate::types::ResourceType` パスで参照しており削除不可。lib.rs の re-export とは別パス。
+- `hw_core/constants/mod.rs` の10件ワイルドカードは意図的にスキップ。100+ 定数のフラット化パターンであり、コメントにも「互換維持のため」と明記。削除しても動作するが可読性が悪化する。
+- `hw_visual/gather/resource_highlight.rs` の `ResourceHighlightState`, `ResourceVisual` は同モジュール内の `components.rs` で定義され、`resource_highlight.rs` では private import のため `pub use resource_highlight::*` では公開されていなかった（ワイルドカード時代も未公開）。
 
 ### 最終確認ログ
 
-- 最終 `cargo check`: 未実施
-- 未解決エラー: なし（未着手）
+- 最終 `cargo check`: `Finished dev profile [unoptimized + debuginfo] target(s) in 0.19s`（エラーなし）
+- コミット: `d9391c82` — `refactor: re-export削減・ファイル整理 (M1-M4)`
 
 ### Definition of Done
 
-- [ ] bevy_app の `pub use` 総数が 177 件以下
-- [ ] 呼び出し元ゼロのインラインシェルモジュールが 0 件
-- [ ] `pub use X::*` が許容ファイル以外で使われていない
-- [ ] `cargo check` が成功
+- [x] bevy_app の `pub use` 総数が 177 件以下
+- [x] 呼び出し元ゼロのインラインシェルモジュールが 0 件
+- [x] `pub use X::*` が許容ファイル以外で使われていない
+- [x] `cargo check` が成功
 
 ## 10. 更新履歴
 
 | 日付 | 変更者 | 内容 |
 | --- | --- | --- |
 | `2026-03-19` | `AI (Copilot)` | 初版作成 |
+| `2026-03-19` | `AI (Copilot)` | M1-M4 完了、ステータスを Completed に更新 |

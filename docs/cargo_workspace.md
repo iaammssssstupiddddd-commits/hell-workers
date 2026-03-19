@@ -215,7 +215,7 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 - `soul_ai::decide::idle_behavior::transitions` — IdleBehavior 遷移判定ヘルパー（次の行動選択・持続時間計算）
 - `soul_ai::decide::idle_behavior::task_override` — タスク割り当て時の集会・休憩解除ヘルパー
 - `soul_ai::decide::idle_behavior::exhausted_gathering` — 疲労集会（ExhaustedGathering）状態処理ヘルパー
-- `soul_ai::helpers::gathering` — `hw_core::gathering` の互換 re-export と gathering timer helper
+- `soul_ai::helpers::gathering` — `hw_core::gathering` の明示的 re-export（wildcard → 明示列挙済み）と gathering timer helper
 - `soul_ai::helpers::gathering_positions` — 集会周辺ランダム位置生成・overlap 回避（`PathWorld + SpatialGridOps` 経由）
 - `soul_ai::helpers::gathering_motion` — 集会中移動先選定（Wandering / Still retreat）
 - `soul_ai::helpers::work::{is_soul_available_for_work, unassign_task, cleanup_task_assignment}` — 作業可否判定・タスク解除・後片付けヘルパー
@@ -257,7 +257,7 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 - `GameAssets`、UI 状態、`bevy_app` 固有 resource を必要とする adapter
 - UI システム
 - `Commands` で複雑な Entity 生成を行うもの
-- `execute/task_execution/{types,common,handler,move_plant}` / `context/execution.rs` — 互換 import path のための thin shell（bevy_app 側に残留）
+- `execute/task_execution/{types,common,handler,move_plant}` / `context/mod.rs` — 互換 import path のための thin shell（bevy_app 側に残留）。`context/mod.rs` は `hw_soul_ai` / `hw_familiar_ai` からの明示的 re-export のみを持つフラット構造。
 - `familiar_ai/decide/task_delegation.rs` / `familiar_ai/decide/familiar_processor.rs` / `familiar_ai/helpers/query_types.rs` — 互換 import path の thin shell。実体は `hw_familiar_ai` 側にある
 - `familiar_ai/perceive/resource_sync.rs` — root perceive system。`SharedResourceCache` の再構築と実ワールドとの同期は root の責務
 
@@ -489,6 +489,14 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 - `crates/bevy_app/src/systems/jobs/mod.rs` -> `pub use hw_jobs::model::{Blueprint, Building, ...};`
 - `crates/bevy_app/src/systems/logistics/mod.rs` -> `pub use hw_logistics::types::{ResourceItem, BelongsTo, ...};`
 - `crates/bevy_app/src/world/river.rs` -> `pub use hw_world::river::{generate_fixed_river_tiles, generate_sand_tiles};`
+- `crates/hw_jobs/src/lib.rs` -> `pub use assigned_task::{AssignedTask, GatherData, HaulData, ...};`（wildcard → 明示列挙）
+- `crates/hw_soul_ai/src/soul_ai/helpers/gathering.rs` -> `pub use hw_core::gathering::{GatheringSpot, GatheringObjectType, ...};`（同上）
+- `crates/hw_visual/src/blueprint/mod.rs` -> `pub use components::{BlueprintState, BlueprintVisual, ...};`（同上）
+
+wildcard が許容される例外（変更しない）:
+
+- `crates/hw_core/src/constants/mod.rs` の `pub use ai::*` 等 10 件: 100 件超の定数をフラット化する互換パターンで、コメントに明記済み。明示列挙は保守性を下げるため維持。
+- `crates/hw_world/src/zones.rs` をラップする `pub mod zones { pub use hw_world::zones::*; }`: 外部クレート全シンボルを sub-namespace に公開する慣用パターン。
 
 ルール:
 
