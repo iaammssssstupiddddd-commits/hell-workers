@@ -1,22 +1,25 @@
 //! 荷下ろしフェーズ
 
+mod capacity;
+mod finalize;
+mod item_ops;
+
+use capacity::{floor_site_remaining, provisional_wall_remaining, wall_site_remaining};
+use finalize::{finalize_unload_task, finish_partial_unload};
+use item_ops::{try_despawn_item, try_drop_item};
+
 use super::super::cancel;
 use crate::soul_ai::execute::task_execution::{
-    common::clear_task_and_path,
     context::TaskExecutionContext,
-    transport_common::{reservation, wheelbarrow as wheelbarrow_common},
+    transport_common::reservation,
     types::HaulWithWheelbarrowData,
 };
 use bevy::prelude::*;
 use hw_core::constants::Z_ITEM_PICKUP;
-use hw_core::relationships::{LoadedIn, StoredIn};
+use hw_core::relationships::LoadedIn;
 use hw_logistics::ResourceType;
 use hw_logistics::transport_request::{
     TransportRequestKind, TransportRequestState, WheelbarrowDestination,
-};
-use hw_logistics::{
-    count_nearby_ground_resources as count_nearby_ground_items, floor_site_tile_demand,
-    provisional_wall_mud_demand, wall_site_tile_demand,
 };
 use std::collections::{HashMap, HashSet};
 
@@ -44,183 +47,6 @@ fn has_pending_wheelbarrow_task(ctx: &TaskExecutionContext) -> bool {
             }
         },
     )
-}
-
-fn try_drop_item(
-    commands: &mut Commands,
-    item_entity: Entity,
-    drop_pos: Vec2,
-    store_in: Option<Entity>,
-) -> bool {
-    let Ok(mut item_commands) = commands.get_entity(item_entity) else {
-        return false;
-    };
-
-    if let Some(stockpile) = store_in {
-        item_commands.try_insert((
-            Visibility::Visible,
-            Transform::from_xyz(drop_pos.x, drop_pos.y, Z_ITEM_PICKUP),
-            StoredIn(stockpile),
-        ));
-    } else {
-        item_commands.try_insert((
-            Visibility::Visible,
-            Transform::from_xyz(drop_pos.x, drop_pos.y, Z_ITEM_PICKUP),
-        ));
-        item_commands.try_remove::<StoredIn>();
-    }
-    item_commands.try_remove::<LoadedIn>();
-    item_commands.try_remove::<hw_core::relationships::DeliveringTo>();
-    item_commands.try_remove::<hw_jobs::IssuedBy>();
-    item_commands.try_remove::<hw_core::relationships::TaskWorkers>();
-    true
-}
-
-fn try_despawn_item(commands: &mut Commands, item_entity: Entity) -> bool {
-    let Ok(mut item_commands) = commands.get_entity(item_entity) else {
-        return false;
-    };
-    item_commands.try_despawn();
-    true
-}
-
-fn floor_site_remaining(
-    ctx: &TaskExecutionContext,
-    site_entity: Entity,
-    resource_type: ResourceType,
-) -> usize {
-    let Ok((_, site, _)) = ctx.queries.storage.floor_sites.get(site_entity) else {
-        return 0;
-    };
-
-    let needed = floor_site_tile_demand(
-        ctx.queries.storage.floor_tiles.iter(),
-        site_entity,
-        resource_type,
-    );
-    let nearby = count_nearby_ground_items(
-        ctx.queries.resource_items.iter(),
-        site.material_center,
-        (hw_core::constants::TILE_SIZE * 2.0).powi(2),
-        resource_type,
-        None,
-    );
-    needed.saturating_sub(nearby)
-}
-
-fn wall_site_remaining(
-    ctx: &TaskExecutionContext,
-    site_entity: Entity,
-    resource_type: ResourceType,
-) -> usize {
-    let Ok((_, site, _)) = ctx.queries.storage.wall_sites.get(site_entity) else {
-        return 0;
-    };
-
-    let needed = wall_site_tile_demand(
-        ctx.queries.storage.wall_tiles.iter(),
-        site_entity,
-        resource_type,
-    );
-    let nearby = count_nearby_ground_items(
-        ctx.queries.resource_items.iter(),
-        site.material_center,
-        (hw_core::constants::TILE_SIZE * 2.0).powi(2),
-        resource_type,
-        None,
-    );
-    needed.saturating_sub(nearby)
-}
-
-fn provisional_wall_remaining(
-    ctx: &TaskExecutionContext,
-    wall_entity: Entity,
-    resource_type: ResourceType,
-) -> usize {
-    let Ok((wall_transform, building, provisional_opt)) =
-        ctx.queries.storage.buildings.get(wall_entity)
-    else {
-        return 0;
-    };
-    if resource_type != ResourceType::StasisMud
-        || provisional_wall_mud_demand(&building, provisional_opt.as_deref()) == 0
-    {
-        return 0;
-    }
-
-    1usize.saturating_sub(count_nearby_ground_items(
-        ctx.queries.resource_items.iter(),
-        wall_transform.translation.truncate(),
-        (hw_core::constants::TILE_SIZE * 1.5).powi(2),
-        ResourceType::StasisMud,
-        None,
-    ))
-}
-
-fn finalize_unload_task(
-    ctx: &mut TaskExecutionContext,
-    data: &HaulWithWheelbarrowData,
-    commands: &mut Commands,
-    soul_pos: Vec2,
-) {
-    reservation::release_source(ctx, data.wheelbarrow, 1);
-    let parking_anchor = ctx
-        .queries
-        .designation
-        .belongs
-        .get(data.wheelbarrow)
-        .ok()
-        .map(|b| b.0);
-    wheelbarrow_common::park_wheelbarrow_entity(
-        commands,
-        data.wheelbarrow,
-        parking_anchor,
-        soul_pos,
-    );
-    ctx.inventory.0 = None;
-    if let Ok(mut soul_commands) = commands.get_entity(ctx.soul_entity) {
-        soul_commands.try_remove::<hw_core::relationships::WorkingOn>();
-    }
-    clear_task_and_path(ctx.task, ctx.path);
-}
-
-fn finish_partial_unload(
-    ctx: &mut TaskExecutionContext,
-    data: &HaulWithWheelbarrowData,
-    commands: &mut Commands,
-    soul_pos: Vec2,
-    delivered_items: &HashSet<Entity>,
-    destination_store_count: usize,
-    mixer_release_types: &[ResourceType],
-) {
-    for &item_entity in &data.items {
-        if delivered_items.contains(&item_entity) {
-            continue;
-        }
-        if let Ok(mut item_commands) = commands.get_entity(item_entity) {
-            item_commands.try_insert((
-                Visibility::Visible,
-                Transform::from_xyz(soul_pos.x, soul_pos.y, Z_ITEM_PICKUP),
-            ));
-            item_commands.try_remove::<LoadedIn>();
-            item_commands.try_remove::<hw_core::relationships::DeliveringTo>();
-        }
-    }
-
-    match data.destination {
-        WheelbarrowDestination::Stockpile(target) | WheelbarrowDestination::Blueprint(target) => {
-            for _ in 0..destination_store_count {
-                reservation::record_stored_destination(ctx, target);
-            }
-        }
-        WheelbarrowDestination::Mixer { entity: target, .. } => {
-            for &res_type in mixer_release_types {
-                reservation::release_mixer_destination(ctx, target, res_type);
-            }
-        }
-    }
-
-    finalize_unload_task(ctx, data, commands, soul_pos);
 }
 
 pub fn handle(

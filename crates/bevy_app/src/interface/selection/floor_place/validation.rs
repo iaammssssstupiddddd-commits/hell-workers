@@ -34,3 +34,15 @@ pub(crate) fn validate_wall_tile(
         existing_floor_building_grids,
     )
 }
+
+/// 床の有無チェックを省いた壁タイルバリデーション（デバッグ用）。
+/// 占有・歩行可能チェックのみ行う。
+pub(crate) fn validate_wall_tile_no_floor_check(
+    gx: i32,
+    gy: i32,
+    world_map: &WorldMap,
+) -> Option<PlacementRejectReason> {
+    // 対象グリッド自体を "floor あり" として渡すことで floor チェックのみ通過させる
+    let fake_floor = HashSet::from([(gx, gy)]);
+    shared_validate_wall_tile(&WorldMapRef(world_map), (gx, gy), &fake_floor)
+}

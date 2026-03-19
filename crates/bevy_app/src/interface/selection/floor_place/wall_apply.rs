@@ -9,6 +9,7 @@ use hw_ui::selection::validate_wall_area;
 use std::collections::HashSet;
 
 use super::validation::validate_wall_tile;
+use super::validation::validate_wall_tile_no_floor_check;
 
 pub(super) fn apply_wall_placement(
     commands: &mut Commands,
@@ -16,6 +17,7 @@ pub(super) fn apply_wall_placement(
     area: &crate::systems::command::TaskArea,
     existing_floor_building_grids: &HashSet<(i32, i32)>,
     placement_failure_tooltip: &mut PlacementFailureTooltip,
+    bypass_floor_check: bool,
 ) {
     let min_grid = WorldMap::world_to_grid(area.min() + Vec2::splat(0.1));
     let max_grid = WorldMap::world_to_grid(area.max() - Vec2::splat(0.1));
@@ -44,9 +46,12 @@ pub(super) fn apply_wall_placement(
     let mut first_reject_reason: Option<String> = None;
     for gy in min_grid.1..=max_grid.1 {
         for gx in min_grid.0..=max_grid.0 {
-            if let Some(reason) =
+            let reject = if bypass_floor_check {
+                validate_wall_tile_no_floor_check(gx, gy, world_map)
+            } else {
                 validate_wall_tile(gx, gy, world_map, existing_floor_building_grids)
-            {
+            };
+            if let Some(reason) = reject {
                 if first_reject_reason.is_none() {
                     first_reject_reason = Some(reason.message(gx, gy));
                 }

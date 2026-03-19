@@ -1,6 +1,9 @@
 //! インターフェース関連のプラグイン
 
-use crate::interface::ui::dev_panel::{toggle_render3d_button_system, update_render3d_button_visual_system};
+use crate::interface::ui::dev_panel::{
+    toggle_instant_build_button_system, toggle_render3d_button_system,
+    update_instant_build_button_visual_system, update_render3d_button_visual_system,
+};
 use crate::interface::ui::plugins;
 use crate::plugins::interface_debug::debug_spawn_system;
 use crate::systems::GameSystemSet;
@@ -22,6 +25,8 @@ impl Plugin for InterfacePlugin {
             (
                 toggle_render3d_button_system,
                 update_render3d_button_visual_system,
+                toggle_instant_build_button_system,
+                update_instant_build_button_visual_system,
             )
                 .in_set(GameSystemSet::Interface),
         );

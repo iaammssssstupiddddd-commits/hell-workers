@@ -40,6 +40,7 @@ pub(super) fn handle_release(
     world_map: &mut WorldMap,
     placement_failure_tooltip: &mut PlacementFailureTooltip,
     task_mode: &mut TaskMode,
+    bypass_floor_check: bool,
 ) -> bool {
     if !buttons.just_released(MouseButton::Left) {
         return false;
@@ -70,6 +71,7 @@ pub(super) fn handle_release(
                 &area,
                 &existing_floor_building_grids,
                 placement_failure_tooltip,
+                bypass_floor_check,
             );
         }
 

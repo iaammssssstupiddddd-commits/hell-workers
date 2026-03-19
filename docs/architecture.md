@@ -100,7 +100,7 @@ Perceive → Update → Decide → Execute
 
 ## Room Detection の境界
 
-- `crates/hw_world::room_detection` が room detection core の唯一の所有者であり、`RoomDetectionBuildingTile` からの入力分類、flood-fill、妥当性判定、`RoomBounds` を提供する。**加えて ECS 型（`Room`, `RoomOverlayTile`, `RoomTileLookup`, `RoomDetectionState`, `RoomValidationState`）も `hw_world::room_detection` が所有する**。
+- `crates/hw_world::room_detection` が room detection core の唯一の所有者であり、`RoomDetectionBuildingTile` からの入力分類、flood-fill、妥当性判定、`RoomBounds` を提供する。**加えて ECS 型（`Room`, `RoomOverlayTile`, `RoomTileLookup`, `RoomDetectionState`, `RoomValidationState`）も `hw_world::room_detection` が所有する**。内部は private submodule に分離済み: `core.rs`（純粋アルゴリズム・型）/ `ecs.rs`（ECS Component/Resource）/ `tests.rs`。外部公開パスは変わらない。
 - `crates/hw_world/src/room_systems.rs` が ECS adapter 層をすべて担う（`detect_rooms_system` / `validate_rooms_system` / `mark_room_dirty_from_building_changes_system` / `on_building_added` / `on_building_removed` / `on_door_added` / `on_door_removed` / `sync_room_overlay_tiles_system`）。
 - `crates/bevy_app/src/systems/room/detection.rs`・`validation.rs`・`dirty_mark.rs`・`visual.rs` はすべて `hw_world` への re-export shell のみ。登録は `bevy_app/plugins/logic.rs`・`visual.rs` が維持する。
 - `bevy_app/src/systems/room/components.rs` と `resources.rs` は `hw_world` からの re-export のみ。型の所有権は `hw_world` にある。
@@ -315,7 +315,7 @@ Perceive → Update → Decide → Execute
 
 - `hw_ui::selection` は state resource と shared outcome 型・trait のみ。`Commands`/`WorldMapWrite`/`NextState<PlayMode>` は使わない。
 - `update_selection_indicator` の実装本体は `hw_visual` にあるが、選択更新と同フレームで反映するため root `Interface` フェーズで登録する。
-- `hw_ui::selection::placement` は building placement/move の geometry, validation 共通ロジックを保持する。`crates/bevy_app/src/interface/selection/building_place/placement.rs`・`building_move/preview.rs`・`building_move/mod.rs`・`crates/bevy_app/src/systems/visual/placement_ghost.rs` が共有する。
+- `hw_ui::selection::placement` は building placement/move の geometry, validation 共通ロジックを保持する。`crates/bevy_app/src/interface/selection/building_place/placement.rs`・`building_move/preview.rs`・`building_move/mod.rs`・`crates/bevy_app/src/systems/visual/placement_ghost.rs` が共有する。内部は private submodule に分離済み: `geometry.rs`（座標変換・形状計算）/ `validation.rs`（配置可否判定）/ `tests.rs`。`placement.rs` root はファサード + 共有型定義のみ。
 - `building_move/geometry.rs` は hw_ui 移動に伴い削除済み。`building_move/placement.rs` は bucket storage 所有グリッド解決だけを持つ薄い adapter で、判定本体は `validate_moved_bucket_storage_placement` を使う。
 - floor/wall の tile reject reason と tile validation は `hw_ui::selection::placement` に共通化済み。`WorldMap` → `WorldReadApi` の adapter は `crates/bevy_app/src/world/map/mod.rs` の `WorldMapRef<'a>` 一箇所に集約済み（旧来の各ファイルのローカルラッパーは削除済み）。
 - `handle_mouse_input` の selection 判定は `SelectionIntent` を返す helper へ分離済み（`apply_selection_intent` が ECS 変更を適用）。

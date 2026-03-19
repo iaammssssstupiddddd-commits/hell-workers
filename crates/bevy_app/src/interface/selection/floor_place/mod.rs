@@ -34,6 +34,7 @@ pub fn floor_placement_system(
     mut world_map: WorldMapWrite,
     mut placement_failure_tooltip: ResMut<PlacementFailureTooltip>,
     mut commands: Commands,
+    debug_instant_build: Res<crate::DebugInstantBuild>,
 ) {
     if ui_input_state.pointer_over_ui {
         return;
@@ -65,6 +66,7 @@ pub fn floor_placement_system(
         &mut world_map,
         &mut placement_failure_tooltip,
         &mut task_context.0,
+        debug_instant_build.0,
     ) {
         return;
     }

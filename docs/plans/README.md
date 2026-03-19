@@ -19,7 +19,8 @@
 
 | Document | Status | Notes |
 |---|---|---|
-| [crate-boundary-alignment-plan-2026-03-18.md](crate-boundary-alignment-plan-2026-03-18.md) | Draft | docs/crate-boundaries.mdの計画。 |
+| [crate-boundary-alignment-plan-2026-03-18.md](crate-boundary-alignment-plan-2026-03-18.md) | Complete | docs/crate-boundaries.mdの計画。 |
+| [refactor-500plus-rs-files-plan-2026-03-18.md](refactor-500plus-rs-files-plan-2026-03-18.md) | Draft | tracked な Rust ソースのうち 500 行超のファイルが 4 本に集中し、責務・テスト・ECS 接続が一つのモジュールに混ざっているの計画。 |
 
 ## アーカイブ計画書一覧 (`docs/plans/archive`)
 

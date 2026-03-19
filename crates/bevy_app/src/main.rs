@@ -36,6 +36,10 @@ pub struct DebugVisible(pub bool);
 #[derive(Resource)]
 pub struct Render3dVisible(pub bool);
 
+/// デバッグ用：壁建築を即時完成させるトグル
+#[derive(Resource, Default)]
+pub struct DebugInstantBuild(pub bool);
+
 impl Default for Render3dVisible {
     fn default() -> Self {
         Self(true)
@@ -76,6 +80,7 @@ fn main() {
         .add_plugins(PopoverPlugin)
         .init_resource::<DebugVisible>()
         .init_resource::<Render3dVisible>()
+        .init_resource::<DebugInstantBuild>()
         // PlayMode State
         .init_state::<PlayMode>()
         // Messages

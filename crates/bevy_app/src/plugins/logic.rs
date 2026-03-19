@@ -85,6 +85,8 @@ impl Plugin for LogicPlugin {
                 floor_construction_phase_transition_system,
                 floor_construction_completion_system,
                 wall_construction_cancellation_system,
+                crate::plugins::interface_debug::debug_instant_complete_walls_system
+                    .run_if(|d: Res<crate::DebugInstantBuild>| d.0),
                 wall_framed_tile_spawn_system,
                 wall_construction_phase_transition_system,
                 wall_construction_completion_system,
