@@ -11,11 +11,22 @@ use bevy::prelude::*;
 use crate::animations::{PulseAnimation, update_pulse_animation};
 use hw_core::visual_mirror::construction::BlueprintVisualState;
 
-pub use components::*;
-pub use effects::*;
-pub use material_display::*;
-pub use progress_bar::*;
-pub use worker_indicator::*;
+pub use components::{
+    BlueprintState, BlueprintVisual, MaterialIcon, MaterialCounter, DeliveryPopup, CompletionText,
+    BuildingBounceEffect, WorkerHammerIcon, HasWorkerIndicator, ProgressBar,
+};
+pub use effects::{
+    material_delivery_vfx_system, update_delivery_popup_system, update_completion_text_system,
+    building_bounce_animation_system,
+};
+pub use material_display::{
+    spawn_material_display_system, update_material_counter_system, cleanup_material_display_system,
+};
+pub use progress_bar::{
+    spawn_progress_bar_system, update_progress_bar_fill_system, sync_progress_bar_position_system,
+    cleanup_progress_bars_system,
+};
+pub use worker_indicator::{spawn_worker_indicators_system, update_worker_indicators_system};
 
 pub const PROGRESS_BAR_WIDTH: f32 = 24.0;
 pub const PROGRESS_BAR_HEIGHT: f32 = 4.0;

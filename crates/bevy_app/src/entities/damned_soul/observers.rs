@@ -112,7 +112,7 @@ pub fn on_stress_breakdown(
 pub fn on_exhausted(
     on: On<OnExhausted>,
     mut commands: Commands,
-    q_spots: Query<&crate::systems::soul_ai::helpers::gathering::GatheringSpot>,
+    q_spots: Query<&hw_soul_ai::soul_ai::helpers::gathering::GatheringSpot>,
     mut q_souls: Query<(
         Entity,
         &Transform,

@@ -2,10 +2,3 @@ pub mod encouragement_apply;
 pub mod idle_visual_apply;
 pub mod max_soul_apply;
 pub mod squad_apply;
-
-pub mod state_apply {
-    pub use hw_familiar_ai::familiar_ai::execute::state_apply::*;
-}
-pub mod state_log {
-    pub use hw_familiar_ai::familiar_ai::execute::state_log::*;
-}

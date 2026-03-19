@@ -1,5 +1,3 @@
-pub mod producer;
-
 pub use hw_logistics::transport_request::components::{
     ManualHaulPinnedSource, ManualTransportRequest, TransportDemand, TransportPolicy,
     TransportPriority, TransportRequest, TransportRequestFixedSource, TransportRequestState,
