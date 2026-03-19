@@ -1,4 +1,3 @@
-use super::geometry::{cursor_icon_for_operation, detect_area_edit_operation, world_cursor_pos};
 use super::state::AreaEditSession;
 use crate::app_contexts::TaskContext;
 use crate::entities::familiar::Familiar;
@@ -7,7 +6,8 @@ use crate::interface::ui::UiInputState;
 use crate::systems::command::{TaskArea, TaskMode};
 use bevy::prelude::*;
 use bevy::window::{CursorIcon, PrimaryWindow, SystemCursorIcon};
-use hw_ui::camera::MainCamera;
+use hw_ui::area_edit::{cursor_icon_for_operation, detect_area_edit_operation};
+use hw_ui::camera::{MainCamera, world_cursor_pos};
 
 pub fn task_area_edit_cursor_system(
     task_context: Res<TaskContext>,

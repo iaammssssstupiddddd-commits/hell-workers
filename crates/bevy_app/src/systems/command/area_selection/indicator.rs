@@ -1,4 +1,4 @@
-use super::geometry::world_cursor_pos;
+use hw_ui::camera::{MainCamera, world_cursor_pos};
 use crate::app_contexts::TaskContext;
 use crate::assets::GameAssets;
 use crate::entities::damned_soul::DreamPool;
@@ -16,7 +16,6 @@ use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use hw_core::area::{get_drag_start, wall_line_area};
 use hw_core::constants::{TILE_SIZE, Z_DREAM_TREE_PREVIEW};
-use hw_ui::camera::MainCamera;
 
 pub fn area_selection_indicator_system(
     task_context: Res<TaskContext>,

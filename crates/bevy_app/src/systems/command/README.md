@@ -42,7 +42,7 @@ UI からの入力を受け取り、`Designation` や `TaskArea` コンポーネ
 | `cleanup.rs` | エリア選択後のクリーンアップ |
 | `cursor.rs` | カーソル位置の追跡 |
 | `geometry.rs` | root 側 UI/camera 依存 helper。pure helper は `hw_core::area` に移設済み（re-export で公開） |
-| `input.rs` / `input/release.rs` | エリア選択入力処理 |
+| `input.rs` / `input/press.rs` / `input/drag.rs` / `input/transitions.rs` / `input/release/` | エリア選択入力処理（press・drag・releaseをフェーズ別サブモジュールに分割済み） |
 | `indicator.rs` | エリア選択ビジュアル（`GameAssets` + mesh/material spawn、root 残留） |
 | `manual_haul.rs` | 手動運搬の指定。選定アルゴリズムは `hw_logistics::manual_haul_selector` を呼ぶ thin adapter |
 | `queries.rs` | `DesignationTargetQuery` 型定義 |

@@ -101,7 +101,7 @@ hw_visual (hw_core + hw_spatial + hw_world + hw_ui)
 - `selection/` — SelectedEntity, HoveredEntity, SelectionIndicator, SelectionIntent, cleanup_selection_references_system, placement validation API
 - `camera.rs` — MainCamera マーカー、`world_cursor_pos`（スクリーン座標→ワールド座標変換ユーティリティ）
 - `plugins/` — UiCorePlugin / UiEntityListPlugin / UiFoundationPlugin / UiInfoPanelPlugin / UiTooltipPlugin（fn ポインタ受け付けシェル）
-- **`area_edit/`** — エリア選択・編集状態の純粋データ型（`AreaEditHandleKind`, `AreaEditOperation`, `AreaEditDrag`, `AreaEditSession`, `AreaEditHistory`, `AreaEditHistoryEntry`, `AreaEditClipboard`, `AreaEditPresets`）。`bevy_app/command/area_selection/state.rs` は re-export のみ。`AreaEditHandleKind` は `bevy_app/command/mod.rs` からも re-export
+- **`area_edit/`** — エリア選択・編集状態の純粋データ型（`AreaEditHandleKind`, `AreaEditOperation`, `AreaEditDrag`, `AreaEditSession`, `AreaEditHistory`, `AreaEditHistoryEntry`, `AreaEditClipboard`, `AreaEditPresets`）。`bevy_app/command/area_selection/state.rs` は re-export のみ。`AreaEditHandleKind` は `bevy_app/command/mod.rs` からも re-export。`area_edit/interaction.rs` に `detect_area_edit_operation`・`apply_area_edit_drag`・`cursor_icon_for_operation` の pure helper を所有（M1 移設済み）
 
 ここに置かないもの:
 

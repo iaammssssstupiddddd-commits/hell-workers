@@ -1,6 +1,6 @@
 # Plans Index
 
-`docs/plans` の文書ステータス一覧（更新日: 2026-03-18）。
+`docs/plans` の文書ステータス一覧（更新日: 2026-03-19）。
 
 ## 新規計画書の作り方
 
@@ -19,8 +19,7 @@
 
 | Document | Status | Notes |
 |---|---|---|
-| [crate-boundary-alignment-plan-2026-03-18.md](crate-boundary-alignment-plan-2026-03-18.md) | Complete | docs/crate-boundaries.mdの計画。 |
-| [refactor-500plus-rs-files-plan-2026-03-18.md](refactor-500plus-rs-files-plan-2026-03-18.md) | Draft | tracked な Rust ソースのうち 500 行超のファイルが 4 本に集中し、責務・テスト・ECS 接続が一つのモジュールに混ざっているの計画。 |
+| [area-selection-input-refactor-plan-2026-03-19.md](area-selection-input-refactor-plan-2026-03-19.md) | Draft | `area_selection` input フローの責務分離と helper ownership 整理の計画。 |
 
 ## アーカイブ計画書一覧 (`docs/plans/archive`)
 
@@ -36,6 +35,7 @@
 | [archive/bucket-return-rebuild-plan.md](archive/bucket-return-rebuild-plan.md) | アーカイブ | バケツ返却仕様の再構築計画。 |
 | [archive/cargo-workspace-migration-plan.md](archive/cargo-workspace-migration-plan.md) | アーカイブ | Cargo Workspace 移行計画 |
 | [archive/command-crate-extraction-plan-2026-03-12.md](archive/command-crate-extraction-plan-2026-03-12.md) | アーカイブ | src/systems/command/の計画。 |
+| [archive/crate-boundary-alignment-plan-2026-03-18.md](archive/crate-boundary-alignment-plan-2026-03-18.md) | アーカイブ | docs/crate-boundaries.mdの計画。 |
 | [archive/destination-validation-unification-plan-2026-03-07.md](archive/destination-validation-unification-plan-2026-03-07.md) | アーカイブ | FloorConstruction / WallConstruction / ProvisionalWall の搬入先需要計算と実行時受入判定が、割り当て時・手運搬 dropping 時・猫車 unloading 時の 3 系統に分散し、同一ロジックを複数箇所で維持しているの計画。 |
 | [archive/docs-index-automation-plan-2026-03-05.md](archive/docs-index-automation-plan-2026-03-05.md) | アーカイブ | docs/plans/README.mdの計画。 |
 | [archive/door-implementation-2026-02-22.md](archive/door-implementation-2026-02-22.md) | アーカイブ | 壁で囲まれた空間への出入りを制御する手段がない。現状は壁に穴を開けるか、壁を完全に閉じるかの二択しかないの計画。 |
@@ -93,7 +93,9 @@
 | [archive/phase3-gameassets-abstraction.md](archive/phase3-gameassets-abstraction.md) | アーカイブ | `bevy_app` に残存するシステムのうち、`GameAssets`（Root 固有リソース）の **一部フィールド** のみに依存するものをの提案。 |
 | [archive/plant-trees-visuals-plan-2026-02-22.md](archive/plant-trees-visuals-plan-2026-02-22.md) | アーカイブ | `Plant Trees` の3フェーズ演出およびドラッグ時プレビュー追加の実装計画。 |
 | [archive/re-export-consolidation-plan-2026-03-12.md](archive/re-export-consolidation-plan-2026-03-12.md) | アーカイブ | `pub use` の多段中継と wildcard 再公開を削減し、正規 public path を整理する計画。 |
+| [archive/reexport-reduction-plan-2026-03-19.md](archive/reexport-reduction-plan-2026-03-19.md) | アーカイブ | bevy_appの計画。 |
 | [archive/refactor-500plus-files-phase-plan-2026-02-14.md](archive/refactor-500plus-files-phase-plan-2026-02-14.md) | アーカイブ | 500行超ファイルの段階的リファクタ計画。 |
+| [archive/refactor-500plus-rs-files-plan-2026-03-18.md](archive/refactor-500plus-rs-files-plan-2026-03-18.md) | アーカイブ | 500行超 Rust ソースファイルの責務分割計画 |
 | [archive/refactor-implementation-order-2026-02-20.md](archive/refactor-implementation-order-2026-02-20.md) | アーカイブ | リファクタ実装順のガイド。 |
 | [archive/refactor-phase-plan-2026-02.md](archive/refactor-phase-plan-2026-02.md) | アーカイブ | フェーズ分割リファクタ計画。 |
 | [archive/refactor-roadmap-2026-02-22.md](archive/refactor-roadmap-2026-02-22.md) | アーカイブ | 現行実装を前提にした全体リファクタ実行計画（回帰テスト追加はスコープ外）。 |
@@ -132,4 +134,3 @@
 | [archive/workspace-construction-phase-extraction.md](archive/workspace-construction-phase-extraction.md) | アーカイブ | Floor/Wall 建設で使うフェーズ・状態型がの計画。 |
 | [archive/zone-placement-refactor-plan-2026-03-05.md](archive/zone-placement-refactor-plan-2026-03-05.md) | アーカイブ | zone_placement.rsの計画。 |
 | [archive/zone-removal-preview-diff-plan-2026-03-01.md](archive/zone-removal-preview-diff-plan-2026-03-01.md) | アーカイブ | Zone removal preview の全件更新を差分更新へ置換する計画。 |
-
