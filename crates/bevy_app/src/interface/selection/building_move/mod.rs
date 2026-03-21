@@ -18,7 +18,7 @@ use crate::systems::soul_ai::execute::task_execution::move_plant::{
     MovePlanned, MovePlantReservation,
 };
 use crate::systems::soul_ai::execute::task_execution::types::{AssignedTask, MovePlantTask};
-use crate::systems::soul_ai::helpers::work::unassign_task;
+use hw_soul_ai::unassign_task;
 use crate::world::map::{WorldMap, WorldMapRef, WorldMapWrite};
 use bevy::prelude::*;
 use hw_core::constants::TILE_SIZE;

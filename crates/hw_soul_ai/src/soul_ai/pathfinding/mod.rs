@@ -7,7 +7,7 @@ use bevy::prelude::*;
 use hw_core::constants::MAX_PATHFINDS_PER_FRAME;
 use hw_core::relationships::RestAreaReservedFor;
 use hw_core::soul::{DamnedSoul, Destination, IdleBehavior, IdleState, Path};
-use hw_world::{PathfindingContext, WorldMap, WorldMapRead};
+use hw_world::{PathfindingContext, WorldMap, WorldMapRead, find_path_world_waypoints};
 
 use crate::soul_ai::execute::task_execution::AssignedTask;
 
@@ -126,7 +126,7 @@ fn process_worker_pathfinding(
     *pathfind_count += 1;
 
     if let Some(world_path) =
-        reuse::try_find_path_world_waypoints(world_map, pf_context, start_grid, goal_grid, entity)
+        find_path_world_waypoints(world_map, pf_context, start_grid, goal_grid)
     {
         // デバッグ：集会中のsoulで特定位置付近の場合
         if matches!(idle.behavior, IdleBehavior::Gathering)

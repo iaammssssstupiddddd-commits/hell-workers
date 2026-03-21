@@ -96,35 +96,4 @@ pub(super) fn try_reuse_existing_path(
     false
 }
 
-/// A* でパスを探索し、ワールド座標の waypoint 列として返す。
-/// 直接到達不可なターゲットには隣接マスへの探索を fallback する。
-pub(super) fn try_find_path_world_waypoints(
-    world_map: &WorldMap,
-    pf_context: &mut PathfindingContext,
-    start_grid: (i32, i32),
-    goal_grid: (i32, i32),
-    entity: Entity,
-) -> Option<Vec<Vec2>> {
-    find_path(
-        world_map,
-        pf_context,
-        start_grid,
-        goal_grid,
-        PathGoalPolicy::RespectGoalWalkability,
-    )
-    .or_else(|| {
-        // 通常のパスが見つからない場合、ターゲットの隣接マスへのパスを試みる
-        // これはターゲットが木や岩（非歩行可能）の上にある場合に有効
-        debug!(
-            "PATH: Soul {:?} failed find_path, trying find_path_to_adjacent",
-            entity
-        );
-        find_path_to_adjacent(world_map, pf_context, start_grid, goal_grid, true)
-    })
-    .map(|grid_path| {
-        grid_path
-            .iter()
-            .map(|&(x, y)| WorldMap::grid_to_world(x, y))
-            .collect()
-    })
-}
+

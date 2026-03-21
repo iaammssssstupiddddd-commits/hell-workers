@@ -5,7 +5,7 @@ use crate::events::{
     OnExhausted, OnSoulRecruited, OnStressBreakdown, OnTaskAssigned, OnTaskCompleted,
 };
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
-use crate::systems::soul_ai::helpers::work::unassign_task;
+use hw_soul_ai::unassign_task;
 use crate::world::map::WorldMapRead;
 use hw_core::constants::*;
 use hw_core::relationships::CommandedBy;

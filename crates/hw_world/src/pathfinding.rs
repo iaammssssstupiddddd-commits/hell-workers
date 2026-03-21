@@ -359,6 +359,32 @@ pub fn find_path_to_boundary(
     }
 }
 
+/// A* でパスを探索し、ワールド座標 waypoint 列として返す。
+/// 直接到達不可なターゲットには隣接マスへの探索を fallback する。
+///
+/// `find_path` → `find_path_to_adjacent` の fallback + grid→world 変換を1関数に集約。
+pub fn find_path_world_waypoints(
+    world_map: &crate::map::WorldMap,
+    pf_context: &mut PathfindingContext,
+    start_grid: (i32, i32),
+    goal_grid: (i32, i32),
+) -> Option<Vec<bevy::math::Vec2>> {
+    find_path(
+        world_map,
+        pf_context,
+        start_grid,
+        goal_grid,
+        PathGoalPolicy::RespectGoalWalkability,
+    )
+    .or_else(|| find_path_to_adjacent(world_map, pf_context, start_grid, goal_grid, true))
+    .map(|grid_path| {
+        grid_path
+            .iter()
+            .map(|&(x, y)| crate::map::WorldMap::grid_to_world(x, y))
+            .collect()
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

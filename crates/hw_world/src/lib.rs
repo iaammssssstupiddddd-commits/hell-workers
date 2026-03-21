@@ -33,7 +33,7 @@ pub use map::{WorldMap, WorldMapRead, WorldMapWrite};
 pub use mapgen::generate_base_terrain_tiles;
 pub use pathfinding::{
     PathGoalPolicy, PathNode, PathWorld, PathfindingContext, can_reach_target, find_path,
-    find_path_to_adjacent, find_path_to_boundary,
+    find_path_to_adjacent, find_path_to_boundary, find_path_world_waypoints,
 };
 pub use query::{find_nearest_river_grid, find_nearest_walkable_grid};
 pub use regrowth::{ForestZone, default_forest_zones, find_regrowth_position};

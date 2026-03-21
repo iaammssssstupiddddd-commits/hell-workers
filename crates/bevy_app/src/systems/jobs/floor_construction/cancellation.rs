@@ -6,7 +6,7 @@ use crate::systems::jobs::construction_shared::{ResourceItemVisualHandles, spawn
 use crate::systems::logistics::{Inventory, ResourceType};
 use crate::systems::soul_ai::execute::task_execution::context::TaskQueries;
 use crate::systems::soul_ai::execute::task_execution::types::AssignedTask;
-use crate::systems::soul_ai::helpers::work::unassign_task;
+use hw_soul_ai::unassign_task;
 use crate::world::map::WorldMapWrite;
 use bevy::prelude::*;
 use hw_core::relationships::WorkingOn;

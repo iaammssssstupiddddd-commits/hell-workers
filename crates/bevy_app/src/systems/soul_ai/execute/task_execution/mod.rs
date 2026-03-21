@@ -12,7 +12,6 @@ pub mod handler {
 pub mod move_plant {
     pub use hw_soul_ai::soul_ai::execute::task_execution::move_plant::*;
 }
-pub mod transport_common;
 pub mod types {
     pub use hw_soul_ai::soul_ai::execute::task_execution::types::*;
 }
