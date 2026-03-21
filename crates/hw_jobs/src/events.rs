@@ -1,4 +1,4 @@
-use crate::assigned_task::AssignedTask;
+use crate::tasks::AssignedTask;
 use crate::model::BuildingType;
 use bevy::prelude::*;
 use hw_core::events::ResourceReservationOp;

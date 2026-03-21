@@ -69,5 +69,12 @@ cargo run
 - 型変更は `定義 -> 生成 -> 使用` の順で更新する
 - 変換は `From/Into` を優先して `as` の多用を避ける
 
+## アセット共有
+- アセット原本の共有は `git` ではなく `Syncthing` を推奨
+- 原本はリポジトリ外の同期フォルダ、ゲーム実行用ファイルは `assets/` に分離する
+- 詳細手順は [docs/assets_workflow.md](docs/assets_workflow.md) を参照
+- 外部 `exports/` から `assets/` へ反映する補助スクリプト:
+  `python scripts/sync_external_assets.py --source ~/Sync/hell-workers-assets/exports`
+
 ## 関連ドキュメント
 詳細は [docs/README.md](docs/README.md) を参照してください。

@@ -5,7 +5,7 @@ use hw_core::jobs::WorkType;
 use hw_core::visual_mirror::gather::{GatherHighlightMarker, RestAreaVisual};
 use hw_core::visual_mirror::task::{SoulTaskPhaseVisual, SoulTaskVisualState};
 
-use crate::assigned_task::{
+use crate::tasks::{
     AssignedTask, CoatWallPhase, FrameWallPhase, GatherPhase, HaulPhase, PourFloorPhase,
     ReinforceFloorPhase,
 };
@@ -256,7 +256,7 @@ pub fn sync_wall_site_visual_system(
 // ── Building Visual Sync ──────────────────────────────────────────────────────
 
 use hw_core::visual_mirror::building::{BuildingTypeVisual, BuildingVisualState, MudMixerVisualState};
-use crate::assigned_task::RefinePhase;
+use crate::tasks::RefinePhase;
 use crate::mud_mixer::MudMixerStorage;
 
 fn building_type_to_visual(kind: BuildingType) -> BuildingTypeVisual {

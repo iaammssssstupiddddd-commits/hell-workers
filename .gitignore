@@ -42,6 +42,12 @@ scripts/__pycache__
 # Assets (Keep only WGSL)
 /assets/**
 !/assets/**/*.wgsl
+/assets_src/
+/assets_exports/
+/.syncthing/
+/.stfolder
+/.stignore
+/.stversions/
 
 # OS files
 .DS_Store
