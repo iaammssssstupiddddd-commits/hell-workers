@@ -218,9 +218,9 @@ App::new()
 - 確定した数値を `hw_core/src/constants/render.rs` に記録する
 
 **確認基準**:
-- [ ] 壁に厚みが感じられる
-- [ ] 床と壁の境界が自然に見える
-- [ ] キャラクタープロキシ（Cuboid または仮GLB）が「体積のない存在に見える」（`character-3d-rendering-proposal` §3.6）
+- [x] 壁に厚みが感じられる
+- [x] 床と壁の境界が自然に見える
+- [x] キャラクタープロキシ（Cuboid または仮GLB）が「体積のない存在に見える」（`character-3d-rendering-proposal` §3.6）
 
 **確定する値**:
 - `VIEW_HEIGHT`（Camera3d の Y 座標）

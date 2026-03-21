@@ -60,6 +60,16 @@ pub const Z_SPEECH_BUBBLE_BG: f32 = 10.9;
 /// RtT composite sprite の Z レイヤー（Overlay Camera で合成表示）
 pub const Z_RTT_COMPOSITE: f32 = 20.0;
 
+/// Camera3d（TopDown）の固定高度
+pub const VIEW_HEIGHT: f32 = 150.0;
+/// Camera3d（TopDown）の Z オフセット
+pub const Z_OFFSET: f32 = 90.0;
+
+/// 斜め TopDown オーソ投影で圧縮される地面の Y 方向を、RtT 合成時に打ち消す係数。
+pub fn topdown_rtt_vertical_compensation() -> f32 {
+    (VIEW_HEIGHT.hypot(Z_OFFSET)) / VIEW_HEIGHT
+}
+
 /// Room 境界線の色（壁の上に乗せるボーダーライン）
 pub const ROOM_BORDER_COLOR: Color = Color::srgba(0.2, 0.7, 1.0, 0.8);
 /// Room 境界線の太さ（ピクセル）

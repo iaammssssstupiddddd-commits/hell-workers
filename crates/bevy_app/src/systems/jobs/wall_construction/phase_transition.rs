@@ -8,6 +8,7 @@ pub use hw_jobs::wall_construction_phase_transition_system;
 use super::components::*;
 use crate::plugins::startup::Building3dHandles;
 use crate::systems::jobs::{Building, BuildingType, ProvisionalWall};
+use crate::systems::visual::wall_orientation_aid::attach_wall_orientation_aid;
 use crate::world::map::{WorldMap, WorldMapWrite};
 use bevy::prelude::*;
 use hw_core::constants::{TILE_SIZE, Z_MAP};
@@ -39,14 +40,17 @@ pub fn wall_framed_tile_spawn_system(
             ))
             .id();
 
-        commands.spawn((
+        let visual_entity = commands
+            .spawn((
             Mesh3d(handles_3d.wall_mesh.clone()),
             MeshMaterial3d(handles_3d.wall_provisional_material.clone()),
             Transform::from_xyz(world_pos.x, TILE_SIZE / 2.0, -world_pos.y),
             handles_3d.render_layers.clone(),
             Building3dVisual { owner: wall_entity },
             Name::new("Building3dVisual (Wall, Provisional)"),
-        ));
+        ))
+            .id();
+        attach_wall_orientation_aid(&mut commands, visual_entity, &handles_3d);
 
         tile.spawned_wall = Some(wall_entity);
         world_map.reserve_building_footprint(

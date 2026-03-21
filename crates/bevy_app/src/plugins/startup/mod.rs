@@ -9,7 +9,7 @@ mod rtt_setup;
 mod visual_handles;
 
 pub use rtt_composite::RttCompositeSprite;
-pub use rtt_setup::{Camera3dRtt, RttTextures};
+pub use rtt_setup::{Camera3dRtt, RttTextures, RttViewportSize};
 pub use visual_handles::Building3dHandles;
 
 use asset_catalog::create_game_assets;
@@ -31,14 +31,16 @@ use crate::systems::logistics::{
     ResourceCountDisplayTimer, ResourceLabels, initial_resource_spawner,
 };
 use crate::systems::spatial::{FloorConstructionSpatialGrid, GatheringSpotSpatialGrid};
+use crate::systems::visual::elevation_view::ElevationDirection;
 use crate::world::map::{
     WorldMap, WorldMapRead, WorldMapWrite, spawn_map, terrain_border::spawn_terrain_borders,
 };
 use bevy::camera::{RenderTarget, visibility::RenderLayers};
 use bevy::camera_controller::pan_camera::PanCamera;
 use bevy::prelude::*;
+use bevy::window::PrimaryWindow;
 use hw_core::GameTime;
-use hw_core::constants::{LAYER_2D, LAYER_3D, LAYER_OVERLAY};
+use hw_core::constants::{LAYER_2D, LAYER_3D, LAYER_OVERLAY, VIEW_HEIGHT, Z_OFFSET};
 use hw_spatial::SpatialGridOps;
 use hw_spatial::{
     BlueprintSpatialGrid, FamiliarSpatialGrid, ResourceSpatialGrid, SpatialGrid,
@@ -93,7 +95,11 @@ impl Plugin for StartupPlugin {
             )
             .add_systems(Update, (
                 setup_perf_scenario_runtime_if_enabled,
-                rtt_composite::sync_rtt_composite_sprite,
+                (
+                    rtt_setup::sync_rtt_texture_size_to_window,
+                    rtt_composite::sync_rtt_output_bindings,
+                )
+                    .chain(),
             ));
     }
 }
@@ -115,10 +121,20 @@ fn setup(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
     mut images: ResMut<Assets<Image>>,
+    q_window: Query<&Window, With<PrimaryWindow>>,
 ) {
     // --- RtT オフスクリーンテクスチャ生成 ---
-    let rtt_handle = rtt_setup::create_rtt_texture(1280, 720, &mut images);
+    let viewport_size = q_window
+        .single()
+        .map(rtt_setup::RttViewportSize::from_window)
+        .unwrap_or(rtt_setup::RttViewportSize {
+            width: 1280,
+            height: 720,
+        });
+    let rtt_handle =
+        rtt_setup::create_rtt_texture(viewport_size.width, viewport_size.height, &mut images);
     commands.insert_resource(RttTextures { texture_3d: rtt_handle.clone() });
+    commands.insert_resource(viewport_size);
 
     // --- Camera2d（既存: メイン描画・スクリーン出力） ---
     commands.spawn((
@@ -141,7 +157,7 @@ fn setup(
     ));
 
     // --- Camera3d（RtT: オフスクリーン3D描画）---
-    // Y=100 に配置し、XZ平面を俯瞰。screen-up = World +Z（2D Y と対応）。
+    // TopDown の初期値は camera_sync.rs の定数と揃える。
     commands.spawn((
         Camera3d::default(),
         Camera {
@@ -150,8 +166,11 @@ fn setup(
             ..default()
         },
         Projection::Orthographic(OrthographicProjection::default_3d()),
-        Transform::from_translation(Vec3::new(0.0, 100.0, 0.0))
-            .looking_at(Vec3::ZERO, Vec3::NEG_Z),
+        {
+            let mut transform = Transform::from_translation(Vec3::new(0.0, VIEW_HEIGHT, Z_OFFSET));
+            transform.rotation = ElevationDirection::TopDown.camera_rotation();
+            transform
+        },
         RenderTarget::Image(rtt_handle.into()),
         RenderLayers::layer(LAYER_3D),
         Camera3dRtt,

@@ -5,7 +5,7 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `phase3-ms-p3-pre-c-plan` |
-| ステータス | `Draft` |
+| ステータス | `Complete` |
 | 作成日 | `2026-03-17` |
 | 関連ロードマップ | `docs/plans/3d-rtt/milestone-roadmap.md` |
 | 関連提案 | `docs/proposals/3d-rtt/20260316/billboard-camera-angle-proposal-2026-03-16.md` |
@@ -56,9 +56,9 @@ Phase 3 着手前の基盤整備として、以下の課題を解決する。
 
 | マイルストーン | 現状 | ギャップ |
 | --- | --- | --- |
-| **[MS-P3-Pre-A]** `CLIP_DISTANCES` 動作確認 | 動作未確認 | SectionMaterial 全体がブロックされる |
-| **[MS-P3-Pre-B]** RtT 基盤整備 | 1280×720 固定 | ウィンドウリサイズで表示崩壊 |
-| **[MS-P3-Pre-C]** Camera3d 角度 V-1 | 真上（90°）固定 | 斜め約53°未適用。GLB 生成パイプラインの撮影角度が決められない |
+| **[MS-P3-Pre-A]** `CLIP_DISTANCES` 動作確認 | `WgpuFeatures::CLIP_DISTANCES` を有効化済み | 実機起動確認のみ継続監視 |
+| **[MS-P3-Pre-B]** RtT 基盤整備 | `PrimaryWindow` の物理解像度追従と合成スプライト同期を実装済み | 品質スケール導入は MS-3-2 側で対応 |
+| **[MS-P3-Pre-C]** Camera3d 角度 V-1 | `VIEW_HEIGHT = 150.0` / `Z_OFFSET = 90.0` を確定し、壁の見え方・配置ズレ・キャラクタープロキシ確認まで完了 | GLB PoC（MS-P3-Pre-D）へ進む |
 
 ---
 
@@ -105,7 +105,7 @@ Phase 3 着手前の基盤整備として、以下の課題を解決する。
 
 **完了条件**:
 - [x] `cargo check` ゼロエラー
-- [ ] ゲームが正常起動する（クラッシュしない）
+- [x] ゲームが正常起動する（クラッシュしない）
 
 ---
 
@@ -120,11 +120,12 @@ Phase 3 着手前の基盤整備として、以下の課題を解決する。
    > ⚠️ `rtt-resolution-scaling-proposal` §3.3 のサンプルコードは `rtt.handle` を参照しているが、実際の `RttTextures` フィールドは `texture_3d`。実装時は `rtt.texture_3d` を使用すること
 3. `hw_core/src/constants/render.rs` に `Z_RTT_COMPOSITE` 定数を追加する
 4. `RenderTarget::Image` の受け取り型を実装前に `docsrs-mcp` / `~/.cargo/registry/src/` で確認する
+5. `PrimaryWindow` の物理解像度に追従して RtT を再生成し、合成スプライトは logical size + TopDown 縦補正で同期する
 
 **変更ファイル**:
 - `crates/bevy_app/src/plugins/startup/rtt_setup.rs`（`create_rtt_texture` 関数追加）
 - `crates/bevy_app/src/plugins/startup/mod.rs`（`setup()` のインライン生成処理を `create_rtt_texture` 呼び出しに置換）
-- `crates/bevy_app/src/plugins/startup/rtt_composite.rs`（`sync_rtt_composite_sprite` システム追加）
+- `crates/bevy_app/src/plugins/startup/rtt_composite.rs`（`sync_rtt_output_bindings` システム追加）
 - `crates/hw_core/src/constants/render.rs`（`Z_RTT_COMPOSITE` 定数追加）
 
 **完了条件**:
@@ -150,31 +151,29 @@ Phase 3 着手前の基盤整備として、以下の課題を解決する。
   // TopDown モード（変更後）
   cam3d.translation.x = cam2d.translation.x;
   cam3d.translation.y = VIEW_HEIGHT;              // 100.0 → 定数に
-  cam3d.translation.z = scene_z + Z_OFFSET;       // Z_OFFSET 分だけカメラを手前に引く
+  cam3d.translation.z = scene_z + Z_OFFSET;       // 2D 中心 + 固定奥行きオフセット
   ```
 
   **② rotation の更新（新規追加）**
 
-  現状の `camera_sync.rs` は translation と scale のみ更新しており rotation には触れていない。Camera3d 初期 rotation は `mod.rs` の spawn 時に `looking_at(Vec3::ZERO, Vec3::NEG_Z)`（真下）として固定されたままになる。53° 視点を実現するには毎フレーム `look_at` で rotation を更新する必要がある。
+  現状の `camera_sync.rs` は translation と projection scale のみ更新しており rotation には触れていない。Camera3d 初期 rotation は `mod.rs` の spawn 時に斜め俯瞰用の固定回転として設定し、TopDown 時はその回転を毎フレーム維持する。
 
   ```rust
   // TopDown モード translation 更新直後に追加
-  cam3d.look_at(
-      Vec3::new(cam2d.translation.x, 0.0, scene_z), // シーン中心（y=0 の注視点）
-      Vec3::NEG_Z,                                    // 2D 上方向と対応（既存と同じ up 軸）
-  );
+  cam3d.rotation = ElevationDirection::TopDown.camera_rotation();
   ```
 
-  `camera_sync.rs` が毎フレーム rotation を上書きするため、`mod.rs` 側の Camera3d 初期 spawn の `looking_at` 設定は変更不要。
+  `camera_sync.rs` が毎フレーム rotation を上書きするため、`mod.rs` 側の Camera3d 初期 spawn も同じ固定回転を使用する。
 
 **変更ファイル**:
 - `crates/hw_core/src/constants/render.rs`（`VIEW_HEIGHT`・`Z_OFFSET` 定数追加）
-- `crates/bevy_app/src/systems/visual/camera_sync.rs`（TopDown ブロックで translation + `look_at` 更新）
+- `crates/bevy_app/src/systems/visual/camera_sync.rs`（TopDown ブロックで translation と Projection.scale を更新）
 
 **確認基準**:
-- [ ] 壁に厚みが感じられる
-- [ ] 床と壁の境界が自然に見える
-- [ ] キャラクタープロキシ（Cuboid または仮GLB）が「体積のない存在に見える」（`character-3d-rendering-proposal` §3.6）
+- [x] 壁に厚みが感じられる
+- [x] 床と壁の境界が自然に見える
+- [x] キャラクタープロキシ（Cuboid または仮GLB）が「体積のない存在に見える」（`character-3d-rendering-proposal` §3.6）
+- [x] 壁の上面と側面を見分けられる補助表示が確認できる（検証用）
 
 **確定する値**:
 - `VIEW_HEIGHT`（Camera3d の Y 座標）
@@ -187,8 +186,8 @@ Phase 3 着手前の基盤整備として、以下の課題を解決する。
 
 1. `render.rs` に初期値を追加：
    ```rust
-   pub const VIEW_HEIGHT: f32 = 100.0;
-   pub const Z_OFFSET: f32 = 75.0;  // 仰角 ≈ 53°（arctan(100/75) ≈ 53.1°）
+  pub const VIEW_HEIGHT: f32 = 150.0;
+  pub const Z_OFFSET: f32 = 90.0;  // 仰角 ≈ 59°（arctan(150/90) ≈ 59.0°）
    ```
 2. `camera_sync.rs` の TopDown ブロックを ①②（上記コード）に差し替える
 

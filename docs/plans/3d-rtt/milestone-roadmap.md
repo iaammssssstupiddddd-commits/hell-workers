@@ -104,7 +104,7 @@
 
 - **やること**: 毎フレーム Camera2d の Transform/OrthographicProjection を Camera3d に同期するシステムを追加
   - パン: `Camera2d.Transform.translation.xy` → Camera3d の XZ 軸にマッピング
-  - ズーム: `PanCamera` が更新する `transform.scale` を Camera3d に反映する
+  - ズーム: `PanCamera` が更新する `transform.scale` を Camera3d の `OrthographicProjection.scale` に反映する
 - **Bevy 0.18 API（実装済み確認）**:
   - `PanCamera` (0.18) は `zoom_factor` を `transform.scale = Vec3::splat(zoom_factor)` で直接反映する（`bevy_camera_controller-0.18.0/src/pan_camera.rs:236` で確認済み）
   - Camera3d 同期式: `cam3d.translation.x = cam2d.translation.x`、`cam3d.translation.z = -cam2d.translation.y`（符号反転必須）
@@ -216,9 +216,9 @@
 - **やること**: `bevy_app` の `RenderPlugin` 設定に `WgpuFeatures::CLIP_DISTANCES` を追加し、`cargo check` + 実機起動で動作確認する
 - **変更ファイル**: `crates/bevy_app/src/main.rs`（または `hw_visual/src/lib.rs`）
 - **完了条件**:
-  - [ ] `cargo check` ゼロエラー
-  - [ ] ゲームが正常起動する（クラッシュしない）
-- **ステータス**: [ ] 未着手
+  - [x] `cargo check` ゼロエラー
+  - [x] ゲームが正常起動する（クラッシュしない）
+- **ステータス**: [x] 完了
 
 ---
 
@@ -228,13 +228,13 @@
 
 - **やること**:
   1. `rtt_setup.rs` の `create_rtt_texture` 関数を切り出す
-  2. `sync_rtt_composite_sprite` システムを実装・登録する
+  2. `sync_rtt_texture_size_to_window` と `sync_rtt_output_bindings` を実装・登録する
   3. `RenderTarget::Image` の受け取り型を実装前に確認する（`docsrs-mcp` / `~/.cargo/registry/src/`）
 - **変更ファイル**: `plugins/startup/rtt_setup.rs`、`systems/visual/rtt_composite.rs`（新規）、`hw_core/src/constants/render.rs`
 - **完了条件**:
-  - [ ] `cargo check` ゼロエラー
-  - [ ] `RttTextures.handle` を手動差し替えしたとき合成スプライトのサイズが自動追従する（目視）
-- **ステータス**: [ ] 未着手
+  - [x] `cargo check` ゼロエラー
+  - [x] `RttTextures.texture_3d` を手動差し替えしたとき合成スプライトのサイズが自動追従する（目視）
+- **ステータス**: [x] 完了
 
 ---
 
@@ -249,9 +249,9 @@
   - キャラクタープロキシ（Cuboid または仮GLB）が「体積のない存在に見える」（`character-3d-rendering-proposal` §3.6 拡張）
 - **確定する値**: `VIEW_HEIGHT`（Camera3d の Y 座標）・`Z_OFFSET`（Z オフセット）・仰角（度数）
 - **完了条件**:
-  - [ ] 数値が確定し `hw_core/src/constants/render.rs` に記録されている
-  - [ ] キャラクタープロキシの見え方について「体積のない存在として許容できる」判断が記録されている
-- **ステータス**: [ ] 未着手
+  - [x] 数値が確定し `hw_core/src/constants/render.rs` に記録されている
+  - [x] キャラクタープロキシの見え方について「体積のない存在として許容できる」判断が記録されている
+- **ステータス**: [x] 完了
 
 ---
 

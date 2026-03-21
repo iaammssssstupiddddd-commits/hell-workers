@@ -5,7 +5,7 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `area-selection-input-refactor-plan-2026-03-19` |
-| ステータス | `Draft` |
+| ステータス | `Completed` |
 | 作成日 | `2026-03-19` |
 | 最終更新日 | `2026-03-19` |
 | 作成者 | `Copilot` |
@@ -13,6 +13,8 @@
 | 関連Issue/PR | `N/A` |
 
 > **コードサーベイ基準日**: 2026-03-19。`README.md`、`docs/DEVELOPMENT.md`、`docs/README.md`、`docs/architecture.md`、`docs/cargo_workspace.md` と、`systems/command/area_selection/**` / `hw_ui::area_edit` / `hw_ui::camera` の実コードを確認済み。全関数の行番号・型依存・import パスを突き合わせ済み。
+>
+> **完了記録**: 2026-03-19 に実装完了。M2 は当初案から微修正し、`input.rs` を facade として残したまま `input/` 配下へ phase module を追加する形で完了している。
 
 ## 1. 目的
 
@@ -101,7 +103,7 @@ area_selection/cursor.rs  ← world_cursor_pos を geometry.rs 経由で参照 (
 ### 3-3. 本計画で埋めるギャップ
 
 - area-edit 操作 helper 3 関数 + `world_cursor_pos` を `hw_ui::area_edit::interaction` に移し、root の重複を除去する。
-- `input.rs` を `input/mod.rs` に変換し、press / drag / transitions の各責務を独立 module に切り出す。
+- `input.rs` を thin facade として維持しつつ、press / drag / transitions の各責務を `input/` 配下の独立 module に切り出す。
 - `release.rs` の 4 モード分岐を専用ファイルに分割し、`CancelDesignation` の点/範囲経路を名前付き helper に抽出する。
 
 ## 4. 実装方針（高レベル）
@@ -158,18 +160,18 @@ area_selection/cursor.rs  ← world_cursor_pos を geometry.rs 経由で参照 (
   - `crates/bevy_app/src/systems/command/area_selection/indicator.rs`
   - `crates/bevy_app/src/systems/command/area_selection/state.rs`
 - 完了条件:
-  - [ ] `geometry.rs` に `world_cursor_pos` が存在しない。
-  - [ ] `detect_area_edit_operation` / `apply_area_edit_drag` / `cursor_icon_for_operation` が `hw_ui::area_edit::interaction` に存在し、root 側から `hw_ui::area_edit::*` 経由で参照される。
-  - [ ] `indicator.rs` も `hw_ui::camera::world_cursor_pos` を使っており、削除済み helper を参照しない。
-  - [ ] root `geometry.rs` に残る関数が `hotkey_slot_index`, `area_from_center_and_size`, `get_indicator_color`, `clamp_area_to_site`, `in_selection_area` のみになる。
+  - [x] `geometry.rs` に `world_cursor_pos` が存在しない。
+  - [x] `detect_area_edit_operation` / `apply_area_edit_drag` / `cursor_icon_for_operation` が `hw_ui::area_edit::interaction` に存在し、root 側から `hw_ui::area_edit::*` 経由で参照される。
+  - [x] `indicator.rs` も `hw_ui::camera::world_cursor_pos` を使っており、削除済み helper を参照しない。
+  - [x] root `geometry.rs` に残る関数が `hotkey_slot_index`, `area_from_center_and_size`, `get_indicator_color`, `clamp_area_to_site`, `in_selection_area` のみになる。
 - 検証:
   - `CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo check --workspace`
 
-## M2: `input.rs` を facade + phase module に分割する
+## M2: `input.rs` を facade + phase module 構成へ分割する
 
 - 現状: `input.rs`(320行) が `mod release;` のみを持つ単一ファイル。`input/` ディレクトリにはすでに `release.rs` が置かれている。
 - 変更内容:
-  1. `input.rs` を `input/mod.rs` へ変換（ファイルを移動）。
+  1. `input.rs` は facade として維持し、phase ごとの実装を `input/` 配下へ切り出す。
   2. `input/transitions.rs` を新規作成し、以下を移動する:
      - `should_exit_after_apply(keyboard: &ButtonInput<KeyCode>) -> bool` (現 `input.rs:32-34`)
      - `reset_designation_mode(mode: TaskMode) -> TaskMode` (現 `input.rs:36-44`)
@@ -178,28 +180,28 @@ area_selection/cursor.rs  ← world_cursor_pos を geometry.rs 経由で参照 (
      - `handle_left_just_pressed_input(...)-> bool` (現 `input.rs:176-226`)
   4. `input/drag.rs` を新規作成し、以下を移動する:
      - `handle_active_drag_input(...)-> bool` (現 `input.rs:87-174`)
-     - `despawn_selection_indicators(...)` (現 `input.rs:78-85`) は `drag.rs` か `mod.rs` のどちらかに置く（`release.rs` からも呼ばれるため、`mod.rs` の `pub(super) fn` として残す方が import が少なくて済む）
-  5. `input/mod.rs` には `task_area_selection_system` (facade) と `despawn_selection_indicators` のみを残す。各 submod の `use` は `pub(super)` 関数の呼び出しで完結させる。
+     - `despawn_selection_indicators(...)` (現 `input.rs:78-85`) は `release/area.rs` からも呼ばれるため、`input.rs` の `pub(super) fn` として残す。
+  5. `input.rs` には `task_area_selection_system` (facade) と `mod drag; mod press; mod release; mod transitions;` のみを残す。各 submod の `use` は `pub(super)` 関数の呼び出しで完結させる。
 - 変更後のモジュール構造:
   ```
-  input/
-    mod.rs         ← task_area_selection_system + despawn_selection_indicators
-    press.rs       ← try_start_direct_edit_drag + handle_left_just_pressed_input
-    drag.rs        ← handle_active_drag_input
-    transitions.rs ← should_exit_after_apply + reset_designation_mode
-    release.rs     ← handle_left_just_released_input (M3 で分割予定)
+  area_selection/
+    input.rs       ← task_area_selection_system (facade)
+    input/
+      press.rs       ← try_start_direct_edit_drag + handle_left_just_pressed_input
+      drag.rs        ← handle_active_drag_input
+      transitions.rs ← should_exit_after_apply + reset_designation_mode
+      release/       ← M3 で mode 別 handler に分割
   ```
 - 変更ファイル:
-  - `crates/bevy_app/src/systems/command/area_selection/input.rs` → `input/mod.rs` (移動・削除)
+  - `crates/bevy_app/src/systems/command/area_selection/input.rs`
   - `crates/bevy_app/src/systems/command/area_selection/input/press.rs`（新規）
   - `crates/bevy_app/src/systems/command/area_selection/input/drag.rs`（新規）
   - `crates/bevy_app/src/systems/command/area_selection/input/transitions.rs`（新規）
-  - `crates/bevy_app/src/systems/command/area_selection.rs` (mod input の path 変更は不要; Rust は `input.rs` と `input/mod.rs` を同一パスとして扱う)
 - 完了条件:
-  - [ ] `input.rs` が存在せず `input/mod.rs` に置き換わっている。
-  - [ ] `task_area_selection_system` が `mod.rs` の facade として残る。
-  - [ ] press / drag / transitions の分岐が専用 module に移り、`mod.rs` が 100 行以下になる。
-  - [ ] `TaskMode::DreamPlanting` 開始時の `dream_planting_preview_seed` セット処理が維持される。
+  - [x] `input.rs` が facade として残り、phase submodule を呼び出す構造になっている。
+  - [x] `task_area_selection_system` が `input.rs` の facade として残る。
+  - [x] press / drag / transitions の分岐が専用 module に移り、`input.rs` が薄い adapter になっている。
+  - [x] `TaskMode::DreamPlanting` 開始時の `dream_planting_preview_seed` セット処理が維持される。
 - 検証:
   - `CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo check --workspace`
 
@@ -234,10 +236,10 @@ area_selection/cursor.rs  ← world_cursor_pos を geometry.rs 経由で参照 (
   - `crates/bevy_app/src/systems/command/area_selection/input/release/cancel.rs`（新規）
   - `crates/bevy_app/src/systems/command/area_selection/input/release/dream.rs`（新規）
 - 完了条件:
-  - [ ] `release/mod.rs` の `handle_left_just_released_input` が dispatcher (match arm が 1-3 行程度) に縮退する。
-  - [ ] `CancelDesignation` の点/範囲経路が named helper に分離され、15-tuple destructure が helper 内に隠蔽される。
-  - [ ] `apply_area_and_record_history` / `apply_designation_in_area` / `cancel_single_designation` の呼び出し順が現状互換のまま維持される。
-  - [ ] `ParamSet::p0/p1/p2` の借用スコープが壊れていない（`B0001` が出ない）。
+  - [x] `release/mod.rs` の `handle_left_just_released_input` が dispatcher (match arm が 1-3 行程度) に縮退する。
+  - [x] `CancelDesignation` の点/範囲経路が named helper に分離され、15-tuple destructure が helper 内に隠蔽される。
+  - [x] `apply_area_and_record_history` / `apply_designation_in_area` / `cancel_single_designation` の呼び出し順が現状互換のまま維持される。
+  - [x] `ParamSet::p0/p1/p2` の借用スコープが壊れていない（`B0001` が出ない）。
 - 検証:
   - `CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo check --workspace`
 
@@ -245,16 +247,16 @@ area_selection/cursor.rs  ← world_cursor_pos を geometry.rs 経由で参照 (
 
 - 変更内容:
   - `systems/command/README.md` に input facade 化と helper ownership の更新を反映する。
-  - `hw_ui::area_edit::interaction` 追加に伴い `docs/architecture.md` と `docs/cargo_workspace.md` の該当箇所を同期する。
-  - `docs/plans/README.md` の索引を更新する。
+  - `docs/cargo_workspace.md` に `hw_ui::area_edit::interaction` の ownership を反映する。
+  - 本計画のステータスを `Completed` に更新し、`docs/plans/README.md` / `docs/proposals/README.md` の索引を実ファイル基準で更新する。
 - 変更ファイル:
   - `crates/bevy_app/src/systems/command/README.md`
-  - `docs/architecture.md`
   - `docs/cargo_workspace.md`
   - `docs/plans/README.md`
+  - `docs/proposals/README.md`
 - 完了条件:
-  - [ ] 実装境界の説明がコード構造と一致する。
-  - [ ] `docs/plans/README.md` に本計画が掲載される。
+  - [x] 実装境界の説明がコード構造と一致する。
+  - [x] `docs/plans/README.md` / `docs/proposals/README.md` が実在ファイルのみを参照し、この refactor を未着手 Draft として扱わない。
 - 検証:
   - `python scripts/update_docs_index.py` (存在する場合)
   - `CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo check --workspace`
@@ -292,24 +294,24 @@ area_selection/cursor.rs  ← world_cursor_pos を geometry.rs 経由で参照 (
   - M2 は `input` module 化だけを戻せる。
   - M3 は release handler 分割だけを戻せる。
 - 戻す時の手順:
-  1. `input/mod.rs` を単一ファイル構成へ戻す。
+  1. `input.rs` に phase submodule のロジックを戻し、`input/` 配下を単一ファイル構成へ戻す。
   2. `hw_ui::area_edit` に移した helper を root `geometry.rs` へ戻す。
   3. `cargo check --workspace` で import / module path の整合を確認する。
 
-## 10. AI引継ぎメモ（最重要）
+## 10. AI引継ぎメモ（完了記録）
 
 ### 現在地
 
-- 進捗: `0%`
-- 完了済みマイルストーン: なし
-- 未着手/進行中: `M1` `M2` `M3` `M4`
+- 進捗: `100%`
+- 完了済みマイルストーン: `M1` `M2` `M3` `M4`
+- 未解決/フォローアップ: なし。追加の入力仕様変更は別計画で扱う。
 
-### 次のAIが最初にやること
+### 実装結果サマリ
 
-1. `crates/bevy_app/src/systems/command/area_selection/geometry.rs` の `detect_area_edit_operation` (l.76) / `apply_area_edit_drag` (l.115) / `cursor_icon_for_operation` (l.166) の import を確認し、root crate 型への依存がないことを再確認する。
-2. `crates/hw_ui/src/area_edit/interaction.rs` を新規作成し、上記 3 関数を移動する（M1 最初の一手）。
-3. `geometry.rs:60-74` の `world_cursor_pos` を削除し、呼び出し元の `input.rs` / `cursor.rs` / `indicator.rs` を `hw_ui::camera::world_cursor_pos` に切り替える。
-4. M1 完了後 `cargo check --workspace` を実行して安全確認してから M2 に進む。
+1. `detect_area_edit_operation` / `apply_area_edit_drag` / `cursor_icon_for_operation` は `crates/hw_ui/src/area_edit/interaction.rs` へ移動済み。`geometry.rs` の重複 `world_cursor_pos` も削除済み。
+2. `crates/bevy_app/src/systems/command/area_selection/input.rs` は facade として維持し、`input/press.rs` / `input/drag.rs` / `input/transitions.rs` / `input/release/` へ分割済み。
+3. `release/` は `mod.rs` / `area.rs` / `designation.rs` / `cancel.rs` / `dream.rs` に分割済み。`cancel.rs` では単点取消と範囲取消が named helper に分離されている。
+4. permanent docs は `crates/bevy_app/src/systems/command/README.md` と `docs/cargo_workspace.md` を更新済み。索引は `python scripts/update_docs_index.py` で同期済み。
 
 ### ブロッカー/注意点
 
@@ -323,8 +325,11 @@ area_selection/cursor.rs  ← world_cursor_pos を geometry.rs 経由で参照 (
 
 - `crates/bevy_app/src/systems/command/README.md`
 - `crates/bevy_app/src/systems/command/area_selection.rs`
-- `crates/bevy_app/src/systems/command/area_selection/input.rs` (l.1-319)
-- `crates/bevy_app/src/systems/command/area_selection/input/release.rs` (l.1-233)
+- `crates/bevy_app/src/systems/command/area_selection/input.rs`
+- `crates/bevy_app/src/systems/command/area_selection/input/press.rs`
+- `crates/bevy_app/src/systems/command/area_selection/input/drag.rs`
+- `crates/bevy_app/src/systems/command/area_selection/input/transitions.rs`
+- `crates/bevy_app/src/systems/command/area_selection/input/release/mod.rs`
 - `crates/bevy_app/src/systems/command/area_selection/geometry.rs` (l.1-195)
 - `crates/bevy_app/src/systems/command/area_selection/cursor.rs`
 - `crates/bevy_app/src/systems/command/area_selection/apply.rs`
@@ -339,16 +344,17 @@ area_selection/cursor.rs  ← world_cursor_pos を geometry.rs 経由で参照 (
 ### 最終確認ログ
 
 - 最終 `cargo check`: `2026-03-19` / `pass`
+- 最終 docs index sync: `2026-03-19` / `python scripts/update_docs_index.py`
 - 未解決エラー: `N/A`
 
 ### Definition of Done
 
-- [ ] M1〜M4 が完了している
-- [ ] `geometry.rs` に `world_cursor_pos` / `detect_area_edit_operation` / `apply_area_edit_drag` / `cursor_icon_for_operation` が存在しない
-- [ ] `input/` が `mod.rs` / `press.rs` / `drag.rs` / `transitions.rs` / `release/` の構造になっている
-- [ ] `release/` が `mod.rs` (dispatcher) / `area.rs` / `designation.rs` / `cancel.rs` / `dream.rs` の構造になっている
-- [ ] docs の境界説明がコードと一致している
-- [ ] `CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo check --workspace` が成功している
+- [x] M1〜M4 が完了している
+- [x] `geometry.rs` に `world_cursor_pos` / `detect_area_edit_operation` / `apply_area_edit_drag` / `cursor_icon_for_operation` が存在しない
+- [x] `input.rs` が facade として残り、`input/press.rs` / `input/drag.rs` / `input/transitions.rs` / `input/release/` の構造になっている
+- [x] `release/` が `mod.rs` (dispatcher) / `area.rs` / `designation.rs` / `cancel.rs` / `dream.rs` の構造になっている
+- [x] docs の境界説明がコードと一致している
+- [x] `CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo check --workspace` が成功している
 
 ## 11. 更新履歴
 
@@ -356,3 +362,4 @@ area_selection/cursor.rs  ← world_cursor_pos を geometry.rs 経由で参照 (
 | --- | --- | --- |
 | `2026-03-19` | `Copilot` | コードサーベイ結果を反映。行番号・型依存・モジュール構造図・named helper 分割方針を追加 |
 | `2026-03-19` | `Codex` | レビュー反映。M1 の `indicator.rs` / `state.rs` 更新漏れと `hw_ui` 側 import path 注意点を追記 |
+| `2026-03-19` | `Codex` | 実装完了を反映。`input.rs` facade 維持の最終構造へ文面を修正し、計画書ステータスを `Completed` に更新 |

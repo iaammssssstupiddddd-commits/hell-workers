@@ -2,12 +2,20 @@
 
 use bevy::prelude::*;
 use bevy::render::render_resource::TextureFormat;
+use bevy::window::PrimaryWindow;
 
 /// Camera3d（RtT）がオフスクリーン描画するテクスチャのハンドルを保持するリソース
 #[derive(Resource)]
 pub struct RttTextures {
     /// 3D シーンのオフスクリーンレンダリング先テクスチャ
     pub texture_3d: Handle<Image>,
+}
+
+/// RtT が追従している現在の物理解像度
+#[derive(Resource, Clone, Copy, Debug, PartialEq, Eq)]
+pub struct RttViewportSize {
+    pub width: u32,
+    pub height: u32,
 }
 
 /// Camera3d（RtT オフスクリーン）のマーカーコンポーネント。M3 カメラ同期システムで使用。
@@ -24,4 +32,33 @@ pub fn create_rtt_texture(width: u32, height: u32, images: &mut Assets<Image>) -
         Some(TextureFormat::Rgba8UnormSrgb),
     );
     images.add(image)
+}
+
+impl RttViewportSize {
+    pub fn from_window(window: &Window) -> Self {
+        Self {
+            width: window.physical_width().max(1),
+            height: window.physical_height().max(1),
+        }
+    }
+}
+
+/// PrimaryWindow の物理解像度に合わせて RtT テクスチャを再生成する。
+pub fn sync_rtt_texture_size_to_window(
+    q_window: Query<&Window, With<PrimaryWindow>>,
+    mut viewport_size: ResMut<RttViewportSize>,
+    mut rtt: ResMut<RttTextures>,
+    mut images: ResMut<Assets<Image>>,
+) {
+    let Ok(window) = q_window.single() else {
+        return;
+    };
+
+    let next_size = RttViewportSize::from_window(window);
+    if *viewport_size == next_size {
+        return;
+    }
+
+    *viewport_size = next_size;
+    rtt.texture_3d = create_rtt_texture(next_size.width, next_size.height, &mut images);
 }

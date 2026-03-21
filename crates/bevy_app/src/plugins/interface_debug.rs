@@ -5,6 +5,7 @@ use crate::systems::jobs::wall_construction::components::{
     WallConstructionPhase, WallConstructionSite, WallTileBlueprint, WallTileState,
 };
 use crate::systems::jobs::{Building, BuildingType, ProvisionalWall};
+use crate::systems::visual::wall_orientation_aid::attach_wall_orientation_aid;
 use crate::world::map::{WorldMap, WorldMapWrite};
 use bevy::prelude::*;
 use hw_core::constants::{TILE_SIZE, Z_MAP};
@@ -80,14 +81,17 @@ pub fn debug_instant_complete_walls_system(
                         Name::new("Building (Wall)"),
                     ))
                     .id();
-                commands.spawn((
-                    Mesh3d(handles_3d.wall_mesh.clone()),
-                    MeshMaterial3d(handles_3d.wall_material.clone()),
-                    Transform::from_xyz(world_pos.x, TILE_SIZE / 2.0, -world_pos.y),
-                    handles_3d.render_layers.clone(),
-                    Building3dVisual { owner: wall_entity },
-                    Name::new("Building3dVisual (Wall)"),
-                ));
+                let visual_entity = commands
+                    .spawn((
+                        Mesh3d(handles_3d.wall_mesh.clone()),
+                        MeshMaterial3d(handles_3d.wall_material.clone()),
+                        Transform::from_xyz(world_pos.x, TILE_SIZE / 2.0, -world_pos.y),
+                        handles_3d.render_layers.clone(),
+                        Building3dVisual { owner: wall_entity },
+                        Name::new("Building3dVisual (Wall)"),
+                    ))
+                    .id();
+                attach_wall_orientation_aid(&mut commands, visual_entity, &handles_3d);
                 world_map.reserve_building_footprint(
                     BuildingType::Wall,
                     wall_entity,

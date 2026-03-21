@@ -1,6 +1,7 @@
 use super::super::{Blueprint, Building, BuildingType, Door, DoorState, ProvisionalWall};
 use crate::assets::GameAssets;
 use crate::plugins::startup::Building3dHandles;
+use crate::systems::visual::wall_orientation_aid::attach_wall_orientation_aid;
 use bevy::prelude::*;
 use hw_core::constants::{
     TILE_SIZE, Z_BUILDING_FLOOR, Z_BUILDING_STRUCT,
@@ -210,13 +211,18 @@ fn spawn_building_3d_visual(
     let center_y = height / 2.0;
     let transform_3d = Transform::from_xyz(pos2d.x, center_y, -pos2d.y);
 
-    commands.spawn((
+    let visual_entity = commands
+        .spawn((
         Mesh3d(mesh),
         MeshMaterial3d(material),
         transform_3d,
         handles_3d.render_layers.clone(),
         Building3dVisual { owner },
         Name::new(format!("Building3dVisual ({:?})", kind)),
-    ));
-}
+    ))
+        .id();
 
+    if matches!(kind, BuildingType::Wall) {
+        attach_wall_orientation_aid(commands, visual_entity, handles_3d);
+    }
+}

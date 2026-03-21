@@ -22,6 +22,8 @@ pub struct Building3dHandles {
     pub wall_mesh: Handle<Mesh>,
     pub wall_material: Handle<StandardMaterial>,
     pub wall_provisional_material: Handle<StandardMaterial>,
+    pub wall_orientation_aid_mesh: Handle<Mesh>,
+    pub wall_orientation_aid_material: Handle<StandardMaterial>,
     // --- 床 ---
     pub floor_mesh: Handle<Mesh>,
     pub floor_material: Handle<StandardMaterial>,
@@ -35,7 +37,8 @@ pub struct Building3dHandles {
     // --- キャラクター ---
     pub soul_mesh: Handle<Mesh>,
     pub familiar_mesh: Handle<Mesh>,
-    pub character_material: Handle<StandardMaterial>,
+    pub soul_material: Handle<StandardMaterial>,
+    pub familiar_material: Handle<StandardMaterial>,
     /// 全3Dエンティティに付与する RenderLayers
     pub render_layers: RenderLayers,
 }
@@ -171,14 +174,15 @@ pub fn init_visual_handles(
 
     // --- 3D レンダリング用ハンドル（Phase 2 プレースホルダー）---
     let wall_mesh = meshes.add(Cuboid::new(TILE_SIZE, TILE_SIZE, TILE_SIZE));
+    let wall_orientation_aid_mesh =
+        meshes.add(Cuboid::new(TILE_SIZE * 0.96, TILE_SIZE * 0.12, TILE_SIZE * 0.96));
     let floor_mesh = meshes.add(Plane3d::default().mesh().size(TILE_SIZE, TILE_SIZE));
     let door_mesh = meshes.add(Cuboid::new(TILE_SIZE, TILE_SIZE * 0.5, TILE_SIZE));
     let equipment_1x1_mesh = meshes.add(Cuboid::new(TILE_SIZE, TILE_SIZE * 0.6, TILE_SIZE));
     let equipment_2x2_mesh =
         meshes.add(Cuboid::new(TILE_SIZE * 2.0, TILE_SIZE * 0.8, TILE_SIZE * 2.0));
-    let soul_mesh = meshes.add(Cuboid::new(TILE_SIZE * 0.8, TILE_SIZE * 0.8, TILE_SIZE * 0.8));
-    let familiar_mesh =
-        meshes.add(Cuboid::new(TILE_SIZE * 0.9, TILE_SIZE * 0.9, TILE_SIZE * 0.9));
+    let soul_mesh = meshes.add(Rectangle::new(TILE_SIZE * 0.8, TILE_SIZE * 0.8));
+    let familiar_mesh = meshes.add(Rectangle::new(TILE_SIZE * 0.9, TILE_SIZE * 0.9));
 
     let wall_material = materials.add(StandardMaterial {
         base_color: Color::srgb(0.55, 0.55, 0.55),
@@ -187,6 +191,12 @@ pub fn init_visual_handles(
     });
     let wall_provisional_material = materials.add(StandardMaterial {
         base_color: Color::srgba(1.0, 0.75, 0.4, 0.85),
+        unlit: true,
+        alpha_mode: AlphaMode::Blend,
+        ..default()
+    });
+    let wall_orientation_aid_material = materials.add(StandardMaterial {
+        base_color: Color::srgb(1.0, 0.95, 0.2),
         unlit: true,
         alpha_mode: AlphaMode::Blend,
         ..default()
@@ -206,9 +216,20 @@ pub fn init_visual_handles(
         unlit: true,
         ..default()
     });
-    let character_material = materials.add(StandardMaterial {
-        base_color: Color::srgb(0.9, 0.7, 0.4),
+    let soul_material = materials.add(StandardMaterial {
+        base_color: Color::WHITE,
         unlit: true,
+        alpha_mode: AlphaMode::Blend,
+        base_color_texture: Some(game_assets.soul.clone()),
+        cull_mode: None,
+        ..default()
+    });
+    let familiar_material = materials.add(StandardMaterial {
+        base_color: Color::WHITE,
+        unlit: true,
+        alpha_mode: AlphaMode::Blend,
+        base_color_texture: Some(game_assets.familiar.clone()),
+        cull_mode: None,
         ..default()
     });
 
@@ -216,6 +237,8 @@ pub fn init_visual_handles(
         wall_mesh,
         wall_material,
         wall_provisional_material,
+        wall_orientation_aid_mesh,
+        wall_orientation_aid_material,
         floor_mesh,
         floor_material,
         door_mesh,
@@ -225,7 +248,8 @@ pub fn init_visual_handles(
         equipment_material,
         soul_mesh,
         familiar_mesh,
-        character_material,
+        soul_material,
+        familiar_material,
         render_layers: RenderLayers::layer(LAYER_3D),
     });
 }

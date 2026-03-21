@@ -6,7 +6,7 @@
 
 use crate::plugins::startup::Camera3dRtt;
 use bevy::prelude::*;
-use hw_core::constants::TILE_SIZE;
+use hw_core::constants::{TILE_SIZE, VIEW_HEIGHT, Z_OFFSET};
 use hw_ui::camera::MainCamera;
 
 /// 矢視カメラがシーンを外側から見るための距離（world units）
@@ -43,8 +43,8 @@ impl ElevationDirection {
     /// looking_at の起点・終点を同じ Y 高度にすることで完全水平な側面視を実現する。
     pub fn camera_rotation(self) -> Quat {
         match self {
-            // TopDown: up=NEG_Z で XZ 平面を俯瞰
-            Self::TopDown => Transform::from_translation(Vec3::new(0.0, 100.0, 0.0))
+            // TopDown: VIEW_HEIGHT / Z_OFFSET で斜め俯瞰の回転を固定する
+            Self::TopDown => Transform::from_xyz(0.0, VIEW_HEIGHT, Z_OFFSET)
                 .looking_at(Vec3::ZERO, Vec3::NEG_Z)
                 .rotation,
             // North: +Z 側から -Z 方向を水平に見る
@@ -92,7 +92,7 @@ pub fn elevation_view_input_system(
 
     // 回転プリセットを即時適用（XZ 位置は sync_camera3d_system が毎フレーム追従）
     cam3d.rotation = state.direction.camera_rotation();
-    // Y は矢視中は壁の中心高度に固定（TopDown 時は sync_camera3d_system が 100.0 に戻す）
+    // Y は矢視中は壁の中心高度に固定（TopDown 時は sync_camera3d_system が VIEW_HEIGHT に戻す）
     if !state.direction.is_top_down() {
         cam3d.translation.y = TILE_SIZE / 2.0;
     }

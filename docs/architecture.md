@@ -144,6 +144,7 @@ Perceive → Update → Decide → Execute
 | カテゴリ | 例 |
 |:--|:--|
 | Z軸レイヤー | `Z_MAP`, `Z_BUILDING_FLOOR`(0.05), `Z_BUILDING_STRUCT`(0.12), `Z_CHARACTER`, `Z_FLOATING_TEXT`, `Z_RTT_COMPOSITE`(20.0) |
+| Camera3d 高度 | `VIEW_HEIGHT`(150.0), `Z_OFFSET`(90.0) |
 | RenderLayer | `LAYER_2D`(0), `LAYER_3D`(1), `LAYER_OVERLAY`(2) |
 | AI閾値 | `FATIGUE_GATHERING_THRESHOLD`, `MOTIVATION_THRESHOLD` |
 | バイタル増減率 | `FATIGUE_WORK_RATE`, `STRESS_RECOVERY_RATE_GATHERING` |
@@ -168,7 +169,7 @@ Perceive → Update → Decide → Execute
 
 `RttTextures`（Resource、`crates/bevy_app/src/plugins/startup/rtt_setup.rs`）が `Handle<Image>` を保持する。
 
-テクスチャ生成は `create_rtt_texture(width, height, images)` 関数（`rtt_setup.rs`）に切り出されており、ウィンドウリサイズ時に呼び直すことで全参照箇所が自動追従する。起動時は `1280×720` 固定で生成（`Rgba8Unorm` / `Rgba8UnormSrgb`）。
+テクスチャ生成は `create_rtt_texture(width, height, images)` 関数（`rtt_setup.rs`）に切り出されている。起動時は `PrimaryWindow` の物理解像度で生成し、`sync_rtt_texture_size_to_window` が物理解像度の変化を検知したフレームに再生成する（`Rgba8Unorm` / `Rgba8UnormSrgb`）。
 
 `WgpuFeatures::CLIP_DISTANCES` は `main.rs` の `WgpuSettings` で有効化済み（MS-P3-Pre-A）。`SectionMaterial` のシェーダークリップ平面（`section_material.wgsl`）に必要。
 
@@ -180,18 +181,19 @@ Perceive → Update → Decide → Execute
 
 | `ElevationDirection` | `cam3d.x` | `cam3d.z` | `cam3d.y` |
 |:--|:--|:--|:--|
-| `TopDown` | `cam2d.x` | `-cam2d.y` | `100.0`（固定） |
+| `TopDown` | `cam2d.x` | `-cam2d.y + Z_OFFSET` | `VIEW_HEIGHT`（固定） |
 | `North` | `cam2d.x` | `-cam2d.y + ELEVATION_DISTANCE` | elevation_view が設定した値を維持 |
 | `South` | `cam2d.x` | `-cam2d.y - ELEVATION_DISTANCE` | 〃 |
 | `East` | `cam2d.x + ELEVATION_DISTANCE` | `-cam2d.y` | 〃 |
 | `West` | `cam2d.x - ELEVATION_DISTANCE` | `-cam2d.y` | 〃 |
 
 - `ELEVATION_DISTANCE = 800`（`pub const`、`elevation_view.rs` で定義）
+- TopDown の RtT は Camera3d の `OrthographicProjection.scale` を Camera2d 側のズーム量に同期する。
 - 矢視時の回転・Y 高度は `elevation_view_input_system`（V キー押下時）が設定し、`sync_camera3d_system` は上書きしない。
 
 ### Camera3d の向き
 
-`Transform::from_translation(Vec3::Y * 100.0).looking_at(Vec3::ZERO, Vec3::NEG_Z)`
+`Transform::from_translation(Vec3::new(0.0, VIEW_HEIGHT, Z_OFFSET))` に `ElevationDirection::TopDown.camera_rotation()` を適用し、ズームは `OrthographicProjection.scale` で同期する
 
 - up=`NEG_Z`（= `Vec3::Z` では画面右が World -X に反転するため不可）
 - 画面右 = World +X、画面上 = World -Z
@@ -203,10 +205,19 @@ Perceive → Update → Decide → Execute
 
 - `RenderLayers::layer(LAYER_OVERLAY)` を付与し、OverlayCamera（固定位置）が描画する。
 - Camera2d の子エンティティではないため、MainCamera のパン・ズームの影響を受けない。
-- 3D コンテンツのパン・ズーム追従は Camera3d の Transform を `sync_camera3d_system` が毎フレーム更新することで実現する。
+- 3D コンテンツのパンは Camera3d の Transform、ズームは `OrthographicProjection.scale` を `sync_camera3d_system` が毎フレーム更新することで実現する。
 - `RttCompositeSprite` マーカーコンポーネントが付与されており、`apply_render3d_visibility_system` が `Visibility` を制御する。
 
-`sync_rtt_composite_sprite`（同ファイル、`Update` スケジュール）が `RttTextures` の変化を検知し、`Sprite.custom_size` とスプライトの Z 座標を自動更新する。ウィンドウリサイズ後のテクスチャ差し替え（MS-P3-Pre-B 本実装）で使用する。
+`sync_rtt_output_bindings`（同ファイル、`Update` スケジュール）が `RttTextures` の変化を検知し、`Camera3d.target` と `RttCompositeSprite` の `Sprite.image` / `custom_size` / Z 座標を同時に更新する。RtT テクスチャ自体は物理解像度で生成するが、合成スプライトの `custom_size` は `PrimaryWindow` の logical size を基準にしつつ、斜め TopDown オーソ投影で圧縮される Y 方向を `topdown_rtt_vertical_compensation()` で補正する。`sync_rtt_texture_size_to_window` と `chain` で登録されているため、ウィンドウサイズ変更フレーム内で再生成後のテクスチャへ差し替わる。
+
+### キャラクター3Dプロキシ（Phase 2 暫定）
+
+`SoulProxy3d` / `FamiliarProxy3d` は、Phase 3 の GLB 置換までの暫定表示として `XY` 矩形メッシュに既存 2D テクスチャを貼った billboard 風プロキシで運用する。
+
+- メッシュは `Rectangle::new(...)` で生成し、厚みを持たせない。
+- 材質は `StandardMaterial` の `base_color_texture` に `soul.png` / familiar テクスチャを設定し、`unlit + AlphaMode::Blend + cull_mode: None` を使う。
+- `sync_soul_proxy_3d_system` / `sync_familiar_proxy_3d_system` は 2D 位置を XZ 平面へ写し、回転は `Camera3dRtt` の `Transform.rotation` をそのままコピーする。
+- パン時に見え方が変形しないことと、壁の後ろに入った際に Z バッファで自然に隠れることを `MS-P3-Pre-C` の目視確認条件とする。
 
 ### 3D 表示トグル（開発機能）
 
