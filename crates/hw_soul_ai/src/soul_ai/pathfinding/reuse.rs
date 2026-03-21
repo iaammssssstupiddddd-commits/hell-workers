@@ -2,7 +2,7 @@
 
 use bevy::prelude::*;
 use hw_core::soul::Path;
-use hw_world::{PathGoalPolicy, PathfindingContext, WorldMap, find_path, find_path_to_adjacent};
+use hw_world::{PathfindingContext, WorldMap, find_path_world_waypoints};
 
 use super::PathCooldown;
 
@@ -61,20 +61,11 @@ pub(super) fn try_reuse_existing_path(
         let resume_grid = WorldMap::world_to_grid(resume_wp);
         *pathfind_count += 1;
 
-        if let Some(partial_grid_path) = find_path(
-            world_map,
-            pf_context,
-            resume_grid,
-            goal_grid,
-            PathGoalPolicy::RespectGoalWalkability,
-        )
-        .or_else(|| find_path_to_adjacent(world_map, pf_context, resume_grid, goal_grid, true))
+        if let Some(mut partial_world_path) =
+            find_path_world_waypoints(world_map, pf_context, resume_grid, goal_grid)
         {
-            let mut partial_world_path: Vec<Vec2> = partial_grid_path
-                .iter()
-                .map(|&(x, y)| WorldMap::grid_to_world(x, y))
-                .collect();
-            if partial_grid_path.first().copied() == Some(resume_grid)
+            let resume_world = WorldMap::grid_to_world(resume_grid.0, resume_grid.1);
+            if partial_world_path.first().copied() == Some(resume_world)
                 && !partial_world_path.is_empty()
             {
                 partial_world_path.remove(0);
