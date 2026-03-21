@@ -21,6 +21,7 @@
 - アイコン等は `generate_image` で背景をマゼンタ (`#FF00FF`) にして生成する。
 - `scripts/convert_to_png.py` を使用して透過 PNG に変換する。
 - 変換後はバイナリ署名を確認する： `89-50-4E-47-0D-0A-1A-0A`
+- 複数 PC 間で原本を共有する場合は、`Syncthing` でリポジトリ外の原本フォルダを同期し、`exports/` から `python scripts/sync_external_assets.py --source ~/Sync/hell-workers-assets/exports` で `assets/` に反映する。詳細は `docs/assets_workflow.md` を参照。
 
 ### 4. 型変更とメッセージ初期化の規約
 型不一致や二重借用エラーが長引きやすいため、以下を必ず守る。
