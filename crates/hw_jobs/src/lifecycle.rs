@@ -8,7 +8,7 @@ use bevy::prelude::*;
 use hw_core::events::ResourceReservationOp;
 use hw_core::logistics::{ResourceType, WheelbarrowDestination};
 
-use crate::assigned_task::{
+use crate::tasks::{
     AssignedTask, BuildPhase, CoatWallPhase, CollectBonePhase, CollectSandPhase, FrameWallPhase,
     GatherPhase, HaulPhase, HaulToBpPhase, HaulToMixerPhase, HaulWithWheelbarrowPhase,
     PourFloorPhase, RefinePhase, ReinforceFloorPhase,

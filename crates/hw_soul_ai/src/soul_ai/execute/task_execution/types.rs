@@ -1,6 +1,6 @@
 //! タスク実行関連の型定義
 
-pub use hw_jobs::assigned_task::{
+pub use hw_jobs::tasks::{
     AssignedTask,
     BucketTransportData, BucketTransportSource, BucketTransportDestination, BucketTransportPhase,
     GatherData, GatherPhase,
