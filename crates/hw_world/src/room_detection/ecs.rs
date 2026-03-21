@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use hw_core::GridPos;
 use hw_core::constants::{ROOM_DETECTION_COOLDOWN_SECS, ROOM_VALIDATION_INTERVAL_SECS};
 use std::collections::{HashMap, HashSet};
 
@@ -26,7 +27,7 @@ pub struct Room {
 /// Marker component for visual overlay tiles spawned per room floor tile.
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RoomOverlayTile {
-    pub grid_pos: (i32, i32),
+    pub grid_pos: GridPos,
 }
 
 /// Reverse lookup from floor tile grid position to the owning room entity.

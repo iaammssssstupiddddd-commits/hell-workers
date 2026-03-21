@@ -1,7 +1,8 @@
 use bevy::prelude::Vec2;
+use hw_core::GridPos;
 use hw_core::constants::{MAP_HEIGHT, MAP_WIDTH, TILE_SIZE};
 
-pub fn world_to_grid(pos: Vec2) -> (i32, i32) {
+pub fn world_to_grid(pos: Vec2) -> GridPos {
     let x = (pos.x / TILE_SIZE + (MAP_WIDTH as f32 - 1.0) / 2.0 + 0.5).floor() as i32;
     let y = (pos.y / TILE_SIZE + (MAP_HEIGHT as f32 - 1.0) / 2.0 + 0.5).floor() as i32;
     (x, y)
@@ -32,7 +33,7 @@ pub fn snap_to_grid_edge(pos: Vec2) -> Vec2 {
     )
 }
 
-pub fn idx_to_pos(idx: usize) -> (i32, i32) {
+pub fn idx_to_pos(idx: usize) -> GridPos {
     let x = idx as i32 % MAP_WIDTH;
     let y = idx as i32 / MAP_WIDTH;
     (x, y)

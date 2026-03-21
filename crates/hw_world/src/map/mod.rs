@@ -11,6 +11,7 @@ pub use access::{WorldMapRead, WorldMapWrite};
 use crate::pathfinding::PathWorld;
 use crate::TerrainType;
 use bevy::prelude::*;
+use hw_core::GridPos;
 use hw_core::world::DoorState;
 use std::collections::{HashMap, HashSet};
 
@@ -48,7 +49,7 @@ impl PathWorld for WorldMap {
         WorldMap::pos_to_idx(self, x, y)
     }
 
-    fn idx_to_pos(&self, idx: usize) -> (i32, i32) {
+    fn idx_to_pos(&self, idx: usize) -> GridPos {
         WorldMap::idx_to_pos(idx)
     }
 

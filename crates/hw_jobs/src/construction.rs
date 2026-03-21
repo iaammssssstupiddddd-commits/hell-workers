@@ -1,5 +1,6 @@
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
+use hw_core::GridPos;
 use hw_core::area::TaskArea;
 use hw_core::relationships::TaskWorkers;
 
@@ -67,7 +68,7 @@ pub enum WallTileState {
 #[derive(Component, Clone, Debug)]
 pub struct FloorTileBlueprint {
     pub parent_site: Entity,
-    pub grid_pos: (i32, i32),
+    pub grid_pos: GridPos,
     pub state: FloorTileState,
     /// Bones delivered (0-2)
     pub bones_delivered: u32,
@@ -76,7 +77,7 @@ pub struct FloorTileBlueprint {
 }
 
 impl FloorTileBlueprint {
-    pub fn new(parent_site: Entity, grid_pos: (i32, i32)) -> Self {
+    pub fn new(parent_site: Entity, grid_pos: GridPos) -> Self {
         Self {
             parent_site,
             grid_pos,
@@ -99,7 +100,7 @@ pub struct FloorConstructionCancelRequested;
 #[derive(Component, Clone, Debug)]
 pub struct WallTileBlueprint {
     pub parent_site: Entity,
-    pub grid_pos: (i32, i32),
+    pub grid_pos: GridPos,
     pub state: WallTileState,
     /// Wood delivered (0-1)
     pub wood_delivered: u32,
@@ -110,7 +111,7 @@ pub struct WallTileBlueprint {
 }
 
 impl WallTileBlueprint {
-    pub fn new(parent_site: Entity, grid_pos: (i32, i32)) -> Self {
+    pub fn new(parent_site: Entity, grid_pos: GridPos) -> Self {
         Self {
             parent_site,
             grid_pos,

@@ -4,6 +4,7 @@ use crate::{
     snap_to_grid_center, snap_to_grid_edge, world_to_grid,
 };
 use bevy::prelude::*;
+use hw_core::GridPos;
 
 impl WorldMap {
     #[inline(always)]
@@ -16,7 +17,7 @@ impl WorldMap {
     }
 
     #[inline(always)]
-    pub fn idx_to_pos(idx: usize) -> (i32, i32) {
+    pub fn idx_to_pos(idx: usize) -> GridPos {
         idx_to_pos(idx)
     }
 

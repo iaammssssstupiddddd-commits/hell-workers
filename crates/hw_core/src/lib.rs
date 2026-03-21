@@ -16,3 +16,4 @@ pub mod visual_mirror;
 pub mod world;
 
 pub use time::GameTime;
+pub use world::GridPos;

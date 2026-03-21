@@ -2,6 +2,7 @@ use crate::familiar::FamiliarAiState;
 use crate::gathering::GatheringObjectType;
 use crate::jobs::WorkType;
 use crate::logistics::ResourceType;
+use crate::world::GridPos;
 use bevy::prelude::*;
 
 /// 魂が使い魔に勧誘（使役開始）された
@@ -288,7 +289,7 @@ pub struct DriftingEscapeStarted;
 #[derive(Event, Debug)]
 pub struct SoulEscaped {
     pub entity: Entity,
-    pub grid: (i32, i32),
+    pub grid: GridPos,
 }
 
 /// 魂のタスク解除要求（Familiar AI → Soul AI Pub/Sub ブリッジ）

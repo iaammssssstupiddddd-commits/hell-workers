@@ -1,3 +1,4 @@
+use hw_core::GridPos;
 use hw_core::constants::{MAP_HEIGHT, MAP_WIDTH};
 use std::cmp::Ordering;
 use std::collections::{BinaryHeap, HashSet};
@@ -5,7 +6,7 @@ use std::collections::{BinaryHeap, HashSet};
 /// `hw_world` が要求する最小限の通行判定 API。
 pub trait PathWorld {
     fn pos_to_idx(&self, x: i32, y: i32) -> Option<usize>;
-    fn idx_to_pos(&self, idx: usize) -> (i32, i32);
+    fn idx_to_pos(&self, idx: usize) -> GridPos;
     fn is_walkable(&self, x: i32, y: i32) -> bool;
     fn get_door_cost(&self, x: i32, y: i32) -> i32;
 }
@@ -201,10 +202,10 @@ where
 pub fn find_path(
     world_map: &impl PathWorld,
     context: &mut PathfindingContext,
-    start: (i32, i32),
-    goal: (i32, i32),
+    start: GridPos,
+    goal: GridPos,
     goal_policy: PathGoalPolicy,
-) -> Option<Vec<(i32, i32)>> {
+) -> Option<Vec<GridPos>> {
     let start_idx = world_map.pos_to_idx(start.0, start.1)?;
     let goal_idx = world_map.pos_to_idx(goal.0, goal.1)?;
 
@@ -239,10 +240,10 @@ pub fn find_path(
 pub fn find_path_to_adjacent(
     world_map: &impl PathWorld,
     context: &mut PathfindingContext,
-    start: (i32, i32),
-    target: (i32, i32),
+    start: GridPos,
+    target: GridPos,
     allow_goal_blocked: bool,
-) -> Option<Vec<(i32, i32)>> {
+) -> Option<Vec<GridPos>> {
     let allow_goal_blocked = allow_goal_blocked || !world_map.is_walkable(start.0, start.1);
     let policy = if allow_goal_blocked {
         PathGoalPolicy::AllowBlockedGoal
@@ -264,8 +265,8 @@ pub fn find_path_to_adjacent(
 pub fn can_reach_target(
     world_map: &impl PathWorld,
     context: &mut PathfindingContext,
-    start: (i32, i32),
-    target: (i32, i32),
+    start: GridPos,
+    target: GridPos,
     target_walkable: bool,
 ) -> bool {
     if target_walkable {
@@ -286,9 +287,9 @@ pub fn can_reach_target(
 pub fn find_path_to_boundary(
     world_map: &impl PathWorld,
     context: &mut PathfindingContext,
-    start: (i32, i32),
-    target_grids: &[(i32, i32)],
-) -> Option<Vec<(i32, i32)>> {
+    start: GridPos,
+    target_grids: &[GridPos],
+) -> Option<Vec<GridPos>> {
     if target_grids.is_empty() {
         return None;
     }
@@ -366,8 +367,8 @@ pub fn find_path_to_boundary(
 pub fn find_path_world_waypoints(
     world_map: &crate::map::WorldMap,
     pf_context: &mut PathfindingContext,
-    start_grid: (i32, i32),
-    goal_grid: (i32, i32),
+    start_grid: GridPos,
+    goal_grid: GridPos,
 ) -> Option<Vec<bevy::math::Vec2>> {
     find_path(
         world_map,
@@ -409,7 +410,7 @@ mod tests {
             Some((y * MAP_WIDTH + x) as usize)
         }
 
-        fn idx_to_pos(&self, idx: usize) -> (i32, i32) {
+        fn idx_to_pos(&self, idx: usize) -> GridPos {
             let x = idx as i32 % MAP_WIDTH;
             let y = idx as i32 / MAP_WIDTH;
             (x, y)
