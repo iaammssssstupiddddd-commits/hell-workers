@@ -26,13 +26,14 @@
 
 | ファイル | 内容 |
 |---|---|
-| `mod.rs` | `UiAssets` trait — セットアップに必要なフォント・アイコンの抽象化 |
+| `mod.rs` | `UiAssets` trait と `setup_ui` の公開 re-export を持つ root shell |
 | `bottom_bar.rs` | 下部コントロールバー |
 | `time_control.rs` | 時間速度・一時停止 UI |
 | `panels.rs` | 情報パネル・メニュー |
 | `entity_list.rs` | エンティティ一覧 UI |
 | `dialogs.rs` | ダイアログボックス |
 | `submenus.rs` | サブメニュー階層 |
+| `root.rs` | UI ルート構築と `setup_ui` 実装本体 |
 
 ### list/ ディレクトリ
 
@@ -69,7 +70,7 @@
 | `dialog.rs` | ダイアログ操作 |
 | `hover_action.rs` | ホバーエフェクト |
 | `status_display/` | ステータスバー描画 (runtime, dream bar, mode panel) |
-| `tooltip/` | ツールチップ (target, layout, fade) |
+| `tooltip/` | ツールチップ (`mod.rs` が共有型/re-export、`system.rs` が `hover_tooltip_system` 本体、`target`/`layout`/`fade` が補助) |
 
 ### selection/ ディレクトリ
 
@@ -93,7 +94,7 @@ UiRoot
 
 ## アセット抽象化（UiAssets）
 
-`setup/mod.rs` の `UiAssets` trait により、セットアップ関数がゲーム固有の `GameAssets` に直接依存しない設計になっている。
+`setup/mod.rs` の `UiAssets` trait により、セットアップ関数がゲーム固有の `GameAssets` に直接依存しない設計になっている。`setup_ui` の実装本体は `setup/root.rs` に置き、`mod.rs` は trait と公開面の root shell にとどめる。
 ルートクレートで `GameAssets: UiAssets` を実装し、`&dyn UiAssets` として渡す。
 
 Entity List の `spawn` / `sync` helper もこの trait を利用し、`font_soul_name`、`icon_arrow_right`、`icon_idle` を含むフォント・アイコン供給を root adapter に委譲する。

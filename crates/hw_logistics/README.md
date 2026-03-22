@@ -41,12 +41,13 @@
 
 | ファイル | 内容 |
 |---|---|
-| `mod.rs` | `wheelbarrow_arbitration_system` |
+| `mod.rs` | `WheelbarrowArbitrationRuntime` / `WheelbarrowArbitrationDirtyParams` と `wheelbarrow_arbitration_system` の公開 root shell |
 | `candidates.rs` | 仲裁候補エントリの収集 |
 | `collection.rs` | バッチ候補評価 |
 | `grants.rs` | `WheelbarrowLease` の付与・検証 |
 | `lease_state.rs` | lease ライフサイクル管理 |
 | `metrics_update.rs` | 仲裁メトリクス更新 |
+| `system.rs` | `wheelbarrow_arbitration_system` の実装本体 |
 | `types.rs` | 仲裁内部型 (`WheelbarrowCandidate` 等) |
 
 ### producer/

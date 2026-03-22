@@ -19,7 +19,7 @@
 
 | Document | Status | Notes |
 |---|---|---|
-| [visual-sync-source-selector-haul-refactor-2026-03-22.md](visual-sync-source-selector-haul-refactor-2026-03-22.md) | Completed | Observer/System 分離・計測コード分離・運搬 builder 分割の 3 フェーズリファクタリング。 |
+
 
 ## アーカイブ計画書一覧 (`docs/plans/archive`)
 
@@ -134,6 +134,7 @@
 | [archive/ui-menu-action-boundary-plan-2026-03-01.md](archive/ui-menu-action-boundary-plan-2026-03-01.md) | アーカイブ | `MenuAction` 処理の責務境界整理と no-op 分岐解消の計画。 |
 | [archive/ui-selection-boundary-thinning-plan-2026-03-12.md](archive/ui-selection-boundary-thinning-plan-2026-03-12.md) | アーカイブ | UI / Selection Boundary Thinning Plan |
 | [archive/ui-submenu-spec-driven-plan-2026-03-01.md](archive/ui-submenu-spec-driven-plan-2026-03-01.md) | アーカイブ | サブメニュー生成を Spec 駆動へ移行し重複を削減する計画。 |
+| [archive/visual-sync-source-selector-haul-refactor-2026-03-22.md](archive/visual-sync-source-selector-haul-refactor-2026-03-22.md) | アーカイブ | 構造整理リファクタリング: visual_sync 分割 / source_selector 計測分離 / haul 分割 |
 | [archive/wall-construction-phase-split-plan-2026-02-19.md](archive/wall-construction-phase-split-plan-2026-02-19.md) | アーカイブ | 壁建築フェーズ分割計画。 |
 | [archive/wall-stasis-mud.md](archive/wall-stasis-mud.md) | アーカイブ | 壁材（stasis mud）関連計画。 |
 | [archive/wheelbarrow-arbitration-plan.md](archive/wheelbarrow-arbitration-plan.md) | アーカイブ | 猫車利用仲裁ロジックの実装計画。 |

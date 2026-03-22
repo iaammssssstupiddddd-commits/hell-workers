@@ -57,7 +57,7 @@ pub const FONT_SIZE_BUBBLE_FAMILIAR: f32 = 12.0;
 | [bottom_bar.rs](../crates/hw_ui/src/setup/bottom_bar.rs) | メニューボタン、モード表示 |
 | [submenus.rs](../crates/hw_ui/src/setup/submenus.rs) | サブメニュー項目 |
 | [time_control.rs](../crates/hw_ui/src/setup/time_control.rs) | 時計、速度ボタン、タスクサマリー |
-| [soul/mod.rs](../crates/hw_visual/src/soul/mod.rs) | ステータスアイコン |
+| [soul/systems.rs](../crates/hw_visual/src/soul/systems.rs) | ステータスアイコン |
 | [effects.rs](../crates/hw_visual/src/blueprint/effects.rs) | 搬入ポップアップ |
 | [building_completion/post_process.rs](../crates/bevy_app/src/systems/jobs/building_completion/post_process.rs) | 建物完成テキスト |
 | [speech/update.rs](../crates/hw_visual/src/speech/update.rs) | 吹き出しシステム（Soul/Familiar） |

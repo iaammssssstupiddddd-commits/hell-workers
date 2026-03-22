@@ -22,9 +22,10 @@
 
 | ファイル | 内容 |
 |---|---|
-| `mod.rs` | `StartupPlugin` — Startup/PostStartup チェーン |
+| `mod.rs` | `StartupPlugin` と Startup/PostStartup 配線を持つ root shell |
 | `asset_catalog.rs` | アセットハンドルの一括ロードと `AssetCatalog` リソース登録 |
 | `perf_scenario.rs` | `--perf-scenario` フラグ時の高負荷テスト用スポーン |
+| `startup_systems.rs` | camera/resource 初期化、初期スポーン、地形境界生成の実装本体 |
 
 ## MessagesPlugin について
 
