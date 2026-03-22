@@ -1,6 +1,6 @@
 # Plans Index
 
-`docs/plans` の文書ステータス一覧（更新日: 2026-03-21）。
+`docs/plans` の文書ステータス一覧（更新日: 2026-03-22）。
 
 ## 新規計画書の作り方
 
@@ -20,6 +20,7 @@
 | Document | Status | Notes |
 |---|---|---|
 | [area-selection-input-refactor-plan-2026-03-19.md](area-selection-input-refactor-plan-2026-03-19.md) | Completed | `area_selection` input フローの責務分離と helper ownership 整理の完了記録。 |
+| [visual-sync-source-selector-haul-refactor-2026-03-22.md](visual-sync-source-selector-haul-refactor-2026-03-22.md) | Completed | Observer/System 分離・計測コード分離・運搬 builder 分割の 3 フェーズリファクタリング。 |
 
 ## アーカイブ計画書一覧 (`docs/plans/archive`)
 

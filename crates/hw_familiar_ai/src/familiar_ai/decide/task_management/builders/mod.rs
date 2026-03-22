@@ -1,10 +1,12 @@
 mod basic;
 mod haul;
 mod water;
+mod wheelbarrow_haul;
 
 pub use basic::*;
 pub use haul::*;
 pub use water::*;
+pub use wheelbarrow_haul::*;
 
 use bevy::prelude::*;
 use hw_core::events::ResourceReservationOp;

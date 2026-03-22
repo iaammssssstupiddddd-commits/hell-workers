@@ -7,6 +7,7 @@ mod lease_validation;
 mod mixer;
 mod provisional_wall;
 mod returns;
+mod selector_metrics;
 mod source_selector;
 mod stockpile;
 mod wall;

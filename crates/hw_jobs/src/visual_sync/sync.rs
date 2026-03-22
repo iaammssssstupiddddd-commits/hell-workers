@@ -1,37 +1,26 @@
-use bevy::ecs::lifecycle::{Add, Remove};
+//! 定期同期 System — コンポーネントの変化を検知して visual mirror コンポーネントを更新する。
+
 use bevy::prelude::*;
 
 use hw_core::jobs::WorkType;
-use hw_core::visual_mirror::gather::{GatherHighlightMarker, RestAreaVisual};
+use hw_core::visual_mirror::building::{BuildingVisualState, MudMixerVisualState};
+use hw_core::visual_mirror::construction::{
+    BlueprintVisualState, FloorConstructionPhaseMirror, FloorSiteVisualState, FloorTileStateMirror,
+    FloorTileVisualMirror, WallSiteVisualState, WallTileStateMirror, WallTileVisualMirror,
+};
 use hw_core::visual_mirror::task::{SoulTaskPhaseVisual, SoulTaskVisualState};
 
+use crate::construction::{
+    FloorConstructionPhase, FloorConstructionSite, FloorTileBlueprint, FloorTileState,
+    WallConstructionPhase, WallConstructionSite, WallTileBlueprint, WallTileState,
+};
+use crate::model::{Blueprint, Building, BuildingType};
 use crate::tasks::{
     AssignedTask, CoatWallPhase, FrameWallPhase, GatherPhase, HaulPhase, PourFloorPhase,
-    ReinforceFloorPhase,
+    RefinePhase, ReinforceFloorPhase,
 };
-use crate::model::{Designation, RestArea, Rock, Tree};
 
-pub fn on_designation_added(
-    on: On<Add, Designation>,
-    mut commands: Commands,
-    q: Query<(), Or<(With<Tree>, With<Rock>)>>,
-) {
-    if q.contains(on.entity) {
-        commands.entity(on.entity).try_insert(GatherHighlightMarker);
-    }
-}
-
-pub fn on_designation_removed(on: On<Remove, Designation>, mut commands: Commands) {
-    commands.entity(on.entity).remove::<GatherHighlightMarker>();
-}
-
-pub fn on_rest_area_added(on: On<Add, RestArea>, mut commands: Commands, q: Query<&RestArea>) {
-    if let Ok(rest_area) = q.get(on.entity) {
-        commands.entity(on.entity).try_insert(RestAreaVisual {
-            capacity: rest_area.capacity,
-        });
-    }
-}
+use super::building_type_to_visual;
 
 pub fn sync_soul_task_visual_system(
     mut q: Query<
@@ -135,17 +124,6 @@ pub fn sync_soul_task_visual_system(
         state.bucket_link = bucket_link;
     }
 }
-
-use hw_core::visual_mirror::construction::{
-    BlueprintVisualState, FloorConstructionPhaseMirror, FloorSiteVisualState, FloorTileStateMirror,
-    FloorTileVisualMirror, WallSiteVisualState, WallTileStateMirror, WallTileVisualMirror,
-};
-
-use crate::construction::{
-    FloorConstructionPhase, FloorConstructionSite, FloorTileBlueprint, FloorTileState,
-    WallConstructionPhase, WallConstructionSite, WallTileBlueprint, WallTileState,
-};
-use crate::model::{Blueprint, BuildingType};
 
 pub fn sync_blueprint_visual_system(
     mut q: Query<
@@ -253,43 +231,6 @@ pub fn sync_wall_site_visual_system(
     }
 }
 
-// ── Building Visual Sync ──────────────────────────────────────────────────────
-
-use hw_core::visual_mirror::building::{BuildingTypeVisual, BuildingVisualState, MudMixerVisualState};
-use crate::tasks::RefinePhase;
-use crate::mud_mixer::MudMixerStorage;
-
-fn building_type_to_visual(kind: BuildingType) -> BuildingTypeVisual {
-    match kind {
-        BuildingType::Wall               => BuildingTypeVisual::Wall,
-        BuildingType::Door               => BuildingTypeVisual::Door,
-        BuildingType::Floor              => BuildingTypeVisual::Floor,
-        BuildingType::Tank               => BuildingTypeVisual::Tank,
-        BuildingType::MudMixer           => BuildingTypeVisual::MudMixer,
-        BuildingType::RestArea           => BuildingTypeVisual::RestArea,
-        BuildingType::Bridge             => BuildingTypeVisual::Bridge,
-        BuildingType::SandPile           => BuildingTypeVisual::SandPile,
-        BuildingType::BonePile           => BuildingTypeVisual::BonePile,
-        BuildingType::WheelbarrowParking => BuildingTypeVisual::WheelbarrowParking,
-    }
-}
-
-use crate::model::Building;
-
-/// Inserts `BuildingVisualState` when a `Building` component is added.
-pub fn on_building_added_sync_visual(
-    on: On<Add, Building>,
-    mut commands: Commands,
-    q: Query<&Building>,
-) {
-    if let Ok(building) = q.get(on.entity) {
-        commands.entity(on.entity).try_insert(BuildingVisualState {
-            kind: building_type_to_visual(building.kind),
-            is_provisional: building.is_provisional,
-        });
-    }
-}
-
 /// Updates `BuildingVisualState` whenever `Building` changes.
 pub fn sync_building_visual_system(
     mut q: Query<(&Building, &mut BuildingVisualState), Changed<Building>>,
@@ -298,11 +239,6 @@ pub fn sync_building_visual_system(
         state.kind = building_type_to_visual(building.kind);
         state.is_provisional = building.is_provisional;
     }
-}
-
-/// Inserts `MudMixerVisualState` when a `MudMixerStorage` component is added.
-pub fn on_mud_mixer_storage_added(on: On<Add, MudMixerStorage>, mut commands: Commands) {
-    commands.entity(on.entity).try_insert(MudMixerVisualState::default());
 }
 
 /// Scans all Soul `AssignedTask`s and updates each Mixer's `MudMixerVisualState`.

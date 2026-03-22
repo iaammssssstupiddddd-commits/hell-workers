@@ -1,38 +1,19 @@
 use bevy::prelude::*;
 use hw_core::logistics::ResourceType;
 use hw_spatial::{ResourceSpatialGrid, SpatialGridOps};
-use std::sync::atomic::{AtomicU32, Ordering};
 
 use crate::familiar_ai::decide::task_management::validator::source_not_reserved;
 use crate::familiar_ai::decide::task_management::{
     CachedSourceItem, FamiliarTaskAssignmentQueries, ReservationShadow, SourceSelectorFrameCache,
 };
 
+use super::selector_metrics::{
+    mark_cache_build_scanned_item, mark_candidate_scanned_item, mark_source_selector_call,
+};
+
+pub use super::selector_metrics::take_source_selector_scan_snapshot;
+
 type TaskQueries<'w, 's> = FamiliarTaskAssignmentQueries<'w, 's>;
-
-static SOURCE_SELECTOR_CALLS: AtomicU32 = AtomicU32::new(0);
-static SOURCE_SELECTOR_CACHE_BUILD_SCANNED_ITEMS: AtomicU32 = AtomicU32::new(0);
-static SOURCE_SELECTOR_CANDIDATE_SCANNED_ITEMS: AtomicU32 = AtomicU32::new(0);
-
-fn mark_source_selector_call() {
-    SOURCE_SELECTOR_CALLS.fetch_add(1, Ordering::Relaxed);
-}
-
-fn mark_cache_build_scanned_item() {
-    SOURCE_SELECTOR_CACHE_BUILD_SCANNED_ITEMS.fetch_add(1, Ordering::Relaxed);
-}
-
-fn mark_candidate_scanned_item() {
-    SOURCE_SELECTOR_CANDIDATE_SCANNED_ITEMS.fetch_add(1, Ordering::Relaxed);
-}
-
-pub fn take_source_selector_scan_snapshot() -> (u32, u32, u32) {
-    (
-        SOURCE_SELECTOR_CALLS.swap(0, Ordering::Relaxed),
-        SOURCE_SELECTOR_CACHE_BUILD_SCANNED_ITEMS.swap(0, Ordering::Relaxed),
-        SOURCE_SELECTOR_CANDIDATE_SCANNED_ITEMS.swap(0, Ordering::Relaxed),
-    )
-}
 
 fn ensure_frame_cache<'w, 's>(queries: &TaskQueries<'w, 's>, shadow: &mut ReservationShadow) {
     if shadow.source_selector_cache.is_some() {
