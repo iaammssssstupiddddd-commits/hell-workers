@@ -104,7 +104,7 @@ callers は `hw_familiar_ai::*` の完全パスを直接参照する。
 - `update/mod.rs` → `hw_familiar_ai` 直接
 
 **設計メモ**
-
+- ECS 実状態の変更は `execute/` が担当する
 - Decide フェーズの message 出力と world/grid/pathfinding を使うオーケストレーションは `hw_familiar_ai` が所有する
 - root に残すのは `GameAssets` 依存 visual と `SharedResourceCache` 再構築のような app shell 固有処理だけに限定する
 
