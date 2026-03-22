@@ -102,8 +102,7 @@ Perceive → Update → Decide → Execute
 
 - `crates/hw_world::room_detection` が room detection core の唯一の所有者であり、`RoomDetectionBuildingTile` からの入力分類、flood-fill、妥当性判定、`RoomBounds` を提供する。**加えて ECS 型（`Room`, `RoomOverlayTile`, `RoomTileLookup`, `RoomDetectionState`, `RoomValidationState`）も `hw_world::room_detection` が所有する**。内部は private submodule に分離済み: `core.rs`（純粋アルゴリズム・型）/ `ecs.rs`（ECS Component/Resource）/ `tests.rs`。外部公開パスは変わらない。
 - `crates/hw_world/src/room_systems.rs` が ECS adapter 層をすべて担う（`detect_rooms_system` / `validate_rooms_system` / `mark_room_dirty_from_building_changes_system` / `on_building_added` / `on_building_removed` / `on_door_added` / `on_door_removed` / `sync_room_overlay_tiles_system`）。
-- `crates/bevy_app/src/systems/room/detection.rs`・`validation.rs`・`dirty_mark.rs`・`visual.rs` はすべて `hw_world` への re-export shell のみ。登録は `bevy_app/plugins/logic.rs`・`visual.rs` が維持する。
-- `bevy_app/src/systems/room/components.rs` と `resources.rs` は `hw_world` からの re-export のみ。型の所有権は `hw_world` にある。
+- `crates/bevy_app/src/systems/room/` ディレクトリは削除済み。`plugins/logic.rs`・`plugins/visual.rs` が `hw_world::` を直接 import する。
 - `Room` entity の spawn では `Transform::default()` を必ず付与する。これを外すと overlay child の transform 伝播が壊れる。
 
 ## ゲーム内時間 (GameTime)
@@ -119,7 +118,7 @@ Perceive → Update → Decide → Execute
 
 ## 空間グリッド一覧 (Spatial Grids)
 
-`crates/hw_spatial` が concrete `SpatialGrid`（9種）を実体として保持し、`crates/bevy_app/src/systems/spatial/` は `hw_spatial` への薄い re-export shell に縮退している。
+`crates/hw_spatial` が concrete `SpatialGrid`（9種）を実体として保持する。`crates/bevy_app/src/systems/spatial/` は削除済みで、`plugins/spatial.rs` が `hw_spatial` / `hw_logistics` から直接 import する。
 すべてのグリッドで `Added` / `Changed` / `RemovedComponents` の Change Detection に基づく差分更新を実装している。
 
 | グリッド | 用途 |

@@ -197,13 +197,16 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 役割:
 
 - Root crate に依存しない AI コアロジック
-- `hw_familiar_ai`: Familiar AI の純粋なシステム実装（69 ファイル）
-- `hw_soul_ai`: Soul AI の純粋なシステム実装（101 ファイル）
+- `hw_familiar_ai`: Familiar AI の純粋なシステム実装。`FamiliarAnimation` コンポーネント（`animation.rs`）と `familiar_movement` システム（`movement.rs`）を含む
+- `hw_soul_ai`: Soul AI の純粋なシステム実装。`soul_movement` システム（`movement.rs`）を含む
 - hw_core / hw_jobs / hw_logistics / hw_world を組み合わせた AI ドメインロジック
 代表例（`hw_soul_ai`）:
 
+- `soul_movement` — パス追従移動システム（ドア待機・衝突スライド解決・速度変調を含む）。`bevy_app/entities/damned_soul/movement/locomotion.rs` は `pub use` の薄いラッパー
 - `SoulAiCorePlugin` — Soul AI の Update/Execute/Decide ヘルパーフェーズコアシステム
 - `FamiliarAiCorePlugin` — Familiar AI の Perceive/Decide/Execute フェーズコアシステム
+- `FamiliarAnimation` — アニメーション状態コンポーネント（`is_moving`, `facing_right`）。`bevy_app/entities/familiar/components.rs` は `pub use` の薄いラッパー
+- `familiar_movement` — Familiar のパス追従移動システム。`bevy_app/entities/familiar/movement.rs` は `pub use` の薄いラッパー
 - `soul_ai::update::*` — 疲労・バイタル・夢・集会・休憩所の更新システム
 - `soul_ai::execute::designation_apply` — Designation 要求適用
 - `soul_ai::execute::gathering_apply` — 集会管理要求適用（Merge / Dissolve / Recruit / Leave）
@@ -338,10 +341,10 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 - `zone_ops::area_tile_size`, `rectangles_overlap_site`, `rectangles_overlap`, `expand_yard_area` — ゾーン geometry helper
 - `terrain_visual::{TerrainVisualHandles, obstacle_cleanup_system}` — 地形スプライト更新を伴う障害物 cleanup。`GameAssets` は root から専用 Resource で注入する
 - `door_systems::{DoorVisualHandles, apply_door_state, door_auto_open_system, door_auto_close_system}` — ドア通行状態とスプライト更新を扱う world 系 system。`GameAssets` は root から専用 Resource で注入する
-- **`Room`, `RoomOverlayTile`（Component）** — Room ECS 型。`bevy_app/room/components.rs` は re-export のみ
-- **`RoomTileLookup`, `RoomDetectionState`, `RoomValidationState`（Resource）** — Room 管理リソース。`bevy_app/room/resources.rs` は re-export のみ
+- **`Room`, `RoomOverlayTile`（Component）** — Room ECS 型
+- **`RoomTileLookup`, `RoomDetectionState`, `RoomValidationState`（Resource）** — Room 管理リソース
 - **`DreamTreePlantingPlan`（`tree_planting.rs`）** — Dream 植林計画の純粋データ構造。ビルダー関数（`build_dream_tree_planting_plan`）は `GameAssets`/`DreamPool` 依存のため bevy_app に残留
-- **`room_systems::{detect_rooms_system, validate_rooms_system, mark_room_dirty_from_building_changes_system, on_building_added, on_building_removed, on_door_added, on_door_removed, sync_room_overlay_tiles_system}`** — Room ECS adapter 層（検出・検証・dirty マーキング・オーバーレイ同期をすべて所有）。`bevy_app/room/detection.rs`・`validation.rs`・`dirty_mark.rs`・`visual.rs` は re-export shell のみ
+- **`room_systems::{detect_rooms_system, validate_rooms_system, mark_room_dirty_from_building_changes_system, on_building_added, on_building_removed, on_door_added, on_door_removed, sync_room_overlay_tiles_system}`** — Room ECS adapter 層（検出・検証・dirty マーキング・オーバーレイ同期をすべて所有）。`bevy_app/src/systems/room/` は削除済みで、`plugins/logic.rs`・`plugins/visual.rs` が直接 import する
 
 ここに置かないもの:
 
