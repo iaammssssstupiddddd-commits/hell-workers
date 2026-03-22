@@ -92,36 +92,20 @@
 | `perceive/resource_sync.rs` | root perceive system | `SharedResourceCache` 再構築・`AssignedTask`/`Designation`/`TransportRequest`/relationship の実ワールド再構築は root の責務。`apply_reservation_op` / `apply_reservation_requests_system` は **`hw_logistics` に移設済み** |
 | `mod.rs` | root wiring | `configure_sets`・`FamiliarAiCorePlugin` の追加を担当（SpatialGrid の `init_resource` は `SpatialPlugin` に移設済み） |
 
-**thin re-export（実装は hw_familiar_ai に移設済み）**
+**thin re-export（削除済み: 2026-03-22）**
 
-以下の `decide/`・`execute/` 各 thin shell はそれぞれの `mod.rs` にインライン化済みであり、個別ファイルは存在しない。
+以下の `decide/`・`execute/`・`helpers/`・`update/` 各ファサードモジュールはすべて削除済み。
+callers は `hw_familiar_ai::*` の完全パスを直接参照する。
 
-| モジュール | 内容 |
-|:---|:---|
-| `decide/mod.rs` | `FamiliarDecideOutput` / `AutoGatherDesignation` / `BlueprintAutoGatherTimer` / `blueprint_auto_gather_system` / `FamiliarDelegationContext` / `process_task_delegation_and_movement` / `FamiliarAiTaskDelegationParams` / `familiar_task_delegation_system` / `EncouragementCooldown` / `encouragement_decision_system` など `hw_familiar_ai::decide::*` への re-export を一括記載 |
-| `helpers/mod.rs` | `FamiliarStateQuery` / `FamiliarSoulQuery` / `FamiliarTaskQuery` および narrow 5型すべて `hw_familiar_ai::decide::query_types` への re-export |
-| `decide/state_handlers/` | `hw_familiar_ai::familiar_ai::decide::state_handlers` への thin re-export |
-| `decide/squad.rs` | `SquadManager` 実体は `hw_familiar_ai` にある |
-| `decide/recruitment.rs` | `RecruitmentManager` 実体は `hw_familiar_ai` にある |
-| `decide/scouting.rs` / `decide/supervising.rs` | スカウト・監視ロジック本体は hw_familiar_ai にある |
-| `perceive/state_detection.rs` | `Changed<FamiliarAiState>` 検知実体は **hw_familiar_ai に移設済み** |
-| `decide/task_management/` | thin bridge。実体は `hw_familiar_ai::familiar_ai::decide::task_management` にある |
-
-**execute（visual / relationship apply）**
-
-`execute/mod.rs` に以下の re-export をインライン化済み（個別ファイルは存在しない）:
-
-| シンボル | 委譲先 |
-|:---|:---|
-| `encouragement_apply_system` / `cleanup_encouragement_cooldowns_system` | `hw_familiar_ai::familiar_ai::execute::encouragement_apply` |
-| `apply_squad_management_requests_system` + `squad_visual_system` | `hw_familiar_ai` + `hw_visual` |
-| `handle_max_soul_changed_system` + `max_soul_visual_system` | `hw_familiar_ai` + `hw_visual` |
-| `familiar_idle_visual_apply_system` | `hw_visual` |
+- `decide/mod.rs`・`helpers/mod.rs`・`decide/state_handlers/`・`decide/squad.rs`・`decide/recruitment.rs` 等 → `hw_familiar_ai::familiar_ai::decide::*`
+- `perceive/state_detection` submodule → `hw_familiar_ai::familiar_ai::perceive::state_detection::*`
+- `execute/mod.rs`（`encouragement_apply_system` / `squad_visual_system` / `max_soul_visual_system` 等）→ `FamiliarAiCorePlugin` が直接登録済み
+- `helpers/mod.rs`（`FamiliarStateQuery` / `FamiliarSoulQuery` 等）→ `hw_familiar_ai::familiar_ai::decide::query_types`
+- `update/mod.rs` → `hw_familiar_ai` 直接
 
 **設計メモ**
 
-- ECS 実状態の変更は `execute/` が担当する
-- Decide フェーズの message 出力と world/grid/pathfinding を使うオーケストレーションは `hw_familiar_ai` に移り、root 側は互換 path 維持用の thin shell と wiring にとどめる
+- Decide フェーズの message 出力と world/grid/pathfinding を使うオーケストレーションは `hw_familiar_ai` が所有する
 - root に残すのは `GameAssets` 依存 visual と `SharedResourceCache` 再構築のような app shell 固有処理だけに限定する
 
 **hw_familiar_ai 分担**: `FamiliarAiPlugin` は `hw_familiar_ai::FamiliarAiCorePlugin` を内部で `add_plugins` する。`WorldMapRead` / SpatialGrid / `PathfindingContext` / `MessageWriter` を使う Familiar Decide 系 system も `hw_familiar_ai` 側で所有する。
@@ -133,7 +117,7 @@
   - **Decide**: `following_familiar_system`（独立）、`state_decision → ApplyDeferred → task_delegation`（chain）、`blueprint_auto_gather → ApplyDeferred → encouragement_decision`（chain、`familiar_ai_state_system` の後）
   - **Execute**: `familiar_state_apply_system` / `handle_state_changed_system` / `max_soul_logic_system` / `squad_logic_system` / `encouragement_apply_system` / `cleanup_encouragement_cooldowns_system`
 - `hw_familiar_ai` は `hw_soul_ai` に依存しない。分隊解放・使役数超過リリース時のタスク解除は `SoulTaskUnassignRequest`（`hw_core::events`）イベントを `MessageWriter` で送信し、`hw_soul_ai` 側の `handle_soul_task_unassign_system`（`SoulAiSystemSet::Perceive`）が処理する。
-- root に残るのは `perceive/resource_sync`（ECS 実状態の再構築）、`configure_sets` の配線、互換 import path の thin shell のみ
+- root に残るのは `perceive/resource_sync`（ECS 実状態の再構築）と `configure_sets` の配線のみ
 - `ConstructionSiteAccess` は **`hw_jobs::construction`** に移設済み（`hw_soul_ai` ではない）
 - Blueprint auto gather の純計画層は `decide/auto_gather_for_blueprint/{planning,demand,supply,helpers}` に置き、orchestration 本体は `hw_familiar_ai::decide::blueprint_auto_gather` が担う
 

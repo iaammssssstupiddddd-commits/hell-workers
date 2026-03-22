@@ -74,7 +74,7 @@ Perceive → Update → Decide → Execute
 ## タスク割り当て・物流・UIの責務境界
 
 - Familiar 側の `TaskAssignmentRequest` 発行は `task_management::builders::submit_assignment_with_source_entities(...)` / `submit_assignment_with_reservation_ops(...)`（または下位の `submit_assignment(...)`）を経由し、`ReservationShadow` による同一フレーム内の予約整合性を維持する。
-- Familiar AI の `state_decision` / `task_delegation` / `blueprint_auto_gather` の system 本体は `hw_familiar_ai` が所有し、`WorldMapRead` / concrete `SpatialGrid` / `MessageWriter` / `Time` / pathfinding context を leaf crate 側で扱う。bevy_app 側は `perceive/resource_sync`、`GameAssets` 依存 visual、`configure_sets` / `init_resource` 配線、互換 import path の thin shell のみを持つ。
+- Familiar AI の `state_decision` / `task_delegation` / `blueprint_auto_gather` の system 本体は `hw_familiar_ai` が所有し、`WorldMapRead` / concrete `SpatialGrid` / `MessageWriter` / `Time` / pathfinding context を leaf crate 側で扱う。bevy_app 側は `perceive/resource_sync`、`GameAssets` 依存 visual、`configure_sets` / `init_resource` 配線のみを持つ（互換 import path の thin shell は 2026-03-22 にすべて削除済み）。
 - 予約オペレーションは `build_source_reservation_ops` / `build_mixer_destination_reservation_ops` / `build_wheelbarrow_reservation_ops` の共通ヘルパーで構築し、割り当てビルダー間の重複を抑制する。
 - Familiar 側 Think フェーズでは `TileSiteIndex`（`Resource<HashMap<Entity, Vec<Entity>>`）を `Spatial` サブセットで更新し、建設サイトへの残需要計算時に floor/wall タイルを O(1) で照会できるようにする。
 - `IncomingDeliverySnapshot` は Think 開始時に1回構築し、`DemandReadContext` 経由で `policy::haul::*` の残需要計算に再利用する。`IncomingDeliveries` や `ResourceType` の都度ルックアップを集約し、同一フレーム内のCPU負荷を低減する。
