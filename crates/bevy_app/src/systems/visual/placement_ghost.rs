@@ -2,7 +2,7 @@ use crate::app_contexts::{
     BuildContext, CompanionParentKind, CompanionPlacementKind, CompanionPlacementState,
 };
 use crate::systems::jobs::{Blueprint, Building, BuildingType};
-use crate::systems::world::zones::{Site, Yard};
+use hw_world::zones::{Site, Yard};
 use crate::world::map::{RIVER_Y_MIN, WorldMap, WorldMapRead, WorldMapRef};
 use bevy::prelude::*;
 use hw_core::constants::TILE_SIZE;

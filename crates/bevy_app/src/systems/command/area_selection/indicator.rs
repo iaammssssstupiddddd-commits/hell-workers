@@ -10,7 +10,7 @@ use crate::systems::dream_tree_planting::build_dream_tree_planting_plan;
 use crate::systems::jobs::Tree;
 use crate::systems::logistics::ResourceItem;
 use crate::systems::visual::task_area_visual::TaskAreaMaterial;
-use crate::systems::world::zones::{Site, Yard};
+use hw_world::zones::{Site, Yard};
 use crate::world::map::{WorldMap, WorldMapRead};
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;

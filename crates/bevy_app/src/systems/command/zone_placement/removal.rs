@@ -1,7 +1,7 @@
 use crate::app_contexts::TaskContext;
 use crate::interface::ui::UiInputState;
 use crate::systems::command::TaskMode;
-use crate::systems::world::zones::AreaBounds;
+use hw_world::zones::AreaBounds;
 use crate::world::map::{WorldMap, WorldMapWrite};
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;

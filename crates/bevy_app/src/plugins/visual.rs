@@ -9,7 +9,7 @@ use crate::systems::command::{
 };
 use crate::systems::jobs::building_completion_system;
 use crate::systems::logistics::resource_count_display_system;
-use crate::systems::room::sync_room_overlay_tiles_system;
+use hw_world::sync_room_overlay_tiles_system;
 use crate::systems::visual::building3d_cleanup::{
     cleanup_building_3d_visuals_system, sync_provisional_wall_material_system,
 };

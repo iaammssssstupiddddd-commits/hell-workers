@@ -1,4 +1,4 @@
-use crate::systems::world::zones::AreaBounds;
+use hw_world::zones::AreaBounds;
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
 use hw_world::identify_removal_targets;

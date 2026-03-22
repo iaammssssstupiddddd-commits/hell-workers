@@ -6,6 +6,7 @@ pub mod manual_haul_selector;
 pub mod plugin;
 pub mod provisional_wall;
 pub mod resource_cache;
+pub mod spatial_sync;
 pub mod tile_index;
 pub mod transport_request;
 pub mod types;
@@ -22,6 +23,11 @@ pub use construction_helpers::{ResourceItemVisualHandles, spawn_refund_items};
 
 // Convenience re-exports for task_execution handlers
 pub use hw_core::logistics::ResourceType;
+pub use spatial_sync::{
+    update_resource_spatial_grid_system_resource_item,
+    update_stockpile_spatial_grid_system_stockpile,
+    update_transport_request_spatial_grid_system_transport_request,
+};
 pub use types::{BelongsTo, BucketStorage, Inventory, ReservedForTask, ResourceItem, Wheelbarrow};
 pub use water::tank_has_capacity_for_full_bucket;
 pub use zone::Stockpile;

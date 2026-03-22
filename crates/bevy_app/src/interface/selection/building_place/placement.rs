@@ -1,6 +1,6 @@
 use crate::assets::GameAssets;
 use crate::systems::jobs::{Blueprint, Building, BuildingType};
-use crate::systems::world::zones::{Site, Yard};
+use hw_world::zones::{Site, Yard};
 use crate::world::map::{RIVER_Y_MIN, WorldMap, WorldMapRef};
 use bevy::prelude::*;
 use hw_core::constants::*;

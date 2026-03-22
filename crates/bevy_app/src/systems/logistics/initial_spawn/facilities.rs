@@ -3,7 +3,7 @@ use crate::systems::jobs::{Building, BuildingType, ObstaclePosition, TaskSlots};
 use crate::systems::logistics::{
     BelongsTo, ResourceItem, ResourceType, Wheelbarrow, WheelbarrowParking,
 };
-use crate::systems::world::zones::{PairedSite, PairedYard, Site, Yard};
+use hw_world::zones::{PairedSite, PairedYard, Site, Yard};
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
 use hw_core::constants::*;

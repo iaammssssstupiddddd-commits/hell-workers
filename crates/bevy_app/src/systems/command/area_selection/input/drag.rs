@@ -6,7 +6,7 @@ use crate::app_contexts::TaskContext;
 use crate::entities::damned_soul::Destination;
 use crate::entities::familiar::{ActiveCommand, Familiar, FamiliarCommand};
 use crate::systems::command::TaskMode;
-use crate::systems::world::zones::Site;
+use hw_world::zones::Site;
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;

@@ -21,7 +21,7 @@ use crate::systems::jobs::wall_construction::{
 };
 use crate::systems::logistics::item_lifetime::despawn_expired_items_system;
 use crate::systems::logistics::transport_request::TransportRequestPlugin;
-use crate::systems::room::{
+use hw_world::{
     RoomDetectionState, RoomTileLookup, RoomValidationState, detect_rooms_system,
     mark_room_dirty_from_building_changes_system, on_building_added, on_building_removed,
     on_door_added, on_door_removed, validate_rooms_system,

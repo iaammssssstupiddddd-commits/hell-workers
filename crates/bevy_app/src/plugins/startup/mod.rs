@@ -30,7 +30,7 @@ use crate::systems::logistics::ResourceItem;
 use crate::systems::logistics::{
     ResourceCountDisplayTimer, ResourceLabels, initial_resource_spawner,
 };
-use crate::systems::spatial::{FloorConstructionSpatialGrid, GatheringSpotSpatialGrid};
+use hw_spatial::{FloorConstructionSpatialGrid, GatheringSpotSpatialGrid};
 use crate::systems::visual::elevation_view::ElevationDirection;
 use crate::world::map::{
     WorldMap, WorldMapRead, WorldMapWrite, spawn_map, terrain_border::spawn_terrain_borders,

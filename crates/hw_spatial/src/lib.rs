@@ -9,8 +9,14 @@ pub mod soul;
 pub mod stockpile;
 pub mod transport_request;
 
-pub use blueprint::{BlueprintSpatialGrid, update_blueprint_spatial_grid_system};
-pub use designation::{DesignationSpatialGrid, update_designation_spatial_grid_system};
+pub use blueprint::{
+    BlueprintSpatialGrid, update_blueprint_spatial_grid_system,
+    update_blueprint_spatial_grid_system_blueprint,
+};
+pub use designation::{
+    DesignationSpatialGrid, update_designation_spatial_grid_system,
+    update_designation_spatial_grid_system_designation,
+};
 pub use familiar::{
     FamiliarSpatialGrid, update_familiar_entity_spatial_grid_system,
     update_familiar_spatial_grid_system,

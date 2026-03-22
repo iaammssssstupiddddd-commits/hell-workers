@@ -12,7 +12,7 @@ use crate::systems::logistics::transport_request::{
     TransportPriority, TransportRequest, TransportRequestFixedSource, TransportRequestKind,
     TransportRequestState,
 };
-use crate::systems::world::zones::Site;
+use hw_world::zones::Site;
 use bevy::prelude::*;
 use hw_core::relationships::ManagedBy;
 

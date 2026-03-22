@@ -9,7 +9,7 @@ use crate::systems::command::{AreaSelectionIndicator, TaskArea, TaskMode};
 use crate::systems::jobs::Designation;
 use crate::systems::jobs::floor_construction::FloorTileBlueprint;
 use crate::systems::jobs::wall_construction::WallTileBlueprint;
-use crate::systems::world::zones::Site;
+use hw_world::zones::Site;
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use hw_core::game_state::PlayMode;

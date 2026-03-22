@@ -7,7 +7,7 @@ use crate::entities::damned_soul::Destination;
 use crate::entities::familiar::{ActiveCommand, Familiar};
 use crate::systems::command::{AreaSelectionIndicator, TaskArea, TaskMode};
 use crate::systems::jobs::Designation;
-use crate::systems::world::zones::Site;
+use hw_world::zones::Site;
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
 use hw_core::game_state::PlayMode;

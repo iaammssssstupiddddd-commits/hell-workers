@@ -1,7 +1,7 @@
 use crate::app_contexts::{CompanionPlacementKind, CompanionPlacementState};
 use crate::assets::GameAssets;
 use crate::systems::jobs::{Blueprint, Building};
-use crate::systems::world::zones::{Site, Yard};
+use hw_world::zones::{Site, Yard};
 use crate::world::map::{RIVER_Y_MIN, WorldMap};
 use bevy::prelude::*;
 use hw_ui::selection::building_occupied_grids;

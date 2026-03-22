@@ -1,5 +1,6 @@
 use super::grid::{GridData, SpatialGridOps};
 use bevy::prelude::*;
+use hw_jobs::model::Designation;
 
 /// タスク（Designation）用の空間グリッド
 #[derive(Resource, Default)]
@@ -41,4 +42,17 @@ pub fn update_designation_spatial_grid_system<T: Component>(
     for entity in removed.read() {
         grid.remove(entity);
     }
+}
+
+/// `Designation` コンポーネントに特化した空間グリッド更新システム。
+pub fn update_designation_spatial_grid_system_designation(
+    grid: ResMut<DesignationSpatialGrid>,
+    query: Query<
+        (Entity, &Transform),
+        (With<Designation>, Or<(Added<Designation>, Changed<Transform>)>),
+    >,
+    removed: RemovedComponents<Designation>,
+) {
+    // 変更差分のみを反映する。スポーン直後は次フレームで取り込まれる。
+    update_designation_spatial_grid_system::<Designation>(grid, query, removed);
 }
