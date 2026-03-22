@@ -91,7 +91,7 @@ pub fn spawn_familiar_at(
             FamiliarOperation::default(),
             ActiveCommand::default(),
             crate::systems::familiar_ai::FamiliarAiState::default(),
-            crate::systems::familiar_ai::perceive::state_detection::FamiliarAiStateHistory::default(
+            hw_familiar_ai::familiar_ai::perceive::state_detection::FamiliarAiStateHistory::default(
             ),
             hw_core::relationships::Commanding::default(),
             hw_core::relationships::ManagedTasks::default(),

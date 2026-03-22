@@ -5,13 +5,10 @@
 use bevy::prelude::*;
 
 pub mod adapters;
-pub mod decide;
 pub mod execute;
-pub mod perceive;
 pub mod scheduling {
     pub use hw_core::system_sets::{FamiliarAiSystemSet, SoulAiSystemSet};
 }
-pub mod update;
 
 use crate::systems::GameSystemSet;
 use scheduling::{FamiliarAiSystemSet, SoulAiSystemSet};

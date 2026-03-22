@@ -6,7 +6,7 @@ use crate::interface::selection::SelectedEntity;
 use crate::interface::ui::panels::InfoPanelPinState;
 use crate::systems::jobs::Blueprint;
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
-use crate::systems::soul_ai::perceive::escaping::is_escape_threat_close;
+use hw_soul_ai::soul_ai::perceive::escaping::is_escape_threat_close;
 use hw_spatial::FamiliarSpatialGrid;
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
