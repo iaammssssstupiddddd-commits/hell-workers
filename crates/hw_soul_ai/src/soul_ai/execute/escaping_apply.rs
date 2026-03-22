@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use hw_core::events::{EscapeOperation, EscapeRequest, OnGatheringLeft};
+use hw_core::events::{EscapeOperation, EscapeRequest};
 use hw_core::relationships::{ParticipatingIn, RestAreaReservedFor, RestingIn};
 use hw_core::soul::{DamnedSoul, DriftingState, IdleBehavior};
 
@@ -22,9 +22,8 @@ pub fn escaping_apply_system(
 
         match &request.operation {
             EscapeOperation::StartEscaping { leave_gathering } => {
-                if let Some(_spot_entity) = *leave_gathering {
+                if leave_gathering.is_some() {
                     commands.entity(entity).remove::<ParticipatingIn>();
-                    commands.trigger(OnGatheringLeft { entity });
                 }
 
                 commands

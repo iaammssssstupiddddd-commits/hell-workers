@@ -2,7 +2,7 @@
 
 use super::*;
 use crate::{
-    OnExhausted, OnSoulRecruited, OnStressBreakdown, OnTaskAssigned, OnTaskCompleted,
+    OnExhausted, OnSoulRecruited, OnStressBreakdown,
 };
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
 use hw_soul_ai::unassign_task;
@@ -11,29 +11,14 @@ use hw_core::constants::*;
 use hw_core::relationships::CommandedBy;
 use rand::Rng;
 
-pub fn on_task_assigned(on: On<OnTaskAssigned>, _q_souls: Query<&mut DamnedSoul>) {
-    let soul_entity = on.entity;
-    let event = on.event();
-    info!(
-        "OBSERVER: Soul {:?} assigned to task {:?} ({:?})",
-        soul_entity, event.task_entity, event.work_type
-    );
-}
-
-pub fn on_task_completed(on: On<OnTaskCompleted>, _q_souls: Query<&mut DamnedSoul>) {
-    let soul_entity = on.entity;
-    let event = on.event();
-    info!(
-        "OBSERVER: Soul {:?} completed task {:?} ({:?})",
-        soul_entity, event.task_entity, event.work_type
-    );
-}
-
 pub fn on_soul_recruited(
     on: On<OnSoulRecruited>,
     mut commands: Commands,
     mut q_souls: Query<(&mut DamnedSoul, &mut IdleState, &mut Path)>,
 ) {
+    // このObserverはsquad_logic.rsからも発火される（タスク割り当てを介さないリクルート経路）。
+    // apply_task_assignment_requests_systemのnormalize_worker_idle_stateと一部重複するが、
+    // squad管理経路では同関数が呼ばれないため維持する。
     let soul_entity = on.entity;
     let event = on.event();
     if let Ok((_soul, mut idle, mut path)) = q_souls.get_mut(soul_entity) {

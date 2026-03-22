@@ -20,9 +20,9 @@ use rand::Rng;
 
 use super::conversation::events::{ConversationTone, ConversationToneTriggered};
 
-/// タスク開始時のオブザーバー
-pub fn on_task_assigned(
-    on: On<OnTaskAssigned>,
+/// タスク開始時の speech bubble 発火システム（MessageReader ベース）
+pub fn speech_on_task_assigned_system(
+    mut reader: MessageReader<OnTaskAssigned>,
     mut commands: Commands,
     handles: Res<SpeechHandles>,
     mut tone_writer: MessageWriter<ConversationToneTriggered>,
@@ -45,59 +45,63 @@ pub fn on_task_assigned(
     q_bubbles: Query<(Entity, &SpeechBubble), With<FamiliarBubble>>,
     time: Res<Time>,
 ) {
-    let soul_entity = on.entity;
-    let event = on.event();
-    let current_time = time.elapsed_secs();
+    for event in reader.read() {
+        let soul_entity = event.entity;
+        let current_time = time.elapsed_secs();
 
-    if let Ok((soul_transform, under_command, soul_history_opt)) = q_souls.get_mut(soul_entity) {
-        let soul_pos = soul_transform.translation();
-        if under_command.is_some() {
-            let mut rng = rand::thread_rng();
-            if rng.gen_bool(COMMAND_REACTION_NEGATIVE_EVENT_CHANCE as f64) {
-                tone_writer.write(ConversationToneTriggered {
-                    speaker: soul_entity,
-                    tone: ConversationTone::Negative,
-                });
+        if let Ok((soul_transform, under_command, soul_history_opt)) = q_souls.get_mut(soul_entity)
+        {
+            let soul_pos = soul_transform.translation();
+            if under_command.is_some() {
+                let mut rng = rand::thread_rng();
+                if rng.gen_bool(COMMAND_REACTION_NEGATIVE_EVENT_CHANCE as f64) {
+                    tone_writer.write(ConversationToneTriggered {
+                        speaker: soul_entity,
+                        tone: ConversationTone::Negative,
+                    });
+                }
             }
-        }
 
-        emit_soul_with_history(
-            &mut commands,
-            soul_entity,
-            "💪",
-            soul_pos,
-            &handles,
-            BubbleEmotion::Motivated,
-            BubblePriority::Low,
-            soul_history_opt,
-            current_time,
-        );
+            emit_soul_with_history(
+                &mut commands,
+                soul_entity,
+                "💪",
+                soul_pos,
+                &handles,
+                BubbleEmotion::Motivated,
+                BubblePriority::Low,
+                soul_history_opt,
+                current_time,
+            );
 
-        if let Some(uc) = under_command {
-            if let Ok((fam_transform, voice, fam_history_opt)) = q_familiars.get_mut(uc.0) {
-                let fam_pos = fam_transform.translation();
-                let phrase = LatinPhrase::from_work_type(event.work_type);
-                emit_familiar_with_history(
-                    &mut commands,
-                    uc.0,
-                    phrase,
-                    fam_pos,
-                    &handles,
-                    &q_bubbles,
-                    BubbleEmotion::Motivated,
-                    BubblePriority::Low,
-                    voice,
-                    fam_history_opt,
-                    current_time,
-                );
+            if let Some(uc) = under_command {
+                if let Ok((fam_transform, voice, fam_history_opt)) =
+                    q_familiars.get_mut(uc.0)
+                {
+                    let fam_pos = fam_transform.translation();
+                    let phrase = LatinPhrase::from_work_type(event.work_type);
+                    emit_familiar_with_history(
+                        &mut commands,
+                        uc.0,
+                        phrase,
+                        fam_pos,
+                        &handles,
+                        &q_bubbles,
+                        BubbleEmotion::Motivated,
+                        BubblePriority::Low,
+                        voice,
+                        fam_history_opt,
+                        current_time,
+                    );
+                }
             }
         }
     }
 }
 
-/// タスク完了時のオブザーバー
-pub fn on_task_completed(
-    on: On<OnTaskCompleted>,
+/// タスク完了時の speech bubble 発火システム（MessageReader ベース）
+pub fn speech_on_task_completed_system(
+    mut reader: MessageReader<OnTaskCompleted>,
     mut commands: Commands,
     handles: Res<SpeechHandles>,
     mut q_souls: Query<
@@ -106,20 +110,22 @@ pub fn on_task_completed(
     >,
     time: Res<Time>,
 ) {
-    let soul_entity = on.entity;
-    let current_time = time.elapsed_secs();
-    if let Ok((transform, history_opt)) = q_souls.get_mut(soul_entity) {
-        emit_soul_with_history(
-            &mut commands,
-            soul_entity,
-            "😊",
-            transform.translation(),
-            &handles,
-            BubbleEmotion::Happy,
-            BubblePriority::Low,
-            history_opt,
-            current_time,
-        );
+    for event in reader.read() {
+        let soul_entity = event.entity;
+        let current_time = time.elapsed_secs();
+        if let Ok((transform, history_opt)) = q_souls.get_mut(soul_entity) {
+            emit_soul_with_history(
+                &mut commands,
+                soul_entity,
+                "😊",
+                transform.translation(),
+                &handles,
+                BubbleEmotion::Happy,
+                BubblePriority::Low,
+                history_opt,
+                current_time,
+            );
+        }
     }
 }
 

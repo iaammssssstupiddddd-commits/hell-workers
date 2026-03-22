@@ -114,8 +114,6 @@ impl Plugin for DamnedSoulPlugin {
                         .after(movement::update_conversation_expression_timer_system),
                 ),
             )
-            .add_observer(observers::on_task_assigned)
-            .add_observer(observers::on_task_completed)
             .add_observer(observers::on_soul_recruited)
             .add_observer(observers::on_stress_breakdown)
             .add_observer(observers::on_exhausted);

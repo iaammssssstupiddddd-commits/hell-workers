@@ -73,12 +73,6 @@ pub struct OnGatheringParticipated {
     pub spot_entity: Entity,
 }
 
-/// 魂が集会から離脱した（スポット管理用）
-#[derive(Event, Debug, Reflect)]
-pub struct OnGatheringLeft {
-    pub entity: Entity,
-}
-
 /// 使い魔が魂を激励した
 #[derive(Message, EntityEvent)]
 pub struct OnEncouraged {

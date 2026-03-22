@@ -1,17 +1,14 @@
 use bevy::prelude::*;
 
 use hw_core::events::{
-    GatheringManagementOp, GatheringManagementRequest, OnGatheringLeft, OnGatheringParticipated,
+    GatheringManagementOp, GatheringManagementRequest, OnGatheringParticipated,
 };
 use hw_core::relationships::ParticipatingIn;
-
-use crate::soul_ai::helpers::gathering::GatheringSpot;
 
 /// GatheringManagementRequest を適用する（Execute Phase）
 pub fn gathering_apply_system(
     mut commands: Commands,
     mut request_reader: MessageReader<GatheringManagementRequest>,
-    q_spots: Query<(), With<GatheringSpot>>,
     q_participating: Query<Option<&ParticipatingIn>>,
 ) {
     for request in request_reader.read() {
@@ -35,9 +32,6 @@ pub fn gathering_apply_system(
                 absorbed_object,
             } => {
                 for soul_entity in participants_to_move {
-                    commands.trigger(OnGatheringLeft {
-                        entity: *soul_entity,
-                    });
                     commands
                         .entity(*soul_entity)
                         .insert(ParticipatingIn(*absorber));
@@ -71,19 +65,8 @@ pub fn gathering_apply_system(
                     spot_entity: *spot,
                 });
             }
-            GatheringManagementOp::Leave { soul, spot } => {
-                let spot_entity = q_participating
-                    .get(*soul)
-                    .ok()
-                    .flatten()
-                    .map(|p| p.0)
-                    .unwrap_or(*spot);
-
+            GatheringManagementOp::Leave { soul, spot: _ } => {
                 commands.entity(*soul).remove::<ParticipatingIn>();
-
-                if q_spots.get(spot_entity).is_ok() {
-                    commands.trigger(OnGatheringLeft { entity: *soul });
-                }
             }
         }
     }

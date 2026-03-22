@@ -4,7 +4,7 @@ use std::collections::HashSet;
 
 use bevy::prelude::*;
 use hw_core::events::{
-    OnGatheringLeft, OnReleasedFromService, OnSoulRecruited, SoulTaskUnassignRequest,
+    OnReleasedFromService, OnSoulRecruited, SoulTaskUnassignRequest,
     SquadManagementOperation, SquadManagementRequest,
 };
 use hw_core::familiar::Familiar;
@@ -34,9 +34,6 @@ pub fn squad_logic_system(
 
                 if q_participating.contains(soul_entity) {
                     commands.entity(soul_entity).remove::<ParticipatingIn>();
-                    commands.trigger(OnGatheringLeft {
-                        entity: soul_entity,
-                    });
                 }
 
                 commands.trigger(OnSoulRecruited {

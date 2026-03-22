@@ -2,7 +2,7 @@
 
 use bevy::prelude::*;
 use hw_core::constants::*;
-use hw_core::events::{DriftingEscapeStarted, OnGatheringLeft};
+use hw_core::events::{DriftingEscapeStarted};
 use hw_core::population::PopulationManager;
 use hw_core::relationships::{CommandedBy, ParticipatingIn, RestingIn};
 use hw_core::soul::{
@@ -95,7 +95,6 @@ pub fn drifting_decision_system(
 
         if participating_in.is_some() {
             commands.entity(entity).remove::<ParticipatingIn>();
-            commands.trigger(OnGatheringLeft { entity });
         }
 
         let grid = WorldMap::world_to_grid(transform.translation.truncate());

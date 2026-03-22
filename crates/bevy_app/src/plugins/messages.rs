@@ -6,8 +6,8 @@ use crate::{
     DesignationRequest, EncouragementRequest, EscapeRequest, FamiliarAiStateChangedEvent,
     FamiliarIdleVisualRequest, FamiliarOperationMaxSoulChangedEvent, FamiliarStateRequest,
     GatheringManagementRequest, GatheringSpawnRequest, IdleBehaviorRequest, OnExhausted,
-    OnGatheringParticipated, ResourceReservationRequest, SoulTaskUnassignRequest,
-    SquadManagementRequest, TaskAssignmentRequest,
+    OnGatheringParticipated, OnTaskAssigned, OnTaskCompleted, ResourceReservationRequest,
+    SoulTaskUnassignRequest, SquadManagementRequest, TaskAssignmentRequest,
 };
 use hw_visual::speech::conversation::events::{
     ConversationCompleted, ConversationToneTriggered, RequestConversation,
@@ -36,6 +36,8 @@ impl Plugin for MessagesPlugin {
             .add_message::<ConversationToneTriggered>()
             .add_message::<OnExhausted>()
             .add_message::<OnGatheringParticipated>()
+            .add_message::<OnTaskAssigned>()
+            .add_message::<OnTaskCompleted>()
             .add_message::<GatheringSpawnRequest>()
             .add_message::<SoulTaskUnassignRequest>();
     }

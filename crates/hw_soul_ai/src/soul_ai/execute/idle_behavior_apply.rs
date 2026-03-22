@@ -3,8 +3,7 @@ use std::collections::HashMap;
 
 use hw_core::constants::{REST_AREA_RECRUIT_COOLDOWN_SECS, REST_AREA_RESTING_DURATION};
 use hw_core::events::{
-    IdleBehaviorOperation, IdleBehaviorRequest, OnGatheringJoined, OnGatheringLeft,
-    OnGatheringParticipated,
+    IdleBehaviorOperation, IdleBehaviorRequest, OnGatheringJoined, OnGatheringParticipated,
 };
 use hw_core::relationships::{
     ParticipatingIn, RestAreaOccupants, RestAreaReservations, RestAreaReservedFor, RestingIn,
@@ -53,9 +52,6 @@ pub fn idle_behavior_apply_system(
             }
             IdleBehaviorOperation::LeaveGathering { spot_entity: _ } => {
                 commands.entity(request.entity).remove::<ParticipatingIn>();
-                commands.trigger(OnGatheringLeft {
-                    entity: request.entity,
-                });
             }
             IdleBehaviorOperation::ArriveAtGathering { spot_entity } => {
                 commands
@@ -155,9 +151,6 @@ pub fn idle_behavior_apply_system(
 
                 if q_participating.get(request.entity).is_ok() {
                     commands.entity(request.entity).remove::<ParticipatingIn>();
-                    commands.trigger(OnGatheringLeft {
-                        entity: request.entity,
-                    });
                 }
 
                 commands.entity(request.entity).remove::<RestAreaCooldown>();

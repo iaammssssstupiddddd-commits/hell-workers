@@ -43,10 +43,16 @@ impl Plugin for SpeechPlugin {
                 .chain()
                 .in_set(hw_core::system_sets::GameSystemSet::Visual),
         );
+        app.add_systems(
+            Update,
+            (
+                observers::speech_on_task_assigned_system,
+                observers::speech_on_task_completed_system,
+            )
+                .in_set(hw_core::system_sets::GameSystemSet::Visual),
+        );
 
         // Observers の登録
-        app.add_observer(on_task_assigned);
-        app.add_observer(on_task_completed);
         app.add_observer(on_soul_recruited);
         app.add_observer(on_exhausted);
         app.add_observer(on_stress_breakdown);

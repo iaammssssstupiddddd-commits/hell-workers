@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 
 use hw_core::constants::REST_AREA_RECRUIT_COOLDOWN_SECS;
-use hw_core::events::{OnGatheringLeft, OnSoulRecruited, OnTaskAssigned};
+use hw_core::events::{OnSoulRecruited, OnTaskAssigned};
 use hw_core::logistics::WheelbarrowDestination;
 use hw_core::relationships::{
     CommandedBy, DeliveringTo, ParticipatingIn, RestAreaReservedFor, RestingIn, WorkingOn,
@@ -51,9 +51,6 @@ fn normalize_worker_idle_state(
         commands
             .entity(worker_entity)
             .try_remove::<ParticipatingIn>();
-        commands.trigger(OnGatheringLeft {
-            entity: worker_entity,
-        });
     }
     commands
         .entity(worker_entity)
