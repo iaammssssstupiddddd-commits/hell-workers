@@ -288,7 +288,26 @@ Windows の PE 形式では、一つの DLL からエクスポートできるシ
 - 修正方針: `Without<T>` で Query を排他的に分離するか、`ParamSet` に統合して同時借用を避ける。
 - 既存共通クエリ（`TaskQueries` など）がある箇所では、同種コンポーネントへの重複 Query を新設しない。
 
-### 4. Linux Wayland 初期化失敗（`NoCompositor`）
+### 4. stray `target/` ディレクトリの混入
+`crates/` 配下のサブディレクトリ内に `target/` が生成された場合、`cargo` をそのディレクトリから誤って実行したことが原因です。
+
+- `**/target/` は `.gitignore` で追跡対象外に設定済みのため Git には影響しません。
+- **`cargo` は必ずワークスペースルートから実行してください。**
+  ```bash
+  # ✅ 正しい（ワークスペースルートから）
+  CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo check
+  
+  # ❌ 誤り（サブディレクトリ内から実行すると src/ 内に target/ が生成される）
+  cd crates/bevy_app/src/systems/logistics
+  cargo check
+  ```
+- 混入した `target/` を削除するには:
+  ```bash
+  find crates -type d -name "target" | xargs rm -rf
+  ```
+- `git push` 時に `pre-push` フックが stray `target/` を自動検出して警告します。
+
+### 5. Linux Wayland 初期化失敗（`NoCompositor`）
 `Failed to build event loop: ... WaylandError(Connection(NoCompositor))` が出る場合、無効な `WAYLAND_DISPLAY` を優先してしまっている可能性があります。
 
 - 実行時に `HW_WINDOW_BACKEND=x11` を指定すると、Wayland を無効化して X11 を強制できます。
