@@ -19,7 +19,6 @@
 
 | Document | Status | Notes |
 |---|---|---|
-| [area-selection-input-refactor-plan-2026-03-19.md](area-selection-input-refactor-plan-2026-03-19.md) | Completed | `area_selection` input フローの責務分離と helper ownership 整理の完了記録。 |
 | [visual-sync-source-selector-haul-refactor-2026-03-22.md](visual-sync-source-selector-haul-refactor-2026-03-22.md) | Completed | Observer/System 分離・計測コード分離・運搬 builder 分割の 3 フェーズリファクタリング。 |
 
 ## アーカイブ計画書一覧 (`docs/plans/archive`)
@@ -29,12 +28,14 @@
 | [archive/ai-phase-refactor-implementation-plan.md](archive/ai-phase-refactor-implementation-plan.md) | アーカイブ | AIフェーズリファクタ実装計画。 |
 | [archive/ai-phase-refactor.md](archive/ai-phase-refactor.md) | アーカイブ | AIフェーズリファクタの全体設計メモ。 |
 | [archive/architecture-safe-crate-extraction-plan-2026-03-12.md](archive/architecture-safe-crate-extraction-plan-2026-03-12.md) | アーカイブ | アーキテクチャ維持前提の追加クレート化計画 |
+| [archive/area-selection-input-refactor-plan-2026-03-19.md](archive/area-selection-input-refactor-plan-2026-03-19.md) | アーカイブ | area_selectionの計画。 |
 | [archive/assigned-task-to-hw-jobs-plan-2026-03-08.md](archive/assigned-task-to-hw-jobs-plan-2026-03-08.md) | アーカイブ | AssignedTask を hw_core → hw_jobs へ移動する計画 |
 | [archive/assignment-builder-unification-plan-2026-03-01.md](archive/assignment-builder-unification-plan-2026-03-01.md) | アーカイブ | `task_management/builders` の重複削減と割り当て生成経路の共通化計画。 |
 | [archive/auto-gather-for-blueprint.md](archive/auto-gather-for-blueprint.md) | アーカイブ | Blueprint不足資材の自動伐採/採掘計画。 |
 | [archive/bridge-building.md](archive/bridge-building.md) | アーカイブ | 橋（Bridge）建築物の実装計画。 |
 | [archive/bucket-return-rebuild-plan.md](archive/bucket-return-rebuild-plan.md) | アーカイブ | バケツ返却仕様の再構築計画。 |
 | [archive/cargo-workspace-migration-plan.md](archive/cargo-workspace-migration-plan.md) | アーカイブ | Cargo Workspace 移行計画 |
+| [archive/codebase-quality-refactor.md](archive/codebase-quality-refactor.md) | アーカイブ | リファクタリング計画: コードベース全体の整理・品質向上 |
 | [archive/command-crate-extraction-plan-2026-03-12.md](archive/command-crate-extraction-plan-2026-03-12.md) | アーカイブ | src/systems/command/の計画。 |
 | [archive/crate-boundary-alignment-plan-2026-03-18.md](archive/crate-boundary-alignment-plan-2026-03-18.md) | アーカイブ | docs/crate-boundaries.mdの計画。 |
 | [archive/debug-instant-build-plan.md](archive/debug-instant-build-plan.md) | アーカイブ | Debug Instant Build ボタン 実装計画 |
@@ -91,8 +92,12 @@
 | [archive/perf-phase4-reachability-cache-lifetime-2026-02-26.md](archive/perf-phase4-reachability-cache-lifetime-2026-02-26.md) | アーカイブ | パフォーマンス改善 Phase 4: Reachability キャッシュを WorldMap 変更時のみクリア。 |
 | [archive/perf-review-followups-plan-2026-03-06.md](archive/perf-review-followups-plan-2026-03-06.md) | アーカイブ | スケール時に効きやすい全件走査・全UI再構築・線形の計画。 |
 | [archive/perf-top3-implementation-plan-2026-02-22.md](archive/perf-top3-implementation-plan-2026-02-22.md) | アーカイブ | 直近Perf上位3件の最適化計画。 |
+| [archive/phase1-file-split-detail.md](archive/phase1-file-split-detail.md) | アーカイブ | Phase 1 詳細実装計画: ファイル分割・構造整理 |
 | [archive/phase12-leftover-migration.md](archive/phase12-leftover-migration.md) | アーカイブ | フェーズ 3 調査の過程で、`GameAssets` 等の Root 固有型に依存せず、の提案。 |
+| [archive/phase2-facade-cleanup-detail.md](archive/phase2-facade-cleanup-detail.md) | アーカイブ | Phase 2 詳細実装計画: bevy_app ファサード整理 |
 | [archive/phase3-gameassets-abstraction.md](archive/phase3-gameassets-abstraction.md) | アーカイブ | `bevy_app` に残存するシステムのうち、`GameAssets`（Root 固有リソース）の **一部フィールド** のみに依存するものをの提案。 |
+| [archive/phase3-naming-gridpos-detail.md](archive/phase3-naming-gridpos-detail.md) | アーカイブ | Phase 1・2 で構造整理・ファサード削除が完了したの提案。 |
+| [archive/phase4-bevy-app-slim-detail.md](archive/phase4-bevy-app-slim-detail.md) | アーカイブ | Phase 4: `bevy_app` スリム化 — 詳細実装計画 |
 | [archive/plant-trees-visuals-plan-2026-02-22.md](archive/plant-trees-visuals-plan-2026-02-22.md) | アーカイブ | `Plant Trees` の3フェーズ演出およびドラッグ時プレビュー追加の実装計画。 |
 | [archive/re-export-consolidation-plan-2026-03-12.md](archive/re-export-consolidation-plan-2026-03-12.md) | アーカイブ | `pub use` の多段中継と wildcard 再公開を削減し、正規 public path を整理する計画。 |
 | [archive/reexport-reduction-plan-2026-03-19.md](archive/reexport-reduction-plan-2026-03-19.md) | アーカイブ | bevy_appの計画。 |

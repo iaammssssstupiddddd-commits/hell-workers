@@ -219,10 +219,10 @@ use hw_jobs::visual_sync::{
 
 ### 完了条件
 
-- [ ] `visual_sync.rs` → `visual_sync/mod.rs` + `observers.rs` + `sync.rs` に分割完了
-- [ ] `mod.rs` が全 13 関数を `pub use` で再エクスポートしている
-- [ ] `building_type_to_visual` が `mod.rs` に置かれ、両サブモジュールから `super::building_type_to_visual` で参照されている
-- [ ] `cargo check` がクリーン
+- [x] `visual_sync.rs` → `visual_sync/mod.rs` + `observers.rs` + `sync.rs` に分割完了
+- [x] `mod.rs` が全 13 関数を `pub use` で再エクスポートしている
+- [x] `building_type_to_visual` が `mod.rs` に置かれ、両サブモジュールから `super::building_type_to_visual` で参照されている
+- [x] `cargo check` がクリーン
 
 ### 検証
 
@@ -298,13 +298,13 @@ pub fn take_source_selector_scan_snapshot() -> (u32, u32, u32) { ... }
 
 ### 完了条件
 
-- [ ] `selector_metrics.rs` に静的カウンター・`mark_*`（pub(super)）・`take_*`（pub）が移動している
-- [ ] `source_selector.rs` から `AtomicU32`・static 変数・`mark_*` が消えている
-- [ ] `source_selector.rs` 先頭に `use super::selector_metrics::{...}` が追加されている
-- [ ] `source_selector.rs` に `pub use super::selector_metrics::take_source_selector_scan_snapshot;` がある
-- [ ] `policy/haul/mod.rs` に `mod selector_metrics;` が追加されている
-- [ ] `take_source_selector_scan_snapshot` の呼び出し元パス（`task_management::take_source_selector_scan_snapshot`）が維持されている
-- [ ] `cargo check` がクリーン
+- [x] `selector_metrics.rs` に静的カウンター・`mark_*`（pub(super)）・`take_*`（pub）が移動している
+- [x] `source_selector.rs` から `AtomicU32`・static 変数・`mark_*` が消えている
+- [x] `source_selector.rs` 先頭に `use super::selector_metrics::{...}` が追加されている
+- [x] `source_selector.rs` に `pub use super::selector_metrics::take_source_selector_scan_snapshot;` がある
+- [x] `policy/haul/mod.rs` に `mod selector_metrics;` が追加されている
+- [x] `take_source_selector_scan_snapshot` の呼び出し元パス（`task_management::take_source_selector_scan_snapshot`）が維持されている
+- [x] `cargo check` がクリーン
 
 ### 検証
 
@@ -421,13 +421,13 @@ use crate::familiar_ai::decide::task_management::{
 
 ### 完了条件
 
-- [ ] `wheelbarrow_haul.rs` に一輪車系 builder 6 関数が移動している
+- [x] `wheelbarrow_haul.rs` に一輪車系 builder 6 関数が移動している
   （`issue_return_wheelbarrow` を含む）
-- [ ] `haul.rs` が手運搬系 3 関数のみになっている
-- [ ] `haul.rs` から `HaulWithWheelbarrowData`・`HaulWithWheelbarrowPhase`・`WheelbarrowDestination` の import が消えている
-- [ ] `issue_haul_to_mixer` の inline `use` がファイル先頭に移動している
-- [ ] `builders/mod.rs` が `wheelbarrow_haul` を `mod` + `pub use *` で追加している
-- [ ] `cargo check` がクリーン
+- [x] `haul.rs` が手運搬系 3 関数のみになっている
+- [x] `haul.rs` から `HaulWithWheelbarrowData`・`HaulWithWheelbarrowPhase`・`WheelbarrowDestination` の import が消えている
+- [x] `issue_haul_to_mixer` の inline `use` がファイル先頭に移動している
+- [x] `builders/mod.rs` が `wheelbarrow_haul` を `mod` + `pub use *` で追加している
+- [x] `cargo check` がクリーン
 
 ### 検証
 
@@ -464,31 +464,32 @@ CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo check
 
 ### 現在地
 
-- 進捗: `0%`
-- 完了済みマイルストーン: なし
-- 未着手/進行中: M1 → M2 → M3 の順
+- 進捗: `100%`
+- 完了済みマイルストーン: M1 / M2 / M3
+- 未着手/進行中: なし
 
 ### 次のAIが最初にやること
 
-1. `CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo check` でベースラインを確認
-2. M1 から着手: `crates/hw_jobs/src/visual_sync.rs` の内容を読んでディレクトリ化
-3. 各 M 完了後に `cargo check` してクリーンを確認してから次の M へ進む
+1. 必要なら `crates/hw_jobs/src/visual_sync/` と `crates/hw_familiar_ai/.../policy/haul/selector_metrics.rs` / `builders/wheelbarrow_haul.rs` の実装を参照する
+2. 挙動変更を加える場合は関連仕様書と crate 境界ドキュメントを先に確認する
+3. 追加の責務分割を続ける場合も public path と root 登録責務を維持する
 
 ### ブロッカー/注意点
 
-- M3 は M1・M2 完了後に着手（依存なしだが作業連続性のため）
-- **M1**: `building_type_to_visual` は `mod.rs` に置く。`observers.rs` と `sync.rs` 両方から `super::building_type_to_visual` で参照。
-- **M2**: `mark_*` は `pub(super)` にすること（`fn` のままだと `source_selector.rs` から参照不可）
-- **M2**: `source_selector.rs` の `mark_*()` 呼び出し行（171, 183, 247, 257, 341）は変更不要（import 追加で解決）
-- **M3**: `issue_return_wheelbarrow` は `wheelbarrow_haul.rs` に移動（手運搬系ではなく一輪車系）
-- **M3**: `builders/mod.rs` の `mod haul;` はすでに存在、`mod wheelbarrow_haul;` + `pub use wheelbarrow_haul::*;` を追加するだけ
+- `hw_jobs::visual_sync` は `mod.rs` が public API を維持し、`observers.rs` / `sync.rs` が実装本体を分担する
+- `take_source_selector_scan_snapshot` は `policy/haul/mod.rs` → `policy/mod.rs` → `task_management/mod.rs` の再エクスポートで公開パスを維持する
+- `builders/mod.rs` は `haul` と `wheelbarrow_haul` を並列に再エクスポートし、既存呼び出し側の import を変えない
 
 ### 参照必須ファイル
 
 - `docs/cargo_workspace.md` — クレート境界ルール
-- `crates/hw_jobs/src/visual_sync.rs` — M1 対象（現行 332 行）
-- `crates/hw_familiar_ai/src/familiar_ai/decide/task_management/policy/haul/source_selector.rs` — M2 対象（現行 391 行）
-- `crates/hw_familiar_ai/src/familiar_ai/decide/task_management/builders/haul.rs` — M3 対象（現行 355 行、9 関数）
+- `crates/hw_jobs/src/visual_sync/mod.rs` — M1 の公開面と共有 helper
+- `crates/hw_jobs/src/visual_sync/observers.rs` — M1 の observer 実装
+- `crates/hw_jobs/src/visual_sync/sync.rs` — M1 の sync system 実装
+- `crates/hw_familiar_ai/src/familiar_ai/decide/task_management/policy/haul/source_selector.rs` — M2 の selector 本体
+- `crates/hw_familiar_ai/src/familiar_ai/decide/task_management/policy/haul/selector_metrics.rs` — M2 の計測カウンター
+- `crates/hw_familiar_ai/src/familiar_ai/decide/task_management/builders/haul.rs` — M3 の手運搬 builder
+- `crates/hw_familiar_ai/src/familiar_ai/decide/task_management/builders/wheelbarrow_haul.rs` — M3 の一輪車 builder
 - `crates/hw_familiar_ai/src/familiar_ai/decide/task_management/builders/mod.rs` — M3 変更対象
 - `crates/hw_familiar_ai/src/familiar_ai/decide/task_management/policy/haul/mod.rs` — M2 変更対象
 - `crates/bevy_app/src/plugins/logic.rs` — visual_sync 呼び出し元（明示 import 13 シンボル、変更不要を確認）
@@ -500,11 +501,11 @@ CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo check
 
 ### Definition of Done
 
-- [ ] M1 完了: `visual_sync/` ディレクトリ化、`observers.rs` + `sync.rs` 分離、`building_type_to_visual` は `mod.rs`
-- [ ] M2 完了: `selector_metrics.rs` 分離、`mark_*` は `pub(super)`
-- [ ] M3 完了: `wheelbarrow_haul.rs` 分離（6 関数）、`haul.rs` は 3 関数のみ
-- [ ] 全 M: `cargo check` がクリーン
-- [ ] public API パスに変更なし
+- [x] M1 完了: `visual_sync/` ディレクトリ化、`observers.rs` + `sync.rs` 分離、`building_type_to_visual` は `mod.rs`
+- [x] M2 完了: `selector_metrics.rs` 分離、`mark_*` は `pub(super)`
+- [x] M3 完了: `wheelbarrow_haul.rs` 分離（6 関数）、`haul.rs` は 3 関数のみ
+- [x] 全 M: `cargo check` がクリーン
+- [x] public API パスに変更なし
 
 ## 10. 更新履歴
 
@@ -512,3 +513,4 @@ CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo check
 | --- | --- | --- |
 | `2026-03-22` | `Copilot` | 初版作成 |
 | `2026-03-22` | `Copilot` | 実コード照合によるブラッシュアップ: `building_type_to_visual` 配置修正 / `mark_*` 可視性修正 / `issue_return_wheelbarrow` 移動先修正 / 各ファイルの `use` ブロック追記 |
+| `2026-03-22` | `Codex` | 実装完了に合わせて進捗・DoD・参照ファイル一覧を完了状態へ同期 |

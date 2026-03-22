@@ -406,6 +406,7 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 
 - jobs の共有 model
 - building / blueprint / designation 系の基礎型
+- `hw_core::visual_mirror` へ状態を写す軽量な sync system / observer 群（登録責務は root）
 
 代表例:
 
@@ -422,12 +423,14 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 - `TargetFloorConstructionSite`, `TargetWallConstructionSite`
 - `FloorConstructionCancelRequested`, `WallConstructionCancelRequested`
 - `remove_tile_task_components`（designation 系コンポーネントの一括 remove helper）
+- `visual_sync::{observers,sync}` — Gather/RestArea/Building/MudMixer/AssignedTask/Construction の visual mirror 同期関数群
 
 ここに置かないもの:
 
 - floor / wall construction system
 - building completion shell
 - door system
+- `add_systems` / `add_observer` の plugin 登録責務（`bevy_app/src/plugins/logic.rs` が担当）
 
 ## 4. どこに置くかの判断基準
 

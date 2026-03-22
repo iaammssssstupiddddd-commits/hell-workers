@@ -1,20 +1,22 @@
-# hw_jobs — タスク・建設データ定義
+# hw_jobs — タスク・建設状態と visual mirror 同期
 
 ## 役割
 
 Soul が実行するタスクの種類・進捗状態、および建物の建設フェーズ状態機械を定義するクレート。
-**AI ロジックは含まない**。データ型と状態遷移の定義のみ。
+加えて、`hw_core::visual_mirror` へ状態を写す軽量な sync system / observer を持つ。
+**AI ロジックは含まない**。タスク model・建設 state・visual mirror 同期に責務を限定する。
 
 ## 主要モジュール
 
 | ファイル | 内容 |
 |---|---|
-| `assigned_task.rs` | `AssignedTask` enum — Soul に割り当てられたタスクと進捗 |
+| `tasks/` | `AssignedTask` と各タスク種別の進捗型（gather / haul / build / refine / wheelbarrow / bucket transport など） |
 | `construction.rs` | 床・壁の建設フェーズ状態機械、タイル Blueprint コンポーネント |
 | `model.rs` | `BuildingType`、`MovePlanned`、`Door` / `DoorCloseTimer`、`remove_tile_task_components` |
 | `mud_mixer.rs` | 泥ミキサーのワークフロー状態 |
 | `events.rs` | タスク完了イベント等 |
 | `lifecycle.rs` | タスク予約ライフサイクル helper (`collect_active_reservation_ops`, `collect_release_reservation_ops`) |
+| `visual_sync/` | `GatherHighlightMarker` / `RestAreaVisual` / `BuildingVisualState` / `MudMixerVisualState` などの visual mirror 同期関数群 |
 
 ## AssignedTask
 
@@ -46,14 +48,14 @@ Wall, Door, Floor, Tank, MudMixer, RestArea, Bridge, SandPile, BonePile, Wheelba
 
 ## 依存クレート
 
-- `hw_core` のみ（軽量な純粋データクレート）
+- `hw_core` のみ（軽量な jobs/visual mirror crate）
 
 ---
 
 ## src/ との境界
 
-hw_jobs は**型・状態機械定義のみ**を提供する。
-建設フェーズを実際に進めるシステムは `src/systems/jobs/` に実装する。
+hw_jobs は**共有 model / state と visual mirror 同期関数**を提供する。
+建設フェーズを実際に進める system や、plugin への登録責務は root app shell 側に残す。
 
 | hw_jobs に置くもの | src/systems/jobs/ に置くもの |
 |---|---|
@@ -68,7 +70,8 @@ hw_jobs は**型・状態機械定義のみ**を提供する。
 | `FloorTileBlueprint`, `WallTileBlueprint`, `FloorConstructionSite`, `WallConstructionSite` | これらを進行させる build / logistics / visual system |
 | `TargetFloorConstructionSite`, `TargetWallConstructionSite` | — |
 | `FloorConstructionCancelRequested`, `WallConstructionCancelRequested` | — |
+| `visual_sync::{observers,sync}` の関数本体 | `bevy_app/src/plugins/logic.rs` での `add_systems` / `add_observer` 登録 |
 
 新しいタスクバリアントを追加する場合:
-1. `assigned_task.rs` に struct variant を追加（hw_jobs）
+1. `tasks/` 配下の適切なモジュールと `tasks/mod.rs` に struct variant を追加（hw_jobs）
 2. `src/systems/soul_ai/execute/task_execution/` にハンドラを実装（src/）
