@@ -85,14 +85,14 @@ pub fn identify_removal_targets(
         .enumerate()
         .max_by(|(_, a), (_, b)| match a.len().cmp(&b.len()) {
             std::cmp::Ordering::Equal => {
-                let min_a = a.iter().min().unwrap();
-                let min_b = b.iter().min().unwrap();
+                let min_a = a.iter().min().expect("cluster is non-empty");
+                let min_b = b.iter().min().expect("cluster is non-empty");
                 min_a.cmp(min_b)
             }
             other => other,
         })
         .map(|(i, _)| i)
-        .unwrap();
+        .expect("clusters is non-empty: checked above");
 
     let mut fragment_removal = Vec::new();
     for (i, cluster) in clusters.iter().enumerate() {

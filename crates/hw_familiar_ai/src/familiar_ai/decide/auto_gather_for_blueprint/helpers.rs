@@ -125,11 +125,10 @@ pub fn resolve_owner(
         return inside_yard
             .into_iter()
             .min_by(|(owner_a, info_a), (owner_b, info_b)| {
-                distance_sq_to_yard_perimeter(pos, info_a.yard.as_ref().unwrap())
-                    .partial_cmp(&distance_sq_to_yard_perimeter(
-                        pos,
-                        info_b.yard.as_ref().unwrap(),
-                    ))
+                let yard_a = info_a.yard.as_ref().expect("inside_yard entries have yard");
+                let yard_b = info_b.yard.as_ref().expect("inside_yard entries have yard");
+                distance_sq_to_yard_perimeter(pos, yard_a)
+                    .partial_cmp(&distance_sq_to_yard_perimeter(pos, yard_b))
                     .unwrap_or(std::cmp::Ordering::Equal)
                     .then(owner_a.to_bits().cmp(&owner_b.to_bits()))
             })

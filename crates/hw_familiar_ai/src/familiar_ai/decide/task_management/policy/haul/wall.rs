@@ -82,7 +82,7 @@ pub fn assign_haul_to_wall_construction(
             .iter()
             .map(|(_, pos)| *pos)
             .reduce(|a, b| a + b)
-            .unwrap()
+            .expect("item_sources is non-empty: checked above")
             / item_sources.len() as f32;
 
         let Some(wheelbarrow) = wheelbarrow::find_nearest_wheelbarrow(source_pos, queries, shadow)

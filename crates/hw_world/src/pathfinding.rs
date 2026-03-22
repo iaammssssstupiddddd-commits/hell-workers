@@ -433,9 +433,9 @@ mod tests {
 
         let path = find_path_to_boundary(&map, &mut ctx, (1, 1), &target);
         assert!(path.is_some(), "Path should be found");
-        let path = path.unwrap();
+        let path = path.expect("path should be found");
 
-        let last = path.last().unwrap();
+        let last = path.last().expect("path is non-empty");
         let dx = (last.0 - 5).abs();
         let dy = (last.1 - 5).abs();
         assert!(

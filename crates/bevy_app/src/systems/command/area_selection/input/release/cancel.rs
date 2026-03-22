@@ -66,7 +66,7 @@ fn cancel_point_nearest_designation(
             }
             let dist = transform.translation.truncate().distance(start_pos);
             if dist < TILE_SIZE {
-                if closest.is_none() || dist < closest.unwrap().1 {
+                if closest.map_or(true, |(_, d)| dist < d) {
                     closest = Some((entity, dist));
                 }
             }

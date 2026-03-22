@@ -162,7 +162,7 @@ pub fn process_conversation_logic(
 
             match participant.phase {
                 ConversationPhase::Greeting => {
-                    let emoji = EMOJIS_GREETING.choose(&mut rng).unwrap();
+                    let emoji = EMOJIS_GREETING.choose(&mut rng).expect("EMOJIS_GREETING is non-empty");
                     spawn_soul_bubble(
                         &mut commands,
                         entity,
@@ -207,7 +207,7 @@ pub fn process_conversation_logic(
                         } else {
                             EMOJIS_COMPLAINING
                         };
-                        let emoji = emoji_set.choose(&mut rng).unwrap();
+                        let emoji = emoji_set.choose(&mut rng).expect("emoji_set is non-empty");
 
                         let emotion = if emoji_set == EMOJIS_FOOD {
                             participant.positive_turns =
@@ -262,7 +262,7 @@ pub fn process_conversation_logic(
                             speaker: entity,
                             tone: ConversationTone::Positive,
                         });
-                        let emoji = EMOJIS_AGREEMENT.choose(&mut rng).unwrap();
+                        let emoji = EMOJIS_AGREEMENT.choose(&mut rng).expect("EMOJIS_AGREEMENT is non-empty");
                         spawn_soul_bubble(
                             &mut commands,
                             entity,

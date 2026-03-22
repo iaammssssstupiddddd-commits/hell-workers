@@ -189,7 +189,7 @@ pub fn on_exhausted(
                 a.center
                     .distance_squared(current_pos)
                     .partial_cmp(&b.center.distance_squared(current_pos))
-                    .unwrap()
+                    .unwrap_or(std::cmp::Ordering::Equal)
             })
             .map(|s| s.center);
 

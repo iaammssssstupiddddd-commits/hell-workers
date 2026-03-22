@@ -58,7 +58,7 @@ pub fn find_nearest_available_rest_area(
                 .truncate()
                 .distance_squared(pos)
                 .partial_cmp(&b.1.translation.truncate().distance_squared(pos))
-                .unwrap()
+                .unwrap_or(std::cmp::Ordering::Equal)
         })
         .map(|(entity, transform, _, _, _)| (entity, transform.translation.truncate()))
 }

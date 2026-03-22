@@ -16,7 +16,9 @@ pub fn spawn_map(
 
     for y in 0..MAP_HEIGHT {
         for x in 0..MAP_WIDTH {
-            let idx = world_map.pos_to_idx(x, y).unwrap();
+            let idx = world_map
+                .pos_to_idx(x, y)
+                .expect("x/y within MAP_WIDTH x MAP_HEIGHT");
             let terrain = terrain_tiles[idx];
             let texture = terrain_texture(terrain, &game_assets);
             world_map.set_terrain_at_idx(idx, terrain);

@@ -87,7 +87,7 @@ pub fn idle_visual_system(
                             a.center
                                 .distance_squared(pos)
                                 .partial_cmp(&b.center.distance_squared(pos))
-                                .unwrap()
+                                .unwrap_or(std::cmp::Ordering::Equal)
                         })
                         .map(|s| s.center)
                 };

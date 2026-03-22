@@ -349,7 +349,7 @@ fn resolve_gathering_target(
                 a.1.center
                     .distance_squared(pos)
                     .partial_cmp(&b.1.center.distance_squared(pos))
-                    .unwrap()
+                    .unwrap_or(std::cmp::Ordering::Equal)
             });
         match nearest {
             Some((e, s, _)) => (Some(s.center), Some(e)),
