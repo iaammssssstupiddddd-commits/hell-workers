@@ -2,7 +2,7 @@ use super::cancel::cancel_single_designation;
 use super::geometry::in_selection_area;
 use super::manual_haul::{find_manual_request_for_source, pick_manual_haul_stockpile_anchor};
 use super::queries::DesignationTargetQuery;
-use super::state::AreaEditHistory;
+use super::AreaEditHistory;
 use crate::entities::damned_soul::Destination;
 use crate::entities::familiar::{ActiveCommand, Familiar, FamiliarCommand};
 use crate::systems::command::{TaskArea, TaskMode};

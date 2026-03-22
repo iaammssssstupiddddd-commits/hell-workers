@@ -101,7 +101,7 @@ hw_visual (hw_core + hw_spatial + hw_world + hw_ui)
 - `selection/` — SelectedEntity, HoveredEntity, SelectionIndicator, SelectionIntent, cleanup_selection_references_system, placement validation API
 - `camera.rs` — MainCamera マーカー、`world_cursor_pos`（スクリーン座標→ワールド座標変換ユーティリティ）
 - `plugins/` — UiCorePlugin / UiEntityListPlugin / UiFoundationPlugin / UiInfoPanelPlugin / UiTooltipPlugin（fn ポインタ受け付けシェル）
-- **`area_edit/`** — エリア選択・編集状態の純粋データ型（`AreaEditHandleKind`, `AreaEditOperation`, `AreaEditDrag`, `AreaEditSession`, `AreaEditHistory`, `AreaEditHistoryEntry`, `AreaEditClipboard`, `AreaEditPresets`）。`bevy_app/command/area_selection/state.rs` は re-export のみ。`AreaEditHandleKind` は `bevy_app/command/mod.rs` からも re-export。`area_edit/interaction.rs` に `detect_area_edit_operation`・`apply_area_edit_drag`・`cursor_icon_for_operation` の pure helper を所有（M1 移設済み）
+- **`area_edit/`** — エリア選択・編集状態の純粋データ型（`AreaEditHandleKind`, `AreaEditOperation`, `AreaEditDrag`, `AreaEditSession`, `AreaEditHistory`, `AreaEditHistoryEntry`, `AreaEditClipboard`, `AreaEditPresets`）。`AreaEditClipboard` 等は `bevy_app/command/area_selection.rs` から直接 `pub use hw_ui::area_edit::*` として re-export。`AreaEditHandleKind` は `bevy_app/command/mod.rs` からも re-export。`area_edit/interaction.rs` に `detect_area_edit_operation`・`apply_area_edit_drag`・`cursor_icon_for_operation` の pure helper を所有（M1 移設済み）
 
 ここに置かないもの:
 
@@ -202,11 +202,11 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 - hw_core / hw_jobs / hw_logistics / hw_world を組み合わせた AI ドメインロジック
 代表例（`hw_soul_ai`）:
 
-- `soul_movement` — パス追従移動システム（ドア待機・衝突スライド解決・速度変調を含む）。`bevy_app/entities/damned_soul/movement/locomotion.rs` は `pub use` の薄いラッパー
+- `soul_movement` — パス追従移動システム（ドア待機・衝突スライド解決・速度変調を含む）。`bevy_app/entities/damned_soul/movement/mod.rs` から直接 `pub use hw_soul_ai::soul_movement` として再公開
 - `SoulAiCorePlugin` — Soul AI の Update/Execute/Decide ヘルパーフェーズコアシステム
 - `FamiliarAiCorePlugin` — Familiar AI の Perceive/Decide/Execute フェーズコアシステム
 - `FamiliarAnimation` — アニメーション状態コンポーネント（`is_moving`, `facing_right`）。`bevy_app/entities/familiar/components.rs` は `pub use` の薄いラッパー
-- `familiar_movement` — Familiar のパス追従移動システム。`bevy_app/entities/familiar/movement.rs` は `pub use` の薄いラッパー
+- `familiar_movement` — Familiar のパス追従移動システム。`bevy_app/entities/familiar/mod.rs` から直接 `pub use hw_familiar_ai::familiar_movement` として再公開
 - `soul_ai::update::*` — 疲労・バイタル・夢・集会・休憩所の更新システム
 - `soul_ai::execute::designation_apply` — Designation 要求適用
 - `soul_ai::execute::gathering_apply` — 集会管理要求適用（Merge / Dissolve / Recruit / Leave）
@@ -260,8 +260,8 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 - `GameAssets`、UI 状態、`bevy_app` 固有 resource を必要とする adapter
 - UI システム
 - `Commands` で複雑な Entity 生成を行うもの
-- `execute/task_execution/{types,common,handler,move_plant}` / `context/mod.rs` — 互換 import path のための thin shell（bevy_app 側に残留）。`context/mod.rs` は `hw_soul_ai` / `hw_familiar_ai` からの明示的 re-export のみを持つフラット構造。
-- `familiar_ai/decide/task_delegation.rs` / `familiar_ai/decide/familiar_processor.rs` / `familiar_ai/helpers/query_types.rs` — 互換 import path の thin shell。実体は `hw_familiar_ai` 側にある
+- `execute/task_execution/mod.rs` — `common`・`handler`・`move_plant`・`types`・`context` の `pub mod` をインラインで保有する thin shell（bevy_app 側に残留）。`context` は `pub mod context { ... }` としてインライン化済み。
+- `familiar_ai/decide/mod.rs` / `familiar_ai/execute/mod.rs` / `familiar_ai/helpers/mod.rs` — 互換 import path の pub use を `mod.rs` にインライン化済み。実体は `hw_familiar_ai` 側にある
 - `familiar_ai/perceive/resource_sync.rs` — root perceive system。`SharedResourceCache` の再構築と実ワールドとの同期は root の責務
 
 移設済み system の登録ルール:

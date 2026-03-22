@@ -1,12 +1,21 @@
 pub mod app_contexts;
 mod assets;
 mod entities;
-mod events;
 use hw_core::game_state;
 pub mod interface;
 pub mod plugins;
 pub mod systems;
 pub mod world;
+
+pub use hw_core::events::{
+    DesignationRequest, EncouragementRequest, EscapeRequest, FamiliarAiStateChangedEvent,
+    FamiliarIdleVisualRequest, FamiliarOperationMaxSoulChangedEvent, FamiliarStateRequest,
+    GatheringManagementRequest, GatheringSpawnRequest, IdleBehaviorRequest, OnExhausted,
+    OnGatheringParticipated, OnSoulRecruited, OnStressBreakdown, OnTaskAbandoned, OnTaskAssigned,
+    OnTaskCompleted, ResourceReservationRequest, SoulTaskUnassignRequest,
+    SquadManagementOperation, SquadManagementRequest,
+};
+pub use hw_jobs::events::TaskAssignmentRequest;
 
 use bevy::prelude::*;
 use bevy::render::RenderPlugin;

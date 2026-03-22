@@ -196,9 +196,9 @@ root 側の shell には `PopulationManager`・visual/UI 依存・request 再検
 
 | 用語 | 定義 | 代表例 |
 |:--|:--|:--|
-| thin shell | root 互換 import path のために `pub use` だけを残すモジュール。独自ロジックを持たない | `execute/task_execution/{types,common,handler,move_plant}`, `context/execution.rs`, `decide/work/*.rs` |
-| root facade/helper | 公開 API や互換 helper を root 側 path で再公開する層 | `execute/task_execution/context/mod.rs`, `execute/task_execution/transport_common/*`, `helpers/work.rs` |
-| root adapter | request 消費時の再検証や root 固有 resource を伴うゲーム側 system | `execute/gathering_spawn.rs`, `decide/drifting.rs` |
+| thin shell | root 互換 import path のために `pub use` だけを残すモジュール。独自ロジックを持たない | `execute/task_execution/{types,common,handler,move_plant}`（hw_soul_ai 内）, `decide/work/*.rs` |
+| root facade/helper | 公開 API や互換 helper を root 側 path で再公開する層 | `execute/task_execution/mod.rs`（`pub mod context { }` をインライン保有）, `execute/task_execution/transport_common/*`, `helpers/work.rs` |
+| root adapter | request 消費時の再検証や root 固有 resource を伴うゲーム側 system | `execute/gathering_spawn.rs` |
 
 ### 移設済みシステムの一覧（soul-ai root thinning）
 
@@ -218,12 +218,12 @@ root 側の shell には `PopulationManager`・visual/UI 依存・request 再検
 `task_execution` は core 実装・context/query・ハンドラ群・`move_plant` を `hw_soul_ai` 側へ移設済みであり、root 側に残るのは次の 4 区分のみである。
 
 1. thin shell re-export:
-   `types.rs`, `common.rs`, `handler/`, `move_plant.rs`, `context/execution.rs` は互換 path 維持のための `pub use` のみを持つ。
+   `execute/task_execution/mod.rs` が `common`・`handler`・`move_plant`・`types` の `pub mod` をインラインで保有。`context` も `pub mod context { ... }` としてインライン化済み。
 2. `execute/task_execution/mod.rs`:
    `task_execution_system` / `apply_task_assignment_requests_system` を root 側 path で再公開する thin shell。
 3. `helpers/work.rs`:
    `cleanup_task_assignment` / `is_soul_available_for_work` / `unassign_task` を root 側 path で再公開する thin shell。
-4. `execute/task_execution/context/mod.rs` と `transport_common/*`:
-   root 側互換 API を維持する facade/helper。`transport_common/*` は wrapper ではなく helper 群として扱う。
+4. `execute/task_execution/mod.rs` 内の `pub mod context { }`:
+   root 側互換 API を維持する inline facade。`transport_common/*` は wrapper ではなく helper 群として扱う。
 
 `FloorConstructionSite` / `WallConstructionSite` は `hw_jobs::construction` 所有に移り、root の `crates/bevy_app/src/systems/jobs/*/components.rs` は re-export shell になっている。

@@ -1,5 +1,5 @@
 use crate::entities::damned_soul::{DamnedSoul, SoulIdentity};
-use crate::events::{SquadManagementOperation, SquadManagementRequest};
+use crate::{SquadManagementOperation, SquadManagementRequest};
 use bevy::prelude::*;
 use bevy::ui::FocusPolicy;
 use hw_core::relationships::CommandedBy;

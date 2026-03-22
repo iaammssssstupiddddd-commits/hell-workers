@@ -2,7 +2,7 @@
 
 use super::components::{TargetWallConstructionSite, WallConstructionCancelRequested};
 use crate::entities::damned_soul::{DamnedSoul, Path};
-use crate::systems::jobs::construction_shared::{ResourceItemVisualHandles, spawn_refund_items};
+use crate::systems::jobs::{ResourceItemVisualHandles, spawn_refund_items};
 use crate::systems::logistics::{Inventory, ResourceType};
 use crate::systems::soul_ai::execute::task_execution::context::TaskQueries;
 use crate::systems::soul_ai::execute::task_execution::types::AssignedTask;

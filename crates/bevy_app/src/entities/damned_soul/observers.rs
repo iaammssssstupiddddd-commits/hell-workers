@@ -1,7 +1,7 @@
 //! ソウルのイベントオブザーバー（ハンドラ）
 
 use super::*;
-use crate::events::{
+use crate::{
     OnExhausted, OnSoulRecruited, OnStressBreakdown, OnTaskAssigned, OnTaskCompleted,
 };
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;

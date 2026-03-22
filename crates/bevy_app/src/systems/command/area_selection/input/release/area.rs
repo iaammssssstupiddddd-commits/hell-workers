@@ -1,6 +1,6 @@
 use super::super::super::apply::apply_area_and_record_history;
 use super::super::super::apply::assign_unassigned_tasks_in_area;
-use super::super::super::state::AreaEditHistory;
+use super::super::super::AreaEditHistory;
 use super::super::transitions::should_exit_after_apply;
 use crate::app_contexts::TaskContext;
 use crate::entities::damned_soul::Destination;

@@ -1,7 +1,7 @@
 use super::transitions::should_exit_after_apply;
 use super::super::apply::{apply_area_and_record_history, assign_unassigned_tasks_in_area};
 use super::super::geometry::clamp_area_to_site;
-use super::super::state::AreaEditHistory;
+use super::super::AreaEditHistory;
 use crate::app_contexts::TaskContext;
 use crate::entities::damned_soul::Destination;
 use crate::entities::familiar::{ActiveCommand, Familiar, FamiliarCommand};

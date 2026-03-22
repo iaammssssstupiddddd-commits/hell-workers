@@ -10,7 +10,7 @@ use crate::systems::command::{
 };
 use crate::systems::dream_tree_planting::dream_tree_planting_system;
 use crate::systems::familiar_ai::FamiliarAiPlugin;
-use crate::systems::jobs::door::{door_auto_close_system, door_auto_open_system};
+use crate::systems::jobs::{door_auto_close_system, door_auto_open_system};
 use crate::systems::jobs::floor_construction::{
     floor_construction_cancellation_system, floor_construction_completion_system,
     floor_construction_phase_transition_system,

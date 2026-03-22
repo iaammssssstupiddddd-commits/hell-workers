@@ -4,7 +4,7 @@
 イベントを追加・削除・変更する際は必ずこのファイルを更新してください。
 
 定義元: `crates/hw_core/src/events.rs` / `crates/hw_jobs/src/events.rs`
-re-export: `crates/bevy_app/src/events.rs`
+re-export: `crates/bevy_app/src/main.rs`（直接 `pub use`）
 
 ---
 

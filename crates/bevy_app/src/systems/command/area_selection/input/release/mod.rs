@@ -9,7 +9,7 @@ use designation::handle_release_designation;
 use dream::handle_release_dream_planting;
 
 use super::super::queries::DesignationTargetQuery;
-use super::super::state::{AreaEditHistory, AreaEditSession};
+use super::super::{AreaEditHistory, AreaEditSession};
 use crate::app_contexts::TaskContext;
 use crate::entities::damned_soul::Destination;
 use crate::entities::familiar::{ActiveCommand, Familiar};

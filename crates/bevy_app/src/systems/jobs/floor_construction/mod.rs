@@ -6,9 +6,8 @@ pub mod components {
         FloorTileBlueprint, FloorTileState, TargetFloorConstructionSite,
     };
 }
-pub mod phase_transition;
 
 pub use cancellation::*;
 pub use completion::*;
 pub use components::*;
-pub use phase_transition::*;
+pub use hw_jobs::floor_construction_phase_transition_system;

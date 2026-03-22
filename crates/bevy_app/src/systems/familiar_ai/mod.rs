@@ -8,7 +8,7 @@ pub mod helpers;
 pub mod perceive;
 pub mod update;
 
-pub use helpers::query_types::FamiliarSoulQuery;
+pub use helpers::FamiliarSoulQuery;
 pub use hw_core::familiar::FamiliarAiState;
 
 pub struct FamiliarAiPlugin;

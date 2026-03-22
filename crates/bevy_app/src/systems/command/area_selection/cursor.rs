@@ -1,4 +1,4 @@
-use super::state::AreaEditSession;
+use super::AreaEditSession;
 use crate::app_contexts::TaskContext;
 use crate::entities::familiar::Familiar;
 use crate::interface::selection::SelectedEntity;

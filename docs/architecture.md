@@ -93,7 +93,7 @@ Perceive → Update → Decide → Execute
 ## 建設タスク型の責務分離
 
 - `FloorConstructionPhase` / `WallConstructionPhase` / `FloorTileState` / `WallTileState` は `hw_jobs` の `construction` モジュールへ集約されたデータ型として扱う。
-- `floor_construction_phase_transition_system` / `wall_construction_phase_transition_system` も `hw_jobs::construction` に移設済み。`bevy_app/floor_construction/phase_transition.rs`・`wall_construction/phase_transition.rs` は re-export shell のみ。`wall_framed_tile_spawn_system` は `Building3dHandles`（root 固有）依存のため `bevy_app` に残留。
+- `floor_construction_phase_transition_system` / `wall_construction_phase_transition_system` も `hw_jobs::construction` に移設済み。`bevy_app/floor_construction/mod.rs`・`wall_construction/mod.rs` に `pub use` を直接記載。`wall_framed_tile_spawn_system` は `Building3dHandles`（root 固有）依存のため `bevy_app` に残留。
 - `AssignedTask` 側の worker オペレーション型（`ReinforceFloorPhase`, `PourFloorPhase`, `FrameWallPhase`, `CoatWallPhase`）は、現時点では「実行者視点の進捗」を表す独立型として維持する。
 - `hw_jobs::construction` 側の tile state は「サイト/タイルごとの状態」を表現し、AssignedTask phase は「魂がそのタスク内でどの段階にいるか」を表現する。
 - 今回の抽出では型を統合せず、2 系統の enum は役割分離したまま保持し、境界を越えた参照だけを `pub use` レイヤーで標準化する。
@@ -238,7 +238,7 @@ Perceive → Update → Decide → Execute
 | 方式 | 用途 | 定義場所 |
 |:--|:--|:--|
 | `Message` | グローバル通知（タスクキュー更新等） | 主に `crates/hw_core/src/events.rs`（`TaskAssignmentRequest` のみ `crates/hw_jobs/src/events.rs`）（登録は `crates/bevy_app/src/plugins/messages.rs`） |
-| `Observer` | エンティティベースの即時反応 | 主に `crates/hw_core/src/events.rs`（root 互換面は `crates/bevy_app/src/events.rs`） |
+| `Observer` | エンティティベースの即時反応 | 主に `crates/hw_core/src/events.rs`（root 互換面は `crates/bevy_app/src/main.rs` に直接 `pub use`） |
 
 > [!TIP]
 > リソース (`ResMut`) を更新する必要がある場合は `Message` を使用してください。

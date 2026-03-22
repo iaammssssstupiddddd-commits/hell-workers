@@ -90,33 +90,33 @@
 | ファイル | 区分 | root 残留理由 |
 |:---|:---|:---|
 | `perceive/resource_sync.rs` | root perceive system | `SharedResourceCache` 再構築・`AssignedTask`/`Designation`/`TransportRequest`/relationship の実ワールド再構築は root の責務。`apply_reservation_op` / `apply_reservation_requests_system` は **`hw_logistics` に移設済み** |
-| `execute/idle_visual_apply.rs` | thin re-export shell | `hw_visual::speech::idle_visual::familiar_idle_visual_apply_system` への re-export。登録は `hw_visual::HwVisualPlugin` |
 | `mod.rs` | root wiring | `configure_sets`・`FamiliarAiCorePlugin` の追加を担当（SpatialGrid の `init_resource` は `SpatialPlugin` に移設済み） |
 
 **thin re-export（実装は hw_familiar_ai に移設済み）**
 
-| ファイル | 内容 |
+以下の `decide/`・`execute/` 各 thin shell はそれぞれの `mod.rs` にインライン化済みであり、個別ファイルは存在しない。
+
+| モジュール | 内容 |
 |:---|:---|
-| `decide/auto_gather_for_blueprint.rs` | `BlueprintAutoGatherTimer` / `blueprint_auto_gather_system` は `hw_familiar_ai::decide::blueprint_auto_gather` への re-export |
-| `decide/task_delegation.rs` | `familiar_task_delegation_system` / `ReachabilityFrameCache` / `ReachabilityCacheKey` の実体は `hw_familiar_ai::decide::task_delegation` / `resources` に移設済み。登録も `FamiliarAiCorePlugin` に移設済み |
-| `decide/familiar_processor.rs` | `FamiliarDelegationContext` / `process_task_delegation_and_movement` 実体は `hw_familiar_ai::decide::delegation_context` に移設済み |
-| `helpers/query_types.rs` | `FamiliarStateQuery` / `FamiliarSoulQuery` / `FamiliarTaskQuery` および narrow 5型すべて `hw_familiar_ai::decide::query_types` への re-export |
+| `decide/mod.rs` | `FamiliarDecideOutput` / `AutoGatherDesignation` / `BlueprintAutoGatherTimer` / `blueprint_auto_gather_system` / `FamiliarDelegationContext` / `process_task_delegation_and_movement` / `FamiliarAiTaskDelegationParams` / `familiar_task_delegation_system` / `EncouragementCooldown` / `encouragement_decision_system` など `hw_familiar_ai::decide::*` への re-export を一括記載 |
+| `helpers/mod.rs` | `FamiliarStateQuery` / `FamiliarSoulQuery` / `FamiliarTaskQuery` および narrow 5型すべて `hw_familiar_ai::decide::query_types` への re-export |
 | `decide/state_handlers/` | `hw_familiar_ai::familiar_ai::decide::state_handlers` への thin re-export |
 | `decide/squad.rs` | `SquadManager` 実体は `hw_familiar_ai` にある |
 | `decide/recruitment.rs` | `RecruitmentManager` 実体は `hw_familiar_ai` にある |
-| `decide/encouragement.rs` | `EncouragementCooldown` / `encouragement_decision_system` / helper 群は `hw_familiar_ai::decide::encouragement` への re-export |
 | `decide/scouting.rs` / `decide/supervising.rs` | スカウト・監視ロジック本体は hw_familiar_ai にある |
 | `perceive/state_detection.rs` | `Changed<FamiliarAiState>` 検知実体は **hw_familiar_ai に移設済み** |
 | `decide/task_management/` | thin bridge。実体は `hw_familiar_ai::familiar_ai::decide::task_management` にある |
 
 **execute（visual / relationship apply）**
 
-| ファイル（bevy_app） | 内容 |
+`execute/mod.rs` に以下の re-export をインライン化済み（個別ファイルは存在しない）:
+
+| シンボル | 委譲先 |
 |:---|:---|
-| `execute/squad_apply.rs` | `hw_familiar_ai::squad_logic_system`（ECS 操作）+ `hw_visual::squad_visual_system`（Fatigued セリフ）への re-export shell |
-| `execute/max_soul_apply.rs` | `hw_familiar_ai::max_soul_logic_system`（Soul リリース）+ `hw_visual::max_soul_visual_system`（"Abi" セリフ）への re-export shell |
-| `execute/idle_visual_apply.rs` | root 残留（`GameAssets` 依存） |
-| `execute/encouragement_apply.rs` | `hw_familiar_ai` への re-export shell |
+| `encouragement_apply_system` / `cleanup_encouragement_cooldowns_system` | `hw_familiar_ai::familiar_ai::execute::encouragement_apply` |
+| `apply_squad_management_requests_system` + `squad_visual_system` | `hw_familiar_ai` + `hw_visual` |
+| `handle_max_soul_changed_system` + `max_soul_visual_system` | `hw_familiar_ai` + `hw_visual` |
+| `familiar_idle_visual_apply_system` | `hw_visual` |
 
 **設計メモ**
 

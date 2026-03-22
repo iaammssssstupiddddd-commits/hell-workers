@@ -2,7 +2,7 @@ use bevy::prelude::*;
 
 use crate::entities::damned_soul::DamnedSoulSpawnEvent;
 use crate::entities::familiar::FamiliarSpawnEvent;
-use crate::events::{
+use crate::{
     DesignationRequest, EncouragementRequest, EscapeRequest, FamiliarAiStateChangedEvent,
     FamiliarIdleVisualRequest, FamiliarOperationMaxSoulChangedEvent, FamiliarStateRequest,
     GatheringManagementRequest, GatheringSpawnRequest, IdleBehaviorRequest, OnExhausted,
