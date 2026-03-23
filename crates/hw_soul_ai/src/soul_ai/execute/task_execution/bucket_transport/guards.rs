@@ -4,10 +4,6 @@ use crate::soul_ai::execute::task_execution::context::TaskExecutionContext;
 use bevy::prelude::*;
 use hw_logistics::tank_has_capacity_for_full_bucket;
 
-pub fn has_bucket_in_inventory(ctx: &TaskExecutionContext, bucket_entity: Entity) -> bool {
-    ctx.inventory.0 == Some(bucket_entity)
-}
-
 pub fn tank_can_accept_full_bucket(ctx: &mut TaskExecutionContext, tank_entity: Entity) -> bool {
     let q_stockpiles = &mut ctx.queries.storage.stockpiles;
     if let Ok((_, _, stock, Some(stored))) = q_stockpiles.get(tank_entity) {

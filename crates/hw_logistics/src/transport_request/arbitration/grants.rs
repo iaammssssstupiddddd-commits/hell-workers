@@ -13,7 +13,7 @@ use crate::zone::Stockpile;
 use super::types::BatchCandidate;
 
 #[derive(Default)]
-pub struct GrantStats {
+pub(super) struct GrantStats {
     pub leases_granted: u32,
     pub items_deduped: u32,
     pub candidates_dropped_by_dedup: u32,

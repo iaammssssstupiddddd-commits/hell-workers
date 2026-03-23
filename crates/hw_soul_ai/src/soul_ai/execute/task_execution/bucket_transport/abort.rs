@@ -34,31 +34,6 @@ pub fn abort_and_drop_bucket_mixer(
     clear_task_and_path(ctx.task, ctx.path);
 }
 
-/// River→Tank 経路: バケツドロップして unassign_task（SharedResourceCache 予約解放含む）
-pub fn drop_bucket_and_unassign(
-    commands: &mut Commands,
-    ctx: &mut TaskExecutionContext,
-    bucket_entity: Entity,
-    world_map: &WorldMap,
-) {
-    let soul_pos = ctx.soul_pos();
-    cancel::drop_bucket_with_cleanup(commands, bucket_entity, soul_pos);
-
-    ctx.inventory.0 = None;
-    crate::soul_ai::helpers::work::cleanup_task_assignment(
-        commands,
-        ctx.soul_entity,
-        soul_pos,
-        ctx.task,
-        ctx.path,
-        None,
-        None,
-        ctx.queries,
-        world_map,
-        false,
-    );
-}
-
 /// バケツなし abort（インベントリにバケツが存在しない状態でのタスク中断）
 pub fn abort_without_bucket(
     commands: &mut Commands,

@@ -19,13 +19,6 @@ pub fn to_task_mode_zone_type(zone_type: ZoneType) -> TaskModeZoneType {
     }
 }
 
-pub fn to_logistics_zone_type(zone_type: TaskModeZoneType) -> ZoneType {
-    match zone_type {
-        TaskModeZoneType::Stockpile => ZoneType::Stockpile,
-        TaskModeZoneType::Yard => ZoneType::Yard,
-    }
-}
-
 /// タスクエリア表示用
 #[derive(Component)]
 pub struct TaskAreaIndicator(pub Entity); // 親の使い魔Entity

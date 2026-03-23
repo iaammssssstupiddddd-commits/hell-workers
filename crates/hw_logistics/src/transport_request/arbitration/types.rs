@@ -8,7 +8,7 @@ use crate::transport_request::WheelbarrowDestination;
 use crate::types::ResourceType;
 
 #[derive(Clone)]
-pub struct BatchCandidate {
+pub(super) struct BatchCandidate {
     pub request_entity: Entity,
     pub items: Vec<Entity>,
     pub source_pos: Vec2,
@@ -20,7 +20,7 @@ pub struct BatchCandidate {
 }
 
 #[derive(Clone, Copy)]
-pub struct FreeItemSnapshot {
+pub(super) struct FreeItemSnapshot {
     pub entity: Entity,
     pub pos: Vec2,
     pub resource_type: ResourceType,
@@ -29,7 +29,7 @@ pub struct FreeItemSnapshot {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
-pub enum ItemBucketKey {
+pub(super) enum ItemBucketKey {
     Resource(ResourceType),
     ResourceOwnerGround {
         resource_type: ResourceType,
@@ -37,7 +37,7 @@ pub enum ItemBucketKey {
     },
 }
 
-pub struct RequestEvalContext {
+pub(super) struct RequestEvalContext {
     pub request_entity: Entity,
     pub request_pos: Vec2,
     pub resource_type: ResourceType,
@@ -50,14 +50,14 @@ pub struct RequestEvalContext {
 }
 
 #[derive(Clone, Copy)]
-pub struct NearbyItem {
+pub(super) struct NearbyItem {
     pub entity: Entity,
     pub pos: Vec2,
     pub dist_sq: f32,
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct HeapEntry {
+pub(super) struct HeapEntry {
     pub snapshot_idx: usize,
     pub dist_sq: f32,
 }
