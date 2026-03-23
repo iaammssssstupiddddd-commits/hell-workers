@@ -85,6 +85,7 @@ impl RecruitmentManager {
         q_breakdown: &Query<&StressBreakdown>,
         q_resting: &Query<(), With<RestingIn>>,
         q_cooldown: &Query<&RestAreaCooldown>,
+        scratch: &mut Vec<Entity>,
         radius_opt: Option<f32>,
         excluded: &HashSet<Entity>,
     ) -> Option<Entity> {
@@ -146,8 +147,8 @@ impl RecruitmentManager {
             };
 
         if let Some(radius) = radius_opt {
-            let nearby = spatial_grid.get_nearby_in_radius(fam_pos, radius);
-            let candidates: Vec<_> = nearby.iter().filter_map(|&e| filter_candidate(e)).collect();
+            spatial_grid.get_nearby_in_radius_into(fam_pos, radius, scratch);
+            let candidates: Vec<_> = scratch.iter().filter_map(|&e| filter_candidate(e)).collect();
             return find_best_scored(candidates).map(|(entity, _)| entity);
         }
 
@@ -162,8 +163,8 @@ impl RecruitmentManager {
         let mut overall_best: Option<(Entity, f32)> = None;
 
         for &radius in &search_tiers {
-            let nearby = spatial_grid.get_nearby_in_radius(fam_pos, radius);
-            let candidates: Vec<_> = nearby.iter().filter_map(|&e| filter_candidate(e)).collect();
+            spatial_grid.get_nearby_in_radius_into(fam_pos, radius, scratch);
+            let candidates: Vec<_> = scratch.iter().filter_map(|&e| filter_candidate(e)).collect();
 
             if let Some((entity, score)) = find_best_scored(candidates) {
                 let should_replace = match overall_best {
@@ -196,6 +197,7 @@ impl RecruitmentManager {
         q_breakdown: &Query<&StressBreakdown>,
         q_resting: &Query<(), With<RestingIn>>,
         q_cooldown: &Query<&RestAreaCooldown>,
+        scratch: &mut Vec<Entity>,
         excluded: &mut HashSet<Entity>,
     ) -> Option<Entity> {
         let recruit_entity = Self::find_best_recruit(
@@ -208,6 +210,7 @@ impl RecruitmentManager {
             q_breakdown,
             q_resting,
             q_cooldown,
+            scratch,
             Some(command_radius),
             excluded,
         )?;
@@ -226,6 +229,7 @@ impl RecruitmentManager {
         q_breakdown: &Query<&StressBreakdown>,
         q_resting: &Query<(), With<RestingIn>>,
         q_cooldown: &Query<&RestAreaCooldown>,
+        scratch: &mut Vec<Entity>,
         excluded: &mut HashSet<Entity>,
     ) -> Option<Entity> {
         let result = Self::find_best_recruit(
@@ -238,6 +242,7 @@ impl RecruitmentManager {
             q_breakdown,
             q_resting,
             q_cooldown,
+            scratch,
             None,
             excluded,
         )?;
@@ -282,6 +287,8 @@ pub struct FamiliarRecruitmentContext<'a, 'w, 's, G: SpatialGridOps> {
     pub q_cooldown: &'a Query<'w, 's, &'static RestAreaCooldown>,
     /// 同フレーム内でのリクルート予約セット（重複防止）
     pub recruitment_reservations: &'a mut HashSet<Entity>,
+    /// 空間グリッド検索用の再利用可能バッファ
+    pub scratch: &'a mut Vec<Entity>,
 }
 
 /// リクルート処理を実行
@@ -306,6 +313,7 @@ pub fn process_recruitment<G: SpatialGridOps>(
             ctx.q_breakdown,
             ctx.q_resting,
             ctx.q_cooldown,
+            ctx.scratch,
             ctx.recruitment_reservations,
         ) {
             debug!(
@@ -323,6 +331,7 @@ pub fn process_recruitment<G: SpatialGridOps>(
             ctx.q_breakdown,
             ctx.q_resting,
             ctx.q_cooldown,
+            ctx.scratch,
             ctx.recruitment_reservations,
         ) {
             debug!(

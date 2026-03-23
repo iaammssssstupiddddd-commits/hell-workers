@@ -21,6 +21,7 @@ pub fn gathering_separation_system(
     q_spots: Query<&GatheringSpot>,
     update_timer: Res<GatheringUpdateTimer>,
     soul_grid: Res<SpatialGrid>,
+    mut nearby_buf: Local<Vec<Entity>>,
     mut q_souls: Query<
         (
             Entity,
@@ -57,8 +58,8 @@ pub fn gathering_separation_system(
         let center = spot.center;
         let current_pos = transform.translation.truncate();
 
-        let nearby_souls = soul_grid.get_nearby_in_radius(current_pos, GATHERING_MIN_SEPARATION);
-        let has_overlap = nearby_souls.iter().any(|&other| other != entity);
+        soul_grid.get_nearby_in_radius_into(current_pos, GATHERING_MIN_SEPARATION, &mut nearby_buf);
+        let has_overlap = nearby_buf.iter().any(|&other| other != entity);
         let dist_from_center = (center - current_pos).length();
         let too_close_to_center = dist_from_center < TILE_SIZE * GATHERING_KEEP_DISTANCE_MIN;
 
@@ -71,6 +72,7 @@ pub fn gathering_separation_system(
                 entity,
                 &*soul_grid,
                 world_map.as_ref(),
+                &mut *nearby_buf,
                 min_dist,
                 max_dist,
                 GATHERING_MIN_SEPARATION,
@@ -85,6 +87,7 @@ pub fn gathering_separation_system(
                 entity,
                 &*soul_grid,
                 world_map.as_ref(),
+                &mut *nearby_buf,
             ) {
                 dest.0 = new_pos;
                 path.waypoints.clear();

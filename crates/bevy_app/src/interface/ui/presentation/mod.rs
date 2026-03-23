@@ -207,10 +207,12 @@ pub(super) fn format_escape_info(
     familiar_grid: &FamiliarSpatialGrid,
     q_familiars_escape: &Query<(&Transform, &Familiar)>,
 ) -> String {
+    let mut scratch = Vec::new();
     let escape_threat_close = is_escape_threat_close(
         transform.translation.truncate(),
         familiar_grid,
         q_familiars_escape,
+        &mut scratch,
     );
     let escape_allowed = under_command.is_none()
         && idle.behavior != IdleBehavior::ExhaustedGathering

@@ -28,6 +28,7 @@ pub fn update_motion_destinations(
     request_writer: &mut MessageWriter<IdleBehaviorRequest>,
     dt: f32,
     dream: f32,
+    scratch: &mut Vec<Entity>,
 ) {
     match idle.behavior {
         IdleBehavior::Wandering => {
@@ -96,6 +97,7 @@ pub fn update_motion_destinations(
                             entity,
                             soul_grid,
                             world_map,
+                            scratch,
                         ) {
                             dest.0 = new_target;
                             path.waypoints.clear();
@@ -115,6 +117,7 @@ pub fn update_motion_destinations(
                                         entity,
                                         soul_grid,
                                         world_map,
+                                        scratch,
                                     )
                                 {
                                     dest.0 = new_target;
@@ -138,6 +141,7 @@ pub fn update_motion_destinations(
                                         entity,
                                         soul_grid,
                                         world_map,
+                                        scratch,
                                     )
                                 {
                                     dest.0 = target;
@@ -146,9 +150,8 @@ pub fn update_motion_destinations(
                                 }
                             } else {
                                 const MIN_SEPARATION: f32 = TILE_SIZE * 1.2;
-                                let nearby_souls =
-                                    soul_grid.get_nearby_in_radius(current_pos, MIN_SEPARATION);
-                                let has_overlap = nearby_souls.iter().any(|&other| other != entity);
+                                soul_grid.get_nearby_in_radius_into(current_pos, MIN_SEPARATION, scratch);
+                                let has_overlap = scratch.iter().any(|&other| other != entity);
                                 let dist_to_dest = (dest.0 - current_pos).length();
                                 if !has_overlap && dist_to_dest < TILE_SIZE * 0.5 {
                                     path.waypoints.clear();

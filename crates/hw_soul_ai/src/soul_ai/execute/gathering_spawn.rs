@@ -24,6 +24,7 @@ pub fn gathering_spawn_logic_system(
     >,
     spot_grid: Res<GatheringSpotSpatialGrid>,
     soul_grid: Res<SpatialGrid>,
+    mut nearby_buf: Local<Vec<Entity>>,
     mut q_readiness: Query<&mut GatheringReadiness>,
     update_timer: Res<GatheringUpdateTimer>,
     mut spawn_requests: MessageWriter<GatheringSpawnRequest>,
@@ -48,13 +49,13 @@ pub fn gathering_spawn_logic_system(
 
         let pos = transform.translation.truncate();
 
-        let nearby_spots = spot_grid.get_nearby_in_radius(pos, GATHERING_DETECTION_RADIUS);
-        if !nearby_spots.is_empty() {
+        spot_grid.get_nearby_in_radius_into(pos, GATHERING_DETECTION_RADIUS, &mut nearby_buf);
+        if !nearby_buf.is_empty() {
             continue;
         }
 
-        let nearby_soul_entities = soul_grid.get_nearby_in_radius(pos, GATHERING_DETECTION_RADIUS);
-        let nearby_souls = nearby_soul_entities.len().saturating_sub(1);
+        soul_grid.get_nearby_in_radius_into(pos, GATHERING_DETECTION_RADIUS, &mut nearby_buf);
+        let nearby_souls = nearby_buf.len().saturating_sub(1);
 
         let spawn_time = (GATHERING_SPAWN_BASE_TIME
             - nearby_souls as f32 * GATHERING_SPAWN_TIME_REDUCTION_PER_SOUL)

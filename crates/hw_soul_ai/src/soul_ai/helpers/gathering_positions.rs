@@ -20,6 +20,7 @@ pub fn find_position_with_separation<G: SpatialGridOps, W: PathWorld>(
     exclude_entity: Entity,
     soul_grid: &G,
     world_map: &W,
+    scratch: &mut Vec<Entity>,
     min_dist: f32,
     max_dist: f32,
     min_separation: f32,
@@ -31,8 +32,8 @@ pub fn find_position_with_separation<G: SpatialGridOps, W: PathWorld>(
         let dist: f32 = rng.gen_range(min_dist..max_dist);
         let new_pos = center + Vec2::new(angle.cos() * dist, angle.sin() * dist);
 
-        let nearby = soul_grid.get_nearby_in_radius(new_pos, min_separation);
-        let occupied = nearby.iter().any(|&e| e != exclude_entity);
+        soul_grid.get_nearby_in_radius_into(new_pos, min_separation, scratch);
+        let occupied = scratch.iter().any(|&e| e != exclude_entity);
         if occupied {
             continue;
         }
@@ -52,6 +53,7 @@ pub fn find_position_fallback_away<G: SpatialGridOps, W: PathWorld>(
     exclude_entity: Entity,
     soul_grid: &G,
     world_map: &W,
+    scratch: &mut Vec<Entity>,
 ) -> Option<Vec2> {
     let away = if (current_pos - center).length() > 0.1 {
         (current_pos - center).normalize()
@@ -62,8 +64,8 @@ pub fn find_position_fallback_away<G: SpatialGridOps, W: PathWorld>(
     };
     let new_pos = center + away * TILE_SIZE * GATHERING_KEEP_DISTANCE_TARGET_MAX;
 
-    let nearby = soul_grid.get_nearby_in_radius(new_pos, TILE_SIZE * 1.2);
-    let occupied = nearby.iter().any(|&e| e != exclude_entity);
+    soul_grid.get_nearby_in_radius_into(new_pos, TILE_SIZE * 1.2, scratch);
+    let occupied = scratch.iter().any(|&e| e != exclude_entity);
     if occupied {
         return None;
     }

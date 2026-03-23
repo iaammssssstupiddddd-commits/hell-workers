@@ -40,6 +40,7 @@ pub struct FamiliarEncouragementContext<'a, 'w, 's, G: SpatialGridOps> {
 pub fn decide_encouragement_target<G: SpatialGridOps, R: Rng + ?Sized>(
     ctx: &FamiliarEncouragementContext<'_, '_, '_, G>,
     rng: &mut R,
+    scratch: &mut Vec<Entity>,
 ) -> Option<Entity> {
     if !matches!(ctx.ai_state, FamiliarAiState::Supervising { .. }) {
         return None;
@@ -54,10 +55,9 @@ pub fn decide_encouragement_target<G: SpatialGridOps, R: Rng + ?Sized>(
         return None;
     }
 
-    let nearby = ctx
-        .soul_grid
-        .get_nearby_in_radius(ctx.fam_pos, ctx.command_radius);
-    let valid_targets: Vec<Entity> = nearby
+    ctx.soul_grid
+        .get_nearby_in_radius_into(ctx.fam_pos, ctx.command_radius, scratch);
+    let valid_targets: Vec<Entity> = scratch
         .iter()
         .filter_map(|&soul_entity| {
             let (entity, has_cooldown) = ctx.q_souls.get(soul_entity).ok()?;
@@ -80,6 +80,7 @@ pub fn encouragement_decision_system(
     )>,
     q_souls: SoulEncouragementQuery,
     soul_grid: Res<SpatialGrid>,
+    mut nearby_buf: Local<Vec<Entity>>,
     mut decide_output: FamiliarDecideOutput,
 ) {
     let dt = time.delta_secs();
@@ -96,7 +97,7 @@ pub fn encouragement_decision_system(
             q_souls: &q_souls,
         };
 
-        if let Some(target_soul) = decide_encouragement_target(&encouragement_ctx, &mut rng) {
+        if let Some(target_soul) = decide_encouragement_target(&encouragement_ctx, &mut rng, &mut *nearby_buf) {
             decide_output
                 .encouragement_requests
                 .write(EncouragementRequest {

@@ -33,6 +33,7 @@ pub struct FamiliarAiStateDecisionParams<'w, 's> {
     pub q_resting: Query<'w, 's, (), With<hw_core::relationships::RestingIn>>,
     pub q_rest_cooldown: Query<'w, 's, &'static RestAreaCooldown>,
     pub decide_output: FamiliarDecideOutput<'w>,
+    pub nearby_buf: Local<'s, Vec<Entity>>,
 }
 
 /// 使い魔AIの状態更新システム（Decide Phase）
@@ -45,6 +46,7 @@ pub fn familiar_ai_state_system(params: FamiliarAiStateDecisionParams) {
         q_resting,
         q_rest_cooldown,
         mut decide_output,
+        mut nearby_buf,
         ..
     } = params;
 
@@ -155,6 +157,7 @@ pub fn familiar_ai_state_system(params: FamiliarAiStateDecisionParams) {
                         q_resting: &q_resting,
                         q_cooldown: &q_rest_cooldown,
                         recruitment_reservations: &mut recruitment_reservations,
+                        scratch: &mut *nearby_buf,
                     };
                     process_recruitment(&mut ctx)
                 };
@@ -302,6 +305,7 @@ pub fn familiar_ai_state_system(params: FamiliarAiStateDecisionParams) {
                         q_resting: &q_resting,
                         q_cooldown: &q_rest_cooldown,
                         recruitment_reservations: &mut recruitment_reservations,
+                        scratch: &mut *nearby_buf,
                     };
                     process_recruitment(&mut ctx)
                 };

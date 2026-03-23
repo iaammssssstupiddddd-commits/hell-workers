@@ -24,6 +24,7 @@ pub fn escaping_decision_system(
     mut behavior_timer: ResMut<EscapeBehaviorTimer>,
     world_map: Res<WorldMap>,
     mut pf_context: Local<PathfindingContext>,
+    mut nearby_buf: Local<Vec<Entity>>,
     familiar_grid: Res<FamiliarSpatialGrid>,
     q_familiars: Query<(&Transform, &Familiar)>,
     q_gathering_spots: Query<(Entity, &GatheringSpot)>,
@@ -84,7 +85,7 @@ pub fn escaping_decision_system(
             }
 
             let soul_pos = transform.translation.truncate();
-            if let Some(threat) = detect_nearest_familiar(soul_pos, &familiar_grid, &q_familiars) {
+            if let Some(threat) = detect_nearest_familiar(soul_pos, &familiar_grid, &q_familiars, &mut *nearby_buf) {
                 debug!(
                     "ESCAPE_DECIDE: {:?} detected threat {:?} dist {:.1}",
                     entity, threat.entity, threat.distance
@@ -120,12 +121,14 @@ pub fn escaping_decision_system(
                 &q_familiars,
                 world_map.as_ref(),
                 &mut pf_context,
+                &mut *nearby_buf,
             ) {
                 let safe_spot = find_safe_gathering_spot(
                     soul_pos,
                     &q_gathering_spots,
                     &familiar_grid,
                     &q_familiars,
+                    &mut *nearby_buf,
                 );
 
                 if let Some(spot_pos) = safe_spot {

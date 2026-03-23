@@ -57,13 +57,14 @@ pub fn detect_nearest_familiar_within_multiplier(
     familiar_grid: &FamiliarSpatialGrid,
     q_familiars: &Query<(&Transform, &Familiar)>,
     radius_multiplier: f32,
+    scratch: &mut Vec<Entity>,
 ) -> Option<FamiliarThreat> {
     let search_radius = TILE_SIZE * 15.0;
-    let nearby_familiars = familiar_grid.get_nearby_in_radius(soul_pos, search_radius);
+    familiar_grid.get_nearby_in_radius_into(soul_pos, search_radius, scratch);
 
     let mut nearest: Option<FamiliarThreat> = None;
 
-    for fam_entity in nearby_familiars {
+    for &fam_entity in scratch.iter() {
         if let Ok((transform, familiar)) = q_familiars.get(fam_entity) {
             let fam_pos = transform.translation.truncate();
             let distance = soul_pos.distance(fam_pos);
@@ -87,12 +88,14 @@ pub fn detect_nearest_familiar(
     soul_pos: Vec2,
     familiar_grid: &FamiliarSpatialGrid,
     q_familiars: &Query<(&Transform, &Familiar)>,
+    scratch: &mut Vec<Entity>,
 ) -> Option<FamiliarThreat> {
     detect_nearest_familiar_within_multiplier(
         soul_pos,
         familiar_grid,
         q_familiars,
         ESCAPE_TRIGGER_DISTANCE_MULTIPLIER,
+        scratch,
     )
 }
 
@@ -133,13 +136,14 @@ pub fn detect_reachable_familiar_within_safe_distance(
     q_familiars: &Query<(&Transform, &Familiar)>,
     world_map: &WorldMap,
     pf_context: &mut PathfindingContext,
+    scratch: &mut Vec<Entity>,
 ) -> Option<FamiliarThreat> {
     let search_radius = TILE_SIZE * 15.0;
-    let nearby_familiars = familiar_grid.get_nearby_in_radius(soul_pos, search_radius);
+    familiar_grid.get_nearby_in_radius_into(soul_pos, search_radius, scratch);
 
     let mut best: Option<(FamiliarThreat, f32)> = None;
 
-    for fam_entity in nearby_familiars {
+    for &fam_entity in scratch.iter() {
         if let Ok((transform, familiar)) = q_familiars.get(fam_entity) {
             let fam_pos = transform.translation.truncate();
             let euclid = soul_pos.distance(fam_pos);
@@ -192,8 +196,9 @@ pub fn is_escape_threat_close(
     soul_pos: Vec2,
     familiar_grid: &FamiliarSpatialGrid,
     q_familiars: &Query<(&Transform, &Familiar)>,
+    scratch: &mut Vec<Entity>,
 ) -> bool {
-    detect_nearest_familiar(soul_pos, familiar_grid, q_familiars).is_some()
+    detect_nearest_familiar(soul_pos, familiar_grid, q_familiars, scratch).is_some()
 }
 
 /// 逃走方向を計算
@@ -224,12 +229,13 @@ fn nearest_familiar_info(
     pos: Vec2,
     familiar_grid: &FamiliarSpatialGrid,
     q_familiars: &Query<(&Transform, &Familiar)>,
+    scratch: &mut Vec<Entity>,
 ) -> Option<(f32, f32)> {
     let search_radius = TILE_SIZE * 15.0;
-    let nearby = familiar_grid.get_nearby_in_radius(pos, search_radius);
+    familiar_grid.get_nearby_in_radius_into(pos, search_radius, scratch);
     let mut nearest: Option<(f32, f32)> = None;
 
-    for fam_entity in nearby {
+    for &fam_entity in scratch.iter() {
         if let Ok((transform, familiar)) = q_familiars.get(fam_entity) {
             let dist = pos.distance(transform.translation.truncate());
             if nearest.map_or(true, |(best_dist, _)| dist < best_dist) {
@@ -247,13 +253,14 @@ pub fn find_safe_gathering_spot(
     gathering_spots: &Query<(Entity, &GatheringSpot)>,
     familiar_grid: &FamiliarSpatialGrid,
     q_familiars: &Query<(&Transform, &Familiar)>,
+    scratch: &mut Vec<Entity>,
 ) -> Option<Vec2> {
     let mut best_spot: Option<(Vec2, f32)> = None;
 
     for (_, spot) in gathering_spots.iter() {
         let spot_pos = spot.center;
         let dist_to_soul = soul_pos.distance(spot_pos);
-        let nearest = nearest_familiar_info(spot_pos, familiar_grid, q_familiars);
+        let nearest = nearest_familiar_info(spot_pos, familiar_grid, q_familiars, scratch);
         let (dist_to_familiar, safe_distance) = match nearest {
             None => (TILE_SIZE * 1000.0, 0.0),
             Some((dist, command_radius)) => {

@@ -64,6 +64,7 @@ impl Plugin for LogicPlugin {
         app.init_resource::<RoomTileLookup>();
         app.init_resource::<RoomValidationState>();
 
+        // グループA: command 系（直列維持 — TaskContext / AreaEdit / WorldMapWrite が競合）
         app.add_systems(
             Update,
             (
@@ -77,21 +78,44 @@ impl Plugin for LogicPlugin {
                 zone_placement_system.run_if(in_state(PlayMode::TaskDesignation)),
                 zone_removal_system.run_if(in_state(PlayMode::TaskDesignation)),
                 task_area_edit_history_shortcuts_system.run_if(in_state(PlayMode::TaskDesignation)),
+            )
+                .chain()
+                .in_set(GameSystemSet::Logic),
+        )
+        // グループB: maintenance / spawn 系（独立。Bevy scheduler が競合を自動調停）
+        .add_systems(
+            Update,
+            (
                 familiar_spawning_system,
                 tree_regrowth_system,
                 obstacle_cleanup_system,
                 blueprint_cancel_cleanup_system,
+                despawn_expired_items_system,
+                dream_tree_planting_system,
+            )
+                .in_set(GameSystemSet::Logic),
+        )
+        // グループC: floor construction（フェーズ順序が必要）
+        .add_systems(
+            Update,
+            (
                 floor_construction_cancellation_system,
                 floor_construction_phase_transition_system,
                 floor_construction_completion_system,
+            )
+                .chain()
+                .in_set(GameSystemSet::Logic),
+        )
+        // グループD: wall construction（フェーズ順序が必要）
+        .add_systems(
+            Update,
+            (
                 wall_construction_cancellation_system,
                 crate::plugins::interface_debug::debug_instant_complete_walls_system
                     .run_if(|d: Res<crate::DebugInstantBuild>| d.0),
                 wall_framed_tile_spawn_system,
                 wall_construction_phase_transition_system,
                 wall_construction_completion_system,
-                despawn_expired_items_system,
-                dream_tree_planting_system,
             )
                 .chain()
                 .in_set(GameSystemSet::Logic),

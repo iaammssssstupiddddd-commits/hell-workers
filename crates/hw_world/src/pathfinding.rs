@@ -39,6 +39,7 @@ pub struct PathfindingContext {
     pub came_from: Vec<Option<usize>>,
     pub open_set: BinaryHeap<PathNode>,
     visited: Vec<usize>,
+    pub target_grid_set: HashSet<(i32, i32)>,
 }
 
 impl Default for PathfindingContext {
@@ -49,6 +50,7 @@ impl Default for PathfindingContext {
             came_from: vec![None; size],
             open_set: BinaryHeap::with_capacity(size / 4),
             visited: Vec::with_capacity(512),
+            target_grid_set: HashSet::with_capacity(64),
         }
     }
 }
@@ -294,7 +296,10 @@ pub fn find_path_to_boundary(
         return None;
     }
 
-    let target_grid_set: HashSet<(i32, i32)> = target_grids.iter().copied().collect();
+    // context から一時退避することで find_path_with_policy への &mut context との borrow 競合を回避する
+    let mut target_grid_set = std::mem::take(&mut context.target_grid_set);
+    target_grid_set.clear();
+    target_grid_set.extend(target_grids.iter().copied());
 
     if target_grid_set.contains(&start) {
         let directions = [
@@ -311,6 +316,7 @@ pub fn find_path_to_boundary(
             let nx = start.0 + dx;
             let ny = start.1 + dy;
             if !target_grid_set.contains(&(nx, ny)) && world_map.is_walkable(nx, ny) {
+                context.target_grid_set = target_grid_set;
                 return Some(vec![start, (nx, ny)]);
             }
         }
@@ -321,11 +327,23 @@ pub fn find_path_to_boundary(
     let center_x = (sum_x / target_grids.len() as f32).round() as i32;
     let center_y = (sum_y / target_grids.len() as f32).round() as i32;
     let goal_grid = (center_x, center_y);
-    let goal_idx = world_map.pos_to_idx(goal_grid.0, goal_grid.1)?;
+    let goal_idx = world_map.pos_to_idx(goal_grid.0, goal_grid.1);
 
-    let start_idx = world_map.pos_to_idx(start.0, start.1)?;
+    if goal_idx.is_none() {
+        context.target_grid_set = target_grid_set;
+        return None;
+    }
+    let goal_idx = goal_idx.unwrap();
+
+    let start_idx = world_map.pos_to_idx(start.0, start.1);
+    if start_idx.is_none() {
+        context.target_grid_set = target_grid_set;
+        return None;
+    }
+    let start_idx = start_idx.unwrap();
+
     let heuristic = |idx| path_cost_heuristic(world_map, idx, goal_idx);
-    let mut path = find_path_with_policy(
+    let path_result = find_path_with_policy(
         world_map,
         context,
         start_idx,
@@ -350,8 +368,11 @@ pub fn find_path_to_boundary(
                 world_map.get_door_cost(x, y)
             }
         },
-    )?;
+    );
 
+    context.target_grid_set = target_grid_set;
+
+    let mut path = path_result?;
     path.pop();
     if path.is_empty() {
         Some(vec![start])

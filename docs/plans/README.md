@@ -1,6 +1,6 @@
 # Plans Index
 
-`docs/plans` の文書ステータス一覧（更新日: 2026-03-22）。
+`docs/plans` の文書ステータス一覧（更新日: 2026-03-23）。
 
 ## 新規計画書の作り方
 
@@ -19,7 +19,7 @@
 
 | Document | Status | Notes |
 |---|---|---|
-
+| [performance-optimization.md](performance-optimization.md) | Draft | パフォーマンス最適化計画 |
 
 ## アーカイブ計画書一覧 (`docs/plans/archive`)
 
@@ -38,6 +38,7 @@
 | [archive/codebase-quality-refactor.md](archive/codebase-quality-refactor.md) | アーカイブ | リファクタリング計画: コードベース全体の整理・品質向上 |
 | [archive/command-crate-extraction-plan-2026-03-12.md](archive/command-crate-extraction-plan-2026-03-12.md) | アーカイブ | src/systems/command/の計画。 |
 | [archive/crate-boundary-alignment-plan-2026-03-18.md](archive/crate-boundary-alignment-plan-2026-03-18.md) | アーカイブ | docs/crate-boundaries.mdの計画。 |
+| [archive/dead-code-cleanup.md](archive/dead-code-cleanup.md) | アーカイブ | ワークスペース全体に散在するの計画。 |
 | [archive/debug-instant-build-plan.md](archive/debug-instant-build-plan.md) | アーカイブ | Debug Instant Build ボタン 実装計画 |
 | [archive/destination-validation-unification-plan-2026-03-07.md](archive/destination-validation-unification-plan-2026-03-07.md) | アーカイブ | FloorConstruction / WallConstruction / ProvisionalWall の搬入先需要計算と実行時受入判定が、割り当て時・手運搬 dropping 時・猫車 unloading 時の 3 系統に分散し、同一ロジックを複数箇所で維持しているの計画。 |
 | [archive/docs-index-automation-plan-2026-03-05.md](archive/docs-index-automation-plan-2026-03-05.md) | アーカイブ | docs/plans/README.mdの計画。 |
@@ -83,6 +84,8 @@
 | [archive/mixer-producer-phase-separation-plan-2026-03-05.md](archive/mixer-producer-phase-separation-plan-2026-03-05.md) | アーカイブ | producer/mixer.rsの計画。 |
 | [archive/move-plant-building.md](archive/move-plant-building.md) | アーカイブ | Plant 建物移動タスク 実装計画（詳細版） |
 | [archive/multi-tool-ai-rules-plan.md](archive/multi-tool-ai-rules-plan.md) | アーカイブ | マルチツール AI ルール体系の構築 |
+| [archive/observer-message-optimization-plan-2026-03-23 copy.md](archive/observer-message-optimization-plan-2026-03-23 copy.md) | アーカイブ | Observerの計画。 |
+| [archive/observer-message-optimization-plan-2026-03-23.md](archive/observer-message-optimization-plan-2026-03-23.md) | アーカイブ | Observerの計画。 |
 | [archive/participating-in-relationship.md](archive/participating-in-relationship.md) | アーカイブ | Relationship参加設計に関する計画。 |
 | [archive/pathfinding-core-unification-plan-2026-03-01.md](archive/pathfinding-core-unification-plan-2026-03-01.md) | アーカイブ | find_pathの計画。 |
 | [archive/pathfinding-executor-split-plan-2026-03-05.md](archive/pathfinding-executor-split-plan-2026-03-05.md) | アーカイブ | entities/damned_soul/movement/pathfinding.rsの計画。 |

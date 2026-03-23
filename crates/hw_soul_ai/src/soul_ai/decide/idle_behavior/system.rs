@@ -29,6 +29,7 @@ pub fn idle_behavior_decision_system(
     mut request_writer: MessageWriter<IdleBehaviorRequest>,
     world_map: Res<WorldMap>,
     mut pending_rest_reservations: Local<HashMap<Entity, usize>>,
+    mut nearby_buf: Local<Vec<Entity>>,
     q_spots: Query<(Entity, &GatheringSpot, &GatheringParticipants)>,
     q_rest_areas: Query<(
         Entity,
@@ -59,7 +60,7 @@ pub fn idle_behavior_decision_system(
     ) in query.iter_mut()
     {
         let (gathering_center, target_spot_entity) =
-            resolve_gathering_target(participating_in, &q_spots, &spot_grid, &transform);
+            resolve_gathering_target(participating_in, &q_spots, &spot_grid, &transform, &mut *nearby_buf);
 
         if exhausted_gathering::process_exhausted_gathering(
             entity,
@@ -314,6 +315,7 @@ pub fn idle_behavior_decision_system(
             &mut request_writer,
             dt,
             soul.dream,
+            &mut *nearby_buf,
         );
     }
 }
@@ -323,14 +325,15 @@ fn resolve_gathering_target(
     q_spots: &Query<(Entity, &GatheringSpot, &GatheringParticipants)>,
     spot_grid: &GatheringSpotSpatialGrid,
     transform: &Transform,
+    scratch: &mut Vec<Entity>,
 ) -> (Option<Vec2>, Option<Entity>) {
     if let Some(p) = participating_in {
         let center = q_spots.get(p.0).ok().map(|(_, s, _)| s.center);
         (center, Some(p.0))
     } else {
         let pos = transform.translation.truncate();
-        let spot_entities = spot_grid.get_nearby_in_radius(pos, GATHERING_LEAVE_RADIUS * 2.0);
-        let nearest = spot_entities
+        spot_grid.get_nearby_in_radius_into(pos, GATHERING_LEAVE_RADIUS * 2.0, scratch);
+        let nearest = scratch
             .iter()
             .filter_map(|&e| q_spots.get(e).ok())
             .filter(|item| item.2.len() < item.1.max_capacity)

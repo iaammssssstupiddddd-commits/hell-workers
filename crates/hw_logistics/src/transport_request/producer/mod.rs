@@ -49,20 +49,15 @@ pub fn find_owner(pos: Vec2, owners: &[(Entity, AreaBounds)]) -> Option<(Entity,
 }
 
 pub fn find_owner_yard(pos: Vec2, yards: &[(Entity, Yard)]) -> Option<(Entity, &Yard)> {
-    let mut candidates: Vec<&(Entity, Yard)> = yards
+    yards
         .iter()
         .filter(|(_, yard)| yard.contains(pos))
-        .collect();
-    if candidates.is_empty() {
-        return None;
-    }
-    candidates.sort_by(|(_, yard_a), (_, yard_b)| {
-        let da = (yard_a.min.distance_squared(pos) + yard_a.max.distance_squared(pos))
-            .partial_cmp(&(yard_b.min.distance_squared(pos) + yard_b.max.distance_squared(pos)))
-            .unwrap_or(std::cmp::Ordering::Equal);
-        da
-    });
-    candidates.first().map(|(entity, yard)| (*entity, yard))
+        .min_by(|(_, a), (_, b)| {
+            let da = a.min.distance_squared(pos) + a.max.distance_squared(pos);
+            let db = b.min.distance_squared(pos) + b.max.distance_squared(pos);
+            da.partial_cmp(&db).unwrap_or(std::cmp::Ordering::Equal)
+        })
+        .map(|(entity, yard)| (*entity, yard))
 }
 
 pub fn find_owner_for_position<'a>(
@@ -72,19 +67,17 @@ pub fn find_owner_for_position<'a>(
 ) -> Option<(Entity, &'a AreaBounds)> {
     if let Some((_yard_entity, yard)) = find_owner_yard(pos, yards) {
         let yard_center = (yard.min + yard.max) * 0.5;
-        let candidates: Vec<_> = owners
+        if let Some(result) = owners
             .iter()
             .filter(|(_, area)| area.contains(yard_center))
-            .collect();
-        if !candidates.is_empty() {
-            return candidates
-                .into_iter()
-                .min_by(|(_, area_a), (_, area_b)| {
-                    let da = area_a.center().distance_squared(yard_center);
-                    let db = area_b.center().distance_squared(yard_center);
-                    da.partial_cmp(&db).unwrap_or(std::cmp::Ordering::Equal)
-                })
-                .map(|(entity, area)| (*entity, area));
+            .min_by(|(_, area_a), (_, area_b)| {
+                let da = area_a.center().distance_squared(yard_center);
+                let db = area_b.center().distance_squared(yard_center);
+                da.partial_cmp(&db).unwrap_or(std::cmp::Ordering::Equal)
+            })
+            .map(|(entity, area)| (*entity, area))
+        {
+            return Some(result);
         }
     }
 
@@ -104,10 +97,12 @@ pub fn collect_nearby_resource_entities(
         &ResourceItem,
         Option<&hw_core::relationships::StoredIn>,
     )>,
+    scratch: &mut Vec<Entity>,
     resources_scanned: &mut u32,
 ) -> Vec<Entity> {
     let mut nearby_resources = Vec::new();
-    for entity in resource_grid.get_nearby_in_radius(center, pickup_radius) {
+    resource_grid.get_nearby_in_radius_into(center, pickup_radius, scratch);
+    for entity in scratch.iter().copied() {
         let Ok((_, transform, visibility, resource_item, stored_in_opt)) = q_resources.get(entity)
         else {
             continue;
@@ -201,6 +196,7 @@ pub fn sync_construction_delivery<
         &ResourceItem,
         Option<&hw_core::relationships::StoredIn>,
     )>,
+    scratch: &mut Vec<Entity>,
     resources_scanned: &mut u32,
     tiles_by_site: &HashMap<Entity, Vec<Entity>>,
     q_tiles: &mut Query<&mut TTile>,
@@ -216,6 +212,7 @@ pub fn sync_construction_delivery<
         target_resource,
         resource_grid,
         q_resources,
+        scratch,
         resources_scanned,
     );
 

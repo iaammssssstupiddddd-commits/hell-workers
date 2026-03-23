@@ -14,6 +14,7 @@ pub fn familiar_influence_unified_system(
     mut commands: Commands,
     time: Res<Time>,
     familiar_grid: Res<FamiliarSpatialGrid>,
+    mut nearby_buf: Local<Vec<Entity>>,
     q_familiars: Query<(&Transform, &Familiar, &ActiveCommand)>,
     mut q_souls: Query<(
         Entity,
@@ -39,11 +40,11 @@ pub fn familiar_influence_unified_system(
             IdleBehavior::Gathering | IdleBehavior::ExhaustedGathering
         );
 
-        let nearby_familiars = familiar_grid.get_nearby_in_radius(soul_pos, familiar_search_radius);
+        familiar_grid.get_nearby_in_radius_into(soul_pos, familiar_search_radius, &mut nearby_buf);
         let mut best_influence = 0.0_f32;
         let mut is_influence_close = false;
 
-        for fam_entity in nearby_familiars {
+        for &fam_entity in nearby_buf.iter() {
             let Ok((fam_transform, familiar, command)) = q_familiars.get(fam_entity) else {
                 continue;
             };

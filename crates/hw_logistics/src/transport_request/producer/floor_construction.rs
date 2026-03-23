@@ -161,6 +161,7 @@ pub fn floor_material_delivery_sync_system(
         Option<&hw_core::relationships::StoredIn>,
     )>,
     resource_grid: Res<ResourceSpatialGrid>,
+    mut nearby_buf: Local<Vec<Entity>>,
     mut metrics: ResMut<TransportRequestMetrics>,
 ) {
     let started_at = Instant::now();
@@ -203,6 +204,7 @@ pub fn floor_material_delivery_sync_system(
                 pickup_radius,
                 &resource_grid,
                 &q_resources,
+                &mut *nearby_buf,
                 &mut resources_scanned,
                 &tiles_by_site,
                 &mut q_tiles_write,

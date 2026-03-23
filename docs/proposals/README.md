@@ -18,7 +18,6 @@
 | Document | Notes |
 | --- | --- |
 | [08_visual_update_prompts.md](08_visual_update_prompts.md) | ビジュアル更新プロンプト集 |
-| [architecture-improvements-2026.md](architecture-improvements-2026.md) | アーキテクチャ改善提案 (Architecture Improvement Proposals) |
 | [soul_spawn_despawn_optimization.md](soul_spawn_despawn_optimization.md) | Soul Spawn/Despawn 最適化提案 |
 | [speech_optimization.md](speech_optimization.md) | スピーチシステム最適化提案 |
 
@@ -31,6 +30,7 @@
 | [archive/09-large-file-refactor.md](archive/09-large-file-refactor.md) | 提案09: 500行超ファイルの段階的リファクタリング計画 |
 | [archive/agent-md-for-branches.md](archive/agent-md-for-branches.md) | AI開発エージェント最適化 提案書 |
 | [archive/ai-scalability-optimization.md](archive/ai-scalability-optimization.md) | AIシステム スケーラビリティ最適化提案 (Scale: Familiar 30, Soul 500) |
+| [archive/architecture-improvements-2026.md](archive/architecture-improvements-2026.md) | アーキテクチャ改善提案 (Architecture Improvement Proposals) |
 | [archive/bevy_018_features.md](archive/bevy_018_features.md) | Bevy 0.18 新機能導入提案 |
 | [archive/destination-validation-unification-proposal-2026-03-07.md](archive/destination-validation-unification-proposal-2026-03-07.md) | 現状: 搬入先（FloorSite, WallSite, ProvisionalWall 等）の受入可能量チェックが **3箇所に独立実装** されている:の提案。 |
 | [archive/dream_general_visuals.md](archive/dream_general_visuals.md) | Dreamシステム全体 ビジュアルアップデート提案 |

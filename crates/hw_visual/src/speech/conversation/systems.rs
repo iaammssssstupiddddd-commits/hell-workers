@@ -14,6 +14,7 @@ use std::collections::HashMap;
 pub fn check_conversation_triggers(
     time: Res<Time>,
     grid: Res<SpatialGrid>,
+    mut nearby_buf: Local<Vec<Entity>>,
     mut q_initiator: Query<
         (Entity, &Transform, &IdleState, &mut ConversationInitiator),
         (
@@ -40,9 +41,9 @@ pub fn check_conversation_triggers(
 
         if initiator.timer.just_finished() {
             let pos = transform.translation.truncate();
-            let nearby = grid.get_nearby_in_radius(pos, CONVERSATION_RADIUS);
+            grid.get_nearby_in_radius_into(pos, CONVERSATION_RADIUS, &mut nearby_buf);
 
-            for &target_entity in nearby.iter() {
+            for &target_entity in nearby_buf.iter() {
                 if target_entity == entity {
                     continue;
                 }

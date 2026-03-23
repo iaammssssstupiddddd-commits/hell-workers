@@ -17,6 +17,7 @@ pub fn find_initial_gathering_position<G: SpatialGridOps, W: PathWorld>(
     exclude_entity: Entity,
     soul_grid: &G,
     world_map: &W,
+    scratch: &mut Vec<Entity>,
 ) -> Option<Vec2> {
     const MIN_SEPARATION: f32 = TILE_SIZE * 1.2;
     let min_dist = TILE_SIZE * GATHERING_KEEP_DISTANCE_TARGET_MIN;
@@ -27,13 +28,14 @@ pub fn find_initial_gathering_position<G: SpatialGridOps, W: PathWorld>(
         exclude_entity,
         soul_grid,
         world_map,
+        scratch,
         min_dist,
         max_dist,
         MIN_SEPARATION,
         20,
     )
     .or_else(|| {
-        find_position_fallback_away(center, current_pos, exclude_entity, soul_grid, world_map)
+        find_position_fallback_away(center, current_pos, exclude_entity, soul_grid, world_map, scratch)
     })
 }
 
@@ -44,6 +46,7 @@ pub fn find_gathering_wandering_target<G: SpatialGridOps, W: PathWorld>(
     exclude_entity: Entity,
     soul_grid: &G,
     world_map: &W,
+    scratch: &mut Vec<Entity>,
 ) -> Option<Vec2> {
     const MIN_SEPARATION: f32 = TILE_SIZE * 1.2;
     const MIN_DIST_FROM_CURRENT: f32 = TILE_SIZE * 2.0;
@@ -57,8 +60,8 @@ pub fn find_gathering_wandering_target<G: SpatialGridOps, W: PathWorld>(
         if dist_from_current < MIN_DIST_FROM_CURRENT {
             continue;
         }
-        let nearby = soul_grid.get_nearby_in_radius(new_target, MIN_SEPARATION);
-        if nearby.iter().any(|&e| e != exclude_entity) {
+        soul_grid.get_nearby_in_radius_into(new_target, MIN_SEPARATION, scratch);
+        if scratch.iter().any(|&e| e != exclude_entity) {
             continue;
         }
         let (gx, gy) = world_to_grid(new_target);
@@ -70,8 +73,8 @@ pub fn find_gathering_wandering_target<G: SpatialGridOps, W: PathWorld>(
         let angle: f32 = rng.gen_range(0.0..std::f32::consts::TAU);
         let fallback_target = center
             + Vec2::new(angle.cos(), angle.sin()) * TILE_SIZE * GATHERING_KEEP_DISTANCE_TARGET_MAX;
-        let nearby = soul_grid.get_nearby_in_radius(fallback_target, MIN_SEPARATION);
-        if nearby.iter().any(|&e| e != exclude_entity) {
+        soul_grid.get_nearby_in_radius_into(fallback_target, MIN_SEPARATION, scratch);
+        if scratch.iter().any(|&e| e != exclude_entity) {
             continue;
         }
         let (gx, gy) = world_to_grid(fallback_target);
@@ -89,6 +92,7 @@ pub fn find_gathering_still_retreat_target<G: SpatialGridOps, W: PathWorld>(
     exclude_entity: Entity,
     soul_grid: &G,
     world_map: &W,
+    scratch: &mut Vec<Entity>,
 ) -> Option<Vec2> {
     const MIN_SEPARATION: f32 = TILE_SIZE * 1.2;
     let away = if (current_pos - center).length() > 0.1 {
@@ -100,8 +104,8 @@ pub fn find_gathering_still_retreat_target<G: SpatialGridOps, W: PathWorld>(
     };
     let target = center + away * TILE_SIZE * GATHERING_KEEP_DISTANCE_TARGET_MIN;
 
-    let nearby = soul_grid.get_nearby_in_radius(target, MIN_SEPARATION);
-    if nearby.iter().any(|&e| e != exclude_entity) {
+    soul_grid.get_nearby_in_radius_into(target, MIN_SEPARATION, scratch);
+    if scratch.iter().any(|&e| e != exclude_entity) {
         return None;
     }
     let (gx, gy) = world_to_grid(target);
