@@ -148,7 +148,10 @@ impl RecruitmentManager {
 
         if let Some(radius) = radius_opt {
             spatial_grid.get_nearby_in_radius_into(fam_pos, radius, scratch);
-            let candidates: Vec<_> = scratch.iter().filter_map(|&e| filter_candidate(e)).collect();
+            let candidates: Vec<_> = scratch
+                .iter()
+                .filter_map(|&e| filter_candidate(e))
+                .collect();
             return find_best_scored(candidates).map(|(entity, _)| entity);
         }
 
@@ -164,7 +167,10 @@ impl RecruitmentManager {
 
         for &radius in &search_tiers {
             spatial_grid.get_nearby_in_radius_into(fam_pos, radius, scratch);
-            let candidates: Vec<_> = scratch.iter().filter_map(|&e| filter_candidate(e)).collect();
+            let candidates: Vec<_> = scratch
+                .iter()
+                .filter_map(|&e| filter_candidate(e))
+                .collect();
 
             if let Some((entity, score)) = find_best_scored(candidates) {
                 let should_replace = match overall_best {

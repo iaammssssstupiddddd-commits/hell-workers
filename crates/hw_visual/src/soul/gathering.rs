@@ -1,11 +1,11 @@
 use bevy::prelude::*;
 
+use hw_core::camera::MainCamera;
 use hw_core::constants::*;
 use hw_core::gathering::{GatheringSpot, GatheringVisuals, calculate_aura_size};
 use hw_core::relationships::{GatheringParticipants, ParticipatingIn};
+use hw_core::selection::HoveredEntity;
 use hw_core::soul::DamnedSoul;
-use hw_ui::camera::MainCamera;
-use hw_ui::selection::HoveredEntity;
 
 /// 集会オーラのサイズと位置の更新システム
 pub fn gathering_visual_update_system(

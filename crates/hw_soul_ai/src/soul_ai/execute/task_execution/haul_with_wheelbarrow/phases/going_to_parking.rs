@@ -5,7 +5,7 @@ use crate::soul_ai::execute::task_execution::types::{
     AssignedTask, HaulWithWheelbarrowData, HaulWithWheelbarrowPhase,
 };
 use crate::soul_ai::execute::task_execution::{
-    common::{is_near_target, update_destination_to_adjacent},
+    common::{NavOutcome, navigate_to_pos},
     context::TaskExecutionContext,
 };
 use bevy::prelude::*;
@@ -32,25 +32,18 @@ pub fn handle(
     };
 
     let wb_pos = wb_transform.translation.truncate();
-    let reachable = update_destination_to_adjacent(
-        ctx.dest,
-        wb_pos,
-        ctx.path,
-        soul_pos,
-        world_map,
-        ctx.pf_context,
-    );
-
-    if !reachable {
-        cancel::cancel_wheelbarrow_task(ctx, &data, commands);
-        return;
+    match navigate_to_pos(ctx, wb_pos, soul_pos, world_map) {
+        NavOutcome::Moving => return,
+        NavOutcome::Unreachable => {
+            cancel::cancel_wheelbarrow_task(ctx, &data, commands);
+            return;
+        }
+        _ => {}
     }
 
-    if is_near_target(soul_pos, wb_pos) {
-        *ctx.task = AssignedTask::HaulWithWheelbarrow(HaulWithWheelbarrowData {
-            phase: HaulWithWheelbarrowPhase::PickingUpWheelbarrow,
-            ..data
-        });
-        ctx.path.waypoints.clear();
-    }
+    *ctx.task = AssignedTask::HaulWithWheelbarrow(HaulWithWheelbarrowData {
+        phase: HaulWithWheelbarrowPhase::PickingUpWheelbarrow,
+        ..data
+    });
+    ctx.path.waypoints.clear();
 }

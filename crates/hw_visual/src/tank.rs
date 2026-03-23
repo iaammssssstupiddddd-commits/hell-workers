@@ -4,13 +4,18 @@ use crate::handles::BuildingAnimHandles;
 use crate::layer::VisualLayerKind;
 use bevy::prelude::*;
 use hw_core::relationships::StoredItems;
-use hw_core::visual_mirror::building::{BuildingTypeVisual, BuildingVisualState};
 use hw_core::visual_mirror::StockpileVisualState;
+use hw_core::visual_mirror::building::{BuildingTypeVisual, BuildingVisualState};
 
 /// タンクの状態に応じて画像を更新するシステム
 pub fn update_tank_visual_system(
     handles: Res<BuildingAnimHandles>,
-    q_tanks: Query<(Entity, &BuildingVisualState, &StockpileVisualState, Option<&StoredItems>)>,
+    q_tanks: Query<(
+        Entity,
+        &BuildingVisualState,
+        &StockpileVisualState,
+        Option<&StoredItems>,
+    )>,
     q_children: Query<&Children>,
     mut q_visual_layers: Query<(&VisualLayerKind, &mut Sprite)>,
 ) {

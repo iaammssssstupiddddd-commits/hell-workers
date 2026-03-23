@@ -26,39 +26,27 @@ pub fn handle_gather_task(
     let q_targets = &ctx.queries.designation.targets;
     match phase {
         GatherPhase::GoingToResource => {
-            if let Ok((res_transform, _, _, _, _, des_opt, _)) = q_targets.get(target) {
-                // 指定が解除されていたら中止
-                if cancel_task_if_designation_missing(des_opt, ctx.task, ctx.path) {
+            let (res_pos, has_designation) = {
+                let Ok((res_transform, _, _, _, _, des_opt, _)) = q_targets.get(target) else {
+                    clear_task_and_path(ctx.task, ctx.path);
                     return;
-                }
-                let res_pos = res_transform.translation.truncate();
-
-                // 到達可能かチェック
-                let reachable = update_destination_to_adjacent(
-                    ctx.dest,
-                    res_pos,
-                    ctx.path,
-                    soul_pos,
-                    world_map,
-                    ctx.pf_context,
-                );
-
-                if !reachable {
-                    // 到達不能: タスクをキャンセル
+                };
+                (res_transform.translation.truncate(), des_opt.is_some())
+            };
+            match navigate_to_adjacent(ctx, has_designation, res_pos, soul_pos, world_map) {
+                NavOutcome::Moving | NavOutcome::Cancelled => {}
+                NavOutcome::Unreachable => {
                     info!(
                         "GATHER: Soul {:?} cannot reach target {:?}, canceling",
                         ctx.soul_entity, target
                     );
-                    // 予約解除
                     ctx.queue_reservation(hw_core::events::ResourceReservationOp::ReleaseSource {
                         source: target,
                         amount: 1,
                     });
                     clear_task_and_path(ctx.task, ctx.path);
-                    return;
                 }
-
-                if is_near_target(soul_pos, res_pos) {
+                NavOutcome::Arrived => {
                     *ctx.task = AssignedTask::Gather(
                         crate::soul_ai::execute::task_execution::types::GatherData {
                             target,
@@ -68,8 +56,6 @@ pub fn handle_gather_task(
                     );
                     ctx.path.waypoints.clear();
                 }
-            } else {
-                clear_task_and_path(ctx.task, ctx.path);
             }
         }
 

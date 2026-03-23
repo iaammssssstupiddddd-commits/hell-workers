@@ -162,7 +162,9 @@ pub fn gathering_recruitment_decision(
         let spot_is_safe_for_escape =
             is_gathering_spot_safe_from_familiars(spot.center, &q_familiars);
         let search_radius = GATHERING_DETECTION_RADIUS.max(ESCAPE_GATHERING_JOIN_RADIUS);
-        soul_grid.0.get_nearby_in_radius_into(spot.center, search_radius, &mut nearby_buf);
+        soul_grid
+            .0
+            .get_nearby_in_radius_into(spot.center, search_radius, &mut nearby_buf);
 
         let mut current_participants = gp.len();
         for &soul_entity in nearby_buf.iter() {

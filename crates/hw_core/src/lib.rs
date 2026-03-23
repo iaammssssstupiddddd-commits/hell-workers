@@ -1,4 +1,5 @@
 pub mod area;
+pub mod camera;
 pub mod constants;
 pub mod events;
 pub mod familiar;
@@ -8,9 +9,11 @@ pub mod jobs;
 pub mod logistics;
 pub mod population;
 pub mod relationships;
+pub mod selection;
 pub mod soul;
 pub mod system_sets;
 pub mod time;
+pub mod ui_nodes;
 pub mod visual;
 pub mod visual_mirror;
 pub mod world;

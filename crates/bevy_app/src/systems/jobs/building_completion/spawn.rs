@@ -3,9 +3,7 @@ use crate::assets::GameAssets;
 use crate::plugins::startup::Building3dHandles;
 use crate::systems::visual::wall_orientation_aid::attach_wall_orientation_aid;
 use bevy::prelude::*;
-use hw_core::constants::{
-    TILE_SIZE, Z_BUILDING_FLOOR, Z_BUILDING_STRUCT,
-};
+use hw_core::constants::{TILE_SIZE, Z_BUILDING_FLOOR, Z_BUILDING_STRUCT};
 use hw_visual::layer::VisualLayerKind;
 use hw_visual::visual3d::Building3dVisual;
 
@@ -33,7 +31,10 @@ pub(super) fn spawn_completed_building(
 
     // 2D スプライト初期画像の選択（wall_connection システムが後から上書きする）
     let (sprite_image_2d, custom_size_2d) = match bp.kind {
-        BuildingType::Wall => (game_assets.mud_wall_isolated.clone(), Vec2::splat(TILE_SIZE)),
+        BuildingType::Wall => (
+            game_assets.mud_wall_isolated.clone(),
+            Vec2::splat(TILE_SIZE),
+        ),
         BuildingType::Door => (game_assets.door_closed.clone(), Vec2::splat(TILE_SIZE)),
         BuildingType::Floor => (game_assets.mud_floor.clone(), Vec2::splat(TILE_SIZE)),
         BuildingType::Tank => (game_assets.tank_empty.clone(), Vec2::splat(TILE_SIZE * 2.0)),
@@ -41,9 +42,10 @@ pub(super) fn spawn_completed_building(
         BuildingType::RestArea => (game_assets.rest_area.clone(), Vec2::splat(TILE_SIZE * 2.0)),
         BuildingType::SandPile => (game_assets.sand_pile.clone(), Vec2::splat(TILE_SIZE)),
         BuildingType::BonePile => (game_assets.bone_pile.clone(), Vec2::splat(TILE_SIZE)),
-        BuildingType::WheelbarrowParking => {
-            (game_assets.wheelbarrow_parking.clone(), Vec2::splat(TILE_SIZE * 2.0))
-        }
+        BuildingType::WheelbarrowParking => (
+            game_assets.wheelbarrow_parking.clone(),
+            Vec2::splat(TILE_SIZE * 2.0),
+        ),
         BuildingType::Bridge => unreachable!("Bridge uses use_3d = false path"),
     };
 
@@ -86,12 +88,8 @@ pub(super) fn spawn_completed_building(
             BuildingType::Door => (game_assets.door_closed.clone(), Vec2::splat(TILE_SIZE)),
             BuildingType::Floor => (game_assets.mud_floor.clone(), Vec2::splat(TILE_SIZE)),
             BuildingType::Tank => (game_assets.tank_empty.clone(), Vec2::splat(TILE_SIZE * 2.0)),
-            BuildingType::MudMixer => {
-                (game_assets.mud_mixer.clone(), Vec2::splat(TILE_SIZE * 2.0))
-            }
-            BuildingType::RestArea => {
-                (game_assets.rest_area.clone(), Vec2::splat(TILE_SIZE * 2.0))
-            }
+            BuildingType::MudMixer => (game_assets.mud_mixer.clone(), Vec2::splat(TILE_SIZE * 2.0)),
+            BuildingType::RestArea => (game_assets.rest_area.clone(), Vec2::splat(TILE_SIZE * 2.0)),
             BuildingType::Bridge => (
                 game_assets.bridge.clone(),
                 Vec2::new(TILE_SIZE * 2.0, TILE_SIZE * 5.0),
@@ -152,7 +150,14 @@ pub(super) fn spawn_completed_building(
 
     // 3D ビジュアルエンティティを独立して spawn（Building の Transform を変えない）
     if use_3d {
-        spawn_building_3d_visual(commands, building_entity, bp.kind, pos2d, is_provisional, handles_3d);
+        spawn_building_3d_visual(
+            commands,
+            building_entity,
+            bp.kind,
+            pos2d,
+            is_provisional,
+            handles_3d,
+        );
     }
 
     building_entity
@@ -213,13 +218,13 @@ fn spawn_building_3d_visual(
 
     let visual_entity = commands
         .spawn((
-        Mesh3d(mesh),
-        MeshMaterial3d(material),
-        transform_3d,
-        handles_3d.render_layers.clone(),
-        Building3dVisual { owner },
-        Name::new(format!("Building3dVisual ({:?})", kind)),
-    ))
+            Mesh3d(mesh),
+            MeshMaterial3d(material),
+            transform_3d,
+            handles_3d.render_layers.clone(),
+            Building3dVisual { owner },
+            Name::new(format!("Building3dVisual ({:?})", kind)),
+        ))
         .id();
 
     if matches!(kind, BuildingType::Wall) {

@@ -2,10 +2,7 @@
 
 use super::super::cancel;
 use crate::soul_ai::execute::task_execution::{
-    common::{
-        is_near_blueprint, is_near_target, is_near_target_or_dest, update_destination_to_adjacent,
-        update_destination_to_blueprint,
-    },
+    common::{NavOutcome, is_near_blueprint, navigate_to_pos, update_destination_to_blueprint},
     context::TaskExecutionContext,
     types::{AssignedTask, HaulWithWheelbarrowData, HaulWithWheelbarrowPhase},
 };
@@ -26,59 +23,34 @@ pub fn handle(
                 ctx.queries.storage.stockpiles.get(stockpile_entity)
             {
                 let stock_pos = stock_transform.translation.truncate();
-                let reachable = update_destination_to_adjacent(
-                    ctx.dest,
-                    stock_pos,
-                    ctx.path,
-                    soul_pos,
-                    world_map,
-                    ctx.pf_context,
-                );
-                (reachable, is_near_target(soul_pos, stock_pos))
+                let outcome = navigate_to_pos(ctx, stock_pos, soul_pos, world_map);
+                (
+                    !matches!(outcome, NavOutcome::Unreachable),
+                    matches!(outcome, NavOutcome::Arrived),
+                )
             } else if let Ok((_, site, _)) = ctx.queries.storage.floor_sites.get(stockpile_entity) {
                 let site_pos = site.material_center;
-                let reachable = update_destination_to_adjacent(
-                    ctx.dest,
-                    site_pos,
-                    ctx.path,
-                    soul_pos,
-                    world_map,
-                    ctx.pf_context,
-                );
+                let outcome = navigate_to_pos(ctx, site_pos, soul_pos, world_map);
                 (
-                    reachable,
-                    is_near_target_or_dest(soul_pos, site_pos, ctx.dest.0),
+                    !matches!(outcome, NavOutcome::Unreachable),
+                    matches!(outcome, NavOutcome::Arrived),
                 )
             } else if let Ok((_, site, _)) = ctx.queries.storage.wall_sites.get(stockpile_entity) {
                 let site_pos = site.material_center;
-                let reachable = update_destination_to_adjacent(
-                    ctx.dest,
-                    site_pos,
-                    ctx.path,
-                    soul_pos,
-                    world_map,
-                    ctx.pf_context,
-                );
+                let outcome = navigate_to_pos(ctx, site_pos, soul_pos, world_map);
                 (
-                    reachable,
-                    is_near_target_or_dest(soul_pos, site_pos, ctx.dest.0),
+                    !matches!(outcome, NavOutcome::Unreachable),
+                    matches!(outcome, NavOutcome::Arrived),
                 )
             } else if let Ok((wall_transform, building, _)) =
                 ctx.queries.storage.buildings.get(stockpile_entity)
             {
                 if building.kind == hw_jobs::BuildingType::Wall && building.is_provisional {
                     let site_pos = wall_transform.translation.truncate();
-                    let reachable = update_destination_to_adjacent(
-                        ctx.dest,
-                        site_pos,
-                        ctx.path,
-                        soul_pos,
-                        world_map,
-                        ctx.pf_context,
-                    );
+                    let outcome = navigate_to_pos(ctx, site_pos, soul_pos, world_map);
                     (
-                        reachable,
-                        is_near_target_or_dest(soul_pos, site_pos, ctx.dest.0),
+                        !matches!(outcome, NavOutcome::Unreachable),
+                        matches!(outcome, NavOutcome::Arrived),
                     )
                 } else {
                     info!("WB_HAUL: Destination stockpile/site not found, canceling");
@@ -119,17 +91,10 @@ pub fn handle(
             };
 
             let mixer_pos = mixer_transform.translation.truncate();
-            let reachable = update_destination_to_adjacent(
-                ctx.dest,
-                mixer_pos,
-                ctx.path,
-                soul_pos,
-                world_map,
-                ctx.pf_context,
-            );
+            let outcome = navigate_to_pos(ctx, mixer_pos, soul_pos, world_map);
             (
-                reachable,
-                is_near_target_or_dest(soul_pos, mixer_pos, ctx.dest.0),
+                !matches!(outcome, NavOutcome::Unreachable),
+                matches!(outcome, NavOutcome::Arrived),
             )
         }
     };

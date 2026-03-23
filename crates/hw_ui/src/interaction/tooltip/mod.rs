@@ -5,9 +5,7 @@ mod layout;
 mod system;
 mod target;
 
-use crate::components::{
-    HoverTooltip, TooltipBody, TooltipHeader, TooltipProgressBar,
-};
+use crate::components::{HoverTooltip, TooltipBody, TooltipHeader, TooltipProgressBar};
 use crate::models::inspection::EntityInspectionModel;
 use crate::theme::UiTheme;
 use bevy::ecs::system::SystemParam;

@@ -46,7 +46,7 @@ graph TD
 
 ## 主要なデータフロー: タスク割り当て
 1.  **Designation / Request**: 手動指定、または Auto-Haul システムが **request エンティティ**（アンカー位置）に `Designation` + `TransportRequest` を付与。運搬系は M3〜M7 で request 化済み。
-2.  **Spatial Grid**: `DesignationSpatialGrid` と `TransportRequestSpatialGrid` でタスク候補を空間検索（毎フレームフル同期）。
+2.  **Spatial Grid**: `DesignationSpatialGrid` と `TransportRequestSpatialGrid` などでタスク候補を空間検索。`GameSystemSet::Spatial` で毎フレーム実行されるが、グリッド本体は **Change Detection（`Added` / `Changed<Transform>` / `RemovedComponents`）による差分更新**であり、全クリア・全件再挿入（フル同期）は行わない（詳細は下記「空間グリッド一覧」）。
 3.  **Assignment**: `Familiar AI` が task_finder で候補を収集し、worker基準で再スコアして同一ティック内に複数 `魂` へ割り当てる。到達判定は `(worker_grid, target_grid)` キャッシュを参照しつつ実行し、割り当て時にソース（資材・バケツ等）を遅延解決する。
 4.  **Execution**: `Soul AI` が `WorkingOn` を通じて目的地を特定し、移動・作業を開始。
 5.  **Completion**: 資源が尽きると実体が消滅。`Observer` が検知し、`魂` のタスクを解除。
@@ -128,7 +128,7 @@ Perceive → Update → Decide → Execute
 
 ## 空間グリッド一覧 (Spatial Grids)
 
-`crates/hw_spatial` が concrete `SpatialGrid`（9種）を実体として保持する。`crates/bevy_app/src/systems/spatial/` は削除済みで、`plugins/spatial.rs` が `hw_spatial` / `hw_logistics` から直接 import する。
+`crates/hw_spatial` が 9 種類の concrete グリッド `Resource`（および `SpatialGridOps` 実装）を実体として保持する（Soul 用の型名は **`SpatialGrid`** — `SoulSpatialGrid` という Rust 型はない）。`ResourceSpatialGrid` / `StockpileSpatialGrid` の更新関数の一部は `hw_logistics` にあり、`plugins/spatial.rs` から登録される。`crates/bevy_app/src/systems/spatial/` は削除済みで、`crates/bevy_app/src/plugins/spatial.rs` が `hw_spatial` / `hw_logistics` から直接 import する。
 すべてのグリッドで `Added` / `Changed` / `RemovedComponents` の Change Detection に基づく差分更新を実装している。
 
 | グリッド | 用途 |
@@ -137,7 +137,7 @@ Perceive → Update → Decide → Execute
 | `TransportRequestSpatialGrid` | TransportRequest エンティティの近傍検索 |
 | `ResourceSpatialGrid` | 地面上の資源アイテムの近傍検索 |
 | `StockpileSpatialGrid` | Stockpile の近傍検索 |
-| `SoulSpatialGrid` | Soul 位置の近傍検索 |
+| `SpatialGrid` | Soul 位置の近傍検索（`hw_spatial::soul`） |
 | `FamiliarSpatialGrid` | Familiar 位置の近傍検索 |
 | `BlueprintSpatialGrid` | Blueprint の近傍検索 |
 | `GatheringSpotSpatialGrid` | 集会スポットの近傍検索 |
@@ -265,7 +265,7 @@ Perceive → Update → Decide → Execute
 
 ### hw_ui と root の境界
 
-- `hw_ui` 側はUIノード生成・表示系システムの本体を集約する。具体的には `UiRoot`/`UiMountSlot`、`UiSlot` 予約、ステータス表示、tooltip_builder、info_panel、task_list の render/interaction、エンティティリストの汎用メカニクス（resize/minimize/visual）を保持する。
+- `hw_ui` 側はUIノード生成・表示系システムの本体を集約する。具体的にはステータス表示、tooltip_builder、info_panel、task_list の render/interaction、エンティティリストの汎用メカニクス（resize/minimize/visual）を保持する。`UiRoot` / `UiMountSlot` / `UiSlot` / `UiNodeRegistry` のような**共有 UI 契約型**は `hw_core::ui_nodes` が所有し、`hw_ui` は re-export する。
 - root 側 (`bevy_app`) は `UiIntent` メッセージ受信、PlayMode 遷移、ゲームエンティティ ECS Query、WorldMapWrite/TaskContext など**ゲーム状態を持つ adapter** を担当する。
 - `crates/bevy_app/src/interface/ui/mod.rs` は app shell の正規入口として機能し、外部から使われるシンボルのみを明示的に re-export する（wildcard `*` は使用しない）。
 
@@ -290,7 +290,7 @@ Perceive → Update → Decide → Execute
 
 ### UIノード管理
 
-- `UiNodeRegistry` は `UiSlot -> Entity` を保持し、ノード更新は `Query::get_mut(entity)` で差分反映。
+- `UiNodeRegistry`（`hw_core::ui_nodes`）は `UiSlot -> Entity` を保持し、ノード更新は `Query::get_mut(entity)` で差分反映する。
 
 ### 情報表示
 
@@ -325,7 +325,7 @@ Perceive → Update → Decide → Execute
 
 | 区分 | 置き場所 | 内容 |
 | --- | --- | --- |
-| state resource | `hw_ui::selection` | `SelectedEntity`, `HoveredEntity`, `SelectionIndicator`, `cleanup_selection_references_system` |
+| state resource | `hw_core::selection` + `hw_ui::selection` | `SelectedEntity`, `HoveredEntity`, `SelectionIndicator` は `hw_core` 所有、`cleanup_selection_references_system` は `hw_ui::selection` |
 | shared 型・validation | `hw_ui::selection::placement` | `PlacementRejectReason`（`NotStraightLine` 含む）, `PlacementValidation`, `PlacementGeometry`, `WorldReadApi`, `BuildingPlacementContext` |
 | placement geometry API | `hw_ui::selection::placement` | `building_geometry`, `building_occupied_grids`, `building_spawn_pos`, `building_size`, `bucket_storage_geometry`, `validate_building_placement`, `validate_bucket_storage_placement` |
 | move geometry API | `hw_ui::selection::placement` | `move_anchor_grid`, `move_occupied_grids`, `move_spawn_pos`, `can_place_moved_building`, `validate_moved_bucket_storage_placement` |
@@ -333,7 +333,7 @@ Perceive → Update → Decide → Execute
 | selection intent | `hw_ui::selection::intent` | `SelectionIntent` |
 | root adapter | `crates/bevy_app/src/interface/selection/*` | Query/Res から intent 生成、ECS 状態・WorldMap 変更の適用 |
 
-- `hw_ui::selection` は state resource と shared outcome 型・trait のみ。`Commands`/`WorldMapWrite`/`NextState<PlayMode>` は使わない。
+- `SelectedEntity` / `HoveredEntity` / `SelectionIndicator` は cross-crate で共有される interaction state として `hw_core::selection` に置き、`hw_ui::selection` は cleanup と placement validation の公開面を担う。`Commands`/`WorldMapWrite`/`NextState<PlayMode>` は使わない。
 - `update_selection_indicator` の実装本体は `hw_visual` にあるが、選択更新と同フレームで反映するため root `Interface` フェーズで登録する。
 - `hw_ui::selection::placement` は building placement/move の geometry, validation 共通ロジックを保持する。`crates/bevy_app/src/interface/selection/building_place/placement.rs`・`building_move/preview.rs`・`building_move/system.rs`・`crates/bevy_app/src/systems/visual/placement_ghost.rs` が共有する。内部は private submodule に分離済み: `geometry.rs`（座標変換・形状計算）/ `validation.rs`（配置可否判定）/ `tests.rs`。`placement.rs` root はファサード + 共有型定義のみ。
 - `building_move/geometry.rs` は hw_ui 移動に伴い削除済み。`building_move/placement.rs` は bucket storage 所有グリッド解決だけを持つ薄い adapter で、判定本体は `validate_moved_bucket_storage_placement` を使う。

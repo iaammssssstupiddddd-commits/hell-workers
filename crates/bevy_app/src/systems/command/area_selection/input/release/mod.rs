@@ -17,9 +17,9 @@ use crate::systems::command::{AreaSelectionIndicator, TaskArea, TaskMode};
 use crate::systems::jobs::Designation;
 use crate::systems::jobs::floor_construction::FloorTileBlueprint;
 use crate::systems::jobs::wall_construction::WallTileBlueprint;
-use hw_world::zones::Site;
 use bevy::prelude::*;
 use hw_core::game_state::PlayMode;
+use hw_world::zones::Site;
 
 pub(super) fn handle_left_just_released_input(
     task_context: &mut TaskContext,
@@ -45,9 +45,7 @@ pub(super) fn handle_left_just_released_input(
 ) {
     match task_context.0 {
         TaskMode::AreaSelection(Some(start_pos)) => {
-            let indicator_entities: Vec<Entity> = {
-                collect_indicator_entities(&q_aux.p1())
-            };
+            let indicator_entities: Vec<Entity> = { collect_indicator_entities(&q_aux.p1()) };
             let q_unassigned = q_aux.p0();
             handle_release_area_selection(
                 task_context,

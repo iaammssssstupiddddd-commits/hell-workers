@@ -50,7 +50,9 @@ pub(super) fn setup(
         });
     let rtt_handle =
         rtt_setup::create_rtt_texture(viewport_size.width, viewport_size.height, &mut images);
-    commands.insert_resource(RttTextures { texture_3d: rtt_handle.clone() });
+    commands.insert_resource(RttTextures {
+        texture_3d: rtt_handle.clone(),
+    });
     commands.insert_resource(viewport_size);
 
     // --- Camera2d（既存: メイン描画・スクリーン出力） ---

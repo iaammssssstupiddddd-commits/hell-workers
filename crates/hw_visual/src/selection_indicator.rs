@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 use hw_core::constants::*;
-use hw_ui::selection::{SelectedEntity, SelectionIndicator};
+use hw_core::selection::{SelectedEntity, SelectionIndicator};
 
 pub fn update_selection_indicator(
     selected: Res<SelectedEntity>,

@@ -54,7 +54,9 @@ impl Plugin for SoulAiCorePlugin {
                     execute::drifting::despawn_at_edge_system
                         .after(execute::drifting::drifting_behavior_system),
                     execute::task_execution_system::task_execution_system
-                        .after(execute::task_assignment_apply::apply_task_assignment_requests_system)
+                        .after(
+                            execute::task_assignment_apply::apply_task_assignment_requests_system,
+                        )
                         .after(execute::drifting::drifting_behavior_system),
                     execute::task_execution::move_plant::apply_pending_building_move_system
                         .after(execute::task_execution_system::task_execution_system),

@@ -1,12 +1,14 @@
 use bevy::prelude::*;
 use hw_core::constants::{DREAM_ICON_ABSORB_DURATION, DREAM_ICON_BASE_SIZE, DREAM_ICON_PULSE_SIZE};
-use hw_ui::theme::UiTheme;
 
 use crate::dream::DreamIconAbsorb;
 
+fn dream_icon_base_color() -> Color {
+    Color::srgb(0.5, 0.7, 1.0)
+}
+
 pub fn dream_icon_absorb_system(
     time: Res<Time>,
-    theme: Res<UiTheme>,
     mut q_icon: Query<(
         &mut Node,
         &mut BackgroundColor,
@@ -34,7 +36,7 @@ pub fn dream_icon_absorb_system(
             let impact_offset = (1.0 - progress) * sin_val * 4.0;
             transform.translation.y = impact_offset;
 
-            let base = theme.colors.accent_soul_bright;
+            let base = dream_icon_base_color();
             let r = base.to_srgba().red + (1.0 - base.to_srgba().red) * sin_val * 0.5;
             let g = base.to_srgba().green + (1.0 - base.to_srgba().green) * sin_val * 0.5;
             let b = base.to_srgba().blue + (1.0 - base.to_srgba().blue) * sin_val * 0.5;
@@ -43,7 +45,7 @@ pub fn dream_icon_absorb_system(
             node.width = Val::Px(DREAM_ICON_BASE_SIZE);
             node.height = Val::Px(DREAM_ICON_BASE_SIZE);
             transform.translation.y = 0.0;
-            color.0 = theme.colors.accent_soul_bright;
+            color.0 = dream_icon_base_color();
         }
     }
 }

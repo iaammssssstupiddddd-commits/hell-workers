@@ -2,14 +2,14 @@ use super::components::{DreamParticle, DreamVisualState};
 use super::dream_bubble_material::{DreamBubbleMaterial, DreamBubbleUiMaterial};
 use bevy::prelude::ChildOf;
 use bevy::prelude::*;
+use hw_core::camera::MainCamera;
 use hw_core::constants::*;
 use hw_core::relationships::{ParticipatingIn, RestAreaOccupants};
 use hw_core::soul::{
     DamnedSoul, DreamQuality, DreamState, GatheringBehavior, IdleBehavior, IdleState,
 };
+use hw_core::ui_nodes::{UiMountSlot, UiNodeRegistry, UiSlot};
 use hw_core::visual_mirror::gather::RestAreaVisual;
-use hw_ui::camera::MainCamera;
-use hw_ui::components::{UiMountSlot, UiNodeRegistry};
 use rand::Rng;
 
 fn particle_interval_for_quality(quality: DreamQuality) -> f32 {
@@ -179,7 +179,7 @@ pub fn rest_area_dream_particle_spawn_system(
 
     let mut target_pos = Vec2::new(viewport_size.x - 80.0, 40.0);
 
-    if let Some(entity) = ui_nodes.get_slot(hw_ui::components::UiSlot::DreamPoolIcon) {
+    if let Some(entity) = ui_nodes.get_slot(UiSlot::DreamPoolIcon) {
         if let Ok((computed, transform)) = q_ui_transform.get(entity) {
             let center = transform.translation * computed.inverse_scale_factor();
             target_pos = center;

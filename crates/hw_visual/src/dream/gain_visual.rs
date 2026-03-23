@@ -7,11 +7,11 @@ use crate::floating_text::{
 };
 use crate::handles::MaterialIconHandles;
 use bevy::prelude::*;
+use hw_core::camera::MainCamera;
 use hw_core::constants::*;
 use hw_core::relationships::ParticipatingIn;
 use hw_core::soul::{DamnedSoul, DreamState, GatheringBehavior, IdleBehavior, IdleState};
-use hw_ui::camera::MainCamera;
-use hw_ui::components::{UiNodeRegistry, UiRoot, UiSlot};
+use hw_core::ui_nodes::{UiNodeRegistry, UiRoot, UiSlot};
 
 pub fn dream_popup_spawn_system(
     mut commands: Commands,

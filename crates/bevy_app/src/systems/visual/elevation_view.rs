@@ -44,25 +44,35 @@ impl ElevationDirection {
     pub fn camera_rotation(self) -> Quat {
         match self {
             // TopDown: VIEW_HEIGHT / Z_OFFSET で斜め俯瞰の回転を固定する
-            Self::TopDown => Transform::from_xyz(0.0, VIEW_HEIGHT, Z_OFFSET)
-                .looking_at(Vec3::ZERO, Vec3::NEG_Z)
-                .rotation,
+            Self::TopDown => {
+                Transform::from_xyz(0.0, VIEW_HEIGHT, Z_OFFSET)
+                    .looking_at(Vec3::ZERO, Vec3::NEG_Z)
+                    .rotation
+            }
             // North: +Z 側から -Z 方向を水平に見る
-            Self::North => Transform::from_xyz(0.0, 0.0, 1.0)
-                .looking_at(Vec3::ZERO, Vec3::Y)
-                .rotation,
+            Self::North => {
+                Transform::from_xyz(0.0, 0.0, 1.0)
+                    .looking_at(Vec3::ZERO, Vec3::Y)
+                    .rotation
+            }
             // South: -Z 側から +Z 方向を水平に見る
-            Self::South => Transform::from_xyz(0.0, 0.0, -1.0)
-                .looking_at(Vec3::ZERO, Vec3::Y)
-                .rotation,
+            Self::South => {
+                Transform::from_xyz(0.0, 0.0, -1.0)
+                    .looking_at(Vec3::ZERO, Vec3::Y)
+                    .rotation
+            }
             // East: +X 側から -X 方向を水平に見る
-            Self::East => Transform::from_xyz(1.0, 0.0, 0.0)
-                .looking_at(Vec3::ZERO, Vec3::Y)
-                .rotation,
+            Self::East => {
+                Transform::from_xyz(1.0, 0.0, 0.0)
+                    .looking_at(Vec3::ZERO, Vec3::Y)
+                    .rotation
+            }
             // West: -X 側から +X 方向を水平に見る
-            Self::West => Transform::from_xyz(-1.0, 0.0, 0.0)
-                .looking_at(Vec3::ZERO, Vec3::Y)
-                .rotation,
+            Self::West => {
+                Transform::from_xyz(-1.0, 0.0, 0.0)
+                    .looking_at(Vec3::ZERO, Vec3::Y)
+                    .rotation
+            }
         }
     }
 }
@@ -103,8 +113,5 @@ pub fn elevation_view_input_system(
         cam2d_camera.is_active = state.direction.is_top_down();
     }
 
-    info!(
-        "ElevationView: switched to {:?}",
-        state.direction
-    );
+    info!("ElevationView: switched to {:?}", state.direction);
 }

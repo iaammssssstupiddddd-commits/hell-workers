@@ -7,8 +7,8 @@ mod worker_indicator;
 use bevy::prelude::Color;
 
 pub use resource_highlight::{
-    COLOR_DESIGNATED_TINT, COLOR_WORKING_TINT,
-    attach_resource_visual_system, update_resource_visual_system, cleanup_resource_visual_system,
+    COLOR_DESIGNATED_TINT, COLOR_WORKING_TINT, attach_resource_visual_system,
+    cleanup_resource_visual_system, update_resource_visual_system,
 };
 pub use worker_indicator::{spawn_gather_indicators_system, update_gather_indicators_system};
 

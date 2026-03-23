@@ -13,8 +13,8 @@ use hw_world::WorldMap;
 
 use crate::soul_ai::helpers::query_types::IdleDecisionSoulQuery;
 
-use super::{exhausted_gathering, motion_dispatch, rest_decision, task_override, transitions};
 use super::rest_area::find_nearest_available_rest_area;
+use super::{exhausted_gathering, motion_dispatch, rest_decision, task_override, transitions};
 
 /// アイドル行動の決定システム (Decide Phase)
 ///
@@ -59,8 +59,13 @@ pub fn idle_behavior_decision_system(
         rest_cooldown,
     ) in query.iter_mut()
     {
-        let (gathering_center, target_spot_entity) =
-            resolve_gathering_target(participating_in, &q_spots, &spot_grid, &transform, &mut *nearby_buf);
+        let (gathering_center, target_spot_entity) = resolve_gathering_target(
+            participating_in,
+            &q_spots,
+            &spot_grid,
+            &transform,
+            &mut *nearby_buf,
+        );
 
         if exhausted_gathering::process_exhausted_gathering(
             entity,

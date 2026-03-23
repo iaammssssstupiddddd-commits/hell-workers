@@ -35,7 +35,14 @@ pub fn find_initial_gathering_position<G: SpatialGridOps, W: PathWorld>(
         20,
     )
     .or_else(|| {
-        find_position_fallback_away(center, current_pos, exclude_entity, soul_grid, world_map, scratch)
+        find_position_fallback_away(
+            center,
+            current_pos,
+            exclude_entity,
+            soul_grid,
+            world_map,
+            scratch,
+        )
     })
 }
 

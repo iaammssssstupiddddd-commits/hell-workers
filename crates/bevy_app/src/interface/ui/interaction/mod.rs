@@ -21,11 +21,7 @@ pub use status_display::{
 pub(crate) use tooltip::hover_tooltip_system;
 
 pub use systems::{
-    arch_category_action_system,
-    door_lock_action_system,
-    move_plant_building_action_system,
-    ui_interaction_system,
-    ui_keyboard_shortcuts_system,
-    update_operation_dialog_system,
+    arch_category_action_system, door_lock_action_system, move_plant_building_action_system,
+    ui_interaction_system, ui_keyboard_shortcuts_system, update_operation_dialog_system,
     update_ui_input_state_system,
 };

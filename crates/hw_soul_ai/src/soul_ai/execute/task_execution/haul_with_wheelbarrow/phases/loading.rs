@@ -56,8 +56,7 @@ pub fn handle(
         if let Some(dest_entity) = data.destination.stockpile_or_blueprint() {
             for &item in &collected_items {
                 if let Ok(mut item_commands) = commands.get_entity(item) {
-                    item_commands
-                        .try_insert(hw_core::relationships::DeliveringTo(dest_entity));
+                    item_commands.try_insert(hw_core::relationships::DeliveringTo(dest_entity));
                 }
             }
         }

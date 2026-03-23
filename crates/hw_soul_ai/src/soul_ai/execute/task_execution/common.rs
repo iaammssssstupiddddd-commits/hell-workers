@@ -1,5 +1,6 @@
 //! タスク実行の共通処理
 
+use crate::soul_ai::execute::task_execution::context::TaskExecutionContext;
 use crate::soul_ai::execute::task_execution::types::AssignedTask;
 use bevy::prelude::*;
 use hw_core::soul::{Destination, Path};
@@ -306,4 +307,131 @@ pub fn try_pickup_item(
     }
     pickup_item(commands, soul_entity, item_entity, inventory);
     true
+}
+
+// ---------------------------------------------------------------------------
+// 移動フェーズ共通ヘルパー
+// ---------------------------------------------------------------------------
+
+/// 指定への隣接移動フェーズの処理結果
+#[derive(Debug, PartialEq, Eq)]
+pub enum NavOutcome {
+    /// 移動中: 特別な処理不要
+    Moving,
+    /// 到達済み: 次フェーズへ遷移可能
+    Arrived,
+    /// 指定が解除された: task/path はすでにクリア済み
+    Cancelled,
+    /// 到達不能: task/path はまだ残っている（呼び出し元でクリーンアップ）
+    Unreachable,
+}
+
+/// 指定チェック → 隣接ナビゲーション → 到達判定をまとめたヘルパー。
+///
+/// - 指定が存在しない (`designation_present: false`) なら `Cancelled`（task+path はすでにクリア済み）
+/// - 到達不能なら `Unreachable`
+/// - 到達済みなら `Arrived`
+/// - 移動中なら `Moving`
+///
+/// # Note
+/// `designation_present` は呼び出し元で `des_opt.is_some()` に評価してから渡すこと。
+/// これにより `ctx` に対するイミュータブル借用（クエリ結果）を事前に解放できる。
+pub fn navigate_to_adjacent(
+    ctx: &mut TaskExecutionContext,
+    designation_present: bool,
+    target_pos: Vec2,
+    soul_pos: Vec2,
+    world_map: &WorldMap,
+) -> NavOutcome {
+    if !designation_present {
+        clear_task_and_path(ctx.task, ctx.path);
+        return NavOutcome::Cancelled;
+    }
+    let reachable = update_destination_to_adjacent(
+        ctx.dest,
+        target_pos,
+        ctx.path,
+        soul_pos,
+        world_map,
+        ctx.pf_context,
+    );
+    if !reachable {
+        return NavOutcome::Unreachable;
+    }
+    if is_near_target(soul_pos, target_pos) {
+        NavOutcome::Arrived
+    } else {
+        NavOutcome::Moving
+    }
+}
+
+/// 収集対象が消えた・到達不能のときの共通クリーンアップ。
+///
+/// Designation / TaskSlots を削除し、予約を解放してからタスクをクリアする。
+pub fn cleanup_collect_target(
+    ctx: &mut TaskExecutionContext,
+    target: Entity,
+    commands: &mut Commands,
+) {
+    commands
+        .entity(target)
+        .remove::<hw_jobs::Designation>()
+        .remove::<hw_jobs::TaskSlots>();
+    ctx.queue_reservation(hw_core::events::ResourceReservationOp::ReleaseSource {
+        source: target,
+        amount: 1,
+    });
+    clear_task_and_path(ctx.task, ctx.path);
+}
+
+/// 指定チェックなしの隣接移動フェーズヘルパー。
+///
+/// 指定（Designation）が存在しない hauling など、キャンセル条件が呼び出し元固有の
+/// フェーズで使用する。`navigate_to_adjacent` と異なり `Cancelled` を返さない。
+///
+/// - 到達不能なら `Unreachable`
+/// - 到達済みなら `Arrived`
+/// - 移動中なら `Moving`
+pub fn navigate_to_pos(
+    ctx: &mut TaskExecutionContext,
+    target_pos: Vec2,
+    soul_pos: Vec2,
+    world_map: &WorldMap,
+) -> NavOutcome {
+    let reachable = update_destination_to_adjacent(
+        ctx.dest,
+        target_pos,
+        ctx.path,
+        soul_pos,
+        world_map,
+        ctx.pf_context,
+    );
+    if !reachable {
+        return NavOutcome::Unreachable;
+    }
+    if is_near_target(soul_pos, target_pos) {
+        NavOutcome::Arrived
+    } else {
+        NavOutcome::Moving
+    }
+}
+
+/// 収集タスク Done フェーズの共通クリーンアップ。
+///
+/// Designation / TaskSlots / IssuedBy を削除し、予約を解放してからタスクをクリアする。
+pub fn finalize_collect_task(
+    ctx: &mut TaskExecutionContext,
+    target: Entity,
+    commands: &mut Commands,
+) {
+    commands
+        .entity(target)
+        .remove::<hw_jobs::Designation>()
+        .remove::<hw_jobs::TaskSlots>()
+        .remove::<hw_jobs::IssuedBy>();
+    ctx.queue_reservation(hw_core::events::ResourceReservationOp::ReleaseSource {
+        source: target,
+        amount: 1,
+    });
+    clear_task_and_path(ctx.task, ctx.path);
 }

@@ -3,11 +3,11 @@ use hw_core::constants::FLOOR_MAX_AREA_SIZE;
 use hw_jobs::{BuildingCategory, BuildingType};
 use std::collections::HashSet;
 
+use super::geometry::grid_is_nearby;
 use super::{
     BuildingPlacementContext, PlacementGeometry, PlacementRejectReason, PlacementValidation,
     WorldReadApi,
 };
-use super::geometry::grid_is_nearby;
 
 /// Validates floor/wall area size. Returns `AreaTooLarge` if either dimension exceeds the limit.
 pub fn validate_area_size(width: i32, height: i32) -> Option<PlacementRejectReason> {

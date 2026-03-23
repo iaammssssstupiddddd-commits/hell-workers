@@ -86,5 +86,3 @@ pub(super) fn try_reuse_existing_path(
     );
     false
 }
-
-

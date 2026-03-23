@@ -6,9 +6,9 @@ mod bottom_bar;
 mod dialogs;
 mod entity_list;
 mod panels;
+mod root;
 mod submenus;
 mod time_control;
-mod root;
 
 use bevy::prelude::{Font, Handle, Image};
 

@@ -1,10 +1,10 @@
 use crate::app_contexts::{CompanionPlacementKind, CompanionPlacementState};
 use crate::assets::GameAssets;
 use crate::systems::jobs::{Blueprint, Building};
-use hw_world::zones::{Site, Yard};
 use crate::world::map::{RIVER_Y_MIN, WorldMap};
 use bevy::prelude::*;
 use hw_ui::selection::building_occupied_grids;
+use hw_world::zones::{Site, Yard};
 
 use super::companion::parent_building_type;
 use super::placement::{place_building_blueprint, try_place_bucket_storage_companion};

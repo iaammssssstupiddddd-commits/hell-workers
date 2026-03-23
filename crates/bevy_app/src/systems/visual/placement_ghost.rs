@@ -2,7 +2,6 @@ use crate::app_contexts::{
     BuildContext, CompanionParentKind, CompanionPlacementKind, CompanionPlacementState,
 };
 use crate::systems::jobs::{Blueprint, Building, BuildingType};
-use hw_world::zones::{Site, Yard};
 use crate::world::map::{RIVER_Y_MIN, WorldMap, WorldMapRead, WorldMapRef};
 use bevy::prelude::*;
 use hw_core::constants::TILE_SIZE;
@@ -13,6 +12,7 @@ use hw_ui::selection::{
     building_geometry, building_occupied_grids, building_size, building_spawn_pos,
     validate_bucket_storage_placement, validate_building_placement,
 };
+use hw_world::zones::{Site, Yard};
 
 #[derive(Component)]
 pub struct PlacementGhost;

@@ -12,19 +12,19 @@ use crate::animations::{PulseAnimation, update_pulse_animation};
 use hw_core::visual_mirror::construction::BlueprintVisualState;
 
 pub use components::{
-    BlueprintState, BlueprintVisual, MaterialIcon, MaterialCounter, DeliveryPopup, CompletionText,
-    BuildingBounceEffect, WorkerHammerIcon, HasWorkerIndicator, ProgressBar,
+    BlueprintState, BlueprintVisual, BuildingBounceEffect, CompletionText, DeliveryPopup,
+    HasWorkerIndicator, MaterialCounter, MaterialIcon, ProgressBar, WorkerHammerIcon,
 };
 pub use effects::{
-    material_delivery_vfx_system, update_delivery_popup_system, update_completion_text_system,
-    building_bounce_animation_system,
+    building_bounce_animation_system, material_delivery_vfx_system, update_completion_text_system,
+    update_delivery_popup_system,
 };
 pub use material_display::{
-    spawn_material_display_system, update_material_counter_system, cleanup_material_display_system,
+    cleanup_material_display_system, spawn_material_display_system, update_material_counter_system,
 };
 pub use progress_bar::{
-    spawn_progress_bar_system, update_progress_bar_fill_system, sync_progress_bar_position_system,
-    cleanup_progress_bars_system,
+    cleanup_progress_bars_system, spawn_progress_bar_system, sync_progress_bar_position_system,
+    update_progress_bar_fill_system,
 };
 pub use worker_indicator::{spawn_worker_indicators_system, update_worker_indicators_system};
 

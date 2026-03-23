@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use bevy::ui_render::prelude::MaterialNode;
 use hw_core::constants::*;
-use hw_ui::components::{UiNodeRegistry, UiSlot};
+use hw_core::ui_nodes::{UiNodeRegistry, UiSlot};
 use rand::Rng;
 use rand::rngs::ThreadRng;
 

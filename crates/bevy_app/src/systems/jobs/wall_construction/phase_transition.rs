@@ -42,13 +42,13 @@ pub fn wall_framed_tile_spawn_system(
 
         let visual_entity = commands
             .spawn((
-            Mesh3d(handles_3d.wall_mesh.clone()),
-            MeshMaterial3d(handles_3d.wall_provisional_material.clone()),
-            Transform::from_xyz(world_pos.x, TILE_SIZE / 2.0, -world_pos.y),
-            handles_3d.render_layers.clone(),
-            Building3dVisual { owner: wall_entity },
-            Name::new("Building3dVisual (Wall, Provisional)"),
-        ))
+                Mesh3d(handles_3d.wall_mesh.clone()),
+                MeshMaterial3d(handles_3d.wall_provisional_material.clone()),
+                Transform::from_xyz(world_pos.x, TILE_SIZE / 2.0, -world_pos.y),
+                handles_3d.render_layers.clone(),
+                Building3dVisual { owner: wall_entity },
+                Name::new("Building3dVisual (Wall, Provisional)"),
+            ))
             .id();
         attach_wall_orientation_aid(&mut commands, visual_entity, &handles_3d);
 

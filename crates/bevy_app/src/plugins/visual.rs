@@ -1,6 +1,7 @@
 //! ビジュアル関連のプラグイン
 
 use crate::entities::familiar::{familiar_animation_system, update_familiar_range_indicator};
+use crate::plugins::startup::{Camera3dRtt, RttCompositeSprite};
 use crate::systems::GameSystemSet;
 use crate::systems::command::{
     area_edit_handles_visual_system, area_selection_indicator_system,
@@ -9,23 +10,20 @@ use crate::systems::command::{
 };
 use crate::systems::jobs::building_completion_system;
 use crate::systems::logistics::resource_count_display_system;
-use hw_world::sync_room_overlay_tiles_system;
 use crate::systems::visual::building3d_cleanup::{
     cleanup_building_3d_visuals_system, sync_provisional_wall_material_system,
 };
 use crate::systems::visual::camera_sync::sync_camera3d_system;
 use crate::systems::visual::character_proxy_3d::{
-    cleanup_familiar_proxy_3d_system, cleanup_soul_proxy_3d_system,
-    sync_familiar_proxy_3d_system, sync_soul_proxy_3d_system,
+    cleanup_familiar_proxy_3d_system, cleanup_soul_proxy_3d_system, sync_familiar_proxy_3d_system,
+    sync_soul_proxy_3d_system,
 };
-use crate::systems::visual::elevation_view::{
-    ElevationViewState, elevation_view_input_system,
-};
+use crate::systems::visual::elevation_view::{ElevationViewState, elevation_view_input_system};
 use crate::systems::visual::task_area_visual::update_task_area_material_system;
 use hw_core::game_state::PlayMode;
-use crate::plugins::startup::{Camera3dRtt, RttCompositeSprite};
 use hw_visual::HwVisualPlugin;
 use hw_visual::soul::task_link_system;
+use hw_world::sync_room_overlay_tiles_system;
 
 use bevy::prelude::*;
 
@@ -37,10 +35,7 @@ impl Plugin for VisualPlugin {
 
         app.init_resource::<ElevationViewState>();
 
-        app.add_systems(
-            Update,
-            sync_camera3d_system.in_set(GameSystemSet::Visual),
-        );
+        app.add_systems(Update, sync_camera3d_system.in_set(GameSystemSet::Visual));
 
         app.add_systems(
             Update,

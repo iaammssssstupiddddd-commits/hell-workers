@@ -6,11 +6,11 @@ use crate::theme::UiTheme;
 use bevy::prelude::*;
 use bevy::ui_widgets::popover::Popover;
 
+use super::target::TooltipTarget;
 use super::{
     TooltipContentRenderer, TooltipInspectionSource, TooltipRenderQueries, TooltipRuntimeState,
     fade, layout, target,
 };
-use super::target::TooltipTarget;
 
 #[allow(clippy::too_many_arguments)]
 pub fn hover_tooltip_system<'w, 's, I, R>(

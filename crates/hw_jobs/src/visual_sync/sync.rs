@@ -250,9 +250,7 @@ pub fn sync_mud_mixer_active_system(
     let refining_mixers: std::collections::HashSet<Entity> = q_tasks
         .iter()
         .filter_map(|task| match task {
-            AssignedTask::Refine(data)
-                if matches!(data.phase, RefinePhase::Refining { .. }) =>
-            {
+            AssignedTask::Refine(data) if matches!(data.phase, RefinePhase::Refining { .. }) => {
                 Some(data.mixer)
             }
             _ => None,

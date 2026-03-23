@@ -85,7 +85,9 @@ pub fn escaping_decision_system(
             }
 
             let soul_pos = transform.translation.truncate();
-            if let Some(threat) = detect_nearest_familiar(soul_pos, &familiar_grid, &q_familiars, &mut *nearby_buf) {
+            if let Some(threat) =
+                detect_nearest_familiar(soul_pos, &familiar_grid, &q_familiars, &mut *nearby_buf)
+            {
                 debug!(
                     "ESCAPE_DECIDE: {:?} detected threat {:?} dist {:.1}",
                     entity, threat.entity, threat.distance

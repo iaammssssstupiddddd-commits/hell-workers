@@ -67,6 +67,40 @@ fn find_nearest_source_item<'w, 's>(
         .map(|source| (source.entity, source.pos))
 }
 
+/// 地面上のエンティティが有効なソースアイテムかを検証する共通フィルタ。
+/// `owner_filter`: `None` = オーナー不問, `Some(Some(e))` = 特定オーナー必須,
+///                 `Some(None)` = オーナーなし必須
+fn is_valid_ground_source<'w, 's>(
+    entity: Entity,
+    resource_type: ResourceType,
+    queries: &TaskQueries<'w, 's>,
+    shadow: &ReservationShadow,
+    owner_filter: Option<Option<Entity>>,
+) -> Option<Vec2> {
+    let (transform, _, _, _, resource_opt, _, stored_in_opt) =
+        queries.designation.targets.get(entity).ok()?;
+    if stored_in_opt.is_some() {
+        return None;
+    }
+    if !resource_opt.is_some_and(|res| res.0 == resource_type) {
+        return None;
+    }
+    if !source_not_reserved(entity, queries, shadow) {
+        return None;
+    }
+    if let Some(expected_owner) = owner_filter {
+        let owner = queries.designation.belongs.get(entity).ok().map(|b| b.0);
+        let owner_compatible = match expected_owner {
+            Some(owner_entity) => owner == Some(owner_entity),
+            None => owner.is_none(),
+        };
+        if !owner_compatible {
+            return None;
+        }
+    }
+    Some(transform.translation.truncate())
+}
+
 fn nearest_ground_source_with_grid<'w, 's>(
     resource_type: ResourceType,
     target_pos: Vec2,
@@ -94,42 +128,11 @@ fn nearest_ground_source_with_grid<'w, 's>(
         let mut candidates = Vec::new();
         for entity in nearby_sources {
             mark_candidate_scanned_item();
-            let Ok((
-                transform,
-                _tree_opt,
-                _tree_variant_opt,
-                _rock_opt,
-                resource_opt,
-                _,
-                stored_in_opt,
-            )) = queries.designation.targets.get(entity)
-            else {
-                continue;
-            };
-            if stored_in_opt.is_some() {
-                continue;
+            if let Some(pos) =
+                is_valid_ground_source(entity, resource_type, queries, shadow, owner_filter)
+            {
+                candidates.push(CachedSourceItem { entity, pos });
             }
-            if !resource_opt.is_some_and(|res| res.0 == resource_type) {
-                continue;
-            }
-            if !source_not_reserved(entity, queries, shadow) {
-                continue;
-            }
-            if let Some(expected_owner) = owner_filter {
-                let owner = queries.designation.belongs.get(entity).ok().map(|b| b.0);
-                let owner_compatible = match expected_owner {
-                    Some(owner_entity) => owner == Some(owner_entity),
-                    None => owner.is_none(),
-                };
-                if !owner_compatible {
-                    continue;
-                }
-            }
-
-            candidates.push(CachedSourceItem {
-                entity,
-                pos: transform.translation.truncate(),
-            });
         }
 
         if let Some(found) =
@@ -332,29 +335,7 @@ fn collect_items_for_wheelbarrow_in_radius(
         .into_iter()
         .inspect(|_| mark_candidate_scanned_item())
         .filter_map(|entity| {
-            let Ok((
-                transform,
-                _tree_opt,
-                _tree_variant_opt,
-                _rock_opt,
-                resource_opt,
-                _,
-                stored_in_opt,
-            )) = queries.designation.targets.get(entity)
-            else {
-                return None;
-            };
-            if stored_in_opt.is_some() {
-                return None;
-            }
-            if !resource_opt.is_some_and(|res| res.0 == resource_type) {
-                return None;
-            }
-            if !source_not_reserved(entity, queries, shadow) {
-                return None;
-            }
-
-            let pos = transform.translation.truncate();
+            let pos = is_valid_ground_source(entity, resource_type, queries, shadow, None)?;
             let dist_sq = pos.distance_squared(center_pos);
             if dist_sq > search_radius_sq {
                 return None;

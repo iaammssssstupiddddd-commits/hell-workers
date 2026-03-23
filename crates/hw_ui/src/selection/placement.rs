@@ -1,11 +1,11 @@
 mod geometry;
-mod validation;
 #[cfg(test)]
 mod tests;
+mod validation;
 
 pub use self::geometry::{
-    building_geometry, building_occupied_grids, building_size, building_spawn_pos,
-    bucket_storage_geometry, grid_is_nearby, move_anchor_grid, move_occupied_grids, move_spawn_pos,
+    bucket_storage_geometry, building_geometry, building_occupied_grids, building_size,
+    building_spawn_pos, grid_is_nearby, move_anchor_grid, move_occupied_grids, move_spawn_pos,
 };
 pub use self::validation::{
     can_place_moved_building, validate_area_size, validate_bucket_storage_placement,
@@ -128,4 +128,3 @@ where
     pub is_wall_or_door_at: &'a dyn Fn((i32, i32)) -> bool,
     pub is_replaceable_wall_at: &'a dyn Fn((i32, i32)) -> bool,
 }
-

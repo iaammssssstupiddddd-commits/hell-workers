@@ -1,8 +1,8 @@
 use bevy::prelude::*;
 use bevy::ui_render::prelude::MaterialNode;
+use hw_core::camera::MainCamera;
 use hw_core::constants::*;
-use hw_ui::camera::MainCamera;
-use hw_ui::components::{UiMountSlot, UiNodeRegistry};
+use hw_core::ui_nodes::{UiMountSlot, UiNodeRegistry};
 use rand::Rng;
 
 use super::super::components::{DreamGainUiParticle, DreamIconAbsorb};

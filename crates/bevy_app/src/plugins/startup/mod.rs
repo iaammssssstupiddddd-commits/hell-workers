@@ -17,9 +17,8 @@ use perf_scenario::{
     PerfScenarioApplied, setup_perf_scenario_if_enabled, setup_perf_scenario_runtime_if_enabled,
 };
 use startup_systems::{
-    initialize_gizmo_config, initial_resource_spawner_timed, populate_resource_spatial_grid,
-    setup, spawn_entities, spawn_familiar_wrapper, spawn_map_timed,
-    spawn_terrain_borders_if_enabled,
+    initial_resource_spawner_timed, initialize_gizmo_config, populate_resource_spatial_grid, setup,
+    spawn_entities, spawn_familiar_wrapper, spawn_map_timed, spawn_terrain_borders_if_enabled,
 };
 
 use crate::app_contexts::{
@@ -82,13 +81,16 @@ impl Plugin for StartupPlugin {
                 )
                     .chain(),
             )
-            .add_systems(Update, (
-                setup_perf_scenario_runtime_if_enabled,
+            .add_systems(
+                Update,
                 (
-                    rtt_setup::sync_rtt_texture_size_to_window,
-                    rtt_composite::sync_rtt_output_bindings,
-                )
-                    .chain(),
-            ));
+                    setup_perf_scenario_runtime_if_enabled,
+                    (
+                        rtt_setup::sync_rtt_texture_size_to_window,
+                        rtt_composite::sync_rtt_output_bindings,
+                    )
+                        .chain(),
+                ),
+            );
     }
 }

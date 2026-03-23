@@ -2,7 +2,7 @@
 
 use bevy::prelude::*;
 use hw_core::constants::*;
-use hw_core::events::{DriftingEscapeStarted};
+use hw_core::events::DriftingEscapeStarted;
 use hw_core::population::PopulationManager;
 use hw_core::relationships::{CommandedBy, ParticipatingIn, RestingIn};
 use hw_core::soul::{

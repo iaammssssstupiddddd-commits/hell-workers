@@ -54,10 +54,10 @@ pub fn building_move_system(
     game_assets: Res<crate::assets::GameAssets>,
     mut commands: Commands,
 ) {
+    // --- Phase 1: 入力と早期 return ---
     if ui_input_state.pointer_over_ui {
         return;
     }
-
     if buttons.just_pressed(MouseButton::Right) {
         clear_move_states(
             &mut move_context,
@@ -67,20 +67,18 @@ pub fn building_move_system(
         next_play_mode.set(PlayMode::Normal);
         return;
     }
-
     if !buttons.just_pressed(MouseButton::Left) {
         return;
     }
-
     let Some(world_pos) = hw_ui::camera::world_cursor_pos(&q_window, &q_camera) else {
         return;
     };
     let destination_grid = WorldMap::world_to_grid(world_pos);
-
     let Some(target_entity) = move_context.0 else {
         return;
     };
 
+    // --- Phase 2: 配置対象の検証 ---
     let Ok((_, building, transform)) = q_buildings.get(target_entity) else {
         clear_move_states(
             &mut move_context,
@@ -90,7 +88,6 @@ pub fn building_move_system(
         next_play_mode.set(PlayMode::Normal);
         return;
     };
-
     if !matches!(building.kind, BuildingType::Tank | BuildingType::MudMixer) {
         clear_move_states(
             &mut move_context,
@@ -101,83 +98,176 @@ pub fn building_move_system(
         return;
     }
 
-    if let Some(active_companion) = companion_state.0.clone() {
-        if active_companion.kind != CompanionPlacementKind::BucketStorage
-            || active_companion.parent_kind != CompanionParentKind::Tank
-        {
-            companion_state.0 = None;
-            move_placement_state.0 = None;
-            return;
-        }
-        let Some(pending) = move_placement_state.0 else {
-            companion_state.0 = None;
-            return;
-        };
-        if pending.building != target_entity {
-            companion_state.0 = None;
-            move_placement_state.0 = None;
-            return;
-        }
-        let old_anchor = move_anchor_grid(building.kind, transform.translation.truncate());
-        let old_occupied = move_occupied_grids(building.kind, old_anchor);
-        let destination_occupied = move_occupied_grids(building.kind, pending.destination_grid);
-        if !can_place_moved_building(
-            &WorldMapRef(&*world_map),
-            target_entity,
-            &old_occupied,
-            &destination_occupied,
-        ) {
-            return;
-        }
-        if !validate_tank_companion_for_move(
-            &world_map,
-            target_entity,
-            pending.destination_grid,
-            destination_grid,
-            &old_occupied,
-            &q_bucket_storages,
-        )
-        .can_place
-        {
-            return;
-        }
-
-        finalize_move_request(
+    // --- Phase 3a: Companion 配置確認クリック ---
+    if companion_state.0.is_some() {
+        handle_companion_click(
             &mut commands,
             &mut world_map,
             &q_transport_requests,
             &mut q_souls,
             &mut task_queries,
             &game_assets,
+            &mut companion_state,
+            &mut move_placement_state,
+            &mut move_context,
+            &mut next_play_mode,
+            destination_grid,
             target_entity,
             building,
             transform,
-            pending.destination_grid,
-            Some(destination_grid),
+            &q_bucket_storages,
         );
-
-        clear_move_states(
-            &mut move_context,
-            &mut move_placement_state,
-            &mut companion_state,
-        );
-        next_play_mode.set(PlayMode::Normal);
         return;
     }
 
+    // --- Phase 3b: 初回配置クリック ---
+    handle_initial_click(
+        &mut commands,
+        &mut world_map,
+        &q_transport_requests,
+        &mut q_souls,
+        &mut task_queries,
+        &game_assets,
+        &mut companion_state,
+        &mut move_placement_state,
+        &mut move_context,
+        &mut next_play_mode,
+        destination_grid,
+        target_entity,
+        building,
+        transform,
+    );
+}
+
+/// Companion（BucketStorage）配置確認ステップのクリック処理。
+#[allow(clippy::too_many_arguments)]
+fn handle_companion_click(
+    commands: &mut Commands,
+    world_map: &mut WorldMapWrite,
+    q_transport_requests: &Query<(Entity, &TransportRequest)>,
+    q_souls: &mut Query<
+        (
+            Entity,
+            &Transform,
+            &mut AssignedTask,
+            &mut crate::entities::damned_soul::Path,
+            Option<&mut crate::systems::logistics::Inventory>,
+        ),
+        With<crate::entities::damned_soul::DamnedSoul>,
+    >,
+    task_queries: &mut TaskUnassignQueries,
+    game_assets: &crate::assets::GameAssets,
+    companion_state: &mut CompanionPlacementState,
+    move_placement_state: &mut MovePlacementState,
+    move_context: &mut MoveContext,
+    next_play_mode: &mut NextState<PlayMode>,
+    destination_grid: (i32, i32),
+    target_entity: Entity,
+    building: &Building,
+    transform: &Transform,
+    q_bucket_storages: &Query<
+        (Entity, &crate::systems::logistics::BelongsTo),
+        With<crate::systems::logistics::BucketStorage>,
+    >,
+) {
+    let Some(active_companion) = companion_state.0.clone() else {
+        return;
+    };
+    if active_companion.kind != CompanionPlacementKind::BucketStorage
+        || active_companion.parent_kind != CompanionParentKind::Tank
+    {
+        companion_state.0 = None;
+        move_placement_state.0 = None;
+        return;
+    }
+    let Some(pending) = move_placement_state.0 else {
+        companion_state.0 = None;
+        return;
+    };
+    if pending.building != target_entity {
+        companion_state.0 = None;
+        move_placement_state.0 = None;
+        return;
+    }
     let old_anchor = move_anchor_grid(building.kind, transform.translation.truncate());
     let old_occupied = move_occupied_grids(building.kind, old_anchor);
-    let destination_occupied = move_occupied_grids(building.kind, destination_grid);
-
+    let destination_occupied = move_occupied_grids(building.kind, pending.destination_grid);
     if !can_place_moved_building(
-        &WorldMapRef(&*world_map),
+        &WorldMapRef(&**world_map),
         target_entity,
         &old_occupied,
         &destination_occupied,
     ) {
         return;
     }
+    if !validate_tank_companion_for_move(
+        &**world_map,
+        target_entity,
+        pending.destination_grid,
+        destination_grid,
+        &old_occupied,
+        q_bucket_storages,
+    )
+    .can_place
+    {
+        return;
+    }
+    finalize_move_request(
+        commands,
+        &mut **world_map,
+        q_transport_requests,
+        q_souls,
+        task_queries,
+        game_assets,
+        target_entity,
+        building,
+        transform,
+        pending.destination_grid,
+        Some(destination_grid),
+    );
+    clear_move_states(move_context, move_placement_state, companion_state);
+    next_play_mode.set(PlayMode::Normal);
+}
 
+/// 初回クリック時の配置検証・移動確定処理。
+/// Tank は companion 配置フローへ移行、MudMixer は即確定。
+#[allow(clippy::too_many_arguments)]
+fn handle_initial_click(
+    commands: &mut Commands,
+    world_map: &mut WorldMapWrite,
+    q_transport_requests: &Query<(Entity, &TransportRequest)>,
+    q_souls: &mut Query<
+        (
+            Entity,
+            &Transform,
+            &mut AssignedTask,
+            &mut crate::entities::damned_soul::Path,
+            Option<&mut crate::systems::logistics::Inventory>,
+        ),
+        With<crate::entities::damned_soul::DamnedSoul>,
+    >,
+    task_queries: &mut TaskUnassignQueries,
+    game_assets: &crate::assets::GameAssets,
+    companion_state: &mut CompanionPlacementState,
+    move_placement_state: &mut MovePlacementState,
+    move_context: &mut MoveContext,
+    next_play_mode: &mut NextState<PlayMode>,
+    destination_grid: (i32, i32),
+    target_entity: Entity,
+    building: &Building,
+    transform: &Transform,
+) {
+    let old_anchor = move_anchor_grid(building.kind, transform.translation.truncate());
+    let old_occupied = move_occupied_grids(building.kind, old_anchor);
+    let destination_occupied = move_occupied_grids(building.kind, destination_grid);
+    if !can_place_moved_building(
+        &WorldMapRef(&**world_map),
+        target_entity,
+        &old_occupied,
+        &destination_occupied,
+    ) {
+        return;
+    }
     if building.kind == BuildingType::Tank {
         let center = move_spawn_pos(BuildingType::Tank, destination_grid);
         move_placement_state.0 = Some(PendingMovePlacement {
@@ -194,25 +284,20 @@ pub fn building_move_system(
         });
         return;
     }
-
     finalize_move_request(
-        &mut commands,
-        &mut world_map,
-        &q_transport_requests,
-        &mut q_souls,
-        &mut task_queries,
-        &game_assets,
+        commands,
+        &mut **world_map,
+        q_transport_requests,
+        q_souls,
+        task_queries,
+        game_assets,
         target_entity,
         building,
         transform,
         destination_grid,
         None,
     );
-    clear_move_states(
-        &mut move_context,
-        &mut move_placement_state,
-        &mut companion_state,
-    );
+    clear_move_states(move_context, move_placement_state, companion_state);
     next_play_mode.set(PlayMode::Normal);
 }
 

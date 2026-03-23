@@ -6,8 +6,8 @@ use crate::entities::damned_soul::Destination;
 use crate::entities::familiar::{ActiveCommand, Familiar};
 use crate::interface::selection::SelectedEntity;
 use crate::systems::command::{TaskArea, TaskMode};
-use hw_world::zones::Site;
 use bevy::prelude::*;
+use hw_world::zones::Site;
 
 pub fn task_area_edit_history_shortcuts_system(
     keyboard: Res<ButtonInput<KeyCode>>,

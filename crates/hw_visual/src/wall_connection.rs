@@ -54,15 +54,12 @@ pub fn wall_connections_system(
     for (gx, gy) in update_targets {
         if let Some(entity) = world_map.building_entity((gx, gy)) {
             if is_wall(gx, gy, world_map.as_ref(), &q_walls_check) {
-                let is_plain_wall =
-                    q_walls_check
-                        .get(entity)
-                        .ok()
-                        .is_some_and(|(building_visual_opt, blueprint_opt)| {
-                            building_visual_opt
-                                .is_some_and(|v| v.kind == BuildingTypeVisual::Wall)
-                                || blueprint_opt.is_some_and(|s| s.is_plain_wall)
-                        });
+                let is_plain_wall = q_walls_check.get(entity).ok().is_some_and(
+                    |(building_visual_opt, blueprint_opt)| {
+                        building_visual_opt.is_some_and(|v| v.kind == BuildingTypeVisual::Wall)
+                            || blueprint_opt.is_some_and(|s| s.is_plain_wall)
+                    },
+                );
                 if !is_plain_wall {
                     continue;
                 }

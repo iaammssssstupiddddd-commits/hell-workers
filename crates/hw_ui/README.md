@@ -3,7 +3,7 @@
 ## 役割
 
 ゲーム UI 全体（パネル・リスト・ダイアログ・ツールチップ・建設配置プレビュー）のセットアップと入力処理を担うクレート。
-`UiRoot` / `UiMountSlot` / `UiNodeRegistry` の仕組みにより、UI要素をスロット単位で管理する。
+`UiRoot` / `UiMountSlot` / `UiNodeRegistry` などの shared UI contract は `hw_core::ui_nodes` が所有し、`hw_ui` はそれを re-export しながら UI 要素をスロット単位で管理する。
 
 ## ディレクトリ構成
 
@@ -13,7 +13,7 @@
 | `intents.rs` | `UiIntent` — ユーザー操作の意図メッセージ型（Entity List 用の Familiar 指定 variant を含む） |
 | `theme.rs` | スタイリング・テーマ定数 |
 | `components.rs` | UI コンポーネントレジストリ・共有ユーティリティ |
-| `camera.rs` | `MainCamera` と `world_cursor_pos`（スクリーン座標→ワールド座標変換 utility） |
+| `camera.rs` | `world_cursor_pos`（スクリーン座標→ワールド座標変換 utility。`MainCamera` は `hw_core::camera` から re-export） |
 | `setup/` | UI 要素の初期スポーン（下表） |
 | `plugins/` | UI システムの Bevy 登録（下表） |
 | `list/` | エンティティリスト共通ロジック（下表） |
@@ -79,8 +79,8 @@
 | `intent.rs` | `SelectionIntent` 型 |
 | `placement.rs` | 建設配置バリデーション・ジオメトリ計算 |
 
-`selection/` は `SelectedEntity` / `HoveredEntity` / `SelectionIndicator` の state resource と、
-despawn 後の参照掃除を行う `cleanup_selection_references_system` を持つ。
+`selection/` は `SelectedEntity` / `HoveredEntity` / `SelectionIndicator` を `hw_core::selection` から re-export し、
+despawn 後の参照掃除を行う `cleanup_selection_references_system` と配置判定 helper を持つ。
 
 ## UI スロット構造
 
@@ -90,7 +90,7 @@ UiRoot
         └── 各 UI コンポーネント
 ```
 
-`UiNodeRegistry` が各スロット/エンティティの安定したマッピングを保持し、更新システムから参照される。
+`UiNodeRegistry`（実体は `hw_core::ui_nodes`）が各スロット/エンティティの安定したマッピングを保持し、更新システムから参照される。
 
 ## アセット抽象化（UiAssets）
 

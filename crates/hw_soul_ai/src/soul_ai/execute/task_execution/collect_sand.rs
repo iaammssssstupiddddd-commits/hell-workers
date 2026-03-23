@@ -24,96 +24,61 @@ pub fn handle_collect_sand_task(
 
     match phase {
         CollectSandPhase::GoingToSand => {
-            if let Ok((res_transform, _, _, _, _, des_opt, _)) = q_targets.get(target) {
-                // 指定が解除されていたら中止
-                if cancel_task_if_designation_missing(des_opt, ctx.task, ctx.path) {
+            let (res_pos, res_translation, has_designation) = {
+                let Ok((res_transform, _, _, _, _, des_opt, _)) =
+                    ctx.queries.designation.targets.get(target)
+                else {
+                    cleanup_collect_target(ctx, target, commands);
                     return;
-                }
-                let res_pos = res_transform.translation.truncate();
-                let reachable = update_destination_to_adjacent(
-                    ctx.dest,
-                    res_pos,
-                    ctx.path,
-                    soul_pos,
-                    world_map,
-                    ctx.pf_context,
-                );
-
-                if !reachable {
-                    // 到達不能: タスクをキャンセル
+                };
+                (
+                    res_transform.translation.truncate(),
+                    res_transform.translation,
+                    des_opt.is_some(),
+                )
+            };
+            match navigate_to_adjacent(ctx, has_designation, res_pos, soul_pos, world_map) {
+                NavOutcome::Moving | NavOutcome::Cancelled => {}
+                NavOutcome::Unreachable => {
                     info!(
                         "COLLECT_SAND: Soul {:?} cannot reach SandPile {:?}, canceling",
                         ctx.soul_entity, target
                     );
-                    commands.entity(target).remove::<hw_jobs::Designation>();
-                    commands.entity(target).remove::<hw_jobs::TaskSlots>();
-                    ctx.queue_reservation(hw_core::events::ResourceReservationOp::ReleaseSource {
-                        source: target,
-                        amount: 1,
-                    });
-                    clear_task_and_path(ctx.task, ctx.path);
-                    return;
+                    cleanup_collect_target(ctx, target, commands);
                 }
-
-                if is_near_target(soul_pos, res_pos) {
+                NavOutcome::Arrived => {
                     complete_collect_sand_now(
                         ctx,
                         target,
-                        res_transform.translation,
+                        res_translation,
                         collect_amount_for_target(ctx, target),
                         commands,
                         soul_handles,
                     );
                     ctx.path.waypoints.clear();
                 }
-            } else {
-                // SandPile が存在しない場合も Designation を削除
-                commands.entity(target).remove::<hw_jobs::Designation>();
-                commands.entity(target).remove::<hw_jobs::TaskSlots>();
-                ctx.queue_reservation(hw_core::events::ResourceReservationOp::ReleaseSource {
-                    source: target,
-                    amount: 1,
-                });
-                clear_task_and_path(ctx.task, ctx.path);
             }
         }
         CollectSandPhase::Collecting { .. } => {
-            if let Ok(target_data) = q_targets.get(target) {
-                let (res_transform, _, _, _, _, des_opt, _) = target_data;
-                // 指定が解除されていたら中止
-                if cancel_task_if_designation_missing(des_opt, ctx.task, ctx.path) {
-                    return;
-                }
-
-                complete_collect_sand_now(
-                    ctx,
-                    target,
-                    res_transform.translation,
-                    collect_amount_for_target(ctx, target),
-                    commands,
-                    soul_handles,
-                );
-            } else {
-                // SandPile が存在しない場合も Designation を削除
-                commands.entity(target).remove::<hw_jobs::Designation>();
-                commands.entity(target).remove::<hw_jobs::TaskSlots>();
-                ctx.queue_reservation(hw_core::events::ResourceReservationOp::ReleaseSource {
-                    source: target,
-                    amount: 1,
-                });
-                clear_task_and_path(ctx.task, ctx.path);
+            let Ok(target_data) = q_targets.get(target) else {
+                cleanup_collect_target(ctx, target, commands);
+                return;
+            };
+            let (res_transform, _, _, _, _, des_opt, _) = target_data;
+            if cancel_task_if_designation_missing(des_opt, ctx.task, ctx.path) {
+                return;
             }
+            complete_collect_sand_now(
+                ctx,
+                target,
+                res_transform.translation,
+                collect_amount_for_target(ctx, target),
+                commands,
+                soul_handles,
+            );
         }
         CollectSandPhase::Done => {
-            // SandPile の Designation を削除（次回必要なときに再発行される）
-            commands.entity(target).remove::<hw_jobs::Designation>();
-            commands.entity(target).remove::<hw_jobs::TaskSlots>();
-            commands.entity(target).remove::<hw_jobs::IssuedBy>();
-            ctx.queue_reservation(hw_core::events::ResourceReservationOp::ReleaseSource {
-                source: target,
-                amount: 1,
-            });
-            clear_task_and_path(ctx.task, ctx.path);
+            finalize_collect_task(ctx, target, commands);
         }
     }
 }

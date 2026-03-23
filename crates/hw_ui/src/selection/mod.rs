@@ -13,14 +13,8 @@ pub use placement::{
     validate_moved_bucket_storage_placement, validate_wall_area, validate_wall_tile,
 };
 
-#[derive(Resource, Default)]
-pub struct SelectedEntity(pub Option<Entity>);
-
-#[derive(Resource, Default)]
-pub struct HoveredEntity(pub Option<Entity>);
-
-#[derive(Component)]
-pub struct SelectionIndicator;
+// 型定義は hw_core に移動し、ここでは re-export して既存コードを壊さない
+pub use hw_core::selection::{HoveredEntity, SelectedEntity, SelectionIndicator};
 
 /// Clears stale `SelectedEntity` / `HoveredEntity` references when the target entity is despawned.
 pub fn cleanup_selection_references_system(

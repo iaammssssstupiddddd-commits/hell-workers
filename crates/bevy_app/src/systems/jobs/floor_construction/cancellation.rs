@@ -6,10 +6,10 @@ use crate::systems::jobs::{ResourceItemVisualHandles, spawn_refund_items};
 use crate::systems::logistics::{Inventory, ResourceType};
 use crate::systems::soul_ai::execute::task_execution::context::TaskQueries;
 use crate::systems::soul_ai::execute::task_execution::types::AssignedTask;
-use hw_soul_ai::unassign_task;
 use crate::world::map::WorldMapWrite;
 use bevy::prelude::*;
 use hw_core::relationships::WorkingOn;
+use hw_soul_ai::unassign_task;
 use std::collections::HashSet;
 
 #[derive(Clone, Copy)]

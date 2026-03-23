@@ -150,7 +150,11 @@ pub fn update_motion_destinations(
                                 }
                             } else {
                                 const MIN_SEPARATION: f32 = TILE_SIZE * 1.2;
-                                soul_grid.get_nearby_in_radius_into(current_pos, MIN_SEPARATION, scratch);
+                                soul_grid.get_nearby_in_radius_into(
+                                    current_pos,
+                                    MIN_SEPARATION,
+                                    scratch,
+                                );
                                 let has_overlap = scratch.iter().any(|&other| other != entity);
                                 let dist_to_dest = (dest.0 - current_pos).length();
                                 if !has_overlap && dist_to_dest < TILE_SIZE * 0.5 {

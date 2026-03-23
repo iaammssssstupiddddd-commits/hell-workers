@@ -4,8 +4,8 @@ use std::collections::HashSet;
 
 use bevy::prelude::*;
 use hw_core::events::{
-    OnReleasedFromService, OnSoulRecruited, SoulTaskUnassignRequest,
-    SquadManagementOperation, SquadManagementRequest,
+    OnReleasedFromService, OnSoulRecruited, SoulTaskUnassignRequest, SquadManagementOperation,
+    SquadManagementRequest,
 };
 use hw_core::familiar::Familiar;
 use hw_core::relationships::{CommandedBy, ParticipatingIn};

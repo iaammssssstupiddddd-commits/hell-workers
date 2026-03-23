@@ -3,7 +3,9 @@ use super::super::super::cancel::cancel_single_designation;
 use super::super::super::queries::DesignationTargetQuery;
 use crate::app_contexts::TaskContext;
 use crate::systems::command::{TaskArea, TaskMode};
-use crate::systems::jobs::floor_construction::{FloorConstructionCancelRequested, FloorTileBlueprint};
+use crate::systems::jobs::floor_construction::{
+    FloorConstructionCancelRequested, FloorTileBlueprint,
+};
 use crate::systems::jobs::wall_construction::{WallConstructionCancelRequested, WallTileBlueprint};
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
@@ -75,8 +77,23 @@ fn cancel_point_nearest_designation(
 
     if let Some((target_entity, _)) = closest {
         let q_targets = q_target_sets.p0();
-        if let Ok((_, _, _, _, _, _, task_workers, blueprint, _, transport_request, fixed_source, _, _, _, _)) =
-            q_targets.get(target_entity)
+        if let Ok((
+            _,
+            _,
+            _,
+            _,
+            _,
+            _,
+            task_workers,
+            blueprint,
+            _,
+            transport_request,
+            fixed_source,
+            _,
+            _,
+            _,
+            _,
+        )) = q_targets.get(target_entity)
         {
             cancel_single_designation(
                 commands,
@@ -113,7 +130,9 @@ fn cancel_point_construction_sites(
         }
     }
     if let Some((site_entity, _)) = closest_floor {
-        commands.entity(site_entity).insert(FloorConstructionCancelRequested);
+        commands
+            .entity(site_entity)
+            .insert(FloorConstructionCancelRequested);
     }
 
     let mut closest_wall: Option<(Entity, f32)> = None;
@@ -130,7 +149,9 @@ fn cancel_point_construction_sites(
         }
     }
     if let Some((site_entity, _)) = closest_wall {
-        commands.entity(site_entity).insert(WallConstructionCancelRequested);
+        commands
+            .entity(site_entity)
+            .insert(WallConstructionCancelRequested);
     }
 }
 
@@ -180,7 +201,9 @@ fn cancel_area_construction_sites(
         }
     }
     for site in floor_sites {
-        commands.entity(site).insert(FloorConstructionCancelRequested);
+        commands
+            .entity(site)
+            .insert(FloorConstructionCancelRequested);
     }
 
     let mut wall_sites = HashSet::new();
@@ -193,6 +216,8 @@ fn cancel_area_construction_sites(
         }
     }
     for site in wall_sites {
-        commands.entity(site).insert(WallConstructionCancelRequested);
+        commands
+            .entity(site)
+            .insert(WallConstructionCancelRequested);
     }
 }

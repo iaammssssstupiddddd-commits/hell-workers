@@ -2,7 +2,7 @@
 
 use super::super::cancel;
 use crate::soul_ai::execute::task_execution::{
-    common::{is_near_target, update_destination_to_adjacent},
+    common::{NavOutcome, navigate_to_pos},
     context::TaskExecutionContext,
     types::{AssignedTask, HaulWithWheelbarrowData, HaulWithWheelbarrowPhase},
 };
@@ -17,44 +17,37 @@ pub fn handle(
     world_map: &WorldMap,
     soul_pos: Vec2,
 ) {
-    let reachable = update_destination_to_adjacent(
-        ctx.dest,
-        data.source_pos,
-        ctx.path,
-        soul_pos,
-        world_map,
-        ctx.pf_context,
-    );
-
-    if !reachable {
-        cancel::cancel_wheelbarrow_task(ctx, &data, commands);
-        return;
+    match navigate_to_pos(ctx, data.source_pos, soul_pos, world_map) {
+        NavOutcome::Moving => return,
+        NavOutcome::Unreachable => {
+            cancel::cancel_wheelbarrow_task(ctx, &data, commands);
+            return;
+        }
+        _ => {}
     }
 
-    if is_near_target(soul_pos, data.source_pos) {
-        // 搬入先の空き容量チェック
-        if let WheelbarrowDestination::Stockpile(stockpile) = data.destination {
-            if let Ok((_, _, stock, stored_items)) = ctx.queries.storage.stockpiles.get(stockpile) {
-                let current_count = stored_items.map(|s| s.len()).unwrap_or(0);
-                let incoming = ctx
-                    .queries
-                    .reservation
-                    .incoming_deliveries_query
-                    .get(stockpile)
-                    .ok()
-                    .map(|(_, inc)| inc.len())
-                    .unwrap_or(0);
-                if (current_count + incoming) >= stock.capacity {
-                    cancel::cancel_wheelbarrow_task(ctx, &data, commands);
-                    return;
-                }
+    // 搬入先の空き容量チェック
+    if let WheelbarrowDestination::Stockpile(stockpile) = data.destination {
+        if let Ok((_, _, stock, stored_items)) = ctx.queries.storage.stockpiles.get(stockpile) {
+            let current_count = stored_items.map(|s| s.len()).unwrap_or(0);
+            let incoming = ctx
+                .queries
+                .reservation
+                .incoming_deliveries_query
+                .get(stockpile)
+                .ok()
+                .map(|(_, inc)| inc.len())
+                .unwrap_or(0);
+            if (current_count + incoming) >= stock.capacity {
+                cancel::cancel_wheelbarrow_task(ctx, &data, commands);
+                return;
             }
         }
-
-        *ctx.task = AssignedTask::HaulWithWheelbarrow(HaulWithWheelbarrowData {
-            phase: HaulWithWheelbarrowPhase::Loading,
-            ..data
-        });
-        ctx.path.waypoints.clear();
     }
+
+    *ctx.task = AssignedTask::HaulWithWheelbarrow(HaulWithWheelbarrowData {
+        phase: HaulWithWheelbarrowPhase::Loading,
+        ..data
+    });
+    ctx.path.waypoints.clear();
 }

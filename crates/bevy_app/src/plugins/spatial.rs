@@ -13,12 +13,9 @@ use hw_logistics::{
 };
 use hw_spatial::{
     DesignationSpatialGrid, TransportRequestSpatialGrid,
-    update_blueprint_spatial_grid_system_blueprint,
-    update_damned_soul_spatial_grid_system,
-    update_designation_spatial_grid_system_designation,
-    update_familiar_entity_spatial_grid_system,
-    update_floor_construction_spatial_grid_system,
-    update_gathering_spot_spatial_grid_system,
+    update_blueprint_spatial_grid_system_blueprint, update_damned_soul_spatial_grid_system,
+    update_designation_spatial_grid_system_designation, update_familiar_entity_spatial_grid_system,
+    update_floor_construction_spatial_grid_system, update_gathering_spot_spatial_grid_system,
 };
 
 pub struct SpatialPlugin;

@@ -1,8 +1,8 @@
+use super::AreaEditHistory;
 use super::cancel::cancel_single_designation;
 use super::geometry::in_selection_area;
 use super::manual_haul::{find_manual_request_for_source, pick_manual_haul_stockpile_anchor};
 use super::queries::DesignationTargetQuery;
-use super::AreaEditHistory;
 use crate::entities::damned_soul::Destination;
 use crate::entities::familiar::{ActiveCommand, Familiar, FamiliarCommand};
 use crate::systems::command::{TaskArea, TaskMode};
@@ -12,9 +12,9 @@ use crate::systems::logistics::transport_request::{
     TransportPriority, TransportRequest, TransportRequestFixedSource, TransportRequestKind,
     TransportRequestState,
 };
-use hw_world::zones::Site;
 use bevy::prelude::*;
 use hw_core::relationships::ManagedBy;
+use hw_world::zones::Site;
 
 pub(super) fn apply_task_area_to_familiar(
     familiar_entity: Entity,

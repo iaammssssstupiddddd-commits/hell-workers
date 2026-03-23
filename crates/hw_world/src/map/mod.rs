@@ -8,8 +8,8 @@ mod tiles;
 
 pub use access::{WorldMapRead, WorldMapWrite};
 
-use crate::pathfinding::PathWorld;
 use crate::TerrainType;
+use crate::pathfinding::PathWorld;
 use bevy::prelude::*;
 use hw_core::GridPos;
 use hw_core::world::DoorState;

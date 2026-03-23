@@ -1,6 +1,5 @@
 use crate::assets::GameAssets;
 use crate::systems::jobs::{Blueprint, Building, BuildingType};
-use hw_world::zones::{Site, Yard};
 use crate::world::map::{RIVER_Y_MIN, WorldMap, WorldMapRef};
 use bevy::prelude::*;
 use hw_core::constants::*;
@@ -9,6 +8,7 @@ use hw_ui::selection::{
     BuildingPlacementContext, TANK_NEARBY_BUCKET_STORAGE_TILES, bucket_storage_geometry,
     building_geometry, validate_bucket_storage_placement, validate_building_placement,
 };
+use hw_world::zones::{Site, Yard};
 
 fn is_replaceable_wall_at(
     world_map: &WorldMap,

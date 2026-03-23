@@ -19,7 +19,7 @@
 | ファイル/ディレクトリ | 内容 |
 |---|---|
 | `mod.rs` | 公開 API (`SelectedEntity`, `HoveredEntity` 等) |
-| `state.rs` | `SelectedEntity`, `HoveredEntity`, `SelectionIndicator` の re-export（実体は `hw_ui`/`hw_visual`） |
+| `state.rs` | `SelectedEntity`, `HoveredEntity`, `SelectionIndicator` の re-export（実体は `hw_core::selection`） |
 | `mode.rs` | 選択モード（`clear_companion_state_outside_build_mode`） |
 | `input.rs` | `handle_mouse_input`, `update_hover_entity` |
 | `hit_test.rs` | ワールド座標 → エンティティのヒットテスト |
@@ -28,7 +28,7 @@
 | `floor_place/` | 床・壁の一括配置（`floor_placement_system`, `wall_apply.rs`, `validation.rs`） |
 
 補足:
-`MainCamera` と `world_cursor_pos` は `hw_ui::camera` が所有する。`bevy_app` 側は `interface::camera` のような再公開層を持たず、selection / command / visual から直接 import する。
+`MainCamera` は `hw_core::camera` が所有し、`world_cursor_pos` は `hw_ui::camera` に残る。`bevy_app` 側は `interface::camera` のような再公開層を持たず、selection / command / visual から直接 import する。
 
 ## ui/ ディレクトリ
 

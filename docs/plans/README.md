@@ -1,6 +1,6 @@
 # Plans Index
 
-`docs/plans` の文書ステータス一覧（更新日: 2026-03-23）。
+`docs/plans` の文書ステータス一覧（更新日: 2026-03-24）。
 
 ## 新規計画書の作り方
 
@@ -19,7 +19,8 @@
 
 | Document | Status | Notes |
 |---|---|---|
-| [performance-optimization.md](performance-optimization.md) | Draft | パフォーマンス最適化計画 |
+| [refactoring-plan-2026-03-23.md](refactoring-plan-2026-03-23.md) | Complete | コードベース整理・リファクタリング計画（DRY削減・責務分離・アーキテクチャ改善） |
+| [soul-pathfinding-rotation.md](soul-pathfinding-rotation.md) | Draft | 計画書：Soul 経路探索ローテーション（P1-b） |
 
 ## アーカイブ計画書一覧 (`docs/plans/archive`)
 
@@ -95,6 +96,7 @@
 | [archive/perf-phase4-reachability-cache-lifetime-2026-02-26.md](archive/perf-phase4-reachability-cache-lifetime-2026-02-26.md) | アーカイブ | パフォーマンス改善 Phase 4: Reachability キャッシュを WorldMap 変更時のみクリア。 |
 | [archive/perf-review-followups-plan-2026-03-06.md](archive/perf-review-followups-plan-2026-03-06.md) | アーカイブ | スケール時に効きやすい全件走査・全UI再構築・線形の計画。 |
 | [archive/perf-top3-implementation-plan-2026-02-22.md](archive/perf-top3-implementation-plan-2026-02-22.md) | アーカイブ | 直近Perf上位3件の最適化計画。 |
+| [archive/performance-optimization.md](archive/performance-optimization.md) | アーカイブ | パフォーマンス最適化計画 |
 | [archive/phase1-file-split-detail.md](archive/phase1-file-split-detail.md) | アーカイブ | Phase 1 詳細実装計画: ファイル分割・構造整理 |
 | [archive/phase12-leftover-migration.md](archive/phase12-leftover-migration.md) | アーカイブ | フェーズ 3 調査の過程で、`GameAssets` 等の Root 固有型に依存せず、の提案。 |
 | [archive/phase2-facade-cleanup-detail.md](archive/phase2-facade-cleanup-detail.md) | アーカイブ | Phase 2 詳細実装計画: bevy_app ファサード整理 |

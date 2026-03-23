@@ -17,7 +17,7 @@
 | `borders.rs` | マップ境界仕様 (`TerrainBorderSpec`) |
 | `layout.rs` | ワールドレイアウト定数 (木・岩・木材の初期位置, 川の範囲) |
 | `regrowth.rs` | 森林再生システム (`ForestZone`, 周期的な木スポーン) |
-| `pathfinding.rs` | A* 経路探索（下記詳細参照） |
+| `pathfinding/` | A* 経路探索（下記詳細参照） |
 | `query.rs` | 環境クエリ (`find_nearest_river_grid`, `find_nearest_walkable_grid`) |
 | `room_detection.rs` | Room 検出 core (`build_detection_input`, `detect_rooms`, `room_is_valid_against_input`, `RoomBounds`) |
 | `room_systems.rs` | `detect_rooms_system`, `validate_rooms_system` |
@@ -28,7 +28,7 @@
 | `zones.rs` | `Yard`, `Site`, `PairedYard`, `PairedSite` — ゾーン系コンポーネント |
 | `map/access.rs` | `WorldMapRead`, `WorldMapWrite` (`SystemParam`) |
 
-## 経路探索 (pathfinding.rs)
+## 経路探索 (`pathfinding/`)
 
 ### 主要関数
 

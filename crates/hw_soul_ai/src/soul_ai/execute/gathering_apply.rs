@@ -1,8 +1,6 @@
 use bevy::prelude::*;
 
-use hw_core::events::{
-    GatheringManagementOp, GatheringManagementRequest, OnGatheringParticipated,
-};
+use hw_core::events::{GatheringManagementOp, GatheringManagementRequest, OnGatheringParticipated};
 use hw_core::relationships::ParticipatingIn;
 
 /// GatheringManagementRequest を適用する（Execute Phase）

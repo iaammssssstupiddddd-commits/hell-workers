@@ -5,7 +5,6 @@
 use bevy::prelude::*;
 use hw_core::game_state::TimeSpeed;
 use hw_jobs::BuildingCategory;
-use std::collections::HashMap;
 
 // ============================================================
 // 左パネルモード
@@ -55,20 +54,7 @@ impl PlacementFailureTooltip {
     }
 }
 
-#[derive(Resource, Default)]
-pub struct UiNodeRegistry {
-    pub slots: HashMap<UiSlot, Entity>,
-}
-
-impl UiNodeRegistry {
-    pub fn set_slot(&mut self, slot: UiSlot, entity: Entity) {
-        self.slots.insert(slot, entity);
-    }
-
-    pub fn get_slot(&self, slot: UiSlot) -> Option<Entity> {
-        self.slots.get(&slot).copied()
-    }
-}
+pub use hw_core::ui_nodes::{UiMountSlot, UiNodeRegistry, UiRoot, UiSlot};
 
 #[derive(Resource, Default)]
 pub struct InfoPanelNodes {
@@ -97,40 +83,6 @@ pub enum MenuState {
 }
 
 pub use crate::UiIntent as MenuAction;
-
-// ============================================================
-// UiSlot - 統一UIスロットコンポーネント
-// ============================================================
-
-#[derive(Component, Clone, Copy, PartialEq, Eq, Hash, Debug)]
-pub enum UiSlot {
-    InfoPanelRoot,
-    InfoPanelStatsGroup,
-    InfoPanelUnpinButton,
-    // Info Panel
-    Header,
-    GenderIcon,
-    StatMotivation,
-    StatStress,
-    StatFatigue,
-    StatDream,
-    TaskText,
-    InventoryText,
-    CommonText,
-    // Dialog
-    DialogFamiliarName,
-    DialogThresholdText,
-    DialogMaxSoulText,
-    // Bottom bar
-    ModeText,
-    // Other
-    TaskSummaryText,
-    AreaEditPreview,
-    TooltipAnchor,
-    FpsText,
-    DreamPoolText,
-    DreamPoolIcon,
-}
 
 // ============================================================
 // UIコンポーネント
@@ -250,26 +202,7 @@ pub struct DreamLossPopupUi {
 #[derive(Component)]
 pub struct ClockText;
 
-#[derive(Component, Default)]
-pub struct DreamIconAbsorb {
-    pub timer: f32,
-    pub pulse_count: u8,
-}
-
-#[derive(Component)]
-pub struct UiRoot;
-
-#[derive(Component, Clone, Copy, PartialEq, Eq, Hash, Debug)]
-pub enum UiMountSlot {
-    LeftPanel,
-    RightPanel,
-    Bottom,
-    Overlay,
-    TopRight,
-    TopLeft,
-    /// 夢の泡パーティクル専用レイヤー（パネルより先にスポーンされるため、常にパネルの後ろに描画される）
-    DreamBubbleLayer,
-}
+pub use hw_core::visual_mirror::DreamIconAbsorb;
 
 /// 速度ボタンに付与し、アクティブ状態のハイライトに使用
 #[derive(Component)]

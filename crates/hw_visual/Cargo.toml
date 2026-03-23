@@ -8,5 +8,4 @@ bevy = { workspace = true }
 hw_core = { path = "../hw_core" }
 hw_spatial = { path = "../hw_spatial" }
 hw_world = { path = "../hw_world" }
-hw_ui = { path = "../hw_ui" }
 rand = { workspace = true }

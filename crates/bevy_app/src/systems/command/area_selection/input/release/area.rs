@@ -1,17 +1,17 @@
+use super::super::super::AreaEditHistory;
 use super::super::super::apply::apply_area_and_record_history;
 use super::super::super::apply::assign_unassigned_tasks_in_area;
-use super::super::super::AreaEditHistory;
 use super::super::transitions::should_exit_after_apply;
 use crate::app_contexts::TaskContext;
 use crate::entities::damned_soul::Destination;
 use crate::entities::familiar::{ActiveCommand, Familiar};
 use crate::systems::command::{AreaSelectionIndicator, TaskArea, TaskMode};
 use crate::systems::jobs::Designation;
-use hw_world::zones::Site;
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
 use hw_core::game_state::PlayMode;
 use hw_core::relationships::ManagedBy;
+use hw_world::zones::Site;
 
 pub(super) fn handle_release_area_selection(
     task_context: &mut TaskContext,
@@ -22,10 +22,7 @@ pub(super) fn handle_release_area_selection(
     q_sites: &Query<&Site>,
     q_familiars: &mut Query<(&mut ActiveCommand, &mut Destination), With<Familiar>>,
     indicator_entities: &[Entity],
-    q_unassigned: &Query<
-        (Entity, &Transform, &Designation),
-        Without<ManagedBy>,
-    >,
+    q_unassigned: &Query<(Entity, &Transform, &Designation), Without<ManagedBy>>,
     keyboard: &ButtonInput<KeyCode>,
     next_play_mode: &mut NextState<PlayMode>,
     commands: &mut Commands,

@@ -155,8 +155,13 @@ pub fn issue_collect_sand_with_wheelbarrow_to_mixer(
     });
 
     // Reserve wheelbarrow + sand source, then mixer destination slots for the items we'll generate
-    let mut reservation_ops =
-        build_wheelbarrow_reservation_ops(queries, wheelbarrow, &destination, &[source_entity], &[]);
+    let mut reservation_ops = build_wheelbarrow_reservation_ops(
+        queries,
+        wheelbarrow,
+        &destination,
+        &[source_entity],
+        &[],
+    );
     for _ in 0..haul_amount {
         reservation_ops.extend(build_mixer_destination_reservation_ops(
             mixer_entity,

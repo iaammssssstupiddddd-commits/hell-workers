@@ -13,7 +13,7 @@
 | `TransportRequestSpatialGrid` | `transport_request.rs` | 輸送要求の近傍検索 |
 | `ResourceSpatialGrid` | `resource.rs` | 地上アイテム位置検索 |
 | `StockpileSpatialGrid` | `stockpile.rs` | ストックパイル位置検索 |
-| `SoulSpatialGrid` | `soul.rs` | Soul 位置検索（経路探索・分離行動用） |
+| `SpatialGrid` | `soul.rs` | Soul 位置検索（経路探索・分離行動用）。`SoulSpatialGrid` という型名はない |
 | `FamiliarSpatialGrid` | `familiar.rs` | Familiar 位置検索 |
 | `BlueprintSpatialGrid` | `blueprint.rs` | 建設ブループリント位置検索 |
 | `GatheringSpotSpatialGrid` | `gathering.rs` | 集会スポット位置検索 |
@@ -47,13 +47,12 @@ trait SpatialGridOps {
 
 ---
 
-## src/ との境界
+## bevy_app との境界
 
-hw_spatial は grid resource 本体と汎用 update system を所有する。
-root `src/systems/spatial/` は root 側コンポーネント型をその generic system に束ねる adapter と、既存 import path を保つ re-export shell だけを持つ。
+hw_spatial は grid resource 本体と汎用 update system を所有する。`crates/bevy_app/src/systems/spatial/` は削除済みで、**`crates/bevy_app/src/plugins/spatial.rs`** の `SpatialPlugin` が `hw_spatial` と `hw_logistics`（`ResourceItem` / `Stockpile` 向け更新の一部）をまとめて `GameSystemSet::Spatial` に登録する。
 
-| hw_spatial に置くもの | src/systems/spatial/ に置くもの |
+| 置き場所 | 内容 |
 |---|---|
-| `SoulSpatialGrid` から `FloorConstructionSpatialGrid` まで全 grid resource | root 型に対する generic update system の binding wrapper |
-| 全 grid の update system 本体 | 互換 re-export パス |
-| `GridData<T>`, `SpatialGridOps` トレイト | `plugins/spatial.rs` から参照する薄い adapter |
+| `hw_spatial` | 各 `*SpatialGrid` / `SpatialGrid`、`GridData`、`SpatialGridOps`、コンポーネント束ねの generic update system |
+| `hw_logistics` | `ResourceSpatialGrid` / `StockpileSpatialGrid` 向けのコンポーネント特化ラッパ（例: `update_resource_spatial_grid_system_resource_item`） |
+| `bevy_app::plugins::spatial` | 上記システムの登録のみ（adapter 用の `systems/spatial` モジュールはない） |

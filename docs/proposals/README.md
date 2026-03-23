@@ -18,6 +18,7 @@
 | Document | Notes |
 | --- | --- |
 | [08_visual_update_prompts.md](08_visual_update_prompts.md) | ビジュアル更新プロンプト集 |
+| [high-priority-performance-proposal-2026-03-23.md](high-priority-performance-proposal-2026-03-23.md) | パフォーマンス改善（優先度高）— Soul 経路・移譲到達判定・Idle 命令委譲 |
 | [soul_spawn_despawn_optimization.md](soul_spawn_despawn_optimization.md) | Soul Spawn/Despawn 最適化提案 |
 | [speech_optimization.md](speech_optimization.md) | スピーチシステム最適化提案 |
 

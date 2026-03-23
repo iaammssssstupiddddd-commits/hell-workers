@@ -9,8 +9,8 @@ mod ecs;
 mod tests;
 
 pub use self::core::{
-    build_detection_input, detect_rooms, room_is_valid_against_input, DetectedRoom,
-    RoomBounds, RoomDetectionBuildingTile, RoomDetectionInput,
+    DetectedRoom, RoomBounds, RoomDetectionBuildingTile, RoomDetectionInput, build_detection_input,
+    detect_rooms, room_is_valid_against_input,
 };
 pub use self::ecs::{
     Room, RoomDetectionState, RoomOverlayTile, RoomTileLookup, RoomValidationState,

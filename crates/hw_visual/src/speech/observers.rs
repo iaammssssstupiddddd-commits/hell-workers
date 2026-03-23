@@ -75,9 +75,7 @@ pub fn speech_on_task_assigned_system(
             );
 
             if let Some(uc) = under_command {
-                if let Ok((fam_transform, voice, fam_history_opt)) =
-                    q_familiars.get_mut(uc.0)
-                {
+                if let Ok((fam_transform, voice, fam_history_opt)) = q_familiars.get_mut(uc.0) {
                     let fam_pos = fam_transform.translation();
                     let phrase = LatinPhrase::from_work_type(event.work_type);
                     emit_familiar_with_history(

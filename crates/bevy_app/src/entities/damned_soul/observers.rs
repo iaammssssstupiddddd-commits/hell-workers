@@ -1,14 +1,12 @@
 //! ソウルのイベントオブザーバー（ハンドラ）
 
 use super::*;
-use crate::{
-    OnExhausted, OnSoulRecruited, OnStressBreakdown,
-};
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
-use hw_soul_ai::unassign_task;
 use crate::world::map::WorldMapRead;
+use crate::{OnExhausted, OnSoulRecruited, OnStressBreakdown};
 use hw_core::constants::*;
 use hw_core::relationships::CommandedBy;
+use hw_soul_ai::unassign_task;
 use rand::Rng;
 
 pub fn on_soul_recruited(

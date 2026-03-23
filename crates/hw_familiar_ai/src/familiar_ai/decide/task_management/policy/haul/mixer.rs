@@ -160,8 +160,7 @@ fn try_direct_collect_with_wheelbarrow_to_mixer(
         .resource_cache
         .get_mixer_destination_reservation(mixer_entity, ResourceType::Sand)
         + shadow.mixer_reserved(mixer_entity, ResourceType::Sand);
-    let available =
-        MUD_MIXER_CAPACITY.saturating_sub(storage.sand + reserved as u32);
+    let available = MUD_MIXER_CAPACITY.saturating_sub(storage.sand + reserved as u32);
     if available == 0 {
         return false;
     }

@@ -2,9 +2,9 @@ pub mod exhausted_gathering;
 pub mod motion_dispatch;
 pub mod rest_area;
 pub mod rest_decision;
+mod system;
 pub mod task_override;
 pub mod transitions;
-mod system;
 
 use hw_core::constants::{GATHERING_ARRIVAL_RADIUS_BASE, TILE_SIZE};
 

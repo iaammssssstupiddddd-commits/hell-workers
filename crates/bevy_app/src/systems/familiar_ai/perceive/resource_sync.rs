@@ -8,11 +8,11 @@ use crate::systems::jobs::{Designation, WorkType};
 use crate::systems::logistics::ResourceType;
 use crate::systems::logistics::transport_request::{TransportRequest, TransportRequestKind};
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
-use hw_jobs::lifecycle;
 use bevy::prelude::*;
 use hw_core::constants::RESERVATION_SYNC_INTERVAL;
 use hw_core::events::ResourceReservationOp;
 use hw_core::relationships::TaskWorkers;
+use hw_jobs::lifecycle;
 use std::collections::HashMap;
 
 pub use hw_logistics::SharedResourceCache;

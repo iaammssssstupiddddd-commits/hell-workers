@@ -10,9 +10,7 @@ use item_ops::{try_despawn_item, try_drop_item};
 
 use super::super::cancel;
 use crate::soul_ai::execute::task_execution::{
-    context::TaskExecutionContext,
-    transport_common::reservation,
-    types::HaulWithWheelbarrowData,
+    context::TaskExecutionContext, transport_common::reservation, types::HaulWithWheelbarrowData,
 };
 use bevy::prelude::*;
 use hw_core::constants::Z_ITEM_PICKUP;

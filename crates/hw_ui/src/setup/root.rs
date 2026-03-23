@@ -2,7 +2,7 @@ use crate::components::{InfoPanelNodes, UiMountSlot, UiNodeRegistry, UiRoot, UiS
 use crate::theme::UiTheme;
 use bevy::prelude::*;
 
-use super::{bottom_bar, dialogs, entity_list, panels, submenus, time_control, UiAssets};
+use super::{UiAssets, bottom_bar, dialogs, entity_list, panels, submenus, time_control};
 
 fn spawn_fps_display(
     commands: &mut Commands,

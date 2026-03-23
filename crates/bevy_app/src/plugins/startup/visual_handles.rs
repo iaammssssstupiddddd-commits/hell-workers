@@ -174,13 +174,19 @@ pub fn init_visual_handles(
 
     // --- 3D レンダリング用ハンドル（Phase 2 プレースホルダー）---
     let wall_mesh = meshes.add(Cuboid::new(TILE_SIZE, TILE_SIZE, TILE_SIZE));
-    let wall_orientation_aid_mesh =
-        meshes.add(Cuboid::new(TILE_SIZE * 0.96, TILE_SIZE * 0.12, TILE_SIZE * 0.96));
+    let wall_orientation_aid_mesh = meshes.add(Cuboid::new(
+        TILE_SIZE * 0.96,
+        TILE_SIZE * 0.12,
+        TILE_SIZE * 0.96,
+    ));
     let floor_mesh = meshes.add(Plane3d::default().mesh().size(TILE_SIZE, TILE_SIZE));
     let door_mesh = meshes.add(Cuboid::new(TILE_SIZE, TILE_SIZE * 0.5, TILE_SIZE));
     let equipment_1x1_mesh = meshes.add(Cuboid::new(TILE_SIZE, TILE_SIZE * 0.6, TILE_SIZE));
-    let equipment_2x2_mesh =
-        meshes.add(Cuboid::new(TILE_SIZE * 2.0, TILE_SIZE * 0.8, TILE_SIZE * 2.0));
+    let equipment_2x2_mesh = meshes.add(Cuboid::new(
+        TILE_SIZE * 2.0,
+        TILE_SIZE * 0.8,
+        TILE_SIZE * 2.0,
+    ));
     let soul_mesh = meshes.add(Rectangle::new(TILE_SIZE * 0.8, TILE_SIZE * 0.8));
     let familiar_mesh = meshes.add(Rectangle::new(TILE_SIZE * 0.9, TILE_SIZE * 0.9));
 

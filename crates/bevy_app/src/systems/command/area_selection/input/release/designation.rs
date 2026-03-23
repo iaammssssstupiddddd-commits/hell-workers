@@ -1,6 +1,6 @@
 use super::super::super::apply::apply_designation_in_area;
-use super::super::transitions::reset_designation_mode;
 use super::super::super::queries::DesignationTargetQuery;
+use super::super::transitions::reset_designation_mode;
 use crate::app_contexts::TaskContext;
 use crate::systems::command::{TaskArea, TaskMode};
 use crate::world::map::WorldMap;
@@ -12,7 +12,13 @@ pub(super) fn handle_release_designation(
     world_pos: Vec2,
     start_pos: Vec2,
     mode: TaskMode,
-    q_familiars: &Query<(&mut crate::entities::familiar::ActiveCommand, &mut crate::entities::damned_soul::Destination), With<crate::entities::familiar::Familiar>>,
+    q_familiars: &Query<
+        (
+            &mut crate::entities::familiar::ActiveCommand,
+            &mut crate::entities::damned_soul::Destination,
+        ),
+        With<crate::entities::familiar::Familiar>,
+    >,
     q_targets: &DesignationTargetQuery,
     commands: &mut Commands,
 ) {

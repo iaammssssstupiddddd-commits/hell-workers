@@ -192,6 +192,7 @@ root 側の shell には `PopulationManager`・visual/UI 依存・request 再検
 `perceive/` (`is_escape_threat_close` 等) も `hw_soul_ai` に移設済みであり、root 側 `perceive/` ディレクトリは削除済み（2026-03-22）。callers は `hw_soul_ai::soul_ai::perceive::escaping` を直接参照する。
 `task_execution` が使う `SoulTaskHandles` と visual marker（`FadeOut`, `WheelbarrowMovement`）は `hw_core::visual` に置かれ、`hw_soul_ai` が `hw_visual` に逆依存しないようにしている。
 `apply_task_assignment_requests_system` の実装と system 登録責務は `hw_soul_ai::soul_ai::execute::task_assignment_apply` / `hw_soul_ai::SoulAiCorePlugin` 側に一本化されている。`task_execution_system` も `hw_soul_ai::soul_ai::execute::task_execution_system` が所有し、root 側の `crates/bevy_app/src/systems/soul_ai/execute/task_execution/mod.rs` は互換 import path の thin re-export にとどまる。`SoulAiPlugin` は system 本体を再登録せず、`ApplyDeferred` フェーズ間同期マーカーと `gathering_spawn_system`（`GameAssets` 依存）のみを登録する。移設済み system を root 側で再登録すると Bevy の schedule 初期化で ordering 対象が曖昧になり panic する。
+`execute/task_execution/common.rs` には `NavOutcome` / `navigate_to_adjacent` / `navigate_to_pos` の共通ナビゲーション helper を集約し、`gather`・`collect_*`・`haul`・`haul_with_wheelbarrow` の移動フェーズを同系統で扱う。各 task ハンドラは到達判定の差分と副作用に集中し、予約解放や cancel 契約は従来どおり task 側で保持する。
 
 ### 境界用語の整理
 

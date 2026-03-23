@@ -48,4 +48,4 @@ pub struct DreamTrailGhost {
     pub max_lifetime: f32,
 }
 
-pub use hw_ui::components::DreamIconAbsorb;
+pub use hw_core::visual_mirror::DreamIconAbsorb;

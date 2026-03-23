@@ -49,7 +49,10 @@ pub fn update_designation_spatial_grid_system_designation(
     grid: ResMut<DesignationSpatialGrid>,
     query: Query<
         (Entity, &Transform),
-        (With<Designation>, Or<(Added<Designation>, Changed<Transform>)>),
+        (
+            With<Designation>,
+            Or<(Added<Designation>, Changed<Transform>)>,
+        ),
     >,
     removed: RemovedComponents<Designation>,
 ) {

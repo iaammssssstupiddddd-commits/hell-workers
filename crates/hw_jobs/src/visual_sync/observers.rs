@@ -50,5 +50,7 @@ pub fn on_building_added_sync_visual(
 
 /// Inserts `MudMixerVisualState` when a `MudMixerStorage` component is added.
 pub fn on_mud_mixer_storage_added(on: On<Add, MudMixerStorage>, mut commands: Commands) {
-    commands.entity(on.entity).try_insert(MudMixerVisualState::default());
+    commands
+        .entity(on.entity)
+        .try_insert(MudMixerVisualState::default());
 }

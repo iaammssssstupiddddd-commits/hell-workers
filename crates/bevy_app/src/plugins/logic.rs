@@ -10,7 +10,6 @@ use crate::systems::command::{
 };
 use crate::systems::dream_tree_planting::dream_tree_planting_system;
 use crate::systems::familiar_ai::FamiliarAiPlugin;
-use crate::systems::jobs::{door_auto_close_system, door_auto_open_system};
 use crate::systems::jobs::floor_construction::{
     floor_construction_cancellation_system, floor_construction_completion_system,
     floor_construction_phase_transition_system,
@@ -19,13 +18,9 @@ use crate::systems::jobs::wall_construction::{
     wall_construction_cancellation_system, wall_construction_completion_system,
     wall_construction_phase_transition_system, wall_framed_tile_spawn_system,
 };
+use crate::systems::jobs::{door_auto_close_system, door_auto_open_system};
 use crate::systems::logistics::item_lifetime::despawn_expired_items_system;
 use crate::systems::logistics::transport_request::TransportRequestPlugin;
-use hw_world::{
-    RoomDetectionState, RoomTileLookup, RoomValidationState, detect_rooms_system,
-    mark_room_dirty_from_building_changes_system, on_building_added, on_building_removed,
-    on_door_added, on_door_removed, validate_rooms_system,
-};
 use crate::systems::soul_ai::SoulAiPlugin;
 use crate::world::regrowth::{RegrowthManager, tree_regrowth_system};
 use bevy::prelude::*;
@@ -42,6 +37,11 @@ use hw_logistics::visual_sync::{
     sync_stockpile_visual_system,
 };
 use hw_world::obstacle_cleanup_system;
+use hw_world::{
+    RoomDetectionState, RoomTileLookup, RoomValidationState, detect_rooms_system,
+    mark_room_dirty_from_building_changes_system, on_building_added, on_building_removed,
+    on_door_added, on_door_removed, validate_rooms_system,
+};
 
 pub struct LogicPlugin;
 

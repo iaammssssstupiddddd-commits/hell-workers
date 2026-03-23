@@ -47,7 +47,10 @@ pub fn update_blueprint_spatial_grid_system<T: Component>(
 /// `Blueprint` コンポーネントに特化した空間グリッド更新システム。
 pub fn update_blueprint_spatial_grid_system_blueprint(
     grid: ResMut<BlueprintSpatialGrid>,
-    query: Query<(Entity, &Transform), (With<Blueprint>, Or<(Added<Blueprint>, Changed<Transform>)>)>,
+    query: Query<
+        (Entity, &Transform),
+        (With<Blueprint>, Or<(Added<Blueprint>, Changed<Transform>)>),
+    >,
     removed: RemovedComponents<Blueprint>,
 ) {
     update_blueprint_spatial_grid_system::<Blueprint>(grid, query, removed);

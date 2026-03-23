@@ -5,8 +5,8 @@ use bevy::prelude::*;
 use hw_core::area::TaskArea;
 use hw_core::familiar::{ActiveCommand, FamiliarCommand};
 use hw_core::relationships::TaskWorkers;
-use hw_jobs::mud_mixer::TargetMixer;
 use hw_jobs::Designation;
+use hw_jobs::mud_mixer::TargetMixer;
 use hw_world::zones::{AreaBounds, Yard};
 
 use crate::transport_request::{TransportRequest, TransportRequestKind};
@@ -37,10 +37,7 @@ pub(crate) fn collect_inflight_mixer_requests(
         Option<&Designation>,
         Option<&TaskWorkers>,
     )>,
-) -> (
-    HashMap<Entity, u32>,
-    HashMap<Entity, u32>,
-) {
+) -> (HashMap<Entity, u32>, HashMap<Entity, u32>) {
     let mut water_inflight_by_mixer = HashMap::<Entity, u32>::new();
     let mut sand_inflight_by_mixer = HashMap::<Entity, u32>::new();
 

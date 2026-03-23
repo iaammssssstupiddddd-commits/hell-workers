@@ -6,13 +6,13 @@ use crate::interface::selection::SelectedEntity;
 use crate::interface::ui::panels::InfoPanelPinState;
 use crate::systems::jobs::Blueprint;
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
-use hw_soul_ai::soul_ai::perceive::escaping::is_escape_threat_close;
-use hw_spatial::FamiliarSpatialGrid;
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use hw_core::constants::ESCAPE_STRESS_THRESHOLD;
 use hw_core::relationships::CommandedBy;
 use hw_core::relationships::TaskWorkers;
+use hw_soul_ai::soul_ai::perceive::escaping::is_escape_threat_close;
+use hw_spatial::FamiliarSpatialGrid;
 use hw_ui::components::TooltipTemplate;
 
 pub use hw_ui::models::inspection::{

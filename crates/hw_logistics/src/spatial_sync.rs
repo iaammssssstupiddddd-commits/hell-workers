@@ -28,7 +28,10 @@ pub fn update_transport_request_spatial_grid_system_transport_request(
     grid: ResMut<TransportRequestSpatialGrid>,
     query: Query<
         (Entity, &Transform),
-        (With<TransportRequest>, Or<(Added<TransportRequest>, Changed<Transform>)>),
+        (
+            With<TransportRequest>,
+            Or<(Added<TransportRequest>, Changed<Transform>)>,
+        ),
     >,
     removed: RemovedComponents<TransportRequest>,
 ) {

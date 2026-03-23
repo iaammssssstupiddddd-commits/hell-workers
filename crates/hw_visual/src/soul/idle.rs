@@ -80,7 +80,11 @@ pub fn idle_visual_system(
                     q_spots.get(p.0).ok().map(|s| s.center)
                 } else {
                     let pos = transform.translation.truncate();
-                    spot_grid.get_nearby_in_radius_into(pos, GATHERING_LEAVE_RADIUS * 2.0, &mut nearby_buf);
+                    spot_grid.get_nearby_in_radius_into(
+                        pos,
+                        GATHERING_LEAVE_RADIUS * 2.0,
+                        &mut nearby_buf,
+                    );
                     nearby_buf
                         .iter()
                         .filter_map(|&e| q_spots.get(e).ok())

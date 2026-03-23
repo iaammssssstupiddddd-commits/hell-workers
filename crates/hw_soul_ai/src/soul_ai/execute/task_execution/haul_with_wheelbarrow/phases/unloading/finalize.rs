@@ -1,8 +1,8 @@
 use bevy::prelude::*;
 use hw_core::constants::Z_ITEM_PICKUP;
 use hw_core::relationships::LoadedIn;
-use hw_logistics::transport_request::WheelbarrowDestination;
 use hw_logistics::ResourceType;
+use hw_logistics::transport_request::WheelbarrowDestination;
 use std::collections::HashSet;
 
 use crate::soul_ai::execute::task_execution::{

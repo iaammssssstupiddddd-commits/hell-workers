@@ -195,10 +195,8 @@ pub fn build_request_eval_context(
     let hard_min = if req.resource_type.requires_wheelbarrow()
         && matches!(
             req.kind,
-            TransportRequestKind::DeliverToBlueprint
-                | TransportRequestKind::DeliverToMixerSolid
-        )
-    {
+            TransportRequestKind::DeliverToBlueprint | TransportRequestKind::DeliverToMixerSolid
+        ) {
         1
     } else {
         WHEELBARROW_MIN_BATCH_SIZE

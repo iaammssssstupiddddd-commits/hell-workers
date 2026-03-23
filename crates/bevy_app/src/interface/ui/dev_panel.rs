@@ -14,11 +14,10 @@ pub struct ToggleRender3dButton;
 pub struct InstantBuildButton;
 
 /// 開発用パネルをスポーン（TopLeft スロットに配置）
-pub fn spawn_dev_panel_system(
-    mut commands: Commands,
-    q_slots: Query<(Entity, &UiMountSlot)>,
-) {
-    let Some((top_left, _)) = q_slots.iter().find(|(_, slot)| **slot == UiMountSlot::TopLeft)
+pub fn spawn_dev_panel_system(mut commands: Commands, q_slots: Query<(Entity, &UiMountSlot)>) {
+    let Some((top_left, _)) = q_slots
+        .iter()
+        .find(|(_, slot)| **slot == UiMountSlot::TopLeft)
     else {
         return;
     };

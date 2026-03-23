@@ -181,7 +181,7 @@ callers は `hw_familiar_ai::*` の完全パスを直接参照する。
 - **候補一回化**: `collect_scored_candidates` を1回だけ実行し、全アイドルワーカーで候補を使い回します。
 - **Worker基準再スコア**: 候補ごとに worker 距離を再評価し、worker ごとに最適候補順を作成します。
 - **距離フィルタ**: `MAX_ASSIGNMENT_DIST_SQ`（60タイル）を超える候補は A* 前に除外します。
-- **フレーム共有キャッシュ**: `ReachabilityFrameCache`（`(worker_grid, target_grid)` キー）で A* 結果をフレーム間共有し、`WorldMap` 変更時または 60 委譲サイクルごとに安全クリアします。
+- **フレーム共有キャッシュ**: `ReachabilityFrameCache`（`(worker_grid, target_grid)` キー）で到達判定結果を複数フレームにわたって共有します。クリア条件は実装どおり **`WorldMap` の Bevy 変更検知時**、または **経過フレーム数が `REACHABILITY_CACHE_SAFETY_CLEAR_INTERVAL_FRAMES`（60）に達したとき**（委譲タイマーの 0.5 秒間隔とは独立）です。
 - **Top-K 先行評価**: 優先候補（`TASK_DELEGATION_TOP_K`）を先に評価し、必要時のみ残り候補を評価します。
 - **複数同時割り当て（仮想ワーカー追跡）**: 1回の委譲サイクル内で同一タスクへ複数ワーカーを同時割り当て可能です。`task_virtual_workers: HashMap<Entity, usize>` でサイクル内の仮想割り当て数を追跡し、スロット判定を `current_workers(ECS) + virtual_workers >= max_slots` で行います。これにより、壁建設で木材×10が必要な場合でも1サイクルで最大10体を同時発行でき、以前の「1体/0.5秒」による最大5秒の遅延を解消します。過剰割り当ては `ReservationShadow` によって引き続き防止されます。
 

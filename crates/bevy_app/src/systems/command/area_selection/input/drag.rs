@@ -1,12 +1,11 @@
-use super::transitions::should_exit_after_apply;
+use super::super::AreaEditHistory;
 use super::super::apply::{apply_area_and_record_history, assign_unassigned_tasks_in_area};
 use super::super::geometry::clamp_area_to_site;
-use super::super::AreaEditHistory;
+use super::transitions::should_exit_after_apply;
 use crate::app_contexts::TaskContext;
 use crate::entities::damned_soul::Destination;
 use crate::entities::familiar::{ActiveCommand, Familiar, FamiliarCommand};
 use crate::systems::command::TaskMode;
-use hw_world::zones::Site;
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
@@ -14,6 +13,7 @@ use hw_core::game_state::PlayMode;
 use hw_core::relationships::ManagedBy;
 use hw_ui::area_edit::{AreaEditSession, apply_area_edit_drag};
 use hw_ui::camera::{MainCamera, world_cursor_pos};
+use hw_world::zones::Site;
 
 pub(super) fn handle_active_drag_input(
     buttons: &ButtonInput<MouseButton>,
@@ -40,7 +40,8 @@ pub(super) fn handle_active_drag_input(
         && let Some(world_pos) = world_cursor_pos(q_window, q_camera)
     {
         let snapped_pos = WorldMap::snap_to_grid_edge(world_pos);
-        let updated_area = clamp_area_to_site(&apply_area_edit_drag(&active_drag, snapped_pos), q_sites);
+        let updated_area =
+            clamp_area_to_site(&apply_area_edit_drag(&active_drag, snapped_pos), q_sites);
 
         commands
             .entity(active_drag.familiar_entity)
@@ -56,7 +57,9 @@ pub(super) fn handle_active_drag_input(
     if buttons.just_released(MouseButton::Left) {
         let applied_area = world_cursor_pos(q_window, q_camera)
             .map(WorldMap::snap_to_grid_edge)
-            .map(|snapped| clamp_area_to_site(&apply_area_edit_drag(&active_drag, snapped), q_sites))
+            .map(|snapped| {
+                clamp_area_to_site(&apply_area_edit_drag(&active_drag, snapped), q_sites)
+            })
             .unwrap_or_else(|| active_drag.original_area.clone());
 
         if applied_area != active_drag.original_area {

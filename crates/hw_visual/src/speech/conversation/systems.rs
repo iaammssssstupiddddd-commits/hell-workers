@@ -163,7 +163,9 @@ pub fn process_conversation_logic(
 
             match participant.phase {
                 ConversationPhase::Greeting => {
-                    let emoji = EMOJIS_GREETING.choose(&mut rng).expect("EMOJIS_GREETING is non-empty");
+                    let emoji = EMOJIS_GREETING
+                        .choose(&mut rng)
+                        .expect("EMOJIS_GREETING is non-empty");
                     spawn_soul_bubble(
                         &mut commands,
                         entity,
@@ -263,7 +265,9 @@ pub fn process_conversation_logic(
                             speaker: entity,
                             tone: ConversationTone::Positive,
                         });
-                        let emoji = EMOJIS_AGREEMENT.choose(&mut rng).expect("EMOJIS_AGREEMENT is non-empty");
+                        let emoji = EMOJIS_AGREEMENT
+                            .choose(&mut rng)
+                            .expect("EMOJIS_AGREEMENT is non-empty");
                         spawn_soul_bubble(
                             &mut commands,
                             entity,

@@ -1,20 +1,11 @@
 //! タスク実行関連の型定義
 
 pub use hw_jobs::tasks::{
-    AssignedTask,
-    BucketTransportData, BucketTransportSource, BucketTransportDestination, BucketTransportPhase,
-    GatherData, GatherPhase,
-    HaulData, HaulPhase,
-    HaulToBlueprintData, HaulToBpPhase,
-    BuildData, BuildPhase,
-    CollectSandData, CollectSandPhase,
-    CollectBoneData, CollectBonePhase,
-    RefineData, RefinePhase,
-    HaulToMixerData, HaulToMixerPhase,
-    HaulWithWheelbarrowData, HaulWithWheelbarrowPhase,
-    ReinforceFloorTileData, ReinforceFloorPhase,
-    PourFloorTileData, PourFloorPhase,
-    FrameWallTileData, FrameWallPhase,
-    CoatWallData, CoatWallPhase,
-    MovePlantData, MovePlantTask, MovePlantPhase,
+    AssignedTask, BucketTransportData, BucketTransportDestination, BucketTransportPhase,
+    BucketTransportSource, BuildData, BuildPhase, CoatWallData, CoatWallPhase, CollectBoneData,
+    CollectBonePhase, CollectSandData, CollectSandPhase, FrameWallPhase, FrameWallTileData,
+    GatherData, GatherPhase, HaulData, HaulPhase, HaulToBlueprintData, HaulToBpPhase,
+    HaulToMixerData, HaulToMixerPhase, HaulWithWheelbarrowData, HaulWithWheelbarrowPhase,
+    MovePlantData, MovePlantPhase, MovePlantTask, PourFloorPhase, PourFloorTileData, RefineData,
+    RefinePhase, ReinforceFloorPhase, ReinforceFloorTileData,
 };

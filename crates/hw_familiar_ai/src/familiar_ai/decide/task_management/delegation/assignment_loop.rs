@@ -253,8 +253,12 @@ pub(super) fn try_assign_for_workers(
             continue;
         };
 
-        let (top_candidates, mut fallback_ranked) =
-            build_worker_candidates(&scored_candidates, worker_pos, &task_virtual_workers, queries);
+        let (top_candidates, mut fallback_ranked) = build_worker_candidates(
+            &scored_candidates,
+            worker_pos,
+            &task_virtual_workers,
+            queries,
+        );
         if top_candidates.is_empty() && fallback_ranked.is_empty() {
             continue;
         }

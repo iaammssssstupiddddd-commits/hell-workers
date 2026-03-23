@@ -1,6 +1,6 @@
 use crate::systems::command::{TaskArea, TaskMode};
-use hw_world::zones::Site;
 use bevy::prelude::*;
+use hw_world::zones::Site;
 
 const AREA_CONTAINS_MARGIN: f32 = 0.1;
 

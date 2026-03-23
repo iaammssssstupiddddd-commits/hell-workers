@@ -1,8 +1,8 @@
 use bevy::prelude::*;
 
+use crate::FamiliarOperationMaxSoulChangedEvent;
 use crate::app_contexts::{BuildContext, TaskContext, ZoneContext};
 use crate::entities::familiar::{Familiar, FamiliarOperation};
-use crate::FamiliarOperationMaxSoulChangedEvent;
 use crate::interface::selection::SelectedEntity;
 use crate::interface::ui::EntityListNodeIndex;
 use crate::interface::ui::InfoPanelPinState;

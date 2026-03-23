@@ -1,8 +1,8 @@
 use bevy::ecs::lifecycle::Add;
 use bevy::prelude::*;
 
-use hw_core::visual_mirror::logistics::{InventoryItemVisual, WheelbarrowMarker};
 use hw_core::visual_mirror::StockpileVisualState;
+use hw_core::visual_mirror::logistics::{InventoryItemVisual, WheelbarrowMarker};
 
 use crate::types::{Inventory, ResourceItem, Wheelbarrow};
 use crate::zone::Stockpile;

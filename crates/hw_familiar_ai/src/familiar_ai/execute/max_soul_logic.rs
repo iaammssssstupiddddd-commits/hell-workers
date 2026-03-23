@@ -53,4 +53,3 @@ pub fn max_soul_logic_system(
         }
     }
 }
-

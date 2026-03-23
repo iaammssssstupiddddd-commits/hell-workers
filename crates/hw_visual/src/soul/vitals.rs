@@ -2,8 +2,8 @@ use bevy::prelude::*;
 
 use hw_core::familiar::{ActiveCommand, Familiar};
 use hw_core::relationships::CommandedBy;
+use hw_core::selection::HoveredEntity;
 use hw_core::soul::DamnedSoul;
-use hw_ui::selection::HoveredEntity;
 
 /// 使い魔にホバーした際、使役中の魂との間に線を引く
 pub fn familiar_hover_visualization_system(

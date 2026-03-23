@@ -61,7 +61,7 @@ hw_soul_ai (hw_core + hw_jobs + hw_logistics + hw_world + hw_spatial)
 hw_ui (hw_core + hw_jobs + hw_logistics)
   └─ bevy_app
 
-hw_visual (hw_core + hw_spatial + hw_world + hw_ui)
+hw_visual (hw_core + hw_spatial + hw_world)
   └─ bevy_app
 ```
 
@@ -75,7 +75,7 @@ hw_visual (hw_core + hw_spatial + hw_world + hw_ui)
 
 - `hw_ui` は UI の構築・更新ロジックを集約し、`bevy_app` は shell/adapter とゲーム状態更新ハンドラを保持する。
 - `bevy_app` → `hw_ui` は依存方向を維持し、`hw_ui` から `bevy_app` へ依存しない。
-- `UiShell` 的な役割（Selection やカメラ・モード遷移）は `bevy_app` 側で管理する。`MainCamera` / `world_cursor_pos` の所有権は `hw_ui::camera` にあり、使用箇所はそこから直接 import する。`bevy_app` 側に 1 段噛ませるだけの `interface::camera` wrapper は置かない。
+- `UiShell` 的な役割（Selection やカメラ・モード遷移）は `bevy_app` 側で管理する。`MainCamera`、`SelectedEntity` / `HoveredEntity` / `SelectionIndicator`、`UiNodeRegistry` / `UiSlot` / `UiMountSlot` / `UiRoot` のような**共有 UI 契約型**は `hw_core` が所有し、`hw_ui` は必要に応じて re-export する。`world_cursor_pos` のような UI 実装ヘルパーは `hw_ui::camera` に残す。
 
 ### `hw_ui`
 
@@ -88,7 +88,7 @@ hw_visual (hw_core + hw_spatial + hw_world + hw_ui)
 代表例（主要モジュール）:
 
 - `setup/` — `UiAssets` trait, `setup_ui` fn（UI ツリー構築。bottom_bar / submenus / panels / entity_list / time_control / dialogs）
-- `components.rs` — UiNodeRegistry, UiSlot, UiMountSlot, MenuState, MenuButton, FamiliarListItem, SoulListItem 等 50+ 型
+- `components.rs` — MenuState, MenuButton, FamiliarListItem, SoulListItem 等 50+ 型（`UiNodeRegistry` / `UiSlot` / `UiMountSlot` / `UiRoot` は `hw_core::ui_nodes` から re-export）
 - `theme.rs` — `UiTheme` Resource（カラーパレット・フォントサイズ・スペーシング・サイズ定数）
 - `intents.rs` — `UiIntent` enum（プレイヤー UI 操作メッセージ）
 - `interaction/` — tooltip/dialog/hover_action/status_display システム群（FPS, speed, dream pool, area_edit_preview 等）
@@ -98,8 +98,8 @@ hw_visual (hw_core + hw_spatial + hw_world + hw_ui)
 - `panels/task_list/` — TaskEntry, TaskListDirty, work_type_icon, render（rebuild_task_list_ui）, interaction システム群
 - `panels/menu.rs` — menu_visibility_system
 - `models/inspection/` — EntityInspectionModel, EntityInspectionViewModel, SoulInspectionFields
-- `selection/` — SelectedEntity, HoveredEntity, SelectionIndicator, SelectionIntent, cleanup_selection_references_system, placement validation API
-- `camera.rs` — MainCamera マーカー、`world_cursor_pos`（スクリーン座標→ワールド座標変換ユーティリティ）
+- `selection/` — SelectionIntent, cleanup_selection_references_system, placement validation API（`SelectedEntity` / `HoveredEntity` / `SelectionIndicator` は `hw_core` から re-export）
+- `camera.rs` — `world_cursor_pos`（スクリーン座標→ワールド座標変換ユーティリティ。`MainCamera` は `hw_core` から re-export）
 - `plugins/` — UiCorePlugin / UiEntityListPlugin / UiFoundationPlugin / UiInfoPanelPlugin / UiTooltipPlugin（fn ポインタ受け付けシェル）
 - **`area_edit/`** — エリア選択・編集状態の純粋データ型（`AreaEditHandleKind`, `AreaEditOperation`, `AreaEditDrag`, `AreaEditSession`, `AreaEditHistory`, `AreaEditHistoryEntry`, `AreaEditClipboard`, `AreaEditPresets`）。`AreaEditClipboard` 等は `bevy_app/command/area_selection.rs` から直接 `pub use hw_ui::area_edit::*` として re-export。`AreaEditHandleKind` は `bevy_app/command/mod.rs` からも re-export。`area_edit/interaction.rs` に `detect_area_edit_operation`・`apply_area_edit_drag`・`cursor_icon_for_operation` の pure helper を所有（M1 移設済み）
 
@@ -129,7 +129,7 @@ root 側の `bevy_app` 残留（adapter 責務）:
 | `panels/task_list/update.rs` | `Res<GameAssets>` をシステム引数に取るため hw_ui 移動不可 |
 | `presentation/` | EntityInspectionQuery（ゲームエンティティ 10+ 型のクエリ集約）|
 | `vignette.rs` | TaskContext (DreamPlanting モード判定) |
-- `hw_visual` はビジュアルシステム全体を集約し、`GameAssets` には依存しない。`hw_visual::handles` の 8 Resource（`WallVisualHandles` 等）は root の `init_visual_handles` startup システムが `GameAssets` から注入する。`SoulTaskHandles` は `hw_core::visual`、`TerrainVisualHandles` / `DoorVisualHandles` は `hw_world`、`ResourceItemVisualHandles` は `hw_logistics` が所有し、同じ startup 注入パターンを共有する。visual marker (`FadeOut`, `WheelbarrowMovement`) は `hw_core::visual` に置き、`hw_familiar_ai` / `hw_soul_ai` / `hw_visual` の共有型として扱う。
+- `hw_visual` はビジュアルシステム全体を集約し、`GameAssets` には依存しない。`hw_visual::handles` の 8 Resource（`WallVisualHandles` 等）は root の `init_visual_handles` startup システムが `GameAssets` から注入する。`SoulTaskHandles` は `hw_core::visual`、`TerrainVisualHandles` / `DoorVisualHandles` は `hw_world`、`ResourceItemVisualHandles` は `hw_logistics` が所有し、同じ startup 注入パターンを共有する。visual marker (`FadeOut`, `WheelbarrowMovement`) は `hw_core::visual` に置き、`hw_familiar_ai` / `hw_soul_ai` / `hw_visual` の共有型として扱う。Dream 系 UI 連携で読む shared contract (`MainCamera`, `SelectedEntity`, `UiNodeRegistry`, `UiMountSlot` など) も `hw_core` 側に寄せ、`hw_visual` が `hw_ui` に直接依存しない構成へ整理済み。
 - `bevy_app` → `hw_visual` は依存方向を維持し、`hw_visual` から `bevy_app` へ依存しない。
 
 ### `hw_visual`
@@ -163,7 +163,7 @@ root 側の `bevy_app` 残留（adapter 責務）:
 - `floor_construction::*` — 床建設タイル進捗バー・資材 visual・骨 visual システム
 - `wall_construction::*` — 壁建設タイル progress / 資材 visual システム
 - `task_area_visual::{TaskAreaMaterial, TaskAreaVisual}` — タスクエリアシェーダー型定義
-- `selection_indicator::update_selection_indicator` — 選択エンティティを追従する黄色スプライト indicator（`SelectionIndicator` コンポーネントは `hw_ui::selection` が所有。実装は `hw_visual`、登録は同フレーム反映のため root `Interface` フェーズで行う）
+- `selection_indicator::update_selection_indicator` — 選択エンティティを追従する黄色スプライト indicator（`SelectionIndicator` コンポーネントは `hw_core::selection` が所有。実装は `hw_visual`、登録は同フレーム反映のため root `Interface` フェーズで行う）
 
 ここに置かないもの:
 
@@ -352,13 +352,13 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 - root 固有アセットを前提にした初期 sprite spawn
 - `GameAssets` への直接依存
 - root 側の startup / plugin wiring / entity spawn facade
-- `SpatialGrid` resource 実体と update system（8 種 concrete）は `hw_spatial` が保持
+- `SpatialGrid` resource 実体と update system（9 種 concrete）は `hw_spatial` が保持（一部更新関数は `hw_logistics` にあり `plugins/spatial` から登録）
 
 ### `hw_spatial`
 
 役割:
 
-- SpatialGrid の concrete resource / update 系（8 種）
+- SpatialGrid の concrete resource / update 系（9 種）
 - `GridData` と空間検索ヘルパの共通化
 - 2D 空間スナップショットの初期化時の query 補助
 
@@ -479,7 +479,7 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 | `crate::plugins` | plugin 型の app-shell 入口 |
 | `crate::entities::damned_soul` | ECS 型・plugin・spawn API の入口 |
 | `crate::entities::familiar` | ECS 型・plugin・spawn API の入口 |
-| `crate::systems::spatial` | grid resource / update system の単一入口 |
+| `crate::plugins::spatial` | `SpatialPlugin` — `hw_spatial` / `hw_logistics` のグリッド更新を `GameSystemSet::Spatial` に登録する app-shell 入口（`systems/spatial` モジュールは廃止済み） |
 | `crate::systems::logistics::transport_request` | request domain の公開面 |
 | `crate::systems::command` | UI / input / mode 系の facade |
 | `crate::world::map` | world map 読み書きと座標 helper の入口 |

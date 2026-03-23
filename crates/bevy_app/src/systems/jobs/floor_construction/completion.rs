@@ -126,25 +126,27 @@ pub fn floor_construction_completion_system(
         for (tile_entity, (gx, gy), _) in site_tiles {
             let world_pos = WorldMap::grid_to_world(gx, gy);
 
-            let building_entity = commands.spawn((
-                Building {
-                    kind: BuildingType::Floor,
-                    is_provisional: false,
-                },
-                BuildingBounceEffect {
-                    bounce_animation: BounceAnimation {
-                        timer: 0.0,
-                        config: BounceAnimationConfig {
-                            duration: BOUNCE_DURATION,
-                            min_scale: 1.0,
-                            max_scale: 1.2,
+            let building_entity = commands
+                .spawn((
+                    Building {
+                        kind: BuildingType::Floor,
+                        is_provisional: false,
+                    },
+                    BuildingBounceEffect {
+                        bounce_animation: BounceAnimation {
+                            timer: 0.0,
+                            config: BounceAnimationConfig {
+                                duration: BOUNCE_DURATION,
+                                min_scale: 1.0,
+                                max_scale: 1.2,
+                            },
                         },
                     },
-                },
-                Transform::from_translation(world_pos.extend(Z_MAP + 0.01)),
-                Visibility::default(),
-                Name::new("Building (Floor)"),
-            )).id();
+                    Transform::from_translation(world_pos.extend(Z_MAP + 0.01)),
+                    Visibility::default(),
+                    Name::new("Building (Floor)"),
+                ))
+                .id();
 
             // 3D ビジュアルエンティティを独立 spawn（Floor は y=0 の地面レベル）
             commands.spawn((
@@ -152,7 +154,9 @@ pub fn floor_construction_completion_system(
                 MeshMaterial3d(handles_3d.floor_material.clone()),
                 Transform::from_xyz(world_pos.x, 0.0, -world_pos.y),
                 handles_3d.render_layers.clone(),
-                Building3dVisual { owner: building_entity },
+                Building3dVisual {
+                    owner: building_entity,
+                },
                 Name::new("Building3dVisual (Floor)"),
             ));
 

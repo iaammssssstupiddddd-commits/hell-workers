@@ -1,8 +1,8 @@
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 
-#[derive(Component)]
-pub struct MainCamera;
+// 型定義は hw_core に移動し、ここでは re-export して既存コードを壊さない
+pub use hw_core::camera::MainCamera;
 
 /// Returns the current cursor position in world space, or `None` if unavailable.
 pub fn world_cursor_pos(

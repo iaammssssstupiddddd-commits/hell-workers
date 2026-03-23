@@ -13,6 +13,108 @@ use crate::theme::UiTheme;
 use bevy::prelude::*;
 
 // ============================================================
+// Node generation helpers (private)
+// ============================================================
+
+/// アイコン画像ノード（ImageNode + Node）をスポーンする。
+/// `margin_right`: `None` のときは margin なし。
+fn spawn_icon(
+    parent: &mut ChildSpawnerCommands,
+    image: Handle<Image>,
+    color: Color,
+    size: f32,
+    margin_right: Option<f32>,
+) {
+    parent.spawn((
+        ImageNode {
+            image,
+            color,
+            ..default()
+        },
+        Node {
+            width: Val::Px(size),
+            height: Val::Px(size),
+            flex_shrink: 0.0,
+            margin: margin_right
+                .map(|m| UiRect::right(Val::Px(m)))
+                .unwrap_or_default(),
+            ..default()
+        },
+    ));
+}
+
+/// テキストノード（Text + TextFont + TextColor + Node）をスポーンする。
+/// `font`: `None` のときは Bevy デフォルトフォントを使用。
+fn spawn_text(
+    parent: &mut ChildSpawnerCommands,
+    text: String,
+    font: Option<Handle<Font>>,
+    font_size: f32,
+    color: Color,
+    weight: FontWeight,
+    margin_right: f32,
+) {
+    let mut text_font = TextFont {
+        font_size,
+        weight,
+        ..default()
+    };
+    if let Some(f) = font {
+        text_font.font = f;
+    }
+    parent.spawn((
+        Text::new(text),
+        text_font,
+        TextColor(color),
+        Node {
+            flex_shrink: 0.0,
+            margin: UiRect::right(Val::Px(margin_right)),
+            ..default()
+        },
+    ));
+}
+
+/// familiar の使役数調整ボタン（-/+）をスポーンして `parent` に追加する。
+fn spawn_adjust_button(
+    commands: &mut Commands,
+    parent: Entity,
+    familiar: Entity,
+    delta: isize,
+    label: &str,
+    theme: &UiTheme,
+    assets: &dyn UiAssets,
+) {
+    let btn = commands
+        .spawn((
+            Button,
+            Node {
+                width: Val::Px(18.0),
+                height: Val::Px(18.0),
+                flex_shrink: 0.0,
+                justify_content: JustifyContent::Center,
+                align_items: AlignItems::Center,
+                ..default()
+            },
+            BackgroundColor(theme.colors.button_default),
+            FamiliarMaxSoulAdjustButton { familiar, delta },
+        ))
+        .id();
+    commands.entity(parent).add_child(btn);
+    commands.entity(btn).with_children(|b| {
+        b.spawn((
+            Text::new(label),
+            TextFont {
+                font: assets.font_ui().clone(),
+                font_size: theme.typography.font_size_base,
+                weight: FontWeight::BOLD,
+                ..default()
+            },
+            TextColor(theme.colors.text_primary_semantic),
+        ));
+    });
+}
+
+// ============================================================
 // Familiar Section
 // ============================================================
 
@@ -127,71 +229,24 @@ pub fn spawn_familiar_section(
         .id();
     commands.entity(header).add_child(adjust_container);
 
-    let decrease_button = commands
-        .spawn((
-            Button,
-            Node {
-                width: Val::Px(18.0),
-                height: Val::Px(18.0),
-                flex_shrink: 0.0,
-                justify_content: JustifyContent::Center,
-                align_items: AlignItems::Center,
-                ..default()
-            },
-            BackgroundColor(theme.colors.button_default),
-            FamiliarMaxSoulAdjustButton {
-                familiar: familiar.entity,
-                delta: -1,
-            },
-        ))
-        .id();
-    commands.entity(adjust_container).add_child(decrease_button);
-    let decrease_text = commands
-        .spawn((
-            Text::new("-"),
-            TextFont {
-                font: assets.font_ui().clone(),
-                font_size: theme.typography.font_size_base,
-                weight: FontWeight::BOLD,
-                ..default()
-            },
-            TextColor(theme.colors.text_primary_semantic),
-        ))
-        .id();
-    commands.entity(decrease_button).add_child(decrease_text);
-
-    let increase_button = commands
-        .spawn((
-            Button,
-            Node {
-                width: Val::Px(18.0),
-                height: Val::Px(18.0),
-                flex_shrink: 0.0,
-                justify_content: JustifyContent::Center,
-                align_items: AlignItems::Center,
-                ..default()
-            },
-            BackgroundColor(theme.colors.button_default),
-            FamiliarMaxSoulAdjustButton {
-                familiar: familiar.entity,
-                delta: 1,
-            },
-        ))
-        .id();
-    commands.entity(adjust_container).add_child(increase_button);
-    let increase_text = commands
-        .spawn((
-            Text::new("+"),
-            TextFont {
-                font: assets.font_ui().clone(),
-                font_size: theme.typography.font_size_base,
-                weight: FontWeight::BOLD,
-                ..default()
-            },
-            TextColor(theme.colors.text_primary_semantic),
-        ))
-        .id();
-    commands.entity(increase_button).add_child(increase_text);
+    spawn_adjust_button(
+        commands,
+        adjust_container,
+        familiar.entity,
+        -1isize,
+        "-",
+        theme,
+        assets,
+    );
+    spawn_adjust_button(
+        commands,
+        adjust_container,
+        familiar.entity,
+        1isize,
+        "+",
+        theme,
+        assets,
+    );
 
     let members_container = commands
         .spawn(Node {
@@ -326,116 +381,65 @@ pub fn spawn_soul_list_item(
             SoulListItem(soul_vm.entity),
         ))
         .with_children(|item| {
-            item.spawn((
-                ImageNode {
-                    image: gender_handle,
-                    color: gender_color,
-                    ..default()
-                },
-                Node {
-                    width: Val::Px(theme.sizes.icon_size),
-                    height: Val::Px(theme.sizes.icon_size),
-                    flex_shrink: 0.0,
-                    margin: UiRect::right(Val::Px(theme.spacing.margin_medium)),
-                    ..default()
-                },
-            ));
-            item.spawn((
-                Text::new(soul_vm.name.clone()),
-                TextFont {
-                    font: assets.font_soul_name().clone(),
-                    font_size: theme.typography.font_size_item,
-                    ..default()
-                },
-                TextColor(stress_color),
-                Node {
-                    flex_shrink: 0.0,
-                    margin: UiRect::right(Val::Px(theme.spacing.margin_large)),
-                    ..default()
-                },
-            ));
-            item.spawn((
-                ImageNode {
-                    image: assets.icon_fatigue().clone(),
-                    color: theme.colors.fatigue_icon,
-                    ..default()
-                },
-                Node {
-                    width: Val::Px(theme.sizes.icon_size),
-                    height: Val::Px(theme.sizes.icon_size),
-                    flex_shrink: 0.0,
-                    margin: UiRect::right(Val::Px(theme.spacing.margin_small)),
-                    ..default()
-                },
-            ));
-            item.spawn((
-                Text::new(soul_vm.fatigue_text.clone()),
-                TextFont {
-                    font_size: theme.typography.font_size_small,
-                    ..default()
-                },
-                TextColor(theme.colors.fatigue_text),
-                Node {
-                    flex_shrink: 0.0,
-                    margin: UiRect::right(Val::Px(theme.spacing.margin_large)),
-                    ..default()
-                },
-            ));
-            item.spawn((
-                ImageNode {
-                    image: assets.icon_stress().clone(),
-                    color: theme.colors.stress_icon,
-                    ..default()
-                },
-                Node {
-                    width: Val::Px(theme.sizes.icon_size),
-                    height: Val::Px(theme.sizes.icon_size),
-                    flex_shrink: 0.0,
-                    margin: UiRect::right(Val::Px(theme.spacing.margin_small)),
-                    ..default()
-                },
-            ));
-            item.spawn((
-                Text::new(soul_vm.stress_text.clone()),
-                TextFont {
-                    font_size: theme.typography.font_size_small,
-                    weight: stress_weight(soul_vm.stress_bucket),
-                    ..default()
-                },
-                TextColor(stress_color),
-                Node {
-                    flex_shrink: 0.0,
-                    margin: UiRect::right(Val::Px(theme.spacing.margin_large)),
-                    ..default()
-                },
-            ));
+            spawn_icon(
+                item,
+                gender_handle,
+                gender_color,
+                theme.sizes.icon_size,
+                Some(theme.spacing.margin_medium),
+            );
+            spawn_text(
+                item,
+                soul_vm.name.clone(),
+                Some(assets.font_soul_name().clone()),
+                theme.typography.font_size_item,
+                stress_color,
+                FontWeight::default(),
+                theme.spacing.margin_large,
+            );
+            spawn_icon(
+                item,
+                assets.icon_fatigue().clone(),
+                theme.colors.fatigue_icon,
+                theme.sizes.icon_size,
+                Some(theme.spacing.margin_small),
+            );
+            spawn_text(
+                item,
+                soul_vm.fatigue_text.clone(),
+                None,
+                theme.typography.font_size_small,
+                theme.colors.fatigue_text,
+                FontWeight::default(),
+                theme.spacing.margin_large,
+            );
+            spawn_icon(
+                item,
+                assets.icon_stress().clone(),
+                theme.colors.stress_icon,
+                theme.sizes.icon_size,
+                Some(theme.spacing.margin_small),
+            );
+            spawn_text(
+                item,
+                soul_vm.stress_text.clone(),
+                None,
+                theme.typography.font_size_small,
+                stress_color,
+                stress_weight(soul_vm.stress_bucket),
+                theme.spacing.margin_large,
+            );
             // children[6]: dream text
-            item.spawn((
-                Text::new(soul_vm.dream_text.clone()),
-                TextFont {
-                    font_size: theme.typography.font_size_small,
-                    ..default()
-                },
-                TextColor(dream_color),
-                Node {
-                    flex_shrink: 0.0,
-                    margin: UiRect::right(Val::Px(theme.spacing.margin_large)),
-                    ..default()
-                },
-            ));
-            item.spawn((
-                ImageNode {
-                    image: task_handle,
-                    color: task_color,
-                    ..default()
-                },
-                Node {
-                    width: Val::Px(theme.sizes.icon_size),
-                    height: Val::Px(theme.sizes.icon_size),
-                    flex_shrink: 0.0,
-                    ..default()
-                },
-            ));
+            spawn_text(
+                item,
+                soul_vm.dream_text.clone(),
+                None,
+                theme.typography.font_size_small,
+                dream_color,
+                FontWeight::default(),
+                theme.spacing.margin_large,
+            );
+            spawn_icon(item, task_handle, task_color, theme.sizes.icon_size, None);
         })
         .id()
 }
