@@ -294,6 +294,7 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 - `GameAssets`・sprite spawn・root 固有 resource を伴う adapter
 - `hw_world::WorldMapRead/Write`、pathfinding context、full-fat query を扱う root adapter system
 - request 消費時に app 側状態を再検証して副作用を確定する adapter
+- `plugins/logic.rs` の scheduling facade。特に command 系 chain、maintenance/spawn 系の非 chain 登録、floor/wall construction の phase chain、room detection の `.after(dream_tree_planting_system)` は root の唯一の ordering 契約として保持する
 
 ### `hw_core`
 

@@ -71,6 +71,16 @@ Perceive → Update → Decide → Execute
 
 各フェーズ間には `ApplyDeferred` が配置され、変更が次のフェーズで確実に反映されます。
 
+### `LogicPlugin` 内の登録グループ
+
+`crates/bevy_app/src/plugins/logic.rs` の `GameSystemSet::Logic` 登録は、単一の巨大 `.chain()` ではなく、責務ごとに次のグループへ分割されている。
+
+- Group A: command 系 (`assign_task_system`, `familiar_command_input_system`, `task_area_selection_system`, `zone_placement_system`, `zone_removal_system`, `task_area_edit_history_shortcuts_system`) を `.chain()` で直列実行する。`TaskContext` / `AreaEdit*` / `WorldMapWrite` を共有するため、この並びが唯一の ordering 契約である。
+- Group B: maintenance / spawn 系 (`familiar_spawning_system`, `tree_regrowth_system`, `obstacle_cleanup_system`, `blueprint_cancel_cleanup_system`, `despawn_expired_items_system`, `dream_tree_planting_system`) は非 chain で登録し、Bevy scheduler に競合解決を委ねる。
+- Group C: floor construction 系 (`floor_construction_cancellation_system` → `floor_construction_phase_transition_system` → `floor_construction_completion_system`) はフェーズ順を保つため `.chain()` で登録する。
+- Group D: wall construction 系 (`wall_construction_cancellation_system` → `debug_instant_complete_walls_system` → `wall_framed_tile_spawn_system` → `wall_construction_phase_transition_system` → `wall_construction_completion_system`) はフェーズ順とデバッグ割り込み位置を保つため `.chain()` で登録する。
+- room detection 系 (`mark_room_dirty_from_building_changes_system` → `validate_rooms_system` → `detect_rooms_system`) は `.chain().after(dream_tree_planting_system)` を維持し、DreamTree 反映後のワールド状態を入力にする。
+
 ## タスク割り当て・物流・UIの責務境界
 
 - Familiar 側の `TaskAssignmentRequest` 発行は `task_management::builders::submit_assignment_with_source_entities(...)` / `submit_assignment_with_reservation_ops(...)`（または下位の `submit_assignment(...)`）を経由し、`ReservationShadow` による同一フレーム内の予約整合性を維持する。
