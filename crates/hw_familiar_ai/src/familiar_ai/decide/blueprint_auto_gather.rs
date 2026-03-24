@@ -23,6 +23,39 @@ use crate::familiar_ai::decide::auto_gather_for_blueprint::helpers::OwnerInfo;
 use crate::familiar_ai::decide::auto_gather_for_blueprint::planning::build_auto_gather_targets;
 use crate::familiar_ai::decide::auto_gather_for_blueprint::supply::collect_supply_state;
 
+type BpGroundItemsQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static Transform,
+        &'static Visibility,
+        &'static ResourceItem,
+    ),
+    (
+        Without<Designation>,
+        Without<TaskWorkers>,
+        Without<ReservedForTask>,
+        Without<StoredIn>,
+        Without<LoadedIn>,
+    ),
+>;
+
+type BpSourcesQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static Transform,
+        Option<&'static Tree>,
+        Option<&'static Rock>,
+        Option<&'static Designation>,
+        Option<&'static TaskWorkers>,
+        Option<&'static ManagedBy>,
+        Option<&'static AutoGatherDesignation>,
+    ),
+    Or<(With<Tree>, With<Rock>, With<AutoGatherDesignation>)>,
+>;
+
 #[derive(Resource)]
 pub struct BlueprintAutoGatherTimer {
     pub timer: Timer,
@@ -38,6 +71,7 @@ impl Default for BlueprintAutoGatherTimer {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn blueprint_auto_gather_system(
     mut commands: Commands,
     time: Res<Time>,
@@ -59,29 +93,8 @@ pub fn blueprint_auto_gather_system(
         Option<&TransportDemand>,
     )>,
     q_blueprints: Query<&Blueprint>,
-    q_ground_items: Query<
-        (&Transform, &Visibility, &ResourceItem),
-        (
-            Without<Designation>,
-            Without<TaskWorkers>,
-            Without<ReservedForTask>,
-            Without<StoredIn>,
-            Without<LoadedIn>,
-        ),
-    >,
-    q_sources: Query<
-        (
-            Entity,
-            &Transform,
-            Option<&Tree>,
-            Option<&Rock>,
-            Option<&Designation>,
-            Option<&TaskWorkers>,
-            Option<&ManagedBy>,
-            Option<&AutoGatherDesignation>,
-        ),
-        Or<(With<Tree>, With<Rock>, With<AutoGatherDesignation>)>,
-    >,
+    q_ground_items: BpGroundItemsQuery,
+    q_sources: BpSourcesQuery,
 ) {
     let timer_finished = timer.timer.tick(time.delta()).just_finished();
     if timer.first_run_done && !timer_finished {

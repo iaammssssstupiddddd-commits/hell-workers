@@ -1,6 +1,13 @@
 use super::grid::{GridData, SpatialGridOps};
 use bevy::prelude::*;
 
+type SpatialUpdateQuery<'w, 's, T> = Query<
+    'w,
+    's,
+    (Entity, &'static Transform),
+    (With<T>, Or<(Added<T>, Changed<Transform>)>),
+>;
+
 /// TransportRequest 用の空間グリッド
 #[derive(Resource, Default)]
 pub struct TransportRequestSpatialGrid(pub GridData);
@@ -31,7 +38,7 @@ impl SpatialGridOps for TransportRequestSpatialGrid {
 
 pub fn update_transport_request_spatial_grid_system<T: Component>(
     mut grid: ResMut<TransportRequestSpatialGrid>,
-    query: Query<(Entity, &Transform), (With<T>, Or<(Added<T>, Changed<Transform>)>)>,
+    query: SpatialUpdateQuery<T>,
     mut removed: RemovedComponents<T>,
 ) {
     // 変更差分のみを反映する。スポーン直後は次フレームで取り込まれる。

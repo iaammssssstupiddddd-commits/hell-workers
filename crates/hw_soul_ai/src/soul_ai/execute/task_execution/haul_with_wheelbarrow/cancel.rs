@@ -19,7 +19,7 @@ pub fn cancel_wheelbarrow_task(
 ) {
     let soul_pos = ctx.soul_pos();
     // 積載済みアイテムを地面にドロップ
-    if let Some(loaded_items) = ctx.queries.storage.loaded_items.get(data.wheelbarrow).ok() {
+    if let Ok(loaded_items) = ctx.queries.storage.loaded_items.get(data.wheelbarrow) {
         for item_entity in loaded_items.iter() {
             if let Ok(mut item_commands) = commands.get_entity(item_entity) {
                 item_commands.try_insert((

@@ -13,6 +13,7 @@ use hw_world::zones::Site;
 use hw_world::zones::{AreaBounds, Yard};
 use hw_world::{area_tile_size, expand_yard_area, rectangles_overlap, rectangles_overlap_site};
 
+#[allow(clippy::too_many_arguments)]
 pub fn zone_placement_system(
     buttons: Res<ButtonInput<MouseButton>>,
     q_window: Query<&Window, With<PrimaryWindow>>,

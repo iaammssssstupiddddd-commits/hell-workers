@@ -2,6 +2,7 @@ use super::components::*;
 use bevy::prelude::*;
 use hw_core::constants::*;
 
+#[allow(clippy::type_complexity)]
 /// 吹き出しのアニメーション処理
 pub fn animate_speech_bubbles(
     time: Res<Time>,

@@ -10,6 +10,7 @@ use hw_core::visual_mirror::gather::GatherHighlightMarker;
 pub const COLOR_DESIGNATED_TINT: Color = Color::srgba(0.6, 0.8, 1.0, 1.0);
 pub const COLOR_WORKING_TINT: Color = Color::srgba(0.8, 0.9, 1.0, 1.0);
 
+#[allow(clippy::type_complexity)]
 pub fn attach_resource_visual_system(
     mut commands: Commands,
     q_resources: Query<(Entity, &Sprite), (With<GatherHighlightMarker>, Without<ResourceVisual>)>,
@@ -53,7 +54,7 @@ pub fn update_resource_visual_system(
 
         let is_being_worked = q_task_workers
             .get(entity)
-            .map(|workers| workers.len() > 0)
+            .map(|workers| !workers.is_empty())
             .unwrap_or(false);
 
         let new_state = if is_being_worked {

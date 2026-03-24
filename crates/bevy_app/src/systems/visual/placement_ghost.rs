@@ -50,16 +50,21 @@ fn is_wall_or_door_at(
     false
 }
 
+type PartnerGhostQuery<'w, 's> = Query<
+    'w,
+    's,
+    (Entity, &'static mut Transform, &'static mut Sprite),
+    (With<PlacementPartnerGhost>, Without<PlacementGhost>),
+>;
+
+#[allow(clippy::too_many_arguments)]
 pub fn placement_ghost_system(
     mut commands: Commands,
     play_mode: Res<State<PlayMode>>,
     build_context: Res<BuildContext>,
     companion_state: Res<CompanionPlacementState>,
     mut q_ghost: Query<(Entity, &mut Transform, &mut Sprite), With<PlacementGhost>>,
-    mut q_partner_ghost: Query<
-        (Entity, &mut Transform, &mut Sprite),
-        (With<PlacementPartnerGhost>, Without<PlacementGhost>),
-    >,
+    mut q_partner_ghost: PartnerGhostQuery,
     q_window: Query<&Window, With<bevy::window::PrimaryWindow>>,
     q_camera: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
     game_assets: Res<crate::assets::GameAssets>,

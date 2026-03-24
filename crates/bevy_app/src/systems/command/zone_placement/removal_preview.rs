@@ -72,11 +72,10 @@ fn set_stockpile_color(
     grid: &(i32, i32),
     color: Color,
 ) {
-    if let Some(entity) = world_map.stockpile_entity(*grid) {
-        if let Ok(mut sprite) = q_sprites.get_mut(entity) {
+    if let Some(entity) = world_map.stockpile_entity(*grid)
+        && let Ok(mut sprite) = q_sprites.get_mut(entity) {
             sprite.color = color;
         }
-    }
 }
 
 fn stockpile_default_color() -> Color {

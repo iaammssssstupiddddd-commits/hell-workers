@@ -1,5 +1,6 @@
 use crate::transport_request::metrics::TransportRequestMetrics;
 
+#[allow(clippy::too_many_arguments)]
 pub(super) fn update_metrics(
     metrics: &mut TransportRequestMetrics,
     active_leases: u32,

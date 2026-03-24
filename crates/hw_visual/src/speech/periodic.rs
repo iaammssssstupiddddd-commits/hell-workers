@@ -11,6 +11,7 @@ use rand::Rng;
 #[derive(Resource, Default)]
 pub struct PeriodicEmotionFrameCounter(pub u32);
 
+#[allow(clippy::type_complexity)]
 /// 定期的に Soul の感情状態をチェックし、必要に応じて吹き出しを出すシステム
 /// パフォーマンス最適化: 毎フレーム全Soulをチェックせず、フレームごとに一部のみ処理
 pub fn periodic_emotion_system(
@@ -105,8 +106,8 @@ pub fn periodic_emotion_system(
             }
         }
         // 4. アイドル (Low)
-        else if state.idle_time > IDLE_EMOTION_MIN_DURATION {
-            if rng.gen_bool(PROBABILITY_PERIODIC_BORED as f64) {
+        else if state.idle_time > IDLE_EMOTION_MIN_DURATION
+            && rng.gen_bool(PROBABILITY_PERIODIC_BORED as f64) {
                 let emoji = match rng.gen_range(0..3) {
                     0 => "💤",
                     1 => "🥱",
@@ -114,7 +115,6 @@ pub fn periodic_emotion_system(
                 };
                 triggered = Some((emoji, BubbleEmotion::Bored, BubblePriority::Low));
             }
-        }
 
         // 発火処理
         if let Some((emoji, emotion, priority)) = triggered {

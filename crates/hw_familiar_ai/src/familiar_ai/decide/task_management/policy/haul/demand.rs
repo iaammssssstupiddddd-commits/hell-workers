@@ -187,7 +187,7 @@ pub fn compute_remaining_provisional_wall_mud(
     else {
         return 0;
     };
-    let base_demand = provisional_wall_mud_demand(&building, provisional_opt.as_deref()) as u32;
+    let base_demand = provisional_wall_mud_demand(building, provisional_opt) as u32;
     compute_remaining_from_incoming(
         wall_entity,
         base_demand as usize,

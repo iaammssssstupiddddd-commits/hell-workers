@@ -6,22 +6,35 @@ use hw_core::visual_mirror::construction::BlueprintVisualState;
 use hw_world::{WorldMap, WorldMapRead};
 use std::collections::HashSet;
 
+type ChangedBuildingQuery<'w, 's> = Query<
+    'w,
+    's,
+    (Entity, &'static Transform, &'static BuildingVisualState),
+    Or<(Added<BuildingVisualState>, Changed<BuildingVisualState>)>,
+>;
+
+type WallCheckQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Option<&'static BuildingVisualState>,
+        Option<&'static BlueprintVisualState>,
+    ),
+    Or<(With<BuildingVisualState>, With<BlueprintVisualState>)>,
+>;
+
+
+#[allow(clippy::too_many_arguments)]
 /// 壁の接続更新を行うシステム
 pub fn wall_connections_system(
     wall_handles: Res<WallVisualHandles>,
     world_map: WorldMapRead,
-    q_new_buildings: Query<
-        (Entity, &Transform, &BuildingVisualState),
-        Or<(Added<BuildingVisualState>, Changed<BuildingVisualState>)>,
-    >,
+    q_new_buildings: ChangedBuildingQuery,
     q_new_blueprints: Query<
         (Entity, &Transform, &BlueprintVisualState),
         Added<BlueprintVisualState>,
     >,
-    q_walls_check: Query<
-        (Option<&BuildingVisualState>, Option<&BlueprintVisualState>),
-        Or<(With<BuildingVisualState>, With<BlueprintVisualState>)>,
-    >,
+    q_walls_check: WallCheckQuery,
     q_children: Query<&Children>,
     mut q_visual_layers: Query<(&VisualLayerKind, &mut Sprite)>,
     // Blueprint エンティティは Sprite を直接持つ（子構造ではない）
@@ -52,8 +65,8 @@ pub fn wall_connections_system(
     }
 
     for (gx, gy) in update_targets {
-        if let Some(entity) = world_map.building_entity((gx, gy)) {
-            if is_wall(gx, gy, world_map.as_ref(), &q_walls_check) {
+        if let Some(entity) = world_map.building_entity((gx, gy))
+            && is_wall(gx, gy, world_map.as_ref(), &q_walls_check) {
                 let is_plain_wall = q_walls_check.get(entity).ok().is_some_and(
                     |(building_visual_opt, blueprint_opt)| {
                         building_visual_opt.is_some_and(|v| v.kind == BuildingTypeVisual::Wall)
@@ -68,8 +81,8 @@ pub fn wall_connections_system(
                 let mut updated = false;
                 if let Ok(children) = q_children.get(entity) {
                     for child in children.iter() {
-                        if let Ok((kind, mut sprite)) = q_visual_layers.get_mut(child) {
-                            if *kind == VisualLayerKind::Struct {
+                        if let Ok((kind, mut sprite)) = q_visual_layers.get_mut(child)
+                            && *kind == VisualLayerKind::Struct {
                                 update_wall_sprite(
                                     entity,
                                     gx,
@@ -82,12 +95,11 @@ pub fn wall_connections_system(
                                 updated = true;
                                 break;
                             }
-                        }
                     }
                 }
                 // Blueprint エンティティは Sprite を直接持つ
-                if !updated {
-                    if let Ok(mut sprite) = q_blueprint_sprites.get_mut(entity) {
+                if !updated
+                    && let Ok(mut sprite) = q_blueprint_sprites.get_mut(entity) {
                         update_wall_sprite(
                             entity,
                             gx,
@@ -98,9 +110,7 @@ pub fn wall_connections_system(
                             &wall_handles,
                         );
                     }
-                }
             }
-        }
     }
 }
 
@@ -118,10 +128,7 @@ fn update_wall_sprite(
     y: i32,
     sprite: &mut Sprite,
     world_map: &WorldMap,
-    q_walls_check: &Query<
-        (Option<&BuildingVisualState>, Option<&BlueprintVisualState>),
-        Or<(With<BuildingVisualState>, With<BlueprintVisualState>)>,
-    >,
+    q_walls_check: &WallCheckQuery<'_, '_>,
     wall_handles: &WallVisualHandles,
 ) {
     let up = is_wall(x, y + 1, world_map, q_walls_check);
@@ -191,10 +198,7 @@ fn update_wall_sprite(
 
 fn is_provisional_wall(
     entity: Entity,
-    q_walls_check: &Query<
-        (Option<&BuildingVisualState>, Option<&BlueprintVisualState>),
-        Or<(With<BuildingVisualState>, With<BlueprintVisualState>)>,
-    >,
+    q_walls_check: &WallCheckQuery<'_, '_>,
 ) -> bool {
     q_walls_check
         .get(entity)
@@ -207,13 +211,10 @@ fn is_wall(
     x: i32,
     y: i32,
     world_map: &WorldMap,
-    q_walls_check: &Query<
-        (Option<&BuildingVisualState>, Option<&BlueprintVisualState>),
-        Or<(With<BuildingVisualState>, With<BlueprintVisualState>)>,
-    >,
+    q_walls_check: &WallCheckQuery<'_, '_>,
 ) -> bool {
-    if let Some(entity) = world_map.building_entity((x, y)) {
-        if let Ok((building_visual_opt, blueprint_opt)) = q_walls_check.get(entity) {
+    if let Some(entity) = world_map.building_entity((x, y))
+        && let Ok((building_visual_opt, blueprint_opt)) = q_walls_check.get(entity) {
             if let Some(v) = building_visual_opt {
                 return matches!(v.kind, BuildingTypeVisual::Wall | BuildingTypeVisual::Door);
             }
@@ -221,6 +222,5 @@ fn is_wall(
                 return s.is_wall_or_door;
             }
         }
-    }
     false
 }

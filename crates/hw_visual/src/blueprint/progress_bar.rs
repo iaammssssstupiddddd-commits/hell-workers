@@ -16,9 +16,47 @@ use crate::progress_bar::{
 };
 use hw_core::visual_mirror::construction::BlueprintVisualState;
 
+
+type BlueprintWithoutBarQuery<'w, 's> = Query<
+    'w,
+    's,
+    (Entity, &'static Transform),
+    (With<BlueprintVisualState>, Without<ProgressBar>),
+>;
+
+type ProgressFillQuery<'w, 's> = Query<
+    'w,
+    's,
+    (Entity, &'static ChildOf, &'static mut Sprite, &'static mut Transform),
+    (With<ProgressBar>, With<ProgressBarFill>),
+>;
+
+type ProgressBgBarQuery<'w, 's> = Query<
+    'w,
+    's,
+    (Entity, &'static ChildOf, &'static mut Transform),
+    (
+        With<ProgressBar>,
+        With<ProgressBarBackground>,
+        Without<BlueprintVisualState>,
+        Without<ProgressBarFill>,
+    ),
+>;
+
+type ProgressFillBarQuery<'w, 's> = Query<
+    'w,
+    's,
+    (Entity, &'static ChildOf, &'static mut Transform, &'static Sprite),
+    (
+        With<ProgressBar>,
+        With<ProgressBarFill>,
+        Without<BlueprintVisualState>,
+        Without<ProgressBarBackground>,
+    ),
+>;
 pub fn spawn_progress_bar_system(
     mut commands: Commands,
-    q_blueprints: Query<(Entity, &Transform), (With<BlueprintVisualState>, Without<ProgressBar>)>,
+    q_blueprints: BlueprintWithoutBarQuery,
     q_progress_bars: Query<&ChildOf, With<ProgressBar>>,
 ) {
     for (bp_entity, bp_transform) in q_blueprints.iter() {
@@ -50,10 +88,7 @@ pub fn spawn_progress_bar_system(
 pub fn update_progress_bar_fill_system(
     q_blueprints: Query<&BlueprintVisualState>,
     q_generic_bars: Query<&GenericProgressBar>,
-    mut q_fills: Query<
-        (Entity, &ChildOf, &mut Sprite, &mut Transform),
-        (With<ProgressBar>, With<ProgressBarFill>),
-    >,
+    mut q_fills: ProgressFillQuery,
 ) {
     for (fill_entity, child_of, mut sprite, mut transform) in q_fills.iter_mut() {
         let Ok(state) = q_blueprints.get(child_of.parent()) else {
@@ -102,36 +137,19 @@ pub fn update_progress_bar_fill_system(
 pub fn sync_progress_bar_position_system(
     q_blueprints: Query<(Entity, &Transform), With<BlueprintVisualState>>,
     q_generic_bars: Query<&GenericProgressBar>,
-    mut q_bg_bars: Query<
-        (Entity, &ChildOf, &mut Transform),
-        (
-            With<ProgressBar>,
-            With<ProgressBarBackground>,
-            Without<BlueprintVisualState>,
-            Without<ProgressBarFill>,
-        ),
-    >,
-    mut q_fill_bars: Query<
-        (Entity, &ChildOf, &mut Transform, &Sprite),
-        (
-            With<ProgressBar>,
-            With<ProgressBarFill>,
-            Without<BlueprintVisualState>,
-            Without<ProgressBarBackground>,
-        ),
-    >,
+    mut q_bg_bars: ProgressBgBarQuery,
+    mut q_fill_bars: ProgressFillBarQuery,
 ) {
     for (bg_entity, child_of, mut bar_transform) in q_bg_bars.iter_mut() {
-        if let Ok((_bp_entity, bp_transform)) = q_blueprints.get(child_of.parent()) {
-            if let Ok(generic_bar) = q_generic_bars.get(bg_entity) {
+        if let Ok((_bp_entity, bp_transform)) = q_blueprints.get(child_of.parent())
+            && let Ok(generic_bar) = q_generic_bars.get(bg_entity) {
                 sync_progress_bar_position(bp_transform, &generic_bar.config, &mut bar_transform);
             }
-        }
     }
 
     for (fill_entity, child_of, mut bar_transform, sprite) in q_fill_bars.iter_mut() {
-        if let Ok((_bp_entity, bp_transform)) = q_blueprints.get(child_of.parent()) {
-            if let Ok(generic_bar) = q_generic_bars.get(fill_entity) {
+        if let Ok((_bp_entity, bp_transform)) = q_blueprints.get(child_of.parent())
+            && let Ok(generic_bar) = q_generic_bars.get(fill_entity) {
                 let fill_width = sprite.custom_size.map(|s| s.x).unwrap_or(0.0);
                 sync_progress_bar_fill_position(
                     bp_transform,
@@ -140,7 +158,6 @@ pub fn sync_progress_bar_position_system(
                     &mut bar_transform,
                 );
             }
-        }
     }
 }
 

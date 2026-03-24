@@ -11,13 +11,16 @@ use hw_core::familiar::Familiar;
 use hw_core::relationships::{CommandedBy, ParticipatingIn};
 use hw_core::soul::DamnedSoul;
 
+type ParticipatingQuery<'w, 's> =
+    Query<'w, 's, (), (With<ParticipatingIn>, With<DamnedSoul>, Without<Familiar>)>;
+
 /// 分隊管理要求を適用するロジックシステム（Execute Phase）
 ///
 /// ビジュアル演出（Fatigued リリース時のセリフ）は `hw_visual::squad_visual_system` が担当。
 pub fn squad_logic_system(
     mut commands: Commands,
     mut request_reader: MessageReader<SquadManagementRequest>,
-    q_participating: Query<(), (With<ParticipatingIn>, With<DamnedSoul>, Without<Familiar>)>,
+    q_participating: ParticipatingQuery,
     mut task_unassign_writer: MessageWriter<SoulTaskUnassignRequest>,
 ) {
     let mut recruited_this_frame: HashSet<Entity> = HashSet::new();

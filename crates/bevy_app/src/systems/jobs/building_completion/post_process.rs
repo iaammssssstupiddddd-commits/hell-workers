@@ -9,6 +9,7 @@ use hw_core::constants::{
     Z_ITEM_PICKUP,
 };
 
+#[allow(clippy::too_many_arguments)]
 pub(super) fn apply_building_specific_post_process(
     commands: &mut Commands,
     blueprint_entity: Entity,

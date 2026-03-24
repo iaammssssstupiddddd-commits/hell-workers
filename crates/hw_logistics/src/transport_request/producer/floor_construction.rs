@@ -146,6 +146,7 @@ pub fn floor_construction_auto_haul_system(
 /// `DeliverToFloorConstruction` requests drop items near `site.material_center`.
 /// This system binds those items to waiting tiles (by incrementing `*_delivered`) and
 /// despawns consumed items so each resource is counted exactly once.
+#[allow(clippy::type_complexity)]
 pub fn floor_material_delivery_sync_system(
     mut commands: Commands,
     q_sites: Query<(Entity, &FloorConstructionSite)>,
@@ -204,7 +205,7 @@ pub fn floor_material_delivery_sync_system(
                 pickup_radius,
                 &resource_grid,
                 &q_resources,
-                &mut *nearby_buf,
+                &mut nearby_buf,
                 &mut resources_scanned,
                 &tiles_by_site,
                 &mut q_tiles_write,

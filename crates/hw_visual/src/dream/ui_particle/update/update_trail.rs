@@ -5,6 +5,7 @@ use hw_core::constants::*;
 use super::super::super::components::DreamTrailGhost;
 use super::super::super::dream_bubble_material::DreamBubbleUiMaterial;
 
+#[allow(clippy::too_many_arguments)]
 pub(super) fn spawn_trail_ghost(
     commands: &mut Commands,
     materials: &mut ResMut<Assets<DreamBubbleUiMaterial>>,

@@ -22,8 +22,22 @@ use hw_ui::selection::{
 
 use super::placement::validate_tank_companion_for_move;
 
+type SoulTaskQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static Transform,
+        &'static mut AssignedTask,
+        &'static mut crate::entities::damned_soul::Path,
+        Option<&'static mut crate::systems::logistics::Inventory>,
+    ),
+    With<crate::entities::damned_soul::DamnedSoul>,
+>;
+
 const COMPANION_PLACEMENT_RADIUS_TILES: f32 = 5.0;
 
+#[allow(clippy::too_many_arguments)]
 pub fn building_move_system(
     buttons: Res<ButtonInput<MouseButton>>,
     q_window: Query<&Window, With<bevy::window::PrimaryWindow>>,
@@ -40,16 +54,7 @@ pub fn building_move_system(
         With<crate::systems::logistics::BucketStorage>,
     >,
     q_transport_requests: Query<(Entity, &TransportRequest)>,
-    mut q_souls: Query<
-        (
-            Entity,
-            &Transform,
-            &mut AssignedTask,
-            &mut crate::entities::damned_soul::Path,
-            Option<&mut crate::systems::logistics::Inventory>,
-        ),
-        With<crate::entities::damned_soul::DamnedSoul>,
-    >,
+    mut q_souls: SoulTaskQuery,
     mut task_queries: TaskUnassignQueries,
     game_assets: Res<crate::assets::GameAssets>,
     mut commands: Commands,
@@ -145,16 +150,7 @@ fn handle_companion_click(
     commands: &mut Commands,
     world_map: &mut WorldMapWrite,
     q_transport_requests: &Query<(Entity, &TransportRequest)>,
-    q_souls: &mut Query<
-        (
-            Entity,
-            &Transform,
-            &mut AssignedTask,
-            &mut crate::entities::damned_soul::Path,
-            Option<&mut crate::systems::logistics::Inventory>,
-        ),
-        With<crate::entities::damned_soul::DamnedSoul>,
-    >,
+    q_souls: &mut SoulTaskQuery,
     task_queries: &mut TaskUnassignQueries,
     game_assets: &crate::assets::GameAssets,
     companion_state: &mut CompanionPlacementState,
@@ -193,7 +189,7 @@ fn handle_companion_click(
     let old_occupied = move_occupied_grids(building.kind, old_anchor);
     let destination_occupied = move_occupied_grids(building.kind, pending.destination_grid);
     if !can_place_moved_building(
-        &WorldMapRef(&**world_map),
+        &WorldMapRef(world_map),
         target_entity,
         &old_occupied,
         &destination_occupied,
@@ -201,7 +197,7 @@ fn handle_companion_click(
         return;
     }
     if !validate_tank_companion_for_move(
-        &**world_map,
+        world_map,
         target_entity,
         pending.destination_grid,
         destination_grid,
@@ -214,7 +210,7 @@ fn handle_companion_click(
     }
     finalize_move_request(
         commands,
-        &mut **world_map,
+        world_map,
         q_transport_requests,
         q_souls,
         task_queries,
@@ -236,16 +232,7 @@ fn handle_initial_click(
     commands: &mut Commands,
     world_map: &mut WorldMapWrite,
     q_transport_requests: &Query<(Entity, &TransportRequest)>,
-    q_souls: &mut Query<
-        (
-            Entity,
-            &Transform,
-            &mut AssignedTask,
-            &mut crate::entities::damned_soul::Path,
-            Option<&mut crate::systems::logistics::Inventory>,
-        ),
-        With<crate::entities::damned_soul::DamnedSoul>,
-    >,
+    q_souls: &mut SoulTaskQuery,
     task_queries: &mut TaskUnassignQueries,
     game_assets: &crate::assets::GameAssets,
     companion_state: &mut CompanionPlacementState,
@@ -261,7 +248,7 @@ fn handle_initial_click(
     let old_occupied = move_occupied_grids(building.kind, old_anchor);
     let destination_occupied = move_occupied_grids(building.kind, destination_grid);
     if !can_place_moved_building(
-        &WorldMapRef(&**world_map),
+        &WorldMapRef(world_map),
         target_entity,
         &old_occupied,
         &destination_occupied,
@@ -286,7 +273,7 @@ fn handle_initial_click(
     }
     finalize_move_request(
         commands,
-        &mut **world_map,
+        world_map,
         q_transport_requests,
         q_souls,
         task_queries,
@@ -316,16 +303,7 @@ fn finalize_move_request(
     commands: &mut Commands,
     world_map: &mut WorldMap,
     q_transport_requests: &Query<(Entity, &TransportRequest)>,
-    q_souls: &mut Query<
-        (
-            Entity,
-            &Transform,
-            &mut AssignedTask,
-            &mut crate::entities::damned_soul::Path,
-            Option<&mut crate::systems::logistics::Inventory>,
-        ),
-        With<crate::entities::damned_soul::DamnedSoul>,
-    >,
+    q_souls: &mut SoulTaskQuery,
     task_queries: &mut TaskUnassignQueries,
     game_assets: &crate::assets::GameAssets,
     target_entity: Entity,
@@ -403,16 +381,7 @@ fn cancel_tasks_and_requests_for_moved_building(
     commands: &mut Commands,
     building_entity: Entity,
     q_transport_requests: &Query<(Entity, &TransportRequest)>,
-    q_souls: &mut Query<
-        (
-            Entity,
-            &Transform,
-            &mut AssignedTask,
-            &mut crate::entities::damned_soul::Path,
-            Option<&mut crate::systems::logistics::Inventory>,
-        ),
-        With<crate::entities::damned_soul::DamnedSoul>,
-    >,
+    q_souls: &mut SoulTaskQuery,
     task_queries: &mut TaskUnassignQueries,
     world_map: &WorldMap,
 ) {

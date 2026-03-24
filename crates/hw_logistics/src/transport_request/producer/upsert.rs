@@ -59,6 +59,7 @@ pub fn request_state_for_workers(workers: usize) -> TransportRequestState {
 }
 
 /// 既存 request entity を指定内容で upsert する
+#[allow(clippy::too_many_arguments)]
 #[inline]
 pub fn upsert_transport_request<TTarget: Component>(
     commands: &mut Commands,
@@ -87,6 +88,7 @@ pub fn upsert_transport_request<TTarget: Component>(
     );
 }
 
+#[allow(clippy::too_many_arguments)]
 #[inline]
 pub fn upsert_transport_request_with_work_type<TTarget: Component>(
     commands: &mut Commands,
@@ -126,6 +128,7 @@ pub fn upsert_transport_request_with_work_type<TTarget: Component>(
 }
 
 /// 新規 request entity を spawn する
+#[allow(clippy::too_many_arguments)]
 #[inline]
 pub fn spawn_transport_request<TTarget: Component>(
     commands: &mut Commands,
@@ -152,6 +155,7 @@ pub fn spawn_transport_request<TTarget: Component>(
     );
 }
 
+#[allow(clippy::too_many_arguments)]
 #[inline]
 pub fn spawn_transport_request_with_work_type<TTarget: Component>(
     commands: &mut Commands,

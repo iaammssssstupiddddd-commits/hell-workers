@@ -13,6 +13,7 @@ use hw_core::game_state::PlayMode;
 use hw_core::relationships::ManagedBy;
 use hw_world::zones::Site;
 
+#[allow(clippy::too_many_arguments)]
 pub(super) fn handle_release_area_selection(
     task_context: &mut TaskContext,
     selected_entity: Option<Entity>,

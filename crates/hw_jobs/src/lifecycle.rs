@@ -29,11 +29,10 @@ pub fn collect_active_reservation_ops(
             });
         }
 
-        if transport_data.should_reserve_tank_source() {
-            if let Some(source) = transport_data.tank_source_entity() {
+        if transport_data.should_reserve_tank_source()
+            && let Some(source) = transport_data.tank_source_entity() {
                 ops.push(ResourceReservationOp::ReserveSource { source, amount: 1 });
             }
-        }
 
         if transport_data.should_reserve_mixer_destination() {
             ops.push(ResourceReservationOp::ReserveMixerDestination {

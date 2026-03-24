@@ -9,6 +9,7 @@ use hw_core::logistics::ResourceType;
 use hw_core::soul::DamnedSoul;
 use hw_core::visual_mirror::logistics::InventoryItemVisual;
 
+#[allow(clippy::type_complexity)]
 pub fn spawn_carrying_item_system(
     mut commands: Commands,
     mat_handles: Res<MaterialIconHandles>,
@@ -75,8 +76,8 @@ pub fn update_carrying_item_system(
     for (icon_entity, icon, mut icon_transform, mut icon_sprite) in q_icons.iter_mut() {
         let mut should_despawn = true;
 
-        if let Ok((_, worker_transform, inv_visual)) = q_workers.get(icon.worker) {
-            if let Some(resource_type) = inv_visual.resource_type {
+        if let Ok((_, worker_transform, inv_visual)) = q_workers.get(icon.worker)
+            && let Some(resource_type) = inv_visual.resource_type {
                 should_despawn = false;
 
                 icon_transform.translation =
@@ -97,7 +98,6 @@ pub fn update_carrying_item_system(
                     icon_sprite.image = new_icon_handle;
                 }
             }
-        }
 
         if should_despawn {
             info!(

@@ -23,6 +23,7 @@ use super::candidates::{
 };
 use super::types::{BatchCandidate, ItemBucketKey, RequestEvalContext};
 
+#[allow(clippy::too_many_arguments, clippy::type_complexity)]
 pub(super) fn collect_candidates(
     q_requests: &Query<(
         Entity,

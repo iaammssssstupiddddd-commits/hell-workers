@@ -9,6 +9,7 @@ use crate::world::pathfinding::{self, PathfindingContext};
 use bevy::prelude::*;
 use hw_ui::camera::MainCamera;
 
+#[allow(clippy::too_many_arguments)]
 pub fn assign_task_system(
     buttons: Res<ButtonInput<MouseButton>>,
     q_window: Query<&Window, With<bevy::window::PrimaryWindow>>,

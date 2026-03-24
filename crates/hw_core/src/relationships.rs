@@ -95,6 +95,10 @@ impl TaskWorkers {
     pub fn len(&self) -> usize {
         self.0.len()
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
 }
 
 // ============================================================
@@ -167,6 +171,10 @@ pub struct StoredItems(Vec<Entity>);
 impl StoredItems {
     pub fn len(&self) -> usize {
         self.0.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
     }
 }
 
@@ -289,6 +297,10 @@ impl IncomingDeliveries {
         self.0.len()
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
     pub fn iter(&self) -> impl Iterator<Item = &Entity> {
         self.0.iter()
     }
@@ -328,6 +340,10 @@ impl GatheringParticipants {
     pub fn len(&self) -> usize {
         self.0.len()
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
 }
 
 // ============================================================
@@ -362,6 +378,10 @@ impl RestAreaOccupants {
     pub fn len(&self) -> usize {
         self.0.len()
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
 }
 
 /// ソウルが休憩所スロットを予約していることを示す Relationship
@@ -391,5 +411,9 @@ impl RestAreaReservations {
 
     pub fn len(&self) -> usize {
         self.0.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
     }
 }

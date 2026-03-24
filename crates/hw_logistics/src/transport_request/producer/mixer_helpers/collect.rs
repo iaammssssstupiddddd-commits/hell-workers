@@ -29,6 +29,7 @@ pub(crate) fn collect_active_yards(q_yards: &Query<(Entity, &Yard)>) -> Vec<(Ent
         .collect()
 }
 
+#[allow(clippy::type_complexity)]
 pub(crate) fn collect_inflight_mixer_requests(
     q_mixer_requests: &Query<(
         Entity,

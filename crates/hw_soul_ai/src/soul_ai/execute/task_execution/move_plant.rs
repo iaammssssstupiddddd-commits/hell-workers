@@ -120,19 +120,27 @@ fn cleanup_move_task(
     clear_task_and_path(ctx.task, ctx.path);
 }
 
+type BucketStorageQuery<'w, 's> = Query<
+    'w,
+    's,
+    (Entity, &'static hw_logistics::BelongsTo, &'static mut Transform),
+    With<hw_logistics::BucketStorage>,
+>;
+
+type AttachedEntitiesQuery<'w, 's> = Query<
+    'w,
+    's,
+    (&'static hw_logistics::BelongsTo, &'static mut Transform),
+    (Without<hw_logistics::BucketStorage>, Without<Building>),
+>;
+
 pub fn apply_pending_building_move_system(
     mut commands: Commands,
     mut world_map: WorldMapWrite,
     q_pending: Query<(Entity, &PendingBuildingMove, Option<&Children>), With<Building>>,
     mut q_obstacles: Query<&mut hw_jobs::ObstaclePosition>,
-    mut q_stockpiles: Query<
-        (Entity, &hw_logistics::BelongsTo, &mut Transform),
-        With<hw_logistics::BucketStorage>,
-    >,
-    mut q_attached_entities: Query<
-        (&hw_logistics::BelongsTo, &mut Transform),
-        (Without<hw_logistics::BucketStorage>, Without<Building>),
-    >,
+    mut q_stockpiles: BucketStorageQuery,
+    mut q_attached_entities: AttachedEntitiesQuery,
 ) {
     for (building_entity, pending, children_opt) in q_pending.iter() {
         world_map.release_building_footprint_if_owned(
@@ -146,13 +154,12 @@ pub fn apply_pending_building_move_system(
             next_positions.sort_unstable();
             let mut index = 0usize;
             for child in children {
-                if let Ok(mut pos) = q_obstacles.get_mut(*child) {
-                    if let Some((gx, gy)) = next_positions.get(index) {
+                if let Ok(mut pos) = q_obstacles.get_mut(*child)
+                    && let Some((gx, gy)) = next_positions.get(index) {
                         pos.0 = *gx;
                         pos.1 = *gy;
                         index += 1;
                     }
-                }
             }
         }
 
@@ -188,10 +195,7 @@ fn relocate_bucket_storages_for_tank(
     pending: &PendingBuildingMove,
     delta: (i32, i32),
     world_map: &mut WorldMap,
-    q_stockpiles: &mut Query<
-        (Entity, &hw_logistics::BelongsTo, &mut Transform),
-        With<hw_logistics::BucketStorage>,
-    >,
+    q_stockpiles: &mut BucketStorageQuery,
 ) {
     let mut stockpiles: Vec<(Entity, (i32, i32))> = q_stockpiles
         .iter()
@@ -234,10 +238,7 @@ fn relocate_bucket_storages_for_tank(
 fn relocate_attached_entities_for_building(
     building_entity: Entity,
     delta: (i32, i32),
-    q_attached_entities: &mut Query<
-        (&hw_logistics::BelongsTo, &mut Transform),
-        (Without<hw_logistics::BucketStorage>, Without<Building>),
-    >,
+    q_attached_entities: &mut AttachedEntitiesQuery,
 ) {
     let offset = Vec2::new(delta.0 as f32 * TILE_SIZE, delta.1 as f32 * TILE_SIZE);
     for (belongs_to, mut transform) in q_attached_entities.iter_mut() {

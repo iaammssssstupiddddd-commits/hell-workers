@@ -7,6 +7,7 @@ use hw_ui::components::LeftPanelMode;
 
 pub use hw_ui::panels::task_list::TaskListDirty;
 
+#[allow(clippy::too_many_arguments)]
 pub fn detect_task_list_changed_components(
     mut dirty: ResMut<TaskListDirty>,
     mode: Res<LeftPanelMode>,
@@ -42,6 +43,7 @@ pub fn detect_task_list_changed_components(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn detect_task_list_removed_components(
     mut dirty: ResMut<TaskListDirty>,
     mut removed_designations: RemovedComponents<Designation>,

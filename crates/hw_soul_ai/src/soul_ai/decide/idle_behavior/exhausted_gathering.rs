@@ -9,6 +9,7 @@ use hw_core::soul::{Destination, IdleBehavior, IdleState, Path};
 
 const GATHERING_ARRIVAL_RADIUS: f32 = TILE_SIZE * GATHERING_ARRIVAL_RADIUS_BASE;
 
+#[allow(clippy::too_many_arguments)]
 /// ExhaustedGathering 状態を処理。継続すべきなら true を返す
 pub fn process_exhausted_gathering(
     entity: Entity,
@@ -31,14 +32,13 @@ pub fn process_exhausted_gathering(
         if has_arrived {
             idle.behavior = IdleBehavior::Gathering;
             idle.needs_separation = true;
-            if participating_in.is_none() {
-                if let Some(spot_entity) = target_spot_entity {
+            if participating_in.is_none()
+                && let Some(spot_entity) = target_spot_entity {
                     request_writer.write(IdleBehaviorRequest {
                         entity,
                         operation: IdleBehaviorOperation::ArriveAtGathering { spot_entity },
                     });
                 }
-            }
             return false;
         }
         if path.waypoints.is_empty() || path.current_index >= path.waypoints.len() {

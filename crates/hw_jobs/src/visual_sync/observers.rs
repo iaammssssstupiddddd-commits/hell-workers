@@ -12,10 +12,12 @@ use crate::mud_mixer::MudMixerStorage;
 
 use super::building_type_to_visual;
 
+type TreeOrRockQuery<'w, 's> = Query<'w, 's, (), Or<(With<Tree>, With<Rock>)>>;
+
 pub fn on_designation_added(
     on: On<Add, Designation>,
     mut commands: Commands,
-    q: Query<(), Or<(With<Tree>, With<Rock>)>>,
+    q: TreeOrRockQuery,
 ) {
     if q.contains(on.entity) {
         commands.entity(on.entity).try_insert(GatherHighlightMarker);

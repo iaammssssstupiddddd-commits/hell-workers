@@ -9,6 +9,7 @@ use crate::systems::command::{TaskArea, TaskMode};
 use bevy::prelude::*;
 use hw_world::zones::Site;
 
+#[allow(clippy::too_many_arguments)]
 pub fn task_area_edit_history_shortcuts_system(
     keyboard: Res<ButtonInput<KeyCode>>,
     task_context: Res<TaskContext>,
@@ -71,11 +72,9 @@ pub fn task_area_edit_history_shortcuts_system(
     if let Some(slot) = hotkey_slot_index(&keyboard) {
         if let Some(selected) = selected_entity.0
             && q_familiar_exists.get(selected).is_ok()
-        {
-            if let Ok(area) = q_task_areas.get(selected) {
+            && let Ok(area) = q_task_areas.get(selected) {
                 area_edit_presets.save_size(slot, area.size());
             }
-        }
         return;
     }
 

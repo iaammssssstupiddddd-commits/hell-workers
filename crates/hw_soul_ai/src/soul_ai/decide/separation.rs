@@ -15,6 +15,21 @@ use crate::soul_ai::helpers::gathering_positions::{
 /// 重なり回避の最小間隔
 const GATHERING_MIN_SEPARATION: f32 = TILE_SIZE * 1.2;
 
+type GatheringSeparationQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static Transform,
+        &'static mut Destination,
+        &'static mut Path,
+        &'static AssignedTask,
+        Option<&'static ParticipatingIn>,
+        &'static IdleState,
+    ),
+    With<DamnedSoul>,
+>;
+
 /// 集会中のSoul同士の重なりを防ぐシステム（0.5秒間隔）
 pub fn gathering_separation_system(
     world_map: Res<WorldMap>,
@@ -22,18 +37,7 @@ pub fn gathering_separation_system(
     update_timer: Res<GatheringUpdateTimer>,
     soul_grid: Res<SpatialGrid>,
     mut nearby_buf: Local<Vec<Entity>>,
-    mut q_souls: Query<
-        (
-            Entity,
-            &Transform,
-            &mut Destination,
-            &mut Path,
-            &AssignedTask,
-            Option<&ParticipatingIn>,
-            &IdleState,
-        ),
-        With<DamnedSoul>,
-    >,
+    mut q_souls: GatheringSeparationQuery,
 ) {
     if !update_timer.timer.just_finished() {
         return;
@@ -72,7 +76,7 @@ pub fn gathering_separation_system(
                 entity,
                 &*soul_grid,
                 world_map.as_ref(),
-                &mut *nearby_buf,
+                &mut nearby_buf,
                 min_dist,
                 max_dist,
                 GATHERING_MIN_SEPARATION,
@@ -87,7 +91,7 @@ pub fn gathering_separation_system(
                 entity,
                 &*soul_grid,
                 world_map.as_ref(),
-                &mut *nearby_buf,
+                &mut nearby_buf,
             ) {
                 dest.0 = new_pos;
                 path.waypoints.clear();

@@ -13,11 +13,10 @@ pub fn update_speech_bubbles(
         bubble.elapsed += time.delta_secs();
 
         if bubble.elapsed >= bubble.duration {
-            if let Some(bg) = bubble.background {
-                if let Ok(mut cmd) = commands.get_entity(bg) {
+            if let Some(bg) = bubble.background
+                && let Ok(mut cmd) = commands.get_entity(bg) {
                     cmd.despawn();
                 }
-            }
             if let Ok(mut cmd) = commands.get_entity(entity) {
                 cmd.despawn();
             }
@@ -31,6 +30,7 @@ pub fn update_speech_bubbles(
     }
 }
 
+#[allow(clippy::type_complexity)]
 /// 吹き出しの重なりを調整するシステム（ParamSet最適化版）
 pub fn update_bubble_stacking(
     mut removed: RemovedComponents<SpeechBubble>,

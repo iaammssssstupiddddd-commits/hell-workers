@@ -4,6 +4,21 @@ use hw_jobs::mud_mixer::StoredByMixer;
 
 use crate::types::{ReservedForTask, ResourceItem};
 
+type ExpiredItemsQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static mut ItemDespawnTimer,
+        Option<&'static ReservedForTask>,
+        Option<&'static LoadedIn>,
+        Option<&'static StoredIn>,
+        Option<&'static DeliveringTo>,
+        Option<&'static StoredByMixer>,
+    ),
+    With<ResourceItem>,
+>;
+
 /// アイテムの寿命を管理するタイマーコンポーネント
 #[derive(Component, Reflect, Debug)]
 #[reflect(Component)]
@@ -20,18 +35,7 @@ impl ItemDespawnTimer {
 pub fn despawn_expired_items_system(
     mut commands: Commands,
     time: Res<Time>,
-    mut q_items: Query<
-        (
-            Entity,
-            &mut ItemDespawnTimer,
-            Option<&ReservedForTask>,
-            Option<&LoadedIn>,
-            Option<&StoredIn>,
-            Option<&DeliveringTo>,
-            Option<&StoredByMixer>,
-        ),
-        With<ResourceItem>,
-    >,
+    mut q_items: ExpiredItemsQuery,
 ) {
     for (entity, mut timer, reserved, loaded, stored, delivering, stored_by_mixer) in
         q_items.iter_mut()

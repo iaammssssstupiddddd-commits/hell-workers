@@ -1,6 +1,13 @@
 use super::grid::{GridData, SpatialGridOps};
 use bevy::prelude::*;
 
+type SpatialUpdateQuery<'w, 's, T> = Query<
+    'w,
+    's,
+    (Entity, &'static Transform),
+    (With<T>, Or<(Added<T>, Changed<Transform>)>),
+>;
+
 /// ストックパイル用の空間グリッド
 #[derive(Resource, Default)]
 pub struct StockpileSpatialGrid(pub GridData);
@@ -32,7 +39,7 @@ impl SpatialGridOps for StockpileSpatialGrid {
 
 pub fn update_stockpile_spatial_grid_system<T: Component>(
     mut grid: ResMut<StockpileSpatialGrid>,
-    query: Query<(Entity, &Transform), (With<T>, Or<(Added<T>, Changed<Transform>)>)>,
+    query: SpatialUpdateQuery<T>,
     mut removed: RemovedComponents<T>,
 ) {
     for (entity, transform) in query.iter() {

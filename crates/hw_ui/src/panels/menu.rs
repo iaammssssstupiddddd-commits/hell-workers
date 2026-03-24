@@ -3,6 +3,8 @@
 use crate::components::*;
 use bevy::prelude::*;
 
+#[allow(clippy::too_many_arguments)]
+#[allow(clippy::type_complexity)]
 pub fn menu_visibility_system(
     menu_state: Res<MenuState>,
     mut arch_category_state: ResMut<ArchitectCategoryState>,

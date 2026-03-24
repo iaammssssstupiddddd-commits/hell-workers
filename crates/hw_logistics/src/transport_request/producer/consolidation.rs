@@ -24,17 +24,23 @@ struct CellInfo {
     capacity: usize,
 }
 
+type ConsolidationStockpileQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static Transform,
+        &'static Stockpile,
+        Option<&'static StoredItems>,
+        Option<&'static BucketStorage>,
+    ),
+>;
+
 pub fn stockpile_consolidation_producer_system(
     mut commands: Commands,
     stockpile_grid: Res<StockpileSpatialGrid>,
     q_yards: Query<(Entity, &Yard)>,
-    q_stockpiles: Query<(
-        Entity,
-        &Transform,
-        &Stockpile,
-        Option<&StoredItems>,
-        Option<&BucketStorage>,
-    )>,
+    q_stockpiles: ConsolidationStockpileQuery,
     q_existing_requests: Query<
         (Entity, &TransportRequest, Option<&TaskWorkers>),
         Without<ManualTransportRequest>,
@@ -66,11 +72,10 @@ pub fn stockpile_consolidation_producer_system(
 
         let mut by_type: HashMap<ResourceType, Vec<&CellInfo>> = HashMap::new();
         for cell in &cells {
-            if let Some(rt) = cell.resource_type {
-                if cell.stored > 0 {
+            if let Some(rt) = cell.resource_type
+                && cell.stored > 0 {
                     by_type.entry(rt).or_default().push(cell);
                 }
-            }
         }
 
         for (resource_type, mut type_cells) in by_type {

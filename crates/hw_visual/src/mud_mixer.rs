@@ -26,8 +26,8 @@ pub fn update_mud_mixer_visual_system(
     for (mixer_entity, visual_state) in q_mixers.iter() {
         if let Ok(children) = q_children.get(mixer_entity) {
             for child in children.iter() {
-                if let Ok((kind, mut sprite)) = q_visual_layers.get_mut(child) {
-                    if *kind == VisualLayerKind::Struct {
+                if let Ok((kind, mut sprite)) = q_visual_layers.get_mut(child)
+                    && *kind == VisualLayerKind::Struct {
                         sprite.image = if visual_state.is_active {
                             frames[frame_idx].clone()
                         } else {
@@ -35,7 +35,6 @@ pub fn update_mud_mixer_visual_system(
                         };
                         break;
                     }
-                }
             }
         }
     }

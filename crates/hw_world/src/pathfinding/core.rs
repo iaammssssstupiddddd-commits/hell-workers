@@ -102,6 +102,7 @@ pub(super) fn build_path_from_came_from(
     path
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(super) fn find_path_with_policy<FG, FM, FD, FE>(
     world_map: &impl PathWorld,
     context: &mut PathfindingContext,

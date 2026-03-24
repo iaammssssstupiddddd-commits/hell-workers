@@ -29,6 +29,7 @@ pub(super) fn handle_drag_start(
     true
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(super) fn handle_release(
     buttons: &ButtonInput<MouseButton>,
     start_pos_opt: Option<Vec2>,
@@ -105,9 +106,6 @@ fn existing_floor_building_grids(
 ) -> HashSet<(i32, i32)> {
     q_floor_buildings
         .iter()
-        .filter_map(|(building, transform)| {
-            (building.kind == BuildingType::Floor)
-                .then(|| WorldMap::world_to_grid(transform.translation.truncate()))
-        })
+        .filter(|&(building, _transform)| building.kind == BuildingType::Floor ).map(|(_building, transform)| WorldMap::world_to_grid(transform.translation.truncate()))
         .collect()
 }

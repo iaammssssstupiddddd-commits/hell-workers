@@ -6,6 +6,7 @@ use hw_ui::theme::UiTheme;
 
 use super::{TaskListDirty, view_model::TaskListState};
 
+#[allow(clippy::too_many_arguments)]
 pub fn task_list_update_system(
     mut commands: Commands,
     game_assets: Res<crate::assets::GameAssets>,

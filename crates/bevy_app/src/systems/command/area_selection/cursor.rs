@@ -9,6 +9,7 @@ use bevy::window::{CursorIcon, PrimaryWindow, SystemCursorIcon};
 use hw_ui::area_edit::{cursor_icon_for_operation, detect_area_edit_operation};
 use hw_ui::camera::{MainCamera, world_cursor_pos};
 
+#[allow(clippy::too_many_arguments)]
 pub fn task_area_edit_cursor_system(
     task_context: Res<TaskContext>,
     selected: Res<SelectedEntity>,

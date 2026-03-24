@@ -5,17 +5,17 @@ use bevy::prelude::*;
 use hw_core::constants::*;
 use hw_core::events::{IdleBehaviorOperation, IdleBehaviorRequest};
 use hw_core::gathering::{GATHERING_LEAVE_RADIUS, GatheringSpot};
-use hw_core::relationships::{GatheringParticipants, RestAreaOccupants, RestAreaReservations};
+use hw_core::relationships::GatheringParticipants;
 use hw_core::soul::IdleBehavior;
-use hw_jobs::RestArea;
 use hw_spatial::{GatheringSpotSpatialGrid, SpatialGrid, SpatialGridOps};
 use hw_world::WorldMap;
 
 use crate::soul_ai::helpers::query_types::IdleDecisionSoulQuery;
 
-use super::rest_area::find_nearest_available_rest_area;
+use super::rest_area::{RestAreasQuery, find_nearest_available_rest_area};
 use super::{exhausted_gathering, motion_dispatch, rest_decision, task_override, transitions};
 
+#[allow(clippy::too_many_arguments)]
 /// アイドル行動の決定システム (Decide Phase)
 ///
 /// 怠惰行動のAIロジック。やる気が低い魂は怠惰な行動をする。
@@ -31,13 +31,7 @@ pub fn idle_behavior_decision_system(
     mut pending_rest_reservations: Local<HashMap<Entity, usize>>,
     mut nearby_buf: Local<Vec<Entity>>,
     q_spots: Query<(Entity, &GatheringSpot, &GatheringParticipants)>,
-    q_rest_areas: Query<(
-        Entity,
-        &Transform,
-        &RestArea,
-        Option<&RestAreaOccupants>,
-        Option<&RestAreaReservations>,
-    )>,
+    q_rest_areas: RestAreasQuery,
     mut query: IdleDecisionSoulQuery,
     spot_grid: Res<GatheringSpotSpatialGrid>,
     soul_grid: Res<SpatialGrid>,
@@ -63,8 +57,8 @@ pub fn idle_behavior_decision_system(
             participating_in,
             &q_spots,
             &spot_grid,
-            &transform,
-            &mut *nearby_buf,
+            transform,
+            &mut nearby_buf,
         );
 
         if exhausted_gathering::process_exhausted_gathering(
@@ -83,7 +77,7 @@ pub fn idle_behavior_decision_system(
 
         if task_override::process_task_override(
             entity,
-            &task,
+            task,
             participating_in,
             resting_in,
             rest_reserved_for,
@@ -320,7 +314,7 @@ pub fn idle_behavior_decision_system(
             &mut request_writer,
             dt,
             soul.dream,
-            &mut *nearby_buf,
+            &mut nearby_buf,
         );
     }
 }
@@ -359,13 +353,7 @@ fn resolve_rest_area_target(
     reserved_rest_area: Option<Entity>,
     pos_a: Vec2,
     pos_b: Vec2,
-    q_rest_areas: &Query<(
-        Entity,
-        &Transform,
-        &RestArea,
-        Option<&RestAreaOccupants>,
-        Option<&RestAreaReservations>,
-    )>,
+    q_rest_areas: &RestAreasQuery,
     pending_rest_reservations: &HashMap<Entity, usize>,
 ) -> Option<(Entity, Vec2)> {
     reserved_rest_area

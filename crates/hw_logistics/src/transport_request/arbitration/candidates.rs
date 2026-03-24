@@ -19,6 +19,14 @@ use crate::zone::Stockpile;
 
 use super::types::{FreeItemSnapshot, HeapEntry, ItemBucketKey, NearbyItem, RequestEvalContext};
 
+
+type FreeItemBuckets = (
+    Vec<FreeItemSnapshot>,
+    HashMap<ResourceType, Vec<usize>>,
+    HashMap<(ResourceType, Option<Entity>), Vec<usize>>,
+);
+
+#[allow(clippy::type_complexity)]
 pub fn build_free_item_buckets(
     q_free_items: &Query<
         (Entity, &Transform, &Visibility, &ResourceItem),
@@ -31,11 +39,7 @@ pub fn build_free_item_buckets(
     >,
     q_belongs: &Query<&BelongsTo>,
     q_stored_in: &Query<&StoredIn>,
-) -> (
-    Vec<FreeItemSnapshot>,
-    HashMap<ResourceType, Vec<usize>>,
-    HashMap<(ResourceType, Option<Entity>), Vec<usize>>,
-) {
+) -> FreeItemBuckets {
     let mut snapshots = Vec::new();
     let mut by_resource = HashMap::new();
     let mut by_resource_owner_ground = HashMap::new();
@@ -73,6 +77,7 @@ pub fn build_free_item_buckets(
     (snapshots, by_resource, by_resource_owner_ground)
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn build_request_eval_context(
     req_entity: Entity,
     req: &TransportRequest,

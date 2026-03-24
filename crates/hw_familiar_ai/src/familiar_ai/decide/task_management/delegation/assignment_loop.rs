@@ -166,8 +166,8 @@ fn try_assign_from_candidates(
             continue;
         }
 
-        if !candidate.skip_reachability_check {
-            if !reachable_with_cache(
+        if !candidate.skip_reachability_check
+            && !reachable_with_cache(
                 worker_grid,
                 candidate,
                 world_map,
@@ -176,7 +176,6 @@ fn try_assign_from_candidates(
             ) {
                 continue;
             }
-        }
 
         if assign_task_to_worker(
             AssignTaskContext {

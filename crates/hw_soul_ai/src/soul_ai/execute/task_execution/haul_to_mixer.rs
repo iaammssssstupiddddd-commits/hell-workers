@@ -212,7 +212,7 @@ pub fn handle_haul_to_mixer_task(
             if let Ok(mixer_data) = ctx.queries.storage.mixers.get_mut(mixer_entity) {
                 let (_, mut storage, _) = mixer_data;
                 let mut delivered = false;
-                if storage.add_material(resource_type).is_ok() {
+                if storage.add_material(resource_type) {
                     delivered = true;
                 }
 

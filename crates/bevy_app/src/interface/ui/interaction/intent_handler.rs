@@ -13,6 +13,7 @@ use hw_core::relationships::Commanding;
 use hw_ui::UiIntent;
 use hw_ui::components::{MenuState, OperationDialog};
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn handle_ui_intent(
     mut ui_intents: MessageReader<UiIntent>,
     mut menu_state: ResMut<MenuState>,
@@ -248,12 +249,11 @@ fn adjust_fatigue_threshold(
     q_familiar_ops: &mut Query<&mut FamiliarOperation>,
     delta: f32,
 ) {
-    if let Some(selected) = selected {
-        if let Ok(mut op) = q_familiar_ops.get_mut(selected) {
+    if let Some(selected) = selected
+        && let Ok(mut op) = q_familiar_ops.get_mut(selected) {
             let new_val = (op.fatigue_threshold + delta).clamp(0.0, 1.0);
             op.fatigue_threshold = (new_val * 10.0).round() / 10.0;
         }
-    }
 }
 
 fn adjust_max_controlled_soul(
@@ -265,8 +265,8 @@ fn adjust_max_controlled_soul(
     delta: isize,
     ev_max_soul_changed: &mut MessageWriter<FamiliarOperationMaxSoulChangedEvent>,
 ) {
-    if let Some(selected) = selected {
-        if let Ok(mut op) = q_familiar_ops.get_mut(selected) {
+    if let Some(selected) = selected
+        && let Ok(mut op) = q_familiar_ops.get_mut(selected) {
             let old_val = op.max_controlled_soul;
             let new_val = (old_val as isize + delta).clamp(1, 8) as usize;
             if old_val == new_val {
@@ -280,7 +280,6 @@ fn adjust_max_controlled_soul(
                 new_value: new_val,
             });
         }
-    }
 }
 
 fn update_familiar_max_soul_header(

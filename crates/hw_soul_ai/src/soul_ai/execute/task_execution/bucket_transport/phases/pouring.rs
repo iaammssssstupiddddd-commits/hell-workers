@@ -165,12 +165,11 @@ pub fn handle(
                 // バケツを戻しに行く場所を探す（タンクに紐づいた stockpile）
                 let mut return_pos = None;
                 for (stock_entity, stock_transform, _, _) in ctx.queries.storage.stockpiles.iter() {
-                    if let Ok(belongs) = ctx.queries.designation.belongs.get(stock_entity) {
-                        if belongs.0 == tank {
+                    if let Ok(belongs) = ctx.queries.designation.belongs.get(stock_entity)
+                        && belongs.0 == tank {
                             return_pos = Some(stock_transform.translation.truncate());
                             break;
                         }
-                    }
                 }
 
                 if let Some(pos) = return_pos {

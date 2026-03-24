@@ -8,6 +8,7 @@ use crate::familiar_ai::decide::task_management::{
     AssignTaskContext, FamiliarTaskAssignmentQueries, ReservationShadow,
 };
 
+#[allow(clippy::too_many_arguments)]
 pub fn submit_assignment(
     ctx: &AssignTaskContext<'_>,
     queries: &mut FamiliarTaskAssignmentQueries,
@@ -88,6 +89,7 @@ fn reserve_item_destination(
     shadow.reserve_destination(target, resource_type, 1);
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn submit_assignment_with_reservation_ops(
     ctx: &AssignTaskContext<'_>,
     queries: &mut FamiliarTaskAssignmentQueries,
@@ -110,6 +112,7 @@ pub(crate) fn submit_assignment_with_reservation_ops(
     );
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn submit_assignment_with_source_entities(
     ctx: &AssignTaskContext<'_>,
     queries: &mut FamiliarTaskAssignmentQueries,

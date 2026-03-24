@@ -1,6 +1,13 @@
 use super::grid::{GridData, SpatialGridOps};
 use bevy::prelude::*;
 
+type SpatialUpdateQuery<'w, 's, T> = Query<
+    'w,
+    's,
+    (Entity, &'static Transform),
+    (With<T>, Or<(Added<T>, Changed<Transform>)>),
+>;
+
 /// 使い魔用の空間グリッド - モチベーション計算の高速化用
 #[derive(Resource, Default)]
 pub struct FamiliarSpatialGrid(pub GridData);
@@ -29,7 +36,7 @@ impl SpatialGridOps for FamiliarSpatialGrid {
 
 pub fn update_familiar_spatial_grid_system<T: Component>(
     mut grid: ResMut<FamiliarSpatialGrid>,
-    query: Query<(Entity, &Transform), (With<T>, Or<(Added<T>, Changed<Transform>)>)>,
+    query: SpatialUpdateQuery<T>,
     mut removed: RemovedComponents<T>,
 ) {
     for (entity, transform) in query.iter() {
@@ -43,13 +50,7 @@ pub fn update_familiar_spatial_grid_system<T: Component>(
 /// `Familiar` 専用のグリッド更新システム（bevy_app への re-export 用）。
 pub fn update_familiar_entity_spatial_grid_system(
     grid: ResMut<FamiliarSpatialGrid>,
-    query: Query<
-        (Entity, &Transform),
-        (
-            With<hw_core::familiar::Familiar>,
-            Or<(Added<hw_core::familiar::Familiar>, Changed<Transform>)>,
-        ),
-    >,
+    query: SpatialUpdateQuery<hw_core::familiar::Familiar>,
     removed: RemovedComponents<hw_core::familiar::Familiar>,
 ) {
     update_familiar_spatial_grid_system::<hw_core::familiar::Familiar>(grid, query, removed);

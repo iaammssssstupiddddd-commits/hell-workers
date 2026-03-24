@@ -8,6 +8,7 @@ use rand::Rng;
 use super::super::components::{DreamGainUiParticle, DreamIconAbsorb};
 use super::super::dream_bubble_material::DreamBubbleUiMaterial;
 
+#[allow(clippy::too_many_arguments)]
 pub fn ui_particle_update_system(
     mut commands: Commands,
     time: Res<Time>,
@@ -109,6 +110,7 @@ fn merge_cluster_scale(mass: f32) -> f32 {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn update_merging_particle(
     dt: f32,
     elapsed: f32,
@@ -123,23 +125,19 @@ fn update_merging_particle(
     particle.merge_timer -= dt;
     let progress = 1.0 - (particle.merge_timer / DREAM_UI_MERGE_DURATION).clamp(0.0, 1.0);
 
-    if let Some(target_entity) = particle.merging_into {
-        if let Some((_, target_pos)) = target_positions.iter().find(|(e, _)| *e == target_entity) {
+    if let Some(target_entity) = particle.merging_into
+        && let Some((_, target_pos)) = target_positions.iter().find(|(e, _)| *e == target_entity) {
             let to_target = *target_pos - current_pos;
             let pull_force = to_target * DREAM_UI_MERGE_PULL_FORCE;
             particle.velocity += pull_force * dt;
             particle.velocity *= DREAM_UI_DRAG;
             let new_pos = current_pos + particle.velocity * dt;
 
-            if new_pos.x < 0.0 {
-                particle.velocity.x *= DREAM_UI_BOUNDARY_DAMPING;
-            } else if new_pos.x > viewport_size.x {
+            if new_pos.x < 0.0 || new_pos.x > viewport_size.x {
                 particle.velocity.x *= DREAM_UI_BOUNDARY_DAMPING;
             }
 
-            if new_pos.y < 0.0 {
-                particle.velocity.y *= DREAM_UI_BOUNDARY_DAMPING;
-            } else if new_pos.y > viewport_size.y {
+            if new_pos.y < 0.0 || new_pos.y > viewport_size.y {
                 particle.velocity.y *= DREAM_UI_BOUNDARY_DAMPING;
             }
 
@@ -162,7 +160,6 @@ fn update_merging_particle(
             }
             return particle.merge_timer <= 0.0;
         }
-    }
 
     if particle.merge_timer <= 0.0 {
         return true;
@@ -176,6 +173,7 @@ fn update_merging_particle(
 mod update_standard;
 mod update_trail;
 
+#[allow(clippy::too_many_arguments)]
 fn update_standard_particle(
     dt: f32,
     elapsed: f32,

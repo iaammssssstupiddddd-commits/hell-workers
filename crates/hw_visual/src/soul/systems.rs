@@ -9,6 +9,45 @@ use hw_core::visual_mirror::task::{SoulTaskPhaseVisual, SoulTaskVisualState};
 
 use super::{SoulProgressBar, StatusIcon};
 
+type SoulProgressBgQuery<'w, 's> = Query<
+    'w,
+    's,
+    (Entity, &'static ChildOf, &'static mut Transform),
+    (
+        With<SoulProgressBar>,
+        With<ProgressBarBackground>,
+        Without<SoulTaskVisualState>,
+        Without<ProgressBarFill>,
+    ),
+>;
+
+type SoulProgressFillQuery<'w, 's> = Query<
+    'w,
+    's,
+    (Entity, &'static ChildOf, &'static mut Transform, &'static Sprite),
+    (
+        With<SoulProgressBar>,
+        With<ProgressBarFill>,
+        Without<SoulTaskVisualState>,
+        Without<ProgressBarBackground>,
+    ),
+>;
+
+type SoulStatusQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static Transform,
+        &'static DamnedSoul,
+        &'static mut SoulUiLinks,
+        &'static SoulTaskVisualState,
+        Option<&'static IdleState>,
+    ),
+    With<DamnedSoul>,
+>;
+
+
 pub fn progress_bar_system(
     mut commands: Commands,
     q_soul_bars: Query<(Entity, &ChildOf), With<SoulProgressBar>>,
@@ -72,10 +111,10 @@ pub fn update_progress_bar_fill_system(
     mut q_fills: Query<(Entity, &mut Sprite, &mut Transform), With<ProgressBarFill>>,
 ) {
     for (fill_entity, mut sprite, mut transform) in q_fills.iter_mut() {
-        if let Ok(child_of) = q_soul_bars.get(fill_entity) {
-            if let Ok(task_vs) = q_souls.get(child_of.parent()) {
-                if let Some(progress) = task_vs.progress {
-                    if let Ok(generic_bar) = q_generic_bars.get(fill_entity) {
+        if let Ok(child_of) = q_soul_bars.get(fill_entity)
+            && let Ok(task_vs) = q_souls.get(child_of.parent())
+                && let Some(progress) = task_vs.progress
+                    && let Ok(generic_bar) = q_generic_bars.get(fill_entity) {
                         update_progress_bar_fill(
                             progress,
                             &generic_bar.config,
@@ -84,9 +123,6 @@ pub fn update_progress_bar_fill_system(
                             None,
                         );
                     }
-                }
-            }
-        }
     }
 }
 
@@ -94,40 +130,23 @@ pub fn update_progress_bar_fill_system(
 pub fn sync_progress_bar_position_system(
     q_parents: Query<&Transform, (With<SoulTaskVisualState>, Without<SoulProgressBar>)>,
     q_generic_bars: Query<&GenericProgressBar>,
-    mut q_bg_bars: Query<
-        (Entity, &ChildOf, &mut Transform),
-        (
-            With<SoulProgressBar>,
-            With<ProgressBarBackground>,
-            Without<SoulTaskVisualState>,
-            Without<ProgressBarFill>,
-        ),
-    >,
-    mut q_fill_bars: Query<
-        (Entity, &ChildOf, &mut Transform, &Sprite),
-        (
-            With<SoulProgressBar>,
-            With<ProgressBarFill>,
-            Without<SoulTaskVisualState>,
-            Without<ProgressBarBackground>,
-        ),
-    >,
+    mut q_bg_bars: SoulProgressBgQuery,
+    mut q_fill_bars: SoulProgressFillQuery,
 ) {
     for (bg_entity, child_of, mut bar_transform) in q_bg_bars.iter_mut() {
-        if let Ok(parent_transform) = q_parents.get(child_of.parent()) {
-            if let Ok(generic_bar) = q_generic_bars.get(bg_entity) {
+        if let Ok(parent_transform) = q_parents.get(child_of.parent())
+            && let Ok(generic_bar) = q_generic_bars.get(bg_entity) {
                 sync_progress_bar_position(
                     parent_transform,
                     &generic_bar.config,
                     &mut bar_transform,
                 );
             }
-        }
     }
 
     for (fill_entity, child_of, mut fill_transform, sprite) in q_fill_bars.iter_mut() {
-        if let Ok(parent_transform) = q_parents.get(child_of.parent()) {
-            if let Ok(generic_bar) = q_generic_bars.get(fill_entity) {
+        if let Ok(parent_transform) = q_parents.get(child_of.parent())
+            && let Ok(generic_bar) = q_generic_bars.get(fill_entity) {
                 let fill_width = sprite.custom_size.map(|s| s.x).unwrap_or(0.0);
                 sync_progress_bar_fill_position(
                     parent_transform,
@@ -136,7 +155,6 @@ pub fn sync_progress_bar_position_system(
                     &mut fill_transform,
                 );
             }
-        }
     }
 }
 
@@ -148,8 +166,8 @@ pub fn task_link_system(
     for (soul_transform, task_vs) in q_souls.iter() {
         let target_entity = task_vs.bucket_link.or(task_vs.link_target);
 
-        if let Some(target) = target_entity {
-            if let Ok(target_transform) = q_targets.get(target) {
+        if let Some(target) = target_entity
+            && let Ok(target_transform) = q_targets.get(target) {
                 let start: Vec2 = soul_transform.translation().truncate();
                 let end: Vec2 = target_transform.translation().truncate();
 
@@ -177,23 +195,12 @@ pub fn task_link_system(
                 let marker_color = color.with_alpha(0.6);
                 gizmos.circle_2d(end, 4.0, marker_color);
             }
-        }
     }
 }
 
 pub fn soul_status_visual_system(
     mut commands: Commands,
-    mut q_souls: Query<
-        (
-            Entity,
-            &Transform,
-            &DamnedSoul,
-            &mut SoulUiLinks,
-            &SoulTaskVisualState,
-            Option<&IdleState>,
-        ),
-        With<DamnedSoul>,
-    >,
+    mut q_souls: SoulStatusQuery,
     mut q_text: Query<&mut Text2d, With<StatusIcon>>,
     speech_handles: Res<SpeechHandles>,
 ) {
@@ -203,7 +210,7 @@ pub fn soul_status_visual_system(
         } else if soul.motivation < 0.2 {
             Some(("?", Color::srgb(0.5, 0.5, 1.0)))
         } else if task_vs.phase == SoulTaskPhaseVisual::None {
-            let is_sleeping = idle_state.map_or(false, |state| {
+            let is_sleeping = idle_state.is_some_and(|state| {
                 state.behavior == IdleBehavior::Sleeping
                     || state.behavior == IdleBehavior::Resting
                     || (state.behavior == IdleBehavior::Gathering

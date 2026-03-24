@@ -7,12 +7,14 @@ use hw_core::relationships::TaskWorkers;
 
 use crate::transport_request::{TransportRequest, TransportRequestState};
 
-pub fn transport_request_state_sync_system(
-    mut q_requests: Query<
-        (&TaskWorkers, &mut TransportRequestState),
-        (With<TransportRequest>, Changed<TaskWorkers>),
-    >,
-) {
+type StateRequestQuery<'w, 's> = Query<
+    'w,
+    's,
+    (&'static TaskWorkers, &'static mut TransportRequestState),
+    (With<TransportRequest>, Changed<TaskWorkers>),
+>;
+
+pub fn transport_request_state_sync_system(mut q_requests: StateRequestQuery) {
     for (workers, mut state) in q_requests.iter_mut() {
         if workers.is_empty() {
             if *state != TransportRequestState::Pending {

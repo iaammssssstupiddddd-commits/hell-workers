@@ -5,20 +5,24 @@ use hw_core::relationships::CommandedBy;
 use hw_core::soul::{DamnedSoul, Destination, IdleBehavior, IdleState, Path};
 use hw_jobs::AssignedTask;
 
+type FollowingSoulsQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static Transform,
+        &'static AssignedTask,
+        &'static CommandedBy,
+        &'static IdleState,
+        &'static mut Destination,
+        &'static mut Path,
+    ),
+    (With<DamnedSoul>, Without<Familiar>),
+>;
+
 /// 部下が使い魔を追尾するシステム
 pub fn following_familiar_system(
-    mut q_souls: Query<
-        (
-            Entity,
-            &Transform,
-            &AssignedTask,
-            &CommandedBy,
-            &IdleState,
-            &mut Destination,
-            &mut Path,
-        ),
-        (With<DamnedSoul>, Without<Familiar>),
-    >,
+    mut q_souls: FollowingSoulsQuery,
     q_familiars: Query<(&Transform, &Familiar), With<Familiar>>,
 ) {
     for (_soul_entity, soul_transform, task, commanded_by, idle, mut dest, mut path) in

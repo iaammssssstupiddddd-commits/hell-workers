@@ -21,6 +21,9 @@ use bevy::prelude::*;
 use hw_core::game_state::PlayMode;
 use hw_world::zones::Site;
 
+
+#[allow(clippy::too_many_arguments)]
+#[allow(clippy::type_complexity)]
 pub(super) fn handle_left_just_released_input(
     task_context: &mut TaskContext,
     selected_entity: Option<Entity>,

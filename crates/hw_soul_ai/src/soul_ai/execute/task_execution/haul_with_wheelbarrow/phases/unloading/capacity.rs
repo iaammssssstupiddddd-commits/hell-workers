@@ -64,7 +64,7 @@ pub(super) fn provisional_wall_remaining(
         return 0;
     };
     if resource_type != ResourceType::StasisMud
-        || provisional_wall_mud_demand(&building, provisional_opt.as_deref()) == 0
+        || provisional_wall_mud_demand(building, provisional_opt) == 0
     {
         return 0;
     }

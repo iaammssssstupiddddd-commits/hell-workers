@@ -15,6 +15,7 @@ fn has_reached_rest_entry(current_pos: Vec2, destination: Vec2, rest_area_center
     near_destination && has_arrived_at_rest_area(current_pos, rest_area_center)
 }
 
+#[allow(clippy::too_many_arguments)]
 /// Resting|GoingToRest 状態の場合の休憩所フローを処理。
 /// rest_area_target は呼び出し元で事前に解決すること。
 /// 継続すべきなら true を返す
@@ -79,6 +80,7 @@ pub fn process_resting_or_going_to_rest(
     true
 }
 
+#[allow(clippy::too_many_arguments)]
 /// wants_rest_area が true の場合の休憩所フローを処理。
 /// rest_area_target は呼び出し元で事前に解決すること。
 /// 継続すべきなら true を返す

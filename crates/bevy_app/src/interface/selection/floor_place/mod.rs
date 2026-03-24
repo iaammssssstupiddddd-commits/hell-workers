@@ -22,6 +22,7 @@ use hw_ui::camera::MainCamera;
 
 use input::{handle_cancel, handle_drag_start, handle_release};
 
+#[allow(clippy::too_many_arguments)]
 pub fn floor_placement_system(
     buttons: Res<ButtonInput<MouseButton>>,
     q_window: Query<&Window, With<PrimaryWindow>>,

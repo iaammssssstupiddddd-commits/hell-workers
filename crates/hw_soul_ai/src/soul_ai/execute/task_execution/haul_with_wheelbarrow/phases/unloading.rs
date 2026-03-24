@@ -225,12 +225,11 @@ pub fn handle(
                     }
                 }
 
-                if blueprint.materials_complete() {
-                    if let Ok(mut blueprint_commands) = commands.get_entity(blueprint_entity) {
+                if blueprint.materials_complete()
+                    && let Ok(mut blueprint_commands) = commands.get_entity(blueprint_entity) {
                         blueprint_commands.try_remove::<hw_core::relationships::ManagedBy>();
                         blueprint_commands.try_insert(hw_jobs::Priority(10));
                     }
-                }
             } else {
                 info!("WB_HAUL: Blueprint destroyed during unloading, dropping items");
                 cancel::drop_items_and_cancel(ctx, &data, commands);
@@ -245,7 +244,7 @@ pub fn handle(
                 for (item_entity, res_type_opt) in &item_types {
                     let res_type = (*res_type_opt).unwrap_or(resource_type);
 
-                    if storage.add_material(res_type).is_ok() {
+                    if storage.add_material(res_type) {
                         if try_despawn_item(commands, *item_entity) {
                             delivered_items.insert(*item_entity);
                             unloaded_count += 1;

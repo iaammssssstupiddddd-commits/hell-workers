@@ -37,33 +37,44 @@ fn removed_affects_wheelbarrows<T: Component>(
         .any(|entity| q_wheelbarrow_entities.get(entity).is_ok())
 }
 
+type ArbitrationRequestQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static TransportRequest,
+        &'static TransportRequestState,
+        &'static TransportDemand,
+        &'static Transform,
+        Option<&'static WheelbarrowLease>,
+        Option<&'static WheelbarrowPendingSince>,
+        Option<&'static ManualTransportRequest>,
+    ),
+>;
+
+type ArbitrationWheelbarrowQuery<'w, 's> =
+    Query<'w, 's, (Entity, &'static Transform), (With<Wheelbarrow>, With<ParkedAt>, Without<PushedBy>)>;
+
+type ArbitrationFreeItemQuery<'w, 's> = Query<
+    'w,
+    's,
+    (Entity, &'static Transform, &'static Visibility, &'static ResourceItem),
+    (
+        Without<Designation>,
+        Without<hw_core::relationships::TaskWorkers>,
+        Without<ReservedForTask>,
+        Without<ManualHaulPinnedSource>,
+    ),
+>;
+
+#[allow(clippy::too_many_arguments)]
 pub fn wheelbarrow_arbitration_system(
     mut commands: Commands,
     time: Res<Time>,
     mut runtime: Local<WheelbarrowArbitrationRuntime>,
-    q_requests: Query<(
-        Entity,
-        &TransportRequest,
-        &TransportRequestState,
-        &TransportDemand,
-        &Transform,
-        Option<&WheelbarrowLease>,
-        Option<&WheelbarrowPendingSince>,
-        Option<&ManualTransportRequest>,
-    )>,
-    q_wheelbarrows: Query<
-        (Entity, &Transform),
-        (With<Wheelbarrow>, With<ParkedAt>, Without<PushedBy>),
-    >,
-    q_free_items: Query<
-        (Entity, &Transform, &Visibility, &ResourceItem),
-        (
-            Without<Designation>,
-            Without<hw_core::relationships::TaskWorkers>,
-            Without<ReservedForTask>,
-            Without<ManualHaulPinnedSource>,
-        ),
-    >,
+    q_requests: ArbitrationRequestQuery,
+    q_wheelbarrows: ArbitrationWheelbarrowQuery,
+    q_free_items: ArbitrationFreeItemQuery,
     q_belongs: Query<&BelongsTo>,
     q_stored_in: Query<&StoredIn>,
     q_stockpiles: Query<(&Stockpile, Option<&StoredItems>)>,

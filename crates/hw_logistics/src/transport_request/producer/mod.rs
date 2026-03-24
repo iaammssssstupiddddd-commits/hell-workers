@@ -84,6 +84,7 @@ pub fn find_owner_for_position<'a>(
     find_owner(pos, owners)
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn collect_nearby_resource_entities(
     center: Vec2,
     pickup_radius: f32,
@@ -135,6 +136,7 @@ pub fn group_tiles_by_site<T: bevy::prelude::Component>(
     tiles_by_site
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn consume_waiting_tile_resources<
     T: bevy::prelude::Component<Mutability = bevy::ecs::component::Mutable>,
 >(
@@ -179,6 +181,7 @@ pub fn consume_waiting_tile_resources<
     consumed
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn sync_construction_delivery<
     TTile: bevy::prelude::Component<Mutability = bevy::ecs::component::Mutable>,
 >(
@@ -236,6 +239,7 @@ pub fn sync_construction_delivery<
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn sync_construction_requests<TTarget: bevy::prelude::Component>(
     commands: &mut Commands,
     q_requests: &Query<(

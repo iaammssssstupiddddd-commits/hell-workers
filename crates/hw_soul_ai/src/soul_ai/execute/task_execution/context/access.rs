@@ -17,36 +17,40 @@ pub struct ReservationAccess<'w, 's> {
         Query<'w, 's, (Entity, &'static hw_core::relationships::IncomingDeliveries)>,
 }
 
+type DesignationTargetsQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static Transform,
+        Option<&'static hw_jobs::Tree>,
+        Option<&'static hw_jobs::TreeVariant>,
+        Option<&'static hw_jobs::Rock>,
+        Option<&'static hw_logistics::types::ResourceItem>,
+        Option<&'static Designation>,
+        Option<&'static hw_core::relationships::StoredIn>,
+    ),
+>;
+
+type DesignationsAccessQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static Transform,
+        &'static Designation,
+        Option<&'static ManagedBy>,
+        Option<&'static TaskSlots>,
+        Option<&'static TaskWorkers>,
+        Option<&'static hw_core::relationships::StoredIn>,
+        Option<&'static Priority>,
+    ),
+>;
+
 /// 指定・場所・属性確認に必要な共通アクセス
 #[derive(SystemParam)]
 pub struct DesignationAccess<'w, 's> {
-    pub targets: Query<
-        'w,
-        's,
-        (
-            &'static Transform,
-            Option<&'static hw_jobs::Tree>,
-            Option<&'static hw_jobs::TreeVariant>,
-            Option<&'static hw_jobs::Rock>,
-            Option<&'static hw_logistics::types::ResourceItem>,
-            Option<&'static Designation>,
-            Option<&'static hw_core::relationships::StoredIn>,
-        ),
-    >,
-    pub designations: Query<
-        'w,
-        's,
-        (
-            Entity,
-            &'static Transform,
-            &'static Designation,
-            Option<&'static ManagedBy>,
-            Option<&'static TaskSlots>,
-            Option<&'static TaskWorkers>,
-            Option<&'static hw_core::relationships::StoredIn>,
-            Option<&'static Priority>,
-        ),
-    >,
+    pub targets: DesignationTargetsQuery<'w, 's>,
+    pub designations: DesignationsAccessQuery<'w, 's>,
     pub belongs: Query<'w, 's, &'static hw_logistics::types::BelongsTo>,
 }
 

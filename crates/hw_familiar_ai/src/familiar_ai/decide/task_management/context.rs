@@ -29,6 +29,79 @@ use hw_logistics::zone::Stockpile;
 use hw_world::WorldMapRead;
 
 pub use hw_jobs::construction::ConstructionSitePositions;
+
+type TargetsQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static Transform,
+        Option<&'static Tree>,
+        Option<&'static hw_jobs::TreeVariant>,
+        Option<&'static hw_jobs::Rock>,
+        Option<&'static ResourceItem>,
+        Option<&'static Designation>,
+        Option<&'static StoredIn>,
+    ),
+>;
+
+type DesignationsQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static Transform,
+        &'static Designation,
+        Option<&'static ManagedBy>,
+        Option<&'static TaskSlots>,
+        Option<&'static TaskWorkers>,
+        Option<&'static StoredIn>,
+        Option<&'static Priority>,
+    ),
+>;
+
+type PileQuery<'w, 's, F> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static Transform,
+        Option<&'static Designation>,
+        Option<&'static TaskWorkers>,
+    ),
+    F,
+>;
+
+type FreeResourceItemsQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static Transform,
+        &'static Visibility,
+        &'static ResourceItem,
+    ),
+    (
+        Without<Designation>,
+        Without<TaskWorkers>,
+        Without<ReservedForTask>,
+        Without<ManualHaulPinnedSource>,
+    ),
+>;
+
+type ParkedWheelbarrowsQuery<'w, 's> = Query<
+    'w,
+    's,
+    (Entity, &'static Transform),
+    (With<Wheelbarrow>, With<ParkedAt>, Without<PushedBy>),
+>;
+
+type StoredItemsQuery<'w, 's> = Query<
+    'w,
+    's,
+    (Entity, &'static ResourceItem, &'static StoredIn),
+    (Without<Designation>, Without<TaskWorkers>, Without<ReservedForTask>),
+>;
+
 /// リソース予約・管理に必要な共通アクセス
 #[derive(SystemParam)]
 pub struct ReservationAccess<'w, 's> {
@@ -41,33 +114,8 @@ pub struct ReservationAccess<'w, 's> {
 /// 指定・場所・属性確認に必要な共通アクセス
 #[derive(SystemParam)]
 pub struct DesignationAccess<'w, 's> {
-    pub targets: Query<
-        'w,
-        's,
-        (
-            &'static Transform,
-            Option<&'static Tree>,
-            Option<&'static hw_jobs::TreeVariant>,
-            Option<&'static hw_jobs::Rock>,
-            Option<&'static ResourceItem>,
-            Option<&'static Designation>,
-            Option<&'static StoredIn>,
-        ),
-    >,
-    pub designations: Query<
-        'w,
-        's,
-        (
-            Entity,
-            &'static Transform,
-            &'static Designation,
-            Option<&'static ManagedBy>,
-            Option<&'static TaskSlots>,
-            Option<&'static TaskWorkers>,
-            Option<&'static StoredIn>,
-            Option<&'static Priority>,
-        ),
-    >,
+    pub targets: TargetsQuery<'w, 's>,
+    pub designations: DesignationsQuery<'w, 's>,
     pub belongs: Query<'w, 's, &'static BelongsTo>,
 }
 
@@ -126,28 +174,8 @@ pub struct TaskAssignmentReadAccess<'w, 's> {
     pub world_map: WorldMapRead<'w>,
     pub yards: Query<'w, 's, &'static hw_world::Yard>,
     pub items: Query<'w, 's, (&'static ResourceItem, Option<&'static Designation>)>,
-    pub sand_piles: Query<
-        'w,
-        's,
-        (
-            Entity,
-            &'static Transform,
-            Option<&'static Designation>,
-            Option<&'static TaskWorkers>,
-        ),
-        With<SandPile>,
-    >,
-    pub bone_piles: Query<
-        'w,
-        's,
-        (
-            Entity,
-            &'static Transform,
-            Option<&'static Designation>,
-            Option<&'static TaskWorkers>,
-        ),
-        With<BonePile>,
-    >,
+    pub sand_piles: PileQuery<'w, 's, With<SandPile>>,
+    pub bone_piles: PileQuery<'w, 's, With<BonePile>>,
     pub task_state: Query<'w, 's, (Option<&'static Designation>, Option<&'static TaskWorkers>)>,
     pub move_plant_tasks: Query<'w, 's, &'static hw_jobs::MovePlantTask>,
     pub transport_requests: Query<'w, 's, &'static TransportRequest>,
@@ -155,41 +183,12 @@ pub struct TaskAssignmentReadAccess<'w, 's> {
     pub transport_request_fixed_sources: Query<'w, 's, &'static TransportRequestFixedSource>,
     pub familiar_task_areas:
         Query<'w, 's, &'static hw_core::area::TaskArea, With<hw_core::familiar::Familiar>>,
-    pub free_resource_items: Query<
-        'w,
-        's,
-        (
-            Entity,
-            &'static Transform,
-            &'static Visibility,
-            &'static ResourceItem,
-        ),
-        (
-            Without<Designation>,
-            Without<TaskWorkers>,
-            Without<ReservedForTask>,
-            Without<ManualHaulPinnedSource>,
-        ),
-    >,
+    pub free_resource_items: FreeResourceItemsQuery<'w, 's>,
     pub reserved_for_task: Query<'w, 's, &'static ReservedForTask>,
     pub task_slots: Query<'w, 's, &'static TaskSlots>,
-    pub wheelbarrows: Query<
-        'w,
-        's,
-        (Entity, &'static Transform),
-        (With<Wheelbarrow>, With<ParkedAt>, Without<PushedBy>),
-    >,
+    pub wheelbarrows: ParkedWheelbarrowsQuery<'w, 's>,
     pub wheelbarrow_leases: Query<'w, 's, &'static WheelbarrowLease>,
-    pub stored_items_query: Query<
-        'w,
-        's,
-        (Entity, &'static ResourceItem, &'static StoredIn),
-        (
-            Without<Designation>,
-            Without<TaskWorkers>,
-            Without<ReservedForTask>,
-        ),
-    >,
+    pub stored_items_query: StoredItemsQuery<'w, 's>,
 }
 
 /// タスク割り当てに必要なクエリ群（Familiar AI向け・独立型）

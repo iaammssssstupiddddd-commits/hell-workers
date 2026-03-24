@@ -7,6 +7,18 @@ use hw_core::constants::TILE_SIZE;
 
 const TASK_AREA_BORDER_HIT_THICKNESS: f32 = 6.0;
 
+type SelectionTargetQuery<'w, 's> = Query<
+    'w,
+    's,
+    (Entity, &'static GlobalTransform, Option<&'static Building>),
+    Or<(
+        With<crate::systems::jobs::Tree>,
+        With<crate::systems::jobs::Rock>,
+        With<crate::systems::logistics::ResourceItem>,
+        With<crate::systems::jobs::Building>,
+    )>,
+>;
+
 pub(super) fn hovered_task_area_border_entity(
     world_pos: Vec2,
     selected_entity: Option<Entity>,
@@ -36,15 +48,7 @@ pub(super) fn hovered_entity_at_world_pos(
     world_pos: Vec2,
     q_souls: &Query<(Entity, &GlobalTransform), With<DamnedSoul>>,
     q_familiars: &Query<(Entity, &GlobalTransform), With<Familiar>>,
-    q_targets: &Query<
-        (Entity, &GlobalTransform, Option<&Building>),
-        Or<(
-            With<crate::systems::jobs::Tree>,
-            With<crate::systems::jobs::Rock>,
-            With<crate::systems::logistics::ResourceItem>,
-            With<crate::systems::jobs::Building>,
-        )>,
-    >,
+    q_targets: &SelectionTargetQuery,
 ) -> Option<Entity> {
     // 1. 使い魔（優先）
     for (entity, transform) in q_familiars.iter() {

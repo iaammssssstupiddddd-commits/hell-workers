@@ -59,12 +59,8 @@ impl MudMixerStorage {
         }
     }
 
-    pub fn add_material(&mut self, resource: ResourceType) -> Result<(), ()> {
-        if self.add_amount(resource, 1) == 1 {
-            Ok(())
-        } else {
-            Err(())
-        }
+    pub fn add_material(&mut self, resource: ResourceType) -> bool {
+        self.add_amount(resource, 1) == 1
     }
 
     pub fn has_materials_for_refining(&self, water_count: u32) -> bool {
@@ -75,14 +71,14 @@ impl MudMixerStorage {
         self.mud + STASIS_MUD_OUTPUT <= MUD_MIXER_MUD_CAPACITY
     }
 
-    pub fn consume_materials_for_refining(&mut self, water_count: u32) -> Result<(), ()> {
+    pub fn consume_materials_for_refining(&mut self, water_count: u32) -> bool {
         if !self.has_materials_for_refining(water_count) || !self.has_output_capacity_for_refining()
         {
-            return Err(());
+            return false;
         }
 
         self.sand = self.sand.saturating_sub(1);
         self.rock = self.rock.saturating_sub(1);
-        Ok(())
+        true
     }
 }

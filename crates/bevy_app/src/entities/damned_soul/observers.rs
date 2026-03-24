@@ -9,6 +9,35 @@ use hw_core::relationships::CommandedBy;
 use hw_soul_ai::unassign_task;
 use rand::Rng;
 
+type StressBreakdownSoulQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static Transform,
+        &'static mut DamnedSoul,
+        &'static mut AssignedTask,
+        &'static mut Path,
+        Option<&'static mut crate::systems::logistics::Inventory>,
+        Option<&'static hw_core::relationships::CommandedBy>,
+    ),
+>;
+
+type ExhaustedSoulQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static Transform,
+        &'static mut IdleState,
+        &'static mut AssignedTask,
+        &'static mut Path,
+        &'static mut Destination,
+        Option<&'static mut crate::systems::logistics::Inventory>,
+        Option<&'static hw_core::relationships::CommandedBy>,
+    ),
+>;
+
 pub fn on_soul_recruited(
     on: On<OnSoulRecruited>,
     mut commands: Commands,
@@ -41,15 +70,7 @@ pub fn on_soul_recruited(
 pub fn on_stress_breakdown(
     on: On<OnStressBreakdown>,
     mut commands: Commands,
-    mut q_souls: Query<(
-        Entity,
-        &Transform,
-        &mut DamnedSoul,
-        &mut AssignedTask,
-        &mut Path,
-        Option<&mut crate::systems::logistics::Inventory>,
-        Option<&hw_core::relationships::CommandedBy>,
-    )>,
+    mut q_souls: StressBreakdownSoulQuery,
     world_map: WorldMapRead,
     mut queries: crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
 ) {
@@ -96,16 +117,7 @@ pub fn on_exhausted(
     on: On<OnExhausted>,
     mut commands: Commands,
     q_spots: Query<&hw_soul_ai::soul_ai::helpers::gathering::GatheringSpot>,
-    mut q_souls: Query<(
-        Entity,
-        &Transform,
-        &mut IdleState,
-        &mut AssignedTask,
-        &mut Path,
-        &mut Destination,
-        Option<&mut crate::systems::logistics::Inventory>,
-        Option<&hw_core::relationships::CommandedBy>,
-    )>,
+    mut q_souls: ExhaustedSoulQuery,
     world_map: WorldMapRead,
     mut queries: crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
 ) {

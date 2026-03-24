@@ -18,6 +18,22 @@ use std::collections::HashMap;
 pub use hw_logistics::SharedResourceCache;
 pub use hw_logistics::apply_reservation_op;
 
+type PendingDirtyQuery<'w, 's> = Query<
+    'w,
+    's,
+    (),
+    (
+        With<Designation>,
+        Without<TaskWorkers>,
+        Or<(
+            Added<Designation>,
+            Changed<Designation>,
+            Added<TransportRequest>,
+            Changed<TransportRequest>,
+        )>,
+    ),
+>;
+
 #[derive(Resource)]
 pub struct ReservationSyncTimer {
     pub timer: Timer,
@@ -33,6 +49,7 @@ impl Default for ReservationSyncTimer {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 /// タスク状態から予約を同期するシステム (Sense Phase)
 ///
 /// 以下の2種類のソースから予約を再構築する:
@@ -45,19 +62,7 @@ pub fn sync_reservations_system(
     mut sync_timer: ResMut<ReservationSyncTimer>,
     q_souls: Query<&AssignedTask>,
     q_pending_tasks: Query<(&Designation, Option<&TransportRequest>), Without<TaskWorkers>>,
-    q_pending_dirty: Query<
-        (),
-        (
-            With<Designation>,
-            Without<TaskWorkers>,
-            Or<(
-                Added<Designation>,
-                Changed<Designation>,
-                Added<TransportRequest>,
-                Changed<TransportRequest>,
-            )>,
-        ),
-    >,
+    q_pending_dirty: PendingDirtyQuery,
     q_task_workers_added: Query<(), (With<Designation>, Added<TaskWorkers>)>,
     q_assigned_task_added: Query<(), Added<AssignedTask>>,
     q_assigned_task_changed: Query<(), Changed<AssignedTask>>,

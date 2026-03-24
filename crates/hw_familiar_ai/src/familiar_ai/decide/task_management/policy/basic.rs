@@ -33,15 +33,14 @@ pub(super) fn assign_build(
     queries: &mut FamiliarTaskAssignmentQueries,
     shadow: &mut ReservationShadow,
 ) -> bool {
-    if let Ok((_, bp, _)) = queries.storage.blueprints.get(ctx.task_entity) {
-        if !bp.materials_complete() {
+    if let Ok((_, bp, _)) = queries.storage.blueprints.get(ctx.task_entity)
+        && !bp.materials_complete() {
             debug!(
                 "ASSIGN: Build target {:?} materials not complete",
                 ctx.task_entity
             );
             return false;
         }
-    }
     issue_build(task_pos, already_commanded, ctx, queries, shadow);
     true
 }

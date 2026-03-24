@@ -1,6 +1,21 @@
 use super::grid::{GridData, SpatialGridOps};
 use bevy::prelude::*;
 
+type ResourceChangedQuery<'w, 's, T> = Query<
+    'w,
+    's,
+    (Entity, &'static Transform, Option<&'static Visibility>),
+    (
+        With<T>,
+        Or<(
+            Added<T>,
+            Added<Visibility>,
+            Changed<Transform>,
+            Changed<Visibility>,
+        )>,
+    ),
+>;
+
 /// リソースアイテム用の空間グリッド
 #[derive(Resource, Default)]
 pub struct ResourceSpatialGrid(pub GridData);
@@ -25,18 +40,7 @@ impl SpatialGridOps for ResourceSpatialGrid {
 
 pub fn update_resource_spatial_grid_system<T: Component>(
     mut grid: ResMut<ResourceSpatialGrid>,
-    q_changed: Query<
-        (Entity, &Transform, Option<&Visibility>),
-        (
-            With<T>,
-            Or<(
-                Added<T>,
-                Added<Visibility>,
-                Changed<Transform>,
-                Changed<Visibility>,
-            )>,
-        ),
-    >,
+    q_changed: ResourceChangedQuery<T>,
     q_resource_transform: Query<&Transform, With<T>>,
     mut removed_items: RemovedComponents<T>,
     mut removed_visibility: RemovedComponents<Visibility>,

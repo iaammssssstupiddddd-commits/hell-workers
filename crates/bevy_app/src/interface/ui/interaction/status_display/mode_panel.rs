@@ -17,6 +17,7 @@ use crate::systems::jobs::Designation;
 use hw_core::relationships::ManagedBy;
 use hw_ui::components::UiNodeRegistry;
 
+#[allow(clippy::too_many_arguments)]
 pub fn update_mode_text_system(
     play_mode: Res<State<PlayMode>>,
     build_context: Res<BuildContext>,
@@ -148,6 +149,7 @@ pub fn task_summary_ui_system(
     );
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn update_area_edit_preview_ui_system(
     task_context: Res<TaskContext>,
     selected_entity: Res<SelectedEntity>,

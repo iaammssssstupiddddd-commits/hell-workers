@@ -21,23 +21,28 @@ struct SiteTileSnapshot {
     spawned_wall: Option<Entity>,
 }
 
+type SoulCancellationQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static Transform,
+        &'static mut AssignedTask,
+        &'static mut Path,
+        &'static mut Inventory,
+        Option<&'static WorkingOn>,
+    ),
+    With<DamnedSoul>,
+>;
+
+#[allow(clippy::too_many_arguments)]
 /// Cancels wall construction sites marked with `WallConstructionCancelRequested`.
 pub fn wall_construction_cancellation_system(
     mut commands: Commands,
     q_sites: Query<Entity, With<WallConstructionCancelRequested>>,
     q_entities: Query<Entity>,
     q_wall_requests: Query<(Entity, &TargetWallConstructionSite)>,
-    mut q_souls: Query<
-        (
-            Entity,
-            &Transform,
-            &mut AssignedTask,
-            &mut Path,
-            &mut Inventory,
-            Option<&WorkingOn>,
-        ),
-        With<DamnedSoul>,
-    >,
+    mut q_souls: SoulCancellationQuery,
     mut reservation_queries: TaskQueries,
     mut world_map: WorldMapWrite,
     resource_item_handles: Res<ResourceItemVisualHandles>,

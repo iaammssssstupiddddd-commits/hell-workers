@@ -11,6 +11,7 @@ use super::spawn::spawn_familiar_bubble;
 use super::voice::FamiliarVoice;
 use crate::handles::SpeechHandles;
 
+#[allow(clippy::type_complexity)]
 /// Idle 遷移時のビジュアル演出を適用する（Execute Phase）
 pub fn familiar_idle_visual_apply_system(
     mut commands: Commands,

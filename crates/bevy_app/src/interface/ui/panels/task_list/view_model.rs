@@ -22,22 +22,28 @@ pub struct TaskListState {
     initialized: bool,
 }
 
+type DesignationQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static Transform,
+        &'static Designation,
+        Option<&'static Priority>,
+        Option<&'static TaskWorkers>,
+        Option<&'static Blueprint>,
+        Option<&'static TransportRequest>,
+        Option<&'static ResourceItem>,
+        Option<&'static Tree>,
+        Option<&'static Rock>,
+        Option<&'static SandPile>,
+        Option<&'static BonePile>,
+    ),
+>;
+
 /// Designation クエリからスナップショットを構築
 pub fn build_task_list_snapshot(
-    designations: &Query<(
-        Entity,
-        &Transform,
-        &Designation,
-        Option<&Priority>,
-        Option<&TaskWorkers>,
-        Option<&Blueprint>,
-        Option<&TransportRequest>,
-        Option<&ResourceItem>,
-        Option<&Tree>,
-        Option<&Rock>,
-        Option<&SandPile>,
-        Option<&BonePile>,
-    )>,
+    designations: &DesignationQuery,
 ) -> Vec<(WorkType, Vec<TaskEntry>)> {
     let mut groups: BTreeMap<u8, (WorkType, Vec<TaskEntry>)> = BTreeMap::new();
 
@@ -88,20 +94,7 @@ pub fn build_task_list_snapshot(
 }
 
 pub fn build_task_summary(
-    designations: &Query<(
-        Entity,
-        &Transform,
-        &Designation,
-        Option<&Priority>,
-        Option<&TaskWorkers>,
-        Option<&Blueprint>,
-        Option<&TransportRequest>,
-        Option<&ResourceItem>,
-        Option<&Tree>,
-        Option<&Rock>,
-        Option<&SandPile>,
-        Option<&BonePile>,
-    )>,
+    designations: &DesignationQuery,
 ) -> (usize, usize) {
     let mut total = 0usize;
     let mut high = 0usize;
@@ -117,20 +110,7 @@ pub fn build_task_summary(
 }
 
 pub fn update_task_list_state_system(
-    designations: Query<(
-        Entity,
-        &Transform,
-        &Designation,
-        Option<&Priority>,
-        Option<&TaskWorkers>,
-        Option<&Blueprint>,
-        Option<&TransportRequest>,
-        Option<&ResourceItem>,
-        Option<&Tree>,
-        Option<&Rock>,
-        Option<&SandPile>,
-        Option<&BonePile>,
-    )>,
+    designations: DesignationQuery,
     mut dirty: ResMut<TaskListDirty>,
     mut state: ResMut<TaskListState>,
 ) {

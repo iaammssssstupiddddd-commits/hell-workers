@@ -8,6 +8,7 @@ use crate::transport_request::producer::upsert;
 use crate::transport_request::{TransportRequest, TransportRequestKind};
 use crate::types::ResourceType;
 
+#[allow(clippy::type_complexity)]
 pub(crate) fn upsert_mixer_requests(
     commands: &mut Commands,
     q_mixer_requests: &Query<(
@@ -60,6 +61,7 @@ pub(crate) fn upsert_mixer_requests(
     }
 }
 
+#[allow(clippy::type_complexity)]
 fn upsert_mixer_requests_by_kind(
     commands: &mut Commands,
     q_mixer_requests: &Query<(

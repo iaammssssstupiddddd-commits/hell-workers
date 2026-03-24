@@ -6,18 +6,15 @@ use crate::types::ResourceType;
 pub use hw_core::logistics::WheelbarrowDestination;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Reflect)]
+#[derive(Default)]
 pub enum TransportPriority {
     Low = 0,
+    #[default]
     Normal = 10,
     High = 20,
     Critical = 30,
 }
 
-impl Default for TransportPriority {
-    fn default() -> Self {
-        Self::Normal
-    }
-}
 
 #[derive(Component, Debug, Clone, Reflect)]
 #[reflect(Component)]
@@ -93,13 +90,10 @@ pub struct WheelbarrowLease {
 
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Hash, Reflect)]
 #[reflect(Component)]
+#[derive(Default)]
 pub enum TransportRequestState {
+    #[default]
     Pending,
     Claimed,
 }
 
-impl Default for TransportRequestState {
-    fn default() -> Self {
-        Self::Pending
-    }
-}

@@ -5,6 +5,7 @@ use crate::theme::UiTheme;
 use bevy::math::TryStableInterpolate;
 use bevy::prelude::*;
 
+#[allow(clippy::type_complexity)]
 pub(crate) fn apply_fade_effects(
     tooltip_bg: &mut BackgroundColor,
     tooltip_border: &mut BorderColor,

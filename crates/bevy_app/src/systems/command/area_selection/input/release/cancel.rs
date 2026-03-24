@@ -12,6 +12,7 @@ use bevy::prelude::*;
 use hw_core::constants::TILE_SIZE;
 use std::collections::HashSet;
 
+#[allow(clippy::type_complexity)]
 pub(super) fn handle_release_cancel_designation(
     task_context: &mut TaskContext,
     selected_entity: Option<Entity>,
@@ -19,8 +20,8 @@ pub(super) fn handle_release_cancel_designation(
     start_pos: Vec2,
     q_target_sets: &mut bevy::ecs::system::ParamSet<(
         DesignationTargetQuery<'_, '_>,
-        Query<(Entity, &'static Transform, &'static FloorTileBlueprint)>,
-        Query<(Entity, &'static Transform, &'static WallTileBlueprint)>,
+        Query<(Entity, &Transform, &FloorTileBlueprint)>,
+        Query<(Entity, &Transform, &WallTileBlueprint)>,
     )>,
     commands: &mut Commands,
 ) {
@@ -36,12 +37,13 @@ pub(super) fn handle_release_cancel_designation(
     task_context.0 = TaskMode::CancelDesignation(None);
 }
 
+#[allow(clippy::type_complexity)]
 fn cancel_point(
     start_pos: Vec2,
     q_target_sets: &mut bevy::ecs::system::ParamSet<(
         DesignationTargetQuery<'_, '_>,
-        Query<(Entity, &'static Transform, &'static FloorTileBlueprint)>,
-        Query<(Entity, &'static Transform, &'static WallTileBlueprint)>,
+        Query<(Entity, &Transform, &FloorTileBlueprint)>,
+        Query<(Entity, &Transform, &WallTileBlueprint)>,
     )>,
     commands: &mut Commands,
 ) {
@@ -49,12 +51,13 @@ fn cancel_point(
     cancel_point_construction_sites(start_pos, q_target_sets, commands);
 }
 
+#[allow(clippy::type_complexity)]
 fn cancel_point_nearest_designation(
     start_pos: Vec2,
     q_target_sets: &mut bevy::ecs::system::ParamSet<(
         DesignationTargetQuery<'_, '_>,
-        Query<(Entity, &'static Transform, &'static FloorTileBlueprint)>,
-        Query<(Entity, &'static Transform, &'static WallTileBlueprint)>,
+        Query<(Entity, &Transform, &FloorTileBlueprint)>,
+        Query<(Entity, &Transform, &WallTileBlueprint)>,
     )>,
     commands: &mut Commands,
 ) {
@@ -67,11 +70,10 @@ fn cancel_point_nearest_designation(
                 continue;
             }
             let dist = transform.translation.truncate().distance(start_pos);
-            if dist < TILE_SIZE {
-                if closest.map_or(true, |(_, d)| dist < d) {
+            if dist < TILE_SIZE
+                && closest.is_none_or(|(_, d)| dist < d) {
                     closest = Some((entity, dist));
                 }
-            }
         }
     }
 
@@ -107,12 +109,13 @@ fn cancel_point_nearest_designation(
     }
 }
 
+#[allow(clippy::type_complexity)]
 fn cancel_point_construction_sites(
     start_pos: Vec2,
     q_target_sets: &mut bevy::ecs::system::ParamSet<(
         DesignationTargetQuery<'_, '_>,
-        Query<(Entity, &'static Transform, &'static FloorTileBlueprint)>,
-        Query<(Entity, &'static Transform, &'static WallTileBlueprint)>,
+        Query<(Entity, &Transform, &FloorTileBlueprint)>,
+        Query<(Entity, &Transform, &WallTileBlueprint)>,
     )>,
     commands: &mut Commands,
 ) {
@@ -155,14 +158,15 @@ fn cancel_point_construction_sites(
     }
 }
 
+#[allow(clippy::type_complexity)]
 fn cancel_area(
     start_pos: Vec2,
     end_pos: Vec2,
     selected_entity: Option<Entity>,
     q_target_sets: &mut bevy::ecs::system::ParamSet<(
         DesignationTargetQuery<'_, '_>,
-        Query<(Entity, &'static Transform, &'static FloorTileBlueprint)>,
-        Query<(Entity, &'static Transform, &'static WallTileBlueprint)>,
+        Query<(Entity, &Transform, &FloorTileBlueprint)>,
+        Query<(Entity, &Transform, &WallTileBlueprint)>,
     )>,
     commands: &mut Commands,
 ) {
@@ -182,12 +186,13 @@ fn cancel_area(
     cancel_area_construction_sites(&area, q_target_sets, commands);
 }
 
+#[allow(clippy::type_complexity)]
 fn cancel_area_construction_sites(
     area: &TaskArea,
     q_target_sets: &mut bevy::ecs::system::ParamSet<(
         DesignationTargetQuery<'_, '_>,
-        Query<(Entity, &'static Transform, &'static FloorTileBlueprint)>,
-        Query<(Entity, &'static Transform, &'static WallTileBlueprint)>,
+        Query<(Entity, &Transform, &FloorTileBlueprint)>,
+        Query<(Entity, &Transform, &WallTileBlueprint)>,
     )>,
     commands: &mut Commands,
 ) {

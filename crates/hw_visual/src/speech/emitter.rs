@@ -8,6 +8,7 @@ use super::voice::FamiliarVoice;
 use crate::handles::SpeechHandles;
 use bevy::prelude::*;
 
+#[allow(clippy::too_many_arguments)]
 /// Soul の発話を、履歴更新込みで発火する。
 /// can_speak が false なら何もしない。
 pub fn emit_soul_with_history(
@@ -18,7 +19,7 @@ pub fn emit_soul_with_history(
     handles: &Res<SpeechHandles>,
     emotion: BubbleEmotion,
     priority: BubblePriority,
-    history_opt: Option<impl std::ops::Deref<Target = SpeechHistory> + std::ops::DerefMut>,
+    history_opt: Option<impl std::ops::DerefMut<Target = SpeechHistory>>,
     current_time: f32,
 ) -> bool {
     let can_speak = history_opt
@@ -52,6 +53,7 @@ pub fn emit_soul_with_history(
     true
 }
 
+#[allow(clippy::too_many_arguments)]
 /// Familiar の発話を、履歴更新込みで発火する。
 /// can_speak が false なら何もしない。
 pub fn emit_familiar_with_history(
@@ -64,7 +66,7 @@ pub fn emit_familiar_with_history(
     emotion: BubbleEmotion,
     priority: BubblePriority,
     voice: Option<&FamiliarVoice>,
-    history_opt: Option<impl std::ops::Deref<Target = SpeechHistory> + std::ops::DerefMut>,
+    history_opt: Option<impl std::ops::DerefMut<Target = SpeechHistory>>,
     current_time: f32,
 ) -> bool {
     let can_speak = history_opt

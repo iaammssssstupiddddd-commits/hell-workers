@@ -6,6 +6,7 @@ use hw_world::{PathfindingContext, WorldMap, find_path_world_waypoints};
 
 use super::PathCooldown;
 
+#[allow(clippy::too_many_arguments)]
 /// 既存パスを再利用できるか検証し、障害物で部分遮断されていれば再計算する。
 /// 再利用できた場合は true を返す。A* を呼んだ場合は pathfind_count を更新する。
 pub(super) fn try_reuse_existing_path(

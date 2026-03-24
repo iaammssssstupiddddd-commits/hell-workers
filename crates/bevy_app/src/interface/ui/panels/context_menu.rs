@@ -10,6 +10,27 @@ use bevy::ui_widgets::popover::{Popover, PopoverAlign, PopoverPlacement, Popover
 use hw_ui::components::*;
 use hw_ui::theme::UiTheme;
 
+type BuildingOrBlueprintQuery<'w, 's> = Query<
+    'w,
+    's,
+    (),
+    Or<(
+        With<crate::systems::jobs::Building>,
+        With<crate::systems::jobs::Blueprint>,
+    )>,
+>;
+
+type ResourceItemQuery<'w, 's> = Query<
+    'w,
+    's,
+    (),
+    Or<(
+        With<crate::systems::logistics::ResourceItem>,
+        With<crate::systems::jobs::Tree>,
+        With<crate::systems::jobs::Rock>,
+    )>,
+>;
+
 #[derive(Clone, Copy, Debug)]
 enum ContextTarget {
     Familiar(Entity),
@@ -18,6 +39,7 @@ enum ContextTarget {
     Resource(Entity),
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn context_menu_system(
     mut commands: Commands,
     buttons: Res<ButtonInput<MouseButton>>,
@@ -28,22 +50,9 @@ pub fn context_menu_system(
     q_context_menu: Query<Entity, With<ContextMenu>>,
     q_familiars: Query<(), With<Familiar>>,
     q_souls: Query<(), With<DamnedSoul>>,
-    q_buildings: Query<
-        (),
-        Or<(
-            With<crate::systems::jobs::Building>,
-            With<crate::systems::jobs::Blueprint>,
-        )>,
-    >,
+    q_buildings: BuildingOrBlueprintQuery,
     q_doors: Query<&crate::systems::jobs::Door>,
-    q_resources: Query<
-        (),
-        Or<(
-            With<crate::systems::logistics::ResourceItem>,
-            With<crate::systems::jobs::Tree>,
-            With<crate::systems::jobs::Rock>,
-        )>,
-    >,
+    q_resources: ResourceItemQuery,
     game_assets: Res<crate::assets::GameAssets>,
     theme: Res<UiTheme>,
 ) {
@@ -210,21 +219,8 @@ fn classify_target(
     entity: Entity,
     q_familiars: &Query<(), With<Familiar>>,
     q_souls: &Query<(), With<DamnedSoul>>,
-    q_buildings: &Query<
-        (),
-        Or<(
-            With<crate::systems::jobs::Building>,
-            With<crate::systems::jobs::Blueprint>,
-        )>,
-    >,
-    q_resources: &Query<
-        (),
-        Or<(
-            With<crate::systems::logistics::ResourceItem>,
-            With<crate::systems::jobs::Tree>,
-            With<crate::systems::jobs::Rock>,
-        )>,
-    >,
+    q_buildings: &BuildingOrBlueprintQuery,
+    q_resources: &ResourceItemQuery,
 ) -> Option<ContextTarget> {
     if q_familiars.get(entity).is_ok() {
         Some(ContextTarget::Familiar(entity))

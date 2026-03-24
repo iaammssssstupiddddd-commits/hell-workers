@@ -22,12 +22,59 @@ use crate::tasks::{
 
 use super::building_type_to_visual;
 
-pub fn sync_soul_task_visual_system(
-    mut q: Query<
-        (&AssignedTask, &mut SoulTaskVisualState),
-        Or<(Changed<AssignedTask>, Added<AssignedTask>)>,
-    >,
-) {
+type SoulTaskSyncQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static AssignedTask,
+        &'static mut SoulTaskVisualState,
+    ),
+    Or<(Changed<AssignedTask>, Added<AssignedTask>)>,
+>;
+type BlueprintSyncQuery<'w, 's> = Query<
+    'w,
+    's,
+    (&'static Blueprint, &'static mut BlueprintVisualState),
+    Or<(Changed<Blueprint>, Added<Blueprint>)>,
+>;
+type FloorTileSyncQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static FloorTileBlueprint,
+        &'static mut FloorTileVisualMirror,
+    ),
+    Or<(Changed<FloorTileBlueprint>, Added<FloorTileBlueprint>)>,
+>;
+type WallTileSyncQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static WallTileBlueprint,
+        &'static mut WallTileVisualMirror,
+    ),
+    Or<(Changed<WallTileBlueprint>, Added<WallTileBlueprint>)>,
+>;
+type FloorSiteSyncQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static FloorConstructionSite,
+        &'static mut FloorSiteVisualState,
+    ),
+    Or<(Changed<FloorConstructionSite>, Added<FloorConstructionSite>)>,
+>;
+type WallSiteSyncQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static WallConstructionSite,
+        &'static mut WallSiteVisualState,
+    ),
+    Or<(Changed<WallConstructionSite>, Added<WallConstructionSite>)>,
+>;
+
+pub fn sync_soul_task_visual_system(mut q: SoulTaskSyncQuery) {
     for (task, mut state) in q.iter_mut() {
         let (phase, progress, link_target, bucket_link) = match task {
             AssignedTask::None => (SoulTaskPhaseVisual::None, None, None, None),
@@ -125,12 +172,7 @@ pub fn sync_soul_task_visual_system(
     }
 }
 
-pub fn sync_blueprint_visual_system(
-    mut q: Query<
-        (&Blueprint, &mut BlueprintVisualState),
-        Or<(Changed<Blueprint>, Added<Blueprint>)>,
-    >,
-) {
+pub fn sync_blueprint_visual_system(mut q: BlueprintSyncQuery) {
     for (bp, mut state) in q.iter_mut() {
         state.progress = bp.progress;
         state.material_counts = bp
@@ -157,12 +199,7 @@ pub fn sync_blueprint_visual_system(
     }
 }
 
-pub fn sync_floor_tile_visual_system(
-    mut q: Query<
-        (&FloorTileBlueprint, &mut FloorTileVisualMirror),
-        Or<(Changed<FloorTileBlueprint>, Added<FloorTileBlueprint>)>,
-    >,
-) {
+pub fn sync_floor_tile_visual_system(mut q: FloorTileSyncQuery) {
     for (tile, mut mirror) in q.iter_mut() {
         mirror.bones_delivered = tile.bones_delivered;
         mirror.state = match tile.state {
@@ -180,12 +217,7 @@ pub fn sync_floor_tile_visual_system(
     }
 }
 
-pub fn sync_wall_tile_visual_system(
-    mut q: Query<
-        (&WallTileBlueprint, &mut WallTileVisualMirror),
-        Or<(Changed<WallTileBlueprint>, Added<WallTileBlueprint>)>,
-    >,
-) {
+pub fn sync_wall_tile_visual_system(mut q: WallTileSyncQuery) {
     for (tile, mut mirror) in q.iter_mut() {
         mirror.state = match tile.state {
             WallTileState::WaitingWood => WallTileStateMirror::WaitingWood,
@@ -200,12 +232,7 @@ pub fn sync_wall_tile_visual_system(
     }
 }
 
-pub fn sync_floor_site_visual_system(
-    mut q: Query<
-        (&FloorConstructionSite, &mut FloorSiteVisualState),
-        Or<(Changed<FloorConstructionSite>, Added<FloorConstructionSite>)>,
-    >,
-) {
+pub fn sync_floor_site_visual_system(mut q: FloorSiteSyncQuery) {
     for (site, mut state) in q.iter_mut() {
         state.phase = match site.phase {
             FloorConstructionPhase::Reinforcing => FloorConstructionPhaseMirror::Reinforcing,
@@ -217,12 +244,7 @@ pub fn sync_floor_site_visual_system(
     }
 }
 
-pub fn sync_wall_site_visual_system(
-    mut q: Query<
-        (&WallConstructionSite, &mut WallSiteVisualState),
-        Or<(Changed<WallConstructionSite>, Added<WallConstructionSite>)>,
-    >,
-) {
+pub fn sync_wall_site_visual_system(mut q: WallSiteSyncQuery) {
     for (site, mut state) in q.iter_mut() {
         state.phase_is_framing = site.phase == WallConstructionPhase::Framing;
         state.tiles_total = site.tiles_total;

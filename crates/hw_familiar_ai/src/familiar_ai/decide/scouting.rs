@@ -112,10 +112,10 @@ pub fn scouting_logic(ctx: &mut FamiliarScoutingContext<'_, '_, '_>) -> Scouting
                     *ctx.ai_state = FamiliarAiState::SearchingTask;
                 }
 
-                return ScoutingOutcome {
+                ScoutingOutcome {
                     state_changed: true,
                     recruited_entity,
-                };
+                }
             } else {
                 // まだ距離があるなら接近を継続
                 let is_path_finished = ctx.fam_path.current_index >= ctx.fam_path.waypoints.len();
@@ -131,10 +131,10 @@ pub fn scouting_logic(ctx: &mut FamiliarScoutingContext<'_, '_, '_>) -> Scouting
                     ctx.fam_path.waypoints = vec![target_pos];
                     ctx.fam_path.current_index = 0;
                 }
-                return ScoutingOutcome {
+                ScoutingOutcome {
                     state_changed: false,
                     recruited_entity: None,
-                };
+                }
             }
         } else {
             // 他の使い魔に取られた
@@ -143,10 +143,10 @@ pub fn scouting_logic(ctx: &mut FamiliarScoutingContext<'_, '_, '_>) -> Scouting
                 ctx.fam_entity, ctx.target_soul
             );
             *ctx.ai_state = FamiliarAiState::SearchingTask;
-            return ScoutingOutcome {
+            ScoutingOutcome {
                 state_changed: true,
                 recruited_entity: None,
-            };
+            }
         }
     } else {
         // ターゲット消失
@@ -155,9 +155,9 @@ pub fn scouting_logic(ctx: &mut FamiliarScoutingContext<'_, '_, '_>) -> Scouting
             ctx.fam_entity, ctx.target_soul
         );
         *ctx.ai_state = FamiliarAiState::SearchingTask;
-        return ScoutingOutcome {
+        ScoutingOutcome {
             state_changed: true,
             recruited_entity: None,
-        };
+        }
     }
 }

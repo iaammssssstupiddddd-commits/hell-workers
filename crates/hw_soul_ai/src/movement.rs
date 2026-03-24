@@ -8,31 +8,36 @@ use hw_core::world::DoorState;
 use hw_world::{WorldMap, WorldMapRead};
 use std::collections::HashMap;
 
+type SoulMovementQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static mut Transform,
+        &'static mut Path,
+        &'static mut AnimationState,
+        &'static DamnedSoul,
+        &'static IdleState,
+        Option<&'static StressBreakdown>,
+        Option<&'static PushingWheelbarrow>,
+    ),
+>;
+
 /// 移動システム
 pub fn soul_movement(
     time: Res<Time>,
     world_map: WorldMapRead,
     mut door_waits: Local<HashMap<Entity, f32>>,
-    mut query: Query<(
-        Entity,
-        &mut Transform,
-        &mut Path,
-        &mut AnimationState,
-        &DamnedSoul,
-        &IdleState,
-        Option<&StressBreakdown>,
-        Option<&PushingWheelbarrow>,
-    )>,
+    mut query: SoulMovementQuery,
 ) {
     for (entity, mut transform, mut path, mut anim, soul, idle, breakdown_opt, pushing_wb) in
         query.iter_mut()
     {
-        if let Some(breakdown) = breakdown_opt {
-            if breakdown.is_frozen {
+        if let Some(breakdown) = breakdown_opt
+            && breakdown.is_frozen {
                 anim.is_moving = false;
                 continue;
             }
-        }
 
         if path.current_index < path.waypoints.len() {
             let target = path.waypoints[path.current_index];

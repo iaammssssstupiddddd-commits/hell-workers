@@ -17,8 +17,8 @@ fn spawn_obstacle_batch<B: Bundle>(
 ) -> usize {
     let mut count = 0;
     for &(gx, gy) in positions {
-        if let Some(idx) = world_map.pos_to_idx(gx, gy) {
-            if world_map
+        if let Some(idx) = world_map.pos_to_idx(gx, gy)
+            && world_map
                 .terrain_at_idx(idx)
                 .is_some_and(|terrain| terrain.is_walkable())
             {
@@ -27,7 +27,6 @@ fn spawn_obstacle_batch<B: Bundle>(
                 world_map.add_grid_obstacle((gx, gy));
                 count += 1;
             }
-        }
     }
     count
 }

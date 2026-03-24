@@ -132,6 +132,7 @@ pub fn dream_tree_planting_system(
     );
 }
 
+#[allow(clippy::too_many_arguments)]
 fn process_dream_planting(
     start: &Vec2,
     end: &Vec2,

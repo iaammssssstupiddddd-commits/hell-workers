@@ -6,6 +6,7 @@ use crate::systems::command::{TaskArea, TaskMode};
 use bevy::prelude::*;
 use hw_ui::camera::MainCamera;
 
+#[allow(clippy::too_many_arguments)]
 pub fn update_task_area_material_system(
     time: Res<Time>,
     q_visuals: Query<(&TaskAreaVisual, &MeshMaterial2d<TaskAreaMaterial>)>,
@@ -40,7 +41,7 @@ pub fn update_task_area_material_system(
 
                 // 強調条件: 境界線をホバーしているか、使い魔本体をホバーしているか
                 let is_border_hovered =
-                    cursor_pos.map_or(false, |pos| area.contains_border(pos, 6.0));
+                    cursor_pos.is_some_and(|pos| area.contains_border(pos, 6.0));
                 let is_familiar_hovered = hovered_entity.0 == Some(fam_entity);
                 let is_hovered = is_border_hovered || is_familiar_hovered;
 

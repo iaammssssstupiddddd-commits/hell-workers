@@ -52,11 +52,10 @@ pub fn obstacle_cleanup_system(
         if let Some(idx) = world_map.pos_to_idx(x, y) {
             world_map.set_terrain_at_idx(idx, TerrainType::Dirt);
 
-            if let Some(tile_entity) = world_map.tile_entity_at_idx(idx) {
-                if let Ok(mut sprite) = q_sprites.get_mut(tile_entity) {
+            if let Some(tile_entity) = world_map.tile_entity_at_idx(idx)
+                && let Ok(mut sprite) = q_sprites.get_mut(tile_entity) {
                     sprite.image = handles.dirt.clone();
                 }
-            }
         }
 
         info!(

@@ -16,24 +16,31 @@ use crate::soul_ai::helpers::drifting::{
     drift_move_target, is_near_map_edge, random_wander_target,
 };
 
+type DriftingBehaviorQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static Transform,
+        &'static mut IdleState,
+        &'static mut hw_core::soul::Destination,
+        &'static mut hw_core::soul::Path,
+        &'static AssignedTask,
+        Option<&'static CommandedBy>,
+        &'static mut DriftingState,
+    ),
+    With<DamnedSoul>,
+>;
+
+type DespawnAtEdgeQuery<'w, 's> =
+    Query<'w, 's, (Entity, &'static Transform, &'static IdleState), (With<DamnedSoul>, With<DriftingState>)>;
+
 /// 漂流（Drifting）中の Soul 行動更新
 pub fn drifting_behavior_system(
     time: Res<Time>,
     world_map: WorldMapRead,
     mut commands: Commands,
-    mut q_souls: Query<
-        (
-            Entity,
-            &Transform,
-            &mut IdleState,
-            &mut hw_core::soul::Destination,
-            &mut hw_core::soul::Path,
-            &AssignedTask,
-            Option<&CommandedBy>,
-            &mut DriftingState,
-        ),
-        With<DamnedSoul>,
-    >,
+    mut q_souls: DriftingBehaviorQuery,
 ) {
     let dt = time.delta_secs();
     let mut rng = rand::thread_rng();
@@ -116,7 +123,7 @@ pub fn drifting_behavior_system(
 /// マップ端到達時に漂流中 Soul をデスポーン
 pub fn despawn_at_edge_system(
     mut commands: Commands,
-    q_souls: Query<(Entity, &Transform, &IdleState), (With<DamnedSoul>, With<DriftingState>)>,
+    q_souls: DespawnAtEdgeQuery,
 ) {
     for (entity, transform, idle) in q_souls.iter() {
         if idle.behavior != IdleBehavior::Drifting {

@@ -99,6 +99,7 @@ fn update_gender_icon<A: UiAssets>(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn info_panel_system<A: UiAssets + Resource>(
     game_assets: Res<A>,
     _selected: Res<SelectedEntity>,

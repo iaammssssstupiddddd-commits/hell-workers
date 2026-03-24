@@ -83,12 +83,19 @@ pub struct ElevationViewState {
     pub direction: ElevationDirection,
 }
 
+type Cam2dQuery<'w, 's> = Query<
+    'w,
+    's,
+    (&'static Transform, &'static mut Camera),
+    (With<MainCamera>, Without<Camera3dRtt>),
+>;
+
 /// V キーで矢視方向をサイクル切替する。
 pub fn elevation_view_input_system(
     keys: Res<ButtonInput<KeyCode>>,
     mut state: ResMut<ElevationViewState>,
     mut q_cam3d: Query<&mut Transform, With<Camera3dRtt>>,
-    mut q_cam2d: Query<(&Transform, &mut Camera), (With<MainCamera>, Without<Camera3dRtt>)>,
+    mut q_cam2d: Cam2dQuery,
 ) {
     if !keys.just_pressed(KeyCode::KeyV) {
         return;

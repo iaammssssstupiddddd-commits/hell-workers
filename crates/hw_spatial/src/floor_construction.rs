@@ -2,6 +2,16 @@ use super::grid::{GridData, SpatialGridOps};
 use bevy::prelude::*;
 use hw_jobs::FloorConstructionSite;
 
+type FloorConstructionUpdateQuery<'w, 's> = Query<
+    'w,
+    's,
+    (Entity, &'static Transform),
+    (
+        With<FloorConstructionSite>,
+        Or<(Added<FloorConstructionSite>, Changed<Transform>)>,
+    ),
+>;
+
 /// FloorConstructionSite 用の空間グリッド
 #[derive(Resource, Default)]
 pub struct FloorConstructionSpatialGrid(pub GridData);
@@ -33,13 +43,7 @@ impl SpatialGridOps for FloorConstructionSpatialGrid {
 
 pub fn update_floor_construction_spatial_grid_system(
     mut grid: ResMut<FloorConstructionSpatialGrid>,
-    query: Query<
-        (Entity, &Transform),
-        (
-            With<FloorConstructionSite>,
-            Or<(Added<FloorConstructionSite>, Changed<Transform>)>,
-        ),
-    >,
+    query: FloorConstructionUpdateQuery,
     mut removed: RemovedComponents<FloorConstructionSite>,
 ) {
     for (entity, transform) in query.iter() {

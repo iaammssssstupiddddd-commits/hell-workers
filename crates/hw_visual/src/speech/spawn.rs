@@ -107,6 +107,7 @@ pub fn spawn_soul_bubble(
         .try_insert(ChildOf(soul_entity));
 }
 
+#[allow(clippy::too_many_arguments)]
 /// Familiar用のラテン語フレーズ吹き出しをスポーンする
 pub fn spawn_familiar_bubble(
     commands: &mut Commands,

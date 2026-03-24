@@ -10,7 +10,7 @@ impl WorldMap {
     #[inline(always)]
     pub fn pos_to_idx(&self, x: i32, y: i32) -> Option<usize> {
         use hw_core::constants::{MAP_HEIGHT, MAP_WIDTH};
-        if x < 0 || x >= MAP_WIDTH || y < 0 || y >= MAP_HEIGHT {
+        if !(0..MAP_WIDTH).contains(&x) || !(0..MAP_HEIGHT).contains(&y) {
             return None;
         }
         Some((y * MAP_WIDTH + x) as usize)

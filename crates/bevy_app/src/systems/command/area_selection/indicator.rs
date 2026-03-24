@@ -17,6 +17,7 @@ use hw_core::constants::{TILE_SIZE, Z_DREAM_TREE_PREVIEW};
 use hw_ui::camera::{MainCamera, world_cursor_pos};
 use hw_world::zones::{Site, Yard};
 
+#[allow(clippy::too_many_arguments)]
 pub fn area_selection_indicator_system(
     task_context: Res<TaskContext>,
     q_camera: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
@@ -126,6 +127,7 @@ fn clear_dream_tree_preview_markers(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn dream_tree_planting_preview_system(
     mut commands: Commands,
     task_context: Res<TaskContext>,

@@ -13,6 +13,8 @@ use hw_core::relationships::ParticipatingIn;
 use hw_core::soul::{DamnedSoul, DreamState, GatheringBehavior, IdleBehavior, IdleState};
 use hw_core::ui_nodes::{UiNodeRegistry, UiRoot, UiSlot};
 
+#[allow(clippy::too_many_arguments)]
+#[allow(clippy::type_complexity)]
 pub fn dream_popup_spawn_system(
     mut commands: Commands,
     time: Res<Time>,
@@ -46,12 +48,11 @@ pub fn dream_popup_spawn_system(
 
     let mut target_pos = Vec2::new(viewport_size.x - 80.0, 40.0);
 
-    if let Some(entity) = ui_nodes.get_slot(UiSlot::DreamPoolIcon) {
-        if let Ok((computed, transform)) = q_ui_transform.get(entity) {
+    if let Some(entity) = ui_nodes.get_slot(UiSlot::DreamPoolIcon)
+        && let Ok((computed, transform)) = q_ui_transform.get(entity) {
             let center = transform.translation * computed.inverse_scale_factor();
             target_pos = center;
         }
-    }
 
     for (transform, soul, idle, _dream, participating_in, mut visual_state) in q_souls.iter_mut() {
         let is_sleeping = idle.behavior == IdleBehavior::Sleeping
@@ -77,7 +78,7 @@ pub fn dream_popup_spawn_system(
 
                 let popup_entity = spawn_floating_text(
                     &mut commands,
-                    &format!("+{:.1} Dream", amount),
+                    format!("+{:.1} Dream", amount),
                     popup_pos,
                     config.clone(),
                     Some(DREAM_POPUP_FONT_SIZE),

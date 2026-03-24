@@ -7,6 +7,14 @@ use hw_core::soul::{DamnedSoul, IdleBehavior, IdleState};
 use hw_jobs::AssignedTask;
 use hw_spatial::{GatheringSpotSpatialGrid, SpatialGrid, SpatialGridOps};
 
+type GatheringSpawnSoulQuery<'w, 's> = Query<
+    'w,
+    's,
+    (Entity, &'static Transform, &'static IdleState, &'static AssignedTask),
+    (With<DamnedSoul>, Without<ParticipatingIn>, Without<CommandedBy>),
+>;
+
+#[allow(clippy::too_many_arguments)]
 /// 集会スポット発生判定システム (純粋ロジック・Execute Phase)
 ///
 /// GatheringReadiness をティックし、発生条件が揃ったら GatheringSpawnRequest を送信する。
@@ -14,14 +22,7 @@ use hw_spatial::{GatheringSpotSpatialGrid, SpatialGrid, SpatialGridOps};
 pub fn gathering_spawn_logic_system(
     time: Res<Time>,
     mut commands: Commands,
-    q_souls: Query<
-        (Entity, &Transform, &IdleState, &AssignedTask),
-        (
-            With<DamnedSoul>,
-            Without<ParticipatingIn>,
-            Without<CommandedBy>,
-        ),
-    >,
+    q_souls: GatheringSpawnSoulQuery,
     spot_grid: Res<GatheringSpotSpatialGrid>,
     soul_grid: Res<SpatialGrid>,
     mut nearby_buf: Local<Vec<Entity>>,

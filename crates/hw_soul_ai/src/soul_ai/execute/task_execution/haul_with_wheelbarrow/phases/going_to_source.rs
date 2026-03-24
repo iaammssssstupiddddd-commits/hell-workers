@@ -27,8 +27,8 @@ pub fn handle(
     }
 
     // 搬入先の空き容量チェック
-    if let WheelbarrowDestination::Stockpile(stockpile) = data.destination {
-        if let Ok((_, _, stock, stored_items)) = ctx.queries.storage.stockpiles.get(stockpile) {
+    if let WheelbarrowDestination::Stockpile(stockpile) = data.destination
+        && let Ok((_, _, stock, stored_items)) = ctx.queries.storage.stockpiles.get(stockpile) {
             let current_count = stored_items.map(|s| s.len()).unwrap_or(0);
             let incoming = ctx
                 .queries
@@ -43,7 +43,6 @@ pub fn handle(
                 return;
             }
         }
-    }
 
     *ctx.task = AssignedTask::HaulWithWheelbarrow(HaulWithWheelbarrowData {
         phase: HaulWithWheelbarrowPhase::Loading,

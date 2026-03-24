@@ -36,12 +36,11 @@ pub fn update_tank_visual_system(
 
         if let Ok(children) = q_children.get(entity) {
             for child in children.iter() {
-                if let Ok((kind, mut sprite)) = q_visual_layers.get_mut(child) {
-                    if *kind == VisualLayerKind::Struct {
+                if let Ok((kind, mut sprite)) = q_visual_layers.get_mut(child)
+                    && *kind == VisualLayerKind::Struct {
                         sprite.image = image_handle;
                         break;
                     }
-                }
             }
         }
     }

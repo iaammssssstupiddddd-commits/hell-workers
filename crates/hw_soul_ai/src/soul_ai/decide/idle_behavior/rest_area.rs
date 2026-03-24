@@ -29,15 +29,21 @@ pub fn rest_area_has_capacity(
     occupant_count + reserved_count + pending_count < rest_area.capacity
 }
 
+pub type RestAreasQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static Transform,
+        &'static RestArea,
+        Option<&'static RestAreaOccupants>,
+        Option<&'static RestAreaReservations>,
+    ),
+>;
+
 pub fn find_nearest_available_rest_area(
     pos: Vec2,
-    q_rest_areas: &Query<(
-        Entity,
-        &Transform,
-        &RestArea,
-        Option<&RestAreaOccupants>,
-        Option<&RestAreaReservations>,
-    )>,
+    q_rest_areas: &RestAreasQuery,
     pending_reservations: &HashMap<Entity, usize>,
 ) -> Option<(Entity, Vec2)> {
     q_rest_areas

@@ -11,26 +11,50 @@ use rand::Rng;
 use rand::seq::SliceRandom;
 use std::collections::HashMap;
 
+
+type ConversationInitiatorQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static Transform,
+        &'static IdleState,
+        &'static mut ConversationInitiator,
+    ),
+    (
+        With<DamnedSoul>,
+        Without<ConversationParticipant>,
+        Without<ConversationCooldown>,
+    ),
+>;
+
+type ConversationTargetQuery<'w, 's> = Query<
+    'w,
+    's,
+    (Entity, &'static IdleState),
+    (
+        With<DamnedSoul>,
+        Without<ConversationParticipant>,
+        Without<ConversationCooldown>,
+    ),
+>;
+
+type AvailableSoulQuery<'w, 's> = Query<
+    'w,
+    's,
+    Entity,
+    (
+        With<DamnedSoul>,
+        Without<ConversationParticipant>,
+        Without<ConversationCooldown>,
+    ),
+>;
 pub fn check_conversation_triggers(
     time: Res<Time>,
     grid: Res<SpatialGrid>,
     mut nearby_buf: Local<Vec<Entity>>,
-    mut q_initiator: Query<
-        (Entity, &Transform, &IdleState, &mut ConversationInitiator),
-        (
-            With<DamnedSoul>,
-            Without<ConversationParticipant>,
-            Without<ConversationCooldown>,
-        ),
-    >,
-    q_target: Query<
-        (Entity, &IdleState),
-        (
-            With<DamnedSoul>,
-            Without<ConversationParticipant>,
-            Without<ConversationCooldown>,
-        ),
-    >,
+    mut q_initiator: ConversationInitiatorQuery,
+    q_target: ConversationTargetQuery,
     mut ev_writer: MessageWriter<RequestConversation>,
 ) {
     let dt = time.delta_secs();
@@ -94,14 +118,7 @@ pub fn check_conversation_triggers(
 pub fn handle_conversation_requests(
     mut commands: Commands,
     mut ev_reader: MessageReader<RequestConversation>,
-    q_souls: Query<
-        Entity,
-        (
-            With<DamnedSoul>,
-            Without<ConversationParticipant>,
-            Without<ConversationCooldown>,
-        ),
-    >,
+    q_souls: AvailableSoulQuery,
 ) {
     for event in ev_reader.read() {
         if q_souls.get(event.initiator).is_ok() && q_souls.get(event.target).is_ok() {

@@ -10,6 +10,8 @@ use hw_ui::selection::{
 };
 use hw_world::zones::{Site, Yard};
 
+type PlaceBlueprintResult = Option<(Entity, Vec<(i32, i32)>, Vec2)>;
+
 fn is_replaceable_wall_at(
     world_map: &WorldMap,
     q_buildings: &Query<&Building>,
@@ -40,6 +42,7 @@ fn is_wall_or_door_at(
     false
 }
 
+#[allow(clippy::too_many_arguments)]
 /// Attempts to spawn a Blueprint entity for the given building type at the given grid position.
 /// Returns `Some((entity, occupied_grids, spawn_pos))` on success, `None` if placement is blocked.
 pub(super) fn place_building_blueprint(
@@ -52,7 +55,7 @@ pub(super) fn place_building_blueprint(
     q_blueprints_by_entity: &Query<&Blueprint>,
     q_sites: &Query<&Site>,
     q_yards: &Query<&Yard>,
-) -> Option<(Entity, Vec<(i32, i32)>, Vec2)> {
+) -> PlaceBlueprintResult {
     let geometry = building_geometry(building_type, grid, RIVER_Y_MIN);
     let replace_wall_entity = {
         let read_world = WorldMapRef(world_map);

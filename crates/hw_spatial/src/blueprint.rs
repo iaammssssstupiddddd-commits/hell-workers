@@ -2,6 +2,13 @@ use super::grid::{GridData, SpatialGridOps};
 use bevy::prelude::*;
 use hw_jobs::model::Blueprint;
 
+type SpatialUpdateQuery<'w, 's, T> = Query<
+    'w,
+    's,
+    (Entity, &'static Transform),
+    (With<T>, Or<(Added<T>, Changed<Transform>)>),
+>;
+
 /// ブループリント用の空間グリッド
 #[derive(Resource, Default)]
 pub struct BlueprintSpatialGrid(pub GridData);
@@ -33,7 +40,7 @@ impl SpatialGridOps for BlueprintSpatialGrid {
 
 pub fn update_blueprint_spatial_grid_system<T: Component>(
     mut grid: ResMut<BlueprintSpatialGrid>,
-    query: Query<(Entity, &Transform), (With<T>, Or<(Added<T>, Changed<Transform>)>)>,
+    query: SpatialUpdateQuery<T>,
     mut removed: RemovedComponents<T>,
 ) {
     for (entity, transform) in query.iter() {
@@ -47,10 +54,7 @@ pub fn update_blueprint_spatial_grid_system<T: Component>(
 /// `Blueprint` コンポーネントに特化した空間グリッド更新システム。
 pub fn update_blueprint_spatial_grid_system_blueprint(
     grid: ResMut<BlueprintSpatialGrid>,
-    query: Query<
-        (Entity, &Transform),
-        (With<Blueprint>, Or<(Added<Blueprint>, Changed<Transform>)>),
-    >,
+    query: SpatialUpdateQuery<Blueprint>,
     removed: RemovedComponents<Blueprint>,
 ) {
     update_blueprint_spatial_grid_system::<Blueprint>(grid, query, removed);

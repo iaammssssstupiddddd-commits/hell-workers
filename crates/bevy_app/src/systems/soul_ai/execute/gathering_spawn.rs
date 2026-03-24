@@ -6,6 +6,17 @@ use crate::{GatheringSpawnRequest, OnGatheringParticipated};
 use hw_core::relationships::{CommandedBy, ParticipatingIn};
 use hw_visual::{GatheringVisualHandles, soul::gathering_spawn::spawn_gathering_spot};
 
+type GatheringInitiatorQuery<'w, 's> = Query<
+    'w,
+    's,
+    (&'static IdleState, &'static AssignedTask),
+    (
+        With<DamnedSoul>,
+        Without<ParticipatingIn>,
+        Without<CommandedBy>,
+    ),
+>;
+
 /// 集会スポットの視覚アダプターシステム (Execute Phase)
 ///
 /// `GatheringSpawnRequest` を受け取り、stale request を再検証したうえで
@@ -14,14 +25,7 @@ use hw_visual::{GatheringVisualHandles, soul::gathering_spawn::spawn_gathering_s
 pub fn gathering_spawn_system(
     mut commands: Commands,
     gathering_visual_handles: Res<GatheringVisualHandles>,
-    q_initiators: Query<
-        (&IdleState, &AssignedTask),
-        (
-            With<DamnedSoul>,
-            Without<ParticipatingIn>,
-            Without<CommandedBy>,
-        ),
-    >,
+    q_initiators: GatheringInitiatorQuery,
     mut spawn_requests: MessageReader<GatheringSpawnRequest>,
 ) {
     for request in spawn_requests.read() {

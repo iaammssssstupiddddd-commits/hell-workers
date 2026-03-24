@@ -96,7 +96,7 @@ pub(super) fn setup(
     ));
 
     // --- asset catalog 生成 ---
-    let game_assets = create_game_assets(&asset_server, &mut *images);
+    let game_assets = create_game_assets(&asset_server, &mut images);
     commands.insert_resource(game_assets);
 }
 

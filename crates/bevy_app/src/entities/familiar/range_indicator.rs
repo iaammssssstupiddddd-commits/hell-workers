@@ -6,21 +6,25 @@ use hw_core::constants::Z_AURA;
 
 use super::components::*;
 
+type RangeIndicatorQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static FamiliarRangeIndicator,
+        &'static mut Transform,
+        &'static mut Sprite,
+        Option<&'static mut FamiliarAura>,
+        Option<&'static AuraLayer>,
+    ),
+    Without<Familiar>,
+>;
+
 /// オーラのパルスアニメーションと位置追従システム
 pub fn update_familiar_range_indicator(
     time: Res<Time>,
     q_familiars: Query<(Entity, &Transform, &Familiar, &FamiliarAnimation)>,
     selected: Res<crate::interface::selection::SelectedEntity>,
-    mut q_indicators: Query<
-        (
-            &FamiliarRangeIndicator,
-            &mut Transform,
-            &mut Sprite,
-            Option<&mut FamiliarAura>,
-            Option<&AuraLayer>,
-        ),
-        Without<Familiar>,
-    >,
+    mut q_indicators: RangeIndicatorQuery,
 ) {
     let selected_fam = selected.0;
 

@@ -19,11 +19,10 @@ pub fn find_collect_sand_source(
     if let Some(best) = find_sand_pile(target_pos, task_area_opt, queries, shadow) {
         return Some(best);
     }
-    if task_area_opt.is_some() {
-        if let Some(best) = find_sand_pile(target_pos, None, queries, shadow) {
+    if task_area_opt.is_some()
+        && let Some(best) = find_sand_pile(target_pos, None, queries, shadow) {
             return Some(best);
         }
-    }
     if let Some(best) = scan_terrain_tiles(
         target_pos,
         task_area_opt,
@@ -48,11 +47,10 @@ pub fn find_collect_bone_source(
     if let Some(best) = find_bone_pile(target_pos, task_area_opt, queries, shadow) {
         return Some(best);
     }
-    if task_area_opt.is_some() {
-        if let Some(best) = find_bone_pile(target_pos, None, queries, shadow) {
+    if task_area_opt.is_some()
+        && let Some(best) = find_bone_pile(target_pos, None, queries, shadow) {
             return Some(best);
         }
-    }
     if let Some(best) = scan_terrain_tiles(
         target_pos,
         task_area_opt,
@@ -81,7 +79,7 @@ fn find_sand_pile(
             designation_opt.is_none()
                 && workers_opt.map(|w| w.len()).unwrap_or(0) == 0
                 && source_not_reserved(*entity, queries, shadow)
-                && area_filter.map_or(true, |a| a.contains(transform.translation.truncate()))
+                && area_filter.is_none_or(|a| a.contains(transform.translation.truncate()))
         })
         .min_by(|(_, t1, _, _), (_, t2, _, _)| {
             let d1 = t1.translation.truncate().distance_squared(target_pos);
@@ -104,7 +102,7 @@ fn find_bone_pile(
             designation_opt.is_none()
                 && workers_opt.map(|w| w.len()).unwrap_or(0) == 0
                 && source_not_reserved(*entity, queries, shadow)
-                && area_filter.map_or(true, |a| a.contains(transform.translation.truncate()))
+                && area_filter.is_none_or(|a| a.contains(transform.translation.truncate()))
         })
         .min_by(|(_, t1, _, _), (_, t2, _, _)| {
             let d1 = t1.translation.truncate().distance_squared(target_pos);
@@ -161,11 +159,10 @@ fn scan_terrain_tiles(
             }
 
             let tile_pos = WorldMap::grid_to_world(gx, gy);
-            if let Some(area) = area_filter {
-                if !area.contains(tile_pos) {
+            if let Some(area) = area_filter
+                && !area.contains(tile_pos) {
                     continue;
                 }
-            }
 
             let dist_sq = tile_pos.distance_squared(target_pos);
             match best {

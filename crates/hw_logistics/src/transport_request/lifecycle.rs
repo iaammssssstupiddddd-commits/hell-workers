@@ -13,17 +13,23 @@ use hw_world::zones::Yard;
 
 use crate::types::ResourceItem;
 
+type AnchorCleanupRequestQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static TransportRequest,
+        Option<&'static super::TransportDemand>,
+        Option<&'static TaskWorkers>,
+        Option<&'static ManualTransportRequest>,
+        Option<&'static TransportRequestFixedSource>,
+    ),
+>;
+
 /// アンカー（搬入先）が消失した request を close する
 pub fn transport_request_anchor_cleanup_system(
     mut commands: Commands,
-    q_requests: Query<(
-        Entity,
-        &TransportRequest,
-        Option<&super::TransportDemand>,
-        Option<&TaskWorkers>,
-        Option<&ManualTransportRequest>,
-        Option<&TransportRequestFixedSource>,
-    )>,
+    q_requests: AnchorCleanupRequestQuery,
     q_any: Query<Entity>,
     q_items: Query<Entity, With<ResourceItem>>,
     q_familiars: Query<Entity, With<Familiar>>,
@@ -42,11 +48,10 @@ pub fn transport_request_anchor_cleanup_system(
         }
 
         // 2. 需要がゼロになり、かつ作業中のワーカーもいない
-        if let Some(demand) = demand_opt {
-            if demand.desired_slots == 0 && workers == 0 {
+        if let Some(demand) = demand_opt
+            && demand.desired_slots == 0 && workers == 0 {
                 should_close = true;
             }
-        }
 
         // 3. 発行者（Familiar/Yard）が消失した
         if q_any.get(req.issued_by).is_err()

@@ -15,6 +15,7 @@ use hw_ui::area_edit::{AreaEditSession, apply_area_edit_drag};
 use hw_ui::camera::{MainCamera, world_cursor_pos};
 use hw_world::zones::Site;
 
+#[allow(clippy::too_many_arguments)]
 pub(super) fn handle_active_drag_input(
     buttons: &ButtonInput<MouseButton>,
     q_window: &Query<&Window, With<PrimaryWindow>>,

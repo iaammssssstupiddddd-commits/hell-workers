@@ -51,7 +51,7 @@ pub fn grant_leases(
             continue;
         }
 
-        let mut final_destination = candidate.destination.clone();
+        let mut final_destination = candidate.destination;
 
         if let WheelbarrowDestination::Stockpile(_) = &candidate.destination {
             let count = lease_items.len();

@@ -157,7 +157,7 @@ pub fn familiar_ai_state_system(params: FamiliarAiStateDecisionParams) {
                         q_resting: &q_resting,
                         q_cooldown: &q_rest_cooldown,
                         recruitment_reservations: &mut recruitment_reservations,
-                        scratch: &mut *nearby_buf,
+                        scratch: &mut nearby_buf,
                     };
                     process_recruitment(&mut ctx)
                 };
@@ -305,7 +305,7 @@ pub fn familiar_ai_state_system(params: FamiliarAiStateDecisionParams) {
                         q_resting: &q_resting,
                         q_cooldown: &q_rest_cooldown,
                         recruitment_reservations: &mut recruitment_reservations,
-                        scratch: &mut *nearby_buf,
+                        scratch: &mut nearby_buf,
                     };
                     process_recruitment(&mut ctx)
                 };

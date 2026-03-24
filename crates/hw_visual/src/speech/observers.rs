@@ -20,28 +20,58 @@ use rand::Rng;
 
 use super::conversation::events::{ConversationTone, ConversationToneTriggered};
 
+type SoulTaskSpeechQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static GlobalTransform,
+        Option<&'static CommandedBy>,
+        Option<&'static mut SpeechHistory>,
+    ),
+    (With<DamnedSoul>, Without<Familiar>),
+>;
+
+type FamiliarTaskSpeechQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static GlobalTransform,
+        Option<&'static FamiliarVoice>,
+        Option<&'static mut SpeechHistory>,
+    ),
+    (With<Familiar>, Without<DamnedSoul>),
+>;
+
+type SoulHistoryQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static GlobalTransform,
+        Option<&'static mut SpeechHistory>,
+    ),
+    (With<DamnedSoul>, Without<Familiar>),
+>;
+
+type FamiliarVoiceQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static GlobalTransform,
+        Option<&'static FamiliarVoice>,
+        Option<&'static mut SpeechHistory>,
+    ),
+    With<Familiar>,
+>;
+
+#[allow(clippy::too_many_arguments)]
 /// タスク開始時の speech bubble 発火システム（MessageReader ベース）
 pub fn speech_on_task_assigned_system(
     mut reader: MessageReader<OnTaskAssigned>,
     mut commands: Commands,
     handles: Res<SpeechHandles>,
     mut tone_writer: MessageWriter<ConversationToneTriggered>,
-    mut q_souls: Query<
-        (
-            &GlobalTransform,
-            Option<&CommandedBy>,
-            Option<&mut SpeechHistory>,
-        ),
-        (With<DamnedSoul>, Without<Familiar>),
-    >,
-    mut q_familiars: Query<
-        (
-            &GlobalTransform,
-            Option<&FamiliarVoice>,
-            Option<&mut SpeechHistory>,
-        ),
-        (With<Familiar>, Without<DamnedSoul>),
-    >,
+    mut q_souls: SoulTaskSpeechQuery,
+    mut q_familiars: FamiliarTaskSpeechQuery,
     q_bubbles: Query<(Entity, &SpeechBubble), With<FamiliarBubble>>,
     time: Res<Time>,
 ) {
@@ -74,8 +104,8 @@ pub fn speech_on_task_assigned_system(
                 current_time,
             );
 
-            if let Some(uc) = under_command {
-                if let Ok((fam_transform, voice, fam_history_opt)) = q_familiars.get_mut(uc.0) {
+            if let Some(uc) = under_command
+                && let Ok((fam_transform, voice, fam_history_opt)) = q_familiars.get_mut(uc.0) {
                     let fam_pos = fam_transform.translation();
                     let phrase = LatinPhrase::from_work_type(event.work_type);
                     emit_familiar_with_history(
@@ -92,7 +122,6 @@ pub fn speech_on_task_assigned_system(
                         current_time,
                     );
                 }
-            }
         }
     }
 }
@@ -102,10 +131,7 @@ pub fn speech_on_task_completed_system(
     mut reader: MessageReader<OnTaskCompleted>,
     mut commands: Commands,
     handles: Res<SpeechHandles>,
-    mut q_souls: Query<
-        (&GlobalTransform, Option<&mut SpeechHistory>),
-        (With<DamnedSoul>, Without<Familiar>),
-    >,
+    mut q_souls: SoulHistoryQuery,
     time: Res<Time>,
 ) {
     for event in reader.read() {
@@ -133,14 +159,7 @@ pub fn on_soul_recruited(
     mut commands: Commands,
     handles: Res<SpeechHandles>,
     mut tone_writer: MessageWriter<ConversationToneTriggered>,
-    mut q_familiars: Query<
-        (
-            &GlobalTransform,
-            Option<&FamiliarVoice>,
-            Option<&mut SpeechHistory>,
-        ),
-        With<Familiar>,
-    >,
+    mut q_familiars: FamiliarVoiceQuery,
     q_bubbles: Query<(Entity, &SpeechBubble), With<FamiliarBubble>>,
     time: Res<Time>,
 ) {
@@ -181,10 +200,7 @@ pub fn on_exhausted(
     on: On<OnExhausted>,
     mut commands: Commands,
     handles: Res<SpeechHandles>,
-    mut q_souls: Query<
-        (&GlobalTransform, Option<&mut SpeechHistory>),
-        (With<DamnedSoul>, Without<Familiar>),
-    >,
+    mut q_souls: SoulHistoryQuery,
     time: Res<Time>,
 ) {
     let soul_entity = on.entity;
@@ -209,10 +225,7 @@ pub fn on_stress_breakdown(
     on: On<OnStressBreakdown>,
     mut commands: Commands,
     handles: Res<SpeechHandles>,
-    mut q_souls: Query<
-        (&GlobalTransform, Option<&mut SpeechHistory>),
-        (With<DamnedSoul>, Without<Familiar>),
-    >,
+    mut q_souls: SoulHistoryQuery,
     time: Res<Time>,
 ) {
     let soul_entity = on.entity;
@@ -312,14 +325,7 @@ pub fn on_encouraged(
     on: On<OnEncouraged>,
     mut commands: Commands,
     handles: Res<SpeechHandles>,
-    mut q_familiars: Query<
-        (
-            &GlobalTransform,
-            Option<&FamiliarVoice>,
-            Option<&mut SpeechHistory>,
-        ),
-        With<Familiar>,
-    >,
+    mut q_familiars: FamiliarVoiceQuery,
     q_bubbles: Query<(Entity, &SpeechBubble), With<FamiliarBubble>>,
     time: Res<Time>,
 ) {

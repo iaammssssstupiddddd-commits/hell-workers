@@ -9,6 +9,7 @@ use crate::handles::WorkIconHandles;
 use hw_core::soul::DamnedSoul;
 use hw_core::visual_mirror::task::{SoulTaskPhaseVisual, SoulTaskVisualState};
 
+#[allow(clippy::type_complexity)]
 pub fn spawn_worker_indicators_system(
     mut commands: Commands,
     handles: Res<WorkIconHandles>,
@@ -53,6 +54,7 @@ pub fn spawn_worker_indicators_system(
     }
 }
 
+#[allow(clippy::type_complexity)]
 pub fn update_worker_indicators_system(
     mut commands: Commands,
     time: Res<Time>,
@@ -66,8 +68,8 @@ pub fn update_worker_indicators_system(
         let mut should_despawn = true;
         let worker_entity: Entity = child_of.parent();
 
-        if let Ok(task_vs) = q_workers.get(worker_entity) {
-            if matches!(task_vs.phase, SoulTaskPhaseVisual::Build) && task_vs.link_target.is_some()
+        if let Ok(task_vs) = q_workers.get(worker_entity)
+            && matches!(task_vs.phase, SoulTaskPhaseVisual::Build) && task_vs.link_target.is_some()
             {
                 should_despawn = false;
 
@@ -75,7 +77,6 @@ pub fn update_worker_indicators_system(
                 hammer_transform.translation =
                     Vec3::new(0.0, 32.0 + bob, Z_VISUAL_EFFECT - Z_CHARACTER);
             }
-        }
 
         if should_despawn {
             info!("VISUAL: Despawning hammer for worker {:?}", worker_entity);

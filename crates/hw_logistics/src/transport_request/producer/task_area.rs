@@ -22,6 +22,49 @@ use super::stockpile_group::{
     find_nearest_group_for_item_indexed,
 };
 
+type StockpilesDetailQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static Transform,
+        &'static Stockpile,
+        Option<&'static StoredItems>,
+        Option<&'static BelongsTo>,
+        Option<&'static BucketStorage>,
+    ),
+>;
+
+type FreeItemsQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static Transform,
+        &'static ResourceItem,
+        &'static Visibility,
+        Option<&'static BelongsTo>,
+    ),
+    (
+        Without<Designation>,
+        Without<TaskWorkers>,
+        Without<ReservedForTask>,
+        Without<ManualHaulPinnedSource>,
+        Without<hw_core::relationships::StoredIn>,
+    ),
+>;
+
+type StockpilesQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static Transform,
+        &'static Stockpile,
+        Option<&'static StoredItems>,
+        Option<&'static BucketStorage>,
+    ),
+>;
+
 struct GroupEvalContext {
     representative: Entity,
     owner: Option<Entity>,
@@ -41,14 +84,7 @@ impl GroupEvalContext {
 
 fn build_group_eval_contexts(
     groups: &[StockpileGroup],
-    q_stockpiles_detail: &Query<(
-        Entity,
-        &Transform,
-        &Stockpile,
-        Option<&StoredItems>,
-        Option<&BelongsTo>,
-        Option<&BucketStorage>,
-    )>,
+    q_stockpiles_detail: &StockpilesDetailQuery<'_, '_>,
 ) -> Vec<GroupEvalContext> {
     let mut contexts = Vec::with_capacity(groups.len());
 
@@ -108,16 +144,7 @@ fn pick_representative_resource_type_per_group(
     groups: &[StockpileGroup],
     spatial_index: &StockpileGroupSpatialIndex,
     contexts: &[GroupEvalContext],
-    q_free_items: &Query<
-        (&Transform, &ResourceItem, &Visibility, Option<&BelongsTo>),
-        (
-            Without<Designation>,
-            Without<TaskWorkers>,
-            Without<ReservedForTask>,
-            Without<ManualHaulPinnedSource>,
-            Without<hw_core::relationships::StoredIn>,
-        ),
-    >,
+    q_free_items: &FreeItemsQuery<'_, '_>,
 ) -> (Vec<Option<ResourceType>>, u32, u32) {
     let mut best_types: Vec<Option<(ResourceType, f32)>> = vec![None; groups.len()];
     let mut free_items_scanned = 0u32;
@@ -172,39 +199,18 @@ fn pick_representative_resource_type_per_group(
     (representative_types, free_items_scanned, items_matched)
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn task_area_auto_haul_system(
     mut commands: Commands,
     stockpile_grid: Res<StockpileSpatialGrid>,
     q_yards: Query<(Entity, &Yard)>,
-    q_stockpiles: Query<(
-        Entity,
-        &Transform,
-        &Stockpile,
-        Option<&StoredItems>,
-        Option<&BucketStorage>,
-    )>,
-    q_stockpiles_detail: Query<(
-        Entity,
-        &Transform,
-        &Stockpile,
-        Option<&StoredItems>,
-        Option<&BelongsTo>,
-        Option<&BucketStorage>,
-    )>,
+    q_stockpiles: StockpilesQuery,
+    q_stockpiles_detail: StockpilesDetailQuery,
     q_stockpile_requests: Query<
         (Entity, &TransportRequest, Option<&TaskWorkers>),
         Without<ManualTransportRequest>,
     >,
-    q_free_items: Query<
-        (&Transform, &ResourceItem, &Visibility, Option<&BelongsTo>),
-        (
-            Without<Designation>,
-            Without<TaskWorkers>,
-            Without<ReservedForTask>,
-            Without<ManualHaulPinnedSource>,
-            Without<hw_core::relationships::StoredIn>,
-        ),
-    >,
+    q_free_items: FreeItemsQuery,
     mut metrics: ResMut<TransportRequestMetrics>,
 ) {
     let started_at = Instant::now();

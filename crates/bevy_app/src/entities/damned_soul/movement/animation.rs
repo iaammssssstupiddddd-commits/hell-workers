@@ -55,20 +55,26 @@ fn select_soul_image<'a>(
     }
 }
 
+type AnimationQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static mut Transform,
+        &'static mut Sprite,
+        &'static mut crate::entities::damned_soul::AnimationState,
+        &'static DamnedSoul,
+        &'static IdleState,
+        &'static AssignedTask,
+        Option<&'static StressBreakdown>,
+        Option<&'static ConversationExpression>,
+    ),
+>;
+
 /// アニメーションシステム
 pub fn animation_system(
     time: Res<Time>,
     game_assets: Res<GameAssets>,
-    mut query: Query<(
-        &mut Transform,
-        &mut Sprite,
-        &mut crate::entities::damned_soul::AnimationState,
-        &DamnedSoul,
-        &IdleState,
-        &AssignedTask,
-        Option<&StressBreakdown>,
-        Option<&ConversationExpression>,
-    )>,
+    mut query: AnimationQuery,
 ) {
     for (mut transform, mut sprite, mut anim, soul, idle, task, breakdown_opt, expression_opt) in
         query.iter_mut()

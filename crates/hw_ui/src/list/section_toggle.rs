@@ -6,14 +6,22 @@ use crate::components::{
 use crate::theme::UiTheme;
 use bevy::prelude::*;
 
+type SectionToggleInteractionQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static Interaction,
+        &'static SectionToggle,
+        &'static mut BackgroundColor,
+    ),
+    (Changed<Interaction>, With<Button>),
+>;
+
 /// SectionToggle ボタンの押下/ホバーに応じて
 /// 折りたたみ状態コンポーネントを追加/削除し、ボタン色を更新する
 pub fn entity_list_section_toggle_system(
     mut commands: Commands,
-    mut interaction_query: Query<
-        (&Interaction, &SectionToggle, &mut BackgroundColor),
-        (Changed<Interaction>, With<Button>),
-    >,
+    mut interaction_query: SectionToggleInteractionQuery,
     q_folded: Query<Has<SectionFolded>>,
     unassigned_folded_query: Query<(Entity, Has<UnassignedFolded>), With<UnassignedSoulSection>>,
     theme: Res<UiTheme>,

@@ -30,6 +30,7 @@ use bevy::prelude::*;
 pub struct VisualPlugin;
 
 impl Plugin for VisualPlugin {
+    #[allow(clippy::match_like_matches_macro)]
     fn build(&self, app: &mut App) {
         app.add_plugins(HwVisualPlugin);
 

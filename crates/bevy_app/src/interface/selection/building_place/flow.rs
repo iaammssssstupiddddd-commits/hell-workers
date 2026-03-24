@@ -9,6 +9,7 @@ use hw_world::zones::{Site, Yard};
 use super::companion::parent_building_type;
 use super::placement::{place_building_blueprint, try_place_bucket_storage_companion};
 
+#[allow(clippy::too_many_arguments)]
 /// Handles the companion placement flow when `companion_state` is active.
 /// Returns `true` if the flow consumed the click (caller should `return`).
 pub(super) fn handle_companion_flow(

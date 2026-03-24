@@ -74,6 +74,7 @@ fn score_recruit(
 pub struct RecruitmentManager;
 
 impl RecruitmentManager {
+    #[allow(clippy::too_many_arguments)]
     /// 条件に合う魂を検索する (リクルート用)
     pub fn find_best_recruit<G: SpatialGridOps>(
         fam_pos: Vec2,
@@ -190,6 +191,7 @@ impl RecruitmentManager {
         overall_best.map(|(entity, _)| entity)
     }
 
+    #[allow(clippy::too_many_arguments)]
     /// 即座にリクルートを試みる（近場の候補）
     ///
     /// メッセージ発行は行わない。呼び出し元が `Entity` を受け取って AddMember リクエストを発行する。
@@ -225,6 +227,7 @@ impl RecruitmentManager {
         Some(recruit_entity)
     }
 
+    #[allow(clippy::too_many_arguments)]
     /// スカウトを開始する（遠方の候補を検索）
     pub fn start_scouting<G: SpatialGridOps>(
         fam_pos: Vec2,

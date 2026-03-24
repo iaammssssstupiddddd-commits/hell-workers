@@ -13,6 +13,7 @@ use bevy::prelude::*;
 
 pub use text_wrap::{TOOLTIP_WRAP_LIMIT_BODY, TOOLTIP_WRAP_LIMIT_ICON_ROW, wrap_tooltip_text};
 
+#[allow(clippy::too_many_arguments)]
 pub fn rebuild_tooltip_content(
     commands: &mut Commands,
     tooltip_root: Entity,

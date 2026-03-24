@@ -116,6 +116,7 @@ pub(super) fn set_area_task_mode(
     next_play_mode.set(PlayMode::TaskDesignation);
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(super) fn build_mode_text(
     play_mode: &PlayMode,
     build_context: &BuildContext,

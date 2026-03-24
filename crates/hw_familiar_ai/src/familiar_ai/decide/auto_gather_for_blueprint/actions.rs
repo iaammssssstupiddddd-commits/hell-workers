@@ -89,15 +89,13 @@ pub fn assign_needed_auto_designations(
                 continue;
             };
 
-            let mut path_checks = 0usize;
-            for candidate in candidates {
+            for (path_checks, candidate) in candidates.iter().enumerate() {
                 if remaining == 0 {
                     break;
                 }
                 if path_checks >= BLUEPRINT_AUTO_GATHER_PATH_CHECK_LIMIT_PER_STAGE {
                     break;
                 }
-                path_checks += 1;
 
                 if !is_reachable(owner_info.path_start, candidate.pos, world_map, pf_context) {
                     continue;

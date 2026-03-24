@@ -37,6 +37,7 @@ fn pos_to_cell(pos: Vec2, cell_size: f32) -> (i32, i32) {
     )
 }
 
+#[allow(clippy::type_complexity)]
 pub fn build_stockpile_groups(
     stockpile_grid: &StockpileSpatialGrid,
     active_yards: &[(Entity, Yard)],

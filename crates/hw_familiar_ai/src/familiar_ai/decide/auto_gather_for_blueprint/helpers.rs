@@ -102,11 +102,10 @@ pub fn resolve_owner(
         if owner_info.area.contains(pos) {
             inside_area.push((*owner, owner_info));
         }
-        if let Some(yard) = owner_info.yard.as_ref() {
-            if yard.contains(pos) {
+        if let Some(yard) = owner_info.yard.as_ref()
+            && yard.contains(pos) {
                 inside_yard.push((*owner, owner_info));
             }
-        }
     }
 
     if !inside_area.is_empty() {
@@ -215,7 +214,7 @@ pub fn div_ceil_u32(value: u32, divisor: u32) -> u32 {
     if value == 0 {
         0
     } else {
-        (value + divisor - 1) / divisor
+        value.div_ceil(divisor)
     }
 }
 

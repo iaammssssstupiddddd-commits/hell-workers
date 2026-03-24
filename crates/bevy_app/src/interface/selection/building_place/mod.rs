@@ -23,6 +23,7 @@ use companion::make_companion_placement;
 use flow::handle_companion_flow;
 use placement::place_building_blueprint;
 
+#[allow(clippy::too_many_arguments)]
 pub fn blueprint_placement(
     buttons: Res<ButtonInput<MouseButton>>,
     q_window: Query<&Window, With<bevy::window::PrimaryWindow>>,

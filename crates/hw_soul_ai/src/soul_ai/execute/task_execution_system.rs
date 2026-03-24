@@ -16,6 +16,7 @@ use crate::soul_ai::execute::task_execution::types::AssignedTask;
 use crate::soul_ai::helpers::query_types::TaskExecutionSoulQuery;
 use crate::soul_ai::helpers::work::unassign_task;
 
+#[allow(clippy::too_many_arguments)]
 pub fn task_execution_system(
     mut commands: Commands,
     mut q_souls: TaskExecutionSoulQuery,
@@ -77,7 +78,7 @@ pub fn task_execution_system(
             dest: &mut dest,
             path: &mut path,
             inventory: &mut inventory,
-            pf_context: &mut *pf_context,
+            pf_context: &mut pf_context,
             queries: &mut queries,
         };
 
@@ -87,12 +88,12 @@ pub fn task_execution_system(
             &soul_handles,
             &time,
             world_map.as_ref(),
-            breakdown_opt.as_deref(),
+            breakdown_opt,
             &q_wheelbarrows,
         );
 
-        if was_busy && matches!(*task, AssignedTask::None) {
-            if let Some(work_type) = old_work_type {
+        if was_busy && matches!(*task, AssignedTask::None)
+            && let Some(work_type) = old_work_type {
                 commands.trigger(OnTaskCompleted {
                     entity: soul_entity,
                     task_entity: old_task_entity.unwrap_or(Entity::PLACEHOLDER),
@@ -106,6 +107,5 @@ pub fn task_execution_system(
                     soul_entity
                 );
             }
-        }
     }
 }

@@ -138,8 +138,8 @@ pub(super) fn candidate_snapshot(
     let is_build_task = designation.work_type == WorkType::Build;
 
     if let Some(area) = task_area_opt {
-        if !area.contains(pos) {
-            if !is_managed_by_me
+        if !area.contains(pos)
+            && !is_managed_by_me
                 && !is_issued_by_yard
                 && !is_mixer_task
                 && !in_yard
@@ -147,7 +147,6 @@ pub(super) fn candidate_snapshot(
             {
                 return None;
             }
-        }
     } else if !is_managed_by_me
         && !is_issued_by_yard
         && !is_mixer_task

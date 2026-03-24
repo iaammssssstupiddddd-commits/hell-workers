@@ -113,7 +113,7 @@ pub fn handle_refine_task(
 
                 if progress >= 1.0 {
                     // 原料消費
-                    let _ = storage.consume_materials_for_refining(water_count);
+                    storage.consume_materials_for_refining(water_count);
                     if let Some(water_entity) = ctx.queries.resource_items.iter().find_map(
                         |(res_entity, _, _, res_item, stored_in, _)| {
                             if res_item.0 == ResourceType::Water

@@ -47,6 +47,7 @@ fn particle_sway_for_quality(quality: DreamQuality) -> f32 {
     }
 }
 
+#[allow(clippy::type_complexity)]
 pub fn ensure_dream_visual_state_system(
     mut commands: Commands,
     q_souls: Query<
@@ -67,6 +68,7 @@ pub fn ensure_dream_visual_state_system(
     }
 }
 
+#[allow(clippy::type_complexity)]
 pub fn dream_particle_spawn_system(
     mut commands: Commands,
     time: Res<Time>,
@@ -141,6 +143,7 @@ pub fn dream_particle_spawn_system(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn rest_area_dream_particle_spawn_system(
     mut commands: Commands,
     time: Res<Time>,
@@ -179,12 +182,11 @@ pub fn rest_area_dream_particle_spawn_system(
 
     let mut target_pos = Vec2::new(viewport_size.x - 80.0, 40.0);
 
-    if let Some(entity) = ui_nodes.get_slot(UiSlot::DreamPoolIcon) {
-        if let Ok((computed, transform)) = q_ui_transform.get(entity) {
+    if let Some(entity) = ui_nodes.get_slot(UiSlot::DreamPoolIcon)
+        && let Ok((computed, transform)) = q_ui_transform.get(entity) {
             let center = transform.translation * computed.inverse_scale_factor();
             target_pos = center;
         }
-    }
 
     for (rest_area_entity, transform, rest_area_visual, occupants_opt, mut visual_state) in
         q_rest_areas.iter_mut()

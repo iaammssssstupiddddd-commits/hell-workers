@@ -202,8 +202,8 @@ pub fn handle_haul_to_blueprint_task(
 
                     // 資材が揃った場合、BlueprintエンティティのIssuedByを削除して未割り当て状態にする
                     // そして、DesignationCreatedEventを再発行して使い魔が建築タスクを探せるようにする
-                    if bp.materials_complete() {
-                        if let Ok((_, _, _designation, managed_by_opt, _, _, _, _)) =
+                    if bp.materials_complete()
+                        && let Ok((_, _, _designation, managed_by_opt, _, _, _, _)) =
                             q_designations.get(blueprint_entity)
                         {
                             // ManagedByを削除して未割り当て状態にする
@@ -223,7 +223,6 @@ pub fn handle_haul_to_blueprint_task(
                                 blueprint_entity
                             );
                         }
-                    }
 
                     // ====== 修正点: 参照先の Item(task_entity)が despawn される前に WorkingOn 等を外す ======
                     ctx.inventory.0 = None;

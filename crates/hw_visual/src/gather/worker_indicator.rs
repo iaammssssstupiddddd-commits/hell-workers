@@ -14,6 +14,7 @@ use crate::worker_icon::{
 use hw_core::soul::DamnedSoul;
 use hw_core::visual_mirror::task::{SoulTaskPhaseVisual, SoulTaskVisualState};
 
+#[allow(clippy::type_complexity)]
 pub fn spawn_gather_indicators_system(
     mut commands: Commands,
     handles: Res<WorkIconHandles>,

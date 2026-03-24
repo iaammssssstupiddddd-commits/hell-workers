@@ -31,8 +31,7 @@ pub fn max_soul_logic_system(
             event.familiar_entity, event.old_value, event.new_value, excess_count
         );
 
-        let mut released_count = 0;
-        for i in (0..squad_entities.len()).rev() {
+        for (released_count, i) in (0..squad_entities.len()).rev().enumerate() {
             if released_count >= excess_count {
                 break;
             }
@@ -44,7 +43,6 @@ pub fn max_soul_logic_system(
             });
 
             commands.entity(member_entity).remove::<CommandedBy>();
-            released_count += 1;
 
             info!(
                 "FAM_AI: {:?} released excess member {:?} (limit: {} -> {})",

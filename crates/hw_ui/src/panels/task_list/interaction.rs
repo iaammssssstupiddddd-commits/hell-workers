@@ -9,6 +9,7 @@ use crate::panels::info_panel::InfoPanelPinState;
 use crate::theme::UiTheme;
 use bevy::prelude::*;
 
+#[allow(clippy::type_complexity)]
 pub fn task_list_visual_feedback_system(
     pin_state: Res<InfoPanelPinState>,
     q_changed: Query<(), Or<(Changed<Interaction>, Added<TaskListItem>)>>,
@@ -61,15 +62,14 @@ pub fn left_panel_tab_system(
         for (button_entity, tab, children) in &tab_buttons {
             let is_active = tab.0 == *mode;
 
-            if let Some(child) = children.iter().next() {
-                if let Ok(mut color) = text_colors.get_mut(child) {
+            if let Some(child) = children.iter().next()
+                && let Ok(mut color) = text_colors.get_mut(child) {
                     color.0 = if is_active {
                         theme.colors.text_accent_semantic
                     } else {
                         theme.colors.text_secondary_semantic
                     };
                 }
-            }
 
             if let Ok(mut border) = border_colors.get_mut(button_entity) {
                 *border = BorderColor::all(if is_active {

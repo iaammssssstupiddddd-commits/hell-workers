@@ -126,9 +126,9 @@ pub fn familiar_task_delegation_system(params: FamiliarAiTaskDelegationParams) {
             fam_entity,
             fam_transform,
             familiar_op,
-            ai_state: &mut *ai_state,
-            fam_dest: &mut *fam_dest,
-            fam_path: &mut *fam_path,
+            ai_state: &mut ai_state,
+            fam_dest: &mut fam_dest,
+            fam_path: &mut fam_path,
             task_area_opt,
             squad_entities: &squad_entities,
             q_souls: &mut q_souls,
@@ -139,7 +139,7 @@ pub fn familiar_task_delegation_system(params: FamiliarAiTaskDelegationParams) {
             resource_grid: &resource_grid,
             managed_tasks,
             world_map: &world_map,
-            pf_context: &mut *pf_context,
+            pf_context: &mut pf_context,
             delta_secs: time.delta_secs(),
             // Yard 共有タスクは TaskArea 非依存で拾える要件のため、
             // Idle command でも委譲処理自体は実行する。

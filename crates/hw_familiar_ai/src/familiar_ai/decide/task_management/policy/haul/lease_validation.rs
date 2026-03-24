@@ -27,6 +27,7 @@ pub fn validate_lease(
     valid_count >= min_valid_items
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn try_issue_haul_from_lease<F>(
     task_entity: Entity,
     task_pos: Vec2,
@@ -63,7 +64,7 @@ where
     issue_haul_with_wheelbarrow(
         lease.wheelbarrow,
         lease.source_pos,
-        lease.destination.clone(),
+        lease.destination,
         lease_items,
         task_pos,
         already_commanded,

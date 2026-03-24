@@ -126,17 +126,16 @@ pub fn handle(
     }
 
     // タンク容量の再確認 (River→Tank 経路のみ)
-    if let BucketTransportSource::River = data.source {
-        if let BucketTransportDestination::Tank(tank_entity) = data.destination {
-            if let Ok(res_item) = ctx.queries.reservation.resources.get(data.bucket) {
-                if res_item.0 == ResourceType::BucketWater {
+    if let BucketTransportSource::River = data.source
+        && let BucketTransportDestination::Tank(tank_entity) = data.destination {
+            if let Ok(res_item) = ctx.queries.reservation.resources.get(data.bucket)
+                && res_item.0 == ResourceType::BucketWater {
                     // バケツが既に水入りならソースには行かずデスティネーションへ
                     super::super::routing::transition_to_destination(
                         commands, ctx, data, soul_pos, world_map,
                     );
                     return;
                 }
-            }
 
             if !guards::tank_can_accept_full_bucket(ctx, tank_entity) {
                 super::super::helpers::drop_bucket_for_auto_haul(
@@ -147,5 +146,4 @@ pub fn handle(
                 );
             }
         }
-    }
 }

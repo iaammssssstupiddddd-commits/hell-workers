@@ -13,6 +13,7 @@ use hw_world::coords::grid_to_world;
 use hw_world::coords::world_to_grid;
 use hw_world::{SpatialGridOps, WorldMap};
 
+#[allow(clippy::too_many_arguments)]
 /// 現在の行動に応じて移動先を更新
 pub fn update_motion_destinations(
     entity: Entity,
@@ -72,14 +73,13 @@ pub fn update_motion_destinations(
                     }
                 } else {
                     let just_arrived = participating_in.is_none();
-                    if just_arrived {
-                        if let Some(spot_entity) = target_spot_entity {
+                    if just_arrived
+                        && let Some(spot_entity) = target_spot_entity {
                             request_writer.write(IdleBehaviorRequest {
                                 entity,
                                 operation: IdleBehaviorOperation::JoinGathering { spot_entity },
                             });
                         }
-                    }
                     if idle.behavior == IdleBehavior::ExhaustedGathering {
                         idle.behavior = IdleBehavior::Gathering;
                     }
@@ -90,8 +90,7 @@ pub fn update_motion_destinations(
                     if !is_moving
                         && (just_arrived
                             || dist_from_center < TILE_SIZE * GATHERING_KEEP_DISTANCE_MIN)
-                    {
-                        if let Some(new_target) = gathering_motion::find_initial_gathering_position(
+                        && let Some(new_target) = gathering_motion::find_initial_gathering_position(
                             center,
                             current_pos,
                             entity,
@@ -103,14 +102,13 @@ pub fn update_motion_destinations(
                             path.waypoints.clear();
                             path.current_index = 0;
                         }
-                    }
 
                     match idle.gathering_behavior {
                         GatheringBehavior::Wandering => {
                             let path_complete = path.waypoints.is_empty()
                                 || path.current_index >= path.waypoints.len();
-                            if path_complete {
-                                if let Some(new_target) =
+                            if path_complete
+                                && let Some(new_target) =
                                     gathering_motion::find_gathering_wandering_target(
                                         center,
                                         current_pos,
@@ -124,7 +122,6 @@ pub fn update_motion_destinations(
                                     path.waypoints.clear();
                                     path.current_index = 0;
                                 }
-                            }
                         }
                         GatheringBehavior::Sleeping
                         | GatheringBehavior::Standing

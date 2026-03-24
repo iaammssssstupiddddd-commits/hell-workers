@@ -12,8 +12,8 @@ pub fn familiar_hover_visualization_system(
     q_souls: Query<(&GlobalTransform, &CommandedBy), With<DamnedSoul>>,
     mut gizmos: Gizmos,
 ) {
-    if let Some(hovered) = hovered_entity.0 {
-        if let Ok((fam_transform, _)) = q_familiars.get(hovered) {
+    if let Some(hovered) = hovered_entity.0
+        && let Ok((fam_transform, _)) = q_familiars.get(hovered) {
             let fam_pos = fam_transform.translation().truncate();
 
             for (soul_transform, commanded_by) in q_souls.iter() {
@@ -23,5 +23,4 @@ pub fn familiar_hover_visualization_system(
                 }
             }
         }
-    }
 }

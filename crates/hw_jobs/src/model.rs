@@ -311,6 +311,12 @@ pub struct DoorCloseTimer {
     pub timer: Timer,
 }
 
+impl Default for DoorCloseTimer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl DoorCloseTimer {
     pub fn new() -> Self {
         Self {

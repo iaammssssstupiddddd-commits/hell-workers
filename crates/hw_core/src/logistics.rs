@@ -15,13 +15,13 @@ pub enum ResourceType {
 
 impl ResourceType {
     pub fn is_loadable(&self) -> bool {
-        match self {
-            ResourceType::Water => false,
-            ResourceType::BucketWater => false,
-            ResourceType::BucketEmpty => false,
-            ResourceType::Wheelbarrow => false,
-            _ => true,
-        }
+        !matches!(
+            self,
+            ResourceType::Water
+                | ResourceType::BucketWater
+                | ResourceType::BucketEmpty
+                | ResourceType::Wheelbarrow
+        )
     }
 
     pub fn requires_wheelbarrow(&self) -> bool {

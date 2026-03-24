@@ -18,7 +18,7 @@ fn is_gathering_spot_safe_from_familiars(
     let mut nearest: Option<(f32, f32)> = None;
     for (transform, familiar) in q_familiars.iter() {
         let dist = spot_pos.distance(transform.translation.truncate());
-        if nearest.map_or(true, |(best_dist, _)| dist < best_dist) {
+        if nearest.is_none_or(|(best_dist, _)| dist < best_dist) {
             nearest = Some((dist, familiar.command_radius));
         }
     }
@@ -133,19 +133,19 @@ pub fn gathering_merge_decision(
     }
 }
 
+type GatheringRecruitSoulQuery<'w, 's> = Query<
+    'w,
+    's,
+    (Entity, &'static Transform, &'static AssignedTask, &'static IdleState),
+    (With<DamnedSoul>, Without<ParticipatingIn>, Without<CommandedBy>),
+>;
+
 /// 条件を満たすSoulの集会参加を Recruit 要求に変換する
 pub fn gathering_recruitment_decision(
     q_spots: Query<(Entity, &GatheringSpot, &GatheringParticipants)>,
     soul_grid: Res<SpatialGrid>,
     mut nearby_buf: Local<Vec<Entity>>,
-    q_souls: Query<
-        (Entity, &Transform, &AssignedTask, &IdleState),
-        (
-            With<DamnedSoul>,
-            Without<ParticipatingIn>,
-            Without<CommandedBy>,
-        ),
-    >,
+    q_souls: GatheringRecruitSoulQuery,
     q_familiars: Query<(&Transform, &Familiar)>,
     update_timer: Res<GatheringUpdateTimer>,
     mut decide_output: SoulDecideOutput,
@@ -182,9 +182,9 @@ pub fn gathering_recruitment_decision(
                     if dist_to_spot > ESCAPE_GATHERING_JOIN_RADIUS || !spot_is_safe_for_escape {
                         continue;
                     }
-                } else if idle.behavior == IdleBehavior::Drifting {
-                    continue;
-                } else if dist_to_spot > GATHERING_DETECTION_RADIUS {
+                } else if idle.behavior == IdleBehavior::Drifting
+                    || dist_to_spot > GATHERING_DETECTION_RADIUS
+                {
                     continue;
                 }
 

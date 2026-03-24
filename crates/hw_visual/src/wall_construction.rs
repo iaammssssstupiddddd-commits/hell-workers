@@ -21,6 +21,30 @@ const WALL_PROGRESS_BAR_BG_COLOR: Color = Color::srgba(0.1, 0.1, 0.1, 0.9);
 #[derive(Component)]
 pub struct WallConstructionProgressBar;
 
+
+type WallConstructionBgQuery<'w, 's> = Query<
+    'w,
+    's,
+    (Entity, &'static ChildOf, &'static mut Transform),
+    (
+        With<WallConstructionProgressBar>,
+        With<ProgressBarBackground>,
+        Without<WallSiteVisualState>,
+        Without<ProgressBarFill>,
+    ),
+>;
+
+type WallConstructionFillQuery<'w, 's> = Query<
+    'w,
+    's,
+    (Entity, &'static ChildOf, &'static mut Sprite, &'static mut Transform),
+    (
+        With<WallConstructionProgressBar>,
+        With<ProgressBarFill>,
+        Without<WallSiteVisualState>,
+        Without<ProgressBarBackground>,
+    ),
+>;
 fn progress_to_ratio(progress: u8) -> f32 {
     (progress as f32 / 100.0).clamp(0.0, 1.0)
 }
@@ -146,24 +170,8 @@ pub fn manage_wall_progress_bars_system(
 pub fn update_wall_progress_bars_system(
     q_sites: Query<(&Transform, &WallSiteVisualState), Without<WallConstructionProgressBar>>,
     q_generic_bars: Query<&GenericProgressBar>,
-    mut q_bg_bars: Query<
-        (Entity, &ChildOf, &mut Transform),
-        (
-            With<WallConstructionProgressBar>,
-            With<ProgressBarBackground>,
-            Without<WallSiteVisualState>,
-            Without<ProgressBarFill>,
-        ),
-    >,
-    mut q_fill_bars: Query<
-        (Entity, &ChildOf, &mut Sprite, &mut Transform),
-        (
-            With<WallConstructionProgressBar>,
-            With<ProgressBarFill>,
-            Without<WallSiteVisualState>,
-            Without<ProgressBarBackground>,
-        ),
-    >,
+    mut q_bg_bars: WallConstructionBgQuery,
+    mut q_fill_bars: WallConstructionFillQuery,
 ) {
     for (bg_entity, child_of, mut bg_transform) in q_bg_bars.iter_mut() {
         let Ok((site_transform, _site)) = q_sites.get(child_of.parent()) else {

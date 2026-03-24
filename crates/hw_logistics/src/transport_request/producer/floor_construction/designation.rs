@@ -9,16 +9,22 @@ use hw_jobs::{Designation, FloorTileState, Priority, TaskSlots, WorkType};
 ///
 /// This system runs in TransportRequestSet::Decide phase (after material delivery logic)
 /// to prepare tiles for worker assignment.
+type FloorTileDesignationQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static Transform,
+        &'static mut FloorTileBlueprint,
+        Option<&'static Designation>,
+        Option<&'static TaskWorkers>,
+        &'static mut Visibility,
+    ),
+>;
+
 pub fn floor_tile_designation_system(
     mut commands: Commands,
-    mut q_tiles: Query<(
-        Entity,
-        &Transform,
-        &mut FloorTileBlueprint,
-        Option<&Designation>,
-        Option<&TaskWorkers>,
-        &mut Visibility,
-    )>,
+    mut q_tiles: FloorTileDesignationQuery,
 ) {
     for (tile_entity, tile_transform, mut tile, designation_opt, workers_opt, mut visibility) in
         q_tiles.iter_mut()

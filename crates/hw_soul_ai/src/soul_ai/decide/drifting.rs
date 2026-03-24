@@ -27,27 +27,31 @@ impl Default for DriftingDecisionTimer {
     }
 }
 
+type DriftingDecisionQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static Transform,
+        &'static mut IdleState,
+        &'static mut Destination,
+        &'static mut Path,
+        &'static AssignedTask,
+        Option<&'static CommandedBy>,
+        Option<&'static RestingIn>,
+        Option<&'static ParticipatingIn>,
+        Option<&'static DriftingState>,
+    ),
+    With<DamnedSoul>,
+>;
+
 /// 未管理状態の Soul を漂流（自然脱走）へ遷移させる
 pub fn drifting_decision_system(
     time: Res<Time>,
     mut commands: Commands,
     mut timer: ResMut<DriftingDecisionTimer>,
     population: Res<PopulationManager>,
-    mut q_souls: Query<
-        (
-            Entity,
-            &Transform,
-            &mut IdleState,
-            &mut Destination,
-            &mut Path,
-            &AssignedTask,
-            Option<&CommandedBy>,
-            Option<&RestingIn>,
-            Option<&ParticipatingIn>,
-            Option<&DriftingState>,
-        ),
-        With<DamnedSoul>,
-    >,
+    mut q_souls: DriftingDecisionQuery,
 ) {
     if !timer.timer.tick(time.delta()).just_finished() {
         return;

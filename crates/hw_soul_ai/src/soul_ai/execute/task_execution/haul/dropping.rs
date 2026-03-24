@@ -166,11 +166,10 @@ pub(super) fn handle_dropping_phase(
         };
 
         if can_drop {
-            if !is_bucket_storage && stockpile_comp.resource_type.is_none() {
-                if let Some((res_type, _)) = item_info {
+            if !is_bucket_storage && stockpile_comp.resource_type.is_none()
+                && let Some((res_type, _)) = item_info {
                     stockpile_comp.resource_type = res_type;
                 }
-            }
 
             if !is_bucket_storage
                 && q_belongs.get(item).is_err()
@@ -276,8 +275,8 @@ pub(super) fn handle_dropping_phase(
             ctx,
             item_resource_type,
             stockpile,
-            &building,
-            provisional_opt.as_deref(),
+            building,
+            provisional_opt,
             wall_pos,
             item,
         );

@@ -293,11 +293,10 @@ fn find_tank_bucket_for_water_mixer(
             let tank_pos = s_transform.translation.truncate();
             let in_task_area = task_area_opt.is_some_and(|area| area.contains(tank_pos));
             let in_yard = yard_opt.is_some_and(|yard| yard.contains(tank_pos));
-            if task_area_opt.is_some() || yard_opt.is_some() {
-                if !in_task_area && !in_yard {
+            if (task_area_opt.is_some() || yard_opt.is_some())
+                && !in_task_area && !in_yard {
                     return false;
                 }
-            }
             true
         })
         .map(|(e, t, _, _)| {

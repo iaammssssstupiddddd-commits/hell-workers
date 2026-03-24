@@ -28,13 +28,17 @@ fn to_u32_saturating(value: usize) -> u32 {
     value.min(u32::MAX as usize) as u32
 }
 
+type WheelbarrowParkedQuery<'w, 's> = Query<
+    'w,
+    's,
+    (Entity, &'static Transform, &'static ParkedAt),
+    (With<Wheelbarrow>, With<ParkedAt>, Without<PushedBy>),
+>;
+
 pub fn wheelbarrow_auto_haul_system(
     mut commands: Commands,
     q_familiars: Query<(Entity, &ActiveCommand, &TaskArea)>,
-    q_wheelbarrows: Query<
-        (Entity, &Transform, &ParkedAt),
-        (With<Wheelbarrow>, With<ParkedAt>, Without<PushedBy>),
-    >,
+    q_wheelbarrows: WheelbarrowParkedQuery,
     q_transforms: Query<&Transform>,
     q_wb_requests: Query<(Entity, &TransportRequest, Option<&TaskWorkers>)>,
 ) {

@@ -10,10 +10,6 @@ pub struct WorldMapRead<'w> {
 }
 
 impl<'w> WorldMapRead<'w> {
-    pub fn as_ref(&self) -> &WorldMap {
-        self.world_map.as_ref()
-    }
-
     pub fn is_changed(&self) -> bool {
         self.world_map.is_changed()
     }
@@ -21,7 +17,7 @@ impl<'w> WorldMapRead<'w> {
 
 impl AsRef<WorldMap> for WorldMapRead<'_> {
     fn as_ref(&self) -> &WorldMap {
-        self.world_map.as_ref()
+        &self.world_map
     }
 }
 
@@ -29,7 +25,7 @@ impl std::ops::Deref for WorldMapRead<'_> {
     type Target = WorldMap;
 
     fn deref(&self) -> &Self::Target {
-        self.as_ref()
+        &self.world_map
     }
 }
 
@@ -40,14 +36,6 @@ pub struct WorldMapWrite<'w> {
 }
 
 impl<'w> WorldMapWrite<'w> {
-    pub fn as_ref(&self) -> &WorldMap {
-        self.world_map.as_ref()
-    }
-
-    pub fn as_mut(&mut self) -> &mut WorldMap {
-        self.world_map.as_mut()
-    }
-
     pub fn is_changed(&self) -> bool {
         self.world_map.is_changed()
     }
@@ -55,13 +43,13 @@ impl<'w> WorldMapWrite<'w> {
 
 impl AsRef<WorldMap> for WorldMapWrite<'_> {
     fn as_ref(&self) -> &WorldMap {
-        self.world_map.as_ref()
+        &self.world_map
     }
 }
 
 impl AsMut<WorldMap> for WorldMapWrite<'_> {
     fn as_mut(&mut self) -> &mut WorldMap {
-        self.world_map.as_mut()
+        &mut self.world_map
     }
 }
 
@@ -69,12 +57,12 @@ impl std::ops::Deref for WorldMapWrite<'_> {
     type Target = WorldMap;
 
     fn deref(&self) -> &Self::Target {
-        self.as_ref()
+        &self.world_map
     }
 }
 
 impl std::ops::DerefMut for WorldMapWrite<'_> {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        self.as_mut()
+        &mut self.world_map
     }
 }

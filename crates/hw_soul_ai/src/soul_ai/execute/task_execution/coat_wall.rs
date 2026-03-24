@@ -146,6 +146,7 @@ fn handle_legacy_coat_wall_task(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn handle_coat_wall_task(
     ctx: &mut TaskExecutionContext,
     tile_entity: Entity,

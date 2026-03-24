@@ -70,7 +70,7 @@ pub fn detect_nearest_familiar_within_multiplier(
             let distance = soul_pos.distance(fam_pos);
             let trigger_distance = familiar.command_radius * radius_multiplier;
 
-            if distance < trigger_distance && nearest.map_or(true, |n| distance < n.distance) {
+            if distance < trigger_distance && nearest.is_none_or(|n| distance < n.distance) {
                 nearest = Some(FamiliarThreat {
                     entity: fam_entity,
                     position: fam_pos,
@@ -161,7 +161,7 @@ pub fn detect_reachable_familiar_within_safe_distance(
                     position: fam_pos,
                     distance: euclid,
                 };
-                if best.map_or(true, |(_, best_dist)| euclid < best_dist) {
+                if best.is_none_or(|(_, best_dist)| euclid < best_dist) {
                     best = Some((threat, euclid));
                 }
                 continue;
@@ -182,7 +182,7 @@ pub fn detect_reachable_familiar_within_safe_distance(
                 distance: euclid,
             };
 
-            if best.map_or(true, |(_, best_dist)| path_dist < best_dist) {
+            if best.is_none_or(|(_, best_dist)| path_dist < best_dist) {
                 best = Some((threat, path_dist));
             }
         }
@@ -238,7 +238,7 @@ fn nearest_familiar_info(
     for &fam_entity in scratch.iter() {
         if let Ok((transform, familiar)) = q_familiars.get(fam_entity) {
             let dist = pos.distance(transform.translation.truncate());
-            if nearest.map_or(true, |(best_dist, _)| dist < best_dist) {
+            if nearest.is_none_or(|(best_dist, _)| dist < best_dist) {
                 nearest = Some((dist, familiar.command_radius));
             }
         }
@@ -274,7 +274,7 @@ pub fn find_safe_gathering_spot(
 
         if dist_to_familiar > safe_distance {
             let score = (1000.0 / (dist_to_soul + 1.0)) + (dist_to_familiar / TILE_SIZE);
-            if best_spot.map_or(true, |(_, best_score)| score > best_score) {
+            if best_spot.is_none_or(|(_, best_score)| score > best_score) {
                 best_spot = Some((spot_pos, score));
             }
         }

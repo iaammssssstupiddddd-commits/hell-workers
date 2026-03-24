@@ -189,25 +189,29 @@ fn process_worker_pathfinding(
     }
 }
 
+type PathfindingQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static Transform,
+        &'static mut Destination,
+        &'static mut Path,
+        &'static mut AssignedTask,
+        &'static mut IdleState,
+        Option<&'static hw_core::relationships::RestingIn>,
+        Option<&'static RestAreaReservedFor>,
+        Option<&'static mut PathCooldown>,
+        Option<&'static mut hw_logistics::Inventory>,
+    ),
+    With<DamnedSoul>,
+>;
+
 pub fn pathfinding_system(
     mut commands: Commands,
     world_map: WorldMapRead,
     mut pf_context: Local<PathfindingContext>,
-    mut query: Query<
-        (
-            Entity,
-            &Transform,
-            &mut Destination,
-            &mut Path,
-            &mut AssignedTask,
-            &mut IdleState,
-            Option<&hw_core::relationships::RestingIn>,
-            Option<&RestAreaReservedFor>,
-            Option<&mut PathCooldown>,
-            Option<&mut hw_logistics::Inventory>,
-        ),
-        With<DamnedSoul>,
-    >,
+    mut query: PathfindingQuery,
     q_rest_areas: Query<&Transform, With<hw_jobs::RestArea>>,
     mut queries: crate::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
 ) {

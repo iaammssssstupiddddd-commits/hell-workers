@@ -41,11 +41,10 @@ pub fn handle(
                         );
                         // Filling フェーズをスキップしたため amount が 0 のまま。
                         // GoingToDestination/Pouring フェーズが正しく動作するよう補正する。
-                        if let AssignedTask::BucketTransport(ref mut d) = *ctx.task {
-                            if d.amount == 0 {
+                        if let AssignedTask::BucketTransport(ref mut d) = *ctx.task
+                            && d.amount == 0 {
                                 d.amount = BUCKET_CAPACITY;
                             }
-                        }
                     } else {
                         // 空ならタンクへ
                         routing::transition_to_source(commands, ctx, data, soul_pos, world_map);
@@ -68,8 +67,8 @@ pub fn handle(
             BucketTransportDestination::Tank(tank_entity) => {
                 let tank = *tank_entity;
                 // River→Tank 経路: 既にバケツ保持済みならソースへ向かう
-                if let Ok(res_item) = ctx.queries.reservation.resources.get(bucket_entity) {
-                    if res_item.0 == ResourceType::BucketWater {
+                if let Ok(res_item) = ctx.queries.reservation.resources.get(bucket_entity)
+                    && res_item.0 == ResourceType::BucketWater {
                         // 既に水入り→直接タンクへ
                         if let Ok((tank_transform, _, _, _, _, _, _)) =
                             ctx.queries.designation.targets.get(tank)
@@ -91,7 +90,6 @@ pub fn handle(
                             }
                         }
                     }
-                }
                 // 空バケツ: 川へ
                 if routing::set_path_to_river(ctx, world_map, data).is_none() {
                     abort::abort_with_bucket(commands, ctx, data, world_map);
@@ -116,12 +114,11 @@ pub fn handle(
     let res_type = res_item_opt.map(|res| res.0);
     let stored_in_entity = stored_in_opt.map(|stored| stored.0);
 
-    if let Some(rt) = res_type {
-        if !matches!(rt, ResourceType::BucketEmpty | ResourceType::BucketWater) {
+    if let Some(rt) = res_type
+        && !matches!(rt, ResourceType::BucketEmpty | ResourceType::BucketWater) {
             abort::abort_without_bucket(commands, ctx, data, world_map);
             return;
         }
-    }
 
     let bucket_pos = bucket_transform.translation.truncate();
 
@@ -185,11 +182,10 @@ pub fn handle(
                     routing::transition_to_destination(commands, ctx, data, soul_pos, world_map);
                     // Filling フェーズをスキップしたため amount が 0 のまま。
                     // GoingToDestination/Pouring フェーズが正しく動作するよう補正する。
-                    if let AssignedTask::BucketTransport(ref mut d) = *ctx.task {
-                        if d.amount == 0 {
+                    if let AssignedTask::BucketTransport(ref mut d) = *ctx.task
+                        && d.amount == 0 {
                             d.amount = BUCKET_CAPACITY;
                         }
-                    }
                     return;
                 }
             }
@@ -202,9 +198,8 @@ pub fn handle(
 
     // まだバケツに近づいていない: 移動中
     let bucket_grid = WorldMap::world_to_grid(bucket_pos);
-    if ctx.path.waypoints.is_empty() {
-        if routing::set_path_to_grid_boundary(ctx, world_map, bucket_grid, bucket_pos).is_none() {
+    if ctx.path.waypoints.is_empty()
+        && routing::set_path_to_grid_boundary(ctx, world_map, bucket_grid, bucket_pos).is_none() {
             ctx.dest.0 = bucket_pos;
         }
-    }
 }

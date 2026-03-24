@@ -9,6 +9,7 @@ use hw_jobs::AssignedTask;
 use hw_spatial::FamiliarSpatialGrid;
 use hw_world::SpatialGridOps;
 
+#[allow(clippy::type_complexity)]
 /// Familiar影響関連の更新を1パスで処理する統合システム
 pub fn familiar_influence_unified_system(
     mut commands: Commands,
@@ -107,11 +108,10 @@ pub fn familiar_influence_unified_system(
             soul.laziness = (soul.laziness + dt * LAZINESS_GAIN_RATE_IDLE).min(1.0);
         }
 
-        if soul.stress >= 1.0 {
-            if breakdown_opt.is_none() {
+        if soul.stress >= 1.0
+            && breakdown_opt.is_none() {
                 commands.trigger(OnStressBreakdown { entity });
             }
-        }
 
         if let Some(mut breakdown) = breakdown_opt {
             if soul.stress <= STRESS_RECOVERY_THRESHOLD {

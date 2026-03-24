@@ -20,31 +20,43 @@ pub struct SupplyState {
     pub invalid_auto_idle: HashSet<Entity>,
 }
 
+type GroundItemsQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static Transform,
+        &'static Visibility,
+        &'static ResourceItem,
+    ),
+    (
+        Without<Designation>,
+        Without<TaskWorkers>,
+        Without<ReservedForTask>,
+        Without<StoredIn>,
+        Without<LoadedIn>,
+    ),
+>;
+
+type SourcesQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static Transform,
+        Option<&'static Tree>,
+        Option<&'static Rock>,
+        Option<&'static Designation>,
+        Option<&'static TaskWorkers>,
+        Option<&'static ManagedBy>,
+        Option<&'static AutoGatherDesignation>,
+    ),
+    Or<(With<Tree>, With<Rock>, With<AutoGatherDesignation>)>,
+>;
+
 pub fn collect_supply_state(
     owner_infos: &HashMap<Entity, OwnerInfo>,
-    q_ground_items: &Query<
-        (&Transform, &Visibility, &ResourceItem),
-        (
-            Without<Designation>,
-            Without<TaskWorkers>,
-            Without<ReservedForTask>,
-            Without<StoredIn>,
-            Without<LoadedIn>,
-        ),
-    >,
-    q_sources: &Query<
-        (
-            Entity,
-            &Transform,
-            Option<&Tree>,
-            Option<&Rock>,
-            Option<&Designation>,
-            Option<&TaskWorkers>,
-            Option<&ManagedBy>,
-            Option<&AutoGatherDesignation>,
-        ),
-        Or<(With<Tree>, With<Rock>, With<AutoGatherDesignation>)>,
-    >,
+    q_ground_items: &GroundItemsQuery,
+    q_sources: &SourcesQuery,
 ) -> SupplyState {
     let mut supply_by_owner = HashMap::<(Entity, ResourceType), SupplyBucket>::new();
     let mut candidate_sources =

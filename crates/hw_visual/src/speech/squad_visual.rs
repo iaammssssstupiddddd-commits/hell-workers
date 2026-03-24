@@ -11,6 +11,7 @@ use super::spawn::spawn_familiar_bubble;
 use super::voice::FamiliarVoice;
 use crate::handles::SpeechHandles;
 
+#[allow(clippy::type_complexity)]
 /// Fatigued リリース時に Familiar の "Abi" セリフバブルを表示するビジュアルシステム
 ///
 /// ECS 操作は `hw_familiar_ai::squad_logic_system` が担当。

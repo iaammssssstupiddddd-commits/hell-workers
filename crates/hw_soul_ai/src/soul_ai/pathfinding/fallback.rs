@@ -61,6 +61,7 @@ fn rest_area_adjacent_candidates(
     candidates
 }
 
+#[allow(clippy::too_many_arguments)]
 /// 休憩所の周辺タイルへの代替パスを探す（GoingToRest の idle worker 専用）。
 /// 代替パスが見つかった場合は destination と path を更新して true を返す。
 pub(super) fn try_rest_area_fallback_path(
@@ -108,6 +109,7 @@ pub(super) fn try_rest_area_fallback_path(
     false
 }
 
+#[allow(clippy::too_many_arguments)]
 /// 到達不能な destination を破棄し PathCooldown を付与する。
 /// idle の GoingToRest なら予約を解放し、タスク実行中なら unassign する。
 pub(super) fn cleanup_unreachable_destination(

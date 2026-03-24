@@ -12,6 +12,7 @@ use hw_jobs::{Designation, WorkType};
 use hw_logistics::ResourceItem;
 use hw_world::WorldMap;
 
+#[allow(clippy::too_many_arguments)]
 pub fn handle_gather_task(
     ctx: &mut TaskExecutionContext,
     target: Entity,

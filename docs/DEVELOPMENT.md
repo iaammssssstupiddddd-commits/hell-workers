@@ -14,6 +14,47 @@
 - コンパイルエラー（赤い波線）を一つも残したまま完了報告をしてはいけない。
 - `cargo check --workspace` が通ることを必ず確認する。
 
+### 1.5. Clippy 警告ゼロの維持
+本プロジェクトは `cargo clippy --workspace` で **警告0件** を目標としている（2026-03達成）。
+
+**新規コードの規約:**
+
+- **`type_complexity`**: `Query<...>` が複雑になる場合、以下のいずれかを選択する：
+  - **Bevy システム関数の直接パラメータ**（`fn my_system(q: Query<...>)`）→ **型エイリアスを追加**：
+    ```rust
+    type FooQuery<'w, 's> = Query<'w, 's, (Entity, &'static Transform), With<Foo>>;
+    pub fn my_system(q: FooQuery) { ... }
+    ```
+  - **参照パラメータ**（`fn helper(q: &Query<...>)`）→ `#[allow(clippy::type_complexity)]` を関数に付与。
+    型エイリアスを参照パラメータに使うと E0521 ライフタイムエラーになるため不可。
+  - **`#[derive(SystemParam)]` の struct フィールド**→ struct に `#[allow(clippy::type_complexity)]` を付与。
+  - **`ParamSet` の型エイリアス**は原則禁止。`ParamSet<'w, 's, (Query<'w, 's, ...>)>` の形で内側 Query に明示ライフタイムを付けると、`.chain()` など `IntoSystemConfigs` トレイトが壊れる。
+
+- **`too_many_arguments`**: Bevy システム関数（`add_systems` 登録対象）は引数が多くなりやすい。
+  `#[allow(clippy::too_many_arguments)]` を関数に付与する（`SystemParam` へのリファクタリングは任意）。
+
+**Clippy 確認コマンド:**
+```bash
+CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo clippy --workspace 2>&1 | grep "^warning:" | grep -v "generated"
+```
+
+**`#[allow]` 解消の引き継ぎタスク（次のリファクタリング機会に対応）:**
+現在、以下のパターンで `#[allow]` が多数付与されている。長期的には適切なリファクタリングで解消することが望ましい。
+
+| 警告 | 現状 | 推奨する解消方法 |
+|:---|:---|:---|
+| `too_many_arguments` (Bevy system) | `#[allow]` で抑制 | `SystemParam` struct にまとめる（`#[derive(SystemParam)]`） |
+| `too_many_arguments` (helper fn) | `#[allow]` で抑制 | 引数をデータ構造 (`struct`) にまとめる |
+| `type_complexity` (参照パラメータ) | `#[allow]` で抑制 | 呼び出し元をリファクタリングしてシステム関数から直接渡すか、`SystemParam` 化する |
+| `type_complexity` (SystemParam struct フィールド) | `#[allow]` で抑制 | 型エイリアスをフィールドの型として使う（`'static` コンポーネント参照のエイリアス） |
+
+具体的な対象ファイルを調べるには：
+```bash
+CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo clippy --workspace 2>&1 | grep "allow" | head -5
+# または
+grep -rn "#\[allow(clippy::too_many_arguments)\]\|#\[allow(clippy::type_complexity)\]" crates/ --include="*.rs" | wc -l
+```
+
 ### 2. 死蔵コードの禁止 ([deadcode.md])
 - 将来使う予定があっても、現在使われていないコードや `#[allow(dead_code)]` は残さない。
 

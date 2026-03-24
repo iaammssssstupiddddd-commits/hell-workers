@@ -57,8 +57,8 @@ pub fn assign_haul_to_blueprint(
         &demand_context,
     );
 
-    if queries.wheelbarrow_leases.get(ctx.task_entity).is_err() {
-        if try_pick_drop_to_blueprint(
+    if queries.wheelbarrow_leases.get(ctx.task_entity).is_err()
+        && try_pick_drop_to_blueprint(
             blueprint,
             resource_type,
             already_commanded,
@@ -68,7 +68,6 @@ pub fn assign_haul_to_blueprint(
         ) {
             return true;
         }
-    }
 
     let max_items = remaining_needed.min(WHEELBARROW_CAPACITY as u32) as usize;
     if lease_validation::try_issue_haul_from_lease(
@@ -201,6 +200,20 @@ type FindSourceFn = fn(
     &ReservationShadow,
 ) -> Option<(Entity, Vec2)>;
 
+type IssueFnPtr = fn(
+    Entity,
+    Entity,
+    Vec2,
+    Entity,
+    u32,
+    Vec2,
+    bool,
+    &AssignTaskContext<'_>,
+    &mut crate::familiar_ai::decide::task_management::FamiliarTaskAssignmentQueries,
+    &mut ReservationShadow,
+);
+
+#[allow(clippy::too_many_arguments)]
 fn try_direct_collect_with_wheelbarrow_to_blueprint(
     blueprint: Entity,
     remaining_needed: u32,
@@ -210,18 +223,7 @@ fn try_direct_collect_with_wheelbarrow_to_blueprint(
     queries: &mut FamiliarTaskAssignmentQueries,
     shadow: &mut ReservationShadow,
     find_source: FindSourceFn,
-    issue_fn: fn(
-        Entity,
-        Entity,
-        Vec2,
-        Entity,
-        u32,
-        Vec2,
-        bool,
-        &AssignTaskContext<'_>,
-        &mut crate::familiar_ai::decide::task_management::FamiliarTaskAssignmentQueries,
-        &mut ReservationShadow,
-    ),
+    issue_fn: IssueFnPtr,
 ) -> bool {
     let Some((source_entity, source_pos)) =
         find_source(task_pos, ctx.task_area_opt, queries, shadow)

@@ -20,6 +20,19 @@ use std::time::Instant;
 use crate::transport_request::{TransportRequest, TransportRequestKind, TransportRequestMetrics};
 use crate::types::{ResourceItem, ResourceType};
 
+type WallTileDesignationQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static Transform,
+        &'static mut WallTileBlueprint,
+        Option<&'static Designation>,
+        Option<&'static TaskWorkers>,
+        &'static mut Visibility,
+    ),
+>;
+
 fn request_priority(resource_type: ResourceType) -> u32 {
     match resource_type {
         ResourceType::Wood => WALL_FRAME_PRIORITY,
@@ -128,6 +141,7 @@ pub fn wall_construction_auto_haul_system(
 }
 
 /// Consumes delivered materials around each wall site and advances tiles to ready states.
+#[allow(clippy::type_complexity)]
 pub fn wall_material_delivery_sync_system(
     mut commands: Commands,
     q_sites: Query<(Entity, &WallConstructionSite)>,
@@ -185,7 +199,7 @@ pub fn wall_material_delivery_sync_system(
                 pickup_radius,
                 &resource_grid,
                 &q_resources,
-                &mut *nearby_buf,
+                &mut nearby_buf,
                 &mut resources_scanned,
                 &tiles_by_site,
                 &mut q_tiles_write,
@@ -217,14 +231,7 @@ pub fn wall_material_delivery_sync_system(
 /// Assign/remove tile designations based on wall tile state.
 pub fn wall_tile_designation_system(
     mut commands: Commands,
-    mut q_tiles: Query<(
-        Entity,
-        &Transform,
-        &mut WallTileBlueprint,
-        Option<&Designation>,
-        Option<&TaskWorkers>,
-        &mut Visibility,
-    )>,
+    mut q_tiles: WallTileDesignationQuery,
 ) {
     for (tile_entity, tile_transform, mut tile, designation_opt, workers_opt, mut visibility) in
         q_tiles.iter_mut()

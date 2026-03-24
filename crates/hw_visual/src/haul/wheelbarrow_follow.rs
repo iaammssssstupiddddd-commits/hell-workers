@@ -9,6 +9,7 @@ use hw_core::soul::{AnimationState, DamnedSoul};
 use hw_core::visual::WheelbarrowMovement;
 use hw_core::visual_mirror::logistics::WheelbarrowMarker;
 
+#[allow(clippy::type_complexity)]
 pub fn wheelbarrow_follow_system(
     mut commands: Commands,
     q_souls: Query<(&Transform, &AnimationState), With<DamnedSoul>>,

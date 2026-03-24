@@ -27,6 +27,25 @@ After any code change, ensure zero compilation errors:
 **Completion criteria**: `CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo check` shows "Finished" with no errors.
 **Never report completion with errors remaining.**
 
+### 1.5. Clippy Warnings (MAINTAIN ZERO)
+`cargo clippy --workspace` must produce **0 warnings**. This baseline was achieved 2026-03.
+
+**When writing new code with complex Query types:**
+- **Direct Bevy system param** (`fn my_system(q: Query<...>)`): Add a type alias before the function:
+  ```rust
+  type FooQuery<'w, 's> = Query<'w, 's, (Entity, &'static Transform), With<Foo>>;
+  pub fn my_system(q: FooQuery) { ... }
+  ```
+- **Reference param** (`fn helper(q: &Query<...>)`): Use `#[allow(clippy::type_complexity)]`. Do NOT use type aliases — causes E0521 lifetime errors.
+- **`#[derive(SystemParam)]` struct field**: Add `#[allow(clippy::type_complexity)]` to the struct.
+- **`ParamSet` type aliases**: NEVER use `ParamSet<'w, 's, (Query<'w, 's, ...>)>` — breaks `IntoSystemConfigs` / `.chain()`. Use `ParamSet<(Query<...>, Query<...>)>` without explicit lifetimes.
+- **`too_many_arguments`** for Bevy systems: Add `#[allow(clippy::too_many_arguments)]` on the function.
+
+**Check command:**
+```bash
+CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo clippy --workspace 2>&1 | grep "^warning:" | grep -v generated
+```
+
 ### 2. No Dead Code
 - Do not use `#[allow(dead_code)]` for "future use"
 - Do not leave implementations not documented in `docs/`

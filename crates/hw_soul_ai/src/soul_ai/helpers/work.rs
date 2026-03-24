@@ -41,6 +41,7 @@ pub fn is_soul_available_for_work(
     true
 }
 
+#[allow(clippy::too_many_arguments)]
 /// タスク解除時の低レベル cleanup を適用する。
 ///
 /// `AssignedTask` / インベントリ / 予約状態の cleanup を行うが、
@@ -52,7 +53,7 @@ pub fn cleanup_task_assignment<'w, 's, Q: TaskReservationAccess<'w, 's>>(
     drop_pos: Vec2,
     task: &mut AssignedTask,
     path: &mut hw_core::soul::Path,
-    mut inventory: Option<&mut Inventory>,
+    inventory: Option<&mut Inventory>,
     dropped_item_res: Option<ResourceType>,
     queries: &mut Q,
     world_map: &WorldMap,
@@ -114,9 +115,9 @@ pub fn cleanup_task_assignment<'w, 's, Q: TaskReservationAccess<'w, 's>>(
         skip_inventory_drop_for = Some(data.wheelbarrow);
     }
 
-    if let Some(inventory) = inventory.as_deref_mut() {
-        if let Some(item_entity) = inventory.0 {
-            if Some(item_entity) != skip_inventory_drop_for {
+    if let Some(inventory) = inventory {
+        if let Some(item_entity) = inventory.0
+            && Some(item_entity) != skip_inventory_drop_for {
                 commands.entity(item_entity).try_insert((
                     Visibility::Visible,
                     Transform::from_xyz(snapped_pos.x, snapped_pos.y, Z_ITEM_PICKUP),
@@ -132,7 +133,6 @@ pub fn cleanup_task_assignment<'w, 's, Q: TaskReservationAccess<'w, 's>>(
                 commands.entity(item_entity).remove::<StoredIn>();
                 commands.entity(item_entity).remove::<DeliveringTo>();
             }
-        }
         inventory.0 = None;
     }
 
@@ -140,6 +140,7 @@ pub fn cleanup_task_assignment<'w, 's, Q: TaskReservationAccess<'w, 's>>(
     path.waypoints.clear();
 }
 
+#[allow(clippy::too_many_arguments)]
 /// タスク解除の公開 API。
 ///
 /// 内部で `cleanup_task_assignment` を呼び出し、加えて

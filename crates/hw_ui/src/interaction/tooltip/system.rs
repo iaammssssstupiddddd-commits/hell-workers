@@ -234,9 +234,9 @@ pub fn hover_tooltip_system<'w, 's, I, R>(
     tooltip.fade_alpha += (desired_alpha - tooltip.fade_alpha) * fade_t;
     tooltip.fade_alpha = tooltip.fade_alpha.clamp(0.0, 1.0);
 
-    if target.is_some() && !tooltip.delay_timer.is_finished() {
-        tooltip_node.display = Display::None;
-    } else if tooltip.fade_alpha <= f32::EPSILON {
+    if (target.is_some() && !tooltip.delay_timer.is_finished())
+        || tooltip.fade_alpha <= f32::EPSILON
+    {
         tooltip_node.display = Display::None;
     } else {
         tooltip_node.display = Display::Flex;

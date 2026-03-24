@@ -19,6 +19,7 @@ pub use hw_ui::models::inspection::{
     EntityInspectionModel, EntityInspectionViewModel, SoulInspectionFields,
 };
 
+#[allow(clippy::type_complexity)]
 #[derive(SystemParam)]
 pub struct EntityInspectionQuery<'w, 's> {
     q_souls: Query<

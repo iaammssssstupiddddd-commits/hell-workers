@@ -24,6 +24,9 @@ use drag::handle_active_drag_input;
 use press::handle_left_just_pressed_input;
 use release::handle_left_just_released_input;
 
+
+#[allow(clippy::too_many_arguments)]
+#[allow(clippy::type_complexity)]
 pub fn task_area_selection_system(
     buttons: Res<ButtonInput<MouseButton>>,
     q_window: Query<&Window, With<PrimaryWindow>>,

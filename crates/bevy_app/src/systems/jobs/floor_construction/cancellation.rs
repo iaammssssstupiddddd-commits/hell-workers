@@ -28,6 +28,21 @@ fn is_floor_task_for_site(task: &AssignedTask, site_entity: Entity) -> bool {
     }
 }
 
+type SoulCancellationQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static Transform,
+        &'static mut AssignedTask,
+        &'static mut Path,
+        &'static mut Inventory,
+        Option<&'static WorkingOn>,
+    ),
+    With<DamnedSoul>,
+>;
+
+#[allow(clippy::too_many_arguments)]
 /// Cancels floor construction sites marked with `FloorConstructionCancelRequested`.
 ///
 /// Cancellation is site-wide:
@@ -40,17 +55,7 @@ pub fn floor_construction_cancellation_system(
     q_sites: Query<Entity, With<FloorConstructionCancelRequested>>,
     q_floor_requests: Query<(Entity, &TargetFloorConstructionSite)>,
     q_entities: Query<Entity>,
-    mut q_souls: Query<
-        (
-            Entity,
-            &Transform,
-            &mut AssignedTask,
-            &mut Path,
-            &mut Inventory,
-            Option<&WorkingOn>,
-        ),
-        With<DamnedSoul>,
-    >,
+    mut q_souls: SoulCancellationQuery,
     mut reservation_queries: TaskQueries,
     mut world_map: WorldMapWrite,
     resource_item_handles: Res<ResourceItemVisualHandles>,

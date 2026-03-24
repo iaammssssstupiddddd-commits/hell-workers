@@ -13,6 +13,7 @@ use crate::transport_request::producer::find_owner_for_position;
 use crate::types::ResourceType;
 use crate::zone::Stockpile;
 
+#[allow(clippy::too_many_arguments, clippy::type_complexity)]
 pub(crate) fn compute_mixer_desired_requests(
     q_mixers: &Query<(
         Entity,

@@ -14,6 +14,21 @@ use hw_ui::selection::{
 
 use super::placement::validate_tank_companion_for_move;
 
+type MoveBuildingQuery<'w, 's> = Query<
+    'w,
+    's,
+    (Entity, &'static Building, &'static Transform),
+    (Without<PlacementGhost>, Without<PlacementPartnerGhost>),
+>;
+
+type PartnerGhostQuery<'w, 's> = Query<
+    'w,
+    's,
+    (Entity, &'static mut Transform, &'static mut Sprite),
+    (With<PlacementPartnerGhost>, Without<PlacementGhost>),
+>;
+
+#[allow(clippy::too_many_arguments)]
 pub fn building_move_preview_system(
     mut commands: Commands,
     play_mode: Res<State<PlayMode>>,
@@ -24,19 +39,13 @@ pub fn building_move_preview_system(
     q_camera: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
     world_map: WorldMapRead,
     game_assets: Res<crate::assets::GameAssets>,
-    q_buildings: Query<
-        (Entity, &Building, &Transform),
-        (Without<PlacementGhost>, Without<PlacementPartnerGhost>),
-    >,
+    q_buildings: MoveBuildingQuery,
     q_bucket_storages: Query<
         (Entity, &crate::systems::logistics::BelongsTo),
         With<crate::systems::logistics::BucketStorage>,
     >,
     mut q_ghost: Query<(Entity, &mut Transform, &mut Sprite), With<PlacementGhost>>,
-    mut q_partner_ghost: Query<
-        (Entity, &mut Transform, &mut Sprite),
-        (With<PlacementPartnerGhost>, Without<PlacementGhost>),
-    >,
+    mut q_partner_ghost: PartnerGhostQuery,
 ) {
     if *play_mode.get() != PlayMode::BuildingMove {
         despawn_move_ghosts(&mut commands, &q_ghost, &q_partner_ghost);
@@ -69,8 +78,7 @@ pub fn building_move_preview_system(
     let destination_grid = WorldMap::world_to_grid(world_pos);
     if let (Some(active_companion), Some(pending)) =
         (companion_state.0.as_ref(), move_placement_state.0)
-    {
-        if active_companion.kind == CompanionPlacementKind::BucketStorage
+        && active_companion.kind == CompanionPlacementKind::BucketStorage
             && pending.building == target_entity
         {
             let old_anchor = move_anchor_grid(building.kind, transform.translation.truncate());
@@ -119,7 +127,6 @@ pub fn building_move_preview_system(
             );
             return;
         }
-    }
 
     despawn_partner_ghost(&mut commands, &q_partner_ghost);
 
@@ -157,10 +164,7 @@ pub fn building_move_preview_system(
 fn despawn_move_ghosts(
     commands: &mut Commands,
     q_ghost: &Query<(Entity, &mut Transform, &mut Sprite), With<PlacementGhost>>,
-    q_partner_ghost: &Query<
-        (Entity, &mut Transform, &mut Sprite),
-        (With<PlacementPartnerGhost>, Without<PlacementGhost>),
-    >,
+    q_partner_ghost: &PartnerGhostQuery,
 ) {
     for (entity, _, _) in q_ghost.iter() {
         commands.entity(entity).despawn();
@@ -170,10 +174,7 @@ fn despawn_move_ghosts(
 
 fn despawn_partner_ghost(
     commands: &mut Commands,
-    q_partner_ghost: &Query<
-        (Entity, &mut Transform, &mut Sprite),
-        (With<PlacementPartnerGhost>, Without<PlacementGhost>),
-    >,
+    q_partner_ghost: &PartnerGhostQuery,
 ) {
     for (entity, _, _) in q_partner_ghost.iter() {
         commands.entity(entity).despawn();
@@ -211,10 +212,7 @@ fn upsert_move_ghost(
 
 fn upsert_partner_ghost(
     commands: &mut Commands,
-    q_partner_ghost: &mut Query<
-        (Entity, &mut Transform, &mut Sprite),
-        (With<PlacementPartnerGhost>, Without<PlacementGhost>),
-    >,
+    q_partner_ghost: &mut PartnerGhostQuery,
     texture: Handle<Image>,
     size: Vec2,
     draw_pos: Vec2,

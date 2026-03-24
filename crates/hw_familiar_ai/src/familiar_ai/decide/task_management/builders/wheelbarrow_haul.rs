@@ -13,6 +13,7 @@ use crate::familiar_ai::decide::task_management::{
     AssignTaskContext, FamiliarTaskAssignmentQueries, ReservationShadow,
 };
 
+#[allow(clippy::too_many_arguments)]
 pub fn issue_haul_with_wheelbarrow(
     wheelbarrow: Entity,
     source_pos: Vec2,
@@ -49,6 +50,7 @@ pub fn issue_haul_with_wheelbarrow(
     );
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn issue_return_wheelbarrow(
     wheelbarrow: Entity,
     parking_anchor: Entity,
@@ -82,6 +84,7 @@ pub fn issue_return_wheelbarrow(
     );
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn issue_collect_sand_with_wheelbarrow_to_blueprint(
     wheelbarrow: Entity,
     source_entity: Entity,
@@ -126,6 +129,7 @@ pub fn issue_collect_sand_with_wheelbarrow_to_blueprint(
     );
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn issue_collect_sand_with_wheelbarrow_to_mixer(
     wheelbarrow: Entity,
     source_entity: Entity,
@@ -181,6 +185,7 @@ pub fn issue_collect_sand_with_wheelbarrow_to_mixer(
     );
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn issue_collect_bone_with_wheelbarrow_to_blueprint(
     wheelbarrow: Entity,
     source_entity: Entity,
@@ -225,6 +230,7 @@ pub fn issue_collect_bone_with_wheelbarrow_to_blueprint(
     );
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn issue_collect_bone_with_wheelbarrow_to_floor(
     wheelbarrow: Entity,
     source_entity: Entity,

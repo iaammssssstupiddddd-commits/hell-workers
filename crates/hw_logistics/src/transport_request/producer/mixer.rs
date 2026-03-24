@@ -15,25 +15,37 @@ use crate::transport_request::TransportRequest;
 use crate::types::ResourceType;
 use crate::zone::Stockpile;
 
+type MixerQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static Transform,
+        &'static MudMixerStorage,
+        Option<&'static TaskWorkers>,
+        Option<&'static hw_jobs::MovePlanned>,
+    ),
+>;
+
+type MixerRequestQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static TargetMixer,
+        &'static TransportRequest,
+        Option<&'static hw_jobs::Designation>,
+        Option<&'static TaskWorkers>,
+    ),
+>;
+
 pub fn mud_mixer_auto_haul_system(
     mut commands: Commands,
     haul_cache: Res<SharedResourceCache>,
     q_familiars: Query<(Entity, &ActiveCommand, &TaskArea)>,
     q_yards: Query<(Entity, &Yard)>,
-    q_mixers: Query<(
-        Entity,
-        &Transform,
-        &MudMixerStorage,
-        Option<&TaskWorkers>,
-        Option<&hw_jobs::MovePlanned>,
-    )>,
-    q_mixer_requests: Query<(
-        Entity,
-        &TargetMixer,
-        &TransportRequest,
-        Option<&hw_jobs::Designation>,
-        Option<&TaskWorkers>,
-    )>,
+    q_mixers: MixerQuery,
+    q_mixer_requests: MixerRequestQuery,
     q_stockpiles_detailed: Query<(
         Entity,
         &Transform,

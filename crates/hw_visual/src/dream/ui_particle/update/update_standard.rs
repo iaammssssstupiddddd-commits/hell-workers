@@ -26,6 +26,7 @@ pub(super) struct StandardParticleMotion {
     visual_distance_ratio: f32,
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(super) fn update_standard_particle(
     dt: f32,
     elapsed: f32,
@@ -218,6 +219,7 @@ fn integrate_standard_particle_motion(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn update_standard_particle_visual(
     elapsed: f32,
     mat_node: &MaterialNode<DreamBubbleUiMaterial>,
@@ -280,17 +282,17 @@ fn handle_standard_particle_arrival(
     q_icon: &mut Query<&mut DreamIconAbsorb>,
 ) -> bool {
     if distance < DREAM_UI_ARRIVAL_RADIUS {
-        if let Some(icon_entity) = ui_nodes.get_slot(UiSlot::DreamPoolIcon) {
-            if let Ok(mut absorb) = q_icon.get_mut(icon_entity) {
+        if let Some(icon_entity) = ui_nodes.get_slot(UiSlot::DreamPoolIcon)
+            && let Ok(mut absorb) = q_icon.get_mut(icon_entity) {
                 absorb.pulse_count = absorb.pulse_count.saturating_add(1);
             }
-        }
         return true;
     }
 
     false
 }
 
+#[allow(clippy::too_many_arguments)]
 fn emit_standard_particle_trail(
     dt: f32,
     elapsed: f32,

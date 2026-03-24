@@ -41,6 +41,7 @@ pub fn issue_gather_water(
     );
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn issue_haul_water_to_mixer(
     bucket: Entity,
     mixer: Entity,

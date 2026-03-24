@@ -98,7 +98,7 @@ pub fn encouragement_decision_system(
         };
 
         if let Some(target_soul) =
-            decide_encouragement_target(&encouragement_ctx, &mut rng, &mut *nearby_buf)
+            decide_encouragement_target(&encouragement_ctx, &mut rng, &mut nearby_buf)
         {
             decide_output
                 .encouragement_requests

@@ -13,19 +13,23 @@ use hw_world::WorldMapRead;
 use crate::soul_ai::execute::task_execution::{AssignedTask, TaskUnassignQueries};
 use crate::soul_ai::helpers::work::unassign_task;
 
+type TaskUnassignSoulQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static Transform,
+        &'static mut AssignedTask,
+        &'static mut Path,
+        Option<&'static mut Inventory>,
+    ),
+    With<DamnedSoul>,
+>;
+
 /// `SoulTaskUnassignRequest` を受け取り、対象の魂のタスクを解除する。
 pub fn handle_soul_task_unassign_system(
     mut request_reader: MessageReader<SoulTaskUnassignRequest>,
-    mut q_souls: Query<
-        (
-            Entity,
-            &Transform,
-            &mut AssignedTask,
-            &mut Path,
-            Option<&mut Inventory>,
-        ),
-        With<DamnedSoul>,
-    >,
+    mut q_souls: TaskUnassignSoulQuery,
     mut queries: TaskUnassignQueries,
     world_map: WorldMapRead,
     mut commands: Commands,

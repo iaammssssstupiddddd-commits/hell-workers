@@ -47,6 +47,23 @@ fn to_u32_saturating(value: usize) -> u32 {
     value.min(u32::MAX as usize) as u32
 }
 
+type DroppedBucketsQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static Visibility,
+        &'static ResourceItem,
+        &'static BelongsTo,
+        Option<&'static ReservedForTask>,
+        Option<&'static TaskWorkers>,
+    ),
+    (
+        Without<hw_core::relationships::StoredIn>,
+        Without<hw_jobs::Designation>,
+    ),
+>;
+
+#[allow(clippy::too_many_arguments)]
 pub fn bucket_auto_haul_system(
     mut commands: Commands,
     _haul_cache: Res<SharedResourceCache>,
@@ -54,19 +71,7 @@ pub fn bucket_auto_haul_system(
     q_familiars: Query<(Entity, &ActiveCommand, &TaskArea), With<Familiar>>,
     q_yards: Query<(Entity, &Yard)>,
     q_tanks: Query<(&Transform, &Stockpile), Without<BucketStorage>>,
-    q_dropped_buckets: Query<
-        (
-            &Visibility,
-            &ResourceItem,
-            &BelongsTo,
-            Option<&ReservedForTask>,
-            Option<&TaskWorkers>,
-        ),
-        (
-            Without<hw_core::relationships::StoredIn>,
-            Without<hw_jobs::Designation>,
-        ),
-    >,
+    q_dropped_buckets: DroppedBucketsQuery,
     q_bucket_storages: Query<
         (Entity, &Stockpile, &BelongsTo, Option<&StoredItems>),
         With<BucketStorage>,

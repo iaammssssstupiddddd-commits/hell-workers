@@ -71,6 +71,7 @@ fn apply_expression_lock(
     });
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn apply_conversation_expression_event_system(
     mut commands: Commands,
     q_souls: Query<(), With<DamnedSoul>>,

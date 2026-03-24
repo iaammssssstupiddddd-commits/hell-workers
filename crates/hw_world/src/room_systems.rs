@@ -17,6 +17,21 @@ use crate::room_detection::{
     room_is_valid_against_input,
 };
 
+type ChangedBuildingQuery<'w, 's> = Query<
+    'w,
+    's,
+    &'static Transform,
+    (With<Building>, Or<(Changed<Building>, Changed<Transform>)>),
+>;
+type ChangedDoorQuery<'w, 's> =
+    Query<'w, 's, &'static Transform, (With<Door>, Or<(Changed<Door>, Changed<Transform>)>)>;
+type ChangedRoomsQuery<'w, 's> = Query<
+    'w,
+    's,
+    (Entity, &'static Room, Option<&'static Children>),
+    Or<(Added<Room>, Changed<Room>)>,
+>;
+
 /// 建物タイルを収集し Room ECS エンティティを再構築するシステム
 pub fn detect_rooms_system(
     mut commands: Commands,
@@ -76,6 +91,7 @@ pub fn detect_rooms_system(
     detection_state.dirty_tiles.clear();
 }
 
+#[allow(clippy::too_many_arguments)]
 /// 既存 Room の整合性を定期検証し、無効なものを再検出キューへ送るシステム
 pub fn validate_rooms_system(
     mut commands: Commands,
@@ -151,11 +167,8 @@ fn collect_building_tiles(
 /// Add/Remove は Observer (on_building_added 等) が担うため、ここでは Changed のみ処理する。
 pub fn mark_room_dirty_from_building_changes_system(
     mut detection_state: ResMut<RoomDetectionState>,
-    q_changed_buildings: Query<
-        &Transform,
-        (With<Building>, Or<(Changed<Building>, Changed<Transform>)>),
-    >,
-    q_changed_doors: Query<&Transform, (With<Door>, Or<(Changed<Door>, Changed<Transform>)>)>,
+    q_changed_buildings: ChangedBuildingQuery,
+    q_changed_doors: ChangedDoorQuery,
 ) {
     for transform in q_changed_buildings.iter() {
         let grid = WorldMap::world_to_grid(transform.translation.truncate());
@@ -226,7 +239,7 @@ const CORNER_EXT: f32 = LINE_OFFSET - TILE_SIZE * 0.5;
 /// コーナーでは隣接する2辺が接続するようにラインを延長する。
 pub fn sync_room_overlay_tiles_system(
     mut commands: Commands,
-    q_rooms: Query<(Entity, &Room, Option<&Children>), Or<(Added<Room>, Changed<Room>)>>,
+    q_rooms: ChangedRoomsQuery,
     q_overlay_tiles: Query<(), With<RoomOverlayTile>>,
 ) {
     for (room_entity, room, children_opt) in q_rooms.iter() {

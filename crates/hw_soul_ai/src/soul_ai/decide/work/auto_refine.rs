@@ -16,21 +16,27 @@ use hw_logistics::transport_request::producer::{collect_all_area_owners, find_ow
 use hw_logistics::zone::Stockpile;
 use hw_world::Yard;
 
+type MixersQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static Transform,
+        &'static MudMixerStorage,
+        Option<&'static TaskWorkers>,
+        Option<&'static Designation>,
+        Option<&'static Stockpile>,
+        Option<&'static StoredItems>,
+        Option<&'static MovePlanned>,
+    ),
+>;
+
 /// MudMixer で精製タスクを自動発行するシステム
 pub fn mud_mixer_auto_refine_system(
     mut designation_writer: MessageWriter<DesignationRequest>,
     q_familiars: Query<(Entity, &ActiveCommand, &TaskArea)>,
     q_yards: Query<(Entity, &Yard)>,
-    q_mixers: Query<(
-        Entity,
-        &Transform,
-        &MudMixerStorage,
-        Option<&TaskWorkers>,
-        Option<&Designation>,
-        Option<&Stockpile>,
-        Option<&StoredItems>,
-        Option<&MovePlanned>,
-    )>,
+    q_mixers: MixersQuery,
     q_souls: Query<&AssignedTask>,
 ) {
     // 1. 集計フェーズ: 現在実行中の精製タスクをカウント

@@ -12,21 +12,27 @@ use hw_spatial::BlueprintSpatialGrid;
 use crate::soul_ai::helpers::query_types::AutoBuildSoulQuery;
 use crate::soul_ai::helpers::work as helpers;
 
+type DesignationsQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static Transform,
+        &'static Designation,
+        Option<&'static ManagedBy>,
+        Option<&'static TaskSlots>,
+        Option<&'static TaskWorkers>,
+        Option<&'static Priority>,
+    ),
+>;
+
 /// 資材が揃った建築タスクの自動割り当てシステム
 pub fn blueprint_auto_build_system(
     mut assignment_writer: MessageWriter<TaskAssignmentRequest>,
     blueprint_grid: Res<BlueprintSpatialGrid>,
     q_familiars: Query<(Entity, &ActiveCommand, &TaskArea, Option<&Commanding>)>,
     q_blueprints: Query<(Entity, &Transform, &Blueprint, Option<&TaskWorkers>)>,
-    q_designations: Query<(
-        Entity,
-        &Transform,
-        &Designation,
-        Option<&ManagedBy>,
-        Option<&TaskSlots>,
-        Option<&TaskWorkers>,
-        Option<&Priority>,
-    )>,
+    q_designations: DesignationsQuery,
     mut q_souls: AutoBuildSoulQuery,
     q_breakdown: Query<&StressBreakdown>,
 ) {
@@ -116,8 +122,8 @@ pub fn blueprint_auto_build_system(
                 }
 
                 // 見つかった魂に建築タスクを割り当て
-                if let Some(worker_entity) = best_worker {
-                    if let Ok((_, _, soul, assigned_task, _, _, idle, _)) =
+                if let Some(worker_entity) = best_worker
+                    && let Ok((_, _, soul, assigned_task, _, _, idle, _)) =
                         q_souls.get_mut(worker_entity)
                     {
                         if !helpers::is_soul_available_for_work(
@@ -150,7 +156,6 @@ pub fn blueprint_auto_build_system(
                             bp_entity, worker_entity
                         );
                     }
-                }
             }
         }
     }

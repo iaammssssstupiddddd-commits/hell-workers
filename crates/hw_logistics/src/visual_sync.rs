@@ -11,11 +11,15 @@ pub fn on_wheelbarrow_added(on: On<Add, Wheelbarrow>, mut commands: Commands) {
     commands.entity(on.entity).try_insert(WheelbarrowMarker);
 }
 
+type InventoryVisualQuery<'w, 's> = Query<
+    'w,
+    's,
+    (&'static Inventory, &'static mut InventoryItemVisual),
+    Or<(Changed<Inventory>, Added<Inventory>)>,
+>;
+
 pub fn sync_inventory_item_visual_system(
-    mut q: Query<
-        (&Inventory, &mut InventoryItemVisual),
-        Or<(Changed<Inventory>, Added<Inventory>)>,
-    >,
+    mut q: InventoryVisualQuery,
     q_items: Query<&ResourceItem>,
 ) {
     for (inventory, mut visual) in q.iter_mut() {

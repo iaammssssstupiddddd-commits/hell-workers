@@ -10,6 +10,7 @@ pub struct SiteYardBoundaryVisual;
 const SITE_BOUNDARY_COLOR: LinearRgba = LinearRgba::new(0.62, 0.58, 0.49, 0.85);
 const YARD_BOUNDARY_COLOR: LinearRgba = LinearRgba::new(0.28, 0.88, 0.95, 0.85);
 
+#[allow(clippy::too_many_arguments)]
 pub fn sync_site_yard_boundaries_system(
     mut commands: Commands,
     q_existing: Query<Entity, With<SiteYardBoundaryVisual>>,

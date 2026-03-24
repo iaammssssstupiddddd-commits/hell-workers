@@ -5,6 +5,7 @@ use crate::systems::logistics::ResourceItem;
 use crate::systems::logistics::transport_request::{TransportRequest, TransportRequestKind};
 use bevy::prelude::*;
 
+#[allow(clippy::too_many_arguments)]
 pub fn generate_task_description(
     wt: WorkType,
     entity: Entity,
@@ -13,8 +14,7 @@ pub fn generate_task_description(
     resource_item: Option<&ResourceItem>,
     tree: Option<&Tree>,
     rock: Option<&Rock>,
-    sand_pile: Option<&SandPile>,
-    bone_pile: Option<&BonePile>,
+    _sand_pile: Option<&SandPile>,    bone_pile: Option<&BonePile>,
 ) -> String {
     match wt {
         WorkType::Build => {
@@ -76,13 +76,7 @@ pub fn generate_task_description(
         }
         WorkType::HaulWaterToMixer => "Haul Water to Mixer".to_string(),
         WorkType::GatherWater => "Gather Water".to_string(),
-        WorkType::CollectSand => {
-            if sand_pile.is_some() {
-                "Collect Sand".to_string()
-            } else {
-                "Collect Sand".to_string()
-            }
-        }
+        WorkType::CollectSand => "Collect Sand".to_string(),
         WorkType::Refine => "Refine".to_string(),
         WorkType::WheelbarrowHaul => "Wheelbarrow Haul".to_string(),
         WorkType::CollectBone => {

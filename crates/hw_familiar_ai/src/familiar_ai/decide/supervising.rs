@@ -49,11 +49,10 @@ pub fn supervising_logic(ctx: &mut FamiliarSupervisingContext<'_, '_, '_>) {
 
     // 現在のターゲットが有効かチェック
     let mut target_valid = false;
-    if let Some(target_ent) = current_target {
-        if ctx.active_members.contains(&target_ent) {
+    if let Some(target_ent) = current_target
+        && ctx.active_members.contains(&target_ent) {
             target_valid = true;
         }
-    }
 
     // ターゲットが無効、またはタイマー終了時に新しいターゲットを選定
     if !target_valid || timer <= 0.0 {
@@ -107,8 +106,8 @@ pub fn supervising_logic(ctx: &mut FamiliarSupervisingContext<'_, '_, '_>) {
         }
     });
 
-    if all_members_idle {
-        if let Some(area) = ctx.task_area_opt {
+    if all_members_idle
+        && let Some(area) = ctx.task_area_opt {
             let area_center = area.center();
             // メンバー全員待機中なら、エリア中心に移動して終了（以降の追従ロジックをスキップ）
             move_to_center(
@@ -120,10 +119,9 @@ pub fn supervising_logic(ctx: &mut FamiliarSupervisingContext<'_, '_, '_>) {
             );
             return;
         }
-    }
 
-    if let Some(target_ent) = current_target {
-        if let Ok((_, transform, task)) = ctx.q_souls.get(target_ent) {
+    if let Some(target_ent) = current_target
+        && let Ok((_, transform, task)) = ctx.q_souls.get(target_ent) {
             let target_pos = transform.translation.truncate();
             let is_working = !matches!(*task, AssignedTask::None);
 
@@ -134,13 +132,12 @@ pub fn supervising_logic(ctx: &mut FamiliarSupervisingContext<'_, '_, '_>) {
             let is_path_finished = ctx.fam_path.current_index >= ctx.fam_path.waypoints.len();
 
             // 1. 誘導判定 (ターゲットが待機中、かつエリアから遠い場合)
-            if !is_working {
-                if let Some(area) = ctx.task_area_opt {
+            if !is_working
+                && let Some(area) = ctx.task_area_opt {
                     let area_center = area.center();
-                    if ctx.fam_pos.distance_squared(area_center) > (TILE_SIZE * 1.5).powi(2)
-                        || target_pos.distance_squared(area_center) > (TILE_SIZE * 5.0).powi(2)
-                    {
-                        if move_to_center(
+                    if (ctx.fam_pos.distance_squared(area_center) > (TILE_SIZE * 1.5).powi(2)
+                        || target_pos.distance_squared(area_center) > (TILE_SIZE * 5.0).powi(2))
+                        && move_to_center(
                             ctx.fam_entity,
                             ctx.fam_pos,
                             area_center,
@@ -149,21 +146,17 @@ pub fn supervising_logic(ctx: &mut FamiliarSupervisingContext<'_, '_, '_>) {
                         ) {
                             return;
                         }
-                    }
                 }
-            }
 
             // 2. 追従判定 (離れた時だけ近づく)
             let mut should_follow = dist_sq > follow_threshold;
-            if !is_working {
-                if let Some(area) = ctx.task_area_opt {
-                    if !area.contains(target_pos)
+            if !is_working
+                && let Some(area) = ctx.task_area_opt
+                    && !area.contains(target_pos)
                         && ctx.fam_pos.distance_squared(area.center()) < (TILE_SIZE * 3.0).powi(2)
                     {
                         should_follow = false;
                     }
-                }
-            }
 
             if should_follow {
                 let dest_lag_sq = ctx.fam_dest.0.distance_squared(target_pos);
@@ -172,14 +165,12 @@ pub fn supervising_logic(ctx: &mut FamiliarSupervisingContext<'_, '_, '_>) {
                     ctx.fam_path.waypoints = vec![target_pos];
                     ctx.fam_path.current_index = 0;
                 }
-            } else if dist_sq < stop_threshold || !is_working {
-                if !is_path_finished {
+            } else if (dist_sq < stop_threshold || !is_working)
+                && !is_path_finished {
                     ctx.fam_path.waypoints.clear();
                     ctx.fam_path.current_index = 0;
                 }
-            }
         }
-    }
 }
 
 /// 指定位置（エリア中心など）への移動を制御するヘルパー

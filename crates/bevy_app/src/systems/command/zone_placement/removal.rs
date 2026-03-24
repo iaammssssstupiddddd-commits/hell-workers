@@ -13,6 +13,7 @@ use super::removal_preview::{
     ZoneRemovalPreviewState, clear_removal_preview, update_removal_preview,
 };
 
+#[allow(clippy::too_many_arguments)]
 pub fn zone_removal_system(
     buttons: Res<ButtonInput<MouseButton>>,
     q_window: Query<&Window, With<PrimaryWindow>>,
@@ -80,7 +81,7 @@ fn apply_zone_removal(commands: &mut Commands, world_map: &mut WorldMap, area: &
     let (to_remove, fragments) = identify_removal_targets(world_map, area);
 
     let removed =
-        world_map.take_stockpile_tiles(to_remove.into_iter().chain(fragments.into_iter()));
+        world_map.take_stockpile_tiles(to_remove.into_iter().chain(fragments));
     for entity in removed {
         commands.entity(entity).despawn();
     }

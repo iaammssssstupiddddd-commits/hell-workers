@@ -31,8 +31,8 @@ pub fn update_destination_to_adjacent(
     let start_grid = WorldMap::world_to_grid(soul_pos);
 
     // すでに有効なパスがあり、目的地も変わっていないならスキップ
-    if !path.waypoints.is_empty() && path.current_index < path.waypoints.len() {
-        if let Some(last_wp) = path.waypoints.last() {
+    if !path.waypoints.is_empty() && path.current_index < path.waypoints.len()
+        && let Some(last_wp) = path.waypoints.last() {
             let last_grid = WorldMap::world_to_grid(*last_wp);
             // 終点がターゲットに隣接していれば、そのパスは有効
             let dx = (last_grid.0 - target_grid.0).abs();
@@ -43,7 +43,6 @@ pub fn update_destination_to_adjacent(
                 return true;
             }
         }
-    }
 
     // ターゲット自体がWalkableなら、そのまま直接移動を試みる
     if world_map.is_walkable(target_grid.0, target_grid.1) {
@@ -155,8 +154,8 @@ pub fn update_destination_to_blueprint(
     }
 
     // 現在のパスが既に有効（ターゲットの隣接点に向かっている）なら再計算しない
-    if !path.waypoints.is_empty() {
-        if let Some(last_wp) = path.waypoints.last() {
+    if !path.waypoints.is_empty()
+        && let Some(last_wp) = path.waypoints.last() {
             let last_grid = WorldMap::world_to_grid(*last_wp);
 
             // 終点が予定地外かつターゲットに隣接していれば、そのパスは有効
@@ -170,13 +169,11 @@ pub fn update_destination_to_blueprint(
                 }
             }
         }
-    }
 
     // ターゲットの中心地点を軸に「境界」までのパスを計算
     if let Some(grid_path) =
         hw_world::find_path_to_boundary(world_map, pf_context, start_grid, occupied_grids)
-    {
-        if let Some(last_grid) = grid_path.last() {
+        && let Some(last_grid) = grid_path.last() {
             let last_pos = WorldMap::grid_to_world(last_grid.0, last_grid.1);
             update_destination_if_needed(dest, last_pos, path);
 
@@ -187,7 +184,6 @@ pub fn update_destination_to_blueprint(
             path.current_index = 0;
             return true;
         }
-    }
 
     false
 }
@@ -290,6 +286,7 @@ pub fn release_mixer_mud_storage_for_item(
         .remove::<hw_jobs::StoredByMixer>();
 }
 
+#[allow(clippy::too_many_arguments)]
 /// 拾い判定が満たされない場合はタスクをクリアする
 pub fn try_pickup_item(
     commands: &mut Commands,

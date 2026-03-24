@@ -20,6 +20,18 @@ use crate::types::{ResourceItem, ResourceType};
 
 const PROVISIONAL_WALL_PRIORITY: u32 = 5;
 
+type WallDesignationQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static Building,
+        &'static ProvisionalWall,
+        Option<&'static Designation>,
+        Option<&'static TaskWorkers>,
+    ),
+>;
+
 fn to_u32_saturating(value: usize) -> u32 {
     u32::try_from(value).unwrap_or(u32::MAX)
 }
@@ -212,7 +224,7 @@ pub fn provisional_wall_material_delivery_sync_system(
         let nearest_mud = q_resources
             .iter()
             .filter(|(_, transform, visibility, item, stored_in_opt)| {
-                *visibility != &Visibility::Hidden
+                *visibility != Visibility::Hidden
                     && stored_in_opt.is_none()
                     && item.0 == ResourceType::StasisMud
                     && transform.translation.truncate().distance_squared(wall_pos)
@@ -240,13 +252,7 @@ pub fn provisional_wall_material_delivery_sync_system(
 
 pub fn provisional_wall_designation_system(
     mut commands: Commands,
-    q_walls: Query<(
-        Entity,
-        &Building,
-        &ProvisionalWall,
-        Option<&Designation>,
-        Option<&TaskWorkers>,
-    )>,
+    q_walls: WallDesignationQuery,
     q_wall_tiles: Query<&WallTileBlueprint>,
 ) {
     let site_managed_walls: std::collections::HashSet<Entity> = q_wall_tiles

@@ -11,6 +11,61 @@ use hw_world::WorldMapRead;
 
 use super::access::{DesignationAccess, MutStorageAccess, ReservationAccess, StorageAccess};
 
+type SandPilesQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static Transform,
+        Option<&'static hw_jobs::Designation>,
+        Option<&'static TaskWorkers>,
+    ),
+    With<hw_jobs::SandPile>,
+>;
+
+type BonePilesQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static Transform,
+        Option<&'static hw_jobs::Designation>,
+        Option<&'static TaskWorkers>,
+    ),
+    With<hw_jobs::BonePile>,
+>;
+
+type FreeResourceItemsQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static Transform,
+        &'static Visibility,
+        &'static hw_logistics::types::ResourceItem,
+    ),
+    (
+        Without<hw_jobs::Designation>,
+        Without<TaskWorkers>,
+        Without<ReservedForTask>,
+        Without<hw_logistics::transport_request::ManualHaulPinnedSource>,
+    ),
+>;
+
+type WheelbarrowsQuery<'w, 's> =
+    Query<'w, 's, (Entity, &'static Transform), (With<Wheelbarrow>, With<ParkedAt>, Without<PushedBy>)>;
+
+type StoredItemsQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static hw_logistics::types::ResourceItem,
+        &'static hw_core::relationships::StoredIn,
+    ),
+    (Without<hw_jobs::Designation>, Without<TaskWorkers>, Without<ReservedForTask>),
+>;
+
 /// タスク割り当てに必要なクエリ群（Familiar AI向け）
 #[derive(SystemParam)]
 pub struct TaskAssignmentReadAccess<'w, 's> {
@@ -24,28 +79,8 @@ pub struct TaskAssignmentReadAccess<'w, 's> {
             Option<&'static hw_jobs::Designation>,
         ),
     >,
-    pub sand_piles: Query<
-        'w,
-        's,
-        (
-            Entity,
-            &'static Transform,
-            Option<&'static hw_jobs::Designation>,
-            Option<&'static TaskWorkers>,
-        ),
-        With<hw_jobs::SandPile>,
-    >,
-    pub bone_piles: Query<
-        'w,
-        's,
-        (
-            Entity,
-            &'static Transform,
-            Option<&'static hw_jobs::Designation>,
-            Option<&'static TaskWorkers>,
-        ),
-        With<hw_jobs::BonePile>,
-    >,
+    pub sand_piles: SandPilesQuery<'w, 's>,
+    pub bone_piles: BonePilesQuery<'w, 's>,
     pub task_state: Query<
         'w,
         's,
@@ -62,46 +97,13 @@ pub struct TaskAssignmentReadAccess<'w, 's> {
         Query<'w, 's, &'static hw_logistics::transport_request::TransportRequestFixedSource>,
     pub familiar_task_areas:
         Query<'w, 's, &'static hw_core::area::TaskArea, With<hw_core::familiar::Familiar>>,
-    pub free_resource_items: Query<
-        'w,
-        's,
-        (
-            Entity,
-            &'static Transform,
-            &'static Visibility,
-            &'static hw_logistics::types::ResourceItem,
-        ),
-        (
-            Without<hw_jobs::Designation>,
-            Without<TaskWorkers>,
-            Without<ReservedForTask>,
-            Without<hw_logistics::transport_request::ManualHaulPinnedSource>,
-        ),
-    >,
+    pub free_resource_items: FreeResourceItemsQuery<'w, 's>,
     pub reserved_for_task: Query<'w, 's, &'static ReservedForTask>,
     pub task_slots: Query<'w, 's, &'static hw_jobs::TaskSlots>,
-    pub wheelbarrows: Query<
-        'w,
-        's,
-        (Entity, &'static Transform),
-        (With<Wheelbarrow>, With<ParkedAt>, Without<PushedBy>),
-    >,
+    pub wheelbarrows: WheelbarrowsQuery<'w, 's>,
     pub wheelbarrow_leases:
         Query<'w, 's, &'static hw_logistics::transport_request::WheelbarrowLease>,
-    pub stored_items_query: Query<
-        'w,
-        's,
-        (
-            Entity,
-            &'static hw_logistics::types::ResourceItem,
-            &'static hw_core::relationships::StoredIn,
-        ),
-        (
-            Without<hw_jobs::Designation>,
-            Without<TaskWorkers>,
-            Without<ReservedForTask>,
-        ),
-    >,
+    pub stored_items_query: StoredItemsQuery<'w, 's>,
 }
 
 /// タスク割り当てに必要なクエリ群（Familiar AI向け）
@@ -123,6 +125,7 @@ impl<'w, 's> Deref for TaskAssignmentQueries<'w, 's> {
 }
 
 impl<'w, 's> DerefMut for TaskAssignmentQueries<'w, 's> {
+    #[allow(clippy::type_complexity)]
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.read
     }
@@ -136,6 +139,7 @@ pub struct TaskUnassignQueries<'w, 's> {
 }
 
 /// タスク実行に必要なクエリ群
+#[allow(clippy::type_complexity)]
 #[derive(SystemParam)]
 pub struct TaskQueries<'w, 's> {
     pub reservation: ReservationAccess<'w, 's>,

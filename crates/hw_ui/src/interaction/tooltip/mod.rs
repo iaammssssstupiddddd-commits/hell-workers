@@ -15,6 +15,9 @@ pub use layout::TooltipUiLayoutQueryParam;
 pub use system::hover_tooltip_system;
 pub use target::TooltipTarget;
 
+type TooltipTextQuery<'w, 's> =
+    Query<'w, 's, &'static mut TextColor, Or<(With<TooltipHeader>, With<TooltipBody>)>>;
+
 #[derive(Default)]
 pub struct TooltipRuntimeState {
     pub target: Option<TooltipTarget>,
@@ -30,6 +33,7 @@ pub trait TooltipInspectionSource {
 pub trait TooltipContentRenderer {
     type GameAssets;
 
+    #[allow(clippy::too_many_arguments)]
     fn rebuild_tooltip_content(
         &self,
         commands: &mut Commands,
@@ -47,8 +51,7 @@ pub trait TooltipContentRenderer {
 pub struct TooltipRenderQueries<'w, 's> {
     pub q_children: Query<'w, 's, &'static Children>,
     pub q_nodes: Query<'w, 's, &'static mut Node, Without<HoverTooltip>>,
-    pub q_tooltip_text:
-        Query<'w, 's, &'static mut TextColor, Or<(With<TooltipHeader>, With<TooltipBody>)>>,
+    pub q_tooltip_text: TooltipTextQuery<'w, 's>,
     pub q_tooltip_progress: Query<
         'w,
         's,

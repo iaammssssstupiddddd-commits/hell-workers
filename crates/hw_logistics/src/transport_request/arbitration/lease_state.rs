@@ -16,6 +16,7 @@ pub(super) struct LeaseStateUpdate {
     pub(super) cleared_requests: HashSet<Entity>,
 }
 
+#[allow(clippy::type_complexity)]
 pub(super) fn update_lease_state(
     commands: &mut Commands,
     q_requests: &Query<(

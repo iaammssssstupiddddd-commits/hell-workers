@@ -9,14 +9,24 @@ use hw_core::familiar::Familiar;
 use hw_core::soul::DamnedSoul;
 use hw_visual::visual3d::{FamiliarProxy3d, SoulProxy3d};
 
+type SoulProxy3dQuery<'w, 's> = Query<
+    'w,
+    's,
+    (&'static SoulProxy3d, &'static mut Transform),
+    (Without<DamnedSoul>, Without<Camera3dRtt>),
+>;
+type FamiliarProxy3dQuery<'w, 's> = Query<
+    'w,
+    's,
+    (&'static FamiliarProxy3d, &'static mut Transform),
+    (Without<Familiar>, Without<Camera3dRtt>),
+>;
+
 /// SoulProxy3d を対応する DamnedSoul の 2D Transform に同期する。
 pub fn sync_soul_proxy_3d_system(
     q_souls: Query<(Entity, &Transform), With<DamnedSoul>>,
     q_cam3d: Query<&Transform, With<Camera3dRtt>>,
-    mut q_proxies: Query<
-        (&SoulProxy3d, &mut Transform),
-        (Without<DamnedSoul>, Without<Camera3dRtt>),
-    >,
+    mut q_proxies: SoulProxy3dQuery,
 ) {
     let Ok(cam3d) = q_cam3d.single() else { return };
 
@@ -35,10 +45,7 @@ pub fn sync_soul_proxy_3d_system(
 pub fn sync_familiar_proxy_3d_system(
     q_familiars: Query<(Entity, &Transform), With<Familiar>>,
     q_cam3d: Query<&Transform, With<Camera3dRtt>>,
-    mut q_proxies: Query<
-        (&FamiliarProxy3d, &mut Transform),
-        (Without<Familiar>, Without<Camera3dRtt>),
-    >,
+    mut q_proxies: FamiliarProxy3dQuery,
 ) {
     let Ok(cam3d) = q_cam3d.single() else { return };
 

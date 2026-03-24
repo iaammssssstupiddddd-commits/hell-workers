@@ -13,6 +13,22 @@ use super::hit_test::{
 };
 use super::state::{HoveredEntity, SelectedEntity};
 
+type SelectionTargetQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static GlobalTransform,
+        Option<&'static crate::systems::jobs::Building>,
+    ),
+    Or<(
+        With<crate::systems::jobs::Tree>,
+        With<crate::systems::jobs::Rock>,
+        With<crate::systems::logistics::ResourceItem>,
+        With<crate::systems::jobs::Building>,
+    )>,
+>;
+
 /// Determines the SelectionIntent for a left-click at `world_pos`.
 fn resolve_left_click_intent(
     world_pos: Vec2,
@@ -39,19 +55,7 @@ fn resolve_right_click_intent(
     current_selected: Option<Entity>,
     q_souls: &Query<(Entity, &GlobalTransform), With<DamnedSoul>>,
     q_familiars: &Query<(Entity, &GlobalTransform), With<Familiar>>,
-    q_targets: &Query<
-        (
-            Entity,
-            &GlobalTransform,
-            Option<&crate::systems::jobs::Building>,
-        ),
-        Or<(
-            With<crate::systems::jobs::Tree>,
-            With<crate::systems::jobs::Rock>,
-            With<crate::systems::logistics::ResourceItem>,
-            With<crate::systems::jobs::Building>,
-        )>,
-    >,
+    q_targets: &SelectionTargetQuery,
 ) -> SelectionIntent {
     // 右クリック対象がエンティティ上なら移動命令ではなくコンテキストメニューを優先
     if hovered_entity_at_world_pos(world_pos, q_souls, q_familiars, q_targets).is_some() {
@@ -70,6 +74,7 @@ fn resolve_right_click_intent(
     SelectionIntent::None
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn handle_mouse_input(
     buttons: Res<ButtonInput<MouseButton>>,
     q_window: Query<&Window, With<bevy::window::PrimaryWindow>>,
@@ -77,19 +82,7 @@ pub fn handle_mouse_input(
     q_souls: Query<(Entity, &GlobalTransform), With<DamnedSoul>>,
     q_familiars: Query<(Entity, &GlobalTransform), With<Familiar>>,
     q_task_areas: Query<(Entity, &TaskArea), With<Familiar>>,
-    q_targets: Query<
-        (
-            Entity,
-            &GlobalTransform,
-            Option<&crate::systems::jobs::Building>,
-        ),
-        Or<(
-            With<crate::systems::jobs::Tree>,
-            With<crate::systems::jobs::Rock>,
-            With<crate::systems::logistics::ResourceItem>,
-            With<crate::systems::jobs::Building>,
-        )>,
-    >,
+    q_targets: SelectionTargetQuery,
     ui_input_state: Res<UiInputState>,
     mut selected_entity: ResMut<SelectedEntity>,
     mut next_play_mode: ResMut<NextState<PlayMode>>,
@@ -177,19 +170,7 @@ pub fn update_hover_entity(
     q_camera: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
     q_souls: Query<(Entity, &GlobalTransform), With<DamnedSoul>>,
     q_familiars: Query<(Entity, &GlobalTransform), With<Familiar>>,
-    q_targets: Query<
-        (
-            Entity,
-            &GlobalTransform,
-            Option<&crate::systems::jobs::Building>,
-        ),
-        Or<(
-            With<crate::systems::jobs::Tree>,
-            With<crate::systems::jobs::Rock>,
-            With<crate::systems::logistics::ResourceItem>,
-            With<crate::systems::jobs::Building>,
-        )>,
-    >,
+    q_targets: SelectionTargetQuery,
     mut hovered_entity: ResMut<HoveredEntity>,
 ) {
     if ui_input_state.pointer_over_ui {

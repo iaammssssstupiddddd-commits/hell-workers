@@ -5,6 +5,8 @@ use crate::systems::jobs::{Building, BuildingType, ProvisionalWall};
 use crate::world::map::WorldMapWrite;
 use bevy::prelude::*;
 
+type SiteTileData = (Entity, (i32, i32), WallTileState, Option<Entity>);
+
 /// Handles wall construction completion (no curing phase)
 pub fn wall_construction_completion_system(
     mut q_sites: Query<(Entity, &WallConstructionSite)>,
@@ -15,7 +17,7 @@ pub fn wall_construction_completion_system(
     mut commands: Commands,
 ) {
     for (site_entity, site) in q_sites.iter_mut() {
-        let site_tiles: Vec<(Entity, (i32, i32), WallTileState, Option<Entity>)> = q_tiles
+        let site_tiles: Vec<SiteTileData> = q_tiles
             .iter()
             .filter(|(_, tile)| tile.parent_site == site_entity)
             .map(|(tile_entity, tile)| (tile_entity, tile.grid_pos, tile.state, tile.spawned_wall))

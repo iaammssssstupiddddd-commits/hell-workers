@@ -7,6 +7,7 @@ use hw_core::relationships::{GatheringParticipants, ParticipatingIn};
 use hw_core::selection::HoveredEntity;
 use hw_core::soul::DamnedSoul;
 
+#[allow(clippy::type_complexity)]
 /// 集会オーラのサイズと位置の更新システム
 pub fn gathering_visual_update_system(
     q_spots: Query<
@@ -43,8 +44,8 @@ pub fn gathering_visual_update_system(
             }
         }
 
-        if let Some(obj_entity) = visuals.object_entity {
-            if let Ok((_, mut transform, mut visibility)) = q_visuals.get_mut(obj_entity) {
+        if let Some(obj_entity) = visuals.object_entity
+            && let Ok((_, mut transform, mut visibility)) = q_visuals.get_mut(obj_entity) {
                 if transform.translation != target_obj_pos {
                     transform.translation = target_obj_pos;
                 }
@@ -59,7 +60,6 @@ pub fn gathering_visual_update_system(
                     *visibility = target_visibility;
                 }
             }
-        }
     }
 }
 
@@ -96,11 +96,10 @@ pub fn gathering_debug_visualization_system(
         }
     }
 
-    if let Some(hovered) = hovered_entity.0 {
-        if let Ok(participating_in) = q_soul_participating.get(hovered) {
+    if let Some(hovered) = hovered_entity.0
+        && let Ok(participating_in) = q_soul_participating.get(hovered) {
             target_spots.insert(participating_in.0);
         }
-    }
 
     for spot_entity in target_spots {
         if let Ok((_, spot, participants)) = q_spots.get(spot_entity) {

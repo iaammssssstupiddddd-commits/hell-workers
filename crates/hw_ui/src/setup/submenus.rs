@@ -42,6 +42,7 @@ impl<'a> MenuEntrySpec<'a> {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn spawn_submenu_container<T: Bundle>(
     commands: &mut Commands,
     theme: &UiTheme,

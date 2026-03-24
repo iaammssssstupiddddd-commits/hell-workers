@@ -14,6 +14,7 @@ pub fn random_position_around(center: Vec2, min_dist: f32, max_dist: f32) -> Vec
     center + Vec2::new(angle.cos() * dist, angle.sin() * dist)
 }
 
+#[allow(clippy::too_many_arguments)]
 /// overlap 回避付きの移動先を探索。歩行可能かつ他 Soul と重ならない位置を返す。
 pub fn find_position_with_separation<G: SpatialGridOps, W: PathWorld>(
     center: Vec2,

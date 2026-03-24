@@ -154,6 +154,7 @@ pub fn assign_haul_to_floor_construction(
     false
 }
 
+#[allow(clippy::too_many_arguments)]
 fn try_direct_bone_collect_to_floor(
     site_entity: Entity,
     task_entity: Entity,

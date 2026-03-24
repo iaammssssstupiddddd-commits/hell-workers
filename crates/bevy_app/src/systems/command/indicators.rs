@@ -10,18 +10,22 @@ use crate::systems::visual::task_area_visual::{TaskAreaMaterial, TaskAreaVisual}
 use bevy::prelude::*;
 use hw_core::constants::TILE_SIZE;
 
+type TaskAreaIndicatorQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static TaskAreaIndicator,
+        &'static mut Transform,
+        &'static mut Visibility,
+        &'static MeshMaterial2d<TaskAreaMaterial>,
+    ),
+    (Without<Familiar>, With<TaskAreaVisual>),
+>;
+
 pub fn task_area_indicator_system(
     q_familiars: Query<(Entity, &Transform, &TaskArea, &Familiar), With<Familiar>>,
-    mut q_indicators: Query<
-        (
-            Entity,
-            &TaskAreaIndicator,
-            &mut Transform,
-            &mut Visibility,
-            &MeshMaterial2d<TaskAreaMaterial>,
-        ),
-        (Without<Familiar>, With<TaskAreaVisual>),
-    >,
+    mut q_indicators: TaskAreaIndicatorQuery,
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<TaskAreaMaterial>>,

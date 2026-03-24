@@ -6,6 +6,7 @@ use crate::systems::command::{TaskArea, TaskMode};
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
 
+#[allow(clippy::too_many_arguments)]
 pub(super) fn handle_release_designation(
     task_context: &mut TaskContext,
     selected_entity: Option<Entity>,

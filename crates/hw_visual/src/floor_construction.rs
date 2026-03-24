@@ -14,6 +14,30 @@ use crate::progress_bar::{
     update_progress_bar_fill,
 };
 
+
+type FloorCuringBgQuery<'w, 's> = Query<
+    'w,
+    's,
+    (Entity, &'static ChildOf, &'static mut Transform),
+    (
+        With<FloorCuringProgressBar>,
+        With<ProgressBarBackground>,
+        Without<FloorSiteVisualState>,
+        Without<ProgressBarFill>,
+    ),
+>;
+
+type FloorCuringFillQuery<'w, 's> = Query<
+    'w,
+    's,
+    (Entity, &'static ChildOf, &'static mut Sprite, &'static mut Transform),
+    (
+        With<FloorCuringProgressBar>,
+        With<ProgressBarFill>,
+        Without<FloorSiteVisualState>,
+        Without<ProgressBarBackground>,
+    ),
+>;
 const MAX_BONE_VISUAL_SLOTS: u8 = 2;
 const FLOOR_CURING_BAR_WIDTH: f32 = 40.0;
 const FLOOR_CURING_BAR_HEIGHT: f32 = 5.0;
@@ -198,24 +222,8 @@ pub fn manage_floor_curing_progress_bars_system(
 pub fn update_floor_curing_progress_bars_system(
     q_sites: Query<(&Transform, &FloorSiteVisualState), Without<FloorCuringProgressBar>>,
     q_generic_bars: Query<&GenericProgressBar>,
-    mut q_bg_bars: Query<
-        (Entity, &ChildOf, &mut Transform),
-        (
-            With<FloorCuringProgressBar>,
-            With<ProgressBarBackground>,
-            Without<FloorSiteVisualState>,
-            Without<ProgressBarFill>,
-        ),
-    >,
-    mut q_fill_bars: Query<
-        (Entity, &ChildOf, &mut Sprite, &mut Transform),
-        (
-            With<FloorCuringProgressBar>,
-            With<ProgressBarFill>,
-            Without<FloorSiteVisualState>,
-            Without<ProgressBarBackground>,
-        ),
-    >,
+    mut q_bg_bars: FloorCuringBgQuery,
+    mut q_fill_bars: FloorCuringFillQuery,
 ) {
     for (bg_entity, child_of, mut bg_transform) in q_bg_bars.iter_mut() {
         let Ok((site_transform, site)) = q_sites.get(child_of.parent()) else {

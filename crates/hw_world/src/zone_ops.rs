@@ -9,6 +9,8 @@ use crate::coords::world_to_grid;
 use crate::map::WorldMap;
 use crate::zones::{Site, Yard};
 
+type TileVecPair = (Vec<(i32, i32)>, Vec<(i32, i32)>);
+
 // ---------------------------------------------------------------------------
 // Removal targets
 // ---------------------------------------------------------------------------
@@ -19,7 +21,7 @@ use crate::zones::{Site, Yard};
 pub fn identify_removal_targets(
     world_map: &WorldMap,
     area: &AreaBounds,
-) -> (Vec<(i32, i32)>, Vec<(i32, i32)>) {
+) -> TileVecPair {
     let min_grid = WorldMap::world_to_grid(area.min + bevy::math::Vec2::splat(0.1));
     let max_grid = WorldMap::world_to_grid(area.max - bevy::math::Vec2::splat(0.1));
 

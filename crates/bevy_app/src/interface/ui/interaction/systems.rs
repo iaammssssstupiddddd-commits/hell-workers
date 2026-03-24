@@ -18,6 +18,24 @@ use hw_world::DoorVisualHandles;
 
 use super::{menu_actions, mode};
 
+type MenuButtonWithColorQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static Interaction,
+        &'static MenuButton,
+        &'static mut BackgroundColor,
+    ),
+    (Changed<Interaction>, With<Button>),
+>;
+
+type MenuButtonQuery<'w, 's> = Query<
+    'w,
+    's,
+    (&'static Interaction, &'static MenuButton),
+    (Changed<Interaction>, With<Button>),
+>;
+
 pub fn update_ui_input_state_system(
     mut ui_input_state: ResMut<UiInputState>,
     q_blockers: Query<&RelativeCursorPosition, With<UiInputBlocker>>,
@@ -30,6 +48,7 @@ pub fn update_ui_input_state_system(
     ui_input_state.pointer_over_ui = pointer_over_blocker || pointer_over_button;
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn ui_keyboard_shortcuts_system(
     keyboard: Res<ButtonInput<KeyCode>>,
     mut menu_state: ResMut<MenuState>,
@@ -112,10 +131,7 @@ pub fn ui_keyboard_shortcuts_system(
 
 /// UI ボタンの操作を受け取り、`UiIntent` を発行する統合システム
 pub fn ui_interaction_system(
-    mut interaction_query: Query<
-        (&Interaction, &MenuButton, &mut BackgroundColor),
-        (Changed<Interaction>, With<Button>),
-    >,
+    mut interaction_query: MenuButtonWithColorQuery,
     q_context_menu: Query<Entity, With<ContextMenu>>,
     mut commands: Commands,
     mut ui_intent_writer: MessageWriter<UiIntent>,
@@ -136,7 +152,7 @@ pub fn ui_interaction_system(
 /// `SelectArchitectCategory` を専用で処理するシステム
 /// 2回押下時のトグル仕様をここで維持する。
 pub fn arch_category_action_system(
-    interaction_query: Query<(&Interaction, &MenuButton), (Changed<Interaction>, With<Button>)>,
+    interaction_query: MenuButtonQuery,
     mut arch_category_state: ResMut<hw_ui::components::ArchitectCategoryState>,
 ) {
     for (interaction, menu_button) in interaction_query.iter() {
@@ -157,7 +173,7 @@ pub fn arch_category_action_system(
 /// `MovePlantBuilding` を専用で処理するシステム
 /// Plantの移動先選択モードへ遷移する。
 pub fn move_plant_building_action_system(
-    interaction_query: Query<(&Interaction, &MenuButton), (Changed<Interaction>, With<Button>)>,
+    interaction_query: MenuButtonQuery,
     mut selected_entity: ResMut<crate::interface::selection::SelectedEntity>,
     mut move_context: ResMut<MoveContext>,
     mut move_placement_state: ResMut<MovePlacementState>,
@@ -182,7 +198,7 @@ pub fn move_plant_building_action_system(
 /// `ToggleDoorLock` を専用で処理するシステム
 /// ドアのロック状態と見た目を即時反映する。
 pub fn door_lock_action_system(
-    interaction_query: Query<(&Interaction, &MenuButton), (Changed<Interaction>, With<Button>)>,
+    interaction_query: MenuButtonQuery,
     mut q_doors: Query<(&Transform, &mut Door, &mut Sprite)>,
     mut world_map: WorldMapWrite,
     door_visual_handles: Res<DoorVisualHandles>,
@@ -224,27 +240,24 @@ pub fn update_operation_dialog_system(
 ) {
     if let Some(selected) = selected_entity.0 {
         if let Ok((familiar, op)) = q_familiars.get(selected) {
-            if let Some(entity) = ui_nodes.get_slot(UiSlot::DialogFamiliarName) {
-                if let Ok(mut text) = q_text.get_mut(entity) {
+            if let Some(entity) = ui_nodes.get_slot(UiSlot::DialogFamiliarName)
+                && let Ok(mut text) = q_text.get_mut(entity) {
                     text.0 = format!("Editing: {}", familiar.name);
                 }
-            }
-            if let Some(entity) = ui_nodes.get_slot(UiSlot::DialogThresholdText) {
-                if let Ok(mut text) = q_text.get_mut(entity) {
+            if let Some(entity) = ui_nodes.get_slot(UiSlot::DialogThresholdText)
+                && let Ok(mut text) = q_text.get_mut(entity) {
                     let val_str = format!("{:.0}%", op.fatigue_threshold * 100.0);
                     if text.0 != val_str {
                         text.0 = val_str;
                     }
                 }
-            }
-            if let Some(entity) = ui_nodes.get_slot(UiSlot::DialogMaxSoulText) {
-                if let Ok(mut text) = q_text.get_mut(entity) {
+            if let Some(entity) = ui_nodes.get_slot(UiSlot::DialogMaxSoulText)
+                && let Ok(mut text) = q_text.get_mut(entity) {
                     let val_str = format!("{}", op.max_controlled_soul);
                     if text.0 != val_str {
                         text.0 = val_str;
                     }
                 }
-            }
         } else {
             close_operation_dialog(&mut q_dialog);
         }

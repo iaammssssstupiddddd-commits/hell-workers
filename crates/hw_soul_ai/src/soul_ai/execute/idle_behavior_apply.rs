@@ -11,6 +11,7 @@ use hw_core::relationships::{
 use hw_core::soul::{DamnedSoul, IdleBehavior, IdleState, Path, RestAreaCooldown};
 use hw_jobs::RestArea;
 
+#[allow(clippy::too_many_arguments)]
 /// アイドル行動の適用システム (Execute Phase)
 ///
 /// IdleBehaviorRequestを読み取り、実際のエンティティ操作を行う。

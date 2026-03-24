@@ -61,8 +61,8 @@ pub fn detect_command_changes_system(
 ) {
     for (entity, active_command, current_state, mut history) in q_familiars.iter_mut() {
         // コマンドが Idle に変更された場合、状態も Idle に遷移する可能性が高い
-        if matches!(active_command.command, FamiliarCommand::Idle) {
-            if !matches!(current_state, FamiliarAiState::Idle) {
+        if matches!(active_command.command, FamiliarCommand::Idle)
+            && !matches!(current_state, FamiliarAiState::Idle) {
                 let from_state = history.last_state.clone();
 
                 // イベントを発火
@@ -75,7 +75,6 @@ pub fn detect_command_changes_system(
 
                 history.last_state = FamiliarAiState::Idle;
             }
-        }
     }
 }
 

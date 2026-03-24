@@ -32,84 +32,92 @@ pub struct WheelbarrowArbitrationRuntime {
     last_full_eval_secs: f64,
 }
 
+type RequestDirtyQuery<'w, 's> = Query<
+    'w,
+    's,
+    (),
+    (
+        With<TransportRequest>,
+        Or<(
+            Added<TransportRequest>,
+            Changed<TransportRequest>,
+            Changed<TransportRequestState>,
+            Changed<TransportDemand>,
+            Changed<Transform>,
+            Added<WheelbarrowLease>,
+            Changed<WheelbarrowLease>,
+            Added<WheelbarrowPendingSince>,
+            Changed<WheelbarrowPendingSince>,
+            Added<ManualTransportRequest>,
+        )>,
+    ),
+>;
+
+type FreeItemDirtyQuery<'w, 's> = Query<
+    'w,
+    's,
+    (),
+    (
+        With<ResourceItem>,
+        Or<(
+            Added<ResourceItem>,
+            Changed<ResourceItem>,
+            Changed<Transform>,
+            Changed<Visibility>,
+            Added<ReservedForTask>,
+            Changed<ReservedForTask>,
+            Added<ManualHaulPinnedSource>,
+            Changed<ManualHaulPinnedSource>,
+            Added<BelongsTo>,
+            Changed<BelongsTo>,
+            Added<StoredIn>,
+            Changed<StoredIn>,
+            Added<Designation>,
+            Changed<Designation>,
+        )>,
+    ),
+>;
+
+type WheelbarrowDirtyQuery<'w, 's> = Query<
+    'w,
+    's,
+    (),
+    (
+        With<Wheelbarrow>,
+        Or<(
+            Added<Wheelbarrow>,
+            Changed<Transform>,
+            Added<ParkedAt>,
+            Changed<ParkedAt>,
+            Added<PushedBy>,
+            Changed<PushedBy>,
+        )>,
+    ),
+>;
+
+type StockpileDirtyQuery<'w, 's> = Query<
+    'w,
+    's,
+    (),
+    (
+        With<Stockpile>,
+        Or<(
+            Added<Stockpile>,
+            Changed<Stockpile>,
+            Added<StoredItems>,
+            Changed<StoredItems>,
+            Added<IncomingDeliveries>,
+            Changed<IncomingDeliveries>,
+        )>,
+    ),
+>;
+
 #[derive(SystemParam)]
 pub struct WheelbarrowArbitrationDirtyParams<'w, 's> {
-    q_request_dirty: Query<
-        'w,
-        's,
-        (),
-        (
-            With<TransportRequest>,
-            Or<(
-                Added<TransportRequest>,
-                Changed<TransportRequest>,
-                Changed<TransportRequestState>,
-                Changed<TransportDemand>,
-                Changed<Transform>,
-                Added<WheelbarrowLease>,
-                Changed<WheelbarrowLease>,
-                Added<WheelbarrowPendingSince>,
-                Changed<WheelbarrowPendingSince>,
-                Added<ManualTransportRequest>,
-            )>,
-        ),
-    >,
-    q_free_item_dirty: Query<
-        'w,
-        's,
-        (),
-        (
-            With<ResourceItem>,
-            Or<(
-                Added<ResourceItem>,
-                Changed<ResourceItem>,
-                Changed<Transform>,
-                Changed<Visibility>,
-                Added<ReservedForTask>,
-                Changed<ReservedForTask>,
-                Added<ManualHaulPinnedSource>,
-                Changed<ManualHaulPinnedSource>,
-                Added<BelongsTo>,
-                Changed<BelongsTo>,
-                Added<StoredIn>,
-                Changed<StoredIn>,
-                Added<Designation>,
-                Changed<Designation>,
-            )>,
-        ),
-    >,
-    q_wheelbarrow_dirty: Query<
-        'w,
-        's,
-        (),
-        (
-            With<Wheelbarrow>,
-            Or<(
-                Added<Wheelbarrow>,
-                Changed<Transform>,
-                Added<ParkedAt>,
-                Changed<ParkedAt>,
-                Added<PushedBy>,
-                Changed<PushedBy>,
-            )>,
-        ),
-    >,
-    q_stockpile_dirty: Query<
-        'w,
-        's,
-        (),
-        (
-            With<Stockpile>,
-            Or<(
-                Added<Stockpile>,
-                Changed<Stockpile>,
-                Added<StoredItems>,
-                Changed<StoredItems>,
-                Added<IncomingDeliveries>,
-                Changed<IncomingDeliveries>,
-            )>,
-        ),
-    >,
+    q_request_dirty: RequestDirtyQuery<'w, 's>,
+    q_free_item_dirty: FreeItemDirtyQuery<'w, 's>,
+    q_wheelbarrow_dirty: WheelbarrowDirtyQuery<'w, 's>,
+    q_stockpile_dirty: StockpileDirtyQuery<'w, 's>,
     q_resource_entities: Query<'w, 's, (), With<ResourceItem>>,
     q_wheelbarrow_entities: Query<'w, 's, (), With<Wheelbarrow>>,
     removed_requests: RemovedComponents<'w, 's, TransportRequest>,

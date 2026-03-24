@@ -68,6 +68,7 @@ pub fn issue_haul_to_stockpile_with_source(
     );
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn issue_haul_to_mixer(
     source_item: Entity,
     mixer: Entity,

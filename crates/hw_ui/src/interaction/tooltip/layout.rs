@@ -7,6 +7,7 @@ use bevy::ui_widgets::popover::{Popover, PopoverAlign, PopoverPlacement, Popover
 
 use super::target::TooltipTarget;
 
+#[allow(clippy::type_complexity)]
 #[derive(SystemParam)]
 pub struct TooltipUiLayoutQueryParam<'w, 's> {
     pub q_ui_tooltip_buttons: Query<
@@ -62,6 +63,7 @@ fn is_menu_toggle_action(action: MenuAction) -> bool {
     )
 }
 
+#[allow(clippy::type_complexity)]
 pub(crate) fn resolve_toggle_span_x(
     q_ui_tooltip_buttons: &Query<
         (

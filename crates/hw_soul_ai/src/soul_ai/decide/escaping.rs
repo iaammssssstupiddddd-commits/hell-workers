@@ -17,6 +17,32 @@ use crate::soul_ai::perceive::escaping::{
     find_safe_gathering_spot,
 };
 
+type EscapeDetectQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static Transform,
+        &'static DamnedSoul,
+        Option<&'static CommandedBy>,
+        Option<&'static ParticipatingIn>,
+        &'static IdleState,
+    ),
+>;
+
+type EscapeBehaviorQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static Transform,
+        &'static IdleState,
+        Option<&'static CommandedBy>,
+        Option<&'static ParticipatingIn>,
+    ),
+>;
+
+#[allow(clippy::too_many_arguments)]
 /// 逃走の判定と要求生成を行う（Decide Phase）
 pub fn escaping_decision_system(
     time: Res<Time>,
@@ -28,21 +54,8 @@ pub fn escaping_decision_system(
     familiar_grid: Res<FamiliarSpatialGrid>,
     q_familiars: Query<(&Transform, &Familiar)>,
     q_gathering_spots: Query<(Entity, &GatheringSpot)>,
-    q_detect: Query<(
-        Entity,
-        &Transform,
-        &DamnedSoul,
-        Option<&CommandedBy>,
-        Option<&ParticipatingIn>,
-        &IdleState,
-    )>,
-    q_behavior: Query<(
-        Entity,
-        &Transform,
-        &IdleState,
-        Option<&CommandedBy>,
-        Option<&ParticipatingIn>,
-    )>,
+    q_detect: EscapeDetectQuery,
+    q_behavior: EscapeBehaviorQuery,
     mut decide_output: SoulDecideOutput,
 ) {
     let detect_tick = detection_timer.timer.tick(time.delta()).just_finished();
@@ -86,7 +99,7 @@ pub fn escaping_decision_system(
 
             let soul_pos = transform.translation.truncate();
             if let Some(threat) =
-                detect_nearest_familiar(soul_pos, &familiar_grid, &q_familiars, &mut *nearby_buf)
+                detect_nearest_familiar(soul_pos, &familiar_grid, &q_familiars, &mut nearby_buf)
             {
                 debug!(
                     "ESCAPE_DECIDE: {:?} detected threat {:?} dist {:.1}",
@@ -123,25 +136,24 @@ pub fn escaping_decision_system(
                 &q_familiars,
                 world_map.as_ref(),
                 &mut pf_context,
-                &mut *nearby_buf,
+                &mut nearby_buf,
             ) {
                 let safe_spot = find_safe_gathering_spot(
                     soul_pos,
                     &q_gathering_spots,
                     &familiar_grid,
                     &q_familiars,
-                    &mut *nearby_buf,
+                    &mut nearby_buf,
                 );
 
-                if let Some(spot_pos) = safe_spot {
-                    if soul_pos.distance(spot_pos) <= GATHERING_ARRIVAL_RADIUS {
+                if let Some(spot_pos) = safe_spot
+                    && soul_pos.distance(spot_pos) <= GATHERING_ARRIVAL_RADIUS {
                         decide_output.escape_requests.write(EscapeRequest {
                             entity,
                             operation: EscapeOperation::JoinSafeGathering,
                         });
                         continue;
                     }
-                }
 
                 let destination =
                     calculate_escape_destination(soul_pos, &threat, safe_spot, world_map.as_ref());
