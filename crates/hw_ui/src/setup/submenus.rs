@@ -42,17 +42,21 @@ impl<'a> MenuEntrySpec<'a> {
     }
 }
 
-#[allow(clippy::too_many_arguments)]
-fn spawn_submenu_container<T: Bundle>(
-    commands: &mut Commands,
-    theme: &UiTheme,
-    parent_entity: Entity,
+struct SubmenuContainerSpec<T: Bundle> {
     left: Val,
     width: Val,
     flex_direction: FlexDirection,
     align_items: Option<AlignItems>,
     marker: T,
+}
+
+fn spawn_submenu_container<T: Bundle>(
+    commands: &mut Commands,
+    theme: &UiTheme,
+    parent_entity: Entity,
+    spec: SubmenuContainerSpec<T>,
 ) -> Entity {
+    let SubmenuContainerSpec { left, width, flex_direction, align_items, marker } = spec;
     let mut node = Node {
         display: Display::None,
         width,
@@ -186,11 +190,13 @@ fn spawn_architect_submenu(
         commands,
         theme,
         parent_entity,
-        Val::Px(theme.sizes.submenu_left_architect),
-        Val::Auto,
-        FlexDirection::Row,
-        Some(AlignItems::Start),
-        ArchitectSubMenu,
+        SubmenuContainerSpec {
+            left: Val::Px(theme.sizes.submenu_left_architect),
+            width: Val::Auto,
+            flex_direction: FlexDirection::Row,
+            align_items: Some(AlignItems::Start),
+            marker: ArchitectSubMenu,
+        },
     );
 
     commands.entity(submenu).with_children(|parent| {
@@ -234,11 +240,13 @@ fn spawn_zones_submenu(
         commands,
         theme,
         parent_entity,
-        Val::Px(theme.sizes.submenu_left_zones),
-        Val::Px(theme.sizes.submenu_width),
-        FlexDirection::Column,
-        None,
-        ZonesSubMenu,
+        SubmenuContainerSpec {
+            left: Val::Px(theme.sizes.submenu_left_zones),
+            width: Val::Px(theme.sizes.submenu_width),
+            flex_direction: FlexDirection::Column,
+            align_items: None,
+            marker: ZonesSubMenu,
+        },
     );
 
     commands.entity(submenu).with_children(|parent| {
@@ -257,11 +265,13 @@ fn spawn_orders_submenu(
         commands,
         theme,
         parent_entity,
-        Val::Px(theme.sizes.submenu_left_orders),
-        Val::Px(theme.sizes.submenu_width),
-        FlexDirection::Column,
-        None,
-        OrdersSubMenu,
+        SubmenuContainerSpec {
+            left: Val::Px(theme.sizes.submenu_left_orders),
+            width: Val::Px(theme.sizes.submenu_width),
+            flex_direction: FlexDirection::Column,
+            align_items: None,
+            marker: OrdersSubMenu,
+        },
     );
 
     commands.entity(submenu).with_children(|parent| {
@@ -280,11 +290,13 @@ fn spawn_dream_submenu(
         commands,
         theme,
         parent_entity,
-        Val::Px(theme.sizes.submenu_left_dream),
-        Val::Px(theme.sizes.submenu_width),
-        FlexDirection::Column,
-        None,
-        DreamSubMenu,
+        SubmenuContainerSpec {
+            left: Val::Px(theme.sizes.submenu_left_dream),
+            width: Val::Px(theme.sizes.submenu_width),
+            flex_direction: FlexDirection::Column,
+            align_items: None,
+            marker: DreamSubMenu,
+        },
     );
 
     commands.entity(submenu).with_children(|parent| {

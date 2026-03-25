@@ -19,22 +19,47 @@ pub use hw_ui::models::inspection::{
     EntityInspectionModel, EntityInspectionViewModel, SoulInspectionFields,
 };
 
-#[allow(clippy::type_complexity)]
+type SoulInspectionQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static DamnedSoul,
+        &'static AssignedTask,
+        &'static Transform,
+        &'static IdleState,
+        Option<&'static CommandedBy>,
+        Option<&'static crate::systems::logistics::Inventory>,
+        Option<&'static crate::entities::damned_soul::SoulIdentity>,
+    ),
+>;
+
+type DesignationInspectionQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static crate::systems::jobs::Designation,
+        Option<&'static crate::systems::jobs::IssuedBy>,
+        Option<&'static TaskWorkers>,
+    ),
+>;
+
+type BuildingInspectionQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static crate::systems::jobs::Building,
+        Option<&'static crate::systems::jobs::ProvisionalWall>,
+        Option<&'static crate::systems::logistics::Stockpile>,
+        Option<&'static hw_core::relationships::StoredItems>,
+        Option<&'static crate::systems::jobs::MudMixerStorage>,
+        Option<&'static crate::systems::jobs::RestArea>,
+        Option<&'static hw_core::relationships::RestAreaOccupants>,
+    ),
+>;
+
 #[derive(SystemParam)]
 pub struct EntityInspectionQuery<'w, 's> {
-    q_souls: Query<
-        'w,
-        's,
-        (
-            &'static DamnedSoul,
-            &'static AssignedTask,
-            &'static Transform,
-            &'static IdleState,
-            Option<&'static CommandedBy>,
-            Option<&'static crate::systems::logistics::Inventory>,
-            Option<&'static crate::entities::damned_soul::SoulIdentity>,
-        ),
-    >,
+    q_souls: SoulInspectionQuery<'w, 's>,
     q_blueprints: Query<'w, 's, &'static Blueprint>,
     q_familiars: Query<
         'w,
@@ -49,28 +74,8 @@ pub struct EntityInspectionQuery<'w, 's> {
     q_items: Query<'w, 's, &'static crate::systems::logistics::ResourceItem>,
     q_trees: Query<'w, 's, &'static crate::systems::jobs::Tree>,
     q_rocks: Query<'w, 's, &'static crate::systems::jobs::Rock>,
-    q_designations: Query<
-        'w,
-        's,
-        (
-            &'static crate::systems::jobs::Designation,
-            Option<&'static crate::systems::jobs::IssuedBy>,
-            Option<&'static TaskWorkers>,
-        ),
-    >,
-    q_buildings: Query<
-        'w,
-        's,
-        (
-            &'static crate::systems::jobs::Building,
-            Option<&'static crate::systems::jobs::ProvisionalWall>,
-            Option<&'static crate::systems::logistics::Stockpile>,
-            Option<&'static hw_core::relationships::StoredItems>,
-            Option<&'static crate::systems::jobs::MudMixerStorage>,
-            Option<&'static crate::systems::jobs::RestArea>,
-            Option<&'static hw_core::relationships::RestAreaOccupants>,
-        ),
-    >,
+    q_designations: DesignationInspectionQuery<'w, 's>,
+    q_buildings: BuildingInspectionQuery<'w, 's>,
 }
 
 #[derive(Default)]

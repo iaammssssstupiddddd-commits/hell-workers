@@ -11,7 +11,19 @@ use rand::Rng;
 #[derive(Resource, Default)]
 pub struct PeriodicEmotionFrameCounter(pub u32);
 
-#[allow(clippy::type_complexity)]
+type SoulEmotionQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static GlobalTransform,
+        &'static DamnedSoul,
+        &'static IdleState,
+        Option<&'static CommandedBy>,
+        &'static mut SoulEmotionState,
+    ),
+>;
+
 /// 定期的に Soul の感情状態をチェックし、必要に応じて吹き出しを出すシステム
 /// パフォーマンス最適化: 毎フレーム全Soulをチェックせず、フレームごとに一部のみ処理
 pub fn periodic_emotion_system(
@@ -19,14 +31,7 @@ pub fn periodic_emotion_system(
     mut commands: Commands,
     handles: Res<SpeechHandles>,
     mut frame_counter: ResMut<PeriodicEmotionFrameCounter>,
-    mut query: Query<(
-        Entity,
-        &GlobalTransform,
-        &DamnedSoul,
-        &IdleState,
-        Option<&CommandedBy>,
-        &mut SoulEmotionState,
-    )>,
+    mut query: SoulEmotionQuery,
 ) {
     let dt = time.delta_secs();
     let mut rng = rand::thread_rng();

@@ -1,3 +1,4 @@
+use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 
 use crate::FamiliarOperationMaxSoulChangedEvent;
@@ -13,25 +14,69 @@ use hw_core::relationships::Commanding;
 use hw_ui::UiIntent;
 use hw_ui::components::{MenuState, OperationDialog};
 
-#[allow(clippy::too_many_arguments)]
+#[derive(SystemParam)]
+pub(crate) struct IntentModeCtx<'w> {
+    menu_state: ResMut<'w, MenuState>,
+    next_play_mode: ResMut<'w, NextState<PlayMode>>,
+    build_context: ResMut<'w, BuildContext>,
+    zone_context: ResMut<'w, ZoneContext>,
+    task_context: ResMut<'w, TaskContext>,
+}
+
+#[derive(SystemParam)]
+pub(crate) struct IntentSelectionCtx<'w> {
+    selected_entity: ResMut<'w, SelectedEntity>,
+    info_panel_pin: ResMut<'w, InfoPanelPinState>,
+    node_index: Res<'w, EntityListNodeIndex>,
+}
+
+#[derive(SystemParam)]
+pub(crate) struct IntentFamiliarQueries<'w, 's> {
+    q_familiar_ops: Query<'w, 's, &'static mut FamiliarOperation>,
+    q_familiar_meta: Query<
+        'w,
+        's,
+        (&'static Familiar, &'static FamiliarAiState, Option<&'static Commanding>),
+    >,
+    q_familiars_for_area: Query<'w, 's, (Entity, Option<&'static TaskArea>), With<Familiar>>,
+}
+
+#[derive(SystemParam)]
+pub(crate) struct IntentUiQueries<'w, 's> {
+    q_dialog: Query<'w, 's, &'static mut Node, With<OperationDialog>>,
+    q_text: Query<'w, 's, &'static mut Text>,
+}
+
 pub(crate) fn handle_ui_intent(
     mut ui_intents: MessageReader<UiIntent>,
-    mut menu_state: ResMut<MenuState>,
-    mut next_play_mode: ResMut<NextState<PlayMode>>,
-    mut build_context: ResMut<BuildContext>,
-    mut zone_context: ResMut<ZoneContext>,
-    mut task_context: ResMut<TaskContext>,
-    mut selected_entity: ResMut<SelectedEntity>,
-    mut info_panel_pin: ResMut<InfoPanelPinState>,
-    mut q_familiar_ops: Query<&mut FamiliarOperation>,
-    q_familiar_meta: Query<(&Familiar, &FamiliarAiState, Option<&Commanding>)>,
-    q_familiars_for_area: Query<(Entity, Option<&TaskArea>), With<Familiar>>,
-    mut q_dialog: Query<&mut Node, With<OperationDialog>>,
-    node_index: Res<EntityListNodeIndex>,
-    mut q_text: Query<&mut Text>,
+    mode_ctx: IntentModeCtx,
+    selection_ctx: IntentSelectionCtx,
+    familiar_queries: IntentFamiliarQueries,
+    ui_queries: IntentUiQueries,
     mut ev_max_soul_changed: MessageWriter<FamiliarOperationMaxSoulChangedEvent>,
     mut time: ResMut<Time<Virtual>>,
 ) {
+    let IntentModeCtx {
+        mut menu_state,
+        mut next_play_mode,
+        mut build_context,
+        mut zone_context,
+        mut task_context,
+    } = mode_ctx;
+    let IntentSelectionCtx {
+        mut selected_entity,
+        mut info_panel_pin,
+        node_index,
+    } = selection_ctx;
+    let IntentFamiliarQueries {
+        mut q_familiar_ops,
+        q_familiar_meta,
+        q_familiars_for_area,
+    } = familiar_queries;
+    let IntentUiQueries {
+        mut q_dialog,
+        mut q_text,
+    } = ui_queries;
     for intent in ui_intents.read().cloned() {
         match intent {
             UiIntent::InspectEntity(entity) => {

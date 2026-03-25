@@ -30,7 +30,6 @@ use bevy::prelude::*;
 pub struct VisualPlugin;
 
 impl Plugin for VisualPlugin {
-    #[allow(clippy::match_like_matches_macro)]
     fn build(&self, app: &mut App) {
         app.add_plugins(HwVisualPlugin);
 
@@ -55,11 +54,13 @@ impl Plugin for VisualPlugin {
             )
                 .in_set(GameSystemSet::Visual)
                 .run_if(
-                    |state: Res<State<hw_core::game_state::PlayMode>>| match state.get() {
-                        PlayMode::Normal | PlayMode::BuildingPlace | PlayMode::TaskDesignation => {
-                            true
-                        }
-                        _ => false,
+                    |state: Res<State<hw_core::game_state::PlayMode>>| {
+                        matches!(
+                            state.get(),
+                            PlayMode::Normal
+                                | PlayMode::BuildingPlace
+                                | PlayMode::TaskDesignation
+                        )
                     },
                 ),
         );

@@ -6,7 +6,7 @@ use hw_jobs::{
 };
 
 use super::{
-    build_mixer_destination_reservation_ops, build_source_reservation_ops,
+    TaskTarget, build_mixer_destination_reservation_ops, build_source_reservation_ops,
     submit_assignment_with_reservation_ops, submit_assignment_with_source_entities,
 };
 use crate::familiar_ai::decide::task_management::{
@@ -33,21 +33,24 @@ pub fn issue_gather_water(
         ctx,
         queries,
         shadow,
-        WorkType::GatherWater,
-        task_pos,
+        TaskTarget { work_type: WorkType::GatherWater, task_pos },
         assigned_task,
         &[bucket],
         already_commanded,
     );
 }
 
-#[allow(clippy::too_many_arguments)]
+/// `issue_haul_water_to_mixer` のデータをまとめた構造体。
+pub struct WaterHaulSpec {
+    pub bucket: Entity,
+    pub mixer: Entity,
+    pub tank: Entity,
+    pub needs_tank_fill: bool,
+    pub mixer_already_reserved: bool,
+}
+
 pub fn issue_haul_water_to_mixer(
-    bucket: Entity,
-    mixer: Entity,
-    tank: Entity,
-    needs_tank_fill: bool,
-    mixer_already_reserved: bool,
+    spec: WaterHaulSpec,
     task_pos: Vec2,
     already_commanded: bool,
     ctx: &AssignTaskContext<'_>,
@@ -55,30 +58,29 @@ pub fn issue_haul_water_to_mixer(
     shadow: &mut ReservationShadow,
 ) {
     let assigned_task = AssignedTask::BucketTransport(BucketTransportData {
-        bucket,
+        bucket: spec.bucket,
         source: BucketTransportSource::Tank {
-            tank,
-            needs_fill: needs_tank_fill,
+            tank: spec.tank,
+            needs_fill: spec.needs_tank_fill,
         },
-        destination: BucketTransportDestination::Mixer(mixer),
+        destination: BucketTransportDestination::Mixer(spec.mixer),
         amount: 0,
         phase: BucketTransportPhase::GoingToBucket,
     });
-    let mut reservation_ops = build_source_reservation_ops(&[bucket]);
-    if needs_tank_fill {
-        reservation_ops.extend(build_source_reservation_ops(&[tank]));
+    let mut reservation_ops = build_source_reservation_ops(&[spec.bucket]);
+    if spec.needs_tank_fill {
+        reservation_ops.extend(build_source_reservation_ops(&[spec.tank]));
     }
     reservation_ops.extend(build_mixer_destination_reservation_ops(
-        mixer,
+        spec.mixer,
         ResourceType::Water,
-        mixer_already_reserved,
+        spec.mixer_already_reserved,
     ));
     submit_assignment_with_reservation_ops(
         ctx,
         queries,
         shadow,
-        WorkType::HaulWaterToMixer,
-        task_pos,
+        TaskTarget { work_type: WorkType::HaulWaterToMixer, task_pos },
         assigned_task,
         reservation_ops,
         already_commanded,

@@ -9,7 +9,7 @@ use hw_jobs::{
 };
 
 use super::{
-    build_mixer_destination_reservation_ops, build_source_reservation_ops,
+    TaskTarget, build_mixer_destination_reservation_ops, build_source_reservation_ops,
     submit_assignment_with_reservation_ops, submit_assignment_with_source_entities,
 };
 use crate::familiar_ai::decide::task_management::{
@@ -34,8 +34,7 @@ pub fn issue_haul_to_blueprint_with_source(
         ctx,
         queries,
         shadow,
-        WorkType::Haul,
-        task_pos,
+        TaskTarget { work_type: WorkType::Haul, task_pos },
         assigned_task,
         &[source_item],
         already_commanded,
@@ -60,20 +59,23 @@ pub fn issue_haul_to_stockpile_with_source(
         ctx,
         queries,
         shadow,
-        WorkType::Haul,
-        task_pos,
+        TaskTarget { work_type: WorkType::Haul, task_pos },
         assigned_task,
         &[source_item],
         already_commanded,
     );
 }
 
-#[allow(clippy::too_many_arguments)]
+/// `issue_haul_to_mixer` のデータをまとめた構造体。
+pub struct MixerHaulSpec {
+    pub source_item: Entity,
+    pub mixer: Entity,
+    pub item_type: ResourceType,
+    pub mixer_already_reserved: bool,
+}
+
 pub fn issue_haul_to_mixer(
-    source_item: Entity,
-    mixer: Entity,
-    item_type: ResourceType,
-    mixer_already_reserved: bool,
+    spec: MixerHaulSpec,
     task_pos: Vec2,
     already_commanded: bool,
     ctx: &AssignTaskContext<'_>,
@@ -81,23 +83,22 @@ pub fn issue_haul_to_mixer(
     shadow: &mut ReservationShadow,
 ) {
     let assigned_task = AssignedTask::HaulToMixer(HaulToMixerData {
-        item: source_item,
-        mixer,
-        resource_type: item_type,
+        item: spec.source_item,
+        mixer: spec.mixer,
+        resource_type: spec.item_type,
         phase: HaulToMixerPhase::GoingToItem,
     });
-    let mut reservation_ops = build_source_reservation_ops(&[source_item]);
+    let mut reservation_ops = build_source_reservation_ops(&[spec.source_item]);
     reservation_ops.extend(build_mixer_destination_reservation_ops(
-        mixer,
-        item_type,
-        mixer_already_reserved,
+        spec.mixer,
+        spec.item_type,
+        spec.mixer_already_reserved,
     ));
     submit_assignment_with_reservation_ops(
         ctx,
         queries,
         shadow,
-        WorkType::HaulToMixer,
-        task_pos,
+        TaskTarget { work_type: WorkType::HaulToMixer, task_pos },
         assigned_task,
         reservation_ops,
         already_commanded,

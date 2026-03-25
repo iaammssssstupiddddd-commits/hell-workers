@@ -102,23 +102,34 @@ pub(super) fn build_path_from_came_from(
     path
 }
 
-#[allow(clippy::too_many_arguments)]
-pub(super) fn find_path_with_policy<FG, FM, FD, FE>(
+pub(super) struct PathPolicy<H, FG, FM, FD, FE> {
+    pub heuristic: H,
+    pub is_goal_reached: FG,
+    pub can_enter: FM,
+    pub can_cross_diagonal: FD,
+    pub move_penalty: FE,
+}
+
+pub(super) fn find_path_with_policy<H, FG, FM, FD, FE>(
     world_map: &impl PathWorld,
     context: &mut PathfindingContext,
     start_idx: usize,
-    heuristic: impl Fn(usize) -> i32,
-    is_goal_reached: FG,
-    can_enter: FM,
-    can_cross_diagonal: FD,
-    move_penalty: FE,
+    policy: PathPolicy<H, FG, FM, FD, FE>,
 ) -> Option<Vec<(i32, i32)>>
 where
+    H: Fn(usize) -> i32,
     FG: Fn((i32, i32)) -> bool,
     FM: Fn((i32, i32), (i32, i32)) -> bool,
     FD: Fn((i32, i32), (i32, i32)) -> bool,
     FE: Fn(i32, i32, bool) -> i32,
 {
+    let PathPolicy {
+        heuristic,
+        is_goal_reached,
+        can_enter,
+        can_cross_diagonal,
+        move_penalty,
+    } = policy;
     context.reset();
 
     context.visited.push(start_idx);

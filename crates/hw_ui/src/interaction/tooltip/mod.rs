@@ -12,7 +12,7 @@ use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 
 pub use layout::TooltipUiLayoutQueryParam;
-pub use system::hover_tooltip_system;
+pub use system::{TooltipBevy, TooltipHandlers, TooltipQuerySet, hover_tooltip_system};
 pub use target::TooltipTarget;
 
 type TooltipTextQuery<'w, 's> =
@@ -33,7 +33,6 @@ pub trait TooltipInspectionSource {
 pub trait TooltipContentRenderer {
     type GameAssets;
 
-    #[allow(clippy::too_many_arguments)]
     fn rebuild_tooltip_content(
         &self,
         commands: &mut Commands,
@@ -41,9 +40,7 @@ pub trait TooltipContentRenderer {
         q_children: &Query<&Children>,
         game_assets: &Self::GameAssets,
         theme: &UiTheme,
-        template: crate::components::TooltipTemplate,
-        model: Option<&EntityInspectionModel>,
-        ui_tooltip: Option<&crate::components::UiTooltip>,
+        payload: crate::panels::tooltip_builder::TooltipBuildPayload<'_>,
     );
 }
 

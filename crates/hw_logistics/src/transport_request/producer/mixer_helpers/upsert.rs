@@ -4,20 +4,25 @@ use hw_core::relationships::TaskWorkers;
 use hw_jobs::mud_mixer::TargetMixer;
 use hw_jobs::{Designation, WorkType};
 
-use crate::transport_request::producer::upsert;
+use crate::transport_request::producer::upsert::{self, SpawnRequestSpec, UpsertRequestSpec};
 use crate::transport_request::{TransportRequest, TransportRequestKind};
 use crate::types::ResourceType;
 
-#[allow(clippy::type_complexity)]
+type MixerRequestsQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static TargetMixer,
+        &'static TransportRequest,
+        Option<&'static Designation>,
+        Option<&'static TaskWorkers>,
+    ),
+>;
+
 pub(crate) fn upsert_mixer_requests(
     commands: &mut Commands,
-    q_mixer_requests: &Query<(
-        Entity,
-        &TargetMixer,
-        &TransportRequest,
-        Option<&Designation>,
-        Option<&TaskWorkers>,
-    )>,
+    q_mixer_requests: &MixerRequestsQuery,
     desired_requests: &std::collections::HashMap<(Entity, ResourceType), (Entity, u32, Vec2)>,
     active_mixers: &std::collections::HashSet<Entity>,
 ) {
@@ -46,31 +51,26 @@ pub(crate) fn upsert_mixer_requests(
         }
 
         let (work_type, kind, name) = mixer_request_profile(key.1);
-        upsert::spawn_transport_request_with_work_type(
+        upsert::spawn_transport_request(
             commands,
-            name,
-            *key,
-            *mixer_pos,
-            *issued_by,
-            *slots,
-            5,
-            TargetMixer(key.0),
-            kind,
-            work_type,
+            SpawnRequestSpec {
+                name,
+                key: *key,
+                site_pos: *mixer_pos,
+                issued_by: *issued_by,
+                desired_slots: *slots,
+                priority: 5,
+                target: TargetMixer(key.0),
+                kind,
+                work_type,
+            },
         );
     }
 }
 
-#[allow(clippy::type_complexity)]
 fn upsert_mixer_requests_by_kind(
     commands: &mut Commands,
-    q_mixer_requests: &Query<(
-        Entity,
-        &TargetMixer,
-        &TransportRequest,
-        Option<&Designation>,
-        Option<&TaskWorkers>,
-    )>,
+    q_mixer_requests: &MixerRequestsQuery,
     desired_requests: &std::collections::HashMap<(Entity, ResourceType), (Entity, u32, Vec2)>,
     active_mixers: &std::collections::HashSet<Entity>,
     seen_existing_keys: &mut std::collections::HashSet<(Entity, ResourceType)>,
@@ -100,18 +100,20 @@ fn upsert_mixer_requests_by_kind(
 
         if let Some((issued_by, slots, mixer_pos)) = desired_requests.get(&key) {
             let (work_type, kind, _) = mixer_request_profile(key.1);
-            upsert::upsert_transport_request_with_work_type(
+            upsert::upsert_transport_request(
                 commands,
                 request_entity,
-                key,
-                *mixer_pos,
-                *issued_by,
-                *slots,
-                0,
-                5,
-                TargetMixer(key.0),
-                kind,
-                work_type,
+                UpsertRequestSpec {
+                    key,
+                    site_pos: *mixer_pos,
+                    issued_by: *issued_by,
+                    desired_slots: *slots,
+                    inflight: 0,
+                    priority: 5,
+                    target: TargetMixer(key.0),
+                    kind,
+                    work_type,
+                },
             );
             continue;
         }

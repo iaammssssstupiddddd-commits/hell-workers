@@ -66,6 +66,31 @@ type StoredItemsQuery<'w, 's> = Query<
     (Without<hw_jobs::Designation>, Without<TaskWorkers>, Without<ReservedForTask>),
 >;
 
+type ResourceItemsQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static Transform,
+        &'static Visibility,
+        &'static hw_logistics::types::ResourceItem,
+        Option<&'static hw_core::relationships::StoredIn>,
+        Option<&'static hw_core::relationships::LoadedIn>,
+    ),
+>;
+
+type TransportRequestStatusQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static hw_logistics::transport_request::TransportRequest,
+        &'static hw_logistics::transport_request::TransportDemand,
+        &'static hw_logistics::transport_request::TransportRequestState,
+        Option<&'static hw_logistics::transport_request::WheelbarrowLease>,
+        Option<&'static TaskWorkers>,
+    ),
+>;
+
 /// タスク割り当てに必要なクエリ群（Familiar AI向け）
 #[derive(SystemParam)]
 pub struct TaskAssignmentReadAccess<'w, 's> {
@@ -125,7 +150,6 @@ impl<'w, 's> Deref for TaskAssignmentQueries<'w, 's> {
 }
 
 impl<'w, 's> DerefMut for TaskAssignmentQueries<'w, 's> {
-    #[allow(clippy::type_complexity)]
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.read
     }
@@ -139,7 +163,6 @@ pub struct TaskUnassignQueries<'w, 's> {
 }
 
 /// タスク実行に必要なクエリ群
-#[allow(clippy::type_complexity)]
 #[derive(SystemParam)]
 pub struct TaskQueries<'w, 's> {
     pub reservation: ReservationAccess<'w, 's>,
@@ -147,30 +170,9 @@ pub struct TaskQueries<'w, 's> {
     pub storage: MutStorageAccess<'w, 's>,
 
     // 固有フィールド
-    pub resource_items: Query<
-        'w,
-        's,
-        (
-            Entity,
-            &'static Transform,
-            &'static Visibility,
-            &'static hw_logistics::types::ResourceItem,
-            Option<&'static hw_core::relationships::StoredIn>,
-            Option<&'static hw_core::relationships::LoadedIn>,
-        ),
-    >,
+    pub resource_items: ResourceItemsQuery<'w, 's>,
     pub mixer_stored_mud: Query<'w, 's, &'static hw_jobs::mud_mixer::StoredByMixer>,
-    pub transport_request_status: Query<
-        'w,
-        's,
-        (
-            &'static hw_logistics::transport_request::TransportRequest,
-            &'static hw_logistics::transport_request::TransportDemand,
-            &'static hw_logistics::transport_request::TransportRequestState,
-            Option<&'static hw_logistics::transport_request::WheelbarrowLease>,
-            Option<&'static TaskWorkers>,
-        ),
-    >,
+    pub transport_request_status: TransportRequestStatusQuery<'w, 's>,
 }
 
 pub trait TaskReservationAccess<'w, 's> {

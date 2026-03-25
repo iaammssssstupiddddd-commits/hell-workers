@@ -2,6 +2,7 @@ use crate::components::{
     HoverTooltip, MenuAction, MenuState, TooltipTemplate, UiNodeRegistry, UiSlot, UiTooltip,
 };
 use crate::models::inspection::EntityInspectionModel;
+use crate::panels::tooltip_builder::TooltipBuildPayload;
 use crate::theme::UiTheme;
 use bevy::prelude::*;
 use bevy::ui_widgets::popover::Popover;
@@ -12,41 +13,59 @@ use super::{
     fade, layout, target,
 };
 
-#[allow(clippy::too_many_arguments)]
+/// Bevy-extracted resources passed to hover_tooltip_system
+pub struct TooltipBevy<'a> {
+    pub time: &'a Time,
+    pub hovered: &'a crate::selection::HoveredEntity,
+    pub placement_failure_tooltip: &'a mut crate::components::PlacementFailureTooltip,
+    pub menu_state: &'a MenuState,
+    pub ui_nodes: &'a UiNodeRegistry,
+}
+
+/// Query bundle for hover_tooltip_system
+pub struct TooltipQuerySet<'w, 's> {
+    pub q_window: Query<'w, 's, &'static Window, With<bevy::window::PrimaryWindow>>,
+    pub q_tooltip: Query<
+        'w,
+        's,
+        (
+            Entity,
+            &'static mut HoverTooltip,
+            &'static mut Node,
+            &'static mut BackgroundColor,
+            &'static mut BorderColor,
+            &'static mut Popover,
+            &'static ComputedNode,
+        ),
+    >,
+    pub render_queries: TooltipRenderQueries<'w, 's>,
+    pub ui_layout: layout::TooltipUiLayoutQueryParam<'w, 's>,
+}
+
+/// Renderer/inspection handlers for hover_tooltip_system
+pub struct TooltipHandlers<'a, I: TooltipInspectionSource, R: TooltipContentRenderer> {
+    pub game_assets: &'a R::GameAssets,
+    pub theme: &'a UiTheme,
+    pub inspection: &'a I,
+    pub tooltip_renderer: &'a R,
+}
+
 pub fn hover_tooltip_system<'w, 's, I, R>(
     mut commands: Commands,
-    time: Res<Time>,
-    hovered: Res<crate::selection::HoveredEntity>,
-    mut placement_failure_tooltip: ResMut<crate::components::PlacementFailureTooltip>,
-    menu_state: Res<MenuState>,
-    ui_nodes: Res<UiNodeRegistry>,
-    game_assets: &R::GameAssets,
-    theme: &Res<UiTheme>,
-    q_window: Query<&Window, With<bevy::window::PrimaryWindow>>,
-    mut q_tooltip: Query<(
-        Entity,
-        &mut HoverTooltip,
-        &mut Node,
-        &mut BackgroundColor,
-        &mut BorderColor,
-        &mut Popover,
-        &ComputedNode,
-    )>,
-    mut render_queries: TooltipRenderQueries<'w, 's>,
-    ui_layout: layout::TooltipUiLayoutQueryParam<'w, 's>,
-    inspection: &I,
+    bevy: TooltipBevy<'_>,
+    mut queries: TooltipQuerySet<'w, 's>,
+    handlers: TooltipHandlers<'_, I, R>,
     runtime: &mut TooltipRuntimeState,
-    tooltip_renderer: &R,
 ) where
     I: TooltipInspectionSource,
     R: TooltipContentRenderer,
 {
-    placement_failure_tooltip.tick(time.delta_secs());
+    bevy.placement_failure_tooltip.tick(bevy.time.delta_secs());
 
-    let Ok(window) = q_window.single() else {
+    let Ok(window) = queries.q_window.single() else {
         return;
     };
-    let Some(tooltip_anchor) = ui_nodes.get_slot(UiSlot::TooltipAnchor) else {
+    let Some(tooltip_anchor) = bevy.ui_nodes.get_slot(UiSlot::TooltipAnchor) else {
         return;
     };
     let Ok((
@@ -57,18 +76,22 @@ pub fn hover_tooltip_system<'w, 's, I, R>(
         mut tooltip_border,
         mut tooltip_popover,
         tooltip_computed,
-    )) = q_tooltip.single_mut()
+    )) = queries.q_tooltip.single_mut()
     else {
         return;
     };
 
     let hovered_button =
-        ui_layout
+        queries
+            .ui_layout
             .q_ui_tooltip_buttons
             .iter()
             .find(|(_, interaction, _, menu_button, _, _)| {
                 matches!(**interaction, Interaction::Hovered | Interaction::Pressed)
-                    && !target::is_tooltip_suppressed_for_expanded_menu(*menu_button, *menu_state)
+                    && !target::is_tooltip_suppressed_for_expanded_menu(
+                        *menu_button,
+                        *bevy.menu_state,
+                    )
             });
 
     let mut target = None;
@@ -96,7 +119,7 @@ pub fn hover_tooltip_system<'w, 's, I, R>(
             tooltip_data.text,
             tooltip_data.shortcut.unwrap_or_default()
         );
-    } else if let Some(reason) = placement_failure_tooltip.message.as_ref() {
+    } else if let Some(reason) = bevy.placement_failure_tooltip.message.as_ref() {
         target = Some(TooltipTarget::PlacementFailure);
         template = TooltipTemplate::Generic;
         payload = format!("placement_failure:{reason}");
@@ -106,10 +129,10 @@ pub fn hover_tooltip_system<'w, 's, I, R>(
             tooltip_lines: vec![reason.clone()],
             soul: None,
         });
-    } else if let Some(entity) = hovered.0
-        && let Some(built_model) = inspection.build_model(entity)
+    } else if let Some(entity) = bevy.hovered.0
+        && let Some(built_model) = handlers.inspection.build_model(entity)
     {
-        template = inspection.classify_template(entity);
+        template = handlers.inspection.classify_template(entity);
         payload = format!(
             "entity:{entity:?}:{}:{}:{}",
             built_model.header,
@@ -124,7 +147,7 @@ pub fn hover_tooltip_system<'w, 's, I, R>(
     let payload_changed = runtime.payload != payload;
     let template_changed = tooltip.template_type != template;
     let expanded_toggle_hover = matches!(target, Some(TooltipTarget::UiButton(_)))
-        && !matches!(*menu_state, MenuState::Hidden)
+        && !matches!(*bevy.menu_state, MenuState::Hidden)
         && hovered_menu_action.is_some_and(|a| {
             matches!(
                 a,
@@ -133,7 +156,7 @@ pub fn hover_tooltip_system<'w, 's, I, R>(
         });
     // ZIndex付きパネル内のボタン（速度ボタン等）はアンカーに留める（スタッキングコンテキスト回避）
     let button_in_zindex_panel =
-        matches!(target, Some(TooltipTarget::UiButton(e)) if ui_layout.q_speed_buttons.contains(e));
+        matches!(target, Some(TooltipTarget::UiButton(e)) if queries.ui_layout.q_speed_buttons.contains(e));
     let attach_to_anchor = !matches!(target, Some(TooltipTarget::UiButton(_)))
         || expanded_toggle_hover
         || button_in_zindex_panel;
@@ -181,9 +204,9 @@ pub fn hover_tooltip_system<'w, 's, I, R>(
                 button_y_span,
                 tooltip_size,
                 Vec2::new(window.width(), window.height()),
-                layout::resolve_mode_text_span_x(&ui_nodes, &ui_layout.q_layout),
-                layout::resolve_toggle_span_x(&ui_layout.q_ui_tooltip_buttons),
-                &layout::resolve_visible_submenu_spans_x(&ui_layout, *menu_state),
+                layout::resolve_mode_text_span_x(bevy.ui_nodes, &queries.ui_layout.q_layout),
+                layout::resolve_toggle_span_x(&queries.ui_layout.q_ui_tooltip_buttons),
+                &layout::resolve_visible_submenu_spans_x(&queries.ui_layout, *bevy.menu_state),
             );
             tooltip_node.position_type = PositionType::Absolute;
             tooltip_node.left = Val::Px(x);
@@ -198,27 +221,29 @@ pub fn hover_tooltip_system<'w, 's, I, R>(
         layout::update_tooltip_popover_positions(
             &mut tooltip_popover,
             target,
-            *menu_state,
+            *bevy.menu_state,
             hovered_menu_action,
         );
     }
 
     if target.is_some() && (target_changed || payload_changed || template_changed) {
         tooltip.template_type = template;
-        tooltip_renderer.rebuild_tooltip_content(
+        handlers.tooltip_renderer.rebuild_tooltip_content(
             &mut commands,
             tooltip_entity,
-            &render_queries.q_children,
-            game_assets,
-            theme.as_ref(),
-            template,
-            model.as_ref(),
-            ui_tooltip.as_ref(),
+            &queries.render_queries.q_children,
+            handlers.game_assets,
+            handlers.theme,
+            TooltipBuildPayload {
+                template,
+                model: model.as_ref(),
+                ui_tooltip: ui_tooltip.as_ref(),
+            },
         );
     }
 
     if target.is_some() {
-        tooltip.delay_timer.tick(time.delta());
+        tooltip.delay_timer.tick(bevy.time.delta());
     }
     let desired_alpha = if target.is_some() && tooltip.delay_timer.is_finished() {
         1.0
@@ -230,7 +255,7 @@ pub fn hover_tooltip_system<'w, 's, I, R>(
     } else {
         0.05
     };
-    let fade_t = (time.delta_secs() / fade_duration).clamp(0.0, 1.0);
+    let fade_t = (bevy.time.delta_secs() / fade_duration).clamp(0.0, 1.0);
     tooltip.fade_alpha += (desired_alpha - tooltip.fade_alpha) * fade_t;
     tooltip.fade_alpha = tooltip.fade_alpha.clamp(0.0, 1.0);
 
@@ -242,7 +267,7 @@ pub fn hover_tooltip_system<'w, 's, I, R>(
         tooltip_node.display = Display::Flex;
     }
 
-    if let Ok(mut anchor_node) = render_queries.q_nodes.get_mut(tooltip_anchor) {
+    if let Ok(mut anchor_node) = queries.render_queries.q_nodes.get_mut(tooltip_anchor) {
         if expanded_toggle_hover {
             anchor_node.left = Val::Px(0.0);
             anchor_node.top = Val::Px(0.0);
@@ -255,10 +280,10 @@ pub fn hover_tooltip_system<'w, 's, I, R>(
     fade::apply_fade_effects(
         &mut tooltip_bg,
         &mut tooltip_border,
-        &mut render_queries.q_tooltip_text,
-        &mut render_queries.q_tooltip_progress,
+        &mut queries.render_queries.q_tooltip_text,
+        &mut queries.render_queries.q_tooltip_progress,
         tooltip.fade_alpha,
-        theme.as_ref(),
+        handlers.theme,
         fade_t,
     );
 }

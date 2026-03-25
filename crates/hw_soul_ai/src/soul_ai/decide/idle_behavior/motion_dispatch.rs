@@ -13,24 +13,54 @@ use hw_world::coords::grid_to_world;
 use hw_world::coords::world_to_grid;
 use hw_world::{SpatialGridOps, WorldMap};
 
-#[allow(clippy::too_many_arguments)]
+/// `update_motion_destinations` に渡すエンティティ位置情報。
+pub struct SoulPos {
+    pub entity: Entity,
+    pub pos: Vec2,
+}
+
+/// `update_motion_destinations` に渡す集会コンテキスト。
+pub struct MotionGatheringCtx<'a> {
+    pub center: Option<Vec2>,
+    pub target_spot_entity: Option<Entity>,
+    pub participating_in: Option<&'a ParticipatingIn>,
+}
+
+/// `update_motion_destinations` に渡す Soul 移動状態。
+pub struct MotionState<'a> {
+    pub idle: &'a mut IdleState,
+    pub dest: &'a mut Destination,
+    pub path: &'a mut Path,
+}
+
+/// `update_motion_destinations` に渡す時間・scratch バッファ。
+pub struct MotionExtras<'a> {
+    pub dt: f32,
+    pub dream: f32,
+    pub scratch: &'a mut Vec<Entity>,
+}
+
 /// 現在の行動に応じて移動先を更新
 pub fn update_motion_destinations(
-    entity: Entity,
-    current_pos: Vec2,
-    gathering_center: Option<Vec2>,
-    target_spot_entity: Option<Entity>,
-    participating_in: Option<&ParticipatingIn>,
-    idle: &mut IdleState,
-    dest: &mut Destination,
-    path: &mut Path,
+    soul_pos: SoulPos,
+    gathering: MotionGatheringCtx<'_>,
+    state: MotionState<'_>,
     soul_grid: &impl SpatialGridOps,
     world_map: &WorldMap,
     request_writer: &mut MessageWriter<IdleBehaviorRequest>,
-    dt: f32,
-    dream: f32,
-    scratch: &mut Vec<Entity>,
+    extras: MotionExtras<'_>,
 ) {
+    let entity = soul_pos.entity;
+    let current_pos = soul_pos.pos;
+    let dt = extras.dt;
+    let dream = extras.dream;
+    let scratch = extras.scratch;
+    let idle = state.idle;
+    let dest = state.dest;
+    let path = state.path;
+    let gathering_center = gathering.center;
+    let target_spot_entity = gathering.target_spot_entity;
+    let participating_in = gathering.participating_in;
     match idle.behavior {
         IdleBehavior::Wandering => {
             if path.waypoints.is_empty() || path.current_index >= path.waypoints.len() {

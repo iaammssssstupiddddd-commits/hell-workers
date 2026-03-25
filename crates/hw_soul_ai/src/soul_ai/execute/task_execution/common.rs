@@ -286,18 +286,28 @@ pub fn release_mixer_mud_storage_for_item(
         .remove::<hw_jobs::StoredByMixer>();
 }
 
-#[allow(clippy::too_many_arguments)]
+/// `try_pickup_item` のロケーション引数をまとめた構造体。
+pub struct PickupLocations {
+    pub soul_entity: Entity,
+    pub item_entity: Entity,
+    pub soul_pos: Vec2,
+    pub item_pos: Vec2,
+}
+
 /// 拾い判定が満たされない場合はタスクをクリアする
 pub fn try_pickup_item(
     commands: &mut Commands,
-    soul_entity: Entity,
-    item_entity: Entity,
+    locations: PickupLocations,
     inventory: &mut Inventory,
-    soul_pos: Vec2,
-    item_pos: Vec2,
     task: &mut AssignedTask,
     path: &mut Path,
 ) -> bool {
+    let PickupLocations {
+        soul_entity,
+        item_entity,
+        soul_pos,
+        item_pos,
+    } = locations;
     if !can_pickup_item(soul_pos, item_pos) {
         clear_task_and_path(task, path);
         return false;

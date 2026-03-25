@@ -8,7 +8,7 @@ use hw_ui::selection::{
     BuildingPlacementContext, TANK_NEARBY_BUCKET_STORAGE_TILES, bucket_storage_geometry,
     building_geometry, validate_bucket_storage_placement, validate_building_placement,
 };
-use hw_world::zones::{Site, Yard};
+use super::PlacementQueries;
 
 type PlaceBlueprintResult = Option<(Entity, Vec<(i32, i32)>, Vec2)>;
 
@@ -42,7 +42,6 @@ fn is_wall_or_door_at(
     false
 }
 
-#[allow(clippy::too_many_arguments)]
 /// Attempts to spawn a Blueprint entity for the given building type at the given grid position.
 /// Returns `Some((entity, occupied_grids, spawn_pos))` on success, `None` if placement is blocked.
 pub(super) fn place_building_blueprint(
@@ -51,23 +50,20 @@ pub(super) fn place_building_blueprint(
     game_assets: &GameAssets,
     building_type: BuildingType,
     grid: (i32, i32),
-    q_buildings: &Query<&Building>,
-    q_blueprints_by_entity: &Query<&Blueprint>,
-    q_sites: &Query<&Site>,
-    q_yards: &Query<&Yard>,
+    pq: &PlacementQueries<'_, '_, '_>,
 ) -> PlaceBlueprintResult {
     let geometry = building_geometry(building_type, grid, RIVER_Y_MIN);
     let replace_wall_entity = {
         let read_world = WorldMapRef(world_map);
         let ctx = BuildingPlacementContext {
             world: &read_world,
-            in_site: q_sites.iter().any(|site| site.contains(geometry.draw_pos)),
-            in_yard: q_yards.iter().any(|yard| yard.contains(geometry.draw_pos)),
+            in_site: pq.q_sites.iter().any(|site| site.contains(geometry.draw_pos)),
+            in_yard: pq.q_yards.iter().any(|yard| yard.contains(geometry.draw_pos)),
             is_wall_or_door_at: &|candidate| {
-                is_wall_or_door_at(world_map, q_buildings, q_blueprints_by_entity, candidate)
+                is_wall_or_door_at(world_map, pq.q_buildings, pq.q_blueprints_by_entity, candidate)
             },
             is_replaceable_wall_at: &|candidate| {
-                is_replaceable_wall_at(world_map, q_buildings, candidate)
+                is_replaceable_wall_at(world_map, pq.q_buildings, candidate)
             },
         };
         let validation = validate_building_placement(&ctx, building_type, grid, &geometry);
@@ -78,7 +74,7 @@ pub(super) fn place_building_blueprint(
         (building_type == BuildingType::Door)
             .then(|| world_map.building_entity(grid))
             .flatten()
-            .filter(|_| is_replaceable_wall_at(world_map, q_buildings, grid))
+            .filter(|_| is_replaceable_wall_at(world_map, pq.q_buildings, grid))
     };
 
     if let Some(entity) = replace_wall_entity {

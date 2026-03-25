@@ -1,5 +1,6 @@
 //! モード表示 / エリア編集プレビュー / タスクサマリの中継レイヤー（hw_ui 側実装へ委譲）
 
+use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use hw_core::constants::TILE_SIZE;
@@ -17,22 +18,48 @@ use crate::systems::jobs::Designation;
 use hw_core::relationships::ManagedBy;
 use hw_ui::components::UiNodeRegistry;
 
-#[allow(clippy::too_many_arguments)]
+#[derive(SystemParam)]
+pub struct ModeState<'w> {
+    play_mode: Res<'w, State<PlayMode>>,
+    build_context: Res<'w, BuildContext>,
+    companion_state: Res<'w, CompanionPlacementState>,
+    zone_context: Res<'w, ZoneContext>,
+    task_context: Res<'w, TaskContext>,
+}
+
+#[derive(SystemParam)]
+pub struct ModeSelectionData<'w, 's> {
+    selected_entity: Res<'w, SelectedEntity>,
+    area_edit_session: Res<'w, AreaEditSession>,
+    area_edit_clipboard: Res<'w, AreaEditClipboard>,
+    q_familiars: Query<'w, 's, &'static hw_core::familiar::Familiar>,
+    q_task_areas:
+        Query<'w, 's, (Entity, Ref<'static, TaskArea>), With<hw_core::familiar::Familiar>>,
+    q_unassigned_tasks:
+        Query<'w, 's, &'static Transform, (With<Designation>, Without<ManagedBy>)>,
+}
+
 pub fn update_mode_text_system(
-    play_mode: Res<State<PlayMode>>,
-    build_context: Res<BuildContext>,
-    companion_state: Res<CompanionPlacementState>,
-    zone_context: Res<ZoneContext>,
-    task_context: Res<TaskContext>,
-    selected_entity: Res<SelectedEntity>,
-    area_edit_session: Res<AreaEditSession>,
-    area_edit_clipboard: Res<AreaEditClipboard>,
-    q_familiars: Query<&hw_core::familiar::Familiar>,
-    q_task_areas: Query<(Entity, Ref<TaskArea>), With<hw_core::familiar::Familiar>>,
-    q_unassigned_tasks: Query<&Transform, (With<Designation>, Without<ManagedBy>)>,
+    mode_state: ModeState,
+    selection_data: ModeSelectionData,
     q_text: Query<&mut Text>,
     ui_nodes: Res<UiNodeRegistry>,
 ) {
+    let ModeState {
+        play_mode,
+        build_context,
+        companion_state,
+        zone_context,
+        task_context,
+    } = mode_state;
+    let ModeSelectionData {
+        selected_entity,
+        area_edit_session,
+        area_edit_clipboard,
+        q_familiars,
+        q_task_areas,
+        q_unassigned_tasks,
+    } = selection_data;
     let area_mode_active = matches!(task_context.0, TaskMode::AreaSelection(_));
     let selected_area_changed = selected_entity.0.is_some_and(|selected| {
         q_task_areas
@@ -94,18 +121,22 @@ pub fn update_mode_text_system(
     });
 
     let mode_text = mode::build_mode_text(
-        play_mode.get(),
-        &build_context,
-        &companion_state,
-        &zone_context,
-        &task_context,
-        selected_familiar_name,
-        selected_area_size_tiles,
-        area_edit_session.is_dragging(),
-        area_edit_session.operation_label(),
-        area_overlap,
-        area_edit_clipboard.has_area(),
-        unassigned_tasks_in_area,
+        mode::ModeCtxRefs {
+            play_mode: play_mode.get(),
+            build_context: &build_context,
+            companion_state: &companion_state,
+            zone_context: &zone_context,
+            task_context: &task_context,
+        },
+        mode::ModeDisplayInfo {
+            selected_familiar_name,
+            selected_area_size_tiles,
+            area_edit_dragging: area_edit_session.is_dragging(),
+            area_edit_operation: area_edit_session.operation_label(),
+            area_overlap,
+            clipboard_has_area: area_edit_clipboard.has_area(),
+            unassigned_tasks_in_area,
+        },
     );
 
     hw_ui::interaction::status_display::update_mode_text_system(
@@ -149,19 +180,40 @@ pub fn task_summary_ui_system(
     );
 }
 
-#[allow(clippy::too_many_arguments)]
+#[derive(SystemParam)]
+pub struct AreaEditContext<'w> {
+    task_context: Res<'w, TaskContext>,
+    selected_entity: Res<'w, SelectedEntity>,
+    area_edit_session: Res<'w, AreaEditSession>,
+    area_edit_clipboard: Res<'w, AreaEditClipboard>,
+}
+
+#[derive(SystemParam)]
+pub struct AreaEditQueries<'w, 's> {
+    q_task_areas: Query<'w, 's, (Entity, &'static TaskArea), With<hw_core::familiar::Familiar>>,
+    q_unassigned_tasks:
+        Query<'w, 's, &'static Transform, (With<Designation>, Without<ManagedBy>)>,
+    q_window: Query<'w, 's, &'static Window, With<PrimaryWindow>>,
+}
+
 pub fn update_area_edit_preview_ui_system(
-    task_context: Res<TaskContext>,
-    selected_entity: Res<SelectedEntity>,
-    area_edit_session: Res<AreaEditSession>,
-    area_edit_clipboard: Res<AreaEditClipboard>,
+    edit_context: AreaEditContext,
+    edit_queries: AreaEditQueries,
     ui_nodes: Res<UiNodeRegistry>,
-    q_task_areas: Query<(Entity, &TaskArea), With<hw_core::familiar::Familiar>>,
-    q_unassigned_tasks: Query<&Transform, (With<Designation>, Without<ManagedBy>)>,
-    q_window: Query<&Window, With<PrimaryWindow>>,
     q_node: Query<&mut Node>,
     q_text: Query<&mut Text>,
 ) {
+    let AreaEditContext {
+        task_context,
+        selected_entity,
+        area_edit_session,
+        area_edit_clipboard,
+    } = edit_context;
+    let AreaEditQueries {
+        q_task_areas,
+        q_unassigned_tasks,
+        q_window,
+    } = edit_queries;
     let mut payload = Some(hw_ui::interaction::status_display::AreaEditPreviewPayload {
         display: false,
         text: String::new(),

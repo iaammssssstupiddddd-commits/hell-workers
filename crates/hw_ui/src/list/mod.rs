@@ -26,6 +26,6 @@ pub use spawn::{
     spawn_empty_squad_hint_entity, spawn_familiar_section, spawn_soul_list_item,
     spawn_soul_list_item_entity,
 };
-pub use sync::{sync_familiar_sections, sync_unassigned_souls};
+pub use sync::{FamiliarSectionCtx, sync_familiar_sections, sync_unassigned_souls};
 pub use tree_ops::clear_children;
-pub use visual::{apply_row_highlight, entity_list_visual_feedback_system};
+pub use visual::{RowHighlightState, apply_row_highlight, entity_list_visual_feedback_system};

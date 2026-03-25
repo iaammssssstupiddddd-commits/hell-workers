@@ -1,5 +1,6 @@
 use crate::handles::WallVisualHandles;
 use crate::layer::VisualLayerKind;
+use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use hw_core::visual_mirror::building::{BuildingTypeVisual, BuildingVisualState};
 use hw_core::visual_mirror::construction::BlueprintVisualState;
@@ -23,8 +24,13 @@ type WallCheckQuery<'w, 's> = Query<
     Or<(With<BuildingVisualState>, With<BlueprintVisualState>)>,
 >;
 
+#[derive(SystemParam)]
+pub struct WallConnectionQueries<'w, 's> {
+    q_children: Query<'w, 's, &'static Children>,
+    q_visual_layers: Query<'w, 's, (&'static VisualLayerKind, &'static mut Sprite)>,
+    q_blueprint_sprites: Query<'w, 's, &'static mut Sprite, Without<VisualLayerKind>>,
+}
 
-#[allow(clippy::too_many_arguments)]
 /// 壁の接続更新を行うシステム
 pub fn wall_connections_system(
     wall_handles: Res<WallVisualHandles>,
@@ -35,10 +41,7 @@ pub fn wall_connections_system(
         Added<BlueprintVisualState>,
     >,
     q_walls_check: WallCheckQuery,
-    q_children: Query<&Children>,
-    mut q_visual_layers: Query<(&VisualLayerKind, &mut Sprite)>,
-    // Blueprint エンティティは Sprite を直接持つ（子構造ではない）
-    mut q_blueprint_sprites: Query<&mut Sprite, Without<VisualLayerKind>>,
+    mut queries: WallConnectionQueries,
 ) {
     let mut update_targets = HashSet::new();
 
@@ -79,9 +82,9 @@ pub fn wall_connections_system(
 
                 // 完成した Building は Sprite を VisualLayerKind::Struct 子エンティティに持つ
                 let mut updated = false;
-                if let Ok(children) = q_children.get(entity) {
+                if let Ok(children) = queries.q_children.get(entity) {
                     for child in children.iter() {
-                        if let Ok((kind, mut sprite)) = q_visual_layers.get_mut(child)
+                        if let Ok((kind, mut sprite)) = queries.q_visual_layers.get_mut(child)
                             && *kind == VisualLayerKind::Struct {
                                 update_wall_sprite(
                                     entity,
@@ -99,7 +102,7 @@ pub fn wall_connections_system(
                 }
                 // Blueprint エンティティは Sprite を直接持つ
                 if !updated
-                    && let Ok(mut sprite) = q_blueprint_sprites.get_mut(entity) {
+                    && let Ok(mut sprite) = queries.q_blueprint_sprites.get_mut(entity) {
                         update_wall_sprite(
                             entity,
                             gx,

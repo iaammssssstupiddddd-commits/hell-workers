@@ -91,24 +91,29 @@ pub fn detect_rooms_system(
     detection_state.dirty_tiles.clear();
 }
 
-#[allow(clippy::too_many_arguments)]
+use bevy::ecs::system::SystemParam;
+
+#[derive(SystemParam)]
+pub struct ValidateRoomsParams<'w, 's> {
+    commands: Commands<'w, 's>,
+    time: Res<'w, Time>,
+    validation_state: ResMut<'w, RoomValidationState>,
+    detection_state: ResMut<'w, RoomDetectionState>,
+    room_tile_lookup: ResMut<'w, RoomTileLookup>,
+    q_rooms: Query<'w, 's, (Entity, &'static Room)>,
+    q_buildings: Query<'w, 's, (Entity, &'static Building, &'static Transform)>,
+    world_map: WorldMapRead<'w>,
+}
+
 /// 既存 Room の整合性を定期検証し、無効なものを再検出キューへ送るシステム
-pub fn validate_rooms_system(
-    mut commands: Commands,
-    time: Res<Time>,
-    mut validation_state: ResMut<RoomValidationState>,
-    mut detection_state: ResMut<RoomDetectionState>,
-    mut room_tile_lookup: ResMut<RoomTileLookup>,
-    q_rooms: Query<(Entity, &Room)>,
-    q_buildings: Query<(Entity, &Building, &Transform)>,
-    world_map: WorldMapRead,
-) {
-    validation_state.timer.tick(time.delta());
-    if !validation_state.timer.just_finished() {
+pub fn validate_rooms_system(mut p: ValidateRoomsParams) {
+    p.validation_state.timer.tick(p.time.delta());
+    if !p.validation_state.timer.just_finished() {
         return;
     }
 
-    let tiles: Vec<RoomDetectionBuildingTile> = q_buildings
+    let tiles: Vec<RoomDetectionBuildingTile> = p
+        .q_buildings
         .iter()
         .map(|(_entity, building, transform)| {
             let grid = WorldMap::world_to_grid(transform.translation.truncate());
@@ -116,7 +121,7 @@ pub fn validate_rooms_system(
                 grid,
                 kind: building.kind,
                 is_provisional: building.is_provisional,
-                has_building_on_top: world_map.has_building(grid),
+                has_building_on_top: p.world_map.has_building(grid),
             }
         })
         .collect();
@@ -124,7 +129,7 @@ pub fn validate_rooms_system(
     let input = build_detection_input(&tiles);
     let mut tile_to_room = HashMap::new();
 
-    for (room_entity, room) in q_rooms.iter() {
+    for (room_entity, room) in p.q_rooms.iter() {
         if room_is_valid_against_input(&room.tiles, &input) {
             for &tile in &room.tiles {
                 tile_to_room.insert(tile, room_entity);
@@ -132,13 +137,13 @@ pub fn validate_rooms_system(
             continue;
         }
 
-        detection_state.mark_dirty_many(room.tiles.iter().copied());
-        detection_state.mark_dirty_many(room.wall_tiles.iter().copied());
-        detection_state.mark_dirty_many(room.door_tiles.iter().copied());
-        commands.entity(room_entity).try_despawn();
+        p.detection_state.mark_dirty_many(room.tiles.iter().copied());
+        p.detection_state.mark_dirty_many(room.wall_tiles.iter().copied());
+        p.detection_state.mark_dirty_many(room.door_tiles.iter().copied());
+        p.commands.entity(room_entity).try_despawn();
     }
 
-    room_tile_lookup.tile_to_room = tile_to_room;
+    p.room_tile_lookup.tile_to_room = tile_to_room;
 }
 
 fn collect_building_tiles(

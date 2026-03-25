@@ -15,6 +15,8 @@ use hw_core::relationships::TaskWorkers;
 use hw_jobs::lifecycle;
 use std::collections::HashMap;
 
+use bevy::ecs::system::SystemParam;
+
 pub use hw_logistics::SharedResourceCache;
 pub use hw_logistics::apply_reservation_op;
 
@@ -34,6 +36,22 @@ type PendingDirtyQuery<'w, 's> = Query<
     ),
 >;
 
+#[derive(SystemParam)]
+pub struct DirtyCheckQueries<'w, 's> {
+    q_pending_dirty: PendingDirtyQuery<'w, 's>,
+    q_task_workers_added: Query<'w, 's, (), (With<Designation>, Added<TaskWorkers>)>,
+    q_assigned_task_added: Query<'w, 's, (), Added<AssignedTask>>,
+    q_assigned_task_changed: Query<'w, 's, (), Changed<AssignedTask>>,
+}
+
+#[derive(SystemParam)]
+pub struct RemovedTrackings<'w, 's> {
+    removed_designations: RemovedComponents<'w, 's, Designation>,
+    removed_transport_requests: RemovedComponents<'w, 's, TransportRequest>,
+    removed_task_workers: RemovedComponents<'w, 's, TaskWorkers>,
+    removed_assigned_tasks: RemovedComponents<'w, 's, AssignedTask>,
+}
+
 #[derive(Resource)]
 pub struct ReservationSyncTimer {
     pub timer: Timer,
@@ -49,7 +67,6 @@ impl Default for ReservationSyncTimer {
     }
 }
 
-#[allow(clippy::too_many_arguments)]
 /// タスク状態から予約を同期するシステム (Sense Phase)
 ///
 /// 以下の2種類のソースから予約を再構築する:
@@ -62,26 +79,26 @@ pub fn sync_reservations_system(
     mut sync_timer: ResMut<ReservationSyncTimer>,
     q_souls: Query<&AssignedTask>,
     q_pending_tasks: Query<(&Designation, Option<&TransportRequest>), Without<TaskWorkers>>,
-    q_pending_dirty: PendingDirtyQuery,
-    q_task_workers_added: Query<(), (With<Designation>, Added<TaskWorkers>)>,
-    q_assigned_task_added: Query<(), Added<AssignedTask>>,
-    q_assigned_task_changed: Query<(), Changed<AssignedTask>>,
-    mut removed_designations: RemovedComponents<Designation>,
-    mut removed_transport_requests: RemovedComponents<TransportRequest>,
-    mut removed_task_workers: RemovedComponents<TaskWorkers>,
-    mut removed_assigned_tasks: RemovedComponents<AssignedTask>,
+    dirty_checks: DirtyCheckQueries,
+    mut removed: RemovedTrackings,
     mut cache: ResMut<SharedResourceCache>,
 ) {
+    let DirtyCheckQueries {
+        q_pending_dirty,
+        q_task_workers_added,
+        q_assigned_task_added,
+        q_assigned_task_changed,
+    } = dirty_checks;
     let timer_finished = sync_timer.timer.tick(time.delta()).just_finished();
     let interval_due = !sync_timer.first_run_done || timer_finished;
     let pending_dirty = q_pending_dirty.iter().next().is_some()
         || q_task_workers_added.iter().next().is_some()
-        || removed_designations.read().next().is_some()
-        || removed_transport_requests.read().next().is_some()
-        || removed_task_workers.read().next().is_some();
+        || removed.removed_designations.read().next().is_some()
+        || removed.removed_transport_requests.read().next().is_some()
+        || removed.removed_task_workers.read().next().is_some();
     let active_dirty = q_assigned_task_added.iter().next().is_some()
         || q_assigned_task_changed.iter().next().is_some()
-        || removed_assigned_tasks.read().next().is_some();
+        || removed.removed_assigned_tasks.read().next().is_some();
 
     if sync_timer.first_run_done && !interval_due && !pending_dirty && !active_dirty {
         return;

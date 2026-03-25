@@ -3,7 +3,7 @@ use hw_core::logistics::{ResourceType, WheelbarrowDestination};
 use hw_jobs::BuildingType;
 
 use super::super::super::builders::{
-    issue_haul_to_stockpile_with_source, issue_haul_with_wheelbarrow,
+    WheelbarrowHaulSpec, issue_haul_to_stockpile_with_source, issue_haul_with_wheelbarrow,
 };
 use super::super::super::validator::resolve_haul_to_provisional_wall_inputs;
 use super::demand;
@@ -73,10 +73,12 @@ pub fn assign_haul_to_provisional_wall(
             return false;
         };
         issue_haul_with_wheelbarrow(
-            wheelbarrow,
-            source_pos,
-            WheelbarrowDestination::Stockpile(wall_entity),
-            vec![source_item],
+            WheelbarrowHaulSpec {
+                wheelbarrow,
+                source_pos,
+                destination: WheelbarrowDestination::Stockpile(wall_entity),
+                items: vec![source_item],
+            },
             wall_pos,
             already_commanded,
             ctx,

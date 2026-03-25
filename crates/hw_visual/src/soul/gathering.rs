@@ -7,22 +7,29 @@ use hw_core::relationships::{GatheringParticipants, ParticipatingIn};
 use hw_core::selection::HoveredEntity;
 use hw_core::soul::DamnedSoul;
 
-#[allow(clippy::type_complexity)]
+type GatheringSpotsQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static GatheringSpot,
+        &'static GatheringParticipants,
+        &'static GatheringVisuals,
+    ),
+    Changed<GatheringSpot>,
+>;
+
+type GatheringVisualsQuery<'w, 's> = Query<
+    'w,
+    's,
+    (&'static mut Sprite, &'static mut Transform, &'static mut Visibility),
+    (Without<DamnedSoul>, Without<ParticipatingIn>),
+>;
+
 /// 集会オーラのサイズと位置の更新システム
 pub fn gathering_visual_update_system(
-    q_spots: Query<
-        (
-            Entity,
-            &GatheringSpot,
-            &GatheringParticipants,
-            &GatheringVisuals,
-        ),
-        Changed<GatheringSpot>,
-    >,
-    mut q_visuals: Query<
-        (&mut Sprite, &mut Transform, &mut Visibility),
-        (Without<DamnedSoul>, Without<ParticipatingIn>),
-    >,
+    q_spots: GatheringSpotsQuery,
+    mut q_visuals: GatheringVisualsQuery,
 ) {
     for (_spot_entity, spot, participants, visuals) in q_spots.iter() {
         let target_size = calculate_aura_size(participants.len());

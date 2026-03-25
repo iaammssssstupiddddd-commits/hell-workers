@@ -13,33 +13,36 @@ use hw_core::game_state::PlayMode;
 use hw_core::relationships::ManagedBy;
 use hw_world::zones::Site;
 
-#[allow(clippy::too_many_arguments)]
+pub(super) struct AreaReleaseCtx<'a> {
+    pub(super) task_context: &'a mut TaskContext,
+    pub(super) selected_entity: Option<Entity>,
+    pub(super) world_pos: Vec2,
+    pub(super) start_pos: Vec2,
+    pub(super) keyboard: &'a ButtonInput<KeyCode>,
+    pub(super) next_play_mode: &'a mut NextState<PlayMode>,
+    pub(super) area_edit_history: &'a mut AreaEditHistory,
+}
+
 pub(super) fn handle_release_area_selection(
-    task_context: &mut TaskContext,
-    selected_entity: Option<Entity>,
-    world_pos: Vec2,
-    start_pos: Vec2,
+    ctx: &mut AreaReleaseCtx<'_>,
     q_familiar_areas: &Query<&TaskArea, With<Familiar>>,
     q_sites: &Query<&Site>,
     q_familiars: &mut Query<(&mut ActiveCommand, &mut Destination), With<Familiar>>,
     indicator_entities: &[Entity],
     q_unassigned: &Query<(Entity, &Transform, &Designation), Without<ManagedBy>>,
-    keyboard: &ButtonInput<KeyCode>,
-    next_play_mode: &mut NextState<PlayMode>,
     commands: &mut Commands,
-    area_edit_history: &mut AreaEditHistory,
 ) {
-    let end_pos = WorldMap::snap_to_grid_edge(world_pos);
+    let end_pos = WorldMap::snap_to_grid_edge(ctx.world_pos);
 
-    if start_pos.distance(end_pos) < 0.1 {
-        task_context.0 = TaskMode::None;
-        next_play_mode.set(PlayMode::Normal);
+    if ctx.start_pos.distance(end_pos) < 0.1 {
+        ctx.task_context.0 = TaskMode::None;
+        ctx.next_play_mode.set(PlayMode::Normal);
         despawn_indicators(indicator_entities, commands);
         return;
     }
 
-    let new_area = TaskArea::from_points(start_pos, end_pos);
-    if let Some(fam_entity) = selected_entity {
+    let new_area = TaskArea::from_points(ctx.start_pos, end_pos);
+    if let Some(fam_entity) = ctx.selected_entity {
         let before_area = q_familiar_areas.get(fam_entity).ok().cloned();
         apply_area_and_record_history(
             fam_entity,
@@ -47,7 +50,7 @@ pub(super) fn handle_release_area_selection(
             before_area,
             commands,
             q_familiars,
-            area_edit_history,
+            ctx.area_edit_history,
             q_sites,
         );
         assign_unassigned_tasks_in_area(commands, fam_entity, &new_area, q_unassigned);
@@ -55,11 +58,11 @@ pub(super) fn handle_release_area_selection(
 
     despawn_indicators(indicator_entities, commands);
 
-    if should_exit_after_apply(keyboard) {
-        task_context.0 = TaskMode::None;
-        next_play_mode.set(PlayMode::Normal);
+    if should_exit_after_apply(ctx.keyboard) {
+        ctx.task_context.0 = TaskMode::None;
+        ctx.next_play_mode.set(PlayMode::Normal);
     } else {
-        task_context.0 = TaskMode::AreaSelection(None);
+        ctx.task_context.0 = TaskMode::AreaSelection(None);
     }
 }
 

@@ -1,4 +1,5 @@
 use super::{EntityListNodeIndex, EntityListViewModel, SoulGender, StressBucket, TaskVisual};
+use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use hw_ui::components::{FamiliarListContainer, SoulListItem, UnassignedSoulContent};
 use hw_ui::theme::UiTheme;
@@ -69,32 +70,41 @@ fn lookup_soul_view_model(
         .find(|soul| soul.entity == entity)
 }
 
-#[allow(clippy::too_many_arguments)]
+#[derive(SystemParam)]
+pub struct SyncViewModelCtx<'w, 's> {
+    game_assets: Res<'w, crate::assets::GameAssets>,
+    theme: Res<'w, UiTheme>,
+    view_model: ResMut<'w, EntityListViewModel>,
+    node_index: ResMut<'w, EntityListNodeIndex>,
+    q_fam_container: Query<'w, 's, Entity, With<FamiliarListContainer>>,
+    q_unassigned_container: Query<'w, 's, Entity, With<UnassignedSoulContent>>,
+    q_children: Query<'w, 's, &'static Children>,
+}
+
+#[derive(SystemParam)]
+pub struct SyncMutUiQueries<'w, 's> {
+    q_text: Query<'w, 's, &'static mut Text>,
+    q_image: Query<'w, 's, &'static mut ImageNode>,
+}
+
 pub fn sync_entity_list_from_view_model_system(
     mut commands: Commands,
-    game_assets: Res<crate::assets::GameAssets>,
-    theme: Res<UiTheme>,
-    mut view_model: ResMut<EntityListViewModel>,
-    mut node_index: ResMut<EntityListNodeIndex>,
+    mut ctx: SyncViewModelCtx,
     mut dirty: ResMut<super::dirty::EntityListDirty>,
-    q_fam_container: Query<Entity, With<FamiliarListContainer>>,
-    q_unassigned_container: Query<Entity, With<UnassignedSoulContent>>,
-    q_children: Query<&Children>,
-    mut q_text: Query<&mut Text>,
-    mut q_image: Query<&mut ImageNode>,
+    mut ui_queries: SyncMutUiQueries,
 ) {
     dirty.clear_all();
 
-    if view_model.current == view_model.previous {
+    if ctx.view_model.current == ctx.view_model.previous {
         return;
     }
 
-    let fam_container_entity = if let Some(e) = q_fam_container.iter().next() {
+    let fam_container_entity = if let Some(e) = ctx.q_fam_container.iter().next() {
         e
     } else {
         return;
     };
-    let unassigned_content_entity = if let Some(e) = q_unassigned_container.iter().next() {
+    let unassigned_content_entity = if let Some(e) = ctx.q_unassigned_container.iter().next() {
         e
     } else {
         return;
@@ -102,41 +112,64 @@ pub fn sync_entity_list_from_view_model_system(
 
     hw_ui::list::sync::sync_familiar_sections(
         &mut commands,
-        game_assets.as_ref() as &dyn hw_ui::setup::UiAssets,
-        &theme,
-        &view_model,
-        &mut node_index,
-        fam_container_entity,
-        &q_children,
-        &mut q_text,
-        &mut q_image,
+        ctx.game_assets.as_ref() as &dyn hw_ui::setup::UiAssets,
+        &ctx.theme,
+        &mut hw_ui::list::FamiliarSectionCtx {
+            view_model: &ctx.view_model,
+            node_index: &mut ctx.node_index,
+            fam_container_entity,
+        },
+        &ctx.q_children,
+        &mut ui_queries.q_text,
+        &mut ui_queries.q_image,
     );
     hw_ui::list::sync::sync_unassigned_souls(
         &mut commands,
-        game_assets.as_ref() as &dyn hw_ui::setup::UiAssets,
-        &theme,
-        &view_model,
-        &mut node_index,
+        ctx.game_assets.as_ref() as &dyn hw_ui::setup::UiAssets,
+        &ctx.theme,
+        &ctx.view_model,
+        &mut ctx.node_index,
         unassigned_content_entity,
-        &q_children,
+        &ctx.q_children,
     );
 
-    view_model.previous = view_model.current.clone();
+    ctx.view_model.previous = ctx.view_model.current.clone();
 }
 
-#[allow(clippy::too_many_arguments)]
+#[derive(SystemParam)]
+pub struct SyncValueResources<'w> {
+    game_assets: Res<'w, crate::assets::GameAssets>,
+    theme: Res<'w, UiTheme>,
+    node_index: Res<'w, EntityListNodeIndex>,
+    view_model: Res<'w, EntityListViewModel>,
+}
+
+#[derive(SystemParam)]
+pub struct SyncValueMutQueries<'w, 's> {
+    q_text: Query<'w, 's, &'static mut Text>,
+    q_text_font: Query<'w, 's, &'static mut TextFont>,
+    q_text_color: Query<'w, 's, &'static mut TextColor>,
+    q_image: Query<'w, 's, &'static mut ImageNode>,
+}
+
 pub fn sync_entity_list_value_rows_system(
-    game_assets: Res<crate::assets::GameAssets>,
-    theme: Res<UiTheme>,
-    node_index: Res<EntityListNodeIndex>,
+    resources: SyncValueResources,
     q_soul_rows: Query<(&SoulListItem, &Children)>,
-    view_model: Res<EntityListViewModel>,
-    mut q_text: Query<&mut Text>,
-    mut q_text_font: Query<&mut TextFont>,
-    mut q_text_color: Query<&mut TextColor>,
-    mut q_image: Query<&mut ImageNode>,
+    mutable_queries: SyncValueMutQueries,
     mut dirty: ResMut<super::dirty::EntityListDirty>,
 ) {
+    let SyncValueResources {
+        game_assets,
+        theme,
+        node_index,
+        view_model,
+    } = resources;
+    let SyncValueMutQueries {
+        mut q_text,
+        mut q_text_font,
+        mut q_text_color,
+        mut q_image,
+    } = mutable_queries;
     for familiar in &view_model.current.familiars {
         let fam_entity = familiar.entity;
         let Some(nodes) = node_index.familiar_sections.get(&fam_entity).copied() else {

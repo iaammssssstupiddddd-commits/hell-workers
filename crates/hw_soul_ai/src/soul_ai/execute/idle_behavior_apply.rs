@@ -1,3 +1,4 @@
+use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use std::collections::HashMap;
 
@@ -11,7 +12,22 @@ use hw_core::relationships::{
 use hw_core::soul::{DamnedSoul, IdleBehavior, IdleState, Path, RestAreaCooldown};
 use hw_jobs::RestArea;
 
-#[allow(clippy::too_many_arguments)]
+#[derive(SystemParam)]
+pub struct RestAreaCheckQueries<'w, 's> {
+    pub q_rest_reserved: Query<'w, 's, &'static RestAreaReservedFor>,
+    pub q_rest_cooldown: Query<'w, 's, &'static RestAreaCooldown>,
+    pub q_participating: Query<'w, 's, (), With<ParticipatingIn>>,
+    pub q_rest_areas: Query<
+        'w,
+        's,
+        (
+            &'static RestArea,
+            Option<&'static RestAreaOccupants>,
+            Option<&'static RestAreaReservations>,
+        ),
+    >,
+}
+
 /// アイドル行動の適用システム (Execute Phase)
 ///
 /// IdleBehaviorRequestを読み取り、実際のエンティティ操作を行う。
@@ -23,14 +39,7 @@ pub fn idle_behavior_apply_system(
     mut q_idle: Query<&mut IdleState>,
     mut q_path: Query<&mut Path>,
     mut q_visibility: Query<&mut Visibility, With<DamnedSoul>>,
-    q_rest_reserved: Query<&RestAreaReservedFor>,
-    q_rest_cooldown: Query<&RestAreaCooldown>,
-    q_participating: Query<(), With<ParticipatingIn>>,
-    q_rest_areas: Query<(
-        &RestArea,
-        Option<&RestAreaOccupants>,
-        Option<&RestAreaReservations>,
-    )>,
+    rest_queries: RestAreaCheckQueries,
 ) {
     let mut pending_rest_reservations: HashMap<Entity, usize> = HashMap::new();
     let mut pending_rest_entries: HashMap<Entity, usize> = HashMap::new();
@@ -73,7 +82,8 @@ pub fn idle_behavior_apply_system(
                 });
             }
             IdleBehaviorOperation::ReserveRestArea { rest_area_entity } => {
-                let cooldown_active = q_rest_cooldown
+                let cooldown_active = rest_queries
+                    .q_rest_cooldown
                     .get(request.entity)
                     .map(|cooldown| cooldown.remaining_secs > f32::EPSILON)
                     .unwrap_or(false);
@@ -83,7 +93,8 @@ pub fn idle_behavior_apply_system(
                         .remove::<RestAreaReservedFor>();
                     continue;
                 }
-                let can_reserve = q_rest_areas
+                let can_reserve = rest_queries
+                    .q_rest_areas
                     .get(*rest_area_entity)
                     .map(|(rest_area, occupants, reservations)| {
                         let current = occupants.map_or(0, RestAreaOccupants::len);
@@ -112,7 +123,8 @@ pub fn idle_behavior_apply_system(
                     .remove::<RestAreaReservedFor>();
             }
             IdleBehaviorOperation::EnterRestArea { rest_area_entity } => {
-                let cooldown_active = q_rest_cooldown
+                let cooldown_active = rest_queries
+                    .q_rest_cooldown
                     .get(request.entity)
                     .map(|cooldown| cooldown.remaining_secs > f32::EPSILON)
                     .unwrap_or(false);
@@ -122,11 +134,13 @@ pub fn idle_behavior_apply_system(
                         .remove::<RestAreaReservedFor>();
                     continue;
                 }
-                let has_reservation_for_target = q_rest_reserved
+                let has_reservation_for_target = rest_queries
+                    .q_rest_reserved
                     .get(request.entity)
                     .map(|reserved| reserved.0 == *rest_area_entity)
                     .unwrap_or(false);
-                let can_enter = q_rest_areas
+                let can_enter = rest_queries
+                    .q_rest_areas
                     .get(*rest_area_entity)
                     .map(|(rest_area, occupants, reservations)| {
                         let current = occupants.map_or(0, RestAreaOccupants::len);
@@ -150,7 +164,7 @@ pub fn idle_behavior_apply_system(
                 }
                 *pending_rest_entries.entry(*rest_area_entity).or_insert(0) += 1;
 
-                if q_participating.get(request.entity).is_ok() {
+                if rest_queries.q_participating.get(request.entity).is_ok() {
                     commands.entity(request.entity).remove::<ParticipatingIn>();
                 }
 

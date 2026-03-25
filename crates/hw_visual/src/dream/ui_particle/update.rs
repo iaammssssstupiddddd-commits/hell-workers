@@ -1,38 +1,51 @@
+use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use bevy::ui_render::prelude::MaterialNode;
 use hw_core::camera::MainCamera;
 use hw_core::constants::*;
-use hw_core::ui_nodes::{UiMountSlot, UiNodeRegistry};
+use hw_core::ui_nodes::{UiMountSlot, UiNodeRegistry, UiSlot};
 use rand::Rng;
 
 use super::super::components::{DreamGainUiParticle, DreamIconAbsorb};
 use super::super::dream_bubble_material::DreamBubbleUiMaterial;
 
-#[allow(clippy::too_many_arguments)]
+#[derive(SystemParam)]
+pub struct UiParticleReadParams<'w, 's> {
+    q_ui_bubble_layer: Query<'w, 's, (Entity, &'static UiMountSlot)>,
+    q_camera: Query<'w, 's, &'static Camera, With<MainCamera>>,
+    ui_nodes: Res<'w, UiNodeRegistry>,
+}
+
+type ParticlesQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static mut DreamGainUiParticle,
+        &'static mut Node,
+        &'static MaterialNode<DreamBubbleUiMaterial>,
+        &'static mut Transform,
+    ),
+>;
+
 pub fn ui_particle_update_system(
     mut commands: Commands,
     time: Res<Time>,
     mut materials: ResMut<Assets<DreamBubbleUiMaterial>>,
-    ui_nodes: Res<UiNodeRegistry>,
-    q_ui_bubble_layer: Query<(Entity, &UiMountSlot)>,
+    read: UiParticleReadParams,
     mut q_icon: Query<&mut DreamIconAbsorb>,
-    mut q_particles: Query<(
-        Entity,
-        &mut DreamGainUiParticle,
-        &mut Node,
-        &MaterialNode<DreamBubbleUiMaterial>,
-        &mut Transform,
-    )>,
-    q_camera: Query<&Camera, With<MainCamera>>,
+    mut q_particles: ParticlesQuery,
 ) {
     let dt = time.delta_secs();
     let elapsed = time.elapsed_secs();
-    let ui_bubble_layer = q_ui_bubble_layer
+    let ui_bubble_layer = read
+        .q_ui_bubble_layer
         .iter()
         .find(|(_, slot)| matches!(slot, UiMountSlot::DreamBubbleLayer))
         .map(|(e, _)| e);
 
-    let viewport_size = q_camera
+    let viewport_size = read
+        .q_camera
         .iter()
         .next()
         .and_then(|c| c.logical_viewport_size())
@@ -45,17 +58,16 @@ pub fn ui_particle_update_system(
 
     let mut rng = rand::thread_rng();
 
+    let icon_entity = read.ui_nodes.get_slot(UiSlot::DreamPoolIcon);
+
     for (entity, mut particle, mut node, mat_node, mut transform) in q_particles.iter_mut() {
         particle.time_alive += dt;
 
         let current_pos = ui_position_from_node(&node);
 
-        let is_merge_complete = if particle.merging_into.is_some() {
+        let should_despawn = if particle.merging_into.is_some() {
             update_merging_particle(
-                dt,
-                elapsed,
-                viewport_size,
-                current_pos,
+                MergeInput { dt, elapsed, viewport_size, current_pos },
                 &target_positions,
                 &mut particle,
                 &mut node,
@@ -63,25 +75,24 @@ pub fn ui_particle_update_system(
                 &mut materials,
             )
         } else {
-            update_standard_particle(
-                dt,
-                elapsed,
-                viewport_size,
-                current_pos,
-                &mut rng,
-                &mut particle,
-                &mut node,
-                mat_node,
-                &mut transform,
+            let arrived = update_standard::update_standard_particle(
+                update_standard::StandardInput { dt, elapsed, viewport_size, current_pos },
+                update_standard::ParticleState { particle: &mut particle, rng: &mut rng },
+                update_standard::NodeVisuals { node: &mut node, mat_node, transform: &mut transform },
                 &mut materials,
-                &mut q_icon,
-                &ui_nodes,
                 ui_bubble_layer,
                 &mut commands,
-            )
+            );
+            if arrived
+                && let Some(icon_e) = icon_entity
+                    && let Ok(mut absorb) = q_icon.get_mut(icon_e)
+                {
+                    absorb.pulse_count = absorb.pulse_count.saturating_add(1);
+                }
+            arrived
         };
 
-        if is_merge_complete {
+        if should_despawn {
             commands.entity(entity).try_despawn();
         }
     }
@@ -110,18 +121,22 @@ fn merge_cluster_scale(mass: f32) -> f32 {
     }
 }
 
-#[allow(clippy::too_many_arguments)]
-fn update_merging_particle(
+struct MergeInput {
     dt: f32,
     elapsed: f32,
     viewport_size: Vec2,
     current_pos: Vec2,
+}
+
+fn update_merging_particle(
+    input: MergeInput,
     target_positions: &[(Entity, Vec2)],
     particle: &mut DreamGainUiParticle,
     node: &mut Node,
     mat_node: &MaterialNode<DreamBubbleUiMaterial>,
-    materials: &mut ResMut<Assets<DreamBubbleUiMaterial>>,
+    materials: &mut Assets<DreamBubbleUiMaterial>,
 ) -> bool {
+    let MergeInput { dt, elapsed, viewport_size, current_pos } = input;
     particle.merge_timer -= dt;
     let progress = 1.0 - (particle.merge_timer / DREAM_UI_MERGE_DURATION).clamp(0.0, 1.0);
 
@@ -172,41 +187,6 @@ fn update_merging_particle(
 
 mod update_standard;
 mod update_trail;
-
-#[allow(clippy::too_many_arguments)]
-fn update_standard_particle(
-    dt: f32,
-    elapsed: f32,
-    viewport_size: Vec2,
-    current_pos: Vec2,
-    rng: &mut rand::rngs::ThreadRng,
-    particle: &mut DreamGainUiParticle,
-    node: &mut Node,
-    mat_node: &MaterialNode<DreamBubbleUiMaterial>,
-    transform: &mut Transform,
-    materials: &mut ResMut<Assets<DreamBubbleUiMaterial>>,
-    q_icon: &mut Query<&mut DreamIconAbsorb>,
-    ui_nodes: &UiNodeRegistry,
-    ui_bubble_layer: Option<Entity>,
-    commands: &mut Commands,
-) -> bool {
-    update_standard::update_standard_particle(
-        dt,
-        elapsed,
-        viewport_size,
-        current_pos,
-        rng,
-        particle,
-        node,
-        mat_node,
-        transform,
-        materials,
-        q_icon,
-        ui_nodes,
-        ui_bubble_layer,
-        commands,
-    )
-}
 
 pub fn spawn_ui_particle(
     commands: &mut Commands,

@@ -7,51 +7,52 @@ use hw_core::constants::{
     WHEELBARROW_PREFERRED_MIN_BATCH_SIZE,
 };
 use hw_core::relationships::{IncomingDeliveries, StoredIn, StoredItems};
-use hw_jobs::{Blueprint, Designation};
+use hw_jobs::Blueprint;
 
 use crate::resource_cache::SharedResourceCache;
 use crate::transport_request::{
-    ManualHaulPinnedSource, ManualTransportRequest, TransportDemand, TransportRequest,
+    ManualTransportRequest, TransportDemand, TransportRequest,
     TransportRequestKind, TransportRequestState, WheelbarrowLease, WheelbarrowPendingSince,
 };
-use crate::types::{BelongsTo, ReservedForTask, ResourceItem};
+use crate::types::BelongsTo;
 use crate::zone::Stockpile;
 
 use super::candidates::{
-    build_free_item_buckets, build_request_eval_context, collect_top_k_nearest,
-    is_pick_drop_possible, score_candidate,
+    FreeItemsQuery, RequestEvalInput, build_free_item_buckets, build_request_eval_context,
+    collect_top_k_nearest, is_pick_drop_possible, score_candidate,
 };
 use super::types::{BatchCandidate, ItemBucketKey, RequestEvalContext};
 
-#[allow(clippy::too_many_arguments, clippy::type_complexity)]
-pub(super) fn collect_candidates(
-    q_requests: &Query<(
+type CollectCandidatesRequestQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
         Entity,
-        &TransportRequest,
-        &TransportRequestState,
-        &TransportDemand,
-        &Transform,
-        Option<&WheelbarrowLease>,
-        Option<&WheelbarrowPendingSince>,
-        Option<&ManualTransportRequest>,
-    )>,
-    q_free_items: &Query<
-        (Entity, &Transform, &Visibility, &ResourceItem),
-        (
-            Without<Designation>,
-            Without<hw_core::relationships::TaskWorkers>,
-            Without<ReservedForTask>,
-            Without<ManualHaulPinnedSource>,
-        ),
-    >,
-    q_belongs: &Query<&BelongsTo>,
-    q_stored_in: &Query<&StoredIn>,
-    q_stockpiles: &Query<(&Stockpile, Option<&StoredItems>)>,
-    q_blueprints: &Query<&Blueprint>,
+        &'static TransportRequest,
+        &'static TransportRequestState,
+        &'static TransportDemand,
+        &'static Transform,
+        Option<&'static WheelbarrowLease>,
+        Option<&'static WheelbarrowPendingSince>,
+        Option<&'static ManualTransportRequest>,
+    ),
+>;
+
+pub(super) struct CollectCandidatesQueries<'a> {
+    pub q_belongs: &'a Query<'a, 'a, &'static BelongsTo>,
+    pub q_stored_in: &'a Query<'a, 'a, &'static StoredIn>,
+    pub q_stockpiles: &'a Query<'a, 'a, (&'static Stockpile, Option<&'static StoredItems>)>,
+    pub q_blueprints: &'a Query<'a, 'a, &'static Blueprint>,
+    pub q_incoming: &'a Query<'a, 'a, &'static IncomingDeliveries>,
+}
+
+pub(super) fn collect_candidates(
+    q_requests: &CollectCandidatesRequestQuery,
+    q_free_items: &FreeItemsQuery,
+    queries: CollectCandidatesQueries<'_>,
     available_wheelbarrows: &[(Entity, Vec2)],
     stale_cleared_requests: &HashSet<Entity>,
     cache: &SharedResourceCache,
-    q_incoming: &Query<&IncomingDeliveries>,
     now: f64,
 ) -> (Vec<(BatchCandidate, f32)>, u32, u32, u32, f64) {
     struct EligibleRequest {
@@ -86,19 +87,21 @@ pub(super) fn collect_candidates(
             lease_opt
         };
         let Some(eval) = build_request_eval_context(
-            req_entity,
-            req,
-            state,
-            demand,
-            transform,
-            effective_lease,
-            pending_since_opt,
-            manual_opt,
-            now,
-            q_belongs,
-            q_stockpiles,
+            RequestEvalInput {
+                req_entity,
+                req,
+                state,
+                demand,
+                transform,
+                lease_opt: effective_lease,
+                pending_since_opt,
+                manual_opt,
+                now,
+            },
+            queries.q_belongs,
+            queries.q_stockpiles,
             cache,
-            q_incoming,
+            queries.q_incoming,
         ) else {
             continue;
         };
@@ -121,7 +124,7 @@ pub(super) fn collect_candidates(
     }
 
     let (free_items, by_resource, by_resource_owner_ground) =
-        build_free_item_buckets(q_free_items, q_belongs, q_stored_in);
+        build_free_item_buckets(q_free_items, queries.q_belongs, queries.q_stored_in);
     let search_radius_sq = (TILE_SIZE * 10.0) * (TILE_SIZE * 10.0);
 
     for req in eligible {
@@ -169,7 +172,7 @@ pub(super) fn collect_candidates(
             continue;
         }
 
-        if is_pick_drop_possible(&eval, &nearby_items, q_blueprints) {
+        if is_pick_drop_possible(&eval, &nearby_items, queries.q_blueprints) {
             continue;
         }
 

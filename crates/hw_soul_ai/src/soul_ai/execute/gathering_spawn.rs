@@ -1,3 +1,4 @@
+use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 
 use hw_core::events::GatheringSpawnRequest;
@@ -14,28 +15,32 @@ type GatheringSpawnSoulQuery<'w, 's> = Query<
     (With<DamnedSoul>, Without<ParticipatingIn>, Without<CommandedBy>),
 >;
 
-#[allow(clippy::too_many_arguments)]
+#[derive(SystemParam)]
+pub struct GatheringSpawnResources<'w> {
+    pub time: Res<'w, Time>,
+    pub spot_grid: Res<'w, GatheringSpotSpatialGrid>,
+    pub soul_grid: Res<'w, SpatialGrid>,
+    pub update_timer: Res<'w, GatheringUpdateTimer>,
+}
+
 /// 集会スポット発生判定システム (純粋ロジック・Execute Phase)
 ///
 /// GatheringReadiness をティックし、発生条件が揃ったら GatheringSpawnRequest を送信する。
 /// 視覚エンティティのスポーンは root 側のアダプターが担う。
 pub fn gathering_spawn_logic_system(
-    time: Res<Time>,
     mut commands: Commands,
     q_souls: GatheringSpawnSoulQuery,
-    spot_grid: Res<GatheringSpotSpatialGrid>,
-    soul_grid: Res<SpatialGrid>,
     mut nearby_buf: Local<Vec<Entity>>,
     mut q_readiness: Query<&mut GatheringReadiness>,
-    update_timer: Res<GatheringUpdateTimer>,
     mut spawn_requests: MessageWriter<GatheringSpawnRequest>,
+    res: GatheringSpawnResources,
 ) {
-    if !update_timer.timer.just_finished() {
+    if !res.update_timer.timer.just_finished() {
         return;
     }
 
-    let dt = update_timer.timer.duration().as_secs_f32();
-    let current_time = time.elapsed_secs();
+    let dt = res.update_timer.timer.duration().as_secs_f32();
+    let current_time = res.time.elapsed_secs();
 
     for (entity, transform, idle, task) in q_souls.iter() {
         if !matches!(task, AssignedTask::None) {
@@ -50,12 +55,12 @@ pub fn gathering_spawn_logic_system(
 
         let pos = transform.translation.truncate();
 
-        spot_grid.get_nearby_in_radius_into(pos, GATHERING_DETECTION_RADIUS, &mut nearby_buf);
+        res.spot_grid.get_nearby_in_radius_into(pos, GATHERING_DETECTION_RADIUS, &mut nearby_buf);
         if !nearby_buf.is_empty() {
             continue;
         }
 
-        soul_grid.get_nearby_in_radius_into(pos, GATHERING_DETECTION_RADIUS, &mut nearby_buf);
+        res.soul_grid.get_nearby_in_radius_into(pos, GATHERING_DETECTION_RADIUS, &mut nearby_buf);
         let nearby_souls = nearby_buf.len().saturating_sub(1);
 
         let spawn_time = (GATHERING_SPAWN_BASE_TIME

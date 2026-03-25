@@ -2,7 +2,7 @@ use super::components::{
     BubbleEmotion, BubblePriority, FamiliarBubble, ReactionDelay, SpeechBubble,
 };
 use super::cooldown::SpeechHistory;
-use super::emitter::{emit_familiar_with_history, emit_soul_with_history};
+use super::emitter::{SoulSpeechContent, emit_familiar_with_history, emit_soul_with_history};
 use super::phrases::LatinPhrase;
 use super::spawn::*;
 use super::voice::FamiliarVoice;
@@ -63,29 +63,36 @@ type FamiliarVoiceQuery<'w, 's> = Query<
     With<Familiar>,
 >;
 
-#[allow(clippy::too_many_arguments)]
+use bevy::ecs::system::SystemParam;
+
+#[derive(SystemParam)]
+pub struct SpeechTaskParams<'w, 's> {
+    handles: Res<'w, SpeechHandles>,
+    tone_writer: MessageWriter<'w, ConversationToneTriggered>,
+    q_souls: SoulTaskSpeechQuery<'w, 's>,
+    q_familiars: FamiliarTaskSpeechQuery<'w, 's>,
+    q_bubbles: Query<'w, 's, (Entity, &'static SpeechBubble), With<FamiliarBubble>>,
+    time: Res<'w, Time>,
+}
+
 /// タスク開始時の speech bubble 発火システム（MessageReader ベース）
 pub fn speech_on_task_assigned_system(
     mut reader: MessageReader<OnTaskAssigned>,
     mut commands: Commands,
-    handles: Res<SpeechHandles>,
-    mut tone_writer: MessageWriter<ConversationToneTriggered>,
-    mut q_souls: SoulTaskSpeechQuery,
-    mut q_familiars: FamiliarTaskSpeechQuery,
-    q_bubbles: Query<(Entity, &SpeechBubble), With<FamiliarBubble>>,
-    time: Res<Time>,
+    mut p: SpeechTaskParams,
 ) {
     for event in reader.read() {
         let soul_entity = event.entity;
-        let current_time = time.elapsed_secs();
+        let current_time = p.time.elapsed_secs();
 
-        if let Ok((soul_transform, under_command, soul_history_opt)) = q_souls.get_mut(soul_entity)
+        if let Ok((soul_transform, under_command, soul_history_opt)) =
+            p.q_souls.get_mut(soul_entity)
         {
             let soul_pos = soul_transform.translation();
             if under_command.is_some() {
                 let mut rng = rand::thread_rng();
                 if rng.gen_bool(COMMAND_REACTION_NEGATIVE_EVENT_CHANCE as f64) {
-                    tone_writer.write(ConversationToneTriggered {
+                    p.tone_writer.write(ConversationToneTriggered {
                         speaker: soul_entity,
                         tone: ConversationTone::Negative,
                     });
@@ -95,33 +102,29 @@ pub fn speech_on_task_assigned_system(
             emit_soul_with_history(
                 &mut commands,
                 soul_entity,
-                "💪",
+                SoulSpeechContent { emoji: "💪", emotion: BubbleEmotion::Motivated, priority: BubblePriority::Low },
                 soul_pos,
-                &handles,
-                BubbleEmotion::Motivated,
-                BubblePriority::Low,
+                &p.handles,
                 soul_history_opt,
                 current_time,
             );
 
             if let Some(uc) = under_command
-                && let Ok((fam_transform, voice, fam_history_opt)) = q_familiars.get_mut(uc.0) {
-                    let fam_pos = fam_transform.translation();
-                    let phrase = LatinPhrase::from_work_type(event.work_type);
-                    emit_familiar_with_history(
-                        &mut commands,
-                        uc.0,
-                        phrase,
-                        fam_pos,
-                        &handles,
-                        &q_bubbles,
-                        BubbleEmotion::Motivated,
-                        BubblePriority::Low,
-                        voice,
-                        fam_history_opt,
-                        current_time,
-                    );
-                }
+                && let Ok((_fam_transform, voice, fam_history_opt)) =
+                    p.q_familiars.get_mut(uc.0)
+            {
+                let _fam_pos = _fam_transform.translation();
+                let phrase = LatinPhrase::from_work_type(event.work_type);
+                emit_familiar_with_history(
+                    &mut commands,
+                    uc.0,
+                    FamiliarBubbleSpec { phrase, emotion: BubbleEmotion::Motivated, priority: BubblePriority::Low, voice },
+                    &p.handles,
+                    &p.q_bubbles,
+                    fam_history_opt,
+                    current_time,
+                );
+            }
         }
     }
 }
@@ -141,11 +144,9 @@ pub fn speech_on_task_completed_system(
             emit_soul_with_history(
                 &mut commands,
                 soul_entity,
-                "😊",
+                SoulSpeechContent { emoji: "😊", emotion: BubbleEmotion::Happy, priority: BubblePriority::Low },
                 transform.translation(),
                 &handles,
-                BubbleEmotion::Happy,
-                BubblePriority::Low,
                 history_opt,
                 current_time,
             );
@@ -172,17 +173,13 @@ pub fn on_soul_recruited(
         tone: ConversationTone::Negative,
     });
 
-    if let Ok((transform, voice, history_opt)) = q_familiars.get_mut(fam_entity) {
+    if let Ok((_transform, voice, history_opt)) = q_familiars.get_mut(fam_entity) {
         emit_familiar_with_history(
             &mut commands,
             fam_entity,
-            LatinPhrase::Veni,
-            transform.translation(),
+            FamiliarBubbleSpec { phrase: LatinPhrase::Veni, emotion: BubbleEmotion::Neutral, priority: BubblePriority::Normal, voice },
             &handles,
             &q_bubbles,
-            BubbleEmotion::Neutral,
-            BubblePriority::Normal,
-            voice,
             history_opt,
             current_time,
         );
@@ -209,11 +206,9 @@ pub fn on_exhausted(
         emit_soul_with_history(
             &mut commands,
             soul_entity,
-            "😴",
+            SoulSpeechContent { emoji: "😴", emotion: BubbleEmotion::Exhausted, priority: BubblePriority::High },
             transform.translation(),
             &handles,
-            BubbleEmotion::Exhausted,
-            BubblePriority::High,
             history_opt,
             current_time,
         );
@@ -234,11 +229,9 @@ pub fn on_stress_breakdown(
         emit_soul_with_history(
             &mut commands,
             soul_entity,
-            "😰",
+            SoulSpeechContent { emoji: "😰", emotion: BubbleEmotion::Stressed, priority: BubblePriority::Critical },
             transform.translation(),
             &handles,
-            BubbleEmotion::Stressed,
-            BubblePriority::Critical,
             history_opt,
             current_time,
         );
@@ -334,7 +327,7 @@ pub fn on_encouraged(
     let soul_entity = event.soul_entity;
     let current_time = time.elapsed_secs();
 
-    if let Ok((transform, voice, history_opt)) = q_familiars.get_mut(fam_entity) {
+    if let Ok((_transform, voice, history_opt)) = q_familiars.get_mut(fam_entity) {
         use rand::seq::SliceRandom;
         let mut rng = rand::thread_rng();
         let emoji = hw_core::constants::EMOJIS_ENCOURAGEMENT
@@ -344,13 +337,9 @@ pub fn on_encouraged(
         emit_familiar_with_history(
             &mut commands,
             fam_entity,
-            LatinPhrase::Custom(emoji.to_string()),
-            transform.translation(),
+            FamiliarBubbleSpec { phrase: LatinPhrase::Custom(emoji.to_string()), emotion: BubbleEmotion::Motivated, priority: BubblePriority::Normal, voice },
             &handles,
             &q_bubbles,
-            BubbleEmotion::Motivated,
-            BubblePriority::Normal,
-            voice,
             history_opt,
             current_time,
         );

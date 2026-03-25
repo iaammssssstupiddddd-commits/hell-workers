@@ -146,17 +146,27 @@ fn handle_legacy_coat_wall_task(
     }
 }
 
-#[allow(clippy::too_many_arguments)]
+/// `handle_coat_wall_task` のタスク引数をまとめた構造体。
+pub struct CoatWallArgs {
+    pub tile_entity: Entity,
+    pub site_entity: Entity,
+    pub wall_entity: Entity,
+    pub phase: CoatWallPhase,
+}
+
 pub fn handle_coat_wall_task(
     ctx: &mut TaskExecutionContext,
-    tile_entity: Entity,
-    site_entity: Entity,
-    wall_entity: Entity,
-    phase: CoatWallPhase,
+    args: CoatWallArgs,
     commands: &mut Commands,
     time: &Res<Time>,
     world_map: &WorldMap,
 ) {
+    let CoatWallArgs {
+        tile_entity,
+        site_entity,
+        wall_entity,
+        phase,
+    } = args;
     if site_entity == Entity::PLACEHOLDER {
         handle_legacy_coat_wall_task(ctx, wall_entity, phase, commands, time, world_map);
         return;

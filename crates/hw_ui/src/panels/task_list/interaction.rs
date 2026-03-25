@@ -4,25 +4,31 @@ use crate::camera::MainCamera;
 use crate::components::{
     EntityListBody, LeftPanelMode, LeftPanelTabButton, TaskListBody, TaskListItem,
 };
-use crate::list::{apply_row_highlight, focus_camera_on_entity};
+use crate::list::{RowHighlightState, apply_row_highlight, focus_camera_on_entity};
 use crate::panels::info_panel::InfoPanelPinState;
 use crate::theme::UiTheme;
 use bevy::prelude::*;
 
-#[allow(clippy::type_complexity)]
+type TaskListItemQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static Interaction,
+        &'static TaskListItem,
+        &'static mut Node,
+        &'static mut BackgroundColor,
+        &'static mut BorderColor,
+    ),
+    With<Button>,
+>;
+
+type TaskChangedQuery<'w, 's> =
+    Query<'w, 's, (), Or<(Changed<Interaction>, Added<TaskListItem>)>>;
+
 pub fn task_list_visual_feedback_system(
     pin_state: Res<InfoPanelPinState>,
-    q_changed: Query<(), Or<(Changed<Interaction>, Added<TaskListItem>)>>,
-    mut q_items: Query<
-        (
-            &Interaction,
-            &TaskListItem,
-            &mut Node,
-            &mut BackgroundColor,
-            &mut BorderColor,
-        ),
-        With<Button>,
-    >,
+    q_changed: TaskChangedQuery,
+    mut q_items: TaskListItemQuery<'_, '_>,
     theme: Res<UiTheme>,
 ) {
     if !pin_state.is_changed() && q_changed.is_empty() {
@@ -35,10 +41,12 @@ pub fn task_list_visual_feedback_system(
             &mut node,
             &mut bg,
             &mut border_color,
-            *interaction,
-            is_selected,
-            false,
-            false,
+            RowHighlightState {
+                interaction: *interaction,
+                is_selected,
+                is_drop_target: false,
+                is_familiar_row: false,
+            },
             &theme,
         );
     }

@@ -13,17 +13,22 @@ use bevy::prelude::*;
 
 pub use text_wrap::{TOOLTIP_WRAP_LIMIT_BODY, TOOLTIP_WRAP_LIMIT_ICON_ROW, wrap_tooltip_text};
 
-#[allow(clippy::too_many_arguments)]
+/// ツールチップ再構築の内容指定
+pub struct TooltipBuildPayload<'a> {
+    pub template: TooltipTemplate,
+    pub model: Option<&'a EntityInspectionModel>,
+    pub ui_tooltip: Option<&'a UiTooltip>,
+}
+
 pub fn rebuild_tooltip_content(
     commands: &mut Commands,
     tooltip_root: Entity,
     q_children: &Query<&Children>,
     game_assets: &dyn UiAssets,
     theme: &UiTheme,
-    template: TooltipTemplate,
-    model: Option<&EntityInspectionModel>,
-    ui_tooltip: Option<&UiTooltip>,
+    payload: TooltipBuildPayload<'_>,
 ) {
+    let TooltipBuildPayload { template, model, ui_tooltip } = payload;
     clear_children(commands, q_children, tooltip_root);
 
     commands

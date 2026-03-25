@@ -4,13 +4,15 @@ pub(crate) use hw_ui::interaction::tooltip::{
     TooltipContentRenderer, TooltipInspectionSource, TooltipRuntimeState, TooltipUiLayoutQueryParam,
 };
 
+use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use bevy::ui_widgets::popover::Popover;
 use hw_ui::components::{
-    HoverTooltip, MenuState, PlacementFailureTooltip, TooltipTemplate, UiNodeRegistry, UiTooltip,
+    HoverTooltip, MenuState, PlacementFailureTooltip, TooltipTemplate, UiNodeRegistry,
 };
 use hw_ui::interaction::tooltip;
 use hw_ui::models::inspection::EntityInspectionModel;
+use hw_ui::panels::tooltip_builder::TooltipBuildPayload;
 
 impl TooltipInspectionSource for crate::interface::ui::presentation::EntityInspectionQuery<'_, '_> {
     fn build_model(&self, entity: Entity) -> Option<EntityInspectionModel> {
@@ -34,9 +36,7 @@ impl TooltipContentRenderer for TooltipRenderer {
         q_children: &Query<&Children>,
         game_assets: &Self::GameAssets,
         theme: &hw_ui::theme::UiTheme,
-        template: TooltipTemplate,
-        model: Option<&EntityInspectionModel>,
-        ui_tooltip: Option<&UiTooltip>,
+        payload: TooltipBuildPayload<'_>,
     ) {
         crate::interface::ui::panels::tooltip_builder::rebuild_tooltip_content(
             commands,
@@ -44,53 +44,76 @@ impl TooltipContentRenderer for TooltipRenderer {
             q_children,
             game_assets as &dyn hw_ui::setup::UiAssets,
             theme,
-            template,
-            model,
-            ui_tooltip,
+            payload,
         );
     }
 }
 
-#[allow(clippy::too_many_arguments)]
+#[derive(SystemParam)]
+pub(crate) struct TooltipStateInput<'w, 's> {
+    pub time: Res<'w, Time>,
+    pub hovered: Res<'w, crate::interface::selection::HoveredEntity>,
+    pub placement_failure_tooltip: ResMut<'w, PlacementFailureTooltip>,
+    pub menu_state: Res<'w, MenuState>,
+    pub ui_nodes: Res<'w, UiNodeRegistry>,
+    pub game_assets: Res<'w, crate::assets::GameAssets>,
+    pub theme: Res<'w, hw_ui::theme::UiTheme>,
+    pub q_window: Query<'w, 's, &'static Window, With<bevy::window::PrimaryWindow>>,
+    pub q_tooltip: Query<
+        'w,
+        's,
+        (
+            Entity,
+            &'static mut HoverTooltip,
+            &'static mut Node,
+            &'static mut BackgroundColor,
+            &'static mut BorderColor,
+            &'static mut Popover,
+            &'static ComputedNode,
+        ),
+    >,
+}
+
 pub(crate) fn hover_tooltip_system(
     commands: Commands,
-    time: Res<Time>,
-    hovered: Res<crate::interface::selection::HoveredEntity>,
-    placement_failure_tooltip: ResMut<PlacementFailureTooltip>,
-    menu_state: Res<MenuState>,
-    ui_nodes: Res<UiNodeRegistry>,
-    game_assets: Res<crate::assets::GameAssets>,
-    theme: Res<hw_ui::theme::UiTheme>,
-    q_window: Query<&Window, With<bevy::window::PrimaryWindow>>,
-    q_tooltip: Query<(
-        Entity,
-        &mut HoverTooltip,
-        &mut Node,
-        &mut BackgroundColor,
-        &mut BorderColor,
-        &mut Popover,
-        &ComputedNode,
-    )>,
+    state_input: TooltipStateInput,
     render_queries: tooltip::TooltipRenderQueries,
     ui_layout: TooltipUiLayoutQueryParam,
     inspection: crate::interface::ui::presentation::EntityInspectionQuery<'_, '_>,
     mut runtime: Local<TooltipRuntimeState>,
 ) {
-    tooltip::hover_tooltip_system(
-        commands,
+    let TooltipStateInput {
         time,
         hovered,
-        placement_failure_tooltip,
+        mut placement_failure_tooltip,
         menu_state,
         ui_nodes,
-        &*game_assets,
-        &theme,
+        game_assets,
+        theme,
         q_window,
         q_tooltip,
-        render_queries,
-        ui_layout,
-        &inspection,
+    } = state_input;
+    tooltip::hover_tooltip_system(
+        commands,
+        tooltip::TooltipBevy {
+            time: &time,
+            hovered: &hovered,
+            placement_failure_tooltip: &mut placement_failure_tooltip,
+            menu_state: &menu_state,
+            ui_nodes: &ui_nodes,
+        },
+        tooltip::TooltipQuerySet {
+            q_window,
+            q_tooltip,
+            render_queries,
+            ui_layout,
+        },
+        tooltip::TooltipHandlers {
+            game_assets: &*game_assets,
+            theme: &theme,
+            inspection: &inspection,
+            tooltip_renderer: &TooltipRenderer,
+        },
         &mut runtime,
-        &TooltipRenderer,
     );
 }

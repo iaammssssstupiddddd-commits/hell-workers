@@ -31,12 +31,16 @@ pub struct ScoredDelegationCandidate {
     pub dist_sq: f32,
 }
 
+/// `collect_scored_candidates` に渡す Familiar 固有の検索コンテキスト。
+pub struct FamiliarSearchContext<'a> {
+    pub fam_entity: Entity,
+    pub fam_pos: Vec2,
+    pub task_area_opt: Option<&'a TaskArea>,
+}
+
 /// Familiar単位で委譲候補を収集し、スコア情報付きで返す
-#[allow(clippy::too_many_arguments)]
 pub fn collect_scored_candidates(
-    fam_entity: Entity,
-    fam_pos: Vec2,
-    task_area_opt: Option<&TaskArea>,
+    ctx: FamiliarSearchContext<'_>,
     queries: &FamiliarTaskAssignmentQueries,
     designation_grid: &DesignationSpatialGrid,
     transport_request_grid: &TransportRequestSpatialGrid,
@@ -47,7 +51,7 @@ pub fn collect_scored_candidates(
     let all_yards: Vec<Yard> = queries.yards.iter().cloned().collect();
 
     let mut candidates = collect_candidate_entities(
-        task_area_opt,
+        ctx.task_area_opt,
         &all_yards,
         managed_tasks,
         designation_grid,
@@ -74,9 +78,9 @@ pub fn collect_scored_candidates(
         .into_iter()
         .filter_map(|entity| {
             let snapshot = candidate_snapshot(
-                fam_entity,
+                ctx.fam_entity,
                 entity,
-                task_area_opt,
+                ctx.task_area_opt,
                 &all_yards,
                 managed_tasks,
                 world_map,
@@ -97,7 +101,7 @@ pub fn collect_scored_candidates(
                 q_target_blueprints,
             )?;
 
-            let dist_sq = snapshot.pos.distance_squared(fam_pos);
+            let dist_sq = snapshot.pos.distance_squared(ctx.fam_pos);
 
             if work_type == WorkType::HaulWaterToMixer {
                 debug!(
@@ -121,7 +125,7 @@ pub fn collect_scored_candidates(
         .collect();
 
     if valid_candidates.is_empty() {
-        debug!("TASK_FINDER: {:?} has no candidates", fam_entity);
+        debug!("TASK_FINDER: {:?} has no candidates", ctx.fam_entity);
     }
 
     valid_candidates

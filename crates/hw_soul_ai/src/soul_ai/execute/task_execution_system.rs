@@ -1,7 +1,4 @@
-//! メインのタスク実行システム。
-//!
-//! Soul の AssignedTask ステートマシンを毎フレーム駆動する。
-
+use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use hw_core::events::OnTaskCompleted;
 use hw_core::relationships::WorkingOn;
@@ -16,15 +13,19 @@ use crate::soul_ai::execute::task_execution::types::AssignedTask;
 use crate::soul_ai::helpers::query_types::TaskExecutionSoulQuery;
 use crate::soul_ai::helpers::work::unassign_task;
 
-#[allow(clippy::too_many_arguments)]
+#[derive(SystemParam)]
+pub struct TaskExecResources<'w, 's> {
+    pub soul_handles: Res<'w, SoulTaskHandles>,
+    pub time: Res<'w, Time>,
+    pub world_map: WorldMapRead<'w>,
+    pub pf_context: Local<'s, PathfindingContext>,
+}
+
 pub fn task_execution_system(
     mut commands: Commands,
     mut q_souls: TaskExecutionSoulQuery,
     mut queries: TaskQueries,
-    soul_handles: Res<SoulTaskHandles>,
-    time: Res<Time>,
-    world_map: WorldMapRead,
-    mut pf_context: Local<PathfindingContext>,
+    mut res: TaskExecResources,
     q_wheelbarrows: Query<
         (&Transform, Option<&hw_core::relationships::ParkedAt>),
         With<Wheelbarrow>,
@@ -52,14 +53,16 @@ pub fn task_execution_system(
             if has_mismatch || missing_required {
                 unassign_task(
                     &mut commands,
-                    soul_entity,
-                    soul_transform.translation.truncate(),
+                    crate::soul_ai::helpers::work::SoulDropCtx {
+                        soul_entity,
+                        drop_pos: soul_transform.translation.truncate(),
+                        inventory: Some(&mut inventory),
+                        dropped_item_res: None,
+                    },
                     &mut task,
                     &mut path,
-                    Some(&mut inventory),
-                    None,
                     &mut queries,
-                    world_map.as_ref(),
+                    res.world_map.as_ref(),
                     true,
                 );
                 continue;
@@ -78,16 +81,16 @@ pub fn task_execution_system(
             dest: &mut dest,
             path: &mut path,
             inventory: &mut inventory,
-            pf_context: &mut pf_context,
+            pf_context: &mut res.pf_context,
             queries: &mut queries,
         };
 
         run_task_handler(
             &mut ctx,
             &mut commands,
-            &soul_handles,
-            &time,
-            world_map.as_ref(),
+            &res.soul_handles,
+            &res.time,
+            res.world_map.as_ref(),
             breakdown_opt,
             &q_wheelbarrows,
         );

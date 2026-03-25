@@ -7,7 +7,7 @@ use hw_core::familiar::Familiar;
 use super::components::{BubbleEmotion, BubblePriority, FamiliarBubble, SpeechBubble};
 use super::cooldown::SpeechHistory;
 use super::phrases::LatinPhrase;
-use super::spawn::spawn_familiar_bubble;
+use super::spawn::{FamiliarBubbleSpec, spawn_familiar_bubble};
 use super::voice::FamiliarVoice;
 use crate::handles::SpeechHandles;
 
@@ -28,7 +28,7 @@ pub fn max_soul_visual_system(
             continue;
         }
 
-        let Ok((fam_transform, voice_opt, history_opt)) =
+        let Ok((_fam_transform, voice_opt, history_opt)) =
             q_familiars.get_mut(event.familiar_entity)
         else {
             continue;
@@ -48,13 +48,9 @@ pub fn max_soul_visual_system(
         spawn_familiar_bubble(
             &mut commands,
             event.familiar_entity,
-            LatinPhrase::Abi,
-            fam_transform.translation,
+            FamiliarBubbleSpec { phrase: LatinPhrase::Abi, emotion: BubbleEmotion::Neutral, priority: BubblePriority::Normal, voice: Some(voice_opt) },
             &speech_handles,
             &q_bubbles,
-            BubbleEmotion::Neutral,
-            BubblePriority::Normal,
-            Some(voice_opt),
         );
 
         if let Some(mut history) = history_opt {

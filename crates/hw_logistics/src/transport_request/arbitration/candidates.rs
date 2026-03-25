@@ -19,6 +19,17 @@ use crate::zone::Stockpile;
 
 use super::types::{FreeItemSnapshot, HeapEntry, ItemBucketKey, NearbyItem, RequestEvalContext};
 
+pub type FreeItemsQuery<'w, 's> = Query<
+    'w,
+    's,
+    (Entity, &'static Transform, &'static Visibility, &'static ResourceItem),
+    (
+        Without<Designation>,
+        Without<hw_core::relationships::TaskWorkers>,
+        Without<ReservedForTask>,
+        Without<ManualHaulPinnedSource>,
+    ),
+>;
 
 type FreeItemBuckets = (
     Vec<FreeItemSnapshot>,
@@ -26,17 +37,8 @@ type FreeItemBuckets = (
     HashMap<(ResourceType, Option<Entity>), Vec<usize>>,
 );
 
-#[allow(clippy::type_complexity)]
 pub fn build_free_item_buckets(
-    q_free_items: &Query<
-        (Entity, &Transform, &Visibility, &ResourceItem),
-        (
-            Without<Designation>,
-            Without<hw_core::relationships::TaskWorkers>,
-            Without<ReservedForTask>,
-            Without<ManualHaulPinnedSource>,
-        ),
-    >,
+    q_free_items: &FreeItemsQuery,
     q_belongs: &Query<&BelongsTo>,
     q_stored_in: &Query<&StoredIn>,
 ) -> FreeItemBuckets {
@@ -77,22 +79,37 @@ pub fn build_free_item_buckets(
     (snapshots, by_resource, by_resource_owner_ground)
 }
 
-#[allow(clippy::too_many_arguments)]
+/// `build_request_eval_context` に渡すリクエスト単体のデータ。
+pub struct RequestEvalInput<'a> {
+    pub req_entity: Entity,
+    pub req: &'a TransportRequest,
+    pub state: &'a TransportRequestState,
+    pub demand: &'a TransportDemand,
+    pub transform: &'a Transform,
+    pub lease_opt: Option<&'a WheelbarrowLease>,
+    pub pending_since_opt: Option<&'a WheelbarrowPendingSince>,
+    pub manual_opt: Option<&'a ManualTransportRequest>,
+    pub now: f64,
+}
+
 pub fn build_request_eval_context(
-    req_entity: Entity,
-    req: &TransportRequest,
-    state: &TransportRequestState,
-    demand: &TransportDemand,
-    transform: &Transform,
-    lease_opt: Option<&WheelbarrowLease>,
-    pending_since_opt: Option<&WheelbarrowPendingSince>,
-    manual_opt: Option<&ManualTransportRequest>,
-    now: f64,
+    input: RequestEvalInput<'_>,
     q_belongs: &Query<&BelongsTo>,
     q_stockpiles: &Query<(&Stockpile, Option<&StoredItems>)>,
     _cache: &SharedResourceCache,
     q_incoming: &Query<&hw_core::relationships::IncomingDeliveries>,
 ) -> Option<RequestEvalContext> {
+    let RequestEvalInput {
+        req_entity,
+        req,
+        state,
+        demand,
+        transform,
+        lease_opt,
+        pending_since_opt,
+        manual_opt,
+        now,
+    } = input;
     if manual_opt.is_some() {
         return None;
     }

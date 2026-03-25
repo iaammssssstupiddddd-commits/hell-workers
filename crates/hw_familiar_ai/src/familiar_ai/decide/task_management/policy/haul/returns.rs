@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 
 use super::super::super::builders::{
-    issue_haul_to_stockpile_with_source, issue_return_wheelbarrow,
+    ReturnWheelbarrowSpec, issue_haul_to_stockpile_with_source, issue_return_wheelbarrow,
 };
 use super::super::super::validator::{
     find_bucket_return_assignment, resolve_return_bucket_tank, resolve_return_wheelbarrow,
@@ -51,9 +51,7 @@ pub fn assign_return_wheelbarrow(
         resolve_return_wheelbarrow(ctx.task_entity, queries)?;
 
     issue_return_wheelbarrow(
-        wheelbarrow,
-        parking_anchor,
-        wheelbarrow_pos,
+        ReturnWheelbarrowSpec { wheelbarrow, parking_anchor, wheelbarrow_pos },
         task_pos,
         already_commanded,
         ctx,

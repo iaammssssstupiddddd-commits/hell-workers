@@ -4,6 +4,7 @@ use crate::entities::damned_soul::{
     ConversationExpression, ConversationExpressionKind, DamnedSoul,
 };
 use crate::{OnExhausted, OnGatheringParticipated};
+use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use hw_core::constants::*;
 use hw_soul_ai::soul_ai::helpers::gathering::{GatheringObjectType, GatheringSpot};
@@ -71,18 +72,22 @@ fn apply_expression_lock(
     });
 }
 
-#[allow(clippy::too_many_arguments)]
+#[derive(SystemParam)]
+pub struct ConversationEventReaders<'w, 's> {
+    pub ev_exhausted: MessageReader<'w, 's, OnExhausted>,
+    pub ev_gathering_participated: MessageReader<'w, 's, OnGatheringParticipated>,
+    pub ev_tone: MessageReader<'w, 's, ConversationToneTriggered>,
+    pub ev_completed: MessageReader<'w, 's, ConversationCompleted>,
+}
+
 pub fn apply_conversation_expression_event_system(
     mut commands: Commands,
     q_souls: Query<(), With<DamnedSoul>>,
     q_spots: Query<&GatheringSpot>,
     mut q_expression: Query<&mut ConversationExpression, With<DamnedSoul>>,
-    mut ev_exhausted_reader: MessageReader<OnExhausted>,
-    mut ev_gathering_participated_reader: MessageReader<OnGatheringParticipated>,
-    mut ev_tone_reader: MessageReader<ConversationToneTriggered>,
-    mut ev_reader: MessageReader<ConversationCompleted>,
+    mut readers: ConversationEventReaders,
 ) {
-    for event in ev_exhausted_reader.read() {
+    for event in readers.ev_exhausted.read() {
         if q_souls.get(event.entity).is_err() {
             continue;
         }
@@ -96,7 +101,7 @@ pub fn apply_conversation_expression_event_system(
         );
     }
 
-    for event in ev_gathering_participated_reader.read() {
+    for event in readers.ev_gathering_participated.read() {
         if q_souls.get(event.entity).is_err() {
             continue;
         }
@@ -122,7 +127,7 @@ pub fn apply_conversation_expression_event_system(
         );
     }
 
-    for event in ev_tone_reader.read() {
+    for event in readers.ev_tone.read() {
         if q_souls.get(event.speaker).is_err() {
             continue;
         }
@@ -143,7 +148,7 @@ pub fn apply_conversation_expression_event_system(
         );
     }
 
-    for event in ev_reader.read() {
+    for event in readers.ev_completed.read() {
         let Some(kind) = tone_to_expression_kind(event.tone) else {
             continue;
         };

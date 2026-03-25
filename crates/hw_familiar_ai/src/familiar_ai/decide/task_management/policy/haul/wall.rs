@@ -2,7 +2,7 @@ use bevy::prelude::*;
 use hw_core::logistics::{ResourceType, WheelbarrowDestination};
 
 use super::super::super::builders::{
-    issue_haul_to_stockpile_with_source, issue_haul_with_wheelbarrow,
+    WheelbarrowHaulSpec, issue_haul_to_stockpile_with_source, issue_haul_with_wheelbarrow,
 };
 use super::super::super::validator::resolve_haul_to_wall_construction_inputs;
 use super::demand;
@@ -96,10 +96,12 @@ pub fn assign_haul_to_wall_construction(
 
         let item_entities = item_sources.into_iter().map(|(entity, _)| entity).collect();
         issue_haul_with_wheelbarrow(
-            wheelbarrow,
-            source_pos,
-            WheelbarrowDestination::Stockpile(site_entity),
-            item_entities,
+            WheelbarrowHaulSpec {
+                wheelbarrow,
+                source_pos,
+                destination: WheelbarrowDestination::Stockpile(site_entity),
+                items: item_entities,
+            },
             site_pos,
             already_commanded,
             ctx,

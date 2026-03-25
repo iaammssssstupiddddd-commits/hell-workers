@@ -25,34 +25,42 @@
     type FooQuery<'w, 's> = Query<'w, 's, (Entity, &'static Transform), With<Foo>>;
     pub fn my_system(q: FooQuery) { ... }
     ```
-  - **参照パラメータ**（`fn helper(q: &Query<...>)`）→ `#[allow(clippy::type_complexity)]` を関数に付与。
-    型エイリアスを参照パラメータに使うと E0521 ライフタイムエラーになるため不可。
-  - **`#[derive(SystemParam)]` の struct フィールド**→ struct に `#[allow(clippy::type_complexity)]` を付与。
-  - **`ParamSet` の型エイリアス**は原則禁止。`ParamSet<'w, 's, (Query<'w, 's, ...>)>` の形で内側 Query に明示ライフタイムを付けると、`.chain()` など `IntoSystemConfigs` トレイトが壊れる。
+  - **参照パラメータ**（`fn helper(q: &Query<...>)`）→ 呼び出し側を見直し、型エイリアス付きの直接パラメータに寄せるか、必要なデータを `SystemParam` / コンテキスト構造体に再編する。
+  - **`#[derive(SystemParam)]` の struct フィールド**→ フィールド型もエイリアス化・責務分割して複雑さを下げる。
+  - **`ParamSet` の型エイリアス**は原則禁止。`ParamSet<'w, 's, (Query<'w, 's, ...>)>` の形で内側 Query に明示ライフタイムを付けると、`.chain()` など `IntoSystemConfigs` トレイトが壊れるため、必要なら `SystemParam` への分解や処理分割を優先する。
 
-- **`too_many_arguments`**: Bevy システム関数（`add_systems` 登録対象）は引数が多くなりやすい。
-  `#[allow(clippy::too_many_arguments)]` を関数に付与する（`SystemParam` へのリファクタリングは任意）。
+- **`too_many_arguments`**: Bevy system / helper 関数ともに `#[allow(clippy::too_many_arguments)]` で抑制しない。
+  Query / Resource 群は `#[derive(SystemParam)]` にまとめ、純粋ヘルパーは入力構造体へ集約する。
+
+- **`#[allow(clippy::...)]` の扱い**:
+  原則禁止。まずコード構造を見直して lint 自体を解消する。
+  やむを得ず例外を設ける場合は、false positive か外部制約で回避不能であることを確認し、短い理由コメントと合わせてレビュアー合意を前提にする。
 
 **Clippy 確認コマンド:**
 ```bash
 CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo clippy --workspace 2>&1 | grep "^warning:" | grep -v "generated"
 ```
 
-**`#[allow]` 解消の引き継ぎタスク（次のリファクタリング機会に対応）:**
-現在、以下のパターンで `#[allow]` が多数付与されている。長期的には適切なリファクタリングで解消することが望ましい。
+**厳格運用ルール:**
+
+- `cargo check --workspace` だけで完了扱いにしない。完了前に `cargo clippy --workspace` を必ず通す。
+- `#[allow(clippy::...)]` を追加して警告を黙らせる修正は、構造的な解消が不可能と確認できる場合を除き不可。
+- 既存コードに allow が残っているのを見つけた場合も、その場しのぎで追従せず、除去できる設計に寄せる。
+
+**lint 解消の基本方針:**
 
 | 警告 | 現状 | 推奨する解消方法 |
 |:---|:---|:---|
-| `too_many_arguments` (Bevy system) | `#[allow]` で抑制 | `SystemParam` struct にまとめる（`#[derive(SystemParam)]`） |
-| `too_many_arguments` (helper fn) | `#[allow]` で抑制 | 引数をデータ構造 (`struct`) にまとめる |
-| `type_complexity` (参照パラメータ) | `#[allow]` で抑制 | 呼び出し元をリファクタリングしてシステム関数から直接渡すか、`SystemParam` 化する |
-| `type_complexity` (SystemParam struct フィールド) | `#[allow]` で抑制 | 型エイリアスをフィールドの型として使う（`'static` コンポーネント参照のエイリアス） |
+| `too_many_arguments` (Bevy system) | `SystemParam` / 処理分割で解消 | `SystemParam` struct にまとめる（`#[derive(SystemParam)]`） |
+| `too_many_arguments` (helper fn) | 入力構造体で解消 | 引数をデータ構造 (`struct`) にまとめる |
+| `type_complexity` (参照パラメータ) | 呼び出し側の再編で解消 | システム関数から直接渡すか、`SystemParam` / コンテキスト struct 化する |
+| `type_complexity` (SystemParam struct フィールド) | 型整理で解消 | 型エイリアス化、責務分割、小さな `SystemParam` への分離 |
 
 具体的な対象ファイルを調べるには：
 ```bash
-CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo clippy --workspace 2>&1 | grep "allow" | head -5
+CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo clippy --workspace
 # または
-grep -rn "#\[allow(clippy::too_many_arguments)\]\|#\[allow(clippy::type_complexity)\]" crates/ --include="*.rs" | wc -l
+rg -n "#\[allow\\(clippy::" crates -g '*.rs'
 ```
 
 ### 2. 死蔵コードの禁止 ([deadcode.md])

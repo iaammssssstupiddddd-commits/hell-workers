@@ -1,5 +1,6 @@
 use crate::entities::damned_soul::{DamnedSoul, SoulIdentity};
 use crate::{SquadManagementOperation, SquadManagementRequest};
+use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use bevy::ui::FocusPolicy;
 use hw_core::relationships::CommandedBy;
@@ -10,21 +11,46 @@ use hw_ui::theme::UiTheme;
 #[derive(Component)]
 struct DragGhost;
 
-#[allow(clippy::too_many_arguments)]
+#[derive(SystemParam)]
+pub struct DragDropResources<'w> {
+    time: Res<'w, Time>,
+    buttons: Res<'w, ButtonInput<MouseButton>>,
+    ui_nodes: Res<'w, UiNodeRegistry>,
+    game_assets: Res<'w, crate::assets::GameAssets>,
+    theme: Res<'w, UiTheme>,
+    drag_state: ResMut<'w, DragState>,
+    squad_request_writer: MessageWriter<'w, SquadManagementRequest>,
+}
+
+#[derive(SystemParam)]
+pub struct DragDropQueries<'w, 's> {
+    q_soul_rows: Query<'w, 's, (&'static Interaction, &'static SoulListItem), With<Button>>,
+    q_familiar_rows:
+        Query<'w, 's, (&'static Interaction, &'static FamiliarListItem), With<Button>>,
+    q_soul_names: Query<'w, 's, &'static SoulIdentity, With<DamnedSoul>>,
+    q_commanded_by: Query<'w, 's, &'static CommandedBy, With<DamnedSoul>>,
+}
+
 pub fn entity_list_drag_drop_system(
     mut commands: Commands,
-    time: Res<Time>,
-    buttons: Res<ButtonInput<MouseButton>>,
-    ui_nodes: Res<UiNodeRegistry>,
-    game_assets: Res<crate::assets::GameAssets>,
-    theme: Res<UiTheme>,
-    mut drag_state: ResMut<DragState>,
-    q_soul_rows: Query<(&Interaction, &SoulListItem), With<Button>>,
-    q_familiar_rows: Query<(&Interaction, &FamiliarListItem), With<Button>>,
-    q_soul_names: Query<&SoulIdentity, With<DamnedSoul>>,
-    q_commanded_by: Query<&CommandedBy, With<DamnedSoul>>,
-    mut squad_request_writer: MessageWriter<SquadManagementRequest>,
+    resources: DragDropResources,
+    queries: DragDropQueries,
 ) {
+    let DragDropResources {
+        time,
+        buttons,
+        ui_nodes,
+        game_assets,
+        theme,
+        mut drag_state,
+        mut squad_request_writer,
+    } = resources;
+    let DragDropQueries {
+        q_soul_rows,
+        q_familiar_rows,
+        q_soul_names,
+        q_commanded_by,
+    } = queries;
     if buttons.just_pressed(MouseButton::Left)
         && let Some(soul_entity) = hovered_soul_row(&q_soul_rows)
     {

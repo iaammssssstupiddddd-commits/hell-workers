@@ -25,9 +25,11 @@ impl TaskHandler<GatherData> for AssignedTask {
     ) {
         crate::soul_ai::execute::task_execution::gather::handle_gather_task(
             ctx,
-            data.target,
-            &data.work_type,
-            data.phase,
+            crate::soul_ai::execute::task_execution::gather::GatherTaskArgs {
+                target: data.target,
+                work_type: &data.work_type,
+                phase: data.phase,
+            },
             commands,
             soul_handles,
             time,
@@ -231,7 +233,16 @@ impl TaskHandler<CoatWallData> for AssignedTask {
         _breakdown_opt: Option<&StressBreakdown>,
     ) {
         crate::soul_ai::execute::task_execution::coat_wall::handle_coat_wall_task(
-            ctx, data.tile, data.site, data.wall, data.phase, commands, time, world_map,
+            ctx,
+            crate::soul_ai::execute::task_execution::coat_wall::CoatWallArgs {
+                tile_entity: data.tile,
+                site_entity: data.site,
+                wall_entity: data.wall,
+                phase: data.phase,
+            },
+            commands,
+            time,
+            world_map,
         );
     }
 }

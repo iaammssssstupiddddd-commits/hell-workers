@@ -4,7 +4,23 @@ use crate::components::{InfoPanelNodes, UiNodeRegistry, UiSlot};
 use crate::models::inspection::{EntityInspectionViewModel, InspectionSoulGender};
 use crate::selection::SelectedEntity;
 use crate::setup::UiAssets;
+use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
+
+#[derive(SystemParam)]
+pub struct InfoPanelRes<'w, A: UiAssets + Resource + 'static> {
+    pub game_assets: Res<'w, A>,
+    pub info_nodes: Res<'w, InfoPanelNodes>,
+    pub ui_nodes: Res<'w, UiNodeRegistry>,
+    pub inspection_view_model: Res<'w, EntityInspectionViewModel>,
+}
+
+#[derive(SystemParam)]
+pub struct InfoPanelNodeQueries<'w, 's> {
+    pub q_text: Query<'w, 's, &'static mut Text>,
+    pub q_node: Query<'w, 's, &'static mut Node>,
+    pub q_gender: Query<'w, 's, &'static mut ImageNode>,
+}
 
 fn entity_for_slot(
     info_nodes: &InfoPanelNodes,
@@ -99,20 +115,14 @@ fn update_gender_icon<A: UiAssets>(
     }
 }
 
-#[allow(clippy::too_many_arguments)]
 pub fn info_panel_system<A: UiAssets + Resource>(
-    game_assets: Res<A>,
+    res: InfoPanelRes<A>,
     _selected: Res<SelectedEntity>,
     pin_state: ResMut<InfoPanelPinState>,
-    info_nodes: Res<InfoPanelNodes>,
-    ui_nodes: Res<UiNodeRegistry>,
     mut panel_state: ResMut<InfoPanelState>,
-    mut q_text: Query<&mut Text>,
-    mut q_node: Query<&mut Node>,
-    mut q_gender: Query<&mut ImageNode>,
-    inspection_view_model: Res<EntityInspectionViewModel>,
+    mut queries: InfoPanelNodeQueries,
 ) {
-    let next_model = inspection_view_model.model.clone().map(to_view_model);
+    let next_model = res.inspection_view_model.model.clone().map(to_view_model);
 
     let pinned = pin_state.entity.is_some();
     if panel_state.last == next_model && panel_state.last_pinned == pinned {
@@ -120,9 +130,9 @@ pub fn info_panel_system<A: UiAssets + Resource>(
     }
 
     set_display_slot(
-        &info_nodes,
-        &ui_nodes,
-        &mut q_node,
+        &res.info_nodes,
+        &res.ui_nodes,
+        &mut queries.q_node,
         UiSlot::InfoPanelRoot,
         if next_model.is_some() {
             Display::Flex
@@ -131,9 +141,9 @@ pub fn info_panel_system<A: UiAssets + Resource>(
         },
     );
     set_display_slot(
-        &info_nodes,
-        &ui_nodes,
-        &mut q_node,
+        &res.info_nodes,
+        &res.ui_nodes,
+        &mut queries.q_node,
         UiSlot::InfoPanelUnpinButton,
         if pinned { Display::Flex } else { Display::None },
     );
@@ -141,140 +151,140 @@ pub fn info_panel_system<A: UiAssets + Resource>(
     match &next_model {
         Some(InfoPanelViewModel::Soul(soul)) => {
             set_display_slot(
-                &info_nodes,
-                &ui_nodes,
-                &mut q_node,
+                &res.info_nodes,
+                &res.ui_nodes,
+                &mut queries.q_node,
                 UiSlot::InfoPanelStatsGroup,
                 Display::Flex,
             );
             set_text_slot(
-                &info_nodes,
-                &ui_nodes,
-                &mut q_text,
+                &res.info_nodes,
+                &res.ui_nodes,
+                &mut queries.q_text,
                 UiSlot::Header,
                 &soul.header,
             );
             set_text_slot(
-                &info_nodes,
-                &ui_nodes,
-                &mut q_text,
+                &res.info_nodes,
+                &res.ui_nodes,
+                &mut queries.q_text,
                 UiSlot::StatMotivation,
                 &soul.motivation,
             );
             set_text_slot(
-                &info_nodes,
-                &ui_nodes,
-                &mut q_text,
+                &res.info_nodes,
+                &res.ui_nodes,
+                &mut queries.q_text,
                 UiSlot::StatStress,
                 &soul.stress,
             );
             set_text_slot(
-                &info_nodes,
-                &ui_nodes,
-                &mut q_text,
+                &res.info_nodes,
+                &res.ui_nodes,
+                &mut queries.q_text,
                 UiSlot::StatFatigue,
                 &soul.fatigue,
             );
             set_text_slot(
-                &info_nodes,
-                &ui_nodes,
-                &mut q_text,
+                &res.info_nodes,
+                &res.ui_nodes,
+                &mut queries.q_text,
                 UiSlot::StatDream,
                 &soul.dream,
             );
             set_text_slot(
-                &info_nodes,
-                &ui_nodes,
-                &mut q_text,
+                &res.info_nodes,
+                &res.ui_nodes,
+                &mut queries.q_text,
                 UiSlot::TaskText,
                 &soul.task,
             );
             set_text_slot(
-                &info_nodes,
-                &ui_nodes,
-                &mut q_text,
+                &res.info_nodes,
+                &res.ui_nodes,
+                &mut queries.q_text,
                 UiSlot::InventoryText,
                 &soul.inventory,
             );
             set_text_slot(
-                &info_nodes,
-                &ui_nodes,
-                &mut q_text,
+                &res.info_nodes,
+                &res.ui_nodes,
+                &mut queries.q_text,
                 UiSlot::CommonText,
                 &soul.common,
             );
             update_gender_icon(
-                &info_nodes,
-                &ui_nodes,
-                &mut q_gender,
-                &mut q_node,
-                &*game_assets,
+                &res.info_nodes,
+                &res.ui_nodes,
+                &mut queries.q_gender,
+                &mut queries.q_node,
+                &*res.game_assets,
                 soul.gender,
             );
         }
         Some(InfoPanelViewModel::Simple(simple)) => {
             set_display_slot(
-                &info_nodes,
-                &ui_nodes,
-                &mut q_node,
+                &res.info_nodes,
+                &res.ui_nodes,
+                &mut queries.q_node,
                 UiSlot::InfoPanelStatsGroup,
                 Display::None,
             );
             set_text_slot(
-                &info_nodes,
-                &ui_nodes,
-                &mut q_text,
+                &res.info_nodes,
+                &res.ui_nodes,
+                &mut queries.q_text,
                 UiSlot::Header,
                 &simple.header,
             );
             set_text_slot(
-                &info_nodes,
-                &ui_nodes,
-                &mut q_text,
+                &res.info_nodes,
+                &res.ui_nodes,
+                &mut queries.q_text,
                 UiSlot::CommonText,
                 &simple.common,
             );
             update_gender_icon(
-                &info_nodes,
-                &ui_nodes,
-                &mut q_gender,
-                &mut q_node,
-                &*game_assets,
+                &res.info_nodes,
+                &res.ui_nodes,
+                &mut queries.q_gender,
+                &mut queries.q_node,
+                &*res.game_assets,
                 None,
             );
             set_text_slot(
-                &info_nodes,
-                &ui_nodes,
-                &mut q_text,
+                &res.info_nodes,
+                &res.ui_nodes,
+                &mut queries.q_text,
                 UiSlot::StatMotivation,
                 "",
             );
-            set_text_slot(&info_nodes, &ui_nodes, &mut q_text, UiSlot::StatStress, "");
-            set_text_slot(&info_nodes, &ui_nodes, &mut q_text, UiSlot::StatFatigue, "");
-            set_text_slot(&info_nodes, &ui_nodes, &mut q_text, UiSlot::StatDream, "");
-            set_text_slot(&info_nodes, &ui_nodes, &mut q_text, UiSlot::TaskText, "");
+            set_text_slot(&res.info_nodes, &res.ui_nodes, &mut queries.q_text, UiSlot::StatStress, "");
+            set_text_slot(&res.info_nodes, &res.ui_nodes, &mut queries.q_text, UiSlot::StatFatigue, "");
+            set_text_slot(&res.info_nodes, &res.ui_nodes, &mut queries.q_text, UiSlot::StatDream, "");
+            set_text_slot(&res.info_nodes, &res.ui_nodes, &mut queries.q_text, UiSlot::TaskText, "");
             set_text_slot(
-                &info_nodes,
-                &ui_nodes,
-                &mut q_text,
+                &res.info_nodes,
+                &res.ui_nodes,
+                &mut queries.q_text,
                 UiSlot::InventoryText,
                 "",
             );
         }
         None => {
             set_display_slot(
-                &info_nodes,
-                &ui_nodes,
-                &mut q_node,
+                &res.info_nodes,
+                &res.ui_nodes,
+                &mut queries.q_node,
                 UiSlot::InfoPanelStatsGroup,
                 Display::None,
             );
             update_gender_icon(
-                &info_nodes,
-                &ui_nodes,
-                &mut q_gender,
-                &mut q_node,
-                &*game_assets,
+                &res.info_nodes,
+                &res.ui_nodes,
+                &mut queries.q_gender,
+                &mut queries.q_node,
+                &*res.game_assets,
                 None,
             );
         }

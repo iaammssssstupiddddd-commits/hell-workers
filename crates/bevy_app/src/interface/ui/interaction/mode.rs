@@ -116,21 +116,41 @@ pub(super) fn set_area_task_mode(
     next_play_mode.set(PlayMode::TaskDesignation);
 }
 
-#[allow(clippy::too_many_arguments)]
-pub(super) fn build_mode_text(
-    play_mode: &PlayMode,
-    build_context: &BuildContext,
-    companion_state: &CompanionPlacementState,
-    zone_context: &ZoneContext,
-    task_context: &TaskContext,
-    selected_familiar_name: Option<&str>,
-    selected_area_size_tiles: Option<UVec2>,
-    area_edit_dragging: bool,
-    area_edit_operation: Option<&str>,
-    area_overlap: Option<(usize, f32)>,
-    clipboard_has_area: bool,
-    unassigned_tasks_in_area: Option<usize>,
-) -> String {
+pub(super) struct ModeCtxRefs<'a> {
+    pub play_mode: &'a PlayMode,
+    pub build_context: &'a BuildContext,
+    pub companion_state: &'a CompanionPlacementState,
+    pub zone_context: &'a ZoneContext,
+    pub task_context: &'a TaskContext,
+}
+
+pub(super) struct ModeDisplayInfo<'a> {
+    pub selected_familiar_name: Option<&'a str>,
+    pub selected_area_size_tiles: Option<UVec2>,
+    pub area_edit_dragging: bool,
+    pub area_edit_operation: Option<&'a str>,
+    pub area_overlap: Option<(usize, f32)>,
+    pub clipboard_has_area: bool,
+    pub unassigned_tasks_in_area: Option<usize>,
+}
+
+pub(super) fn build_mode_text(ctx: ModeCtxRefs, info: ModeDisplayInfo) -> String {
+    let ModeCtxRefs {
+        play_mode,
+        build_context,
+        companion_state,
+        zone_context,
+        task_context,
+    } = ctx;
+    let ModeDisplayInfo {
+        selected_familiar_name,
+        selected_area_size_tiles,
+        area_edit_dragging,
+        area_edit_operation,
+        area_overlap,
+        clipboard_has_area,
+        unassigned_tasks_in_area,
+    } = info;
     match play_mode {
         PlayMode::Normal => "Mode: Normal".to_string(),
         PlayMode::BuildingPlace => {

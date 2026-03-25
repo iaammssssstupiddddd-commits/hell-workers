@@ -41,7 +41,14 @@ pub fn is_soul_available_for_work(
     true
 }
 
-#[allow(clippy::too_many_arguments)]
+/// `cleanup_task_assignment` / `unassign_task` に渡す Soul の位置とインベントリ情報。
+pub struct SoulDropCtx<'a> {
+    pub soul_entity: Entity,
+    pub drop_pos: Vec2,
+    pub inventory: Option<&'a mut Inventory>,
+    pub dropped_item_res: Option<ResourceType>,
+}
+
 /// タスク解除時の低レベル cleanup を適用する。
 ///
 /// `AssignedTask` / インベントリ / 予約状態の cleanup を行うが、
@@ -49,16 +56,19 @@ pub fn is_soul_available_for_work(
 /// root crate 側の wrapper が所有する。
 pub fn cleanup_task_assignment<'w, 's, Q: TaskReservationAccess<'w, 's>>(
     commands: &mut Commands,
-    soul_entity: Entity,
-    drop_pos: Vec2,
+    ctx: SoulDropCtx<'_>,
     task: &mut AssignedTask,
     path: &mut hw_core::soul::Path,
-    inventory: Option<&mut Inventory>,
-    dropped_item_res: Option<ResourceType>,
     queries: &mut Q,
     world_map: &WorldMap,
     emit_abandoned_event: bool,
 ) {
+    let SoulDropCtx {
+        soul_entity,
+        drop_pos,
+        inventory,
+        dropped_item_res,
+    } = ctx;
     if !matches!(*task, AssignedTask::None) && emit_abandoned_event {
         commands.trigger(OnTaskAbandoned {
             entity: soul_entity,
@@ -140,31 +150,25 @@ pub fn cleanup_task_assignment<'w, 's, Q: TaskReservationAccess<'w, 's>>(
     path.waypoints.clear();
 }
 
-#[allow(clippy::too_many_arguments)]
 /// タスク解除の公開 API。
 ///
 /// 内部で `cleanup_task_assignment` を呼び出し、加えて
 /// `OnTaskAbandoned` イベントの発行と `WorkingOn` コンポーネントの削除を行う。
 pub fn unassign_task<'w, 's, Q: TaskReservationAccess<'w, 's>>(
     commands: &mut Commands,
-    soul_entity: Entity,
-    drop_pos: Vec2,
+    ctx: SoulDropCtx<'_>,
     task: &mut AssignedTask,
     path: &mut hw_core::soul::Path,
-    inventory: Option<&mut hw_logistics::Inventory>,
-    dropped_item_res: Option<hw_logistics::ResourceType>,
     queries: &mut Q,
     world_map: &WorldMap,
     emit_abandoned_event: bool,
 ) {
+    let soul_entity = ctx.soul_entity;
     cleanup_task_assignment(
         commands,
-        soul_entity,
-        drop_pos,
+        ctx,
         task,
         path,
-        inventory,
-        dropped_item_res,
         queries,
         world_map,
         emit_abandoned_event,

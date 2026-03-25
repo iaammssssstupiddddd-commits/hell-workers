@@ -9,17 +9,24 @@ use hw_core::constants::{
     Z_ITEM_PICKUP,
 };
 
-#[allow(clippy::too_many_arguments)]
+pub(super) struct PostProcessTargets {
+    pub blueprint_entity: Entity,
+    pub building_entity: Entity,
+}
+
 pub(super) fn apply_building_specific_post_process(
     commands: &mut Commands,
-    blueprint_entity: Entity,
-    building_entity: Entity,
+    targets: PostProcessTargets,
     bp: &Blueprint,
     transform: &Transform,
     game_assets: &GameAssets,
     world_map: &mut WorldMap,
     promoted_bucket_storage: &[Entity],
 ) {
+    let PostProcessTargets {
+        blueprint_entity,
+        building_entity,
+    } = targets;
     if bp.kind == BuildingType::Tank {
         setup_tank(
             commands,

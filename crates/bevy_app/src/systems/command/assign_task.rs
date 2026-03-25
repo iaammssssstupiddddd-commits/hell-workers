@@ -6,26 +6,48 @@ use crate::interface::ui::UiInputState;
 use crate::systems::jobs::Designation;
 use crate::world::map::{WorldMap, WorldMapRead};
 use crate::world::pathfinding::{self, PathfindingContext};
+use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use hw_ui::camera::MainCamera;
 
-#[allow(clippy::too_many_arguments)]
+#[derive(SystemParam)]
+pub struct AssignTaskInput<'w, 's> {
+    buttons: Res<'w, ButtonInput<MouseButton>>,
+    q_window: Query<'w, 's, &'static Window, With<bevy::window::PrimaryWindow>>,
+    q_camera: Query<'w, 's, (&'static Camera, &'static GlobalTransform), With<MainCamera>>,
+    ui_input_state: Res<'w, UiInputState>,
+}
+
+#[derive(SystemParam)]
+pub struct AssignTaskWorkerQuery<'w, 's> {
+    q_designations: Query<
+        'w,
+        's,
+        (Entity, &'static Transform, &'static Designation),
+        Without<hw_core::relationships::ManagedBy>,
+    >,
+    q_familiars: Query<'w, 's, (Entity, &'static Transform), With<Familiar>>,
+}
+
 pub fn assign_task_system(
-    buttons: Res<ButtonInput<MouseButton>>,
-    q_window: Query<&Window, With<bevy::window::PrimaryWindow>>,
-    q_camera: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
-    ui_input_state: Res<UiInputState>,
+    input: AssignTaskInput,
     selected: Res<SelectedEntity>,
     mut task_context: ResMut<TaskContext>,
     mut commands: Commands,
-    q_designations: Query<
-        (Entity, &Transform, &Designation),
-        Without<hw_core::relationships::ManagedBy>,
-    >,
-    q_familiars: Query<(Entity, &Transform), With<Familiar>>,
+    worker_queries: AssignTaskWorkerQuery,
     world_map: WorldMapRead,
     mut pf_context: Local<PathfindingContext>,
 ) {
+    let AssignTaskInput {
+        buttons,
+        q_window,
+        q_camera,
+        ui_input_state,
+    } = input;
+    let AssignTaskWorkerQuery {
+        q_designations,
+        q_familiars,
+    } = worker_queries;
     if ui_input_state.pointer_over_ui {
         return;
     }

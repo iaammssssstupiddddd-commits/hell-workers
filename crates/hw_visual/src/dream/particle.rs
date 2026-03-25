@@ -12,6 +12,26 @@ use hw_core::ui_nodes::{UiMountSlot, UiNodeRegistry, UiSlot};
 use hw_core::visual_mirror::gather::RestAreaVisual;
 use rand::Rng;
 
+type NewDreamEntitiesQuery<'w, 's> = Query<
+    'w,
+    's,
+    Entity,
+    (With<DamnedSoul>, With<DreamState>, Without<DreamVisualState>),
+>;
+
+type SleepingSoulsQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static IdleState,
+        &'static DreamState,
+        Option<&'static ParticipatingIn>,
+        &'static mut DreamVisualState,
+    ),
+    With<DamnedSoul>,
+>;
+
 fn particle_interval_for_quality(quality: DreamQuality) -> f32 {
     match quality {
         DreamQuality::VividDream => DREAM_PARTICLE_INTERVAL_VIVID,
@@ -47,17 +67,9 @@ fn particle_sway_for_quality(quality: DreamQuality) -> f32 {
     }
 }
 
-#[allow(clippy::type_complexity)]
 pub fn ensure_dream_visual_state_system(
     mut commands: Commands,
-    q_souls: Query<
-        Entity,
-        (
-            With<DamnedSoul>,
-            With<DreamState>,
-            Without<DreamVisualState>,
-        ),
-    >,
+    q_souls: NewDreamEntitiesQuery,
     q_rest_areas: Query<Entity, (With<RestAreaVisual>, Without<DreamVisualState>)>,
 ) {
     for entity in q_souls.iter() {
@@ -68,22 +80,12 @@ pub fn ensure_dream_visual_state_system(
     }
 }
 
-#[allow(clippy::type_complexity)]
 pub fn dream_particle_spawn_system(
     mut commands: Commands,
     time: Res<Time>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<DreamBubbleMaterial>>,
-    mut q_souls: Query<
-        (
-            Entity,
-            &IdleState,
-            &DreamState,
-            Option<&ParticipatingIn>,
-            &mut DreamVisualState,
-        ),
-        With<DamnedSoul>,
-    >,
+    mut q_souls: SleepingSoulsQuery,
 ) {
     let dt = time.delta_secs();
     let mut rng = rand::thread_rng();
@@ -143,32 +145,34 @@ pub fn dream_particle_spawn_system(
     }
 }
 
-#[allow(clippy::too_many_arguments)]
-pub fn rest_area_dream_particle_spawn_system(
-    mut commands: Commands,
-    time: Res<Time>,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<DreamBubbleMaterial>>,
-    mut q_rest_areas: Query<(
+#[derive(bevy::ecs::system::SystemParam)]
+pub struct RestAreaDreamParams<'w, 's> {
+    commands: Commands<'w, 's>,
+    time: Res<'w, Time>,
+    meshes: ResMut<'w, Assets<Mesh>>,
+    materials: ResMut<'w, Assets<DreamBubbleMaterial>>,
+    q_rest_areas: Query<'w, 's, (
         Entity,
-        &Transform,
-        &RestAreaVisual,
-        Option<&RestAreaOccupants>,
-        &mut DreamVisualState,
+        &'static Transform,
+        &'static RestAreaVisual,
+        Option<&'static RestAreaOccupants>,
+        &'static mut DreamVisualState,
     )>,
-    q_camera: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
-    q_ui_bubble_layer: Query<(Entity, &UiMountSlot)>,
-    ui_nodes: Res<UiNodeRegistry>,
-    q_ui_transform: Query<(&ComputedNode, &UiGlobalTransform)>,
-    mut ui_bubble_materials: ResMut<Assets<DreamBubbleUiMaterial>>,
-) {
-    let dt = time.delta_secs();
+    q_camera: Query<'w, 's, (&'static Camera, &'static GlobalTransform), With<MainCamera>>,
+    q_ui_bubble_layer: Query<'w, 's, (Entity, &'static UiMountSlot)>,
+    ui_nodes: Res<'w, UiNodeRegistry>,
+    q_ui_transform: Query<'w, 's, (&'static ComputedNode, &'static UiGlobalTransform)>,
+    ui_bubble_materials: ResMut<'w, Assets<DreamBubbleUiMaterial>>,
+}
+
+pub fn rest_area_dream_particle_spawn_system(mut p: RestAreaDreamParams) {
+    let dt = p.time.delta_secs();
     let mut rng = rand::thread_rng();
 
-    let Some((camera, camera_transform)) = q_camera.iter().next() else {
+    let Some((camera, camera_transform)) = p.q_camera.iter().next() else {
         return;
     };
-    let Some(dream_bubble_layer) = q_ui_bubble_layer
+    let Some(dream_bubble_layer) = p.q_ui_bubble_layer
         .iter()
         .find(|(_, slot)| matches!(slot, UiMountSlot::DreamBubbleLayer))
         .map(|(e, _)| e)
@@ -182,14 +186,14 @@ pub fn rest_area_dream_particle_spawn_system(
 
     let mut target_pos = Vec2::new(viewport_size.x - 80.0, 40.0);
 
-    if let Some(entity) = ui_nodes.get_slot(UiSlot::DreamPoolIcon)
-        && let Ok((computed, transform)) = q_ui_transform.get(entity) {
+    if let Some(entity) = p.ui_nodes.get_slot(UiSlot::DreamPoolIcon)
+        && let Ok((computed, transform)) = p.q_ui_transform.get(entity) {
             let center = transform.translation * computed.inverse_scale_factor();
             target_pos = center;
         }
 
     for (rest_area_entity, transform, rest_area_visual, occupants_opt, mut visual_state) in
-        q_rest_areas.iter_mut()
+        p.q_rest_areas.iter_mut()
     {
         let occupant_count = occupants_opt
             .map(|occ| occ.len())
@@ -227,15 +231,15 @@ pub fn rest_area_dream_particle_spawn_system(
         let size = rng.gen_range(DREAM_PARTICLE_SIZE_MIN..=DREAM_PARTICLE_SIZE_MAX)
             * (1.0 + (scale_factor - 1.0) * 0.5);
 
-        let mesh = meshes.add(Circle::new(0.5));
-        let material = materials.add(DreamBubbleMaterial {
+        let mesh = p.meshes.add(Circle::new(0.5));
+        let material = p.materials.add(DreamBubbleMaterial {
             color,
             time: 0.0,
             alpha: 0.85,
             mass: 1.0,
         });
 
-        commands.spawn((
+        p.commands.spawn((
             DreamParticle {
                 owner: rest_area_entity,
                 quality: particle_quality,
@@ -255,11 +259,11 @@ pub fn rest_area_dream_particle_spawn_system(
         let world_pos = transform.translation + Vec3::new(x_offset, y_offset, 0.0);
         if let Ok(start_pos) = camera.world_to_viewport(camera_transform, world_pos) {
             super::ui_particle::spawn_ui_particle(
-                &mut commands,
+                &mut p.commands,
                 start_pos,
                 target_pos,
                 dream_bubble_layer,
-                &mut ui_bubble_materials,
+                &mut p.ui_bubble_materials,
                 0.5 * scale_factor,
             );
         }

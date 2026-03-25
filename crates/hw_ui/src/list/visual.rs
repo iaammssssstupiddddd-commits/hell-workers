@@ -4,32 +4,44 @@ use crate::selection::SelectedEntity;
 use crate::theme::UiTheme;
 use bevy::prelude::*;
 
-#[allow(clippy::type_complexity)]
+type SoulListItemQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static Interaction,
+        &'static SoulListItem,
+        &'static mut Node,
+        &'static mut BackgroundColor,
+        &'static mut BorderColor,
+    ),
+    With<Button>,
+>;
+
+type FamiliarListItemQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static Interaction,
+        &'static FamiliarListItem,
+        &'static mut Node,
+        &'static mut BackgroundColor,
+        &'static mut BorderColor,
+    ),
+    (With<Button>, Without<SoulListItem>),
+>;
+
+type SoulChangedQuery<'w, 's> =
+    Query<'w, 's, (), Or<(Changed<Interaction>, Added<SoulListItem>)>>;
+type FamiliarChangedQuery<'w, 's> =
+    Query<'w, 's, (), Or<(Changed<Interaction>, Added<FamiliarListItem>)>>;
+
 pub fn entity_list_visual_feedback_system(
     selected_entity: Res<SelectedEntity>,
     drag_state: Res<DragState>,
-    q_soul_changed: Query<(), Or<(Changed<Interaction>, Added<SoulListItem>)>>,
-    q_familiar_changed: Query<(), Or<(Changed<Interaction>, Added<FamiliarListItem>)>>,
-    mut q_souls: Query<
-        (
-            &Interaction,
-            &SoulListItem,
-            &mut Node,
-            &mut BackgroundColor,
-            &mut BorderColor,
-        ),
-        With<Button>,
-    >,
-    mut q_familiars: Query<
-        (
-            &Interaction,
-            &FamiliarListItem,
-            &mut Node,
-            &mut BackgroundColor,
-            &mut BorderColor,
-        ),
-        (With<Button>, Without<SoulListItem>),
-    >,
+    q_soul_changed: SoulChangedQuery,
+    q_familiar_changed: FamiliarChangedQuery,
+    mut q_souls: SoulListItemQuery<'_, '_>,
+    mut q_familiars: FamiliarListItemQuery<'_, '_>,
     theme: Res<UiTheme>,
 ) {
     if !selected_entity.is_changed()
@@ -46,10 +58,12 @@ pub fn entity_list_visual_feedback_system(
             &mut node,
             &mut bg,
             &mut border_color,
-            *interaction,
-            is_selected,
-            false,
-            false,
+            RowHighlightState {
+                interaction: *interaction,
+                is_selected,
+                is_drop_target: false,
+                is_familiar_row: false,
+            },
             &theme,
         );
     }
@@ -61,27 +75,34 @@ pub fn entity_list_visual_feedback_system(
             &mut node,
             &mut bg,
             &mut border_color,
-            *interaction,
-            is_selected,
-            is_drop_target,
-            true,
+            RowHighlightState {
+                interaction: *interaction,
+                is_selected,
+                is_drop_target,
+                is_familiar_row: true,
+            },
             &theme,
         );
     }
 }
 
+/// リスト行のハイライト状態
+pub struct RowHighlightState {
+    pub interaction: Interaction,
+    pub is_selected: bool,
+    pub is_drop_target: bool,
+    pub is_familiar_row: bool,
+}
+
 /// リスト行の選択・ホバー状態に応じたハイライト適用（タスクリスト等で再利用）
-#[allow(clippy::too_many_arguments)]
 pub fn apply_row_highlight(
     node: &mut Node,
     bg: &mut BackgroundColor,
     border_color: &mut BorderColor,
-    interaction: Interaction,
-    is_selected: bool,
-    is_drop_target: bool,
-    is_familiar_row: bool,
+    state: RowHighlightState,
     theme: &UiTheme,
 ) {
+    let RowHighlightState { interaction, is_selected, is_drop_target, is_familiar_row } = state;
     if is_drop_target {
         bg.0 = theme.colors.list_item_selected_hover;
         node.border.left = Val::Px(theme.sizes.list_selection_border_width);

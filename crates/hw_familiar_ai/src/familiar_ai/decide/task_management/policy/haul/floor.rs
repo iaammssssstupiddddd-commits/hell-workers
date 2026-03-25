@@ -2,8 +2,8 @@ use bevy::prelude::*;
 use hw_core::logistics::{ResourceType, WheelbarrowDestination};
 
 use super::super::super::builders::{
-    issue_collect_bone_with_wheelbarrow_to_floor, issue_haul_to_stockpile_with_source,
-    issue_haul_with_wheelbarrow,
+    WheelbarrowCollectSpec, WheelbarrowHaulSpec, issue_collect_bone_with_wheelbarrow_to_floor,
+    issue_haul_to_stockpile_with_source, issue_haul_with_wheelbarrow,
 };
 use super::super::super::validator::resolve_haul_to_floor_construction_inputs;
 use super::demand;
@@ -100,10 +100,12 @@ pub fn assign_haul_to_floor_construction(
 
         let item_entities = item_sources.into_iter().map(|(entity, _)| entity).collect();
         issue_haul_with_wheelbarrow(
-            wheelbarrow,
-            source_pos,
-            WheelbarrowDestination::Stockpile(site_entity),
-            item_entities,
+            WheelbarrowHaulSpec {
+                wheelbarrow,
+                source_pos,
+                destination: WheelbarrowDestination::Stockpile(site_entity),
+                items: item_entities,
+            },
             site_pos,
             already_commanded,
             ctx,
@@ -134,10 +136,12 @@ pub fn assign_haul_to_floor_construction(
 
     if resource_type == ResourceType::Bone
         && try_direct_bone_collect_to_floor(
-            site_entity,
-            ctx.task_entity,
-            remaining_needed,
-            site_pos,
+            FloorBoneCollectParams {
+                site_entity,
+                task_entity: ctx.task_entity,
+                remaining_needed,
+                site_pos,
+            },
             already_commanded,
             ctx,
             queries,
@@ -154,23 +158,27 @@ pub fn assign_haul_to_floor_construction(
     false
 }
 
-#[allow(clippy::too_many_arguments)]
-fn try_direct_bone_collect_to_floor(
+/// `try_direct_bone_collect_to_floor` の設定パラメータをまとめた構造体。
+struct FloorBoneCollectParams {
     site_entity: Entity,
     task_entity: Entity,
     remaining_needed: u32,
     site_pos: Vec2,
+}
+
+fn try_direct_bone_collect_to_floor(
+    params: FloorBoneCollectParams,
     already_commanded: bool,
     ctx: &AssignTaskContext<'_>,
     queries: &mut FamiliarTaskAssignmentQueries,
     shadow: &mut ReservationShadow,
 ) -> bool {
     let Some((source_entity, source_pos)) =
-        direct_collect::find_collect_bone_source(site_pos, ctx.task_area_opt, queries, shadow)
+        direct_collect::find_collect_bone_source(params.site_pos, ctx.task_area_opt, queries, shadow)
     else {
         debug!(
             "ASSIGN: Floor request {:?} has no available Bone collect source",
-            task_entity
+            params.task_entity
         );
         return false;
     };
@@ -179,19 +187,21 @@ fn try_direct_bone_collect_to_floor(
     else {
         debug!(
             "ASSIGN: Floor request {:?} has no available wheelbarrow for Bone collect",
-            task_entity
+            params.task_entity
         );
         return false;
     };
 
-    let amount = remaining_needed.min(hw_core::constants::WHEELBARROW_CAPACITY as u32);
+    let amount = params.remaining_needed.min(hw_core::constants::WHEELBARROW_CAPACITY as u32);
 
     issue_collect_bone_with_wheelbarrow_to_floor(
-        wheelbarrow,
-        source_entity,
-        source_pos,
-        site_entity,
-        amount,
+        WheelbarrowCollectSpec {
+            wheelbarrow,
+            source_entity,
+            source_pos,
+            destination: params.site_entity,
+            amount,
+        },
         source_pos,
         already_commanded,
         ctx,
@@ -200,7 +210,7 @@ fn try_direct_bone_collect_to_floor(
     );
     info!(
         "ASSIGN: Floor request {:?} assigned direct Bone collect via wheelbarrow {:?} from {:?} to site {:?} (amount {})",
-        task_entity, wheelbarrow, source_entity, site_entity, amount
+        params.task_entity, wheelbarrow, source_entity, params.site_entity, amount
     );
     true
 }

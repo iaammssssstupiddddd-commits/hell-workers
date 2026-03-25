@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use hw_logistics::transport_request::WheelbarrowLease;
 
-use super::super::super::builders::issue_haul_with_wheelbarrow;
+use super::super::super::builders::{WheelbarrowHaulSpec, issue_haul_with_wheelbarrow};
 use crate::familiar_ai::decide::task_management::validator::source_not_reserved;
 use crate::familiar_ai::decide::task_management::{
     AssignTaskContext, FamiliarTaskAssignmentQueries, ReservationShadow,
@@ -27,13 +27,17 @@ pub fn validate_lease(
     valid_count >= min_valid_items
 }
 
-#[allow(clippy::too_many_arguments)]
+/// `try_issue_haul_from_lease` の設定パラメータをまとめた構造体。
+pub struct HaulFromLeaseSpec {
+    pub task_entity: Entity,
+    pub task_pos: Vec2,
+    pub already_commanded: bool,
+    pub min_valid_items: usize,
+    pub max_items: usize,
+}
+
 pub fn try_issue_haul_from_lease<F>(
-    task_entity: Entity,
-    task_pos: Vec2,
-    already_commanded: bool,
-    min_valid_items: usize,
-    max_items: usize,
+    spec: HaulFromLeaseSpec,
     item_filter: F,
     ctx: &AssignTaskContext<'_>,
     queries: &mut FamiliarTaskAssignmentQueries,
@@ -42,11 +46,11 @@ pub fn try_issue_haul_from_lease<F>(
 where
     F: Fn(Entity) -> bool,
 {
-    let Ok(lease) = queries.wheelbarrow_leases.get(task_entity) else {
+    let Ok(lease) = queries.wheelbarrow_leases.get(spec.task_entity) else {
         return false;
     };
 
-    if !validate_lease(lease, queries, shadow, min_valid_items) {
+    if !validate_lease(lease, queries, shadow, spec.min_valid_items) {
         return false;
     }
 
@@ -55,19 +59,21 @@ where
         .iter()
         .copied()
         .filter(|item| item_filter(*item))
-        .take(max_items)
+        .take(spec.max_items)
         .collect();
-    if lease_items.len() < min_valid_items {
+    if lease_items.len() < spec.min_valid_items {
         return false;
     }
 
     issue_haul_with_wheelbarrow(
-        lease.wheelbarrow,
-        lease.source_pos,
-        lease.destination,
-        lease_items,
-        task_pos,
-        already_commanded,
+        WheelbarrowHaulSpec {
+            wheelbarrow: lease.wheelbarrow,
+            source_pos: lease.source_pos,
+            destination: lease.destination,
+            items: lease_items,
+        },
+        spec.task_pos,
+        spec.already_commanded,
         ctx,
         queries,
         shadow,

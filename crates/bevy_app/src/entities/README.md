@@ -3,7 +3,7 @@
 ## 役割
 
 ゲームに登場するエンティティ（DamnedSoul・Familiar）の**スポーン・移動・アニメーション・ビジュアル**を実装するディレクトリ。
-AI 意思決定ロジックは `systems/soul_ai/`・`systems/familiar_ai/`（および `hw_ai` クレート）に分離されている。
+AI 意思決定ロジックは `systems/soul_ai/`・`systems/familiar_ai/`（および `hw_soul_ai`・`hw_familiar_ai` クレート）に分離されている。
 
 ## ディレクトリ構成
 
@@ -37,6 +37,6 @@ AI 意思決定ロジックは `systems/soul_ai/`・`systems/familiar_ai/`（お
 ## 依存関係
 
 - コンポーネント定義: `hw_core`（`DamnedSoul`, `Familiar`）
-- AI 状態: `hw_ai` / `systems/soul_ai/` / `systems/familiar_ai/`
+- AI 状態: `hw_soul_ai` / `hw_familiar_ai` / `systems/soul_ai/` / `systems/familiar_ai/`
 - ビジュアル: `systems/visual/`
 - スポーン位置補正: `hw_world::find_nearby_walkable_grid` を各 spawn 実装から直接利用する。`entities/mod.rs` に中継用 wrapper は置かない

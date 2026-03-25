@@ -18,6 +18,7 @@ use hw_world::zones::{AreaBounds, Yard};
 use std::collections::HashMap;
 
 use crate::transport_request::{TransportRequest, TransportRequestKind};
+use crate::transport_request::producer::upsert::{SpawnRequestSpec, UpsertRequestSpec};
 use crate::types::{ResourceItem, ResourceType};
 use hw_spatial::{ResourceSpatialGrid, SpatialGridOps};
 
@@ -84,12 +85,15 @@ pub fn find_owner_for_position<'a>(
     find_owner(pos, owners)
 }
 
-#[allow(clippy::too_many_arguments)]
+/// `collect_nearby_resource_entities` の検索条件をまとめた構造体。
+pub struct NearbyResourceSpec {
+    pub center: Vec2,
+    pub pickup_radius: f32,
+    pub target_resource: ResourceType,
+}
+
 pub fn collect_nearby_resource_entities(
-    center: Vec2,
-    pickup_radius: f32,
-    pickup_radius_sq: f32,
-    target_resource: ResourceType,
+    spec: NearbyResourceSpec,
     resource_grid: &ResourceSpatialGrid,
     q_resources: &Query<(
         Entity,
@@ -101,8 +105,9 @@ pub fn collect_nearby_resource_entities(
     scratch: &mut Vec<Entity>,
     resources_scanned: &mut u32,
 ) -> Vec<Entity> {
+    let pickup_radius_sq = spec.pickup_radius * spec.pickup_radius;
     let mut nearby_resources = Vec::new();
-    resource_grid.get_nearby_in_radius_into(center, pickup_radius, scratch);
+    resource_grid.get_nearby_in_radius_into(spec.center, spec.pickup_radius, scratch);
     for entity in scratch.iter().copied() {
         let Ok((_, transform, visibility, resource_item, stored_in_opt)) = q_resources.get(entity)
         else {
@@ -111,8 +116,8 @@ pub fn collect_nearby_resource_entities(
         *resources_scanned = resources_scanned.saturating_add(1);
         if *visibility != Visibility::Hidden
             && stored_in_opt.is_none()
-            && resource_item.0 == target_resource
-            && transform.translation.truncate().distance_squared(center) <= pickup_radius_sq
+            && resource_item.0 == spec.target_resource
+            && transform.translation.truncate().distance_squared(spec.center) <= pickup_radius_sq
         {
             nearby_resources.push(entity);
         }
@@ -136,21 +141,25 @@ pub fn group_tiles_by_site<T: bevy::prelude::Component>(
     tiles_by_site
 }
 
-#[allow(clippy::too_many_arguments)]
+/// `consume_waiting_tile_resources` の非ジェネリック引数をまとめた構造体。
+pub struct TileConsumeSpec<'a> {
+    pub site_tiles: &'a [Entity],
+    pub required_amount: u32,
+}
+
 pub fn consume_waiting_tile_resources<
     T: bevy::prelude::Component<Mutability = bevy::ecs::component::Mutable>,
 >(
     commands: &mut Commands,
-    site_tiles: &[Entity],
+    spec: TileConsumeSpec<'_>,
     q_tiles: &mut Query<&mut T>,
     nearby_resources: &mut Vec<Entity>,
-    required_amount: u32,
     mut is_waiting: impl FnMut(&T) -> bool,
     mut delivered_mut: impl FnMut(&mut T) -> &mut u32,
     mut mark_ready: impl FnMut(&mut T),
 ) -> u32 {
     let mut consumed = 0u32;
-    for tile_entity in site_tiles.iter().copied() {
+    for tile_entity in spec.site_tiles.iter().copied() {
         let Ok(mut tile) = q_tiles.get_mut(tile_entity) else {
             continue;
         };
@@ -160,7 +169,7 @@ pub fn consume_waiting_tile_resources<
 
         let reached_required = {
             let delivered = delivered_mut(&mut tile);
-            while *delivered < required_amount {
+            while *delivered < spec.required_amount {
                 let Some(resource_entity) = nearby_resources.pop() else {
                     break;
                 };
@@ -168,7 +177,7 @@ pub fn consume_waiting_tile_resources<
                 *delivered += 1;
                 consumed += 1;
             }
-            *delivered >= required_amount
+            *delivered >= spec.required_amount
         };
 
         if reached_required {
@@ -181,17 +190,24 @@ pub fn consume_waiting_tile_resources<
     consumed
 }
 
-#[allow(clippy::too_many_arguments)]
+/// `sync_construction_delivery` のサイト固有データ＋検索補助バッファをまとめた構造体。
+pub struct ConstructionDeliverySpec<'a> {
+    pub site_entity: Entity,
+    pub site_pos: Vec2,
+    pub target_resource: ResourceType,
+    pub required_amount: u32,
+    pub pickup_radius: f32,
+    pub resource_grid: &'a ResourceSpatialGrid,
+    pub scratch: &'a mut Vec<Entity>,
+    pub resources_scanned: &'a mut u32,
+    pub tiles_by_site: &'a HashMap<Entity, Vec<Entity>>,
+}
+
 pub fn sync_construction_delivery<
     TTile: bevy::prelude::Component<Mutability = bevy::ecs::component::Mutable>,
 >(
     commands: &mut Commands,
-    site_entity: Entity,
-    site_pos: Vec2,
-    target_resource: ResourceType,
-    required_amount: u32,
-    pickup_radius: f32,
-    resource_grid: &ResourceSpatialGrid,
+    spec: ConstructionDeliverySpec<'_>,
     q_resources: &Query<(
         Entity,
         &Transform,
@@ -199,47 +215,52 @@ pub fn sync_construction_delivery<
         &ResourceItem,
         Option<&hw_core::relationships::StoredIn>,
     )>,
-    scratch: &mut Vec<Entity>,
-    resources_scanned: &mut u32,
-    tiles_by_site: &HashMap<Entity, Vec<Entity>>,
     q_tiles: &mut Query<&mut TTile>,
     is_waiting: impl FnMut(&TTile) -> bool,
     delivered_mut: impl FnMut(&mut TTile) -> &mut u32,
     mark_ready: impl FnMut(&mut TTile),
 ) -> u32 {
-    let pickup_radius_sq = pickup_radius * pickup_radius;
     let mut nearby_resources = collect_nearby_resource_entities(
-        site_pos,
-        pickup_radius,
-        pickup_radius_sq,
-        target_resource,
-        resource_grid,
+        NearbyResourceSpec {
+            center: spec.site_pos,
+            pickup_radius: spec.pickup_radius,
+            target_resource: spec.target_resource,
+        },
+        spec.resource_grid,
         q_resources,
-        scratch,
-        resources_scanned,
+        spec.scratch,
+        spec.resources_scanned,
     );
 
     if nearby_resources.is_empty() {
         return 0;
     }
 
-    let Some(site_tiles) = tiles_by_site.get(&site_entity) else {
+    let Some(site_tiles) = spec.tiles_by_site.get(&spec.site_entity) else {
         return 0;
     };
 
     consume_waiting_tile_resources(
         commands,
-        site_tiles,
+        TileConsumeSpec {
+            site_tiles,
+            required_amount: spec.required_amount,
+        },
         q_tiles,
         &mut nearby_resources,
-        required_amount,
         is_waiting,
         delivered_mut,
         mark_ready,
     )
 }
 
-#[allow(clippy::too_many_arguments)]
+/// `sync_construction_requests` のリクエスト種別定義をまとめた構造体。
+pub struct RequestSyncSpec {
+    pub expected_kind: TransportRequestKind,
+    pub request_name: &'static str,
+    pub request_kind: TransportRequestKind,
+}
+
 pub fn sync_construction_requests<TTarget: bevy::prelude::Component>(
     commands: &mut Commands,
     q_requests: &Query<(
@@ -249,9 +270,7 @@ pub fn sync_construction_requests<TTarget: bevy::prelude::Component>(
         Option<&hw_core::relationships::TaskWorkers>,
     )>,
     desired_requests: &HashMap<(Entity, ResourceType), (Entity, u32, Vec2)>,
-    expected_kind: TransportRequestKind,
-    request_name: &'static str,
-    request_kind: TransportRequestKind,
+    spec: RequestSyncSpec,
     target_entity: impl Fn(&TTarget) -> Entity,
     build_target: impl Fn(Entity) -> TTarget,
     priority_for: impl Fn(ResourceType) -> u32,
@@ -259,7 +278,7 @@ pub fn sync_construction_requests<TTarget: bevy::prelude::Component>(
     let mut seen_existing_keys = std::collections::HashSet::<(Entity, ResourceType)>::new();
 
     for (request_entity, target, request, workers_opt) in q_requests.iter() {
-        if request.kind != expected_kind {
+        if request.kind != spec.expected_kind {
             continue;
         }
 
@@ -280,14 +299,17 @@ pub fn sync_construction_requests<TTarget: bevy::prelude::Component>(
             upsert::upsert_transport_request(
                 commands,
                 request_entity,
-                key,
-                *site_pos,
-                *issued_by,
-                *slots,
-                inflight,
-                priority_for(key.1),
-                build_target(key.0),
-                request_kind,
+                UpsertRequestSpec {
+                    key,
+                    site_pos: *site_pos,
+                    issued_by: *issued_by,
+                    desired_slots: *slots,
+                    inflight,
+                    priority: priority_for(key.1),
+                    target: build_target(key.0),
+                    kind: spec.request_kind,
+                    work_type: hw_jobs::WorkType::Haul,
+                },
             );
             continue;
         }
@@ -302,14 +324,17 @@ pub fn sync_construction_requests<TTarget: bevy::prelude::Component>(
 
         upsert::spawn_transport_request(
             commands,
-            request_name,
-            *key,
-            *site_pos,
-            *issued_by,
-            *slots,
-            priority_for(key.1),
-            build_target(key.0),
-            request_kind,
+            SpawnRequestSpec {
+                name: spec.request_name,
+                key: *key,
+                site_pos: *site_pos,
+                issued_by: *issued_by,
+                desired_slots: *slots,
+                priority: priority_for(key.1),
+                target: build_target(key.0),
+                kind: spec.request_kind,
+                work_type: hw_jobs::WorkType::Haul,
+            },
         );
     }
 

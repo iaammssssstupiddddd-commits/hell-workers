@@ -1,4 +1,7 @@
-use super::queries::DesignationTargetQuery;
+use super::queries::{
+    DesignationTargetQuery, FloorTileBlueprintQuery, UnassignedDesignationQuery,
+    WallTileBlueprintQuery,
+};
 use super::{AreaEditHistory, AreaEditSession};
 use crate::app_contexts::TaskContext;
 use crate::entities::damned_soul::Destination;
@@ -6,9 +9,7 @@ use crate::entities::familiar::{ActiveCommand, Familiar};
 use crate::interface::selection::SelectedEntity;
 use crate::interface::ui::UiInputState;
 use crate::systems::command::{AreaSelectionIndicator, TaskArea, TaskMode};
-use crate::systems::jobs::Designation;
-use crate::systems::jobs::floor_construction::FloorTileBlueprint;
-use crate::systems::jobs::wall_construction::WallTileBlueprint;
+use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use hw_core::game_state::PlayMode;
@@ -20,102 +21,118 @@ mod press;
 mod release;
 mod transitions;
 
-use drag::handle_active_drag_input;
+use drag::{ActiveDragCtx, handle_active_drag_input};
 use press::handle_left_just_pressed_input;
-use release::handle_left_just_released_input;
+use release::{ReleaseCtx, handle_left_just_released_input};
 
+#[derive(SystemParam)]
+pub struct AreaInputContext<'w, 's> {
+    buttons: Res<'w, ButtonInput<MouseButton>>,
+    q_window: Query<'w, 's, &'static Window, With<PrimaryWindow>>,
+    q_camera: Query<'w, 's, (&'static Camera, &'static GlobalTransform), With<MainCamera>>,
+    ui_input_state: Res<'w, UiInputState>,
+    keyboard: Res<'w, ButtonInput<KeyCode>>,
+}
 
-#[allow(clippy::too_many_arguments)]
-#[allow(clippy::type_complexity)]
+#[derive(SystemParam)]
+pub struct AreaStateParams<'w> {
+    selected: Res<'w, SelectedEntity>,
+    task_context: ResMut<'w, TaskContext>,
+    next_play_mode: ResMut<'w, NextState<PlayMode>>,
+    area_edit_session: ResMut<'w, AreaEditSession>,
+    area_edit_history: ResMut<'w, AreaEditHistory>,
+}
+
+#[derive(SystemParam)]
+pub struct AreaEntityQueries<'w, 's> {
+    q_familiars: Query<'w, 's, (&'static mut ActiveCommand, &'static mut Destination), With<Familiar>>,
+    q_familiar_areas: Query<'w, 's, &'static TaskArea, With<Familiar>>,
+    q_target_sets: ParamSet<'w, 's, (
+        DesignationTargetQuery<'w, 's>,
+        FloorTileBlueprintQuery<'w, 's>,
+        WallTileBlueprintQuery<'w, 's>,
+    )>,
+    q_sites: Query<'w, 's, &'static Site>,
+    q_aux: ParamSet<'w, 's, (
+        UnassignedDesignationQuery<'w, 's>,
+        Query<'w, 's, Entity, With<AreaSelectionIndicator>>,
+    )>,
+}
+
 pub fn task_area_selection_system(
-    buttons: Res<ButtonInput<MouseButton>>,
-    q_window: Query<&Window, With<PrimaryWindow>>,
-    q_camera: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
-    ui_input_state: Res<UiInputState>,
-    selected: Res<SelectedEntity>,
-    mut task_context: ResMut<TaskContext>,
-    mut next_play_mode: ResMut<NextState<PlayMode>>,
-    mut q_familiars: Query<(&mut ActiveCommand, &mut Destination), With<Familiar>>,
-    q_familiar_areas: Query<&TaskArea, With<Familiar>>,
-    mut q_target_sets: ParamSet<(
-        DesignationTargetQuery<'_, '_>,
-        Query<(Entity, &Transform, &FloorTileBlueprint)>,
-        Query<(Entity, &Transform, &WallTileBlueprint)>,
-    )>,
-    q_sites: Query<&Site>,
+    input: AreaInputContext,
+    mut state: AreaStateParams,
+    mut queries: AreaEntityQueries,
     mut commands: Commands,
-    keyboard: Res<ButtonInput<KeyCode>>,
-    mut q_aux: ParamSet<(
-        Query<(Entity, &Transform, &Designation), Without<hw_core::relationships::ManagedBy>>,
-        Query<Entity, With<AreaSelectionIndicator>>,
-    )>,
-    mut area_edit_session: ResMut<AreaEditSession>,
-    mut area_edit_history: ResMut<AreaEditHistory>,
 ) {
-    if !matches!(task_context.0, TaskMode::DreamPlanting(_)) {
-        area_edit_session.dream_planting_preview_seed = None;
+    if !matches!(state.task_context.0, TaskMode::DreamPlanting(_)) {
+        state.area_edit_session.dream_planting_preview_seed = None;
     }
 
-    if ui_input_state.pointer_over_ui {
+    if input.ui_input_state.pointer_over_ui {
         return;
     }
 
-    if task_context.0 == TaskMode::None {
-        area_edit_session.active_drag = None;
+    if state.task_context.0 == TaskMode::None {
+        state.area_edit_session.active_drag = None;
         return;
     }
 
     if handle_active_drag_input(
-        &buttons,
-        &q_window,
-        &q_camera,
-        &keyboard,
-        &mut task_context,
-        &mut next_play_mode,
-        &mut q_familiars,
-        &q_sites,
-        &q_aux.p0(),
+        &mut ActiveDragCtx {
+            buttons: &input.buttons,
+            keyboard: &input.keyboard,
+            task_context: &mut state.task_context,
+            next_play_mode: &mut state.next_play_mode,
+            area_edit_session: &mut state.area_edit_session,
+            area_edit_history: &mut state.area_edit_history,
+        },
+        &input.q_window,
+        &input.q_camera,
+        &mut queries.q_familiars,
+        &queries.q_sites,
+        &queries.q_aux.p0(),
         &mut commands,
-        &mut area_edit_session,
-        &mut area_edit_history,
     ) {
         return;
     }
 
-    if buttons.just_pressed(MouseButton::Left)
+    if input.buttons.just_pressed(MouseButton::Left)
         && handle_left_just_pressed_input(
-            &mut task_context,
-            selected.0,
-            &q_familiar_areas,
-            &q_window,
-            &q_camera,
-            &mut area_edit_session,
+            &mut state.task_context,
+            state.selected.0,
+            &queries.q_familiar_areas,
+            &input.q_window,
+            &input.q_camera,
+            &mut state.area_edit_session,
         )
     {
         return;
     }
 
-    if !buttons.just_released(MouseButton::Left) {
+    if !input.buttons.just_released(MouseButton::Left) {
         return;
     }
 
-    let Some(world_pos) = world_cursor_pos(&q_window, &q_camera) else {
+    let Some(world_pos) = world_cursor_pos(&input.q_window, &input.q_camera) else {
         return;
     };
 
     handle_left_just_released_input(
-        &mut task_context,
-        selected.0,
-        world_pos,
-        &q_familiar_areas,
-        &q_sites,
-        &mut q_familiars,
-        &mut q_target_sets,
-        &mut q_aux,
-        &keyboard,
-        &mut next_play_mode,
+        &mut ReleaseCtx {
+            task_context: &mut state.task_context,
+            selected_entity: state.selected.0,
+            world_pos,
+            keyboard: &input.keyboard,
+            next_play_mode: &mut state.next_play_mode,
+            area_edit_session: &mut state.area_edit_session,
+            area_edit_history: &mut state.area_edit_history,
+        },
+        &queries.q_familiar_areas,
+        &queries.q_sites,
+        &mut queries.q_familiars,
+        &mut queries.q_target_sets,
+        &mut queries.q_aux,
         &mut commands,
-        &mut area_edit_session,
-        &mut area_edit_history,
     );
 }

@@ -5,15 +5,21 @@ use crate::theme::UiTheme;
 use bevy::math::TryStableInterpolate;
 use bevy::prelude::*;
 
-#[allow(clippy::type_complexity)]
+type TooltipTextQuery<'w, 's> =
+    Query<'w, 's, &'static mut TextColor, Or<(With<TooltipHeader>, With<TooltipBody>)>>;
+
+type TooltipProgressQuery<'w, 's> = Query<
+    'w,
+    's,
+    (&'static TooltipProgressBar, &'static mut BackgroundColor),
+    Without<HoverTooltip>,
+>;
+
 pub(crate) fn apply_fade_effects(
     tooltip_bg: &mut BackgroundColor,
     tooltip_border: &mut BorderColor,
-    q_tooltip_text: &mut Query<&mut TextColor, Or<(With<TooltipHeader>, With<TooltipBody>)>>,
-    q_tooltip_progress: &mut Query<
-        (&TooltipProgressBar, &mut BackgroundColor),
-        Without<HoverTooltip>,
-    >,
+    q_tooltip_text: &mut TooltipTextQuery<'_, '_>,
+    q_tooltip_progress: &mut TooltipProgressQuery<'_, '_>,
     fade_alpha: f32,
     theme: &UiTheme,
     fade_t: f32,

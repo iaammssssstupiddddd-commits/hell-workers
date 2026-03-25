@@ -6,6 +6,7 @@ use crate::floating_text::{
     FloatingText, FloatingTextConfig, spawn_floating_text, update_floating_text,
 };
 use crate::handles::MaterialIconHandles;
+use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use hw_core::camera::MainCamera;
 use hw_core::constants::*;
@@ -13,32 +14,39 @@ use hw_core::relationships::ParticipatingIn;
 use hw_core::soul::{DamnedSoul, DreamState, GatheringBehavior, IdleBehavior, IdleState};
 use hw_core::ui_nodes::{UiNodeRegistry, UiRoot, UiSlot};
 
-#[allow(clippy::too_many_arguments)]
-#[allow(clippy::type_complexity)]
-pub fn dream_popup_spawn_system(
-    mut commands: Commands,
-    time: Res<Time>,
-    handles: Res<MaterialIconHandles>,
-    mut ui_bubble_materials: ResMut<Assets<DreamBubbleUiMaterial>>,
-    mut q_souls: Query<(
-        &Transform,
-        &DamnedSoul,
-        &IdleState,
-        &DreamState,
-        Option<&ParticipatingIn>,
-        &mut DreamVisualState,
-    )>,
-    q_camera: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
-    q_ui_root: Query<Entity, With<UiRoot>>,
-    ui_nodes: Res<UiNodeRegistry>,
-    q_ui_transform: Query<(&ComputedNode, &UiGlobalTransform)>,
-) {
-    let dt = time.delta_secs();
+type DreamSoulsQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static Transform,
+        &'static DamnedSoul,
+        &'static IdleState,
+        &'static DreamState,
+        Option<&'static ParticipatingIn>,
+        &'static mut DreamVisualState,
+    ),
+>;
 
-    let Some((camera, camera_transform)) = q_camera.iter().next() else {
+#[derive(SystemParam)]
+pub struct DreamPopupParams<'w, 's> {
+    commands: Commands<'w, 's>,
+    time: Res<'w, Time>,
+    handles: Res<'w, MaterialIconHandles>,
+    ui_bubble_materials: ResMut<'w, Assets<DreamBubbleUiMaterial>>,
+    q_souls: DreamSoulsQuery<'w, 's>,
+    q_camera: Query<'w, 's, (&'static Camera, &'static GlobalTransform), With<MainCamera>>,
+    q_ui_root: Query<'w, 's, Entity, With<UiRoot>>,
+    ui_nodes: Res<'w, UiNodeRegistry>,
+    q_ui_transform: Query<'w, 's, (&'static ComputedNode, &'static UiGlobalTransform)>,
+}
+
+pub fn dream_popup_spawn_system(mut p: DreamPopupParams) {
+    let dt = p.time.delta_secs();
+
+    let Some((camera, camera_transform)) = p.q_camera.iter().next() else {
         return;
     };
-    let Some(ui_root) = q_ui_root.iter().next() else {
+    let Some(ui_root) = p.q_ui_root.iter().next() else {
         return;
     };
 
@@ -48,13 +56,13 @@ pub fn dream_popup_spawn_system(
 
     let mut target_pos = Vec2::new(viewport_size.x - 80.0, 40.0);
 
-    if let Some(entity) = ui_nodes.get_slot(UiSlot::DreamPoolIcon)
-        && let Ok((computed, transform)) = q_ui_transform.get(entity) {
+    if let Some(entity) = p.ui_nodes.get_slot(UiSlot::DreamPoolIcon)
+        && let Ok((computed, transform)) = p.q_ui_transform.get(entity) {
             let center = transform.translation * computed.inverse_scale_factor();
             target_pos = center;
         }
 
-    for (transform, soul, idle, _dream, participating_in, mut visual_state) in q_souls.iter_mut() {
+    for (transform, soul, idle, _dream, participating_in, mut visual_state) in p.q_souls.iter_mut() {
         let is_sleeping = idle.behavior == IdleBehavior::Sleeping
             || (idle.behavior == IdleBehavior::Gathering
                 && idle.gathering_behavior == GatheringBehavior::Sleeping
@@ -77,15 +85,15 @@ pub fn dream_popup_spawn_system(
                     + Vec3::new(0.0, DREAM_POPUP_OFFSET_Y, 0.0);
 
                 let popup_entity = spawn_floating_text(
-                    &mut commands,
+                    &mut p.commands,
                     format!("+{:.1} Dream", amount),
                     popup_pos,
                     config.clone(),
                     Some(DREAM_POPUP_FONT_SIZE),
-                    handles.font_ui.clone(),
+                    p.handles.font_ui.clone(),
                 );
 
-                commands.entity(popup_entity).insert(DreamGainPopup {
+                p.commands.entity(popup_entity).insert(DreamGainPopup {
                     floating_text: FloatingText {
                         lifetime: config.lifetime,
                         config,
@@ -94,11 +102,11 @@ pub fn dream_popup_spawn_system(
 
                 if let Ok(start_pos) = camera.world_to_viewport(camera_transform, popup_pos) {
                     super::ui_particle::spawn_ui_particle(
-                        &mut commands,
+                        &mut p.commands,
                         start_pos,
                         target_pos,
                         ui_root,
-                        &mut ui_bubble_materials,
+                        &mut p.ui_bubble_materials,
                         amount,
                     );
                 }
@@ -129,15 +137,15 @@ pub fn dream_popup_spawn_system(
                     + Vec3::new(0.0, DREAM_POPUP_OFFSET_Y, 0.0);
 
                 let popup_entity = spawn_floating_text(
-                    &mut commands,
+                    &mut p.commands,
                     "+Dream",
                     popup_pos,
                     config.clone(),
                     Some(DREAM_POPUP_FONT_SIZE),
-                    handles.font_ui.clone(),
+                    p.handles.font_ui.clone(),
                 );
 
-                commands.entity(popup_entity).insert(DreamGainPopup {
+                p.commands.entity(popup_entity).insert(DreamGainPopup {
                     floating_text: FloatingText {
                         lifetime: config.lifetime,
                         config,
@@ -146,11 +154,11 @@ pub fn dream_popup_spawn_system(
 
                 if let Ok(start_pos) = camera.world_to_viewport(camera_transform, popup_pos) {
                     super::ui_particle::spawn_ui_particle(
-                        &mut commands,
+                        &mut p.commands,
                         start_pos,
                         target_pos,
                         ui_root,
-                        &mut ui_bubble_materials,
+                        &mut p.ui_bubble_materials,
                         amount,
                     );
                 }

@@ -11,6 +11,18 @@ use crate::types::BucketStorage;
 use crate::zone::Stockpile;
 use hw_spatial::StockpileSpatialGrid;
 
+type StockpilesQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static Transform,
+        &'static Stockpile,
+        Option<&'static StoredItems>,
+        Option<&'static BucketStorage>,
+    ),
+>;
+
 /// ファミリアのTaskArea内にあるStockpileのグループ
 pub struct StockpileGroup {
     pub cells: Vec<Entity>,
@@ -37,17 +49,10 @@ fn pos_to_cell(pos: Vec2, cell_size: f32) -> (i32, i32) {
     )
 }
 
-#[allow(clippy::type_complexity)]
 pub fn build_stockpile_groups(
     stockpile_grid: &StockpileSpatialGrid,
     active_yards: &[(Entity, Yard)],
-    q_stockpiles: &Query<(
-        Entity,
-        &Transform,
-        &Stockpile,
-        Option<&StoredItems>,
-        Option<&BucketStorage>,
-    )>,
+    q_stockpiles: &StockpilesQuery,
 ) -> Vec<StockpileGroup> {
     let mut groups = Vec::new();
 

@@ -2,6 +2,7 @@
 
 use std::collections::HashMap;
 
+use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use hw_core::area::TaskArea;
 use hw_core::constants::BLUEPRINT_AUTO_GATHER_INTERVAL_SECS;
@@ -71,30 +72,43 @@ impl Default for BlueprintAutoGatherTimer {
     }
 }
 
-#[allow(clippy::too_many_arguments)]
+#[derive(SystemParam)]
+pub struct BlueprintAutoGatherParams<'w, 's> {
+    world_map: WorldMapRead<'w>,
+    pf_context: Local<'s, PathfindingContext>,
+    q_familiars: Query<
+        'w,
+        's,
+        (Entity, &'static ActiveCommand, &'static TaskArea, &'static Transform),
+    >,
+    q_yards: Query<'w, 's, (Entity, &'static Yard)>,
+    q_bp_requests:
+        Query<'w, 's, (&'static TransportRequest, &'static TargetBlueprint, Option<&'static TaskWorkers>)>,
+    q_wall_requests: Query<
+        'w,
+        's,
+        (
+            &'static TransportRequest,
+            &'static TargetWallConstructionSite,
+            Option<&'static TaskWorkers>,
+            Option<&'static TransportDemand>,
+        ),
+    >,
+    q_mixer_solid_requests: Query<
+        'w,
+        's,
+        (&'static TransportRequest, Option<&'static TaskWorkers>, Option<&'static TransportDemand>),
+    >,
+    q_blueprints: Query<'w, 's, &'static Blueprint>,
+    q_ground_items: BpGroundItemsQuery<'w, 's>,
+    q_sources: BpSourcesQuery<'w, 's>,
+}
+
 pub fn blueprint_auto_gather_system(
     mut commands: Commands,
     time: Res<Time>,
     mut timer: ResMut<BlueprintAutoGatherTimer>,
-    world_map: WorldMapRead,
-    mut pf_context: Local<PathfindingContext>,
-    q_familiars: Query<(Entity, &ActiveCommand, &TaskArea, &Transform)>,
-    q_yards: Query<(Entity, &Yard)>,
-    q_bp_requests: Query<(&TransportRequest, &TargetBlueprint, Option<&TaskWorkers>)>,
-    q_wall_requests: Query<(
-        &TransportRequest,
-        &TargetWallConstructionSite,
-        Option<&TaskWorkers>,
-        Option<&TransportDemand>,
-    )>,
-    q_mixer_solid_requests: Query<(
-        &TransportRequest,
-        Option<&TaskWorkers>,
-        Option<&TransportDemand>,
-    )>,
-    q_blueprints: Query<&Blueprint>,
-    q_ground_items: BpGroundItemsQuery,
-    q_sources: BpSourcesQuery,
+    mut p: BlueprintAutoGatherParams,
 ) {
     let timer_finished = timer.timer.tick(time.delta()).just_finished();
     if timer.first_run_done && !timer_finished {
@@ -103,19 +117,19 @@ pub fn blueprint_auto_gather_system(
     timer.first_run_done = true;
 
     let mut owner_infos = HashMap::<Entity, OwnerInfo>::new();
-    let yards: Vec<(Entity, Yard)> = q_yards
+    let yards: Vec<(Entity, Yard)> = p.q_yards
         .iter()
         .map(|(entity, yard)| (entity, yard.clone()))
         .collect();
 
-    for (fam_entity, active_command, area, transform) in q_familiars.iter() {
+    for (fam_entity, active_command, area, transform) in p.q_familiars.iter() {
         if matches!(active_command.command, FamiliarCommand::Idle) {
             continue;
         }
 
-        let start_grid = world_map
+        let start_grid = p.world_map
             .get_nearest_walkable_grid(transform.translation.truncate())
-            .or_else(|| world_map.get_nearest_walkable_grid(area.center()));
+            .or_else(|| p.world_map.get_nearest_walkable_grid(area.center()));
         let Some(path_start) = start_grid else {
             continue;
         };
@@ -138,7 +152,7 @@ pub fn blueprint_auto_gather_system(
 
     for (yard_entity, yard) in &yards {
         let yard_center = (yard.min + yard.max) / 2.0;
-        let Some(path_start) = world_map.get_nearest_walkable_grid(yard_center) else {
+        let Some(path_start) = p.world_map.get_nearest_walkable_grid(yard_center) else {
             continue;
         };
         owner_infos.insert(
@@ -154,13 +168,13 @@ pub fn blueprint_auto_gather_system(
 
     let raw_demand_by_owner = collect_raw_demand_by_owner(
         &owner_infos,
-        &q_bp_requests,
-        &q_wall_requests,
-        &q_mixer_solid_requests,
-        &q_blueprints,
+        &p.q_bp_requests,
+        &p.q_wall_requests,
+        &p.q_mixer_solid_requests,
+        &p.q_blueprints,
     );
 
-    let mut supply_state = collect_supply_state(&owner_infos, &q_ground_items, &q_sources);
+    let mut supply_state = collect_supply_state(&owner_infos, &p.q_ground_items, &p.q_sources);
 
     let plan = build_auto_gather_targets(&raw_demand_by_owner, &supply_state.supply_by_owner);
 
@@ -169,8 +183,8 @@ pub fn blueprint_auto_gather_system(
         &plan.needed_new_auto_count,
         &owner_infos,
         &supply_state.candidate_sources,
-        world_map.as_ref(),
-        &mut pf_context,
+        p.world_map.as_ref(),
+        &mut p.pf_context,
     );
 
     cleanup_auto_gather_markers(

@@ -8,13 +8,17 @@ use crate::familiar_ai::decide::task_management::{
     AssignTaskContext, FamiliarTaskAssignmentQueries, ReservationShadow,
 };
 
-#[allow(clippy::too_many_arguments)]
+#[derive(Clone, Copy)]
+pub struct TaskTarget {
+    pub work_type: WorkType,
+    pub task_pos: Vec2,
+}
+
 pub fn submit_assignment(
     ctx: &AssignTaskContext<'_>,
     queries: &mut FamiliarTaskAssignmentQueries,
     shadow: &mut ReservationShadow,
-    work_type: WorkType,
-    task_pos: Vec2,
+    target: TaskTarget,
     assigned_task: AssignedTask,
     reservation_ops: Vec<ResourceReservationOp>,
     already_commanded: bool,
@@ -25,8 +29,8 @@ pub fn submit_assignment(
         familiar_entity: ctx.fam_entity,
         worker_entity: ctx.worker_entity,
         task_entity: ctx.task_entity,
-        work_type,
-        task_pos,
+        work_type: target.work_type,
+        task_pos: target.task_pos,
         assigned_task,
         reservation_ops,
         already_commanded,
@@ -89,51 +93,29 @@ fn reserve_item_destination(
     shadow.reserve_destination(target, resource_type, 1);
 }
 
-#[allow(clippy::too_many_arguments)]
 pub(crate) fn submit_assignment_with_reservation_ops(
     ctx: &AssignTaskContext<'_>,
     queries: &mut FamiliarTaskAssignmentQueries,
     shadow: &mut ReservationShadow,
-    work_type: WorkType,
-    task_pos: Vec2,
+    target: TaskTarget,
     assigned_task: AssignedTask,
     reservation_ops: Vec<ResourceReservationOp>,
     already_commanded: bool,
 ) {
-    submit_assignment(
-        ctx,
-        queries,
-        shadow,
-        work_type,
-        task_pos,
-        assigned_task,
-        reservation_ops,
-        already_commanded,
-    );
+    submit_assignment(ctx, queries, shadow, target, assigned_task, reservation_ops, already_commanded);
 }
 
-#[allow(clippy::too_many_arguments)]
 pub(crate) fn submit_assignment_with_source_entities(
     ctx: &AssignTaskContext<'_>,
     queries: &mut FamiliarTaskAssignmentQueries,
     shadow: &mut ReservationShadow,
-    work_type: WorkType,
-    task_pos: Vec2,
+    target: TaskTarget,
     assigned_task: AssignedTask,
     source_entities: &[Entity],
     already_commanded: bool,
 ) {
     let reservation_ops = build_source_reservation_ops(source_entities);
-    submit_assignment_with_reservation_ops(
-        ctx,
-        queries,
-        shadow,
-        work_type,
-        task_pos,
-        assigned_task,
-        reservation_ops,
-        already_commanded,
-    );
+    submit_assignment_with_reservation_ops(ctx, queries, shadow, target, assigned_task, reservation_ops, already_commanded);
 }
 
 pub fn build_source_reservation_ops(sources: &[Entity]) -> Vec<ResourceReservationOp> {

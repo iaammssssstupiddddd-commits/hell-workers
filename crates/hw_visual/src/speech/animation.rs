@@ -2,18 +2,23 @@ use super::components::*;
 use bevy::prelude::*;
 use hw_core::constants::*;
 
-#[allow(clippy::type_complexity)]
+type SpeechBubblesQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static SpeechBubble,
+        &'static mut BubbleAnimation,
+        &'static mut Transform,
+        Option<&'static mut TextColor>,
+        Option<&'static Children>,
+    ),
+>;
+
 /// 吹き出しのアニメーション処理
 pub fn animate_speech_bubbles(
     time: Res<Time>,
-    mut q_bubbles: Query<(
-        Entity,
-        &SpeechBubble,
-        &mut BubbleAnimation,
-        &mut Transform,
-        Option<&mut TextColor>,
-        Option<&Children>,
-    )>,
+    mut q_bubbles: SpeechBubblesQuery,
     mut q_sprites: Query<&mut Sprite>,
 ) {
     let dt = time.delta_secs();

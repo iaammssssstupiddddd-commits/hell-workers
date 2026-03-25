@@ -1,8 +1,40 @@
+use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use hw_ui::UiIntent;
 use hw_ui::camera::MainCamera;
 use hw_ui::components::*;
 use hw_ui::theme::UiTheme;
+
+type SoulListInteractionQuery<'w, 's> = Query<
+    'w,
+    's,
+    (&'static Interaction, &'static SoulListItem),
+    (Changed<Interaction>, With<Button>, Without<FamiliarListItem>),
+>;
+
+type FamiliarListInteractionQuery<'w, 's> = Query<
+    'w,
+    's,
+    (&'static Interaction, &'static FamiliarListItem),
+    (Changed<Interaction>, With<Button>, Without<SoulListItem>),
+>;
+
+type FamiliarMaxSoulButtonQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static Interaction,
+        &'static FamiliarMaxSoulAdjustButton,
+        &'static mut BackgroundColor,
+    ),
+    (
+        Changed<Interaction>,
+        With<Button>,
+        Without<FamiliarListItem>,
+        Without<SoulListItem>,
+        Without<SectionToggle>,
+    ),
+>;
 
 mod navigation;
 mod visual {
@@ -15,6 +47,12 @@ pub use navigation::{
     entity_list_tab_focus_system, update_unassigned_arrow_icon_system,
 };
 pub use visual::{apply_row_highlight, entity_list_visual_feedback_system};
+
+#[derive(SystemParam)]
+pub struct FocusQueries<'w, 's> {
+    q_camera: Query<'w, 's, &'static mut Transform, With<MainCamera>>,
+    q_transforms: Query<'w, 's, &'static GlobalTransform>,
+}
 
 fn focus_list_entity(
     entity: Entity,
@@ -35,38 +73,12 @@ fn focus_list_entity(
 /// エンティティリストのゲーム側インタラクション
 /// （行クリック選択 + 使役数上限変更）
 /// セクション折りたたみは `entity_list_section_toggle_system` (hw_ui) が担当する
-#[allow(clippy::too_many_arguments)]
-#[allow(clippy::type_complexity)]
 pub fn entity_list_interaction_system(
-    mut soul_list_interaction: Query<
-        (&Interaction, &SoulListItem),
-        (
-            Changed<Interaction>,
-            With<Button>,
-            Without<FamiliarListItem>,
-        ),
-    >,
-    mut familiar_list_interaction: Query<
-        (&Interaction, &FamiliarListItem),
-        (Changed<Interaction>, With<Button>, Without<SoulListItem>),
-    >,
-    mut familiar_max_soul_buttons: Query<
-        (
-            &Interaction,
-            &FamiliarMaxSoulAdjustButton,
-            &mut BackgroundColor,
-        ),
-        (
-            Changed<Interaction>,
-            With<Button>,
-            Without<FamiliarListItem>,
-            Without<SoulListItem>,
-            Without<SectionToggle>,
-        ),
-    >,
+    mut soul_list_interaction: SoulListInteractionQuery<'_, '_>,
+    mut familiar_list_interaction: FamiliarListInteractionQuery<'_, '_>,
+    mut familiar_max_soul_buttons: FamiliarMaxSoulButtonQuery<'_, '_>,
     mut selected_entity: ResMut<crate::interface::selection::SelectedEntity>,
-    mut q_camera: Query<&mut Transform, With<MainCamera>>,
-    q_transforms: Query<&GlobalTransform>,
+    mut focus_queries: FocusQueries,
     mut ui_intents: MessageWriter<UiIntent>,
     theme: Res<UiTheme>,
 ) {
@@ -76,8 +88,8 @@ pub fn entity_list_interaction_system(
                 item.0,
                 "soul",
                 &mut selected_entity,
-                &mut q_camera,
-                &q_transforms,
+                &mut focus_queries.q_camera,
+                &focus_queries.q_transforms,
             );
         }
     }
@@ -88,8 +100,8 @@ pub fn entity_list_interaction_system(
                 item.0,
                 "familiar",
                 &mut selected_entity,
-                &mut q_camera,
-                &q_transforms,
+                &mut focus_queries.q_camera,
+                &focus_queries.q_transforms,
             );
         }
     }

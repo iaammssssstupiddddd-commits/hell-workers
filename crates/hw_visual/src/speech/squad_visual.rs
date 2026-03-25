@@ -7,24 +7,27 @@ use hw_core::familiar::Familiar;
 use super::components::{BubbleEmotion, BubblePriority, FamiliarBubble, SpeechBubble};
 use super::cooldown::SpeechHistory;
 use super::phrases::LatinPhrase;
-use super::spawn::spawn_familiar_bubble;
+use super::spawn::{FamiliarBubbleSpec, spawn_familiar_bubble};
 use super::voice::FamiliarVoice;
 use crate::handles::SpeechHandles;
 
-#[allow(clippy::type_complexity)]
+type FamiliarsQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static Transform,
+        Option<&'static FamiliarVoice>,
+        Option<&'static mut SpeechHistory>,
+    ),
+    With<Familiar>,
+>;
+
 /// Fatigued リリース時に Familiar の "Abi" セリフバブルを表示するビジュアルシステム
 ///
 /// ECS 操作は `hw_familiar_ai::squad_logic_system` が担当。
 pub fn squad_visual_system(
     mut request_reader: MessageReader<SquadManagementRequest>,
-    mut q_familiars: Query<
-        (
-            &Transform,
-            Option<&FamiliarVoice>,
-            Option<&mut SpeechHistory>,
-        ),
-        With<Familiar>,
-    >,
+    mut q_familiars: FamiliarsQuery,
     speech_handles: Res<SpeechHandles>,
     q_bubbles: Query<(Entity, &SpeechBubble), With<FamiliarBubble>>,
     time: Res<Time>,
@@ -39,7 +42,7 @@ pub fn squad_visual_system(
         }
 
         let fam_entity = request.familiar_entity;
-        let Ok((fam_transform, voice_opt, history_opt)) = q_familiars.get_mut(fam_entity) else {
+        let Ok((_fam_transform, voice_opt, history_opt)) = q_familiars.get_mut(fam_entity) else {
             continue;
         };
 
@@ -57,13 +60,9 @@ pub fn squad_visual_system(
         spawn_familiar_bubble(
             &mut commands,
             fam_entity,
-            LatinPhrase::Abi,
-            fam_transform.translation,
+            FamiliarBubbleSpec { phrase: LatinPhrase::Abi, emotion: BubbleEmotion::Neutral, priority: BubblePriority::Normal, voice: voice_opt },
             &speech_handles,
             &q_bubbles,
-            BubbleEmotion::Neutral,
-            BubblePriority::Normal,
-            voice_opt,
         );
 
         if let Some(mut history) = history_opt {

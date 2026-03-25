@@ -70,26 +70,53 @@ fn score_recruit(
 // RecruitmentManager
 // ──────────────────────────────────────────────────────────────────────────────
 
+/// `find_best_recruit` の検索パラメータをまとめた構造体。
+pub struct RecruitSearchSpec<'a> {
+    pub fam_pos: Vec2,
+    pub fatigue_threshold: f32,
+    pub min_fatigue: f32,
+    pub task_area_center: Option<Vec2>,
+    pub radius_opt: Option<f32>,
+    pub excluded: &'a HashSet<Entity>,
+}
+
+/// `try_immediate_recruit` のパラメータをまとめた構造体。
+pub struct ImmediateRecruitSpec<'a> {
+    pub fam_pos: Vec2,
+    pub command_radius: f32,
+    pub fatigue_threshold: f32,
+    pub task_area_center: Option<Vec2>,
+    pub excluded: &'a mut HashSet<Entity>,
+}
+
+/// `start_scouting` のパラメータをまとめた構造体。
+pub struct ScoutSpec<'a> {
+    pub fam_pos: Vec2,
+    pub fatigue_threshold: f32,
+    pub task_area_center: Option<Vec2>,
+    pub excluded: &'a mut HashSet<Entity>,
+}
+
 /// リクルート管理ユーティリティ
 pub struct RecruitmentManager;
 
 impl RecruitmentManager {
-    #[allow(clippy::too_many_arguments)]
     /// 条件に合う魂を検索する (リクルート用)
     pub fn find_best_recruit<G: SpatialGridOps>(
-        fam_pos: Vec2,
-        fatigue_threshold: f32,
-        _min_fatigue: f32,
-        task_area_center: Option<Vec2>,
+        spec: RecruitSearchSpec<'_>,
         spatial_grid: &G,
         q_souls: &SoulRecruitmentQuery,
         q_breakdown: &Query<&StressBreakdown>,
         q_resting: &Query<(), With<RestingIn>>,
         q_cooldown: &Query<&RestAreaCooldown>,
         scratch: &mut Vec<Entity>,
-        radius_opt: Option<f32>,
-        excluded: &HashSet<Entity>,
     ) -> Option<Entity> {
+        let fam_pos = spec.fam_pos;
+        let fatigue_threshold = spec.fatigue_threshold;
+        let task_area_center = spec.task_area_center;
+        let radius_opt = spec.radius_opt;
+        let excluded = spec.excluded;
+
         let filter_candidate = |e: Entity| -> Option<(Entity, Vec2, f32, f32)> {
             if excluded.contains(&e) {
                 return None;
@@ -191,71 +218,66 @@ impl RecruitmentManager {
         overall_best.map(|(entity, _)| entity)
     }
 
-    #[allow(clippy::too_many_arguments)]
     /// 即座にリクルートを試みる（近場の候補）
     ///
     /// メッセージ発行は行わない。呼び出し元が `Entity` を受け取って AddMember リクエストを発行する。
     pub fn try_immediate_recruit<G: SpatialGridOps>(
-        fam_pos: Vec2,
-        command_radius: f32,
-        fatigue_threshold: f32,
-        task_area_center: Option<Vec2>,
+        spec: ImmediateRecruitSpec<'_>,
         spatial_grid: &G,
         q_souls: &SoulRecruitmentQuery,
         q_breakdown: &Query<&StressBreakdown>,
         q_resting: &Query<(), With<RestingIn>>,
         q_cooldown: &Query<&RestAreaCooldown>,
         scratch: &mut Vec<Entity>,
-        excluded: &mut HashSet<Entity>,
     ) -> Option<Entity> {
         let recruit_entity = Self::find_best_recruit(
-            fam_pos,
-            fatigue_threshold,
-            0.0,
-            task_area_center,
+            RecruitSearchSpec {
+                fam_pos: spec.fam_pos,
+                fatigue_threshold: spec.fatigue_threshold,
+                min_fatigue: 0.0,
+                task_area_center: spec.task_area_center,
+                radius_opt: Some(spec.command_radius),
+                excluded: spec.excluded,
+            },
             spatial_grid,
             q_souls,
             q_breakdown,
             q_resting,
             q_cooldown,
             scratch,
-            Some(command_radius),
-            excluded,
         )?;
 
-        excluded.insert(recruit_entity);
+        spec.excluded.insert(recruit_entity);
         Some(recruit_entity)
     }
 
-    #[allow(clippy::too_many_arguments)]
     /// スカウトを開始する（遠方の候補を検索）
     pub fn start_scouting<G: SpatialGridOps>(
-        fam_pos: Vec2,
-        fatigue_threshold: f32,
-        task_area_center: Option<Vec2>,
+        spec: ScoutSpec<'_>,
         spatial_grid: &G,
         q_souls: &SoulRecruitmentQuery,
         q_breakdown: &Query<&StressBreakdown>,
         q_resting: &Query<(), With<RestingIn>>,
         q_cooldown: &Query<&RestAreaCooldown>,
         scratch: &mut Vec<Entity>,
-        excluded: &mut HashSet<Entity>,
     ) -> Option<Entity> {
         let result = Self::find_best_recruit(
-            fam_pos,
-            fatigue_threshold,
-            0.0,
-            task_area_center,
+            RecruitSearchSpec {
+                fam_pos: spec.fam_pos,
+                fatigue_threshold: spec.fatigue_threshold,
+                min_fatigue: 0.0,
+                task_area_center: spec.task_area_center,
+                radius_opt: None,
+                excluded: spec.excluded,
+            },
             spatial_grid,
             q_souls,
             q_breakdown,
             q_resting,
             q_cooldown,
             scratch,
-            None,
-            excluded,
         )?;
-        excluded.insert(result);
+        spec.excluded.insert(result);
         Some(result)
     }
 }
@@ -313,17 +335,19 @@ pub fn process_recruitment<G: SpatialGridOps>(
 
     if ctx.squad_entities.len() < ctx.max_workers {
         if let Some(new_recruit) = RecruitmentManager::try_immediate_recruit(
-            fam_pos,
-            command_radius,
-            fatigue_threshold,
-            task_area_center,
+            ImmediateRecruitSpec {
+                fam_pos,
+                command_radius,
+                fatigue_threshold,
+                task_area_center,
+                excluded: ctx.recruitment_reservations,
+            },
             ctx.spatial_grid,
             ctx.q_souls,
             ctx.q_breakdown,
             ctx.q_resting,
             ctx.q_cooldown,
             ctx.scratch,
-            ctx.recruitment_reservations,
         ) {
             debug!(
                 "FAM_AI: {:?} recruiting nearby soul {:?}",
@@ -332,16 +356,18 @@ pub fn process_recruitment<G: SpatialGridOps>(
             ctx.squad_entities.push(new_recruit);
             return RecruitmentOutcome::ImmediateRecruit(new_recruit);
         } else if let Some(distant_recruit) = RecruitmentManager::start_scouting(
-            fam_pos,
-            fatigue_threshold,
-            task_area_center,
+            ScoutSpec {
+                fam_pos,
+                fatigue_threshold,
+                task_area_center,
+                excluded: ctx.recruitment_reservations,
+            },
             ctx.spatial_grid,
             ctx.q_souls,
             ctx.q_breakdown,
             ctx.q_resting,
             ctx.q_cooldown,
             ctx.scratch,
-            ctx.recruitment_reservations,
         ) {
             debug!(
                 "FAM_AI: {:?} scouting distant soul {:?}",

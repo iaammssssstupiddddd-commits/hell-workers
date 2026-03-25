@@ -4,6 +4,7 @@ use crate::systems::command::TaskMode;
 use crate::systems::command::TaskModeZoneType;
 use crate::systems::logistics::{BelongsTo, Stockpile};
 use crate::world::map::{WorldMap, WorldMapWrite};
+use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use hw_core::constants::*;
@@ -13,12 +14,16 @@ use hw_world::zones::Site;
 use hw_world::zones::{AreaBounds, Yard};
 use hw_world::{area_tile_size, expand_yard_area, rectangles_overlap, rectangles_overlap_site};
 
-#[allow(clippy::too_many_arguments)]
+#[derive(SystemParam)]
+pub struct ZonePlacementInput<'w, 's> {
+    buttons: Res<'w, ButtonInput<MouseButton>>,
+    q_window: Query<'w, 's, &'static Window, With<PrimaryWindow>>,
+    q_camera: Query<'w, 's, (&'static Camera, &'static GlobalTransform), With<MainCamera>>,
+    ui_input_state: Res<'w, UiInputState>,
+}
+
 pub fn zone_placement_system(
-    buttons: Res<ButtonInput<MouseButton>>,
-    q_window: Query<&Window, With<PrimaryWindow>>,
-    q_camera: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
-    ui_input_state: Res<UiInputState>,
+    input: ZonePlacementInput,
     mut task_context: ResMut<TaskContext>,
     mut next_play_mode: ResMut<NextState<PlayMode>>,
     mut world_map: WorldMapWrite,
@@ -26,7 +31,7 @@ pub fn zone_placement_system(
     q_yards: Query<(Entity, &Yard)>,
     q_sites: Query<&Site>,
 ) {
-    if ui_input_state.pointer_over_ui {
+    if input.ui_input_state.pointer_over_ui {
         return;
     }
 
@@ -34,19 +39,19 @@ pub fn zone_placement_system(
         return;
     };
 
-    let Some(world_pos) = super::world_cursor_pos(&q_window, &q_camera) else {
+    let Some(world_pos) = super::world_cursor_pos(&input.q_window, &input.q_camera) else {
         return;
     };
     let snapped_pos = WorldMap::snap_to_grid_edge(world_pos);
 
     // 開始
-    if buttons.just_pressed(MouseButton::Left) {
+    if input.buttons.just_pressed(MouseButton::Left) {
         task_context.0 = TaskMode::ZonePlacement(zone_type, Some(snapped_pos));
         return;
     }
 
     // 確定
-    if buttons.just_released(MouseButton::Left) {
+    if input.buttons.just_released(MouseButton::Left) {
         if let Some(start_pos) = start_pos_opt {
             let area = AreaBounds::from_points(start_pos, snapped_pos);
             if matches!(zone_type, TaskModeZoneType::Stockpile)
@@ -73,7 +78,7 @@ pub fn zone_placement_system(
     }
 
     // キャンセル (右クリック)
-    if buttons.just_pressed(MouseButton::Right) {
+    if input.buttons.just_pressed(MouseButton::Right) {
         task_context.0 = TaskMode::None;
         next_play_mode.set(PlayMode::Normal);
     }

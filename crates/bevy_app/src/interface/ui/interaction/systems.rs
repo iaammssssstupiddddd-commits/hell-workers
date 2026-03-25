@@ -6,6 +6,7 @@ use crate::entities::familiar::{Familiar, FamiliarOperation};
 use crate::systems::command::TaskMode;
 use crate::systems::jobs::{Door, DoorState, apply_door_state};
 use crate::world::map::WorldMapWrite;
+use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use bevy::ui::RelativeCursorPosition;
 use hw_core::game_state::PlayMode;
@@ -48,18 +49,29 @@ pub fn update_ui_input_state_system(
     ui_input_state.pointer_over_ui = pointer_over_blocker || pointer_over_button;
 }
 
-#[allow(clippy::too_many_arguments)]
+#[derive(SystemParam)]
+pub struct KeyboardModeCtx<'w> {
+    menu_state: ResMut<'w, MenuState>,
+    next_play_mode: ResMut<'w, NextState<PlayMode>>,
+    build_context: ResMut<'w, BuildContext>,
+    zone_context: ResMut<'w, ZoneContext>,
+    task_context: ResMut<'w, TaskContext>,
+}
+
 pub fn ui_keyboard_shortcuts_system(
     keyboard: Res<ButtonInput<KeyCode>>,
-    mut menu_state: ResMut<MenuState>,
-    mut next_play_mode: ResMut<NextState<PlayMode>>,
-    mut build_context: ResMut<BuildContext>,
-    mut zone_context: ResMut<ZoneContext>,
-    mut task_context: ResMut<TaskContext>,
+    mode_ctx: KeyboardModeCtx,
     mut time: ResMut<Time<Virtual>>,
     play_mode: Res<State<PlayMode>>,
     mut companion_state: ResMut<CompanionPlacementState>,
 ) {
+    let KeyboardModeCtx {
+        mut menu_state,
+        mut next_play_mode,
+        mut build_context,
+        mut zone_context,
+        mut task_context,
+    } = mode_ctx;
     // メニュートグル
     if keyboard.just_pressed(KeyCode::KeyB) {
         mode::toggle_menu_and_reset_mode(

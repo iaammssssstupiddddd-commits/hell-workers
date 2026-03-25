@@ -7,7 +7,7 @@ mod wheelbarrow_haul;
 pub use basic::*;
 pub use haul::*;
 pub use submit::{
-    build_mixer_destination_reservation_ops, build_source_reservation_ops,
+    TaskTarget, build_mixer_destination_reservation_ops, build_source_reservation_ops,
     build_wheelbarrow_reservation_ops, submit_assignment,
 };
 pub(crate) use submit::{

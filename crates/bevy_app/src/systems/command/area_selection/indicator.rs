@@ -10,6 +10,7 @@ use crate::systems::jobs::Tree;
 use crate::systems::logistics::ResourceItem;
 use crate::systems::visual::task_area_visual::TaskAreaMaterial;
 use crate::world::map::{WorldMap, WorldMapRead};
+use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use hw_core::area::{get_drag_start, wall_line_area};
@@ -17,11 +18,17 @@ use hw_core::constants::{TILE_SIZE, Z_DREAM_TREE_PREVIEW};
 use hw_ui::camera::{MainCamera, world_cursor_pos};
 use hw_world::zones::{Site, Yard};
 
-#[allow(clippy::too_many_arguments)]
+#[derive(SystemParam)]
+pub struct IndicatorInputQueries<'w, 's> {
+    task_context: Res<'w, TaskContext>,
+    q_camera: Query<'w, 's, (&'static Camera, &'static GlobalTransform), With<MainCamera>>,
+    q_window: Query<'w, 's, &'static Window, With<PrimaryWindow>>,
+    q_yards: Query<'w, 's, (Entity, &'static Yard)>,
+    q_sites: Query<'w, 's, &'static Site>,
+}
+
 pub fn area_selection_indicator_system(
-    task_context: Res<TaskContext>,
-    q_camera: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
-    q_window: Query<&Window, With<PrimaryWindow>>,
+    ctx: IndicatorInputQueries,
     mut q_indicator: Query<
         (
             &mut Transform,
@@ -33,15 +40,13 @@ pub fn area_selection_indicator_system(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<TaskAreaMaterial>>,
-    q_yards: Query<(Entity, &Yard)>,
-    q_sites: Query<&Site>,
 ) {
-    let drag_start = get_drag_start(task_context.0);
+    let drag_start = get_drag_start(ctx.task_context.0);
 
     if let Some(start_pos) = drag_start
-        && let Some(world_pos) = world_cursor_pos(&q_window, &q_camera)
+        && let Some(world_pos) = world_cursor_pos(&ctx.q_window, &ctx.q_camera)
     {
-        let area = match task_context.0 {
+        let area = match ctx.task_context.0 {
             TaskMode::WallPlace(_) => {
                 let end_pos = WorldMap::snap_to_grid_edge(world_pos);
                 wall_line_area(start_pos, end_pos)
@@ -64,26 +69,26 @@ pub fn area_selection_indicator_system(
             }
         };
         let area_bounds = area.bounds();
-        let is_area_valid = match task_context.0 {
+        let is_area_valid = match ctx.task_context.0 {
             TaskMode::ZonePlacement(TaskModeZoneType::Stockpile, _) => {
                 crate::systems::command::zone_placement::is_stockpile_area_within_yards(
                     &area_bounds,
-                    &q_yards,
+                    &ctx.q_yards,
                 )
             }
             TaskMode::ZonePlacement(TaskModeZoneType::Yard, Some(start_pos)) => {
                 crate::systems::command::zone_placement::is_yard_expansion_area_valid(
                     start_pos,
                     &area_bounds,
-                    &q_sites,
-                    &q_yards,
+                    &ctx.q_sites,
+                    &ctx.q_yards,
                 )
             }
             _ => true,
         };
         let center = area.center();
         let size = area.size();
-        let color = super::geometry::get_indicator_color(task_context.0, is_area_valid);
+        let color = super::geometry::get_indicator_color(ctx.task_context.0, is_area_valid);
 
         if let Some((mut transform, material_handle, mut visibility)) =
             q_indicator.iter_mut().next()
@@ -127,31 +132,35 @@ fn clear_dream_tree_preview_markers(
     }
 }
 
-#[allow(clippy::too_many_arguments)]
+#[derive(SystemParam)]
+pub struct DreamPreviewInput<'w, 's> {
+    task_context: Res<'w, TaskContext>,
+    area_edit_session: Res<'w, AreaEditSession>,
+    q_camera: Query<'w, 's, (&'static Camera, &'static GlobalTransform), With<MainCamera>>,
+    q_window: Query<'w, 's, &'static Window, With<PrimaryWindow>>,
+    world_map: WorldMapRead<'w>,
+    dream_pool: Res<'w, DreamPool>,
+    game_assets: Res<'w, GameAssets>,
+}
+
 pub fn dream_tree_planting_preview_system(
     mut commands: Commands,
-    task_context: Res<TaskContext>,
-    area_edit_session: Res<AreaEditSession>,
-    q_camera: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
-    q_window: Query<&Window, With<PrimaryWindow>>,
-    world_map: WorldMapRead,
-    dream_pool: Res<DreamPool>,
-    game_assets: Res<GameAssets>,
+    preview: DreamPreviewInput,
     q_trees: Query<&Transform, With<Tree>>,
     q_items: Query<&Transform, With<ResourceItem>>,
     q_preview_markers: Query<Entity, With<DreamTreePreviewIndicator>>,
 ) {
-    let TaskMode::DreamPlanting(Some(start_pos)) = task_context.0 else {
+    let TaskMode::DreamPlanting(Some(start_pos)) = preview.task_context.0 else {
         clear_dream_tree_preview_markers(&mut commands, &q_preview_markers);
         return;
     };
 
-    let Some(world_pos) = world_cursor_pos(&q_window, &q_camera) else {
+    let Some(world_pos) = world_cursor_pos(&preview.q_window, &preview.q_camera) else {
         clear_dream_tree_preview_markers(&mut commands, &q_preview_markers);
         return;
     };
 
-    if game_assets.trees.is_empty() {
+    if preview.game_assets.trees.is_empty() {
         clear_dream_tree_preview_markers(&mut commands, &q_preview_markers);
         return;
     }
@@ -159,7 +168,7 @@ pub fn dream_tree_planting_preview_system(
     let end_pos = WorldMap::snap_to_grid_center(world_pos);
     let (sx, sy) = WorldMap::world_to_grid(start_pos);
     let (ex, ey) = WorldMap::world_to_grid(end_pos);
-    let seed = area_edit_session.dream_planting_preview_seed.unwrap_or(
+    let seed = preview.area_edit_session.dream_planting_preview_seed.unwrap_or(
         (sx as i64 as u64).wrapping_mul(73_856_093)
             ^ (sy as i64 as u64).wrapping_mul(19_349_663)
             ^ (ex as i64 as u64).wrapping_mul(83_492_791)
@@ -170,8 +179,8 @@ pub fn dream_tree_planting_preview_system(
         start_pos,
         end_pos,
         seed,
-        world_map.as_ref(),
-        dream_pool.points,
+        preview.world_map.as_ref(),
+        preview.dream_pool.points,
         q_trees.iter().count() as u32,
         &q_items,
     );
@@ -181,12 +190,12 @@ pub fn dream_tree_planting_preview_system(
     for (index, (gx, gy)) in plan.selected_tiles.iter().copied().enumerate() {
         let pos = WorldMap::grid_to_world(gx, gy);
         let variant_seed = seed.wrapping_add(index as u64 * 7_919);
-        let variant_index = (variant_seed as usize) % game_assets.trees.len();
+        let variant_index = (variant_seed as usize) % preview.game_assets.trees.len();
 
         commands.spawn((
             DreamTreePreviewIndicator,
             Sprite {
-                image: game_assets.trees[variant_index].clone(),
+                image: preview.game_assets.trees[variant_index].clone(),
                 color: Color::srgba(0.60, 0.90, 1.0, 0.50),
                 custom_size: Some(Vec2::splat(TILE_SIZE * 1.4)),
                 ..default()

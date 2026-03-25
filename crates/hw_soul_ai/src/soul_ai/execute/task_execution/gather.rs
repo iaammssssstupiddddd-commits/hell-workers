@@ -12,17 +12,26 @@ use hw_jobs::{Designation, WorkType};
 use hw_logistics::ResourceItem;
 use hw_world::WorldMap;
 
-#[allow(clippy::too_many_arguments)]
+/// `handle_gather_task` のタスク引数をまとめた構造体。
+pub struct GatherTaskArgs<'a> {
+    pub target: Entity,
+    pub work_type: &'a WorkType,
+    pub phase: GatherPhase,
+}
+
 pub fn handle_gather_task(
     ctx: &mut TaskExecutionContext,
-    target: Entity,
-    work_type: &WorkType,
-    phase: GatherPhase,
+    args: GatherTaskArgs<'_>,
     commands: &mut Commands,
     soul_handles: &SoulTaskHandles,
     time: &Res<Time>,
     world_map: &WorldMap,
 ) {
+    let GatherTaskArgs {
+        target,
+        work_type,
+        phase,
+    } = args;
     let soul_pos = ctx.soul_pos();
     let q_targets = &ctx.queries.designation.targets;
     match phase {

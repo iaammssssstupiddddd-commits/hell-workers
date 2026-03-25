@@ -1,4 +1,5 @@
 use crate::task_area_visual::TaskAreaMaterial;
+use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use bevy::sprite_render::MeshMaterial2d;
 use hw_core::constants::Z_SELECTION;
@@ -10,40 +11,41 @@ pub struct SiteYardBoundaryVisual;
 const SITE_BOUNDARY_COLOR: LinearRgba = LinearRgba::new(0.62, 0.58, 0.49, 0.85);
 const YARD_BOUNDARY_COLOR: LinearRgba = LinearRgba::new(0.28, 0.88, 0.95, 0.85);
 
-#[allow(clippy::too_many_arguments)]
-pub fn sync_site_yard_boundaries_system(
-    mut commands: Commands,
-    q_existing: Query<Entity, With<SiteYardBoundaryVisual>>,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<TaskAreaMaterial>>,
-    q_sites: Query<&Site>,
-    q_yards: Query<&Yard>,
-    q_sites_changed: Query<Entity, (With<Site>, Changed<Site>)>,
-    q_yards_changed: Query<Entity, (With<Yard>, Changed<Yard>)>,
-) {
-    if q_sites_changed.is_empty() && q_yards_changed.is_empty() {
+#[derive(SystemParam)]
+pub struct SiteYardParams<'w, 's> {
+    q_existing: Query<'w, 's, Entity, With<SiteYardBoundaryVisual>>,
+    meshes: ResMut<'w, Assets<Mesh>>,
+    materials: ResMut<'w, Assets<TaskAreaMaterial>>,
+    q_sites: Query<'w, 's, &'static Site>,
+    q_yards: Query<'w, 's, &'static Yard>,
+    q_sites_changed: Query<'w, 's, Entity, (With<Site>, Changed<Site>)>,
+    q_yards_changed: Query<'w, 's, Entity, (With<Yard>, Changed<Yard>)>,
+}
+
+pub fn sync_site_yard_boundaries_system(mut commands: Commands, mut p: SiteYardParams) {
+    if p.q_sites_changed.is_empty() && p.q_yards_changed.is_empty() {
         return;
     }
 
-    for visual in q_existing.iter() {
+    for visual in p.q_existing.iter() {
         commands.entity(visual).despawn();
     }
 
-    for site in q_sites.iter() {
+    for site in p.q_sites.iter() {
         spawn_boundary_visual(
             &mut commands,
-            &mut meshes,
-            &mut materials,
+            &mut p.meshes,
+            &mut p.materials,
             &site.bounds(),
             SITE_BOUNDARY_COLOR,
         );
     }
 
-    for yard in q_yards.iter() {
+    for yard in p.q_yards.iter() {
         spawn_boundary_visual(
             &mut commands,
-            &mut meshes,
-            &mut materials,
+            &mut p.meshes,
+            &mut p.materials,
             &yard.bounds(),
             YARD_BOUNDARY_COLOR,
         );

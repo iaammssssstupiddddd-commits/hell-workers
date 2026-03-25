@@ -34,12 +34,14 @@ pub fn handle_haul_to_blueprint_task(
         let soul_pos = ctx.soul_transform.translation.truncate();
         crate::soul_ai::helpers::work::cleanup_task_assignment(
             commands,
-            ctx.soul_entity,
-            soul_pos,
+            crate::soul_ai::helpers::work::SoulDropCtx {
+                soul_entity: ctx.soul_entity,
+                drop_pos: soul_pos,
+                inventory: Some(ctx.inventory),
+                dropped_item_res: None,
+            },
             ctx.task,
             ctx.path,
-            Some(ctx.inventory),
-            None, // アイテムを拾う前なのでNone
             ctx.queries,
             world_map,
             true, // 失敗時はセリフを出す
@@ -65,11 +67,13 @@ pub fn handle_haul_to_blueprint_task(
                 if is_near {
                     if !try_pickup_item(
                         commands,
-                        ctx.soul_entity,
-                        item_entity,
+                        PickupLocations {
+                            soul_entity: ctx.soul_entity,
+                            item_entity,
+                            soul_pos,
+                            item_pos,
+                        },
                         ctx.inventory,
-                        soul_pos,
-                        item_pos,
                         ctx.task,
                         ctx.path,
                     ) {
@@ -157,12 +161,14 @@ pub fn handle_haul_to_blueprint_task(
                     .and_then(|(_, _, _, _, ri, _, _)| ri.map(|r| r.0));
                 crate::soul_ai::helpers::work::cleanup_task_assignment(
                     commands,
-                    ctx.soul_entity,
-                    soul_pos,
+                    crate::soul_ai::helpers::work::SoulDropCtx {
+                        soul_entity: ctx.soul_entity,
+                        drop_pos: soul_pos,
+                        inventory: Some(ctx.inventory),
+                        dropped_item_res: dropped_res,
+                    },
                     ctx.task,
                     ctx.path,
-                    Some(ctx.inventory),
-                    dropped_res,
                     ctx.queries,
                     world_map,
                     true,

@@ -7,22 +7,23 @@ use bevy::ui_widgets::popover::{Popover, PopoverAlign, PopoverPlacement, Popover
 
 use super::target::TooltipTarget;
 
-#[allow(clippy::type_complexity)]
+type UiTooltipButtonsQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static Interaction,
+        &'static UiTooltip,
+        Option<&'static MenuButton>,
+        &'static ComputedNode,
+        &'static UiGlobalTransform,
+    ),
+    With<Button>,
+>;
+
 #[derive(SystemParam)]
 pub struct TooltipUiLayoutQueryParam<'w, 's> {
-    pub q_ui_tooltip_buttons: Query<
-        'w,
-        's,
-        (
-            Entity,
-            &'static Interaction,
-            &'static UiTooltip,
-            Option<&'static MenuButton>,
-            &'static ComputedNode,
-            &'static UiGlobalTransform,
-        ),
-        With<Button>,
-    >,
+    pub q_ui_tooltip_buttons: UiTooltipButtonsQuery<'w, 's>,
     pub q_speed_buttons: Query<'w, 's, (), With<SpeedButtonMarker>>,
     pub q_layout: Query<'w, 's, (&'static ComputedNode, &'static UiGlobalTransform)>,
     pub q_architect_submenu:
@@ -63,19 +64,8 @@ fn is_menu_toggle_action(action: MenuAction) -> bool {
     )
 }
 
-#[allow(clippy::type_complexity)]
 pub(crate) fn resolve_toggle_span_x(
-    q_ui_tooltip_buttons: &Query<
-        (
-            Entity,
-            &Interaction,
-            &UiTooltip,
-            Option<&MenuButton>,
-            &ComputedNode,
-            &UiGlobalTransform,
-        ),
-        With<Button>,
-    >,
+    q_ui_tooltip_buttons: &UiTooltipButtonsQuery<'_, '_>,
 ) -> Option<(f32, f32)> {
     let mut min_x = f32::MAX;
     let mut max_x = f32::MIN;

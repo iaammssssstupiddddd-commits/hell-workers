@@ -11,37 +11,46 @@ use crate::transport_request::{
 };
 use crate::types::{ReservedForTask, ResourceItem, Wheelbarrow};
 
+type LeaseRequestsQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static TransportRequest,
+        &'static TransportRequestState,
+        &'static TransportDemand,
+        &'static Transform,
+        Option<&'static WheelbarrowLease>,
+        Option<&'static WheelbarrowPendingSince>,
+        Option<&'static ManualTransportRequest>,
+    ),
+>;
+
+type FreeItemsQuery<'w, 's> = Query<
+    'w,
+    's,
+    (Entity, &'static Transform, &'static Visibility, &'static ResourceItem),
+    (
+        Without<Designation>,
+        Without<hw_core::relationships::TaskWorkers>,
+        Without<ReservedForTask>,
+        Without<ManualHaulPinnedSource>,
+    ),
+>;
+
+type WheelbarrowsQuery<'w, 's> =
+    Query<'w, 's, (Entity, &'static Transform), (With<Wheelbarrow>, With<ParkedAt>, Without<PushedBy>)>;
+
 pub(super) struct LeaseStateUpdate {
     pub(super) used_wheelbarrows: HashSet<Entity>,
     pub(super) cleared_requests: HashSet<Entity>,
 }
 
-#[allow(clippy::type_complexity)]
 pub(super) fn update_lease_state(
     commands: &mut Commands,
-    q_requests: &Query<(
-        Entity,
-        &TransportRequest,
-        &TransportRequestState,
-        &TransportDemand,
-        &Transform,
-        Option<&WheelbarrowLease>,
-        Option<&WheelbarrowPendingSince>,
-        Option<&ManualTransportRequest>,
-    )>,
-    q_free_items: &Query<
-        (Entity, &Transform, &Visibility, &ResourceItem),
-        (
-            Without<Designation>,
-            Without<hw_core::relationships::TaskWorkers>,
-            Without<ReservedForTask>,
-            Without<ManualHaulPinnedSource>,
-        ),
-    >,
-    q_wheelbarrows: &Query<
-        (Entity, &Transform),
-        (With<Wheelbarrow>, With<ParkedAt>, Without<PushedBy>),
-    >,
+    q_requests: &LeaseRequestsQuery,
+    q_free_items: &FreeItemsQuery,
+    q_wheelbarrows: &WheelbarrowsQuery,
     now: f64,
 ) -> LeaseStateUpdate {
     let mut used_wheelbarrows = HashSet::new();

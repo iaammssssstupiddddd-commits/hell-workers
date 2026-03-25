@@ -71,11 +71,13 @@ pub fn handle_haul_task(
                         }
                         if !try_pickup_item(
                             commands,
-                            ctx.soul_entity,
-                            item,
+                            PickupLocations {
+                                soul_entity: ctx.soul_entity,
+                                item_entity: item,
+                                soul_pos,
+                                item_pos: res_pos,
+                            },
                             ctx.inventory,
-                            soul_pos,
-                            res_pos,
                             ctx.task,
                             ctx.path,
                         ) {

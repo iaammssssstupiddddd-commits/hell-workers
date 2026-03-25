@@ -3,6 +3,7 @@ use crate::app_contexts::{
 };
 use crate::systems::jobs::{Blueprint, Building, BuildingType};
 use crate::world::map::{RIVER_Y_MIN, WorldMap, WorldMapRead, WorldMapRef};
+use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use hw_core::constants::TILE_SIZE;
 use hw_core::game_state::PlayMode;
@@ -57,23 +58,46 @@ type PartnerGhostQuery<'w, 's> = Query<
     (With<PlacementPartnerGhost>, Without<PlacementGhost>),
 >;
 
-#[allow(clippy::too_many_arguments)]
+#[derive(SystemParam)]
+pub struct GhostInputState<'w, 's> {
+    pub play_mode: Res<'w, State<PlayMode>>,
+    pub build_context: Res<'w, BuildContext>,
+    pub companion_state: Res<'w, CompanionPlacementState>,
+    pub game_assets: Res<'w, crate::assets::GameAssets>,
+    pub q_window: Query<'w, 's, &'static Window, With<bevy::window::PrimaryWindow>>,
+    pub q_camera: Query<'w, 's, (&'static Camera, &'static GlobalTransform), With<MainCamera>>,
+}
+
+#[derive(SystemParam)]
+pub struct GhostValidationQueries<'w, 's> {
+    pub q_buildings: Query<'w, 's, &'static Building>,
+    pub q_blueprints: Query<'w, 's, &'static Blueprint>,
+    pub q_sites: Query<'w, 's, &'static Site>,
+    pub q_yards: Query<'w, 's, &'static Yard>,
+}
+
 pub fn placement_ghost_system(
     mut commands: Commands,
-    play_mode: Res<State<PlayMode>>,
-    build_context: Res<BuildContext>,
-    companion_state: Res<CompanionPlacementState>,
+    input_state: GhostInputState,
+    world_map: WorldMapRead,
+    validation_queries: GhostValidationQueries,
     mut q_ghost: Query<(Entity, &mut Transform, &mut Sprite), With<PlacementGhost>>,
     mut q_partner_ghost: PartnerGhostQuery,
-    q_window: Query<&Window, With<bevy::window::PrimaryWindow>>,
-    q_camera: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
-    game_assets: Res<crate::assets::GameAssets>,
-    world_map: WorldMapRead,
-    q_buildings: Query<&Building>,
-    q_blueprints: Query<&Blueprint>,
-    q_sites: Query<&Site>,
-    q_yards: Query<&Yard>,
 ) {
+    let GhostInputState {
+        play_mode,
+        build_context,
+        companion_state,
+        game_assets,
+        q_window,
+        q_camera,
+    } = input_state;
+    let GhostValidationQueries {
+        q_buildings,
+        q_blueprints,
+        q_sites,
+        q_yards,
+    } = validation_queries;
     // 建築モード以外ならゴーストを削除して終了
     if *play_mode.get() != PlayMode::BuildingPlace {
         for (entity, _, _) in q_ghost.iter() {

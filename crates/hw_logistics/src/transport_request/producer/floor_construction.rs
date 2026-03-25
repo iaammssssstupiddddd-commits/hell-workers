@@ -20,7 +20,22 @@ use std::collections::HashMap;
 use std::time::Instant;
 
 use crate::transport_request::{TransportRequest, TransportRequestKind, TransportRequestMetrics};
+use crate::transport_request::producer::{ConstructionDeliverySpec, RequestSyncSpec};
 use crate::types::{ResourceItem, ResourceType};
+
+type FloorTileImmutQuery<'w, 's> = Query<'w, 's, (Entity, &'static FloorTileBlueprint)>;
+type FloorTileMutQuery<'w, 's> = Query<'w, 's, &'static mut FloorTileBlueprint>;
+type FloorResourcesQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static Transform,
+        &'static Visibility,
+        &'static ResourceItem,
+        Option<&'static hw_core::relationships::StoredIn>,
+    ),
+>;
 
 mod designation;
 pub use designation::floor_tile_designation_system;
@@ -132,9 +147,11 @@ pub fn floor_construction_auto_haul_system(
         &mut commands,
         &q_floor_requests,
         &desired_requests,
-        TransportRequestKind::DeliverToFloorConstruction,
-        "TransportRequest::DeliverToFloorConstruction",
-        TransportRequestKind::DeliverToFloorConstruction,
+        RequestSyncSpec {
+            expected_kind: TransportRequestKind::DeliverToFloorConstruction,
+            request_name: "TransportRequest::DeliverToFloorConstruction",
+            request_kind: TransportRequestKind::DeliverToFloorConstruction,
+        },
         |target| target.0,
         TargetFloorConstructionSite,
         |_| FLOOR_CONSTRUCTION_PRIORITY,
@@ -146,21 +163,11 @@ pub fn floor_construction_auto_haul_system(
 /// `DeliverToFloorConstruction` requests drop items near `site.material_center`.
 /// This system binds those items to waiting tiles (by incrementing `*_delivered`) and
 /// despawns consumed items so each resource is counted exactly once.
-#[allow(clippy::type_complexity)]
 pub fn floor_material_delivery_sync_system(
     mut commands: Commands,
     q_sites: Query<(Entity, &FloorConstructionSite)>,
-    mut q_tiles: ParamSet<(
-        Query<(Entity, &FloorTileBlueprint)>,
-        Query<&mut FloorTileBlueprint>,
-    )>,
-    q_resources: Query<(
-        Entity,
-        &Transform,
-        &Visibility,
-        &ResourceItem,
-        Option<&hw_core::relationships::StoredIn>,
-    )>,
+    mut q_tiles: ParamSet<(FloorTileImmutQuery, FloorTileMutQuery)>,
+    q_resources: FloorResourcesQuery,
     resource_grid: Res<ResourceSpatialGrid>,
     mut nearby_buf: Local<Vec<Entity>>,
     mut metrics: ResMut<TransportRequestMetrics>,
@@ -198,16 +205,18 @@ pub fn floor_material_delivery_sync_system(
             let mut q_tiles_write = q_tiles.p1();
             super::sync_construction_delivery(
                 &mut commands,
-                site_entity,
-                site.material_center,
-                target_resource,
-                required_amount,
-                pickup_radius,
-                &resource_grid,
+                ConstructionDeliverySpec {
+                    site_entity,
+                    site_pos: site.material_center,
+                    target_resource,
+                    required_amount,
+                    pickup_radius,
+                    resource_grid: &resource_grid,
+                    scratch: &mut nearby_buf,
+                    resources_scanned: &mut resources_scanned,
+                    tiles_by_site: &tiles_by_site,
+                },
                 &q_resources,
-                &mut nearby_buf,
-                &mut resources_scanned,
-                &tiles_by_site,
                 &mut q_tiles_write,
                 |tile: &FloorTileBlueprint| tile.state == waiting_state,
                 |tile: &mut FloorTileBlueprint| match site.phase {

@@ -125,11 +125,13 @@ pub fn handle(
     if common::can_pickup_item(soul_pos, bucket_pos) {
         if !common::try_pickup_item(
             commands,
-            ctx.soul_entity,
-            bucket_entity,
+            common::PickupLocations {
+                soul_entity: ctx.soul_entity,
+                item_entity: bucket_entity,
+                soul_pos,
+                item_pos: bucket_pos,
+            },
             ctx.inventory,
-            soul_pos,
-            bucket_pos,
             ctx.task,
             ctx.path,
         ) {

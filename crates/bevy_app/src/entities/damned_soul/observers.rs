@@ -95,12 +95,14 @@ pub fn on_stress_breakdown(
         if !matches!(*task, AssignedTask::None) {
             unassign_task(
                 &mut commands,
-                entity,
-                transform.translation.truncate(),
+                hw_soul_ai::SoulDropCtx {
+                    soul_entity: entity,
+                    drop_pos: transform.translation.truncate(),
+                    inventory: inventory_opt.as_deref_mut(),
+                    dropped_item_res: None,
+                },
                 &mut task,
                 &mut path,
-                inventory_opt.as_deref_mut(),
-                None,
                 &mut queries,
                 world_map.as_ref(),
                 true,
@@ -145,12 +147,14 @@ pub fn on_exhausted(
         if !matches!(*task, AssignedTask::None) {
             unassign_task(
                 &mut commands,
-                entity,
-                transform.translation.truncate(),
+                hw_soul_ai::SoulDropCtx {
+                    soul_entity: entity,
+                    drop_pos: transform.translation.truncate(),
+                    inventory: inventory_opt.as_deref_mut(),
+                    dropped_item_res: None,
+                },
                 &mut task,
                 &mut path,
-                inventory_opt.as_deref_mut(),
-                None,
                 &mut queries,
                 world_map.as_ref(),
                 true,

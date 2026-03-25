@@ -1,5 +1,6 @@
 //! Task area auto-haul system
 
+use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use std::collections::{HashMap, HashSet};
 use std::time::Instant;
@@ -199,25 +200,29 @@ fn pick_representative_resource_type_per_group(
     (representative_types, free_items_scanned, items_matched)
 }
 
-#[allow(clippy::too_many_arguments)]
-pub fn task_area_auto_haul_system(
-    mut commands: Commands,
-    stockpile_grid: Res<StockpileSpatialGrid>,
-    q_yards: Query<(Entity, &Yard)>,
-    q_stockpiles: StockpilesQuery,
-    q_stockpiles_detail: StockpilesDetailQuery,
-    q_stockpile_requests: Query<
-        (Entity, &TransportRequest, Option<&TaskWorkers>),
+/// `task_area_auto_haul_system` の ECS クエリ・リソースをまとめた SystemParam。
+#[derive(SystemParam)]
+pub struct TaskAreaAutoHaulParams<'w, 's> {
+    pub stockpile_grid: Res<'w, StockpileSpatialGrid>,
+    pub q_yards: Query<'w, 's, (Entity, &'static Yard)>,
+    pub q_stockpiles: StockpilesQuery<'w, 's>,
+    pub q_stockpiles_detail: StockpilesDetailQuery<'w, 's>,
+    pub q_stockpile_requests: Query<
+        'w,
+        's,
+        (Entity, &'static TransportRequest, Option<&'static TaskWorkers>),
         Without<ManualTransportRequest>,
     >,
-    q_free_items: FreeItemsQuery,
-    mut metrics: ResMut<TransportRequestMetrics>,
-) {
+    pub q_free_items: FreeItemsQuery<'w, 's>,
+    pub metrics: ResMut<'w, TransportRequestMetrics>,
+}
+
+pub fn task_area_auto_haul_system(mut commands: Commands, mut p: TaskAreaAutoHaulParams) {
     let started_at = Instant::now();
 
     let mut in_flight = HashMap::<(Entity, ResourceType), usize>::new();
 
-    for (_, req, workers_opt) in q_stockpile_requests.iter() {
+    for (_, req, workers_opt) in p.q_stockpile_requests.iter() {
         if matches!(req.kind, TransportRequestKind::DepositToStockpile) {
             let count = workers_opt.map(|w| w.len()).unwrap_or(0);
             if count > 0 {
@@ -228,17 +233,17 @@ pub fn task_area_auto_haul_system(
         }
     }
 
-    let active_yards: Vec<(Entity, Yard)> = q_yards.iter().map(|(e, a)| (e, a.clone())).collect();
+    let active_yards: Vec<(Entity, Yard)> = p.q_yards.iter().map(|(e, a)| (e, a.clone())).collect();
 
-    let groups = build_stockpile_groups(&stockpile_grid, &active_yards, &q_stockpiles);
+    let groups = build_stockpile_groups(&p.stockpile_grid, &active_yards, &p.q_stockpiles);
     let group_spatial_index = build_group_spatial_index(&groups, &active_yards);
-    let group_contexts = build_group_eval_contexts(&groups, &q_stockpiles_detail);
+    let group_contexts = build_group_eval_contexts(&groups, &p.q_stockpiles_detail);
     let (group_resource_types, free_items_scanned, items_matched) =
         pick_representative_resource_type_per_group(
             &groups,
             &group_spatial_index,
             &group_contexts,
-            &q_free_items,
+            &p.q_free_items,
         );
 
     let mut desired_requests =
@@ -268,7 +273,7 @@ pub fn task_area_auto_haul_system(
     }
 
     let mut seen = std::collections::HashSet::new();
-    for (req_entity, req, workers_opt) in q_stockpile_requests.iter() {
+    for (req_entity, req, workers_opt) in p.q_stockpile_requests.iter() {
         if !matches!(req.kind, TransportRequestKind::DepositToStockpile) {
             continue;
         }
@@ -343,8 +348,8 @@ pub fn task_area_auto_haul_system(
         ));
     }
 
-    metrics.task_area_groups = groups.len() as u32;
-    metrics.task_area_free_items_scanned = free_items_scanned;
-    metrics.task_area_items_matched = items_matched;
-    metrics.task_area_elapsed_ms = started_at.elapsed().as_secs_f32() * 1000.0;
+    p.metrics.task_area_groups = groups.len() as u32;
+    p.metrics.task_area_free_items_scanned = free_items_scanned;
+    p.metrics.task_area_items_matched = items_matched;
+    p.metrics.task_area_elapsed_ms = started_at.elapsed().as_secs_f32() * 1000.0;
 }

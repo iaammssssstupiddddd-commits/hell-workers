@@ -3,7 +3,6 @@
 use bevy::prelude::*;
 
 /// 指定エンティティの位置にカメラを移動（リストクリック等で再利用）
-#[allow(clippy::collapsible_if)]
 pub fn focus_camera_on_entity<F>(
     target: Entity,
     q_camera: &mut Query<&mut Transform, With<crate::camera::MainCamera>>,

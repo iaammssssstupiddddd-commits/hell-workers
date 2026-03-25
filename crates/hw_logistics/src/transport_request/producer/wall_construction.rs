@@ -18,6 +18,7 @@ use std::collections::HashMap;
 use std::time::Instant;
 
 use crate::transport_request::{TransportRequest, TransportRequestKind, TransportRequestMetrics};
+use crate::transport_request::producer::{ConstructionDeliverySpec, RequestSyncSpec};
 use crate::types::{ResourceItem, ResourceType};
 
 type WallTileDesignationQuery<'w, 's> = Query<
@@ -30,6 +31,20 @@ type WallTileDesignationQuery<'w, 's> = Query<
         Option<&'static Designation>,
         Option<&'static TaskWorkers>,
         &'static mut Visibility,
+    ),
+>;
+
+type WallTileImmutQuery<'w, 's> = Query<'w, 's, (Entity, &'static WallTileBlueprint)>;
+type WallTileMutQuery<'w, 's> = Query<'w, 's, &'static mut WallTileBlueprint>;
+type WallResourcesQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static Transform,
+        &'static Visibility,
+        &'static ResourceItem,
+        Option<&'static hw_core::relationships::StoredIn>,
     ),
 >;
 
@@ -131,9 +146,11 @@ pub fn wall_construction_auto_haul_system(
         &mut commands,
         &q_wall_requests,
         &desired_requests,
-        TransportRequestKind::DeliverToWallConstruction,
-        "TransportRequest::DeliverToWallConstruction",
-        TransportRequestKind::DeliverToWallConstruction,
+        RequestSyncSpec {
+            expected_kind: TransportRequestKind::DeliverToWallConstruction,
+            request_name: "TransportRequest::DeliverToWallConstruction",
+            request_kind: TransportRequestKind::DeliverToWallConstruction,
+        },
         |target| target.0,
         TargetWallConstructionSite,
         request_priority,
@@ -141,21 +158,11 @@ pub fn wall_construction_auto_haul_system(
 }
 
 /// Consumes delivered materials around each wall site and advances tiles to ready states.
-#[allow(clippy::type_complexity)]
 pub fn wall_material_delivery_sync_system(
     mut commands: Commands,
     q_sites: Query<(Entity, &WallConstructionSite)>,
-    mut q_tiles: ParamSet<(
-        Query<(Entity, &WallTileBlueprint)>,
-        Query<&mut WallTileBlueprint>,
-    )>,
-    q_resources: Query<(
-        Entity,
-        &Transform,
-        &Visibility,
-        &ResourceItem,
-        Option<&hw_core::relationships::StoredIn>,
-    )>,
+    mut q_tiles: ParamSet<(WallTileImmutQuery, WallTileMutQuery)>,
+    q_resources: WallResourcesQuery,
     resource_grid: Res<ResourceSpatialGrid>,
     mut nearby_buf: Local<Vec<Entity>>,
     mut metrics: ResMut<TransportRequestMetrics>,
@@ -192,16 +199,18 @@ pub fn wall_material_delivery_sync_system(
             let mut q_tiles_write = q_tiles.p1();
             super::sync_construction_delivery(
                 &mut commands,
-                site_entity,
-                site.material_center,
-                target_resource,
-                required_amount,
-                pickup_radius,
-                &resource_grid,
+                ConstructionDeliverySpec {
+                    site_entity,
+                    site_pos: site.material_center,
+                    target_resource,
+                    required_amount,
+                    pickup_radius,
+                    resource_grid: &resource_grid,
+                    scratch: &mut nearby_buf,
+                    resources_scanned: &mut resources_scanned,
+                    tiles_by_site: &tiles_by_site,
+                },
                 &q_resources,
-                &mut nearby_buf,
-                &mut resources_scanned,
-                &tiles_by_site,
                 &mut q_tiles_write,
                 |tile: &WallTileBlueprint| tile.state == waiting_state,
                 |tile: &mut WallTileBlueprint| match site.phase {

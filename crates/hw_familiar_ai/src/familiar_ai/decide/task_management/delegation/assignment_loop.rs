@@ -1,20 +1,17 @@
 use bevy::prelude::*;
-use hw_core::area::TaskArea;
 use hw_core::constants::TILE_SIZE;
-use hw_core::relationships::ManagedTasks;
-use hw_logistics::tile_index::TileSiteIndex;
-use hw_spatial::{DesignationSpatialGrid, ResourceSpatialGrid, TransportRequestSpatialGrid};
 use hw_world::WorldMap;
 use hw_world::pathfinding::{self, PathfindingContext};
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU32, Ordering as AtomicOrdering};
 
+use super::{DelegationEnvCtx, PathfindingCtxMut};
 use crate::familiar_ai::decide::task_management::context::ConstructionSitePositions;
 use crate::familiar_ai::decide::task_management::{
-    AssignTaskContext, DelegationCandidate, FamiliarSoulQuery, FamiliarTaskAssignmentQueries,
-    IncomingDeliverySnapshot, ReservationShadow, ScoredDelegationCandidate, assign_task_to_worker,
-    collect_scored_candidates,
+    AssignTaskContext, DelegationCandidate, FamiliarSearchContext, FamiliarSoulQuery,
+    FamiliarTaskAssignmentQueries, ReservationShadow, ScoredDelegationCandidate,
+    assign_task_to_worker, collect_scored_candidates,
 };
 
 pub type ReachabilityCacheKey = ((i32, i32), (i32, i32));
@@ -130,27 +127,24 @@ fn build_worker_candidates(
     )
 }
 
-#[allow(clippy::too_many_arguments)]
-fn try_assign_from_candidates(
+/// `try_assign_from_candidates` の per-worker データをまとめた構造体。
+struct WorkerAssignCtx<'a> {
     worker_entity: Entity,
     worker_grid: (i32, i32),
-    candidates: &[DelegationCandidate],
-    fam_entity: Entity,
-    fatigue_threshold: f32,
-    task_area_opt: Option<&TaskArea>,
+    candidates: &'a [DelegationCandidate],
+    task_virtual_workers: &'a HashMap<Entity, usize>,
+}
+
+fn try_assign_from_candidates(
+    worker_ctx: WorkerAssignCtx<'_>,
+    env: &DelegationEnvCtx<'_>,
     queries: &mut FamiliarTaskAssignmentQueries,
     construction_sites: &impl ConstructionSitePositions,
     q_souls: &mut FamiliarSoulQuery,
-    resource_grid: &ResourceSpatialGrid,
-    world_map: &WorldMap,
-    pf_context: &mut PathfindingContext,
-    tile_site_index: &TileSiteIndex,
-    incoming_snapshot: &IncomingDeliverySnapshot,
+    pf_ctx: &mut PathfindingCtxMut<'_>,
     reservation_shadow: &mut ReservationShadow,
-    task_virtual_workers: &HashMap<Entity, usize>,
-    reachability_cache: &mut HashMap<ReachabilityCacheKey, bool>,
 ) -> Option<Entity> {
-    for candidate in candidates.iter().copied() {
+    for candidate in worker_ctx.candidates.iter().copied() {
         let Ok((_, _, _, _, slots, workers, _, _)) =
             queries.designation.designations.get(candidate.entity)
         else {
@@ -158,7 +152,7 @@ fn try_assign_from_candidates(
         };
         let current_workers = workers.map(|w| w.len()).unwrap_or(0);
         let max_slots = slots.map(|s| s.max).unwrap_or(1) as usize;
-        let virtual_workers = task_virtual_workers
+        let virtual_workers = worker_ctx.task_virtual_workers
             .get(&candidate.entity)
             .copied()
             .unwrap_or(0);
@@ -168,25 +162,25 @@ fn try_assign_from_candidates(
 
         if !candidate.skip_reachability_check
             && !reachable_with_cache(
-                worker_grid,
+                worker_ctx.worker_grid,
                 candidate,
-                world_map,
-                pf_context,
-                reachability_cache,
+                env.world_map,
+                pf_ctx.pf_context,
+                pf_ctx.reachability_cache,
             ) {
                 continue;
             }
 
         if assign_task_to_worker(
             AssignTaskContext {
-                fam_entity,
+                fam_entity: env.fam_entity,
                 task_entity: candidate.entity,
-                worker_entity,
-                fatigue_threshold,
-                task_area_opt,
-                resource_grid,
-                tile_site_index,
-                incoming_snapshot,
+                worker_entity: worker_ctx.worker_entity,
+                fatigue_threshold: env.fatigue_threshold,
+                task_area_opt: env.task_area_opt,
+                resource_grid: env.resource_grid,
+                tile_site_index: env.tile_site_index,
+                incoming_snapshot: env.incoming_snapshot,
             },
             queries,
             construction_sites,
@@ -200,37 +194,23 @@ fn try_assign_from_candidates(
     None
 }
 
-#[allow(clippy::too_many_arguments)]
 pub(super) fn try_assign_for_workers(
     idle_members: &[(Entity, Vec2)],
-    fam_entity: Entity,
-    fam_pos: Vec2,
-    task_area_opt: Option<&TaskArea>,
-    fatigue_threshold: f32,
+    env: &DelegationEnvCtx<'_>,
     queries: &mut FamiliarTaskAssignmentQueries,
     construction_sites: &impl ConstructionSitePositions,
     q_souls: &mut FamiliarSoulQuery,
-    designation_grid: &DesignationSpatialGrid,
-    transport_request_grid: &TransportRequestSpatialGrid,
-    managed_tasks: &ManagedTasks,
-    resource_grid: &ResourceSpatialGrid,
-    world_map: &WorldMap,
-    pf_context: &mut PathfindingContext,
+    pf_ctx: &mut PathfindingCtxMut<'_>,
     reservation_shadow: &mut ReservationShadow,
-    tile_site_index: &TileSiteIndex,
-    incoming_snapshot: &IncomingDeliverySnapshot,
-    reachability_cache: &mut HashMap<ReachabilityCacheKey, bool>,
 ) -> Option<Entity> {
     let scored_candidates = collect_scored_candidates(
-        fam_entity,
-        fam_pos,
-        task_area_opt,
+        FamiliarSearchContext { fam_entity: env.fam_entity, fam_pos: env.fam_pos, task_area_opt: env.task_area_opt },
         queries,
-        designation_grid,
-        transport_request_grid,
-        managed_tasks,
+        env.designation_grid,
+        env.transport_request_grid,
+        env.managed_tasks,
         &queries.storage.target_blueprints,
-        world_map,
+        env.world_map,
     );
     if scored_candidates.is_empty() {
         return None;
@@ -239,8 +219,8 @@ pub(super) fn try_assign_for_workers(
     let mut sorted_workers = idle_members.to_vec();
     sorted_workers.sort_by(|(_, a_pos), (_, b_pos)| {
         a_pos
-            .distance_squared(fam_pos)
-            .partial_cmp(&b_pos.distance_squared(fam_pos))
+            .distance_squared(env.fam_pos)
+            .partial_cmp(&b_pos.distance_squared(env.fam_pos))
             .unwrap_or(Ordering::Equal)
     });
 
@@ -248,7 +228,7 @@ pub(super) fn try_assign_for_workers(
     let mut task_virtual_workers: HashMap<Entity, usize> = HashMap::new();
 
     for (worker_entity, worker_pos) in sorted_workers {
-        let Some(worker_grid) = world_map.get_nearest_walkable_grid(worker_pos) else {
+        let Some(worker_grid) = env.world_map.get_nearest_walkable_grid(worker_pos) else {
             continue;
         };
 
@@ -263,23 +243,18 @@ pub(super) fn try_assign_for_workers(
         }
 
         if let Some(task_entity) = try_assign_from_candidates(
-            worker_entity,
-            worker_grid,
-            &top_candidates,
-            fam_entity,
-            fatigue_threshold,
-            task_area_opt,
+            WorkerAssignCtx {
+                worker_entity,
+                worker_grid,
+                candidates: &top_candidates,
+                task_virtual_workers: &task_virtual_workers,
+            },
+            env,
             queries,
             construction_sites,
             q_souls,
-            resource_grid,
-            world_map,
-            pf_context,
-            tile_site_index,
-            incoming_snapshot,
+            pf_ctx,
             reservation_shadow,
-            &task_virtual_workers,
-            reachability_cache,
         ) {
             *task_virtual_workers.entry(task_entity).or_insert(0) += 1;
             if first_assigned_task.is_none() {
@@ -294,23 +269,18 @@ pub(super) fn try_assign_for_workers(
             .map(|(candidate, _)| candidate)
             .collect();
         if let Some(task_entity) = try_assign_from_candidates(
-            worker_entity,
-            worker_grid,
-            &fallback_candidates,
-            fam_entity,
-            fatigue_threshold,
-            task_area_opt,
+            WorkerAssignCtx {
+                worker_entity,
+                worker_grid,
+                candidates: &fallback_candidates,
+                task_virtual_workers: &task_virtual_workers,
+            },
+            env,
             queries,
             construction_sites,
             q_souls,
-            resource_grid,
-            world_map,
-            pf_context,
-            tile_site_index,
-            incoming_snapshot,
+            pf_ctx,
             reservation_shadow,
-            &task_virtual_workers,
-            reachability_cache,
         ) {
             *task_virtual_workers.entry(task_entity).or_insert(0) += 1;
             if first_assigned_task.is_none() {

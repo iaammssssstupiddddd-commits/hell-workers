@@ -14,14 +14,17 @@ use crate::worker_icon::{
 use hw_core::soul::DamnedSoul;
 use hw_core::visual_mirror::task::{SoulTaskPhaseVisual, SoulTaskVisualState};
 
-#[allow(clippy::type_complexity)]
+type GatherWorkersQuery<'w, 's> = Query<
+    'w,
+    's,
+    (Entity, &'static SoulTaskVisualState, &'static Transform),
+    (With<DamnedSoul>, Without<HasGatherIndicator>),
+>;
+
 pub fn spawn_gather_indicators_system(
     mut commands: Commands,
     handles: Res<WorkIconHandles>,
-    q_workers: Query<
-        (Entity, &SoulTaskVisualState, &Transform),
-        (With<DamnedSoul>, Without<HasGatherIndicator>),
-    >,
+    q_workers: GatherWorkersQuery,
 ) {
     for (worker_entity, task_vs, transform) in q_workers.iter() {
         let (icon_handle, icon_color) = match task_vs.phase {

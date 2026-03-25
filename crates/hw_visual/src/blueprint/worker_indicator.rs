@@ -9,14 +9,24 @@ use crate::handles::WorkIconHandles;
 use hw_core::soul::DamnedSoul;
 use hw_core::visual_mirror::task::{SoulTaskPhaseVisual, SoulTaskVisualState};
 
-#[allow(clippy::type_complexity)]
+type BuildWorkersQuery<'w, 's> = Query<
+    'w,
+    's,
+    (Entity, &'static SoulTaskVisualState, &'static Transform),
+    (With<DamnedSoul>, Without<HasWorkerIndicator>),
+>;
+
+type HammerIconsQuery<'w, 's> = Query<
+    'w,
+    's,
+    (Entity, &'static ChildOf, &'static mut Transform),
+    (With<WorkerHammerIcon>, Without<DamnedSoul>),
+>;
+
 pub fn spawn_worker_indicators_system(
     mut commands: Commands,
     handles: Res<WorkIconHandles>,
-    q_workers: Query<
-        (Entity, &SoulTaskVisualState, &Transform),
-        (With<DamnedSoul>, Without<HasWorkerIndicator>),
-    >,
+    q_workers: BuildWorkersQuery,
 ) {
     for (worker_entity, task_vs, _transform) in q_workers.iter() {
         if matches!(task_vs.phase, SoulTaskPhaseVisual::Build) && task_vs.progress.is_none() {
@@ -54,15 +64,11 @@ pub fn spawn_worker_indicators_system(
     }
 }
 
-#[allow(clippy::type_complexity)]
 pub fn update_worker_indicators_system(
     mut commands: Commands,
     time: Res<Time>,
     q_workers: Query<&SoulTaskVisualState, With<DamnedSoul>>,
-    mut q_hammers: Query<
-        (Entity, &ChildOf, &mut Transform),
-        (With<WorkerHammerIcon>, Without<DamnedSoul>),
-    >,
+    mut q_hammers: HammerIconsQuery,
 ) {
     for (hammer_entity, child_of, mut hammer_transform) in q_hammers.iter_mut() {
         let mut should_despawn = true;

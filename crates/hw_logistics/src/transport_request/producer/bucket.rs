@@ -1,5 +1,6 @@
 //! Bucket auto-haul system
 
+use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 
 use hw_core::area::TaskArea;
@@ -63,33 +64,37 @@ type DroppedBucketsQuery<'w, 's> = Query<
     ),
 >;
 
-#[allow(clippy::too_many_arguments)]
-pub fn bucket_auto_haul_system(
-    mut commands: Commands,
-    _haul_cache: Res<SharedResourceCache>,
-    q_incoming: Query<&IncomingDeliveries>,
-    q_familiars: Query<(Entity, &ActiveCommand, &TaskArea), With<Familiar>>,
-    q_yards: Query<(Entity, &Yard)>,
-    q_tanks: Query<(&Transform, &Stockpile), Without<BucketStorage>>,
-    q_dropped_buckets: DroppedBucketsQuery,
-    q_bucket_storages: Query<
-        (Entity, &Stockpile, &BelongsTo, Option<&StoredItems>),
+/// `bucket_auto_haul_system` の ECS クエリ・リソースをまとめた SystemParam。
+#[derive(SystemParam)]
+pub struct BucketAutoHaulParams<'w, 's> {
+    pub _haul_cache: Res<'w, SharedResourceCache>,
+    pub q_incoming: Query<'w, 's, &'static IncomingDeliveries>,
+    pub q_familiars: Query<'w, 's, (Entity, &'static ActiveCommand, &'static TaskArea), With<Familiar>>,
+    pub q_yards: Query<'w, 's, (Entity, &'static Yard)>,
+    pub q_tanks: Query<'w, 's, (&'static Transform, &'static Stockpile), Without<BucketStorage>>,
+    pub q_dropped_buckets: DroppedBucketsQuery<'w, 's>,
+    pub q_bucket_storages: Query<
+        'w,
+        's,
+        (Entity, &'static Stockpile, &'static BelongsTo, Option<&'static StoredItems>),
         With<BucketStorage>,
     >,
-    q_bucket_requests: Query<(Entity, &TransportRequest, Option<&TaskWorkers>)>,
-    q_move_planned: Query<(), With<MovePlanned>>,
-) {
-    let active_familiars: Vec<(Entity, AreaBounds)> = q_familiars
+    pub q_bucket_requests: Query<'w, 's, (Entity, &'static TransportRequest, Option<&'static TaskWorkers>)>,
+    pub q_move_planned: Query<'w, 's, (), With<MovePlanned>>,
+}
+
+pub fn bucket_auto_haul_system(mut commands: Commands, p: BucketAutoHaulParams) {
+    let active_familiars: Vec<(Entity, AreaBounds)> = p.q_familiars
         .iter()
         .filter(|(_, active_command, _)| !matches!(active_command.command, FamiliarCommand::Idle))
         .map(|(entity, _, area)| (entity, area.bounds()))
         .collect();
-    let active_yards: Vec<(Entity, Yard)> = q_yards.iter().map(|(e, y)| (e, y.clone())).collect();
+    let active_yards: Vec<(Entity, Yard)> = p.q_yards.iter().map(|(e, y)| (e, y.clone())).collect();
     let all_owners = super::collect_all_area_owners(&active_familiars, &active_yards);
 
     let mut tank_demands = std::collections::HashMap::<Entity, TankDemand>::new();
 
-    for (storage_entity, stockpile, storage_belongs, stored_opt) in q_bucket_storages.iter() {
+    for (storage_entity, stockpile, storage_belongs, stored_opt) in p.q_bucket_storages.iter() {
         if !bucket_storage_accepts_buckets(stockpile) {
             continue;
         }
@@ -97,7 +102,7 @@ pub fn bucket_auto_haul_system(
         let current = stored_opt
             .map(|stored: &StoredItems| stored.len())
             .unwrap_or(0);
-        let incoming_deliveries = q_incoming
+        let incoming_deliveries = p.q_incoming
             .get(storage_entity)
             .ok()
             .map(|inc: &IncomingDeliveries| inc.len())
@@ -113,7 +118,7 @@ pub fn bucket_auto_haul_system(
     }
 
     for (visibility, resource_item, belongs_to, reserved_opt, workers_opt) in
-        q_dropped_buckets.iter()
+        p.q_dropped_buckets.iter()
     {
         if *visibility == Visibility::Hidden {
             continue;
@@ -134,10 +139,10 @@ pub fn bucket_auto_haul_system(
 
     let mut desired_requests = std::collections::HashMap::<Entity, DesiredBucketReturn>::new();
     for (tank_entity, demand) in tank_demands.iter() {
-        if q_move_planned.get(*tank_entity).is_ok() {
+        if p.q_move_planned.get(*tank_entity).is_ok() {
             continue;
         }
-        let Ok((tank_transform, tank_stockpile)) = q_tanks.get(*tank_entity) else {
+        let Ok((tank_transform, tank_stockpile)) = p.q_tanks.get(*tank_entity) else {
             continue;
         };
         if tank_stockpile.resource_type != Some(ResourceType::Water) {
@@ -165,7 +170,7 @@ pub fn bucket_auto_haul_system(
     }
 
     let mut seen_existing = std::collections::HashSet::<Entity>::new();
-    for (request_entity, request, workers_opt) in q_bucket_requests.iter() {
+    for (request_entity, request, workers_opt) in p.q_bucket_requests.iter() {
         if request.kind != TransportRequestKind::ReturnBucket {
             continue;
         }
@@ -173,7 +178,7 @@ pub fn bucket_auto_haul_system(
         let tank_entity = request.anchor;
         let workers = workers_opt.map(|workers| workers.len()).unwrap_or(0);
         let inflight = to_u32_saturating(workers);
-        let valid_tank = q_tanks
+        let valid_tank = p.q_tanks
             .get(tank_entity)
             .is_ok_and(|(_, stockpile)| stockpile.resource_type == Some(ResourceType::Water));
 

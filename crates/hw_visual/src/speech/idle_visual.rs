@@ -7,11 +7,21 @@ use hw_core::familiar::Familiar;
 use super::components::{BubbleEmotion, BubblePriority, FamiliarBubble, SpeechBubble};
 use super::cooldown::SpeechHistory;
 use super::phrases::LatinPhrase;
-use super::spawn::spawn_familiar_bubble;
+use super::spawn::{FamiliarBubbleSpec, spawn_familiar_bubble};
 use super::voice::FamiliarVoice;
 use crate::handles::SpeechHandles;
 
-#[allow(clippy::type_complexity)]
+type FamiliarsQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static Transform,
+        Option<&'static FamiliarVoice>,
+        Option<&'static mut SpeechHistory>,
+    ),
+    With<Familiar>,
+>;
+
 /// Idle 遷移時のビジュアル演出を適用する（Execute Phase）
 pub fn familiar_idle_visual_apply_system(
     mut commands: Commands,
@@ -19,17 +29,10 @@ pub fn familiar_idle_visual_apply_system(
     mut request_reader: MessageReader<FamiliarIdleVisualRequest>,
     q_bubbles: Query<(Entity, &SpeechBubble), With<FamiliarBubble>>,
     speech_handles: Res<SpeechHandles>,
-    mut q_familiars: Query<
-        (
-            &Transform,
-            Option<&FamiliarVoice>,
-            Option<&mut SpeechHistory>,
-        ),
-        With<Familiar>,
-    >,
+    mut q_familiars: FamiliarsQuery,
 ) {
     for request in request_reader.read() {
-        let Ok((fam_transform, voice_opt, mut history_opt)) =
+        let Ok((_fam_transform, voice_opt, mut history_opt)) =
             q_familiars.get_mut(request.familiar_entity)
         else {
             continue;
@@ -49,13 +52,9 @@ pub fn familiar_idle_visual_apply_system(
         spawn_familiar_bubble(
             &mut commands,
             request.familiar_entity,
-            LatinPhrase::Requiesce,
-            fam_transform.translation,
+            FamiliarBubbleSpec { phrase: LatinPhrase::Requiesce, emotion: BubbleEmotion::Neutral, priority: BubblePriority::Normal, voice: voice_opt },
             &speech_handles,
             &q_bubbles,
-            BubbleEmotion::Neutral,
-            BubblePriority::Normal,
-            voice_opt,
         );
 
         if let Some(history) = history_opt.as_mut() {

@@ -9,7 +9,7 @@ use hw_world::WorldMap;
 
 use crate::soul_ai::helpers::gathering::{GatheringSpot, GatheringUpdateTimer};
 use crate::soul_ai::helpers::gathering_positions::{
-    find_position_fallback_away, find_position_with_separation,
+    SeparationParams, find_position_fallback_away, find_position_with_separation,
 };
 
 /// 重なり回避の最小間隔
@@ -77,10 +77,12 @@ pub fn gathering_separation_system(
                 &*soul_grid,
                 world_map.as_ref(),
                 &mut nearby_buf,
-                min_dist,
-                max_dist,
-                GATHERING_MIN_SEPARATION,
-                30,
+                SeparationParams {
+                    min_dist,
+                    max_dist,
+                    min_separation: GATHERING_MIN_SEPARATION,
+                    max_attempts: 30,
+                },
             ) {
                 dest.0 = new_pos;
                 path.waypoints.clear();

@@ -9,21 +9,24 @@ use hw_core::soul::{AnimationState, DamnedSoul};
 use hw_core::visual::WheelbarrowMovement;
 use hw_core::visual_mirror::logistics::WheelbarrowMarker;
 
-#[allow(clippy::type_complexity)]
+type WheelbarrowsQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static mut Transform,
+        &'static mut Sprite,
+        &'static PushedBy,
+        Option<&'static LoadedItems>,
+        Option<&'static mut WheelbarrowMovement>,
+    ),
+    (With<WheelbarrowMarker>, Without<DamnedSoul>),
+>;
+
 pub fn wheelbarrow_follow_system(
     mut commands: Commands,
     q_souls: Query<(&Transform, &AnimationState), With<DamnedSoul>>,
-    mut q_wheelbarrows: Query<
-        (
-            Entity,
-            &mut Transform,
-            &mut Sprite,
-            &PushedBy,
-            Option<&LoadedItems>,
-            Option<&mut WheelbarrowMovement>,
-        ),
-        (With<WheelbarrowMarker>, Without<DamnedSoul>),
-    >,
+    mut q_wheelbarrows: WheelbarrowsQuery,
     handles: Res<HaulItemHandles>,
 ) {
     for (wb_entity, mut wb_tf, mut wb_sprite, pushed_by, loaded_items, movement) in

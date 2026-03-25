@@ -3,29 +3,58 @@ use crate::entities::damned_soul::{DamnedSoul, SoulIdentity};
 use crate::entities::familiar::{Familiar, FamiliarOperation};
 use crate::systems::familiar_ai::FamiliarAiState;
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
+use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use hw_core::relationships::{CommandedBy, Commanding};
 use hw_ui::components::{SectionFolded, UnassignedFolded};
 
-#[allow(clippy::too_many_arguments)]
+#[derive(SystemParam)]
+pub struct StructureDetectors<'w, 's> {
+    q_added_souls: Query<'w, 's, (), Added<DamnedSoul>>,
+    q_added_familiars: Query<'w, 's, (), Added<Familiar>>,
+    q_commanding: Query<'w, 's, (), Changed<Commanding>>,
+    q_commanded_by: Query<'w, 's, (), Changed<CommandedBy>>,
+    q_folded: Query<'w, 's, (), Changed<SectionFolded>>,
+    q_unassigned_folded: Query<'w, 's, (), Changed<UnassignedFolded>>,
+    removed_souls: RemovedComponents<'w, 's, DamnedSoul>,
+    removed_familiars: RemovedComponents<'w, 's, Familiar>,
+    removed_commanded_by: RemovedComponents<'w, 's, CommandedBy>,
+}
+
+#[derive(SystemParam)]
+pub struct ValueDetectors<'w, 's> {
+    q_souls: Query<'w, 's, (), Changed<DamnedSoul>>,
+    q_tasks: Query<'w, 's, (), Changed<AssignedTask>>,
+    q_identity: Query<'w, 's, (), Changed<SoulIdentity>>,
+    q_familiars: Query<'w, 's, (), Changed<Familiar>>,
+    q_familiar_ai: Query<'w, 's, (), Changed<FamiliarAiState>>,
+    q_familiar_op: Query<'w, 's, (), Changed<FamiliarOperation>>,
+}
+
 pub fn detect_entity_list_changes(
     mut dirty: ResMut<EntityListDirty>,
-    q_souls: Query<(), Changed<DamnedSoul>>,
-    q_added_souls: Query<(), Added<DamnedSoul>>,
-    q_tasks: Query<(), Changed<AssignedTask>>,
-    q_identity: Query<(), Changed<SoulIdentity>>,
-    q_familiars: Query<(), Changed<Familiar>>,
-    q_added_familiars: Query<(), Added<Familiar>>,
-    q_familiar_ai: Query<(), Changed<FamiliarAiState>>,
-    q_familiar_op: Query<(), Changed<FamiliarOperation>>,
-    q_commanding: Query<(), Changed<Commanding>>,
-    q_commanded_by: Query<(), Changed<CommandedBy>>,
-    q_folded: Query<(), Changed<SectionFolded>>,
-    q_unassigned_folded: Query<(), Changed<UnassignedFolded>>,
-    mut removed_souls: RemovedComponents<DamnedSoul>,
-    mut removed_familiars: RemovedComponents<Familiar>,
-    mut removed_commanded_by: RemovedComponents<CommandedBy>,
+    structure: StructureDetectors,
+    value: ValueDetectors,
 ) {
+    let StructureDetectors {
+        q_added_souls,
+        q_added_familiars,
+        q_commanding,
+        q_commanded_by,
+        q_folded,
+        q_unassigned_folded,
+        mut removed_souls,
+        mut removed_familiars,
+        mut removed_commanded_by,
+    } = structure;
+    let ValueDetectors {
+        q_souls,
+        q_tasks,
+        q_identity,
+        q_familiars,
+        q_familiar_ai,
+        q_familiar_op,
+    } = value;
     let structure_changed = !q_added_souls.is_empty()
         || !q_added_familiars.is_empty()
         || !q_commanding.is_empty()

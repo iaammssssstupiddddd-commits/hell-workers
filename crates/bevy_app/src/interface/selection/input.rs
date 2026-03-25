@@ -3,6 +3,7 @@ use crate::entities::damned_soul::{DamnedSoul, Destination};
 use crate::entities::familiar::Familiar;
 use crate::interface::ui::UiInputState;
 use crate::systems::command::{TaskArea, TaskMode};
+use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use hw_core::game_state::PlayMode;
 use hw_ui::camera::MainCamera;
@@ -28,6 +29,22 @@ type SelectionTargetQuery<'w, 's> = Query<
         With<crate::systems::jobs::Building>,
     )>,
 >;
+
+#[derive(SystemParam)]
+pub struct SelectionInput<'w, 's> {
+    pub buttons: Res<'w, ButtonInput<MouseButton>>,
+    pub q_window: Query<'w, 's, &'static Window, With<bevy::window::PrimaryWindow>>,
+    pub q_camera: Query<'w, 's, (&'static Camera, &'static GlobalTransform), With<MainCamera>>,
+    pub ui_input_state: Res<'w, UiInputState>,
+}
+
+#[derive(SystemParam)]
+pub struct SelectionWorldQueries<'w, 's> {
+    pub q_souls: Query<'w, 's, (Entity, &'static GlobalTransform), With<DamnedSoul>>,
+    pub q_familiars: Query<'w, 's, (Entity, &'static GlobalTransform), With<Familiar>>,
+    pub q_task_areas: Query<'w, 's, (Entity, &'static TaskArea), With<Familiar>>,
+    pub q_targets: SelectionTargetQuery<'w, 's>,
+}
 
 /// Determines the SelectionIntent for a left-click at `world_pos`.
 fn resolve_left_click_intent(
@@ -74,21 +91,26 @@ fn resolve_right_click_intent(
     SelectionIntent::None
 }
 
-#[allow(clippy::too_many_arguments)]
 pub fn handle_mouse_input(
-    buttons: Res<ButtonInput<MouseButton>>,
-    q_window: Query<&Window, With<bevy::window::PrimaryWindow>>,
-    q_camera: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
-    q_souls: Query<(Entity, &GlobalTransform), With<DamnedSoul>>,
-    q_familiars: Query<(Entity, &GlobalTransform), With<Familiar>>,
-    q_task_areas: Query<(Entity, &TaskArea), With<Familiar>>,
-    q_targets: SelectionTargetQuery,
-    ui_input_state: Res<UiInputState>,
+    input: SelectionInput,
+    world_queries: SelectionWorldQueries,
     mut selected_entity: ResMut<SelectedEntity>,
     mut next_play_mode: ResMut<NextState<PlayMode>>,
     mut task_context: ResMut<TaskContext>,
     mut q_dest: Query<&mut Destination>,
 ) {
+    let SelectionInput {
+        buttons,
+        q_window,
+        q_camera,
+        ui_input_state,
+    } = input;
+    let SelectionWorldQueries {
+        q_souls,
+        q_familiars,
+        q_task_areas,
+        q_targets,
+    } = world_queries;
     if ui_input_state.pointer_over_ui {
         return;
     }

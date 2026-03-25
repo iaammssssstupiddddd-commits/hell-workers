@@ -10,6 +10,31 @@ use bevy::prelude::*;
 use hw_core::relationships::{CommandedBy, Commanding};
 use hw_ui::components::{SectionFolded, UnassignedFolded, UnassignedSoulSection};
 
+type FamiliarListQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static Familiar,
+        &'static FamiliarOperation,
+        &'static FamiliarAiState,
+        Option<&'static Commanding>,
+    ),
+>;
+
+type AllSoulsQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static DamnedSoul,
+        &'static AssignedTask,
+        &'static SoulIdentity,
+        Option<&'static CommandedBy>,
+    ),
+    Without<Familiar>,
+>;
+
 use super::{StressBucket, TaskVisual};
 
 pub fn familiar_state_label(ai_state: &FamiliarAiState) -> &'static str {
@@ -97,7 +122,6 @@ pub(super) fn build_soul_view_model(
     }
 }
 
-#[allow(clippy::type_complexity)]
 fn build_familiar_row_view_model(
     fam_entity: Entity,
     familiar: &Familiar,
@@ -105,16 +129,7 @@ fn build_familiar_row_view_model(
     ai_state: &FamiliarAiState,
     commanding_opt: Option<&Commanding>,
     is_folded: bool,
-    q_all_souls: &Query<
-        (
-            Entity,
-            &DamnedSoul,
-            &AssignedTask,
-            &SoulIdentity,
-            Option<&CommandedBy>,
-        ),
-        Without<Familiar>,
-    >,
+    q_all_souls: &AllSoulsQuery<'_, '_>,
 ) -> FamiliarRowViewModel {
     let squad_count = commanding_opt.map(|c| c.len()).unwrap_or(0);
     let mut souls = Vec::new();
@@ -142,27 +157,11 @@ fn build_familiar_row_view_model(
     }
 }
 
-#[allow(clippy::type_complexity)]
 pub fn build_entity_list_view_model_system(
     dirty: Res<super::dirty::EntityListDirty>,
     mut view_model: ResMut<EntityListViewModel>,
-    q_familiars: Query<(
-        Entity,
-        &Familiar,
-        &FamiliarOperation,
-        &FamiliarAiState,
-        Option<&Commanding>,
-    )>,
-    q_all_souls: Query<
-        (
-            Entity,
-            &DamnedSoul,
-            &AssignedTask,
-            &SoulIdentity,
-            Option<&CommandedBy>,
-        ),
-        Without<Familiar>,
-    >,
+    q_familiars: FamiliarListQuery<'_, '_>,
+    q_all_souls: AllSoulsQuery<'_, '_>,
     q_folded: Query<Has<SectionFolded>>,
     unassigned_folded_query: Query<Has<UnassignedFolded>, With<UnassignedSoulSection>>,
 ) {

@@ -206,12 +206,14 @@ pub(super) fn handle_dropping_phase(
         } else {
             cleanup_task_assignment(
                 commands,
-                ctx.soul_entity,
-                soul_pos,
+                crate::soul_ai::helpers::work::SoulDropCtx {
+                    soul_entity: ctx.soul_entity,
+                    drop_pos: soul_pos,
+                    inventory: Some(ctx.inventory),
+                    dropped_item_res: item_info.and_then(|(it, _)| it),
+                },
                 ctx.task,
                 ctx.path,
-                Some(ctx.inventory),
-                item_info.and_then(|(it, _)| it),
                 ctx.queries,
                 world_map,
                 true,

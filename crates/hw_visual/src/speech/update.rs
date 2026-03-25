@@ -2,6 +2,9 @@ use super::components::*;
 use bevy::prelude::*;
 use hw_core::constants::*;
 
+type AddedBubbleQuery<'w, 's> = Query<'w, 's, &'static SpeechBubble, Added<SpeechBubble>>;
+type BubbleMutQuery<'w, 's> = Query<'w, 's, (Entity, &'static mut SpeechBubble)>;
+
 /// 吹き出しの追従およびフェードアウト/削除システム
 pub fn update_speech_bubbles(
     mut commands: Commands,
@@ -30,14 +33,10 @@ pub fn update_speech_bubbles(
     }
 }
 
-#[allow(clippy::type_complexity)]
 /// 吹き出しの重なりを調整するシステム（ParamSet最適化版）
 pub fn update_bubble_stacking(
     mut removed: RemovedComponents<SpeechBubble>,
-    mut set: ParamSet<(
-        Query<&SpeechBubble, Added<SpeechBubble>>,
-        Query<(Entity, &mut SpeechBubble)>,
-    )>,
+    mut set: ParamSet<(AddedBubbleQuery, BubbleMutQuery)>,
 ) {
     // 1. 追加または削除があるかチェック
     let has_added = !set.p0().is_empty();

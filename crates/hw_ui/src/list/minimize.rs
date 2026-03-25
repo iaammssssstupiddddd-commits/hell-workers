@@ -5,6 +5,13 @@ use crate::components::{
 use crate::theme::UiTheme;
 use bevy::prelude::*;
 
+type MinimizeButtonQuery<'w, 's> = Query<
+    'w,
+    's,
+    (&'static Interaction, &'static mut BackgroundColor),
+    (Changed<Interaction>, With<Button>, With<EntityListMinimizeButton>),
+>;
+
 #[derive(Resource)]
 pub struct EntityListMinimizeState {
     pub minimized: bool,
@@ -24,17 +31,8 @@ fn minimized_panel_height(theme: &UiTheme) -> f32 {
     theme.spacing.panel_padding * 2.0 + 28.0
 }
 
-#[allow(clippy::too_many_arguments)]
-#[allow(clippy::type_complexity)]
 pub fn entity_list_minimize_toggle_system(
-    mut q_button: Query<
-        (&Interaction, &mut BackgroundColor),
-        (
-            Changed<Interaction>,
-            With<Button>,
-            With<EntityListMinimizeButton>,
-        ),
-    >,
+    mut q_button: MinimizeButtonQuery<'_, '_>,
     mut q_panel_node: Query<&mut Node, (With<EntityListPanel>, Without<EntityListBody>)>,
     mut q_body_node: Query<&mut Node, (With<EntityListBody>, Without<EntityListPanel>)>,
     mut q_label_text: Query<&mut Text, With<EntityListMinimizeButtonLabel>>,

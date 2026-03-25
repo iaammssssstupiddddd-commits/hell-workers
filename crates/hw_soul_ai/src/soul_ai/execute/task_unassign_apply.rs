@@ -11,7 +11,7 @@ use hw_logistics::Inventory;
 use hw_world::WorldMapRead;
 
 use crate::soul_ai::execute::task_execution::{AssignedTask, TaskUnassignQueries};
-use crate::soul_ai::helpers::work::unassign_task;
+use crate::soul_ai::helpers::work::{SoulDropCtx, unassign_task};
 
 type TaskUnassignSoulQuery<'w, 's> = Query<
     'w,
@@ -40,12 +40,14 @@ pub fn handle_soul_task_unassign_system(
         {
             unassign_task(
                 &mut commands,
-                entity,
-                transform.translation.truncate(),
+                SoulDropCtx {
+                    soul_entity: entity,
+                    drop_pos: transform.translation.truncate(),
+                    inventory: inventory_opt.as_deref_mut(),
+                    dropped_item_res: None,
+                },
                 &mut task,
                 &mut path,
-                inventory_opt.as_deref_mut(),
-                None,
                 &mut queries,
                 world_map.as_ref(),
                 req.emit_abandoned,

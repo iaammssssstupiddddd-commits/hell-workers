@@ -1,5 +1,7 @@
 //! エリア選択で使う Query 型の共通定義
 
+use crate::systems::jobs::floor_construction::FloorTileBlueprint;
+use crate::systems::jobs::wall_construction::WallTileBlueprint;
 use crate::systems::jobs::{Blueprint, Designation, Rock, Tree};
 use crate::systems::logistics::transport_request::{
     ManualTransportRequest, TransportRequest, TransportRequestFixedSource,
@@ -29,4 +31,17 @@ pub type DesignationTargetQuery<'w, 's> = Query<
         Option<&'static BucketStorage>,
         Option<&'static ManualTransportRequest>,
     ),
+>;
+
+pub type FloorTileBlueprintQuery<'w, 's> =
+    Query<'w, 's, (Entity, &'static Transform, &'static FloorTileBlueprint)>;
+
+pub type WallTileBlueprintQuery<'w, 's> =
+    Query<'w, 's, (Entity, &'static Transform, &'static WallTileBlueprint)>;
+
+pub type UnassignedDesignationQuery<'w, 's> = Query<
+    'w,
+    's,
+    (Entity, &'static Transform, &'static Designation),
+    Without<hw_core::relationships::ManagedBy>,
 >;

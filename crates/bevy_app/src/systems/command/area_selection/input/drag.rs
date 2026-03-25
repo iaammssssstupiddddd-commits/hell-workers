@@ -15,14 +15,19 @@ use hw_ui::area_edit::{AreaEditSession, apply_area_edit_drag};
 use hw_ui::camera::{MainCamera, world_cursor_pos};
 use hw_world::zones::Site;
 
-#[allow(clippy::too_many_arguments)]
+pub(super) struct ActiveDragCtx<'a> {
+    pub(super) buttons: &'a ButtonInput<MouseButton>,
+    pub(super) keyboard: &'a ButtonInput<KeyCode>,
+    pub(super) task_context: &'a mut TaskContext,
+    pub(super) next_play_mode: &'a mut NextState<PlayMode>,
+    pub(super) area_edit_session: &'a mut AreaEditSession,
+    pub(super) area_edit_history: &'a mut AreaEditHistory,
+}
+
 pub(super) fn handle_active_drag_input(
-    buttons: &ButtonInput<MouseButton>,
+    ctx: &mut ActiveDragCtx<'_>,
     q_window: &Query<&Window, With<PrimaryWindow>>,
     q_camera: &Query<(&Camera, &GlobalTransform), With<MainCamera>>,
-    keyboard: &ButtonInput<KeyCode>,
-    task_context: &mut TaskContext,
-    next_play_mode: &mut NextState<PlayMode>,
     q_familiars: &mut Query<(&mut ActiveCommand, &mut Destination), With<Familiar>>,
     q_sites: &Query<&Site>,
     q_unassigned: &Query<
@@ -30,14 +35,12 @@ pub(super) fn handle_active_drag_input(
         Without<ManagedBy>,
     >,
     commands: &mut Commands,
-    area_edit_session: &mut AreaEditSession,
-    area_edit_history: &mut AreaEditHistory,
 ) -> bool {
-    let Some(active_drag) = area_edit_session.active_drag.clone() else {
+    let Some(active_drag) = ctx.area_edit_session.active_drag.clone() else {
         return false;
     };
 
-    if buttons.pressed(MouseButton::Left)
+    if ctx.buttons.pressed(MouseButton::Left)
         && let Some(world_pos) = world_cursor_pos(q_window, q_camera)
     {
         let snapped_pos = WorldMap::snap_to_grid_edge(world_pos);
@@ -55,7 +58,7 @@ pub(super) fn handle_active_drag_input(
         }
     }
 
-    if buttons.just_released(MouseButton::Left) {
+    if ctx.buttons.just_released(MouseButton::Left) {
         let applied_area = world_cursor_pos(q_window, q_camera)
             .map(WorldMap::snap_to_grid_edge)
             .map(|snapped| {
@@ -70,7 +73,7 @@ pub(super) fn handle_active_drag_input(
                 Some(active_drag.original_area.clone()),
                 commands,
                 q_familiars,
-                area_edit_history,
+                ctx.area_edit_history,
                 q_sites,
             );
 
@@ -82,20 +85,20 @@ pub(super) fn handle_active_drag_input(
             );
         }
 
-        area_edit_session.active_drag = None;
-        if should_exit_after_apply(keyboard) {
-            task_context.0 = TaskMode::None;
-            next_play_mode.set(PlayMode::Normal);
+        ctx.area_edit_session.active_drag = None;
+        if should_exit_after_apply(ctx.keyboard) {
+            ctx.task_context.0 = TaskMode::None;
+            ctx.next_play_mode.set(PlayMode::Normal);
         } else {
-            task_context.0 = TaskMode::AreaSelection(None);
+            ctx.task_context.0 = TaskMode::AreaSelection(None);
         }
         return true;
     }
 
-    if buttons.pressed(MouseButton::Left) {
+    if ctx.buttons.pressed(MouseButton::Left) {
         return true;
     }
 
-    area_edit_session.active_drag = None;
+    ctx.area_edit_session.active_drag = None;
     false
 }

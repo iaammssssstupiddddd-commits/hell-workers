@@ -10,10 +10,16 @@ use hw_core::visual_mirror::gather::GatherHighlightMarker;
 pub const COLOR_DESIGNATED_TINT: Color = Color::srgba(0.6, 0.8, 1.0, 1.0);
 pub const COLOR_WORKING_TINT: Color = Color::srgba(0.8, 0.9, 1.0, 1.0);
 
-#[allow(clippy::type_complexity)]
+type NewResourcesQuery<'w, 's> = Query<
+    'w,
+    's,
+    (Entity, &'static Sprite),
+    (With<GatherHighlightMarker>, Without<ResourceVisual>),
+>;
+
 pub fn attach_resource_visual_system(
     mut commands: Commands,
-    q_resources: Query<(Entity, &Sprite), (With<GatherHighlightMarker>, Without<ResourceVisual>)>,
+    q_resources: NewResourcesQuery,
 ) {
     for (entity, sprite) in q_resources.iter() {
         commands.entity(entity).try_insert(ResourceVisual {

@@ -83,11 +83,11 @@ src/ 側で hw_* の実装を公開する方法は 3 種類ある:
 
 ```rust
 // パターン A: 単純 re-export
-pub use hw_ai::soul_ai::decide::SoulDecideOutput;
+pub use hw_soul_ai::soul_ai::decide::SoulDecideOutput;
 
 // パターン B: ラッパーモジュール
 pub mod escaping_apply {
-    pub use hw_ai::soul_ai::execute::escaping_apply::*;
+    pub use hw_soul_ai::soul_ai::execute::escaping_apply::*;
 }
 
 // パターン C: 拡張（leaf の request emitter を使い、root 側で再検証と visual spawn を追加）

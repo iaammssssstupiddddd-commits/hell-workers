@@ -7,7 +7,8 @@ use hw_core::constants::*;
 use hw_world::{PathWorld, SpatialGridOps, world_to_grid};
 
 use super::gathering_positions::{
-    find_position_fallback_away, find_position_with_separation, random_position_around,
+    SeparationParams, find_position_fallback_away, find_position_with_separation,
+    random_position_around,
 };
 
 /// 到着直後・中心に近すぎる場合の移動先を探索
@@ -29,10 +30,12 @@ pub fn find_initial_gathering_position<G: SpatialGridOps, W: PathWorld>(
         soul_grid,
         world_map,
         scratch,
-        min_dist,
-        max_dist,
-        MIN_SEPARATION,
-        20,
+        SeparationParams {
+            min_dist,
+            max_dist,
+            min_separation: MIN_SEPARATION,
+            max_attempts: 20,
+        },
     )
     .or_else(|| {
         find_position_fallback_away(

@@ -4,7 +4,8 @@ use hw_core::logistics::ResourceType;
 use hw_logistics::transport_request::can_complete_pick_drop_to_point;
 
 use super::super::super::builders::{
-    issue_collect_sand_with_wheelbarrow_to_mixer, issue_haul_to_mixer,
+    MixerHaulSpec, WheelbarrowCollectSpec, issue_collect_sand_with_wheelbarrow_to_mixer,
+    issue_haul_to_mixer,
 };
 use super::super::super::validator::resolve_haul_to_mixer_inputs;
 use super::{direct_collect, lease_validation, source_selector, wheelbarrow};
@@ -52,11 +53,13 @@ pub fn assign_haul_to_mixer(
     };
 
     if lease_validation::try_issue_haul_from_lease(
-        ctx.task_entity,
-        task_pos,
-        already_commanded,
-        1,
-        usize::MAX,
+        lease_validation::HaulFromLeaseSpec {
+            task_entity: ctx.task_entity,
+            task_pos,
+            already_commanded,
+            min_valid_items: 1,
+            max_items: usize::MAX,
+        },
         |_| true,
         ctx,
         queries,
@@ -131,10 +134,12 @@ fn assign_single_item_haul_to_mixer(
     }
 
     issue_haul_to_mixer(
-        source_item,
-        mixer_entity,
-        item_type,
-        false,
+        MixerHaulSpec {
+            source_item,
+            mixer: mixer_entity,
+            item_type,
+            mixer_already_reserved: false,
+        },
         source_pos,
         already_commanded,
         ctx,
@@ -177,11 +182,13 @@ fn try_direct_collect_with_wheelbarrow_to_mixer(
     };
 
     issue_collect_sand_with_wheelbarrow_to_mixer(
-        wb_entity,
-        source_entity,
-        source_pos,
-        mixer_entity,
-        amount,
+        WheelbarrowCollectSpec {
+            wheelbarrow: wb_entity,
+            source_entity,
+            source_pos,
+            destination: mixer_entity,
+            amount,
+        },
         task_pos,
         already_commanded,
         ctx,

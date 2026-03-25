@@ -12,6 +12,18 @@ use hw_world::zones::{AreaBounds, Yard};
 use crate::transport_request::{TransportRequest, TransportRequestKind};
 use crate::types::ResourceType;
 
+type MixerRequestsQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static TargetMixer,
+        &'static TransportRequest,
+        Option<&'static Designation>,
+        Option<&'static TaskWorkers>,
+    ),
+>;
+
 pub(crate) fn collect_active_familiars(
     q_familiars: &Query<(Entity, &ActiveCommand, &TaskArea)>,
 ) -> Vec<(Entity, AreaBounds)> {
@@ -29,15 +41,8 @@ pub(crate) fn collect_active_yards(q_yards: &Query<(Entity, &Yard)>) -> Vec<(Ent
         .collect()
 }
 
-#[allow(clippy::type_complexity)]
 pub(crate) fn collect_inflight_mixer_requests(
-    q_mixer_requests: &Query<(
-        Entity,
-        &TargetMixer,
-        &TransportRequest,
-        Option<&Designation>,
-        Option<&TaskWorkers>,
-    )>,
+    q_mixer_requests: &MixerRequestsQuery,
 ) -> (HashMap<Entity, u32>, HashMap<Entity, u32>) {
     let mut water_inflight_by_mixer = HashMap::<Entity, u32>::new();
     let mut sand_inflight_by_mixer = HashMap::<Entity, u32>::new();

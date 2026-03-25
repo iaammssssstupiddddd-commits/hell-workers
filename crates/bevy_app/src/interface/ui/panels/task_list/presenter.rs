@@ -5,17 +5,30 @@ use crate::systems::logistics::ResourceItem;
 use crate::systems::logistics::transport_request::{TransportRequest, TransportRequestKind};
 use bevy::prelude::*;
 
-#[allow(clippy::too_many_arguments)]
+pub struct TaskComponentRefs<'a> {
+    pub blueprint: Option<&'a Blueprint>,
+    pub transport_req: Option<&'a TransportRequest>,
+    pub resource_item: Option<&'a ResourceItem>,
+    pub tree: Option<&'a Tree>,
+    pub rock: Option<&'a Rock>,
+    pub _sand_pile: Option<&'a SandPile>,
+    pub bone_pile: Option<&'a BonePile>,
+}
+
 pub fn generate_task_description(
     wt: WorkType,
     entity: Entity,
-    blueprint: Option<&Blueprint>,
-    transport_req: Option<&TransportRequest>,
-    resource_item: Option<&ResourceItem>,
-    tree: Option<&Tree>,
-    rock: Option<&Rock>,
-    _sand_pile: Option<&SandPile>,    bone_pile: Option<&BonePile>,
+    refs: TaskComponentRefs,
 ) -> String {
+    let TaskComponentRefs {
+        blueprint,
+        transport_req,
+        resource_item,
+        tree,
+        rock,
+        _sand_pile: _,
+        bone_pile,
+    } = refs;
     match wt {
         WorkType::Build => {
             if let Some(bp) = blueprint {

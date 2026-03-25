@@ -4,6 +4,7 @@ use crate::app_contexts::{
 use crate::systems::jobs::{Building, BuildingType};
 use crate::systems::visual::placement_ghost::{PlacementGhost, PlacementPartnerGhost};
 use crate::world::map::{WorldMap, WorldMapRead, WorldMapRef};
+use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use hw_core::constants::TILE_SIZE;
 use hw_core::game_state::PlayMode;
@@ -28,25 +29,49 @@ type PartnerGhostQuery<'w, 's> = Query<
     (With<PlacementPartnerGhost>, Without<PlacementGhost>),
 >;
 
-#[allow(clippy::too_many_arguments)]
-pub fn building_move_preview_system(
-    mut commands: Commands,
-    play_mode: Res<State<PlayMode>>,
-    move_context: Res<MoveContext>,
-    move_placement_state: Res<MovePlacementState>,
-    companion_state: Res<CompanionPlacementState>,
-    q_window: Query<&Window, With<bevy::window::PrimaryWindow>>,
-    q_camera: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
-    world_map: WorldMapRead,
-    game_assets: Res<crate::assets::GameAssets>,
-    q_buildings: MoveBuildingQuery,
-    q_bucket_storages: Query<
-        (Entity, &crate::systems::logistics::BelongsTo),
+#[derive(SystemParam)]
+pub struct BuildMovePreviewState<'w, 's> {
+    pub play_mode: Res<'w, State<PlayMode>>,
+    pub move_context: Res<'w, MoveContext>,
+    pub move_placement_state: Res<'w, MovePlacementState>,
+    pub companion_state: Res<'w, CompanionPlacementState>,
+    pub game_assets: Res<'w, crate::assets::GameAssets>,
+    pub q_window: Query<'w, 's, &'static Window, With<bevy::window::PrimaryWindow>>,
+    pub q_camera: Query<'w, 's, (&'static Camera, &'static GlobalTransform), With<MainCamera>>,
+}
+
+#[derive(SystemParam)]
+pub struct BuildMovePreviewQueries<'w, 's> {
+    pub q_buildings: MoveBuildingQuery<'w, 's>,
+    pub q_bucket_storages: Query<
+        'w,
+        's,
+        (Entity, &'static crate::systems::logistics::BelongsTo),
         With<crate::systems::logistics::BucketStorage>,
     >,
+}
+
+pub fn building_move_preview_system(
+    mut commands: Commands,
+    state: BuildMovePreviewState,
+    world_map: WorldMapRead,
+    preview_queries: BuildMovePreviewQueries,
     mut q_ghost: Query<(Entity, &mut Transform, &mut Sprite), With<PlacementGhost>>,
     mut q_partner_ghost: PartnerGhostQuery,
 ) {
+    let BuildMovePreviewState {
+        play_mode,
+        move_context,
+        move_placement_state,
+        companion_state,
+        game_assets,
+        q_window,
+        q_camera,
+    } = state;
+    let BuildMovePreviewQueries {
+        q_buildings,
+        q_bucket_storages,
+    } = preview_queries;
     if *play_mode.get() != PlayMode::BuildingMove {
         despawn_move_ghosts(&mut commands, &q_ghost, &q_partner_ghost);
         return;

@@ -42,6 +42,27 @@
 - Task system conventions: add new `AssignedTask` variants as struct variants and keep task queries aggregated in `TaskQueries` (see `crates/bevy_app/src/systems/soul_ai/execute/task_execution/`).
 - Context hygiene: respect `.cursorignore` and `.geminiignore` by avoiding large build artifacts/logs (`target/`, `dist/`, `.trunk/`, `logs/`, `build_*.txt`, `*_output*.txt`) unless explicitly needed.
 
+### Background Agent Policy (STRICT — DO NOT VIOLATE)
+**Do NOT use background/subprocess agents for code editing tasks** (e.g., `general-purpose` agent with file edits).
+
+Reasons:
+- Agents share the same repository and routinely make out-of-scope changes to unrelated files
+- Progress cannot be monitored in real time; damage is discovered only after the fact
+- Multiple agents running in parallel conflict with each other and with other ongoing sessions
+
+**Permitted agent uses:**
+- `explore` agent — read-only codebase investigation only
+- `code-review` agent — read-only review only
+- All code edits must be made directly by the main agent using `view` / `edit` tools
+
+### Git Revert Policy
+**NEVER run `git checkout -- <file>` or any destructive git command without first:**
+1. Running `git log --oneline -5` to understand recent commit history
+2. Running `git diff HEAD -- <file>` to read and understand every line being discarded
+3. Confirming that NO parallel task or session produced those changes
+
+Parallel sessions may have legitimately modified files that appear "unexpected" to a new agent.
+
 ### Task Lifecycle
 **On task start**: Review `docs/` to understand current specs and implementation status.
 **On task completion**: Update or create documentation in `docs/` as needed.

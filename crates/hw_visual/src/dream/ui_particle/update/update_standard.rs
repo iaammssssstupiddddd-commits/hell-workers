@@ -1,11 +1,10 @@
 use bevy::prelude::*;
 use bevy::ui_render::prelude::MaterialNode;
 use hw_core::constants::*;
-use hw_core::ui_nodes::{UiNodeRegistry, UiSlot};
 use rand::Rng;
 use rand::rngs::ThreadRng;
 
-use super::super::super::components::{DreamGainUiParticle, DreamIconAbsorb};
+use super::super::super::components::DreamGainUiParticle;
 use super::super::super::dream_bubble_material::DreamBubbleUiMaterial;
 use super::update_trail::spawn_trail_ghost;
 
@@ -26,40 +25,61 @@ pub(super) struct StandardParticleMotion {
     visual_distance_ratio: f32,
 }
 
-#[allow(clippy::too_many_arguments)]
+pub(super) struct StandardInput {
+    pub dt: f32,
+    pub elapsed: f32,
+    pub viewport_size: Vec2,
+    pub current_pos: Vec2,
+}
+
+pub(super) struct ParticleState<'a> {
+    pub particle: &'a mut DreamGainUiParticle,
+    pub rng: &'a mut ThreadRng,
+}
+
+pub(super) struct NodeVisuals<'a> {
+    pub node: &'a mut Node,
+    pub mat_node: &'a MaterialNode<DreamBubbleUiMaterial>,
+    pub transform: &'a mut Transform,
+}
+
+pub(super) struct TrailTimingCtx {
+    pub dt: f32,
+    pub elapsed: f32,
+    pub ui_bubble_layer: Option<Entity>,
+}
+
 pub(super) fn update_standard_particle(
-    dt: f32,
-    elapsed: f32,
-    viewport_size: Vec2,
-    current_pos: Vec2,
-    rng: &mut ThreadRng,
-    particle: &mut DreamGainUiParticle,
-    node: &mut Node,
-    mat_node: &MaterialNode<DreamBubbleUiMaterial>,
-    transform: &mut Transform,
-    materials: &mut ResMut<Assets<DreamBubbleUiMaterial>>,
-    q_icon: &mut Query<&mut DreamIconAbsorb>,
-    ui_nodes: &UiNodeRegistry,
+    input: StandardInput,
+    state: ParticleState<'_>,
+    visuals: NodeVisuals<'_>,
+    materials: &mut Assets<DreamBubbleUiMaterial>,
     ui_bubble_layer: Option<Entity>,
-    commands: &mut Commands,
+    commands: &mut Commands<'_, '_>,
 ) -> bool {
+    let StandardInput { dt, elapsed, viewport_size, current_pos } = input;
+    let ParticleState { particle, rng } = state;
+    let NodeVisuals { node, mat_node, transform } = visuals;
+
     let forces = compute_standard_particle_forces(dt, viewport_size, current_pos, particle, rng);
 
     let motion =
         integrate_standard_particle_motion(dt, viewport_size, current_pos, &forces, particle, node);
 
     update_standard_particle_visual(
-        elapsed, mat_node, materials, particle, transform, &motion, node, &forces,
+        elapsed,
+        particle,
+        VisualData { mat_node, materials, transform, node },
+        &motion,
+        &forces,
     );
 
-    if handle_standard_particle_arrival(forces.distance, ui_nodes, q_icon) {
+    if forces.distance < DREAM_UI_ARRIVAL_RADIUS {
         return true;
     }
 
     emit_standard_particle_trail(
-        dt,
-        elapsed,
-        ui_bubble_layer,
+        TrailTimingCtx { dt, elapsed, ui_bubble_layer },
         &motion,
         &forces,
         particle,
@@ -219,17 +239,21 @@ fn integrate_standard_particle_motion(
     }
 }
 
-#[allow(clippy::too_many_arguments)]
+struct VisualData<'a> {
+    mat_node: &'a MaterialNode<DreamBubbleUiMaterial>,
+    materials: &'a mut Assets<DreamBubbleUiMaterial>,
+    transform: &'a mut Transform,
+    node: &'a mut Node,
+}
+
 fn update_standard_particle_visual(
     elapsed: f32,
-    mat_node: &MaterialNode<DreamBubbleUiMaterial>,
-    materials: &mut ResMut<Assets<DreamBubbleUiMaterial>>,
     particle: &DreamGainUiParticle,
-    transform: &mut Transform,
+    vis: VisualData<'_>,
     motion: &StandardParticleMotion,
-    node: &mut Node,
     forces: &StandardParticleForces,
 ) {
+    let VisualData { mat_node, materials, transform, node } = vis;
     let shrink = (motion.visual_distance_ratio * 9.0 + 1.0).log10().max(0.1);
 
     node.width = Val::Px(
@@ -276,33 +300,15 @@ fn update_standard_particle_visual(
     }
 }
 
-fn handle_standard_particle_arrival(
-    distance: f32,
-    ui_nodes: &UiNodeRegistry,
-    q_icon: &mut Query<&mut DreamIconAbsorb>,
-) -> bool {
-    if distance < DREAM_UI_ARRIVAL_RADIUS {
-        if let Some(icon_entity) = ui_nodes.get_slot(UiSlot::DreamPoolIcon)
-            && let Ok(mut absorb) = q_icon.get_mut(icon_entity) {
-                absorb.pulse_count = absorb.pulse_count.saturating_add(1);
-            }
-        return true;
-    }
-
-    false
-}
-
-#[allow(clippy::too_many_arguments)]
 fn emit_standard_particle_trail(
-    dt: f32,
-    elapsed: f32,
-    ui_bubble_layer: Option<Entity>,
+    timing: TrailTimingCtx,
     motion: &StandardParticleMotion,
     forces: &StandardParticleForces,
     particle: &mut DreamGainUiParticle,
-    commands: &mut Commands,
-    materials: &mut ResMut<Assets<DreamBubbleUiMaterial>>,
+    commands: &mut Commands<'_, '_>,
+    materials: &mut Assets<DreamBubbleUiMaterial>,
 ) {
+    let TrailTimingCtx { dt, elapsed, ui_bubble_layer } = timing;
     particle.trail_cooldown -= dt;
     if particle.trail_cooldown <= 0.0 && motion.visual_distance_ratio > 0.15 {
         particle.trail_cooldown = DREAM_UI_TRAIL_INTERVAL;
@@ -315,14 +321,16 @@ fn emit_standard_particle_trail(
             spawn_trail_ghost(
                 commands,
                 materials,
-                root,
-                motion.final_pos,
-                trail_size,
-                motion.width_scale,
-                motion.length_scale,
-                elapsed,
-                motion.speed,
-                motion.vel_dir,
+                super::update_trail::TrailGhostSpec {
+                    root,
+                    final_pos: motion.final_pos,
+                    trail_size,
+                    width_scale: motion.width_scale,
+                    length_scale: motion.length_scale,
+                    elapsed,
+                    speed: motion.speed,
+                    vel_dir: motion.vel_dir,
+                },
             );
         }
     }

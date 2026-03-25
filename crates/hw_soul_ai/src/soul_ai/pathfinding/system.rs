@@ -44,48 +44,59 @@ pub fn soul_stuck_escape_system(
     }
 }
 
+/// `process_worker_pathfinding` に渡す Soul の移動状態・アイドル情報。
+struct SoulPfState<'a> {
+    destination: &'a mut Destination,
+    path: &'a mut Path,
+    task: &'a mut AssignedTask,
+    idle: &'a mut IdleState,
+    rest_reserved_for: Option<&'a RestAreaReservedFor>,
+    inventory_opt: Option<&'a mut hw_logistics::Inventory>,
+}
+
+/// `process_worker_pathfinding` に渡すワールド・パス探索コンテキスト。
+struct WorldPfCtx<'a> {
+    world_map: &'a WorldMap,
+    pf_context: &'a mut PathfindingContext,
+    pathfind_count: &'a mut usize,
+    budget: usize,
+}
+
 /// 1 worker のパス探索処理（cooldown 処理後に呼ぶ）。
 /// pathfind_count は再利用時の部分再計算・新規計算それぞれで内部更新される。
-#[allow(clippy::too_many_arguments)]
 fn process_worker_pathfinding(
     commands: &mut Commands,
     entity: Entity,
     transform: &Transform,
-    destination: &mut Destination,
-    path: &mut Path,
-    task: &mut AssignedTask,
-    idle: &mut IdleState,
-    rest_reserved_for: Option<&RestAreaReservedFor>,
-    inventory_opt: Option<&mut hw_logistics::Inventory>,
-    world_map: &WorldMap,
-    pf_context: &mut PathfindingContext,
+    soul: SoulPfState<'_>,
+    world_pf: WorldPfCtx<'_>,
     q_rest_areas: &Query<&Transform, With<hw_jobs::RestArea>>,
     queries: &mut crate::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
-    pathfind_count: &mut usize,
-    budget: usize,
 ) {
-    let has_task = !matches!(*task, AssignedTask::None);
+    let has_task = !matches!(*soul.task, AssignedTask::None);
     let current_pos = transform.translation.truncate();
     let start_grid = WorldMap::world_to_grid(current_pos);
-    let goal_grid = WorldMap::world_to_grid(destination.0);
+    let goal_grid = WorldMap::world_to_grid(soul.destination.0);
 
     // --- 再利用フェーズ: 既存パスが有効なら A* コストなしで続行 ---
     if reuse::try_reuse_existing_path(
         commands,
-        entity,
-        path,
-        destination.0,
+        reuse::PathBudgetInfo {
+            entity,
+            pathfind_count: world_pf.pathfind_count,
+            phase_budget_limit: world_pf.budget,
+        },
+        soul.path,
+        soul.destination.0,
         goal_grid,
-        world_map,
-        pf_context,
-        pathfind_count,
-        budget,
+        world_pf.world_map,
+        world_pf.pf_context,
     ) {
         return;
     }
 
     // デバッグログ: どのソウルがパス探索を行うか
-    if has_task && path.waypoints.is_empty() {
+    if has_task && soul.path.waypoints.is_empty() {
         info!(
             "PATHFIND_DEBUG: Soul {:?} seeking path from {:?} to {:?}",
             entity, start_grid, goal_grid
@@ -94,34 +105,34 @@ fn process_worker_pathfinding(
 
     // 同グリッド: A* 不要、1ステップで到達可能
     if start_grid == goal_grid {
-        path.waypoints = vec![destination.0];
-        path.current_index = 0;
+        soul.path.waypoints = vec![soul.destination.0];
+        soul.path.current_index = 0;
         commands.entity(entity).remove::<PathCooldown>();
         // デバッグ：集会中のsoulで特定位置付近の場合
-        if matches!(idle.behavior, IdleBehavior::Gathering)
+        if matches!(soul.idle.behavior, IdleBehavior::Gathering)
             && current_pos.x.abs() < 150.0
             && current_pos.y.abs() < 250.0
         {
-            let dist = (destination.0 - current_pos).length();
+            let dist = (soul.destination.0 - current_pos).length();
             info!(
                 "PATHFIND: {:?} same grid - pos: {:?}, dest: {:?}, dist: {:.1}",
-                entity, current_pos, destination.0, dist
+                entity, current_pos, soul.destination.0, dist
             );
         }
         return;
     }
 
     // --- 探索フェーズ: 予算スロットを 1 消費して A* を実行 ---
-    if *pathfind_count >= budget {
+    if *world_pf.pathfind_count >= world_pf.budget {
         return;
     }
-    *pathfind_count += 1;
+    *world_pf.pathfind_count += 1;
 
     if let Some(world_path) =
-        find_path_world_waypoints(world_map, pf_context, start_grid, goal_grid)
+        find_path_world_waypoints(world_pf.world_map, world_pf.pf_context, start_grid, goal_grid)
     {
         // デバッグ：集会中のsoulで特定位置付近の場合
-        if matches!(idle.behavior, IdleBehavior::Gathering)
+        if matches!(soul.idle.behavior, IdleBehavior::Gathering)
             && current_pos.x.abs() < 150.0
             && current_pos.y.abs() < 250.0
         {
@@ -133,8 +144,8 @@ fn process_worker_pathfinding(
                 goal_grid
             );
         }
-        path.waypoints = world_path;
-        path.current_index = 0;
+        soul.path.waypoints = world_path;
+        soul.path.current_index = 0;
         commands.entity(entity).remove::<PathCooldown>();
         debug!("PATH: Soul {:?} found new path", entity);
     } else {
@@ -142,49 +153,57 @@ fn process_worker_pathfinding(
 
         // --- fallback フェーズ: 休憩所への代替タイルを探す（idle の GoingToRest のみ）---
         if !has_task
-            && idle.behavior == IdleBehavior::GoingToRest
+            && soul.idle.behavior == IdleBehavior::GoingToRest
             && fallback::try_rest_area_fallback_path(
                 commands,
-                destination,
-                path,
-                rest_reserved_for,
+                soul.destination,
+                soul.path,
+                soul.rest_reserved_for,
                 q_rest_areas,
-                current_pos,
-                start_grid,
-                goal_grid,
-                world_map,
-                pf_context,
-                entity,
+                fallback::SoulGridPos {
+                    entity,
+                    current_pos,
+                    start_grid,
+                    goal_grid,
+                },
+                fallback::FallbackPfState {
+                    world_map: world_pf.world_map,
+                    pf_context: world_pf.pf_context,
+                },
             )
         {
             return;
         }
 
         // デバッグ：集会中のsoulで特定位置付近の場合
-        if matches!(idle.behavior, IdleBehavior::Gathering)
+        if matches!(soul.idle.behavior, IdleBehavior::Gathering)
             && current_pos.x.abs() < 150.0
             && current_pos.y.abs() < 250.0
         {
             warn!(
                 "PATHFIND: {:?} FAILED to find path - from grid {:?} to grid {:?}, dest: {:?}",
-                entity, start_grid, goal_grid, destination.0
+                entity, start_grid, goal_grid, soul.destination.0
             );
         }
 
         // --- cleanup フェーズ: 到達不能の destination を破棄し、冷却期間を付与 ---
         fallback::cleanup_unreachable_destination(
             commands,
-            entity,
-            transform,
-            current_pos,
-            has_task,
-            idle,
-            destination,
-            task,
-            path,
-            inventory_opt,
+            fallback::SoulEntityCtx {
+                entity,
+                transform,
+                current_pos,
+                has_task,
+            },
+            fallback::SoulMoveState {
+                idle: soul.idle,
+                destination: soul.destination,
+                task: soul.task,
+                path: soul.path,
+            },
+            soul.inventory_opt,
             queries,
-            world_map,
+            world_pf.world_map,
         );
     }
 }
@@ -269,18 +288,22 @@ pub fn pathfinding_system(
                 &mut commands,
                 entity,
                 transform,
-                &mut destination,
-                &mut path,
-                &mut task,
-                &mut idle,
-                rest_reserved_for,
-                inventory_opt.as_deref_mut(),
-                world_map.as_ref(),
-                &mut pf_context,
+                SoulPfState {
+                    destination: &mut destination,
+                    path: &mut path,
+                    task: &mut task,
+                    idle: &mut idle,
+                    rest_reserved_for,
+                    inventory_opt: inventory_opt.as_deref_mut(),
+                },
+                WorldPfCtx {
+                    world_map: world_map.as_ref(),
+                    pf_context: &mut pf_context,
+                    pathfind_count: &mut pathfind_count,
+                    budget,
+                },
                 &q_rest_areas,
                 &mut queries,
-                &mut pathfind_count,
-                budget,
             );
         }
     }

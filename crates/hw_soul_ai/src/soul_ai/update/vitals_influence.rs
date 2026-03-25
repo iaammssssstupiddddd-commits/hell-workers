@@ -9,7 +9,20 @@ use hw_jobs::AssignedTask;
 use hw_spatial::FamiliarSpatialGrid;
 use hw_world::SpatialGridOps;
 
-#[allow(clippy::type_complexity)]
+type SoulVitalsQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static Transform,
+        &'static mut DamnedSoul,
+        &'static AssignedTask,
+        &'static IdleState,
+        Option<&'static CommandedBy>,
+        Option<&'static mut StressBreakdown>,
+    ),
+>;
+
 /// Familiar影響関連の更新を1パスで処理する統合システム
 pub fn familiar_influence_unified_system(
     mut commands: Commands,
@@ -17,15 +30,7 @@ pub fn familiar_influence_unified_system(
     familiar_grid: Res<FamiliarSpatialGrid>,
     mut nearby_buf: Local<Vec<Entity>>,
     q_familiars: Query<(&Transform, &Familiar, &ActiveCommand)>,
-    mut q_souls: Query<(
-        Entity,
-        &Transform,
-        &mut DamnedSoul,
-        &AssignedTask,
-        &IdleState,
-        Option<&CommandedBy>,
-        Option<&mut StressBreakdown>,
-    )>,
+    mut q_souls: SoulVitalsQuery<'_, '_>,
 ) {
     let dt = time.delta_secs();
     let familiar_search_radius = TILE_SIZE * 15.0;

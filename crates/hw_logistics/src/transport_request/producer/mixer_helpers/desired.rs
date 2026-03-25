@@ -13,23 +13,35 @@ use crate::transport_request::producer::find_owner_for_position;
 use crate::types::ResourceType;
 use crate::zone::Stockpile;
 
-#[allow(clippy::too_many_arguments, clippy::type_complexity)]
-pub(crate) fn compute_mixer_desired_requests(
-    q_mixers: &Query<(
+type MixerQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
         Entity,
-        &Transform,
-        &MudMixerStorage,
-        Option<&TaskWorkers>,
-        Option<&MovePlanned>,
-    )>,
+        &'static Transform,
+        &'static MudMixerStorage,
+        Option<&'static TaskWorkers>,
+        Option<&'static MovePlanned>,
+    ),
+>;
+
+pub(crate) type StockpilesDetailedQuery<'w, 's> =
+    Query<'w, 's, (Entity, &'static Transform, &'static Stockpile, Option<&'static StoredItems>)>;
+
+pub(crate) struct MixerInflightContext<'a> {
+    pub haul_cache: &'a SharedResourceCache,
+    pub water_inflight_by_mixer: &'a std::collections::HashMap<Entity, u32>,
+    pub sand_inflight_by_mixer: &'a std::collections::HashMap<Entity, u32>,
+}
+
+pub(crate) fn compute_mixer_desired_requests(
+    q_mixers: &MixerQuery,
     desired_requests: &mut std::collections::HashMap<(Entity, ResourceType), (Entity, u32, Vec2)>,
     active_mixers: &mut HashSet<Entity>,
     all_owners: &[(Entity, AreaBounds)],
     active_yards: &[(Entity, Yard)],
-    haul_cache: &SharedResourceCache,
-    q_stockpiles_detailed: &Query<(Entity, &Transform, &Stockpile, Option<&StoredItems>)>,
-    water_inflight_by_mixer: &std::collections::HashMap<Entity, u32>,
-    sand_inflight_by_mixer: &std::collections::HashMap<Entity, u32>,
+    q_stockpiles_detailed: &StockpilesDetailedQuery,
+    inflight: MixerInflightContext<'_>,
 ) {
     for (mixer_entity, mixer_transform, storage, _workers_opt, move_planned_opt) in q_mixers.iter()
     {
@@ -52,13 +64,15 @@ pub(crate) fn compute_mixer_desired_requests(
                 _ => 0,
             };
 
-            let inflight = if resource_type == ResourceType::Sand {
-                *sand_inflight_by_mixer.get(&mixer_entity).unwrap_or(&0)
+            let inflight_count = if resource_type == ResourceType::Sand {
+                *inflight.sand_inflight_by_mixer.get(&mixer_entity).unwrap_or(&0)
             } else {
                 0
             };
-            let _ = haul_cache.get_mixer_destination_reservation(mixer_entity, resource_type);
-            let needed = MUD_MIXER_CAPACITY.saturating_sub(current + inflight);
+            let _ = inflight
+                .haul_cache
+                .get_mixer_destination_reservation(mixer_entity, resource_type);
+            let needed = MUD_MIXER_CAPACITY.saturating_sub(current + inflight_count);
             if needed > 0 {
                 desired_requests.insert(
                     (mixer_entity, resource_type),
@@ -67,21 +81,25 @@ pub(crate) fn compute_mixer_desired_requests(
             }
         }
 
-        let water_inflight_tasks = *water_inflight_by_mixer.get(&mixer_entity).unwrap_or(&0);
+        let water_inflight_tasks = *inflight
+            .water_inflight_by_mixer
+            .get(&mixer_entity)
+            .unwrap_or(&0);
         let water_inflight = water_inflight_tasks * BUCKET_CAPACITY;
-        let (water_current, water_capacity) =
-            if let Ok((_, _, stock, stored_opt)) = q_stockpiles_detailed.get(mixer_entity) {
-                if stock.resource_type == Some(ResourceType::Water) {
-                    (
-                        stored_opt.map(|s| s.len()).unwrap_or(0) as u32,
-                        stock.capacity as u32,
-                    )
-                } else {
-                    (0, MUD_MIXER_CAPACITY)
-                }
+        let (water_current, water_capacity) = if let Ok((_, _, stock, stored_opt)) =
+            q_stockpiles_detailed.get(mixer_entity)
+        {
+            if stock.resource_type == Some(ResourceType::Water) {
+                (
+                    stored_opt.map(|s| s.len()).unwrap_or(0) as u32,
+                    stock.capacity as u32,
+                )
             } else {
                 (0, MUD_MIXER_CAPACITY)
-            };
+            }
+        } else {
+            (0, MUD_MIXER_CAPACITY)
+        };
         let projected_water = water_current
             .saturating_add(water_inflight)
             .min(water_capacity);

@@ -68,13 +68,15 @@ pub fn build_task_list_snapshot(
         let description = presenter::generate_task_description(
             wt,
             entity,
-            blueprint,
-            transport_req,
-            resource_item,
-            tree,
-            rock,
-            sand_pile,
-            bone_pile,
+            presenter::TaskComponentRefs {
+                blueprint,
+                transport_req,
+                resource_item,
+                tree,
+                rock,
+                _sand_pile: sand_pile,
+                bone_pile,
+            },
         );
 
         let entry = TaskEntry {

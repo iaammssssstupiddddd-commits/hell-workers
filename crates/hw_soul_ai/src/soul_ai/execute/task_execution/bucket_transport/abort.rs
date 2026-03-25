@@ -59,12 +59,14 @@ pub fn abort_without_bucket(
             let soul_pos = ctx.soul_pos();
             crate::soul_ai::helpers::work::cleanup_task_assignment(
                 commands,
-                ctx.soul_entity,
-                soul_pos,
+                crate::soul_ai::helpers::work::SoulDropCtx {
+                    soul_entity: ctx.soul_entity,
+                    drop_pos: soul_pos,
+                    inventory: None,
+                    dropped_item_res: None,
+                },
                 ctx.task,
                 ctx.path,
-                None,
-                None,
                 ctx.queries,
                 world_map,
                 true,
@@ -101,12 +103,14 @@ pub fn abort_with_bucket(
             let soul_pos = ctx.soul_pos();
             crate::soul_ai::helpers::work::cleanup_task_assignment(
                 commands,
-                ctx.soul_entity,
-                soul_pos,
+                crate::soul_ai::helpers::work::SoulDropCtx {
+                    soul_entity: ctx.soul_entity,
+                    drop_pos: soul_pos,
+                    inventory: Some(ctx.inventory),
+                    dropped_item_res: None,
+                },
                 ctx.task,
                 ctx.path,
-                Some(ctx.inventory),
-                None,
                 ctx.queries,
                 world_map,
                 true,

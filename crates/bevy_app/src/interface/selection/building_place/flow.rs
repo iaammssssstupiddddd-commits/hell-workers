@@ -1,15 +1,12 @@
 use crate::app_contexts::{CompanionPlacementKind, CompanionPlacementState};
 use crate::assets::GameAssets;
-use crate::systems::jobs::{Blueprint, Building};
 use crate::world::map::{RIVER_Y_MIN, WorldMap};
 use bevy::prelude::*;
 use hw_ui::selection::building_occupied_grids;
-use hw_world::zones::{Site, Yard};
-
+use super::PlacementQueries;
 use super::companion::parent_building_type;
 use super::placement::{place_building_blueprint, try_place_bucket_storage_companion};
 
-#[allow(clippy::too_many_arguments)]
 /// Handles the companion placement flow when `companion_state` is active.
 /// Returns `true` if the flow consumed the click (caller should `return`).
 pub(super) fn handle_companion_flow(
@@ -17,10 +14,7 @@ pub(super) fn handle_companion_flow(
     commands: &mut Commands,
     world_map: &mut WorldMap,
     game_assets: &GameAssets,
-    q_buildings: &Query<&Building>,
-    q_blueprints_by_entity: &Query<&Blueprint>,
-    q_sites: &Query<&Site>,
-    q_yards: &Query<&Yard>,
+    pq: &PlacementQueries<'_, '_, '_>,
     world_pos: Vec2,
     grid: (i32, i32),
 ) -> bool {
@@ -44,10 +38,7 @@ pub(super) fn handle_companion_flow(
                 game_assets,
                 parent_type,
                 active.parent_anchor,
-                q_buildings,
-                q_blueprints_by_entity,
-                q_sites,
-                q_yards,
+                pq,
             ) else {
                 warn!(
                     "COMPANION: failed to confirm parent blueprint before bucket storage placement"

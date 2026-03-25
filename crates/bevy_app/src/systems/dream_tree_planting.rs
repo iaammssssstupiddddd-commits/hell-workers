@@ -120,9 +120,7 @@ pub fn dream_tree_planting_system(
     };
 
     process_dream_planting(
-        &start,
-        &end,
-        seed,
+        PlantingArea { start, end, seed },
         &mut commands,
         &mut world_map,
         &mut dream_pool,
@@ -132,11 +130,14 @@ pub fn dream_tree_planting_system(
     );
 }
 
-#[allow(clippy::too_many_arguments)]
-fn process_dream_planting(
-    start: &Vec2,
-    end: &Vec2,
+struct PlantingArea {
+    start: Vec2,
+    end: Vec2,
     seed: u64,
+}
+
+fn process_dream_planting(
+    area: PlantingArea,
     commands: &mut Commands,
     world_map: &mut WorldMap,
     dream_pool: &mut ResMut<DreamPool>,
@@ -144,10 +145,11 @@ fn process_dream_planting(
     q_trees: &Query<&Transform, With<Tree>>,
     q_items: &Query<&Transform, With<ResourceItem>>,
 ) {
+    let PlantingArea { start, end, seed } = area;
     let current_tree_count = q_trees.iter().count() as u32;
     let plan = build_dream_tree_planting_plan(
-        *start,
-        *end,
+        start,
+        end,
         seed,
         world_map,
         dream_pool.points,

@@ -13,7 +13,6 @@ use hw_world::zones::Yard;
 use crate::resource_cache::SharedResourceCache;
 use crate::transport_request::TransportRequest;
 use crate::types::ResourceType;
-use crate::zone::Stockpile;
 
 type MixerQuery<'w, 's> = Query<
     'w,
@@ -46,12 +45,7 @@ pub fn mud_mixer_auto_haul_system(
     q_yards: Query<(Entity, &Yard)>,
     q_mixers: MixerQuery,
     q_mixer_requests: MixerRequestQuery,
-    q_stockpiles_detailed: Query<(
-        Entity,
-        &Transform,
-        &Stockpile,
-        Option<&hw_core::relationships::StoredItems>,
-    )>,
+    q_stockpiles_detailed: mixer_helpers::StockpilesDetailedQuery,
 ) {
     let active_familiars = mixer_helpers::collect_active_familiars(&q_familiars);
     let active_yards = mixer_helpers::collect_active_yards(&q_yards);
@@ -70,10 +64,12 @@ pub fn mud_mixer_auto_haul_system(
         &mut active_mixers,
         &all_owners,
         &active_yards,
-        &haul_cache,
         &q_stockpiles_detailed,
-        &water_inflight_by_mixer,
-        &sand_inflight_by_mixer,
+        mixer_helpers::MixerInflightContext {
+            haul_cache: &haul_cache,
+            water_inflight_by_mixer: &water_inflight_by_mixer,
+            sand_inflight_by_mixer: &sand_inflight_by_mixer,
+        },
     );
 
     mixer_helpers::upsert_mixer_requests(

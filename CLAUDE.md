@@ -59,6 +59,23 @@ CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo clippy --worksp
 - Only request user debugging as last resort when cause cannot be identified
 - When debugging, first check implementation once cause is roughly estimated
 
+### 4.5. Background Agent Policy (STRICT)
+**Do NOT use background agents (`task` tool with `mode="background"` or `agent_type="general-purpose"`) for code editing tasks.**
+
+Reasons:
+- Background agents operate on the shared repository and can make out-of-scope changes (unrelated files, docs, refactors not asked for)
+- Their progress cannot be monitored in real time; by the time you notice a problem, damage is done
+- Multiple agents running simultaneously can conflict with each other and with other ongoing tasks
+
+**Allowed uses of agents:**
+- `explore` agent: read-only codebase investigation
+- `code-review` agent: read-only review
+- Direct editing by the main agent using `view` / `edit` tools
+
+**`git checkout --` and revert policy:**
+- NEVER run `git checkout -- <file>` or any revert command without first running `git log --oneline -5` and `git diff HEAD -- <file>` to confirm the change is truly unwanted
+- Changes may have been made by a separate completed task in a parallel session
+
 ### 5. Bevy バージョンの厳守とドキュメント確認
 - 本プロジェクトは **Bevy 0.18** を使用している。
 - AIの学習データにある過去のバージョン（0.14以前など）のAPIを無自覚に使用しないこと。

@@ -1,18 +1,17 @@
 use super::super::super::apply::apply_designation_in_area;
 use super::super::super::cancel::cancel_single_designation;
-use super::super::super::queries::DesignationTargetQuery;
+use super::super::super::queries::{
+    DesignationTargetQuery, FloorTileBlueprintQuery, WallTileBlueprintQuery,
+};
 use crate::app_contexts::TaskContext;
 use crate::systems::command::{TaskArea, TaskMode};
-use crate::systems::jobs::floor_construction::{
-    FloorConstructionCancelRequested, FloorTileBlueprint,
-};
-use crate::systems::jobs::wall_construction::{WallConstructionCancelRequested, WallTileBlueprint};
+use crate::systems::jobs::floor_construction::FloorConstructionCancelRequested;
+use crate::systems::jobs::wall_construction::WallConstructionCancelRequested;
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
 use hw_core::constants::TILE_SIZE;
 use std::collections::HashSet;
 
-#[allow(clippy::type_complexity)]
 pub(super) fn handle_release_cancel_designation(
     task_context: &mut TaskContext,
     selected_entity: Option<Entity>,
@@ -20,8 +19,8 @@ pub(super) fn handle_release_cancel_designation(
     start_pos: Vec2,
     q_target_sets: &mut bevy::ecs::system::ParamSet<(
         DesignationTargetQuery<'_, '_>,
-        Query<(Entity, &Transform, &FloorTileBlueprint)>,
-        Query<(Entity, &Transform, &WallTileBlueprint)>,
+        FloorTileBlueprintQuery<'_, '_>,
+        WallTileBlueprintQuery<'_, '_>,
     )>,
     commands: &mut Commands,
 ) {
@@ -37,13 +36,12 @@ pub(super) fn handle_release_cancel_designation(
     task_context.0 = TaskMode::CancelDesignation(None);
 }
 
-#[allow(clippy::type_complexity)]
 fn cancel_point(
     start_pos: Vec2,
     q_target_sets: &mut bevy::ecs::system::ParamSet<(
         DesignationTargetQuery<'_, '_>,
-        Query<(Entity, &Transform, &FloorTileBlueprint)>,
-        Query<(Entity, &Transform, &WallTileBlueprint)>,
+        FloorTileBlueprintQuery<'_, '_>,
+        WallTileBlueprintQuery<'_, '_>,
     )>,
     commands: &mut Commands,
 ) {
@@ -51,13 +49,12 @@ fn cancel_point(
     cancel_point_construction_sites(start_pos, q_target_sets, commands);
 }
 
-#[allow(clippy::type_complexity)]
 fn cancel_point_nearest_designation(
     start_pos: Vec2,
     q_target_sets: &mut bevy::ecs::system::ParamSet<(
         DesignationTargetQuery<'_, '_>,
-        Query<(Entity, &Transform, &FloorTileBlueprint)>,
-        Query<(Entity, &Transform, &WallTileBlueprint)>,
+        FloorTileBlueprintQuery<'_, '_>,
+        WallTileBlueprintQuery<'_, '_>,
     )>,
     commands: &mut Commands,
 ) {
@@ -109,13 +106,12 @@ fn cancel_point_nearest_designation(
     }
 }
 
-#[allow(clippy::type_complexity)]
 fn cancel_point_construction_sites(
     start_pos: Vec2,
     q_target_sets: &mut bevy::ecs::system::ParamSet<(
         DesignationTargetQuery<'_, '_>,
-        Query<(Entity, &Transform, &FloorTileBlueprint)>,
-        Query<(Entity, &Transform, &WallTileBlueprint)>,
+        FloorTileBlueprintQuery<'_, '_>,
+        WallTileBlueprintQuery<'_, '_>,
     )>,
     commands: &mut Commands,
 ) {
@@ -158,15 +154,14 @@ fn cancel_point_construction_sites(
     }
 }
 
-#[allow(clippy::type_complexity)]
 fn cancel_area(
     start_pos: Vec2,
     end_pos: Vec2,
     selected_entity: Option<Entity>,
     q_target_sets: &mut bevy::ecs::system::ParamSet<(
         DesignationTargetQuery<'_, '_>,
-        Query<(Entity, &Transform, &FloorTileBlueprint)>,
-        Query<(Entity, &Transform, &WallTileBlueprint)>,
+        FloorTileBlueprintQuery<'_, '_>,
+        WallTileBlueprintQuery<'_, '_>,
     )>,
     commands: &mut Commands,
 ) {
@@ -186,13 +181,12 @@ fn cancel_area(
     cancel_area_construction_sites(&area, q_target_sets, commands);
 }
 
-#[allow(clippy::type_complexity)]
 fn cancel_area_construction_sites(
     area: &TaskArea,
     q_target_sets: &mut bevy::ecs::system::ParamSet<(
         DesignationTargetQuery<'_, '_>,
-        Query<(Entity, &Transform, &FloorTileBlueprint)>,
-        Query<(Entity, &Transform, &WallTileBlueprint)>,
+        FloorTileBlueprintQuery<'_, '_>,
+        WallTileBlueprintQuery<'_, '_>,
     )>,
     commands: &mut Commands,
 ) {

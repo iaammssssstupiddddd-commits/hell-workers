@@ -4,7 +4,7 @@ use hw_core::logistics::WheelbarrowDestination;
 use hw_logistics::transport_request::can_complete_pick_drop_to_point;
 
 use super::super::super::builders::{
-    issue_haul_to_stockpile_with_source, issue_haul_with_wheelbarrow,
+    WheelbarrowHaulSpec, issue_haul_to_stockpile_with_source, issue_haul_with_wheelbarrow,
 };
 use super::super::super::validator::resolve_haul_to_stockpile_inputs;
 use super::demand;
@@ -67,11 +67,13 @@ pub fn assign_haul_to_stockpile(
                 return true;
             }
             if lease_validation::try_issue_haul_from_lease(
-                ctx.task_entity,
-                task_pos,
-                already_commanded,
-                1,
-                1,
+                lease_validation::HaulFromLeaseSpec {
+                    task_entity: ctx.task_entity,
+                    task_pos,
+                    already_commanded,
+                    min_valid_items: 1,
+                    max_items: 1,
+                },
                 |item| item == source_item,
                 ctx,
                 queries,
@@ -83,10 +85,12 @@ pub fn assign_haul_to_stockpile(
                 wheelbarrow::find_nearest_wheelbarrow(task_pos, queries, shadow)
             {
                 issue_haul_with_wheelbarrow(
-                    wb_entity,
-                    source_pos,
-                    WheelbarrowDestination::Stockpile(stockpile),
-                    vec![source_item],
+                    WheelbarrowHaulSpec {
+                        wheelbarrow: wb_entity,
+                        source_pos,
+                        destination: WheelbarrowDestination::Stockpile(stockpile),
+                        items: vec![source_item],
+                    },
                     task_pos,
                     already_commanded,
                     ctx,
@@ -144,11 +148,13 @@ pub fn assign_haul_to_stockpile(
         WHEELBARROW_MIN_BATCH_SIZE
     };
     if lease_validation::try_issue_haul_from_lease(
-        ctx.task_entity,
-        task_pos,
-        already_commanded,
-        min_valid_items,
-        max_items,
+        lease_validation::HaulFromLeaseSpec {
+            task_entity: ctx.task_entity,
+            task_pos,
+            already_commanded,
+            min_valid_items,
+            max_items,
+        },
         |_| true,
         ctx,
         queries,

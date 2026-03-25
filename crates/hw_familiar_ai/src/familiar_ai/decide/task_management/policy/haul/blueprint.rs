@@ -5,7 +5,7 @@ use hw_core::logistics::ResourceType;
 use hw_logistics::transport_request::can_complete_pick_drop_to_blueprint;
 
 use super::super::super::builders::{
-    issue_collect_bone_with_wheelbarrow_to_blueprint,
+    WheelbarrowCollectSpec, issue_collect_bone_with_wheelbarrow_to_blueprint,
     issue_collect_sand_with_wheelbarrow_to_blueprint, issue_haul_to_blueprint_with_source,
 };
 use super::super::super::validator::resolve_haul_to_blueprint_inputs;
@@ -71,11 +71,13 @@ pub fn assign_haul_to_blueprint(
 
     let max_items = remaining_needed.min(WHEELBARROW_CAPACITY as u32) as usize;
     if lease_validation::try_issue_haul_from_lease(
-        ctx.task_entity,
-        task_pos,
-        already_commanded,
-        1,
-        max_items,
+        lease_validation::HaulFromLeaseSpec {
+            task_entity: ctx.task_entity,
+            task_pos,
+            already_commanded,
+            min_valid_items: 1,
+            max_items,
+        },
         |_| true,
         ctx,
         queries,
@@ -86,15 +88,16 @@ pub fn assign_haul_to_blueprint(
 
     if resource_type == ResourceType::Sand
         && try_direct_collect_with_wheelbarrow_to_blueprint(
-            blueprint,
-            remaining_needed,
+            CollectBlueprintParams { blueprint, remaining_needed },
             task_pos,
             already_commanded,
             ctx,
             queries,
             shadow,
-            direct_collect::find_collect_sand_source,
-            issue_collect_sand_with_wheelbarrow_to_blueprint,
+            CollectStrategy {
+                find_source: direct_collect::find_collect_sand_source,
+                issue_fn: issue_collect_sand_with_wheelbarrow_to_blueprint,
+            },
         )
     {
         return true;
@@ -102,15 +105,16 @@ pub fn assign_haul_to_blueprint(
 
     if resource_type == ResourceType::Bone
         && try_direct_collect_with_wheelbarrow_to_blueprint(
-            blueprint,
-            remaining_needed,
+            CollectBlueprintParams { blueprint, remaining_needed },
             task_pos,
             already_commanded,
             ctx,
             queries,
             shadow,
-            direct_collect::find_collect_bone_source,
-            issue_collect_bone_with_wheelbarrow_to_blueprint,
+            CollectStrategy {
+                find_source: direct_collect::find_collect_bone_source,
+                issue_fn: issue_collect_bone_with_wheelbarrow_to_blueprint,
+            },
         )
     {
         return true;
@@ -201,11 +205,7 @@ type FindSourceFn = fn(
 ) -> Option<(Entity, Vec2)>;
 
 type IssueFnPtr = fn(
-    Entity,
-    Entity,
-    Vec2,
-    Entity,
-    u32,
+    WheelbarrowCollectSpec,
     Vec2,
     bool,
     &AssignTaskContext<'_>,
@@ -213,20 +213,29 @@ type IssueFnPtr = fn(
     &mut ReservationShadow,
 );
 
-#[allow(clippy::too_many_arguments)]
-fn try_direct_collect_with_wheelbarrow_to_blueprint(
+/// `try_direct_collect_with_wheelbarrow_to_blueprint` のパラメータをまとめた構造体。
+struct CollectBlueprintParams {
     blueprint: Entity,
     remaining_needed: u32,
+}
+
+/// collect 関数と source 探索関数をまとめた戦略構造体。
+struct CollectStrategy {
+    find_source: FindSourceFn,
+    issue_fn: IssueFnPtr,
+}
+
+fn try_direct_collect_with_wheelbarrow_to_blueprint(
+    params: CollectBlueprintParams,
     task_pos: Vec2,
     already_commanded: bool,
     ctx: &AssignTaskContext<'_>,
     queries: &mut FamiliarTaskAssignmentQueries,
     shadow: &mut ReservationShadow,
-    find_source: FindSourceFn,
-    issue_fn: IssueFnPtr,
+    strategy: CollectStrategy,
 ) -> bool {
     let Some((source_entity, source_pos)) =
-        find_source(task_pos, ctx.task_area_opt, queries, shadow)
+        (strategy.find_source)(task_pos, ctx.task_area_opt, queries, shadow)
     else {
         return false;
     };
@@ -235,14 +244,16 @@ fn try_direct_collect_with_wheelbarrow_to_blueprint(
         return false;
     };
 
-    let amount = remaining_needed.max(1).min(WHEELBARROW_CAPACITY as u32);
+    let amount = params.remaining_needed.max(1).min(WHEELBARROW_CAPACITY as u32);
 
-    issue_fn(
-        wb_entity,
-        source_entity,
-        source_pos,
-        blueprint,
-        amount,
+    (strategy.issue_fn)(
+        WheelbarrowCollectSpec {
+            wheelbarrow: wb_entity,
+            source_entity,
+            source_pos,
+            destination: params.blueprint,
+            amount,
+        },
         task_pos,
         already_commanded,
         ctx,

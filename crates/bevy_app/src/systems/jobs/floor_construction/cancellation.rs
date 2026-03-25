@@ -7,6 +7,7 @@ use crate::systems::logistics::{Inventory, ResourceType};
 use crate::systems::soul_ai::execute::task_execution::context::TaskQueries;
 use crate::systems::soul_ai::execute::task_execution::types::AssignedTask;
 use crate::world::map::WorldMapWrite;
+use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use hw_core::relationships::WorkingOn;
 use hw_soul_ai::unassign_task;
@@ -42,7 +43,13 @@ type SoulCancellationQuery<'w, 's> = Query<
     With<DamnedSoul>,
 >;
 
-#[allow(clippy::too_many_arguments)]
+#[derive(SystemParam)]
+pub struct FloorCancellationQueries<'w, 's> {
+    q_sites: Query<'w, 's, Entity, With<FloorConstructionCancelRequested>>,
+    q_floor_requests: Query<'w, 's, (Entity, &'static TargetFloorConstructionSite)>,
+    q_entities: Query<'w, 's, Entity>,
+}
+
 /// Cancels floor construction sites marked with `FloorConstructionCancelRequested`.
 ///
 /// Cancellation is site-wide:
@@ -52,15 +59,13 @@ type SoulCancellationQuery<'w, 's> = Query<
 /// - despawn the site itself
 pub fn floor_construction_cancellation_system(
     mut commands: Commands,
-    q_sites: Query<Entity, With<FloorConstructionCancelRequested>>,
-    q_floor_requests: Query<(Entity, &TargetFloorConstructionSite)>,
-    q_entities: Query<Entity>,
+    fl_queries: FloorCancellationQueries,
     mut q_souls: SoulCancellationQuery,
     mut reservation_queries: TaskQueries,
     mut world_map: WorldMapWrite,
     resource_item_handles: Res<ResourceItemVisualHandles>,
 ) {
-    for site_entity in q_sites.iter() {
+    for site_entity in fl_queries.q_sites.iter() {
         let (site_material_center, site_tiles_total) = {
             let Ok((_site_transform, site, _)) =
                 reservation_queries.storage.floor_sites.get(site_entity)
@@ -71,7 +76,7 @@ pub fn floor_construction_cancellation_system(
         };
 
         let mut site_tiles: Vec<SiteTileSnapshot> = Vec::new();
-        for entity in q_entities.iter() {
+        for entity in fl_queries.q_entities.iter() {
             let Ok(tile) = reservation_queries.storage.floor_tiles.get_mut(entity) else {
                 continue;
             };
@@ -86,7 +91,7 @@ pub fn floor_construction_cancellation_system(
             });
         }
 
-        let site_requests: Vec<Entity> = q_floor_requests
+        let site_requests: Vec<Entity> = fl_queries.q_floor_requests
             .iter()
             .filter(|(_, target_site)| target_site.0 == site_entity)
             .map(|(request_entity, _)| request_entity)
@@ -119,12 +124,14 @@ pub fn floor_construction_cancellation_system(
 
             unassign_task(
                 &mut commands,
-                soul_entity,
-                soul_transform.translation.truncate(),
+                hw_soul_ai::SoulDropCtx {
+                    soul_entity,
+                    drop_pos: soul_transform.translation.truncate(),
+                    inventory: Some(&mut inventory),
+                    dropped_item_res: None,
+                },
                 &mut assigned_task,
                 &mut path,
-                Some(&mut inventory),
-                None,
                 &mut reservation_queries,
                 &world_map,
                 true,

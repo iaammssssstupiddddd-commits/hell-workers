@@ -9,15 +9,18 @@ use hw_core::logistics::ResourceType;
 use hw_core::soul::DamnedSoul;
 use hw_core::visual_mirror::logistics::InventoryItemVisual;
 
-#[allow(clippy::type_complexity)]
+type CarryWorkersQuery<'w, 's> = Query<
+    'w,
+    's,
+    (Entity, &'static Transform, &'static InventoryItemVisual),
+    (With<DamnedSoul>, Without<HasCarryingIndicator>),
+>;
+
 pub fn spawn_carrying_item_system(
     mut commands: Commands,
     mat_handles: Res<MaterialIconHandles>,
     haul_handles: Res<HaulItemHandles>,
-    q_workers: Query<
-        (Entity, &Transform, &InventoryItemVisual),
-        (With<DamnedSoul>, Without<HasCarryingIndicator>),
-    >,
+    q_workers: CarryWorkersQuery,
 ) {
     for (worker_entity, transform, inv_visual) in q_workers.iter() {
         let Some(resource_type) = inv_visual.resource_type else {

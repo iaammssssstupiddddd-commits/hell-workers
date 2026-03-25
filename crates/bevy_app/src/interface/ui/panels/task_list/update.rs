@@ -1,23 +1,28 @@
 // タスクリストのオーケストレーション
 
+use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use hw_ui::components::{LeftPanelMode, TaskListBody};
 use hw_ui::theme::UiTheme;
 
 use super::{TaskListDirty, view_model::TaskListState};
 
-#[allow(clippy::too_many_arguments)]
+#[derive(SystemParam)]
+pub struct TaskListRenderState<'w> {
+    game_assets: Res<'w, crate::assets::GameAssets>,
+    theme: Res<'w, UiTheme>,
+    mode: Res<'w, LeftPanelMode>,
+    state: Res<'w, TaskListState>,
+}
+
 pub fn task_list_update_system(
     mut commands: Commands,
-    game_assets: Res<crate::assets::GameAssets>,
-    theme: Res<UiTheme>,
-    mode: Res<LeftPanelMode>,
+    render_state: TaskListRenderState,
     mut dirty: ResMut<TaskListDirty>,
-    state: Res<TaskListState>,
     body_query: Query<Entity, With<TaskListBody>>,
     children_query: Query<&Children>,
 ) {
-    if *mode != LeftPanelMode::TaskList {
+    if *render_state.mode != LeftPanelMode::TaskList {
         return;
     }
 
@@ -38,9 +43,9 @@ pub fn task_list_update_system(
     commands.entity(body_entity).with_children(|parent| {
         hw_ui::panels::task_list::rebuild_task_list_ui(
             parent,
-            &state.snapshot,
-            &*game_assets,
-            &theme,
+            &render_state.state.snapshot,
+            &*render_state.game_assets,
+            &render_state.theme,
         );
     });
     dirty.clear_list();

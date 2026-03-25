@@ -11,6 +11,7 @@ use crate::systems::soul_ai::execute::task_execution::move_plant::{
 };
 use crate::systems::soul_ai::execute::task_execution::types::{AssignedTask, MovePlantTask};
 use crate::world::map::{WorldMap, WorldMapRef, WorldMapWrite};
+use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use hw_core::constants::TILE_SIZE;
 use hw_core::game_state::PlayMode;
@@ -37,106 +38,140 @@ type SoulTaskQuery<'w, 's> = Query<
 
 const COMPANION_PLACEMENT_RADIUS_TILES: f32 = 5.0;
 
-#[allow(clippy::too_many_arguments)]
-pub fn building_move_system(
-    buttons: Res<ButtonInput<MouseButton>>,
-    q_window: Query<&Window, With<bevy::window::PrimaryWindow>>,
-    q_camera: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
-    ui_input_state: Res<UiInputState>,
-    mut world_map: WorldMapWrite,
-    mut move_context: ResMut<MoveContext>,
-    mut move_placement_state: ResMut<MovePlacementState>,
-    mut companion_state: ResMut<CompanionPlacementState>,
-    mut next_play_mode: ResMut<NextState<PlayMode>>,
-    q_buildings: Query<(Entity, &Building, &Transform)>,
-    q_bucket_storages: Query<
-        (Entity, &crate::systems::logistics::BelongsTo),
+#[derive(SystemParam)]
+pub struct BuildMoveInput<'w, 's> {
+    pub buttons: Res<'w, ButtonInput<MouseButton>>,
+    pub q_window: Query<'w, 's, &'static Window, With<bevy::window::PrimaryWindow>>,
+    pub q_camera: Query<'w, 's, (&'static Camera, &'static GlobalTransform), With<MainCamera>>,
+    pub ui_input_state: Res<'w, UiInputState>,
+}
+
+#[derive(SystemParam)]
+pub struct BuildMoveState<'w> {
+    pub move_context: ResMut<'w, MoveContext>,
+    pub move_placement_state: ResMut<'w, MovePlacementState>,
+    pub companion_state: ResMut<'w, CompanionPlacementState>,
+    pub next_play_mode: ResMut<'w, NextState<PlayMode>>,
+}
+
+#[derive(SystemParam)]
+pub struct BuildMoveQueries<'w, 's> {
+    pub q_buildings: Query<'w, 's, (Entity, &'static Building, &'static Transform)>,
+    pub q_bucket_storages: Query<
+        'w,
+        's,
+        (
+            Entity,
+            &'static crate::systems::logistics::BelongsTo,
+        ),
         With<crate::systems::logistics::BucketStorage>,
     >,
-    q_transport_requests: Query<(Entity, &TransportRequest)>,
-    mut q_souls: SoulTaskQuery,
-    mut task_queries: TaskUnassignQueries,
+    pub q_transport_requests: Query<'w, 's, (Entity, &'static TransportRequest)>,
+    pub q_souls: SoulTaskQuery<'w, 's>,
+    pub task_queries: TaskUnassignQueries<'w, 's>,
+}
+
+struct MoveStateCtx<'a> {
+    companion_state: &'a mut CompanionPlacementState,
+    move_placement_state: &'a mut MovePlacementState,
+    move_context: &'a mut MoveContext,
+    next_play_mode: &'a mut NextState<PlayMode>,
+}
+
+struct MoveOpCtx<'a, 'wc, 'sc, 'wm, 'wq, 'sq> {
+    commands: &'a mut Commands<'wc, 'sc>,
+    world_map: &'a mut WorldMapWrite<'wm>,
+    q_transport_requests: &'a Query<'wq, 'sq, (Entity, &'static TransportRequest)>,
+    q_souls: &'a mut SoulTaskQuery<'wq, 'sq>,
+    task_queries: &'a mut TaskUnassignQueries<'wq, 'sq>,
+    game_assets: &'a crate::assets::GameAssets,
+}
+
+pub fn building_move_system(
+    input: BuildMoveInput,
+    mut state: BuildMoveState,
+    mut queries: BuildMoveQueries,
+    mut world_map: WorldMapWrite,
     game_assets: Res<crate::assets::GameAssets>,
     mut commands: Commands,
 ) {
     // --- Phase 1: 入力と早期 return ---
-    if ui_input_state.pointer_over_ui {
+    if input.ui_input_state.pointer_over_ui {
         return;
     }
-    if buttons.just_pressed(MouseButton::Right) {
+    if input.buttons.just_pressed(MouseButton::Right) {
         clear_move_states(
-            &mut move_context,
-            &mut move_placement_state,
-            &mut companion_state,
+            &mut state.move_context,
+            &mut state.move_placement_state,
+            &mut state.companion_state,
         );
-        next_play_mode.set(PlayMode::Normal);
+        state.next_play_mode.set(PlayMode::Normal);
         return;
     }
-    if !buttons.just_pressed(MouseButton::Left) {
+    if !input.buttons.just_pressed(MouseButton::Left) {
         return;
     }
-    let Some(world_pos) = hw_ui::camera::world_cursor_pos(&q_window, &q_camera) else {
+    let Some(world_pos) = hw_ui::camera::world_cursor_pos(&input.q_window, &input.q_camera) else {
         return;
     };
     let destination_grid = WorldMap::world_to_grid(world_pos);
-    let Some(target_entity) = move_context.0 else {
+    let Some(target_entity) = state.move_context.0 else {
         return;
     };
 
     // --- Phase 2: 配置対象の検証 ---
-    let Ok((_, building, transform)) = q_buildings.get(target_entity) else {
+    let Ok((_, building, transform)) = queries.q_buildings.get(target_entity) else {
         clear_move_states(
-            &mut move_context,
-            &mut move_placement_state,
-            &mut companion_state,
+            &mut state.move_context,
+            &mut state.move_placement_state,
+            &mut state.companion_state,
         );
-        next_play_mode.set(PlayMode::Normal);
+        state.next_play_mode.set(PlayMode::Normal);
         return;
     };
     if !matches!(building.kind, BuildingType::Tank | BuildingType::MudMixer) {
         clear_move_states(
-            &mut move_context,
-            &mut move_placement_state,
-            &mut companion_state,
+            &mut state.move_context,
+            &mut state.move_placement_state,
+            &mut state.companion_state,
         );
-        next_play_mode.set(PlayMode::Normal);
+        state.next_play_mode.set(PlayMode::Normal);
         return;
     }
 
+    let mut op = MoveOpCtx {
+        commands: &mut commands,
+        world_map: &mut world_map,
+        q_transport_requests: &queries.q_transport_requests,
+        q_souls: &mut queries.q_souls,
+        task_queries: &mut queries.task_queries,
+        game_assets: &game_assets,
+    };
+    let mut st = MoveStateCtx {
+        companion_state: &mut state.companion_state,
+        move_placement_state: &mut state.move_placement_state,
+        move_context: &mut state.move_context,
+        next_play_mode: &mut state.next_play_mode,
+    };
+
     // --- Phase 3a: Companion 配置確認クリック ---
-    if companion_state.0.is_some() {
+    if st.companion_state.0.is_some() {
         handle_companion_click(
-            &mut commands,
-            &mut world_map,
-            &q_transport_requests,
-            &mut q_souls,
-            &mut task_queries,
-            &game_assets,
-            &mut companion_state,
-            &mut move_placement_state,
-            &mut move_context,
-            &mut next_play_mode,
+            &mut op,
+            &mut st,
             destination_grid,
             target_entity,
             building,
             transform,
-            &q_bucket_storages,
+            &queries.q_bucket_storages,
         );
         return;
     }
 
     // --- Phase 3b: 初回配置クリック ---
     handle_initial_click(
-        &mut commands,
-        &mut world_map,
-        &q_transport_requests,
-        &mut q_souls,
-        &mut task_queries,
-        &game_assets,
-        &mut companion_state,
-        &mut move_placement_state,
-        &mut move_context,
-        &mut next_play_mode,
+        &mut op,
+        &mut st,
         destination_grid,
         target_entity,
         building,
@@ -145,18 +180,9 @@ pub fn building_move_system(
 }
 
 /// Companion（BucketStorage）配置確認ステップのクリック処理。
-#[allow(clippy::too_many_arguments)]
 fn handle_companion_click(
-    commands: &mut Commands,
-    world_map: &mut WorldMapWrite,
-    q_transport_requests: &Query<(Entity, &TransportRequest)>,
-    q_souls: &mut SoulTaskQuery,
-    task_queries: &mut TaskUnassignQueries,
-    game_assets: &crate::assets::GameAssets,
-    companion_state: &mut CompanionPlacementState,
-    move_placement_state: &mut MovePlacementState,
-    move_context: &mut MoveContext,
-    next_play_mode: &mut NextState<PlayMode>,
+    op: &mut MoveOpCtx<'_, '_, '_, '_, '_, '_>,
+    st: &mut MoveStateCtx<'_>,
     destination_grid: (i32, i32),
     target_entity: Entity,
     building: &Building,
@@ -166,30 +192,30 @@ fn handle_companion_click(
         With<crate::systems::logistics::BucketStorage>,
     >,
 ) {
-    let Some(active_companion) = companion_state.0.clone() else {
+    let Some(active_companion) = st.companion_state.0.clone() else {
         return;
     };
     if active_companion.kind != CompanionPlacementKind::BucketStorage
         || active_companion.parent_kind != CompanionParentKind::Tank
     {
-        companion_state.0 = None;
-        move_placement_state.0 = None;
+        st.companion_state.0 = None;
+        st.move_placement_state.0 = None;
         return;
     }
-    let Some(pending) = move_placement_state.0 else {
-        companion_state.0 = None;
+    let Some(pending) = st.move_placement_state.0 else {
+        st.companion_state.0 = None;
         return;
     };
     if pending.building != target_entity {
-        companion_state.0 = None;
-        move_placement_state.0 = None;
+        st.companion_state.0 = None;
+        st.move_placement_state.0 = None;
         return;
     }
     let old_anchor = move_anchor_grid(building.kind, transform.translation.truncate());
     let old_occupied = move_occupied_grids(building.kind, old_anchor);
     let destination_occupied = move_occupied_grids(building.kind, pending.destination_grid);
     if !can_place_moved_building(
-        &WorldMapRef(world_map),
+        &WorldMapRef(op.world_map),
         target_entity,
         &old_occupied,
         &destination_occupied,
@@ -197,7 +223,7 @@ fn handle_companion_click(
         return;
     }
     if !validate_tank_companion_for_move(
-        world_map,
+        op.world_map,
         target_entity,
         pending.destination_grid,
         destination_grid,
@@ -209,36 +235,22 @@ fn handle_companion_click(
         return;
     }
     finalize_move_request(
-        commands,
-        world_map,
-        q_transport_requests,
-        q_souls,
-        task_queries,
-        game_assets,
+        op,
         target_entity,
         building,
         transform,
         pending.destination_grid,
         Some(destination_grid),
     );
-    clear_move_states(move_context, move_placement_state, companion_state);
-    next_play_mode.set(PlayMode::Normal);
+    clear_move_states(st.move_context, st.move_placement_state, st.companion_state);
+    st.next_play_mode.set(PlayMode::Normal);
 }
 
 /// 初回クリック時の配置検証・移動確定処理。
 /// Tank は companion 配置フローへ移行、MudMixer は即確定。
-#[allow(clippy::too_many_arguments)]
 fn handle_initial_click(
-    commands: &mut Commands,
-    world_map: &mut WorldMapWrite,
-    q_transport_requests: &Query<(Entity, &TransportRequest)>,
-    q_souls: &mut SoulTaskQuery,
-    task_queries: &mut TaskUnassignQueries,
-    game_assets: &crate::assets::GameAssets,
-    companion_state: &mut CompanionPlacementState,
-    move_placement_state: &mut MovePlacementState,
-    move_context: &mut MoveContext,
-    next_play_mode: &mut NextState<PlayMode>,
+    op: &mut MoveOpCtx<'_, '_, '_, '_, '_, '_>,
+    st: &mut MoveStateCtx<'_>,
     destination_grid: (i32, i32),
     target_entity: Entity,
     building: &Building,
@@ -248,7 +260,7 @@ fn handle_initial_click(
     let old_occupied = move_occupied_grids(building.kind, old_anchor);
     let destination_occupied = move_occupied_grids(building.kind, destination_grid);
     if !can_place_moved_building(
-        &WorldMapRef(world_map),
+        &WorldMapRef(op.world_map),
         target_entity,
         &old_occupied,
         &destination_occupied,
@@ -257,11 +269,11 @@ fn handle_initial_click(
     }
     if building.kind == BuildingType::Tank {
         let center = move_spawn_pos(BuildingType::Tank, destination_grid);
-        move_placement_state.0 = Some(PendingMovePlacement {
+        st.move_placement_state.0 = Some(PendingMovePlacement {
             building: target_entity,
             destination_grid,
         });
-        companion_state.0 = Some(CompanionPlacement {
+        st.companion_state.0 = Some(CompanionPlacement {
             parent_kind: CompanionParentKind::Tank,
             parent_anchor: destination_grid,
             kind: CompanionPlacementKind::BucketStorage,
@@ -272,20 +284,15 @@ fn handle_initial_click(
         return;
     }
     finalize_move_request(
-        commands,
-        world_map,
-        q_transport_requests,
-        q_souls,
-        task_queries,
-        game_assets,
+        op,
         target_entity,
         building,
         transform,
         destination_grid,
         None,
     );
-    clear_move_states(move_context, move_placement_state, companion_state);
-    next_play_mode.set(PlayMode::Normal);
+    clear_move_states(st.move_context, st.move_placement_state, st.companion_state);
+    st.next_play_mode.set(PlayMode::Normal);
 }
 
 fn clear_move_states(
@@ -298,14 +305,8 @@ fn clear_move_states(
     companion_state.0 = None;
 }
 
-#[allow(clippy::too_many_arguments)]
 fn finalize_move_request(
-    commands: &mut Commands,
-    world_map: &mut WorldMap,
-    q_transport_requests: &Query<(Entity, &TransportRequest)>,
-    q_souls: &mut SoulTaskQuery,
-    task_queries: &mut TaskUnassignQueries,
-    game_assets: &crate::assets::GameAssets,
+    op: &mut MoveOpCtx<'_, '_, '_, '_, '_, '_>,
     target_entity: Entity,
     building: &Building,
     transform: &Transform,
@@ -313,18 +314,18 @@ fn finalize_move_request(
     companion_anchor: Option<(i32, i32)>,
 ) {
     cancel_tasks_and_requests_for_moved_building(
-        commands,
+        op.commands,
         target_entity,
-        q_transport_requests,
-        q_souls,
-        task_queries,
-        world_map,
+        op.q_transport_requests,
+        op.q_souls,
+        op.task_queries,
+        &*op.world_map,
     );
 
     let destination_pos = move_spawn_pos(building.kind, destination_grid);
     let (texture, size) = match building.kind {
-        BuildingType::Tank => (game_assets.tank_empty.clone(), Vec2::splat(TILE_SIZE * 2.0)),
-        BuildingType::MudMixer => (game_assets.mud_mixer.clone(), Vec2::splat(TILE_SIZE * 2.0)),
+        BuildingType::Tank => (op.game_assets.tank_empty.clone(), Vec2::splat(TILE_SIZE * 2.0)),
+        BuildingType::MudMixer => (op.game_assets.mud_mixer.clone(), Vec2::splat(TILE_SIZE * 2.0)),
         _ => return,
     };
     let destination_occupied = move_occupied_grids(building.kind, destination_grid);
@@ -333,10 +334,10 @@ fn finalize_move_request(
         .unwrap_or_default();
     let mut reserved_occupied = destination_occupied.clone();
     reserved_occupied.extend(companion_occupied.iter().copied());
-    let task_entity = commands.spawn_empty().id();
-    world_map.add_grid_obstacles(reserved_occupied.iter().copied());
+    let task_entity = op.commands.spawn_empty().id();
+    op.world_map.add_grid_obstacles(reserved_occupied.iter().copied());
 
-    commands.entity(task_entity).with_children(|parent| {
+    op.commands.entity(task_entity).with_children(|parent| {
         for &(gx, gy) in &reserved_occupied {
             parent.spawn((
                 crate::systems::jobs::ObstaclePosition(gx, gy),
@@ -344,7 +345,7 @@ fn finalize_move_request(
             ));
         }
     });
-    commands.entity(task_entity).insert((
+    op.commands.entity(task_entity).insert((
         Designation {
             work_type: WorkType::Move,
         },
@@ -372,7 +373,7 @@ fn finalize_move_request(
         ),
         Name::new("Move Plant Task"),
     ));
-    commands
+    op.commands
         .entity(target_entity)
         .insert(MovePlanned { task_entity });
 }
@@ -402,12 +403,14 @@ fn cancel_tasks_and_requests_for_moved_building(
         if task_targets_building(&task, building_entity) {
             unassign_task(
                 commands,
-                soul_entity,
-                transform.translation.truncate(),
+                hw_soul_ai::SoulDropCtx {
+                    soul_entity,
+                    drop_pos: transform.translation.truncate(),
+                    inventory: inventory.as_deref_mut(),
+                    dropped_item_res: None,
+                },
                 &mut task,
                 &mut path,
-                inventory.as_deref_mut(),
-                None,
                 task_queries,
                 world_map,
                 false,

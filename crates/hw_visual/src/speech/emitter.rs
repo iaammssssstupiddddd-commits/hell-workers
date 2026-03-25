@@ -2,29 +2,31 @@
 
 use super::components::{BubbleEmotion, BubblePriority, FamiliarBubble, SpeechBubble};
 use super::cooldown::SpeechHistory;
-use super::phrases::LatinPhrase;
-use super::spawn::{spawn_familiar_bubble, spawn_soul_bubble};
-use super::voice::FamiliarVoice;
+use super::spawn::{FamiliarBubbleSpec, spawn_familiar_bubble, spawn_soul_bubble};
 use crate::handles::SpeechHandles;
 use bevy::prelude::*;
 
-#[allow(clippy::too_many_arguments)]
+/// emit_soul_with_history に渡すコンテンツをグループ化する構造体
+pub struct SoulSpeechContent<'a> {
+    pub emoji: &'a str,
+    pub emotion: BubbleEmotion,
+    pub priority: BubblePriority,
+}
+
 /// Soul の発話を、履歴更新込みで発火する。
 /// can_speak が false なら何もしない。
 pub fn emit_soul_with_history(
     commands: &mut Commands,
     soul_entity: Entity,
-    emoji: &str,
+    content: SoulSpeechContent<'_>,
     pos: Vec3,
     handles: &Res<SpeechHandles>,
-    emotion: BubbleEmotion,
-    priority: BubblePriority,
     history_opt: Option<impl std::ops::DerefMut<Target = SpeechHistory>>,
     current_time: f32,
 ) -> bool {
     let can_speak = history_opt
         .as_ref()
-        .map(|h| h.can_speak(priority, current_time))
+        .map(|h| h.can_speak(content.priority, current_time))
         .unwrap_or(true);
 
     if !can_speak {
@@ -34,53 +36,47 @@ pub fn emit_soul_with_history(
     spawn_soul_bubble(
         commands,
         soul_entity,
-        emoji,
+        content.emoji,
         pos,
         handles,
-        emotion,
-        priority,
+        content.emotion,
+        content.priority,
     );
 
     if let Some(mut history) = history_opt {
-        history.record_speech(priority, current_time);
+        history.record_speech(content.priority, current_time);
     } else {
         commands.entity(soul_entity).insert(SpeechHistory {
             last_time: current_time,
-            last_priority: priority,
+            last_priority: content.priority,
         });
     }
 
     true
 }
 
-#[allow(clippy::too_many_arguments)]
 /// Familiar の発話を、履歴更新込みで発火する。
 /// can_speak が false なら何もしない。
 pub fn emit_familiar_with_history(
     commands: &mut Commands,
     fam_entity: Entity,
-    phrase: LatinPhrase,
-    pos: Vec3,
+    spec: FamiliarBubbleSpec<'_>,
     handles: &Res<SpeechHandles>,
     q_bubbles: &Query<(Entity, &SpeechBubble), With<FamiliarBubble>>,
-    emotion: BubbleEmotion,
-    priority: BubblePriority,
-    voice: Option<&FamiliarVoice>,
     history_opt: Option<impl std::ops::DerefMut<Target = SpeechHistory>>,
     current_time: f32,
 ) -> bool {
     let can_speak = history_opt
         .as_ref()
-        .map(|h| h.can_speak(priority, current_time))
+        .map(|h| h.can_speak(spec.priority, current_time))
         .unwrap_or(true);
 
     if !can_speak {
         return false;
     }
 
-    spawn_familiar_bubble(
-        commands, fam_entity, phrase, pos, handles, q_bubbles, emotion, priority, voice,
-    );
+    let priority = spec.priority;
+    spawn_familiar_bubble(commands, fam_entity, spec, handles, q_bubbles);
 
     if let Some(mut history) = history_opt {
         history.record_speech(priority, current_time);

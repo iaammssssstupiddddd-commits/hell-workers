@@ -107,19 +107,23 @@ pub fn spawn_soul_bubble(
         .try_insert(ChildOf(soul_entity));
 }
 
-#[allow(clippy::too_many_arguments)]
+/// Familiar用の吹き出しコンテンツをグループ化する構造体
+pub struct FamiliarBubbleSpec<'a> {
+    pub phrase: LatinPhrase,
+    pub emotion: BubbleEmotion,
+    pub priority: BubblePriority,
+    pub voice: Option<&'a FamiliarVoice>,
+}
+
 /// Familiar用のラテン語フレーズ吹き出しをスポーンする
 pub fn spawn_familiar_bubble(
     commands: &mut Commands,
     fam_entity: Entity,
-    phrase: LatinPhrase,
-    _pos: Vec3,
+    spec: FamiliarBubbleSpec<'_>,
     handles: &Res<SpeechHandles>,
     q_bubbles: &Query<(Entity, &SpeechBubble), With<FamiliarBubble>>,
-    emotion: BubbleEmotion,
-    priority: BubblePriority,
-    voice: Option<&FamiliarVoice>,
 ) {
+    let FamiliarBubbleSpec { phrase, emotion, priority, voice } = spec;
     // 優先度に応じた生存時間の決定
     let duration = match priority {
         BubblePriority::Low => BUBBLE_DURATION_LOW,

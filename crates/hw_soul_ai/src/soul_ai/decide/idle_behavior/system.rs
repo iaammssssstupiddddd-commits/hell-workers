@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 
 use hw_core::constants::*;
@@ -15,7 +16,20 @@ use crate::soul_ai::helpers::query_types::IdleDecisionSoulQuery;
 use super::rest_area::{RestAreasQuery, find_nearest_available_rest_area};
 use super::{exhausted_gathering, motion_dispatch, rest_decision, task_override, transitions};
 
-#[allow(clippy::too_many_arguments)]
+#[derive(SystemParam)]
+pub(crate) struct IdleLocalState<'s> {
+    pending_rest_reservations: Local<'s, HashMap<Entity, usize>>,
+    nearby_buf: Local<'s, Vec<Entity>>,
+}
+
+#[derive(SystemParam)]
+pub(crate) struct IdleGatheringQueries<'w, 's> {
+    q_spots: Query<'w, 's, (Entity, &'static GatheringSpot, &'static GatheringParticipants)>,
+    q_rest_areas: RestAreasQuery<'w, 's>,
+    spot_grid: Res<'w, GatheringSpotSpatialGrid>,
+    soul_grid: Res<'w, SpatialGrid>,
+}
+
 /// アイドル行動の決定システム (Decide Phase)
 ///
 /// 怠惰行動のAIロジック。やる気が低い魂は怠惰な行動をする。
@@ -24,20 +38,16 @@ use super::{exhausted_gathering, motion_dispatch, rest_decision, task_override, 
 /// このシステムはIdleState, Destination, Pathの更新と、
 /// IdleBehaviorRequestの発行を行う。実際のエンティティ操作は
 /// idle_behavior_apply_systemで行われる。
-pub fn idle_behavior_decision_system(
+pub(crate) fn idle_behavior_decision_system(
     time: Res<Time>,
     mut request_writer: MessageWriter<IdleBehaviorRequest>,
     world_map: Res<WorldMap>,
-    mut pending_rest_reservations: Local<HashMap<Entity, usize>>,
-    mut nearby_buf: Local<Vec<Entity>>,
-    q_spots: Query<(Entity, &GatheringSpot, &GatheringParticipants)>,
-    q_rest_areas: RestAreasQuery,
+    mut local: IdleLocalState,
+    gq: IdleGatheringQueries,
     mut query: IdleDecisionSoulQuery,
-    spot_grid: Res<GatheringSpotSpatialGrid>,
-    soul_grid: Res<SpatialGrid>,
 ) {
     let dt = time.delta_secs();
-    pending_rest_reservations.clear();
+    local.pending_rest_reservations.clear();
 
     for (
         entity,
@@ -55,18 +65,20 @@ pub fn idle_behavior_decision_system(
     {
         let (gathering_center, target_spot_entity) = resolve_gathering_target(
             participating_in,
-            &q_spots,
-            &spot_grid,
+            &gq.q_spots,
+            &gq.spot_grid,
             transform,
-            &mut nearby_buf,
+            &mut local.nearby_buf,
         );
 
         if exhausted_gathering::process_exhausted_gathering(
             entity,
             transform.translation.truncate(),
-            gathering_center,
-            target_spot_entity,
-            participating_in,
+            exhausted_gathering::GatheringCtx {
+                center: gathering_center,
+                target_spot_entity,
+                participating_in,
+            },
             &mut idle,
             &mut dest,
             &mut path,
@@ -129,8 +141,8 @@ pub fn idle_behavior_decision_system(
                     reserved_rest_area,
                     dest.0,
                     current_pos,
-                    &q_rest_areas,
-                    &pending_rest_reservations,
+                    &gq.q_rest_areas,
+                    &local.pending_rest_reservations,
                 );
 
                 if let Some((rest_area_entity, rest_area_pos)) = rest_area_target {
@@ -139,7 +151,8 @@ pub fn idle_behavior_decision_system(
                             entity,
                             operation: IdleBehaviorOperation::ReserveRestArea { rest_area_entity },
                         });
-                        *pending_rest_reservations
+                        *local
+                            .pending_rest_reservations
                             .entry(rest_area_entity)
                             .or_insert(0) += 1;
                         true
@@ -148,17 +161,20 @@ pub fn idle_behavior_decision_system(
                     };
 
                     if rest_decision::process_resting_or_going_to_rest(
-                        entity,
-                        Some((rest_area_entity, rest_area_pos)),
-                        reserved_rest_area,
-                        participating_in,
-                        &mut idle,
-                        &mut dest,
-                        &mut path,
+                        rest_decision::RestDecisionCtx {
+                            entity,
+                            rest_area_target: Some((rest_area_entity, rest_area_pos)),
+                            participating_in,
+                            current_pos,
+                            just_reserved,
+                        },
+                        rest_decision::RestMoveState {
+                            idle: &mut idle,
+                            dest: &mut dest,
+                            path: &mut path,
+                        },
                         world_map.as_ref(),
                         &mut request_writer,
-                        current_pos,
-                        just_reserved,
                     ) {
                         continue;
                     }
@@ -193,8 +209,8 @@ pub fn idle_behavior_decision_system(
                 reserved_rest_area,
                 current_pos,
                 current_pos,
-                &q_rest_areas,
-                &pending_rest_reservations,
+                &gq.q_rest_areas,
+                &local.pending_rest_reservations,
             );
 
             if let Some((rest_area_entity, rest_area_pos)) = rest_area_target {
@@ -203,7 +219,8 @@ pub fn idle_behavior_decision_system(
                         entity,
                         operation: IdleBehaviorOperation::ReserveRestArea { rest_area_entity },
                     });
-                    *pending_rest_reservations
+                    *local
+                        .pending_rest_reservations
                         .entry(rest_area_entity)
                         .or_insert(0) += 1;
                     true
@@ -212,17 +229,20 @@ pub fn idle_behavior_decision_system(
                 };
 
                 if rest_decision::process_wants_rest_area(
-                    entity,
-                    Some((rest_area_entity, rest_area_pos)),
-                    reserved_rest_area,
-                    participating_in,
-                    &mut idle,
-                    &mut dest,
-                    &mut path,
+                    rest_decision::RestDecisionCtx {
+                        entity,
+                        rest_area_target: Some((rest_area_entity, rest_area_pos)),
+                        participating_in,
+                        current_pos,
+                        just_reserved,
+                    },
+                    rest_decision::RestMoveState {
+                        idle: &mut idle,
+                        dest: &mut dest,
+                        path: &mut path,
+                    },
                     world_map.as_ref(),
                     &mut request_writer,
-                    current_pos,
-                    just_reserved,
                 ) {
                     continue;
                 }
@@ -301,20 +321,25 @@ pub fn idle_behavior_decision_system(
         }
 
         motion_dispatch::update_motion_destinations(
-            entity,
-            current_pos,
-            gathering_center,
-            target_spot_entity,
-            participating_in,
-            &mut idle,
-            &mut dest,
-            &mut path,
-            &*soul_grid,
+            motion_dispatch::SoulPos { entity, pos: current_pos },
+            motion_dispatch::MotionGatheringCtx {
+                center: gathering_center,
+                target_spot_entity,
+                participating_in,
+            },
+            motion_dispatch::MotionState {
+                idle: &mut idle,
+                dest: &mut dest,
+                path: &mut path,
+            },
+            &*gq.soul_grid,
             world_map.as_ref(),
             &mut request_writer,
-            dt,
-            soul.dream,
-            &mut nearby_buf,
+            motion_dispatch::MotionExtras {
+                dt,
+                dream: soul.dream,
+                scratch: &mut local.nearby_buf,
+            },
         );
     }
 }

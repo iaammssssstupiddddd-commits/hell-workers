@@ -18,12 +18,14 @@ pub fn drop_bucket_for_auto_haul(
     ctx.inventory.0 = None;
     crate::soul_ai::helpers::work::cleanup_task_assignment(
         commands,
-        ctx.soul_entity,
-        soul_pos,
+        crate::soul_ai::helpers::work::SoulDropCtx {
+            soul_entity: ctx.soul_entity,
+            drop_pos: soul_pos,
+            inventory: None,
+            dropped_item_res: None,
+        },
         ctx.task,
         ctx.path,
-        None,
-        None,
         ctx.queries,
         world_map,
         false,

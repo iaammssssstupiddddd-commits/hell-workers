@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use hw_core::logistics::ResourceType;
 
-use super::super::builders::{issue_gather_water, issue_haul_water_to_mixer};
+use super::super::builders::{WaterHaulSpec, issue_gather_water, issue_haul_water_to_mixer};
 use super::super::validator::{
     resolve_gather_water_inputs, resolve_haul_water_to_mixer_inputs, source_not_reserved,
 };
@@ -90,11 +90,13 @@ pub(super) fn assign_haul_water_to_mixer(
     let mixer_already_reserved = queries.reserved_for_task.get(ctx.task_entity).is_ok();
 
     issue_haul_water_to_mixer(
-        bucket_entity,
-        mixer_entity,
-        tank_entity,
-        needs_tank_fill,
-        mixer_already_reserved,
+        WaterHaulSpec {
+            bucket: bucket_entity,
+            mixer: mixer_entity,
+            tank: tank_entity,
+            needs_tank_fill,
+            mixer_already_reserved,
+        },
         task_pos,
         already_commanded,
         ctx,

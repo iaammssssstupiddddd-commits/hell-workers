@@ -3,7 +3,7 @@ mod core;
 pub use core::{
     MOVE_COST_DIAGONAL, MOVE_COST_STRAIGHT, PathGoalPolicy, PathNode, PathWorld, PathfindingContext,
 };
-use core::{find_path_with_policy, path_cost_heuristic};
+use core::{PathPolicy, find_path_with_policy, path_cost_heuristic};
 
 use hw_core::GridPos;
 
@@ -28,19 +28,21 @@ pub fn find_path(
         world_map,
         context,
         start_idx,
-        heuristic,
-        move |pos| pos == goal,
-        |_from, to| world_map.is_walkable(to.0, to.1),
-        |from, to| {
-            let dx = to.0 - from.0;
-            let dy = to.1 - from.1;
-            let is_diagonal = dx.abs() == 1 && dy.abs() == 1;
-            if !is_diagonal {
-                return true;
-            }
-            world_map.is_walkable(from.0 + dx, from.1) && world_map.is_walkable(from.0, from.1 + dy)
+        PathPolicy {
+            heuristic,
+            is_goal_reached: move |pos: (i32, i32)| pos == goal,
+            can_enter: |_from: (i32, i32), to: (i32, i32)| world_map.is_walkable(to.0, to.1),
+            can_cross_diagonal: |from: (i32, i32), to: (i32, i32)| {
+                let dx = to.0 - from.0;
+                let dy = to.1 - from.1;
+                let is_diagonal = dx.abs() == 1 && dy.abs() == 1;
+                if !is_diagonal {
+                    return true;
+                }
+                world_map.is_walkable(from.0 + dx, from.1) && world_map.is_walkable(from.0, from.1 + dy)
+            },
+            move_penalty: |x, y, _is_diagonal| world_map.get_door_cost(x, y),
         },
-        |x, y, _is_diagonal| world_map.get_door_cost(x, y),
     )
 }
 
@@ -152,26 +154,28 @@ pub fn find_path_to_boundary(
         world_map,
         context,
         start_idx,
-        heuristic,
-        |pos| target_grid_set.contains(&pos),
-        |_, to| {
-            let is_in_target = target_grid_set.contains(&to);
-            is_in_target || world_map.is_walkable(to.0, to.1)
-        },
-        |from, to| {
-            let dx = to.0 - from.0;
-            let dy = to.1 - from.1;
-            (world_map.is_walkable(from.0 + dx, from.1)
-                || target_grid_set.contains(&(from.0 + dx, from.1)))
-                && (world_map.is_walkable(from.0, from.1 + dy)
-                    || target_grid_set.contains(&(from.0, from.1 + dy)))
-        },
-        |x, y, _is_diagonal| {
-            if target_grid_set.contains(&(x, y)) {
-                0
-            } else {
-                world_map.get_door_cost(x, y)
-            }
+        PathPolicy {
+            heuristic,
+            is_goal_reached: |pos: (i32, i32)| target_grid_set.contains(&pos),
+            can_enter: |_: (i32, i32), to: (i32, i32)| {
+                let is_in_target = target_grid_set.contains(&to);
+                is_in_target || world_map.is_walkable(to.0, to.1)
+            },
+            can_cross_diagonal: |from: (i32, i32), to: (i32, i32)| {
+                let dx = to.0 - from.0;
+                let dy = to.1 - from.1;
+                (world_map.is_walkable(from.0 + dx, from.1)
+                    || target_grid_set.contains(&(from.0 + dx, from.1)))
+                    && (world_map.is_walkable(from.0, from.1 + dy)
+                        || target_grid_set.contains(&(from.0, from.1 + dy)))
+            },
+            move_penalty: |x, y, _is_diagonal| {
+                if target_grid_set.contains(&(x, y)) {
+                    0
+                } else {
+                    world_map.get_door_cost(x, y)
+                }
+            },
         },
     );
 

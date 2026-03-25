@@ -65,8 +65,10 @@ pub fn building_completion_system(
 
         post_process::apply_building_specific_post_process(
             &mut commands,
-            entity,
-            building_entity,
+            post_process::PostProcessTargets {
+                blueprint_entity: entity,
+                building_entity,
+            },
             bp,
             transform,
             &game_assets,

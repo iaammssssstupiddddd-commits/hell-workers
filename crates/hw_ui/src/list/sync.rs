@@ -17,17 +17,21 @@ use std::collections::{HashMap, HashSet};
 // Familiar sections
 // ============================================================
 
-#[allow(clippy::too_many_arguments)]
+struct FamiliarRowSyncSpec<'a> {
+    familiar: &'a FamiliarRowViewModel,
+    previous: Option<&'a FamiliarRowViewModel>,
+    nodes: FamiliarSectionNodes,
+}
+
 fn sync_familiar_member_rows(
     commands: &mut Commands,
     assets: &dyn UiAssets,
     theme: &UiTheme,
-    familiar: &FamiliarRowViewModel,
-    previous: Option<&FamiliarRowViewModel>,
+    spec: FamiliarRowSyncSpec<'_>,
     node_index: &mut EntityListNodeIndex,
-    nodes: FamiliarSectionNodes,
     q_children: &Query<&Children>,
 ) {
+    let FamiliarRowSyncSpec { familiar, previous, nodes } = spec;
     let member_rows = node_index
         .familiar_member_rows
         .entry(familiar.entity)
@@ -136,18 +140,24 @@ fn sync_familiar_member_rows(
     }
 }
 
-#[allow(clippy::too_many_arguments)]
+pub struct FamiliarSectionCtx<'a> {
+    pub view_model: &'a EntityListViewModel,
+    pub node_index: &'a mut EntityListNodeIndex,
+    pub fam_container_entity: Entity,
+}
+
 pub fn sync_familiar_sections(
     commands: &mut Commands,
     assets: &dyn UiAssets,
     theme: &UiTheme,
-    view_model: &EntityListViewModel,
-    node_index: &mut EntityListNodeIndex,
-    fam_container_entity: Entity,
+    ctx: &mut FamiliarSectionCtx<'_>,
     q_children: &Query<&Children>,
     q_text: &mut Query<&mut Text>,
     q_image: &mut Query<&mut ImageNode>,
 ) {
+    let view_model = ctx.view_model;
+    let node_index = &mut ctx.node_index;
+    let fam_container_entity = ctx.fam_container_entity;
     let prev_familiar_ids: HashSet<Entity> = view_model
         .previous
         .familiars
@@ -216,7 +226,12 @@ pub fn sync_familiar_sections(
                 .unwrap_or(true);
             if members_changed {
                 sync_familiar_member_rows(
-                    commands, assets, theme, familiar, previous, node_index, nodes, q_children,
+                    commands,
+                    assets,
+                    theme,
+                    FamiliarRowSyncSpec { familiar, previous, nodes },
+                    node_index,
+                    q_children,
                 );
             }
         }
@@ -264,7 +279,6 @@ pub fn sync_familiar_sections(
 // Unassigned souls
 // ============================================================
 
-#[allow(clippy::too_many_arguments)]
 pub fn sync_unassigned_souls(
     commands: &mut Commands,
     assets: &dyn UiAssets,

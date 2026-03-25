@@ -17,6 +17,7 @@ use std::collections::HashMap;
 
 use super::query_types::FamiliarSoulQuery;
 use super::resources::ReachabilityCacheKey;
+use super::task_management::delegation::{DelegationEnvCtx, PathfindingCtxMut};
 use super::task_management::TaskManager;
 use super::task_management::{
     FamiliarTaskAssignmentQueries, IncomingDeliverySnapshot, ReservationShadow,
@@ -65,24 +66,28 @@ pub fn process_task_delegation_and_movement(ctx: &mut FamiliarDelegationContext<
     // タスク委譲
     let has_available_task = if ctx.allow_task_delegation {
         TaskManager::delegate_task(
-            ctx.fam_entity,
-            fam_pos,
-            ctx.squad_entities,
-            ctx.task_area_opt,
-            fatigue_threshold,
+            DelegationEnvCtx {
+                fam_entity: ctx.fam_entity,
+                fam_pos,
+                squad: ctx.squad_entities,
+                task_area_opt: ctx.task_area_opt,
+                fatigue_threshold,
+                designation_grid: ctx.designation_grid,
+                transport_request_grid: ctx.transport_request_grid,
+                managed_tasks: ctx.managed_tasks,
+                resource_grid: ctx.resource_grid,
+                world_map: ctx.world_map,
+                tile_site_index: ctx.tile_site_index,
+                incoming_snapshot: ctx.incoming_snapshot,
+            },
             ctx.task_queries,
             ctx.construction_sites,
             ctx.q_souls,
-            ctx.designation_grid,
-            ctx.transport_request_grid,
-            ctx.managed_tasks,
-            ctx.resource_grid,
-            ctx.world_map,
-            ctx.pf_context,
+            &mut PathfindingCtxMut {
+                pf_context: ctx.pf_context,
+                reachability_cache: ctx.reachability_frame_cache,
+            },
             ctx.reservation_shadow,
-            ctx.tile_site_index,
-            ctx.incoming_snapshot,
-            ctx.reachability_frame_cache,
         )
         .is_some()
     } else {

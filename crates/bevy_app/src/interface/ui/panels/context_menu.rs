@@ -4,6 +4,7 @@ use crate::entities::damned_soul::DamnedSoul;
 use crate::entities::familiar::Familiar;
 use crate::interface::selection::HoveredEntity;
 use crate::interface::ui::interaction::despawn_context_menus;
+use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use bevy::ui::RelativeCursorPosition;
 use bevy::ui_widgets::popover::{Popover, PopoverAlign, PopoverPlacement, PopoverSide};
@@ -39,23 +40,51 @@ enum ContextTarget {
     Resource(Entity),
 }
 
-#[allow(clippy::too_many_arguments)]
+#[derive(SystemParam)]
+pub struct ContextMenuInput<'w, 's> {
+    buttons: Res<'w, ButtonInput<MouseButton>>,
+    q_window: Query<'w, 's, &'static Window, With<bevy::window::PrimaryWindow>>,
+    hovered: Res<'w, HoveredEntity>,
+    ui_input_state: Res<'w, UiInputState>,
+}
+
+#[derive(SystemParam)]
+pub struct ContextMenuClassifyQueries<'w, 's> {
+    q_familiars: Query<'w, 's, (), With<Familiar>>,
+    q_souls: Query<'w, 's, (), With<DamnedSoul>>,
+    q_buildings: BuildingOrBlueprintQuery<'w, 's>,
+    q_doors: Query<'w, 's, &'static crate::systems::jobs::Door>,
+    q_resources: ResourceItemQuery<'w, 's>,
+}
+
+#[derive(SystemParam)]
+pub struct ContextMenuRenderAssets<'w> {
+    game_assets: Res<'w, crate::assets::GameAssets>,
+    theme: Res<'w, UiTheme>,
+}
+
 pub fn context_menu_system(
     mut commands: Commands,
-    buttons: Res<ButtonInput<MouseButton>>,
-    q_window: Query<&Window, With<bevy::window::PrimaryWindow>>,
-    hovered: Res<HoveredEntity>,
-    ui_input_state: Res<UiInputState>,
+    input: ContextMenuInput,
     mut selected_entity: ResMut<crate::interface::selection::SelectedEntity>,
     q_context_menu: Query<Entity, With<ContextMenu>>,
-    q_familiars: Query<(), With<Familiar>>,
-    q_souls: Query<(), With<DamnedSoul>>,
-    q_buildings: BuildingOrBlueprintQuery,
-    q_doors: Query<&crate::systems::jobs::Door>,
-    q_resources: ResourceItemQuery,
-    game_assets: Res<crate::assets::GameAssets>,
-    theme: Res<UiTheme>,
+    classify_queries: ContextMenuClassifyQueries,
+    render_assets: ContextMenuRenderAssets,
 ) {
+    let ContextMenuInput {
+        buttons,
+        q_window,
+        hovered,
+        ui_input_state,
+    } = input;
+    let ContextMenuClassifyQueries {
+        q_familiars,
+        q_souls,
+        q_buildings,
+        q_doors,
+        q_resources,
+    } = classify_queries;
+    let ContextMenuRenderAssets { game_assets, theme } = render_assets;
     if buttons.just_pressed(MouseButton::Left) {
         // UI上クリック時（メニュー項目クリック含む）は、ボタン処理側に委譲する。
         // ワールド上クリック時のみここでメニューを閉じる。

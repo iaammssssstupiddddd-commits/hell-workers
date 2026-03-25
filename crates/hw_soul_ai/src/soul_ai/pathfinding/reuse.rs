@@ -6,20 +6,25 @@ use hw_world::{PathfindingContext, WorldMap, find_path_world_waypoints};
 
 use super::PathCooldown;
 
-#[allow(clippy::too_many_arguments)]
+/// `try_reuse_existing_path` へのバジェット・エンティティ情報。
+pub(super) struct PathBudgetInfo<'a> {
+    pub entity: Entity,
+    pub pathfind_count: &'a mut usize,
+    pub phase_budget_limit: usize,
+}
+
 /// 既存パスを再利用できるか検証し、障害物で部分遮断されていれば再計算する。
 /// 再利用できた場合は true を返す。A* を呼んだ場合は pathfind_count を更新する。
 pub(super) fn try_reuse_existing_path(
     commands: &mut Commands,
-    entity: Entity,
+    budget: PathBudgetInfo<'_>,
     path: &mut Path,
     destination: Vec2,
     goal_grid: (i32, i32),
     world_map: &WorldMap,
     pf_context: &mut PathfindingContext,
-    pathfind_count: &mut usize,
-    phase_budget_limit: usize,
 ) -> bool {
+    let PathBudgetInfo { entity, pathfind_count, phase_budget_limit } = budget;
     // すでに有効なパスがあり、目的地も変わっていないならスキップ
     //
     // ただし、移動側が衝突で waypoint をスキップして `current_index == waypoints.len()` になっている場合、

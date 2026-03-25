@@ -8,7 +8,7 @@ use hw_world::WorldMapRead;
 
 use crate::soul_ai::execute::task_execution::context::TaskAssignmentQueries;
 use crate::soul_ai::helpers::query_types::CleanupSoulQuery;
-use crate::soul_ai::helpers::work::unassign_task;
+use crate::soul_ai::helpers::work::{SoulDropCtx, unassign_task};
 
 /// 指揮元の使い魔が存在しない場合に、使役状態の魂をクリーンアップする
 pub fn cleanup_commanded_souls_system(
@@ -32,12 +32,14 @@ pub fn cleanup_commanded_souls_system(
 
         unassign_task(
             &mut commands,
-            soul_entity,
-            transform.translation.truncate(),
+            SoulDropCtx {
+                soul_entity,
+                drop_pos: transform.translation.truncate(),
+                inventory: inventory_opt.as_deref_mut(),
+                dropped_item_res: None,
+            },
             &mut task,
             &mut path,
-            inventory_opt.as_deref_mut(),
-            None,
             &mut queries,
             world_map.as_ref(),
             false, // emit_abandoned_event: 解放時は個別のタスク中断セリフを出さない

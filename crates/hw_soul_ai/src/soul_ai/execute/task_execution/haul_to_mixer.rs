@@ -83,11 +83,13 @@ pub fn handle_haul_to_mixer_task(
                     // アイテムを拾う（拾えなければタスクをクリア）
                     if !try_pickup_item(
                         commands,
-                        ctx.soul_entity,
-                        item_entity,
+                        PickupLocations {
+                            soul_entity: ctx.soul_entity,
+                            item_entity,
+                            soul_pos,
+                            item_pos,
+                        },
                         ctx.inventory,
-                        soul_pos,
-                        item_pos,
                         ctx.task,
                         ctx.path,
                     ) {

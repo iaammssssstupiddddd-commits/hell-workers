@@ -5,19 +5,23 @@ use hw_core::constants::*;
 use super::super::super::components::DreamTrailGhost;
 use super::super::super::dream_bubble_material::DreamBubbleUiMaterial;
 
-#[allow(clippy::too_many_arguments)]
+pub(super) struct TrailGhostSpec {
+    pub root: Entity,
+    pub final_pos: Vec2,
+    pub trail_size: f32,
+    pub width_scale: f32,
+    pub length_scale: f32,
+    pub elapsed: f32,
+    pub speed: f32,
+    pub vel_dir: Vec2,
+}
+
 pub(super) fn spawn_trail_ghost(
     commands: &mut Commands,
-    materials: &mut ResMut<Assets<DreamBubbleUiMaterial>>,
-    root: Entity,
-    final_pos: Vec2,
-    trail_size: f32,
-    width_scale: f32,
-    length_scale: f32,
-    elapsed: f32,
-    speed: f32,
-    vel_dir: Vec2,
+    materials: &mut Assets<DreamBubbleUiMaterial>,
+    spec: TrailGhostSpec,
 ) {
+    let TrailGhostSpec { root, final_pos, trail_size, width_scale, length_scale, elapsed, speed, vel_dir } = spec;
     let mut trail_transform = Transform::from_translation(Vec3::ZERO);
     if speed > 1.0 {
         let angle = vel_dir.y.atan2(vel_dir.x) - std::f32::consts::FRAC_PI_2;
