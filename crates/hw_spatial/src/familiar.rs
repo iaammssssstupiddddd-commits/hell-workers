@@ -1,12 +1,8 @@
 use super::grid::{GridData, SpatialGridOps};
 use bevy::prelude::*;
 
-type SpatialUpdateQuery<'w, 's, T> = Query<
-    'w,
-    's,
-    (Entity, &'static Transform),
-    (With<T>, Or<(Added<T>, Changed<Transform>)>),
->;
+type SpatialUpdateQuery<'w, 's, T> =
+    Query<'w, 's, (Entity, &'static Transform), (With<T>, Or<(Added<T>, Changed<Transform>)>)>;
 
 /// 使い魔用の空間グリッド - モチベーション計算の高速化用
 #[derive(Resource, Default)]

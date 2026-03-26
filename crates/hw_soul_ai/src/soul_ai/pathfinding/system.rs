@@ -128,9 +128,12 @@ fn process_worker_pathfinding(
     }
     *world_pf.pathfind_count += 1;
 
-    if let Some(world_path) =
-        find_path_world_waypoints(world_pf.world_map, world_pf.pf_context, start_grid, goal_grid)
-    {
+    if let Some(world_path) = find_path_world_waypoints(
+        world_pf.world_map,
+        world_pf.pf_context,
+        start_grid,
+        goal_grid,
+    ) {
         // デバッグ：集会中のsoulで特定位置付近の場合
         if matches!(soul.idle.behavior, IdleBehavior::Gathering)
             && current_pos.x.abs() < 150.0

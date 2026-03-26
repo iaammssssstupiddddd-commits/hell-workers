@@ -11,8 +11,17 @@ use hw_spatial::{GatheringSpotSpatialGrid, SpatialGrid, SpatialGridOps};
 type GatheringSpawnSoulQuery<'w, 's> = Query<
     'w,
     's,
-    (Entity, &'static Transform, &'static IdleState, &'static AssignedTask),
-    (With<DamnedSoul>, Without<ParticipatingIn>, Without<CommandedBy>),
+    (
+        Entity,
+        &'static Transform,
+        &'static IdleState,
+        &'static AssignedTask,
+    ),
+    (
+        With<DamnedSoul>,
+        Without<ParticipatingIn>,
+        Without<CommandedBy>,
+    ),
 >;
 
 #[derive(SystemParam)]
@@ -55,12 +64,14 @@ pub fn gathering_spawn_logic_system(
 
         let pos = transform.translation.truncate();
 
-        res.spot_grid.get_nearby_in_radius_into(pos, GATHERING_DETECTION_RADIUS, &mut nearby_buf);
+        res.spot_grid
+            .get_nearby_in_radius_into(pos, GATHERING_DETECTION_RADIUS, &mut nearby_buf);
         if !nearby_buf.is_empty() {
             continue;
         }
 
-        res.soul_grid.get_nearby_in_radius_into(pos, GATHERING_DETECTION_RADIUS, &mut nearby_buf);
+        res.soul_grid
+            .get_nearby_in_radius_into(pos, GATHERING_DETECTION_RADIUS, &mut nearby_buf);
         let nearby_souls = nearby_buf.len().saturating_sub(1);
 
         let spawn_time = (GATHERING_SPAWN_BASE_TIME

@@ -17,6 +17,7 @@ pub struct Building3dVisual {
 #[derive(Component, Debug, Clone)]
 pub struct SoulProxy3d {
     pub owner: Entity,
+    pub billboard: bool,
 }
 
 /// Familiar エンティティに対応する3Dプロキシのマーカー。

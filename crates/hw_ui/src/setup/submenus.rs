@@ -56,7 +56,13 @@ fn spawn_submenu_container<T: Bundle>(
     parent_entity: Entity,
     spec: SubmenuContainerSpec<T>,
 ) -> Entity {
-    let SubmenuContainerSpec { left, width, flex_direction, align_items, marker } = spec;
+    let SubmenuContainerSpec {
+        left,
+        width,
+        flex_direction,
+        align_items,
+        marker,
+    } = spec;
     let mut node = Node {
         display: Display::None,
         width,

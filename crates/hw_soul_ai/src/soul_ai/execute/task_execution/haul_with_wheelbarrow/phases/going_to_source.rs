@@ -28,21 +28,22 @@ pub fn handle(
 
     // 搬入先の空き容量チェック
     if let WheelbarrowDestination::Stockpile(stockpile) = data.destination
-        && let Ok((_, _, stock, stored_items)) = ctx.queries.storage.stockpiles.get(stockpile) {
-            let current_count = stored_items.map(|s| s.len()).unwrap_or(0);
-            let incoming = ctx
-                .queries
-                .reservation
-                .incoming_deliveries_query
-                .get(stockpile)
-                .ok()
-                .map(|(_, inc)| inc.len())
-                .unwrap_or(0);
-            if (current_count + incoming) >= stock.capacity {
-                cancel::cancel_wheelbarrow_task(ctx, &data, commands);
-                return;
-            }
+        && let Ok((_, _, stock, stored_items)) = ctx.queries.storage.stockpiles.get(stockpile)
+    {
+        let current_count = stored_items.map(|s| s.len()).unwrap_or(0);
+        let incoming = ctx
+            .queries
+            .reservation
+            .incoming_deliveries_query
+            .get(stockpile)
+            .ok()
+            .map(|(_, inc)| inc.len())
+            .unwrap_or(0);
+        if (current_count + incoming) >= stock.capacity {
+            cancel::cancel_wheelbarrow_task(ctx, &data, commands);
+            return;
         }
+    }
 
     *ctx.task = AssignedTask::HaulWithWheelbarrow(HaulWithWheelbarrowData {
         phase: HaulWithWheelbarrowPhase::Loading,

@@ -49,9 +49,11 @@ pub fn transport_request_anchor_cleanup_system(
 
         // 2. 需要がゼロになり、かつ作業中のワーカーもいない
         if let Some(demand) = demand_opt
-            && demand.desired_slots == 0 && workers == 0 {
-                should_close = true;
-            }
+            && demand.desired_slots == 0
+            && workers == 0
+        {
+            should_close = true;
+        }
 
         // 3. 発行者（Familiar/Yard）が消失した
         if q_any.get(req.issued_by).is_err()

@@ -94,7 +94,9 @@ pub fn upsert_transport_request<TTarget: Component>(
     commands.entity(request_entity).try_insert((
         Transform::from_xyz(spec.site_pos.x, spec.site_pos.y, 0.0),
         Visibility::Hidden,
-        Designation { work_type: spec.work_type },
+        Designation {
+            work_type: spec.work_type,
+        },
         ManagedBy(spec.issued_by),
         TaskSlots::new(spec.desired_slots),
         Priority(spec.priority),
@@ -125,7 +127,9 @@ pub fn spawn_transport_request<TTarget: Component>(
         Name::new(spec.name),
         Transform::from_xyz(spec.site_pos.x, spec.site_pos.y, 0.0),
         Visibility::Hidden,
-        Designation { work_type: spec.work_type },
+        Designation {
+            work_type: spec.work_type,
+        },
         ManagedBy(spec.issued_by),
         TaskSlots::new(spec.desired_slots),
         Priority(spec.priority),

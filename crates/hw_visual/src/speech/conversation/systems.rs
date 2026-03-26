@@ -1,16 +1,14 @@
+use super::bubble_spawn_helpers;
 use super::components::*;
 use super::events::*;
+use super::phase_handlers;
 use crate::handles::SpeechHandles;
-use crate::speech::components::{BubbleEmotion, BubblePriority};
-use crate::speech::spawn::spawn_soul_bubble;
 use bevy::prelude::*;
 use hw_core::constants::*;
 use hw_core::soul::{DamnedSoul, IdleBehavior, IdleState};
 use hw_spatial::{SpatialGrid, SpatialGridOps};
 use rand::Rng;
-use rand::seq::SliceRandom;
 use std::collections::HashMap;
-
 
 type ConversationInitiatorQuery<'w, 's> = Query<
     'w,
@@ -32,17 +30,6 @@ type ConversationTargetQuery<'w, 's> = Query<
     'w,
     's,
     (Entity, &'static IdleState),
-    (
-        With<DamnedSoul>,
-        Without<ConversationParticipant>,
-        Without<ConversationCooldown>,
-    ),
->;
-
-type AvailableSoulQuery<'w, 's> = Query<
-    'w,
-    's,
-    Entity,
     (
         With<DamnedSoul>,
         Without<ConversationParticipant>,
@@ -115,39 +102,6 @@ pub fn check_conversation_triggers(
     }
 }
 
-pub fn handle_conversation_requests(
-    mut commands: Commands,
-    mut ev_reader: MessageReader<RequestConversation>,
-    q_souls: AvailableSoulQuery,
-) {
-    for event in ev_reader.read() {
-        if q_souls.get(event.initiator).is_ok() && q_souls.get(event.target).is_ok() {
-            commands
-                .entity(event.initiator)
-                .insert(ConversationParticipant {
-                    target: event.target,
-                    role: ConversationRole::Initiator,
-                    phase: ConversationPhase::Greeting,
-                    timer: Timer::from_seconds(0.1, TimerMode::Once),
-                    turns: 0,
-                    positive_turns: 0,
-                    negative_turns: 0,
-                });
-            commands
-                .entity(event.target)
-                .insert(ConversationParticipant {
-                    target: event.initiator,
-                    role: ConversationRole::Responder,
-                    phase: ConversationPhase::Greeting,
-                    timer: Timer::from_seconds(1.0, TimerMode::Once),
-                    turns: 0,
-                    positive_turns: 0,
-                    negative_turns: 0,
-                });
-        }
-    }
-}
-
 pub fn process_conversation_logic(
     time: Res<Time>,
     mut commands: Commands,
@@ -171,208 +125,66 @@ pub fn process_conversation_logic(
             .tick(std::time::Duration::from_secs_f32(dt));
 
         if !participant_entities.contains(&participant.target) {
-            end_conversation(&mut commands, entity, None);
+            phase_handlers::end_conversation(&mut commands, entity, None);
             continue;
         }
 
         if participant.timer.just_finished() {
             let pos = transform.translation;
+            let is_gathering = matches!(
+                idle_state.behavior,
+                IdleBehavior::Gathering | IdleBehavior::ExhaustedGathering
+            );
 
             match participant.phase {
                 ConversationPhase::Greeting => {
-                    let emoji = EMOJIS_GREETING
-                        .choose(&mut rng)
-                        .expect("EMOJIS_GREETING is non-empty");
-                    spawn_soul_bubble(
-                        &mut commands,
-                        entity,
-                        emoji,
-                        pos,
+                    phase_handlers::handle_greeting_phase(
+                        bubble_spawn_helpers::BubbleSpawnCtx {
+                            commands: &mut commands,
+                            entity,
+                            pos,
+                            rng: &mut rng,
+                        },
                         &handles,
-                        BubbleEmotion::Chatting,
-                        BubblePriority::Normal,
+                        &mut participant,
                     );
-
-                    participant.phase = ConversationPhase::Chatting;
-                    participant.timer =
-                        Timer::from_seconds(CONVERSATION_TURN_DURATION, TimerMode::Once);
-                    participant.turns += 1;
                 }
                 ConversationPhase::Chatting => {
-                    let is_gathering = matches!(
-                        idle_state.behavior,
-                        IdleBehavior::Gathering | IdleBehavior::ExhaustedGathering
-                    );
-                    let max_turns = if is_gathering { 2 } else { 1 };
-
-                    if participant.turns <= max_turns {
-                        let emoji_set = if is_gathering {
-                            // 集会中はポジティブ寄りの会話を増やす
-                            let roll: f32 = rng.gen_range(0.0..1.0);
-                            if roll < 0.75 {
-                                EMOJIS_FOOD
-                            } else if roll < 0.88 {
-                                EMOJIS_QUESTION
-                            } else if roll < 0.98 {
-                                EMOJIS_SLACKING
-                            } else {
-                                EMOJIS_COMPLAINING
-                            }
-                        } else if rng.gen_bool(0.2) {
-                            EMOJIS_QUESTION
-                        } else if rng.gen_bool(0.3) {
-                            EMOJIS_FOOD
-                        } else if rng.gen_bool(0.4) {
-                            EMOJIS_SLACKING
-                        } else {
-                            EMOJIS_COMPLAINING
-                        };
-                        let emoji = emoji_set.choose(&mut rng).expect("emoji_set is non-empty");
-
-                        let emotion = if emoji_set == EMOJIS_FOOD {
-                            participant.positive_turns =
-                                participant.positive_turns.saturating_add(1);
-                            ev_tone.write(ConversationToneTriggered {
-                                speaker: entity,
-                                tone: ConversationTone::Positive,
-                            });
-                            BubbleEmotion::Happy
-                        } else if emoji_set == EMOJIS_SLACKING {
-                            BubbleEmotion::Slacking
-                        } else if emoji_set == EMOJIS_COMPLAINING {
-                            participant.negative_turns =
-                                participant.negative_turns.saturating_add(1);
-                            ev_tone.write(ConversationToneTriggered {
-                                speaker: entity,
-                                tone: ConversationTone::Negative,
-                            });
-                            BubbleEmotion::Chatting
-                        } else {
-                            BubbleEmotion::Chatting
-                        };
-
-                        spawn_soul_bubble(
-                            &mut commands,
+                    if let Some(tone_event) = phase_handlers::handle_chatting_phase(
+                        bubble_spawn_helpers::BubbleSpawnCtx {
+                            commands: &mut commands,
                             entity,
-                            emoji,
                             pos,
-                            &handles,
-                            emotion,
-                            BubblePriority::Normal,
-                        );
-
-                        participant.timer =
-                            Timer::from_seconds(CONVERSATION_TURN_DURATION * 1.5, TimerMode::Once);
-                        participant.turns += 1;
-                    } else {
-                        participant.phase = ConversationPhase::Closing;
-                        participant.timer =
-                            Timer::from_seconds(CONVERSATION_TURN_DURATION, TimerMode::Once);
+                            rng: &mut rng,
+                        },
+                        &handles,
+                        &mut participant,
+                        is_gathering,
+                    ) {
+                        ev_tone.write(tone_event);
                     }
                 }
                 ConversationPhase::Closing => {
-                    let is_gathering = matches!(
-                        idle_state.behavior,
-                        IdleBehavior::Gathering | IdleBehavior::ExhaustedGathering
-                    );
-                    let agreement_chance = if is_gathering { 0.95 } else { 0.5 };
-                    if rng.gen_bool(agreement_chance) {
-                        participant.positive_turns = participant.positive_turns.saturating_add(1);
-                        ev_tone.write(ConversationToneTriggered {
-                            speaker: entity,
-                            tone: ConversationTone::Positive,
-                        });
-                        let emoji = EMOJIS_AGREEMENT
-                            .choose(&mut rng)
-                            .expect("EMOJIS_AGREEMENT is non-empty");
-                        spawn_soul_bubble(
-                            &mut commands,
+                    let result = phase_handlers::handle_closing_phase(
+                        bubble_spawn_helpers::BubbleSpawnCtx {
+                            commands: &mut commands,
                             entity,
-                            emoji,
                             pos,
-                            &handles,
-                            BubbleEmotion::Relieved,
-                            BubblePriority::Normal,
-                        );
+                            rng: &mut rng,
+                        },
+                        &handles,
+                        &mut participant,
+                        &participant_tone_snapshot,
+                        is_gathering,
+                    );
+                    if let Some(tone_event) = result.tone_trigger {
+                        ev_tone.write(tone_event);
                     }
-
-                    if participant.role == ConversationRole::Initiator {
-                        let mut positive_turns = participant.positive_turns;
-                        let mut negative_turns = participant.negative_turns;
-                        if let Some((target_pos, target_neg)) =
-                            participant_tone_snapshot.get(&participant.target)
-                        {
-                            positive_turns = positive_turns.saturating_add(*target_pos);
-                            negative_turns = negative_turns.saturating_add(*target_neg);
-                        }
-                        let is_gathering = matches!(
-                            idle_state.behavior,
-                            IdleBehavior::Gathering | IdleBehavior::ExhaustedGathering
-                        );
-                        let tone = if positive_turns > negative_turns {
-                            ConversationTone::Positive
-                        } else if negative_turns > positive_turns {
-                            ConversationTone::Negative
-                        } else if is_gathering {
-                            ConversationTone::Positive
-                        } else {
-                            ConversationTone::Neutral
-                        };
-                        ev_completed.write(ConversationCompleted {
-                            participants: vec![entity, participant.target],
-                            turns: participant.turns,
-                            tone,
-                        });
+                    if let Some(completed_event) = result.completed {
+                        ev_completed.write(completed_event);
                     }
-
-                    end_conversation(&mut commands, entity, Some(CONVERSATION_COOLDOWN));
                 }
             }
-        }
-    }
-}
-
-fn end_conversation(commands: &mut Commands, entity: Entity, cooldown: Option<f32>) {
-    commands.entity(entity).remove::<ConversationParticipant>();
-    if let Some(dur) = cooldown {
-        commands.entity(entity).insert(ConversationCooldown {
-            timer: Timer::from_seconds(dur, TimerMode::Once),
-        });
-    }
-}
-
-pub fn apply_conversation_rewards(
-    mut ev_reader: MessageReader<ConversationCompleted>,
-    mut q_souls: Query<&mut DamnedSoul>,
-) {
-    for event in ev_reader.read() {
-        let is_long_chat = event.turns > 2;
-        let relief = if is_long_chat {
-            CONVERSATION_STRESS_RELIEF + CONVERSATION_LONG_CHAT_BONUS
-        } else {
-            CONVERSATION_STRESS_RELIEF
-        };
-
-        for &entity in &event.participants {
-            if let Ok(mut soul) = q_souls.get_mut(entity) {
-                soul.stress = (soul.stress - relief / 100.0).max(0.0);
-                // 会話によるモチベーション減少（サボり）
-                soul.motivation = (soul.motivation - MOTIVATION_PENALTY_CONVERSATION).max(0.0);
-            }
-        }
-    }
-}
-
-pub fn update_conversation_cooldowns(
-    time: Res<Time>,
-    mut commands: Commands,
-    mut q_cooldowns: Query<(Entity, &mut ConversationCooldown)>,
-) {
-    let dt = time.delta_secs();
-    for (entity, mut cooldown) in q_cooldowns.iter_mut() {
-        cooldown.timer.tick(std::time::Duration::from_secs_f32(dt));
-        if cooldown.timer.just_finished() {
-            commands.entity(entity).remove::<ConversationCooldown>();
         }
     }
 }

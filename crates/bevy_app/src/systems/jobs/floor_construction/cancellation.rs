@@ -91,7 +91,8 @@ pub fn floor_construction_cancellation_system(
             });
         }
 
-        let site_requests: Vec<Entity> = fl_queries.q_floor_requests
+        let site_requests: Vec<Entity> = fl_queries
+            .q_floor_requests
             .iter()
             .filter(|(_, target_site)| target_site.0 == site_entity)
             .map(|(request_entity, _)| request_entity)

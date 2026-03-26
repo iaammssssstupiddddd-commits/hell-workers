@@ -17,8 +17,8 @@ use bevy::prelude::{Commands, Entity, Query, Transform, Visibility};
 use hw_world::zones::{AreaBounds, Yard};
 use std::collections::HashMap;
 
-use crate::transport_request::{TransportRequest, TransportRequestKind};
 use crate::transport_request::producer::upsert::{SpawnRequestSpec, UpsertRequestSpec};
+use crate::transport_request::{TransportRequest, TransportRequestKind};
 use crate::types::{ResourceItem, ResourceType};
 use hw_spatial::{ResourceSpatialGrid, SpatialGridOps};
 
@@ -117,7 +117,11 @@ pub fn collect_nearby_resource_entities(
         if *visibility != Visibility::Hidden
             && stored_in_opt.is_none()
             && resource_item.0 == spec.target_resource
-            && transform.translation.truncate().distance_squared(spec.center) <= pickup_radius_sq
+            && transform
+                .translation
+                .truncate()
+                .distance_squared(spec.center)
+                <= pickup_radius_sq
         {
             nearby_resources.push(entity);
         }

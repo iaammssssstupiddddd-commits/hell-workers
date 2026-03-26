@@ -235,6 +235,8 @@ App::new()
 > **根拠**: `character-3d-rendering-proposal` §3.5（Camera3d 角度との関係）
 
 **やること**:
+- `GameAssets` に `soul.glb#Scene0` の `Handle<Scene>` を追加し、Soul spawn 時に `SceneRoot` ベースで RtT へ流す
+- `SceneInstanceReady` で Soul GLB 子孫へ `RenderLayers::layer(LAYER_3D)` を付与し、RtT Camera3d で確実に描画する
 - `CharacterMaterial` を最小限実装する（Unlit + `AlphaMode::Blend`・クリップ平面は仮実装）
 - `CharacterHandles` リソースを定義し Soul GLB を仮スポーンして `CharacterMaterial` を適用する
 - 斜め Camera3d で Soul GLB が建物 Cuboid と Z バッファを共有し前後関係が正しく描画されることを確認する
@@ -244,6 +246,11 @@ App::new()
 - [ ] 壁の後ろに入った Soul GLB が壁に隠れる（Z バッファ共有の確認）
 - [ ] Soul GLB が「体積のない存在に見える」アートスタイル感が出ている
 - [ ] `mesh_face` がカメラを向いている（`face_billboard_system` 仮実装）
+
+**進捗メモ**:
+- [x] `assets/models/characters/soul.glb` をリポジトリへ配置済み
+- [x] Soul spawn は `SceneRoot` ベースで RtT に接続済み
+- [ ] `CharacterMaterial` / `face_billboard_system` は未着手
 
 ---
 

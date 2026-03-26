@@ -73,10 +73,18 @@ pub(crate) fn escaping_decision_system(
     q_behavior: EscapeBehaviorQuery,
     mut decide_output: SoulDecideOutput,
 ) {
-    let detect_tick = timers.detection_timer.timer.tick(time.delta()).just_finished();
+    let detect_tick = timers
+        .detection_timer
+        .timer
+        .tick(time.delta())
+        .just_finished();
 
     let behavior_tick = {
-        let finished = timers.behavior_timer.timer.tick(time.delta()).just_finished();
+        let finished = timers
+            .behavior_timer
+            .timer
+            .tick(time.delta())
+            .just_finished();
         if timers.behavior_timer.first_run_done && !finished {
             false
         } else {
@@ -165,13 +173,14 @@ pub(crate) fn escaping_decision_system(
                 );
 
                 if let Some(spot_pos) = safe_spot
-                    && soul_pos.distance(spot_pos) <= GATHERING_ARRIVAL_RADIUS {
-                        decide_output.escape_requests.write(EscapeRequest {
-                            entity,
-                            operation: EscapeOperation::JoinSafeGathering,
-                        });
-                        continue;
-                    }
+                    && soul_pos.distance(spot_pos) <= GATHERING_ARRIVAL_RADIUS
+                {
+                    decide_output.escape_requests.write(EscapeRequest {
+                        entity,
+                        operation: EscapeOperation::JoinSafeGathering,
+                    });
+                    continue;
+                }
 
                 let destination = calculate_escape_destination(
                     soul_pos,

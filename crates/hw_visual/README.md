@@ -22,7 +22,7 @@
 | `tank.rs` | タンクビジュアル |
 | `layer/` | ビジュアルレイヤー定数・管理 |
 | `soul/` | Soul の progress bar, status, task link, idle/gathering/vitals visual |
-| `speech/` | 吹き出しと observer ベースの発話演出（`conversation/` サブディレクトリを含む） |
+| `speech/` | 吹き出しと observer ベースの発話演出（`conversation/` の `systems.rs` / `phase_handlers.rs` / `bubble_spawn_helpers.rs` を含む） |
 | `blueprint/` | 設計図 visual, progress bar, delivery popup |
 | `gather/` | 採取インジケータ、resource highlight |
 | `haul/` | 運搬 visual、手押し車追従 |

@@ -20,9 +20,10 @@ pub fn find_collect_sand_source(
         return Some(best);
     }
     if task_area_opt.is_some()
-        && let Some(best) = find_sand_pile(target_pos, None, queries, shadow) {
-            return Some(best);
-        }
+        && let Some(best) = find_sand_pile(target_pos, None, queries, shadow)
+    {
+        return Some(best);
+    }
     if let Some(best) = scan_terrain_tiles(
         target_pos,
         task_area_opt,
@@ -48,9 +49,10 @@ pub fn find_collect_bone_source(
         return Some(best);
     }
     if task_area_opt.is_some()
-        && let Some(best) = find_bone_pile(target_pos, None, queries, shadow) {
-            return Some(best);
-        }
+        && let Some(best) = find_bone_pile(target_pos, None, queries, shadow)
+    {
+        return Some(best);
+    }
     if let Some(best) = scan_terrain_tiles(
         target_pos,
         task_area_opt,
@@ -160,9 +162,10 @@ fn scan_terrain_tiles(
 
             let tile_pos = WorldMap::grid_to_world(gx, gy);
             if let Some(area) = area_filter
-                && !area.contains(tile_pos) {
-                    continue;
-                }
+                && !area.contains(tile_pos)
+            {
+                continue;
+            }
 
             let dist_sq = tile_pos.distance_squared(target_pos);
             match best {

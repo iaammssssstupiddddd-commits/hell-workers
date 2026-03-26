@@ -22,7 +22,11 @@ type GatheringSpotsQuery<'w, 's> = Query<
 type GatheringVisualsQuery<'w, 's> = Query<
     'w,
     's,
-    (&'static mut Sprite, &'static mut Transform, &'static mut Visibility),
+    (
+        &'static mut Sprite,
+        &'static mut Transform,
+        &'static mut Visibility,
+    ),
     (Without<DamnedSoul>, Without<ParticipatingIn>),
 >;
 
@@ -52,21 +56,22 @@ pub fn gathering_visual_update_system(
         }
 
         if let Some(obj_entity) = visuals.object_entity
-            && let Ok((_, mut transform, mut visibility)) = q_visuals.get_mut(obj_entity) {
-                if transform.translation != target_obj_pos {
-                    transform.translation = target_obj_pos;
-                }
-
-                let target_visibility = if participants.len() < 2 {
-                    Visibility::Hidden
-                } else {
-                    Visibility::Inherited
-                };
-
-                if *visibility != target_visibility {
-                    *visibility = target_visibility;
-                }
+            && let Ok((_, mut transform, mut visibility)) = q_visuals.get_mut(obj_entity)
+        {
+            if transform.translation != target_obj_pos {
+                transform.translation = target_obj_pos;
             }
+
+            let target_visibility = if participants.len() < 2 {
+                Visibility::Hidden
+            } else {
+                Visibility::Inherited
+            };
+
+            if *visibility != target_visibility {
+                *visibility = target_visibility;
+            }
+        }
     }
 }
 
@@ -104,9 +109,10 @@ pub fn gathering_debug_visualization_system(
     }
 
     if let Some(hovered) = hovered_entity.0
-        && let Ok(participating_in) = q_soul_participating.get(hovered) {
-            target_spots.insert(participating_in.0);
-        }
+        && let Ok(participating_in) = q_soul_participating.get(hovered)
+    {
+        target_spots.insert(participating_in.0);
+    }
 
     for spot_entity in target_spots {
         if let Ok((_, spot, participants)) = q_spots.get(spot_entity) {

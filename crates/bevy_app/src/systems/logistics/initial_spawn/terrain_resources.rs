@@ -21,12 +21,12 @@ fn spawn_obstacle_batch<B: Bundle>(
             && world_map
                 .terrain_at_idx(idx)
                 .is_some_and(|terrain| terrain.is_walkable())
-            {
-                let pos = WorldMap::grid_to_world(gx, gy);
-                commands.spawn(make_bundle(gx, gy, pos));
-                world_map.add_grid_obstacle((gx, gy));
-                count += 1;
-            }
+        {
+            let pos = WorldMap::grid_to_world(gx, gy);
+            commands.spawn(make_bundle(gx, gy, pos));
+            world_map.add_grid_obstacle((gx, gy));
+            count += 1;
+        }
     }
     count
 }

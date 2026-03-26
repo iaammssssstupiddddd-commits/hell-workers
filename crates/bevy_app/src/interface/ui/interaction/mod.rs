@@ -2,6 +2,8 @@
 //!
 //! ツールチップ、モードテキスト、タスクサマリー、およびボタン操作を管理します。
 
+mod handlers;
+mod intent_context;
 mod intent_handler;
 mod menu_actions;
 mod mode;

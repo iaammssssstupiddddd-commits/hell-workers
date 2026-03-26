@@ -116,14 +116,13 @@ root 側の `bevy_app` 残留（adapter 責務）:
 
 | ファイル/モジュール | 残留理由 |
 |:---|:---|
-| `interaction/intent_handler.rs` | BuildContext, ZoneContext, FamiliarOperation 等 |
+| `interaction/intent_context.rs`, `interaction/handlers/`, `interaction/intent_handler.rs` | BuildContext, ZoneContext, `FamiliarOperation`, `TimeSpeed`, `WorldMapWrite` などのゲーム依存 `UiIntent` 処理。`intent_handler.rs` 自体は dispatcher だが、実処理は root 側 handler 群に残留 |
 | `interaction/mode.rs` | PlayMode 遷移、TaskMode、BuildingType |
 | `list/change_detection.rs` | DamnedSoul, Familiar, AssignedTask の Changed 監視 |
 | `list/view_model.rs` | Familiar, DamnedSoul, FamiliarAiState からビューモデル構築 |
 | `list/sync.rs` | `sync_entity_list_from_view_model_system` / `sync_entity_list_value_rows_system`（hw_ui helpers の thin shell） |
 | `list/drag_drop.rs` | SquadManagementRequest, SoulIdentity（DragState 型は hw_ui） |
 | `list/interaction.rs`, `list/interaction/navigation.rs` | 行クリック・Tab 巡回・target 付き `UiIntent` 発行。TaskContext は navigation 側に残留（SectionToggle 操作は hw_ui の `entity_list_section_toggle_system` へ移設済み） |
-| `interaction/intent_handler.rs` | `UiIntent::AdjustMaxControlledSoul*` を受けて `FamiliarOperation` 更新・`FamiliarOperationMaxSoulChangedEvent` 発行・Entity List ヘッダーの optimistic update を一元処理 |
 | `panels/context_menu.rs` | Familiar, DamnedSoul, Building, Door の分類 |
 | `panels/task_list/view_model.rs`, `presenter.rs`, `dirty.rs`（detect systems）| Designation, Blueprint, WorkType 等のゲームクエリ |
 | `panels/task_list/update.rs` | `Res<GameAssets>` をシステム引数に取るため hw_ui 移動不可 |

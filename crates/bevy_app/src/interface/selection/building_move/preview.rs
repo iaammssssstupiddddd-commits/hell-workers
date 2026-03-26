@@ -104,54 +104,54 @@ pub fn building_move_preview_system(
     if let (Some(active_companion), Some(pending)) =
         (companion_state.0.as_ref(), move_placement_state.0)
         && active_companion.kind == CompanionPlacementKind::BucketStorage
-            && pending.building == target_entity
-        {
-            let old_anchor = move_anchor_grid(building.kind, transform.translation.truncate());
-            let old_occupied = move_occupied_grids(building.kind, old_anchor);
-            let destination_occupied = move_occupied_grids(building.kind, pending.destination_grid);
-            let can_place = can_place_moved_building(
-                &WorldMapRef(world_map.as_ref()),
-                target_entity,
-                &old_occupied,
-                &destination_occupied,
-            ) && validate_tank_companion_for_move(
-                &world_map,
-                target_entity,
-                pending.destination_grid,
-                destination_grid,
-                &old_occupied,
-                &q_bucket_storages,
-            )
-            .can_place;
-            let draw_base = WorldMap::grid_to_world(destination_grid.0, destination_grid.1);
-            let draw_pos = draw_base + Vec2::new(TILE_SIZE * 0.5, 0.0);
-            let color = if can_place {
-                Color::srgba(0.5, 1.0, 0.5, 0.5)
-            } else {
-                Color::srgba(1.0, 0.2, 0.2, 0.5)
-            };
+        && pending.building == target_entity
+    {
+        let old_anchor = move_anchor_grid(building.kind, transform.translation.truncate());
+        let old_occupied = move_occupied_grids(building.kind, old_anchor);
+        let destination_occupied = move_occupied_grids(building.kind, pending.destination_grid);
+        let can_place = can_place_moved_building(
+            &WorldMapRef(world_map.as_ref()),
+            target_entity,
+            &old_occupied,
+            &destination_occupied,
+        ) && validate_tank_companion_for_move(
+            &world_map,
+            target_entity,
+            pending.destination_grid,
+            destination_grid,
+            &old_occupied,
+            &q_bucket_storages,
+        )
+        .can_place;
+        let draw_base = WorldMap::grid_to_world(destination_grid.0, destination_grid.1);
+        let draw_pos = draw_base + Vec2::new(TILE_SIZE * 0.5, 0.0);
+        let color = if can_place {
+            Color::srgba(0.5, 1.0, 0.5, 0.5)
+        } else {
+            Color::srgba(1.0, 0.2, 0.2, 0.5)
+        };
 
-            upsert_move_ghost(
-                &mut commands,
-                &mut q_ghost,
-                game_assets.bucket_empty.clone(),
-                Vec2::new(TILE_SIZE * 2.0, TILE_SIZE),
-                draw_pos,
-                color,
-            );
+        upsert_move_ghost(
+            &mut commands,
+            &mut q_ghost,
+            game_assets.bucket_empty.clone(),
+            Vec2::new(TILE_SIZE * 2.0, TILE_SIZE),
+            draw_pos,
+            color,
+        );
 
-            let partner_pos = move_spawn_pos(BuildingType::Tank, pending.destination_grid);
-            let partner_color = Color::srgba(0.8, 0.9, 1.0, 0.35);
-            upsert_partner_ghost(
-                &mut commands,
-                &mut q_partner_ghost,
-                game_assets.tank_empty.clone(),
-                Vec2::splat(TILE_SIZE * 2.0),
-                partner_pos,
-                partner_color,
-            );
-            return;
-        }
+        let partner_pos = move_spawn_pos(BuildingType::Tank, pending.destination_grid);
+        let partner_color = Color::srgba(0.8, 0.9, 1.0, 0.35);
+        upsert_partner_ghost(
+            &mut commands,
+            &mut q_partner_ghost,
+            game_assets.tank_empty.clone(),
+            Vec2::splat(TILE_SIZE * 2.0),
+            partner_pos,
+            partner_color,
+        );
+        return;
+    }
 
     despawn_partner_ghost(&mut commands, &q_partner_ghost);
 
@@ -197,10 +197,7 @@ fn despawn_move_ghosts(
     despawn_partner_ghost(commands, q_partner_ghost);
 }
 
-fn despawn_partner_ghost(
-    commands: &mut Commands,
-    q_partner_ghost: &PartnerGhostQuery,
-) {
+fn despawn_partner_ghost(commands: &mut Commands, q_partner_ghost: &PartnerGhostQuery) {
     for (entity, _, _) in q_partner_ghost.iter() {
         commands.entity(entity).despawn();
     }

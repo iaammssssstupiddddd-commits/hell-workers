@@ -140,13 +140,13 @@ pub(super) fn candidate_snapshot(
     if let Some(area) = task_area_opt {
         if !area.contains(pos)
             && !is_managed_by_me
-                && !is_issued_by_yard
-                && !is_mixer_task
-                && !in_yard
-                && !is_build_task
-            {
-                return None;
-            }
+            && !is_issued_by_yard
+            && !is_mixer_task
+            && !in_yard
+            && !is_build_task
+        {
+            return None;
+        }
     } else if !is_managed_by_me
         && !is_issued_by_yard
         && !is_mixer_task

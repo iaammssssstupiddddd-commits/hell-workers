@@ -125,37 +125,37 @@ pub fn blueprint_auto_build_system(
                 if let Some(worker_entity) = best_worker
                     && let Ok((_, _, soul, assigned_task, _, _, idle, _)) =
                         q_souls.get_mut(worker_entity)
-                    {
-                        if !helpers::is_soul_available_for_work(
-                            soul,
-                            &assigned_task,
-                            idle,
-                            false,
-                            fatigue_threshold,
-                        ) {
-                            continue;
-                        }
-
-                        assignment_writer.write(TaskAssignmentRequest {
-                            familiar_entity: fam_entity,
-                            worker_entity,
-                            task_entity: bp_entity,
-                            work_type: WorkType::Build,
-                            task_pos: bp_pos,
-                            assigned_task: AssignedTask::Build(BuildData {
-                                blueprint: bp_entity,
-                                phase: BuildPhase::GoingToBlueprint,
-                            }),
-                            reservation_ops: vec![],
-                            already_commanded: true,
-                        });
-                        already_requested_workers.insert(worker_entity);
-
-                        info!(
-                            "AUTO_BUILD: Assigned build task {:?} to worker {:?}",
-                            bp_entity, worker_entity
-                        );
+                {
+                    if !helpers::is_soul_available_for_work(
+                        soul,
+                        &assigned_task,
+                        idle,
+                        false,
+                        fatigue_threshold,
+                    ) {
+                        continue;
                     }
+
+                    assignment_writer.write(TaskAssignmentRequest {
+                        familiar_entity: fam_entity,
+                        worker_entity,
+                        task_entity: bp_entity,
+                        work_type: WorkType::Build,
+                        task_pos: bp_pos,
+                        assigned_task: AssignedTask::Build(BuildData {
+                            blueprint: bp_entity,
+                            phase: BuildPhase::GoingToBlueprint,
+                        }),
+                        reservation_ops: vec![],
+                        already_commanded: true,
+                    });
+                    already_requested_workers.insert(worker_entity);
+
+                    info!(
+                        "AUTO_BUILD: Assigned build task {:?} to worker {:?}",
+                        bp_entity, worker_entity
+                    );
+                }
             }
         }
     }

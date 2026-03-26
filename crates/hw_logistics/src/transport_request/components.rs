@@ -5,8 +5,7 @@ use crate::types::ResourceType;
 
 pub use hw_core::logistics::WheelbarrowDestination;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Reflect)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Reflect, Default)]
 pub enum TransportPriority {
     Low = 0,
     #[default]
@@ -14,7 +13,6 @@ pub enum TransportPriority {
     High = 20,
     Critical = 30,
 }
-
 
 #[derive(Component, Debug, Clone, Reflect)]
 #[reflect(Component)]
@@ -96,4 +94,3 @@ pub enum TransportRequestState {
     Pending,
     Claimed,
 }
-

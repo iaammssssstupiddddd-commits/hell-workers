@@ -39,9 +39,10 @@ pub fn task_area_edit_cursor_system(
         CursorIcon::System(SystemCursorIcon::Default)
     } else if let Some(active_drag) = state.area_edit_session.active_drag.as_ref() {
         cursor_icon_for_operation(active_drag.operation, true)
-    } else if let (Some(fam_entity), Some(world_pos)) =
-        (state.selected.0, world_cursor_pos(&state.q_window, &state.q_camera))
-    {
+    } else if let (Some(fam_entity), Some(world_pos)) = (
+        state.selected.0,
+        world_cursor_pos(&state.q_window, &state.q_camera),
+    ) {
         if let Ok(area) = state.q_task_areas.get(fam_entity) {
             if let Some(operation) = detect_area_edit_operation(area, world_pos) {
                 cursor_icon_for_operation(operation, false)

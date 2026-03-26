@@ -18,10 +18,7 @@ type TileVecPair = (Vec<(i32, i32)>, Vec<(i32, i32)>);
 /// 削除対象タイルと、それによって発生する孤立フラグメントを特定する。
 ///
 /// 戻り値: `(直接削除対象, 孤立フラグメント削除対象)`
-pub fn identify_removal_targets(
-    world_map: &WorldMap,
-    area: &AreaBounds,
-) -> TileVecPair {
+pub fn identify_removal_targets(world_map: &WorldMap, area: &AreaBounds) -> TileVecPair {
     let min_grid = WorldMap::world_to_grid(area.min + bevy::math::Vec2::splat(0.1));
     let max_grid = WorldMap::world_to_grid(area.max - bevy::math::Vec2::splat(0.1));
 

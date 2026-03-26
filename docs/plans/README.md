@@ -1,6 +1,6 @@
 # Plans Index
 
-`docs/plans` の文書ステータス一覧（更新日: 2026-03-24）。
+`docs/plans` の文書ステータス一覧（更新日: 2026-03-26）。
 
 ## 新規計画書の作り方
 
@@ -19,8 +19,7 @@
 
 | Document | Status | Notes |
 |---|---|---|
-| [refactoring-plan-2026-03-23.md](refactoring-plan-2026-03-23.md) | Complete | コードベース整理・リファクタリング計画（DRY削減・責務分離・アーキテクチャ改善） |
-| [soul-pathfinding-rotation.md](soul-pathfinding-rotation.md) | Draft | 計画書：Soul 経路探索ローテーション（P1-b） |
+| [code-quality-refactoring-2026-03-26.md](code-quality-refactoring-2026-03-26.md) | Draft | 大ファイル分割・重複除去（本線 **M1〜M6**、M4 は A/B の 2 ステップ、**M7** は任意） |
 
 ## アーカイブ計画書一覧 (`docs/plans/archive`)
 
@@ -36,6 +35,7 @@
 | [archive/bridge-building.md](archive/bridge-building.md) | アーカイブ | 橋（Bridge）建築物の実装計画。 |
 | [archive/bucket-return-rebuild-plan.md](archive/bucket-return-rebuild-plan.md) | アーカイブ | バケツ返却仕様の再構築計画。 |
 | [archive/cargo-workspace-migration-plan.md](archive/cargo-workspace-migration-plan.md) | アーカイブ | Cargo Workspace 移行計画 |
+| [archive/clippy-allow-cleanup-2026-03-24.md](archive/clippy-allow-cleanup-2026-03-24.md) | アーカイブ | コードベース全体に散在するの計画。 |
 | [archive/codebase-quality-refactor.md](archive/codebase-quality-refactor.md) | アーカイブ | リファクタリング計画: コードベース全体の整理・品質向上 |
 | [archive/command-crate-extraction-plan-2026-03-12.md](archive/command-crate-extraction-plan-2026-03-12.md) | アーカイブ | src/systems/command/の計画。 |
 | [archive/crate-boundary-alignment-plan-2026-03-18.md](archive/crate-boundary-alignment-plan-2026-03-18.md) | アーカイブ | docs/crate-boundaries.mdの計画。 |
@@ -114,6 +114,7 @@
 | [archive/refactor-top5-followups-plan-2026-03-02.md](archive/refactor-top5-followups-plan-2026-03-02.md) | アーカイブ | 直近レビューで抽出した5件（運搬request重複、UI粒子更新肥大、assignment builder重複、pathfinding隠れ状態、冗長分岐）を段階的に解消するの計画。 |
 | [archive/refactor-types-migration-plan copy.md](archive/refactor-types-migration-plan copy.md) | アーカイブ | 型・ドメインモデルのクレート境界リファクタリング計画 |
 | [archive/refactor-types-migration-plan.md](archive/refactor-types-migration-plan.md) | アーカイブ | 型・ドメインモデルのクレート境界リファクタリング計画 |
+| [archive/refactoring-plan-2026-03-23.md](archive/refactoring-plan-2026-03-23.md) | アーカイブ | コードベース整理・リファクタリング計画 |
 | [archive/remove-instockpile-claimedby.md](archive/remove-instockpile-claimedby.md) | アーカイブ | `InStockpile`/`ClaimedBy` 削除統合計画。 |
 | [archive/remove-reexport-indirections-plan.md](archive/remove-reexport-indirections-plan.md) | アーカイブ | bevy_appの計画。 |
 | [archive/request-unification-plan-2026-02-14.md](archive/request-unification-plan-2026-02-14.md) | アーカイブ | Request方式一本化計画。 |

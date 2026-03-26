@@ -9,7 +9,11 @@ type MinimizeButtonQuery<'w, 's> = Query<
     'w,
     's,
     (&'static Interaction, &'static mut BackgroundColor),
-    (Changed<Interaction>, With<Button>, With<EntityListMinimizeButton>),
+    (
+        Changed<Interaction>,
+        With<Button>,
+        With<EntityListMinimizeButton>,
+    ),
 >;
 
 #[derive(Resource)]

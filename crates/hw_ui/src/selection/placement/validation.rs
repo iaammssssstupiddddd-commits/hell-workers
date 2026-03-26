@@ -133,11 +133,9 @@ where
                 || !(ctx.is_wall_or_door_at)((grid.0 + 1, grid.1)))
                 && (!(ctx.is_wall_or_door_at)((grid.0, grid.1 + 1))
                     || !(ctx.is_wall_or_door_at)((grid.0, grid.1 - 1)))
-                {
-                    return PlacementValidation::rejected(
-                        PlacementRejectReason::NoDoorAdjacentWall,
-                    );
-                }
+            {
+                return PlacementValidation::rejected(PlacementRejectReason::NoDoorAdjacentWall);
+            }
         }
         _ => {
             for &candidate in &geometry.occupied_grids {

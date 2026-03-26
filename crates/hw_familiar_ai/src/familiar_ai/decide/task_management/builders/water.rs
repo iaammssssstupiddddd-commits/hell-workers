@@ -33,7 +33,10 @@ pub fn issue_gather_water(
         ctx,
         queries,
         shadow,
-        TaskTarget { work_type: WorkType::GatherWater, task_pos },
+        TaskTarget {
+            work_type: WorkType::GatherWater,
+            task_pos,
+        },
         assigned_task,
         &[bucket],
         already_commanded,
@@ -80,7 +83,10 @@ pub fn issue_haul_water_to_mixer(
         ctx,
         queries,
         shadow,
-        TaskTarget { work_type: WorkType::HaulWaterToMixer, task_pos },
+        TaskTarget {
+            work_type: WorkType::HaulWaterToMixer,
+            task_pos,
+        },
         assigned_task,
         reservation_ops,
         already_commanded,

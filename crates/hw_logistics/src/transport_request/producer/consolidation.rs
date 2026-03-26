@@ -73,9 +73,10 @@ pub fn stockpile_consolidation_producer_system(
         let mut by_type: HashMap<ResourceType, Vec<&CellInfo>> = HashMap::new();
         for cell in &cells {
             if let Some(rt) = cell.resource_type
-                && cell.stored > 0 {
-                    by_type.entry(rt).or_default().push(cell);
-                }
+                && cell.stored > 0
+            {
+                by_type.entry(rt).or_default().push(cell);
+            }
         }
 
         for (resource_type, mut type_cells) in by_type {

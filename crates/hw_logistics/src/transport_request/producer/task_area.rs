@@ -210,7 +210,11 @@ pub struct TaskAreaAutoHaulParams<'w, 's> {
     pub q_stockpile_requests: Query<
         'w,
         's,
-        (Entity, &'static TransportRequest, Option<&'static TaskWorkers>),
+        (
+            Entity,
+            &'static TransportRequest,
+            Option<&'static TaskWorkers>,
+        ),
         Without<ManualTransportRequest>,
     >,
     pub q_free_items: FreeItemsQuery<'w, 's>,

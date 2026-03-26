@@ -123,7 +123,12 @@ pub fn spawn_familiar_bubble(
     handles: &Res<SpeechHandles>,
     q_bubbles: &Query<(Entity, &SpeechBubble), With<FamiliarBubble>>,
 ) {
-    let FamiliarBubbleSpec { phrase, emotion, priority, voice } = spec;
+    let FamiliarBubbleSpec {
+        phrase,
+        emotion,
+        priority,
+        voice,
+    } = spec;
     // 優先度に応じた生存時間の決定
     let duration = match priority {
         BubblePriority::Low => BUBBLE_DURATION_LOW,

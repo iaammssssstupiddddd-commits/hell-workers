@@ -48,7 +48,12 @@ pub fn max_soul_visual_system(
         spawn_familiar_bubble(
             &mut commands,
             event.familiar_entity,
-            FamiliarBubbleSpec { phrase: LatinPhrase::Abi, emotion: BubbleEmotion::Neutral, priority: BubblePriority::Normal, voice: Some(voice_opt) },
+            FamiliarBubbleSpec {
+                phrase: LatinPhrase::Abi,
+                emotion: BubbleEmotion::Neutral,
+                priority: BubblePriority::Normal,
+                voice: Some(voice_opt),
+            },
             &speech_handles,
             &q_bubbles,
         );

@@ -102,7 +102,15 @@ pub(crate) fn submit_assignment_with_reservation_ops(
     reservation_ops: Vec<ResourceReservationOp>,
     already_commanded: bool,
 ) {
-    submit_assignment(ctx, queries, shadow, target, assigned_task, reservation_ops, already_commanded);
+    submit_assignment(
+        ctx,
+        queries,
+        shadow,
+        target,
+        assigned_task,
+        reservation_ops,
+        already_commanded,
+    );
 }
 
 pub(crate) fn submit_assignment_with_source_entities(
@@ -115,7 +123,15 @@ pub(crate) fn submit_assignment_with_source_entities(
     already_commanded: bool,
 ) {
     let reservation_ops = build_source_reservation_ops(source_entities);
-    submit_assignment_with_reservation_ops(ctx, queries, shadow, target, assigned_task, reservation_ops, already_commanded);
+    submit_assignment_with_reservation_ops(
+        ctx,
+        queries,
+        shadow,
+        target,
+        assigned_task,
+        reservation_ops,
+        already_commanded,
+    );
 }
 
 pub fn build_source_reservation_ops(sources: &[Entity]) -> Vec<ResourceReservationOp> {

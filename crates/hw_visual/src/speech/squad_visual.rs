@@ -60,7 +60,12 @@ pub fn squad_visual_system(
         spawn_familiar_bubble(
             &mut commands,
             fam_entity,
-            FamiliarBubbleSpec { phrase: LatinPhrase::Abi, emotion: BubbleEmotion::Neutral, priority: BubblePriority::Normal, voice: voice_opt },
+            FamiliarBubbleSpec {
+                phrase: LatinPhrase::Abi,
+                emotion: BubbleEmotion::Neutral,
+                priority: BubblePriority::Normal,
+                voice: voice_opt,
+            },
             &speech_handles,
             &q_bubbles,
         );

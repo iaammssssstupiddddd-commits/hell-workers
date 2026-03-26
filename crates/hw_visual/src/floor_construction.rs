@@ -14,7 +14,6 @@ use crate::progress_bar::{
     update_progress_bar_fill,
 };
 
-
 type FloorCuringBgQuery<'w, 's> = Query<
     'w,
     's,
@@ -30,7 +29,12 @@ type FloorCuringBgQuery<'w, 's> = Query<
 type FloorCuringFillQuery<'w, 's> = Query<
     'w,
     's,
-    (Entity, &'static ChildOf, &'static mut Sprite, &'static mut Transform),
+    (
+        Entity,
+        &'static ChildOf,
+        &'static mut Sprite,
+        &'static mut Transform,
+    ),
     (
         With<FloorCuringProgressBar>,
         With<ProgressBarFill>,

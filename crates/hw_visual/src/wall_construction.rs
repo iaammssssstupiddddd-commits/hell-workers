@@ -21,7 +21,6 @@ const WALL_PROGRESS_BAR_BG_COLOR: Color = Color::srgba(0.1, 0.1, 0.1, 0.9);
 #[derive(Component)]
 pub struct WallConstructionProgressBar;
 
-
 type WallConstructionBgQuery<'w, 's> = Query<
     'w,
     's,
@@ -37,7 +36,12 @@ type WallConstructionBgQuery<'w, 's> = Query<
 type WallConstructionFillQuery<'w, 's> = Query<
     'w,
     's,
-    (Entity, &'static ChildOf, &'static mut Sprite, &'static mut Transform),
+    (
+        Entity,
+        &'static ChildOf,
+        &'static mut Sprite,
+        &'static mut Transform,
+    ),
     (
         With<WallConstructionProgressBar>,
         With<ProgressBarFill>,

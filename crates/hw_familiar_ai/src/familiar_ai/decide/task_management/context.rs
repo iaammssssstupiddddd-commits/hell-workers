@@ -99,7 +99,11 @@ type StoredItemsQuery<'w, 's> = Query<
     'w,
     's,
     (Entity, &'static ResourceItem, &'static StoredIn),
-    (Without<Designation>, Without<TaskWorkers>, Without<ReservedForTask>),
+    (
+        Without<Designation>,
+        Without<TaskWorkers>,
+        Without<ReservedForTask>,
+    ),
 >;
 
 /// リソース予約・管理に必要な共通アクセス

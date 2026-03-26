@@ -127,22 +127,23 @@ pub fn cleanup_task_assignment<'w, 's, Q: TaskReservationAccess<'w, 's>>(
 
     if let Some(inventory) = inventory {
         if let Some(item_entity) = inventory.0
-            && Some(item_entity) != skip_inventory_drop_for {
-                commands.entity(item_entity).try_insert((
-                    Visibility::Visible,
-                    Transform::from_xyz(snapped_pos.x, snapped_pos.y, Z_ITEM_PICKUP),
-                ));
+            && Some(item_entity) != skip_inventory_drop_for
+        {
+            commands.entity(item_entity).try_insert((
+                Visibility::Visible,
+                Transform::from_xyz(snapped_pos.x, snapped_pos.y, Z_ITEM_PICKUP),
+            ));
 
-                let _res_item = dropped_item_res
-                    .or_else(|| queries.resources().get(item_entity).ok().map(|r| r.0));
+            let _res_item =
+                dropped_item_res.or_else(|| queries.resources().get(item_entity).ok().map(|r| r.0));
 
-                commands.entity(item_entity).remove::<TargetBlueprint>();
-                commands.entity(item_entity).remove::<Priority>();
-                // TaskWorkers は RelationshipTarget のため手動で remove してはいけない。
-                // WorkingOn を外すと Bevy の関係システムが自動的に管理する。
-                commands.entity(item_entity).remove::<StoredIn>();
-                commands.entity(item_entity).remove::<DeliveringTo>();
-            }
+            commands.entity(item_entity).remove::<TargetBlueprint>();
+            commands.entity(item_entity).remove::<Priority>();
+            // TaskWorkers は RelationshipTarget のため手動で remove してはいけない。
+            // WorkingOn を外すと Bevy の関係システムが自動的に管理する。
+            commands.entity(item_entity).remove::<StoredIn>();
+            commands.entity(item_entity).remove::<DeliveringTo>();
+        }
         inventory.0 = None;
     }
 

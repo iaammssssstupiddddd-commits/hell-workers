@@ -15,8 +15,8 @@ use crate::systems::visual::building3d_cleanup::{
 };
 use crate::systems::visual::camera_sync::sync_camera3d_system;
 use crate::systems::visual::character_proxy_3d::{
-    cleanup_familiar_proxy_3d_system, cleanup_soul_proxy_3d_system, sync_familiar_proxy_3d_system,
-    sync_soul_proxy_3d_system,
+    apply_soul_gltf_render_layers_on_ready, cleanup_familiar_proxy_3d_system,
+    cleanup_soul_proxy_3d_system, sync_familiar_proxy_3d_system, sync_soul_proxy_3d_system,
 };
 use crate::systems::visual::elevation_view::{ElevationViewState, elevation_view_input_system};
 use crate::systems::visual::task_area_visual::update_task_area_material_system;
@@ -53,16 +53,12 @@ impl Plugin for VisualPlugin {
                 crate::systems::visual::placement_ghost::placement_ghost_system,
             )
                 .in_set(GameSystemSet::Visual)
-                .run_if(
-                    |state: Res<State<hw_core::game_state::PlayMode>>| {
-                        matches!(
-                            state.get(),
-                            PlayMode::Normal
-                                | PlayMode::BuildingPlace
-                                | PlayMode::TaskDesignation
-                        )
-                    },
-                ),
+                .run_if(|state: Res<State<hw_core::game_state::PlayMode>>| {
+                    matches!(
+                        state.get(),
+                        PlayMode::Normal | PlayMode::BuildingPlace | PlayMode::TaskDesignation
+                    )
+                }),
         );
 
         app.add_systems(
@@ -143,6 +139,7 @@ impl Plugin for VisualPlugin {
             Update,
             apply_render3d_visibility_system.in_set(GameSystemSet::Visual),
         );
+        app.add_observer(apply_soul_gltf_render_layers_on_ready);
     }
 }
 

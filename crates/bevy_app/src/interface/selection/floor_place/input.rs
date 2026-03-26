@@ -116,6 +116,7 @@ fn existing_floor_building_grids(
 ) -> HashSet<(i32, i32)> {
     q_floor_buildings
         .iter()
-        .filter(|&(building, _transform)| building.kind == BuildingType::Floor ).map(|(_building, transform)| WorldMap::world_to_grid(transform.translation.truncate()))
+        .filter(|&(building, _transform)| building.kind == BuildingType::Floor)
+        .map(|(_building, transform)| WorldMap::world_to_grid(transform.translation.truncate()))
         .collect()
 }

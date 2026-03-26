@@ -25,7 +25,8 @@ pub struct ShortcutQueries<'w, 's> {
     q_familiar_exists: Query<'w, 's, (), With<Familiar>>,
     q_task_areas: Query<'w, 's, &'static TaskArea, With<Familiar>>,
     q_sites: Query<'w, 's, &'static Site>,
-    q_familiars: Query<'w, 's, (&'static mut ActiveCommand, &'static mut Destination), With<Familiar>>,
+    q_familiars:
+        Query<'w, 's, (&'static mut ActiveCommand, &'static mut Destination), With<Familiar>>,
 }
 
 pub fn task_area_edit_history_shortcuts_system(
@@ -39,7 +40,8 @@ pub fn task_area_edit_history_shortcuts_system(
 
     let ctrl_pressed =
         res.keyboard.pressed(KeyCode::ControlLeft) || res.keyboard.pressed(KeyCode::ControlRight);
-    let alt_pressed = res.keyboard.pressed(KeyCode::AltLeft) || res.keyboard.pressed(KeyCode::AltRight);
+    let alt_pressed =
+        res.keyboard.pressed(KeyCode::AltLeft) || res.keyboard.pressed(KeyCode::AltRight);
 
     if alt_pressed && let Some(slot) = hotkey_slot_index(&res.keyboard) {
         let Some(selected) = res.selected_entity.0 else {
@@ -82,9 +84,10 @@ pub fn task_area_edit_history_shortcuts_system(
     if let Some(slot) = hotkey_slot_index(&res.keyboard) {
         if let Some(selected) = res.selected_entity.0
             && queries.q_familiar_exists.get(selected).is_ok()
-            && let Ok(area) = queries.q_task_areas.get(selected) {
-                res.area_edit_presets.save_size(slot, area.size());
-            }
+            && let Ok(area) = queries.q_task_areas.get(selected)
+        {
+            res.area_edit_presets.save_size(slot, area.size());
+        }
         return;
     }
 

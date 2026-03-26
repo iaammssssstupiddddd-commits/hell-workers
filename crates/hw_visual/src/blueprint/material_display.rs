@@ -111,15 +111,16 @@ pub fn update_material_counter_system(
         };
 
         if let Some((accepted_types, delivered, required)) = &state.flexible_material
-            && accepted_types.contains(&counter.resource_type) {
-                let accepted = accepted_types
-                    .iter()
-                    .map(|resource_type| format!("{:?}", resource_type))
-                    .collect::<Vec<_>>()
-                    .join("/");
-                text.0 = format!("{} {}/{}", accepted, delivered, required);
-                continue;
-            }
+            && accepted_types.contains(&counter.resource_type)
+        {
+            let accepted = accepted_types
+                .iter()
+                .map(|resource_type| format!("{:?}", resource_type))
+                .collect::<Vec<_>>()
+                .join("/");
+            text.0 = format!("{} {}/{}", accepted, delivered, required);
+            continue;
+        }
 
         if let Some((_, delivered, required)) = state
             .material_counts

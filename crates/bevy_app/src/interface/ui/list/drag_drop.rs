@@ -25,8 +25,7 @@ pub struct DragDropResources<'w> {
 #[derive(SystemParam)]
 pub struct DragDropQueries<'w, 's> {
     q_soul_rows: Query<'w, 's, (&'static Interaction, &'static SoulListItem), With<Button>>,
-    q_familiar_rows:
-        Query<'w, 's, (&'static Interaction, &'static FamiliarListItem), With<Button>>,
+    q_familiar_rows: Query<'w, 's, (&'static Interaction, &'static FamiliarListItem), With<Button>>,
     q_soul_names: Query<'w, 's, &'static SoulIdentity, With<DamnedSoul>>,
     q_commanded_by: Query<'w, 's, &'static CommandedBy, With<DamnedSoul>>,
 }

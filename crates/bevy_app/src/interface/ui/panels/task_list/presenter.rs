@@ -15,11 +15,7 @@ pub struct TaskComponentRefs<'a> {
     pub bone_pile: Option<&'a BonePile>,
 }
 
-pub fn generate_task_description(
-    wt: WorkType,
-    entity: Entity,
-    refs: TaskComponentRefs,
-) -> String {
+pub fn generate_task_description(wt: WorkType, entity: Entity, refs: TaskComponentRefs) -> String {
     let TaskComponentRefs {
         blueprint,
         transport_req,

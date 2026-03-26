@@ -168,12 +168,15 @@ pub fn dream_tree_planting_preview_system(
     let end_pos = WorldMap::snap_to_grid_center(world_pos);
     let (sx, sy) = WorldMap::world_to_grid(start_pos);
     let (ex, ey) = WorldMap::world_to_grid(end_pos);
-    let seed = preview.area_edit_session.dream_planting_preview_seed.unwrap_or(
-        (sx as i64 as u64).wrapping_mul(73_856_093)
-            ^ (sy as i64 as u64).wrapping_mul(19_349_663)
-            ^ (ex as i64 as u64).wrapping_mul(83_492_791)
-            ^ (ey as i64 as u64).wrapping_mul(2_654_435_761),
-    );
+    let seed = preview
+        .area_edit_session
+        .dream_planting_preview_seed
+        .unwrap_or(
+            (sx as i64 as u64).wrapping_mul(73_856_093)
+                ^ (sy as i64 as u64).wrapping_mul(19_349_663)
+                ^ (ex as i64 as u64).wrapping_mul(83_492_791)
+                ^ (ey as i64 as u64).wrapping_mul(2_654_435_761),
+        );
 
     let plan = build_dream_tree_planting_plan(
         start_pos,

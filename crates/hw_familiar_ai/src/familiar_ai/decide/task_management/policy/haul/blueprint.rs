@@ -65,9 +65,10 @@ pub fn assign_haul_to_blueprint(
             ctx,
             queries,
             shadow,
-        ) {
-            return true;
-        }
+        )
+    {
+        return true;
+    }
 
     let max_items = remaining_needed.min(WHEELBARROW_CAPACITY as u32) as usize;
     if lease_validation::try_issue_haul_from_lease(
@@ -88,7 +89,10 @@ pub fn assign_haul_to_blueprint(
 
     if resource_type == ResourceType::Sand
         && try_direct_collect_with_wheelbarrow_to_blueprint(
-            CollectBlueprintParams { blueprint, remaining_needed },
+            CollectBlueprintParams {
+                blueprint,
+                remaining_needed,
+            },
             task_pos,
             already_commanded,
             ctx,
@@ -105,7 +109,10 @@ pub fn assign_haul_to_blueprint(
 
     if resource_type == ResourceType::Bone
         && try_direct_collect_with_wheelbarrow_to_blueprint(
-            CollectBlueprintParams { blueprint, remaining_needed },
+            CollectBlueprintParams {
+                blueprint,
+                remaining_needed,
+            },
             task_pos,
             already_commanded,
             ctx,
@@ -244,7 +251,10 @@ fn try_direct_collect_with_wheelbarrow_to_blueprint(
         return false;
     };
 
-    let amount = params.remaining_needed.max(1).min(WHEELBARROW_CAPACITY as u32);
+    let amount = params
+        .remaining_needed
+        .max(1)
+        .min(WHEELBARROW_CAPACITY as u32);
 
     (strategy.issue_fn)(
         WheelbarrowCollectSpec {

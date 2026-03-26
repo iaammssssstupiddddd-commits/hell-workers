@@ -1,9 +1,12 @@
+pub mod bubble_spawn_helpers;
 pub mod components;
 pub mod events;
+pub mod phase_handlers;
 pub mod systems;
 
 use bevy::prelude::*;
 use components::*;
+use phase_handlers::*;
 use systems::*;
 
 pub struct ConversationPlugin;

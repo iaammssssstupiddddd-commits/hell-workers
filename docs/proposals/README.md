@@ -18,7 +18,6 @@
 | Document | Notes |
 | --- | --- |
 | [08_visual_update_prompts.md](08_visual_update_prompts.md) | ビジュアル更新プロンプト集 |
-| [high-priority-performance-proposal-2026-03-23.md](high-priority-performance-proposal-2026-03-23.md) | パフォーマンス改善（優先度高）— Soul 経路・移譲到達判定・Idle 命令委譲 |
 | [soul_spawn_despawn_optimization.md](soul_spawn_despawn_optimization.md) | Soul Spawn/Despawn 最適化提案 |
 | [speech_optimization.md](speech_optimization.md) | スピーチシステム最適化提案 |
 
@@ -37,6 +36,7 @@
 | [archive/dream_general_visuals.md](archive/dream_general_visuals.md) | Dreamシステム全体 ビジュアルアップデート提案 |
 | [archive/dream_tree_planting_proposal.md](archive/dream_tree_planting_proposal.md) | Dream を使った植林システム提案 |
 | [archive/familiar-task-management-hw-ai-extraction-proposal-2026-03-11.md](archive/familiar-task-management-hw-ai-extraction-proposal-2026-03-11.md) | `src/systems/familiar_ai/decide/task_management/` には、候補収集、優先度評価、搬送元選定、予約影反映、`AssignedTask` 構築など、使い魔 AI の中核ロジックがまとまっていたの提案。 |
+| [archive/high-priority-performance-proposal-2026-03-23.md](archive/high-priority-performance-proposal-2026-03-23.md) | **現状**: Soul 数・使い魔数の増加に伴い、Actor/Logic フェーズの CPU 負荷が上がる。コード走査により、次の 3 領域が **優先度高** の改善候補として整理されたの提案。 |
 | [archive/high_priority_performance_plan.md](archive/high_priority_performance_plan.md) | `try_assign_for_workers` でワーカーごとに候補収集と評価を実行しているの提案。 |
 | [archive/hw-ai-crate copy.md](archive/hw-ai-crate copy.md) | 現状: `src/systems/soul_ai/`（98ファイル）と `src/systems/familiar_ai/`（70ファイル）が root crate に存在し、全479ファイルの **35%** を占める。root crate 内のどのファイルを変更しても、AI コード含む全体が再コンパイル対象になるの提案。 |
 | [archive/hw-ai-crate-phase2-2026-03-08.md](archive/hw-ai-crate-phase2-2026-03-08.md) | Phase 1 時点ではの計画。 |

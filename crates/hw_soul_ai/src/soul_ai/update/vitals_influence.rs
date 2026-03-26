@@ -113,10 +113,9 @@ pub fn familiar_influence_unified_system(
             soul.laziness = (soul.laziness + dt * LAZINESS_GAIN_RATE_IDLE).min(1.0);
         }
 
-        if soul.stress >= 1.0
-            && breakdown_opt.is_none() {
-                commands.trigger(OnStressBreakdown { entity });
-            }
+        if soul.stress >= 1.0 && breakdown_opt.is_none() {
+            commands.trigger(OnStressBreakdown { entity });
+        }
 
         if let Some(mut breakdown) = breakdown_opt {
             if soul.stress <= STRESS_RECOVERY_THRESHOLD {

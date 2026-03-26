@@ -53,9 +53,10 @@ pub fn obstacle_cleanup_system(
             world_map.set_terrain_at_idx(idx, TerrainType::Dirt);
 
             if let Some(tile_entity) = world_map.tile_entity_at_idx(idx)
-                && let Ok(mut sprite) = q_sprites.get_mut(tile_entity) {
-                    sprite.image = handles.dirt.clone();
-                }
+                && let Ok(mut sprite) = q_sprites.get_mut(tile_entity)
+            {
+                sprite.image = handles.dirt.clone();
+            }
         }
 
         info!(

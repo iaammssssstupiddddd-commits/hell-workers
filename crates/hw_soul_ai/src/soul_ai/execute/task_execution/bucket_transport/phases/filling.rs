@@ -95,12 +95,13 @@ pub fn handle(
             for (res_entity, _, _, res_item, stored_in, _) in ctx.queries.resource_items.iter() {
                 if res_item.0 == ResourceType::Water
                     && let Some(stored) = stored_in
-                        && stored.0 == tank {
-                            found_waters.push(res_entity);
-                            if found_waters.len() as u32 >= BUCKET_CAPACITY {
-                                break;
-                            }
-                        }
+                    && stored.0 == tank
+                {
+                    found_waters.push(res_entity);
+                    if found_waters.len() as u32 >= BUCKET_CAPACITY {
+                        break;
+                    }
+                }
             }
 
             if !found_waters.is_empty() {

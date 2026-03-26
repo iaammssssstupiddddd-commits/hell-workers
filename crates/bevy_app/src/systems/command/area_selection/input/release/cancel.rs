@@ -67,10 +67,9 @@ fn cancel_point_nearest_designation(
                 continue;
             }
             let dist = transform.translation.truncate().distance(start_pos);
-            if dist < TILE_SIZE
-                && closest.is_none_or(|(_, d)| dist < d) {
-                    closest = Some((entity, dist));
-                }
+            if dist < TILE_SIZE && closest.is_none_or(|(_, d)| dist < d) {
+                closest = Some((entity, dist));
+            }
         }
     }
 

@@ -17,10 +17,7 @@ type NewResourcesQuery<'w, 's> = Query<
     (With<GatherHighlightMarker>, Without<ResourceVisual>),
 >;
 
-pub fn attach_resource_visual_system(
-    mut commands: Commands,
-    q_resources: NewResourcesQuery,
-) {
+pub fn attach_resource_visual_system(mut commands: Commands, q_resources: NewResourcesQuery) {
     for (entity, sprite) in q_resources.iter() {
         commands.entity(entity).try_insert(ResourceVisual {
             state: ResourceHighlightState::Designated,

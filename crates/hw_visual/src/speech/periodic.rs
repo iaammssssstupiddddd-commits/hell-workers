@@ -112,14 +112,15 @@ pub fn periodic_emotion_system(
         }
         // 4. アイドル (Low)
         else if state.idle_time > IDLE_EMOTION_MIN_DURATION
-            && rng.gen_bool(PROBABILITY_PERIODIC_BORED as f64) {
-                let emoji = match rng.gen_range(0..3) {
-                    0 => "💤",
-                    1 => "🥱",
-                    _ => "😑",
-                };
-                triggered = Some((emoji, BubbleEmotion::Bored, BubblePriority::Low));
-            }
+            && rng.gen_bool(PROBABILITY_PERIODIC_BORED as f64)
+        {
+            let emoji = match rng.gen_range(0..3) {
+                0 => "💤",
+                1 => "🥱",
+                _ => "😑",
+            };
+            triggered = Some((emoji, BubbleEmotion::Bored, BubblePriority::Low));
+        }
 
         // 発火処理
         if let Some((emoji, emotion, priority)) = triggered {

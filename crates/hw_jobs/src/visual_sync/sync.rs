@@ -25,10 +25,7 @@ use super::building_type_to_visual;
 type SoulTaskSyncQuery<'w, 's> = Query<
     'w,
     's,
-    (
-        &'static AssignedTask,
-        &'static mut SoulTaskVisualState,
-    ),
+    (&'static AssignedTask, &'static mut SoulTaskVisualState),
     Or<(Changed<AssignedTask>, Added<AssignedTask>)>,
 >;
 type BlueprintSyncQuery<'w, 's> = Query<

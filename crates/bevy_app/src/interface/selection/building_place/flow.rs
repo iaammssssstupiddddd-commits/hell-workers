@@ -1,11 +1,11 @@
+use super::PlacementQueries;
+use super::companion::parent_building_type;
+use super::placement::{place_building_blueprint, try_place_bucket_storage_companion};
 use crate::app_contexts::{CompanionPlacementKind, CompanionPlacementState};
 use crate::assets::GameAssets;
 use crate::world::map::{RIVER_Y_MIN, WorldMap};
 use bevy::prelude::*;
 use hw_ui::selection::building_occupied_grids;
-use super::PlacementQueries;
-use super::companion::parent_building_type;
-use super::placement::{place_building_blueprint, try_place_bucket_storage_companion};
 
 /// Handles the companion placement flow when `companion_state` is active.
 /// Returns `true` if the flow consumed the click (caller should `return`).

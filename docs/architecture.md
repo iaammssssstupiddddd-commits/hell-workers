@@ -219,14 +219,15 @@ Perceive → Update → Decide → Execute
 
 `sync_rtt_output_bindings`（同ファイル、`Update` スケジュール）が `RttTextures` の変化を検知し、`Camera3d.target` と `RttCompositeSprite` の `Sprite.image` / `custom_size` / Z 座標を同時に更新する。RtT テクスチャ自体は物理解像度で生成するが、合成スプライトの `custom_size` は `PrimaryWindow` の logical size を基準にしつつ、斜め TopDown オーソ投影で圧縮される Y 方向を `topdown_rtt_vertical_compensation()` で補正する。`sync_rtt_texture_size_to_window` と `chain` で登録されているため、ウィンドウサイズ変更フレーム内で再生成後のテクスチャへ差し替わる。
 
-### キャラクター3Dプロキシ（Phase 2 暫定）
+### キャラクター3D表示（Soul GLB PoC / Familiar billboard）
 
-`SoulProxy3d` / `FamiliarProxy3d` は、Phase 3 の GLB 置換までの暫定表示として `XY` 矩形メッシュに既存 2D テクスチャを貼った billboard 風プロキシで運用する。
+`SoulProxy3d` は `SceneRoot` で `assets/models/characters/soul.glb#Scene0` を読み込む 3D ルートとして使い、`FamiliarProxy3d` は引き続き `XY` 矩形メッシュに既存 2D テクスチャを貼った billboard 風プロキシで運用する。
 
-- メッシュは `Rectangle::new(...)` で生成し、厚みを持たせない。
-- 材質は `StandardMaterial` の `base_color_texture` に `soul.png` / familiar テクスチャを設定し、`unlit + AlphaMode::Blend + cull_mode: None` を使う。
-- `sync_soul_proxy_3d_system` / `sync_familiar_proxy_3d_system` は 2D 位置を XZ 平面へ写し、回転は `Camera3dRtt` の `Transform.rotation` をそのままコピーする。
-- パン時に見え方が変形しないことと、壁の後ろに入った際に Z バッファで自然に隠れることを `MS-P3-Pre-C` の目視確認条件とする。
+- `GameAssets.soul_scene` に `GltfAssetLabel::Scene(0).from_asset("models/characters/soul.glb")` を保持し、Soul spawn 時に `SceneRoot` として 3D シーンへ追加する。
+- Soul の 3D ルートは `SOUL_GLB_SCALE` を適用し、`sync_soul_proxy_3d_system` は 2D 位置を XZ 平面へ写すが、billboard 回転は行わない。
+- `apply_soul_gltf_render_layers_on_ready` が `SceneInstanceReady` を受けて Soul GLB の子孫へ `RenderLayers::layer(LAYER_3D)` を付与し、RtT 用 `Camera3dRtt` で確実に描画する。
+- `Camera3dRtt` には `AmbientLight` を付与し、GLB 付属の lit material が RtT 上で暗転しないようにする。
+- Familiar 側は `Rectangle::new(...)` + `StandardMaterial { base_color_texture, unlit, AlphaMode::Blend, cull_mode: None }` を維持し、`sync_familiar_proxy_3d_system` が `Camera3dRtt` の回転をそのままコピーする。
 
 ### 3D 表示トグル（開発機能）
 
@@ -310,7 +311,7 @@ Perceive → Update → Decide → Execute
 
 | ファイル | 理由 |
 |:---|:---|
-| `interaction/intent_handler.rs`, `mode.rs` | PlayMode 遷移、app_contexts 依存 |
+| `interaction/intent_context.rs`, `interaction/handlers/`, `interaction/intent_handler.rs`, `mode.rs` | PlayMode 遷移、app_contexts、`FamiliarOperation` などのゲーム依存 state / handler |
 | `list/change_detection.rs` | ゲームコンポーネントの Changed 監視 |
 | `list/view_model.rs`, `spawn/`, `sync/` | ゲームエンティティ → UI ノード変換 |
 | `list/drag_drop.rs`, `list/interaction.rs`, `navigation.rs` | FamiliarOperation, TaskContext 等 |
@@ -335,11 +336,11 @@ Perceive → Update → Decide → Execute
 
 - `SelectedEntity` / `HoveredEntity` / `SelectionIndicator` は cross-crate で共有される interaction state として `hw_core::selection` に置き、`hw_ui::selection` は cleanup と placement validation の公開面を担う。`Commands`/`WorldMapWrite`/`NextState<PlayMode>` は使わない。
 - `update_selection_indicator` の実装本体は `hw_visual` にあるが、選択更新と同フレームで反映するため root `Interface` フェーズで登録する。
-- `hw_ui::selection::placement` は building placement/move の geometry, validation 共通ロジックを保持する。`crates/bevy_app/src/interface/selection/building_place/placement.rs`・`building_move/preview.rs`・`building_move/system.rs`・`crates/bevy_app/src/systems/visual/placement_ghost.rs` が共有する。内部は private submodule に分離済み: `geometry.rs`（座標変換・形状計算）/ `validation.rs`（配置可否判定）/ `tests.rs`。`placement.rs` root はファサード + 共有型定義のみ。
+- `hw_ui::selection::placement` は building placement/move の geometry, validation 共通ロジックを保持する。`crates/bevy_app/src/interface/selection/building_place/placement.rs`・`building_move/preview.rs`・`building_move/click_handlers.rs`・`crates/bevy_app/src/systems/visual/placement_ghost.rs` が共有する。内部は private submodule に分離済み: `geometry.rs`（座標変換・形状計算）/ `validation.rs`（配置可否判定）/ `tests.rs`。`placement.rs` root はファサード + 共有型定義のみ。
 - `building_move/geometry.rs` は hw_ui 移動に伴い削除済み。`building_move/placement.rs` は bucket storage 所有グリッド解決だけを持つ薄い adapter で、判定本体は `validate_moved_bucket_storage_placement` を使う。
 - floor/wall の tile reject reason と tile validation は `hw_ui::selection::placement` に共通化済み。`WorldMap` → `WorldReadApi` の adapter は `crates/bevy_app/src/world/map/mod.rs` の `WorldMapRef<'a>` 一箇所に集約済み（旧来の各ファイルのローカルラッパーは削除済み）。
 - `handle_mouse_input` の selection 判定は `SelectionIntent` を返す helper へ分離済み（`apply_selection_intent` が ECS 変更を適用）。
-- `building_move/mod.rs` は root shell として `preview.rs` / `system.rs` を束ねる。`finalize_move_request` / `cancel_tasks_and_requests_for_moved_building` の実装本体は `building_move/system.rs` にあり、`TransportRequest`・`unassign_task` 依存を持つ root adapter として残留する。
+- `building_move/mod.rs` は root shell として `preview.rs` / `system.rs` / `context.rs` / `click_handlers.rs` / `finalization.rs` を束ねる。`system.rs` は entrypoint に縮小され、`MoveStateCtx` / `MoveOpCtx` は `context.rs`、クリック別分岐は `click_handlers.rs`、`finalize_move_request` / `cancel_tasks_and_requests_for_moved_building` は `finalization.rs` に分離済み。`TransportRequest`・`unassign_task` 依存を持つため crate 境界としては root adapter に残留する。
 
 
 ## キーボードショートカット

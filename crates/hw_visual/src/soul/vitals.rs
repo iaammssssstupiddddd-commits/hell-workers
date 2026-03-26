@@ -13,14 +13,15 @@ pub fn familiar_hover_visualization_system(
     mut gizmos: Gizmos,
 ) {
     if let Some(hovered) = hovered_entity.0
-        && let Ok((fam_transform, _)) = q_familiars.get(hovered) {
-            let fam_pos = fam_transform.translation().truncate();
+        && let Ok((fam_transform, _)) = q_familiars.get(hovered)
+    {
+        let fam_pos = fam_transform.translation().truncate();
 
-            for (soul_transform, commanded_by) in q_souls.iter() {
-                if commanded_by.0 == hovered {
-                    let soul_pos = soul_transform.translation().truncate();
-                    gizmos.line_2d(fam_pos, soul_pos, Color::srgba(1.0, 1.0, 1.0, 0.7));
-                }
+        for (soul_transform, commanded_by) in q_souls.iter() {
+            if commanded_by.0 == hovered {
+                let soul_pos = soul_transform.translation().truncate();
+                gizmos.line_2d(fam_pos, soul_pos, Color::srgba(1.0, 1.0, 1.0, 0.7));
             }
         }
+    }
 }

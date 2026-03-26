@@ -126,19 +126,19 @@ pub fn assign_haul_to_stockpile(
             queries,
             shadow,
             ctx.resource_grid,
-        )
-            && can_complete_pick_drop_to_point(source_pos, stock_pos) {
-                issue_haul_to_stockpile_with_source(
-                    source_item,
-                    stockpile,
-                    source_pos,
-                    already_commanded,
-                    ctx,
-                    queries,
-                    shadow,
-                );
-                return true;
-            }
+        ) && can_complete_pick_drop_to_point(source_pos, stock_pos)
+        {
+            issue_haul_to_stockpile_with_source(
+                source_item,
+                stockpile,
+                source_pos,
+                already_commanded,
+                ctx,
+                queries,
+                shadow,
+            );
+            return true;
+        }
     }
 
     let max_items = remaining_capacity.max(1) as usize;

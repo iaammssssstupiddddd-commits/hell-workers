@@ -103,9 +103,10 @@ pub fn resolve_owner(
             inside_area.push((*owner, owner_info));
         }
         if let Some(yard) = owner_info.yard.as_ref()
-            && yard.contains(pos) {
-                inside_yard.push((*owner, owner_info));
-            }
+            && yard.contains(pos)
+        {
+            inside_yard.push((*owner, owner_info));
+        }
     }
 
     if !inside_area.is_empty() {

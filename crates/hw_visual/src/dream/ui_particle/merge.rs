@@ -56,17 +56,17 @@ pub fn ui_particle_merge_system(mut q_particles: Query<(Entity, &mut DreamGainUi
     if let Some((absorbed, absorber)) = merge_pair
         && let Ok([(_, mut absorbed_p, _), (_, mut absorber_p, _)]) =
             q_particles.get_many_mut([absorbed, absorber])
+    {
+        if absorber_p.merge_count >= DREAM_UI_MERGE_MAX_COUNT
+            || absorber_p.mass > DREAM_UI_MERGE_MAX_MASS
         {
-            if absorber_p.merge_count >= DREAM_UI_MERGE_MAX_COUNT
-                || absorber_p.mass > DREAM_UI_MERGE_MAX_MASS
-            {
-                return;
-            }
-
-            absorbed_p.merging_into = Some(absorber);
-            absorbed_p.merge_timer = DREAM_UI_MERGE_DURATION;
-
-            absorber_p.merge_count += 1;
-            absorber_p.mass += absorbed_p.mass;
+            return;
         }
+
+        absorbed_p.merging_into = Some(absorber);
+        absorbed_p.merge_timer = DREAM_UI_MERGE_DURATION;
+
+        absorber_p.merge_count += 1;
+        absorber_p.mass += absorbed_p.mass;
+    }
 }

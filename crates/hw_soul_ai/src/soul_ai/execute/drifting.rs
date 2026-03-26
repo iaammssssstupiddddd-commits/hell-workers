@@ -32,8 +32,12 @@ type DriftingBehaviorQuery<'w, 's> = Query<
     With<DamnedSoul>,
 >;
 
-type DespawnAtEdgeQuery<'w, 's> =
-    Query<'w, 's, (Entity, &'static Transform, &'static IdleState), (With<DamnedSoul>, With<DriftingState>)>;
+type DespawnAtEdgeQuery<'w, 's> = Query<
+    'w,
+    's,
+    (Entity, &'static Transform, &'static IdleState),
+    (With<DamnedSoul>, With<DriftingState>),
+>;
 
 /// 漂流（Drifting）中の Soul 行動更新
 pub fn drifting_behavior_system(
@@ -121,10 +125,7 @@ pub fn drifting_behavior_system(
 }
 
 /// マップ端到達時に漂流中 Soul をデスポーン
-pub fn despawn_at_edge_system(
-    mut commands: Commands,
-    q_souls: DespawnAtEdgeQuery,
-) {
+pub fn despawn_at_edge_system(mut commands: Commands, q_souls: DespawnAtEdgeQuery) {
     for (entity, transform, idle) in q_souls.iter() {
         if idle.behavior != IdleBehavior::Drifting {
             continue;

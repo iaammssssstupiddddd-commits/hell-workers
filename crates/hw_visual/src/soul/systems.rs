@@ -24,7 +24,12 @@ type SoulProgressBgQuery<'w, 's> = Query<
 type SoulProgressFillQuery<'w, 's> = Query<
     'w,
     's,
-    (Entity, &'static ChildOf, &'static mut Transform, &'static Sprite),
+    (
+        Entity,
+        &'static ChildOf,
+        &'static mut Transform,
+        &'static Sprite,
+    ),
     (
         With<SoulProgressBar>,
         With<ProgressBarFill>,
@@ -46,7 +51,6 @@ type SoulStatusQuery<'w, 's> = Query<
     ),
     With<DamnedSoul>,
 >;
-
 
 pub fn progress_bar_system(
     mut commands: Commands,
@@ -113,16 +117,17 @@ pub fn update_progress_bar_fill_system(
     for (fill_entity, mut sprite, mut transform) in q_fills.iter_mut() {
         if let Ok(child_of) = q_soul_bars.get(fill_entity)
             && let Ok(task_vs) = q_souls.get(child_of.parent())
-                && let Some(progress) = task_vs.progress
-                    && let Ok(generic_bar) = q_generic_bars.get(fill_entity) {
-                        update_progress_bar_fill(
-                            progress,
-                            &generic_bar.config,
-                            &mut sprite,
-                            &mut transform,
-                            None,
-                        );
-                    }
+            && let Some(progress) = task_vs.progress
+            && let Ok(generic_bar) = q_generic_bars.get(fill_entity)
+        {
+            update_progress_bar_fill(
+                progress,
+                &generic_bar.config,
+                &mut sprite,
+                &mut transform,
+                None,
+            );
+        }
     }
 }
 
@@ -135,26 +140,24 @@ pub fn sync_progress_bar_position_system(
 ) {
     for (bg_entity, child_of, mut bar_transform) in q_bg_bars.iter_mut() {
         if let Ok(parent_transform) = q_parents.get(child_of.parent())
-            && let Ok(generic_bar) = q_generic_bars.get(bg_entity) {
-                sync_progress_bar_position(
-                    parent_transform,
-                    &generic_bar.config,
-                    &mut bar_transform,
-                );
-            }
+            && let Ok(generic_bar) = q_generic_bars.get(bg_entity)
+        {
+            sync_progress_bar_position(parent_transform, &generic_bar.config, &mut bar_transform);
+        }
     }
 
     for (fill_entity, child_of, mut fill_transform, sprite) in q_fill_bars.iter_mut() {
         if let Ok(parent_transform) = q_parents.get(child_of.parent())
-            && let Ok(generic_bar) = q_generic_bars.get(fill_entity) {
-                let fill_width = sprite.custom_size.map(|s| s.x).unwrap_or(0.0);
-                sync_progress_bar_fill_position(
-                    parent_transform,
-                    &generic_bar.config,
-                    fill_width,
-                    &mut fill_transform,
-                );
-            }
+            && let Ok(generic_bar) = q_generic_bars.get(fill_entity)
+        {
+            let fill_width = sprite.custom_size.map(|s| s.x).unwrap_or(0.0);
+            sync_progress_bar_fill_position(
+                parent_transform,
+                &generic_bar.config,
+                fill_width,
+                &mut fill_transform,
+            );
+        }
     }
 }
 
@@ -167,34 +170,35 @@ pub fn task_link_system(
         let target_entity = task_vs.bucket_link.or(task_vs.link_target);
 
         if let Some(target) = target_entity
-            && let Ok(target_transform) = q_targets.get(target) {
-                let start: Vec2 = soul_transform.translation().truncate();
-                let end: Vec2 = target_transform.translation().truncate();
+            && let Ok(target_transform) = q_targets.get(target)
+        {
+            let start: Vec2 = soul_transform.translation().truncate();
+            let end: Vec2 = target_transform.translation().truncate();
 
-                let color = if task_vs.bucket_link.is_some() {
-                    Color::srgb(0.0, 0.5, 1.0)
-                } else {
-                    match task_vs.phase {
-                        SoulTaskPhaseVisual::GatherChop | SoulTaskPhaseVisual::GatherMine => {
-                            Color::srgba(0.0, 1.0, 0.0, 0.4)
-                        }
-                        SoulTaskPhaseVisual::CollectSand => Color::srgb(1.0, 0.8, 0.0),
-                        SoulTaskPhaseVisual::Refine => Color::srgb(0.5, 0.0, 1.0),
-                        SoulTaskPhaseVisual::Haul => Color::srgba(1.0, 1.0, 0.0, 0.4),
-                        SoulTaskPhaseVisual::Build => Color::srgba(1.0, 1.0, 1.0, 0.5),
-                        SoulTaskPhaseVisual::HaulToBlueprint => Color::srgba(1.0, 1.0, 0.5, 0.4),
-                        SoulTaskPhaseVisual::FrameWall | SoulTaskPhaseVisual::CoatWall => {
-                            Color::srgba(1.0, 1.0, 1.0, 0.5)
-                        }
-                        _ => Color::srgba(1.0, 1.0, 1.0, 0.3),
+            let color = if task_vs.bucket_link.is_some() {
+                Color::srgb(0.0, 0.5, 1.0)
+            } else {
+                match task_vs.phase {
+                    SoulTaskPhaseVisual::GatherChop | SoulTaskPhaseVisual::GatherMine => {
+                        Color::srgba(0.0, 1.0, 0.0, 0.4)
                     }
-                };
+                    SoulTaskPhaseVisual::CollectSand => Color::srgb(1.0, 0.8, 0.0),
+                    SoulTaskPhaseVisual::Refine => Color::srgb(0.5, 0.0, 1.0),
+                    SoulTaskPhaseVisual::Haul => Color::srgba(1.0, 1.0, 0.0, 0.4),
+                    SoulTaskPhaseVisual::Build => Color::srgba(1.0, 1.0, 1.0, 0.5),
+                    SoulTaskPhaseVisual::HaulToBlueprint => Color::srgba(1.0, 1.0, 0.5, 0.4),
+                    SoulTaskPhaseVisual::FrameWall | SoulTaskPhaseVisual::CoatWall => {
+                        Color::srgba(1.0, 1.0, 1.0, 0.5)
+                    }
+                    _ => Color::srgba(1.0, 1.0, 1.0, 0.3),
+                }
+            };
 
-                gizmos.line_2d(start, end, color);
+            gizmos.line_2d(start, end, color);
 
-                let marker_color = color.with_alpha(0.6);
-                gizmos.circle_2d(end, 4.0, marker_color);
-            }
+            let marker_color = color.with_alpha(0.6);
+            gizmos.circle_2d(end, 4.0, marker_color);
+        }
     }
 }
 

@@ -103,13 +103,12 @@ pub fn update_motion_destinations(
                     }
                 } else {
                     let just_arrived = participating_in.is_none();
-                    if just_arrived
-                        && let Some(spot_entity) = target_spot_entity {
-                            request_writer.write(IdleBehaviorRequest {
-                                entity,
-                                operation: IdleBehaviorOperation::JoinGathering { spot_entity },
-                            });
-                        }
+                    if just_arrived && let Some(spot_entity) = target_spot_entity {
+                        request_writer.write(IdleBehaviorRequest {
+                            entity,
+                            operation: IdleBehaviorOperation::JoinGathering { spot_entity },
+                        });
+                    }
                     if idle.behavior == IdleBehavior::ExhaustedGathering {
                         idle.behavior = IdleBehavior::Gathering;
                     }
@@ -127,11 +126,12 @@ pub fn update_motion_destinations(
                             soul_grid,
                             world_map,
                             scratch,
-                        ) {
-                            dest.0 = new_target;
-                            path.waypoints.clear();
-                            path.current_index = 0;
-                        }
+                        )
+                    {
+                        dest.0 = new_target;
+                        path.waypoints.clear();
+                        path.current_index = 0;
+                    }
 
                     match idle.gathering_behavior {
                         GatheringBehavior::Wandering => {
@@ -147,11 +147,11 @@ pub fn update_motion_destinations(
                                         world_map,
                                         scratch,
                                     )
-                                {
-                                    dest.0 = new_target;
-                                    path.waypoints.clear();
-                                    path.current_index = 0;
-                                }
+                            {
+                                dest.0 = new_target;
+                                path.waypoints.clear();
+                                path.current_index = 0;
+                            }
                         }
                         GatheringBehavior::Sleeping
                         | GatheringBehavior::Standing

@@ -94,7 +94,11 @@ pub enum FamiliarAiState {
     #[default]
     Idle,
     SearchingTask,
-    Scouting { target_soul: Entity },
-    Supervising { target: Option<Entity>, timer: f32 },
+    Scouting {
+        target_soul: Entity,
+    },
+    Supervising {
+        target: Option<Entity>,
+        timer: f32,
+    },
 }
-

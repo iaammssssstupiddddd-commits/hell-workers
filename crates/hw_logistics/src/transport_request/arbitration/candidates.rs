@@ -22,7 +22,12 @@ use super::types::{FreeItemSnapshot, HeapEntry, ItemBucketKey, NearbyItem, Reque
 pub type FreeItemsQuery<'w, 's> = Query<
     'w,
     's,
-    (Entity, &'static Transform, &'static Visibility, &'static ResourceItem),
+    (
+        Entity,
+        &'static Transform,
+        &'static Visibility,
+        &'static ResourceItem,
+    ),
     (
         Without<Designation>,
         Without<hw_core::relationships::TaskWorkers>,

@@ -99,7 +99,12 @@ pub(super) fn handle_left_just_released_input(
             );
         }
         TaskMode::DreamPlanting(Some(start_pos)) => {
-            handle_release_dream_planting(ctx.task_context, ctx.world_pos, start_pos, ctx.area_edit_session);
+            handle_release_dream_planting(
+                ctx.task_context,
+                ctx.world_pos,
+                start_pos,
+                ctx.area_edit_session,
+            );
         }
         _ => {}
     }

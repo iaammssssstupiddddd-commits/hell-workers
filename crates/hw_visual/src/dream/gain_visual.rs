@@ -57,12 +57,14 @@ pub fn dream_popup_spawn_system(mut p: DreamPopupParams) {
     let mut target_pos = Vec2::new(viewport_size.x - 80.0, 40.0);
 
     if let Some(entity) = p.ui_nodes.get_slot(UiSlot::DreamPoolIcon)
-        && let Ok((computed, transform)) = p.q_ui_transform.get(entity) {
-            let center = transform.translation * computed.inverse_scale_factor();
-            target_pos = center;
-        }
+        && let Ok((computed, transform)) = p.q_ui_transform.get(entity)
+    {
+        let center = transform.translation * computed.inverse_scale_factor();
+        target_pos = center;
+    }
 
-    for (transform, soul, idle, _dream, participating_in, mut visual_state) in p.q_souls.iter_mut() {
+    for (transform, soul, idle, _dream, participating_in, mut visual_state) in p.q_souls.iter_mut()
+    {
         let is_sleeping = idle.behavior == IdleBehavior::Sleeping
             || (idle.behavior == IdleBehavior::Gathering
                 && idle.gathering_behavior == GatheringBehavior::Sleeping

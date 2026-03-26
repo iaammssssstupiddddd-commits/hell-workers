@@ -52,7 +52,12 @@ pub fn familiar_idle_visual_apply_system(
         spawn_familiar_bubble(
             &mut commands,
             request.familiar_entity,
-            FamiliarBubbleSpec { phrase: LatinPhrase::Requiesce, emotion: BubbleEmotion::Neutral, priority: BubblePriority::Normal, voice: voice_opt },
+            FamiliarBubbleSpec {
+                phrase: LatinPhrase::Requiesce,
+                emotion: BubbleEmotion::Neutral,
+                priority: BubblePriority::Normal,
+                voice: voice_opt,
+            },
             &speech_handles,
             &q_bubbles,
         );

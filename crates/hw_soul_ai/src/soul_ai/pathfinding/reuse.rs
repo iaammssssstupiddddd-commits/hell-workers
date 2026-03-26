@@ -24,7 +24,11 @@ pub(super) fn try_reuse_existing_path(
     world_map: &WorldMap,
     pf_context: &mut PathfindingContext,
 ) -> bool {
-    let PathBudgetInfo { entity, pathfind_count, phase_budget_limit } = budget;
+    let PathBudgetInfo {
+        entity,
+        pathfind_count,
+        phase_budget_limit,
+    } = budget;
     // すでに有効なパスがあり、目的地も変わっていないならスキップ
     //
     // ただし、移動側が衝突で waypoint をスキップして `current_index == waypoints.len()` になっている場合、

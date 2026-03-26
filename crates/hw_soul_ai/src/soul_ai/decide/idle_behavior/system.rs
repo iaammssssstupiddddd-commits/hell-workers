@@ -24,7 +24,15 @@ pub(crate) struct IdleLocalState<'s> {
 
 #[derive(SystemParam)]
 pub(crate) struct IdleGatheringQueries<'w, 's> {
-    q_spots: Query<'w, 's, (Entity, &'static GatheringSpot, &'static GatheringParticipants)>,
+    q_spots: Query<
+        'w,
+        's,
+        (
+            Entity,
+            &'static GatheringSpot,
+            &'static GatheringParticipants,
+        ),
+    >,
     q_rest_areas: RestAreasQuery<'w, 's>,
     spot_grid: Res<'w, GatheringSpotSpatialGrid>,
     soul_grid: Res<'w, SpatialGrid>,
@@ -321,7 +329,10 @@ pub(crate) fn idle_behavior_decision_system(
         }
 
         motion_dispatch::update_motion_destinations(
-            motion_dispatch::SoulPos { entity, pos: current_pos },
+            motion_dispatch::SoulPos {
+                entity,
+                pos: current_pos,
+            },
             motion_dispatch::MotionGatheringCtx {
                 center: gathering_center,
                 target_spot_entity,

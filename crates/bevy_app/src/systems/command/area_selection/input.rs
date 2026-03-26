@@ -45,18 +45,27 @@ pub struct AreaStateParams<'w> {
 
 #[derive(SystemParam)]
 pub struct AreaEntityQueries<'w, 's> {
-    q_familiars: Query<'w, 's, (&'static mut ActiveCommand, &'static mut Destination), With<Familiar>>,
+    q_familiars:
+        Query<'w, 's, (&'static mut ActiveCommand, &'static mut Destination), With<Familiar>>,
     q_familiar_areas: Query<'w, 's, &'static TaskArea, With<Familiar>>,
-    q_target_sets: ParamSet<'w, 's, (
-        DesignationTargetQuery<'w, 's>,
-        FloorTileBlueprintQuery<'w, 's>,
-        WallTileBlueprintQuery<'w, 's>,
-    )>,
+    q_target_sets: ParamSet<
+        'w,
+        's,
+        (
+            DesignationTargetQuery<'w, 's>,
+            FloorTileBlueprintQuery<'w, 's>,
+            WallTileBlueprintQuery<'w, 's>,
+        ),
+    >,
     q_sites: Query<'w, 's, &'static Site>,
-    q_aux: ParamSet<'w, 's, (
-        UnassignedDesignationQuery<'w, 's>,
-        Query<'w, 's, Entity, With<AreaSelectionIndicator>>,
-    )>,
+    q_aux: ParamSet<
+        'w,
+        's,
+        (
+            UnassignedDesignationQuery<'w, 's>,
+            Query<'w, 's, Entity, With<AreaSelectionIndicator>>,
+        ),
+    >,
 }
 
 pub fn task_area_selection_system(

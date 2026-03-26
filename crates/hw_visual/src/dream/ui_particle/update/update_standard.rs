@@ -57,9 +57,18 @@ pub(super) fn update_standard_particle(
     ui_bubble_layer: Option<Entity>,
     commands: &mut Commands<'_, '_>,
 ) -> bool {
-    let StandardInput { dt, elapsed, viewport_size, current_pos } = input;
+    let StandardInput {
+        dt,
+        elapsed,
+        viewport_size,
+        current_pos,
+    } = input;
     let ParticleState { particle, rng } = state;
-    let NodeVisuals { node, mat_node, transform } = visuals;
+    let NodeVisuals {
+        node,
+        mat_node,
+        transform,
+    } = visuals;
 
     let forces = compute_standard_particle_forces(dt, viewport_size, current_pos, particle, rng);
 
@@ -69,7 +78,12 @@ pub(super) fn update_standard_particle(
     update_standard_particle_visual(
         elapsed,
         particle,
-        VisualData { mat_node, materials, transform, node },
+        VisualData {
+            mat_node,
+            materials,
+            transform,
+            node,
+        },
         &motion,
         &forces,
     );
@@ -79,7 +93,11 @@ pub(super) fn update_standard_particle(
     }
 
     emit_standard_particle_trail(
-        TrailTimingCtx { dt, elapsed, ui_bubble_layer },
+        TrailTimingCtx {
+            dt,
+            elapsed,
+            ui_bubble_layer,
+        },
         &motion,
         &forces,
         particle,
@@ -253,7 +271,12 @@ fn update_standard_particle_visual(
     motion: &StandardParticleMotion,
     forces: &StandardParticleForces,
 ) {
-    let VisualData { mat_node, materials, transform, node } = vis;
+    let VisualData {
+        mat_node,
+        materials,
+        transform,
+        node,
+    } = vis;
     let shrink = (motion.visual_distance_ratio * 9.0 + 1.0).log10().max(0.1);
 
     node.width = Val::Px(
@@ -308,7 +331,11 @@ fn emit_standard_particle_trail(
     commands: &mut Commands<'_, '_>,
     materials: &mut Assets<DreamBubbleUiMaterial>,
 ) {
-    let TrailTimingCtx { dt, elapsed, ui_bubble_layer } = timing;
+    let TrailTimingCtx {
+        dt,
+        elapsed,
+        ui_bubble_layer,
+    } = timing;
     particle.trail_cooldown -= dt;
     if particle.trail_cooldown <= 0.0 && motion.visual_distance_ratio > 0.15 {
         particle.trail_cooldown = DREAM_UI_TRAIL_INTERVAL;

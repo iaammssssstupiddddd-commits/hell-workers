@@ -123,7 +123,11 @@ fn cleanup_move_task(
 type BucketStorageQuery<'w, 's> = Query<
     'w,
     's,
-    (Entity, &'static hw_logistics::BelongsTo, &'static mut Transform),
+    (
+        Entity,
+        &'static hw_logistics::BelongsTo,
+        &'static mut Transform,
+    ),
     With<hw_logistics::BucketStorage>,
 >;
 
@@ -155,11 +159,12 @@ pub fn apply_pending_building_move_system(
             let mut index = 0usize;
             for child in children {
                 if let Ok(mut pos) = q_obstacles.get_mut(*child)
-                    && let Some((gx, gy)) = next_positions.get(index) {
-                        pos.0 = *gx;
-                        pos.1 = *gy;
-                        index += 1;
-                    }
+                    && let Some((gx, gy)) = next_positions.get(index)
+                {
+                    pos.0 = *gx;
+                    pos.1 = *gy;
+                    index += 1;
+                }
             }
         }
 

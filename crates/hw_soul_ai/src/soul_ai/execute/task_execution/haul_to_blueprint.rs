@@ -211,24 +211,24 @@ pub fn handle_haul_to_blueprint_task(
                     if bp.materials_complete()
                         && let Ok((_, _, _designation, managed_by_opt, _, _, _, _)) =
                             q_designations.get(blueprint_entity)
-                        {
-                            // ManagedByを削除して未割り当て状態にする
-                            if managed_by_opt.is_some() {
-                                commands
-                                    .entity(blueprint_entity)
-                                    .remove::<hw_core::relationships::ManagedBy>();
-                            }
-
-                            // Priority(10) を付与して使い魔がタスクを探せるようにする
+                    {
+                        // ManagedByを削除して未割り当て状態にする
+                        if managed_by_opt.is_some() {
                             commands
                                 .entity(blueprint_entity)
-                                .insert(hw_jobs::Priority(10));
-
-                            info!(
-                                "HAUL_TO_BP: Blueprint {:?} materials complete, reissuing DesignationCreatedEvent for build task",
-                                blueprint_entity
-                            );
+                                .remove::<hw_core::relationships::ManagedBy>();
                         }
+
+                        // Priority(10) を付与して使い魔がタスクを探せるようにする
+                        commands
+                            .entity(blueprint_entity)
+                            .insert(hw_jobs::Priority(10));
+
+                        info!(
+                            "HAUL_TO_BP: Blueprint {:?} materials complete, reissuing DesignationCreatedEvent for build task",
+                            blueprint_entity
+                        );
+                    }
 
                     // ====== 修正点: 参照先の Item(task_entity)が despawn される前に WorkingOn 等を外す ======
                     ctx.inventory.0 = None;

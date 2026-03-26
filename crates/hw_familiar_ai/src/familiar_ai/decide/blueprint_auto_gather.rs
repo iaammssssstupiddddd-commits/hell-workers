@@ -79,11 +79,23 @@ pub struct BlueprintAutoGatherParams<'w, 's> {
     q_familiars: Query<
         'w,
         's,
-        (Entity, &'static ActiveCommand, &'static TaskArea, &'static Transform),
+        (
+            Entity,
+            &'static ActiveCommand,
+            &'static TaskArea,
+            &'static Transform,
+        ),
     >,
     q_yards: Query<'w, 's, (Entity, &'static Yard)>,
-    q_bp_requests:
-        Query<'w, 's, (&'static TransportRequest, &'static TargetBlueprint, Option<&'static TaskWorkers>)>,
+    q_bp_requests: Query<
+        'w,
+        's,
+        (
+            &'static TransportRequest,
+            &'static TargetBlueprint,
+            Option<&'static TaskWorkers>,
+        ),
+    >,
     q_wall_requests: Query<
         'w,
         's,
@@ -97,7 +109,11 @@ pub struct BlueprintAutoGatherParams<'w, 's> {
     q_mixer_solid_requests: Query<
         'w,
         's,
-        (&'static TransportRequest, Option<&'static TaskWorkers>, Option<&'static TransportDemand>),
+        (
+            &'static TransportRequest,
+            Option<&'static TaskWorkers>,
+            Option<&'static TransportDemand>,
+        ),
     >,
     q_blueprints: Query<'w, 's, &'static Blueprint>,
     q_ground_items: BpGroundItemsQuery<'w, 's>,
@@ -117,7 +133,8 @@ pub fn blueprint_auto_gather_system(
     timer.first_run_done = true;
 
     let mut owner_infos = HashMap::<Entity, OwnerInfo>::new();
-    let yards: Vec<(Entity, Yard)> = p.q_yards
+    let yards: Vec<(Entity, Yard)> = p
+        .q_yards
         .iter()
         .map(|(entity, yard)| (entity, yard.clone()))
         .collect();
@@ -127,7 +144,8 @@ pub fn blueprint_auto_gather_system(
             continue;
         }
 
-        let start_grid = p.world_map
+        let start_grid = p
+            .world_map
             .get_nearest_walkable_grid(transform.translation.truncate())
             .or_else(|| p.world_map.get_nearest_walkable_grid(area.center()));
         let Some(path_start) = start_grid else {

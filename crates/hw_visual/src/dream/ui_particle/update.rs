@@ -67,7 +67,12 @@ pub fn ui_particle_update_system(
 
         let should_despawn = if particle.merging_into.is_some() {
             update_merging_particle(
-                MergeInput { dt, elapsed, viewport_size, current_pos },
+                MergeInput {
+                    dt,
+                    elapsed,
+                    viewport_size,
+                    current_pos,
+                },
                 &target_positions,
                 &mut particle,
                 &mut node,
@@ -76,19 +81,31 @@ pub fn ui_particle_update_system(
             )
         } else {
             let arrived = update_standard::update_standard_particle(
-                update_standard::StandardInput { dt, elapsed, viewport_size, current_pos },
-                update_standard::ParticleState { particle: &mut particle, rng: &mut rng },
-                update_standard::NodeVisuals { node: &mut node, mat_node, transform: &mut transform },
+                update_standard::StandardInput {
+                    dt,
+                    elapsed,
+                    viewport_size,
+                    current_pos,
+                },
+                update_standard::ParticleState {
+                    particle: &mut particle,
+                    rng: &mut rng,
+                },
+                update_standard::NodeVisuals {
+                    node: &mut node,
+                    mat_node,
+                    transform: &mut transform,
+                },
                 &mut materials,
                 ui_bubble_layer,
                 &mut commands,
             );
             if arrived
                 && let Some(icon_e) = icon_entity
-                    && let Ok(mut absorb) = q_icon.get_mut(icon_e)
-                {
-                    absorb.pulse_count = absorb.pulse_count.saturating_add(1);
-                }
+                && let Ok(mut absorb) = q_icon.get_mut(icon_e)
+            {
+                absorb.pulse_count = absorb.pulse_count.saturating_add(1);
+            }
             arrived
         };
 
@@ -136,45 +153,51 @@ fn update_merging_particle(
     mat_node: &MaterialNode<DreamBubbleUiMaterial>,
     materials: &mut Assets<DreamBubbleUiMaterial>,
 ) -> bool {
-    let MergeInput { dt, elapsed, viewport_size, current_pos } = input;
+    let MergeInput {
+        dt,
+        elapsed,
+        viewport_size,
+        current_pos,
+    } = input;
     particle.merge_timer -= dt;
     let progress = 1.0 - (particle.merge_timer / DREAM_UI_MERGE_DURATION).clamp(0.0, 1.0);
 
     if let Some(target_entity) = particle.merging_into
-        && let Some((_, target_pos)) = target_positions.iter().find(|(e, _)| *e == target_entity) {
-            let to_target = *target_pos - current_pos;
-            let pull_force = to_target * DREAM_UI_MERGE_PULL_FORCE;
-            particle.velocity += pull_force * dt;
-            particle.velocity *= DREAM_UI_DRAG;
-            let new_pos = current_pos + particle.velocity * dt;
+        && let Some((_, target_pos)) = target_positions.iter().find(|(e, _)| *e == target_entity)
+    {
+        let to_target = *target_pos - current_pos;
+        let pull_force = to_target * DREAM_UI_MERGE_PULL_FORCE;
+        particle.velocity += pull_force * dt;
+        particle.velocity *= DREAM_UI_DRAG;
+        let new_pos = current_pos + particle.velocity * dt;
 
-            if new_pos.x < 0.0 || new_pos.x > viewport_size.x {
-                particle.velocity.x *= DREAM_UI_BOUNDARY_DAMPING;
-            }
-
-            if new_pos.y < 0.0 || new_pos.y > viewport_size.y {
-                particle.velocity.y *= DREAM_UI_BOUNDARY_DAMPING;
-            }
-
-            let clamped_pos = new_pos.clamp(Vec2::ZERO, viewport_size);
-            node.left = Val::Px(clamped_pos.x);
-            node.top = Val::Px(clamped_pos.y);
-
-            let cluster_scale = merge_cluster_scale(particle.mass);
-
-            let effective_mass = particle.mass + DREAM_UI_BASE_MASS_OFFSET;
-            let base = DREAM_UI_PARTICLE_SIZE * effective_mass.sqrt() * cluster_scale;
-            let size = base * (1.0 - progress);
-            node.width = Val::Px(size);
-            node.height = Val::Px(size);
-
-            if let Some(mat) = materials.get_mut(&mat_node.0) {
-                mat.alpha = 0.9 * (1.0 - progress);
-                mat.time = elapsed;
-                mat.mass = particle.mass;
-            }
-            return particle.merge_timer <= 0.0;
+        if new_pos.x < 0.0 || new_pos.x > viewport_size.x {
+            particle.velocity.x *= DREAM_UI_BOUNDARY_DAMPING;
         }
+
+        if new_pos.y < 0.0 || new_pos.y > viewport_size.y {
+            particle.velocity.y *= DREAM_UI_BOUNDARY_DAMPING;
+        }
+
+        let clamped_pos = new_pos.clamp(Vec2::ZERO, viewport_size);
+        node.left = Val::Px(clamped_pos.x);
+        node.top = Val::Px(clamped_pos.y);
+
+        let cluster_scale = merge_cluster_scale(particle.mass);
+
+        let effective_mass = particle.mass + DREAM_UI_BASE_MASS_OFFSET;
+        let base = DREAM_UI_PARTICLE_SIZE * effective_mass.sqrt() * cluster_scale;
+        let size = base * (1.0 - progress);
+        node.width = Val::Px(size);
+        node.height = Val::Px(size);
+
+        if let Some(mat) = materials.get_mut(&mat_node.0) {
+            mat.alpha = 0.9 * (1.0 - progress);
+            mat.time = elapsed;
+            mat.mass = particle.mass;
+        }
+        return particle.merge_timer <= 0.0;
+    }
 
     if particle.merge_timer <= 0.0 {
         return true;

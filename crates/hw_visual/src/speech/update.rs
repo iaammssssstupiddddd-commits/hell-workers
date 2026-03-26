@@ -17,9 +17,10 @@ pub fn update_speech_bubbles(
 
         if bubble.elapsed >= bubble.duration {
             if let Some(bg) = bubble.background
-                && let Ok(mut cmd) = commands.get_entity(bg) {
-                    cmd.despawn();
-                }
+                && let Ok(mut cmd) = commands.get_entity(bg)
+            {
+                cmd.despawn();
+            }
             if let Ok(mut cmd) = commands.get_entity(entity) {
                 cmd.despawn();
             }

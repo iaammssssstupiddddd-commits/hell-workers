@@ -37,12 +37,13 @@ pub fn process_exhausted_gathering(
             idle.behavior = IdleBehavior::Gathering;
             idle.needs_separation = true;
             if gathering.participating_in.is_none()
-                && let Some(spot_entity) = gathering.target_spot_entity {
-                    request_writer.write(IdleBehaviorRequest {
-                        entity,
-                        operation: IdleBehaviorOperation::ArriveAtGathering { spot_entity },
-                    });
-                }
+                && let Some(spot_entity) = gathering.target_spot_entity
+            {
+                request_writer.write(IdleBehaviorRequest {
+                    entity,
+                    operation: IdleBehaviorOperation::ArriveAtGathering { spot_entity },
+                });
+            }
             return false;
         }
         if path.waypoints.is_empty() || path.current_index >= path.waypoints.len() {

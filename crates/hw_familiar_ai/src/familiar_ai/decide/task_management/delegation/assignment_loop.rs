@@ -152,7 +152,8 @@ fn try_assign_from_candidates(
         };
         let current_workers = workers.map(|w| w.len()).unwrap_or(0);
         let max_slots = slots.map(|s| s.max).unwrap_or(1) as usize;
-        let virtual_workers = worker_ctx.task_virtual_workers
+        let virtual_workers = worker_ctx
+            .task_virtual_workers
             .get(&candidate.entity)
             .copied()
             .unwrap_or(0);
@@ -167,9 +168,10 @@ fn try_assign_from_candidates(
                 env.world_map,
                 pf_ctx.pf_context,
                 pf_ctx.reachability_cache,
-            ) {
-                continue;
-            }
+            )
+        {
+            continue;
+        }
 
         if assign_task_to_worker(
             AssignTaskContext {
@@ -204,7 +206,11 @@ pub(super) fn try_assign_for_workers(
     reservation_shadow: &mut ReservationShadow,
 ) -> Option<Entity> {
     let scored_candidates = collect_scored_candidates(
-        FamiliarSearchContext { fam_entity: env.fam_entity, fam_pos: env.fam_pos, task_area_opt: env.task_area_opt },
+        FamiliarSearchContext {
+            fam_entity: env.fam_entity,
+            fam_pos: env.fam_pos,
+            task_area_opt: env.task_area_opt,
+        },
         queries,
         env.designation_grid,
         env.transport_request_grid,

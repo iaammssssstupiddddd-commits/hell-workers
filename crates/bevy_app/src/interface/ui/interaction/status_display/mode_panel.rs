@@ -35,8 +35,7 @@ pub struct ModeSelectionData<'w, 's> {
     q_familiars: Query<'w, 's, &'static hw_core::familiar::Familiar>,
     q_task_areas:
         Query<'w, 's, (Entity, Ref<'static, TaskArea>), With<hw_core::familiar::Familiar>>,
-    q_unassigned_tasks:
-        Query<'w, 's, &'static Transform, (With<Designation>, Without<ManagedBy>)>,
+    q_unassigned_tasks: Query<'w, 's, &'static Transform, (With<Designation>, Without<ManagedBy>)>,
 }
 
 pub fn update_mode_text_system(
@@ -191,8 +190,7 @@ pub struct AreaEditContext<'w> {
 #[derive(SystemParam)]
 pub struct AreaEditQueries<'w, 's> {
     q_task_areas: Query<'w, 's, (Entity, &'static TaskArea), With<hw_core::familiar::Familiar>>,
-    q_unassigned_tasks:
-        Query<'w, 's, &'static Transform, (With<Designation>, Without<ManagedBy>)>,
+    q_unassigned_tasks: Query<'w, 's, &'static Transform, (With<Designation>, Without<ManagedBy>)>,
     q_window: Query<'w, 's, &'static Window, With<PrimaryWindow>>,
 }
 

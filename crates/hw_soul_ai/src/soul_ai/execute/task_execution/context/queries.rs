@@ -52,8 +52,12 @@ type FreeResourceItemsQuery<'w, 's> = Query<
     ),
 >;
 
-type WheelbarrowsQuery<'w, 's> =
-    Query<'w, 's, (Entity, &'static Transform), (With<Wheelbarrow>, With<ParkedAt>, Without<PushedBy>)>;
+type WheelbarrowsQuery<'w, 's> = Query<
+    'w,
+    's,
+    (Entity, &'static Transform),
+    (With<Wheelbarrow>, With<ParkedAt>, Without<PushedBy>),
+>;
 
 type StoredItemsQuery<'w, 's> = Query<
     'w,
@@ -63,7 +67,11 @@ type StoredItemsQuery<'w, 's> = Query<
         &'static hw_logistics::types::ResourceItem,
         &'static hw_core::relationships::StoredIn,
     ),
-    (Without<hw_jobs::Designation>, Without<TaskWorkers>, Without<ReservedForTask>),
+    (
+        Without<hw_jobs::Designation>,
+        Without<TaskWorkers>,
+        Without<ReservedForTask>,
+    ),
 >;
 
 type ResourceItemsQuery<'w, 's> = Query<

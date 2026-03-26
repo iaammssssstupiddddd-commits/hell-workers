@@ -22,8 +22,7 @@ type TaskListItemQuery<'w, 's> = Query<
     With<Button>,
 >;
 
-type TaskChangedQuery<'w, 's> =
-    Query<'w, 's, (), Or<(Changed<Interaction>, Added<TaskListItem>)>>;
+type TaskChangedQuery<'w, 's> = Query<'w, 's, (), Or<(Changed<Interaction>, Added<TaskListItem>)>>;
 
 pub fn task_list_visual_feedback_system(
     pin_state: Res<InfoPanelPinState>,
@@ -71,13 +70,14 @@ pub fn left_panel_tab_system(
             let is_active = tab.0 == *mode;
 
             if let Some(child) = children.iter().next()
-                && let Ok(mut color) = text_colors.get_mut(child) {
-                    color.0 = if is_active {
-                        theme.colors.text_accent_semantic
-                    } else {
-                        theme.colors.text_secondary_semantic
-                    };
-                }
+                && let Ok(mut color) = text_colors.get_mut(child)
+            {
+                color.0 = if is_active {
+                    theme.colors.text_accent_semantic
+                } else {
+                    theme.colors.text_secondary_semantic
+                };
+            }
 
             if let Ok(mut border) = border_colors.get_mut(button_entity) {
                 *border = BorderColor::all(if is_active {

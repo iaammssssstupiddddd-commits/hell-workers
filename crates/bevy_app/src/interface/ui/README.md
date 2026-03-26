@@ -31,7 +31,9 @@
 |---|---|
 | `mod.rs` | 公開 API |
 | `hover_action.rs` | ホバーエフェクト |
-| `intent_handler.rs` | `UiIntent` メッセージ処理 |
+| `intent_handler.rs` | `UiIntent` dispatcher |
+| `intent_context.rs` | `UiIntent` 処理共通の `SystemParam` / query 集約 |
+| `handlers/` | `UiIntent` 種別ごとの実処理（general / familiar_settings / mode_selection / mode_toggle） |
 | `menu_actions.rs` | メニューアクション処理 |
 | `mode.rs` | UI モード管理 |
 | `systems.rs` | インタラクションシステム |
@@ -74,7 +76,7 @@
 |---|---|
 | `list/sync.rs` | `Res<GameAssets>` を受けて `hw_ui::list::sync::*` を呼ぶ thin shell |
 | `list/view_model.rs` | `Familiar` / `DamnedSoul` / `AssignedTask` / `FamiliarAiState` などゲーム固有 ECS Query に依存 |
-| `interaction/intent_handler.rs` | `UiIntent::AdjustMaxControlledSoul` / `AdjustMaxControlledSoulFor` を処理し、`FamiliarOperation` 更新と optimistic header update を一元化 |
+| `interaction/intent_context.rs`, `interaction/handlers/`, `interaction/intent_handler.rs` | `UiIntent::AdjustMaxControlledSoul*` を含むゲーム固有 `UiIntent` を処理する root adapter。`intent_handler.rs` は dispatcher のみで、`FamiliarOperation` 更新や `PlayMode` / `TimeSpeed` / `WorldMapWrite` 依存は `intent_context.rs` と `handlers/` 側に残留 |
 | `list/interaction/navigation.rs` | `Res<TaskContext>`（ルート定義型）に依存 |
 | `panels/task_list/update.rs` | `Res<GameAssets>` — Bevy は `Res<dyn Trait>` 不可 |
 | `panels/context_menu.rs` | `Familiar`/`DamnedSoul`/`Building` ECS クエリ |

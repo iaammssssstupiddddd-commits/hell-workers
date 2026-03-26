@@ -260,6 +260,8 @@
 > **依存**: MS-P3-Pre-C（角度数値確定後）・MS-Asset-Char-GLB-A（Soul GLB 配置済み）
 
 - **やること**:
+  - `GameAssets` に `soul.glb#Scene0` を追加し、Soul spawn を `SceneRoot` ベースで RtT に接続する
+  - `SceneInstanceReady` で Soul GLB 子孫へ `RenderLayers::layer(LAYER_3D)` を付与する
   - `CharacterMaterial`（`hw_visual/src/material/character_material.rs`）を最小限実装する（Unlit + AlphaMode::Blend + クリップ平面なし仮実装）
   - `CharacterHandles` リソースを定義し Soul GLB を仮スポーンして `CharacterMaterial` を適用する
   - 斜め Camera3d で Soul GLB が建物 Cuboid と正しく前後表示されることを確認する（Z バッファ共有の確認）
@@ -268,7 +270,7 @@
   - [ ] 壁の後ろに入った Soul GLB が壁に隠れる（Z バッファが RtT に焼き込まれていることを確認）
   - [ ] Soul GLB が「体積のない存在に見える」アートスタイル感が出ている
   - [ ] `mesh_face` がどの角度でもカメラを向いている
-- **ステータス**: [ ] 未着手
+- **ステータス**: [~] 進行中（Soul `SceneRoot` 接続まで完了）
 
 ---
 

@@ -29,7 +29,12 @@ type LeaseRequestsQuery<'w, 's> = Query<
 type FreeItemsQuery<'w, 's> = Query<
     'w,
     's,
-    (Entity, &'static Transform, &'static Visibility, &'static ResourceItem),
+    (
+        Entity,
+        &'static Transform,
+        &'static Visibility,
+        &'static ResourceItem,
+    ),
     (
         Without<Designation>,
         Without<hw_core::relationships::TaskWorkers>,
@@ -38,8 +43,12 @@ type FreeItemsQuery<'w, 's> = Query<
     ),
 >;
 
-type WheelbarrowsQuery<'w, 's> =
-    Query<'w, 's, (Entity, &'static Transform), (With<Wheelbarrow>, With<ParkedAt>, Without<PushedBy>)>;
+type WheelbarrowsQuery<'w, 's> = Query<
+    'w,
+    's,
+    (Entity, &'static Transform),
+    (With<Wheelbarrow>, With<ParkedAt>, Without<PushedBy>),
+>;
 
 pub(super) struct LeaseStateUpdate {
     pub(super) used_wheelbarrows: HashSet<Entity>,

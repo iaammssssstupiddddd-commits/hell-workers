@@ -166,10 +166,12 @@ pub(super) fn handle_dropping_phase(
         };
 
         if can_drop {
-            if !is_bucket_storage && stockpile_comp.resource_type.is_none()
-                && let Some((res_type, _)) = item_info {
-                    stockpile_comp.resource_type = res_type;
-                }
+            if !is_bucket_storage
+                && stockpile_comp.resource_type.is_none()
+                && let Some((res_type, _)) = item_info
+            {
+                stockpile_comp.resource_type = res_type;
+            }
 
             if !is_bucket_storage
                 && q_belongs.get(item).is_err()

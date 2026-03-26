@@ -11,8 +11,8 @@ use hw_jobs::Blueprint;
 
 use crate::resource_cache::SharedResourceCache;
 use crate::transport_request::{
-    ManualTransportRequest, TransportDemand, TransportRequest,
-    TransportRequestKind, TransportRequestState, WheelbarrowLease, WheelbarrowPendingSince,
+    ManualTransportRequest, TransportDemand, TransportRequest, TransportRequestKind,
+    TransportRequestState, WheelbarrowLease, WheelbarrowPendingSince,
 };
 use crate::types::BelongsTo;
 use crate::zone::Stockpile;

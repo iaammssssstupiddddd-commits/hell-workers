@@ -210,7 +210,12 @@ MS-P3-Pre-C（Camera角度確定）
 - [ ] ボーンリグが AnimationGraph で参照できることを確認済み
 - [ ] LOD1 ポリゴン数が目安範囲内
 
-**ステータス**: [ ] 未着手
+**進捗メモ**:
+- [x] `assets/models/characters/soul.glb` を `assets/models/characters/` へ配置済み
+- [x] `animation_list.md` / `soul_face_atlas.png` / `soul_face_atlas_layout.md` もリポジトリへ同期済み
+- [x] GLB 内に `mesh_face` / `Soul_Body` / 複数 animation clip が含まれていることを確認済み
+
+**ステータス**: [~] 進行中
 
 ---
 

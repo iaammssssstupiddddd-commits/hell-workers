@@ -69,22 +69,37 @@ type DroppedBucketsQuery<'w, 's> = Query<
 pub struct BucketAutoHaulParams<'w, 's> {
     pub _haul_cache: Res<'w, SharedResourceCache>,
     pub q_incoming: Query<'w, 's, &'static IncomingDeliveries>,
-    pub q_familiars: Query<'w, 's, (Entity, &'static ActiveCommand, &'static TaskArea), With<Familiar>>,
+    pub q_familiars:
+        Query<'w, 's, (Entity, &'static ActiveCommand, &'static TaskArea), With<Familiar>>,
     pub q_yards: Query<'w, 's, (Entity, &'static Yard)>,
     pub q_tanks: Query<'w, 's, (&'static Transform, &'static Stockpile), Without<BucketStorage>>,
     pub q_dropped_buckets: DroppedBucketsQuery<'w, 's>,
     pub q_bucket_storages: Query<
         'w,
         's,
-        (Entity, &'static Stockpile, &'static BelongsTo, Option<&'static StoredItems>),
+        (
+            Entity,
+            &'static Stockpile,
+            &'static BelongsTo,
+            Option<&'static StoredItems>,
+        ),
         With<BucketStorage>,
     >,
-    pub q_bucket_requests: Query<'w, 's, (Entity, &'static TransportRequest, Option<&'static TaskWorkers>)>,
+    pub q_bucket_requests: Query<
+        'w,
+        's,
+        (
+            Entity,
+            &'static TransportRequest,
+            Option<&'static TaskWorkers>,
+        ),
+    >,
     pub q_move_planned: Query<'w, 's, (), With<MovePlanned>>,
 }
 
 pub fn bucket_auto_haul_system(mut commands: Commands, p: BucketAutoHaulParams) {
-    let active_familiars: Vec<(Entity, AreaBounds)> = p.q_familiars
+    let active_familiars: Vec<(Entity, AreaBounds)> = p
+        .q_familiars
         .iter()
         .filter(|(_, active_command, _)| !matches!(active_command.command, FamiliarCommand::Idle))
         .map(|(entity, _, area)| (entity, area.bounds()))
@@ -102,7 +117,8 @@ pub fn bucket_auto_haul_system(mut commands: Commands, p: BucketAutoHaulParams) 
         let current = stored_opt
             .map(|stored: &StoredItems| stored.len())
             .unwrap_or(0);
-        let incoming_deliveries = p.q_incoming
+        let incoming_deliveries = p
+            .q_incoming
             .get(storage_entity)
             .ok()
             .map(|inc: &IncomingDeliveries| inc.len())
@@ -178,7 +194,8 @@ pub fn bucket_auto_haul_system(mut commands: Commands, p: BucketAutoHaulParams) 
         let tank_entity = request.anchor;
         let workers = workers_opt.map(|workers| workers.len()).unwrap_or(0);
         let inflight = to_u32_saturating(workers);
-        let valid_tank = p.q_tanks
+        let valid_tank = p
+            .q_tanks
             .get(tank_entity)
             .is_ok_and(|(_, stockpile)| stockpile.resource_type == Some(ResourceType::Water));
 

@@ -95,9 +95,7 @@ pub fn build_task_list_snapshot(
     groups.into_values().collect()
 }
 
-pub fn build_task_summary(
-    designations: &DesignationQuery,
-) -> (usize, usize) {
+pub fn build_task_summary(designations: &DesignationQuery) -> (usize, usize) {
     let mut total = 0usize;
     let mut high = 0usize;
 

@@ -9,7 +9,11 @@ type SoulListInteractionQuery<'w, 's> = Query<
     'w,
     's,
     (&'static Interaction, &'static SoulListItem),
-    (Changed<Interaction>, With<Button>, Without<FamiliarListItem>),
+    (
+        Changed<Interaction>,
+        With<Button>,
+        Without<FamiliarListItem>,
+    ),
 >;
 
 type FamiliarListInteractionQuery<'w, 's> = Query<

@@ -137,9 +137,12 @@ pub fn validate_rooms_system(mut p: ValidateRoomsParams) {
             continue;
         }
 
-        p.detection_state.mark_dirty_many(room.tiles.iter().copied());
-        p.detection_state.mark_dirty_many(room.wall_tiles.iter().copied());
-        p.detection_state.mark_dirty_many(room.door_tiles.iter().copied());
+        p.detection_state
+            .mark_dirty_many(room.tiles.iter().copied());
+        p.detection_state
+            .mark_dirty_many(room.wall_tiles.iter().copied());
+        p.detection_state
+            .mark_dirty_many(room.door_tiles.iter().copied());
         p.commands.entity(room_entity).try_despawn();
     }
 

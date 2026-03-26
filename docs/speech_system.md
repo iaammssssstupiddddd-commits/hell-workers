@@ -107,6 +107,9 @@ Familiar は命令や状態を「ラテン語」で表現します。表示は *
     - `update_bubble_stacking`: 位置調整制御
     - `periodic_emotion_system`: [NEW] 定期的な感情判定ロジック
     - `reaction_delay_system`: [NEW] 勧誘時の遅延リアクション制御
+    - `ConversationPlugin`: `check_conversation_triggers` / `handle_conversation_requests` / `process_conversation_logic` / `apply_conversation_rewards` / `update_conversation_cooldowns` を登録
+    - `conversation/phase_handlers.rs`: Greeting / Chatting / Closing 各フェーズの進行と tone / reward 判定
+    - `conversation/bubble_spawn_helpers.rs`: 会話バブル生成と絵文字選定の helper 群
 
 ---
 

@@ -21,7 +21,16 @@ pub(super) fn spawn_trail_ghost(
     materials: &mut Assets<DreamBubbleUiMaterial>,
     spec: TrailGhostSpec,
 ) {
-    let TrailGhostSpec { root, final_pos, trail_size, width_scale, length_scale, elapsed, speed, vel_dir } = spec;
+    let TrailGhostSpec {
+        root,
+        final_pos,
+        trail_size,
+        width_scale,
+        length_scale,
+        elapsed,
+        speed,
+        vel_dir,
+    } = spec;
     let mut trail_transform = Transform::from_translation(Vec3::ZERO);
     if speed > 1.0 {
         let angle = vel_dir.y.atan2(vel_dir.x) - std::f32::consts::FRAC_PI_2;

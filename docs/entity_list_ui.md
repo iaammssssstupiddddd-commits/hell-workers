@@ -78,7 +78,7 @@
 - 使役数上限の `-` / `+` 操作時、`FamiliarOperation.max_controlled_soul` 更新直後に
   使い魔ヘッダー表示（`現在/最大`）を即時更新する
 - Entity List の `-` / `+` と operation dialog の `-` / `+` はどちらも `UiIntent` を経由し、
-  `handle_ui_intent` 内の共通経路で `FamiliarOperation` 更新・ヘッダー即時更新・`FamiliarOperationMaxSoulChangedEvent` 発行を行う
+  `handle_ui_intent` dispatcher から `interaction/handlers/familiar_settings.rs` の共通経路へ委譲されて `FamiliarOperation` 更新・ヘッダー即時更新・`FamiliarOperationMaxSoulChangedEvent` 発行を行う
 - 最終的な整合は通常の100ms差分同期と `FamiliarOperationMaxSoulChangedEvent` の処理で維持する
 
 ## 主な関連ファイル（最終境界反映）
@@ -90,7 +90,9 @@
 - `crates/bevy_app/src/interface/ui/list/sync.rs` - `sync_entity_list_from_view_model_system` / `sync_entity_list_value_rows_system`（hw_ui sync helpers の thin shell）
 - `crates/bevy_app/src/interface/ui/list/drag_drop.rs` - ドラッグ&ドロップシステム（`DragState` 型は hw_ui）
 - `crates/bevy_app/src/interface/ui/list/interaction.rs`, `interaction/navigation.rs` - 行クリック・Tab 巡回・target 付き `UiIntent` 発行（`FamiliarOperation` 直接更新は行わない）
-- `crates/bevy_app/src/interface/ui/interaction/intent_handler.rs` - dialog/list button 共通の `FamiliarOperation` 更新、即時ヘッダー更新、`FamiliarOperationMaxSoulChangedEvent` 発行
+- `crates/bevy_app/src/interface/ui/interaction/intent_handler.rs` - `UiIntent` dispatcher
+- `crates/bevy_app/src/interface/ui/interaction/intent_context.rs` - `UiIntent` 処理が共有する `SystemParam` / query 集約
+- `crates/bevy_app/src/interface/ui/interaction/handlers/familiar_settings.rs` - dialog/list button 共通の `FamiliarOperation` 更新、即時ヘッダー更新、`FamiliarOperationMaxSoulChangedEvent` 発行
 
 ### `hw_ui` 側（移設済み）
 - `crates/hw_ui/src/list/models.rs` - ビューモデル型・`EntityListNodeIndex`・`FamiliarSectionNodes`

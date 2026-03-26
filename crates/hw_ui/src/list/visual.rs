@@ -30,8 +30,7 @@ type FamiliarListItemQuery<'w, 's> = Query<
     (With<Button>, Without<SoulListItem>),
 >;
 
-type SoulChangedQuery<'w, 's> =
-    Query<'w, 's, (), Or<(Changed<Interaction>, Added<SoulListItem>)>>;
+type SoulChangedQuery<'w, 's> = Query<'w, 's, (), Or<(Changed<Interaction>, Added<SoulListItem>)>>;
 type FamiliarChangedQuery<'w, 's> =
     Query<'w, 's, (), Or<(Changed<Interaction>, Added<FamiliarListItem>)>>;
 
@@ -102,7 +101,12 @@ pub fn apply_row_highlight(
     state: RowHighlightState,
     theme: &UiTheme,
 ) {
-    let RowHighlightState { interaction, is_selected, is_drop_target, is_familiar_row } = state;
+    let RowHighlightState {
+        interaction,
+        is_selected,
+        is_drop_target,
+        is_familiar_row,
+    } = state;
     if is_drop_target {
         bg.0 = theme.colors.list_item_selected_hover;
         node.border.left = Val::Px(theme.sizes.list_selection_border_width);

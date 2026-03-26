@@ -19,8 +19,8 @@ use hw_world::zones::AreaBounds;
 use std::collections::HashMap;
 use std::time::Instant;
 
-use crate::transport_request::{TransportRequest, TransportRequestKind, TransportRequestMetrics};
 use crate::transport_request::producer::{ConstructionDeliverySpec, RequestSyncSpec};
+use crate::transport_request::{TransportRequest, TransportRequestKind, TransportRequestMetrics};
 use crate::types::{ResourceItem, ResourceType};
 
 type FloorTileImmutQuery<'w, 's> = Query<'w, 's, (Entity, &'static FloorTileBlueprint)>;

@@ -226,10 +226,11 @@ pub fn handle(
                 }
 
                 if blueprint.materials_complete()
-                    && let Ok(mut blueprint_commands) = commands.get_entity(blueprint_entity) {
-                        blueprint_commands.try_remove::<hw_core::relationships::ManagedBy>();
-                        blueprint_commands.try_insert(hw_jobs::Priority(10));
-                    }
+                    && let Ok(mut blueprint_commands) = commands.get_entity(blueprint_entity)
+                {
+                    blueprint_commands.try_remove::<hw_core::relationships::ManagedBy>();
+                    blueprint_commands.try_insert(hw_jobs::Priority(10));
+                }
             } else {
                 info!("WB_HAUL: Blueprint destroyed during unloading, dropping items");
                 cancel::drop_items_and_cancel(ctx, &data, commands);

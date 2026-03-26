@@ -253,23 +253,26 @@ pub fn update_operation_dialog_system(
     if let Some(selected) = selected_entity.0 {
         if let Ok((familiar, op)) = q_familiars.get(selected) {
             if let Some(entity) = ui_nodes.get_slot(UiSlot::DialogFamiliarName)
-                && let Ok(mut text) = q_text.get_mut(entity) {
-                    text.0 = format!("Editing: {}", familiar.name);
-                }
+                && let Ok(mut text) = q_text.get_mut(entity)
+            {
+                text.0 = format!("Editing: {}", familiar.name);
+            }
             if let Some(entity) = ui_nodes.get_slot(UiSlot::DialogThresholdText)
-                && let Ok(mut text) = q_text.get_mut(entity) {
-                    let val_str = format!("{:.0}%", op.fatigue_threshold * 100.0);
-                    if text.0 != val_str {
-                        text.0 = val_str;
-                    }
+                && let Ok(mut text) = q_text.get_mut(entity)
+            {
+                let val_str = format!("{:.0}%", op.fatigue_threshold * 100.0);
+                if text.0 != val_str {
+                    text.0 = val_str;
                 }
+            }
             if let Some(entity) = ui_nodes.get_slot(UiSlot::DialogMaxSoulText)
-                && let Ok(mut text) = q_text.get_mut(entity) {
-                    let val_str = format!("{}", op.max_controlled_soul);
-                    if text.0 != val_str {
-                        text.0 = val_str;
-                    }
+                && let Ok(mut text) = q_text.get_mut(entity)
+            {
+                let val_str = format!("{}", op.max_controlled_soul);
+                if text.0 != val_str {
+                    text.0 = val_str;
                 }
+            }
         } else {
             close_operation_dialog(&mut q_dialog);
         }

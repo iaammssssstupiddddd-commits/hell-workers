@@ -27,7 +27,9 @@ pub(super) fn handle_release_designation(
     commands: &mut Commands,
 ) {
     let area = TaskArea::from_points(ctx.start_pos, WorldMap::snap_to_grid_edge(ctx.world_pos));
-    let issued_by = ctx.selected_entity.filter(|entity| q_familiars.contains(*entity));
+    let issued_by = ctx
+        .selected_entity
+        .filter(|entity| q_familiars.contains(*entity));
     apply_designation_in_area(commands, ctx.mode, &area, issued_by, q_targets);
     task_context.0 = reset_designation_mode(ctx.mode);
 }

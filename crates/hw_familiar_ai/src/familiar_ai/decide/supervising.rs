@@ -50,9 +50,10 @@ pub fn supervising_logic(ctx: &mut FamiliarSupervisingContext<'_, '_, '_>) {
     // 現在のターゲットが有効かチェック
     let mut target_valid = false;
     if let Some(target_ent) = current_target
-        && ctx.active_members.contains(&target_ent) {
-            target_valid = true;
-        }
+        && ctx.active_members.contains(&target_ent)
+    {
+        target_valid = true;
+    }
 
     // ターゲットが無効、またはタイマー終了時に新しいターゲットを選定
     if !target_valid || timer <= 0.0 {
@@ -106,71 +107,70 @@ pub fn supervising_logic(ctx: &mut FamiliarSupervisingContext<'_, '_, '_>) {
         }
     });
 
-    if all_members_idle
-        && let Some(area) = ctx.task_area_opt {
-            let area_center = area.center();
-            // メンバー全員待機中なら、エリア中心に移動して終了（以降の追従ロジックをスキップ）
-            move_to_center(
-                ctx.fam_entity,
-                ctx.fam_pos,
-                area_center,
-                ctx.fam_dest,
-                ctx.fam_path,
-            );
-            return;
-        }
+    if all_members_idle && let Some(area) = ctx.task_area_opt {
+        let area_center = area.center();
+        // メンバー全員待機中なら、エリア中心に移動して終了（以降の追従ロジックをスキップ）
+        move_to_center(
+            ctx.fam_entity,
+            ctx.fam_pos,
+            area_center,
+            ctx.fam_dest,
+            ctx.fam_path,
+        );
+        return;
+    }
 
     if let Some(target_ent) = current_target
-        && let Ok((_, transform, task)) = ctx.q_souls.get(target_ent) {
-            let target_pos = transform.translation.truncate();
-            let is_working = !matches!(*task, AssignedTask::None);
+        && let Ok((_, transform, task)) = ctx.q_souls.get(target_ent)
+    {
+        let target_pos = transform.translation.truncate();
+        let is_working = !matches!(*task, AssignedTask::None);
 
-            // 監視のしきい値 (遠めから見守る設定)
-            let follow_threshold = (TILE_SIZE * 5.0).powi(2);
-            let stop_threshold = (TILE_SIZE * 3.0).powi(2);
-            let dist_sq = ctx.fam_pos.distance_squared(target_pos);
-            let is_path_finished = ctx.fam_path.current_index >= ctx.fam_path.waypoints.len();
+        // 監視のしきい値 (遠めから見守る設定)
+        let follow_threshold = (TILE_SIZE * 5.0).powi(2);
+        let stop_threshold = (TILE_SIZE * 3.0).powi(2);
+        let dist_sq = ctx.fam_pos.distance_squared(target_pos);
+        let is_path_finished = ctx.fam_path.current_index >= ctx.fam_path.waypoints.len();
 
-            // 1. 誘導判定 (ターゲットが待機中、かつエリアから遠い場合)
-            if !is_working
-                && let Some(area) = ctx.task_area_opt {
-                    let area_center = area.center();
-                    if (ctx.fam_pos.distance_squared(area_center) > (TILE_SIZE * 1.5).powi(2)
-                        || target_pos.distance_squared(area_center) > (TILE_SIZE * 5.0).powi(2))
-                        && move_to_center(
-                            ctx.fam_entity,
-                            ctx.fam_pos,
-                            area_center,
-                            ctx.fam_dest,
-                            ctx.fam_path,
-                        ) {
-                            return;
-                        }
-                }
-
-            // 2. 追従判定 (離れた時だけ近づく)
-            let mut should_follow = dist_sq > follow_threshold;
-            if !is_working
-                && let Some(area) = ctx.task_area_opt
-                    && !area.contains(target_pos)
-                        && ctx.fam_pos.distance_squared(area.center()) < (TILE_SIZE * 3.0).powi(2)
-                    {
-                        should_follow = false;
-                    }
-
-            if should_follow {
-                let dest_lag_sq = ctx.fam_dest.0.distance_squared(target_pos);
-                if is_path_finished || dest_lag_sq > (TILE_SIZE * 1.0).powi(2) {
-                    ctx.fam_dest.0 = target_pos;
-                    ctx.fam_path.waypoints = vec![target_pos];
-                    ctx.fam_path.current_index = 0;
-                }
-            } else if (dist_sq < stop_threshold || !is_working)
-                && !is_path_finished {
-                    ctx.fam_path.waypoints.clear();
-                    ctx.fam_path.current_index = 0;
-                }
+        // 1. 誘導判定 (ターゲットが待機中、かつエリアから遠い場合)
+        if !is_working && let Some(area) = ctx.task_area_opt {
+            let area_center = area.center();
+            if (ctx.fam_pos.distance_squared(area_center) > (TILE_SIZE * 1.5).powi(2)
+                || target_pos.distance_squared(area_center) > (TILE_SIZE * 5.0).powi(2))
+                && move_to_center(
+                    ctx.fam_entity,
+                    ctx.fam_pos,
+                    area_center,
+                    ctx.fam_dest,
+                    ctx.fam_path,
+                )
+            {
+                return;
+            }
         }
+
+        // 2. 追従判定 (離れた時だけ近づく)
+        let mut should_follow = dist_sq > follow_threshold;
+        if !is_working
+            && let Some(area) = ctx.task_area_opt
+            && !area.contains(target_pos)
+            && ctx.fam_pos.distance_squared(area.center()) < (TILE_SIZE * 3.0).powi(2)
+        {
+            should_follow = false;
+        }
+
+        if should_follow {
+            let dest_lag_sq = ctx.fam_dest.0.distance_squared(target_pos);
+            if is_path_finished || dest_lag_sq > (TILE_SIZE * 1.0).powi(2) {
+                ctx.fam_dest.0 = target_pos;
+                ctx.fam_path.waypoints = vec![target_pos];
+                ctx.fam_path.current_index = 0;
+            }
+        } else if (dist_sq < stop_threshold || !is_working) && !is_path_finished {
+            ctx.fam_path.waypoints.clear();
+            ctx.fam_path.current_index = 0;
+        }
+    }
 }
 
 /// 指定位置（エリア中心など）への移動を制御するヘルパー

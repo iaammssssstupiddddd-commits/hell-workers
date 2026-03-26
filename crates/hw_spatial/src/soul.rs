@@ -1,12 +1,8 @@
 use super::grid::{GridData, SpatialGridOps};
 use bevy::prelude::*;
 
-type SpatialUpdateQuery<'w, 's, T> = Query<
-    'w,
-    's,
-    (Entity, &'static Transform),
-    (With<T>, Or<(Added<T>, Changed<Transform>)>),
->;
+type SpatialUpdateQuery<'w, 's, T> =
+    Query<'w, 's, (Entity, &'static Transform), (With<T>, Or<(Added<T>, Changed<Transform>)>)>;
 
 /// 空間グリッド - 魂位置の高速検索用
 #[derive(Resource, Default)]

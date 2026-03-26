@@ -80,27 +80,28 @@ pub fn update_carrying_item_system(
         let mut should_despawn = true;
 
         if let Ok((_, worker_transform, inv_visual)) = q_workers.get(icon.worker)
-            && let Some(resource_type) = inv_visual.resource_type {
-                should_despawn = false;
+            && let Some(resource_type) = inv_visual.resource_type
+        {
+            should_despawn = false;
 
-                icon_transform.translation =
-                    worker_transform.translation + Vec3::new(0.0, CARRIED_ITEM_Y_OFFSET, 0.5);
+            icon_transform.translation =
+                worker_transform.translation + Vec3::new(0.0, CARRIED_ITEM_Y_OFFSET, 0.5);
 
-                let new_icon_handle = match resource_type {
-                    ResourceType::Wood => mat_handles.wood_small.clone(),
-                    ResourceType::Rock => mat_handles.rock_small.clone(),
-                    ResourceType::Water => mat_handles.water_small.clone(),
-                    ResourceType::BucketEmpty => haul_handles.bucket_empty.clone(),
-                    ResourceType::BucketWater => haul_handles.bucket_water.clone(),
-                    ResourceType::Sand => haul_handles.sand_pile.clone(),
-                    ResourceType::Bone => mat_handles.bone_small.clone(),
-                    ResourceType::StasisMud => haul_handles.stasis_mud.clone(),
-                    ResourceType::Wheelbarrow => work_handles.wheelbarrow_small.clone(),
-                };
-                if icon_sprite.image != new_icon_handle {
-                    icon_sprite.image = new_icon_handle;
-                }
+            let new_icon_handle = match resource_type {
+                ResourceType::Wood => mat_handles.wood_small.clone(),
+                ResourceType::Rock => mat_handles.rock_small.clone(),
+                ResourceType::Water => mat_handles.water_small.clone(),
+                ResourceType::BucketEmpty => haul_handles.bucket_empty.clone(),
+                ResourceType::BucketWater => haul_handles.bucket_water.clone(),
+                ResourceType::Sand => haul_handles.sand_pile.clone(),
+                ResourceType::Bone => mat_handles.bone_small.clone(),
+                ResourceType::StasisMud => haul_handles.stasis_mud.clone(),
+                ResourceType::Wheelbarrow => work_handles.wheelbarrow_small.clone(),
+            };
+            if icon_sprite.image != new_icon_handle {
+                icon_sprite.image = new_icon_handle;
             }
+        }
 
         if should_despawn {
             info!(

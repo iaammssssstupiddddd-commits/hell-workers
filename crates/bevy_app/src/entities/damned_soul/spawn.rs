@@ -216,13 +216,16 @@ pub fn spawn_damned_soul_at(
         ))
         .id();
 
-    // 3D プロキシ（Phase 2 プレースホルダー）
+    // Soul 3D PoC: billboard ではなく GLB SceneRoot を直接 RtT に流す。
     commands.spawn((
-        Mesh3d(handles_3d.soul_mesh.clone()),
-        MeshMaterial3d(handles_3d.soul_material.clone()),
-        Transform::from_xyz(actual_pos.x, TILE_SIZE * 0.4, -actual_pos.y),
+        SceneRoot(handles_3d.soul_scene.clone()),
+        Transform::from_xyz(actual_pos.x, 0.0, -actual_pos.y)
+            .with_scale(Vec3::splat(SOUL_GLB_SCALE)),
         handles_3d.render_layers.clone(),
-        hw_visual::visual3d::SoulProxy3d { owner: soul_entity },
+        hw_visual::visual3d::SoulProxy3d {
+            owner: soul_entity,
+            billboard: false,
+        },
         Name::new(format!("SoulProxy3d: {}", soul_name)),
     ));
 

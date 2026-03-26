@@ -34,10 +34,11 @@ pub fn soul_movement(
         query.iter_mut()
     {
         if let Some(breakdown) = breakdown_opt
-            && breakdown.is_frozen {
-                anim.is_moving = false;
-                continue;
-            }
+            && breakdown.is_frozen
+        {
+            anim.is_moving = false;
+            continue;
+        }
 
         if path.current_index < path.waypoints.len() {
             let target = path.waypoints[path.current_index];

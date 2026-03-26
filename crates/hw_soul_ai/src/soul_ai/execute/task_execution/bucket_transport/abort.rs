@@ -50,9 +50,10 @@ pub fn abort_without_bucket(
             };
             reservation::release_mixer_destination(ctx, mixer, ResourceType::Water);
             if let Some(tank) = tank_opt
-                && data.should_reserve_tank_source() {
-                    reservation::release_source(ctx, tank, 1);
-                }
+                && data.should_reserve_tank_source()
+            {
+                reservation::release_source(ctx, tank, 1);
+            }
             clear_task_and_path(ctx.task, ctx.path);
         }
         BucketTransportDestination::Tank(_) => {
@@ -91,9 +92,10 @@ pub fn abort_with_bucket(
             };
             reservation::release_mixer_destination(ctx, mixer, ResourceType::Water);
             if let Some(tank) = tank_opt
-                && data.should_reserve_tank_source() {
-                    reservation::release_source(ctx, tank, 1);
-                }
+                && data.should_reserve_tank_source()
+            {
+                reservation::release_source(ctx, tank, 1);
+            }
             let soul_pos = ctx.soul_pos();
             cancel::drop_bucket_with_cleanup(commands, data.bucket, soul_pos);
             ctx.inventory.0 = None;

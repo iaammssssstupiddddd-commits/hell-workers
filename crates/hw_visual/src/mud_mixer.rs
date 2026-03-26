@@ -27,14 +27,15 @@ pub fn update_mud_mixer_visual_system(
         if let Ok(children) = q_children.get(mixer_entity) {
             for child in children.iter() {
                 if let Ok((kind, mut sprite)) = q_visual_layers.get_mut(child)
-                    && *kind == VisualLayerKind::Struct {
-                        sprite.image = if visual_state.is_active {
-                            frames[frame_idx].clone()
-                        } else {
-                            handles.mud_mixer_idle.clone()
-                        };
-                        break;
-                    }
+                    && *kind == VisualLayerKind::Struct
+                {
+                    sprite.image = if visual_state.is_active {
+                        frames[frame_idx].clone()
+                    } else {
+                        handles.mud_mixer_idle.clone()
+                    };
+                    break;
+                }
             }
         }
     }

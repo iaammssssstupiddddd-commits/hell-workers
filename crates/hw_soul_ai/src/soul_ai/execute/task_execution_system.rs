@@ -95,20 +95,22 @@ pub fn task_execution_system(
             &q_wheelbarrows,
         );
 
-        if was_busy && matches!(*task, AssignedTask::None)
-            && let Some(work_type) = old_work_type {
-                commands.trigger(OnTaskCompleted {
-                    entity: soul_entity,
-                    task_entity: old_task_entity.unwrap_or(Entity::PLACEHOLDER),
-                    work_type,
-                });
+        if was_busy
+            && matches!(*task, AssignedTask::None)
+            && let Some(work_type) = old_work_type
+        {
+            commands.trigger(OnTaskCompleted {
+                entity: soul_entity,
+                task_entity: old_task_entity.unwrap_or(Entity::PLACEHOLDER),
+                work_type,
+            });
 
-                commands.entity(soul_entity).remove::<WorkingOn>();
+            commands.entity(soul_entity).remove::<WorkingOn>();
 
-                info!(
-                    "EVENT: OnTaskCompleted triggered for Soul {:?}",
-                    soul_entity
-                );
-            }
+            info!(
+                "EVENT: OnTaskCompleted triggered for Soul {:?}",
+                soul_entity
+            );
+        }
     }
 }

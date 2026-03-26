@@ -51,7 +51,11 @@ pub fn assign_return_wheelbarrow(
         resolve_return_wheelbarrow(ctx.task_entity, queries)?;
 
     issue_return_wheelbarrow(
-        ReturnWheelbarrowSpec { wheelbarrow, parking_anchor, wheelbarrow_pos },
+        ReturnWheelbarrowSpec {
+            wheelbarrow,
+            parking_anchor,
+            wheelbarrow_pos,
+        },
         task_pos,
         already_commanded,
         ctx,

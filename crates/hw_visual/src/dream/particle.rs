@@ -16,7 +16,11 @@ type NewDreamEntitiesQuery<'w, 's> = Query<
     'w,
     's,
     Entity,
-    (With<DamnedSoul>, With<DreamState>, Without<DreamVisualState>),
+    (
+        With<DamnedSoul>,
+        With<DreamState>,
+        Without<DreamVisualState>,
+    ),
 >;
 
 type SleepingSoulsQuery<'w, 's> = Query<
@@ -151,13 +155,17 @@ pub struct RestAreaDreamParams<'w, 's> {
     time: Res<'w, Time>,
     meshes: ResMut<'w, Assets<Mesh>>,
     materials: ResMut<'w, Assets<DreamBubbleMaterial>>,
-    q_rest_areas: Query<'w, 's, (
-        Entity,
-        &'static Transform,
-        &'static RestAreaVisual,
-        Option<&'static RestAreaOccupants>,
-        &'static mut DreamVisualState,
-    )>,
+    q_rest_areas: Query<
+        'w,
+        's,
+        (
+            Entity,
+            &'static Transform,
+            &'static RestAreaVisual,
+            Option<&'static RestAreaOccupants>,
+            &'static mut DreamVisualState,
+        ),
+    >,
     q_camera: Query<'w, 's, (&'static Camera, &'static GlobalTransform), With<MainCamera>>,
     q_ui_bubble_layer: Query<'w, 's, (Entity, &'static UiMountSlot)>,
     ui_nodes: Res<'w, UiNodeRegistry>,
@@ -172,7 +180,8 @@ pub fn rest_area_dream_particle_spawn_system(mut p: RestAreaDreamParams) {
     let Some((camera, camera_transform)) = p.q_camera.iter().next() else {
         return;
     };
-    let Some(dream_bubble_layer) = p.q_ui_bubble_layer
+    let Some(dream_bubble_layer) = p
+        .q_ui_bubble_layer
         .iter()
         .find(|(_, slot)| matches!(slot, UiMountSlot::DreamBubbleLayer))
         .map(|(e, _)| e)
@@ -187,10 +196,11 @@ pub fn rest_area_dream_particle_spawn_system(mut p: RestAreaDreamParams) {
     let mut target_pos = Vec2::new(viewport_size.x - 80.0, 40.0);
 
     if let Some(entity) = p.ui_nodes.get_slot(UiSlot::DreamPoolIcon)
-        && let Ok((computed, transform)) = p.q_ui_transform.get(entity) {
-            let center = transform.translation * computed.inverse_scale_factor();
-            target_pos = center;
-        }
+        && let Ok((computed, transform)) = p.q_ui_transform.get(entity)
+    {
+        let center = transform.translation * computed.inverse_scale_factor();
+        target_pos = center;
+    }
 
     for (rest_area_entity, transform, rest_area_visual, occupants_opt, mut visual_state) in
         p.q_rest_areas.iter_mut()

@@ -13,6 +13,39 @@ use crate::theme::UiTheme;
 use bevy::prelude::*;
 use std::collections::{HashMap, HashSet};
 
+fn remove_stale_rows<V>(
+    commands: &mut Commands,
+    row_map: &mut HashMap<Entity, Entity>,
+    current_by_entity: &HashMap<Entity, V>,
+) {
+    let stale: Vec<Entity> = row_map
+        .keys()
+        .copied()
+        .filter(|e| !current_by_entity.contains_key(e))
+        .collect();
+    for e in stale {
+        if let Some(row) = row_map.remove(&e) {
+            commands.entity(row).despawn();
+        }
+    }
+}
+
+fn apply_row_order(
+    commands: &mut Commands,
+    q_children: &Query<&Children>,
+    container: Entity,
+    ordered_rows: Vec<Entity>,
+    clear_if_empty: bool,
+) {
+    if ordered_rows.is_empty() {
+        if clear_if_empty {
+            clear_children(commands, q_children, container);
+        }
+    } else {
+        commands.entity(container).replace_children(&ordered_rows);
+    }
+}
+
 // ============================================================
 // Familiar sections
 // ============================================================
@@ -31,7 +64,11 @@ fn sync_familiar_member_rows(
     node_index: &mut EntityListNodeIndex,
     q_children: &Query<&Children>,
 ) {
-    let FamiliarRowSyncSpec { familiar, previous, nodes } = spec;
+    let FamiliarRowSyncSpec {
+        familiar,
+        previous,
+        nodes,
+    } = spec;
     let member_rows = node_index
         .familiar_member_rows
         .entry(familiar.entity)
@@ -78,16 +115,7 @@ fn sync_familiar_member_rows(
     let current_by_entity: HashMap<Entity, &SoulRowViewModel> =
         familiar.souls.iter().map(|vm| (vm.entity, vm)).collect();
 
-    let stale_entities: Vec<Entity> = member_rows
-        .keys()
-        .copied()
-        .filter(|entity| !current_by_entity.contains_key(entity))
-        .collect();
-    for entity in stale_entities {
-        if let Some(row) = member_rows.remove(&entity) {
-            commands.entity(row).despawn();
-        }
-    }
+    remove_stale_rows(commands, member_rows, &current_by_entity);
 
     let previous_souls: HashMap<Entity, &SoulRowViewModel> = previous
         .map(|vm| vm.souls.iter().map(|soul| (soul.entity, soul)).collect())
@@ -131,13 +159,13 @@ fn sync_familiar_member_rows(
         .filter_map(|vm| member_rows.get(&vm.entity).copied())
         .collect();
 
-    if ordered_rows.is_empty() {
-        clear_children(commands, q_children, nodes.members_container);
-    } else {
-        commands
-            .entity(nodes.members_container)
-            .replace_children(&ordered_rows);
-    }
+    apply_row_order(
+        commands,
+        q_children,
+        nodes.members_container,
+        ordered_rows,
+        true,
+    );
 }
 
 pub struct FamiliarSectionCtx<'a> {
@@ -229,7 +257,11 @@ pub fn sync_familiar_sections(
                     commands,
                     assets,
                     theme,
-                    FamiliarRowSyncSpec { familiar, previous, nodes },
+                    FamiliarRowSyncSpec {
+                        familiar,
+                        previous,
+                        nodes,
+                    },
                     node_index,
                     q_children,
                 );
@@ -328,17 +360,11 @@ pub fn sync_unassigned_souls(
         .map(|vm| (vm.entity, vm))
         .collect();
 
-    let stale_entities: Vec<Entity> = node_index
-        .unassigned_rows
-        .keys()
-        .copied()
-        .filter(|entity| !current_by_entity.contains_key(entity))
-        .collect();
-    for entity in stale_entities {
-        if let Some(row) = node_index.unassigned_rows.remove(&entity) {
-            commands.entity(row).despawn();
-        }
-    }
+    remove_stale_rows(
+        commands,
+        &mut node_index.unassigned_rows,
+        &current_by_entity,
+    );
 
     for soul_vm in &view_model.current.unassigned {
         if let std::collections::hash_map::Entry::Vacant(e) =
@@ -382,9 +408,11 @@ pub fn sync_unassigned_souls(
         .iter()
         .filter_map(|vm| node_index.unassigned_rows.get(&vm.entity).copied())
         .collect();
-    if !ordered_rows.is_empty() {
-        commands
-            .entity(unassigned_content_entity)
-            .replace_children(&ordered_rows);
-    }
+    apply_row_order(
+        commands,
+        q_children,
+        unassigned_content_entity,
+        ordered_rows,
+        false,
+    );
 }

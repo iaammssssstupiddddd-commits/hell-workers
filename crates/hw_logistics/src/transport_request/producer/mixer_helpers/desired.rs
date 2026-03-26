@@ -25,8 +25,16 @@ type MixerQuery<'w, 's> = Query<
     ),
 >;
 
-pub(crate) type StockpilesDetailedQuery<'w, 's> =
-    Query<'w, 's, (Entity, &'static Transform, &'static Stockpile, Option<&'static StoredItems>)>;
+pub(crate) type StockpilesDetailedQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static Transform,
+        &'static Stockpile,
+        Option<&'static StoredItems>,
+    ),
+>;
 
 pub(crate) struct MixerInflightContext<'a> {
     pub haul_cache: &'a SharedResourceCache,
@@ -65,7 +73,10 @@ pub(crate) fn compute_mixer_desired_requests(
             };
 
             let inflight_count = if resource_type == ResourceType::Sand {
-                *inflight.sand_inflight_by_mixer.get(&mixer_entity).unwrap_or(&0)
+                *inflight
+                    .sand_inflight_by_mixer
+                    .get(&mixer_entity)
+                    .unwrap_or(&0)
             } else {
                 0
             };
@@ -86,20 +97,19 @@ pub(crate) fn compute_mixer_desired_requests(
             .get(&mixer_entity)
             .unwrap_or(&0);
         let water_inflight = water_inflight_tasks * BUCKET_CAPACITY;
-        let (water_current, water_capacity) = if let Ok((_, _, stock, stored_opt)) =
-            q_stockpiles_detailed.get(mixer_entity)
-        {
-            if stock.resource_type == Some(ResourceType::Water) {
-                (
-                    stored_opt.map(|s| s.len()).unwrap_or(0) as u32,
-                    stock.capacity as u32,
-                )
+        let (water_current, water_capacity) =
+            if let Ok((_, _, stock, stored_opt)) = q_stockpiles_detailed.get(mixer_entity) {
+                if stock.resource_type == Some(ResourceType::Water) {
+                    (
+                        stored_opt.map(|s| s.len()).unwrap_or(0) as u32,
+                        stock.capacity as u32,
+                    )
+                } else {
+                    (0, MUD_MIXER_CAPACITY)
+                }
             } else {
                 (0, MUD_MIXER_CAPACITY)
-            }
-        } else {
-            (0, MUD_MIXER_CAPACITY)
-        };
+            };
         let projected_water = water_current
             .saturating_add(water_inflight)
             .min(water_capacity);

@@ -109,7 +109,10 @@ pub(super) fn try_rest_area_fallback_path(
         return false;
     };
 
-    let FallbackPfState { world_map, pf_context } = pf;
+    let FallbackPfState {
+        world_map,
+        pf_context,
+    } = pf;
     let rest_center = rest_transform.translation.truncate();
     for candidate_grid in
         rest_area_adjacent_candidates(rest_center, soul_grid.current_pos, world_map)

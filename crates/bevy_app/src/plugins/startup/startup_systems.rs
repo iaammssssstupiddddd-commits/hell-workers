@@ -84,6 +84,10 @@ pub(super) fn setup(
             clear_color: ClearColorConfig::Custom(Color::srgba(0.0, 0.0, 0.0, 0.0)),
             ..default()
         },
+        AmbientLight {
+            brightness: 500.0,
+            ..default()
+        },
         Projection::Orthographic(OrthographicProjection::default_3d()),
         {
             let mut transform = Transform::from_translation(Vec3::new(0.0, VIEW_HEIGHT, Z_OFFSET));

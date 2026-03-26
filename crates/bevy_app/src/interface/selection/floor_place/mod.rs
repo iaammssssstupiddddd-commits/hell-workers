@@ -62,7 +62,12 @@ pub fn floor_placement_system(
     };
     let snapped_pos = WorldMap::snap_to_grid_edge(world_pos);
 
-    if handle_drag_start(&input.buttons, &mut context.task_context.0, is_floor_mode, snapped_pos) {
+    if handle_drag_start(
+        &input.buttons,
+        &mut context.task_context.0,
+        is_floor_mode,
+        snapped_pos,
+    ) {
         return;
     }
 
@@ -89,5 +94,9 @@ pub fn floor_placement_system(
         return;
     }
 
-    let _ = handle_cancel(&input.buttons, &mut context.task_context.0, &mut context.next_play_mode);
+    let _ = handle_cancel(
+        &input.buttons,
+        &mut context.task_context.0,
+        &mut context.next_play_mode,
+    );
 }

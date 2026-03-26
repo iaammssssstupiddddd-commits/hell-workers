@@ -1,5 +1,6 @@
 //! Z軸レイヤー管理 (RenderLayers) および描画レイヤー定数
 
+use super::world::TILE_SIZE;
 use bevy::prelude::Color;
 
 /// Camera2d が使用する RenderLayer インデックス（デフォルトレイヤー）
@@ -64,6 +65,8 @@ pub const Z_RTT_COMPOSITE: f32 = 20.0;
 pub const VIEW_HEIGHT: f32 = 150.0;
 /// Camera3d（TopDown）の Z オフセット
 pub const Z_OFFSET: f32 = 90.0;
+/// Soul GLB PoC の初期スケール（Blender 1.0 単位をタイル基準へ揃える）
+pub const SOUL_GLB_SCALE: f32 = TILE_SIZE * 0.8;
 
 /// 斜め TopDown オーソ投影で圧縮される地面の Y 方向を、RtT 合成時に打ち消す係数。
 pub fn topdown_rtt_vertical_compensation() -> f32 {

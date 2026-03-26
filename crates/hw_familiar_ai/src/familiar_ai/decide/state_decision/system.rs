@@ -192,23 +192,7 @@ pub fn familiar_ai_state_system(params: FamiliarAiStateDecisionParams) {
                 let SquadManagementOutcome {
                     mut squad_entities,
                     released_entities,
-                } = {
-                    let mut q_lens = q_souls.transmute_lens_filtered::<(
-                        Entity,
-                        &hw_core::soul::DamnedSoul,
-                        &hw_core::soul::IdleState,
-                        Option<&CommandedBy>,
-                    ), Without<hw_core::familiar::Familiar>>(
-                    );
-                    let q = q_lens.query();
-                    let mut ctx = FamiliarSquadContext {
-                        fam_entity,
-                        familiar_op,
-                        commanding,
-                        q_souls: &q,
-                    };
-                    process_squad_management(&mut ctx)
-                };
+                } = run_squad_management(fam_entity, familiar_op, commanding, &mut q_souls);
 
                 // スカウト中のターゲットを予約登録
                 recruitment_reservations.insert(target_soul);
@@ -259,23 +243,7 @@ pub fn familiar_ai_state_system(params: FamiliarAiStateDecisionParams) {
                 let SquadManagementOutcome {
                     mut squad_entities,
                     released_entities,
-                } = {
-                    let mut q_lens = q_souls.transmute_lens_filtered::<(
-                        Entity,
-                        &hw_core::soul::DamnedSoul,
-                        &hw_core::soul::IdleState,
-                        Option<&CommandedBy>,
-                    ), Without<hw_core::familiar::Familiar>>(
-                    );
-                    let q = q_lens.query();
-                    let mut ctx = FamiliarSquadContext {
-                        fam_entity,
-                        familiar_op,
-                        commanding,
-                        q_souls: &q,
-                    };
-                    process_squad_management(&mut ctx)
-                };
+                } = run_squad_management(fam_entity, familiar_op, commanding, &mut q_souls);
 
                 let outcome = {
                     let mut q_lens = q_souls.transmute_lens_filtered::<(
@@ -336,4 +304,28 @@ pub fn familiar_ai_state_system(params: FamiliarAiStateDecisionParams) {
             &mut decide_output,
         );
     }
+}
+
+// transmute_lens_filtered は &mut self を消費するためブロック分離が必要。
+// 同一の分隊管理パターンが複数のアームで重複するため共通化する。
+fn run_squad_management<'w, 's>(
+    fam_entity: Entity,
+    familiar_op: &hw_core::familiar::FamiliarOperation,
+    commanding: Option<&hw_core::relationships::Commanding>,
+    q_souls: &mut FamiliarSoulQuery<'w, 's>,
+) -> SquadManagementOutcome {
+    let mut q_lens = q_souls.transmute_lens_filtered::<(
+        Entity,
+        &hw_core::soul::DamnedSoul,
+        &hw_core::soul::IdleState,
+        Option<&CommandedBy>,
+    ), Without<hw_core::familiar::Familiar>>();
+    let q = q_lens.query();
+    let mut ctx = FamiliarSquadContext {
+        fam_entity,
+        familiar_op,
+        commanding,
+        q_souls: &q,
+    };
+    process_squad_management(&mut ctx)
 }

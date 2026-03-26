@@ -136,8 +136,17 @@ pub fn gathering_merge_decision(
 type GatheringRecruitSoulQuery<'w, 's> = Query<
     'w,
     's,
-    (Entity, &'static Transform, &'static AssignedTask, &'static IdleState),
-    (With<DamnedSoul>, Without<ParticipatingIn>, Without<CommandedBy>),
+    (
+        Entity,
+        &'static Transform,
+        &'static AssignedTask,
+        &'static IdleState,
+    ),
+    (
+        With<DamnedSoul>,
+        Without<ParticipatingIn>,
+        Without<CommandedBy>,
+    ),
 >;
 
 /// 条件を満たすSoulの集会参加を Recruit 要求に変換する

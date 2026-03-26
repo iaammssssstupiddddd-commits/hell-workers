@@ -79,7 +79,8 @@ pub fn wall_construction_cancellation_system(
             });
         }
 
-        let site_requests: Vec<Entity> = wl_queries.q_wall_requests
+        let site_requests: Vec<Entity> = wl_queries
+            .q_wall_requests
             .iter()
             .filter(|(_, target_site)| target_site.0 == site_entity)
             .map(|(request_entity, _)| request_entity)

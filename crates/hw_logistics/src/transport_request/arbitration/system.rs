@@ -52,13 +52,22 @@ type ArbitrationRequestQuery<'w, 's> = Query<
     ),
 >;
 
-type ArbitrationWheelbarrowQuery<'w, 's> =
-    Query<'w, 's, (Entity, &'static Transform), (With<Wheelbarrow>, With<ParkedAt>, Without<PushedBy>)>;
+type ArbitrationWheelbarrowQuery<'w, 's> = Query<
+    'w,
+    's,
+    (Entity, &'static Transform),
+    (With<Wheelbarrow>, With<ParkedAt>, Without<PushedBy>),
+>;
 
 type ArbitrationFreeItemQuery<'w, 's> = Query<
     'w,
     's,
-    (Entity, &'static Transform, &'static Visibility, &'static ResourceItem),
+    (
+        Entity,
+        &'static Transform,
+        &'static Visibility,
+        &'static ResourceItem,
+    ),
     (
         Without<Designation>,
         Without<hw_core::relationships::TaskWorkers>,
@@ -75,7 +84,14 @@ pub struct WheelbarrowArbitrationParams<'w, 's> {
     pub q_free_items: ArbitrationFreeItemQuery<'w, 's>,
     pub q_belongs: Query<'w, 's, &'static BelongsTo>,
     pub q_stored_in: Query<'w, 's, &'static StoredIn>,
-    pub q_stockpiles: Query<'w, 's, (&'static crate::zone::Stockpile, Option<&'static StoredItems>)>,
+    pub q_stockpiles: Query<
+        'w,
+        's,
+        (
+            &'static crate::zone::Stockpile,
+            Option<&'static StoredItems>,
+        ),
+    >,
     pub q_blueprints: Query<'w, 's, &'static hw_jobs::Blueprint>,
     pub q_transforms: Query<'w, 's, &'static Transform>,
     pub q_incoming: Query<'w, 's, &'static IncomingDeliveries>,
@@ -153,7 +169,8 @@ pub fn wheelbarrow_arbitration_system(
         runtime.initialized = true;
         runtime.last_full_eval_secs = now;
 
-        let mut available_wheelbarrows: Vec<(Entity, Vec2)> = p.q_wheelbarrows
+        let mut available_wheelbarrows: Vec<(Entity, Vec2)> = p
+            .q_wheelbarrows
             .iter()
             .filter(|(e, _)| !lease_state.used_wheelbarrows.contains(e))
             .map(|(e, t)| (e, t.translation.truncate()))
@@ -193,8 +210,7 @@ pub fn wheelbarrow_arbitration_system(
     update_metrics(
         &mut metrics,
         MetricsUpdateSpec {
-            active_leases: lease_state.used_wheelbarrows.len() as u32
-                + grant_stats.leases_granted,
+            active_leases: lease_state.used_wheelbarrows.len() as u32 + grant_stats.leases_granted,
             leases_granted: grant_stats.leases_granted,
             eligible_requests,
             bucket_items_total,

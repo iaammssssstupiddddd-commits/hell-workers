@@ -71,11 +71,7 @@ type AnimationQuery<'w, 's> = Query<
 >;
 
 /// アニメーションシステム
-pub fn animation_system(
-    time: Res<Time>,
-    game_assets: Res<GameAssets>,
-    mut query: AnimationQuery,
-) {
+pub fn animation_system(time: Res<Time>, game_assets: Res<GameAssets>, mut query: AnimationQuery) {
     for (mut transform, mut sprite, mut anim, soul, idle, task, breakdown_opt, expression_opt) in
         query.iter_mut()
     {

@@ -173,9 +173,12 @@ fn try_direct_bone_collect_to_floor(
     queries: &mut FamiliarTaskAssignmentQueries,
     shadow: &mut ReservationShadow,
 ) -> bool {
-    let Some((source_entity, source_pos)) =
-        direct_collect::find_collect_bone_source(params.site_pos, ctx.task_area_opt, queries, shadow)
-    else {
+    let Some((source_entity, source_pos)) = direct_collect::find_collect_bone_source(
+        params.site_pos,
+        ctx.task_area_opt,
+        queries,
+        shadow,
+    ) else {
         debug!(
             "ASSIGN: Floor request {:?} has no available Bone collect source",
             params.task_entity
@@ -192,7 +195,9 @@ fn try_direct_bone_collect_to_floor(
         return false;
     };
 
-    let amount = params.remaining_needed.min(hw_core::constants::WHEELBARROW_CAPACITY as u32);
+    let amount = params
+        .remaining_needed
+        .min(hw_core::constants::WHEELBARROW_CAPACITY as u32);
 
     issue_collect_bone_with_wheelbarrow_to_floor(
         WheelbarrowCollectSpec {

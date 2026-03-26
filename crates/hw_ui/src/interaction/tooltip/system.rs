@@ -81,18 +81,12 @@ pub fn hover_tooltip_system<'w, 's, I, R>(
         return;
     };
 
-    let hovered_button =
-        queries
-            .ui_layout
-            .q_ui_tooltip_buttons
-            .iter()
-            .find(|(_, interaction, _, menu_button, _, _)| {
-                matches!(**interaction, Interaction::Hovered | Interaction::Pressed)
-                    && !target::is_tooltip_suppressed_for_expanded_menu(
-                        *menu_button,
-                        *bevy.menu_state,
-                    )
-            });
+    let hovered_button = queries.ui_layout.q_ui_tooltip_buttons.iter().find(
+        |(_, interaction, _, menu_button, _, _)| {
+            matches!(**interaction, Interaction::Hovered | Interaction::Pressed)
+                && !target::is_tooltip_suppressed_for_expanded_menu(*menu_button, *bevy.menu_state)
+        },
+    );
 
     let mut target = None;
     let mut template = TooltipTemplate::Generic;
@@ -155,8 +149,7 @@ pub fn hover_tooltip_system<'w, 's, I, R>(
             )
         });
     // ZIndex付きパネル内のボタン（速度ボタン等）はアンカーに留める（スタッキングコンテキスト回避）
-    let button_in_zindex_panel =
-        matches!(target, Some(TooltipTarget::UiButton(e)) if queries.ui_layout.q_speed_buttons.contains(e));
+    let button_in_zindex_panel = matches!(target, Some(TooltipTarget::UiButton(e)) if queries.ui_layout.q_speed_buttons.contains(e));
     let attach_to_anchor = !matches!(target, Some(TooltipTarget::UiButton(_)))
         || expanded_toggle_hover
         || button_in_zindex_panel;

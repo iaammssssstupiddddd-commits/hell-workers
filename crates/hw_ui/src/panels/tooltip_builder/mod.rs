@@ -28,7 +28,11 @@ pub fn rebuild_tooltip_content(
     theme: &UiTheme,
     payload: TooltipBuildPayload<'_>,
 ) {
-    let TooltipBuildPayload { template, model, ui_tooltip } = payload;
+    let TooltipBuildPayload {
+        template,
+        model,
+        ui_tooltip,
+    } = payload;
     clear_children(commands, q_children, tooltip_root);
 
     commands

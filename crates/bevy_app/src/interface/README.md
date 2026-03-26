@@ -24,7 +24,7 @@
 | `input.rs` | `handle_mouse_input`, `update_hover_entity` |
 | `hit_test.rs` | ワールド座標 → エンティティのヒットテスト |
 | `building_place/` | 建物ブループリット配置（`blueprint_placement`, `preview.rs`, `companion.rs`） |
-| `building_move/` | 建物移動（`mod.rs` root shell、`system.rs` の `building_move_system`、`preview.rs` の `building_move_preview_system`） |
+| `building_move/` | 建物移動（`mod.rs` root shell、`system.rs` entrypoint、`preview.rs`、`context.rs`、`click_handlers.rs`、`finalization.rs`） |
 | `floor_place/` | 床・壁の一括配置（`floor_placement_system`, `wall_apply.rs`, `validation.rs`） |
 
 補足:

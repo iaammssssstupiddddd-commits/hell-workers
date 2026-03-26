@@ -259,10 +259,34 @@ pub fn info_panel_system<A: UiAssets + Resource>(
                 UiSlot::StatMotivation,
                 "",
             );
-            set_text_slot(&res.info_nodes, &res.ui_nodes, &mut queries.q_text, UiSlot::StatStress, "");
-            set_text_slot(&res.info_nodes, &res.ui_nodes, &mut queries.q_text, UiSlot::StatFatigue, "");
-            set_text_slot(&res.info_nodes, &res.ui_nodes, &mut queries.q_text, UiSlot::StatDream, "");
-            set_text_slot(&res.info_nodes, &res.ui_nodes, &mut queries.q_text, UiSlot::TaskText, "");
+            set_text_slot(
+                &res.info_nodes,
+                &res.ui_nodes,
+                &mut queries.q_text,
+                UiSlot::StatStress,
+                "",
+            );
+            set_text_slot(
+                &res.info_nodes,
+                &res.ui_nodes,
+                &mut queries.q_text,
+                UiSlot::StatFatigue,
+                "",
+            );
+            set_text_slot(
+                &res.info_nodes,
+                &res.ui_nodes,
+                &mut queries.q_text,
+                UiSlot::StatDream,
+                "",
+            );
+            set_text_slot(
+                &res.info_nodes,
+                &res.ui_nodes,
+                &mut queries.q_text,
+                UiSlot::TaskText,
+                "",
+            );
             set_text_slot(
                 &res.info_nodes,
                 &res.ui_nodes,

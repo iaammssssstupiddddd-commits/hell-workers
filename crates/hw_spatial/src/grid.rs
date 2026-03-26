@@ -56,9 +56,10 @@ impl GridData {
                 if let Some(entities) = self.grid.get(&cell) {
                     for &entity in entities {
                         if let Some(&entity_pos) = self.positions.get(&entity)
-                            && pos.distance(entity_pos) <= radius {
-                                out.push(entity);
-                            }
+                            && pos.distance(entity_pos) <= radius
+                        {
+                            out.push(entity);
+                        }
                     }
                 }
             }
@@ -77,10 +78,13 @@ impl GridData {
                 if let Some(entities) = self.grid.get(&cell) {
                     for &entity in entities {
                         if let Some(&pos) = self.positions.get(&entity)
-                            && pos.x >= min.x && pos.x <= max.x && pos.y >= min.y && pos.y <= max.y
-                            {
-                                results.push(entity);
-                            }
+                            && pos.x >= min.x
+                            && pos.x <= max.x
+                            && pos.y >= min.y
+                            && pos.y <= max.y
+                        {
+                            results.push(entity);
+                        }
                     }
                 }
             }

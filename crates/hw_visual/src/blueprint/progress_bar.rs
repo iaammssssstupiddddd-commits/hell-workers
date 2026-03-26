@@ -16,18 +16,18 @@ use crate::progress_bar::{
 };
 use hw_core::visual_mirror::construction::BlueprintVisualState;
 
-
-type BlueprintWithoutBarQuery<'w, 's> = Query<
-    'w,
-    's,
-    (Entity, &'static Transform),
-    (With<BlueprintVisualState>, Without<ProgressBar>),
->;
+type BlueprintWithoutBarQuery<'w, 's> =
+    Query<'w, 's, (Entity, &'static Transform), (With<BlueprintVisualState>, Without<ProgressBar>)>;
 
 type ProgressFillQuery<'w, 's> = Query<
     'w,
     's,
-    (Entity, &'static ChildOf, &'static mut Sprite, &'static mut Transform),
+    (
+        Entity,
+        &'static ChildOf,
+        &'static mut Sprite,
+        &'static mut Transform,
+    ),
     (With<ProgressBar>, With<ProgressBarFill>),
 >;
 
@@ -46,7 +46,12 @@ type ProgressBgBarQuery<'w, 's> = Query<
 type ProgressFillBarQuery<'w, 's> = Query<
     'w,
     's,
-    (Entity, &'static ChildOf, &'static mut Transform, &'static Sprite),
+    (
+        Entity,
+        &'static ChildOf,
+        &'static mut Transform,
+        &'static Sprite,
+    ),
     (
         With<ProgressBar>,
         With<ProgressBarFill>,
@@ -142,22 +147,24 @@ pub fn sync_progress_bar_position_system(
 ) {
     for (bg_entity, child_of, mut bar_transform) in q_bg_bars.iter_mut() {
         if let Ok((_bp_entity, bp_transform)) = q_blueprints.get(child_of.parent())
-            && let Ok(generic_bar) = q_generic_bars.get(bg_entity) {
-                sync_progress_bar_position(bp_transform, &generic_bar.config, &mut bar_transform);
-            }
+            && let Ok(generic_bar) = q_generic_bars.get(bg_entity)
+        {
+            sync_progress_bar_position(bp_transform, &generic_bar.config, &mut bar_transform);
+        }
     }
 
     for (fill_entity, child_of, mut bar_transform, sprite) in q_fill_bars.iter_mut() {
         if let Ok((_bp_entity, bp_transform)) = q_blueprints.get(child_of.parent())
-            && let Ok(generic_bar) = q_generic_bars.get(fill_entity) {
-                let fill_width = sprite.custom_size.map(|s| s.x).unwrap_or(0.0);
-                sync_progress_bar_fill_position(
-                    bp_transform,
-                    &generic_bar.config,
-                    fill_width,
-                    &mut bar_transform,
-                );
-            }
+            && let Ok(generic_bar) = q_generic_bars.get(fill_entity)
+        {
+            let fill_width = sprite.custom_size.map(|s| s.x).unwrap_or(0.0);
+            sync_progress_bar_fill_position(
+                bp_transform,
+                &generic_bar.config,
+                fill_width,
+                &mut bar_transform,
+            );
+        }
     }
 }
 

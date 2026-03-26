@@ -2,12 +2,8 @@ use super::grid::{GridData, SpatialGridOps};
 use bevy::prelude::*;
 use hw_jobs::model::Blueprint;
 
-type SpatialUpdateQuery<'w, 's, T> = Query<
-    'w,
-    's,
-    (Entity, &'static Transform),
-    (With<T>, Or<(Added<T>, Changed<Transform>)>),
->;
+type SpatialUpdateQuery<'w, 's, T> =
+    Query<'w, 's, (Entity, &'static Transform), (With<T>, Or<(Added<T>, Changed<Transform>)>)>;
 
 /// ブループリント用の空間グリッド
 #[derive(Resource, Default)]

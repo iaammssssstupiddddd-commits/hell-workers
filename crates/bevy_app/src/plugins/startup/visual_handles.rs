@@ -35,9 +35,8 @@ pub struct Building3dHandles {
     pub equipment_2x2_mesh: Handle<Mesh>,
     pub equipment_material: Handle<StandardMaterial>,
     // --- キャラクター ---
-    pub soul_mesh: Handle<Mesh>,
+    pub soul_scene: Handle<Scene>,
     pub familiar_mesh: Handle<Mesh>,
-    pub soul_material: Handle<StandardMaterial>,
     pub familiar_material: Handle<StandardMaterial>,
     /// 全3Dエンティティに付与する RenderLayers
     pub render_layers: RenderLayers,
@@ -187,7 +186,6 @@ pub fn init_visual_handles(
         TILE_SIZE * 0.8,
         TILE_SIZE * 2.0,
     ));
-    let soul_mesh = meshes.add(Rectangle::new(TILE_SIZE * 0.8, TILE_SIZE * 0.8));
     let familiar_mesh = meshes.add(Rectangle::new(TILE_SIZE * 0.9, TILE_SIZE * 0.9));
 
     let wall_material = materials.add(StandardMaterial {
@@ -222,14 +220,6 @@ pub fn init_visual_handles(
         unlit: true,
         ..default()
     });
-    let soul_material = materials.add(StandardMaterial {
-        base_color: Color::WHITE,
-        unlit: true,
-        alpha_mode: AlphaMode::Blend,
-        base_color_texture: Some(game_assets.soul.clone()),
-        cull_mode: None,
-        ..default()
-    });
     let familiar_material = materials.add(StandardMaterial {
         base_color: Color::WHITE,
         unlit: true,
@@ -252,9 +242,8 @@ pub fn init_visual_handles(
         equipment_1x1_mesh,
         equipment_2x2_mesh,
         equipment_material,
-        soul_mesh,
+        soul_scene: game_assets.soul_scene.clone(),
         familiar_mesh,
-        soul_material,
         familiar_material,
         render_layers: RenderLayers::layer(LAYER_3D),
     });

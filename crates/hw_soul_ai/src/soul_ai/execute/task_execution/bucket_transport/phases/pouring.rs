@@ -166,10 +166,11 @@ pub fn handle(
                 let mut return_pos = None;
                 for (stock_entity, stock_transform, _, _) in ctx.queries.storage.stockpiles.iter() {
                     if let Ok(belongs) = ctx.queries.designation.belongs.get(stock_entity)
-                        && belongs.0 == tank {
-                            return_pos = Some(stock_transform.translation.truncate());
-                            break;
-                        }
+                        && belongs.0 == tank
+                    {
+                        return_pos = Some(stock_transform.translation.truncate());
+                        break;
+                    }
                 }
 
                 if let Some(pos) = return_pos {

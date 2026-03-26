@@ -45,10 +45,7 @@ type FamiliarTaskSpeechQuery<'w, 's> = Query<
 type SoulHistoryQuery<'w, 's> = Query<
     'w,
     's,
-    (
-        &'static GlobalTransform,
-        Option<&'static mut SpeechHistory>,
-    ),
+    (&'static GlobalTransform, Option<&'static mut SpeechHistory>),
     (With<DamnedSoul>, Without<Familiar>),
 >;
 
@@ -102,7 +99,11 @@ pub fn speech_on_task_assigned_system(
             emit_soul_with_history(
                 &mut commands,
                 soul_entity,
-                SoulSpeechContent { emoji: "💪", emotion: BubbleEmotion::Motivated, priority: BubblePriority::Low },
+                SoulSpeechContent {
+                    emoji: "💪",
+                    emotion: BubbleEmotion::Motivated,
+                    priority: BubblePriority::Low,
+                },
                 soul_pos,
                 &p.handles,
                 soul_history_opt,
@@ -110,15 +111,19 @@ pub fn speech_on_task_assigned_system(
             );
 
             if let Some(uc) = under_command
-                && let Ok((_fam_transform, voice, fam_history_opt)) =
-                    p.q_familiars.get_mut(uc.0)
+                && let Ok((_fam_transform, voice, fam_history_opt)) = p.q_familiars.get_mut(uc.0)
             {
                 let _fam_pos = _fam_transform.translation();
                 let phrase = LatinPhrase::from_work_type(event.work_type);
                 emit_familiar_with_history(
                     &mut commands,
                     uc.0,
-                    FamiliarBubbleSpec { phrase, emotion: BubbleEmotion::Motivated, priority: BubblePriority::Low, voice },
+                    FamiliarBubbleSpec {
+                        phrase,
+                        emotion: BubbleEmotion::Motivated,
+                        priority: BubblePriority::Low,
+                        voice,
+                    },
                     &p.handles,
                     &p.q_bubbles,
                     fam_history_opt,
@@ -144,7 +149,11 @@ pub fn speech_on_task_completed_system(
             emit_soul_with_history(
                 &mut commands,
                 soul_entity,
-                SoulSpeechContent { emoji: "😊", emotion: BubbleEmotion::Happy, priority: BubblePriority::Low },
+                SoulSpeechContent {
+                    emoji: "😊",
+                    emotion: BubbleEmotion::Happy,
+                    priority: BubblePriority::Low,
+                },
                 transform.translation(),
                 &handles,
                 history_opt,
@@ -177,7 +186,12 @@ pub fn on_soul_recruited(
         emit_familiar_with_history(
             &mut commands,
             fam_entity,
-            FamiliarBubbleSpec { phrase: LatinPhrase::Veni, emotion: BubbleEmotion::Neutral, priority: BubblePriority::Normal, voice },
+            FamiliarBubbleSpec {
+                phrase: LatinPhrase::Veni,
+                emotion: BubbleEmotion::Neutral,
+                priority: BubblePriority::Normal,
+                voice,
+            },
             &handles,
             &q_bubbles,
             history_opt,
@@ -206,7 +220,11 @@ pub fn on_exhausted(
         emit_soul_with_history(
             &mut commands,
             soul_entity,
-            SoulSpeechContent { emoji: "😴", emotion: BubbleEmotion::Exhausted, priority: BubblePriority::High },
+            SoulSpeechContent {
+                emoji: "😴",
+                emotion: BubbleEmotion::Exhausted,
+                priority: BubblePriority::High,
+            },
             transform.translation(),
             &handles,
             history_opt,
@@ -229,7 +247,11 @@ pub fn on_stress_breakdown(
         emit_soul_with_history(
             &mut commands,
             soul_entity,
-            SoulSpeechContent { emoji: "😰", emotion: BubbleEmotion::Stressed, priority: BubblePriority::Critical },
+            SoulSpeechContent {
+                emoji: "😰",
+                emotion: BubbleEmotion::Stressed,
+                priority: BubblePriority::Critical,
+            },
             transform.translation(),
             &handles,
             history_opt,
@@ -337,7 +359,12 @@ pub fn on_encouraged(
         emit_familiar_with_history(
             &mut commands,
             fam_entity,
-            FamiliarBubbleSpec { phrase: LatinPhrase::Custom(emoji.to_string()), emotion: BubbleEmotion::Motivated, priority: BubblePriority::Normal, voice },
+            FamiliarBubbleSpec {
+                phrase: LatinPhrase::Custom(emoji.to_string()),
+                emotion: BubbleEmotion::Motivated,
+                priority: BubblePriority::Normal,
+                voice,
+            },
             &handles,
             &q_bubbles,
             history_opt,
