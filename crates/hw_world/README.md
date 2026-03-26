@@ -10,7 +10,7 @@
 | ファイル | 内容 |
 |---|---|
 | `coords.rs` | 座標変換 (`grid_to_world`, `world_to_grid`, `snap_to_grid_*`, `idx_to_pos`) |
-| `map.rs` | `WorldMap` — 地形・歩行可能性・建物データの保持 |
+| `map/` | `WorldMap` — 地形・歩行可能性・建物データの保持（access, bridges, buildings, doors, obstacles, stockpiles, tiles のサブモジュールを含む） |
 | `terrain.rs` | `TerrainType` enum (Water, Sand, Rock, Grass, ...) |
 | `mapgen.rs` | `generate_base_terrain_tiles()` — Perlin ノイズ地形生成 |
 | `river.rs` | `generate_fixed_river_tiles()` と砂地生成 |
@@ -19,13 +19,15 @@
 | `regrowth.rs` | 森林再生システム (`ForestZone`, 周期的な木スポーン) |
 | `pathfinding/` | A* 経路探索（下記詳細参照） |
 | `query.rs` | 環境クエリ (`find_nearest_river_grid`, `find_nearest_walkable_grid`) |
-| `room_detection.rs` | Room 検出 core (`build_detection_input`, `detect_rooms`, `room_is_valid_against_input`, `RoomBounds`) |
+| `room_detection/` | Room 検出 core (`build_detection_input`, `detect_rooms`, `room_is_valid_against_input`, `RoomBounds`。core/ecs/tests サブモジュールを含む） |
 | `room_systems.rs` | `detect_rooms_system`, `validate_rooms_system` |
 | `door_systems.rs` | ドア自動開閉、`DoorVisualHandles`, `apply_door_state` |
 | `terrain_visual.rs` | 障害物 cleanup、`TerrainVisualHandles` |
 | `spatial.rs` | ワールド向け `SpatialGridOps` 実装 |
 | `spawn.rs` | スポーンヘルパー (`find_nearby_walkable_grid`, `pick_random_walkable_grid_in_rect`) |
 | `zones.rs` | `Yard`, `Site`, `PairedYard`, `PairedSite` — ゾーン系コンポーネント |
+| `zone_ops.rs` | ゾーン操作の純粋アルゴリズム helper (`expand_yard_area`, `identify_removal_targets` 等) |
+| `tree_planting.rs` | `DreamTreePlantingPlan` — 植林プランデータ構造 |
 | `map/access.rs` | `WorldMapRead`, `WorldMapWrite` (`SystemParam`) |
 
 ## 経路探索 (`pathfinding/`)
@@ -36,7 +38,7 @@
 find_path(map, from, to)                          // 基本 A*
 find_path_to_adjacent(map, from, target)          // 隣接タイルへの探索
 find_path_to_boundary(map, from)                  // マップ境界への探索
-find_path_with_policy(map, from, goal_policy)     // カスタムゴール条件
+find_path_world_waypoints(map, from, to)          // ウェイポイント付き経路探索
 can_reach_target(map, from, to)                   // 到達可能性チェック
 ```
 

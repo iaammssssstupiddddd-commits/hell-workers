@@ -98,7 +98,7 @@ Familiar は命令や状態を「ラテン語」で表現します。表示は *
 
 ## 4. 関連コンポーネント・定数
 
-- **コンポーネント**: `SpeechBubble`, `BubbleAnimation`, `TypewriterEffect`, `BubbleEmotion`
+- **コンポーネント**: `SpeechBubble`, `BubbleAnimation`, `TypewriterEffect`, `BubbleEmotion`, `ConversationExpression`, `ConversationInitiator`
 - **定数**: [crates/hw_core/src/constants/speech.rs](../crates/hw_core/src/constants/speech.rs) 内の `BUBBLE_` プレフィックスが付いた各定数（速度、色、サイズ等）
 - **システム構成**:
     - `spawn_soul_bubble` / `spawn_familiar_bubble`: 生成ロジック

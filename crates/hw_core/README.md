@@ -20,6 +20,13 @@
 | `logistics.rs` | ロジスティクス共通型 (Stockpile 等) |
 | `game_state.rs` | ゲーム状態管理 |
 | `world.rs` | ワールドコンテキスト型 |
+| `camera.rs` | `MainCamera` マーカーコンポーネント |
+| `population.rs` | `PopulationManager` — スポーン・脱走クールダウン管理リソース |
+| `selection.rs` | `SelectedEntity`・`HoveredEntity`・`SelectionIndicator` |
+| `time.rs` | `GameTime` リソース |
+| `ui_nodes.rs` | `UiRoot`・`UiMountSlot`・`UiNodeRegistry` — UI スロット shared contract |
+| `visual.rs` | `SoulTaskHandles` など Soul 実行時ビジュアルハンドルリソース |
+| `visual_mirror/` | ECS コンポーネントの視覚状態ミラー型（building, construction, dream, gather, logistics, task） |
 | `constants/` | ドメイン別定数 (下表参照) |
 
 ### constants/ ディレクトリ

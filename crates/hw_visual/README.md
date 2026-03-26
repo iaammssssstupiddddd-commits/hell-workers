@@ -11,8 +11,18 @@
 |---|---|
 | `lib.rs` | `HwVisualPlugin` と visual system の登録 |
 | `handles.rs` | `WallVisualHandles`, `SpeechHandles` などの handle resource |
+| `animations.rs` | `PulseAnimationConfig` など汎用アニメーション効果 |
+| `fade.rs` | フェードイン・アウト効果 |
+| `floating_text.rs` | フローティングテキスト演出 |
+| `progress_bar.rs` | 汎用プログレスバーコンポーネント |
+| `worker_icon.rs` | ワーカー頭上アイコン（ハンマー・斧・ツルハシ等）共通実装 |
+| `wall_connection.rs` | 壁接続状態の視覚同期 |
+| `visual3d.rs` | 3D レンダリング用プロキシコンポーネント（`Building3dVisual`, `FamiliarProxy3d`, `SoulProxy3d`） |
+| `mud_mixer.rs` | 泥ミキサービジュアル |
+| `tank.rs` | タンクビジュアル |
+| `layer/` | ビジュアルレイヤー定数・管理 |
 | `soul/` | Soul の progress bar, status, task link, idle/gathering/vitals visual |
-| `speech/` | 吹き出しと observer ベースの発話演出 |
+| `speech/` | 吹き出しと observer ベースの発話演出（`conversation/` サブディレクトリを含む） |
 | `blueprint/` | 設計図 visual, progress bar, delivery popup |
 | `gather/` | 採取インジケータ、resource highlight |
 | `haul/` | 運搬 visual、手押し車追従 |

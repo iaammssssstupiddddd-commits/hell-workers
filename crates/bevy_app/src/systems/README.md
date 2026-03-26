@@ -7,18 +7,16 @@
 
 ## ディレクトリ構成
 
-| ディレクトリ | フェーズ | 内容 |
+| ディレクトリ / ファイル | フェーズ | 内容 |
 |---|---|---|
 | `soul_ai/` | Logic | Soul（魂）の意思決定・タスク実行 |
 | `familiar_ai/` | Logic | Familiar（使い魔）の意思決定・タスク委譲 |
 | `command/` | Logic | プレイヤーのコマンド処理（タスクエリア・ゾーン配置） |
 | `jobs/` | Logic | 建設フェーズ遷移・建物完成・ドア管理 |
 | `logistics/` | Logic | リソース管理・輸送要求・ゾーン・地上アイテム |
-| `room/` | Logic | 部屋検出・バリデーション・ビジュアル同期 |
-| `world/` | Logic | ワールドゾーン・Site/Yard 管理 |
-| `spatial/` | Spatial | 空間グリッド更新（gathering・floor_construction） |
 | `visual/` | Visual | 視覚フィードバック・アニメーション同期 |
-| `utils/` | 共通 | アニメーション・フローティングテキスト等のユーティリティ |
+| `dream_tree_planting.rs` | Logic | ドリームツリーの植林システム |
+| `time.rs` | Logic | ゲーム内時間管理 |
 
 ## 各システムの関係
 
@@ -27,7 +25,7 @@
     ↓
 command/ → Designation / TransportRequest エンティティ生成
     ↓
-spatial/ → 空間グリッド更新（毎フレーム）
+plugins/spatial.rs → 空間グリッド更新（毎フレーム）
     ↓
 familiar_ai/ → タスク発見・割り当て要求生成
     ↓

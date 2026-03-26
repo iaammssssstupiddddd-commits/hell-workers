@@ -50,18 +50,9 @@ initial_spawn/
 
 | ファイル | 内容 |
 |---|---|
-| `mod.rs` | `hw_logistics::transport_request` の型を re-export + `plugin`, `producer` を公開 |
-| `plugin.rs` | `TransportRequestPlugin` / `TransportRequestSet` の thin shell |
+| `mod.rs` | `hw_logistics::transport_request` の型を re-export。`TransportRequestPlugin` / `TransportRequestSet` / producer 群も直接 re-export |
 
-## transport_request/producer/ ディレクトリ
-
-floor / wall construction producer 実装本体は `hw_logistics` に移り、このディレクトリには互換 re-export だけが残る。
-
-| ファイル | 内容 |
-|---|---|
-| `mod.rs` | thin shell module 宣言 |
-| `floor_construction.rs` | `hw_logistics::transport_request::producer::floor_construction` の re-export |
-| `wall_construction.rs` | `hw_logistics::transport_request::producer::wall_construction` の re-export |
+`plugin.rs` および `producer/` サブディレクトリは `hw_logistics` への移設により削除済み。
 
 ---
 

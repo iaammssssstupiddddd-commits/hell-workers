@@ -14,6 +14,7 @@
 | `theme.rs` | スタイリング・テーマ定数 |
 | `components.rs` | UI コンポーネントレジストリ・共有ユーティリティ |
 | `camera.rs` | `world_cursor_pos`（スクリーン座標→ワールド座標変換 utility。`MainCamera` は `hw_core::camera` から re-export） |
+| `area_edit/` | TaskArea 編集モード（インタラクション・状態管理） |
 | `setup/` | UI 要素の初期スポーン（下表） |
 | `plugins/` | UI システムの Bevy 登録（下表） |
 | `list/` | エンティティリスト共通ロジック（下表） |

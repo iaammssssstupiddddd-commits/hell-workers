@@ -20,6 +20,10 @@
 | `tile_index.rs` | `TileSiteIndex` — タイル座標 → サイトエンティティ高速逆引き |
 | `resource_cache.rs` | `SharedResourceCache` — タスク間リソース予約キャッシュ |
 | `construction_helpers.rs` | `ResourceItemVisualHandles`, `spawn_refund_items` — 建設キャンセル返却 helper |
+| `plugin.rs` | `LogisticsPlugin` — `apply_reservation_requests_system` のプラグイン登録 |
+| `manual_haul_selector.rs` | 手動運搬選定ロジック（`StockpileCandidateView` / `ExistingHaulRequestView` 処理） |
+| `spatial_sync.rs` | `ResourceSpatialGrid`・`StockpileSpatialGrid`・`TransportRequestSpatialGrid` 更新システム |
+| `visual_sync.rs` | `WheelbarrowMarker`・`InventoryItemVisual` 等の visual mirror 同期 Observer |
 | `transport_request/` | 輸送要求の完全なライフサイクル（下表参照） |
 
 ## transport_request/ ディレクトリ

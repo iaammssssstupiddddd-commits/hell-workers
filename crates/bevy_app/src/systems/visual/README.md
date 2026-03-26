@@ -9,11 +9,14 @@
 
 | ファイル/ディレクトリ | 内容 |
 |---|---|
-| `mod.rs` | root visual module の公開面。`hw_visual` へ移設済み領域を案内 |
+| `mod.rs` | root visual module の公開面。`hw_visual` へ移設済み領域を案内。`floor_construction` / `wall_construction` inline modules を含む |
 | `placement_ghost.rs` | 建物配置ゴーストプレビュー。`GameAssets` / placement context 依存のため root 残留 |
 | `task_area_visual.rs` | `TaskAreaMaterial` と task area 境界ビジュアル更新 |
-| `floor_construction.rs` | `hw_visual::floor_construction` の thin shell |
-| `wall_construction.rs` | `hw_visual::wall_construction` の thin shell |
+| `building3d_cleanup.rs` | 3D 建物エンティティのクリーンアップ |
+| `camera_sync.rs` | カメラ同期 |
+| `character_proxy_3d.rs` | キャラクター 3D プロキシ |
+| `elevation_view.rs` | 高度ビュー |
+| `wall_orientation_aid.rs` | 壁向き補助 |
 
 ## TaskAreaMaterial
 

@@ -8,13 +8,16 @@
 
 ## ディレクトリ構成
 
-| ディレクトリ | フェーズ | 内容 |
+このディレクトリに実際に存在するのは `perceive/` のみ。
+`update/`・`decide/`・`execute/`・`helpers/` の実装本体は `hw_familiar_ai` クレートにある。
+
+| ディレクトリ | フェーズ | 実体 |
 |---|---|---|
-| `perceive/` | Perceive | 環境情報の読み取り |
-| `update/` | Update | 時間経過による内部状態更新 |
-| `decide/` | Decide | 次行動の選択・リクエスト生成 |
-| `execute/` | Execute | 決定された行動の実行 |
-| `helpers/` | 共通 | 共有クエリ・ユーティリティ |
+| `perceive/` | Perceive | このディレクトリに存在（resource_sync.rs） |
+| `update/` | Update | **`hw_familiar_ai` 内**（ローカルディレクトリなし） |
+| `decide/` | Decide | **`hw_familiar_ai` 内**（ローカルディレクトリなし） |
+| `execute/` | Execute | **`hw_familiar_ai` 内**（ローカルディレクトリなし） |
+| `helpers/` | 共通 | **`hw_familiar_ai` 内**（ローカルディレクトリなし） |
 
 ## decide/ ディレクトリ
 

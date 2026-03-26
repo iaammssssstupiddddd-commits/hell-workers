@@ -30,12 +30,11 @@
 | ファイル/ディレクトリ | 内容 |
 |---|---|
 | `mod.rs` | 公開 API |
-| `common.rs` | 共有インタラクションユーティリティ |
-| `dialog.rs` | ダイアログ操作 |
 | `hover_action.rs` | ホバーエフェクト |
 | `intent_handler.rs` | `UiIntent` メッセージ処理 |
 | `menu_actions.rs` | メニューアクション処理 |
 | `mode.rs` | UI モード管理 |
+| `systems.rs` | インタラクションシステム |
 | `status_display.rs` | ステータス表示エントリポイント |
 | `status_display/` | ステータスバー描画（runtime, dream bar, mode panel） |
 | `tooltip/` | ツールチップ（target, layout, fade） |

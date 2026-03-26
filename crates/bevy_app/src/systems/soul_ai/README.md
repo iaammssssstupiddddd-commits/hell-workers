@@ -7,14 +7,17 @@
 
 ## ディレクトリ構成
 
-| ディレクトリ | フェーズ | 内容 |
+このディレクトリに実際に存在するのは `execute/` のみ。
+`perceive/`・`update/`・`decide/`・`helpers/`・`visual/` の実装本体は `hw_soul_ai` クレートにある。
+
+| ディレクトリ | フェーズ | 実体 |
 |---|---|---|
-| `perceive/` | Perceive | 環境情報の読み取り（`hw_soul_ai` から re-export） |
-| `update/` | Update | 時間経過によるバイタル・状態更新（`hw_soul_ai` から re-export） |
-| `decide/` | Decide | 次行動の選択・リクエスト生成 |
-| `execute/` | Execute | 決定された行動の実行・ECS 変更 |
-| `helpers/` | 共通 | 共有ヘルパー（`hw_soul_ai` から re-export） |
-| `visual/` | Visual | Soul 固有のビジュアル同期 |
+| `perceive/` | Perceive | **`hw_soul_ai` 内**（ローカルディレクトリなし） |
+| `update/` | Update | **`hw_soul_ai` 内**（ローカルディレクトリなし） |
+| `decide/` | Decide | **`hw_soul_ai` 内**（ローカルディレクトリなし） |
+| `execute/` | Execute | このディレクトリに存在（task_execution/, gathering_spawn.rs, adapters.rs 等） |
+| `helpers/` | 共通 | **`hw_soul_ai` 内**（ローカルディレクトリなし） |
+| `visual/` | Visual | **`hw_soul_ai` / `hw_visual` 内**（ローカルディレクトリなし） |
 
 ## decide/ ディレクトリ
 
