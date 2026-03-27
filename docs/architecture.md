@@ -225,7 +225,10 @@ Perceive → Update → Decide → Execute
 
 - `GameAssets.soul_scene` に `GltfAssetLabel::Scene(0).from_asset("models/characters/soul.glb")` を保持し、Soul spawn 時に `SceneRoot` として 3D シーンへ追加する。
 - Soul の 3D ルートは `SOUL_GLB_SCALE` を適用し、`sync_soul_proxy_3d_system` は 2D 位置を XZ 平面へ写すが、billboard 回転は行わない。
-- `apply_soul_gltf_render_layers_on_ready` が `SceneInstanceReady` を受けて Soul GLB の子孫へ `RenderLayers::layer(LAYER_3D)` を付与し、RtT 用 `Camera3dRtt` で確実に描画する。
+- `apply_soul_gltf_render_layers_on_ready` が `SceneInstanceReady` を受けて Soul GLB の子孫へ `RenderLayers::layer(LAYER_3D)` を付与し、`mesh_face` には `soul_face_atlas.png` を読む `StandardMaterial` を差し替える。
+- `CharacterHandles` は face atlas 用 `StandardMaterial` を保持する。PoC 段階では `uv_transform` で atlas の先頭セル（通常表情）から、Idle 表情の可視領域計測を元にした crop を中心固定で 1.4 倍拡大し、ゲーム状態による表情切り替えはまだ行わない。
+- `mesh_face` には `SOUL_FACE_SCALE_MULTIPLIER` を掛け、PoC 目視で顔が読み取りづらい問題を asset 非破壊で補正する。
+- `mesh_face` のローカル回転は GLB 側の初期姿勢をそのまま使い、PoC 段階では追加の billboard 回転を行わない。
 - `Camera3dRtt` には `AmbientLight` を付与し、GLB 付属の lit material が RtT 上で暗転しないようにする。
 - Familiar 側は `Rectangle::new(...)` + `StandardMaterial { base_color_texture, unlit, AlphaMode::Blend, cull_mode: None }` を維持し、`sync_familiar_proxy_3d_system` が `Camera3dRtt` の回転をそのままコピーする。
 

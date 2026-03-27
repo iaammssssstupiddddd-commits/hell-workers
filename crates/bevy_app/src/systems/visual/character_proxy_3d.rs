@@ -3,11 +3,14 @@
 //! DamnedSoul / Familiar の 2D Transform を対応する 3D プロキシエンティティに毎フレーム同期する。
 //! 2D 座標 (x, y) → 3D 座標 (x, height/2, -y) の変換を使用する。
 
-use crate::plugins::startup::Camera3dRtt;
+use crate::plugins::startup::{Camera3dRtt, CharacterHandles};
 use bevy::camera::visibility::RenderLayers;
+use bevy::gltf::GltfMeshName;
+use bevy::mesh::Mesh3d;
+use bevy::pbr::{MeshMaterial3d, StandardMaterial};
 use bevy::prelude::*;
 use bevy::scene::SceneInstanceReady;
-use hw_core::constants::LAYER_3D;
+use hw_core::constants::{LAYER_3D, SOUL_FACE_SCALE_MULTIPLIER};
 use hw_core::familiar::Familiar;
 use hw_core::soul::DamnedSoul;
 use hw_visual::visual3d::{FamiliarProxy3d, SoulProxy3d};
@@ -100,8 +103,13 @@ pub fn cleanup_familiar_proxy_3d_system(
 pub fn apply_soul_gltf_render_layers_on_ready(
     scene_ready: On<SceneInstanceReady>,
     mut commands: Commands,
+    character_handles: Res<CharacterHandles>,
     q_soul_roots: Query<&SoulProxy3d>,
     q_children: Query<&Children>,
+    q_transforms: Query<&Transform>,
+    q_mesh_names: Query<&GltfMeshName>,
+    q_names: Query<&Name>,
+    q_meshes: Query<(), With<Mesh3d>>,
 ) {
     let Ok(proxy) = q_soul_roots.get(scene_ready.entity) else {
         return;
@@ -112,6 +120,33 @@ pub fn apply_soul_gltf_render_layers_on_ready(
 
     let render_layers = RenderLayers::layer(LAYER_3D);
     for child in q_children.iter_descendants(scene_ready.entity) {
-        commands.entity(child).insert(render_layers.clone());
+        let mut entity_commands = commands.entity(child);
+        entity_commands.insert(render_layers.clone());
+
+        let is_mesh_entity = q_meshes.get(child).is_ok();
+        if !is_mesh_entity {
+            continue;
+        }
+
+        let is_face_mesh = q_mesh_names
+            .get(child)
+            .map(|mesh_name| mesh_name.0 == "Soul_Face_Mesh")
+            .unwrap_or(false)
+            || q_names
+                .get(child)
+                .map(|name| name.as_str() == "Soul_Face_Mesh")
+                .unwrap_or(false);
+        if is_face_mesh {
+            if let Ok(face_transform) = q_transforms.get(child) {
+                let mut scaled_face = *face_transform;
+                scaled_face.scale *=
+                    Vec3::new(SOUL_FACE_SCALE_MULTIPLIER, SOUL_FACE_SCALE_MULTIPLIER, 1.0);
+                entity_commands.insert(scaled_face);
+            }
+            entity_commands
+                .remove::<MeshMaterial3d<StandardMaterial>>()
+                .insert(MeshMaterial3d(character_handles.soul_face_material.clone()));
+            continue;
+        }
     }
 }

@@ -29,6 +29,7 @@ pub fn create_game_assets(asset_server: &AssetServer, images: &mut Assets<Image>
         soul: asset_server.load("textures/character/soul.png"),
         soul_scene: asset_server
             .load(GltfAssetLabel::Scene(0).from_asset("models/characters/soul.glb")),
+        soul_face_atlas: asset_server.load("textures/character/soul_face_atlas.png"),
         soul_exhausted: asset_server.load("textures/character/soul_exhausted.png"),
         soul_lough: asset_server.load("textures/character/soul_lough.png"),
         soul_sleep: asset_server.load("textures/character/soul_sleep.png"),

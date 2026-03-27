@@ -117,7 +117,7 @@ Phase 3 着手前（今すぐ着手可・並走可）
   M-Pre1: WgpuFeatures::CLIP_DISTANCES 動作確認          ← P0 ブロッカー確認
   M-Pre2: RtT 基盤整備（create_rtt_texture 切り出し）
   M-Pre3: Camera3d 角度 V-1（目視・数値確定）
-  M-Pre4: Character GLB PoC（CharacterMaterial 動作確認） ← M-Pre3 + MS-Asset-Char-GLB-A 後
+  M-Pre4: Character GLB PoC（face atlas 表示確認）        ← M-Pre3 + MS-Asset-Char-GLB-A 後
 
 Phase 3 序盤
   M-3-1: Camera3d 斜め角度適用 + CharacterMaterial 本実装  ← M-Pre3/4 完了後
@@ -229,7 +229,7 @@ App::new()
 
 ---
 
-### M-Pre4: Character GLB PoC（CharacterMaterial 動作確認）
+### M-Pre4: Character GLB PoC（face atlas 表示確認）
 
 > **依存**: M-Pre3（角度数値確定後）・MS-Asset-Char-GLB-A（Soul GLB 配置済み）
 > **根拠**: `character-3d-rendering-proposal` §3.5（Camera3d 角度との関係）
@@ -237,20 +237,23 @@ App::new()
 **やること**:
 - `GameAssets` に `soul.glb#Scene0` の `Handle<Scene>` を追加し、Soul spawn 時に `SceneRoot` ベースで RtT へ流す
 - `SceneInstanceReady` で Soul GLB 子孫へ `RenderLayers::layer(LAYER_3D)` を付与し、RtT Camera3d で確実に描画する
-- `CharacterMaterial` を最小限実装する（Unlit + `AlphaMode::Blend`・クリップ平面は仮実装）
-- `CharacterHandles` リソースを定義し Soul GLB を仮スポーンして `CharacterMaterial` を適用する
+- `CharacterHandles` リソースを定義し、`mesh_face` に `soul_face_atlas.png` の先頭セルだけを切り出す最小 `StandardMaterial` を適用する
 - 斜め Camera3d で Soul GLB が建物 Cuboid と Z バッファを共有し前後関係が正しく描画されることを確認する
-- `face_billboard_system` を仮実装し `mesh_face` がカメラを向くことを確認する
+- `mesh_face` は GLB 既定姿勢と authoring 済み UV をそのまま使い、face atlas が視認できることを確認する
 
 **確認基準**:
-- [ ] 壁の後ろに入った Soul GLB が壁に隠れる（Z バッファ共有の確認）
-- [ ] Soul GLB が「体積のない存在に見える」アートスタイル感が出ている
-- [ ] `mesh_face` がカメラを向いている（`face_billboard_system` 仮実装）
+- [x] 壁の後ろに入った Soul GLB が壁に隠れる（Z バッファ共有の確認）
+- [x] Soul GLB が「体積のない存在に見える」アートスタイル感が出ている
+- [x] `mesh_face` に通常表情の face atlas 1 セルが十分視認できる
 
 **進捗メモ**:
 - [x] `assets/models/characters/soul.glb` をリポジトリへ配置済み
 - [x] Soul spawn は `SceneRoot` ベースで RtT に接続済み
-- [ ] `CharacterMaterial` / `face_billboard_system` は未着手
+- [x] `CharacterHandles` を追加し、`soul_face_atlas.png` を face atlas としてロード済み
+- [x] `mesh_face` の差し替え条件を `GltfMeshName` / `Name` の両方で拾うように更新済み
+- [x] `mesh_face` の回転は GLB 既定姿勢を使う方針に戻し、追加の billboard 処理は外した
+- [x] `CharacterMaterial` の試作経路は撤去し、PoC は `StandardMaterial` + GLB 既定 UV に整理済み
+- [x] `mesh_face` は Idle セルの可視領域を元にした 1.4 倍 crop で十分な視認性を確認済み
 
 ---
 

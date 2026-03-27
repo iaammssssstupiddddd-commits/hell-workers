@@ -255,22 +255,21 @@
 
 ---
 
-### MS-P3-Pre-D: Character GLB PoC（CharacterMaterial 動作確認）
+### MS-P3-Pre-D: Character GLB PoC（face atlas 表示確認）
 
 > **依存**: MS-P3-Pre-C（角度数値確定後）・MS-Asset-Char-GLB-A（Soul GLB 配置済み）
 
 - **やること**:
   - `GameAssets` に `soul.glb#Scene0` を追加し、Soul spawn を `SceneRoot` ベースで RtT に接続する
   - `SceneInstanceReady` で Soul GLB 子孫へ `RenderLayers::layer(LAYER_3D)` を付与する
-  - `CharacterMaterial`（`hw_visual/src/material/character_material.rs`）を最小限実装する（Unlit + AlphaMode::Blend + クリップ平面なし仮実装）
-  - `CharacterHandles` リソースを定義し Soul GLB を仮スポーンして `CharacterMaterial` を適用する
+  - `CharacterHandles` リソースを定義し Soul GLB を仮スポーンして `mesh_face` に `soul_face_atlas.png` の先頭セルだけを切り出す最小 `StandardMaterial` を適用する
   - 斜め Camera3d で Soul GLB が建物 Cuboid と正しく前後表示されることを確認する（Z バッファ共有の確認）
-  - `face_billboard_system` の仮実装で `mesh_face` がカメラを向くことを確認する
+  - `mesh_face` は GLB 既定姿勢を維持したまま、通常表情の face atlas 1 セルが十分視認できることを確認する
 - **確認基準**:
-  - [ ] 壁の後ろに入った Soul GLB が壁に隠れる（Z バッファが RtT に焼き込まれていることを確認）
-  - [ ] Soul GLB が「体積のない存在に見える」アートスタイル感が出ている
-  - [ ] `mesh_face` がどの角度でもカメラを向いている
-- **ステータス**: [~] 進行中（Soul `SceneRoot` 接続まで完了）
+  - [x] 壁の後ろに入った Soul GLB が壁に隠れる（Z バッファが RtT に焼き込まれていることを確認）
+  - [x] Soul GLB が「体積のない存在に見える」アートスタイル感が出ている
+  - [x] `mesh_face` に通常表情の face atlas 1 セルが十分視認できる
+- **ステータス**: [x] 完了（Soul `SceneRoot`・`mesh_face` atlas 表示・前後関係確認まで完了）
 
 ---
 
@@ -557,7 +556,7 @@ MS-WFC-1 → MS-WFC-2 → MS-WFC-3 → MS-WFC-3.5  (独立)
 | ⚠️ P0（ブロッカー確認） | MS-P3-Pre-A | `CLIP_DISTANCES` 非対応なら SectionMaterial 設計を全面再検討 |
 | P0（データ確定） | MS-P3-Pre-C | Camera3d 角度未確定のまま GLB 生成パイプラインを進められない |
 | P1（基盤整備） | MS-P3-Pre-B | Phase 3 参照箇所が増える前に一元化しておく必要がある |
-| P1（PoC） | MS-P3-Pre-D | Character GLB + CharacterMaterial の最小動作確認。MS-3-1 の前提 |
+| P1（PoC） | MS-P3-Pre-D | Character GLB + face atlas 表示確認。MS-3-1 の前提 |
 | P1（序盤） | MS-3-3 | SectionMaterial の PoC が Phase 3 後半全体の前提 |
 | P2（本実装） | MS-3-1・MS-3-2 | 着手前準備完了後に連続実装 |
 | P2（キャラクター） | MS-3-Char-A | AnimationGraph + タスク連動。MS-3-1 完了後すぐ着手 |

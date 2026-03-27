@@ -11,7 +11,7 @@ mod visual_handles;
 
 pub use rtt_composite::RttCompositeSprite;
 pub use rtt_setup::{Camera3dRtt, RttTextures, RttViewportSize};
-pub use visual_handles::Building3dHandles;
+pub use visual_handles::{Building3dHandles, CharacterHandles};
 
 use perf_scenario::{
     PerfScenarioApplied, setup_perf_scenario_if_enabled, setup_perf_scenario_runtime_if_enabled,

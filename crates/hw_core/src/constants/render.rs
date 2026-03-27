@@ -67,6 +67,8 @@ pub const VIEW_HEIGHT: f32 = 150.0;
 pub const Z_OFFSET: f32 = 90.0;
 /// Soul GLB PoC の初期スケール（Blender 1.0 単位をタイル基準へ揃える）
 pub const SOUL_GLB_SCALE: f32 = TILE_SIZE * 0.8;
+/// Soul `mesh_face` の見やすさを補う一時スケール補正。
+pub const SOUL_FACE_SCALE_MULTIPLIER: f32 = 1.6;
 
 /// 斜め TopDown オーソ投影で圧縮される地面の Y 方向を、RtT 合成時に打ち消す係数。
 pub fn topdown_rtt_vertical_compensation() -> f32 {

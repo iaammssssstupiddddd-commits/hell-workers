@@ -2,6 +2,7 @@
 
 use crate::assets::GameAssets;
 use bevy::camera::visibility::RenderLayers;
+use bevy::math::Affine2;
 use bevy::prelude::*;
 use hw_core::constants::{LAYER_3D, TILE_SIZE};
 use hw_core::visual::SoulTaskHandles;
@@ -41,6 +42,19 @@ pub struct Building3dHandles {
     /// 全3Dエンティティに付与する RenderLayers
     pub render_layers: RenderLayers,
 }
+
+#[derive(Resource)]
+pub struct CharacterHandles {
+    pub soul_face_material: Handle<StandardMaterial>,
+}
+
+const SOUL_FACE_ATLAS_COLUMNS: f32 = 3.0;
+const SOUL_FACE_ATLAS_ROWS: f32 = 2.0;
+const SOUL_FACE_CELL_SIZE_PX: f32 = 256.0;
+const SOUL_FACE_BASE_CROP_OFFSET_X_PX: f32 = 24.0;
+const SOUL_FACE_BASE_CROP_OFFSET_Y_PX: f32 = 32.0;
+const SOUL_FACE_BASE_CROP_SIZE_PX: f32 = 152.0;
+const SOUL_FACE_TEXTURE_MAGNIFICATION: f32 = 1.4;
 
 pub fn init_visual_handles(
     mut commands: Commands,
@@ -246,5 +260,44 @@ pub fn init_visual_handles(
         familiar_mesh,
         familiar_material,
         render_layers: RenderLayers::layer(LAYER_3D),
+    });
+
+    commands.insert_resource(CharacterHandles {
+        soul_face_material: materials.add(StandardMaterial {
+            base_color: Color::WHITE,
+            base_color_texture: Some(game_assets.soul_face_atlas.clone()),
+            // Idle セルの可視領域を元にした crop を中心維持で拡大する。
+            uv_transform: Affine2::from_scale_angle_translation(
+                Vec2::new(
+                    SOUL_FACE_BASE_CROP_SIZE_PX
+                        / SOUL_FACE_TEXTURE_MAGNIFICATION
+                        / SOUL_FACE_CELL_SIZE_PX
+                        / SOUL_FACE_ATLAS_COLUMNS,
+                    SOUL_FACE_BASE_CROP_SIZE_PX
+                        / SOUL_FACE_TEXTURE_MAGNIFICATION
+                        / SOUL_FACE_CELL_SIZE_PX
+                        / SOUL_FACE_ATLAS_ROWS,
+                ),
+                0.0,
+                Vec2::new(
+                    (SOUL_FACE_BASE_CROP_OFFSET_X_PX
+                        + (SOUL_FACE_BASE_CROP_SIZE_PX
+                            - SOUL_FACE_BASE_CROP_SIZE_PX / SOUL_FACE_TEXTURE_MAGNIFICATION)
+                            * 0.5)
+                        / SOUL_FACE_CELL_SIZE_PX
+                        / SOUL_FACE_ATLAS_COLUMNS,
+                    (SOUL_FACE_BASE_CROP_OFFSET_Y_PX
+                        + (SOUL_FACE_BASE_CROP_SIZE_PX
+                            - SOUL_FACE_BASE_CROP_SIZE_PX / SOUL_FACE_TEXTURE_MAGNIFICATION)
+                            * 0.5)
+                        / SOUL_FACE_CELL_SIZE_PX
+                        / SOUL_FACE_ATLAS_ROWS,
+                ),
+            ),
+            unlit: true,
+            alpha_mode: AlphaMode::Blend,
+            cull_mode: None,
+            ..default()
+        }),
     });
 }
