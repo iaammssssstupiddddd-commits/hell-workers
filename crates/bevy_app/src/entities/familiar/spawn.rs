@@ -114,7 +114,7 @@ pub fn spawn_familiar_at(
         Mesh3d(handles_3d.familiar_mesh.clone()),
         MeshMaterial3d(handles_3d.familiar_material.clone()),
         Transform::from_xyz(actual_pos.x, TILE_SIZE * 0.45, -actual_pos.y),
-        handles_3d.render_layers.clone(),
+        bevy::camera::visibility::RenderLayers::layer(LAYER_3D),
         hw_visual::visual3d::FamiliarProxy3d { owner: fam_entity },
         Name::new(format!("FamiliarProxy3d: {}", familiar_name)),
     ));

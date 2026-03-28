@@ -8,10 +8,12 @@ use crate::world::map::{
 };
 use bevy::camera::{RenderTarget, visibility::RenderLayers};
 use bevy::camera_controller::pan_camera::PanCamera;
+use bevy::light::{CascadeShadowConfigBuilder, DirectionalLightShadowMap};
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use hw_core::constants::{
-    LAYER_2D, LAYER_3D, LAYER_3D_SOUL_MASK, LAYER_OVERLAY, VIEW_HEIGHT, Z_OFFSET,
+    LAYER_2D, LAYER_3D, LAYER_3D_SHADOW_RECEIVER, LAYER_3D_SOUL_MASK, LAYER_3D_SOUL_SHADOW,
+    LAYER_OVERLAY, VIEW_HEIGHT, Z_OFFSET, topdown_sun_direction_world,
 };
 use hw_spatial::{ResourceSpatialGrid, SpatialGridOps};
 use hw_ui::camera::MainCamera;
@@ -42,6 +44,8 @@ pub(super) fn setup(
     mut images: ResMut<Assets<Image>>,
     q_window: Query<&Window, With<PrimaryWindow>>,
 ) {
+    commands.insert_resource(DirectionalLightShadowMap { size: 4096 });
+
     // --- RtT オフスクリーンテクスチャ生成 ---
     let viewport_size = q_window
         .single()
@@ -102,6 +106,25 @@ pub(super) fn setup(
         RenderTarget::Image(rtt_handle.into()),
         RenderLayers::layer(LAYER_3D),
         Camera3dRtt,
+    ));
+
+    // 3D RtT の影確認用ライト。AmbientLight だけでは shadow caster 分離を確認できないので、
+    // 壁面にも影が出る向きから DirectionalLight を 1 本入れる。
+    let sun_dir = topdown_sun_direction_world();
+    commands.spawn((
+        DirectionalLight {
+            shadows_enabled: true,
+            illuminance: 12_000.0,
+            ..default()
+        },
+        Transform::from_translation(sun_dir * 360.0).looking_at(Vec3::ZERO, Vec3::Y),
+        CascadeShadowConfigBuilder {
+            first_cascade_far_bound: 120.0,
+            maximum_distance: 500.0,
+            ..default()
+        }
+        .build(),
+        RenderLayers::from_layers(&[LAYER_3D, LAYER_3D_SHADOW_RECEIVER, LAYER_3D_SOUL_SHADOW]),
     ));
 
     commands.spawn((

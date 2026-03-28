@@ -2,15 +2,17 @@
 
 use crate::assets::GameAssets;
 use bevy::camera::visibility::RenderLayers;
+use bevy::mesh::Mesh;
 use bevy::prelude::*;
-use hw_core::constants::{LAYER_3D, TILE_SIZE};
+use hw_core::constants::{TILE_SIZE, building_3d_render_layers};
 use hw_core::visual::SoulTaskHandles;
 use hw_logistics::ResourceItemVisualHandles;
-use hw_visual::CharacterMaterial;
 use hw_visual::{
     BuildingAnimHandles, GatheringVisualHandles, HaulItemHandles, MaterialIconHandles,
-    PlantTreeHandles, SoulMaskMaterial, SpeechHandles, WallVisualHandles, WorkIconHandles,
+    PlantTreeHandles, SoulMaskMaterial, SoulShadowMaterial, SpeechHandles, WallVisualHandles,
+    WorkIconHandles,
 };
+use hw_visual::{CharacterMaterial, soul_face_uv_offset, soul_face_uv_scale};
 use hw_world::{DoorVisualHandles, TerrainVisualHandles};
 
 /// 3D レンダリング用メッシュ・マテリアルハンドルリソース
@@ -48,15 +50,8 @@ pub struct CharacterHandles {
     pub soul_body_material: Handle<CharacterMaterial>,
     pub soul_face_material: Handle<CharacterMaterial>,
     pub soul_mask_material: Handle<SoulMaskMaterial>,
+    pub soul_shadow_proxy_material: Handle<SoulShadowMaterial>,
 }
-
-const SOUL_FACE_ATLAS_COLUMNS: f32 = 3.0;
-const SOUL_FACE_ATLAS_ROWS: f32 = 2.0;
-const SOUL_FACE_CELL_SIZE_PX: f32 = 256.0;
-const SOUL_FACE_BASE_CROP_OFFSET_X_PX: f32 = 24.0;
-const SOUL_FACE_BASE_CROP_OFFSET_Y_PX: f32 = 32.0;
-const SOUL_FACE_BASE_CROP_SIZE_PX: f32 = 152.0;
-const SOUL_FACE_TEXTURE_MAGNIFICATION: f32 = 1.4;
 
 pub fn init_visual_handles(
     mut commands: Commands,
@@ -65,6 +60,7 @@ pub fn init_visual_handles(
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut character_materials: ResMut<Assets<CharacterMaterial>>,
     mut soul_mask_materials: ResMut<Assets<SoulMaskMaterial>>,
+    mut soul_shadow_materials: ResMut<Assets<SoulShadowMaterial>>,
 ) {
     commands.insert_resource(WallVisualHandles {
         stone_isolated: game_assets.wall_isolated.clone(),
@@ -207,13 +203,15 @@ pub fn init_visual_handles(
     let familiar_mesh = meshes.add(Rectangle::new(TILE_SIZE * 0.9, TILE_SIZE * 0.9));
 
     let wall_material = materials.add(StandardMaterial {
-        base_color: Color::srgb(0.55, 0.55, 0.55),
-        unlit: true,
+        base_color: Color::srgb(0.56, 0.44, 0.3),
+        perceptual_roughness: 1.0,
+        reflectance: 0.0,
         ..default()
     });
     let wall_provisional_material = materials.add(StandardMaterial {
-        base_color: Color::srgba(1.0, 0.75, 0.4, 0.85),
-        unlit: true,
+        base_color: Color::srgba(0.95, 0.72, 0.45, 0.9),
+        perceptual_roughness: 1.0,
+        reflectance: 0.0,
         alpha_mode: AlphaMode::Blend,
         ..default()
     });
@@ -225,17 +223,20 @@ pub fn init_visual_handles(
     });
     let floor_material = materials.add(StandardMaterial {
         base_color: Color::srgb(0.4, 0.3, 0.2),
-        unlit: true,
+        perceptual_roughness: 1.0,
+        reflectance: 0.0,
         ..default()
     });
     let door_material = materials.add(StandardMaterial {
         base_color: Color::srgb(0.6, 0.45, 0.2),
-        unlit: true,
+        perceptual_roughness: 1.0,
+        reflectance: 0.0,
         ..default()
     });
     let equipment_material = materials.add(StandardMaterial {
         base_color: Color::srgb(0.3, 0.5, 0.6),
-        unlit: true,
+        perceptual_roughness: 1.0,
+        reflectance: 0.0,
         ..default()
     });
     let familiar_material = materials.add(StandardMaterial {
@@ -263,7 +264,7 @@ pub fn init_visual_handles(
         soul_scene: game_assets.soul_scene.clone(),
         familiar_mesh,
         familiar_material,
-        render_layers: RenderLayers::layer(LAYER_3D),
+        render_layers: building_3d_render_layers(),
     });
 
     commands.insert_resource(CharacterHandles {
@@ -272,31 +273,10 @@ pub fn init_visual_handles(
         soul_face_material: character_materials.add(CharacterMaterial::face(
             game_assets.soul_face_atlas.clone(),
             LinearRgba::WHITE,
-            Vec2::new(
-                SOUL_FACE_BASE_CROP_SIZE_PX
-                    / SOUL_FACE_TEXTURE_MAGNIFICATION
-                    / SOUL_FACE_CELL_SIZE_PX
-                    / SOUL_FACE_ATLAS_COLUMNS,
-                SOUL_FACE_BASE_CROP_SIZE_PX
-                    / SOUL_FACE_TEXTURE_MAGNIFICATION
-                    / SOUL_FACE_CELL_SIZE_PX
-                    / SOUL_FACE_ATLAS_ROWS,
-            ),
-            Vec2::new(
-                (SOUL_FACE_BASE_CROP_OFFSET_X_PX
-                    + (SOUL_FACE_BASE_CROP_SIZE_PX
-                        - SOUL_FACE_BASE_CROP_SIZE_PX / SOUL_FACE_TEXTURE_MAGNIFICATION)
-                        * 0.5)
-                    / SOUL_FACE_CELL_SIZE_PX
-                    / SOUL_FACE_ATLAS_COLUMNS,
-                (SOUL_FACE_BASE_CROP_OFFSET_Y_PX
-                    + (SOUL_FACE_BASE_CROP_SIZE_PX
-                        - SOUL_FACE_BASE_CROP_SIZE_PX / SOUL_FACE_TEXTURE_MAGNIFICATION)
-                        * 0.5)
-                    / SOUL_FACE_CELL_SIZE_PX
-                    / SOUL_FACE_ATLAS_ROWS,
-            ),
+            soul_face_uv_scale(),
+            soul_face_uv_offset(0.0, 0.0),
         )),
         soul_mask_material: soul_mask_materials.add(SoulMaskMaterial::solid_white()),
+        soul_shadow_proxy_material: soul_shadow_materials.add(SoulShadowMaterial::default()),
     });
 }

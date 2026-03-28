@@ -26,6 +26,55 @@ pub struct SoulMaskProxy3d {
     pub owner: Entity,
 }
 
+/// DamnedSoul エンティティに対応する shadow caster 専用 proxy のマーカー。
+#[derive(Component, Debug, Clone)]
+pub struct SoulShadowProxy3d {
+    pub owner: Entity,
+}
+
+#[derive(Component, Debug, Clone)]
+pub struct SoulAnimationPlayer3d {
+    pub owner: Entity,
+    pub current_body: SoulBodyAnimState,
+    pub walk_facing_right: Option<bool>,
+    pub last_owner_pos: Option<Vec2>,
+    pub walk_variant_lock_secs: f32,
+}
+
+#[derive(Component, Debug, Clone)]
+pub struct SoulFaceMaterial3d {
+    pub owner: Entity,
+    pub material: Handle<crate::CharacterMaterial>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SoulBodyAnimState {
+    #[default]
+    Idle,
+    Walk,
+    Work,
+    Carry,
+    Fear,
+    Exhausted,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SoulFaceState {
+    #[default]
+    Normal,
+    Fear,
+    Exhausted,
+    Focused,
+    Happy,
+    Sleep,
+}
+
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct SoulAnimVisualState {
+    pub body: SoulBodyAnimState,
+    pub face: SoulFaceState,
+}
+
 /// Familiar エンティティに対応する3Dプロキシのマーカー。
 #[derive(Component, Debug, Clone)]
 pub struct FamiliarProxy3d {

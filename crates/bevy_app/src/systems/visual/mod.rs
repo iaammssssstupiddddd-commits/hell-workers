@@ -9,6 +9,7 @@ pub mod building3d_cleanup;
 pub mod camera_sync;
 pub mod character_proxy_3d;
 pub mod elevation_view;
+pub mod soul_animation;
 pub mod wall_orientation_aid;
 pub mod floor_construction {
     pub use hw_visual::floor_construction::{

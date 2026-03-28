@@ -1,17 +1,7 @@
 //! Soul GLB Visual Test Scene
 //!
 //! ゲーム本体とは独立して、表情アトラス・モーション・Z-fight を検証する。
-//!
-//! 操作:
-//!   [1]-[6]   表情切り替え (Normal/Fear/Exhausted/Concentration/Happy/Sleep)
-//!   [A]       全表情モード (各 Soul に異なる表情を自動割当)
-//!   [+/=]     Soul 追加 (最大 6)
-//!   [-]       Soul 削除
-//!   [M]       モーション切り替え
-//!   [R]       全ポジションリセット
-//!   [←→↑↓]   選択 Soul の移動
-//!   [Tab]     Soul 選択切り替え
-//!   [Esc]     終了
+//! 右側のメニューパネルに操作一覧と現在値を常時表示。[H] でパネルを折りたたみ。
 //!
 //! ```bash
 //! CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo run --example visual_test -p bevy_app
@@ -19,22 +9,52 @@
 
 use bevy::camera::visibility::RenderLayers;
 use bevy::camera::{ClearColorConfig, RenderTarget};
-use bevy::gltf::GltfMeshName;
+use bevy::camera_controller::pan_camera::{PanCamera, PanCameraPlugin};
+use bevy::gltf::{Gltf, GltfMeshName};
+use bevy::light::{CascadeShadowConfigBuilder, DirectionalLightShadowMap, NotShadowCaster, NotShadowReceiver};
 use bevy::mesh::Mesh3d;
 use bevy::pbr::{MaterialPlugin, MeshMaterial3d, StandardMaterial};
 use bevy::prelude::*;
 use bevy::render::render_resource::TextureFormat;
 use bevy::scene::SceneInstanceReady;
 use bevy::window::PrimaryWindow;
+use std::fmt::Write as _;
+use std::time::Duration;
 
 use hw_core::constants::{
-    LAYER_3D, LAYER_OVERLAY, SOUL_FACE_SCALE_MULTIPLIER, SOUL_GLB_SCALE, VIEW_HEIGHT, Z_OFFSET,
+    LAYER_2D, LAYER_3D, LAYER_3D_SHADOW_RECEIVER, LAYER_3D_SOUL_SHADOW, LAYER_OVERLAY, MAP_HEIGHT,
+    MAP_WIDTH, SOUL_FACE_SCALE_MULTIPLIER, SOUL_GLB_SCALE,
+    SOUL_SHADOW_PROXY_PITCH_CORRECTION_DEGREES, TILE_SIZE, VIEW_HEIGHT, Z_MAP, Z_MAP_DIRT,
+    Z_MAP_GRASS, Z_MAP_SAND, Z_OFFSET, topdown_sun_direction_world,
 };
-use hw_visual::CharacterMaterial;
+use hw_visual::{CharacterMaterial, SoulShadowMaterial};
+use hw_visual::visual3d::SoulShadowProxy3d;
+use hw_world::{TerrainType, generate_base_terrain_tiles, grid_to_world, SAND_WIDTH};
 
 // ─── Constants ─────────────────────────────────────────────────────────────
 
 const SOUL_SPACING: f32 = SOUL_GLB_SCALE * 2.5;
+const MENU_WIDTH: f32 = 270.0;
+
+/// GLB に含まれるアニメーションクリップ名（[Q] で順番に切り替え）
+const ANIM_CLIP_NAMES: &[&str] = &[
+    "Idle",
+    "Walk",
+    "Work",
+    "Carry",
+    "Fear",
+    "Exhausted",
+    "WalkLeft",
+    "WalkRight",
+];
+
+/// `CharacterMaterial::body` のデフォルト値（[P] リセット用）
+const DEFAULT_GHOST_ALPHA: f32 = 1.0;
+const DEFAULT_RIM_STRENGTH: f32 = 0.28;
+const DEFAULT_POSTERIZE_STEPS: f32 = 4.0;
+
+/// 矢視（Elevation）モード時の Camera3d のシーン中心からの距離
+const ELEV_DISTANCE: f32 = 200.0;
 
 // ─── Face atlas constants (mirrors visual_handles.rs) ──────────────────────
 
@@ -120,6 +140,15 @@ enum MotionMode {
 }
 
 impl MotionMode {
+    const ALL: [Self; 6] = [
+        Self::Idle,
+        Self::FloatingBob,
+        Self::Sleeping,
+        Self::Resting,
+        Self::Escaping,
+        Self::Dancing,
+    ];
+
     fn next(self) -> Self {
         match self {
             Self::Idle => Self::FloatingBob,
@@ -143,10 +172,90 @@ impl MotionMode {
     }
 }
 
+/// 矢視方向（ゲーム本体の ElevationDirection 相当）
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+enum TestElevDir {
+    #[default]
+    TopDown,
+    North,
+    East,
+    South,
+    West,
+}
+
+impl TestElevDir {
+    fn next(self) -> Self {
+        match self {
+            Self::TopDown => Self::North,
+            Self::North => Self::East,
+            Self::East => Self::South,
+            Self::South => Self::West,
+            Self::West => Self::TopDown,
+        }
+    }
+
+    fn label(self) -> &'static str {
+        match self {
+            Self::TopDown => "TopDown",
+            Self::North => "North",
+            Self::East => "East",
+            Self::South => "South",
+            Self::West => "West",
+        }
+    }
+
+    fn is_top_down(self) -> bool {
+        self == Self::TopDown
+    }
+
+    fn camera_rotation(self, view_height: f32, z_offset: f32) -> Quat {
+        match self {
+            Self::TopDown => {
+                Transform::from_xyz(0.0, view_height, z_offset)
+                    .looking_at(Vec3::ZERO, Vec3::NEG_Z)
+                    .rotation
+            }
+            Self::North => {
+                Transform::from_xyz(0.0, 0.0, 1.0)
+                    .looking_at(Vec3::ZERO, Vec3::Y)
+                    .rotation
+            }
+            Self::South => {
+                Transform::from_xyz(0.0, 0.0, -1.0)
+                    .looking_at(Vec3::ZERO, Vec3::Y)
+                    .rotation
+            }
+            Self::East => {
+                Transform::from_xyz(1.0, 0.0, 0.0)
+                    .looking_at(Vec3::ZERO, Vec3::Y)
+                    .rotation
+            }
+            Self::West => {
+                Transform::from_xyz(-1.0, 0.0, 0.0)
+                    .looking_at(Vec3::ZERO, Vec3::Y)
+                    .rotation
+            }
+        }
+    }
+}
+
+/// 矢視状態リソース（ゲーム本体の ElevationViewState 相当）
+#[derive(Resource, Default)]
+struct TestElev {
+    dir: TestElevDir,
+}
+
 // ─── Components / Resources ────────────────────────────────────────────────
 
 #[derive(Component)]
 struct Camera3dRtt;
+
+/// PanCamera（WASD パン・スクロールズーム）を持つ Camera2d のマーカー
+#[derive(Component)]
+struct TestMainCamera;
+
+#[derive(Component)]
+struct CompositeSprite;
 
 #[derive(Component)]
 struct TestSoulConfig {
@@ -158,14 +267,43 @@ struct TestSoulConfig {
 #[derive(Component)]
 struct SelectedSoul;
 
+/// 右サイドメニューパネルのルートノード
 #[derive(Component)]
-struct HudText;
+struct MenuPanel;
+
+/// メニューパネル内のテキスト
+#[derive(Component)]
+struct MenuText;
+
+/// パネル非表示時に右上に表示する「[H] メニュー表示」ヒント
+#[derive(Component)]
+struct MenuHint;
+
+/// ワールドマップタイルのマーカーコンポーネント。
+#[derive(Component)]
+struct WorldMapTile;
+
+/// ソウルのシャドウプロキシが使用するシャドウマテリアルを保持するコンポーネント。
+#[derive(Component)]
+struct SoulShadowConfig {
+    shadow_mat: Handle<SoulShadowMaterial>,
+}
+
+/// アニメーション再生に必要な情報を Soul ルートエンティティに保持するコンポーネント。
+#[derive(Component)]
+struct SoulAnimHandle {
+    anim_player_entity: Entity,
+    clips: Vec<(&'static str, AnimationNodeIndex)>,
+    current_playing: usize,
+}
 
 #[derive(Resource)]
 struct TestAssets {
     soul_scene: Handle<Scene>,
     face_atlas: Handle<Image>,
     white_pixel: Handle<Image>,
+    gltf_handle: Handle<Gltf>,
+    soul_shadow_material: Handle<SoulShadowMaterial>,
 }
 
 #[derive(Resource)]
@@ -174,6 +312,13 @@ struct TestState {
     motion: MotionMode,
     soul_count: usize,
     next_index: usize,
+    anim_clip_idx: usize,
+    view_height: f32,
+    z_offset: f32,
+    ghost_alpha: f32,
+    rim_strength: f32,
+    posterize_steps: f32,
+    menu_visible: bool,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -189,9 +334,30 @@ impl Default for TestState {
             motion: MotionMode::Idle,
             soul_count: 0,
             next_index: 0,
+            anim_clip_idx: 0,
+            view_height: VIEW_HEIGHT,
+            z_offset: Z_OFFSET,
+            ghost_alpha: DEFAULT_GHOST_ALPHA,
+            rim_strength: DEFAULT_RIM_STRENGTH,
+            posterize_steps: DEFAULT_POSTERIZE_STEPS,
+            menu_visible: true,
         }
     }
 }
+
+// ─── Query type aliases ────────────────────────────────────────────────────
+
+type AnimPlayerQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static mut AnimationPlayer,
+        &'static mut AnimationTransitions,
+    ),
+>;
+
+type Cam3dSyncQuery<'w, 's> =
+    Query<'w, 's, (&'static mut Transform, &'static mut Projection), With<Camera3dRtt>>;
 
 // ─── Plugin ────────────────────────────────────────────────────────────────
 
@@ -199,13 +365,30 @@ struct VisualTestPlugin;
 
 impl Plugin for VisualTestPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<TestState>()
-            .add_systems(Startup, setup_scene)
-            .add_observer(on_soul_scene_ready)
-            .add_systems(
-                Update,
-                (keyboard_input, apply_faces, apply_motion, update_hud).chain(),
-            );
+        app.add_plugins((
+            PanCameraPlugin,
+            MaterialPlugin::<SoulShadowMaterial>::default(),
+        ))
+        .init_resource::<TestState>()
+        .init_resource::<TestElev>()
+        .add_systems(Startup, (setup_scene, setup_world_map))
+        .add_observer(on_soul_scene_ready)
+        .add_observer(on_shadow_scene_ready)
+        .add_systems(
+            Update,
+            (
+                keyboard_input,
+                sync_test_camera3d,
+                apply_faces,
+                apply_motion,
+                apply_animation,
+                apply_shader_params,
+                apply_composite_sprite,
+                apply_menu_visibility,
+                update_hud,
+            )
+                .chain(),
+        );
     }
 }
 
@@ -216,9 +399,12 @@ fn setup_scene(
     asset_server: Res<AssetServer>,
     mut images: ResMut<Assets<Image>>,
     mut character_materials: ResMut<Assets<CharacterMaterial>>,
+    mut soul_shadow_materials: ResMut<Assets<SoulShadowMaterial>>,
     q_window: Query<&Window, With<PrimaryWindow>>,
     mut state: ResMut<TestState>,
 ) {
+    commands.insert_resource(DirectionalLightShadowMap { size: 4096 });
+
     // --- RtT texture ---
     let (w, h) = q_window
         .single()
@@ -254,8 +440,34 @@ fn setup_scene(
         Camera3dRtt,
     ));
 
-    // --- Camera2d (main screen output) ---
-    commands.spawn((Camera2d, RenderLayers::layer(LAYER_OVERLAY)));
+    // --- Camera2d (TestMainCamera: W/A/S/D パン + スクロールズーム) ---
+    commands.spawn((
+        Camera2d,
+        Camera {
+            order: 0,
+            ..default()
+        },
+        RenderLayers::layer(LAYER_2D),
+        TestMainCamera,
+        PanCamera {
+            key_rotate_ccw: None, // [Q] はアニメーション切替に使用
+            key_rotate_cw: None,
+            key_zoom_in: None,  // [=] は Soul 追加に使用
+            key_zoom_out: None, // [-] は Soul 削除に使用
+            ..Default::default()
+        },
+    ));
+
+    // --- Camera2d (overlay: composite sprite + UI) ---
+    commands.spawn((
+        Camera2d,
+        Camera {
+            order: 1,
+            clear_color: ClearColorConfig::None,
+            ..default()
+        },
+        RenderLayers::layer(LAYER_OVERLAY),
+    ));
 
     // --- Composite sprite ---
     commands.spawn((
@@ -270,11 +482,13 @@ fn setup_scene(
         },
         Transform::from_xyz(0.0, 0.0, 0.0),
         RenderLayers::layer(LAYER_OVERLAY),
+        CompositeSprite,
     ));
 
     // --- Assets ---
     let soul_scene =
         asset_server.load(GltfAssetLabel::Scene(0).from_asset("models/characters/soul.glb"));
+    let gltf_handle: Handle<Gltf> = asset_server.load("models/characters/soul.glb");
     let face_atlas = asset_server.load("textures/character/soul_face_atlas.png");
     let white_pixel = images.add(Image::new(
         bevy::render::render_resource::Extent3d {
@@ -288,11 +502,32 @@ fn setup_scene(
         default(),
     ));
     let font: Handle<Font> = asset_server.load("fonts/NotoSansJP-VF.ttf");
+    let soul_shadow_material = soul_shadow_materials.add(SoulShadowMaterial::default());
+
+    // --- Directional light (production-equivalent shadow setup) ---
+    let sun_dir = topdown_sun_direction_world();
+    commands.spawn((
+        DirectionalLight {
+            shadows_enabled: true,
+            illuminance: 12_000.0,
+            ..default()
+        },
+        Transform::from_translation(sun_dir * 360.0).looking_at(Vec3::ZERO, Vec3::Y),
+        CascadeShadowConfigBuilder {
+            first_cascade_far_bound: 120.0,
+            maximum_distance: 500.0,
+            ..default()
+        }
+        .build(),
+        RenderLayers::from_layers(&[LAYER_3D, LAYER_3D_SHADOW_RECEIVER, LAYER_3D_SOUL_SHADOW]),
+    ));
 
     commands.insert_resource(TestAssets {
         soul_scene: soul_scene.clone(),
         face_atlas: face_atlas.clone(),
         white_pixel: white_pixel.clone(),
+        gltf_handle,
+        soul_shadow_material: soul_shadow_material.clone(),
     });
 
     // --- Spawn initial 3 souls ---
@@ -304,6 +539,7 @@ fn setup_scene(
                 soul_scene: &soul_scene,
                 face_atlas: &face_atlas,
                 white_pixel: &white_pixel,
+                soul_shadow_material: &soul_shadow_material,
                 x: (i as f32 - 1.0) * SOUL_SPACING,
                 z: 0.0,
                 index: state.next_index,
@@ -315,30 +551,89 @@ fn setup_scene(
         state.soul_count += 1;
     }
 
-    // --- HUD ---
+    // --- Right-side menu panel ---
     commands
-        .spawn(Node {
-            position_type: PositionType::Absolute,
-            bottom: Val::Px(10.0),
-            left: Val::Px(10.0),
-            flex_direction: FlexDirection::Column,
-            ..default()
-        })
+        .spawn((
+            Node {
+                position_type: PositionType::Absolute,
+                right: Val::Px(0.0),
+                top: Val::Px(0.0),
+                width: Val::Px(MENU_WIDTH),
+                height: Val::Percent(100.0),
+                padding: UiRect::all(Val::Px(10.0)),
+                flex_direction: FlexDirection::Column,
+                overflow: Overflow::clip(),
+                ..default()
+            },
+            BackgroundColor(Color::srgba(0.04, 0.04, 0.04, 0.82)),
+            MenuPanel,
+        ))
         .with_children(|parent| {
             parent.spawn((
                 Text::new(""),
                 TextFont {
-                    font,
-                    font_size: 16.0,
+                    font: font.clone(),
+                    font_size: 12.0,
                     ..default()
                 },
-                TextColor(Color::WHITE),
-                HudText,
+                TextColor(Color::srgb(0.92, 0.92, 0.92)),
+                MenuText,
             ));
         });
+
+    // --- Hint shown when panel is collapsed ---
+    commands.spawn((
+        Text::new("[H] メニュー表示"),
+        TextFont {
+            font,
+            font_size: 13.0,
+            ..default()
+        },
+        TextColor(Color::srgba(1.0, 1.0, 1.0, 0.55)),
+        Node {
+            position_type: PositionType::Absolute,
+            top: Val::Px(8.0),
+            right: Val::Px(8.0),
+            ..default()
+        },
+        Visibility::Hidden,
+        MenuHint,
+    ));
 }
 
-// ─── Soul spawning ─────────────────────────────────────────────────────────
+fn setup_world_map(mut commands: Commands, asset_server: Res<AssetServer>) {
+    let grass = asset_server.load("textures/grass.png");
+    let dirt = asset_server.load("textures/dirt.png");
+    let river = asset_server.load("textures/river.png");
+    let sand = asset_server.load("textures/sand_terrain.png");
+
+    let terrain = generate_base_terrain_tiles(MAP_WIDTH, MAP_HEIGHT, SAND_WIDTH);
+
+    for y in 0..MAP_HEIGHT {
+        for x in 0..MAP_WIDTH {
+            let idx = (y * MAP_WIDTH + x) as usize;
+            let (texture, z) = match terrain[idx] {
+                TerrainType::Grass => (grass.clone(), Z_MAP_GRASS),
+                TerrainType::Dirt => (dirt.clone(), Z_MAP_DIRT),
+                TerrainType::River => (river.clone(), Z_MAP),
+                TerrainType::Sand => (sand.clone(), Z_MAP_SAND),
+            };
+            let pos = grid_to_world(x, y);
+            commands.spawn((
+                Sprite {
+                    image: texture,
+                    custom_size: Some(Vec2::splat(TILE_SIZE)),
+                    ..default()
+                },
+                Transform::from_xyz(pos.x, pos.y, z),
+                RenderLayers::layer(LAYER_2D),
+                WorldMapTile,
+            ));
+        }
+    }
+}
+
+// ─── Soul spawning ──────────────────────────────────────────────────────────
 
 const MAX_SOULS: usize = 6;
 
@@ -346,6 +641,7 @@ struct SoulSpawnArgs<'a> {
     soul_scene: &'a Handle<Scene>,
     face_atlas: &'a Handle<Image>,
     white_pixel: &'a Handle<Image>,
+    soul_shadow_material: &'a Handle<SoulShadowMaterial>,
     x: f32,
     z: f32,
     index: usize,
@@ -379,9 +675,25 @@ fn spawn_test_soul(
     if args.selected {
         entity.insert(SelectedSoul);
     }
+    let soul_entity = entity.id();
+
+    // Shadow proxy — matches production SoulShadowProxy3d spawn
+    commands.spawn((
+        SceneRoot(args.soul_scene.clone()),
+        Transform::from_xyz(args.x, 0.0, args.z)
+            .with_scale(Vec3::splat(SOUL_GLB_SCALE))
+            .with_rotation(Quat::from_rotation_x(
+                SOUL_SHADOW_PROXY_PITCH_CORRECTION_DEGREES.to_radians(),
+            )),
+        RenderLayers::from_layers(&[LAYER_3D, LAYER_3D_SOUL_SHADOW]),
+        SoulShadowProxy3d { owner: soul_entity },
+        SoulShadowConfig {
+            shadow_mat: args.soul_shadow_material.clone(),
+        },
+    ));
 }
 
-// ─── GLB material replacement observer ─────────────────────────────────────
+// ─── GLB material replacement + animation setup observer ───────────────────
 
 #[allow(clippy::too_many_arguments)]
 fn on_soul_scene_ready(
@@ -392,6 +704,10 @@ fn on_soul_scene_ready(
     q_names: Query<&Name>,
     q_meshes: Query<(), With<Mesh3d>>,
     q_transforms: Query<&Transform>,
+    q_anim_players: Query<(), With<AnimationPlayer>>,
+    assets: Option<Res<TestAssets>>,
+    gltfs: Res<Assets<Gltf>>,
+    mut anim_graphs: ResMut<Assets<AnimationGraph>>,
     mut commands: Commands,
 ) {
     let Ok(config) = q_configs.get(scene_ready.entity) else {
@@ -399,9 +715,15 @@ fn on_soul_scene_ready(
     };
 
     let render_layers = RenderLayers::layer(LAYER_3D);
+    let mut anim_player_entity: Option<Entity> = None;
+
     for child in q_children.iter_descendants(scene_ready.entity) {
         let mut entity_commands = commands.entity(child);
         entity_commands.insert(render_layers.clone());
+
+        if q_anim_players.get(child).is_ok() {
+            anim_player_entity = Some(child);
+        }
 
         if q_meshes.get(child).is_err() {
             continue;
@@ -421,7 +743,10 @@ fn on_soul_scene_ready(
             }
             entity_commands
                 .remove::<MeshMaterial3d<StandardMaterial>>()
-                .insert(MeshMaterial3d(config.face_mat.clone()));
+                .insert((
+                    MeshMaterial3d(config.face_mat.clone()),
+                    NotShadowCaster,
+                ));
             continue;
         }
 
@@ -431,7 +756,76 @@ fn on_soul_scene_ready(
         if is_body_mesh {
             entity_commands
                 .remove::<MeshMaterial3d<StandardMaterial>>()
-                .insert(MeshMaterial3d::<CharacterMaterial>(config.body_mat.clone()));
+                .insert((
+                    MeshMaterial3d::<CharacterMaterial>(config.body_mat.clone()),
+                    NotShadowCaster,
+                ));
+        }
+    }
+
+    // ── アニメーション設定 ──────────────────────────────────────────────────
+    let Some(player_entity) = anim_player_entity else {
+        return;
+    };
+    let Some(ref assets) = assets else {
+        return;
+    };
+    let Some(gltf) = gltfs.get(&assets.gltf_handle) else {
+        return;
+    };
+
+    let mut graph = AnimationGraph::new();
+    let clips: Vec<(&'static str, AnimationNodeIndex)> = ANIM_CLIP_NAMES
+        .iter()
+        .filter_map(|name| {
+            gltf.named_animations
+                .get(*name)
+                .cloned()
+                .map(|clip| (*name, graph.add_clip(clip, 1.0, graph.root)))
+        })
+        .collect();
+
+    if clips.is_empty() {
+        return;
+    }
+
+    let graph_handle = anim_graphs.add(graph);
+    commands.entity(player_entity).insert((
+        AnimationGraphHandle(graph_handle),
+        AnimationTransitions::new(),
+    ));
+
+    commands.entity(scene_ready.entity).insert(SoulAnimHandle {
+        anim_player_entity: player_entity,
+        clips,
+        current_playing: usize::MAX,
+    });
+}
+
+// ─── Shadow proxy GLB material replacement observer ──────────────────────────
+
+fn on_shadow_scene_ready(
+    scene_ready: On<SceneInstanceReady>,
+    q_configs: Query<&SoulShadowConfig>,
+    q_children: Query<&Children>,
+    q_meshes: Query<(), With<Mesh3d>>,
+    mut commands: Commands,
+) {
+    let Ok(config) = q_configs.get(scene_ready.entity) else {
+        return;
+    };
+
+    let render_layers = RenderLayers::from_layers(&[LAYER_3D, LAYER_3D_SOUL_SHADOW]);
+
+    for child in q_children.iter_descendants(scene_ready.entity) {
+        let mut entity_commands = commands.entity(child);
+        entity_commands.insert((render_layers.clone(), NotShadowReceiver));
+        entity_commands.remove::<NotShadowCaster>();
+
+        if q_meshes.get(child).is_ok() {
+            entity_commands
+                .remove::<MeshMaterial3d<StandardMaterial>>()
+                .insert(MeshMaterial3d(config.shadow_mat.clone()));
         }
     }
 }
@@ -442,6 +836,7 @@ fn on_soul_scene_ready(
 fn keyboard_input(
     keys: Res<ButtonInput<KeyCode>>,
     mut state: ResMut<TestState>,
+    mut elev: ResMut<TestElev>,
     mut commands: Commands,
     assets: Option<Res<TestAssets>>,
     mut character_materials: ResMut<Assets<CharacterMaterial>>,
@@ -451,13 +846,18 @@ fn keyboard_input(
         &TestSoulConfig,
         Option<&SelectedSoul>,
     )>,
+    q_anim_handles: Query<&SoulAnimHandle>,
     mut exit: MessageWriter<AppExit>,
     time: Res<Time>,
 ) {
-    // Esc → quit
     if keys.just_pressed(KeyCode::Escape) {
         exit.write(AppExit::Success);
         return;
+    }
+
+    // [H] → メニュー表示切り替え
+    if keys.just_pressed(KeyCode::KeyH) {
+        state.menu_visible = !state.menu_visible;
     }
 
     // Face expression keys [1]-[6]
@@ -476,14 +876,74 @@ fn keyboard_input(
         }
     }
 
-    // [A] → all-different mode
-    if keys.just_pressed(KeyCode::KeyA) {
+    // [G] → all-different mode ([A] は PanCamera パン左に使用)
+    if keys.just_pressed(KeyCode::KeyG) {
         state.face_mode = FaceMode::AllDifferent;
     }
 
     // [M] → cycle motion
     if keys.just_pressed(KeyCode::KeyM) {
         state.motion = state.motion.next();
+    }
+
+    // [Q] → cycle animation clip
+    if keys.just_pressed(KeyCode::KeyQ) {
+        let num_clips = q_anim_handles
+            .iter()
+            .next()
+            .map(|h| h.clips.len())
+            .unwrap_or(ANIM_CLIP_NAMES.len());
+        if num_clips > 0 {
+            state.anim_clip_idx = (state.anim_clip_idx + 1) % num_clips;
+        }
+    }
+
+    // Shader params
+    if keys.just_pressed(KeyCode::KeyZ) {
+        state.ghost_alpha = (state.ghost_alpha - 0.05).clamp(0.0, 1.0);
+    }
+    if keys.just_pressed(KeyCode::KeyX) {
+        state.ghost_alpha = (state.ghost_alpha + 0.05).clamp(0.0, 1.0);
+    }
+    if keys.just_pressed(KeyCode::KeyC) {
+        state.rim_strength = (state.rim_strength - 0.05).clamp(0.0, 2.0);
+    }
+    if keys.just_pressed(KeyCode::KeyF) {
+        state.rim_strength = (state.rim_strength + 0.05).clamp(0.0, 2.0);
+    }
+
+    // [V] → 矢視方向切替 (TopDown → North → East → South → West)
+    if keys.just_pressed(KeyCode::KeyV) {
+        elev.dir = elev.dir.next();
+    }
+    if keys.just_pressed(KeyCode::KeyB) {
+        state.posterize_steps = (state.posterize_steps - 1.0).clamp(1.0, 16.0);
+    }
+    if keys.just_pressed(KeyCode::KeyN) {
+        state.posterize_steps = (state.posterize_steps + 1.0).clamp(1.0, 16.0);
+    }
+    if keys.just_pressed(KeyCode::KeyP) {
+        state.ghost_alpha = DEFAULT_GHOST_ALPHA;
+        state.rim_strength = DEFAULT_RIM_STRENGTH;
+        state.posterize_steps = DEFAULT_POSTERIZE_STEPS;
+    }
+
+    // Camera angle
+    if keys.just_pressed(KeyCode::KeyJ) {
+        state.view_height = (state.view_height - 10.0).clamp(50.0, 400.0);
+    }
+    if keys.just_pressed(KeyCode::KeyK) {
+        state.view_height = (state.view_height + 10.0).clamp(50.0, 400.0);
+    }
+    if keys.just_pressed(KeyCode::KeyU) {
+        state.z_offset = (state.z_offset - 10.0).clamp(0.0, 400.0);
+    }
+    if keys.just_pressed(KeyCode::KeyI) {
+        state.z_offset = (state.z_offset + 10.0).clamp(0.0, 400.0);
+    }
+    if keys.just_pressed(KeyCode::KeyO) {
+        state.view_height = VIEW_HEIGHT;
+        state.z_offset = Z_OFFSET;
     }
 
     // [R] → reset positions
@@ -518,6 +978,7 @@ fn keyboard_input(
                 soul_scene: &assets.soul_scene,
                 face_atlas: &assets.face_atlas,
                 white_pixel: &assets.white_pixel,
+                soul_shadow_material: &assets.soul_shadow_material,
                 x: (state.soul_count as f32 - 1.0) * SOUL_SPACING * 0.5,
                 z: 0.0,
                 index: state.next_index,
@@ -529,7 +990,7 @@ fn keyboard_input(
         state.soul_count += 1;
     }
 
-    // [-] → remove last soul (non-selected preferred)
+    // [-] → remove last soul
     if keys.just_pressed(KeyCode::Minus) && state.soul_count > 1 {
         let mut candidates: Vec<_> = q_souls
             .iter()
@@ -538,7 +999,6 @@ fn keyboard_input(
         candidates.sort_by_key(|(_, idx, selected)| {
             (std::cmp::Reverse(*selected as u8), std::cmp::Reverse(*idx))
         });
-        // Pick the first non-selected with highest index, or the highest index if all selected
         if let Some(&(entity, _, _)) = candidates.first() {
             commands.entity(entity).despawn();
             state.soul_count -= 1;
@@ -552,15 +1012,12 @@ fn keyboard_input(
             .map(|(e, _, cfg, sel)| (e, cfg.index, sel.is_some()))
             .collect();
         sorted.sort_by_key(|(_, idx, _)| *idx);
-
         let current = sorted.iter().position(|(_, _, sel)| *sel);
-        // Remove current selection
         for &(entity, _, sel) in &sorted {
             if sel {
                 commands.entity(entity).remove::<SelectedSoul>();
             }
         }
-        // Select next
         let next_idx = current.map(|i| (i + 1) % sorted.len()).unwrap_or(0);
         if let Some(&(entity, _, _)) = sorted.get(next_idx) {
             commands.entity(entity).insert(SelectedSoul);
@@ -597,7 +1054,6 @@ fn apply_faces(
 ) {
     let mut sorted: Vec<_> = q_souls.iter().collect();
     sorted.sort_by_key(|cfg| cfg.index);
-
     for (i, config) in sorted.iter().enumerate() {
         let expr = match state.face_mode {
             FaceMode::Single(e) => e,
@@ -618,7 +1074,6 @@ fn apply_motion(
 ) {
     let t = time.elapsed_secs();
     let base_scale = SOUL_GLB_SCALE;
-
     for mut tf in q_souls.iter_mut() {
         match state.motion {
             MotionMode::Idle => {
@@ -654,35 +1109,262 @@ fn apply_motion(
     }
 }
 
-// ─── HUD update ────────────────────────────────────────────────────────────
+// ─── Animation application ─────────────────────────────────────────────────
+
+fn apply_animation(
+    state: Res<TestState>,
+    mut q_anim: Query<&mut SoulAnimHandle>,
+    mut q_players: AnimPlayerQuery,
+) {
+    for mut handle in q_anim.iter_mut() {
+        if handle.current_playing == state.anim_clip_idx {
+            continue;
+        }
+        let Some(&(_, new_node)) = handle.clips.get(state.anim_clip_idx) else {
+            continue;
+        };
+        let Ok((mut player, mut transitions)) = q_players.get_mut(handle.anim_player_entity) else {
+            continue;
+        };
+        transitions
+            .play(&mut player, new_node, Duration::ZERO)
+            .repeat();
+        handle.current_playing = state.anim_clip_idx;
+    }
+}
+
+// ─── Shader parameter application ──────────────────────────────────────────
+
+fn apply_shader_params(
+    state: Res<TestState>,
+    q_souls: Query<&TestSoulConfig, With<SelectedSoul>>,
+    mut materials: ResMut<Assets<CharacterMaterial>>,
+) {
+    let Ok(config) = q_souls.single() else {
+        return;
+    };
+    if let Some(mat) = materials.get_mut(&config.body_mat) {
+        mat.params.ghost_alpha = state.ghost_alpha;
+        mat.params.rim_strength = state.rim_strength;
+        mat.params.posterize_steps = state.posterize_steps;
+    }
+}
+
+// ─── Camera3d ↔ Camera2d 同期（ゲームの sync_camera3d_system 相当） ──────────
+
+fn sync_test_camera3d(
+    state: Res<TestState>,
+    elev: Res<TestElev>,
+    q_cam2d: Query<&Transform, (With<TestMainCamera>, Without<Camera3dRtt>)>,
+    mut q_cam3d: Cam3dSyncQuery,
+) {
+    let Ok(cam2d) = q_cam2d.single() else {
+        return;
+    };
+    let scene_z = -cam2d.translation.y; // 2D y → 3D z 変換
+
+    for (mut cam3d, mut projection) in &mut q_cam3d {
+        let soul_mid_y = SOUL_GLB_SCALE * 0.5;
+        match elev.dir {
+            TestElevDir::TopDown => {
+                cam3d.translation.x = cam2d.translation.x;
+                cam3d.translation.y = state.view_height;
+                cam3d.translation.z = scene_z + state.z_offset;
+                cam3d.rotation = elev.dir.camera_rotation(state.view_height, state.z_offset);
+            }
+            TestElevDir::North => {
+                cam3d.translation.x = cam2d.translation.x;
+                cam3d.translation.y = soul_mid_y;
+                cam3d.translation.z = scene_z + ELEV_DISTANCE;
+                cam3d.rotation = elev.dir.camera_rotation(state.view_height, state.z_offset);
+            }
+            TestElevDir::South => {
+                cam3d.translation.x = cam2d.translation.x;
+                cam3d.translation.y = soul_mid_y;
+                cam3d.translation.z = scene_z - ELEV_DISTANCE;
+                cam3d.rotation = elev.dir.camera_rotation(state.view_height, state.z_offset);
+            }
+            TestElevDir::East => {
+                cam3d.translation.x = cam2d.translation.x + ELEV_DISTANCE;
+                cam3d.translation.y = soul_mid_y;
+                cam3d.translation.z = scene_z;
+                cam3d.rotation = elev.dir.camera_rotation(state.view_height, state.z_offset);
+            }
+            TestElevDir::West => {
+                cam3d.translation.x = cam2d.translation.x - ELEV_DISTANCE;
+                cam3d.translation.y = soul_mid_y;
+                cam3d.translation.z = scene_z;
+                cam3d.rotation = elev.dir.camera_rotation(state.view_height, state.z_offset);
+            }
+        }
+        cam3d.scale = Vec3::ONE;
+        if let Projection::Orthographic(ortho) = &mut *projection {
+            ortho.scale = cam2d.scale.x;
+        }
+    }
+}
+
+// ─── Composite sprite サイズ更新 ──────────────────────────────────────────────
+
+fn apply_composite_sprite(
+    state: Res<TestState>,
+    elev: Res<TestElev>,
+    mut q_sprite: Query<&mut Sprite, With<CompositeSprite>>,
+    q_window: Query<&Window, With<PrimaryWindow>>,
+) {
+    if !state.is_changed() && !elev.is_changed() {
+        return;
+    }
+    let Ok(mut sprite) = q_sprite.single_mut() else {
+        return;
+    };
+    let Ok(win) = q_window.single() else {
+        return;
+    };
+    let s = win.size();
+    let comp = if elev.dir.is_top_down() {
+        state.view_height.hypot(state.z_offset) / state.view_height
+    } else {
+        1.0
+    };
+    sprite.custom_size = Some(Vec2::new(s.x, s.y * comp));
+}
+
+// ─── Menu visibility ───────────────────────────────────────────────────────
+
+fn apply_menu_visibility(
+    state: Res<TestState>,
+    mut q_panel: Query<&mut Visibility, With<MenuPanel>>,
+    mut q_hint: Query<&mut Visibility, (With<MenuHint>, Without<MenuPanel>)>,
+) {
+    if !state.is_changed() {
+        return;
+    }
+    if let Ok(mut vis) = q_panel.single_mut() {
+        *vis = if state.menu_visible {
+            Visibility::Visible
+        } else {
+            Visibility::Hidden
+        };
+    }
+    if let Ok(mut vis) = q_hint.single_mut() {
+        *vis = if state.menu_visible {
+            Visibility::Hidden
+        } else {
+            Visibility::Visible
+        };
+    }
+}
+
+// ─── HUD / menu text update ────────────────────────────────────────────────
 
 fn update_hud(
     state: Res<TestState>,
-    q_selected: Query<&TestSoulConfig, With<SelectedSoul>>,
-    mut q_hud: Query<&mut Text, With<HudText>>,
+    elev: Res<TestElev>,
+    q_selected: Query<(&TestSoulConfig, Option<&SoulAnimHandle>), With<SelectedSoul>>,
+    q_players: Query<&AnimationPlayer>,
+    mut q_text: Query<&mut Text, With<MenuText>>,
 ) {
-    let Ok(mut text) = q_hud.single_mut() else {
+    if !state.menu_visible {
+        return;
+    }
+    let Ok(mut text) = q_text.single_mut() else {
         return;
     };
 
-    let face_label = match state.face_mode {
-        FaceMode::Single(e) => format!("Face: {}", e.label()),
-        FaceMode::AllDifferent => "Face: AllDifferent".to_string(),
-    };
-    let sel_label = q_selected
-        .single()
-        .ok()
-        .map(|c| format!("Soul #{}", c.index))
-        .unwrap_or_else(|| "None".to_string());
+    let selected = q_selected.single().ok();
+    let soul_label = selected
+        .map(|(c, _)| format!("Soul#{}", c.index))
+        .unwrap_or_else(|| "なし".to_string());
+    let anim_handle = selected.and_then(|(_, h)| h);
 
-    **text = format!(
-        "{} | Motion: {} | Selected: {} | Souls: {}/{}",
-        face_label,
-        state.motion.label(),
-        sel_label,
-        state.soul_count,
-        MAX_SOULS,
+    let anim_seek = anim_handle
+        .and_then(|h| h.clips.get(state.anim_clip_idx))
+        .map(|&(_, node)| {
+            q_players
+                .get(anim_handle.unwrap().anim_player_entity)
+                .ok()
+                .and_then(|p| p.animation(node))
+                .map(|a| a.seek_time())
+                .unwrap_or(0.0)
+        })
+        .unwrap_or(0.0);
+
+    let mut s = String::with_capacity(1024);
+
+    // ── ヘッダー ─────────────────────────────────────────────────────────────
+    let _ = writeln!(s, "━━ Visual Test ━━━━━━━━━━━━━━");
+    let _ = writeln!(
+        s,
+        " Souls:{}/{}   {soul_label}",
+        state.soul_count, MAX_SOULS
     );
+    let _ = writeln!(s, " [H] メニューを閉じる");
+
+    // ── 表情 ──────────────────────────────────────────────────────────────────
+    let _ = writeln!(s, "\n─ 表情  [1-6]  [G]:全体 ─────");
+    for (i, expr) in FaceExpression::ALL.iter().enumerate() {
+        let cur = matches!(state.face_mode, FaceMode::Single(e) if e == *expr);
+        let mark = if cur { "►" } else { " " };
+        let _ = writeln!(s, " {mark}[{}] {}", i + 1, expr.label());
+    }
+    let all_cur = matches!(state.face_mode, FaceMode::AllDifferent);
+    let all_mark = if all_cur { "►" } else { " " };
+    let _ = writeln!(s, " {all_mark}[G] 全表情モード");
+
+    // ── アニメーション ──────────────────────────────────────────────────────────
+    let _ = writeln!(s, "\n─ アニメーション  [Q]:次へ ───");
+    let num_clips = anim_handle
+        .map(|h| h.clips.len())
+        .unwrap_or(ANIM_CLIP_NAMES.len());
+    for i in 0..num_clips {
+        let name = anim_handle
+            .and_then(|h| h.clips.get(i))
+            .map(|(n, _)| *n)
+            .or_else(|| ANIM_CLIP_NAMES.get(i).copied())
+            .unwrap_or("?");
+        let mark = if i == state.anim_clip_idx { "►" } else { " " };
+        if i == state.anim_clip_idx {
+            let _ = writeln!(s, " {mark} {name}  ({anim_seek:.1}s)");
+        } else {
+            let _ = writeln!(s, " {mark} {name}");
+        }
+    }
+
+    // ── Transform モーション ─────────────────────────────────────────────────
+    let _ = writeln!(s, "\n─ Transform  [M]:次へ ────────");
+    for mode in MotionMode::ALL {
+        let mark = if mode == state.motion { "►" } else { " " };
+        let _ = writeln!(s, " {mark} {}", mode.label());
+    }
+
+    // ── シェーダー ───────────────────────────────────────────────────────────
+    let _ = writeln!(s, "\n─ シェーダー  [P]:reset ──────");
+    let _ = writeln!(s, " ghost_alpha   {:>5.2}  [Z]/[X]", state.ghost_alpha);
+    let _ = writeln!(s, " rim_strength  {:>5.2}  [C]/[F]", state.rim_strength);
+    let _ = writeln!(s, " posterize     {:>5.1}  [B]/[N]", state.posterize_steps);
+
+    // ── カメラ ────────────────────────────────────────────────────────────────
+    let _ = writeln!(s, "\n─ カメラ ────────────────────────");
+    let _ = writeln!(s, " [W/A/S/D]  パン");
+    let _ = writeln!(s, " [スクロール]  ズーム");
+    let _ = writeln!(s, " [V]        矢視切替");
+    let _ = writeln!(s, " 方向:  {}", elev.dir.label());
+    let _ = writeln!(s, "\n─ 仰角  [O]:reset ───────────");
+    let elev_deg = state.z_offset.atan2(state.view_height).to_degrees();
+    let _ = writeln!(s, " HEIGHT  {:>5.0}  [J]/[K]", state.view_height);
+    let _ = writeln!(s, " OFFSET  {:>5.0}  [U]/[I]", state.z_offset);
+    let _ = writeln!(s, " 仰角    {:>5.1}°", elev_deg);
+
+    // ── Soul 管理 ────────────────────────────────────────────────────────────
+    let _ = writeln!(s, "\n─ Soul管理 ───────────────────");
+    let _ = writeln!(s, " [=]/[-]   追加 / 削除");
+    let _ = writeln!(s, " [Tab]     選択切替");
+    let _ = writeln!(s, " [R]       位置リセット");
+    let _ = writeln!(s, " [←→↑↓]  移動");
+    let _ = writeln!(s, " [Esc]     終了");
+
+    **text = s;
 }
 
 // ─── main ──────────────────────────────────────────────────────────────────

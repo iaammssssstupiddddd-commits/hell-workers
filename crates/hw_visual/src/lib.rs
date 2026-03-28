@@ -32,9 +32,15 @@ pub use handles::{
     BuildingAnimHandles, GatheringVisualHandles, HaulItemHandles, MaterialIconHandles,
     PlantTreeHandles, SpeechHandles, WallVisualHandles, WorkIconHandles,
 };
-pub use material::{CharacterMaterial, SoulMaskMaterial};
+pub use material::{
+    CharacterMaterial, SoulMaskMaterial, SoulShadowMaterial, soul_face_uv_offset,
+    soul_face_uv_scale,
+};
 
-pub use visual3d::{Building3dVisual, FamiliarProxy3d, SoulMaskProxy3d, SoulProxy3d};
+pub use visual3d::{
+    Building3dVisual, FamiliarProxy3d, SoulAnimVisualState, SoulAnimationPlayer3d,
+    SoulBodyAnimState, SoulFaceMaterial3d, SoulFaceState, SoulMaskProxy3d, SoulProxy3d,
+};
 
 pub use task_area_visual::{TaskAreaMaterial, TaskAreaVisual};
 
@@ -55,6 +61,7 @@ impl Plugin for HwVisualPlugin {
             Material2dPlugin::<TaskAreaMaterial>::default(),
             MaterialPlugin::<material::CharacterMaterial>::default(),
             MaterialPlugin::<material::SoulMaskMaterial>::default(),
+            MaterialPlugin::<material::SoulShadowMaterial>::default(),
         ));
 
         app.add_plugins(speech::SpeechPlugin);

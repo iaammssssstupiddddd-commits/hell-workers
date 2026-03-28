@@ -155,9 +155,14 @@ Perceive → Update → Decide → Execute
 | Z軸レイヤー | `Z_MAP`, `Z_BUILDING_FLOOR`(0.05), `Z_BUILDING_STRUCT`(0.12), `Z_CHARACTER`, `Z_FLOATING_TEXT`, `Z_RTT_COMPOSITE`(20.0) |
 | Camera3d 高度 | `VIEW_HEIGHT`(150.0), `Z_OFFSET`(90.0) |
 | RenderLayer | `LAYER_2D`(0), `LAYER_3D`(1), `LAYER_OVERLAY`(2) |
+| TopDown sun 方向 | `topdown_sun_direction_world()` |
 | AI閾値 | `FATIGUE_GATHERING_THRESHOLD`, `MOTIVATION_THRESHOLD` |
 | バイタル増減率 | `FATIGUE_WORK_RATE`, `STRESS_RECOVERY_RATE_GATHERING` |
 | 移動・アニメーション | `SOUL_SPEED_BASE`, `ANIM_BOB_SPEED` |
+
+> **例外: Soul Energy 定数**
+> `OUTPUT_PER_SOUL`, `DREAM_CONSUME_RATE_GENERATING`, `OUTDOOR_LAMP_DEMAND` など Soul Energy 系の定数は
+> ドメイン専用 crate `hw_energy::constants` に集約されています（`hw_core` には含まれません）。
 
 ## RtT（Render-to-Texture）インフラ
 
@@ -217,6 +222,10 @@ Perceive → Update → Decide → Execute
 - 3D コンテンツのパンは Camera3d の Transform、ズームは `OrthographicProjection.scale` を `sync_camera3d_system` が毎フレーム更新することで実現する。
 - `RttCompositeSprite` マーカーコンポーネントが付与されており、`apply_render3d_visibility_system` が `Visibility` を制御する。
 - `RttCompositeMaterial` は通常の 3D RtT (`RttTextures.texture_3d`) と Soul 専用 mask RtT (`RttTextures.texture_soul_mask`) を同時に受け取り、最終合成時に Soul の輪郭を画面上で少し丸める。
+- 建築物 3D ビジュアルは `RenderLayers::from_layers(&[LAYER_3D, LAYER_3D_SHADOW_RECEIVER])` を使い、RtT Camera3d には見せつつ、影確認用 `DirectionalLight` からも shadow receiver として扱えるようにしている。
+- 表示用 Soul GLB は `LAYER_3D`、Soul shadow proxy は `LAYER_3D` と `LAYER_3D_SOUL_SHADOW` の両方に所属する。Bevy 0.18 の shadow queue は `camera_layers ∩ mesh_layers` を満たさない caster を落とすため、camera 非表示用の専用 layer だけでは shadow map に参加できない。shadow proxy は main view 側にも残しつつ、`SoulShadowMaterial` で通常描画だけ `discard` し、prepass / shadow pass では depth を書く。
+- TopDown の太陽方向は `hw_core::constants::topdown_sun_direction_world()` を単一の真実とし、検証用 `DirectionalLight` と `CharacterMaterial` の body shader の両方が同じ方向を使う。現在は画面手前側の壁面が完全な日陰にならないよう、真上寄りではなく前方寄りの斜光を採用している。
+- Bevy 0.18 の directional light は `light.render_layers` と camera の view layers が交差しないと、その view では一切使われない。RtT 用 `DirectionalLight` は caster/receiver 専用 layer に加えて `LAYER_3D` も持ち、`Camera3dRtt` 視点で light 自体が有効になるようにしている。
 
 `sync_rtt_output_bindings`（同ファイル、`Update` スケジュール）は `RttTextures` の変化を検知し、`Camera3dRtt.target` / `Camera3dSoulMaskRtt.target` と `RttCompositeMaterial` の参照テクスチャを同時に更新する。RtT テクスチャ自体は物理解像度で生成するが、合成メッシュのスケールは `PrimaryWindow` の logical size を基準にしつつ、斜め TopDown オーソ投影で圧縮される Y 方向を `topdown_rtt_vertical_compensation()` で補正する。`sync_rtt_texture_size_to_window` と `chain` で登録されているため、ウィンドウサイズ変更フレーム内で再生成後のテクスチャへ差し替わる。
 
@@ -227,14 +236,25 @@ Perceive → Update → Decide → Execute
 - `GameAssets.soul_scene` に `GltfAssetLabel::Scene(0).from_asset("models/characters/soul.glb")` を保持し、Soul spawn 時に `SceneRoot` として 3D シーンへ追加する。
 - Soul 本体エンティティは 2D `Sprite` を持たず、通常表示は GLB 側へ一本化している。従来の `animation_system` / `idle_visual_system` は `Sprite` を optional にして、Soul の状態更新を維持したまま 3D 表示へ移行している。
 - Soul の通常描画ルートとは別に、`SoulMaskProxy3d` が同じ `soul.glb` を `LAYER_3D_SOUL_MASK` へ複製スポーンする。`sync_soul_mask_proxy_3d_system` が本体と同じ 2D 位置へ同期し、Soul 専用 mask RtT の入力に使う。
+- `SoulShadowProxy3d` は shadow caster 専用の複製 root で、通常の Soul 表示とは分離して同期する。表示側 `mesh_body` / `mesh_face` には `NotShadowCaster` を付ける。
+- shadow proxy 側は `RenderLayers::from_layers(&[LAYER_3D, LAYER_3D_SOUL_SHADOW])` に所属し、`SoulShadowMaterial` を使って main pass では `discard`、prepass / shadow pass では depth のみを書く。Bevy 0.18 の shadow queue は `camera_layers ∩ mesh_layers` を満たさない caster を落とすため、shadow 専用 layer だけでは参加できない。main pass 側の不可視化は layer 分離ではなく material 側で行う。
+- shadow proxy root には表示用 Soul より前に起こした回転を入れ、影だけをより自然な upright silhouette に寄せる。face mesh も shadow proxy 側では不可視・非寄与にしている。
+- 仮 wall / floor / door / equipment 用 `StandardMaterial` は shadow receiver として働くように `unlit = false` の lit material にしている。見た目の破綻を避けるため、roughness を高く、reflectance を 0 に寄せている。
 - `hw_visual::CharacterMaterial` と `assets/shaders/character_material.wgsl` が Soul 用 custom material 経路を提供し、`AlphaMode::Blend` の透過付き描画を行う。現段階では section 連動や表情状態切り替えはまだ入れていない。
 - `apply_soul_gltf_render_layers_on_ready` が `SceneInstanceReady` を受けて Soul GLB の子孫へ `RenderLayers::layer(LAYER_3D)` を付与し、`mesh_body` / `mesh_face` の両方を `CharacterMaterial` へ差し替える。
 - `apply_soul_mask_gltf_render_layers_on_ready` が `SoulMaskProxy3d` の子孫へ `RenderLayers::layer(LAYER_3D_SOUL_MASK)` を付与し、すべてのメッシュを `SoulMaskMaterial` に差し替える。mask ルートは最終色を描かず、輪郭抽出専用の白単色 RtT だけを生成する。
 - `CharacterHandles` は Soul body/face 用の `Handle<CharacterMaterial>` と、Soul mask 用の `Handle<SoulMaskMaterial>` を保持する。`mesh_body` はリポジトリ内で生成する 1x1 白テクスチャを使い、shader 側で青白い base/shadow 色、簡易ポスタライズ、rim 強調で 2D の幽体感へ寄せる。body 自体は不透明描画にして、腕や胴体の重なりでポリゴン内部が透けないようにしている。
 - `mesh_face` は atlas の先頭セル（通常表情）から、Idle 表情の可視領域計測を元にした crop を `uv_scale` / `uv_offset` で切り出し、中心固定で 1.4 倍拡大している。
+- `prepare_soul_animation_library_system` は `GameAssets.soul_gltf` から `Gltf.named_animations` を読み、`Idle / Walk / Work / Carry / Fear / Exhausted / WalkLeft / WalkRight` の clip handle を名前解決して `SoulAnimationLibrary` に保持する。
+- `apply_soul_gltf_render_layers_on_ready` は `mesh_face` に共有 material を直接挿さず、Soul ごとに face material を複製して `SoulFaceMaterial3d` を付与する。これにより face atlas の `uv_offset` を Soul 単位で更新できる。
+- `sync_soul_anim_visual_state_system` が Soul 本体の `AssignedTask` ミラー、`AnimationState.is_moving`、`IdleState`、疲労、会話表情イベントから `SoulAnimVisualState { body, face }` を算出し、`sync_soul_body_animation_system` と `sync_soul_face_expression_system` がそれぞれ body clip と face atlas を更新する。
+- `initialize_soul_animation_players_system` は GLB 内で自動生成された `AnimationPlayer` を `SoulAnimationPlayer3d` と関連付け、`AnimationGraphHandle` と `AnimationTransitions` を挿入して `Idle` から再生を開始する。
+- `sync_soul_body_animation_system` は Soul 本体のフレーム間移動量から実移動ベクトルを算出し、横成分比率が十分高いときだけ `WalkLeft / WalkRight` を使う。判定には enter / exit の 2 段階閾値を使って揺れを抑え、縦移動寄りでは `Walk` または `Carry` を維持する。現行 GLB に `CarryLeft / CarryRight` は無いため、運搬移動で横成分が強いときも `WalkLeft / WalkRight` を優先する。clip 向きは現行 Soul GLB に合わせて `+X => WalkLeft`、`-X => WalkRight` としている。
+- `sync_soul_body_animation_system` はさらに `Walk` 系 variant 更新に短い lock を持ち、微小な軌道ぶれで `Walk <-> WalkLeft/WalkRight` が毎フレーム往復しないようにしている。Idle / Work / Carry など別 body state への遷移は lock で止めない。
 - `mesh_face` には `SOUL_FACE_SCALE_MULTIPLIER` を掛け、PoC 目視で顔が読み取りづらい問題を asset 非破壊で補正する。
 - `mesh_face` のローカル回転は GLB 側の初期姿勢をそのまま使い、PoC 段階では追加の billboard 回転を行わない。
 - `Camera3dRtt` には `AmbientLight` を付与し、GLB 付属の lit material が RtT 上で暗転しないようにする。
+- `startup_systems::setup` では `LAYER_3D` と `LAYER_3D_SOUL_SHADOW` の両方に作用する shadow-enabled `DirectionalLight` を 1 本追加し、`DirectionalLightShadowMap { size: 4096 }` と `CascadeShadowConfigBuilder` で shadow map 範囲を明示している。これにより Soul の shadow proxy だけを camera 非表示のまま shadow pass に参加させられる。
 - `Camera3dSoulMaskRtt` は Soul mask 専用 Camera3d で、通常の `Camera3dRtt` と同じ Transform / Projection を共有する。最終合成では `RttCompositeMaterial` が `texture_soul_mask` を近傍サンプリングし、Soul シルエットだけを画面上で少し膨らませて角を丸める。
 - Familiar 側は `Rectangle::new(...)` + `StandardMaterial { base_color_texture, unlit, AlphaMode::Blend, cull_mode: None }` を維持し、`sync_familiar_proxy_3d_system` が `Camera3dRtt` の回転をそのままコピーする。
 

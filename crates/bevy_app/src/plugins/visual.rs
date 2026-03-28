@@ -16,11 +16,17 @@ use crate::systems::visual::building3d_cleanup::{
 use crate::systems::visual::camera_sync::sync_camera3d_system;
 use crate::systems::visual::character_proxy_3d::{
     apply_soul_gltf_render_layers_on_ready, apply_soul_mask_gltf_render_layers_on_ready,
-    cleanup_familiar_proxy_3d_system, cleanup_soul_mask_proxy_3d_system,
-    cleanup_soul_proxy_3d_system, sync_familiar_proxy_3d_system, sync_soul_mask_proxy_3d_system,
-    sync_soul_proxy_3d_system,
+    apply_soul_shadow_gltf_render_layers_on_ready, cleanup_familiar_proxy_3d_system,
+    cleanup_soul_mask_proxy_3d_system, cleanup_soul_proxy_3d_system,
+    cleanup_soul_shadow_proxy_3d_system, sync_familiar_proxy_3d_system,
+    sync_soul_mask_proxy_3d_system, sync_soul_proxy_3d_system, sync_soul_shadow_proxy_3d_system,
 };
 use crate::systems::visual::elevation_view::{ElevationViewState, elevation_view_input_system};
+use crate::systems::visual::soul_animation::{
+    SoulAnimationLibrary, initialize_soul_animation_players_system,
+    prepare_soul_animation_library_system, sync_soul_anim_visual_state_system,
+    sync_soul_body_animation_system, sync_soul_face_expression_system,
+};
 use crate::systems::visual::task_area_visual::update_task_area_material_system;
 use hw_core::game_state::PlayMode;
 use hw_visual::HwVisualPlugin;
@@ -39,6 +45,7 @@ impl Plugin for VisualPlugin {
         app.add_plugins(HwVisualPlugin);
 
         app.init_resource::<ElevationViewState>();
+        app.init_resource::<SoulAnimationLibrary>();
 
         app.add_systems(Update, sync_camera3d_system.in_set(GameSystemSet::Visual));
 
@@ -127,9 +134,19 @@ impl Plugin for VisualPlugin {
             (
                 sync_soul_proxy_3d_system,
                 sync_soul_mask_proxy_3d_system,
+                sync_soul_shadow_proxy_3d_system,
                 sync_familiar_proxy_3d_system,
+                prepare_soul_animation_library_system,
+                (
+                    sync_soul_anim_visual_state_system,
+                    initialize_soul_animation_players_system,
+                    sync_soul_body_animation_system,
+                    sync_soul_face_expression_system,
+                )
+                    .chain(),
                 cleanup_soul_proxy_3d_system,
                 cleanup_soul_mask_proxy_3d_system,
+                cleanup_soul_shadow_proxy_3d_system,
                 cleanup_familiar_proxy_3d_system,
             )
                 .in_set(GameSystemSet::Visual),
@@ -148,6 +165,7 @@ impl Plugin for VisualPlugin {
         );
         app.add_observer(apply_soul_gltf_render_layers_on_ready);
         app.add_observer(apply_soul_mask_gltf_render_layers_on_ready);
+        app.add_observer(apply_soul_shadow_gltf_render_layers_on_ready);
     }
 }
 

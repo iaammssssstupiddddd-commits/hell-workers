@@ -42,6 +42,13 @@
 - Task system conventions: add new `AssignedTask` variants as struct variants and keep task queries aggregated in `TaskQueries` (see `crates/bevy_app/src/systems/soul_ai/execute/task_execution/`).
 - Context hygiene: respect `.cursorignore` and `.geminiignore` by avoiding large build artifacts/logs (`target/`, `dist/`, `.trunk/`, `logs/`, `build_*.txt`, `*_output*.txt`) unless explicitly needed.
 
+### Debugging and Verification Policy
+- ユーザーが報告した観測事実や、直前の検証で確定した事実は、以後の切り分けで **強い制約** として扱う。補助情報として軽く扱わない。
+- 値調整や見た目調整に入る前に、まず **経路・前提条件・成立条件** を確認する。機能が有効な経路に乗っているか、対象が同じ世界・同じ対象集合・同じ条件で処理されているかを先に切る。
+- 仮説検証の変更は、毎回「何を否定・確認するための変更か」を明示し、**変化が出なければその仮説は一度で打ち切る**。同じ系統の調整を惰性で続けない。
+- フレームワークやライブラリ依存の挙動は推測で説明しない。必要なら `docs.rs` や `~/.cargo/registry/src/` などの一次情報を確認してから説明する。
+- probe / debug material / 一時設定変更は最小限に留め、原因切り分け後は必ず撤去する。恒久実装と診断実装を混在させない。
+
 ### Background Agent Policy (STRICT — DO NOT VIOLATE)
 **Do NOT use background/subprocess agents for code editing tasks** (e.g., `general-purpose` agent with file edits).
 

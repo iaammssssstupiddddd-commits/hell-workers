@@ -81,6 +81,7 @@ pub struct GameAssets {
     pub familiar_anim_4: Handle<Image>,
     // Soul
     pub soul: Handle<Image>,
+    pub soul_gltf: Handle<Gltf>,
     pub soul_scene: Handle<Scene>,
     pub soul_face_atlas: Handle<Image>,
     pub soul_exhausted: Handle<Image>,

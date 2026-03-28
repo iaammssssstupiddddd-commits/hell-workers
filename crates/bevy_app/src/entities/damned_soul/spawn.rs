@@ -193,6 +193,7 @@ pub fn spawn_damned_soul_at(
             Destination(actual_pos),
             Path::default(),
             AnimationState::default(),
+            hw_visual::SoulAnimVisualState::default(),
             hw_visual::speech::components::SoulEmotionState::default(),
             hw_visual::speech::conversation::components::ConversationInitiator {
                 timer: Timer::from_seconds(CONVERSATION_CHECK_INTERVAL, TimerMode::Repeating),
@@ -206,7 +207,7 @@ pub fn spawn_damned_soul_at(
         SceneRoot(handles_3d.soul_scene.clone()),
         Transform::from_xyz(actual_pos.x, 0.0, -actual_pos.y)
             .with_scale(Vec3::splat(SOUL_GLB_SCALE)),
-        handles_3d.render_layers.clone(),
+        bevy::camera::visibility::RenderLayers::layer(LAYER_3D),
         hw_visual::visual3d::SoulProxy3d {
             owner: soul_entity,
             billboard: false,
@@ -221,6 +222,15 @@ pub fn spawn_damned_soul_at(
         bevy::camera::visibility::RenderLayers::layer(LAYER_3D_SOUL_MASK),
         hw_visual::visual3d::SoulMaskProxy3d { owner: soul_entity },
         Name::new(format!("SoulMaskProxy3d: {}", soul_name)),
+    ));
+
+    commands.spawn((
+        SceneRoot(handles_3d.soul_scene.clone()),
+        Transform::from_xyz(actual_pos.x, 0.0, -actual_pos.y)
+            .with_scale(Vec3::splat(SOUL_GLB_SCALE)),
+        bevy::camera::visibility::RenderLayers::from_layers(&[LAYER_3D, LAYER_3D_SOUL_SHADOW]),
+        hw_visual::visual3d::SoulShadowProxy3d { owner: soul_entity },
+        Name::new(format!("SoulShadowProxy3d: {}", soul_name)),
     ));
 
     info!("SPAWN: {} ({:?}) at {:?}", soul_name, gender, actual_pos);

@@ -314,22 +314,33 @@ App::new()
 > **根拠**: `character-3d-rendering-proposal` §3.3
 
 **やること**:
-1. `SoulAnimState` 列挙型（`Idle` / `Walk` / `Work` / `Carry` / `Fear` / `Exhausted`）を定義する
-2. `AnimationGraph` を構築し Idle / Walk / Work / Carry を `SoulAnimState` に連動させる
-3. `sync_soul_anim_state` システムを実装・登録する（タスク状態 → `SoulAnimState` → AnimationGraph ノード切替）
-4. `face_billboard_system` を本実装する（`FaceBillboard` コンポーネントを `mesh_face` エンティティに付与）
-5. `CharacterMaterial.face_uv_offset` をゲーム状態から更新するシステムを実装する
+1. `SoulAnimationLibrary` を追加し、`GameAssets.soul_gltf` の `named_animations` から clip handle を名前解決する
+2. `SoulAnimVisualState`（body / face 分離）を導入する
+3. `AnimationGraph` と `AnimationTransitions` を使って Idle / Walk / WalkLeft / WalkRight を `SoulBodyAnimState` と `AnimationState.facing_right` に連動させる
+4. `mesh_face` を per-instance material 化し、`CharacterMaterial.face_uv_offset` を Soul 単位で更新できるようにする
+5. `SoulFaceState` を `IdleState` / 疲労 / 会話表情イベント / タスク状態から更新する
 
 **変更ファイル**:
-- `hw_visual/src/anim/soul_anim.rs`（新規）
-- `hw_visual/src/billboard.rs`（`face_billboard_system` のみ新規）
-- `crates/bevy_app/src/systems/soul_ai/` 以下（SoulAnimState 連動）
+- `crates/bevy_app/src/systems/visual/soul_animation.rs`（新規）
+- `crates/bevy_app/src/assets.rs`
+- `crates/bevy_app/src/plugins/startup/asset_catalog.rs`
+- `crates/bevy_app/src/systems/visual/character_proxy_3d.rs`
+- `crates/hw_visual/src/visual3d.rs`
+- `crates/hw_visual/src/material/character_material.rs`
 
 **完了条件**:
-- [ ] `cargo check` ゼロエラー
-- [ ] Idle / Walk がタスク状態に連動して切り替わる（目視）
-- [ ] `mesh_face` がどの角度でもカメラを向いている（目視）
-- [ ] 表情が `SoulAnimState` に連動して切り替わる（目視）
+- [x] `cargo check` ゼロエラー
+- [x] Idle / Walk がタスク状態に連動して切り替わる（目視）
+- [x] 表情が `SoulAnimState` に連動して切り替わる（目視）
+
+**進捗メモ**:
+- [x] `animation_list.md` の `Idle / Walk / Work / Carry / Fear / Exhausted / WalkLeft / WalkRight` を前提に `SoulAnimationLibrary` の clip registry を追加済み
+- [x] `SoulAnimVisualState` / `SoulBodyAnimState` / `SoulFaceState` を追加し、body と face を分離した状態管理へ移行済み
+- [x] GLB 内 `AnimationPlayer` に `SoulAnimationPlayer3d` を付与し、`AnimationGraphHandle` + `AnimationTransitions` で `Idle` 初期再生を開始する経路を追加済み
+- [x] 実移動ベクトルの横成分比率を enter / exit 閾値付きで判定し、横移動寄りのときだけ `WalkLeft / WalkRight` を選ぶ経路を追加済み
+- [x] `mesh_face` を Soul ごとに複製した material handle へ差し替え、per-instance `uv_offset` 更新経路を追加済み
+- [x] Idle / Walk / WalkLeft / WalkRight の目視確認は実施済み
+- [x] face atlas の状態連動の目視確認は実施済み
 
 ---
 

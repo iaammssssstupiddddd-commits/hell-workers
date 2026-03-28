@@ -308,18 +308,17 @@
 > **依存**: MS-3-1 完了・MS-Asset-Char-GLB-B 完了（P0 クリップ）
 
 - **やること**:
-  1. `SoulAnimState` 列挙型をタスクシステム（`hw_task`）の状態と連動させる
-  2. `AnimationGraph` を構築し Idle / Walk / Work / Carry の切り替えを実装する
-  3. `sync_soul_anim_state` システムを実装・登録する（タスク状態 → `SoulAnimState` → AnimationGraph ノード切替）
-  4. `face_billboard_system` を本実装し `FaceBillboard` コンポーネントを `mesh_face` エンティティに付与する
-  5. `CharacterMaterial.face_uv_offset` をゲーム状態から更新するシステムを実装する
-- **変更ファイル**: `crates/bevy_app/src/systems/soul_ai/` 以下（状態連動）、`hw_visual/src/anim/soul_anim.rs`（新規）、`hw_visual/src/billboard.rs`（`face_billboard_system` のみ新規）
+  1. `SoulAnimationLibrary` を追加し `Gltf.named_animations` から clip handle を名前解決する
+  2. `SoulAnimVisualState`（body / face 分離）を導入する
+  3. `AnimationGraph` + `AnimationTransitions` で Idle / Walk / WalkLeft / WalkRight を切り替える
+  4. `mesh_face` を per-instance material 化し Soul 単位で `face_uv_offset` を更新できるようにする
+  5. `IdleState` / 疲労 / 会話表情イベント / タスク状態から `SoulFaceState` を更新する
+- **変更ファイル**: `crates/bevy_app/src/systems/visual/soul_animation.rs`（新規）、`crates/bevy_app/src/assets.rs`、`crates/bevy_app/src/plugins/startup/asset_catalog.rs`、`crates/bevy_app/src/systems/visual/character_proxy_3d.rs`、`crates/hw_visual/src/visual3d.rs`、`crates/hw_visual/src/material/character_material.rs`
 - **完了条件**:
-  - [ ] `cargo check` ゼロエラー
-  - [ ] Idle / Walk がタスク状態に連動して切り替わる（目視）
-  - [ ] `mesh_face` がどの角度でもカメラを向いている（目視）
-  - [ ] 表情が SoulAnimState に連動して切り替わる（目視）
-- **ステータス**: [ ] 未着手
+  - [x] `cargo check` ゼロエラー
+  - [x] Idle / Walk がタスク状態に連動して切り替わる（目視）
+  - [x] 表情が SoulAnimState に連動して切り替わる（目視）
+- **ステータス**: [x] 完了（clip registry・per-instance face material・AnimationPlayer binding・WalkLeft/WalkRight 切替・face atlas 状態連動確認まで完了）
 
 ---
 

@@ -173,6 +173,7 @@
 
 - Soul が待機時に `Idle` を再生する
 - 移動時に `Walk` へ切り替わる
+- 横移動時に `WalkLeft / WalkRight` へ切り替わる
 - face atlas が `Normal / Sleep / Fear / Exhausted / Focused / Happy` で切り替わる
 - Soul mask prepass と body 不透明化に退行がない
 - Familiar 表示に退行がない
