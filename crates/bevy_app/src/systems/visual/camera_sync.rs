@@ -13,7 +13,7 @@
 //!   - パン・ズームに追従するため XZ と OrthographicProjection.scale は毎フレーム同期
 //!   - 回転・Y 高度は elevation_view_input_system が設定した値を維持
 
-use crate::plugins::startup::Camera3dRtt;
+use crate::plugins::startup::{Camera3dRtt, Camera3dSoulMaskRtt};
 use crate::systems::visual::elevation_view::{
     ELEVATION_DISTANCE, ElevationDirection, ElevationViewState,
 };
@@ -21,47 +21,66 @@ use bevy::prelude::*;
 use hw_core::constants::{VIEW_HEIGHT, Z_OFFSET};
 use hw_ui::camera::MainCamera;
 
+type MainCameraTransformQuery<'w, 's> = Query<
+    'w,
+    's,
+    &'static Transform,
+    (
+        With<MainCamera>,
+        Without<Camera3dRtt>,
+        Without<Camera3dSoulMaskRtt>,
+    ),
+>;
+type SyncedCamera3dQuery<'w, 's> = Query<
+    'w,
+    's,
+    (&'static mut Transform, &'static mut Projection),
+    Or<(With<Camera3dRtt>, With<Camera3dSoulMaskRtt>)>,
+>;
+
 /// Camera2d（MainCamera）の Transform を Camera3d（Camera3dRtt）へ毎フレーム同期する。
 pub fn sync_camera3d_system(
-    q_cam2d: Query<&Transform, (With<MainCamera>, Without<Camera3dRtt>)>,
-    mut q_cam3d: Query<(&mut Transform, &mut Projection), With<Camera3dRtt>>,
+    q_cam2d: MainCameraTransformQuery,
+    mut q_cam3d: SyncedCamera3dQuery,
     elevation: Res<ElevationViewState>,
 ) {
     let Ok(cam2d) = q_cam2d.single() else { return };
-    let Ok((mut cam3d, mut projection)) = q_cam3d.single_mut() else {
+    if q_cam3d.is_empty() {
         return;
-    };
+    }
 
     let scene_z = -cam2d.translation.y; // 2D y → 3D z 変換
 
-    match elevation.direction {
-        ElevationDirection::TopDown => {
-            cam3d.translation.x = cam2d.translation.x;
-            cam3d.translation.z = scene_z + Z_OFFSET;
-            cam3d.translation.y = VIEW_HEIGHT;
-            cam3d.rotation = elevation.direction.camera_rotation();
+    for (mut cam3d, mut projection) in &mut q_cam3d {
+        match elevation.direction {
+            ElevationDirection::TopDown => {
+                cam3d.translation.x = cam2d.translation.x;
+                cam3d.translation.z = scene_z + Z_OFFSET;
+                cam3d.translation.y = VIEW_HEIGHT;
+                cam3d.rotation = elevation.direction.camera_rotation();
+            }
+            ElevationDirection::North => {
+                cam3d.translation.x = cam2d.translation.x;
+                cam3d.translation.z = scene_z + ELEVATION_DISTANCE;
+            }
+            ElevationDirection::South => {
+                cam3d.translation.x = cam2d.translation.x;
+                cam3d.translation.z = scene_z - ELEVATION_DISTANCE;
+            }
+            ElevationDirection::East => {
+                cam3d.translation.x = cam2d.translation.x + ELEVATION_DISTANCE;
+                cam3d.translation.z = scene_z;
+            }
+            ElevationDirection::West => {
+                cam3d.translation.x = cam2d.translation.x - ELEVATION_DISTANCE;
+                cam3d.translation.z = scene_z;
+            }
         }
-        ElevationDirection::North => {
-            cam3d.translation.x = cam2d.translation.x;
-            cam3d.translation.z = scene_z + ELEVATION_DISTANCE;
-        }
-        ElevationDirection::South => {
-            cam3d.translation.x = cam2d.translation.x;
-            cam3d.translation.z = scene_z - ELEVATION_DISTANCE;
-        }
-        ElevationDirection::East => {
-            cam3d.translation.x = cam2d.translation.x + ELEVATION_DISTANCE;
-            cam3d.translation.z = scene_z;
-        }
-        ElevationDirection::West => {
-            cam3d.translation.x = cam2d.translation.x - ELEVATION_DISTANCE;
-            cam3d.translation.z = scene_z;
-        }
-    }
 
-    cam3d.scale = Vec3::ONE;
-    if let Projection::Orthographic(ortho) = &mut *projection {
-        ortho.scale = cam2d.scale.x;
+        cam3d.scale = Vec3::ONE;
+        if let Projection::Orthographic(ortho) = &mut *projection {
+            ortho.scale = cam2d.scale.x;
+        }
     }
 
     // 回転・Y（矢視高度）は elevation_view_input_system が V キー時に設定した値を維持

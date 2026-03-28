@@ -280,24 +280,26 @@
 
 ---
 
-### MS-3-1: Camera3d 斜め角度適用 + CharacterMaterial 本実装
+### MS-3-1: Soul CharacterMaterial 本実装 + 2D Sprite置換
 
 > **依存**: MS-P3-Pre-C・MS-P3-Pre-D 完了
 
 - **やること**:
-  1. `camera_sync.rs` の `sync_camera3d_system` を斜め角度用変換式に更新（`VIEW_HEIGHT`・`Z_OFFSET` 適用）
-  2. `hw_visual/src/material/character_material.rs` を本実装（`CharacterMaterial`・`AlphaMode::Blend`）
-  3. `hw_visual/src/visual_handles.rs` に `CharacterHandles` リソースを追加（`Building3dHandles` から分離）
-  4. `building_completion/spawn.rs` の `SoulProxy3d` / `FamiliarProxy3d` スポーンを GLB ベースの実装へ置き換え
-  5. Camera2d 側の Soul / Familiar Sprite を削除
-  6. `section_clip.wgsl` 共通モジュールを先行作成し `CharacterMaterial` に接続
-- **変更ファイル**: `systems/visual/camera_sync.rs`、`hw_visual/src/material/character_material.rs`（新規）、`hw_visual/src/visual_handles.rs`、`building_completion/spawn.rs`、`assets/shaders/character_material.wgsl`（新規）、`assets/shaders/common/section_clip.wgsl`（新規）
+  1. `hw_visual/src/material/character_material.rs` を本実装する
+  2. `assets/shaders/character_material.wgsl` を新規作成し Soul `mesh_body` / `mesh_face` を custom material へ移行する
+  3. `CharacterHandles` を Soul 本実装向けの構成へ整理し、PoC 用 `StandardMaterial` 差し替えを置き換える
+  4. Camera2d 側の Soul Sprite を削除し、通常表示を Soul GLB 側へ一本化する
+  5. Familiar は現行 billboard / 2D 経路を維持する
+  6. Soul 専用 mask RtT と最終合成 Material を追加し、画面上のシルエット丸めを後段で扱えるようにする
+- **変更ファイル**: `hw_visual/src/material/character_material.rs`（新規）、`hw_visual/src/material/soul_mask_material.rs`（新規）、`hw_visual/src/visual_handles.rs`、`assets/shaders/character_material.wgsl`（新規）、`assets/shaders/soul_mask_material.wgsl`（新規）、`assets/shaders/rtt_composite_material.wgsl`（新規）、`plugins/startup/rtt_setup.rs`、`plugins/startup/rtt_composite.rs`、Soul の Camera2d Sprite spawn 箇所
 - **完了条件**:
-  - [ ] `cargo check` ゼロエラー
-  - [ ] 通常ビューで建物・キャラクター GLB が 2.5D 的に見える
-  - [ ] `SoulProxy3d` / `FamiliarProxy3d` / `Billboard` コンポーネントが削除されている
-  - [ ] Camera2d 側に Soul / Familiar の Sprite が残っていない
-- **ステータス**: [ ] 未着手
+  - [x] `cargo check` ゼロエラー
+  - [x] 通常ビューで Soul GLB が 2.5D 的に見える
+  - [x] Soul の `mesh_body` / `mesh_face` が `CharacterMaterial` 経路で描画される
+  - [x] Camera2d 側に Soul の Sprite が残っていない
+  - [x] Familiar の表示挙動は現状から退行していない
+  - [x] Soul のシルエット丸めが通常ビューで自然に見える
+- **ステータス**: [x] 完了（body/face custom material・2D Sprite 置換・Soul mask prepass・body 不透明化まで完了）
 
 ---
 
@@ -321,20 +323,34 @@
 
 ---
 
-### MS-3-Char-B: Familiar GLB 対応 + アニメーションフルセット
+### MS-3-Char-B: Soul P1 クリップ + face atlas 状態連動
 
-> **依存**: MS-3-Char-A 完了・MS-Asset-Char-GLB-B 完了（P1 クリップ）
+> **依存**: MS-3-Char-A 完了・MS-Asset-Char-Face 完了
 
 - **やること**:
-  1. Familiar GLB を `CharacterHandles` に追加し FamiliarProxy3d を GLB ベースへ置き換える
-  2. `FamiliarAnimState` を定義しコマンドシステムと連動させる
-  3. Soul の P1 クリップ（Work・Carry）をタスク状態に接続する
-  4. `CharacterMaterial.face_uv_offset` に顔テクスチャアトラス（MS-Asset-Char-Face）を統合する
-- **変更ファイル**: `hw_visual/src/anim/familiar_anim.rs`（新規）、`hw_visual/src/visual_handles.rs`
+  1. Soul の P1 クリップ（Work・Carry）をタスク状態に接続する
+  2. `CharacterMaterial.face_uv_offset` に顔テクスチャアトラス（MS-Asset-Char-Face）を統合する
+  3. `Fear` / `Exhausted` を含む表情切り替え規則を `SoulAnimState` と同期する
+- **変更ファイル**: `crates/bevy_app/src/systems/soul_ai/` 以下、`hw_visual/src/anim/soul_anim.rs`、`hw_visual/src/material/character_material.rs`
 - **完了条件**:
   - [ ] `cargo check` ゼロエラー
-  - [ ] Familiar が GLB で表示されタスク状態に連動したアニメーションが動作する（目視）
   - [ ] Soul の全 P1 クリップがタスク状態に連動する（目視）
+  - [ ] 顔テクスチャアトラスによる表情切り替えが動作する（目視）
+- **ステータス**: [ ] 未着手
+
+---
+
+### MS-3-Fam-R: Familiar 表示方式再検討
+
+> **依存**: MS-3-1 完了
+
+- **やること**:
+  1. Familiar の現行表示と GLB 化の利点・欠点を比較する
+  2. Z 軸表現、被遮蔽の必要性、アニメーション要求、実装コストを評価する
+  3. `GLB 化する / billboard 維持 / 2D 維持` のいずれかを決定し、後続マイルストーンへ反映する
+- **完了条件**:
+  - [ ] Familiar の表示方式が決定されている
+  - [ ] 決定内容が roadmap / implementation plan に反映されている
 - **ステータス**: [ ] 未着手
 
 ---
@@ -526,10 +542,11 @@ MS-1A → MS-1B → MS-1C → MS-1D ────────────┤
                   MS-P3-Pre-D (Character GLB PoC) ←─Pre-C+Char-GLB-A │  │
                               │                                      │  │
                               ↓ Phase 3 本実装                       │  │
-                  MS-3-1 (Camera斜め+CharacterMaterial) ←─Pre-C,D    │  │
+                  MS-3-1 (Soul CharacterMaterial) ←─────Pre-C,D       │  │
                        │                                             │  │
                   MS-3-Char-A (AnimationGraph+SoulAnimState) ←─3-1+GLB-B│
-                  MS-3-Char-B (Familiar+アニメ全クリップ) ←─3-Char-A     │
+                  MS-3-Char-B (Soul P1+face atlas) ←────── 3-Char-A+Face│
+                  MS-3-Fam-R (Familiar表示再検討) ←─────── 3-1          │
                   MS-3-2 (RtT WindowResized)   ←─Pre-B              │  │
                   MS-3-3 (SectionMaterial基盤) ←─Pre-A              ↓  │
                        │                                            │  │
@@ -538,7 +555,7 @@ MS-1A → MS-1B → MS-1C → MS-1D ────────────┤
                        │                                               │
                   MS-3-6 (テレイン表面) ←── MS-3-4                     │
                   MS-3-7 (Raycasting)  ←── MS-3-4                     │
-                  MS-3-8 (2D廃止)      ←── MS-3-7 + MS-3-Char-B       │
+                  MS-3-8 (2D廃止)      ←── MS-3-7 + MS-3-Char-B + Fam-R│
                   MS-3-9 (切断線UI)    ←── MS-3-5                     │
                   MS-3-10 (アウトライン計画) ←── GLB PoC               │
                               │                                       │
@@ -558,9 +575,11 @@ MS-WFC-1 → MS-WFC-2 → MS-WFC-3 → MS-WFC-3.5  (独立)
 | P1（基盤整備） | MS-P3-Pre-B | Phase 3 参照箇所が増える前に一元化しておく必要がある |
 | P1（PoC） | MS-P3-Pre-D | Character GLB + face atlas 表示確認。MS-3-1 の前提 |
 | P1（序盤） | MS-3-3 | SectionMaterial の PoC が Phase 3 後半全体の前提 |
-| P2（本実装） | MS-3-1・MS-3-2 | 着手前準備完了後に連続実装 |
+| P2（本実装） | MS-3-2 | RtT 解像度と品質スケール整備 |
+| P2（キャラクター） | MS-3-Char-A | M-3-1 完了後の次タスク |
 | P2（キャラクター） | MS-3-Char-A | AnimationGraph + タスク連動。MS-3-1 完了後すぐ着手 |
-| P2（キャラクター） | MS-3-Char-B | Familiar 対応 + 全クリップ統合。MS-3-Char-A 完了後 |
+| P2（キャラクター） | MS-3-Char-B | Soul の P1 クリップ接続 + face atlas 状態連動。MS-3-Char-A 完了後 |
+| P3（再評価） | MS-3-Fam-R | Familiar を 3D 化する価値を改めて判断する |
 | P2（本実装） | MS-3-4〜MS-3-9 | Phase 3 中盤〜後半の順次実装 |
 | 独立 | MS-WFC-1〜3 | メインルートとは独立。地形改善を先行させることも可 |
 

@@ -4,6 +4,9 @@ target-dir = "target"
 [target.x86_64-unknown-linux-gnu]
 rustflags = ["-C", "link-arg=-fuse-ld=mold"]
 
+[alias]
+visual-test = "run --example visual_test -p bevy_app@0.1.0"
+
 [env]
 # CARGO_MANIFEST_DIR が crates/bevy_app/ になるため、
 # Bevy のアセット検索パスをワークスペースルートに固定する

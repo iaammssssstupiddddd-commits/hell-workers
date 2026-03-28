@@ -2,14 +2,14 @@
 
 use crate::assets::GameAssets;
 use bevy::camera::visibility::RenderLayers;
-use bevy::math::Affine2;
 use bevy::prelude::*;
 use hw_core::constants::{LAYER_3D, TILE_SIZE};
 use hw_core::visual::SoulTaskHandles;
 use hw_logistics::ResourceItemVisualHandles;
+use hw_visual::CharacterMaterial;
 use hw_visual::{
     BuildingAnimHandles, GatheringVisualHandles, HaulItemHandles, MaterialIconHandles,
-    PlantTreeHandles, SpeechHandles, WallVisualHandles, WorkIconHandles,
+    PlantTreeHandles, SoulMaskMaterial, SpeechHandles, WallVisualHandles, WorkIconHandles,
 };
 use hw_world::{DoorVisualHandles, TerrainVisualHandles};
 
@@ -45,7 +45,9 @@ pub struct Building3dHandles {
 
 #[derive(Resource)]
 pub struct CharacterHandles {
-    pub soul_face_material: Handle<StandardMaterial>,
+    pub soul_body_material: Handle<CharacterMaterial>,
+    pub soul_face_material: Handle<CharacterMaterial>,
+    pub soul_mask_material: Handle<SoulMaskMaterial>,
 }
 
 const SOUL_FACE_ATLAS_COLUMNS: f32 = 3.0;
@@ -61,6 +63,8 @@ pub fn init_visual_handles(
     game_assets: Res<GameAssets>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    mut character_materials: ResMut<Assets<CharacterMaterial>>,
+    mut soul_mask_materials: ResMut<Assets<SoulMaskMaterial>>,
 ) {
     commands.insert_resource(WallVisualHandles {
         stone_isolated: game_assets.wall_isolated.clone(),
@@ -263,41 +267,36 @@ pub fn init_visual_handles(
     });
 
     commands.insert_resource(CharacterHandles {
-        soul_face_material: materials.add(StandardMaterial {
-            base_color: Color::WHITE,
-            base_color_texture: Some(game_assets.soul_face_atlas.clone()),
-            // Idle セルの可視領域を元にした crop を中心維持で拡大する。
-            uv_transform: Affine2::from_scale_angle_translation(
-                Vec2::new(
-                    SOUL_FACE_BASE_CROP_SIZE_PX
-                        / SOUL_FACE_TEXTURE_MAGNIFICATION
-                        / SOUL_FACE_CELL_SIZE_PX
-                        / SOUL_FACE_ATLAS_COLUMNS,
-                    SOUL_FACE_BASE_CROP_SIZE_PX
-                        / SOUL_FACE_TEXTURE_MAGNIFICATION
-                        / SOUL_FACE_CELL_SIZE_PX
-                        / SOUL_FACE_ATLAS_ROWS,
-                ),
-                0.0,
-                Vec2::new(
-                    (SOUL_FACE_BASE_CROP_OFFSET_X_PX
-                        + (SOUL_FACE_BASE_CROP_SIZE_PX
-                            - SOUL_FACE_BASE_CROP_SIZE_PX / SOUL_FACE_TEXTURE_MAGNIFICATION)
-                            * 0.5)
-                        / SOUL_FACE_CELL_SIZE_PX
-                        / SOUL_FACE_ATLAS_COLUMNS,
-                    (SOUL_FACE_BASE_CROP_OFFSET_Y_PX
-                        + (SOUL_FACE_BASE_CROP_SIZE_PX
-                            - SOUL_FACE_BASE_CROP_SIZE_PX / SOUL_FACE_TEXTURE_MAGNIFICATION)
-                            * 0.5)
-                        / SOUL_FACE_CELL_SIZE_PX
-                        / SOUL_FACE_ATLAS_ROWS,
-                ),
+        soul_body_material: character_materials
+            .add(CharacterMaterial::body(game_assets.white_pixel.clone())),
+        soul_face_material: character_materials.add(CharacterMaterial::face(
+            game_assets.soul_face_atlas.clone(),
+            LinearRgba::WHITE,
+            Vec2::new(
+                SOUL_FACE_BASE_CROP_SIZE_PX
+                    / SOUL_FACE_TEXTURE_MAGNIFICATION
+                    / SOUL_FACE_CELL_SIZE_PX
+                    / SOUL_FACE_ATLAS_COLUMNS,
+                SOUL_FACE_BASE_CROP_SIZE_PX
+                    / SOUL_FACE_TEXTURE_MAGNIFICATION
+                    / SOUL_FACE_CELL_SIZE_PX
+                    / SOUL_FACE_ATLAS_ROWS,
             ),
-            unlit: true,
-            alpha_mode: AlphaMode::Blend,
-            cull_mode: None,
-            ..default()
-        }),
+            Vec2::new(
+                (SOUL_FACE_BASE_CROP_OFFSET_X_PX
+                    + (SOUL_FACE_BASE_CROP_SIZE_PX
+                        - SOUL_FACE_BASE_CROP_SIZE_PX / SOUL_FACE_TEXTURE_MAGNIFICATION)
+                        * 0.5)
+                    / SOUL_FACE_CELL_SIZE_PX
+                    / SOUL_FACE_ATLAS_COLUMNS,
+                (SOUL_FACE_BASE_CROP_OFFSET_Y_PX
+                    + (SOUL_FACE_BASE_CROP_SIZE_PX
+                        - SOUL_FACE_BASE_CROP_SIZE_PX / SOUL_FACE_TEXTURE_MAGNIFICATION)
+                        * 0.5)
+                    / SOUL_FACE_CELL_SIZE_PX
+                    / SOUL_FACE_ATLAS_ROWS,
+            ),
+        )),
+        soul_mask_material: soul_mask_materials.add(SoulMaskMaterial::solid_white()),
     });
 }

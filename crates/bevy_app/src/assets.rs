@@ -69,6 +69,7 @@ impl UiAssets for GameAssets {
 
 #[derive(Resource)]
 pub struct GameAssets {
+    pub white_pixel: Handle<Image>,
     pub grass: Handle<Image>,
     pub dirt: Handle<Image>,
     pub stone: Handle<Image>,

@@ -60,7 +60,7 @@ type AnimationQuery<'w, 's> = Query<
     's,
     (
         &'static mut Transform,
-        &'static mut Sprite,
+        Option<&'static mut Sprite>,
         &'static mut crate::entities::damned_soul::AnimationState,
         &'static DamnedSoul,
         &'static IdleState,
@@ -72,21 +72,23 @@ type AnimationQuery<'w, 's> = Query<
 
 /// アニメーションシステム
 pub fn animation_system(time: Res<Time>, game_assets: Res<GameAssets>, mut query: AnimationQuery) {
-    for (mut transform, mut sprite, mut anim, soul, idle, task, breakdown_opt, expression_opt) in
+    for (mut transform, sprite_opt, mut anim, soul, idle, task, breakdown_opt, expression_opt) in
         query.iter_mut()
     {
-        // 進行方向に応じて左右反転（facing_right は movement 側で更新）
-        sprite.flip_x = anim.facing_right;
-        let is_working_or_moving = !matches!(*task, AssignedTask::None) || anim.is_moving;
-        let desired_image = select_soul_image(
-            &game_assets,
-            idle,
-            breakdown_opt,
-            expression_opt,
-            is_working_or_moving,
-        );
-        if sprite.image != *desired_image {
-            sprite.image = desired_image.clone();
+        if let Some(mut sprite) = sprite_opt {
+            // 進行方向に応じて左右反転（facing_right は movement 側で更新）
+            sprite.flip_x = anim.facing_right;
+            let is_working_or_moving = !matches!(*task, AssignedTask::None) || anim.is_moving;
+            let desired_image = select_soul_image(
+                &game_assets,
+                idle,
+                breakdown_opt,
+                expression_opt,
+                is_working_or_moving,
+            );
+            if sprite.image != *desired_image {
+                sprite.image = desired_image.clone();
+            }
         }
 
         // 集会中の特定の行動では、idle_visual_systemがアニメーションを管理するため

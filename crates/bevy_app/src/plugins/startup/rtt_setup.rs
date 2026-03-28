@@ -9,6 +9,8 @@ use bevy::window::PrimaryWindow;
 pub struct RttTextures {
     /// 3D シーンのオフスクリーンレンダリング先テクスチャ
     pub texture_3d: Handle<Image>,
+    /// Soul シルエット mask のオフスクリーンレンダリング先テクスチャ
+    pub texture_soul_mask: Handle<Image>,
 }
 
 /// RtT が追従している現在の物理解像度
@@ -21,6 +23,10 @@ pub struct RttViewportSize {
 /// Camera3d（RtT オフスクリーン）のマーカーコンポーネント。M3 カメラ同期システムで使用。
 #[derive(Component)]
 pub struct Camera3dRtt;
+
+/// Soul mask RtT 用 Camera3d のマーカー。
+#[derive(Component)]
+pub struct Camera3dSoulMaskRtt;
 
 /// RtT テクスチャを生成して Assets に登録し、ハンドルを返す。
 /// ウィンドウリサイズ時に呼び直すことで全参照箇所が追従する。
@@ -61,4 +67,5 @@ pub fn sync_rtt_texture_size_to_window(
 
     *viewport_size = next_size;
     rtt.texture_3d = create_rtt_texture(next_size.width, next_size.height, &mut images);
+    rtt.texture_soul_mask = create_rtt_texture(next_size.width, next_size.height, &mut images);
 }

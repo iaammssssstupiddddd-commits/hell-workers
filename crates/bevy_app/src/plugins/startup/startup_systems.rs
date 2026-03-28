@@ -10,12 +10,14 @@ use bevy::camera::{RenderTarget, visibility::RenderLayers};
 use bevy::camera_controller::pan_camera::PanCamera;
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
-use hw_core::constants::{LAYER_2D, LAYER_3D, LAYER_OVERLAY, VIEW_HEIGHT, Z_OFFSET};
+use hw_core::constants::{
+    LAYER_2D, LAYER_3D, LAYER_3D_SOUL_MASK, LAYER_OVERLAY, VIEW_HEIGHT, Z_OFFSET,
+};
 use hw_spatial::{ResourceSpatialGrid, SpatialGridOps};
 use hw_ui::camera::MainCamera;
 
 use super::asset_catalog::create_game_assets;
-use super::rtt_setup::{self, Camera3dRtt, RttTextures};
+use super::rtt_setup::{self, Camera3dRtt, Camera3dSoulMaskRtt, RttTextures};
 
 pub(super) fn spawn_map_timed(
     commands: Commands,
@@ -50,8 +52,11 @@ pub(super) fn setup(
         });
     let rtt_handle =
         rtt_setup::create_rtt_texture(viewport_size.width, viewport_size.height, &mut images);
+    let soul_mask_handle =
+        rtt_setup::create_rtt_texture(viewport_size.width, viewport_size.height, &mut images);
     commands.insert_resource(RttTextures {
         texture_3d: rtt_handle.clone(),
+        texture_soul_mask: soul_mask_handle.clone(),
     });
     commands.insert_resource(viewport_size);
 
@@ -97,6 +102,24 @@ pub(super) fn setup(
         RenderTarget::Image(rtt_handle.into()),
         RenderLayers::layer(LAYER_3D),
         Camera3dRtt,
+    ));
+
+    commands.spawn((
+        Camera3d::default(),
+        Camera {
+            order: -2,
+            clear_color: ClearColorConfig::Custom(Color::srgba(0.0, 0.0, 0.0, 0.0)),
+            ..default()
+        },
+        Projection::Orthographic(OrthographicProjection::default_3d()),
+        {
+            let mut transform = Transform::from_translation(Vec3::new(0.0, VIEW_HEIGHT, Z_OFFSET));
+            transform.rotation = ElevationDirection::TopDown.camera_rotation();
+            transform
+        },
+        RenderTarget::Image(soul_mask_handle.into()),
+        RenderLayers::layer(LAYER_3D_SOUL_MASK),
+        Camera3dSoulMaskRtt,
     ));
 
     // --- asset catalog 生成 ---

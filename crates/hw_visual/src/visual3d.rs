@@ -20,6 +20,12 @@ pub struct SoulProxy3d {
     pub billboard: bool,
 }
 
+/// DamnedSoul エンティティに対応する Soul 専用 mask プロキシのマーカー。
+#[derive(Component, Debug, Clone)]
+pub struct SoulMaskProxy3d {
+    pub owner: Entity,
+}
+
 /// Familiar エンティティに対応する3Dプロキシのマーカー。
 #[derive(Component, Debug, Clone)]
 pub struct FamiliarProxy3d {

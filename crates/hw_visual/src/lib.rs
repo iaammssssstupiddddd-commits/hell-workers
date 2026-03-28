@@ -8,6 +8,7 @@ pub mod gather;
 pub mod handles;
 pub mod haul;
 pub mod layer;
+pub mod material;
 pub mod mud_mixer;
 pub mod plant_trees;
 pub mod progress_bar;
@@ -31,11 +32,13 @@ pub use handles::{
     BuildingAnimHandles, GatheringVisualHandles, HaulItemHandles, MaterialIconHandles,
     PlantTreeHandles, SpeechHandles, WallVisualHandles, WorkIconHandles,
 };
+pub use material::{CharacterMaterial, SoulMaskMaterial};
 
-pub use visual3d::{Building3dVisual, FamiliarProxy3d, SoulProxy3d};
+pub use visual3d::{Building3dVisual, FamiliarProxy3d, SoulMaskProxy3d, SoulProxy3d};
 
 pub use task_area_visual::{TaskAreaMaterial, TaskAreaVisual};
 
+use bevy::pbr::MaterialPlugin;
 use bevy::prelude::*;
 use bevy::sprite_render::Material2dPlugin;
 use bevy::ui_render::prelude::UiMaterialPlugin;
@@ -50,6 +53,8 @@ impl Plugin for HwVisualPlugin {
             Material2dPlugin::<dream::DreamBubbleMaterial>::default(),
             UiMaterialPlugin::<dream::DreamBubbleUiMaterial>::default(),
             Material2dPlugin::<TaskAreaMaterial>::default(),
+            MaterialPlugin::<material::CharacterMaterial>::default(),
+            MaterialPlugin::<material::SoulMaskMaterial>::default(),
         ));
 
         app.add_plugins(speech::SpeechPlugin);

@@ -310,6 +310,27 @@ python scripts/update_docs_index.py
 - 新規ファイルはファイル内容から説明を自動抽出する。
 - 計画書・提案書を追加/移動/削除したらこのコマンドを実行する。
 
+### Visual Test Scene（Soul GLB 3D 検証）
+```bash
+cargo visual-test
+```
+
+ゲーム本体とは独立して Soul GLB の表情アトラス・モーション・Z-fight を検証する example。
+
+| キー | 操作 |
+|:---|:---|
+| `1`-`6` | 表情切り替え (Normal/Fear/Exhausted/Concentration/Happy/Sleep) |
+| `A` | 全表情モード (各 Soul に異なる表情を自動割当) |
+| `+`/`=` | Soul 追加 (最大 6) |
+| `-` | Soul 削除 |
+| `M` | モーション切り替え (Idle→FloatingBob→Sleeping→Resting→Escaping→Dancing) |
+| `R` | 全ポジションリセット |
+| `←→↑↓` | 選択 Soul の移動 (干渉テスト) |
+| `Tab` | Soul 選択切り替え |
+| `Esc` | 終了 |
+
+ソース: `crates/bevy_app/examples/visual_test.rs`
+
 ### 高負荷パフォーマンス計測（500 Soul / 30 Familiar）
 ```bash
 cargo run -p bevy_app -- --spawn-souls 500 --spawn-familiars 30 --perf-scenario

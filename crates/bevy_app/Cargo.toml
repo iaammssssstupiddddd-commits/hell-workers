@@ -16,6 +16,9 @@ hw_soul_ai       = { path = "../hw_soul_ai" }
 hw_spatial = { path = "../hw_spatial" }
 hw_visual = { path = "../hw_visual" }
 
+[[example]]
+name = "visual_test"
+
 [features]
 default = ["dynamic_linking"]
 dynamic_linking = ["bevy/dynamic_linking"]

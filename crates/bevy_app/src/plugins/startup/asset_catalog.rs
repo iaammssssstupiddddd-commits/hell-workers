@@ -10,6 +10,7 @@ use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 pub fn create_game_assets(asset_server: &AssetServer, images: &mut Assets<Image>) -> GameAssets {
     let aura_circle = create_circular_gradient_texture(images);
     let aura_ring = create_circular_outline_texture(images);
+    let white_pixel = create_solid_texture(images, [255, 255, 255, 255]);
 
     let font_ui = asset_server.load("fonts/NotoSansJP-VF.ttf");
     let font_familiar = asset_server.load("fonts/ShantellSans-VF.ttf");
@@ -17,6 +18,7 @@ pub fn create_game_assets(asset_server: &AssetServer, images: &mut Assets<Image>
     let font_soul_emoji = asset_server.load("fonts/NotoEmoji-VF.ttf");
 
     GameAssets {
+        white_pixel,
         grass: asset_server.load("textures/grass.png"),
         dirt: asset_server.load("textures/dirt.png"),
         stone: asset_server.load("textures/stone.jpg"),
@@ -199,6 +201,21 @@ fn create_circular_outline_texture(images: &mut Assets<Image>) -> Handle<Image> 
         },
         TextureDimension::D2,
         data,
+        TextureFormat::Rgba8UnormSrgb,
+        default(),
+    );
+    images.add(image)
+}
+
+fn create_solid_texture(images: &mut Assets<Image>, rgba: [u8; 4]) -> Handle<Image> {
+    let image = Image::new(
+        Extent3d {
+            width: 1,
+            height: 1,
+            depth_or_array_layers: 1,
+        },
+        TextureDimension::D2,
+        rgba.to_vec(),
         TextureFormat::Rgba8UnormSrgb,
         default(),
     );

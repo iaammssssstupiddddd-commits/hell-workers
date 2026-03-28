@@ -1,7 +1,7 @@
 //! ビジュアル関連のプラグイン
 
 use crate::entities::familiar::{familiar_animation_system, update_familiar_range_indicator};
-use crate::plugins::startup::{Camera3dRtt, RttCompositeSprite};
+use crate::plugins::startup::{Camera3dRtt, Camera3dSoulMaskRtt, RttCompositeSprite};
 use crate::systems::GameSystemSet;
 use crate::systems::command::{
     area_edit_handles_visual_system, area_selection_indicator_system,
@@ -15,8 +15,10 @@ use crate::systems::visual::building3d_cleanup::{
 };
 use crate::systems::visual::camera_sync::sync_camera3d_system;
 use crate::systems::visual::character_proxy_3d::{
-    apply_soul_gltf_render_layers_on_ready, cleanup_familiar_proxy_3d_system,
-    cleanup_soul_proxy_3d_system, sync_familiar_proxy_3d_system, sync_soul_proxy_3d_system,
+    apply_soul_gltf_render_layers_on_ready, apply_soul_mask_gltf_render_layers_on_ready,
+    cleanup_familiar_proxy_3d_system, cleanup_soul_mask_proxy_3d_system,
+    cleanup_soul_proxy_3d_system, sync_familiar_proxy_3d_system, sync_soul_mask_proxy_3d_system,
+    sync_soul_proxy_3d_system,
 };
 use crate::systems::visual::elevation_view::{ElevationViewState, elevation_view_input_system};
 use crate::systems::visual::task_area_visual::update_task_area_material_system;
@@ -26,6 +28,9 @@ use hw_visual::soul::task_link_system;
 use hw_world::sync_room_overlay_tiles_system;
 
 use bevy::prelude::*;
+
+type Render3dCameraQuery<'w, 's> =
+    Query<'w, 's, &'static mut Camera, Or<(With<Camera3dRtt>, With<Camera3dSoulMaskRtt>)>>;
 
 pub struct VisualPlugin;
 
@@ -121,8 +126,10 @@ impl Plugin for VisualPlugin {
             Update,
             (
                 sync_soul_proxy_3d_system,
+                sync_soul_mask_proxy_3d_system,
                 sync_familiar_proxy_3d_system,
                 cleanup_soul_proxy_3d_system,
+                cleanup_soul_mask_proxy_3d_system,
                 cleanup_familiar_proxy_3d_system,
             )
                 .in_set(GameSystemSet::Visual),
@@ -140,19 +147,20 @@ impl Plugin for VisualPlugin {
             apply_render3d_visibility_system.in_set(GameSystemSet::Visual),
         );
         app.add_observer(apply_soul_gltf_render_layers_on_ready);
+        app.add_observer(apply_soul_mask_gltf_render_layers_on_ready);
     }
 }
 
 /// Render3dVisible の変更を Camera3dRtt と RttCompositeSprite の可視性に反映する
 fn apply_render3d_visibility_system(
     render3d: Res<crate::Render3dVisible>,
-    mut q_camera: Query<&mut Camera, With<Camera3dRtt>>,
+    mut q_camera: Render3dCameraQuery,
     mut q_sprite: Query<&mut Visibility, With<RttCompositeSprite>>,
 ) {
     if !render3d.is_changed() {
         return;
     }
-    if let Ok(mut camera) = q_camera.single_mut() {
+    for mut camera in &mut q_camera {
         camera.is_active = render3d.0;
     }
     if let Ok(mut visibility) = q_sprite.single_mut() {

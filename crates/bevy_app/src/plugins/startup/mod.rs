@@ -10,7 +10,7 @@ mod startup_systems;
 mod visual_handles;
 
 pub use rtt_composite::RttCompositeSprite;
-pub use rtt_setup::{Camera3dRtt, RttTextures, RttViewportSize};
+pub use rtt_setup::{Camera3dRtt, Camera3dSoulMaskRtt, RttTextures, RttViewportSize};
 pub use visual_handles::{Building3dHandles, CharacterHandles};
 
 use perf_scenario::{
@@ -30,6 +30,7 @@ use crate::interface::ui::{MenuState, setup_ui};
 use crate::systems::logistics::{ResourceCountDisplayTimer, ResourceLabels};
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
+use bevy::sprite_render::Material2dPlugin;
 use hw_core::GameTime;
 use hw_spatial::{
     BlueprintSpatialGrid, FamiliarSpatialGrid, FloorConstructionSpatialGrid,
@@ -63,6 +64,7 @@ impl Plugin for StartupPlugin {
             .init_resource::<FloorConstructionSpatialGrid>()
             .init_resource::<StockpileSpatialGrid>()
             .init_resource::<PerfScenarioApplied>()
+            .add_plugins(Material2dPlugin::<rtt_composite::RttCompositeMaterial>::default())
             .add_systems(Startup, (setup, initialize_gizmo_config))
             .add_systems(
                 PostStartup,

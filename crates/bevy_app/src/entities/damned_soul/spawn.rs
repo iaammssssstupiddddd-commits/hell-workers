@@ -1,7 +1,6 @@
 //! ソウルのスポーン関連システム
 
 use super::*;
-use crate::assets::GameAssets;
 use crate::entities::spawn_args;
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
 use crate::world::map::{RIVER_X_MAX, RIVER_X_MIN, RIVER_Y_MIN, WorldMap, WorldMapRead};
@@ -149,14 +148,12 @@ pub fn periodic_spawn_system(
 pub fn soul_spawning_system(
     mut commands: Commands,
     mut spawn_events: MessageReader<DamnedSoulSpawnEvent>,
-    game_assets: Res<GameAssets>,
     handles_3d: Res<crate::plugins::startup::Building3dHandles>,
     world_map: WorldMapRead,
 ) {
     for event in spawn_events.read() {
         spawn_damned_soul_at(
             &mut commands,
-            &game_assets,
             &handles_3d,
             world_map.as_ref(),
             event.position,
@@ -167,7 +164,6 @@ pub fn soul_spawning_system(
 /// 指定座標にソウルをスポーンする（内部用ヘルパー）
 pub fn spawn_damned_soul_at(
     commands: &mut Commands,
-    game_assets: &Res<GameAssets>,
     handles_3d: &crate::plugins::startup::Building3dHandles,
     world_map: &WorldMap,
     pos: Vec2,
@@ -179,11 +175,6 @@ pub fn spawn_damned_soul_at(
     let identity = SoulIdentity::random();
     let soul_name = identity.name.clone();
     let gender = identity.gender;
-
-    let sprite_color = match gender {
-        Gender::Male => Color::srgb(0.9, 0.9, 1.0), // わずかに青み
-        Gender::Female => Color::srgb(1.0, 0.9, 0.9), // わずかに赤み
-    };
 
     let soul_entity = commands
         .spawn((
@@ -198,12 +189,6 @@ pub fn spawn_damned_soul_at(
                 InventoryItemVisual::default(),
                 SoulTaskVisualState::default(),
             ),
-            Sprite {
-                image: game_assets.soul.clone(),
-                custom_size: Some(Vec2::splat(TILE_SIZE * 0.8)),
-                color: sprite_color,
-                ..default()
-            },
             Transform::from_xyz(actual_pos.x, actual_pos.y, Z_CHARACTER),
             Destination(actual_pos),
             Path::default(),
@@ -216,7 +201,7 @@ pub fn spawn_damned_soul_at(
         ))
         .id();
 
-    // Soul 3D PoC: billboard ではなく GLB SceneRoot を直接 RtT に流す。
+    // Soul の通常表示は GLB SceneRoot を RtT に流し、2D Sprite は持たない。
     commands.spawn((
         SceneRoot(handles_3d.soul_scene.clone()),
         Transform::from_xyz(actual_pos.x, 0.0, -actual_pos.y)
@@ -227,6 +212,15 @@ pub fn spawn_damned_soul_at(
             billboard: false,
         },
         Name::new(format!("SoulProxy3d: {}", soul_name)),
+    ));
+
+    commands.spawn((
+        SceneRoot(handles_3d.soul_scene.clone()),
+        Transform::from_xyz(actual_pos.x, 0.0, -actual_pos.y)
+            .with_scale(Vec3::splat(SOUL_GLB_SCALE)),
+        bevy::camera::visibility::RenderLayers::layer(LAYER_3D_SOUL_MASK),
+        hw_visual::visual3d::SoulMaskProxy3d { owner: soul_entity },
+        Name::new(format!("SoulMaskProxy3d: {}", soul_name)),
     ));
 
     info!("SPAWN: {} ({:?}) at {:?}", soul_name, gender, actual_pos);
