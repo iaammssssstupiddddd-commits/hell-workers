@@ -16,6 +16,7 @@
 ```text
 .
 crates/hw_core
+crates/hw_energy
 crates/hw_world
 crates/hw_logistics
 crates/hw_jobs
@@ -38,6 +39,9 @@ hw_core
   ├─ hw_soul_ai
   ├─ hw_ui
   ├─ hw_visual
+  └─ bevy_app
+
+hw_energy
   └─ bevy_app
 
 hw_world (hw_core + hw_jobs)
@@ -315,6 +319,32 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 - `AreaBounds`, `TaskArea`（矩形エリア抽象型）
 - `command` 系 pure helper の一部（`wall_line_area`, `count_positions_in_area`, `overlap_summary_from_areas`, `get_drag_start`）
 - `GameTime`（`hw_core::time`）— ゲーム内時間 Resource。`game_time_system` は `ClockText` 依存のため bevy_app に残留するが、型自体は `hw_core::GameTime` を直接使う。1 段だけの pass-through re-export は置かない
+
+### `hw_energy`
+
+役割:
+
+- Soul Energy システム専用の型・定数・Relationship を集約するドメインクレート
+- `hw_core` に依存しない独立 leaf crate（依存: `bevy` のみ）
+
+代表例:
+
+- `constants::{OUTPUT_PER_SOUL, DREAM_CONSUME_RATE_GENERATING, DREAM_GENERATE_FLOOR, OUTDOOR_LAMP_DEMAND, OUTDOOR_LAMP_EFFECT_RADIUS, SOUL_SPA_BONE_COST_PER_TILE, FATIGUE_RATE_GENERATING}`
+- `components::{PowerGrid, PowerGenerator, PowerConsumer, Unpowered, YardPowerGrid}`
+  - `PowerGrid` — Yard に 1 対 1 で存在する電力網エンティティ（generation / consumption / powered を保持）
+  - `PowerGenerator` — SoulSpaSite に付与するサイト単位の発電集計コンポーネント（Phase 1b で使用開始）
+  - `PowerConsumer` — 電力消費建物に付与。`#[require(Unpowered)]` で未接続時のデフォルトを停電側に設定
+  - `Unpowered` — 停電マーカー。グリッド再計算で除去/再挿入される
+  - `YardPowerGrid` — PowerGrid エンティティ上に付与。所属 Yard への逆参照
+- `relationships::{GeneratesFor, GridGenerators, ConsumesFrom, GridConsumers}`
+  - `GeneratesFor` — SoulSpaSite → PowerGrid（発電機グリッド登録）
+  - `ConsumesFrom` — OutdoorLamp 等 → PowerGrid（消費者グリッド登録）
+
+ここに置かないもの:
+
+- `hw_core` 等の他 hw_* クレートへの依存
+- PowerGrid 再計算ロジック（Phase 1c 以降、`hw_energy` 本体に追加予定）
+- Soul Spa / OutdoorLamp の建物 ECS 定義（`hw_jobs` または `hw_energy` 拡張で Phase 1b/1c に追加）
 
 ### `hw_world`
 

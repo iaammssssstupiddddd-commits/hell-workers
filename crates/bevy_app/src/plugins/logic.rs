@@ -9,6 +9,7 @@ use crate::systems::command::{
     zone_removal_system,
 };
 use crate::systems::dream_tree_planting::dream_tree_planting_system;
+use crate::systems::energy::grid_lifecycle::{on_yard_added, on_yard_removed};
 use crate::systems::familiar_ai::FamiliarAiPlugin;
 use crate::systems::jobs::floor_construction::{
     floor_construction_cancellation_system, floor_construction_completion_system,
@@ -25,6 +26,10 @@ use crate::systems::soul_ai::SoulAiPlugin;
 use crate::world::regrowth::{RegrowthManager, tree_regrowth_system};
 use bevy::prelude::*;
 use hw_core::game_state::PlayMode;
+use hw_energy::{
+    ConsumesFrom, GeneratesFor, GridConsumers, GridGenerators, PowerConsumer, PowerGenerator,
+    PowerGrid, Unpowered, YardPowerGrid,
+};
 use hw_jobs::visual_sync::{
     on_building_added_sync_visual, on_designation_added, on_designation_removed,
     on_mud_mixer_storage_added, on_rest_area_added, sync_blueprint_visual_system,
@@ -63,6 +68,17 @@ impl Plugin for LogicPlugin {
         app.init_resource::<RoomDetectionState>();
         app.init_resource::<RoomTileLookup>();
         app.init_resource::<RoomValidationState>();
+
+        // Soul Energy 型登録
+        app.register_type::<PowerGrid>()
+            .register_type::<PowerGenerator>()
+            .register_type::<PowerConsumer>()
+            .register_type::<Unpowered>()
+            .register_type::<YardPowerGrid>()
+            .register_type::<GeneratesFor>()
+            .register_type::<GridGenerators>()
+            .register_type::<ConsumesFrom>()
+            .register_type::<GridConsumers>();
 
         // グループA: command 系（直列維持 — TaskContext / AreaEdit / WorldMapWrite が競合）
         app.add_systems(
@@ -158,6 +174,8 @@ impl Plugin for LogicPlugin {
         .add_observer(on_building_added_sync_visual)
         .add_observer(on_mud_mixer_storage_added)
         .add_observer(on_stockpile_added_sync_visual)
+        .add_observer(on_yard_added)
+        .add_observer(on_yard_removed)
         .add_systems(
             Update,
             (

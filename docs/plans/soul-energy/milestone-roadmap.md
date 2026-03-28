@@ -1,8 +1,8 @@
 # Soul Energy System — Milestone Roadmap
 
 Created: 2026-03-27
-Last Updated: 2026-03-27
-Status: Phase 1 plan finalized, implementation not started
+Last Updated: 2026-03-28
+Status: Phase 1a complete, Phase 1b not started
 
 ---
 
@@ -43,7 +43,7 @@ Soul performs ritual meditation at a **Soul Spa** to generate energy. Appears to
 
 ### ECS Relationship Design
 
-New Relationships in `hw_core/src/relationships.rs`:
+New Relationships in `hw_energy/src/relationships.rs` (formerly planned for `hw_core/src/relationships.rs`):
 
 | Source | Target (Bevy auto) | Purpose |
 |:---|:---|:---|
@@ -91,10 +91,11 @@ Phase 1: Foundation (Yard-scoped)
 
 ## Phase 1 Plans
 
-### Phase 1a: Data Model + Grid Infrastructure
+### Phase 1a: Data Model + Grid Infrastructure ✅ Done
 > **File**: `phase1a-data-model.md`
 > **Scope**: Component/Relationship/constant definitions, PowerGrid entity auto-creation with Yard
 > **Size**: Small. No UI, no gameplay changes.
+> **Delivered**: `crates/hw_energy` crate (`components`, `constants`, `relationships`); `bevy_app/src/systems/energy/grid_lifecycle.rs` (Yard observers)
 
 ### Phase 1b: Soul Spa + GeneratePower Task
 > **File**: `phase1b-soul-spa.md`

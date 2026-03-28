@@ -152,7 +152,7 @@ Visual rendering (sprites/animations) is Phase 1c. This step only defines the mi
 - `crates/hw_jobs/src/tasks/` — WorkType::GeneratePower, AssignedTask::GeneratePower, GeneratePowerData
 - `crates/hw_core/src/game_state.rs` — TaskMode::SoulSpaPlace
 - `crates/hw_core/src/visual_mirror/` — SoulTaskPhaseVisual::GeneratePower, SoulSpaTileVisualState
-- `crates/hw_core/src/` — SoulSpaSite, SoulSpaTile components
+- `crates/hw_energy/src/` — SoulSpaSite, SoulSpaTile components
 - `crates/bevy_app/src/systems/jobs/` — Soul Spa construction system (new module)
 - `crates/bevy_app/src/systems/soul_ai/execute/task_execution/` — GeneratePower execution logic
 - `crates/bevy_app/src/interface/` — Placement UI, slot control UI
