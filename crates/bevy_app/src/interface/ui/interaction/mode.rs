@@ -247,6 +247,7 @@ pub(super) fn build_mode_text(ctx: ModeCtxRefs, info: ModeDisplayInfo) -> String
                 "Mode: Dream Planting (Drag to select area)".to_string()
             }
             TaskMode::DreamPlanting(Some(_)) => "Mode: Dream Planting (Dragging...)".to_string(),
+            TaskMode::SoulSpaPlace(_) => "Mode: Soul Spa (Click to place 2×2)".to_string(),
             _ => "Mode: Task".to_string(),
         },
         PlayMode::FloorPlace => match task_context.0 {

@@ -5,7 +5,7 @@ target-dir = "target"
 rustflags = ["-C", "link-arg=-fuse-ld=mold"]
 
 [alias]
-visual-test = "run --example visual_test -p bevy_app@0.1.0"
+visual-test = "run -p visual_test"
 
 [env]
 # CARGO_MANIFEST_DIR が crates/bevy_app/ になるため、

@@ -14,4 +14,5 @@ pub enum TransportRequestKind {
     ReturnWheelbarrow,
     BatchWheelbarrow,
     ConsolidateStockpile,
+    DeliverToSoulSpa,
 }

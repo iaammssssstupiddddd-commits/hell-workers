@@ -196,6 +196,19 @@ pub fn compute_remaining_provisional_wall_mud(
     )
 }
 
+pub fn compute_remaining_soul_spa_bones(
+    site_entity: Entity,
+    context: &DemandReadContext<'_, '_, '_>,
+) -> u32 {
+    let base_demand = context
+        .queries
+        .soul_spa_sites
+        .get(site_entity)
+        .map(|site| site.bones_required.saturating_sub(site.bones_delivered) as usize)
+        .unwrap_or(0);
+    compute_remaining_from_incoming(site_entity, base_demand, ResourceType::Bone, context)
+}
+
 fn compute_remaining_from_incoming(
     anchor_entity: Entity,
     base_demand: usize,

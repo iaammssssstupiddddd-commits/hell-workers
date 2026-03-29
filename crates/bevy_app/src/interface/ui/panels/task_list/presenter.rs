@@ -39,6 +39,7 @@ pub fn generate_task_description(wt: WorkType, entity: Entity, refs: TaskCompone
                     BuildingType::SandPile => "Construct SandPile".to_string(),
                     BuildingType::BonePile => "Construct BonePile".to_string(),
                     BuildingType::WheelbarrowParking => "Construct Parking".to_string(),
+                    BuildingType::SoulSpa => "Construct Soul Spa".to_string(),
                 }
             } else {
                 format!("Construct {:?}", entity)
@@ -99,5 +100,6 @@ pub fn generate_task_description(wt: WorkType, entity: Entity, refs: TaskCompone
         WorkType::PourFloorTile => "Pour Floor".to_string(),
         WorkType::FrameWallTile => "Frame Wall".to_string(),
         WorkType::CoatWall => "Coat Wall".to_string(),
+        WorkType::GeneratePower => "Generate Power".to_string(),
     }
 }

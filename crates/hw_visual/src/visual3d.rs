@@ -38,7 +38,7 @@ pub struct SoulAnimationPlayer3d {
     pub current_body: SoulBodyAnimState,
     pub walk_facing_right: Option<bool>,
     pub last_owner_pos: Option<Vec2>,
-    pub walk_variant_lock_secs: f32,
+    pub directional_variant_lock_secs: f32,
 }
 
 #[derive(Component, Debug, Clone)]

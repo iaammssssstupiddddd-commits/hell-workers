@@ -20,5 +20,6 @@ fn building_type_to_visual(kind: BuildingType) -> BuildingTypeVisual {
         BuildingType::SandPile => BuildingTypeVisual::SandPile,
         BuildingType::BonePile => BuildingTypeVisual::BonePile,
         BuildingType::WheelbarrowParking => BuildingTypeVisual::WheelbarrowParking,
+        BuildingType::SoulSpa => BuildingTypeVisual::SoulSpa,
     }
 }

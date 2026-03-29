@@ -50,6 +50,7 @@ Normal ↔ ZonePlace（Zoneボタン/Esc）、Normal ↔ TaskDesignation（Order
 | `FloorPlace(Option<Vec2>)` | 床エリア配置 | Some = ドラッグ中 |
 | `WallPlace(Option<Vec2>)` | 壁ライン配置 | Some = ドラッグ中 |
 | `DreamPlanting(Option<Vec2>)` | Dream 植林モード | Some = ドラッグ中 |
+| `SoulSpaPlace(Option<Vec2>)` | Soul Spa 配置（2×2） | Some = ドラッグ中 |
 
 `Option<Vec2>` は `None` = 待機、`Some(pos)` = ドラッグ開始位置（進行中）を示す。
 

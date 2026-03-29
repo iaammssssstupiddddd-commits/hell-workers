@@ -1,0 +1,18 @@
+[package]
+name = "visual_test"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "visual_test"
+path = "src/main.rs"
+
+[dependencies]
+bevy = { workspace = true }
+hw_core = { path = "../hw_core" }
+hw_visual = { path = "../hw_visual" }
+hw_world = { path = "../hw_world" }
+
+[features]
+default = ["dynamic_linking"]
+dynamic_linking = ["bevy/dynamic_linking"]

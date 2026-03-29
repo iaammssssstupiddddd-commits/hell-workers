@@ -3,6 +3,7 @@ use bevy::prelude::*;
 
 use hw_core::events::ResourceReservationRequest;
 use hw_core::relationships::{ManagedBy, TaskWorkers};
+use hw_energy::SoulSpaSite;
 use hw_jobs::{Blueprint, Designation, Priority, TaskSlots};
 use hw_logistics::SharedResourceCache;
 use hw_logistics::zone::Stockpile;
@@ -237,4 +238,5 @@ pub struct MutStorageAccess<'w, 's> {
             Option<&'static mut hw_jobs::ProvisionalWall>,
         ),
     >,
+    pub soul_spa_sites: Query<'w, 's, &'static Transform, With<SoulSpaSite>>,
 }

@@ -203,6 +203,17 @@ pub struct FamiliarTaskAssignmentQueries<'w, 's> {
     pub storage: FamiliarStorageAccess<'w, 's>,
     pub assignment_writer: MessageWriter<'w, hw_jobs::events::TaskAssignmentRequest>,
     pub read: TaskAssignmentReadAccess<'w, 's>,
+    /// Soul Spa サイト（active_slots ゲート確認用）
+    pub soul_spa_sites: Query<'w, 's, &'static hw_energy::SoulSpaSite>,
+    /// Soul Spa タイル（稼働数集計用）
+    pub soul_spa_tiles: Query<
+        'w,
+        's,
+        (
+            &'static hw_energy::SoulSpaTile,
+            Option<&'static TaskWorkers>,
+        ),
+    >,
 }
 
 impl<'w, 's> Deref for FamiliarTaskAssignmentQueries<'w, 's> {

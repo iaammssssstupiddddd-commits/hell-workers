@@ -57,6 +57,15 @@ pub fn handle(
                     cancel::cancel_wheelbarrow_task(ctx, &data, commands);
                     return;
                 }
+            } else if let Ok(soul_spa_transform) =
+                ctx.queries.storage.soul_spa_sites.get(stockpile_entity)
+            {
+                let site_pos = soul_spa_transform.translation.truncate();
+                let outcome = navigate_to_pos(ctx, site_pos, soul_pos, world_map);
+                (
+                    !matches!(outcome, NavOutcome::Unreachable),
+                    matches!(outcome, NavOutcome::Arrived),
+                )
             } else {
                 info!("WB_HAUL: Destination stockpile/site not found, canceling");
                 cancel::cancel_wheelbarrow_task(ctx, &data, commands);

@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "crates/*",
 ]
+default-members = ["crates/bevy_app"]
 
 [workspace.dependencies]
 bevy = { version = "0.18", default-features = false, features = [

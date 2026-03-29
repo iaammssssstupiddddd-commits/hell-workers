@@ -3,6 +3,7 @@ use crate::interface::selection::blueprint_placement;
 use crate::interface::selection::building_move_preview_system;
 use crate::interface::selection::building_move_system;
 use crate::interface::selection::floor_placement_system;
+use crate::interface::selection::soul_spa_place_input_system;
 use crate::interface::selection::{
     cleanup_selection_references_system, clear_companion_state_outside_build_mode,
     update_hover_entity, update_selection_indicator,
@@ -33,6 +34,7 @@ fn register_ui_core_plugin_systems(app: &mut App) {
             building_move_preview_system.run_if(in_state(PlayMode::BuildingMove)),
             floor_placement_system.run_if(in_state(PlayMode::FloorPlace)),
             building_move_system.run_if(in_state(PlayMode::BuildingMove)),
+            soul_spa_place_input_system.run_if(in_state(PlayMode::TaskDesignation)),
         )
             .in_set(GameSystemSet::Interface),
     )

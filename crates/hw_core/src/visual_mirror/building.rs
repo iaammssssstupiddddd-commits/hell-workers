@@ -16,6 +16,7 @@ pub enum BuildingTypeVisual {
     SandPile,
     BonePile,
     WheelbarrowParking,
+    SoulSpa,
 }
 
 /// Mirror of `hw_jobs::Building` carrying only the data `hw_visual` needs.

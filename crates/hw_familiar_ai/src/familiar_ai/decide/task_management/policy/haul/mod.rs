@@ -8,6 +8,7 @@ mod mixer;
 mod provisional_wall;
 mod returns;
 mod selector_metrics;
+mod soul_spa;
 mod source_selector;
 mod stockpile;
 mod wall;
@@ -76,6 +77,10 @@ pub fn assign_haul(
         construction_sites,
         shadow,
     ) {
+        return true;
+    }
+
+    if soul_spa::assign_haul_to_soul_spa(task_pos, already_commanded, ctx, queries, shadow) {
         return true;
     }
 

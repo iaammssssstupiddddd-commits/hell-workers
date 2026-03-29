@@ -71,6 +71,7 @@ Source 側のみ手動操作し、Target 側は Bevy が自動更新する（tas
 | `DeliverToFloorConstruction` | `Haul` | `floor_construction_auto_haul_system` | FloorConstructionSite | 割り当て時に Bone / StasisMud ソースを遅延解決（搬入先は `site.material_center`） |
 | `DeliverToWallConstruction` | `Haul` | `wall_construction_auto_haul_system` | WallConstructionSite | 割り当て時に Wood / StasisMud ソースを遅延解決（搬入先は `site.material_center`） |
 | `DeliverToProvisionalWall` | `Haul` | `provisional_wall_auto_haul_system` | Wall (Building) | 割り当て時に StasisMud ソースを遅延解決（搬入先は壁足元） |
+| `DeliverToSoulSpa` | `WheelbarrowHaul` | `soul_spa_auto_haul_system` | SoulSpaSite | 割り当て時に Bone ソース（地面 / BonePile）を遅延解決（猫車必須）。搬入先はサイト中央 |
 | `DeliverWaterToMixer` | `BucketTransport` (source=Tank) | `mud_mixer_auto_haul_system` | Mixer | 割り当て時に tank + bucket を遅延解決 |
 | `GatherWaterToTank` | `BucketTransport` (source=River) | `tank_water_request_system` | Tank | 割り当て時に bucket を遅延解決 |
 | `ReturnBucket` | `Haul` | `bucket_auto_haul_system` | Tank | 割り当て時に dropped bucket と返却先 BucketStorage を同時遅延解決 |
@@ -212,6 +213,14 @@ Source 側のみ手動操作し、Target 側は Bevy が自動更新する（tas
 - 割り当て時と wheelbarrow 荷下ろし時に、対象 phase の残需要を再確認して不要な資材を搬入先へ置かない。
 - `wall_tile_designation_system` が `FramingReady -> WorkType::FrameWallTile`、`CoatingReady -> WorkType::CoatWall` を付与する。
 
+### 4.11 Soul Spa 建設搬入 (`DeliverToSoulSpa`)
+- `soul_spa_auto_haul_system` が `SoulSpaPhase::Constructing` のサイトを走査し、残 Bone 需要を算出して request を upsert。
+- owner 解決には `collect_all_area_owners`（使い魔 TaskArea + Yard）を使用するため、サイトが使い魔のエリア外の Yard にある場合でも request が生成される。
+- Bone は常に猫車（`WheelbarrowHaul`）で搬送。搬入先はサイト中央（`SoulSpaSite` の `Transform` 位置）。
+- `soul_spa_delivery_sync_system` がサイト周辺（半径 1.5 タイル）の Bone を消費し `bones_delivered` を更新する。
+- `bones_delivered >= bones_required`（= 12）で `SoulSpaPhase::Operational` に遷移し、建設 request は消滅する。
+- 荷下ろし時（`unloading.rs`）は `WheelbarrowDestination::Stockpile` として到着し、サイト位置へアイテムをドロップ。delivery_sync 側が収集するためストックパイル容量チェックは行わない。
+
 ## 5. 手押し車運搬
 
 ### 5.1 基本動作
@@ -232,6 +241,7 @@ Source 側のみ手動操作し、Target 側は Bevy が自動更新する（tas
   - `DeliverToMixerSolid`（`Sand`）
   - `DeliverToFloorConstruction`（`StasisMud` / 直採取 `Bone`）
   - `DeliverToWallConstruction`（`StasisMud`）
+  - `DeliverToSoulSpa`（`Bone`、猫車直採取）
 - 猫車不足時は request は `Pending` のまま待機する。
 
 ### 5.2 手押し車仲裁システム (Wheelbarrow Arbitration)

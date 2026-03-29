@@ -229,9 +229,9 @@ Perceive → Update → Decide → Execute
 
 `sync_rtt_output_bindings`（同ファイル、`Update` スケジュール）は `RttTextures` の変化を検知し、`Camera3dRtt.target` / `Camera3dSoulMaskRtt.target` と `RttCompositeMaterial` の参照テクスチャを同時に更新する。RtT テクスチャ自体は物理解像度で生成するが、合成メッシュのスケールは `PrimaryWindow` の logical size を基準にしつつ、斜め TopDown オーソ投影で圧縮される Y 方向を `topdown_rtt_vertical_compensation()` で補正する。`sync_rtt_texture_size_to_window` と `chain` で登録されているため、ウィンドウサイズ変更フレーム内で再生成後のテクスチャへ差し替わる。
 
-### キャラクター3D表示（Soul GLB + Soul mask / Familiar billboard）
+### キャラクター表示（Soul GLB + Familiar 2D 前面表示）
 
-`SoulProxy3d` は `SceneRoot` で `assets/models/characters/soul.glb#Scene0` を読み込む 3D ルートとして使い、`FamiliarProxy3d` は引き続き `XY` 矩形メッシュに既存 2D テクスチャを貼った billboard 風プロキシで運用する。
+`SoulProxy3d` は `SceneRoot` で `assets/models/characters/soul.glb#Scene0` を読み込む 3D ルートとして使う。Familiar は Phase 3 の表示方針として 2D 前面表示・影なしを採用し、建築物 RtT より手前の Camera2d レイヤーで扱う。
 
 - `GameAssets.soul_scene` に `GltfAssetLabel::Scene(0).from_asset("models/characters/soul.glb")` を保持し、Soul spawn 時に `SceneRoot` として 3D シーンへ追加する。
 - Soul 本体エンティティは 2D `Sprite` を持たず、通常表示は GLB 側へ一本化している。従来の `animation_system` / `idle_visual_system` は `Sprite` を optional にして、Soul の状態更新を維持したまま 3D 表示へ移行している。
@@ -248,15 +248,19 @@ Perceive → Update → Decide → Execute
 - `prepare_soul_animation_library_system` は `GameAssets.soul_gltf` から `Gltf.named_animations` を読み、`Idle / Walk / Work / Carry / Fear / Exhausted / WalkLeft / WalkRight` の clip handle を名前解決して `SoulAnimationLibrary` に保持する。
 - `apply_soul_gltf_render_layers_on_ready` は `mesh_face` に共有 material を直接挿さず、Soul ごとに face material を複製して `SoulFaceMaterial3d` を付与する。これにより face atlas の `uv_offset` を Soul 単位で更新できる。
 - `sync_soul_anim_visual_state_system` が Soul 本体の `AssignedTask` ミラー、`AnimationState.is_moving`、`IdleState`、疲労、会話表情イベントから `SoulAnimVisualState { body, face }` を算出し、`sync_soul_body_animation_system` と `sync_soul_face_expression_system` がそれぞれ body clip と face atlas を更新する。
+- body / face の写像は同一ではない。body `Fear` は `StressBreakdown` にのみ結び付き、`is_frozen = true` の短時間は body を `Idle` のまま維持し、freeze 明けで `Fear` clip へ入る。negative 会話表情は face `Fear` のみを更新する。
+- body `Exhausted` は `IdleBehavior::ExhaustedGathering` にのみ結び付き、通常の fatigue 上昇や `ConversationExpressionKind::Exhausted` は face `Exhausted` 側だけで扱う。
 - `initialize_soul_animation_players_system` は GLB 内で自動生成された `AnimationPlayer` を `SoulAnimationPlayer3d` と関連付け、`AnimationGraphHandle` と `AnimationTransitions` を挿入して `Idle` から再生を開始する。
 - `sync_soul_body_animation_system` は Soul 本体のフレーム間移動量から実移動ベクトルを算出し、横成分比率が十分高いときだけ `WalkLeft / WalkRight` を使う。判定には enter / exit の 2 段階閾値を使って揺れを抑え、縦移動寄りでは `Walk` または `Carry` を維持する。現行 GLB に `CarryLeft / CarryRight` は無いため、運搬移動で横成分が強いときも `WalkLeft / WalkRight` を優先する。clip 向きは現行 Soul GLB に合わせて `+X => WalkLeft`、`-X => WalkRight` としている。
-- `sync_soul_body_animation_system` はさらに `Walk` 系 variant 更新に短い lock を持ち、微小な軌道ぶれで `Walk <-> WalkLeft/WalkRight` が毎フレーム往復しないようにしている。Idle / Work / Carry など別 body state への遷移は lock で止めない。
+- `sync_soul_body_animation_system` はさらに directional variant 更新に短い lock を持ち、微小な軌道ぶれで `Walk / Carry <-> WalkLeft/WalkRight` が毎フレーム往復しないようにしている。Idle / Work / Fear / Exhausted など別 body state への遷移は lock で止めない。
 - `mesh_face` には `SOUL_FACE_SCALE_MULTIPLIER` を掛け、PoC 目視で顔が読み取りづらい問題を asset 非破壊で補正する。
 - `mesh_face` のローカル回転は GLB 側の初期姿勢をそのまま使い、PoC 段階では追加の billboard 回転を行わない。
 - `Camera3dRtt` には `AmbientLight` を付与し、GLB 付属の lit material が RtT 上で暗転しないようにする。
 - `startup_systems::setup` では `LAYER_3D` と `LAYER_3D_SOUL_SHADOW` の両方に作用する shadow-enabled `DirectionalLight` を 1 本追加し、`DirectionalLightShadowMap { size: 4096 }` と `CascadeShadowConfigBuilder` で shadow map 範囲を明示している。これにより Soul の shadow proxy だけを camera 非表示のまま shadow pass に参加させられる。
 - `Camera3dSoulMaskRtt` は Soul mask 専用 Camera3d で、通常の `Camera3dRtt` と同じ Transform / Projection を共有する。最終合成では `RttCompositeMaterial` が `texture_soul_mask` を近傍サンプリングし、Soul シルエットだけを画面上で少し膨らませて角を丸める。
-- Familiar 側は `Rectangle::new(...)` + `StandardMaterial { base_color_texture, unlit, AlphaMode::Blend, cull_mode: None }` を維持し、`sync_familiar_proxy_3d_system` が `Camera3dRtt` の回転をそのままコピーする。
+- Familiar は 2D `Sprite` の 4 フレーム差し替え・左右反転・hover/wobble を本表示として維持する。Command radius オーラ・hover/selection・吹き出しも同じ 2D world transform を参照する。
+- Familiar は建築物 RtT 合成より手前に出す前提とし、Soul のような shadow proxy や shadow caster は持たない。
+- `FamiliarProxy3d` は移行期の検証用経路として残っているが、Phase 3 の恒久方針ではない。多層階導入時は `FloorLevel` 等の所属階 state を導入し、「現在表示中の階に属する Familiar だけを 2D 前面表示する」ルールを別マイルストーンで定義する。
 
 ### 3D 表示トグル（開発機能）
 

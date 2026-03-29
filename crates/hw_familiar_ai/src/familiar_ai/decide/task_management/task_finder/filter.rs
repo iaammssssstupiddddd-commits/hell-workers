@@ -241,6 +241,7 @@ pub(super) fn candidate_snapshot(
                 false
             }
         }
+        WorkType::GeneratePower => true,
     };
 
     if !is_valid {

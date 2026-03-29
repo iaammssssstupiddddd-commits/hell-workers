@@ -1,5 +1,6 @@
 mod building_completion;
 pub mod floor_construction;
+pub mod soul_spa_construction;
 pub mod wall_construction;
 
 pub use building_completion::building_completion_system;

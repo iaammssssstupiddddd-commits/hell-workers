@@ -358,6 +358,11 @@ fn architect_building_specs(
                 MenuAction::SelectBuild(BuildingType::MudMixer),
                 button_color,
             ),
+            MenuEntrySpec::new(
+                "Soul Spa",
+                MenuAction::SelectTaskMode(TaskMode::SoulSpaPlace(None)),
+                button_color,
+            ),
         ],
         BuildingCategory::Temporary => vec![
             MenuEntrySpec::new(

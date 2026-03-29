@@ -34,6 +34,7 @@ pub fn designation_visual_system(
             WorkType::PourFloorTile => Color::srgb(0.0, 0.5, 1.0), // Same as Build
             WorkType::FrameWallTile => Color::srgb(0.0, 0.5, 1.0), // Same as Build
             WorkType::CoatWall => Color::srgb(0.0, 0.5, 1.0),    // Same as Build
+            WorkType::GeneratePower => Color::srgb(1.0, 0.8, 0.0), // Golden yellow
         };
 
         commands.spawn((

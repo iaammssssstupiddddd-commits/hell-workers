@@ -4,6 +4,7 @@ mod floor_place;
 mod hit_test;
 mod input;
 mod mode;
+pub(crate) mod soul_spa_place;
 mod state {
     pub use hw_ui::selection::{
         HoveredEntity, SelectedEntity, SelectionIndicator, cleanup_selection_references_system,
@@ -16,6 +17,7 @@ pub use building_place::blueprint_placement;
 pub use floor_place::floor_placement_system;
 pub use input::{handle_mouse_input, update_hover_entity};
 pub use mode::clear_companion_state_outside_build_mode;
+pub use soul_spa_place::soul_spa_place_input_system;
 pub use state::{
     HoveredEntity, SelectedEntity, SelectionIndicator, cleanup_selection_references_system,
     update_selection_indicator,

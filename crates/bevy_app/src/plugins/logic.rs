@@ -10,10 +10,14 @@ use crate::systems::command::{
 };
 use crate::systems::dream_tree_planting::dream_tree_planting_system;
 use crate::systems::energy::grid_lifecycle::{on_yard_added, on_yard_removed};
+use crate::systems::energy::power_output::soul_spa_power_output_system;
 use crate::systems::familiar_ai::FamiliarAiPlugin;
 use crate::systems::jobs::floor_construction::{
     floor_construction_cancellation_system, floor_construction_completion_system,
     floor_construction_phase_transition_system,
+};
+use crate::systems::jobs::soul_spa_construction::{
+    soul_spa_auto_haul_system, soul_spa_delivery_sync_system, soul_spa_tile_activate_system,
 };
 use crate::systems::jobs::wall_construction::{
     wall_construction_cancellation_system, wall_construction_completion_system,
@@ -28,7 +32,7 @@ use bevy::prelude::*;
 use hw_core::game_state::PlayMode;
 use hw_energy::{
     ConsumesFrom, GeneratesFor, GridConsumers, GridGenerators, PowerConsumer, PowerGenerator,
-    PowerGrid, Unpowered, YardPowerGrid,
+    PowerGrid, SoulSpaPhase, SoulSpaSite, SoulSpaTile, Unpowered, YardPowerGrid,
 };
 use hw_jobs::visual_sync::{
     on_building_added_sync_visual, on_designation_added, on_designation_removed,
@@ -37,6 +41,7 @@ use hw_jobs::visual_sync::{
     sync_mud_mixer_active_system, sync_soul_task_visual_system, sync_wall_site_visual_system,
     sync_wall_tile_visual_system,
 };
+use hw_jobs::{GeneratePowerData, GeneratePowerPhase, TargetSoulSpaSite};
 use hw_logistics::visual_sync::{
     on_stockpile_added_sync_visual, on_wheelbarrow_added, sync_inventory_item_visual_system,
     sync_stockpile_visual_system,
@@ -78,7 +83,13 @@ impl Plugin for LogicPlugin {
             .register_type::<GeneratesFor>()
             .register_type::<GridGenerators>()
             .register_type::<ConsumesFrom>()
-            .register_type::<GridConsumers>();
+            .register_type::<GridConsumers>()
+            .register_type::<SoulSpaSite>()
+            .register_type::<SoulSpaTile>()
+            .register_type::<SoulSpaPhase>()
+            .register_type::<GeneratePowerData>()
+            .register_type::<GeneratePowerPhase>()
+            .register_type::<TargetSoulSpaSite>();
 
         // グループA: command 系（直列維持 — TaskContext / AreaEdit / WorldMapWrite が競合）
         app.add_systems(
@@ -134,6 +145,17 @@ impl Plugin for LogicPlugin {
                 wall_construction_completion_system,
             )
                 .chain()
+                .in_set(GameSystemSet::Logic),
+        )
+        // グループE: Soul Spa construction（フェーズ順序が必要）
+        .add_systems(
+            Update,
+            (
+                soul_spa_auto_haul_system,
+                soul_spa_delivery_sync_system.after(soul_spa_auto_haul_system),
+                soul_spa_tile_activate_system.after(soul_spa_delivery_sync_system),
+                soul_spa_power_output_system,
+            )
                 .in_set(GameSystemSet::Logic),
         )
         .add_systems(

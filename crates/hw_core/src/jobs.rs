@@ -19,4 +19,5 @@ pub enum WorkType {
     PourFloorTile,
     FrameWallTile,
     CoatWall,
+    GeneratePower,
 }

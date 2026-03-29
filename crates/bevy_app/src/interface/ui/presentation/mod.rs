@@ -186,6 +186,7 @@ pub(super) fn format_task_str(task: &AssignedTask) -> String {
         AssignedTask::PourFloorTile(data) => format!("PourFloor ({:?})", data.phase),
         AssignedTask::FrameWallTile(data) => format!("FrameWall ({:?})", data.phase),
         AssignedTask::CoatWall(data) => format!("CoatWall ({:?})", data.phase),
+        AssignedTask::GeneratePower(data) => format!("GeneratePower ({:?})", data.phase),
         _ => "BucketTransport".to_string(),
     }
 }

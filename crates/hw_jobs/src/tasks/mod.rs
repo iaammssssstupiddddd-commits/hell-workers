@@ -4,6 +4,7 @@ pub mod bucket;
 pub mod build;
 pub mod collect;
 pub mod gather;
+pub mod generate_power;
 pub mod haul;
 pub mod move_plant;
 pub mod refine;
@@ -18,6 +19,7 @@ pub use build::{
 };
 pub use collect::{CollectBoneData, CollectBonePhase, CollectSandData, CollectSandPhase};
 pub use gather::{GatherData, GatherPhase};
+pub use generate_power::{GeneratePowerData, GeneratePowerPhase};
 pub use haul::{HaulData, HaulPhase, HaulToBlueprintData, HaulToBpPhase};
 pub use move_plant::{MovePlantData, MovePlantPhase, MovePlantTask};
 pub use refine::{HaulToMixerData, HaulToMixerPhase, RefineData, RefinePhase};
@@ -46,6 +48,7 @@ pub enum AssignedTask {
     PourFloorTile(PourFloorTileData),
     FrameWallTile(FrameWallTileData),
     CoatWall(CoatWallData),
+    GeneratePower(GeneratePowerData),
 }
 
 impl AssignedTask {
@@ -76,6 +79,7 @@ impl AssignedTask {
             AssignedTask::PourFloorTile(_) => Some(WorkType::PourFloorTile),
             AssignedTask::FrameWallTile(_) => Some(WorkType::FrameWallTile),
             AssignedTask::CoatWall(_) => Some(WorkType::CoatWall),
+            AssignedTask::GeneratePower(_) => Some(WorkType::GeneratePower),
             AssignedTask::None => None,
         }
     }
@@ -97,6 +101,7 @@ impl AssignedTask {
             AssignedTask::PourFloorTile(data) => Some(data.tile),
             AssignedTask::FrameWallTile(data) => Some(data.tile),
             AssignedTask::CoatWall(data) => Some(data.tile),
+            AssignedTask::GeneratePower(data) => Some(data.tile),
             AssignedTask::None => None,
         }
     }

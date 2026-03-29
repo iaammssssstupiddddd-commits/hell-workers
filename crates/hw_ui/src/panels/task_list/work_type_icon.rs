@@ -21,6 +21,7 @@ pub fn work_type_label(wt: &WorkType) -> &'static str {
         WorkType::PourFloorTile => "Pour",
         WorkType::FrameWallTile => "Frame",
         WorkType::CoatWall => "Coat",
+        WorkType::GeneratePower => "Generate",
     }
 }
 
@@ -49,6 +50,7 @@ pub fn work_type_icon(
         WorkType::ReinforceFloorTile
         | WorkType::PourFloorTile
         | WorkType::FrameWallTile
-        | WorkType::CoatWall => (assets.icon_hammer().clone(), theme.colors.build),
+        | WorkType::CoatWall
+        | WorkType::GeneratePower => (assets.icon_hammer().clone(), theme.colors.build),
     }
 }

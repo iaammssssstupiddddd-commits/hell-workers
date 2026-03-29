@@ -148,7 +148,8 @@ pub fn sync_reservations_system(
             // pending request 段階では destination 予約を積まない。
             TransportRequestKind::ReturnBucket
             | TransportRequestKind::ReturnWheelbarrow
-            | TransportRequestKind::BatchWheelbarrow => {}
+            | TransportRequestKind::BatchWheelbarrow
+            | TransportRequestKind::DeliverToSoulSpa => {}
         }
     }
 

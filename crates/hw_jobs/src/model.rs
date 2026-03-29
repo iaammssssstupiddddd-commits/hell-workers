@@ -21,6 +21,7 @@ pub enum BuildingType {
     SandPile,
     BonePile,
     WheelbarrowParking,
+    SoulSpa,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -49,7 +50,9 @@ impl BuildingType {
                 BuildingCategory::Structure
             }
             BuildingType::Door => BuildingCategory::Architecture,
-            BuildingType::Tank | BuildingType::MudMixer => BuildingCategory::Plant,
+            BuildingType::Tank | BuildingType::MudMixer | BuildingType::SoulSpa => {
+                BuildingCategory::Plant
+            }
             BuildingType::SandPile
             | BuildingType::BonePile
             | BuildingType::WheelbarrowParking
@@ -87,6 +90,10 @@ impl BuildingType {
             }
             BuildingType::WheelbarrowParking => {
                 materials.insert(ResourceType::Wood, 2);
+            }
+            BuildingType::SoulSpa => {
+                // Soul Spa は SoulSpaSite/SoulSpaTile で直接管理するため
+                // Blueprint システムは使用しない。materials は空。
             }
         }
         materials
@@ -335,3 +342,9 @@ pub fn remove_tile_task_components(commands: &mut Commands, tile_entities: &[Ent
             .remove::<(Designation, TaskSlots, Priority)>();
     }
 }
+
+/// TransportRequest の搬送先 Soul Spa サイトへの参照。
+/// Soul Spa 建設ロジスティクスシステムが使用する。
+#[derive(Component, Debug, Clone, Copy, Reflect)]
+#[reflect(Component)]
+pub struct TargetSoulSpaSite(pub Entity);

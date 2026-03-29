@@ -18,8 +18,8 @@
 |---------|-------------|------------------|------|
 | Phase 1 | 地形、建築物、キャラクター、UI | テスト用3Dオブジェクトのみ | RtT配線の成立確認 |
 | Phase 2 | 地形、2D UI | 壁・建築物の一部、キャラクタープロキシ | ハイブリッドRtTでZバッファ検証 |
-| Phase 3 | UIのみ | 地形、建築物、キャラクター | ここを「フルRtT到達点」とする |
-| Phase 4 | UIのみ | Phase 3の3Dシーン + 多層階表示 | ロジック座標系の拡張が入る |
+| Phase 3 | UI、Familiar、純2Dオーバーレイ | 地形、建築物、Soul | Familiar は前面 2D 表示を維持する |
+| Phase 4 | UI、純2Dオーバーレイ | Phase 3の3Dシーン + 多層階表示 | Familiar の所属階可視ルールをここで定義する |
 
 ---
 
@@ -332,25 +332,25 @@
   3. `Fear` / `Exhausted` を含む表情切り替え規則を `SoulAnimState` と同期する
 - **変更ファイル**: `crates/bevy_app/src/systems/soul_ai/` 以下、`hw_visual/src/anim/soul_anim.rs`、`hw_visual/src/material/character_material.rs`
 - **完了条件**:
-  - [ ] `cargo check` ゼロエラー
-  - [ ] Soul の全 P1 クリップがタスク状態に連動する（目視）
-  - [ ] 顔テクスチャアトラスによる表情切り替えが動作する（目視）
-- **ステータス**: [ ] 未着手
+  - [x] `cargo check` ゼロエラー
+  - [x] Soul の全 P1 クリップがタスク状態に連動する（目視）
+  - [x] 顔テクスチャアトラスによる表情切り替えが動作する（目視）
+- **ステータス**: [x] 完了（Work / Carry / Fear / Exhausted の写像確認、face atlas 連動確認、breakdown / exhausted の body-face 役割分離まで完了）
 
 ---
 
-### MS-3-Fam-R: Familiar 表示方式再検討
+### MS-3-Fam-R: Familiar 表示方式決定
 
 > **依存**: MS-3-1 完了
 
 - **やること**:
-  1. Familiar の現行表示と GLB 化の利点・欠点を比較する
-  2. Z 軸表現、被遮蔽の必要性、アニメーション要求、実装コストを評価する
-  3. `GLB 化する / billboard 維持 / 2D 維持` のいずれかを決定し、後続マイルストーンへ反映する
+  1. Familiar は Phase 3 では 2D 前面表示を本表示として維持する
+  2. Familiar に shadow caster / shadow proxy は持たせず、影は仕様として扱わない
+  3. 多層階での所属階可視ルールは別マイルストーンへ分離する
 - **完了条件**:
-  - [ ] Familiar の表示方式が決定されている
-  - [ ] 決定内容が roadmap / implementation plan に反映されている
-- **ステータス**: [ ] 未着手
+  - [x] Familiar の表示方式が決定されている
+  - [x] 決定内容が roadmap / implementation plan に反映されている
+- **ステータス**: [x] 完了（Phase 3 は 2D 前面表示・影なし、多層階の所属階可視ルールは後段へ分離）
 
 ---
 
@@ -370,7 +370,7 @@
 
 ---
 
-### MS-3-3: SectionMaterial 基盤（MS-Section-A）
+### MS-3-3: SectionMaterial 基盤（MS-Section-A / 将来実装）
 
 > **依存**: MS-P3-Pre-A 完了（`WgpuFeatures::CLIP_DISTANCES` 確認済みであること）
 
@@ -385,7 +385,7 @@
   - [ ] `cargo check` ゼロエラー
   - [ ] `SectionCut.active = true` のとき Cuboid がスラブ外でクリップされる（目視）
   - [ ] `SectionCut.active = false` のとき全体が正常描画される（目視）
-- **ステータス**: [ ] 未着手
+- **ステータス**: [ ] 将来実装
 
 ---
 
@@ -545,7 +545,7 @@ MS-1A → MS-1B → MS-1C → MS-1D ────────────┤
                        │                                             │  │
                   MS-3-Char-A (AnimationGraph+SoulAnimState) ←─3-1+GLB-B│
                   MS-3-Char-B (Soul P1+face atlas) ←────── 3-Char-A+Face│
-                  MS-3-Fam-R (Familiar表示再検討) ←─────── 3-1          │
+                  MS-3-Fam-R (Familiar表示決定)  ←─────── 3-1          │
                   MS-3-2 (RtT WindowResized)   ←─Pre-B              │  │
                   MS-3-3 (SectionMaterial基盤) ←─Pre-A              ↓  │
                        │                                            │  │
@@ -573,12 +573,12 @@ MS-WFC-1 → MS-WFC-2 → MS-WFC-3 → MS-WFC-3.5  (独立)
 | P0（データ確定） | MS-P3-Pre-C | Camera3d 角度未確定のまま GLB 生成パイプラインを進められない |
 | P1（基盤整備） | MS-P3-Pre-B | Phase 3 参照箇所が増える前に一元化しておく必要がある |
 | P1（PoC） | MS-P3-Pre-D | Character GLB + face atlas 表示確認。MS-3-1 の前提 |
-| P1（序盤） | MS-3-3 | SectionMaterial の PoC が Phase 3 後半全体の前提 |
-| P2（本実装） | MS-3-2 | RtT 解像度と品質スケール整備 |
+| P1（本実装） | MS-3-2 | RtT 解像度と品質スケール整備。現行 Phase 3 の次タスク |
+| P4（将来実装） | MS-3-3 | SectionMaterial / section clip は将来フェーズへ延期 |
 | P2（キャラクター） | MS-3-Char-A | M-3-1 完了後の次タスク |
 | P2（キャラクター） | MS-3-Char-A | AnimationGraph + タスク連動。MS-3-1 完了後すぐ着手 |
 | P2（キャラクター） | MS-3-Char-B | Soul の P1 クリップ接続 + face atlas 状態連動。MS-3-Char-A 完了後 |
-| P3（再評価） | MS-3-Fam-R | Familiar を 3D 化する価値を改めて判断する |
+| P3（方針確定） | MS-3-Fam-R | Familiar を Phase 3 では 2D 前面表示・影なしで扱い、多層階の可視ルールを後段へ送る |
 | P2（本実装） | MS-3-4〜MS-3-9 | Phase 3 中盤〜後半の順次実装 |
 | 独立 | MS-WFC-1〜3 | メインルートとは独立。地形改善を先行させることも可 |
 

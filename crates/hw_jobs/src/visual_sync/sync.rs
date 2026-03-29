@@ -160,6 +160,9 @@ pub fn sync_soul_task_visual_system(mut q: SoulTaskSyncQuery) {
                 None,
                 Some(d.bucket),
             ),
+            AssignedTask::GeneratePower(d) => {
+                (SoulTaskPhaseVisual::GeneratePower, None, Some(d.tile), None)
+            }
         };
 
         state.phase = phase;

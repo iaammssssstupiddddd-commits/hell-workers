@@ -289,3 +289,46 @@ pub fn issue_collect_bone_with_wheelbarrow_to_floor(
         already_commanded,
     );
 }
+
+/// Soul Spa 建設用の Bone 回収 → 搬入タスク（ホイールバロー使用）
+pub fn issue_collect_bone_with_wheelbarrow_to_soul_spa(
+    spec: WheelbarrowCollectSpec,
+    task_pos: Vec2,
+    already_commanded: bool,
+    ctx: &AssignTaskContext<'_>,
+    queries: &mut FamiliarTaskAssignmentQueries,
+    shadow: &mut ReservationShadow,
+) {
+    let haul_amount = spec.amount.max(1);
+    let destination = WheelbarrowDestination::Stockpile(spec.destination);
+    let assigned_task = AssignedTask::HaulWithWheelbarrow(HaulWithWheelbarrowData {
+        wheelbarrow: spec.wheelbarrow,
+        source_pos: spec.source_pos,
+        destination,
+        collect_source: Some(spec.source_entity),
+        collect_amount: haul_amount,
+        collect_resource_type: Some(ResourceType::Bone),
+        items: Vec::new(),
+        phase: HaulWithWheelbarrowPhase::GoingToParking,
+    });
+
+    let reservation_ops = build_wheelbarrow_reservation_ops(
+        queries,
+        spec.wheelbarrow,
+        &destination,
+        &[spec.source_entity],
+        &[],
+    );
+    submit_assignment_with_reservation_ops(
+        ctx,
+        queries,
+        shadow,
+        TaskTarget {
+            work_type: WorkType::WheelbarrowHaul,
+            task_pos,
+        },
+        assigned_task,
+        reservation_ops,
+        already_commanded,
+    );
+}

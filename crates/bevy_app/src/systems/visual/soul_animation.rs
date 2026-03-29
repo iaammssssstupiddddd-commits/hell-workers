@@ -2,7 +2,7 @@ use crate::assets::GameAssets;
 use crate::entities::damned_soul::{ConversationExpression, ConversationExpressionKind};
 use bevy::gltf::Gltf;
 use bevy::prelude::*;
-use hw_core::constants::{EMOTION_THRESHOLD_EXHAUSTED, FATIGUE_THRESHOLD};
+use hw_core::constants::EMOTION_THRESHOLD_EXHAUSTED;
 use hw_core::soul::{AnimationState, DamnedSoul, IdleBehavior, IdleState, StressBreakdown};
 use hw_core::visual_mirror::task::{SoulTaskPhaseVisual, SoulTaskVisualState};
 use hw_visual::{
@@ -224,8 +224,8 @@ pub fn sync_soul_body_animation_system(
     }
 
     for (mut binding, mut player, mut transitions) in &mut q_players {
-        binding.walk_variant_lock_secs =
-            (binding.walk_variant_lock_secs - time.delta_secs()).max(0.0);
+        binding.directional_variant_lock_secs =
+            (binding.directional_variant_lock_secs - time.delta_secs()).max(0.0);
         let Ok((state, animation, transform)) = q_states.get(binding.owner) else {
             continue;
         };
@@ -241,10 +241,10 @@ pub fn sync_soul_body_animation_system(
         if state.body == binding.current_body && walk_facing_right == binding.walk_facing_right {
             continue;
         }
-        let walk_variant_changed = matches!(state.body, SoulBodyAnimState::Walk)
-            && matches!(binding.current_body, SoulBodyAnimState::Walk)
+        let directional_variant_changed = uses_directional_side_variant(state.body)
+            && uses_directional_side_variant(binding.current_body)
             && walk_facing_right != binding.walk_facing_right;
-        if walk_variant_changed && binding.walk_variant_lock_secs > 0.0 {
+        if directional_variant_changed && binding.directional_variant_lock_secs > 0.0 {
             continue;
         }
         let Some(node) = library.node_for(state.body, walk_facing_right) else {
@@ -256,7 +256,7 @@ pub fn sync_soul_body_animation_system(
             .repeat();
         binding.current_body = state.body;
         binding.walk_facing_right = walk_facing_right;
-        binding.walk_variant_lock_secs = if matches!(state.body, SoulBodyAnimState::Walk) {
+        binding.directional_variant_lock_secs = if uses_directional_side_variant(state.body) {
             WALK_VARIANT_LOCK_SECS
         } else {
             0.0
@@ -281,26 +281,23 @@ pub fn sync_soul_face_expression_system(
 }
 
 fn desired_body_state(
-    soul: &DamnedSoul,
+    _soul: &DamnedSoul,
     idle: &IdleState,
     animation: &AnimationState,
     task_visual: &SoulTaskVisualState,
     breakdown: Option<&StressBreakdown>,
-    expression: Option<&ConversationExpression>,
+    _expression: Option<&ConversationExpression>,
 ) -> SoulBodyAnimState {
-    if breakdown.is_some() || matches_negative_expression(expression) {
-        return SoulBodyAnimState::Fear;
+    if let Some(breakdown) = breakdown {
+        return if breakdown.is_frozen {
+            SoulBodyAnimState::Idle
+        } else {
+            SoulBodyAnimState::Fear
+        };
     }
 
-    if soul.fatigue >= FATIGUE_THRESHOLD
-        || matches!(idle.behavior, IdleBehavior::ExhaustedGathering)
-        || matches_exhausted_expression(expression)
-    {
-        return if animation.is_moving {
-            SoulBodyAnimState::Walk
-        } else {
-            SoulBodyAnimState::Exhausted
-        };
+    if matches!(idle.behavior, IdleBehavior::ExhaustedGathering) {
+        return SoulBodyAnimState::Exhausted;
     }
 
     if animation.is_moving {
@@ -393,6 +390,10 @@ fn desired_walk_facing_right(
     } else {
         None
     }
+}
+
+fn uses_directional_side_variant(body: SoulBodyAnimState) -> bool {
+    matches!(body, SoulBodyAnimState::Walk | SoulBodyAnimState::Carry)
 }
 
 fn face_uv_offset_for_state(state: SoulFaceState) -> Vec2 {

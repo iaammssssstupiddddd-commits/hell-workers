@@ -246,7 +246,7 @@ pub fn apply_soul_gltf_render_layers_on_ready(
                 current_body: SoulBodyAnimState::Idle,
                 walk_facing_right: None,
                 last_owner_pos: None,
-                walk_variant_lock_secs: 0.0,
+                directional_variant_lock_secs: 0.0,
             });
         }
 
@@ -321,7 +321,7 @@ pub fn apply_soul_shadow_gltf_render_layers_on_ready(
                 current_body: SoulBodyAnimState::Idle,
                 walk_facing_right: None,
                 last_owner_pos: None,
-                walk_variant_lock_secs: 0.0,
+                directional_variant_lock_secs: 0.0,
             });
         }
 

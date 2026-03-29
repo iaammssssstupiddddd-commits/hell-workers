@@ -11,6 +11,7 @@ use hw_core::soul::{
     DamnedSoul, DreamPool, DreamQuality, DreamState, GatheringBehavior, IdleBehavior, IdleState,
 };
 use hw_jobs::AssignedTask;
+use hw_jobs::tasks::GeneratePowerPhase;
 
 /// SoulのDream蓄積・放出を処理するシステム
 pub fn dream_update_system(
@@ -37,6 +38,11 @@ pub fn dream_update_system(
             // 起きている（休憩中含む）はAwakeにリセット
             if dream.quality != DreamQuality::Awake {
                 dream.quality = DreamQuality::Awake;
+            }
+            // 発電中（Generating フェーズ）は Dream 消費を generate_power.rs 側で行う
+            if matches!(*task, AssignedTask::GeneratePower(ref d) if d.phase == GeneratePowerPhase::Generating)
+            {
+                continue;
             }
             if !is_resting {
                 // 非睡眠・非休憩中はdream蓄積

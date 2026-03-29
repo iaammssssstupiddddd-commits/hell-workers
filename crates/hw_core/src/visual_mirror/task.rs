@@ -35,4 +35,5 @@ pub enum SoulTaskPhaseVisual {
     BucketTransport,
     HaulToMixer,
     HaulWithWheelbarrow,
+    GeneratePower,
 }

@@ -7,6 +7,7 @@ pub mod common;
 pub mod context;
 pub mod frame_wall;
 pub mod gather;
+pub mod generate_power;
 pub mod handler;
 pub mod haul;
 pub mod haul_to_blueprint;

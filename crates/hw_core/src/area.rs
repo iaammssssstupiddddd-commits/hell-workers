@@ -126,6 +126,7 @@ pub fn get_drag_start(mode: TaskMode) -> Option<Vec2> {
         TaskMode::FloorPlace(s) => s,
         TaskMode::WallPlace(s) => s,
         TaskMode::DreamPlanting(s) => s,
+        TaskMode::SoulSpaPlace(s) => s,
         _ => None,
     }
 }

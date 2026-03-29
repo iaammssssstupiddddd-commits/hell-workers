@@ -1,11 +1,11 @@
 # Visual Test Scene
 
-Soul GLB の 3D レンダリングをゲーム本体とは独立して検証するための Bevy example。
+ゲーム本体とは独立して Soul GLB レンダリングと建築物配置を検証するための独立クレート。
 
 ## 起動
 
 ```bash
-cargo visual-test
+CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo run -p visual_test
 ```
 
 ## 検証できること
@@ -13,189 +13,163 @@ cargo visual-test
 | 項目 | 概要 |
 |:---|:---|
 | 表情アトラス UV 切り替え | 6 表情 (Normal/Fear/Exhausted/Concentration/Happy/Sleep) の個別・一括切り替え |
-| モーション | Idle / FloatingBob / Sleeping / Resting / Escaping / Dancing の Transform 操作 |
-| GLB アニメーション再生 | soul.glb の 8 クリップ（Idle/Walk/Work/Carry/Fear/Exhausted/WalkLeft/WalkRight）を順番に切り替えて再生時間を確認 |
-| シェーダーパラメータ調整 | 選択 Soul の ghost_alpha / rim_strength / posterize_steps をキーボードでリアルタイム調整 |
+| モーション | Idle / FloatingBob / Sleeping / Resting / Escaping / Dancing |
+| GLB アニメーション再生 | soul.glb の 8 クリップを順番に切り替えて再生確認 |
+| シェーダーパラメータ調整 | 選択 Soul の ghost_alpha / rim_strength / posterize_steps をリアルタイム調整 |
 | カメラパン・ズーム | W/A/S/D パン・スクロールズーム（ゲーム本体と同じ PanCamera）|
-| 矢視（Elevation View）| V キーで TopDown/North/East/South/West を切替し、側面・正面からの GLB 確認 |
+| 矢視（Elevation View）| V キーで TopDown/North/East/South/West を切替して GLB を全方向から確認 |
 | 仰角調整 | VIEW_HEIGHT / Z_OFFSET をリアルタイムに変更して TopDown 俯角を確認 |
-| 複数エンティティ干渉 | Soul を最大 6 体まで追加し、矢印キーで移動させて重なり・Z-fight を確認 |
-| Per-entity マテリアル | 各 Soul が独立した `Handle<CharacterMaterial>` を持ち、個別に表情・シェーダー値を変更可能 |
+| 複数 Soul 干渉 | Soul を最大 6 体まで追加し、Z-fight・マテリアル独立性を確認 |
+| ワールド上での建築物配置 | ゲーム本体と同一のゴーストプレビュー + クリック配置方式 |
+| 建築物 2D/3D 表示 | 2D スプライト + 3D メッシュの重ね描画を本番環境と同じ条件で確認 |
+| 影・ライト | DirectionalLight + CascadeShadowConfig による影をゲーム本体と同条件で検証 |
 | RtT パイプライン | Camera3d → オフスクリーンテクスチャ → composite sprite の描画経路 |
 
 ## 操作
 
+### 共通
+
 | キー | 操作 |
 |:---|:---|
-| `1`-`6` | 表情切り替え (1=Normal, 2=Fear, 3=Exhausted, 4=Concentration, 5=Happy, 6=Sleep) |
-| `G` | 全表情モード — 各 Soul に異なる表情を自動割当 |
-| `+` / `=` | Soul 追加 (最大 6) |
-| `-` | Soul 削除 (非選択のものから優先) |
-| `M` | モーション切り替え (Idle → FloatingBob → Sleeping → Resting → Escaping → Dancing) |
-| `Q` | アニメーションクリップ切り替え (Idle → Walk → Work → Carry → Fear → Exhausted → WalkLeft → WalkRight) |
-| `Z` / `X` | 選択 Soul の `ghost_alpha` ±0.05 |
-| `C` / `F` | 選択 Soul の `rim_strength` ±0.05 |
-| `B` / `N` | 選択 Soul の `posterize_steps` ±1.0 |
-| `P` | シェーダーパラメータをデフォルト値にリセット |
-| `W` / `A` / `S` / `D` | カメラパン |
-| スクロール | カメラズーム |
+| `Space` | モード切替 (Soul ⇔ Build) |
+| `H` | メニューパネル表示/非表示 |
+| `W/A/S/D` | カメラパン |
+| スクロール | カメラズーム（メニュー上ではパネルスクロールに切り替わる）|
 | `V` | 矢視切替 (TopDown → North → East → South → West) |
-| `J` / `K` | TopDown 時の `VIEW_HEIGHT` ±10 (範囲 50〜400) |
-| `U` / `I` | TopDown 時の `Z_OFFSET` ±10 (範囲 0〜400) |
-| `O` | VIEW_HEIGHT / Z_OFFSET をデフォルト (150/90) にリセット |
-| `R` | 全 Soul の位置・回転・スケールをリセット |
-| `←` `→` `↑` `↓` | 選択 Soul を移動 |
-| `Tab` | Soul 選択を順番に切り替え |
+| `J/K` | VIEW_HEIGHT ±10 |
+| `U/I` | Z_OFFSET ±10 |
+| `O` | VIEW_HEIGHT / Z_OFFSET をデフォルト値にリセット |
 | `Esc` | 終了 |
+
+### Soul モード
+
+| キー | 操作 |
+|:---|:---|
+| `1`–`6` | 表情切り替え |
+| `G` | 全表情モード（各 Soul に異なる表情を自動割当）|
+| `=` | Soul 追加 (最大 6) |
+| `-` | Soul 削除 |
+| `M` | モーション切り替え |
+| `Q` | アニメーションクリップ切り替え |
+| `Z/X` | 選択 Soul の `ghost_alpha` ±0.05 |
+| `C/F` | 選択 Soul の `rim_strength` ±0.05 |
+| `B/N` | 選択 Soul の `posterize_steps` ±1.0 |
+| `P` | シェーダーパラメータをデフォルトにリセット |
+| `R` | 全 Soul の位置・回転・スケールをリセット |
+| `←→↑↓` | 選択 Soul を移動 |
+| `Tab` | Soul 選択を順番に切り替え |
+
+### Build モード
+
+| 操作 | 内容 |
+|:---|:---|
+| **マウス移動** | ゴーストプレビューが追従（緑 = 配置可能、赤 = 占有済み）|
+| **左クリック** | 空きグリッドなら建築物を配置、占有済みなら削除 |
+| `[` / `]` | 建築種別を前/次に切り替え |
+| `Enter` | 現在のゴースト位置で配置/削除 |
+| `Del` | 全建築物を削除 |
 
 ## メニューパネル
 
-右サイドに常時表示されるデバッグパネル。現在値がリアルタイムで反映される。
-`[H]` でパネルを折りたたみ（右上に `[H] メニュー表示` ヒントが出る）。
+右サイドに常時表示されるデバッグパネル（`[H]` で折りたたみ）。ボタンで操作でき、現在値をリアルタイムで反映する。
+
+### パネル構成
 
 ```
 ━━ Visual Test ━━━━━━━━━━━━━━
- Souls:3/6   Soul#0
  [H] メニューを閉じる
+ [SOUL]  [BUILD]          ← モード切替
 
-─ 表情  [1-6]  [G]:全体 ─────
-  [1] Normal
- ►[2] Fear         ← 現在選択中
-  ...
+─ カメラ ─────────────────────
+ [TopDown]               [V]
+ HEIGHT: [150-] [150+]
+ OFFSET: [ 90-] [ 90+]
+ [リセット]
 
-─ アニメーション  [Q]:次へ ───
-  Idle
- ► Walk  (1.2s)   ← 現在再生中 + 時間
-  Work
-  ...
+─ ソウルセクション（Soul モード時のみ表示）─
+ 表情ボタン × 6 + 全表情
+ アニメーションクリップボタン
+ モーションボタン
+ シェーダーパラメータ（ghost/rim/posterize）
+ Soul 追加/削除/選択/リセット
 
-─ Transform  [M]:次へ ────────
- ► Idle
-  ...
-
-─ シェーダー  [P]:reset ──────
- ghost_alpha    1.00  [Z]/[X]
- rim_strength   0.28  [C]/[F]
- posterize      4.0   [B]/[N]
-
-─ カメラ ────────────────────────
- [W/A/S/D]  パン
- [スクロール]  ズーム
- [V]        矢視切替
- 方向:  TopDown
-
-─ 仰角  [O]:reset ───────────
- HEIGHT   150  [J]/[K]
- OFFSET    90  [U]/[I]
- 仰角    31.0°
-
-─ Soul管理 ───────────────────
- [=]/[-]   追加 / 削除
- [Tab]     選択切替
- [R]       位置リセット
- [←→↑↓]  移動
- [Esc]     終了
+─ 建築セクション（Build モード時のみ表示）─
+ 建築種別ボタン × 11
+ 配置位置 (x, y)         ← マウス追従
+ [配置/削除 [Enter]]
+ [全削除 [Del]]
 ```
+
+パネル上でスクロールするとパネルがスクロールされ、ワールドのズームは無効化される。
 
 ## アーキテクチャ
 
-ゲーム本体の `GameAssets` / `StartupPlugin` には依存せず、必要最小限のアセット（`soul.glb`, `soul_face_atlas.png`, 1x1 白テクスチャ）だけを自前で読み込む自己完結型 example。
+独立した `visual_test` クレート (`crates/visual_test/`)。ゲーム本体の `GameAssets` / `StartupPlugin` には一切依存しない。
+
+### モジュール構成
+
+| ファイル | 責務 |
+|:---|:---|
+| `main.rs` | App 構築・プラグイン登録・システム順序定義 |
+| `types.rs` | 全共有型・定数・リソース (`TestState`, `TestElev`, enums) |
+| `setup.rs` | カメラ・ライト・RtT・UIパネルの初期化 |
+| `building.rs` | 建築物のアセット定義・スポーン/デスポーン・ゴーストシステム・ワールドマップ生成 |
+| `soul.rs` | Soul GLB スポーン・SceneInstanceReady Observer |
+| `systems.rs` | ボタンインタラクション・カメラ同期・Soul 描画システム群 |
+| `hud.rs` | パネル表示制御・ボタン状態更新・動的テキスト更新 |
+| `input.rs` | キーボード入力ハンドラ（Soul モード / Build モード）|
 
 ### カメラ 3 層構造（ゲーム本体と同構成）
 
 ```
-Camera3d     (LAYER_3D,      order=-1)  → RtT オフスクリーンテクスチャ
-TestMainCamera Camera2d (LAYER_2D,   order= 0)  ← PanCamera（W/A/S/D パン・スクロールズーム）
-Overlay Camera2d       (LAYER_OVERLAY, order= 1)  ← Composite Sprite をスクリーンに描画
+Camera3d          (LAYER_3D,      order=-1)  → RtT オフスクリーンテクスチャ
+TestMainCamera    (LAYER_2D,      order= 0)  ← PanCamera（パン・ズーム）
+Overlay Camera2d  (LAYER_OVERLAY, order= 1)  ← composite sprite をスクリーンに描画
 ```
 
-`sync_test_camera3d` が毎フレーム TestMainCamera の `Transform.translation` と `scale` を Camera3d へ反映する（ゲーム本体の `sync_camera3d_system` 相当）。
+`sync_test_camera3d` が毎フレーム TestMainCamera の Transform/scale を Camera3d へ反映する。
 
-### GLB マテリアル差し替え
+### ゴーストプレビュー（建築物配置）
 
-`SceneInstanceReady` Observer が GLB 読み込み完了後に子孫を走査し、メッシュ名で face/body を判別してマテリアルを差し替える。ゲーム本体の `apply_soul_gltf_render_layers_on_ready` と同等のロジック。
+マウス座標 → `Camera::viewport_to_world_2d` → `world_to_grid` → グリッドスナップ の流れで毎フレーム更新。
 
-| メッシュ名 | 差し替え先 | 追加処理 |
-|:---|:---|:---|
-| `Soul_Face_Mesh` | `CharacterMaterial::face(...)` | `SOUL_FACE_SCALE_MULTIPLIER` でスケール補正 |
-| `Soul_Mesh.010` | `CharacterMaterial::body(...)` | — |
+| 状態 | ゴースト色 |
+|:---|:---|
+| 空きグリッド | `Color::srgba(0.5, 1.0, 0.5, 0.5)` 緑・50% |
+| 占有済みグリッド | `Color::srgba(1.0, 0.2, 0.2, 0.5)` 赤・50% |
 
-### GLB アニメーション設定（on_soul_scene_ready）
+ゴーストスプライトには実際の建築テクスチャが表示される。メニューパネル上ではマウス入力が無効化される。
 
-1. 子孫から `AnimationPlayer` エンティティを特定
-2. `Assets<Gltf>.named_animations` から `ANIM_CLIP_NAMES` 順で `AnimationGraph` を構築
-3. `AnimationGraphHandle` + `AnimationTransitions` を AnimationPlayer エンティティに挿入
-4. `SoulAnimHandle` コンポーネントを Soul ルートエンティティに追加
+`update_building_cursor` システム（`building.rs`）が座標変換・占有チェック・左クリック配置を一括担当する。
 
-`apply_animation` システムが毎フレーム `state.anim_clip_idx` と `SoulAnimHandle.current_playing` を比較し、変わっていれば `AnimationTransitions::play(..., Duration::ZERO)` で即切り替え。
+### UI パネルボタン
 
-### シェーダーパラメータ調整
+`VisualTestAction` コンポーネントで各ボタンアクションを識別。`Changed<Interaction>` フィルタで `Interaction::Pressed` を検知し `TestState` を更新する。ボタン色は `update_button_states`（毎フレーム）が管理する。
 
-`apply_shader_params` が毎フレーム選択 Soul の `body_mat` に `state.ghost_alpha / rim_strength / posterize_steps` を適用する。per-entity マテリアルのため他の Soul には影響しない。
+| 色 | 状態 |
+|:---|:---|
+| `BTN_DEF` (暗グレー) | 通常 |
+| `BTN_HOVER` (紫) | ホバー |
+| `BTN_PRESS` (オレンジ暗) | 押下中 |
+| `BTN_ACT` (オレンジ明) | 選択中 |
+| `BTN_ACT_H` (オレンジ明+ホバー) | 選択中かつホバー |
 
-⚠️ Tab で選択を変えると、新しい選択 Soul に現在の state 値が即時適用される（意図的な動作）。
+### ゲーム本体との対応
 
-### 矢視（Elevation View）
+| visual_test 内 | ゲーム本体対応 |
+|:---|:---|
+| `TestMainCamera` + `PanCamera` | `hw_ui::camera::MainCamera` + `PanCamera` |
+| `sync_test_camera3d` | `systems::visual::camera_sync::sync_camera3d_system` |
+| `TestElevDir` / `TestElev` | `ElevationDirection` / `ElevationViewState` |
+| `update_building_cursor` ゴースト | `systems::visual::placement_ghost::placement_ghost_system` |
+| `SoulAnimHandle` | `SoulAnimationPlayer3d` + `SoulAnimationLibrary` |
+| `on_soul_scene_ready` | `apply_soul_gltf_render_layers_on_ready` |
 
-`TestElevDir`（TopDown/North/East/South/West）を `TestElev` リソースで管理。V キーで循環切替。
-
-`sync_test_camera3d` が各方向に応じた Camera3d 位置と回転を毎フレーム設定する：
-
-| 方向 | Camera3d 位置 | 用途 |
-|:---|:---|:---|
-| TopDown | `(x, VIEW_HEIGHT, scene_z + Z_OFFSET)` | 通常の斜め俯瞰 |
-| North | `(x, SOUL_MID_Y, scene_z + ELEV_DISTANCE)` | 南向き側面視 |
-| East | `(x + ELEV_DISTANCE, SOUL_MID_Y, scene_z)` | 西向き側面視 |
-| South | `(x, SOUL_MID_Y, scene_z - ELEV_DISTANCE)` | 北向き側面視 |
-| West | `(x - ELEV_DISTANCE, SOUL_MID_Y, scene_z)` | 東向き側面視 |
-
-### 仰角（TopDown）調整
-
-J/K で `state.view_height`、U/I で `state.z_offset` を変更。`sync_test_camera3d` が毎フレーム反映するため、`apply_camera` のような変更検知は不要。
-
-`apply_composite_sprite` が TopDown 時のみ composite sprite のサイズ補正係数を計算する：`comp = view_height.hypot(z_offset) / view_height`。矢視時は `comp = 1.0`。
-
-### 表情更新のタイミング
-
-`apply_faces` は毎フレーム全 Soul のマテリアル UV を上書きする（Change Detection による早期リターンなし）。
-
-⚠️ `state.is_changed()` を使って最適化しないこと。Soul の追加/削除は Commands が遅延フラッシュされるため、変更が発生したフレームにはまだ新しいエンティティが Query に見えない。`is_changed()` を戻すと、Soul を削除した次フレームで AllDifferent モードの割り当てが更新されなくなる。最大 6 体のマテリアル更新なので性能コストは無視できる。
-
-### モーション
-
-`hw_visual::soul::idle` の `idle_visual_system` を参考にした time ベースの Transform 操作。GLB アニメーション（[Q]）と Transform モーション（[M]）は独立して動作する。
-
-### 表情アトラス UV 計算
-
-`soul_face_atlas.png` (768x512, 3x2 グリッド) から crop + magnification 補正付きで UV を算出。`visual_handles.rs` と同じ定数・計算式を使用。
-
-| キー | (col,row) | 表情 |
-|:---|:---|:---|
-| `1` | (0,0) | Normal |
-| `2` | (1,0) | Fear |
-| `3` | (2,0) | Exhausted |
-| `4` | (0,1) | Concentration |
-| `5` | (1,1) | Happy |
-| `6` | (2,1) | Sleep |
-
-## ファイル
+## ファイルパス
 
 | ファイル | 内容 |
 |:---|:---|
-| `crates/bevy_app/examples/visual_test.rs` | テストシーン本体 |
-| `crates/bevy_app/Cargo.toml` | `[[example]]` 登録 |
-| `.cargo/config.toml` | `cargo visual-test` エイリアス |
+| `crates/visual_test/` | クレートルート |
+| `crates/visual_test/src/` | Rust ソース（上記モジュール）|
+| `crates/visual_test/Cargo.toml` | 依存クレート定義 |
 
-## ゲーム本体との対応
-
-| example 内の型 | ゲーム本体の対応 |
-|:---|:---|
-| `Camera3dRtt` (ローカル定義) | `plugins::startup::Camera3dRtt` |
-| `TestMainCamera` + `PanCamera` | `hw_ui::camera::MainCamera` + `PanCamera` |
-| `sync_test_camera3d` | `systems::visual::camera_sync::sync_camera3d_system` |
-| `TestElevDir` / `TestElev` | `systems::visual::elevation_view::ElevationDirection` / `ElevationViewState` |
-| `apply_composite_sprite` | 同等のロジックはゲーム本体では startup 時の固定サイズ設定 |
-| `TestSoulConfig` | `CharacterHandles` (全 Soul 共通) → example は per-entity |
-| `SoulAnimHandle` | `SoulAnimationPlayer3d` + `SoulAnimationLibrary` |
-| `on_soul_scene_ready` | `apply_soul_gltf_render_layers_on_ready` |
-| face UV 定数 | `plugins::startup::visual_handles` の `SOUL_FACE_*` 定数群 |

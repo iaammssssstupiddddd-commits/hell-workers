@@ -181,6 +181,15 @@ pub fn run_task_handler(
                 breakdown_opt,
             );
         }
+        AssignedTask::GeneratePower(data) => {
+            crate::soul_ai::execute::task_execution::generate_power::handle_generate_power_task(
+                ctx,
+                data.clone(),
+                commands,
+                time,
+                world_map,
+            );
+        }
         AssignedTask::None => {}
     }
 }

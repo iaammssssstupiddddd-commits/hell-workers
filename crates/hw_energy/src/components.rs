@@ -25,8 +25,9 @@ impl Default for PowerGrid {
 }
 
 /// SoulSpaSite に付与。サイト単位の発電集計。
-/// Phase 1b で SoulSpaSite スポーン時に追加される（ここでは型定義のみ）。
-#[derive(Component, Reflect, Debug, Default, Clone)]
+/// `#[require(PowerGenerator)]` で SoulSpaSite に自動付与される。
+/// Default で `output_per_soul = OUTPUT_PER_SOUL` が設定される。
+#[derive(Component, Reflect, Debug, Clone)]
 #[reflect(Component)]
 pub struct PowerGenerator {
     /// 実際の出力: 占有スロット数 × output_per_soul
@@ -35,6 +36,15 @@ pub struct PowerGenerator {
     /// フィールドとして保持する理由: 将来の上位施設（効率の良い Soul Spa 等）で
     /// 施設ごとに異なる値を設定可能にするため。
     pub output_per_soul: f32,
+}
+
+impl Default for PowerGenerator {
+    fn default() -> Self {
+        Self {
+            current_output: 0.0,
+            output_per_soul: crate::constants::OUTPUT_PER_SOUL,
+        }
+    }
 }
 
 /// 電力消費建物（OutdoorLamp 等）に付与。

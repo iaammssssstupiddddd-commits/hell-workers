@@ -47,6 +47,7 @@ pub(super) fn spawn_completed_building(
             Vec2::splat(TILE_SIZE * 2.0),
         ),
         BuildingType::Bridge => unreachable!("Bridge uses use_3d = false path"),
+        BuildingType::SoulSpa => (game_assets.rest_area.clone(), Vec2::splat(TILE_SIZE * 2.0)),
     };
 
     let building_entity = if use_3d {
@@ -100,6 +101,7 @@ pub(super) fn spawn_completed_building(
                 game_assets.wheelbarrow_parking.clone(),
                 Vec2::splat(TILE_SIZE * 2.0),
             ),
+            BuildingType::SoulSpa => (game_assets.rest_area.clone(), Vec2::splat(TILE_SIZE * 2.0)),
         };
 
         commands
@@ -210,6 +212,11 @@ fn spawn_building_3d_visual(
             TILE_SIZE * 0.8,
         ),
         BuildingType::Bridge => return, // Bridge は 2D スプライトのまま（Phase 2 対象外）
+        BuildingType::SoulSpa => (
+            handles_3d.equipment_2x2_mesh.clone(),
+            handles_3d.equipment_material.clone(),
+            TILE_SIZE * 0.8,
+        ),
     };
 
     // Floor は XZ 平面に平置き（y=0）、それ以外は高さの中心に配置

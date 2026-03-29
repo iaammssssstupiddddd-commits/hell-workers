@@ -30,16 +30,20 @@ After any code change, ensure zero compilation errors:
 ### 1.5. Clippy Warnings (MAINTAIN ZERO)
 `cargo clippy --workspace` must produce **0 warnings**. This baseline was achieved 2026-03.
 
-**When writing new code with complex Query types:**
-- **Direct Bevy system param** (`fn my_system(q: Query<...>)`): Add a type alias before the function:
-  ```rust
-  type FooQuery<'w, 's> = Query<'w, 's, (Entity, &'static Transform), With<Foo>>;
-  pub fn my_system(q: FooQuery) { ... }
-  ```
-- **Reference param** (`fn helper(q: &Query<...>)`): Use `#[allow(clippy::type_complexity)]`. Do NOT use type aliases — causes E0521 lifetime errors.
-- **`#[derive(SystemParam)]` struct field**: Add `#[allow(clippy::type_complexity)]` to the struct.
-- **`ParamSet` type aliases**: NEVER use `ParamSet<'w, 's, (Query<'w, 's, ...>)>` — breaks `IntoSystemConfigs` / `.chain()`. Use `ParamSet<(Query<...>, Query<...>)>` without explicit lifetimes.
-- **`too_many_arguments`** for Bevy systems: Add `#[allow(clippy::too_many_arguments)]` on the function.
+**`#[allow(clippy::...)]` is prohibited in principle.** Fix the code structure instead.
+Exception only when a false positive or external constraint makes it unavoidable — requires a brief reason comment.
+
+**Lint resolution table:**
+
+| Warning | Resolution |
+|:---|:---|
+| `type_complexity` (direct system param) | Add type alias before the function: `type FooQuery<'w, 's> = Query<'w, 's, ...>;` |
+| `type_complexity` (reference param `&Query<...>`) | Restructure caller — move to `SystemParam` or context struct |
+| `type_complexity` (`SystemParam` struct field) | Use type alias, split responsibilities, or extract smaller `SystemParam` |
+| `too_many_arguments` (system) | Consolidate with `#[derive(SystemParam)]` |
+| `too_many_arguments` (helper fn) | Consolidate arguments into an input struct |
+
+**`ParamSet` type aliases**: NEVER write `ParamSet<'w, 's, (Query<'w, 's, ...>)>` with explicit lifetimes — breaks `IntoSystemConfigs` / `.chain()`. Use `SystemParam` decomposition instead.
 
 **Check command:**
 ```bash

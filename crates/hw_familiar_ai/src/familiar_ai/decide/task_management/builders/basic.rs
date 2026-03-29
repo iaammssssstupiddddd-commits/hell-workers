@@ -3,8 +3,9 @@ use hw_jobs::WorkType;
 use hw_jobs::{
     AssignedTask, BuildData, BuildPhase, BuildingType, CoatWallData, CoatWallPhase,
     CollectBoneData, CollectBonePhase, CollectSandData, CollectSandPhase, FrameWallPhase,
-    FrameWallTileData, GatherData, GatherPhase, MovePlantData, MovePlantPhase, PourFloorPhase,
-    PourFloorTileData, RefineData, RefinePhase, ReinforceFloorPhase, ReinforceFloorTileData,
+    FrameWallTileData, GatherData, GatherPhase, GeneratePowerData, GeneratePowerPhase,
+    MovePlantData, MovePlantPhase, PourFloorPhase, PourFloorTileData, RefineData, RefinePhase,
+    ReinforceFloorPhase, ReinforceFloorTileData,
 };
 
 use super::{
@@ -342,6 +343,32 @@ pub fn issue_move(
         },
         assigned_task,
         Vec::new(),
+        already_commanded,
+    );
+}
+
+pub fn issue_generate_power(
+    task_pos: Vec2,
+    already_commanded: bool,
+    ctx: &AssignTaskContext<'_>,
+    queries: &mut FamiliarTaskAssignmentQueries,
+    shadow: &mut ReservationShadow,
+) {
+    let assigned_task = AssignedTask::GeneratePower(GeneratePowerData {
+        tile: ctx.task_entity,
+        tile_pos: task_pos,
+        phase: GeneratePowerPhase::GoingToTile,
+    });
+    submit_assignment_with_source_entities(
+        ctx,
+        queries,
+        shadow,
+        TaskTarget {
+            work_type: WorkType::GeneratePower,
+            task_pos,
+        },
+        assigned_task,
+        &[ctx.task_entity],
         already_commanded,
     );
 }

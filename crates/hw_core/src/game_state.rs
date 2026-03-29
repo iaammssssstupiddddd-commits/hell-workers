@@ -39,6 +39,7 @@ pub enum TaskMode {
     FloorPlace(Option<Vec2>),
     WallPlace(Option<Vec2>),
     DreamPlanting(Option<Vec2>),
+    SoulSpaPlace(Option<Vec2>),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

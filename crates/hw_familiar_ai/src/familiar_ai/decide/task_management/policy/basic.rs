@@ -4,7 +4,8 @@ use hw_jobs::WorkType;
 use hw_logistics::transport_request::TransportRequestKind;
 
 use super::super::builders::{
-    issue_build, issue_collect_bone, issue_collect_sand, issue_gather, issue_move, issue_refine,
+    issue_build, issue_collect_bone, issue_collect_sand, issue_gather, issue_generate_power,
+    issue_move, issue_refine,
 };
 use super::super::validator::can_reserve_source;
 use crate::familiar_ai::decide::task_management::{
@@ -161,5 +162,32 @@ pub(super) fn assign_collect_bone(
         return false;
     }
     issue_collect_bone(task_pos, already_commanded, ctx, queries, shadow);
+    true
+}
+
+pub(super) fn assign_generate_power(
+    task_pos: Vec2,
+    already_commanded: bool,
+    ctx: &AssignTaskContext<'_>,
+    queries: &mut FamiliarTaskAssignmentQueries,
+    shadow: &mut ReservationShadow,
+) -> bool {
+    // タイルの parent_site を引き、active_slots ゲートを確認
+    let Ok((tile, _)) = queries.soul_spa_tiles.get(ctx.task_entity) else {
+        return false;
+    };
+    let parent_site = tile.parent_site;
+    let Ok(site) = queries.soul_spa_sites.get(parent_site) else {
+        return false;
+    };
+    let occupied = queries
+        .soul_spa_tiles
+        .iter()
+        .filter(|(t, w)| t.parent_site == parent_site && w.map(|w| !w.is_empty()).unwrap_or(false))
+        .count() as u32;
+    if !site.has_available_slot(occupied) {
+        return false;
+    }
+    issue_generate_power(task_pos, already_commanded, ctx, queries, shadow);
     true
 }
